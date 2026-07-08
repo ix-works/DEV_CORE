@@ -24,7 +24,10 @@
       },
       {
         "matcher": "Edit|Write|MultiEdit",
-        "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pull_before_edit"] } ]
+        "hooks": [
+          { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pre_tool_guard"] },
+          { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pull_before_edit"] }
+        ]
       },
       {
         "matcher": "Agent",

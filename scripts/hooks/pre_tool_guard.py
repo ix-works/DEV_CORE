@@ -1,14 +1,25 @@
 #!/usr/bin/env python3
-"""PreToolUse (matcher: Bash|mcp__sap-adt__*) — 2 katman guard.
+"""PreToolUse (matcher: Bash|Edit|Write|MultiEdit|mcp__sap-adt__*) — çok-katman guard.
 
+SAP katmanı (eskiden beri):
 1) ADR 0005-C: transport/package YARATMA ve TR RELEASE etme yasak (Bash/script dahil).
-2) ADR 0010 BAGLANTI TUTARSIZLIGI: MCP'nin canli bagli oldugu sistem (.mcp_active_system)
-   ile .conn_adt ayrisirsa (switch_tier yapildi ama /mcp restart edilmedi), TUM
-   mcp__sap-adt__* islemleri REDDEDILIR — cunku MCP istegi eski sisteme gonderir ama
-   tier guard yeni sistemi okur (ornek: write DEV der ama ECC QA'ya gider). Bash MUAF
-   (script'ler her calismada taze .conn_adt okur → tutarsizlik olamaz). ping MUAF.
+2) ADR 0010 BAGLANTI TUTARSIZLIGI: MCP eski sisteme bagliyken ADT islemi RED.
+3) Inline-aktivasyon / yalin-fiori-deploy / app-ici-npm-install dersleri.
+
+Mimari katmanı (ADR 0020, B9 — v3 yan-kurulum):
+4) FREEZE-GUARD (R10): project.yaml `frozen_readonly_paths` köklerine YAZMA teşebbüsü RED
+   (Edit/Write hedefi veya Bash'te yazma-fiili + dondurulmus yol). OKUMA serbest.
+5) ÖZYİNELEMELİ-SİLME BLOĞU (R9): core-junction / .claude/{agents,skills,commands} /
+   DEV_CORE hedefli rm -rf / Remove-Item -Recurse / rimraf / rmdir /s / git clean RED
+   (guncel toolchain junction'a inmiyor [2.8 kanıtı] ama arac-cesitliligi sigortasi).
+6) CORE-YAZIM TARAMASI (Ö5, string-hizli): core/'a Edit/Write anında genericize-leak
+   (musteri/sistem/kullanici izi) RED; standards|playbook'a YENİ .md Write'ında
+   applies_to frontmatter yoksa RED. Kesin gate commit-hook+CI'da; bu erken-uyarı.
+7) SIZINTI-COMMIT KİLİDİ (2.7/F1 lokal): `git add/commit` kapsamında core-path RED.
 
 Tehlikeli/tutarsiz degilse sessiz (exit 0). Blokta exit 2 (stderr → Claude'a geri besler).
+Hız ilkesi (Ö5): tum yeni kontroller string/regex — sicak yolda dosya-sistemi taramasi YOK
+(yaml okuma module-load'da 1 kez, cache'li).
 """
 import io
 import json
@@ -59,7 +70,7 @@ def _ui_app_subdir(path: str):
     ui_root, app = m.group(1), m.group(2).strip()
     if not app or app in (".", ".."):
         return None
-    root = Path(__file__).resolve().parents[2]
+    root = _proje_koku()  # B9-fix: __file__ junction'la DEV_CORE'a çözülür — env/cwd kullan
     ui_path = Path(ui_root) if Path(ui_root).is_absolute() else (root / ui_root)
     pkg = ui_path / "package.json"
     try:
@@ -68,6 +79,88 @@ def _ui_app_subdir(path: str):
     except Exception:
         return None
     return None
+
+
+# ---------------- B9 mimari-katman yardımcıları ----------------
+
+def _proje_koku() -> Path:
+    """PROJE kökü. DİKKAT (ADR 0020): bu hook junction üzerinden CORE'dan koşar —
+    __file__.resolve() junction'ı DEV_CORE'a çözer, PROJEYE DEĞİL. Tek doğru kaynak:
+    env CLAUDE_PROJECT_DIR (hook'lara verilir) → cwd fallback."""
+    import os as _os
+    env = _os.environ.get("CLAUDE_PROJECT_DIR")
+    return Path(env) if env else Path.cwd()
+
+
+_PROJ_ROOT = _proje_koku()
+
+_YAZMA_FIILI = re.compile(
+    r"(\brm\b|\bmv\b|\bcp\b|>>|(?<![-=<>])>(?!>)|\bdel\b|\brmdir\b|\bmkdir\b|\btouch\b"
+    r"|\btee\b|\bsed\s+-i\b|\brobocopy\b|Set-Content|Out-File|Add-Content|New-Item"
+    r"|Remove-Item|Move-Item|Copy-Item\s)", re.IGNORECASE)
+
+_SILME_FIILI = re.compile(
+    r"(\brm\s+-[a-z]*r[a-z]*f?|\brm\s+-[a-z]*f[a-z]*r|Remove-Item[^\n|;]*-Recurse"
+    r"|\brimraf\b|\brmdir\s+/s|\bgit\s+clean\b(?![^\n]*-n))", re.IGNORECASE)
+
+_KORUNAN_SILME_HEDEF = re.compile(
+    r"(\bcore[/\\]|[/\\]core\b|\.claude[/\\](agents|skills|commands)|DEV_CORE)",
+    re.IGNORECASE)
+
+_CORE_LEAK = re.compile(
+    r"(<PROJECT_NAME>|<PROJECT_NAME>|<LEGACY_SOURCE>|<LEGACY_SOURCE>|<SAP_HOST>|<SAP_USER>|<USER>"
+    r"|C:[/\\]+<LEGACY_ROOT>|<USER>)", )
+
+_GIT_STAGE = re.compile(r"\bgit\s+(add|commit|stage)\b", re.IGNORECASE)
+
+
+def _frozen_paths() -> list[str]:
+    """project.yaml frozen_readonly_paths (basit satır-parse; pyyaml bağımlılığı yok)."""
+    py = _PROJ_ROOT / "project.yaml"
+    if not py.exists():
+        return []
+    out: list[str] = []
+    try:
+        icinde = False
+        for line in py.read_text(encoding="utf-8", errors="ignore").splitlines():
+            s = line.strip()
+            if s.startswith("frozen_readonly_paths:"):
+                kalan = s.split(":", 1)[1].strip()
+                if kalan.startswith("[") and kalan.endswith("]"):
+                    out += [x.strip().strip("'\"") for x in kalan[1:-1].split(",") if x.strip()]
+                    return out
+                icinde = True
+                continue
+            if icinde:
+                if s.startswith("- "):
+                    out.append(s[2:].strip().strip("'\""))
+                elif s and not s.startswith("#"):
+                    break
+    except Exception:
+        return []
+    return out
+
+
+_FROZEN = [p.replace("/", "\\").lower().rstrip("\\") for p in _frozen_paths() if p]
+
+
+def _frozen_hit(metin: str) -> str:
+    """Metin (komut/dosya-yolu) dondurulmuş kök içeriyor mu? İlk eşleşen kökü döndür."""
+    if not _FROZEN or not metin:
+        return ""
+    duz = metin.replace("/", "\\").lower()
+    for kok in _FROZEN:
+        if kok in duz:
+            return kok
+    return ""
+
+
+def _core_hedef_mi(dosya: str) -> bool:
+    """Edit/Write hedefi core (junction veya DEV_CORE mutlak) altında mı?"""
+    if not dosya:
+        return False
+    d = dosya.replace("\\", "/").lower()
+    return "/core/" in d or d.startswith("core/") or "dev_core" in d
 
 
 def _host(url: str) -> str:
@@ -88,7 +181,7 @@ def _binding_mismatch() -> tuple:
     """(.conn_adt) ile (MCP'nin canli baglantisi=.mcp_active_system) ayrisik mi?
 
     Donus: (mismatch: bool, conn_label, mcp_label). Kanit yoksa (False, '', '')."""
-    root = Path(__file__).resolve().parents[2]
+    root = _proje_koku()  # B9-fix: __file__ junction'la DEV_CORE'a çözülür — env/cwd kullan
     conn = root / ".conn_adt"
     state = root / ".claude" / ".mcp_active_system"
     if not conn.exists() or not state.exists():
@@ -137,6 +230,68 @@ def main() -> int:
         hay = ti.get("command", "") or json.dumps(ti, ensure_ascii=False)
     else:
         hay = str(ti)
+
+    # ---- B9-4 FREEZE-GUARD (R10): dondurulmuş köke YAZMA teşebbüsü ----
+    dosya_hedefi = ti.get("file_path", "") if isinstance(ti, dict) else ""
+    if tool_name in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+        kok = _frozen_hit(dosya_hedefi)
+        if kok:
+            sys.stderr.write(
+                f"⛔ FREEZE-GUARD (R10): '{kok}' DONDURULMUŞ SALT-OKUNUR yedek — yazma "
+                f"YASAK (hedef: {dosya_hedefi}). Okuma serbesttir. Çalışma yeni dünyada "
+                "(C:\\IX) yapılır. İŞLEM REDDEDİLDİ.\n")
+            return 2
+    if tool_name == "Bash":
+        kok = _frozen_hit(hay)
+        if kok and _YAZMA_FIILI.search(hay):
+            sys.stderr.write(
+                f"⛔ FREEZE-GUARD (R10): Bash komutu dondurulmuş kökü ('{kok}') yazma-fiiliyle "
+                "birlikte içeriyor — eski dünyaya yazma YASAK (okuma: cat/grep/ls serbest). "
+                "İŞLEM REDDEDİLDİ. Salt-okuma yapıyorsan komutu yazma-fiilsiz kur.\n")
+            return 2
+
+    # ---- B9-5 ÖZYİNELEMELİ-SİLME BLOĞU (R9): core/junction hedefli silme ----
+    if tool_name == "Bash" and _SILME_FIILI.search(hay) and _KORUNAN_SILME_HEDEF.search(hay):
+        sys.stderr.write(
+            "⛔ SİLME BLOĞU (R9): Özyinelemeli silme/clean komutu core-junction veya "
+            ".claude/{agents,skills,commands} hedefini içeriyor. Güncel toolchain junction "
+            "içine inmiyor (kanıtlı) ama araç-çeşitliliği sigortası olarak BLOKLU. "
+            "Junction'ı kaldırmak istiyorsan: `cmd /c rmdir <link>` (yalnız linki kaldırır). "
+            "git clean gerekiyorsa önce `-n` ile önizle + core junction'ını geçici kaldır. "
+            "İŞLEM REDDEDİLDİ.\n")
+        return 2
+
+    # ---- B9-7 SIZINTI-COMMIT KİLİDİ (2.7/F1): proje reposunda core-path stage'leme ----
+    if tool_name == "Bash" and _GIT_STAGE.search(hay) and re.search(
+            r"(\bcore[/\\]|\s\.claude[/\\](agents|skills|commands))", hay):
+        sys.stderr.write(
+            "⛔ SIZINTI-COMMIT KİLİDİ (F1/2.7): `git add/commit` kapsamında core-junction "
+            "içeriği var — core proje reposuna COMMIT'LENEMEZ (fikri-sermaye sızıntısı, R1). "
+            "core/ zaten .gitignore'ludur; bu komut kasıtlı zorlama olurdu. İŞLEM REDDEDİLDİ.\n")
+        return 2
+
+    # ---- B9-6 CORE-YAZIM TARAMASI (Ö5): core'a yazım anında leak + applies_to ----
+    if tool_name in ("Edit", "Write", "MultiEdit") and _core_hedef_mi(dosya_hedefi):
+        icerik = ""
+        if isinstance(ti, dict):
+            icerik = (ti.get("content", "") or ti.get("new_string", "") or "")
+        m = _CORE_LEAK.search(icerik)
+        if m:
+            sys.stderr.write(
+                f"⛔ GENERICIZE-LEAK (Ö5/B9): core'a yazılan içerikte proje/müşteri izi "
+                f"tespit edildi: '{m.group(0)}' (hedef: {dosya_hedefi}). Core'a yalnız "
+                "jenerik içerik girer (SORU 0: placeholder kullan — <PROJECT_NAME>, "
+                "<LEGACY_SOURCE>, <SAP_USER>, ZSD001-örnek). İŞLEM REDDEDİLDİ.\n")
+            return 2
+        d = dosya_hedefi.replace("\\", "/").lower()
+        if (tool_name == "Write" and d.endswith(".md")
+                and ("/standards/" in d or "/playbook/" in d)
+                and "applies_to:" not in icerik[:500]):
+            sys.stderr.write(
+                "⛔ APPLIES_TO EKSİK (D21/B9): standards|playbook altına yeni .md, "
+                "profil etiketi olmadan yazılamaz. Dosya başına frontmatter ekle:\n"
+                "---\napplies_to: [s4_private]\n---\n(SORU 0 4. soru). İŞLEM REDDEDİLDİ.\n")
+            return 2
 
     if _DANGER.search(hay):
         sys.stderr.write(
