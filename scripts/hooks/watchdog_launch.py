@@ -40,7 +40,10 @@ def main():
     except Exception:
         pass
 
-    daemon = os.path.join(proj, "scripts", "hooks", "watchdog_daemon.sh")
+    # Junction'lı projede core script'leri proj/core/ altındadır; core-repo'nun kendisinde proj/scripts/.
+    daemon = os.path.join(proj, "core", "scripts", "hooks", "watchdog_daemon.sh")
+    if not os.path.exists(daemon):
+        daemon = os.path.join(proj, "scripts", "hooks", "watchdog_daemon.sh")
     if not os.path.exists(daemon):
         emit({"hookSpecificOutput": {"hookEventName": "PreToolUse",
               "additionalContext": "[WATCHDOG] daemon script yok (%s) — Monitor/cron'a dus." % daemon}})
@@ -68,8 +71,11 @@ def main():
 
     # OUTER Popen = bash_exe MUTLAK (hook PATH'inde bash yok). INNER = bare `bash`
     # (outer git-bash icinde calisir, orada 'bash' PATH'te var; mutlak-Windows-path'i MSYS exec edemez).
+    # PROJ arg2 olarak açıkça geçilir: daemon core'da yaşadığından BASH_SOURCE-türetimi
+    # junction'da DEV_CORE'a çözülür — proje kökünü launcher bilir (env-first).
     daemon_posix = daemon.replace("\\", "/")
-    launch_cmd = "nohup bash '%s' '%s' >/dev/null 2>&1 &" % (daemon_posix, sid)
+    proj_posix = proj.replace("\\", "/")
+    launch_cmd = "nohup bash '%s' '%s' '%s' >/dev/null 2>&1 &" % (daemon_posix, sid, proj_posix)
     try:
         subprocess.Popen(
             [bash_exe, "-c", launch_cmd],

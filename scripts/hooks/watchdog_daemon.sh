@@ -3,20 +3,23 @@
 # Kopukluk (VPN/MCP ölümü) veya erişimsizlikte kullanıcıya doğrudan ALERT verir:
 #   (1) Windows MessageBox popup (best-effort)  (2) .tmp/watchdog-alerts.log satırı.
 # Heartbeat dosyası her tur güncellenir → launcher "zaten çalışıyor mu" kontrolü.
-# Kullanım: watchdog_daemon.sh <session_id>   (watchdog_launch.py DETACHED başlatır).
+# Kullanım: watchdog_daemon.sh <session_id> [<proje_koku>]   (watchdog_launch.py DETACHED başlatır).
 # Yaşam: ~2 saat (72 x 100s) VEYA stop-sentinel → çıkar. SessionEnd hook sentinel yazar.
 set -u
 
 SID="${1:-nosid}"
-PROJ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Proje kökü: arg2 > env > BASH_SOURCE-türetimi. DİKKAT: bu dosya core'da yaşar; junction'lı
+# projede BASH_SOURCE ../.. DEV_CORE'a çözülür (proje DEĞİL) → launcher arg2 geçirir.
+PROJ="${2:-${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}}"
 CONN="$PROJ/.conn_adt"
 WD="$PROJ/.tmp/claude_watchdog"; mkdir -p "$WD"
 LOG="$PROJ/.tmp/watchdog-alerts.log"
 HB="$WD/heartbeat_$SID"
 STOP="$WD/stop_$SID"
-H="https://<SAP_HOST>.<SAP_DOMAIN>:44300"
+H="$(grep -m1 '^ADT_SAP_URL' "$CONN" 2>/dev/null | cut -d= -f2- | tr -d ' \r')"
 U=$(grep -i '^ADT_SAP_USER=' "$CONN" 2>/dev/null | cut -d= -f2 | tr -d '\r')
 P=$(grep -i '^ADT_SAP_PASSWORD=' "$CONN" 2>/dev/null | cut -d= -f2- | tr -d '\r')
+[ -z "$H" ] && { echo "$(date '+%Y-%m-%d %H:%M:%S') END .conn_adt/ADT_SAP_URL yok — daemon kapali (proj=$PROJ)" >> "$LOG"; exit 0; }
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG"; }
 
