@@ -5,3 +5,8 @@
 *.gif binary
 *.pdf binary
 *.zip binary
+*.sh text eol=lf
+*.py text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
