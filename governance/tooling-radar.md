@@ -3,7 +3,7 @@ type: tooling-radar
 title: Genel Agent-Dev Tooling Radar (SAP-dışı dahil)
 status: active
 cadence-days: 21
-last-run: 2026-06-13
+last-run: 2026-07-08
 ---
 
 # Genel Agent-Dev Tooling Radar
@@ -70,4 +70,5 @@ Otomatik kurulum YAPMA — kullanıcı onayı sonrası. Bitince frontmatter `las
 | Tarih | Tarayan | Yüksek-değer bulgular | Adopt edilen |
 |---|---|---|---|
 | 2026-06-13 | (manuel, kullanıcı tetikledi) | `playwright-cli` (tarayıcı/UI; MCP'den ~4x az token, snapshot→disk) + bounding-box-assert deseni | ✅ playwright-cli + token-verimli akış (commit efb58de8/bd82dcb) — radar bu eksiklikten doğdu |
+| 2026-07-08 | HEDEFLİ SAP-AI turu (kullanıcı 17-repo listesi; 4 paralel paket: ADT-MCP'ler / ADT-API+editör / skills / docs-MCP) — genel 6-kategori turu KAPSANMADI (bir sonraki radar genel-odaklı koşulmalı) | **ADOPT-ADAY (onay bekliyor, tooling-plugins §6):** (1) MCP **runtime-teşhis paketi** — ST22 dump + ABAP-Unit koşucu + versiyon-diff + guarded-SQL + scope-grep (yzonur kanıtlı endpoint'ler + abap-adt-api haritası); (2) yazma **audit-JSONL** + QA/PRD readOnly-default; (3) ATC package/transport scope; (4) adt_get satır-aralığı; (5) **mcp-sap-docs** pilotu (resmi ABAP keyword-docs); (6) released_successors kapsam genişletme (DDLS/DTEL/BDEF + full-state — ROSA fikri); (7) pre_tool_guard npx-sürüm-pin + credential-scan; (8) 4 mikro checklist/standards eklemesi. **İZLE:** SAP RESMÎ ADT MCP (custom-server emeklilik sorusu, çeyreklik) · ADT debugger fizibilite · arc-1 SAPDiagnose · sc4sap görüntü-spec pipeline (docs-tetikli) · ui5lint FE-gate · refactor-guardrail playbook · cross-system diff. **ATLA:** fr0ster/babamba2 tool-enflasyonu · ROSA server · mario salt-GET. Karşı-tespit: governance-guardrail + composite+readback + SRVB-publish sınıflarında 17 repo içinde rakipsiziz. | (onay sonrası) |
 | 2026-06-13 | radar ilk run ⚠️ tek-subagent (sonradan paralel'e revize edildi) | **ADOPT:** (1) `ast-grep` CLI — AST yapısal arama/refactor (ripgrep↔pyright arası eksik katman, Python+JS); (2) skill frontmatter `disallowed-tools` — ADR 0005'e ~0-maliyet proaktif 2. guardrail; (3) "CLI-over-MCP" karar-kuralı (MCP ~35-43x token) → tooling-plugins §3'e yaz. **İZLE:** Dynamic Workflows (repo-audit pilotu), PostToolUse `updatedToolOutput` (çıktı-kısaltma), `/reload-skills`. **ATLA:** CodeGraph/graf-indeks (repo ölçeği haklı çıkarmıyor), agent-browser (playwright-cli zaten lider) | ✅ **ast-grep** kuruldu + recall (skill_injector `_STRUCTURAL`) + team_setup + AGENTS/tooling-plugins; **CLI-over-MCP** ilkesi ast-grep entry'sine işlendi. ❌ **disallowed-tools DÜŞÜRÜLDÜ** (claude-code-guide doğrulaması): tool-seviyesi blacklist param-seviyesi ADR 0005 riskine UYMUYOR — asıl koruma zaten `pre_tool_guard` hook'unda (doğru katman). "Doğrula-sonra-adopt" disiplini çalıştı. |
