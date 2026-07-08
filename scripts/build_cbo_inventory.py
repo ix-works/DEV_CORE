@@ -20,8 +20,13 @@ import sys
 from pathlib import Path
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "scripts"))
+_CORE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_CORE / "scripts"))
+# D24: envanter çıktısı + .claude/active_package PROJE kökündedir; junction'da
+# __file__ DEV_CORE'a çözülür — proje kökü için __file__-türetimi YASAK.
+from utils.project_config import project_root
+
+REPO = project_root()
 OUT = REPO / "governance" / "cbo-inventory.json"
 
 
