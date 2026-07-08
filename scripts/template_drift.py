@@ -16,6 +16,10 @@ import argparse
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -34,7 +38,7 @@ METHODOLOGY = [
     "templates/",
 ]
 # Kapsam DISI (projeye ozel — karsilastirma).
-EXCLUDE = ["ERP/", "governance/package-registry.md", "governance/cbo-inventory.json",
+EXCLUDE = [SOURCE_ROOT_NAME + "/", "governance/package-registry.md", "governance/cbo-inventory.json",
            "governance/research/", "governance/api-docs/", "SESSION_NOTES", "SPEC",
            "__pycache__", ".git", "scripts/init_project.py", "scripts/template_drift.py",
            "scripts/genericize_for_template.py",  # kaynak-spesifik port araci (RULES projeye bagli)

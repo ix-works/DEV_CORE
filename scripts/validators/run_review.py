@@ -13,7 +13,7 @@ Mantık:
 
 Kullanım:
     # CDS yaratma öncesi
-    python scripts/validators/run_review.py --task cds_creation --artifact ERP/SD/ZSD001_CLC/cds/ZSD001_DDL_X.cds
+    python scripts/validators/run_review.py --task cds_creation --artifact <source_root>/SD/ZSD001_CLC/cds/ZSD001_DDL_X.cds
 
     # Tablo update öncesi
     python scripts/validators/run_review.py --task table_update --artifact <path>
@@ -183,7 +183,7 @@ TASK_CHECKLISTS = {
 }
 
 
-# Repo-geneli tarayıcılar: ERP/** üzerinde kendileri os.walk yapar, POZİSYONEL artifact
+# Repo-geneli tarayıcılar: <source_root>/** üzerinde kendileri os.walk yapar, POZİSYONEL artifact
 # KABUL ETMEZ (argparse yalnız --strict/--quick). run_validator bunlara artifact GEÇMEZ
 # (yoksa "unrecognized arguments" → crash → sahte BLOCKER). Gate korunur: check yine
 # repo-geneli (yeni artifact da ERP içinde olduğundan kapsanır) çalışır + gate'ler.
@@ -251,7 +251,7 @@ def main() -> int:
         if script_name == 'check_table_field_drop.py' and args.ack_drop:
             extra_args = extra_args + ['--ack-drop', args.ack_drop]
 
-        # Repo-geneli tarayıcılar (kendileri ERP/** os.walk eder) pozisyonel artifact KABUL ETMEZ
+        # Repo-geneli tarayıcılar (kendileri <source_root>/** os.walk eder) pozisyonel artifact KABUL ETMEZ
         # → artifact=None geç (yoksa "unrecognized arguments" → sahte BLOCKER).
         review_artifact = None if script_name in REPO_WIDE_SCANNERS else args.artifact
         rc, out, err = run_validator(script_path, review_artifact, extra_args)

@@ -10,7 +10,7 @@ Bu modül SAP'ye bağlanmaz — saf yardımcı mantık (repo dosya bulma + norma
 + kıyas). Canlı source'u çağıran taraf, fetch_active callback ile verir
 (MCP push akışı `sap_adt_lib.detect_source_drift` üzerinden; validator standalone).
 
-Reuse: repo dosya eşleme `check_object_in_correct_pkg.py`'deki ERP/<MODULE>/<PKG>/
+Reuse: repo dosya eşleme `check_object_in_correct_pkg.py`'deki <source_root>/<MODULE>/<PKG>/
 <folder> + rglob desenini genişletir (uzantı seti daha geniş: .srvd/.srvb/.bdef
 dahil).
 """
@@ -20,6 +20,10 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Callable, Optional
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 
 def _git_working_copy_dirty(path: Path) -> bool:
@@ -142,7 +146,7 @@ def find_repo_source_file(
 ) -> Optional[Path]:
     """Bir SAP obje adına karşılık gelen repo kaynak dosyasını bul.
 
-    Strateji: ERP/ altında `<NAME>.<source-ext>` ile eşleşen dosyayı ara
+    Strateji: <source_root>/ altında `<NAME>.<source-ext>` ile eşleşen dosyayı ara
     (case-insensitive basename). `.md`/`.txt`/`.json`/`.xml` companion'lar elenir.
     object_type verilirse, eşleşen dosyalar o tipin uzantı setine (_TYPE_TO_EXTENSIONS)
     göre FİLTRELENİR — aynı ada sahip farklı-tip dosyalardan (ör. ZSD001_I_BOOKING'in
@@ -158,7 +162,7 @@ def find_repo_source_file(
         Eşleşen dosya Path'i, yoksa None.
     """
     if erp_root is None:
-        erp_root = repo_root() / "ERP"
+        erp_root = repo_root() / SOURCE_ROOT_NAME
     if not erp_root.exists():
         return None
 

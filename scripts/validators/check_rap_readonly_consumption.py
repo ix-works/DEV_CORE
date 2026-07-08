@@ -51,7 +51,7 @@ def _strip_comments(text: str) -> str:
 
 
 def _package_root(path: Path) -> Path:
-    # .../ERP/<MOD>/<PKG>/cds/X.cds → <PKG>
+    # .../<source_root>/<MOD>/<PKG>/cds/X.cds → <PKG>
     for parent in path.parents:
         if (parent / '.rules.md').exists():
             return parent

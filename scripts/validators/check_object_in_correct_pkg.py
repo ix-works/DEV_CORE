@@ -2,7 +2,7 @@
 check_object_in_correct_pkg.py — Bir paketin alt klasörlerindeki dosyaların prefix'i
 paket adıyla uyumlu mu kontrol eder.
 
-Örnek ihlal: ERP/ZSD003_CLC/cds/ZSD010_DDL_FOO.cds (yanlış paket)
+Örnek ihlal: <source_root>/ZSD003_CLC/cds/ZSD010_DDL_FOO.cds (yanlış paket)
 
 Whitelist (.rules.md "Bilinen İstisnalar / Legacy" bölümünden okunur — gelecek):
 - ZSD003_CLC: ZCL_ZSD_FITTINGS_* (Gateway namespace)
@@ -20,6 +20,10 @@ import argparse
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -39,7 +43,7 @@ PACKAGE_EXCEPTIONS = {
 CHECK_FOLDERS = {"cds", "classes", "programs", "structures", "tables", "functions", "auth"}
 
 # Tooling scratch dizini artık .tmp/sap_scratch (ERP DIŞI, gitignored) — ZAI default'u
-# KALDIRILDI (2026-06-18). ERP/ZAI ARTIK YASAK: belirirse bu check onu flag'ler
+# KALDIRILDI (2026-06-18). <source_root>/ZAI ARTIK YASAK: belirirse bu check onu flag'ler
 # (ZAI-resurgence guard). Başka scratch-modül yok → exclude kümesi BOŞ.
 SCRATCH_MODULES: set = set()
 
@@ -65,7 +69,7 @@ def matches_package(filename: str, pkg_prefix: str, pkg_name: str) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Obje paket sınır kontrolü")
-    parser.add_argument("--erp-root", default="ERP", help="ERP root dizini")
+    parser.add_argument("--source-root", default=SOURCE_ROOT_NAME, help="ERP root dizini")
     parser.add_argument("--strict", action="store_true", help="run_all_validators ile uyum için, no-op")
     args = parser.parse_args()
 
@@ -75,7 +79,7 @@ def main() -> int:
         return 1
 
     violations = []
-    # ERP/<MODULE>/<PKG>/ pattern'i
+    # <source_root>/<MODULE>/<PKG>/ pattern'i
     packages = []
     for module_dir in sorted(erp_root.iterdir()):
         if not module_dir.is_dir() or module_dir.name.startswith("."):

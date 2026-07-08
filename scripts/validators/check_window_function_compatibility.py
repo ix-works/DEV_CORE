@@ -69,7 +69,7 @@ def main() -> int:
     print(
         '\nBu sistem ABAP CDS window function desteklemiyor.\n'
         'Alternatif: FIFO/aggregate logic ABAP class içinde yapılır.\n'
-        'Bkz. ERP/SD/ZSD001_CLC/programs/FIFO_ORDER_ALLOCATION.md',
+        'Bkz. <source_root>/SD/ZSD001_CLC/programs/FIFO_ORDER_ALLOCATION.md',
         file=sys.stderr
     )
     return 1

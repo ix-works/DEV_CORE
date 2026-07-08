@@ -17,6 +17,10 @@ import sys
 import time
 from pathlib import Path
 from urllib.parse import urlparse
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 SESSION_NOTE_NAME = "SESSION_NOTES.md"
 ACTIVE_PKG_FILE = ".claude/active_package"
@@ -79,7 +83,7 @@ def _find_session_notes_by_name(root: Path, pkg: str):
 
 def _latest_session_notes(root: Path):
     candidates = []
-    erp = root / "ERP"
+    erp = root / SOURCE_ROOT_NAME
     if not erp.exists():
         return None
     for p in erp.rglob(SESSION_NOTE_NAME):

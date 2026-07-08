@@ -6,7 +6,7 @@ Kullanım:
     python scripts/bootstrap_package.py ZSD001_CLC --title "Demo" --owner <OWNER>
 
 Yapılanlar:
-1. ERP/<PKG_FULL>/ yaratır
+1. <source_root>/<PKG_FULL>/ yaratır
 2. templates/new-package/ içeriğini kopyalar
 3. Placeholder'ları doldurur:
    - {PKG} → ZSD001
@@ -30,6 +30,10 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -60,7 +64,7 @@ def main() -> int:
     parser.add_argument("--module", default="SD", help="SAP modülü (varsayılan: SD)")
     parser.add_argument("--owner", default=None, help="Owner (varsayılan: git user.name)")
     parser.add_argument("--templates-root", default="templates/new-package")
-    parser.add_argument("--erp-root", default="ERP")
+    parser.add_argument("--source-root", default=SOURCE_ROOT_NAME)
     args = parser.parse_args()
 
     pkg_full = args.package

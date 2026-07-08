@@ -28,7 +28,7 @@ args = p.parse_args()
 NAME = args.name.upper()
 TRANSPORT = args.transport
 obj_url = f'/sap/bc/adt/ddic/ddl/sources/{NAME.lower()}'
-src_path = Path(f'<PROJECT_ROOT>/ERP/ZSD001_CLC/cds_src/{NAME}.cds')
+src_path = Path(f'<PROJECT_ROOT>/<source_root>/ZSD001_CLC/cds_src/{NAME}.cds')
 
 if not src_path.exists():
     print(f'[FAIL] {src_path} yok'); sys.exit(1)

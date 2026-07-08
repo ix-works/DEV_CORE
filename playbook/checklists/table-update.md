@@ -30,7 +30,7 @@ applies_to: [s4_private]
 | **C-TBL-RENAME-01** | Mevcut alan RENAME ediliyor mu? (DROP+CREATE riski) | `check_table_field_drop.py` (rename = DROP+yeni alan olarak yakalanır) | BLOCKER | DDIC stability |
 | **C-TBL-TYPE-01** | Mevcut alan TİPİ değiştiriliyor mu? (data loss riski) | `check_table_field_drop.py` (DTEL değişikliği = TYPE) | BLOCKER | DDIC stability |
 | **C-TBL-STD-01** | Standart SAP DTEL referansları (NETWR, WAERK, MENGE, vb.) doğru yazıldı mı? | `check_standard_table_fields.py --type dtel` (⚠️ ORPHAN — run_review zincirinde DEĞİL; T11 wire adayı) | BLOCKER | Standart obje teyidi |
-| **C-TBL-TD-01** | TD spec'teki alan listesi ile yeni source uyumlu mu (alan sayısı, sıralama)? | `manual:td-field-list-check` (oto-gate YOK; silinen-alan için `check_td_cancelled_fields` WARNING) | BLOCKER | Sprint 2A T_BOOKHD vakası |
+| **C-TBL-TD-01** | TD spec'teki alan listesi ile yeni source uyumlu mu (alan sayısı, sıralama)? | `manual:td-field-list-check` (oto-gate YOK; silinen-alan denetimi proje-katmanı validators-local'da olabilir) | BLOCKER | Sprint 2A T_BOOKHD vakası |
 | **C-TBL-APPEND-01** | Standart SAP tablosuna append eklenmiyor mu? (⛔ KATEGORİ A — YASAK) | regex:standard-table-append | BLOCKER | ADR 0005 |
 | **C-TBL-DLI-01** | DeliveryClass değişiyor mu? | regex:delivery-class | WARNING | Genelde stabil olmalı |
 | **C-TBL-MAINT-01** | DataMaintenance değişiyor mu? | regex:data-maintenance | INFO | Tercih |

@@ -16,7 +16,7 @@ DOĞRU DESEN: commit gerektiren klasik BAPI'yi (BAPI_SHIPMENT_CREATE, SD_SCDS_CR
 RAP'ten çağırırken AYRI LUW kullan → Z RFC-enabled FM + `CALL FUNCTION '...' DESTINATION 'NONE'`.
 Commit yalnız o RFC-FM'de (ayrı roll-area) LEGAL. Reçete: playbook/adt-rap.md.
 
-Kapsam: ERP/**/*.clas.abap, *.ccimp.abap, *.ccau.abap.
+Kapsam: <source_root>/**/*.clas.abap, *.ccimp.abap, *.ccau.abap.
   Muaf: *.func.abap (RFC-FM wrapper = ayrı LUW → commit orada legal; bu validator taramaz).
   Kaçış: ilgili satıra `"#NO_RAP_COMMIT_CHECK <gerekçe>` (gerçek non-RAP class için; gerekçesiz değil).
 
@@ -37,13 +37,17 @@ import argparse
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 REPO = Path(__file__).resolve().parent.parent.parent
-ERP = REPO / "ERP"
+ERP = REPO / SOURCE_ROOT_NAME
 
 _SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp"}
 _SCAN_SUFFIXES = (".clas.abap", ".ccimp.abap", ".ccau.abap")

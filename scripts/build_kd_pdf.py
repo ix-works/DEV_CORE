@@ -14,9 +14,13 @@ from PIL import Image, ImageOps
 import markdown
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from doc_tools import preprocess_mermaid_fences  # ```mermaid → render PNG → ![](..)
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 BASE = r'C:\<LEGACY_ROOT>\<PROJECT_NAME>'
-DOCS = os.path.join(BASE, 'ERP', 'SD', 'ZSD011_CLC', 'docs')
+DOCS = os.path.join(BASE, SOURCE_ROOT_NAME, 'SD', 'ZSD011_CLC', 'docs')
 SHOT = os.path.join(DOCS, 'screenshots')
 MD = os.path.join(DOCS, 'KD-SD-011_Fittings_Siparis_Kullanici_Kilavuzu.md')
 HTML = os.path.join(DOCS, 'KD-SD-011_Fittings_Siparis_Kullanici_Kilavuzu.html')
@@ -136,7 +140,7 @@ open(HTML, 'w', encoding='utf-8').write(html)
 #    webapp/help/kullanici-kilavuzu.html açar — onOpenHelp). Aksi halde uygulamadaki kopya bayatlar.
 #    NOT: senkron sonrası UI BSP RE-DEPLOY gerekir (canlıda görünmesi için).
 import shutil
-HELP = os.path.join(BASE, 'ERP', 'SD', 'ZSD011_CLC', 'ui', 'fittings_order_rap', 'webapp', 'help')
+HELP = os.path.join(BASE, SOURCE_ROOT_NAME, 'SD', 'ZSD011_CLC', 'ui', 'fittings_order_rap', 'webapp', 'help')
 if os.path.isdir(HELP):
     open(os.path.join(HELP, 'kullanici-kilavuzu.html'), 'w', encoding='utf-8').write(html)
     hshot = os.path.join(HELP, 'screenshots')

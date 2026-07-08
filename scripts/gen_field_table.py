@@ -20,7 +20,7 @@ bilgilendirme amaçlıdır, operatör KD'de gözden geçirmeli. Etiket çözüle
 
 Kullanım:
     python gen_field_table.py <cds_yolu> [--ref-csv <dataelements_or_table_fields.csv>] [-o out.md]
-    python gen_field_table.py ERP/SD/ZSD001_CLC/cds/ZSD001_C_SO_ITEM.cds
+    python gen_field_table.py <source_root>/SD/ZSD001_CLC/cds/ZSD001_C_SO_ITEM.cds
 """
 import os
 import re

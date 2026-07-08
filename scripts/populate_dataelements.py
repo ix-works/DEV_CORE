@@ -17,7 +17,7 @@ Kullanım:
         --package ZSD001_CLC \\
         --transport <TRANSPORT> \\
         --responsible <SAP_USER> \\
-        --csv ERP/ZSD001_CLC/dataelements.csv \\
+        --csv <source_root>/ZSD001_CLC/dataelements.csv \\
         --cwd <PROJECT_ROOT>
 
 CSV format (UTF-8, header'lı):

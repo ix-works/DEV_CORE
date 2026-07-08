@@ -1,7 +1,7 @@
 """
 check_source_drift.py — Repo ↔ canlı SAP kaynak DRIFT validator (ADR 0016 M3).
 
-Repo'daki yönetilen Z source dosyalarını (ERP/<MODULE>/<PKG>/<folder>/*.srvd|.cds|
+Repo'daki yönetilen Z source dosyalarını (<source_root>/<MODULE>/<PKG>/<folder>/*.srvd|.cds|
 .ddls|.asddls|.abap|.bdef ...) tarar; her biri için canlı AKTİF source'u çeker,
 normalize (CRLF/trailing-ws yok say) edip kıyaslar, drift'leri RAPORLAR.
 
@@ -36,6 +36,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
+from utils.project_config import SOURCE_ROOT_NAME  # noqa: E402  # K12
 from source_drift import (  # noqa: E402
     SOURCE_EXTENSIONS,
     compare_sources,
@@ -109,7 +110,7 @@ def _fetch_active_source(client, name: str, ext: str):
 
 
 def _collect_repo_files(erp_root: Path, name_filter: str | None) -> list[Path]:
-    """ERP altındaki source dosyalarını topla (companion .md/.txt elenmiş)."""
+    """<source_root> altındaki source dosyalarını topla (companion .md/.txt elenmiş)."""
     files: list[Path] = []
     for f in erp_root.rglob("*"):
         if not f.is_file():
@@ -136,7 +137,7 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true", help="Drift bulununca fail (exit 1)")
     args = parser.parse_args()
 
-    erp_root = repo_root() / "ERP"
+    erp_root = repo_root() / SOURCE_ROOT_NAME
     if not erp_root.exists():
         print(f"UYARI: {erp_root} yok — drift check atlandı")
         return 0

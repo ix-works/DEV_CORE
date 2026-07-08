@@ -18,13 +18,17 @@ Exit: her zaman 0 (soft). Bulgu varsa stdout'a uyarı yazar.
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 REPO = Path(__file__).resolve().parents[2]
-ERP = REPO / "ERP"
+ERP = REPO / SOURCE_ROOT_NAME
 
 # READ ENTITIES ... BY \_assoc ... (FROM | ALL FIELDS WITH | FIELDS ( ) ... RESULT
 # Statement = "READ ENTITIES" ... "RESULT" arası (çok satır).

@@ -14,7 +14,7 @@ standards/04 hizalı bir FS/TS TASLAĞI üretir.
 
 Kullanım:
     python scripts/program_to_spec.py <source.abap> [<source2.abap> ...] [--out TD/DRAFT_X.md]
-    python scripts/program_to_spec.py ERP/SD/SEVKEMRI/sources/ZSD_007_*.abap
+    python scripts/program_to_spec.py <source_root>/SD/SEVKEMRI/sources/ZSD_007_*.abap
 """
 from __future__ import annotations
 

@@ -25,7 +25,7 @@ args = p.parse_args()
 NAME = args.name.upper()
 TRANSPORT = args.transport
 obj_url = f'/sap/bc/adt/ddic/ddl/sources/{NAME.lower()}'
-src_path = Path(f'<PROJECT_ROOT>/ERP/ZSD001_CLC/cds_src/{NAME}.cds')
+src_path = Path(f'<PROJECT_ROOT>/<source_root>/ZSD001_CLC/cds_src/{NAME}.cds')
 source = src_path.read_text(encoding='utf-8')
 sv_m = re.search(r"@AbapCatalog\.sqlViewName\s*:\s*'([^']+)'", source)
 SQL_VIEW = sv_m.group(1)

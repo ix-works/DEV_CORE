@@ -26,6 +26,10 @@ KULLANIM (populate scripts veya TempScripts converter'larında):
 import re
 from pathlib import Path
 from typing import Dict, List, Optional
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 # Modül kökü — <PROJECT_NAME> project root
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -46,7 +50,7 @@ OBJECT_TYPE_FOLDER = {
 
 # Modül kök yolları (gelecek modüller için ekle: ZSD016_CLC vb.)
 MODULE_ROOTS = [
-    PROJECT_ROOT / 'ERP' / 'ZSD015_CLC',
+    PROJECT_ROOT / SOURCE_ROOT_NAME / 'ZSD015_CLC',
 ]
 
 # <LEGACY_SOURCE> referans kök (eski sistem source'ları + spec'leri)
@@ -99,7 +103,7 @@ def require_td_spec(object_name: str, object_type: str,
     if spec_path is None:
         folder = OBJECT_TYPE_FOLDER.get(object_type.lower(), '<unknown>')
         searched = [
-            f'  - ERP/ZSD015_CLC/{folder}/{object_name}.md',
+            f'  - <source_root>/ZSD015_CLC/{folder}/{object_name}.md',
             f'  - C:/<LEGACY_ROOT>/<LEGACY_SOURCE>/SEVKEMRI/{folder}/{object_name}.md (<LEGACY_SOURCE> fallback)',
         ]
         msg = (

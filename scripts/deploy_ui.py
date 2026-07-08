@@ -23,7 +23,7 @@ Kullanım:
     python scripts/deploy_ui.py --app dsk_se
     python scripts/deploy_ui.py --all-changed          # git'e göre webapp'i değişen app'ler
     python scripts/deploy_ui.py --apps sip_se --dry-run # build+doğrula plan, deploy YOK
-    # --ui-root ile farklı paket: --ui-root ERP/SD/ZSD015_CLC/ui (varsayılan)
+    # --ui-root ile farklı paket: --ui-root <source_root>/SD/ZSD015_CLC/ui (varsayılan)
 """
 import argparse
 import base64
@@ -36,6 +36,10 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -44,7 +48,7 @@ except Exception:
     pass
 
 REPO = Path(__file__).resolve().parents[1]
-DEFAULT_UI_ROOT = "ERP/SD/ZSD015_CLC/ui"
+DEFAULT_UI_ROOT = SOURCE_ROOT_NAME + "/SD/ZSD015_CLC/ui"
 PRELOAD = "Component-preload.js"
 
 

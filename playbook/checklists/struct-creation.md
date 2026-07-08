@@ -31,7 +31,7 @@ applies_to: [s4_private]
 | **C-STR-UNIT-01** | QUAN field var ise, `@Semantics.quantity.unitOfMeasure` annotation qualified mi? | `check_cds_currency_reference.py --type unit` | BLOCKER | Playbook §15.3 (CURR ile aynı pattern) |
 | **C-STR-UNIT-02** | Referans edilen unit field üzerinde `@Semantics.unitOfMeasure : true` marker var mı? | `check_cds_currency_reference.py --type unit` | BLOCKER | Playbook §15.3 |
 | **C-STR-DEPR-01** | `@AbapCatalog.preserveKey` annotation kullanılmış mı? | `check_deprecated_annotations.py` | WARNING | Deprecated (Sprint 5'te keşfedildi) |
-| **C-STR-KAP-01** | <LEGACY_SOURCE> md'sinde "silinen alan" var ise yeni source'tan kaldırıldı mı? | `check_td_cancelled_fields.py` (silinen-alan, WARNING-level, struct_creation zincirinde) | BLOCKER | LESSONS_LEARNED #2 — TD Spec Disiplini |
+| **C-STR-KAP-01** | <LEGACY_SOURCE> md'sinde "silinen alan" var ise yeni source'tan kaldırıldı mı? | `manual:legacy-deleted-field-check` (silinen-alan denetimi PROJE-katmanıdır: varsa `scripts/validators-local/` proje-validator'ı WARNING verir; core oto-gate YOK) | BLOCKER | LESSONS_LEARNED #2 — Spec Disiplini |
 | **C-STR-KAP-02** | Field rename'ler (eski → yeni) doğru uygulanmış mı? | `manual:field-rename-check` (oto-gate YOK) | BLOCKER | TD spec |
 | **C-STR-LANG-01** | Mevcut sistemdeki obje (varsa) ile aynı `masterLanguage="TR"` mi? | regex:master-language | WARNING | ⛔ KATEGORİ D |
 

@@ -7,7 +7,7 @@ standards/06-coding-classic-dialog.md deseninde Main + koşullu include + OO ALV
 çıktı repo'da; reviewer + spec-mutabakat sonrası MCP push_source ile gider.
 
 Kullanım:
-    python scripts/scaffold_classic_program.py ZSD001_CLC_P_ORDER_LIST --out ERP/SD/ZSD001_CLC/programs/
+    python scripts/scaffold_classic_program.py ZSD001_CLC_P_ORDER_LIST --out <source_root>/SD/ZSD001_CLC/programs/
 """
 from __future__ import annotations
 

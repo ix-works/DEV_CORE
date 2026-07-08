@@ -15,7 +15,7 @@ Kullanım:
     python populate_tables.py \\
         --package ZSD001_CLC \\
         --transport <TRANSPORT> \\
-        --csv ERP/ZSD001_CLC/table_fields.csv \\
+        --csv <source_root>/ZSD001_CLC/table_fields.csv \\
         --cwd <PROJECT_ROOT>
 
 CSV format (UTF-8, header'lı, satır başına bir alan):

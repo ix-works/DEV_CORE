@@ -22,7 +22,7 @@ Tuzaklar:
              Çoklu-kontrol: HBox yerine sibling f:fields veya ayrı f:FormElement. XML-valid → node-check
              YAKALAMAZ; bu statik gate + runtime açılış (FE-17) birlikte. (shipment 2026-07-02.)
 
-Kapsam: ERP/**/ui/**/webapp altındaki *.xml (view/fragment) + *.js (controller). node_modules,
+Kapsam: <source_root>/**/ui/**/webapp altındaki *.xml (view/fragment) + *.js (controller). node_modules,
 dist, test elenir.
 
 Kullanım:
@@ -37,13 +37,17 @@ import argparse
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 REPO = Path(__file__).resolve().parent.parent.parent
-ERP = REPO / "ERP"
+ERP = REPO / SOURCE_ROOT_NAME
 
 _SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp"}
 

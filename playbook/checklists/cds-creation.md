@@ -31,7 +31,7 @@ applies_to: [s4_private]
 | **C-CDS-CUR-02** | CURR field'ın annotation'ı `@Semantics.amount.currencyCode` qualified mi? | `check_cds_currency_reference.py` | BLOCKER | Playbook §15.3 |
 | **C-CDS-CUR-03** | QUAN field'ın annotation'ı `@Semantics.quantity.unitOfMeasure` qualified mi? | `check_cds_currency_reference.py` | BLOCKER | Playbook §15.3 |
 | **C-CDS-NS-01** | Eski <LEGACY_SOURCE> source'tan kopyalanmışsa `zsd_007_` → `zsd001_` namespace dönüştürüldü mü? | `manual:namespace-conversion-check` (oto-gate YOK) | BLOCKER | TD spec kuralı |
-| **C-CDS-NS-02** | Eski sistem field rename'leri uygulandı mı (örn. `teklif` → `order_amount`)? | `manual:<legacy_source>-field-rename-check` (oto-gate YOK; silinen-alan için `check_td_cancelled_fields` WARNING var, rename için YOK) | BLOCKER | LESSONS_LEARNED #2 |
+| **C-CDS-NS-02** | Eski sistem field rename'leri uygulandı mı (örn. `teklif` → `order_amount`)? | `manual:<legacy_source>-field-rename-check` (oto-gate YOK; silinen-alan denetimi PROJE-katmanıdır — varsa validators-local'daki proje-validator'ı WARNING verir; rename için YOK) | BLOCKER | LESSONS_LEARNED #2 |
 | **C-CDS-KEY-01** | En az 1 `key` field var mı? | regex:has-key-field | WARNING | Tüm view'lar key gerektirir |
 | **C-CDS-AGG-01** | `sum()` / `count()` kullanılmış ise `group by` var mı? | regex:group-by-check | BLOCKER | SQL kural |
 | **C-CDS-TD-01** | TD spec dosyası `.md` var mı? (`td_spec_check.py` zaten pre-flight'ta çalışır) | `td_spec_check.py` | BLOCKER | LESSONS_LEARNED #2 |

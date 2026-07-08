@@ -10,7 +10,7 @@ Kullanım:
     python populate_lock_objects.py \\
         --package ZSD001_CLC \\
         --transport <TRANSPORT> \\
-        --csv ERP/ZSD001_CLC/lock_objects.csv \\
+        --csv <source_root>/ZSD001_CLC/lock_objects.csv \\
         --cwd <PROJECT_ROOT>
 
 CSV format (UTF-8, header'lı):

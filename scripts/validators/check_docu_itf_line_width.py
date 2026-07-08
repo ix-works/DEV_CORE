@@ -16,7 +16,7 @@ her `iv_line = '...'` literal'i, apostrof-doubling normalize edildikten sonra
 
 Kullanım:
     python check_docu_itf_line_width.py [path] [--strict]
-    (path verilmezse ERP/ altındaki tüm DOCU runner *.clas.abap taranır)
+    (path verilmezse <source_root>/ altındaki tüm DOCU runner *.clas.abap taranır)
 Çıkış: 0 temiz, 1 ihlal.
 """
 # ENFORCES: DOC-F1-01  (ADR 0019 coverage binding)
@@ -25,6 +25,10 @@ import io
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -75,7 +79,7 @@ def main():
     if target:
         files = [Path(target)]
     else:
-        files = list((root / "ERP").rglob("*.clas.abap"))
+        files = list((root / SOURCE_ROOT_NAME).rglob("*.clas.abap"))
 
     total = 0
     scanned = 0

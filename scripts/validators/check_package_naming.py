@@ -20,6 +20,10 @@ import argparse
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -169,13 +173,13 @@ def validate_package(pkg_dir: Path, verbose: bool = False) -> list[str]:
 
 
 # Tooling scratch dizini artık .tmp/sap_scratch (ERP DIŞI, gitignored) — ZAI default'u
-# KALDIRILDI (2026-06-18). ERP/ZAI ARTIK YASAK: belirirse bu check onu flag'ler
+# KALDIRILDI (2026-06-18). <source_root>/ZAI ARTIK YASAK: belirirse bu check onu flag'ler
 # (ZAI-resurgence guard). Başka scratch-modül yok → exclude kümesi BOŞ.
 SCRATCH_MODULES: set = set()
 
 
 def find_packages(erp_root: Path) -> list[Path]:
-    """ERP/<MODULE>/<PKG>/ — modül seviyesi altındaki paketleri döner."""
+    """<source_root>/<MODULE>/<PKG>/ — modül seviyesi altındaki paketleri döner."""
     if not erp_root.exists():
         return []
     packages = []
@@ -203,7 +207,7 @@ def find_package_by_name(erp_root: Path, pkg_name: str) -> Path | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Paket naming kurallarını doğrula")
-    parser.add_argument("--erp-root", default="ERP", help="ERP root dizini")
+    parser.add_argument("--source-root", default=SOURCE_ROOT_NAME, help="ERP root dizini")
     parser.add_argument("--package", default=None, help="Sadece bu paketi doğrula")
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--strict", action="store_true", help="run_all_validators ile uyum için, no-op")
@@ -213,7 +217,7 @@ def main() -> int:
     if args.package:
         pkg = find_package_by_name(erp_root, args.package)
         if pkg is None:
-            print(f"HATA: {args.package} ERP/ altında bulunamadı", file=sys.stderr)
+            print(f"HATA: {args.package} <source_root>/ altında bulunamadı", file=sys.stderr)
             return 1
         packages = [pkg]
     else:

@@ -1,5 +1,5 @@
 """
-build_package_index.py — Tüm ERP/<PKG>/.rules.md'leri tarayıp
+build_package_index.py — Tüm <source_root>/<PKG>/.rules.md'leri tarayıp
 governance/package-registry.md'yi auto-üretir.
 
 Kullanım:
@@ -16,6 +16,10 @@ import re
 import sys
 from datetime import date
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -43,7 +47,7 @@ def extract_frontmatter_status(text: str) -> str:
 
 
 def collect_packages(erp_root: Path) -> list[dict]:
-    """ERP/<MODULE>/<PKG>/ — her paketten bilgi topla, modül path'ten alınır."""
+    """<source_root>/<MODULE>/<PKG>/ — her paketten bilgi topla, modül path'ten alınır."""
     packages = []
     for module_dir in sorted(erp_root.iterdir()):
         if not module_dir.is_dir() or module_dir.name.startswith("."):
@@ -104,7 +108,7 @@ def render_table(packages: list[dict]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="package-registry.md üret")
-    parser.add_argument("--erp-root", default="ERP")
+    parser.add_argument("--source-root", default=SOURCE_ROOT_NAME)
     parser.add_argument("--registry", default="governance/package-registry.md")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

@@ -14,7 +14,7 @@ sırasıyla deploy eder:
 
 Kullanım:
     python scripts/deploy_common_package.py --transport <TR>
-    python scripts/deploy_common_package.py --transport <TR> --package ZSD000_CLC --erp-root ERP/SD --cwd <conn_dir>
+    python scripts/deploy_common_package.py --transport <TR> --package ZSD000_CLC --source-root <source_root>/SD --cwd <conn_dir>
     python scripts/deploy_common_package.py --dry-run        # sadece deploy planını göster (SAP'ye dokunmaz)
 """
 import argparse
@@ -29,6 +29,10 @@ except Exception:
 
 from sap_adt_lib import set_explicit_working_dir
 from sap_client import SAPClient
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 # TR açıklamalar (obje adına göre; yoksa generic fallback). ADR 0005-D: TR text zorunlu.
 DESCRIPTIONS = {
@@ -57,7 +61,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Ortak paketi SAP'ye deploy et")
     ap.add_argument("--transport", help="Transport request (ZORUNLU; --dry-run hariç)")
     ap.add_argument("--package", default="ZSD000_CLC", help="Ortak paket (varsayılan ZSD000_CLC)")
-    ap.add_argument("--erp-root", default="ERP/SD", help="Paketin bulunduğu kök (varsayılan ERP/SD)")
+    ap.add_argument("--source-root", default=SOURCE_ROOT_NAME + "/SD", help="Paketin bulunduğu kök (varsayılan <source_root>/SD)")
     ap.add_argument("--cwd", help=".conn_adt içeren çalışma dizini")
     ap.add_argument("--dry-run", action="store_true", help="Sadece planı göster, SAP'ye dokunma")
     args = ap.parse_args()

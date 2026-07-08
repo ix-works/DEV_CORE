@@ -14,7 +14,7 @@ WARNING (bloklamaz): rapor `Filter.view.xml`'inde tek-değer `<Input ... valueHe
   → select-options için `<MultiInput>` olmalı (çoklu-değer + aralık standardı, FE-32).
   (Tüm raporlar replike edilince temizlenir → sonra HARD'a terfi adayı.)
 
-Kapsam: ERP/**/ui/**/webapp/** (dist/ build-kopyası hariç).
+Kapsam: <source_root>/**/ui/**/webapp/** (dist/ build-kopyası hariç).
 Kullanım: python check_filter_search_pattern.py [--file <path>] [--strict]
 Çıkış: 0 temiz (veya yalnız WARNING) · 1 BLOCKER (caseSensitive:false bulundu).
 """
@@ -24,6 +24,10 @@ import io
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -87,7 +91,7 @@ def main() -> int:
         # PERF: rglob node_modules'ı (1184 dizin) dolaşıyordu → os.walk ile yürüyüş anında buda.
         _prune = {"node_modules", "dist", ".tmp", "tmp", ".git"}
         ui_files = []
-        for dirpath, dirnames, filenames in os.walk(root / "ERP"):
+        for dirpath, dirnames, filenames in os.walk(root / SOURCE_ROOT_NAME):
             dirnames[:] = [d for d in dirnames if d.lower() not in _prune]
             if "ui" not in Path(dirpath).parts:  # yalnız ui/ ağacı
                 continue

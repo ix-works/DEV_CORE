@@ -11,13 +11,13 @@ Kullanım:
     python populate_cds_views.py \\
         --package ZSD015_CLC \\
         --transport <TRANSPORT> \\
-        --source-dir ERP/ZSD015_CLC/cds_src \\
+        --source-dir <source_root>/ZSD015_CLC/cds_src \\
         --cwd C:\\<LEGACY_ROOT>\\<PROJECT_NAME>
 
 Source dir formatı:
     Her CDS için bir .cds dosyası:
-        ERP/ZSD015_CLC/cds_src/ZSD015_DDL_CONTAINER_TYPES.cds
-        ERP/ZSD015_CLC/cds_src/ZSD015_DDL_SHIPPING_TYPES.cds
+        <source_root>/ZSD015_CLC/cds_src/ZSD015_DDL_CONTAINER_TYPES.cds
+        <source_root>/ZSD015_CLC/cds_src/ZSD015_DDL_SHIPPING_TYPES.cds
         ...
 
     Her .cds dosyası tam DDL kaynağını içerir (annotations + define view).

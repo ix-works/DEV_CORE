@@ -16,7 +16,7 @@ işaretleme (FN tercih). HARD (terfi 2026-06-18): bulgu = exit 1 (BLOCKER).
 
 Kullanım:
     python check_list_view_grid.py [--file <path>]
-    (--file verilmezse ERP/ altındaki ui/**/*.view.xml taranır)
+    (--file verilmezse <source_root>/ altındaki ui/**/*.view.xml taranır)
 Çıkış: 0 temiz · 1 ihlal (BLOCKER).
 """
 # ENFORCES: FE-13  (ADR 0019 coverage binding)
@@ -25,6 +25,10 @@ import io
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -74,7 +78,7 @@ def main():
         # PERF: rglob node_modules'ı (1184 dizin) dolaşıyordu → os.walk ile yürüyüş anında buda.
         _prune = {"node_modules", "dist", ".tmp", "tmp", ".git"}
         files = []
-        for dirpath, dirnames, filenames in os.walk(root / "ERP"):
+        for dirpath, dirnames, filenames in os.walk(root / SOURCE_ROOT_NAME):
             dirnames[:] = [d for d in dirnames if d.lower() not in _prune]
             if "ui" not in Path(dirpath).parts:  # yalnız ui/ ağacı
                 continue

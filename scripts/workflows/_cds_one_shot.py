@@ -13,7 +13,7 @@ p.add_argument('name', help='CDS name e.g. ZSD001_DDL_SHIPPING_TYPES')
 args = p.parse_args()
 
 NAME = args.name.upper()
-src_path = Path(f'<PROJECT_ROOT>/ERP/ZSD001_CLC/cds_src/{NAME}.cds')
+src_path = Path(f'<PROJECT_ROOT>/<source_root>/ZSD001_CLC/cds_src/{NAME}.cds')
 if not src_path.exists():
     print(f'[FAIL] {src_path} yok')
     sys.exit(1)
@@ -33,7 +33,7 @@ r = subprocess.run([
     sys.executable,
     r'<PROJECT_ROOT>/scripts/populate_cds_views.py',
     '--package','ZSD001_CLC','--transport','<TRANSPORT>',
-    '--source-dir', r'<PROJECT_ROOT>/ERP/ZSD001_CLC/cds_src',
+    '--source-dir', r'<PROJECT_ROOT>/<source_root>/ZSD001_CLC/cds_src',
     '--cwd', r'<PROJECT_ROOT>',
     '--only', NAME, '--force-recreate'
 ], capture_output=True, text=True, encoding='utf-8', errors='replace')

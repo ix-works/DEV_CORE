@@ -13,7 +13,7 @@ class'ı (marker yok) işaretlenmez. WARNING seviyesi.
 
 Kullanım:
     python check_decimal_write_to.py [--file <path>] [--strict]
-    (--file verilmezse ERP/ altındaki *.clas.abap / *.abap taranır)
+    (--file verilmezse <source_root>/ altındaki *.clas.abap / *.abap taranır)
 Çıkış: 0 temiz/uyarı, 1 ihlal (--strict ile WARNING de fail).
 """
 # ENFORCES: BE-04  (ADR 0019 coverage binding)
@@ -22,6 +22,10 @@ import io
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -64,8 +68,8 @@ def main():
     if target:
         files = [Path(target)]
     else:
-        files = list((root / "ERP").rglob("*.clas.abap")) + \
-            [p for p in (root / "ERP").rglob("*.abap") if not p.name.endswith(".clas.abap")]
+        files = list((root / SOURCE_ROOT_NAME).rglob("*.clas.abap")) + \
+            [p for p in (root / SOURCE_ROOT_NAME).rglob("*.abap") if not p.name.endswith(".clas.abap")]
 
     total = 0
     for f in files:

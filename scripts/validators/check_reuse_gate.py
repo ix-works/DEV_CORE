@@ -6,7 +6,7 @@ başka bir yerde zaten tanımlı olup olmadığını kontrol eder. Amaç: duplic
 obje yaratımını ve "var olanı tekrar üretme" hatasını SAP'ye yazmadan yakalamak.
 
 Kapsam (deterministik, repo-local):
-  - CDS/RAP view entity adları: ERP/**/*.{cds,asddls,ddls} içinde
+  - CDS/RAP view entity adları: <source_root>/**/*.{cds,asddls,ddls} içinde
     `define [root] view entity <NAME>`.
   - Generic ortak master objeler (ZSD000_I_*) — reuse hatırlatması (ADR 0009).
 
@@ -26,6 +26,10 @@ import argparse
 import re
 import sys
 from pathlib import Path
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.platform == 'win32':
     if hasattr(sys.stdout, 'reconfigure'):
@@ -46,14 +50,14 @@ def _repo_root(path: Path) -> Path:
     for parent in path.parents:
         if (parent / 'CLAUDE.md').exists() or (parent / '.git').exists():
             return parent
-    # ERP/<MOD>/<PKG>/... → 3 üst
+    # <source_root>/<MOD>/<PKG>/... → 3 üst
     return path.parents[min(3, len(path.parents) - 1)]
 
 
 def _inventory(repo: Path, exclude: Path) -> dict[str, Path]:
     """Repo'daki tüm CDS view entity adları → tanımlandığı dosya."""
     inv: dict[str, Path] = {}
-    erp = repo / 'ERP'
+    erp = repo / SOURCE_ROOT_NAME
     base = erp if erp.exists() else repo
     for pat in SCAN_GLOBS:
         for f in base.glob(pat):

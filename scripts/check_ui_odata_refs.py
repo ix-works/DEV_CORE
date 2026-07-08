@@ -10,7 +10,7 @@ Kontroller:
   • new Filter("P") / $orderby / $select / view {P} binding -> P metadata property mi?
 
 Kullanim:
-  python scripts/check_ui_odata_refs.py --app ERP/SD/ZSD001_CLC/ui/order_app_rap \
+  python scripts/check_ui_odata_refs.py --app <source_root>/SD/ZSD001_CLC/ui/order_app_rap \
       --service ZSD001_UI_SO_O2
   (baglanti: .conn_adt; --service yoksa manifest mainService uri'sinden cikarilir)
 

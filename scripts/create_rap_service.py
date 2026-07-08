@@ -24,6 +24,10 @@ from xml.sax.saxutils import escape as xml_escape
 
 sys.path.insert(0, __import__("os").path.dirname(__file__))
 from sap_adt_lib import SAPADTClient
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 urllib3.disable_warnings()
 
@@ -670,10 +674,10 @@ def main():
     ap.add_argument("--url", default="")
     ap.add_argument("--accept", default="")
     ap.add_argument("--bdef-source",
-                    default="ERP/SD/ZSD001_CLC/cds/ZSD001_I_ORDER.bdef")
+                    default=SOURCE_ROOT_NAME + "/SD/ZSD001_CLC/cds/ZSD001_I_ORDER.bdef")
     ap.add_argument("--bdef-name", default=BDEF_NAME)
     ap.add_argument("--ccimp-source",
-                    default="ERP/SD/ZSD001_CLC/classes/ZCL_SD001_ORDER.ccimp.abap")
+                    default=SOURCE_ROOT_NAME + "/SD/ZSD001_CLC/classes/ZCL_SD001_ORDER.ccimp.abap")
     ap.add_argument("--bclass-name", default="",
                     help="behavior class adı (override; default ZCL_SD001_ORDER)")
     ap.add_argument("--srvd-name", default="")

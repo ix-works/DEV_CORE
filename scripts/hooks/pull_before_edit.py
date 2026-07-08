@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """PreToolUse (matcher: Edit|Write) — PULL-BEFORE-EDIT gate (ADR 0016 revize).
 
-Yönetilen bir SAP source dosyasını (ERP/ altı, source uzantısı) düzenlemeden ÖNCE,
+Yönetilen bir SAP source dosyasını (<source_root>/ altı, source uzantısı) düzenlemeden ÖNCE,
 o objenin canlı GÜNCEL hali bu SEANSTA çekilmiş/yazılmış olmalı. Değilse edit
 BLOKLANIR (exit 2) ve agent önce `scripts/sap_sync_pull.py` ile çeker. Böylece
 working-copy daima TAZE canlıdan türer → push, canlıdaki belgelenmemiş bir değişikliği
