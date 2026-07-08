@@ -50,8 +50,14 @@ def is_list_view(filename, text):
     return bool(_LIST_NAME.search(filename))
 
 
+_XML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)  # B7 fix (2026-07-09): yorum-strip
+
+
 def scan_view(filename, text):
     """List/Report-adlı + GERÇEK m.Table'lı + sap.ui.table'sız view → (1, col_count); aksi []."""
+    # B7 fix: XML yorumlarını çıkar — yorumdaki `<!-- sap.ui.table -->` gerçek m.Table ihlalini
+    # MASKELEMESİN (health-check false-negative bulgusu). is_list_view dosya-adına bakar (etkilenmez).
+    text = _XML_COMMENT.sub("", text)
     if _UI_TABLE_NS.search(text):
         return []  # grid zaten kullanılıyor → temiz
     if not is_list_view(filename, text):

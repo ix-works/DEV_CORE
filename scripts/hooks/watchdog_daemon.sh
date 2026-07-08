@@ -35,6 +35,9 @@ alert() {
 log "START watchdog daemon (sid=$SID pid=$$)"
 touch "$HB"
 fails=0
+alerted=0   # B4 fix (2026-07-09): EDGE-triggered alert — kopuklugun BASINDA bir kez uyar,
+            # kopuk sürerken SUS, recovery'de resetle. Eskiden level-triggered idi (fails>=2 → alert →
+            # fails=0 → ~3dk sonra TEKRAR alert) → uzun kopuklukta Windows MessageBox SPAM (health-check B4).
 for i in $(seq 1 72); do
   [ -f "$STOP" ] && { log "STOP sentinel → cikiyor"; rm -f "$STOP"; break; }
   reach=$(curl -sk -o /dev/null -w "%{http_code}" -u "$U:$P" "$H/sap/bc/adt/discovery" --max-time 12 2>/dev/null)
@@ -42,13 +45,16 @@ for i in $(seq 1 72); do
   if [ "$reach" != "200" ]; then
     fails=$((fails+1))
     log "reach=$reach (fails=$fails)"
-    if [ "$fails" -ge 2 ]; then
+    if [ "$fails" -ge 2 ] && [ "$alerted" -eq 0 ]; then
       alert "SAP/ADT ERISILEMEZ (reach=$reach) — VPN/MCP kopmus olabilir. Arka-plan agent STALL riski; kontrol et."
-      fails=0
+      alerted=1   # tek uyari; kopuk sürerken tekrar basma (fails'i sifirLAMA — recover'da temizlenir)
     fi
   else
-    # #2: saglikliyken de periyodik OK satiri (log spam'siz): recovery (onceki tur fail) VEYA her 6. tur (~10dk).
-    if [ "$fails" -gt 0 ] || [ $(( i % 6 )) -eq 1 ]; then
+    # recovery: onceki turda uyarilmissa "toparlandi" satiri + alert-bayragi reset (sonraki kopmada yine uyar).
+    if [ "$alerted" -eq 1 ]; then
+      log "reach=200 OK — TOPARLANDI (SAP erisim geri geldi; alert reset, tur=$i/72, sid=$SID)"
+      alerted=0
+    elif [ "$fails" -gt 0 ] || [ $(( i % 6 )) -eq 1 ]; then
       log "reach=200 OK (tur=$i/72, sid=$SID)"
     fi
     fails=0

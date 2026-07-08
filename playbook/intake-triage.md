@@ -22,7 +22,7 @@ purpose: Geliştirme talebi alım protokolü — kapsam-sınıflama + 3-eksen ar
 
 ---
 
-## 6 ADIM
+## PROTOKOL — 6 ANA ADIM (+ adım 7: çıkış-kaydı)
 
 ### 1. SINIFLA (İKİ DİK EKSEN + KAPSAM) — gerekçeyle
 Bir iş **iki dik eksende birden** yer alır — karıştırma:
