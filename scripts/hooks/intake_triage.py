@@ -17,6 +17,14 @@ import json
 import re
 import sys
 
+# B5: otomatik-event işaretleri (task-notification/sistem-bildirimi = kullanıcı-turn'ü DEĞİL).
+# Kullanıcı bunları yazmaz → filtrelemek yanlış-negatif üretmez. system-reminder HARİÇ (her promptta).
+_AUTO_EVENT_MARKERS = (
+    "<task-notification>",
+    "This is an automated background-task event",
+    "[SYSTEM NOTIFICATION - NOT USER INPUT]",
+)
+
 # Geliştirme-TALEBİ/NİYETİ sinyali (obje-tipi DEĞİL — iş başlatma/revizyon niyeti).
 # Yüksek eşik: gürültü olmasın. skill_injector _STRONG obje-tipini yakalar; bu iş-niyetini.
 _INTENT = re.compile(
@@ -82,6 +90,13 @@ def main() -> int:
     except Exception:
         return 0
     prompt = data.get("prompt", "") or ""
+
+    # B5 fix (2026-07-09): OTOMATİK-EVENT filtresi — task-notification / sistem-bildirimi
+    # gerçek kullanıcı promptu DEĞİL; içeriğinde "geliştir/rapor" geçse de ITG tetiklenmemeli
+    # (health-check yanlış-pozitif bulgusu). Bu işaretleri kullanıcı YAZMAZ (harness enjekte
+    # eder) → yanlış-negatif riski yok. NOT: <system-reminder> DAHİL EDİLMEZ (her promptta olur).
+    if any(mk in prompt for mk in _AUTO_EVENT_MARKERS):
+        return 0
 
     if not _INTENT.search(prompt):
         return 0  # geliştirme-niyeti sinyali yok → sessiz

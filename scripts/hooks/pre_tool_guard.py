@@ -177,9 +177,12 @@ def _yasaklar_damga_sorunu() -> str:
 
 
 def _canon_path(s: str) -> str:
-    """Yol-kıyas kanonu: hem `C:\\<LEGACY_ROOT>` hem git-bash `/c/<LEGACY_ROOT>` aynı forma iner.
-    lower · \\→/ · sürücü-iki-noktası düşür (`c:/`→`c/`) → alt-dize kıyası tutar."""
-    return s.replace("\\", "/").lower().replace(":", "")
+    """Yol-kıyas kanonu: hem `<DRIVE>\\<FROZEN_ROOT>` hem git-bash `/<drive>/<root>` aynı forma iner.
+    lower · \\→/ · sürücü-iki-noktası düşür · ÇOKLU-slash→tek (B1 fix 2026-07-09):
+    project.yaml liste-değeri naif-parser'da çift-backslash unescape edilmeyince `_FROZEN`
+    çift-slash oluyordu → gerçek tek-slash yollar eşleşmiyordu (FREEZE-GUARD R10 ölüydü).
+    Coklu-slash normalizasyonu HEM _FROZEN'ı HEM gelen yolu aynı forma indirir (format-bağımsız)."""
+    return re.sub(r"/{2,}", "/", s.replace("\\", "/").lower().replace(":", ""))
 
 
 _FROZEN = [_canon_path(p).rstrip("/") for p in _frozen_paths() if p]

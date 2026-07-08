@@ -65,12 +65,26 @@ _WORKTYPES = [
 ]
 
 
+# B5 fix (2026-07-09): otomatik-event işaretleri (task-notification/sistem-bildirimi =
+# kullanıcı-turn'ü DEĞİL). Kullanıcı yazmaz → filtre yanlış-negatif üretmez. system-reminder HARİÇ.
+_AUTO_EVENT_MARKERS = (
+    "<task-notification>",
+    "This is an automated background-task event",
+    "[SYSTEM NOTIFICATION - NOT USER INPUT]",
+)
+
+
 def main() -> int:
     try:
-        data = json.load(sys.stdin)
+        # UTF-8 stdin (Windows cp1252 TR-char bozulmasına karşı — intake_triage ile tutarlı, HC1 notu)
+        data = json.loads(sys.stdin.buffer.read().decode("utf-8", errors="replace"))
     except Exception:
         return 0
     prompt = data.get("prompt", "") or ""
+
+    # B5: otomatik-event → enjeksiyon yok (task-notification'da "SAP işi" yanlış-pozitifi)
+    if any(mk in prompt for mk in _AUTO_EVENT_MARKERS):
+        return 0
 
     sap_hit = bool(_STRONG.search(prompt))
     browser_hit = bool(_BROWSER.search(prompt))

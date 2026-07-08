@@ -46,13 +46,21 @@ _DETERMINATION_ADMIN = re.compile(
 )
 
 
+# B7 fix (2026-07-09): yorum-strip — yorumdaki `// setAdmin` gerçek eksikliği MASKELEMESİN
+_BDEF_LINE_C = re.compile(r"//[^\n]*")            # satır-sonu yorum (newline korunur → line_no sabit)
+_BDEF_BLOCK_C = re.compile(r"/\*.*?\*/", re.DOTALL)  # blok yorum
+
+
 def scan_bdef(text):
     """Audit alanı içeren ama admin determination'ı olmayan .bdef ise ilk audit alanını
     (line_no, field) olarak döner; aksi halde boş liste."""
-    if _DETERMINATION_ADMIN.search(text):
+    # determination-var kontrolü YORUM-SIZ metinde (yorumdaki setAdmin false-negative yaratmasın).
+    clean = _BDEF_LINE_C.sub("", _BDEF_BLOCK_C.sub("", text))
+    if _DETERMINATION_ADMIN.search(clean):
         return []
     for i, raw in enumerate(text.splitlines(), 1):
-        m = _AUDIT_FIELDS.search(raw)
+        line = _BDEF_LINE_C.sub("", raw)  # satırdaki yorumu at (line_no korunur)
+        m = _AUDIT_FIELDS.search(line)
         if m:
             return [(i, m.group(1))]
     return []

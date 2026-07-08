@@ -429,14 +429,26 @@ def katman4() -> list[Sonuc]:
     if not frozen:
         r.append((SKIP, "project.yaml frozen_readonly_paths boş — freeze-guard canlı testi atlandı"))
     else:
-        hedef = frozen[0].rstrip("\\/") + os.sep + "__ix_doctor_probe__.txt"
-        rc, out, _ = _hook_kos("pre_tool_guard",
-                               {"tool_name": "Write",
-                                "tool_input": {"file_path": hedef, "content": "ix_doctor freeze probe"}})
-        if rc == 2 and "FREEZE-GUARD" in out:
-            r.append((PASS, f"freeze-guard CANLI: dondurulmuş köke sahte-Write RED edildi (exit 2; hedef: {hedef})"))
+        # B3 fix (2026-07-09): GERÇEKÇİ yol formatları test et. Eskiden ham project.yaml değeri
+        # (çift-backslash artefaktı) + os.sep kullanılıyordu → guard'ın eski _canon delik-halinde
+        # bile yanlış-pozitif PASS veriyordu (health-check B3). Gerçek Edit/Write tek-backslash
+        # ya da düz-slash verir → İKİ varyantı da test et; HER İKİSİ de RED olmalı.
+        kok = frozen[0].rstrip("\\/").replace("\\\\", "\\")  # çift-backslash → tek (yaml artefaktı)
+        varyantlar = [
+            ("backslash", kok + "\\__ix_doctor_probe__.txt"),
+            ("forward",   kok.replace("\\", "/") + "/__ix_doctor_probe__.txt"),
+        ]
+        delik = []
+        for etiket, hedef in varyantlar:
+            rc, out, _ = _hook_kos("pre_tool_guard",
+                                   {"tool_name": "Write",
+                                    "tool_input": {"file_path": hedef, "content": "ix_doctor freeze probe"}})
+            if not (rc == 2 and "FREEZE-GUARD" in out):
+                delik.append(f"{etiket}={hedef}→exit{rc}")
+        if not delik:
+            r.append((PASS, f"freeze-guard CANLI: dondurulmuş köke sahte-Write RED (her iki yol-formatı; kök: {kok})"))
         else:
-            r.append((FAIL, f"freeze-guard DELİK: sahte-Write exit {rc} (beklenen 2 + RED mesajı; hedef: {hedef})"))
+            r.append((FAIL, f"freeze-guard DELİK: {'; '.join(delik)} (beklenen exit 2 + RED mesajı — gerçek yol formatları geçiyor!)"))
     return r
 
 

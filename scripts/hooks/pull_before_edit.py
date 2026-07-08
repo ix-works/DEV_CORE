@@ -28,6 +28,18 @@ if sys.platform == "win32" and hasattr(sys.stderr, "buffer"):
 ROOT = Path(__file__).resolve().parents[2]
 FRESH_STORE = ROOT / ".claude" / ".session_fresh.json"
 
+# B2 fix (2026-07-09): kaynak-kök segmenti project.yaml `source_root`'tan dinamik.
+# Eskiden sabit "erp" aranıyordu; K12 ile ERP→SOURCE_CODES rename edilince PULL-BEFORE-EDIT
+# güncel kaynaklarda HİÇ tetiklenmez olmuştu (health-check B2 bulgusu). Config'ten oku +
+# geçiş-uyumluluk için eski "erp"i de kabul et.
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # core/scripts
+    from utils.project_config import source_root_name as _srn  # type: ignore
+    _SRC_SEG = (_srn() or "SOURCE_CODES").lower()
+except Exception:
+    _SRC_SEG = "source_codes"
+_ROOT_SEGMENTS = {_SRC_SEG, "erp"}  # güncel + geçiş-eski
+
 _SOURCE_EXTS = (
     ".cds", ".ddls", ".asddls", ".bdef", ".srvd", ".srvb",
     ".abap", ".dcl", ".asdcls", ".ddlx", ".asddlxs",
@@ -47,7 +59,7 @@ def _is_managed_sap_source(p: Path) -> bool:
     if n.endswith(_CLASS_SUBSOURCE):   # alt-include ana objeyle gelir, ayrı pull edilmez
         return False
     parts = {s.lower() for s in p.parts}
-    if "erp" not in parts:
+    if not (_ROOT_SEGMENTS & parts):
         return False
     if _EXCLUDED_DIRS & parts:
         return False
