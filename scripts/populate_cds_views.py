@@ -68,8 +68,18 @@ def extract_view_name(source: str) -> str:
 #   broken (Sprint 4'te SHIPPING_TYPES bunu tekrar gösterdi)
 #
 # Whitelist kuralı: sadece tek format OK, geri kalan hepsi RED.
-SQL_VIEW_PATTERN  = re.compile(r"^ZSD015_V_[A-Z0-9]{1,5}$")    # POZİTİF: tek geçerli format
-VIEW_NAME_PATTERN = re.compile(r"^zsd015_ddl_[a-z0-9_]+$")     # POZİTİF: view name TD namespace
+# B-5 (K12/§9.3): prefix'ler PROJE-CONFIG'ten — core hard-code etmez. project.yaml:
+#   sql_view_prefix: ZSD001_V_   ·   cds_view_name_prefix: zsd001_ddl_
+# Eksikse gate VARSAYMAZ: validate anında NET hatayla durur (fail-safe).
+import sys as _pc_sys
+from pathlib import Path as _pc_Path
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
+from utils.project_config import cfg as _cfg  # noqa: E402
+
+_SQLP = _cfg("sql_view_prefix")          # örn. "ZSD001_V_"
+_VNP  = _cfg("cds_view_name_prefix")     # örn. "zsd001_ddl_"
+SQL_VIEW_PATTERN  = re.compile(r"^" + re.escape(_SQLP) + r"[A-Z0-9]{1,5}$") if _SQLP else None
+VIEW_NAME_PATTERN = re.compile(r"^" + re.escape(_VNP) + r"[a-z0-9_]+$") if _VNP else None
 SQL_VIEW_MAX_LEN  = 14                                          # SAP DB SQL view 14 char limit
 
 # RAP view entity: `define [root] view entity` — sqlViewName TAŞIMAZ. Klasik
@@ -133,6 +143,11 @@ def validate_sql_view_names(cds_files):
     Returns: hata mesajı listesi (boş = OK)
     """
     errors = []
+    # B-5 fail-safe: prefix config'i yoksa VARSAYMA — gate çalışamaz, NET hata.
+    if SQL_VIEW_PATTERN is None or VIEW_NAME_PATTERN is None:
+        return ["NAMESPACE-GATE KONFİGÜRE DEĞİL (B-5): project.yaml'a "
+                "`sql_view_prefix: <ZMOD00N_V_>` ve `cds_view_name_prefix: <zmod00n_ddl_>` "
+                "ekle — gate prefix VARSAYMAZ, bu doldurulmadan CDS populate REDDEDİLİR."]
     for f in cds_files:
         try:
             source = f.read_text(encoding='utf-8')

@@ -26,12 +26,9 @@ Ekte ilgili SAP gelistirme dokumanlari yer almaktadir.
 Iyi calismalar.
 """
 
-ATTACHMENTS = [
-    r"C:\<LEGACY_ROOT>\<PROJECT_NAME>\ERP\ZSD008_CLC\FS-SD-008_ZSD008_P_SATIS_CIRO.txt",
-    r"C:\<LEGACY_ROOT>\<PROJECT_NAME>\ERP\ZSD008_CLC\TS-SD-008_ZSD008_P_SATIS_CIRO.txt",
-    r"C:\<LEGACY_ROOT>\<PROJECT_NAME>\ERP\ZSD009_CLC\FS-SD-009_ZSD009_P_FITTINS_MIZAN.txt",
-    r"C:\<LEGACY_ROOT>\<PROJECT_NAME>\ERP\ZSD009_CLC\TS-SD-009_ZSD009_P_FITTINS_MIZAN.txt",
-]
+# B10: ekler PROJE-CONFIG'ten (project.yaml mail_attachments: [yol, ...]) — core sabit-yol tasimaz
+from utils.project_config import cfg as _cfg
+ATTACHMENTS = [str(x) for x in (_cfg('mail_attachments') or [])]
 # ============================================================
 
 def send_mail():

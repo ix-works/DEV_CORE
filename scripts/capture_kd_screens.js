@@ -1,5 +1,5 @@
 /**
- * KD ekran görüntüsü üreteci — ZSD011 Fittings Sipariş (mock UI, panel-bazlı kırpma).
+ * KD ekran görüntüsü üreteci — jenerik (mock UI, panel-bazlı kırpma). B10/B-8: paket-parametrik.
  *
  * Reçete: playbook/howto-kullanici-dokumani-pdf-ekran-goruntulu.md §A.
  *   - Mock sunucu çalışır olmalı: cd ui/fittings_order_rap && npm run start-mock  (port log'dan)
@@ -9,14 +9,19 @@
  *     Depo/Teslimat dialog) AYRI kırpılır → kullanıcı her bölümü tek tek görür.
  *
  * Çalıştır:  node scripts/capture_kd_screens.js [http://localhost:PORT]
- * Çıktı   :  ERP/SD/ZSD011_CLC/docs/screenshots/kd-*.png
+ * Çıktı   :  <arg2 OUT dizini>/kd-*.png   (kullanım: node capture_kd_screens.js <URL> <OUT>)
  */
 const path = require("path");
-const PW = "C:/Users/DELL/AppData/Roaming/npm/node_modules/@playwright/cli/node_modules/playwright-core";
-const { chromium } = require(PW);
+// B10: playwright-core makine-bagimsiz cozumleme (env -> npm-global APPDATA turetimi -> duz require)
+const PW = process.env.PLAYWRIGHT_CORE_PATH
+  || (process.env.APPDATA ? process.env.APPDATA.replace(/\/g, "/") + "/npm/node_modules/@playwright/cli/node_modules/playwright-core" : "playwright-core");
+let chromium;
+try { ({ chromium } = require(PW)); }
+catch { ({ chromium } = require("playwright-core")); }
 
 const URL = (process.argv[2] || "http://localhost:8092").replace(/\/$/, "");
-const OUT = path.resolve(__dirname, "..", "ERP", "SD", "ZSD011_CLC", "docs", "screenshots");
+const OUT = process.argv[3];
+if (!OUT) { console.error("KULLANIM: node capture_kd_screens.js <URL> <OUT-dizini>  (B10: paket VARSAYILMAZ)"); process.exit(2); }
 
 // ── Zengin örnek state (TEMİZ örnek veri; KVKK/gerçek-veri yok) ──────────────
 const STATE = {

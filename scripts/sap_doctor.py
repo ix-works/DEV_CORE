@@ -149,11 +149,16 @@ def run(probe: str, ptype: str, package: str) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="SAP bağlantı/ortam tanısı")
-    ap.add_argument("--probe", default="ZSD015_I_VOYAGE", help="Canlı test için obje adı")
+    ap.add_argument("--probe", default=None, help="Canlı test objesi (default: project.yaml doctor_probe_object)")
     ap.add_argument("--type", default="ddls", help="Probe obje tipi (ddls/class/tabl...)")
-    ap.add_argument("--package", default="ZSD015_CLC", help="Erişim teyidi için paket")
+    ap.add_argument("--package", default=None, help="Erişim paketi (default: project.yaml active_package)")
     args = ap.parse_args()
-    return run(args.probe, args.type, args.package)
+    from utils.project_config import cfg as _cfg
+    probe = args.probe or _cfg("doctor_probe_object")
+    pkg = args.package or _cfg("active_package")
+    if not probe or not pkg:
+        print("UYARI: probe/paket config yok (project.yaml doctor_probe_object + active_package) — canli-probe adimi SINIRLI kosacak")
+    return run(probe or "", args.type, pkg or "")
 
 
 if __name__ == "__main__":

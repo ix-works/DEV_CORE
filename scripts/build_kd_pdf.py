@@ -19,8 +19,15 @@ from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
 from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
-BASE = r'C:\<LEGACY_ROOT>\<PROJECT_NAME>'
-DOCS = os.path.join(BASE, SOURCE_ROOT_NAME, 'SD', 'ZSD011_CLC', 'docs')
+# B10/K12: kökler PROJE-CONFIG'ten (paket hard-code YOK). project.yaml:
+#   kd_docs_dir: SOURCE_CODES/SD/<PKG>/docs   ·   kd_help_dir: SOURCE_CODES/SD/<PKG>/ui/<app>/webapp/help
+from utils.project_config import project_root, cfg as _cfg
+BASE = str(project_root())
+_docs_rel = _cfg('kd_docs_dir')
+if not _docs_rel:
+    print('HATA (B10): project.yaml kd_docs_dir + kd_help_dir doldurulmali — core paket VARSAYMAZ')
+    raise SystemExit(2)
+DOCS = os.path.join(BASE, _docs_rel)
 SHOT = os.path.join(DOCS, 'screenshots')
 MD = os.path.join(DOCS, 'KD-SD-011_Fittings_Siparis_Kullanici_Kilavuzu.md')
 HTML = os.path.join(DOCS, 'KD-SD-011_Fittings_Siparis_Kullanici_Kilavuzu.html')
@@ -140,7 +147,7 @@ open(HTML, 'w', encoding='utf-8').write(html)
 #    webapp/help/kullanici-kilavuzu.html açar — onOpenHelp). Aksi halde uygulamadaki kopya bayatlar.
 #    NOT: senkron sonrası UI BSP RE-DEPLOY gerekir (canlıda görünmesi için).
 import shutil
-HELP = os.path.join(BASE, SOURCE_ROOT_NAME, 'SD', 'ZSD011_CLC', 'ui', 'fittings_order_rap', 'webapp', 'help')
+HELP = os.path.join(BASE, _cfg('kd_help_dir') or '')
 if os.path.isdir(HELP):
     open(os.path.join(HELP, 'kullanici-kilavuzu.html'), 'w', encoding='utf-8').write(html)
     hshot = os.path.join(HELP, 'screenshots')

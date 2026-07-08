@@ -48,7 +48,10 @@ except Exception:
     pass
 
 REPO = Path(__file__).resolve().parents[1]
-DEFAULT_UI_ROOT = SOURCE_ROOT_NAME + "/SD/ZSD015_CLC/ui"
+# B10/K12: varsayılan UI kökü PROJE-CONFIG'ten (project.yaml default_ui_root:
+# "SOURCE_CODES/SD/<PKG>/ui"); yoksa --ui-root ZORUNLU (core paket VARSAYMAZ).
+from utils.project_config import cfg as _cfg
+DEFAULT_UI_ROOT = _cfg("default_ui_root")  # None olabilir
 PRELOAD = "Component-preload.js"
 
 
@@ -195,7 +198,8 @@ def main() -> int:
     g.add_argument("--apps", help="Virgülle app listesi (ör. sip_se,dsk_se,fih_se)")
     g.add_argument("--all-changed", action="store_true", help="git'e göre webapp değişen app'ler")
     g.add_argument("--all", action="store_true", help="ui-root'taki TÜM deployable app (ui5-deploy.yaml olan)")
-    ap.add_argument("--ui-root", default=DEFAULT_UI_ROOT, help=f"UI workspace kökü (varsayılan {DEFAULT_UI_ROOT})")
+    ap.add_argument("--ui-root", default=DEFAULT_UI_ROOT,
+                help=f"UI workspace kökü (varsayılan: project.yaml default_ui_root={DEFAULT_UI_ROOT})")
     ap.add_argument("--dry-run", action="store_true", help="build+doğrula planı, deploy YAPMA")
     ap.add_argument("--verify-only", action="store_true",
                     help="DEPLOY ETME — sadece canlı BSP == mevcut kaynaktan build mi karşılaştır (stale tarama)")

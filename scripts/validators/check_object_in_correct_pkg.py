@@ -30,14 +30,14 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Paket bazlı istisnalar (NTTDATA-onaylı veya legacy)
-PACKAGE_EXCEPTIONS = {
-    "ZSD003_CLC": [r"^ZCL_ZSD_FITTINGS_", r"^ZSD_FITTINGS_"],
-    "ZSD009_CLC": [r"^ZFI_I_FITT_", r"^ZCL_ZSD009_"],
-    "ZSD015_CLC": [r"^ZCL_SD015_", r"^ZIF_SD015_"],  # ABAP OO class/interface prefix (ZCL_/ZIF_ <module>_<name>)
-    "ZSD011_CLC": [r"^ZCL_SD011_"],  # RAP behavior class prefix (ZCL_<module>_<name>)
-    "ZSD000_CLC": [r"^ZCL_SD000_"],  # RAP behavior class prefix (ZCL_<module>_<name>)
-    # Diğer paketler için .rules.md'den otomatik okuma — gelecek versiyon
-}
+# B10/K12: paket-istisnalari PROJE-CONFIG'ten. project.yaml:
+#   package_exceptions: ["ZSD001_CLC:^ZCL_SD001_", "ZSD001_CLC:^ZIF_SD001_"]
+from utils.project_config import cfg as _cfg
+PACKAGE_EXCEPTIONS: dict = {}
+for _e in (_cfg('package_exceptions') or []):
+    if ':' in str(_e):
+        _pkg, _rx = str(_e).split(':', 1)
+        PACKAGE_EXCEPTIONS.setdefault(_pkg.strip(), []).append(_rx.strip())
 
 # Sadece bu klasörlerde obje adı doğrulanır (root'taki .md/.txt'ler ve docs/ muaf)
 CHECK_FOLDERS = {"cds", "classes", "programs", "structures", "tables", "functions", "auth"}

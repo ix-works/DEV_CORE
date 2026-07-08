@@ -9,10 +9,14 @@
 # Amaç: 20-dk körlük yerine ≤5dk'da stall tespiti + garantili periyodik check-in.
 
 set -u
-CONN="C:/<LEGACY_ROOT>/<PROJECT_NAME>/.conn_adt"
+# B10/B-6: proje-koku env-first; host .conn_adt'ten; probe listesi opsiyonel dosyadan
+PROJ="${CLAUDE_PROJECT_DIR:-$PWD}"
+CONN="$PROJ/.conn_adt"
 U=$(grep -i '^ADT_SAP_USER=' "$CONN" | cut -d= -f2 | tr -d '\r')
 P=$(grep -i '^ADT_SAP_PASSWORD=' "$CONN" | cut -d= -f2- | tr -d '\r')
-H="https://<SAP_HOST>.<SAP_DOMAIN>:44300"
+H="$(grep -m1 '^ADT_SAP_URL' "$CONN" 2>/dev/null | cut -d= -f2- | tr -d ' ')"
+[ -z "$H" ] && { echo "watchdog: .conn_adt/ADT_SAP_URL yok — izleme kapali"; exit 0; }
+PROBES_FILE="$PROJ/.claude/watchdog_probes"   # satir: <odata-servis-path>|<beklenen-desen>
 MODE="${1:-zsd015_batch_removal}"
 
 BATCH_CDS="zsd015_i_ihrse_stock_batch zsd015_i_sipse_stock_batch zsd015_i_batch_stock zsd015_i_ihrse_alloc zsd015_i_sipse_alloc zsd015_i_mmqty_by_bat zsd015_i_ewmqty_by_bat zsd015_i_ewmphys_by_bat"
