@@ -1,8 +1,13 @@
 # CLAUDE.md — <PROJECT_NAME> (ince proje loader'ı)
 
+<!-- KESİN YASAKLAR bloğu init_project tarafından buraya FİZİKSEL damgalanır (junction-
+     bağımsız daima yüklü). Aşağıdaki @import metodolojinin GERİ KALANINI yükler. -->
+
 @core/CLAUDE.core.md
 
-> Yukarıdaki import metodoloji çekirdeğini yükler (yasaklar, protokol, SORU 0, gate'ler).
+> Yukarıdaki import metodoloji çekirdeğini yükler (protokol, SORU 0, gate'ler). **Yasaklar
+> yukarıda fiziksel damgalıdır — import'a bağlı değil** (junction kırılsa da anayasa yüklü;
+> `check_kesin_yasaklar` guard'ı damganın kanonikle eşliğini zorlar).
 > **Bu dosyada YALNIZ proje-özel bilgi durur.** Metodoloji buraya YAZILMAZ (SORU 0 → core).
 > Not: Metodoloji dosyaları `core/` junction'ı altındadır; core dokümanlarındaki göreli
 > yollar CORE köküne göredir. **Metodoloji araması DAİMA `path=core/` ile** (kök-Grep

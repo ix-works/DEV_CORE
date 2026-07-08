@@ -8,7 +8,7 @@
 
 ---
 
-<kesin-yasaklar priority="MUST-NOT" enforcement="ADR-0005 · bypass-yok · istisna-yok · her-oturum-aktif">
+<kesin-yasaklar priority="MUST-NOT" enforcement="ADR-0005 · bypass-yok · istisna-yok · FİZİKSEL-DAMGA">
 
 ```
 ████████████████████████████████████████████████████████████████
@@ -16,23 +16,27 @@
 ████████████████████████████████████████████████████████████████
 ```
 
-| Kategori | Yasak |
-|---|---|
-| **A — Standart SAP objeleri** (Z/Y ile başlamayan) | Hiçbir şekilde yarat/değiştir/sil. Append struct, alan ekleme, FM/BAdI/program değişikliği, message class değişikliği = YASAK. Bunları yapan script çalıştırma da YASAK. **Append field/DTEL adını AI ÖNERMEZ — kullanıcı belirler, sonucu AI'a bildirir.** |
-| **B — Standart tablo verileri** | Direkt `INSERT/UPDATE/DELETE/MODIFY` YASAK (Z'li programda yazdığın kod içinde bile). Sıralı arama: BAPI → RFC FM → transaction (BDC) → kullanıcıdan manuel. Asla direkt SQL. |
-| **C — Sistem state** | Transport request yaratma, release etme YASAK. Package yaratma YASAK. Enqueue lock silme YASAK. |
-| **D — Z'li obje yaratma** | Login dili = projenin **master_language**'i (`project.yaml`; ör. `sap-language=TR`). Tüm 4 field label (short/medium/long/heading) o dilde ve TAM yazılır. Title/description boş bırakılmaz. Activate öncesi REST GET ile doğrulanır. |
-
-**Yapılması gerekiyorsa:** DUR → AÇIKLA → ÖNERİ SUN → KULLANICIDAN İSTE → BEKLE → DEVAM. "Küçük dokunuş" istisnası YOK.
-
-📖 Detay: [`governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md`](governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md)
+> **Bu yasakların TAM metni her projenin kök `CLAUDE.md`'sine FİZİKSEL damgalıdır**
+> (kanonik: `claude/kesin-yasaklar.canonical.md`) — junction/`@import`'a bağımlı DEĞİL:
+> kök CLAUDE.md doğrudan yüklenir, junction kırılsa da anayasa context'te. `init_project`
+> damgalar · `check_kesin_yasaklar` guard'ı (run_all_validators + session_start +
+> pre_tool_guard SAP-yazma) damganın kanonikle eşliğini zorlar · `sync_yasaklar.py`
+> kanonik değişince yeniden damgalar. **Özet (tam metin kök CLAUDE.md'de):**
+>
+> - **A — Standart SAP objeleri** (Z/Y ile başlamayan): yarat/değiştir/sil YASAK; append/DTEL adını AI önermez.
+> - **B — Standart tablo verileri**: direkt `INSERT/UPDATE/DELETE/MODIFY` YASAK (BAPI→RFC→BDC→manuel).
+> - **C — Sistem state**: transport/package yaratma/release, enqueue lock silme YASAK.
+> - **D — Z'li obje**: login = projenin `master_language`'i; 4 field label TAM; activate öncesi REST GET doğrula.
+>
+> **Yapılması gerekiyorsa:** DUR → AÇIKLA → ÖNERİ SUN → KULLANICIDAN İSTE → BEKLE → DEVAM. "Küçük dokunuş" istisnası YOK.
+> 📖 Detay: [`governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md`](governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md)
 
 </kesin-yasaklar>
 
 > **🧭 ÇEKİRDEK DAVRANIŞ — lider + TÜM alt-ajanlar:** **TAHMİN YASAK = kanıtlı hareket et.**
 > Yöntem/pattern/syntax/alan-adını mevcut artefakt + playbook/standard'dan doğrula, canlı
 > teyit et; "activated/uploaded/çalıştı" mesajına güvenme; emin değilsen DUR → sor;
-> DTEL/append adı önerme (kullanıcı verir). Bu satır CLAUDE.core ile alt-ajanlara da yüklenir.
+> DTEL/append adı önerme (kullanıcı verir). (Tam yasak metni kök CLAUDE.md'de fiziksel damgalı.)
 
 > **🔎 ARAMA TALİMATI (D29 — kritik):** Grep aracı `.gitignore`'a uyar ve `core/` proje
 > tarafında ignore'ludur → **proje kökünden yapılan aramalar metodolojiyi GÖRMEZ.**

@@ -35,6 +35,7 @@ from utils.project_config import project_root, has_project_yaml, sap_profile, so
 #   scope: "project" = proje-bağlamı ister (CORE modunda SKIP) · "both" = her modda
 #   profiller: None = tüm profiller; liste = yalnız o profillerde (§9.4b)
 VALIDATORS = [
+    ("KESİN YASAKLAR fiziksel damga (HARD, ADR 0005)", "check_kesin_yasaklar.py", [], "project", None),
     ("Core-sızıntı kilidi (R1/2.7)", "check_core_not_committed.py", [], "project", None),
     ("Paket .rules.md varlık", "check_package_rules_present.py", [], "project", None),
     ("Paket naming regex", "check_package_naming.py", [], "project", None),

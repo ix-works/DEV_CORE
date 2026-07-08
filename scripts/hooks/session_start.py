@@ -101,6 +101,23 @@ def _drift_kontrol() -> list[str]:
     return sorun
 
 
+def _yasaklar_kontrol() -> list[str]:
+    """KESİN YASAKLAR fiziksel damgası kök CLAUDE.md'de var + kanonikle eş mi?
+    (Damga junction'dan bağımsız güvence; bu kontrol junction sağlamken eşliği doğrular.)"""
+    if not (PROJ / "project.yaml").exists() or not (PROJ / "CLAUDE.md").exists():
+        return []
+    try:
+        sys.path.insert(0, str(PROJ / "core" / "scripts"))
+        from utils import yasaklar_stamp  # type: ignore
+        core = PROJ / "core"
+        if not yasaklar_stamp.canonical_path(core).exists():
+            return []
+        ok, mesaj = yasaklar_stamp.check((PROJ / "CLAUDE.md").read_text(encoding="utf-8"), core)
+        return [] if ok else [mesaj]
+    except Exception as e:
+        return [f"yasaklar-damga kontrolu calismadi: {e}"]
+
+
 def _manifest_kontrol() -> list[str]:
     """F2: behavior-manifest diff (core'daki modülü yükle)."""
     try:
@@ -171,6 +188,8 @@ def main() -> int:
         saglik += ["⛔ " + s for s in junctions]
         saglik.append("⛔ JUNCTION SORUNU VARKEN SAP-YAZMA YAPMA (guardrail eksik olabilir).")
     else:
+        for s in _yasaklar_kontrol():
+            saglik.append("⛔ KESİN YASAKLAR DAMGASI: " + s)
         for s in _drift_kontrol():
             saglik.append("⚠ " + s)
         for s in _manifest_kontrol():

@@ -23,6 +23,9 @@ import argparse
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from utils import yasaklar_stamp  # KESİN YASAKLAR fiziksel damga (junction-bağımsız)
+
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     try:
         sys.stdout.reconfigure(encoding="utf-8"); sys.stderr.reconfigure(encoding="utf-8")
@@ -130,6 +133,8 @@ def main() -> int:
     if a.name:
         claude_md = claude_md.replace("<PROJECT_NAME>", a.name)
     claude_md = claude_md.replace("<SOURCE_ROOT>", a.source_root)
+    # KESİN YASAKLAR fiziksel damgası — kök CLAUDE.md'ye (junction-bağımsız daima yüklü)
+    claude_md = yasaklar_stamp.upsert(claude_md, CORE_ROOT)
 
     sonuc = [
         uret(proje / "CLAUDE.md", claude_md, a.force),

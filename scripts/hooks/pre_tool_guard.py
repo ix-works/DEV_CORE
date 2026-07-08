@@ -145,6 +145,37 @@ def _frozen_paths() -> list[str]:
     return out
 
 
+# SAP'ye YAZAN MCP tool'ları (yasaklar-damga gate'i bunlardan önce koşar)
+_SAP_YAZMA_TOOLLARI = {
+    "mcp__sap-adt__adt_push_source", "mcp__sap-adt__adt_activate",
+    "mcp__sap-adt__adt_delete", "mcp__sap-adt__adt_domain_create",
+    "mcp__sap-adt__adt_dtel_create", "mcp__sap-adt__adt_struct_create",
+    "mcp__sap-adt__adt_post_shell", "mcp__sap-adt__adt_publish_service",
+    "mcp__sap-adt__adt_classrun",
+}
+
+
+def _yasaklar_damga_sorunu() -> str:
+    """SAP-yazma öncesi: kök CLAUDE.md yasaklar damgası kanonikle eş mi?
+    Sorun varsa mesaj, temizse ''. (Kanonik okunamıyorsa=junction sorunu → bu gate
+    sessiz geçer; junction'ı zaten shim/junction-guard yakalar — çifte-blok gereksiz.)"""
+    kok = _PROJ_ROOT
+    cmd = kok / "CLAUDE.md"
+    if not (kok / "project.yaml").exists() or not cmd.exists():
+        return ""
+    try:
+        import sys as _s
+        _s.path.insert(0, str(kok / "core" / "scripts"))
+        from utils import yasaklar_stamp  # type: ignore
+        core = kok / "core"
+        if not yasaklar_stamp.canonical_path(core).exists():
+            return ""  # junction/kanonik yok → bu gate'in işi değil
+        ok, mesaj = yasaklar_stamp.check(cmd.read_text(encoding="utf-8"), core)
+        return "" if ok else mesaj
+    except Exception:
+        return ""  # fail-open: kendi hatamız SAP-yazmayı bloklamasın
+
+
 def _canon_path(s: str) -> str:
     """Yol-kıyas kanonu: hem `C:\\<LEGACY_ROOT>` hem git-bash `/c/<LEGACY_ROOT>` aynı forma iner.
     lower · \\→/ · sürücü-iki-noktası düşür (`c:/`→`c/`) → alt-dize kıyası tutar."""
@@ -220,6 +251,20 @@ def main() -> int:
         return 0
 
     tool_name = data.get("tool_name", "") or ""
+
+    # KESİN YASAKLAR fiziksel-damga gate (ADR 0005): SAP-YAZMA öncesi kök CLAUDE.md
+    # damgası kanonikle eş mi? (junction-kopuk zaten shim'de yakalanır; bu, junction
+    # SAĞLAMKEN damganın silinmiş/bozulmuş olması — yasaklar context'te yok — halini kapar.)
+    if tool_name in _SAP_YAZMA_TOOLLARI:
+        sorun = _yasaklar_damga_sorunu()
+        if sorun:
+            sys.stderr.write(
+                "⛔ KESİN YASAKLAR DAMGASI EKSİK/SAPMIŞ (PreToolUse guard, ADR 0005): "
+                f"{sorun}\nYasaklar kök CLAUDE.md'de fiziksel damgalı OLMALI (junction-"
+                "bağımsız anayasa). Damga yokken/bayatken SAP-YAZMA REDDEDİLDİ. "
+                "Çözüm: python core/scripts/sync_yasaklar.py → sonra tekrar dene.\n")
+            return 2
+
     # ADR 0010 — baglanti tutarsizligi gate: MCP eski sisteme bagliyken hicbir ADT islemi yapma.
     if tool_name.startswith("mcp__sap-adt__") and tool_name != "mcp__sap-adt__ping":
         mismatch, conn_label, mcp_label = _binding_mismatch()
