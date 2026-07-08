@@ -131,6 +131,17 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 
 ---
 
+### PATTERN #10: Junction'da `__file__`-türetimli proje kökü (D24 ihlali)
+- **Hata:** Core script'i proje kökünü `Path(__file__).resolve().parents[1]` ile türetti → junction üzerinden koşunca `resolve()` CORE reposuna çözüldü; `.conn_adt`/ui-root/çıktı-dosyası yanlış repoda arandı (deploy_ui `[FAIL] ui-root yok: <CORE>/...`).
+- **Trigger:** Core script proje-tarafı artefakt (`.conn_adt`, `conn/`, `<source_root>/`, `governance/`, `.claude/`) ararken CORE-köklü yol hatası; "X yok: <CORE_ROOT>/..." biçiminde FAIL.
+- **Kök sebep:** K12/B10 dönüşümünde `cfg()` çağrıları eklendi ama köke giden `REPO = parents[1]` sabiti gözden kaçtı (cfg proje'den okunuyor, yol CORE'dan kuruluyordu — yarı-dönüşüm).
+- **Detection:** D15 ilk normal-iş provası (`deploy_ui --verify-only`) ilk koşuda yakaladı; `rg "parents\[1\]" scripts/` taramasıyla kalan 2 script (switch_tier, build_cbo_inventory) bulundu.
+- **Prevention:** Proje kökü İÇİN TEK kaynak `utils/project_config.project_root()` (env `CLAUDE_PROJECT_DIR` → cwd). `__file__` yalnız CORE-içi varlıklar için meşru (sys.path, core config/şablon). Yeni core script'te köke dokunan her yol için sor: "bu artefakt CORE'un mu PROJE'nin mi?". Denetim: `rg "parents\[1\]" scripts/ --type py` → her eşleşme ya sys.path ya core-varlığı olmalı.
+- **Status:** 🔴 YENİ — fix: deploy_ui + switch_tier + build_cbo_inventory (PR, 2026-07-08); F2-P sağlık taramasına aday-denetim.
+- **Vakalar:** 2026-07-08 D15 provası (<PROJECT_NAME> ilk yan-kurulum oturumu).
+
+---
+
 ## 🔄 SELF-UPDATE PROTOKOLÜ
 
 ### Oturum BAŞLANGICI (her yeni session)

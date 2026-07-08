@@ -47,10 +47,12 @@ try:
 except Exception:
     pass
 
-REPO = Path(__file__).resolve().parents[1]
+# D24: proje kökü env→cwd (junction'da __file__ DEV_CORE'a çözülür; .conn_adt /
+# ui-root / git hedefi PROJE'dir — __file__-türetimi YASAK).
+from utils.project_config import cfg as _cfg, project_root as _project_root
+REPO = _project_root()
 # B10/K12: varsayılan UI kökü PROJE-CONFIG'ten (project.yaml default_ui_root:
 # "SOURCE_CODES/SD/<PKG>/ui"); yoksa --ui-root ZORUNLU (core paket VARSAYMAZ).
-from utils.project_config import cfg as _cfg
 DEFAULT_UI_ROOT = _cfg("default_ui_root")  # None olabilir
 PRELOAD = "Component-preload.js"
 
