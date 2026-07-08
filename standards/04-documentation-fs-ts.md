@@ -39,6 +39,20 @@ Canlıya Alma + Eğitim
 
 > **KD ne zaman?** Geliştirme bittikten sonra (UAT sırasında/öncesi) hazırlanır, **canlı geçiş eğitiminde** ve sonrasında son kullanıcının başucu kılavuzu olur. FS/TS *geliştirme için*, KD *kullanım için*tir.
 
+## 1.1.0 Kapsam-orantılı FS derinliği (ITG / ADR 0022)
+
+FS derinliği **işin ITG kapsam-sınıfına** (bkz. [`../playbook/intake-triage.md`](../playbook/intake-triage.md)) orantılıdır — her işe tam FS dayatmak (hız) da, kapsamlı işi FS'siz başlatmak (kalite) da hatalıdır:
+
+| Kapsam | FS beklentisi |
+|---|---|
+| **S0 · nokta-düzeltme** | FS YOK — tek satır "ne değişti + neden" (commit mesajı yeter). |
+| **S1 · lokalize** | HAFİF FS — etkilenen alan/ekran + kabul kriteri + varsa risk (yarım sayfa). |
+| **S2 · kapsamlı** | TAM FS — intake-artefaktı (ITG şeması) + **EARS** kabul kriterleri ("kullanıcı VA01'de kaydettiğinde sistem X yapmalı" / "miktar kapasiteyi aşarsa uyar") + **INVEST/Definition-of-Ready** (her gereksinim test-edilebilir + kabul-kriterli olmadan build YOK) + **backend ve frontend ayrı** DoR bölümleri. Aşağıdaki (BÖLÜM 2+) tam şablon buraya uygulanır. |
+
+> "Geliştirme Tipi" (Report/Enhancement/Interface/Form; §"FS Şablonu") bölüm-dallanması bu
+> kapsam-eksenine DİKtir: S2 bir Report da olabilir bir Interface de — kapsam derinliği,
+> tip bölümleri belirler. İkisi birlikte uygulanır.
+
 ## 1.1.1 Paket doküman yerleşimi — `ref_docs/` (ADR 0013)
 
 Bir paket başka sistemden (eski <LEGACY_SOURCE> / başka SAP / legacy) dönüştürülüyorsa,

@@ -130,6 +130,6 @@ Backend ve frontend ayrı DoR (BE/FE expert + ayrı bug-checklist).
 
 ## İlişkili
 - Hook: [`../scripts/hooks/intake_triage.py`](../scripts/hooks/intake_triage.py) · obje-tipi kardeşi: `skill_injector.py`
-- Modül paketleri: `playbook/modules/<modül>.md` (SD pilot — PR-B ile gelir)
+- Modül paketleri: [`modules/`](modules/) — SD pilot: [`modules/sd.md`](modules/sd.md) (MM/FI/CO/PP/QM/PM/WM-EWM ipucu var, paket birikimle T-trigger)
 - Çekirdek davranış (tahmin-yasak) + ADR 0016 (source-drift) + ADR 0006 (reviewer) + ADR 0019 (gate coverage)
 - Karar: [`../governance/decisions/0022-intake-triage-gate.md`](../governance/decisions/0022-intake-triage-gate.md)
