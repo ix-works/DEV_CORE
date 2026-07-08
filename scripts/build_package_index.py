@@ -19,7 +19,7 @@ from pathlib import Path
 import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
-from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+from utils.project_config import project_root,  SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -113,7 +113,7 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    erp_root = Path(args.erp_root)
+    erp_root = (lambda _p: _p if _p.is_absolute() else (project_root() / _p))(Path(args.source_root))
     registry_path = Path(args.registry)
 
     packages = collect_packages(erp_root)

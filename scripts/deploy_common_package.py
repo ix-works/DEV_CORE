@@ -32,7 +32,7 @@ from sap_client import SAPClient
 import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
-from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+from utils.project_config import project_root,  SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 
 # TR açıklamalar (obje adına göre; yoksa generic fallback). ADR 0005-D: TR text zorunlu.
 DESCRIPTIONS = {
@@ -69,7 +69,7 @@ def main() -> int:
     if args.cwd:
         set_explicit_working_dir(args.cwd)
 
-    pkg_dir = Path(args.erp_root) / args.package
+    pkg_dir = (lambda _p: _p if _p.is_absolute() else (project_root() / _p))(Path(args.source_root)) / args.package
     if not pkg_dir.is_dir():
         print(f"[FAIL] Paket dizini yok: {pkg_dir}", file=sys.stderr)
         return 1
