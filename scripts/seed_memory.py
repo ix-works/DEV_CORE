@@ -16,7 +16,7 @@ dosyaları ekler. MEMORY.md index'i yalnız hedefte yoksa kopyalanır; varsa dok
 (kullanıcının kendi index'i korunur). --force ile üzerine yazılabilir.
 
 Proje-slug: repo kök yolundaki alfanümerik-olmayan her karakter '-' ile değiştirilir
-(Claude Code konvansiyonu). Ör: C:\\<LEGACY_ROOT>\\<PROJECT_NAME> -> C--AI-PROJE-<PROJECT_NAME>
+(Claude Code konvansiyonu). Ör: C:\\IX\\<PROJECT_NAME> -> C--IX-<PROJECT_NAME>
 
 Kullanım (repo kökünde):
     python scripts/seed_memory.py            # eksikleri ekle, raporla

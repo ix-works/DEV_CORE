@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""TD Spec Disiplin Checker — <PROJECT_NAME> ZSD015 ve gelecek modüller için.
+"""TD Spec Disiplin Checker — proje spec otoritesi gate'i (tüm paketler için).
 
 KURAL (Playbook §1 §6️⃣):
-  1. Yeni obje yarat/değiştirme → ÖNCE TD spec'i ara
+  1. Yeni obje yarat/değiştirme → ÖNCE TD (target-design) spec'i ara
   2. TD spec VARSA: TD karar otoritesi, "Silinen Alanlar"/"Kaldırılan" uygulanır,
-     <LEGACY_SOURCE> sadece structural pattern referansı
-  3. TD spec YOKSA: Operatör onayı şart, otomatik <LEGACY_SOURCE> fallback YASAK
+     legacy kaynak sadece structural pattern referansı
+  3. TD spec YOKSA: Operatör onayı şart, otomatik legacy fallback YASAK
+
+Konfig (project.yaml): `active_package` (öncelikli arama) · `legacy_spec_roots`
+(eski-sistem spec kökleri, liste; yoksa legacy fallback araması yapılmaz).
 
 KULLANIM (populate scripts veya TempScripts converter'larında):
     from td_spec_check import require_td_spec, find_deleted_items, scan_source_for_deleted
 
     # Spec yoksa script ölür (operator approval mesajı)
-    spec_text = require_td_spec('ZSD015_DDL_ORDER_ITEMS', 'cds')
+    spec_text = require_td_spec('ZSD<NNN>_DDL_ORDER_ITEMS', 'cds')
 
     # Spec'teki "Silinen" item'ları çıkar
     deleted = find_deleted_items(spec_text)
@@ -29,10 +32,10 @@ from typing import Dict, List, Optional
 import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
-from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+from utils.project_config import cfg, project_root, source_dir  # K12 config tek-nokta
 
-# Modül kökü — <PROJECT_NAME> project root
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Proje kökü — env-first (junction'da __file__ core'a çözülür, KULLANMA)
+PROJECT_ROOT = project_root()
 
 # Obje tipi → spec klasörü adı eşlemesi
 OBJECT_TYPE_FOLDER = {
@@ -48,38 +51,47 @@ OBJECT_TYPE_FOLDER = {
     'auth':      'auth',
 }
 
-# Modül kök yolları (gelecek modüller için ekle: ZSD016_CLC vb.)
-MODULE_ROOTS = [
-    PROJECT_ROOT / SOURCE_ROOT_NAME / 'ZSD015_CLC',
-]
+def _module_roots() -> List[Path]:
+    """Spec aranacak paket kökleri: active_package (config) öncelikli, sonra
+    source_root altındaki TÜM paket klasörleri (yeni paket = otomatik kapsam)."""
+    roots: List[Path] = []
+    src = source_dir()
+    aktif = cfg('active_package')
+    if aktif and (src / str(aktif)).is_dir():
+        roots.append(src / str(aktif))
+    if src.is_dir():
+        for d in sorted(src.iterdir()):
+            if d.is_dir() and d not in roots:
+                roots.append(d)
+    return roots
 
-# <LEGACY_SOURCE> referans kök (eski sistem source'ları + spec'leri)
-# 2026-05-13: TD/ZSD015_CLC/SEVKEMRI klasörü silindi, tek referans burası.
-<LEGACY_SOURCE>_ROOTS = [
-    Path(r'C:/<LEGACY_ROOT>/<LEGACY_SOURCE>/SEVKEMRI'),
-]
+
+def _legacy_roots() -> List[Path]:
+    """Eski-sistem spec kökleri — project.yaml `legacy_spec_roots` listesi.
+    Tanımsızsa legacy fallback araması YAPILMAZ (fail-safe)."""
+    return [Path(str(p)) for p in (cfg('legacy_spec_roots') or [])]
 
 
 def find_td_spec(object_name: str, object_type: str) -> Optional[Path]:
     """TD ve fallback klasörlerinde spec MD dosyası ara.
 
-    Arama sırası (2026-05-13 TD/ subfolder kaldırıldı, klasör yapısı düzleştirildi):
-      1. <module>/<folder>/<object_name>.md              ← TD karar (öncelik)
-      2. <<LEGACY_SOURCE>>/<folder>/<object_name>.md           ← <LEGACY_SOURCE> referansı (fallback)
+    Arama sırası:
+      1. <source_root>/<paket>/<folder>/<object_name>.md   ← TD karar (öncelik)
+      2. <legacy_spec_roots[i]>/<folder>/<object_name>.md  ← legacy referans (fallback)
 
     Returns: Path | None
     """
     folder = OBJECT_TYPE_FOLDER.get(object_type.lower())
     if not folder:
         return None
-    # 1) TD karar otoritesi (modül kökü altında düz yapı)
-    for module_root in MODULE_ROOTS:
+    # 1) TD karar otoritesi (paket kökü altında düz yapı)
+    for module_root in _module_roots():
         candidate = module_root / folder / f'{object_name}.md'
         if candidate.exists():
             return candidate
-    # 2) <LEGACY_SOURCE> referans fallback
-    for kap_root in <LEGACY_SOURCE>_ROOTS:
-        candidate = kap_root / folder / f'{object_name}.md'
+    # 2) legacy referans fallback (config'te tanımlıysa)
+    for leg_root in _legacy_roots():
+        candidate = leg_root / folder / f'{object_name}.md'
         if candidate.exists():
             return candidate
     return None
@@ -102,20 +114,22 @@ def require_td_spec(object_name: str, object_type: str,
     spec_path = find_td_spec(object_name, object_type)
     if spec_path is None:
         folder = OBJECT_TYPE_FOLDER.get(object_type.lower(), '<unknown>')
-        searched = [
-            f'  - <source_root>/ZSD015_CLC/{folder}/{object_name}.md',
-            f'  - C:/<LEGACY_ROOT>/<LEGACY_SOURCE>/SEVKEMRI/{folder}/{object_name}.md (<LEGACY_SOURCE> fallback)',
-        ]
+        searched = [f'  - {r}/{folder}/{object_name}.md' for r in _module_roots()]
+        searched += [f'  - {r}/{folder}/{object_name}.md (legacy fallback)'
+                     for r in _legacy_roots()]
+        if not searched:
+            searched = ['  - (arama kökü yok: source_root altında paket klasörü ve '
+                        'legacy_spec_roots tanımı bulunamadı — project.yaml kontrol et)']
         msg = (
             f'\n[FAIL] TD spec EKSİK: {object_name} ({object_type}) — action={action}\n'
             f'\n'
             f'Aranan yollar:\n' + '\n'.join(searched) + '\n'
             f'\n'
             f'⚠️ Playbook §1 §6️⃣ — TD Spec Disiplini:\n'
-            f'  • TD spec bulunmazsa <LEGACY_SOURCE> source\'a otomatik fallback YASAK.\n'
+            f'  • TD spec bulunmazsa legacy source\'a otomatik fallback YASAK.\n'
             f'  • Operatöre rapor et:\n'
-            f'      "{object_name} için TD spec yok. <LEGACY_SOURCE>\'da X referansı var.\n'
-            f'       <LEGACY_SOURCE>\'ı fallback alabilir miyim? Onay ver."\n'
+            f'      "{object_name} için TD spec yok. Legacy kaynakta X referansı var.\n'
+            f'       Legacy\'yi fallback alabilir miyim? Onay ver."\n'
             f'  • Onay alınmadan obje yaratılmaz/değiştirilmez.\n'
         )
         raise SystemExit(msg)
@@ -260,7 +274,7 @@ if __name__ == '__main__':
     import sys
     if len(sys.argv) < 3:
         print('Kullanım: python td_spec_check.py <object_name> <object_type> [source_file]')
-        print('Örnek:    python td_spec_check.py ZSD015_DDL_ORDER_ITEMS cds')
+        print('Örnek:    python td_spec_check.py ZSD<NNN>_DDL_ORDER_ITEMS cds')
         sys.exit(2)
     name, otype = sys.argv[1], sys.argv[2]
     spec = require_td_spec(name, otype)

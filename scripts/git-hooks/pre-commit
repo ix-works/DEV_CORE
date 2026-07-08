@@ -1,0 +1,12 @@
+#!/bin/sh
+# DEV_CORE pre-commit shim (B11/D19) — gercek gate: core_precommit.py
+# core.hooksPath=scripts/git-hooks (team_setup.py kurar). Bypass YASAK.
+DIR="$(cd "$(dirname "$0")" && pwd)"
+if command -v python >/dev/null 2>&1; then PY=python
+elif command -v python3 >/dev/null 2>&1; then PY=python3
+elif command -v py >/dev/null 2>&1; then PY=py
+else
+  echo "pre-commit: python bulunamadi — gate calistirilamiyor (commit BLOKLANDI)" >&2
+  exit 1
+fi
+exec "$PY" "$DIR/core_precommit.py"
