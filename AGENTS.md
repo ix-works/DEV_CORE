@@ -40,7 +40,7 @@
 
 - ❌ **Transport request yaratma** (yeni TR açma)
 - ❌ **Transport request release etme** (var olanı kapama)
-- ❌ **Package yaratma** (SE21 veya `scripts/create_package.py` çalıştırma)
+- ❌ **Package yaratma** (SE21 veya `core/scripts/create_package.py` çalıştırma)
 - ❌ Username/enqueue **lock silme**
 - ❌ **System change option** değiştirme
 
@@ -79,9 +79,9 @@ Yukarıdaki yasaklardan birini yapma ihtiyacı doğarsa:
 **[L1-ADTINFRA-02]** (MUST-NOT) Bu onayı bir iş listesinin/çoklu-maddenin arasına gömülü tek satır olarak isteme; ADT-infra maddesi ayrıca öne çıkarılıp **tek-tek** onaylanır.
 
 **Kapsam (HIGH — onaysız Edit/Write YASAK):**
-- `scripts/sap_adt_lib.py`, `scripts/sap_sync_pull.py`, `scripts/source_drift.py` ve diğer pull/drift/aktivasyon mantığı taşıyan `scripts/*.py`
-- MCP server: `mcp_servers/sap_adt/**`
-- Hook'lar: `scripts/hooks/**` · Validator'lar: `scripts/validators/**`
+- `core/scripts/sap_adt_lib.py`, `core/scripts/sap_sync_pull.py`, `core/scripts/source_drift.py` ve diğer pull/drift/aktivasyon mantığı taşıyan `core/scripts/*.py`
+- MCP server: `core/mcp_servers/sap_adt/**`
+- Hook'lar: `core/scripts/hooks/**` + proje-lokal `scripts/hook_shim.py` · Validator'lar: `core/scripts/validators/**` + proje `scripts/validators-local/**`
 - Kural dosyaları (AGENTS/standards/playbook/governance) — yalnız SAP-yazma/pull/aktivasyon **davranışını** değiştiren kısımlar
 
 **Kapsam DIŞI (highlight gerekmez):** salt-okunur analiz; repo-içi uygulama kaynağı (FE/BE build, paket `.cds/.abap` iş kodu); saf dokümantasyon.
@@ -94,38 +94,31 @@ Yukarıdaki yasaklardan birini yapma ihtiyacı doğarsa:
 
 ## 0. SESSION BAŞLANGICI — EKRAN TEYİDİ ZORUNLU
 
-Her yeni oturumun **ilk yanıtının** [`CLAUDE.core.md`](CLAUDE.core.md) §2'deki template'le başlamalı:
-
-```
-[Session başladı — <PROJECT_NAME>]
-⛔ KESİN YASAKLAR aktif (ADR 0005): standart SAP objelerine, standart
-   tablo verilerine, transport/package state'ine dokunma YASAK.
-   Z'li obje yaratırken TR login + TR text zorunlu.
-✓ AGENTS.md + CLAUDE.md yüklendi (L1-L4 katman mimarisi aktif)
-✓ run_all_validators.py --quick: <OK | N ihlal>
-✓ Aktif paket: <PKG_FULL>
-✓ Son session notu: <bir satır>
-✓ Mimari: ADR 0003 (4 katman) + ADR 0005 (yasaklar), kod gate'ler aktif
-
-Devam: <kullanıcıya soru / hazır olduğun bilgi>
-```
-
-Bu format atlanırsa kullanıcı protokol'e uyulmadığını varsayar.
+Her yeni oturumun **ilk yanıtı** [`CLAUDE.core.md`](CLAUDE.core.md) **§3**'teki "Ekran Teyidi — İlk Mesaj Formatı" template'iyle başlar — format ORADA tanımlıdır (tek kaynak; burada kopya tutulmaz). Atlanırsa kullanıcı protokole uyulmadığını varsayar.
 
 ---
 
 ## 1. GIT WORKFLOW — ZORUNLU
 
-**Tek branch:** Bu repo sadece `main` branch kullanır.
+**Model (ADR 0001, ADR 0020 canlı-çekirdek geçişiyle REVİZE):** tek UZUN-YAŞAYAN branch =
+`main`; `main` doğrudan-push'a KAPALI (GitHub ruleset `main-pr-required`) → her değişiklik
+**kısa-ömürlü branch + PR + CI** ile girer; merge sonrası branch silinir
+(delete-branch-on-merge).
 
-- ❌ `git checkout -b`, `git branch <ad>`, `git switch -c` — **yasak**
-- ❌ `git worktree add`, EnterWorktree tool — **yasak**, tüm iş `<PROJECT_ROOT>`'da
-- ❌ `main-backup-*` branch'lerine dokunma — güvenlik yedeği
+- ✅ Kısa branch: `git checkout -b <konu/kisa-ad>` → push → PR → CI yeşil → merge
+  (**merge = lider/kullanıcı onayı**; ajan kendi PR'ını onaysız merge ETMEZ)
+- ❌ Uzun-yaşayan ikinci branch tutma; `main-backup-*` branch'lerine dokunma
 - ❌ `git push --force[-with-lease]`, `--no-verify` — kullanıcı açıkça istemedikçe yapma
-- ✅ Push öncesi **her zaman** kullanıcı onayı al ("git'e gönder" demediyse pushlama)
+- ⚠️ Worktree yalnız provizyonlu açılır: `team_setup.py --provision-worktree`
+  (junction + `.conn_adt` provizyonu şart — D16; çıplak `git worktree add` guardrail'siz kalır)
+- ✅ Push öncesi **her zaman** kullanıcı onayı al ("git'e gönder" demediyse pushlama);
+  PR-merge de aynı onaya tabidir
 - ✅ Commit mesajı Türkçe yazılabilir. Net, "ne" değil "neden" odaklı.
+- ⛔ **FREEZE (T3/K8):** `project.yaml frozen_readonly_paths` altındaki köklere
+  (dondurulmuş eski-dünya yedekleri) YAZMA YASAK — `pre_tool_guard` R10 bloklar;
+  okuma serbest. Git dahil: bu köklerdeki repolara commit/push/checkout YAPILMAZ.
 
-ADR referansı: [`governance/decisions/0001-tek-branch-main.md`](governance/decisions/0001-tek-branch-main.md)
+ADR referansı: [`governance/decisions/0001-tek-branch-main.md`](governance/decisions/0001-tek-branch-main.md) · [`governance/decisions/0020-canli-cekirdek-junction-mimarisi.md`](governance/decisions/0020-canli-cekirdek-junction-mimarisi.md)
 
 ---
 
@@ -203,7 +196,7 @@ lider de doğrudan yazmaz, gateway'e devreder; **solo'da lider doğrudan yazar**
 
 1. **Plumbing'i icat etme — içeriği değil (app-kopyalama DEĞİL):** Freestyle UI5+V2'nin **mekanik/plumbing** kısmı (save=sıralı `update(merge)`, nav=`to_X`, `setData` tam şekil, master-detail seçim-wiring, MERGE tarih-null) **tek-doğru-yol, uygulamadan bağımsız** → [`playbook/ui-freestyle-odata-v2.md`](playbook/ui-freestyle-odata-v2.md) **§K**'yı **referans al, sıfırdan icat etme** (icat = çözülmüş bug'ı geri getirmek). **Uygulamaya özel her şey BESPOKE yazılır** (entity/servis, alan listesi, ekran layout/grid, iş/gating kuralları, VH hedefleri, label, akış) — hiçbir ekran diğerinin kopyası değildir. Sınır: *framework-plumbing = reuse · iş-içeriği = bespoke*.
 2. **"done/verified" kanıtsız KABUL EDİLMEZ** (lider): UI build için → `check_ui5_freestyle_traps.py` PASS **+ runtime smoke** (G1 playwright-cli, yoksa elle console: zero render error + ana akış). SAP yazımı için → `adt_get` active readback. "node --check OK / XML well-formed" runtime/fonksiyonel hatayı YAKALAMAZ — yeterli değil.
-3. **Recon ≠ implementasyon:** Bir recon dokümanı "done" değildir. Çıkarılan kural/gating UI'a **gerçekten kodlandı mı** lider doğrular (done = tam kapsam; [[feedback_done-tam-kapsam-dogrula]]).
+3. **Recon ≠ implementasyon:** Bir recon dokümanı "done" değildir. Çıkarılan kural/gating UI'a **gerçekten kodlandı mı** lider doğrular. *Done = tam kapsam:* "tamam" demeden önce çıktı, işin TAM kapsamına karşı madde-madde doğrulanır; bilinçli ertelenen parça açıkça flag'lenir + register'a yazılır (sessiz eksik = done değil).
 4. **Kör-bug YASAK:** "Kaydedilemedi" gibi opak hatada deneme-yanılma yapma → önce **gerçek hatayı** al (F12 Network/Console status+body, ya da gateway ile birebir replikte). Kanıtsız tek satır bile değiştirme.
 
 ---
@@ -216,12 +209,14 @@ Detay için bu dosyanın başındaki **⛔ KESİN YASAKLAR** bloğuna ve [`gover
 
 ## 4. DOSYA YERLEŞTİRME
 
+> `<source_root>` = projenin kaynak-kod klasör adı — `project.yaml source_root`'tan okunur (K12; varsayılan `SOURCE_CODES`).
+
 | Tip | Konum |
 |---|---|
-| Paket-özel SAP objeleri | `ERP/<MODULE>/<PKG>/<obje-tipi>/` (cds/, classes/, programs/, structures/, tables/, functions/, ui/) |
-| Paket-spesifik kurallar | `ERP/<MODULE>/<PKG>/.rules.md` |
-| Paket spec/notlar | `ERP/<MODULE>/<PKG>/SPEC.md`, `SESSION_NOTES.md` |
-| Modüller | `ERP/SD/`, `ERP/MM/`, `ERP/FI/`, `ERP/QM/`, `ERP/PM/`, `ERP/EWM/`, `ERP/CO/` (ADR 0004) |
+| Paket-özel SAP objeleri | `<source_root>/<MODULE>/<PKG>/<obje-tipi>/` (cds/, classes/, programs/, structures/, tables/, functions/, ui/) |
+| Paket-spesifik kurallar | `<source_root>/<MODULE>/<PKG>/.rules.md` |
+| Paket spec/notlar | `<source_root>/<MODULE>/<PKG>/SPEC.md`, `SESSION_NOTES.md` |
+| Modüller | `<source_root>/SD/`, `<source_root>/MM/`, `<source_root>/FI/`, `<source_root>/QM/`, `<source_root>/PM/`, `<source_root>/EWM/`, `<source_root>/CO/` (ADR 0004) |
 | Geçici script + test | `TempScripts/` (gitignored) |
 | Kalıcı utility | `scripts/` veya alt klasör (`workflows/`, `cleanup/`, `search/`, `validators/`, `utils/`) |
 | Legacy referans `.txt` | Paket root'unda kalır — `.abap`/`.cds`'a rename **YASAK** |
@@ -232,19 +227,19 @@ SAP objelerini local'e indirirken **varsayılan `ZAI` klasörünü KULLANMA** (d
 
 | Obje Tipi | Klasör | Örnek (ZSD001_CLC) |
 |---|---|---|
-| Class | `classes/` | `ERP/SD/ZSD001_CLC/classes/ZCL_ZSD_ORDER_DPC_EXT.abap` |
-| CDS view (kaynak) | `cds/` | `ERP/SD/ZSD001_CLC/cds/ZSD001_C_SO_ITEM.cds` |
-| CDS TD spec | `cds/` | `ERP/SD/ZSD001_CLC/cds/<obje>.md` (yan yana .cds + .md) |
-| Function module / FUGR | `functions/` | `ERP/SD/ZSD001_CLC/functions/ZSD001_FM_SO_CREATE.abap` |
-| Structure | `structures/` | `ERP/SD/ZSD000_CLC/structures/ZSD000_S_BP_BASIC.ddls.asddls` |
-| Tablo / Z table | `tables/` | `ERP/SD/<PKG>/tables/<obje>.abap` |
-| Program / include | `programs/` | `ERP/SD/ZSD001_CLC/programs/ZSD001_P_SCHED_ITEMS.abap` |
-| Fiori UI app | `ui/<app_adi>/` | `ERP/SD/ZSD001_CLC/ui/order_app/` |
-| Auth check | `auth/` | `ERP/SD/<PKG>/auth/<obje>` |
-| Sprint planları, FS doc'u | paket root | `ERP/SD/<PKG>/SPEC.md`, `SESSION_NOTES.md` |
-| FS/TS txt doc | `docs/` | `ERP/SD/<PKG>/docs/FS.txt`, `TS.txt` |
+| Class | `classes/` | `<source_root>/SD/ZSD001_CLC/classes/ZCL_ZSD_ORDER_DPC_EXT.abap` |
+| CDS view (kaynak) | `cds/` | `<source_root>/SD/ZSD001_CLC/cds/ZSD001_C_SO_ITEM.cds` |
+| CDS TD spec | `cds/` | `<source_root>/SD/ZSD001_CLC/cds/<obje>.md` (yan yana .cds + .md) |
+| Function module / FUGR | `functions/` | `<source_root>/SD/ZSD001_CLC/functions/ZSD001_FM_SO_CREATE.abap` |
+| Structure | `structures/` | `<source_root>/SD/ZSD000_CLC/structures/ZSD000_S_BP_BASIC.ddls.asddls` |
+| Tablo / Z table | `tables/` | `<source_root>/SD/<PKG>/tables/<obje>.abap` |
+| Program / include | `programs/` | `<source_root>/SD/ZSD001_CLC/programs/ZSD001_P_SCHED_ITEMS.abap` |
+| Fiori UI app | `ui/<app_adi>/` | `<source_root>/SD/ZSD001_CLC/ui/order_app/` |
+| Auth check | `auth/` | `<source_root>/SD/<PKG>/auth/<obje>` |
+| Sprint planları, FS doc'u | paket root | `<source_root>/SD/<PKG>/SPEC.md`, `SESSION_NOTES.md` |
+| FS/TS txt doc | `docs/` | `<source_root>/SD/<PKG>/docs/FS.txt`, `TS.txt` |
 
-**⛔ ZAI YASAK:** Hiçbir obje `ERP/ZAI/` veya benzer "default" klasöre düşemez. Paket adı belirsizse **kullanıcıya sor**.
+**⛔ ZAI YASAK:** Hiçbir obje `<source_root>/ZAI/` veya benzer "default" klasöre düşemez. Paket adı belirsizse **kullanıcıya sor**.
 
 ---
 
@@ -262,7 +257,7 @@ SAP objelerini local'e indirirken **varsayılan `ZAI` klasörünü KULLANMA** (d
 Her SAP yazma işlemi (domain/DTEL/CDS/tablo yarat veya update, class/program push) **öncesinde**:
 
 ```powershell
-python scripts/validators/run_review.py --task <task_type> --artifact <path>
+python core/scripts/validators/run_review.py --task <task_type> --artifact <path>
 ```
 
 | Task Type | Ne zaman | Validator zinciri |
@@ -287,17 +282,17 @@ Reviewer = deterministik script orchestrator. LLM'in inisiyatifinde değil. Chec
 
 ## 5.6. PULL-BEFORE-EDIT — SAP KAYNAĞI ÜZERİNDE ÇALIŞMAYA BAŞLARKEN (ANALİZDEN ÖNCE; ADR 0016 revize; lider DAHİL)
 
-Bir SAP source objesini (CDS/BDEF/SRVD/class/DDL — `ERP/<pkg>/` altı, source uzantısı) değiştirme amacıyla **üzerinde çalışmaya başladığın AN — yani onu İNCELEMEDEN/ANALİZ ETMEDEN ÖNCE** (edit anından çok daha erken) canlı güncel halini çek:
+Bir SAP source objesini (CDS/BDEF/SRVD/class/DDL — `<source_root>/<pkg>/` altı, source uzantısı) değiştirme amacıyla **üzerinde çalışmaya başladığın AN — yani onu İNCELEMEDEN/ANALİZ ETMEDEN ÖNCE** (edit anından çok daha erken) canlı güncel halini çek:
 
 ```powershell
-python scripts/sap_sync_pull.py <NAME> --type <ddls|bdef|srvd|class|structure|...>
+python core/scripts/sap_sync_pull.py <NAME> --type <ddls|bdef|srvd|class|structure|...>
 ```
 
 (seans-bazlı, obje başına 1×; `--session` SessionStart marker'ından otomatik; SAP erişilemezse `--offline`).
 
 **Neden ANALİZDEN önce (edit'ten değil):** bayat koda göre analiz edersen değişiklik planın **yanlış/uygunsuz** çıkar; edit anında çekmek GEÇ kalır (analizini zaten eski koda yaptın, plan kirlenmiş olur). Tazelik bu yüzden **görev başında, okuma/analizden önce** sağlanır. (working-tree ≠ canlı her edit'te doğal → eski M1 pre-push drift-block kaldırıldı; başkasının canlıda yaptığı belgelenmemiş değişikliği ezme riski baştan-taze ile düşer.)
 
-- **PreToolUse(Edit/Write) hook = YALNIZ BACKSTOP** (`scripts/hooks/pull_before_edit.py`): analiz-anında gate EDEMEZ (edit choke-point'i geç kalır) — proaktif pull'u unutursan bayat SAP-kaynak edit'ini bloklar + komutu söyler. **Asıl disiplin = proaktif görev-başı pull**, hook sigortadır.
+- **PreToolUse(Edit/Write) hook = YALNIZ BACKSTOP** (`core/scripts/hooks/pull_before_edit.py`): analiz-anında gate EDEMEZ (edit choke-point'i geç kalır) — proaktif pull'u unutursan bayat SAP-kaynak edit'ini bloklar + komutu söyler. **Asıl disiplin = proaktif görev-başı pull**, hook sigortadır.
 - **Solo-lider DAHİL** (sen doğrudan yazarken). Takımda editleyen ajan yapar (prompt'larında var).
 - **Muaf:** doküman/script/governance/ADR (SAP-dışı) · git-dirty (üstünde çalıştığın WIP) · yeni obje · `ref_docs/`/`.tmp/`.
 
@@ -348,14 +343,14 @@ Bu dosya şunları içerir:
 
 | Gate | Script | Tetiklenme |
 |---|---|---|
-| Sprint geçiş | `scripts/sprint_gate_check.py` | populate_*.py / spec değişikliği |
-| TD spec varlık | `scripts/td_spec_check.py` | populate_cds_views.py pre-flight |
+| Sprint geçiş | `core/scripts/sprint_gate_check.py` | populate_*.py / spec değişikliği |
+| TD spec varlık | `core/scripts/td_spec_check.py` | populate_cds_views.py pre-flight |
 | Namespace whitelist | `populate_cds_views.py::validate_sql_view_names()` | populate_cds_views.py pre-flight |
-| Paket .rules.md varlık | `scripts/validators/check_package_rules_present.py` | run_all_validators |
-| Paket naming regex | `scripts/validators/check_package_naming.py` | run_all_validators |
-| Obje paket sınırı | `scripts/validators/check_object_in_correct_pkg.py` | run_all_validators |
-| Script playbook ref | `scripts/validators/check_scripts_documented.py` | run_all_validators |
+| Paket .rules.md varlık | `core/scripts/validators/check_package_rules_present.py` | run_all_validators |
+| Paket naming regex | `core/scripts/validators/check_package_naming.py` | run_all_validators |
+| Obje paket sınırı | `core/scripts/validators/check_object_in_correct_pkg.py` | run_all_validators |
+| Script playbook ref | `core/scripts/validators/check_scripts_documented.py` | run_all_validators |
 
-Tüm validator'lar: `python scripts/validators/run_all_validators.py`
+Tüm validator'lar: `python core/scripts/validators/run_all_validators.py` (core + proje `scripts/validators-local/` birlikte)
 
 Detay: [`governance/decisions/0003-layered-rule-architecture.md`](governance/decisions/0003-layered-rule-architecture.md)

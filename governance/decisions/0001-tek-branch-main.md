@@ -1,7 +1,7 @@
 ---
 adr: 0001
 title: Tek branch — sadece main
-status: accepted
+status: accepted (revize 2026-07-08 — ADR 0020)
 date: 2026-04-29
 deciders: <SAP_USER>, NTT DATA TR ekibi
 supersedes: —
@@ -9,6 +9,13 @@ superseded-by: —
 ---
 
 # ADR 0001 — Tek Branch (Sadece `main`)
+
+> **REVİZE (2026-07-08, ADR 0020 canlı-çekirdek geçişi):** Karar özü korunur — tek
+> UZUN-YAŞAYAN branch `main`'dir. Ancak `main` artık doğrudan-push'a KAPALIDIR (GitHub
+> ruleset `main-pr-required`) → değişiklikler **kısa-ömürlü branch + PR + CI** ile girer,
+> merge sonrası branch otomatik silinir. "Hiç branch açılmaz" hükmü
+> [AGENTS.md §1](../../AGENTS.md)'deki güncel kural setine devredildi. Worktree yalnız
+> `team_setup.py --provision-worktree` ile (D16 provizyonu).
 
 ## Bağlam
 

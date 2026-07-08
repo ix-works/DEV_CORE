@@ -57,7 +57,7 @@ def installed_plugins(claude: str) -> set[str]:
     _, out = run([claude, "plugin", "list"])
     names = set()
     for line in out.splitlines():
-        line = line.strip().lstrip("❯ ").strip()
+        line = line.strip().lstrip("❯> ").strip()  # CLI liste-öneki: '❯' (eski) / '>' (yeni)
         if "@" in line and not line.lower().startswith(("version", "scope", "status", "source")):
             names.add(line.split("@")[0].strip())
     return names

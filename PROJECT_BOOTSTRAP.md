@@ -4,7 +4,7 @@
 > **BAKAR** (ADR 0020). Projeye kurulan şey = ince iskelet + bağlantılar. Hedef süre:
 > **~30–60 dk** (STEP 0 kararları hazırsa). Aşağıda `XYZ` örnek proje adıdır.
 
-## 8.0 Ön koşul (makinede ZATEN var — proje başına TEKRARLANMAZ)
+## Ön koşul — STEP 0 öncesi (makinede ZATEN var; proje başına TEKRARLANMAZ)
 
 `C:\IX\DEV_CORE\` clone'u makinede BİR KEZ durur. Yeni proje için DEV_CORE'a hiçbir şey
 yapılmaz: ne clone, ne kopya, ne branch. Tüm projeler **aynı tek fiziksel DEV_CORE'a**
@@ -22,23 +22,34 @@ Makine ön-koşulları (Python/git/Node/Claude CLI): [`README.md`](README.md) "K
 | Paket prefix'leri + modüller ne? | `project.yaml` (STEP 4) + ilk paket adı (STEP 6) |
 | Repo adı + ekip/yetki? (yalnız `full`) | STEP 1 GitHub ayarı |
 
-## STEP 1 — Repo + lokal klasör *(yalnız repo_mode=full; diğer modlarda ATLA)*
+### LITE akış (K13 — repo_mode=`local`|`none`; STEP 1 ATLANIR)
 
-```powershell
-gh repo create ix-works/XYZ --private
-git clone https://github.com/ix-works/XYZ.git C:\IX\XYZ
-```
-
-**LITE akış (K13):** `local` → `mkdir C:\IX\XYZ ; git -C C:\IX\XYZ init` (remote yok;
+`local` → `mkdir C:\IX\XYZ ; git -C C:\IX\XYZ init` (remote yok;
 tarihçe+geri-alma kalır). `none` → sadece `mkdir C:\IX\XYZ` (git yok; gün-sonu push
 disiplini yoktur, kalıcılaştırma kullanıcı takdirindedir; `check_core_not_committed`
 otomatik SKIP olur). Junction/core-canlılık/memory/profil mekanizmalarının HİÇBİRİ
 git'e bağımlı değildir — çekirdek değer repo'suz da tam çalışır.
+Sonraki adımlar aynıdır: STEP 2'de `--repo-mode local|none` ver; STEP 5/6'daki
+git/push kalemleri düşer.
+
+## STEP 1 — Repo + lokal klasör *(yalnız repo_mode=full; LITE modlarda ATLA)*
+
+```powershell
+gh repo create <ORG>/XYZ --private
+git clone https://github.com/<ORG>/XYZ.git C:\IX\XYZ
+```
+
+**Koruma kurulumu + ilk-push istisnası:** yeni repoda `main-pr-required` ruleset'i ve CI
+workflow'u kurulup **AKTİF edilene dek** main'e doğrudan push mümkündür — bilinçli sıra:
+ruleset'i önce **DISABLED** durumda yarat → iskelet ilk push'u yap (STEP 6) → ruleset'i
+**ACTIVE** et. Aktifleşince main doğrudan-push'a kapanır; her sonraki değişiklik
+kısa-branch + PR + CI ile girer ([`AGENTS.md`](AGENTS.md) §1).
 
 ## STEP 2 — `init_project.py` → iskeleti ÜRETİR (kopyalamaz)
 
 ```powershell
 python C:\IX\DEV_CORE\scripts\init_project.py C:\IX\XYZ --name XYZ --repo-mode full
+#  --repo-mode full|local|none (K13; STEP 0 kararı — LITE akışta local|none)
 #  --source-root SOURCE_CODES (varsayılan) · --force (var olanın üstüne)
 ```
 
@@ -48,9 +59,10 @@ python C:\IX\DEV_CORE\scripts\init_project.py C:\IX\XYZ --name XYZ --repo-mode f
 | `.claude/settings.json` | `claude/settings.template.json`'dan; hook'lar proje-lokal `scripts/hook_shim.py` üzerinden core'a gider |
 | `scripts/hook_shim.py` | `claude/hook_shim.template.py`'den (runpy; kopuk-junction'da NET onarım mesajı) |
 | `.gitignore` | Sızıntı kilidi HAZIR: `/core/`, `.claude/agents|skills|commands/` + standart ignore'lar |
+| `.gitattributes` | CRLF/binary normalizasyon kararı (py/sh/yaml/json = LF; görsel/pdf/zip = binary) |
 | `.mcp.json` | İnce; MCP server core'dan (`PYTHONPATH=core`), bağlantı proje kökündeki `.conn_adt`'den |
 | `project.yaml` | Şablon (repo_mode/source_root dolu gelir; kalanı STEP 4) |
-| `<source_root>/`, `conn/`, `playbook-local/`, `standards-local/`, `scripts/validators-local/` | Boş overlay klasörleri |
+| `<source_root>/`, `conn/`, `governance/`, `playbook-local/`, `standards-local/`, `scripts/validators-local/` | Boş overlay/proje klasörleri (governance = proje ADR/registry evi) |
 
 ## STEP 3 — `team_setup.py` → junction'lar + memory seed
 
@@ -80,7 +92,9 @@ olmalı); (e) `seed_memory` → core memory-seed'den projenin memory'sini tohuml
 
 ## STEP 4 — Proje-özel değerleri elle doldur (STEP 0 kararlarından)
 
-- `.conn_adt` → projenin SAP sistemi (host/client/user; **proje-içi durur — K10**)
+- `.conn_adt` → projenin SAP sistemi (host/client/user; **proje-içi durur — K10**).
+  Alan şablonu: [`claude/conn_adt.template`](claude/conn_adt.template) (çoklu-tier:
+  proje `conn/*.env` + `switch_tier.py` — ADR 0010)
 - `project.yaml` → `sap_profile` + `release` (+ `db`/`cleancore_policy`) +
   `master_language` + paket prefix'leri + iş-anahtarları. Tam anahtar kataloğu:
   [`MAINTENANCE.md`](MAINTENANCE.md) §"project.yaml kataloğu".
@@ -94,15 +108,20 @@ olmalı); (e) `seed_memory` → core memory-seed'den projenin memory'sini tohuml
 | 2 | MCP kendi sistemine bağlı | `ping` + read-only `adt_get` → PROJENİN SAP sistemi (başka projeninki DEĞİL) |
 | 3 | Validators PASS | `python core/scripts/validators/run_all_validators.py` (core + varsa local) |
 | 4 | Sızıntı kilidi çalışıyor | `git status` → core içeriği görünMÜyor; `git ls-files core/ .claude/agents` → boş *(repo_mode=none: SKIP)* |
-| 5 | Kurulum sağlığı | `python core/scripts/ix_doctor.py` *(araç Faz-F'de; yoksa 1-4 yeterli)* |
+| 5 | Kurulum sağlığı | `python core/scripts/ix_doctor.py` → FAIL yok (7-katman tarama) |
 
 ## STEP 6 — İlk paket + ilk commit
 
 ```powershell
 python core/scripts/bootstrap_package.py <PKG_FULL> --title "..."
 git add -A ; git commit -m "chore(bootstrap): XYZ proje iskeleti (PROJECT_BOOTSTRAP)"
-git push   # yalnız repo_mode=full
+git push -u origin main   # yalnız repo_mode=full (ilk-push istisnası: STEP 1)
 ```
+
+> **NOT:** `main-pr-required` ruleset'i **ACTIVE** edildikten sonra (STEP 1) main'e
+> doğrudan push KAPANIR → bu ilk push'tan sonraki her değişiklik kısa-ömürlü branch +
+> PR + CI ile girer ([`AGENTS.md`](AGENTS.md) §1). `repo_mode=local`'da push satırı,
+> `repo_mode=none`'da tüm git satırları düşer (LITE akış).
 
 Uzak repoda metodolojiden TEK SATIR görünmez — sadece iskelet + proje içeriği.
 

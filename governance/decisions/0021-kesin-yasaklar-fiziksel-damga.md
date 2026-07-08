@@ -1,7 +1,7 @@
 # ADR 0021 — KESİN YASAKLAR: fiziksel damga + drift-guard (import'a bağlı değil)
 
 **Durum:** Kabul edildi (2026-07-08, kullanıcı direktifi)
-**Bağlam ADR'leri:** [0005](0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md) (yasakların kendisi) · [0019](0019-kural-enforcement-mimarisi-3-eksen-coverage-check.md) (enforcement mimarisi) · ADR 0020 (canlı-çekirdek + junction — E3)
+**Bağlam ADR'leri:** [0005](0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md) (yasakların kendisi) · [0019](0019-kural-enforcement-mimarisi-3-eksen-coverage-check.md) (enforcement mimarisi) · [0020](0020-canli-cekirdek-junction-mimarisi.md) (canlı-çekirdek + junction)
 
 ## Sorun
 

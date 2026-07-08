@@ -1,0 +1,18 @@
+# .conn_adt şablonu — SAP ADT bağlantısı (K10: dosya PROJE KÖKÜNDE durur, adı nokta İLE)
+# Kullanım: bu dosyayı <PROJE_KOK>\.conn_adt olarak kopyala, <...> alanlarını KENDİN doldur.
+# ŞİFRE Claude sohbetine ASLA yazılmaz — dosyayı elle düzenle (.conn_adt gitignore'dadır, repoya gitmez).
+# Çoklu-tier/çoklu-sistem: proje conn/*.env dosyaları + scripts/switch_tier.py (ADR 0010).
+ADT_SAP_URL=https://<HOST>:<PORT>
+ADT_SAP_USER=<SAP_KULLANICI>
+ADT_SAP_PASSWORD=<SAP_SIFRE>
+ADT_SAP_CLIENT=<CLIENT>
+# Login dili = projenin master_language'i (project.yaml; ADR 0005-D) — örn. TR
+ADT_SAP_LANGUAGE=<MASTER_LANG>
+# Self-signed sertifikalı sistemlerde false
+ADT_SAP_SSL_VERIFY=false
+# DEV | QA | PRD — QA/PRD salt-okunurdur, mutasyon MCP guard'ınca reddedilir (ADR 0010)
+ADT_SAP_TIER=DEV
+# Sistem kimliği (statusline + MCP-binding görünümü) — örn. SID/DEV
+ADT_SAP_SYSTEM_NAME=<SISTEM_ADI>
+# ATC (Code Inspector) check variant — sisteme özgü; tanımsızsa DEFAULT kullanılır
+# ADT_ATC_VARIANT=<VARIANT>
