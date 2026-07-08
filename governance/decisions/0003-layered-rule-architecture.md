@@ -89,7 +89,7 @@ Sadece doc bypass edilebilir (`LESSONS_LEARNED #4`). Her kural ikinci katmanla d
 
 ## İlgili
 
-- [`../../migration/audit.md`](../../migration/audit.md) — Detaylı plan
+- `migration/audit.md` *(tarihsel; ilk-proje reposunda)* — Detaylı plan
 - [`../../playbook/lessons-learned.md`](../../playbook/lessons-learned.md) — Pattern #4 (Doc ≠ Enforcement)
 - [`../../AGENTS.md`](../../AGENTS.md) — L1 davranış kuralları
-- [`../../CLAUDE.md`](../../CLAUDE.md) — Loader (Adım 7'de yenilenecek)
+- [`../../CLAUDE.core.md`](../../CLAUDE.core.md) — Loader (Adım 7'de yenilenecek)

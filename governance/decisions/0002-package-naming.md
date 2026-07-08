@@ -56,6 +56,6 @@ Adım 5 (Migration ERP normalize)'te:
 
 ## İlgili
 
-- [`../package-registry.md`](../package-registry.md)
+- `governance/package-registry.md` *(proje reposunda)*
 - [`../../standards/01-naming.md`](../../standards/01-naming.md)
-- [`../../migration/audit.md`](../../migration/audit.md) — S3 cevabı
+- `migration/audit.md` *(tarihsel; ilk-proje reposunda)* — S3 cevabı

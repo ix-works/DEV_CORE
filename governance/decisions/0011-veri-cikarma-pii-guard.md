@@ -11,7 +11,7 @@ superseded-by: —
 
 # ADR 0011 — Veri-Çıkarma / PII (KVKK) Guard
 
-> Kaynak: SuperClaude-for-SAP gap analizi ([`../research/sc4sap-gap-analysis.md`](../research/sc4sap-gap-analysis.md) #2).
+> Kaynak: SuperClaude-for-SAP gap analizi (`governance/research/sc4sap-gap-analysis.md` #2 — proje reposunda).
 > ADR 0005'in **veri ekseni** kardeşi: 0005 obje/state korur, 0011 hassas **veriyi** korur.
 
 ## Bağlam

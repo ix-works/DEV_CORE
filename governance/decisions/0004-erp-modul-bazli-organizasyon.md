@@ -87,7 +87,7 @@ Migration Adımı (Adım 9-11):
 
 ## İlgili
 
-- [`../package-registry.md`](../package-registry.md)
+- `governance/package-registry.md` *(proje reposunda)*
 - [`0003-layered-rule-architecture.md`](0003-layered-rule-architecture.md) — Önceki mimari kararı (L1-L4 katmanlar)
-- [`../../ERP/README.md`](../../ERP/README.md) — Modül indeks
+- `<source_root>/README.md` *(proje reposunda)* — Modül indeks
 - [`../../standards/01-naming.md`](../../standards/01-naming.md) — NTTDATA modül prefix standardı

@@ -9,7 +9,7 @@ last-run: 2026-06-13
 # Genel Agent-Dev Tooling Radar
 
 > **Neden var (kök sorun).** Tooling-incelemelerimiz uzun süre **SAP-AI-dar** kaldı
-> ([`research/sc4sap-gap-analysis.md`](research/sc4sap-gap-analysis.md) → SAP-AI katalogları).
+> (`governance/research/sc4sap-gap-analysis.md` — proje reposunda → SAP-AI katalogları).
 > Genel "agent geliştirme verimliliği" alanı (vision-loop maliyeti, MCP↔CLI token farkı,
 > tarayıcı/araştırma araçları) **taranmıyordu** → `playwright-cli` gibi büyük verim-kazançları
 > kullanıcı sorana kadar yüzeye çıkmadı (2026-06-13 dersi). Bu radar o körlüğü kapatır:

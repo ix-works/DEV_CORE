@@ -78,6 +78,6 @@ Format: `00-discipline-and-principles.md`'deki "ÇALIŞAN YÖNTEM" + "DENENEN VE
 ## İlgili
 
 - [`../standards/`](../standards/) — L2 stabil kurumsal standartlar
-- [`../CLAUDE.md`](../CLAUDE.md) — Session protokolü + trigger özeti
+- [`../CLAUDE.core.md`](../CLAUDE.core.md) — Session protokolü + trigger özeti
 - [`../scripts/`](../scripts/) — Kanonik implementasyon kütüphanesi
 - [`lessons-learned.md`](lessons-learned.md) — Hata pattern kataloğu

@@ -192,8 +192,8 @@ analizi + canlı-test → PR.
 | UI tecrübesi FE+BE (§0 PRE-FLIGHT) | [`playbook/ui-freestyle-odata-v2.md`](playbook/ui-freestyle-odata-v2.md) · [`playbook/ui-backend-rap.md`](playbook/ui-backend-rap.md) |
 | Profil yetenek matrisi | [`profiles/`](profiles/) |
 | Mimari kararlar (ADR) | [`governance/decisions/`](governance/decisions/) |
-| **Yeni proje açılışı** | [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) *(Faz-E'de finalize)* |
-| **Canlı-çekirdek işletimi** (PR/CI/stable/rollback) | [`MAINTENANCE.md`](MAINTENANCE.md) *(Faz-B'de yazılır)* |
+| **Yeni proje açılışı** | [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) *(E3'te gözden geçirilir)* |
+| **Canlı-çekirdek işletimi** (PR/CI/stable/rollback) | [`MAINTENANCE.md`](MAINTENANCE.md) |
 | Agent teams işletim modeli | [`governance/agent-teams-operating-model.md`](governance/agent-teams-operating-model.md) |
 | Kurulu plugin envanteri | [`governance/tooling-plugins.md`](governance/tooling-plugins.md) |
 | Ekip/proje kurulumu | `python core/scripts/team_setup.py` · yeni proje: `core/scripts/init_project.py` |

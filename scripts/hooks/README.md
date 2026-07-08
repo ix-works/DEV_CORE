@@ -1,7 +1,7 @@
 # Hook'lar — Envanter + Bakım/Evrim Protokolü
 
 > **Bu klasör = proaktif güvence katmanı.** Hook'lar Claude Code event'lerinde otomatik çalışır
-> (config: [`.claude/settings.json`](../../.claude/settings.json)). Reviewer/validator REAKTİF
+> (config: `.claude/settings.json` *(proje reposunda; template: `claude/settings.template.json`)*). Reviewer/validator REAKTİF
 > (yazımdan sonra kontrol); hook'lar PROAKTİF (iş başlamadan hatırlat / yazımı blokla).
 >
 > **Neden var:** kural seti büyüdükçe "doğru anda hatırlamak" insan/AI hafızasına bırakılamaz

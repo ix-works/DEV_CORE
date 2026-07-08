@@ -12,7 +12,8 @@
    Typo = sessiz profil-kaybı — şema doğrulaması bunu yakalar.
 
 Yalnız staged içerik taranır (git show :path) — working-tree kirliliği gate'i etkilemez.
-Çıkış: ihlal varsa 1 (commit bloklanır), yoksa 0.
+CI modu: `--all` ile TÜM tracked dosyalar taranır (core-ci.yml full-tree gate'i).
+Çıkış: ihlal varsa 1 (commit/CI bloklanır), yoksa 0.
 """
 import re
 import subprocess
@@ -31,7 +32,8 @@ ZSD_PAT = re.compile(r"\bzsd0(?!00|01)\d{2}", re.IGNORECASE)  # ZSD000/001 demo 
 
 # Dosya-bazlı izinli token'lar (taramadan ÖNCE içerikten çıkarılır; kalan yine taranır)
 ALLOWED_TOKENS = {
-    "README.md": ["<PROJECT_NAME>_DOKUM", "<USER>"],  # ilk-proje + tarihsel-yedek referansı
+    # ilk-proje repo/klasör adı + tarihsel-yedek referansı (mimari şema; başka iz YASAK)
+    "README.md": ["<PROJECT_NAME>_DOKUM", "<PROJECT_NAME>", "<USER>"],
 }
 # Desen-sözlüğü taşıyan dosyalar (tarama anlamsız — kendileri desen tanımlar)
 SCAN_EXEMPT = {
@@ -50,8 +52,11 @@ def _git(*args: str) -> str:
     return r.stdout.decode("utf-8", errors="replace")
 
 
-def staged_files() -> list[str]:
-    out = _git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
+def staged_files(all_tracked: bool = False) -> list[str]:
+    if all_tracked:
+        out = _git("ls-files", "-z")
+    else:
+        out = _git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
     return [p for p in out.split("\0") if p]
 
 
@@ -91,6 +96,10 @@ def check_generic(path: str, text: str, hatalar: list[str]) -> None:
 
 
 def check_links(path: str, text: str, repo: Path, hatalar: list[str]) -> None:
+    # Kod-bloğu (```...```) ve inline-kod (`...`) içindeki linkler ÖRNEKTİR — tarama dışı
+    # (satır numarası korunsun diye newline'lar bırakılarak boşaltılır).
+    text = re.sub(r"```.*?```", lambda m: re.sub(r"[^\n]", " ", m.group(0)), text, flags=re.S)
+    text = re.sub(r"`[^`\n]*`", lambda m: " " * len(m.group(0)), text)
     base = (repo / path).parent
     for m in LINK_RE.finditer(text):
         hedef = m.group(1).split("#", 1)[0]
@@ -119,10 +128,11 @@ def check_applies_to(path: str, text: str, enum: set[str], hatalar: list[str]) -
 
 
 def main() -> int:
+    all_tracked = "--all" in sys.argv
     repo = Path(_git("rev-parse", "--show-toplevel").strip() or ".")
     enum = profile_enum(repo)
     hatalar: list[str] = []
-    for path in staged_files():
+    for path in staged_files(all_tracked):
         text = staged_content(path)
         if text is None:
             continue

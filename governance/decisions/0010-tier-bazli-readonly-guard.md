@@ -11,7 +11,7 @@ superseded-by: —
 
 # ADR 0010 — Tier-bazlı Readonly Guard + Multi-System Bağlantı
 
-> Kaynak: SuperClaude-for-SAP gap analizi ([`../research/sc4sap-gap-analysis.md`](../research/sc4sap-gap-analysis.md) #1).
+> Kaynak: SuperClaude-for-SAP gap analizi (`governance/research/sc4sap-gap-analysis.md` #1 — proje reposunda).
 > İlke: **"Safety is not memory, it is code"** — tier dosyadan okunur, agent hatırlamasına bırakılmaz.
 
 ## Bağlam

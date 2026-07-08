@@ -1,7 +1,7 @@
 # 0016 — Source DRIFT Önleme: Repo ↔ Canlı SAP Senkron (Kod-Gate)
 
 **Durum:** Kabul edildi (2026-06-16)
-**Bağlam ADR'leri:** [0005](0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md) (yasaklar/guardrail), [0006](0006-reviewer-pre-flight.md) (reviewer pre-flight), [0007](0007-sap-adt-mcp-server.md) (MCP server), [0010](0010-tier-bazli-readonly-guard.md) (kod-gate deseni), [0013](0013-kaynak-referans-dokuman-ayrimi-ref_docs.md) (ref_docs ayrımı)
+**Bağlam ADR'leri:** [0005](0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md) (yasaklar/guardrail), [0006](0006-reviewer-agent-pattern.md) (reviewer pre-flight), [0007](0007-sap-adt-mcp-server.md) (MCP server), [0010](0010-tier-bazli-readonly-guard.md) (kod-gate deseni), [0013](0013-kaynak-referans-dokuman-ayrimi-ref_docs.md) (ref_docs ayrımı)
 **Pilot/kanıt:** ZSD001_UI_BOOKING.srvd (canlı drift bilinen vaka), ZSD001_CLC
 
 ---

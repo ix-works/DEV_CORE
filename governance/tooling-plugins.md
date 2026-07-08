@@ -146,7 +146,7 @@ kurulmaz" kuralı: [`vscode-setup.md`](vscode-setup.md). Öneri listesi: `.vscod
 
 ## 6. ADOPTED TOOLING — provenance kataloğu (kaynak → ne aldık → nerede)
 
-> **Tek doğruluk kaynağı:** dışarıdan araştırıp **aldığımız/aktive ettiğimiz** (kurduğumuz VEYA deseninden kendi yazdığımız) her şey. Keşif → kıyas → adoption metodu: [`research/sap-ai-tooling-comparison.md`](research/sap-ai-tooling-comparison.md). Yeni araç ararken §🔎 (marianfoo katalog). **Yeni bir şey kurunca/aktive edince bu tabloya satır.**
+> **Tek doğruluk kaynağı:** dışarıdan araştırıp **aldığımız/aktive ettiğimiz** (kurduğumuz VEYA deseninden kendi yazdığımız) her şey. Keşif → kıyas → adoption metodu: `governance/research/sap-ai-tooling-comparison.md` *(proje reposunda)*. Yeni araç ararken §🔎 (marianfoo katalog). **Yeni bir şey kurunca/aktive edince bu tabloya satır.**
 
 | Öğe | Kaynak (repo/URL) | Ne aldık | Bizde nerede | Durum |
 |---|---|---|---|---|
@@ -167,4 +167,4 @@ kurulmaz" kuralı: [`vscode-setup.md`](vscode-setup.md). Öneri listesi: `.vscod
 | sapcli | jfilak/sapcli | RAP BOTD test-runner (`aunit --output junit4`) | — | ⏳ deferred (test gelince) |
 | ai-skills-library | SAP (resmi) | sap-fiori-guidelines (tek skill) | — | ⚪ izle |
 
-> **Template (T12):** Bu katalog + adoption metodolojisi **genericize edilip template repo'ya** taşınmalı (gelecek projeler küratörlü araç setini + "kıyasla, var/yok değil" yöntemini miras alsın). Kayıt: [`pending-template-ports.md`](pending-template-ports.md). ⚠️ Otomatik port YASAK (TD sızar) — milestone batch.
+> **Template (T12):** Bu katalog + adoption metodolojisi **genericize edilip template repo'ya** taşınmalı (gelecek projeler küratörlü araç setini + "kıyasla, var/yok değil" yöntemini miras alsın). *(EMEKLİ — canlı-çekirdek mimarisinde [ADR 0020] port süreci YOK: katalog zaten core'da yaşar; genericize'ı pre-commit gate korur.)*

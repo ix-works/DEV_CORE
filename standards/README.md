@@ -8,7 +8,7 @@ last-updated: 2026-05-14
 
 # Standards — Kurumsal & Proje Standartları
 
-Bu klasör **L2 katman** dosyaları içerir: stabil, değişme sıklığı düşük, tüm projelere uygulanan kurallar. Detay için kural katmanları → [`../CLAUDE.md`](../CLAUDE.md).
+Bu klasör **L2 katman** dosyaları içerir: stabil, değişme sıklığı düşük, tüm projelere uygulanan kurallar. Detay için kural katmanları → [`../CLAUDE.core.md`](../CLAUDE.core.md).
 
 ## Dosyalar
 
@@ -47,5 +47,5 @@ status: active|deprecated
 ## İlgili
 
 - [`../playbook/`](../playbook/) — L3 operasyonel pattern bankası
-- [`../CLAUDE.md`](../CLAUDE.md) — Katman özetleri + session protokolü
+- [`../CLAUDE.core.md`](../CLAUDE.core.md) — Katman özetleri + session protokolü
 - [`../AGENTS.md`](../AGENTS.md) — L1 agent davranış kuralları

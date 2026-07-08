@@ -239,4 +239,4 @@ res = c.set_function_module_source('ZXXX_FM_FOO', 'ZXXX_FG_FOO', src, transport=
 - [`adt-foundation.md`](adt-foundation.md) §3.2 — Genel FM push/lock/activate temeli
 - [`adt-classes.md`](adt-classes.md) — Class push/activate (benzer lock pattern)
 - [`lessons-learned.md`](lessons-learned.md) — PATTERN #7 (placeholder tuzağı)
-- [`governance/deferred-triggers.md`](../governance/deferred-triggers.md) — C1 register satırı
+- `governance/deferred-triggers.md` *(proje reposunda)* — C1 register satırı

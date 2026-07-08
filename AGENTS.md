@@ -2,7 +2,7 @@
 
 > Bu dosya **L1 katman**: AI agent'ın her oturumda nasıl davranması gerektiğini tanımlar. Detay kurallar (kodlama, naming, doc format, ADT pattern) ayrı dosyalarda — referanslar aşağıda.
 >
-> **Önce oku:** [`CLAUDE.md`](CLAUDE.md) — proje session protokolü + indeks.
+> **Önce oku:** [`CLAUDE.core.md`](CLAUDE.core.md) — proje session protokolü + indeks.
 
 ---
 
@@ -94,7 +94,7 @@ Yukarıdaki yasaklardan birini yapma ihtiyacı doğarsa:
 
 ## 0. SESSION BAŞLANGICI — EKRAN TEYİDİ ZORUNLU
 
-Her yeni oturumun **ilk yanıtının** [`CLAUDE.md`](CLAUDE.md) §2'deki template'le başlamalı:
+Her yeni oturumun **ilk yanıtının** [`CLAUDE.core.md`](CLAUDE.core.md) §2'deki template'le başlamalı:
 
 ```
 [Session başladı — <PROJECT_NAME>]
@@ -312,7 +312,7 @@ Her ADT işlemi için bu sırayı uygula:
 1. **OKU** — [`playbook/README.md`](playbook/README.md) → obje tipine göre dosyayı bul → ilgili `playbook/adt-<tip>.md`'yi aç
 2. **PATTERN VARSA UYGULA** — "ÇALIŞAN YÖNTEM" kopyala, parametreleri değiştir. **"Denenen ve başarısız"** tablosundakileri **tekrar deneme** (zaman kaybı).
 3. **DOĞRULA** — REST GET + (kritik objeler için) SAP GUI'den onay iste
-4. **YENİ KEŞİF VARSA PLAYBOOK GÜNCELLE** — T1/T2/T9 trigger (bkz. [`CLAUDE.md`](CLAUDE.md))
+4. **YENİ KEŞİF VARSA PLAYBOOK GÜNCELLE** — T1/T2/T9 trigger (bkz. [`CLAUDE.core.md`](CLAUDE.core.md))
 
 Bu dosya şunları içerir:
 - Her obje tipi için **denenmiş ve başarılı** komut örnekleri (push, activate, download, SQL, lock, vb.)
@@ -332,14 +332,14 @@ Bu dosya şunları içerir:
 
 | Konu | Dosya |
 |---|---|
-| Session protokol + trigger + indeks | [`CLAUDE.md`](CLAUDE.md) |
+| Session protokol + trigger + indeks | [`CLAUDE.core.md`](CLAUDE.core.md) |
 | Naming | [`standards/01-naming.md`](standards/01-naming.md) |
 | Backend kodlama (OData/CDS/RAP) | [`standards/02-coding-backend.md`](standards/02-coding-backend.md) |
 | Fiori UI | [`standards/03-coding-ui-fiori.md`](standards/03-coding-ui-fiori.md) |
 | FS/TS şablonu | [`standards/04-documentation-fs-ts.md`](standards/04-documentation-fs-ts.md) |
 | ADT pattern bankası | [`playbook/`](playbook/) (README'den başla) |
 | Hata pattern + trigger phrases | [`playbook/lessons-learned.md`](playbook/lessons-learned.md) |
-| Paket listesi | [`governance/package-registry.md`](governance/package-registry.md) |
+| Paket listesi | `governance/package-registry.md` *(proje reposunda; auto-generated)* |
 | Mimari kararlar | [`governance/decisions/`](governance/decisions/) |
 
 ---

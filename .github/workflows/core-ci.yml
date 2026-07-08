@@ -1,0 +1,32 @@
+# core-ci — DEV_CORE required-check (B12).
+# Pre-commit gate'inin sunucu aynası: hook lokalde atlansa bile merge EDILEMEZ.
+# Required-check baglama (B14 push + ilk yesil kosudan SONRA):
+#   main-ruleset'e (id 18667766) "gates" job'u required_status_checks olarak eklenir + ruleset ENABLE edilir.
+name: core-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Bagimliliklar
+        run: pip install --quiet requests urllib3
+
+      - name: Genericize-leak + link-audit + applies_to sema (TAM AGAC)
+        run: python scripts/git-hooks/core_precommit.py --all
+
+      - name: Validators (CORE modu)
+        run: python scripts/validators/run_all_validators.py
+
+      - name: Derleme taramasi (py_compile)
+        run: python -m compileall -q scripts mcp_servers

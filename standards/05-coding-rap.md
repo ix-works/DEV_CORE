@@ -72,7 +72,7 @@ RAP naming **icat edilmez**; `01-naming.md` (NTTDATA Guideline) §4.2/§4.4.1/§
 | Domain | `D` | `ZSD001_D_VOYNO` | §4.4.5 — **`DOM` DEĞİL** |
 | Draft DB tablo (draft'lı senaryoda) | `A` … `_D` | `ZSD001_A_ORDER_D` | §4.4.5 |
 
-> **Class naming — TEK desen (karar 2026-06-09, kullanıcı).** Sınıfın rolü ne olursa olsun (RAP behavior impl. **veya** iş mantığı/utility) **`ZCL_<PKG#>_<ad>`** kullanılır (NTT §4.4.3 kanonik): `ZCL_SD001_ORDER` (behavior), `ZCL_SD001_SO_MANAGER` (iş mantığı). **`ZSD<NNN>_CL_*` deseni LEGACY** — yeni sınıfta KULLANILMAZ (eskiden L4 .rules.md'de "iş mantığı class" olarak vardı; L2 NTT ile çelişiyordu, geri hizalandı). `ZBP_*` da kullanılmaz. Mevcut `ZSD<NNN>_CL_*` objelerin rename'i ERTELENDİ → [`governance/deferred-triggers.md`](../governance/deferred-triggers.md).
+> **Class naming — TEK desen (karar 2026-06-09, kullanıcı).** Sınıfın rolü ne olursa olsun (RAP behavior impl. **veya** iş mantığı/utility) **`ZCL_<PKG#>_<ad>`** kullanılır (NTT §4.4.3 kanonik): `ZCL_SD001_ORDER` (behavior), `ZCL_SD001_SO_MANAGER` (iş mantığı). **`ZSD<NNN>_CL_*` deseni LEGACY** — yeni sınıfta KULLANILMAZ (eskiden L4 .rules.md'de "iş mantığı class" olarak vardı; L2 NTT ile çelişiyordu, geri hizalandı). `ZBP_*` da kullanılmaz. Mevcut `ZSD<NNN>_CL_*` objelerin rename'i ERTELENDİ → `governance/deferred-triggers.md` *(proje reposunda)*.
 
 ### 4.1 `ZSD001_I_*` Namespace Çakışması — ÇÖZÜM
 
@@ -196,7 +196,7 @@ Bug-checklist: `BE-19`. (Tarihsel `ZSD000_I_BPNAME` 2026-06-17 silindi.)
 
 ## 9X. CLEAN CORE — released-object + aile matrisi (dual-track on-prem)
 
-> Biz **dual-track on-prem**'iz (RAP + bilinçli klasik). Clean Core ailelerinin **hepsi bize uygulanmaz**. SAP'nin kendi rehberi: *ABAP Language Version / Allowed Object Types ATC check'leri classic ABAP için **hariç***. Tam matris + gerekçe: [`../governance/research/sap-ai-tooling-comparison.md`](../governance/research/sap-ai-tooling-comparison.md).
+> Biz **dual-track on-prem**'iz (RAP + bilinçli klasik). Clean Core ailelerinin **hepsi bize uygulanmaz**. SAP'nin kendi rehberi: *ABAP Language Version / Allowed Object Types ATC check'leri classic ABAP için **hariç***. Tam matris + gerekçe: `governance/research/sap-ai-tooling-comparison.md` *(proje reposunda)*.
 
 - **Tablo→released CDS:** yeni RAP CDS'te std tablo (MARA/VBAP/LIPS...) yerine released CDS (I_Product/I_SalesOrderItem...) **tercih et**. Pre-flight: `check_released_objects.py` (WARNING, reviewer cds/rap zincirinde) → successor önerir. Hard kural değil (ADR 0005-B READ'i yasaklamaz); Clean Core Level A tercihi.
 - **Tüm-tip released-API** (class/IF/FM): OTORİTE = SAP yerel **ATC "Usage of APIs"** (`adt_atc_check`, S/4 2025+PCE). Regex'le taklit edilmez.
@@ -213,5 +213,5 @@ Bug-checklist: `BE-19`. (Tarihsel `ZSD000_I_BPNAME` 2026-06-17 silindi.)
 - [`../playbook/adt-rap.md`](../playbook/adt-rap.md) — L3 RAP ADT REST pattern bankası
 - [`../playbook/checklists/rap-creation.md`](../playbook/checklists/rap-creation.md) — reviewer checklist
 - [`../playbook/checklists/rap-troubleshoot.md`](../playbook/checklists/rap-troubleshoot.md) — hata teşhisi + BOTD unit-test + ATC no-suppress
-- [`../ERP/SD/ZSD001_CLC/.rules.md`](../ERP/SD/ZSD001_CLC/.rules.md) — L4 paket naming (RAP satırları)
+- `<source_root>/SD/ZSD001_CLC/.rules.md` *(proje reposunda)* — L4 paket naming (RAP satırları)
 - ADR [`0005`](../governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md) · [`0006`](../governance/decisions/0006-reviewer-agent-pattern.md)

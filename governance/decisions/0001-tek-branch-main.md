@@ -51,5 +51,5 @@ Bu karar AGENTS.md'ye yazıldı (2026-04-29). Adım 7'de (CLAUDE.md ince loader)
 
 ## İlgili
 
-- [`../package-registry.md`](../package-registry.md)
+- `governance/package-registry.md` *(proje reposunda)*
 - [`../../AGENTS.md`](../../AGENTS.md) — Git workflow zorunlu kuralları

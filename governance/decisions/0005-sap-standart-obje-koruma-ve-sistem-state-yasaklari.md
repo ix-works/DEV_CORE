@@ -125,6 +125,6 @@ Bir geliştirme için yukarıdaki yasaklardan birini yapma ihtiyacı doğarsa:
 ## İlgili
 
 - [`../../AGENTS.md`](../../AGENTS.md) §0 — kesin yasaklar
-- [`../../CLAUDE.md`](../../CLAUDE.md) §0 — session ilk yüklenen
+- [`../../CLAUDE.core.md`](../../CLAUDE.core.md) §0 — session ilk yüklenen
 - [`../../playbook/lessons-learned.md`](../../playbook/lessons-learned.md) — Pattern #5 (Trust without Verify) ile ilgili
 - [`0003-layered-rule-architecture.md`](0003-layered-rule-architecture.md) — L1 katmanda yer

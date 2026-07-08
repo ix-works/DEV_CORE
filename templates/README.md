@@ -38,4 +38,4 @@ Bootstrap sonrası `governance/package-registry.md` otomatik yeniden üretilir (
 ## İlgili
 
 - [`../scripts/bootstrap_package.py`](../scripts/) — Bootstrap script (Adım 6'da yazılacak)
-- [`../governance/package-registry.md`](../governance/package-registry.md) — Paket listesi
+- `governance/package-registry.md` *(proje reposunda)* — Paket listesi
