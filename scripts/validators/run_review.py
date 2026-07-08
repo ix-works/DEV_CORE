@@ -168,6 +168,12 @@ TASK_VALIDATORS = {
         # Service Definition/Binding/Publish — make-or-break, deterministik
         # validator yok. Manual + checklist C-RAP-SB-* (publish AI-otonom kanıtı).
     ],
+    # ─── ITG S2 sign-off (ADR 0022, Faz-1) ── artifact = intake-artefaktı .md ──
+    'itg_s2_signoff': [
+        ('check_itg_signoff.py', 'BLOCKER',
+         'S2 kapsamlı iş: intake-artefaktı tam (KAPSAM/etkilenen-obje/prior-art/kabul-kriteri) '
+         '+ kullanıcı MUTABAKAT [x] var mı (ADR 0022; SAP-yazma öncesi)'),
+    ],
 }
 
 # Checklist dosyaları (manuel/LLM tarafından okunması gereken ek kontroller)
@@ -180,6 +186,7 @@ TASK_CHECKLISTS = {
     'rap_cds_creation': 'playbook/checklists/rap-creation.md',
     'rap_bdef_creation': 'playbook/checklists/rap-creation.md',
     'rap_service_binding': 'playbook/checklists/rap-creation.md',
+    'itg_s2_signoff': 'playbook/checklists/itg-s2-signoff.md',
 }
 
 

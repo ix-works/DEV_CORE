@@ -128,8 +128,23 @@ Backend ve frontend ayrı DoR (BE/FE expert + ayrı bug-checklist).
 
 ---
 
+## Eval — ITG katkısı placebo mı, gerçek mi (objektif ölçüm)
+ITG'nin değeri iddia değil kanıtla doğrulanır: **paket-var/yok masa-testi**. Aynı temsili talep
+(ör. "satış siparişi kalem raporu + kullanılabilir stok kolonu") iki koşulda çalıştırılır ve çıktı
+rubrikle kıyaslanır:
+- **A (ITG YOK):** protokol/paket devre-dışı, ham prompt.
+- **B (ITG VAR):** intake_triage + SD paketi devrede.
+
+**Rubrik (her madde 0/1):** (1) doğru modül+kapsam sınıflandı mı · (2) "kullanılabilir stok" → ATP
+konusu çıkarıldı mı · (3) canlı-sistemde mevcut stok-view'ları arandı/reuse kararı verildi mi
+(3-eksen b) · (4) prior-art tarandı mı (3-eksen c) · (5) SD-özgü doğru soru(lar) soruldu mu
+(satış-org/özel-E/plant-lgort) · (6) pool-semantik/BE-44 gibi tuzak yakalandı mı · (7) kanıtsız
+varsayım YOK. **Ölçüt:** B'nin toplam skoru A'dan belirgin yüksekse ITG katkı üretiyor; eşitse placebo.
+Araç: skill-creator eval veya elle masa-testi; sonuç pilot-değerlendirmeye (ADR 0022) işlenir.
+
 ## İlişkili
 - Hook: [`../scripts/hooks/intake_triage.py`](../scripts/hooks/intake_triage.py) · obje-tipi kardeşi: `skill_injector.py`
+- S2 gate: [`checklists/itg-s2-signoff.md`](checklists/itg-s2-signoff.md) + `check_itg_signoff.py` (run_review `--task itg_s2_signoff`)
 - Modül paketleri: [`modules/`](modules/) — SD pilot: [`modules/sd.md`](modules/sd.md) (MM/FI/CO/PP/QM/PM/WM-EWM ipucu var, paket birikimle T-trigger)
 - Çekirdek davranış (tahmin-yasak) + ADR 0016 (source-drift) + ADR 0006 (reviewer) + ADR 0019 (gate coverage)
 - Karar: [`../governance/decisions/0022-intake-triage-gate.md`](../governance/decisions/0022-intake-triage-gate.md)
