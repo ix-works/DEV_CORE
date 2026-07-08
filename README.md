@@ -39,11 +39,26 @@ ix-works/<PROJECT_NAME>_DOKUM ─clone─► C:\IX\<PROJECT_NAME>\
 
 ## Kurulum (yeni geliştirici / yeni makine)
 
+**Ön-koşullar (makine-düzeyi — repo bunları GETİRMEZ):** Python ≥3.10 · git ·
+Node.js+npm · Claude Code CLI (`claude`). Bunlar kuruluysa gerisi tek komut:
+
 ```powershell
 git clone https://github.com/ix-works/DEV_CORE.git C:\IX\DEV_CORE
-# proje clone'undan sonra:
-python C:\IX\DEV_CORE\scripts\team_setup.py     # junction'lar + hooksPath + seed_memory
+# proje clone'undan sonra, proje kökünde:
+python C:\IX\DEV_CORE\scripts\team_setup.py
 ```
+
+`team_setup` şunları kurar/doğrular: junction'lar + hooksPath + pip-bağımlılıkları +
+**Claude Code plugin'leri** (`setup_plugins.py`: ui5 · playwright-MCP · pyright-lsp ·
+plugin-dev — makine-düzeyi, clone ile GELMEZ) + **npm CLI'ler** (`playwright-cli`
+[tarayıcı-doğrulama + ui-smoke gate'inin temeli, ADR 0017] · ast-grep · mmdc · marp) +
+memory-seed + smoke testler. Plugin/CLI adımları NON-FATAL'dır ama FE/UI işine
+başlamadan tamamlanmış olmalı (`ix_doctor` bağımlılık katmanı kontrol eder).
+Envanter ve "hangi iş → hangi araç": [`governance/tooling-plugins.md`](governance/tooling-plugins.md).
+
+**Playwright iki katmandır (bilinçli):** tercih edilen `playwright-cli` (npm-global binary +
+core'daki `claude/skills/playwright-cli` skill'i — token-verimli, ~4x) ; yedek `playwright`
+Claude-plugin'i (MCP — ad-hoc debug). UI-doğrulama akışı: [`governance/tooling-plugins.md`](governance/tooling-plugins.md).
 
 Yeni PROJE açılışı: [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) (STEP 0–6 + kabul gate'i).
 Kurulum doğrulama: `python scripts/ix_doctor.py` (7-katman sağlık taraması).

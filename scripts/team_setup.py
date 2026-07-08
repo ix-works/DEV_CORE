@@ -138,6 +138,29 @@ def provision_worktree(worktree: Path, proje: Path) -> bool:
     return ok
 
 
+def npm_clis() -> None:
+    """Token-verimli CLI'ler (governance/tooling-plugins.md; makine-düzeyi, repo'da DEĞİL):
+    playwright-cli = ADR 0017 ui-smoke gate'i + tarayıcı-doğrulamanın TEMELİ (skill core'da,
+    binary global gerekir). NON-FATAL: yoksa playwright-MCP-plugin'ine düşülür."""
+    if not shutil.which("npm"):
+        say(WARN, "npm YOK — playwright-cli/ast-grep/mmdc/marp atlandı "
+                  "(node kur, sonra: npm i -g @playwright/cli @ast-grep/cli)")
+        return
+    clis = [
+        ("playwright-cli", "@playwright/cli@latest", "token-verimli tarayıcı doğrulama (ADR 0017 ui-smoke)"),
+        ("ast-grep", "@ast-grep/cli@latest", "yapısal kod arama/refactor (AST)"),
+        ("mmdc", "@mermaid-js/mermaid-cli@latest", "Mermaid → SVG/PNG (FS/TS/KD)"),
+        ("marp", "@marp-team/marp-cli@latest", "Markdown → slayt (PDF/PPTX)"),
+    ]
+    for binary, pkg, desc in clis:
+        if shutil.which(binary):
+            say(OK, f"{binary} kurulu ({desc})")
+            continue
+        r = subprocess.run(["npm", "install", "-g", pkg], capture_output=True, text=True)
+        say(OK if r.returncode == 0 else WARN,
+            f"{binary} {'kuruldu' if r.returncode == 0 else 'KURULAMADI (opsiyonel): ' + (r.stderr or '')[:120]}")
+
+
 def alt_arac(proje: Path, ad: str, non_fatal_msg: str) -> None:
     """core scripts/<ad> aracını proje cwd'siyle koş (non-fatal)."""
     script = CORE_ROOT / "scripts" / ad
@@ -201,6 +224,7 @@ def main() -> int:
 
     if not a.no_plugins:
         alt_arac(proje, "setup_plugins.py", "plugin kurulumu (claude CLI gerekli)")
+        npm_clis()  # playwright-cli + ast-grep + mmdc + marp (non-fatal)
     if not a.no_seed:
         alt_arac(proje, "seed_memory.py", "memory tohumu")
 
