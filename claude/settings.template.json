@@ -15,7 +15,10 @@
       }
     ],
     "UserPromptSubmit": [
-      { "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "skill_injector"] } ] }
+      { "hooks": [
+        { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "skill_injector"] },
+        { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "intake_triage"] }
+      ] }
     ],
     "PreToolUse": [
       {
