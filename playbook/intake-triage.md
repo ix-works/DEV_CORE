@@ -24,12 +24,20 @@ purpose: Geliştirme talebi alım protokolü — kapsam-sınıflama + 3-eksen ar
 
 ## 6 ADIM
 
-### 1. SINIFLA (modül + iş-tipi + KAPSAM) — gerekçeyle
-Talebi üç eksende etiketle:
-- **Fonksiyonel modül:** SD / MM / FI / … (hook kaba ipucu verir; kesin sınıfı SEN belirle).
-  Modül kural-paketi varsa (`playbook/modules/<kod>.md`) OKU. Yoksa genel iskeletle ilerle.
-- **İş-tipi:** rapor / RAP-servis / klasik-dialog / DDIC / UI / enhancement / … (skill_injector
-  obje-tipi checklist'ini zaten enjekte eder — onu da izle).
+### 1. SINIFLA (İKİ DİK EKSEN + KAPSAM) — gerekçeyle
+Bir iş **iki dik eksende birden** yer alır — karıştırma:
+
+- **① Fonksiyonel modül ekseni (NE iş?):** SD / MM / FI / CO / PP / QM / PM / WM-EWM …
+  → `intake_triage` hook kaba ipucu verir; kesin modülü SEN belirle. Modül kural-paketi
+  varsa (`playbook/modules/<kod>.md`) OKU (iş kuralları + ne-kontrol-et + ne-sor). Yoksa genel iskelet.
+- **② Teknik/kodlama-tipi ekseni (NASIL?):** klasik ABAP / RAP / Fiori-UI5 / CDS / DDIC …
+  → `skill_injector` hook obje-tipi checklist'ini + standardı ZATEN enjekte eder
+  (RAP→rap-creation+std05 · Fiori→ui-freestyle+std03 · klasik→classic-dialog+std06 · DDIC→...).
+  ABAP/RAP/Fiori **fonksiyonel modül DEĞİLDİR** — bu eksende yaşar, modül-ipucuna eklenmez.
+- **Örnek:** "SD modülünde yeni RAP raporu" → ① SD kural-paketi (availability/pricing araştır,
+  satış-org sor) + ② rap-creation checklist (BDEF/CDS syntax, aktivasyon). İki hook birlikte,
+  çakışmadan tamamlar.
+
 - **KAPSAM (en kritik):** aşağıdaki 3 sınıftan biri — **gerekçesini bir cümleyle yaz**
   (kullanıcı görür, yanlışsa düzeltir). Kapsam, sonraki adımların AĞIRLIĞINI belirler.
 

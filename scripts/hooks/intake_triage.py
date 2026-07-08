@@ -31,17 +31,42 @@ _INTENT = re.compile(
 # MODÜL ipucu (KABA — ajana "muhtemel modül", kesin değil). Anahtar kelime → (modül-kodu, etiket).
 # Kural-paketi playbook/modules/<kod>.md varsa hook onu adıyla önerir. Şimdilik yalnız SD paketi var;
 # diğer modüller ipucu verir ama "paket henüz yok — genel iskeletle ilerle" der.
+# NOT (TR-çekim tuzağı): kapanış \b KULLANMA — "merkez"+\b Türkçe eki ("merkezi") kaçırır.
+# Kök-eşleşme (prefix) kullan; kısa/riskli token'ları tekil \b...\b ile koru (\bWM\b, \bHU\b).
 _MODULES = [
     ("sd", "SD (Satış-Dağıtım)", re.compile(
-        r"\b(satış|satis|sipariş|sipiriş|siparis|teslimat|sevkiyat|fatura|faturalandırma|"
-        r"sevk\s*emri|müşteri\s+sipariş|delivery|billing|pricing|fiyatland|kondisyon|"
-        r"VA0\d|VL0\d|VF0\d|VBAK|VBAP|LIKP|LIPS|VBRK|kullanılabilir\s+stok|availability)\b", re.I)),
+        # NOT: çıplak "sipariş" KULLANMA — MM "satın alma siparişi" / PP "üretim siparişi"ne
+        # takılıp yanlış-pozitif SD-ipucu üretir. SD-bağlamlı sipariş terimleri kullan.
+        r"(\bsatış|\bsatis|\bmüşteri\s+sipariş|\bsipariş\s+kalem|\bsipariş\s+belge|\bteslimat|\bsevkiyat|\bfatura|"
+        r"\bsevk\s*emri|\bdelivery\b|\bbilling\b|\bpricing\b|\bfiyatland|\bkondisyon|"
+        r"\bVA0\d|\bVL0\d|\bVF0\d|\bVBAK\b|\bVBAP\b|\bLIKP\b|\bLIPS\b|\bVBRK\b|kullanılabilir\s+stok|\bavailability)", re.I)),
     ("mm", "MM (Malzeme Yönetimi)", re.compile(
-        r"\b(satın\s*alma|satinalma|satın\s*al|malzeme\s+belge|mal\s+giriş|stok\s+hareket|"
-        r"ME2\d|MIGO|MIRO|satıcı\s+fatura|purchase\s+order|EKKO|EKPO|MSEG)\b", re.I)),
+        r"(\bsatın\s*al|\bsatinal|\bmalzeme\s+belge|\bmal\s+giriş|\bstok\s+hareket|"
+        r"\bME2\d|\bMIGO\b|\bMIRO\b|\bsatıcı\s+fatura|\bpurchase\s+order|\bEKKO\b|\bEKPO\b|\bMSEG\b)", re.I)),
+    ("ewm", "WM/EWM (Depo Yönetimi)", re.compile(
+        # EWM (Extended) + klasik WM (LE-WM) terimleri birlikte — hangi sistem olduğunu
+        # ajan canlı-araştırmada belirler (bazı sistemlerde WM, bazılarında EWM).
+        r"(\bdepo\s+yönet|\bdepo\s+görev|\bdepo\s+tip|\bhandling\s+unit|\bHU\b|\bhu_ident|\bmal\s+kabul|\byerleştir|"
+        r"\btoplama\s+görev|\baktarım\s+emri|\btransfer\s+order|\btransit\s+depo|\bputaway|\bpicking|"
+        r"\bstorage\s+(bin|type)|\bwarehouse\s+task|/SCWM/|\blgnum\b|\bEWM\b|\bWM\b|"
+        r"\bLTAK\b|\bLTAP\b|\bLT0\d|\bLX\d\d|\bdepo\s+stok|\bdepo\s+birim)", re.I)),
+    ("pp", "PP (Üretim Planlama)", re.compile(
+        r"(\büretim\s+sipariş|\bimalat|\biş\s+emri|\bplanlı\s+sipariş|\bCO0\d|\büretim\s+planla|"
+        r"\bürün\s+ağac|\bBOM\b|\breçete|\byönlendirme|\brouting\b|\bMRP\b|\bproduction\s+order|\bAFKO\b|\bAFPO\b|\bRESB\b)", re.I)),
     ("fi", "FI (Mali Muhasebe)", re.compile(
-        r"\b(muhasebe\s+belge|mali\s+belge|hesap\s+plan|borç|alacak|mizan|FB0\d|FBL\d|"
-        r"ana\s+hesap|BSEG|BKPF|GL\s+hesab)\b", re.I)),
+        r"(\bmuhasebe\s+belge|\bmali\s+belge|\bhesap\s+plan|\bborç|\balacak|\bmizan|\bFB0\d|\bFBL\d|"
+        r"\bana\s+hesap|\bBSEG\b|\bBKPF\b|\bGL\s+hesab)", re.I)),
+    ("co", "CO (Maliyet-Kontrol)", re.compile(
+        r"(\bmaliyet\s+merkez|\bmasraf\s+yer|\biç\s+sipariş|\bmaliyet\s+unsur|\bkarlılık|\bkârlılık|"
+        r"\bkâr\s+merkez|\bkar\s+merkez|\bCO-?PA\b|\bcost\s+center|\binternal\s+order|\bKS0\d|\bKO0\d|\bCOEP\b|\bmaliyet\s+analiz)", re.I)),
+    ("qm", "QM (Kalite Yönetimi)", re.compile(
+        r"(\bkalite\s+yönet|\bkalite\s+kontrol|\bkalite\s+bildirim|\bmuayene\s+lot|\bmuayene\s+plan|"
+        r"\binspection\s+lot|\bquality\s+notification|\bkusur|\bred\s+karar|\busage\s+decision|"
+        r"\bQA0\d|\bQE\d\d|\bQPMK\b|\bQALS\b|\bQMEL\b)", re.I)),
+    ("pm", "PM (Bakım Onarım)", re.compile(
+        r"(\bbakım\s+emri|\bbakım\s+sipariş|\barıza\s+bildirim|\bekipman\b|\bfonksiyon\s+yer|"
+        r"\bteknik\s+yer|\bmaintenance\s+order|\bmalfunction|\bfunctional\s+location|\bwork\s+order|"
+        r"\bIW3\d|\bIW2\d|\bIE0\d|\bEQUI\b|\bAUFK\b|\byedek\s+parça)", re.I)),
 ]
 
 # Kural-paketi FİİLEN mevcut modüller (dosya core'da → junction'la görünür).
