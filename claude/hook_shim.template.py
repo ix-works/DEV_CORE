@@ -14,6 +14,13 @@ import os
 import runpy
 import sys
 
+if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 SHIM_SURUM = "1.0"  # D7 drift-karşılaştırması bu sürümü okur
 
 

@@ -1,355 +1,215 @@
 #!/usr/bin/env python3
-"""Team Setup — <PROJECT_NAME> repo yeni katılan veya güncellenen geliştirici için.
+# -*- coding: utf-8 -*-
+"""team_setup.py — Geliştirici/proje kurulumu ve onarımı (ADR 0020; canlı-çekirdek modeli).
 
-Tek komutla:
-  1. Python versiyonu kontrol et (>= 3.10)
-  2. Mevcut repo durumunu kontrol et (clean / kirli)
-  3. git pull (varsa upstream)
-  4. pip install -r mcp_servers/sap_adt/requirements.txt
-  5. .claude/active_package wizard (ilk kez veya değişiklik)
-  6. .conn_adt template kontrolü (yoksa uyar)
-  7. Statusline smoke test
-  8. MCP server smoke test (ping tool)
-  9. Özet rapor
+CORE içinde yaşar; hedef PROJE cwd'den veya --project ile alınır (D24: kökler
+__file__-türetimli, sabit sürücü/klasör varsayımı YOK).
 
-Çalıştırma (repo kök dizininde):
-  python scripts/team_setup.py
-
-Flags:
-  --no-pull      git pull yapma
-  --no-install   pip install yapma
-  --no-smoke     smoke test yapma
-  --pkg <name>   active_package'i bu değere set et (wizard'ı atla)
+Yaptıkları:
+  1. Python >= 3.10 + pip install (MCP requirements)
+  2. CORE reposunda `core.hooksPath scripts/git-hooks` (D19 — pre-commit gate'leri)
+  3. PROJE'de 4 JUNCTION kur/doğrula (admin gerektirmez, mklink /J; D25: tek tek rapor):
+       core / .claude\\agents / .claude\\skills / .claude\\commands
+  4. Eksik proje-lokal dosyaları template'ten tamamla (settings.json, hook_shim.py)
+  5. Claude Code plugin'leri (setup_plugins.py; non-fatal) + seed_memory (--no-seed ile atla)
+  6. Smoke: statusline + MCP import
+  --repair-junctions      : yalnız junction kur/onar + rapor (session_start'ın önerdiği komut)
+  --provision-worktree P  : D16 — worktree'ye junction'lar + izlenmeyen runtime dosyaları
+                            (.conn_adt, conn/, settings.local.json → hardlink/kopya)
 """
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-# Force UTF-8 on Windows so Türkçe karakterler hata vermez
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8"); sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
         pass
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+CORE_ROOT = Path(__file__).resolve().parent.parent          # D24
 MIN_PY = (3, 10)
-REQ_FILE = REPO_ROOT / "mcp_servers" / "sap_adt" / "requirements.txt"
-ACTIVE_PKG_FILE = REPO_ROOT / ".claude" / "active_package"
-CONN_FILE = REPO_ROOT / ".conn_adt"
-STATUSLINE = REPO_ROOT / "scripts" / "statusline.py"
+REQ_FILE = CORE_ROOT / "mcp_servers" / "sap_adt" / "requirements.txt"
+
+OK, WARN, FAIL, INFO = "[ OK ]", "[WARN]", "[FAIL]", "[INFO]"
 
 
-# ---------------- helpers ----------------
-
-class Step:
-    OK = "[ OK ]"
-    WARN = "[WARN]"
-    FAIL = "[FAIL]"
-    INFO = "[INFO]"
-    ACTION = "[>>>]"
+def say(lv: str, msg: str) -> None:
+    print(f"{lv} {msg}")
 
 
-def say(level: str, msg: str) -> None:
-    print(f"{level} {msg}", flush=True)
-
-
-def run(cmd: list[str], cwd: Path | None = None, check: bool = False, capture: bool = False):
-    return subprocess.run(
-        cmd,
-        cwd=str(cwd or REPO_ROOT),
-        check=check,
-        capture_output=capture,
-        text=True,
-    )
-
-
-# ---------------- steps ----------------
-
-def check_python() -> bool:
-    say(Step.INFO, f"Python: {sys.version.split()[0]}  ({sys.executable})")
-    if sys.version_info < MIN_PY:
-        say(Step.FAIL, f"Python {MIN_PY[0]}.{MIN_PY[1]}+ gerekli. Yükselt ve tekrar dene.")
-        return False
-    say(Step.OK, "Python versiyonu yeterli")
-    return True
-
-
-def check_git_status() -> bool:
-    r = run(["git", "status", "--porcelain"], capture=True)
-    if r.returncode != 0:
-        say(Step.FAIL, "git çalışmıyor veya bu klasör repo değil")
-        return False
-    dirty = r.stdout.strip()
-    if dirty:
-        say(Step.WARN, "Repo'da commit edilmemiş değişiklikler var:")
-        for line in dirty.splitlines()[:8]:
-            print(f"        {line}")
-        say(Step.WARN, "Devam edebilirsin ama pull conflict'e yol açabilir. Önce commit/stash öner.")
-    else:
-        say(Step.OK, "Repo temiz")
-    return True
-
-
-def git_pull() -> bool:
-    say(Step.ACTION, "git pull çalışıyor...")
-    r = run(["git", "pull", "--ff-only"], capture=True)
-    if r.returncode != 0:
-        say(Step.FAIL, f"git pull başarısız: {r.stderr.strip()}")
-        say(Step.INFO, "Çözüm: önce kendi değişikliklerini commit/stash et veya rebase yap.")
-        return False
-    out = (r.stdout + r.stderr).strip()
-    for line in out.splitlines()[-5:]:
-        print(f"        {line}")
-    say(Step.OK, "git pull tamam")
-    return True
-
-
-def pip_install() -> bool:
-    if not REQ_FILE.exists():
-        say(Step.FAIL, f"requirements bulunamadı: {REQ_FILE}")
-        return False
-    say(Step.ACTION, f"pip install -r {REQ_FILE.relative_to(REPO_ROOT)} ...")
-    r = run([sys.executable, "-m", "pip", "install", "-q", "-r", str(REQ_FILE)], capture=True)
-    if r.returncode != 0:
-        say(Step.FAIL, "pip install başarısız:")
-        print(r.stderr)
-        return False
-    say(Step.OK, "MCP SDK ve bağımlılıklar yüklü")
-    return True
-
-
-def npm_install_clis() -> bool:
-    # Token-verimli CLI'ler (governance/tooling-plugins.md): playwright-cli (tarayıcı doğrulama;
-    # skill repo'da .claude/skills/, binary global gerekir) + ast-grep (yapısal kod arama/refactor,
-    # AST). NON-FATAL: yoksa playwright MCP / Grep'e düşülür, setup'ı bloklamaz.
-    if not shutil.which("npm"):
-        say(Step.WARN, "npm yok — playwright-cli + ast-grep atlandı (sonra: npm i -g @playwright/cli @ast-grep/cli)")
-        return True
-    clis = [
-        ("playwright-cli", "@playwright/cli@latest", "token-verimli tarayıcı doğrulama"),
-        ("ast-grep", "@ast-grep/cli@latest", "yapısal kod arama/refactor (AST)"),
-        ("mmdc", "@mermaid-js/mermaid-cli@latest", "Mermaid diyagram → SVG/PNG (FS/TS/KD)"),
-        ("marp", "@marp-team/marp-cli@latest", "Markdown → eğitim slaytı (PDF/PPTX)"),
-    ]
-    for binary, pkg, desc in clis:
-        if shutil.which(binary):
-            say(Step.OK, f"{binary} zaten kurulu ({desc})")
-            continue
-        say(Step.ACTION, f"npm i -g {pkg} ({desc}) ...")
-        r = run(["npm", "install", "-g", pkg], capture=True)
-        if r.returncode != 0:
-            say(Step.WARN, f"{binary} kurulamadı (opsiyonel):")
-            print((r.stderr or "")[:200])
-        else:
-            say(Step.OK, f"{binary} kuruldu")
-    return True
-
-
-def setup_active_package(forced_pkg: str | None) -> bool:
-    ACTIVE_PKG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if forced_pkg:
-        ACTIVE_PKG_FILE.write_text(forced_pkg + "\n", encoding="utf-8")
-        say(Step.OK, f"Aktif paket: {forced_pkg}")
-        return True
-    if ACTIVE_PKG_FILE.exists():
-        cur = ACTIVE_PKG_FILE.read_text(encoding="utf-8").strip()
-        say(Step.OK, f"Aktif paket zaten ayarlı: {cur}")
-        say(Step.INFO, "Değiştirmek için: --pkg <name> ile tekrar çalıştır")
-        return True
-    # Wizard
-    print()
-    print("    Hangi pakette çalışıyorsun? (örn: ZSD001_CLC, ZMM004_CLC)")
-    print("    Boş bırakırsan otomatik tespit edilir (en son düzenlenen SESSION_NOTES'tan).")
+def junction_hedefi(link: Path) -> Path | None:
+    """Junction/symlink hedefini döndür; değilse None."""
     try:
-        ans = input("    Paket adı: ").strip()
-    except EOFError:
-        ans = ""
-    if ans:
-        ACTIVE_PKG_FILE.write_text(ans + "\n", encoding="utf-8")
-        say(Step.OK, f"Aktif paket: {ans}")
-    else:
-        say(Step.INFO, "Otomatik tespit aktif (active_package dosyası yaratılmadı)")
-    return True
+        return Path(os.readlink(link))
+    except (OSError, ValueError):
+        return None
 
 
-def check_conn_file() -> bool:
-    if CONN_FILE.exists():
-        say(Step.OK, ".conn_adt mevcut (SAP credentials)")
+def junction_kur(link: Path, hedef: Path) -> bool:
+    """mklink /J (admin gerektirmez). True=sağlam."""
+    if link.exists():
+        mevcut = junction_hedefi(link)
+        if mevcut and mevcut.resolve() == hedef.resolve():
+            say(OK, f"junction sağlam: {link} → {hedef}")
+            return True
+        if mevcut:
+            say(WARN, f"junction YANLIŞ hedefe: {link} → {mevcut}; yeniden kuruluyor")
+            link.rmdir()  # linki kaldırır, HEDEFE DOKUNMAZ (silme-matrisi kanıtlı)
+        else:
+            say(FAIL, f"{link} junction DEĞİL gerçek klasör — elle incele, DOKUNMADIM")
+            return False
+    link.parent.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(hedef)],
+                       capture_output=True, text=True)
+    if r.returncode == 0:
+        say(OK, f"junction kuruldu: {link} → {hedef}")
         return True
-    say(Step.WARN, ".conn_adt yok — SAP'a bağlanamazsın")
-    say(Step.INFO, "Şu içerikle bir tane yarat (kendi credentials'larınla):")
-    print("""
-        ADT_SAP_URL=https://<SYSTEM_ID>:8000
-        ADT_SAP_USER=<kendi-user>
-        ADT_SAP_PASSWORD=<kendi-password>
-        ADT_SAP_CLIENT=100
-        ADT_SAP_LANGUAGE=TR
-    """)
-    say(Step.INFO, "Sonra bu script'i tekrar çalıştır.")
-    return True  # warning, not fatal
+    say(FAIL, f"mklink başarısız: {(r.stderr or r.stdout).strip()}")
+    return False
 
 
-def smoke_statusline() -> bool:
-    if not STATUSLINE.exists():
-        say(Step.FAIL, f"statusline.py bulunamadı: {STATUSLINE}")
-        return False
-    say(Step.ACTION, "Statusline smoke test...")
-    payload = json.dumps({"workspace": {"current_dir": str(REPO_ROOT)}})
-    r = subprocess.run(
-        [sys.executable, str(STATUSLINE)],
-        input=payload,
-        capture_output=True,
-        text=True,
-        timeout=5,
-    )
-    if r.returncode != 0:
-        say(Step.FAIL, f"statusline.py exit {r.returncode}: {r.stderr.strip()}")
-        return False
-    line = r.stdout.strip()
-    say(Step.OK, f"Statusline: {line}")
-    return True
+def junctions(proje: Path) -> bool:
+    """4 junction (D25: dördü TEK TEK raporlanır — kopuk agents/skills SESSİZ semptom verir)."""
+    plan = [
+        (proje / "core",                 CORE_ROOT),
+        (proje / ".claude" / "agents",   CORE_ROOT / "claude" / "agents"),
+        (proje / ".claude" / "skills",   CORE_ROOT / "claude" / "skills"),
+        (proje / ".claude" / "commands", CORE_ROOT / "claude" / "commands"),
+    ]
+    return all([junction_kur(l, h) for (l, h) in plan])
 
 
-def smoke_mcp() -> bool:
-    say(Step.ACTION, "MCP server smoke test (ping)...")
-    smoke_mod = "mcp_servers.sap_adt.tests.smoke"
-    r = subprocess.run(
-        [sys.executable, "-m", smoke_mod],
-        capture_output=True,
-        text=True,
-        timeout=20,
-        cwd=str(REPO_ROOT),
-    )
-    if r.returncode != 0:
-        say(Step.FAIL, f"MCP smoke fail (exit {r.returncode})")
-        if r.stderr:
-            print(r.stderr[-500:])
-        return False
-    last_lines = [ln for ln in r.stdout.strip().splitlines() if ln.strip()]
-    for ln in last_lines[-3:]:
-        print(f"        {ln}")
-    say(Step.OK, "MCP server ayakta, ping başarılı")
-    return True
+def dosya_tamamla(proje: Path) -> None:
+    """Eksik proje-lokal dosyaları template'ten üret (idempotent — var olanı EZMEZ)."""
+    tpl = CORE_ROOT / "claude"
+    hedefler = [
+        (proje / ".claude" / "settings.json", tpl / "settings.template.json"),
+        (proje / "scripts" / "hook_shim.py",  tpl / "hook_shim.template.py"),
+    ]
+    for hedef, kaynak in hedefler:
+        if hedef.exists():
+            say(OK, f"mevcut: {hedef.name} (drift denetimi: session_start D7)")
+        else:
+            hedef.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(kaynak, hedef)
+            say(OK, f"template'ten üretildi: {hedef}")
 
 
-def setup_plugins_step() -> None:
-    """Projenin gerektirdiği Claude Code plugin'lerini kur (idempotent, non-fatal)."""
-    script = REPO_ROOT / "scripts" / "setup_plugins.py"
+def hookspath_core() -> None:
+    """D19: core reposunda versiyonlanan git-hook'ları etkinleştir."""
+    gh = CORE_ROOT / "scripts" / "git-hooks"
+    if not gh.is_dir():
+        say(WARN, "core scripts/git-hooks henüz yok (B11) — hooksPath atlandı")
+        return
+    r = subprocess.run(["git", "-C", str(CORE_ROOT), "config",
+                        "core.hooksPath", "scripts/git-hooks"], capture_output=True, text=True)
+    say(OK if r.returncode == 0 else FAIL, f"core.hooksPath=scripts/git-hooks ({CORE_ROOT})")
+
+
+def provision_worktree(worktree: Path, proje: Path) -> bool:
+    """D16: worktree'de junction'lar + git'in getirmediği runtime dosyaları."""
+    say(INFO, f"worktree provizyonu: {worktree} (ana proje: {proje})")
+    ok = junctions(worktree)
+    for rel in (".conn_adt", ".claude/settings.local.json"):
+        src, dst = proje / rel, worktree / rel
+        if not src.exists():
+            say(WARN, f"kaynakta yok, atlandı: {rel}")
+            continue
+        if dst.exists():
+            say(OK, f"zaten var: {rel}")
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.link(src, dst)  # hardlink: aynı volume, admin istemez
+            say(OK, f"hardlink: {rel}")
+        except OSError:
+            shutil.copyfile(src, dst)
+            say(OK, f"kopya (hardlink olmadı): {rel}")
+    src_conn, dst_conn = proje / "conn", worktree / "conn"
+    if src_conn.is_dir() and not dst_conn.exists():
+        shutil.copytree(src_conn, dst_conn)
+        say(OK, "conn/ kopyalandı")
+    return ok
+
+
+def alt_arac(proje: Path, ad: str, non_fatal_msg: str) -> None:
+    """core scripts/<ad> aracını proje cwd'siyle koş (non-fatal)."""
+    script = CORE_ROOT / "scripts" / ad
     if not script.exists():
         return
-    say(Step.INFO, "Gerekli Claude Code plugin'leri (ui5/playwright/pyright-lsp…)...")
-    r = subprocess.run(
-        [sys.executable, str(script)],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-    )
-    for ln in (r.stdout or "").strip().splitlines():
-        if any(k in ln for k in ("Kurulu", "Kurulacak", "ÖZET", "Kuruldu", "[OK]", "[FAIL]", "Başarısız", "NOT:")):
-            print(f"        {ln.strip()}")
-    if r.returncode == 0:
-        say(Step.OK, "Gerekli plugin'ler kurulu/kuruldu")
-    else:
-        say(Step.WARN, "Bazı plugin'ler kurulamadı — yukarıyı oku (claude CLI gerekli); kritik FE/UI işinde tamamla")
+    r = subprocess.run([sys.executable, str(script)], capture_output=True,
+                       text=True, encoding="utf-8", errors="replace", cwd=proje)
+    say(OK if r.returncode == 0 else WARN,
+        f"{ad} (exit {r.returncode}) {(r.stdout or '').strip().splitlines()[-1][:70] if (r.stdout or '').strip() else non_fatal_msg}")
 
 
-def seed_memory_step() -> None:
-    """Feedback memory tohumunu bu makineye seed et (merge-safe, non-fatal)."""
-    seed_script = REPO_ROOT / "scripts" / "seed_memory.py"
-    if not seed_script.exists():
-        return
-    say(Step.INFO, "Memory tohumu (feedback çalışma-disiplini kuralları)...")
-    r = subprocess.run(
-        [sys.executable, str(seed_script)],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-    )
-    for ln in (r.stdout or "").strip().splitlines():
-        if any(k in ln for k in ("ÖZET", "Eklendi", "Atlandı", "Ezildi", "MEMORY.md", "[OK]", "[WARN]", "[FAIL]")):
-            print(f"        {ln.strip()}")
-    if r.returncode == 0:
-        say(Step.OK, "Memory tohumu işlendi (yeni oturumda kurallar yüklenir)")
-    else:
-        say(Step.WARN, "Memory tohumu atlandı (seed klasörü/erişim) — kritik değil")
+def smoke(proje: Path) -> None:
+    st = CORE_ROOT / "scripts" / "statusline.py"
+    try:
+        r = subprocess.run([sys.executable, str(st)], input="{}", capture_output=True,
+                           text=True, cwd=proje, timeout=30)
+        say(OK if r.returncode == 0 else WARN, f"statusline smoke (exit {r.returncode})")
+    except subprocess.TimeoutExpired:
+        say(WARN, "statusline smoke timeout")
+    env = dict(os.environ, PYTHONPATH=str(CORE_ROOT), CLAUDE_PROJECT_DIR=str(proje))
+    r = subprocess.run([sys.executable, "-c",
+                        "import mcp_servers.sap_adt.server; print('import-ok')"],
+                       capture_output=True, text=True, cwd=proje, env=env, timeout=60)
+    say(OK if "import-ok" in (r.stdout or "") else WARN,
+        f"MCP server import smoke ({((r.stdout or r.stderr) or '').strip()[:60]})")
 
-
-def show_next_steps(ok: bool) -> None:
-    print()
-    print("=" * 60)
-    if ok:
-        print("  KURULUM TAMAM")
-        print("=" * 60)
-        print()
-        print("  Son adımlar:")
-        print("    1. Claude Code panelini TAMAMEN kapat ve yeniden aç")
-        print("       (sadece Reload Window MCP'yi yeniden bağlamayabilir)")
-        print("    2. Alt çubukta statusline görünür (paket | sprint | VPN | branch)")
-        print("    3. Terminal: 'claude mcp list' — 'sap-adt: ✓ Connected' görmen lazım")
-        print("    4. Claude'da '/mcp' yaz veya tool isteği yap (örn: 'adt_get ile ZSD001_D_DEMDT')")
-        print()
-        print("  Sorun olursa: python scripts/team_setup.py --no-pull --no-install")
-    else:
-        print("  KURULUM TAMAMLANMADI")
-        print("=" * 60)
-        print("  Yukarıdaki [FAIL] satırlarını oku, sebebi düzeltip tekrar dene.")
-    print()
-
-
-# ---------------- main ----------------
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="<PROJECT_NAME> team setup")
-    ap.add_argument("--no-pull", action="store_true", help="git pull yapma")
-    ap.add_argument("--no-install", action="store_true", help="pip install yapma")
-    ap.add_argument("--no-smoke", action="store_true", help="smoke test yapma")
-    ap.add_argument("--pkg", help="active_package değeri (wizard atlanır)")
-    args = ap.parse_args()
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--project", default=".", help="Proje kökü (default: cwd)")
+    ap.add_argument("--repair-junctions", action="store_true")
+    ap.add_argument("--provision-worktree", metavar="PATH")
+    ap.add_argument("--no-install", action="store_true")
+    ap.add_argument("--no-seed", action="store_true")
+    ap.add_argument("--no-plugins", action="store_true")
+    ap.add_argument("--no-smoke", action="store_true")
+    a = ap.parse_args()
 
-    print()
-    print("=" * 60)
-    print("  <PROJECT_NAME> — Team Setup")
-    print("=" * 60)
-    print(f"  Repo: {REPO_ROOT}")
-    print()
+    proje = Path(a.project).resolve()
+    print(f"team_setup — core = {CORE_ROOT}\n            proje = {proje}\n")
 
-    steps_ok = True
+    if a.provision_worktree:
+        return 0 if provision_worktree(Path(a.provision_worktree).resolve(), proje) else 1
+    if a.repair_junctions:
+        return 0 if junctions(proje) else 1
 
-    if not check_python():
-        steps_ok = False
-        show_next_steps(steps_ok)
+    if sys.version_info < MIN_PY:
+        say(FAIL, f"Python {MIN_PY[0]}.{MIN_PY[1]}+ gerekli"); return 1
+    say(OK, f"Python {sys.version.split()[0]}")
+
+    if not a.no_install and REQ_FILE.exists():
+        r = subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r",
+                            str(REQ_FILE)], capture_output=True, text=True)
+        say(OK if r.returncode == 0 else WARN, "pip install (MCP requirements)")
+
+    if not junctions(proje):
+        say(FAIL, "junction kurulumu TAMAMLANAMADI — yukarıdaki satırlara bak")
         return 1
+    dosya_tamamla(proje)
+    hookspath_core()
 
-    if not check_git_status():
-        steps_ok = False
+    if not a.no_plugins:
+        alt_arac(proje, "setup_plugins.py", "plugin kurulumu (claude CLI gerekli)")
+    if not a.no_seed:
+        alt_arac(proje, "seed_memory.py", "memory tohumu")
 
-    if not args.no_pull and steps_ok:
-        if not git_pull():
-            steps_ok = False
-
-    if not args.no_install and steps_ok:
-        if not pip_install():
-            steps_ok = False
-        npm_install_clis()  # non-fatal — playwright-cli + ast-grep
-
-    if steps_ok:
-        setup_active_package(args.pkg)
-        check_conn_file()
-        setup_plugins_step()  # gerekli Claude Code plugin'leri (idempotent, non-fatal)
-        seed_memory_step()    # feedback memory tohumu (merge-safe, non-fatal)
-
-    if not args.no_smoke and steps_ok:
-        if not smoke_statusline():
-            steps_ok = False
-        if not smoke_mcp():
-            steps_ok = False
-
-    show_next_steps(steps_ok)
-    return 0 if steps_ok else 2
+    if not (proje / ".conn_adt").exists():
+        say(WARN, ".conn_adt YOK — SAP için doldurulmalı (PROJECT_BOOTSTRAP STEP 4)")
+    if not a.no_smoke:
+        smoke(proje)
+    say(OK, "team_setup TAMAM — kabul gate'i: oturum aç → ekran-teyidi + MCP ping + validators")
+    return 0
 
 
 if __name__ == "__main__":
