@@ -6330,7 +6330,7 @@ def detect_source_drift(object_url, object_name, object_type, client=None):
     asıl koruma push'un kendi hata yolu).
 
     Args:
-        object_url: ADT obje URL'i (örn. /sap/bc/adt/ddic/srvd/sources/zsd015_ui_booking).
+        object_url: ADT obje URL'i (örn. /sap/bc/adt/ddic/srvd/sources/zsd001_ui_booking).
                     None ise object_name+object_type'tan türetilir.
         object_name: SAP obje adı (Z*/Y*).
         object_type: ADT obje tipi (srvd, ddls, cds, class, prog, ...).

@@ -20,7 +20,7 @@ act_url = url + '/sap/bc/adt/activation?method=activate&preauditRequested=false'
 body = (
     '<?xml version="1.0" encoding="utf-8"?>'
     '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">'
-    '<adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/zsd009_p_fittins_mizan"'
+    '<adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/zsd001_p_fittins_mizan"'
     ' adtcore:name="ZSD001_P_FITTINS_MIZAN"/>'
     '</adtcore:objectReferences>'
 )

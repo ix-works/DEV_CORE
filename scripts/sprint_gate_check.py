@@ -13,7 +13,14 @@ KULLANIM:
   python scripts/sprint_gate_check.py --json         # CI/script entegrasyon için
 
 populate_*.py scripts ilk satırda çağırır:
-  ensure_sprint_gates_open(target_sprint='3')  # Sprint 3 için 0-1A-1B-2 kapalı mı?
+  ensure_sprint_gates_open(target_sprint='3')  # Sprint 3 için önceki gate'ler kapalı mı?
+
+SPRINT TANIMLARI = PROJE VERİSİ (core hard-code etmez). Kaynak dosya:
+  <project_root>/governance/sprint-gates.json   (veya project.yaml `sprint_gates_file`)
+  Format: {"order": ["0.1", "1A", ...],
+           "sprints": {"0.1": {"name": ..., "check_type": "count_query|name_list|multi_field",
+                               "sql"/"fields"/"expected_*": ...}, ...}}
+Dosya YOKSA gate tanımsızdır → SKIP (OK) — sprint-plansız proje bloklanmaz.
 """
 import sys
 import urllib3
@@ -39,161 +46,29 @@ if sys.platform == 'win32':
 
 sys.path.insert(0, str(Path(__file__).parent))
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.project_config import cfg, project_root
 
 
-# ─── SPRINT TANIMLARI ─────────────────────────────────────────────────────────
-# Her sprint: TADIR/DD03L query, expected count veya specific name list
+# ─── SPRINT TANIMLARI — PROJE VERİ DOSYASINDAN ───────────────────────────────
+# Her sprint: TADIR/DD03L query, expected count veya specific name list.
+# Core hiçbir proje sprint-planı taşımaz; tanımlar governance/sprint-gates.json'dan.
 
-SPRINT_DEFINITIONS = {
-    '0.1': {
-        'name': 'Message Class ZSD015 (54 mesaj)',
-        'check_type': 'count_query',
-        'sql': "SELECT msgnr FROM t100 WHERE arbgb = 'ZSD015'",
-        'expected_min': 54,
-    },
-    '0.2': {
-        'name': 'NR Object ZSD015_VN',
-        'check_type': 'count_query',
-        'sql': "SELECT object FROM tnro WHERE object = 'ZSD015_VN'",
-        'expected_min': 1,
-    },
-    '0.3': {
-        'name': 'NR Object ZSD015_DO',
-        'check_type': 'count_query',
-        'sql': "SELECT object FROM tnro WHERE object = 'ZSD015_DO'",
-        'expected_min': 1,
-    },
-    '0.4': {
-        'name': 'NR Object ZSD015_BN',
-        'check_type': 'count_query',
-        'sql': "SELECT object FROM tnro WHERE object = 'ZSD015_BN'",
-        'expected_min': 1,
-    },
-    '1A': {
-        'name': 'Custom Domain (ZSD015_D_*)',
-        'check_type': 'count_query',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'DOMA' AND obj_name LIKE 'ZSD015_D_%'",
-        'expected_min': 34,
-    },
-    '1B': {
-        'name': 'Custom DTEL (ZSD015_E_*)',
-        'check_type': 'count_query',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'DTEL' AND obj_name LIKE 'ZSD015_E_%'",
-        'expected_min': 50,
-    },
-    '2A': {
-        'name': 'Z Tablolar (ZSD015_T_*)',
-        'check_type': 'count_query',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'TABL' AND obj_name LIKE 'ZSD015_T_%'",
-        'expected_min': 8,
-    },
-    '2B': {
-        'name': 'Standart Tablo Append (LIPS+LIKP)',
-        'check_type': 'multi_field',
-        'fields': [
-            ('LIPS', 'ZZ1_DISPATCH_ORDER_DLI'),
-            ('LIPS', 'ZZ1_DISPATCH_ITEM_DLI'),
-            ('LIKP', 'ZZ1_BOOKING_NUMBER_DLH'),
-            ('LIKP', 'ZZ1_CONTAINER_NUMBER_DLH'),
-        ],
-        'expected_count': 4,
-    },
-    '2C': {
-        'name': 'Lock Objects (EZSD015_LO_*)',
-        'check_type': 'name_list',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'ENQU' AND obj_name LIKE 'EZSD015%'",
-        'expected_names': ['EZSD015_LO_DORD', 'EZSD015_LO_BOOK'],
-    },
-    '3': {
-        'name': 'Yaprak CDS (10 obje)',
-        'check_type': 'name_list',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'DDLS' AND obj_name LIKE 'ZSD015_DDL_%'",
-        'expected_names': [
-            'ZSD015_DDL_VOYAGE_DESTINATION',
-            'ZSD015_DDL_DISPATCH_SHIP_BAL',
-            'ZSD015_DDL_ORDER_DISPATCHES',
-            'ZSD015_DDL_DISPATCH_ORDER_BC',
-            'ZSD015_DDL_STOCK_LIST',
-            'ZSD015_DDL_CONTAINER_TYPES',
-            'ZSD015_DDL_SHIPMENT_ITEMS',
-            'ZSD015_DDL_SHIPMENT_LIST',
-            'ZSD015_DDL_CONTAINER_CUSTOMER',
-            'ZSD015_DDL_SHIPPING_TYPES',
-            # ZSD015_DDL_ORDER_SA_SCHED ve ZSD015_DDL_ORDER_SCHED_LINES — 2026-05-14
-            # iptal: ABAP CDS bu sistemde window function desteklemiyor; aggregate +
-            # FIFO ABAP class içinde yapılacak. Standart I_SalesSchedgAgrmtSchedLine
-            # + ZSD015_DDL_ORDER_DISPATCHES yeterli.
-        ],
-    },
-    '4': {
-        'name': 'Mid-tier CDS + ORDER_ITEMS UNION',
-        'check_type': 'name_list',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'DDLS' AND obj_name LIKE 'ZSD015_DDL_%'",
-        'expected_names': [
-            'ZSD015_DDL_VOYAGE_HEADER',
-            'ZSD015_DDL_CONTAINER_SHIPMENT',
-            'ZSD015_DDL_ORDER_ITEMS',
-            'ZSD015_DDL_ORDER_ITEMS_SO',
-            'ZSD015_DDL_ORDER_ITEMS_SA',
-            'ZSD015_DDL_BOOKING_CONTAINERS',
-            'ZSD015_DDL_DISPATCH_ORDER_IT',
-            'ZSD015_DDL_DISPATCH_SHIP_ITM',
-        ],
-    },
-    '5': {
-        'name': 'Composite CDS (7 obje)',
-        'check_type': 'name_list',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'DDLS' AND obj_name LIKE 'ZSD015_DDL_%'",
-        'expected_names': [
-            'ZSD015_DDL_BOOKING_DOCCOUNT',
-            'ZSD015_DDL_BOOKING_DOCCOUNT2',
-            'ZSD015_DDL_DISPATCH_ORDER_ST',
-            'ZSD015_DDL_BOOKING_HEADER',
-            'ZSD015_DDL_DISPATCH_ORDER_HD',
-            'ZSD015_DDL_DISPATCH_ORDER_BK',
-            'ZSD015_DDL_CONTAINER_REPORT',
-        ],
-    },
-    '6': {
-        'name': 'Z Structures (13 obje)',
-        'check_type': 'count_query',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'TABL' AND obj_name LIKE 'ZSD015_S_%'",
-        'expected_min': 13,
-    },
-    '7': {
-        'name': 'Utility Class ZCL_SD015_GENERAL',
-        'check_type': 'count_query',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'CLAS' AND obj_name = 'ZCL_SD015_GENERAL'",
-        'expected_min': 1,
-    },
-    '8': {
-        'name': 'VOYAGE Program',
-        'check_type': 'count_query',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'PROG' AND obj_name = 'ZSD015_VOYAGE'",
-        'expected_min': 1,
-    },
-    '9': {
-        'name': 'BOOKING Program',
-        'check_type': 'count_query',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'PROG' AND obj_name = 'ZSD015_BOOKING'",
-        'expected_min': 1,
-    },
-    '10': {
-        'name': 'DISPATCH_ORDER Program',
-        'check_type': 'count_query',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'PROG' AND obj_name = 'ZSD015_DISPATCH_ORDER'",
-        'expected_min': 1,
-    },
-    '11': {
-        'name': 'SHIPMENT + CONTAINER_REPORT Programs',
-        'check_type': 'name_list',
-        'sql': "SELECT obj_name FROM tadir WHERE pgmid = 'R3TR' AND object = 'PROG' AND obj_name LIKE 'ZSD015_%'",
-        'expected_names': ['ZSD015_SHIPMENT', 'ZSD015_CONTAINER_REPORT'],
-    },
-}
+def _load_sprint_defs():
+    """(definitions, order) veya dosya yoksa (None, None)."""
+    yol = cfg('sprint_gates_file') or 'governance/sprint-gates.json'
+    p = project_root() / str(yol)
+    if not p.exists():
+        return None, None
+    try:
+        data = json.loads(p.read_text(encoding='utf-8'))
+        return data.get('sprints') or {}, data.get('order') or []
+    except Exception as e:
+        # Bozuk tanım dosyası = SKIP DEĞİL, net hata (yanlış-negatif gate olmasın)
+        raise SystemExit(f'[FAIL] sprint-gates dosyası parse edilemedi ({p}): {e}')
 
-# Sprint sırası (dependency)
-SPRINT_ORDER = ['0.1', '0.2', '0.3', '0.4', '1A', '1B', '2A', '2B', '2C', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+
+SPRINT_DEFINITIONS, SPRINT_ORDER = _load_sprint_defs()
+
 
 
 # ─── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
@@ -226,7 +101,7 @@ def check_sprint(client, sprint_id: str) -> Tuple[bool, str, Dict]:
     Returns:
         (is_closed, status_message, detail_dict)
     """
-    defn = SPRINT_DEFINITIONS.get(sprint_id)
+    defn = (SPRINT_DEFINITIONS or {}).get(sprint_id)
     if not defn:
         return (False, f'Bilinmeyen sprint: {sprint_id}', {})
 
@@ -271,6 +146,11 @@ def check_sprint(client, sprint_id: str) -> Tuple[bool, str, Dict]:
 
 def gate_check_all(verbose: bool = True) -> Dict[str, dict]:
     """Tüm sprint'leri kontrol et, sonuç dict döndür."""
+    if SPRINT_DEFINITIONS is None:
+        if verbose:
+            print('[SKIP] Sprint gate tanımsız — governance/sprint-gates.json yok '
+                  '(sprint-plansız proje; gate uygulanmaz)')
+        return {}
     client = SAPADTClient()
     results = {}
     if verbose:
@@ -309,6 +189,9 @@ def ensure_sprint_gates_open(target_sprint: str, allow_open_priors: bool = False
     Returns:
         True (sprint gate'leri OK), False (açık prior var ve raise_on_fail=False)
     """
+    if SPRINT_DEFINITIONS is None:
+        print('[SKIP] Sprint gate tanımsız (governance/sprint-gates.json yok) — gate uygulanmadı')
+        return True
     if target_sprint not in SPRINT_ORDER:
         raise ValueError(f'Bilinmeyen sprint: {target_sprint}')
     target_idx = SPRINT_ORDER.index(target_sprint)

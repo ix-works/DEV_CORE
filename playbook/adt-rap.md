@@ -80,7 +80,7 @@ mcp__sap-adt__adt_activate(name=ZSD001_I_ORDER, object_type=ddls)
 Script: `scripts/populate_cds_views.py` (batch) — **RAP-aware** (`validate_sql_view_names()` view-entity'de sqlViewName aramaz, `^ZSD001_(I|C|R|E)_*` adını doğrular; 2026-05-15 reconcile, plan §88).
 
 **Klasik view'dan FARK (KRİTİK):**
-- `define root view entity ZSD001_I_ORDER` (NOT `define view zsd015_ddl_...`)
+- `define root view entity ZSD001_I_ORDER` (NOT `define view zsd001_ddl_...`)
 - `@AbapCatalog.sqlViewName` **YOK** (view entity'de yasak — varsa BLOCKER)
 - `@AbapCatalog.compiler.compareFilter` view entity'de gereksiz
 - Composition: `composition [1..*] of ZSD001_I_ORDERDEST as _Destination`
@@ -255,7 +255,7 @@ bağımlılığı YOK. Pilot premisi tam doğrulandı.**
 **1) Child interface view entity** (root DEĞİL):
 ```cds
 define view entity ZSD001_I_ORDERDEST
-  as select from zsd015_t_voydes
+  as select from zsd001_t_voydes
   association to parent ZSD001_I_ORDER as _Voyage
     on $projection.VoyageNo = _Voyage.VoyageNo
 { key voyage_no as VoyageNo, key destination_port as DestinationPort, ... , _Voyage }
@@ -291,10 +291,10 @@ Contract expected" = projection behavior yokken normal (9b çözer).
 ```
 define behavior for ZSD001_I_ORDER ... { ... association _Destination { create; }
   define behavior for ZSD001_I_ORDERDEST alias VoyageDest
-  persistent table zsd015_t_voydes
+  persistent table zsd001_t_voydes
   lock dependent by _Voyage authorization dependent by _Voyage
   { create; update; delete; field ( readonly ) VoyageNo; association _Voyage;
-    mapping for zsd015_t_voydes { ... } } }
+    mapping for zsd001_t_voydes { ... } } }
 ```
 **Projection behavior = AYRI BDEF** (adı = projection root `ZSD001_C_ORDER`):
 `projection; define behavior for ZSD001_C_ORDER { use create; use update;
@@ -410,7 +410,7 @@ handler'ı yazıp BDEF'te `early numbering` bildirmezsen aktivasyon:
 satırını gösterir, yanıltıcı). Düzeltme — root behavior characteristic:
 ```
 define behavior for ZSD001_I_ORDER alias Voyage
-persistent table zsd015_t_voyage
+persistent table zsd001_t_voyage
 lock master
 authorization master ( global )
 early numbering            "<-- BU SATIR; yoksa CREATE-not-activated

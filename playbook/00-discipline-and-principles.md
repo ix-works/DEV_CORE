@@ -85,7 +85,7 @@ ZSD001 modülünde **tek geçerli format** vardır. Whitelist'te olmayan her şe
 `scripts/populate_cds_views.py` → `validate_sql_view_names()` fonksiyonu **3 katmanı da** doğrular. Her `.cds` dosyasında:
 1. sqlViewName whitelist regex'e uygun mu?
 2. define view name whitelist regex'e uygun mu?
-3. Source body içinde yasak literal var mı (`zsd_007_*`, `'ZSD007_CV_*'`, `'ZSD01XXXX'`)?
+3. Source body içinde yasak literal var mı (proje-config `cds_banned_literals` desenleri — legacy namespace / eski kısaltma)?
 
 Tek bir ihlal varsa **script HEMEN exit 1**, hiçbir POST/PUT/aktivasyon yapılmaz.
 

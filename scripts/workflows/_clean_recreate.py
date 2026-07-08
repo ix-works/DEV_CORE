@@ -116,7 +116,7 @@ shell = ('<?xml version="1.0" encoding="UTF-8"?>'
          'xmlns:adtcore="http://www.sap.com/adt/core" '
          f'adtcore:name="{NAME}" adtcore:description="{xml_escape(NAME)}" '
          'adtcore:masterLanguage="TR">'
-         '<adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/zsd015_clc" '
+         '<adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/zsd001_clc" '
          'adtcore:type="DEVC/K" adtcore:name="ZSD001_CLC"/>'
          '</ddl:ddlSource>')
 pr = c.session.post(c.url + '/sap/bc/adt/ddic/ddl/sources',

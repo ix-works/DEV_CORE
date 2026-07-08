@@ -59,7 +59,7 @@ Bu tip kodu activation body'sinde, GET response'ta, vb. her yerde kullanılır. 
                  adtcore:name="EZSD001_LO_BOOK"
                  adtcore:description="Booking Edit Kilidi"
                  adtcore:masterLanguage="TR">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/zsd015_clc"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/zsd001_clc"
                       adtcore:type="DEVC/K"
                       adtcore:name="ZSD001_CLC"/>
   <enqu:content>

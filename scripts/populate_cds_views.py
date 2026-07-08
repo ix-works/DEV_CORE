@@ -9,15 +9,15 @@ ignore ediyor, source/main boş kalıyor (table'daki sorunla aynı, playbook §2
 
 Kullanım:
     python populate_cds_views.py \\
-        --package ZSD015_CLC \\
-        --transport <TRANSPORT> \\
-        --source-dir <source_root>/ZSD015_CLC/cds_src \\
-        --cwd C:\\<LEGACY_ROOT>\\<PROJECT_NAME>
+        --package ZSD<NNN>_CLC \\
+        --transport <TR_NO> \\
+        --source-dir <source_root>/ZSD<NNN>_CLC/cds_src \\
+        --cwd <PROJECT_ROOT>
 
 Source dir formatı:
     Her CDS için bir .cds dosyası:
-        <source_root>/ZSD015_CLC/cds_src/ZSD015_DDL_CONTAINER_TYPES.cds
-        <source_root>/ZSD015_CLC/cds_src/ZSD015_DDL_SHIPPING_TYPES.cds
+        <source_root>/ZSD<NNN>_CLC/cds_src/ZSD<NNN>_DDL_CONTAINER_TYPES.cds
+        <source_root>/ZSD<NNN>_CLC/cds_src/ZSD<NNN>_DDL_SHIPPING_TYPES.cds
         ...
 
     Her .cds dosyası tam DDL kaynağını içerir (annotations + define view).
@@ -56,16 +56,15 @@ def extract_view_name(source: str) -> str:
     return m.group(1).upper() if m else ''
 
 
-# ─── PRE-FLIGHT VALIDATION (POZİTİF WHITELIST — Sprint 3 hatası tekrar olmasın) ─
-# Playbook §1.5 ve §17.9 — POZİTİF KURAL: TD namespace'de sqlViewName tek doğru
-# format `ZSD015_V_<≤5char>`, view name tek doğru `zsd015_ddl_<x>`, source içinde
-# hiçbir `zsd_007_*` veya `'ZSD15XXXX'` (eski kısaltma) referansı YASAK.
+# ─── PRE-FLIGHT VALIDATION (POZİTİF WHITELIST — legacy-prefix hatası tekrar olmasın) ─
+# Playbook §1.5 ve §17.9 — POZİTİF KURAL: proje namespace'inde sqlViewName tek doğru
+# format `<sql_view_prefix><≤5char>`, view name tek doğru `<cds_view_name_prefix><x>`,
+# source içinde hiçbir legacy-namespace / eski-kısaltma referansı YASAK.
 #
-# Sprint 3'te yaşananlar:
-# - _convert_cds_sources.py manuel dictionary kullandı, 8+ CDS source <LEGACY_SOURCE>
-#   prefix (ZSD_007_CV_*) ile aktive oldu → TADIR cleanup gerekti
-# - Bazı CDS'ler `ZSD15XXXX` kısaltma ile aktive edildi → TADIR orphan, rename
-#   broken (Sprint 4'te SHIPPING_TYPES bunu tekrar gösterdi)
+# Tarihsel ders (bu gate'in doğduğu vaka):
+# - Elle dictionary'li dönüşüm 8+ CDS source'u LEGACY prefix ile aktive etti →
+#   TADIR cleanup gerekti; bazıları kısaltma-sqlViewName ile aktive edildi →
+#   TADIR orphan + rename broken (shipped DDL rename teknik imkansız, SAP Note 2710405).
 #
 # Whitelist kuralı: sadece tek format OK, geri kalan hepsi RED.
 # B-5 (K12/§9.3): prefix'ler PROJE-CONFIG'ten — core hard-code etmez. project.yaml:
@@ -83,11 +82,11 @@ VIEW_NAME_PATTERN = re.compile(r"^" + re.escape(_VNP) + r"[a-z0-9_]+$") if _VNP 
 SQL_VIEW_MAX_LEN  = 14                                          # SAP DB SQL view 14 char limit
 
 # RAP view entity: `define [root] view entity` — sqlViewName TAŞIMAZ. Klasik
-# whitelist (sqlViewName + `define view zsd015_ddl_`) uygulanmaz; ayrı isim kuralı
+# whitelist (sqlViewName + `define view <cds_view_name_prefix>`) uygulanmaz; ayrı isim kuralı
 # geçerli. 2026-05-15 reconcile (PILOT_VOYAGE_RAP.md §88, repo gate — ADR 0005 dışı).
 # view entity / root view entity / abstract entity — hepsi RAP teknik CDS:
 # TD-spec + sqlViewName whitelist UYGULANMAZ (abstract entity = RAP action/function
-# param/result tipi; veri-CDS veya <LEGACY_SOURCE>→TD dönüşümü değil). 2026-06-03 ZSD011 spike.
+# param/result tipi; veri-CDS veya legacy→TD dönüşümü değil). 2026-06-03 RAP spike.
 RAP_VIEW_ENTITY_RE  = re.compile(r"\bdefine\s+(?:(?:root\s+)?view|abstract)\s+entity\b", re.IGNORECASE)
 # Modül-bağımsız RAP view entity adı (NTTDATA: Z<MOD><nnn>_<I|C|R|E>_*;
 # MOD = SD/MM/FI/CO/PP/QM/PM/EWM... 2-4 harf). Paket-doğru olma kontrolü
@@ -95,50 +94,48 @@ RAP_VIEW_ENTITY_RE  = re.compile(r"\bdefine\s+(?:(?:root\s+)?view|abstract)\s+en
 # (ZSD'ye hardcoded DEĞİL — başka modülde de çalışır).
 RAP_VE_NAME_PATTERN = re.compile(r"^Z[A-Z]{2,4}\d{3}_(?:I|C|R|E)_[A-Z0-9_]+$")
 
-# Source body içinde yasak literal'ler (TD namespace dışı her şey)
-BANNED_SOURCE_PATTERNS = [
-    (re.compile(r"\bzsd_007_\w+", re.IGNORECASE),
-     "<LEGACY_SOURCE> namespace referansı (zsd_007_*) — tüm referanslar zsd015_* olmalı"),
-    (re.compile(r"'ZSD_007_(?:CV|V)_\w+'"),
-     "Eski <LEGACY_SOURCE> sqlViewName literal'i ('ZSD_007_CV_*' / 'ZSD_007_V_*')"),
-    (re.compile(r"'ZSD\d{2}[A-Z]{4,8}'"),
-     "Eski kısaltılmış sqlViewName literal'i ('ZSD15XXXX' stili) — 'ZSD015_V_XXX' olmalı"),
-]
+# Source body içinde yasak literal'ler — PROJE-CONFIG'ten (legacy namespace projeye
+# özgü veridir; core hard-code etmez). project.yaml:
+#   cds_banned_literals:
+#     - "\\bzsd_007_\\w+"          # legacy namespace referansı
+#     - "'ZSD_007_(?:CV|V)_\\w+'"  # legacy sqlViewName literal'i
+#     - "'ZSD\\d{2}[A-Z]{4,8}'"    # eski kısaltılmış sqlViewName stili
+# Tanımsızsa bu EK tarama atlanır (prefix-whitelist yine zorunludur).
+BANNED_SOURCE_PATTERNS = []
+for _pat in (_cfg("cds_banned_literals") or []):
+    try:
+        BANNED_SOURCE_PATTERNS.append(
+            (re.compile(_pat, re.IGNORECASE),
+             f"proje-config yasak literal'i (cds_banned_literals: {_pat})"))
+    except re.error as _e:
+        print(f"[UYARI] cds_banned_literals regex derlenemedi: {_pat} ({_e})")
 
-# ─── SPRINT 4 EXCEPTION LISTESİ (Plan A — 2026-05-13) ─────────────────────────
-# Sprint 3 release kalıntısı: 9 yaprak CDS shipped DDL source rename teknik
-# imkansız (SAP Note 2710405, DDLS 533). Bu CDS'ler **eski sqlViewName** ile
-# aktive edildi (re-sync), source dosyaları o şekilde güncellendi.
-# Gelecek tüm modüllerde yeni format `ZSD015_V_<X>` zorunlu olarak uygulanır.
-#
-# Bu liste sadece bu 9 CDS için pre-flight check'i yumuşatır.
-SPRINT3_LEGACY_EXCEPTIONS = {
-    # User 2026-05-13 gecesi 6 CDS'i temiz TD format ile yeniden yarattı:
-    # CONTAINER_CUSTOMER, DISPATCH_ORDER_BC, DISPATCH_SHIP_BAL, ORDER_DISPATCHES,
-    # SHIPMENT_LIST (V_SHPLS), CONTAINER_SHIPMENT — bunlar listede DEĞİL.
-    'ZSD015_DDL_VOYAGE_DESTINATION': 'ZSD015VYDS',
-    'ZSD015_DDL_SHIPMENT_ITEMS':     'ZSD_007_CV_SHPIT',
-    'ZSD015_DDL_STOCK_LIST':         'ZSD_007_CV_STOCK',
-    'ZSD015_DDL_SHIPPING_TYPES':     'ZSD15SHTYP',
-    'ZSD015_DDL_ORDER_ITEMS_SO':     'ZSD15ORDSO',
-    'ZSD015_DDL_ORDER_ITEMS_SA':     'ZSD15ORDSA',
-}
+# ─── LEGACY sqlViewName İSTİSNALARI — PROJE-CONFIG'ten ────────────────────────
+# Shipped DDL source rename teknik imkansız (SAP Note 2710405, DDLS 533) —
+# eski sqlViewName ile aktive kalmış CDS'ler için pre-flight yumuşatması.
+# project.yaml:  cds_legacy_sqlview_exceptions: ["ZSD001_DDL_X:ZSD01OLDSV", ...]
+# ("VIEWADI:ESKISQLVIEW" çiftleri; yeni modüllerde yeni format zorunlu kalır.)
+LEGACY_SQLVIEW_EXCEPTIONS = {}
+for _cift in (_cfg("cds_legacy_sqlview_exceptions") or []):
+    if ":" in str(_cift):
+        _ad, _sv = str(_cift).split(":", 1)
+        LEGACY_SQLVIEW_EXCEPTIONS[_ad.strip().upper()] = _sv.strip()
 
 
 def validate_sql_view_names(cds_files):
     """POZİTİF WHITELIST validation — her .cds dosyası TD namespace kurallarına uygun mu?
 
-    KURAL (whitelist-only):
-    - @AbapCatalog.sqlViewName MUTLAKA 'ZSD015_V_<≤5 char>' formatında OLMALI
-    - define view MUTLAKA zsd015_ddl_<x> formatında OLMALI
-    - Source body içinde HİÇBİR zsd_007_* veya 'ZSD15XXXX' referansı OLMAMALI
+    KURAL (whitelist-only; prefix'ler project.yaml'dan):
+    - @AbapCatalog.sqlViewName MUTLAKA '<sql_view_prefix><≤5 char>' formatında OLMALI
+    - define view MUTLAKA <cds_view_name_prefix><x> formatında OLMALI
+    - Source body içinde HİÇBİR cds_banned_literals deseni OLMAMALI (legacy ns vb.)
 
-    Doğru:  sqlViewName='ZSD015_V_CONCD', view=zsd015_ddl_container_customer
-    Yanlış: sqlViewName='ZSD_007_CV_CONCD' (<LEGACY_SOURCE> prefix)
-            sqlViewName='ZSD15CONCD'        (eski kısaltma)
-            sqlViewName='ZSD015_V_TOOLONG'  (>14 char)
-            view=zsd_007_ddl_x              (eski namespace)
-            JOIN zsd_007_ddl_orderitems     (source body'de orphan ref)
+    Örn. (prefix=ZSD001_V_ / zsd001_ddl_):
+    Doğru:  sqlViewName='ZSD001_V_CONCD', view=zsd001_ddl_container_customer
+    Yanlış: sqlViewName='<legacy-prefix>_CONCD'  (eski namespace)
+            sqlViewName='ZSD01CONCD'             (eski kısaltma)
+            sqlViewName='ZSD001_V_TOOLONG'       (>14 char)
+            JOIN <legacy>_ddl_orderitems         (source body'de orphan ref)
 
     Returns: hata mesajı listesi (boş = OK)
     """
@@ -155,9 +152,9 @@ def validate_sql_view_names(cds_files):
             errors.append(f"{f.name}: okunamadı: {e}")
             continue
 
-        # CDS adından exception kontrolü (Sprint 3 release kalıntısı 9 CDS)
+        # CDS adından exception kontrolü (config: cds_legacy_sqlview_exceptions)
         cds_name = f.stem.upper()
-        legacy_sv = SPRINT3_LEGACY_EXCEPTIONS.get(cds_name)
+        legacy_sv = LEGACY_SQLVIEW_EXCEPTIONS.get(cds_name)
 
         # ─── RAP VIEW ENTITY DALI (sqlViewName YOK; ayrı isim kuralı) ────────
         if RAP_VIEW_ENTITY_RE.search(source):
@@ -195,7 +192,7 @@ def validate_sql_view_names(cds_files):
         m = re.search(r"@AbapCatalog\.sqlViewName\s*:\s*'([^']+)'", source)
         if not m:
             errors.append(f"{f.name}: @AbapCatalog.sqlViewName annotation EKSİK "
-                          f"(zorunlu, format: 'ZSD015_V_<≤5 char>')")
+                          f"(zorunlu, format: '{_SQLP}<≤5 char>')")
         else:
             sv = m.group(1)
             if legacy_sv and sv == legacy_sv:
@@ -204,8 +201,8 @@ def validate_sql_view_names(cds_files):
             elif not SQL_VIEW_PATTERN.match(sv):
                 errors.append(
                     f"{f.name}: sqlViewName='{sv}' YASAK. "
-                    f"TEK GEÇERLİ FORMAT: 'ZSD015_V_<1-5 büyük harf/rakam>' "
-                    f"(regex: ^ZSD015_V_[A-Z0-9]{{1,5}}$, toplam ≤14 char). "
+                    f"TEK GEÇERLİ FORMAT: '{_SQLP}<1-5 büyük harf/rakam>' "
+                    f"(regex: {SQL_VIEW_PATTERN.pattern}, toplam ≤14 char). "
                     f"(Playbook §17.9)"
                 )
             elif len(sv) > SQL_VIEW_MAX_LEN:
@@ -223,8 +220,8 @@ def validate_sql_view_names(cds_files):
             if not VIEW_NAME_PATTERN.match(vname):
                 errors.append(
                     f"{f.name}: define view='{vname}' YASAK. "
-                    f"TEK GEÇERLİ FORMAT: 'zsd015_ddl_<x>' "
-                    f"(regex: ^zsd015_ddl_[a-z0-9_]+$). "
+                    f"TEK GEÇERLİ FORMAT: '{_VNP}<x>' "
+                    f"(regex: {VIEW_NAME_PATTERN.pattern}). "
                     f"(Playbook §17.9)"
                 )
 
@@ -397,7 +394,7 @@ def main():
     print(f'[INFO] {len(cds_files)} .cds dosyası bulundu')
 
     # ─── PRE-FLIGHT: sqlViewName format validation ─────────────────────────
-    # Sprint 3 hatası tekrar olmasın: <LEGACY_SOURCE> prefix veya eski kısaltma
+    # Tarihsel hata tekrar olmasın: legacy prefix veya eski kısaltma
     # ile yaratma DENEMEDEN HEMEN dur. Playbook §1.5 ve §17.9.
     if only_set is None:
         files_to_check = cds_files
@@ -425,7 +422,7 @@ def main():
         spec_errors = []
         for f in files_to_check:
             cds_name = f.stem.upper()
-            # RAP view entity → TD spec ZORUNLU DEĞİL (<LEGACY_SOURCE>→TD dönüşümü
+            # RAP view entity → TD spec ZORUNLU DEĞİL (legacy→TD dönüşümü
             # değil; fresh Z-tablo view'ı). Reviewer rap_cds_creation zinciri de
             # td_spec_check içermez. standards/05-coding-rap.md §9; 2026-05-15
             # reconcile (PILOT_VOYAGE_RAP.md §88, repo gate — ADR 0005 dışı).
@@ -468,11 +465,11 @@ def main():
               f'({len(naming_errors)} hata):')
         for err in naming_errors:
             print(f'  ✗ {err}')
-        print(f'\nDoğru format: ZSD015_V_<≤5 karakter> (toplam ≤14 char)')
+        print(f'\nDoğru format: {_SQLP}<≤5 karakter> (toplam ≤14 char)')
         print(f'Playbook §17.9 — Namespace Dönüşümü Doğrulama')
         return 1
     print(f'[OK] Pre-flight: {len(files_to_check)} dosya doğru '
-          f'sqlViewName formatında (ZSD015_V_<XXX>)')
+          f'sqlViewName formatında ({_SQLP}<XXX>)')
 
     client = SAPADTClient()
     csrf = ''

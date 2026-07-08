@@ -2,11 +2,11 @@
 check_object_in_correct_pkg.py — Bir paketin alt klasörlerindeki dosyaların prefix'i
 paket adıyla uyumlu mu kontrol eder.
 
-Örnek ihlal: <source_root>/ZSD003_CLC/cds/ZSD010_DDL_FOO.cds (yanlış paket)
+Örnek ihlal: <source_root>/ZSD000_CLC/cds/ZSD001_DDL_FOO.cds (yanlış paket)
 
 Whitelist (.rules.md "Bilinen İstisnalar / Legacy" bölümünden okunur — gelecek):
-- ZSD003_CLC: ZCL_ZSD_FITTINGS_* (Gateway namespace)
-- ZSD009_CLC: ZFI_I_FITT_* (FI namespace, paket root'unda .txt olarak)
+- ZSD001_CLC: ZCL_Z<...>_* (farklı-namespace istisna örneği)
+- ZSD000_CLC: Z<MOD>_I_* (başka-modül namespace örneği, paket root'unda .txt olarak)
 
 Kullanım:
     python scripts/validators/check_object_in_correct_pkg.py
@@ -49,7 +49,7 @@ SCRATCH_MODULES: set = set()
 
 
 def get_pkg_prefix(pkg_name: str) -> str:
-    """ZSD003_CLC → ZSD003"""
+    """ZSD001_CLC → ZSD001"""
     return pkg_name.replace("_CLC", "")
 
 

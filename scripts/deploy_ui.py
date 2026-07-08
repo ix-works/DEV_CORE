@@ -23,7 +23,7 @@ Kullanım:
     python scripts/deploy_ui.py --app dsk_se
     python scripts/deploy_ui.py --all-changed          # git'e göre webapp'i değişen app'ler
     python scripts/deploy_ui.py --apps sip_se --dry-run # build+doğrula plan, deploy YOK
-    # --ui-root ile farklı paket: --ui-root <source_root>/SD/ZSD015_CLC/ui (varsayılan)
+    # --ui-root ile farklı paket: --ui-root <source_root>/SD/ZSD001_CLC/ui (varsayılan)
 """
 import argparse
 import base64

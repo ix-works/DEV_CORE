@@ -19,7 +19,7 @@ canonical-detail: adt-rap.md §32 (bu dosya = "neyle takıldık + baştan
 > tooling) tarafında ORDER'de yaşanan patinajların damıtımıdır.
 > **Kanonik implementasyon detayı** [`adt-rap.md`](adt-rap.md) §32'dedir
 > (tek doğru kaynak); burada **semptom→kök→çözüm→önleyici** merceği +
-> §0 PRE-FLIGHT var. `[zsd015]` etiketsizler tüm RAP backend'lerde ortak.
+> §0 PRE-FLIGHT var. `[proje-özel]` işaretliler hariç tümü RAP backend'lerde ortak.
 
 ---
 

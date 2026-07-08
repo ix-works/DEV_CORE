@@ -53,7 +53,7 @@ O zaman **kendin DDIC'te yarat:**
 ```abap
 METHODS constructor
   IMPORTING
-    it_fiyat_listesi TYPE zsd009_tt_sel_price.  " DOGRU
+    it_fiyat_listesi TYPE zsd001_tt_sel_price.  " DOGRU
 "   it_fiyat_listesi TYPE RANGE OF zz1_price_code.  " YANLIS — aktivasyon hatası
 ```
 

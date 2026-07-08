@@ -16,7 +16,7 @@ Katmanlar:
 
 Kullanım:
     python scripts/sap_doctor.py
-    python scripts/sap_doctor.py --probe ZSD015_I_VOYAGE --type ddls --package ZSD015_CLC
+    python scripts/sap_doctor.py --probe ZSD001_I_VOYAGE --type ddls --package ZSD001_CLC
 """
 from __future__ import annotations
 
