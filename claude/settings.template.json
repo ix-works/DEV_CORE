@@ -1,0 +1,78 @@
+{
+  "_comment": "PROJE settings şablonu — init_project.py bundan üretir. TÜM hook'lar proje-lokal hook_shim.py üzerinden (D15: kopuk-junction'da net hata; runpy=+0ms Ö2). Drift kontrolü: session_start D7. Always-allow YASAĞI (D32): SAP-yazma/davranış-yüzeyi araçlarına verilmez.",
+  "statusLine": {
+    "type": "command",
+    "command": "python \"${CLAUDE_PROJECT_DIR}/core/scripts/statusline.py\"",
+    "padding": 0
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "session_start"] },
+          { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "tooling_radar_check"] }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "skill_injector"] } ] }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|mcp__sap-adt__.*",
+        "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pre_tool_guard"] } ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pull_before_edit"] } ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "watchdog_launch"] } ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "post_validate"] } ]
+      },
+      {
+        "matcher": "mcp__sap-adt__.*",
+        "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "post_tool_failure"] } ]
+      }
+    ],
+    "ConfigChange": [
+      { "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "config_change_guard"] } ] }
+    ],
+    "PreCompact": [
+      { "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pre_compact"] } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "watchdog_stop"] } ] }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "mcp__sap-adt__ping",
+      "mcp__sap-adt__adt_get",
+      "mcp__sap-adt__adt_search_objects",
+      "mcp__sap-adt__adt_lock_check",
+      "mcp__sap-adt__adt_transport_list",
+      "Bash(python core/scripts/validators/run_all_validators.py:*)",
+      "Bash(python core/scripts/build_package_index.py)",
+      "Bash(python core/scripts/sprint_gate_check.py:*)",
+      "Bash(python core/scripts/td_spec_check.py:*)"
+    ],
+    "ask": [
+      "Bash(rm -rf:*)", "Bash(rm -fr:*)", "Bash(rm -r:*)",
+      "Bash(git push --force:*)", "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)", "Bash(git clean -f:*)", "Bash(git clean -fd:*)",
+      "Bash(chmod -R:*)", "Bash(chown -R:*)", "Bash(dd:*)", "Bash(shred:*)",
+      "Bash(kill:*)", "Bash(killall:*)", "Bash(pkill:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /:*)", "Bash(rm -rf /)", "Bash(rm -rf ~:*)", "Bash(rm -rf ~)",
+      "Bash(rm -rf /*)", "Bash(mkfs:*)", "Bash(fdisk:*)", "Bash(dd if=:* of=/dev/:*)"
+    ]
+  }
+}
