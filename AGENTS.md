@@ -116,16 +116,25 @@ Bu format atlanırsa kullanıcı protokol'e uyulmadığını varsayar.
 
 ## 1. GIT WORKFLOW — ZORUNLU
 
-**Tek branch:** Bu repo sadece `main` branch kullanır.
+**Model (ADR 0001, ADR 0020 canlı-çekirdek geçişiyle REVİZE):** tek UZUN-YAŞAYAN branch =
+`main`; `main` doğrudan-push'a KAPALI (GitHub ruleset `main-pr-required`) → her değişiklik
+**kısa-ömürlü branch + PR + CI** ile girer; merge sonrası branch silinir
+(delete-branch-on-merge).
 
-- ❌ `git checkout -b`, `git branch <ad>`, `git switch -c` — **yasak**
-- ❌ `git worktree add`, EnterWorktree tool — **yasak**, tüm iş `<PROJECT_ROOT>`'da
-- ❌ `main-backup-*` branch'lerine dokunma — güvenlik yedeği
+- ✅ Kısa branch: `git checkout -b <konu/kisa-ad>` → push → PR → CI yeşil → merge
+  (**merge = lider/kullanıcı onayı**; ajan kendi PR'ını onaysız merge ETMEZ)
+- ❌ Uzun-yaşayan ikinci branch tutma; `main-backup-*` branch'lerine dokunma
 - ❌ `git push --force[-with-lease]`, `--no-verify` — kullanıcı açıkça istemedikçe yapma
-- ✅ Push öncesi **her zaman** kullanıcı onayı al ("git'e gönder" demediyse pushlama)
+- ⚠️ Worktree yalnız provizyonlu açılır: `team_setup.py --provision-worktree`
+  (junction + `.conn_adt` provizyonu şart — D16; çıplak `git worktree add` guardrail'siz kalır)
+- ✅ Push öncesi **her zaman** kullanıcı onayı al ("git'e gönder" demediyse pushlama);
+  PR-merge de aynı onaya tabidir
 - ✅ Commit mesajı Türkçe yazılabilir. Net, "ne" değil "neden" odaklı.
+- ⛔ **FREEZE (T3/K8):** `project.yaml frozen_readonly_paths` altındaki köklere
+  (dondurulmuş eski-dünya yedekleri) YAZMA YASAK — `pre_tool_guard` R10 bloklar;
+  okuma serbest. Git dahil: bu köklerdeki repolara commit/push/checkout YAPILMAZ.
 
-ADR referansı: [`governance/decisions/0001-tek-branch-main.md`](governance/decisions/0001-tek-branch-main.md)
+ADR referansı: [`governance/decisions/0001-tek-branch-main.md`](governance/decisions/0001-tek-branch-main.md) · [`governance/decisions/0020-canli-cekirdek-junction-mimarisi.md`](governance/decisions/0020-canli-cekirdek-junction-mimarisi.md)
 
 ---
 

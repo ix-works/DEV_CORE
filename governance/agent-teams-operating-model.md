@@ -116,6 +116,23 @@ Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
 ## 6. Maliyet / model katmanı
 Çok-ajan ~15× token. Opsiyonel katman: lider/gateway Opus, feature Sonnet, research Haiku. SAP precision gerektiğinde kaliteyi düşürme; tiering bir maliyet kaldıracı, zorunlu değil.
 
+**Model-tiering DAİMA DECLARATIVE kalır (D34g, 2026-07-08):** tiering ajan-tanımı
+frontmatter'ında/spawn-parametresinde BEYAN edilir; hook/guard ile HARD-enforce EDİLMEZ
+(sc4sap dersi: model-zorlaması guard'ı revert edildi — precision işinde tier-kilidi
+kaliteyi sessizce düşürür, ihtiyaç anında override edilemez). İhlal sinyali değil,
+tercih sinyalidir.
+
+**Docs-expert rol değerlendirmesi (D34g):** FS/TS/KD üretimi bugün feature-expert +
+bug-expert(doc-checklist) hattında. Ayrı bir docs-expert rolü ANCAK şu tetikle açılır:
+bir sprint içinde ≥3 bağımsız doküman-turu VE doc-bug-gate'te tekrar-eden format
+BLOCKER'ları. O güne dek rol AÇILMAZ (LAZY ilkesi §2A).
+
+**Per-subagent project-scope memory PİLOTU (D34g):** alt-ajanlara proje-scope memory
+verilebilir (okuma serbest) — ANCAK memory-TERFİ (yeni kalıcı kayıt/düzeltme) YALNIZ
+liderde kalır (tek-yazıcı; çift-kaynak drift önlemi §10). Pilot ölçütü: ajanın
+tekrar-brief maliyeti düşüyor mu; kirlilik (yanlış/bayat kayıt) sıfır mı. Kirlilikte
+pilot geri alınır.
+
 ## 7. Gate'ler (kalite)
 - Her SAP yazımı: **run_review pre-flight (ADR 0006)** — gateway uygular; BLOCKER → yazma.
 - ADR 0005 guardrail + MCP server-side guard = iki katman (her zaman).

@@ -21,7 +21,7 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
     except Exception:
         pass
 
-SHIM_SURUM = "1.0"  # D7 drift-karşılaştırması bu sürümü okur
+SHIM_SURUM = "1.0"  # bilgi-amaçlı sürüm etiketi (D7 drift'i sürümü DEĞİL tam-dosya SHA256'yı kıyaslar)
 
 
 def proje_koku() -> str:
