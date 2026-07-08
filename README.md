@@ -1,0 +1,76 @@
+# DEV_CORE — Canlı Metodoloji Çekirdeği
+
+> **Tek cümlede:** Tüm projelerin (<PROJECT_NAME>_DOKUM, gelecektekiler) ORTAK ve CANLI kullandığı
+> SAP-AI geliştirme metodolojisi: standartlar, playbook, script/validator/hook takımı,
+> MCP server, agent tanımları ve skill'ler — **tek kaynak-gerçek, kopya YOK**.
+
+## Mimari (ADR 0020 — canlı çekirdek + junction)
+
+```
+GitHub                                   Lokal disk (her geliştirici)
+ix-works/DEV_CORE  ──clone──►  C:\IX\DEV_CORE\        ← BU repo (working tree = canlı çekirdek)
+ix-works/<PROJECT_NAME>_DOKUM ─clone─► C:\IX\<PROJECT_NAME>\
+                                 ├─ core ══junction══► C:\IX\DEV_CORE
+                                 ├─ CLAUDE.md (ince: @core/CLAUDE.core.md + proje bölümü)
+                                 └─ .claude\{agents,skills,commands} ══junction══► DEV_CORE\claude\...
+```
+
+- **Canlılık:** Core'daki bir düzeltme, aynı makinedeki TÜM projelere ANINDA yansır
+  (junction = tek fiziksel kopya). Manuel port/kopya süreci YOKTUR.
+- **Senkron:** Makine başına tek `git pull` (bu clone'da). `session_start` hook'u
+  "origin'in gerisindesin" uyarısı verir.
+- Projeler bu repoya junction'la BAKAR; proje repolarına core içeriği ASLA commit'lenmez
+  (`.gitignore` + `check_core_not_committed` + CI kilidi).
+
+## Depo haritası
+
+| Klasör | İçerik |
+|---|---|
+| `CLAUDE.core.md` | Çekirdek loader — yasaklar (ADR 0005), session protokolü, SORU 0, gate tablosu. Projelerin ince `CLAUDE.md`'si bunu `@core/...` ile import eder |
+| `AGENTS.md` | L1 — agent davranış kuralları (git, ADT işlem sırası, ADT-infra) |
+| `standards/` | L2 — kurumsal standartlar (naming, backend, RAP, UI5, klasik dialog, FS/TS, forms…) |
+| `playbook/` | L3 — ADT pattern bankası, lessons-learned, checklists, kod template'leri |
+| `profiles/` | SAP profil yetenek matrisi (`ecc / s4_private / s4_public / btp_abap`) — içerik `applies_to:` etiketiyle profile bağlanır |
+| `scripts/` | Araç takımı: ADT CRUD, validators (`run_all_validators.py`), hooks, gate'ler, deploy, doküman üreticileri |
+| `mcp_servers/sap_adt/` | Typed ADT MCP server — server-side ADR 0005 guardrail'li |
+| `claude/` | Projelere junction'lanan varlıklar: `agents/`, `skills/`, `commands/`, `memory-seed/` + `settings.template.json`, `CLAUDE.project.template.md`, `hook_shim.template.py` |
+| `governance/` | Metodoloji ADR'leri (`decisions/`), agent-teams işletim modeli, tooling envanteri |
+| `templates/` | Yeni-paket iskeleti vb. üretim şablonları |
+
+## Kurulum (yeni geliştirici / yeni makine)
+
+```powershell
+git clone https://github.com/ix-works/DEV_CORE.git C:\IX\DEV_CORE
+# proje clone'undan sonra:
+python C:\IX\DEV_CORE\scripts\team_setup.py     # junction'lar + hooksPath + seed_memory
+```
+
+Yeni PROJE açılışı: [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) (STEP 0–6 + kabul gate'i).
+Kurulum doğrulama: `python scripts/ix_doctor.py` (7-katman sağlık taraması).
+
+## Çalışma kuralları (özet — detay: [`MAINTENANCE.md`](MAINTENANCE.md))
+
+- **Yazma = herkes PR + CI required-check** (lider dahil; `main` branch-protected). Bypass yok.
+- **Genericize-on-write:** Bu repoya proje/müşteri kimliği GİREMEZ (sistem adı, kullanıcı,
+  paket numaraları → placeholder; `ZSD000`/`ZSD001` çalışan-demo istisnası). Pre-commit
+  hook (`scripts/git-hooks/`) + CI tarar.
+- **`applies_to` zorunlu:** standards/playbook/checklist dosyaları hangi SAP profillerinde
+  geçerli olduğunu frontmatter'da beyan eder.
+- **`stable` tag** = bilinen-iyi commit (yalnız lider ilerletir; tag-ruleset korumalı).
+  Kırık durumda: `git checkout stable` → dönüş `git switch main`.
+- Trunk-based: `main` tek uzun-ömürlü branch; kısa branch'ler aynı gün merge.
+
+## İlişkili repolar
+
+- **[ix-works/<PROJECT_NAME>_DOKUM](https://github.com/ix-works/<PROJECT_NAME>_DOKUM)** — ilk proje reposu
+  (yalnız proje içeriği; metodolojiyi bu repodan junction'la kullanır).
+- `<USER>/*` repoları — **dondurulmuş tarihsel yedek** (2026-07-08 öncesi dünya;
+  salt-okunur, push almaz).
+
+## Kilit dokümanlar
+
+[`CLAUDE.core.md`](CLAUDE.core.md) · [`AGENTS.md`](AGENTS.md) ·
+[`ONBOARDING.md`](ONBOARDING.md) · [`MAINTENANCE.md`](MAINTENANCE.md) ·
+[`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) ·
+[`governance/decisions/`](governance/decisions/) (mimari gerekçeler — ADR 0003 katmanlar,
+0005 yasaklar, 0006 reviewer, 0007 MCP, 0020 bu mimari)
