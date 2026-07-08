@@ -1,0 +1,21 @@
+{
+  "_yorum": [
+    "D33 — makine-düzeyi yönetilen politika ŞABLONU (F1 çevre katmanı).",
+    "Kurulum (UAC/admin gerekir — kullanıcı aksiyonu #6):",
+    "  1. <ESKI_KOK> placeholder'larını makinedeki dondurulmus eski-dunya kokuyle doldur",
+    "     (bu kullanicida: dondurulmus yedek klasorunun tam yolu).",
+    "  2. Dosyayi kopyala -> C:\\ProgramData\\ClaudeCode\\managed-settings.json",
+    "  3. _yorum alanini sil.",
+    "Etkisi: settings.json'daki proje/kullanici ayarlarinin UZERINDE, oturumda degistirilemez.",
+    "Neden: Always-allow yasagi (D32) + dondurulmus eski-dunya korumasi hook'lardan",
+    "bagimsiz, ajan/oturum tarafindan asilamaz bir katmanda da dursun.",
+    "Dogrulama: ix_doctor katman-1 varligini + placeholder'larin DOLU oldugunu kontrol eder."
+  ],
+  "permissions": {
+    "deny": [
+      "Write(<ESKI_KOK>\\**)",
+      "Edit(<ESKI_KOK>\\**)",
+      "Bash(git -C <ESKI_KOK>* push:*)"
+    ]
+  }
+}

@@ -252,7 +252,7 @@ SAP objelerini local'e indirirken **varsayılan `ZAI` klasörünü KULLANMA** (d
 
 - Konum: `<PROJECT_ROOT>\.conn_adt` (**nokta İLE** — `.conn_adt`, gizli dosya formatında)
 - Script'ler `sap_adt_lib.py` üzerinden okur (CWD'den otomatik bulur). Manuel: `open(r'<PROJECT_ROOT>\.conn_adt')`
-- **⚠️ `populate_*.py` çağrılarında `--cwd` argümanı VERME.** Bash'ten path geçerken backslash escape bozulur (`<PROJECT_ROOT>` → script'te `C:<LEGACY_ROOT><PROJECT_NAME>` olur, yanlış path). CWD zaten doğru olduğu için argüman gereksiz.
+- **⚠️ `populate_*.py` çağrılarında `--cwd` argümanı VERME.** Bash'ten path geçerken backslash escape bozulur (`C:\IX\<PROJECT_NAME>` → script'te `C:IX<PROJECT_NAME>` olur, yanlış path). CWD zaten doğru olduğu için argüman gereksiz.
 - Bağlantı testi: `GET /sap/bc/adt/discovery` + `auth=(user, pw)`, `headers={'sap-client':'100','X-CSRF-Token':'Fetch'}`, `verify=False`
 
 ---

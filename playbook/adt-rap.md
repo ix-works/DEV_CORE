@@ -66,7 +66,7 @@ mcp__sap-adt__adt_activate(name=ZSD001_I_ORDER, object_type=ddls)
   function/dataelement/domain/table/structure/tabletype/cds/metadataextension/
   accesscontrol/package. **srvd/srvb YOK** (SD/SB için MCP yolu kapalı).
 - ❌ `populate_cds_views.py --cwd <PROJECT_ROOT>` (bash) → backslash
-  yendi (`<LEGACY_ROOT><PROJECT_NAME>`), `.conn_adt` bulunamadı. **Çözüm:** `--cwd`'yi
+  yendi (`IX<PROJECT_NAME>`), `.conn_adt` bulunamadı. **Çözüm:** `--cwd`'yi
   ATLA (zaten proje kökü) + **PowerShell** tool kullan.
 - ❌ `adt_get(object_type='tabl', include_source=true)` → `[400] .../source/main`.
   Tablo DDL source MCP wrapper'da çalışmıyor; metadata-only (`include_source=

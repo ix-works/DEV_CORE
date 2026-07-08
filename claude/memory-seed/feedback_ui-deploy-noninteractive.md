@@ -10,8 +10,8 @@ metadata:
 Freestyle UI5 app'i BSP'ye deploy ederken **"ben çalıştıramam / kimlik yok"** DEME (2026-06-12 hatası: FIORI_TOOLS env boş görüp "yapamam" dedim, oysa reçete vardı). Çalışan non-interaktif yöntem **`standards/03-coding-ui-fiori.md` §2.4.1**'de:
 
 ```bash
-U=$(grep '^ADT_SAP_USER=' /c/<LEGACY_ROOT>/<PROJECT_NAME>/.conn_adt | cut -d= -f2 | tr -d '\r')
-P=$(grep '^ADT_SAP_PASSWORD=' /c/<LEGACY_ROOT>/<PROJECT_NAME>/.conn_adt | cut -d= -f2- | tr -d '\r')
+U=$(grep '^ADT_SAP_USER=' /c/IX/<PROJECT_NAME>/.conn_adt | cut -d= -f2 | tr -d '\r')
+P=$(grep '^ADT_SAP_PASSWORD=' /c/IX/<PROJECT_NAME>/.conn_adt | cut -d= -f2- | tr -d '\r')
 FIORI_TOOLS_USER="$U" FIORI_TOOLS_PASSWORD="$P" \
   npm --prefix <app_mutlak_yol> run deploy -- --yes
 ```

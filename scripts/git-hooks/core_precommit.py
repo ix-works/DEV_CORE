@@ -27,7 +27,7 @@ if hasattr(sys.stdout, "reconfigure"):
 # ── Kimlik desenleri (pre_tool_guard._CORE_LEAK ile hizalı + commit-gate ekleri) ──
 ID_PAT = re.compile(
     r"(<PROJECT_NAME>|<PROJECT_NAME>|<LEGACY_SOURCE>|<LEGACY_SOURCE>|<SAP_HOST>|<SAP_USER>|<USER>|<USER>"
-    r"|C:[/\\]+<LEGACY_ROOT>|C:[/\\]+Users[/\\]+DELL)")
+    r"|<LEGACY_ROOT>|C:[/\\]+Users[/\\]+DELL)")  # <LEGACY_ROOT> her formda (C:\, /c/, çıplak)
 ZSD_PAT = re.compile(r"\bzsd0(?!00|01)\d{2}", re.IGNORECASE)  # ZSD000/001 demo serbest
 
 # Dosya-bazlı izinli token'lar (taramadan ÖNCE içerikten çıkarılır; kalan yine taranır)
