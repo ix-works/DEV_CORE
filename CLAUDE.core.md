@@ -190,6 +190,7 @@ analizi + canlı-test → PR.
 | FS/TS şablonları | [`standards/04-documentation-fs-ts.md`](standards/04-documentation-fs-ts.md) |
 | Klasik GUI F1/KD yardımı | [`standards/08-classic-gui-f1-help.md`](standards/08-classic-gui-f1-help.md) |
 | Ambalajlama talimatı tüketimi | [`standards/09-packing-instruction-consumption.md`](standards/09-packing-instruction-consumption.md) |
+| İş-alım / kapsam-triage / modül-persona (ADR 0022) | [`playbook/intake-triage.md`](playbook/intake-triage.md) · modül paketleri [`playbook/modules/`](playbook/modules/) |
 | ADT pattern bankası | [`playbook/README.md`](playbook/README.md) |
 | Hata pattern + trigger phrases | [`playbook/lessons-learned.md`](playbook/lessons-learned.md) |
 | Belge kilidi (ADR 0014) | [`playbook/howto-document-lock.md`](playbook/howto-document-lock.md) |

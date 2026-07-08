@@ -82,6 +82,12 @@ annotation/syntax pattern tahmin edilmez.
 
 #### TETİKLEMELİ YÜKLEME (iş türü → ÖNCE oku) — gap-analysis #8
 
+> **⓪ Geliştirme talebi/revizyon ise ÖNCE İŞ-ALIM (ITG, ADR 0022):** `intake_triage` hook'u
+> [`playbook/intake-triage.md`](../../../playbook/intake-triage.md) protokolünü enjekte eder —
+> kapsam sınıfla (S0/S1/S2) + fonksiyonel modülü belirle (varsa [`playbook/modules/`](../../../playbook/modules/)
+> kural-paketini oku) + isterlerden konu çıkar + 3-eksen araştır. Bu, aşağıdaki teknik-tip
+> yüklemesine DİK eksendir (ikisi birlikte: "ne iş" × "nasıl kodla"), çakışmaz.
+
 İşe başlamadan, türüne göre **şunu oku** (her şeyi değil, ilgiliyi — token + tutarlılık):
 
 | İş türü / tetik | ÖNCE oku |
