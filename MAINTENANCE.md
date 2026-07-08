@@ -31,6 +31,16 @@ değil **proje `project.yaml` / `governance/` dosyasına** gider (aşağıda kat
 profil-kaybı — gate şema doğrular. Yeni içerikte kanıtsız profil genişletme YAPMA
 (yalnız doğrulandığın profili yaz).
 
+## 3b. KESİN YASAKLAR fiziksel damgası (ADR 0021)
+
+Yasaklar (ADR 0005: A/B/C/D + TAHMİN-YASAK) her projenin **kök `CLAUDE.md`'sine FİZİKSEL
+damgalıdır** — `@import`'a/junction'a bağlı DEĞİL (junction kırılsa da anayasa yüklü).
+- Tek kaynak: `claude/kesin-yasaklar.canonical.md`. Yeni proje: `init_project` damgalar.
+- Kanonik değişirse (nadir): `python core/scripts/sync_yasaklar.py --root C:\IX` → tüm
+  projeleri yeniden damgalar. `--check` ile önce sapanları gör.
+- Damga elle düzenlenmez (marker'lar arası). Drift = `check_kesin_yasaklar` BLOCKER
+  (run_all_validators + session_start + SAP-yazma öncesi pre_tool_guard).
+
 ## 4. `stable` tag + rollback
 
 - `stable` = bilinen-iyi commit. Yalnız LİDER ilerletir (tag-ruleset korumalı):
