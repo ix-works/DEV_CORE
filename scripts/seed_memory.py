@@ -27,6 +27,7 @@ Kullanım (repo kökünde):
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import sys
@@ -38,8 +39,15 @@ try:
 except Exception:
     pass
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-SEED_DIR = REPO_ROOT / ".claude" / "memory-seed"
+# Seed KAYNAĞI = core (script core'da yaşar; __file__.resolve() junction'da DEV_CORE'a
+# çözülür — kaynak için DOĞRU). Yeni yerleşim claude/, eski .claude/ fallback.
+CORE_ROOT = Path(__file__).resolve().parent.parent
+SEED_DIR = CORE_ROOT / "claude" / "memory-seed"
+if not SEED_DIR.exists():
+    SEED_DIR = CORE_ROOT / ".claude" / "memory-seed"
+
+# Seed HEDEFİ = PROJE (env-first; __file__ KULLANMA — projenin slug'ı lazım)
+PROJECT_ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
 
 
 def project_slug(path: Path) -> str:
@@ -48,7 +56,7 @@ def project_slug(path: Path) -> str:
 
 
 def default_target() -> Path:
-    slug = project_slug(REPO_ROOT)
+    slug = project_slug(PROJECT_ROOT)
     return Path.home() / ".claude" / "projects" / slug / "memory"
 
 
@@ -70,7 +78,7 @@ def main() -> int:
         return 0
 
     target = Path(args.target) if args.target else default_target()
-    print(f"[INFO] Repo kök : {REPO_ROOT}")
+    print(f"[INFO] Proje kök: {PROJECT_ROOT}  (seed kaynağı core: {CORE_ROOT})")
     print(f"[INFO] Seed     : {SEED_DIR} ({len(seed_files)} feedback dosyası)")
     print(f"[INFO] Hedef    : {target}")
     print(f"[INFO] Mod      : {'DRY-RUN' if args.dry_run else ('FORCE' if args.force else 'merge (eksikleri ekle)')}")

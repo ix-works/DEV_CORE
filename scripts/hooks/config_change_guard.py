@@ -31,9 +31,12 @@ _YUZEY = re.compile(
 
 def _duz_metin(obj) -> str:
     try:
-        return json.dumps(obj, ensure_ascii=False)
+        ham = json.dumps(obj, ensure_ascii=False)
     except Exception:
-        return str(obj)
+        ham = str(obj)
+    # json.dumps Windows yollarındaki '\' → '\\' yapar; regex tek '\' beklediğinden
+    # gerçek payload kaçardı. Tüm ayraçları '/'ye indir (desen [/\\] yine tutar).
+    return ham.replace("\\\\", "/").replace("\\", "/")
 
 
 def main() -> int:

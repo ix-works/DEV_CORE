@@ -103,8 +103,10 @@ _SILME_FIILI = re.compile(
     r"(\brm\s+-[a-z]*r[a-z]*f?|\brm\s+-[a-z]*f[a-z]*r|Remove-Item[^\n|;]*-Recurse"
     r"|\brimraf\b|\brmdir\s+/s|\bgit\s+clean\b(?![^\n]*-n))", re.IGNORECASE)
 
+# Silme hedefi: core/ · /core · ÇIPLAK `core` argümanı (rm -rf core) · .claude/{alt} · DEV_CORE
 _KORUNAN_SILME_HEDEF = re.compile(
-    r"(\bcore[/\\]|[/\\]core\b|\.claude[/\\](agents|skills|commands)|DEV_CORE)",
+    r"(\bcore[/\\]|[/\\]core\b|(?<![\w/\\.])core(?![\w/\\.])"
+    r"|\.claude[/\\](agents|skills|commands)|DEV_CORE)",
     re.IGNORECASE)
 
 _CORE_LEAK = re.compile(
@@ -126,6 +128,8 @@ def _frozen_paths() -> list[str]:
             s = line.strip()
             if s.startswith("frozen_readonly_paths:"):
                 kalan = s.split(":", 1)[1].strip()
+                # satır-sonu yorumunu soy (` # ...`); yol içinde '#' beklenmez
+                kalan = re.sub(r"\s+#.*$", "", kalan).strip()
                 if kalan.startswith("[") and kalan.endswith("]"):
                     out += [x.strip().strip("'\"") for x in kalan[1:-1].split(",") if x.strip()]
                     return out
@@ -133,7 +137,7 @@ def _frozen_paths() -> list[str]:
                 continue
             if icinde:
                 if s.startswith("- "):
-                    out.append(s[2:].strip().strip("'\""))
+                    out.append(re.sub(r"\s+#.*$", "", s[2:]).strip().strip("'\""))
                 elif s and not s.startswith("#"):
                     break
     except Exception:
@@ -141,16 +145,23 @@ def _frozen_paths() -> list[str]:
     return out
 
 
-_FROZEN = [p.replace("/", "\\").lower().rstrip("\\") for p in _frozen_paths() if p]
+def _canon_path(s: str) -> str:
+    """Yol-kıyas kanonu: hem `C:\\<LEGACY_ROOT>` hem git-bash `/c/<LEGACY_ROOT>` aynı forma iner.
+    lower · \\→/ · sürücü-iki-noktası düşür (`c:/`→`c/`) → alt-dize kıyası tutar."""
+    return s.replace("\\", "/").lower().replace(":", "")
+
+
+_FROZEN = [_canon_path(p).rstrip("/") for p in _frozen_paths() if p]
 
 
 def _frozen_hit(metin: str) -> str:
-    """Metin (komut/dosya-yolu) dondurulmuş kök içeriyor mu? İlk eşleşen kökü döndür."""
+    """Metin (komut/dosya-yolu) dondurulmuş kök içeriyor mu? İlk eşleşen kökü döndür.
+    Windows (C:\\<LEGACY_ROOT>) ve bash (/c/<LEGACY_ROOT>) yol stilleri kanonlaştırılarak kıyaslanır."""
     if not _FROZEN or not metin:
         return ""
-    duz = metin.replace("/", "\\").lower()
+    duz = _canon_path(metin)
     for kok in _FROZEN:
-        if kok in duz:
+        if kok and kok in duz:
             return kok
     return ""
 

@@ -44,9 +44,14 @@ def say(lv: str, msg: str) -> None:
 
 
 def junction_hedefi(link: Path) -> Path | None:
-    """Junction/symlink hedefini döndür; değilse None."""
+    """Junction/symlink hedefini döndür; değilse None.
+    Windows readlink '\\\\?\\' extended-length öneki döndürür — kıyas için soyulur
+    (soyulmazsa sağlam junction 'YANLIŞ hedefe' sanılıp gereksiz yeniden kurulur)."""
     try:
-        return Path(os.readlink(link))
+        ham = str(os.readlink(link))
+        if ham.startswith("\\\\?\\"):
+            ham = ham[4:]
+        return Path(ham)
     except (OSError, ValueError):
         return None
 

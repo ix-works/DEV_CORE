@@ -401,7 +401,7 @@ def find_conn_file():
     def iter_candidate_dirs():
         # CRITICAL: Check environment variables that point to Claude Code's working directory FIRST
         # These are set by Claude Code to indicate the real project directory
-        for env_var in ['CLAUDE_CWD', 'INIT_CWD', 'COPILOT_CWD']:
+        for env_var in ['CLAUDE_PROJECT_DIR', 'CLAUDE_CWD', 'INIT_CWD', 'COPILOT_CWD']:
             value = os.getenv(env_var)
             if value:
                 p = Path(value)
