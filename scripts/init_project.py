@@ -9,7 +9,7 @@ proje core'a junction'la bakar (junction'ları team_setup.py kurar, STEP 3).
   CLAUDE.md                (claude/CLAUDE.project.template.md'den; --name verilirse doldurulur)
   .claude/settings.json    (claude/settings.template.json'dan)
   scripts/hook_shim.py     (claude/hook_shim.template.py'den — D15)
-  project.yaml             (profil + source_root iskeleti — §9.3)
+  project.yaml             (profil + source_root iskeleti — profiles/ + CLAUDE.core.md §2)
   .gitignore               (SIZINTI KİLİDİ satırları hazır)
   .gitattributes           (CRLF kararı — A3.0/B1 ile aynı)
   .mcp.json                (MCP core'dan yüklenir; D17 env-first)
@@ -85,7 +85,8 @@ MCP_JSON = """\
 """
 
 PROJECT_YAML = """\
-# project.yaml — proje kimliği (PROJECT_BOOTSTRAP STEP 0 kararları; GECIS-PLAN §9.3)
+# project.yaml — proje kimliği (PROJECT_BOOTSTRAP STEP 0 kararları;
+# profil alanları: core/profiles/ + CLAUDE.core.md §2)
 # Core script/validator'ları BU dosyadan okur — hard-code yok (K12).
 
 source_root: {source_root}     # kaynak-kod klasörü adı

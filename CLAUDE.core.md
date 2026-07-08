@@ -162,7 +162,7 @@ Tek komut: `python core/scripts/validators/run_all_validators.py` (core + proje 
 
 ### SAP ADT MCP Server (ADR 0007)
 
-Typed MCP tool'lar ([`mcp_servers/sap_adt/`](mcp_servers/sap_adt/)): tek-obje yaratım/aktivasyon/push/search/lock = MCP; CSV-batch/validator/gate = script. Server-side guardrail: ADR 0005 + **profil-bazlı tool-blok** (§9.4d — profil neyi yasaklıyorsa server REDDeder) + bağlantı-tutarsızlık gate'i (ADR 0010). Bağlantı: proje kökündeki `.conn_adt` (env `CLAUDE_PROJECT_DIR` → cwd fallback).
+Typed MCP tool'lar ([`mcp_servers/sap_adt/`](mcp_servers/sap_adt/)): tek-obje yaratım/aktivasyon/push/search/lock = MCP; CSV-batch/validator/gate = script. Server-side guardrail: ADR 0005 + bağlantı-tutarsızlık gate'i (ADR 0010). **Profil-bazlı tool-blok (§9.4d) HENÜZ KODDA DEĞİL — PLANLI** (kapsama-matrisi tespiti 2026-07-08; tetik: ilk s4_public/btp projesi VEYA onaylı ADT-INFRA penceresi — proje deferred-register'ında D34d satırı); o güne dek profil-dışı yasaklar validator/skill-injector katmanında. Bağlantı: proje kökündeki `.conn_adt` (env `CLAUDE_PROJECT_DIR` → cwd fallback).
 
 ## 8. DAVRANIŞ GÜVENLİK DUVARI — ÖZET (§11)
 

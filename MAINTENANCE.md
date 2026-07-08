@@ -97,5 +97,5 @@ Emin değilsen: önce proje-tarafına yaz, genellenince core'a PR'la terfi ettir
 
 `python scripts/team_setup.py` idempotenttir (eksik olanı tamamlar) ·
 `--repair-junctions` kopuk junction onarır · `python scripts/ix_doctor.py` 7-katman
-sağlık taraması *(Faz-F'de eklenir)* · Doğrulama komutu:
+sağlık taraması · Doğrulama komutu:
 `python scripts/validators/run_all_validators.py` (CORE modunda scope=project SKIP'ler).

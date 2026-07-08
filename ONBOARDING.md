@@ -59,6 +59,7 @@ Kopuk junction onarımı: `python C:\IX\DEV_CORE\scripts\team_setup.py --repair-
 Sonra **kişisel** dosyanı yarat: proje kökünde `.conn_adt` (SAP host/client/KENDİ
 kullanıcın — gitignore'da, repoya gitmez; şablon: proje `conn/` klasörü). Şifreyi Claude
 sohbetine YAZMA — dosyayı kendin düzenle.
+Alan şablonu: [`claude/conn_adt.template`](claude/conn_adt.template) (tek sistem; çoklu-tier: proje `conn/*.env` — ADR 0010).
 
 ## 3. Çalışma kökü modeli + FREEZE
 

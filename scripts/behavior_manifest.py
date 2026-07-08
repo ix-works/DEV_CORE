@@ -62,14 +62,18 @@ def _topla(proj: Path) -> dict[str, str]:
             for f in sorted(d.rglob("*")):
                 if f.is_file():
                     kayit[str(f.relative_to(proj)).replace("\\", "/")] = _hash(f)
-    # nested CLAUDE.md'ler (kök hariç; core junction'ı atla)
-    for f in sorted(proj.rglob("CLAUDE.md")):
-        rel = str(f.relative_to(proj)).replace("\\", "/")
-        if rel == "CLAUDE.md" or rel.startswith("core/") or "/core/" in rel:
-            continue
-        if any(seg in rel for seg in ("node_modules/", ".git/", ".tmp/")):
-            continue
-        kayit[rel] = _hash(f)
+    # nested CLAUDE.md'ler (kök hariç; core junction'ı atla) — os.walk + DİZİN-BUDAMA.
+    # (Eski rglob tüm ağacı yürüyordu; node_modules/.git filtresi sonuçta eleniyordu ama
+    # yürüyüş budanmıyordu → session_start ~720ms manifest maliyeti; F2-P bulgusu 2026-07-08.)
+    prune = {"node_modules", ".git", ".tmp", "core", "dist", "__pycache__"}
+    for dirpath, dirnames, filenames in os.walk(proj):
+        dirnames[:] = [d for d in dirnames
+                       if d not in prune and not _is_junction(Path(dirpath) / d)]
+        if "CLAUDE.md" in filenames:
+            f = Path(dirpath) / "CLAUDE.md"
+            rel = str(f.relative_to(proj)).replace("\\", "/")
+            if rel != "CLAUDE.md":
+                kayit[rel] = _hash(f)
     return kayit
 
 
