@@ -86,6 +86,7 @@ PROJECT_YAML = """\
 # Core script/validator'ları BU dosyadan okur — hard-code yok (K12).
 
 source_root: {source_root}     # kaynak-kod klasörü adı
+repo_mode: {repo_mode}         # full=GitHub+korumalar | local=yalnız git-init (kısa proje ÖNERİLEN) | none=git'siz (K13)
 sap_profile: __DOLDUR__        # ecc | s4_private | s4_public | btp_abap
 release: "__DOLDUR__"          # ecc+s4_private zorunlu (örn. "2025"); public/btp'de kaldır
 # db: hana                     # yalnız ecc: hana | anydb
@@ -112,6 +113,8 @@ def main() -> int:
     ap.add_argument("hedef", help="Yeni proje kök dizini (örn. C:\\IX\\XYZ)")
     ap.add_argument("--name", default=None, help="<PROJECT_NAME> placeholder'ını doldur")
     ap.add_argument("--source-root", default="SOURCE_CODES", help="Kaynak-kod klasör adı (K12)")
+    ap.add_argument("--repo-mode", default="full", choices=["full", "local", "none"],
+                    help="K13: full=GitHub | local=yalnız git-init (kısa proje) | none=git'siz")
     ap.add_argument("--force", action="store_true")
     a = ap.parse_args()
 
@@ -132,7 +135,8 @@ def main() -> int:
         uret(proje / "CLAUDE.md", claude_md, a.force),
         uret(proje / ".claude" / "settings.json", settings, a.force),
         uret(proje / "scripts" / "hook_shim.py", shim, a.force),
-        uret(proje / "project.yaml", PROJECT_YAML.format(source_root=a.source_root), a.force),
+        uret(proje / "project.yaml",
+             PROJECT_YAML.format(source_root=a.source_root, repo_mode=a.repo_mode), a.force),
         uret(proje / ".gitignore", GITIGNORE, a.force),
         uret(proje / ".gitattributes", GITATTRIBUTES, a.force),
         uret(proje / ".mcp.json", MCP_JSON, a.force),
@@ -145,7 +149,14 @@ def main() -> int:
         sonuc.append(f"[ OK ] {p}\\  (klasör)")
 
     print("\n".join(sonuc))
-    print("\nSONRAKİ ADIMLAR (PROJECT_BOOTSTRAP):")
+    print(f"\nSONRAKİ ADIMLAR (PROJECT_BOOTSTRAP — repo_mode={a.repo_mode}):")
+    if a.repo_mode == "full":
+        print("  0. GitHub'da boş private repo aç + clone/remote bağla (STEP 1)")
+    elif a.repo_mode == "local":
+        print(f"  0. git init (yalnız lokal — remote YOK):  git -C {proje} init  (K13 LITE)")
+    else:
+        print("  0. (K13 LITE/none) git YOK — sızıntı/push kalemleri kabul-gate'inden düşer;"
+              " kalıcılaştırma kullanıcı takdirinde")
     print(f"  1. python {CORE_ROOT / 'scripts' / 'team_setup.py'} --project {proje}   (junction'lar + seed)")
     print("  2. .conn_adt + project.yaml __DOLDUR__ alanları  (STEP 4)")
     print("  3. Kabul gate'i (STEP 5): oturum aç → ekran-teyidi + MCP ping + validators")
