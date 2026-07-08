@@ -65,6 +65,13 @@ def main() -> int:
     scripts_dir = Path(args.scripts_root)
     playbook_dir = Path(args.playbook_root)
 
+    # Proje-modunda (cwd=proje kökü) scripts/playbook CORE junction'ı altındadır —
+    # denetlenen şey CORE script'lerinin CORE playbook referansıdır (proje scripts'i değil).
+    if not scripts_dir.exists() or not playbook_dir.exists():
+        core = Path("core")
+        if (core / args.scripts_root).exists() and (core / args.playbook_root).exists():
+            scripts_dir = core / args.scripts_root
+            playbook_dir = core / args.playbook_root
     if not scripts_dir.exists() or not playbook_dir.exists():
         print(f"HATA: {scripts_dir} veya {playbook_dir} bulunamadı", file=sys.stderr)
         return 1
