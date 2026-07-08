@@ -1,0 +1,60 @@
+---
+layer: L4
+scope: package:{PKG_FULL}
+last-updated: {DATE}
+status: active
+---
+
+# {PKG_FULL} — Paket Kuralları
+
+## Naming (zorunlu prefix'ler)
+
+| Obje Tipi | Prefix | Regex |
+|---|---|---|
+| Program | `{PKG}_P_*` | `^{PKG}_P_[A-Z0-9_]+$` |
+| Include | `{PKG}_I_*` | `^{PKG}_I_[A-Z0-9_]+$` |
+| Class | `{PKG}_CL_*` veya `ZCL_{PKG}_*` | `^({PKG}_CL_|ZCL_{PKG}_)[A-Z0-9_]+$` |
+| Function Group | `{PKG}_FG_*` | `^{PKG}_FG_[A-Z0-9_]+$` |
+| Function Module | `{PKG}_FM_*` | `^{PKG}_FM_[A-Z0-9_]+$` |
+| CDS Root View | `{PKG}_C_*` | `^{PKG}_C_[A-Z0-9_]+$` |
+| CDS Interface View | `{PKG}_I_*` | `^{PKG}_I_[A-Z0-9_]+$` |
+| DDL Source | `{PKG}_DDL_*` | `^{PKG}_DDL_[A-Z0-9_]+$` |
+| Data Element | `{PKG}_DE_*` veya `{PKG}_DTEL_*` | `^{PKG}_(DE\|DTEL)_[A-Z0-9_]+$` |
+| Domain | `{PKG}_DOM_*` | `^{PKG}_DOM_[A-Z0-9_]+$` |
+| Structure | `{PKG}_S_*` | `^{PKG}_S_[A-Z0-9_]+$` |
+| Table | `{PKG}_T_*` | `^{PKG}_T_[A-Z0-9_]+$` |
+| Table Type | `{PKG}_TT_*` | `^{PKG}_TT_[A-Z0-9_]+$` |
+| Lock Object | `E{PKG}_*` veya `EZ_{PKG}_*` | (lock obj prefix `E` ile başlar) |
+| Message Class | `{PKG}` | tek tablo, paket adıyla aynı |
+
+> Validator: `scripts/validators/check_package_naming.py` bu regex'leri okuyup `cds/`, `classes/`, `programs/`, vb. altındaki dosya adlarını doğrular.
+
+## Bağımlılıklar
+
+- Üst paket: TBD (varsa)
+- Bağımlı paket(ler): TBD (varsa)
+
+## Bilinen İstisnalar / Legacy
+
+(Varsa burada listele — örn. "Bu pakette FI namespace CDS de var: `ZFI_I_*`")
+
+## Konvansiyon — Legacy/Draft .txt (genel)
+
+Paket root'unda `*.txt` dosyaları **ilk draft spec** olarak tutulabilir:
+- Eski sistemden alınan veya manuel yazılmış kod kaynağı
+- Yeni sistemde **henüz implemente edilmemiş** veya implementasyona kaynak olmuş
+- `.abap` / `.cds` dosyalarına çevrilmez (rename veya silinmez)
+- Validator: paket root'undaki `.txt` dosyaları naming regex'inden muaf
+- `docs/` altındaki `.txt`'ler ise FS/TS dokümanı (farklı kategori)
+
+## Transport
+
+- Aktif TR: TBD
+- Önceki TR'ler: TBD
+
+## İlgili
+
+- [`SPEC.md`](SPEC.md)
+- [`SESSION_NOTES.md`](SESSION_NOTES.md)
+- [`../../standards/01-naming.md`](../../standards/01-naming.md) — Kurumsal naming standardı
+- [`../../governance/package-registry.md`](../../governance/package-registry.md)

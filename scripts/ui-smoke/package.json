@@ -1,0 +1,11 @@
+{
+  "name": "ui-smoke",
+  "private": true,
+  "description": "Freestyle UI5 build runtime smoke-test gate (G1, ADR 0017) — playwright-cli; SAP auth .conn_adt'den httpCredentials ile",
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  },
+  "scripts": {
+    "test": "playwright test"
+  }
+}

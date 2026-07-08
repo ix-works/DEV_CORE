@@ -1,0 +1,22 @@
+# ref_docs/ — Kaynak/dönüşüm + tarihsel referans ({PKG})
+
+> **NEDİR:** Başka bir sistemden (eski <LEGACY_SOURCE> / başka SAP / legacy) alınıp S4 DEV'de
+> **1:1 yaratılmayacak** conversion/planlama dokümanları. Build sırasında **spec kaynağı**;
+> canlı teslimat **değildir**. Bkz. ADR [0013](../../../governance/decisions/0013-kaynak-referans-dokuman-ayrimi-ref_docs.md).
+>
+> **NE DEĞİL:** "temp/çöp" değil — gerçek S4 objesi + dokümanı oluşana kadar **silinmez**.
+> Tüketildiğinde aşağıda "superseded" işaretlenir.
+>
+> **Gerçek S4 DEV artefaktları** paket kökünde: `cds/`, `classes/`, `programs/`, `ui/`.
+>
+> **Çok-kaynak:** Birden çok kaynak sistem varsa `ref_docs/<kaynak>/` alt klasörü aç.
+
+## İçerik + durum (provenance: <KAYNAK SİSTEM>)
+
+| Klasör/dosya | İçerik | Durum |
+|---|---|---|
+| _(doldur)_ | _(klasik DDL/struct/program spec, mockup, csv...)_ | 🔶 ham / ✅ superseded→<obje> / ❌ düştü |
+
+> **Build kuralı:** Program sprint'inde (§4-adım1) spec-mutabakat için buradaki ilgili
+> spec'ler okunur; gerçek RAP/UI yaratıldıkça gerçek doc paket kökünde üretilir, buradaki
+> ilgili satır "superseded" işaretlenir.

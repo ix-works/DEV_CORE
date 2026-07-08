@@ -1,0 +1,26 @@
+# SAP Profil Yetenek Matrisi — btp_abap (BTP ABAP Environment / side-by-side Steampunk)
+# [İSKELET — LAZY, §9.5]. s4_public'ten AYRI sınıf: LOKAL S/4 iş nesnesi YOK —
+# veri erişimi yalnız REMOTE released API (communication arrangement).
+
+profile: btp_abap
+description: "ABAP Cloud dili; ayrık PaaS — S/4 verisine yalnız remote released API"
+
+capabilities:
+  rap: required
+  abap_cloud: only
+  classic_dynpro: forbidden
+  classic_reports: forbidden
+  segw_odata: forbidden
+  cds: cloud_flavor
+  local_s4_objects: none        # AYIRT EDİCİ hücre — s4_public'te var, burada YOK
+  remote_consumption: primary   # communication arrangement + destination servisleri
+  released_apis_only: true
+  sap_gui: none
+  transport: gcts               # software component (arc-1 SAPGit + sapcli emsalleri)
+  adt_auth: sso                 # XSUAA/OAuth (D34c çözümleri birebir bu ortam için)
+
+release_overrides: {}           # rolling
+
+lazy_todo:
+  - "remote-consumption / communication-arrangement playbook pattern'leri (§9.5)"
+  - "multi-tenancy / ayrık yaşam-döngüsü notları"

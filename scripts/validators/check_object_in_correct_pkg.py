@@ -1,0 +1,124 @@
+"""
+check_object_in_correct_pkg.py — Bir paketin alt klasörlerindeki dosyaların prefix'i
+paket adıyla uyumlu mu kontrol eder.
+
+Örnek ihlal: ERP/ZSD003_CLC/cds/ZSD010_DDL_FOO.cds (yanlış paket)
+
+Whitelist (.rules.md "Bilinen İstisnalar / Legacy" bölümünden okunur — gelecek):
+- ZSD003_CLC: ZCL_ZSD_FITTINGS_* (Gateway namespace)
+- ZSD009_CLC: ZFI_I_FITT_* (FI namespace, paket root'unda .txt olarak)
+
+Kullanım:
+    python scripts/validators/check_object_in_correct_pkg.py
+
+Exit kodu:
+    0 — Tüm dosyalar doğru pakette
+    1 — Cross-package sızıntı tespit edildi
+"""
+# ENFORCES: C-RAP-PKG-01  (ADR 0019 coverage binding)
+import argparse
+import re
+import sys
+from pathlib import Path
+
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+# Paket bazlı istisnalar (NTTDATA-onaylı veya legacy)
+PACKAGE_EXCEPTIONS = {
+    "ZSD003_CLC": [r"^ZCL_ZSD_FITTINGS_", r"^ZSD_FITTINGS_"],
+    "ZSD009_CLC": [r"^ZFI_I_FITT_", r"^ZCL_ZSD009_"],
+    "ZSD015_CLC": [r"^ZCL_SD015_", r"^ZIF_SD015_"],  # ABAP OO class/interface prefix (ZCL_/ZIF_ <module>_<name>)
+    "ZSD011_CLC": [r"^ZCL_SD011_"],  # RAP behavior class prefix (ZCL_<module>_<name>)
+    "ZSD000_CLC": [r"^ZCL_SD000_"],  # RAP behavior class prefix (ZCL_<module>_<name>)
+    # Diğer paketler için .rules.md'den otomatik okuma — gelecek versiyon
+}
+
+# Sadece bu klasörlerde obje adı doğrulanır (root'taki .md/.txt'ler ve docs/ muaf)
+CHECK_FOLDERS = {"cds", "classes", "programs", "structures", "tables", "functions", "auth"}
+
+# Tooling scratch dizini artık .tmp/sap_scratch (ERP DIŞI, gitignored) — ZAI default'u
+# KALDIRILDI (2026-06-18). ERP/ZAI ARTIK YASAK: belirirse bu check onu flag'ler
+# (ZAI-resurgence guard). Başka scratch-modül yok → exclude kümesi BOŞ.
+SCRATCH_MODULES: set = set()
+
+
+def get_pkg_prefix(pkg_name: str) -> str:
+    """ZSD003_CLC → ZSD003"""
+    return pkg_name.replace("_CLC", "")
+
+
+def matches_package(filename: str, pkg_prefix: str, pkg_name: str) -> bool:
+    """Dosya adı paket prefix'iyle veya istisna pattern'iyle eşleşiyor mu?"""
+    base = filename.split(".")[0].upper()
+    if base.startswith(pkg_prefix.upper() + "_") or base == pkg_prefix.upper():
+        return True
+
+    # Paket-spesifik istisnalar
+    for pattern in PACKAGE_EXCEPTIONS.get(pkg_name, []):
+        if re.match(pattern, base):
+            return True
+
+    return False
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Obje paket sınır kontrolü")
+    parser.add_argument("--erp-root", default="ERP", help="ERP root dizini")
+    parser.add_argument("--strict", action="store_true", help="run_all_validators ile uyum için, no-op")
+    args = parser.parse_args()
+
+    erp_root = Path(args.erp_root)
+    if not erp_root.exists():
+        print(f"HATA: {erp_root} bulunamadı", file=sys.stderr)
+        return 1
+
+    violations = []
+    # ERP/<MODULE>/<PKG>/ pattern'i
+    packages = []
+    for module_dir in sorted(erp_root.iterdir()):
+        if not module_dir.is_dir() or module_dir.name.startswith("."):
+            continue
+        if module_dir.name in SCRATCH_MODULES:
+            continue
+        for pkg in sorted(module_dir.iterdir()):
+            if pkg.is_dir() and not pkg.name.startswith("."):
+                packages.append((module_dir.name, pkg))
+
+    for module_name, pkg in packages:
+        pkg_prefix = get_pkg_prefix(pkg.name)
+
+        for folder_name in CHECK_FOLDERS:
+            folder = pkg / folder_name
+            if not folder.exists():
+                continue
+
+            for f in folder.rglob("*"):
+                if not f.is_file():
+                    continue
+                # Sadece kod/obje uzantılarını kontrol et
+                if not f.suffix.lower() in {".abap", ".cds", ".ddls", ".asddls", ".xml"}:
+                    continue
+                # .ddls.asddls çift uzantı
+                if f.name.endswith(".ddls.asddls"):
+                    pass
+
+                if not matches_package(f.name, pkg_prefix, pkg.name):
+                    violations.append(
+                        f"{module_name}/{pkg.name}/{folder_name}/{f.name}: "
+                        f"paket prefix'i '{pkg_prefix}' veya istisna pattern'iyle eşleşmiyor"
+                    )
+
+    if violations:
+        print("HATA — Cross-package sızıntı:", file=sys.stderr)
+        for v in violations:
+            print(f"  {v}", file=sys.stderr)
+        return 1
+
+    print(f"OK — {len(packages)} paketteki obje dosyaları doğru paket altında.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

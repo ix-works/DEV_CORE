@@ -1,0 +1,32 @@
+# SAP Profil Yetenek Matrisi — ecc (SAP ECC 6.0, NW 7.0x–7.5x)  [İSKELET — LAZY, §9.5]
+# İlk ecc-profilli proje açılırken doldurulur (deferred-trigger); hücreler CANLI TESTLE kanıtlanır.
+
+profile: ecc
+description: "Yalnız klasik ABAP; RAP YOK; OData=SEGW; CDS sürüme bağlı"
+
+capabilities:
+  rap: none                    # RAP ECC'de yok (S/4 1909+)
+  abap_cloud: none
+  classic_dynpro: primary      # ana geliştirme modeli
+  classic_reports: primary
+  segw_odata: available        # NW 7.31+ (Gateway)
+  cds: by_release              # bkz. release_overrides — 7.31'de YOK
+  amdp: by_db                  # yalnız db=hana (Suite on HANA); anyDB'de YOK
+  released_apis_only: false    # kavram ECC'de yok
+  standard_table_direct_write: forbidden   # ADR 0005-B governance yasağı AYNEN
+  sap_gui: available
+  transport: cts
+  adt_auth: basic
+
+release_overrides:
+  "7.31": { cds: none, segw_odata: available }
+  "7.40": { cds: limited }         # 7.40 SP05+ sınırlı; @OData.publish YOK
+  "7.50": { cds: usable }          # kullanılabilir seviye; @OData.publish 7.50+
+
+db_axis:
+  hana:  { amdp: available }
+  anydb: { amdp: none }            # anyDB ECC'de AMDP önermek HATA (D14 kanıtı)
+
+lazy_todo:
+  - "SEGW/BOPF playbook pattern'leri yok (§9.5) — ilk ecc projesinde yazılır"
+  - "eski-syntax uyarlamaları (7.40-öncesi inline-declaration yok vb.)"

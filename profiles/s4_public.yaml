@@ -1,0 +1,28 @@
+# SAP Profil Yetenek Matrisi — s4_public (S/4HANA Cloud Public Edition)  [İSKELET — LAZY, §9.5]
+# İlk s4_public projesi açılırken doldurulur (deferred-trigger: xsuaa-auth + gCTS + arc-1
+# cloud farkları paketi). Yasak-listesi kaynağı: matt1as/claude-abap-skills (D34a).
+
+profile: s4_public
+description: "YALNIZ ABAP Cloud — platform enforce eder (klasik derlenmez); SaaS rolling release"
+
+capabilities:
+  rap: required
+  abap_cloud: only             # tek dil-modeli
+  classic_dynpro: forbidden    # platform reddeder (SAP GUI de yok)
+  classic_reports: forbidden   # logical DB / SAP Query / batch-input dahil (matt1as listesi)
+  segw_odata: forbidden
+  cds: cloud_flavor            # abapFlavor=cloud (mcp-sap-docs ayrımı — D34a)
+  amdp: restricted             # yalnız released çerçevede
+  released_apis_only: true     # platform-enforce (derleyici/runtime reddeder)
+  standard_table_direct_write: platform_blocked
+  sap_gui: none
+  transport: cloud_ts          # NÖTR (D27): BTP-gCTS ile bire bir aynı VARSAYILMAZ —
+                               # ilk s4_public projede CANLI doğrulanıp netleşir
+  adt_auth: sso                # basic YOK; çözüm hazır: @arc-mcp/xsuaa-auth + sapcli auth-plugin (D34c)
+
+release_overrides: {}          # SaaS rolling — sürüm ekseni YOK (§9.2)
+
+lazy_todo:
+  - "MCP server SSO/servis-anahtarı auth genişletmesi (D34c — dışarıda hazır, sıfırdan yazma)"
+  - "cloud_ts taşıma akışının canlı doğrulanması (D27)"
+  - "gCTS/software-component playbook'u"

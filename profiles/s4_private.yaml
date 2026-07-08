@@ -1,0 +1,43 @@
+# SAP Profil Yetenek Matrisi — s4_private (S/4HANA on-premise + RISE Private Cloud)
+# GECIS-PLAN §9 (D14). Geliştirme modeli iki ortamda AYNI (araştırma-teyitli 2026-07-08).
+# ⚠ MATRİS REHBERDİR, KANIT DEĞİLDİR: capability iddiası CANLI TESTLE doğrulanır
+#   (ders: playbook/adt-cds.md — sürüm-numarasından çıkarım canlı aktivasyonla çürür).
+# DOLU profil: mevcut kanıtlı deneyim bu profilden (ilk proje s4_private/2025 idi).
+
+profile: s4_private
+description: "ABAP Cloud + klasik ABAP YAN YANA (3-tier / 2025 4-seviye clean-core modeli)"
+
+capabilities:
+  rap: preferred              # RAP 1909+; klasik hâlâ meşru (cleancore_policy'ye bağlı)
+  abap_cloud: available       # Embedded Steampunk 2022+ (release_overrides'a bak)
+  classic_dynpro: allowed     # Tier-3; proje policy=strict ise projede kısıtlanabilir
+  classic_reports: allowed
+  segw_odata: allowed         # RAP tercih; SEGW çalışır
+  cds: full
+  amdp: available             # HANA garanti (S/4)
+  released_apis_only: false   # tercih edilir (check_released_objects WARNING) ama zorunlu değil
+  standard_table_direct_write: forbidden   # ADR 0005-B (platform değil GOVERNANCE yasağı)
+  sap_gui: available
+  transport: cts
+  adt_auth: basic             # + SAML/SSO kurumsal kurulumlarda (login_saml_sso mevcut)
+
+release_overrides:
+  # anahtar = S/4 release; yalnız FARKLAR yazılır
+  "1909": { abap_cloud: none, rap: available }     # Embedded Steampunk yok; RAP erken sürüm
+  "2020": { abap_cloud: none }
+  "2021": { abap_cloud: none }
+  "2022": {}                                        # Embedded Steampunk başlangıcı
+  "2023": {}
+  "2025": {}                                        # referans-kanıt profili (ilk proje)
+
+policy_axis:
+  # cleancore_policy project.yaml'dan gelir: strict | balanced | classic
+  strict:   { classic_dynpro: forbidden_by_policy, released_apis_only: true }
+  balanced: {}                                      # matris default'ları geçerli
+  classic:  { rap: available }                      # RAP tercih-baskısı kalkar
+
+data_sources:
+  # D34a — hücre verilerinin otoriter kaynakları
+  released_objects: "SAP/abap-atc-cr-cv-s4hc → objectReleaseInfo_PCELatest.json (+_PCE<yıl>; refresh_released_successors.py)"
+  classic_api_classification: "objectClassifications_SAP.json (Clean Core Model, B-seviye) — EVAL"
+  system_type_sozlugu: "ClementRingot/ROSA sap_list_versions + system_type parametresi"

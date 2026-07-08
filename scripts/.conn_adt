@@ -1,0 +1,21 @@
+# SAP ADT Connection Configuration
+# Please update these values with your SAP system credentials
+# Uses ADT_ prefix to avoid conflicts with other SAP tools
+
+# === On-Premise SAP System (Basic Auth) ===
+ADT_SAP_URL=https://your-sap-server.com:44300
+ADT_SAP_USER=YOUR_USERNAME
+ADT_SAP_PASSWORD=YOUR_PASSWORD
+ADT_SAP_CLIENT=100
+ADT_SAP_LANGUAGE=EN
+
+# === SAP BTP Cloud (Service Key Auth) ===
+# For BTP cloud systems, use service key instead of username/password:
+# 1. Download service key from your BTP subaccount (XSUAA)
+# 2. Save it as a JSON file (e.g., .conn_btp_cloud.json)
+# 3. Update ADT_BTP_SERVICE_KEY_PATH to point to that file
+# ADT_BTP_SERVICE_KEY_PATH=.conn_btp_cloud.json
+# ADT_BTP_AUTH_TYPE=service_key
+
+# Optional: SSL certificate verification (default: false for self-signed certs)
+# ADT_SAP_SSL_VERIFY=false

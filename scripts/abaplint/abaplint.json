@@ -1,0 +1,19 @@
+{
+  "_comment": "<PROJECT_NAME> tuned abaplint config — DÜŞÜK GÜRÜLTÜ. check_syntax KAPALI (otoriter syntax=adt_syntax_check, izole dosyada tip-çözümleme gürültü yapar). keyword_case+7bit_ascii KAPALI (Türkçe metin + karışık-case meşru). Sadece yapısal/mantık + hijyen kuralları.",
+  "global": { "files": "/src/**/*.*" },
+  "syntax": { "version": "v757", "errorNamespace": "^(Z|Y)" },
+  "rules": {
+    "check_syntax": false,
+    "keyword_case": false,
+    "7bit_ascii": false,
+    "parser_error": true,
+    "unreachable_code": true,
+    "identical_conditions": true,
+    "identical_form_names": true,
+    "empty_statement": true,
+    "contains_tab": true,
+    "dangerous_statement": true,
+    "line_length": { "length": 255 },
+    "sequential_blank": { "lines": 5 }
+  }
+}
