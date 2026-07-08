@@ -1,4 +1,5 @@
 ---
+applies_to: [s4_private]
 layer: L2
 scope: project-wide
 applies-to: ui

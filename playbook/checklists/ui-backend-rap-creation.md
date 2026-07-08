@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Checklist — UI Uygulaması RAP Backend Oluşturma
 
 > **Manuel + script gate.** RAP backend SAP-yazma → `run_review.py` (ADR 0006)

@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Checklist — RAP Troubleshoot + Unit-Test (BOTD)
 
 > RAP geliştirmede **hata teşhisi** + **ABAP Unit test** (BOTD test-double) rehberi.

@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Reviewer Checklist — Struct Creation (DDIC Structure)
 
 > Bu dosya **reviewer agent** için mekanik checklist. Coordinator yeni Z struct (DDIC structure) yaratırken/güncellerken `run_review.py --task struct_creation` çağrılır → reviewer bu listeyi tarar.

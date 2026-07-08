@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Reviewer Checklist — CDS Creation/Update (DDLS)
 
 > Reviewer agent için mekanik checklist. CDS view yaratma/güncelleme öncesi `run_review.py --task cds_creation` çağrılır.

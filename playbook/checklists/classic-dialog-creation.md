@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Checklist — Klasik Dialog Program (report / module pool / Dynpro / ALV) Oluşturma
 
 > **Manuel pre-flight.** Yeni klasik program yazmaya başlamadan / push öncesi bu liste

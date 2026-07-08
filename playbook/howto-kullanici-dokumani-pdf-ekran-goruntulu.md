@@ -1,4 +1,5 @@
 ---
+applies_to: [s4_private]
 layer: L3
 type: how-to
 scope: dökümantasyon / PDF üretimi

@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Checklist — Adobe Forms Çıktı (driver + interface spec) Oluşturma
 
 > **Puan-flight.** Adobe Form işine başlarken geçilir. Layout SAP-yazması DEĞİL (operatör/GUI işi)

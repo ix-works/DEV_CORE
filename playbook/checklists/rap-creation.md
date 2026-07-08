@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Reviewer Checklist — RAP Object Creation (view entity / BDEF / SD / SB)
 
 > Reviewer agent için mekanik checklist. RAP SAP-yazması öncesi

@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Doc-Checklist — Kullanıcı/Teknik Dökümanlar (KD / FS / TS)
 
 > **Doc-Gate reviewer bunu kullanır** (kod bug-gate'inin doküman karşılığı, ADR 0018 deseni). KD/FS/TS **üretilince veya değişince**, lider'e "bitti" denmeden ÖNCE **bağımsız + TAZE** bir reviewer dökümanı bu listeye karşı inceler → verdict **PASS / WARNING / BLOCKER**. Self-verify (yazarın kendi kontrolü) YETMEZ — bağımsız göz şart.

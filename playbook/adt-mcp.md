@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # ADT — MCP Tool Kullanımı (Coordinator için)
 
 > **Bağlam:** [ADR 0007](../governance/decisions/0007-sap-adt-mcp-server.md). MCP server `mcp_servers/sap_adt/` altında. 11 typed tool, server-side ADR 0005 guardrails.

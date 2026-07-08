@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Reviewer Checklist — Table ALTER / Update (Z Table Field Ekleme/Değiştirme)
 
 > Reviewer agent için mekanik checklist. Mevcut Z tabloya yeni field eklemek, field tipini değiştirmek, vb. işlemlerde `run_review.py --task table_update` çağrılır.

@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # How-To: VA02-Tarzı Belge Kilidi (App-Level, ortak ZSD000)
 
 > **Ne zaman:** Bir RAP belgesinde (managed veya unmanaged) "açarken kilit var mı

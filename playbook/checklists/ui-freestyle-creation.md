@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Checklist — Freestyle UI5 (OData V2 / RAP tüketen) Oluşturma
 
 > **Manuel checklist.** Freestyle UI = SAP-yazması DEĞİL → otomatik

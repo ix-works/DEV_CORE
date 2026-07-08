@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Reviewer Checklist — Ambalajlama Talimatı Tüketimi (Packing Consumption)
 
 > Reviewer/Bug-Expert için mekanik checklist. Ambalajlama talimatı okuyan CDS/class/FE

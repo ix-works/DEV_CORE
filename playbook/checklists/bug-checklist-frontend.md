@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Bug-Checklist — Frontend (freestyle UI5 + OData V2)
 
 > **Bug_Expert bunu kullanır** (ADR 0018). Her madde **must-do** — kozmetik buraya YAZILMAZ → **kanıtlı ihlal = ZORUNLU FİX** (builder takdiri değil). Kapsam = **diff + blast-radius**.

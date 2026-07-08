@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Bug-Checklist — Backend (ABAP / RAP / CDS / DDIC)
 
 > **Bug_Expert bunu kullanır** (ADR 0018). Her madde **must-do** — **kanıtlı ihlal = ZORUNLU FİX**. Kapsam = **diff + blast-radius** (where-used: çağıran CDS/class/BDEF; released-ref; tablo alan).

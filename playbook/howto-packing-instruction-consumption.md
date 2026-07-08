@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # How-To — Ambalajlama Talimatı Tüketimi (POP/POF → kasa + kasa-içi adet)
 
 > **L3 operasyonel reçete.** Kurallar (MUST/MUST-NOT) → [`../standards/09-packing-instruction-consumption.md`](../standards/09-packing-instruction-consumption.md).

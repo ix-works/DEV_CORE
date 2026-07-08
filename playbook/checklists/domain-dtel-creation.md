@@ -1,3 +1,6 @@
+---
+applies_to: [s4_private]
+---
 # Checklist — DDIC Domain / Data Element (DTEL) Oluşturma
 
 > **Pre-flight.** Yeni domain/DTEL yaratmadan önce geçilir. Reviewer task'ı: `dtel_update`
