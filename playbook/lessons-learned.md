@@ -150,6 +150,17 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 - **Status:** ✅ SOLVED (kod gate; canlı test 5/5 — silinmiş/canlı/uydurma obje) — fix PR `fix/where-used-object-not-found`.
 - **Vakalar:** 2026-07-09 <PROJECT_NAME> orphan sweep (`ZSD001_I_SOME_VIEW` tipi silinmiş CDS'te yakalandı; sweep ajanı `count=0`'a güvenmeyip envanter+grep ile çaprazladığı için yanlış silme OLMADI).
 
+### PATTERN #12: Guard'ın kör noktaları — "komut" ile "komuttan bahis" karışır; tek yüzey kapatılır
+- **Hata:** Guard kuralları **ham komut metnini** tarıyordu. Heredoc/here-string gövdesi (commit mesajı, PR gövdesi) komut DEĞİL **veri**dir → kural, kendi tarihçe notunu bloklar. Ayrıca kabuk kuralları yalnız `Bash` tool'una bakıyordu; aynı komut `PowerShell` tool'undan geçiyordu.
+- **Trigger:** Bir guard, gate'i **tanıtan** commit/PR metnini reddediyor. Ya da akla "Bash'te bloklandı, PowerShell'den deneyeyim" geliyor — bu düşünce mümkünse yüzey zaten açıktır.
+- **Kök sebep:** Desen `\bkomut\b` diye yazıldı, metnin **nerede** geçtiği sorulmadı. Ve kural `tool_name == "Bash"` ile sabitlendi; kabuk yüzeyi tek sanıldı.
+- **Detection:** Guard kendi commit'ini bloklar (dogfood). **Tek tek yamamak tuzaktır:** bir kuralda görülen körlük tüm kurallarda vardır. Denetim: `rg "\.search\(hay\)|== .Bash." scripts/hooks/` → her eşleşme adaydır.
+- **Prevention (GATE):** (1) `main()`'de TEK normalizasyon — `komut = _komut_govdesi(hay)` (heredoc/here-string gövdeleri düşer); komut-niyeti kurallarının hepsi `komut` kullanır, yeni kural yazan otomatik doğru yapar. (2) `_KABUK_TOOLLARI = ("Bash","PowerShell")` — kabuk kuralı iki yüzeye birden. (3) Kural başına **3-eksenli** regresyon testi: **(A)** yanlış-pozitif kapandı mı · **(B)** gerçek koruma ayakta mı · **(C)** ikinci kabuk yüzeyi kapalı mı → `scripts/tests/test_pre_tool_guard.py`, **CI'a bağlı**. *Yanlış-pozitifi kapatırken korumayı delmediğini kanıtlamak ZORUNLU: gürültülü gate ciddiye alınmaz, delik gate koruma sanılır.*
+- **Aynı denetimde çıkan üç kardeş bulgu:** (a) **Koşmayan test gate değildir** — test dosyası vardı, CI çağırmıyordu. (b) **Yapılandırma korumayı zayıflatmasın** — `_leak_desenleri()` "ilk bulunan kazanır"dı: proje bir blocklist tanımlayınca jenerik desenler (makine-lokal kullanıcı yolu, e-posta) düşüyordu → *daha fazla yapılandırma = daha az koruma*; artık birleşim. (c) İki dosyada aynı deseni "bilerek aynı" yorumuyla tutmak enforcement değildir → **drift'i gate'le**, negatif testle kanıtla.
+- **Genel ders:** Bir gate'in **neyi** taradığı kadar **nerede durduğu** ve **hangi yüzeyleri** kapattığı da kuralın parçasıdır. Guard yazarken iki soru: bu deseni içeren zararsız bir *metin* var mı? Aynı işi yapan ikinci bir *araç* var mı?
+- **Status:** ✅ SOLVED (tek normalizasyon + iki kabuk yüzeyi + CI'a bağlı 3-eksenli test; tam mod 29/29).
+- **Vakalar:** 2026-07-09 guard denetimi — 3 guard arka arkaya kendi commit'ini bloklad; toplu denetimde 4 kural daha aynı körlükteydi ve `PowerShell` yüzeyinden özyinelemeli-silme hiç bloklanmıyordu.
+
 ---
 
 ## 🔄 SELF-UPDATE PROTOKOLÜ
@@ -189,6 +200,7 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 | #5 Trust Without Verify | 2026-05-13 | 2 (ZSD_007 cleanup, SHIPMENT_LIST) | ⚠️ DİSİPLİN |
 | #6 TempScripts → Playbook | 2026-05-13 | 1 | ⚠️ DİSİPLİN |
 | #11 where_used count=0 = orphan sanma | 2026-07-09 | 1 (orphan sweep) | ✅ SOLVED (kod gate) |
+| #12 Guard kör noktası (heredoc + tek yüzey) | 2026-07-09 | 3 guard + 4 kural (denetim) | ✅ SOLVED (tek normalizasyon + CI testi) |
 
 > **Hedef:** ACTIVE/⚠️ DİSİPLİN olanları zamanla SOLVED'a çevir (kod gate ile).
 
