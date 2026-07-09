@@ -148,9 +148,35 @@ def build_cases():
     return c
 
 
+def test_zsd_pat_tek_dogruluk_kaynagi() -> str:
+    """`_ZSD_PAT` iki dosyada ayrı tanımlı — AYNI kalmalarını bu test zorlar.
+
+    core_precommit COMMIT içeriğini, pre_tool_guard PR gövdesini tarar. Desenler
+    ayrışırsa commit'te yakalanan bir iz PR gövdesinden kaçar (ya da tersi). Yorumla
+    "bilerek aynı" demek yetmez — hiçbir şey aynı kalmalarını zorlamıyordu.
+    """
+    kok = Path(__file__).resolve().parents[1]
+    def _desen(dosya: str, ad: str) -> str:
+        metin = (kok / dosya).read_text(encoding="utf-8", errors="replace")
+        m = re.search(rf"{ad}\s*=\s*re\.compile\(\s*r?(['\"])(.+?)\1", metin)
+        return m.group(2) if m else ""
+    a = _desen("git-hooks/core_precommit.py", "ZSD_PAT")
+    b = _desen("hooks/pre_tool_guard.py", "_ZSD_PAT")
+    if not a or not b:
+        return "ZSD_PAT desenlerinden biri okunamadi (yeniden adlandirilmis olabilir)"
+    if a != b:
+        return f"ZSD_PAT DRIFT: core_precommit={a!r} != pre_tool_guard={b!r}"
+    return ""
+
+
 def main() -> int:
     fails, skipped = [], 0
     ozet = {}
+
+    drift = test_zsd_pat_tek_dogruluk_kaynagi()
+    ozet["ZSD_PAT DRIFT"] = [0 if drift else 1, 1]
+    if drift:
+        fails.append("ZSD_PAT / " + drift)
     for kural, ad, tool, cmd, beklenen, skip in build_cases():
         if skip:
             skipped += 1

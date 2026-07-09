@@ -30,3 +30,10 @@ jobs:
 
       - name: Derleme taramasi (py_compile)
         run: python -m compileall -q scripts mcp_servers
+
+      # Guard regresyonu: yanlis-pozitif kapali MI + gercek koruma ayakta MI + ikinci
+      # kabuk yuzeyi (PowerShell) kapali MI. Kosmayan test gate degildir.
+      # Ag/proje bagimli senaryolar (PUBLIC-PR canli gorunurluk, freeze kokleri)
+      # burada otomatik atlanir; tam kosum icin IX_GUARD_TEST_LIVE=1 + repo env'leri.
+      - name: Guard yuzeyi regresyonu (pre_tool_guard)
+        run: python scripts/tests/test_pre_tool_guard.py
