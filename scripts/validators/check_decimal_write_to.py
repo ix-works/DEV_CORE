@@ -25,7 +25,7 @@ from pathlib import Path
 import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
-from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12: kaynak-klasor adi config'ten
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -63,7 +63,8 @@ def main():
     ap.add_argument("--strict", action="store_true")
     args, _unknown = ap.parse_known_args()  # run_review ek flag geçebilir → yut
 
-    root = Path(__file__).resolve().parents[2]
+    # ADR 0020: junction'da __file__ DEV_CORE'a çözülür → kanonik project_root()
+    root = project_root()
     target = args.file or args.path
     if target:
         files = [Path(target)]

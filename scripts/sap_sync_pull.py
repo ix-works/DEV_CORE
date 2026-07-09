@@ -28,7 +28,10 @@ if sys.platform == "win32":
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ importları
 
-ROOT = Path(__file__).resolve().parent.parent
+from utils.project_config import project_root  # noqa: E402
+
+# ADR 0020: junction'da __file__ DEV_CORE'a çözülür → tazelik damgası PROJE köküne yazılmalı
+ROOT = project_root()
 FRESH_STORE = ROOT / ".claude" / ".session_fresh.json"
 SESSION_MARKER = ROOT / ".claude" / ".current_session"
 

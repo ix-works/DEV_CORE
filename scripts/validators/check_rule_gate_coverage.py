@@ -1,3 +1,4 @@
+# ENFORCES: CORE-04  (ADR 0019 coverage binding — kendi kuralını da bağlar)
 """
 check_rule_gate_coverage.py — KEYSTONE coverage-check (ADR 0019).
 
