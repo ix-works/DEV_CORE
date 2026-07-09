@@ -18,6 +18,7 @@ Bayatsa exit 2 (stderr → agent'a geri besler, ne yapacağını söyler).
 """
 import io
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,7 +26,14 @@ from pathlib import Path
 if sys.platform == "win32" and hasattr(sys.stderr, "buffer"):
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-ROOT = Path(__file__).resolve().parents[2]
+# ADR 0020: junction'da __file__ DEV_CORE'a çözülür → kanonik project_root().
+# Hook asla patlamamalı → import başarısızsa env/cwd fallback.
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # core/scripts
+    from utils.project_config import project_root as _project_root  # type: ignore
+    ROOT = _project_root()
+except Exception:
+    ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR") or ".").resolve()
 FRESH_STORE = ROOT / ".claude" / ".session_fresh.json"
 
 # B2 fix (2026-07-09): kaynak-kök segmenti project.yaml `source_root`'tan dinamik.

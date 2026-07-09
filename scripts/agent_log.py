@@ -17,11 +17,15 @@ import os
 import re
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ importları
+from utils.project_config import project_root
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-REPO = Path(__file__).resolve().parent.parent
+# ADR 0020: junction'da __file__ DEV_CORE'a çözülür → transcript klasör adı PROJE kökünden
+# encode edilmeli (aksi halde alt-ajan logları DEV_CORE klasörüne bakar)
+REPO = project_root()
 
 
 def project_dir() -> Path:

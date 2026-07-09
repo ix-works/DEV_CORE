@@ -40,14 +40,15 @@ from pathlib import Path
 import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
-from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+from utils.project_config import project_root, source_dir  # K12: kaynak-klasor adi config'ten
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-REPO = Path(__file__).resolve().parent.parent.parent
-ERP = REPO / SOURCE_ROOT_NAME
+# ADR 0020: junction'da __file__ DEV_CORE'a çözülür → kanonik project_root()/source_dir()
+REPO = project_root()
+ERP = source_dir()
 
 _SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp"}
 _SCAN_SUFFIXES = (".clas.abap", ".ccimp.abap", ".ccau.abap")
