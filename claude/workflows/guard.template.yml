@@ -1,0 +1,76 @@
+# guard — proje reposu sunucu-tarafı savunması (init_project.py bunu üretir)
+#
+# İKİ İŞ:
+#   (a) core-leak        : junction içeriği repoya girmiş mi? (R1 — fikri sermaye)
+#                          Yerel `.gitignore` ve `pre_tool_guard` ilk savunmadır;
+#                          bu, onlar atlanırsa devreye giren sunucu-tarafı ağdır.
+#   (b) behavior-surface : davranış-yüzeyi dosyaları (hook/permission/MCP/CLAUDE.md)
+#                          main'e MERGE-OLMAYAN doğrudan push ile değişmiş mi?
+#                          Ruleset'in defense-in-depth'i (ADR 0020 §11).
+#
+# PR'larda davranış-yüzeyi dokunuşu FAIL değil WARNING'dir — görünür kalsın,
+# ama akışı kilitlemesin; kilidi CODEOWNERS + ruleset sağlar.
+name: guard
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  leak:
+    name: core-leak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: tracked tree'de core/junction içeriği yok
+        run: |
+          BAD=$(git ls-files -- 'core/**' '.claude/agents/**' '.claude/skills/**' '.claude/commands/**')
+          if [ -n "$BAD" ]; then
+            echo "$BAD"
+            echo "::error::CORE SIZINTISI: junction içeriği repoya girmiş (R1)"
+            exit 1
+          fi
+          echo "OK — sızıntı yok"
+
+  behavior-surface:
+    name: behavior-surface
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: davranış-yüzeyi değişim kontrolü
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          REF: ${{ github.ref }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          SURFACE='CLAUDE.md */CLAUDE.md .claude/* .mcp.json project.yaml scripts/hook_shim.py'
+          list_touched() {
+            git diff --name-only "$1" "$2" -- $SURFACE 2>/dev/null || true
+          }
+          if [ "$EVENT" = "pull_request" ]; then
+            TOUCHED=$(list_touched "$BASE" "$AFTER")
+            if [ -n "$TOUCHED" ]; then
+              echo "$TOUCHED"
+              echo "::warning::PR davranış-yüzeyi dosyası içeriyor — code-owner incelemesi şart"
+            else
+              echo "OK — davranış-yüzeyi dokunuşu yok"
+            fi
+            exit 0
+          fi
+          # push olayı: main'e merge-OLMAYAN (doğrudan) push + davranış-yüzeyi = FAIL
+          if [ "$REF" = "refs/heads/main" ]; then
+            PARENTS=$(git rev-list --parents -n 1 "$AFTER" | wc -w)
+            if [ "$PARENTS" -lt 3 ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+              TOUCHED=$(list_touched "$BEFORE" "$AFTER")
+              if [ -n "$TOUCHED" ]; then
+                echo "$TOUCHED"
+                echo "::error::main'e DOĞRUDAN push davranış-yüzeyine dokunuyor (yalnız onaylı PR)"
+                exit 1
+              fi
+            fi
+          fi
+          echo "OK"

@@ -1,0 +1,47 @@
+# CODEOWNERS — <PROJECT_NAME>  (init_project.py bunu üretir)
+#
+# NİYE VAR: main'e giren değişiklik projenin davranışını (hook, permission, MCP) ve
+# iş kurallarını taşır. `main-pr-required` ruleset'i `require_code_owner_review=true`
+# ile koşarsa, aşağıdaki sahip onaylamadan hiçbir PR merge edilemez.
+#
+# KURULUM (init_project bunu YAPMAZ — repo ayarı, elle/gh ile):
+#   1. `<OWNER_TEAM>` yerine gerçek bir GitHub team yaz (ör. @org/core-maintainers).
+#      TEAM kullan, kişi değil: bakımcı değişince bu dosyaya dokunulmaz. Team'in
+#      repoya EN AZ `write` erişimi olmalı — GitHub'ın CODEOWNERS şartı.
+#   2. Ruleset: `main-pr-required` → required_approving_review_count=1 +
+#      require_code_owner_review=true + required_status_checks=[guard işleri]
+#   3. ⚠ TEK-KİŞİ KİLİDİ: tek code-owner varsa o kişi KENDİ PR'ını onaylayamaz
+#      (GitHub kuralı) → hiçbir PR merge edilemez. Çözüm:
+#      bypass_actors: [{ actor_type: OrganizationAdmin, bypass_mode: pull_request }]
+#      Bu bypass DAR: PR zorunlu kalır, main'e doğrudan push YOK, CI atlanamaz;
+#      yalnız "birinin onaylaması" şartı aşılır.
+#   4. ⚠ Ruleset'i ilk push'tan SONRA ACTIVE et (PROJECT_BOOTSTRAP STEP 1).
+#
+# `*` BİLEREK YOK: sıradan kod/doküman PR'ları lidere takılmasın; onlar için
+# `required_approving_review_count=1` yeterli. Yalnız davranış-yüzeyi ve gate'ler
+# code-owner onayına bağlıdır.
+#
+# Kural sırası: SON eşleşen desen kazanır (gitignore'un tersi).
+
+# ── DAVRANIŞ YÜZEYİ — oturumun ne yapabileceğini belirler ────────────────────
+# Hook/permission/MCP değişikliği = bir güvenlik katmanının sessizce kalkması.
+CLAUDE.md                        <OWNER_TEAM>
+**/CLAUDE.md                     <OWNER_TEAM>
+CLAUDE.local.md                  <OWNER_TEAM>
+.claude/**                       <OWNER_TEAM>
+.mcp.json                        <OWNER_TEAM>
+project.yaml                     <OWNER_TEAM>
+scripts/hook_shim.py             <OWNER_TEAM>
+
+# ── PROJE-ÖZEL GATE'LER + YÖNETİŞİM ─────────────────────────────────────────
+# Bir validator'ın sessizce 0 dosya taraması "[OK]" görünür → gate değişikliği
+# code-owner gözünden geçer (CORE-01 dersi, 2026-07-09).
+scripts/validators-local/**       <OWNER_TEAM>
+governance/decisions/**           <OWNER_TEAM>
+governance/deferred-triggers.md   <OWNER_TEAM>
+
+# ── SAP BAĞLANTI / TIER (`.conn_adt` gitignore'lu; şablonlar korunur) ────────
+conn/**                          <OWNER_TEAM>
+
+# ── CI + BU DOSYA (korumanın kendisi) ───────────────────────────────────────
+.github/**                       <OWNER_TEAM>

@@ -1,6 +1,6 @@
 # DEV_CORE — Canlı Metodoloji Çekirdeği
 
-> **Tek cümlede:** Tüm projelerin (<PROJECT_NAME>_DOKUM, gelecektekiler) ORTAK ve CANLI kullandığı
+> **Tek cümlede:** Tüm projelerin ORTAK ve CANLI kullandığı
 > SAP-AI geliştirme metodolojisi: standartlar, playbook, script/validator/hook takımı,
 > MCP server, agent tanımları ve skill'ler — **tek kaynak-gerçek, kopya YOK**.
 
@@ -9,7 +9,7 @@
 ```
 GitHub                                   Lokal disk (her geliştirici)
 ix-works/DEV_CORE  ──clone──►  C:\IX\DEV_CORE\        ← BU repo (working tree = canlı çekirdek)
-ix-works/<PROJECT_NAME>_DOKUM ─clone─► C:\IX\<PROJECT_NAME>\
+ix-works/<PROJECT_NAME> ─clone─► C:\IX\<PROJECT_NAME>\
                                  ├─ core ══junction══► C:\IX\DEV_CORE
                                  ├─ CLAUDE.md (ince: @core/CLAUDE.core.md + proje bölümü)
                                  └─ .claude\{agents,skills,commands} ══junction══► DEV_CORE\claude\...
@@ -77,10 +77,45 @@ Kurulum doğrulama: `python scripts/ix_doctor.py` (7-katman sağlık taraması).
 
 ## İlişkili repolar
 
-- **[ix-works/<PROJECT_NAME>_DOKUM](https://github.com/ix-works/<PROJECT_NAME>_DOKUM)** — ilk proje reposu
-  (yalnız proje içeriği; metodolojiyi bu repodan junction'la kullanır).
-- `<USER>/*` repoları — **dondurulmuş tarihsel yedek** (2026-07-08 öncesi dünya;
-  salt-okunur, push almaz).
+- **[ix-works/template_project](https://github.com/ix-works/template_project)** — *(public)*
+  **canlı referans iskelet.** Bu çekirdeğe bağlı bir projenin nasıl göründüğünü gösterir:
+  ince `CLAUDE.md`, `project.yaml`, 4 junction, sızıntı kilidi, CI, CODEOWNERS, örnek paket.
+  [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) STEP 0–6'nın canlı provasıdır; SAP bağlantısı
+  **yoktur**. Yeni proje açarken oraya *bakılır*, oradan **kopyalanmaz** — `init_project.py`
+  ile üretilir.
+
+- **Proje repoları** *(private)* — yalnız proje içeriği; metodolojiyi bu repodan
+  junction'la kullanırlar. Bir projenin nasıl kurulduğu için yukarıdaki
+  `template_project`'e bak.
+- Eski dünya repoları — **dondurulmuş tarihsel yedek** (2026-07-08 öncesi; salt-okunur,
+  push almaz). Yolları makine-lokaldir (`project.yaml` → `frozen_readonly_paths`).
+
+### Çekirdek ↔ proje: sorumluluk sınırı
+
+| Bu bilgi… | …buraya (DEV_CORE) | …projeye |
+|---|---|---|
+| Pattern / ADT dersi (her projede geçerli) | `playbook/` | — |
+| Atlanamaz kural | `standards/` + bir **gate** | — |
+| Mimari karar (metodoloji) | `governance/decisions/` | — |
+| Tekrar kullanılacak script | `scripts/` + playbook referansı | — |
+| SAP sistemi, müşteri, paket | — | `project.yaml` · `.conn_adt` · `CLAUDE.md` |
+| İş kuralı / sprint kararı | — | `governance/` |
+| Pakete özel istisna | — | `<source_root>/<MOD>/<PKG>/.rules.md` |
+| Core kuralını bu projede daraltmak | — | `playbook-local/` · `standards-local/` · `validators-local/` |
+
+Karar ağacı: [`CLAUDE.core.md`](CLAUDE.core.md) §4 **SORU 0**.
+
+**Akış tek yönlü değildir.** Proje core'a *bakar* (junction, salt-görünüm) — core'a
+**yazmaz**. Projede öğrenilen metodoloji dersi buraya **PR ile** geri döner (T1–T11
+tetikleri). Merge sonrası makinede tek `git -C C:\IX\DEV_CORE pull` → **tüm projeler**
+aynı anda güncellenir. `template_project`'in "Bilinen sapmalar" listesi tam olarak böyle
+doğdu: bootstrap provası el kitabındaki 7 boşluğu ortaya çıkardı, hepsi buraya işlendi.
+
+**Genericize kuralı:** bu repo public'tir ve her projeye bakar. `pre_tool_guard` core'a
+müşteri/firma adı, SAP host adı, SAP kullanıcı adı, transport numarası ve kişisel handle
+yazılmasını **bloklar** — bu bölümü yazarken iki kez bloklandım, kural çalışıyor.
+Placeholder kullan: `<SAP_HOST>`, `<PROJECT_NAME>`, `<TRANSPORT>` (`ZSD001` demo paketi
+bilinçli istisnadır).
 
 ## Kilit dokümanlar
 

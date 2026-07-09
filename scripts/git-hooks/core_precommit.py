@@ -15,6 +15,7 @@ Yalnız staged içerik taranır (git show :path) — working-tree kirliliği gat
 CI modu: `--all` ile TÜM tracked dosyalar taranır (core-ci.yml full-tree gate'i).
 Çıkış: ihlal varsa 1 (commit/CI bloklanır), yoksa 0.
 """
+import os
 import re
 import subprocess
 import sys
@@ -24,16 +25,51 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-# ── Kimlik desenleri (pre_tool_guard._CORE_LEAK ile hizalı + commit-gate ekleri) ──
-ID_PAT = re.compile(
-    r"(<PROJECT_NAME>|<PROJECT_NAME>|<LEGACY_SOURCE>|<LEGACY_SOURCE>|<SAP_HOST>|<SAP_USER>|<USER>|<USER>"
-    r"|<LEGACY_ROOT>|C:[/\\]+Users[/\\]+DELL)")  # <LEGACY_ROOT> her formda (C:\, /c/, çıplak)
+def _id_desenleri() -> list[str]:
+    """Core'a girmesi yasak kimlik izleri (pre_tool_guard._leak_desenleri ile hizalı).
+
+    ⚠ LİSTE BU DOSYADA TUTULMAZ. DEV_CORE **public**tir; müşteri/sistem/kişi adını
+    buraya yazmak, engellemeye çalıştığımız sızıntının kendisidir (2026-07-09 dersi:
+    guard'ın kendi filtresi public repoda bu adları ilan ediyordu).
+
+    Kaynak sırası (ilk bulunan kazanır):
+      1. env `IX_GENERICIZE_BLOCKLIST` (virgülle ayrılmış)
+      2. `<repo>/.git/genericize-blocklist`  ← repo AĞACININ DIŞI: commit'lenmez,
+         klonlanmaz, push edilmez. Her makine kendi listesini tutar.
+      3. jenerik varsayılan — isim içermez, yalnız yapısal desenler
+    """
+    env = os.environ.get("IX_GENERICIZE_BLOCKLIST", "").strip()
+    if env:
+        return [p.strip() for p in env.split(",") if p.strip()]
+
+    # git dizini repo ağacının dışındadır → buradaki liste asla push edilmez
+    try:
+        git_dir = Path(subprocess.run(["git", "rev-parse", "--git-dir"],
+                                      capture_output=True, text=True, check=True
+                                      ).stdout.strip())
+        dosya = git_dir / "genericize-blocklist"
+        if dosya.exists():
+            satirlar = dosya.read_text(encoding="utf-8", errors="replace").splitlines()
+            desenler = [s.strip() for s in satirlar
+                        if s.strip() and not s.lstrip().startswith("#")]
+            if desenler:
+                return desenler
+    except Exception:
+        pass
+
+    return [
+        r"C:[/\\]+Users[/\\]+[^/\\ ]+",                      # makine-lokal kullanıcı yolu
+        r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",   # e-posta adresi
+    ]
+
+
+ID_PAT = re.compile("(" + "|".join(_id_desenleri()) + ")")
 ZSD_PAT = re.compile(r"\bzsd0(?!00|01)\d{2}", re.IGNORECASE)  # ZSD000/001 demo serbest
 
 # Dosya-bazlı izinli token'lar (taramadan ÖNCE içerikten çıkarılır; kalan yine taranır)
 ALLOWED_TOKENS = {
-    # ilk-proje repo/klasör adı + tarihsel-yedek referansı (mimari şema; başka iz YASAK)
-    "README.md": ["<PROJECT_NAME>_DOKUM", "<PROJECT_NAME>", "<USER>"],
+    # mimari şemadaki placeholder (gerçek proje/müşteri adı YASAK)
+    "README.md": ["<PROJECT_NAME>"],
 }
 # Desen-sözlüğü taşıyan dosyalar (tarama anlamsız — kendileri desen tanımlar)
 SCAN_EXEMPT = {
