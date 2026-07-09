@@ -1,0 +1,46 @@
+# CODEOWNERS — DEV_CORE (metodoloji çekirdeği)
+#
+# NİYE VAR: DEV_CORE bütün projelerin davranışını taşır (hook, validator, guard, ADR,
+# playbook). Buradaki bir satır, junction üzerinden HER projede anında canlıdır. Bu
+# yüzden main'e giren her değişiklik çekirdek sahibinin onayını gerektirir.
+#
+# NASIL ÇALIŞIR: `main-pr-required` ruleset'i `require_code_owner_review=true` ile
+# koşar → aşağıdaki sahip onaylamadan hiçbir PR merge edilemez. Katkıcılar (read
+# yetkisi + private fork) PR açar; merge yetkisi yalnız çekirdek bakımcılarındadır.
+#
+# NİYE TEAM, KİŞİ DEĞİL: core jenerik kalmalı (Ö5/B9 — `pre_tool_guard` kişisel/proje
+# izini bloklar). Team handle org-jeneriktir; bakımcı değişince bu dosyaya dokunulmaz.
+# Üyelik: https://github.com/orgs/ix-works/teams/core-maintainers
+#
+# ⚠ Bu dosyanın kendisi de korumalıdır (en alta bakın): korumayı gevşetmeye çalışan
+# bir PR yine sahibin onayını ister. Koruma kendini korur.
+#
+# Kural sırası: SON eşleşen desen kazanır (gitignore'un tersi).
+
+# ── Varsayılan: her şey ────────────────────────────────────────────────────────
+*                                    @ix-works/core-maintainers
+
+# ── DAVRANIŞ YÜZEYİ (§11) — bir oturumun ne yapabileceğini belirler ───────────
+# Bu yollar araç yüzeyini, guard'ları ve otomatik kapıları taşır. Gözden kaçan bir
+# değişiklik = sessizce devre dışı kalmış bir güvenlik katmanı.
+/.claude/                            @ix-works/core-maintainers
+/claude/                             @ix-works/core-maintainers
+/scripts/hooks/                      @ix-works/core-maintainers
+/scripts/hook_shim.py                @ix-works/core-maintainers
+/mcp_servers/                        @ix-works/core-maintainers
+
+# ── GATE'LER — kural↔gate zinciri (ADR 0019) ─────────────────────────────────
+# Bir validator'ın sessizce 0 dosya taraması "[OK]" görünür (2026-07-09 dersi:
+# 11 validator aylarca sahte PASS verdi). Gate değişikliği sahibin gözünden geçer.
+/scripts/validators/                 @ix-works/core-maintainers
+/playbook/checklists/                @ix-works/core-maintainers
+
+# ── ANAYASA + MİMARİ KARARLAR ────────────────────────────────────────────────
+/CLAUDE.core.md                      @ix-works/core-maintainers
+/AGENTS.md                           @ix-works/core-maintainers
+/governance/decisions/               @ix-works/core-maintainers
+/claude/kesin-yasaklar.canonical.md  @ix-works/core-maintainers
+
+# ── CI + BU DOSYA (korumanın kendisi) ────────────────────────────────────────
+/.github/                            @ix-works/core-maintainers
+/.github/CODEOWNERS                  @ix-works/core-maintainers
