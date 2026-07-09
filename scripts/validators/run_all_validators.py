@@ -56,6 +56,12 @@ VALIDATORS = [
     # Hook'lar ajana "OKU: <yol>" der; yol çözülmezse ZORUNLU protokol sessizce atlanır
     # (2026-07-09 denetimi: 32 talimat, 0 okuma). C-HOOK-01.
     ("Hook enjekte-yol çözümlemesi (HARD, C-HOOK-01)", "check_hook_injected_paths.py", [], "project", None),
+    # core/ junction'dır → Grep/Glob görmez. CORE-INDEX gerçek dosyadır ve o körlüğü
+    # kapatır; bayat indeks ajana YANLIŞ yol verir (sessiz hata). C-IDX-01.
+    ("CORE-INDEX tazeliği (HARD, C-IDX-01)", "check_core_index_fresh.py", [], "project", None),
+    # Windows cp1252: non-ASCII basan script çöker → exit 1, gerçek FAIL'den ayırt edilemez.
+    # 2026-07-09'da üç script arka arkaya bu yüzden çöktü. C-ENC-01.
+    ("Konsol UTF-8 koruması (HARD, C-ENC-01)", "check_console_utf8.py", [], "both", None),
     ("Playbook freshness (uyarı)", "check_playbook_freshness.py", [], "both", None),
 ]
 

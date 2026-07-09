@@ -80,14 +80,38 @@ def junction_kur(link: Path, hedef: Path) -> bool:
 
 
 def junctions(proje: Path) -> bool:
-    """4 junction (D25: dördü TEK TEK raporlanır — kopuk agents/skills SESSİZ semptom verir)."""
-    plan = [
-        (proje / "core",                 CORE_ROOT),
-        (proje / ".claude" / "agents",   CORE_ROOT / "claude" / "agents"),
-        (proje / ".claude" / "skills",   CORE_ROOT / "claude" / "skills"),
-        (proje / ".claude" / "commands", CORE_ROOT / "claude" / "commands"),
-    ]
-    return all([junction_kur(l, h) for (l, h) in plan])
+    """4 junction (D25: dördü TEK TEK raporlanır — kopuk agents/skills SESSİZ semptom verir).
+
+    OVERLAY (opt-in, 2026-07-09): `claude-local/<tip>/*.md` varsa o tip için junction YERİNE
+    gerçek dizin üretilir (core + proje override). Yoksa davranış aynen junction — mevcut
+    projeler etkilenmez. Detay: utils/claude_overlay.py
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(CORE_ROOT / "scripts"))
+    from utils import claude_overlay as ov  # type: ignore
+
+    ok = junction_kur(proje / "core", CORE_ROOT)
+    for tip in ov.TIPLER:
+        if ov.overlay_var_mi(proje, tip):
+            basarili, mesaj = ov.materyalize(proje, CORE_ROOT, tip)
+            print(f"  [{'OK' if basarili else 'FAIL'}] overlay .claude/{tip} — {mesaj}")
+            ok = ok and basarili
+        else:
+            ok = junction_kur(proje / ".claude" / tip, CORE_ROOT / "claude" / tip) and ok
+    return ok
+
+
+def _core_index_yenile(proje: Path) -> None:
+    """`governance/CORE-INDEX.md`'i tazele — core/ junction'i Grep/Glob'a gorunmez oldugu
+    icin metodolojinin TEK kokten-aranabilir giris noktasi budur (2026-07-09 denetimi)."""
+    uretici = CORE_ROOT / "scripts" / "build_core_index.py"
+    if not uretici.is_file():
+        return
+    r = subprocess.run([sys.executable, str(uretici)], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace",
+                       env=dict(os.environ, CLAUDE_PROJECT_DIR=str(proje)))
+    print(f"  [{'OK' if r.returncode == 0 else 'FAIL'}] CORE-INDEX: "
+          f"{(r.stdout or r.stderr).strip().splitlines()[-1] if (r.stdout or r.stderr).strip() else '?'}")
 
 
 def dosya_tamamla(proje: Path) -> None:
@@ -210,7 +234,9 @@ def main() -> int:
     if a.provision_worktree:
         return 0 if provision_worktree(Path(a.provision_worktree).resolve(), proje) else 1
     if a.repair_junctions:
-        return 0 if junctions(proje) else 1
+        ok = junctions(proje)
+        _core_index_yenile(proje)
+        return 0 if ok else 1
 
     if sys.version_info < MIN_PY:
         say(FAIL, f"Python {MIN_PY[0]}.{MIN_PY[1]}+ gerekli"); return 1

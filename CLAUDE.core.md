@@ -38,13 +38,18 @@
 > teyit et; "activated/uploaded/çalıştı" mesajına güvenme; emin değilsen DUR → sor;
 > DTEL/append adı önerme (kullanıcı verir). (Tam yasak metni kök CLAUDE.md'de fiziksel damgalı.)
 
-> **🔎 ARAMA TALİMATI (D29 — kritik):** `core/` **hem** `.gitignore`'dadır (`/core/`) **hem**
-> bir junction'dır. İKİ BAĞIMSIZ körlük: (a) `Grep`/`rg` gitignore'a uyar; (b) `Glob`/`find`
-> symlink'i takip etmez. İkisi de **SESSİZCE BOŞ** döner — "dosya yok" ile ayırt edilemez.
-> **Kökten sıfır-sonuç ≠ "core'da yok".** (2026-07-09 ölçümü: eski dünyada kökten arama
-> metodolojiyi buluyordu; yenide 199 dokümanın **tamamı** varsayılan aramada görünmez.)
+> **🔎 ARAMA TALİMATI (D29 — kritik):** `core/` bir **junction**'dır ve `Grep`/`Glob`
+> junction'ı **TAKİP ETMEZ**. Kontrollü deney (2026-07-09): *ignore'suz* bir junction'ın
+> arkasındaki dosya iki araçla da **bulunamadı**; aynı dosya gerçek dizindeyken bulundu.
+> Yani sebep `.gitignore` DEĞİL — `/core/` satırını silmek ya da `respectGitignore:false`
+> yapmak **hiçbir şeyi değiştirmez**. İkisi de **SESSİZCE BOŞ** döner; "dosya yok" ile
+> ayırt edilemez. **Kökten sıfır-sonuç ≠ "core'da yok".**
 >
-> Metodoloji araması DAİMA `path=` ile:
+> **YAPISAL ÇÖZÜM — önce buraya bak:** `governance/CORE-INDEX.md` (proje reposunda
+> **gerçek** dosya → kökten aranır, bulunur, doğru `core/...` yolunu verir).
+> `build_core_index.py` üretir, `check_core_index_fresh.py` tazeliğini zorlar.
+>
+> Doğrudan aramak gerekirse DAİMA `path=` ile:
 > - **`Grep`:** `path="core"` veya `path="core/playbook"` — pattern serbest.
 > - **`Glob`:** `path="core"` **+ tek-segmentli pattern** (`"**/*.md"` ya da `"*.md"`).
 >   ⚠ `path=` verildiğinde pattern'de `/` geçerse Glob **DAİMA 0** döner →

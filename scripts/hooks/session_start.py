@@ -22,6 +22,14 @@ import sys
 import time
 from pathlib import Path
 
+# Windows konsolu/pipe'i cp1252'dir: non-ASCII basmak UnicodeEncodeError ile COKER
+# (exit 1 -> gercek FAIL'den ayirt edilemez). C-ENC-01 / check_console_utf8.py
+for _akis in (sys.stdout, sys.stderr):
+    try:
+        _akis.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
 PROJ = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
 CORE = PROJ / "core"
 
@@ -61,11 +69,21 @@ STATIK = (
 
 
 def _junction_kontrol() -> list[str]:
-    """D25: 4 junction tek tek."""
+    """D25: junction'lar tek tek. OVERLAY'li tipler (claude-local/<tip>) gerçek dizindir."""
     sorun = []
-    plan = [("core", CORE), (".claude/agents", PROJ / ".claude" / "agents"),
-            (".claude/skills", PROJ / ".claude" / "skills"),
-            (".claude/commands", PROJ / ".claude" / "commands")]
+    try:
+        sys.path.insert(0, str(CORE / "scripts"))
+        from utils import claude_overlay as ov  # type: ignore
+        overlayli = {t for t in ov.TIPLER if ov.overlay_var_mi(PROJ, t)}
+        for t in overlayli:
+            _, s = ov.durum(PROJ, CORE, t)
+            sorun.extend(f"overlay {x}" for x in s if "GÜNCELLENDİ" not in x)
+    except Exception:
+        overlayli = set()
+
+    plan = [("core", CORE)]
+    plan += [(f".claude/{t}", PROJ / ".claude" / t)
+             for t in ("agents", "skills", "commands") if t not in overlayli]
     for ad, p in plan:
         try:
             hedef = os.readlink(p)

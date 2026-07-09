@@ -133,13 +133,26 @@ def _yaml_list(key: str) -> list[str]:
 def katman1() -> list[Sonuc]:
     r: list[Sonuc] = []
 
-    # 1a — 4 junction: var + gerçek core'a çözülüyor (team_setup planıyla birebir)
-    plan = [
-        ("core",             PROJ / "core",                 CORE_ROOT),
-        (".claude/agents",   PROJ / ".claude" / "agents",   CORE_ROOT / "claude" / "agents"),
-        (".claude/skills",   PROJ / ".claude" / "skills",   CORE_ROOT / "claude" / "skills"),
-        (".claude/commands", PROJ / ".claude" / "commands", CORE_ROOT / "claude" / "commands"),
-    ]
+    # 1a — junction'lar: var + gerçek core'a çözülüyor (team_setup planıyla birebir).
+    #      OVERLAY (2026-07-09): `claude-local/<tip>` varsa o tip junction DEĞİL gerçek
+    #      dizindir (core + proje override) — bu bir sızıntı değil, tasarım. Ayrıca
+    #      güncelliği denetlenir. Detay: utils/claude_overlay.py
+    sys.path.insert(0, str(CORE_ROOT / "scripts"))
+    from utils import claude_overlay as _ov  # type: ignore
+
+    plan = [("core", PROJ / "core", CORE_ROOT)]
+    for _tip in _ov.TIPLER:
+        if _ov.overlay_var_mi(PROJ, _tip):
+            mod, sorunlar = _ov.durum(PROJ, CORE_ROOT, _tip)
+            if sorunlar:
+                for s in sorunlar:
+                    r.append((WARN if "GÜNCELLENDİ" in s else FAIL, f"overlay {s}"))
+            else:
+                r.append((PASS, f"overlay .claude/{_tip}: güncel (core + proje override)"))
+        else:
+            plan.append((f".claude/{_tip}", PROJ / ".claude" / _tip,
+                         CORE_ROOT / "claude" / _tip))
+
     for ad, link, hedef in plan:
         if not link.exists():
             r.append((FAIL, f"junction YOK: {ad} — onarım: python core/scripts/team_setup.py --repair-junctions"))

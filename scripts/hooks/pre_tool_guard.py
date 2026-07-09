@@ -405,6 +405,12 @@ _KOD_YAZMA = re.compile(r"""['"][wax]\+?['"]|write_text|write_bytes|writelines|\
                         re.IGNORECASE)
 
 
+def _tirnaksiz(s: str) -> str:
+    """Tırnaklı bölgeleri boşlukla değiştir — komut-konumu araması için.
+    Argüman çıkarımında KULLANILMAZ (orada tırnaklı hedef de meşrudur)."""
+    return re.sub(r"'[^']*'|\"[^\"]*\"", " ", s)
+
+
 def _yol_argumanlari(seg: str) -> list:
     """Segmentteki yol-benzeri argümanlar (bayrak değil, tırnaksız)."""
     out = []
@@ -427,7 +433,11 @@ def _korunan_hedefe_mi(seg: str, fiil: "re.Pattern", cwd_korunan: bool = False) 
     `find <hedef> ... -delete` biçiminde hedef fiilden ÖNCE gelir → "fiilden sonrası"na
     bakmak onu kaçırıyordu (2026-07-09 denetimi).
     """
-    if not fiil.search(seg):
+    # FİİL, komut konumunda mı — yoksa tırnak içinde bir VERİ mi?
+    # `echo '{"cmd":"rm -rf core/"}'` silme komutu DEĞİLDİR (2026-07-09: bu yanlış-pozitif
+    # guard'ın kendi test komutunu bloklad). Tırnaklı bölgeler fiil aramasından düşer;
+    # ARGÜMAN çıkarımı orijinal segmentte kalır → `rm -rf "core/"` hâlâ yakalanır.
+    if not fiil.search(_tirnaksiz(seg)):
         return False
     for a in _yol_argumanlari(seg):
         if _KORUNAN_SILME_HEDEF.search(a):
@@ -663,10 +673,14 @@ def main() -> int:
     # staging kapsamı DEĞİLDİR (2026-07-09 denetimi: bu yanlış-pozitif canlı yakalandı).
     _CORE_ARG = re.compile(r"(^|[/\\])core[/\\]|^core$|[/\\]?\.claude[/\\](agents|skills|commands)")
     def _stage_kapsaminda_core(seg: str) -> bool:
-        m = _GIT_STAGE.search(seg)
+        # `git add` komut konumunda mı (tırnak içinde anlatılan bir örnek değil)?
+        m = _GIT_STAGE.search(_tirnaksiz(seg))
         if not m:
             return False
-        return any(_CORE_ARG.search(a) for a in _yol_argumanlari(seg[m.end():]))
+        m2 = _GIT_STAGE.search(seg)          # argüman çıkarımı orijinal segmentte
+        if not m2:
+            return False
+        return any(_CORE_ARG.search(a) for a in _yol_argumanlari(seg[m2.end():]))
 
     if tool_name in _KABUK_TOOLLARI and any(
             _stage_kapsaminda_core(seg) for seg in _AYRAC.split(komut)):
