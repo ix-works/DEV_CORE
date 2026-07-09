@@ -23,7 +23,7 @@ if sys.platform == 'win32':
 script_dir = Path(__file__).parent
 sys.path.insert(0, str(script_dir))
 
-from sap_adt_lib import set_explicit_working_dir
+from sap_adt_lib import set_explicit_working_dir, SAPObjectNotFoundError
 from sap_client import SAPClient
 
 
@@ -47,6 +47,18 @@ def main():
             object_name=args.object_name,
             object_type=args.object_type
         )
+    except SAPObjectNotFoundError:
+        print("")
+        print("=" * 60)
+        print(f"[FAIL] OBJECT NOT FOUND - {args.object_name} ({args.object_type}) does not exist in SAP")
+        print("=" * 60)
+        print("[WHY THIS IS NOT '0 usages'] SAP returns an EMPTY usage list for objects that")
+        print("do not exist. 'no consumers' and 'no object' look identical. They are not.")
+        print("")
+        print("[ACTION REQUIRED] Do NOT report this as 'orphan' or 'safe to delete'.")
+        print("[ACTION REQUIRED] Verify the object name/type, or confirm it was already deleted.")
+        print("=" * 60)
+        return 2
     except Exception as e:
         print("")
         print("=" * 60)
@@ -71,7 +83,9 @@ def main():
         return 1
 
     if not results:
-        print(f"[OK] No usages found for: {args.object_name}")
+        # Buraya gelindiyse obje VARLIGI dogrulanmistir (where_used gate'i 404'te
+        # SAPObjectNotFoundError firlatir) — bu yuzden "0 usages" guvenilir bir iddiadir.
+        print(f"[OK] No usages found for: {args.object_name} (object EXISTS, verified)")
         return 0
 
     print(f"[OK] Found {len(results)} usage(s) of {args.object_name}:")
