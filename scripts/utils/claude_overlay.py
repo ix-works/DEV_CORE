@@ -26,12 +26,19 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 
 TIPLER = ("agents", "skills", "commands")
 MANIFEST_ADI = ".overlay-manifest.json"
 DAMGA = "<!-- CORE-URETILDI: elle duzenleme; kaynak core/claude/{tip}/{ad} -->\n"
+
+# ⚠ Agent/skill/command dosyaları YAML frontmatter ile BAŞLAMAK ZORUNDADIR (`---`).
+# İlk sürümde damga frontmatter'ın ÖNÜNE konmuştu → 6/6 agent yüklenemez oldu ve harness
+# "agent types no longer available" dedi. Dosya SAYISI doğruydu, FORMAT bozuktu; içerik
+# saymak yetmiyor. Damga artık frontmatter'dan SONRA girer, dosyalar LF yazılır.
+_FRONTMATTER = re.compile(r"\A---\r?\n.*?\r?\n---\r?\n", re.S)
 
 
 def _hash(p: Path) -> str:
@@ -41,6 +48,23 @@ def _hash(p: Path) -> str:
 def _junction_mu(p: Path) -> bool:
     try:
         return p.is_dir() and os.path.realpath(p) != os.path.abspath(p)
+    except OSError:
+        return False
+
+
+def _damgala(icerik: str, damga: str) -> str:
+    """Damgayı frontmatter'dan SONRA yerleştir — dosya `---` ile başlamalı."""
+    m = _FRONTMATTER.match(icerik)
+    if m:
+        return icerik[:m.end()] + damga + icerik[m.end():]
+    return damga + icerik          # frontmatter yoksa (command dosyaları) başa
+
+
+def frontmatter_ile_basliyor(p: Path) -> bool:
+    """Agent/skill dosyası `---` ile mi başlıyor? (yüklenebilirlik ön koşulu)"""
+    try:
+        with p.open("r", encoding="utf-8", errors="replace") as f:
+            return f.readline().strip() == "---"
     except OSError:
         return False
 
@@ -89,8 +113,10 @@ def materyalize(proje: Path, core_root: Path, tip: str) -> tuple:
         icerik = kaynak.read_text(encoding="utf-8", errors="replace")
         proje_ustu = kaynak.parent == overlay_kaynagi(proje, tip)
         if not proje_ustu:
-            icerik = DAMGA.format(tip=tip, ad=ad) + icerik
-        (h / ad).write_text(icerik, encoding="utf-8")
+            icerik = _damgala(icerik, DAMGA.format(tip=tip, ad=ad))
+        # newline="\n" ŞART: varsayılan (None) Windows'ta CRLF yazar → frontmatter satırları
+        # `---\r\n` olur ve bazı parser'lar bozulur; ayrıca sahte diff üretir.
+        (h / ad).write_text(icerik, encoding="utf-8", newline="\n")
         manifest["dosyalar"][ad] = {
             "kaynak": "proje" if proje_ustu else "core",
             "core_hash": core_hash,       # override edilen core dosyasının hash'i (drift için)
@@ -125,6 +151,19 @@ def durum(proje: Path, core_root: Path, tip: str) -> tuple:
         return "overlay", [f"{tip}: overlay manifest okunamadı"]
 
     sorunlar = []
+
+    # FORMAT: agents/skills frontmatter ile BAŞLAMALI. İlk sürümde damga frontmatter'ın
+    # önüne girdi → 6/6 agent yüklenemedi, ama dosya SAYISI doğru olduğu için "güncel"
+    # raporlandı. Sayı ≠ yüklenebilirlik. (2026-07-09)
+    if tip in ("agents", "skills"):
+        bozuk = [f.name for f in sorted(h.glob("*.md")) if not frontmatter_ile_basliyor(f)]
+        if bozuk:
+            sorunlar.append(f"{tip}: FRONTMATTER BOZUK {bozuk} — dosya `---` ile başlamalı, "
+                            f"yoksa Claude Code bu {tip[:-1]}'ları HİÇ yüklemez")
+        crlf = [f.name for f in sorted(h.glob("*.md")) if b"\r\n" in f.read_bytes()]
+        if crlf:
+            sorunlar.append(f"{tip}: CRLF satır sonu {crlf} — LF yazılmalı")
+
     beklenen = _beklenen(proje, core_root, tip)
     eksik = set(beklenen) - set(m["dosyalar"])
     fazla = set(m["dosyalar"]) - set(beklenen)
