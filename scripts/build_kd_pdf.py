@@ -147,6 +147,14 @@ open(HTML, 'w', encoding='utf-8').write(html)
 #    webapp/help/kullanici-kilavuzu.html açar — onOpenHelp). Aksi halde uygulamadaki kopya bayatlar.
 #    NOT: senkron sonrası UI BSP RE-DEPLOY gerekir (canlıda görünmesi için).
 import shutil
+
+# Windows konsolu/pipe'i cp1252'dir: non-ASCII basmak UnicodeEncodeError ile COKER
+# (exit 1 -> gercek FAIL'den ayirt edilemez). C-ENC-01 / check_console_utf8.py
+for _akis in (sys.stdout, sys.stderr):
+    try:
+        _akis.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass
 HELP = os.path.join(BASE, _cfg('kd_help_dir') or '')
 if os.path.isdir(HELP):
     open(os.path.join(HELP, 'kullanici-kilavuzu.html'), 'w', encoding='utf-8').write(html)

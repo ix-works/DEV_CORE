@@ -18,6 +18,14 @@ import re
 import sys
 from pathlib import Path
 
+# Windows konsolu/pipe'i cp1252'dir: non-ASCII basmak UnicodeEncodeError ile COKER
+# (exit 1 -> gercek FAIL'den ayirt edilemez). C-ENC-01 / check_console_utf8.py
+for _akis in (sys.stdout, sys.stderr):
+    try:
+        _akis.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
 # Proje kökü: env-first (junction'da __file__.resolve() DEV_CORE'a çözülür — KULLANMA)
 PROJ = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
 

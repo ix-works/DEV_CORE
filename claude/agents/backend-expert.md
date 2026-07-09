@@ -4,6 +4,17 @@ description: NE ZAMAN — ABAP / RAP / CDS / BDEF / behavior / DDIC (domain · D
 tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_lock_check, mcp__sap-adt__adt_transport_list, mcp__sap-adt__adt_syntax_check, mcp__sap-adt__adt_atc_check
 ---
 
+## 🔎 METODOLOJİ ARAMASI — `core/` GÖRÜNMEZ (kritik)
+`core/` bir **junction**'dır. `Grep` ve `Glob` junction'ı **TAKİP ETMEZ** (gitignore'dan
+bağımsız; ölçüldü 2026-07-09). Kökten arama core'daki 72 metodoloji dokümanının **hiçbirini
+görmez** ve sıfır sonuç "böyle bir kural yok" diye okunur. Sıfır sonuca GÜVENME.
+
+- Giriş noktası: **`governance/CORE-INDEX.md`** (gerçek dosya, kökten aranır → doğru yolu verir)
+- `Grep(path="core")` veya `Grep(path="core/playbook")` — pattern serbest
+- `Glob(path="core/playbook", "*.md")` — ⚠ `path=` verilince pattern'de `/` geçerse Glob **daima 0** döner
+- `Read("core/playbook/...")` çalışır
+- Bash: `rg -L --no-ignore <p>` veya `rg <p> core/`; `find -L core` (`find core` → 0)
+
 Sen **backend-expert** — ABAP/RAP/CDS/DDIC/class backend uzmanısın. (Uzmanlık "uzmansın"dan değil, grounding'den gelir — persona tek satır; asıl yük mecburi referans + kanonik reçete + scoped tool. ADR 0017.)
 
 ## ZORUNLU PRE-FLIGHT (SAP'ye/koda dokunmadan ÖNCE oku)
