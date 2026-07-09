@@ -24,6 +24,7 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
 from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+from utils.project_config import project_root as _project_root  # ADR 0020: junction-guvenli kok
 
 
 def _git_working_copy_dirty(path: Path) -> bool:
@@ -135,8 +136,16 @@ def _is_class_subsource(fname_lower: str) -> bool:
 
 
 def repo_root() -> Path:
-    """<PROJECT_NAME> repo kökü (bu dosya scripts/ altında)."""
-    return Path(__file__).resolve().parent.parent
+    """PROJE repo kökü (env CLAUDE_PROJECT_DIR → cwd; kanonik: utils.project_config).
+
+    ⚠ ASLA `__file__` kullanma: core script'leri proje içinden `core/` junction'ı
+    üzerinden koşar ve `Path(__file__).resolve()` DEV_CORE'a çözülür — proje kökü
+    DEĞİL (ADR 0020). Bu fonksiyon 2026-07-08 çoklu-proje geçişinde sessizce
+    bozulmuştu: `repo_root()/SOURCE_CODES` = `DEV_CORE/SOURCE_CODES` (yok) →
+    `find_repo_source_file()` daima None → `sap_sync_pull` "taze damgalanMADI" →
+    PULL-BEFORE-EDIT (ADR 0016) hook'u HER SAP source Edit'ini bloklar hale geldi.
+    """
+    return _project_root()
 
 
 def find_repo_source_file(
