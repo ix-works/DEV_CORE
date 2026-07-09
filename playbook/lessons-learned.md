@@ -140,6 +140,16 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 - **Status:** 🔴 YENİ — fix: deploy_ui + switch_tier + build_cbo_inventory (PR, 2026-07-08); F2-P sağlık taramasına aday-denetim.
 - **Vakalar:** 2026-07-08 D15 provası (<PROJECT_NAME> ilk yan-kurulum oturumu).
 
+### PATTERN #11: `where_used` count=0 → "orphan" sanma (yokluk ≠ tüketicisizlik)
+- **Hata:** Orphan-sweep'te `adt_where_used` `{ok:true, count:0}` döndü → "tüketicisi yok, silinebilir" okundu. Oysa obje **zaten silinmişti**: SAP, var olmayan obje için usageReferences'ta **HTTP 200 + boş liste** döner. "Tüketicisi yok" ile "obje yok" birebir aynı cevabı üretir.
+- **Trigger:** Silmeden-önce-kullanım-kontrolü, orphan sweep, blast-radius analizi — `count == 0` / `if not results` üzerine kurulan HER karar.
+- **Kök sebep:** `where_used` varlık doğrulaması yapmıyordu; boş liste iki ayrı gerçeği (yok / kullanılmıyor) tek sinyale çöktürüyordu. Araç sessizliği "temiz" gibi okunuyordu.
+- **Kanıt (canlı ölçüm):** silinmiş DDLS → `get_object_structure` `SAPADTError[404]`, `where_used` `count=0`. Canlı DDLS → structure OK, `count=4`. Yani varlık sondası `get_object_structure`; `where_used` değil. **Not:** 404 her zaman `SAPObjectNotFoundError` olarak gelmez — düz `SAPADTError` + `status_code=404` de gelir; gate'i yalnız sınıf tipine bağlamak kaçırır.
+- **Prevention (GATE, kod — not değil):** `SAPClient.object_exists()` eklendi; `SAPClient.where_used()` obje yoksa `SAPObjectNotFoundError` **fırlatır**. MCP `adt_where_used` obje yoksa `{ok:false, error_code:"OBJECT_NOT_FOUND"}` döner ve **`count` anahtarını HİÇ döndürmez** (çağıran onu 0 sanamaz). CLI `where_used.py` ayrı exit kodu **2** + "bunu orphan sanma" uyarısı; `[OK] No usages found` mesajı artık "(object EXISTS, verified)" der. Paylaşılan client katmanında olduğu için MCP + script yüzeylerinin İKİSİ de korunur.
+- **Genel ders:** Bir araç "boş" dönerse, sorunun *önkoşulunun* sağlandığını doğrula. Boş sonuç iki farklı dünyayı (soru anlamsız / cevap gerçekten sıfır) ayırt etmiyorsa, o araç o soruya cevap veremez. Aynı sınıf: sessiz `[]`, `None`, `count:0`, HTTP 200+boş gövde.
+- **Status:** ✅ SOLVED (kod gate; canlı test 5/5 — silinmiş/canlı/uydurma obje) — fix PR `fix/where-used-object-not-found`.
+- **Vakalar:** 2026-07-09 <PROJECT_NAME> orphan sweep (`ZSD001_I_SOME_VIEW` tipi silinmiş CDS'te yakalandı; sweep ajanı `count=0`'a güvenmeyip envanter+grep ile çaprazladığı için yanlış silme OLMADI).
+
 ---
 
 ## 🔄 SELF-UPDATE PROTOKOLÜ
@@ -178,6 +188,7 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 | #4 Doc ≠ Enforcement | 2026-05-13 | 2 (Namespace whitelist v1, v2) | ✅ SİSTEMATİK |
 | #5 Trust Without Verify | 2026-05-13 | 2 (ZSD_007 cleanup, SHIPMENT_LIST) | ⚠️ DİSİPLİN |
 | #6 TempScripts → Playbook | 2026-05-13 | 1 | ⚠️ DİSİPLİN |
+| #11 where_used count=0 = orphan sanma | 2026-07-09 | 1 (orphan sweep) | ✅ SOLVED (kod gate) |
 
 > **Hedef:** ACTIVE/⚠️ DİSİPLİN olanları zamanla SOLVED'a çevir (kod gate ile).
 

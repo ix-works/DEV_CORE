@@ -2483,6 +2483,30 @@ constants:
             print(f"\n[ERROR] {str(e)}")
             return False
 
+    def object_exists(self, object_name: str, object_type: str = 'class') -> bool:
+        """SAP'de obje var mı? (read-only; kaynak indirmez, yalnız structure sorar)
+
+        Var-yok ayrımı gerektiren çağrıların ÖNKOŞULU. ADT bazı endpoint'lerde
+        (özellikle usageReferences) silinmiş obje için de BOŞ LİSTE döner — yani
+        "obje yok" ile "tüketicisi yok" aynı cevabı verir. Bu metot ayrımı yapar.
+
+        Not: 404 her zaman SAPObjectNotFoundError olarak gelmez; düz SAPADTError +
+        status_code=404 de gelir (canlı ölçüm 2026-07-09) → ikisi de yakalanır.
+        """
+        from object_types import get_object_url
+        from sap_adt_lib import SAPADTError, SAPObjectNotFoundError
+
+        object_url = get_object_url(object_name, object_type)
+        try:
+            self.adt_client.get_object_structure(object_url)
+            return True
+        except SAPObjectNotFoundError:
+            return False
+        except SAPADTError as e:
+            if getattr(e, 'status_code', None) == 404:
+                return False
+            raise  # 401/403/500 vb. varlık cevabı DEĞİL — yutma
+
     def where_used(self, object_name: str, object_type: str ='class') -> Optional[List[Dict]]:
         """
         Find all usages of an ABAP object (Where-Used List)
@@ -2493,10 +2517,24 @@ constants:
 
         Returns:
             List of dicts with 'name', 'type', 'uri', 'description', or None on error
+
+        Raises:
+            SAPObjectNotFoundError: obje SAP'de YOK. count=0'ı "tüketicisi yok" diye
+                okumak orphan-sweep'te yanlış silmeye yol açar → sessiz boş liste
+                yerine gürültülü hata (T11 gate; canlı kanıt: silinmiş DDLS için
+                usageReferences 200 + [] döner).
         """
-        from object_types import get_object_url
+        from sap_adt_lib import SAPObjectNotFoundError
 
         print(f"\nSearching where-used for: {object_name} ({object_type})")
+
+        # GATE: varlık önce. Yoksa where_used'ın boş listesi anlamsızdır.
+        if not self.object_exists(object_name, object_type):
+            raise SAPObjectNotFoundError(
+                f"{object_name} ({object_type}) SAP'de yok — where_used bos liste doner; "
+                f"bunu 'tuketicisi yok' diye okuma.",
+                status_code=404,
+            )
 
         try:
             object_url = get_object_url(object_name, object_type)

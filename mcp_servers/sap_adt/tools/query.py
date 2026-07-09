@@ -121,12 +121,31 @@ def adt_where_used(name: str, object_type: str = "class") -> dict:
 
     Returns:
         {ok, name, type, count, references: [{name, type, uri, description}], client_log}
+        Obje YOKSA: {ok: false, error_code: "OBJECT_NOT_FOUND", ...} — count DÖNMEZ.
+
+    Gate (T11): SAP, silinmiş obje için de usageReferences'ta 200 + boş liste döner.
+    "count=0" sorusu "tüketicisi yok mu?" ile "obje yok mu?" ayrımını YAPAMAZ — bu
+    ayrım orphan-sweep'te yanlış silmeye yol açar. Varlık önce doğrulanır; obje yoksa
+    count HİÇ dönmez ki çağıran onu 0 sanmasın.
     """
     client = _get_client()
     try:
         from object_types import get_object_url  # type: ignore
-        url = get_object_url(name.upper(), object_type)
+
         with _capture() as buf:
+            if not client.object_exists(name.upper(), object_type):
+                return {
+                    "ok": False,
+                    "error_code": "OBJECT_NOT_FOUND",
+                    "name": name,
+                    "type": object_type,
+                    "hint": (
+                        f"{name} ({object_type}) SAP'de yok. where_used bos liste "
+                        f"donerdi; bunu 'tuketicisi yok' diye okuma."
+                    ),
+                    "client_log": buf.getvalue().strip(),
+                }
+            url = get_object_url(name.upper(), object_type)
             refs = client.adt_client.where_used(url)
         return {
             "ok": True,
