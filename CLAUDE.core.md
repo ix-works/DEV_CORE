@@ -38,11 +38,24 @@
 > teyit et; "activated/uploaded/çalıştı" mesajına güvenme; emin değilsen DUR → sor;
 > DTEL/append adı önerme (kullanıcı verir). (Tam yasak metni kök CLAUDE.md'de fiziksel damgalı.)
 
-> **🔎 ARAMA TALİMATI (D29 — kritik):** Grep aracı `.gitignore`'a uyar ve `core/` proje
-> tarafında ignore'ludur → **proje kökünden yapılan aramalar metodolojiyi GÖRMEZ.**
-> Metodoloji (playbook/standards/checklists/scripts) araması DAİMA `path=core/...`
-> parametresiyle yapılır. **Kökten sıfır-sonuç ≠ "core'da yok".** (Glob ignore'a uymaz —
-> asimetriye güvenme, kuralı uygula.)
+> **🔎 ARAMA TALİMATI (D29 — kritik):** `core/` **hem** `.gitignore`'dadır (`/core/`) **hem**
+> bir junction'dır. İKİ BAĞIMSIZ körlük: (a) `Grep`/`rg` gitignore'a uyar; (b) `Glob`/`find`
+> symlink'i takip etmez. İkisi de **SESSİZCE BOŞ** döner — "dosya yok" ile ayırt edilemez.
+> **Kökten sıfır-sonuç ≠ "core'da yok".** (2026-07-09 ölçümü: eski dünyada kökten arama
+> metodolojiyi buluyordu; yenide 199 dokümanın **tamamı** varsayılan aramada görünmez.)
+>
+> Metodoloji araması DAİMA `path=` ile:
+> - **`Grep`:** `path="core"` veya `path="core/playbook"` — pattern serbest.
+> - **`Glob`:** `path="core"` **+ tek-segmentli pattern** (`"**/*.md"` ya da `"*.md"`).
+>   ⚠ `path=` verildiğinde pattern'de `/` geçerse Glob **DAİMA 0** döner →
+>   `Glob("core/playbook/*.md")` ve `Glob(path="core", "playbook/*.md")` İKİSİ DE YANLIŞ.
+>   Doğrusu: `Glob(path="core/playbook", "*.md")`.
+> - **`Read`:** göreli `core/...` çalışır (hook'ların verdiği yollar artık önekli).
+> - **`Bash`:** `rg -L --no-ignore <p>` **veya** açıkça `rg <p> core/`; `find -L core`
+>   (`find core` → 0). `--no-ignore` TEK BAŞINA yetmez, `-L` TEK BAŞINA yetmez.
+>
+> **Alt-ajanlara da söyle:** brifingde `path=core/` demezsen ajan metodolojinin var
+> olduğunu bile keşfedemez ve "böyle bir kural yok" diye rapor eder.
 
 ---
 

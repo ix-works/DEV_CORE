@@ -53,7 +53,8 @@ _NPM_INSTALL = re.compile(r"\bnpm\s+(?:install|ci|add|i)\b", re.IGNORECASE)
 # Yalın `fiori deploy` — build YAPMAZ, eski dist'i yükler + "Successful" yalanı söyler
 # (2026-07-06 stale-dist dersi). Kanonik yol scripts/deploy_ui.py (build+deploy+canlı-doğrulama).
 # deploy_ui.py'nin kendi `npx fiori deploy` çağrısı Python subprocess'te → Bash tool'a görünmez (muaf).
-_FIORI_DEPLOY = re.compile(r"\bfiori\s+deploy\b", re.IGNORECASE)
+# NOT: eski `_FIORI_DEPLOY` düz string-araması KALDIRILDI — `grep -rn 'fiori deploy' docs/`
+# gibi ARAMA komutlarını bloklıyordu. Yerine `_komut_konumunda()` (tırnak-dışı, komut konumu).
 
 
 def _ui_app_subdir(path: str):
@@ -95,14 +96,14 @@ def _proje_koku() -> Path:
 
 _PROJ_ROOT = _proje_koku()
 
-_YAZMA_FIILI = re.compile(
-    r"(\brm\b|\bmv\b|\bcp\b|>>|(?<![-=<>])>(?!>)|\bdel\b|\brmdir\b|\bmkdir\b|\btouch\b"
-    r"|\btee\b|\bsed\s+-i\b|\brobocopy\b|Set-Content|Out-File|Add-Content|New-Item"
-    r"|Remove-Item|Move-Item|Copy-Item\s)", re.IGNORECASE)
+# NOT: eski `_YAZMA_FIILI` (fiil kara-listesi) KALDIRILDI — hedefi sormuyordu, iki yönde
+# birden bozuktu. Yerine `_frozen_yazma_hedefi()` (yazma-hedefi analizi) geçti.
 
 _SILME_FIILI = re.compile(
     r"(\brm\s+-[a-z]*r[a-z]*f?|\brm\s+-[a-z]*f[a-z]*r|Remove-Item[^\n|;]*-Recurse"
-    r"|\brimraf\b|\brmdir\s+/s|\bgit\s+clean\b(?![^\n]*-n))", re.IGNORECASE)
+    r"|\brimraf\b|\brmdir\s+/s|\bgit\s+clean\b(?![^\n]*-n)"
+    # Kabuk-dışı silme yolları: `rm -rf` yakalanıp `shutil.rmtree` kaçıyordu (2026-07-09)
+    r"|shutil\.rmtree|os\.removedirs|\bfind\b[^\n]*-delete\b)", re.IGNORECASE)
 
 # Silme hedefi: core/ · /core · ÇIPLAK `core` argümanı (rm -rf core) · .claude/{alt} · DEV_CORE
 _KORUNAN_SILME_HEDEF = re.compile(
@@ -355,13 +356,149 @@ _FROZEN = [_canon_path(p).rstrip("/") for p in _frozen_paths() if p]
 
 def _frozen_hit(metin: str) -> str:
     """Metin (komut/dosya-yolu) dondurulmuş kök içeriyor mu? İlk eşleşen kökü döndür.
-    Windows (C:\\<kök>) ve bash (/c/<kök>) yol stilleri kanonlaştırılarak kıyaslanır."""
+
+    SINIR ŞARTI: kökten sonra ya metin biter ya ayraç gelir. Çıplak substring kıyası
+    `<LEGACY_SOURCE>_YENI` gibi BAŞKA bir kökü de eşleştiriyordu (2026-07-09 denetimi).
+    """
     if not _FROZEN or not metin:
         return ""
     duz = _canon_path(metin)
     for kok in _FROZEN:
-        if kok and kok in duz:
+        if not kok:
+            continue
+        i = 0
+        while True:
+            i = duz.find(kok, i)
+            if i < 0:
+                break
+            son = i + len(kok)
+            if son == len(duz) or duz[son] in "/ \"'\t":
+                return kok
+            i = son
+    return ""
+
+
+# ── FREEZE-GUARD yeniden tasarımı (2026-07-09 denetimi) ────────────────────────
+# ESKİ TASARIM: "komutta yazma-FİİLİ var mı + donmuş kök geçiyor mu" → ikisi de
+# doğruysa blokla. Hedefi hiç sormuyordu; İKİ YÖNDE birden bozuktu:
+#   YANLIŞ-POZİTİF: `ls <FROZEN> 2>&1`      → `2>&1`'deki `>` "yazma fiili" sayıldı
+#                   `cp <FROZEN>/x ./y`     → kaynak okuma, hedef yerel
+#                   `grep x <FROZEN> > o.txt` → yazma hedefi o.txt
+#   YANLIŞ-NEGATİF: `python -c "open('<FROZEN>/x','w')"` → fiil listesinde yok, GEÇTİ
+#                   `tar -xzf y.tgz -C <FROZEN>`         → GEÇTİ
+# YENİ SORU: "yazma fiili var mı" DEĞİL → **"yazmanın HEDEFİ donmuş kök mü?"**
+_AYRAC = re.compile(r"\s*(?:\|\||&&|[;|&\n])\s*")
+_REDIRECT = re.compile(r"(?:\d*>>?|&>)\s*(\S+)")           # `> x`, `2> x`, `>> x`, `&> x`
+_SIL_FIIL = re.compile(r"\b(rm|rmdir|rimraf|unlink|del)\b|Remove-Item|shutil\.rmtree"
+                       r"|os\.remove|os\.unlink|\.unlink\(|-delete\b", re.IGNORECASE)
+_TASI_FIIL = re.compile(r"\bmv\b|Move-Item", re.IGNORECASE)
+_KOPYA_FIIL = re.compile(r"\bcp\b|\bcopy\b|Copy-Item|robocopy|xcopy", re.IGNORECASE)
+_ARSIV = re.compile(r"\b(tar|unzip|7z|gunzip)\b", re.IGNORECASE)
+_YARAT_FIIL = re.compile(r"\b(touch|mkdir|tee)\b|\bsed\s+-i\b|Set-Content|Out-File"
+                         r"|Add-Content|New-Item", re.IGNORECASE)
+_YORUMLAYICI = re.compile(r"\b(python3?|node|perl|ruby|pwsh)\b|\b(?:bash|sh|powershell)\s+-c",
+                          re.IGNORECASE)
+# Yorumlayıcı gövdesinde YAZMA göstergesi. Yoksa okuma sayılır →
+# `python -c "print(open(f).read())"` meşru kalır.
+_KOD_YAZMA = re.compile(r"""['"][wax]\+?['"]|write_text|write_bytes|writelines|\.write\("""
+                        r"""|rmtree|remove\(|unlink\(|makedirs|mkdir\(|copy2?\(|move\(""",
+                        re.IGNORECASE)
+
+
+def _yol_argumanlari(seg: str) -> list:
+    """Segmentteki yol-benzeri argümanlar (bayrak değil, tırnaksız)."""
+    out = []
+    for t in seg.split():
+        t = t.strip("\"'")
+        if t.startswith("-") or not t:
+            continue
+        out.append(t)
+    return out
+
+
+def _korunan_hedefe_mi(seg: str, fiil: "re.Pattern", cwd_korunan: bool = False) -> bool:
+    """<fiil> segmentte var VE korunan hedef (core/junction) o segmentin ARGÜMANI mı?
+
+    Eski kontrol `fiil.search(cmd) and hedef.search(cmd)` idi: `cd <CORE_REPO> && rm -rf
+    .tmp/x` bloklanıyordu (silme hedefi .tmp; core yalnız `cd` argümanı). Hedefe bak,
+    satıra değil. Segmentin TÜM yol argümanlarına bakmak güvenlidir: `cd <CORE_REPO>`
+    ayrı bir segmenttir, silme segmentinde geçmez.
+
+    `find <hedef> ... -delete` biçiminde hedef fiilden ÖNCE gelir → "fiilden sonrası"na
+    bakmak onu kaçırıyordu (2026-07-09 denetimi).
+    """
+    if not fiil.search(seg):
+        return False
+    for a in _yol_argumanlari(seg):
+        if _KORUNAN_SILME_HEDEF.search(a):
+            return True
+    # `git clean` argümansızdır ama CWD'yi siler → cwd korunan alandaysa blokla.
+    if re.search(r"git\s+clean", seg, re.IGNORECASE) and cwd_korunan:
+        return True
+    return False
+
+
+def _cwd_korunan_mi(komut: str) -> bool:
+    """Komutun herhangi bir yerinde korunan alana `cd` var mı (git clean için cwd riski)."""
+    for c in _CD_PREFIX.finditer(komut):
+        if _KORUNAN_SILME_HEDEF.search(c.group(1)):
+            return True
+    return False
+
+
+def _komut_konumunda(seg: str, desen: str) -> bool:
+    """Desen KOMUT konumunda mı (satır başı / ayraç sonrası), yoksa tırnak içinde bir arg mı?
+
+    `grep -rn 'fiori deploy' docs/` fiori'yi ÇALIŞTIRMAZ — string olarak arar.
+    """
+    tırnaksız = re.sub(r"'[^']*'|\"[^\"]*\"", " ", seg)      # tırnaklı bölgeleri düşür
+    return re.search(r"(?:^|[\n;|&(])\s*(?:\w+\s+)?" + desen, tırnaksız, re.IGNORECASE) is not None
+
+
+def _frozen_yazma_hedefi(komut: str) -> str:
+    """Komut donmuş köke YAZIYOR mu? Yazıyorsa kökü, yazmıyorsa '' döndürür.
+
+    Segment segment (`;` `&&` `||` `|` ile bölünür): donmuş kök geçen HER segment için
+    "bu kök bir yazma HEDEFİ mi, yoksa okuma ARGÜMANI mı" sorulur.
+    """
+    if not _FROZEN:
+        return ""
+    for seg in _AYRAC.split(komut):
+        kok = _frozen_hit(seg)
+        if not kok:
+            continue
+
+        # 1) Yönlendirme hedefi donmuş kök mü? (`2>&1` ve `>/dev/null` hedefi donmuş DEĞİL)
+        for hedef in _REDIRECT.findall(seg):
+            if _frozen_hit(hedef):
+                return kok
+
+        # 2) Silme/taşıma: donmuş kök argümansa yazmadır (mv kaynağı da siler)
+        if _SIL_FIIL.search(seg) or _TASI_FIIL.search(seg):
             return kok
+
+        # 3) Kopyalama: yalnız HEDEF (son yol argümanı) donmuşsa yazma; kaynak okumadır
+        if _KOPYA_FIIL.search(seg):
+            yollar = [t for t in seg.split() if "/" in t or "\\" in t]
+            if yollar and _frozen_hit(yollar[-1]):
+                return kok
+            continue                                   # kaynak okuma → segment temiz
+
+        # 4) Arşiv: listeleme okuma; diğer her kullanım fail-closed.
+        #    `-t` birleşik bayrak kümesinde olabilir (`tar -tzf`) → `-t\b` YETMEZ.
+        if _ARSIV.search(seg):
+            if re.search(r"(?:^|\s)-[a-zA-Z]*t[a-zA-Z]*(?:\s|$)|--list\b", seg):
+                continue
+            return kok
+
+        # 5) Dosya yaratma/yerinde-değiştirme fiilleri
+        if _YARAT_FIIL.search(seg):
+            return kok
+
+        # 6) Yorumlayıcı: gövdede yazma göstergesi VARSA blokla, yoksa okuma say
+        if _YORUMLAYICI.search(seg) and _KOD_YAZMA.search(seg):
+            return kok
+
     return ""
 
 
@@ -467,7 +604,11 @@ def main() -> int:
     komut = _komut_govdesi(hay) if tool_name in _KABUK_TOOLLARI else hay
 
     # ---- B9-4 FREEZE-GUARD (R10): dondurulmuş köke YAZMA teşebbüsü ----
-    dosya_hedefi = ti.get("file_path", "") if isinstance(ti, dict) else ""
+    # NotebookEdit'in hedef anahtarı `notebook_path` (file_path DEĞİL) — yalnız file_path
+    # okumak o tool'u sessizce muaf tutuyordu (2026-07-09 denetimi).
+    dosya_hedefi = ""
+    if isinstance(ti, dict):
+        dosya_hedefi = ti.get("file_path", "") or ti.get("notebook_path", "") or ""
     if tool_name in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
         kok = _frozen_hit(dosya_hedefi)
         if kok:
@@ -477,12 +618,14 @@ def main() -> int:
                 "(C:\\IX) yapılır. İŞLEM REDDEDİLDİ.\n")
             return 2
     if tool_name in _KABUK_TOOLLARI:
-        kok = _frozen_hit(komut)
-        if kok and _YAZMA_FIILI.search(komut):
+        kok = _frozen_yazma_hedefi(komut)
+        if kok:
             sys.stderr.write(
-                f"⛔ FREEZE-GUARD (R10): Bash komutu dondurulmuş kökü ('{kok}') yazma-fiiliyle "
-                "birlikte içeriyor — eski dünyaya yazma YASAK (okuma: cat/grep/ls serbest). "
-                "İŞLEM REDDEDİLDİ. Salt-okuma yapıyorsan komutu yazma-fiilsiz kur.\n")
+                f"⛔ FREEZE-GUARD (R10): komut dondurulmuş köke ('{kok}') YAZIYOR — eski "
+                "dünyaya yazma YASAK. OKUMA serbesttir (ls/cat/grep/find/diff, `cp <FROZEN>/x .`, "
+                "`python -c \"open(f).read()\"`, `tar -t`). İŞLEM REDDEDİLDİ.\n"
+                "Not: yazma-hedefi analizi yapılır — `2>&1` / `>/dev/null` yazma sayılmaz, "
+                "ama `> <FROZEN>/x`, `tar -C <FROZEN>`, `open(...,'w')` sayılır.\n")
             return 2
 
     # ---- PUBLIC-PR SIZINTI GATE: gh pr create → public repo → govde taramasi ----
@@ -502,8 +645,9 @@ def main() -> int:
             return 2
 
     # ---- B9-5 ÖZYİNELEMELİ-SİLME BLOĞU (R9): core/junction hedefli silme ----
-    if tool_name in _KABUK_TOOLLARI and _SILME_FIILI.search(komut) \
-            and _KORUNAN_SILME_HEDEF.search(komut):
+    _cwd_kor = _cwd_korunan_mi(komut) if tool_name in _KABUK_TOOLLARI else False
+    if tool_name in _KABUK_TOOLLARI and any(
+            _korunan_hedefe_mi(seg, _SILME_FIILI, _cwd_kor) for seg in _AYRAC.split(komut)):
         sys.stderr.write(
             "⛔ SİLME BLOĞU (R9): Özyinelemeli silme/clean komutu core-junction veya "
             ".claude/{agents,skills,commands} hedefini içeriyor. Güncel toolchain junction "
@@ -514,8 +658,18 @@ def main() -> int:
         return 2
 
     # ---- B9-7 SIZINTI-COMMIT KİLİDİ (2.7/F1): proje reposunda core-path stage'leme ----
-    if tool_name in _KABUK_TOOLLARI and _GIT_STAGE.search(komut) and re.search(
-            r"(\bcore[/\\]|\s\.claude[/\\](agents|skills|commands))", komut):
+    # HEDEF-tabanlı: `git add`/`stage`/`commit`'in ARGÜMANLARINDA core var mı? Satırda
+    # başka amaçla geçen `core/...` (ör. `git add p.py && python core/scripts/x.py`)
+    # staging kapsamı DEĞİLDİR (2026-07-09 denetimi: bu yanlış-pozitif canlı yakalandı).
+    _CORE_ARG = re.compile(r"(^|[/\\])core[/\\]|^core$|[/\\]?\.claude[/\\](agents|skills|commands)")
+    def _stage_kapsaminda_core(seg: str) -> bool:
+        m = _GIT_STAGE.search(seg)
+        if not m:
+            return False
+        return any(_CORE_ARG.search(a) for a in _yol_argumanlari(seg[m.end():]))
+
+    if tool_name in _KABUK_TOOLLARI and any(
+            _stage_kapsaminda_core(seg) for seg in _AYRAC.split(komut)):
         sys.stderr.write(
             "⛔ SIZINTI-COMMIT KİLİDİ (F1/2.7): `git add/commit` kapsamında core-junction "
             "içeriği var — core proje reposuna COMMIT'LENEMEZ (fikri-sermaye sızıntısı, R1). "
@@ -523,10 +677,20 @@ def main() -> int:
         return 2
 
     # ---- B9-6 CORE-YAZIM TARAMASI (Ö5): core'a yazım anında leak + applies_to ----
-    if tool_name in ("Edit", "Write", "MultiEdit") and _core_hedef_mi(dosya_hedefi):
-        icerik = ""
+    if tool_name in ("Edit", "Write", "MultiEdit", "NotebookEdit") and _core_hedef_mi(dosya_hedefi):
+        # MultiEdit içeriği `edits[].new_string` altındadır; NotebookEdit `new_source`.
+        # Yalnız content/new_string okumak ikisini de SESSİZCE muaf tutuyordu → core'a
+        # kimlik izi yazma kapısı açıktı (2026-07-09 denetimi, kanıtlı).
+        parcalar = []
         if isinstance(ti, dict):
-            icerik = (ti.get("content", "") or ti.get("new_string", "") or "")
+            for anahtar in ("content", "new_string", "new_source"):
+                v = ti.get(anahtar)
+                if isinstance(v, str):
+                    parcalar.append(v)
+            for e in (ti.get("edits") or []):
+                if isinstance(e, dict) and isinstance(e.get("new_string"), str):
+                    parcalar.append(e["new_string"])
+        icerik = "\n".join(parcalar)
         m = _CORE_LEAK.search(icerik)
         if m:
             sys.stderr.write(
@@ -571,7 +735,10 @@ def main() -> int:
     # YALIN FIORI DEPLOY guard (2026-07-06 stale-dist dersi): build'siz `fiori deploy` eski
     # dist'i yükler + "Deployment Successful" der ama canlıya bayat gider. Kanonik yol
     # scripts/deploy_ui.py (build ZORUNLU + deploy + canlı Component-preload==dist doğrulaması).
-    if tool_name in _KABUK_TOOLLARI and _FIORI_DEPLOY.search(komut) and "deploy_ui.py" not in komut:
+    # KOMUT konumunda mı, yoksa tırnak içinde ARANAN bir string mi? `grep -rn 'fiori deploy'
+    # docs/` deploy ETMEZ (2026-07-09 denetimi).
+    if tool_name in _KABUK_TOOLLARI and "deploy_ui.py" not in komut and any(
+            _komut_konumunda(seg, r"(?:npx\s+)?fiori\s+deploy") for seg in _AYRAC.split(komut)):
         sys.stderr.write(
             "⛔ YALIN FIORI DEPLOY (PreToolUse guard, 2026-07-06 stale-dist dersi): "
             "Doğrudan 'fiori deploy' BUILD YAPMAZ — eski dist/'i archive edip 'Deployment "
