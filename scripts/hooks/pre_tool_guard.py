@@ -188,6 +188,35 @@ _ARG_BODYFILE = re.compile(r"--body-file[= ]+(?:'([^']+)'|\"([^\"]+)\"|(\S+))")
 _CD_PREFIX = re.compile(r"\bcd\s+([^\s;&|]+)")
 
 
+def _arg_deger(s: str, ad: str) -> str:
+    """--<ad> değerini çıkar (tek/çift tırnaklı veya tırnaksız). Yoksa ''."""
+    m = re.search(rf"--{ad}[= ]+(?:'([^']*)'|\"((?:[^\"\\]|\\.)*)\"|(\S+))", s)
+    if not m:
+        return ""
+    return m.group(1) or m.group(2) or m.group(3) or ""
+
+
+def _yayinlanan_metin(hay: str) -> tuple:
+    """PR'da GERÇEKTEN yayınlanacak metin: --title + --body + --body-file İÇERİĞİ.
+
+    Komutun tamamını taramak YANLIŞ: `--body-file` YOLU yayınlanmaz ama içinde
+    proje/müşteri adı geçebilir (ör. `C:/IX/<Musteri>/.tmp/body.md`) → gate kendi
+    yolunu sızıntı sanır (2026-07-09 dogfood: ikinci yanlış-pozitif). Yanlış-pozitif
+    üreten gate gürültüye döner, gürültülü gate ciddiye alınmaz.
+    Dönüş: (metin, hata) — hata doluysa FAIL-CLOSED.
+    """
+    parcalar = [_arg_deger(hay, "title"), _arg_deger(hay, "body")]
+    bf = _ARG_BODYFILE.search(hay)
+    if bf:
+        yol = bf.group(1) or bf.group(2) or bf.group(3)
+        try:
+            parcalar.append(Path(yol).read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            return "", (f"--body-file okunamadi ({yol}) — govde taranamadi. "
+                        "FAIL-CLOSED: dosyayi okunur yap veya --body kullan.")
+    return "\n".join(p for p in parcalar if p), ""
+
+
 def _repo_public_mu(hay: str) -> tuple:
     """Hedef repo public mi? -> (public_mu, etiket). Kararsızsa FAIL-CLOSED (public say).
 
@@ -225,16 +254,10 @@ def _gh_pr_public_leak(hay: str) -> str:
     if not public:
         return ""  # private repo (ör. proje reposu): gerçek obje adı MEŞRU, tarama yok
 
-    # Taranan metin = komutun kendisi (--title/--body inline) + varsa --body-file içeriği.
-    metin = hay
-    bf = _ARG_BODYFILE.search(hay)
-    if bf:
-        yol = bf.group(1) or bf.group(2) or bf.group(3)
-        try:
-            metin += "\n" + Path(yol).read_text(encoding="utf-8", errors="replace")
-        except Exception:
-            return (f"--body-file okunamadi ({yol}) — public repo '{repo}' icin govde "
-                    "taranamadi. FAIL-CLOSED: dosyayi okunur yap veya --body kullan.")
+    # YALNIZ yayınlanacak metin taranır — komutun kendisi (yollar, flag'ler) değil.
+    metin, hata = _yayinlanan_metin(hay)
+    if hata:
+        return f"public repo '{repo}' — {hata}"
 
     bulgular = []
     for pat, ad in ((_CORE_LEAK, "kimlik izi"), (_ZSD_PAT, "ZSD-numarali paket adi")):
