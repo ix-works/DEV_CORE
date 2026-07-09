@@ -180,6 +180,12 @@ def _komut_govdesi(s: str) -> str:
     """Heredoc/here-string gövdelerini düşür — geriye yalnız çalıştırılacak komut kalsın."""
     s = _HEREDOC.sub(" <<HEREDOC-STRIPPED> ", s)
     return _PS_HERESTRING.sub(" <HERESTRING-STRIPPED> ", s)
+
+
+# Kabuk yüzeyleri: bir kural yalnız Bash'i kapatırsa, aynı komut PowerShell'den geçer.
+# (2026-07-09 denetimi: freeze-guard ve R9-silme bloğu `tool_name == "Bash"` ile
+# sınırlıydı → `Remove-Item -Recurse core` PowerShell aracından HİÇ bloklanmıyordu.)
+_KABUK_TOOLLARI = ("Bash", "PowerShell")
 # core_precommit.py::ZSD_PAT ile AYNI desen (tek doğruluk kaynağı olmalı; ikisi
 # ayrışırsa commit'te yakalanan PR gövdesinde kaçar). ZSD000/001 = demo, serbest.
 _ZSD_PAT = re.compile(r"\bzsd0(?!00|01)\d{2}", re.IGNORECASE)
@@ -444,6 +450,17 @@ def main() -> int:
     else:
         hay = str(ti)
 
+    # ---- TEK NORMALİZASYON: komut-niyeti kuralları `komut` üzerinde çalışır ----
+    # `hay` ham metindir: heredoc/here-string GÖVDESİ de içindedir. O gövde VERİdir
+    # (commit mesajı, PR gövdesi), komut değil. Ham metin üzerinde desen aramak, bir
+    # kuralın kendi dokümantasyonunu bloklamasına yol açar — 2026-07-09'da üç ayrı
+    # guard'da (freeze / R9-silme / PUBLIC-PR) arka arkaya yaşandı; tek tek yamamak
+    # yerine burada BİR KEZ çözülür. Yeni komut-niyeti kuralı `komut` kullanmalıdır.
+    #
+    # Kabuk yüzeyi TEK DEĞİL: Bash'te bloklanan komut PowerShell'den tünellenebilir
+    # (aynı gün denendi). Kabuk-kuralları her iki araca da uygulanır.
+    komut = _komut_govdesi(hay) if tool_name in _KABUK_TOOLLARI else hay
+
     # ---- B9-4 FREEZE-GUARD (R10): dondurulmuş köke YAZMA teşebbüsü ----
     dosya_hedefi = ti.get("file_path", "") if isinstance(ti, dict) else ""
     if tool_name in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
@@ -454,9 +471,9 @@ def main() -> int:
                 f"YASAK (hedef: {dosya_hedefi}). Okuma serbesttir. Çalışma yeni dünyada "
                 "(C:\\IX) yapılır. İŞLEM REDDEDİLDİ.\n")
             return 2
-    if tool_name == "Bash":
-        kok = _frozen_hit(hay)
-        if kok and _YAZMA_FIILI.search(hay):
+    if tool_name in _KABUK_TOOLLARI:
+        kok = _frozen_hit(komut)
+        if kok and _YAZMA_FIILI.search(komut):
             sys.stderr.write(
                 f"⛔ FREEZE-GUARD (R10): Bash komutu dondurulmuş kökü ('{kok}') yazma-fiiliyle "
                 "birlikte içeriyor — eski dünyaya yazma YASAK (okuma: cat/grep/ls serbest). "
@@ -466,8 +483,8 @@ def main() -> int:
     # ---- PUBLIC-PR SIZINTI GATE: gh pr create → public repo → govde taramasi ----
     # Bash VE PowerShell birlikte: tek yuzeyi kapatmak gate degil, yavaslatmadir
     # (2026-07-09: Bash'te reddedilen komut PowerShell'den tunellenmeye calisildi).
-    if tool_name in ("Bash", "PowerShell"):
-        sorun = _gh_pr_public_leak(hay)
+    if tool_name in _KABUK_TOOLLARI:
+        sorun = _gh_pr_public_leak(komut)
         if sorun:
             sys.stderr.write(
                 f"⛔ PUBLIC-PR SIZINTI GATE: {sorun}\n"
@@ -480,7 +497,8 @@ def main() -> int:
             return 2
 
     # ---- B9-5 ÖZYİNELEMELİ-SİLME BLOĞU (R9): core/junction hedefli silme ----
-    if tool_name == "Bash" and _SILME_FIILI.search(hay) and _KORUNAN_SILME_HEDEF.search(hay):
+    if tool_name in _KABUK_TOOLLARI and _SILME_FIILI.search(komut) \
+            and _KORUNAN_SILME_HEDEF.search(komut):
         sys.stderr.write(
             "⛔ SİLME BLOĞU (R9): Özyinelemeli silme/clean komutu core-junction veya "
             ".claude/{agents,skills,commands} hedefini içeriyor. Güncel toolchain junction "
@@ -491,8 +509,8 @@ def main() -> int:
         return 2
 
     # ---- B9-7 SIZINTI-COMMIT KİLİDİ (2.7/F1): proje reposunda core-path stage'leme ----
-    if tool_name == "Bash" and _GIT_STAGE.search(hay) and re.search(
-            r"(\bcore[/\\]|\s\.claude[/\\](agents|skills|commands))", hay):
+    if tool_name in _KABUK_TOOLLARI and _GIT_STAGE.search(komut) and re.search(
+            r"(\bcore[/\\]|\s\.claude[/\\](agents|skills|commands))", komut):
         sys.stderr.write(
             "⛔ SIZINTI-COMMIT KİLİDİ (F1/2.7): `git add/commit` kapsamında core-junction "
             "içeriği var — core proje reposuna COMMIT'LENEMEZ (fikri-sermaye sızıntısı, R1). "
@@ -522,7 +540,7 @@ def main() -> int:
                 "---\napplies_to: [s4_private]\n---\n(SORU 0 4. soru). İŞLEM REDDEDİLDİ.\n")
             return 2
 
-    if _DANGER.search(hay):
+    if _DANGER.search(komut):
         sys.stderr.write(
             "⛔ ADR 0005-C İHLALİ (PreToolUse guard): transport release/create veya "
             "package create teşebbüsü tespit edildi. Bu YASAK — transport'u kullanıcı "
@@ -533,8 +551,8 @@ def main() -> int:
     # INLINE AKTİVASYON guard (2026-06-11 dersi / adt-rap §34-D): Bash içinde elle
     # '/sap/bc/adt/activation' POST'u activationExecuted'ı parse ETMEZ → HTTP 200 sahte-OK
     # üretir (metadata eski kalır, saatler kayboldu). Helper'a zorla.
-    if (tool_name == "Bash" and "adt/activation" in hay and ".post(" in hay
-            and "activate_and_verify" not in hay and "_activation_failures" not in hay):
+    if (tool_name in _KABUK_TOOLLARI and "adt/activation" in komut and ".post(" in komut
+            and "activate_and_verify" not in komut and "_activation_failures" not in komut):
         sys.stderr.write(
             "⛔ INLINE AKTİVASYON (PreToolUse guard, 2026-06-11 dersi / adt-rap §34-D): "
             "Bash içinde elle '/sap/bc/adt/activation' POST'u tespit edildi. Bu yol "
@@ -548,7 +566,7 @@ def main() -> int:
     # YALIN FIORI DEPLOY guard (2026-07-06 stale-dist dersi): build'siz `fiori deploy` eski
     # dist'i yükler + "Deployment Successful" der ama canlıya bayat gider. Kanonik yol
     # scripts/deploy_ui.py (build ZORUNLU + deploy + canlı Component-preload==dist doğrulaması).
-    if tool_name == "Bash" and _FIORI_DEPLOY.search(hay) and "deploy_ui.py" not in hay:
+    if tool_name in _KABUK_TOOLLARI and _FIORI_DEPLOY.search(komut) and "deploy_ui.py" not in komut:
         sys.stderr.write(
             "⛔ YALIN FIORI DEPLOY (PreToolUse guard, 2026-07-06 stale-dist dersi): "
             "Doğrudan 'fiori deploy' BUILD YAPMAZ — eski dist/'i archive edip 'Deployment "
@@ -563,8 +581,8 @@ def main() -> int:
     # APP-İÇİ NPM INSTALL guard (standards/03 §; paket-seviye ui/ npm workspace):
     # app dizininde `npm install/ci/add` YASAK → tooling ui/node_modules'a hoist'lu.
     # Sıcak-yol: npm-install içermeyen Bash'te _NPM_INSTALL.search anında fail (FS'ye dokunmaz).
-    if tool_name == "Bash" and _NPM_INSTALL.search(hay):
-        cdm = re.search(r"\bcd\s+(?:\"([^\"]+)\"|'([^']+)'|([^\s&|;]+))", hay)
+    if tool_name in _KABUK_TOOLLARI and _NPM_INSTALL.search(komut):
+        cdm = re.search(r"\bcd\s+(?:\"([^\"]+)\"|'([^']+)'|([^\s&|;]+))", komut)
         cd_target = next((g for g in (cdm.groups() if cdm else ()) if g), "") if cdm else ""
         hit = _ui_app_subdir(cd_target) or _ui_app_subdir(data.get("cwd", "") or "")
         if hit:
