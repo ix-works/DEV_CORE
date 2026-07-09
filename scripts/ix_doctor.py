@@ -449,6 +449,50 @@ def katman4() -> list[Sonuc]:
             r.append((PASS, f"freeze-guard CANLI: dondurulmuş köke sahte-Write RED (her iki yol-formatı; kök: {kok})"))
         else:
             r.append((FAIL, f"freeze-guard DELİK: {'; '.join(delik)} (beklenen exit 2 + RED mesajı — gerçek yol formatları geçiyor!)"))
+
+    # 4f — KABLOLAMA GATE (2026-07-09 denetimi): guard'ın KOD'da koruduğu her araç,
+    #      settings.json PreToolUse matcher'ında da var mı?
+    #      Vaka: guard `PowerShell`i tanıyordu, matcher yalnız `Bash` idi → Bash'te
+    #      bloklanan komut PowerShell'den GEÇİYORDU (canlı A/B ile kanıtlandı). Guard'ı
+    #      doğrudan çağıran testler yeşildi. "Kod-seviyesi koruma" ≠ "korunuyor".
+    r.extend(_kablolama_kontrol())
+    return r
+
+
+_GUARD_KORUDUGU_TOOLLAR = ("Bash", "PowerShell", "Edit", "Write", "MultiEdit", "NotebookEdit")
+
+
+def _kablolama_kontrol() -> list:
+    """pre_tool_guard'ın koruduğu her tool, PreToolUse matcher'ıyla ona yönleniyor mu?"""
+    import json as _json
+    r = []
+    ayar = PROJ / ".claude" / "settings.json"
+    if not ayar.exists():
+        return [(SKIP, "kablolama kontrolü: .claude/settings.json yok")]
+    try:
+        d = _json.loads(ayar.read_text(encoding="utf-8"))
+    except Exception as e:
+        return [(FAIL, f"kablolama kontrolü: settings.json okunamadı ({type(e).__name__})")]
+
+    matcherlar = []
+    for blok in (d.get("hooks", {}) or {}).get("PreToolUse", []) or []:
+        kancalar = _json.dumps(blok.get("hooks", []))
+        if "pre_tool_guard" in kancalar:
+            matcherlar.append(blok.get("matcher", ".*"))
+
+    if not matcherlar:
+        return [(FAIL, "kablolama: PreToolUse'da pre_tool_guard'a giden HİÇBİR matcher yok — guard ÖLÜ")]
+
+    kapsanmayan = []
+    for tool in _GUARD_KORUDUGU_TOOLLAR:
+        if not any(re.fullmatch(m, tool) for m in matcherlar):
+            kapsanmayan.append(tool)
+    if kapsanmayan:
+        r.append((FAIL, f"kablolama DELİK: guard bu tool'ları kodda koruyor ama matcher yönlendirmiyor "
+                        f"→ {', '.join(kapsanmayan)}. Kod-seviyesi koruma, kablolanmadan KORUMA DEĞİLDİR."))
+    else:
+        r.append((PASS, f"kablolama: guard'ın koruduğu {len(_GUARD_KORUDUGU_TOOLLAR)} tool'un tamamı "
+                        f"PreToolUse matcher'ında ({len(matcherlar)} blok)"))
     return r
 
 

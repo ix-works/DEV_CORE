@@ -49,11 +49,11 @@ _WORKTYPES = [
     (re.compile(r"\b(CDS\s+yarat|value\s*help|arama\s+yardım|lookup\s+CDS|ddls|VH\s+yarat)\b", re.I),
      "CDS view-entity YARATMA", "playbook/adt-cds.md ⚡ 'TEK CDS YARATMA' reçetesi (shell→adt_push_source; post_shell-ddls/create_cds_view DEĞİL)"),
     (re.compile(r"\b(RAP|BDEF|behavior|view\s+entity|SRVB|service\s+binding|publish)\b", re.I),
-     "RAP/CDS", "playbook/checklists/rap-creation.md (+ cds-creation.md) · standards/05"),
+     "RAP/CDS", "playbook/checklists/rap-creation.md (+ playbook/checklists/cds-creation.md) · standards/05"),
     (re.compile(r"\b(Dynpro|ALV|module\s+pool|report\s+yaz|klasik)\b", re.I),
      "Klasik dialog/ALV", "playbook/checklists/classic-dialog-creation.md · standards/06 (§1 include-böl ZORUNLU!)"),
     (re.compile(r"\b(freestyle|UI5|fiori)\b", re.I),
-     "Freestyle UI5", "playbook/checklists/ui-freestyle-creation.md (+ ui-backend-rap-creation.md)"),
+     "Freestyle UI5", "playbook/checklists/ui-freestyle-creation.md (+ playbook/checklists/ui-backend-rap-creation.md)"),
     (re.compile(r"\bstruct(?:ure)?\b", re.I),
      "DDIC struct", "playbook/checklists/struct-creation.md"),
     (re.compile(r"\b(tablo|table)\b", re.I),
@@ -131,10 +131,16 @@ def main() -> int:
             "imza/yapı/AST gerekiyorsa ast-grep (governance/tooling-plugins.md §ast-grep)."
         )
 
+    # Enjekte edilen metodoloji yolları `core/` junction'ı altındadır; öneksiz yol
+    # Read()'te çözülmez (2026-07-09 denetimi). Tek kaynak: utils/inject_paths.py
+    from pathlib import Path as _Path
+    sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))  # core/scripts
+    from utils.inject_paths import core_onekle  # type: ignore
+
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
-            "additionalContext": "\n".join(parts),
+            "additionalContext": core_onekle("\n".join(parts)),
         }
     }))
     return 0

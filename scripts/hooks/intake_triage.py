@@ -16,6 +16,7 @@ odaklı; ITG kapsam+modül+protokol işi — ayrık sorumluluk. Sinyal yoksa ses
 import json
 import re
 import sys
+from pathlib import Path
 
 # B5: otomatik-event işaretleri (task-notification/sistem-bildirimi = kullanıcı-turn'ü DEĞİL).
 # Kullanıcı bunları yazmaz → filtrelemek yanlış-negatif üretmez. system-reminder HARİÇ (her promptta).
@@ -131,6 +132,11 @@ def main() -> int:
         + modul_notu
     )
 
+    # Enjekte edilen metodoloji yolları `core/` junction'ı altındadır; öneksiz yol
+    # Read()'te çözülmez (2026-07-09 denetimi). Tek kaynak: utils/inject_paths.py
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # core/scripts
+    from utils.inject_paths import core_onekle  # type: ignore
+    nudge = core_onekle(nudge)
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",

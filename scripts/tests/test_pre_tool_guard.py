@@ -28,41 +28,37 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Windows konsolu cp1252'dir: Türkçe karakterli çıktı UnicodeEncodeError ile ÇÖKER ve
+# test "hata" gibi görünür (2026-07-09: CI'da fark edilmezdi, yerelde çöktü).
+for _akis in (sys.stdout, sys.stderr):
+    try:
+        _akis.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
 GUARD = Path(__file__).resolve().parents[1] / "hooks" / "pre_tool_guard.py"
 PROJ = os.environ.get("CLAUDE_PROJECT_DIR", "")
 LIVE = os.environ.get("IX_GUARD_TEST_LIVE") == "1"
 
 
-def _frozen_root() -> str:
-    """project.yaml'dan ilk frozen_readonly_paths girdisi; yoksa '' (freeze testleri atlanır).
+def _fixture_proje() -> tuple:
+    """FREEZE testleri için KENDİ proje fixture'ını kurar → (proje_dizini, donmus_kok).
 
-    İki YAML biçimi de desteklenir — yalnız blok-listeyi beklemek sessizce '' döndürür
-    ve testi 'atlandı' sanırsın (2026-07-09: tam bu oldu, freeze testleri hiç koşmadı):
-        frozen_readonly_paths: ["C:\\\\X"]      # inline
-        frozen_readonly_paths:\n  - "C:\\\\X"   # blok
+    Eskiden gerçek `project.yaml`'a bağlıydı; CI'da `CLAUDE_PROJECT_DIR` yok diye FREEZE'in
+    5 senaryosunun TAMAMI sessizce SKIP oluyordu — üstelik ekrana "GUARD YUZEYI TUTUYOR"
+    yazıp exit 0 veriyordu (2026-07-09 denetimi). En çok yanlış-pozitif üreten kural,
+    hiç test edilmiyordu. Fixture ile bağımlılık kalkar: senaryolar HER ORTAMDA koşar.
     """
-    if not PROJ:
-        return ""
-    p = Path(PROJ) / "project.yaml"
-    if not p.exists():
-        return ""
-    metin = p.read_text(encoding="utf-8", errors="replace")
-    # inline: frozen_readonly_paths: ["...", "..."]
-    m = re.search(r"frozen_readonly_paths:\s*\[([^\]]*)\]", metin)
-    if m:
-        hits = re.findall(r"['\"]([^'\"]+)['\"]", m.group(1))
-        if hits:
-            return hits[0].replace("\\\\", "\\").strip()
-    # blok: frozen_readonly_paths:\n  - "..."
-    m = re.search(r"frozen_readonly_paths:\s*\n((?:\s*-\s*.+\n)+)", metin)
-    if m:
-        hits = re.findall(r"-\s*['\"]?([^'\"\n]+)", m.group(1))
-        if hits:
-            return hits[0].strip()
-    return ""
+    import tempfile
+    d = Path(tempfile.mkdtemp(prefix="ix_guard_fixture_"))
+    kok = "C:" + chr(92) + "IX_FROZEN_TEST"
+    (d / "project.yaml").write_text(
+        'frozen_readonly_paths: ["' + kok.replace(chr(92), chr(92) * 2) + '"]\n',
+        encoding="utf-8")
+    return d, kok.replace(chr(92), "/")
 
 
-FROZEN = _frozen_root()
+FIXTURE_PROJE, FROZEN = _fixture_proje()   # freeze senaryoları artık HER ORTAMDA koşar
 GH = shutil.which("gh") is not None
 
 
@@ -82,15 +78,23 @@ def _case(kural, ad, tool, cmd, beklenen, skip=""):
 
 def build_cases():
     c = []
-    fz = FROZEN or r"C:\FROZEN_PLACEHOLDER"
-    skip_fz = "" if FROZEN else "project.yaml/frozen_readonly_paths yok"
+    fz = FROZEN
+    skip_fz = ""     # fixture sayesinde koşulsuz
 
     c += [
         _case("FREEZE R10", "A mesajda donmus kok gecer", "Bash", hd(f"chore: {fz} yolu duzeltildi"), 0, skip_fz),
         _case("FREEZE R10", "A PS here-string", "PowerShell", ps_hd(f"chore: {fz} yolu"), 0, skip_fz),
         _case("FREEZE R10", "B donmus koke yazma", "Bash", f'echo x > {fz}/a.txt', 2, skip_fz),
-        _case("FREEZE R10", "C powershell yazma", "PowerShell", f'Set-Content {fz}\\a.txt "x"', 2, skip_fz),
+        _case("FREEZE R10", "C powershell yazma", "PowerShell", f'Set-Content {fz}/a.txt "x"', 2, skip_fz),
         _case("FREEZE R10", "mesru: okuma", "Bash", f'grep -r x {fz}', 0, skip_fz),
+        # Denetimde yakalanan iki yön (2026-07-09): salt-okuma bloklanıyordu, gerçek yazma geçiyordu
+        _case("FREEZE R10", "mesru: okuma + 2>&1 redirect", "Bash", f'ls {fz} 2>&1', 0, skip_fz),
+        _case("FREEZE R10", "mesru: kaynak kopyalama", "Bash", f'cp {fz}/x.abap ./y', 0, skip_fz),
+        _case("FREEZE R10", "B python ile yazma", "Bash", f'python -c "open(\'{fz}/x\',\'w\')"', 2, skip_fz),
+        _case("FREEZE R10", "B tar -C donmus kok", "Bash", f'tar -xzf y.tgz -C {fz}', 2, skip_fz),
+        _case("FREEZE R10", "mesru: tar listeleme", "Bash", f'tar -tzf {fz}/a.tgz', 0, skip_fz),
+        _case("FREEZE R10", "mesru: prefix cakismasi", "Bash", f'rm -rf {fz}_YENI/tmp', 0, skip_fz),
+        _case("FREEZE R10", "B NotebookEdit (notebook_path)", "NotebookEdit", None, 2, skip_fz),
     ]
     c += [
         _case("R9 SILME", "A mesajda 'rm -rf core'", "Bash", hd("test: rm -rf core -> 2 (koruma ayakta)"), 0),
@@ -220,12 +224,20 @@ def main() -> int:
     ozet["ZSD_PAT DRIFT"] = [0 if drift else 1, 1]
     if drift:
         fails.append("ZSD_PAT / " + drift)
+    atlananlar = []
     for kural, ad, tool, cmd, beklenen, skip in build_cases():
         if skip:
             skipped += 1
+            atlananlar.append(f"{kural} / {ad} ({skip})")
             continue
-        payload = json.dumps({"tool_name": tool, "tool_input": {"command": cmd}})
+        if tool == "NotebookEdit":
+            ti = {"notebook_path": FROZEN + "/x.ipynb", "new_source": "a"}
+        else:
+            ti = {"command": cmd}
+        payload = json.dumps({"tool_name": tool, "tool_input": ti})
         env = dict(os.environ)
+        if kural.startswith("FREEZE"):
+            env["CLAUDE_PROJECT_DIR"] = str(FIXTURE_PROJE)   # fixture: her ortamda koşsun
         r = subprocess.run([sys.executable, str(GUARD)], input=payload, capture_output=True,
                            text=True, encoding="utf-8", errors="replace", env=env, timeout=90)
         ok = (r.returncode == beklenen)
@@ -239,7 +251,15 @@ def main() -> int:
     for k, (g, t) in ozet.items():
         print(f"  {'OK  ' if g == t else 'FAIL'} {k:20} {g}/{t}")
     if skipped:
-        print(f"  SKIP {skipped} senaryo (ag/proje bagimli)")
+        # SESSİZ ATLAMA YASAK: eskiden "SKIP 9" yazıp "GUARD YUZEYI TUTUYOR" diyordu ve
+        # exit 0 veriyordu — atlananların 5'i FREEZE'in TAMAMI idi (2026-07-09 denetimi).
+        print(f"  SKIP {skipped} senaryo — ATLANANLAR (yeşil ışık DEĞİL):")
+        for a in atlananlar:
+            print(f"       - {a}")
+    print("\n⚠ BU TEST GUARD'I DOĞRUDAN ÇAĞIRIR — KABLOLAMAYI (settings.json PreToolUse\n"
+          "  matcher'ı) TEST ETMEZ. 'C powershell' senaryoları guard KODUNUN o tool'u\n"
+          "  tanıdığını gösterir, üretimde hook'un tetiklendiğini DEĞİL. Kablolama gate'i:\n"
+          "  `python core/scripts/ix_doctor.py` → 'kablolama' satırı.")
     if fails:
         print("\nGUARD YUZEYI BOZUK:")
         for f in fails:

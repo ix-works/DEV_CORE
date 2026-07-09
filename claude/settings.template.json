@@ -22,7 +22,8 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|mcp__sap-adt__.*",
+        "_comment": "PowerShell 2026-07-09'da EKLENDI: guard kodu iki kabugu da taniyordu ama matcher yalniz Bash'ti -> Bash'te bloklanan komut PowerShell'den GECIYORDU (canli A/B ile kanitlandi). Kod-seviyesi koruma, kablolanmadan korumadir sanilir.",
+        "matcher": "Bash|PowerShell|mcp__sap-adt__.*",
         "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pre_tool_guard"] } ]
       },
       {
@@ -31,6 +32,11 @@
           { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pre_tool_guard"] },
           { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pull_before_edit"] }
         ]
+      },
+      {
+        "_comment": "NotebookEdit AYRI blok: pre_tool_guard freeze/core-leak icin gerekli, ama pull_before_edit SAP-source akisina ozeldir, notebook'a uygulanmaz.",
+        "matcher": "NotebookEdit",
+        "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pre_tool_guard"] } ]
       },
       {
         "matcher": "Agent",

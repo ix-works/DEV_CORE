@@ -32,6 +32,11 @@ def proje_koku() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+# Bloklayıcı (PreToolUse) hook'lar: core yoksa aracı REDDET (exit 2). Diğerleri (SessionStart,
+# watchdog, post_validate...) bloklamaz → exit 1 ile yalnız uyarır.
+_FAIL_CLOSED = {"pre_tool_guard", "pull_before_edit"}
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print("hook_shim: hook adı eksik (kullanım: hook_shim.py <hook_adi>)", file=sys.stderr)
@@ -42,6 +47,11 @@ def main() -> int:
     hedef = os.path.join(core, "scripts", "hooks", hook + ".py")
 
     if not os.path.isdir(core) or not os.path.isfile(hedef):
+        # FAIL-CLOSED: PreToolUse'da bloklayan çıkış kodu 2'dir. Eskiden burada `return 1`
+        # vardı → junction kırılınca guard SESSİZCE yok oluyor, araç ÇALIŞIYORDU. Yani
+        # koruma en çok gerektiği anda (kurulum bozuk) kayboluyordu. Uyarı metni "SAP-YAZMA
+        # YAPMA" diyordu — tavsiye, zorlama değil. (2026-07-09 denetimi.)
+        kapali = hook in _FAIL_CLOSED
         print(
             "=" * 62 + "\n"
             "⛔ CORE JUNCTION KOPUK/EKSİK — guardrail'ler ÇALIŞMIYOR!\n"
@@ -50,11 +60,13 @@ def main() -> int:
             "     python core/scripts/team_setup.py --repair-junctions\n"
             "   core/ tamamen yoksa (DEV_CORE clone'u eksik):\n"
             "     git clone <CORE_REPO_URL> <CORE_CLONE_DIR>  &&  team_setup.py\n"
-            "   Bu oturumda SAP-YAZMA YAPMA (pre_tool_guard devre dışı olabilir).\n"
+            + ("   Bu araç çağrısı REDDEDİLDİ (fail-closed): guard yokken yazma yapılmaz.\n"
+               if kapali else
+               "   (Bu hook bloklayıcı değil; oturum devam ediyor.)\n")
             + "=" * 62,
             file=sys.stderr,
         )
-        return 1
+        return 2 if kapali else 1
 
     # Gerçek hook'u aynı süreçte çalıştır (stdin/stdout/stderr doğal geçer)
     sys.argv = [hedef] + sys.argv[2:]
