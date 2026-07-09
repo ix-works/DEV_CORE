@@ -157,6 +157,95 @@ _CORE_LEAK = re.compile("(" + "|".join(_leak_desenleri()) + ")")
 
 _GIT_STAGE = re.compile(r"\bgit\s+(add|commit|stage)\b", re.IGNORECASE)
 
+# ---- PUBLIC-PR SIZINTI GATE (2026-07-09) -------------------------------------
+# DEV_CORE public oldu. `gh pr create` gövdesi HİÇBİR gate'ten geçmiyordu:
+# core_precommit yalnız COMMIT içeriğini tarar, PR başlığı/gövdesi commit değildir.
+# Somut vaka: PR gövdesi gerçek Z-paket adı taşıyordu; onu auto-mode tesadüfen
+# durdurdu (genericize kontrolü olduğu için değil, "public surface" refleksiyle).
+# Yayınlanan içerik cache'lenir/indexlenir — silmek geri almaz → FAIL-CLOSED.
+# `gh pr create` KOMUT olarak mı geçiyor, yoksa metin içinde ondan BAHSEDİLİYOR mu?
+# Naif `\bgh\s+pr\s+create\b` ikisini ayırt etmez: bu gate'i tanıtan commit mesajı
+# ("`gh pr create` gövdesi ...") gate'in kendisini bloklamıştı (2026-07-09, dogfood).
+# Komut-sınırı şart: satır başı ya da ayraç (; | & ( newline) sonrası.
+_GH_PR_CREATE = re.compile(
+    r"(?:^|[\n;|&(])\s*(?:[A-Za-z_]\w*=\S+\s+)*gh\s+pr\s+create\b", re.IGNORECASE)
+
+# Heredoc/here-string gövdeleri KOMUT DEĞİL, veridir (git commit -F -, --body "$(cat <<EOF)").
+# Taramadan önce çıkarılır; aksi halde commit mesajındaki örnek komut "çalıştırılıyor" sanılır.
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1.*?^\2$", re.MULTILINE | re.DOTALL)
+_PS_HERESTRING = re.compile(r"@(['\"])[\s\S]*?^\1@", re.MULTILINE)
+
+
+def _komut_govdesi(s: str) -> str:
+    """Heredoc/here-string gövdelerini düşür — geriye yalnız çalıştırılacak komut kalsın."""
+    s = _HEREDOC.sub(" <<HEREDOC-STRIPPED> ", s)
+    return _PS_HERESTRING.sub(" <HERESTRING-STRIPPED> ", s)
+# core_precommit.py::ZSD_PAT ile AYNI desen (tek doğruluk kaynağı olmalı; ikisi
+# ayrışırsa commit'te yakalanan PR gövdesinde kaçar). ZSD000/001 = demo, serbest.
+_ZSD_PAT = re.compile(r"\bzsd0(?!00|01)\d{2}", re.IGNORECASE)
+_ARG_REPO = re.compile(r"--repo[= ]+([^\s'\"]+)")
+_ARG_BODYFILE = re.compile(r"--body-file[= ]+(?:'([^']+)'|\"([^\"]+)\"|(\S+))")
+_CD_PREFIX = re.compile(r"\bcd\s+([^\s;&|]+)")
+
+
+def _repo_public_mu(hay: str) -> tuple:
+    """Hedef repo public mi? -> (public_mu, etiket). Kararsızsa FAIL-CLOSED (public say).
+
+    Görünürlük CANLI sorulur (`gh repo view`), listeden okunmaz: bugün private olan
+    repo yarın public olabilir (2026-07-09'da tam bu oldu) ve bayat liste gate'i
+    sessizce susturur — korumanın en kötü başarısızlık biçimi.
+    """
+    import subprocess
+    m = _ARG_REPO.search(hay)
+    argv = ["gh", "repo", "view", "--json", "isPrivate,nameWithOwner"]
+    cwd = None
+    if m:
+        argv.insert(3, m.group(1))
+    else:
+        c = _CD_PREFIX.search(hay)
+        cwd = c.group(1) if c else str(_PROJ_ROOT)
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=15,
+                           cwd=cwd, shell=False)
+        if r.returncode != 0:
+            return True, "gorunurluk-sorulamadi(fail-closed)"
+        d = json.loads(r.stdout)
+        return (not d.get("isPrivate", True)), d.get("nameWithOwner", "?")
+    except Exception:
+        return True, "gorunurluk-sorulamadi(fail-closed)"
+
+
+def _gh_pr_public_leak(hay: str) -> str:
+    """`gh pr create` public repoya gidiyorsa başlık+gövdede proje/müşteri izi ara."""
+    komut = _komut_govdesi(hay)
+    if not _GH_PR_CREATE.search(komut):
+        return ""
+    hay = komut  # arg çıkarımı da yalnız komut üzerinden (heredoc verisi arg değildir)
+    public, repo = _repo_public_mu(hay)
+    if not public:
+        return ""  # private repo (ör. proje reposu): gerçek obje adı MEŞRU, tarama yok
+
+    # Taranan metin = komutun kendisi (--title/--body inline) + varsa --body-file içeriği.
+    metin = hay
+    bf = _ARG_BODYFILE.search(hay)
+    if bf:
+        yol = bf.group(1) or bf.group(2) or bf.group(3)
+        try:
+            metin += "\n" + Path(yol).read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            return (f"--body-file okunamadi ({yol}) — public repo '{repo}' icin govde "
+                    "taranamadi. FAIL-CLOSED: dosyayi okunur yap veya --body kullan.")
+
+    bulgular = []
+    for pat, ad in ((_CORE_LEAK, "kimlik izi"), (_ZSD_PAT, "ZSD-numarali paket adi")):
+        for mm in pat.finditer(metin):
+            bulgular.append(f"{ad}: '{mm.group(0)}'")
+            if len(bulgular) >= 6:
+                break
+    if not bulgular:
+        return ""
+    return (f"public repo '{repo}' — PR basligi/govdesinde " + "; ".join(bulgular))
+
 
 def _frozen_paths() -> list[str]:
     """project.yaml frozen_readonly_paths (basit satır-parse; pyyaml bağımlılığı yok)."""
@@ -349,6 +438,22 @@ def main() -> int:
                 f"⛔ FREEZE-GUARD (R10): Bash komutu dondurulmuş kökü ('{kok}') yazma-fiiliyle "
                 "birlikte içeriyor — eski dünyaya yazma YASAK (okuma: cat/grep/ls serbest). "
                 "İŞLEM REDDEDİLDİ. Salt-okuma yapıyorsan komutu yazma-fiilsiz kur.\n")
+            return 2
+
+    # ---- PUBLIC-PR SIZINTI GATE: gh pr create → public repo → govde taramasi ----
+    # Bash VE PowerShell birlikte: tek yuzeyi kapatmak gate degil, yavaslatmadir
+    # (2026-07-09: Bash'te reddedilen komut PowerShell'den tunellenmeye calisildi).
+    if tool_name in ("Bash", "PowerShell"):
+        sorun = _gh_pr_public_leak(hay)
+        if sorun:
+            sys.stderr.write(
+                f"⛔ PUBLIC-PR SIZINTI GATE: {sorun}\n"
+                "PR başlığı/gövdesi PUBLIC repoya yayınlanır ve cache'lenir/indexlenir — "
+                "sonradan silmek geri ALMAZ. core_precommit yalnız commit içeriğini tarar; "
+                "PR gövdesi commit DEĞİLDİR, bu yüzden ayrı gate. İŞLEM REDDEDİLDİ.\n"
+                "Çözüm: gövdeyi genericize et (gerçek paket adı → ZSD<NNN>/ZSD001 demo, "
+                "sistem/kişi adı → <SYSTEM_ID>/<USER>), sonra tekrar dene. "
+                "Gerçekten istisna ise: kullanıcıya sor, bypass etme.\n")
             return 2
 
     # ---- B9-5 ÖZYİNELEMELİ-SİLME BLOĞU (R9): core/junction hedefli silme ----
