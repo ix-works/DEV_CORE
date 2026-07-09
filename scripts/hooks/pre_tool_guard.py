@@ -118,39 +118,44 @@ def _leak_desenleri() -> list[str]:
     sızıntının kendisidir. (2026-07-09: guard'ın kendi filtre listesi public
     repoda müşteri ve kişi adlarını ilan ediyordu — bu fonksiyon o yüzden var.)
 
-    Kaynak sırası (ilk bulunan kazanır):
-      1. env `IX_GENERICIZE_BLOCKLIST`  (virgülle ayrılmış)
-      2. `<proje>/.claude/genericize-blocklist.txt`  (satır başına bir desen;
-         `#` yorum; **.gitignore'lu** — repoya girmez)
-      3. jenerik varsayılan (aşağıda) — isim içermez, yalnız yapısal desenler
+    Kaynak: proje-özel liste **BİRLEŞİR**, ezmez.
+      1. env `IX_GENERICIZE_BLOCKLIST` (virgülle ayrılmış) VEYA
+         `<proje>/.claude/genericize-blocklist.txt` (satır başına bir desen; `#` yorum;
+         **.gitignore'lu** — repoya girmez)
+      2. + jenerik yapısal desenler (aşağıda) — HER ZAMAN eklenir
+
+    ⚠ Eskiden "ilk bulunan kazanır"dı: proje bir blocklist tanımladığı anda jenerik
+    desenler DÜŞÜYORDU. Sonuç tersineydi — daha fazla yapılandırma, daha az koruma:
+    blocklist'li bir projede makine-lokal kullanıcı yolu ve gerçek e-posta core'a
+    sızabiliyordu (2026-07-09 denetimi, canlı ölçümle doğrulandı). Artık birleşim.
 
     Kısaltma/obfuscation (ör. ilk 4 harf) ÇÖZÜM DEĞİL: bağlamda tahmin edilir ve
     masum kelimeleri bloklar (yanlış-pozitif).
     """
-    env = os.environ.get("IX_GENERICIZE_BLOCKLIST", "").strip()
-    if env:
-        return [p.strip() for p in env.split(",") if p.strip()]
-
-    dosya = _PROJ_ROOT / ".claude" / "genericize-blocklist.txt"
-    if dosya.exists():
-        try:
-            satirlar = dosya.read_text(encoding="utf-8", errors="replace").splitlines()
-            desenler = [s.strip() for s in satirlar
-                        if s.strip() and not s.lstrip().startswith("#")]
-            if desenler:
-                return desenler
-        except Exception:
-            pass
-
-    # Jenerik varsayılan: isim YOK, yalnız yapısal sızıntı desenleri.
-    # Her ikisi de PLACEHOLDER'ı muaf tutar — dokümantasyon örnekleri yanlış-pozitif
-    # üretiyordu (2026-07-09 CI bulgusu: `C:\Users\<USER>` ve `user@example.com`).
-    return [
+    # Jenerik yapısal desenler: isim YOK. PLACEHOLDER muaftır — dokümantasyon örnekleri
+    # yanlış-pozitif üretiyordu (`C:\Users\<USER>`, `user@example.com`).
+    jenerik = [
         r"C:[/\\]+Users[/\\]+(?!<)[^/\\ ]+",                 # makine-lokal kullanıcı yolu
         # e-posta: RFC 2606 rezerve/örnek domainleri HARİÇ
         r"[A-Za-z0-9._%+-]+@(?!example\.(?:com|org|net)\b)(?!test\b)(?!localhost\b)"
         r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
     ]
+
+    proje: list[str] = []
+    env = os.environ.get("IX_GENERICIZE_BLOCKLIST", "").strip()
+    if env:
+        proje = [p.strip() for p in env.split(",") if p.strip()]
+    else:
+        dosya = _PROJ_ROOT / ".claude" / "genericize-blocklist.txt"
+        if dosya.exists():
+            try:
+                satirlar = dosya.read_text(encoding="utf-8", errors="replace").splitlines()
+                proje = [s.strip() for s in satirlar
+                         if s.strip() and not s.lstrip().startswith("#")]
+            except Exception:
+                proje = []
+
+    return proje + jenerik
 
 
 _CORE_LEAK = re.compile("(" + "|".join(_leak_desenleri()) + ")")

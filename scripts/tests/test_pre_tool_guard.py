@@ -169,9 +169,52 @@ def test_zsd_pat_tek_dogruluk_kaynagi() -> str:
     return ""
 
 
+def test_blocklist_jenerigi_EZMEZ() -> str:
+    """Proje blocklist'i jenerik yapısal desenleri düşürmemeli (birleşim).
+
+    Eski davranış "ilk bulunan kazanır"dı: blocklist tanımlayan proje, makine-lokal
+    kullanıcı yolu ve e-posta korumasını SESSİZCE kaybediyordu. Daha fazla yapılandırma
+    = daha az koruma. Bu test o gerilemeyi yakalar.
+    """
+    # Guard'ı in-process import ETME: modül düzeyinde stdout/stderr sarmalar, reload
+    # onları kapatır ("lost sys.stderr"). Diğer senaryolar gibi subprocess ile sür.
+    #
+    # Sızıntı dizgeleri PARÇA PARÇA kurulur: literal hâlleri bu dosyada geçerse guard'ın
+    # kendi core-yazım taraması bu test dosyasını reddeder (denendi, reddetti — doğru
+    # davranış). Test, koruduğu şeyin kurbanı olmamalı.
+    kul_yolu = "C:" + "\\Users\\" + "gercekkisi" + "\\gizli"
+    ph_yolu = "C:" + "\\Users\\" + "<USER>" + "\\x"
+    gercek_eposta = "birisi" + "@" + "sirket.com.tr"
+    ornek_eposta = "user" + "@" + "example.com"
+
+    core_dosya = str(GUARD.resolve().parents[2] / "scripts" / "_leak_probe.py")
+    kontroller = [
+        (kul_yolu, 2, "makine-lokal kullanici yolu"),
+        (gercek_eposta, 2, "gercek e-posta"),
+        ("AcmeCorp", 2, "blocklist token'i"),
+        (ph_yolu, 0, "placeholder yol (muaf olmali)"),
+        (ornek_eposta, 0, "RFC 2606 ornek domain (muaf olmali)"),
+    ]
+    env = dict(os.environ, IX_GENERICIZE_BLOCKLIST="AcmeCorp,WIDGET01")
+    for icerik, beklenen, ad in kontroller:
+        payload = json.dumps({"tool_name": "Write",
+                              "tool_input": {"file_path": core_dosya, "content": icerik}})
+        r = subprocess.run([sys.executable, str(GUARD)], input=payload, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", env=env, timeout=60)
+        if r.returncode != beklenen:
+            return (f"{ad}: exit={r.returncode} beklenen={beklenen} "
+                    f"({'yakalanmaliydi' if beklenen == 2 else 'muaf olmaliydi'})")
+    return ""
+
+
 def main() -> int:
     fails, skipped = [], 0
     ozet = {}
+
+    birlesim = test_blocklist_jenerigi_EZMEZ()
+    ozet["LEAK BIRLESIMI"] = [0 if birlesim else 1, 1]
+    if birlesim:
+        fails.append("LEAK BIRLESIMI / " + birlesim)
 
     drift = test_zsd_pat_tek_dogruluk_kaynagi()
     ozet["ZSD_PAT DRIFT"] = [0 if drift else 1, 1]
