@@ -205,6 +205,35 @@ EDİLEMEZ ("BEHAVIOR cannot be implemented in class" — BDEF inactive iken).
 - status 200, `activationExecuted="true"` → ikisi de AKTİF (W-uyarılar normal:
   global auth implement edilmemiş, key readonly önerisi)
 
+**🔧 HAZIR ARAÇ — `scripts/push_bo_atomic.py` (MEVCUT BO güncelleme; T6, 2026-07-09):**
+Yukarıdaki reçetenin çalışan implementasyonu. Var olan bir BO'nun kaynaklarını
+(ddls + bdef + ccimp) günceller: her birini **LOCK → PUT(inactive) → UNLOCK**, sonra
+**HEPSİNİ tek `/activation` POST**'unda birlikte aktive eder → tutarsız pencere YOK.
+
+```bash
+python core/scripts/push_bo_atomic.py --transport <TRANSPORT> \
+  --ddls  ZSD001_I_BOOKING_ITEM=<path>.cds \
+  --bdef  ZSD001_I_BOOKING=<path>.bdef \
+  --ccimp ZCL_SD001_BOOKING=<path>.ccimp.abap
+# yalnız aktivasyon (inactive kalmışları toparla):  --activate-only
+```
+
+- **Niye script, MCP değil:** `adt_push_source` **bdef ve ccimp DESTEKLEMEZ** —
+  `scripts/object_types.py::OBJECT_TYPES`'ta `bdef` girdisi **hiç yok** (kanıtlı).
+  Bu iki tip yalnız raw ADT REST ile yazılır.
+- **Sıkı doğrulama:** `activationExecuted="false"` VEYA `type/severity=E|A` → **FAIL**
+  (exit 5). HTTP 200 tek başına başarı DEĞİL — "200 ama aktive etmedi" tuzağı.
+- PUT başarısızsa aktivasyon **hiç denenmez** (exit 2) → yarım yazım olmaz.
+- Bağlantı/`sap-client`/dil `.conn_adt`'den; transport CLI'dan (gömülü değil);
+  proje kökü `__file__`'dan türetilmez (CORE-01 / ADR 0020).
+- Çalıştırdıktan sonra **readback ZORUNLU** (`adt_get` → canlı source + `version=active`)
+  ve `worklist_audit.py` — script "yazdım" der, "doğru yazdım" demez.
+- Canlı kanıt: 14 obje (9 DDLS + 4 BDEF + 1 CCIMP) tek turda push+aktive (2026-07-09,
+  bir SD paketinin yorum-senkronu); `$metadata` byte-identical kaldı.
+- ⚠ Tarihsel: bu script proje `TempScripts/`'inde **donmuş eski dünya kökünü** hard-code
+  eden ve `activationExecuted` kontrolü olmayan bir sürüm olarak yaşıyordu → core'a
+  terfi + düzeltme (T6). Eski sürümü çalıştırma.
+
 **⛔ ADR 0005 D — MCP class create EN yaratır (KRİTİK):** `mcp__sap-adt__
 adt_post_shell(object_type='class')` objeyi `masterLanguage="EN"` yaratır
 (MCP'de language param yok). Behavior class'ı **raw REST** ile yarat: endpoint
