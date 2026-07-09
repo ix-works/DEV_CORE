@@ -8,7 +8,7 @@ from email import encoders
 # ============================================================
 # AYARLAR — Buraya kendi bilgilerini gir
 # ============================================================
-SENDER_EMAIL    = "<gonderen>@example.com"       # Gonderen Gmail adresi
+SENDER_EMAIL    = "<gonderen>@example.com"       # Gonderen e-posta (Gmail App Password ile)
 SENDER_PASSWORD = "xxxx xxxx xxxx xxxx"          # Gmail App Password (bosluklu 16 karakter)
 
 RECIPIENTS = [

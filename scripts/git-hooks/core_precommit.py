@@ -57,9 +57,13 @@ def _id_desenleri() -> list[str]:
     except Exception:
         pass
 
+    # Her ikisi de PLACEHOLDER'ı muaf tutar — dokümantasyon örnekleri yanlış-pozitif
+    # üretiyordu (2026-07-09 CI bulgusu: `C:\Users\<USER>` ve `user@example.com`).
     return [
-        r"C:[/\\]+Users[/\\]+[^/\\ ]+",                      # makine-lokal kullanıcı yolu
-        r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",   # e-posta adresi
+        r"C:[/\\]+Users[/\\]+(?!<)[^/\\ ]+",                 # makine-lokal kullanıcı yolu
+        # e-posta: RFC 2606 rezerve/örnek domainleri HARİÇ
+        r"[A-Za-z0-9._%+-]+@(?!example\.(?:com|org|net)\b)(?!test\b)(?!localhost\b)"
+        r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
     ]
 
 

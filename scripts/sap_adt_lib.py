@@ -328,7 +328,7 @@ def set_explicit_working_dir(path: str) -> None:
         path: Path to the directory containing .conn_adt
 
     Example:
-        set_explicit_working_dir('C:\\Users\\project\\folder')
+        set_explicit_working_dir('C:\\Users\\<USER>\\<proje>')
     """
     global _explicit_working_dir, conn_path, ADT_SAP_URL, ADT_SAP_USER, ADT_SAP_PASSWORD, ADT_SAP_CLIENT, ADT_SAP_LANGUAGE
 
