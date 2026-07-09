@@ -118,44 +118,167 @@ def _leak_desenleri() -> list[str]:
     sızıntının kendisidir. (2026-07-09: guard'ın kendi filtre listesi public
     repoda müşteri ve kişi adlarını ilan ediyordu — bu fonksiyon o yüzden var.)
 
-    Kaynak sırası (ilk bulunan kazanır):
-      1. env `IX_GENERICIZE_BLOCKLIST`  (virgülle ayrılmış)
-      2. `<proje>/.claude/genericize-blocklist.txt`  (satır başına bir desen;
-         `#` yorum; **.gitignore'lu** — repoya girmez)
-      3. jenerik varsayılan (aşağıda) — isim içermez, yalnız yapısal desenler
+    Kaynak: proje-özel liste **BİRLEŞİR**, ezmez.
+      1. env `IX_GENERICIZE_BLOCKLIST` (virgülle ayrılmış) VEYA
+         `<proje>/.claude/genericize-blocklist.txt` (satır başına bir desen; `#` yorum;
+         **.gitignore'lu** — repoya girmez)
+      2. + jenerik yapısal desenler (aşağıda) — HER ZAMAN eklenir
+
+    ⚠ Eskiden "ilk bulunan kazanır"dı: proje bir blocklist tanımladığı anda jenerik
+    desenler DÜŞÜYORDU. Sonuç tersineydi — daha fazla yapılandırma, daha az koruma:
+    blocklist'li bir projede makine-lokal kullanıcı yolu ve gerçek e-posta core'a
+    sızabiliyordu (2026-07-09 denetimi, canlı ölçümle doğrulandı). Artık birleşim.
 
     Kısaltma/obfuscation (ör. ilk 4 harf) ÇÖZÜM DEĞİL: bağlamda tahmin edilir ve
     masum kelimeleri bloklar (yanlış-pozitif).
     """
-    env = os.environ.get("IX_GENERICIZE_BLOCKLIST", "").strip()
-    if env:
-        return [p.strip() for p in env.split(",") if p.strip()]
-
-    dosya = _PROJ_ROOT / ".claude" / "genericize-blocklist.txt"
-    if dosya.exists():
-        try:
-            satirlar = dosya.read_text(encoding="utf-8", errors="replace").splitlines()
-            desenler = [s.strip() for s in satirlar
-                        if s.strip() and not s.lstrip().startswith("#")]
-            if desenler:
-                return desenler
-        except Exception:
-            pass
-
-    # Jenerik varsayılan: isim YOK, yalnız yapısal sızıntı desenleri.
-    # Her ikisi de PLACEHOLDER'ı muaf tutar — dokümantasyon örnekleri yanlış-pozitif
-    # üretiyordu (2026-07-09 CI bulgusu: `C:\Users\<USER>` ve `user@example.com`).
-    return [
+    # Jenerik yapısal desenler: isim YOK. PLACEHOLDER muaftır — dokümantasyon örnekleri
+    # yanlış-pozitif üretiyordu (`C:\Users\<USER>`, `user@example.com`).
+    jenerik = [
         r"C:[/\\]+Users[/\\]+(?!<)[^/\\ ]+",                 # makine-lokal kullanıcı yolu
         # e-posta: RFC 2606 rezerve/örnek domainleri HARİÇ
         r"[A-Za-z0-9._%+-]+@(?!example\.(?:com|org|net)\b)(?!test\b)(?!localhost\b)"
         r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
     ]
 
+    proje: list[str] = []
+    env = os.environ.get("IX_GENERICIZE_BLOCKLIST", "").strip()
+    if env:
+        proje = [p.strip() for p in env.split(",") if p.strip()]
+    else:
+        dosya = _PROJ_ROOT / ".claude" / "genericize-blocklist.txt"
+        if dosya.exists():
+            try:
+                satirlar = dosya.read_text(encoding="utf-8", errors="replace").splitlines()
+                proje = [s.strip() for s in satirlar
+                         if s.strip() and not s.lstrip().startswith("#")]
+            except Exception:
+                proje = []
+
+    return proje + jenerik
+
 
 _CORE_LEAK = re.compile("(" + "|".join(_leak_desenleri()) + ")")
 
 _GIT_STAGE = re.compile(r"\bgit\s+(add|commit|stage)\b", re.IGNORECASE)
+
+# ---- PUBLIC-PR SIZINTI GATE (2026-07-09) -------------------------------------
+# DEV_CORE public oldu. `gh pr create` gövdesi HİÇBİR gate'ten geçmiyordu:
+# core_precommit yalnız COMMIT içeriğini tarar, PR başlığı/gövdesi commit değildir.
+# Somut vaka: PR gövdesi gerçek Z-paket adı taşıyordu; onu auto-mode tesadüfen
+# durdurdu (genericize kontrolü olduğu için değil, "public surface" refleksiyle).
+# Yayınlanan içerik cache'lenir/indexlenir — silmek geri almaz → FAIL-CLOSED.
+# `gh pr create` KOMUT olarak mı geçiyor, yoksa metin içinde ondan BAHSEDİLİYOR mu?
+# Naif `\bgh\s+pr\s+create\b` ikisini ayırt etmez: bu gate'i tanıtan commit mesajı
+# ("`gh pr create` gövdesi ...") gate'in kendisini bloklamıştı (2026-07-09, dogfood).
+# Komut-sınırı şart: satır başı ya da ayraç (; | & ( newline) sonrası.
+_GH_PR_CREATE = re.compile(
+    r"(?:^|[\n;|&(])\s*(?:[A-Za-z_]\w*=\S+\s+)*gh\s+pr\s+create\b", re.IGNORECASE)
+
+# Heredoc/here-string gövdeleri KOMUT DEĞİL, veridir (git commit -F -, --body "$(cat <<EOF)").
+# Taramadan önce çıkarılır; aksi halde commit mesajındaki örnek komut "çalıştırılıyor" sanılır.
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1.*?^\2$", re.MULTILINE | re.DOTALL)
+_PS_HERESTRING = re.compile(r"@(['\"])[\s\S]*?^\1@", re.MULTILINE)
+
+
+def _komut_govdesi(s: str) -> str:
+    """Heredoc/here-string gövdelerini düşür — geriye yalnız çalıştırılacak komut kalsın."""
+    s = _HEREDOC.sub(" <<HEREDOC-STRIPPED> ", s)
+    return _PS_HERESTRING.sub(" <HERESTRING-STRIPPED> ", s)
+
+
+# Kabuk yüzeyleri: bir kural yalnız Bash'i kapatırsa, aynı komut PowerShell'den geçer.
+# (2026-07-09 denetimi: freeze-guard ve R9-silme bloğu `tool_name == "Bash"` ile
+# sınırlıydı → `Remove-Item -Recurse core` PowerShell aracından HİÇ bloklanmıyordu.)
+_KABUK_TOOLLARI = ("Bash", "PowerShell")
+# core_precommit.py::ZSD_PAT ile AYNI desen (tek doğruluk kaynağı olmalı; ikisi
+# ayrışırsa commit'te yakalanan PR gövdesinde kaçar). ZSD000/001 = demo, serbest.
+_ZSD_PAT = re.compile(r"\bzsd0(?!00|01)\d{2}", re.IGNORECASE)
+_ARG_REPO = re.compile(r"--repo[= ]+([^\s'\"]+)")
+_ARG_BODYFILE = re.compile(r"--body-file[= ]+(?:'([^']+)'|\"([^\"]+)\"|(\S+))")
+_CD_PREFIX = re.compile(r"\bcd\s+([^\s;&|]+)")
+
+
+def _arg_deger(s: str, ad: str) -> str:
+    """--<ad> değerini çıkar (tek/çift tırnaklı veya tırnaksız). Yoksa ''."""
+    m = re.search(rf"--{ad}[= ]+(?:'([^']*)'|\"((?:[^\"\\]|\\.)*)\"|(\S+))", s)
+    if not m:
+        return ""
+    return m.group(1) or m.group(2) or m.group(3) or ""
+
+
+def _yayinlanan_metin(hay: str) -> tuple:
+    """PR'da GERÇEKTEN yayınlanacak metin: --title + --body + --body-file İÇERİĞİ.
+
+    Komutun tamamını taramak YANLIŞ: `--body-file` YOLU yayınlanmaz ama içinde
+    proje/müşteri adı geçebilir (ör. `C:/IX/<Musteri>/.tmp/body.md`) → gate kendi
+    yolunu sızıntı sanır (2026-07-09 dogfood: ikinci yanlış-pozitif). Yanlış-pozitif
+    üreten gate gürültüye döner, gürültülü gate ciddiye alınmaz.
+    Dönüş: (metin, hata) — hata doluysa FAIL-CLOSED.
+    """
+    parcalar = [_arg_deger(hay, "title"), _arg_deger(hay, "body")]
+    bf = _ARG_BODYFILE.search(hay)
+    if bf:
+        yol = bf.group(1) or bf.group(2) or bf.group(3)
+        try:
+            parcalar.append(Path(yol).read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            return "", (f"--body-file okunamadi ({yol}) — govde taranamadi. "
+                        "FAIL-CLOSED: dosyayi okunur yap veya --body kullan.")
+    return "\n".join(p for p in parcalar if p), ""
+
+
+def _repo_public_mu(hay: str) -> tuple:
+    """Hedef repo public mi? -> (public_mu, etiket). Kararsızsa FAIL-CLOSED (public say).
+
+    Görünürlük CANLI sorulur (`gh repo view`), listeden okunmaz: bugün private olan
+    repo yarın public olabilir (2026-07-09'da tam bu oldu) ve bayat liste gate'i
+    sessizce susturur — korumanın en kötü başarısızlık biçimi.
+    """
+    import subprocess
+    m = _ARG_REPO.search(hay)
+    argv = ["gh", "repo", "view", "--json", "isPrivate,nameWithOwner"]
+    cwd = None
+    if m:
+        argv.insert(3, m.group(1))
+    else:
+        c = _CD_PREFIX.search(hay)
+        cwd = c.group(1) if c else str(_PROJ_ROOT)
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, timeout=15,
+                           cwd=cwd, shell=False)
+        if r.returncode != 0:
+            return True, "gorunurluk-sorulamadi(fail-closed)"
+        d = json.loads(r.stdout)
+        return (not d.get("isPrivate", True)), d.get("nameWithOwner", "?")
+    except Exception:
+        return True, "gorunurluk-sorulamadi(fail-closed)"
+
+
+def _gh_pr_public_leak(hay: str) -> str:
+    """`gh pr create` public repoya gidiyorsa başlık+gövdede proje/müşteri izi ara."""
+    komut = _komut_govdesi(hay)
+    if not _GH_PR_CREATE.search(komut):
+        return ""
+    hay = komut  # arg çıkarımı da yalnız komut üzerinden (heredoc verisi arg değildir)
+    public, repo = _repo_public_mu(hay)
+    if not public:
+        return ""  # private repo (ör. proje reposu): gerçek obje adı MEŞRU, tarama yok
+
+    # YALNIZ yayınlanacak metin taranır — komutun kendisi (yollar, flag'ler) değil.
+    metin, hata = _yayinlanan_metin(hay)
+    if hata:
+        return f"public repo '{repo}' — {hata}"
+
+    bulgular = []
+    for pat, ad in ((_CORE_LEAK, "kimlik izi"), (_ZSD_PAT, "ZSD-numarali paket adi")):
+        for mm in pat.finditer(metin):
+            bulgular.append(f"{ad}: '{mm.group(0)}'")
+            if len(bulgular) >= 6:
+                break
+    if not bulgular:
+        return ""
+    return (f"public repo '{repo}' — PR basligi/govdesinde " + "; ".join(bulgular))
 
 
 def _frozen_paths() -> list[str]:
@@ -332,6 +455,17 @@ def main() -> int:
     else:
         hay = str(ti)
 
+    # ---- TEK NORMALİZASYON: komut-niyeti kuralları `komut` üzerinde çalışır ----
+    # `hay` ham metindir: heredoc/here-string GÖVDESİ de içindedir. O gövde VERİdir
+    # (commit mesajı, PR gövdesi), komut değil. Ham metin üzerinde desen aramak, bir
+    # kuralın kendi dokümantasyonunu bloklamasına yol açar — 2026-07-09'da üç ayrı
+    # guard'da (freeze / R9-silme / PUBLIC-PR) arka arkaya yaşandı; tek tek yamamak
+    # yerine burada BİR KEZ çözülür. Yeni komut-niyeti kuralı `komut` kullanmalıdır.
+    #
+    # Kabuk yüzeyi TEK DEĞİL: Bash'te bloklanan komut PowerShell'den tünellenebilir
+    # (aynı gün denendi). Kabuk-kuralları her iki araca da uygulanır.
+    komut = _komut_govdesi(hay) if tool_name in _KABUK_TOOLLARI else hay
+
     # ---- B9-4 FREEZE-GUARD (R10): dondurulmuş köke YAZMA teşebbüsü ----
     dosya_hedefi = ti.get("file_path", "") if isinstance(ti, dict) else ""
     if tool_name in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
@@ -342,17 +476,34 @@ def main() -> int:
                 f"YASAK (hedef: {dosya_hedefi}). Okuma serbesttir. Çalışma yeni dünyada "
                 "(C:\\IX) yapılır. İŞLEM REDDEDİLDİ.\n")
             return 2
-    if tool_name == "Bash":
-        kok = _frozen_hit(hay)
-        if kok and _YAZMA_FIILI.search(hay):
+    if tool_name in _KABUK_TOOLLARI:
+        kok = _frozen_hit(komut)
+        if kok and _YAZMA_FIILI.search(komut):
             sys.stderr.write(
                 f"⛔ FREEZE-GUARD (R10): Bash komutu dondurulmuş kökü ('{kok}') yazma-fiiliyle "
                 "birlikte içeriyor — eski dünyaya yazma YASAK (okuma: cat/grep/ls serbest). "
                 "İŞLEM REDDEDİLDİ. Salt-okuma yapıyorsan komutu yazma-fiilsiz kur.\n")
             return 2
 
+    # ---- PUBLIC-PR SIZINTI GATE: gh pr create → public repo → govde taramasi ----
+    # Bash VE PowerShell birlikte: tek yuzeyi kapatmak gate degil, yavaslatmadir
+    # (2026-07-09: Bash'te reddedilen komut PowerShell'den tunellenmeye calisildi).
+    if tool_name in _KABUK_TOOLLARI:
+        sorun = _gh_pr_public_leak(komut)
+        if sorun:
+            sys.stderr.write(
+                f"⛔ PUBLIC-PR SIZINTI GATE: {sorun}\n"
+                "PR başlığı/gövdesi PUBLIC repoya yayınlanır ve cache'lenir/indexlenir — "
+                "sonradan silmek geri ALMAZ. core_precommit yalnız commit içeriğini tarar; "
+                "PR gövdesi commit DEĞİLDİR, bu yüzden ayrı gate. İŞLEM REDDEDİLDİ.\n"
+                "Çözüm: gövdeyi genericize et (gerçek paket adı → ZSD<NNN>/ZSD001 demo, "
+                "sistem/kişi adı → <SYSTEM_ID>/<USER>), sonra tekrar dene. "
+                "Gerçekten istisna ise: kullanıcıya sor, bypass etme.\n")
+            return 2
+
     # ---- B9-5 ÖZYİNELEMELİ-SİLME BLOĞU (R9): core/junction hedefli silme ----
-    if tool_name == "Bash" and _SILME_FIILI.search(hay) and _KORUNAN_SILME_HEDEF.search(hay):
+    if tool_name in _KABUK_TOOLLARI and _SILME_FIILI.search(komut) \
+            and _KORUNAN_SILME_HEDEF.search(komut):
         sys.stderr.write(
             "⛔ SİLME BLOĞU (R9): Özyinelemeli silme/clean komutu core-junction veya "
             ".claude/{agents,skills,commands} hedefini içeriyor. Güncel toolchain junction "
@@ -363,8 +514,8 @@ def main() -> int:
         return 2
 
     # ---- B9-7 SIZINTI-COMMIT KİLİDİ (2.7/F1): proje reposunda core-path stage'leme ----
-    if tool_name == "Bash" and _GIT_STAGE.search(hay) and re.search(
-            r"(\bcore[/\\]|\s\.claude[/\\](agents|skills|commands))", hay):
+    if tool_name in _KABUK_TOOLLARI and _GIT_STAGE.search(komut) and re.search(
+            r"(\bcore[/\\]|\s\.claude[/\\](agents|skills|commands))", komut):
         sys.stderr.write(
             "⛔ SIZINTI-COMMIT KİLİDİ (F1/2.7): `git add/commit` kapsamında core-junction "
             "içeriği var — core proje reposuna COMMIT'LENEMEZ (fikri-sermaye sızıntısı, R1). "
@@ -394,7 +545,7 @@ def main() -> int:
                 "---\napplies_to: [s4_private]\n---\n(SORU 0 4. soru). İŞLEM REDDEDİLDİ.\n")
             return 2
 
-    if _DANGER.search(hay):
+    if _DANGER.search(komut):
         sys.stderr.write(
             "⛔ ADR 0005-C İHLALİ (PreToolUse guard): transport release/create veya "
             "package create teşebbüsü tespit edildi. Bu YASAK — transport'u kullanıcı "
@@ -405,8 +556,8 @@ def main() -> int:
     # INLINE AKTİVASYON guard (2026-06-11 dersi / adt-rap §34-D): Bash içinde elle
     # '/sap/bc/adt/activation' POST'u activationExecuted'ı parse ETMEZ → HTTP 200 sahte-OK
     # üretir (metadata eski kalır, saatler kayboldu). Helper'a zorla.
-    if (tool_name == "Bash" and "adt/activation" in hay and ".post(" in hay
-            and "activate_and_verify" not in hay and "_activation_failures" not in hay):
+    if (tool_name in _KABUK_TOOLLARI and "adt/activation" in komut and ".post(" in komut
+            and "activate_and_verify" not in komut and "_activation_failures" not in komut):
         sys.stderr.write(
             "⛔ INLINE AKTİVASYON (PreToolUse guard, 2026-06-11 dersi / adt-rap §34-D): "
             "Bash içinde elle '/sap/bc/adt/activation' POST'u tespit edildi. Bu yol "
@@ -420,7 +571,7 @@ def main() -> int:
     # YALIN FIORI DEPLOY guard (2026-07-06 stale-dist dersi): build'siz `fiori deploy` eski
     # dist'i yükler + "Deployment Successful" der ama canlıya bayat gider. Kanonik yol
     # scripts/deploy_ui.py (build ZORUNLU + deploy + canlı Component-preload==dist doğrulaması).
-    if tool_name == "Bash" and _FIORI_DEPLOY.search(hay) and "deploy_ui.py" not in hay:
+    if tool_name in _KABUK_TOOLLARI and _FIORI_DEPLOY.search(komut) and "deploy_ui.py" not in komut:
         sys.stderr.write(
             "⛔ YALIN FIORI DEPLOY (PreToolUse guard, 2026-07-06 stale-dist dersi): "
             "Doğrudan 'fiori deploy' BUILD YAPMAZ — eski dist/'i archive edip 'Deployment "
@@ -435,8 +586,8 @@ def main() -> int:
     # APP-İÇİ NPM INSTALL guard (standards/03 §; paket-seviye ui/ npm workspace):
     # app dizininde `npm install/ci/add` YASAK → tooling ui/node_modules'a hoist'lu.
     # Sıcak-yol: npm-install içermeyen Bash'te _NPM_INSTALL.search anında fail (FS'ye dokunmaz).
-    if tool_name == "Bash" and _NPM_INSTALL.search(hay):
-        cdm = re.search(r"\bcd\s+(?:\"([^\"]+)\"|'([^']+)'|([^\s&|;]+))", hay)
+    if tool_name in _KABUK_TOOLLARI and _NPM_INSTALL.search(komut):
+        cdm = re.search(r"\bcd\s+(?:\"([^\"]+)\"|'([^']+)'|([^\s&|;]+))", komut)
         cd_target = next((g for g in (cdm.groups() if cdm else ()) if g), "") if cdm else ""
         hit = _ui_app_subdir(cd_target) or _ui_app_subdir(data.get("cwd", "") or "")
         if hit:
