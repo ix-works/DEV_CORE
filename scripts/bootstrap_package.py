@@ -14,7 +14,7 @@ Yapılanlar:
    - {TITLE} → "Sevkiyat Optimizasyon"
    - {MODULE} → SD
    - {DATE} → bugünün tarihi
-   - {OWNER} → --owner veya git config user.name
+   - {OWNER} → --owner (yoksa `<OWNER>` placeholder; --owner-from-git ile git user.name)
 4. folders.txt'deki klasörleri yaratır
 5. validators/check_package_rules_present.py çalıştırır
 6. governance/package-registry.md auto-yeniden üretmeyi önerir
@@ -62,8 +62,18 @@ def main() -> int:
     parser.add_argument("package", help="Paket adı (örn. ZSD001_CLC)")
     parser.add_argument("--title", required=True, help="Paket başlığı")
     parser.add_argument("--module", default="SD", help="SAP modülü (varsayılan: SD)")
-    parser.add_argument("--owner", default=None, help="Owner (varsayılan: git user.name)")
-    parser.add_argument("--templates-root", default="templates/new-package")
+    # ⚠ `--owner` varsayılanı ARTIK git user.name DEĞİL (bootstrap provası 2026-07-09):
+    #   public/şablon repoda gerçek kullanıcı adı dosyalara gömülüyordu (kimlik sızıntısı).
+    #   Güvenli-varsayılan: placeholder. Gerçek ad isteniyorsa AÇIKÇA verilir.
+    parser.add_argument("--owner", default=None,
+                        help="Owner (varsayılan: <OWNER> placeholder; --owner-from-git ile git user.name)")
+    parser.add_argument("--owner-from-git", action="store_true",
+                        help="Owner'ı `git config user.name`'den al (private repoda uygun; public'te kimlik sızdırır)")
+    # ⚠ Şablonlar CORE'da yaşar — cwd'ye göre değil (bootstrap provası 2026-07-09:
+    #   `templates/new-package` göreliydi → proje kökünden çağrılınca bulunamıyordu).
+    parser.add_argument("--templates-root",
+                        default=str(Path(__file__).resolve().parent.parent / "templates" / "new-package"),
+                        help="Paket şablon kökü (varsayılan: <CORE>/templates/new-package)")
     parser.add_argument("--source-root", default=SOURCE_ROOT_NAME)
     args = parser.parse_args()
 
@@ -76,7 +86,15 @@ def main() -> int:
         )
 
     pkg_short = pkg_full.replace("_CLC", "")
-    owner = args.owner or get_git_user()
+    # Güvenli-varsayılan: kimlik gömme. Gerçek ad ancak AÇIKÇA istenirse yazılır.
+    if args.owner:
+        owner = args.owner
+    elif args.owner_from_git:
+        owner = get_git_user()
+    else:
+        owner = "<OWNER>"
+        print("[BİLGİ] owner = <OWNER> (placeholder). Gerçek ad için: --owner \"Ad\" "
+              "veya --owner-from-git (public repoda kimlik sızdırır).")
     today = date.today().isoformat()
 
     mapping = {

@@ -23,6 +23,7 @@ Hız ilkesi (Ö5): tum yeni kontroller string/regex — sicak yolda dosya-sistem
 """
 import io
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -109,9 +110,50 @@ _KORUNAN_SILME_HEDEF = re.compile(
     r"|\.claude[/\\](agents|skills|commands)|DEV_CORE)",
     re.IGNORECASE)
 
-_CORE_LEAK = re.compile(
-    r"(<PROJECT_NAME>|<PROJECT_NAME>|<LEGACY_SOURCE>|<LEGACY_SOURCE>|<SAP_HOST>|<SAP_USER>|<USER>"
-    r"|C:[/\\]+<LEGACY_ROOT>|<USER>)", )
+def _leak_desenleri() -> list[str]:
+    """Core'a girmesi yasak proje/müşteri/kişi izleri.
+
+    ⚠ LİSTE CORE'DA TUTULMAZ. DEV_CORE **public**tir; müşteri adını, sistem
+    kimliğini veya kişi adını buraya yazmak, tam da engellemeye çalıştığımız
+    sızıntının kendisidir. (2026-07-09: guard'ın kendi filtre listesi public
+    repoda müşteri ve kişi adlarını ilan ediyordu — bu fonksiyon o yüzden var.)
+
+    Kaynak sırası (ilk bulunan kazanır):
+      1. env `IX_GENERICIZE_BLOCKLIST`  (virgülle ayrılmış)
+      2. `<proje>/.claude/genericize-blocklist.txt`  (satır başına bir desen;
+         `#` yorum; **.gitignore'lu** — repoya girmez)
+      3. jenerik varsayılan (aşağıda) — isim içermez, yalnız yapısal desenler
+
+    Kısaltma/obfuscation (ör. ilk 4 harf) ÇÖZÜM DEĞİL: bağlamda tahmin edilir ve
+    masum kelimeleri bloklar (yanlış-pozitif).
+    """
+    env = os.environ.get("IX_GENERICIZE_BLOCKLIST", "").strip()
+    if env:
+        return [p.strip() for p in env.split(",") if p.strip()]
+
+    dosya = _PROJ_ROOT / ".claude" / "genericize-blocklist.txt"
+    if dosya.exists():
+        try:
+            satirlar = dosya.read_text(encoding="utf-8", errors="replace").splitlines()
+            desenler = [s.strip() for s in satirlar
+                        if s.strip() and not s.lstrip().startswith("#")]
+            if desenler:
+                return desenler
+        except Exception:
+            pass
+
+    # Jenerik varsayılan: isim YOK, yalnız yapısal sızıntı desenleri.
+    # Her ikisi de PLACEHOLDER'ı muaf tutar — dokümantasyon örnekleri yanlış-pozitif
+    # üretiyordu (2026-07-09 CI bulgusu: `C:\Users\<USER>` ve `user@example.com`).
+    return [
+        r"C:[/\\]+Users[/\\]+(?!<)[^/\\ ]+",                 # makine-lokal kullanıcı yolu
+        # e-posta: RFC 2606 rezerve/örnek domainleri HARİÇ
+        r"[A-Za-z0-9._%+-]+@(?!example\.(?:com|org|net)\b)(?!test\b)(?!localhost\b)"
+        r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+    ]
+
+
+_CORE_LEAK = re.compile("(" + "|".join(_leak_desenleri()) + ")")
 
 _GIT_STAGE = re.compile(r"\bgit\s+(add|commit|stage)\b", re.IGNORECASE)
 
@@ -190,7 +232,7 @@ _FROZEN = [_canon_path(p).rstrip("/") for p in _frozen_paths() if p]
 
 def _frozen_hit(metin: str) -> str:
     """Metin (komut/dosya-yolu) dondurulmuş kök içeriyor mu? İlk eşleşen kökü döndür.
-    Windows (C:\\<LEGACY_ROOT>) ve bash (/c/<LEGACY_ROOT>) yol stilleri kanonlaştırılarak kıyaslanır."""
+    Windows (C:\\<kök>) ve bash (/c/<kök>) yol stilleri kanonlaştırılarak kıyaslanır."""
     if not _FROZEN or not metin:
         return ""
     duz = _canon_path(metin)

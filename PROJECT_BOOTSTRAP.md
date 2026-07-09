@@ -62,7 +62,13 @@ python C:\IX\DEV_CORE\scripts\init_project.py C:\IX\XYZ --name XYZ --repo-mode f
 | `.gitattributes` | CRLF/binary normalizasyon kararı (py/sh/yaml/json = LF; görsel/pdf/zip = binary) |
 | `.mcp.json` | İnce; MCP server core'dan (`PYTHONPATH=core`), bağlantı proje kökündeki `.conn_adt`'den |
 | `project.yaml` | Şablon (repo_mode/source_root dolu gelir; kalanı STEP 4) |
+| `.github/workflows/guard.yml` *(yalnız `full`)* | `claude/workflows/guard.template.yml`'den: core-sızıntı sunucu-tarafı ağı + davranış-yüzeyi çevre duvarı |
+| `.github/CODEOWNERS` *(yalnız `full`)* | `claude/CODEOWNERS.template`'den; **`<OWNER_TEAM>` STEP 4'te doldurulur** |
 | `<source_root>/`, `conn/`, `governance/`, `playbook-local/`, `standards-local/`, `scripts/validators-local/` | Boş overlay/proje klasörleri (governance = proje ADR/registry evi) |
+
+> **Bootstrap provası dersi (2026-07-09):** CI workflow ve CODEOWNERS eskiden
+> üretilmiyordu; projeler bunları başka bir projeden **kopyalıyordu** — private repodan
+> public repoya kopya = sızıntı riski. Artık core'daki template'lerden üretilir.
 
 ## STEP 3 — `team_setup.py` → junction'lar + memory seed
 
@@ -99,8 +105,23 @@ olmalı); (e) `seed_memory` → core memory-seed'den projenin memory'sini tohuml
   `master_language` + paket prefix'leri + iş-anahtarları. Tam anahtar kataloğu:
   [`MAINTENANCE.md`](MAINTENANCE.md) §"project.yaml kataloğu".
 - `CLAUDE.md` proje bölümü → SAP bağlantı satırı, proje-özel notlar
+- **`.github/CODEOWNERS`** *(yalnız `full`)* → `<OWNER_TEAM>` yerine gerçek GitHub team.
+  **Team kullan, kişi değil** (bakımcı değişince dosyaya dokunulmaz). Team'in repoya
+  **en az `write`** erişimi olmalı — GitHub'ın CODEOWNERS şartı.
+- **Davranış baseline:** `python core/scripts/behavior_manifest.py generate`
+  (üretilmezse `ix_doctor` K4 daima FAIL verir)
+- **Genericize blocklist:** `.claude/genericize-blocklist.txt` → projenin müşteri/firma
+  adı, SAP sistem kimliği, kişi adları (satır başına bir regex). `pre_tool_guard` bu
+  listeyi okur ve core'a bu izlerin yazılmasını bloklar. **Dosya `.gitignore`'ludur —
+  liste asla repoya girmez.** Yoksa yalnız yapısal varsayılanlar (makine yolu, e-posta)
+  devrededir. *(2026-07-09: liste eskiden guard'ın içinde hard-code'du ve public core'da
+  müşteri adlarını ilan ediyordu.)*
 
 ## STEP 5 — KABUL GATE'İ (geçmeden projede İŞ YAPILMAZ)
+
+> ⚠ **Sıra:** `ix_doctor` git `main` ref'i, ruleset ve CI koşusu arar — bunlar STEP 6'da
+> doğar. Bu yüzden gate **STEP 6'dan SONRA** koşulur. (Bootstrap provası 2026-07-09;
+> eskiden STEP 5 STEP 6'dan önce yazılıydı ve hiçbir yeni proje geçemiyordu.)
 
 | # | Kanıt | Nasıl |
 |---|---|---|
@@ -110,13 +131,41 @@ olmalı); (e) `seed_memory` → core memory-seed'den projenin memory'sini tohuml
 | 4 | Sızıntı kilidi çalışıyor | `git status` → core içeriği görünMÜyor; `git ls-files core/ .claude/agents` → boş *(repo_mode=none: SKIP)* |
 | 5 | Kurulum sağlığı | `python core/scripts/ix_doctor.py` → FAIL yok (7-katman tarama) |
 
+**Gerekçeli SKIP'ler** (kayda geçir, sessizce geçme):
+`.conn_adt` yoksa (iskelet/LITE proje) madde 2 SKIP edilir ve `ix_doctor` K5 FAIL verir —
+bu beklenen davranıştır, gerekçesi `CLAUDE.md`'ye yazılır.
+
 ## STEP 6 — İlk paket + ilk commit
 
 ```powershell
-python core/scripts/bootstrap_package.py <PKG_FULL> --title "..."
+python core/scripts/bootstrap_package.py <PKG_ADI> --module <MOD> --title "..."
+#   --owner "Ad"        → gerçek ad (private repo). VARSAYILAN: <OWNER> placeholder.
+#   --owner-from-git    → git user.name (⚠ public repoda kimlik sızdırır)
+#   şablon kökü artık CORE'a göre çözülür (proje kökünden çalışır)
+
 git add -A ; git commit -m "chore(bootstrap): XYZ proje iskeleti (PROJECT_BOOTSTRAP)"
 git push -u origin main   # yalnız repo_mode=full (ilk-push istisnası: STEP 1)
 ```
+
+**İlk push'tan SONRA korumayı ACTIVE et** *(yalnız `full`)*:
+
+```
+main-pr-required (branch, ~DEFAULT_BRANCH):
+  required_approving_review_count = 1
+  require_code_owner_review       = true
+  required_status_checks          = [core-leak, behavior-surface]
+  deletion + non_fast_forward     = engelli
+  bypass_actors = [{ OrganizationAdmin, bypass_mode: pull_request }]
+```
+
+> ⚠ **TEK-KİŞİ KİLİDİ:** `require_code_owner_review` açıkken tek code-owner varsa, o kişi
+> **kendi PR'ını onaylayamaz** (GitHub kuralı) → hiçbir PR merge edilemez. `bypass_actors`
+> bunu çözer. Bypass **dar** olsun: `pull_request` modu → PR zorunlu kalır, main'e doğrudan
+> push YOK, CI atlanamaz; yalnız "birinin onaylaması" şartı aşılır.
+>
+> ⚠ **Geçmiş yeniden yazılacaksa** (repo public'e açılacak vb.): force-push **yetmez** —
+> GitHub'ın `refs/pull/*` ref'leri eski commit'leri canlı tutar. Eski repoyu arşivle,
+> **aynı adla yeni repo** aç, temiz geçmişi oraya push et. (2026-07-09 dersi.)
 
 > **NOT:** `main-pr-required` ruleset'i **ACTIVE** edildikten sonra (STEP 1) main'e
 > doğrudan push KAPANIR → bu ilk push'tan sonraki her değişiklik kısa-ömürlü branch +

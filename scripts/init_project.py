@@ -43,6 +43,10 @@ GITIGNORE = """\
 # ==== kişisel / runtime ====
 .claude/settings.local.json
 .claude/active_package
+# makine-lokal davranış baseline (session_start üretir; commit'lenmez)
+.claude/behavior-manifest.json
+# genericize blocklist: müşteri/sistem/kişi adları — ASLA commit'lenmez
+.claude/genericize-blocklist.txt
 .conn_adt
 conn/*.env
 CLAUDE.local.md
@@ -147,6 +151,17 @@ def main() -> int:
         uret(proje / ".gitattributes", GITATTRIBUTES, a.force),
         uret(proje / ".mcp.json", MCP_JSON, a.force),
     ]
+
+    # Sunucu-tarafı koruma (yalnız repo_mode=full; LITE modlarda anlamsız).
+    # Bootstrap provası 2026-07-09: bunlar ÜRETİLMİYORDU → her proje elle kuruyordu,
+    # ve CI workflow'u başka bir projeden kopyalanıyordu (private→public sızıntı riski).
+    if a.repo_mode == "full":
+        wf = (tpl / "workflows" / "guard.template.yml").read_text(encoding="utf-8")
+        co = (tpl / "CODEOWNERS.template").read_text(encoding="utf-8")
+        if a.name:
+            co = co.replace("<PROJECT_NAME>", a.name)
+        sonuc.append(uret(proje / ".github" / "workflows" / "guard.yml", wf, a.force))
+        sonuc.append(uret(proje / ".github" / "CODEOWNERS", co, a.force))
     for d in (a.source_root, "conn", "playbook-local", "standards-local",
               "scripts/validators-local", "governance"):
         p = proje / d
@@ -157,7 +172,7 @@ def main() -> int:
     print("\n".join(sonuc))
     print(f"\nSONRAKİ ADIMLAR (PROJECT_BOOTSTRAP — repo_mode={a.repo_mode}):")
     if a.repo_mode == "full":
-        print("  0. GitHub'da boş private repo aç + clone/remote bağla (STEP 1)")
+        print("  0. GitHub'da boş repo aç + clone/remote bağla (STEP 1)")
     elif a.repo_mode == "local":
         print(f"  0. git init (yalnız lokal — remote YOK):  git -C {proje} init  (K13 LITE)")
     else:
@@ -165,7 +180,18 @@ def main() -> int:
               " kalıcılaştırma kullanıcı takdirinde")
     print(f"  1. python {CORE_ROOT / 'scripts' / 'team_setup.py'} --project {proje}   (junction'lar + seed)")
     print("  2. .conn_adt + project.yaml __DOLDUR__ alanları  (STEP 4)")
-    print("  3. Kabul gate'i (STEP 5): oturum aç → ekran-teyidi + MCP ping + validators")
+    print(f"  3. python {CORE_ROOT / 'scripts' / 'behavior_manifest.py'} generate"
+          "   (davranış baseline; yoksa ix_doctor K4 FAIL)")
+    if a.repo_mode == "full":
+        print("  4. .github/CODEOWNERS → <OWNER_TEAM> yerine gerçek GitHub team yaz")
+        print("     (team'in repoya EN AZ `write` erişimi olmalı — GitHub şartı)")
+        print("  5. STEP 6 ilk push'tan SONRA ruleset'i ACTIVE et:")
+        print("       required_approving_review_count=1 + require_code_owner_review=true")
+        print("       + required_status_checks=[core-leak, behavior-surface]")
+        print("       + bypass_actors=[{OrganizationAdmin, bypass_mode: pull_request}]")
+        print("       (tek code-owner varsa bypass ŞART: kendi PR'ını onaylayamaz)")
+    print("  6. Kabul gate'i (STEP 5) — ilk commit/push SONRASI koş "
+          "(ix_doctor main-ref + ruleset + CI arar)")
     return 0
 
 
