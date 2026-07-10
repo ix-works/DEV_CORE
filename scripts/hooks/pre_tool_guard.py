@@ -134,6 +134,14 @@ from genericize_common import id_pattern, sizintilari_bul  # noqa: E402
 
 _CORE_LEAK = id_pattern(proje_koku=_PROJ_ROOT)  # IGNORECASE (D2)
 
+# Desen tanımlayan dosyalar: taranırlarsa kendi desenlerine takılırlar (core_precommit'te
+# SCAN_EXEMPT olarak vardı, burada yoktu). Dosya ADIYLA eşleşir — yol makineye göre değişir.
+_DESEN_TANIMLAYAN = frozenset({
+    "genericize_common.py",
+    "core_precommit.py",
+    "pre_tool_guard.py",
+})
+
 # D7 (2026-07-10 denetimi): eskiden yalnız `gh pr create` tutuluyordu. Aynı geri-alınamaz
 # yayını yapan `pr edit` / `pr comment` / `issue create` / `release create --notes` /
 # `api .../pulls` yan kapılardan geçiyordu; `-t`/`-b` kısa bayrakları da görülmüyordu.
@@ -432,6 +440,11 @@ def main() -> int:
             return 2
 
     if tool_name in ("Edit", "Write", "MultiEdit", "NotebookEdit") and _core_hedef_mi(dosya_hedefi):
+        # Desen-sözlüğü taşıyan dosyalar taranmaz — kendileri deseni TANIMLAR, o yüzden
+        # kaçınılmaz olarak "eşleşirler". `core_precommit.SCAN_EXEMPT` ile aynı liste;
+        # burada YOKTU → guard kendi düzeltmesini blokluyordu (2026-07-10).
+        if Path(str(dosya_hedefi)).name in _DESEN_TANIMLAYAN:
+            return 0
         parcalar = []
         if isinstance(ti, dict):
             for anahtar in ("content", "new_string", "new_source"):
