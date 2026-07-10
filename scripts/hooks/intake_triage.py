@@ -12,8 +12,16 @@ gerekir). Modül-regex yalnız KABA ipucu ("muhtemel"), kesin sınıf değil.
 
 skill_injector'a KARDEŞ (onu genişletme DEĞİL): skill_injector obje-tipi→checklist işine
 odaklı; ITG kapsam+modül+protokol işi — ayrık sorumluluk. Sinyal yoksa sessiz (exit 0).
+
+⚠ 2026-07-10 REDİZAYN — bu hook ARTIK TEK-SAVUNMA DEĞİL: prompt-KEYWORD regex'i kırılgandı
+(keyword-seti dışı ifade edilen gerçek talepler ITG'yi HİÇ tetiklemiyordu; 5/5 kaçış ölçüldü).
+Üç katman: (1) native `intake-triage` skill = SEMANTİK keşif (parafrazı yakalar); (2) BU HOOK
+= ERKEN hatırlatma (kaçabilir); (3) `itg_backstop.py` (PreToolUse) = SAP-tool sınırında
+DETERMİNİSTİK net. Bu hook fire ederse `.claude/.itg_shown.json` marker'ını yazar → backstop
+çifte-fire etmez (paylaşılan koordinasyon).
 """
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -125,7 +133,19 @@ def main() -> int:
 
     _folded = _fold(prompt)                       # diyakritik-bağımsız eşleşme
     if not _INTENT.search(_folded):
-        return 0  # geliştirme-niyeti sinyali yok → sessiz
+        return 0  # geliştirme-niyeti sinyali yok → sessiz (native skill + backstop yakalar)
+
+    # ITG bu session'da gösterildi → itg_backstop.py çifte-fire etmesin (paylaşılan marker).
+    try:
+        proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+        sid = ""
+        cs = proj / ".claude" / ".current_session"
+        if cs.exists():
+            sid = str(json.loads(cs.read_text(encoding="utf-8")).get("session_id") or "")
+        (proj / ".claude" / ".itg_shown.json").write_text(
+            json.dumps({"session": sid}), encoding="utf-8", newline="\n")
+    except Exception:
+        pass
 
     # Muhtemel modül ipuçları (birden çok eşleşebilir — hepsini söyle, ajan seçsin)
     # Modül desenleri Türkçe içerir → hem ham hem folded prompt'ta ara (ASCII yazımı da yakala).
