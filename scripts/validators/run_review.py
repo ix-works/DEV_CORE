@@ -33,6 +33,7 @@ Bkz. ADR 0006 — Reviewer Agent Pattern.
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -44,6 +45,9 @@ if sys.platform == 'win32':
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 VALIDATORS_DIR = Path(__file__).parent
+# PROJE kökü: proje-lokal validator'ları (scripts/validators-local/) bulmak için.
+# __file__ junction'la CORE'a çözülür → env CLAUDE_PROJECT_DIR öncelikli, cwd fallback.
+PROJ_ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
 
 # Görev tipi → validator zinciri
 # Her validator: (script_name, severity_default, description)
@@ -240,13 +244,22 @@ def main() -> int:
     # Validator zincirini çalıştır
     results = []
     for script_name, default_severity, description in validators:
+        # Arama sırası (2026-07-10 düzeltmesi): önce core VALIDATORS_DIR, sonra PROJE
+        # scripts/validators-local/. Eskiden yalnız core'a bakılıyordu → proje-lokal
+        # validator'lar (ör. check_td_cancelled_fields.py) HER ZAMAN 'bulunamadı' SKIP
+        # veriyordu ve SKIP verdict'e sayılmadığı için sahte-PASS üretiyordu.
         script_path = VALIDATORS_DIR / script_name
+        if not script_path.exists():
+            lokal = PROJ_ROOT / "scripts" / "validators-local" / script_name
+            if lokal.exists():
+                script_path = lokal
         if not script_path.exists():
             results.append({
                 'validator': script_name,
                 'severity': default_severity,
                 'status': 'SKIP',
-                'message': f'Script {script_name} bulunamadı',
+                'description': description,          # ← KeyError fix (satır ~316)
+                'message': f'Script {script_name} core+validators-local hiçbirinde yok',
             })
             continue
 

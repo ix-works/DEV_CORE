@@ -36,8 +36,8 @@ from utils.project_config import cfg, project_root, source_dir  # K12 config tek
 
 # Windows konsolu/pipe'i cp1252'dir: non-ASCII basmak UnicodeEncodeError ile COKER
 # (exit 1 -> gercek FAIL'den ayirt edilemez). C-ENC-01 / check_console_utf8.py
-for _akis in (sys.stdout, sys.stderr):
-    try:
+for _akis in (_pc_sys.stdout, _pc_sys.stderr):   # 2026-07-10: 'sys' hiç import edilmemişti
+    try:                                          # → satır import-anında NameError ile ÇÖKÜYORDU
         _akis.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
     except Exception:
         pass
@@ -75,8 +75,43 @@ def _module_roots() -> List[Path]:
 
 
 def _legacy_roots() -> List[Path]:
-    """Eski-sistem spec kökleri — project.yaml `legacy_spec_roots` listesi.
-    Tanımsızsa legacy fallback araması YAPILMAZ (fail-safe)."""
+    """Eski-sistem spec kökleri. Tanımsızsa legacy fallback araması YAPILMAZ (fail-safe).
+
+    Kaynak sırası (2026-07-10): legacy kök MAKİNEYE ÖZGÜ mutlak yoldur (ör. eski dünyanın
+    <LEGACY_SOURCE> kökü) → project.yaml'da COMMIT'lenirse klonlayan geliştiricide o klasör
+    yoktur ve spec-arama sessizce yanlış davranır. Bu yüzden önce git-DIŞI lokal config:
+      1. env IX_LEGACY_SPEC_ROOTS (virgülle ayrılmış)
+      2. <proje>/.claude/project.local.yaml → legacy_spec_roots:  (.gitignore'lu)
+      3. project.yaml legacy_spec_roots  (geriye-uyum; opsiyonel)
+    """
+    import os as _os
+    env = _os.environ.get("IX_LEGACY_SPEC_ROOTS", "").strip()
+    if env:
+        return [Path(p.strip()) for p in env.split(",") if p.strip()]
+    try:
+        proj = Path(_os.environ.get("CLAUDE_PROJECT_DIR") or _os.getcwd())
+        loc = proj / ".claude" / "project.local.yaml"
+        if loc.exists():
+            roots = []
+            icinde = False
+            for line in loc.read_text(encoding="utf-8", errors="replace").splitlines():
+                s = line.strip()
+                if s.startswith("legacy_spec_roots:"):
+                    kalan = s.split(":", 1)[1].strip()
+                    if kalan.startswith("[") and kalan.endswith("]"):
+                        return [Path(x.strip().strip("'\""))
+                                for x in kalan[1:-1].split(",") if x.strip()]
+                    icinde = True
+                    continue
+                if icinde:
+                    if s.startswith("- "):
+                        roots.append(Path(s[2:].strip().strip("'\"")))
+                    elif s and not s.startswith("#"):
+                        break
+            if roots:
+                return roots
+    except Exception:
+        pass
     return [Path(str(p)) for p in (cfg('legacy_spec_roots') or [])]
 
 
