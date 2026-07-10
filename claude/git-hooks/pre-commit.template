@@ -7,7 +7,12 @@
 # ⑤ (doküman) seviyesindeydi. "Kod ≠ kablolama."
 #
 # KABLOLAMA (team_setup otomatik yapar; elle: `git config core.hooksPath scripts/git-hooks`)
-# Gate: check_project_precommit_wired.py
+#
+# ⚠ Bu kablolamayı zorlayan bir GATE YOKTUR. `core.hooksPath` unset ise bu dosya sessizce
+# hiç çalışmaz — ve hiçbir şey uyarmaz. Kontrol: `git config core.hooksPath`
+# (2026-07-10: burada "Gate: check_project_precommit_wired.py" yazıyordu; o dosya hiç var
+#  olmadı. Var olmayan bir gate'i anmak, koruma var sanmaktan daha kötüdür — "kod ≠ kablolama"
+#  dersini tam da ihlal eder. Gate gerekirse ADR 0019'un 5 şartı işletilerek açılır.)
 #
 # Bypass (acil durum, kullanıcı onayıyla): git commit --no-verify
 set -e
