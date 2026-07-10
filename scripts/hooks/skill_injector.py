@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""UserPromptSubmit — SAP işi tespit edilince sap-abap-dev skill + İŞ-TÜRÜNE ÖZEL
-pre-flight checklist nudge'ı.
+"""UserPromptSubmit — tarayıcı/UI-doğrulama + yapısal-kod-arama akış nudge'ları.
 
-Skill zaten description ile auto-tetiklenir; bu hook ek deterministik güvence
-(gap-analysis #9). GÜÇLÜ SAP sinyali varsa kısa bir nudge enjekte eder, ve tespit
-edilen iş-türüne göre **okunması ZORUNLU checklist**i adıyla söyler (generic değil
-hedefli — böylece o iş-türünün ~kuralları unutulmaz; bkz. lessons-learned PATTERN #8).
-Sinyal yoksa sessiz (eşik yüksek, gürültü olmasın).
+⚠ 2026-07-10 SKILL-INJECTION REDİZAYNI: SAP-işi tespiti (`_STRONG`/`_TRANSPORT`) ve
+worktype→checklist (`_WORKTYPES`) BU HOOK'TAN KALDIRILDI. Neden: prompt-KEYWORD regex'i
+kırılgandı ("CDS view yarat" kaçtı, İngilizce "public transport" yanlış-tetikledi) ve
+işlev ZATEN redundant'tı:
+  (A) KEŞİF ("bu SAP işi mi + hangi skill") → native `sap-abap-dev` skill `description`'ı
+      (943 char, "Use it whenever the work touches SAP/ABAP/CDS/RAP..."). Ekosistemin tamamı
+      keşfi description-semantik ile yapıyor; keyword-hook en kırılgan azınlık desendi.
+  (B) worktype→checklist → hem skill içeriğinde (SKILL.md "TETİKLEMELİ YÜKLEME" tablosu)
+      hem de artık `sap_worktype_hint.py` (PreToolUse) GERÇEK obje-tipinden deterministik.
+Bu hook YALNIZ SAP'den bağımsız akış-nudge'larını taşır (tarayıcı-token-verimli, ast-grep).
+Sinyal yoksa sessiz.
 """
 import json
 import re
@@ -20,15 +25,16 @@ for _akis in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-# Güçlü, az-yanlış-pozitif SAP geliştirme sinyalleri (hook'u tetikleyen genel eşik)
-_STRONG = re.compile(
-    r"\b(CDS\s+yarat|view\s+entity|RAP|BDEF|behavior\s+def|domain\s+ekle|DTEL|"
-    r"struct(?:ure)?\s+yarat|tablo\s+yarat|SAP'?ye\s+push|aktive\s+et|"
-    r"SRVB|service\s+binding|publish|where-used|ATC|ZSD\d{3}|\.conn_adt|"
-    r"transport|lock\s+obje|message\s+class|Dynpro|ALV|Adobe\s+Form|"
-    r"report\s+yaz|module\s+pool|fiori|UI5|freestyle)\b",
-    re.IGNORECASE,
-)
+# Türkçe diyakritik-katlama (2026-07-10 health-check): ASCII yazımı da yakala.
+_TR_FOLD = str.maketrans("şŞğĞıİöÖüÜçÇ", "sSgGiIoOuUcC")
+
+
+def _fold(s: str) -> str:
+    return s.translate(_TR_FOLD)
+
+
+# (SAP-tespiti _STRONG/_TRANSPORT KALDIRILDI — redizayn; docstring'e bkz. Keşif native
+#  skill description'ında, worktype-checklist sap_worktype_hint.py PreToolUse'da.)
 
 # Tarayıcı/UI-doğrulama sinyali — SAP'den BAĞIMSIZ tetik. Amaç: token-verimli akışı
 # (ui5-linter-önce, playwright-cli, bounding-box-assert, element-JPEG) DOĞRU ANDA dayatmak
@@ -51,26 +57,8 @@ _STRUCTURAL = re.compile(
     re.IGNORECASE,
 )
 
-# İş-türü → okunması ZORUNLU pre-flight kaynağı (checklist varsa o, yoksa standart).
-# Sıra önemli: ilk eşleşen(ler) raporlanır. (playbook/checklists/ altında.)
-_WORKTYPES = [
-    (re.compile(r"\b(CDS\s+yarat|value\s*help|arama\s+yardım|lookup\s+CDS|ddls|VH\s+yarat)\b", re.I),
-     "CDS view-entity YARATMA", "playbook/adt-cds.md ⚡ 'TEK CDS YARATMA' reçetesi (shell→adt_push_source; post_shell-ddls/create_cds_view DEĞİL)"),
-    (re.compile(r"\b(RAP|BDEF|behavior|view\s+entity|SRVB|service\s+binding|publish)\b", re.I),
-     "RAP/CDS", "playbook/checklists/rap-creation.md (+ playbook/checklists/cds-creation.md) · standards/05"),
-    (re.compile(r"\b(Dynpro|ALV|module\s+pool|report\s+yaz|klasik)\b", re.I),
-     "Klasik dialog/ALV", "playbook/checklists/classic-dialog-creation.md · standards/06 (§1 include-böl ZORUNLU!)"),
-    (re.compile(r"\b(freestyle|UI5|fiori)\b", re.I),
-     "Freestyle UI5", "playbook/checklists/ui-freestyle-creation.md (+ playbook/checklists/ui-backend-rap-creation.md)"),
-    (re.compile(r"\bstruct(?:ure)?\b", re.I),
-     "DDIC struct", "playbook/checklists/struct-creation.md"),
-    (re.compile(r"\b(tablo|table)\b", re.I),
-     "DDIC tablo", "playbook/checklists/table-update.md"),
-    (re.compile(r"\b(domain|DTEL)\b", re.I),
-     "DDIC domain/DTEL", "playbook/checklists/domain-dtel-creation.md · standards/01 §5B (reuse-gate)"),
-    (re.compile(r"\bAdobe\s+Form\b", re.I),
-     "Adobe Forms", "playbook/checklists/adobe-forms-creation.md · standards/07"),
-]
+# (_WORKTYPES KALDIRILDI — redizayn: worktype→checklist artık sap_worktype_hint.py'de,
+#  GERÇEK obje-tipinden, prompt-keyword tahmininden değil.)
 
 
 # B5 fix (2026-07-09): otomatik-event işaretleri (task-notification/sistem-bildirimi =
@@ -94,30 +82,14 @@ def main() -> int:
     if any(mk in prompt for mk in _AUTO_EVENT_MARKERS):
         return 0
 
-    sap_hit = bool(_STRONG.search(prompt))
-    browser_hit = bool(_BROWSER.search(prompt))
-    structural_hit = bool(_STRUCTURAL.search(prompt))
-    if not sap_hit and not browser_hit and not structural_hit:
+    _folded = _fold(prompt)                       # diyakritik-bağımsız eşleşme
+    # SAP-işi tespiti KALDIRILDI (redizayn): keşif native skill description'ında.
+    browser_hit = bool(_BROWSER.search(prompt) or _BROWSER.search(_folded))
+    structural_hit = bool(_STRUCTURAL.search(prompt) or _STRUCTURAL.search(_folded))
+    if not browser_hit and not structural_hit:
         return 0
 
     parts = []
-
-    if sap_hit:
-        hits = [(label, ref) for rx, label, ref in _WORKTYPES if rx.search(prompt)]
-        if hits:
-            lines = "; ".join(f"{label} → OKU: {ref}" for label, ref in hits)
-            worktype_note = (
-                f" İş-türü tespit edildi — ZORUNLU pre-flight checklist(ler): {lines}. "
-                "SAP-yazma öncesi ilgili checklist'in HER maddesini geç (atlamak = patinaj)."
-            )
-        else:
-            worktype_note = ""
-        parts.append(
-            "[SAP işi tespit edildi] sap-abap-dev skill rehberini izle: TIER 0 yasaklar "
-            "(ADR 0005) → tetiklemeli yükleme tablosu (iş türü→okunacak dosya) → SAP yazma "
-            "protokolü (run_review pre-flight, MCP tool/script kararı, .conn_adt'den oku). "
-            "Bağlantı şüphesi: scripts/sap_doctor.py." + worktype_note
-        )
 
     if browser_hit:
         parts.append(
