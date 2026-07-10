@@ -14,6 +14,9 @@ KALAN KURALLAR (hepsi kriteri karşılar):
 6) YALIN FIORI DEPLOY — "Successful" der, bayat dist gider (SESSİZ).
 7) APP-İÇİ NPM INSTALL — workspace ihlali.
 8) GENERICIZE-LEAK — core PUBLIC; yazılan kimlik izi push'lanınca GERİ ALINAMAZ.
+9) GH HEDEF BELİRSİZ — `gh` hedefi cwd'den çıkarır ve `core/` bir JUNCTION'dır; yanlış
+   repoya yayın/mutasyon GERİ ALINAMAZ ve `gh` başarı döner (SESSİZ). Repoyu DEĞİŞTİREN
+   her alt-komutta hedef açık olmalı (`--repo`/`-R` ya da `gh api repos/<o>/<r>/...`).
 
 2026-07-10'da KALDIRILAN 4 kural (sağlık denetimi; her biri için ayrı gerekçe):
 - FREEZE-GUARD (R10): donmuş kök git-remote'ta yedekli → yazma GERİ ALINABİLİR. Ayrıca
@@ -153,6 +156,43 @@ _GH_PUBLIC_YAYIN = re.compile(
     r"|api\s+\S*(?:pulls|issues|releases)\S*)\b",
     re.IGNORECASE)
 _GH_PR_CREATE = _GH_PUBLIC_YAYIN  # geriye dönük ad (guard_conformance şartnamesi)
+
+# 2026-07-10: `gh`, hedef repoyu `--repo` yoksa CWD'den çıkarır. `core/` bir JUNCTION'dır →
+# yanlış dizinde çalışan bir mutasyon komutu private proje içeriğini PUBLIC çekirdeğe
+# yayınlayabilir ya da yanlış repoyu değiştirebilir. Yayın cache'lenir: GERİ ALINAMAZ.
+# Kapsam: repoyu DEĞİŞTİREN alt-komutlar. Okuma komutları (list/view/status) serbesttir.
+# ⚠ KOMUT-BAŞI ÇAPASI ŞART: çapasız desen `git commit -m 'gh pr create ...'` gibi bir commit
+# MESAJINI komut sanar (guard_conformance ④ vakası bunu yakaladı, 2026-07-10).
+_GH_MUTASYON = re.compile(
+    r"(?:^|[\n;|&(])\s*(?:[A-Za-z_]\w*=\S+\s+)*gh\s+("
+    r"pr\s+(create|edit|comment|merge|close|reopen|ready|review)"
+    r"|issue\s+(create|edit|comment|close|reopen|delete)"
+    r"|release\s+(create|edit|delete|upload)"
+    r"|repo\s+(create|edit|rename|delete|archive|deploy-key)"
+    r"|secret\s+(set|delete)"
+    r"|variable\s+(set|delete)"
+    r"|workflow\s+(run|enable|disable)"
+    r"|ruleset\b"
+    r"|label\s+(create|edit|delete|clone)"
+    r"|api\b"
+    r")", re.IGNORECASE)
+
+# Hedefi açıkça bildiren biçimler: `--repo o/r` · `-R o/r` · `gh api repos/o/r/...`
+# (ve `orgs/<o>/...` — org-hedefli API çağrıları da açıktır).
+_GH_HEDEF_ACIK = re.compile(
+    r"(?<![\w-])(--repo[= ]\S+|-R[= ]\S+)"
+    r"|(?<![\w/])(repos|orgs)/[\w.-]+/", re.IGNORECASE)
+
+
+def _gh_hedef_belirsiz(komut: str) -> str:
+    """Repoyu değiştiren `gh` komutunda hedef açıkça verilmemişse RED gerekçesi döner."""
+    if not _GH_MUTASYON.search(komut):
+        return ""
+    if _GH_HEDEF_ACIK.search(komut):
+        return ""
+    return ("hedef repo BELİRSİZ — `gh` repoyu cwd'den çıkarır ve `core/` bir junction'dır; "
+            "yanlış repoya yazma/yayın GERİ ALINAMAZ. Hedefi AÇIKÇA ver: "
+            "`--repo <ORG>/<REPO>` (ya da `gh api repos/<ORG>/<REPO>/...`).")
 
 # BAŞLIK SATIRI KORUNUR (grup 1): eski `.*?` DOTALL ilk satırdaki yönlendirmeyi de yutardı.
 _HEREDOC = re.compile(r"(<<-?\s*(['\"]?)(\w+)\2[^\n]*)\n(.*?)^\3$", re.MULTILINE | re.DOTALL)
@@ -400,6 +440,15 @@ def main() -> int:
             return 2
 
     if tool_name in _KABUK_TOOLLARI:
+        belirsiz = _gh_hedef_belirsiz(komut)
+        if belirsiz:
+            sys.stderr.write(
+                f"⛔ GH HEDEF BELİRSİZ: {belirsiz}\n"
+                "Bu kural repoyu DEĞİŞTİREN her `gh` alt-komutunda geçerlidir "
+                "(pr/issue/release/repo/secret/variable/workflow/ruleset/label/api). "
+                "Okuma komutları (list/view/status) serbesttir. İŞLEM REDDEDİLDİ.\n")
+            return 2
+
         sorun = _gh_pr_public_leak(komut, ham)
         if sorun:
             sys.stderr.write(

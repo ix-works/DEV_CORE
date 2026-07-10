@@ -207,6 +207,43 @@ def _kurallar(proj: Path) -> list:
             ],
         ),
         Kural(
+            id="GH-HEDEF",
+            etiket="GH HEDEF BELİRSİZ",
+            katman=4,
+            gerekce="`gh`, `--repo` yoksa hedefi CWD'den çıkarır ve `core/` bir JUNCTION'dır → "
+                    "yanlış dizinde çalışan bir mutasyon komutu private proje içeriğini PUBLIC "
+                    "çekirdeğe yayınlayabilir ya da yanlış repoyu değiştirebilir. Yayın "
+                    "cache'lenir: GERİ ALINAMAZ; `gh` başarı döner (SESSİZ). Okuma komutları "
+                    "(list/view/status) kapsam dışıdır.",
+            yuzey=["Bash", "PowerShell"],
+            bloklamali=[
+                Vaka("Bash", {"command": "gh pr create --title 'x' --body 'y'"},
+                     "pr create: hedef repo verilmemiş"),
+                Vaka("Bash", {"command": "gh pr merge 12 --squash --admin"},
+                     "pr merge: hedef repo verilmemiş"),
+                Vaka("Bash", {"command": "gh secret set FOO"},
+                     "secret set: hedef repo verilmemiş"),
+                Vaka("Bash", {"command": "gh api -X PUT collaborators/kullanici"},
+                     "gh api: yolda repos/<o>/<r> yok"),
+                Vaka("PowerShell", {"command": "gh release create v1 --notes 'x'"},
+                     "ikinci kabuk yüzeyi de kapalı"),
+            ],
+            gecmeli=[
+                Vaka("Bash", {"command": "gh pr create --repo ix-works/DEV_CORE -t 'a' -b 'b'"},
+                     "--repo ile hedef açık"),
+                Vaka("Bash", {"command": "gh pr merge 12 -R ix-works/DEV_CORE --squash"},
+                     "-R ile hedef açık"),
+                Vaka("Bash", {"command": "gh api repos/ix-works/DEV_CORE/rulesets"},
+                     "gh api: repos/<o>/<r> yolu açık"),
+                Vaka("Bash", {"command": "gh api orgs/ix-works/invitations"},
+                     "gh api: orgs/<o> yolu açık"),
+                Vaka("Bash", {"command": "gh pr list --limit 5"},
+                     "okuma komutu — kapsam dışı"),
+                Vaka("Bash", {"command": "gh repo view"},
+                     "okuma komutu — kapsam dışı"),
+            ],
+        ),
+        Kural(
             id="INLINE-AKTIVASYON",
             etiket="INLINE AKTİVASYON",
             katman=4,

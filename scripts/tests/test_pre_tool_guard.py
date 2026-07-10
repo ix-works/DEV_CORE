@@ -162,26 +162,54 @@ m._repo_public_mu = lambda hay: (True, "org/public-core")   # public repo simula
 kirli = "Acme" + "Corp"
 zobj  = "Z" + "BC" + "002" + "_CL_X"
 user  = "D_" + "OSOZEN"
+R = "--repo org/x"   # hedef repo DAIMA acikca verilir (asagida ayri vaka)
 vakalar = [
-    (f"gh pr create --title 'x' --body '{kirli}'", 1, "uzun bayrak (regresyon)"),
-    (f"gh pr create -t 'x' -b '{kirli}'",          1, "kisa bayrak -t/-b"),
-    (f"gh pr edit 12 --body '{kirli}'",            1, "pr edit"),
-    (f"gh pr comment 12 --body '{kirli}'",         1, "pr comment"),
-    (f"gh issue create --title '{kirli}' -b 'x'",  1, "issue create"),
-    (f"gh release create v1 --notes '{kirli}'",    1, "release --notes"),
-    (f"gh release create v1 -n '{kirli}'",         1, "release -n"),
-    (f"gh api repos/o/r/pulls -f body='{kirli}'",  1, "gh api pulls (fail-closed)"),
-    (f"gh pr create -t 'x' -b '{zobj}'",           1, "Z-obje adi PR govdesinde"),
-    (f"gh pr create -t 'x' -b 'sahibi {user}'",    1, "SAP kullanici adi PR govdesinde"),
-    (f"gh pr create -t 'x' -b '{kirli.lower()}'",  1, "kucuk harf (IGNORECASE)"),
-    ("gh pr create -t 'docs' -b 'ZSD001 ornek'",   0, "MESRU: demo paket"),
-    ("gh pr list --limit 5",                       0, "MESRU: okuma komutu"),
+    (f"gh pr create {R} --title 'x' --body '{kirli}'", 1, "uzun bayrak (regresyon)"),
+    (f"gh pr create {R} -t 'x' -b '{kirli}'",          1, "kisa bayrak -t/-b"),
+    (f"gh pr edit 12 {R} --body '{kirli}'",            1, "pr edit"),
+    (f"gh pr comment 12 {R} --body '{kirli}'",         1, "pr comment"),
+    (f"gh issue create {R} --title '{kirli}' -b 'x'",  1, "issue create"),
+    (f"gh release create v1 {R} --notes '{kirli}'",    1, "release --notes"),
+    (f"gh release create v1 {R} -n '{kirli}'",         1, "release -n"),
+    (f"gh api repos/o/r/pulls -f body='{kirli}'",      1, "gh api pulls (fail-closed)"),
+    (f"gh pr create {R} -t 'x' -b '{zobj}'",           1, "Z-obje adi PR govdesinde"),
+    (f"gh pr create {R} -t 'x' -b 'sahibi {user}'",    1, "SAP kullanici adi PR govdesinde"),
+    (f"gh pr create {R} -t 'x' -b '{kirli.lower()}'",  1, "kucuk harf (IGNORECASE)"),
+    (f"gh pr create -R org/x -t 'docs' -b 'ZSD001 ornek'", 0, "MESRU: -R + demo paket"),
+    (f"gh pr create {R} -t 'docs' -b 'ZSD001 ornek'",  0, "MESRU: --repo + demo paket"),
+    ("gh pr list --limit 5",                           0, "MESRU: okuma komutu (yuzey disi)"),
 ]
 hatalar = []
 for komut, bloklanmali, ad in vakalar:
     bloklandi = 1 if m._gh_pr_public_leak(komut, komut) else 0
     if bloklandi != bloklanmali:
-        hatalar.append(f"{ad}: beklenen={'BLOK' if bloklanmali else 'GECER'}")
+        hatalar.append(f"LEAK/{ad}: beklenen={'BLOK' if bloklanmali else 'GECER'}")
+
+# --- HEDEF-ACIK degismezi: repoyu DEGISTIREN her gh alt-komutunda hedef acik olmali ---
+hedef = [
+    ("gh pr create -t x -b y",                       1, "pr create"),
+    ("gh pr merge 12 --squash --admin",              1, "pr merge"),
+    ("gh issue create --title x",                    1, "issue create"),
+    ("gh release create v1 --notes x",               1, "release create"),
+    ("gh secret set FOO",                            1, "secret set"),
+    ("gh workflow run ci.yml",                       1, "workflow run"),
+    ("gh repo edit --visibility private",            1, "repo edit"),
+    ("gh ruleset delete 123",                        1, "ruleset delete"),
+    ("gh api -X PUT collaborators/u",                1, "api: repos/ yolu yok"),
+    ("gh pr create --repo org/x -t a -b b",          0, "--repo acik"),
+    ("gh pr merge 12 -R org/x --squash",             0, "-R acik"),
+    ("gh secret set FOO --repo org/x",               0, "secret + --repo"),
+    ("gh api repos/org/x/collaborators/u -X PUT",    0, "api: repos/ yolu acik"),
+    ("gh api orgs/org/invitations",                  0, "api: orgs/ yolu acik"),
+    ("gh pr list --limit 5",                         0, "okuma: pr list"),
+    ("gh pr view 12 --json state",                   0, "okuma: pr view"),
+    ("gh auth status",                               0, "okuma: auth status"),
+    ("gh repo view",                                 0, "okuma: repo view"),
+]
+for komut, bloklanmali, ad in hedef:
+    bloklandi = 1 if m._gh_hedef_belirsiz(komut) else 0
+    if bloklandi != bloklanmali:
+        hatalar.append(f"HEDEF/{ad}: beklenen={'BLOK' if bloklanmali else 'GECER'}")
 print("|".join(hatalar))
 '''
 
