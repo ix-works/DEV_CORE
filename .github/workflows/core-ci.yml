@@ -42,11 +42,12 @@ jobs:
       # ④tetiklenmemeli + kablolama + "kanitsiz kural = FAIL". Sahte-gate sinifini
       # yapisal olarak imkansiz kilar. template_project'i de kapsar (iki-proje matrisi).
       # Once Z4 oz-testi kosar: harness notr guard'a yesil basarsa CI kirilir (harness bozuk).
-      - name: Guard konformans matrisi (self-test + template_project)
+      # SONRA TAM konformans: template_project (public) clone edilip GERCEK guard'a karsi
+      # kosulur → ③④ + KABLOLAMA + META-GATE (kanitsiz kural = FAIL) burada zorlanir.
+      # Yalniz --self-test-only meta-gate'i gercek guard'a uygulamaz (notr stub'i okur).
+      - name: template_project clone (tam konformans icin)
+        run: git clone --depth 1 https://github.com/ix-works/template_project.git ../template_project
+      - name: Guard konformans matrisi (self-test + TAM ucuncu-proje)
         run: |
           python scripts/tests/guard_conformance.py --self-test-only
-          if [ -d ../template_project ]; then
-            python scripts/tests/guard_conformance.py --project ../template_project
-          else
-            echo "template_project yok — yalniz self-test kosuldu (CI'da tek repo checkout)"
-          fi
+          python scripts/tests/guard_conformance.py --project ../template_project
