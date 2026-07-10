@@ -99,6 +99,44 @@ coverage-check **de bir validator** → `run_all_validators` + `post_validate` h
 - **Maliyet:** her hard-gate için fixture yazma yükü (ama büyüyen corpus = amortisman); gate'lerin `# ENFORCES:` ile etiketlenmesi (tek seferlik geriye-dönük).
 - **Kapsam dışı (şimdilik):** kademeli build — bu ADR mimariyi sabitler; uygulama sırası: (a) orphan-wire (warn-first), (b) `check_rule_gate_coverage` iskeleti, (c) onboarding hook. Her biri ayrı commit + kırmızı-fixture testi.
 
+## Ek (2026-07-10) — GATE-MORATORYUMU: yeni gate açmanın 5 şartı
+
+**Sorun.** Bu ADR "her kural bir gate'le zorlanmalı" der. Tersi okunursa gate enflasyonu
+üretir: 2026-07-10'da bir belge iki repoya **kopyalandı** → kopya bayatlar → tazelik gate'i
+(C-DOC-01) → gate CI'da kaçınılmaz kırmızı verdi → `--admin` ile bypass edildi → bypass'ı
+önlemek için bir guard kuralı daha (kural 10). **Kural kuralı doğurdu.** Kök sebep kural
+eksikliği değil, **gereksiz çoğaltmaydı**; kopya kaldırılınca iki gate birden düştü.
+
+**Karar.** Yeni bir gate ancak **beş şartın hepsi** sağlandığında açılır:
+
+1. **Hata gerçekten yaşandı** — varsayım, ihtimal ya da "olabilir" yetmez.
+2. **Sonuç geri alınamaz VEYA sessiz** — ikisi de değilse runtime guard meşru değildir
+   (merdiven ilkesi: statik kontrole in).
+3. **Başka hiçbir katman yakalamıyor** — tasarım / validator / pre-commit / CI zaten
+   kapatıyorsa ikinci bir gate yalnız gürültüdür.
+4. **Önce dokümanla hatırlatma denendi ve yetmedi** — `CLAUDE.core.md §1.1` (L1a),
+   `claude/rules/` (glob-tetiklemeli), skill ya da checklist. **Gate son çaredir.**
+5. **Kullanıcıya detaylı izah + AÇIK ONAY** — *auto-mode'da bile*. Gömülü onay
+   ("hepsini yap", "devam et", "erteleme") bu izni **VERMEZ**. `feedback_adt-infra-*`
+   kuralıyla aynı ruh.
+
+> Ve her şeyden önce: **kök sebep çoğu zaman gereksiz bir çoğaltma/karmaşadır — önce onu kaldır.**
+> Bir gate'i silmek, bir gate eklemekten daha sık doğru cevaptır.
+
+**Kapsam.** Şartlar, *otomatik bir zorlama noktası ekleyen* her şey için geçerlidir:
+`scripts/validators/check_*.py` · `scripts/hooks/*` (özellikle bloklayan) ·
+`pre_tool_guard` kuralı · pre-commit / CI job'u · `run_review` görev-zinciri ·
+checklist'te `check_*.py` iddia eden yeni satır.
+
+**Kapsam dışı** (5 şart aranmaz):
+- Var olan bir gate'in **onarımı** (yanlış-pozitif düzeltme, kaçak kapatma, desen sertleştirme).
+- Bir gate'i **kaldırmak/gevşetmek** — teşvik edilir; yalnız kullanıcıya bildirilir.
+- Zorlama yapmayan yardımcı araç (ör. `scripts/merge_pr.py`).
+
+*Not:* bloklamayan ama davranış-yüzeyine dokunan hook'lar (ör. yalnız log yazan) bu beş şarta
+girmez; onlar **ADT-altyapısı/hook değişikliği → önce uyar + açık onay** kuralına tabidir.
+Pratik sonuç aynıdır: **onaysız yeni hook yok.**
+
 ## İlgili
 
 - Remediation süreci + bulgular: `governance/rule-remediation-RESUME.md` + `archive/rule-remediation-2026-06-18/` (arşiv audit-izi).

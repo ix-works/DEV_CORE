@@ -258,7 +258,7 @@ buraya bakar.
 > her hook `settings.template.json`'da kablolu olmalıdır. Aksi hâlde yeni açılan proje
 > eksik korumayla açılır — 2026-07-10'da tam olarak bu oldu (3 hook şablonda yoktu).
 
-**`scripts/validators/` — 43 `check_*.py`; 22'si `run_all_validators`'a kayıtlı.**
+**`scripts/validators/` — 43 `check_*.py`; 22'i `run_all_validators`'a kayıtlı.**
 Tek komut `run_all_validators.py` core + proje `validators-local/` ile birlikte, profil-modlu
 koşar. `run_review.py` SAP yazma öncesi reviewer pre-flight'ıdır (ADR 0006).
 
@@ -523,21 +523,6 @@ Okuma komutları (`list`/`view`/`status`) ve repo-hedefsiz API'ler (`gh api user
 >
 > Ders: **runtime guard eklerken önce blast-radius ölçülür.** Kural doğru, model yanlıştı.
 
-**Kaldırılan 4 kural** ve gerekçeleri (her biri ayrı ölçüldü): freeze-guard (git-remote'ta
-yedekli → geri alınabilir; ayrıca 6 kabuk-yolundan sızıyordu), özyinelemeli-silme bloğu
-(geri alınabilir ve sessiz değil), sızıntı-commit kilidi (iki ikizi var: validator + CI),
-`applies_to` eksikliği (yalnız `Write`'ı tutuyordu → yarım koruma).
-
-> **Kabul edilen kalıntı:** guard, `echo >> core/f.md` / `cp` / `tee` gibi kabuk kaçışlarını
-> kapatmaz (komut-metni regex'i sonsuz varyant savaşıdır). Telafi katmanı pre-commit + CI'dır.
-> Bu bilinçli bir merdiven tasarımıdır; `guard_conformance.py` guard yüzeyini beyan eder.
-
-### 6.3 Guard'ın kendi meta-gate'i
-
-`scripts/tests/guard_conformance.py`: her kural için **③ tetiklenmeli** ve **④ tetiklenmemeli**
-vakaları + kablolama + grup kontrolü. Kanıtsız kural CI'yı kırar. `test_pre_tool_guard.py`
-ayrıca desen **tek-kaynak** değişmezini ve `gh` yayın yüzeyini (13 vaka) zorlar.
-
 ---
 
 ## 7. Kalite Kapıları: Validator + Reviewer + Coverage
@@ -564,25 +549,12 @@ Proje-kökü çözümlemesi (CORE-01) · **Kural↔gate coverage (ADR 0019)** ·
 **Auto-memory bütçe + indeks bütünlüğü (C-MEM-01)** · **package-registry tazeliği (C-REG-01)** ·
 **settings.template ↔ hook envanteri (C-TPL-01)** · Playbook freshness (uyarı)
 
-Ayrıca **C-DOC-01** (docs aynası ↔ `core/docs`) projede `docs/` varsa koşar.
 
-Son dördü 2026-07-10'da eklendi; her biri gerçek bir sessiz-bozulmayı kapatır:
+Son üçü 2026-07-10'da eklendi; her biri gerçek bir sessiz-bozulmayı kapatır:
 
 - **C-MEM-01** — hafıza indeksi sessizce kesiliyordu (Bölüm 11.2).
 - **C-REG-01** — `manual-edit: PROHIBITED` diyen artefaktın tazeliğini kimse ölçmüyordu.
 - **C-TPL-01** — yazılan hook şablona kablolanmıyordu (Bölüm 3, 16.2).
-- **C-DOC-01** — çoğaltılmış belge tazelik kontrolü olmadan drift üretir.
-
-> **Bypass'a zorlayan gate, gate değildir.** C-DOC-01 CI'da **WARNING**, lokalde **HARD**'dır.
-> Sebep: CI checkout'unda `core/` junction'ı yoktur, DEV_CORE **main** klonlanır; bir ayna PR'ı
-> kaynağı merge edilene kadar **zorunlu olarak** bayat görünür. Bu, gate'i kalıcı kırmızı yapar
-> ve `--admin` bypass'ını normalleştirir. Otorite **lokal pre-commit**'tir (gerçek junction).
-> Aynı gerekçe `CORE-INDEX` (C-IDX-01) için de geçerlidir ve orada da CI çapraz-repo
-> staleness'i yapısal olarak zorlamaz.
->
-> *Bu kural, kendisi bir bypass'a yol açtıktan sonra yazıldı:* ayna PR'ının `validators` job'u
-> kırmızıydı ve `--admin` ile merge edildi. İçerik doğruydu (kaynak 53 saniye sonra merge
-> oldu), ama süreç yanlıştı.
 
 ### `run_review.py` (ADR 0006)
 
@@ -621,6 +593,30 @@ Bulgu sınıfları:
 **Kritik ilke — "sürekli PASS kanıt değildir":** bir gate yanlış-kablolanmış veya no-op
 olabilir. Her gate kasıtlı bozuk bir fixture'la (kırmızı-girdi) FAIL üretebildiği doğrulanarak
 kabul edilir. (Operasyonel karşılığı: Bölüm 14.3.)
+
+### 7.1 Gate-moratoryumu — bu ADR'nin ters okunması
+
+*"Her kural bir gate'le zorlanmalı"* tersinden okunursa **gate enflasyonu** üretir. Canlı örnek
+(2026-07-10): bir belge iki repoya **kopyalandı** → kopya bayatlar → tazelik gate'i → gate CI'da
+kaçınılmaz kırmızı verdi → bypass edildi → bypass'ı önlemek için bir guard kuralı daha.
+**Kural kuralı doğurdu.** Kök sebep kural eksikliği değildi, **gereksiz çoğaltmaydı**; kopya
+kaldırılınca iki gate birden düştü.
+
+Bu yüzden yeni bir gate ancak **beş şartın hepsi** sağlandığında açılır (ADR 0019 eki):
+
+```text
+1. Hata GERÇEKTEN yaşandı (varsayım değil)
+2. Sonuç GERİ ALINAMAZ veya SESSİZ (ikisi de değilse → statik kontrole in)
+3. Başka hiçbir katman zaten yakalamıyor
+4. ÖNCE dokümanla hatırlatma denendi (L1a / claude/rules / skill / checklist) ve YETMEDİ
+5. Kullanıcıya detaylı izah + AÇIK ONAY — auto-mode'da bile; gömülü onay SAYILMAZ
+```
+
+Kapsam: `check_*.py` · hook · guard kuralı · pre-commit/CI job'u · `run_review` zinciri ·
+checklist'te gate iddia eden yeni satır. **Kapsam dışı:** mevcut gate'in onarımı, bir gate'in
+kaldırılması (teşvik edilir), zorlama yapmayan yardımcı araç.
+
+> **Bir gate'i silmek, bir gate eklemekten daha sık doğru cevaptır.**
 
 ---
 

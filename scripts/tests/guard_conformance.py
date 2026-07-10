@@ -219,8 +219,8 @@ def _kurallar(proj: Path) -> list:
             bloklamali=[
                 Vaka("Bash", {"command": "gh pr create --title 'x' --body 'y'"},
                      "A: pr create — --repo yok"),
-                Vaka("Bash", {"command": "gh pr merge 12 --squash --admin"},
-                     "A: pr merge — --repo yok"),
+                Vaka("Bash", {"command": "gh issue create --title 'x' --body 'y'"},
+                     "A: issue create — --repo yok"),
                 Vaka("Bash", {"command": "gh secret set FOO"},
                      "A: secret set — --repo yok"),
                 Vaka("Bash", {"command": "gh repo edit --visibility private"},
@@ -233,7 +233,7 @@ def _kurallar(proj: Path) -> list:
             gecmeli=[
                 Vaka("Bash", {"command": "gh pr create --repo ix-works/DEV_CORE -t 'a' -b 'b'"},
                      "A: --repo ile hedef açık"),
-                Vaka("Bash", {"command": "gh pr merge 12 -R ix-works/DEV_CORE --squash"},
+                Vaka("Bash", {"command": "gh pr comment 12 -R ix-works/DEV_CORE --body 'ok'"},
                      "A: -R ile hedef açık"),
                 Vaka("Bash", {"command": "gh repo create ix-works/YENI --private"},
                      "B: konumsal hedef açık (PROJECT_BOOTSTRAP STEP 1)"),

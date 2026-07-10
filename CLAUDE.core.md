@@ -100,6 +100,21 @@
   3. **`git commit` (heredoc) ile `gh pr create` AYNI Bash çağrısına konmaz.** Guard komut
      metninin tamamını "yayınlanan gövde" sayar; commit mesajındaki e-posta/iz PR gövdesi
      sanılır. Ayrıca hata hangi adımda çıktı belirsizleşir. Önce commit, sonra push, sonra PR.
+- **MERGE:** merge GERİ ALINAMAZ ve `gh pr merge --admin` **kırmızı CI'yi de sessizce**
+  merge eder. Merge'den ÖNCE `statusCheckRollup` kontrol edilir; `--admin` yalnız
+  "onaylayan yok" şartını aşmak içindir, **CI'yi atlatmak için değil**.
+  Kolaylık: `python core/scripts/merge_pr.py --repo <ORG>/<REPO> --pr <N> --squash --admin`
+  (araç CI'yi kendi doğrular; **gate değil**, kullanmamak serbest).
+
+- **⛔ GATE-MORATORYUMU — yeni bir gate/guard/validator açmadan önce 5 ŞART (hepsi):**
+  1. Hata **gerçekten yaşandı** (varsayım/ihtimal değil).
+  2. Sonuç **geri alınamaz VEYA sessiz** (ikisi de değilse gate meşru değil — merdiven ilkesi).
+  3. **Başka hiçbir katman** (validator/pre-commit/CI/tasarım) zaten yakalamıyor.
+  4. **ÖNCE dokümanla hatırlatma denendi** (L1a · `claude/rules/` · skill · checklist) ve
+     **yetmediği görüldü.** Gate son çaredir; kural yazmak, kural doğurmasın.
+  5. Kullanıcıya **detaylı izah + AÇIK ONAY.** *Auto-mode'da bile.* Gömülü onay
+     ("hepsini yap", "devam et") bu izni **VERMEZ**. — `ADR 0019`
+  > Kök sebep kural eksikliği değil, çoğu zaman gereksiz bir çoğaltma/karmaşadır: **önce onu kaldır.**
 - **SUBAGENT KARARI:** önemsiz → kendin · token-ağır seri iş → tek ajan · paralelleşen iş → fan-out.
   Ajan **DAİMA** `run_in_background: true`. Substantive FE/BE build → **expert'e dağıt** (lider build yapmaz).
   Paylaşılan tooling (hook/validator/MCP) kök-fix'i → **lider'in işi**, expert'e verilmez.

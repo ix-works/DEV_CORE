@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse guard — çok-katman, 8 kural (2026-07-10 sadeleştirmesi).
+"""PreToolUse guard — çok-katman, 9 kural (2026-07-10 sadeleştirmesi).
 
 MERDİVEN İLKESİ (ADR 0019 revizyonu): runtime guard YALNIZ
 **geri alınamaz VE sessizce başarısız olan** eylemler için meşrudur. Bir kural bu iki
@@ -196,6 +196,7 @@ _GH_C = re.compile(_KOMUT_BASI + r"api\b", re.IGNORECASE)
 _GH_C_CWD = re.compile(r"\{(owner|repo)\}", re.IGNORECASE)
 
 _GH_MUTASYON = _GH_A  # geriye dönük ad
+
 
 
 def _gh_hedef_belirsiz(komut: str) -> str:
