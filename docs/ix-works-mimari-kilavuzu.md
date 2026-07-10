@@ -11,9 +11,14 @@
 > kurulumda kendi değerlerinizle değişir. Standart SAP nesneleri (VBAK, LIKP, BAPI_*) gerçektir.
 >
 > **Bu sürümdeki büyük değişiklikler.** (a) Talimat-katmanı yeniden bölündü: `AGENTS.md`'nin
-> hiçbir oturumda yüklenmediği ölçüldü → L1a/L1b/L1c ayrımı ve glob-tetiklemeli `claude/rules/`.
-> (b) `pre_tool_guard` 12 katmandan **8 kurala** indirildi (merdiven ilkesi). (c) MCP tool yüzeyi
-> profil-bazlı oldu (fail-closed). (d) Üç yeni gate: C-MEM-01, C-REG-01, C-TPL-01.
+> hiçbir oturumda yüklenmediği ölçüldü → L1a/L1b/L1c ayrımı ve dosya-tetiklemeli `claude/rules/`
+> (frontmatter anahtarı **`paths:`**; `globs:` sessizce yok sayılır — kural o zaman *tembel değil,
+> koşulsuz* yüklenir). (b) `pre_tool_guard` 12 katmandan **9 kurala** indirildi (merdiven ilkesi).
+> (c) MCP tool yüzeyi profil-bazlı oldu (fail-closed). (d) Üç yeni gate: C-MEM-01, C-REG-01, C-TPL-01.
+> (e) Proje CI'ı **reusable workflow** çağırıcısına indi — `guard.yml` mantığı core'da tek yerde.
+> (f) `.gitignore` **sır satırları** sızıntı kilidine eklendi (yeni gate değil; var olanın eksik dişi).
+> (g) **Inspector v1** (rapor-only canlılık denetçisi) `session_start`'a bağlandı.
+> (h) **ADR 0023:** hook kablolaması plugin'e taşınmaz — *fail-closed-on-absence ifade edilemez*.
 
 ---
 
@@ -89,9 +94,31 @@ olarak DEV_CORE'un çalışan kopyasını gösterir:
 
 - Metodoloji **bir yerde** yaşar; tüm projeler onu **anlık** görür.
 - Bir kural/ders bir kez yazılır, junction'la her projeye ulaşır.
-- Kopya-drift **yapısal olarak imkânsızdır** — kopya yoktur.
+- Junction'la gelen katmanda kopya-drift **yapısal olarak imkânsızdır** — kopya yoktur.
 
 Karar kaydı: **ADR 0020** (Canlı-Çekirdek Junction Mimarisi).
+
+> **⚠ Ama kopya tamamen yok değildir — ve bu kasıtlıdır.** Junction'la *gelemeyen* birkaç artefakt
+> proje reposunda commit'li durur: `.claude/settings.json` (hook kablolaması), `scripts/hook_shim.py`,
+> `scripts/git-hooks/pre-commit`, `.gitignore` / `.gitattributes`, `.github/CODEOWNERS`.
+> 2026-07-10'da her biri tek tek "core'a taşınabilir mi" diye sınandı; çoğu **bilerek** kopya bırakıldı.
+>
+> **Kazanılan genel kural — çoğaltmayı kaldırırken `fail-closed → fail-open` takası YAPILMAZ.**
+> `hook_shim.py`'nin tek işi, `core/` bulunamadığında bağırıp bloklayıcı hook'larda `exit 2`
+> dönmektir (D15). Core'a taşınsaydı, junction koptuğunda hatayı bildirecek kod kopuk junction'ın
+> ardında kalırdı. `core.hooksPath` core'u gösterseydi, junction kopunca git hook'ları **sessizce
+> atlanırdı**. `.gitignore` → `core.excludesFile` olsaydı, o bir *local git config*'tir ve
+> commit'lenmez: klonlayanda sırlar korumasız kalırdı. Hook kablolaması bir plugin'e taşınsaydı,
+> plugin devre-dışıyken 16 hook'un tamamı sessizce kaydedilmezdi (**ADR 0023**).
+>
+> Her dedup adayına sorulacak soru şudur: **bu artefakt yokken sistem bağırır mı, yoksa sessizce
+> korumasız mı kalır?** Sessizse, kopya kalır. *Bir kopyanın gürültülü bayatlaması, bir korumanın
+> sessizce yok olmasından iyidir.*
+>
+> Kopyanın bedeli gerçektir ve ödenir: `guard.yml` bir kopyaydı, core'a eklenen bir CI job'u
+> şablona hiç yansımadı ve **hiçbir şey uyarmadı**. Çözüm o dosyayı **reusable workflow
+> çağırıcısına** indirmek oldu (Bölüm 13.3) — fail-closed'dan ödün vermeden, çünkü CI GitHub'da
+> koşar, junction'a bağlı değildir ve ref bulunamazsa kırmızı olur.
 
 ### 1.3 Neden junction (ve neden diğerleri değil)
 | Alternatif | Neden seçilmedi |
@@ -118,6 +145,14 @@ kökten aranıp bulunur ve doğru `core/...` yolunu verir. `build_core_index.py`
 
 **Kural:** kökten sıfır-sonuç, "core'da yok" anlamına **gelmez**.
 
+> **İndeksin çapraz-repo bedeli — ve neden kaldırılamaz.** Core'a tek bir doküman eklemek, bağlı
+> HER projenin `CORE-INDEX.md`'sini bayatlatır; her birinde bir commit gerekir. "Öyleyse
+> gitignore'layıp her oturum üretelim" fikri **ölçüldü ve reddedildi**: `Grep` gitignore'lu
+> dosyayı **bulmaz** (kontrollü deney, 2026-07-10). İndeksi ignore'lamak, onun tek varlık
+> sebebini — kökten aranabilir olmasını — yok ederdi. Yani bu bağ bir kusur değil, junction'ın
+> Grep tarafından takip edilmemesinin **yapısal bedelidir**; üstelik sessiz değildir (C-IDX-01
+> bağırır) ve hiçbir koruma kaybı yoktur.
+
 ### 1.5 Metodoloji vs proje ayrımı (SORU 0)
 Yeni bilgi üretildiğinde tek soru sorulur: *"Bu metodoloji mi, projeye mi özel?"*
 Metodoloji-nitelikli her şey `DEV_CORE`'a; projeye-özel her şey proje reposuna gider.
@@ -129,9 +164,15 @@ Bu ayrım çekirdeğin jenerik kalmasını, proje reposunun iş-bilgisini taşı
 ## 2. Temel Yetenekler ve Tasarım Kararları
 
 **1. Kendi kendini denetleyen kalite altyapısı.**
-`ix_doctor` (7 katman) kurulumun bütünlüğünü doğrular. Guard katmanları dönemsel olarak
-**bozuk girdiyle** sınanır; bu, bir kuralın "tanımlı olması" ile "fiilen çalışması"nı ayrı
-ayrı doğrular. (Bölüm 14)
+`ix_doctor` (7 katman) kurulumun bütünlüğünü doğrular. `pre_tool_guard` **bozuk girdiyle**
+sınanır (`guard_conformance.py` + `ix_doctor` katman 4): bir kuralın "tanımlı olması" ile
+"fiilen çalışması" ayrı ayrı doğrulanır. **Inspector v1** (2026-07-10) bunun üstüne
+*canlılık* katmanını ekler: kablolama gerçekten kurulu mu, talimatlar gerçekten yüklendi mi.
+(Bölüm 14)
+
+> **Kapsam dürüstlüğü.** Bozuk-girdiyle sınama bugün yalnız `pre_tool_guard` için vardır.
+> **43 validator'ın hiçbirinin negatif testi yoktur** (`0/43`). Inspector bu kesri her raporda
+> basar; çıplak "✓ hepsi geçti" çıktısı üretmez. Kapatılması Inspector v2'nin işidir.
 
 **2. Yapay-zekâ ajanı için davranış denetimi.**
 Ajanın her eylemi `pre_tool_guard`'dan geçer. Temel yasaklar, projenin kök yapılandırma
@@ -149,6 +190,15 @@ context'e girmediği** ölçüldü: harness `CLAUDE.md` okur, `AGENTS.md` okumaz
 `InstructionsLoaded` hook'u yüklemeyi **loglar**. (Bölüm 8)
 
 > **İlke:** Markdown link hiçbir şey yüklemez. "Yüklendi" bir iddia değil, bir ölçümdür.
+
+Aynı gün ikinci ders geldi: ölçüm aletinin kendisi de sessizce bozulabiliyordu. `InstructionsLoaded`
+logger'ı payload'da `matcher`/`paths` arıyordu; gerçek alanlar `load_reason`/`file_path`. Log
+aylarca `?  ?` yazdı ve "ölçüyoruz" hissi verdi. Ayrıca kurallara `globs:` yazılmıştı; Claude Code
+yalnız `paths:` okur → kural ölmedi, **tembel yüklemesi öldü** ve her oturum koşulsuz yüklendi.
+Hata mesajı yoktu.
+
+> **İlke (ikinci):** Sessiz hatayı yakalayan aletin kendisi sessizce bozulabilir. Anahtar adını
+> dokümandan değil, **çalışan sürümün kendisinden** doğrula. Aleti de bir canary ile sına.
 
 **5. Biriken kurumsal hafıza — sınırları bilinerek.**
 Oturum-başı yüklenen hafıza indeksinin sert bir tavanı vardır (ilk 200 satır **veya** ilk
@@ -196,6 +246,8 @@ olması genericize disiplinini zorunlu kılar (Bölüm 15.2).
 | `ONBOARDING.md` | Yeni/güncellenen geliştiriciyi ortamla senkron etme adımları. |
 | `PROJECT_BOOTSTRAP.md` | Yeni proje açılış prosedürü (STEP 0–6 + kabul kapısı). |
 | `.github/workflows/core-ci.yml` | Çekirdeğin kendi CI'ı (`gates` job). |
+| `.github/workflows/project-guard.yml` | **Reusable workflow** — projelerin `guard.yml`'i bunu çağırır (`core-leak` · `validators` · `behavior-surface`). Mantık tek yerde. |
+| `scripts/inspector.py` | **Inspector v1** — davranış katmanı canlılık denetçisi (rapor-only; `--self-test` canary). |
 
 ### Dizinler
 
@@ -207,22 +259,26 @@ DEV_CORE/
 ├── standards/       L2 — stabil kurumsal standartlar (10 dosya)
 ├── playbook/        L3 — ADT pattern bankası + checklists/ + modules/ + templates/ (41 md)
 ├── profiles/        SAP profil yetenek matrisleri (4 yaml)
-├── governance/      ADR'ler (21) + işletim modeli + tooling envanteri
+├── governance/      ADR'ler (22) + işletim modeli + tooling envanteri
 ├── templates/       Yeni-paket iskelet şablonları
-├── docs/            Bu kılavuz + yönetici sunumu
+├── docs/            Bu kılavuz + yönetici sunumu + `claude-rules-nasil-yazilir.md`
 └── intake/          Dış içerik karantina/gümrük alanı
 ```
 
 #### `claude/` — Claude Code varlıkları
 
-Proje `.claude/` altındaki **beş junction** (agents, skills, commands, rules) ve `core/`
-buraya bakar.
+Proje `.claude/` altındaki **dört bağlantı** (agents, skills, commands, rules) ve `core/`
+buraya bakar. ⚠ Bu dördü junction/symlink olabileceği gibi **overlay** de olabilir: proje bir
+dosyayı override ediyorsa (ör. proje-lokal `backend-expert`) dizin materyalize edilir ve
+`.overlay-manifest.json` her dosyanın `core_hash`'ini saklar. Overlay kasıtlıdır ama **kopyadır
+→ bayatlar**; Inspector B5 iddiası bu bayatlığı ve core'da eklenip overlay'e hiç düşmemiş
+dosyaları arar.
 
 | Yol | İçerik |
 |---|---|
 | `agents/` | **6 rol tanımı.** Tek-yazıcı (single-writer) modeli — aşağıda tablo. Her rolün başında "sen auto-memory GÖRMEZSİN + kanıt kuralları" bloğu vardır (Bölüm 11.5). |
 | `skills/` | **3 project skill:** `sap-abap-dev` (SAP/ABAP/RAP/CDS/DDIC yönlendirme), `intake-triage` (iş-alım protokolü, native semantik keşif), `playwright-cli` (tarayıcı otomasyonu). |
-| `rules/` | **L1b — glob-tetiklemeli davranış kuralları.** Eşleşen dosya okunduğunda otomatik yüklenir; startup maliyeti sıfırdır. Bugün 3 dosya (`sap-source-protokolu`, `ui5-freestyle`, `README`). |
+| `rules/` | **L1b — dosya-tetiklemeli davranış kuralları.** Frontmatter anahtarı **`paths:`**; eşleşen dosya okunduğunda otomatik yüklenir, startup maliyeti sıfırdır. Bugün **2 dosya** (`sap-source-protokolu`, `ui5-freestyle`). ⚠ Bu dizine README konmaz — oradaki her `.md` talimat dosyasıdır ve her oturum yüklenir. Nasıl yazılır: [`docs/claude-rules-nasil-yazilir.md`](claude-rules-nasil-yazilir.md). |
 | `commands/` | Slash-komutlar (`onboard`). |
 | `memory-seed/` | Yeni proje memory tohumu: `MEMORY.md` indeksi + 85 `feedback_*.md` ders dosyası. |
 | `CLAUDE.project.template.md` | Yeni proje ince `CLAUDE.md` şablonu. |
@@ -230,7 +286,7 @@ buraya bakar.
 | `settings.template.json` | Proje `.claude/settings.json` şablonu — hook zinciri. Gate: **C-TPL-01**. |
 | `hook_shim.template.py` | Proje-lokal hook yönlendiricisi şablonu (D15). |
 | `git-hooks/pre-commit.template` | Proje pre-commit gate şablonu (statik katman ③). |
-| `workflows/guard.template.yml` | Proje CI şablonu (3 job). |
+| `workflows/guard.template.yml` | Proje CI şablonu — **30 satırlık çağırıcı**; job'lar core'daki `.github/workflows/project-guard.yml` reusable workflow'unda. |
 | `kesin-yasaklar.canonical.md` | KESİN YASAKLAR kanonik metni; her projenin kök `CLAUDE.md`'sine fiziksel damgalanır (ADR 0021). |
 | `conn_adt.template` / `managed-policy.template.json` / `CODEOWNERS.template` | Bağlantı / izin / sahiplik şablonları. |
 
@@ -245,7 +301,7 @@ buraya bakar.
 | `sap-feature` | Modül/uygulama sahibi — uçtan uca tasarım + yerel kaynak, read-only. |
 | `sap-research` | Salt-okunur keşif/analiz + web araştırması. Yalnız `.tmp/` rapor yazar. |
 
-#### `scripts/` — Python araçları (89 tekil + alt dizinler)
+#### `scripts/` — Python araçları (91 tekil + alt dizinler)
 
 **`scripts/hooks/` — 15 olay-tetikli hook** (hepsi `hook_shim.py` üzerinden):
 
@@ -300,7 +356,7 @@ testleri (`guard_conformance.py`, `test_pre_tool_guard.py`).
   `howto-*`, `intake-triage.md`; alt dizinler `checklists/` (16), `templates/`, `modules/`.
 - **`profiles/`** — `ecc` · `s4_private` · `s4_public` · `btp_abap`. **Matris rehberdir,
   kanıt değildir:** capability iddiası canlı testle doğrulanır.
-- **`governance/`** — `decisions/` (21 ADR), `agent-teams-operating-model.md`,
+- **`governance/`** — `decisions/` (**22 ADR**), `agent-teams-operating-model.md`,
   `tooling-plugins.md`, `tooling-radar.md`.
 
 #### `intake/` — dış içerik gümrüğü
@@ -317,10 +373,10 @@ Sebep: core canlıdır — buraya giren şey junction'lı tüm projelerde **anı
 <PROJE>/
 ├── core/  ═══════════════════► DEV_CORE                    (junction)
 ├── .claude/
-│   ├── agents/  ═════════════► DEV_CORE/claude/agents      (junction)
+│   ├── agents/  ═════════════► DEV_CORE/claude/agents      (junction VEYA overlay)
 │   ├── skills/  ═════════════► DEV_CORE/claude/skills      (junction)
 │   ├── commands/ ════════════► DEV_CORE/claude/commands    (junction)
-│   ├── rules/   ═════════════► DEV_CORE/claude/rules       (junction — L1b)
+│   ├── rules/   ═════════════► DEV_CORE/claude/rules       (junction — L1b, `paths:`)
 │   ├── settings.json            (proje-lokal, commit'li — hook zinciri)
 │   ├── settings.local.json      (kişisel, gitignore)
 │   ├── behavior-manifest.json   (davranış-yüzeyi manifest, gitignore runtime)
@@ -332,7 +388,7 @@ Sebep: core canlıdır — buraya giren şey junction'lı tüm projelerde **anı
 ├── conn/                        (çoklu-tier .env'ler — *.env gitignore)
 ├── .mcp.json                    (MCP server tanımı — core'dan yüklenir, env-first)
 ├── .gitignore / .gitattributes  (SIZINTI KİLİDİ + sırlar + runtime + CRLF politikası)
-├── .github/workflows/guard.yml  (CI: core-leak · validators · behavior-surface)
+├── .github/workflows/guard.yml  (30 satır — core'daki reusable workflow'u ÇAĞIRIR)
 ├── .github/CODEOWNERS
 ├── scripts/
 │   ├── hook_shim.py             (proje-lokal hook yönlendiricisi — commit'li)
@@ -349,7 +405,7 @@ Sebep: core canlıdır — buraya giren şey junction'lı tüm projelerde **anı
 
 | Dosya / dizin | Kaynak | Not |
 |---|---|---|
-| `core/`, `.claude/{agents,skills,commands,rules}/` | **Junction → DEV_CORE** | Tüm metodoloji. Proje reposuna commit'lenmez (gitignore + pre-commit + CI). |
+| `core/`, `.claude/{agents,skills,commands,rules}/` | **Junction → DEV_CORE** (biri overlay olabilir) | Tüm metodoloji. Proje reposuna commit'lenmez (gitignore + pre-commit + CI). Overlay hâlinde `.overlay-manifest.json` `core_hash` tutar → bayatlık Inspector B5 ile yakalanır. |
 | `CLAUDE.md`, `README.md`, `.claude/settings.json`, `scripts/hook_shim.py`, `scripts/git-hooks/pre-commit`, `.mcp.json`, `project.yaml` | **Proje-lokal (commit'li)** | Template'ten **üretilir**. Metodoloji yazılmaz (SORU 0). |
 | `.conn_adt`, `conn/*.env`, `.claude/project.local.yaml`, `.csrf_token.json` | **Proje-lokal (gitignore)** | Sırlar. Yalnız `*.template` commit'li. |
 | `behavior-manifest.json`, `.current_session`, `.itg_shown.json` … | **Proje-lokal (gitignore)** | Runtime state, paylaşılmaz. |
@@ -432,11 +488,17 @@ varsayım yapılmaz: **tool yüzeyi kesilir** (Bölüm 10.6).
 |---|---|---|
 | ① Yazım anı | `pre_tool_guard` (Edit/Write core hedefi) | Core'a yazılan içerikte/dosya adında kimlik izi |
 | ② Commit anı | `scripts/git-hooks/pre-commit` | Stage'lenen junction içeriği (`core/**`, `.claude/{agents,skills,commands,rules}/**`) |
-| ③ Push/PR anı | CI `guard.yml → core-leak` | Aynı kontrolün sunucu-tarafı aynası |
+| ③ Push/PR anı | CI `guard.yml` → core'daki `project-guard.yml` → `core-leak` | Aynı kontrolün sunucu-tarafı aynası |
 | ④ Yayın anı | `pre_tool_guard` PUBLIC-PR gate | `gh pr create/edit/comment`, `issue create`, `release --notes`, `gh api …/pulls` gövdesinde kimlik izi |
 
 Çekirdeğin kendi tarafında `core_precommit.py --all` (+ CI `gates` job) tam-ağaç tarar.
 Desenler **tek kaynaktan** (`genericize_common.py`) gelir; kopya geri gelirse test kırar.
+
+> **Sır sızıntısı ayrı bir eksendir** (fikri-sermaye değil, kimlik bilgisi). `check_core_not_committed.py`
+> `.gitignore`'da `.conn_adt` · `.csrf_token.json` · `.claude/project.local.yaml` satırlarının **tam satır**
+> olarak bulunmasını *ve* bu yolların git index'inde **olmamasını** zorlar. İkisi birlikte gerekir: dosya
+> zaten tracked ise `.gitignore` hiçbir şey yapmaz. (2026-07-10 K3: bu üç dosya aylarca commit'lendi,
+> hiçbir katman uyarmadı. Push'lanmış sır **geri alınamaz** — ifşa varsayılır.)
 
 ---
 
@@ -451,9 +513,9 @@ veya **`additionalContext` JSON** (bağlam enjekte eder).
 | Event | Hook | Ne yapar | RED (exit 2)? |
 |---|---|---|---|
 | SessionStart | `session_start` | Yasak özeti + oturum protokolü enjekte; junction/drift/manifest/damga sağlığı | Hayır |
+| SessionStart | `session_start` → **`inspector.py`** | Davranış katmanı gerçekten canlı mı: kablolama + **önceki** oturumun yükleme izi (bkz. 14.4) | Hayır (rapor-only, geçerse sessiz) |
 | SessionStart | `tooling_radar_check` | Tooling taraması bayatsa 1-satır nudge | Hayır |
 | **InstructionsLoaded** | `instructions_loaded_log` | Hangi talimat dosyası ne zaman/neden yüklendi → `.tmp/instructions-loaded.log` | Hayır (yalnız log) |
-| SessionStart | `session_start` → **`inspector.py`** | Davranış katmanı gerçekten canlı mı (kablolama + önceki oturumun yükleme izi) | Hayır (rapor-only, geçerse sessiz) |
 | UserPromptSubmit | `skill_injector` | İş-türüne özel pre-flight checklist adını enjekte | Hayır |
 | UserPromptSubmit | `intake_triage` | Geliştirme-talebi sinyali → ITG protokolü enjekte | Hayır |
 | PreToolUse `Bash\|PowerShell\|mcp__sap-adt__*` | `pre_tool_guard` | 8 kural (aşağıda) | **Evet** |
@@ -1003,7 +1065,24 @@ gerçek Z-obje adı core'a giremez (Bölüm 15.2).
 
 ### 13.3 CI
 
-**Proje `guard.yml` — üç job:**
+**Proje `guard.yml` bir ÇAĞIRICIDIR (30 satır).** Mantık core'da tek yerde yaşar:
+`ix-works/DEV_CORE/.github/workflows/project-guard.yml@main` (reusable workflow).
+
+> **Neden (K2, 2026-07-10).** `guard.yml` her projeye kopyalanıyordu; core'a eklenen `validators`
+> job'u bir projeye elle eklendi, şablona hiç yansımadı ve **hiçbir şey uyarmadı**. Artık job
+> eklemek/değiştirmek için yalnız core'daki reusable workflow düzenlenir; tüm projeler bir sonraki
+> koşuda otomatik alır. Canlı kanıt: private proje reposu → public core, koşu `success`,
+> `github.*` bağlamı **çağıranı** gösterir (`actions/checkout` çağıranın kodunu çeker).
+>
+> **`@main`e sabitlidir, `@stable`a DEĞİL:** `stable` tag'i elle taşınır ve bayatlar (2026-07-10'da
+> main'in 49 commit gerisindeydi). Bayat ref guard'ı *sessizce* eski tutardı. `@main`'in bedeli
+> gürültülüdür: bozuk bir core commit'i projelerin CI'ını KIRMIZI yapar.
+>
+> ⚠ Çağırıcıya job EKLENMEZ. Projeye özgü kontrol gerekiyorsa AYRI bir workflow dosyası açılır.
+> ⚠ Reusable workflow'a geçince check adları `core-leak` → `guard / core-leak` olur. Yeni projede
+> ruleset'te `required_status_checks` varsa **sessizce kopar** — kontrol edilmelidir.
+
+**Core'daki `project-guard.yml` — üç job:**
 
 - `core-leak`: tracked tree'de `core/**` veya `.claude/{agents,skills,commands,rules}/**`
   görülürse FAIL.
@@ -1075,6 +1154,44 @@ Sürekli PASS dönen bir kontrol, bir şeyi zorladığının kanıtı değildir.
 > **Tarihsel not.** Guard'ın eski canonicalize hâli bir yol varyantında sessizce yanlış-pozitif
 > PASS veriyordu. Ve `pre_tool_guard`'ın PowerShell matcher'ı eksikti: Bash'te bloklanan komut
 > PowerShell'den geçiyordu. Kod-seviyesi koruma, **kablolanmadan** koruma sanılır.
+
+### 14.4 `inspector.py` — canlılık denetçisi (v1, rapor-only)
+
+Enforcement-testi (14.3) *kodun* doğru davrandığını sorar. Inspector iki başka soruyu sorar:
+**gerçekten kablolu mu** ve **gerçekten çalıştı mı**. 2026-07-10'da bizi yakan beş arızanın
+ortak yanı şuydu: *diskte hiçbir şey yanlış görünmüyordu.*
+
+`session_start`'ın son adımı, ~400 ms, **bloklamaz, düzeltmez**, geçerse **tamamen sessizdir**.
+
+| Katman | İddialar |
+|---|---|
+| **Kablolama (B)** | hayalet hook · hayalet gate (`Gate: check_x.py` beyan edilmiş, dosya yok) · `pre_tool_guard` matcher'ı hem `Bash` hem `PowerShell` kapsıyor mu · `rules/*.md` anahtarı `paths:` mi · `.claude/*` junction mü, overlay ise `core_hash` bayat mı |
+| **Canlılık (A)** | logger yaşıyor mu · log'da `SEMA-DEGISTI` yok mu (CC sürümü bizi sessizce körleştirmesin) · eşleşen dosya okunmuş bir oturumda `path_glob_match` göründü mü · oturum-başı yükleme kümesi baseline'dan saptı mı |
+
+Değişmezleri:
+
+- **Asla çıplak ✓ basmaz.** Her rapor `negatif-testli gate: 0/43 (v2 bekliyor)` kesrini taşır.
+  *"Inspector OK dedi"* cümlesinin yeni *"activated"* olmaması için.
+- **Geçerse susar.** Yanlış-pozitif üreten uyarı, uyarıya karşı bağışıklık yaratır.
+- **Kendini sınar.** `--self-test` kasten bozuk bir fixture kurar; beş iddia orada FAIL vermezse
+  **koşucu bozuktur** ve bu gürültülü biter. Bekçiyi bekleyen şey budur.
+- **İzoledir.** `session_start` içinden `try/except` ile çağrılır ve negatif testle doğrulanmıştır:
+  *bir denetim aracı, denetlediği sistemi düşüremez.*
+- **Varsaymaz, kaydeder.** `InstructionsLoaded`'ın oturum başında hangi dosyalar için ateşlendiği
+  **doğrulanamadı** (5 dosya yüklenirken 2 olay gözlendi). Bu yüzden sayı iddia edilmez: ilk koşu
+  baseline yazar, sonrakiler sapma arar.
+
+**Zamanlama (ölçüldü):** `session_start` 14:50:51'de, `InstructionsLoaded` olayları 14:50:53'te.
+Bir oturumu **başlangıcında** denetleyemezsin → Inspector daima *önceki* oturumun izine bakar.
+
+**ÖLÇÜLEMEZ olan:** *"guard fiilen koştu mu?"* Claude Code yalnız **konuşan** hook'u transcript'e
+yazar (`hook_success` · `hook_additional_context` · `hook_blocking_error`); sessizce izin veren
+`pre_tool_guard`'ın **tek bir kaydı yoktur**. `hook_shim`'e heartbeat eklemek reddedildi (Bölüm 17).
+Inspector bu kaleme ✓ değil **ÖLÇÜLEMEZ** yazar.
+
+**v2** = gate başına negatif test (bozuk girdi → FAIL, temiz girdi → sessiz); `0/43` onunla dolar.
+**v3** = Inspector *ajanı*, küratör rolünde — senaryo önerir, çelişki bulur, **asla "gate çalışıyor"
+demez** (PASS'i script söyler; ajan raporu hipotezdir).
 
 ---
 
@@ -1198,7 +1315,7 @@ Dürüstlük, mimarinin bir parçasıdır. Bilinen sınırlar:
 
 ## EK-A. Karar Kayıtları (ADR) Dizini
 
-Çekirdek **21** ADR içerir (`DEV_CORE/governance/decisions/`). Numara 0015 proje-seviyesindedir
+Çekirdek **22** ADR içerir (`DEV_CORE/governance/decisions/`). Numara 0015 proje-seviyesindedir
 (çekirdekte yoktur) — iki ADR uzayı aynı numaralandırmayı paylaşır.
 
 | ADR | Konu |
@@ -1224,6 +1341,7 @@ Dürüstlük, mimarinin bir parçasıdır. Bilinen sınırlar:
 | **0020** | Canlı-çekirdek junction mimarisi |
 | **0021** | Kesin yasaklar fiziksel damga |
 | 0022 | Intake Triage Gate (iş-alım katmanı) |
+| **0023** | Hook kablolaması plugin'e taşınmaz (fail-closed-on-absence ifade edilemez) — REDDEDİLDİ |
 
 ## EK-B. Terminoloji
 
@@ -1236,7 +1354,7 @@ Dürüstlük, mimarinin bir parçasıdır. Bilinen sınırlar:
 - **reviewer:** SAP-yazımı öncesi ön-inceleme; PASS/WARNING/BLOCKER.
 - **ITG:** Intake Triage Gate — geliştirme talebi alım/sınıflama katmanı.
 - **profil:** projenin SAP türü (`ecc`/`s4_private`/`s4_public`/`btp_abap`).
-- **L1a / L1b / L1c:** her-oturum / glob-tetiklemeli / derin-referans davranış katmanları.
+- **L1a / L1b / L1c:** her-oturum / dosya-tetiklemeli (`paths:`) / derin-referans davranış katmanları.
 - **fail-closed:** bilgi eksikse yüzeyi kapatma (varsayım yapmama) davranışı.
 - **stable etiketi:** çekirdeğin bilinen-iyi git noktası; rollback hedefi.
 - **genericize:** core'a girecek içerikten proje/müşteri/sistem/kişi izini temizleme.
