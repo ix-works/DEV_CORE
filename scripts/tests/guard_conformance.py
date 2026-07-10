@@ -54,6 +54,23 @@ for _a in (sys.stdout, sys.stderr):
 CORE = Path(__file__).resolve().parents[2]
 GUARD = CORE / "scripts" / "hooks" / "pre_tool_guard.py"
 
+
+def _core_link(link: Path) -> None:
+    """<link> → CORE junction (Windows) veya symlink (Linux/CI). Platform-güvenli."""
+    if link.exists():
+        return
+    if sys.platform == "win32":
+        try:
+            subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(CORE)],
+                           capture_output=True, text=True)
+        except Exception:
+            pass
+    if not link.exists():                       # Linux/CI ya da mklink başarısız
+        try:
+            link.symlink_to(CORE, target_is_directory=True)
+        except Exception:
+            pass
+
 # --- runtime'da kurulan tetikleyiciler (öz-gönderme tuzağı; yukarı bkz.) ---
 T_CREATE = "create" + "Transport"
 T_RELEASE = "release" + "Transport"
@@ -292,10 +309,7 @@ def _fixture_damgasiz_proje(tmp: Path) -> Path:
     (d / "project.yaml").write_text("sap_profile: s4_private\nmaster_language: TR\n",
                                     encoding="utf-8", newline="\n")
     (d / "CLAUDE.md").write_text("# proje\nDamga YOK.\n", encoding="utf-8", newline="\n")
-    link = d / "core"
-    if not link.exists():
-        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(CORE)],
-                       capture_output=True, text=True)
+    _core_link(d / "core")
     return d
 
 
@@ -481,15 +495,7 @@ def _minimal_proje(tmp: Path) -> Path:
     (d / "project.yaml").write_text("sap_profile: s4_private\nmaster_language: TR\n",
                                     encoding="utf-8", newline="\n")
     (d / "CLAUDE.md").write_text("# proje\n", encoding="utf-8", newline="\n")
-    link = d / "core"
-    if not link.exists():
-        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(CORE)],
-                       capture_output=True, text=True)
-        if not link.exists():                      # POSIX/CI: junction yok → symlink
-            try:
-                link.symlink_to(CORE, target_is_directory=True)
-            except Exception:
-                pass
+    _core_link(d / "core")
     return d
 
 
