@@ -34,14 +34,30 @@ _AUTO_EVENT_MARKERS = (
     "[SYSTEM NOTIFICATION - NOT USER INPUT]",
 )
 
+# Türkçe diyakritik-katlama (2026-07-10 health-check bulgusu): eski desen ş/ğ/ı/ç şartlıydı
+# → TR-klavyesiz kullanıcı "gelistir/degistir/duzelt" yazınca gate KAÇIRIYORdu. Artık prompt
+# ASCII'ye indirilip ASCII-desenle eşleşir; her iki yazım da yakalanır.
+_TR_FOLD = str.maketrans("şŞğĞıİöÖüÜçÇ", "sSgGiIoOuUcC")
+
+
+def _fold(s: str) -> str:
+    return s.translate(_TR_FOLD)
+
+
 # Geliştirme-TALEBİ/NİYETİ sinyali (obje-tipi DEĞİL — iş başlatma/revizyon niyeti).
 # Yüksek eşik: gürültü olmasın. skill_injector _STRONG obje-tipini yakalar; bu iş-niyetini.
+# DESEN ASCII yazılır; eşleşme _fold(prompt) üzerinde yapılır (diyakritik-bağımsız).
+# `ister` DARALTILDI (2026-07-10): eski `\bister\w*\b` günlük "istersen/istersem"i (want,
+# talep değil) yakalayıp yanlış-pozitif üretiyordu → yalnız istek/istenen/isteniyor ailesi
+# (`iste[kn]`); "ister/istersen/isteyen" ve "isteğe bağlı" (=opsiyonel idiom; ğ→g dalı
+# yakalıyordu) artık tetiklemez. NOT: `g` dalı bilerek YOK — "iste[k]"=istek, "iste[n]"=
+# istenen/isteniyor; "isteği/isteğe" nadir tetik, "isteğe bağlı" sık yanlış-pozitif.
 _INTENT = re.compile(
-    r"(\bgeliştir\w*\b|\brevizyon\b|\brevize\b|\bister\w*\b|\btalep\b|\bihtiyac\w*\b|"
-    r"\bspec\b|\bFS\b|\bfonksiyonel\s+şartname\b|\byeni\s+(rapor|program|ekran|uygulama|özellik|geliştirme)\b|"
-    r"\brapor\s+(iste|yap|çıkar|oluştur|hazırla)\w*|\blisteler?\b\s+(iste|çıkar|ver)\w*|"
-    r"\bekle\w*\b|\bdeğiştir\w*\b|\bdüzelt\w*\b|\bböyle\s+bir\s+(özellik|geliştirme|istek)\b|"
-    r"\bexcel\b|\.xlsx\b|\bşu\s+alanlar\b|\bkalem\s+listesi\b)",
+    r"(\bgelistir\w*\b|\brevizyon\b|\brevize\b|\biste[kn]\w*\b|\btalep\b|\bihtiyac\w*\b|"
+    r"\bspec\b|\bFS\b|\bfonksiyonel\s+sartname\b|\byeni\s+(rapor|program|ekran|uygulama|ozellik|gelistirme)\b|"
+    r"\brapor\s+(iste|yap|cikar|olustur|hazirla)\w*|\blisteler?\b\s+(iste|cikar|ver)\w*|"
+    r"\bekle\w*\b|\bdegistir\w*\b|\bduzelt\w*\b|\bboyle\s+bir\s+(ozellik|gelistirme|istek)\b|"
+    r"\bexcel\b|\.xlsx\b|\bsu\s+alanlar\b|\bkalem\s+listesi\b)",
     re.IGNORECASE,
 )
 
@@ -107,13 +123,15 @@ def main() -> int:
     if any(mk in prompt for mk in _AUTO_EVENT_MARKERS):
         return 0
 
-    if not _INTENT.search(prompt):
+    _folded = _fold(prompt)                       # diyakritik-bağımsız eşleşme
+    if not _INTENT.search(_folded):
         return 0  # geliştirme-niyeti sinyali yok → sessiz
 
     # Muhtemel modül ipuçları (birden çok eşleşebilir — hepsini söyle, ajan seçsin)
+    # Modül desenleri Türkçe içerir → hem ham hem folded prompt'ta ara (ASCII yazımı da yakala).
     ipuclari = []
     for kod, etiket, rx in _MODULES:
-        if rx.search(prompt):
+        if rx.search(prompt) or rx.search(_folded):
             if kod in _HAZIR_PAKETLER:
                 ipuclari.append(f"{etiket} → OKU: playbook/modules/{kod}.md")
             else:
