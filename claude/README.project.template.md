@@ -31,14 +31,14 @@ satır yoktur — `.gitignore`, pre-commit ve CI (`guard.yml`) bunu üç katmand
 |---|---|---|
 | **Anayasa** (KESİN YASAKLAR) | kök `CLAUDE.md`, fiziksel damga | Her oturum; `/compact` sonrası diskten yeniden enjekte |
 | **L1a** her-oturum davranışı | `core/CLAUDE.core.md §1.1` | Her oturum (`@import`) |
-| **L1b** dosya-türüne bağlı | `core/claude/rules/*.md` | **Eşleşen dosya okununca** (`globs:`) |
+| **L1b** dosya-türüne bağlı | `core/claude/rules/*.md` | **Eşleşen dosya okununca** (`paths:`) |
 | **L1c** derin referans | `core/AGENTS.md` | ⚠ **Otomatik YÜKLENMEZ** — açıkça okunmalı |
 | **L2/L3** standart & playbook | `core/standards/`, `core/playbook/` | On-demand |
 | **L4** paket kuralı | `<source_root>/<MOD>/<PKG>/.rules.md` | On-demand |
 
 > **Markdown link hiçbir şey yüklemez.** Claude Code `CLAUDE.md` okur, `AGENTS.md` okumaz.
-> `.claude/rules/` frontmatter'ında **`globs:`** kullanılır; dokümante `paths:` biçimi
-> sessizce çalışmaz (anthropics/claude-code#17204).
+> `.claude/rules/` frontmatter'ında **`paths:`** kullanılır (`globs:` sessizce yok sayılır ve
+> kural her oturum koşulsuz yüklenir). Ayrıntı: `core/docs/claude-rules-nasil-yazilir.md`.
 
 ---
 
@@ -167,7 +167,7 @@ python core/scripts/team_setup.py --repair-junctions   # junction koptuysa
 | MCP yanlış sisteme bağlı | Proje kökündeki `.conn_adt` (env `ADT_SAP_*` override eder) |
 | Validator "CORE-modu" diyor | `project.yaml` proje kökünde mi + `sap_profile` dolu mu |
 | MCP tool'ları görünmüyor | `project.yaml` → `sap_profile` boş/geçersiz → **fail-closed**, yalnız `ping` açılır (D34d) |
-| `.claude/rules/` kuralı uygulanmıyor | `globs:` mi yazdın (`paths:` sessizce çalışmaz)? `.tmp/instructions-loaded.log`'a bak |
+| `.claude/rules/` kuralı uygulanmıyor | `paths:` mi yazdın (`globs:` sessizce yok sayılır)? `.tmp/instructions-loaded.log`'a bak |
 
 ---
 

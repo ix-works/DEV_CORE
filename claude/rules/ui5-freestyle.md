@@ -1,5 +1,5 @@
 ---
-globs: **/webapp/**/*.js, **/webapp/**/*.xml, **/webapp/**/*.properties, **/manifest.json, **/*.view.xml, **/*.controller.js
+paths: **/webapp/**/*.js, **/webapp/**/*.xml, **/webapp/**/*.properties, **/manifest.json, **/*.view.xml, **/*.controller.js
 ---
 
 # Freestyle UI5 + OData V2 (L1b — bu kural eşleşen dosya okununca yüklenir)

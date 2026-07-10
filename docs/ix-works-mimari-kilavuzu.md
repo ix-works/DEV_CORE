@@ -626,7 +626,7 @@ kaldırılması (teşvik edilir), zorlama yapmayan yardımcı araç.
 |---|---|---|---|
 | **Anayasa** | KESİN YASAKLAR (A/B/C/D) | kök `CLAUDE.md`, fiziksel damga | Her oturum; `/compact` sonrası diskten yeniden enjekte |
 | **L1a** | Her-oturum davranış değişmezleri | `CLAUDE.core.md §1.1` | Her oturum (`@import`) |
-| **L1b** | Dosya-türüne bağlı davranış | `claude/rules/*.md` | **Eşleşen dosya okununca** (`globs:`) |
+| **L1b** | Dosya-türüne bağlı davranış | `claude/rules/*.md` | **Eşleşen dosya okununca** (`paths:`) |
 | **L1c** | Derin davranış referansı | `AGENTS.md` | ⚠ **Otomatik YÜKLENMEZ** |
 | **L2** | Stabil kurumsal standartlar | `standards/` | On-demand |
 | **L3** | Operasyonel pattern | `playbook/` | On-demand |
@@ -640,25 +640,32 @@ oturum "yüklendi" diyordu. Çözüm:
 
 - Her oturum gereken (git workflow, subagent kararı, STOP kuralı, bağlantı) → **L1a**.
 - İş-anına özgü olan (ADT işlem sırası, reviewer pre-flight, dosya yerleşimi, UI5 tuzakları)
-  → **L1b**, `globs:` ile ilgili dosya okununca yüklenir. Startup maliyeti sıfırdır.
+  → **L1b**, `paths:` ile ilgili dosya okununca yüklenir. Startup maliyeti sıfırdır.
 - Derin referans → **L1c**, açıkça okunur.
 
 ### 8.2 `claude/rules/` yazım kuralları — bir tuzak
 
-**`globs:` kullanılır, `paths:` KULLANILMAZ.** Resmî doküman `paths:` (YAML listesi, tırnaklı)
-tarif eder ama o biçim **sessizce çalışmaz** — hata vermez, kural hiç yüklenmez. Çalışan biçim
-tırnaksız, virgülle ayrılmış tek satırdır:
+**`paths:` kullanılır, `globs:` KULLANILMAZ.** Değer hem virgüllü tek satır hem YAML listesi
+olabilir; eşleştirme gitignore semantiğiyle, proje köküne göreli yol üzerinde yapılır:
 
 ```yaml
 ---
-globs: **/*.abap, **/*.ddls
+paths: **/*.abap, **/*.ddls
 ---
 ```
 
-`globs:` **olmayan** kural koşulsuz yüklenir (her oturum). **Compaction uyarısı:**
-`globs:`-scoped kurallar `/compact` sonrası kaybolur (eşleşen dosya tekrar okununca döner).
-Bu yüzden **anayasa buraya konmaz** — kök `CLAUDE.md`'ye fiziksel damgalıdır (ADR 0021) ve
-compaction'dan sağ çıkan tek yerdir.
+⚠ **2026-07-10'a kadar burada bunun TERSİ yazıyordu** (issue #17204'e dayanarak). Claude Code
+2.1.206 frontmatter'da yalnız `paths` okur (`SQh()` parser'ı). Yanlış anahtar kuralı öldürmez —
+`paths` bulunamayınca kural "koşulsuz" kovasına düşer ve **sessizce her oturum yüklenir**;
+tembel yükleme hiç çalışmaz, hata da vermez. Ayrıntı + kanıt yolu:
+[`claude-rules-nasil-yazilir.md`](claude-rules-nasil-yazilir.md).
+
+`paths:` **olmayan** kural koşulsuz yüklenir (her oturum) — bu meşru bir tercih olabilir.
+**Compaction uyarısı:** `paths:`-scoped kurallar `/compact` sonrası kaybolur (eşleşen dosya
+tekrar okununca döner). Bu yüzden **anayasa buraya konmaz** — kök `CLAUDE.md`'ye fiziksel
+damgalıdır (ADR 0021) ve compaction'dan sağ çıkan tek yerdir.
+
+⚠ **Bir README'yi `claude/rules/` içine koyma** — o dizindeki her `.md` talimat dosyasıdır.
 
 ### 8.3 SORU 0 — yeni bilgi nereye yazılır
 
@@ -1176,7 +1183,8 @@ Dürüstlük, mimarinin bir parçasıdır. Bilinen sınırlar:
 
 | Konu | Durum |
 |---|---|
-| **L1b yükleme kanıtı** | `claude/rules/` kuruldu ve kablolandı; **gerçekten yüklendiği henüz canlı ölçülmedi** (`InstructionsLoaded` logger'ı sonradan eklendi; hook'lar oturum başında kaydedilir). Taze oturumda `.tmp/instructions-loaded.log`'da `path_glob_match` aranmalıdır. |
+| **L1b yükleme kanıtı** | **Kısmen kapandı (2026-07-10).** Ölçüldü: kurallar yükleniyordu ama *tembel değil, koşulsuz* — çünkü frontmatter `globs:` yazıyordu, Claude Code ise `paths:` okur. Anahtar düzeltildi. **AÇIK:** `paths:`-scoped kuralın gerçekten tembel yüklendiği (`path_glob_match`) henüz **görülmedi** — talimat dosyaları oturum başında cache'lendiği için aynı seansta ölçülemez. **Taze oturumda** `.abap` okut → `.tmp/instructions-loaded.log`'da `path_glob_match` satırı çıkmalı. Çıkmazsa `paths:` de tutmamıştır. |
+| **InstructionsLoaded logger'ının kendisi** | 2026-07-10'a kadar payload'da `matcher`/`paths` arıyordu — gerçek alanlar `load_reason`/`file_path`. Log `?  ?` yazıyor, "ölçüyoruz" sanılıyordu. Onarıldı; artık tanımadığı şemada `SEMA-DEGISTI` + ham payload döküyor. **Ders: sessiz hatayı yakalayan aletin kendisi sessizce bozulabilir.** |
 | **Kabuk kaçışları** | `pre_tool_guard`, `echo >> core/…` / `cp` / `tee` gibi yolları kapatmaz (bilinçli; telafi pre-commit + CI). |
 | **Git geçmişi** | Public core'un HEAD'i kimlik izinden temizlendi; **commit geçmişi temizlenmedi** (ayrı, ağır bir operasyon). |
 | **D34d politika tablosu** | Mekanizma canlı; profil-özel `available_on` daraltmaları kanıt bekliyor (ilk `s4_public`/`btp_abap` projesi). |
