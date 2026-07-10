@@ -96,15 +96,38 @@ def _junction_kontrol() -> list[str]:
     return sorun
 
 
-def _sha16(p: Path) -> str:
+def _yorumsuz(nesne):
+    """`_comment*` anahtarlarını özyinelemeli at — JSON'da yorum yoktur, bunlar insan notudur."""
+    if isinstance(nesne, dict):
+        return {k: _yorumsuz(v) for k, v in nesne.items() if not k.startswith("_comment")}
+    if isinstance(nesne, list):
+        return [_yorumsuz(x) for x in nesne]
+    return nesne
+
+
+def _anlamli_imza(p: Path) -> str:
+    """DAVRANIŞSAL imza: JSON'da yorum anahtarları, metinde CRLF/son-boşluk sayılmaz.
+
+    2026-07-10: bu fonksiyon ham `_sha16` idi. TD'nin settings.json'u template'le
+    kablolama olarak BİREBİR aynıyken, tek bir `_comment_yorumlar` anahtarı yüzünden
+    her oturum "SAPMIS (D7)" diye bağırıyordu. Yanlış-pozitif üreten uyarı, uyarıya
+    karşı bağışıklık yaratır — gerçek drift geldiğinde görülmez. Kapsam kaybı yok:
+    atılan alanların ikisi de (yorum, satır-sonu) davranış taşımaz.
+    """
     try:
-        return hashlib.sha256(p.read_bytes()).hexdigest()[:16]
+        ham = p.read_bytes()
+        if p.suffix == ".json":
+            veri = _yorumsuz(json.loads(ham.decode("utf-8")))
+            norm = json.dumps(veri, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        else:
+            norm = ham.replace(b"\r\n", b"\n").strip()
+        return hashlib.sha256(norm).hexdigest()[:16]
     except Exception:
         return "?"
 
 
 def _drift_kontrol() -> list[str]:
-    """D7: settings.json + hook_shim template'lerin gerisinde mi (hash karşılaştırma)."""
+    """D7: settings.json + hook_shim template'lerin gerisinde mi (davranışsal imza)."""
     sorun = []
     ciftler = [
         (PROJ / ".claude" / "settings.json", CORE / "claude" / "settings.template.json", "settings.json"),
@@ -113,7 +136,13 @@ def _drift_kontrol() -> list[str]:
     for yerel, tpl, ad in ciftler:
         if not yerel.exists():
             sorun.append(f"{ad} YOK — team_setup ile uret")
-        elif tpl.exists() and _sha16(yerel) != _sha16(tpl):
+            continue
+        if not tpl.exists():
+            continue
+        y, t = _anlamli_imza(yerel), _anlamli_imza(tpl)
+        if "?" in (y, t):
+            sorun.append(f"{ad} OKUNAMADI/BOZUK — imza cikarilamadi (sessiz gecme)")
+        elif y != t:
             sorun.append(f"{ad} template'ten SAPMIS (D7) — bilinçliyse manifest'e isle; degilse: "
                          f"template'ten yenile (fark: core/claude/{tpl.name} ile diff'le)")
     return sorun
