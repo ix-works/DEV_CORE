@@ -222,6 +222,37 @@ def _origin_kontrol() -> list[str]:
     return out
 
 
+def _inspector() -> list[str]:
+    """Inspector v1 (rapor-only): davranış katmanı GERÇEKTEN canlı mı?
+
+    ⚠ Bu çağrı oturum açılışını ASLA bozamaz. Inspector çöker/yavaşlarsa sessizce atlanır —
+    bir denetim aracı, denetlediği sistemi düşüremez. Geçerse tamamen SESSİZDİR
+    (yanlış-pozitif üreten uyarı, uyarıya karşı bağışıklık yaratır — D7 dersi).
+    """
+    try:
+        import importlib.util
+        yol = CORE / "scripts" / "inspector.py"
+        if not yol.is_file():
+            return []
+        spec = importlib.util.spec_from_file_location("_inspector", yol)
+        if spec is None or spec.loader is None:
+            return []
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        bulgular, istat = mod.denetle(PROJ, CORE)
+        if not bulgular:
+            return []
+        mod.rapor_yaz(PROJ, bulgular, istat)  # "detay şurada" dediğimiz dosya GERÇEKTEN yazılsın
+        satirlar = [str(b).replace("\n", " ") for b in bulgular[:5]]
+        if len(bulgular) > 5:
+            satirlar.append(f"… +{len(bulgular) - 5} bulgu daha")
+        satirlar.append(f"(negatif-testli gate: {istat['negatif_testli_gate']}/{istat['gate_toplam']} — v2 bekliyor)")
+        satirlar.append("detay: .tmp/inspector-report.md · elle: python core/scripts/inspector.py")
+        return satirlar
+    except Exception:
+        return []
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
@@ -243,6 +274,8 @@ def main() -> int:
             saglik.append("⛔ DAVRANIS-YUZEYI (F2): " + s)
         for s in _origin_kontrol():
             saglik.append("⚠ " + s)
+        for s in _inspector():
+            saglik.append("⚠ INSPECTOR: " + s)
     govde = STATIK
     if saglik:
         govde += "\n\n[SAGLIK KONTROLLERI — session_start]\n" + "\n".join(saglik)
