@@ -7,6 +7,14 @@ Kontroller (proje reposunda):
   2. .gitignore SIZINTI-KİLİDİ satırları mevcut: /core/ + .claude/{agents,skills,commands}/
      (eksik satır = FAIL — kilit olmadan bir sonraki commit sızdırır).
   3. `git status` untracked'ta core-path görünmüyor (ignore fiilen çalışıyor kanıtı).
+  4. SIR KİLİDİ: `.conn_adt` · `.csrf_token.json` · `.claude/project.local.yaml` hem
+     .gitignore'da satır olarak VAR hem de git index'inde YOK.
+
+NEDEN 4 (K3, 2026-07-10): bu üç dosya AYLARCA commit'lendi ve hiçbir katman uyarmadı.
+Bu gate .gitignore'u zaten okuyordu ama yalnız core-sızıntısını biliyordu; sır kalıplarını
+hiç bilmiyordu. Push'lanmış bir sır GERİ ALINAMAZ (ifşa olmuştur) ve sızma SESSİZDİR —
+yeni bir gate değil, var olan kilidin eksik dişi. Satır kontrolü TEK BAŞINA yetmez: dosya
+zaten tracked ise .gitignore hiçbir şey yapmaz, o yüzden index de kontrol edilir.
 
 Kasıtlı-kirli senaryoda test edilmelidir (sürekli-PASS tuzağı — GATE-2/C7).
 Exit: 0=temiz · 1=sızıntı/kilit-eksiği.
@@ -26,6 +34,12 @@ KILIT_SATIRLARI = ["/core/", ".claude/agents/", ".claude/skills/", ".claude/comm
                    ".claude/rules/"]
 IZLENEN_YOLLAR = ["core", ".claude/agents", ".claude/skills", ".claude/commands",
                   ".claude/rules"]
+
+# Sır/kimlik dosyaları (K3). Satır eşleşmesi TAM SATIR ile yapılır: `.conn_adt` alt-dizgesi
+# `conn/.conn_adt.bak` içinde de geçer → alt-dizge kontrolü yanlış güvence verirdi.
+SIR_SATIRLARI = [".conn_adt", ".csrf_token.json", ".claude/project.local.yaml"]
+SIR_YOLLARI = [".conn_adt", ".csrf_token.json", ".claude/project.local.yaml",
+               "conn/.conn_adt.bak"]
 
 
 def _git(*args: str) -> tuple[int, str]:
@@ -63,6 +77,19 @@ def main() -> int:
     if gorunen:
         sorun.append("UNTRACKED'TA CORE GÖRÜNÜYOR (ignore çalışmıyor): "
                      + ", ".join(g[3:] for g in gorunen[:4]))
+
+    # 4) SIR kilidi — satır VAR mı (tam satır) + index'te YOK mu
+    satirlar = {s.strip() for s in icerik.splitlines() if s.strip() and not s.startswith("#")}
+    eksik_sir = [s for s in SIR_SATIRLARI if s not in satirlar]
+    if eksik_sir:
+        sorun.append("SIR KİLİDİ EKSİK (.gitignore): " + ", ".join(eksik_sir)
+                     + " → satırları ekle; push'lanmış sır GERİ ALINAMAZ (K3)")
+
+    rc, out = _git("ls-files", "--", *SIR_YOLLARI)
+    sizan_sir = [l for l in out.splitlines() if l.strip()]
+    if sizan_sir:
+        sorun.append("SIR COMMIT'Lİ/STAGED: " + ", ".join(sizan_sir[:4])
+                     + " → `git rm --cached <yol>` + kimlik bilgisini DEĞİŞTİR (ifşa varsay)")
 
     if sorun:
         print("[FAIL] check_core_not_committed:")
