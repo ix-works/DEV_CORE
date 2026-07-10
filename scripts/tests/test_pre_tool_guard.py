@@ -187,24 +187,36 @@ for komut, bloklanmali, ad in vakalar:
 
 # --- HEDEF-ACIK degismezi: repoyu DEGISTIREN her gh alt-komutunda hedef acik olmali ---
 hedef = [
-    ("gh pr create -t x -b y",                       1, "pr create"),
-    ("gh pr merge 12 --squash --admin",              1, "pr merge"),
-    ("gh issue create --title x",                    1, "issue create"),
-    ("gh release create v1 --notes x",               1, "release create"),
-    ("gh secret set FOO",                            1, "secret set"),
-    ("gh workflow run ci.yml",                       1, "workflow run"),
-    ("gh repo edit --visibility private",            1, "repo edit"),
-    ("gh ruleset delete 123",                        1, "ruleset delete"),
-    ("gh api -X PUT collaborators/u",                1, "api: repos/ yolu yok"),
-    ("gh pr create --repo org/x -t a -b b",          0, "--repo acik"),
-    ("gh pr merge 12 -R org/x --squash",             0, "-R acik"),
-    ("gh secret set FOO --repo org/x",               0, "secret + --repo"),
-    ("gh api repos/org/x/collaborators/u -X PUT",    0, "api: repos/ yolu acik"),
-    ("gh api orgs/org/invitations",                  0, "api: orgs/ yolu acik"),
+    # GRUP A — bayrak-tabanli mutasyonlar
+    ("gh pr create -t x -b y",                       1, "A: pr create"),
+    ("gh pr merge 12 --squash --admin",              1, "A: pr merge"),
+    ("gh issue create --title x",                    1, "A: issue create"),
+    ("gh release create v1 --notes x",               1, "A: release create"),
+    ("gh secret set FOO",                            1, "A: secret set"),
+    ("gh workflow run ci.yml",                       1, "A: workflow run"),
+    ("gh ruleset delete 123",                        1, "A: ruleset delete"),
+    ("gh pr create --repo org/x -t a -b b",          0, "A: --repo acik"),
+    ("gh pr merge 12 -R org/x --squash",             0, "A: -R acik"),
+    ("gh secret set FOO --repo org/x",               0, "A: secret + --repo"),
+    # GRUP B — konumsal hedefli `gh repo <alt>`
+    ("gh repo edit --visibility private",            1, "B: repo edit, konumsal yok"),
+    ("gh repo delete",                               1, "B: repo delete, konumsal yok"),
+    ("gh repo create org/XYZ --private",             0, "B: PROJECT_BOOTSTRAP STEP 1"),
+    ("gh repo edit org/XYZ --visibility private",    0, "B: konumsal hedef"),
+    # GRUP C — `gh api`: cwd cikarimi YALNIZ {owner}/{repo} placeholder'iyla olur
+    ("gh api repos/{owner}/{repo}/pulls",            1, "C: placeholder"),
+    ("gh api -X PATCH repos/{owner}/{repo}",         1, "C: placeholder + mutasyon"),
+    ("gh api repos/org/x/collaborators/u -X PUT",    0, "C: repos/ yolu acik"),
+    ("gh api orgs/org/invitations",                  0, "C: orgs/ yolu acik"),
+    ("gh api user -q .login",                        0, "C: repo-hedefsiz (user)"),
+    ("gh api graphql -f query=x",                    0, "C: repo-hedefsiz (graphql)"),
+    ("gh api rate_limit",                            0, "C: repo-hedefsiz (rate_limit)"),
+    # okuma + capa
     ("gh pr list --limit 5",                         0, "okuma: pr list"),
     ("gh pr view 12 --json state",                   0, "okuma: pr view"),
     ("gh auth status",                               0, "okuma: auth status"),
     ("gh repo view",                                 0, "okuma: repo view"),
+    ("git commit -m 'gh pr create govdesi'",         0, "capa: commit MESAJI"),
 ]
 for komut, bloklanmali, ad in hedef:
     bloklandi = 1 if m._gh_hedef_belirsiz(komut) else 0

@@ -39,6 +39,12 @@ gh repo create <ORG>/XYZ --private
 git clone https://github.com/<ORG>/XYZ.git C:\IX\XYZ
 ```
 
+> ⚠ `<ORG>/XYZ` placeholder'ını **doldurmadan** çalıştırma. `pre_tool_guard` kural 9
+> (GH-HEDEF) doldurulmamış placeholder'ı hedef saymaz ve komutu reddeder — bu bilinçlidir:
+> `gh` hedefi bayrak/argüman yoksa **cwd'den** çıkarır ve `core/` bir junction'dır; yanlış
+> repoya yayın **geri alınamaz**. Repoyu değiştiren her `gh` alt-komutunda hedef açıkça
+> verilir (`--repo <ORG>/<REPO>`, konumsal `<ORG>/<REPO>`, ya da `gh api repos/<ORG>/<REPO>/…`).
+
 **Koruma kurulumu + ilk-push istisnası:** yeni repoda `main-pr-required` ruleset'i ve CI
 workflow'u kurulup **AKTİF edilene dek** main'e doğrudan push mümkündür — bilinçli sıra:
 ruleset'i önce **DISABLED** durumda yarat → iskelet ilk push'u yap (STEP 6) → ruleset'i

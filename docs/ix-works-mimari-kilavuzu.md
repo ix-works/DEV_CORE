@@ -496,14 +496,32 @@ eylemler için meşrudur. Bir kural bu iki kriterden birini karşılamıyorsa st
 | 6 | **Yalın fiori deploy** | "Successful" der, bayat `dist/` gider (SESSİZ) | Bash |
 | 7 | **App-içi npm install** | Workspace ihlali | Bash |
 | 8 | **GENERICIZE-LEAK** | Core PUBLIC; push'lanınca GERİ ALINAMAZ | Edit/Write core hedefi |
-| 9 | **GH HEDEF BELİRSİZ** | `gh` hedefi **cwd'den** çıkarır; `core/` junction'dır → yanlış repoya yayın/mutasyon GERİ ALINAMAZ, `gh` başarı döner (SESSİZ) | Repoyu değiştiren her `gh` alt-komutu |
+| 9 | **GH HEDEF BELİRSİZ** | `gh` hedefi **cwd'den** çıkarır; `core/` junction'dır → yanlış repoya yayın/mutasyon GERİ ALINAMAZ, `gh` başarı döner (SESSİZ) | Repoyu değiştiren `gh` alt-komutları |
 
-> **Kural 9 nasıl doğdu.** Bir PR `--repo` verilmeden açılmaya çalışıldı; guard görünürlüğü
-> soramayınca fail-closed reddetti. Asıl tehlike ise fark edilmedi: yanlış cwd'de (ör. `core/`
-> junction'ı içinde) çalışan bir `gh pr create`, private proje içeriğini public çekirdeğe
-> yayınlayabilirdi. Kural konurken `guard_conformance` ④ vakası bir **yanlış-pozitif** yakaladı:
-> desen komut-başı çapası taşımadığı için `git commit -m 'gh pr create …'` mesajını komut
-> sanıyordu. Meta-gate olmasaydı bu sessizce üretime girerdi.
+Kural 9 üç grubu ayrı ele alır — çünkü `gh`'de hedef üç farklı yoldan verilir:
+
+| Grup | Komutlar | Hedef nasıl açık olur | Cwd'ye düşer mi |
+|---|---|---|---|
+| **A** | `pr` · `issue` · `release` · `secret` · `variable` · `workflow` · `ruleset` · `label` | `--repo <O>/<R>` ya da `-R <O>/<R>` | Bayrak yoksa **evet** |
+| **B** | `repo create/edit/rename/delete/archive` | Konumsal `<O>/<R>` (bayrak yok) | Argümansızsa **evet** |
+| **C** | `api` | Yolun kendisi (`repos/<O>/<R>/…`, `orgs/<O>/…`) | Yalnız `{owner}`/`{repo}` **placeholder** varsa |
+
+Okuma komutları (`list`/`view`/`status`) ve repo-hedefsiz API'ler (`gh api user`, `graphql`,
+`rate_limit`) **kapsam dışıdır** — kural gürültü üretmez.
+
+> **Kural 9 nasıl doğdu ve iki kez nasıl yakalandı.** Bir PR `--repo` verilmeden açılmaya
+> çalışıldı; guard görünürlüğü soramayınca fail-closed reddetti. Asıl tehlike ise fark
+> edilmemişti: yanlış cwd'de (ör. `core/` junction'ı içinde) çalışan bir `gh pr create`,
+> private proje içeriğini public çekirdeğe yayınlayabilirdi.
+>
+> Kural konurken **iki hata yaptı ve ikisini de sistem yakaladı.** (1) `guard_conformance`
+> ④ vakası bir yanlış-pozitif buldu: desen komut-başı çapası taşımadığı için
+> `git commit -m 'gh pr create …'` **mesajını** komut sanıyordu. (2) Regresyon taraması
+> dört kırılma gösterdi: `gh api user` / `graphql` / `rate_limit` ve `gh repo create <O>/<R>`
+> — yani `PROJECT_BOOTSTRAP` STEP 1'in kendisi. İlk model `gh api`'nin `--repo` bayrağı
+> olmadığını ve `gh repo create`'in hedefi konumsal aldığını gözden kaçırmıştı.
+>
+> Ders: **runtime guard eklerken önce blast-radius ölçülür.** Kural doğru, model yanlıştı.
 
 **Kaldırılan 4 kural** ve gerekçeleri (her biri ayrı ölçüldü): freeze-guard (git-remote'ta
 yedekli → geri alınabilir; ayrıca 6 kabuk-yolundan sızıyordu), özyinelemeli-silme bloğu

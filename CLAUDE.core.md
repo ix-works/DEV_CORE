@@ -87,13 +87,14 @@
 - **GIT:** `main`'e doğrudan commit YOK → branch + PR. Commit = **lider**; alt-ajan commit/push etmez.
   Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU**.
 - **HEDEF-AÇIKLIK — `gh`/`git` üç değişmez (2026-07-10 dersi; guard kural 9):**
-  1. **Repoyu DEĞİŞTİREN her `gh` alt-komutunda hedef AÇIKÇA verilir** —
-     `--repo <ORG>/<REPO>` (ya da `gh api repos/<ORG>/<REPO>/...`). Kapsam: `pr`, `issue`,
-     `release`, `repo`, `secret`, `variable`, `workflow`, `ruleset`, `label`, `api`.
-     Gerekçe: `gh` bayrak yoksa hedefi **cwd'den** çıkarır ve `core/` bir **junction**'dır →
+  1. **Repoyu DEĞİŞTİREN her `gh` alt-komutunda hedef AÇIKÇA verilir.** Üç biçim vardır:
+     · `pr`/`issue`/`release`/`secret`/`variable`/`workflow`/`ruleset`/`label` → **`--repo <ORG>/<REPO>`**
+     · `repo create|edit|rename|delete|archive` → **konumsal `<ORG>/<REPO>`** (bu komutlarda `--repo` yok)
+     · `api` → **yolun kendisi**: `repos/<ORG>/<REPO>/...` (⚠ `{owner}`/`{repo}` placeholder'ı cwd'den çözülür — YASAK)
+     Gerekçe: `gh` hedefi verilmezse **cwd'den** çıkarır ve `core/` bir **junction**'dır →
      yanlış dizinde çalışan bir komut private proje içeriğini **public çekirdeğe** yayınlayabilir.
      Yayın cache'lenir: **geri alınamaz**, üstelik `gh` başarı döner (sessiz).
-     Okuma komutları (`list`/`view`/`status`) serbesttir.
+     Okuma komutları (`list`/`view`/`status`) ve repo-hedefsiz API'ler (`gh api user|graphql|rate_limit`) serbesttir.
   2. **`git` cwd-tabanlıdır:** proje içinden `cd core && git …` **DEV_CORE'u** etkiler.
      Hedef bariz değilse `git -C <repo-kökü> …` kullan.
   3. **`git commit` (heredoc) ile `gh pr create` AYNI Bash çağrısına konmaz.** Guard komut
