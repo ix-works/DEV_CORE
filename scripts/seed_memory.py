@@ -12,21 +12,36 @@ KAPSAM: SADECE feedback (nasıl-çalışırsın) memory'leri tohumlanır. Projey
 (project-type memory) tohuma DAHİL DEĞİLDİR (başka projeye yanıltıcı).
 
 MERGE-SAFE: Hedefte zaten var olan dosyayı EZMEZ (yerel daha taze olabilir). Yalnız eksik
-dosyaları ekler. MEMORY.md index'i yalnız hedefte yoksa kopyalanır; varsa dokunulmaz
-(kullanıcının kendi index'i korunur). --force ile üzerine yazılabilir.
+dosyaları ekler. --force ile üzerine yazılabilir.
+
+RENAME/SİLME İZİ (2026-07-10 template provası): script eskiden yalnız EKLİYORDU. Seed'de bir
+dosya yeniden adlandırılınca (ör. kimlik sızdıran ad temizlenince) daha önce tohumlanmış her
+projede ESKİ dosya + BAYAT indeks satırı kalıyordu; kimse görmüyordu. Artık:
+
+  * `.seed-manifest.json` hedefte tutulur (tohumlanan ad → sha1).
+  * Manifest'te olup seed'de OLMAYAN dosya = seed'den kalkmış. İçeriği hâlâ manifest'teki
+    sha ile aynıysa (kullanıcı DOKUNMAMIŞ) `--prune` ile silinir + indeks satırı düşer.
+    Kullanıcı düzenlemişse SİLİNMEZ, yalnız uyarılır.
+  * MEMORY.md index'i: eksik seed satırları `## Feedback` altına EKLENİR (mevcut satırlara
+    dokunulmaz). Ölü seed linkleri temizlenir.
+
+Gate: `check_memory_index.py` (C-MEM-01) bu bayatlığı zaten FAIL eder — bu script onarır.
 
 Proje-slug: repo kök yolundaki alfanümerik-olmayan her karakter '-' ile değiştirilir
-(Claude Code konvansiyonu). Ör: C:\\IX\\<PROJECT_NAME> -> C--IX-<PROJECT_NAME>
+(Claude Code konvansiyonu). Ör: C:\\IX\\<PROJECT_NAME> -> C--IX--PROJECT-NAME-
 
 Kullanım (repo kökünde):
-    python scripts/seed_memory.py            # eksikleri ekle, raporla
+    python scripts/seed_memory.py            # eksikleri ekle + indeksi onar, raporla
     python scripts/seed_memory.py --dry-run  # ne yapacağını göster, yazma
-    python scripts/seed_memory.py --force     # var olanları da seed'le ez (DİKKAT)
+    python scripts/seed_memory.py --prune    # seed'den kalkmış, dokunulmamış dosyaları sil
+    python scripts/seed_memory.py --force    # var olanları da seed'le ez (DİKKAT)
     python scripts/seed_memory.py --target <yol>  # hedef memory klasörünü elle ver
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -60,11 +75,94 @@ def default_target() -> Path:
     return Path.home() / ".claude" / "projects" / slug / "memory"
 
 
+MANIFEST_ADI = ".seed-manifest.json"
+LINK_RE = re.compile(r"\]\(([^)]+\.md)\)")
+
+
+def _sha(p: Path) -> str:
+    return hashlib.sha1(p.read_bytes()).hexdigest()
+
+
+def _manifest_oku(target: Path) -> dict:
+    p = target / MANIFEST_ADI
+    if not p.is_file():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _yetimleri_bul(target: Path, seed_adlari: set, manifest: dict) -> tuple[list, list]:
+    """(silinebilir, elle-bakılacak) — seed'den kalkmış tohum dosyaları.
+
+    Manifest YOKSA (manifest özelliğinden önce tohumlanmış proje) hangi dosyanın tohum
+    olduğunu bilemeyiz → hiçbir şey SİLİNMEZ, yalnız uyarılır. Yaratmadığımız dosyayı
+    silmeyiz.
+    """
+    if not manifest:
+        supheli = [p.name for p in sorted(target.glob("feedback_*.md"))
+                   if p.name not in seed_adlari]
+        return [], supheli
+    silinebilir, dokunulmus = [], []
+    for ad, sha in manifest.items():
+        if ad in seed_adlari:
+            continue
+        dst = target / ad
+        if not dst.is_file():
+            continue
+        (silinebilir if _sha(dst) == sha else dokunulmus).append(ad)
+    return silinebilir, dokunulmus
+
+
+def _index_onar(target: Path, seed_index: Path, seed_adlari: set,
+                silinen: list, dry: bool) -> list:
+    """Eksik seed satırlarını ekle, ölü seed linklerini çıkar. Kullanıcı satırlarına dokunma."""
+    dst = target / "MEMORY.md"
+    if not dst.is_file() or not seed_index.is_file():
+        return []
+    metin = dst.read_text(encoding="utf-8")
+    seed_metin = seed_index.read_text(encoding="utf-8")
+    islem = []
+
+    # 1) silinen/ölü seed linklerini at
+    yeni_satirlar = []
+    for s in metin.split("\n"):
+        m = LINK_RE.search(s)
+        if m:
+            hedef = m.group(1)
+            if hedef in silinen or (hedef not in seed_adlari and not (target / hedef).is_file()):
+                islem.append(f"indeksten düştü: {hedef}")
+                continue
+        yeni_satirlar.append(s)
+    metin = "\n".join(yeni_satirlar)
+
+    # 2) indekste olmayan seed dosyaları için seed'in kendi satırını ekle
+    var_olan = set(LINK_RE.findall(metin))
+    eklenecek = []
+    for s in seed_metin.split("\n"):
+        m = LINK_RE.search(s)
+        if m and m.group(1) in seed_adlari and m.group(1) not in var_olan:
+            eklenecek.append(s)
+            islem.append(f"indekse eklendi: {m.group(1)}")
+    if eklenecek:
+        if "## Feedback" in metin:
+            metin = metin.replace("## Feedback\n", "## Feedback\n\n" + "\n".join(eklenecek) + "\n", 1)
+        else:
+            metin = metin.rstrip() + "\n\n## Feedback\n\n" + "\n".join(eklenecek) + "\n"
+
+    if islem and not dry:
+        dst.write_text(metin, encoding="utf-8")
+    return islem
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Repo memory tohumunu makineye seed et")
     ap.add_argument("--target", default=None, help="Hedef memory klasörü (vermezsen otomatik hesaplanır)")
     ap.add_argument("--dry-run", action="store_true", help="Yalnız raporla, yazma")
     ap.add_argument("--force", action="store_true", help="Var olan dosyaları da seed ile ez")
+    ap.add_argument("--prune", action="store_true",
+                    help="Seed'den kalkmış + kullanıcı dokunmamış tohum dosyalarını sil")
     args = ap.parse_args()
 
     if not SEED_DIR.exists():
@@ -109,18 +207,56 @@ def main() -> int:
             if not args.dry_run:
                 shutil.copy2(seed_index, dst_index)
 
+    # --- seed'den kalkmış (yeniden adlandırılmış/silinmiş) tohum dosyaları ---
+    seed_adlari = {f.name for f in seed_files}
+    manifest = _manifest_oku(target)
+    silinebilir, dokunulmus = _yetimleri_bul(target, seed_adlari, manifest)
+    silinen: list = []
+    if silinebilir:
+        if args.prune and not args.dry_run:
+            for ad in silinebilir:
+                (target / ad).unlink(missing_ok=True)
+            silinen = silinebilir
+        # --prune yoksa dosya durur ama indeks onarımında ölü link temizlenir
+
+    # --- indeks onarımı: eksik seed satırlarını ekle, ölü linkleri at ---
+    index_islem = _index_onar(target, seed_index, seed_adlari, silinen, args.dry_run)
+
+    # --- manifest'i yaz (tohumlanan adlar → sha) ---
+    if not args.dry_run:
+        yeni_manifest = {f.name: _sha(f) for f in seed_files}
+        (target / MANIFEST_ADI).write_text(
+            json.dumps(yeni_manifest, ensure_ascii=False, indent=1), encoding="utf-8")
+
     print("\n--- ÖZET ---")
     print(f"  Eklendi : {len(added)}")
     if forced:
         print(f"  Ezildi  : {len(forced)} (--force)")
     print(f"  Atlandı : {len(skipped)} (zaten mevcut, korundu)")
     print(f"  MEMORY.md index: {index_action}")
+    for i in index_islem:
+        print(f"    · {i}")
+    if silinen:
+        print(f"  Budandı : {len(silinen)} (seed'den kalkmış, kullanıcı dokunmamış)")
+    elif silinebilir:
+        print(f"  [WARN] {len(silinebilir)} tohum dosyası seed'den kalkmış (yeniden adlandırılmış?):")
+        for ad in silinebilir:
+            print(f"    · {ad}   → silmek için: --prune")
+    if dokunulmus:
+        neden = ("manifest yok (bu proje manifest özelliğinden önce tohumlandı) → tohum mu, "
+                 "kullanıcı hatırası mı AYIRT EDİLEMEZ"
+                 if not manifest else "seed'den kalkmış AMA yerel olarak DÜZENLENMİŞ")
+        print(f"  [WARN] {len(dokunulmus)} dosya seed'de yok — {neden}. SİLİNMEDİ:")
+        for ad in dokunulmus:
+            print(f"    · {ad}")
+        print("    (yaratmadığımız dosyayı silmeyiz; gerekiyorsa elle sil)")
+
     if args.dry_run:
         print("\n  (DRY-RUN — hiçbir dosya yazılmadı)")
-    elif added or forced:
-        print("\n[OK] Feedback memory tohumlandı. Yeni Claude oturumunda kurallar yüklenir.")
+    elif added or forced or silinen or index_islem:
+        print("\n[OK] Feedback memory tohumlandı/onarıldı. Yeni Claude oturumunda kurallar yüklenir.")
     else:
-        print("\n[OK] Her şey güncel — eklenecek yeni feedback memory yok.")
+        print("\n[OK] Her şey güncel.")
     return 0
 
 

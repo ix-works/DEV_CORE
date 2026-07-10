@@ -1,5 +1,7 @@
 {
   "_comment": "PROJE settings şablonu — init_project.py bundan üretir. TÜM hook'lar proje-lokal hook_shim.py üzerinden (D15: kopuk-junction'da net hata; runpy=+0ms Ö2). Drift kontrolü: session_start D7. Always-allow YASAĞI (D32): SAP-yazma/davranış-yüzeyi araçlarına verilmez.",
+  "_comment_yorumlar": "YORUMLAR ÜST SEVİYEDE durur ya da bir hook-BLOĞUNUN içinde ('_comment' alanı). 'hooks' NESNESİNİN doğrudan içine yazılan anahtar bir OLAY adı sanılır (2026-07-10'da bu hata yapıldı).",
+  "_comment_instructions_loaded": "InstructionsLoaded (2026-07-10): talimat-dosyası yüklemesi SESSİZDİR — AGENTS.md aylarca yüklenmeden 'yüklendi' teyidi verildi; dokümante 'paths:' frontmatter'ı sessizce çalışmaz (anthropics/claude-code#17204); core/ bir junction'dır (D29). Hook BLOKLAMAZ, yalnız .tmp/instructions-loaded.log'a zaman/matcher/yol yazar → glob-tetiklemeli L1b kuralının GERÇEKTEN yüklendiği kanıtlanabilsin. matcher=path_glob_match görünmüyorsa kural ÖLÜDÜR.",
   "statusLine": {
     "type": "command",
     "command": "python \"${CLAUDE_PROJECT_DIR}/core/scripts/statusline.py\"",
@@ -11,6 +13,13 @@
         "hooks": [
           { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "session_start"] },
           { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "tooling_radar_check"] }
+        ]
+      }
+    ],
+    "InstructionsLoaded": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "instructions_loaded_log"] }
         ]
       }
     ],
@@ -37,6 +46,16 @@
         "_comment": "NotebookEdit AYRI blok: pre_tool_guard freeze/core-leak icin gerekli, ama pull_before_edit SAP-source akisina ozeldir, notebook'a uygulanmaz.",
         "matcher": "NotebookEdit",
         "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "pre_tool_guard"] } ]
+      },
+      {
+        "_comment": "sap_worktype_hint (2026-07-09 skill-inj redizayni): SAP-yazma tool'unda GERCEK obje-tipinden deterministik worktype-checklist hatirlatmasi. Eski skill_injector prompt-keyword tahminini (kirilgan) tool-adi enforcement'a tasir. Non-blocking.",
+        "matcher": "mcp__sap-adt__adt_(push_source|activate|dtel_create|domain_create|struct_create|publish_service)",
+        "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "sap_worktype_hint"] } ]
+      },
+      {
+        "_comment": "itg_backstop (2026-07-09 intake_triage redizayni): SAP isi FIILEN basladiginda (ilk mcp__sap-adt__* tool'u) session'da ITG-marker yoksa ITG protokolunu enjekte eder. Prompt-keyword regex'in kacirdigi talepleri deterministik yakalar. Non-blocking; native intake-triage skill + regex hook ile 3-katman.",
+        "matcher": "mcp__sap-adt__.*",
+        "hooks": [ { "type": "command", "command": "python", "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "itg_backstop"] } ]
       },
       {
         "matcher": "Agent",

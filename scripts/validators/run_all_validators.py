@@ -67,6 +67,11 @@ VALIDATORS = [
     ("Auto-memory bütçe + indeks bütünlüğü (HARD, C-MEM-01)", "check_memory_index.py", [], "both", None),
     # "manual-edit: PROHIBITED" diyen ama tazeliği ölçülmeyen artefakt sessizce bayatlar. C-REG-01.
     ("package-registry tazeliği (HARD, C-REG-01)", "check_package_registry_fresh.py", [], "project", None),
+    # Hook yazmak ≠ şablona kablolamak. sap_worktype_hint + itg_backstop şablona hiç
+    # eklenmemişti → init_project geride bir proje üretiyordu (2026-07-10 provası). C-TPL-01.
+    ("settings.template ↔ hook envanteri (HARD, C-TPL-01)", "check_settings_template_sync.py", [], "both", None),
+    # Belgeyi iki yerde tutmak, tazelik kontrolü olmadan KESİNLİKLE drift üretir. C-DOC-01.
+    ("docs aynası ↔ core/docs (HARD, C-DOC-01)", "check_docs_mirror.py", [], "project", None),
     ("Playbook freshness (uyarı)", "check_playbook_freshness.py", [], "both", None),
 ]
 

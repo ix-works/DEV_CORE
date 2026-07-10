@@ -1,0 +1,49 @@
+#!/bin/sh
+# PROJE pre-commit gate — statik katman ③ (init_project.py bunu üretir; team_setup kablolar).
+#
+# NEDEN (2026-07-10 sağlık denetimi): projede commit anında HİÇBİR statik kontrol
+# koşmuyordu (`core.hooksPath` unset, `.git/hooks` yalnız *.sample). Validator'ların çoğu
+# yalnız elle `run_all_validators` ile çalışıyordu → merdivende ③ sanılan gate'ler fiilen
+# ⑤ (doküman) seviyesindeydi. "Kod ≠ kablolama."
+#
+# KABLOLAMA (team_setup otomatik yapar; elle: `git config core.hooksPath scripts/git-hooks`)
+# Gate: check_project_precommit_wired.py
+#
+# Bypass (acil durum, kullanıcı onayıyla): git commit --no-verify
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "[pre-commit] statik gate..."
+
+# 1) core-sızıntı: junction içeriği staging'e girmiş mi (CI'daki core-leak'in lokal ikizi).
+#    'rules' 2026-07-10'da eklendi (L1b) — junction'lanan HER tip burada olmalı.
+BAD=$(git diff --cached --name-only -- \
+        'core/**' '.claude/agents/**' '.claude/skills/**' '.claude/commands/**' '.claude/rules/**' \
+        2>/dev/null || true)
+if [ -n "$BAD" ]; then
+  echo "$BAD"
+  echo "HATA: core/junction içeriği commit'e girmiş (R1/D26). 'git reset' ile çıkar." >&2
+  exit 1
+fi
+
+# 2) CORE-INDEX tazeliği: türetilmiş artefakt, üretim adımı unutulmuş olabilir.
+#    (core/ junction lokalde mevcut → --check çalışır; CI'da core/ yok, bu kontrol
+#     YALNIZ pre-commit'te anlamlıdır → C-IDX-01'i elle-bağımlılıktan kurtarır.)
+if [ -f core/scripts/build_core_index.py ]; then
+  if ! python core/scripts/build_core_index.py --check >/dev/null 2>&1; then
+    echo "HATA: governance/CORE-INDEX.md bayat. Çalıştır: python core/scripts/build_core_index.py" >&2
+    exit 1
+  fi
+fi
+
+# 3) run_all_validators --quick (core + validators-local; profil-modlu)
+if [ -f core/scripts/validators/run_all_validators.py ]; then
+  if ! python core/scripts/validators/run_all_validators.py --quick; then
+    echo "HATA: validator ihlali — commit engellendi. Yukarıdaki FAIL'leri düzelt." >&2
+    exit 1
+  fi
+fi
+
+echo "[pre-commit] OK"

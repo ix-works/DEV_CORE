@@ -142,6 +142,29 @@ def hookspath_core() -> None:
     say(OK if r.returncode == 0 else FAIL, f"core.hooksPath=scripts/git-hooks ({CORE_ROOT})")
 
 
+def hookspath_proje(proje: Path) -> None:
+    """PROJE reposunda pre-commit gate'ini kabla (2026-07-10 template provası).
+
+    `init_project` `scripts/git-hooks/pre-commit`i üretir; ama `core.hooksPath` set
+    edilmezse git onu ASLA çalıştırmaz — dosya var, gate yok. TD'de bu boşluk aylarca
+    açık kaldı ve pre-commit elle kuruldu. Kod ≠ kablolama.
+    """
+    hook = proje / "scripts" / "git-hooks" / "pre-commit"
+    if not (proje / ".git").exists():
+        say(WARN, "proje git reposu değil — pre-commit kablolaması atlandı (repo_mode=none)")
+        return
+    if not hook.is_file():
+        say(WARN, "proje scripts/git-hooks/pre-commit yok — init_project --force ile üret")
+        return
+    try:
+        os.chmod(hook, os.stat(hook).st_mode | 0o111)  # POSIX'te çalıştırılabilir olmalı
+    except OSError:
+        pass
+    r = subprocess.run(["git", "-C", str(proje), "config",
+                        "core.hooksPath", "scripts/git-hooks"], capture_output=True, text=True)
+    say(OK if r.returncode == 0 else FAIL, f"proje core.hooksPath=scripts/git-hooks ({proje})")
+
+
 def provision_worktree(worktree: Path, proje: Path) -> bool:
     """D16: worktree'de junction'lar + git'in getirmediği runtime dosyaları."""
     say(INFO, f"worktree provizyonu: {worktree} (ana proje: {proje})")
@@ -253,6 +276,12 @@ def main() -> int:
         return 1
     dosya_tamamla(proje)
     hookspath_core()
+    hookspath_proje(proje)
+    # 2026-07-10 template provası: CORE-INDEX yalnız `--repair-junctions` yolunda
+    # üretiliyordu → her YENİ proje C-IDX-01 FAIL ile açılıyordu (ilk `run_all_validators`
+    # kırmızı). Kurulumun bir parçası olmalı: junction Grep/Glob'a görünmez, indeks tek
+    # kökten-aranabilir giriş noktası (D29).
+    _core_index_yenile(proje)
 
     if not a.no_plugins:
         alt_arac(proje, "setup_plugins.py", "plugin kurulumu (claude CLI gerekli)")

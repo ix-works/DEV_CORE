@@ -41,21 +41,62 @@ GITIGNORE = """\
 .claude/skills/
 .claude/commands/
 .claude/rules/
-# ==== kişisel / runtime ====
-.claude/settings.local.json
-.claude/active_package
-# makine-lokal davranış baseline (session_start üretir; commit'lenmez)
-.claude/behavior-manifest.json
-# genericize blocklist: müşteri/sistem/kişi adları — ASLA commit'lenmez
-.claude/genericize-blocklist.txt
+.claude/memory-seed/
+
+# ==== SIRLAR / KİMLİK — asla commit'lenmez ====
+# 2026-07-10 template provası: bu satırların ÇOĞU şablonda YOKTU; yalnız TD'de
+# birikmişti → yeni açılan her proje bağlantı-yedeğini, CSRF token'ını ve
+# proje-lokal kimlik dosyalarını COMMIT EDİYORDU.
 .conn_adt
 conn/*.env
+conn/.conn_adt.bak
+.csrf_token.json
+# genericize blocklist: müşteri/sistem/kişi adları — ASLA commit'lenmez
+.claude/genericize-blocklist.txt
+.claude/project.local.yaml
+
+# ==== kişisel / runtime state ====
+.claude/settings.local.json
+.claude/active_package
+.claude/cache/
+.claude/projects/
+.claude/worktrees/
+# makine-lokal davranış baseline (behavior_manifest üretir; commit'lenmez)
+.claude/behavior-manifest.json
+.claude/.current_session
+.claude/.session_fresh.json
+.claude/.statusline_vpn_cache
+.claude/.mcp_active_system
+.claude/.worktype_hinted.json
+.claude/.itg_shown.json
+**/.statusline_vpn_cache
+**/.mcp_active_system
 CLAUDE.local.md
 .tmp/
-*.pyc
-__pycache__/
-node_modules/
+scratchpad/
+TempScripts/
+mcp_servers/**/.cache/
+mcp_servers/**/audit.log
 sap_adt_debug.log
+
+# ==== derleme / araç artefaktları ====
+*.pyc
+*.pyo
+__pycache__/
+.pytest_cache/
+node_modules/
+UI/node_modules/
+.playwright/
+.playwright-cli/
+.playwright-mcp/
+*.proposed.cds
+
+# ==== editör / OS ====
+*.swp
+*~
+~$*
+.DS_Store
+Thumbs.db
 """
 
 GITATTRIBUTES = """\
@@ -136,16 +177,25 @@ def main() -> int:
     claude_md = (tpl / "CLAUDE.project.template.md").read_text(encoding="utf-8")
     settings = (tpl / "settings.template.json").read_text(encoding="utf-8")
     shim = (tpl / "hook_shim.template.py").read_text(encoding="utf-8")
+    # 2026-07-10 template provası: README ve pre-commit ÜRETİLMİYORDU. README her projede
+    # elle yazılıyordu; pre-commit ise HİÇ yoktu → yeni proje commit anında sıfır statik
+    # kontrolle açılıyordu (merdivende ③ sanılan gate'ler fiilen ⑤ idi).
+    readme = (tpl / "README.project.template.md").read_text(encoding="utf-8")
+    precommit = (tpl / "git-hooks" / "pre-commit.template").read_text(encoding="utf-8")
     if a.name:
         claude_md = claude_md.replace("<PROJECT_NAME>", a.name)
+        readme = readme.replace("<PROJECT_NAME>", a.name)
     claude_md = claude_md.replace("<SOURCE_ROOT>", a.source_root)
+    readme = readme.replace("<source_root>", a.source_root)
     # KESİN YASAKLAR fiziksel damgası — kök CLAUDE.md'ye (junction-bağımsız daima yüklü)
     claude_md = yasaklar_stamp.upsert(claude_md, CORE_ROOT)
 
     sonuc = [
         uret(proje / "CLAUDE.md", claude_md, a.force),
+        uret(proje / "README.md", readme, a.force),
         uret(proje / ".claude" / "settings.json", settings, a.force),
         uret(proje / "scripts" / "hook_shim.py", shim, a.force),
+        uret(proje / "scripts" / "git-hooks" / "pre-commit", precommit, a.force),
         uret(proje / "project.yaml",
              PROJECT_YAML.format(source_root=a.source_root, repo_mode=a.repo_mode), a.force),
         uret(proje / ".gitignore", GITIGNORE, a.force),

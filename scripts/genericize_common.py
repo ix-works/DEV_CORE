@@ -103,7 +103,14 @@ Z_OBJ_PAT = re.compile(r"(?<![A-Za-z0-9])(Z[A-Z]{2}\d{3})(?!\d)", re.IGNORECASE)
 
 # D4: SAP kullanıcı adı (gerçek kişi). Sadece BÜYÜK harf — `d_data` gibi değişken
 # adlarını yanlış-yakalamamak için IGNORECASE YOK.
-SAP_USER_PAT = re.compile(r"(?<![A-Za-z0-9_])D_[A-Z]{4,}(?![A-Za-z0-9])")
+# ⚠ Yalnız 'X' ya da yalnız 'N' harflerinden oluşan diziler dokümantasyon PLACEHOLDER'ıdır
+# (gerçek kullanıcı değil) → muaf. 2026-07-10: kendi README şablonumuz bu yanlış-pozitife
+# takıldı. Guard doğru çalışıyordu; desen fazla genişti.
+SAP_USER_PAT = re.compile(
+    r"(?<![A-Za-z0-9_])D_"
+    r"(?!X{2,}(?![A-Za-z0-9]))"   # placeholder: D_ + yalnız X'ler
+    r"(?!N{2,}(?![A-Za-z0-9]))"   # placeholder: D_ + yalnız N'ler
+    r"[A-Z]{4,}(?![A-Za-z0-9])")
 
 
 def z_obje_sizintilari(metin: str) -> list[str]:

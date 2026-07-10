@@ -6,9 +6,14 @@
 > **geliştiriciler** (tüm belge). Belge, sistemin fiili durumunu yansıtır; her yetenek,
 > arkasındaki dosya/kural referansıyla birlikte anlatılır.
 >
-> **Sürüm bilgisi.** Bu belgedeki tüm proje/paket adları örnektir (`<PROJE>`, `<ORG>`,
-> `ZSD001_CLC`); gerçek bir kurulumda kendi değerlerinizle değişir. Standart SAP nesneleri
-> (VBAK, LIKP, BAPI_*) gerçektir.
+> **Sürüm.** 2026-07-10. Sayılar (hook/validator/tool adedi) o tarihte canlı ağaçtan ölçülmüştür.
+> Belgedeki tüm proje/paket adları örnektir (`<PROJE>`, `<ORG>`, `ZSD001_CLC`); gerçek bir
+> kurulumda kendi değerlerinizle değişir. Standart SAP nesneleri (VBAK, LIKP, BAPI_*) gerçektir.
+>
+> **Bu sürümdeki büyük değişiklikler.** (a) Talimat-katmanı yeniden bölündü: `AGENTS.md`'nin
+> hiçbir oturumda yüklenmediği ölçüldü → L1a/L1b/L1c ayrımı ve glob-tetiklemeli `claude/rules/`.
+> (b) `pre_tool_guard` 12 katmandan **8 kurala** indirildi (merdiven ilkesi). (c) MCP tool yüzeyi
+> profil-bazlı oldu (fail-closed). (d) Üç yeni gate: C-MEM-01, C-REG-01, C-TPL-01.
 
 ---
 
@@ -22,7 +27,7 @@
 - [5. Çoklu-Proje Flow & Junction Mimarisi](#5-çoklu-proje-flow--junction-mimarisi)
 - [6. Enforcement Katmanı — Ne, Ne Zaman Tetiklenir](#6-enforcement-katmanı--ne-ne-zaman-tetiklenir)
 - [7. Kalite Kapıları: Validator + Reviewer + Coverage](#7-kalite-kapıları-validator--reviewer--coverage)
-- [8. Kural Mimarisi (L1-L4) ve SORU 0](#8-kural-mimarisi-l1-l4-ve-soru-0)
+- [8. Kural Mimarisi (L1–L4) ve SORU 0](#8-kural-mimarisi-l1l4-ve-soru-0)
 - [9. İş-Alım: Intake Triage Gate (ITG)](#9-iş-alım-intake-triage-gate-itg)
 - [10. SAP ADT MCP Sunucusu](#10-sap-adt-mcp-sunucusu)
 - [11. Kurumsal Hafıza (Memory) Sistemi](#11-kurumsal-hafıza-memory-sistemi)
@@ -31,6 +36,7 @@
 - [14. Sağlık ve Kalite Araçları](#14-sağlık-ve-kalite-araçları)
 - [15. Güvenlik, Gizlilik ve Uyumluluk](#15-güvenlik-gizlilik-ve-uyumluluk)
 - [16. Onboarding: Yeni Geliştirici ve Yeni Proje](#16-onboarding-yeni-geliştirici-ve-yeni-proje)
+- [17. Bilinen Sınırlar ve Açık Kalemler](#17-bilinen-sınırlar-ve-açık-kalemler)
 - [EK-A. Karar Kayıtları (ADR) Dizini](#ek-a-karar-kayıtları-adr-dizini)
 - [EK-B. Terminoloji](#ek-b-terminoloji)
 
@@ -49,21 +55,22 @@ Modelin üç temel özelliği:
 
 1. **Kural ile uygulama ayrılmaz.** Her kalite kuralı, atlanamayan bir teknik kapıyla
    (validator, hook, gate) zorlanır. Kural "belgede yazılı" değil, "araç tarafından
-   uygulanan" bir şeydir. İnsan disiplinine değil, mimariye dayanır — bu, aynı aracı
-   kullanan farklı kişilerin çıktılarındaki kalite farkını azaltır.
+   uygulanan" bir şeydir. İnsan disiplinine değil, mimariye dayanır.
 
-2. **Yapay-zekâ ajanı da kurallara tabidir.** Sistem, bir yapay-zekâ ajanı tarafından
-   kullanıldığında, ajanın her önemli eylemi (dosya yazma, SAP'ye erişim, komut çalıştırma)
-   gerçek zamanlı olarak denetlenir. Standart SAP nesnesine dokunma, donmuş yedeğe yazma
-   veya fikri-sermaye sızdırma gibi eylemler eylem anında reddedilir.
+2. **Yapay-zekâ ajanı da kurallara tabidir.** Ajanın her önemli eylemi (dosya yazma, SAP'ye
+   erişim, komut çalıştırma) gerçek zamanlı denetlenir. Standart SAP nesnesine dokunma,
+   donmuş yedeğe yazma veya fikri-sermaye sızdırma gibi eylemler **eylem anında** reddedilir.
 
 3. **Değişiklikler denetlenebilir ve geri alınabilir.** Her değişiklik kısa-ömürlü dal +
    inceleme (PR) + otomatik kontrol (CI) sürecinden geçer. Merkezi çekirdek, bilinen-iyi
-   bir noktaya (stable etiketi) tek adımda döndürülebilir.
+   bir noktaya (`stable` etiketi) tek adımda döndürülebilir.
 
-Model, gerçek kurumsal SAP ortamları için tasarlanmıştır: Windows üzerinde çalışır,
-şirket-içi (on-prem) SAP sistemlerine VPN üzerinden bağlanır, birden çok sistem katmanını
-(geliştirme/kalite/üretim) ayrı yönetir ve KVKK/veri-gizliliği kısıtlarını gözetir.
+Model gerçek kurumsal SAP ortamları için tasarlanmıştır: Windows üzerinde çalışır, şirket-içi
+(on-prem) SAP sistemlerine VPN üzerinden bağlanır, birden çok sistem katmanını (DEV/QA/PRD)
+ayrı yönetir ve KVKK/veri-gizliliği kısıtlarını gözetir.
+
+> **Yönetici için tek cümlelik özet:** Kalite, kişilerin dikkatine değil, atlanamayan
+> otomatik kapılara bağlanmıştır; yapay-zekâ dahil hiçbir aktör bu kapıları geçemez.
 
 ---
 
@@ -72,17 +79,17 @@ Model, gerçek kurumsal SAP ortamları için tasarlanmıştır: Windows üzerind
 ### 1.1 Çözülen sorun
 Birden çok proje aynı metodolojiyi (standartlar, hook'lar, validator'lar, şablonlar)
 kullandığında, klasik yaklaşım her projeye bir kopya koymaktır. Kopyalar zamanla birbirinden
-uzaklaşır (drift); bir düzeltme/ders bir projede yapılır, diğerlerine taşınmaz; hangi
-kopyanın güncel olduğu belirsizleşir. Proje sayısı arttıkça bu bakım yükü katlanır.
+uzaklaşır (drift); bir düzeltme bir projede yapılır, diğerlerine taşınmaz; hangi kopyanın
+güncel olduğu belirsizleşir. Proje sayısı arttıkça bakım yükü katlanır.
 
 ### 1.2 Çözüm — tek canlı kaynak
-ix-works, metodolojinin tamamını `DEV_CORE` adında **tek bir repoda** tutar ve her projeye
-Windows **junction** (dizin bağlantısı) ile bağlar. Proje klasörü içindeki `core/` girişi,
-fiziksel olarak DEV_CORE'un çalışan kopyasını gösterir. Böylece:
+Metodolojinin tamamı `DEV_CORE` adında **tek bir repoda** tutulur ve her projeye Windows
+**junction** (dizin bağlantısı) ile bağlanır. Proje klasöründeki `core/` girişi, fiziksel
+olarak DEV_CORE'un çalışan kopyasını gösterir:
 
 - Metodoloji **bir yerde** yaşar; tüm projeler onu **anlık** görür.
-- Bir kural/ders bir kez yazılır (`DEV_CORE`), junction'la her projeye ulaşır.
-- Kopya-drift yapısal olarak imkânsızdır — kopya yoktur.
+- Bir kural/ders bir kez yazılır, junction'la her projeye ulaşır.
+- Kopya-drift **yapısal olarak imkânsızdır** — kopya yoktur.
 
 Karar kaydı: **ADR 0020** (Canlı-Çekirdek Junction Mimarisi).
 
@@ -92,320 +99,266 @@ Karar kaydı: **ADR 0020** (Canlı-Çekirdek Junction Mimarisi).
 | Her projeye kopya | Drift + N-kat bakım (çözülen sorunun kendisi) |
 | Git submodule | Sürüm-sabitleme "canlı"lığı bozar; her projede ayrı pin/pull yükü |
 | Git subtree | Geçmiş şişer; senkron karmaşık |
-| Kullanıcı-seviyesi paylaşım (`~/.claude`) | Git-dışı (ekibe akmaz); kapsam taşması (alakasız projeye kural) |
+| Kullanıcı-seviyesi paylaşım (`~/.claude`) | Git-dışı (ekibe akmaz); kapsam taşması |
 | Tek monorepo | Projeler ayrı yaşam-döngüsü/izin/repo ister |
 
 Junction, "canlı tek kaynak" ile "projelerin bağımsız git repoları" gereksinimlerini aynı
-anda karşılayan tek seçenektir. DEV_CORE ile projeler arasında **git bağı yoktur**; her biri
-kendi GitHub reposudur, yalnız dosya-sistemi düzeyinde bağlıdır.
+anda karşılayan tek seçenektir. DEV_CORE ile projeler arasında **git bağı yoktur**; yalnız
+dosya-sistemi düzeyinde bağlıdırlar.
 
-### 1.4 Metodoloji vs proje ayrımı (SORU 0)
-Yeni bir bilgi üretildiğinde tek bir soru sorulur: *"Bu metodoloji mi, projeye mi özel?"*
-Metodoloji-nitelikli her şey (pattern, validator, standart, ders) `DEV_CORE`'a; projeye-özel
-her şey (iş kuralı, paket, müşteri süreci) proje reposuna gider. Bu ayrım, çekirdeğin jenerik
-(kopyalanabilir/şablonlanabilir) kalmasını, proje reposunun ise iş-bilgisini taşımasını sağlar.
-(Ayrıntılı karar ağacı: Bölüm 8.)
+### 1.4 Junction'ın bedeli — arama körlüğü (D29)
+Junction ücretsiz değildir. `Grep`/`Glob` araçları junction'ı **takip etmez** ve
+**sessizce boş** döner — "dosya yok" ile ayırt edilemez. Kontrollü deneyle ölçülmüştür:
+sebep `.gitignore` değildir; junction'ın kendisidir.
+
+Yapısal çözüm: `governance/CORE-INDEX.md` — proje reposunda **gerçek** bir dosya olarak durur,
+kökten aranıp bulunur ve doğru `core/...` yolunu verir. `build_core_index.py` üretir,
+`check_core_index_fresh.py` (C-IDX-01) tazeliğini zorlar. Doğrudan arama gerekiyorsa daima
+`path=core/` verilir.
+
+**Kural:** kökten sıfır-sonuç, "core'da yok" anlamına **gelmez**.
+
+### 1.5 Metodoloji vs proje ayrımı (SORU 0)
+Yeni bilgi üretildiğinde tek soru sorulur: *"Bu metodoloji mi, projeye mi özel?"*
+Metodoloji-nitelikli her şey `DEV_CORE`'a; projeye-özel her şey proje reposuna gider.
+Bu ayrım çekirdeğin jenerik kalmasını, proje reposunun iş-bilgisini taşımasını sağlar.
+(Karar ağacı: Bölüm 8.)
 
 ---
 
 ## 2. Temel Yetenekler ve Tasarım Kararları
 
-Bu bölüm, sistemin ayırt edici davranışlarını olgu düzeyinde listeler. Her madde, ilgili
-bölüme referans verir.
-
 **1. Kendi kendini denetleyen kalite altyapısı.**
-`ix_doctor` adlı 7 katmanlı bir sağlık-kontrol aracı, kurulumun bütünlüğünü (junction,
-git, GitHub kuralları, hook drift'i, MCP bağlantısı, validator geçişi) doğrular. Ek olarak
-guard katmanları dönemsel olarak **bozuk girdiyle** sınanır; bu, bir kuralın "tanımlı
-olması" ile "fiilen çalışması"nı ayrı ayrı doğrular. (Bölüm 14)
+`ix_doctor` (7 katman) kurulumun bütünlüğünü doğrular. Guard katmanları dönemsel olarak
+**bozuk girdiyle** sınanır; bu, bir kuralın "tanımlı olması" ile "fiilen çalışması"nı ayrı
+ayrı doğrular. (Bölüm 14)
 
 **2. Yapay-zekâ ajanı için davranış denetimi.**
-Ajanın her eylemi, işletim öncesinde bir denetim katmanından (`pre_tool_guard`) geçer.
-Standart SAP nesnesine yazma, transport/paket yaratma, donmuş yedeğe yazma, çekirdek
-içeriğini proje reposuna gönderme gibi eylemler eylem anında reddedilir. Temel yasaklar,
-projenin kök yapılandırma dosyasına fiziksel olarak damgalanmıştır; bağlantı kopsa bile
-bu kurallar yüklüdür. (Bölüm 6)
+Ajanın her eylemi `pre_tool_guard`'dan geçer. Temel yasaklar, projenin kök yapılandırma
+dosyasına **fiziksel olarak damgalanmıştır**; junction kopsa bile yüklüdürler. (Bölüm 6)
 
 **3. Her kural bir kapıyla zorlanır.**
-"Gate'siz kural, kuralsızdır" ilkesi (ADR 0019): her kalite kuralının arkasında onu
-otomatik uygulayan bir script/hook/checklist bulunur ve bir kapsam-denetleyici (`check_rule_gate_coverage`)
-bu bağın var olduğunu doğrular. Kural belgede kalıp uygulanmadan geçemez. (Bölüm 7)
+*"Gate'siz kural, kuralsızdır"* (ADR 0019). `check_rule_gate_coverage` bu bağı hesaplattırır;
+elle-bakımlı eşleme tutulmaz. (Bölüm 7)
 
-**4. Yaz-bir-kez, devral-her-yerde.**
-Metodoloji tek merkezde; tüm projeler junction'la güncel. Yeni proje kurulduğunda çekirdeği
-sıfır-eforla devralır; mevcut projeler anlık görür. (Bölüm 1, 4)
+**4. Talimatın yüklendiği KANITLANIR, varsayılmaz.**
+2026-07-10 denetiminde `AGENTS.md`'nin (356 satır, 25 zorunlu kural) **hiçbir oturumda
+context'e girmediği** ölçüldü: harness `CLAUDE.md` okur, `AGENTS.md` okumaz ve bağlantı bir
+`@import` değil düz markdown link'ti. Üstelik oturum-başı ekran teyidi her seferinde
+"AGENTS.md yüklendi" diyordu. Sonuç: talimat katmanı L1a/L1b/L1c olarak ayrıldı ve
+`InstructionsLoaded` hook'u yüklemeyi **loglar**. (Bölüm 8)
 
-**5. Biriken kurumsal hafıza.**
-Karşılaşılan her hata, tekrarını önlemek üzere kalıcı hafızaya (memory + lessons-learned)
-işlenir. İş geldiğinde "benzerini daha önce yaptık mı?" araması yapılır. Bilgi kişilerde
-değil, sistemde birikir. (Bölüm 11)
+> **İlke:** Markdown link hiçbir şey yüklemez. "Yüklendi" bir iddia değil, bir ölçümdür.
+
+**5. Biriken kurumsal hafıza — sınırları bilinerek.**
+Oturum-başı yüklenen hafıza indeksinin sert bir tavanı vardır (ilk 200 satır **veya** ilk
+25 KB; hangisi önce gelirse). Aşıldığında sessizce kesilir. `check_memory_index.py` (C-MEM-01)
+bu bütçeyi ve indeks bütünlüğünü ölçer. (Bölüm 11)
 
 **6. Kanıta dayalı çalışma ("tahmin yasak").**
-Ajan, bir iddiayı doğrulamadan aksiyona geçemez; hatırlanan bilgi hipotez, canlı sistem
-otoritedir (ADR 0016). Bu, yanlış varsayımdan doğan hataları (ör. değişmiş bir nesneyi
-eski haliyle varsayma) azaltır. (Bölüm 6, 9)
+Hatırlanan bilgi **hipotez**, canlı sistem **otoritedir** (ADR 0016). Bir araç "başarılı"
+dediğinde bu kanıt sayılmaz; readback yapılır. (Bölüm 6, 10)
 
 **7. İşe-orantılı alım süreci (ITG).**
-Bir geliştirme talebi geldiğinde sistem, işin kapsamını (küçük düzeltme / lokalize /
-kapsamlı) sınıflar, ilgili fonksiyonel modülün kontrol-listesini yükler, isterlerden
-araştırılması gereken konuları çıkarır ve üç eksende (alan bilgisi + canlı sistem +
-kurumsal hafıza) araştırma yapar. Küçük işe ağır süreç binmez; kapsamlı işe disiplin atlanmaz. (Bölüm 9)
+Talep geldiğinde kapsam sınıflanır (S0/S1/S2), modül kural-paketi yüklenir, isterlerden
+araştırılacak konular çıkarılır, üç eksende araştırma yapılır. Küçük işe ağır süreç binmez;
+kapsamlı işte disiplin atlanmaz. (Bölüm 9)
 
-**8. Uçtan uca denetlenebilirlik.**
-Her SAP-yazımı bir ön-inceleme (reviewer) kapısından, her değişiklik PR+CI+davranış-manifest'ten
-geçer. Merkez, bilinen-iyi noktaya geri döndürülebilir. (Bölüm 15)
+**8. Profil-farkında araç yüzeyi (fail-closed).**
+MCP tool'ları `available_on` etiketi taşır; projenin SAP profiline uymayan tool `tools/list`'te
+**görünmez**. `sap_profile` eksik/geçersizse yüzey kesilir, yalnız `ping` açılır. Prompt'a
+"bunu kullanma" demek ricadır; tool'u gizlemek sınırdır. (Bölüm 10)
 
 **9. Çok-katmanlı SAP hedefi.**
-Aynı çekirdek dört SAP profilini (ECC, S/4 private, S/4 public, BTP ABAP) destekler; her
-projenin `project.yaml`'ındaki profil, hangi kuralların geçerli olduğunu belirler. (Bölüm 4)
+Aynı çekirdek dört profili destekler: `ecc`, `s4_private`, `s4_public`, `btp_abap`.
 
 **10. Gerçek kurumsal ortam desteği.**
-Windows junction, VPN-kopukluğu izleyen bir arka-plan bekçisi (watchdog), çoklu sistem-katmanı
-(DEV/QA/PRD) ve Windows'a özgü kodlama tuzaklarının çözümü — laboratuvar değil, saha kullanımı
-için tasarlanmıştır.
+Windows junction, VPN-kopukluğunu izleyen arka-plan bekçisi (watchdog), çoklu sistem-katmanı
+ve Windows'a özgü kodlama tuzaklarının çözümü — laboratuvar değil, saha kullanımı için.
 
 ---
 
-Aşağıdaki üç bölüm (3–5) iki fiziksel katmanın anatomisini ve ikisini birbirine bağlayan
-junction mekanizmasını tanımlar: (1) metodolojinin tek kopyası olan **DEV_CORE** reposu ve
-(2) her SAP projesi klasörü.
+Aşağıdaki üç bölüm (3–5) iki fiziksel katmanın anatomisini ve onları bağlayan junction
+mekanizmasını tanımlar.
 
 ## 3. DEV_CORE Anatomisi
 
-DEV_CORE, metodolojinin (standartlar, playbook, script/validator/hook, MCP server, agent
-ve skill tanımları) tek fiziksel kopyasının tutulduğu git reposudur. Projeler bu içeriği
-kopyalamaz; junction ile canlı olarak okur (bkz. Bölüm 5). Her düzeltme bir kez burada yazılır,
-junction'lı tüm projeler aynı anda görür.
+DEV_CORE, metodolojinin tek fiziksel kopyasının tutulduğu **public** git reposudur. Public
+olması genericize disiplinini zorunlu kılar (Bölüm 15.2).
 
 ### Kök seviyesi dosyalar
 
 | Dosya | İçerik / işlev |
 |---|---|
-| `CLAUDE.core.md` | Çekirdek loader. Proje `CLAUDE.md`'si `@core/CLAUDE.core.md` ile bunu yükler. Katman özeti (L1–L4), SAP profil modeli, 4-adım session protokolü, T1–T11 tetikleyiciler + SORU 0, kod gate'leri tablosu, dosya indeksi. Metodoloji buradadır; proje-özel bilgi burada tutulmaz. |
-| `AGENTS.md` | L1 katmanı: agent davranış kuralları — git iş akışı, ADT işlem sırası, project skill kullanımı. |
-| `README.md` | Reponun ne olduğu ve nasıl clone edildiğine dair giriş. |
-| `MAINTENANCE.md` | Canlı-çekirdek işletim el kitabı: PR/CI akışı, `stable` tag ile rollback, `project.yaml` anahtar kataloğu, sürüm politikası. ADR 0020 "neden"i, bu dosya "nasıl"ı anlatır. |
-| `ONBOARDING.md` | Yeni/güncellenen geliştiriciyi ortamla senkron etme adımları (`onboard` komutunun düz-metin karşılığı). |
-| `PROJECT_BOOTSTRAP.md` | Yeni proje açılış prosedürü (init_project → team_setup → paket bootstrap sıralaması). |
-| `.gitignore` / `.gitattributes` / `.github/` | Repo hijyeni: ignore kuralları, CRLF/satır-sonu politikası, CI workflow tanımları. |
+| `CLAUDE.core.md` | Çekirdek loader. Proje `CLAUDE.md`'si `@core/CLAUDE.core.md` ile yükler. Katman özeti (L1a–L4), **§1.1 her-oturum davranış değişmezleri**, SAP profil modeli, oturum protokolü, T1–T11 + SORU 0, gate tablosu, dosya indeksi. |
+| `AGENTS.md` | **L1c — derin davranış referansı. OTOMATİK YÜKLENMEZ**; açıkça okunmalıdır. Git workflow detayı, ADT işlem sırası, obje→klasör eşlemesi, reviewer pre-flight ayrıntısı. |
+| `MAINTENANCE.md` | Canlı-çekirdek işletim el kitabı: PR/CI akışı, `stable` tag ile rollback, `project.yaml` anahtar kataloğu. |
+| `ONBOARDING.md` | Yeni/güncellenen geliştiriciyi ortamla senkron etme adımları. |
+| `PROJECT_BOOTSTRAP.md` | Yeni proje açılış prosedürü (STEP 0–6 + kabul kapısı). |
+| `.github/workflows/core-ci.yml` | Çekirdeğin kendi CI'ı (`gates` job). |
 
 ### Dizinler
 
 ```text
 DEV_CORE/
-├── claude/          Claude Code varlıkları (agent, skill, command, template, memory-seed)
-├── scripts/         Python araçları — hooks/ + validators/ + tekil araçlar + utils/
+├── claude/          Claude Code varlıkları (agent, skill, rules, command, template, memory-seed)
+├── scripts/         Python araçları — hooks/ + validators/ + git-hooks/ + tests/ + utils/
 ├── mcp_servers/     SAP ADT MCP server (typed tool katmanı + guardrail'ler)
-├── standards/       L2 — stabil kurumsal/proje standartları (01–09)
-├── playbook/        L3 — operasyonel ADT pattern bankası + checklists/ + modules/
+├── standards/       L2 — stabil kurumsal standartlar (10 dosya)
+├── playbook/        L3 — ADT pattern bankası + checklists/ + modules/ + templates/ (41 md)
 ├── profiles/        SAP profil yetenek matrisleri (4 yaml)
-├── governance/      ADR'ler + işletim modeli + tooling envanteri
+├── governance/      ADR'ler (21) + işletim modeli + tooling envanteri
 ├── templates/       Yeni-paket iskelet şablonları
+├── docs/            Bu kılavuz + yönetici sunumu
 └── intake/          Dış içerik karantina/gümrük alanı
 ```
 
 #### `claude/` — Claude Code varlıkları
 
-Plugin-şekilli varlıkların tek çatı altında gruplandığı dizin. Proje `.claude/` altındaki
-üç junction (agents, skills, commands) buraya bakar.
+Proje `.claude/` altındaki **beş junction** (agents, skills, commands, rules) ve `core/`
+buraya bakar.
 
 | Yol | İçerik |
 |---|---|
-| `agents/` | 6 rol tanımı (`.md`, YAML frontmatter'lı). Rol modeli tek-yazıcı (single-writer) serileştirmesine dayanır — aşağıda ayrı tablo. |
-| `skills/` | Project skill'leri: `sap-abap-dev` (SAP/ABAP/RAP/CDS/DDIC iş yönlendirmesi + ADR 0005 yasakları), `playwright-cli` (tarayıcı otomasyonu). |
-| `commands/` | Slash-komutlar. `onboard` — geliştirici senkron akışı. |
-| `memory-seed/` | Yeni proje memory'sinin tohumlandığı `MEMORY.md` indeksi + `feedback_*.md` ders dosyaları (`seed_memory.py` ile kopyalanır). |
-| `CLAUDE.project.template.md` | Yeni proje ince `CLAUDE.md`'sinin şablonu (init_project doldurur). |
-| `settings.template.json` | Proje `.claude/settings.json`'ının şablonu — hook zinciri `hook_shim.py` üzerinden bağlanır. |
-| `hook_shim.template.py` | Proje-lokal hook yönlendiricisinin şablonu (D15; Bölüm 5'te ayrıntılı). |
-| `kesin-yasaklar.canonical.md` | KESİN YASAKLAR'ın kanonik metni. Her projenin kök `CLAUDE.md`'sine fiziksel damgalanır; `sync_yasaklar.py` kanonik değişince yeniden damgalar, `check_kesin_yasaklar.py` damga eşliğini zorlar (ADR 0021). |
-| `managed-policy.template.json` | Yönetilen izin politikası şablonu. |
-| `conn_adt.template` | SAP bağlantı dosyasının (`.conn_adt`) şablonu. |
+| `agents/` | **6 rol tanımı.** Tek-yazıcı (single-writer) modeli — aşağıda tablo. Her rolün başında "sen auto-memory GÖRMEZSİN + kanıt kuralları" bloğu vardır (Bölüm 11.5). |
+| `skills/` | **3 project skill:** `sap-abap-dev` (SAP/ABAP/RAP/CDS/DDIC yönlendirme), `intake-triage` (iş-alım protokolü, native semantik keşif), `playwright-cli` (tarayıcı otomasyonu). |
+| `rules/` | **L1b — glob-tetiklemeli davranış kuralları.** Eşleşen dosya okunduğunda otomatik yüklenir; startup maliyeti sıfırdır. Bugün 3 dosya (`sap-source-protokolu`, `ui5-freestyle`, `README`). |
+| `commands/` | Slash-komutlar (`onboard`). |
+| `memory-seed/` | Yeni proje memory tohumu: `MEMORY.md` indeksi + 85 `feedback_*.md` ders dosyası. |
+| `CLAUDE.project.template.md` | Yeni proje ince `CLAUDE.md` şablonu. |
+| `README.project.template.md` | Yeni proje kök `README.md` şablonu. |
+| `settings.template.json` | Proje `.claude/settings.json` şablonu — hook zinciri. Gate: **C-TPL-01**. |
+| `hook_shim.template.py` | Proje-lokal hook yönlendiricisi şablonu (D15). |
+| `git-hooks/pre-commit.template` | Proje pre-commit gate şablonu (statik katman ③). |
+| `workflows/guard.template.yml` | Proje CI şablonu (3 job). |
+| `kesin-yasaklar.canonical.md` | KESİN YASAKLAR kanonik metni; her projenin kök `CLAUDE.md`'sine fiziksel damgalanır (ADR 0021). |
+| `conn_adt.template` / `managed-policy.template.json` / `CODEOWNERS.template` | Bağlantı / izin / sahiplik şablonları. |
 
-**Agent rolleri (6):** tek SAP-yazıcısı ilkesine (single-writer) göre ayrılmıştır. Yazma
-yetkisi tek rolde toplanır; diğerleri tasarlar, yerel kaynak hazırlar, read-only SAP
-analizi yapar.
+**Agent rolleri (6):**
 
 | Rol | Yetki sınırı |
 |---|---|
-| `adt-gateway` | SAP'ye yazabilen **tek** rol. Tüm create/push/activate/delete/DDIC/post_shell işlemleri buradan geçer (serileştirme). run_review pre-flight + ADR 0005/0006/0007 guardrail'leri. |
-| `backend-expert` | ABAP/RAP/CDS/DDIC/class. Tasarım + yerel kaynak + read-only analiz. SAP-yazma tool'u yok. |
-| `frontend-expert` | Freestyle UI5 + OData V2. Yerel UI kaynağı (controller/view/i18n/manifest) + read-only. SAP-yazma tool'u yok. |
-| `bug-expert` | Adversarial inceleme (read-only). Değişimi/dokümanı checklist'e karşı çürütmeye çalışır; verdict PASS/WARNING/BLOCKER. Yazmaz. |
-| `sap-feature` | Modül/uygulama sahibi — uçtan uca tasarım + yerel kaynak, read-only. SAP-yazma tool'u yok. |
+| `adt-gateway` | SAP'ye yazabilen **tek** rol. Tüm create/push/activate/delete/DDIC/post_shell buradan geçer. |
+| `backend-expert` | ABAP/RAP/CDS/DDIC/class. Tasarım + yerel kaynak + read-only analiz. **SAP-yazma tool'u yok.** |
+| `frontend-expert` | Freestyle UI5 + OData V2. Yerel UI kaynağı + read-only. **SAP-yazma tool'u yok.** |
+| `bug-expert` | Adversarial inceleme (read-only). Verdict PASS/WARNING/BLOCKER. Yazmaz. Her review taze. |
+| `sap-feature` | Modül/uygulama sahibi — uçtan uca tasarım + yerel kaynak, read-only. |
 | `sap-research` | Salt-okunur keşif/analiz + web araştırması. Yalnız `.tmp/` rapor yazar. |
 
-#### `scripts/` — Python araçları
+#### `scripts/` — Python araçları (89 tekil + alt dizinler)
 
-Üç kategoriye ayrılır: olay-tetikli hook'lar, deterministik validator'lar ve tekil
-araçlar.
+**`scripts/hooks/` — 15 olay-tetikli hook** (hepsi `hook_shim.py` üzerinden):
 
-**`scripts/hooks/` (olay-tetikli, `hook_shim.py` üzerinden çağrılır):**
+`session_start` · `tooling_radar_check` · `instructions_loaded_log` · `skill_injector` ·
+`intake_triage` · `pre_tool_guard` · `pull_before_edit` · `sap_worktype_hint` ·
+`itg_backstop` · `watchdog_launch` · `post_validate` · `post_tool_failure` ·
+`config_change_guard` · `pre_compact` · `watchdog_stop`
 
-| Hook | İşlev |
-|---|---|
-| `session_start.py` | Oturum başı: junction sağlığı, davranış-manifest diff, "origin gerisinde" uyarısı, junction onarım önerisi. |
-| `pre_tool_guard.py` | Tool öncesi guard: donmuş/salt-okunur yollara yazma reddi, junction hedefine özyinelemeli-silme bloğu, SAP-yazma öncesi yasak/bağlantı-tutarlılık kontrolü. |
-| `pull_before_edit.py` | SAP source düzenleme öncesi tazelik backstop'u (ADR 0016). |
-| `post_validate.py` / `post_tool_failure.py` | Tool sonrası doğrulama / başarısızlık işleme. |
-| `config_change_guard.py` | Davranış-yüzeyi (settings/manifest) değişimi seans-içi yakalama. |
-| `skill_injector.py` | İş türüne göre ilgili skill'i devreye alma (profil-okuyan). |
-| `intake_triage.py` | Dış-içerik ilk temas triyajı (ADR 0022). |
-| `tooling_radar_check.py` | Kurulu tooling/plugin envanter kontrolü. |
-| `pre_compact.py` | Context compact öncesi checkpoint. |
-| `watchdog_*` | Background agent stall izleme (heartbeat/daemon). |
-| `README.md` | Hook bakım karar ağacı (T11): validator mı, checklist mi, hook mu, pre_tool_guard mı. |
+> Envanterin şablonla eşliği **C-TPL-01** gate'iyle zorlanır: `scripts/hooks/` altına düşen
+> her hook `settings.template.json`'da kablolu olmalıdır. Aksi hâlde yeni açılan proje
+> eksik korumayla açılır — 2026-07-10'da tam olarak bu oldu (3 hook şablonda yoktu).
 
-**`scripts/validators/` (deterministik kural kontrolleri, ~36 adet):** Tek komut
-`run_all_validators.py` ile core + proje `validators-local/` birlikte, profil-modlu koşar.
-Örnek kapsamlar: `check_kesin_yasaklar` (damga eşliği), `check_core_not_committed`
-(fikri-sermaye sızıntı kilidi), `check_sap_master_language` (Z obje TR label),
-`check_object_in_correct_pkg` (paket sınırı), `check_list_view_grid` (grid liste
-standardı), `check_ui5_freestyle_traps` (FE tuzakları), `check_released_objects` (clean
-core), `check_rule_gate_coverage` (her kuralın gate'lenmiş olması). `run_review.py` SAP
-yazma öncesi reviewer pre-flight'ı (ADR 0006).
+**`scripts/validators/` — 43 `check_*.py`; 22'si `run_all_validators`'a kayıtlı.**
+Tek komut `run_all_validators.py` core + proje `validators-local/` ile birlikte, profil-modlu
+koşar. `run_review.py` SAP yazma öncesi reviewer pre-flight'ıdır (ADR 0006).
+
+**`scripts/git-hooks/` + `scripts/tests/`:** çekirdeğin kendi pre-commit gate'i
+(`core_precommit.py`: genericize-leak + link-audit + applies_to şeması) ve guard konformans
+testleri (`guard_conformance.py`, `test_pre_tool_guard.py`).
 
 **Tekil araçlar (seçme):**
 
 | Araç | İşlev |
 |---|---|
 | `init_project.py` | Yeni proje iskeletini template'lerden **üretir** (kopyalamaz). |
-| `team_setup.py` | Geliştirici/proje kurulumu + junction kur/onar (`--repair-junctions`, `--provision-worktree`). |
+| `team_setup.py` | Junction kur/onar, pre-commit kablola, plugin + memory seed, CORE-INDEX üret. |
 | `bootstrap_package.py` | Yeni SAP paketi iskeleti (`.rules.md` + docs + SESSION_NOTES). |
+| `genericize_common.py` | Sızıntı desenlerinin **tek kaynağı** (pre-commit + pre_tool_guard aynı modülü kullanır). |
 | `sync_yasaklar.py` | KESİN YASAKLAR kanonik → tüm projeleri yeniden damgalama. |
 | `ix_doctor.py` / `sap_doctor.py` | Ortam / SAP bağlantı sağlık teşhisi. |
-| `deploy_ui.py` | Freestyle UI kanonik non-interaktif deploy (build + deploy + canlı-hash doğrulama). |
+| `deploy_ui.py` | Freestyle UI kanonik non-interaktif deploy (build + deploy + canlı-hash). |
 | `behavior_manifest.py` | Davranış-yüzeyi manifest üretimi/diff. |
-| `statusline.py` | Claude Code status line üreteci. |
-| `seed_memory.py` / `setup_plugins.py` | Memory tohumlama / plugin kurulumu (onboarding). |
+| `seed_memory.py` | Memory tohumlama; `.seed-manifest.json` ile rename/silme uzlaştırma. |
+| `build_core_index.py` | `governance/CORE-INDEX.md` üretimi (junction arama körlüğü çözümü). |
+| `build_package_index.py` | `governance/package-registry.md` üretimi + `--check` tazelik. |
 | `switch_tier.py` | Çoklu-tier SAP bağlantı değişimi (ADR 0010). |
 | `sap_sync_pull.py` / `source_drift.py` | Canlı-repo senkron / drift tespiti (ADR 0016). |
-| `utils/project_config.py` | Proje kökü + `project.yaml` okuma tek kaynağı (junction `resolve()` tuzağına karşı; D24). |
+| `utils/project_config.py` | Proje kökü + `project.yaml` okuma tek kaynağı (D24). |
 
 #### `mcp_servers/sap_adt/` — SAP ADT MCP server
 
-`sap_adt_lib.py` üzerine typed tool katmanı (ADR 0007). Tekil obje işlemleri (create,
-activate, push, search, lock, table-read) MCP tool'u; CSV-batch/validator/gate işi
-script. Server-side guardrail: ADR 0005 hardcoded (Z/Y prefix zorunlu, TR text zorunlu,
-standart obje değişimi yok, transport release yok) + profil-bazlı tool-blok + bağlantı
-tutarsızlık gate'i. Bileşenler: `server.py`, `guardrails.py`, `data_guard.py`,
-`_reviewer.py`, `_conn.py`, `tools/`, `tests/`. (Ayrıntı: Bölüm 10.)
+`stdio` transport'lu typed tool katmanı (ADR 0007). Bileşenler: `server.py`, `_app.py`
+(`profil_tool` dekoratörü), `_profile.py` (D34d profil kapısı), `guardrails.py`,
+`data_guard.py`, `_reviewer.py`, `_conn.py`, `tools/`, `tests/`. (Ayrıntı: Bölüm 10.)
 
-#### `standards/` — L2 stabil standartlar
+#### `standards/` (L2) · `playbook/` (L3) · `profiles/` · `governance/`
 
-Değişim sıklığı düşük, `applies_to:` frontmatter'lı kurallar. `01-naming` (paket/WRICEF/
-namespace), `02-coding-backend` (klasik SEGW/OData v2), `03-coding-ui-fiori`,
-`04-documentation-fs-ts`, `05-coding-rap`, `06-coding-classic-dialog`, `07-output-forms`,
-`08-classic-gui-f1-help`, `09-packing-instruction-consumption`, `README.md` (indeks).
-
-#### `playbook/` — L3 operasyonel pattern bankası
-
-Deneme-yanılma ile bulunmuş çalışan ADT pattern'leri, denenen başarısız yollar,
-gotcha'lar. Obje tipine göre bölünmüştür: `adt-foundation` (temel ADT işlemleri),
-`adt-tables-structures`, `adt-domain-dtel`, `adt-cds`, `adt-rap`, `adt-classes`,
-`adt-programs`, `adt-fugr-functions`, `adt-lock-objects`, `adt-message-class`, `adt-mcp`,
-`ui-freestyle-odata-v2`, `ui-backend-rap`, `coding-patterns`, `odata-services`,
-`known-errors`, `lessons-learned` (cross-cutting hata pattern + trigger phrase), `howto-*`
-(dynpro/gui-status, document-lock, packing, KD-PDF). Alt dizinler: `checklists/` (15 iş
-türü kontrol listesi — cds/rap/struct/domain-dtel/table-update/ui-*/adobe-forms/doc/itg),
-`templates/` (kanonik kod şablonları, ör. klasik ALV), `modules/` (modül-özel bilgi, ör.
-`sd.md`).
-
-#### `profiles/` — SAP profil yetenek matrisleri
-
-Her `.yaml` bir SAP profilini tanımlar: `ecc`, `s4_private`, `s4_public`, `btp_abap`.
-İçerik yapısı (`s4_private.yaml` örneği): `capabilities` (rap/abap_cloud/classic_dynpro/
-cds/amdp/segw_odata/transport… her biri `preferred|available|allowed|forbidden`),
-`release_overrides` (S/4 release'e göre farklar), `policy_axis` (`cleancore_policy` =
-strict|balanced|classic → hangi yetenek kısıtlanır), `data_sources` (released-obje/clean-
-core sınıflandırma otoriter kaynakları). Matris rehberdir, kanıt değildir: capability
-iddiası canlı testle doğrulanır. Bir projenin hangi kuralın aktif olduğu bu profil +
-`project.yaml` birleşiminden çözülür (Bölüm 5).
-
-#### `governance/` — kararlar ve işletim
-
-| İçerik | Açıklama |
-|---|---|
-| `decisions/` | ADR'ler (0001–0022). Metodoloji-seviyesi mimari kararlar; ör. 0003 (L1–L4 katman), 0005 (SAP standart-obje koruma + yasaklar), 0007 (MCP server), 0018 (agent takım yapısı), 0020 (junction mimarisi), 0021 (yasaklar fiziksel damga). |
-| `agent-teams-operating-model.md` | Takım işletim modeli: dosya bölgeleri (Zone A/B/C), yazım yetkisi, gün-sonu/resume disiplini. |
-| `tooling-plugins.md` / `tooling-radar.md` | Kurulu plugin envanteri / tooling değişim radarı. |
-| `vscode-setup.md` | Editör kurulum notları. |
-
-#### `templates/` — yeni-paket iskeleti
-
-`new-package/` altında `.tmpl` şablonlar: `README.md.tmpl`, `SPEC.md.tmpl`,
-`SESSION_NOTES.md.tmpl`, `folders.txt` (paket dizin ağacı), `ref_docs/`. `bootstrap_package.py`
-bunlardan üretir.
+- **`standards/`** — 10 dosya, `applies_to:` frontmatter'lı, düşük değişim sıklığı:
+  naming, klasik backend, Fiori UI5, FS/TS dokümantasyon, RAP, klasik dialog, çıktı/formlar,
+  klasik F1 yardımı, ambalajlama talimatı + indeks.
+- **`playbook/`** — 41 md: obje-tipi bazlı ADT pattern bankası (`adt-*`), `lessons-learned`,
+  `howto-*`, `intake-triage.md`; alt dizinler `checklists/` (16), `templates/`, `modules/`.
+- **`profiles/`** — `ecc` · `s4_private` · `s4_public` · `btp_abap`. **Matris rehberdir,
+  kanıt değildir:** capability iddiası canlı testle doğrulanır.
+- **`governance/`** — `decisions/` (21 ADR), `agent-teams-operating-model.md`,
+  `tooling-plugins.md`, `tooling-radar.md`.
 
 #### `intake/` — dış içerik gümrüğü
 
-Dışarıdan gelen her metodoloji parçası (skill/hook/script/agent/playbook) core'un canlı
-yüzeyine doğrudan girmez; önce buraya iner, güvenlik+lisans+genericize incelemesinden
-geçer, sonra PR ile hedefe taşınır (F4 firewall, ADR 0022). Sebep: core canlıdır — buraya
-giren şey junction'lı tüm projelerde anında etkilidir.
+Dışarıdan gelen her metodoloji parçası core'un canlı yüzeyine doğrudan girmez; önce buraya
+iner, güvenlik + lisans + genericize incelemesinden geçer, sonra PR ile hedefe taşınır.
+Sebep: core canlıdır — buraya giren şey junction'lı tüm projelerde **anında** etkilidir.
 
 ---
 
 ## 4. Proje Klasörü Anatomisi
 
-Bir proje klasörü üç tür içerikten oluşur: (a) core'a bakan junction'lar, (b) proje-lokal
-davranış/config dosyaları, (c) proje-özel iş içeriği (SAP kaynağı, bağlantı, governance).
-Metodoloji fiziksel olarak burada **yoktur** — junction üzerinden okunur.
-
 ```text
 <PROJE>/
-├── core/  ═══════════════════► DEV_CORE            (junction)
+├── core/  ═══════════════════► DEV_CORE                    (junction)
 ├── .claude/
-│   ├── agents/  ═════════════► DEV_CORE/claude/agents    (junction)
-│   ├── skills/  ═════════════► DEV_CORE/claude/skills     (junction)
-│   ├── commands/ ════════════► DEV_CORE/claude/commands   (junction)
+│   ├── agents/  ═════════════► DEV_CORE/claude/agents      (junction)
+│   ├── skills/  ═════════════► DEV_CORE/claude/skills      (junction)
+│   ├── commands/ ════════════► DEV_CORE/claude/commands    (junction)
+│   ├── rules/   ═════════════► DEV_CORE/claude/rules       (junction — L1b)
 │   ├── settings.json            (proje-lokal, commit'li — hook zinciri)
 │   ├── settings.local.json      (kişisel, gitignore)
-│   ├── behavior-manifest.json   (davranış-yüzeyi manifest, proje-lokal runtime)
-│   ├── active_package           (aktif paket işareti, gitignore)
-│   └── .current_session / .mcp_active_system / .statusline_vpn_cache  (runtime state)
+│   ├── behavior-manifest.json   (davranış-yüzeyi manifest, gitignore runtime)
+│   └── .current_session / .mcp_active_system / .itg_shown.json …  (runtime state, gitignore)
 ├── CLAUDE.md                    (ince loader — yasaklar damgalı + @core import + proje-özel)
+├── README.md                    (init_project üretir)
 ├── project.yaml                 (proje kimliği: profil, source_root, gate config'leri)
 ├── .conn_adt                    (SAP bağlantı — gitignore)
-├── conn/                        (çoklu-tier .env'ler — *.env gitignore, template'ler commit'li)
+├── conn/                        (çoklu-tier .env'ler — *.env gitignore)
 ├── .mcp.json                    (MCP server tanımı — core'dan yüklenir, env-first)
-├── .gitignore / .gitattributes  (SIZINTI KİLİDİ + CRLF politikası)
+├── .gitignore / .gitattributes  (SIZINTI KİLİDİ + sırlar + runtime + CRLF politikası)
+├── .github/workflows/guard.yml  (CI: core-leak · validators · behavior-surface)
+├── .github/CODEOWNERS
 ├── scripts/
 │   ├── hook_shim.py             (proje-lokal hook yönlendiricisi — commit'li)
-│   ├── validators-local/        (proje-özel validator'lar)
-│   └── workflows/ TempScripts/  (proje iş scriptleri / geçici)
-├── SOURCE_CODES/                (SAP kaynak kodu — modül-bazlı; ad project.yaml'dan)
-│   └── <MODULE>/<PKG>/           (ör. SD/ZSD001_CLC/ — cds classes functions docs ui .rules.md)
-├── governance/                  (proje: ADR'ler, deferred-triggers, package-registry, RESUME)
-├── playbook-local/ standards-local/   (proje-özel overlay — core mekanizması otokeşif)
+│   ├── git-hooks/pre-commit     (statik gate ③ — team_setup kablolar)
+│   └── validators-local/        (proje-özel validator'lar)
+├── <source_root>/               (SAP kaynak kodu — modül-bazlı; ad project.yaml'dan)
+│   └── <MODULE>/<PKG>/           (ör. SD/ZSD001_CLC/ — cds classes docs ui .rules.md)
+├── governance/                  (proje ADR'leri, deferred-triggers, package-registry, CORE-INDEX)
+├── playbook-local/ standards-local/   (proje-özel overlay — core otokeşif)
 └── .tmp/                        (scratch/çıktı — gitignore)
 ```
 
-### Core'dan gelen vs Proje-özel — net ayrım
+### Core'dan gelen vs proje-özel — net ayrım
 
 | Dosya / dizin | Kaynak | Not |
 |---|---|---|
-| `core/` | **Junction → DEV_CORE** | Tüm metodoloji. Proje reposuna commit'lenmez (`/core/` gitignore'da). |
-| `.claude/agents/` | **Junction → DEV_CORE/claude/agents** | 6 rol tanımı. gitignore'da. |
-| `.claude/skills/` | **Junction → DEV_CORE/claude/skills** | Project skill'leri. gitignore'da. |
-| `.claude/commands/` | **Junction → DEV_CORE/claude/commands** | Slash-komutlar. gitignore'da. |
-| `.claude/memory-seed/` | (junction'lanan içerik) | gitignore'da (sızıntı kilidi). |
-| `CLAUDE.md` | **Proje-lokal (commit'li)** | Template'ten üretilir. Yasaklar fiziksel damga + `@core/CLAUDE.core.md` import + yalnız proje-özel bölüm. Metodoloji yazılmaz (SORU 0). |
-| `.claude/settings.json` | **Proje-lokal (commit'li)** | Template'ten üretilir; hook'lar `hook_shim.py` üzerinden core'a bağlanır. |
-| `scripts/hook_shim.py` | **Proje-lokal (commit'li)** | Bilinçli mini-kopya (D15). Junction koptuğunda net hata + onarım komutu; sağlamsa core hook'unu aynı süreçte koşar. |
-| `project.yaml` | **Proje-lokal (commit'li)** | Mekanizma/değer ayrımının değer tarafı: profil, release, source_root, prefix'ler, gate config'leri. Core hiçbir değeri hard-code etmez. |
-| `.conn_adt` / `conn/*.env` | **Proje-lokal (gitignore)** | SAP bağlantı kimliği/şifre. Yalnız `*.template` + `conn/README.md` commit'li. |
-| `.mcp.json` | **Proje-lokal (commit'li)** | MCP server core'dan yüklenir; bağlantı projeden (env-first). |
-| `behavior-manifest.json` | **Proje-lokal (gitignore runtime)** | Davranış-yüzeyi sapma tespiti (F2). |
-| `active_package` / `.current_session` / `.mcp_active_system` | **Proje-lokal (gitignore)** | Runtime state, paylaşılmaz. |
-| `SOURCE_CODES/<MODULE>/<PKG>/` | **Proje-özel (commit'li)** | SAP kaynağı, docs (FS/TS), `.rules.md` (L4 paket kuralı), SESSION_NOTES. |
-| `governance/` (proje) | **Proje-özel (commit'li)** | Proje ADR'leri (`<PROJE>-NNN`), deferred-triggers, package-registry, `*-RESUME.md` çapa dosyaları. |
-| `playbook-local/` `standards-local/` `validators-local/` | **Proje-özel (commit'li)** | Overlay: core mekanizmaları otomatik keşfeder ve core kurallarıyla birlikte koşar. |
-| `.gitignore` / `.gitattributes` | **Proje-lokal (commit'li)** | SIZINTI KİLİDİ satırları + CRLF politikası. |
+| `core/`, `.claude/{agents,skills,commands,rules}/` | **Junction → DEV_CORE** | Tüm metodoloji. Proje reposuna commit'lenmez (gitignore + pre-commit + CI). |
+| `CLAUDE.md`, `README.md`, `.claude/settings.json`, `scripts/hook_shim.py`, `scripts/git-hooks/pre-commit`, `.mcp.json`, `project.yaml` | **Proje-lokal (commit'li)** | Template'ten **üretilir**. Metodoloji yazılmaz (SORU 0). |
+| `.conn_adt`, `conn/*.env`, `.claude/project.local.yaml`, `.csrf_token.json` | **Proje-lokal (gitignore)** | Sırlar. Yalnız `*.template` commit'li. |
+| `behavior-manifest.json`, `.current_session`, `.itg_shown.json` … | **Proje-lokal (gitignore)** | Runtime state, paylaşılmaz. |
+| `<source_root>/<MODULE>/<PKG>/` | **Proje-özel (commit'li)** | SAP kaynağı, docs, `.rules.md` (L4), SESSION_NOTES. |
+| `governance/` | **Proje-özel (commit'li)** | Proje ADR'leri, deferred-triggers, package-registry, CORE-INDEX, `*-RESUME.md`. |
+| `playbook-local/`, `standards-local/`, `validators-local/` | **Proje-özel (commit'li)** | Overlay: core mekanizmaları otomatik keşfeder. |
 
-**Ayrımın özü:** davranış taşıyan her şey ya core'dan junction'la gelir (tek kaynak,
-PR+CI'lı) ya da davranış-manifest'te kayıtlıdır. Proje reposu yalnızca proje-özel iş
-içeriğini + ince config/loader dosyalarını taşır; metodolojinin kopyası asla girmez.
+**Ayrımın özü:** davranış taşıyan her şey ya core'dan junction'la gelir (tek kaynak, PR+CI'lı)
+ya da davranış-manifest'te kayıtlıdır.
 
 ---
 
@@ -414,31 +367,30 @@ içeriğini + ince config/loader dosyalarını taşır; metodolojinin kopyası a
 ### 5.1 Junction nasıl kurulur ve çalışır
 
 Junction, Windows NTFS'in dizin bağlama mekanizmasıdır (`mklink /J`). Admin/dev-mode
-gerektirmez, cross-volume çalışır. Proje klasöründeki dört yol DEV_CORE'a bağlanır:
+gerektirmez, cross-volume çalışır. Proje klasöründeki **beş** yol DEV_CORE'a bağlanır:
 
 ```text
 <PROJE>\core             ──► DEV_CORE
 <PROJE>\.claude\agents   ──► DEV_CORE\claude\agents
 <PROJE>\.claude\skills   ──► DEV_CORE\claude\skills
 <PROJE>\.claude\commands ──► DEV_CORE\claude\commands
+<PROJE>\.claude\rules    ──► DEV_CORE\claude\rules
 ```
 
-Kurulumu `team_setup.py` yapar: Python ≥3.10 + MCP requirements kurulumu, DEV_CORE
-clone'unda `core.hooksPath scripts/git-hooks` ayarı (pre-commit gate'leri), projede dört
-junction kur/doğrula (tek tek rapor), eksik proje-lokal dosyaları template'ten tamamla,
-plugin + memory seed, smoke test (statusline + MCP import). Junction kopmuşsa
-`team_setup.py --repair-junctions` yalnız onarımı koşar.
+Kurulumu `team_setup.py` yapar: Python ≥3.10 + MCP requirements, core reposunda ve **projede**
+`core.hooksPath scripts/git-hooks`, beş junction kur/doğrula (tek tek rapor), eksik proje-lokal
+dosyaları template'ten tamamla, plugin + memory seed, `CORE-INDEX` üret, smoke test. Junction
+kopmuşsa `--repair-junctions` yalnız onarımı koşar.
 
-Çünkü junction canlı bir bağdır (kopya değil), DEV_CORE working tree'sindeki her değişiklik
-tüm projelerde anında görünür. Sürüm sabitleme yoktur — canlılık ilkesi pinning'le
-çelişir. Rollback ihtiyacı `stable` tag ile karşılanır: GATE-geçen commit'lerde hareketli
-`stable` tag ilerler; core kırılırsa `git checkout stable` deterministik bilinen-iyiye
-döndürür.
+> ⚠ **Junction silme tuzağı.** `rm -rf <proje>` bir junction'a girerse **hedefi** (DEV_CORE)
+> siler. Proje klasörü boşaltılacaksa junction'lar önce *bağlantı olarak* kaldırılır
+> (`rmdir` — `/s` YOK), sonra içerik silinir.
+
+Junction canlı bir bağdır; DEV_CORE working tree'sindeki her değişiklik tüm projelerde anında
+görünür. Sürüm sabitleme yoktur — canlılık ilkesi pinning'le çelişir. Rollback ihtiyacı
+`stable` tag ile karşılanır.
 
 ### 5.2 Çağrı zinciri: proje → DEV_CORE
-
-Hook zinciri, junction koptuğunda guardrail'lerin sessizce kaybolmaması için bir
-proje-lokal shim üzerinden geçer:
 
 ```text
 .claude/settings.json
@@ -448,915 +400,795 @@ proje-lokal shim üzerinden geçer:
              └─ EVET ─► core/scripts/hooks/<hook_adi>.py  (runpy — aynı süreç, +0 ms)
 ```
 
-Shim bilinçli bir mini kopya-artefaktıdır: settings.json doğrudan `core/`'a işaret
-etseydi, junction koptuğunda kontrolü yapacak kod da kopuk junction'ın arkasında kalırdı
-ve kullanıcı yalnız kriptik "hook command failed" görürdü. Shim proje reposunda
-yaşadığından junction'ı bulamazsa net hata + onarım komutu basar; bulursa gerçek core
-hook'unu aynı süreçte (`runpy`) koşar (subprocess başına ölçülmüş +86 ms maliyetten
-kaçınır). Shim'in core kanoniğiyle drift'i `session_start` hook'unda tam-dosya SHA256 ile
-denetlenir.
+Shim bilinçli bir mini kopya-artefaktıdır: `settings.json` doğrudan `core/`'a işaret etseydi,
+junction koptuğunda kontrolü yapacak kod da kopuk junction'ın arkasında kalırdı. Shim'in core
+kanoniğiyle drift'i `session_start` hook'unda SHA-256 ile denetlenir.
 
 **Junction `resolve()` tuzağı (D24):** junction üzerinden koşan core script'inde
-`Path(__file__).resolve()` fiziksel CORE reposuna çözülür → proje-artefaktı (`.conn_adt`,
-`SOURCE_CODES/`…) yanlış kökte aranır. Kural: proje kökü için tek kaynak
-`utils/project_config.project_root()` (env `CLAUDE_PROJECT_DIR` → cwd fallback); `__file__`
-yalnız core-içi varlıklar için meşru.
+`Path(__file__).resolve()` fiziksel CORE reposuna çözülür → proje-artefaktı yanlış kökte aranır.
+Kural: proje kökü için tek kaynak `utils/project_config.project_root()`; `__file__` yalnız
+core-içi varlıklar için meşru. Gate: `check_project_root_resolution` (CORE-01).
 
 ### 5.3 project.yaml profil sistemi — hangi kural aktif
 
-Mekanizma core'da, değer projededir. Core script/validator/hook'ları proje davranışını
-`project.yaml`'dan okur; hiçbir değeri hard-code etmez. Profil çözümü iki girdiden çıkar:
+Mekanizma core'da, **değer projededir**. Core hiçbir değeri hard-code etmez.
 
 ```text
 project.yaml
-   sap_profile: s4_private   ──► profiles/s4_private.yaml  (yetenek matrisi)
-   release: "2025"           ──► release_overrides["2025"]  (release farkları)
-   cleancore_policy: balanced ─► policy_axis["balanced"]    (politika kısıtı)
-   master_language: TR       ──► ADR 0005-D uygulaması (Z obje TR login + 4 TR label)
-   source_root: SOURCE_CODES ──► kaynak-kod klasörü adı (paket validator'ları buradan okur)
-   sql_view_prefix / cds_*   ──► CDS namespace gate'leri
-   package_exceptions        ──► paket-sınır istisnaları (check_object_in_correct_pkg)
+   sap_profile: s4_private    ──► profiles/s4_private.yaml (yetenek matrisi)
+   release: "2025"            ──► release_overrides["2025"]
+   cleancore_policy: balanced ──► policy_axis["balanced"]
+   master_language: TR        ──► ADR 0005-D (Z obje login dili + 4 label)
+   source_root: SOURCE_CODES  ──► kaynak-kod klasörü adı
+   frozen_readonly_paths      ──► pre_tool_guard yazma bloğu
 ```
 
-Bir capability (ör. `classic_dynpro`) profil matrisinde `allowed` iken proje
-`cleancore_policy: strict` ise `policy_axis.strict` onu `forbidden_by_policy` yapar.
-Validator'lar, skill-injector ve MCP guardrail'i profili okur; profil-dışı kural o projede
-uygulanmaz. Profil alanları boşsa varsayım yapılmaz — kullanıcı setup'a yönlendirilir,
-tool-yüzeyi kesilir. Matris rehberdir, kanıt değildir: capability iddiası canlı testle
-doğrulanır.
+Validator'lar, skill katmanı ve **MCP tool yüzeyi** profili okur. Profil alanları boşsa
+varsayım yapılmaz: **tool yüzeyi kesilir** (Bölüm 10.6).
 
-### 5.4 Sızıntı koruması
+### 5.4 Sızıntı koruması — dört katman
 
-Metodoloji (fikri sermaye) müşteri-proje reposuna asla sızmamalıdır. İki katmanlı önlem:
+| Katman | Nerede | Ne yakalar |
+|---|---|---|
+| ① Yazım anı | `pre_tool_guard` (Edit/Write core hedefi) | Core'a yazılan içerikte/dosya adında kimlik izi |
+| ② Commit anı | `scripts/git-hooks/pre-commit` | Stage'lenen junction içeriği (`core/**`, `.claude/{agents,skills,commands,rules}/**`) |
+| ③ Push/PR anı | CI `guard.yml → core-leak` | Aynı kontrolün sunucu-tarafı aynası |
+| ④ Yayın anı | `pre_tool_guard` PUBLIC-PR gate | `gh pr create/edit/comment`, `issue create`, `release --notes`, `gh api …/pulls` gövdesinde kimlik izi |
 
-- **`.gitignore` SIZINTI KİLİDİ:** `/core/`, `.claude/agents/`, `.claude/skills/`,
-  `.claude/commands/`, `.claude/memory-seed/`, `.claude/behavior-manifest.json` junction
-  hedefleri ve runtime state ignore'lanır. Core içeriği git'e hiç girmez.
-- **`check_core_not_committed` validator + `pre_tool_guard` commit-kapsam kontrolü +
-  proje-repo CI kilidi:** kazara stage'lenen core içeriğini üç noktada yakalar (R1
-  sızıntı gate'i).
-
-`resolve()` tuzağının yan etkisiyle ilişkili bir görünürlük kuralı (D29): Grep aracı
-`.gitignore`'a uyduğundan proje kökünden yapılan aramalar ignore'lu `core/`'u sessizce
-atlar. Metodoloji araması daima `path=core/` ile yapılır; kökten sıfır-sonuç "core'da
-yok" anlamına gelmez.
-
-### 5.5 Yeni proje kurulumu adımları
-
-```text
-1. init_project.py C:\...\<PROJE> [--name <AD>] [--source-root SOURCE_CODES]
-     → template'lerden ÜRETİR (kopyalamaz):
-       CLAUDE.md (yasaklar damgalı + @core import), .claude/settings.json,
-       scripts/hook_shim.py, project.yaml (profil iskeleti), .gitignore (sızıntı kilidi),
-       .gitattributes, .mcp.json, boş: <source_root>/ conn/ playbook-local/
-       standards-local/ scripts/validators-local/
-2. team_setup.py  (cwd = proje veya --project <PROJE>)
-     → Python/pip, DEV_CORE hooksPath, 4 junction kur/doğrula, eksik lokal dosyaları
-       template'ten tamamla, plugin + memory seed, smoke test
-3. project.yaml doldur   (sap_profile / release / cleancore_policy / master_language /
-                          source_root + gate config'leri)
-4. .conn_adt + conn/*.env  (SAP bağlantı — gitignore'lu, elle/güvenli girilir)
-5. bootstrap_package.py <PKG_FULL> --title "..."   (ilk SAP paketi iskeleti + .rules.md)
-```
-
-Yeni proje, mevcut bir projeye **yerinde dönüşüm olarak değil, yeni kök altında sıfırdan**
-kurulur (ADR 0020 §5, YAN-KURULUM modeli): rollback radikal basitleşir (en kötü senaryoda
-yeni kök komple silinir), yarı-dönüşmüş ara-durum riski sıfırlanır. Worktree'lerde
-junction'lar ve gitignore'lu runtime dosyaları kendiliğinden yoktur;
-`team_setup.py --provision-worktree` bunları kurar, junction'sız worktree'de oturum
-açılmaz (R4 önlemi).
+Çekirdeğin kendi tarafında `core_precommit.py --all` (+ CI `gates` job) tam-ağaç tarar.
+Desenler **tek kaynaktan** (`genericize_common.py`) gelir; kopya geri gelirse test kırar.
 
 ---
 
-Aşağıdaki dört bölüm (6–9), bir projede AI ajanın davranışını **harness seviyesinde**
-(hook + validator + kural katmanları) nasıl zorladığını anlatır. Tüm yollar proje kökünden
-görecelidir; `core/` bir junction'dır ve gerçek dosyalar DEV_CORE deposundadır.
-
 ## 6. Enforcement Katmanı — Ne, Ne Zaman Tetiklenir
 
-Ajan davranışı sohbet metniyle değil, `<PROJE>/.claude/settings.json` içinde
-tanımlı **hook zinciriyle** zorlanır. Her hook proje-lokal `scripts/hook_shim.py`
-üzerinden çağrılır (junction kopuksa net hata verir); shim, olay adına göre
-`core/scripts/hooks/*.py` içindeki gerçek uygulamaya yönlenir. Hook'lar üç sonuç
-üretir: **exit 0** (sessiz geç), **stderr + exit 2** (bloklar veya Claude'a geri
-besler), veya **`additionalContext` JSON** (prompta bağlam enjekte eder).
+Ajan davranışı sohbet metniyle değil, `.claude/settings.json` içindeki **hook zinciriyle**
+zorlanır. Hook'lar üç sonuç üretir: **exit 0** (sessiz geç), **stderr + exit 2** (bloklar),
+veya **`additionalContext` JSON** (bağlam enjekte eder).
 
-### Event → Hook Tetikleme Haritası
+### Event → Hook haritası
 
-| Event | Hook | Ne yapar | RED (exit 2) verir mi |
+| Event | Hook | Ne yapar | RED (exit 2)? |
 |---|---|---|---|
-| SessionStart | `session_start` | Yasak özeti + oturum protokolü enjekte; junction/drift/manifest/damga sağlık kontrolü | Hayır (bağlam enjekte; ⛔ uyarıları metinle iletir) |
-| SessionStart | `tooling_radar_check` | `governance/tooling-radar.md` bayatsa 1-satır nudge | Hayır (nudge) |
-| UserPromptSubmit | `skill_injector` | SAP/tarayıcı/yapısal-arama sinyali → iş-türüne özel checklist adını enjekte | Hayır (bağlam enjekte) |
-| UserPromptSubmit | `intake_triage` | Geliştirme-talebi sinyali → ITG protokolünü enjekte (ADR 0022) | Hayır (protokol enjekte) |
-| PreToolUse `Bash\|mcp__sap-adt__*` | `pre_tool_guard` | 12 RED-katman: yasak-damga, bağlantı, freeze, silme, sızıntı, tehlike, inline-akt, fiori, npm | **Evet** |
-| PreToolUse `Edit\|Write\|MultiEdit` | `pre_tool_guard` | Freeze-guard + core-leak + applies_to + silme/sızıntı taraması | **Evet** |
-| PreToolUse `Edit\|Write\|MultiEdit` | `pull_before_edit` | Yönetilen SAP source bu seansta çekilmediyse edit'i blokla (ADR 0016) | **Evet** |
-| PreToolUse `Agent` | `watchdog_launch` | Arka-plan ajan spawn'unda detached watchdog daemon başlat | Hayır (bağlam enjekte) |
-| PostToolUse `Edit\|Write\|MultiEdit` | `post_validate` | Kural-taşıyan dosya editlendiyse `run_all_validators --quick` + coverage nudge | **Evet** (validator FAIL'de geri besler) |
-| PostToolUse `mcp__sap-adt__*` | `post_tool_failure` | SAP işlemi yapısal-fail döndürünce patinaj-kesici eskalasyon merdiveni enjekte | Hayır (bağlam enjekte) |
+| SessionStart | `session_start` | Yasak özeti + oturum protokolü enjekte; junction/drift/manifest/damga sağlığı | Hayır |
+| SessionStart | `tooling_radar_check` | Tooling taraması bayatsa 1-satır nudge | Hayır |
+| **InstructionsLoaded** | `instructions_loaded_log` | Hangi talimat dosyası ne zaman/neden yüklendi → `.tmp/instructions-loaded.log` | Hayır (yalnız log) |
+| UserPromptSubmit | `skill_injector` | İş-türüne özel pre-flight checklist adını enjekte | Hayır |
+| UserPromptSubmit | `intake_triage` | Geliştirme-talebi sinyali → ITG protokolü enjekte | Hayır |
+| PreToolUse `Bash\|PowerShell\|mcp__sap-adt__*` | `pre_tool_guard` | 8 kural (aşağıda) | **Evet** |
+| PreToolUse `Edit\|Write\|MultiEdit\|NotebookEdit` | `pre_tool_guard` | Core-leak + freeze + damga | **Evet** |
+| PreToolUse `Edit\|Write\|MultiEdit` | `pull_before_edit` | SAP source bu seansta çekilmediyse edit'i blokla (ADR 0016) | **Evet** |
+| PreToolUse `mcp__sap-adt__adt_(push_source\|activate\|…)` | `sap_worktype_hint` | **Gerçek obje-tipinden** deterministik checklist hatırlatması | Hayır |
+| PreToolUse `mcp__sap-adt__*` | `itg_backstop` | SAP işi fiilen başladıysa ve ITG-marker yoksa protokolü enjekte | Hayır |
+| PreToolUse `Agent` | `watchdog_launch` | Detached watchdog daemon başlat | Hayır |
+| PostToolUse `Edit\|Write\|MultiEdit` | `post_validate` | Kural-taşıyan dosya editlendiyse `run_all_validators --quick` | **Evet** (FAIL'de geri besler) |
+| PostToolUse `mcp__sap-adt__*` | `post_tool_failure` | Yapısal fail'de patinaj-kesici eskalasyon merdiveni | Hayır |
 | ConfigChange | `config_change_guard` | Seans-içi davranış-yüzeyi değişimi manifest-onaysızsa blokla | **Evet** |
-| PreCompact | `pre_compact` | Compaction öncesi SESSION_NOTES/memory flush hatırlatması | Hayır (systemMessage) |
+| PreCompact | `pre_compact` | SESSION_NOTES/memory flush hatırlatması | Hayır |
 | SessionEnd | `watchdog_stop` | Watchdog daemon'ı kapat | Hayır |
 
-### (a) Oturum-başı hook'ları
+### 6.1 Keşif vs güvence — 2026-07-09/10 redizaynı
 
-**`session_start`** (SessionStart) — İki iş yapar. Birincisi statik enjeksiyon: ADR
-0005 yasak özeti (A/B/C/D), ilk yanıtın "Ekran Teyidi" formatıyla başlaması
-zorunluluğu, ve ajan-takım çalışma modeli. İkincisi dinamik sağlık kontrolleri:
+İki mekanizma bilinçli olarak ayrıldı:
 
-```text
-D25 — 4 junction TEK TEK sağlam mı (core, .claude/{agents,skills,commands})
-      kopuk junction sessiz semptom verir → "SAP-yazma yapma" uyarısı
-Damga — kök CLAUDE.md yasaklar damgası kanonikle eş mi (junction-bağımsız anayasa)
-D7  — settings.json + hook_shim.py template'ten sapmış mı (hash karşılaştırma)
-F2  — behavior-manifest diff: kayıtsız/değişmiş davranış dosyası → BÜYÜK uyarı
-Ö3  — DEV_CORE origin-geride mi (saatte 1 fetch, 2 sn timeout, cache'li throttle)
-D20b— detached@stable ise sakin bilgi (yanlış origin-geride alarmı üretme)
-```
+- **Keşif (hatırlama)** kırılgan prompt-keyword-regex'te değil, **native `description`
+  semantiğinde** yapılır. Model karar verir, parafrazı yakalar. Bu yüzden ITG artık bir
+  **skill**tir (`intake-triage`); regex hook yalnız erken hatırlatmadır.
+- **Deterministik güvence** prompt-NLP'de değil, **tool sınırında** yapılır:
+  `sap_worktype_hint` gerçek obje-tipini okur, `itg_backstop` ilk SAP tool'unda devreye girer.
 
-Junction sorunu bulunursa hepsi ⛔ ile listelenir ve "guardrail eksik olabilir,
-SAP-yazma yapma" notu eklenir. Manifest sapması varsa "bu oturumun çıktısına güvenme"
-kuralı devreye girer.
+> Ölçüm: eski regex hook, keyword-seti dışındaki 5 talebin 5'inde de ITG'yi hiç tetiklemiyordu.
 
-**`tooling_radar_check`** (SessionStart) — `governance/tooling-radar.md`
-frontmatter'ındaki `last-run` tarihini okur; `cadence-days` (varsayılan 21) geçtiyse
-iş-arası bir tarama önerir. Bayat değilse sessizdir (normal oturumda maliyet yok).
-Amaç, araç taramasının yalnız SAP'a dar kalmayıp genel ajan-verimlilik araçlarını
-(tarayıcı-doğrulama, token-verim, arama, kod-zekâsı) proaktif yüzeye çıkarmasıdır.
+### 6.2 `pre_tool_guard` — 8 kural (merdiven ilkesi)
 
-### (b) Prompt-anı hook'ları
+2026-07-10 sağlık denetiminde guard 13 kuraldan 8'e indirildi. **Merdiven ilkesi:** runtime
+guard yalnız **geri alınamaz VE sessizce başarısız olan** eylemler için meşrudur. Bir kural bu
+iki kriterden birini karşılamıyorsa statik kontrole (validator / pre-commit / CI) iner.
 
-**`skill_injector`** (UserPromptSubmit) — Prompt'ta güçlü, az-yanlış-pozitif sinyal
-ararken üç ayrı eksen tarar:
-
-- `_STRONG`: SAP geliştirme sinyalleri (CDS yarat, RAP, BDEF, DTEL, tablo yarat,
-  aktive et, ZSD###, `.conn_adt`, UI5 …). Yakalanırsa `sap-abap-dev` skill rehberini
-  hatırlatır ve iş-türünü tespit eder.
-- `_WORKTYPES`: iş-türü → **okunması zorunlu pre-flight checklist** eşlemesi. Örneğin
-  RAP/BDEF → `playbook/checklists/rap-creation.md`, klasik ALV →
-  `classic-dialog-creation.md` (§1 include-böl zorunlu), DDIC struct →
-  `struct-creation.md`. Böylece o iş-türünün kuralları unutulmaz.
-- `_BROWSER`: tarayıcı/UI-doğrulama sinyali (SAP'tan bağımsız) → token-verimli akışı
-  dayatır (önce `run_ui5_linter`/`run_manifest_validation`, sonra `playwright-cli`,
-  layout'u gözle değil sayıyla doğrula).
-- `_STRUCTURAL`: yapısal kod-arama/refactor sinyali → `ast-grep` CLI'yı hatırlatır
-  (ripgrep/Grep lexical körlüğüne düşmemek için).
-
-Otomatik-event işaretleri (`<task-notification>`, sistem-bildirimi) filtrelenir —
-bunlar kullanıcı-turn'ü değildir, yanlış-pozitif üretmezler. Sinyal yoksa sessizdir.
-
-**`intake_triage`** (UserPromptSubmit) — Bir **geliştirme talebi / revizyon / FS /
-Excel-ister / rapor isteği** niyeti (`_INTENT` regex) görülünce ITG protokolünü
-(Bölüm 9) enjekte eder. Tasarım ilkesi (ADR 0022): hook **durum tutmaz ve sınıflandırma
-yapmaz** — yalnız tetikler ve protokolü dayatır; kapsam-sınıflama (S0/S1/S2), konu
-çıkarımı ve 3-eksen araştırmayı ajan yapar. `_MODULES` regex'i yalnız **kaba modül
-ipucu** verir (SD/MM/FI/CO/PP/QM/PM/WM-EWM); kural-paketi fiilen mevcut modüllerde
-(`_HAZIR_PAKETLER`) dosya adını söyler, yoksa "genel iskeletle ilerle" der.
-`skill_injector`'a kardeştir: o obje-tipi→checklist, bu kapsam+modül+protokol —
-ayrık sorumluluk.
-
-### (c) Araç-öncesi guard — `pre_tool_guard` 12 RED-katmanı
-
-`pre_tool_guard`, `Bash | Edit | Write | MultiEdit | mcp__sap-adt__*` araçlarından
-önce koşar. Sıcak-yolda tüm kontroller string/regex'tir (dosya-sistemi taraması yok;
-yaml okuma module-load'da bir kez cache'lenir). Katmanlar sırayla:
-
-| # | Katman | Neyi engeller | Tetik |
+| # | Kural | Neden runtime | Tetik |
 |---|---|---|---|
-| 1 | **Yasak-damga** | SAP-yazma tool'undan önce kök CLAUDE.md yasak damgası kanonikle eş değilse RED | SAP-yazma MCP tool'ları |
-| 2 | **Bağlantı-tutarsızlığı** (ADR 0010) | `.conn_adt` ile MCP'nin canlı bağlantısı ayrışıksa (switch_tier yapılıp `/mcp restart` edilmediyse) ADT işlemi RED | `mcp__sap-adt__*` (ping hariç) |
-| 3 | **Freeze-guard** (R10) | `project.yaml` `frozen_readonly_paths` köklerine yazma (Edit/Write hedefi veya Bash yazma-fiili) RED; okuma serbest | Edit/Write/Bash |
-| 4 | **Özyinelemeli-silme** (R9) | `core`/junction, `.claude/{agents,skills,commands}`, `DEV_CORE` hedefli özyinelemeli silme/`clean` RED | Bash |
-| 5 | **Sızıntı-commit kilidi** (F1) | `git add/commit` kapsamında core-path stage'leme RED (fikri-sermaye sızıntısı) | Bash |
-| 6 | **Core-leak** (Ö5) | `core/`'a yazılan içerikte proje/müşteri izi (sistem adı, kullanıcı, müşteri) tespit edilirse RED — jenerik-olmayan içerik girmez | Edit/Write core hedefi |
-| 7 | **applies_to eksik** (D21) | `standards/` veya `playbook/` altına YENİ `.md` yazımında `applies_to:` frontmatter yoksa RED | Write core hedefi |
-| 8 | **Tehlike** (ADR 0005-C) | Transport bırakma/oluşturma ve package oluşturma endpoint/FM token'ları RED | Bash / MCP argümanı |
-| 9 | **Inline-aktivasyon** | Bash içinde elle ADT activation endpoint POST'u (helper kullanmadan) RED — bu yol `activationExecuted`'ı parse etmez, sahte HTTP-200-OK üretir | Bash |
-| 10 | **Yalın fiori-deploy** | `deploy_ui.py` dışında doğrudan `fiori deploy` RED — build yapmaz, eski dist'i "Successful" diyerek yükler | Bash |
-| 11 | **App-içi npm-install** | UI app alt-dizininde `npm install/ci/add` RED — tooling `ui/` workspace köküne hoist'lu | Bash |
-| 12 | Core-yazım taraması bütünü (6+7 birlikte core hedefine uygulanır) | — | — |
+| 1 | **KESİN YASAKLAR damgası** (ADR 0005) | Damga silinirse SESSİZ; anayasasız SAP yazımı | SAP-yazma tool'ları |
+| 2 | **Bağlantı-tutarsızlığı** (ADR 0010) | Yanlış sisteme yazım GERİ ALINAMAZ, HTTP 200 SESSİZ | `mcp__sap-adt__*` |
+| 3 | **Transport release** (ADR 0005-C) | GERİ ALINAMAZ, HTTP 200 SESSİZ | Bash / MCP argümanı |
+| 4 | **PUBLIC-PR sızıntı gate** | Yayınlanan gövde cache'lenir (GERİ ALINAMAZ) | `gh pr/issue/release/api` |
+| 5 | **Inline aktivasyon** | HTTP 200 sahte-OK (SESSİZ) | Bash |
+| 6 | **Yalın fiori deploy** | "Successful" der, bayat `dist/` gider (SESSİZ) | Bash |
+| 7 | **App-içi npm install** | Workspace ihlali | Bash |
+| 8 | **GENERICIZE-LEAK** | Core PUBLIC; push'lanınca GERİ ALINAMAZ | Edit/Write core hedefi |
 
-RED durumunda hook stderr'e sebebi + düzeltme yolunu yazar ve exit 2 döner (Claude'a
-geri beslenir). Tehlikeli/tutarsız değilse sessizdir.
+**Kaldırılan 4 kural** ve gerekçeleri (her biri ayrı ölçüldü): freeze-guard (git-remote'ta
+yedekli → geri alınabilir; ayrıca 6 kabuk-yolundan sızıyordu), özyinelemeli-silme bloğu
+(geri alınabilir ve sessiz değil), sızıntı-commit kilidi (iki ikizi var: validator + CI),
+`applies_to` eksikliği (yalnız `Write`'ı tutuyordu → yarım koruma).
 
-**`pull_before_edit`** (PreToolUse `Edit|Write`) — Yönetilen bir SAP source dosyasını
-(`<source_root>/` altı, kaynak uzantısı) düzenlemeden önce, o objenin canlı güncel
-hali bu seansta çekilmiş/yazılmış olmalıdır (ADR 0016). Değilse edit bloklanır ve
-ajan önce `scripts/sap_sync_pull.py` ile çeker. Muafiyetler: SAP-source değil,
-`ref_docs/`/`docs/`/`.tmp/`, dosya yok (yeni obje), git-dirty (üstünde çalışılan WIP
-— pull onu ezmesin), session_id yok (fail-safe). Amaç: working-copy daima taze
-canlıdan türesin → push, canlıdaki belgelenmemiş bir değişikliği sessizce ezmesin.
+> **Kabul edilen kalıntı:** guard, `echo >> core/f.md` / `cp` / `tee` gibi kabuk kaçışlarını
+> kapatmaz (komut-metni regex'i sonsuz varyant savaşıdır). Telafi katmanı pre-commit + CI'dır.
+> Bu bilinçli bir merdiven tasarımıdır; `guard_conformance.py` guard yüzeyini beyan eder.
 
-**`watchdog_launch`** (PreToolUse `Agent`) — Arka-plan ajan spawn edilince, SAP/VPN/MCP
-kopmasından doğan sessiz stall'i Claude'a bağlı olmadan haber veren detached bir daemon
-başlatır (seans başına tek daemon, heartbeat ile idempotent). Windows MessageBox +
-`.tmp/watchdog-alerts.log` ALERT üretir.
+### 6.3 Guard'ın kendi meta-gate'i
 
-### (d) Araç-sonrası hook'ları
-
-**`post_validate`** (PostToolUse `Edit|Write|MultiEdit`) — Yalnız kural-taşıyan
-dosyalar validator'ları tetikler (`.rules.md`, `governance/`, `standards/`,
-`validators/`, `populate_*.py`, `sprint*`, `td_spec`). Üç davranış:
-
-```text
-1. UI manifest.json editlendi → check_ui_odata_refs.py hatırlat (statik cross-check)
-2. list/report view.xml → check_list_view_grid.py (grid standardı, ADR 0008)
-3. standards/playbook/governance/decisions + AGENTS/CLAUDE .md editi + güç-keyword
-   (MUST/YASAK/ZORUNLU/BLOCKER) → ADR 0019 onboarding (5-adım) + 8-ölçüt RUBRIC +
-   checklist ise check_rule_gate_coverage --strict hatırlat
-4. Kural-taşıyan dosya → run_all_validators.py --quick; FAIL ise özet + "forward
-   progress YOK, önce ihlali düzelt" (STOP kuralı) → exit 2 geri besler
-```
-
-Durum/izleme dökümanları (RESUME, SESSION_NOTES, package-registry) kural taşımaz →
-`governance/` altında olsalar da heavy run atlanır (sıfır gürültü).
-
-**`post_tool_failure`** (PostToolUse `mcp__sap-adt__*`) — Bir SAP ADT tool'u yapısal
-hata döndürünce (`ok:false`, bilinen error değeri, `success:false`, reviewer BLOCKER)
-kör deneme-yanılma döngüsünü sistemsel keser. Enjekte edilen eskalasyon merdiveni:
-
-```text
-1. Kör tekrar YOK; aynı objede en çok 3 deneme (yalnız geçici CSRF/lock için)
-2. 3'te çözülmezse → ZORUNLU playbook/adt-*.md + lessons-learned + hata pattern araştır
-3. Toplam 5 denemede olmazsa → DUR + lider/kullanıcı (ham hata + denenenler + bulgu)
-4. Transport: hata mesajındaki numarayı ASLA kullanma
-5. Guardrail ihlaliyse: kuralı değiştirme — yaklaşımı değiştir
-6. Çözünce playbook güncelle (T1)
-```
-
-CDS-yaratma patinaj imzası (`ddls/df`, `is not locked`, `invalidlockhandle`)
-görülürse generic değil spesifik "TEK CDS YARATMA" reçetesi eklenir.
-
-### (e) Config / Compact / End
-
-**`config_change_guard`** (ConfigChange) — Hooks/settings canlı reload olur ve proje
-hook'ları onaysız çalışabilir; oturum-başı manifest kontrolü seans-içi değişimi
-göremez. Bu hook her ConfigChange'de tetiklenir: davranış-yüzeyi dosyası
-(`settings.json`, `.mcp.json`, `CLAUDE.md`, `project.yaml`, `hook_shim.py`,
-`.claude/rules/`) manifest-onaysız değiştiyse **bloklar** (exit 2); değilse denetim
-izine yazar (`.tmp/config-changes.log`). F2'nin runtime bacağıdır.
-
-**`pre_compact`** (PreCompact) — Compaction öncesi, aktif paketin SESSION_NOTES'una
-son durumu ve önemli kalıcı bilgiyi memory'ye yazmayı hatırlatır. `systemMessage`
-kanalıyla kullanıcıya gösterilir (PreCompact `additionalContext` kabul etmez).
-
-**`watchdog_stop`** (SessionEnd) — Watchdog daemon'ı kapatır.
+`scripts/tests/guard_conformance.py`: her kural için **③ tetiklenmeli** ve **④ tetiklenmemeli**
+vakaları + kablolama + grup kontrolü. Kanıtsız kural CI'yı kırar. `test_pre_tool_guard.py`
+ayrıca desen **tek-kaynak** değişmezini ve `gh` yayın yüzeyini (13 vaka) zorlar.
 
 ---
 
 ## 7. Kalite Kapıları: Validator + Reviewer + Coverage
 
-Enforcement'ın ikinci ayağı, deterministik (LLM-bağımsız) Python validator'larıdır.
-İki farklı giriş noktası vardır ve birbiriyle karıştırılmamalıdır:
-
 | | `run_all_validators.py` | `run_review.py` |
 |---|---|---|
 | Amaç | Repo-geneli sağlık taraması | Tek SAP-yazma işi öncesi pre-flight |
 | Kapsam | Tüm proje (kural-taşıyan artefaktlar) | Belirli `--task` + `--artifact` |
-| Ne zaman | Oturum-başı `--quick`, `post_validate`, CI, gün-sonu | SAP'a create/push/activate ÖNCESİ |
-| Çıktı | OK / N ihlal (exit 0/1) | PASS / WARNING / BLOCKER verdict |
-| Tetik | Manuel + `post_validate` hook | Ajan/gateway çağırır (ADR 0006) |
+| Ne zaman | Oturum-başı `--quick`, `post_validate`, **pre-commit**, CI | SAP'a create/push/activate ÖNCESİ |
+| Çıktı | OK / N ihlal (exit 0/1) | PASS / WARNING / BLOCKER |
 
-**`run_all_validators.py`** iki modda koşar. **PROJE modu** (`project.yaml` var):
-scope=project+both validator'lar + profil-filtreleri + `scripts/validators-local/*`
-keşfi. **CORE modu** (project.yaml yok, örn. DEV_CORE CI): yalnız scope=both
-statik validator'lar; proje-bağlamı isteyenler SKIP edilir. Her validator bir profil
-etiketi taşır (`applies_to`) — örneğin RAP validator'ları yalnız
-`s4_private/s4_public/btp_abap` profillerinde koşar, `ecc`'de atlanır. Örnek zincir:
-KESİN YASAKLAR damgası (HARD, ADR 0005), core-sızıntı kilidi, paket naming, liste=grid
-(HARD, ADR 0008), filtre/VH deseni (HARD, FE-32), kural↔gate coverage (HARD, ADR 0019).
+`run_all_validators.py` iki modda koşar. **PROJE modu** (`project.yaml` var): scope=project+both
+validator'lar + profil filtreleri + `validators-local/*` keşfi. **CORE modu** (project.yaml yok,
+ör. DEV_CORE CI): yalnız scope=both statik validator'lar.
 
-**`run_review.py`** (ADR 0006 — Reviewer Agent Pattern), coordinator/gateway SAP
-yazmadan önce çağırır. `TASK_VALIDATORS` sözlüğü her görev-tipini bir validator
-zincirine eşler ve her validator'a bir varsayılan **severity** verir:
+### Kayıtlı gate zinciri (22)
+
+KESİN YASAKLAR damgası (ADR 0005) · Core-sızıntı kilidi (R1) · Paket `.rules.md` varlık ·
+Paket naming · Obje paket sınırı · Script playbook referansı · Freestyle UI5 tuzaklar ·
+Liste=grid (ADR 0008) · Filtre/VH deseni (FE-32) · RAP BY-assoc keys-only (BE-20) ·
+RAP commit yasağı (BE-26) · AMDP yorum-apostrof (BE-28c) · KD ham-mermaid (DOC-KD-15) ·
+Proje-kökü çözümlemesi (CORE-01) · **Kural↔gate coverage (ADR 0019)** · Hook enjekte-yol
+çözümlemesi (C-HOOK-01) · CORE-INDEX tazeliği (C-IDX-01) · Konsol UTF-8 koruması (C-ENC-01) ·
+**Auto-memory bütçe + indeks bütünlüğü (C-MEM-01)** · **package-registry tazeliği (C-REG-01)** ·
+**settings.template ↔ hook envanteri (C-TPL-01)** · Playbook freshness (uyarı)
+
+Son üçü 2026-07-10'da eklendi; her biri gerçek bir sessiz-bozulmayı kapatır:
+
+- **C-MEM-01** — hafıza indeksi sessizce kesiliyordu (Bölüm 11.2).
+- **C-REG-01** — `manual-edit: PROHIBITED` diyen artefaktın tazeliğini kimse ölçmüyordu.
+- **C-TPL-01** — yazılan hook şablona kablolanmıyordu (Bölüm 3, 16.2).
+
+### `run_review.py` (ADR 0006)
+
+`TASK_VALIDATORS` sözlüğü her görev-tipini bir validator zincirine ve severity'ye eşler:
 
 ```text
-cds_creation      → window_function(BLOCKER) + currency_ref(BLOCKER) +
-                    deprecated_annotations(WARNING) + released_objects(WARNING) + ...
-table_update      → struct_field_dtel_active(BLOCKER) + table_field_drop(BLOCKER) + ...
-class_push        → method_param_type_c(BLOCKER) + amdp_apostrophe(BLOCKER) +
-                    docu_itf_line_width(BLOCKER) + decimal_write_to(WARNING) + abaplint(WARNING)
+cds_creation      → window_function(BLOCKER) + currency_ref(BLOCKER) + released_objects(WARNING) …
+table_update      → struct_field_dtel_active(BLOCKER) + table_field_drop(BLOCKER) …
+class_push        → method_param_type_c(BLOCKER) + amdp_apostrophe(BLOCKER) + abaplint(WARNING) …
 rap_bdef_creation → rap_managed_etag(BLOCKER) + audit_fields_autofill(WARNING)
-itg_s2_signoff    → check_itg_signoff(BLOCKER)   ← ITG S2 gate (ADR 0022)
+itg_s2_signoff    → check_itg_signoff(BLOCKER)            ← ITG S2 gate (ADR 0022)
 ```
 
-Verdict hesabı basittir ve tek yönde eskalasyondur:
-
 ```text
-BLOCKER count > 0  → verdict BLOCKER → SAP yazma YASAK, düzelt + tekrar review (exit 1)
-WARNING count > 0  → verdict WARNING → yazabilirsin AMA kullanıcıya bildir  (exit 0)
-aksi               → verdict PASS    → devam edebilirsin                    (exit 0)
---strict           → WARNING'i de BLOCKER say
+BLOCKER > 0 → verdict BLOCKER → SAP yazma YASAK (exit 1)
+WARNING > 0 → verdict WARNING → yazabilirsin AMA kullanıcıya bildir (exit 0)
+aksi        → verdict PASS
+--strict    → WARNING'i de BLOCKER say
 ```
 
-Her görev-tipi ayrıca bir **manuel checklist** (`playbook/checklists/<task>.md`) referansı
-üretir — deterministik validator'ın göremediği, LLM'in okuması gereken semantik kontroller.
+### `check_rule_gate_coverage.py` (ADR 0019 — "keystone")
 
-**`check_rule_gate_coverage.py`** (ADR 0019, "keystone") coverage-check'tir. İlke:
-*her kural bir gate'le zorlanmalı; gate'lenmemiş kural ≈ kuralsızdır.* Bu script, bir
-kuralın "BLOCKER der ama arkasında çalışan script yok" durumunu (sahte-WIRED çürümesi)
-otomatik yakalar — elle-bakımlı eşleme tutulmaz, hesaplattırılır. Karşılaştırılan
-kaynaklar: (1) checklist tablo satırlarındaki `check_*.py` iddiaları, (2)
-`scripts/validators/check_*.py` dosya varlığı, (3) `run_all_validators` +
-`run_review` içinde geçen WIRED küme, (4) gate'in `# ENFORCES: <rule-id>` beyanı.
+*Her kural bir gate'le zorlanmalı; gate'lenmemiş kural ≈ kuralsızdır.*
 
 ```text
-3-EKSEN (ADR 0019):  (a) gate dosyası VAR mı
-                     (b) bir runner'a WIRED mı (run_all / run_review)
-                     (c) kırmızı-fixture ile test ediliyor mu (her gate kendi sorumluluğu)
+3-EKSEN:  (a) gate dosyası VAR mı
+          (b) bir runner'a WIRED mı (run_all / run_review)
+          (c) kırmızı-fixture ile test ediliyor mu
 
 Bulgu sınıfları:
   MISSING    — checklist gate adı verir ama dosya YOK (en ciddi: sahte-WIRED)
-  ORPHAN     — script VAR ama hiçbir runner'da DEĞİL (wire-edilmemiş)
-  UNDECLARED — WIRED ama `# ENFORCES:<id>` beyanı yok (binding eksik)
+  ORPHAN     — script VAR ama hiçbir runner'da DEĞİL
+  UNDECLARED — WIRED ama `# ENFORCES:<id>` beyanı yok
 ```
 
-Bulgu varsa exit 1 (HARD — forward progress yok). Bu, checklist'te bir satırın gate
-iddia edip gate'in gerçekte bulunmaması riskini kapatır.
-
-**Kritik ilke — "checklist ≠ wired validator, bozuk-girdiyle test et":** Bir gate'in
-sürekli PASS dönmesi onun doğru çalıştığını kanıtlamaz; gate yanlış-kablolanmış veya
-no-op olabilir. Her gate, kasıtlı bozuk bir fixture (kırmızı-girdi) ile test edilerek
-gerçekten FAIL üretebildiği doğrulanır. Coverage-check (a)+(b)+binding'i denetler;
-fixture-varlığı gate'in kendi (c) sorumluluğudur. (Operasyonel karşılığı: Bölüm 14.3.)
+**Kritik ilke — "sürekli PASS kanıt değildir":** bir gate yanlış-kablolanmış veya no-op
+olabilir. Her gate kasıtlı bozuk bir fixture'la (kırmızı-girdi) FAIL üretebildiği doğrulanarak
+kabul edilir. (Operasyonel karşılığı: Bölüm 14.3.)
 
 ---
 
-## 8. Kural Mimarisi (L1-L4) ve SORU 0
+## 8. Kural Mimarisi (L1–L4) ve SORU 0
 
-Kurallar dört katmana ayrılır (ADR 0003 + 0020). Katman, bir kuralın **kapsamını** ve
-**yaşadığı yeri** belirler:
-
-| Katman | Konu | Yer | Örnek |
+| Katman | Konu | Yer | **Nasıl yüklenir** |
 |---|---|---|---|
-| **L1** | Agent davranışı (git, ADT işlem sırası, oturum protokolü) | `AGENTS.md` (core) | "push öncesi kullanıcı onayı al" |
-| **L2** | Stabil kurumsal standartlar (naming, coding, UI, doc format) | `standards/` (core) | naming regex, RAP kodlama |
-| **L3** | Operasyonel pattern (ADT pattern bankası, lessons-learned) | `playbook/` (core) | "TEK CDS YARATMA" reçetesi |
-| **L4** | Paket-spesifik (prefix, bağımlılık, istisna) | `<source_root>/<MODULE>/<PKG>/.rules.md` (PROJE reposu) | `ZSD001_CLC` prefix kuralı |
+| **Anayasa** | KESİN YASAKLAR (A/B/C/D) | kök `CLAUDE.md`, fiziksel damga | Her oturum; `/compact` sonrası diskten yeniden enjekte |
+| **L1a** | Her-oturum davranış değişmezleri | `CLAUDE.core.md §1.1` | Her oturum (`@import`) |
+| **L1b** | Dosya-türüne bağlı davranış | `claude/rules/*.md` | **Eşleşen dosya okununca** (`globs:`) |
+| **L1c** | Derin davranış referansı | `AGENTS.md` | ⚠ **Otomatik YÜKLENMEZ** |
+| **L2** | Stabil kurumsal standartlar | `standards/` | On-demand |
+| **L3** | Operasyonel pattern | `playbook/` | On-demand |
+| **L4** | Paket-spesifik | `<source_root>/<MOD>/<PKG>/.rules.md` | On-demand |
 
-L1-L3 metodolojidir ve `core/`'da yaşar (tüm projelere junction'la gelir); L4
-proje-özeldir ve proje reposunda kalır. Proje-özel overlay kapıları da vardır:
-`playbook-local/`, `standards-local/`, `scripts/validators-local/`.
+### 8.1 Neden bu bölünme (ölçülmüş gerekçe)
 
-**AGENTS.md (L1)** git ve ADT-infra davranışını tanımlar: kısa branch → push → PR →
-CI yeşil → merge; `git push --force` / `--no-verify` kullanıcı açıkça istemedikçe
-yasak; push öncesi her zaman kullanıcı onayı; geçici script → `TempScripts/`
-(gitignored). ADT işlem sırası ve infra kuralları da buradadır.
+`AGENTS.md` bir markdown link'in arkasındaydı ve **hiç yüklenmiyordu**. Harness `CLAUDE.md`
+okur, `AGENTS.md` okumaz. 356 satır / 25 zorunlu kural sessizce ölüydü; ekran teyidi ise her
+oturum "yüklendi" diyordu. Çözüm:
 
-### SORU 0 — Yeni bilgi nereye yazılır
+- Her oturum gereken (git workflow, subagent kararı, STOP kuralı, bağlantı) → **L1a**.
+- İş-anına özgü olan (ADT işlem sırası, reviewer pre-flight, dosya yerleşimi, UI5 tuzakları)
+  → **L1b**, `globs:` ile ilgili dosya okununca yüklenir. Startup maliyeti sıfırdır.
+- Derin referans → **L1c**, açıkça okunur.
 
-Bir bilgi öğrenildiğinde ilk karar "bu metodoloji mi, projeye mi özel?" sorusudur.
-Karar ağacı:
+### 8.2 `claude/rules/` yazım kuralları — bir tuzak
+
+**`globs:` kullanılır, `paths:` KULLANILMAZ.** Resmî doküman `paths:` (YAML listesi, tırnaklı)
+tarif eder ama o biçim **sessizce çalışmaz** — hata vermez, kural hiç yüklenmez. Çalışan biçim
+tırnaksız, virgülle ayrılmış tek satırdır:
+
+```yaml
+---
+globs: **/*.abap, **/*.ddls
+---
+```
+
+`globs:` **olmayan** kural koşulsuz yüklenir (her oturum). **Compaction uyarısı:**
+`globs:`-scoped kurallar `/compact` sonrası kaybolur (eşleşen dosya tekrar okununca döner).
+Bu yüzden **anayasa buraya konmaz** — kök `CLAUDE.md`'ye fiziksel damgalıdır (ADR 0021) ve
+compaction'dan sağ çıkan tek yerdir.
+
+### 8.3 SORU 0 — yeni bilgi nereye yazılır
 
 ```text
 SORU 0: Bu bilgi metodoloji mi, projeye mi özel?
   ├─ Metodoloji (pattern, validator, hook, standart, ADT dersi, checklist satırı)
   │     → DOĞRUDAN core'a yaz. Yazarken:
-  │       • genericize: ZSD0xx → ZSD001 örneği; sistem/kullanıcı/müşteri → placeholder
+  │       • genericize: gerçek obje/sistem/kullanıcı/müşteri → placeholder
   │       • link: core-içi link CORE-göreli; core → proje link YASAK
   │       • profil etiketi: applies_to hangi profiller? (kanıtsız genişletme YOK)
   └─ Proje işi (paket, iş kuralı, müşteri süreci, bağlantı, sprint)
-        → proje reposu (SORU 1-3 ağacı; L4 .rules.md aynen)
+        → proje reposu (L4 .rules.md aynen)
 
-SORU 1: Tek paket mi, tüm proje mi?          → tek paket = L4 (.rules.md)
-SORU 2: Tipi? davranış=AGENTS · standart=standards · nasıl-yaparım=playbook · karar=decisions
+SORU 1: Tek paket mi, tüm proje mi?   → tek paket = L4
+SORU 2: Tipi? davranış=L1a/L1b · standart=standards · nasıl-yaparım=playbook · karar=decisions
 SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lessons-learned.md
 ```
 
-Bu ağaç, `pre_tool_guard`'ın core-leak (Ö5) ve applies_to (D21) katmanlarıyla zorlanır:
-core'a proje-izi taşıyan içerik veya profil-etiketsiz standart/playbook yazımı bloklanır.
+Ek dal (2026-07-10): bir kural **dosya-türüne bağlıysa** (yalnız `.abap` ya da `ui/**` işinde
+geçerli) → `claude/rules/` + `globs:`. Bir playbook girdisi **çok-adımlı prosedüre** dönüştüyse
+→ skill.
 
-### T1-T11 Trigger'ları — hangi tetik hangi hedefe yazar
-
-Yeni bilgi belirli tetiklerle kalıcılaşır. Özet:
+### 8.4 T1–T11 tetikleri
 
 | # | Tetikleyici | Hedef |
 |---|---|---|
 | T1 | ADT işlemi başarısız denemelerden sonra başarılı oldu | `playbook/<obje-tipi>.md` (çalışan + denenen-başarısız) |
 | T2 | Playbook'ta olmayan senaryo başarıyla işlendi | Yeni section `playbook/` |
-| T3 | Kullanıcı kural koydu | Davranış → AGENTS.md; standart → standards/; pakete özel → `.rules.md` |
-| T4 | Kullanıcı trigger-phrase kullandı | `lessons-learned.md` recurrence + kod gate öner |
+| T3 | Kullanıcı kural koydu | Davranış → L1a/L1b; standart → `standards/`; pakete özel → `.rules.md` |
+| T4 | Kullanıcı trigger-phrase kullandı | `lessons-learned.md` + kod gate öner |
 | T5 | Yeni paket / naming kararı | `.rules.md` (bootstrap script) |
 | T6 | TempScripts'te çalışan script kalıcı lazım | core `scripts/`e taşı (genericize) + playbook ref |
-| T7 | Mimari karar | Metodoloji → core `governance/decisions/NNNN-*.md`; proje → proje reposu |
-| T8 | Paket-spesifik bağımlılık/istisna | `.rules.md` "Bilinen İstisnalar" |
+| T7 | Mimari karar | Metodoloji → core `governance/decisions/`; proje → proje reposu |
+| T8 | Paket-spesifik istisna | `.rules.md` "Bilinen İstisnalar" |
 | T9 | Script kullanıldı ama playbook referansı yok | İlgili playbook'a pattern + script ref |
-| T10 | Patinaj/hata yakalandı | Düzelt + playbook (T1) + "reviewer yakalar mıydı?" → validator/checklist |
-| T11 | Tekrar-eden tuzak / yeni iş-türü | Karar ağacı: validator / checklist / hook / pre_tool_guard (playbook notu YETMEZ) |
+| T10 | Patinaj/hata yakalandı | Düzelt + playbook (T1) + "reviewer yakalar mıydı?" |
+| T11 | Tekrar-eden tuzak / yeni iş-türü | validator / checklist / hook / pre_tool_guard (playbook notu YETMEZ) |
 
-### Kural nasıl eklenir (ADR 0019 onboarding)
-
-Yeni/değişen bir kural, `post_validate` hook'unun hatırlattığı 5-adım onboarding'ten
-geçmeden "eklenmiş" sayılmaz:
+### 8.5 Kural nasıl eklenir (ADR 0019 onboarding)
 
 ```text
-(1) GÜÇ-ETİKETLE      — MUST / MUST-NOT / SHOULD / MAY (belirsiz güç = uygulanamaz)
+(1) GÜÇ-ETİKETLE      — MUST / MUST-NOT / SHOULD / MAY
 (2) ENFORCEMENT-SEÇ   — otomatikleştirilebilir mi, yargı mı?
-(3) BAĞLA             — gate + kırmızı-fixture (otomatik) VEYA reviewer + checklist-üyeliği (yargı)
-(4) STABİL-ID VER     — kural-id (ör. FE-32, BE-26, C-ITG-01) + gate `# ENFORCES:<id>` beyanı
-(5) COVERAGE-CHECK    — check_rule_gate_coverage temiz mi (MISSING/ORPHAN/UNDECLARED yok)
+(3) BAĞLA             — gate + kırmızı-fixture VEYA reviewer + checklist-üyeliği
+(4) STABİL-ID VER     — kural-id (FE-32, BE-26, C-MEM-01…) + gate `# ENFORCES:<id>` beyanı
+(5) COVERAGE-CHECK    — check_rule_gate_coverage temiz mi
 ```
-
-Ayrıca 8-ölçütlü metin-kalitesi rubriği uygulanır: atomik, güç-açık, denetlenebilir
-(pass/fail), kapsam-belli, tek-ev (canonical, tekrar değil), bağımsız-anlaşılır
-(+gerekçe), stabil-ID, güncel-çelişkisiz.
 
 ---
 
 ## 9. İş-Alım: Intake Triage Gate (ITG)
 
-ITG (ADR 0022), bir geliştirme talebinin alım-sürecini standartlaştırır: kapsamına
-orantılı, kişiden bağımsız (tutarlı), kanıtlı. `intake_triage.py` hook'u bir
-geliştirme-talebi/revizyon/FS/Excel-ister/rapor niyeti görülünce protokolü zorunlu
-enjekte eder (Bölüm 6-b). Çekirdek ilke: ajan her domain'i ezbere bilmez — beklenti bu
-değildir; iş geldiğinde onu **sınıflar → isterlerden bilmesi gereken konuları çıkarır →
-hedefli araştırır → ancak bilgilendikten sonra** değerlendirir.
+ITG (ADR 0022) bir geliştirme talebinin alım-sürecini standartlaştırır: kapsamına orantılı,
+kişiden bağımsız, kanıtlı. Çekirdek ilke: ajan her domain'i ezbere bilmez — iş geldiğinde onu
+**sınıflar → isterlerden bilmesi gereken konuları çıkarır → hedefli araştırır → ancak
+bilgilendikten sonra** değerlendirir.
 
-### İki dik eksen
+### 9.1 Üç katmanlı tetikleme (redizayn)
 
-Bir iş **iki bağımsız eksende birden** yaşar; karıştırılmaz:
+```text
+① native skill `intake-triage`   → SEMANTİK keşif; parafrazı yakalar ("bu ekrana kolon koyalım")
+② intake_triage hook (regex)     → erken hatırlatma; kırılgan, tek başına yeterli DEĞİL
+③ itg_backstop (PreToolUse)      → ilk SAP tool'unda ITG-marker yoksa protokolü DETERMİNİSTİK enjekte
+```
+
+Eski kurgu yalnız ② idi ve keyword-seti dışındaki talepleri hiç yakalamıyordu.
+
+### 9.2 İki dik eksen
 
 ```text
 ① Fonksiyonel modül ekseni (NE iş?)  : SD / MM / FI / CO / PP / QM / PM / WM-EWM
-     → intake_triage hook kaba ipucu verir; kesin modülü ajan belirler.
-     → modül kural-paketi (playbook/modules/<kod>.md) varsa OKUnur.
+     → modül kural-paketi (playbook/modules/<kod>.md) varsa OKUnur
 ② Teknik/kodlama-tipi ekseni (NASIL?) : klasik ABAP / RAP / Fiori-UI5 / CDS / DDIC
-     → skill_injector hook obje-tipi checklist'ini + standardı ZATEN enjekte eder.
-
-Örnek: "SD modülünde yeni RAP raporu"
-   ① SD kural-paketi (availability/pricing araştır, satış-org sor)
-   ② rap-creation checklist (BDEF/CDS syntax, aktivasyon)
-   İki hook birbirini çakışmadan tamamlar.
+     → obje-tipi checklist'i + standardı zaten enjekte edilir
 ```
 
-**Persona = kural-paketi, "act as X" DEĞİL.** Modül kural-paketi bir bilgi-deposu
-değildir; yapılandırılmış bir aktivasyondur — hangi objeyi kontrol et, hangi soruyu
-sor, hangi kaynağı araştır. Uzmanlık kaynak-zincirinden çıkar (persona-placebo değil).
+**Persona = kural-paketi, "act as X" DEĞİL.** Uzmanlık kaynak-zincirinden çıkar,
+persona-placebo'dan değil.
 
-### 6 adımlı protokol
+### 9.3 6 adımlı protokol
 
 ```text
-1. SINIFLA — iki dik eksen + KAPSAM (S0/S1/S2); gerekçesini bir cümleyle yaz
-2. Modül kural-paketini OKU (varsa playbook/modules/<modül>.md)
-3. İSTERLERDEN KONU ÇIKAR — her anlamlı alan bir domain-konusu doğurur
-       ("kullanılabilir stok" → availability/ATP; "döviz/tutar" → currency conversion)
-4. 3-EKSEN ARAŞTIR (bilgilen — sonra değerlendir):
-       (a) domain bilgisi (docs-MCP/resmi kaynak; syntax TAHMİN EDİLMEZ)
-       (b) canlı sistem / ilişkili kod (adt_where_used + adt_package_contents → harita,
-           sonra adt_get → derin oku; reuse mi yeni mi + blast-radius + tutarlılık)
-       (c) kurumsal hafıza / prior-art (memory + lessons-learned + SESSION_NOTES)
+1. SINIFLA — iki dik eksen + KAPSAM (S0/S1/S2); gerekçeyi bir cümleyle yaz
+2. Modül kural-paketini OKU
+3. İSTERLERDEN KONU ÇIKAR ("kullanılabilir stok" → availability/ATP)
+4. 3-EKSEN ARAŞTIR:
+     (a) domain bilgisi (resmî kaynak; syntax TAHMİN EDİLMEZ)
+     (b) canlı sistem / ilişkili kod (where_used + package_contents → harita, sonra adt_get)
+     (c) kurumsal hafıza / prior-art (memory + lessons-learned + SESSION_NOTES)
 5. KANITLI DEĞERLENDİR — reuse + tutarlılık + geçmiş-ders + risk; TAHMİN YASAK
 6. KAPSAM-ORANTILI SORU + AKSİYON
 ```
 
-Enine kesen kalite kilidi (atlanamaz): her eksenin çıktısı kanıtlı olmalı; bir Z-obje
-hatırlanıyorsa canlı-doğrula (hafıza=hipotez, canlı=otorite; ADR 0016); prior-art
-"sanırım yaptık" değildir — referansı bul + doğrula, yoksa "yok" say.
+Kalite kilidi: bir Z-obje hatırlanıyorsa **canlı doğrula** (hafıza = hipotez, canlı = otorite);
+prior-art "sanırım yaptık" değildir — referansı bul + doğrula, yoksa "yok" say.
 
-### Kapsam sınıfları
+### 9.4 Kapsam sınıfları
 
-| Sınıf | Nedir | Örnek | Akış ağırlığı |
-|---|---|---|---|
-| **S0 · nokta-düzeltme** | tek alan/label/mesaj; davranış değişmez | "şu kolon başlığı yanlış" | HAFİF: where-used → fix → bug-gate. Soru yok, artefakt yok |
-| **S1 · lokalize** | tek app/rapor/CDS içi davranış değişimi | "bu rapora X kolonu ekle" | ORTA: kısa etki analizi + hedefli soru + fix + bug-gate |
-| **S2 · kapsamlı** | yeni program/çok-obje/cross-stack/yeni sprint | "yeni sipariş-kalem raporu" | TAM: tam zincir + intake-artefaktı + mutabakat |
+| Sınıf | Nedir | Akış ağırlığı |
+|---|---|---|
+| **S0 · nokta-düzeltme** | tek alan/label/mesaj; davranış değişmez | HAFİF: where-used → fix → bug-gate |
+| **S1 · lokalize** | tek app/rapor/CDS içi davranış değişimi | ORTA: kısa etki analizi + hedefli soru |
+| **S2 · kapsamlı** | yeni program / çok-obje / cross-stack | TAM: intake-artefaktı + mutabakat |
 
-Sınır belirsizse üst sınıfa yuvarlamak değil, en makul sınıfı gerekçelemek esastır;
-over-triage (küçük işe ağır süreç) de anti-pattern'dir.
+Over-triage (küçük işe ağır süreç) de anti-pattern'dir.
 
-### S2 sign-off gate
+### 9.5 S2 sign-off gate
 
-S2 (kapsamlı) bir iş, SAP-yazmasına geçmeden önce sabit-şemalı bir **intake-artefaktı**
-üretir ve kullanıcı mutabakatı alır. Şema (`playbook/intake-triage.md`):
-
-```text
-# INTAKE — <kısa-ad>  (tarih)
-- Modül / iş-tipi / KAPSAM: SD / rapor / S2  (gerekçe: ...)
-- İstenen (özet):
-- Çıkan domain-konuları: [konu → araştırma özeti (a/b/c eksen)]
-- Etkilenen objeler (canlı-doğrulanmış): [obje → reuse/yeni/değişir → blast-radius]
-- Prior-art: [bulundu: <ref> / yok]        ← ZORUNLU alan (aramayı mecbur kılar)
-- Kabul kriterleri (EARS): "<olay> olduğunda sistem <sonuç> yapmalı"
-- Açık kararlar / riskler:
-- MUTABAKAT: [ ] kullanıcı sign-off
-```
-
-Bu artefakt `check_itg_signoff.py` ile deterministik doğrulanır (run_review
-`--task itg_s2_signoff`, severity BLOCKER). Kontroller: zorunlu alanlar (KAPSAM,
-etkilenen objeler, prior-art, kabul kriterleri) dolu mu; prior-art alanı
-"bulundu:<ref>" veya "yok" içeriyor mu (boş bırakılamaz); MUTABAKAT satırında `[x]`
-işareti var mı. Herhangi biri eksikse exit 1 → BLOCKER → SAP-yazma yasak. Gate,
-`# ENFORCES: C-ITG-01..04` beyanıyla ADR 0019 coverage'a bağlıdır.
-
-Kabul kriterleri EARS kalıplarıyla yazılır (Event-driven / Unwanted / State-driven /
-Ubiquitous) ve INVEST/DoR ile test-edilebilir olmadan build başlamaz; backend ve
-frontend ayrı DoR + ayrı bug-checklist taşır.
+S2 iş, SAP yazımına geçmeden sabit-şemalı bir **intake-artefaktı** üretir ve kullanıcı
+mutabakatı alır. `check_itg_signoff.py` deterministik doğrular (severity BLOCKER):
+zorunlu alanlar dolu mu, `prior-art` alanı `bulundu:<ref>` veya `yok` içeriyor mu (boş
+bırakılamaz), `MUTABAKAT` satırında `[x]` var mı. Kabul kriterleri EARS kalıplarıyla yazılır.
 
 ---
 
-Aşağıdaki bölümler (10–14), canlı-çekirdek mimarisinin işletim katmanını tarif eder:
-SAP'ye yazan araç yüzeyi, kurumsal hafıza, çok-ajanlı çalışma, GitHub akışı ve sağlık
-taraması. Anlatım olgusaldır — her iddia mevcut bir tool/rol/repo/dosyaya dayanır.
-
 ## 10. SAP ADT MCP Sunucusu
 
-SAP ABAP Development Tools (ADT) işlemleri, `stdio` transport'lu bir MCP sunucusu üzerinden
-typed tool olarak sunulur (`mcp_servers/sap_adt/`; giriş `server.py`, kayıt `tools/` altındaki
-`atom.py` · `composite.py` · `query.py` dekoratörleriyle). Karar gerekçesi ADR 0007: tek-obje
-yaratım/aktivasyon/okuma gibi işlemler serbest-metin shell komutu yerine, dönüşü yapısal JSON
-(`{ok: bool, ...}`) olan ve guardrail'i sunucu tarafında zorlayan araçlarla yapılır.
+`stdio` transport'lu typed tool katmanı (ADR 0007): tek-obje işlemleri serbest-metin shell
+komutu yerine, dönüşü yapısal JSON (`{ok: bool, …}`) olan ve guardrail'i **sunucu tarafında**
+zorlayan araçlarla yapılır.
 
-### 10.1 Tool envanteri (işlev gruplarına göre)
+### 10.1 Tool envanteri (19)
 
-| Grup | Tool | İşlev | Yazma? |
-|---|---|---|---|
-| **Okuma / Analiz** | `ping` | Sunucu canlılık + versiyon + repo kökü | Hayır |
-| | `adt_get` | Obje varlık + metadata + (opsiyonel) source; XML-DDIC tipleri ayrı okunur | Hayır |
-| | `adt_search_objects` | Ad/wildcard ile obje arama (tip filtreli) | Hayır |
-| | `adt_where_used` | Bir objeyi referanslayan objeler (etki/blast-radius) | Hayır |
-| | `adt_table_read` | Tablo verisi okuma (ADT data preview); ADR 0011 PII guard'a tabi | Hayır |
-| | `adt_package_contents` | Paket içeriği listeleme | Hayır |
-| | `adt_lock_check` | Obje kilitli mi (best-effort metadata probe) | Hayır |
-| | `adt_transport_list` | Kullanıcının değiştirilebilir/serbest transport listesi | Hayır |
-| | `adt_syntax_check` | Aktive etmeden inactive-sürüm sözdizimi kontrolü | Hayır |
-| | `adt_atc_check` | ATC statik kod kontrolü (Clean ABAP/perf/güvenlik) | Hayır |
-| **Yaratım / DDIC** | `adt_post_shell` | Boş Z obje shell'i (source'suz, inactive) | Evet |
-| | `adt_domain_create` | Domain create + activate + verify (composite) | Evet |
-| | `adt_dtel_create` | Data element create + activate + verify; 4 label zorunlu | Evet |
-| | `adt_struct_create` | Structure (INTTAB) create + activate + verify | Evet |
-| **Aktivasyon / Push** | `adt_push_source` | Mevcut objeye source gövdesi push (reviewer pre-flight ile) | Evet |
-| | `adt_activate` | Tek obje VEYA atomik çoklu-obje aktivasyon (tek `/activation` POST) | Evet |
-| | `adt_delete` | Z/Y obje silme (standart obje reddedilir) | Evet |
-| **Servis / Yürütme** | `adt_publish_service` | OData V2 service binding (SRVB) republish → `$metadata` tazeleme | Evet |
-| | `adt_classrun` | `IF_OO_ADT_CLASSRUN` sınıfı çalıştırma (F9-run muadili) | Evet (yürütme) |
+| Grup | Tool | Yazma? |
+|---|---|---|
+| **Okuma / Analiz** | `ping` · `adt_get` · `adt_search_objects` · `adt_where_used` · `adt_table_read` · `adt_package_contents` · `adt_lock_check` · `adt_transport_list` · `adt_syntax_check` · `adt_atc_check` | Hayır |
+| **Yaratım / DDIC** | `adt_post_shell` · `adt_domain_create` · `adt_dtel_create` · `adt_struct_create` | Evet |
+| **Aktivasyon / Push** | `adt_push_source` · `adt_activate` · `adt_delete` | Evet |
+| **Servis / Yürütme** | `adt_publish_service` · `adt_classrun` | Evet |
 
-Okuma tool'ları hiçbir koşulda SAP'ye yazmaz; bu ayrım hem araç setinde hem de ajan
-tool-allowlist'lerinde (bkz. Bölüm 12) fiziksel enforcement'ın temelidir.
+Okuma tool'ları hiçbir koşulda yazmaz; bu ayrım ajan tool-allowlist'lerinde fiziksel
+enforcement'ın temelidir (Bölüm 12.1).
 
 ### 10.2 Sunucu tarafı guardrail'ler (hardcoded, bypass yok)
 
-Guardrail'ler her HTTP çağrısından ÖNCE çalışır; ihlalde `GuardrailViolation` yükseltilir ve
-tool `{ok: false, error: "guardrail_violation", code, message}` döner. Ajanın "hatırlamasına"
-bırakılmaz — kuralın kaynağı koddur (`guardrails.py`, `data_guard.py`).
+| ADR | Kural | Uygulama |
+|---|---|---|
+| **0005-A** | Standart obje yaratma/silme yasak — Z/Y namespace zorunlu | `require_customer_namespace`, `reject_standard_delete` |
+| **0005-C** | Transport zorunlu; asla varsayılmaz | `require_transport` |
+| **0005-D** | Z obje `master_language` text zorunlu; DTEL 4 label dolu | `require_tr_text`, `require_all_labels` |
+| **0010** | Mutasyon yalnız DEV tier'da; QA/PRD salt-okunur | `require_writable_tier` |
+| **0011** | QA/PRD'de hassas tablo/alan okuma açık onay ister (KVKK) | `require_data_access` |
 
-| ADR | Kural | Kod | Uygulama noktası |
-|---|---|---|---|
-| **0005-A** | Standart obje yaratma/silme yasak — Z/Y customer namespace zorunlu (lock objeleri için E+Z/Y meşru) | `ADR_0005_A` | `require_customer_namespace`, `reject_standard_delete` |
-| **0005-C** | Transport zorunlu; asla varsayılmaz (önce `adt_transport_list` + kullanıcı teyidi) | `ADR_0005_C` | `require_transport` |
-| **0005-D** | Z obje TR text zorunlu; DTEL 4 label (short/medium/long/heading) dolu | `ADR_0005_D` | `require_tr_text`, `require_all_labels` |
-| **0010** | Mutasyon (create/push/activate/delete) yalnız DEV tier'da; QA/PRD salt-okunur | `ADR_0010_TIER` | `require_writable_tier` (tier `.conn_adt`'den okunur) |
-| **0011** | QA/PRD'de hassas tablo/alan okuma açık onay ister (KVKK); DEV muaf | `ADR_0011_PII` | `require_data_access` (affirmative kelime; muğlak "dene/çek" yetmez) |
+Ek iki **bağlam-tutarlılık backstop'u**: `_guard_binding_current` (`.conn_adt` değişip
+`/mcp restart` edilmediyse ADT işlemini reddeder — "write DEV der, istek QA'ya gider"
+felaketini önler) ve `_guard_module_current` (bayat kodu bellekte çalıştırıyorsa reddeder).
 
-ADR 0011 hassas-hedef deseni müşteri/iş-ortağı/adres, HR/bordro, banka/ödeme ve vergi-no
-(TCKN/VKN/STCD/IBAN) tablo ve alanlarını kapsar; eşleşmede `acknowledge_risk=True` + onay
-kelimesi olmadan okuma reddedilir.
+### 10.3 Composite create + readback ("activated" yalanına karşı)
 
-Guardrail'e ek iki **bağlam-tutarlılık backstop'u** cache'li client üzerinde çalışır: (a)
-`_guard_binding_current` — `.conn_adt` `switch_tier` ile değişip MCP `/mcp restart` edilmediyse
-(client eski sisteme bağlı kalmış) ADT işlemini reddeder (ADR 0010; yoksa "write DEV der, istek
-QA'ya gider" felaketi); (b) `_guard_module_current` — uzun-ömürlü MCP süreci `sap_client.py` disk'te
-güncellenmişken bayat kodu bellekte çalıştırıyorsa reddeder. Her iki kontrol de kendisi kırılırsa
-fail-open davranır (asıl katman hook `pre_tool_guard`).
+Bir yazımın "ok" dönmesi, objenin gerçekten **aktif ve doğru içerikle** oturduğu anlamına
+gelmez.
 
-### 10.3 Composite create + readback (activated-yalanına karşı)
-
-Temel sorun: bir yazımın SAP tarafında "ok" dönmesi, objenin gerçekten aktif ve doğru içerikle
-oturduğu anlamına gelmez (aktivasyon eksik/kısmi kalabilir, aktif sürüm push edilenin gerisinde
-kalabilir). Sunucu bunu iki mekanizmayla ele alır:
-
-- **Composite atomik akış** (`adt_domain_create` / `adt_dtel_create` / `adt_struct_create`):
-  guardrail → pre-check (varsa `already_exists` ile dur) → create → `activate` → **verify**
-  (`get_object_metadata` + `adtcore:version="active"` regex). `existence != active` dersi gereği
-  varlık kanıt sayılmaz; ek olarak `masterLanguage="TR"` metadata'dan doğrulanır (EN çıkarsa
-  yüksek-sesli uyarı). Rollback politikası konservatiftir: activate başarısızsa obje inactive
-  bırakılır, otomatik silinmez — çağıran karar verir.
-- **Readback-gate** (`adt_push_source` + `adt_activate`): push edilen source `_LAST_PUSHED`
-  kaydında `(name.upper(), type_key)` anahtarıyla tutulur; activate sonrası AKTİF source çekilip
-  normalize-compare edilir. Fark varsa `content_verified=False` + `ok=False` (BLOCKER sinyali:
-  "yazım tam oturmadı, re-push/re-activate gerekli"). `adt_delete` sonrası da varlık readback'i
-  yapılır — obje hâlâ varsa silme "oturmadı" sayılır. Anahtar `(ad, tip)` çiftidir; sadece isimle
-  key'lemek DDLS ve BDEF çakışmasında sahte-mismatch üretir (CDS kaydını BDEF push'u ezer).
+- **Composite atomik akış** (`adt_*_create`): guardrail → pre-check → create → activate →
+  **verify** (`adtcore:version="active"`). *Varlık kanıt sayılmaz* (`existence != active`).
+  Activate başarısızsa obje inactive bırakılır, otomatik silinmez.
+- **Readback-gate** (`adt_push_source` + `adt_activate`): push edilen source `(ad, tip)`
+  anahtarıyla tutulur; activate sonrası **aktif** source çekilip normalize-karşılaştırılır.
+  Fark varsa `content_verified=False` + `ok=False`. Yalnız isimle key'lemek DDLS/BDEF
+  çakışmasında sahte-mismatch üretir.
 
 ### 10.4 Reviewer pre-flight (ADR 0006)
 
-Yazma tool'ları source'u geçici dosyaya yazıp `scripts/validators/run_review.py`'ı otomatik
-çağırır. Verdict BLOCKER ise push reddedilir (`reject_payload`); WARNING ise geçer ama yanıta
-`reviewer` alanı eklenir. `skip_reviewer=True` yalnız acil durum içindir. Tablo DROP'ları için
-`ack_drop` parametresi hedefli/denetlenebilir alternatiftir: yalnız adı verilen alan DROP'ları
-ACK-WARNING olur; adı verilmeyen DROP veya herhangi bir TYPE/RENAME değişimi hâlâ BLOCKER kalır.
+Yazma tool'ları source'u geçici dosyaya yazıp `run_review.py`'ı otomatik çağırır. BLOCKER ise
+push reddedilir; WARNING geçer ama yanıta `reviewer` alanı eklenir. Tablo DROP'ları için
+`ack_drop` hedefli/denetlenebilir alternatiftir.
 
 ### 10.5 MCP-vs-script karar kuralı
 
 | İş türü | Kanal | Gerekçe |
 |---|---|---|
 | Tek obje yaratım/aktivasyon/push/silme/arama/where-used/lock/table-read | **MCP tool** | Typed dönüş + sunucu-tarafı guardrail + readback |
-| CSV/batch işlemler, validator koşumu, sprint/spec gate'leri | **Script** | Toplu-işlem + orkestrasyon; MCP tek-obje granülaritesi uygun değil |
+| CSV/batch, validator koşumu, sprint/spec gate'leri | **Script** | Toplu-işlem + orkestrasyon |
+
+### 10.6 Profil-bazlı tool yüzeyi (D34d)
+
+Tool'lar `available_on` etiketi taşır. Profil uymuyorsa tool **hiç register edilmez** →
+`tools/list`'te görünmez. Model olmayan bir tool'u çağıramaz.
+
+```text
+sap_profile: s4_private  →  19 tool
+sap_profile: btp_abap    →  18 tool  (adt_transport_list gizli: transport=gcts, CTS ucu yok)
+sap_profile: yok/geçersiz →  1 tool  (yalnız ping — FAIL-CLOSED)
+```
+
+> **Kanıt disiplini.** Politika tablosu kısadır çünkü `profiles/*.yaml` kendi başında
+> *"matris rehberdir, kanıt değildir"* der. Bugün tartışmasız tek matris-hücresi
+> `btp_abap.transport: gcts`'tir. `s4_public.transport` hücresi açıkça "NÖTR, canlı
+> doğrulanacak" dediği için **bloklanmaz**. Tablo, ilk `s4_public`/`btp_abap` projesinde canlı
+> testle genişletilir. Bu tembellik değil, kanıt yokluğudur.
 
 ---
 
 ## 11. Kurumsal Hafıza (Memory) Sistemi
 
-Hafıza katmanı, oturumlar arası süreklilik ile kanonik metodoloji arasında net bir ayrım
-gözetir. Temel ilke: **memory = hatırlatıcı, core = kanonik** (`CLAUDE.core.md` §5).
+Temel ilke: **memory = hatırlatıcı, core = kanonik.**
 
 ### 11.1 Memory türleri
 
 | Tür | Konum | İçerik |
 |---|---|---|
-| **user** | `~/.claude/CLAUDE.md` | Projeden-bağımsız kişisel tercih (metodoloji YAZILMAZ — çift-kaynak drift riski) |
-| **feedback** | proje memory klasörü + `MEMORY.md` index | Davranış/çalışma-disiplini kuralları (nasıl-çalışırsın) |
-| **project** | proje memory klasörü + `MEMORY.md` index | Projeye-özel work-state (paket durumu, iş çapaları, kararlar) |
-| **reference** | `MEMORY.md` altında | Sabit başvuru bilgisi (kullanıcı e-postası, tarih vb.) |
+| **user** | `~/.claude/CLAUDE.md` | Projeden-bağımsız kişisel tercih (metodoloji YAZILMAZ) |
+| **feedback** | proje memory klasörü + `MEMORY.md` | Davranış/çalışma-disiplini kuralları |
+| **project** | proje memory klasörü + `MEMORY.md` | Projeye-özel work-state (iş çapaları, kararlar) |
+| **reference** | `MEMORY.md` altında | Sabit başvuru bilgisi |
 
-Proje memory'si repo DIŞINDADIR (`~/.claude/projects/<slug>/memory/`), ancak dosya-bölgesi
-modelinde (Bölge D) Bölge A gibi korunur: yalnız lider yazar.
+Proje memory'si repo DIŞINDADIR (`~/.claude/projects/<slug>/memory/`) ve **makine-lokaldir** —
+başka geliştiriciye akmaz. Bu, metodoloji-nitelikli memory'nin core'a terfi etmesini zorunlu
+kılar (11.4).
 
-### 11.2 memory-seed (yeni proje tohumu)
+### 11.2 Sert sınır: 200 satır **veya** 25 KB
 
-Repoya committed `claude/memory-seed/` klasörü **feedback** tipi memory'nin tohumudur.
-`scripts/seed_memory.py` bu klasörü yeni geliştiricinin proje-hafıza klasörüne kopyalar →
-geliştirici, proje sahibinin çalışma disiplinini devralır. Kapsam yalnız feedback'tir;
-projeye-özel work-state tohuma dahil değildir. Kopyalama merge-safe'tir: hedefte zaten var olan
-dosyalar ezilmez (yerel öğrenmeler korunur), index yalnız hedefte yoksa yazılır. Tohumdaki her
-`feedback_*.md` bir çalışma kuralını (çoğu bir GATE ismiyle) taşır; `MEMORY.md` bunlara
-tek-satır pointer verir.
+`MEMORY.md`'nin yalnız **ilk 200 satırı veya ilk 25 KB'ı** (hangisi önce gelirse) oturum
+başında yüklenir. Gerisi **yüklenmez, uyarı verilmez.** Türkçe metinde bağlayıcı kısıt genelde
+**bayt**tır (çoğu harf 2 bayt).
 
-### 11.3 Terfi mekanizması (metodoloji → core, pointer kalır)
+Sonuçlar:
 
-Bir memory-feedback metodoloji-nitelikliyse (pattern, validator, hook, standart, ADT dersi,
-checklist satırı) core'a TERFİ eder; memory'de yalnız tek-satır pointer kalır. Yön kararı
-SORU 0 ağacıyla verilir: metodoloji → doğrudan core (genericize + `applies_to` profil etiketi +
-core-içi link kuralı); proje işi → proje reposu. Terfi disiplini gün-sonu kontrolünde uygulanır.
+- Kesilme **sondan** olur → davranış kuralları (`## Feedback`) indeksin **üstünde** durur,
+  proje durumu (`## Project`) altta.
+- Konu dosyaları (`feedback_*.md`, `project_*.md`) startup'ta **yüklenmez**; ihtiyaç anında
+  okunur. Bu doğru mimaridir — indeks ince kalmalıdır.
+- **Gate C-MEM-01** (`check_memory_index.py`): bayt/satır doluluğu (%85 WARNING, %95 FAIL),
+  ölü indeks linki, indeksten erişilemez hatıra, frontmatter şeması. `memory-seed`'i de kapsar.
 
-### 11.4 Oturum-sürekliliği (artefaktta yaşar)
+### 11.3 memory-seed (yeni proje tohumu)
+
+`claude/memory-seed/` (85 `feedback_*.md` + `MEMORY.md`) yeni geliştiricinin proje-hafıza
+klasörüne `seed_memory.py` ile tohumlanır. Kapsam yalnız **feedback**tir; projeye-özel
+work-state tohuma dahil değildir.
+
+Merge-safe: hedefte var olan dosya ezilmez. **Rename/silme uzlaştırması** (2026-07-10):
+`.seed-manifest.json` tohumlanan adları ve hash'lerini tutar. Seed'de bir dosya yeniden
+adlandırılınca (ör. kimlik sızdıran ad temizlenince) eski dosya + bayat indeks satırı artık
+tespit edilir; eksik indeks satırları eklenir, ölü linkler düşer, **kullanıcı dokunmamış**
+tohum dosyaları `--prune` ile silinir. Manifest yoksa hiçbir şey silinmez, yalnız uyarılır —
+*yaratmadığımız dosyayı silmeyiz.*
+
+### 11.4 Terfi mekanizması (metodoloji → core, pointer kalır)
+
+Bir memory-feedback metodoloji-nitelikliyse core'a **terfi eder**; memory'de tek-satır pointer
+kalır. Yön kararı SORU 0 ağacıyla verilir. Terfi, memory'nin makine-lokal olması nedeniyle
+ekip-ölçeğinde zorunludur.
+
+### 11.5 Alt-ajanlar auto-memory'yi GÖRMEZ
+
+Bir alt-ajan (subagent) kendi context penceresiyle başlar: `CLAUDE.md` kopyasını alır,
+**ana oturumun auto-memory'sini almaz.** Yani lider'in birikmiş dersleri alt-ajanda yoktur.
+
+Bu yüzden altı ajan tanımının başına *"sen auto-memory görmezsin + kanıt kuralları"* bloğu
+fiziksel olarak yazılmıştır: TAHMİN YASAK · kanıtsız iddia yazma · bulunamadı ≠ yok ·
+kod ≠ kablolama · çökme ≠ FAIL · erişemediğini "DOĞRULANAMADI" işaretle ·
+`SendMessage({to:"main"})` ile raporla.
+
+> Ölçülmüş tezahür: bir araştırma alt-ajanı, hiçbir kaynakta bulunmayan bir başarı yüzdesi
+> üretti ve resmî dokümana 404 alınca çıkarımı kanıt diye sundu. Kural brifingde yazılmamıştı.
+
+### 11.6 Oturum-sürekliliği artefaktta yaşar
 
 Süreklilik ajanların canlı bağlamında değil, kalıcı artefaktlarda yaşar (repo kaynağı, SAP
-objeleri, task listesi, `SESSION_NOTES.md`, memory, git). Ajan bağlamı uçucudur — transcript
-dosyası kalır ama otomatik resume yoktur. Bu yüzden yeni bilgi daima bir artefakta (core, proje
-dosyası veya memory pointer'ı) düşürülür; "aklımda tutarım" geçerli bir süreklilik mekanizması
-değildir.
+objeleri, `SESSION_NOTES.md`, memory, git). *"Aklımda tutarım"* geçerli bir süreklilik
+mekanizması değildir.
 
 ---
 
 ## 12. Çok-Ajanlı Çalışma Modeli
 
-Çalışma modeli, çok-ajanın okumada kazanıp yazmada kaybettiği araştırma bulgusuna dayanır
-(`governance/agent-teams-operating-model.md`; ADR 0018). Takım okuma/araştırma-ağırlıklı,
-gerçekten paralelleşen iş için açılır; seri/bağımlı iş solo yürütülür. Uzmanlaştırma persona
-değil **grounding**'dir (zorunlu pre-flight okuma + kanonik desen pointer + scoped tool + skill).
+Takım okuma/araştırma-ağırlıklı, gerçekten paralelleşen iş için açılır; seri/bağımlı iş solo
+yürütülür. Uzmanlaştırma persona değil **grounding**'dir (zorunlu pre-flight okuma + kanonik
+desen pointer + scoped tool + skill).
 
 ### 12.1 Roller ve tool-düzeyi yetki ayrımı
 
 | Rol | Lifecycle | SAP yazma | Görev |
 |---|---|---|---|
-| **lider** (ana oturum) | daimi | Koşullu (Bölüm 12.2) | Orkestrasyon, görev dağıtımı, kullanıcı muhatabı, tek committer |
-| **adt-gateway** | STANDING | ✅ TEK yazıcı | Takım modunda tüm SAP yazımı (write tool'ları yalnız bunda) |
-| **backend-expert** | LAZY (bounded feature-standing istisna) | ❌ | Tüm ABAP/RAP/CDS/DDIC; tasarım + yerel kaynak + read-only SAP |
-| **frontend-expert** | LAZY (app-build'de bounded-standing) | ❌ | Tüm freestyle UI5 / OData V2; controller/view/i18n/manifest |
-| **bug-expert** | HER ZAMAN LAZY + her review TAZE | ❌ (read-only) | Adversarial inceleme; verdict PASS/WARNING/BLOCKER |
-| **sap-feature / sap-research** | LAZY | ❌ | Eski roster (uyumluluk); research repo kodunu da düzenlemez |
+| **lider** (ana oturum) | daimi | Koşullu (12.2) | Orkestrasyon, kullanıcı muhatabı, **tek committer** |
+| **adt-gateway** | STANDING | ✅ TEK yazıcı | Takım modunda tüm SAP yazımı |
+| **backend-expert** | LAZY | ❌ | ABAP/RAP/CDS/DDIC; tasarım + yerel kaynak + read-only |
+| **frontend-expert** | LAZY | ❌ | Freestyle UI5 / OData V2 |
+| **bug-expert** | LAZY + her review TAZE | ❌ | Adversarial inceleme; PASS/WARNING/BLOCKER |
+| **sap-feature / sap-research** | LAZY | ❌ | Feature sahipliği / salt-okunur araştırma |
 
 Yetki ayrımı **tool-allowlist ile fiziksel**tir, hook ile değil (hook çağıran-ajanı ayırt
-edemez). Örnek: `backend-expert`/`frontend-expert`/`bug-expert` allowlist'inde `adt_push_source`,
-`adt_activate`, `adt_*_create`, `adt_delete`, `adt_post_shell`, `adt_classrun` YOKTUR — bu roller
-SAP'ye yazamaz. Yalnız `adt-gateway` bu yazma tool'larına sahiptir.
+edemez). Expert'lerin allowlist'inde `adt_push_source`, `adt_activate`, `adt_*_create`,
+`adt_delete`, `adt_post_shell`, `adt_classrun` **yoktur**.
 
 ### 12.2 Single-writer (koşullu serializasyon)
 
-Gateway'in tek amacı eşzamanlı yazıcıları serileştirmektir; tek yazıcı varken gereksizdir.
-
-- **Solo (takım yok):** lider SAP'ye doğrudan yazar (run_review pre-flight + ADR 0005 yine geçerli).
-- **Takım aktif (≥1 yazabilecek alt-ajan):** tüm SAP yazımı `adt-gateway`'den geçer; lider
-  doğrudan yazmaz, gateway'e devreder. Ortak objeler (paylaşılan DDIC/CDS/tablo/API) lider
-  tarafından sıralanır — tek ajana hazırlatılır, gateway bir kez yazar; paralel ALTER yaptırılmaz.
+- **Solo:** lider SAP'ye doğrudan yazar (run_review pre-flight + ADR 0005 yine geçerli).
+- **Takım aktif:** tüm SAP yazımı `adt-gateway`'den geçer. Ortak objeler lider tarafından
+  sıralanır; paralel ALTER yaptırılmaz.
 
 ### 12.3 Bug-gate (expert → bug-expert → lider)
 
-Model A, lider-aracılıdır (alt-ajan spawn edemez):
+1. Expert build'i bitirince lider'e `BUG_GATE_READY` + diff + niyet + blast-radius yollar.
+2. Lider **TAZE** bir bug-expert spawn edip diff'i besler (önceki bug context'i kirlilik).
+3. Verdict: PASS → lider commit; BLOCKER/EKSİK → Expert yeniden devreye alınır.
 
-1. Expert substantive build'i bitirince lider'e `BUG_GATE_READY` + diff + niyet/spec + blast-radius
-   yollar (commit/kabul ÖNCESİ).
-2. Lider **TAZE** bir bug-expert spawn edip diff'i besler (önceki bug context'i kirlilik sayılır →
-   her review taze).
-3. Verdict PASS/WARNING/BLOCKER (ADR 0006 dili): PASS → lider commit; BLOCKER/EKSİK → lider
-   Expert'i `SendMessage` ile yeniden devreye alır (zorunlu fix).
-
-Kapsam = diff + blast-radius. Bulgu tipi üçlüdür: **HATA** (kod bozuk) / **EKSİK** (kod çalışır ama
-must-do/UX karşılanmamış) / **ÖNERİ** (checklist-dışı, bağlayıcı değil, verdict'i etkilemez). HATA+EKSİK
-= checklist must-do → zorunlu fix; builder "önemsiz" diyemez, yalnız kanıtla "bu ihlal değil"
-itirazı yapabilir. bug-expert read-only'dir → "düzeltilmeli" der, fix'i Expert yapar. Büyük/riskli
-diff'lerde lider takdiriyle çok-bug-expert paneli (disjoint partition ya da diverse-lens) açılabilir;
-panel üyeleri de tazedir.
+Bulgu tipi üçlüdür: **HATA** (kod bozuk) / **EKSİK** (must-do karşılanmamış) / **ÖNERİ**
+(bağlayıcı değil). bug-expert read-only'dir → "düzeltilmeli" der, fix'i Expert yapar.
 
 ### 12.4 İletişim ve süreklilik
 
-Lider = hub; expert/gateway lider'e `SendMessage` ile rapor eder, ajanlar kendiliğinden
-senkronlanmaz. Ajan brifingine `SendMessage({to:"main"})` eklenmezse rapor gelmez. Model-tiering
-daima **declarative**'dir (frontmatter/spawn parametresi); hook/guard ile hard-enforce edilmez —
-precision işinde tier-kilidi kaliteyi sessizce düşürür.
+Lider = hub. Ajan brifingine `SendMessage({to:"main"})` eklenmezse rapor gelmez. Alt-ajanların
+memory körlüğü (11.5) nedeniyle kanıt kuralları brifingde **tekrar edilir**.
 
 ---
 
 ## 13. GitHub Mimarisi ve Çalışma Akışı
 
-### 13.1 Üç repo ve rolleri
+### 13.1 Repolar
 
-| Repo | Rol |
-|---|---|
-| `<ORG>/DEV_CORE` | Canlı metodoloji çekirdeği — junction'la tüm projelere yansır (ADR 0020) |
-| `<ORG>/<PROJE_REPO>` | Proje reposu — SAP kaynağı, docs, project.yaml, governance |
-| `<ORG>/.github` | Org-seviyesi varsayılanlar |
+| Repo | Görünürlük | Rol |
+|---|---|---|
+| `<ORG>/DEV_CORE` | **public** | Canlı metodoloji çekirdeği — junction'la tüm projelere yansır |
+| `<ORG>/template_project` | **public** | Referans iskelet (gerçek SAP bağlantısı yok) |
+| `<ORG>/<PROJE_REPO>` | private | Proje reposu — SAP kaynağı, docs, project.yaml, governance |
 
-Proje, core'u fiziksel kopya olarak değil **junction** olarak taşır (`core`, `.claude/agents`,
-`.claude/skills`, `.claude/commands`). Core içeriği proje reposuna commit'lenmez — ayrımı CI
-zorlar (Bölüm 13.3).
+Core'un public olması genericize disiplinini **zorunlu** kılar: müşteri/sistem/kullanıcı adı,
+gerçek Z-obje adı core'a giremez (Bölüm 15.2).
 
 ### 13.2 Ruleset'ler ve stable-tag
 
 | Ruleset | Kapsam | Etki |
 |---|---|---|
-| main-pr-required (active) | Her iki repo `main` | Doğrudan push yasak; değişiklik = branch → PR → CI yeşil → merge |
-| stable-tag-lider-only | CORE `stable` tag | `stable` tag'ini yalnız lider ilerletir |
+| `main-pr-required` (active) | `main` | Doğrudan push yasak; branch → PR → CI yeşil → merge; 1 onay |
+| `stable-tag-lider-only` | CORE `stable` tag | Tag'i yalnız lider ilerletir |
 
-Yazma akışı trunk-based'tir: `main` tek uzun-ömürlü branch; kısa branch'ler aynı gün merge edilir.
-Tek-kişi düzeninde `required_approving_review_count=0` olsa da PR yine zorunludur. Commit'ler
-`core.hooksPath=scripts/git-hooks` gate'inden geçer (genericize-leak + link-audit + applies_to
-şema).
+> ⚠ **Tek-geliştirici tuzağı.** `bypass_actors = [OrganizationAdmin, bypass_mode: pull_request]`
+> ayarı, org admin'in kuralı **yalnız PR üzerinden** atlamasına izin verir; doğrudan push yine
+> reddedilir. Ama GitHub **kendi PR'ınızı onaylatmaz**. Tek code-owner varsa her merge bir
+> `--admin` bypass'ı olur ve "1 onay zorunlu" kuralı fiilen hiçbir onay kaydetmez. Bu durumda
+> ya ikinci bir reviewer eklenir, ya `required_approving_review_count=0` yapılıp gerçek koruma
+> `required_status_checks`e bırakılır (CI bypass edilemez).
 
-### 13.3 CI (sızıntı + davranış-yüzeyi kontrolü)
+### 13.3 CI
 
-`.github/workflows/` altında iki iş vardır:
+**Proje `guard.yml` — üç job:**
 
-- **Proje `guard.yml`** — iki job:
-  - `core-leak`: tracked tree'de `core/**` veya `.claude/{agents,skills,commands}/**` görülürse
-    FAIL (junction içeriği repoya girmiş = sızıntı, R1/D26).
-  - `behavior-surface`: davranış-yüzeyi dosyaları (`CLAUDE.md`, `*/CLAUDE.md`, `.claude/*`,
-    `.mcp.json`, `project.yaml`, `scripts/hook_shim.py`) — PR'da dokunuluyorsa görünür WARNING
-    (lider incelemesi şart); `main`'e merge-OLMAYAN doğrudan push dokunuyorsa FAIL (yalnız
-    lider-onaylı PR).
-- **CORE `core-ci.yml`** — `gates` job'u pre-commit hook'unun sunucu aynasıdır (hook lokalde
-  atlansa bile merge edilemez): `core_precommit.py --all` (tam-ağaç genericize+link+applies_to) +
-  `run_all_validators.py` + `py_compile` derleme taraması. Bu job main-ruleset'e required_status_check
-  olarak bağlanır.
+- `core-leak`: tracked tree'de `core/**` veya `.claude/{agents,skills,commands,rules}/**`
+  görülürse FAIL.
+- `validators`: CI checkout'unda `core/` yoktur (junction) → DEV_CORE (public) klonlanır,
+  `CORE-INDEX` yeniden üretilir, `run_all_validators.py` koşar. *Bu job yoksa validator'ların
+  çoğu yalnız elle çalışır.*
+- `behavior-surface`: davranış-yüzeyi dosyaları PR'da dokunuluyorsa görünür WARNING;
+  `main`'e **merge-olmayan doğrudan push** dokunuyorsa FAIL. Squash-merge'ler yanlış-tetiklemesin
+  diye commit'in merged-PR'dan gelip gelmediği `gh api commits/{sha}/pulls` ile sorulur
+  (bu yüzden `permissions: pull-requests: read` şarttır).
+
+**CORE `core-ci.yml` — `gates` job:** `core_precommit.py --all` (tam-ağaç genericize + link-audit
++ applies_to) + `run_all_validators.py` + `py_compile` + guard konformans testleri.
+
+> **Fail-closed genericize.** Kimlik blocklist'i repo ağacının DIŞINDA yaşar
+> (`.git/genericize-blocklist`) — çünkü müşteri adını public bir filtreye yazmak, engellenmeye
+> çalışılan sızıntının kendisidir. Ama `.git/` klonlanmaz: CI taze klon yaptığı için liste hiç
+> yüklenmiyordu ve public repoya giden son kapı **kördü**. Artık liste `IX_GENERICIZE_BLOCKLIST`
+> repository secret'ıyla verilir; yoksa `--all` modunda gate **durur**.
 
 ### 13.4 Rollback (stable-tag + detached)
 
-`stable` = bilinen-iyi commit; yalnız lider ilerletir (`git tag -f stable && git push -f origin
-stable`, gate geçişlerinde). Core bir hatayla bir proje oturumunu bloke ederse:
-`git -C <core> checkout stable` → tüm projeler anında bilinen-iyiye döner (session_start durumu
-"detached@stable" olarak sakin raporlar). Onarım sonrası `git switch main`. Junction'a
-dokunulmaz — rollback tamamen git işlemidir. Başka makine/PR'dan gelen core değişikliği makineye
-tek yerden iner (`git -C <core> pull`); projelerde pull yoktur (junction).
+`stable` = bilinen-iyi commit. Core bir hatayla oturumu bloke ederse `git -C <core> checkout
+stable` → tüm projeler anında bilinen-iyiye döner (session_start bunu "detached@stable" olarak
+sakin raporlar). Junction'a dokunulmaz — rollback tamamen git işlemidir.
 
-### 13.5 Davranış-yüzeyi güvenlik duvarı + yabancı-repo misafir-modu
+### 13.5 Davranış-yüzeyi güvenlik duvarı
 
-Davranış taşıyan dosya ya core'dan junction'la gelir ya behavior-manifest'te kayıtlıdır; değilse
-RED ya da intake-gümrüğünden geçer (`CLAUDE.core.md` §8/§11). Davranış-yüzeyi yalnız lider-onaylı
-PR ile değişir. Yabancı repoya ilk temas: önce Claude'suz `foreign_project_audit.py` pre-scan →
-`--safe-mode` → kod-sınıfı (hooks/MCP) incelemesiz normal oturum açılmaz → `guest_mode.py` ile
-`CLAUDE.local.md`. Değerli dış kural `intake/` karantinasına alınır → çakışma-analizi + canlı-test
-→ PR. (Güvenlik/gizlilik açısından konsolide bakış: Bölüm 15.)
+Davranış taşıyan dosya ya core'dan junction'la gelir ya behavior-manifest'te kayıtlıdır.
+Yabancı repoya ilk temas: Claude'suz `foreign_project_audit.py` pre-scan → `--safe-mode` →
+kod-sınıfı (hooks/MCP) incelemesiz normal oturum açılmaz → `guest_mode.py`.
 
 ---
 
 ## 14. Sağlık ve Kalite Araçları
 
-### 14.1 ix_doctor (7 katman)
-
-`scripts/ix_doctor.py`, `sap_doctor`'un kardeşidir: "SAP bağlantısı sağlıklı mı?" yerine
-"canlı-çekirdek kurulumu uçtan uca sağlıklı mı?" sorusuna bakar. Her kontrol bir kanıt-satırı
-basar; katman durumu = kontrollerin en kötüsü (FAIL > WARN > PASS). Exit 0 = FAIL yok, 1 = en az
-bir FAIL. SAP'ye default'ta ASLA çıkılmaz (`--live-sap` gerekir).
+### 14.1 `ix_doctor` (7 katman)
 
 | # | Katman | Örnek kontroller |
 |---|---|---|
-| 1 | FS + bağımlılık | 4 junction gerçek core'a çözülüyor · managed-policy · plugin envanteri · CLI mevcudiyeti |
-| 2 | Git | remote org tutarlı · `main == origin/main` · `stable` tag · hooksPath · global baseline · tree temizliği |
-| 3 | GitHub-enforce | ruleset ACTIVE · CI yeşil · repo tree'de core-sızıntısı yok (gh CLI yoksa SKIP+WARN) |
-| 4 | Claude katmanı | settings/shim template-drift (hash) · SHIM_SURUM · behavior-manifest ↔ ağaç · hook smoke · freeze-guard CANLI test |
-| 5 | MCP / SAP | `.conn_adt` var + placeholder'sız · MCP server junction'dan erişilebilir · (`--live-sap`) canlı probe |
-| 6 | Validators + perf | `run_all_validators` TAM PASS + süre · `session_start` < 1.5sn |
-| 7 | İş-akışı smoke | memory (`MEMORY.md` dolu) · deploy-zinciri import-sağlığı · aktif paket `.rules.md` |
+| 1 | FS + bağımlılık | junction'lar gerçek core'a çözülüyor · plugin envanteri · CLI mevcudiyeti |
+| 2 | Git | remote org tutarlı · `main == origin/main` · `stable` tag · hooksPath · tree temizliği |
+| 3 | GitHub-enforce | ruleset ACTIVE · CI yeşil · repo tree'de core-sızıntısı yok |
+| 4 | Claude katmanı | settings/shim template-drift (hash) · behavior-manifest ↔ ağaç · hook smoke · guard CANLI test |
+| 5 | MCP / SAP | `.conn_adt` var + placeholder'sız · MCP server erişilebilir · (`--live-sap`) canlı probe |
+| 6 | Validators + perf | `run_all_validators` TAM PASS + süre · `session_start` < 1.5 sn |
+| 7 | İş-akışı smoke | memory dolu · deploy-zinciri import-sağlığı · aktif paket `.rules.md` |
 
-### 14.2 behavior_manifest (davranış-yüzeyi hash envanteri)
+Exit 0 = FAIL yok. SAP'ye default'ta **asla** çıkılmaz (`--live-sap` gerekir).
 
-`scripts/behavior_manifest.py`, ajanın davranışını şekillendiren proje-lokal dosyaların
-(CLAUDE.md, `.mcp.json`, `project.yaml`, `hook_shim.py`, `.claude/settings*.json`, nested
-CLAUDE.md'ler) SHA-256 hash envanterini tutar. Manifest yalnız lider-onaylı PR ile güncellenir
-(`generate`); `session_start` her oturum başında canlı ağacı manifest'le karşılaştırır → kayıtsız/
-değişmiş dosya BÜYÜK uyarıdır. Junction'la gelen core içeriği (agents/skills/commands) manifest
-DIŞIDIR — onların bütünlüğü core-git'in işidir; buradaki amaç PROJE-LOKAL sapmayı yakalamaktır.
-Tespit post-load'dur; önleme çevre duvarındadır (Bölüm 13.5).
+### 14.2 `behavior_manifest` (davranış-yüzeyi hash envanteri)
 
-### 14.3 Enforcement-testi yaklaşımı (guard'ları bozuk-girdiyle sınama)
+Proje-lokal davranış dosyalarının (`CLAUDE.md`, `.mcp.json`, `project.yaml`, `hook_shim.py`,
+`.claude/settings*.json`) SHA-256 envanteri. Yalnız lider-onaylı PR ile güncellenir
+(`generate`); `session_start` her oturum canlı ağacı manifest'le karşılaştırır. Junction'la
+gelen core içeriği manifest DIŞIDIR — onun bütünlüğü core-git'in işidir.
 
-Sürekli PASS dönen bir kontrol, gerçekten bir şeyi zorladığının kanıtı değildir; guard'lar
-bozuk-girdiyle test edilir. ix_doctor katman 4 bunu somutlaştırır: **freeze-guard CANLI testi**,
-dondurulmuş köke sahte-Write stdin-JSON'u simüle eder (gerçek yazma YOK) ve exit 2 + RED mesajı
-bekler — hem backslash hem forward-slash yol varyantıyla, çünkü guard'ın eski canonicalize hâli
-bir varyantta sessizce yanlış-pozitif PASS veriyordu. Aynı ilke reviewer için de geçerlidir:
-"checklist ≠ wired validator" — BLOCKER arkasında koşan bir script olduğu, kasıtlı bozuk girdiyle
-doğrulanır. Bu yaklaşım, kuralın gate'lenmemişse kuralsıza denk olduğu ilkesinin (her kural
-atlanamaz kurgulanmalı) operasyonel karşılığıdır.
+### 14.3 Enforcement-testi (guard'ları bozuk-girdiyle sınama)
+
+Sürekli PASS dönen bir kontrol, bir şeyi zorladığının kanıtı değildir.
+
+- `guard_conformance.py` — her kural için ③ tetiklenmeli / ④ tetiklenmemeli + kablolama +
+  meta-gate. Kanıtsız kural CI'yı kırar.
+- `test_pre_tool_guard.py` — sızıntı deseni tek-kaynak değişmezi, `gh` yayın yüzeyi (13 vaka),
+  blocklist birleşimi.
+- `ix_doctor` katman 4 — guard'a sahte-Write stdin-JSON'u simüle eder (gerçek yazma YOK),
+  exit 2 + RED mesajı bekler; hem backslash hem forward-slash varyantıyla.
+
+> **Tarihsel not.** Guard'ın eski canonicalize hâli bir yol varyantında sessizce yanlış-pozitif
+> PASS veriyordu. Ve `pre_tool_guard`'ın PowerShell matcher'ı eksikti: Bash'te bloklanan komut
+> PowerShell'den geçiyordu. Kod-seviyesi koruma, **kablolanmadan** koruma sanılır.
 
 ---
 
 ## 15. Güvenlik, Gizlilik ve Uyumluluk
 
-Bu bölüm, sistemin güvenlik ve veri-gizliliği açısından bilinmesi gereken davranışlarını
-tek yerde toplar. Ayrıntılar ilgili bölümlerdedir.
-
 ### 15.1 Veri gizliliği (KVKK) — PII guard
-Tablo verisi okuma (`adt_table_read`) sistem katmanına duyarlıdır (ADR 0011). Geliştirme
-(DEV) katmanında serbesttir; kalite/üretim (QA/PRD) katmanında hassas tablo/alan (müşteri,
-personel, banka, kimlik numarası vb.) için açık risk-kabulü ve onay kelimesi ister; muğlak
-ifade yeterli değildir. Amaç, kişisel verinin denetimsiz dışa çıkmasını engellemektir.
+`adt_table_read` sistem katmanına duyarlıdır (ADR 0011): DEV'de serbest; QA/PRD'de hassas
+tablo/alan (müşteri, personel, banka, kimlik/vergi no) için açık risk-kabulü ve onay kelimesi
+ister. Muğlak ifade ("dene", "çek") yetmez.
 
-### 15.2 Fikri-sermaye sızıntısı koruması
-Çekirdek metodoloji, proje repolarına **gönderilemez** (junction ile görünür ama git'e
-girmez). Bir `git add`/commit kapsamına çekirdek içeriği girerse eylem reddedilir; ayrıca
-CI tarafında sunucu-seviyesinde ikinci bir kontrol vardır. Çekirdeğe yazılan içerikte
-proje/müşteri kimliği tespit edilirse (genericize-guard) yazma reddedilir — çekirdek jenerik
-kalır, müşteri kimliği dış-paylaşımda sızmaz.
+### 15.2 Fikri-sermaye ve kimlik sızıntısı koruması
+
+Çekirdek **public**tir; iki yönlü koruma vardır:
+
+- **Core → proje:** metodoloji proje reposuna gönderilemez (dört katman, Bölüm 5.4).
+- **Proje → core:** core'a yazılan içerikte ve **dosya adında** kimlik izi taranır. Kapsam:
+  isim listesi (müşteri/sistem/kişi; IGNORECASE) + yapısal desenler — makine-lokal kullanıcı
+  yolu, e-posta, **gerçek Z-obje adı** (`Z<MOD><NNN>`; kanonik örnek `Z<MOD>000`/`Z<MOD>001`
+  muaf), **SAP kullanıcı adı** (`D_XXXX` biçimli placeholder'lar muaf).
+
+> Desenler `genericize_common.py`'de **tek kaynaktan** gelir. İki guard'ın ayrı listelerden
+> beslendiği dönemde biri güncellenip diğeri unutuluyordu; bir test artık kopyanın geri
+> gelmesini engelliyor.
 
 ### 15.3 Donmuş (salt-okunur) yedekler
-Eski/arşiv kökler `project.yaml`'da `frozen_readonly_paths` ile işaretlenir. Bu köklere
-her türlü yazma (Edit/Write/Bash) reddedilir; okuma serbesttir. Böylece dondurulmuş bir
-yedek yanlışlıkla değiştirilemez. (Bu koruma, dönemsel enforcement-testleriyle gerçek yol
-formatlarında doğrulanır — Bölüm 14.)
+Arşiv kökler `project.yaml` → `frozen_readonly_paths` ile işaretlenir; bu köklere yazma
+reddedilir, okuma serbesttir.
 
 ### 15.4 Davranış-yüzeyi güvenlik duvarı
-Ajan davranışını değiştiren dosyalar (`CLAUDE.md`, `.claude/**`, `.mcp.json`, `project.yaml`,
-hook giriş noktası) "davranış-yüzeyi" sayılır ve yalnız lider-onaylı PR ile değişir; oturum
-içi değişiklikleri bir hook (ConfigChange) izler. Bir davranış-manifest'i (hash envanteri)
-bu dosyaların beklenmedik değişimini yakalar.
+`CLAUDE.md`, `.claude/**`, `.mcp.json`, `project.yaml`, `hook_shim.py` yalnız lider-onaylı PR
+ile değişir; oturum-içi değişimi `ConfigChange` hook'u izler; hash envanteri beklenmedik
+değişimi yakalar.
 
 ### 15.5 Yabancı repoya ilk temas (misafir modu)
-Bilinmeyen/dış bir projeye ilk bağlanışta, önce yapay-zekâsız bir ön-tarama (`foreign_project_audit`)
-çalışır; sonra güvenli-modda (`--safe-mode`) oturum açılır ve o projeye özel geçici bir kural
-dosyası (`guest_mode`) üretilir. Kod-sınıfı (hook/MCP) incelenmeden normal oturum açılmaz.
-(İşletim akışındaki karşılığı: Bölüm 13.5.)
+Önce yapay-zekâsız ön-tarama, sonra `--safe-mode` oturum, sonra `guest_mode` ile geçici kural
+dosyası. Kod-sınıfı (hook/MCP) incelenmeden normal oturum açılmaz.
 
-### 15.6 Denetim izi (audit trail)
-Her SAP-yazımı ön-incelemeden (reviewer), her değişiklik PR + CI'dan geçer; git geçmişi +
-davranış-manifest + oturum notları birlikte uçtan uca izlenebilirlik sağlar. Yanlış bir
-değişiklik `stable` etiketine geri döndürülerek kurtarılabilir.
+### 15.6 Denetim izi
+Her SAP-yazımı reviewer'dan, her değişiklik PR + CI'dan geçer; git geçmişi + davranış-manifest
++ oturum notları uçtan uca izlenebilirlik sağlar. Yanlış değişiklik `stable`'a döndürülür.
 
 ---
 
 ## 16. Onboarding: Yeni Geliştirici ve Yeni Proje
 
-### 16.1 Yeni geliştirici (mevcut projeye katılım)
-Ayrıntılı el kitabı: `DEV_CORE/ONBOARDING.md`. Özet akış:
-1. Ön-koşullar: git yapılandırma temeli (`autocrlf=false`, `longpaths=true`, `defaultBranch=main`),
-   Node/npm, `claude` CLI, GitHub kimliği, gerekli eklentiler.
-2. Projeyi klonla → `python core/scripts/team_setup.py` (junction'ları kurar, hook yolunu
-   ayarlar, hafızayı tohumlar).
-3. `.conn_adt` bağlantı dosyasını doldur (şablon: `core/claude/conn_adt.template`).
-4. Kurulumu doğrula: `python core/scripts/ix_doctor.py`.
-5. Son oturum notunu oku, çalışmaya başla.
+### 16.1 Yeni geliştirici
+Ayrıntı: `DEV_CORE/ONBOARDING.md`.
+
+```powershell
+# 1. Ön-koşullar: git (autocrlf=false, longpaths=true), Node/npm, claude CLI, GitHub kimliği
+# 2. Projeyi klonla, sonra:
+python core/scripts/team_setup.py       # junction + hooksPath + memory seed + CORE-INDEX
+# 3. .conn_adt doldur (şablon: core/claude/conn_adt.template)
+# 4. python core/scripts/ix_doctor.py   # kurulumu doğrula
+# 5. Son SESSION_NOTES girdisini oku
+```
 
 ### 16.2 Yeni proje açma
-Ayrıntılı el kitabı: `DEV_CORE/PROJECT_BOOTSTRAP.md` (STEP 0–6 + kabul kapısı). Özet:
-- **STEP 0:** repo modu seç (`full` GitHub / `local` yalnız yerel git / `none` git'siz).
-- `init_project.py` iskeleti üretir (yasaklar-damgalı `CLAUDE.md`, `project.yaml`, dizin yapısı).
-- `team_setup.py` junction'ları + hook yolunu + hafıza tohumunu kurar.
-- `project.yaml`'da profil (`sap_profile`, `release`, `master_language`, `source_root`) belirlenir.
-- Kabul kapısı: sızıntı kontrolü, validator geçişi, junction sağlığı.
-Yeni proje, çekirdek metodolojisinin tamamını junction'la devralır; yalnız kendi iş-bilgisini
-(kural/paket/bağlantı) ekler.
+Ayrıntı: `DEV_CORE/PROJECT_BOOTSTRAP.md` (STEP 0–6).
+
+```powershell
+gh repo create <ORG>/XYZ --private
+git clone https://github.com/<ORG>/XYZ.git C:\IX\XYZ
+python C:\IX\DEV_CORE\scripts\init_project.py C:\IX\XYZ --name XYZ --repo-mode full
+python C:\IX\DEV_CORE\scripts\team_setup.py --project C:\IX\XYZ
+#   project.yaml + .conn_adt doldur
+python core/scripts/behavior_manifest.py generate
+mkdir <source_root>\SD
+python core/scripts/bootstrap_package.py ZSD001_CLC --module SD --title "..." --owner "<OWNER>"
+git add -A ; git commit -m "chore(bootstrap): XYZ iskeleti" ; git push -u origin main
+python core/scripts/ix_doctor.py
+```
+
+`init_project.py` **üretir** (kopyalamaz): `CLAUDE.md` (yasaklar damgalı + `@core` import),
+`README.md`, `.claude/settings.json`, `scripts/hook_shim.py`, `scripts/git-hooks/pre-commit`,
+`project.yaml`, `.gitignore` (sızıntı kilidi + sırlar + runtime), `.gitattributes`, `.mcp.json`,
+`.github/workflows/guard.yml`, `.github/CODEOWNERS` ve boş dizin iskeleti.
+`team_setup.py` beş junction'ı kurar, **projede `core.hooksPath`'i kablolar**, memory tohumlar,
+`CORE-INDEX`'i üretir.
+
+> **Bu zincirin kendisi test edilir.** 2026-07-10'da `template_project` sıfırdan yeniden
+> üretildi; prova yedi bosluk buldu (üç hook şablonda yoktu, `validators` CI job'u şablona
+> yansımamıştı, `pre-commit` hiç üretilmiyordu, `.gitignore` ~35 satır geriydi, kök `README`
+> yoktu, `CORE-INDEX` yalnız onarım yolunda üretiliyordu, CI ağı `.claude/rules/**`'ı
+> aramıyordu). Hepsi kapatıldı ve **C-TPL-01** gate'i tekrarını engelliyor.
+
+**Yeni proje mevcut bir projeye yerinde dönüşüm olarak değil, yeni kök altında sıfırdan
+kurulur** (ADR 0020 §5, yan-kurulum): rollback radikal basitleşir, yarı-dönüşmüş ara-durum
+riski sıfırlanır.
+
+### 16.3 Kabul gate'i (STEP 6 sonrası)
+
+| # | Kanıt | Nasıl |
+|---|---|---|
+| 1 | Loader + hook'lar çalışıyor | Oturum aç → ekran-teyidi formatı geliyor |
+| 2 | MCP kendi sistemine bağlı | `ping` + read-only `adt_get` |
+| 3 | Validator'lar PASS | `run_all_validators.py` |
+| 4 | Sızıntı kilidi çalışıyor | `git ls-files core/ .claude/agents .claude/rules` → boş |
+| 5 | Kurulum sağlığı | `ix_doctor.py` → FAIL yok |
+| 6 | **L1b kuralları gerçekten yükleniyor** | Bir `.abap` okut → `.tmp/instructions-loaded.log`'da `path_glob_match` |
+
+---
+
+## 17. Bilinen Sınırlar ve Açık Kalemler
+
+Dürüstlük, mimarinin bir parçasıdır. Bilinen sınırlar:
+
+| Konu | Durum |
+|---|---|
+| **L1b yükleme kanıtı** | `claude/rules/` kuruldu ve kablolandı; **gerçekten yüklendiği henüz canlı ölçülmedi** (`InstructionsLoaded` logger'ı sonradan eklendi; hook'lar oturum başında kaydedilir). Taze oturumda `.tmp/instructions-loaded.log`'da `path_glob_match` aranmalıdır. |
+| **Kabuk kaçışları** | `pre_tool_guard`, `echo >> core/…` / `cp` / `tee` gibi yolları kapatmaz (bilinçli; telafi pre-commit + CI). |
+| **Git geçmişi** | Public core'un HEAD'i kimlik izinden temizlendi; **commit geçmişi temizlenmedi** (ayrı, ağır bir operasyon). |
+| **D34d politika tablosu** | Mekanizma canlı; profil-özel `available_on` daraltmaları kanıt bekliyor (ilk `s4_public`/`btp_abap` projesi). |
+| **Ruleset onay kaydı** | Tek code-owner'da "1 onay" kuralı fiilen bypass'la geçiliyor (13.2). |
+| **Profil matrisi** | Rehberdir, kanıt değildir; her capability iddiası canlı testle doğrulanmalıdır. |
 
 ---
 
 ## EK-A. Karar Kayıtları (ADR) Dizini
-Sistem 22 mimari karar kaydı içerir (`DEV_CORE/governance/decisions/`). Öne çıkanlar:
+
+Çekirdek **21** ADR içerir (`DEV_CORE/governance/decisions/`). Numara 0015 proje-seviyesindedir
+(çekirdekte yoktur) — iki ADR uzayı aynı numaralandırmayı paylaşır.
 
 | ADR | Konu |
 |---|---|
 | 0001 | Tek branch (PR-zorunlu modeliyle revize) |
-| 0005 | Standart SAP nesne koruması + sistem-state yasakları (temel yasaklar) |
+| 0002 | Paket adlandırma |
+| 0003 | Katmanlı kural mimarisi (L1–L4) |
+| 0004 | Modül-bazlı klasör organizasyonu |
+| **0005** | Standart SAP nesne koruması + sistem-state yasakları |
 | 0006 | Reviewer (ön-inceleme) ajan deseni |
 | 0007 | SAP ADT MCP sunucusu |
-| 0008 | Liste ekranı grid (sap.ui.table) paritesi |
+| 0008 | Liste ekranı grid (`sap.ui.table`) paritesi |
 | 0009 | Ortak value-help CDS politikası |
-| 0010 | Katman-bazlı salt-okunur guard (bağlantı-tutarlılığı) |
+| 0010 | Katman-bazlı salt-okunur guard (bağlantı tutarlılığı) |
 | 0011 | Veri-çıkarma / PII guard (KVKK) |
-| 0012–0017 | Klasik ALV template, belge-kilidi, source-drift, UI doğrulama, agent takım |
+| 0012 | Klasik ALV template-first |
+| 0013 | Kaynak/referans doküman ayrımı (`ref_docs`) |
+| 0014 | Belge kilidi (app-level vs draft) |
+| 0016 | Source-drift önleme (repo ↔ canlı senkron) |
+| 0017 | UI build doğrulama — kanonik desen + tuzak gate |
 | 0018 | Agent takım yapısı (katman + bug-gate) |
-| 0019 | Kural-enforcement mimarisi (3-eksen coverage) |
-| 0020 | Canlı-çekirdek junction mimarisi |
-| 0021 | Temel yasaklar fiziksel-damga |
+| **0019** | Kural-enforcement mimarisi (3-eksen coverage) |
+| **0020** | Canlı-çekirdek junction mimarisi |
+| **0021** | Kesin yasaklar fiziksel damga |
 | 0022 | Intake Triage Gate (iş-alım katmanı) |
 
 ## EK-B. Terminoloji
-- **DEV_CORE:** metodoloji çekirdeği reposu (tek kaynak).
+
+- **DEV_CORE:** metodoloji çekirdeği reposu (tek kaynak, public).
 - **junction:** Windows dizin bağlantısı; proje `core/` → DEV_CORE.
-- **hook:** belirli bir olayda (oturum başı, prompt, araç öncesi/sonrası) otomatik çalışan script.
-- **guard:** araç-öncesi denetim; kural ihlalinde eylemi reddeder (RED).
+- **hook:** belirli bir olayda otomatik çalışan script.
+- **guard:** araç-öncesi denetim; kural ihlalinde eylemi reddeder (RED, exit 2).
 - **validator:** bir kaynağı/kuralı kontrol eden `check_*.py`; PASS/FAIL.
-- **gate (kapı):** bir eylemin geçmesi için sağlanması gereken kontrol (validator/reviewer/hook).
-- **reviewer:** SAP-yazımı öncesi çalışan ön-inceleme; PASS/WARNING/BLOCKER.
+- **gate (kapı):** bir eylemin geçmesi için sağlanması gereken kontrol.
+- **reviewer:** SAP-yazımı öncesi ön-inceleme; PASS/WARNING/BLOCKER.
 - **ITG:** Intake Triage Gate — geliştirme talebi alım/sınıflama katmanı.
-- **profil:** projenin SAP türü (ecc/s4_private/s4_public/btp_abap); hangi kuralların geçerli olduğunu belirler.
+- **profil:** projenin SAP türü (`ecc`/`s4_private`/`s4_public`/`btp_abap`).
+- **L1a / L1b / L1c:** her-oturum / glob-tetiklemeli / derin-referans davranış katmanları.
+- **fail-closed:** bilgi eksikse yüzeyi kapatma (varsayım yapmama) davranışı.
 - **stable etiketi:** çekirdeğin bilinen-iyi git noktası; rollback hedefi.
+- **genericize:** core'a girecek içerikten proje/müşteri/sistem/kişi izini temizleme.
