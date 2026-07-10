@@ -564,11 +564,25 @@ Proje-kökü çözümlemesi (CORE-01) · **Kural↔gate coverage (ADR 0019)** ·
 **Auto-memory bütçe + indeks bütünlüğü (C-MEM-01)** · **package-registry tazeliği (C-REG-01)** ·
 **settings.template ↔ hook envanteri (C-TPL-01)** · Playbook freshness (uyarı)
 
-Son üçü 2026-07-10'da eklendi; her biri gerçek bir sessiz-bozulmayı kapatır:
+Ayrıca **C-DOC-01** (docs aynası ↔ `core/docs`) projede `docs/` varsa koşar.
+
+Son dördü 2026-07-10'da eklendi; her biri gerçek bir sessiz-bozulmayı kapatır:
 
 - **C-MEM-01** — hafıza indeksi sessizce kesiliyordu (Bölüm 11.2).
 - **C-REG-01** — `manual-edit: PROHIBITED` diyen artefaktın tazeliğini kimse ölçmüyordu.
 - **C-TPL-01** — yazılan hook şablona kablolanmıyordu (Bölüm 3, 16.2).
+- **C-DOC-01** — çoğaltılmış belge tazelik kontrolü olmadan drift üretir.
+
+> **Bypass'a zorlayan gate, gate değildir.** C-DOC-01 CI'da **WARNING**, lokalde **HARD**'dır.
+> Sebep: CI checkout'unda `core/` junction'ı yoktur, DEV_CORE **main** klonlanır; bir ayna PR'ı
+> kaynağı merge edilene kadar **zorunlu olarak** bayat görünür. Bu, gate'i kalıcı kırmızı yapar
+> ve `--admin` bypass'ını normalleştirir. Otorite **lokal pre-commit**'tir (gerçek junction).
+> Aynı gerekçe `CORE-INDEX` (C-IDX-01) için de geçerlidir ve orada da CI çapraz-repo
+> staleness'i yapısal olarak zorlamaz.
+>
+> *Bu kural, kendisi bir bypass'a yol açtıktan sonra yazıldı:* ayna PR'ının `validators` job'u
+> kırmızıydı ve `--admin` ile merge edildi. İçerik doğruydu (kaynak 53 saniye sonra merge
+> oldu), ama süreç yanlıştı.
 
 ### `run_review.py` (ADR 0006)
 
