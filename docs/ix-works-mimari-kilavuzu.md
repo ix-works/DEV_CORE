@@ -453,6 +453,7 @@ veya **`additionalContext` JSON** (bağlam enjekte eder).
 | SessionStart | `session_start` | Yasak özeti + oturum protokolü enjekte; junction/drift/manifest/damga sağlığı | Hayır |
 | SessionStart | `tooling_radar_check` | Tooling taraması bayatsa 1-satır nudge | Hayır |
 | **InstructionsLoaded** | `instructions_loaded_log` | Hangi talimat dosyası ne zaman/neden yüklendi → `.tmp/instructions-loaded.log` | Hayır (yalnız log) |
+| SessionStart | `session_start` → **`inspector.py`** | Davranış katmanı gerçekten canlı mı (kablolama + önceki oturumun yükleme izi) | Hayır (rapor-only, geçerse sessiz) |
 | UserPromptSubmit | `skill_injector` | İş-türüne özel pre-flight checklist adını enjekte | Hayır |
 | UserPromptSubmit | `intake_triage` | Geliştirme-talebi sinyali → ITG protokolü enjekte | Hayır |
 | PreToolUse `Bash\|PowerShell\|mcp__sap-adt__*` | `pre_tool_guard` | 8 kural (aşağıda) | **Evet** |
@@ -1185,6 +1186,8 @@ Dürüstlük, mimarinin bir parçasıdır. Bilinen sınırlar:
 |---|---|
 | **L1b yükleme kanıtı** | **Kısmen kapandı (2026-07-10).** Ölçüldü: kurallar yükleniyordu ama *tembel değil, koşulsuz* — çünkü frontmatter `globs:` yazıyordu, Claude Code ise `paths:` okur. Anahtar düzeltildi. **AÇIK:** `paths:`-scoped kuralın gerçekten tembel yüklendiği (`path_glob_match`) henüz **görülmedi** — talimat dosyaları oturum başında cache'lendiği için aynı seansta ölçülemez. **Taze oturumda** `.abap` okut → `.tmp/instructions-loaded.log`'da `path_glob_match` satırı çıkmalı. Çıkmazsa `paths:` de tutmamıştır. |
 | **InstructionsLoaded logger'ının kendisi** | 2026-07-10'a kadar payload'da `matcher`/`paths` arıyordu — gerçek alanlar `load_reason`/`file_path`. Log `?  ?` yazıyor, "ölçüyoruz" sanılıyordu. Onarıldı; artık tanımadığı şemada `SEMA-DEGISTI` + ham payload döküyor. **Ders: sessiz hatayı yakalayan aletin kendisi sessizce bozulabilir.** |
+| **"guard fiilen koştu mu" — ÖLÇÜLEMEZ** | Claude Code yalnız **konuşan** hook'u transcript'e yazar (`hook_success` / `hook_additional_context` / `hook_blocking_error`). Sessizce izin veren `pre_tool_guard`'ın tek kaydı yoktur → *"koştu ve izin verdi"* ile *"hiç koşmadı"* diskte ayırt edilemez (2026-07-09 PowerShell bypass'ının 2 gün fark edilmemesinin sebebi). `hook_shim`'e heartbeat düşünüldü ve **reddedildi**: tool adını yazmak için stdin'i okuyup geri enjekte etmek gerekirdi; 16 hook'un tek geçiş noktasında ince bir hata guard'ı payload'sız → muhtemelen sessizce izin verir hâle getirir. Gözlemlenebilirlik için guard katmanını riske atmak kötü takas. Inspector bu kaleme ✓ değil **ÖLÇÜLEMEZ** yazar. |
+| **Inspector kapsamı** | v1 yalnız *kablolama* + *canlılık* iddiaları taşır. **Negatif-testli gate: 0/43.** Her gate'in bozuk girdide FAIL, temiz girdide sessiz kaldığını kanıtlayan v2 henüz yok. Rapor bu kesri daima basar — "Inspector OK dedi" cümlesi yeni "activated" olmasın. |
 | **Kabuk kaçışları** | `pre_tool_guard`, `echo >> core/…` / `cp` / `tee` gibi yolları kapatmaz (bilinçli; telafi pre-commit + CI). |
 | **Git geçmişi** | Public core'un HEAD'i kimlik izinden temizlendi; **commit geçmişi temizlenmedi** (ayrı, ağır bir operasyon). |
 | **D34d politika tablosu** | Mekanizma canlı; profil-özel `available_on` daraltmaları kanıt bekliyor (ilk `s4_public`/`btp_abap` projesi). |
