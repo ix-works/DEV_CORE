@@ -70,6 +70,8 @@ VALIDATORS = [
     # Hook yazmak ≠ şablona kablolamak. sap_worktype_hint + itg_backstop şablona hiç
     # eklenmemişti → init_project geride bir proje üretiyordu (2026-07-10 provası). C-TPL-01.
     ("settings.template ↔ hook envanteri (HARD, C-TPL-01)", "check_settings_template_sync.py", [], "both", None),
+    # Belgeyi iki yerde tutmak, tazelik kontrolü olmadan KESİNLİKLE drift üretir. C-DOC-01.
+    ("docs aynası ↔ core/docs (HARD, C-DOC-01)", "check_docs_mirror.py", [], "project", None),
     ("Playbook freshness (uyarı)", "check_playbook_freshness.py", [], "both", None),
 ]
 
