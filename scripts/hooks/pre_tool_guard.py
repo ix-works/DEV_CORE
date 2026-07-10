@@ -126,37 +126,25 @@ def _ui_app_subdir(path: str):
     return None
 
 
-def _leak_desenleri() -> list:
-    """Core'a girmesi yasak proje/müşteri/kişi izleri. LİSTE CORE'DA TUTULMAZ (public).
+# TEK KAYNAK (D9): desenler `scripts/genericize_common.py`'de; `core_precommit` de aynı
+# modülü kullanır. Eskiden iki guard iki AYRI dosyadan besleniyordu (biri
+# `<proje>/.claude/...`, diğeri `<git-dir>/...`) → biri güncellenip diğeri unutulabiliyordu.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from genericize_common import id_pattern, sizintilari_bul  # noqa: E402
 
-    Proje-özel liste BİRLEŞİR, ezmez. `core_precommit._id_desenleri()` ile AYNI semantik
-    olmalı — 2026-07-09'da ayrışmışlardı (public repoya makine-yolu + e-posta kaçıyordu).
-    """
-    jenerik = [
-        r"C:[/\\]+Users[/\\]+(?!<)[^/\\ ]+",
-        r"[A-Za-z0-9._%+-]+@(?!example\.(?:com|org|net)\b)(?!test\b)(?!localhost\b)"
-        r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
-    ]
-    proje: list = []
-    env = os.environ.get("IX_GENERICIZE_BLOCKLIST", "").strip()
-    if env:
-        proje = [p.strip() for p in env.split(",") if p.strip()]
-    else:
-        dosya = _PROJ_ROOT / ".claude" / "genericize-blocklist.txt"
-        if dosya.exists():
-            try:
-                satirlar = dosya.read_text(encoding="utf-8", errors="replace").splitlines()
-                proje = [s.strip() for s in satirlar
-                         if s.strip() and not s.lstrip().startswith("#")]
-            except Exception:
-                proje = []
-    return proje + jenerik
+_CORE_LEAK = id_pattern(proje_koku=_PROJ_ROOT)  # IGNORECASE (D2)
 
-
-_CORE_LEAK = re.compile("(" + "|".join(_leak_desenleri()) + ")")
-
-_GH_PR_CREATE = re.compile(
-    r"(?:^|[\n;|&(])\s*(?:[A-Za-z_]\w*=\S+\s+)*gh\s+pr\s+create\b", re.IGNORECASE)
+# D7 (2026-07-10 denetimi): eskiden yalnız `gh pr create` tutuluyordu. Aynı geri-alınamaz
+# yayını yapan `pr edit` / `pr comment` / `issue create` / `release create --notes` /
+# `api .../pulls` yan kapılardan geçiyordu; `-t`/`-b` kısa bayrakları da görülmüyordu.
+_GH_PUBLIC_YAYIN = re.compile(
+    r"(?:^|[\n;|&(])\s*(?:[A-Za-z_]\w*=\S+\s+)*gh\s+"
+    r"(?:pr\s+(?:create|edit|comment)"
+    r"|issue\s+(?:create|edit|comment)"
+    r"|release\s+create"
+    r"|api\s+\S*(?:pulls|issues|releases)\S*)\b",
+    re.IGNORECASE)
+_GH_PR_CREATE = _GH_PUBLIC_YAYIN  # geriye dönük ad (guard_conformance şartnamesi)
 
 # BAŞLIK SATIRI KORUNUR (grup 1): eski `.*?` DOTALL ilk satırdaki yönlendirmeyi de yutardı.
 _HEREDOC = re.compile(r"(<<-?\s*(['\"]?)(\w+)\2[^\n]*)\n(.*?)^\3$", re.MULTILINE | re.DOTALL)
@@ -173,9 +161,9 @@ def _heredoc_govdeleri(s: str) -> str:
 
 
 _KABUK_TOOLLARI = ("Bash", "PowerShell")
-_ZSD_PAT = re.compile(r"\bzsd0(?!00|01)\d{2}", re.IGNORECASE)
 _ARG_REPO = re.compile(r"--repo[= ]+([^\s'\"]+)")
-_ARG_BODYFILE = re.compile(r"--body-file[= ]+(?:'([^']+)'|\"([^\"]+)\"|(\S+))")
+_ARG_BODYFILE = re.compile(
+    r"(?:--body-file|--notes-file|(?<![\w-])-F)[= ]+(?:'([^']+)'|\"([^\"]+)\"|(\S+))")
 _CD_PREFIX = re.compile(r"\bcd\s+([^\s;&|]+)")
 _AYRAC = re.compile(r"\s*(?:\|\||&&|[;|&\n])\s*")
 
@@ -187,10 +175,34 @@ def _arg_deger(s: str, ad: str) -> str:
     return m.group(1) or m.group(2) or m.group(3) or ""
 
 
+_KISA_BAYRAK = {"title": "t", "body": "b", "notes": "n"}
+
+
+def _arg_deger_kisa(s: str, ad: str) -> str:
+    """--<ad> yoksa kısa bayrağa (-t/-b/-n) bak. `gh pr create -b "..."` eskiden KAÇIYORDU."""
+    v = _arg_deger(s, ad)
+    if v:
+        return v
+    ch = _KISA_BAYRAK.get(ad)
+    if not ch:
+        return ""
+    m = re.search(rf"(?<![\w-])-{ch}\s+(?:'([^']*)'|\"((?:[^\"\\]|\\.)*)\"|(\S+))", s)
+    if not m:
+        return ""
+    return m.group(1) or m.group(2) or m.group(3) or ""
+
+
 def _yayinlanan_metin(komut: str, ham: str) -> tuple:
-    """--title + --body + --body-file İÇERİĞİ. `--body-file -` (stdin) heredoc'tan çözülür
-    (eski sürüm fail-closed ediyordu → meşru PR durdu, 2026-07-09). Dönüş: (metin, hata)."""
-    parcalar = [_arg_deger(komut, "title"), _arg_deger(komut, "body")]
+    """--title/--body/--notes (+ kısa bayraklar) + --body-file/--notes-file İÇERİĞİ.
+    `--body-file -` (stdin) heredoc'tan çözülür (eski sürüm fail-closed ediyordu →
+    meşru PR durdu, 2026-07-09). `gh api` için gövde çıkarılamaz → TÜM komut taranır
+    (fail-closed). Dönüş: (metin, hata)."""
+    if re.search(r"(?<!\w)gh\s+api\b", komut, re.IGNORECASE):
+        return komut + "\n" + _heredoc_govdeleri(ham), ""
+
+    parcalar = [_arg_deger_kisa(komut, "title"),
+                _arg_deger_kisa(komut, "body"),
+                _arg_deger_kisa(komut, "notes")]
     bf = _ARG_BODYFILE.search(komut)
     if bf:
         yol = bf.group(1) or bf.group(2) or bf.group(3)
@@ -231,7 +243,7 @@ def _repo_public_mu(hay: str) -> tuple:
 
 
 def _gh_pr_public_leak(komut: str, ham: str) -> str:
-    if not _GH_PR_CREATE.search(komut):
+    if not _GH_PUBLIC_YAYIN.search(komut):
         return ""
     public, repo = _repo_public_mu(komut)
     if not public:
@@ -239,15 +251,10 @@ def _gh_pr_public_leak(komut: str, ham: str) -> str:
     metin, hata = _yayinlanan_metin(komut, ham)
     if hata:
         return f"public repo '{repo}' — {hata}"
-    bulgular = []
-    for pat, ad in ((_CORE_LEAK, "kimlik izi"), (_ZSD_PAT, "ZSD-numarali paket adi")):
-        for mm in pat.finditer(metin):
-            bulgular.append(f"{ad}: '{mm.group(0)}'")
-            if len(bulgular) >= 6:
-                break
+    bulgular = [f"{ad}: '{tok}'" for tok, ad in sizintilari_bul(metin, _CORE_LEAK)][:6]
     if not bulgular:
         return ""
-    return f"public repo '{repo}' — PR basligi/govdesinde " + "; ".join(bulgular)
+    return f"public repo '{repo}' — yayinlanan baslik/govdede " + "; ".join(bulgular)
 
 
 _SAP_YAZMA_TOOLLARI = {
@@ -435,11 +442,18 @@ def main() -> int:
                 if isinstance(e, dict) and isinstance(e.get("new_string"), str):
                     parcalar.append(e["new_string"])
         icerik = "\n".join(parcalar)
-        m = _CORE_LEAK.search(icerik)
-        if m:
+        # K4a (2026-07-10): bu dal yalnız isim-listesini uyguluyordu; Z-obje adı ve SAP
+        # kullanıcı adı core'a Edit/Write ile SESSİZCE yazılabiliyordu. Artık aynı
+        # sizintilari_bul() — hedef dosya ADI da taranır (D5).
+        # ⚠ TAM YOL değil, yalnız DOSYA ADI taranır: core başka makinede kullanıcı-profili
+        # altında olabilir → makine-yolu deseni her core yazımını yanlış-bloklardı.
+        hedef_ad = Path(str(dosya_hedefi)).name
+        bulgular = sizintilari_bul(icerik, _CORE_LEAK) + sizintilari_bul(hedef_ad, _CORE_LEAK)
+        if bulgular:
+            tok, ad = bulgular[0]
             sys.stderr.write(
-                f"⛔ GENERICIZE-LEAK (Ö5/B9): core'a yazılan içerikte proje/müşteri izi: "
-                f"'{m.group(0)}' (hedef: {dosya_hedefi}). Core PUBLIC repodur; yalnız jenerik "
+                f"⛔ GENERICIZE-LEAK (Ö5/B9): core'a yazılan içerikte/adda {ad}: "
+                f"'{tok}' (hedef: {dosya_hedefi}). Core PUBLIC repodur; yalnız jenerik "
                 "içerik girer (placeholder: <PROJECT_NAME>, <SAP_USER>, ZSD001). İŞLEM REDDEDİLDİ.\n")
             return 2
 

@@ -62,6 +62,11 @@ VALIDATORS = [
     # Windows cp1252: non-ASCII basan script çöker → exit 1, gerçek FAIL'den ayırt edilemez.
     # 2026-07-09'da üç script arka arkaya bu yüzden çöktü. C-ENC-01.
     ("Konsol UTF-8 koruması (HARD, C-ENC-01)", "check_console_utf8.py", [], "both", None),
+    # MEMORY.md'nin yalnız ilk 200 satırı VEYA ilk 25KB'ı yüklenir; gerisi SESSİZCE düşer.
+    # Ölü indeks linki / erişilemez hatıra = model için o bilgi YOK. C-MEM-01.
+    ("Auto-memory bütçe + indeks bütünlüğü (HARD, C-MEM-01)", "check_memory_index.py", [], "both", None),
+    # "manual-edit: PROHIBITED" diyen ama tazeliği ölçülmeyen artefakt sessizce bayatlar. C-REG-01.
+    ("package-registry tazeliği (HARD, C-REG-01)", "check_package_registry_fresh.py", [], "project", None),
     ("Playbook freshness (uyarı)", "check_playbook_freshness.py", [], "both", None),
 ]
 

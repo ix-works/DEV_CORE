@@ -22,7 +22,13 @@ jobs:
       - name: Bagimliliklar
         run: pip install --quiet requests urllib3
 
+      # D1 (2026-07-10): kimlik blocklist'i `.git/genericize-blocklist`te yasar ve ASLA
+      # klonlanmaz -> CI taze klon yaptigi icin liste hic yuklenmiyordu; public repoya
+      # giden SON KAPI musteri/sistem/kisi adina kordu. Secret zorunlu; yoksa gate
+      # fail-closed durur (script exit 1).
       - name: Genericize-leak + link-audit + applies_to sema (TAM AGAC)
+        env:
+          IX_GENERICIZE_BLOCKLIST: ${{ secrets.IX_GENERICIZE_BLOCKLIST }}
         run: python scripts/git-hooks/core_precommit.py --all
 
       - name: Validators (CORE modu)

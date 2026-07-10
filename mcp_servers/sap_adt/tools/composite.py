@@ -26,7 +26,7 @@ import contextlib
 import io
 from typing import Any
 
-from mcp_servers.sap_adt._app import mcp, log
+from mcp_servers.sap_adt._app import mcp, log, profil_tool
 from mcp_servers.sap_adt._reviewer import (
     reject_payload,
     run_reviewer,
@@ -156,7 +156,7 @@ def _activate_and_verify(client, name: str, object_type: str) -> dict:
 # adt_domain_create
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_domain_create(
     name: str,
     datatype: str,
@@ -268,7 +268,7 @@ def adt_domain_create(
 # adt_dtel_create
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_dtel_create(
     name: str,
     domain_name: str,
@@ -378,7 +378,7 @@ def adt_dtel_create(
 # adt_struct_create
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_struct_create(
     name: str,
     fields: list[dict],

@@ -30,9 +30,9 @@
 - [Klasik Program Include'lara Bölünür](feedback_klasik-program-include-bol.md) — tek-body OLMAZ; main=INCLUDE+event, kod T01/C01/O01/I01/F01'e; baştan böl (std 06 §1)
 - [Klasik ALV Template-First (ADR 0012)](feedback_klasik-alv-template-first.md) — klasik ALV programa inline; template classic-alv-list.prog.abap; ZSD000_CL_ALV_* silindi
 - [Generic Tool'a Program-Spesifik İsim Verme](feedback_generic-tool-program-spesifik-isim-verme.md) — GATE check_reuse_gate; reusable araç generic isim+container almalı, program adını DEĞİL
-- [<LEGACY_SOURCE> Field Adları Sistem Bağımlı](feedback_<legacy_source>-field-adlari-sistem-bagimli.md) — eski source'tan kopyada standart tablo alan adlarını yeni sistemde teyit et
+- [<LEGACY_SOURCE> Field Adları Sistem Bağımlı](feedback_legacy-field-adlari-sistem-bagimli.md) — eski source'tan kopyada standart tablo alan adlarını yeni sistemde teyit et
 - [PONUMBER + POSNUMBER Global İptal](feedback_ponumber-posnumber-global-iptal.md) — GATE check_td_cancelled_fields; ZSD001 struct'larda iptal (TD "korunan" dese bile)
-- [<LEGACY_SOURCE> Full Dump Pattern](feedback_<legacy_source>-full-dump-pattern.md) — kapsam kararı öncesi ilgili tüm <LEGACY_SOURCE> objelerini (struct/DTEL/domain) tam indir
+- [<LEGACY_SOURCE> Full Dump Pattern](feedback_legacy-full-dump-pattern.md) — kapsam kararı öncesi ilgili tüm <LEGACY_SOURCE> objelerini (struct/DTEL/domain) tam indir
 - [Yeni Teknoloji → Önce Kural Seti](feedback_yeni-teknoloji-once-kural-seti.md) — ilk-kez teknolojide SAP'ye yazmadan ÖNCE tam formal kural seti (L2/L3/L4+reviewer)
 - [Yeni Yetenek → Önce Araştır](feedback_yeni-yetenek-once-arastir.md) — yeni yetenek/araç benimsemeden önce dünyada nasıl yapıldığını araştır; sıfırdan keşfetme
 - [MCP post_shell EN Master Lang](feedback_mcp-post-shell-en-master-lang.md) — GATE check_sap_master_language; Z obje raw REST + masterLanguage=TR + post-create doğrula
@@ -54,7 +54,7 @@
 - [Clean Core Released-CDS Proaktif](feedback_clean-core-released-cds-proaktif.md) — GATE check_released_objects; released CDS tercih (MARA değil I_Product); released_successors.json
 - [Spec-Mutabakat Gate (her dev başı)](feedback_spec-mutabakat-gate.md) — yeni program: ekran+fonksiyonel spec iste → <LEGACY_SOURCE>+app+DDL/S ile sentezle → MUTABAKAT → build
 - [Hook Komut ${CLAUDE_PROJECT_DIR} Exec-Form](feedback_hook-komut-project-dir-execform.md) — hook+statusLine ASLA göreceli yol; cwd kayınca kırılır; exec-form + ${CLAUDE_PROJECT_DIR}
-- [API Call İç Gateway Proxy (ZBC002)](feedback_api-call-ic-gateway-proxy-zbc002.md) — RFC-dest call'da ZBC002_CL_GET_TOKEN + /iwfnd iç loopback; host/client runtime; örn ZSD001 simulate_pricing
+- [API Call İç Gateway Proxy (ZBC001)](feedback_api-call-ic-gateway-proxy.md) — RFC-dest call'da ZBC001_CL_GET_TOKEN + /iwfnd iç loopback; host/client runtime; örn ZSD001 simulate_pricing
 - [Tablo Yaratma Onay Gate](feedback_tablo-yaratma-onay-gate.md) — DDIC tablo öncesi alan+DTEL+key tasarımı göster, açık onay al; ad max 16 char
 - [Reviewer: checklist ≠ wired validator](feedback_reviewer-checklist-vs-wired-validator.md) — reviewer sürekli PASS'e güvenme; BLOCKER arkasında script olmayabilir; bozuk-girdiyle test et
 - [abaplint parser_error gerçek olabilir](feedback_abaplint-parser-error-gercek-olabilir.md) — ccimp parser_error'ı körü körüne false-positive sayma; çalışan ccimp ile kıyas + adt_syntax_check

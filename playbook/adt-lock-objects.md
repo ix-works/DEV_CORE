@@ -143,7 +143,7 @@ Programda şöyle kullanılır:
 ```abap
 CALL FUNCTION 'ENQUEUE_EZSD001_LO_BOOK'
   EXPORTING
-    mode_zsd015_t_bookhd = 'E'
+    mode_zsd001_t_bookhd = 'E'
     mandt                = sy-mandt
     booking_no           = lv_booking_no
   EXCEPTIONS
@@ -155,7 +155,7 @@ CALL FUNCTION 'ENQUEUE_EZSD001_LO_BOOK'
 
 CALL FUNCTION 'DEQUEUE_EZSD001_LO_BOOK'
   EXPORTING
-    mode_zsd015_t_bookhd = 'E'
+    mode_zsd001_t_bookhd = 'E'
     mandt                = sy-mandt
     booking_no           = lv_booking_no.
 ```

@@ -32,3 +32,25 @@ mcp = FastMCP(
         "no standard object modification, no transport release."
     ),
 )
+
+
+def profil_tool(available_on: tuple = ("all",)):
+    """`@mcp.tool()` yerine kullanılır — profil uymuyorsa tool HİÇ register edilmez (D34d).
+
+    Prompt'a "bu tool'u kullanma" demek ricadır; `tools/list`'ten gizlemek sınırdır.
+    Profil çözülemiyorsa (project.yaml eksik/bozuk) fail-closed: hiçbir tool açılmaz.
+    Gerekçe + kanıt disiplini: `mcp_servers/sap_adt/_profile.py`.
+    """
+    from mcp_servers.sap_adt._profile import aktif_profil, uygun_mu
+
+    def sarmalayici(fn):
+        profil = aktif_profil()
+        if not uygun_mu(available_on, profil):
+            log.warning(
+                "tool GİZLENDİ: %s (profil=%s, available_on=%s)",
+                getattr(fn, "__name__", "?"), profil, available_on,
+            )
+            return fn  # register EDİLMEZ; import hatası olmasın diye fonksiyon döner
+        return mcp.tool()(fn)
+
+    return sarmalayici

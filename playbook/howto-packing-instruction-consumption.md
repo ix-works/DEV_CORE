@@ -62,7 +62,7 @@ Belirleme: S1917+KUNWE 600003 → `AMB_TLMT_S1917` (40); S1917 genel (KOTP001) �
 1. **Tier-2 wrapper class** `ZCL_SD001_PACK_SRC` (released interface): metot `get_packing( matnr, kunwe, date ) → { pobjid, crate_mat, crate_name, in_crate_qty, base_uom, source(POF/POP) }`.
    - İçeride: FM çağır → boşsa released CDS fallback (CreationDate MAX). Distinct-key **internal-table cache** (N+1 önle).
 2. **Tüketim view/entity** `ZSD001_I_ITEM_PACKING` → SE kalemine `_ItemPacking` association (PAK deseni; ABAP-destekli çünkü FM). Alanlar: kasa malzeme, kasa adı, kasa-içi adet, AmbTlmtNo.
-3. **Expose:** GetOpenQty deseni — function import VEYA custom-entity, IHRSE/SIPSE servisinde. Belirleme **liste yüklenince 1 kez**.
+3. **Expose:** GetOpenQty deseni — function import VEYA custom-entity, SE_B/SE_A servisinde. Belirleme **liste yüklenince 1 kez**.
 4. **FE (sip_se + ihr_se):** kalem tablosuna `KasaAdt` kolonu (Ağırlık'ın soluna) = `CEIL(SevkMiktarı / kasa-içi adet)` canlı; kalem-detay "Ambalajlama Talimatı" başlığı: AmbTlmtNo / Kasa Malzemesi / Kasa Mlz Adı / Kasa İçi Adet. ChangeSe + CreateSe. OrderPicker'a EKLENMEZ.
 
 ---

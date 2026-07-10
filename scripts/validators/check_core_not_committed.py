@@ -20,8 +20,12 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 PROJ = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
-KILIT_SATIRLARI = ["/core/", ".claude/agents/", ".claude/skills/", ".claude/commands/"]
-IZLENEN_YOLLAR = ["core", ".claude/agents", ".claude/skills", ".claude/commands"]
+# `.claude/rules/` 2026-07-10'da eklendi (L1b). Junction'lanan her tip bu iki listede
+# OLMAK ZORUNDA — yoksa core içeriği proje reposuna sessizce commit'lenir.
+KILIT_SATIRLARI = ["/core/", ".claude/agents/", ".claude/skills/", ".claude/commands/",
+                   ".claude/rules/"]
+IZLENEN_YOLLAR = ["core", ".claude/agents", ".claude/skills", ".claude/commands",
+                  ".claude/rules"]
 
 
 def _git(*args: str) -> tuple[int, str]:

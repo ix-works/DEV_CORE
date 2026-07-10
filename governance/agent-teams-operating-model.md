@@ -34,7 +34,7 @@ source: deep-research (4 paralel subagent, 2026-06-14) — Anthropic/Cognition/L
 
 ## 2A. GÜNCEL MODEL (ADR 0018) — 4 rol + Bug gate + LAZY lifecycle + audit
 
-> Eski **modül-feature roster** (sipse/ihrse/booking = sap-feature) + **STANDING spawn (model B)** İPTAL. sap-feature/sap-research role-def'leri uyumluluk için durur; go-forward = bu.
+> Eski **modül-feature roster** (se_a/se_b/booking = sap-feature) + **STANDING spawn (model B)** İPTAL. sap-feature/sap-research role-def'leri uyumluluk için durur; go-forward = bu.
 
 **Roller (KATMAN-bazlı):** `adt-gateway` (TEK yazıcı) · **`frontend-expert`** (tüm FE) · **`backend-expert`** (tüm ABAP/RAP) · **`bug-expert`** (adversarial kod-inceleme, read-only). **Uzmanlaştırma = grounding** (mecburi pre-flight okuma + kanonik desen pointer + MCP-routing + scoped tools + skill çağrısı), persona DEĞİL — araştırma kanıtı: "sen uzmansın" kod görevinde kazanç vermez (ADR 0018).
 

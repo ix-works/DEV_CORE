@@ -1,27 +1,33 @@
 ---
 name: sap-abap-dev
 description: >
-  This skill should be used for ANY SAP ABAP development task in the <PROJECT_NAME>
-  repo — creating or changing CDS views, RAP objects (BDEF/behavior/SRVD/SRVB),
-  DDIC objects (domain/data element/structure/table), classes, programs, OData
-  services, transports, lock objects, message classes, or freestyle UI5. Use it
-  whenever the work touches SAP, ABAP, ADT, CDS, RAP, DDIC, a Z object, a package
-  like ZSD001_CLC, transport <TRANSPORT>, or the .conn_adt connection. It routes to
-  the project's layered rule architecture (general -> module -> package), enforces
-  the ADR 0005 hard prohibitions, and surfaces hard-won operational lessons
-  (TR master-language create, transport discipline, Windows encoding, no-retry).
-  Triggers: "CDS yarat", "RAP", "BDEF", "behavior", "domain ekle", "DTEL",
-  "struct", "tablo yarat", "SAP'ye push", "aktive et", "transport", "ZSD001",
-  "OData servis", "freestyle UI", "SRVB publish", "where-used", "ATC".
+  Routes any SAP ABAP development task in this repo to the layered rule architecture
+  (general -> module -> package), enforces the ADR 0005 hard prohibitions, and surfaces
+  hard-won operational lessons (master-language create, transport discipline, Windows
+  encoding, no-retry). Use when creating or changing CDS views, RAP objects
+  (BDEF/behavior/SRVD/SRVB), DDIC objects (domain/data element/structure/table), classes,
+  programs, OData services, transports, lock objects, message classes, or freestyle UI5 —
+  or whenever the work touches SAP, ABAP, ADT, a Z object, an ABAP package, or the
+  .conn_adt connection. Triggers include "CDS yarat", "RAP", "BDEF", "behavior",
+  "domain ekle", "DTEL", "struct", "tablo yarat", "SAP'ye push", "aktive et",
+  "transport", "OData servis", "freestyle UI", "SRVB publish", "where-used", "ATC".
+  DO NOT USE FOR: non-SAP code, this repo's own tooling (hooks, validators, MCP server,
+  CI), documentation-only edits, or intake/scope triage of a new request (use the
+  intake-triage skill first).
 version: 0.1.0
 ---
 
-# SAP ABAP Geliştirme — <PROJECT_NAME> (Katmanlı Yönlendirme)
+# SAP ABAP Geliştirme (Katmanlı Yönlendirme)
 
-Bu skill, <PROJECT_NAME> deposundaki her SAP/ABAP işinin **giriş noktasıdır**. Bilgiyi
-burada tekrarlamaz; doğru katmana yönlendirir (ADR 0003). Önce inviolable yasakları
-hatırlatır, sonra genel → modül → paket sırasıyla hangi dosyanın okunacağını söyler,
-ardından SAP yazma protokolünü ve tekrarlayan operasyonel tuzakları gösterir.
+> ⚠ **Compaction notu:** Skill gövdesi kırpılırsa BAŞI korunur — en kritik talimat burada.
+> **SAP'ye yazmadan önce:** `run_review.py` (BLOCKER → yazma) · PULL-BEFORE-EDIT · yazan tek
+> rol `adt-gateway`. **"Activated/uploaded" mesajına güvenme — `adt_get` ile canlı doğrula.**
+> **TAHMİN YASAK:** alan/DTEL/append adını uydurma; kullanıcı verir.
+
+Bu skill, bu depodaki her SAP/ABAP işinin **giriş noktasıdır**. Bilgiyi burada tekrarlamaz;
+doğru katmana yönlendirir (ADR 0003). Önce inviolable yasakları hatırlatır, sonra genel →
+modül → paket sırasıyla hangi dosyanın okunacağını söyler, ardından SAP yazma protokolünü ve
+tekrarlayan operasyonel tuzakları gösterir.
 
 ---
 

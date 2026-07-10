@@ -18,7 +18,7 @@ Z'li (custom) SAP objelerinin metinlerini (description, field label, başlık) *
 **Önemli:** "DTEL metni = domain description" (kullanıcı bilgisi, 2026-05-14). Domain description ile DTEL field label'ları aynı semantic kaynaktan beslenir.
 
 **Yapılması GEREKMEYEN:**
-- Domain/DTEL adından (örn. `D_LPART`) anlam tahmin etmek ("Lojistik Partneri" gibi)
+- Domain/DTEL adından (örn. `<DOMAIN_A>`) anlam tahmin etmek ("Lojistik Partneri" gibi)
 - DEPENDENCY_GRAPH'taki kategori başlığını description olarak almak ("Partner" gibi tek kelime — yetersiz)
 - İngilizce alan adından Türkçe tahmin türetmek (DEParture PORT → "Kalkış Limanı" tahmini doğru olabilir ama kanonik kaynaktan teyit şart)
 
@@ -29,7 +29,7 @@ Z'li (custom) SAP objelerinin metinlerini (description, field label, başlık) *
 4. Son çare `sources\ddic\dtel\` — DTEL XML
 5. Hiçbiri yoksa **kullanıcıya sor** — AI tahmin etmez
 
-**Why:** 2026-05-14 Sprint 1A başlatılırken AI 27 domain için description tahmini yaptı (D_LPART = "Lojistik Partneri", D_DELRES = "Teslimat Rezervasyonu", vb.). Kullanıcı uyardı: "txt tahmin etmemen gerek özellikle Z lilerde". <LEGACY_SOURCE> tablo dosyalarında kanonik karşılıklar bulundu, ~5 tahminden 3'ü yanlış çıktı (D_LPART = "Hat / shipping line", D_DELRES = "Gecikme sebebi"). Bu, ⛔ KATEGORİ D (Z'li obje TR text zorunluluğu) prensibinin doğrudan ihlali — yanlış text → ekran/rapor'da yanlış metinler.
+**Why:** 2026-05-14 Sprint 1A başlatılırken AI 27 domain için description tahmini yaptı (<DOMAIN_A> = "Lojistik Partneri", <DOMAIN_B> = "Teslimat Rezervasyonu", vb.). Kullanıcı uyardı: "txt tahmin etmemen gerek özellikle Z lilerde". <LEGACY_SOURCE> tablo dosyalarında kanonik karşılıklar bulundu, ~5 tahminden 3'ü yanlış çıktı (<DOMAIN_A> = "Hat / shipping line", <DOMAIN_B> = "Gecikme sebebi"). Bu, ⛔ KATEGORİ D (Z'li obje TR text zorunluluğu) prensibinin doğrudan ihlali — yanlış text → ekran/rapor'da yanlış metinler.
 
 **How to apply:** Z'li domain/DTEL/CDS/class/program yaratırken description/title/label gerekirse: önce kanonik kaynakları sırayla ara, bulunamazsa kullanıcıdan iste. ASLA tahmin yazma. Eğer obje hiç eski sistemde yoksa (yeni icat), kullanıcıdan TR description'ı al.
 

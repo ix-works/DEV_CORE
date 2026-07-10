@@ -4,6 +4,16 @@ description: NE ZAMAN — ABAP / RAP / CDS / BDEF / behavior / DDIC (domain · D
 tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_lock_check, mcp__sap-adt__adt_transport_list, mcp__sap-adt__adt_syntax_check, mcp__sap-adt__adt_atc_check
 ---
 
+## 🧭 KANIT KURALLARI — sen auto-memory GÖRMEZSİN
+Alt-ajanlar ana oturumun auto-memory'sini (`MEMORY.md` + hatıralar) **almaz**; yalnız
+`CLAUDE.md` kopyasını alırsın (resmî: code.claude.com/docs/en/context-window). Lider'in
+birikmiş dersleri sende YOK — bu yüzden burada tekrarlanır:
+- **TAHMİN YASAK.** Yöntem/syntax/alan-adını mevcut artefakt + playbook'tan doğrula.
+- **Kanıtsız iddia yazma.** Yüzde/oran uydurma; her iddiaya kaynak ver (dosya:satır veya URL).
+- **Bulunamadı ≠ yok** · **kod ≠ kablolama** · **çökme ≠ FAIL** · **HTTP 200 ≠ başarı**.
+- Erişemediğini/test edemediğini **"DOĞRULANAMADI"** diye işaretle — boşluğu doldurma.
+- ÇIKTI: bitince `SendMessage({to:"main"})` ile raporla, yoksa lider raporu görmez.
+
 ## 🔎 METODOLOJİ ARAMASI — `core/` GÖRÜNMEZ (kritik)
 `core/` bir **junction**'dır. `Grep` ve `Glob` junction'ı **TAKİP ETMEZ** (gitignore'dan
 bağımsız; ölçüldü 2026-07-09). Kökten arama core'daki 72 metodoloji dokümanının **hiçbirini
@@ -28,7 +38,7 @@ Bir SAP source objesini DEĞİŞTİRMEK üzere çalışmaya başlarken, **derin 
 `python scripts/sap_sync_pull.py <NAME> --type <ddls|bdef|srvd|class|structure|...>` (seans-bazlı, obje başına 1×; `--session` marker'dan otomatik). Böylece analizin+değişikliğin **TAZE koda** dayanır (başkası canlıyı değiştirmiş olabilir; working-tree≠live doğal olduğu için eski pre-push drift-block KALDIRILDI). PreToolUse(Edit|Write) hook'u UNUTURSAN **backstop**'tur (bayatsa edit'i bloklar + ne yapacağını söyler). Muaf: git-dirty (üstünde çalıştığın WIP) · yeni obje · ref_docs/.tmp · SAP-dışı dosya. SAP erişilemezse `--offline` (ezme riskini kabul).
 
 ## KANONİK REÇETE + CLEAN CORE (tahmin değil, kanıt)
-- Kanonik RAP desenleri AL: BY-assoc READ = ORDER ccimp düz-key; `\_Text` persist = adt-rap §35 `SAVE_TEXT savemode_direct`; editableFieldFor key-create = §35; API call iç-gateway = `ZBC002_CL_GET_TOKEN` + iç loopback (feedback). **Sıfırdan icat etme** — mevcut çalışan reçeteyi kopyala (içerik bespoke).
+- Kanonik RAP desenleri AL: BY-assoc READ = ORDER ccimp düz-key; `\_Text` persist = adt-rap §35 `SAVE_TEXT savemode_direct`; editableFieldFor key-create = §35; API call iç-gateway = `ZBC001_CL_GET_TOKEN` + iç loopback (feedback). **Sıfırdan icat etme** — mevcut çalışan reçeteyi kopyala (içerik bespoke).
 - **Clean Core:** CDS/RAP yazmadan ÖNCE **released CDS** tercih et (MARA değil I_Product; `released_successors.json`); ATC Prio-1 zorunlu; audit alan auto-fill; decimal/qty serialize locale-safe (WRITE...TO YASAK).
 - **DTEL/append/domain adı ÖNERME** (kullanıcı/lider verir, ADR 0005-A). Tablo yaratma = onay gate (alan+key göster, açık onay).
 
