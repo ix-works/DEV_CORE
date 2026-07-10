@@ -39,32 +39,36 @@ def _id_desenleri() -> list[str]:
       3. jenerik varsayılan — isim içermez, yalnız yapısal desenler
     """
     env = os.environ.get("IX_GENERICIZE_BLOCKLIST", "").strip()
+    # ⚠ BİRLEŞİM, EZME DEĞİL (2026-07-10 düzeltmesi). Eskiden proje-listesi VARSA erken
+    # return ediyordu → jenerik yapısal desenler (makine-yolu, e-posta) DÜŞÜYORDU. Sonuç
+    # tersineydi: blocklist'li makinede pre-commit makine-yolunu/e-postayı KAÇIRIYOR,
+    # blocklist'siz CI runner'ında müşteri adını KAÇIRIYORdu — public repoya giden son
+    # kapı her iki senaryoda yarım koruyordu (2026-07-10 denetimi, canlı ölçüldü).
+    # `pre_tool_guard._leak_desenleri()` ile AYNI semantik: proje + jenerik BİRLEŞİR.
+    proje = []
     if env:
-        return [p.strip() for p in env.split(",") if p.strip()]
+        proje = [p.strip() for p in env.split(",") if p.strip()]
+    else:
+        try:
+            git_dir = Path(subprocess.run(["git", "rev-parse", "--git-dir"],
+                                          capture_output=True, text=True, check=True
+                                          ).stdout.strip())
+            dosya = git_dir / "genericize-blocklist"
+            if dosya.exists():
+                satirlar = dosya.read_text(encoding="utf-8", errors="replace").splitlines()
+                proje = [s.strip() for s in satirlar
+                         if s.strip() and not s.lstrip().startswith("#")]
+        except Exception:
+            proje = []
 
-    # git dizini repo ağacının dışındadır → buradaki liste asla push edilmez
-    try:
-        git_dir = Path(subprocess.run(["git", "rev-parse", "--git-dir"],
-                                      capture_output=True, text=True, check=True
-                                      ).stdout.strip())
-        dosya = git_dir / "genericize-blocklist"
-        if dosya.exists():
-            satirlar = dosya.read_text(encoding="utf-8", errors="replace").splitlines()
-            desenler = [s.strip() for s in satirlar
-                        if s.strip() and not s.lstrip().startswith("#")]
-            if desenler:
-                return desenler
-    except Exception:
-        pass
-
-    # Her ikisi de PLACEHOLDER'ı muaf tutar — dokümantasyon örnekleri yanlış-pozitif
-    # üretiyordu (2026-07-09 CI bulgusu: `C:\Users\<USER>` ve `user@example.com`).
-    return [
+    # Jenerik yapısal desenler HER ZAMAN eklenir (isim içermez). PLACEHOLDER muaftır.
+    jenerik = [
         r"C:[/\\]+Users[/\\]+(?!<)[^/\\ ]+",                 # makine-lokal kullanıcı yolu
         # e-posta: RFC 2606 rezerve/örnek domainleri HARİÇ
         r"[A-Za-z0-9._%+-]+@(?!example\.(?:com|org|net)\b)(?!test\b)(?!localhost\b)"
         r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
     ]
+    return proje + jenerik
 
 
 ID_PAT = re.compile("(" + "|".join(_id_desenleri()) + ")")

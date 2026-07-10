@@ -37,3 +37,16 @@ jobs:
       # burada otomatik atlanir; tam kosum icin IX_GUARD_TEST_LIVE=1 + repo env'leri.
       - name: Guard yuzeyi regresyonu (pre_tool_guard)
         run: python scripts/tests/test_pre_tool_guard.py
+
+      # META-GATE (2026-07-10 saglik denetimi): her guard kurali icin ③tetiklenmeli /
+      # ④tetiklenmemeli + kablolama + "kanitsiz kural = FAIL". Sahte-gate sinifini
+      # yapisal olarak imkansiz kilar. template_project'i de kapsar (iki-proje matrisi).
+      # Once Z4 oz-testi kosar: harness notr guard'a yesil basarsa CI kirilir (harness bozuk).
+      - name: Guard konformans matrisi (self-test + template_project)
+        run: |
+          python scripts/tests/guard_conformance.py --self-test-only
+          if [ -d ../template_project ]; then
+            python scripts/tests/guard_conformance.py --project ../template_project
+          else
+            echo "template_project yok — yalniz self-test kosuldu (CI'da tek repo checkout)"
+          fi

@@ -77,39 +77,12 @@ def _case(kural, ad, tool, cmd, beklenen, skip=""):
 
 
 def build_cases():
+    # NOT (2026-07-10 sadeleştirmesi): FREEZE R10 · R9 SİLME · SIZINTI-COMMIT kuralları
+    # guard'dan KALDIRILDI (merdiven kriteri: geri-alınabilir VEYA sessiz-değil → runtime
+    # guard'a ait değil). Vakaları buradan çıkarıldı. Guard'ın TAM şartnamesi artık
+    # `guard_conformance.py`'dedir (③④ + kablolama + meta-gate). Bu dosya yalnız
+    # kod-değişmezlerini (ZSD_PAT tek-kaynak, blocklist birleşimi) korur.
     c = []
-    fz = FROZEN
-    skip_fz = ""     # fixture sayesinde koşulsuz
-
-    c += [
-        _case("FREEZE R10", "A mesajda donmus kok gecer", "Bash", hd(f"chore: {fz} yolu duzeltildi"), 0, skip_fz),
-        _case("FREEZE R10", "A PS here-string", "PowerShell", ps_hd(f"chore: {fz} yolu"), 0, skip_fz),
-        _case("FREEZE R10", "B donmus koke yazma", "Bash", f'echo x > {fz}/a.txt', 2, skip_fz),
-        _case("FREEZE R10", "C powershell yazma", "PowerShell", f'Set-Content {fz}/a.txt "x"', 2, skip_fz),
-        _case("FREEZE R10", "mesru: okuma", "Bash", f'grep -r x {fz}', 0, skip_fz),
-        # Denetimde yakalanan iki yön (2026-07-09): salt-okuma bloklanıyordu, gerçek yazma geçiyordu
-        _case("FREEZE R10", "mesru: okuma + 2>&1 redirect", "Bash", f'ls {fz} 2>&1', 0, skip_fz),
-        _case("FREEZE R10", "mesru: kaynak kopyalama", "Bash", f'cp {fz}/x.abap ./y', 0, skip_fz),
-        _case("FREEZE R10", "B python ile yazma", "Bash", f'python -c "open(\'{fz}/x\',\'w\')"', 2, skip_fz),
-        _case("FREEZE R10", "B tar -C donmus kok", "Bash", f'tar -xzf y.tgz -C {fz}', 2, skip_fz),
-        _case("FREEZE R10", "mesru: tar listeleme", "Bash", f'tar -tzf {fz}/a.tgz', 0, skip_fz),
-        _case("FREEZE R10", "mesru: prefix cakismasi", "Bash", f'rm -rf {fz}_YENI/tmp', 0, skip_fz),
-        _case("FREEZE R10", "B NotebookEdit (notebook_path)", "NotebookEdit", None, 2, skip_fz),
-    ]
-    c += [
-        _case("R9 SILME", "A mesajda 'rm -rf core'", "Bash", hd("test: rm -rf core -> 2 (koruma ayakta)"), 0),
-        _case("R9 SILME", "B rm -rf core/", "Bash", "rm -rf core/", 2),
-        _case("R9 SILME", "B rm -rf DEV_CORE", "Bash", "rm -rf /x/DEV_CORE", 2),
-        _case("R9 SILME", "C powershell Remove-Item -Recurse", "PowerShell", "Remove-Item -Recurse -Force core", 2),
-        _case("R9 SILME", "C powershell rimraf .claude/agents", "PowerShell", "rimraf .claude/agents", 2),
-        _case("R9 SILME", "mesru: git clean -n", "Bash", "cd core; git clean -nfd", 0),
-        _case("R9 SILME", "mesru: baska hedef", "Bash", "rm -rf .tmp/x", 0),
-    ]
-    c += [
-        _case("SIZINTI-COMMIT", "A mesajda 'core/' gecer", "Bash", hd("docs: core/ junction aciklandi"), 0),
-        _case("SIZINTI-COMMIT", "B git add core/", "Bash", "git add core/scripts/x.py", 2),
-        _case("SIZINTI-COMMIT", "C powershell git add core/", "PowerShell", "git add core/scripts/x.py", 2),
-    ]
     c += [
         _case("ADR0005-C", "A mesajda transport release", "Bash", hd("docs: transport release YASAK (ADR 0005-C)"), 0),
     ]

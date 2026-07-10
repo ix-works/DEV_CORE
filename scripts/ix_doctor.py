@@ -436,32 +436,10 @@ def katman4() -> list[Sonuc]:
     r.append((PASS, "hook smoke pre_tool_guard (zararsız komut): exit 0") if rc == 0
              else (FAIL, f"hook smoke pre_tool_guard: exit {rc} (zararsız komutta blok/hata!) — {out.strip()[:100]}"))
 
-    # 4e — freeze-guard CANLI test: dondurulmuş köke sahte-Write → RED (exit 2) beklenir.
-    #      GERÇEK dosya yazımı YOK — guard stdin-JSON simülasyonuyla çağrılır.
-    frozen = _yaml_list("frozen_readonly_paths")
-    if not frozen:
-        r.append((SKIP, "project.yaml frozen_readonly_paths boş — freeze-guard canlı testi atlandı"))
-    else:
-        # B3 fix (2026-07-09): GERÇEKÇİ yol formatları test et. Eskiden ham project.yaml değeri
-        # (çift-backslash artefaktı) + os.sep kullanılıyordu → guard'ın eski _canon delik-halinde
-        # bile yanlış-pozitif PASS veriyordu (health-check B3). Gerçek Edit/Write tek-backslash
-        # ya da düz-slash verir → İKİ varyantı da test et; HER İKİSİ de RED olmalı.
-        kok = frozen[0].rstrip("\\/").replace("\\\\", "\\")  # çift-backslash → tek (yaml artefaktı)
-        varyantlar = [
-            ("backslash", kok + "\\__ix_doctor_probe__.txt"),
-            ("forward",   kok.replace("\\", "/") + "/__ix_doctor_probe__.txt"),
-        ]
-        delik = []
-        for etiket, hedef in varyantlar:
-            rc, out, _ = _hook_kos("pre_tool_guard",
-                                   {"tool_name": "Write",
-                                    "tool_input": {"file_path": hedef, "content": "ix_doctor freeze probe"}})
-            if not (rc == 2 and "FREEZE-GUARD" in out):
-                delik.append(f"{etiket}={hedef}→exit{rc}")
-        if not delik:
-            r.append((PASS, f"freeze-guard CANLI: dondurulmuş köke sahte-Write RED (her iki yol-formatı; kök: {kok})"))
-        else:
-            r.append((FAIL, f"freeze-guard DELİK: {'; '.join(delik)} (beklenen exit 2 + RED mesajı — gerçek yol formatları geçiyor!)"))
+    # 4e — (KALDIRILDI 2026-07-10) FREEZE-GUARD R10 sağlık denetiminde silindi:
+    #      donmuş kök git-remote'ta yedekli → yazma geri-alınabilir, runtime guard'a ait
+    #      değil (merdiven kriteri). Koruma OS izniyle (icacls) ya da klasörü park ederek
+    #      yapılır. Bu canlı test de onunla birlikte kaldırıldı.
 
     # 4f — KABLOLAMA GATE (2026-07-09 denetimi): guard'ın KOD'da koruduğu her araç,
     #      settings.json PreToolUse matcher'ında da var mı?
