@@ -1,5 +1,5 @@
 ---
-globs: **/*.abap, **/*.ddls, **/*.asddls, **/*.bdef, **/*.behavior, **/*.srvd, **/*.srvb, **/*.ddlx, **/.rules.md
+paths: **/*.abap, **/*.ddls, **/*.asddls, **/*.bdef, **/*.behavior, **/*.srvd, **/*.srvb, **/*.ddlx, **/.rules.md
 ---
 
 # SAP kaynağına dokunurken (L1b — bu kural eşleşen dosya okununca yüklenir)

@@ -69,7 +69,7 @@
 | Katman | Konu | Yer | Nasıl yüklenir |
 |---|---|---|---|
 | **L1a** | Her-oturum davranış değişmezleri | **§1.1 (aşağıda)** | her oturum (bu dosya) |
-| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | **eşleşen dosyaya dokununca** (`globs:`) |
+| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | **eşleşen dosyaya dokununca** (`paths:` — `globs:` DEĞİL) |
 | **L1c** | Derin davranış referansı | [`AGENTS.md`](AGENTS.md) | ⚠ **OTOMATİK YÜKLENMEZ** — açıkça okunmalı |
 | **L2** | Stabil kurumsal standartlar (naming, coding, UI, doc format) | [`standards/`](standards/) | on-demand |
 | **L3** | Operasyonel pattern (ADT pattern bankası, lessons-learned) | [`playbook/`](playbook/) | on-demand |
@@ -79,8 +79,15 @@
 > Claude Code `CLAUDE.md` okur, `AGENTS.md` okumaz (resmî: code.claude.com/docs/en/memory) ve
 > buradaki bağlantı `@import` değil düz markdown link'ti. 356 satır / 25 zorunlu kural sessizce
 > ölüydü — üstelik ekran teyidi her oturum "AGENTS.md yüklendi" diyordu. Her-oturum gerekli olan
-> §1.1'e taşındı; dosya-türüne bağlı olan `claude/rules/`e (glob-tetiklemeli) indi.
+> §1.1'e taşındı; dosya-türüne bağlı olan `claude/rules/`e (dosya-tetiklemeli) indi.
 > **"Yüklendi" varsayma — markdown link hiçbir şey yüklemez.**
+>
+> **⚠ Aynı gün, ikinci ders (L1b'nin kendisi):** kurallara `globs:` yazmıştık; Claude Code
+> 2.1.206 frontmatter'da **yalnız `paths:`** okuyor. Yanlış anahtar kuralı öldürmedi —
+> *sessizce her oturuma taşıdı* (tembel yükleme hiç çalışmadı, hata da vermedi). Üstelik
+> bunu ölçmek için kurulan `InstructionsLoaded` hook'u da yanlış payload anahtarlarını
+> arıyordu ve log'a `?  ?` yazıp "ölçtük" hissi veriyordu. **Anahtar adını dokümandan değil
+> çalışan sürümden doğrula.** Nasıl: [`docs/claude-rules-nasil-yazilir.md`](docs/claude-rules-nasil-yazilir.md).
 
 ## 1.1 HER-OTURUM DAVRANIŞ DEĞİŞMEZLERİ (L1a)
 
