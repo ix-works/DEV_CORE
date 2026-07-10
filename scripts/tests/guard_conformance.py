@@ -473,10 +473,32 @@ def _notr_guard(tmp: Path) -> Path:
     return h
 
 
+def _minimal_proje(tmp: Path) -> Path:
+    """Geçerli proje kökü verilmediğinde self-test için minimal fixture (CI: DEV_CORE
+    checkout'unda project.yaml yoktur; self-test yine de koşabilmeli)."""
+    d = tmp / "minproj"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "project.yaml").write_text("sap_profile: s4_private\nmaster_language: TR\n",
+                                    encoding="utf-8", newline="\n")
+    (d / "CLAUDE.md").write_text("# proje\n", encoding="utf-8", newline="\n")
+    link = d / "core"
+    if not link.exists():
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(CORE)],
+                       capture_output=True, text=True)
+        if not link.exists():                      # POSIX/CI: junction yok → symlink
+            try:
+                link.symlink_to(CORE, target_is_directory=True)
+            except Exception:
+                pass
+    return d
+
+
 def oz_test(proj: Path) -> bool:
     """Z4 — harness nötr guard'a yeşil basarsa harness bozuktur."""
     tmp = Path(tempfile.mkdtemp(prefix="guardself_"))
     try:
+        if not (proj / "project.yaml").exists():
+            proj = _minimal_proje(tmp)
         s = kosum(_notr_guard(tmp), proj)
         ucuncu = [h for h in s["hatalar"] if "③" in h]
         ok = len(ucuncu) >= 5
@@ -503,17 +525,20 @@ def main() -> int:
     projeler = [Path(x) for x in a.project] or \
                [Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())]
     projeler = [p for p in projeler if (p / "project.yaml").exists()]
-    if not projeler:
-        print("  [FAIL] geçerli proje kökü yok (project.yaml bulunamadı)")
-        return 1
 
     print("=" * 74)
     print("KONFORMANS MATRİSİ — pre_tool_guard")
     print("=" * 74)
-    if not oz_test(projeler[0]):
+    # Z4 öz-test kendi minimal fixture'ını kurabilir → geçerli proje şart DEĞİL.
+    if not oz_test(projeler[0] if projeler else Path(os.getcwd())):
         return 1
     if a.self_test_only:
         return 0
+
+    if not projeler:
+        print("  [FAIL] konformans için geçerli proje kökü yok (project.yaml). "
+              "--project <yol> ver.")
+        return 1
 
     print(f"   (test edilen guard: {guard})")
     toplam = 0
