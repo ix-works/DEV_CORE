@@ -1,0 +1,119 @@
+# PROJE guard'ı — REUSABLE WORKFLOW (her proje bunu çağırır; mantık TEK yerde yaşar).
+#
+# NEDEN (2026-07-10 senkronizasyon denetimi): guard.yml her projeye KOPYALANIYORDU. Core'a
+# eklenen `validators` job'u bir projeye elle eklendi, şablona hiç yansımadı (K2) ve hiçbir
+# şey uyarmadı. Kopya = drift kaynağı. Artık projeler 6 satırlık bir çağırıcı tutar.
+#
+# Canlı kanıt (2026-07-10): bir PRIVATE proje reposu, PUBLIC core reposunun reusable
+# workflow'unu çağırdı; koşu `success`, log'da `repo=<ORG>/<PROJECT_REPO>` → `github.*`
+# bağlamı ÇAĞIRANI gösteriyor, `actions/checkout` çağıranın kodunu çekiyor.
+#
+# ⚠ Projeler bunu `@main`'e sabitler, `@stable`'a DEĞİL: `stable` tag'i elle taşınır ve
+# bayatlar (2026-07-10'da main'in 49 commit gerisindeydi). Bayat bir ref, guard'ı sessizce
+# eski tutardı — tam da kaldırmaya çalıştığımız drift. `@main`'in bedeli gürültülüdür:
+# bozuk bir core commit'i projelerin CI'ını KIRMIZI yapar, sessizce geçmez.
+name: project-guard
+
+on:
+  workflow_call:
+
+jobs:
+  leak:
+    name: core-leak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: tracked tree'de core/junction içeriği yok
+        run: |
+          # 'rules' 2026-07-10'da eklendi (L1b). Junction'lanan HER tip burada olmalı;
+          # yoksa core içeriği sunucu tarafında yakalanmadan geçer.
+          BAD=$(git ls-files -- 'core/**' '.claude/agents/**' '.claude/skills/**' '.claude/commands/**' '.claude/rules/**')
+          if [ -n "$BAD" ]; then
+            echo "$BAD"
+            echo "::error::CORE SIZINTISI: junction içeriği repoya girmiş (R1/D26)"
+            exit 1
+          fi
+          echo "OK — sızıntı yok"
+
+  validators:
+    # 2026-07-10 sağlık denetimi (statik katman ③): proje CI'ında run_all_validators HİÇ
+    # koşmuyordu → validator'ların çoğu yalnız elle çalışıyordu. CI checkout'unda core/
+    # YOK (junction + gitignore); core repo PUBLIC olduğu için auth'suz clone edilir.
+    name: validators
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: core clone → core/ (junction yerine)
+        run: |
+          git clone --depth 1 https://github.com/ix-works/DEV_CORE.git core
+          echo "core klonlandı: $(git -C core rev-parse --short HEAD)"
+      - name: python bağımlılıkları
+        run: pip install --quiet requests urllib3 || true
+      - name: CORE-INDEX'i CLONE'lanan core'a göre yeniden üret
+        # C-IDX-01 "üretim adımını unutma" gate'idir; commit'li index gerçek junction'a
+        # (geliştirici makinesi) göre üretilir. CI'da core = fresh clone (satır-sonu/doc-set
+        # farkı olabilir) → burada indeksi CLONE'a göre yeniden üret, sonra doğrula.
+        run: python core/scripts/build_core_index.py || true
+      - name: run_all_validators (profil-modlu; core + validators-local)
+        env:
+          CLAUDE_PROJECT_DIR: ${{ github.workspace }}
+        run: python core/scripts/validators/run_all_validators.py
+
+  behavior-surface:
+    name: behavior-surface
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: davranış-yüzeyi değişim kontrolü (F1)
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          REF: ${{ github.ref }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SURFACE='CLAUDE.md */CLAUDE.md .claude/* .mcp.json project.yaml scripts/hook_shim.py'
+          list_touched() {
+            git diff --name-only "$1" "$2" -- $SURFACE 2>/dev/null || true
+          }
+          if [ "$EVENT" = "pull_request" ]; then
+            TOUCHED=$(list_touched "$BASE" "$AFTER")
+            if [ -n "$TOUCHED" ]; then
+              echo "$TOUCHED"
+              echo "::warning::PR davranış-yüzeyi dosyası içeriyor — lider incelemesi şart (F1)"
+            else
+              echo "OK — davranış-yüzeyi dokunuşu yok"
+            fi
+            exit 0
+          fi
+          # push olayı: main'e merge-olmayan (doğrudan) push + davranış-yüzeyi = FAIL
+          if [ "$REF" = "refs/heads/main" ]; then
+            PARENTS=$(git rev-list --parents -n 1 "$AFTER" | wc -w)
+            if [ "$PARENTS" -lt 3 ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+              TOUCHED=$(list_touched "$BEFORE" "$AFTER")
+              if [ -n "$TOUCHED" ]; then
+                # SQUASH-MERGE de tek-parent'lıdır (PARENTS<3) ama MERGED PR'dan gelir →
+                # review'dan geçmiştir, F1'in engellemek istediği "bypass" DEĞİLDİR.
+                MERGED_PR=$(gh api "repos/$REPO/commits/$AFTER/pulls" \
+                              --jq '[.[]|select(.merged_at!=null)]|length' 2>/dev/null || echo 0)
+                # api hata dönerse (403/JSON) sayısal-olmayan gelir → `-gt` çöker; sayıya zorla.
+                echo "$MERGED_PR" | grep -qE '^[0-9]+$' || MERGED_PR=0
+                if [ "${MERGED_PR:-0}" -gt 0 ]; then
+                  echo "$TOUCHED"
+                  echo "OK — davranış-yüzeyi değişti ama MERGED PR'dan geldi (F1 geçti; review disiplini korundu)"
+                else
+                  echo "$TOUCHED"
+                  echo "::error::main'e DOĞRUDAN push davranış-yüzeyine dokunuyor (F1 — yalnız lider-onaylı PR)"
+                  exit 1
+                fi
+              fi
+            fi
+          fi
+          echo "OK"
