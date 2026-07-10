@@ -30,7 +30,9 @@ import re
 import shutil
 from pathlib import Path
 
-TIPLER = ("agents", "skills", "commands")
+# "rules" 2026-07-10'da eklendi (L1b glob-tetiklemeli davranış kuralları). Junction'lanmazsa
+# yeni projede `.claude/rules` HİÇ kurulmaz → kural yazılır ama hiç yüklenmez (kod≠kablolama).
+TIPLER = ("agents", "skills", "commands", "rules")
 MANIFEST_ADI = ".overlay-manifest.json"
 DAMGA = "<!-- CORE-URETILDI: elle duzenleme; kaynak core/claude/{tip}/{ad} -->\n"
 

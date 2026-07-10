@@ -1,5 +1,5 @@
 ---
-name: feedback-<legacy_source>-field-adlari-sistem-bagimli
+name: feedback_legacy-field-adlari-sistem-bagimli
 description: "<LEGACY_SOURCE> eski source'tan kopya yaparken standart SAP tablo alan adlarını yeni sistemde mutlaka teyit et — versiyon/eklenti farkı olabilir"
 metadata: 
   node_type: memory

@@ -111,6 +111,10 @@ def main() -> int:
     parser.add_argument("--source-root", default=SOURCE_ROOT_NAME)
     parser.add_argument("--registry", default="governance/package-registry.md")
     parser.add_argument("--dry-run", action="store_true")
+    # `manual-edit: PROHIBITED` diyen bir dosyanın tazeliğini kimse ölçmüyordu (2026-07-10
+    # denetimi). --check: üretilecek tablo diskteki ile aynı mı? Değilse exit 1 (validator).
+    parser.add_argument("--check", action="store_true",
+                        help="Yazma; registry bayat mı diye bak (exit 1 = bayat)")
     args = parser.parse_args()
 
     erp_root = (lambda _p: _p if _p.is_absolute() else (project_root() / _p))(Path(args.source_root))
@@ -130,6 +134,21 @@ def main() -> int:
         return 1
 
     current = registry_path.read_text(encoding="utf-8")
+
+    if args.check:
+        # `last-updated` her gün değişir → tazelik ölçüsü DEĞİL. Yalnız tablo gövdesi kıyaslanır.
+        m = re.search(r"## Aktif Paketler\n\n(.*?)\n\n## ", current, flags=re.DOTALL)
+        if not m:
+            print("HATA: 'Aktif Paketler' bölümü bulunamadı", file=sys.stderr)
+            return 1
+        norm = lambda s: "\n".join(l.rstrip() for l in s.strip().splitlines())
+        if norm(m.group(1)) != norm(table):
+            print("  [FAIL] package-registry.md BAYAT — kaynak ağaç ile uyuşmuyor.")
+            print("         Onarım: python core/scripts/build_package_index.py")
+            return 1
+        print("  [OK] package-registry.md taze")
+        return 0
+
     # last-updated frontmatter alanını güncelle
     current = re.sub(
         r"^last-updated:.*$", f"last-updated: {today}", current, count=1, flags=re.MULTILINE

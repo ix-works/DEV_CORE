@@ -125,25 +125,86 @@ def build_cases():
     return c
 
 
-def test_zsd_pat_tek_dogruluk_kaynagi() -> str:
-    """`_ZSD_PAT` iki dosyada ayrı tanımlı — AYNI kalmalarını bu test zorlar.
+def test_sizinti_desenleri_tek_dogruluk_kaynagi() -> str:
+    """Sızıntı desenleri TEK dosyada tanımlı olmalı: `scripts/genericize_common.py`.
 
-    core_precommit COMMIT içeriğini, pre_tool_guard PR gövdesini tarar. Desenler
-    ayrışırsa commit'te yakalanan bir iz PR gövdesinden kaçar (ya da tersi). Yorumla
-    "bilerek aynı" demek yetmez — hiçbir şey aynı kalmalarını zorlamıyordu.
+    Eskiden desen iki dosyada ayrı tanımlıydı ve bu test "aynı mı" diye bakıyordu.
+    2026-07-10 (D9): kopya kaldırıldı — artık her iki guard da ortak modülü import eder.
+    Bu test drift'i değil, KOPYANIN GERİ GELMESİNİ engeller. (Drift testi, kopya varken
+    ancak eşitliği zorlayabiliyordu; kopya yoksa drift kavramı da yok.)
     """
     kok = Path(__file__).resolve().parents[1]
-    def _desen(dosya: str, ad: str) -> str:
+    ortak = kok / "genericize_common.py"
+    if not ortak.exists():
+        return "scripts/genericize_common.py YOK — tek-kaynak modülü kayıp"
+    om = ortak.read_text(encoding="utf-8", errors="replace")
+    for ad in ("Z_OBJ_PAT", "SAP_USER_PAT", "ORNEK_Z"):
+        if not re.search(rf"^{ad}\s*=", om, re.M):
+            return f"genericize_common.{ad} tanımlı değil"
+
+    for dosya in ("git-hooks/core_precommit.py", "hooks/pre_tool_guard.py"):
         metin = (kok / dosya).read_text(encoding="utf-8", errors="replace")
-        m = re.search(rf"{ad}\s*=\s*re\.compile\(\s*r?(['\"])(.+?)\1", metin)
-        return m.group(2) if m else ""
-    a = _desen("git-hooks/core_precommit.py", "ZSD_PAT")
-    b = _desen("hooks/pre_tool_guard.py", "_ZSD_PAT")
-    if not a or not b:
-        return "ZSD_PAT desenlerinden biri okunamadi (yeniden adlandirilmis olabilir)"
-    if a != b:
-        return f"ZSD_PAT DRIFT: core_precommit={a!r} != pre_tool_guard={b!r}"
+        if "from genericize_common import" not in metin:
+            return f"{dosya} ortak modülü import etmiyor (kopya desen riski)"
+        # Yerel yeniden-tanım = kopya geri geldi
+        if re.search(r"^\s*_?Z(SD|_OBJ)_PAT\s*=\s*re\.compile", metin, re.M):
+            return f"{dosya} kendi Z-obje desenini tanımlıyor — TEK KAYNAK ihlali"
     return ""
+
+
+_GH_PROBE = r'''
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("ptg", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+try: spec.loader.exec_module(m)
+except SystemExit: pass
+m._repo_public_mu = lambda hay: (True, "org/public-core")   # public repo simulasyonu
+kirli = "Acme" + "Corp"
+zobj  = "Z" + "BC" + "002" + "_CL_X"
+user  = "D_" + "OSOZEN"
+vakalar = [
+    (f"gh pr create --title 'x' --body '{kirli}'", 1, "uzun bayrak (regresyon)"),
+    (f"gh pr create -t 'x' -b '{kirli}'",          1, "kisa bayrak -t/-b"),
+    (f"gh pr edit 12 --body '{kirli}'",            1, "pr edit"),
+    (f"gh pr comment 12 --body '{kirli}'",         1, "pr comment"),
+    (f"gh issue create --title '{kirli}' -b 'x'",  1, "issue create"),
+    (f"gh release create v1 --notes '{kirli}'",    1, "release --notes"),
+    (f"gh release create v1 -n '{kirli}'",         1, "release -n"),
+    (f"gh api repos/o/r/pulls -f body='{kirli}'",  1, "gh api pulls (fail-closed)"),
+    (f"gh pr create -t 'x' -b '{zobj}'",           1, "Z-obje adi PR govdesinde"),
+    (f"gh pr create -t 'x' -b 'sahibi {user}'",    1, "SAP kullanici adi PR govdesinde"),
+    (f"gh pr create -t 'x' -b '{kirli.lower()}'",  1, "kucuk harf (IGNORECASE)"),
+    ("gh pr create -t 'docs' -b 'ZSD001 ornek'",   0, "MESRU: demo paket"),
+    ("gh pr list --limit 5",                       0, "MESRU: okuma komutu"),
+]
+hatalar = []
+for komut, bloklanmali, ad in vakalar:
+    bloklandi = 1 if m._gh_pr_public_leak(komut, komut) else 0
+    if bloklandi != bloklanmali:
+        hatalar.append(f"{ad}: beklenen={'BLOK' if bloklanmali else 'GECER'}")
+print("|".join(hatalar))
+'''
+
+
+def test_gh_yayin_yuzeyi() -> str:
+    """PUBLIC-PR gate'i `gh pr create`in ÖTESİNİ de tutmalı (D7, 2026-07-10 denetimi).
+
+    Denetimde `pr edit` / `pr comment` / `issue create` / `release create --notes` /
+    `gh api .../pulls` ve `-t`/`-b` kısa bayrakları gate'ten KAÇIYORDU — hepsi aynı
+    geri-alınamaz yayını yapıyor. Gövde çıkarılamayan `gh api` için fail-closed.
+    """
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as f:
+        f.write(_GH_PROBE)
+        probe = f.name
+    env = dict(os.environ, IX_GENERICIZE_BLOCKLIST="AcmeCorp,WIDGET01")
+    r = subprocess.run([sys.executable, probe, str(GUARD)], capture_output=True,
+                       text=True, env=env)
+    Path(probe).unlink(missing_ok=True)
+    if r.returncode != 0:
+        return f"probe calismadi: {r.stderr.strip()[:180]}"
+    kalan = r.stdout.strip()
+    return ("gh yayin yuzeyi ACIK -> " + kalan) if kalan else ""
 
 
 def test_blocklist_jenerigi_EZMEZ() -> str:
@@ -193,10 +254,15 @@ def main() -> int:
     if birlesim:
         fails.append("LEAK BIRLESIMI / " + birlesim)
 
-    drift = test_zsd_pat_tek_dogruluk_kaynagi()
-    ozet["ZSD_PAT DRIFT"] = [0 if drift else 1, 1]
-    if drift:
-        fails.append("ZSD_PAT / " + drift)
+    tek_kaynak = test_sizinti_desenleri_tek_dogruluk_kaynagi()
+    ozet["SIZINTI DESENI TEK-KAYNAK"] = [0 if tek_kaynak else 1, 1]
+    if tek_kaynak:
+        fails.append("TEK-KAYNAK / " + tek_kaynak)
+
+    gh = test_gh_yayin_yuzeyi()
+    ozet["GH YAYIN YUZEYI"] = [0 if gh else 1, 1]
+    if gh:
+        fails.append("GH YAYIN / " + gh)
     atlananlar = []
     for kural, ad, tool, cmd, beklenen, skip in build_cases():
         if skip:

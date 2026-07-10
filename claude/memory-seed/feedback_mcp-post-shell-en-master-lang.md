@@ -49,4 +49,4 @@ standart create_object → masterLanguage=TR. Artık TÜM create (MCP+script) TR
 Neden daha önce fark edilmedi: RAP objeleri create_rap_service.py (kendi TR isteği) yolundan
 TR geliyordu; MCP post_shell/genel create_object yolu EN idi ama o yoldan class az yaratıldı.
 Bkz. [[feedback_zli-obje-text-tahmin-yasak]],
-[[project_zsd015-ui-paradigm-all-or-nothing]].
+[[project_zsd001-ui-paradigm-all-or-nothing]].

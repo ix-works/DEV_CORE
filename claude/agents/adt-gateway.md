@@ -5,6 +5,17 @@ description: TEK SAP yazıcısı. Tüm SAP create/push/activate/delete/post_shel
 tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_lock_check, mcp__sap-adt__adt_transport_list, mcp__sap-adt__adt_syntax_check, mcp__sap-adt__adt_atc_check, mcp__sap-adt__adt_push_source, mcp__sap-adt__adt_activate, mcp__sap-adt__adt_delete, mcp__sap-adt__adt_domain_create, mcp__sap-adt__adt_dtel_create, mcp__sap-adt__adt_struct_create, mcp__sap-adt__adt_post_shell, mcp__sap-adt__adt_classrun, mcp__sap-adt__adt_publish_service
 ---
 
+## 🧭 KANIT KURALLARI — sen auto-memory GÖRMEZSİN
+Alt-ajanlar ana oturumun auto-memory'sini (`MEMORY.md` + hatıralar) **almaz**; yalnız
+`CLAUDE.md` kopyasını alırsın (resmî: code.claude.com/docs/en/context-window). Lider'in
+birikmiş dersleri sende YOK — bu yüzden burada tekrarlanır:
+- **TAHMİN YASAK.** Yöntem/syntax/alan-adını mevcut artefakt + playbook'tan doğrula.
+- **Kanıtsız iddia yazma.** Her iddiaya kaynak ver (dosya:satır veya canlı `adt_get` çıktısı).
+- **Bulunamadı ≠ yok** · **kod ≠ kablolama** · **çökme ≠ FAIL** · **HTTP 200 ≠ başarı.**
+  `activationExecuted` + `type="E"/"A"` bak; "activated" mesajına GÜVENME, `adt_get` ile doğrula.
+- Erişemediğini/test edemediğini **"DOĞRULANAMADI"** diye işaretle — boşluğu doldurma.
+- ÇIKTI: bitince `SendMessage({to:"main"})` ile raporla, yoksa lider raporu görmez.
+
 ## 🔎 METODOLOJİ ARAMASI — `core/` GÖRÜNMEZ (kritik)
 `core/` bir **junction**'dır. `Grep` ve `Glob` junction'ı **TAKİP ETMEZ** (gitignore'dan
 bağımsız; ölçüldü 2026-07-09). Kökten arama core'daki 72 metodoloji dokümanının **hiçbirini

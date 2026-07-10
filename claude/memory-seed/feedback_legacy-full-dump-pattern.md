@@ -1,5 +1,5 @@
 ---
-name: feedback-<legacy_source>-full-dump-pattern
+name: feedback_legacy-full-dump-pattern
 description: "Sprintlerde \"kapsam içi mi\" kararı vermeden ÖNCE, ilgili tüm <LEGACY_SOURCE> objelerini (struct/DTEL/domain) tam indir"
 metadata: 
   node_type: memory

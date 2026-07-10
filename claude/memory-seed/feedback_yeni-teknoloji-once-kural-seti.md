@@ -25,4 +25,4 @@ bağımlılığını ve patinajı reddediyor — kural-önce, yazma-sonra onun a
 AskUserQuestion ile kapsamı netleştir → yaz → `run_all_validators` yeşil →
 sonra SAP. Kanıtlanmamış adımı playbook'ta "KANITLANMADI" diye işaretle, asla
 çalışıyormuş gibi sunma. ADR ise pilot/karar SONRASI (erken ADR yazma).
-Bkz. [[project_zsd015-ui-paradigm-all-or-nothing]], [[feedback_playbook-once-oku]].
+Bkz. [[project_zsd001-ui-paradigm-all-or-nothing]], [[feedback_playbook-once-oku]].

@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from mcp_servers.sap_adt._app import mcp, log
+from mcp_servers.sap_adt._app import mcp, log, profil_tool
 from mcp_servers.sap_adt._reviewer import (
     reject_payload,
     run_reviewer,
@@ -328,7 +328,7 @@ def _ddic_xml_type(object_type: str):
 # adt_get
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_get(name: str, object_type: str = "class", include_source: bool = True) -> dict:
     """Get an SAP ADT object: existence, metadata, and (optionally) source.
 
@@ -411,7 +411,7 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
 # adt_post_shell
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_post_shell(
     object_type: str,
     name: str,
@@ -470,7 +470,7 @@ def adt_post_shell(
 # adt_push_source
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_push_source(
     name: str,
     object_type: str,
@@ -603,7 +603,7 @@ def adt_push_source(
 # adt_activate
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_delete(
     name: str,
     object_type: str,
@@ -693,7 +693,7 @@ def _activation_uri(name: str, object_type: str):
     return f"/sap/bc/adt/{seg}/{quote(name.lower(), safe='')}"
 
 
-@mcp.tool()
+@profil_tool()
 def adt_activate(name: str, object_type: str = "class", also: list | None = None) -> dict:
     """Activate an SAP object — single, OR multiple objects ATOMICALLY (one /activation POST).
 
@@ -819,7 +819,7 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
         return _err_from_exc(exc)
 
 
-@mcp.tool()
+@profil_tool()
 def adt_publish_service(name: str, version: str = "0001") -> dict:
     """(Re)publish an OData V2 service binding (SRVB) — refreshes the OData $metadata.
 
@@ -873,7 +873,7 @@ def adt_publish_service(name: str, version: str = "0001") -> dict:
 # adt_classrun  (gap-analysis C1 — ABAP çalıştırma kanalı)
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_classrun(name: str) -> dict:
     """Bir IF_OO_ADT_CLASSRUN sınıfını çalıştır (ADT classrun, F9-run muadili).
 

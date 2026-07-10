@@ -80,7 +80,8 @@ def junction_kur(link: Path, hedef: Path) -> bool:
 
 
 def junctions(proje: Path) -> bool:
-    """4 junction (D25: dördü TEK TEK raporlanır — kopuk agents/skills SESSİZ semptom verir).
+    """5 junction (D25: her biri TEK TEK raporlanır — kopuk agents/skills SESSİZ semptom verir).
+    core · .claude/agents · .claude/skills · .claude/commands · .claude/rules (L1b, 2026-07-10).
 
     OVERLAY (opt-in, 2026-07-09): `claude-local/<tip>/*.md` varsa o tip için junction YERİNE
     gerçek dizin üretilir (core + proje override). Yoksa davranış aynen junction — mevcut

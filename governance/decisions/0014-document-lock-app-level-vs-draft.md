@@ -77,4 +77,4 @@ edildi); küçük yarış penceresi (ETag kapatır); tarayıcı sert-çökmede 5
 edilir (framework-managed lock + resume). Bu ADR, freestyle+V2+draft'sız bağlama özgü
 bilinçli bir sapmadır.
 
-İlgili: ADR 0005 (C — enqueue), standards/05 §Lock, [[project_zsd015-ui-paradigm-all-or-nothing]].
+İlgili: ADR 0005 (C — enqueue), standards/05 §Lock, [[project_zsd001-ui-paradigm-all-or-nothing]].

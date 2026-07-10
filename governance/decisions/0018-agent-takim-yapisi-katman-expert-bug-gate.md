@@ -5,7 +5,7 @@
 
 ## Bağlam
 
-Eski model: lider + modül-bazlı feature ajanları (ajan1-sipse/ajan2-ihrse/ajan3-booking = sap-feature) + sap-research + adt-gateway; oturum başında STANDING roster spawn (model B). Sorunlar: (a) **denetçi yok** — feature ajanı builder-yanlılığıyla "done" der, bug ancak kullanıcı test edince çıkar (Booking'in tüm çilesi); (b) modül-roster israfı — booking oturumunda sipse/ihrse ajanları HİÇ çalışmadı; (c) standing state → echo/kirlenme.
+Eski model: lider + modül-bazlı feature ajanları (ajan1-se_a/ajan2-se_b/ajan3-booking = sap-feature) + sap-research + adt-gateway; oturum başında STANDING roster spawn (model B). Sorunlar: (a) **denetçi yok** — feature ajanı builder-yanlılığıyla "done" der, bug ancak kullanıcı test edince çıkar (Booking'in tüm çilesi); (b) modül-roster israfı — booking oturumunda se_a/se_b ajanları HİÇ çalışmadı; (c) standing state → echo/kirlenme.
 
 Araştırma (web+GitHub, ADR-kanıtlı): **persona-prompting kod görevinde kazanç vermez** (Wharton GAIL + arXiv 2311.10054) → uzmanlık grounding'den gelir; **adversarial code-review gate** kanıtlı değerli (Anthropic code-review plugin, affaan-m); **naive same-model panel tehlikeli** (popularity-trap) → deterministik gate + kanıt-zorunlu asıl FP filtresi.
 

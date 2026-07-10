@@ -40,6 +40,7 @@ GITIGNORE = """\
 .claude/agents/
 .claude/skills/
 .claude/commands/
+.claude/rules/
 # ==== kişisel / runtime ====
 .claude/settings.local.json
 .claude/active_package

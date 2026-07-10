@@ -14,7 +14,7 @@ maturity: pilot-in-progress
 ## 32. RAP Obje Zinciri (ADT REST / MCP)
 
 > **Olgunluk uyarısı:** RAP bu projede **ilk kez** uygulanıyor (ORDER pilotu, hafıza
-> `project_zsd015-ui-paradigm-all-or-nothing`). Aşağıda **kanıtlanmış** ile
+> `project_zsd001-ui-paradigm-all-or-nothing`). Aşağıda **kanıtlanmış** ile
 > **kanıtlanmamış (Faz 0 spike doğrulayacak)** açıkça ayrılmıştır. Kanıtlanmamış bir
 > adım çalışınca → bu dosya T1 ile güncellenir (ÇALIŞAN YÖNTEM doldurulur).
 > Çökerse → DENENEN VE BAŞARISIZ + STOP + kullanıcıya rapor (ADR 0006, pilot GATE).
@@ -657,7 +657,7 @@ String function-import parametresi **tek-tırnaklı**: `GetBalance?IvKunnr='0000
 
 ---
 
-## 34. SAP-içi HTTP/OData servis çağrısı — KANONİK: ZBC002 iç gateway proxy (SM59 = legacy)
+## 34. SAP-içi HTTP/OData servis çağrısı — KANONİK: ZBC001 iç gateway proxy (SM59 = legacy)
 
 > **Senaryo:** ABAP'tan (RAP handler, klasik sınıf, FM…) released/standart bir OData servisini çağırmak
 > (fiyat simülasyonu, BP API, vergi, dış API…). ZSD001 SimulatePricing (`API_SALES_ORDER_SIMULATION_SRV`),
@@ -671,15 +671,15 @@ String function-import parametresi **tek-tırnaklı**: `GetBalance?IvKunnr='0000
 **Neden SM59 değil:** SM59 host'u config'e taşır ama `sap-client` kodda hardcode kalır ('100') → QA/PRD client değişiminde kırılır. İç proxy host+client'ı runtime alır → **sistem & client bağımsız, kimliksiz**.
 
 **Üç parça:**
-1. **Paylaşılan `ZBC002_CL_GET_TOKEN`** (sahibi D_OSOZEN, BC paketi — ⛔ **DEĞİŞTİRME, sadece kullan**):
+1. **Paylaşılan `ZBC001_CL_GET_TOKEN`** (sahibi başka bir geliştirici, BC paketi — ⛔ **DEĞİŞTİRME, sadece kullan**):
    - `get_host( iv_method, iv_token )` → `https://{host}:{port}/sap/opu/odata/sap/{iv_method}?sap-client={sy-mandt}` (host=`TH_GET_VIRT_HOST_DATA`, client=`sy-mandt`, runtime). `iv_token = abap_true` ise `&$top=1`.
    - `get_token( iv_method )` → iç proxy GET ile `x-csrf-token` döndürür.
-2. **Motor:** `/iwfnd/cl_sutil_client_proxy=>get_instance( )->web_request( )` — SAP Gateway iç loopback. Harici HTTP / RFC-dest / kimlik YOK. **Singleton session** → token GET ile sonraki POST/PATCH CSRF'i paylaşır (ayrı `NEW zbc002` örnekleri sorun değil).
-3. **POST/PATCH'i kendi paketinin altında** yaz (ZBC002'ye genel POST EKLENMEZ). Tam çalışan örnek: `ZQM012_CL_GET_TOKEN` (get_token + save_userdecision). `iv_method = '<SERVICE_SRV>/<Entity>'`.
+2. **Motor:** `/iwfnd/cl_sutil_client_proxy=>get_instance( )->web_request( )` — SAP Gateway iç loopback. Harici HTTP / RFC-dest / kimlik YOK. **Singleton session** → token GET ile sonraki POST/PATCH CSRF'i paylaşır (ayrı `NEW zbc001` örnekleri sorun değil).
+3. **POST/PATCH'i kendi paketinin altında** yaz (ZBC001'ye genel POST EKLENMEZ). Tam çalışan örnek: `ZQM001_CL_GET_TOKEN` (get_token + save_userdecision). `iv_method = '<SERVICE_SRV>/<Entity>'`.
 
 ```abap
 " 1) CSRF
-DATA(lo_api) = NEW zbc002_cl_get_token( ).
+DATA(lo_api) = NEW zbc001_cl_get_token( ).
 DATA(lv_csrf) = lo_api->get_token( iv_method = `API_X_SRV/A_Entity` ).
 " 2) POST (PATCH için method='PATCH' + ( name = 'if-match' value = '*' ))
 /iwfnd/cl_sutil_client_proxy=>get_instance( )->web_request(
@@ -704,7 +704,7 @@ DATA(lv_response) = cl_abap_conv_codepage=>create_in( )->convert( lv_body_x ).
 - **DİL (kritik):** `get_host` URL'e sadece `sap-client` koyar, `sap-language` KOYMAZ → UoM/text lookup gereken servis EN'de patlar (`S4 HTTP 400: Unit ... is not created in language EN`). Çözüm: request_uri'ye TR ekle → `value = |{ lo_api->get_host( iv_method = lc_method ) }&sap-language=TR|` (ZSD001 simulate).
 - **Query'li URL (`?$filter`/`?$select`):** `get_host(iv_method)` sonuna `?sap-client` eklediği için **ham query'li path'i iv_method olarak VERME** (çift `?` olur). Bunun yerine host:port'u `get_host( `` )`'tan regex ile ayıkla, sonra `path + (query varsa & yoksa ?) + sap-client=sy-mandt` kur. Kanonik helper = ZSD000 `build_url`:
   ```abap
-  DATA(lv_base) = NEW zbc002_cl_get_token( )->get_host( iv_method = `` ).
+  DATA(lv_base) = NEW zbc001_cl_get_token( )->get_host( iv_method = `` ).
   DATA lv_hostport TYPE string.
   FIND REGEX `^(https?://[^/]+)` IN lv_base SUBMATCHES lv_hostport.
   DATA(lv_sep) = COND string( WHEN iv_path CS `?` THEN `&` ELSE `?` ).
@@ -718,7 +718,7 @@ DATA(lv_response) = cl_abap_conv_codepage=>create_in( )->convert( lv_body_x ).
 
 ## 34-LEGACY. SM59 destination yöntemi (İKİNCİL — yeni kodda kullanma, §34 kanonik tercih edilir)
 
-> Tarihsel referans + SM59 ortamı zaten kuruluysa bilgisi. **Yeni API çağrısı = §34 kanonik (ZBC002 iç proxy).**
+> Tarihsel referans + SM59 ortamı zaten kuruluysa bilgisi. **Yeni API çağrısı = §34 kanonik (ZBC001 iç proxy).**
 
 ### Kural 0 — Kimlik kaynak koda YAZILMAZ (ADR 0005)
 Legacy SEGW kodu sık sık `lo_client->authenticate( username = '...' password = '...' )` ile **parolayı koda gömer** (kopya tuzağı; güvenlik guard'ı da bloke eder). RAP kopyada **ASLA** taşıma. Çözüm: **SM59 destination** — kimlik/host/SSL **config'te (şifreli), source'ta değil.**

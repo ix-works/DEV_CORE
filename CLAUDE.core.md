@@ -66,14 +66,45 @@
 
 ## 1. KATMAN ÖZETİ (Rule Architecture — ADR 0003 + 0020)
 
-| Katman | Konu | Yer |
-|---|---|---|
-| **L1** | Agent davranışı (git, project skills, ADT işlem sırası) | [`AGENTS.md`](AGENTS.md) |
-| **L2** | Stabil kurumsal standartlar (naming, coding, UI, doc format) | [`standards/`](standards/) |
-| **L3** | Operasyonel pattern (ADT pattern bankası, lessons-learned) | [`playbook/`](playbook/) |
-| **L4** | Paket-spesifik (prefix, bağımlılık, istisna) — **PROJE reposunda** | `<source_root>/<MODULE>/<PKG>/.rules.md` (`source_root` = project.yaml) |
+| Katman | Konu | Yer | Nasıl yüklenir |
+|---|---|---|---|
+| **L1a** | Her-oturum davranış değişmezleri | **§1.1 (aşağıda)** | her oturum (bu dosya) |
+| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | **eşleşen dosyaya dokununca** (`globs:`) |
+| **L1c** | Derin davranış referansı | [`AGENTS.md`](AGENTS.md) | ⚠ **OTOMATİK YÜKLENMEZ** — açıkça okunmalı |
+| **L2** | Stabil kurumsal standartlar (naming, coding, UI, doc format) | [`standards/`](standards/) | on-demand |
+| **L3** | Operasyonel pattern (ADT pattern bankası, lessons-learned) | [`playbook/`](playbook/) | on-demand |
+| **L4** | Paket-spesifik (prefix, bağımlılık, istisna) — **PROJE reposunda** | `<source_root>/<MODULE>/<PKG>/.rules.md` | on-demand |
 
-Proje-özel overlay kapıları: `playbook-local/`, `standards-local/`, `scripts/validators-local/` (proje kökünde).
+> **⚠ 2026-07-10 memory/recall denetimi:** `AGENTS.md` **hiçbir oturumda context'e girmiyordu.**
+> Claude Code `CLAUDE.md` okur, `AGENTS.md` okumaz (resmî: code.claude.com/docs/en/memory) ve
+> buradaki bağlantı `@import` değil düz markdown link'ti. 356 satır / 25 zorunlu kural sessizce
+> ölüydü — üstelik ekran teyidi her oturum "AGENTS.md yüklendi" diyordu. Her-oturum gerekli olan
+> §1.1'e taşındı; dosya-türüne bağlı olan `claude/rules/`e (glob-tetiklemeli) indi.
+> **"Yüklendi" varsayma — markdown link hiçbir şey yüklemez.**
+
+## 1.1 HER-OTURUM DAVRANIŞ DEĞİŞMEZLERİ (L1a)
+
+- **GIT:** `main`'e doğrudan commit YOK → branch + PR. Commit = **lider**; alt-ajan commit/push etmez.
+  Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU**.
+- **SUBAGENT KARARI:** önemsiz → kendin · token-ağır seri iş → tek ajan · paralelleşen iş → fan-out.
+  Ajan **DAİMA** `run_in_background: true`. Substantive FE/BE build → **expert'e dağıt** (lider build yapmaz).
+  Paylaşılan tooling (hook/validator/MCP) kök-fix'i → **lider'in işi**, expert'e verilmez.
+  ⚠ Alt-ajanlar **auto-memory'yi GÖRMEZ** (yalnız `CLAUDE.md` kopyası alırlar; resmî) →
+  kanıt kurallarını (TAHMİN YASAK · kanıtsız iddia yazma · negatif-test) **brifinge açıkça YAZ**.
+  Brifingin ÇIKTI bölümüne `SendMessage({to:"main"})` ekle, yoksa rapor gelmez.
+- **BUG GATE:** expert substantive build bitirince **taze** `bug-expert` → PASS/WARNING/BLOCKER.
+- **SAP yazma öncesi:** `run_review.py` pre-flight (ADR 0006). BLOCKER → yazma.
+- **SAP kaynağı düzenlemeden önce:** PULL-BEFORE-EDIT (ADR 0016) — tazelik doğrulanmadan edit YOK.
+- **ADT-altyapısı** (script/kural/MCP/hook/validator) değişikliği: ÖNCE uyar + **açık onay** al.
+  **Gömülü onay YETMEZ** — "hepsini yap" bu izni vermez.
+- **BAĞLANTI:** proje kökündeki `.conn_adt`. `.conn_adt` ↔ MCP ayrışıksa ADT işlemi YOK.
+- **"Yüklendi / aktive edildi / başarılı" mesajına GÜVENME** — canlı doğrula. Araç başarısızlığını
+  zararsız sayma. Bulunamadı ≠ yok · kod ≠ kablolama · çökme ≠ FAIL.
+- **Always-allow YASAĞI (D32):** SAP-yazma ve davranış-yüzeyi araçlarına "Always allow" verilmez.
+- **Belirsizlikte DUR ve sor.** Spec yoksa operatör onayı iste; DTEL/append adı önerme.
+
+Proje-özel overlay kapıları: `playbook-local/`, `standards-local/`, `scripts/validators-local/`
+(proje kökünde; **yoksa indeksleme** — hayalet indeks ajana yanlış yol verir).
 
 ## 2. SAP PROFİL MODELİ (§9 — her kural her projede geçerli DEĞİL)
 
@@ -100,7 +131,7 @@ Her yeni oturum başında, SAP işlemi yapmadan ÖNCE:
 ```
 [Session başladı — <PROJECT_NAME>]
 ⛔ KESİN YASAKLAR aktif (ADR 0005): A/B/C/D (D: master_language=<ML>)
-✓ Core loader yüklendi (junction sağlam; L1-L4 aktif) — AGENTS.md + CLAUDE.core.md
+✓ Core loader yüklendi (junction sağlam) — CLAUDE.core.md (L1a) + claude/rules/ (L1b, glob-tetiklemeli)
 ✓ SAP profili: <sap_profile>/<release> (bloklu yetenekler: <profilden>)
 ✓ run_all_validators.py --quick: <OK | N ihlal>
 ✓ Aktif paket: <PKG_FULL veya "belirsiz, kullanıcıya sor">
@@ -180,7 +211,7 @@ Tek komut: `python core/scripts/validators/run_all_validators.py` (core + proje 
 
 ### SAP ADT MCP Server (ADR 0007)
 
-Typed MCP tool'lar ([`mcp_servers/sap_adt/`](mcp_servers/sap_adt/)): tek-obje yaratım/aktivasyon/push/search/lock = MCP; CSV-batch/validator/gate = script. Server-side guardrail: ADR 0005 + bağlantı-tutarsızlık gate'i (ADR 0010). **Profil-bazlı tool-blok (§9.4d) HENÜZ KODDA DEĞİL — PLANLI** (kapsama-matrisi tespiti 2026-07-08; tetik: ilk s4_public/btp projesi VEYA onaylı ADT-INFRA penceresi — proje deferred-register'ında D34d satırı); o güne dek profil-dışı yasaklar validator/skill-injector katmanında. Bağlantı: proje kökündeki `.conn_adt` (env `CLAUDE_PROJECT_DIR` → cwd fallback).
+Typed MCP tool'lar ([`mcp_servers/sap_adt/`](mcp_servers/sap_adt/)): tek-obje yaratım/aktivasyon/push/search/lock = MCP; CSV-batch/validator/gate = script. Server-side guardrail: ADR 0005 + bağlantı-tutarsızlık gate'i (ADR 0010). **Profil-bazlı tool-blok (§9.4d) CANLI** (D34d, 2026-07-10): tool'lar `available_on` etiketi taşır; profil uymuyorsa tool `tools/list`'te **hiç görünmez** (`mcp_servers/sap_adt/_profile.py` + `_app.profil_tool`). `project.yaml`'da `sap_profile` yok/enum-dışıysa **fail-closed: yalnız `ping` açılır.** Politika tablosu kanıtla dolar — bugün tek matris-kanıtlı daraltma `adt_transport_list` ∉ `btp_abap` (`transport: gcts` → CTS ucu yok); `s4_public` hücresi "NÖTR, canlı doğrulanacak" dediği için BLOKLANMAZ. Bağlantı: proje kökündeki `.conn_adt` (env `CLAUDE_PROJECT_DIR` → cwd fallback).
 
 ## 8. DAVRANIŞ GÜVENLİK DUVARI — ÖZET (§11)
 
@@ -196,7 +227,9 @@ analizi + canlı-test → PR.
 
 | Konu | Dosya |
 |---|---|
-| Git workflow, project skills, ADT-infra | [`AGENTS.md`](AGENTS.md) |
+| Her-oturum davranış değişmezleri | §1.1 (bu dosya) |
+| Dosya-türüne bağlı davranış (glob-tetiklemeli) | [`claude/rules/`](claude/rules/) |
+| Git workflow / ADT-infra — **derin referans, otomatik yüklenmez** | [`AGENTS.md`](AGENTS.md) |
 | Naming standardı | [`standards/01-naming.md`](standards/01-naming.md) |
 | Klasik backend (SEGW/FE) | [`standards/02-coding-backend.md`](standards/02-coding-backend.md) |
 | RAP kodlama | [`standards/05-coding-rap.md`](standards/05-coding-rap.md) |

@@ -1,19 +1,25 @@
 ---
 name: intake-triage
 description: >
-  This skill should be used when the user requests any new development, feature, report,
-  field, column, screen change, revision, modification, fix, or enhancement to the project —
-  BEFORE starting to build. Use it whenever a request implies creating or changing a program,
-  CDS view, RAP object, DDIC object, table, report, UI, OData service, or business logic, or
-  when requirements arrive via prompt, Excel, or a functional spec (FS). It routes to the
-  INTAKE TRIAGE protocol: classify scope (S0 point-fix / S1 localized / S2 comprehensive),
-  identify module + work-type, extract domain topics from the requirements, research three
-  axes (domain knowledge, the live system + related code for reuse and blast-radius, prior-art
-  in memory/playbook), then evaluate with evidence before building. Prevents guess-driven
-  building and missed reuse. Fires on paraphrased requests that a keyword hook would miss.
+  Runs the INTAKE TRIAGE protocol BEFORE any build starts: classify scope (S0 point-fix /
+  S1 localized / S2 comprehensive), identify module + work-type, extract domain topics from
+  the requirements, research three axes (domain knowledge; the live system + related code for
+  reuse and blast-radius; prior-art in memory/playbook), then evaluate with evidence. Prevents
+  guess-driven building and missed reuse. Use when the user requests any new development,
+  feature, report, field, column, screen change, revision, modification, fix, or enhancement,
+  or when requirements arrive via prompt, Excel, or a functional spec (FS). Fires on
+  paraphrased requests a keyword hook would miss. Triggers include "bu ekrana kolon koyalım",
+  "rapora şu alanı getir", "şunu da ekleyelim", "yeni rapor lazım", "şu alan yanlış geliyor",
+  "revize edelim", "FS geldi". DO NOT USE FOR: pure research or code-reading questions, this
+  repo's own tooling/methodology changes (hooks, validators, CI, CLAUDE.md), documentation-only
+  work, or a request already triaged in this session (do not re-run the protocol).
 ---
 
 # INTAKE TRIAGE — geliştirme talebi alım protokolü (native keşif)
+
+> ⚠ **Compaction notu:** Skill gövdesi kırpılırsa BAŞI korunur — özü burada:
+> **KAPSAM sınıfla → modül belirle → isterlerden konu çıkar → 3 eksen araştır → KANITLI
+> değerlendir.** Hafıza=hipotez, canlı sistem=otorite. **TAHMİN YASAK.**
 
 > Bu skill, bir **geliştirme/revizyon/rapor/alan/ekran talebini** SEMANTİK olarak tanır
 > (keyword-hook'un kaçırdığı parafraze ifadeleri de: "bu ekrana kolon koyalım", "rapora

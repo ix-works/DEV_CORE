@@ -12,7 +12,7 @@ import contextlib
 import io
 from typing import Any
 
-from mcp_servers.sap_adt._app import mcp, log
+from mcp_servers.sap_adt._app import mcp, log, profil_tool
 
 
 def _get_client():
@@ -36,7 +36,7 @@ def _capture():
 # adt_search_objects
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_search_objects(
     query: str,
     max_results: int = 50,
@@ -76,7 +76,7 @@ def adt_search_objects(
 # adt_transport_list
 # =============================================================================
 
-@mcp.tool()
+@profil_tool(("ecc", "s4_private", "s4_public"))  # btp_abap: transport=gcts -> CTS ucu yok
 def adt_transport_list(user: str | None = None) -> dict:
     """List a user's transport requests (modifiable + released).
 
@@ -108,7 +108,7 @@ def adt_transport_list(user: str | None = None) -> dict:
 # adt_where_used  (gap-analysis #10)
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_where_used(name: str, object_type: str = "class") -> dict:
     """Where-used: bir Z objeyi referanslayan objeleri listele (read-only).
 
@@ -163,7 +163,7 @@ def adt_where_used(name: str, object_type: str = "class") -> dict:
 # adt_atc_check  (gap-analysis #10)
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_atc_check(name: str, object_type: str = "class",
                   variant: str | None = None, max_verdicts: int = 100) -> dict:
     """ATC statik kod kontrolü (Clean ABAP / performans / güvenlik) — read-only.
@@ -219,7 +219,7 @@ def adt_atc_check(name: str, object_type: str = "class",
 # adt_syntax_check  (gap-analysis #10)
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_syntax_check(name: str, object_type: str = "class") -> dict:
     """Sözdizimi kontrolü (aktivasyon pre-audit) — aktive ETMEDEN. read-only.
 
@@ -254,7 +254,7 @@ def adt_syntax_check(name: str, object_type: str = "class") -> dict:
 # adt_package_contents  (gap-analysis #10)
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_package_contents(package: str) -> dict:
     """Bir paketin içeriğini (objeleri) listele — read-only.
 
@@ -283,7 +283,7 @@ def adt_package_contents(package: str) -> dict:
 # adt_table_read  (gap-analysis #10 + #2 PII guard, ADR 0011)
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_table_read(
     table: str,
     row_limit: int = 100,
@@ -372,7 +372,7 @@ def adt_table_read(
 # adt_lock_check
 # =============================================================================
 
-@mcp.tool()
+@profil_tool()
 def adt_lock_check(name: str, object_type: str = "class") -> dict:
     """Probe whether an SAP object is currently locked.
 

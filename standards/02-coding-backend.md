@@ -439,13 +439,13 @@ ENDIF.
 
 > **KURAL (proje standardı):** ABAP'tan SAP-içi bir OData servisini çağırırken (BP API, sipariş simülasyonu, vergi…)
 > **RFC destination / SM59 / `cl_http_client=>create_by_destination|create_by_url` KULLANMA.** Bunun yerine
-> paylaşılan **`ZBC002_CL_GET_TOKEN`** (token+URL) + **`/iwfnd/cl_sutil_client_proxy=>web_request`** (iç gateway loopback) kullan.
+> paylaşılan **`ZBC001_CL_GET_TOKEN`** (token+URL) + **`/iwfnd/cl_sutil_client_proxy=>web_request`** (iç gateway loopback) kullan.
 >
 > **Neden:** host=`TH_GET_VIRT_HOST_DATA`, client=`sy-mandt` → runtime, **sistem & client bağımsız, kimliksiz**.
 > SM59 host'u dışarı alır ama `sap-client`'ı kodda hardcode bırakır → QA/PRD'de kırılır.
 >
-> - `ZBC002`'ye **DOKUNMA, sadece kullan** (başka geliştiricinin shared objesi).
-> - POST/PATCH'i kendi paketin altında yaz; çalışan örnek `ZQM012_CL_GET_TOKEN`.
+> - `ZBC001`'ye **DOKUNMA, sadece kullan** (başka geliştiricinin shared objesi).
+> - POST/PATCH'i kendi paketin altında yaz; çalışan örnek `ZQM001_CL_GET_TOKEN`.
 > - **Dil tuzağı:** `get_host` URL'e `sap-language` koymaz → gerekirse `&sap-language=TR` ekle (UoM/text 400'ünü önler).
 > - **Query'li URL:** ham path'i `iv_method` verme (çift `?`); `build_url` deseni (host:port'u `get_host('')`'tan ayıkla + `?`/`&`+sap-client).
 > - **Tam reçete + tuzaklar + kod:** [`playbook/adt-rap.md` §34](../playbook/adt-rap.md). Referans kod: `ZSD001_CL_SO_MANAGER->simulate_pricing`, `ZSD000_CL_CUSTOMER_MAINTAIN`.

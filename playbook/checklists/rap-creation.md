@@ -55,7 +55,7 @@ applies_to: [s4_private]
 | **C-RAP-BD-02** | Draft kararı açık (varsayılan draft'sız; draft varsa `ZSDxxx_A_*_D`)? | BLOCKER | Pilot kararı |
 | **C-RAP-BD-03** | Numbering NR objesi **kullanıcı kaynaklı** (AI NR yaratmıyor)? | BLOCKER | ⛔ ADR 0005 C |
 | **C-RAP-BD-04** | EML std tabloya yazmıyor; tek MODIFY bloğu, %cid unique, COMMIT ENTITIES yok? | BLOCKER | Playbook §29 |
-| **C-RAP-BD-05** | **MUST** — `validation`/`determination ... on save` tetikleyicisinde `update` varsa `create` de VAR mı? Tek başına `{ ... update; }` aktivasyon FAIL eder: "The trigger update is only allowed in combination with create here." Repo-geneli desen istisnasız `{ create; update; }` (ORDER/BOOKING/SEVKEMRI). `delete;` ve `create;` tek-başına serbest. (Statik regex: `on save {` bloğunda `update` var + `create` yok → BLOCKER.) | BLOCKER | RAP semantik · ZSD001_I_SIPSE 2026-06-19 |
+| **C-RAP-BD-05** | **MUST** — `validation`/`determination ... on save` tetikleyicisinde `update` varsa `create` de VAR mı? Tek başına `{ ... update; }` aktivasyon FAIL eder: "The trigger update is only allowed in combination with create here." Repo-geneli desen istisnasız `{ create; update; }` (ORDER/BOOKING/SEVKEMRI). `delete;` ve `create;` tek-başına serbest. (Statik regex: `on save {` bloğunda `update` var + `create` yok → BLOCKER.) | BLOCKER | RAP semantik · ZSD001_I_SE_A 2026-06-19 |
 
 ## Checklist — Service Binding + Publish (rap_service_binding)
 

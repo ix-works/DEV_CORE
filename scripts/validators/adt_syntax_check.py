@@ -27,7 +27,7 @@ act_url = url + '/sap/bc/adt/activation?method=activate&preauditRequested=false'
 body = (
     '<?xml version="1.0" encoding="utf-8"?>'
     '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">'
-    '<adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_zsd009_mizan"'
+    '<adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/zcl_zsd001_mizan"'
     ' adtcore:name="ZCL_ZSD001_MIZAN"/>'
     '</adtcore:objectReferences>'
 )
