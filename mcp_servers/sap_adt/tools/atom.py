@@ -329,6 +329,33 @@ def _ddic_xml_type(object_type: str):
 # =============================================================================
 
 @profil_tool()
+def _read_source_object(name: str, uri_seg: str, type_label: str) -> dict:
+    """Kaynak-endpoint'li obje oku (`.../source/main`) — `download_object`'in desteklemediği
+    tipler için (ör. BDEF). Raw GET (Accept text/plain), READ-ONLY.
+    """
+    client = _get_client()
+    log_buf = io.StringIO()
+    try:
+        adt = getattr(client, "adt_client", None) or client
+        from urllib.parse import quote
+        url = (adt.url + "/sap/bc/adt/" + uri_seg + "/"
+               + quote(name.lower(), safe="") + "/source/main")
+        with _capture_stdout() as out:
+            r = adt.session.get(url, headers={"Accept": "text/plain"}, verify=False, timeout=60)
+        log_buf.write(out.getvalue())
+        if r.status_code == 404:
+            return {"ok": True, "name": name.upper(), "type": type_label, "exists": False,
+                    "client_log": log_buf.getvalue().strip()}
+        if r.status_code != 200:
+            return {"ok": False, "name": name.upper(), "type": type_label,
+                    "error": "http_%d" % r.status_code, "message": (r.text or "")[:500],
+                    "client_log": log_buf.getvalue().strip()}
+        return {"ok": True, "name": name.upper(), "type": type_label, "exists": True,
+                "source": r.text, "client_log": log_buf.getvalue().strip()}
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
 def adt_get(name: str, object_type: str = "class", include_source: bool = True) -> dict:
     """Get an SAP ADT object: existence, metadata, and (optionally) source.
 
@@ -343,6 +370,10 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
         On miss:  {ok: true, exists: false, name, type}
         On error: {ok: false, error, message}
     """
+    # BDEF (behavior definition): download_object DESTEKLEMEZ → source/main endpoint'i (raw GET).
+    if (object_type or "").lower().strip() in ("bdef", "behaviordefinition"):
+        return _read_source_object(name, "bo/behaviordefinitions", "bdef")
+
     client = _get_client()
     log_buf = io.StringIO()
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import re
 from typing import Any
 
 from mcp_servers.sap_adt._app import mcp, log, profil_tool
@@ -364,6 +365,164 @@ def adt_table_read(
             "data": data,
             "client_log": buf.getvalue().strip(),
         }
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
+# =============================================================================
+# adt_sql_query  (WHERE-filtreli serbest SELECT — ADT Data Preview freestyle)
+# =============================================================================
+_SQL_WRITE_RE = re.compile(
+    r"\b(INSERT|UPDATE|DELETE|MODIFY|DROP|CREATE|ALTER|TRUNCATE|MERGE|UPSERT|"
+    r"COMMIT|ROLLBACK|CALL|EXEC|GRANT|REVOKE|LOCK)\b", re.IGNORECASE)
+
+
+@profil_tool()
+def adt_sql_query(
+    query: str,
+    row_limit: int = 100,
+    acknowledge_risk: bool = False,
+    approval_text: str | None = None,
+) -> dict:
+    """WHERE/JOIN/aggregate destekli serbest OpenSQL **SELECT** çalıştır — READ-ONLY.
+
+    `adt_table_read` yalnız `SELECT * FROM tablo` yapar (WHERE yok); bu tool ADT Data
+    Preview freestyle (`/datapreview/freestyle`) ile tam OpenSQL SELECT'i koşar:
+    WHERE, JOIN, GROUP BY, COUNT/SUM. INTO/UP TO **YAZMA** — SAP kendi ekler.
+
+    Guard'lar:
+      • **SELECT-only (ADR 0005-B):** SELECT/WITH ile başlamalı; yazma/DDL keyword'ü
+        (INSERT/UPDATE/DELETE/MODIFY/DROP/...) tespit edilirse REDDEDİLİR. (Data Preview
+        zaten server-side salt-okuma; bu tool-seviyesi ikinci katman.)
+      • **PII (ADR 0011):** FROM/JOIN tabloları çıkarılır; DEV serbest, QA/PRD'de hassas
+        tablo (KNA1/PA*/banka/TCKN...) için `acknowledge_risk=True` + onay kelimesi ZORUNLU.
+
+    Args:
+        query: OpenSQL SELECT. Ör: "SELECT msgnr, text FROM t100 WHERE arbgb = 'ZSD001' AND sprsl = 'T'".
+        row_limit: Maks satır (default 100).
+        acknowledge_risk / approval_text: QA/PRD hassas-tablo için (ADR 0011).
+
+    Returns:
+        {ok, query, row_count, columns, rows: [{KOLON: değer}, ...], executed?, client_log}
+        veya {ok: false, error, message} (SELECT-değil / yazma-keyword) veya guardrail_violation.
+        Satırları DAİMA `rows`'tan oku (kolon-adı→değer eşlemeli; hizalama-güvenli).
+    """
+    q = (query or "").strip().rstrip(";").strip()
+    low = q.lstrip("( \t\n").lower()
+    if not (low.startswith("select") or low.startswith("with")):
+        return {"ok": False, "error": "not_select",
+                "message": "Yalnız SELECT/WITH sorgusu kabul edilir (WHERE/JOIN/aggregate). "
+                           "Yazma/DDL reddedilir (ADR 0005-B)."}
+    # String-literalleri sök → literal içindeki keyword yanlış-pozitif reddetmesin.
+    q_nolit = re.sub(r"'[^']*'", "''", q)
+    if _SQL_WRITE_RE.search(q_nolit):
+        return {"ok": False, "error": "write_keyword",
+                "message": "Yazma/DDL/işlem keyword'ü tespit edildi — REDDEDİLDİ (ADR 0005-B). "
+                           "Bu tool yalnız salt-okuma SELECT içindir."}
+
+    from mcp_servers.sap_adt._conn import get_active_tier
+    from mcp_servers.sap_adt.data_guard import require_data_access
+    from mcp_servers.sap_adt.guardrails import GuardrailViolation
+    tables = {t.upper() for t in re.findall(
+        r"\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_/]*)", q_nolit, re.IGNORECASE)}
+    try:
+        for t in sorted(tables):
+            require_data_access(get_active_tier(), t,
+                                acknowledge_risk=acknowledge_risk, approval_text=approval_text)
+    except GuardrailViolation as gv:
+        return gv.as_dict()
+
+    client = _get_client()
+    try:
+        with _capture() as buf:
+            data = client.run_sql_query(q, max_rows=row_limit)
+        cols = data.get("columns") if isinstance(data, dict) else None
+        rows = data.get("data") if isinstance(data, dict) else None
+        rows_labeled = ([dict(zip(cols, r)) for r in rows]
+                        if (cols and isinstance(rows, list)) else rows)
+        return {
+            "ok": True,
+            "query": q,
+            "tables": sorted(tables),
+            "executed": data.get("executedQueryString") if isinstance(data, dict) else None,
+            "columns": cols,
+            "row_count": len(rows) if isinstance(rows, list) else 0,
+            "rows": rows_labeled,
+            "client_log": buf.getvalue().strip(),
+        }
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
+# =============================================================================
+# adt_dump_list  (ST22 ABAP short-dump feed — runtime hata teşhisi)
+# =============================================================================
+_ATOM_NS = "http://www.w3.org/2005/Atom"
+
+
+@profil_tool()
+def adt_dump_list(limit: int = 20, from_ts: str | None = None, to_ts: str | None = None) -> dict:
+    """ST22 ABAP kısa-dump (short dump) feed'ini oku — READ-ONLY.
+
+    RAP/UI/classrun çalıştırmalarında runtime 500/kısa-dump kök-neden teşhisi (SAP GUI'siz).
+    `GET /sap/bc/adt/runtime/dumps` (Accept `application/atom+xml;type=feed`) → Atom feed parse.
+
+    Args:
+        limit: Döndürülecek maks dump (default 20; feed en yeni→eski).
+        from_ts / to_ts: Opsiyonel zaman penceresi (feed'in `from`/`to` param'ı; ör. '20260710154122').
+
+    Returns:
+        {ok, count, dumps: [{error_type, program, user, timestamp, title, id, dump_uri}], client_log}
+        `dump_uri` = tek dumpın ADT detay URI'si (sonra detay çekmek için).
+    """
+    import xml.etree.ElementTree as ET
+    client = _get_client()
+    try:
+        adt = getattr(client, "adt_client", None) or client
+        params: dict = {}
+        if from_ts:
+            params["from"] = from_ts
+        if to_ts:
+            params["to"] = to_ts
+        with _capture() as buf:
+            r = adt.session.get(
+                adt.url + "/sap/bc/adt/runtime/dumps", params=params,
+                headers={"Accept": "application/atom+xml;type=feed"}, verify=False, timeout=60)
+        if r.status_code != 200:
+            return {"ok": False, "error": "http_%d" % r.status_code,
+                    "message": (r.text or "")[:400], "client_log": buf.getvalue().strip()}
+        root = ET.fromstring(r.text)
+        dumps = []
+        for e in root.findall("{%s}entry" % _ATOM_NS):
+            if len(dumps) >= limit:
+                break
+            cats = e.findall("{%s}category" % _ATOM_NS)
+
+            def _cat(lbl, _cats=cats):
+                for c in _cats:
+                    if c.get("label") == lbl:
+                        return c.get("term")
+                return None
+
+            author = e.find("{%s}author/{%s}name" % (_ATOM_NS, _ATOM_NS))
+            updated = e.find("{%s}updated" % _ATOM_NS)
+            idel = e.find("{%s}id" % _ATOM_NS)
+            title = e.find("{%s}title" % _ATOM_NS)
+            dump_uri = None
+            for lnk in e.findall("{%s}link" % _ATOM_NS):
+                if "/runtime/dump/" in (lnk.get("href") or ""):
+                    dump_uri = lnk.get("href")
+                    break
+            dumps.append({
+                "error_type": _cat("ABAP runtime error"),
+                "program": _cat("Terminated ABAP program"),
+                "user": author.text if author is not None else None,
+                "timestamp": updated.text if updated is not None else None,
+                "title": title.text if title is not None else None,
+                "id": idel.text if idel is not None else None,
+                "dump_uri": dump_uri,
+            })
+        return {"ok": True, "count": len(dumps), "dumps": dumps, "client_log": buf.getvalue().strip()}
     except Exception as exc:
         return _err_from_exc(exc)
 
