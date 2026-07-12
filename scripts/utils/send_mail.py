@@ -45,7 +45,9 @@ for _akis in (sys.stdout, sys.stderr):
         pass
 
 SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 465  # SSL
+# 587 (STARTTLS) varsayılan: kurumsal ağlar 465'i (implicit-SSL) sık bloklar, 587 daha
+# yaygın açıktır. 465'e düşmek istenirse --port 465 (implicit SSL otomatik seçilir).
+SMTP_PORT = 587
 
 
 def proje_koku() -> Path:
@@ -169,6 +171,7 @@ def main() -> int:
     ap.add_argument("--to-list", default=str(default_list), help=f"alıcı listesi (varsayılan {default_list})")
     ap.add_argument("--from", dest="sender", default=None, help="gönderen (yoksa GMAIL_SENDER env / project.yaml)")
     ap.add_argument("--html", action="store_true", help="gövde HTML")
+    ap.add_argument("--port", type=int, default=SMTP_PORT, help=f"SMTP port (varsayılan {SMTP_PORT} STARTTLS; 465=implicit SSL)")
     ap.add_argument("--send", action="store_true", help="GERÇEKTEN gönder (yoksa yalnız önizleme)")
     args = ap.parse_args()
 
@@ -189,11 +192,21 @@ def main() -> int:
     msg = build_message(sender, recipients, args.subject, body, args.html, attachments)
     all_rcpts = recipients + [sender]
     try:
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=ctx, timeout=60) as s:
-            s.login(sender, app_pw)
-            s.send_message(msg, from_addr=sender, to_addrs=all_rcpts)
+        if args.port == 465:  # implicit SSL
+            with smtplib.SMTP_SSL(SMTP_HOST, 465, context=ctx, timeout=60) as s:
+                s.login(sender, app_pw)
+                s.send_message(msg, from_addr=sender, to_addrs=all_rcpts)
+        else:                  # 587/25 explicit STARTTLS
+            with smtplib.SMTP(SMTP_HOST, args.port, timeout=60) as s:
+                s.ehlo()
+                s.starttls(context=ctx)
+                s.login(sender, app_pw)
+                s.send_message(msg, from_addr=sender, to_addrs=all_rcpts)
     except smtplib.SMTPAuthenticationError:
         die("SMTP kimlik doğrulama başarısız. App Password yanlış ya da 2FA/App-Password kapalı.")
+    except (TimeoutError, OSError) as e:
+        die(f"bağlantı hatası (port {args.port}): {type(e).__name__}: {e}\n"
+            f"       Ağ 587'yi de blokluyorsa --port 465 dene; kurumsal firewall SMTP'yi tümden kesebilir.")
     except Exception as e:  # noqa: BLE001
         die(f"gönderim hatası: {type(e).__name__}: {e}")
     print(f"[ OK ] gönderildi → {len(recipients)} alıcı (BCC). Message-ID: {msg['Message-ID']}")
