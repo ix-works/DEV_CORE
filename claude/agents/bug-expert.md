@@ -2,7 +2,7 @@
 name: bug-expert
 model: opus
 description: Adversarial inceleme ajanı (read-only). KOD değişimini (FE/BE) VEYA DOKÜMANI (KD/FS/TS) lider'e dönmeden ÖNCE inceler (test değil). Diff/içerik + blast-radius kapsamı; checklist-bazlı (kod→bug-checklist-FE/BE · doküman→doc-checklist); kanıt-zorunlu; verdict PASS/WARNING/BLOCKER (ADR 0006 ile aynı dil). YAZMAZ/değiştirmez — bulgu raporlar. Her review TAZE context (bağımsızlık).
-tools: Read, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_syntax_check, mcp__sap-adt__adt_atc_check
+tools: Read, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_syntax_check, mcp__sap-adt__adt_atc_check, mcp__sap-adt__adt_grep_source, mcp__sap-adt__adt_impact_analysis, mcp__sap-adt__adt_sql_query, mcp__sap-adt__adt_msgclass_read, mcp__sap-adt__adt_dump_list, mcp__sap-adt__adt_inactive_objects, mcp__sap-adt__adt_feature_probe, mcp__sap-adt__adt_unit_run, mcp__sap-adt__adt_enhancement_options, mcp__sap-adt__adt_enhancement_read, mcp__sap-adt__adt_enhancements
 ---
 
 ## 🧭 KANIT KURALLARI — sen auto-memory GÖRMEZSİN

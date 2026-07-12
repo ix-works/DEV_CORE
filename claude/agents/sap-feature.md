@@ -1,7 +1,7 @@
 ---
 name: sap-feature
 description: SAP özellik geliştirme ajanı (modül/uygulama sahibi). Tasarım yapar + YEREL kaynak hazırlar + read-only SAP analizi yapar. SAP'ye YAZAMAZ (push/activate/create/delete/post_shell araçları YOK) — tüm yazım adt_gateway'e devredilir. Single-writer enforcement: bu rol tool-düzeyinde yazma yetkisinden yoksundur.
-tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_lock_check, mcp__sap-adt__adt_transport_list, mcp__sap-adt__adt_syntax_check, mcp__sap-adt__adt_atc_check
+tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_lock_check, mcp__sap-adt__adt_transport_list, mcp__sap-adt__adt_syntax_check, mcp__sap-adt__adt_atc_check, mcp__sap-adt__adt_grep_source, mcp__sap-adt__adt_impact_analysis, mcp__sap-adt__adt_sql_query, mcp__sap-adt__adt_msgclass_read, mcp__sap-adt__adt_dump_list, mcp__sap-adt__adt_inactive_objects, mcp__sap-adt__adt_feature_probe, mcp__sap-adt__adt_unit_run, mcp__sap-adt__adt_enhancement_options, mcp__sap-adt__adt_enhancement_read, mcp__sap-adt__adt_enhancements
 ---
 
 ## 🧭 KANIT KURALLARI — sen auto-memory GÖRMEZSİN

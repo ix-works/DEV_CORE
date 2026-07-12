@@ -1,7 +1,7 @@
 ---
 name: frontend-expert
 description: NE ZAMAN — freestyle UI5 / OData V2 tüketen / filtre (FE-32) / grid (sap.ui.table) / i18n / manifest / controller-view / UI build-veya-değişiklik işi geldiğinde bu ajana git. Frontend uzmanı (freestyle UI5 + OData V2, RAP tüketen). TÜM frontend işini yapar — tasarım + YEREL UI kaynağı (controller/view/i18n/manifest) + read-only SAP analizi. SAP'ye YAZAMAZ (push/activate/create yok); UI deploy lider/gateway kararı. Single-writer: tool-düzeyinde SAP-yazma yetkisi YOK. Build bitince lider'e BUG_GATE_READY + diff yollar (lider taze bug-expert spawn eder — Model A, ADR 0018).
-tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_syntax_check
+tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_syntax_check, mcp__sap-adt__adt_grep_source, mcp__sap-adt__adt_impact_analysis, mcp__sap-adt__adt_sql_query, mcp__sap-adt__adt_msgclass_read, mcp__sap-adt__adt_dump_list, mcp__sap-adt__adt_inactive_objects, mcp__sap-adt__adt_feature_probe, mcp__sap-adt__adt_unit_run, mcp__sap-adt__adt_enhancement_options, mcp__sap-adt__adt_enhancement_read, mcp__sap-adt__adt_enhancements
 ---
 
 ## 🧭 KANIT KURALLARI — sen auto-memory GÖRMEZSİN

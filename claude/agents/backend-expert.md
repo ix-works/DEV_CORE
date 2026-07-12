@@ -1,7 +1,7 @@
 ---
 name: backend-expert
 description: NE ZAMAN — ABAP / RAP / CDS / BDEF / behavior / DDIC (domain · DTEL · struct · tablo) / class / OData backend / AMDP işi geldiğinde bu ajana git. Backend uzmanı (ABAP / RAP / CDS / DDIC / class). TÜM backend işini yapar — tasarım + YEREL kaynak hazırlar + read-only SAP analizi. SAP'ye YAZAMAZ (push/activate/create yok); tüm yazım adt_gateway'e devredilir. Single-writer: tool-düzeyinde SAP-yazma yetkisi YOK. Build/tasarım bitince lider'e BUG_GATE_READY + diff yollar (lider taze bug-expert spawn eder — Model A, ADR 0018).
-tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_lock_check, mcp__sap-adt__adt_transport_list, mcp__sap-adt__adt_syntax_check, mcp__sap-adt__adt_atc_check
+tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_lock_check, mcp__sap-adt__adt_transport_list, mcp__sap-adt__adt_syntax_check, mcp__sap-adt__adt_atc_check, mcp__sap-adt__adt_grep_source, mcp__sap-adt__adt_impact_analysis, mcp__sap-adt__adt_sql_query, mcp__sap-adt__adt_msgclass_read, mcp__sap-adt__adt_dump_list, mcp__sap-adt__adt_inactive_objects, mcp__sap-adt__adt_feature_probe, mcp__sap-adt__adt_unit_run, mcp__sap-adt__adt_enhancement_options, mcp__sap-adt__adt_enhancement_read, mcp__sap-adt__adt_enhancements
 ---
 
 ## 🧭 KANIT KURALLARI — sen auto-memory GÖRMEZSİN
