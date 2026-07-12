@@ -593,23 +593,31 @@ _ENH_SEG = {"program": "programs/programs", "prog": "programs/programs",
 
 
 @profil_tool()
-def adt_enhancements(name: str, object_type: str = "program") -> dict:
-    """Bir objedeki enhancement implementasyonlarını (explicit/implicit/BAdI) oku — READ-ONLY.
+def adt_enhancements(name: str, object_type: str = "program", include_source: bool = False) -> dict:
+    """Bir objeye BAĞLI enhancement implementasyonlarını (implicit/explicit source enh.) oku — READ-ONLY.
 
-    ECC/legacy davranış analizinde std kodun enhancement'larını görmek (legacy dump/reuse
-    incelemesi). `.../source/main/enhancements/elements`. Std obje OKUR, DEĞİŞTİRMEZ (ADR 0005 temiz).
+    ECC/legacy davranış analizinde std koda NE enjekte edilmiş + NEREYE görmek. Her impl'in
+    enjeksiyon SİTE'lerini (full_name = enhancement-point yolu, position, mode/replacing) ve
+    `include_source=True` ise base64-çözülmüş enjekte kaynağı verir. `.../source/main/enhancements/elements`.
+    Std obje OKUR, DEĞİŞTİRMEZ (ADR 0005 temiz).
 
     Args:
         name: Obje adı. object_type: 'program'|'class'|'include'|'functiongroup'.
+        include_source: True → her site'ın enjekte-kaynağını (base64→utf8) dahil et (büyük olabilir).
 
     Returns:
-        {ok, name, exists, count, enhancements: [{name, type, version}], client_log}
+        {ok, name, exists, count, enhancements: [{name, type, version, enhanced_object,
+         sites: [{full_name, mode, replacing, impl_uri, position_uri, source?}]}], client_log}
+        (ENHO tipleri objeye-bağlı; `adt_enhancement_read` ile impl kaynağını isimle de çekebilirsiniz.)
     """
     import xml.etree.ElementTree as ET
+    import base64
     seg = _ENH_SEG.get((object_type or "").lower().strip())
     if not seg:
         return {"ok": False, "error": "unsupported_type",
                 "message": "object_type: program|class|include|functiongroup"}
+    _E = "{%s}" % _ENH_NS["enh"]
+    _A = "{%s}" % _ENH_NS["adtcore"]
     client = _get_client()
     try:
         adt = getattr(client, "adt_client", None) or client
@@ -617,7 +625,8 @@ def adt_enhancements(name: str, object_type: str = "program") -> dict:
         url = (adt.url + "/sap/bc/adt/" + seg + "/" + quote(name.lower(), safe="")
                + "/source/main/enhancements/elements")
         with _capture() as buf:
-            r = adt.session.get(url, headers={"Accept": "application/*"}, verify=False, timeout=45)
+            r = adt.session.get(url, headers={"Accept": "application/vnd.sap.adt.enhancements.v3+xml"},
+                                verify=False, timeout=45)
         if r.status_code == 404:
             return {"ok": True, "name": name.upper(), "exists": False, "count": 0,
                     "enhancements": [], "client_log": buf.getvalue().strip()}
@@ -626,14 +635,136 @@ def adt_enhancements(name: str, object_type: str = "program") -> dict:
                     "message": (r.text or "")[:300], "client_log": buf.getvalue().strip()}
         root = ET.fromstring(r.text)
         out = []
-        for impl in root.iter("{%s}enhancementImplementations" % _ENH_NS["enh"]):
+        for impl in root.iter(_E + "enhancementImplementations"):
+            eobj = impl.find(".//" + _E + "enhancedObject")
+            sites = []
+            for scp in impl.iter(_E + "sourceCodePlugin"):
+                pos = scp.find(".//" + _E + "position")
+                site = {
+                    "full_name": scp.get(_E + "full_name", ""),
+                    "mode": scp.get(_E + "mode", ""),
+                    "replacing": scp.get(_E + "replacing", ""),
+                    "impl_uri": scp.get(_E + "uri", ""),
+                    "position_uri": pos.get(_A + "uri", "") if pos is not None else "",
+                }
+                if include_source:
+                    src_el = scp.find(_E + "source")
+                    if src_el is not None and src_el.text:
+                        try:
+                            site["source"] = base64.b64decode(src_el.text).decode("utf-8", "replace")
+                        except Exception:  # noqa: BLE001
+                            site["source"] = None
+                sites.append(site)
             out.append({
-                "name": impl.get("{%s}name" % _ENH_NS["adtcore"], ""),
-                "type": impl.get("{%s}type" % _ENH_NS["adtcore"], ""),
-                "version": impl.get("{%s}version" % _ENH_NS["adtcore"], ""),
+                "name": impl.get(_A + "name", ""),
+                "type": impl.get(_A + "type", ""),
+                "version": impl.get(_A + "version", ""),
+                "enhanced_object": eobj.get(_A + "name", "") if eobj is not None else "",
+                "sites": sites,
             })
         return {"ok": True, "name": name.upper(), "exists": True, "count": len(out),
                 "enhancements": out, "client_log": buf.getvalue().strip()}
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
+# =============================================================================
+# adt_enhancement_read  (ENHO/BAdI-impl kaynağını İSİMLE oku)
+# =============================================================================
+_ENHO_TYPE_SEG = {"enhoxhh": "enhancements/enhoxhh", "enhoxh": "enhancements/enhoxh",
+                  "enhoxhb": "enhancements/enhoxhb"}
+
+
+@profil_tool()
+def adt_enhancement_read(name: str, enh_type: str = "enhoxhh") -> dict:
+    """Bir ENHO/BAdI-impl objesinin ham ABAP kaynağını İSİMLE oku — READ-ONLY.
+
+    `adt_enhancements`'in verdiği impl adını tam kaynağa çevirir (legacy davranış analizinin
+    ikinci yarısı). `.../enhancements/{enh_type}/{name}/source/main`.
+
+    Args:
+        name: ENHO obje adı (namespaced ise '/NS/...' URL-encode edilir). enh_type:
+              'enhoxhh' (source-plugin) | 'enhoxh' (impl) | 'enhoxhb' (BAdI impl).
+
+    Returns:
+        {ok, name, type, exists, source, client_log}
+    """
+    from mcp_servers.sap_adt.tools.atom import _read_source_object
+    seg = _ENHO_TYPE_SEG.get((enh_type or "").lower().strip())
+    if not seg:
+        return {"ok": False, "error": "unsupported_type", "message": "enh_type: enhoxhh|enhoxh|enhoxhb"}
+    return _read_source_object(name, seg, enh_type.lower())
+
+
+# =============================================================================
+# adt_enhancement_options  (obje HANGİ exit/point/spot'u SUNUYOR — ⚠ devasa yanıt)
+# =============================================================================
+_ENHO_OPT_NS = {"enho": "http://www.sap.com/adt/enhancementOptions/enho",
+                "enhocore": "http://www.sap.com/abapsource/enhancementscore",
+                "atom": "http://www.w3.org/2005/Atom"}
+
+
+@profil_tool()
+def adt_enhancement_options(name: str, object_type: str = "program",
+                            name_filter: str | None = None, max_results: int = 100) -> dict:
+    """Bir objenin SUNDUĞU enhancement option'ları (exit/point/BAdI) listele — READ-ONLY.
+
+    "Bu program/FG nereden genişletilebilir / nereye enjekte edilebilir" haritası.
+    `.../enhancements/options`. ⚠ Yanıt DEVASA olabilir (MB'larca) → `name_filter` + `max_results`
+    ile daralt. Std obje OKUR, DEĞİŞTİRMEZ (ADR 0005 temiz).
+
+    Args:
+        name: Obje adı. object_type: 'program'|'class'|'include'|'functiongroup'.
+        name_filter: Yalnız full_name'inde bu metin geçen option'lar (ör. 'EX:' exit'ler).
+        max_results: Döndürülecek maks option (default 100).
+
+    Returns:
+        {ok, name, matched, returned, truncated, options: [{full_name, description, mode,
+         source_link}], client_log}
+    """
+    import xml.etree.ElementTree as ET
+    seg = _ENH_SEG.get((object_type or "").lower().strip())
+    if not seg:
+        return {"ok": False, "error": "unsupported_type",
+                "message": "object_type: program|class|include|functiongroup"}
+    _O = "{%s}" % _ENHO_OPT_NS["enho"]
+    _OC = "{%s}" % _ENHO_OPT_NS["enhocore"]
+    _AT = "{%s}" % _ENHO_OPT_NS["atom"]
+    client = _get_client()
+    try:
+        adt = getattr(client, "adt_client", None) or client
+        from urllib.parse import quote
+        url = (adt.url + "/sap/bc/adt/" + seg + "/" + quote(name.lower(), safe="")
+               + "/enhancements/options")
+        with _capture() as buf:
+            r = adt.session.get(
+                url, headers={"Accept": "application/vnd.sap.adt.enhancementoptions.v2+xml"},
+                verify=False, timeout=90)
+        if r.status_code == 404:
+            return {"ok": True, "name": name.upper(), "matched": 0, "returned": 0,
+                    "options": [], "client_log": buf.getvalue().strip()}
+        if r.status_code != 200:
+            return {"ok": False, "error": "http_%d" % r.status_code,
+                    "message": (r.text or "")[:300], "client_log": buf.getvalue().strip()}
+        root = ET.fromstring(r.text)
+        matched, opts = 0, []
+        flt = name_filter.lower() if name_filter else None
+        for opt in root.iter(_O + "option"):
+            fn = opt.get(_OC + "full_name", "")
+            if flt and flt not in fn.lower():
+                continue
+            matched += 1
+            if len(opts) < max_results:
+                link = opt.find(_AT + "link")
+                opts.append({
+                    "full_name": fn,
+                    "description": opt.get(_O + "fullDescription", ""),
+                    "mode": opt.get(_O + "mode", ""),
+                    "source_link": link.get("href") if link is not None else None,
+                })
+        return {"ok": True, "name": name.upper(), "matched": matched, "returned": len(opts),
+                "truncated": matched > len(opts), "options": opts,
+                "client_log": buf.getvalue().strip()}
     except Exception as exc:
         return _err_from_exc(exc)
 
