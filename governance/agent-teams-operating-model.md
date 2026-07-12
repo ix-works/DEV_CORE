@@ -105,6 +105,24 @@ Uzun-yaşayan background ajanlarla (özellikle standing gateway) çalışırken 
 - **D — Tamamlanan task'ı ANINDA `completed` işaretle** → re-trigger penceresi kapanır.
 > Not: gerçek blocker'lar (DDLS shell reçetesi, generic-tip aktivasyon-fail, pseudo-comment yerleşimi) bu gürültüden AYRIDIR — onlardaki gidiş-geliş normal SAP-geliştirme iterasyonudur, A-D kapsamı değil.
 
+### 4B. Checkpoint-heartbeat — uzun-iş görünürlüğü (2026-07-12, kullanıcı sorusu)
+Uzun/token-ağır tek-ajan işinde (ör. backend-expert build), lider adım-adım ilerlemeyi **CANLI göremez**:
+local-agent transcript'i canlı flush etmez (`...\tasks\<id>.output` uzun süre 0-byte görünebilir) ve
+ham okumak lider context'ini taşırır (§5-3 output-peek yalnız sessizlikte, kontrollü). Çözüm: ajan
+**kendi** doğal kilometre-taşlarında lider'e kısa ilerleme yollar. Brifinge ekle (auto-memory'yi görmez).
+- **NE:** her kilometre-taşında 2-3 satır `SendMessage({to:"main"})` — "yaptım (X) / sırada (Y) / açık-nokta (Z)".
+  Doğal taşlar: ön-okuma bitti · canlı-teyitler (D-x) bitti · her ana metot/INCLUDE/entity bitti · build bitti (=`BUG_GATE_READY`).
+- **CADENCE = kilometre-taşı, SAAT DEĞİL.** Ajan tek LLM döngüsüdür → **öz-zamanlayıcısı yok**; yalnız
+  adımlar (tool-call) ARASINDA hareket eder, uzun **tek** bir çağrının (ör. 2 dk'lık `adt_get`) ortasında
+  kendini bölemez. "Her 5 dk" garanti EDİLEMEZ; kilometre-taşı başına ≈ birkaç dakikaya denk gelir.
+- **AMAÇ = görünürlük ("ne yapıyor"), canlılık garantisi DEĞİL.** Ajan bir çağrı İÇİNDE asılırsa
+  (asıl patinaj riski) zaten heartbeat gönderemez → asılmayı **§5 watchdog / output-peek** yakalar.
+  İkisi tamamlayıcı: **heartbeat = içerik, watchdog = nabız.**
+- **§4A ile TUTARLI:** heartbeat **niyetli + nokta-zamanlı** bir `SendMessage`'dır → §4A-A'nın "lider yalnız
+  explicit `SendMessage` raporuna göre hareket eder" ilkesine girer (stale `idle_notification` gürültüsü DEĞİL).
+- **NE ZAMAN KAPAT:** geniş fan-out (çok ajan × sık heartbeat = mesaj seli, §4A/§6 gürültü) → kapat veya
+  yalnız "başladım / bitti"ye indir. Tek uzun ajan → aç (bedava sayılır). Kısa iş (<birkaç dk) → gerekmez.
+
 ## 5. Gateway Gözlemlenebilirlik Protokolü (opak-patinaj önleme)
 Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
 1. **Deneme/eskalasyon merdiveni (kör döngü yerine):** obje başına **3 denemeye** kadar dene (geçici CSRF/lock vb.). 3'te çözülmezse → **ZORUNLU ARAŞTIRMA** (`playbook/<obje-tipi>.md` + `playbook/lessons-learned.md` + ilgili `playbook/checklists/` + hata pattern'i — yani lider takılınca neye bakıyorsa) → bulguyla devam. **Toplam 5 denemede** hâlâ başarısız → **DUR + lider'e gel** (ham hata + denenenler + araştırma bulgusu). Sınırsız/kör tekrar YASAK → patinaj 5 ile sınırlı.
