@@ -128,6 +128,11 @@
   ⚠ Alt-ajanlar **auto-memory'yi GÖRMEZ** (yalnız `CLAUDE.md` kopyası alırlar; resmî) →
   kanıt kurallarını (TAHMİN YASAK · kanıtsız iddia yazma · negatif-test) **brifinge açıkça YAZ**.
   Brifingin ÇIKTI bölümüne `SendMessage({to:"main"})` ekle, yoksa rapor gelmez.
+  **Checkpoint-heartbeat (uzun/token-ağır ajan):** brifinge ekle → ajan her doğal kilometre-taşında
+  (ön-okuma bitti · canlı-teyit bitti · her ana metot/INCLUDE) 2-3 satır `SendMessage({to:"main"})`
+  ("yaptım / sırada / açık-nokta"). = **görünürlük** (ne yapıyor), canlılık garantisi DEĞİL: asılı ajan
+  rapor gönderemez → onu watchdog/§5 yakalar. Saat-bazlı DEĞİL (ajanın öz-zamanlayıcısı yok; kilometre-taşı
+  başına ≈ birkaç dk). Geniş fan-out'ta KAPAT (mesaj seli). 📖 `governance/agent-teams-operating-model.md` §4B.
 - **BUG GATE:** expert substantive build bitirince **taze** `bug-expert` → PASS/WARNING/BLOCKER.
 - **SAP yazma öncesi:** `run_review.py` pre-flight (ADR 0006). BLOCKER → yazma.
 - **SAP kaynağı düzenlemeden önce:** PULL-BEFORE-EDIT (ADR 0016) — tazelik doğrulanmadan edit YOK.

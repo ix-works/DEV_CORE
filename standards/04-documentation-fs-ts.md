@@ -3,10 +3,16 @@ applies_to: [s4_private]
 layer: L2
 scope: project-wide
 applies-to: fs-ts-kd
-version: 1.1
-last-updated: 2026-06-11
+version: 1.2
+last-updated: 2026-07-11
 status: active
 ---
+
+<!-- v1.2 (2026-07-11): FS §2.0 kullanıcı-gözü + öneri/soru disiplini (İLKE-1/2) + §11-A/11-B;
+     TS §3.0 developer-gözü + FS-otoritesi + FS-denetimi + ertelenebilir-ayrımı (İLKE-3/4/5) +
+     §2-A/§11-A; §7/§8 checklist+hata güncellendi. Kök ders: bir TS'te fonksiyonel kararların
+     (eşleştirme/dönüşüm/UoM) "build'de netleşir"e ertelenmesi → developer tahmine düşer. -->
+
 
 # SAP Geliştirme Dökümantasyon Kuralları
 ## Fonksiyonel Spesifikasyon (FS), Teknik Spesifikasyon (TS) ve Kullanıcı Dökümanı (KD) Hazırlama Rehberi
@@ -94,6 +100,41 @@ Bu yüzden:
 ---
 
 # BÖLÜM 2: FONKSİYONEL SPESİFİKASYON (FS) DOKÜMANI
+
+## 2.0 FS YAZIM ZİHNİYETİ — "Kullanıcı Gözü" + Öneri/Soru Disiplini (ÖNCE OKU)
+
+> **FS'i, bu uygulamayı *her gün SEN kullanacakmışsın* gibi yaz.** Bölüm yapısını (2.2)
+> doldurmak yetmez; bir son-kullanıcının umursayacağı her şeyi düşün: ekranda ne görünür/
+> görünmez, hangi alan default gelir, **boş/hatalı/sıfır-kayıt** durumunda ne olur, toplu
+> aksiyon var mı, teyit/geri-alma var mı, "**Kaydet'e basınca arka planda ne oluştuğu**"
+> kullanıcıya görünür mü, çok kayıtta performans/ergonomi ne olur. Jenerik şablon bunları
+> sormaz — **sen sor.**
+
+**İki değişmez ilke (ihlal = eksik FS):**
+
+**İLKE-1 — KULLANICI İSTEĞİ = KANON.** Kullanıcının/Key User'ın **açıkça yazdığı hiçbir
+istek atlanamaz, gölgelenemez, sessizce yeniden yorumlanamaz.** Kullanıcının ifadeleri FS'te
+**ön planda** durur ve her biri gereksinim listesinde **izlenebilir + karşılanmış** olmalıdır
+(hiçbiri "unutulup" düşmez). Danışman katkıları bu isteklerin **etrafında** durur — **yerine
+değil**. Bir öneri kullanıcı isteğiyle çelişiyorsa: isteği uygula, çelişkiyi **soru** olarak getir.
+
+**İLKE-2 — ÖNERİ ve SORU, isteği NETLEŞTİRMEK içindir.** Danışmanın eklediği zenginleştirmeler
+`[ÖNERİ]` olarak işaretlenir ve **"BÖLÜM 11-A: DANIŞMAN ÖNERİLERİ (onay bekliyor)"**nde toplanır;
+onaylanınca ilgili gereksinime taşınır. Kullanıcının yazdığını **onun yönünde** derinleştiren
+**paralel sorular** (alternatif + öneri ile) **"BÖLÜM 11-B: AÇIK KARARLAR / SORU SETİ"**ne yazılır.
+Sorular tek-tek, bağlam+öneri ile sorulur ([[sorulari-tek-tek-sor-oneriyle]]).
+
+**Soru-seti zorunluluğu:** Danışmanın **karar veremediği** her nokta 11-B'de *seçenekler +
+önerilen seçenek* ile durmalıdır. **Hiçbir açık fonksiyonel nokta "geliştirmede/build'de
+netleşir"e ERTELENEMEZ** — FS mutabakatı, 11-A boşalıp 11-B'deki her karar kapandığında olur.
+
+**Kullanıcı-gözü tamlık — FS'i bitirmeden kendine sor:**
+- Boş dosya / 0 kayıt / mükerrer / çok-fazla (max) kayıtta ekran ne yapar?
+- Her alanın default'u, zorunluluğu, "boş bırakırsam ne olur"u yazılı mı?
+- Hata nasıl gösterilir (satır mı, toplu mu, birebir metin mi), kullanıcı ne yapacağını biliyor mu?
+- İşlem geri alınabilir mi? Teyit isteniyor mu? Yarım-iş kalır mı?
+- "Kaydet/İşle" sonrası sistemde **ne oluştuğu** kullanıcıya görünür mü?
+- Kullanıcının **yazdığı her istek** gereksinim/kural olarak FS'te var mı (izlenebilir)?
 
 ## 2.1 FS Nedir?
 
@@ -369,6 +410,30 @@ Her rapor için:
 
 ---
 
+### BÖLÜM 11-A: DANIŞMAN ÖNERİLERİ (onay bekliyor) *(İLKE-2 — sabit bölüm)*
+
+> Kullanıcının **istemediği** ama danışmanın işi iyileştirmek için önerdiği her şey **burada**
+> toplanır — gereksinim listesine (§4) sessizce **gömülmez**. Kullanıcı tek yerden görüp
+> onaylar/reddeder. **Onaylanan** madde ilgili gereksinime (FR/KR) taşınır ve burada "✓ taşındı"
+> işaretlenir. Bu bölüm **boşalmadan** (her öneri karara bağlanmadan) FS mutabakata gitmez.
+
+| # | Öneri `[ÖNERİ]` | Neden (fayda) | Etki/maliyet | Karar (Onay/Ret) |
+|---|---|---|---|---|
+| Ö-01 | (ekranda şu kolaylık…) | (kullanıcı şunu kazanır) | (ek efor / risk) | ☐ Onay ☐ Ret |
+
+### BÖLÜM 11-B: AÇIK KARARLAR / SORU SETİ *(mutabakat öncesi — build'e ERTELENEMEZ)*
+
+> Danışmanın **karar veremediği** ve **kullanıcının yazdığını netleştiren** her nokta burada
+> *seçenekler + önerilen seçenek* ile durur. Sorular **kullanıcının isteği yönünde** derinleşir
+> (İLKE-1) — onu değiştirmeye değil, tamamlamaya hizmet eder. **Hiçbir fonksiyonel açık nokta
+> "build'de netleşir"e atılamaz.** Tümü kapanınca FS onaylanır.
+
+| # | Açık nokta (hangi isteği netleştiriyor) | Seçenekler | Öneri | Karar |
+|---|---|---|---|---|
+| S-01 | (ör. "mevcut sipariş eşleşmesi": aynı PO ile 2 açık sipariş olursa?) | a) hata b) en yeni c) açık olan | (b) | — |
+
+---
+
 ### BÖLÜM 12: ONAY
 
 | Rol | Ad Soyad | İmza | Tarih |
@@ -399,6 +464,57 @@ Her rapor için:
 ---
 
 # BÖLÜM 3: TEKNİK SPESİFİKASYON (TS) DOKÜMANI
+
+## 3.0 TS YAZIM ZİHNİYETİ — "Developer Gözü" + FS Otoritesi + "Ertelenebilir mi?" (ÖNCE OKU)
+
+> **TS'i, bu TS'le *SEN build edeceksin* gibi yaz.** Satır-1'i yazmadan önce bir developer'ın
+> soracağı **her soruyu şimdi cevapla.** Bölüm yapısını (3.2) doldurmak yetmez — developer
+> tahmine düşerse yanlış/uzun/gitgelli build olur.
+
+**İki değişmez ilke (ihlal = eksik TS):**
+
+**İLKE-3 — FS = KAYNAK OTORİTE.** TS'in **birincil görevi FS'teki HER maddeye (FR/KR) teknik
+çözüm üretmektir.** Hiçbir FS gereksinimi TS'te **çözümsüz/atlanmış** kalamaz — izlenebilirlik
+matrisi (§5.1) her FR/KR'yi bir TS nesne/metoduna bağlamalıdır (boş satır = eksik TS). TS
+yazarken iyileştirme/düşünülmemiş nokta çıkabilir; **meşrudur ama:** (a) FS gereksinimleri
+**tam karşılandıktan sonra**, onların üstüne eklenir — FS'i **baypas etmez**; (b) FS'i
+değiştiren bir iyileştirme ise TS'e keyfî gömülmez → **FS'e öneri olarak geri beslenir**
+(§11-A), onay alınır, sonra TS'e girer.
+
+**İLKE-4 — TS, FS'İ DENETLER (kör itaat DEĞİL).** İLKE-3 "her FR/KR'ye çözüm üret" der; ama TS
+yazarken FS **aynı zamanda eleştirel yorumlanır.** Bir FS isteği: **fizibil olmayabilir**;
+istendiği gibi yapılınca **hataya** yol açabilir; uygulamanın **başka yerini bozabilir**
+(blast-radius — [[feedback_fix-oncesi-where-used-blast-radius]]); **alternatif** bir yolla
+yapılması gerekiyor olabilir; ya da düpedüz **yanlış** olabilir. **TS'in en önemli görevlerinden
+biri FS'in kalitesini ve doğruluğunu denetlemektir.** Bu değerlendirme TS'ten **önce/sırasında**
+yapılır ve bulgular **"BÖLÜM 2-A: FS DENETİMİ"**ne yazılıp kullanıcıya **bilgilendirme** olarak
+getirilir — sorunlu bir isteği körü körüne build etmek YASAK: **DUR → denetim bulgusu →
+alternatif öner → onay → sonra çözüm.** (TAHMİN YASAK / kanıtlı hareket — çekirdek davranış.)
+
+**İLKE-5 — "ERTELENEBİLİR Mİ?" AYRIMI (kritik).** "Build'de netleşir" cümlesi iki **çok farklı**
+şeyi gizler. TS'te bunları **karıştırma:**
+
+| ✅ MEŞRU build-time teyit (ertelenebilir) | ⛔ FONKSİYONEL karar (TS'te KAPANMALI) |
+|---|---|
+| Tasarımı **değiştirmez**, canlıda **doğrulanır** | Yanlışsa **tasarım/sonuç yanlış** olur |
+| DTEL/append adı (ADR 0005 — AI önermez zaten) | Eşleştirme mantığı + **çoklu-eşleşme çözümü** |
+| `CONVERT KEY` pre-key alan adı (sürüme bağlı) | Anahtar çözümü **TÜM key alanlarıyla** (ör. KNMT'de vkorg/vtweg) |
+| Kütüphane alt-metod syntax'i (`xco_*`) | Veri dönüşümü: tarih / ondalık / **ALPHA / padding** |
+| Aktivasyon davranışı (HTTP 200 sahte-OK) | **Birim/UoM** dönüşümü ve karşılaştırma |
+| Mesaj no'sunun kesin metni | Hangi **entity/child** hangi alanı taşır (EML/RAP/schedule-line) |
+| | **Kenar durumlar:** boş / mükerrer / max / sıfır |
+| | Kilit / eşzamanlılık, hata-**birleştirme** kuralı |
+
+> **Sonuç:** TS'in **"BÖLÜM 11-A: BUILD-TIME DOĞRULANACAKLAR"** bölümü YALNIZ sol sütun
+> (teknik-teyit) maddelerini içerebilir. Sağ sütun (fonksiyonel karar) oraya **konamaz** —
+> o, TS gövdesinde **çözülür** ya da (FS'i etkiliyorsa) FS §11-B'ye geri gider.
+
+**Developer geri-soru simülasyonu — TS'i bitirmeden yap:**
+> "Bu TS elime geçti, kodu yazacağım. Satır-1'den önce **neyi bilmem gerekir?**" — çıkan her
+> soru TS'te **cevaplı** mı, yoksa 11-A'ya (yalnız meşruysa) mı taşındı? Tipik sorular:
+> mevcut kaydı **hangi WHERE** ile bulacağım · **iki eşleşme** olursa hangisi · şu alan **hangi
+> tabloda/child'da** · Excel/dış-veri **hangi formatta** gelir, nasıl çeviririm (ALPHA/tarih/
+> ondalık) · **birim** farkında karşılaştırma · **boş/mükerrer/max** girdide ne olur · kilit.
 
 ## 3.1 TS Nedir?
 
@@ -454,6 +570,22 @@ Geliştirmenin sistemdeki yerini ve bağlantılarını gösterir:
                                               ↓
                                     [Email Gönderimi - SO_NEW_DOCUMENT_ATT_SEND_API1]
 ```
+
+---
+
+### BÖLÜM 2-A: FS DENETİMİ (fizibilite · yan-etki · alternatif · hata) *(İLKE-4 — sabit bölüm)*
+
+> TS, FS'i yalnız uygulamaz; **denetler.** Her FS gereksinimi (FR/KR) teknik gözle
+> değerlendirilir; sorunlular **build'den ÖNCE** kullanıcıya bilgilendirme olarak getirilir.
+> Sorun yoksa "✓ istendiği gibi uygulanabilir" satırı yeterlidir (bu bölüm boş bırakılmaz —
+> "denetlendi, temiz" de bir sonuçtur).
+
+| FS Md. | Denetim sonucu | Bulgu / gerekçe | Aksiyon |
+|---|---|---|---|
+| (FR/KR-nn) | ✅ uygulanabilir / ⚠ alternatif gerek / ⛔ fizibil değil / 💥 başka yeri bozar / ✗ FS hatalı | (kanıt: where-used / blast-radius / kural) | (aynen uygula / **alternatif öner→onay** / FS'e geri besle) |
+
+> ⛔ **Sorunlu bir FS maddesi körü körüne build EDİLMEZ** — DUR → bulgu → alternatif → onay →
+> sonra çözüm. FS'i değiştiren her düzeltme FS §11-A/§11-B'ye geri döner (İLKE-3).
 
 ---
 
@@ -804,6 +936,20 @@ ENDTRY.
 
 ---
 
+### BÖLÜM 11-A: BUILD-TIME DOĞRULANACAKLAR *(YALNIZ teknik-teyit — İLKE-5)*
+
+> Buraya **yalnız** İLKE-5 sol-sütun maddeleri girer: tasarımı değiştirmeyen, canlıda
+> doğrulanacak teknik teyitler (DTEL adı · `CONVERT KEY` pre-key alanı · kütüphane alt-metod
+> syntax'i · aktivasyon sahte-OK · kesin mesaj metni). **Fonksiyonel karar buraya KONAMAZ** —
+> o TS gövdesinde çözülür ya da FS §11-B'ye gider. Denetim: "bu madde yanlış çıkarsa *tasarım/
+> sonuç* değişir mi?" → **evet ise buraya ait değildir.**
+
+| # | Doğrulanacak (teknik) | Yöntem | Neden ertelenebilir (tasarımı değiştirmez) |
+|---|---|---|---|
+| D-01 | (ör. `CONVERT KEY` pre-key alan adı) | ilk test / `adt_syntax_check` | sürüme bağlı ad; akış aynı |
+
+---
+
 ### BÖLÜM 12: TRANSPORT STRATEJİSİ
 
 **12.1 Transport Listesi**
@@ -1105,6 +1251,10 @@ Her FS gereksinimi ile TS teknik çözümü arasında bağ kurulmalıdır:
 [ ] Müşteri Key User onayı alınmış
 [ ] Tüm varsayımlar belirtilmiş
 [ ] Kapsam dışı konular açıkça ifade edilmiş
+[ ] (İLKE-1) Kullanıcının yazdığı HER istek gereksinim/kural olarak izlenebilir + karşılanmış (hiçbiri düşmemiş)
+[ ] (İLKE-2) Danışman katkıları [ÖNERİ] olarak §11-A'da; gereksinime sessizce gömülmemiş; her öneri karara bağlı
+[ ] (İLKE-2) Karar-verilemeyen her nokta §11-B'de (seçenek+öneri); "build'de netleşir"e ertelenen fonksiyonel açık nokta YOK
+[ ] (§2.0) Kullanıcı-gözü tamlık: boş/mükerrer/max/sıfır girdi, default, teyit/geri-alma, hata gösterimi, "kaydet sonrası ne oluştuğu" görünürlüğü düşünülmüş
 ```
 
 ## 7.2 TS Kalite Kontrol Listesi
@@ -1122,6 +1272,11 @@ Her FS gereksinimi ile TS teknik çözümü arasında bağ kurulmalıdır:
 [ ] Transport stratejisi belirlenmiş
 [ ] Teknik lider onayı alınmış
 [ ] Traceability matrix ile FS'e bağlanmış
+[ ] (İLKE-3) FS'teki her FR/KR için TS'te teknik çözüm var (matriste boş satır = eksik TS); iyileştirmeler FS karşılandıktan sonra, FS'i baypas etmeden
+[ ] (İLKE-4) §2-A FS Denetimi dolu: her FS maddesi fizibilite/yan-etki/alternatif/hata gözüyle değerlendirilmiş; sorunlular bilgilendirilmiş (kör build YOK)
+[ ] (İLKE-5) §11-A "Build-Time Doğrulanacaklar" YALNIZ teknik-teyit içeriyor; fonksiyonel karar sızmamış
+[ ] (İLKE-5) Ertelenemez fonksiyonel kararlar kapalı: eşleştirme+çoklu-eşleşme · tüm-key çözümü · dönüşüm (tarih/ondalık/ALPHA/padding) · UoM · entity/child alan-taşıma · edge (boş/mükerrer/max/sıfır) · kilit · hata-birleştirme
+[ ] (§3.0) Developer geri-soru simülasyonu yapıldı; satır-1 öncesi her soru TS'te cevaplı ya da (yalnız meşruysa) §11-A'da
 ```
 
 ---
@@ -1137,6 +1292,8 @@ Her FS gereksinimi ile TS teknik çözümü arasında bağ kurulmalıdır:
 | Kapsam kayması | Her istek FS'e ekleniyor | Her kapsam değişikliği CR (Change Request) sürecine girmeli |
 | Test edilemez kural | "Sistem kullanıcı dostu olmalı" | Ölçülebilir kriterler yazılmalı |
 | Onaysız geliştirme | Müşteri imzalamadan geliştirme başlıyor | Önce imza, sonra geliştirme |
+| Kullanıcı isteğini gölgeleme | Danışman önerisi kullanıcının açık isteğinin yerine geçiyor/atlıyor | İstek kanon; öneri §11-A'da ayrı, onaya sunulur (İLKE-1/2) |
+| Açık noktayı erteleme | "Bunu build'de netleştiririz" | Fonksiyonel açık nokta §11-B soru-setinde kapanır (İLKE-2) |
 
 ## 8.2 TS'te Sık Yapılan Hatalar
 
@@ -1148,6 +1305,9 @@ Her FS gereksinimi ile TS teknik çözümü arasında bağ kurulmalıdır:
 | Hardcoded değerler | Kodda sabit değerler | Customizing tablosu veya sabit tanım |
 | Eksik exception handling | TRY-CATCH yok | Her kritik operasyon exception ile sarılmalı |
 | Transport sırası hatası | DD olmadan program transportu | Önce DD, sonra program |
+| FS'i kör uygulama | Fizibil olmayan/başka yeri bozan/yanlış FS maddesini sorgusuz build | §2-A FS denetimi + bilgilendir + alternatif öner (İLKE-4) |
+| Fonksiyonel kararı erteleme | Eşleştirme/dönüşüm/UoM kararını §11-A "doğrulanacaklar"a atma | Meşru teyit ≠ fonksiyonel karar; ikincisi TS gövdesinde kapanır (İLKE-5) |
+| Çözümsüz FS maddesi | Bir FR/KR'nin TS karşılığı yok | Traceability matrisinde her FR/KR bir nesne/metoda bağlı (İLKE-3) |
 
 ---
 
