@@ -150,7 +150,8 @@ kurulmaz" kuralı: [`vscode-setup.md`](vscode-setup.md). Öneri listesi: `.vscod
 
 | Öğe | Kaynak (repo/URL) | Ne aldık | Bizde nerede | Durum |
 |---|---|---|---|---|
-| **sap_adt MCP** | özgün (ilham: abap-adt-api ekosistemi) | 18 ADT tool + ADR 0005/0010 server-side guardrail | `mcp_servers/sap_adt/` | ✅ aktif |
+| **sap_adt MCP** | özgün (ilham: abap-adt-api ekosistemi) | ~28 ADT tool + ADR 0005/0010 server-side guardrail. 2026-07-12 ekleme (6-repo ADOPT'lari): `adt_sql_query` (WHERE'li SELECT) · `adt_dump_list` (ST22, PII-guard) · `adt_grep_source` · `adt_unit_run` (DEV-tier) · `adt_impact_analysis` (blast-radius) · `adt_inactive_objects` · `adt_feature_probe` · `adt_msgclass_read` · `adt_get(bdef)` · `adt_enhancements`(+`_read`/`_options`) — hepsi read-only, canlı-doğrulanmış | `mcp_servers/sap_adt/` | ✅ aktif |
+| **sap-gui MCP** (kts982/mcp-sap-gui) | github.com/kts982/mcp-sap-gui v0.2.2 | Klasik Dynpro/ALV screenshot+read (Playwright'in erisemedigi boslugu kapatir). `--read-only --profile exploration --audit-log`. Intake gumrugu GECTI (network/subprocess/telemetri YOK; guardrail'ler kaynakta). ⚠ **DORMANT**: sunucu `sapgui/user_scripting=TRUE` (RZ11) + `S_SCR` yetkisi ONKOSUL — Basis acmali. ⚠ shared-env pip install (pip-check temiz); ideal=izole venv | `.mcp.json` (sap-gui) · karantina `C:\IX\_intake\kts982-mcp-sap-gui` | ⏳ **kurulu/wire — Basis onkosulu bekliyor** |
 | **ui5** (MCP+2 skill) | UI5/mcp-server (resmi) | proje/validate, API-ref, ui5-linter, best-practice skill'leri | plugin + `standards/03` | ✅ aktif |
 | **playwright** | @playwright/mcp (Microsoft) | tarayıcı e2e/doğrulama | plugin + `/verify`,`/run` | ✅ aktif |
 | **pyright-lsp** | pyright | Python diagnostics | LSP | ✅ aktif |
