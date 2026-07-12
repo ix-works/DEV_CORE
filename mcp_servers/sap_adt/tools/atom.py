@@ -343,6 +343,10 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
         On miss:  {ok: true, exists: false, name, type}
         On error: {ok: false, error, message}
     """
+    # MSAG (mesaj sınıfı): adt_get msag tipini DESTEKLEMEZ → özel messageclass endpoint'i.
+    if (object_type or "").lower().strip() in ("msag", "messageclass"):
+        return adt_msgclass_read(name)
+
     client = _get_client()
     log_buf = io.StringIO()
 
@@ -404,6 +408,99 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
                 "exists": False,
                 "client_log": log_buf.getvalue().strip(),
             }
+        return _err_from_exc(exc)
+
+
+# =============================================================================
+# adt_msgclass_read  (mesaj sınıfı / MSAG okuma — adt_get msag DESTEKLEMEZ)
+# =============================================================================
+_MC_NS_MC = "http://www.sap.com/adt/MessageClass"
+_MC_NS_AC = "http://www.sap.com/adt/core"
+
+
+def _parse_msgclass_xml(xml_text: str) -> dict:
+    """ADT `mc:messageClass` XML → {name, master_language, description, messages:[...]}.
+
+    Kanıt (canlı MSAG doğrulaması, 2026-07-12): her mesaj `<mc:messages mc:msgno mc:msgtext
+    mc:selfexplainatory mc:documented>` attribute'ları taşır; metin HTML-escape'li (ET çözer).
+    """
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(xml_text)
+
+    def _ac(a: str):
+        return root.get("{%s}%s" % (_MC_NS_AC, a))
+
+    messages = []
+    for el in root.findall("{%s}messages" % _MC_NS_MC):
+        def _g(a: str, _el=el):
+            return _el.get("{%s}%s" % (_MC_NS_MC, a))
+        messages.append({
+            "no": _g("msgno"),
+            "text": _g("msgtext"),
+            "selfexplanatory": (_g("selfexplainatory") == "true"),
+            "documented": (_g("documented") == "true"),
+        })
+    return {
+        "name": _ac("name"),
+        "master_language": _ac("masterLanguage"),
+        "description": _ac("description"),
+        "messages": messages,
+    }
+
+
+@profil_tool()
+def adt_msgclass_read(name: str) -> dict:
+    """Read a message class (MSAG) and ALL its messages via ADT. READ-ONLY.
+
+    Neden ayrı tool: `adt_get` msag tipini DESTEKLEMEZ ve `adt_table_read` T100'ü
+    filtreleyemez (WHERE param yok; T100 preview 400 verir). Bu tool resmî ADT kaynağını
+    kullanır: ham GET `/sap/bc/adt/messageclass/{name}`
+    (Accept `application/vnd.sap.adt.mc.messageclass+xml`) → XML parse.
+
+    Referans: marcellourbani/vscode_abap_remote_fs (Message Class Editor). CANLI-DOĞRULANDI
+    (2026-07-12): `/messages` alt-path'i 404; kök `/messageclass/{name}` +
+    `.mc.messageclass+xml` Accept çalışır (reference'ın `.v2+xml` header'ı 406 verir —
+    sunucu kabul-tipini kendi bildirir).
+
+    Args:
+        name: Mesaj sınıfı adı (ör. 'ZSD001').
+
+    Returns:
+        {ok, name, exists, master_language?, description?, count?, messages?, client_log}
+        messages: [{no, text, selfexplanatory, documented}, ...] (text: '&' çözülmüş, master dil).
+        On miss: {ok: true, exists: false, name}
+    """
+    client = _get_client()
+    log_buf = io.StringIO()
+    try:
+        adt = getattr(client, "adt_client", None) or client
+        from urllib.parse import quote
+        url = adt.url + "/sap/bc/adt/messageclass/" + quote(name.lower(), safe="")
+        with _capture_stdout() as out:
+            r = adt.session.get(
+                url,
+                headers={"Accept": "application/vnd.sap.adt.mc.messageclass+xml"},
+                verify=False, timeout=60,
+            )
+        log_buf.write(out.getvalue())
+        if r.status_code == 404:
+            return {"ok": True, "name": name.upper(), "exists": False,
+                    "client_log": log_buf.getvalue().strip()}
+        if r.status_code != 200:
+            return {"ok": False, "name": name.upper(), "error": "http_%d" % r.status_code,
+                    "message": (r.text or "")[:500], "client_log": log_buf.getvalue().strip()}
+        parsed = _parse_msgclass_xml(r.text)
+        return {
+            "ok": True,
+            "name": parsed["name"] or name.upper(),
+            "exists": True,
+            "master_language": parsed["master_language"],
+            "description": parsed["description"],
+            "count": len(parsed["messages"]),
+            "messages": parsed["messages"],
+            "client_log": log_buf.getvalue().strip(),
+        }
+    except Exception as exc:
         return _err_from_exc(exc)
 
 

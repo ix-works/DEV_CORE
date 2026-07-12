@@ -215,4 +215,38 @@ Test edilip çalışmadığı **kanıtlanan** yöntemler — tekrar deneme:
 
 ---
 
+## 19. Mesaj Sınıfı OKUMA — `adt_msgclass_read` MCP tool (2026-07-12)
+
+**Sorun (kanıt):** `adt_get` **msag tipini DESTEKLEMEZ** (`Unsupported object type: msag`) ve
+`adt_table_read` T100'ü **filtreleyemez** (WHERE param yok → T100 preview HTTP 400). Bir ajan
+mevcut mesaj sınıfını okuyamayınca **inline literal `MESSAGE '...'`'e düşer** — bu standards/06 §5
+(literal-gömme YASAK) ihlalidir. Çözüm: okuma için özel MCP tool.
+
+**`adt_msgclass_read(name)`** (`mcp_servers/sap_adt/tools/atom.py`):
+- Endpoint: `GET /sap/bc/adt/messageclass/{name}` · **Accept: `application/vnd.sap.adt.mc.messageclass+xml`**
+- Döner: `{ok, exists, master_language, description, count, messages:[{no, text, selfexplanatory, documented}]}`
+  (metin `&` çözülmüş, master dilde).
+- `adt_get(name, object_type='msag')` da buna delege eder.
+
+**⚠ Endpoint tuzakları (canlı-doğrulandı 2026-07-12):**
+| Denenen | Sonuç |
+|---|---|
+| `.../messageclass/{name}/messages` alt-path | **404** (bu sürümde yok) |
+| Accept `application/vnd.sap.adt.messageclass.v2+xml` (reference'ın header'ı) | **406** — sunucu doğru tipi gövdede bildirir |
+| **`.../messageclass/{name}` + `.mc.messageclass+xml`** | **200** ✓ |
+
+> Referans impl: `marcellourbani/vscode_abap_remote_fs` → `client/src/editors/messages.ts` (Message
+> Class Editor; ham `httpClient.request` + XML parse). Sürüm-farkı: reference'ın `.v2+xml` Accept'i
+> bizim sistemde 406 → **API'yi dokümandan değil sunucudan doğrula** (sunucu 406 gövdesinde kabul-tipini verir).
+
+**XML şeması** = §27.3 ile aynı (`mc:messages` çoğul · `mc:msgno` · `mc:msgtext` ·
+`mc:selfexplainatory` typo'lu · `mc:documented`); ns `http://www.sap.com/adt/MessageClass`.
+
+**KURAL — bir Z mesaj sınıfına MESSAGE ile referans vereceksen:** ÖNCE `adt_msgclass_read` ile mevcut
+mesajları OKU, uygun no'yu reuse et. Okuyamadın diye inline literal YAZMA. Uygun mesaj yoksa: yeni
+mesaj ekle (`populate_message_class.py`, §18) veya kullanıcıya sor. (Okuma tool'u = yazma script'inin
+`--verify-only` yolunun MCP muadili; ajan artık SE91'siz görebilir.)
+
+---
+
 
