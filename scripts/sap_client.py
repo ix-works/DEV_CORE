@@ -1985,7 +1985,8 @@ class SAPClient:
 <ttyp:tableType xmlns:ttyp="http://www.sap.com/dictionary/tabletype"
                 xmlns:adtcore="http://www.sap.com/adt/core"
                 adtcore:name="{name.upper()}"
-                adtcore:description="{description}">
+                adtcore:description="{description}"
+                adtcore:masterLanguage="{self.adt_client.language}">
     <adtcore:packageRef adtcore:name="{package.upper()}"/>
     <ttyp:rowType>
         <ttyp:typeKind>dictionaryType</ttyp:typeKind>
