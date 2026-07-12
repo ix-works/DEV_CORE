@@ -528,6 +528,255 @@ def adt_dump_list(limit: int = 20, from_ts: str | None = None, to_ts: str | None
 
 
 # =============================================================================
+# adt_inactive_objects  (aktive-bekleyen worklist — worklist_audit MCP-native)
+# =============================================================================
+_IOC_NS = {"ioc": "http://www.sap.com/abapxml/inactiveCtsObjects",
+           "adtcore": "http://www.sap.com/adt/core"}
+
+
+@profil_tool()
+def adt_inactive_objects() -> dict:
+    """Aktive-bekleyen (inactive) obje worklist'ini oku — READ-ONLY.
+
+    `scripts/worklist_audit.py`'nin MCP-native karşılığı. Gün-sonu/commit-öncesi "aktive
+    edilmemiş obje var mı" kontrolü tek çağrıya iner. `GET /sap/bc/adt/activation/inactiveobjects`.
+
+    Returns:
+        {ok, count, inactive_objects: [{name, type, uri, user}], client_log}
+        count=0 → aktive-bekleyen ana obje yok (transport/method-seviyesi girdiler elenir).
+    """
+    import xml.etree.ElementTree as ET
+    client = _get_client()
+    try:
+        adt = getattr(client, "adt_client", None) or client
+        with _capture() as buf:
+            r = adt.session.get(adt.url + "/sap/bc/adt/activation/inactiveobjects",
+                                headers={"Accept": "application/*"}, verify=False, timeout=45)
+        if r.status_code != 200:
+            return {"ok": False, "error": "http_%d" % r.status_code,
+                    "message": (r.text or "")[:300], "client_log": buf.getvalue().strip()}
+        root = ET.fromstring(r.text)
+        out, seen = [], set()
+        for entry in root.findall("ioc:entry", _IOC_NS):
+            obj = entry.find("ioc:object", _IOC_NS)
+            if obj is None:
+                continue
+            ref = obj.find("ioc:ref", _IOC_NS)
+            if ref is None:
+                continue  # transport-seviyesi (boş object)
+            a_type = ref.get("{%s}type" % _IOC_NS["adtcore"], "") or ""
+            a_name = ref.get("{%s}name" % _IOC_NS["adtcore"], "") or ""
+            a_uri = ref.get("{%s}uri" % _IOC_NS["adtcore"], "") or ""
+            if a_type.endswith("/OM") or "#type=" in a_uri:
+                continue  # method/sub-obje → ana obje girdisi var
+            key = a_uri.split("#")[0].rstrip("/")
+            if not a_name or key in seen:
+                continue
+            seen.add(key)
+            out.append({"name": a_name.strip(), "type": a_type, "uri": key,
+                        "user": obj.get("{%s}user" % _IOC_NS["ioc"], "") or ""})
+        return {"ok": True, "count": len(out), "inactive_objects": out,
+                "client_log": buf.getvalue().strip()}
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
+# =============================================================================
+# adt_enhancements  (bir objedeki enhancement/BAdI implementasyonları — legacy analiz)
+# =============================================================================
+_ENH_NS = {"enh": "http://www.sap.com/adt/abapsource/enhancements",
+           "adtcore": "http://www.sap.com/adt/core"}
+_ENH_SEG = {"program": "programs/programs", "prog": "programs/programs",
+            "class": "oo/classes", "clas": "oo/classes",
+            "include": "programs/includes", "incl": "programs/includes",
+            "functiongroup": "functions/groups", "fugr": "functions/groups"}
+
+
+@profil_tool()
+def adt_enhancements(name: str, object_type: str = "program") -> dict:
+    """Bir objedeki enhancement implementasyonlarını (explicit/implicit/BAdI) oku — READ-ONLY.
+
+    ECC/legacy davranış analizinde std kodun enhancement'larını görmek (legacy dump/reuse
+    incelemesi). `.../source/main/enhancements/elements`. Std obje OKUR, DEĞİŞTİRMEZ (ADR 0005 temiz).
+
+    Args:
+        name: Obje adı. object_type: 'program'|'class'|'include'|'functiongroup'.
+
+    Returns:
+        {ok, name, exists, count, enhancements: [{name, type, version}], client_log}
+    """
+    import xml.etree.ElementTree as ET
+    seg = _ENH_SEG.get((object_type or "").lower().strip())
+    if not seg:
+        return {"ok": False, "error": "unsupported_type",
+                "message": "object_type: program|class|include|functiongroup"}
+    client = _get_client()
+    try:
+        adt = getattr(client, "adt_client", None) or client
+        from urllib.parse import quote
+        url = (adt.url + "/sap/bc/adt/" + seg + "/" + quote(name.lower(), safe="")
+               + "/source/main/enhancements/elements")
+        with _capture() as buf:
+            r = adt.session.get(url, headers={"Accept": "application/*"}, verify=False, timeout=45)
+        if r.status_code == 404:
+            return {"ok": True, "name": name.upper(), "exists": False, "count": 0,
+                    "enhancements": [], "client_log": buf.getvalue().strip()}
+        if r.status_code != 200:
+            return {"ok": False, "error": "http_%d" % r.status_code,
+                    "message": (r.text or "")[:300], "client_log": buf.getvalue().strip()}
+        root = ET.fromstring(r.text)
+        out = []
+        for impl in root.iter("{%s}enhancementImplementations" % _ENH_NS["enh"]):
+            out.append({
+                "name": impl.get("{%s}name" % _ENH_NS["adtcore"], ""),
+                "type": impl.get("{%s}type" % _ENH_NS["adtcore"], ""),
+                "version": impl.get("{%s}version" % _ENH_NS["adtcore"], ""),
+            })
+        return {"ok": True, "name": name.upper(), "exists": True, "count": len(out),
+                "enhancements": out, "client_log": buf.getvalue().strip()}
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
+# =============================================================================
+# adt_feature_probe  (ADT sunucu yetenek keşfi — statik profil matrisini canlı-kanıta çevirir)
+# =============================================================================
+_APP_NS = "http://www.w3.org/2007/app"
+
+
+@profil_tool()
+def adt_feature_probe(filter: str | None = None) -> dict:
+    """ADT sunucu yetenek keşfi (discovery) — hangi ADT collection'ları/yetenekleri MEVCUT. READ-ONLY.
+
+    `profiles/` matrisimiz "rehberdir, kanıt değildir" (D34d) — bu tool onu CANLI-kanıta çevirir:
+    sistemde hangi ADT yetenek uçları (RAP generator, BOPF, abapGit, datapreview, atc...) açık.
+    `GET /sap/bc/adt/discovery` (Atom service doc) parse.
+
+    Args:
+        filter: Opsiyonel — yalnız title/href/workspace'inde bu metin geçen collection'lar.
+
+    Returns:
+        {ok, collection_count, collections: [{workspace, title, href}], client_log}
+    """
+    import xml.etree.ElementTree as ET
+    client = _get_client()
+    try:
+        adt = getattr(client, "adt_client", None) or client
+        with _capture() as buf:
+            r = adt.session.get(adt.url + "/sap/bc/adt/discovery",
+                                headers={"Accept": "application/atomsvc+xml"}, verify=False, timeout=60)
+        if r.status_code != 200:
+            return {"ok": False, "error": "http_%d" % r.status_code,
+                    "message": (r.text or "")[:300], "client_log": buf.getvalue().strip()}
+        root = ET.fromstring(r.text)
+        flat = []
+        for ws in root.findall("{%s}workspace" % _APP_NS):
+            wt = ws.find("{%s}title" % _ATOM_NS)
+            ws_title = wt.text if wt is not None else None
+            for col in ws.findall("{%s}collection" % _APP_NS):
+                ct = col.find("{%s}title" % _ATOM_NS)
+                flat.append({"workspace": ws_title,
+                             "title": ct.text if ct is not None else None,
+                             "href": col.get("href")})
+        if filter:
+            fl = filter.lower()
+            flat = [x for x in flat if any(fl in (x.get(k) or "").lower()
+                                           for k in ("title", "href", "workspace"))]
+        return {"ok": True, "collection_count": len(flat), "collections": flat,
+                "client_log": buf.getvalue().strip()}
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
+# =============================================================================
+# adt_grep_source  (paket/obje kapsamında ABAP kaynak-metin regex arama)
+# =============================================================================
+_GREP_TYPE_MAP = {"CLAS": "class", "PROG": "program", "INTF": "interface",
+                  "FUGR": "functiongroup", "DDLS": "ddls", "BDEF": "bdef"}
+
+
+@profil_tool()
+def adt_grep_source(
+    pattern: str,
+    package: str | None = None,
+    objects: str | list | None = None,
+    object_types: str = "CLAS,PROG,INTF,DDLS",
+    max_objects: int = 80,
+    ignore_case: bool = True,
+) -> dict:
+    """Paket/obje kapsamında ABAP **KAYNAK-METİN** regex arama — READ-ONLY.
+
+    `adt_where_used` "beni kim referanslıyor" der; bu tool "bu metin/pattern nerede geçiyor"
+    der (tamamlayıcı). Kaynağı indirip satır-satır regex. Token-ekonomisi için `max_objects`
+    ve toplam 500 eşleşme sınırlı — sınıra ulaşılırsa `truncated_*` işaretlenir (sessiz-kesme yok).
+
+    Args:
+        pattern: Python regex. package: paket adı (kapsam). objects: "NAME" veya "NAME:type"
+                 virgüllü liste (package'a alternatif). object_types: paket-taramada tip filtresi
+                 (CLAS/PROG/INTF/DDLS/FUGR/BDEF). max_objects: taranacak maks obje. ignore_case.
+
+    Returns:
+        {ok, pattern, scanned_objects, match_count, truncated_object_scope, truncated_matches,
+         matches: [{object, type, line, text}], client_log}
+    """
+    import re as _re
+    from mcp_servers.sap_adt.tools.atom import adt_get
+    try:
+        rx = _re.compile(pattern, _re.IGNORECASE if ignore_case else 0)
+    except _re.error as e:
+        return {"ok": False, "error": "bad_regex", "message": str(e)}
+
+    wanted = {t.strip().upper() for t in (object_types.split(",") if object_types else []) if t.strip()}
+    client = _get_client()
+    targets: list = []
+    try:
+        if objects:
+            raw = objects.split(",") if isinstance(objects, str) else list(objects)
+            for item in [str(x).strip() for x in raw if str(x).strip()]:
+                if ":" in item:
+                    n, t = item.split(":", 1)
+                    targets.append((n.strip(), t.strip().lower()))
+                else:
+                    targets.append((item, "class"))
+        elif package:
+            with _capture():
+                objs = client.list_package_contents(package)
+            for o in (objs or []):
+                pref = (o.get("type") or "").split("/")[0].upper()
+                if wanted and pref not in wanted:
+                    continue
+                at = _GREP_TYPE_MAP.get(pref)
+                if not at:
+                    continue
+                targets.append((o.get("name"), at))
+        else:
+            return {"ok": False, "error": "no_scope", "message": "package veya objects gerekli"}
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+    truncated_scope = len(targets) > max_objects
+    targets = targets[:max_objects]
+    matches, scanned, hit_cap = [], 0, False
+    for n, at in targets:
+        r = adt_get(n, object_type=at, include_source=True)
+        src = r.get("source")
+        if not isinstance(src, str) or not src:
+            continue
+        scanned += 1
+        for i, line in enumerate(src.splitlines(), 1):
+            if rx.search(line):
+                matches.append({"object": n, "type": at, "line": i, "text": line.strip()[:200]})
+                if len(matches) >= 500:
+                    hit_cap = True
+                    break
+        if hit_cap:
+            break
+    return {"ok": True, "pattern": pattern, "scanned_objects": scanned,
+            "match_count": len(matches), "truncated_object_scope": truncated_scope,
+            "truncated_matches": hit_cap, "matches": matches}
+
+
+# =============================================================================
 # adt_lock_check
 # =============================================================================
 
