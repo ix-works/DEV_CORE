@@ -77,8 +77,20 @@ def main() -> int:
         return 0
 
     print(f'\n--- {path.name} — {len(issues)} abaplint bulgusu (tuned) ---', file=sys.stderr)
+    parser_errs = [(ln, msg) for ln, msg, rule in issues if rule == 'parser_error']
     for ln, msg, rule in issues:
-        print(f'  [WARNING] line {ln} (C-ABLINT): {msg} ({rule})', file=sys.stderr)
+        if rule == 'parser_error':
+            # parser_error'ı jenerik WARNING olarak GÖMME: modern-syntax (EML/RAP/source-based)
+            # class'ta abaplint desync olur ve GERÇEK save/aktivasyon hatalarını (string-template
+            # escape BE-47, METHODS param sırası BE-48) parser_error olarak gösterir. Kör
+            # false-positive sayma → CANLI adt_syntax_check ile DOĞRULA (bug-checklist BE-36/47/48).
+            print(f'  [DOĞRULA-CANLI] line {ln} (C-ABLINT parser_error — GERÇEK OLABİLİR): {msg}', file=sys.stderr)
+        else:
+            print(f'  [WARNING] line {ln} (C-ABLINT): {msg} ({rule})', file=sys.stderr)
+    if parser_errs:
+        print(f'    ⚠ {len(parser_errs)} parser_error VAR — modern-class ise abaplint desync gerçek hatayı '
+              'gizleyebilir/kaydırabilir; "modern-ABAP false-positive" diye ELEME → CANLI adt_syntax_check '
+              'ZORUNLU (bug-checklist BE-36/47/48; ZSD001 EXCUPL 2026-07-12).', file=sys.stderr)
     print('    Not: tuned kural seti (yapısal/mantık+hijyen). Otoriter syntax = adt_syntax_check.', file=sys.stderr)
     return 1
 

@@ -164,6 +164,13 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 
 ---
 
+### PATTERN #13: Enqueue lock-leak — session/agent mid-operation ölünce in-flight lock kalır
+**Belirti:** SM12'de kendi kullanıcın (`<SAP_USER>`) üstünde stale lock: mesaj sınıfında `EU 510` (workbench), class generate/aktivasyonda `E_ABAP_GENPH` (`=HPZ`/`=HCZ` include'ları), hatta silinmiş temp objede orphan lock (`...DIAGTMP...` — `adt_syntax_check`'in geçici probe class'ı). Sonraki yazım/aktivasyon aynı kullanıcı tarafından bile **bloklanır**.
+**Kök-neden:** lock alan akış (populate/create/activate) `try/finally` ile UNLOCK garanti eder AMA **process ÖLÜRSE** (401 auth-expiry, timeout, agent-kill) finally HİÇ çalışmaz → lock canlı kalır. `clear_enqueue_lock` kurtaramaz: release için önce **acquire** gerekir, o da bloke. Yani in-process safety-net session-ölümünü YAKALAYAMAZ.
+**Ayırt et — CANLI mı STALE mı (kritik):** Aktif SAP-yazıcısı (gateway) **çalışıyorsa** lock CANLI olabilir → silme, işi bozarsın. Gateway görevi bittiyse/öldüyse + başka yazıcı yoksa → STALE. Kanıt: `adt_get`(temp obje exists=false → orphan lock) + `adt_lock_check` + gateway'in aktif olup olmadığı (SendMessage "no active task" = ölü).
+**Kurtarma:** STALE ise **kullanıcı SM12'den elle siler** (kendi lock'u, ADR 0005-C: AI force-clear ETMEZ). Silinen shell/temp arkasında kayıp iş yok (boş shell / silinmiş obje).
+**Önleme (pre-flight):** gateway her obje yazımından ÖNCE `adt_lock_check` → kendi stale lock'u varsa aktivasyonun ORTASINDA patlamak yerine ERKEN yüzeye çıkar + lider'e bildirir. **Robust auto-recovery** (pre-flight kendi-stale-lock'unu programatik temizle) = paylaşılan lib lock-döngüsü riski + ADR 0005-C sınırı → **deferred tooling task** (aceleye getirme). Kanıt: ZSD001 EXCUPL msgclass EU 510 + class E_ABAP_GENPH 2026-07-12.
+
 ## 🔄 SELF-UPDATE PROTOKOLÜ
 
 ### Oturum BAŞLANGICI (her yeni session)
