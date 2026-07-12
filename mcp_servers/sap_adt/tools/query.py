@@ -777,6 +777,163 @@ def adt_grep_source(
 
 
 # =============================================================================
+# adt_impact_analysis  (blast-radius — özyinelemeli where-used)
+# =============================================================================
+@profil_tool()
+def adt_impact_analysis(name: str, object_type: str = "ddls",
+                        max_depth: int = 2, max_nodes: int = 150) -> dict:
+    """Değişiklik etki-alanı (blast-radius) — bir objeyi DOLAYLI referanslayanları
+    özyinelemeli where-used ile çıkarır. READ-ONLY.
+
+    "Fix öncesi where-used + blast-radius" feedback'inin otomasyonu: direkt referanslardan
+    başlayıp `max_depth` seviyeye kadar yukarı çıkar ("kim etkilenir"). Çok-katmanlı CDS
+    stack'inde değişiklik-riskini ölçer. `max_nodes` ile sınırlı — aşılırsa `truncated=True`
+    (sessiz-kesme yok).
+
+    Args:
+        name: Kök obje. object_type: 'ddls'|'class'|'dtel'|'tabl'|'intf'... max_depth: özyineleme
+              derinliği (default 2). max_nodes: toplam maks düğüm (default 150).
+
+    Returns:
+        {ok, name, type, max_depth, impacted_count, truncated,
+         by_depth: [{depth, count, objects:[{name,type,uri,depth}]}], client_log}
+    """
+    client = _get_client()
+    try:
+        from object_types import get_object_url  # type: ignore
+        adt = getattr(client, "adt_client", None) or client
+        with _capture() as buf:
+            if not client.object_exists(name.upper(), object_type):
+                return {"ok": False, "error_code": "OBJECT_NOT_FOUND", "name": name,
+                        "type": object_type, "client_log": buf.getvalue().strip()}
+            root_url = get_object_url(name.upper(), object_type)
+            seen = {name.upper() + "|" + object_type.lower()}
+            frontier = [root_url]
+            levels = []
+            truncated = False
+            for depth in range(max_depth):
+                level_nodes, next_frontier = [], []
+                for url in frontier:
+                    refs = adt.where_used(url) or []
+                    for r in refs:
+                        rn = (r.get("name") or "").upper()
+                        rt = (r.get("type") or "")
+                        ru = (r.get("uri") or "").split("#")[0]
+                        key = rn + "|" + rt.lower()
+                        if not rn or key in seen:
+                            continue
+                        seen.add(key)
+                        level_nodes.append({"name": rn, "type": rt, "uri": ru, "depth": depth + 1})
+                        if ru:
+                            next_frontier.append(ru)
+                        if len(seen) >= max_nodes:
+                            truncated = True
+                            break
+                    if truncated:
+                        break
+                levels.append(level_nodes)
+                frontier = next_frontier
+                if truncated or not frontier:
+                    break
+        all_nodes = [n for lvl in levels for n in lvl]
+        return {"ok": True, "name": name.upper(), "type": object_type, "max_depth": max_depth,
+                "impacted_count": len(all_nodes), "truncated": truncated,
+                "by_depth": [{"depth": i + 1, "count": len(lvl), "objects": lvl}
+                             for i, lvl in enumerate(levels)],
+                "client_log": buf.getvalue().strip()}
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
+# =============================================================================
+# adt_unit_run  (ABAP Unit test koşucu — bug-gate'i canlı-test seviyesine çıkarır)
+# =============================================================================
+_AUNIT_SEG = {"class": "oo/classes", "clas": "oo/classes",
+              "program": "programs/programs", "prog": "programs/programs",
+              "functiongroup": "functions/groups", "fugr": "functions/groups"}
+_AUNIT_NS = "http://www.sap.com/adt/aunit"
+_ADTCORE_NS = "http://www.sap.com/adt/core"
+
+
+@profil_tool()
+def adt_unit_run(name: str, object_type: str = "class") -> dict:
+    """Bir Z objenin ABAP Unit testlerini çalıştır → sonuç/assertion döner. READ-ONLY.
+
+    `POST /sap/bc/adt/abapunit/testruns` (run config). Test KOŞAR ama kalıcı obje değişimi
+    YOK → ADR 0005 temiz (Z-scope). BUG GATE'i "checklist" seviyesinden "canlı test sonucu"na
+    çıkarır. Test yoksa boş sonuç (passed=true, method 0).
+
+    Args:
+        name: Obje (Z*/Y*). object_type: 'class'|'program'|'functiongroup'.
+
+    Returns:
+        {ok, name, method_count, failed_count, passed, classes: [{class, methods:[{method,
+         status, alerts:[{severity, kind, title}]}]}], client_log}
+    """
+    import xml.etree.ElementTree as ET
+    seg = _AUNIT_SEG.get((object_type or "").lower().strip())
+    if not seg:
+        return {"ok": False, "error": "unsupported_type",
+                "message": "object_type: class|program|functiongroup"}
+    client = _get_client()
+    try:
+        from create_rap_service import csrf  # type: ignore
+        from urllib.parse import quote
+        adt = getattr(client, "adt_client", None) or client
+        objuri = "/sap/bc/adt/" + seg + "/" + quote(name.lower(), safe="")
+        body = ('<?xml version="1.0" encoding="UTF-8"?>'
+                '<aunit:runConfiguration xmlns:aunit="http://www.sap.com/adt/aunit"'
+                ' xmlns:adtcore="http://www.sap.com/adt/core">'
+                '<external><coverage active="false"/></external>'
+                '<adtcore:objectSets><objectSet kind="inclusive"><adtcore:objectReferences>'
+                '<adtcore:objectReference adtcore:uri="' + objuri + '"/>'
+                '</adtcore:objectReferences></objectSet></adtcore:objectSets>'
+                '</aunit:runConfiguration>')
+        with _capture() as buf:
+            tok = csrf(adt)
+            r = adt.session.post(
+                adt.url + "/sap/bc/adt/abapunit/testruns",
+                headers={"X-CSRF-Token": tok,
+                         "Content-Type": "application/vnd.sap.adt.abapunit.testruns.config.v4+xml",
+                         "Accept": "application/vnd.sap.adt.abapunit.testruns.result.v2+xml",
+                         "sap-client": "100"},
+                data=body.encode("utf-8"), verify=False, timeout=180)
+        if r.status_code != 200:
+            return {"ok": False, "error": "http_%d" % r.status_code,
+                    "message": (r.text or "")[:400], "client_log": buf.getvalue().strip()}
+        root = ET.fromstring(r.text)
+
+        def _an(el, a):
+            return el.get("{%s}%s" % (_ADTCORE_NS, a), "")
+
+        classes, mcount, fcount = [], 0, 0
+        for prog in root.iter("{%s}program" % _AUNIT_NS):
+            for tclass in prog.iter("{%s}testClass" % _AUNIT_NS):
+                methods = []
+                for tm in tclass.iter("{%s}testMethod" % _AUNIT_NS):
+                    alerts = []
+                    for al in tm.iter("{%s}alert" % _AUNIT_NS):
+                        title_el = al.find("{%s}title" % _AUNIT_NS)
+                        alerts.append({
+                            "severity": al.get("severity", ""),
+                            "kind": al.get("kind", ""),
+                            "title": title_el.text if title_el is not None else None,
+                        })
+                    mcount += 1
+                    if alerts:
+                        fcount += 1
+                    methods.append({"method": _an(tm, "name"),
+                                    "status": "failed" if alerts else "passed",
+                                    "alerts": alerts})
+                classes.append({"class": _an(tclass, "name"), "methods": methods})
+        return {"ok": True, "name": name.upper(), "method_count": mcount,
+                "failed_count": fcount, "passed": fcount == 0,
+                "classes": classes, "client_log": buf.getvalue().strip()}
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
+# =============================================================================
 # adt_lock_check
 # =============================================================================
 
