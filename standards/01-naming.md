@@ -161,6 +161,15 @@ Z_ROOT
 | Program Report | Z or Y | `P` / `R` | `ZSD001_P_INVOICE_REPORT` | RAP |
 | Include | Z or Y | `I` | `ZMM001_I_INVOICE_REPORT` | RAP |
 
+> **Klasik program include türetme (C-INC-NAME-01 · WIRED: `check_package_naming`):** Klasik
+> report/module-pool include adı **program adından TÜRETİLİR — kısaltma YOK.** Program
+> `Z<n>_P_<BASE>` → include `Z<n>_I_<BASE>_<SUFFIX>` (SUFFIX = `_T01`/`_S01`/`_C01`/`_O01`/`_I01`/`_F01`…).
+> Örnek: `ZSD001_P_INVOICE_REPORT` → `ZSD001_I_INVOICE_REPORT_T01` (`ZSD001_I_INVREP_T01` YASAK — kısaltma).
+> **Program `_P_` adı ≤ 26 karakter** (include = 26 + `_T01`(4) = 30 ADT obje-adı limitine sığsın).
+> Exit/enhancement include'ları (standart programa gömülü, ör. `MV50AFZZ` içeriği) bu türetme
+> kuralından muaftır (Z-programdan türemez). Standart-öncesi legacy kısaltmalar proje-lokal
+> `include_naming_exempt` (project.yaml) ile grandfather'lanır — rename edilince listeden silinir.
+
 ### 4.2 Interfaces
 
 > **Note:** For Service Binding objects, the suffix `_O2` or `_O4` must be added to indicate the OData version (e.g., `ZMM001_UI_DESCRIPTION_O2`, `ZMM001_API_DESCRIPTION_O4`).
