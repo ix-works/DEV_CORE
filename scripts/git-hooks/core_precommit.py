@@ -51,6 +51,14 @@ SCAN_EXEMPT = {
     "scripts/genericize_common.py",
 }
 
+# Link-check muafiyeti: build_core_index.py'nin ÜRETTİĞİ CORE-INDEX kasıtlı olarak PROJE-göreli
+# `../core/...` link'leri taşır (proje-kökünden junction ile çözülür; core-repo-kökünden çözülmez).
+# build_core_index gerçek dosyaları listeler → link hedefleri garanti var. Bu index'i link-check'ten
+# muaf tut (aksi halde her regen 70+ false-positive KOPUK-LINK verir). Genericize-scan'e TABİ kalır.
+LINK_EXEMPT = {
+    "governance/CORE-INDEX.md",
+}
+
 BINARY_EXT = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".ico", ".woff",
               ".woff2", ".ttf", ".xlsx", ".docx", ".pptx", ".exe", ".dll"}
 
@@ -112,6 +120,8 @@ def check_generic(path: str, text: str, hatalar: list[str]) -> None:
 
 
 def check_links(path: str, text: str, repo: Path, hatalar: list[str]) -> None:
+    if path in LINK_EXEMPT:
+        return
     # Kod-bloğu (```...```) ve inline-kod (`...`) içindeki linkler ÖRNEKTİR — tarama dışı
     # (satır numarası korunsun diye newline'lar bırakılarak boşaltılır).
     text = re.sub(r"```.*?```", lambda m: re.sub(r"[^\n]", " ", m.group(0)), text, flags=re.S)
