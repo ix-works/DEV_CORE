@@ -461,21 +461,31 @@ _ATOM_NS = "http://www.w3.org/2005/Atom"
 
 
 @profil_tool()
-def adt_dump_list(limit: int = 20, from_ts: str | None = None, to_ts: str | None = None) -> dict:
+def adt_dump_list(limit: int = 20, from_ts: str | None = None, to_ts: str | None = None,
+                  acknowledge_risk: bool = False) -> dict:
     """ST22 ABAP kısa-dump (short dump) feed'ini oku — READ-ONLY.
 
     RAP/UI/classrun çalıştırmalarında runtime 500/kısa-dump kök-neden teşhisi (SAP GUI'siz).
     `GET /sap/bc/adt/runtime/dumps` (Accept `application/atom+xml;type=feed`) → Atom feed parse.
 
+    ⚠ PII (ADR 0011): dump feed'i kullanıcı-adı + program (kişisel veri, KVKK) taşır → DEV dışı
+    tier'da `acknowledge_risk=True` ZORUNLU (adt_table_read/adt_sql_query ile tutarlı).
+
     Args:
         limit: Döndürülecek maks dump (default 20; feed en yeni→eski).
         from_ts / to_ts: Opsiyonel zaman penceresi (feed'in `from`/`to` param'ı; ör. '20260710154122').
+        acknowledge_risk: QA/PRD'de PII-kabulü (DEV'de gereksiz).
 
     Returns:
         {ok, count, dumps: [{error_type, program, user, timestamp, title, id, dump_uri}], client_log}
         `dump_uri` = tek dumpın ADT detay URI'si (sonra detay çekmek için).
     """
     import xml.etree.ElementTree as ET
+    from mcp_servers.sap_adt._conn import get_active_tier
+    if get_active_tier() != "DEV" and not acknowledge_risk:
+        return {"ok": False, "error": "tier_pii_guard",
+                "message": ("ST22 dump feed'i kullanıcı-adı/program (KVKK — ADR 0011) taşır; "
+                            "DEV dışı tier'da acknowledge_risk=True gerekli.")}
     client = _get_client()
     try:
         adt = getattr(client, "adt_client", None) or client
@@ -1006,6 +1016,14 @@ def adt_unit_run(name: str, object_type: str = "class") -> dict:
     if not seg:
         return {"ok": False, "error": "unsupported_type",
                 "message": "object_type: class|program|functiongroup"}
+    # ABAP Unit ABAP KODU çalıştırır (test) → adt_classrun ile aynı risk sınıfı → DEV-tier-gate
+    # (kötü-yazılmış test COMMIT edebilir; ADR 0010).
+    from mcp_servers.sap_adt._conn import get_active_tier
+    from mcp_servers.sap_adt.guardrails import require_writable_tier, GuardrailViolation
+    try:
+        require_writable_tier(get_active_tier(), what="abap unit run (kod çalıştırır)")
+    except GuardrailViolation as gv:
+        return gv.as_dict()
     client = _get_client()
     try:
         from create_rap_service import csrf  # type: ignore

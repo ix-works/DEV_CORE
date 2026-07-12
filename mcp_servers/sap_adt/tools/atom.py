@@ -328,10 +328,9 @@ def _ddic_xml_type(object_type: str):
 # adt_get
 # =============================================================================
 
-@profil_tool()
 def _read_source_object(name: str, uri_seg: str, type_label: str) -> dict:
     """Kaynak-endpoint'li obje oku (`.../source/main`) — `download_object`'in desteklemediği
-    tipler için (ör. BDEF). Raw GET (Accept text/plain), READ-ONLY.
+    tipler için (ör. BDEF). Raw GET (Accept text/plain), READ-ONLY. (private helper — tool DEĞİL)
     """
     client = _get_client()
     log_buf = io.StringIO()
@@ -356,6 +355,7 @@ def _read_source_object(name: str, uri_seg: str, type_label: str) -> dict:
         return _err_from_exc(exc)
 
 
+@profil_tool()
 def adt_get(name: str, object_type: str = "class", include_source: bool = True) -> dict:
     """Get an SAP ADT object: existence, metadata, and (optionally) source.
 
