@@ -1990,7 +1990,7 @@ class SAPClient:
     <ttyp:rowType>
         <ttyp:typeKind>dictionaryType</ttyp:typeKind>
         <ttyp:typeName>{row_type.upper()}</ttyp:typeName>
-        <ttyp:builtInType><ttyp:dataType/><ttyp:length>000000</ttyp:length><ttyp:decimals>000000</ttyp:decimals></ttyp:builtInType>
+        <ttyp:builtInType><ttyp:dataType>STRU</ttyp:dataType><ttyp:length>000000</ttyp:length><ttyp:decimals>000000</ttyp:decimals></ttyp:builtInType>
         <ttyp:rangeType/>
     </ttyp:rowType>
     <ttyp:initialRowCount>00000</ttyp:initialRowCount>
