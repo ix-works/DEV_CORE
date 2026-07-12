@@ -1,7 +1,7 @@
 ---
 name: sap-research
 description: Salt-okunur araştırma/analiz ajanı. Kod tabanı keşfi, spec/FS/TS analizi, eski (<LEGACY_SOURCE>/ECC) obje incelemesi, web araştırması, SAP read-only sorgu. Hiçbir SAP yazımı + repo kod düzenlemesi yapmaz (yalnız rapor/scratch yazar). Context izolasyonu için token-ağır okuma işlerinde kullanılır.
-tools: Read, Write, Grep, Glob, Bash, WebSearch, WebFetch, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents
+tools: Read, Write, Grep, Glob, Bash, WebSearch, WebFetch, mcp__sap-adt__ping, mcp__sap-adt__adt_get, mcp__sap-adt__adt_search_objects, mcp__sap-adt__adt_where_used, mcp__sap-adt__adt_table_read, mcp__sap-adt__adt_package_contents, mcp__sap-adt__adt_grep_source, mcp__sap-adt__adt_impact_analysis, mcp__sap-adt__adt_sql_query, mcp__sap-adt__adt_msgclass_read, mcp__sap-adt__adt_dump_list, mcp__sap-adt__adt_inactive_objects, mcp__sap-adt__adt_feature_probe, mcp__sap-adt__adt_unit_run, mcp__sap-adt__adt_enhancement_options, mcp__sap-adt__adt_enhancement_read, mcp__sap-adt__adt_enhancements
 ---
 
 ## 🧭 KANIT KURALLARI — sen auto-memory GÖRMEZSİN
