@@ -14,9 +14,26 @@ status: active
 
 **🎉 ÇÖZÜLDÜ — 2026-05-13** | 50+ varyant test edildi, **`If-Match` header'ı göndermemek** bug'ı bypass etti.
 
-### 27.0 Hazır Production Script
+### 27.0 Hazır Production Script — İKİ ADIM (SE91 GEREKMEZ, ikisi de programatik)
 
-📦 **`scripts/populate_message_class.py`** — herhangi bir mesaj sınıfına CSV'den toplu mesaj yazma.
+> **⚠ KRİTİK:** MSAG shell'i **SE91'de elle açmaya GEREK YOK** — programatik create script'i VAR.
+> `populate` **mevcut** shell'e yazar; shell yoksa PUT **sahte-200** döner (T100'e hiç yazmaz,
+> `adt_msgclass_read` exists=false). Ayrıca `adt_post_shell(msag)` / `adt_activate(msag)` MCP'de
+> **desteklenmez** ("Unsupported object type: msag") → **create script'i kullan.**
+
+**1) SHELL YARAT** — 📦 **`scripts/create_message_class.py`** (`client.create_message_class`):
+```
+python scripts/create_message_class.py --name ZSD001_MSG \
+  --description "<PKG> Mesaj Sinifi" --package ZSD000_CLC \
+  --transport <TRANSPORT> --cwd <PROJECT_ROOT>
+```
+(master lang = login dili; TR login → TR shell — `check_sap_master_language` gate TR ister.)
+> ⚠ **create script LOCK-release tuzağı:** create sonrası kendi editor-lock'unu (EU 510)
+> bırakabilir → populate `403 EU 510 "<user> zaten düzenliyor"` alır. Script §27.4 try/finally
+> unlock disiplinini uygulamalı; almıyorsa ADT-dequeue / SM12 clear + tek retry (kök-fix: create
+> script'ine finally-unlock ekle).
+
+**2) MESAJLARI YAZ** — 📦 **`scripts/populate_message_class.py`** — shell'e CSV'den toplu mesaj.
 
 ```powershell
 # CSV format (UTF-8, header'lı):
@@ -207,11 +224,11 @@ Test edilip çalışmadığı **kanıtlanan** yöntemler — tekrar deneme:
 
 | Adım | Aksiyon |
 |---|---|
-| 1 | Sınıfı SE91'de yarat (boş shell, TR master lang) |
-| 2 | Mesaj listesini CSV'ye yaz: `msgno,msgtext,selfexplainatory` |
-| 3 | `python scripts/populate_message_class.py --name ... --messages-csv ...` |
-| 4 | `--verify-only` ile mesajları doğrula |
-| 5 | SE91 / SAP GUI'de aktive et |
+| 1 | `python scripts/create_message_class.py --name ... --description ... --package ... --transport ... --cwd ...` → **shell (SE91 GEREKMEZ)** |
+| 2 | Mesaj listesini CSV'ye yaz: `msgno,msgtext,selfexplainatory` (⚠ msgtext ≤ **73 char** — T100 limiti) |
+| 3 | `python scripts/populate_message_class.py --name ... --messages-csv ...` (shell'e PUT-replace) |
+| 4 | `adt_msgclass_read` (veya `--verify-only`) ile mesajları + master_language=TR doğrula |
+| 5 | Ayrı aktivasyon genelde GEREKMEZ — populate T100'e save-eder (readback ile doğrula) |
 
 ---
 
