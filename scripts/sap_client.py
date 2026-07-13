@@ -575,6 +575,38 @@ class SAPClient:
                 except Exception as unlock_err:
                     print(f"      [WARNING] Pre-activation unlock failed: {str(unlock_err)[:100]}")
 
+            # --- AKTIVASYON-ONCESI CANLI SYNTAX-CHECK (push-before-activate guvenlik katmani) ---
+            # Kaynak upload edildi (inactive), henuz aktive edilmedi. abaplint/run_review STATIK
+            # katmani bazi KERNEL-derleme hatalarini yakalamaz (metot-param inline TABLE OF,
+            # string-template escape, METHODS param sirasi, released-CDS alan adi, use-before-DATA...)
+            # — yalniz SAP kernel gorur. syntax_check = preaudit-activation (SE24 "Check" ile ayni
+            # kernel, non-destructive: lock/yazma yok) -> aktivasyondan ONCE yakalar. valid:False ->
+            # AKTIVE ETME (inactive source incelemede kalir, aktif surum etkilenmez). Kernel-check
+            # kosulamazsa SOFT (aktivasyona devam; activate kendi hatasini verir).
+            # KAPSAM: yalniz self-contained source-based OO (class/interface) — bunlarda preaudit
+            # SE24-Check ile birebir guvenilir. prog/fugr/include DISLANDI: standalone include
+            # syntax-check parent-context'siz FAKE olabilir -> yanlis-pozitif blok riski (bkz.
+            # bug-checklist BE-46). Blok yalniz valid:False + somut error listesi varsa.
+            _ABAP_SRC_PRECHECK = {'class', 'clas', 'interface', 'intf'}
+            if (object_type or '').lower().strip() in _ABAP_SRC_PRECHECK:
+                try:
+                    _pre = self.syntax_check(object_name, object_type=object_type)
+                except Exception as _pre_exc:
+                    _pre = None
+                    print(f"      [INFO] Pre-activation syntax-check kosulamadi (SOFT, devam): {str(_pre_exc)[:80]}")
+                if isinstance(_pre, dict) and _pre.get('valid') is False and _pre.get('errors'):
+                    result['activated'] = False
+                    result['success'] = False
+                    result['syntax_precheck'] = 'failed'
+                    result['syntax_errors'] = _pre.get('errors', [])
+                    print(f"\n[BLOCK] Aktivasyon-oncesi syntax-check BASARISIZ -> AKTIVE EDILMEDI.")
+                    print(f"        Kaynagi duzelt + yeniden push et. Hatalar:")
+                    for _e in (_pre.get('errors') or [])[:10]:
+                        _m = _e.get('message', '') if isinstance(_e, dict) else str(_e)
+                        _ln = _e.get('line', '') if isinstance(_e, dict) else ''
+                        print(f"          Line {_ln}: {_m}")
+                    return result
+
             activation_result = self.adt_client.activate_object(object_name, object_url)
             if isinstance(activation_result, dict):
                 if activation_result.get('success'):
@@ -1310,6 +1342,33 @@ class SAPClient:
             except Exception:
                 body = r.text or ''
             ok = r.status_code == 200 and 'does not implement' not in body.lower()
+
+            # SERTLEŞTİRME (2026-07-13): retry sonrası HÂLÂ "does not implement"
+            # ise, sınıf yapısal olarak geçerli mi bak. Geçerliyse (aktif +
+            # INTERFACES if_oo_adt_classrun kaynakta) bu, SAP app-server
+            # class-LOAD-cache / aynı-isim sil-yarat binding bozulmasıdır
+            # (playbook howto-rap-eml...:116-117). Aynı-isim retry ETKİSİZ →
+            # körlemesine tekrar yerine NET TEŞHİS dön ki "tooling bozuk"
+            # yanlış-sonucu doğmasın. Çözüm = TAZE class adı.
+            if not ok and 'does not implement' in body.lower():
+                diag = self._diagnose_classrun_binding(class_name)
+                if diag.get('structurally_valid'):
+                    return {
+                        'ok': False,
+                        'class': class_name,
+                        'status': r.status_code,
+                        'output': body,
+                        'error': 'classrun_load_cache_binding',
+                        'diagnosis': (
+                            f"Sinif {class_name} YAPISAL OLARAK GECERLI (aktif + "
+                            f"INTERFACES if_oo_adt_classrun kaynakta VAR) ama classrun "
+                            f"'does not implement' donuyor. Bu SAP app-server "
+                            f"class-LOAD-cache / ayni-isim sil-yarat binding "
+                            f"bozulmasidir; ayni-isim retry ETKISIZ. COZUM: TAZE "
+                            f"(daha once kullanilmamis) bir sinif adiyla yeniden "
+                            f"yarat+kos. Ayni ismi delete+recreate ETME."
+                        ),
+                    }
             return {
                 'ok': ok,
                 'class': class_name,
@@ -1318,6 +1377,30 @@ class SAPClient:
             }
         except Exception as e:
             return {'ok': False, 'class': class_name, 'error': str(e)}
+
+    def _diagnose_classrun_binding(self, class_name: str) -> Dict[str, Any]:
+        """classrun 'does not implement' teşhisi (sertleştirme yardımcısı).
+
+        Sınıf aktif + kaynakta `INTERFACES if_oo_adt_classrun` var mı? Varsa
+        yapısal-geçerli → sorun LOAD-cache/aynı-isim binding (fix = taze isim),
+        tooling/reçete DEĞİL. Yalnız salt-okuma (GET source/main).
+        """
+        try:
+            src_url = (f"{self.adt_client.url}/sap/bc/adt/oo/classes/"
+                       f"{class_name.lower()}/source/main")
+            hdrs = self.adt_client._get_headers(accept_type='text/plain')
+            r = self.adt_client._request_with_csrf_retry(
+                'get', src_url, headers=dict(hdrs))
+            src = (r.content.decode('utf-8', errors='replace')
+                   if r.content else '').lower()
+            has_iface = 'if_oo_adt_classrun' in src
+            return {
+                'structurally_valid': (r.status_code == 200 and has_iface),
+                'has_interface': has_iface,
+                'source_http': r.status_code,
+            }
+        except Exception as e:
+            return {'structurally_valid': False, 'error': str(e)}
 
     def activate_object(self, object_name: str, object_type: str = 'class') -> bool:
         """
@@ -1985,12 +2068,13 @@ class SAPClient:
 <ttyp:tableType xmlns:ttyp="http://www.sap.com/dictionary/tabletype"
                 xmlns:adtcore="http://www.sap.com/adt/core"
                 adtcore:name="{name.upper()}"
-                adtcore:description="{description}">
+                adtcore:description="{description}"
+                adtcore:masterLanguage="{self.adt_client.language}">
     <adtcore:packageRef adtcore:name="{package.upper()}"/>
     <ttyp:rowType>
         <ttyp:typeKind>dictionaryType</ttyp:typeKind>
         <ttyp:typeName>{row_type.upper()}</ttyp:typeName>
-        <ttyp:builtInType><ttyp:dataType/><ttyp:length>000000</ttyp:length><ttyp:decimals>000000</ttyp:decimals></ttyp:builtInType>
+        <ttyp:builtInType><ttyp:dataType>STRU</ttyp:dataType><ttyp:length>000000</ttyp:length><ttyp:decimals>000000</ttyp:decimals></ttyp:builtInType>
         <ttyp:rangeType/>
     </ttyp:rowType>
     <ttyp:initialRowCount>00000</ttyp:initialRowCount>

@@ -16,11 +16,13 @@ SOURCE format (canlıdan):
   selections  : "NAME    =Etiket\\r\\n\\r\\nNAME2   =..."       (ad 8-haneye SOLA yaslı, aralarda boş satır)
 
 Akış: csrf → GET(etag) → lock(prog, corrNr=transport) → PUT(her alt-kaynak, If-Match+lockHandle+corrNr)
-      → activate(prog; pre-audit PROG/PX'i otomatik toplar) → unlock → readback GET (doğrulama).
+      → UNLOCK → activate(PROG/P + PROG/PX; unlock'tan SONRA — PROG/PX self-conflict 403 önlenir)
+      → readback GET (?version=active doğrulama). Ayrıca PUT öncesi offline @MaxLength ön-kontrolü.
 
 ADR 0005: yalnız Z/Y program. Transport ZORUNLU (corrNr). TR master-lang .conn_adt'den gelir.
 """
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -52,6 +54,31 @@ def _read_payload(path: str) -> str:
     return txt.replace("\n", "\r\n")
 
 
+def _check_symbol_maxlengths(payload: str) -> list:
+    """symbols payload'ında her metnin uzunluğu kendi @MaxLength'ini AŞIYOR mu.
+
+    SAP DS512 ("Text elements contain errors") tam bunu der — ama PUT anında + şifreli.
+    Bu ön-kontrol push'tan ÖNCE net mesajla yakalar (2026-07-12 dersi). Döner:
+    [(sym, text, textlen, maxlen), ...]. Format: her sembolü kendi '@MaxLength:NN' satırı
+    önceler; ardından 'SYM=metin'. (=limit sorun değil; yalnız > aşımı DS512 verir.)
+    """
+    viol = []
+    cur_max = None
+    for raw in payload.replace("\r\n", "\n").split("\n"):
+        line = raw.rstrip()
+        m = re.match(r"@MaxLength:(\d+)\s*$", line)
+        if m:
+            cur_max = int(m.group(1))
+            continue
+        m = re.match(r"(\S{1,3})=(.*)$", line)
+        if m and cur_max is not None:
+            text = m.group(2)
+            if len(text) > cur_max:
+                viol.append((m.group(1), text, len(text), cur_max))
+            cur_max = None
+    return viol
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Klasik program text-pool PUT + aktivasyon")
     ap.add_argument("--program", required=True, help="Z/Y program adı (örn ZSD001_P_SOZLESME_KOPYALA)")
@@ -76,6 +103,20 @@ def main() -> int:
     if not subs:
         print("[BLOCK] En az bir payload (--symbols-file/--selections-file/--headings-file) gerekir.")
         return 2
+
+    # 2.5) OFFLINE @MaxLength ön-kontrolü — symbols'te metin @MaxLength'i aşarsa SAP DS512
+    #      ("text elements contain errors") ile PUT'u REDDEDER (şifreli + round-trip). Push'tan
+    #      ÖNCE net mesajla yakala (2026-07-12 dersi: C07/C09/D03 aşımı → DS512 → boş kolon).
+    for _name, _payload in subs:
+        if _name != "symbols":
+            continue
+        _viol = _check_symbol_maxlengths(_payload)
+        if _viol:
+            print("[BLOCK] symbols: metin @MaxLength'i AŞIYOR → SAP DS512 verir (push öncesi yakalandı):")
+            for _sym, _txt, _tl, _ml in _viol:
+                print(f'        {_sym}="{_txt}"  uzunluk={_tl} > @MaxLength:{_ml}  (+{_tl - _ml})')
+            print("        Çözüm: @MaxLength'i büyüt VEYA metni kısalt.")
+            return 2
 
     c = SAPClient()
     adt = c.adt_client
@@ -135,45 +176,49 @@ def main() -> int:
             if not ok:
                 print(f"      body: {r.text[:600]}")
                 return 3
-
-        # 4) Aktivasyon — İKİ AŞAMA (tek PROG/P-activate YETMEZ):
-        if not args.no_activate:
-            # 4a) Program (PROG/P) — text-symbol referansları + load regen.
-            print(f"[ACTIVATE] {prog} (PROG/P)")
-            res = adt.activate_object(prog, prog_obj_url)
-            print(f"[ACTIVATE] PROG/P success={res.get('success')} errors={len(res.get('errors', []))}")
-            for e in res.get("errors", [])[:10]:
-                print(f"      E: {e.get('message')}")
-            # 4b) Text-pool (PROG/PX) EXPLICIT seed — KRİTİK: program ZATEN AKTİFSE
-            #     PROG/P-activate no-op'tur (activationExecuted=false) ve inactive PROG/PX'i
-            #     PROMOTE ETMEZ → selections/symbols ACTIVE'de `?`/boş kalır (ekranda textsiz).
-            #     Çözüm: PROG/PX'i DOĞRUDAN seed'le. (ZSD001_P_AMBALAJ_TAKIP 2026-06-28.)
-            px_body = (
-                '<?xml version="1.0" encoding="UTF-8"?>'
-                '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">'
-                f'<adtcore:objectReference adtcore:uri="/sap/bc/adt/textelements/programs/{prog_l}"'
-                f' adtcore:type="PROG/PX" adtcore:name="{prog.upper()}"/>'
-                '</adtcore:objectReferences>'
-            )
-            ph = adt._get_headers(
-                accept_type="application/vnd.sap.adt.objectactivation.result.v1+xml",
-                content_type="application/xml",
-            )
-            pr = adt._request_with_csrf_retry(
-                "post", f"{base}/sap/bc/adt/activation", headers=ph,
-                data=px_body.encode("utf-8"),
-                params={"method": "activate", "preauditRequested": "true"}, timeout=60)
-            print(f"[ACTIVATE] PROG/PX status={pr.status_code}")
-            if pr.status_code != 200:
-                print(f"      body: {pr.text[:500]}")
     finally:
         # 5) Unlock — DOĞRU helper (stateful + csrf). Raw POST csrf'siz başarısız olup
         #    lock'u SIZDIRIR (EU 510) → sonraki run'lar lock alamaz. unlock_object kullan.
+        #    ⚠ PUT bitti; lock YALNIZ YAZMA içindi → aktivasyondan ÖNCE serbest bırak. Aksi halde
+        #    PROG/PX aktivasyonu tool'un KENDİ textelements-lock'uyla çakışır → deterministik
+        #    403 "already editing" self-conflict (2026-07-12 dersi: PROG/P farklı endpoint
+        #    /programs olduğu için etkilenmiyordu; PROG/PX aynı textelements resource → çakışıyordu).
         try:
             ok_unlock = adt.unlock_object(te_url, lock_handle)
             print(f"[UNLOCK] {'done' if ok_unlock else 'FAILED — SM12 kontrol et'}")
         except Exception as exc:
             print(f"[UNLOCK] FAILED ({exc}) — SM12'de {prog} kilidini kontrol et")
+
+    # 4) Aktivasyon — UNLOCK'TAN SONRA (İKİ AŞAMA; tek PROG/P-activate YETMEZ).
+    if not args.no_activate:
+        # 4a) Program (PROG/P) — text-symbol referansları + load regen.
+        print(f"[ACTIVATE] {prog} (PROG/P)")
+        res = adt.activate_object(prog, prog_obj_url)
+        print(f"[ACTIVATE] PROG/P success={res.get('success')} errors={len(res.get('errors', []))}")
+        for e in res.get("errors", [])[:10]:
+            print(f"      E: {e.get('message')}")
+        # 4b) Text-pool (PROG/PX) EXPLICIT seed — KRİTİK: program ZATEN AKTİFSE
+        #     PROG/P-activate no-op'tur (activationExecuted=false) ve inactive PROG/PX'i
+        #     PROMOTE ETMEZ → selections/symbols ACTIVE'de `?`/boş kalır (ekranda textsiz).
+        #     Çözüm: PROG/PX'i DOĞRUDAN seed'le. (ZSD001_P_AMBALAJ_TAKIP 2026-06-28.)
+        px_body = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">'
+            f'<adtcore:objectReference adtcore:uri="/sap/bc/adt/textelements/programs/{prog_l}"'
+            f' adtcore:type="PROG/PX" adtcore:name="{prog.upper()}"/>'
+            '</adtcore:objectReferences>'
+        )
+        ph = adt._get_headers(
+            accept_type="application/vnd.sap.adt.objectactivation.result.v1+xml",
+            content_type="application/xml",
+        )
+        pr = adt._request_with_csrf_retry(
+            "post", f"{base}/sap/bc/adt/activation", headers=ph,
+            data=px_body.encode("utf-8"),
+            params={"method": "activate", "preauditRequested": "true"}, timeout=60)
+        print(f"[ACTIVATE] PROG/PX status={pr.status_code}")
+        if pr.status_code != 200:
+            print(f"      body: {pr.text[:500]}")
 
     # 6) Readback DOĞRULAMA — ?version=active ŞART (working DEĞİL).
     #    BE-39: working/inactive readback PUT'lanan metni gösterip YANILTIR; oysa ekran

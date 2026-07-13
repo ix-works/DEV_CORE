@@ -152,6 +152,57 @@ def _activate_and_verify(client, name: str, object_type: str) -> dict:
     return out
 
 
+def _verify_ddic_content(client, name: str, obj_type: str) -> dict:
+    """KOŞULSUZ içerik-doğrulama (varlık DEĞİL) — 'activated' shell'i maskelemesin.
+
+    Ders: create-POST inline source flaky → 'activated' bir placeholder shell olabilir
+    (component_to_be_changed:abap.string). Bu yüzden AKTİVASYON SONRASI sistemden İÇERİK
+    okunur, success mesajına güvenilmez:
+      - tabl (structure): /source/main (active) → placeholder yok + field sayısı > 0
+      - ttyp (table type): obje XML (active) → rowType/typeName dolu + dataType boş değil
+
+    Returns {ok: bool, reason?, field_count?/row_type?/data_type?}.
+    """
+    import re
+    adt = getattr(client, "adt_client", client)
+    try:
+        if obj_type == "tabl":
+            url = f"/sap/bc/adt/ddic/structures/{name.lower()}/source/main"
+            r = adt.session.get(adt.url + url, headers=adt._get_headers("text/plain"),
+                                params={"version": "active"}, timeout=30)
+            if r.status_code != 200:
+                return {"ok": False, "reason": f"source_read_http_{r.status_code}"}
+            src = r.text or ""
+            if re.search(r"component_to_be_changed\s*:\s*abap\.string", src, re.IGNORECASE):
+                return {"ok": False, "reason": "placeholder_shell", "source_head": src[:160]}
+            body = src[src.find("{") + 1: src.rfind("}")] if "{" in src else ""
+            fcount = len(re.findall(r"^\s*\w+\s*:\s*[^;]+;", body, re.MULTILINE))
+            if fcount == 0:
+                return {"ok": False, "reason": "no_fields", "source_head": src[:160]}
+            return {"ok": True, "field_count": fcount}
+        if obj_type == "ttyp":
+            url = f"/sap/bc/adt/ddic/tabletypes/{name.lower()}"
+            r = adt.session.get(
+                adt.url + url,
+                headers={"Authorization": adt._get_auth_header(),
+                         "sap-client": adt.client,
+                         "Accept": "application/vnd.sap.adt.tabletype.v1+xml"},
+                params={"version": "active"}, timeout=30)
+            if r.status_code != 200:
+                return {"ok": False, "reason": f"ttyp_read_http_{r.status_code}"}
+            t = r.text or ""
+            tn = re.search(r"typeName>([^<]+)<", t)
+            dt = re.search(r"dataType>([^<]*)<", t)
+            if not tn or not tn.group(1).strip():
+                return {"ok": False, "reason": "rowtype_empty", "xml_head": t[:200]}
+            if not dt or not dt.group(1).strip():
+                return {"ok": False, "reason": "datatype_empty_shell", "xml_head": t[:200]}
+            return {"ok": True, "row_type": tn.group(1).strip(), "data_type": dt.group(1).strip()}
+        return {"ok": True, "skip_reason": f"no_content_verify_for_{obj_type}"}
+    except Exception as exc:
+        return {"ok": False, "reason": f"content_verify_exception:{exc}"}
+
+
 # =============================================================================
 # adt_domain_create
 # =============================================================================
@@ -469,6 +520,14 @@ def adt_struct_create(
     if "sap_version" in tail:
         steps["verify"]["sap_version"] = tail["sap_version"]
 
+    # KOŞULSUZ içerik-doğrulama (artifact_path OLMASA da) — 'activated' bir placeholder
+    # shell'i maskeliyor olabilir. Aktivasyon+versiyon OK ise sistemden İÇERİK okunur.
+    content_ok = True
+    if tail.get("verified"):
+        content = _verify_ddic_content(client, name, obj_type)
+        steps["content_verify"] = content
+        content_ok = content.get("ok", False)
+
     # Sprint 6 T10 — post-create consistency check (placeholder + field count diff).
     # adt_struct_create fields[] yöntemi bazen SAP'de sadece placeholder bırakır.
     # artifact_path verilmişse, lokal artifact ile SAP'deki source'u karşılaştır.
@@ -486,7 +545,7 @@ def adt_struct_create(
         consistency_ok = consistency.passed
 
     ok_overall = (steps["create"].get("ok") and tail.get("activated")
-                  and tail.get("verified") and consistency_ok)
+                  and tail.get("verified") and consistency_ok and content_ok)
     out = {
         "ok": bool(ok_overall),
         "name": name,

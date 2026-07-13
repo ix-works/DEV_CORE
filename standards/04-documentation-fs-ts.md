@@ -680,6 +680,16 @@ Geliştirmenin sistemdeki yerini ve bağlantılarını gösterir:
 
 Detaylı mockup (FS'tekinden daha net — gerçek etiketler, bölümler, butonlar) +:
 
+> **★ KOLON TAMLIĞI (MUST — eksikse TS eksiktir):** Ekrandaki HER grid/tablonun **TÜM kolonları ve
+> her kolonun BAŞLIK etiketi (kolon tanımı)** TS'te açıkça listelenir + netleştirilir — DDIC/varsayılan
+> etikete BIRAKILMAZ. *Gerekçe:* structure-merge'de başlık alanın **DTEL'inden** gelir → jenerik veya
+> rol-yanlış DTEL AYNI/anlamsız başlık üretir (ör. farklı partner rolleri — sipariş-veren, sevk-adresi,
+> ek-muhatap — hepsi `KUNNR` ile "Müşteri" görünür). **Yöntem:** (1) semantik-doğru **standart DTEL**
+> kullan (rol-özel: sipariş-veren `KUNAG`/`NAME_AG`, malı-teslim-alan `KUNWE`/`NAME_WE` → ayrı, doğru
+> başlık + F1); (2) standart DTEL yoksa (müşteri-özel Z partner fn. vb.) **başlık metnini TS'te AÇIKÇA
+> yaz** + `set_coltext` ile ver (ya da kullanıcı-adlı Z DTEL — ADR 0005-D). §4.5.2-(d) açıklama kolonları
+> ve (e) fcat-yaklaşımı bu kuralın parçasıdır. Kolonu/etiketi eksik bırakılmış TS = **eksik TS**.
+
 **(a) Alan tablosu**
 
 | Alan (teknik) | Ekran Etiketi | Tip/Uzunluk | Zorunlu | Default | F4 / Value-Help | Düzenlenebilir? | Açıklama/Validasyon |
@@ -704,6 +714,47 @@ Detaylı mockup (FS'tekinden daha net — gerçek etiketler, bölümler, butonla
 | quantity | Miktar (ADT) | dec | E | Evet | PAK katı kontrol |
 | packageQty | Miktar (PAK) | dec | H | Hayır | = miktar × PakFactor |
 | netAmount | Tutar | curr | H | Evet | Fiyat Hesapla doldurur |
+
+**(d) Açıklama / tanım kolonları kararı (ZORUNLU — atlanamaz)**
+
+> Ekranda veya grid'de **kod alanı** olarak listelenen HER alan için (müşteri no, ship-to/WE,
+> ilave partner/ZW, sipariş tipi/AUART, malzeme, birim, plant, depo, ödeme/teslim koşulu vb.),
+> o kodun **açıklama/tanım metninin** tabloya **ayrı kolon olarak eklenip eklenmeyeceği TS
+> hazırlanırken KARARA BAĞLANIR ve bu bölümde AÇIKÇA belirtilir.** Kullanıcının salt koddan
+> tanıyamayacağı bir kod-kolonu **tanımsız bırakılamaz**: ya açıklama kolonu eklenir — **kaynak
+> tablo/alan + dil** yazılır (ör. müşteri→`KNA1-NAME1`, sipariş tipi→`TVAKT-BEZEI` SPRAS=oturum,
+> malzeme→`MAKT-MAKTX`) — ya da "açıklama gerekmez" **gerekçesiyle bilinçli olarak dışlanır.**
+> Bu karar boş bırakılırsa build'de eksik/tanımsız kolon riski doğar (kod görünür, anlamı görünmez).
+
+| Kod alanı | Açıklama eklensin mi? | Kaynak (tablo-alan · dil) | Karar/gerekçe |
+|---|---|---|---|
+| (ör. kunwe/WE) | ✅ Evet | KNA1-NAME1 | Kullanıcı adı görmeli |
+| (ör. auart) | ✅ Evet | TVAKT-BEZEI · oturum dili | Tip kodu tek başına yetersiz |
+| (ör. mandt) | ⛔ Hayır | — | Teknik alan, anlam gerekmez |
+
+**(e) Field catalog yaklaşımı — DDIC-structure mi, manuel mi? (klasik ALV — ZORUNLU KARAR)**
+
+> Klasik ALV (`CL_GUI_ALV_GRID` / SALV) içeren ekranda field catalog'un **DDIC output-structure'dan
+> merge** mi (`Z…_S_…` + `i_structure_name`/`LVC_FIELDCATALOG_MERGE`) yoksa **manuel `lvc_t_fcat`** mi
+> kurulacağı TS'te **KARARA BAĞLANIR ve gerekçesiyle yazılır** — developer sessizce seçmez (ADR 0012
+> rafinasyonu). **Structure tercih:** miktar+birim ondalık · para+PB · çok kolon · kod→tanım (açıklama)
+> kolonları · tekrar-kullanım (DDIC tipleri + QUAN-birim-ref + CURR-ref **otomatik** gelir → manuel hata
+> kapanır). **Manuel meşru:** basit / az-kolon / ad-hoc rapor. Structure seçildiyse: **structure adı +
+> alan→DTEL eşlemesi** BÖLÜM 4 (DDIC) altında verilir; §4.5.2-(d) açıklama kolonları da structure alanı olur.
+>
+> **DTEL SEMANTİĞİ = KOLON BAŞLIĞI (kritik):** structure-merge'de kolon başlığı alanın **DTEL'inden**
+> gelir. **Semantik-doğru standart DTEL seç** — aynı jenerik DTEL'i (ör. `KUNNR`) farklı roller için
+> kullanmak AYNI/yanıltıcı başlık üretir (ör. sipariş-veren + sevk-adresi + ek-muhatap hepsi "Müşteri").
+> Rol-özel standart DTEL VARSA kullan (ör. sipariş-veren `KUNAG`/`NAME_AG`, malı-teslim-alan
+> `KUNWE`/`NAME_WE` → ayrı, doğru başlık + F1). **Standart DTEL YOKSA** (ör. müşteri-özel Z partner
+> fonksiyonu): iki yol — (a) **Z DTEL** (kullanıcı adlandırır — ADR 0005-D, AI önermez) VEYA (b)
+> **`set_coltext` ile kod-etiketi**. Hangisi olursa olsun **o kolonun başlık metni TS'te AÇIKÇA
+> NETLEŞTİRİLİR** (jenerik DTEL etiketine — "Müşteri"/"Ad" — güvenilmez; alanın gerçek iş-anlamı yazılır).
+
+| ALV grid | Yaklaşım | Gerekçe |
+|---|---|---|
+| (ör. kalem grid — miktar/birim/tanım) | DDIC-structure merge | ondalık+tanım DDIC'ten; manuel hata riski |
+| (ör. basit 3-kolon log) | Manuel lvc_t_fcat | tipsiz/az kolon; structure gereksiz |
 
 **4.5.3 Etkileşim Matrisi (girilen veriye göre davranış)**
 
@@ -1170,6 +1221,7 @@ Takılınca kime/nasıl başvurulur: Key User adı/iletişim, IT destek/ticket k
 [ ] Hata/mesaj tablosu: birebir metin + anlam + AKSİYON
 [ ] SSS + terim sözlüğü + destek/iletişim
 [ ] Teknik terim sızmamış (hepsi sözlükte/sade)
+[ ] (KD-F1-01) Klasik/GUI program (tcode'lu Dynpro/ALV) ise → in-system F1-DOCU yardım ayağı ÜRETİLDİ (RE fihrist + TX detay, ZSD000_CL_DOCU runner, ITF ≤72); KD ile senkron; Fiori/UI5 ise muaf (§4.6)
 [ ] Key User onayı alınmış
 ```
 
@@ -1179,6 +1231,73 @@ No   : KD-[MODÜL]-[SIRA]   (FS-SD-001 ↔ TS-SD-001 ↔ KD-SD-001 aynı gelişt
 Dosya: KD-[MODÜL]-[SIRA]_[Uygulama_Adı]_v[Versiyon].docx
 Örnek: KD-SD-001_Siparis_Kullanici_Kilavuzu_v1.0.docx
 ```
+
+---
+
+## 4.6 Klasik/GUI Program KD → In-System F1-DOCU Yardım Ayağı (ZORUNLU/VARSAYILAN) *(ID: KD-F1-01)*
+
+> **MUST (KD-F1-01):** Klasik-GUI (Dynpro / ALV / module-pool / report; **tcode ile açılan**)
+> bir programın KD'si **İKİ AYAKLIDIR** ve her iki ayak da teslimatın parçasıdır:
+>
+> 1. **Repo markdown/PDF KD** (`docs/KD-[MODÜL]-[SIRA]_*.md`) — **otorite + offline** başucu
+>    kılavuzu; yazım kaynağı ve §4.1-§4.5 kurallarının uygulandığı yer.
+> 2. **In-system F1-DOCU yardımı** — **KD içeriğinden türetilen**, kullanıcının programın
+>    **içinden** (aşağıda §4.6.2) eriştiği SAP-yerel yardım.
+>
+> **İkinci ayak VARSAYILANDIR.** Klasik/GUI bir program KD'si hazırlanıyorsa, geliştirici
+> **kullanıcı ayrıca istemese de** bu F1-DOCU ayağını otomatik üretir — "söylenirse yaparım"
+> DEĞİL, klasik/GUI KD'nin **tanım gereği** bir parçasıdır. (Bu kural tam da *"söylenmeden
+> yapılmalı"*yı zorlar; atlandığında KD **eksiktir**.)
+
+**4.6.1 Gerekçe (neden varsayılan).** RAP/Fiori uygulamada yardım UI-içinde/launchpad'de yaşar;
+klasik GUI'de kullanıcının başvuracağı **yerleşik** yer SAP-standart **Yardım → Uygulama Yardımı
+(F1)**'dır. Repo markdown'ı otorite olsa da son kullanıcı çoğu zaman ona ulaşamaz (dosya paylaşımı
+gerekir); programın içinden çıkmadan yardım görebilmesi ancak F1-DOCU ayağıyla sağlanır. Bu yüzden
+klasik/GUI KD'de bu ayak opsiyonel bir "ekstra" değil, **varsayılan teslimattır**.
+
+**4.6.2 Mekanizma (özet — tam teslim mekanizması: `../standards/08-classic-gui-f1-help.md`).**
+KD-F1-01 **içerik** kuralıdır; **nasıl SAP'ye yazılacağı** std/08'de tanımlıdır. Özet:
+
+- **Teslim yapısı = fihrist + link'li detay** (tek-düz-sayfa değil):
+  - **Fihrist** = **`RE` doküman**, obje adı = **programın adı** (ör. `ZSD<NNN>_P_<...>`).
+    SAP-standart **RE-DOCU bağı** sayesinde **Yardım → Uygulama Yardımı (F1)** bu dokümanı
+    **otomatik açar** — programa **özel buton / fcode / `HELP_OBJECT_SHOW` handler yazmak
+    GEREKMEZ** (obje adı = program adı olması yeter).
+  - **Detay sayfaları** = `TX` dokümanlar, ad deseni `ZSD<NNN>_KD_<KONU>` (ör.
+    `..._KD_AMAC`, `..._KD_SECIM`, `..._KD_KOLON`, `..._KD_IPUCU`); fihristteki
+    `<DS:TX....>` link'inden açılır.
+- **Altyapı:** proje-ortak generic yazıcı **`ZSD000_CL_DOCU`** (`write_object_doc(...)` →
+  `DOCU_UPDATE`) + program-özel bir **`ZSD<NNN>_CL_<...>_DOCU_RUN`** runner (`if_oo_adt_classrun`;
+  KD içeriği ITF satırları olarak burada gömülü). Runner sırası: **PROBE → TX detaylar → RE
+  fihrist → `DOCU_GET` readback**. Çalıştırma **gateway `adt_classrun`** ile (kullanıcı GUI'de
+  hiçbir şey yapmaz). ADT/REST klasik RE/TX doc **yazamaz** — tek yol budur.
+- **ITF format (std/08 §3):** her sayfanın **İLK satırı `U1` başlık**; bold = `<ZH>...</>`;
+  link = `<DS:TX.<DOCNAME>>görünen metin</>`; **her satır ≤ 72 ham karakter** (tag dahil —
+  görüntüleme sınırı; depolama ≤132'ye güvenme, F1'de kuyruk kırpılır); tag'i iki satıra
+  BÖLME; **gerçek Türkçe + UTF-8 (BOM yok) + TR login** (ADR 0005-D).
+
+**4.6.3 KD ↔ DOCU türetme ve senkron.** İki ayak **paralel içerik** taşır: repo markdown KD
+**otorite/yazım kaynağı**, F1-DOCU ondan **türer**. Her ana KD bölümü (§4.2: Amaç/Kapsam,
+Ön Koşullar, Seçim Ekranı, Kolonlar, İpuçları/SSS…) bir DOCU yardım başlığına (bir `TX` sayfası)
+eşlenir. **Senkron zorunlu:** KD değişince F1-DOCU **aynı revizyonda** güncellenir (içerik değiştir
++ re-classrun) — biri güncel, diğeri bayat kalamaz. F1-DOCU kaynağı ayrı bir dosyada tutulur:
+**`docs/DOCU-[MODÜL]-[SIRA]_<Uygulama>_GUI_Yardim.md`** (SAP'ye yüklenecek ITF kaynak metni;
+`KD-[MODÜL]-[SIRA]` ile aynı geliştirmeye bağlı). *(Kanonik örnek: `ZSD001` — tcode ZSD001 →
+F1 → fihrist + TX detaylar; generic yazıcı `ZSD000_CL_DOCU`.)*
+
+**4.6.4 İçerik kaynağı (uydurma YASAK).** F1-DOCU metni **repo KD'ye paralel** + tip/değer
+tanımları domain fixed-value label'larından **canlı** (`adt_get`), kolon/formül FS + class
+mantığından üretilir. Erişim adımlarında **SA38/SE38/SE80 ile program çalıştırma ASLA verilmez**
+(std/08 §2; son kullanıcı bunu çalıştıramaz → tcode yoksa yetkiliye yönlendir).
+
+**4.6.5 Denetim (DOC-F1-01 gate).** Bu ayağın **ITF genişlik/format disiplini**
+`check_docu_itf_line_width.py` (**DOC-F1-01**) ile denetlenir: DOCU runner'da `iv_line` > 72 ham
+karakter veya tag'in tek satırda açılıp-kapanmaması → **BLOCKER** (`run_review.py` pre-flight).
+"F1-DOCU ayağı üretildi mi" tamlığı ise §4.4 KD Kalite Kontrol Listesi'nde işaretlenir.
+
+**4.6.6 İSTİSNA.** Bu ayak **yalnız klasik/GUI** program içindir. **RAP + Fiori/UI5 freestyle**
+uygulamada F1-DOCU ayağı **YOKTUR** (yardım UI-içi/launchpad'de yaşar) → yalnız repo markdown KD
+(+ varsa launchpad yardımı) yeterlidir; std/08 ve KD-F1-01 uygulanmaz.
 
 ---
 

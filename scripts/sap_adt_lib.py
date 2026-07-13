@@ -4734,6 +4734,59 @@ class SAPADTClient:
                     field='fields'
                 )
 
+    def _field_type_to_ddl(self, field_type):
+        """Bir field 'type' kısayolunu DDL structure-source biçimine çevirir.
+
+        Structure /source/main kanonik DDL bekler:
+          - built-in : abap.char(10), abap.numc(8), abap.dec(15,2), abap.int4, ...
+          - dictionary (data element / alt-struct) : olduğu gibi (küçük harf)
+
+        Bilinmeyen tip → data element/alt-struct referansı sayılır (pass-through).
+        Yanlışsa AKTİVASYON patlar (sessiz shell DEĞİL) → composite content-verify yakalar.
+        """
+        import re
+        t = (field_type or '').strip()
+        if not t:
+            return 'abap.char(1)'
+        tl = t.lower()
+        if tl.startswith('abap.'):
+            return t
+        m = re.fullmatch(r'(?:char|c)(\d+)', tl)
+        if m:
+            return f'abap.char({int(m.group(1))})'
+        m = re.fullmatch(r'(?:numc|n)(\d+)', tl)
+        if m:
+            return f'abap.numc({int(m.group(1))})'
+        m = re.fullmatch(r'raw(\d+)', tl)
+        if m:
+            return f'abap.raw({int(m.group(1))})'
+        m = re.fullmatch(r'curr(\d+)[_,.](\d+)', tl)
+        if m:
+            return f'abap.curr({int(m.group(1))},{int(m.group(2))})'
+        m = re.fullmatch(r'quan(\d+)[_,.](\d+)', tl)
+        if m:
+            return f'abap.quan({int(m.group(1))},{int(m.group(2))})'
+        m = re.fullmatch(r'(?:dec|p)(\d+)[_,.](\d+)', tl)
+        if m:
+            return f'abap.dec({int(m.group(1))},{int(m.group(2))})'
+        m = re.fullmatch(r'(?:dec|p)(\d+)', tl)
+        if m:
+            return f'abap.dec({int(m.group(1))},0)'
+        _scalar = {
+            'i': 'abap.int4', 'int1': 'abap.int1', 'int2': 'abap.int2',
+            'int4': 'abap.int4', 'int8': 'abap.int8',
+            'd': 'abap.dats', 'dats': 'abap.dats',
+            't': 'abap.tims', 'tims': 'abap.tims',
+            'f': 'abap.fltp', 'fltp': 'abap.fltp',
+            'string': 'abap.string', 'xstring': 'abap.rawstring',
+            'rawstring': 'abap.rawstring',
+            'decfloat16': 'abap.decfloat16', 'decfloat34': 'abap.decfloat34',
+            'clnt': 'abap.clnt', 'lang': 'abap.lang',
+        }
+        if tl in _scalar:
+            return _scalar[tl]
+        return tl
+
     def create_structure(self, name, fields, description, package_name, transport=None):
         """Create a structure (INTTAB) using blue source format
 
@@ -4777,21 +4830,32 @@ class SAPADTClient:
         if not self.csrf_token:
             self.fetch_csrf_token()
 
-        # Build field definitions (ABAP structure syntax)
+        # Build canonical DDL structure source: define structure NAME { field : abap.type; }
+        # KÖK-NEDEN: create-POST'un blue:source'u SAP'de GÜVENİLMEZ (flaky) — bazen inline
+        # source YOK SAYILIP shell (component_to_be_changed:abap.string) bırakır; aynı kod
+        # bir objede çalışıp diğerinde shell bırakabilir. Bu yüzden create-POST'tan SONRA
+        # source/main'e DETERMİNİSTİK ham PUT yapılır (set_object_source blue-DDIC'i sessizce
+        # persist ETMEZ = false-OK → ham PUT şart).
         field_lines = []
         for field in fields:
-            field_name = field.get('name', '')
-            field_type = field.get('type', 'char10')
+            field_name = (field.get('name') or '').strip()
             field_desc = field.get('description', '')
-
-            # Add comment if description provided
+            ddl_type = self._field_type_to_ddl(field.get('type', 'char10'))
             if field_desc:
-                field_lines.append(f'  "// {field_desc}')
-            field_lines.append(f'  {field_name}: {field_type};')
-
+                field_lines.append(f'  // {field_desc}')
+            field_lines.append(f'  {field_name.lower()} : {ddl_type};')
         fields_source = '\n'.join(field_lines)
 
-        # Build XML with blueSource format
+        _label = (description or '').replace("'", "''")
+        ddl_source = (
+            f"@EndUserText.label : '{_label}'\n"
+            f"@AbapCatalog.enhancement.category : #NOT_EXTENSIBLE\n"
+            f"define structure {name.lower()} {{\n"
+            f"{fields_source}\n"
+            f"}}"
+        )
+
+        # Build XML with blueSource format (shell create; source deterministik PUT ile yazılır)
         structure_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <blue:blueSource xmlns:blue="http://www.sap.com/wbobj/blue"
                   xmlns:adtcore="http://www.sap.com/adt/core"
@@ -4801,9 +4865,7 @@ class SAPADTClient:
   <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
-  <blue:source>structure {name.upper()} {{
-{fields_source}
-}}</blue:source>
+  <blue:source>{ddl_source}</blue:source>
 </blue:blueSource>'''
 
         params = {}
@@ -4828,20 +4890,11 @@ class SAPADTClient:
 
         response = self._retry_request(do_request, f'Create structure {name}')
 
+        object_url = f'/sap/bc/adt/ddic/structures/{name.lower()}'
         if response.status_code in [200, 201]:
-            object_url = response.headers.get('Location', f'/sap/bc/adt/ddic/structures/{name.lower()}')
-            return {
-                'success': True,
-                'object_url': object_url,
-                'message': f'Structure {name} created successfully'
-            }
-        if response.status_code == 405 and 'AlreadyExists' in response.text:
-            object_url = f'/sap/bc/adt/ddic/structures/{name.lower()}'
-            return {
-                'success': True,
-                'object_url': object_url,
-                'message': f'Structure {name} already exists'
-            }
+            object_url = response.headers.get('Location', object_url)
+        elif response.status_code == 405 and 'AlreadyExists' in response.text:
+            pass  # zaten var → source'u yine deterministik PUT ile (yeniden) yaz
         else:
             raise SAPADTError(
                 f"Failed to create structure {name}",
@@ -4849,6 +4902,44 @@ class SAPADTClient:
                 response_text=response.text,
                 endpoint='/sap/bc/adt/ddic/structures'
             )
+
+        # DETERMİNİSTİK source yazımı — create-POST shell bırakmış olsa da düzeltir.
+        src_url = f'/sap/bc/adt/ddic/structures/{name.lower()}'
+        lock_handle = self.lock_object(src_url, transport=transport)
+        try:
+            put_params = {'lockHandle': lock_handle}
+            if transport:
+                put_params['corrNr'] = transport
+            put_resp = self.session.put(
+                f"{self.url}{src_url}/source/main",
+                headers={
+                    'X-CSRF-Token': self.csrf_token,
+                    'Content-Type': 'text/plain; charset=utf-8',
+                },
+                params=put_params,
+                data=ddl_source.encode('utf-8'),
+                timeout=self.timeout_default,
+            )
+        finally:
+            try:
+                self.unlock_object(src_url, lock_handle)
+            except Exception:
+                pass
+
+        if put_resp.status_code not in [200, 201]:
+            raise SAPADTError(
+                f"Structure {name} shell yaratıldı ama source PUT başarısız "
+                f"(shell/placeholder riski — activate ETME)",
+                status_code=put_resp.status_code,
+                response_text=put_resp.text,
+                endpoint=f'{src_url}/source/main'
+            )
+
+        return {
+            'success': True,
+            'object_url': object_url,
+            'message': f'Structure {name} created + source deterministik PUT ile yazıldı'
+        }
 
     def create_table(self, name, description, package_name, fields=None,
                      ref_structure=None, transport=None, table_category='TRANSP',

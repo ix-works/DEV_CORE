@@ -682,6 +682,13 @@ def adt_push_source(
         if reviewer_warn:
             resp["reviewer"] = reviewer_warn
 
+        # Aktivasyon-oncesi canli syntax-check (push_object icinde) basarisizsa yuzeye cikar:
+        # push upload etti ama AKTIVE ETMEDI -> ok=False + hatalar (gateway net gorsun, nested kalmasin).
+        if isinstance(result, dict) and result.get("syntax_precheck") == "failed":
+            resp["ok"] = False
+            resp["syntax_precheck"] = "failed"
+            resp["syntax_errors"] = result.get("syntax_errors", [])
+
         # Readback-gate: push edilen source'u kaydet → adt_activate sonrası AKTİF source ile
         # normalize-compare için (yazımın tam oturduğunu doğrula). Upload başarılıysa.
         if ok:
