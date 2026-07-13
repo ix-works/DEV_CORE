@@ -575,6 +575,38 @@ class SAPClient:
                 except Exception as unlock_err:
                     print(f"      [WARNING] Pre-activation unlock failed: {str(unlock_err)[:100]}")
 
+            # --- AKTIVASYON-ONCESI CANLI SYNTAX-CHECK (push-before-activate guvenlik katmani) ---
+            # Kaynak upload edildi (inactive), henuz aktive edilmedi. abaplint/run_review STATIK
+            # katmani bazi KERNEL-derleme hatalarini yakalamaz (metot-param inline TABLE OF,
+            # string-template escape, METHODS param sirasi, released-CDS alan adi, use-before-DATA...)
+            # — yalniz SAP kernel gorur. syntax_check = preaudit-activation (SE24 "Check" ile ayni
+            # kernel, non-destructive: lock/yazma yok) -> aktivasyondan ONCE yakalar. valid:False ->
+            # AKTIVE ETME (inactive source incelemede kalir, aktif surum etkilenmez). Kernel-check
+            # kosulamazsa SOFT (aktivasyona devam; activate kendi hatasini verir).
+            # KAPSAM: yalniz self-contained source-based OO (class/interface) — bunlarda preaudit
+            # SE24-Check ile birebir guvenilir. prog/fugr/include DISLANDI: standalone include
+            # syntax-check parent-context'siz FAKE olabilir -> yanlis-pozitif blok riski (bkz.
+            # bug-checklist BE-46). Blok yalniz valid:False + somut error listesi varsa.
+            _ABAP_SRC_PRECHECK = {'class', 'clas', 'interface', 'intf'}
+            if (object_type or '').lower().strip() in _ABAP_SRC_PRECHECK:
+                try:
+                    _pre = self.syntax_check(object_name, object_type=object_type)
+                except Exception as _pre_exc:
+                    _pre = None
+                    print(f"      [INFO] Pre-activation syntax-check kosulamadi (SOFT, devam): {str(_pre_exc)[:80]}")
+                if isinstance(_pre, dict) and _pre.get('valid') is False and _pre.get('errors'):
+                    result['activated'] = False
+                    result['success'] = False
+                    result['syntax_precheck'] = 'failed'
+                    result['syntax_errors'] = _pre.get('errors', [])
+                    print(f"\n[BLOCK] Aktivasyon-oncesi syntax-check BASARISIZ -> AKTIVE EDILMEDI.")
+                    print(f"        Kaynagi duzelt + yeniden push et. Hatalar:")
+                    for _e in (_pre.get('errors') or [])[:10]:
+                        _m = _e.get('message', '') if isinstance(_e, dict) else str(_e)
+                        _ln = _e.get('line', '') if isinstance(_e, dict) else ''
+                        print(f"          Line {_ln}: {_m}")
+                    return result
+
             activation_result = self.adt_client.activate_object(object_name, object_url)
             if isinstance(activation_result, dict):
                 if activation_result.get('success'):
