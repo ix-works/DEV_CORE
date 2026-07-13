@@ -15,7 +15,7 @@ Exit kodu:
     0 — Tüm dosya adları paket regex'lerine uyumlu
     1 — Bir veya birden çok ihlal var (liste stderr'de)
 """
-# ENFORCES: C-CDS-NAME-01, C-RAP-NAME-01, C-STR-NAME-01, C-TBL-NAME-01  (ADR 0019 coverage binding)
+# ENFORCES: C-CDS-NAME-01, C-RAP-NAME-01, C-STR-NAME-01, C-TBL-NAME-01, C-INC-NAME-01, BE-49  (ADR 0019 coverage binding)
 import argparse
 import re
 import sys
@@ -23,7 +23,7 @@ from pathlib import Path
 import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
-from utils.project_config import project_root,  SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+from utils.project_config import project_root,  SOURCE_ROOT_NAME, cfg  # K12: kaynak-klasor adi config'ten
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -54,6 +54,55 @@ TYPE_TO_FOLDERS = {
 
 # Paket root'undaki dosyalar için muafiyet (legacy/draft konvansiyonu)
 ROOT_EXEMPT_EXTENSIONS = {".txt", ".md"}  # spec/draft dosyaları regex'ten muaf
+
+# --- C-INC-NAME-01: klasik program include türetme kuralı (standards/01-naming §4.1) ---
+# Klasik report/module-pool include'ları program-adından TÜREMELİ (kısaltma YOK):
+#   program Z<n>_P_<BASE>  →  include Z<n>_I_<BASE>_<SUFFIX>  (SUFFIX = _T01/_S01/_C01/_O01/_I01/_F01...)
+# Ayrıca program adı ≤26 karakter (include = 26 + _T01(4) = 30 limitine sığsın).
+# NEDEN gate: skill router (sap-abap-dev) + naming standardı BU kuralı taşıyordu ama build-unit
+# atladı (ZSD001 klasik build, kısaltılmış include adı) → doküman-tek-başına kanıtlı yetersiz (moratoryum §4).
+# Grandfather (standart-öncesi kısaltmalar) PROJE-LOKAL: project.yaml `include_naming_exempt: [...]`
+# — core generic kalır, proje kendi legacy adlarını muaf tutar (rename edilince listeden sil).
+_INCLUDE_SUFFIX_RE = re.compile(r"_[A-Z]\d{2}$")  # klasik report-include suffix
+
+
+def validate_classic_include_naming(pkg_dir: Path) -> list[str]:
+    """C-INC-NAME-01: klasik program include'ları program-adından türer + program ≤26."""
+    violations: list[str] = []
+    pd = pkg_dir / "programs"
+    if not pd.exists():
+        return violations
+    exempt = {str(x).upper() for x in (cfg("include_naming_exempt") or [])}
+    # programlar: programs/ kökünde _P_/_R_ (include alt-klasörü hariç)
+    progs = {f.name.split(".prog.")[0].upper() for f in pd.glob("*.prog.abap")
+             if re.search(r"_[PR]_", f.name.split(".prog.")[0].upper())}
+    for p in sorted(progs):
+        if len(p) > 26:
+            violations.append(
+                f"{pkg_dir.name}/programs/{p}: program adı {len(p)} karakter (>26) — "
+                f"include'lar 30 limitine sığmaz (C-INC-NAME-01)")
+    # include'lar: programs/ (her derinlik) _I_ + report-suffix'li
+    for f in pd.rglob("*.prog.abap"):
+        nm = f.name.split(".prog.")[0].upper()
+        if "_I_" not in nm or not _INCLUDE_SUFFIX_RE.search(nm):
+            continue  # yalnız report-suffix'li include (exit/enhancement include'ları hariç)
+        if nm in exempt:
+            continue
+        parts = nm.split("_")
+        try:
+            i = parts.index("I")
+        except ValueError:
+            continue
+        if i < 1 or len(parts) < i + 3:
+            continue
+        pref = "_".join(parts[:i])
+        base = "_".join(parts[i + 1:-1])
+        if f"{pref}_P_{base}" not in progs and f"{pref}_R_{base}" not in progs:
+            violations.append(
+                f"{pkg_dir.name}/programs/.../{f.name}: include program-adindan turemiyor "
+                f"(beklenen `{pref}_P_{base}` — kisaltma/uyumsuz; C-INC-NAME-01). "
+                f"Kural: klasik include = program adi `_P_`->`_I_` + `_<suffix>`, kisaltma YOK (standards/01-naming §4.1)")
+    return violations
 
 # Klasörler bazında dosya uzantı filtresi
 FOLDER_FILE_GLOBS = {
@@ -168,6 +217,9 @@ def validate_package(pkg_dir: Path, verbose: bool = False) -> list[str]:
                     f"hiçbir regex'le eşleşmiyor "
                     f"(denenenler: {', '.join(t for t, _ in applicable_regexes)})"
                 )
+
+    # C-INC-NAME-01: klasik include türetme (regex prefix'in ötesinde — program-adı türetme + ≤26)
+    violations.extend(validate_classic_include_naming(pkg_dir))
 
     return violations
 

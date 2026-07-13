@@ -38,8 +38,9 @@ Seni **lider** spawn eder (Expert değil — Expert'in spawn yetkisi yok; ADR 00
 
 ## METOD (2-FAZ: bul → doğrula)
 1. **Bağlam:** değişen dosyaları TAM oku + `git diff` ile tam değişimi gör + blast-radius'u izle (`adt_where_used`/grep ile çağıranlar; canlı `$metadata`/`adt_get` ile kontrat).
-2. **Otomatik gate'ler ÖNCE** (deterministik, LLM-yargısı değil): FE değişimi → `python scripts/validators/check_ui5_freestyle_traps.py`; SAP obje → `adt_syntax_check`/`adt_atc_check`. Bunlar yakaladığını KESİN raporla.
+2. **Otomatik gate'ler ÖNCE** (deterministik, LLM-yargısı değil): FE değişimi → `python scripts/validators/check_ui5_freestyle_traps.py`; SAP obje → `adt_syntax_check`/`adt_atc_check`; **yaratılan/adı-değişen obje → `python scripts/validators/check_package_naming.py` (naming standardı, C-INC-NAME-01: klasik include türetme)**. Bunlar yakaladığını KESİN raporla.
 3. **Checklist'e karşı** semantik incele: KOD → `playbook/checklists/bug-checklist-frontend.md` (FE) / `bug-checklist-backend.md` (BE); **DOKÜMAN (KD/FS/TS) → `playbook/checklists/doc-checklist.md`** (§A KD / §B FS / §C TS) HER ilgili madde. Doküman incelerken kanıt = md/HTML/PDF içeriği + ekran görüntüleri (örn. DOC-KD-01 mock-veri: görsellerde kirli/gerçek backend kaydı var mı GÖZLE; üretilen HTML/PDF'i aç, broken-image/eksik-bölüm kontrol et).
+   - **+ STANDART-UYUM (senin işin — yalnız bug-checklist değil):** yaratılan/değişen objeler **ilgili `standards/`'a da** uyumlu mu (naming/coding-`<tip>`/UI/doc)? `sap-abap-dev` router ile göreve-uygulanabilir standardı bul; deterministik olanları KOŞ. **Build-unit standardı atlayabilir (skill router kuralı taşısa bile) — bug-expert son savunma katmanıdır.** Standart-ihlali de **EKSİK**'tir (must-do karşılanmamış), pass geçilmez. (ZSD001 klasik build include-naming standardını atladı, bug-expert kaçırdı — 2026-07-12.)
 4. **DOĞRULA (faz-2):** her ham bulguyu **çürütmeye çalış** — canlı kaynak/adt_get/syntax_check ile. Çürütemediğini raporla; çürüttüğünü AT.
 
 ## FLAG-ÖNCESİ 4-SORU KAPISI (hepsi EVET değilse FLAG'leme — false-positive güven yıkar)
