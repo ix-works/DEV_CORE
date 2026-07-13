@@ -1221,6 +1221,7 @@ Takılınca kime/nasıl başvurulur: Key User adı/iletişim, IT destek/ticket k
 [ ] Hata/mesaj tablosu: birebir metin + anlam + AKSİYON
 [ ] SSS + terim sözlüğü + destek/iletişim
 [ ] Teknik terim sızmamış (hepsi sözlükte/sade)
+[ ] (KD-F1-01) Klasik/GUI program (tcode'lu Dynpro/ALV) ise → in-system F1-DOCU yardım ayağı ÜRETİLDİ (RE fihrist + TX detay, ZSD000_CL_DOCU runner, ITF ≤72); KD ile senkron; Fiori/UI5 ise muaf (§4.6)
 [ ] Key User onayı alınmış
 ```
 
@@ -1230,6 +1231,73 @@ No   : KD-[MODÜL]-[SIRA]   (FS-SD-001 ↔ TS-SD-001 ↔ KD-SD-001 aynı gelişt
 Dosya: KD-[MODÜL]-[SIRA]_[Uygulama_Adı]_v[Versiyon].docx
 Örnek: KD-SD-001_Siparis_Kullanici_Kilavuzu_v1.0.docx
 ```
+
+---
+
+## 4.6 Klasik/GUI Program KD → In-System F1-DOCU Yardım Ayağı (ZORUNLU/VARSAYILAN) *(ID: KD-F1-01)*
+
+> **MUST (KD-F1-01):** Klasik-GUI (Dynpro / ALV / module-pool / report; **tcode ile açılan**)
+> bir programın KD'si **İKİ AYAKLIDIR** ve her iki ayak da teslimatın parçasıdır:
+>
+> 1. **Repo markdown/PDF KD** (`docs/KD-[MODÜL]-[SIRA]_*.md`) — **otorite + offline** başucu
+>    kılavuzu; yazım kaynağı ve §4.1-§4.5 kurallarının uygulandığı yer.
+> 2. **In-system F1-DOCU yardımı** — **KD içeriğinden türetilen**, kullanıcının programın
+>    **içinden** (aşağıda §4.6.2) eriştiği SAP-yerel yardım.
+>
+> **İkinci ayak VARSAYILANDIR.** Klasik/GUI bir program KD'si hazırlanıyorsa, geliştirici
+> **kullanıcı ayrıca istemese de** bu F1-DOCU ayağını otomatik üretir — "söylenirse yaparım"
+> DEĞİL, klasik/GUI KD'nin **tanım gereği** bir parçasıdır. (Bu kural tam da *"söylenmeden
+> yapılmalı"*yı zorlar; atlandığında KD **eksiktir**.)
+
+**4.6.1 Gerekçe (neden varsayılan).** RAP/Fiori uygulamada yardım UI-içinde/launchpad'de yaşar;
+klasik GUI'de kullanıcının başvuracağı **yerleşik** yer SAP-standart **Yardım → Uygulama Yardımı
+(F1)**'dır. Repo markdown'ı otorite olsa da son kullanıcı çoğu zaman ona ulaşamaz (dosya paylaşımı
+gerekir); programın içinden çıkmadan yardım görebilmesi ancak F1-DOCU ayağıyla sağlanır. Bu yüzden
+klasik/GUI KD'de bu ayak opsiyonel bir "ekstra" değil, **varsayılan teslimattır**.
+
+**4.6.2 Mekanizma (özet — tam teslim mekanizması: `../standards/08-classic-gui-f1-help.md`).**
+KD-F1-01 **içerik** kuralıdır; **nasıl SAP'ye yazılacağı** std/08'de tanımlıdır. Özet:
+
+- **Teslim yapısı = fihrist + link'li detay** (tek-düz-sayfa değil):
+  - **Fihrist** = **`RE` doküman**, obje adı = **programın adı** (ör. `ZSD<NNN>_P_<...>`).
+    SAP-standart **RE-DOCU bağı** sayesinde **Yardım → Uygulama Yardımı (F1)** bu dokümanı
+    **otomatik açar** — programa **özel buton / fcode / `HELP_OBJECT_SHOW` handler yazmak
+    GEREKMEZ** (obje adı = program adı olması yeter).
+  - **Detay sayfaları** = `TX` dokümanlar, ad deseni `ZSD<NNN>_KD_<KONU>` (ör.
+    `..._KD_AMAC`, `..._KD_SECIM`, `..._KD_KOLON`, `..._KD_IPUCU`); fihristteki
+    `<DS:TX....>` link'inden açılır.
+- **Altyapı:** proje-ortak generic yazıcı **`ZSD000_CL_DOCU`** (`write_object_doc(...)` →
+  `DOCU_UPDATE`) + program-özel bir **`ZSD<NNN>_CL_<...>_DOCU_RUN`** runner (`if_oo_adt_classrun`;
+  KD içeriği ITF satırları olarak burada gömülü). Runner sırası: **PROBE → TX detaylar → RE
+  fihrist → `DOCU_GET` readback**. Çalıştırma **gateway `adt_classrun`** ile (kullanıcı GUI'de
+  hiçbir şey yapmaz). ADT/REST klasik RE/TX doc **yazamaz** — tek yol budur.
+- **ITF format (std/08 §3):** her sayfanın **İLK satırı `U1` başlık**; bold = `<ZH>...</>`;
+  link = `<DS:TX.<DOCNAME>>görünen metin</>`; **her satır ≤ 72 ham karakter** (tag dahil —
+  görüntüleme sınırı; depolama ≤132'ye güvenme, F1'de kuyruk kırpılır); tag'i iki satıra
+  BÖLME; **gerçek Türkçe + UTF-8 (BOM yok) + TR login** (ADR 0005-D).
+
+**4.6.3 KD ↔ DOCU türetme ve senkron.** İki ayak **paralel içerik** taşır: repo markdown KD
+**otorite/yazım kaynağı**, F1-DOCU ondan **türer**. Her ana KD bölümü (§4.2: Amaç/Kapsam,
+Ön Koşullar, Seçim Ekranı, Kolonlar, İpuçları/SSS…) bir DOCU yardım başlığına (bir `TX` sayfası)
+eşlenir. **Senkron zorunlu:** KD değişince F1-DOCU **aynı revizyonda** güncellenir (içerik değiştir
++ re-classrun) — biri güncel, diğeri bayat kalamaz. F1-DOCU kaynağı ayrı bir dosyada tutulur:
+**`docs/DOCU-[MODÜL]-[SIRA]_<Uygulama>_GUI_Yardim.md`** (SAP'ye yüklenecek ITF kaynak metni;
+`KD-[MODÜL]-[SIRA]` ile aynı geliştirmeye bağlı). *(Kanonik örnek: `ZSD001` — tcode ZSD001 →
+F1 → fihrist + TX detaylar; generic yazıcı `ZSD000_CL_DOCU`.)*
+
+**4.6.4 İçerik kaynağı (uydurma YASAK).** F1-DOCU metni **repo KD'ye paralel** + tip/değer
+tanımları domain fixed-value label'larından **canlı** (`adt_get`), kolon/formül FS + class
+mantığından üretilir. Erişim adımlarında **SA38/SE38/SE80 ile program çalıştırma ASLA verilmez**
+(std/08 §2; son kullanıcı bunu çalıştıramaz → tcode yoksa yetkiliye yönlendir).
+
+**4.6.5 Denetim (DOC-F1-01 gate).** Bu ayağın **ITF genişlik/format disiplini**
+`check_docu_itf_line_width.py` (**DOC-F1-01**) ile denetlenir: DOCU runner'da `iv_line` > 72 ham
+karakter veya tag'in tek satırda açılıp-kapanmaması → **BLOCKER** (`run_review.py` pre-flight).
+"F1-DOCU ayağı üretildi mi" tamlığı ise §4.4 KD Kalite Kontrol Listesi'nde işaretlenir.
+
+**4.6.6 İSTİSNA.** Bu ayak **yalnız klasik/GUI** program içindir. **RAP + Fiori/UI5 freestyle**
+uygulamada F1-DOCU ayağı **YOKTUR** (yardım UI-içi/launchpad'de yaşar) → yalnız repo markdown KD
+(+ varsa launchpad yardımı) yeterlidir; std/08 ve KD-F1-01 uygulanmaz.
 
 ---
 
