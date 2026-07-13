@@ -34,3 +34,33 @@ Klasik ALV kurulumu (field catalog + layout + event handler) **her programda İN
 - Ekran/GUI status hâlâ AI üretir (`ZSD000_FM_SCREEN_GEN`, playbook §6) — bu karar yalnız ALV-kurulum katmanını değiştirir.
 - Hiyerarşik/tree liste (eski C3 tree ayağı) gerekirse: o da **template** olarak (lcl + CL_GUI_ALV_TREE inline), reusable class değil.
 - Çalışan örnek: `ZSD000_P_ALV_TEMP1` (template inline; fcat TR title + VBELN hotspot + lcl_event).
+
+---
+
+## Karar Rafinasyonu (2026-07-13) — Field catalog: DDIC-structure mi, manuel mi? (ÖNCE SOR)
+
+**Karar veren:** Kullanıcı — açık talimat (canlı Excel-upload ALV dersi).
+
+Yukarıdaki "inline `lvc_t_fcat` elle kur", **her kolonu elle yazmak zorunlu** demek DEĞİLDİR. Field
+catalog iki yolla kurulabilir — **ikisi de ADR 0012'ye uygundur** (inline, program-lokal; reusable
+wrapper class DEĞİL):
+
+1. **DDIC-structure-merge (tipli/kompleks grid için TERCİH):** program-özel bir Z output structure
+   (`Z…_S_…`) tanımla → `set_table_for_first_display( i_structure_name = 'Z…_S_…' )` **veya**
+   `LVC_FIELDCATALOG_MERGE( i_structure_name = … )` ile base fcat üret → sonra YALNIZ title/hotspot/
+   `no_out`/edit/sıralama tweak'i inline yap. Tipler, uzunluklar, **QUAN birim-referansı (ondalık)**,
+   CURR para-referansı DDIC'ten **otomatik** gelir → manuel hata kaynağı kapanır.
+2. **Manuel `lvc_t_fcat` (basit rapor için meşru):** kolon-kolon `fieldname`/`coltext`/`outputlen` elle.
+
+**KURAL — hangisi kullanılacağı bir KARARDIR; sessizce seçme:** field catalog'u DOĞRUDAN kurmadan
+**ÖNCE kullanıcıya SOR** ("structure ile mi, manuel fcat mi?") **ya da TS'te netleştir + gerekçelendir**
+(std04 §4.5). Her ikisi de her durumda anlamlı değildir:
+- **Structure tercih:** miktar+birim ondalık · para+PB · çok kolon · kod→açıklama (tanım) kolonları ·
+  tekrar-kullanım. *(Manuel fcat'te ondalık/referans/tanım elle kurulur → sessiz hata: miktarın yanlış
+  ondalıkla gösterimi, kod-alanlarının tanım kolonlarının eksikliği, içeriğe göre optimize olmayan kısa
+  kolon genişliği — bunların hepsi manuel-fcat kaynaklıdır.)*
+- **Manuel meşru:** basit/ad-hoc rapor · az kolon · hesaplanan/tipik-olmayan alanlar · geçici çıktı.
+
+**Enforcement:** judgment-rule → TS'te fcat-yaklaşımı **belirtilir** (std04 §4.5 maddesi) + reviewer/
+checklist denetler. Otomatik gate ile "daima structure" DAYATILMAZ (basit raporda structure zorlamak
+yanlış olur — merdiven ilkesi).

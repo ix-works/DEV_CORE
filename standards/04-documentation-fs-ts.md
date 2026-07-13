@@ -680,6 +680,16 @@ Geliştirmenin sistemdeki yerini ve bağlantılarını gösterir:
 
 Detaylı mockup (FS'tekinden daha net — gerçek etiketler, bölümler, butonlar) +:
 
+> **★ KOLON TAMLIĞI (MUST — eksikse TS eksiktir):** Ekrandaki HER grid/tablonun **TÜM kolonları ve
+> her kolonun BAŞLIK etiketi (kolon tanımı)** TS'te açıkça listelenir + netleştirilir — DDIC/varsayılan
+> etikete BIRAKILMAZ. *Gerekçe:* structure-merge'de başlık alanın **DTEL'inden** gelir → jenerik veya
+> rol-yanlış DTEL AYNI/anlamsız başlık üretir (ör. farklı partner rolleri — sipariş-veren, sevk-adresi,
+> ek-muhatap — hepsi `KUNNR` ile "Müşteri" görünür). **Yöntem:** (1) semantik-doğru **standart DTEL**
+> kullan (rol-özel: sipariş-veren `KUNAG`/`NAME_AG`, malı-teslim-alan `KUNWE`/`NAME_WE` → ayrı, doğru
+> başlık + F1); (2) standart DTEL yoksa (müşteri-özel Z partner fn. vb.) **başlık metnini TS'te AÇIKÇA
+> yaz** + `set_coltext` ile ver (ya da kullanıcı-adlı Z DTEL — ADR 0005-D). §4.5.2-(d) açıklama kolonları
+> ve (e) fcat-yaklaşımı bu kuralın parçasıdır. Kolonu/etiketi eksik bırakılmış TS = **eksik TS**.
+
 **(a) Alan tablosu**
 
 | Alan (teknik) | Ekran Etiketi | Tip/Uzunluk | Zorunlu | Default | F4 / Value-Help | Düzenlenebilir? | Açıklama/Validasyon |
@@ -704,6 +714,47 @@ Detaylı mockup (FS'tekinden daha net — gerçek etiketler, bölümler, butonla
 | quantity | Miktar (ADT) | dec | E | Evet | PAK katı kontrol |
 | packageQty | Miktar (PAK) | dec | H | Hayır | = miktar × PakFactor |
 | netAmount | Tutar | curr | H | Evet | Fiyat Hesapla doldurur |
+
+**(d) Açıklama / tanım kolonları kararı (ZORUNLU — atlanamaz)**
+
+> Ekranda veya grid'de **kod alanı** olarak listelenen HER alan için (müşteri no, ship-to/WE,
+> ilave partner/ZW, sipariş tipi/AUART, malzeme, birim, plant, depo, ödeme/teslim koşulu vb.),
+> o kodun **açıklama/tanım metninin** tabloya **ayrı kolon olarak eklenip eklenmeyeceği TS
+> hazırlanırken KARARA BAĞLANIR ve bu bölümde AÇIKÇA belirtilir.** Kullanıcının salt koddan
+> tanıyamayacağı bir kod-kolonu **tanımsız bırakılamaz**: ya açıklama kolonu eklenir — **kaynak
+> tablo/alan + dil** yazılır (ör. müşteri→`KNA1-NAME1`, sipariş tipi→`TVAKT-BEZEI` SPRAS=oturum,
+> malzeme→`MAKT-MAKTX`) — ya da "açıklama gerekmez" **gerekçesiyle bilinçli olarak dışlanır.**
+> Bu karar boş bırakılırsa build'de eksik/tanımsız kolon riski doğar (kod görünür, anlamı görünmez).
+
+| Kod alanı | Açıklama eklensin mi? | Kaynak (tablo-alan · dil) | Karar/gerekçe |
+|---|---|---|---|
+| (ör. kunwe/WE) | ✅ Evet | KNA1-NAME1 | Kullanıcı adı görmeli |
+| (ör. auart) | ✅ Evet | TVAKT-BEZEI · oturum dili | Tip kodu tek başına yetersiz |
+| (ör. mandt) | ⛔ Hayır | — | Teknik alan, anlam gerekmez |
+
+**(e) Field catalog yaklaşımı — DDIC-structure mi, manuel mi? (klasik ALV — ZORUNLU KARAR)**
+
+> Klasik ALV (`CL_GUI_ALV_GRID` / SALV) içeren ekranda field catalog'un **DDIC output-structure'dan
+> merge** mi (`Z…_S_…` + `i_structure_name`/`LVC_FIELDCATALOG_MERGE`) yoksa **manuel `lvc_t_fcat`** mi
+> kurulacağı TS'te **KARARA BAĞLANIR ve gerekçesiyle yazılır** — developer sessizce seçmez (ADR 0012
+> rafinasyonu). **Structure tercih:** miktar+birim ondalık · para+PB · çok kolon · kod→tanım (açıklama)
+> kolonları · tekrar-kullanım (DDIC tipleri + QUAN-birim-ref + CURR-ref **otomatik** gelir → manuel hata
+> kapanır). **Manuel meşru:** basit / az-kolon / ad-hoc rapor. Structure seçildiyse: **structure adı +
+> alan→DTEL eşlemesi** BÖLÜM 4 (DDIC) altında verilir; §4.5.2-(d) açıklama kolonları da structure alanı olur.
+>
+> **DTEL SEMANTİĞİ = KOLON BAŞLIĞI (kritik):** structure-merge'de kolon başlığı alanın **DTEL'inden**
+> gelir. **Semantik-doğru standart DTEL seç** — aynı jenerik DTEL'i (ör. `KUNNR`) farklı roller için
+> kullanmak AYNI/yanıltıcı başlık üretir (ör. sipariş-veren + sevk-adresi + ek-muhatap hepsi "Müşteri").
+> Rol-özel standart DTEL VARSA kullan (ör. sipariş-veren `KUNAG`/`NAME_AG`, malı-teslim-alan
+> `KUNWE`/`NAME_WE` → ayrı, doğru başlık + F1). **Standart DTEL YOKSA** (ör. müşteri-özel Z partner
+> fonksiyonu): iki yol — (a) **Z DTEL** (kullanıcı adlandırır — ADR 0005-D, AI önermez) VEYA (b)
+> **`set_coltext` ile kod-etiketi**. Hangisi olursa olsun **o kolonun başlık metni TS'te AÇIKÇA
+> NETLEŞTİRİLİR** (jenerik DTEL etiketine — "Müşteri"/"Ad" — güvenilmez; alanın gerçek iş-anlamı yazılır).
+
+| ALV grid | Yaklaşım | Gerekçe |
+|---|---|---|
+| (ör. kalem grid — miktar/birim/tanım) | DDIC-structure merge | ondalık+tanım DDIC'ten; manuel hata riski |
+| (ör. basit 3-kolon log) | Manuel lvc_t_fcat | tipsiz/az kolon; structure gereksiz |
 
 **4.5.3 Etkileşim Matrisi (girilen veriye göre davranış)**
 

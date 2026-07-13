@@ -1310,6 +1310,33 @@ class SAPClient:
             except Exception:
                 body = r.text or ''
             ok = r.status_code == 200 and 'does not implement' not in body.lower()
+
+            # SERTLEŞTİRME (2026-07-13): retry sonrası HÂLÂ "does not implement"
+            # ise, sınıf yapısal olarak geçerli mi bak. Geçerliyse (aktif +
+            # INTERFACES if_oo_adt_classrun kaynakta) bu, SAP app-server
+            # class-LOAD-cache / aynı-isim sil-yarat binding bozulmasıdır
+            # (playbook howto-rap-eml...:116-117). Aynı-isim retry ETKİSİZ →
+            # körlemesine tekrar yerine NET TEŞHİS dön ki "tooling bozuk"
+            # yanlış-sonucu doğmasın. Çözüm = TAZE class adı.
+            if not ok and 'does not implement' in body.lower():
+                diag = self._diagnose_classrun_binding(class_name)
+                if diag.get('structurally_valid'):
+                    return {
+                        'ok': False,
+                        'class': class_name,
+                        'status': r.status_code,
+                        'output': body,
+                        'error': 'classrun_load_cache_binding',
+                        'diagnosis': (
+                            f"Sinif {class_name} YAPISAL OLARAK GECERLI (aktif + "
+                            f"INTERFACES if_oo_adt_classrun kaynakta VAR) ama classrun "
+                            f"'does not implement' donuyor. Bu SAP app-server "
+                            f"class-LOAD-cache / ayni-isim sil-yarat binding "
+                            f"bozulmasidir; ayni-isim retry ETKISIZ. COZUM: TAZE "
+                            f"(daha once kullanilmamis) bir sinif adiyla yeniden "
+                            f"yarat+kos. Ayni ismi delete+recreate ETME."
+                        ),
+                    }
             return {
                 'ok': ok,
                 'class': class_name,
@@ -1318,6 +1345,30 @@ class SAPClient:
             }
         except Exception as e:
             return {'ok': False, 'class': class_name, 'error': str(e)}
+
+    def _diagnose_classrun_binding(self, class_name: str) -> Dict[str, Any]:
+        """classrun 'does not implement' teşhisi (sertleştirme yardımcısı).
+
+        Sınıf aktif + kaynakta `INTERFACES if_oo_adt_classrun` var mı? Varsa
+        yapısal-geçerli → sorun LOAD-cache/aynı-isim binding (fix = taze isim),
+        tooling/reçete DEĞİL. Yalnız salt-okuma (GET source/main).
+        """
+        try:
+            src_url = (f"{self.adt_client.url}/sap/bc/adt/oo/classes/"
+                       f"{class_name.lower()}/source/main")
+            hdrs = self.adt_client._get_headers(accept_type='text/plain')
+            r = self.adt_client._request_with_csrf_retry(
+                'get', src_url, headers=dict(hdrs))
+            src = (r.content.decode('utf-8', errors='replace')
+                   if r.content else '').lower()
+            has_iface = 'if_oo_adt_classrun' in src
+            return {
+                'structurally_valid': (r.status_code == 200 and has_iface),
+                'has_interface': has_iface,
+                'source_http': r.status_code,
+            }
+        except Exception as e:
+            return {'structurally_valid': False, 'error': str(e)}
 
     def activate_object(self, object_name: str, object_type: str = 'class') -> bool:
         """

@@ -64,6 +64,15 @@ ZSD<pkg>_P_<PRG>                  (Main / REPORT — INCLUDE'lar + event bloklar
 Kolonlar göster/gizle + Excel export. Klasik ALV'de bunlar `CL_GUI_ALV_GRID` +
 `set_table_for_first_display( i_save = 'A' )` **built-in**'inden gelir (template'te hazır) — reusable sarıcı gerekmez. (UI5 tarafı ayrı: ADR 0008 / TablePersonalizer.js.)
 
+> **Field catalog — DDIC-structure mi, manuel `lvc_t_fcat` mi? (SHOULD — ÖNCE SOR):** fcat'i DOĞRUDAN
+> kurmadan önce kullanıcıya **SOR** ("structure ile mi, manuel mi?") ya da **TS'te belirt + gerekçelendir**
+> (std04 §4.5). **Structure-merge TERCİH** — tipli/kompleks grid: miktar+birim ondalık, para+PB, çok kolon,
+> kod→tanım (açıklama) kolonları, tekrar-kullanım. Program-özel `Z…_S_…` structure + `set_table_for_first_display(
+> i_structure_name = … )` / `LVC_FIELDCATALOG_MERGE` → sonra yalnız title/hotspot/`no_out`/edit tweak. DDIC
+> tipleri + **QUAN birim-referansı (ondalık)** + CURR referansı OTOMATİK → manuel hata kaynağı (yanlış ondalık,
+> eksik tanım kolonu, kısa genişlik) kapanır. **Manuel meşru:** basit/az-kolon/ad-hoc rapor. Detay + gerekçe:
+> [ADR 0012 "Karar Rafinasyonu (2026-07-13)"](../governance/decisions/0012-klasik-alv-template-first.md).
+
 ## 4. Dynpro / GUI status — AI ÜRETİR (C1 TAMAM, 2026-06-03)
 
 > ⭐ **Klasik Dynpro ekranı + GUI status artık AI tarafından üretiliyor** — operatör SE51/SE41 ŞART DEĞİL.

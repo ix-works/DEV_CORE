@@ -123,6 +123,31 @@ ham okumak lider context'ini taşırır (§5-3 output-peek yalnız sessizlikte, 
 - **NE ZAMAN KAPAT:** geniş fan-out (çok ajan × sık heartbeat = mesaj seli, §4A/§6 gürültü) → kapat veya
   yalnız "başladım / bitti"ye indir. Tek uzun ajan → aç (bedava sayılır). Kısa iş (<birkaç dk) → gerekmez.
 
+### 4C. Okuma disiplini — token-verimliliği vs tazelik (2026-07-13, kullanıcı sorusu)
+Gözlem: uzun bir düzenleyen-ajan aynı büyük kaynak dosyasını **her Edit'ten sonra baştan** okuyup
+tek run'da 24× Read etti → ağır token israfı (exec-süre değil, context maliyeti). Brifinge ekle
+(auto-memory'yi görmez). **İki katman + bir kırmızı-çizgi:**
+- **ORTAK (tüm ajanlar):** Her hedef dosyayı run içinde BİR kez taze oku; `git diff`/snapshot'tan çalış;
+  **değişmemiş** dosyayı aynı run'da gereksiz tekrar-okuma YOK. Genelde ranged/offset okuma yeterli.
+- **DÜZENLEYEN ajanlar (backend/frontend/gateway):** Edit'ten sonra aynı dosyayı **baştan tekrar Read ETME** —
+  harness Edit-state'i izler ("no need to Read it back"); hedefli `old_string` ile Edit yeniden-okuma gerektirmez.
+- **READ-ONLY ajanlar (reviewer/research/Explore):** Edit-eki UYGULANMAZ (Edit yapmazlar); onlara yalnız
+  ORTAK madde — her dosyayı bir kez, tek snapshot. Brifinge "Edit sonrası okuma" yazma (anlamsız).
+- **🔴 KIRMIZI-ÇİZGİ — tazelik her zaman kazanır (ADR 0016 / PULL-BEFORE-EDIT):** Bu kural YALNIZ **aynı-run**
+  gereksiz tekrarını keser. **Her yeni run/resume başında ve dosya değişmiş olabilecekse TAZE oku** —
+  "önceki oturumda okumuştum, atlayayım" YASAK: kod değişmiş olabilir (lider/başka ajan editlemiş, drift).
+  Resume'da ajanın context'indeki eski kopyaya güvenip diskteki taze sürümü ezmek = veri kaybı. Kesilecek
+  olan **cross-run tazelik okuması DEĞİL**, aynı-run gereksiz tekrardır.
+
+**Zaman/verimlilik analizi için LOG (2026-07-13):** Ampirik olarak `...\tasks\<id>.output` transkripti
+**güvenilir kalıcılaşmıyor** — tek-run read-only ajanlar (bug-expert) ve bazı gateway koşuları **0-byte**
+kaldı; yalnız resume'li/uzun ajan (backend-expert) tam yazıldı. Yani lider per-tool analiz için transkripte
+**GÜVENEMEZ**. Ajanın zaman-analizi isteniyorsa → **brifinge öz-rapor ekle:** ajan final `SendMessage`'ında
+kısa "VERİMLİLİK ÖZ-RAPORU" versin — faz-sınırlarında `date +%s` (her tool'a değil), toplam ~tool sayısı,
+tekrar-okunan dosya, retry/patinaj noktası. Kaba wall-clock + tool-sayısı zaten completion `usage`'dan gelir
+(`subagent_tokens`/`tool_uses`/`duration_ms`); öz-rapor bunun faz-kırılımını ekler. Analiz script şablonu:
+lider `scratchpad`'inde `agent_time_analysis.py` (transkript doluysa per-tool döker).
+
 ## 5. Gateway Gözlemlenebilirlik Protokolü (opak-patinaj önleme)
 Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
 1. **Deneme/eskalasyon merdiveni (kör döngü yerine):** obje başına **3 denemeye** kadar dene (geçici CSRF/lock vb.). 3'te çözülmezse → **ZORUNLU ARAŞTIRMA** (`playbook/<obje-tipi>.md` + `playbook/lessons-learned.md` + ilgili `playbook/checklists/` + hata pattern'i — yani lider takılınca neye bakıyorsa) → bulguyla devam. **Toplam 5 denemede** hâlâ başarısız → **DUR + lider'e gel** (ham hata + denenenler + araştırma bulgusu). Sınırsız/kör tekrar YASAK → patinaj 5 ile sınırlı.
