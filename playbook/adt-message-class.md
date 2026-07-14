@@ -28,10 +28,14 @@ python scripts/create_message_class.py --name ZSD001_MSG \
   --transport <TRANSPORT> --cwd <PROJECT_ROOT>
 ```
 (master lang = login dili; TR login → TR shell — `check_sap_master_language` gate TR ister.)
-> ⚠ **create script LOCK-release tuzağı:** create sonrası kendi editor-lock'unu (EU 510)
-> bırakabilir → populate `403 EU 510 "<user> zaten düzenliyor"` alır. Script §27.4 try/finally
-> unlock disiplinini uygulamalı; almıyorsa ADT-dequeue / SM12 clear + tek retry (kök-fix: create
-> script'ine finally-unlock ekle).
+> ✅ **create LOCK-release ÇÖZÜLDÜ (2026-07-14, canlı-kanıtlı):** eski davranışta `create_message_class`
+> POST'u **stateful session** default'uyla gidiyordu → MSAG create-anı EU 510 enqueue'sunu request-end'de
+> BIRAKMIYORDU → populate/delete `403 EU 510` → SM12 gerekiyordu. **Kök-fix:** `sap_client.py::create_message_class`
+> POST'una per-call `x-sap-adt-sessiontype: stateless` (referans `abap-adt-api`: `createObject` stateless →
+> enqueue request-end roll-out'ta düşer) + bozuk `clear_enqueue_lock` re-lock safety-net'i kaldırıldı
+> (self-lock'u re-lock ile temizlemeye çalışıyordu → yine 403). Test: create→populate tek akış, **SM12'siz**.
+> Not: hedef paket **DEV paketi** olmalı — structure/aggregate paket verilince create sessizce exists=false +
+> populate sahte-200 üretir. (Eski "finally-unlock ekle" önerisi SUPERSEDED; sorun handle-eksikliği değil, session-type idi.)
 
 **2) MESAJLARI YAZ** — 📦 **`scripts/populate_message_class.py`** — shell'e CSV'den toplu mesaj.
 
