@@ -1,8 +1,22 @@
 /** HTML → PDF (Edge, page.pdf). Kullanım: node scripts/html_to_pdf.js <input.html> <output.pdf>
  * KD/FS/TS markdown→HTML (build_kd_pdf.py) çıktısını şık A4 PDF'e çevirir. */
 const path = require("path");
-const PW = "C:/Users/<USER>/AppData/Roaming/npm/node_modules/@playwright/cli/node_modules/playwright-core";
-const { chromium } = require(PW);
+const fs = require("fs");
+const os = require("os");
+// playwright-core yolunu DİNAMİK çöz (hardcode/username-placeholder YOK).
+// Global npm kurulumundaki @playwright/cli altındaki playwright-core'u ara; bulunamazsa
+// normal modül çözümüne düş (yerel node_modules / NODE_PATH).
+function resolvePlaywrightCore() {
+  const suffix = "npm/node_modules/@playwright/cli/node_modules/playwright-core";
+  const cands = [
+    process.env.APPDATA && path.join(process.env.APPDATA, suffix),           // Windows: C:\Users\<user>\AppData\Roaming
+    path.join(os.homedir(), "AppData/Roaming", suffix),                       // Windows fallback
+    process.env.npm_config_prefix && path.join(process.env.npm_config_prefix, "node_modules/@playwright/cli/node_modules/playwright-core"),
+  ].filter(Boolean);
+  for (const c of cands) { if (fs.existsSync(c)) return c; }
+  return "playwright-core";                                                   // son çare: normal require çözümü
+}
+const { chromium } = require(resolvePlaywrightCore());
 const IN = path.resolve(process.argv[2]);
 const OUT = path.resolve(process.argv[3]);
 (async () => {
