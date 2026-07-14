@@ -13,7 +13,7 @@ status: active
 |---|---|---|
 | Program | `{PKG}_P_*` | `^{PKG}_P_[A-Z0-9_]+$` |
 | Include | `{PKG}_I_*` | `^{PKG}_I_[A-Z0-9_]+$` |
-| Class | `{PKG}_CL_*` veya `ZCL_{PKG}_*` | `^({PKG}_CL_|ZCL_{PKG}_)[A-Z0-9_]+$` |
+| Class | `{PKG}_CL_*` veya `ZCL_{PKG}_*` | `^({PKG}_CL_\|ZCL_{PKG}_)[A-Z0-9_]+$` |
 | Function Group | `{PKG}_FG_*` | `^{PKG}_FG_[A-Z0-9_]+$` |
 | Function Module | `{PKG}_FM_*` | `^{PKG}_FM_[A-Z0-9_]+$` |
 | CDS Root View | `{PKG}_C_*` | `^{PKG}_C_[A-Z0-9_]+$` |
@@ -28,6 +28,8 @@ status: active
 | Message Class | `{PKG}` | tek tablo, paket adıyla aynı |
 
 > Validator: `scripts/validators/check_package_naming.py` bu regex'leri okuyup `cds/`, `classes/`, `programs/`, vb. altındaki dosya adlarını doğrular.
+
+> **Include alt-kuralı — klasik program (std 06 §1 · gate C-INC-NAME-01):** Klasik report/module-pool **tek-body YAZILMAZ**; main = `INCLUDE` + event blokları. Include adı programdan TÜRER: `{PKG}_P_<PRG>` → `{PKG}_I_<PRG>_<Tip><NN>` — Tip: **T**op·**C**ls·**O**=PBO·**I**=PAI·**F**orm·**S**el; NN=01… Örn `{PKG}_P_SIPARIS` → `{PKG}_I_SIPARIS_T01`/`_C01`/`_F01`. Generic `{PKG}_I_TOP` (program-kökü + numaralı suffix yok) YASAK. Include = PROG/I objesi, `programs/includes/`.
 
 ## Bağımlılıklar
 
