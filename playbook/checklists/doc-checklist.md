@@ -44,7 +44,7 @@ applies_to: [s4_private]
 |---|---|---|---|
 | DOC-TS-01 | **Gerçek ekran görüntüsü YOK** — detaylı ekran/UI mockup + yapısal tablo (§4.5) | HIGH (HATA) | std §1.3 / §3.2 B4.5 |
 | DOC-TS-02 | **Zorunlu bölümler tam** (teknik genel bakış + obje listesi + veri sözlüğü + ekran tasarımı + program/sınıf + DB erişim + enhancement + form + interface + hata + test + transport + onay) | HIGH (EKSİK) | std §3.2 |
-| DOC-TS-03 | **Obje adları/alanlar canlı sistemle tutarlı** (uydurma değil; DDL/CDS/struct gerçeğiyle); naming standardına uygun | HIGH (HATA) | std §3.3 · 01-naming |
+| DOC-TS-03 | **Obje adları/alanlar canlı sistemle tutarlı** (uydurma değil; DDL/CDS/struct gerçeğiyle); naming standardına uygun. **Klasik program include'ları:** `<PKG>_I_<PRG>_<T01/C01/O01/I01/F01/S01>` — program-kökünden TÜRER; generic `_I_TOP`/`_I_F01` (kök+numaralı-suffix yok) YASAK (std 06 §1 · gate C-INC-NAME-01 · .rules.md include alt-kuralı) | HIGH (HATA) | std §3.3 · 01-naming · 06 §1 |
 | DOC-TS-04 | **Clean-core/yasak farkındalığı** (std tablo yerine released CDS; ADR 0005 ihlali anlatılmıyor) | MEDIUM (ÖNERİ) | feedback_clean-core |
 
 ## Verdict

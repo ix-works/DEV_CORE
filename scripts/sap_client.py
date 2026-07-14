@@ -2144,7 +2144,13 @@ class SAPClient:
                 'sap-client': self.adt_client.client,
                 'X-CSRF-Token': self.adt_client.csrf_token,
                 'Content-Type': 'application/vnd.sap.adt.messageclass.v2+xml',
-                'Accept': '*/*'
+                'Accept': '*/*',
+                # FIX (2026-07-15, referans abap-adt-api createObject = stateless):
+                # Session default'u 'stateful' (sap_adt_lib.py session header). Stateful create,
+                # MSAG create-anı SE91 editor enqueue'sunu (EU 510) request sonunda BIRAKMIYOR →
+                # sonraki populate/delete 403. Bu POST'u per-call STATELESS yaparak enqueue'nun
+                # request-end roll-out ile düşmesini sağlıyoruz. Yalnız bu çağrıyı etkiler.
+                'x-sap-adt-sessiontype': 'stateless',
             }
 
             xml_payload = f'''<?xml version="1.0" encoding="UTF-8"?>
@@ -2161,15 +2167,11 @@ class SAPClient:
 
             if response.status_code in [200, 201]:
                 print(f"\n[OK] Message class created successfully")
-                # Safety net: bazı sistemlerde create işlemi MSAG üzerinde takılı bir
-                # workbench enqueue kilidi (EU 510) bırakabiliyor → sonraki
-                # populate_message_class.py "kullanıcı zaten düzenliyor" ile bloke olur.
-                # Kalıntı kilidi temizle (best-effort; başarısızsa create'i bozma).
-                try:
-                    obj_url = f'{self.adt_client.url}/sap/bc/adt/messageclass/{name.lower()}'
-                    self.adt_client.clear_enqueue_lock(object_url=obj_url, transport=transport)
-                except Exception as e:
-                    print(f"[WARN] enqueue-lock temizleme atlandı: {e}")
+                # NOT: Eski "clear_enqueue_lock re-lock safety-net"i KALDIRILDI (2026-07-15).
+                # O, kalıcı kilidi yeni bir MODIFY-lock alarak temizlemeye çalışıyordu; ama
+                # obje aynı kullanıcıca zaten kilitli → lock_object 403 EU510 → cycle hiç
+                # tamamlanmıyordu (etkisiz churn). Kök-fix yukarıda: create'i STATELESS yapmak
+                # → enqueue request-end'de düşer, temizlenecek kalıntı kalmaz.
                 return True
             else:
                 print(f"\n[ERROR] {response.status_code}: {response.text[:500]}")
