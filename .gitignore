@@ -3,3 +3,5 @@ __pycache__/
 .pytest_cache/
 node_modules/
 .tmp/
+# SAP baglanti dosyasi — kimlik bilgisi icerir, ASLA commit edilmez
+.conn_adt
