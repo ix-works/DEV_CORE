@@ -20,6 +20,12 @@ if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 CONFIG = Path(__file__).resolve().parents[1] / 'abaplint' / 'abaplint.json'
+
+# Sürüm PİNLİ (2026-07-26). Pin'siz `@abaplint/cli` her koşumda upstream latest'i çeker →
+# lint davranışı bizden habersiz değişir (upstream'de 2 haftada 43 commit) + tedarik-zinciri
+# yüzeyi. Bump = BİLİNÇLİ karar: burayı güncelle, bir class/program üzerinde koş, farkı gör.
+# Fetch edilemezse (offline/cache yok) aşağıdaki except → SKIP (reviewer kırılmaz, mevcut davranış).
+ABAPLINT_PIN = '@abaplint/cli@2.120.5'
 ISSUE_RE = re.compile(r'^(.*\.abap)\[(\d+),\s*(\d+)\]\s*-\s*(.+?)\s*\(([a-z_]+)\)\s*\[[EWI]\]\s*$')
 
 
@@ -60,7 +66,7 @@ def main() -> int:
         (tdp / 'src' / f'{objname}{suffix}').write_text(text, encoding='utf-8')
         (tdp / 'abaplint.json').write_text(json.dumps(cfg), encoding='utf-8')
         try:
-            r = subprocess.run(['npx', '--yes', '@abaplint/cli'], cwd=str(tdp),
+            r = subprocess.run(['npx', '--yes', ABAPLINT_PIN], cwd=str(tdp),
                                capture_output=True, text=True, timeout=180, shell=(sys.platform == 'win32'))
         except Exception as e:
             print(f'SKIP — abaplint çalıştırılamadı ({type(e).__name__}); offline? reviewer kırılmadı')

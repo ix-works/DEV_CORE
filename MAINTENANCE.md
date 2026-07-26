@@ -71,7 +71,8 @@ Okuma tek-noktası: `scripts/utils/project_config.py` (`cfg(key)`; env override:
 | `repo_mode` | `full` / `local` / `none` (K13) | `full` |
 | `sap_profile` | `ecc/s4_private/s4_public/btp_abap` | `s4_private` |
 | `release` / `db` / `cleancore_policy` / `master_language` | Profil detayı | `"2025"` / — / `balanced` / `TR` |
-| `frozen_readonly_paths` | Yazma-yasak kökler (freeze-guard R10; örn. dondurulmuş eski-dünya kökü) | `[C:/ESKI_KOK]` |
+| ~~`frozen_readonly_paths`~~ | ⚠ **ÖLÜ ANAHTAR — YENİ PROJEDE KULLANMA.** Freeze-guard R10 2026-07-10 sağlık denetiminde SİLİNDİ (`pre_tool_guard.py` başlığı: fiil-kara-listesi 6 yoldan sızıyordu; koruma OS izniyle yapılır). Hiçbir guard bu anahtarı artık OKUMUYOR; `init_project.py` şablonunda hâlâ boş üretiliyor. Yazarsan **koruma sanısı** üretir. | — (kullanma) |
+| `include_naming_exempt` | Klasik include-naming grandfather listesi (C-INC-NAME-01) — isim-isim; **her girişe gerekçe + çıkış şartı yorumu** ("rename edilince listeden SİL"). Yeni ihlaller yakalanmaya devam eder | `[ZSD001_I_KISALT_C01]` |
 | `active_package` | Aktif paket (spec arama önceliği + hook mesajları) | `ZSD001_CLC` |
 | `package_exceptions` | Paket-sınır istisnaları | `["ZSD001_CLC:^ZCL_..."]` |
 | `sql_view_prefix` / `cds_view_name_prefix` | CDS namespace whitelist'i (B-5; eksikse populate NET hatayla durur) | `ZSD001_V_` / `zsd001_ddl_` |
