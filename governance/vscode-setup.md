@@ -16,6 +16,17 @@ Biz **ABAP RAP + freestyle UI5** kullanıyoruz; SAP yazma işlemleri **yalnızca
 
 - ⛔ **ABAP doğrudan-edit eklentisi (ör. "ABAP remote filesystem") KURULMAZ** —
   MCP/script disiplinini ve reviewer gate'ini bypass eder. Bilinçli karar.
+  **Kapsam (2026-07-26 yeniden değerlendirme):** yasak eklentinin **gömülü MCP
+  server'ını da içerir.** Bu eklentiler artık salt-editör değil: v2.7'de 42
+  language-model tool + loopback MCP ucu ile **AI'a doğrudan ADT yazma** (obje
+  değiştir/aktive et/yarat) açıyorlar; resmî dokümanı "değişiklikler doğrudan
+  uygulanır, keep/undo UI yoktur" diyor ve **salt-okunur modu YOK**. Böyle bir ucu
+  `.mcp.json`'a eklemek **§8 davranış-yüzeyi değişikliğidir** (lider-onaylı PR şart) ve
+  ADR 0018 tek-yazıcı serileştirmesini, ADR 0006 pre-flight'ını, ADR 0007 server-side
+  guardrail'ini ve ADR 0010 tier-kontrolünü **aynı anda** devre dışı bırakır. Ek somut
+  risk: eklenti dosya "dirty" olur olmaz SAP kilidi alır → gateway ile **kilit çakışması**
+  (playbook/lessons-learned PATTERN #13, bizde yaşandı) ve `adt://` sanal FS'te
+  düzenlediği için `pull_before_edit` gate'i **hiç ateşlenmez** (ADR 0016 kör noktası).
 - ✅ XML/i18n/manifest/JS/Python/Git **yardımcı** eklentileri serbest — bunlar SAP'ye
   yazmaz, sadece editör zekası verir.
 
@@ -47,7 +58,7 @@ code --install-extension EditorConfig.EditorConfig
 | Eklenti (ID) | Ne sağlar | Bizde hangi iş | Dikkat |
 |---|---|---|---|
 | **UI5 Language Assistant** (`SAPOSS.vscode-ui5-language-assistant`) | `.view.xml` + `manifest.json` autocomplete, kontrol/aggregation doğrulama, i18n key kontrolü, hover doküman | Freestyle UI5 ekranları (voyage, container_report, BOOKING) yazarken kontrol API'sini **editörde** doğrula. `ui5-mcp-server`'ı tamamlar | — |
-| **SAP Fiori Tools – Extension Pack** (`SAPSE.sap-ux-fiori-tools-extension-pack`) | XML annotation dili, i18n editör, app yapısı görünümü, guided dev | i18n + XML view düzenleme yardımı | FE/CAP **generator**'larını ve "Application Wizard" CAP akışını **kullanma** (RAP+freestyle). Sadece XML/i18n araçları |
+| **SAP Fiori Tools – Extension Pack** (`SAPSE.sap-ux-fiori-tools-extension-pack`) | XML annotation dili, i18n editör, app yapısı görünümü, guided dev | i18n + XML view düzenleme yardımı | FE/CAP **generator**'larını ve "Application Wizard" CAP akışını **kullanma** (RAP+freestyle). Sadece XML/i18n araçları. ⛔ **DEPLOY YÜZEYİ YASAK** — `Deploy` / `Test deployment` / **`Undeploy`** komutları (Application Info karosu · sağ-tık · komut paleti) KULLANILMAZ: buton entegre terminale `npm run deploy` yazar → **kanonik `deploy_ui.py`'yi atlar**, deploy sonrası **canlı `Component-preload.js` ↔ dist sha256 doğrulaması YAPILMAZ** ("Successful" der, canlıya bayat gidebilir) ve npm-workspace altında dokümante ettiğimiz native crash'i tetikler (`standards/03` §2.4.1). ⚠ `pre_tool_guard` yalnız AI'ın komutlarını görür, **insanın tıklamasını GÖRMEZ** → bu satır tek korumadır. ⛔ Ayrıca mevcut app'lerde: `Add Deployment Config` / `Add FLP Config` / `Convert Preview Config` (elle tunlanmış `ui5.yaml`/`ui5-deploy.yaml`'ı ezer) · Page Map/Editor ile **sayfa ekle-sil-kaydet** (freestyle `routing` bozma geçmişi var; SAP changelog'da "experimental") · Application Info **quick-fix npm butonları** (app-içi `npm install` = YASAK). ✅ Serbest: Application Info görüntüleme · Validate Project · Run UI5 Linter · XML/i18n araçları |
 | **XML** (`redhat.vscode-xml`) | XML şema/format/validate | `manifest`-dışı XML, `.view.xml` format | — |
 | **YAML** (`redhat.vscode-yaml`) | YAML şema/validate | `ui5.yaml`, `ui5-deploy.yaml`, frontmatter | — |
 | **Python** (`ms-python.python`) | Python dil desteği, test, debug | `scripts/`, `mcp_servers/`, validator/populate geliştirme | — |
@@ -91,5 +102,6 @@ code --install-extension EditorConfig.EditorConfig
 | Python tip/hata | Pylance (editör) + `pyright-lsp` (Claude) |
 | Git geçmiş / multi-dev blame | GitLens |
 | ABAP/CDS/RAP yaz-değiştir | **Yalnızca** `sap-adt` MCP/script (ADR 0005/0006/0007) — editör eklentisi DEĞİL |
+| **UI5 app BSP'ye deploy** | **Yalnızca** `python core/scripts/deploy_ui.py --app <app>` — Fiori Tools eklentisinin `Deploy`/`Undeploy` butonları ve yalın `fiori deploy` **YASAK** (build+canlı-hash doğrulaması atlanır; guard insan tıklamasını görmez) |
 
 > Yeni eklenti eklenirse: `.vscode/extensions.json`'a ID ekle → bu tabloya satır → gerekçe.
