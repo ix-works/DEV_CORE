@@ -1,0 +1,4703 @@
+{
+ "_meta": {
+  "purpose": "Clean Core: non-released obje -> released successor (OTORİTE, SAP resmi JSON'dan üretildi).",
+  "source": "https://raw.githubusercontent.com/SAP/abap-atc-cr-cv-s4hc/main/src/objectReleaseInfo_PCELatest.json",
+  "generated": "2026-07-26",
+  "note": "check_released_objects.py 'tables' kullanır. Çok-successor olabilir (MARA->I_Product+4). Severity WARNING (ADR 0005-B READ yasak değil; Clean Core Level A tercihi).",
+  "refresh": "python scripts/refresh_released_successors.py"
+ },
+ "classes": {
+  "CL_AUNIT_ASSERT": {
+   "successors": [
+    "CL_ABAP_UNIT_ASSERT"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-DWB-TOO-UT"
+  },
+  "CL_BAL_LOGGING": {
+   "successors": [
+    "CL_BALI_LOG",
+    "CL_BALI_LOG_DB"
+   ],
+   "state": "deprecated",
+   "classification": "multipleObjects",
+   "app": "BC-SRV-BAL"
+  },
+  "CL_CMIS_CLIENT_FACTORY": {
+   "successors": [
+    "CL_CMIS_CLIENT_FACTORY2"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-SRV-MCM-SER"
+  },
+  "CL_NUMBER_RANGE_INTERVALS": {
+   "successors": [
+    "CL_NUMBERRANGE_INTERVALS"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "CL_NUMBER_RANGE_OBJECTS": {
+   "successors": [
+    "CL_NUMBERRANGE_OBJECTS"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "CL_NUMBER_RANGE_RUNTIME": {
+   "successors": [
+    "CL_NUMBERRANGE_RUNTIME"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "CL_SCAL_API": {
+   "successors": [
+    "CL_FHC_CALENDAR_RUNTIME",
+    "I_FACTORYCALENDARBASIC",
+    "I_PUBLICHOLIDAYCALENDARBASIC"
+   ],
+   "state": "deprecated",
+   "classification": "multipleObjects",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "CX_A4C_RAP_QUERY_PROVIDER": {
+   "successors": [
+    "CX_RAP_QUERY_PROVIDER"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-ESI-ESF-BSA"
+  },
+  "CX_BAL_EXCEPTION": {
+   "successors": [
+    "CX_BALI_RUNTIME"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "CX_COMMCONNECTION": {
+   "successors": [
+    "CX_APPDESTINATION"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-MID-RFC"
+  },
+  "CL_BCS": {
+   "successors": [
+    "CL_BCS_MAIL_MESSAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "CL_BCS_MESSAGE": {
+   "successors": [
+    "CL_BCS_MAIL_MESSAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "CL_CAM_ADDRESS_BCS": {
+   "successors": [
+    "CL_BCS_MAIL_MESSAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "CL_DOCUMENT_BCS": {
+   "successors": [
+    "CL_BCS_MAIL_MESSAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "CL_HTTP_UTILITY": {
+   "successors": [
+    "CL_WEB_HTTP_UTILITY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-MID-ICF"
+  },
+  "CL_PRC_RESULT_FACTORY": {
+   "successors": [
+    "I_SLSPRCGCONDITIONRECORD"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-PR"
+  },
+  "CL_SAPUSER_BCS": {
+   "successors": [
+    "CL_BCS_MAIL_MESSAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "CL_SATC_API_FACTORY": {
+   "successors": [
+    "CL_SATC_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-DWB-TOO-ATF"
+  },
+  "CL_SD_DOCFLOW_UTIL": {
+   "successors": [
+    "I_SDDOCUMENTMULTILEVELPROCFLOW"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-DF"
+  },
+  "CL_SD_DOCUMENT_FLOW_RT": {
+   "successors": [
+    "I_SDDOCUMENTMULTILEVELPROCFLOW"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-DF"
+  },
+  "CL_SEND_REQUEST_BCS": {
+   "successors": [
+    "CL_BCS_MAIL_MESSAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "CX_ADDRESS_BCS": {
+   "successors": [
+    "CX_BCS_MAIL"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "CX_BCS": {
+   "successors": [
+    "CX_BCS_MAIL"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "CX_SEND_REQ_BCS": {
+   "successors": [
+    "CX_BCS_MAIL"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  }
+ },
+ "functions": {
+  "BAPI_PROCORD_GET_LIST": {
+   "successors": [
+    "I_MANUFACTURINGORDER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "BAPI_PROCORD_GET_DETAIL": {
+   "successors": [
+    "I_MANUFACTURINGORDER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "BAPI_COMPANYCODE_GET_PERIOD": {
+   "successors": [
+    "I_FISCCALENDARDATEFORCOMPCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "BAPI_COMPANYCODE_GETLIST": {
+   "successors": [
+    "I_COMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "BAPI_COMPANYCODE_GETDETAIL": {
+   "successors": [
+    "I_COMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "BAPI_COMPANYCODE_EXISTENCECHK": {
+   "successors": [
+    "I_COMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "BAPI_CONTROLLINGAREA_GETDETAIL": {
+   "successors": [
+    "I_CONTROLLINGAREA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "BAPI_CONTROLLINGAREA_GETPERIOD": {
+   "successors": [
+    "I_CONTROLLINGAREA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "BAPI_CONTROLLINGAREA_GETLIST": {
+   "successors": [
+    "I_CONTROLLINGAREA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "BAPI_CONTROLLINGAREA_FIND": {
+   "successors": [
+    "I_COMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "BAPI_COSTCENTER_GETLIST1": {
+   "successors": [
+    "I_COSTCENTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "BAPI_COSTCENTER_GETLIST": {
+   "successors": [
+    "I_COSTCENTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "BAPI_COSTCENTER_GETDETAIL": {
+   "successors": [
+    "I_COSTCENTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "BAPI_COSTCENTER_GETDETAIL1": {
+   "successors": [
+    "I_COSTCENTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "BAPI_MATERIAL_MAINTAINDATA_RT": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_RETAILMATERIAL_CREATE": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_DISPLAY": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_RETAILMATERIAL_DELETE": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_EDIT": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_STANDARDMATERIAL_CREATE": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_DELETE": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_SAVEREPLICA": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_SAVEDATA": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_GL_GETGLACCCURRENTBALANCE": {
+   "successors": [
+    "I_GLACCOUNTLINEITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-GL-GL-N"
+  },
+  "BAPI_GL_GETGLACCPERIODBALANCES": {
+   "successors": [
+    "I_GLACCOUNTLINEITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-GL-GL-N"
+  },
+  "BAPI_GL_GETGLACCBALANCE": {
+   "successors": [
+    "I_GLACCOUNTLINEITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-GL-GL-N"
+  },
+  "BAPI_PLANNEDORDER_GET_DETAIL": {
+   "successors": [
+    "I_PLANNEDORDERTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-PLO"
+  },
+  "BAPI_PLANNEDORDER_GET_DET_LIST": {
+   "successors": [
+    "I_PLANNEDORDERTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-PLO"
+  },
+  "BAPI_PRODORD_RELEASE": {
+   "successors": [
+    "I_PRODUCTIONORDERTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "BAPI_PRODORD_GET_DETAIL": {
+   "successors": [
+    "I_MANUFACTURINGORDER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "BAPI_PRODORD_COMPLETE_TECH": {
+   "successors": [
+    "I_PRODUCTIONORDERTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "BAPI_PRODORD_CHANGE": {
+   "successors": [
+    "I_PRODUCTIONORDERTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "BAPI_PRODORD_SCHEDULE": {
+   "successors": [
+    "I_PRODUCTIONORDERTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "BAPI_PRODORD_GET_LIST": {
+   "successors": [
+    "I_MANUFACTURINGORDER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "BAPI_PRODORD_CREATE": {
+   "successors": [
+    "I_PRODUCTIONORDERTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "BAPI_PROCORDCONF_GETLIST": {
+   "successors": [
+    "I_MFGORDERCONFIRMATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC-EXE-CON"
+  },
+  "BAPI_PROCORDCONF_CANCEL": {
+   "successors": [
+    "I_PROCESSORDERCONFIRMATIONTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC-EXE-CON"
+  },
+  "BAPI_PROCORDCONF_GETDETAIL": {
+   "successors": [
+    "I_MATERIALDOCUMENTITEM_2",
+    "I_MFGORDERCONFIRMATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "PP-SFC-EXE-CON"
+  },
+  "BAPISDORDER_GETDETAILEDLIST": {
+   "successors": [
+    "I_SALESDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "BAPI_SALESORDER_CREATEFROMDAT2": {
+   "successors": [
+    "I_SALESORDERTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "BAPI_COSTESTIMATE_GETLIST": {
+   "successors": [
+    "I_PRODUCTCOSTESTIMATE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-PC-PCP"
+  },
+  "BAPI_COSTESTIMATE_ITEMIZATION": {
+   "successors": [
+    "I_PRODUCTCOSTESTIMATEITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-PC-PCP"
+  },
+  "BAPI_INSPLOT_GETDETAIL": {
+   "successors": [
+    "I_INSPECTIONLOT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-IM"
+  },
+  "BAPI_INSPPOINT_GETLIST": {
+   "successors": [
+    "I_INSPECTIONSUBSET"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-IM"
+  },
+  "BAPI_INSPOPER_GETLIST": {
+   "successors": [
+    "I_INSPECTIONOPERATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-IM"
+  },
+  "BAPI_INSPOPER_GETDETAIL": {
+   "successors": [
+    "I_INSPECTIONOPERATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-IM"
+  },
+  "BAPI_INSPLOT_SETUSAGEDECISION": {
+   "successors": [
+    "I_INSPECTIONLOTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-IM"
+  },
+  "BAPI_INSPLOT_GETOPERATIONS": {
+   "successors": [
+    "I_INSPECTIONOPERATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-IM"
+  },
+  "BAPI_INSPLOT_GETLIST": {
+   "successors": [
+    "I_INSPECTIONLOT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-IM"
+  },
+  "BAPI_QNOTIFICAT_GETMATLISTFCUS": {
+   "successors": [
+    "I_QLTYNOTIFICATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "BAPI_QUALNOT_GETDETAIL": {
+   "successors": [
+    "I_QLTYNOTIFICATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "BAPI_QUALNOT_MODIFY_DATA": {
+   "successors": [
+    "I_QLTYNOTIFICATIONTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "BAPI_QUALNOT_DEL_DATA": {
+   "successors": [
+    "I_QLTYNOTIFICATIONTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "BAPI_QUALNOT_CREATE": {
+   "successors": [
+    "I_QLTYNOTIFICATIONTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "BAPI_QNOTIFICAT_GETKEYFIGURES": {
+   "successors": [
+    "I_QLTYNOTIFICATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "BAPI_QUALNOT_SAVE": {
+   "successors": [
+    "I_QLTYNOTIFICATIONTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "BAPI_QUALNOT_ADD_DATA": {
+   "successors": [
+    "I_QLTYNOTIFICATIONTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "BAPI_QNOTIFICAT_GETLISTFORCUST": {
+   "successors": [
+    "I_QLTYNOTIFICATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "BAPI_QNOTIFICAT_CREATE": {
+   "successors": [
+    "I_QLTYNOTIFICATIONTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "BAPI_PRODORDCONF_GETDETAIL": {
+   "successors": [
+    "I_MATERIALDOCUMENTITEM_2",
+    "I_MFGORDERCONFIRMATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "PP-SFC-EXE-CON"
+  },
+  "BAPI_PRODORDCONF_GETLIST": {
+   "successors": [
+    "I_MFGORDERCONFIRMATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC-EXE-CON"
+  },
+  "BAPI_PRODORDCONF_CANCEL": {
+   "successors": [
+    "I_PRODUCTIONORDCONFIRMATIONTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC-EXE-CON"
+  },
+  "BAPI_GL_ACC_GETDETAIL": {
+   "successors": [
+    "I_GLACCOUNT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-GL-GL"
+  },
+  "BAPI_AR_ACC_GETOPENITEMS": {
+   "successors": [
+    "I_OPERATIONALACCTGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AR-AR"
+  },
+  "BAPI_AR_ACC_GETSTATEMENT": {
+   "successors": [
+    "I_OPERATIONALACCTGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AR-AR"
+  },
+  "BAPI_AR_ACC_GETKEYDATEBALANCE": {
+   "successors": [
+    "I_OPERATIONALACCTGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AR-AR"
+  },
+  "BAPI_AR_ACC_GETBALANCEDITEMS": {
+   "successors": [
+    "I_OPERATIONALACCTGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AR-AR"
+  },
+  "BAPI_AP_ACC_GETSTATEMENT": {
+   "successors": [
+    "I_OPERATIONALACCTGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AP-AP"
+  },
+  "BAPI_AP_ACC_GETOPENITEMS": {
+   "successors": [
+    "I_OPERATIONALACCTGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AP-AP"
+  },
+  "BAPI_AP_ACC_GETBALANCEDITEMS": {
+   "successors": [
+    "I_OPERATIONALACCTGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AP-AP"
+  },
+  "BAPI_AP_ACC_GETKEYDATEBALANCE": {
+   "successors": [
+    "I_OPERATIONALACCTGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AP-AP"
+  },
+  "BAPI_REQUIREMENTS_GETDETAIL": {
+   "successors": [
+    "I_PLNDINDEPRQMTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-MP-DEM"
+  },
+  "BAPI_REQUIREMENTS_CREATE": {
+   "successors": [
+    "I_PLNDINDEPRQMTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-MP-DEM"
+  },
+  "BAPI_REQUIREMENTS_CHANGE": {
+   "successors": [
+    "I_PLNDINDEPRQMTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-MP-DEM"
+  },
+  "JOB_SUBMIT": {
+   "successors": [
+    "CL_APJ_RT_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-CCM-BTC"
+  },
+  "JOB_OPEN": {
+   "successors": [
+    "CL_APJ_RT_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-CCM-BTC"
+  },
+  "JOB_CLOSE": {
+   "successors": [
+    "CL_APJ_RT_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-CCM-BTC"
+  },
+  "BAPI_MATERIAL_GETINTNUMBER": {
+   "successors": [
+    "CL_MD_PRODUCT_ID_UTILS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_GETBATCHES": {
+   "successors": [
+    "CL_MD_PRODUCT_GET_BATCHES"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_GETBATCHCERT": {
+   "successors": [
+    "CL_MD_PRODUCT_GETBATCHCERT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_GETLIST": {
+   "successors": [
+    "I_PRODUCT",
+    "I_PRODUCTDESCRIPTION",
+    "I_PRODUCTPLANTBASIC",
+    "I_PRODUCTSALESDELIVERY",
+    "I_PRODUCTSTORAGELOCATIONBASIC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_STDMATERIAL_GETINTNUMBER": {
+   "successors": [
+    "CL_MD_PRODUCT_ID_UTILS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_GET_DETAIL": {
+   "successors": [
+    "I_PRODUCT",
+    "I_PRODUCTDESCRIPTION",
+    "I_PRODUCTPLANTBASIC",
+    "I_PRODUCTPLANTCOSTING",
+    "I_PRODUCTPLANTFORECAST",
+    "I_PRODUCTPLANTINTLTRD",
+    "I_PRODUCTPLANTMRP",
+    "I_PRODUCTPLANTPROCUREMENT",
+    "I_PRODUCTPLANTQTMANAGEMENT",
+    "I_PRODUCTPLANTSALES",
+    "I_PRODUCTPROCUREMENT",
+    "I_PRODUCTPURCHASETAX",
+    "I_PRODUCTQM",
+    "I_PRODUCTRETAIL",
+    "I_PRODUCTSALES",
+    "I_PRODUCTSALESDELIVERY",
+    "I_PRODUCTSALESTAX",
+    "I_PRODUCTSTORAGELOCATIONBASIC",
+    "I_PRODUCTSTORAGE_2",
+    "I_PRODUCTSUPPLYPLANNING",
+    "I_PRODUCTTAXCLASSIFICATION",
+    "I_PRODUCTTEXT",
+    "I_PRODUCTUNITOFMEASUREEAN",
+    "I_PRODUCTUNITSOFMEASURE",
+    "I_PRODUCTVALUATIONACCT",
+    "I_PRODUCTVALUATIONBASIC",
+    "I_PRODUCTVALUATIONCOSTING",
+    "I_PRODUCTWORKSCHEDULING",
+    "I_PRODUNITOFMEASURETEXTBASIC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_EXISTENCECHECK": {
+   "successors": [
+    "I_PRODUCT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_GETALL": {
+   "successors": [
+    "I_PRODUCT",
+    "I_PRODUCTDESCRIPTION",
+    "I_PRODUCTPLANTBASIC",
+    "I_PRODUCTPLANTCOSTING",
+    "I_PRODUCTPLANTFORECAST",
+    "I_PRODUCTPLANTINTLTRD",
+    "I_PRODUCTPLANTMRP",
+    "I_PRODUCTPLANTPROCUREMENT",
+    "I_PRODUCTPLANTQTMANAGEMENT",
+    "I_PRODUCTPLANTSALES",
+    "I_PRODUCTPROCUREMENT",
+    "I_PRODUCTPURCHASETAX",
+    "I_PRODUCTQM",
+    "I_PRODUCTRETAIL",
+    "I_PRODUCTSALES",
+    "I_PRODUCTSALESDELIVERY",
+    "I_PRODUCTSALESTAX",
+    "I_PRODUCTSTORAGELOCATIONBASIC",
+    "I_PRODUCTSTORAGE_2",
+    "I_PRODUCTSUPPLYPLANNING",
+    "I_PRODUCTTAXCLASSIFICATION",
+    "I_PRODUCTTEXT",
+    "I_PRODUCTUNITOFMEASUREEAN",
+    "I_PRODUCTUNITSOFMEASURE",
+    "I_PRODUCTVALUATIONACCT",
+    "I_PRODUCTVALUATIONBASIC",
+    "I_PRODUCTVALUATIONCOSTING",
+    "I_PRODUCTWORKSCHEDULING",
+    "I_PRODUNITOFMEASURETEXTBASIC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_MATERIAL_GET_ALL": {
+   "successors": [
+    "I_PRODUCT",
+    "I_PRODUCTDESCRIPTION",
+    "I_PRODUCTPLANTBASIC",
+    "I_PRODUCTPLANTCOSTING",
+    "I_PRODUCTPLANTFORECAST",
+    "I_PRODUCTPLANTINTLTRD",
+    "I_PRODUCTPLANTMRP",
+    "I_PRODUCTPLANTPROCUREMENT",
+    "I_PRODUCTPLANTQTMANAGEMENT",
+    "I_PRODUCTPLANTSALES",
+    "I_PRODUCTPROCUREMENT",
+    "I_PRODUCTPURCHASETAX",
+    "I_PRODUCTQM",
+    "I_PRODUCTRETAIL",
+    "I_PRODUCTSALES",
+    "I_PRODUCTSALESDELIVERY",
+    "I_PRODUCTSALESTAX",
+    "I_PRODUCTSTORAGELOCATIONBASIC",
+    "I_PRODUCTSTORAGE_2",
+    "I_PRODUCTSUPPLYPLANNING",
+    "I_PRODUCTTAXCLASSIFICATION",
+    "I_PRODUCTUNITOFMEASUREEAN",
+    "I_PRODUCTUNITSOFMEASURE",
+    "I_PRODUCTVALUATIONACCT",
+    "I_PRODUCTVALUATIONBASIC",
+    "I_PRODUCTVALUATIONCOSTING",
+    "I_PRODUCTWORKSCHEDULING",
+    "I_PRODUNITOFMEASURETEXTBASIC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-MD-MM"
+  },
+  "CHANGEDOCUMENT_READ_ALL": {
+   "successors": [
+    "CL_CHDO_READ_TOOLS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CHD"
+  },
+  "CO_SE_PRODORD_CHANGE": {
+   "successors": [
+    "I_PRODUCTIONORDERTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "BAPI_MATERIAL_BOM_GROUP_CREATE": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "BAPI_MAT_BOM_EXISTENCE_CHECK": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CR_WORKSTATION_READ": {
+   "successors": [
+    "I_WORKCENTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-BD-WKC"
+  },
+  "CSAI_BOM_READ": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CSAI_BOM_MAINTAIN": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CSAI_BOM_CREATE": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CSAP_MAT_BOM_MAINTAIN": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CSAP_BOM_ITEM_MAINTAIN": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CSAP_MAT_BOM_DELETE": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CSAP_MAT_BOM_ALLOC_CREATE": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CSAP_MAT_BOM_READ": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CSAP_MAT_BOM_CREATE": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CSEP_MAT_BOM_READ": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CS_BOM_EXPL_MAT_V2": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "CS_WHERE_USED_MAT": {
+   "successors": [
+    "I_BILLOFMATERIALTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BOM"
+  },
+  "FI_DOCUMENT_READ": {
+   "successors": [
+    "I_JOURNALENTRY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "FI_PERIOD_DETERMINE": {
+   "successors": [
+    "I_FISCCALENDARDATEFORCOMPCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "FI_COMPANY_CODE_DATA": {
+   "successors": [
+    "I_COMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "FKK_BIX_BILLPLAN_DISP": {
+   "successors": [
+    "I_CABILLGPLN",
+    "I_CABILLGPLNITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-CA-INV"
+  },
+  "FKK_INV_INVDOC_DISP": {
+   "successors": [
+    "I_CAINVCGDOCHEADER",
+    "I_CAINVCGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-CA-INV"
+  },
+  "FKK_KOKRS_FOR_BUKRS": {
+   "successors": [
+    "I_COMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-CA"
+  },
+  "G_SET_FETCH": {
+   "successors": [
+    "I_COSTCENTERHIERARCHY",
+    "I_COSTCENTERHIERARCHYNODE",
+    "I_COSTCTRACTIVITYTYPEHIERARCHY",
+    "I_COSTCTRACTIVITYTYPEHIERNODE",
+    "I_FUNCTIONALAREAHIERARCHY",
+    "I_FUNCTIONALAREAHIERNODE",
+    "I_PROFITCENTERHIERARCHY",
+    "I_PROFITCENTERHIERARCHYNODE",
+    "I_STSTCLKEYFIGUREHIERARCHY",
+    "I_STSTCLKEYFIGUREHIERNODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "G_SET_GET_ID_FROM_NAME": {
+   "successors": [
+    "I_COSTCENTERHIERARCHY",
+    "I_COSTCTRACTIVITYTYPEHIERARCHY",
+    "I_FUNCTIONALAREAHIERARCHY",
+    "I_PROFITCENTERHIERARCHY",
+    "I_STSTCLKEYFIGUREHIERARCHY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "G_SET_TREE_IMPORT": {
+   "successors": [
+    "I_COSTCENTERHIERARCHY",
+    "I_COSTCENTERHIERARCHYNODE",
+    "I_COSTCTRACTIVITYTYPEHIERARCHY",
+    "I_COSTCTRACTIVITYTYPEHIERNODE",
+    "I_FUNCTIONALAREAHIERARCHY",
+    "I_FUNCTIONALAREAHIERNODE",
+    "I_PROFITCENTERHIERARCHY",
+    "I_PROFITCENTERHIERARCHYNODE",
+    "I_STSTCLKEYFIGUREHIERARCHY",
+    "I_STSTCLKEYFIGUREHIERNODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "G_SET_ENCRYPT_SETID": {
+   "successors": [
+    "I_COSTCENTERHIERARCHY",
+    "I_COSTCTRACTIVITYTYPEHIERARCHY",
+    "I_FUNCTIONALAREAHIERARCHY",
+    "I_PROFITCENTERHIERARCHY",
+    "I_STSTCLKEYFIGUREHIERARCHY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "G_SET_GET_ALL_VALUES": {
+   "successors": [
+    "I_COSTCENTERHIERARCHYNODE",
+    "I_COSTCTRACTIVITYTYPEHIERNODE",
+    "I_FUNCTIONALAREAHIERNODE",
+    "I_PROFITCENTERHIERARCHYNODE",
+    "I_STSTCLKEYFIGUREHIERNODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "G_POSTING_DATE_OF_PERIOD_GET": {
+   "successors": [
+    "I_FISCALYEARPERIOD"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-SL-SL"
+  },
+  "BAPI_HU_GETLIST": {
+   "successors": [
+    "I_HANDLINGUNITTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-HU-BF"
+  },
+  "BAPI_HU_CREATE": {
+   "successors": [
+    "I_HANDLINGUNITTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-HU-BF"
+  },
+  "HU_CREATE_GOODS_MOVEMENT": {
+   "successors": [
+    "I_HANDLINGUNITTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-HU-BF"
+  },
+  "MEASUREM_DOCUM_RFC_SINGLE_001": {
+   "successors": [
+    "I_MEASUREMENTDOCUMENTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PM-EQM-SF-MPC"
+  },
+  "MEASUREM_DOCUM_RFC_SINGLE_002": {
+   "successors": [
+    "I_MEASUREMENTDOCUMENTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PM-EQM-SF-MPC"
+  },
+  "MEASUREM_DOCUM_READ_LAST": {
+   "successors": [
+    "I_MEASUREMENTDOCUMENTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PM-EQM-SF-MPC"
+  },
+  "MEASUREM_DOCUM_READ": {
+   "successors": [
+    "I_MEASUREMENTDOCUMENTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PM-EQM-SF-MPC"
+  },
+  "K_GROUP_SELECT": {
+   "successors": [
+    "I_COSTCENTERHIERARCHY",
+    "I_COSTCTRACTIVITYTYPEHIERARCHY",
+    "I_FUNCTIONALAREAHIERARCHY",
+    "I_PROFITCENTERHIERARCHY",
+    "I_STSTCLKEYFIGUREHIERARCHY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "CO-OM"
+  },
+  "BAPI_COSTCENTERGROUP_GETDETAIL": {
+   "successors": [
+    "I_COSTCENTERHIERARCHY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "BAPI_PROFITCENTERGRP_GETLIST": {
+   "successors": [
+    "I_PROFITCENTERHIERARCHY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "AUFBAUEN_MDPSX_ANZEIGEN_SIM": {
+   "successors": [
+    "I_SUPPLYDEMANDITEMTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-MRP-BD"
+  },
+  "MD_STOCK_REQUIREMENTS_LIST_API": {
+   "successors": [
+    "I_SUPPLYDEMANDITEMTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-MRP-BD"
+  },
+  "AUFBAUEN_MDPSX_ANZEIGEN": {
+   "successors": [
+    "I_SUPPLYDEMANDITEMTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-MRP-BD"
+  },
+  "MATERIAL_UNIT_CONVERSION": {
+   "successors": [
+    "CL_MD_PRODUCT_UNIT_CONVERSION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "MATERIAL_READ": {
+   "successors": [
+    "I_PRODUCT",
+    "I_PRODUCTDESCRIPTION",
+    "I_PRODUCTPLANTBASIC",
+    "I_PRODUCTPLANTCOSTING",
+    "I_PRODUCTPLANTFORECAST",
+    "I_PRODUCTPLANTINTLTRD",
+    "I_PRODUCTPLANTMRP",
+    "I_PRODUCTPLANTPROCUREMENT",
+    "I_PRODUCTPLANTQTMANAGEMENT",
+    "I_PRODUCTPLANTSALES",
+    "I_PRODUCTPROCUREMENT",
+    "I_PRODUCTPURCHASETAX",
+    "I_PRODUCTQM",
+    "I_PRODUCTRETAIL",
+    "I_PRODUCTSALES",
+    "I_PRODUCTSALESDELIVERY",
+    "I_PRODUCTSALESTAX",
+    "I_PRODUCTSTORAGELOCATIONBASIC",
+    "I_PRODUCTSTORAGE_2",
+    "I_PRODUCTSUPPLYPLANNING",
+    "I_PRODUCTTAXCLASSIFICATION",
+    "I_PRODUCTTEXT",
+    "I_PRODUCTUNITOFMEASUREEAN",
+    "I_PRODUCTUNITSOFMEASURE",
+    "I_PRODUCTVALUATIONACCT",
+    "I_PRODUCTVALUATIONBASIC",
+    "I_PRODUCTVALUATIONCOSTING",
+    "I_PRODUCTWORKSCHEDULING",
+    "I_PRODUNITOFMEASURETEXTBASIC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-MD-MM"
+  },
+  "MB_CREATE_GOODS_MOVEMENT": {
+   "successors": [
+    "I_MATERIALDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "MB_POST_GOODS_MOVEMENT": {
+   "successors": [
+    "I_MATERIALDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_GOODSMVT_CANCEL": {
+   "successors": [
+    "I_MATERIALDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_GOODSMVT_CREATE": {
+   "successors": [
+    "I_MATERIALDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_MATPHYSINV_GETLIST": {
+   "successors": [
+    "I_PHYSICALINVENTORYDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_MATPHYSINV_CHANGECOUNT": {
+   "successors": [
+    "I_PHYSICALINVENTORYDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_MATPHYSINV_GETITEMS": {
+   "successors": [
+    "I_PHYSICALINVENTORYDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_MATPHYSINV_GETDETAIL": {
+   "successors": [
+    "I_PHYSICALINVENTORYDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_MATPHYSINV_COUNT": {
+   "successors": [
+    "I_PHYSICALINVENTORYDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_MATPHYSINV_CREATE": {
+   "successors": [
+    "I_PHYSICALINVENTORYDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_RESERVATION_CREATE1": {
+   "successors": [
+    "I_RESERVATIONDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_RESERVATION_CHANGE": {
+   "successors": [
+    "I_RESERVATIONDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "BAPI_RESERVATION_DELETE": {
+   "successors": [
+    "I_RESERVATIONDOCUMENTTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "ME_EKKO_SINGLE_READ": {
+   "successors": [
+    "I_PURCHASEORDERAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "ME_EKPO_SINGLE_READ": {
+   "successors": [
+    "I_PURCHASEORDERITEMAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "MMPUR_EKKN_READ_EBELN_EBELP": {
+   "successors": [
+    "I_PURCHASEORDERAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "MMPUR_MATERIAL_DISPLAY": {
+   "successors": [
+    "I_PRODUCT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "MMPUR_REQUISITION_DISPLAY": {
+   "successors": [
+    "I_PURCHASEREQUISITIONAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "ME_GET_INFORECORD_CONDITIONS_1": {
+   "successors": [
+    "I_PURCHASINGINFORECORDAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "ME_READ_INFORECORD": {
+   "successors": [
+    "I_PURCHASINGINFORECORDAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "ME_DISPLAY_PURCHASE_DOCUMENT": {
+   "successors": [
+    "I_PURCHASEORDERAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "BAPI_INFORECORD_GETLIST": {
+   "successors": [
+    "I_PURCHASINGINFORECORDAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR-GF"
+  },
+  "READ_MATERIALTYPE": {
+   "successors": [
+    "I_PRODUCTTYPE_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "T001W_SINGLE_READ": {
+   "successors": [
+    "I_PLANT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "T130F_ARRAY_READ": {
+   "successors": [
+    "I_PRODUCTFIELDATTRIBUTES"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "MARA_SINGLE_READ": {
+   "successors": [
+    "I_PRODUCT",
+    "I_PRODUCTPROCUREMENT",
+    "I_PRODUCTQM",
+    "I_PRODUCTSALES",
+    "I_PRODUCTSTORAGE_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-MD-MM"
+  },
+  "MARC_SINGLE_READ": {
+   "successors": [
+    "I_PRODUCTPLANTBASIC",
+    "I_PRODUCTPLANTCOSTING",
+    "I_PRODUCTPLANTFORECAST",
+    "I_PRODUCTPLANTINTLTRD",
+    "I_PRODUCTPLANTPROCUREMENT",
+    "I_PRODUCTPLANTQTMANAGEMENT",
+    "I_PRODUCTPLANTSALES",
+    "I_PRODUCTSUPPLYPLANNING",
+    "I_PRODUCTWORKSCHEDULING"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-MD-MM"
+  },
+  "MAKT_SINGLE_READ": {
+   "successors": [
+    "I_PRODUCTDESCRIPTION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "MAKT_GENERIC_READ_WITH_MATNR": {
+   "successors": [
+    "I_PRODUCTDESCRIPTION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "MATERIAL_MAINTAIN_DARK": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "MATERIAL_UPDATE_ALL": {
+   "successors": [
+    "I_PRODUCTTP_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "BAPI_KANBANCC_GETLIST_ALL": {
+   "successors": [
+    "I_KANBANCONTROLCYCLE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-KAB"
+  },
+  "BAPI_KANBANCC_GETLIST": {
+   "successors": [
+    "I_KANBANCONTROLCYCLE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-KAB"
+  },
+  "BAPI_KANBANCC_EXISTCHECK": {
+   "successors": [
+    "I_KANBANCONTROLCYCLE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-KAB"
+  },
+  "BAPI_KANBAN_GETLIST": {
+   "successors": [
+    "I_KANBANCONTAINER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-KAB"
+  },
+  "BAPI_KANBAN_GETLISTFORSUPPLIE1": {
+   "successors": [
+    "I_KANBANCONTROLCYCLE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-KAB"
+  },
+  "BAPI_KANBAN_GETLISTFORSUPPLIER": {
+   "successors": [
+    "I_KANBANCONTROLCYCLE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-KAB"
+  },
+  "BAPI_KANBAN_GETLIST_ALL": {
+   "successors": [
+    "I_KANBANCONTAINER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-KAB"
+  },
+  "BAPI_INCOMINGINVOICE_GETLIST": {
+   "successors": [
+    "I_SUPPLIERINVOICEAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IV-LIV"
+  },
+  "BAPI_INCOMINGINVOICE_GETDETAIL": {
+   "successors": [
+    "I_SUPPLIERINVOICEAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IV-LIV"
+  },
+  "MD_READ_MATERIAL_SIMPLE": {
+   "successors": [
+    "I_PRODUCTPLANTBASIC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-MRP-BD"
+  },
+  "BAPI_MATERIAL_STOCK_REQ_LIST": {
+   "successors": [
+    "I_SUPPLYDEMANDITEMTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-MRP-BD"
+  },
+  "QEEA_STATUS_TEXT_READING": {
+   "successors": [
+    "I_INSPECTIONRESULTSTATUS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-IM-RR"
+  },
+  "QM05_CREATE_NOTIFICATION": {
+   "successors": [
+    "I_QLTYNOTIFICATIONTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-QN"
+  },
+  "QPK1_GP_CODE_ARRAY_SELECTION": {
+   "successors": [
+    "I_CONFIGURABLECODESCODE",
+    "I_CONFIGURABLECODESCODEGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "QM-PT-BD-CAT"
+  },
+  "QPK1_CODE_TEXT": {
+   "successors": [
+    "I_CHARCATTRIBUTECODETEXT",
+    "I_DEFECTCODETEXT",
+    "I_USAGEDECISIONCODETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "QM-PT-BD-CAT"
+  },
+  "RK_KOKRS_FIND": {
+   "successors": [
+    "I_COMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "K_KOKRS_READ": {
+   "successors": [
+    "I_CONTROLLINGAREA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "BAL_LOG_HDR_READ": {
+   "successors": [
+    "CL_BALI_LOG"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_LOG_MSG_CUMULATE": {
+   "successors": [
+    "CL_BALI_LOG",
+    "CL_BALI_MESSAGE_SETTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_LOG_CREATE": {
+   "successors": [
+    "CL_BALI_LOG"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_LOG_MSG_ADD": {
+   "successors": [
+    "CL_BALI_LOG",
+    "CL_BALI_MESSAGE_SETTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_LOG_MSG_ADD_FREE_TEXT": {
+   "successors": [
+    "CL_BALI_FREE_TEXT_SETTER",
+    "CL_BALI_LOG"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_LOG_EXCEPTION_READ": {
+   "successors": [
+    "CL_BALI_LOG"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_LOG_EXCEPTION_ADD": {
+   "successors": [
+    "CL_BALI_EXCEPTION_SETTER",
+    "CL_BALI_LOG"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_LOG_MSG_READ": {
+   "successors": [
+    "CL_BALI_LOG"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_LOG_HDR_CHANGE": {
+   "successors": [
+    "CL_BALI_HEADER_SETTER",
+    "CL_BALI_LOG"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_DB_SAVE": {
+   "successors": [
+    "CL_BALI_LOG_DB"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_DB_LOAD": {
+   "successors": [
+    "CL_BALI_LOG_DB"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_DB_DELETE": {
+   "successors": [
+    "CL_BALI_LOG_DB"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_DB_COMMIT_2ND_CONNECTION": {
+   "successors": [
+    "CL_BALI_LOG_DB"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_DB_SEARCH": {
+   "successors": [
+    "CL_BALI_LOG_DB"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_FILTER_CREATE": {
+   "successors": [
+    "CL_BALI_LOG_FILTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_DB_ENQUEUE": {
+   "successors": [
+    "CL_BALI_LOG_DB"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_LOG_READ": {
+   "successors": [
+    "CL_BALI_LOG"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "BAL_DB_DEQUEUE": {
+   "successors": [
+    "CL_BALI_LOG_DB"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BAL"
+  },
+  "CONVERT_DATE_TO_EXTERNAL": {
+   "successors": [
+    "CL_ABAP_DATFM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "CONVERT_DATE_TO_INTERNAL": {
+   "successors": [
+    "CL_ABAP_DATFM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "END_TIME_DETERMINE": {
+   "successors": [
+    "CL_SCAL_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "START_TIME_DETERMINE": {
+   "successors": [
+    "CL_SCAL_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "HOLIDAY_CALENDAR_GET": {
+   "successors": [
+    "CL_SCAL_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "MONTH_NAMES_GET": {
+   "successors": [
+    "CL_SCAL_UTILS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "DAY_ATTRIBUTES_GET": {
+   "successors": [
+    "CL_SCAL_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "FACTORY_CALENDAR_ATTRIBUTE_GET": {
+   "successors": [
+    "CL_SCAL_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "FACTORY_CALENDAR_GET": {
+   "successors": [
+    "CL_SCAL_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "DATE_CONVERT_TO_FACTORYDATE": {
+   "successors": [
+    "CL_SCAL_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "DATE_GET_WEEK": {
+   "successors": [
+    "CL_SCAL_UTILS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "DATE_COMPUTE_DAY_ENHANCED": {
+   "successors": [
+    "CL_SCAL_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "WEEK_GET_FIRST_DAY": {
+   "successors": [
+    "CL_SCAL_UTILS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "FACTORYDATE_CONVERT_TO_DATE": {
+   "successors": [
+    "CL_SCAL_API"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CAL"
+  },
+  "CHANGEDOCUMENT_TEXT_CASE": {
+   "successors": [
+    "CL_CHDO_WRITE_TOOLS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CHD"
+  },
+  "CHANGEDOCUMENT_SINGLE_CASE": {
+   "successors": [
+    "CL_CHDO_WRITE_TOOLS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CHD"
+  },
+  "CHANGEDOCUMENT_CLOSE": {
+   "successors": [
+    "CL_CHDO_WRITE_TOOLS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CHD"
+  },
+  "CHANGEDOCUMENT_MULTIPLE_CASE": {
+   "successors": [
+    "CL_CHDO_WRITE_TOOLS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CHD"
+  },
+  "CHANGEDOCUMENT_OPEN": {
+   "successors": [
+    "CL_CHDO_WRITE_TOOLS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CHD"
+  },
+  "CHANGEDOCUMENT_MULTIPLE_CASE2": {
+   "successors": [
+    "CL_CHDO_WRITE_TOOLS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-CHD"
+  },
+  "UNIT_PARAMETERS_GET": {
+   "successors": [
+    "CL_UOM_CONVERSION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "UNIT_CONVERSION_SIMPLE": {
+   "successors": [
+    "CL_UOM_CONVERSION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "UNIT_OF_MEASURE_ISO_TO_SAP": {
+   "successors": [
+    "I_UNITOFMEASURE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "SI_UNIT_GET": {
+   "successors": [
+    "CL_UOM_CONVERSION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "DEQUEUE_ALL": {
+   "successors": [
+    "CL_ABAP_LOCK_OBJECT_FACTORY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-DWB-DIC-AC"
+  },
+  "CALCULATE_HASH_FOR_CHAR": {
+   "successors": [
+    "CL_ABAP_MESSAGE_DIGEST"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SEC-LLF"
+  },
+  "CALCULATE_HASH_FOR_RAW": {
+   "successors": [
+    "CL_ABAP_MESSAGE_DIGEST"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SEC-LLF"
+  },
+  "SD_DOCUMENT_FLOW_GET": {
+   "successors": [
+    "I_SDDOCUMENTMULTILEVELPROCFLOW"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "NUMBER_RANGE_ENQUEUE": {
+   "successors": [
+    "CL_NUMBERRANGE_INTERVALS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "NUMBER_RANGE_UPDATE_CLOSE": {
+   "successors": [
+    "CL_NUMBERRANGE_INTERVALS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "NUMBER_RANGE_DEQUEUE": {
+   "successors": [
+    "CL_NUMBERRANGE_INTERVALS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "NUMBER_RANGE_INTERVAL_UPDATE": {
+   "successors": [
+    "CL_NUMBERRANGE_INTERVALS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "NUMBER_RANGE_OBJECT_READ": {
+   "successors": [
+    "CL_NUMBERRANGE_OBJECTS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "NUMBER_RANGE_OBJECT_DELETE": {
+   "successors": [
+    "CL_NUMBERRANGE_OBJECTS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "NUMBER_RANGE_OBJECT_UPDATE": {
+   "successors": [
+    "CL_NUMBERRANGE_OBJECTS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "NUMBER_RANGE_OBJECT_CLOSE": {
+   "successors": [
+    "CL_NUMBERRANGE_OBJECTS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "NUMBER_GET_NEXT": {
+   "successors": [
+    "CL_NUMBERRANGE_RUNTIME"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "NUMBER_CHECK": {
+   "successors": [
+    "CL_NUMBERRANGE_RUNTIME"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-NUM"
+  },
+  "SO_NEW_DOCUMENT_ATT_SEND_API1": {
+   "successors": [
+    "CL_BCS_MAIL_MESSAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "FREE_SELECTIONS_EX_2_RANGE": {
+   "successors": [
+    "CL_ABAP_RANGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-ABA-LA"
+  },
+  "FREE_SELECTIONS_RANGE_2_WHERE": {
+   "successors": [
+    "CL_ABAP_RANGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-ABA-LA"
+  },
+  "FREE_SELECTIONS_RANGE_2_EX": {
+   "successors": [
+    "CL_ABAP_RANGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-ABA-LA"
+  },
+  "FREE_SELECTIONS_WHERE_2_RANGE": {
+   "successors": [
+    "CL_ABAP_RANGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-ABA-LA"
+  },
+  "GUID_CREATE": {
+   "successors": [
+    "CL_SYSTEM_UUID"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-ABA-LA"
+  },
+  "RV_ORDER_FLOW_INFORMATION": {
+   "successors": [
+    "I_SDDOCUMENTMULTILEVELPROCFLOW"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "RV_FLOW": {
+   "successors": [
+    "I_SDDOCUMENTMULTILEVELPROCFLOW"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "SD_CUSTOMER_SALES_AREAS_LIST": {
+   "successors": [
+    "I_CUSTOMERSALESAREA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-PD"
+  },
+  "SD_SALES_DOCUMENT_READ": {
+   "successors": [
+    "I_SALESDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "SD_VBFA_SELECT": {
+   "successors": [
+    "I_SDDOCUMENTMULTILEVELPROCFLOW"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "SD_VBAP_SINGLE_READ": {
+   "successors": [
+    "I_SALESDOCUMENTITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "SD_VBAP_SELECT": {
+   "successors": [
+    "I_SALESDOCUMENTITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "SD_VBKD_SINGLE_READ": {
+   "successors": [
+    "I_SALESDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "SD_VBAK_SINGLE_READ": {
+   "successors": [
+    "I_SALESDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "SD_VBPA_READ_WITH_VBELN": {
+   "successors": [
+    "I_SALESDOCUMENTPARTNER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "SD_VEDA_GET_PRINT_DATA": {
+   "successors": [
+    "I_SALESDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "HU_GET_HUS": {
+   "successors": [
+    "I_HANDLINGUNITTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-HU-BF"
+  },
+  "RV_INVOICE_DOCUMENT_READ": {
+   "successors": [
+    "I_BILLINGDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL"
+  },
+  "BAPI_BILLINGDOC_DISPLAY": {
+   "successors": [
+    "I_BILLINGDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL"
+  },
+  "BAPI_BILLINGDOC_GETLIST": {
+   "successors": [
+    "I_BILLINGDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL"
+  },
+  "BAPI_BILLINGDOC_GETDETAIL": {
+   "successors": [
+    "I_BILLINGDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL"
+  },
+  "BAPI_BILLINGDOC_EXISTENCECHECK": {
+   "successors": [
+    "I_BILLINGDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL"
+  },
+  "BAPI_BILLINGDOC_IS_CANCELLED": {
+   "successors": [
+    "I_BILLINGDOCUMENTBASIC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL"
+  }
+ },
+ "tables": {
+  "ACDOCA": {
+   "successors": [
+    "I_GLACCOUNTLINEITEM",
+    "I_GLACCOUNTLINEITEMRAWDATA",
+    "I_JOURNALENTRYITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-GL-GL"
+  },
+  "AFKO": {
+   "successors": [
+    "I_MANUFACTURINGORDER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "AFPO": {
+   "successors": [
+    "I_MANUFACTURINGORDERITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "AFRU": {
+   "successors": [
+    "I_MFGORDERCONFIRMATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC-EXE-CON"
+  },
+  "AFVC": {
+   "successors": [
+    "I_MANUFACTURINGORDEROPERATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "AFVU": {
+   "successors": [
+    "I_MANUFACTURINGORDEROPERATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "AFVV": {
+   "successors": [
+    "I_MANUFACTURINGORDEROPERATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-SFC"
+  },
+  "AUFK": {
+   "successors": [
+    "I_ORDER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM-OPA"
+  },
+  "BKPF": {
+   "successors": [
+    "I_JOURNALENTRY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "BNKA": {
+   "successors": [
+    "I_BANK_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CA-BK-BNK"
+  },
+  "BSEC": {
+   "successors": [
+    "I_ONETIMEACCOUNTCUSTOMER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "BSED": {
+   "successors": [
+    "I_BILLOFEXCHANGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "BSEG": {
+   "successors": [
+    "I_OPERATIONALACCTGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "BSEG_ADD": {
+   "successors": [
+    "I_ADDLLEDGEROPLACCTGDOCITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-GL-GL"
+  },
+  "BUT000": {
+   "successors": [
+    "I_BUSINESSPARTNER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BP"
+  },
+  "CDHDR": {
+   "successors": [
+    "CL_CHDO_READ_TOOLS",
+    "CL_CHDO_WRITE_TOOLS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "BC-SRV-ASF-CHD"
+  },
+  "CDPOS": {
+   "successors": [
+    "CL_CHDO_READ_TOOLS",
+    "CL_CHDO_WRITE_TOOLS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "BC-SRV-ASF-CHD"
+  },
+  "CEPC": {
+   "successors": [
+    "I_PROFITCENTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "EC-PCA"
+  },
+  "CEPCT": {
+   "successors": [
+    "I_PROFITCENTERTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "EC-PCA"
+  },
+  "CRHD": {
+   "successors": [
+    "I_WORKCENTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-BD-WKC"
+  },
+  "CRTX": {
+   "successors": [
+    "I_WORKCENTERTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-BD-WKC"
+  },
+  "CSKA": {
+   "successors": [
+    "I_GLACCOUNT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "CSKB": {
+   "successors": [
+    "I_GLACCOUNTINCOMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "CSKS": {
+   "successors": [
+    "I_COSTCENTER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "CSKT": {
+   "successors": [
+    "I_COSTCENTERTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "CSKU": {
+   "successors": [
+    "I_GLACCOUNTTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "CSLA": {
+   "successors": [
+    "I_COSTCENTERACTIVITYTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "CSLT": {
+   "successors": [
+    "I_COSTCENTERACTIVITYTYPETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "DD07L": {
+   "successors": [
+    "DDCDS_CUSTOMER_DOMAIN_VALUE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-DWB-DIC-AC"
+  },
+  "DD07T": {
+   "successors": [
+    "DDCDS_CUSTOMER_DOMAIN_VALUE_T"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-DWB-DIC-AC"
+  },
+  "DFKKKO": {
+   "successors": [
+    "I_CADOCUMENTHEADER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-CA"
+  },
+  "DFKKOP": {
+   "successors": [
+    "I_CADOCUMENTBPITEMPHYSICAL"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-CA"
+  },
+  "DFKKOPK": {
+   "successors": [
+    "I_CADOCUMENTGLITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-CA"
+  },
+  "EBAN": {
+   "successors": [
+    "I_PURCHASEREQUISITIONITEMAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EBKN": {
+   "successors": [
+    "I_PURREQNACCTASSGMTAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EHEWAD_WA_TRRQLA": {
+   "successors": [
+    "I_WASTETRANSFERREQUESTHISTORY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "EHS-SUS-WA"
+  },
+  "EINA": {
+   "successors": [
+    "I_PURCHASINGINFORECORDAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EINE": {
+   "successors": [
+    "I_PURCHASINGINFORECORDAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EKBE": {
+   "successors": [
+    "I_PURCHASEORDERHISTORYAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EKES": {
+   "successors": [
+    "I_POSUPPLIERCONFIRMATIONAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EKET": {
+   "successors": [
+    "I_PURORDSCHEDULELINEAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EKKN": {
+   "successors": [
+    "I_PURORDACCOUNTASSIGNMENTAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EKKO": {
+   "successors": [
+    "I_PURCHASEORDERAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EKPA": {
+   "successors": [
+    "I_PURCHASEORDERPARTNERAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EKPO": {
+   "successors": [
+    "I_PURCHASEORDERITEMAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EORD": {
+   "successors": [
+    "I_MPPURCHASINGSOURCEITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EQUK": {
+   "successors": [
+    "I_PURGQUOTAARRGMTAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "EQUP": {
+   "successors": [
+    "I_PURGQUOTAARRGMTITEMAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "FKKVK": {
+   "successors": [
+    "I_CONTRACTACCOUNTHEADER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-CA"
+  },
+  "FKKVKP": {
+   "successors": [
+    "I_CONTRACTACCOUNTPARTNER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-CA"
+  },
+  "KBED": {
+   "successors": [
+    "I_CAPACITYREQUIREMENTITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-CRP-SCH"
+  },
+  "KBLK": {
+   "successors": [
+    "I_EARMARKEDFUNDSDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-FM"
+  },
+  "KBLP": {
+   "successors": [
+    "I_EARMARKEDFUNDSDOCUMENTITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-FM"
+  },
+  "KNA1": {
+   "successors": [
+    "I_CUSTOMER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "KNB1": {
+   "successors": [
+    "I_CUSTOMERCOMPANY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "KNB5": {
+   "successors": [
+    "I_CUSTOMERDUNNING"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "KNBK": {
+   "successors": [
+    "I_BUSINESSPARTNERBANK"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "KNVI": {
+   "successors": [
+    "I_CUSTSALESAREATAX"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "KNVK": {
+   "successors": [
+    "I_CONTACTPERSON"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "KNVP": {
+   "successors": [
+    "I_CUSTSALESPARTNERFUNC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "KNVV": {
+   "successors": [
+    "I_CUSTOMERSALESAREA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "KONH": {
+   "successors": [
+    "I_SLSPRCGCONDITIONRECORD"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-CM"
+  },
+  "KONM": {
+   "successors": [
+    "I_SLSPRCGCNDNRECORDSCALE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-CM"
+  },
+  "KONP": {
+   "successors": [
+    "I_SLSPRCGCONDITIONRECORD"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-CM"
+  },
+  "KONV": {
+   "successors": [
+    "I_SLSPRCGCONDITIONRECORD"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-PR"
+  },
+  "LFA1": {
+   "successors": [
+    "I_SUPPLIER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-VM"
+  },
+  "LFAS": {
+   "successors": [
+    "I_BUSINESSPARTNERTAXNUMBER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-VM"
+  },
+  "LFB1": {
+   "successors": [
+    "I_SUPPLIERCOMPANY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-VM"
+  },
+  "LFBK": {
+   "successors": [
+    "I_BUSINESSPARTNERBANK"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-VM"
+  },
+  "LFM1": {
+   "successors": [
+    "I_SUPPLIERPURCHASINGORG"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-VM"
+  },
+  "LIKP": {
+   "successors": [
+    "I_DELIVERYDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LE-SHP-GF"
+  },
+  "LIPS": {
+   "successors": [
+    "I_DELIVERYDOCUMENTITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LE-SHP-GF"
+  },
+  "MARA": {
+   "successors": [
+    "I_PRODUCT",
+    "I_PRODUCTPROCUREMENT",
+    "I_PRODUCTQM",
+    "I_PRODUCTSALES",
+    "I_PRODUCTSTORAGE_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-MD-MM"
+  },
+  "MARC": {
+   "successors": [
+    "I_PRODUCTPLANTBASIC",
+    "I_PRODUCTPLANTCOSTING",
+    "I_PRODUCTPLANTFORECAST",
+    "I_PRODUCTPLANTINTLTRD",
+    "I_PRODUCTPLANTPROCUREMENT",
+    "I_PRODUCTPLANTQTMANAGEMENT",
+    "I_PRODUCTPLANTSALES",
+    "I_PRODUCTSUPPLYPLANNING",
+    "I_PRODUCTWORKSCHEDULING"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-MD-MM"
+  },
+  "MARD": {
+   "successors": [
+    "I_PRODUCTSTORAGELOCATIONBASIC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "MARM": {
+   "successors": [
+    "I_PRODUCTUNITSOFMEASURE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-MM"
+  },
+  "MATDOC": {
+   "successors": [
+    "I_MATERIALDOCUMENTHEADER_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM-GF"
+  },
+  "MCH1": {
+   "successors": [
+    "I_BATCH"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-BM-MD"
+  },
+  "MCHA": {
+   "successors": [
+    "I_BATCH"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-BM-MD"
+  },
+  "MKAL": {
+   "successors": [
+    "I_PRODUCTIONVERSION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-PI-MD"
+  },
+  "MKPF": {
+   "successors": [
+    "I_MATERIALDOCUMENTHEADER_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "MSEG": {
+   "successors": [
+    "I_MATERIALDOCUMENTITEM_2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "MSKA": {
+   "successors": [
+    "I_MATERIALSTOCK"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM-GF"
+  },
+  "MSKU": {
+   "successors": [
+    "I_MATERIALSTOCK"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM-GF"
+  },
+  "MSLB": {
+   "successors": [
+    "I_MATERIALSTOCK"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM-GF"
+  },
+  "MSLBH": {
+   "successors": [
+    "I_MATERIALSTOCK"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM-GF"
+  },
+  "MSPR": {
+   "successors": [
+    "I_MATERIALSTOCK"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM-GF"
+  },
+  "PACKKP": {
+   "successors": [
+    "I_PACKINGINSTRUCTIONHEADER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-HU-MD"
+  },
+  "PACKPO": {
+   "successors": [
+    "I_PACKINGINSTRUCTIONCOMPONENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-HU-MD"
+  },
+  "PKHD": {
+   "successors": [
+    "I_KANBANCONTROLCYCLE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-KAB"
+  },
+  "PLFH": {
+   "successors": [
+    "I_MFGBOOOPPRODNRSCETOOLCHGST"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-BD-RTG"
+  },
+  "PLKO": {
+   "successors": [
+    "I_BILLOFOPERATIONSGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-BD-RTG"
+  },
+  "PLPO": {
+   "successors": [
+    "I_MFGBILLOFOPERATIONSOPERATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-BD-RTG"
+  },
+  "PRCD_ELEMENTS": {
+   "successors": [
+    "I_SLSPRCGCONDITIONRECORD"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-PR"
+  },
+  "QALS": {
+   "successors": [
+    "I_INSPECTIONLOT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-IM"
+  },
+  "QPCT": {
+   "successors": [
+    "I_CHARCATTRIBUTECODETEXT",
+    "I_DEFECTCODETEXT",
+    "I_USAGEDECISIONCODETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "QM-PT-BD-CAT"
+  },
+  "QPMK": {
+   "successors": [
+    "I_INSPSPECIFICATIONVERSION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "QM-PT-BD"
+  },
+  "RBCO": {
+   "successors": [
+    "I_SUPLRINVOICEITEMGLACCTAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IV-LIV"
+  },
+  "RBKP": {
+   "successors": [
+    "I_SUPPLIERINVOICEAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IV-LIV"
+  },
+  "RBSELBEST": {
+   "successors": [
+    "I_SUPLRINVCSELDPURGDOCAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IV-LIV"
+  },
+  "RESB": {
+   "successors": [
+    "I_RESERVATIONDOCUMENTITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "RKWA": {
+   "successors": [
+    "I_SUPCSGNMTPPLINEWTHDRWLAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IV-LIV"
+  },
+  "RSEG": {
+   "successors": [
+    "I_SUPLRINVCITEMPURORDREFAPI01"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IV-LIV"
+  },
+  "SETHEADER": {
+   "successors": [
+    "I_COSTCENTERHIERARCHY",
+    "I_COSTCTRACTIVITYTYPEHIERARCHY",
+    "I_FUNCTIONALAREAHIERARCHY",
+    "I_PROFITCENTERHIERARCHY",
+    "I_STSTCLKEYFIGUREHIERARCHY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "SETHEADERT": {
+   "successors": [
+    "I_COSTCENTERHIERARCHY",
+    "I_COSTCTRACTIVITYTYPEHIERARCHY",
+    "I_FUNCTIONALAREAHIERARCHY",
+    "I_PROFITCENTERHIERARCHY",
+    "I_STSTCLKEYFIGUREHIERARCHY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "SETLEAF": {
+   "successors": [
+    "I_COSTCENTERHIERARCHYNODE",
+    "I_COSTCTRACTIVITYTYPEHIERNODE",
+    "I_FUNCTIONALAREAHIERNODE",
+    "I_PROFITCENTERHIERARCHYNODE",
+    "I_STSTCLKEYFIGUREHIERNODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "SETNODE": {
+   "successors": [
+    "I_COSTCENTERHIERARCHYNODE",
+    "I_COSTCTRACTIVITYTYPEHIERNODE",
+    "I_FUNCTIONALAREAHIERNODE",
+    "I_PROFITCENTERHIERARCHYNODE",
+    "I_STSTCLKEYFIGUREHIERNODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "FI-SL-SL-MD-SE"
+  },
+  "SKA1": {
+   "successors": [
+    "I_GLACCOUNTINCHARTOFACCOUNTS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "SKAT": {
+   "successors": [
+    "I_GLACCOUNTTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "SKB1": {
+   "successors": [
+    "I_GLACCOUNTINCOMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-GL-GL-N"
+  },
+  "T001": {
+   "successors": [
+    "I_COMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "T002": {
+   "successors": [
+    "I_LANGUAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-DOC-TTL"
+  },
+  "T002T": {
+   "successors": [
+    "I_LANGUAGETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-DOC-TTL"
+  },
+  "T003": {
+   "successors": [
+    "I_ACCOUNTINGDOCUMENTTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "T004": {
+   "successors": [
+    "I_CHARTOFACCOUNTS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "T005": {
+   "successors": [
+    "I_COUNTRY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ADR"
+  },
+  "T005T": {
+   "successors": [
+    "I_COUNTRYTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ADR"
+  },
+  "T006": {
+   "successors": [
+    "I_UNITOFMEASURE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "T006A": {
+   "successors": [
+    "I_UNITOFMEASURETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "T006B": {
+   "successors": [
+    "I_UNITOFMEASURECOMMERCIALNAME"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "T006C": {
+   "successors": [
+    "I_UNITOFMEASURETECHNICALNAME"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "T006D": {
+   "successors": [
+    "I_UNITOFMEASUREDIMENSION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "T006I": {
+   "successors": [
+    "I_UNITOFMEASUREISOCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "T006J": {
+   "successors": [
+    "I_UNITOFMEASUREISOCODETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "T006T": {
+   "successors": [
+    "I_UNITOFMEASUREDIMENSIONTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-ASF-UOM"
+  },
+  "T008": {
+   "successors": [
+    "I_PAYMENTBLOCKINGREASON"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "T008T": {
+   "successors": [
+    "I_PAYMENTBLOCKINGREASON"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "T011": {
+   "successors": [
+    "I_FINANCIALSTATEMENTHIER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-GL-GL-N"
+  },
+  "T011T": {
+   "successors": [
+    "I_FINANCIALSTATEMENTHIERT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-GL-GL-N"
+  },
+  "T014": {
+   "successors": [
+    "I_CREDITCONTROLAREA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AR-AR"
+  },
+  "T014T": {
+   "successors": [
+    "I_CREDITCONTROLAREATEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AR-AR"
+  },
+  "T024": {
+   "successors": [
+    "I_PURCHASINGGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T024D": {
+   "successors": [
+    "I_MRPCONTROLLER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-MRP-BD"
+  },
+  "T024E": {
+   "successors": [
+    "I_PURCHASINGORGANIZATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T027A": {
+   "successors": [
+    "I_SHIPPINGINSTRUCTION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T027B": {
+   "successors": [
+    "I_SHIPPINGINSTRUCTIONTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T040S": {
+   "successors": [
+    "I_DUNNINGBLOCKINGREASONCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AR-AR-C"
+  },
+  "T048": {
+   "successors": [
+    "I_CORRESPONDENCETYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "T074T": {
+   "successors": [
+    "I_SPECIALGLCODETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "T074U": {
+   "successors": [
+    "I_SPECIALGLCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "T077X": {
+   "successors": [
+    "I_CUSTOMERACCOUNTGROUPTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "T151": {
+   "successors": [
+    "I_CUSTOMERGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "T151T": {
+   "successors": [
+    "I_CUSTOMERGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "T156": {
+   "successors": [
+    "I_GOODSMOVEMENTTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-IM"
+  },
+  "T161": {
+   "successors": [
+    "I_PURCHASINGDOCUMENTTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T161T": {
+   "successors": [
+    "I_PURCHASINGDOCUMENTTYPETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T163D": {
+   "successors": [
+    "I_SUPLRCONFCATINTERNALASSGMT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T163I": {
+   "successors": [
+    "I_ACCTASSIGNMENTCATEGORYTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T163K": {
+   "successors": [
+    "I_ACCOUNTASSIGNMENTCATEGORY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T166C": {
+   "successors": [
+    "I_PURGDOCOUTPUTRELEVANTCHANGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T166K": {
+   "successors": [
+    "I_PURGOBJTEXTOBJECTOUTPRLVNCE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T166P": {
+   "successors": [
+    "I_PURGOBJITEMTXTOBJOUTPRLVNCE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T166T": {
+   "successors": [
+    "I_PURGDOCOUTPUTCHANGETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "MM-PUR"
+  },
+  "T171T": {
+   "successors": [
+    "I_SALESDISTRICT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "T178": {
+   "successors": [
+    "I_MATERIALPRICINGGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "T188": {
+   "successors": [
+    "I_CUSTOMERPRICEGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "T189": {
+   "successors": [
+    "I_PRICELISTTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "T459A": {
+   "successors": [
+    "I_PLNDINDEPRQMTTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "PP-MP-DEM"
+  },
+  "T683": {
+   "successors": [
+    "I_SLSPRICINGPROCEDURE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-PR"
+  },
+  "T683S": {
+   "successors": [
+    "I_SLSPRICINGPROCEDUREITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-PR"
+  },
+  "T683T": {
+   "successors": [
+    "I_SLSPRICINGPROCEDUREITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-PR"
+  },
+  "T685": {
+   "successors": [
+    "I_CONDITIONTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-CM"
+  },
+  "T685A": {
+   "successors": [
+    "I_PRICINGCONDITIONTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-CM"
+  },
+  "T685T": {
+   "successors": [
+    "I_CONDITIONTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-CM"
+  },
+  "TADIR": {
+   "successors": [
+    "I_CUSTABAPOBJDIRECTORYENTRY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-CTS-ORG"
+  },
+  "TBSL": {
+   "successors": [
+    "I_POSTINGKEY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AP-AP-B"
+  },
+  "TCURC": {
+   "successors": [
+    "I_CURRENCY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BSF-CUR"
+  },
+  "TCURF": {
+   "successors": [
+    "I_EXCHANGERATEFACTORSRAWDATA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BSF-CUR"
+  },
+  "TCURN": {
+   "successors": [
+    "I_EXCHRATEQTANTYPERAWDATA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BSF-CUR"
+  },
+  "TCURR": {
+   "successors": [
+    "I_EXCHANGERATERAWDATA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BSF-CUR"
+  },
+  "TCURT": {
+   "successors": [
+    "I_CURRENCYTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BSF-CUR"
+  },
+  "TCURV": {
+   "successors": [
+    "I_EXCHANGERATETYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BSF-CUR"
+  },
+  "TCURX": {
+   "successors": [
+    "I_CURRENCY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-BSF-CUR"
+  },
+  "TDEVC": {
+   "successors": [
+    "I_CUSTABAPPACKAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-CTS-ORG"
+  },
+  "TINC": {
+   "successors": [
+    "I_INCOTERMSCLASSIFICATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL-GF"
+  },
+  "TINCT": {
+   "successors": [
+    "I_INCOTERMSCLASSIFICATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL-GF"
+  },
+  "TKA01": {
+   "successors": [
+    "I_CONTROLLINGAREA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "TKA02": {
+   "successors": [
+    "I_COMPANYCODE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "CO-OM"
+  },
+  "TPAR": {
+   "successors": [
+    "I_INCOTERMSCLASSIFICATION",
+    "I_PARTNERFUNCTION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "SD-MD-MM"
+  },
+  "TPART": {
+   "successors": [
+    "I_PARTNERFUNCTIONTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-PD"
+  },
+  "TPRIO": {
+   "successors": [
+    "I_DELIVERYPRIORITY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LE-SHP-GF"
+  },
+  "TSKD": {
+   "successors": [
+    "I_CUSTOMERTAXCLASSIFICATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-TX"
+  },
+  "TSKDT": {
+   "successors": [
+    "I_CUSTOMERTAXCLASSIFICATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-TX"
+  },
+  "TSPA": {
+   "successors": [
+    "I_DIVISION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-ORG"
+  },
+  "TSPAT": {
+   "successors": [
+    "I_DIVISION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-ORG"
+  },
+  "TSTL": {
+   "successors": [
+    "I_PRODUCTSALESTAX"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-TX"
+  },
+  "TTYPT": {
+   "successors": [
+    "I_REFERENCEDOCUMENTTYPETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI"
+  },
+  "TVAG": {
+   "successors": [
+    "I_SALESDOCUMENTRJCNREASON"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "TVAGT": {
+   "successors": [
+    "I_SALESDOCUMENTRJCNREASON"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "TVAK": {
+   "successors": [
+    "I_SALESDOCUMENTTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "TVAKT": {
+   "successors": [
+    "I_SALESDOCUMENTTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "TVAP": {
+   "successors": [
+    "I_SALESDOCUMENTITEMCATEGORY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "TVAPT": {
+   "successors": [
+    "I_SALESDOCUMENTITEMCATEGORY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "TVAU": {
+   "successors": [
+    "I_SDDOCUMENTREASON"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "TVAUT": {
+   "successors": [
+    "I_SDDOCUMENTREASONTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS-GF"
+  },
+  "TVBUR": {
+   "successors": [
+    "I_SALESOFFICE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "TVBVK": {
+   "successors": [
+    "I_SALESOFFICESALESGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-ORG"
+  },
+  "TVCIN": {
+   "successors": [
+    "I_SDDOCUMENTPAYMENTCARDTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL-GF"
+  },
+  "TVCINT": {
+   "successors": [
+    "I_SDDOCUMENTPAYMENTCARDTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL-GF"
+  },
+  "TVEPT": {
+   "successors": [
+    "I_SCHEDULELINECATEGORY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVFK": {
+   "successors": [
+    "I_BILLINGDOCUMENTTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL-GF"
+  },
+  "TVFKT": {
+   "successors": [
+    "I_BILLINGDOCUMENTTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL-GF"
+  },
+  "TVFS": {
+   "successors": [
+    "I_BILLINGBLOCKREASON"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL"
+  },
+  "TVFST": {
+   "successors": [
+    "I_BILLINGBLOCKREASON"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL"
+  },
+  "TVGRT": {
+   "successors": [
+    "I_SALESGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-ORG"
+  },
+  "TVKBT": {
+   "successors": [
+    "I_SALESOFFICE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-ORG"
+  },
+  "TVKBZ": {
+   "successors": [
+    "I_SALESAREASALESOFFICE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-ORG"
+  },
+  "TVKGG": {
+   "successors": [
+    "I_CUSTOMERCONDITIONGROUPVH"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "TVKGGT": {
+   "successors": [
+    "I_CUSTCNDNGROUPVALUEHELPTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "TVKGR": {
+   "successors": [
+    "I_SALESGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVKO": {
+   "successors": [
+    "I_SALESORGANIZATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-ORG"
+  },
+  "TVKOT": {
+   "successors": [
+    "I_SALESORGANIZATION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVKOV": {
+   "successors": [
+    "I_SLSORGANIZATIONDISTRCHNL"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVKT": {
+   "successors": [
+    "I_CUSTOMERACCOUNTASSGMTGROUP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF-ACT"
+  },
+  "TVKWZ": {
+   "successors": [
+    "I_CUSTSALESAREATAX"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF"
+  },
+  "TVLK": {
+   "successors": [
+    "I_DELIVERYDOCUMENTTYPE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LE-SHP-GF"
+  },
+  "TVLKT": {
+   "successors": [
+    "I_DELIVERYDOCUMENTTYPETEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LE-SHP-GF"
+  },
+  "TVLS": {
+   "successors": [
+    "I_DELIVERYBLOCKREASON"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LE-SHP-GF"
+  },
+  "TVLST": {
+   "successors": [
+    "I_DELIVERYBLOCKREASONTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LE-SHP-GF"
+  },
+  "TVM1": {
+   "successors": [
+    "I_ADDITIONALMATERIALGROUP1"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVM1T": {
+   "successors": [
+    "I_ADDITIONALMATERIALGROUP1"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVM2": {
+   "successors": [
+    "I_ADDITIONALMATERIALGROUP2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVM2T": {
+   "successors": [
+    "I_ADDITIONALMATERIALGROUP2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVM3": {
+   "successors": [
+    "I_ADDITIONALMATERIALGROUP3"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVM3T": {
+   "successors": [
+    "I_ADDITIONALMATERIALGROUP3"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVM4": {
+   "successors": [
+    "I_ADDITIONALMATERIALGROUP4"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVM4T": {
+   "successors": [
+    "I_ADDITIONALMATERIALGROUP4"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVM5": {
+   "successors": [
+    "I_ADDITIONALMATERIALGROUP5"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVM5T": {
+   "successors": [
+    "I_ADDITIONALMATERIALGROUP5"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVPT": {
+   "successors": [
+    "I_SALESDOCUMENTITEMCATEGORY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FI-AR-AR"
+  },
+  "TVSB": {
+   "successors": [
+    "I_SHIPPINGCONDITION"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "TVSBT": {
+   "successors": [
+    "I_SHIPPINGCONDITIONTEXT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LO-MD-BP-CM"
+  },
+  "TVST": {
+   "successors": [
+    "I_SHIPPINGPOINT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LE-SHP-GF"
+  },
+  "TVSTT": {
+   "successors": [
+    "I_SHIPPINGPOINT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LE-SHP-GF"
+  },
+  "TVTA": {
+   "successors": [
+    "I_SALESAREA"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVTW": {
+   "successors": [
+    "I_DISTRIBUTIONCHANNEL"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-ORG"
+  },
+  "TVTWT": {
+   "successors": [
+    "I_DISTRIBUTIONCHANNEL"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-ORG"
+  },
+  "TVV1": {
+   "successors": [
+    "I_ADDITIONALCUSTOMERGROUP1"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF"
+  },
+  "TVV1T": {
+   "successors": [
+    "I_ADDITIONALCUSTOMERGROUP1"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF"
+  },
+  "TVV2": {
+   "successors": [
+    "I_ADDITIONALCUSTOMERGROUP2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF"
+  },
+  "TVV2T": {
+   "successors": [
+    "I_ADDITIONALCUSTOMERGROUP2"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BF"
+  },
+  "TVV3": {
+   "successors": [
+    "I_ADDITIONALCUSTOMERGROUP3"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVV3T": {
+   "successors": [
+    "I_ADDITIONALCUSTOMERGROUP3"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVV4": {
+   "successors": [
+    "I_ADDITIONALCUSTOMERGROUP4"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVV4T": {
+   "successors": [
+    "I_ADDITIONALCUSTOMERGROUP4"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVV5": {
+   "successors": [
+    "I_ADDITIONALCUSTOMERGROUP5"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVV5T": {
+   "successors": [
+    "I_ADDITIONALCUSTOMERGROUP5"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "TVZBT": {
+   "successors": [
+    "I_CUSTOMERPAYMENTTERMS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-MD-MM"
+  },
+  "UKMBP_CMS_SGM": {
+   "successors": [
+    "I_CREDITMANAGEMENTACCOUNT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FIN-FSCM-CR-CR"
+  },
+  "UKMCRED_SGM0T": {
+   "successors": [
+    "I_CREDITMANAGEMENTSEGMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "FIN-FSCM-CR-CR"
+  },
+  "VBAK": {
+   "successors": [
+    "I_SALESDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "VBAP": {
+   "successors": [
+    "I_SALESDOCUMENTITEM"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "VBEP": {
+   "successors": [
+    "I_SALESDOCUMENTSCHEDULELINE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "VBFA": {
+   "successors": [
+    "I_SDDOCUMENTMULTILEVELPROCFLOW"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-CRF-DF"
+  },
+  "VBFS": {
+   "successors": [
+    "I_COLLECTIVEPROCESSINGERRORLOG"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "LE-SHP-GF"
+  },
+  "VBKD": {
+   "successors": [
+    "I_SALESDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "VBRK": {
+   "successors": [
+    "I_BILLINGDOCUMENTBASIC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL"
+  },
+  "VBRP": {
+   "successors": [
+    "I_BILLINGDOCUMENTITEMBASIC"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-BIL"
+  },
+  "VEDA": {
+   "successors": [
+    "I_SALESDOCUMENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "SD-SLS"
+  },
+  "VEKP": {
+   "successors": [
+    "I_HANDLINGUNITHEADER",
+    "I_HANDLINGUNITTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-HU-BF"
+  },
+  "VEPO": {
+   "successors": [
+    "I_HANDLINGUNITITEM",
+    "I_HANDLINGUNITITEMTP"
+   ],
+   "state": "notToBeReleased",
+   "classification": "multipleObjects",
+   "app": "LO-HU-BF"
+  }
+ },
+ "interfaces": {
+  "IF_A4C_RAP_QUERY_PROVIDER": {
+   "successors": [
+    "IF_RAP_QUERY_PROVIDER"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-ESI-ESF-BSA"
+  },
+  "IF_A4C_RAP_QUERY_REQUEST": {
+   "successors": [
+    "IF_RAP_QUERY_REQUEST"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-ESI-ESF-BSA"
+  },
+  "IF_A4C_RAP_QUERY_RESPONSE": {
+   "successors": [
+    "IF_RAP_QUERY_RESPONSE"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-ESI-ESF-BSA"
+  },
+  "IF_APJ_JT_CHECK": {
+   "successors": [
+    "IF_APJ_JT_CHECK_20"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-SRV-APS-APJ"
+  },
+  "IF_AUNIT_CONSTANTS": {
+   "successors": [
+    "IF_ABAP_UNIT_CONSTANT"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "BC-DWB-TOO-UT"
+  },
+  "IF_BAL_LOGGER": {
+   "successors": [
+    "IF_BALI_LOG",
+    "IF_BALI_LOG_DB"
+   ],
+   "state": "deprecated",
+   "classification": "multipleObjects",
+   "app": "BC-SRV-BAL"
+  },
+  "IF_LCM_LT_WF_CUSTOM_STEP": {
+   "successors": [
+    "IF_LCM_LT_WF_CUSTOM_STEP_2"
+   ],
+   "state": "deprecated",
+   "classification": "oneObject",
+   "app": "CM-LT"
+  },
+  "IF_DOCUMENT_BCS": {
+   "successors": [
+    "CL_BCS_MAIL_BODYPART"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "IF_HTTP_CLIENT": {
+   "successors": [
+    "IF_WEB_HTTP_CLIENT"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-MID-ICF"
+  },
+  "IF_HTTP_HEADER_FIELDS": {
+   "successors": [
+    "IF_WEB_HTTP_HEADER"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-MID-ICF"
+  },
+  "IF_HTTP_REQUEST": {
+   "successors": [
+    "IF_WEB_HTTP_REQUEST"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-MID-ICF"
+  },
+  "IF_HTTP_RESPONSE": {
+   "successors": [
+    "IF_WEB_HTTP_RESPONSE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-MID-ICF"
+  },
+  "IF_HTTP_SERVER": {
+   "successors": [
+    "CL_WEB_HTTP_SERVER_UTILITY"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-MID-ICF"
+  },
+  "IF_HTTP_STATUS": {
+   "successors": [
+    "IF_WEB_HTTP_STATUS"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-MID-ICF"
+  },
+  "IF_RECIPIENT_BCS": {
+   "successors": [
+    "CL_BCS_MAIL_MESSAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  },
+  "IF_SENDER_BCS": {
+   "successors": [
+    "CL_BCS_MAIL_MESSAGE"
+   ],
+   "state": "notToBeReleased",
+   "classification": "oneObject",
+   "app": "BC-SRV-COM"
+  }
+ }
+}

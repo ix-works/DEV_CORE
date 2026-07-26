@@ -60,6 +60,10 @@ def main():
         }
         n += 1
 
+    # Klasör YOKSA yarat: taze klon/yeni core kökünde `governance/reference/` bulunmaz →
+    # eskiden burada FileNotFoundError ile ölüyordu, harita hiç üretilmiyordu ve
+    # check_released_objects.py boş harita ile SESSİZCE PASS veriyordu (fail-open).
+    OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     counts = {s: len(out.get(s, {})) for s in set(TYPE_SECTION.values())}
     print(f"yazildi: {OUT}  | {n} obje | {counts}")
