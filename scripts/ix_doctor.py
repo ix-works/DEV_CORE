@@ -15,8 +15,8 @@ Katmanlar (GECIS-EXEC-CHECKLIST BLOK F / F2.1–F2.7):
   3. GITHUB-ENFORCE: ruleset ACTIVE · CI yeşil · repo tree'de core-sızıntısı yok
                      (gh CLI yoksa katman SKIP+WARN)
   4. CLAUDE        : settings/shim template-drift (D7) · SHIM_SURUM · behavior-
-                     manifest ↔ ağaç (F2) · hook smoke (örnek-stdin) ·
-                     freeze-guard CANLI test (stdin-simülasyon, gerçek yazma YOK)
+                     manifest ↔ ağaç (F2) · hook smoke (örnek-stdin)
+                     (freeze-guard canlı testi 2026-07-10'da R10 ile birlikte KALDIRILDI — bkz. 4e)
   5. MCP/SAP       : .conn_adt var+placeholder'sız · MCP server dosyaları
                      junction'dan erişilebilir · (--live-sap ile) canlı probe
   6. VALIDATORS+PERF: run_all_validators TAM PASS + süre · session_start <1.5sn
@@ -600,7 +600,7 @@ KATMANLAR: list[tuple[int, str]] = [
     (1, "FS + BAĞIMLILIK (junction/policy/plugin/CLI)"),
     (2, "GIT (remote/main/stable/hooksPath/baseline/tree)"),
     (3, "GITHUB ENFORCE (ruleset/CI/sızıntı)"),
-    (4, "CLAUDE KATMANI (drift/manifest/hook-smoke/freeze-guard)"),
+    (4, "CLAUDE KATMANI (drift/manifest/hook-smoke)"),
     (5, "MCP / SAP (.conn_adt/junction-erişim/canlı-probe)"),
     (6, "VALIDATORS + PERF (run_all + session_start süresi)"),
     (7, "İŞ-AKIŞI SMOKE (memory/deploy-zinciri/.rules.md)"),

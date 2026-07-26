@@ -114,9 +114,14 @@ Her yeni oturumun **ilk yanıtı** [`CLAUDE.core.md`](CLAUDE.core.md) **§3**'te
 - ✅ Push öncesi **her zaman** kullanıcı onayı al ("git'e gönder" demediyse pushlama);
   PR-merge de aynı onaya tabidir
 - ✅ Commit mesajı Türkçe yazılabilir. Net, "ne" değil "neden" odaklı.
-- ⛔ **FREEZE (T3/K8):** `project.yaml frozen_readonly_paths` altındaki köklere
-  (dondurulmuş eski-dünya yedekleri) YAZMA YASAK — `pre_tool_guard` R10 bloklar;
-  okuma serbest. Git dahil: bu köklerdeki repolara commit/push/checkout YAPILMAZ.
+- ⛔ **FREEZE (T3/K8):** Dondurulmuş/arşiv köklere (eski-dünya yedekleri; hangi kökler
+  olduğu PROJE `CLAUDE.md`'sinde yazar) YAZMA YASAK; okuma serbest. Git dahil: bu
+  köklerdeki repolara commit/push/checkout YAPILMAZ.
+  ⚠ **Bu bir DİSİPLİN kuralıdır — runtime guard YOK.** Eski `pre_tool_guard` R10
+  freeze-guard'ı ve `project.yaml frozen_readonly_paths` anahtarı **2026-07-10'da
+  KALDIRILDI** (fiil-kara-listesi 6 yoldan sızıyordu; koruma OS izniyle yapılır).
+  Kanıt: sentetik payload ile negatif test → dondurulmuş köke `Write`/`Bash` **exit 0**.
+  Yani seni hiçbir şey durdurmaz: kural sende. Gerçek koruma isteniyorsa OS/klasör izni.
 
 ADR referansı: [`governance/decisions/0001-tek-branch-main.md`](governance/decisions/0001-tek-branch-main.md) · [`governance/decisions/0020-canli-cekirdek-junction-mimarisi.md`](governance/decisions/0020-canli-cekirdek-junction-mimarisi.md)
 

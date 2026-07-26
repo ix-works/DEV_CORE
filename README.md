@@ -88,7 +88,8 @@ Kurulum doğrulama: `python scripts/ix_doctor.py` (7-katman sağlık taraması).
   junction'la kullanırlar. Bir projenin nasıl kurulduğu için yukarıdaki
   `template_project`'e bak.
 - Eski dünya repoları — **dondurulmuş tarihsel yedek** (2026-07-08 öncesi; salt-okunur,
-  push almaz). Yolları makine-lokaldir (`project.yaml` → `frozen_readonly_paths`).
+  push almaz). Yolları makine-lokaldir ve **disiplin kuralıdır** — runtime guard yok
+  (freeze-guard R10 + `frozen_readonly_paths` anahtarı 2026-07-10'da kaldırıldı).
 
 ### Çekirdek ↔ proje: sorumluluk sınırı
 

@@ -42,7 +42,13 @@ LIVE = os.environ.get("IX_GUARD_TEST_LIVE") == "1"
 
 
 def _fixture_proje() -> tuple:
-    """FREEZE testleri için KENDİ proje fixture'ını kurar → (proje_dizini, donmus_kok).
+    """(TARİHSEL) FREEZE testleri için KENDİ proje fixture'ını kurardı → (proje_dizini, donmus_kok).
+
+    ⚠ 2026-07-10: FREEZE R10 guard'dan KALDIRILDI ve vakaları `build_cases()`'ten çıkarıldı
+    (bkz. oradaki not). Bu fixture artık **yalnız nötr bir yol kaynağı** olarak yaşıyor
+    (NotebookEdit payload'ında `FROZEN` yolu kullanılıyor) — bir korumayı test ETMİYOR.
+    Aşağıdaki tarihsel gerekçe, "koşmayan test gate değildir" dersinin kaydı olarak durur.
+
 
     Eskiden gerçek `project.yaml`'a bağlıydı; CI'da `CLAUDE_PROJECT_DIR` yok diye FREEZE'in
     5 senaryosunun TAMAMI sessizce SKIP oluyordu — üstelik ekrana "GUARD YUZEYI TUTUYOR"

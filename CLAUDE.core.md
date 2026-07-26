@@ -242,10 +242,18 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 | Paket kuralları | `scripts/validators/check_package_*.py` | run_all_validators (`source_root`'tan okur) |
 | **Core-sızıntı kilidi** | `scripts/validators/check_core_not_committed.py` | run_all_validators + pre_tool_guard commit-kapsamı |
 | **Davranış-manifest (F2)** | session_start manifest-diff + **ConfigChange hook** | oturum-başı + seans-içi |
-| **Freeze/salt-okunur kökler** | `pre_tool_guard` — project.yaml `frozen_readonly_paths` hedefli yazma RED | her Edit/Write/Bash |
-| **Özyinelemeli-silme bloğu** | `pre_tool_guard` — core/junction path'ine rm -rf/clean/Remove-Item RED | her Bash |
 | PULL-BEFORE-EDIT | `scripts/hooks/pull_before_edit.py` | SAP source düzenleme öncesi (ADR 0016) |
 | Reviewer pre-flight | `scripts/validators/run_review.py` | SAP yazma öncesi (ADR 0006): PASS→yaz · WARNING→yaz+raporla · BLOCKER→yazma |
+
+> ⚠ **Bu tabloda OLMAYANLAR — 2026-07-10'da KALDIRILAN runtime kuralları** (gerekçeler
+> `scripts/hooks/pre_tool_guard.py` başlığında): **freeze/salt-okunur kök yazma bloğu (R10)** ·
+> **özyinelemeli-silme bloğu (R9)** · sızıntı-commit · applies_to. Silinme sebebi ortak:
+> sonuç **geri alınabilir VEYA sessiz değil** (merdiven ilkesi, ADR 0019) ve fiil-kara-listesi
+> hedefi sormadığı için hem sızdırıyor hem zararsız komutu blokluyordu. **Yasağın kendisi
+> DURUYOR** (dondurulmuş köke yazma yok, junction'ı silme yok) — ama *disiplin + OS izni* ile,
+> **runtime guard ile DEĞİL.** Kaldırılmış bir kuralı "aktif gate" diye yazmak = sahte koruma;
+> gate listesine kural eklemeden önce guard'ı sentetik payload'la NEGATİF TEST et
+> (`echo '{"tool_name":...}' | python core/scripts/hooks/pre_tool_guard.py` → 2=blok, 0=serbest).
 
 Tek komut: `python core/scripts/validators/run_all_validators.py` (core + proje `validators-local/` birlikte; profil-modlu).
 ⚠ **Always-allow YASAĞI (D32):** SAP-yazma ve davranış-yüzeyi araçlarına "Always allow" izni VERİLMEZ — izin katmanı hook-safeguard'ları soyar.

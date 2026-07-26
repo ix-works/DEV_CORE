@@ -33,5 +33,6 @@
 
 ## PROJE-ÖZEL KURALLAR / AKTİF İŞ KÜLTÜRÜ
 
-<!-- Proje-özel gate'ler, dondurulmuş-kök notları (frozen_readonly_paths), aktif sprint
-     kültürü, müşteri-özel kısıtlar BURAYA. Örnek satırlar silinip doldurulur. -->
+<!-- Proje-özel gate'ler, dondurulmuş-kök notları (DİSİPLİN kuralı — runtime guard YOK;
+     `frozen_readonly_paths` ölü anahtardır, yazma), aktif sprint kültürü, müşteri-özel
+     kısıtlar BURAYA. Örnek satırlar silinip doldurulur. -->
