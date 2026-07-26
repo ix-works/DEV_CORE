@@ -107,6 +107,10 @@ Kolonlar göster/gizle + Excel export. Klasik ALV'de bunlar `CL_GUI_ALV_GRID` +
 
 - Magic sayı/string YASAK → `CONSTANTS` veya text element. `c_*` (constant), `gv_/lv_` (global/local var),
   `gt_/lt_` (tablo), `gs_/ls_` (struct), `go_/lo_` (obje ref). Naming: standards/01.
+- **Seçim-ekranı adları ≤ 8 KARAKTER (SAP sınırı) → `SELECT-OPTIONS s_<ad>` · `PARAMETERS p_<ad>`.**
+  9+ karakterli ad aktivasyonda reddedilir; `so_`/`pa_` önekleri 8'i kolayca aşar (`so_docnum` = 9 karakter).
+  Statik kontroller (abaplint / run_review / bug-gate) GEÇER — yalnız canlı aktivasyon yakalar
+  (kanıt: klasik JOB programı build 2026-07-14; `so_*` → `s_*` rename gerekti). Checklist: `BE-58`.
 
 ## 7. ADR 0005 klasik yüzeyi
 
