@@ -83,6 +83,12 @@ Mevcut projelerin bu mimariye geçişi **yerinde dönüşüm olarak YAPILMAZ**. 
   SALT-OKUNUR YEDEK** olur: okuma serbest (legacy referanslar), yazma `pre_tool_guard`
   **freeze-guard**'ıyla BLOK'lu (`project.yaml frozen_readonly_paths`; risk R10 —
   kas-hafızasıyla eski klasöre yazma).
+  > **GÜNCELLEME 2026-07-10 (bu maddenin enforcement'ı DÜŞTÜ):** freeze-guard R10 ve
+  > `frozen_readonly_paths` anahtarı gate revizyonunda **kaldırıldı** (fiil-kara-listesi
+  > 6 yoldan sızıyordu + donmuş kök git-remote'ta yedekli = yazma geri-alınabilir →
+  > merdiven kriteri karşılanmıyor; gerekçe `scripts/hooks/pre_tool_guard.py` başlığında).
+  > **Karar geçerli, koruma katmanı değişti:** dondurulmuş köke yazmama artık *disiplin +
+  > OS/ACL izni* ile sağlanır, runtime guard ile değil. (Negatif testle doğrulandı 2026-07-26.)
 
 **Gerekçe:** (a) **Rollback radikal basitleşir** — en kötü senaryoda eski klasörden
 çalışmaya devam edilir, git-revert akrobasisi gerekmez; yeni kök istenirse komple

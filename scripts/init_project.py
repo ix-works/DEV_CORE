@@ -144,7 +144,9 @@ release: "__DOLDUR__"          # ecc+s4_private zorunlu (örn. "2025"); public/b
 master_language: __DOLDUR__    # örn. TR / EN (ADR 0005-D bu dille uygulanır)
 
 # Davranış/guard config'leri:
-frozen_readonly_paths: []      # pre_tool_guard bu köklere YAZMAYI bloklar (örn. eski-dünya arşivi)
+# NOT: `frozen_readonly_paths` ARTIK YOK — freeze-guard R10 2026-07-10'da kaldırıldı
+#      (hiçbir guard okumuyor). Dondurulmuş arşiv kökü varsa PROJE CLAUDE.md'sinde
+#      DİSİPLİN kuralı olarak yaz; gerçek koruma isteniyorsa OS/ACL izni ver.
 # sql_view_prefix: Z<MOD><NNN>_V_   # populate_cds_views namespace-gate'i (B-5)
 # package_prefixes: []         # paket-sınır validator'ları
 """

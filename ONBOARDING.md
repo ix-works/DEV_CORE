@@ -65,9 +65,14 @@ Alan şablonu: [`claude/conn_adt.template`](claude/conn_adt.template) (tek siste
 
 - **Çalışma kökü = `C:\IX`** — DEV_CORE + tüm proje clone'ları bu kökün altındadır.
 - **Eski dünya = `<FROZEN_ROOT>` = dondurulmuş SALT-OKUNUR arşiv.** Okuma serbest;
-  yazma/commit/push/checkout YASAK — `project.yaml frozen_readonly_paths` üzerinden
-  **pre_tool_guard R10 (freeze-guard)** her Edit/Write/Bash yazma teşebbüsünü RED eder.
-  Eski GitHub org'undaki yedek repolar da aynı statüdedir (push almaz).
+  yazma/commit/push/checkout YASAK. Eski GitHub org'undaki yedek repolar da aynı
+  statüdedir (push almaz).
+  ⚠ **Bu kuralı hiçbir runtime guard ZORLAMIYOR.** `pre_tool_guard` R10 freeze-guard'ı
+  ve `project.yaml frozen_readonly_paths` anahtarı **2026-07-10'da KALDIRILDI** (fiil-kara
+  listesi 6 yoldan sızıyordu — dd · install · git clean · git checkout · heredoc-redirect ·
+  PS değişkeni; koruma OS izniyle yapılır, komut-metni regex'iyle değil). Negatif testle
+  doğrulandı: dondurulmuş köke `Write`/`Bash` → **exit 0 (serbest)**. Kural = disiplin;
+  gerçek koruma istiyorsan klasöre **Windows salt-okunur/ACL** izni ver.
 
 ## 4. ⚠️ SİLME MATRİSİ — junction'lar ve tehlikeli komutlar
 
@@ -75,7 +80,7 @@ Junction bir "klasör görünümlü bağlantı"dır; hedefi (DEV_CORE) TEK fizik
 
 | İşlem | Kural |
 |---|---|
-| Junction'a `rm -rf` / `Remove-Item -Recurse -Force` / `git clean` / `rimraf` / `rmdir /S` | **ASLA.** Özyinelemeli silme junction İÇİNE inip **hedefi (canlı çekirdeği) silebilir** — davranış toolchain-sürümüne bağlıdır (güncel git/PS'te link-sınırında durduğu test edildi; eski PS build'leri, `rimraf`, `robocopy /MIR`, eski `shutil.rmtree` TEST EDİLMEDİ). **pre_tool_guard R9** core/junction path'ine dokunan HER özyinelemeli silmeyi bloklar — bu sigortayı kapatmaya çalışma. |
+| Junction'a `rm -rf` / `Remove-Item -Recurse -Force` / `git clean` / `rimraf` / `rmdir /S` | **ASLA.** Özyinelemeli silme junction İÇİNE inip **hedefi (canlı çekirdeği) silebilir** — davranış toolchain-sürümüne bağlıdır (güncel git/PS'te link-sınırında durduğu test edildi; eski PS build'leri, `rimraf`, `robocopy /MIR`, eski `shutil.rmtree` TEST EDİLMEDİ). ⚠ **Seni durduran bir guard YOK:** `pre_tool_guard` R9 özyinelemeli-silme bloğu **2026-07-10'da KALDIRILDI** (bloklanan `rm -rf` yerine aynı dizin `shutil.rmtree` ile silindi → guard aracı değiştirtti, sonucu değil; ayrıca junction silme geri alınabilir: `team_setup.py --repair-junctions`). Negatif test: `rm -rf <proje>/core` ve `Remove-Item -Recurse core` → **exit 0**. Kural sende. |
 | Junction'ı KALDIRMAK gerekiyorsa | Yalnız **`rmdir <yol>`** (cmd, `/S` YOK) — sadece bağlantıyı söker, hedefe dokunmaz. |
 | Junction (yalnız link) silindiyse | Proje çalışmaz hale gelir (loader/hook/skill kaybı) → onarım: `team_setup.py --repair-junctions`. |
 | `<FROZEN_ROOT>` altına yazma | **R10** bloklar (bkz. §3). |
@@ -137,8 +142,8 @@ Tamamlayıcı: `python core/scripts/validators/run_all_validators.py` (proje kö
 - **Git modeli (L1, [`AGENTS.md`](AGENTS.md) §1):** tek uzun-yaşayan branch = `main`;
   `main` doğrudan-push'a KAPALI → her değişiklik **kısa-ömürlü branch + PR + CI** ile girer;
   merge sonrası branch silinir. Merge = lider/kullanıcı onayı; push öncesi HER ZAMAN
-  kullanıcı onayı; `--force`/`--no-verify` yok. **FREEZE:** `frozen_readonly_paths`
-  köklerine git dahil yazma YOK (R10).
+  kullanıcı onayı; `--force`/`--no-verify` yok. **FREEZE:** dondurulmuş arşiv köklerine
+  git dahil yazma YOK — **disiplin kuralı, guard yok** (§3).
 - **Core'a yazma:** herkes PR + CI required-check (lider dahil) — [`MAINTENANCE.md`](MAINTENANCE.md).
   Genericize-on-write: core'a proje/müşteri kimliği GİREMEZ (pre-commit gate + CI tarar).
 - **Core kırıldıysa:** `git -C C:\IX\DEV_CORE checkout stable` → bilinen-iyiye dönüş;
