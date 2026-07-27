@@ -184,6 +184,23 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 **Genel ders:** Bir kontrolü açmak = üç soruyu yanıtlamak: **veri/önkoşul gerçekten var mı** (yoksa fail-loud mu fail-open mu?), **ilk tarama kaç bulgu veriyor ve kaçı gerçek**, **eski stok yeni ihlali gizler mi**. Üçü yanıtlanmadan "gate aktif" demek, gate'i açmak değil, **gate hissi** üretmektir.
 **Status:** ✅ AKTİF ders — kaynak: 11 vakalık gate-arkeolojisi (2026-07-26); ADR 0019 (gate-moratoryumu) + ADR 0006 (reviewer WARNING semantiği) ile birlikte okunur.
 
+### PATTERN #15: `git diff A...B` (üç-nokta) ile "merge edilmemiş iş" yanılsaması
+**Belirti:** Ölü-dal temizliğinde/denetimde bir dal için "N satır merge edilmemiş iş var" alarmı verilir; dal aslında tamamen süperseded ve main **ondan ileridedir**.
+**Kök-neden — iki sözdizimi, iki AYRI soru:**
+- `git diff A...B` (**üç nokta**) = *merge-base(A,B) → B*. "Bu dal **kendi ömrü boyunca** ne yaptı?" Sorunun içinde `A`'nın **bugünkü** hali YOKTUR — A o sırada aynı işi başka yoldan almış olsa bile diff küçülmez.
+- `git diff A..B` (**iki nokta**) = *A → B*. "Şu anda aralarında ne fark var?" Ölü-dal / kayıp-iş kararı **YALNIZ bunu** sorar.
+- `--stat` çıktısı ikisinde de aynı biçimde görünür → yanlış olan diff **yanlış görünmez**, sadece büyük görünür. Sinyal yok.
+**Neden squash-merge'de kaçınılmaz:** squash, dalın commit'lerini main'e **yeni bir SHA** olarak koyar. Dalın kendi commit'leri main'in tarihçesinde HİÇ görünmez → `git branch --merged` dalı "merge olmamış" sayar, `git log main..dal` commit listeler, `A...B` de tüm dal-diff'ini gösterir. **Üç sinyal birden aynı anda yanıltır** ve birbirini "doğruluyor" gibi okunur.
+**Doğru karar zinciri (ölü dal / kayıp iş):**
+1. `git diff main..<dal>` → benzersiz "+" satırı **0** ise dal main'in tam alt kümesidir, tartışma biter.
+2. "+" satırı varsa **yönü oku**: `-` satırları = main'de olup dalda olmayan (dal geride). `+` satırları teker teker bakılır — çoğu zaman **kaldırılmış/süperseded** eski sürümlerdir.
+3. Hakem kanıt **PR durumudur**: `gh pr list --state merged --json headRefName` ile dal adını eşle. Merged PR = dalın diff'i o an main'e girdi; sonrası main'in evrimidir, kayıp değil.
+4. PR'ı olmayan dal → asıl dosyaları main ile **birebir kıyasla** (`git diff main..dal -- <dosya>`); değişmemiş dosya = iş main'de.
+**Genel ders:** Aynı komutun iki noktalama biçimi iki farklı soruya cevap veriyorsa, hangisini sorduğunu **komutu yazmadan önce** söyle. "Fark" tek kelime ama en az iki anlamı var: *bu dal ne üretti* ≠ *bugün ne eksik*. Aynı sınıf: `log A..B` vs `log A...B`, `--merged` (tarihçe-temelli) vs içerik-temelli kapsanma.
+**Prevention:** GATE YOK (moratoryum — sonuç geri alınabilir: silinen dal reflog/uzak ref ile geri gelir, üstelik yanılgı fazla-temkinli yönde çalışır → veri kaybı değil, yanlış alarm üretir). Disiplin: silme kararı **`..` + PR eşleşmesi** ikilisine dayanır; `...` yalnız "bu dal ne yaptı" sorusunda kullanılır.
+**Status:** ⚠️ DİSİPLİN — kaynak: 2026-07-27 ölü-dal temizliği (22 dal, 2 repo).
+**Vakalar:** 2026-07-27 — PR'sız bir çekirdek dalı için `main...dal` "748 satır, 12 dosya merge edilmemiş" dedi; `main..dal` ölçünce dal main'in **5.162 satır gerisindeydi** ve kendine ait 51 satırın tamamı süperseded çıktı (kaldırılmış guard referansları, hardcode yol, terk edilmiş safety-net). Yanlış alarm; dal güvenle silindi.
+
 ## 🔄 SELF-UPDATE PROTOKOLÜ
 
 ### Oturum BAŞLANGICI (her yeni session)
