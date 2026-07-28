@@ -333,6 +333,90 @@ def _gh_pr_public_leak(komut: str, ham: str) -> str:
     return f"public repo '{repo}' — yayinlanan baslik/govdede " + "; ".join(bulgular)
 
 
+# ---------------------------------------------------------------------------
+# COMMIT MESAJI SIZINTI GATE (2026-07-28 — yasanmis bosluk)
+#
+# VAKA: DEV_CORE'a (PUBLIC) atilan bir commit'in MESAJINDA proje obje adi vardi.
+# `core_precommit` commit'in ICERIGINI (dosyalari) tarar — MESAJINI TARAMAZ.
+# `_gh_pr_public_leak` ise yalniz `gh` yayin komutlarina bakar. Arada kalan
+# commit mesaji push'la birlikte PUBLIC repoya gider ve GitHub'da kalicidir.
+# Gercekten yasandi: PR govdesi guard'a takildi, ama AYNI ad zaten commit
+# mesajiyla push edilmisti (amend + force-push ile temizlendi).
+#
+# Neden commit ANINDA: mesaji o an degistirmek bedavadir; push'tan sonra
+# gecmisi yeniden yazmak gerekir (ve baskasi cektiyse artik gec kalinmistir).
+# ---------------------------------------------------------------------------
+_GIT_COMMIT = re.compile(
+    r"(?:^|[\n;|&(])\s*(?:[A-Za-z_]\w*=\S+\s+)*git\s+(?:-C\s+\S+\s+)*commit\b",
+    re.IGNORECASE)
+_GIT_C_PATH = re.compile(r"(?:^|[\n;|&(])\s*git\s+-C\s+(?:'([^']+)'|\"([^\"]+)\"|(\S+))")
+_GIT_M = re.compile(r"(?<![\w-])(?:-m|--message)[= ]+(?:'([^']*)'|\"((?:[^\"\\]|\\.)*)\"|(\S+))")
+
+
+# GIT IMZA (trailer) SATIRLARI taramadan cikarilir — YANLIS-POZITIF onlemi.
+# `Co-Authored-By: ... <noreply@...>` ve `Claude-Session: <url>` her commit'te
+# ZORUNLU boilerplate'tir (arac sozlesmesi). Bunlar "kimlik izi" kategorisine
+# takilirsa gate TUM core commit'lerini bloklar -> kapatilir -> koruma sifirlanir.
+# Gurultu yapan bir gate, olmayan bir gate'ten kotudur.
+# ⚠ Dar tutuldu: yalniz SATIR BASINDAKI bilinen trailer anahtarlari. Mesajin
+# govdesinde gecen bir e-posta/kimlik yine YAKALANIR.
+_GIT_IMZA_SATIRI = re.compile(
+    r"^[ \t]*(?:Co-Authored-By|Claude-Session|Signed-off-by|Reviewed-by|Cc)[ \t]*:.*$"
+    r"|^[ \t]*🤖[ \t]*Generated with .*$",
+    re.IGNORECASE | re.MULTILINE)
+
+
+def _git_imza_satirlari_ayikla(metin: str) -> str:
+    """Standart git trailer satirlarini duser (yalniz satir-basi anahtarlar)."""
+    return _GIT_IMZA_SATIRI.sub("", metin or "")
+
+
+def _git_commit_mesaji(komut: str, ham: str) -> tuple:
+    """`git commit` mesajini cikarir: -m/--message (COKLU) + -F/--file + heredoc.
+    Git imza satirlari (Co-Authored-By / Claude-Session / ...) AYIKLANIR.
+    Donus: (metin, hata). Mesaj cozulemezse FAIL-CLOSED (hata doner)."""
+    parcalar = [(m.group(1) or m.group(2) or m.group(3) or "") for m in _GIT_M.finditer(komut)]
+    bf = _ARG_BODYFILE.search(komut)
+    if bf:
+        yol = bf.group(1) or bf.group(2) or bf.group(3)
+        if yol in ("-", "/dev/stdin"):
+            govde = _heredoc_govdeleri(ham)
+            if not govde.strip():
+                return "", ("-F - (stdin) commit mesaji cozulemedi. FAIL-CLOSED: mesaji "
+                            "heredoc ile ver ya da -F <dosya> kullan.")
+            parcalar.append(govde)
+        else:
+            try:
+                parcalar.append(Path(yol).read_text(encoding="utf-8", errors="replace"))
+            except Exception:
+                return "", (f"-F dosyasi okunamadi ({yol}). FAIL-CLOSED: okunur yap "
+                            "veya -m kullan.")
+    return _git_imza_satirlari_ayikla("\n".join(p for p in parcalar if p)), ""
+
+
+def _git_commit_public_leak(komut: str, ham: str) -> str:
+    if not _GIT_COMMIT.search(komut):
+        return ""
+    # `git -C <yol> commit` hedefi: _repo_public_mu `cd` onekine bakar, `-C`'ye bakmaz.
+    # Yolu ona `cd <yol>` gibi gostererek dogru repoyu sorgulatiyoruz.
+    hay = komut
+    gc = _GIT_C_PATH.search(komut)
+    if gc:
+        hay = f"cd {gc.group(1) or gc.group(2) or gc.group(3)}\n" + komut
+    public, repo = _repo_public_mu(hay)
+    if not public:
+        return ""
+    metin, hata = _git_commit_mesaji(komut, ham)
+    if hata:
+        return f"public repo '{repo}' — {hata}"
+    if not metin.strip():
+        return ""          # -m/-F yok (editor acilacak) -> taranacak metin yok
+    bulgular = [f"{ad}: '{tok}'" for tok, ad in sizintilari_bul(metin, _CORE_LEAK)][:6]
+    if not bulgular:
+        return ""
+    return f"public repo '{repo}' — commit MESAJINDA " + "; ".join(bulgular)
+
+
 _SAP_YAZMA_TOOLLARI = {
     "mcp__sap-adt__adt_push_source", "mcp__sap-adt__adt_activate",
     "mcp__sap-adt__adt_delete", "mcp__sap-adt__adt_domain_create",
@@ -484,6 +568,18 @@ def main() -> int:
                 "PR başlığı/gövdesi PUBLIC repoya yayınlanır ve cache'lenir — silmek geri "
                 "ALMAZ. core_precommit yalnız commit içeriğini tarar; PR gövdesi commit "
                 "DEĞİLDİR. İŞLEM REDDEDİLDİ. Çözüm: gövdeyi genericize et, tekrar dene.\n")
+            return 2
+
+        sorun = _git_commit_public_leak(komut, ham)
+        if sorun:
+            sys.stderr.write(
+                f"⛔ COMMIT-MESAJI SIZINTI GATE: {sorun}\n"
+                "Commit MESAJI push ile PUBLIC repoya gider ve GitHub'da KALICIDIR. "
+                "core_precommit commit'in İÇERİĞİNİ (dosyaları) tarar — MESAJINI TARAMAZ; "
+                "PR gate'i de yalnız `gh` yayın komutlarına bakar. Arada kalan bu yol "
+                "2026-07-28'de fiilen sızdırdı. İŞLEM REDDEDİLDİ.\n"
+                "Çözüm: mesajı genericize et, tekrar dene. Zaten commit'lediysen ve HENÜZ "
+                "PUSH ETMEDİYSEN: `git commit --amend` ile mesajı düzelt.\n")
             return 2
 
     if (tool_name in _KABUK_TOOLLARI and "adt/activation" in komut and ".post(" in komut

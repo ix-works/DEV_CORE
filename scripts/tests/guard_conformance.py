@@ -207,6 +207,43 @@ def _kurallar(proj: Path) -> list:
             ],
         ),
         Kural(
+            id="COMMIT-MESAJI",
+            etiket="COMMIT-MESAJI SIZINTI GATE",
+            katman=4,
+            gerekce="Commit MESAJI push ile PUBLIC repoya gider ve orada KALICIDIR. "
+                    "`core_precommit` commit'in İÇERİĞİNİ (dosyaları) tarar, MESAJINI "
+                    "TARAMAZ; PUBLIC-PR gate'i yalnız `gh` yayın komutlarına bakar. Arada "
+                    "kalan bu yol 2026-07-28'de FİİLEN sızdırdı (PR gövdesi bloklandı ama "
+                    "aynı ad commit mesajıyla zaten push edilmişti; amend + force-push "
+                    "gerekti). Commit ANINDA durdurmak bedava, push sonrası geçmiş yeniden "
+                    "yazılması gerekir.",
+            yuzey=["Bash", "PowerShell"],
+            bloklamali=[
+                Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit "
+                                         "-m '%s paketi degisti'" % T_PKG},
+                     "public repo + commit mesajında ZSD-paket adı (sentetik)", kosul="gh_var"),
+                Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit -m 'baslik' "
+                                         "-m 'govde %s'" % T_PKG},
+                     "İKİNCİ -m gövdesi de taranmalı", kosul="gh_var"),
+                Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit -F -"},
+                     "-F - (stdin) çözülemiyor → fail-closed", kosul="gh_var"),
+            ],
+            gecmeli=[
+                Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit "
+                                         "-m 'fix: jenerik mesaj, ZSD001 demo paketi'"},
+                     "public repo + temiz mesaj (demo paket istisnası)", kosul="gh_var"),
+                Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit --amend --no-edit"},
+                     "mesaj yok (editör açılacak) → taranacak metin yok", kosul="gh_var"),
+                Vaka("Bash", {"command": "git log --oneline | grep %s" % T_PKG},
+                     "commit DEĞİL — `git log` bu gate'e girmez"),
+                Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit -q -F - <<'M'\n"
+                                         "fix(tooling): readback esitligi\n\n"
+                                         "Co-Authored-By: Bot <%s>\nM" % T_MAIL},
+                     "git imza satırları AYIKLANIR — yoksa gate HER core commit'ini bloklar",
+                     kosul="gh_var"),
+            ],
+        ),
+        Kural(
             id="GH-HEDEF",
             etiket="GH HEDEF BELİRSİZ",
             katman=4,
