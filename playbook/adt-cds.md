@@ -423,3 +423,30 @@ Bir `define view entity ... union all ...` yazarken SAP 3 kuralı tek tek dayat�
 - **Belirti:** base tek-başına aktive → `Field ZSD001_V_INVOICE-KLM_CIKIS_ULKESI is still being used in view ZSD001_C_INVOICE` (aktif consumption hâlâ eski adı kullanıyor). Consumption tek-başına → `column klm_musteri_ulkesi is unknown` (aktif base hâlâ eski). Deadlock.
 - **ÇÖZÜM:** her iki DÜZELTİLMİŞ kaynağı **inaktif upload** et (push, activate etme), sonra **tek POST'ta** `adt_activate(base, also=[consumption])` → atomik co-activation (`activationExecuted=true`, refs=her ikisi). Yeni-yeni birlikte aktive olur, ara-durum kilidi oluşmaz.
 - **T11-a — `content_mismatch` false-alarm:** co-activation sonrası tool `content_mismatch=true` dönebilir — stale `_LAST_PUSHED` baseline aktifi ESKİ kaynakla kıyaslar. Körü körüne "başarısız" sayma → **`adt_get version=active` ile bağımsız teyit** (kaynakta yeni join/alan var mı). Araç-readback ≠ canlı gerçek (feedback_arac-basarisizligini-zararsiz-sayma tersi de geçerli: false-NEGATIF).
+
+### T12 — `concat` **arg1'in SONDAKİ BOŞLUKLARINI SİLER** → ayıraçlı birleştirme sessizce bozulur; çözüm `concat_with_space` (2026-07-28, ZSD001 birleşik kimlik kolonu)
+> **Ne zaman:** iki kolonu görünür bir ayıraçla birleştiriyorsun — `"KNT1010110101 · 34RRR334"` gibi. Sezgisel yazım **yanlış çıktı üretir ve hiçbir hata vermez.**
+
+- **Belirti (ölçüldü, canlı):**
+  ```
+  concat( col_a, concat( ' · ', col_b ) )   ->  "KNT1010110101 ·34RRR334"   ← ayıraçtan SONRA boşluk YOK
+  ```
+  Aktivasyon geçer, syntax check geçer, ATC geçer. Yalnız **çıktıya bakarsan** görürsün.
+- **Kök neden:** CDS/OpenSQL `concat` **birinci argümanın sondaki boşluklarını kırpar**. `' · '` literali arg1 konumuna düştüğü an `' ·'` olur. İç içe yazımda literal **iç** `concat`'in arg1'idir → boşluk orada ölür.
+- **⛔ ÇALIŞMAYAN "düzeltme":** literali dışa almak da **kurtarmaz** — `concat( concat( col_a, ' · ' ), col_b )` bu kez **dış** `concat` arg1'in (yani birleşimin) sondaki boşluğunu siler → aynı sonuç. *Ölçmeden "böyle olur" deme; bu varyant bug-gate'te önerildi, backend ölçümüyle çürütüldü.*
+- **✅ ÇALIŞAN (KANONİK):**
+  ```
+  concat_with_space( concat_with_space( col_a, '·', 1 ), col_b, 1 )   ->  "KNT1010110101 · 34RRR334"
+  ```
+  Üçüncü argüman eklenen boşluk sayısıdır; ayıracı **boşluksuz** ver, boşlukları fonksiyon koysun.
+- **🆕 PRECEDENT KAYDI — `concat_with_space` VIEW ENTITY'de ÇALIŞIYOR (2026-07-28 aktivasyon + readback ile kanıtlandı).** O tarihe kadar codebase'deki tüm kullanımları **klasik DDL view**'daydı; view entity precedent'i YOKTU ve bu, BE-27 gereği bir risk olarak işaretlenmişti. **Artık kanıtlı — bir daha riskli sayma.**
+  ⚠ Yan gözlem: **Open SQL freestyle ucu** `CAST( concat_with_space( col, '<literal>', 1 ) AS CHAR(n) )` çağrısını **400** ile reddediyor. Bu bir **endpoint** sınırıdır, **dil sınırı DEĞİL** — CDS derleyicisi kabul etti. Data-preview'ın reddini "CDS bunu desteklemiyor" diye okuma (T13'ün akrabası).
+- **Neden sessiz:** birleşim dalı çoğu zaman **hiç tetiklenmez** (her iki kolonun da dolu olduğu satır yoksa). Vakada defekt aylardır canlıydı ve **hiç görünmemişti**; ancak veri koşulu oluştuğunda ortaya çıkacaktı. ⇒ Bir ifadeyi TAŞIRKEN kopyalama — **canlı koş ve çıktısını gör**.
+- **Reviewer dersi:** bug-checklist-BE → "ayıraçlı `concat` birleştirmesi: literal ayıracın boşlukları **kırpılır** → `concat_with_space` kullan; taşınan ifade **çıktısıyla** doğrulanır".
+
+### T13 — ADT data-preview **BOŞ CHAR'ı `null` GÖSTERİR** → "null" ekran çıktısı NULL kanıtı DEĞİL (2026-07-28)
+- **Belirti:** data-preview / `adt_sql_query` çıktısında bir CHAR kolonu `null` görünüyor. Buna dayanıp `coalesce`/`IS NULL` mantığı kuruluyor.
+- **Ölçüm (aynı tabloda):** `WHERE col IS NULL` → **0 satır** · `WHERE col = ''` → **17 satır**. Yani değerler **BOŞ**, NULL değil; `null` sadece görüntüleme biçimi.
+- **Neden önemli:** üç değerli mantıkta ikisi farklı davranır — `col <> ''` boş için **FALSE**, NULL için **UNKNOWN** üretir. `CASE`/`WHERE` dallarında bu fark **sessizce başka dal seçtirir**. Gerçek NULL genelde **LEFT JOIN eşleşmemesinden** doğar (o da ayrı bir dal).
+- **Kural:** NULL'lığı **ekrandan okuma, `IS NULL` ile ÖLÇ.** Bir CASE'in NULL davranışına güveniyorsan, kaynağa **tuzak notunu yaz** — yoksa sonraki okuyan "NULL kontrolü unutulmuş" deyip `coalesce` ekler ve kasıtlı fallback'i öldürür.
+- **Akraba araç sınırları (aynı uç, aynı ders — "400 = endpoint sınırı, dil sınırı değil"):** `adt_sql_query` freestyle ucu `IN ( … )` listesini, 8+ kolonlu `GROUP BY`/`ORDER BY`'ı ve join + çok-`WHEN` `CASE` kombinasyonunu **400**'lüyor. OR-zinciri / az-kolon / tek-`WHEN` ile aşılır. **Aracın reddini dilin reddi sanma;** capability kararını canlı aktivasyonla ver (T9 ile aynı ilke).
