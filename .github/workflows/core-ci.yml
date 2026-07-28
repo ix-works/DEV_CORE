@@ -41,6 +41,14 @@ jobs:
       - name: Derleme taramasi (py_compile)
         run: python -m compileall -q scripts mcp_servers
 
+      # IMPORT smoke (2026-07-28): compileall yalnizca DERLER — eksik ucuncu-parti
+      # bagimlilik GORUNMEZ kalir. Nitekim `python-dotenv` repo omru boyunca CI'da
+      # eksikti ve ancak sap_adt_lib'i gercekten import eden ilk test yazilinca patladi.
+      # Bu adim ana modulleri ICE AKTARIR -> eksik bagimlilik ANINDA gorunur.
+      - name: Import smoke (eksik bagimlilik erken yakala)
+        run: python -c "import sys; sys.path.insert(0,'scripts'); import sap_adt_lib, sap_client, object_types; print('import smoke OK')"
+
+
       # Guard regresyonu: yanlis-pozitif kapali MI + gercek koruma ayakta MI + ikinci
       # kabuk yuzeyi (PowerShell) kapali MI. Kosmayan test gate degildir.
       # Ag/proje bagimli senaryolar (PUBLIC-PR canli gorunurluk, freeze kokleri)
