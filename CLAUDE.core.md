@@ -92,6 +92,12 @@
 ## 1.1 HER-OTURUM DAVRANIŞ DEĞİŞMEZLERİ (L1a)
 
 - **GIT:** `main`'e doğrudan commit YOK → branch + PR. Commit = **lider**; alt-ajan commit/push etmez.
+  **Branch DAİMA açık başlangıç noktasıyla açılır:** `git fetch -q origin && git checkout -b <ad> origin/main`.
+  Çıplak `git checkout -b <ad>` **bulunduğun yerden** dallanır; bir önceki PR **squash**-merge edilmişse
+  o branch'in commit'leri main'de artık **başka bir SHA** olarak durur → yeni PR **CONFLICTING** açılır.
+  *(Vaka 2026-07-28: `checkout main && pull` bir `&&` zincirinin erken kırılan adımıydı, sessizce hiç
+  koşmadı; sonraki branch eski noktadan açıldı. Başlangıcı komutta vermek bu sınıfı tümden kapatır —
+  senkron adımının koşup koşmadığına bağımlı olmaz.)*
   Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU**.
 - **HEDEF-AÇIKLIK — `gh`/`git` üç değişmez (2026-07-10 dersi; guard kural 9):**
   1. **Repoyu DEĞİŞTİREN her `gh` alt-komutunda hedef AÇIKÇA verilir.** Üç biçim vardır:
