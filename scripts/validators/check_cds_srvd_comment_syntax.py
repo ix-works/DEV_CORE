@@ -33,7 +33,7 @@ Kullanim:
     python check_cds_srvd_comment_syntax.py [--file <path>] [--strict]
 Cikis: 0 temiz, 1 ihlal.
 """
-# ENFORCES: BE-58  (ADR 0019 coverage binding)
+# ENFORCES: BE-61  (ADR 0019 coverage binding)
 import argparse
 import io
 import re
