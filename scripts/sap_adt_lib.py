@@ -3374,18 +3374,39 @@ class SAPADTClient:
             'warnings': [], 'response': response.text[:500]
         }
 
-    def search_objects(self, query, max_results=100):
-        """Search for ABAP objects"""
+    # Uc-noktanin OLCULEN sinirlari (2026-07-28, canli probe):
+    #   * maxResults ust siniri = 550 (1000 istensе 550 doner) -> MAX_SEARCH_RESULTS
+    #   * siralama ALFABETIK -> gec-alfabetik adlar (ZSD001_T_* gibi) kirpilan sayfaya DUSER
+    #   * `objectType` parametresi NATIVE DESTEKLENIYOR (objectType=TABL/DT -> yalniz TABL)
+    # Bu ucu VERMEDEN tip filtresini istemci tarafinda uygulamak = kirpilmis sayfayi suzmek
+    # = SESSIZ 0 (bkz. sap_client.search_objects basligi).
+    MAX_SEARCH_RESULTS = 550
+
+    def search_objects(self, query, max_results=100, obj_type=None):
+        """Search for ABAP objects.
+
+        Args:
+            query: ad/wildcard (ör. 'ZSD001*')
+            max_results: ust sinir; uc-nokta 550'de doyar (MAX_SEARCH_RESULTS)
+            obj_type: ADT tipi ('TABL', 'TABL/DT', 'CLAS', ...). VERILDIGINDE
+                      SUNUCU tarafinda filtrelenir — istemci tarafinda degil.
+                      Bu, alfabetik kirpma yuzunden olusan sessiz-0'i onler.
+        """
         headers = self._get_headers('application/xml')
+
+        params = {
+            'operation': 'quickSearch',
+            'query': query,
+            'maxResults': max_results
+        }
+        if obj_type:
+            # Sunucu tarafi filtre: kirpma FILTREDEN SONRA uygulanir -> dogru sonuc.
+            params['objectType'] = obj_type
 
         response = self.session.get(
             f"{self.url}/sap/bc/adt/repository/informationsystem/search",
             headers=headers,
-            params={
-                'operation': 'quickSearch',
-                'query': query,
-                'maxResults': max_results
-            },
+            params=params,
             timeout=self.timeout_short
         )
 

@@ -1013,22 +1013,25 @@ class SAPClient:
         Returns:
             List of objects with name, type, uri, description
 
-        Note:
-            Implements auto-workaround for SAP ADT quickSearch limitation:
-            - Specific patterns (e.g., "ZSD000*") + type filter may return no results
-            - Automatically retries with broader pattern (e.g., "Z*") + filters client-side
+        Note (2026-07-28 — SESSIZ-0 KOK FIX, canli olcumle):
+            `obj_type` artik SUNUCUYA gecirilir (`objectType` parametresi NATIVE
+            desteklenir). Eskiden filtresiz cekilip ISTEMCI tarafinda suzuluyordu;
+            uc-nokta ALFABETIK siralar ve maxResults'ta kirpar -> gec-alfabetik
+            adlar (ZSD001_T_* gibi) hic gelmez -> filtre bos kume suzer -> **ok:true,
+            count:0** doner ve "obje YOK" ile AYIRT EDILEMEZ.
+            Olcum: 'ZSD001*' + maxResults=400 -> 400 satirin ICINDE HIC TABL YOK
+            (son kayit ZSD001_I_*); `objectType=TABL/DT` ile ayni sorgu -> 9 TABL.
+            Ayrica eski "genis desenle yeniden dene" (Z*) yolu KALDIRILDI: daha genis
+            sorgu daha COK kirpilir, yani sorunu buyutuyordu.
         """
         if debug_context:
             self._debug(f"[DEBUG] search_objects context: {debug_context}")
         print(f"Searching for: {query}")
         print(f"Max results: {max_results}\n")
 
-        # Store original query for potential workaround
-        original_query = query
-        original_type = obj_type
-        workaround_used = False
-
-        result_xml = self.adt_client.search_objects(query, max_results=max_results)
+        # Tip filtresi SUNUCUYA gider; istemci-suzgeci yalnizca emniyet kemeri olarak kalir.
+        result_xml = self.adt_client.search_objects(query, max_results=max_results,
+                                                    obj_type=obj_type)
 
         filter_type = obj_type.strip().upper() if obj_type else None
         filter_short = filter_type.split('/')[0] if filter_type else None
@@ -1060,59 +1063,28 @@ class SAPClient:
                     'description': description
                 })
 
-        # Auto-workaround: If no results with specific pattern + type filter, retry with broader pattern
-        # This handles SAP ADT quickSearch limitation where "ZSD000*" + type="INTF" returns no results
-        if not objects and filter_type and '*' in original_query and len(original_query) > 2:
-            # Extract the prefix character for broader search (e.g., "Z" from "ZSD000*")
-            broader_query = original_query[0] + '*'
-            # Use a more aggressive multiplier for broader search to ensure we find the objects
-            # Minimum 500 results or 10x original, whichever is larger
-            max_results_retry = max(500, max_results * 10)
-
-            self._debug(f"[DEBUG] No results with '{original_query}' + type='{filter_type}'")
-            self._debug(f"[DEBUG] Retrying with broader pattern '{broader_query}' (auto-workaround)")
-
-            print(f"[INFO] No results found with specific pattern + type filter")
-            print(f"[INFO] Retrying with broader pattern: {broader_query}\n")
-
-            # Retry with broader pattern
-            result_xml = self.adt_client.search_objects(broader_query, max_results=max_results_retry)
-
-            # Parse broader results
-            root = ET.fromstring(result_xml)
-            for obj in root.findall('.//adtcore:objectReference', namespaces):
-                name = obj.get('{http://www.sap.com/adt/core}name')
-                obj_type_value = obj.get('{http://www.sap.com/adt/core}type')
-                uri = obj.get('{http://www.sap.com/adt/core}uri')
-                description = obj.get('{http://www.sap.com/adt/core}description', '')
-
-                if name:
-                    if filter_type:
-                        obj_type_upper = obj_type_value.upper() if obj_type_value else ''
-                        obj_short = obj_type_upper.split('/')[0] if obj_type_upper else ''
-                        if not (filter_type == obj_type_upper or filter_short == obj_short):
-                            continue
-
-                    # Client-side filter: only include names matching original pattern
-                    # Convert wildcard pattern to prefix match (e.g., "ZSD000*" -> startswith("ZSD000"))
-                    if '*' in original_query:
-                        prefix = original_query.replace('*', '').upper()
-                        if name.upper().startswith(prefix):
-                            objects.append({
-                                'name': name,
-                                'type': obj_type_value or '',
-                                'uri': uri or '',
-                                'description': description
-                            })
-
-            workaround_used = True
+        # KIRPMA UYARISI (sessiz-0/sessiz-eksik karsi-onlemi).
+        # Uc-nokta ALFABETIK sirali doner ve maxResults'ta kirpar. Ham (filtresiz)
+        # sonuc sayisi tavana dayandiysa liste EKSIK olabilir -> bunu SESSIZ birakma.
+        # `objectType` sunucuya gectigi icin tip-filtreli aramalarda kirpma
+        # filtreden SONRA uygulanir; yine de tavana dayanan her sonucta uyar.
+        raw_count = len(root.findall('.//adtcore:objectReference', namespaces))
+        truncated = raw_count >= max_results
+        if truncated:
+            print(f"[UYARI] Sonuc tavana dayandi ({raw_count} >= maxResults={max_results}) — "
+                  f"liste EKSIK olabilir. Uc-nokta ALFABETIK siralar ve kirpar; "
+                  f"gec-alfabetik adlar (ör. *_T_*) disarida kalabilir. "
+                  f"max_results'i yukselt (ust sinir {SAPADTClient.MAX_SEARCH_RESULTS}) "
+                  f"veya sorguyu daralt.\n")
+            self._debug(f"[DEBUG] search_objects TRUNCATED raw={raw_count} max={max_results}")
 
         if not objects:
             print("No results found.\n")
+            if filter_type and truncated:
+                # En tehlikeli kombinasyon: tip filtresi + kirpilmis sayfa.
+                print(f"[UYARI] '{filter_type}' tipinde sonuc YOK — ama sonuc KIRPILMIS. "
+                      f"Bu 'obje yok' ANLAMINA GELMEZ. Tekrar dene: max_results'i artir.\n")
         else:
-            if workaround_used:
-                print(f"[INFO] Auto-workaround used: searched with broader pattern and filtered results\n")
-
             print(f"{'=' * 80}")
             print(f"  Search Results: {len(objects)} objects found")
             print(f"{'=' * 80}\n")
