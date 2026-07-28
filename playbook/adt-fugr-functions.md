@@ -129,6 +129,44 @@ res = c.set_function_module_source('ZXXX_FM_FOO', 'ZXXX_FG_FOO', src, transport=
 - **Metadata (processingType/version):** `GET .../fmodules/<fm>` Accept `...fmodules.v3+xml` → `processingType`, `version`, `masterLanguage`, `releaseState`.
 - ⚠️ **MCP `adt_get object_type='func'` GÜVENİLMEZ:** mevcut FM'e bile `exists:false` döndürür (group-resolution bug; standart RPY_DYNPRO_INSERT'te de yanıltıcı). Aynı şekilde `adt_lock_check` func. → **Varlık kontrolü için `adt_search_objects` veya group-qualified metadata GET kullan.** **KAPSAM:** bu sorun YALNIZ `object_type='func'`a özgüdür (FM group-resolution); genel `adt_get` DDIC-okuması güvenilirdir (DTEL/DOMA/TABL/struct/ttyp KÖK-FIX 2026-06-16, hafıza `feedback_adt-get-ddic-read-fixed`) — "adt_get genelde güvenilmez" algısı YARATMA.
 
+### 4.1 ⚠️ FUGR'da KAYNAK-ARAMA KÖRLÜĞÜ — `adt_grep_source` FM gövdesini GÖRMEZ (2026-07-28)
+
+**`adt_grep_source`, kapsamında FUGR varken sessizce boş döner.** Sebep: tool obje başına
+`adt_get(..., include_source=True)` çağırır; FUGR için bu `/functions/groups/<fg>/source/main`
+demektir — o da yalnız **iskelet ana include**'dur:
+
+```abap
+  INCLUDE lzsd001_fg_xtop.        " Global Declarations
+  INCLUDE lzsd001_fg_xuxx.        " Function Modules
+```
+
+**FM gövdesi burada DEĞİL** — `L<FG>U01`, `U02`, … include'larındadır (global bildirimler de
+`L<FG>TOP`'ta). Yani bir FM tabloyu okuyor olsa bile paket taraması **`match_count: 0`** verir ve
+`truncated_*` bayrakları da `false` gelir → **sessiz-kesme bile görünmez.** "Aramada çıkmadı"
+sonucu ile "gerçekten yok" ayırt edilemez (D29'un FUGR'daki eşdeğeri).
+
+**Nasıl anlaşılır:** `adt_where_used` FUGR/FM'i listeliyor **ama** `adt_grep_source` 0 döndürüyorsa
+çelişki **araç sınırıdır, veri değildir.** `where_used` DDIC bağımlılık indeksinden okur ve
+FM imzasını/gövdesini görür; grep göremez. **Bu çelişkide DAİMA `where_used` haklıdır — "yok" varsayma.**
+
+**Çalışan yöntem (kanıtlı):**
+```bash
+# 1) hangi U-include'lar var? (ana include'u oku — INCLUDE satırlarını listeler)
+python core/scripts/download_object.py --name LZSD001_FG_XUXX --type include --no-save
+# 2) FM gövdesini indirip ara
+python core/scripts/download_object.py --name LZSD001_FG_XU01 --type include --no-save | grep -niE "<pattern>"
+```
+Include adı = `L` + `<FG adı>` + `UXX`/`U01`… (FG adı 26 karakteri aşarsa SAP kısaltır → `UXX`
+içeriğinden **gerçek adı oku, türetme**).
+
+> `adt_get object_type='func'` bu işe YARAMAZ — mevcut FM'e `exists:false` döner (§4 madde 3).
+> `adt_grep_source(objects="<FM>:func")` de `scanned_objects: 0` verir (aynı group-resolution bug).
+> Tek güvenilir yol include indirmektir.
+
+**Kapsam:** Bu körlük `object_types` filtresine FUGR koysan da geçerlidir — filtre objeyi
+taramaya **alır**, ama getirdiği kaynak iskelettir. Paket taramasında `scanned_objects` sayısı
+"tarandı" der; **ne tarandığını söylemez.**
+
 ---
 
 ## 5. DENENEN VE BAŞARISIZ YOLLAR (canlı, 2026-06-02)
@@ -141,6 +179,7 @@ res = c.set_function_module_source('ZXXX_FM_FOO', 'ZXXX_FG_FOO', src, transport=
 | `set_object_source()` ile FM push (4 transport-retry + ETag GET) | `423 InvalidLockHandle` | Retry/ETag stateful lock'u bozuyor → §2b sıkı lock→PUT→unlock (tek session). `set_object_source` FM'de KULLANMA. |
 | Aktivasyonu lock-session CSRF token'ıyla yapmak | `403` | `activate_object()` (fresh CSRF-retry) ile ayrı çağır (§2c). |
 | placeholder `adt-fugr-functions.md`'e bakıp "pattern yok"/"yapılamaz" demek | patinaj (saatler) | Çalışan pattern `adt-foundation.md §3.2` + repo'daki çalışan `.abap`'taydı → **FM işi öncesi onları oku** (lessons-learned PATTERN #7). |
+| `adt_grep_source(package=…, object_types="…,FUGR")` ile FM gövdesinde alan/tablo aramak *(2026-07-28)* | `match_count: 0` — **sessiz, `truncated_*` bile `false`**; "bu pakette kullanılmıyor" sanıldı | Grep FUGR'ın yalnız iskelet ana include'unu çeker; gövde `L<FG>U01`'de → **include'u indir** (§4.1). `where_used` FM'i listeliyorsa çelişkide **`where_used` haklıdır**. |
 
 ---
 
