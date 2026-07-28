@@ -50,6 +50,11 @@ VALIDATORS = [
      ["s4_private", "s4_public", "btp_abap"]),
     ("AMDP yorum-apostrof (HARD, BE-28c)", "check_amdp_comment_apostrophe.py", [], "project",
      ["s4_private", "s4_public", "btp_abap", "ecc"]),  # ecc: yalnız db=hana'da anlamlı (validator no-op'a düşer)
+    # CDS'te `"` / SRVD'de herhangi bir yorum: SAP ikisini de SESSİZCE yutar
+    # (CDS: kaynağı hiç almaz, push yine "[OK] activated" der · SRVD: yorumu siler,
+    # obje aktive olur, repo canlıdan sapar). BEŞ kontrol de yeşil verirken kaçtı.
+    ("CDS/SRVD yorum sözdizimi (HARD, BE-58)", "check_cds_srvd_comment_syntax.py", [], "project",
+     ["s4_private", "s4_public", "btp_abap"]),
     ("KD ham-mermaid yok (DOC-KD-15)", "check_kd_no_raw_mermaid.py", [], "project", None),
     ("Proje-kökü çözümlemesi (HARD, CORE-01/ADR 0020)", "check_project_root_resolution.py", [], "both", None),
     ("Kural↔gate coverage (HARD, ADR 0019)", "check_rule_gate_coverage.py", [], "both", None),
