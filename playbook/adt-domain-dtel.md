@@ -47,6 +47,22 @@ import re
 xml_new = re.sub(r'<dtel:typeName>[^<]+</dtel:typeName>',
                  f'<dtel:typeName>{NEW_DOMAIN}</dtel:typeName>', xml_orig)
 
+# 3b. ⛔ TUZAK — adtcore:description XML'de İKİ YERDE geçer (2026-07-28, canlı yakalandı)
+#     Kök <blue:wbobj adtcore:description="…">        <- DTEL'in KENDİ açıklaması
+#     <adtcore:packageRef adtcore:description="…">    <- PAKETİN açıklaması
+#     Düz re.sub İKİSİNİ BİRDEN değiştirir -> paket açıklaması sessizce EZİLİR.
+#     Paket açıklaması tüm paketi etkiler; DTEL update'i yaptığını sanırken
+#     paketin adını bozmuş olursun ve readback DTEL'e bakarsa fark edilmez.
+#     Çözüm: count=1 + assert. Eşleşme 2 ise YAZMA.
+n = len(re.findall(r'adtcore:description="[^"]*"', xml_orig))
+assert n == 2, f'beklenmeyen description sayısı: {n}'      # kök + packageRef
+xml_new, k = re.subn(r'(<blue:wbobj[^>]*?)adtcore:description="[^"]*"',
+                     rf'\1adtcore:description="{NEW_DESC}"', xml_new, count=1)
+assert k == 1, f'description eşleşme={k} (1 olmalı)'
+# packageRef'in ORİJİNAL açıklaması hâlâ duruyor mu — yazmadan önce kanıtla
+pkg_desc = re.search(r'<adtcore:packageRef[^>]*adtcore:description="([^"]*)"', xml_orig).group(1)
+assert f'adtcore:description="{pkg_desc}"' in xml_new, 'packageRef açıklaması EZİLDİ'
+
 # 4. LOCK — DOĞRU Accept header (anahtar!)
 lock_r = client.session.post(url,
     params={'_action':'LOCK','accessMode':'MODIFY','corrNr':TRANSPORT},
