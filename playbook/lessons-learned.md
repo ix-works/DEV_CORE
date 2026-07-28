@@ -229,14 +229,15 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 
 ---
 
-### PATTERN #14: Arama aracının KAPSAMI sonucun anlamını belirler — `0 eşleşme` "yok" demek değildir
+### PATTERN #16: Arama aracının KAPSAMI sonucun anlamını belirler — `0 eşleşme` "yok" demek değildir
 - **Hata:** `adt_grep_source(package=…, object_types="…,FUGR")` çalıştırıldı, `match_count: 0` döndü, "bu paket o tabloyu kullanmıyor" sonucuna varıldı. **Yanlıştı** — FM tabloyu okuyordu. Tool FUGR için yalnız **iskelet ana include**'u çeker (`/functions/groups/<fg>/source/main` = iki satır `INCLUDE`); FM gövdesi `L<FG>U01`'dedir ve **hiç taranmaz**.
 - **Neden sinsi:** Sonuç *yapı olarak* başarılıdır — `ok: true`, `scanned_objects: 7`, **`truncated_object_scope: false`, `truncated_matches: false`**. Yani aracın "kesme yaptım" bayrakları bile temiz. `scanned_objects` "tarandı" der ama **ne** tarandığını söylemez. Sessiz-kesme detektörü sessiz-kapsam'ı yakalamaz.
 - **Trigger (altın sinyal):** **İki araç çelişiyor** — `adt_where_used` objeyi listeliyor ama `adt_grep_source` 0 döndürüyor. Bu çelişki neredeyse hiçbir zaman veri değil, **kapsam farkı**dır: `where_used` DDIC bağımlılık indeksinden okur (derleyicinin gördüğü), grep indirdiği metinden. **Çelişkide indeks haklıdır.**
 - **Detection:** "Aramada çıkmadı" ile "yok" arasında kalınca sor: *bu araç o objenin kaynağını gerçekten indiriyor mu, yoksa bir sarmalayıcı mı indiriyor?* Şüphede tek bir objeyi elle indir ve gözle bak.
 - **Prevention:** (1) Negatif sonucu **ikinci, farklı-mekanizmalı** bir araçla çapraz-doğrula (grep ↔ where_used ↔ indeks). (2) Kapsam sınırını **dokümante et** — `adt-fugr-functions.md §4.1` (FUGR körlüğü, çalışan include-indirme yöntemi). (3) Tool düzeltilebiliyorsa asıl çözüm odur: FUGR'da FM include'larını da tara (**ADT-altyapısı değişikliği → açık onay şart**).
-- **Akraba pattern:** **#11**'in aynadaki hâli. #11: `where_used count=0` → "orphan" sanma (obje yoksa da 0 döner). #14: `grep count=0` → "kullanılmıyor" sanma (araç bakmadıysa da 0 döner). **Ortak çekirdek: `0`, "arananın yokluğu" değil "aracın bulamaması"dır.** Aynı çekirdek D29'da da var (junction arkasını `Grep`/`Glob` sessizce boş döndürür).
+- **Akraba pattern:** **#11**'in aynadaki hâli. #11: `where_used count=0` → "orphan" sanma (obje yoksa da 0 döner). #16: `grep count=0` → "kullanılmıyor" sanma (araç bakmadıysa da 0 döner). **Ortak çekirdek: `0`, "arananın yokluğu" değil "aracın bulamaması"dır.** Aynı çekirdek D29'da da var (junction arkasını `Grep`/`Glob` sessizce boş döndürür).
 - **Status:** ⚠️ DİSİPLİN (doküman + çapraz-doğrulama refleksi). Tool-fix önerildi, onay bekliyor.
+- **🔻 KARDEŞ VAKA — aracın KENDİ TEŞHİSİ yanlış olabilir (2026-07-28):** `adt_classrun` sağlam bir sınıf için *"Class does not implement if_oo_adt_classrun~main!"* döndürdü **ve yanına hazır bir teşhis bastı**: *"class-LOAD-cache binding bozulması; ÇÖZÜM: TAZE sınıf adıyla yeniden yarat"*. Reçete uygulandı — taze isimle **aynı hata**. Gerçek sebep bambaşkaydı: çağıran header'ı `_request_with_csrf_retry`'dan ÖNCE kuruyordu, soğuk session'da token o dict'e hiç yazılmıyordu → istek CSRF'siz gidiyor, SAP 403 yerine **200 + yanıltıcı gövde** dönüyordu. **Ders: bir aracın gömülü teşhisi de bir iddiadır — kanıt değil.** Reçetesini uygulayıp sonuç değişmiyorsa, bu **teşhisin kendisine karşı kanıttır**; daha çok denemek yerine teşhisi bırak. **Bedeli:** yanlış teşhis, araştırmacıyı gereksiz bir ikinci obje yaratmaya sevk etti. Kök-fix + `scripts/tests/test_csrf_header_injection.py` (A/B kanıtlı: fix kapalı → exit 1) + teşhis metninde artık iki sebep sıralı veriliyor. *Sinyal: "bulunamadı/başarısız" mesajının yanında gelen **hazır çözüm önerisi**, hatanın kendisi kadar şüpheli.*
 - **Vakalar:** 2026-07-28 — bir Adobe-Form paketinin plaka-ayrıştırma işinden **etkilenip etkilenmediği** araştırılırken; `where_used` FM'i listeliyordu, paket grep'i 0 diyordu. Include indirilince bağ **gerçek** çıktı (ama okunan tek alan farklıydı → sonuçta etki yoktu). Kanıtsız "yok" denseydi, blast-radius eksik kalırdı.
 
 ---
@@ -251,6 +252,7 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 | #6 TempScripts → Playbook | 2026-05-13 | 1 | ⚠️ DİSİPLİN |
 | #11 where_used count=0 = orphan sanma | 2026-07-09 | 1 (orphan sweep) | ✅ SOLVED (kod gate) |
 | #12 Guard kör noktası (heredoc + tek yüzey) | 2026-07-09 | 3 guard + 4 kural (denetim) | ✅ SOLVED (tek normalizasyon + CI testi) |
+| #16 Arama aracının kapsamı — `0` ≠ "yok" | 2026-07-28 | 2 (FUGR grep körlüğü · classrun sahte teşhisi) | ⚠️ DİSİPLİN + CI testi (CSRF regresyonu) |
 
 > **Hedef:** ACTIVE/⚠️ DİSİPLİN olanları zamanla SOLVED'a çevir (kod gate ile).
 

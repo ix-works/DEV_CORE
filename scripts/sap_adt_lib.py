@@ -1493,6 +1493,18 @@ class SAPADTClient:
 
         if headers is None:
             headers = self._get_headers()
+        elif self.csrf_token and headers.get('X-CSRF-Token') != self.csrf_token:
+            # KÖK-FIX (2026-07-28): çağıranların çoğu (14+ yer) header'ı BU çağrıdan
+            # ÖNCE `_get_headers()` ile kuruyor. Soğuk session'da o an token YOKTU →
+            # `_get_headers()` `X-CSRF-Token` anahtarını HİÇ eklemiyor (bkz. §1228) ve
+            # yukarıdaki `fetch_csrf_token()` çağıranın ELİNDEKİ dict'i güncellemiyordu.
+            # Sonuç: ilk istek CSRF'siz gider. Bazı ADT uçları buna 403 DEĞİL,
+            # **200 + yanıltıcı gövde** döndürür (ör. classrun: "Class does not implement
+            # if_oo_adt_classrun~main!") → aşağıdaki 403'e bakan retry HİÇ tetiklenmez,
+            # iki deneme de aynı çıkar ve hata "obje bozuk / tooling bozuk" gibi görünür.
+            # Token'ı burada enjekte et; kopya al ki çağıranın dict'i mutasyona uğramasın.
+            headers = dict(headers)
+            headers['X-CSRF-Token'] = self.csrf_token
         if timeout is None:
             timeout = self.timeout_default
 
