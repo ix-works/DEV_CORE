@@ -44,6 +44,15 @@ jobs:
       - name: Guard yuzeyi regresyonu (pre_tool_guard)
         run: python scripts/tests/test_pre_tool_guard.py
 
+      # CSRF header enjeksiyonu regresyonu (2026-07-28 canli vaka): cagiranlarin cogu
+      # header'i `_request_with_csrf_retry`'dan ONCE kuruyor; soguk session'da token
+      # o dict'e HIC yazilmiyordu -> istek CSRF'siz gidiyor, bazi ADT uclari 403 yerine
+      # 200 + yaniltici govde donduruyor (classrun "does not implement") -> 403'e bakan
+      # retry hic tetiklenmiyor, hata "obje bozuk" gibi gorunuyor. Agsiz test.
+      # A/B kanitli: kok-fix devre disi birakilinca exit 1, geri alininca exit 0.
+      - name: CSRF header enjeksiyonu regresyonu
+        run: python scripts/tests/test_csrf_header_injection.py
+
       # META-GATE (2026-07-10 saglik denetimi): her guard kurali icin ③tetiklenmeli /
       # ④tetiklenmemeli + kablolama + "kanitsiz kural = FAIL". Sahte-gate sinifini
       # yapisal olarak imkansiz kilar. template_project'i de kapsar (iki-proje matrisi).

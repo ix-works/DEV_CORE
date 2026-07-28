@@ -1362,11 +1362,20 @@ class SAPClient:
                         'diagnosis': (
                             f"Sinif {class_name} YAPISAL OLARAK GECERLI (aktif + "
                             f"INTERFACES if_oo_adt_classrun kaynakta VAR) ama classrun "
-                            f"'does not implement' donuyor. Bu SAP app-server "
-                            f"class-LOAD-cache / ayni-isim sil-yarat binding "
-                            f"bozulmasidir; ayni-isim retry ETKISIZ. COZUM: TAZE "
-                            f"(daha once kullanilmamis) bir sinif adiyla yeniden "
-                            f"yarat+kos. Ayni ismi delete+recreate ETME."
+                            f"'does not implement' donuyor. IKI AYRI SEBEP olabilir, "
+                            f"sirayla ele: "
+                            f"(1) CSRF/soguk-session: istek gecerli X-CSRF-Token'siz "
+                            f"gittiginde SAP 403 yerine 200 + bu yaniltici govdeyi "
+                            f"dondurebilir. 2026-07-28 kok-fix'i "
+                            f"(sap_adt_lib._request_with_csrf_retry, regresyon testi "
+                            f"scripts/tests/test_csrf_header_injection.py) bunu kapatti; "
+                            f"yine de gorursen ONCE fetch_csrf_token(force_refresh=True) "
+                            f"ile session'i isit ve TEKRAR DENE. "
+                            f"(2) SAP app-server class-LOAD-cache / ayni-isim sil-yarat "
+                            f"binding bozulmasi: ayni-isim retry ETKISIZ, TAZE (daha once "
+                            f"kullanilmamis) bir sinif adiyla yeniden yarat+kos. "
+                            f"UYARI: (2)'ye gecmeden once (1)'i ele — taze sinif yaratmak "
+                            f"pahali ve sebep (1) ise SORUNU COZMEZ."
                         ),
                     }
             return {
