@@ -65,6 +65,16 @@ jobs:
       - name: CSRF header enjeksiyonu regresyonu
         run: python scripts/tests/test_csrf_header_injection.py
 
+      # Push readback regresyonu (2026-07-28 canli vaka): CDS'te gecersiz `"` yorumu ->
+      # SAP kaynagi SESSIZCE reddetti; run_review/abaplint/validators/syntax_check/push
+      # BESI DE yesil verdi, kaynak canliya hic inmedi. push_object readback kiyasini
+      # yapiyordu ama yalnizca WARNING basip 'success' True donduruyordu.
+      # Test BICIM (pretty-print, gecer) ile ICERIK (gercek uyusmazlik, duser) ayrimini
+      # kilitler + KABLOLAMAYI dogrular. Sabotaj-kanitli: helper VEYA success ifadesi
+      # bozulunca exit 1.
+      - name: Push readback ayrimi regresyonu
+        run: python scripts/tests/test_push_readback_mismatch.py
+
       # META-GATE (2026-07-10 saglik denetimi): her guard kurali icin ③tetiklenmeli /
       # ④tetiklenmemeli + kablolama + "kanitsiz kural = FAIL". Sahte-gate sinifini
       # yapisal olarak imkansiz kilar. template_project'i de kapsar (iki-proje matrisi).
