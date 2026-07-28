@@ -46,6 +46,31 @@ from object_types import (
 )
 
 
+def readback_farki_yalniz_bicim_mi(yuklenen: str, canli: str) -> bool:
+    """Push sonrası readback farkı BİÇİM mi, İÇERİK mi? (True = yalnız biçim)
+
+    KÖK-FIX (2026-07-28). Vaka: bir CDS kaynağında ABAP tarzı `"` yorumu vardı;
+    CDS DDL'de `"` yorum DEĞİLDİR → SAP kaynağı **sessizce reddetti**. Beş kontrol de
+    yeşil verdi (run_review PASS · abaplint temiz · run_all_validators OK ·
+    adt_syntax_check valid:true · push "[OK] uploaded" + "[OK] activated") ama kaynak
+    canlıya hiç inmedi. Yakalayan tek şey readback karşılaştırmasıydı — o da yalnızca
+    WARNING basıyor, `result`'a başarısızlık işareti koymuyordu.
+
+    Körü körüne hard-fail YAPILAMAZ: SAP bazı obje tiplerinde kaynağı pretty-print eder
+    (gerçek vaka: bir tabloda 12 fark satırı, hepsi hizalama boşluğu, içerik AYNI).
+    Ayrım: **tüm boşluklar atıldığında hâlâ farklıysa** bu biçim değil, gerçek içerik
+    uyuşmazlığıdır → push başarısız sayılır.
+
+    Modül düzeyinde ve ağsızdır ki regresyon testi GERÇEK kod yolunu çağırabilsin
+    (testin mantığı yeniden-uygulaması = sahte güvence).
+    """
+    y = (yuklenen or "").strip().replace("\r\n", "\n").replace("\r", "\n")
+    c = (canli or "").strip().replace("\r\n", "\n").replace("\r", "\n")
+    if y == c:
+        return True
+    return "".join(y.split()) == "".join(c.split())
+
+
 class SAPClient:
     """High-level SAP ABAP Development Client"""
 
@@ -634,11 +659,26 @@ class SAPClient:
                             active_norm = active_source.strip().replace('\r\n', '\n').replace('\r', '\n')
                             if uploaded_norm == active_norm:
                                 print(f"      [OK] Active source verified (after brief delay)")
+                            elif readback_farki_yalniz_bicim_mi(uploaded_norm, active_norm):
+                                print(f"      [WARNING] Active source differs only in whitespace/formatting")
+                                print(f"      [WARNING] Muhtemelen SAP pretty-printing — İÇERİK aynı")
                             else:
-                                print(f"      [WARNING] Active source differs from uploaded content!")
-                                print(f"      [WARNING] This may be SAP pretty-printing or a stale class buffer")
-                                print(f"      [HINT] If changes don't take effect, push manually via SE24/Eclipse ADT")
-                                print(f"      [HINT] Or run transaction /$ABAP_BUFFER_RESET in SM04 to clear buffer")
+                                # KÖK-FIX (2026-07-28): içerik uyuşmazlığı = BAŞARISIZLIK.
+                                # Eskiden bu da yalnız WARNING'di ve result'a hiçbir işaret
+                                # konmuyordu → SAP kaynağı sessizce reddettiğinde push
+                                # "başarılı" dönüyordu. Gerekçe: readback_farki_yalniz_bicim_mi
+                                result['readback_ok'] = False
+                                result['readback_mismatch'] = {
+                                    'uploaded_chars': len(uploaded_norm),
+                                    'active_chars': len(active_norm),
+                                }
+                                print(f"      [FAIL] READBACK UYUŞMAZLIĞI — canlı aktif kaynak "
+                                      f"yüklenenle AYNI DEĞİL (boşluk farkı değil, İÇERİK farkı)")
+                                print(f"      [FAIL] yüklenen {len(uploaded_norm)} ch · canlı aktif {len(active_norm)} ch")
+                                print(f"      [FAIL] SAP kaynağı SESSİZCE reddetmiş olabilir "
+                                      f"(ör. CDS'te geçersiz `\"` yorumu — CDS'te yorum // ve /* */)")
+                                print(f"      [HINT] 'activated'/'uploaded' mesajlarına GÜVENME; kanıt readback eşitliğidir")
+                                print(f"      [HINT] Kaynağı sözdizimi açısından gözden geçir, düzeltip yeniden push et")
                     except Exception as verify_err:
                         print(f"      [INFO] Post-activation verification skipped (could not read active source)")
                         if self.debug_enabled:
@@ -737,11 +777,21 @@ class SAPClient:
                 else:
                     print(f"      [WARNING] Activation failed (manual activation may be required)")
 
-            result['success'] = result['source_uploaded'] and result['activated']
+            # KÖK-FIX (2026-07-28): readback İÇERİK uyuşmazlığı da başarısızlıktır.
+            # `readback_ok` yalnız gerçek içerik farkında False olur (pretty-print
+            # biçim farkı tetiklemez — bkz. readback_farki_yalniz_bicim_mi).
+            result['success'] = (
+                result['source_uploaded']
+                and result['activated']
+                and result.get('readback_ok', True)
+            )
 
             print(f"\n{'=' * 70}")
             if result['success']:
                 print(f"  [OK] Push Complete")
+            elif result.get('readback_ok', True) is False:
+                print(f"  [FAIL] Push BAŞARISIZ — canlı aktif kaynak yüklenenle aynı değil")
+                print(f"         (yukarıdaki READBACK UYUŞMAZLIĞI'na bak; kaynak sessizce reddedilmiş olabilir)")
             else:
                 print(f"  [WARNING] Push Incomplete - source uploaded but activation failed")
             print(f"{'=' * 70}")
