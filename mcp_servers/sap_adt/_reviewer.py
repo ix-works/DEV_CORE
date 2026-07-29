@@ -21,14 +21,30 @@ _REVIEW_SCRIPT = REPO_ROOT / "scripts" / "validators" / "run_review.py"
 
 # Object type → reviewer task name. Tools pass object_type; we map to a known task.
 # Tasks must exist in run_review.py TASK_VALIDATORS dict.
+# ⚠ Keys are matched RAW (task_for_push lowercases only) — list every synonym that
+#   adt_push_source may receive, otherwise the chain is skipped SILENTLY.
 OBJECT_TYPE_TO_TASK = {
     "ddls": "cds_update",     # CDS view source push
     "tabl": "table_update",   # table or structure
+    # 2026-07-29 — these three were None: ADR 0006 pre-flight was silently skipped for
+    # class/bdef/srvd even though full validator chains existed (class_push has 6
+    # validators / 2 BLOCKERs). Documented-but-unwired == unenforced.
+    # Blast radius MEASURED on the live repo before wiring:
+    #   class_push  → 5 real classes: 0 BLOCKER, 1-2 WARNING (non-blocking)
+    #   rap_bdef_creation → 20 real bdefs: 19 PASS, 1 BLOCKER — and that one is a
+    #     TRUE POSITIVE (managed root without `etag master`, standards/05 §lock).
+    #   rap_service_binding → empty chain, degrades gracefully to PASS.
+    # Emergency escape stays available: adt_push_source(skip_reviewer=True) (justify in commit).
+    "class": "class_push",
+    "clas": "class_push",
+    "bdef": "rap_bdef_creation",
+    "behaviordefinition": "rap_bdef_creation",
+    "srvd": "rap_service_binding",
+    "servicedefinition": "rap_service_binding",
     "doma": None,             # no validator chain defined yet (domain_creation_csv is CSV-batch)
     "dtel": None,             # dtel_update validators not defined yet
     "msag": None,
     "prog": None,
-    "class": None,
 }
 
 # Composite tool name → task for its created object.
