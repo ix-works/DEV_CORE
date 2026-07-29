@@ -551,9 +551,23 @@ def adt_inactive_objects() -> dict:
     `scripts/worklist_audit.py`'nin MCP-native karşılığı. Gün-sonu/commit-öncesi "aktive
     edilmemiş obje var mı" kontrolü tek çağrıya iner. `GET /sap/bc/adt/activation/inactiveobjects`.
 
+    ⚠ **SİLİNMİŞ OBJE TUZAĞI (2026-07-29, canlı vaka).** Bu uç nokta SİLİNMİŞ objeleri de
+    listeler ve kendi `ioc:deleted` alanı bunu ELE VERMEZ (ölçüm: TADIR `DELFLAG='X'` olan
+    iki sınıf için `ioc:deleted="false"` döndü — o alan *bekleyen taslağın* türünü anlatıyor,
+    objenin silinmiş olup olmadığını değil). Ham liste "2 obje aktive bekliyor" gibi okundu;
+    oysa objeler silinmişti (SE24/SE80'de yok, `adt_get` `exists:false`) ve geriye yalnız
+    bayat worklist kaydı kalmıştı. → Bu tool her girdiyi **TADIR DELFLAG** ile çapraz
+    kontrol eder; silinmişler `count`/`inactive_objects`'ten ÇIKARILIR, `stale_deleted`
+    altında ayrıca raporlanır. TADIR sorgusu koşamazsa SUSULMAZ: `tadir_deleted` null olur
+    + `warning` alanı döner.
+    ⚠ TADIR'daki `DELFLAG='X'` satırları **SİLİNMEZ** — silme işleminin transport'la
+    taşınması için gereklidir.
+
     Returns:
-        {ok, count, inactive_objects: [{name, type, uri, user}], client_log}
-        count=0 → aktive-bekleyen ana obje yok (transport/method-seviyesi girdiler elenir).
+        {ok, count, inactive_objects, stale_deleted_count, stale_deleted, client_log}
+        count=0 → AKSİYON GEREKTİREN aktive-bekleyen obje yok (silinmişler + transport/
+        method-seviyesi girdiler elenir). Girdi: {name, type, uri, user, deleted, transport,
+        tadir_deleted}. `tadir_deleted=None` → kontrol koşamadı, `warning`'e bak.
     """
     import xml.etree.ElementTree as ET
     client = _get_client()
@@ -583,10 +597,71 @@ def adt_inactive_objects() -> dict:
             if not a_name or key in seen:
                 continue
             seen.add(key)
-            out.append({"name": a_name.strip(), "type": a_type, "uri": key,
-                        "user": obj.get("{%s}user" % _IOC_NS["ioc"], "") or ""})
-        return {"ok": True, "count": len(out), "inactive_objects": out,
-                "client_log": buf.getvalue().strip()}
+            tr_ref = entry.find("ioc:transport/ioc:ref", _IOC_NS)
+            out.append({
+                "name": a_name.strip(), "type": a_type, "uri": key,
+                "user": obj.get("{%s}user" % _IOC_NS["ioc"], "") or "",
+                # ioc:deleted = BEKLEYEN TASLAĞIN türü ("bu taslak bir silme mi"),
+                # objenin silinmiş olup olmadığı DEĞİL. Ölçüm 2026-07-29: TADIR
+                # DELFLAG='X' olan iki obje için bu alan "false" döndü. Bu yüzden
+                # tek başına yeterli değil → aşağıdaki TADIR çapraz kontrolü.
+                "deleted": (obj.get("{%s}deleted" % _IOC_NS["ioc"], "") or "").lower() == "true",
+                "transport": (tr_ref.get("{%s}name" % _IOC_NS["adtcore"], "") or "")
+                             if tr_ref is not None else "",
+            })
+
+        # ── TADIR çapraz kontrolü: SİLİNMİŞ objeyi "aktive bekliyor" diye raporlama ──
+        # 2026-07-29 vakası: iki sınıf worklist'te duruyordu; SE24/SE80'de yok,
+        # adt_get exists:false, TADIR DELFLAG='X'. Yani obje SİLİNMİŞ, worklist kaydı
+        # bayat kalmıştı. Araç bunu ayırt etmediği için "2 obje aktive bekliyor" diye
+        # okundu ve neredeyse TADIR silme-kaydı temizlenecekti (o kayıtlar silmenin
+        # transport'la taşınması için ZORUNLUDUR — silinseydi gerçek hasar olurdu).
+        tadir_hata = None
+        if out:
+            adlar = sorted({o["name"] for o in out
+                            if o["name"] and all(c.isalnum() or c in "_/" for c in o["name"])})
+            if adlar:
+                liste = ", ".join("'%s'" % a for a in adlar)
+                try:
+                    res = adt_sql_query(
+                        "SELECT obj_name, object, delflag FROM tadir "
+                        "WHERE obj_name IN ( %s )" % liste,
+                        row_limit=max(200, len(adlar) * 2))
+                    if res.get("ok"):
+                        silinmis = {
+                            (str(r.get("OBJ_NAME", "")).strip(),
+                             str(r.get("OBJECT", "")).strip())
+                            for r in (res.get("rows") or [])
+                            if str(r.get("DELFLAG", "")).strip().upper() == "X"
+                        }
+                        for o in out:
+                            # ADT tipi 'CLAS/OC' → TADIR OBJECT 'CLAS'
+                            tadir_obj = (o["type"].split("/")[0] or "").strip()
+                            o["tadir_deleted"] = (o["name"], tadir_obj) in silinmis
+                    else:
+                        tadir_hata = res.get("message") or res.get("error") or "bilinmeyen"
+                except Exception as exc:            # noqa: BLE001 — teşhis bozulmasın
+                    tadir_hata = str(exc)[:200]
+        if tadir_hata:
+            # Ölçülemediyse SUSMA — "silinmiş değil" varsayımı tam da bu tuzağın kendisi.
+            for o in out:
+                o["tadir_deleted"] = None
+
+        bayat = [o for o in out if o.get("tadir_deleted") is True]
+        canli = [o for o in out if o.get("tadir_deleted") is not True]
+        sonuc = {
+            "ok": True,
+            "count": len(canli),              # AKSİYON GEREKTİREN (silinmişler hariç)
+            "inactive_objects": canli,
+            "stale_deleted_count": len(bayat),
+            "stale_deleted": bayat,           # TADIR DELFLAG='X' → obje zaten silinmiş
+            "client_log": buf.getvalue().strip(),
+        }
+        if tadir_hata:
+            sonuc["tadir_check"] = "FAILED: %s" % tadir_hata
+            sonuc["warning"] = ("TADIR DELFLAG kontrolü KOŞMADI → listede silinmiş obje "
+                                "olabilir; 'tadir_deleted' alanları null. Elle doğrula.")
+        return sonuc
     except Exception as exc:
         return _err_from_exc(exc)
 
