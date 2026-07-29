@@ -166,6 +166,8 @@ TASK_VALIDATORS = {
          'Managed RAP: lock master + etag master (LAST_CHANGED_AT) eksik mi'),
         ('check_audit_fields_autofill.py', 'WARNING',
          'Audit alanları (created/changed by-at) var ama setAdmin determination yok (std 05 §9A)'),
+        ('check_bdef_backtick.py', 'BLOCKER',
+         'bdef yorumunda ters-tırnak → SAP çoğaltıyor (repo 2→canlı 8); sessiz+büyüyen drift (BE-62)'),
         # Diğer BDEF kontrolleri (C-RAP-BD-*) checklist + manual.
     ],
     'rap_service_binding': [
