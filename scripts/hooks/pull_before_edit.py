@@ -3,7 +3,7 @@
 
 Yönetilen bir SAP source dosyasını (<source_root>/ altı, source uzantısı) düzenlemeden ÖNCE,
 o objenin canlı GÜNCEL hali bu SEANSTA çekilmiş/yazılmış olmalı. Değilse edit
-BLOKLANIR (exit 2) ve agent önce `scripts/sap_sync_pull.py` ile çeker. Böylece
+BLOKLANIR (exit 2) ve agent önce `core/scripts/sap_sync_pull.py` ile çeker. Böylece
 working-copy daima TAZE canlıdan türer → push, canlıdaki belgelenmemiş bir değişikliği
 sessizce ezmez. (Eski M1 pre-push drift-block kaldırıldı; koruma artık edit-öncesine taşındı.)
 
@@ -158,7 +158,7 @@ def main() -> int:
     sys.stderr.write(
         f"⛔ PULL-BEFORE-EDIT (PreToolUse guard, ADR 0016 revize): '{obj}' bu seansta "
         f"SAP'den çekilMEDİ. Düzenlemeden ÖNCE güncel halini al:\n"
-        f"   python scripts/sap_sync_pull.py {obj} --type {obj_type} --session {session_id}\n"
+        f"   python core/scripts/sap_sync_pull.py {obj} --type {obj_type} --session {session_id}\n"
         f"(canlıyı çeker → {p.name} dosyasına yazar → seans-taze damgalar; sonra edit'i TEKRAR dene.)\n"
         f"AMAÇ: working-copy daima TAZE canlıdan türesin → push, canlıdaki belgelenmemiş "
         f"değişikliği ezmesin. Obje başına seansta yalnız 1 kez.\n"
