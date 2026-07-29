@@ -55,6 +55,10 @@ VALIDATORS = [
     # obje aktive olur, repo canlıdan sapar). BEŞ kontrol de yeşil verirken kaçtı.
     ("CDS/SRVD yorum sözdizimi (HARD, BE-61)", "check_cds_srvd_comment_syntax.py", [], "project",
      ["s4_private", "s4_public", "btp_abap"]),
+    # .bdef yorumundaki ters-tırnak SAP'de ÇOĞALIYOR (repo 2 → canlı 8). Sessiz VE büyüyen:
+    # push/aktivasyon/syntax_check üçü de yeşil; fark yalnız readback bayt kıyasında. 2 kez yaşandı.
+    ("bdef ters-tırnak (HARD, BE-62)", "check_bdef_backtick.py", [], "project",
+     ["s4_private", "s4_public", "btp_abap"]),
     ("KD ham-mermaid yok (DOC-KD-15)", "check_kd_no_raw_mermaid.py", [], "project", None),
     ("Proje-kökü çözümlemesi (HARD, CORE-01/ADR 0020)", "check_project_root_resolution.py", [], "both", None),
     ("Kural↔gate coverage (HARD, ADR 0019)", "check_rule_gate_coverage.py", [], "both", None),
