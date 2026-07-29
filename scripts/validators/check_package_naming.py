@@ -197,9 +197,14 @@ def validate_package(pkg_dir: Path, verbose: bool = False) -> list[str]:
             #   class pool : .clas.abap / .clas.locals_imp.abap / .clas.testclasses.abap
             #   RAP behavior pool : .ccimp.abap (CCIMP) / .ccdef.abap (CCDEF) /
             #                       .ccmac.abap (CCMAC) — behavior class lokal include'ları
+            #   test include : .ccau.abap (CCAU) — ADR 0016 + source_drift.py +
+            #                  check_no_rap_commit.py ile AYNI konvansiyon. 2026-07-28'e
+            #                  kadar bu listede YOKTU; repodaki ilk .ccau dosyası yazılınca
+            #                  "hiçbir regex'le eşleşmiyor" FAIL'i verdi (obje adı
+            #                  kırpılamadığı için). Marker listesi konvansiyonla eş tutulmalı.
             #   BDEF : .bdef.abap
             #   program : .prog.abap   function module : .func.abap   FUGR : .fugr.abap
-            _sap_markers = (".clas.", ".ccimp.", ".ccdef.", ".ccmac.", ".bdef.",
+            _sap_markers = (".clas.", ".ccimp.", ".ccdef.", ".ccmac.", ".ccau.", ".bdef.",
                             ".intf.", ".prog.", ".func.", ".fugr.")
             _hit = next((m for m in _sap_markers if m in name), None)
             if _hit:
