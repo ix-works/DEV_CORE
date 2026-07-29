@@ -183,6 +183,50 @@ try_push(minimal, 'minimal baseline')
 
 ---
 
+### 24.8 Test include'u (`ccau`) İLK KEZ ekleniyorsa: POST ≠ PUT (İKİ AYRI ADIM)
+
+**Ne zaman ısırır:** canlı class'ta `testclasses` include'u HENÜZ YOKSA (yani sınıfa ilk kez
+birim testi ekliyorsun). Var olan bir `ccau`'yu güncellemek sıradan PUT'tur — bu bölüm
+yalnız **ilk yaratım** içindir.
+
+**ÇALIŞAN YÖNTEM — iki adım, sırayla:**
+
+```
+1) POST /sap/bc/adt/oo/classes/<cls>/includes/testclasses   → 201 Created  (include'u YARATIR)
+2) PUT  /sap/bc/adt/oo/classes/<cls>/includes/testclasses   → 200 OK       (İÇERİĞİ yazar)
+```
+
+> ⚠ **POST gövdeyi YOK SAYAR.** 201 döner ama include'u SAP'nin 56 baytlık boş iskeletiyle
+> (`*"* use this source file for your ABAP unit test classes`) yaratır — gönderdiğin kaynak
+> ne kadar büyük olursa olsun. Ölçüm (2026-07-29): 11.639 bayt gönderildi, 56 bayt yazıldı.
+> **201'i "başarı" sayıp durursan `ccau` BOŞ kalır.**
+
+**DENENEN — BAŞARISIZ (tekrar deneme):**
+
+| Deneme | Sonuç |
+|---|---|
+| `PUT .../includes/testclasses` (include yokken) | **HTTP 500** — `T100 ED 170`: *"... CCAU does not have any inactive version"* |
+| `PUT .../includes/testclasses?version=inactive` | HTTP 500 (aynı) |
+| `POST .../includes` + `classincludes` XML gövdesi | HTTP 500 — *"could not be created"* |
+
+**Kök sebep:** PUT, var olan bir include'un **inactive kopyasına** yazar. Include hiç yoksa
+yazacak inactive sürüm de yoktur → 500. Önce iskeleti yaratmak (POST) şart.
+
+**SAHTE YEŞİL TUZAĞI — bu tuzağın asıl bedeli:** `ccau` boş kalırsa `adt_unit_run`
+**`method_count = 0`** döner, HTTP 200 ile ve **hata vermeden** (`<aunit:runResult/>` boş).
+Bu, "test altyapısı kapalı" gibi görünür ve saatlerce yanlış yerde aranır — oysa sebep
+kendi push'undur. Bu yüzden:
+
+- Aktivasyondan sonra `adt_get` ile **include listesinde `testclasses` VAR MI** doğrula.
+- `ccau` kaynağını **bayt olarak** repo ile karşılaştır (mesaja değil bayta bak).
+- `adt_unit_run` kabul ölçütüne **`method_count` beklenen sayıya eşit** koşulunu yaz;
+  **0 = FAIL** say. "Yeşil döndü" yetmez.
+
+📌 Aynı sınıf tuzak: CDS inline-POST boş-source (bkz. `adt-cds.md`) — POST'un gövdeyi yok
+sayması ADT'de tekrar eden bir desendir. **Yaratım ve içerik ayrı adımlardır.**
+
+---
+
 ## 20. ABAP Class — Inline Data / OSQLC Tip Çakışması
 
 ### 25.1 `%_##OSQLC_1` / `%_##OSQLC_2` Çakışması
