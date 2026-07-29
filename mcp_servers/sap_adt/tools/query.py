@@ -992,7 +992,9 @@ def adt_impact_analysis(name: str, object_type: str = "ddls",
 _AUNIT_SEG = {"class": "oo/classes", "clas": "oo/classes",
               "program": "programs/programs", "prog": "programs/programs",
               "functiongroup": "functions/groups", "fugr": "functions/groups"}
-_AUNIT_NS = "http://www.sap.com/adt/aunit"
+# NOT: aunit ns yalnız İSTEK gövdesinde (kök <aunit:runConfiguration>) ve YANITIN KÖKÜNDE
+# (<aunit:runResult>) kullanılır. Yanıttaki program/testClass/testMethod/alert ÖNEKSİZDİR →
+# parser'da aunit ns SABİTİ KULLANILMAZ (canlı ölçüm 2026-07-29; bkz. adt_unit_run yorumları).
 _ADTCORE_NS = "http://www.sap.com/adt/core"
 
 
@@ -1030,10 +1032,22 @@ def adt_unit_run(name: str, object_type: str = "class") -> dict:
         from urllib.parse import quote
         adt = getattr(client, "adt_client", None) or client
         objuri = "/sap/bc/adt/" + seg + "/" + quote(name.lower(), safe="")
+        # ⛔ <options> ZORUNLU ve ÖNEKSİZ (canlı ölçüm 2026-07-29, tek-değişkenli matris):
+        #   options YOK        -> HTTP 200, 99 bayt, 0 test  (sunucu filtreleri kapalı sayıyor)
+        #   options ÖNEKLİ     -> HTTP 200, 99 bayt, 0 test  (tanınmayan eleman SESSİZCE yok sayılıyor)
+        #   options ÖNEKSİZ    -> HTTP 200, 2416 bayt, 9 test ✅
+        # Kardeşleri (<external>, <objectSet>) de öneksiz — ipucu gövdedeydi.
+        # Accept DEĞİŞTİRİLMEZ: api.abapunit.run.v1 -> HTTP 406, sunucu "yalnız
+        # ...testruns.result.v2+xml kabul edilir" diyor.
         body = ('<?xml version="1.0" encoding="UTF-8"?>'
                 '<aunit:runConfiguration xmlns:aunit="http://www.sap.com/adt/aunit"'
                 ' xmlns:adtcore="http://www.sap.com/adt/core">'
                 '<external><coverage active="false"/></external>'
+                '<options><uriType value="semantic"/>'
+                '<testDeterminationStrategy sameProgram="true" assignedTests="false"'
+                ' appendAssignedTestsPreview="true"/>'
+                '<testRiskLevels harmless="true" dangerous="true" critical="true"/>'
+                '<testDurations short="true" medium="true" long="true"/></options>'
                 '<adtcore:objectSets><objectSet kind="inclusive"><adtcore:objectReferences>'
                 '<adtcore:objectReference adtcore:uri="' + objuri + '"/>'
                 '</adtcore:objectReferences></objectSet></adtcore:objectSets>'
@@ -1055,14 +1069,22 @@ def adt_unit_run(name: str, object_type: str = "class") -> dict:
         def _an(el, a):
             return el.get("{%s}%s" % (_ADTCORE_NS, a), "")
 
+        # ⛔ Yanıtta YALNIZ kök <runResult> aunit ns'inde; program/testClass/testMethod/alert
+        #   NAMESPACE'SİZ (canlı ölçüm 2026-07-29: .//{aunit}program -> 0, .//program -> 1,
+        #   .//testMethod -> 9). Namespace'li arayan parser DOLU yanıtı bile 0 sayar.
+        #   ⚠ adtcore:name (_an) DOĞRU — `name` attribute'u gerçekten adtcore ns'inde.
+        #   ⚠ Tam-tag eşleşme şart: yanıtta testClasses/testMethods SARMALAYICILARI var;
+        #     substring eşleşmesi 9 yerine 10 sayar.
+        #   ⚠ DOĞRULANAMADI: <alert> ns'i ölçülemedi (9/9 test geçti, 0 alert). Kardeşleri
+        #     öneksiz olduğu için öneksiz varsayıldı — bilerek kırılan bir testle teyit edilmeli.
         classes, mcount, fcount = [], 0, 0
-        for prog in root.iter("{%s}program" % _AUNIT_NS):
-            for tclass in prog.iter("{%s}testClass" % _AUNIT_NS):
+        for prog in root.iter("program"):
+            for tclass in prog.iter("testClass"):
                 methods = []
-                for tm in tclass.iter("{%s}testMethod" % _AUNIT_NS):
+                for tm in tclass.iter("testMethod"):
                     alerts = []
-                    for al in tm.iter("{%s}alert" % _AUNIT_NS):
-                        title_el = al.find("{%s}title" % _AUNIT_NS)
+                    for al in tm.iter("alert"):
+                        title_el = al.find("title")
                         alerts.append({
                             "severity": al.get("severity", ""),
                             "kind": al.get("kind", ""),
