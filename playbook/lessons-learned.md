@@ -201,6 +201,41 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 **Status:** ⚠️ DİSİPLİN — kaynak: 2026-07-27 ölü-dal temizliği (22 dal, 2 repo).
 **Vakalar:** 2026-07-27 — PR'sız bir çekirdek dalı için `main...dal` "748 satır, 12 dosya merge edilmemiş" dedi; `main..dal` ölçünce dal main'in **5.162 satır gerisindeydi** ve kendine ait 51 satırın tamamı süperseded çıktı (kaldırılmış guard referansları, hardcode yol, terk edilmiş safety-net). Yanlış alarm; dal güvenle silindi.
 
+### #17 — Çapraz-kesen işte KATMAN KATMAN KEŞİF (envantersiz ilerleme)
+
+**Belirti:** iş "küçük bir düzeltme" sanılır; her düzeltme bir sonraki eksiği doğurur; kapsam
+yol boyunca büyür; kullanıcı *"neden bu kadar uzadı / neden tek tek yapıyorsun"* der.
+**Kök sebep:** davranış **çapraz-kesen** (BE kuralı + FE akışı + mesaj + veri, ve/veya çok app)
+olmasına rağmen **hiçbir noktada yüzeyin tamamı taranmamıştır.**
+**Vaka (2026-07-29, silme kontrolü):** "3 app'lik FE düzeltmesi" sanıldı → tam tarama sonrası
+**7 app + 2 backend boşluğu + canlıda yetim veri**; silme yolu 14 → **24**; aynı hata sınıfının
+**7 varyantı**; **6 review turu**. Bir app hiçbir review'un kapsamına girmediği için gözden kaçtı
+(kullanıcı "atladığımız bir şey kalmasın" demeseydi kaçacaktı).
+**Prevention:** GATE YOK (moratoryum — bu bir yöntem disiplinidir, statik olarak yakalanamaz).
+Kanonik sıra: **runtime'da teyit → envanter/matris → tek iş listesi + tahmin → kapsam kararı (toplu)
+→ deseni dondur → çoğalt → tek review turu → runtime kabul.**
+📖 Tam yöntem, yapılacaklar/yapılmayacaklar tablosu ve öz-değerlendirme listesi:
+**`playbook/howto-cok-katmanli-degisiklik.md`** (tek-ev; burada tekrarlanmaz).
+**Status:** ⚠️ DİSİPLİN.
+
+### #18 — BAYAT SAYI / SATIR REFERANSI (yorumdaki sayı kod kadar bayatlar)
+
+**Belirti:** yorum "N obje", "N doğrulama metodu", "dosya:satır", "canlıda X yok" der; ölçülünce
+**yanlış** çıkar. Hiçbir validator yorumdaki sayıyı doğrulamaz.
+**Vaka (2026-07-29, tek turda 6 kez):** "7 obje" (gerçek 9) · "10 doğrulama metodu" (gerçek 13;
+satırın kendi listesi zaten 12 diyordu = baştan tutarsız) · "canlıda bağlı teslimat yok"
+(SQL: 26 satır var — **iki ayrı ajan bunu kanıt sanıp aktardı**) · yorum içi `dosya:satır` **iki kez**
+üst üste bayatladı (düzeltmenin kendisi satırları kaydırdı) · "0 bayat referans kaldı" iddiası
+(denetim grep'i **dar desenliydi**, kardeş-dosya referanslarını görmüyordu).
+**En öğretici hâli:** *"satır no yazma, içerik-çapası kullan"* diyen yorum bloğunun **kendisi**
+3 bayat satır numarası taşıyordu.
+**Prevention:** GATE YOK (moratoryum — §4 "önce doküman denendi ve yetmedi" henüz karşılanmadı).
+Yazım disiplini: **(a)** sayı yazarken **ölçüm tarihini** de yaz · **(b)** aynı dosya içinde
+**içerik çapası** kullan, satır numarası değil · **(c)** çapraz-dosya referansını **sembol adına**
+bağla (*"ada göre ara: `<sembol>`"*) · **(d)** **sayıyı tazelemek sınıfı çözmez** — çapaya çevir ·
+**(e)** yorumdaki **veri iddiasını** (canlıda X var/yok) ölçmeden aktarma.
+**Status:** ⚠️ DİSİPLİN — kaynak: 2026-07-29 silme kontrolü turu.
+
 ## 🔄 SELF-UPDATE PROTOKOLÜ
 
 ### Oturum BAŞLANGICI (her yeni session)
@@ -252,7 +287,9 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 | #6 TempScripts → Playbook | 2026-05-13 | 1 | ⚠️ DİSİPLİN |
 | #11 where_used count=0 = orphan sanma | 2026-07-09 | 1 (orphan sweep) | ✅ SOLVED (kod gate) |
 | #12 Guard kör noktası (heredoc + tek yüzey) | 2026-07-09 | 3 guard + 4 kural (denetim) | ✅ SOLVED (tek normalizasyon + CI testi) |
-| #16 Arama aracının kapsamı — `0` ≠ "yok" | 2026-07-28 | 2 (FUGR grep körlüğü · classrun sahte teşhisi) | ⚠️ DİSİPLİN + CI testi (CSRF regresyonu) |
+| #16 Arama aracının kapsamı — `0` ≠ "yok" | 2026-07-28 | **5** (FUGR grep · classrun sahte teşhis · behavior-pool `main` boş · lock-check tip desteği · dar grep deseni "0 referans") | ⚠️ DİSİPLİN + CI testi (CSRF regresyonu) |
+| #17 **Katman katman keşif** — çapraz-kesen işte envantersiz ilerleme | 2026-07-29 | 1 (silme kontrolü: 3 app sanıldı, 7 çıktı; 14 yol sanıldı, 24 çıktı; 6 review turu) | ⚠️ DİSİPLİN → `howto-cok-katmanli-degisiklik.md` |
+| #18 **Bayat sayı/satır referansı** (yorumda `dosya:satır`, "N obje", "N metot") | 2026-07-29 | **6** (obje sayısı · metot sayısı ×2 · veri iddiası · yorum satır-no ×2) | ⚠️ DİSİPLİN (içerik-çapası kuralı) |
 
 > **Hedef:** ACTIVE/⚠️ DİSİPLİN olanları zamanla SOLVED'a çevir (kod gate ile).
 
