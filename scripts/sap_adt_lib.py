@@ -1823,8 +1823,64 @@ class SAPADTClient:
                 self._debug(f"[DEBUG] get_object_revisions - exception: {str(e)[:100]}")
             return []
 
+    def fetch_source_etag(self, object_url):
+        """`source/main` ETag'ini döndür — **LOCK'TAN ÖNCE çağrılmak üzere**.
+
+        NEDEN AYRI METOT (2026-07-30, sınıf push'u 423 vakası):
+        `set_object_source()` ETag'i kendi içinde çekiyordu; `lock_handle` bir parametre
+        olduğu için bu GET **DAİMA lock alındıktan SONRA** koşuyordu. Stateful ADT
+        oturumunda lock ile PUT arasına giren GET, lock context'ini bozuyor →
+        `423 ExceptionResourceInvalidLockHandle` ("Resource CLASS ... is not locked").
+
+        Emsal (playbook): `adt-fugr-functions.md` §4 aynı sınıfı FM'ler için kaydetmiş
+        (*"Retry/ETag stateful lock'u bozuyor"*) ve çözümü sıkı `lock→PUT→unlock` olan
+        `set_function_module_source()` idi — sınıfların muadili yoktu.
+        ⚠ MSAG/DTEL/Z-tablo çözümü (`If-Match` GÖNDERME) **sınıflara UYGULANAMAZ**:
+        `CL_KU_CLASS_REST_HANDLER.put()` ETag yoksa `cx_adt_res_invalid_etag` fırlatır.
+        Bu yüzden fix `If-Match`'i kaldırmaz, yalnız **GET'i lock penceresinden çıkarır**.
+
+        Neden DDLS/CDS push'ları etkilenmiyordu: DDIC source PUT'u `If-Match` istemez →
+        lock ile PUT arasına GET girmez → lock hayatta kalır. Aynı gün 3 CDS sorunsuz
+        geçip ilk sınıf push'unun anında ölmesi bu açıklamayla tutarlı.
+
+        "Stale inactive" seçimi KORUNDU: inaktif sürüm varsa SAP onun ETag'ini doğrular,
+        o yüzden önce inactive denenir, yoksa active'e düşülür.
+        """
+        if not object_url.endswith('/source/main'):
+            object_url = object_url.rstrip('/') + '/source/main'
+        etag = None
+        try:
+            try:
+                resp_inactive = self.session.get(
+                    f"{self.url}{object_url}",
+                    headers=self._get_headers('text/plain'),
+                    params={'version': 'inactive'},
+                    timeout=self.timeout_short
+                )
+                if resp_inactive.status_code == 200:
+                    etag = (resp_inactive.headers.get('ETag')
+                            or resp_inactive.headers.get('etag'))
+            except Exception as e_inactive:
+                if self.debug_enabled:
+                    self._debug(f"[DEBUG] fetch_source_etag - inactive check failed: {str(e_inactive)[:100]}")
+            if not etag:
+                base_url = object_url.replace('/source/main', '')
+                _, etag = self.get_object_source(base_url, return_etag=True)
+        except Exception as e:
+            if self.debug_enabled:
+                self._debug(f"[DEBUG] fetch_source_etag - failed: {str(e)[:100]}")
+            return None
+        if self.debug_enabled:
+            self._debug(f"[DEBUG] fetch_source_etag - pre-lock ETag: {etag}")
+        return etag
+
     def set_object_source(self, object_url, source_code, lock_handle, transport=None, etag=None, max_retries=5):
         """Push ABAP object source code to SAP with fallback strategies.
+
+        ⚠ `etag` VERİLMEZSE bu metot onu kendisi çeker — ama o GET **lock alındıktan
+        sonra** koşar ve sınıflarda `423 InvalidLockHandle` üretir. Çağıranlar ETag'i
+        **lock'tan ÖNCE** `fetch_source_etag()` ile alıp buraya geçirmelidir.
+        İç fetch yalnız geriye-dönük uyumluluk için duruyor.
 
         Note: Automatically retries with different transport parameter approaches.
         Different SAP versions may require corrNr as query param or X-sap-adt-transport header.
