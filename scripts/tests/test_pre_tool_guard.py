@@ -291,9 +291,80 @@ def test_blocklist_jenerigi_EZMEZ() -> str:
     return ""
 
 
+def test_posix_cd_gorunurluk_cozumu() -> str:
+    """`cd /c/...` (Git-Bash POSIX) öneki görünürlük sorgusunu FAIL-CLOSED'a kaçırmamalı.
+
+    VAKA 2026-07-30: `_repo_public_mu()` hedef repoyu `cd` önekinden çıkarıp `subprocess(cwd=)`
+    veriyordu. Bash tool'unda yazılan `cd /c/IX/<proje> && git commit …` POSIX yolunu Windows'ta
+    çözemiyor → exception → `gorunurluk-sorulamadi(fail-closed)` → PRIVATE repo **public**
+    sayılıyor → meşru commit bloklanıyordu. Yön güvenliydi (sızdırmıyordu) ama yanlış-pozitif
+    üretiyordu; o da bypass alışkanlığı doğurur.
+
+    Bu test `_win_yol()` çevirisini AĞSIZ doğrular (her ortamda koşar). Uçtan-uca eksen
+    (gerçek `gh repo view`) yalnız IX_GUARD_TEST_LIVE=1 + gh varken koşar.
+    """
+    kod = (
+        "import importlib.util, sys, json\n"
+        "spec = importlib.util.spec_from_file_location('g', sys.argv[1])\n"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+        "cases = json.loads(sys.argv[2])\n"
+        "out = [[g, m._win_yol(g), b] for g, b in cases]\n"
+        "sys.stderr.write(json.dumps(out))\n"
+    )
+    bs = chr(92)
+    vakalar = [
+        ["/c/IX/proje", "C:" + bs + "IX" + bs + "proje"],       # temel POSIX -> Windows
+        ["/d/a/b/c", "D:" + bs + "a" + bs + "b" + bs + "c"],    # baska surucu
+        ["'/c/IX/proje'", "C:" + bs + "IX" + bs + "proje"],     # tirnakli
+        ["C:" + bs + "IX" + bs + "proje", "C:" + bs + "IX" + bs + "proje"],  # zaten Windows
+        ["core", "core"],                                        # goreli -> dokunulmaz
+        ["", ""],                                                # bos -> patlamaz
+    ]
+    r = subprocess.run([sys.executable, "-", str(GUARD), json.dumps(vakalar)], input=kod,
+                       capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       timeout=60)
+    try:
+        sonuc = json.loads(r.stderr[r.stderr.index("[["):])
+    except Exception:
+        return f"_win_yol cagrilamadi (guard import hatasi?): {(r.stderr or '')[-200:]}"
+    for girdi, cikti, beklenen in sonuc:
+        if cikti != beklenen:
+            return f"_win_yol({girdi!r}) = {cikti!r}, beklenen {beklenen!r}"
+
+    if not (GH and LIVE):
+        return ""   # uctan-uca eksen atlandi; main() bunu SKIP olarak yazdirir
+    kok = GUARD.resolve().parents[2]
+    posix = "/" + str(kok)[0].lower() + str(kok)[2:].replace(bs, "/")
+    kod2 = (
+        "import importlib.util, sys\n"
+        "spec = importlib.util.spec_from_file_location('g', sys.argv[1])\n"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+        "pub, repo = m._repo_public_mu('cd ' + sys.argv[2] + ' && git commit -m x')\n"
+        "sys.stderr.write('REPO=' + str(repo))\n"
+    )
+    r2 = subprocess.run([sys.executable, "-", str(GUARD), posix], input=kod2,
+                        capture_output=True, text=True, encoding="utf-8", errors="replace",
+                        timeout=90)
+    if "fail-closed" in (r2.stderr or ""):
+        return ("POSIX cd onekiyle gorunurluk HALA sorulamiyor (fail-closed) — "
+                "_win_yol devrede degil mi? " + (r2.stderr or "")[-160:])
+    return ""
+
+
 def main() -> int:
-    fails, skipped = [], 0
+    fails, skipped, atlananlar = [], 0, []
     ozet = {}
+
+    posix_cd = test_posix_cd_gorunurluk_cozumu()
+    ozet["POSIX-CD GORUNURLUK"] = [0 if posix_cd else 1, 1]
+    if posix_cd:
+        fails.append("POSIX-CD / " + posix_cd)
+    if not (GH and LIVE):
+        # SESSİZ ATLAMA YASAK (bu dosyanın kendi dersi): _win_yol birim ekseni koştu,
+        # uçtan-uca `gh repo view` ekseni KOŞMADI — adıyla yazdırılır.
+        skipped += 1
+        atlananlar.append("POSIX-CD / uctan-uca gh repo view "
+                          "(IX_GUARD_TEST_LIVE=1 + gh gerekir)")
 
     birlesim = test_blocklist_jenerigi_EZMEZ()
     ozet["LEAK BIRLESIMI"] = [0 if birlesim else 1, 1]
@@ -309,7 +380,6 @@ def main() -> int:
     ozet["GH YAYIN YUZEYI"] = [0 if gh else 1, 1]
     if gh:
         fails.append("GH YAYIN / " + gh)
-    atlananlar = []
     for kural, ad, tool, cmd, beklenen, skip in build_cases():
         if skip:
             skipped += 1

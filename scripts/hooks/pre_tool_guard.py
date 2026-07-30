@@ -242,6 +242,22 @@ _ARG_BODYFILE = re.compile(
     r"(?:--body-file|--notes-file|(?<![\w-])-F)[= ]+(?:'([^']+)'|\"([^\"]+)\"|(\S+))")
 _CD_PREFIX = re.compile(r"\bcd\s+([^\s;&|]+)")
 _AYRAC = re.compile(r"\s*(?:\|\||&&|[;|&\n])\s*")
+_POSIX_SURUCU = re.compile(r"^/([A-Za-z])/(.*)$")
+
+
+def _win_yol(yol: str) -> str:
+    """Git-Bash POSIX yolunu Windows yoluna çevirir (`/c/IX/X` → `C:\\IX\\X`).
+
+    NEDEN (2026-07-30 vakası): Bash tool'unda `cd /c/IX/<proje> && git commit …` yazıldığında
+    `_CD_PREFIX` POSIX yolu yakalıyor, `subprocess(cwd=...)` Windows'ta bu yolu bulamıyor →
+    exception → görünürlük sorulamıyor → fail-closed → PRIVATE repo public sayılıp meşru
+    commit bloklanıyordu. Yön güvenliydi ama yanlış-pozitif bypass alışkanlığı doğurur.
+    """
+    yol = (yol or "").strip().strip("'\"")
+    m = _POSIX_SURUCU.match(yol)
+    if m:
+        return f"{m.group(1).upper()}:\\" + m.group(2).replace("/", "\\")
+    return yol
 
 
 def _arg_deger(s: str, ad: str) -> str:
@@ -307,7 +323,9 @@ def _repo_public_mu(hay: str) -> tuple:
         argv.insert(3, m.group(1))
     else:
         c = _CD_PREFIX.search(hay)
-        cwd = c.group(1) if c else str(_PROJ_ROOT)
+        cwd = _win_yol(c.group(1)) if c else str(_PROJ_ROOT)
+        if not Path(cwd).is_dir():          # çözülemeyen cd → proje köküne düş
+            cwd = str(_PROJ_ROOT)           #   (yoksa cwd hatası fail-closed'a kaçar)
     try:
         r = subprocess.run(argv, capture_output=True, text=True, timeout=15, cwd=cwd, shell=False)
         if r.returncode != 0:
