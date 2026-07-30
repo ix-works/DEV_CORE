@@ -63,6 +63,7 @@ Hepsi `RPY_DYNPRO_INSERT` / `RS_CUA_INTERNAL_*` ile klasik ekran/status üretimi
 | Hata | Sebep / Çözüm |
 |---|---|
 | `400 "Session Timed Out"` (classrun) | RPY/RS_CUA **dialog context** ister → `adt_classrun` yapamaz. RFC-enabled FM + `/sap/bc/soap/rfc`. |
+| **`"Class does not implement if_oo_adt_classrun~main!"` — sınıf AKTİF ve arayüz kaynakta VARKEN** | **SAHTE teşhis.** ⛔ Aynı isimle tekrar deneme, ⛔ taze isimle yeniden yaratma da **yetmeyebilir** (2026-07-30: iki taze sınıf, ikisi de aktif, ikisi de aynı hata). Önce **ELE:** CSRF (`scripts/tests/test_csrf_header_injection.py` koş) · bare-header (`run_classrun` `_get_headers` kullanıyor mu) · sınıfın kendisi (`adt_get` → `version=active` + `INTERFACES` kaynakta). Üçü de temizse kalan hipotez **app-server/class-load asimetrisi** → **KANAL DEĞİŞTİR: Eclipse F9** ya da SOAP-RFC. Detay: [`adt-fugr-functions.md`](adt-fugr-functions.md) §6 "classrun app-server load-cache". |
 | `00264 "GUI status ... durumu eksik / not generated"` | `RS_CUA_INTERNAL_WRITE` tanımı yazar ama load üretmez → sonrasında `RS_CUA_GENERATE` çağır. |
 | `423 InvalidLockHandle` (FM source push) | `set_object_source` retry/ETag stateful lock'u bozar → sıkı lock→PUT→activate→unlock (`set_function_module_source`). |
 | `400 "Parameter comment blocks are not allowed"` | FM imzası `*"` block ile push edildi → **satır-içi ABAP imza** yaz. |
