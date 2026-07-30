@@ -521,6 +521,18 @@ class SAPClient:
                 transport = self._find_existing_transport(object_name, object_type, transport)
 
             # Lock object (pass transport so SAP registers lock under correct corrNr)
+            # ⚠ ETag'i LOCK'TAN ÖNCE çek (2026-07-30, sınıf push'u 423 vakası).
+            # set_object_source() ETag'i kendi içinde çekerse o GET lock ile PUT arasına
+            # girer ve stateful lock context'ini bozar → 423 InvalidLockHandle.
+            # Sınıflarda If-Match ZORUNLU (CL_KU_CLASS_REST_HANDLER), o yüzden ETag'i
+            # atlayamayız — yalnız lock penceresinin DIŞINA taşıyoruz.
+            # Detay + emsal: sap_adt_lib.fetch_source_etag() docstring'i.
+            pre_lock_etag = self.adt_client.fetch_source_etag(source_url)
+            if pre_lock_etag:
+                print(f"      [OK] ETag alindi (lock oncesi): {pre_lock_etag[:24]}...")
+            else:
+                print(f"      [INFO] ETag alinamadi — If-Match'siz denenecek")
+
             print(f"\n[2/4] Locking object...")
             print(f"      corrNr (transport passed to lock): {transport or '[NONE — ghost transport risk!]'}")
 
@@ -558,7 +570,8 @@ class SAPClient:
                 print(f"      Transport: {effective_transport}")
 
             try:
-                self.adt_client.set_object_source(source_url, source_code, lock_handle, effective_transport)
+                self.adt_client.set_object_source(source_url, source_code, lock_handle,
+                                                  effective_transport, etag=pre_lock_etag)
                 result['source_uploaded'] = True
                 print(f"      [OK] Source uploaded")
             except Exception as upload_error:
@@ -723,7 +736,8 @@ class SAPClient:
                                     fb_lock2 = self.adt_client.lock_object(object_url, transport=transport)
                                     fb_eff2 = self.adt_client._last_lock_effective_transport or transport
                                     try:
-                                        self.adt_client.set_object_source(source_url, source_code, fb_lock2, fb_eff2)
+                                        self.adt_client.set_object_source(source_url, source_code, fb_lock2,
+                                                                          fb_eff2, etag=pre_lock_etag)
                                         self.adt_client.unlock_object(object_url, fb_lock2)
                                         fb_lock2 = None
                                         act_b5 = self.adt_client.activate_object(object_name, object_url)
