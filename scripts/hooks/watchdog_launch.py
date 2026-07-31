@@ -32,8 +32,12 @@ def _brifing_lint(data):
         prompt = ti.get("prompt") or ""
         if len(prompt) < 400:
             return None
-        anahtarlar = ("GOREV", "KANIT KURAL")   # asgari 2 zorunlu şablon izi (ASCII-katlanmış)
-        duz = prompt.upper().replace("İ", "I").replace("Ö", "O").replace("Ü", "U")
+        # NFKD-katla: harness NFD gönderebiliyor (canli FP 2026-08-01 — "GÖREV" vardi,
+        # lint "eksik" dedi); combining-mark'lari dusur -> O/U/I ASCII'ye iner.
+        import unicodedata
+        duz = "".join(c for c in unicodedata.normalize("NFKD", prompt.upper())
+                      if not unicodedata.combining(c)).replace("İ", "I")
+        anahtarlar = ("GOREV", "KANIT KURAL")
         eksik = [a for a in anahtarlar if a not in duz]
         if eksik:
             return ("[BRIFING-LINT] Spawn prompt'unda R2 sablon izleri eksik: "
