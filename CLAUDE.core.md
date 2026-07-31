@@ -69,8 +69,8 @@
 | Katman | Konu | Yer | Nasıl yüklenir |
 |---|---|---|---|
 | **L1a** | Her-oturum davranış değişmezleri | **§1.1 (aşağıda)** | her oturum (bu dosya) |
-| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | **eşleşen dosyaya dokununca** (`paths:` — `globs:` DEĞİL) |
-| **L1c** | Derin davranış referansı | [`AGENTS.md`](AGENTS.md) | ⚠ **OTOMATİK YÜKLENMEZ** — açıkça okunmalı |
+| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | **her oturum yüklenir** (`paths:` yazılı ama harness tembel-tetiği çalıştırmıyor — #17204; ölçüm 2026-07-31: 37/37 oturum koşulsuz. Harness düzelirse inspector A3 fark eder) |
+| ~~L1c~~ | ~~AGENTS.md~~ — **SUPERSEDED (D1 2026-08-01)**: içerik §1.1 + rules/ + MAINTENANCE + operating-model'e taşındı | — | — |
 | **L2** | Stabil kurumsal standartlar (naming, coding, UI, doc format) | [`standards/`](standards/) | on-demand |
 | **L3** | Operasyonel pattern (ADT pattern bankası, lessons-learned) | [`playbook/`](playbook/) | on-demand |
 | **L4** | Paket-spesifik (prefix, bağımlılık, istisna) — **PROJE reposunda** | `<source_root>/<MODULE>/<PKG>/.rules.md` | on-demand |
@@ -98,6 +98,7 @@
   *(Vaka 2026-07-28: `checkout main && pull` bir `&&` zincirinin erken kırılan adımıydı, sessizce hiç
   koşmadı; sonraki branch eski noktadan açıldı. Başlangıcı komutta vermek bu sınıfı tümden kapatır —
   senkron adımının koşup koşmadığına bağımlı olmaz.)*
+  ⚠️ Worktree yalnız provizyonlu açılır: `team_setup.py --provision-worktree` (junction + `.conn_adt` provizyonu şart — D16; çıplak `git worktree add` guardrail'siz kalır).
   Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU**.
 - **HEDEF-AÇIKLIK — `gh`/`git` üç değişmez (2026-07-10 dersi; guard kural 9):**
   1. **Repoyu DEĞİŞTİREN her `gh` alt-komutunda hedef AÇIKÇA verilir.** Üç biçim vardır:
@@ -184,7 +185,7 @@ Her yeni oturum başında, SAP işlemi yapmadan ÖNCE:
 ```
 [Session başladı — <PROJECT_NAME>]
 ⛔ KESİN YASAKLAR aktif (ADR 0005): A/B/C/D (D: master_language=<ML>)
-✓ Core loader yüklendi (junction sağlam) — CLAUDE.core.md (L1a) + claude/rules/ (L1b, glob-tetiklemeli)
+✓ Core loader yüklendi (junction sağlam) — CLAUDE.core.md (L1a) + claude/rules/ (L1b — her oturum; tembel-tetik #17204 nedeniyle pasif)
 ✓ SAP profili: <sap_profile>/<release> (bloklu yetenekler: <profilden>)
 ✓ run_all_validators.py --quick: <OK | N ihlal>
 ✓ Aktif paket: <PKG_FULL veya "belirsiz, kullanıcıya sor">
@@ -200,7 +201,7 @@ Bu format atlanırsa kullanıcı loader'ın yüklenmediğini varsayar → T4.
 |---|---|---|
 | **T1** | ADT işlemi başarısız denemelerden sonra başarılı oldu | `playbook/<obje-tipi>.md` (ÇALIŞAN YÖNTEM + DENENEN BAŞARISIZ) — **core'a, SORU 0 kurallarıyla** |
 | **T2** | Playbook'ta olmayan obje tipi/scenario başarıyla işlendi | Yeni section/dosya `playbook/` (core) |
-| **T3** | Kullanıcı kural koydu | Davranışsa AGENTS.md, standartsa standards/ (core); pakete özelse proje `.rules.md` |
+| **T3** | Kullanıcı kural koydu | Davranışsa CLAUDE.core §1.1/claude-rules, standartsa standards/ (core); pakete özelse proje `.rules.md` |
 | **T4** | Kullanıcı trigger phrase kullandı | `playbook/lessons-learned.md` recurrence + kod gate öner |
 | **T5** | Yeni paket / naming kararı | Proje: `<source_root>/<MODULE>/<PKG>/.rules.md` (bootstrap script) |
 | **T6** | TempScripts'te çalışan script, kalıcı lazım | core `scripts/`e taşı + playbook referansı (genericize!) |
@@ -289,8 +290,8 @@ analizi + canlı-test → PR.
 | Konu | Dosya |
 |---|---|
 | Her-oturum davranış değişmezleri | §1.1 (bu dosya) |
-| Dosya-türüne bağlı davranış (glob-tetiklemeli) | [`claude/rules/`](claude/rules/) |
-| Git workflow / ADT-infra — **derin referans, otomatik yüklenmez** | [`AGENTS.md`](AGENTS.md) |
+| Dosya-türüne bağlı davranış (L1b — fiilen her oturum, #17204) | [`claude/rules/`](claude/rules/) |
+| Git workflow / ADT-infra derin referans | §1.1 + [`MAINTENANCE.md`](MAINTENANCE.md) (AGENTS.md SUPERSEDED) |
 | Naming standardı | [`standards/01-naming.md`](standards/01-naming.md) |
 | Klasik backend (SEGW/FE) | [`standards/02-coding-backend.md`](standards/02-coding-backend.md) |
 | RAP kodlama | [`standards/05-coding-rap.md`](standards/05-coding-rap.md) |

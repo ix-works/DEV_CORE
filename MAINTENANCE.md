@@ -15,6 +15,22 @@
   genericize-leak + link-audit + applies_to şeması. CI aynı taramayı `--all` (tam-ağaç)
   koşar — hook atlanmış olsa bile merge edilemez.
 
+**ADT-ALTYAPI 'önce uyar+onay' SOMUT KAPSAMI (AGENTS.md'den taşındı, 2026-08-01 D1):**
+
+**Kapsam (HIGH — onaysız Edit/Write YASAK):**
+- `core/scripts/sap_adt_lib.py`, `core/scripts/sap_sync_pull.py`, `core/scripts/source_drift.py` ve diğer pull/drift/aktivasyon mantığı taşıyan `core/scripts/*.py`
+- MCP server: `core/mcp_servers/sap_adt/**`
+- Hook'lar: `core/scripts/hooks/**` + proje-lokal `scripts/hook_shim.py` · Validator'lar: `core/scripts/validators/**` + proje `scripts/validators-local/**`
+- Kural dosyaları (AGENTS/standards/playbook/governance) — yalnız SAP-yazma/pull/aktivasyon **davranışını** değiştiren kısımlar
+
+**Kapsam DIŞI (highlight gerekmez):** salt-okunur analiz; repo-içi uygulama kaynağı (FE/BE build, paket `.cds/.abap` iş kodu); saf dokümantasyon.
+
+**Enforcement (ADR 0019 §5):** YARGI sınıfı — "uyarı yeterince belirgin mi" deterministik değil; ama TETİK (kapsam dosyasına Edit/Write) deterministiktir → **proaktif PreToolUse cue-hook ÖNERİLDİ** (kullanıcı onayı bekliyor) + bu kural metni + reviewer/self-check üyeliği. Coverage: tetik = kapsam glob'ları; ihlal sinyali = highlight'sız infra edit.
+
+> **Gerekçe (somut):** 2026-06-21 — drift-fix (v1) iş listesi arasında highlight'sız/onaysız uygulandı; kanıt incelemesiyle yanlış kapsamda olduğu görülüp geri alındı. Paylaşılan altyapı + SAP-yazma yolu → sessiz değişiklik kullanıcının kontrolünü kaybettirir. Bkz. memory `feedback_adt-infra-degisikligi-once-uyar-onay`, [`feedback_arac-kod-fix-lider-isi`], ADR 0019 (gate'siz kural ≈ kuralsız).
+
+---
+
 ## 2. Genericize-on-write (kimlik core'a GİREMEZ)
 
 Proje/müşteri kimliği (sistem adı, kullanıcı, gerçek paket numaraları, eski-kök yolları)

@@ -19,7 +19,7 @@ Drift-guard (ADR 0016) gibi **dayatılan** (advisory değil) 4 katman:
 
 - **G2 — Kanonik PLUMBING deseni (app-kopyalama DEĞİL):** Freestyle UI5+V2'nin **mekanik** kısmı (save=sıralı `update`, nav=`to_X`, `setData` şekil, master-detail seçim-wiring, MERGE tarih-null) tek-doğru-yol, uygulamadan bağımsız → `playbook/ui-freestyle-odata-v2.md` §K'de kodlandı; **referans alınır, sıfırdan icat edilmez.** Uygulamaya özel içerik (entity/alan/layout/iş-kuralı/VH/label) **bespoke** yazılır — hiçbir ekran kopya değildir. **Sınır: framework-plumbing = reuse · iş-içeriği = bespoke.** Kardeş uygulama ŞART DEĞİL — kanonik §K yeterli.
 - **G3 — Statik tuzak gate:** `scripts/validators/check_ui5_freestyle_traps.py`, `run_all_validators`'a wire'lı. **T1 (V2-nav `_X`) = HARD ERROR** (build durur); T2 (type=Number) / T3 (core:Title) = WARN (meşru istisnaları var: filtre-sayaç / Form).
-- **G4 — Lider doğrulama protokolü:** AGENTS.md'ye eklendi — "done/verified" kanıtsız kabul edilmez (UI: G3 PASS + runtime smoke; SAP: active readback); recon ≠ implementasyon; kör-bug yasak (önce gerçek hata).
+- **G4 — Lider doğrulama protokolü:** claude/rules/ui5-freestyle.md §6'ya taşındı (D1 2026-08-01; ilk ev AGENTS.md idi) — "done/verified" kanıtsız kabul edilmez (UI: G3 PASS + runtime smoke; SAP: active readback); recon ≠ implementasyon; kör-bug yasak (önce gerçek hata).
 - **G1 — Runtime smoke-test gate (PLANLI, auth kurulumu ile):** UI "done" öncesi app çalıştırılıp console yakalanır (zero render error + ana akış). **Araç = SADECE playwright-cli** (scriptli, headless, tekrarlanabilir, commit'lenebilir). **MCP canlı-browser GATE'te KULLANILMAZ** — iki sebep: (1) her G1 run'ında canlı browser sürmek YAVAŞ; (2) taze-context = SAP oturumu yok → `$metadata` 401 → yalnız render görülür, veri/fonksiyonel akış görülmez. MCP-browser yalnız ajanın **ad-hoc debug'ı** içindir, gate değil. playwright-cli `httpCredentials` ile `.conn_adt` kimliğini fiori-proxy'ye geçirir → 401 yok → gerçek akış test edilir. **KURULDU ve KANITLANDI (2026-06-16):** `scripts/ui-smoke/` (playwright.config + generic `ui.smoke.spec.ts` + lockout-safe `run_ui_smoke.py`). fiori dev-proxy Basic-auth'u SAP'ye FORWARD ediyor (kanıt: `8099 + basic = 200`) → httpCredentials çalışıyor. **Booking 8099 smoke PASS** (`$metadata` 200, zero gerçek console-error). Runner auth'u tek-doğrular (401→DUR, hesap-kilidi önlemi), `retries:0`.
 
 ## Sonuçlar
@@ -31,5 +31,5 @@ Drift-guard (ADR 0016) gibi **dayatılan** (advisory değil) 4 katman:
 ## İlgili
 - Kanonik desen: `playbook/ui-freestyle-odata-v2.md` §K + §J tuzak tablosu
 - Gate: `scripts/validators/check_ui5_freestyle_traps.py` (CLAUDE.md §7)
-- Lider protokolü: `AGENTS.md` §2 "UI BUILD DONE-CRITERIA"
+- Lider protokolü: `claude/rules/ui5-freestyle.md` §6 "UI BUILD DONE-CRITERIA" (D1 2026-08-01 — ilk ev AGENTS.md idi)
 - Benzer enforced-gate felsefesi: ADR 0016 (drift-guard), ADR 0006 (reviewer)

@@ -1,0 +1,16 @@
+managed implementation in class zbp_i_zsd001_order unique;
+strict ( 2 );
+
+define behavior for ZSD001_I_Order alias Order
+persistent table zsd001_ord
+lock master
+authorization master ( instance )
+{
+  // duz metin yorum, tek tirnak kullanilir: 'test'
+  create;
+  update;
+  delete;
+
+  field ( readonly ) OrderId;
+  field ( mandatory ) Description;
+}

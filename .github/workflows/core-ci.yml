@@ -82,6 +82,11 @@ jobs:
       # SONRA TAM konformans: template_project (public) clone edilip GERCEK guard'a karsi
       # kosulur → ③④ + KABLOLAMA + META-GATE (kanitsiz kural = FAIL) burada zorlanir.
       # Yalniz --self-test-only meta-gate'i gercek guard'a uygulamaz (notr stub'i okur).
+      # G1 (2026-07-31): HARD validator fixture korpusu — bad→FAIL, good→PASS.
+      # "Kontrol kostu != kontrol bakti" ailesine yapisal panzehir; ilk 10 validator.
+      - name: Validator fixture testleri (G1 negatif-test korpusu)
+        run: python tests/run_fixture_tests.py
+
       - name: template_project clone (tam konformans icin)
         run: git clone --depth 1 https://github.com/ix-works/template_project.git ../template_project
       - name: Guard konformans matrisi (self-test + TAM ucuncu-proje)

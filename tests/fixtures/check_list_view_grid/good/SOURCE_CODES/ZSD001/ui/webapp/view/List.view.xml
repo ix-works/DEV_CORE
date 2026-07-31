@@ -1,0 +1,20 @@
+<mvc:View
+    controllerName="zsd001.controller.List"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns:t="sap.ui.table"
+    xmlns="sap.m">
+    <Page title="Sipariş Listesi">
+        <t:Table id="idOrderTable" rows="{/Orders}" selectionMode="MultiToggle">
+            <t:columns>
+                <t:Column>
+                    <t:label><Text text="Sipariş No"/></t:label>
+                    <t:template><Text text="{OrderId}"/></t:template>
+                </t:Column>
+                <t:Column>
+                    <t:label><Text text="Müşteri"/></t:label>
+                    <t:template><Text text="{Customer}"/></t:template>
+                </t:Column>
+            </t:columns>
+        </t:Table>
+    </Page>
+</mvc:View>

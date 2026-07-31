@@ -1,3 +1,4 @@
+<!-- uretim: 2026-08-01T00:18:28+03:00 · core-commit: caacea2 — bilgi satiri; tazelik kiyasinda yok sayilir -->
 <!-- URETILMIS DOSYA — elle duzenleme. Uretici: core/scripts/build_core_index.py
      Tazelik gate'i: core/scripts/validators/check_core_index_fresh.py -->
 
@@ -12,7 +13,7 @@
 > · `rg -L --no-ignore <p>` · `find -L core`. Kokten path'siz arama = sessiz sifir.
 
 
-## `core/playbook/` (42 dosya)
+## `core/playbook/` (45 dosya)
 
 - [`core/playbook/00-discipline-and-principles.md`](../core/playbook/00-discipline-and-principles.md) — ADT Disiplini, Hızlı Erişim ve Genel Prensipler
 - [`core/playbook/adt-cds.md`](../core/playbook/adt-cds.md) — CDS View (DDLS/DF)
@@ -43,6 +44,9 @@
 - [`core/playbook/checklists/ui-backend-rap-creation.md`](../core/playbook/checklists/ui-backend-rap-creation.md) — Checklist — UI Uygulaması RAP Backend Oluşturma
 - [`core/playbook/checklists/ui-freestyle-creation.md`](../core/playbook/checklists/ui-freestyle-creation.md) — Checklist — Freestyle UI5 (OData V2 / RAP tüketen) Oluşturma
 - [`core/playbook/coding-patterns.md`](../core/playbook/coding-patterns.md) — ABAP Coding Patterns — Range, FOR ALL ENTRIES, İç Tablo, Kur Dönüşümü
+- [`core/playbook/howto-abap-email.md`](../core/playbook/howto-abap-email.md) — ABAP'ten E-posta Gönderme — HTML gövde (+ ek-dosya) · `SO_DOCUMENT_SEND_API1`
+- [`core/playbook/howto-cok-katmanli-degisiklik.md`](../core/playbook/howto-cok-katmanli-degisiklik.md) — HOWTO — Çapraz-kesen (çok katmanlı) davranış değişikliği nasıl yönetilir
+- [`core/playbook/howto-delete-guard.md`](../core/playbook/howto-delete-guard.md) — HOWTO — Silme Kontrolü (delete guard): backend kuralından kullanıcının gördüğü mesaja
 - [`core/playbook/howto-document-lock.md`](../core/playbook/howto-document-lock.md) — How-To: VA02-Tarzı Belge Kilidi (App-Level, ortak ZSD000)
 - [`core/playbook/howto-dynpro-gui-status-generation.md`](../core/playbook/howto-dynpro-gui-status-generation.md) — Klasik Dynpro ekranı + GUI status'u AI'ın RFC FM ile (SOAP-RFC, dialog context) üretmesi
 - [`core/playbook/howto-kullanici-dokumani-pdf-ekran-goruntulu.md`](../core/playbook/howto-kullanici-dokumani-pdf-ekran-goruntulu.md) — How-To: Markdown Dökümanı → Ekran Görüntülü Şık PDF (KD/FS/TS)
@@ -97,4 +101,4 @@
 
 ---
 
-**Toplam 74 dokuman.** Bu dosya uretilmistir; icerik degistiginde `build_core_index.py` yeniden kosulur.
+**Toplam 77 dokuman.** Bu dosya uretilmistir; icerik degistiginde `build_core_index.py` yeniden kosulur.

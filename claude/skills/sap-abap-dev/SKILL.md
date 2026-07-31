@@ -36,14 +36,12 @@ tekrarlayan operasyonel tuzakları gösterir.
 Her SAP işleminden önce bunlar geçerlidir. İhlal riski varsa: **DUR → AÇIKLA →
 ÖNERİ SUN → KULLANICIDAN İSTE → BEKLE.**
 
-- **A — Standart SAP objeleri (Z ile başlamayan):** yaratma/değiştirme/silme YASAK.
-  Append struct, alan ekleme, FM/BAdI/program/message-class değişikliği dahil. Bunu
-  yapan script'i çalıştırma da yasak. Append field/DTEL adını **AI önermez** — kullanıcı belirler.
-- **B — Standart tablo verileri:** direkt `INSERT/UPDATE/DELETE/MODIFY` YASAK (Z'li
-  kodun içinde bile). Sıra: BAPI → RFC FM → transaction (BDC) → kullanıcıdan manuel. Asla direkt SQL.
-- **C — Sistem state:** transport yaratma/release, package yaratma, enqueue lock silme YASAK.
-- **D — Z'li obje yaratma:** TR login zorunlu (`sap-language=TR`), 4 field label TR ve
-  tam, title/description boş bırakılmaz, activate öncesi REST GET ile doğrula.
+> **KANONİK METİN = kök `CLAUDE.md` fiziksel damgası** (ADR 0021; `check_kesin_yasaklar`
+> eşliği zorlar — burada KOPYA tutulmaz, D6 2026-08-01). Özet: **A)** standart objeye
+> dokunma (append/DTEL adını AI önermez) **B)** standart tablo verisine direkt SQL yok
+> (BAPI→RFC→BDC→manuel) **C)** transport/package yaratma-release, lock silme yok
+> **D)** Z obje = projenin **`master_language`** login'i (hardcoded-TR DEĞİL — `project.yaml`)
+> + 4 label TAM + activate öncesi REST GET.
 
 Detay: `governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md`
 
@@ -119,7 +117,7 @@ annotation/syntax pattern tahmin edilmez.
 
 ### Tier 2 — MODÜL (ADR 0004, modül-bazlı organizasyon)
 
-Objeler `ERP/<MODULE>/<PACKAGE>/` altında yaşar (`SD`, `MM`, `FI`, `CO`, `QM`, `PM`,
+Objeler `<source_root>/<MODULE>/<PACKAGE>/` (değeri `project.yaml` → `source_root`; bu projede genelde `SOURCE_CODES`) altında yaşar (`SD`, `MM`, `FI`, `CO`, `QM`, `PM`,
 `EWM`). Modül = SAP fonksiyonel alanı; paket prefix'i modülü yansıtır
 (`ZSD*` → SD). İndirilen objeyi paket adıyla eşleşen alt klasöre kaydet
 (`cds/`, `classes/`, `functions/`, `structures/`, `tables/`).
@@ -134,12 +132,12 @@ referanslarını oku — `tables.md` (kilit tablolar), `bapi.md` (released BAPI/
 | Adım | Nasıl |
 |---|---|
 | Aktif paketi bul | `.claude/active_package` oku |
-| Paket kuralları | `ERP/<MODULE>/<PKG>/.rules.md` (prefix, bağımlılık, **Bilinen İstisnalar**) |
-| Güncel iş durumu | `ERP/<MODULE>/<PKG>/SESSION_NOTES.md` son entry |
-| Sprint / iş listesi | `ERP/<MODULE>/<PKG>/SPRINT_PLAN.md` |
-| **Spec kaynağı (conversion/referans)** | `ERP/<MODULE>/<PKG>/ref_docs/` — klasik DDL/struct/program spec'leri, ekran mockup'ları, csv'ler (ADR 0013). Build'de spec kaynağı; gerçek S4 objesi paket kökünde üretilir. Kök = yaşayan, `ref_docs/` = referans. |
+| Paket kuralları | `<source_root>/<MODULE>/<PKG>/.rules.md` (prefix, bağımlılık, **Bilinen İstisnalar**) |
+| Güncel iş durumu | `<source_root>/<MODULE>/<PKG>/SESSION_NOTES.md` son entry |
+| Sprint / iş listesi | `<source_root>/<MODULE>/<PKG>/SPRINT_PLAN.md` |
+| **Spec kaynağı (conversion/referans)** | `<source_root>/<MODULE>/<PKG>/ref_docs/` — klasik DDL/struct/program spec'leri, ekran mockup'ları, csv'ler (ADR 0013). Build'de spec kaynağı; gerçek S4 objesi paket kökünde üretilir. Kök = yaşayan, `ref_docs/` = referans. |
 
-Örn. aktif iş ZSD001 SEVKEMRİ → `ERP/SD/ZSD001_CLC/`. Yeni paket başlatılıyorsa:
+Örn. aktif iş ZSD001 SEVKEMRİ → `<source_root>/SD/ZSD001_CLC/`. Yeni paket başlatılıyorsa:
 `python scripts/bootstrap_package.py <PKG_FULL> --title "..."` (T5).
 
 ### Karar ağacı — yeni bilgi nereye yazılır?
@@ -170,7 +168,7 @@ En kritik üçü:
 
 - **TR master-language create:** SAP `masterLanguage="TR"` body attribute'unu ve
   `sap-language` header'ını yok sayar. Tek çalışan yöntem: login (`/discovery`)
-  isteğinde `sap-client` + `sap-language=TR` **birlikte query param**. Daha önce EN
+  isteğinde `sap-client` + `sap-language=<master_language>` **birlikte query param**. Daha önce EN
   yaratılıp silinmiş isim tekrar EN gelir → farklı isimle doğrula. Her create için ayrı session.
 - **Transport disiplini:** numarayı uydurma, hafızadan/önceki context'ten alma,
   **hata mesajındaki transport numarasını ASLA kullanma** (başka geliştiriciye ait

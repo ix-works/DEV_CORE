@@ -154,6 +154,22 @@ tekrar-okunan dosya, retry/patinaj noktası. Kaba wall-clock + tool-sayısı zat
 (`subagent_tokens`/`tool_uses`/`duration_ms`); öz-rapor bunun faz-kırılımını ekler. Analiz script şablonu:
 lider `scratchpad`'inde `agent_time_analysis.py` (transkript doluysa per-tool döker).
 
+**(4) HERHANGİ bir alt-ajanın "YAPILAMAZ"/olumsuz raporunu KANITSIZ KABUL ETME — SORGULA (lider; BAĞLAYICI).** **Her** alt-ajan (`adt-gateway`/`bug-expert`/`backend-expert`/`frontend-expert`/`sap-research`/`general` — gateway yalnız en sık örnek) "yapılamaz / desteklenmiyor / blocker / yok / bulunamadı" derse, bunu doğru kabul edip **ona göre işlem yapma veya durma**. Önce sorgula: bu **gerçekten imkânsız mı**, yoksa **"bu ajanın elindeki araçlarla/kapsamla yapamadı/bulamadı"** mı? Ajanın tool-görünümü repo'nun gerçek kabiliyetinden DARDIR. Protokol: (a) iddiayı **repo'da ara** — aynı işi yapan mevcut `scripts/*.py` / playbook reçetesi / alternatif yol var mı (`grep`/Glob); (b) varsa ajanı o yolla **yeniden yönlendir/taze-spawn et**; (c) yoksa iddiayı **kendin canlı doğrula**, sonra kullanıcıya ilet. **Ders (2026-06-22):** gateway "SRVB description typed-tool ile değişmez" dedi → lider kabul etti; oysa `scripts/sap_set_object_description.py` tam bu senaryo için (voyage "Sefer..." düzeltme) yazılmıştı. Bu, ajan-tarafı [[feedback_dogrula-once-flag-spekulatif-blocker-yasak]]'ın **lider-tarafı tamamlayıcısı**; kök ilke = TAHMİN YASAK = kanıtlı hareket et. Bkz. [[feedback_ajan-olumsuz-donusu-kanitla-sorgula]].
+
+### UI BUILD DONE-CRITERIA + LİDER DOĞRULAMA (ADR 0017 — Booking post-mortem)
+
+> Booking UI'da çok fazla amatör patinaj oldu çünkü (a) çalışan kardeş deseni yerine sıfırdan yazıldı, (b) ajan "done/verified" dedi ama runtime hata ancak kullanıcı test edince çıktı, (c) lider doğrulamadan kabul etti. Bunlar **bağlayıcı**:
+
+1. **Plumbing'i icat etme — içeriği değil (app-kopyalama DEĞİL):** Freestyle UI5+V2'nin **mekanik/plumbing** kısmı (save=sıralı `update(merge)`, nav=`to_X`, `setData` tam şekil, master-detail seçim-wiring, MERGE tarih-null) **tek-doğru-yol, uygulamadan bağımsız** → [`playbook/ui-freestyle-odata-v2.md`](playbook/ui-freestyle-odata-v2.md) **§K**'yı **referans al, sıfırdan icat etme** (icat = çözülmüş bug'ı geri getirmek). **Uygulamaya özel her şey BESPOKE yazılır** (entity/servis, alan listesi, ekran layout/grid, iş/gating kuralları, VH hedefleri, label, akış) — hiçbir ekran diğerinin kopyası değildir. Sınır: *framework-plumbing = reuse · iş-içeriği = bespoke*.
+2. **"done/verified" kanıtsız KABUL EDİLMEZ** (lider): UI build için → `check_ui5_freestyle_traps.py` PASS **+ runtime smoke** (G1 playwright-cli, yoksa elle console: zero render error + ana akış). SAP yazımı için → `adt_get` active readback. "node --check OK / XML well-formed" runtime/fonksiyonel hatayı YAKALAMAZ — yeterli değil.
+3. **Recon ≠ implementasyon:** Bir recon dokümanı "done" değildir. Çıkarılan kural/gating UI'a **gerçekten kodlandı mı** lider doğrular. *Done = tam kapsam:* "tamam" demeden önce çıktı, işin TAM kapsamına karşı madde-madde doğrulanır; bilinçli ertelenen parça açıkça flag'lenir + register'a yazılır (sessiz eksik = done değil).
+4. **Kör-bug YASAK:** "Kaydedilemedi" gibi opak hatada deneme-yanılma yapma → önce **gerçek hatayı** al (F12 Network/Console status+body, ya da gateway ile birebir replikte). Kanıtsız tek satır bile değiştirme.
+
+---
+
+
+**R3 — MEMORY KÖPRÜSÜ (2026-08-01, denetim):** Alt-ajan auto-memory'yi GÖRMEZ (resmî). Lider her substantive spawn'dan önce MEMORY.md'yi görev anahtar-kelimeleriyle tarar ve eşleşen 2-5 dersin ÖZÜNÜ brifin zorunlu 'Göreve-ilişkin dersler' alanına yazar (şablon: `claude/templates/spawn-brief.md` §6; eşleşme yoksa alanı 'ilgili ders yok' ile AÇIKÇA doldur — boş bırakma). Brifing-lint (watchdog_launch) şablon izlerini nudge'lar.
+
 ## 5. Gateway Gözlemlenebilirlik Protokolü (opak-patinaj önleme)
 Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
 1. **Deneme/eskalasyon merdiveni (kör döngü yerine):** obje başına **3 denemeye** kadar dene (geçici CSRF/lock vb.). 3'te çözülmezse → **ZORUNLU ARAŞTIRMA** (`playbook/<obje-tipi>.md` + `playbook/lessons-learned.md` + ilgili `playbook/checklists/` + hata pattern'i — yani lider takılınca neye bakıyorsa) → bulguyla devam. **Toplam 5 denemede** hâlâ başarısız → **DUR + lider'e gel** (ham hata + denenenler + araştırma bulgusu). Sınırsız/kör tekrar YASAK → patinaj 5 ile sınırlı.

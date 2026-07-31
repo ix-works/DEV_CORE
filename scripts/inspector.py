@@ -76,11 +76,12 @@ GUARD_TOOL_KABUKLARI = ("Bash", "PowerShell")
 
 
 class Bulgu:
-    def __init__(self, kod: str, mesaj: str, kanit: str = "") -> None:
-        self.kod, self.mesaj, self.kanit = kod, mesaj, kanit
+    def __init__(self, kod: str, mesaj: str, kanit: str = "", bilgi: bool = False) -> None:
+        self.kod, self.mesaj, self.kanit, self.bilgi = kod, mesaj, kanit, bilgi
 
     def __str__(self) -> str:
-        return f"[{self.kod}] {self.mesaj}" + (f"\n      kanıt: {self.kanit}" if self.kanit else "")
+        on = "bilgi " if self.bilgi else ""
+        return f"[{on}{self.kod}] {self.mesaj}" + (f"\n      kanıt: {self.kanit}" if self.kanit else "")
 
 
 def _oku(p: Path) -> str:
@@ -238,6 +239,17 @@ def b5_core_baglantisi(proj: Path, core: Path) -> list[Bulgu]:
             elif simdiki != meta.get("core_hash"):
                 b.append(Bulgu("B5", f"OVERLAY BAYAT: `{ad}/{dosya}` core'da değişti, kopya eski",
                                f"core={simdiki} manifest={meta.get('core_hash')} → team_setup.py"))
+        # v2 üçlü-kıyas: kopya-ŞİMDİ ↔ üretilecek (core+claude-local) — elle-düzeltme/sapma yakalar.
+        # Tek kaynak: claude_overlay.fark_raporu (T2.5 kapısıyla AYNI mantık; çift-tanım yok).
+        try:
+            import sys as _s
+            _s.path.insert(0, str(core / "scripts"))
+            from utils import claude_overlay as _ov  # type: ignore
+            for fark in _ov.fark_raporu(proj, core, ad):
+                b.append(Bulgu("B5", f"OVERLAY SAPMA (üçlü-kıyas): {fark}",
+                               "terfi/claude-local kararı ver → team_setup --overlay-onayli"))
+        except Exception:
+            pass
         if core_d.is_dir():
             eksik = [f.name for f in core_d.glob("*.md") if f.name not in m]
             if eksik:
@@ -257,6 +269,8 @@ def _log_satirlari(proj: Path) -> list[dict]:
                         "ek": "\t".join(p[4:])})
         elif len(p) >= 2:
             out.append({"ts": p[0], "reason": p[1], "type": "?", "path": "?", "ek": ""})
+        elif satir.strip():
+            out.append({"ts": "?", "reason": "MALFORMED", "type": "?", "path": "?", "ek": satir[:80]})
     return out
 
 
@@ -277,10 +291,17 @@ def a2_sema_degismedi(satirlar: list[dict]) -> list[Bulgu]:
     Onarılmış logger bu durumda `SEMA-DEGISTI` yazar — o satır varsa alet kör demektir.
     """
     bozuk = [s for s in satirlar if s["reason"] in ("SEMA-DEGISTI", "?")]
+    out = []
     if bozuk:
-        return [Bulgu("A2", f"PAYLOAD ŞEMASI DEĞİŞMİŞ ({len(bozuk)} satır) — logger KÖR",
-                      f"örnek: {bozuk[0]['ts']} {bozuk[0]['reason']} {bozuk[0].get('ek','')[:120]}")]
-    return []
+        out.append(Bulgu("A2", f"PAYLOAD ŞEMASI DEĞİŞMİŞ ({len(bozuk)} satır) — logger KÖR",
+                         f"örnek: {bozuk[0]['ts']} {bozuk[0]['reason']} {bozuk[0].get('ek','')[:120]}"))
+    MALFORMED_KABUL = 3  # T0.7 (atomik append) ÖNCESİ tarihsel satırlar — veri olarak korunuyor
+    yarim = [s for s in satirlar if s["reason"] == "MALFORMED"]
+    if len(yarim) > MALFORMED_KABUL:
+        out.append(Bulgu("A2", f"YENİ malformed log satırı: {len(yarim) - MALFORMED_KABUL} adet "
+                         f"(toplam {len(yarim)}; kabul edilen tarihsel {MALFORMED_KABUL}) — atomik-append geriledi mi?",
+                         f"örnek: {yarim[-1].get('ek','')[:100]}"))
+    return out
 
 
 def _kural_desenleri(core: Path) -> dict[str, list[str]]:
@@ -315,8 +336,10 @@ def a3_tembel_yukleme(core: Path, satirlar: list[dict], okunanlar: list[str]) ->
             continue
         goruldu = any(s["reason"] == "path_glob_match" and s["path"].endswith(ad) for s in satirlar)
         if not goruldu:
-            b.append(Bulgu("A3", f"TEMBEL YÜKLEME ÖLÜ: `{ad}` eşleşen dosya okundu ama yüklenmedi",
-                           f"okunan: {eslesen[0]}  · beklenen log: path_glob_match … {ad}"))
+            b.append(Bulgu("A3", f"BİLİNEN KISIT (#17204): `{ad}` tembel-tetiği pasif — kural yine de "
+                           "her oturum KOŞULSUZ yükleniyor (beyan CLAUDE.core §1'de düzeltildi; izleme sürüyor)",
+                           f"okunan: {eslesen[0]}  · harness düzelirse bu satır kendiliğinden kaybolur",
+                           bilgi=True))
     return b
 
 
@@ -438,7 +461,20 @@ def denetle(proj: Path, core: Path, oturum: str | None = None) -> tuple[list[Bul
         bulgular += a4_baseline(proj, satirlar)
 
     gate_sayisi = len(list((core / "scripts" / "validators").glob("check_*.py")))
-    istat = {"iddia_A": 4, "iddia_B": 5, "gate_toplam": gate_sayisi, "negatif_testli_gate": 0,
+    # v2: negatif-test sayacı GERÇEK ölçüm — tests/fixtures/<validator>/{bad,good} çifti olanlar
+    fx = core / "tests" / "fixtures"
+    fixtureli = sum(1 for d in (fx.iterdir() if fx.is_dir() else [])
+                    if d.is_dir() and any((d / "bad").glob("*")) and any((d / "good").glob("*")))
+    ovr = 0
+    try:
+        mfp = proj / ".claude" / "agents" / ".overlay-manifest.json"
+        if mfp.is_file():
+            ovr = sum(1 for v in json.loads(_oku(mfp)).get("dosyalar", {}).values()
+                      if v.get("kaynak") == "proje")
+    except Exception:
+        pass
+    istat = {"iddia_A": 4, "iddia_B": 5, "gate_toplam": gate_sayisi, "negatif_testli_gate": fixtureli,
+             "proje_override": ovr,
              "onceki_oturum_okunan_dosya": len(okunanlar), "log_satiri": len(satirlar)}
     return bulgular, istat
 
@@ -446,7 +482,9 @@ def denetle(proj: Path, core: Path, oturum: str | None = None) -> tuple[list[Bul
 def kesir_metni(istat: dict) -> str:
     """ASLA çıplak ✓ basma — kapsam her raporda görünür."""
     return (f"iddia: A={istat['iddia_A']} · B={istat['iddia_B']} · "
-            f"negatif-testli gate: {istat['negatif_testli_gate']}/{istat['gate_toplam']} (v2 bekliyor)")
+            f"negatif-testli gate: {istat['negatif_testli_gate']}/{istat['gate_toplam']}"
+            + (f" · overlay proje-override: {istat.get('proje_override', 0)} (bilinçli, claude-local kanonik)"
+               if istat.get('proje_override') else ""))
 
 
 def rapor_yaz(proj: Path, bulgular: list[Bulgu], istat: dict) -> None:

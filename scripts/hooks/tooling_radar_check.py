@@ -21,8 +21,29 @@ for _akis in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-RADAR = Path(__file__).resolve().parents[2] / "governance" / "tooling-radar.md"
+import os
+
+CORE_GOV = Path(__file__).resolve().parents[2] / "governance"
 DEFAULT_CADENCE = 21
+
+
+def _bayat_mi(dosya: Path):
+    """(due, age_txt, cadence) — dosya yoksa/parse edilemezse (False, ..) → sessiz."""
+    try:
+        txt = dosya.read_text(encoding="utf-8")
+    except Exception:
+        return False, "", 0
+    last = None
+    cadence = DEFAULT_CADENCE
+    m = re.search(r"^last-run:\s*(\d{4}-\d{2}-\d{2})", txt, re.M)
+    if m:
+        last = datetime.date.fromisoformat(m.group(1))
+    c = re.search(r"^cadence-days:\s*(\d+)", txt, re.M)
+    if c:
+        cadence = int(c.group(1))
+    age = None if last is None else (datetime.date.today() - last).days
+    due = age is None or age >= cadence
+    return due, ("tarih yok" if age is None else f"{age} gün"), cadence
 
 
 def main() -> int:
@@ -31,38 +52,36 @@ def main() -> int:
     except Exception:
         pass
 
-    last = None
-    cadence = DEFAULT_CADENCE
-    try:
-        txt = RADAR.read_text(encoding="utf-8")
-        m = re.search(r"^last-run:\s*(\d{4}-\d{2}-\d{2})", txt, re.M)
-        if m:
-            last = datetime.date.fromisoformat(m.group(1))
-        c = re.search(r"^cadence-days:\s*(\d+)", txt, re.M)
-        if c:
-            cadence = int(c.group(1))
-    except Exception:
-        return 0  # radar dosyası yoksa sessiz kal (kurulmamış)
+    nudges = []
 
-    today = datetime.date.today()
-    age = None if last is None else (today - last).days
-    due = age is None or age >= cadence
-    if not due:
-        return 0  # bayat değil → SESSİZ
+    due, age_txt, cadence = _bayat_mi(CORE_GOV / "tooling-radar.md")
+    if due and (CORE_GOV / "tooling-radar.md").is_file():
+        nudges.append(
+            f"[Tooling radar — bayat ({age_txt}, eşik {cadence}g)] Genel agent-dev verimlilik araçları "
+            "taraması vakti geldi (SADECE SAP-AI DEĞİL: tarayıcı/UI-doğrulama, token-verim/MCP↔CLI, "
+            "arama, orkestrasyon, kod-zekası, Claude Code yenilikleri). AKTİF İŞİ BÖLME — iş-arası uygun "
+            "anda kullanıcıya öner; onaylarsa governance/tooling-radar.md'deki subagent prompt'uyla bir "
+            "general-purpose subagent başlat → bulguları 'Bulgu Log'a + adopt-adaylarını tooling-plugins.md'ye "
+            "yaz, frontmatter last-run'ı bugüne güncelle. (Bu körlük 2026-06-13 playwright-cli dersinden doğdu.)")
 
-    age_txt = "tarih yok" if age is None else f"{age} gün"
-    nudge = (
-        f"[Tooling radar — bayat ({age_txt}, eşik {cadence}g)] Genel agent-dev verimlilik araçları "
-        "taraması vakti geldi (SADECE SAP-AI DEĞİL: tarayıcı/UI-doğrulama, token-verim/MCP↔CLI, "
-        "arama, orkestrasyon, kod-zekası, Claude Code yenilikleri). AKTİF İŞİ BÖLME — iş-arası uygun "
-        "anda kullanıcıya öner; onaylarsa governance/tooling-radar.md'deki subagent prompt'uyla bir "
-        "general-purpose subagent başlat → bulguları 'Bulgu Log'a + adopt-adaylarını tooling-plugins.md'ye "
-        "yaz, frontmatter last-run'ı bugüne güncelle. (Bu körlük 2026-06-13 playwright-cli dersinden doğdu.)"
-    )
+    # T4.2 (2026-08-01): İÇERİK-SAĞLIK RADARI — proje-lokal dosya (denetim §8 Ayak-2).
+    proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+    saglik = proj / "governance" / "content-health-radar.md"
+    due2, age2, cad2 = _bayat_mi(saglik)
+    if due2 and saglik.is_file():
+        nudges.append(
+            f"[İçerik-sağlık radarı — bayat ({age2}, eşik {cad2}g)] Dönemsel içerik-sağlık turu vakti "
+            "(sahte-koruma grep'i + overlay-fark + memory doluluk + recurrence sayaçları + bayat-iddia "
+            "örneklemi + trend tablosu). AKTİF İŞİ BÖLME — iş-arası öner; tur maddeleri + trend tablosu: "
+            "governance/content-health-radar.md. Bitince last-run'ı güncelle. (Denetim 2026-07-31 §8; "
+            "classrun '1 ay sonra tekrar' penceresine karşı 28g cadence.)")
+
+    if not nudges:
+        return 0  # SESSİZ
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
-            "additionalContext": nudge,
+            "additionalContext": "\n".join(nudges),
         }
     }))
     return 0
