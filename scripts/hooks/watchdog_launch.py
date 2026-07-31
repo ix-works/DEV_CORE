@@ -32,13 +32,26 @@ def _brifing_lint(data):
         prompt = ti.get("prompt") or ""
         if len(prompt) < 400:
             return None
-        # NFKD-katla: harness NFD gönderebiliyor (canli FP 2026-08-01 — "GÖREV" vardi,
-        # lint "eksik" dedi); combining-mark'lari dusur -> O/U/I ASCII'ye iner.
+        # NFKD-katla + regex-toleransli eslesme. Canli FP 2026-08-01: izole testte ayni
+        # metin TEMIZ ama harness-payload'inda 'GÖREV' bulunamadi ('KANIT KURAL' bulundu)
+        # -> temsil farki. Teshis icin bulunamayan anahtarin cevresi .tmp'ye loglanir;
+        # kok-analiz radar madde-7'de.
+        import re as _re
         import unicodedata
         duz = "".join(c for c in unicodedata.normalize("NFKD", prompt.upper())
                       if not unicodedata.combining(c)).replace("İ", "I")
-        anahtarlar = ("GOREV", "KANIT KURAL")
-        eksik = [a for a in anahtarlar if a not in duz]
+        desenler = {"GOREV": _re.compile(r"G[OÖ0]?.?REV"), "KANIT KURAL": _re.compile(r"KANIT[ -]KURAL")}
+        eksik = [a for a, rx in desenler.items() if not rx.search(duz)]
+        if eksik:
+            try:
+                import datetime as _dt
+                _proj = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+                with open(os.path.join(_proj, ".tmp", "brifing-lint-debug.log"), "a",
+                          encoding="utf-8") as _f:
+                    _f.write(f"{_dt.datetime.now().isoformat()} eksik={eksik} "
+                             f"ilk300={duz[:300]!r}\n")
+            except Exception:
+                pass
         if eksik:
             return ("[BRIFING-LINT] Spawn prompt'unda R2 sablon izleri eksik: "
                     + ", ".join(eksik)
