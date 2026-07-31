@@ -146,7 +146,13 @@
   **Gömülü onay YETMEZ** — "hepsini yap" bu izni vermez.
 - **BAĞLANTI:** proje kökündeki `.conn_adt`. `.conn_adt` ↔ MCP ayrışıksa ADT işlemi YOK.
 - **"Yüklendi / aktive edildi / başarılı" mesajına GÜVENME** — canlı doğrula. Araç başarısızlığını
-  zararsız sayma. Bulunamadı ≠ yok · kod ≠ kablolama · çökme ≠ FAIL.
+  zararsız sayma. Bulunamadı ≠ yok · kod ≠ kablolama · çökme ≠ FAIL · **"aktif" metadata'sı ≠ kodun aktif**.
+- **"ARAÇ BOZUK" demeden önce KONTROL GRUBU koş (PATTERN #19).** *"X bozuk"* karşılaştırmalı bir
+  iddiadır: sorunlu vaka **+ çalıştığı bilinen vaka** ister. Yoksa elindeki tek cümle *"X bu objede
+  çalışmadı"*dır. Aynı kirli girdiyle yapılan 5 başarısız varyant hipotezi **test etmez**, yalnız
+  ona duyulan güveni haksız yere büyütür. **Ve önce hafızayı ara** — tanıdık semptom bir sezgi değil
+  sinyaldir; cevap zaten yazılmış olabilir (vaka: bir ay önce çözülmüş bulgu unutulup üstüne yanlış
+  sonuç yazıldı). Pahalı bir çare ilk denemede tutmadıysa tekrarlama, **dayandığı kanıtı** sorgula.
 - **Always-allow YASAĞI (D32):** SAP-yazma ve davranış-yüzeyi araçlarına "Always allow" verilmez.
 - **Belirsizlikte DUR ve sor.** Spec yoksa operatör onayı iste; DTEL/append adı önerme.
 

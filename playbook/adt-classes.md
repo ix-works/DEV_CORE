@@ -277,6 +277,48 @@ kardeş vakası.
 
 ---
 
+#### 24.9-A ⛔ PATİNAJ ANATOMİSİ — asıl ders burada (saatler bu yüzden yandı)
+
+Kök sebep teknikti; **maliyeti üreten şey yöntemdi.** Aynı patinaja düşmemek için:
+
+**① "ARAÇ BOZUK" DEMEDEN ÖNCE KONTROL GRUBU KOŞ. (bu vakayı 2 dakikada bitirirdi)**
+Patinaj boyunca `classrun` **yalnız bozuk sanılan objelerle** denendi. *Çalıştığı bilinen*
+bir obje üzerinde **hiç koşulmadı.* Bir kontrol grubu (aktifliği `adt_inactive_objects` ile
+kanıtlanmış, yan etkisiz bir sınıf) ilk yarım saatte "araç sağlam, sorun objede" derdi.
+> **Kural:** *"X aracı bozuk"* bir **karşılaştırmalı** iddiadır. Karşılaştırma yapılmadan
+> kurulamaz. Kontrol grubu yoksa elindeki tek şey *"X bu objede çalışmadı"*dır — ki bu
+> bambaşka bir cümledir.
+> ⚠ Kontrol grubu seçerken **yan etkiye bak**: bu vakada `SEOMETAREL VERSION=1` olan 13 aday
+> sınıfın **hepsi** yazma yapıyordu (12'si DOKU üretiyor, biri `DELETE`+`COMMIT`). Adı masum
+> diye varsayma — gövdesini oku. Yan etkisiz aday yoksa `$TMP`'de `out->write('OK')` kadar
+> basit birini yarat, aktive et, koş, sil.
+
+**② TANIDIK SEMPTOMDA ÖNCE HAFIZAYI ARA — cevap zaten vardı.**
+Bu sonuca **2026-06-30'da da varılmış** ve aynı gün düzeltilmişti: *"BOZUK YANLIŞTI — kod
+bug'ı değil, bayat süreç; çözüm `/mcp` reconnect."* Yani **HATA 2 bir ay önce çözülmüş,
+yazılmış ve unutulmuştu.** 2026-07-30'da semptom tekrar geldi, kayıt okunmadı ve **üstüne
+yanlış sonuç yazıldı.**
+> **Kural:** semptom tanıdık geliyorsa bu bir sezgi değil **sinyaldir** — playbook +
+> lessons-learned + memory'de **önce ara**. Aramadan konulan teşhis, var olan doğruyu ezer.
+
+**③ REÇETE PAHALIYSA VE ÇALIŞMADIYSA, İKİNCİ KEZ DENEME — REÇETEYİ SORGULA.**
+"Taze class adı" **iki kez** denendi. Birincisi başarısız olduğunda sorgulanması gereken şey
+sınıfın adı değil **reçetenin kendisiydi**. Üstelik reçetenin dayanağı bir *ölçüm* değil, bir
+*teşhis fonksiyonunun çıktısıydı*.
+> **Kural:** bir çare ilk denemede işe yaramadıysa, aynı çareyi tekrarlamadan önce
+> **dayandığı kanıtı** doğrula. (`lessons-learned` "no-retry" ilkesi.)
+
+**④ SÜRÜM-DUYARLI UÇTA SÜRÜMÜ AÇIKÇA VER; VARSAYILANI ÖLÇ.**
+`.../source/main` gibi `active`/`inactive` ayrımı olan her uçta parametreyi **yaz**. Buradaki
+varsayılanın İNAKTİF olduğu **ölçülene kadar bilinmiyordu** ve kimse sormadı.
+
+**⑤ MALİYET (bunu hatırlamak için yazıldı):** 1 eksik query parametresi → 6 dokümana yanlış
+bilgi + 1 core PR + auto-memory kaydı + 2 gereksiz Z obje (silindi, postmortem imkânsız) +
+bir gün boyunca "Eclipse F9'a bağımlıyız" varsayımıyla planlama + saatlerce yanlış hipotez
+kovalama (çok-app-server asimetrisi, CSRF, bare-header, taze isim).
+
+---
+
 ## 20. ABAP Class — Inline Data / OSQLC Tip Çakışması
 
 ### 25.1 `%_##OSQLC_1` / `%_##OSQLC_2` Çakışması

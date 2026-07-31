@@ -290,6 +290,24 @@ bağla (*"ada göre ara: `<sembol>`"*) · **(d)** **sayıyı tazelemek sınıfı
 
 ---
 
+### PATTERN #19: *"Araç bozuk"* KARŞILAŞTIRMALI bir iddiadır — kontrol grubu olmadan kurulamaz
+
+- **Hata:** Bir araç beklenen sonucu vermeyince, **yalnız sorunlu obje üzerinde** denemeler yapılır (header varyantları, retry, farklı isim, farklı oturum tipi…), hepsi başarısız olur ve sonuç *"araç bu sistemde bozuk/güvenilmez"* diye yazılır. Oysa araç **hiçbir zaman çalıştığı bilinen bir örnek üzerinde koşulmamıştır.**
+- **Neden sinsi:** Denemeler *çoğaldıkça* "araç bozuk" hipotezine olan güven **artar** — ama hepsi aynı kirli girdiyi kullandığı için hiçbiri hipotezi test etmez. Beş başarısız varyant, bir kontrol grubunun verdiği bilginin **hiçbirini** vermez. Üstelik uğraşılan süre, sonuca duyulan güveni haksız yere büyütür ("bu kadar denedik, demek ki gerçekten bozuk").
+- **Kural:** *"X bozuk"* ile *"X bu objede çalışmadı"* **farklı cümlelerdir**. Birincisini kurmak için **iki** ölçüm gerekir: sorunlu vaka **+ çalıştığı bilinen vaka**. İkincisi yoksa elindeki iddia yalnız ikincisidir — dokümana da öyle yazılır.
+- **Kontrol grubu seçerken:**
+  1. **Yan etkiye bak, adına değil.** Vakada uygun görünen 13 adayın **hepsi** yazma yapıyordu (12'si doküman üretiyor, biri `DELETE`+`COMMIT`). "Runner", "test", "probe" gibi masum adlar hiçbir şey garanti etmez — **gövdesini oku**.
+  2. Yan etkisiz aday yoksa **yarat**: `$TMP`'de en basit hâli (bir satır çıktı), aktive et, koş, sil. Ucuzdur ve kesin cevap verir.
+  3. Kontrol grubunun **gerçekten sağlam olduğunu** ölç (burada: `adt_inactive_objects` = 0). Kontrol grubun da hastaysa deney anlamsızdır.
+- **Prevention (sıra önemli):** ① **ÖNCE HAFIZAYI ARA** (aşağı bak) → ② kontrol grubu koş → ③ hipotez üret → ④ ancak o zaman "araç" sonucuna git.
+- **🔻 İKİZ KURAL — tanıdık semptomda önce hafızayı ara; cevap zaten yazılmış olabilir:** Bu vakanın HATA 2'si (bayat oturum) **bir ay önce, 2026-06-30'da çözülmüş ve kayda geçmişti**: *"BOZUK YANLIŞTI — kod bug'ı değil, bayat süreç; çözüm `/mcp` reconnect."* Semptom 2026-07-30'da tekrar geldi, **kayıt okunmadı**, sıfırdan hipotez kuruldu ve **üstüne yanlış sonuç yazıldı** — yani doğru bilgi yanlışıyla **değiştirildi**. Semptomun tanıdık gelmesi bir sezgi değil **sinyaldir**: playbook + lessons-learned + memory'de arama yapmadan teşhis koyma. *Bir kuralı ikinci kez öğrenmenin bedeli, birinci kez öğrenmekten yüksektir — çünkü arada ona dayanan kararlar alınır.*
+- **🔻 ÜÇÜNCÜ KURAL — pahalı bir çare ilk denemede işe yaramadıysa, ikinci kez deneme: çareyi doğuran KANITI sorgula.** Vakada "taze class adı" **iki kez** uygulandı. Birincisi başarısız olduğunda sorgulanacak şey sınıfın adı değil **reçetenin dayanağıydı** — ki dayanak bir ölçüm değil, bir teşhis fonksiyonunun çıktısıydı (bkz. #16, HATA 1).
+- **Bedel (2026-07-31 vakası):** 1 eksik query parametresi → 6 dokümana yanlış bilgi + 1 core PR + auto-memory kaydı + 2 gereksiz Z obje + bir gün "harici bir kanala bağımlıyız" varsayımıyla planlama + saatlerce yanlış hipotez (çok-app-server asimetrisi · CSRF · bare-header · taze isim). **Kontrol grubu bunu ilk yarım saatte bitirirdi.**
+- **Akraba:** **#16** (teşhisin kendisi kanıt gerektirir) — #16 *teşhisin girdisini*, #19 *sonucun kurulma biçimini* denetler. İkisi birlikte: **kanıt hem doğru veriden okunmalı hem karşılaştırmalı olmalı.**
+- **Status:** ⚠️ DİSİPLİN. Vaka evi: [`adt-classes.md`](adt-classes.md) §24.9-A.
+
+---
+
 ## 📊 PATTERN İstatistikleri (audit için)
 
 | Pattern | İlk keşif | Tekrar sayısı | Status |
@@ -303,6 +321,7 @@ bağla (*"ada göre ara: `<sembol>`"*) · **(d)** **sayıyı tazelemek sınıfı
 | #16 Arama aracının kapsamı — `0` ≠ "yok" · **teşhisin kendisi de kanıt gerektirir** | 2026-07-28 | **6** (FUGR grep · classrun sahte teşhis ×2 → 2026-07-31 kök-fix: teşhis İNAKTİF sürümü okuyordu · behavior-pool `main` boş · lock-check tip desteği · dar grep deseni "0 referans") | ⚠️ DİSİPLİN + CI testi (CSRF regresyonu) + kök-fix (`version=active` + session reset) |
 | #17 **Katman katman keşif** — çapraz-kesen işte envantersiz ilerleme | 2026-07-29 | 1 (silme kontrolü: 3 app sanıldı, 7 çıktı; 14 yol sanıldı, 24 çıktı; 6 review turu) | ⚠️ DİSİPLİN → `howto-cok-katmanli-degisiklik.md` |
 | #18 **Bayat sayı/satır referansı** (yorumda `dosya:satır`, "N obje", "N metot") | 2026-07-29 | **6** (obje sayısı · metot sayısı ×2 · veri iddiası · yorum satır-no ×2) | ⚠️ DİSİPLİN (içerik-çapası kuralı) |
+| #19 **"Araç bozuk" kontrol grubu olmadan kurulamaz** + tanıdık semptomda önce hafızayı ara | 2026-07-31 | **2** (classrun "güvenilmez" ×2 — 2026-06-30'da çözülmüştü, 2026-07-30'da unutulup üstüne yanlış yazıldı) | ⚠️ DİSİPLİN |
 
 > **Hedef:** ACTIVE/⚠️ DİSİPLİN olanları zamanla SOLVED'a çevir (kod gate ile).
 
