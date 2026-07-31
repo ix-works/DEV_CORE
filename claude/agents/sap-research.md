@@ -39,3 +39,8 @@ Damıtılmış, **kaynak-referanslı** (dosya:satır / URL) bulgu. Tahmin etme; 
 
 ## DOĞRULA-ÖNCE-FLAG (false-blocker önleme — ZORUNLU)
 Bir **FLAG / BLOCKER / risk** yalnız **CANLI-DOĞRULANMIŞSA** raporlanır. **Doğrudan canlı-okumayla test edilebilen** iddiayı ("view veri dönüyor mu?", "X kaydı/parti var mı?", "alan dolu mu?") **DOĞRULAMADAN eskale ETME** — önce **DOĞRUDAN OKU**. Büyük-tablo dump'ı token-taşarsa: çıktı **dosyaya kaydedilir** → `grep` / `Read offset` ile tara (tool çıktısı söyler); "giant dump, doğrulayamadım" deyip geçme. Dolaylı/varsayımsal (annotation/filtre-mantığından çıkarım) kontrol YETMEZ — doğrudan test mümkünken onu yap. "Doğrulayamadım" yalnız gerçekten imkânsızsa. **Spekülatif blocker = false-positive (lider zamanı + güven kaybı).**
+## TUR EKONOMİSİ (P6, 2026-07-31 — ölçüm: batch-medyanı 1'di, her ekstra tur ≈ +8 sn)
+Birbirinden BAĞIMSIZ okuma çağrılarını (Read / Grep / Glob / adt_get / adt_table_read /
+adt_sql_query vb.) **tek turda PARALEL gönder** — teker teker sırayla değil. Seri çağrı
+YALNIZ bir çağrının girdisi öncekinin çıktısına bağlıysa meşrudur. Yazma (Edit/Write) ve
+sıra-bağımlı işlemler DAİMA seri kalır.

@@ -63,3 +63,8 @@ Lider gate verdict'ini toplar: **PASS** → lider commit/kabul. **BLOCKER/HATA/E
   - **Tam Playwright journey** (navigate→Listele→F4→wildcard→sort/Excel akışı) yalnız: (a) **yeni davranış/akış/handler/save** eklendiğinde, VEYA (b) lider/kullanıcı **açıkça** "tam test/playwright" dediğinde. Aksi halde journey = israf (booking-tarzı sessiz-boş riski yoksa).
   - Şüphede HAFİF seç + "tam test istersen söyle" diye işaretle. Token-verimli akış: `governance/tooling-plugins.md §playwright`.
 - Lider'e SADECE SendMessage; TaskUpdate ile durum. Operating-model §3-4 bağlayıcı.
+## TUR EKONOMİSİ (P6, 2026-07-31 — ölçüm: batch-medyanı 1'di, her ekstra tur ≈ +8 sn)
+Birbirinden BAĞIMSIZ okuma çağrılarını (Read / Grep / Glob / adt_get / adt_table_read /
+adt_sql_query vb.) **tek turda PARALEL gönder** — teker teker sırayla değil. Seri çağrı
+YALNIZ bir çağrının girdisi öncekinin çıktısına bağlıysa meşrudur. Yazma (Edit/Write) ve
+sıra-bağımlı işlemler DAİMA seri kalır.

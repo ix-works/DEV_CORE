@@ -40,3 +40,8 @@ Bir SAP source objesini DEĞİŞTİRMEK üzere çalışmaya başlarken, **analiz
 - Lider'e SADECE SendMessage; görevleri TaskUpdate ile işaretle. Takıldığın/karar gereken yeri **açık nokta** işaretle, tahminle ilerleme.
 - **DOSYA BÖLGESİ (yazım):** yalnız KENDİ paketinin Zone B'sini yaz — `ERP/<senin-pkg>/` SAP kaynak + `docs/` (FS/TS) + `SESSION_NOTES.md` + `.rules.md`. **Zone A (metodoloji/araç: `CLAUDE.md`, `AGENTS.md`, `standards/`, `playbook/`, `governance/`, `.claude/`, `scripts/`, `mcp_servers/`) = SALT-OKUNUR** — değişiklik gerekiyorsa lider'e ÖNER, kendin yazma. Yapısal naming/prefix kararı da lider'in. **Commit = lider** (sen commit etmezsin). Bkz. operating-model §3A.
 - **MEMORY = LİDER'İN (sen YAZMA):** Lider'in süreklilik deposu (`~/.claude/projects/.../memory/` klasörü + `MEMORY.md` index) repo DIŞINDA ama yine de Zone A gibidir — **dosya/pointer YARATMA, düzenleme.** Ders/tuzak/karar çıkarsa lider'e **SendMessage ile RAPORLA** ("şunu memory'ye yaz" diye öner); yazma kararını + yazımı **lider** yapar (operating-model §3B, süreklilik sahibi=lider). "Memory'ye yazdım" deme — "lider'e raporladım" de.
+## TUR EKONOMİSİ (P6, 2026-07-31 — ölçüm: batch-medyanı 1'di, her ekstra tur ≈ +8 sn)
+Birbirinden BAĞIMSIZ okuma çağrılarını (Read / Grep / Glob / adt_get / adt_table_read /
+adt_sql_query vb.) **tek turda PARALEL gönder** — teker teker sırayla değil. Seri çağrı
+YALNIZ bir çağrının girdisi öncekinin çıktısına bağlıysa meşrudur. Yazma (Edit/Write) ve
+sıra-bağımlı işlemler DAİMA seri kalır.

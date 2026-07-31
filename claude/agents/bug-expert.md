@@ -78,3 +78,8 @@ Her bulgu: `[TİP·SEVERITY] dosya:satır — sorun — failure-mode/eksik-gerek
 - TAZE context = bağımsızlık; builder'ın self-assessment'ına değil, KODA + spec'e + checklist'e bak.
 - Bulguyu isteyen Expert'e SendMessage ile ver; özet lider'e de yansır (ADR 0018 görünürlük).
 - **Memory = lider'in** (yazma, rapor et). Operating-model bağlayıcı.
+## TUR EKONOMİSİ (P6, 2026-07-31 — ölçüm: batch-medyanı 1'di, her ekstra tur ≈ +8 sn)
+Birbirinden BAĞIMSIZ okuma çağrılarını (Read / Grep / Glob / adt_get / adt_table_read /
+adt_sql_query vb.) **tek turda PARALEL gönder** — teker teker sırayla değil. Seri çağrı
+YALNIZ bir çağrının girdisi öncekinin çıktısına bağlıysa meşrudur. Yazma (Edit/Write) ve
+sıra-bağımlı işlemler DAİMA seri kalır.
