@@ -101,6 +101,13 @@ _TYPE_TO_EXTENSIONS = {
 # ZSD001_DDL_BOOKING_HEADER.cds eski FS reçetesi, canlıyla bilinçli ayrışık).
 _EXCLUDED_DIR_SEGMENTS = {"ref_docs", "docs", ".tmp", "legacy", "_archive", "archive", "drafts"}
 
+# FIX-C içerik-kaybı koruması (write_repo_from_live). Canlı AKTİF sürüm yerelden bu
+# oranın altına düşerse pull ATLAR (yerel yeni iş ezilmesin) — --force ile geçilir.
+# Eşikler bilinçli GEVŞEK: amaç normal tazelemeyi engellemek değil, YIKIMI yakalamak.
+# Ölçülen vakalar (2026-07-31): 267→113 (%42 kaldı) · 141→1 (%0.7 kaldı).
+_SHRINK_MIN_LINES = 10     # bu satırın altındaki dosyalarda kontrol yapılmaz
+_SHRINK_KEEP_RATIO = 0.7   # canlı, yerelin %70'inin altındaysa → blocked_shrink
+
 # Class ALT-source include'ları ayrı ADT URL'lerine map olur (/includes/...),
 # /source/main DEĞİL. Bunları ana-source ile kıyaslamak SAHTE drift verir → basename
 # eşlemesinde elenir. (.clas.abap = ana source, GEÇ.)
@@ -428,6 +435,30 @@ def write_repo_from_live(
                 "Yereli koru: önce commit/push et; bilerek canlıya dönmek istiyorsan --force ver."
             ),
             "blocked_dirty": True,
+        }
+
+    # FIX-C (ölçüldü 2026-07-31): "yerel TEMİZ ise BAYAT demektir" varsayımı YANLIŞ.
+    # FIX-B yalnız COMMIT EDİLMEMİŞ emeği korur. Ama normal akışımızda yeni sürüm yazılır,
+    # COMMIT edilir, henüz push/aktive EDİLMEZ → yerel git'te temizdir ama canlıdan İLERİDİR.
+    # O anda pull canlı ESKİYİ yerel YENİNİN üzerine yazıp "[OK]" der (sessiz veri kaybı).
+    # Ölçülen iki vaka (ikisi de commit'liydi, FIX-B devreye girmedi):
+    #   T01  267 → 113 satır  (canlı AKTİF sürüm v1; v2 push edilmişti ama aktive edilmemişti)
+    #   I02  141 →   1 satır  (canlı AKTİF sürüm boş kabuk; pull AKTİF okur, INAKTİF'i görmez)
+    # Sinyal: canlıda belirgin İÇERİK KAYBI. Bu "tazeleme" değil, yıkım olabilir.
+    # Eşikler bilinçli gevşek: küçük dosyalar ve normal tazeleme etkilenmesin.
+    old_lines = len(existing.decode("utf-8", errors="replace").splitlines()) if existing else 0
+    new_lines = len(body.splitlines())
+    if not force and old_lines >= _SHRINK_MIN_LINES and new_lines < old_lines * _SHRINK_KEEP_RATIO:
+        return {
+            "written": False,
+            "repo_path": str(repo_file),
+            "reason": (
+                f"canlı AKTİF sürüm yerelden BELİRGİN KÜÇÜK ({old_lines} → {new_lines} satır). "
+                "Bu 'bayat yerel tazelendi' DEĞİL, yerel yeni işin EZİLMESİ olabilir: obje henüz "
+                "push edilmemiş ya da push edilip AKTİVE EDİLMEMİŞ olabilir (pull AKTİF sürümü "
+                "okur, INAKTİF'i görmez). ATLANDI. Canlıyı gerçekten istiyorsan --force ver."
+            ),
+            "blocked_shrink": True,
         }
 
     try:

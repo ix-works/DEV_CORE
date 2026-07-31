@@ -129,6 +129,18 @@ def main() -> int:
               f"python scripts/sap_sync_pull.py {obj} --type {t} --force")
         return 1
 
+    if res.get("blocked_shrink"):
+        # FIX-C: canlı AKTİF sürüm yerelden belirgin KÜÇÜK → pull EZMEDİ. "Yerel temiz =
+        # bayat" DEĞİLDİR: obje push edilmemiş ya da push edilip AKTİVE EDİLMEMİŞ olabilir
+        # (pull AKTİF okur). exit 1 → çağıran net "korundu" sinyali alır.
+        print(f"[KORUMA] {obj} ({t}) PULL ATLANDI — {res.get('reason')}")
+        print(f"  repo_path={res.get('repo_path')}")
+        print(f"  → Önce KONTROL ET: obje canlıda AKTİF mi? (push edilmiş ama aktive edilmemiş "
+              f"olabilir — o hâlde yerel doğru, pull YANLIŞ olurdu.)")
+        print(f"  → Yine de canlıya dönmek istiyorsan: "
+              f"python scripts/sap_sync_pull.py {obj} --type {t} --force")
+        return 1
+
     if not res.get("written"):
         print(f"[WARN] repo'ya YAZILMADI ({res.get('reason')}) — repo_path={res.get('repo_path')}. "
               f"Taze damgalanMADI (working-copy taze değil). Repo'da bu objenin source dosyası yoksa "
