@@ -372,8 +372,15 @@ seçtirir; yani fazla-genelleme, bilgiyi silmekle aynı sonucu verir. Uygulanmı
 | #4 Doc ≠ Enforcement | 2026-05-13 | 2 (Namespace whitelist v1, v2) | ✅ SİSTEMATİK |
 | #5 Trust Without Verify | 2026-05-13 | 2 (ZSD_007 cleanup, SHIPMENT_LIST) | ⚠️ DİSİPLİN |
 | #6 TempScripts → Playbook | 2026-05-13 | 1 | ⚠️ DİSİPLİN |
+| #7 Placeholder'a bakıp "pattern yok" (yanlış dosya) | 2026-06-02 | 1 (FM imza push; sınıfsal akrabaları #16/#19'da sayılır) | ⚠️ DİSİPLİN (adt-fugr dolduruldu + memory) |
+| #8 Klasik programı tek-body yazmak | 2026-06-03 | 1 (ALV_TEMP1/2/3) | ⚠️ DİSİPLİN (std 06 §1 + memory + skill-tetik) |
+| #9 Satırsız save-scan'de feature suçlama + körlemesine patinaj | 2026-06-11 | 1 (ZSD001 sipariş-notu) | ⚠️ DİSİPLİN (bisect disiplini; TYPE c gate'i AYRICA kod-gate) |
+| #10 Junction'da `__file__` proje kökü | 2026-07-08 | 1 (deploy_ui + rg ile 2 script daha) | ✅ SOLVED (kök-fix + CORE-01 gate) |
 | #11 where_used count=0 = orphan sanma | 2026-07-09 | 1 (orphan sweep) | ✅ SOLVED (kod gate) |
-| #12 Guard kör noktası (heredoc + tek yüzey) | 2026-07-09 | 3 guard + 4 kural (denetim) | ✅ SOLVED (tek normalizasyon + CI testi) |
+| #12 Guard kör noktası (heredoc + tek yüzey) | 2026-07-09 | 3 guard + 4 kural (denetim) + 1 kapsam-dışı varyant (2026-07-30 POSIX-cd → fix+mutasyon-testi) | ✅ SOLVED (tek normalizasyon + CI testi; varyant sınıfı için negatif-test kültürü) |
+| #13 Enqueue lock-leak (session ölünce in-flight lock) | 2026-07-12 | 1 (EU 510 + E_ABAP_GENPH) | ⚠️ DİSİPLİN (gateway pre-flight lock_check; auto-recovery DEFERRED) |
+| #14 Devreye alma — "koştu ≠ baktı" + FP seli | 2026-07-26 | aile 5 kez (released_objects boş-harita, damga except-PASS, ölü freeze-guard, 0-token validator, 10/10-FP detektör) | ✅ AKTİF ders (9-adım devreye-alma protokolü + grandfather değişmezleri) |
+| #15 `git diff A...B` "merge edilmemiş iş" yanılsaması | 2026-07-27 | 1 (748-satır yanlış alarm; dal 5.162 satır gerideydi) | ⚠️ DİSİPLİN (iki-nokta + PR-hakem zinciri) |
 | #16 Arama aracının kapsamı — `0` ≠ "yok" · **teşhisin kendisi de kanıt gerektirir** | 2026-07-28 | **6** (FUGR grep · classrun sahte teşhis ×2 → 2026-07-31 kök-fix: teşhis İNAKTİF sürümü okuyordu · behavior-pool `main` boş · lock-check tip desteği · dar grep deseni "0 referans") | ⚠️ DİSİPLİN + CI testi (CSRF regresyonu) + kök-fix (`version=active` + session reset) |
 | #17 **Katman katman keşif** — çapraz-kesen işte envantersiz ilerleme | 2026-07-29 | 1 (silme kontrolü: 3 app sanıldı, 7 çıktı; 14 yol sanıldı, 24 çıktı; 6 review turu) | ⚠️ DİSİPLİN → `howto-cok-katmanli-degisiklik.md` |
 | #18 **Bayat sayı/satır referansı** (yorumda `dosya:satır`, "N obje", "N metot") | 2026-07-29 | **6** (obje sayısı · metot sayısı ×2 · veri iddiası · yorum satır-no ×2) | ⚠️ DİSİPLİN (içerik-çapası kuralı) |
@@ -381,6 +388,9 @@ seçtirir; yani fazla-genelleme, bilgiyi silmekle aynı sonucu verir. Uygulanmı
 | #20 **Salt-okunur sanılan araç yazıyordu** — yetkiyi ad/doküman değil ölçüm belirler | 2026-07-31 | 1 (`adt_syntax_check` → temiz inaktif sürümü AKTİVE ediyor; docstring aksini söylüyordu) | ⚠️ DİSİPLİN + kaynak-fix (docstring) |
 
 > **Hedef:** ACTIVE/⚠️ DİSİPLİN olanları zamanla SOLVED'a çevir (kod gate ile).
+> **Numara notu (2026-07-31):** #1–#2 hiç tanımlanmadı (tarihsel boşluk — yeniden kullanma);
+> #17–#18'in ayrıntı gövdesi bu dosyada değil `howto-cok-katmanli-degisiklik.md` +
+> içerik-çapası kuralındadır (tablo satırları kanonik sayaçtır).
 
 ---
 
