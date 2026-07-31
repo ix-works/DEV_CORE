@@ -121,6 +121,52 @@ res = c.set_function_module_source('ZXXX_FM_FOO', 'ZXXX_FG_FOO', src, transport=
 - ✅ **Bilinen çalışan yol:** SE37'de "Remote-Enabled Module" radyo (bir kerelik manuel tek-tık). Sonra metadata GET `processingType="rfc"` gösterir.
 - ❓ **TEST EDİLMEDİ:** post-create **metadata PUT** ile (`...fmodules.v3+xml`, `processingType="remoteEnabled"`, lock'lu) RFC-enable yapılabilir mi — denenmedi (C1'de source-push önce patladığı için sıraya gelmedi). Gerekirse dene; çalışırsa buraya ÇALIŞAN olarak taşı, manuel adımı kaldır.
 
+### 3.1 🔴 SOAP-RFC **STATELESS**'tır — `COMMIT` isteyen BAPI zinciri BU KANALDAN KOŞMAZ (2026-07-31)
+
+**`TFDIR-FMODE='R'` (RFC-enabled) ölçümü, "bu BAPI SOAP-RFC ile kullanılabilir" DEMEK DEĞİLDİR.**
+İki ayrı şeydir ve karıştırmak bir günü yakar:
+
+| Soru | Nasıl ölçülür | Ne söyler |
+|---|---|---|
+| FM uzaktan çağrılabilir mi? | `TFDIR-FMODE = 'R'` | Yalnız **çağrılabilirlik** |
+| İki çağrı **aynı LUW**'u paylaşır mı? | **canlı postalama + geri okuma** | Asıl soru budur |
+
+`/sap/bc/soap/rfc` bu sistemde **stateless**: her HTTP çağrısı **ayrı LUW**. Dolayısıyla
+`BAPI_..._CREATE` → `BAPI_TRANSACTION_COMMIT` zinciri **çalışmaz** — commit **başka bir LUW**'da
+koşar ve create'in update-task işini commit etmez.
+
+**⚠ EN SİNSİ YANI — HER ŞEY BAŞARILI GÖRÜNÜR:**
+- `CREATE` **belge numarası döndürür** (numara aralığından çekilir, LUW'dan bağımsız)
+- `COMMIT` **HTTP 200** döner
+- **ama `MKPF`/`MATDOC`'ta SATIR YOKTUR.**
+Doğrulama yapılmazsa "9 belge postaladım" diye raporlanır. Vaka: `4900001292`/`4900001293`
+numaraları döndü, geri okumada **0 satır**. Tüketilen numaralar boşa gitti (zararsız boşluk).
+
+**Elenen çareler (denenmiş, hiçbiri `sap-contextid` üretmedi — tekrar deneme):**
+`sap-sessioncmd=open` (URL param **ve** header) · `sap-contextid=NEW` · `sap-sessiontype=stateful` ·
+SOAP session header. Sonuncusu `mustUnderstand="1"` ile **HTTP 500** verir (= handler bu özelliği
+**bilmiyor**), `mustUnderstand`'sız hâli **sessizce yok sayılır**.
+
+✅ **ÇALIŞAN YOL: `adt_classrun` + küçük bir Z koşucu sınıf** — `CREATE → RETURN kontrolü →
+COMMIT AND WAIT` **tek ABAP oturumunda**, yani doğal olarak aynı LUW'da. ADR 0005-B ihlali yok:
+standart tabloya yazan hâlâ **BAPI**, yalnız çağıran yer HTTP değil ABAP.
+📖 `classrun`'ın "bozuk" sanılması ayrı bir vakaydı ve çürütüldü: [`adt-classes.md`](adt-classes.md) §24.9.
+
+**SOAP-RFC hâlâ geçerli olduğu yer:** commit gerektirmeyen, **tek çağrılık** RFC FM'ler
+(ör. dialog-context isteyen ekran üreteçleri — §6). Kanal kötü değil, **LUW zinciri için uygun değil**.
+
+### 3.2 ⚠️ SOAP-RFC `TABLES` tuzağı — istemediğin tabloyu CEVAPTA GÖREMEZSİN
+
+Bir `TABLES` parametresi **istekte geçmezse cevapta HİÇ dönmez.** Yani `<RETURN></RETURN>`
+göndermezsen cevapta `RETURN` bloğu **olmaz** ve **uydurma bir malzeme bile "hatasız" görünür.**
+Hata yokluğu değil, **soru sorulmamış** olur.
+
+**Kural:** SOAP-RFC çağrısında `RETURN` (ve okumak istediğin her TABLES parametresi) **DAİMA boş
+olarak istekte yer alır.**
+**Doğrulama refleksi:** kanalı **negatif kontrolle** aç — bilerek var olmayan bir değer gönder ve
+gerçekten hata döndüğünü gör (vaka: `ZZZNOEXIST` → `E M3351`, geçersiz depo → `E M7146`). Hata
+gelmiyorsa kanalın hata **raporlamıyor** olabilir; "temiz" sanma. *(PATTERN #19 — kontrol grubu.)*
+
 ---
 
 ## 4. Doğrulama / Okuma
