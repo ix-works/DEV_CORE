@@ -833,46 +833,10 @@ class SAPADTClient:
         self._auth_provider = auth_provider or self._create_auth_provider(auth_type)
 
         # Connection pooling via requests.Session
-        from requests.adapters import HTTPAdapter
-        from urllib3.util.retry import Retry as _Retry
-        self.session = requests.Session()
-        ssl_verify = os.getenv('ADT_SAP_SSL_VERIFY', 'false').lower()
-        self.session.verify = ssl_verify in ('true', '1', 'yes')
-
-        _adapter = HTTPAdapter(
-            pool_connections=4,
-            pool_maxsize=10,
-            max_retries=_Retry(
-                total=3,
-                backoff_factor=0.3,
-                status_forcelist=(429, 500, 502, 503, 504),
-                allowed_methods=('GET', 'HEAD', 'PUT', 'POST', 'DELETE'),
-            ),
-        )
-        self.session.mount('https://', _adapter)
-        self.session.mount('http://', _adapter)
-        self.session.headers.update({'Accept-Encoding': 'gzip, deflate'})
-
-        # Set initial headers with auth from provider
-        auth_headers = self._get_auth_headers()
-        self.session.headers.update(auth_headers)
-        is_saml_init = self._auth_provider and getattr(self._auth_provider, 'auth_type', '') == 'saml'
-        if not is_saml_init:
-            self.session.headers.update({
-                'sap-client': self.client,
-                # ADR 0005-D: logon dilini session-genelinde TR yap. SAP, obje master
-                # dilini session'ın logon diline göre belirler (body masterLanguage tek
-                # başına yetmez). sap-language'ı session default header yapınca İLK auth
-                # dahil tüm istekler TR logon olur → Z obje masterLanguage=TR.
-                # (gap-analysis #20; feedback_mcp-post-shell-en-master-lang)
-                'sap-language': self.language,
-                'x-sap-adt-sessiontype': 'stateful',
-            })
-        else:
-            self.session.headers.update({
-                'sap-language': self.language,
-                'x-sap-adt-sessiontype': 'stateful',
-            })
+        # ⚠ Kurulum `_build_session()`'da — `new_session()` ile AYNI kodu paylaşır.
+        #   Buraya inline kurulum YAZMA: iki kopya sessizce ayrışır (ör. biri
+        #   `sap-language` alır diğeri almaz → master-dil ADR 0005-D ihlali).
+        self.session = self._build_session()
 
         # Apply SAML cookies if using SAML auth provider
         if self._auth_provider and self._auth_provider.auth_type == 'saml':
@@ -930,6 +894,93 @@ class SAPADTClient:
                 return 'cloud'
 
         return 'onprem'
+
+    def _build_session(self) -> requests.Session:
+        """Yeni bir `requests.Session` kur (pooling + auth + ADT default header'ları).
+
+        `__init__` ve `new_session()` **bu tek kaynağı** paylaşır — kurulum kodu
+        kopyalanmaz (iki kopya sessizce ayrışır: biri `sap-language` alır diğeri
+        almaz → ADR 0005-D master-dil ihlali doğar).
+        """
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry as _Retry
+
+        sess = requests.Session()
+        ssl_verify = os.getenv('ADT_SAP_SSL_VERIFY', 'false').lower()
+        sess.verify = ssl_verify in ('true', '1', 'yes')
+
+        _adapter = HTTPAdapter(
+            pool_connections=4,
+            pool_maxsize=10,
+            max_retries=_Retry(
+                total=3,
+                backoff_factor=0.3,
+                status_forcelist=(429, 500, 502, 503, 504),
+                allowed_methods=('GET', 'HEAD', 'PUT', 'POST', 'DELETE'),
+            ),
+        )
+        sess.mount('https://', _adapter)
+        sess.mount('http://', _adapter)
+        sess.headers.update({'Accept-Encoding': 'gzip, deflate'})
+
+        # Set initial headers with auth from provider
+        sess.headers.update(self._get_auth_headers())
+        is_saml_init = (self._auth_provider
+                        and getattr(self._auth_provider, 'auth_type', '') == 'saml')
+        if not is_saml_init:
+            sess.headers.update({
+                'sap-client': self.client,
+                # ADR 0005-D: logon dilini session-genelinde master dile sabitle. SAP,
+                # obje master dilini session'ın logon diline göre belirler (body
+                # masterLanguage tek başına yetmez). sap-language'ı session default
+                # header yapınca İLK auth dahil tüm istekler o dilde logon olur.
+                # (gap-analysis #20; feedback_mcp-post-shell-en-master-lang)
+                'sap-language': self.language,
+                'x-sap-adt-sessiontype': 'stateful',
+            })
+        else:
+            sess.headers.update({
+                'sap-language': self.language,
+                'x-sap-adt-sessiontype': 'stateful',
+            })
+        return sess
+
+    def new_session(self) -> None:
+        """HTTP oturumunu SIFIRLA → yeni cookie kavanozu = **yeni ABAP oturumu**.
+
+        NİÇİN GEREKLİ (2026-07-31, canlı-kanıtlı): bu istemci süreç ömrü boyunca TEK
+        `requests.Session` tutar ve header'ı `x-sap-adt-sessiontype: stateful`'dur.
+        Bir obje **başka bir süreçte** (ör. `push_object.py`) aktive edildiğinde, bu
+        sürecin SAP oturumu o aktivasyonu GÖRMEZ ve bellekteki eski class-load'a bağlı
+        kalır → `classrun` **aktif** bir sınıfa bile *"does not implement
+        if_oo_adt_classrun~main"* der.
+
+        KANIT (ölçüm; aynı sınıf, aktifliği `adt_inactive_objects == 0` ile doğrulanmış):
+        mevcut oturum → hata · **taze süreç/oturum → ÇALIŞTI**, tam konsol çıktısı geldi.
+        Süreç-içi retry ELENDİ: `run_classrun` zaten aynı oturumda iki kez POST ediyordu,
+        ikisi de aynı hatayı verdi → çare retry değil, **RESET**. Aynı desen
+        `jfilak/sapcli` `d223ed3c`'de de var: `activate() → new_session() → execute()`.
+
+        ⚠ Bu bir *önbellek ısıtma* numarası DEĞİL: oturum kimliği (`sap-contextid`)
+        değişmeden SAP yeni class-load'u vermiyor. CSRF token'ı oturuma bağlı olduğu
+        için geçersizleşir; bir sonraki istekte yeniden alınır.
+        """
+        old = getattr(self, 'session', None)
+        self.session = self._build_session()
+        if self._auth_provider and getattr(self._auth_provider, 'auth_type', '') == 'saml':
+            self._apply_saml_cookies()
+        # CSRF token oturuma bağlıdır → yeni oturumda geçersiz. Disk cache'i de
+        # düşür, yoksa bayat token'la 403 alıp gereksiz retry turu döneriz.
+        self.csrf_token = None
+        try:
+            self._invalidate_csrf_cache()
+        except Exception:
+            pass
+        if old is not None:
+            try:
+                old.close()
+            except Exception:
+                pass
 
     def _create_auth_provider(self, auth_type_hint=None) -> Optional[IAuthProvider]:
         """
