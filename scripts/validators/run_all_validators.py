@@ -120,6 +120,13 @@ def main() -> int:
     validators_dir = Path(__file__).parent
     failed, skipped, ran = [], [], []
 
+    # T1.10 (2026-07-31): sıralı subprocess → ThreadPool paralel koşum; ÇIKTI kanonik
+    # sırada basılır (submit-hepsi → sırayla bekle+bas → format/CI-parse birebir korunur).
+    # Validator'lar salt-okur tarayıcılardır; eşzamanlılık güvenliği seri-vs-paralel
+    # bayt-eşitlik testiyle kanıtlanır. İnce ayar/kıyas: IX_VALIDATOR_WORKERS (varsayılan 8).
+    from concurrent.futures import ThreadPoolExecutor
+
+    is_listesi = []  # (label, gorunen_ad, cmd|None)  — cmd=None → dosya YOK (FAIL)
     for label, script_name, extra_args, scope, profiller in VALIDATORS:
         if args.quick and "freshness" in script_name:
             skipped.append((label, "quick")); continue
@@ -127,28 +134,41 @@ def main() -> int:
             skipped.append((label, "core-modu")); continue
         if profil and profiller and profil not in profiller:
             skipped.append((label, f"profil={profil}")); continue
-
         script_path = validators_dir / script_name
         if not script_path.exists():
-            failed.append(label)
-            print(f"\n--- {label} --- ({script_name})\n[FAIL] validator dosyası YOK")
-            continue
+            is_listesi.append((label, script_name, None)); continue
         cmd = [sys.executable, str(script_path), *extra_args]
         if args.strict:
             cmd.append("--strict")
-        print(f"\n--- {label} --- ({script_name})")
-        result = subprocess.run(cmd, check=False, env=env, cwd=proj)
-        ran.append(label)
-        if result.returncode != 0:
-            failed.append(label)
-
-    # validators-local keşfi (yalnız proje modunda)
+        is_listesi.append((label, script_name, cmd))
     if proje_modu:
         for label, path in _local_validators(proj):
-            print(f"\n--- {label} --- ({path.name})")
-            result = subprocess.run([sys.executable, str(path)], check=False, env=env, cwd=proj)
+            is_listesi.append((label, path.name, [sys.executable, str(path)]))
+
+    def _kos(cmd):
+        return subprocess.run(cmd, check=False, env=env, cwd=proj,
+                              capture_output=True, text=True, encoding="utf-8",
+                              errors="replace")
+
+    try:
+        iscik = max(1, int(os.environ.get("IX_VALIDATOR_WORKERS", "8")))
+    except ValueError:
+        iscik = 8
+    with ThreadPoolExecutor(max_workers=iscik) as havuz:
+        gelecekler = [(label, ad, havuz.submit(_kos, cmd) if cmd else None)
+                      for label, ad, cmd in is_listesi]
+        for label, ad, fut in gelecekler:  # kanonik sırada bekle+bas
+            print(f"\n--- {label} --- ({ad})")
+            if fut is None:
+                print("[FAIL] validator dosyası YOK")
+                failed.append(label); continue
+            r = fut.result()
+            if r.stdout:
+                sys.stdout.write(r.stdout)
+            if r.stderr:
+                sys.stderr.write(r.stderr)
             ran.append(label)
-            if result.returncode != 0:
+            if r.returncode != 0:
                 failed.append(label)
 
     print("\n" + "=" * 60 + "\nÖzet:")
