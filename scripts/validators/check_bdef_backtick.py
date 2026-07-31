@@ -82,7 +82,12 @@ def main():
     if target:
         files = [Path(target)]
     else:
-        files = list((root / SOURCE_ROOT_NAME).rglob("*.bdef"))
+        # T1.9 (2026-07-31): rglob node_modules/dist'i de yürüyordu → prune'lu walk (23× hız).
+        files = []
+        import os as _os
+        for _r, _ds, _fs in _os.walk(root / SOURCE_ROOT_NAME):
+            _ds[:] = [d for d in _ds if d not in ("node_modules", ".git", "dist", "coverage")]
+            files += [Path(_r) / f for f in _fs if f.lower().endswith(".bdef")]
 
     toplam = 0
     dosya_sayisi = 0

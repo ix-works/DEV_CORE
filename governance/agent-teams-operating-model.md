@@ -51,6 +51,12 @@ source: deep-research (4 paralel subagent, 2026-06-14) — Anthropic/Cognition/L
 
 **Bounded-standing GUARDRAIL (eski model-B echo/kirlenme çöpüne dönme — Alt-B çok-dar):** (1) aynı anda **EN FAZLA 1** feature-expert standing (backend VEYA frontend) + gateway; gerisi lazy. (2) feature bitince/idle'da **zorunlu yık**. (3) **echo-reset tetiği:** ajan bayat-bağlam gösterirse (eski feature/obje adı, çözülmüş bug'a benzetme) → lider kill+taze re-spawn. (4) şüphede lazy. *bounded-standing ≠ standing-roster: tek, aktif, sınırlı, echo-korumalı.*
 
+**P7 boşta-bekletme kuralı (2026-07-31 denetim ölçümü — 292 transcript):** ajan duvar-saatinin
+**%33'ü** "liderden yeni mesaj bekleyen" boşta ajanlardı. Kural: ajandan FİNAL raporu alınınca
+(bounded-standing gateway hariç) ajanı beklemede TUTMA — sonraki iş YENİ taze spawn'dır
+(açılış ~53K token maliyetine rağmen: context-kirlenmesi/echo riski + boşta-şişme > açılış).
+Metrik radar turunda izlenir (`agent_time_report` boşta-%; baseline %33, hedef <%15).
+
 **AUDIT:** alt-ajan TAM transcript SABİT adreste (`<session>/subagents/agent-<id>.jsonl`) → **`python scripts/agent_log.py --agent <isim>`** (arama YOK). Loop = **agent-to-agent** (auditable olduğu için); sorun görülürse lead-routed'a çevir.
 
 ## 3. Single-writer KOŞULLU model (KRİTİK)
@@ -158,6 +164,18 @@ Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
 
 ## 6. Maliyet / model katmanı
 Çok-ajan ~15× token. Opsiyonel katman: lider/gateway Opus, feature Sonnet, research Haiku. SAP precision gerektiğinde kaliteyi düşürme; tiering bir maliyet kaldıracı, zorunlu değil.
+
+**SPAWN-MODEL-FLOW (kullanıcı-onaylı matris, 2026-07-31 — denetim P8):** İki seviye:
+① **Politika = KULLANICI** — frontmatter varsayılanları yalnız kullanıcı-onaylı PR ile değişir.
+Onaylı matris: denetçi (bug-expert) + yazıcı (adt-gateway) + backend-expert = **opus SABİT**
+(asimetri ilkesi: denetçi/yazıcı asla düşürülmez); frontend-expert + sap-research +
+sap-feature = **sonnet** varsayılan. ② **Spawn-anı = LİDER, mekanik uygulama** — ITG kapsam
+sınıfından türetilir: S2/yeni-desen/karmaşık iş → `Agent(model:"opus")` ile YÜKSELT;
+sap-research'te mekanik envanter/döküm → `haiku` İNDİRİLEBİLİR; tabloda karşılığı olmayan
+durum/sapma → kullanıcıya sor. Brifin başına tek satır iz: "Model: X — rol×kapsam".
+⚠ Beyan ≠ fiilî model: atama transcript `message.model` alanından CANLI doğrulanır
+(allowlist geçersiz değeri sessizce inherit'e düşürür). Pilot karar kuralı: Sonnet'te
+bug-gate BLOCKER oranı veya rework turu ARTARSA o rol Opus'a geri döner.
 
 **Model-tiering DAİMA DECLARATIVE kalır (D34g, 2026-07-08):** tiering ajan-tanımı
 frontmatter'ında/spawn-parametresinde BEYAN edilir; hook/guard ile HARD-enforce EDİLMEZ
