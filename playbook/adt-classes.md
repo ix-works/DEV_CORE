@@ -106,6 +106,12 @@ veya script ile:
 python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ORNEK_CLASS
 ```
 
+> ⚠ **AKTİVASYON KANITI = `adt_inactive_objects`, metadata DEĞİL.** `adtcore:version="active"`
+> **boş kabuk için de "active" der** → tek başına aktivasyon kanıtı değildir. Aktif sürümü
+> okuyacaksan **`?version=active` parametresini AÇIKÇA ver** — ADT'nin varsayılanı
+> **İNAKTİF** sürümdür ve push ettiğin (henüz aktive edilmemiş) kodu gösterip seni
+> "aktifmiş" sanmaya iter. Vaka + ölçüm: §24.9.
+
 ---
 
 ### 24.6 ExceptionResourceScanDuringSaveFailure — Kök Neden ve Çözüm
@@ -180,6 +186,7 @@ try_push(minimal, 'minimal baseline')
 | `412 PreconditionFailed` | Yanlış ETag | `source/main` endpoint'inden ETag al |
 | `400 lockHandle not found` | Lock handle eksik | `push_object.py` kullan (SAPClient) — manuel PUT yapma |
 | Tüm method bisect'te FAIL | Sorun IMPL'de değil DEFINITION'da | DEFINITION bölümünü bisect et |
+| `does not implement if_oo_adt_classrun~main` (classrun, HTTP 200 gövdesinde) | Mesaj DOĞRU: (1) sınıf aktive edilmemiş (aktif sürüm boş kabuk) veya (2) çağıran süreç bayat stateful oturum tutuyor | (1) `adt_activate` + `adt_inactive_objects` doğrula · (2) oturum RESET. ⛔ **taze class adı DEĞİL** — bkz 24.9 |
 
 ---
 
@@ -224,6 +231,140 @@ kendi push'undur. Bu yüzden:
 
 📌 Aynı sınıf tuzak: CDS inline-POST boş-source (bkz. `adt-cds.md`) — POST'un gövdeyi yok
 sayması ADT'de tekrar eden bir desendir. **Yaratım ve içerik ayrı adımlardır.**
+
+---
+
+### 24.9 `classrun` → *"does not implement if_oo_adt_classrun~main"* (2026-07-31 kök-fix)
+
+**Semptom:** `adt_classrun <cls>` → HTTP 200 gövdesinde
+`Class does not implement if_oo_adt_classrun~main!` — oysa **repo kaynağında** `INTERFACES
+if_oo_adt_classrun` açıkça VAR ve `adt_syntax_check` temiz.
+
+> ⛔ **ESKİ REÇETE YANLIŞTI — KULLANMA:** *"`adt_classrun` bu sistemde güvenilmez/bozuk;
+> app-server class-load cache'i binding'i bozuyor; çare TAZE (hiç kullanılmamış) bir sınıf
+> adıyla yeniden yarat."* Bu reçete **iki kez** denendi, **hiçbirinde çözmedi**, geriye iki
+> gereksiz obje bıraktı ve "araç bozuk" yanlış-sonucunu 6 dokümana yaydı. Yeni class adı
+> **hiçbir şeyi bust etmez** — aşağıdaki iki sebebin ikisine de dokunmaz.
+
+**SAP'nin mesajı DOĞRUDUR.** Ardında iki bağımsız sebep vardır:
+
+| # | Kök sebep | Nasıl ayırt edilir | Çare |
+|---|---|---|---|
+| 1 | **Sınıf AKTİVE EDİLMEMİŞ** — push edildi, aktif sürüm hâlâ `adt_post_shell` boş kabuğu. classrun **aktif** sürümü yükler → mesaj gerçekten doğru. | Kaynağı **`?version=active`** ile çek: boş kabuk (birkaç yüz bayt, `INTERFACES` yok). Parametresiz GET seni yanıltır → **İNAKTİF** sürümü döndürür. | `adt_activate` → sonra `adt_inactive_objects` ile **doğrula** |
+| 2 | **BAYAT stateful ADT oturumu** — istemci süreç ömrü boyunca TEK `requests.Session` tutar (`x-sap-adt-sessiontype: stateful`). Obje **başka bir süreçte** aktive edildiyse bu sürecin SAP oturumu aktivasyonu görmez, eski class-load'a bağlı kalır. | Sınıfın aktif olduğu kanıtlanmışken (`adt_inactive_objects` = 0) hata **devam ediyorsa** bu sebeptir. Aynı çağrı **taze bir süreçte** anında çalışır. | **Oturum RESET** — `SAPADTClient.new_session()`; `run_classrun` bunu artık otomatik yapar |
+
+> ⛔ **AYNI OTURUMDA RETRY ETKİSİZDİR.** Eski `run_classrun` zaten aynı session'la iki kez
+> POST ediyordu; **ikisi de** aynı hatayı verdi. Çare retry değil **reset**: yeni session =
+> yeni `sap-contextid` = güncel class-load. Aynı desen `jfilak/sapcli` `d223ed3c`'de:
+> `activate() → new_session() → execute()`.
+
+**⚠️ AKTİVASYON KANITI — `version="active"` metadata'sı TEK BAŞINA YETMEZ.**
+`adtcore:version="active"` **boş kabuk için de "active" der** (kabuk da bir aktif sürümdür).
+Aktivasyonun güvenilir kanıtı **`adt_inactive_objects`**'tir (worklist boş mu?) — ikincil
+olarak aktif kaynağın **bayt/içerik** karşılaştırması. *"Aktif dedi"* ≠ *"kodun aktif"*.
+
+**Ölçüm (2026-07-31, aynı sınıf, aynı an):** `source/main` parametresiz GET → **10.659 bayt,
+arayüz VAR** · `source/main?version=active` → **192 bayt boş kabuk, arayüz YOK**. Yani
+**ADT'nin varsayılan sürümü İNAKTİF'tir** — bir sürüm parametresi vermeyen her doğrulama
+"var" der ve seni yanıltır.
+
+**META-DERS (bu vakanın asıl bedeli):** teşhisi üreten fonksiyon (`_diagnose_classrun_binding`)
+tam da bu tuzağa düşmüştü — `version=` vermeden okuyup **hiç aktive edilmemiş** sınıfa
+"yapısal olarak geçerli" diyordu. Oradan otomatik olarak *"o hâlde tooling bozuk → taze
+class adı"* reçetesi doğdu. **Yanlış veri okuyan bir teşhis, güvenle yanlış bir reçete
+üretir** — ve o reçete "araç bozuk" diye terfi eder. Bkz. `lessons-learned.md` PATTERN #16
+kardeş vakası.
+
+---
+
+#### 24.9-A ⛔ PATİNAJ ANATOMİSİ — asıl ders burada (saatler bu yüzden yandı)
+
+Kök sebep teknikti; **maliyeti üreten şey yöntemdi.** Aynı patinaja düşmemek için:
+
+**① "ARAÇ BOZUK" DEMEDEN ÖNCE KONTROL GRUBU KOŞ. (bu vakayı 2 dakikada bitirirdi)**
+Patinaj boyunca `classrun` **yalnız bozuk sanılan objelerle** denendi. *Çalıştığı bilinen*
+bir obje üzerinde **hiç koşulmadı.* Bir kontrol grubu (aktifliği `adt_inactive_objects` ile
+kanıtlanmış, yan etkisiz bir sınıf) ilk yarım saatte "araç sağlam, sorun objede" derdi.
+> **Kural:** *"X aracı bozuk"* bir **karşılaştırmalı** iddiadır. Karşılaştırma yapılmadan
+> kurulamaz. Kontrol grubu yoksa elindeki tek şey *"X bu objede çalışmadı"*dır — ki bu
+> bambaşka bir cümledir.
+> ⚠ Kontrol grubu seçerken **yan etkiye bak**: bu vakada `SEOMETAREL VERSION=1` olan 13 aday
+> sınıfın **hepsi** yazma yapıyordu (12'si DOKU üretiyor, biri `DELETE`+`COMMIT`). Adı masum
+> diye varsayma — gövdesini oku. Yan etkisiz aday yoksa `$TMP`'de `out->write('OK')` kadar
+> basit birini yarat, aktive et, koş, sil.
+
+**② TANIDIK SEMPTOMDA ÖNCE HAFIZAYI ARA — cevap zaten vardı.**
+Bu sonuca **2026-06-30'da da varılmış** ve aynı gün düzeltilmişti: *"BOZUK YANLIŞTI — kod
+bug'ı değil, bayat süreç; çözüm `/mcp` reconnect."* Yani **HATA 2 bir ay önce çözülmüş,
+yazılmış ve unutulmuştu.** 2026-07-30'da semptom tekrar geldi, kayıt okunmadı ve **üstüne
+yanlış sonuç yazıldı.**
+> **Kural:** semptom tanıdık geliyorsa bu bir sezgi değil **sinyaldir** — playbook +
+> lessons-learned + memory'de **önce ara**. Aramadan konulan teşhis, var olan doğruyu ezer.
+
+**③ REÇETE PAHALIYSA VE ÇALIŞMADIYSA, İKİNCİ KEZ DENEME — REÇETEYİ SORGULA.**
+"Taze class adı" **iki kez** denendi. Birincisi başarısız olduğunda sorgulanması gereken şey
+sınıfın adı değil **reçetenin kendisiydi**. Üstelik reçetenin dayanağı bir *ölçüm* değil, bir
+*teşhis fonksiyonunun çıktısıydı*.
+> **Kural:** bir çare ilk denemede işe yaramadıysa, aynı çareyi tekrarlamadan önce
+> **dayandığı kanıtı** doğrula. (`lessons-learned` "no-retry" ilkesi.)
+
+**④ SÜRÜM-DUYARLI UÇTA SÜRÜMÜ AÇIKÇA VER; VARSAYILANI ÖLÇ.**
+`.../source/main` gibi `active`/`inactive` ayrımı olan her uçta parametreyi **yaz**. Buradaki
+varsayılanın İNAKTİF olduğu **ölçülene kadar bilinmiyordu** ve kimse sormadı.
+
+**⑤ MALİYET (bunu hatırlamak için yazıldı):** 1 eksik query parametresi → 6 dokümana yanlış
+bilgi + 1 core PR + auto-memory kaydı + 2 gereksiz Z obje (silindi, postmortem imkânsız) +
+bir gün boyunca "Eclipse F9'a bağımlıyız" varsayımıyla planlama + saatlerce yanlış hipotez
+kovalama (çok-app-server asimetrisi, CSRF, bare-header, taze isim).
+
+---
+
+### 24.10 YORUM KONUMU — `ENDMETHOD.` ↔ `METHOD` arasına yorum KONULAMAZ (ölçüm 2026-07-31)
+
+**Semptom:** source-based class push → `PUT .../source/main` **HTTP 400** ·
+`ExceptionResourceBadRequest` · *"The class contains unknown comments which can't be stored."* ·
+`T100KEY OO_SOURCE_BASED-012`. **Satır numarası YOKTUR** — hata hangi yorumun suçlu olduğunu
+söylemez, yalnız "bir yerde var" der.
+
+**KURAL — belirleyici olan KONUM'dur, bitişiklik değil.** Ölçülen dört konum:
+
+| Yorumun konumu | Sonuç |
+|---|---|
+| `CLASS … DEFINITION` bölümü (**`METHODS`↔`METHODS` arası DAHİL**) | ✅ **SERBEST** — 73 satırlık kesintisiz yorum bandı DEFINITION'da bırakıldı → PUT **200** |
+| Metot **GÖVDESİ** içi (`METHOD x.` satırının ALTI; `TRY.` öncesi dahil) | ✅ **SERBEST** — PUT **200** |
+| `CLASS … IMPLEMENTATION.` ↔ ilk `METHOD` arası | ⛔ **400** |
+| `ENDMETHOD.` ↔ sonraki `METHOD` arası | ⛔ **400** |
+
+⛔ **BİTİŞİKLEME ÇÖZMEZ.** Yorum bandı ile sonraki `METHOD` satırı arasındaki boş satırı silmek
+sonucu **değiştirmez** — aradaki boşluk değil, bandın IMPLEMENTATION gövdesindeki **yeri** kırar.
+"Bitişikle" reçetesi bu ölçümle çürümüştür (bkz. `checklists/bug-checklist-backend.md` BE-10b).
+
+✅ **DOĞRU REÇETE — iki seçenek:**
+1. Bandı **SİL** (metot/alan silinince ortada kalan not = en sık sebep), **veya**
+2. Bandı `METHOD x.` satırının **ALTINA — gövdenin İÇİNE** taşı (içerik korunur, konum düzelir).
+
+**TEŞHİS YÖNTEMİ — satır-no vermeyen 400'lerde genel reçete (yöntemin kendisi değerlidir):**
+
+```
+1. Kaynağın YORUMSUZ sürümünü PUT et.
+     → 200 gelirse: suçlu yorumlardadır (kod değil). Bu adım atlanırsa
+       yanlış hipotez kovalanır (tip/isim/boyut — bkz. §24.6 confound listesi).
+2. N yorum bloğunu TEK TEK geri koyup PUT et (her turda bir blok).
+     → 400 veren bloklar suçludur; konumlarına bak, deseni oradan oku.
+```
+
+Bu, "hangi satır" bilgisi vermeyen her `400`/save-scan reddinde uygulanabilir; §24.6'nın bisect'i
+**kod** için ne ise bu da **yorum** için odur.
+
+**⚠ YEREL GATE'LERİN HİÇBİRİ YAKALAMIYOR (ölçüldü 2026-07-31):** `run_review.py` **PASS** ·
+abaplint **temiz** → SAP **400**. Yani "reviewer geçti" bu tuzağa karşı hiçbir şey söylemez;
+hata yalnız canlı PUT'ta çıkar.
+> **Ön-kapı adayı (henüz YOK — gate değil):** `ENDMETHOD.`/`IMPLEMENTATION.` ↔ yorum ↔ `METHOD`
+> üçlüsünü push'tan ÖNCE tarayan deterministik bir script yazılabilir. ADR 0019 gate-moratoryumu
+> gereği **önce bu doküman + BE-10b denenir**; yetmediği ölçülürse açık onayla gate'lenir.
+
+📌 İlgili: `claude/memory-seed/feedback_detached-leading-abapdoc-class-push-400.md` (yetim-yorum
+teşhisi) · BE-10b.
 
 ---
 

@@ -249,6 +249,15 @@ gateway'in "include doğası, beklenen, zararsız" diye GEÇİŞTİRMESİ YANLI�
 - Alternatif: tek-obje yolu (`also` olmadan, include URI) bağlam programını çözmez → kullanma.
 - Acil durumda kullanıcı SE80/ADT GUI'den bağlam programını aktive edebilir (kanıtlı çözüm).
 
+**`contextRef` NASIL KURULUR (yaratma XML'i ile DEĞİL) — 2026-07-31:** Include ↔ ana program
+bağı, include'un **yaratma gövdesinde taşınmaz**; **ana programdaki `INCLUDE <ad>.` deyiminden**
+doğar ve **aktivasyonda** kurulur. Kanıt: `create_object`'in `PROG/I` dalı yaratma XML'ine
+`<include:contextRef>` **koymaz** (`scripts/sap_adt_lib.py`, `abapInclude` gövdesi = yalnız
+`adtcore:*` öznitelikleri + `packageRef`), buna karşın canlı include'un metadata'sında
+`contextRefCount="1"` görülür. **Pratik sonuç:** yeni include'a "bağlam ver" diye yaratma
+XML'ine alan eklemeye çalışma — bağı kuran şey **ana programa `INCLUDE` satırını yazıp
+programı aktive etmektir**; `contextRef` bunun **sonucudur, girdisi değil**.
+
 ---
 
 ### 3.0 ABAP Program (PROG/P) Yaratma ve Push — CALISTIRILMIS YONTEM

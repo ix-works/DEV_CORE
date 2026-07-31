@@ -854,13 +854,20 @@ zorlayan araçlarla yapılır.
 
 | Grup | Tool | Yazma? |
 |---|---|---|
-| **Okuma / Analiz** | `ping` · `adt_get` · `adt_search_objects` · `adt_where_used` · `adt_table_read` · `adt_package_contents` · `adt_lock_check` · `adt_transport_list` · `adt_syntax_check` · `adt_atc_check` | Hayır |
+| **Okuma / Analiz** | `ping` · `adt_get` · `adt_search_objects` · `adt_where_used` · `adt_table_read` · `adt_package_contents` · `adt_lock_check` · `adt_transport_list` · `adt_atc_check` | Hayır |
 | **Yaratım / DDIC** | `adt_post_shell` · `adt_domain_create` · `adt_dtel_create` · `adt_struct_create` | Evet |
-| **Aktivasyon / Push** | `adt_push_source` · `adt_activate` · `adt_delete` | Evet |
+| **Aktivasyon / Push** | `adt_push_source` · `adt_activate` · `adt_delete` · **`adt_syntax_check`** | **Evet (koşullu)** |
 | **Servis / Yürütme** | `adt_publish_service` · `adt_classrun` | Evet |
 
 Okuma tool'ları hiçbir koşulda yazmaz; bu ayrım ajan tool-allowlist'lerinde fiziksel
 enforcement'ın temelidir (Bölüm 12.1).
+
+> ⚠ **`adt_syntax_check` adına rağmen okuma DEĞİLDİR** (ölçüm 2026-07-31). Uç nokta
+> `POST /sap/bc/adt/activation?method=activate&preauditRequested=true`; bu sistemde preaudit
+> onurlandırılmıyor → **bekleyen inaktif sürüm temizse objeyi AKTİVE ediyor**
+> (`adt_inactive_objects` 1→0 ölçüldü), hatalıysa etmiyor. Bu yüzden yazma kovasındadır ve
+> yalnız tek-yazıcı (gateway) allowlist'inde bulunur. Ayrıntı: `playbook/adt-mcp.md`
+> "Tool SEMANTİĞİ" · `playbook/lessons-learned.md` PATTERN #20.
 
 ### 10.2 Sunucu tarafı guardrail'ler (hardcoded, bypass yok)
 

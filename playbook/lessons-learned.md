@@ -234,8 +234,18 @@ satırın kendi listesi zaten 12 diyordu = baştan tutarsız) · "canlıda bağl
 Yazım disiplini: **(a)** sayı yazarken **ölçüm tarihini** de yaz · **(b)** aynı dosya içinde
 **içerik çapası** kullan, satır numarası değil · **(c)** çapraz-dosya referansını **sembol adına**
 bağla (*"ada göre ara: `<sembol>`"*) · **(d)** **sayıyı tazelemek sınıfı çözmez** — çapaya çevir ·
-**(e)** yorumdaki **veri iddiasını** (canlıda X var/yok) ölçmeden aktarma.
-**Status:** ⚠️ DİSİPLİN — kaynak: 2026-07-29 silme kontrolü turu.
+**(e)** yorumdaki **veri iddiasını** (canlıda X var/yok) ölçmeden aktarma ·
+**(f) TABAN-ÖLÇÜM — bir işlemin başarısını İDDİAYLA değil İKİ SAYIYLA kanıtla.** `rc=0` /
+`HTTP 200` / `[OK]` bir iddiadır, sonuç değil. İşlemden **ÖNCE taban**, işlemden **SONRA hedef**
+ölç; kanıt ikisinin **farkıdır**. Örnekler: GUI status buton sayısı **0→5** · text-pool sembol
+sayısı **6→35** · mesaj sayısı **37→38** · inaktif-worklist **1→0**. Taban alınmadıysa "sonra"
+değeri hiçbir şey kanıtlamaz (zaten öyle olabilirdi).
+**(g) "X ÇÜRÜDÜ" bir cümle değil, bir KOŞULDUR.** Bir çürütme notu yazarken **hangi koşulda**
+çürüdüğünü de yaz (hangi obje tipi · hangi bağlam · hangi sürüm/uç nokta). Koşulsuz yazılmış
+çürütme notu, sonraki turda **hâlâ geçerli olduğu yerde de** kullanılmaz → yanlış kanal/yöntem
+seçtirir; yani fazla-genelleme, bilgiyi silmekle aynı sonucu verir. Uygulanmış örnek:
+[`adt-fugr-functions.md`](adt-fugr-functions.md) §3.1 (SOAP-RFC vakası koşullu yazıldı).
+**Status:** ⚠️ DİSİPLİN — kaynak: 2026-07-29 silme kontrolü turu · (f)/(g) 2026-07-31.
 
 ## 🔄 SELF-UPDATE PROTOKOLÜ
 
@@ -274,12 +284,83 @@ bağla (*"ada göre ara: `<sembol>`"*) · **(d)** **sayıyı tazelemek sınıfı
 - **Akraba pattern:** **#11**'in aynadaki hâli. #11: `where_used count=0` → "orphan" sanma (obje yoksa da 0 döner). #16: `grep count=0` → "kullanılmıyor" sanma (araç bakmadıysa da 0 döner). **Ortak çekirdek: `0`, "arananın yokluğu" değil "aracın bulamaması"dır.** Aynı çekirdek D29'da da var (junction arkasını `Grep`/`Glob` sessizce boş döndürür).
 - **Status:** ⚠️ DİSİPLİN (doküman + çapraz-doğrulama refleksi). Tool-fix önerildi, onay bekliyor.
 - **🔻 KARDEŞ VAKA — aracın KENDİ TEŞHİSİ yanlış olabilir (2026-07-28):** `adt_classrun` sağlam bir sınıf için *"Class does not implement if_oo_adt_classrun~main!"* döndürdü **ve yanına hazır bir teşhis bastı**: *"class-LOAD-cache binding bozulması; ÇÖZÜM: TAZE sınıf adıyla yeniden yarat"*. Reçete uygulandı — taze isimle **aynı hata**. Gerçek sebep bambaşkaydı: çağıran header'ı `_request_with_csrf_retry`'dan ÖNCE kuruyordu, soğuk session'da token o dict'e hiç yazılmıyordu → istek CSRF'siz gidiyor, SAP 403 yerine **200 + yanıltıcı gövde** dönüyordu. **Ders: bir aracın gömülü teşhisi de bir iddiadır — kanıt değil.** Reçetesini uygulayıp sonuç değişmiyorsa, bu **teşhisin kendisine karşı kanıttır**; daha çok denemek yerine teşhisi bırak. **Bedeli:** yanlış teşhis, araştırmacıyı gereksiz bir ikinci obje yaratmaya sevk etti. Kök-fix + `scripts/tests/test_csrf_header_injection.py` (A/B kanıtlı: fix kapalı → exit 1) + teşhis metninde artık iki sebep sıralı veriliyor. *Sinyal: "bulunamadı/başarısız" mesajının yanında gelen **hazır çözüm önerisi**, hatanın kendisi kadar şüpheli.*
+- **🔻 KARDEŞ VAKA — İKİNCİ TUR: TEŞHİSİN KENDİSİ KANIT GEREKTİRİR (2026-07-31, `adt_classrun` kök-fix):** Yukarıdaki vakanın ardından `adt_classrun` yine *"does not implement if_oo_adt_classrun~main"* dedi ve bu kez sonuç **"araç bu sistemde GÜVENİLMEZ/BOZUK; çare taze bir sınıf adı"** diye **6 dokümana yazıldı**. Canlı ölçüm bunu çürüttü: **araç bozuk değildi, SAP'nin mesajı DOĞRUYDU.** İki bağımsız hata birleşip yanlış sonucu üretmişti.
+  - **HATA 1 — teşhis fonksiyonu YANLIŞ SÜRÜMÜ okuyordu.** `_diagnose_classrun_binding`, `source/main`'i **`version=` parametresi vermeden** GET ediyordu ve **ADT'nin varsayılanı İNAKTİF sürümdür**. Aynı sınıf, aynı an: parametresiz GET → **10.659 bayt, arayüz VAR** · `version=active` → **192 bayt boş kabuk, arayüz YOK**. Yani sınıf **hiç aktive edilmemişken** teşhis "yapısal olarak geçerli" diyordu; oradan da mantıken *"kod sağlamsa suçlu tooling'dir → taze class adı dene"* doğuyordu. Gerçek durum: sınıf push edilmiş ama **AKTİVE EDİLMEMİŞTİ**.
+  - **HATA 2 — bayat uzun-ömürlü oturum.** Sınıfın aktif olduğu **kanıtlandıktan sonra** (`adt_inactive_objects` = 0, syntax temiz) hata **sürdü**. İstemci, süreç ömrü boyunca TEK `requests.Session` tutuyor (`x-sap-adt-sessiontype: stateful`); obje **başka bir süreçte** aktive edildiyse bu sürecin SAP oturumu aktivasyonu görmez, eski class-load'a bağlı kalır. Aynı çağrı **taze bir süreçte anında** çalıştı. **Süreç-içi retry ELENDİ** — kod zaten aynı oturumda iki kez POST ediyordu, ikisi de aynı hatayı verdi: çare retry değil **RESET** (`activate() → new_session() → execute()`; aynı desen `jfilak/sapcli` `d223ed3c`).
+  - **DENENEN — BAŞARISIZ:** *"taze (hiç kullanılmamış) class adıyla yeniden yarat"* — **iki kez** uygulandı, **çözmedi**, geriye **iki gereksiz obje** bıraktı. Bir reçeteyi uygulayıp sonuç değişmiyorsa bu, **reçeteyi doğuran teşhise karşı kanıttır**; üçüncü kez deneme, teşhisi bırak.
+  - **META-DERS (bu ailenin çekirdeği):** **Yanlış veri okuyan bir teşhis, GÜVENLE yanlış bir reçete üretir** — ve o reçete "araç bozuk" diye terfi eder, dokümanlara yayılır, sonra herkes ona dayanır. **Teşhisin KENDİSİ kanıt gerektirir:** hangi veriyi, hangi sürümünü, hangi parametreyle okuduğunu sor. Burada **tek eksik parametre** (`version=active`) → 6 dokümana yanlış bilgi, 2 gereksiz obje, saatlerce yanlış yerde arama.
+  - **YAN BULGU (bağımsız değerli):** `adtcore:version="active"` metadata'sı **boş kabuk için de "active" der** → **tek başına aktivasyon kanıtı DEĞİLDİR.** Güvenilir kanıt **`adt_inactive_objects`** + aktif kaynağın içerik/bayt kıyası.
+  - **Status:** ✅ KÖK-FIX (teşhis artık `version=active` okuyor · `new_session()` + reset'li retry · yanıltıcı teşhis metni yeniden yazıldı) + doküman geri-alması. Vaka evi: [`adt-classes.md`](adt-classes.md) §24.9.
 - **🔺 KARDEŞ VAKA — AYNANIN ÖTEKİ YÜZÜ: `1 eşleşme` de "var" demek değildir (2026-07-30):** Bir inceleme ajanı, riskli bir CDS konstrüksiyonu için *"classic view emsali BULDUM"* dedi ve dosya+satır verdi — **risk kapandı sanıldı ve lider bunu aşağıya da yukarıya da aktardı.** Build ajanı sevinerek kabul etmedi, **ölçtü ve çürüttü:** gösterilen obje `define view **entity**`'ydi (classic değil) ve `@AbapCatalog.sqlViewName` o dosyada **tek bir yerde** geçiyordu — **bir YORUM satırında**, üstelik cümlenin anlamı *"sqlViewName **YOK**"* idi. Yani grep, aradığı token'ı **kendi yokluğunu ilan eden cümlenin içinde** buldu ve "var" sinyali üretti. Bağımsız süpürme kesinleştirdi: o konstrüksiyonu içeren 12 dosyanın `sqlViewName` taşıyanı **yalnız aktive edilmeye çalışılan dosyanın kendisiydi** — yani emsal **hiç yoktu**.
   - **Ortak çekirdek genişliyor:** #16 *"`0`, arananın yokluğu değil aracın bulamamasıdır"* diyordu. Ayna hâli: **`>0`, arananın varlığı değil, aracın bir dizgeye çarpmasıdır.** Token'ın **hangi sözdizimsel bağlamda** (yorum · dizge sabiti · olumsuzlama · dokümantasyon) geçtiği sorulmadıkça eşleşme kanıt değildir.
   - **Neden bu sinsi:** olumsuzlama **eşleşmeyi artırır**. Bir şeyin yokluğunu belgeleyen yorum (`// X YOK`, `# no longer uses Y`, `⛔ Z KULLANMA`), o şeyi arayan her grep'e **isabet** verir. Yani *iyi belgelenmiş* kod tabanları bu hataya **daha açıktır**.
   - **Prevention:** (1) Emsal/varlık iddiasını **tanımlayıcı satırdan** doğrula, arama isabetinden değil — CDS'te `define view` ↔ `define view entity`, tabloda `define table`, sınıfta `CLASS … DEFINITION`. (2) Aday listesini **iki koşulun kesişimiyle** daralt (hem konstrüksiyon hem tip), tek grep'le değil. (3) **Çelişkide ölç:** iki ajan/araç çelişiyorsa üçüncü, mekanizması farklı bir ölçüm yap — burada canlı `adt_get` metadata (`source_type="view entity"`) kesin kanıttı.
   - **Yönetsel ders (en az teknik kadar önemli):** *"riski kapattım"* haberi, *"risk var"* haberinden **daha sıkı** doğrulanmalıdır — çünkü kabul edilirse bir güvenlik ağı (burada: kaynağa yazılmış fallback) **kaldırılır**. Build ajanı iyi haberi reddedip fallback yorumunu yerinde bıraktı; aksi hâlde kaynağa **yanlış bir kanıt iddiası** gömülecek ve ileride biri ona dayanıp fallback'i silecekti.
 - **Vakalar:** 2026-07-28 — bir Adobe-Form paketinin plaka-ayrıştırma işinden **etkilenip etkilenmediği** araştırılırken; `where_used` FM'i listeliyordu, paket grep'i 0 diyordu. Include indirilince bağ **gerçek** çıktı (ama okunan tek alan farklıydı → sonuçta etki yoktu). Kanıtsız "yok" denseydi, blast-radius eksik kalırdı.
+
+---
+
+### PATTERN #19: *"Araç bozuk"* KARŞILAŞTIRMALI bir iddiadır — kontrol grubu olmadan kurulamaz
+
+- **Hata:** Bir araç beklenen sonucu vermeyince, **yalnız sorunlu obje üzerinde** denemeler yapılır (header varyantları, retry, farklı isim, farklı oturum tipi…), hepsi başarısız olur ve sonuç *"araç bu sistemde bozuk/güvenilmez"* diye yazılır. Oysa araç **hiçbir zaman çalıştığı bilinen bir örnek üzerinde koşulmamıştır.**
+- **Neden sinsi:** Denemeler *çoğaldıkça* "araç bozuk" hipotezine olan güven **artar** — ama hepsi aynı kirli girdiyi kullandığı için hiçbiri hipotezi test etmez. Beş başarısız varyant, bir kontrol grubunun verdiği bilginin **hiçbirini** vermez. Üstelik uğraşılan süre, sonuca duyulan güveni haksız yere büyütür ("bu kadar denedik, demek ki gerçekten bozuk").
+- **Kural:** *"X bozuk"* ile *"X bu objede çalışmadı"* **farklı cümlelerdir**. Birincisini kurmak için **iki** ölçüm gerekir: sorunlu vaka **+ çalıştığı bilinen vaka**. İkincisi yoksa elindeki iddia yalnız ikincisidir — dokümana da öyle yazılır.
+- **Kontrol grubu seçerken:**
+  1. **Yan etkiye bak, adına değil.** Vakada uygun görünen 13 adayın **hepsi** yazma yapıyordu (12'si doküman üretiyor, biri `DELETE`+`COMMIT`). "Runner", "test", "probe" gibi masum adlar hiçbir şey garanti etmez — **gövdesini oku**.
+  2. Yan etkisiz aday yoksa **yarat**: `$TMP`'de en basit hâli (bir satır çıktı), aktive et, koş, sil. Ucuzdur ve kesin cevap verir.
+  3. Kontrol grubunun **gerçekten sağlam olduğunu** ölç (burada: `adt_inactive_objects` = 0). Kontrol grubun da hastaysa deney anlamsızdır.
+- **Prevention (sıra önemli):** ① **ÖNCE HAFIZAYI ARA** (aşağı bak) → ② kontrol grubu koş → ③ hipotez üret → ④ ancak o zaman "araç" sonucuna git.
+- **🔻 İKİZ KURAL — tanıdık semptomda önce hafızayı ara; cevap zaten yazılmış olabilir:** Bu vakanın HATA 2'si (bayat oturum) **bir ay önce, 2026-06-30'da çözülmüş ve kayda geçmişti**: *"BOZUK YANLIŞTI — kod bug'ı değil, bayat süreç; çözüm `/mcp` reconnect."* Semptom 2026-07-30'da tekrar geldi, **kayıt okunmadı**, sıfırdan hipotez kuruldu ve **üstüne yanlış sonuç yazıldı** — yani doğru bilgi yanlışıyla **değiştirildi**. Semptomun tanıdık gelmesi bir sezgi değil **sinyaldir**: playbook + lessons-learned + memory'de arama yapmadan teşhis koyma. *Bir kuralı ikinci kez öğrenmenin bedeli, birinci kez öğrenmekten yüksektir — çünkü arada ona dayanan kararlar alınır.*
+- **🔻 ÜÇÜNCÜ KURAL — pahalı bir çare ilk denemede işe yaramadıysa, ikinci kez deneme: çareyi doğuran KANITI sorgula.** Vakada "taze class adı" **iki kez** uygulandı. Birincisi başarısız olduğunda sorgulanacak şey sınıfın adı değil **reçetenin dayanağıydı** — ki dayanak bir ölçüm değil, bir teşhis fonksiyonunun çıktısıydı (bkz. #16, HATA 1).
+- **Bedel (2026-07-31 vakası):** 1 eksik query parametresi → 6 dokümana yanlış bilgi + 1 core PR + auto-memory kaydı + 2 gereksiz Z obje + bir gün "harici bir kanala bağımlıyız" varsayımıyla planlama + saatlerce yanlış hipotez (çok-app-server asimetrisi · CSRF · bare-header · taze isim). **Kontrol grubu bunu ilk yarım saatte bitirirdi.**
+- **Akraba:** **#16** (teşhisin kendisi kanıt gerektirir) — #16 *teşhisin girdisini*, #19 *sonucun kurulma biçimini* denetler. İkisi birlikte: **kanıt hem doğru veriden okunmalı hem karşılaştırmalı olmalı.**
+- **Status:** ⚠️ DİSİPLİN. Vaka evi: [`adt-classes.md`](adt-classes.md) §24.9-A.
+
+---
+
+### PATTERN #20: Salt-okunur SANILAN araç yazıyordu — yetki sınırını **ad ve doküman değil, ÖLÇÜM** belirler
+
+- **Hata:** Bir tool'un **adına** (`*_check`, `*_get`, `*_list`, "preaudit", "dry-run") ve
+  **docstring'ine** bakılarak "okuma" kovasına konur; ajan allowlist'lerine, tek-yazıcı
+  mimarisine ve "bunu çağırmak zararsızdır" refleksine bu sınıflandırma temel yapılır.
+  **Hiç ölçülmemiştir.**
+- **Vaka (2026-07-31):** `adt_syntax_check` **salt-okunur sanılıyordu** — docstring'i açıkça
+  *"performs a syntax check without actually activating the object"* + *"activationExecuted
+  will be false"* diyordu. Ölçüm bunu çürüttü: tool
+  `POST /sap/bc/adt/activation?method=activate&preauditRequested=true` çağırıyor ve bu sistemde
+  preaudit **onurlandırılmıyor** → bekleyen inaktif sürüm **temizse objeyi AKTİVE ediyor**
+  (`adt_inactive_objects` **1 → 0**; `?version=active` kaynağı push edilene eşitlendi), hatalıysa
+  etmiyor. Gerçek semantiği **"hatasızsa aktive et"**.
+- **Neden sinsi — üç kat:**
+  1. **Ad ikna edicidir.** "check" kelimesi, kimsenin sormadığı bir yetki iddiasında bulunur.
+  2. **Yan etki BAŞARILI durumda ortaya çıkar.** Hata varsa aktive etmiyor → tool "gerçekten
+     sadece kontrol ediyor" gibi görünüyor; yazma yalnız her şey yolundayken oluyor, yani
+     **kimsenin bakmadığı anda**.
+  3. **Araç kod göndermez** — çağrıda yalnız obje adı gider, SAP **sunucudaki bekleyen sürümü**
+     devreye alır. Yani çağıran, gönderdiğini değil **orada duranı** aktive eder; bilinçli
+     bekletilen bir aktivasyon (co-activation sırası, def/impl include çifti) varken **sırayı bozar**.
+- **YÖNTEM — bir tool'u "read-only" kovasına koymadan önce yan etkisini ÖLÇ:**
+  ```
+  TABAN ölç  →  tool'u ÇAĞIR  →  TEKRAR ölç  →  fark var mı?
+  ```
+  Ölçüm için tool'un kendi ailesinden **bağımsız** bir sayaç seç (burada: `adt_inactive_objects`
+  worklist sayısı; ayrıca `?version=active` kaynağın bayt/içerik kıyası). Tool'un **kendi
+  dönüşünü** kanıt sayma — `activationExecuted:false` tam da bu vakada yanıltıcıydı.
+  (Taban-sonra ölçüm ilkesi: #18 (f).)
+- **Neden bu bir MİMARİ mesele, sadece doküman hatası değil:** single-writer mimarisinde
+  "okuma" kovası ajan **tool-allowlist'lerine** dönüşür. Yanlış sınıflandırılmış bir tool,
+  yazma yetkisi olmayan rollere sessizce yazma yeteneği verir — ilke ihlal edilir ama
+  **hiçbir gate ötmez**, çünkü ihlal izin katmanının kendi içindedir.
+- **⚠ Kaynağı düzelt, dokümanı değil (yalnız):** yanlış bilgi **kodun docstring'inde**
+  durduğu sürece her okuyan yeniden yanılır; playbook'a not düşmek onu **çürütmez**, yanına
+  ikinci bir gerçek koyar. Bu vakada `scripts/sap_adt_lib.py::syntax_check_via_activation`
+  docstring'i ölçülen davranışa göre yeniden yazıldı (davranış DEĞİŞMEDİ — kasıtlı: karar
+  kullanıcınındır, düzeltilen yalnız **iddia**).
+- **Akraba:** **#16** (teşhisin girdisi kanıt gerektirir) · **#19** ("bozuk" karşılaştırmalı
+  iddiadır). Üçünün ortak çekirdeği: **araç hakkındaki her cümle — adı, docstring'i, teşhisi,
+  dönüş bayrağı — bir İDDİADIR; kanıt yalnız ölçümdür.**
+- **Status:** ⚠️ DİSİPLİN + kaynak-fix (docstring). Tool semantiği evi:
+  [`adt-mcp.md`](adt-mcp.md) "Tool SEMANTİĞİ"; envanter tablosu `docs/ix-works-mimari-kilavuzu.md` §10.1.
 
 ---
 
@@ -293,9 +374,11 @@ bağla (*"ada göre ara: `<sembol>`"*) · **(d)** **sayıyı tazelemek sınıfı
 | #6 TempScripts → Playbook | 2026-05-13 | 1 | ⚠️ DİSİPLİN |
 | #11 where_used count=0 = orphan sanma | 2026-07-09 | 1 (orphan sweep) | ✅ SOLVED (kod gate) |
 | #12 Guard kör noktası (heredoc + tek yüzey) | 2026-07-09 | 3 guard + 4 kural (denetim) | ✅ SOLVED (tek normalizasyon + CI testi) |
-| #16 Arama aracının kapsamı — `0` ≠ "yok" | 2026-07-28 | **5** (FUGR grep · classrun sahte teşhis · behavior-pool `main` boş · lock-check tip desteği · dar grep deseni "0 referans") | ⚠️ DİSİPLİN + CI testi (CSRF regresyonu) |
+| #16 Arama aracının kapsamı — `0` ≠ "yok" · **teşhisin kendisi de kanıt gerektirir** | 2026-07-28 | **6** (FUGR grep · classrun sahte teşhis ×2 → 2026-07-31 kök-fix: teşhis İNAKTİF sürümü okuyordu · behavior-pool `main` boş · lock-check tip desteği · dar grep deseni "0 referans") | ⚠️ DİSİPLİN + CI testi (CSRF regresyonu) + kök-fix (`version=active` + session reset) |
 | #17 **Katman katman keşif** — çapraz-kesen işte envantersiz ilerleme | 2026-07-29 | 1 (silme kontrolü: 3 app sanıldı, 7 çıktı; 14 yol sanıldı, 24 çıktı; 6 review turu) | ⚠️ DİSİPLİN → `howto-cok-katmanli-degisiklik.md` |
 | #18 **Bayat sayı/satır referansı** (yorumda `dosya:satır`, "N obje", "N metot") | 2026-07-29 | **6** (obje sayısı · metot sayısı ×2 · veri iddiası · yorum satır-no ×2) | ⚠️ DİSİPLİN (içerik-çapası kuralı) |
+| #19 **"Araç bozuk" kontrol grubu olmadan kurulamaz** + tanıdık semptomda önce hafızayı ara | 2026-07-31 | **2** (classrun "güvenilmez" ×2 — 2026-06-30'da çözülmüştü, 2026-07-30'da unutulup üstüne yanlış yazıldı) | ⚠️ DİSİPLİN |
+| #20 **Salt-okunur sanılan araç yazıyordu** — yetkiyi ad/doküman değil ölçüm belirler | 2026-07-31 | 1 (`adt_syntax_check` → temiz inaktif sürümü AKTİVE ediyor; docstring aksini söylüyordu) | ⚠️ DİSİPLİN + kaynak-fix (docstring) |
 
 > **Hedef:** ACTIVE/⚠️ DİSİPLİN olanları zamanla SOLVED'a çevir (kod gate ile).
 

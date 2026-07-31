@@ -73,6 +73,17 @@ Kolonlar göster/gizle + Excel export. Klasik ALV'de bunlar `CL_GUI_ALV_GRID` +
 > eksik tanım kolonu, kısa genişlik) kapanır. **Manuel meşru:** basit/az-kolon/ad-hoc rapor. Detay + gerekçe:
 > [ADR 0012 "Karar Rafinasyonu (2026-07-13)"](../governance/decisions/0012-klasik-alv-template-first.md).
 
+> **ALV event'lerinde SATIR KİMLİĞİ = `es_row_no-row_id` (MUST).** `hotspot_click`/`double_click`
+> handler'ında iç tabloyu `READ TABLE … INDEX es_row_no-row_id` ile oku; **`e_row-index` /
+> `e_row_id-index` KULLANILMAZ.** Gerekçe: `LVC_S_ROW` (`e_row`/`e_row_id`) = `INDEX` + **`ROWTYPE`**
+> — `ROWTYPE` satırın ara-toplam/toplam satırı olabileceğini söyler; `do_sum`, sıralama veya filtre
+> etkinken `INDEX` artık iç tablo indeksi değildir → yanlış satır okunur ya da toplam satırında
+> sessiz no-op olur. `LVC_S_ROID` (`es_row_no`) = **`ROW_ID`** = çıktı tablosu satır numarası.
+> Handler imzasına `es_row_no`'yu **eklemeyi unutma** (event onu sunar). Sözdizimi doğru olduğu
+> için **aktivasyon/ATC/abaplint hepsi geçer** — hata yalnız sıralı/toplamlı gridde görülür.
+> Kanonik hâli template'te hazırdır ([`classic-alv-list.prog.abap`](../playbook/templates/classic-alv-list.prog.abap));
+> denetim: `playbook/checklists/bug-checklist-backend.md` **BE-63**.
+
 ## 4. Dynpro / GUI status — AI ÜRETİR (C1 TAMAM, 2026-06-03)
 
 > ⭐ **Klasik Dynpro ekranı + GUI status artık AI tarafından üretiliyor** — operatör SE51/SE41 ŞART DEĞİL.

@@ -48,6 +48,60 @@ def _git_working_copy_dirty(path: Path) -> bool:
     return bool(out.stdout.strip())
 
 
+def _norm_for_compare(data) -> bytes:
+    """Satır-sonu ve dosya-sonu newline farklarını eleyerek karşılaştırma normali üret.
+
+    Gerekli çünkü pull yolu CRLF/LF'i koruyor ve include pull'u EOF newline'ını
+    düşürebiliyor (ölçüldü 2026-07-31) — bunlar İÇERİK farkı değildir ve
+    "canlı geride mi?" sorusunu kirletmemeli.
+    """
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n").rstrip(b"\n")
+
+
+def _live_matches_older_commit(path: Path, live_body: bytes, max_commits: int = 30):
+    """Canlı içerik, bu dosyanın GEÇMİŞ bir commit'indeki hâliyle eşleşiyor mu?
+
+    FIX-D'nin sinyali. Eşleşme varsa canlı **kesinlikle geride**: repo'da bir zamanlar
+    tam olarak bu içerik vardı, sonra üzerine yazıldı ve commit'lendi. Yani pull
+    "tazeleme" değil, kendi geçmişimize dönüş = yerel yeni işin ezilmesi.
+
+    Neden bu sinyal seçildi (alternatifler ölçülüp elendi, 2026-07-31):
+      * zaman karşılaştırması (canlı changedAt ↔ commit tarihi): timezone, saat
+        sapması ve rebase yüzünden hem yanlış pozitif hem yanlış negatif üretir.
+      * "fark varsa blokla": canlı ile repo'nun farklı olması NORMAL (başkası
+        canlıyı değiştirmiş olabilir) → her pull bloklanırdı, araç kullanılamaz olurdu.
+      * içerik-eşleşmesi: canlı içerik geçmişte VARDI ise başka yorum yok.
+        **Yanlış pozitif üretmez.** Eşleşme yoksa canlıda gerçekten yeni bir şey var
+        demektir ve pull meşrudur — o hâlde sessizce geçer.
+
+    Returns: eşleşen commit'in kısa SHA'sı (str) ya da None.
+    """
+    target = _norm_for_compare(live_body)
+    try:
+        p = path.resolve()
+        log = subprocess.run(
+            ["git", "log", f"-{max_commits}", "--format=%h", "--", p.name],
+            cwd=str(p.parent), capture_output=True, text=True, timeout=20,
+        )
+        if log.returncode != 0:
+            return None  # git yok / shallow / detached → sinyal ölçülemez, FIX-C devrede
+        shas = [s for s in log.stdout.split() if s]
+        # HEAD'in kendisi atlanır: canlı == HEAD zaten no-op dalında yakalanıyor;
+        # burada aranan "DAHA ESKİ bir hâle dönüş" durumu.
+        for sha in shas[1:]:
+            show = subprocess.run(
+                ["git", "show", f"{sha}:./{p.name}"],
+                cwd=str(p.parent), capture_output=True, timeout=20,
+            )
+            if show.returncode == 0 and _norm_for_compare(show.stdout) == target:
+                return sha
+    except Exception:
+        return None  # ölçemedik → sessizce geç (FIX-B/FIX-C korumaları duruyor)
+    return None
+
+
 # Repo'da bir SAP objesinin kaynağını taşıyan dosya uzantıları.
 # Çift uzantılar (.ddls.asddls) suffix-zinciri ile değil, basename eşlemesiyle
 # yakalanır (aşağıda find_repo_source_file). .md companion dosyaları (ör.
@@ -100,6 +154,13 @@ _TYPE_TO_EXTENSIONS = {
 # snapshot / dokümantasyon / scratch. Drift kıyasından muaf (ör. ref_docs/cds/
 # ZSD001_DDL_BOOKING_HEADER.cds eski FS reçetesi, canlıyla bilinçli ayrışık).
 _EXCLUDED_DIR_SEGMENTS = {"ref_docs", "docs", ".tmp", "legacy", "_archive", "archive", "drafts"}
+
+# FIX-C içerik-kaybı koruması (write_repo_from_live). Canlı AKTİF sürüm yerelden bu
+# oranın altına düşerse pull ATLAR (yerel yeni iş ezilmesin) — --force ile geçilir.
+# Eşikler bilinçli GEVŞEK: amaç normal tazelemeyi engellemek değil, YIKIMI yakalamak.
+# Ölçülen vakalar (2026-07-31): 267→113 (%42 kaldı) · 141→1 (%0.7 kaldı).
+_SHRINK_MIN_LINES = 10     # bu satırın altındaki dosyalarda kontrol yapılmaz
+_SHRINK_KEEP_RATIO = 0.7   # canlı, yerelin %70'inin altındaysa → blocked_shrink
 
 # Class ALT-source include'ları ayrı ADT URL'lerine map olur (/includes/...),
 # /source/main DEĞİL. Bunları ana-source ile kıyaslamak SAHTE drift verir → basename
@@ -428,6 +489,58 @@ def write_repo_from_live(
                 "Yereli koru: önce commit/push et; bilerek canlıya dönmek istiyorsan --force ver."
             ),
             "blocked_dirty": True,
+        }
+
+    # FIX-D (ölçüldü 2026-07-31, FIX-C'nin KAÇIRDIĞI vaka): canlı içerik, bu dosyanın
+    # GEÇMİŞ bir commit'indeki hâliyle birebir eşleşiyorsa pull "tazeleme" değil,
+    # kendi geçmişimize DÖNÜŞtür → yerel yeni iş ezilir.
+    # Ölçülen vaka: ZSD001_CL_X pull edildi, araç "[OK]" dedi; HEAD ↔ pull farkı 32 satır,
+    # 32'si YORUM, KOD 0 → commit'li bir düzeltme canlının eski hâliyle ezildi. FIX-C bunu
+    # YAKALAYAMADI çünkü satır sayısı düşmedi, yalnız içerik geriye gitti.
+    # YAPISAL SEBEP: tek-yazıcı (gateway) mimarisinde yerel RUTİN OLARAK canlıdan ileridedir
+    # (yazıldı+commit'lendi, henüz push/aktive edilmedi). "Düzenlemeden önce pull et" kuralı
+    # o pencerede her seferinde commit'li işi geri alır.
+    # Bu sinyal yanlış pozitif üretmez: eşleşme yoksa canlıda gerçekten yeni bir şey vardır.
+    if not force:
+        _older = _live_matches_older_commit(repo_file, body.encode("utf-8"))
+        if _older:
+            return {
+                "written": False,
+                "repo_path": str(repo_file),
+                "reason": (
+                    f"canlı AKTİF sürüm, bu dosyanın GEÇMİŞ bir commit'iyle ({_older}) BİREBİR "
+                    "aynı — yani repo'da bir zamanlar tam olarak bu içerik vardı ve sonra "
+                    "üzerine yazılıp commit'lendi. Pull burada 'tazeleme' değil, KENDİ "
+                    "GEÇMİŞİMİZE DÖNÜŞ olur ve commit'li yerel iş EZİLİR. Muhtemel sebep: "
+                    "obje push edilmemiş ya da push edilip AKTİVE EDİLMEMİŞ (pull AKTİF sürümü "
+                    "okur). ATLANDI. Bilerek canlıya dönmek istiyorsan --force ver."
+                ),
+                "blocked_behind": True,
+                "behind_commit": _older,
+            }
+
+    # FIX-C (ölçüldü 2026-07-31): "yerel TEMİZ ise BAYAT demektir" varsayımı YANLIŞ.
+    # FIX-B yalnız COMMIT EDİLMEMİŞ emeği korur. Ama normal akışımızda yeni sürüm yazılır,
+    # COMMIT edilir, henüz push/aktive EDİLMEZ → yerel git'te temizdir ama canlıdan İLERİDİR.
+    # O anda pull canlı ESKİYİ yerel YENİNİN üzerine yazıp "[OK]" der (sessiz veri kaybı).
+    # Ölçülen iki vaka (ikisi de commit'liydi, FIX-B devreye girmedi):
+    #   T01  267 → 113 satır  (canlı AKTİF sürüm v1; v2 push edilmişti ama aktive edilmemişti)
+    #   I02  141 →   1 satır  (canlı AKTİF sürüm boş kabuk; pull AKTİF okur, INAKTİF'i görmez)
+    # Sinyal: canlıda belirgin İÇERİK KAYBI. Bu "tazeleme" değil, yıkım olabilir.
+    # Eşikler bilinçli gevşek: küçük dosyalar ve normal tazeleme etkilenmesin.
+    old_lines = len(existing.decode("utf-8", errors="replace").splitlines()) if existing else 0
+    new_lines = len(body.splitlines())
+    if not force and old_lines >= _SHRINK_MIN_LINES and new_lines < old_lines * _SHRINK_KEEP_RATIO:
+        return {
+            "written": False,
+            "repo_path": str(repo_file),
+            "reason": (
+                f"canlı AKTİF sürüm yerelden BELİRGİN KÜÇÜK ({old_lines} → {new_lines} satır). "
+                "Bu 'bayat yerel tazelendi' DEĞİL, yerel yeni işin EZİLMESİ olabilir: obje henüz "
+                "push edilmemiş ya da push edilip AKTİVE EDİLMEMİŞ olabilir (pull AKTİF sürümü "
+                "okur, INAKTİF'i görmez). ATLANDI. Canlıyı gerçekten istiyorsan --force ver."
+            ),
+            "blocked_shrink": True,
         }
 
     try:

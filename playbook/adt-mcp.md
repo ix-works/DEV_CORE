@@ -177,6 +177,47 @@ adt_struct_create(name, fields, artifact_path='ERP/SD/.../X.asddls', ...)
 
 Katmanlar overlapping değil tamamlayıcı — biri kaçırırsa diğeri yakalar.
 
+## Tool SEMANTİĞİ — adı/dokümanı değil, ÖLÇÜLEN yan etkisi belirler
+
+### `adt_syntax_check` **SALT-OKUNUR DEĞİLDİR** (ölçüm 2026-07-31)
+
+Adı "check" olmasına rağmen bu tool bir **aktivasyon** ucuna gider:
+
+```
+POST /sap/bc/adt/activation?method=activate&preauditRequested=true
+```
+
+**Ölçülen davranış (bu sistem):** `preauditRequested=true` **onurlandırılmıyor** — bekleyen
+**inaktif** sürüm TEMİZSE tool objeyi **AKTİVE EDİYOR**. Kanıt: çağrı öncesi
+`adt_inactive_objects` = **1**, çağrı sonrası = **0**; `?version=active` ile okunan kaynak
+push edilen kaynağa **eşitlendi**. Hatalıysa aktive etmiyor (`"Activation was cancelled"`).
+⇒ Gerçek semantiği: **"hatasızsa aktive et"**.
+
+**⚠ Araç KOD GÖNDERMEZ.** Çağrının gövdesinde yalnız **obje adı/URI** gider; SAP o ad altında
+**o an bekleyen sürümü** devreye alır. Yani elindeki kaynağı değil, **sunucudaki bekleyen
+sürümü** aktive edersin. Somut risk: bilinçli bekletilen bir aktivasyon (co-activation sırası,
+def/impl include çifti, gözden geçirilmeyi bekleyen inaktif sürüm) varken çağırmak **sırayı bozar**.
+
+**Sonuç (MUST):** `adt_syntax_check` **yazma yetkili** sayılır → yalnız **tek-yazıcı (gateway)**
+rolünün allowlist'inde bulunur; "read-only" kovasına **konmaz**. Aksi hâlde single-writer
+ilkesi sessizce delinir (bkz. `lessons-learned.md` PATTERN #20).
+
+### `adt_push_source` ZATEN aktivasyon-öncesi syntax-check yapar
+
+Ayrı bir "zararsız ön-derleyici turu" **kurmaya gerek YOK** — push bunu içeriyor:
+
+- Upload sonrası / aktivasyon öncesi syntax-check koşar; **hatalıysa AKTİVE ETMEZ** ve hataları
+  **satır/kolon** bilgisiyle döndürür.
+- Kanıt: `scripts/sap_client.py` →
+  `[BLOCK] Aktivasyon-oncesi syntax-check BASARISIZ -> AKTIVE EDILMEDI` (`syntax_precheck='failed'`
+  + `syntax_errors`); MCP yüzeyi `mcp_servers/sap_adt/tools/atom.py` → `syntax_precheck == "failed"`
+  ise `ok=False` + `syntax_errors` yanıta çıkarılır (nested kalmaz).
+- Kapsam sınırı: preaudit **class/interface** push'unda koşar; `prog`/`fugr`/`include` DIŞLANMIŞTIR
+  (standalone include preaudit FAKE — `checklists/bug-checklist-backend.md` BE-46).
+
+⇒ Doğru sıra: **push → (hata varsa dur, düzelt) → `adt_activate` → readback**. Araya elle bir
+syntax-check turu eklemek hem gereksiz hem — yukarıdaki semantiği yüzünden — **yan etkilidir**.
+
 ## Bilinen Sınırlar (v1)
 
 - `adt_lock_check` best-effort probe — bazı lock tipleri sadece write sırasında ortaya çıkar
@@ -184,8 +225,14 @@ Katmanlar overlapping değil tamamlayıcı — biri kaçırırsa diğeri yakalar
 - Tool listesinde `transport_release`, `package_create` **YOK** (ADR 0005 §C)
 - TR karakter validation v1'de sadece boş kontrolü; non-Latin karakter dağılım kontrolü v2'de
 - ⚠️ **`adt_get`/`adt_lock_check` object_type='func' GÜVENİLMEZ** — mevcut FM'e bile `exists:false` (group-resolution bug). Varlık için `adt_search_objects` ya da group-qualified metadata GET (`/sap/bc/adt/functions/groups/<fg>/fmodules/<fm>`). Bkz. `adt-fugr-functions.md` §4. **KAPSAM:** yalnız `object_type='func'`; genel `adt_get` DDIC-okuması güvenilir (KÖK-FIX 2026-06-16, `feedback_adt-get-ddic-read-fixed`) — "adt_get genelde güvenilmez" algısı yok.
+- ⚠️ **AĞ/DNS kesintisinde `adt_get` `ok:true` + `exists:false` DÖNEBİLİR** — yani "obje yok" ile
+  "sunucuya ulaşamadım" **aynı görünür**. Ayırt edici: yanıtın `client_log` alanında
+  `NameResolutionError` (ya da benzeri bağlantı hatası) görünür. **KURAL:** `exists:false`
+  gördüğünde **önce `client_log`'a BAK**; ağ hatası varsa bu bir varlık kanıtı değildir, tekrar
+  ölç. (Bulunamadı ≠ yok — `lessons-learned.md` PATTERN #16 ailesi.)
 - ⚠️ **`adt_delete` object_type='func' ÇALIŞMAZ** ("lock not supported"). FM silmek için stateful lock + DELETE (lib pattern, `adt-fugr-functions.md`). FG/class delete OK.
-- ⚠️ **`adt_classrun` dialog-context FM çalıştıramaz** (RPY_DYNPRO_*/RS_CUA_*) → `400 "Session Timed Out"`. Bunlar için RFC-enabled FM + `/sap/bc/soap/rfc`. Ayrıca classrun **app-server load-cache**: push+activate sonrası eski load çalışabilir → iterasyonda yeni class adı. Bkz. `adt-fugr-functions.md` §6.
+- ⚠️ **`adt_classrun` dialog-context FM çalıştıramaz** (RPY_DYNPRO_*/RS_CUA_*) → `400 "Session Timed Out"`. Bunlar için RFC-enabled FM + `/sap/bc/soap/rfc`. Bkz. `adt-fugr-functions.md` §6.
+- ✅ **`adt_classrun` BOZUK/GÜVENİLMEZ DEĞİL** (2026-07-31 kök-fix; önceki "güvenilmez" kaydı GERİ ALINDI). *"does not implement if_oo_adt_classrun~main"* mesajı **DOĞRUDUR**: ya sınıf **aktive edilmemiştir** (aktif sürüm boş kabuk) ya da çağıran süreç **bayat stateful oturum** tutmaktadır (obje başka süreçte aktive edildi). Çare: aktive et + `adt_inactive_objects` doğrula · oturum RESET. ⛔ **"taze/yeni class adıyla yeniden yarat" reçetesini UYGULAMA** — yanlıştı, çözmez, çöp obje bırakır. Tam vaka + ölçüm: `adt-classes.md` §24.9.
 
 ## Geliştirme
 

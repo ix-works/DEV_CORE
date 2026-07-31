@@ -259,6 +259,9 @@ mevcut mesaj sınıfını okuyamayınca **inline literal `MESSAGE '...'`'e düş
 > Referans impl: `marcellourbani/vscode_abap_remote_fs` → `client/src/editors/messages.ts` (Message
 > Class Editor; ham `httpClient.request` + XML parse). Sürüm-farkı: reference'ın `.v2+xml` Accept'i
 > bizim sistemde 406 → **API'yi dokümandan değil sunucudan doğrula** (sunucu 406 gövdesinde kabul-tipini verir).
+> Aynı meta-kuralın ikinci uygulaması: program **text-pool OKUMA** Accept tipleri
+> (`text/plain` → 406; kök obje `.textelements.v1+xml`, alt-objeler kendi tipini bildirir) —
+> [`adt-programs.md`](adt-programs.md) §23.7 "OKUMA reçetesi", 2026-07-31.
 
 **XML şeması** = §27.3 ile aynı (`mc:messages` çoğul · `mc:msgno` · `mc:msgtext` ·
 `mc:selfexplainatory` typo'lu · `mc:documented`); ns `http://www.sap.com/adt/MessageClass`.

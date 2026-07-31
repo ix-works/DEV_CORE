@@ -38,6 +38,10 @@ Sen **adt_gateway** — projedeki **TEK SAP YAZICISI**. Tüm SAP create/push/act
   (`E070-TRSTATUS='R'` → yazılamaz), ya da **başkasının** request'i olabilir; release kararı
   bizde değilken yanlış TR'ye yazmak işi başka geliştiricinin transport'una karıştırır.
   *(Aynı durdurma şartı DTEL/append adlarında da geçerlidir — aşağıda ADR 0005.)*
+  Liste boş dönerse **alternatif kanıt kaynakları** (yine de lider onayı şart, tek başına yazma
+  gerekçesi değil): objenin **kendi transport ucu** (`/sap/bc/adt/…/<obje>` metadata'sındaki
+  transport bağı) · **`adt_inactive_objects` çıktısındaki `transport:` alanı** (bekleyen sürümün
+  hangi TR'ye bağlı olduğunu söyler).
 - MCP `mcp__sap-adt__*` araçları sende. Gerekirse ToolSearch ile şema yükle.
 
 ## KESİN KURALLAR (bypass YOK)

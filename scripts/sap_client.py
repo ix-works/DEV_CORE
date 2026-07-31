@@ -1360,17 +1360,27 @@ class SAPClient:
         # "does not implement if_oo_adt_classrun~main" döndürebilir. Accept override.
         base_headers = self.adt_client._get_headers(accept_type='text/plain')
 
-        def _post():
+        def _post(headers):
             return self.adt_client._request_with_csrf_retry(
-                'post', url, headers=dict(base_headers))
+                'post', url, headers=dict(headers))
 
         try:
-            r = _post()
+            r = _post(base_headers)
             body = r.text or ''
-            # Aktivasyon-sonrası ilk run geçici "does not implement" verebilir
-            # (sınıf yükü henüz üretilmemiş) → tek retry.
+            # ⛔ AYNI OTURUMDA RETRY ETKİSİZDİR — 2026-07-31 ölçümü. Eskiden burada
+            #    `_post()` ikinci kez AYNI session'la çağrılıyordu; aktif bir sınıfta
+            #    iki deneme de aynı "does not implement" hatasını verdi.
+            #    KÖK SEBEP: bu istemci süreç ömrü boyunca TEK stateful session tutar.
+            #    Obje BAŞKA BİR SÜREÇTE aktive edildiyse (push/activate ayrı süreç),
+            #    bu sürecin SAP oturumu aktivasyonu görmez ve eski class-load'a bağlı
+            #    kalır. Çare RESET: yeni session = yeni sap-contextid = güncel load.
+            #    Kanıt: taze süreçte aynı çağrı ANINDA çalıştı (tam konsol çıktısıyla).
+            #    Aynı desen jfilak/sapcli d223ed3c: activate() -> new_session() -> execute().
             if r.status_code != 200 or 'does not implement' in body.lower():
-                r = _post()
+                self.adt_client.new_session()
+                # Header'lar eski session'dan türetilmişti (auth + CSRF) → yeniden al.
+                base_headers = self.adt_client._get_headers(accept_type='text/plain')
+                r = _post(base_headers)
             # text/plain charset'siz dönebilir → requests latin-1 varsayar
             # (Türkçe mojibake); out->write UTF-8 olduğundan UTF-8'e zorla.
             try:
@@ -1379,41 +1389,61 @@ class SAPClient:
                 body = r.text or ''
             ok = r.status_code == 200 and 'does not implement' not in body.lower()
 
-            # SERTLEŞTİRME (2026-07-13): retry sonrası HÂLÂ "does not implement"
-            # ise, sınıf yapısal olarak geçerli mi bak. Geçerliyse (aktif +
-            # INTERFACES if_oo_adt_classrun kaynakta) bu, SAP app-server
-            # class-LOAD-cache / aynı-isim sil-yarat binding bozulmasıdır
-            # (playbook howto-rap-eml...:116-117). Aynı-isim retry ETKİSİZ →
-            # körlemesine tekrar yerine NET TEŞHİS dön ki "tooling bozuk"
-            # yanlış-sonucu doğmasın. Çözüm = TAZE class adı.
+            # TEŞHİS (2026-07-31 kök-fix ile YENİDEN YAZILDI).
+            # Buraya yalnız session-RESET'li retry de başarısız olunca gelinir.
+            # ⛔ ESKİ METİN YANLIŞTI ve zarar verdi: "TAZE (daha once kullanilmamis)
+            #    bir sinif adiyla yeniden yarat+kos" diyordu. O reçete iki gereksiz
+            #    obje yarattırdı, sorunu ÇÖZMEDİ ve sistem-geneli "adt_classrun
+            #    GÜVENİLMEZ" yanlış-sonucunu doğurdu. Sebebi: teşhis fonksiyonu
+            #    İNAKTİF kaynağı okuyup "yapısal olarak geçerli" diyordu
+            #    (bkz. _diagnose_classrun_binding — artık version=active okuyor).
+            # GERÇEK sebepler, olasılık sırasıyla:
+            #   1. Sınıf AKTİVE EDİLMEMİŞ → aktif sürüm boş kabuk → mesaj DOĞRU.
+            #   2. Bayat oturum (başka süreçte aktive edildi) → yukarıdaki reset çözer.
+            #   3. Sınıf gerçekten arayüzü implemente etmiyor.
             if not ok and 'does not implement' in body.lower():
                 diag = self._diagnose_classrun_binding(class_name)
-                if diag.get('structurally_valid'):
+                if not diag.get('structurally_valid'):
+                    # AKTİF sürümde arayüz yok → mesaj DOĞRU, tooling sorunu DEĞİL.
+                    nbytes = diag.get('active_source_bytes')
                     return {
                         'ok': False,
                         'class': class_name,
                         'status': r.status_code,
                         'output': body,
-                        'error': 'classrun_load_cache_binding',
+                        'error': 'classrun_class_not_active',
                         'diagnosis': (
-                            f"Sinif {class_name} YAPISAL OLARAK GECERLI (aktif + "
-                            f"INTERFACES if_oo_adt_classrun kaynakta VAR) ama classrun "
-                            f"'does not implement' donuyor. IKI AYRI SEBEP olabilir, "
-                            f"sirayla ele: "
-                            f"(1) CSRF/soguk-session: istek gecerli X-CSRF-Token'siz "
-                            f"gittiginde SAP 403 yerine 200 + bu yaniltici govdeyi "
-                            f"dondurebilir. 2026-07-28 kok-fix'i "
-                            f"(sap_adt_lib._request_with_csrf_retry, regresyon testi "
-                            f"scripts/tests/test_csrf_header_injection.py) bunu kapatti; "
-                            f"yine de gorursen ONCE fetch_csrf_token(force_refresh=True) "
-                            f"ile session'i isit ve TEKRAR DENE. "
-                            f"(2) SAP app-server class-LOAD-cache / ayni-isim sil-yarat "
-                            f"binding bozulmasi: ayni-isim retry ETKISIZ, TAZE (daha once "
-                            f"kullanilmamis) bir sinif adiyla yeniden yarat+kos. "
-                            f"UYARI: (2)'ye gecmeden once (1)'i ele — taze sinif yaratmak "
-                            f"pahali ve sebep (1) ise SORUNU COZMEZ."
+                            f"SAP'nin mesaji DOGRU: {class_name} sinifinin AKTIF surumu "
+                            f"if_oo_adt_classrun'i implemente ETMIYOR "
+                            f"(aktif kaynak {nbytes} bayt, arayuz YOK). "
+                            f"En olasi sebep: sinif push edildi ama AKTIVE EDILMEDI — "
+                            f"aktif surum bos kabuk (adt_post_shell iskeleti) olarak duruyor. "
+                            f"YAP: adt_activate calistir, sonra `adt_inactive_objects` ile "
+                            f"DOGRULA (uyari: adtcore:version=\"active\" metadata'si bos "
+                            f"kabuk icin de 'active' der — TEK BASINA KANIT DEGILDIR). "
+                            f"Aktivasyon tamamsa sinif gercekten arayuzu implemente "
+                            f"etmiyordur: kaynakta INTERFACES if_oo_adt_classrun ara. "
+                            f"⛔ TAZE SINIF ADI ILE YENIDEN YARATMA — o eski recete "
+                            f"YANLISTI, sorunu cozmez, sadece cop obje birakir."
                         ),
                     }
+                # Aktif sürümde arayüz VAR ama reset'li retry de başarısız →
+                # gerçekten beklenmedik. Körlemesine reçete verme, ölçümü ilet.
+                return {
+                    'ok': False,
+                    'class': class_name,
+                    'status': r.status_code,
+                    'output': body,
+                    'error': 'classrun_unexpected',
+                    'diagnosis': (
+                        f"{class_name} AKTIF surumu arayuzu implemente ediyor "
+                        f"(aktif kaynak {diag.get('active_source_bytes')} bayt) ve "
+                        f"session-RESET'li retry de basarisiz oldu. Bu BILINEN bir "
+                        f"desen DEGIL — recete uydurma. Kanit topla: "
+                        f"SEOMETAREL'de VERSION=1 satiri var mi, `adt_inactive_objects` "
+                        f"ne diyor, ayni cagri TAZE BIR SURECTE calisiyor mu."
+                    ),
+                }
             return {
                 'ok': ok,
                 'class': class_name,
@@ -1424,25 +1454,39 @@ class SAPClient:
             return {'ok': False, 'class': class_name, 'error': str(e)}
 
     def _diagnose_classrun_binding(self, class_name: str) -> Dict[str, Any]:
-        """classrun 'does not implement' teşhisi (sertleştirme yardımcısı).
+        """classrun 'does not implement' teşhisi.
 
-        Sınıf aktif + kaynakta `INTERFACES if_oo_adt_classrun` var mı? Varsa
-        yapısal-geçerli → sorun LOAD-cache/aynı-isim binding (fix = taze isim),
-        tooling/reçete DEĞİL. Yalnız salt-okuma (GET source/main).
+        classrun **AKTİF** sürümü yükler → teşhis de AKTİF sürümü okumalıdır.
+
+        ⛔ 2026-07-31 KÖK-FIX — bu fonksiyon SAHTE TEŞHİS üretiyordu.
+        Eski hâli `source/main`'i **`version=` parametresi VERMEDEN** çekiyordu ve
+        **ADT varsayılanı İNAKTİF sürümdür** (canlı ölçüm: parametresiz GET inaktif
+        gövdeyi döndürdü — 10.659 bayt, arayüz VAR; `version=active` ise 192 baytlık
+        boş kabuk, arayüz YOK). Sonuç: sınıf hiç aktive edilmemişken bile
+        "structurally_valid=True" diyor, oradan da *"tooling bozuk → TAZE class adı
+        dene"* reçetesi doğuyordu. O reçete YANLIŞTI ve bir sistem-geneli "adt_classrun
+        bu sistemde GÜVENİLMEZ" sonucunun kaynağı oldu (6 doküman + 2 gereksiz obje).
+        GERÇEK: SAP'nin "does not implement" mesajı DOĞRUYDU — aktif sürüm gerçekten
+        boş kabuktu, çünkü push edilmiş ama AKTİVE EDİLMEMİŞTİ.
+        📖 Kanıt: `.tmp/classrun-research.md` (SEOMETAREL VERSION=0 · aktif⇄inaktif
+        bayt kıyası · semptomun talep üzerine yeniden üretimi).
+        ⚠ `version=active` parametresini KALDIRMA — kaldırıldığı an sahte teşhis geri gelir.
         """
         try:
             src_url = (f"{self.adt_client.url}/sap/bc/adt/oo/classes/"
                        f"{class_name.lower()}/source/main")
             hdrs = self.adt_client._get_headers(accept_type='text/plain')
             r = self.adt_client._request_with_csrf_retry(
-                'get', src_url, headers=dict(hdrs))
+                'get', src_url, headers=dict(hdrs),
+                params={'version': 'active'})
             src = (r.content.decode('utf-8', errors='replace')
-                   if r.content else '').lower()
-            has_iface = 'if_oo_adt_classrun' in src
+                   if r.content else '')
+            has_iface = 'if_oo_adt_classrun' in src.lower()
             return {
                 'structurally_valid': (r.status_code == 200 and has_iface),
                 'has_interface': has_iface,
                 'source_http': r.status_code,
+                'active_source_bytes': len(src),
             }
         except Exception as e:
             return {'structurally_valid': False, 'error': str(e)}

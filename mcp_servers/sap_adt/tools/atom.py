@@ -324,6 +324,60 @@ def _ddic_xml_type(object_type: str):
     return canonical if canonical in _DDIC_XML_TYPES else None
 
 
+# "BULUNAMADI != YOK" (ölçüldü 2026-07-31, dört ayrı vaka aynı gün).
+# adt_get, ulaşılamayan SAP'te de `ok:true, exists:false` döndürüyordu; obje CANLIDA
+# VARDI ve client_log'da NameResolutionError yazıyordu. Bir ajan buna dayanıp
+# "obje yok, yaratayım" derse ADR 0005-A sınırına dayanır. Bu yüzden ağ/erişim
+# kaynaklı boş sonuç artık `exists:false` DEĞİL, açık HATA döner.
+_UNREACHABLE_MARKERS = (
+    "NameResolutionError", "getaddrinfo", "ConnectionError", "ConnectTimeout",
+    "Max retries exceeded", "ReadTimeout", "SSLError", "ProxyError",
+    "Connection refused", "Connection aborted",
+)
+
+# Doğrudan okuma yolu OLMAYAN tipler: /source/main eklenerek 404 alınır ve obje
+# yanlışlıkla "yok" görünür. FM örneği ölçüldü (2026-07-31): ZSD001_FM_X canlıda
+# VARdı, adt_get(type='func') exists:false dedi -- çünkü FM'in kaynağı
+# /functions/groups/<fg>/fmodules/<fm>/source/main altındadır, fonksiyon grubu
+# adı da tek başına FM adından çıkarılamaz.
+_NO_DIRECT_READ_HINT = {
+    "func": ("FM'in kaynağı fonksiyon grubu altındadır "
+             "(/functions/groups/<fg>/fmodules/<fm>/source/main) ve grup adı FM adından "
+             "çıkarılamaz. Doğru yol: adt_search_objects ile gerçek URI'yi al, sonra ham GET."),
+    "function": ("FM'in kaynağı fonksiyon grubu altındadır; adt_search_objects ile URI al."),
+}
+
+
+def _miss_or_unreachable(name: str, object_type: str, log_text: str) -> dict:
+    """Boş sonucu SINIFLANDIR: gerçekten 'obje yok' mu, yoksa 'ulaşamadım' mı?
+
+    exists:false yalnızca SAP'ye ULAŞILDIĞI ve objenin gerçekten bulunmadığı
+    durumda döner. Ağ/erişim izi varsa ok:false + unreachable döner -- çağıran
+    bunu "yok" diye okuyamasın.
+    """
+    if any(m in (log_text or "") for m in _UNREACHABLE_MARKERS):
+        return {
+            "ok": False,
+            "error": "unreachable",
+            "name": name.upper(),
+            "type": object_type,
+            "message": (
+                "SAP'ye ULAŞILAMADI — bu sonuç 'obje yok' DEĞİLDİR. Bağlantı/DNS/VPN "
+                "kontrol et ve tekrar ölç. ⛔ Bu cevaba dayanıp obje YARATMA (ADR 0005-A)."
+            ),
+            "client_log": log_text,
+        }
+    out = {"ok": True, "name": name.upper(), "type": object_type, "exists": False,
+           "client_log": log_text}
+    hint = _NO_DIRECT_READ_HINT.get((object_type or "").lower().strip())
+    if hint:
+        out["warning"] = (
+            f"'{object_type}' tipi bu uçtan doğrudan okunamaz — exists:false BURADA "
+            f"'obje yok' anlamına GELMEYEBİLİR. {hint}"
+        )
+    return out
+
+
 # =============================================================================
 # adt_get
 # =============================================================================
@@ -343,8 +397,7 @@ def _read_source_object(name: str, uri_seg: str, type_label: str) -> dict:
             r = adt.session.get(url, headers={"Accept": "text/plain"}, verify=False, timeout=60)
         log_buf.write(out.getvalue())
         if r.status_code == 404:
-            return {"ok": True, "name": name.upper(), "type": type_label, "exists": False,
-                    "client_log": log_buf.getvalue().strip()}
+            return _miss_or_unreachable(name, type_label, log_buf.getvalue().strip())
         if r.status_code != 200:
             return {"ok": False, "name": name.upper(), "type": type_label,
                     "error": "http_%d" % r.status_code, "message": (r.text or "")[:500],
@@ -402,13 +455,7 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
             if isinstance(exc, SAPObjectNotFoundError) or (
                 isinstance(exc, SAPADTError) and getattr(exc, "status_code", None) == 404
             ):
-                return {
-                    "ok": True,
-                    "name": name,
-                    "type": object_type,
-                    "exists": False,
-                    "client_log": log_buf.getvalue().strip(),
-                }
+                return _miss_or_unreachable(name, object_type, log_buf.getvalue().strip())
             return _err_from_exc(exc)
 
     try:
@@ -419,11 +466,15 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
                 source = client.download_object(name, object_type=object_type, save_local=False)
             metadata = client.get_object_metadata(name, object_type=object_type)
         log_buf.write(out.getvalue())
+        # Alt katman istisna ATMADAN None dönebiliyor (ör. ağ hatası yutulmuşsa). O hâlde
+        # "obje yok" değil "ulaşamadım" olabilir -- sınıflandırmayı _miss_or_unreachable yapar.
+        if source is None and metadata is None:
+            return _miss_or_unreachable(name, object_type, log_buf.getvalue().strip())
         return {
             "ok": True,
             "name": name,
             "type": object_type,
-            "exists": source is not None or metadata is not None,
+            "exists": True,
             "source": source,
             "metadata": metadata,
             "client_log": log_buf.getvalue().strip(),
@@ -431,13 +482,7 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
     except Exception as exc:
         from sap_adt_lib import SAPObjectNotFoundError  # type: ignore
         if isinstance(exc, SAPObjectNotFoundError):
-            return {
-                "ok": True,
-                "name": name,
-                "type": object_type,
-                "exists": False,
-                "client_log": log_buf.getvalue().strip(),
-            }
+            return _miss_or_unreachable(name, object_type, log_buf.getvalue().strip())
         return _err_from_exc(exc)
 
 
