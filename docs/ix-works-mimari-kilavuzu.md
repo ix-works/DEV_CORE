@@ -476,8 +476,10 @@ project.yaml
    cleancore_policy: balanced ──► policy_axis["balanced"]
    master_language: TR        ──► ADR 0005-D (Z obje login dili + 4 label)
    source_root: SOURCE_CODES  ──► kaynak-kod klasörü adı
-   frozen_readonly_paths      ──► pre_tool_guard yazma bloğu
 ```
+
+> Not (2026-07-31): eski `frozen_readonly_paths` anahtarı ve ona bağlı pre_tool_guard yazma
+> bloğu (R10) **2026-07-10'da kaldırıldı** — anahtar artık `project.yaml`'da YOKTUR (§15.3).
 
 Validator'lar, skill katmanı ve **MCP tool yüzeyi** profili okur. Profil alanları boşsa
 varsayım yapılmaz: **tool yüzeyi kesilir** (Bölüm 10.6).
@@ -1224,8 +1226,11 @@ ister. Muğlak ifade ("dene", "çek") yetmez.
 > gelmesini engelliyor.
 
 ### 15.3 Donmuş (salt-okunur) yedekler
-Arşiv kökler `project.yaml` → `frozen_readonly_paths` ile işaretlenir; bu köklere yazma
-reddedilir, okuma serbesttir.
+Arşiv köklere yazmama bir **DİSİPLİN kuralıdır** (proje `CLAUDE.md`'sinde belgelenir; okuma
+serbesttir). Eski runtime mekanizması — `project.yaml` `frozen_readonly_paths` anahtarı +
+pre_tool_guard R10 yazma bloğu — **2026-07-10'da KALDIRILDI** (fiil-kara-listesi hedefi
+sormuyordu; negatif test 2026-07-26: donmuş köke yazma → exit 0). Seni araç durdurmaz;
+kalıcı koruma istenirse OS/ACL.
 
 ### 15.4 Davranış-yüzeyi güvenlik duvarı
 `CLAUDE.md`, `.claude/**`, `.mcp.json`, `project.yaml`, `hook_shim.py` yalnız lider-onaylı PR

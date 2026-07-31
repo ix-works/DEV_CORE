@@ -21,6 +21,10 @@ sessizce başarısızdı. Tanımadığın anahtarı ASLA varsayma → `_ham` ala
 
 Doğrulama: bir `.abap` dosyası okut → log'da `path_glob_match ... sap-source-protokolu.md`
 satırı çıkmalı. Çıkmıyorsa kural ÖLÜDÜR (`paths:` yanlış ya da junction takip edilmiyor).
+
+2026-07-31 (T0.7): eşzamanlı hook süreçleri TextIOWrapper append'inde satır bölüyordu
+(150 satırlık logda 3 malformed). Yazım tek `os.write` + O_APPEND'e çevrildi — satır komple
+tek syscall'da eklenir; format DEĞİŞMEDİ. Eski malformed satırlar veri olarak bırakıldı.
 """
 from __future__ import annotations
 
@@ -64,8 +68,14 @@ def main() -> int:
             ek += f"\ttrigger={tetik}" if tetik else ""
             satir = f"{zaman}\t{sebep}\t{tip or '?'}\t{yol}{ek}\n"
 
-        with log.open("a", encoding="utf-8") as fh:
-            fh.write(satir)
+        # Atomik append: satır komple oluşturuldu → tek os.write (O_APPEND) ile eklenir.
+        # Windows'ta append-modlu WriteFile bu boyutta (<1 KB) bölünmez; TextIOWrapper
+        # buffer'ının eşzamanlı süreçlerde ürettiği yarım-satır sınıfı kapanır.
+        fd = os.open(str(log), os.O_APPEND | os.O_CREAT | os.O_WRONLY)
+        try:
+            os.write(fd, satir.encode("utf-8"))
+        finally:
+            os.close(fd)
     except Exception:
         pass
     return 0

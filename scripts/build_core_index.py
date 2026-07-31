@@ -93,6 +93,23 @@ def uret() -> str:
     return "\n".join(satirlar)
 
 
+def _damga() -> str:
+    """Üretim tarihi + core-commit satırı (T0.10, 2026-07-31): okuyan bayatlığı GÖREBİLSİN.
+    --check karşılaştırmasında YOK SAYILIR (yoksa her koşum timestamp farkıyla FAIL olurdu)."""
+    import subprocess
+    from datetime import datetime, timezone
+    try:
+        sha = subprocess.run(["git", "-C", str(CORE), "rev-parse", "--short", "HEAD"],
+                             capture_output=True, text=True, timeout=10).stdout.strip() or "?"
+    except Exception:
+        sha = "?"
+    z = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    return f"<!-- uretim: {z} · core-commit: {sha} — bilgi satiri; tazelik kiyasinda yok sayilir -->\n"
+
+
+_DAMGA_RE = re.compile(r"^<!-- uretim: .*?-->\n", re.MULTILINE)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="yazma; mevcutla karşılaştır")
@@ -103,7 +120,7 @@ def main() -> int:
         if not HEDEF.is_file():
             print(f"  [FAIL] {HEDEF.relative_to(PROJ)} YOK — üret: python core/scripts/build_core_index.py")
             return 1
-        mevcut = HEDEF.read_text(encoding="utf-8", errors="replace")
+        mevcut = _DAMGA_RE.sub("", HEDEF.read_text(encoding="utf-8", errors="replace"), count=1)
         if mevcut.replace("\r\n", "\n") != yeni.replace("\r\n", "\n"):
             print(f"  [FAIL] {HEDEF.relative_to(PROJ)} BAYAT — core dokümanları değişmiş.")
             print("         Bayat indeks = ajana YANLIŞ yol verir (sessiz hata).")
@@ -113,7 +130,7 @@ def main() -> int:
         return 0
 
     HEDEF.parent.mkdir(parents=True, exist_ok=True)
-    HEDEF.write_text(yeni, encoding="utf-8", newline="\n")
+    HEDEF.write_text(_damga() + yeni, encoding="utf-8", newline="\n")
     print(f"[ OK ] yazıldı: {HEDEF}  ({yeni.count(chr(10) + '- [`core/')} doküman)")
     return 0
 
