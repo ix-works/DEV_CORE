@@ -167,6 +167,9 @@ lider `scratchpad`'inde `agent_time_analysis.py` (transkript doluysa per-tool d�
 
 ---
 
+
+**R3 — MEMORY KÖPRÜSÜ (2026-08-01, denetim):** Alt-ajan auto-memory'yi GÖRMEZ (resmî). Lider her substantive spawn'dan önce MEMORY.md'yi görev anahtar-kelimeleriyle tarar ve eşleşen 2-5 dersin ÖZÜNÜ brifin zorunlu 'Göreve-ilişkin dersler' alanına yazar (şablon: `claude/templates/spawn-brief.md` §6; eşleşme yoksa alanı 'ilgili ders yok' ile AÇIKÇA doldur — boş bırakma). Brifing-lint (watchdog_launch) şablon izlerini nudge'lar.
+
 ## 5. Gateway Gözlemlenebilirlik Protokolü (opak-patinaj önleme)
 Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
 1. **Deneme/eskalasyon merdiveni (kör döngü yerine):** obje başına **3 denemeye** kadar dene (geçici CSRF/lock vb.). 3'te çözülmezse → **ZORUNLU ARAŞTIRMA** (`playbook/<obje-tipi>.md` + `playbook/lessons-learned.md` + ilgili `playbook/checklists/` + hata pattern'i — yani lider takılınca neye bakıyorsa) → bulguyla devam. **Toplam 5 denemede** hâlâ başarısız → **DUR + lider'e gel** (ham hata + denenenler + araştırma bulgusu). Sınırsız/kör tekrar YASAK → patinaj 5 ile sınırlı.

@@ -36,14 +36,12 @@ tekrarlayan operasyonel tuzakları gösterir.
 Her SAP işleminden önce bunlar geçerlidir. İhlal riski varsa: **DUR → AÇIKLA →
 ÖNERİ SUN → KULLANICIDAN İSTE → BEKLE.**
 
-- **A — Standart SAP objeleri (Z ile başlamayan):** yaratma/değiştirme/silme YASAK.
-  Append struct, alan ekleme, FM/BAdI/program/message-class değişikliği dahil. Bunu
-  yapan script'i çalıştırma da yasak. Append field/DTEL adını **AI önermez** — kullanıcı belirler.
-- **B — Standart tablo verileri:** direkt `INSERT/UPDATE/DELETE/MODIFY` YASAK (Z'li
-  kodun içinde bile). Sıra: BAPI → RFC FM → transaction (BDC) → kullanıcıdan manuel. Asla direkt SQL.
-- **C — Sistem state:** transport yaratma/release, package yaratma, enqueue lock silme YASAK.
-- **D — Z'li obje yaratma:** TR login zorunlu (`sap-language=TR`), 4 field label TR ve
-  tam, title/description boş bırakılmaz, activate öncesi REST GET ile doğrula.
+> **KANONİK METİN = kök `CLAUDE.md` fiziksel damgası** (ADR 0021; `check_kesin_yasaklar`
+> eşliği zorlar — burada KOPYA tutulmaz, D6 2026-08-01). Özet: **A)** standart objeye
+> dokunma (append/DTEL adını AI önermez) **B)** standart tablo verisine direkt SQL yok
+> (BAPI→RFC→BDC→manuel) **C)** transport/package yaratma-release, lock silme yok
+> **D)** Z obje = projenin **`master_language`** login'i (hardcoded-TR DEĞİL — `project.yaml`)
+> + 4 label TAM + activate öncesi REST GET.
 
 Detay: `governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md`
 
@@ -170,7 +168,7 @@ En kritik üçü:
 
 - **TR master-language create:** SAP `masterLanguage="TR"` body attribute'unu ve
   `sap-language` header'ını yok sayar. Tek çalışan yöntem: login (`/discovery`)
-  isteğinde `sap-client` + `sap-language=TR` **birlikte query param**. Daha önce EN
+  isteğinde `sap-client` + `sap-language=<master_language>` **birlikte query param**. Daha önce EN
   yaratılıp silinmiş isim tekrar EN gelir → farklı isimle doğrula. Her create için ayrı session.
 - **Transport disiplini:** numarayı uydurma, hafızadan/önceki context'ten alma,
   **hata mesajındaki transport numarasını ASLA kullanma** (başka geliştiriciye ait
