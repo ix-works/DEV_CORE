@@ -185,7 +185,8 @@ Katmanlar overlapping değil tamamlayıcı — biri kaçırırsa diğeri yakalar
 - TR karakter validation v1'de sadece boş kontrolü; non-Latin karakter dağılım kontrolü v2'de
 - ⚠️ **`adt_get`/`adt_lock_check` object_type='func' GÜVENİLMEZ** — mevcut FM'e bile `exists:false` (group-resolution bug). Varlık için `adt_search_objects` ya da group-qualified metadata GET (`/sap/bc/adt/functions/groups/<fg>/fmodules/<fm>`). Bkz. `adt-fugr-functions.md` §4. **KAPSAM:** yalnız `object_type='func'`; genel `adt_get` DDIC-okuması güvenilir (KÖK-FIX 2026-06-16, `feedback_adt-get-ddic-read-fixed`) — "adt_get genelde güvenilmez" algısı yok.
 - ⚠️ **`adt_delete` object_type='func' ÇALIŞMAZ** ("lock not supported"). FM silmek için stateful lock + DELETE (lib pattern, `adt-fugr-functions.md`). FG/class delete OK.
-- ⚠️ **`adt_classrun` dialog-context FM çalıştıramaz** (RPY_DYNPRO_*/RS_CUA_*) → `400 "Session Timed Out"`. Bunlar için RFC-enabled FM + `/sap/bc/soap/rfc`. Ayrıca classrun **app-server load-cache**: push+activate sonrası eski load çalışabilir → iterasyonda yeni class adı. Bkz. `adt-fugr-functions.md` §6.
+- ⚠️ **`adt_classrun` dialog-context FM çalıştıramaz** (RPY_DYNPRO_*/RS_CUA_*) → `400 "Session Timed Out"`. Bunlar için RFC-enabled FM + `/sap/bc/soap/rfc`. Bkz. `adt-fugr-functions.md` §6.
+- ✅ **`adt_classrun` BOZUK/GÜVENİLMEZ DEĞİL** (2026-07-31 kök-fix; önceki "güvenilmez" kaydı GERİ ALINDI). *"does not implement if_oo_adt_classrun~main"* mesajı **DOĞRUDUR**: ya sınıf **aktive edilmemiştir** (aktif sürüm boş kabuk) ya da çağıran süreç **bayat stateful oturum** tutmaktadır (obje başka süreçte aktive edildi). Çare: aktive et + `adt_inactive_objects` doğrula · oturum RESET. ⛔ **"taze/yeni class adıyla yeniden yarat" reçetesini UYGULAMA** — yanlıştı, çözmez, çöp obje bırakır. Tam vaka + ölçüm: `adt-classes.md` §24.9.
 
 ## Geliştirme
 

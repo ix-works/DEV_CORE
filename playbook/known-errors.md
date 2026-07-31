@@ -63,6 +63,7 @@ Hepsi `RPY_DYNPRO_INSERT` / `RS_CUA_INTERNAL_*` ile klasik ekran/status üretimi
 | Hata | Sebep / Çözüm |
 |---|---|
 | `400 "Session Timed Out"` (classrun) | RPY/RS_CUA **dialog context** ister → `adt_classrun` yapamaz. RFC-enabled FM + `/sap/bc/soap/rfc`. |
+| `does not implement if_oo_adt_classrun~main` (HTTP **200** gövdesinde) | Mesaj **DOĞRU**, araç bozuk değil: (1) sınıf **aktive edilmemiş** → aktif sürüm boş kabuk (classrun aktif sürümü koşar) · (2) çağıran süreç **bayat stateful oturum** tutuyor (obje başka süreçte aktive edildi). → aktive et + **`adt_inactive_objects`** doğrula · oturum RESET. ⛔ **taze class adıyla yeniden yaratma** (yanlış reçete, geri alındı 2026-07-31). [`adt-classes.md`](adt-classes.md) §24.9 |
 | `00264 "GUI status ... durumu eksik / not generated"` | `RS_CUA_INTERNAL_WRITE` tanımı yazar ama load üretmez → sonrasında `RS_CUA_GENERATE` çağır. |
 | `423 InvalidLockHandle` (FM source push) | `set_object_source` retry/ETag stateful lock'u bozar → sıkı lock→PUT→activate→unlock (`set_function_module_source`). |
 | `400 "Parameter comment blocks are not allowed"` | FM imzası `*"` block ile push edildi → **satır-içi ABAP imza** yaz. |

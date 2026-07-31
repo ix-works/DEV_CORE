@@ -113,8 +113,12 @@ METHOD msg_line.
 ENDMETHOD.
 ```
 Uyarı: `io_msg->m_severity` DOĞRUDAN erişilir (`io_msg->if_abap_behv_message~m_severity` YANLIŞ →
-"class does not contain interface" aktivasyon hatası). classrun sınıfı **taze isimle** yarat
-(sil-yarat aynı isim `if_oo_adt_classrun` binding'ini bozabiliyor: "does not implement ...main").
+"class does not contain interface" aktivasyon hatası).
+⛔ **Eski not GERİ ALINDI (2026-07-31):** *"classrun sınıfını taze isimle yarat — sil-yarat aynı
+isim binding'i bozuyor"* **YANLIŞTI** (denendi, çözmedi, çöp obje bıraktı). `"does not implement
+...~main"` mesajı **doğrudur**: ya sınıf **aktive edilmemiştir** ya da çağıran süreç **bayat
+stateful oturum** tutmaktadır. Çare: aktive et → `adt_inactive_objects` ile doğrula → gerekirse
+oturumu RESET et. Aynı ismi rahatça kullan. Detay: [`adt-classes.md`](adt-classes.md) §24.9.
 
 ## 5. UPDATE — mevcut siparişe kalem ekleme / miktar güncelleme
 

@@ -106,6 +106,12 @@ veya script ile:
 python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ORNEK_CLASS
 ```
 
+> ⚠ **AKTİVASYON KANITI = `adt_inactive_objects`, metadata DEĞİL.** `adtcore:version="active"`
+> **boş kabuk için de "active" der** → tek başına aktivasyon kanıtı değildir. Aktif sürümü
+> okuyacaksan **`?version=active` parametresini AÇIKÇA ver** — ADT'nin varsayılanı
+> **İNAKTİF** sürümdür ve push ettiğin (henüz aktive edilmemiş) kodu gösterip seni
+> "aktifmiş" sanmaya iter. Vaka + ölçüm: §24.9.
+
 ---
 
 ### 24.6 ExceptionResourceScanDuringSaveFailure — Kök Neden ve Çözüm
@@ -180,6 +186,7 @@ try_push(minimal, 'minimal baseline')
 | `412 PreconditionFailed` | Yanlış ETag | `source/main` endpoint'inden ETag al |
 | `400 lockHandle not found` | Lock handle eksik | `push_object.py` kullan (SAPClient) — manuel PUT yapma |
 | Tüm method bisect'te FAIL | Sorun IMPL'de değil DEFINITION'da | DEFINITION bölümünü bisect et |
+| `does not implement if_oo_adt_classrun~main` (classrun, HTTP 200 gövdesinde) | Mesaj DOĞRU: (1) sınıf aktive edilmemiş (aktif sürüm boş kabuk) veya (2) çağıran süreç bayat stateful oturum tutuyor | (1) `adt_activate` + `adt_inactive_objects` doğrula · (2) oturum RESET. ⛔ **taze class adı DEĞİL** — bkz 24.9 |
 
 ---
 
@@ -224,6 +231,49 @@ kendi push'undur. Bu yüzden:
 
 📌 Aynı sınıf tuzak: CDS inline-POST boş-source (bkz. `adt-cds.md`) — POST'un gövdeyi yok
 sayması ADT'de tekrar eden bir desendir. **Yaratım ve içerik ayrı adımlardır.**
+
+---
+
+### 24.9 `classrun` → *"does not implement if_oo_adt_classrun~main"* (2026-07-31 kök-fix)
+
+**Semptom:** `adt_classrun <cls>` → HTTP 200 gövdesinde
+`Class does not implement if_oo_adt_classrun~main!` — oysa **repo kaynağında** `INTERFACES
+if_oo_adt_classrun` açıkça VAR ve `adt_syntax_check` temiz.
+
+> ⛔ **ESKİ REÇETE YANLIŞTI — KULLANMA:** *"`adt_classrun` bu sistemde güvenilmez/bozuk;
+> app-server class-load cache'i binding'i bozuyor; çare TAZE (hiç kullanılmamış) bir sınıf
+> adıyla yeniden yarat."* Bu reçete **iki kez** denendi, **hiçbirinde çözmedi**, geriye iki
+> gereksiz obje bıraktı ve "araç bozuk" yanlış-sonucunu 6 dokümana yaydı. Yeni class adı
+> **hiçbir şeyi bust etmez** — aşağıdaki iki sebebin ikisine de dokunmaz.
+
+**SAP'nin mesajı DOĞRUDUR.** Ardında iki bağımsız sebep vardır:
+
+| # | Kök sebep | Nasıl ayırt edilir | Çare |
+|---|---|---|---|
+| 1 | **Sınıf AKTİVE EDİLMEMİŞ** — push edildi, aktif sürüm hâlâ `adt_post_shell` boş kabuğu. classrun **aktif** sürümü yükler → mesaj gerçekten doğru. | Kaynağı **`?version=active`** ile çek: boş kabuk (birkaç yüz bayt, `INTERFACES` yok). Parametresiz GET seni yanıltır → **İNAKTİF** sürümü döndürür. | `adt_activate` → sonra `adt_inactive_objects` ile **doğrula** |
+| 2 | **BAYAT stateful ADT oturumu** — istemci süreç ömrü boyunca TEK `requests.Session` tutar (`x-sap-adt-sessiontype: stateful`). Obje **başka bir süreçte** aktive edildiyse bu sürecin SAP oturumu aktivasyonu görmez, eski class-load'a bağlı kalır. | Sınıfın aktif olduğu kanıtlanmışken (`adt_inactive_objects` = 0) hata **devam ediyorsa** bu sebeptir. Aynı çağrı **taze bir süreçte** anında çalışır. | **Oturum RESET** — `SAPADTClient.new_session()`; `run_classrun` bunu artık otomatik yapar |
+
+> ⛔ **AYNI OTURUMDA RETRY ETKİSİZDİR.** Eski `run_classrun` zaten aynı session'la iki kez
+> POST ediyordu; **ikisi de** aynı hatayı verdi. Çare retry değil **reset**: yeni session =
+> yeni `sap-contextid` = güncel class-load. Aynı desen `jfilak/sapcli` `d223ed3c`'de:
+> `activate() → new_session() → execute()`.
+
+**⚠️ AKTİVASYON KANITI — `version="active"` metadata'sı TEK BAŞINA YETMEZ.**
+`adtcore:version="active"` **boş kabuk için de "active" der** (kabuk da bir aktif sürümdür).
+Aktivasyonun güvenilir kanıtı **`adt_inactive_objects`**'tir (worklist boş mu?) — ikincil
+olarak aktif kaynağın **bayt/içerik** karşılaştırması. *"Aktif dedi"* ≠ *"kodun aktif"*.
+
+**Ölçüm (2026-07-31, aynı sınıf, aynı an):** `source/main` parametresiz GET → **10.659 bayt,
+arayüz VAR** · `source/main?version=active` → **192 bayt boş kabuk, arayüz YOK**. Yani
+**ADT'nin varsayılan sürümü İNAKTİF'tir** — bir sürüm parametresi vermeyen her doğrulama
+"var" der ve seni yanıltır.
+
+**META-DERS (bu vakanın asıl bedeli):** teşhisi üreten fonksiyon (`_diagnose_classrun_binding`)
+tam da bu tuzağa düşmüştü — `version=` vermeden okuyup **hiç aktive edilmemiş** sınıfa
+"yapısal olarak geçerli" diyordu. Oradan otomatik olarak *"o hâlde tooling bozuk → taze
+class adı"* reçetesi doğdu. **Yanlış veri okuyan bir teşhis, güvenle yanlış bir reçete
+üretir** — ve o reçete "araç bozuk" diye terfi eder. Bkz. `lessons-learned.md` PATTERN #16
+kardeş vakası.
 
 ---
 
