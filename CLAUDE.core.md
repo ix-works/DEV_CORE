@@ -69,7 +69,7 @@
 | Katman | Konu | Yer | Nasıl yüklenir |
 |---|---|---|---|
 | **L1a** | Her-oturum davranış değişmezleri | **§1.1 (aşağıda)** | her oturum (bu dosya) |
-| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | **eşleşen dosyaya dokununca** (`paths:` — `globs:` DEĞİL) |
+| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | **her oturum yüklenir** (`paths:` yazılı ama harness tembel-tetiği çalıştırmıyor — #17204; ölçüm 2026-07-31: 37/37 oturum koşulsuz. Harness düzelirse inspector A3 fark eder) |
 | **L1c** | Derin davranış referansı | [`AGENTS.md`](AGENTS.md) | ⚠ **OTOMATİK YÜKLENMEZ** — açıkça okunmalı |
 | **L2** | Stabil kurumsal standartlar (naming, coding, UI, doc format) | [`standards/`](standards/) | on-demand |
 | **L3** | Operasyonel pattern (ADT pattern bankası, lessons-learned) | [`playbook/`](playbook/) | on-demand |
@@ -184,7 +184,7 @@ Her yeni oturum başında, SAP işlemi yapmadan ÖNCE:
 ```
 [Session başladı — <PROJECT_NAME>]
 ⛔ KESİN YASAKLAR aktif (ADR 0005): A/B/C/D (D: master_language=<ML>)
-✓ Core loader yüklendi (junction sağlam) — CLAUDE.core.md (L1a) + claude/rules/ (L1b, glob-tetiklemeli)
+✓ Core loader yüklendi (junction sağlam) — CLAUDE.core.md (L1a) + claude/rules/ (L1b — her oturum; tembel-tetik #17204 nedeniyle pasif)
 ✓ SAP profili: <sap_profile>/<release> (bloklu yetenekler: <profilden>)
 ✓ run_all_validators.py --quick: <OK | N ihlal>
 ✓ Aktif paket: <PKG_FULL veya "belirsiz, kullanıcıya sor">
@@ -289,7 +289,7 @@ analizi + canlı-test → PR.
 | Konu | Dosya |
 |---|---|
 | Her-oturum davranış değişmezleri | §1.1 (bu dosya) |
-| Dosya-türüne bağlı davranış (glob-tetiklemeli) | [`claude/rules/`](claude/rules/) |
+| Dosya-türüne bağlı davranış (L1b — fiilen her oturum, #17204) | [`claude/rules/`](claude/rules/) |
 | Git workflow / ADT-infra — **derin referans, otomatik yüklenmez** | [`AGENTS.md`](AGENTS.md) |
 | Naming standardı | [`standards/01-naming.md`](standards/01-naming.md) |
 | Klasik backend (SEGW/FE) | [`standards/02-coding-backend.md`](standards/02-coding-backend.md) |

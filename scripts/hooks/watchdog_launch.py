@@ -22,6 +22,28 @@ def emit(obj):
     sys.stdout.write(json.dumps(obj))
 
 
+
+def _brifing_lint(data):
+    """T2.8 (2026-07-31): spawn prompt'unda R2 sablon izleri var mi? BLOKLAMAZ — nudge.
+    Sablon: core/claude/templates/spawn-brief.md. Kisa/mekanik spawn'lar (<400 karakter,
+    ör. test-echo) muaf — sablon zorunlulugu substantive isler icindir."""
+    try:
+        ti = data.get("tool_input") or {}
+        prompt = ti.get("prompt") or ""
+        if len(prompt) < 400:
+            return None
+        anahtarlar = ("GOREV", "KANIT KURAL")   # asgari 2 zorunlu şablon izi (ASCII-katlanmış)
+        duz = prompt.upper().replace("İ", "I").replace("Ö", "O").replace("Ü", "U")
+        eksik = [a for a in anahtarlar if a not in duz]
+        if eksik:
+            return ("[BRIFING-LINT] Spawn prompt'unda R2 sablon izleri eksik: "
+                    + ", ".join(eksik)
+                    + " — sablon: core/claude/templates/spawn-brief.md (kanit-kurallari + "
+                      "gorev sinirlari + goreve-iliskin dersler alanlari zorunlu; nudge, blok degil).")
+    except Exception:
+        pass
+    return None
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -41,9 +63,11 @@ def main():
     try:
         if os.path.exists(hb) and (time.time() - os.path.getmtime(hb)) < 200:
             age = int(time.time() - os.path.getmtime(hb))
-            emit({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                  "additionalContext": "[WATCHDOG] Zaten canli (seans basina 1 daemon) — heartbeat %ss taze; "
-                                       "yeniden baslatilmadi (idempotent, hata degil)." % age}})
+            ek = "[WATCHDOG] Zaten canli (seans basina 1 daemon) — heartbeat %ss taze; yeniden baslatilmadi (idempotent, hata degil)." % age
+            lint = _brifing_lint(data)
+            if lint:
+                ek += "\n" + lint
+            emit({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": ek}})
             return
     except Exception:
         pass
@@ -96,6 +120,9 @@ def main():
     except Exception as e:
         msg = "[WATCHDOG] daemon baslatilamadi (%s) — 5dk cron watchdog aktif." % e
 
+    lint = _brifing_lint(data)
+    if lint:
+        msg += "\n" + lint
     emit({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": msg}})
 
 

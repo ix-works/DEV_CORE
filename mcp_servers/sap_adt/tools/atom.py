@@ -703,8 +703,14 @@ def adt_push_source(
             review = run_reviewer(task, str(tmp_file), ack_drop=ack_drop)
             if review.is_blocker:
                 return reject_payload(name, object_type, review)
-            if review.verdict != "SKIP":
-                reviewer_warn = review.to_dict()
+            # G2 (2026-07-31): SKIP artik SESSIZ degil — "PRE-FLIGHT KOSMADI" bilgisi
+            # yanita girer (checklist!=wired sinifinin reviewer versiyonuna karsi).
+            # Davranis DEGISMEZ (push yine gecer); yalniz gorunurluk.
+            reviewer_warn = review.to_dict()
+            if review.verdict == "SKIP":
+                reviewer_warn["notice"] = (
+                    f"PRE-FLIGHT KOSMADI ({review.skip_reason}) — bu tip icin "
+                    "validator zinciri tanimli degil; 'reviewer PASS' SANMA.")
 
         # ADR 0016 REVİZE: pre-push DRIFT GUARD (M1) KALDIRILDI — kasıtlı edit'leri de
         # blokluyordu (repo≠canlı her meşru edit'te doğal). Tazelik artık edit-ÖNCESİ

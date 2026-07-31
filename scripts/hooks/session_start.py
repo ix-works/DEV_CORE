@@ -246,7 +246,7 @@ def _inspector() -> list[str]:
         satirlar = [str(b).replace("\n", " ") for b in bulgular[:5]]
         if len(bulgular) > 5:
             satirlar.append(f"… +{len(bulgular) - 5} bulgu daha")
-        satirlar.append(f"(negatif-testli gate: {istat['negatif_testli_gate']}/{istat['gate_toplam']} — v2 bekliyor)")
+        satirlar.append(f"(negatif-testli gate: {istat["negatif_testli_gate"]}/{istat["gate_toplam"]})")
         satirlar.append("detay: .tmp/inspector-report.md · elle: python core/scripts/inspector.py")
         return satirlar
     except Exception:

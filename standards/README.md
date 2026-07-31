@@ -15,7 +15,7 @@ Bu klasör **L2 katman** dosyaları içerir: stabil, değişme sıklığı düş
 | Dosya | Kapsam | Konu |
 |---|---|---|
 | [`01-naming.md`](01-naming.md) | both (backend + UI) | Package, WRICEF, namespace, obje adlandırma kuralları (NTTDATA/TR rehberi) |
-| [`02-coding-backend.md`](02-coding-backend.md) | backend | **Klasik track:** OData v2 (SEGW), RFC/BAPI, CDS, Fiori Elements, performans, security |
+| [`02-coding-backend.md`](02-coding-backend.md) | backend | **Klasik track:** OData v2 (SEGW), RFC/BAPI, CDS, performans, security (UI: 03) |
 | [`03-coding-ui-fiori.md`](03-coding-ui-fiori.md) | ui | Fiori UI5 proje yapısı, manifest, controller, OData binding, CSS, deploy (ui5-deploy.yaml) |
 | [`04-documentation-fs-ts.md`](04-documentation-fs-ts.md) | both | FS ve TS şablonları, versiyon kontrolü, onay süreci |
 | [`05-coding-rap.md`](05-coding-rap.md) | backend | **RAP track:** view entity katmanlama, BDEF (managed/unmanaged), service definition/binding/publish, ADR 0005 RAP yüzeyi (02'nin alternatifi, all-or-nothing) |

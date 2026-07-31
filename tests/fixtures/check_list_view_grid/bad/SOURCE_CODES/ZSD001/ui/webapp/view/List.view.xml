@@ -1,0 +1,23 @@
+<mvc:View
+    controllerName="zsd001.controller.List"
+    xmlns:mvc="sap.ui.core.mvc"
+    xmlns="sap.m">
+    <Page title="Sipariş Listesi">
+        <Table id="idOrderTable" items="{/Orders}">
+            <columns>
+                <Column><Text text="Sipariş No"/></Column>
+                <Column><Text text="Müşteri"/></Column>
+                <Column><Text text="Tutar"/></Column>
+            </columns>
+            <items>
+                <ColumnListItem>
+                    <cells>
+                        <Text text="{OrderId}"/>
+                        <Text text="{Customer}"/>
+                        <Text text="{Amount}"/>
+                    </cells>
+                </ColumnListItem>
+            </items>
+        </Table>
+    </Page>
+</mvc:View>

@@ -119,7 +119,7 @@ annotation/syntax pattern tahmin edilmez.
 
 ### Tier 2 — MODÜL (ADR 0004, modül-bazlı organizasyon)
 
-Objeler `ERP/<MODULE>/<PACKAGE>/` altında yaşar (`SD`, `MM`, `FI`, `CO`, `QM`, `PM`,
+Objeler `<source_root>/<MODULE>/<PACKAGE>/` (değeri `project.yaml` → `source_root`; bu projede genelde `SOURCE_CODES`) altında yaşar (`SD`, `MM`, `FI`, `CO`, `QM`, `PM`,
 `EWM`). Modül = SAP fonksiyonel alanı; paket prefix'i modülü yansıtır
 (`ZSD*` → SD). İndirilen objeyi paket adıyla eşleşen alt klasöre kaydet
 (`cds/`, `classes/`, `functions/`, `structures/`, `tables/`).
@@ -134,12 +134,12 @@ referanslarını oku — `tables.md` (kilit tablolar), `bapi.md` (released BAPI/
 | Adım | Nasıl |
 |---|---|
 | Aktif paketi bul | `.claude/active_package` oku |
-| Paket kuralları | `ERP/<MODULE>/<PKG>/.rules.md` (prefix, bağımlılık, **Bilinen İstisnalar**) |
-| Güncel iş durumu | `ERP/<MODULE>/<PKG>/SESSION_NOTES.md` son entry |
-| Sprint / iş listesi | `ERP/<MODULE>/<PKG>/SPRINT_PLAN.md` |
-| **Spec kaynağı (conversion/referans)** | `ERP/<MODULE>/<PKG>/ref_docs/` — klasik DDL/struct/program spec'leri, ekran mockup'ları, csv'ler (ADR 0013). Build'de spec kaynağı; gerçek S4 objesi paket kökünde üretilir. Kök = yaşayan, `ref_docs/` = referans. |
+| Paket kuralları | `<source_root>/<MODULE>/<PKG>/.rules.md` (prefix, bağımlılık, **Bilinen İstisnalar**) |
+| Güncel iş durumu | `<source_root>/<MODULE>/<PKG>/SESSION_NOTES.md` son entry |
+| Sprint / iş listesi | `<source_root>/<MODULE>/<PKG>/SPRINT_PLAN.md` |
+| **Spec kaynağı (conversion/referans)** | `<source_root>/<MODULE>/<PKG>/ref_docs/` — klasik DDL/struct/program spec'leri, ekran mockup'ları, csv'ler (ADR 0013). Build'de spec kaynağı; gerçek S4 objesi paket kökünde üretilir. Kök = yaşayan, `ref_docs/` = referans. |
 
-Örn. aktif iş ZSD001 SEVKEMRİ → `ERP/SD/ZSD001_CLC/`. Yeni paket başlatılıyorsa:
+Örn. aktif iş ZSD001 SEVKEMRİ → `<source_root>/SD/ZSD001_CLC/`. Yeni paket başlatılıyorsa:
 `python scripts/bootstrap_package.py <PKG_FULL> --title "..."` (T5).
 
 ### Karar ağacı — yeni bilgi nereye yazılır?

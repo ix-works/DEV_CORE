@@ -104,3 +104,7 @@ applies_to: [s4_private]
 
 > **TİP:** Her madde **HATA** (kod/obje yanlış) veya **EKSİK** (çalışıyor ama must-do karşılanmamış — ör. BE-11 audit-fill, BE-18 recon-implemente-değil) tipindedir → Bug_Expert `[HATA]`/`[EKSİK]` etiketler; ikisi de zorunlu. Checklist-DIŞI fikir = `[ÖNERİ]` (bağlayıcı değil).
 > **Pre-existing AYRI:** değişimle ilgisiz kritik = ayrı işaretle, bloklama. **Tahmin YASAK:** her bulgu canlı obje/syntax/readback ile doğrulanır.
+
+| BE-63 | **Rapor sayıları içerik-çapalı mı?** Ajan/build raporundaki her nicel iddia (N obje, N metot, dosya:satır) yalnız satır-no/çıplak sayı ile değil İÇERİK çapasıyla (başlık/imza/alıntı) verilmiş mi? Bayat sayı = PATTERN #18 (6 tekrar). Çıplak sayı = EKSİK. | MEDIUM | — | denetim 2026-07-31 R6 |
+| BE-64 | **0-sonuç iddiaları kontrol-gruplu mu?** "Bulunamadı/yok/0 eşleşme" türü her iddia için arama kapsam-kanıtı + pozitif kontrol örneği var mı (PATTERN #16, 6 tekrar; boş liste iki gerçeği çöktürür)? Kanıtsız 0-iddia = EKSİK. | MEDIUM | — | denetim 2026-07-31 R6 |
+| BE-65 | **Spawn-brifing şablon alanları tam mıydı?** İncelenen iş bir alt-ajan buildiyse: brifing R2 şablonundaki zorunlu alanları (görev/sınır/çıktı/dersler/kanıt-kuralları) taşıyor muydu? Eksik alan → süreç-EKSİK olarak raporla (build'i bloklamaz, lider'e sinyal). | LOW | — | denetim 2026-07-31 T2.1 |
