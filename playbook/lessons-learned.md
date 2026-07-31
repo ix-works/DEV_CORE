@@ -234,8 +234,18 @@ satırın kendi listesi zaten 12 diyordu = baştan tutarsız) · "canlıda bağl
 Yazım disiplini: **(a)** sayı yazarken **ölçüm tarihini** de yaz · **(b)** aynı dosya içinde
 **içerik çapası** kullan, satır numarası değil · **(c)** çapraz-dosya referansını **sembol adına**
 bağla (*"ada göre ara: `<sembol>`"*) · **(d)** **sayıyı tazelemek sınıfı çözmez** — çapaya çevir ·
-**(e)** yorumdaki **veri iddiasını** (canlıda X var/yok) ölçmeden aktarma.
-**Status:** ⚠️ DİSİPLİN — kaynak: 2026-07-29 silme kontrolü turu.
+**(e)** yorumdaki **veri iddiasını** (canlıda X var/yok) ölçmeden aktarma ·
+**(f) TABAN-ÖLÇÜM — bir işlemin başarısını İDDİAYLA değil İKİ SAYIYLA kanıtla.** `rc=0` /
+`HTTP 200` / `[OK]` bir iddiadır, sonuç değil. İşlemden **ÖNCE taban**, işlemden **SONRA hedef**
+ölç; kanıt ikisinin **farkıdır**. Örnekler: GUI status buton sayısı **0→5** · text-pool sembol
+sayısı **6→35** · mesaj sayısı **37→38** · inaktif-worklist **1→0**. Taban alınmadıysa "sonra"
+değeri hiçbir şey kanıtlamaz (zaten öyle olabilirdi).
+**(g) "X ÇÜRÜDÜ" bir cümle değil, bir KOŞULDUR.** Bir çürütme notu yazarken **hangi koşulda**
+çürüdüğünü de yaz (hangi obje tipi · hangi bağlam · hangi sürüm/uç nokta). Koşulsuz yazılmış
+çürütme notu, sonraki turda **hâlâ geçerli olduğu yerde de** kullanılmaz → yanlış kanal/yöntem
+seçtirir; yani fazla-genelleme, bilgiyi silmekle aynı sonucu verir. Uygulanmış örnek:
+[`adt-fugr-functions.md`](adt-fugr-functions.md) §3.1 (SOAP-RFC vakası koşullu yazıldı).
+**Status:** ⚠️ DİSİPLİN — kaynak: 2026-07-29 silme kontrolü turu · (f)/(g) 2026-07-31.
 
 ## 🔄 SELF-UPDATE PROTOKOLÜ
 
@@ -308,6 +318,52 @@ bağla (*"ada göre ara: `<sembol>`"*) · **(d)** **sayıyı tazelemek sınıfı
 
 ---
 
+### PATTERN #20: Salt-okunur SANILAN araç yazıyordu — yetki sınırını **ad ve doküman değil, ÖLÇÜM** belirler
+
+- **Hata:** Bir tool'un **adına** (`*_check`, `*_get`, `*_list`, "preaudit", "dry-run") ve
+  **docstring'ine** bakılarak "okuma" kovasına konur; ajan allowlist'lerine, tek-yazıcı
+  mimarisine ve "bunu çağırmak zararsızdır" refleksine bu sınıflandırma temel yapılır.
+  **Hiç ölçülmemiştir.**
+- **Vaka (2026-07-31):** `adt_syntax_check` **salt-okunur sanılıyordu** — docstring'i açıkça
+  *"performs a syntax check without actually activating the object"* + *"activationExecuted
+  will be false"* diyordu. Ölçüm bunu çürüttü: tool
+  `POST /sap/bc/adt/activation?method=activate&preauditRequested=true` çağırıyor ve bu sistemde
+  preaudit **onurlandırılmıyor** → bekleyen inaktif sürüm **temizse objeyi AKTİVE ediyor**
+  (`adt_inactive_objects` **1 → 0**; `?version=active` kaynağı push edilene eşitlendi), hatalıysa
+  etmiyor. Gerçek semantiği **"hatasızsa aktive et"**.
+- **Neden sinsi — üç kat:**
+  1. **Ad ikna edicidir.** "check" kelimesi, kimsenin sormadığı bir yetki iddiasında bulunur.
+  2. **Yan etki BAŞARILI durumda ortaya çıkar.** Hata varsa aktive etmiyor → tool "gerçekten
+     sadece kontrol ediyor" gibi görünüyor; yazma yalnız her şey yolundayken oluyor, yani
+     **kimsenin bakmadığı anda**.
+  3. **Araç kod göndermez** — çağrıda yalnız obje adı gider, SAP **sunucudaki bekleyen sürümü**
+     devreye alır. Yani çağıran, gönderdiğini değil **orada duranı** aktive eder; bilinçli
+     bekletilen bir aktivasyon (co-activation sırası, def/impl include çifti) varken **sırayı bozar**.
+- **YÖNTEM — bir tool'u "read-only" kovasına koymadan önce yan etkisini ÖLÇ:**
+  ```
+  TABAN ölç  →  tool'u ÇAĞIR  →  TEKRAR ölç  →  fark var mı?
+  ```
+  Ölçüm için tool'un kendi ailesinden **bağımsız** bir sayaç seç (burada: `adt_inactive_objects`
+  worklist sayısı; ayrıca `?version=active` kaynağın bayt/içerik kıyası). Tool'un **kendi
+  dönüşünü** kanıt sayma — `activationExecuted:false` tam da bu vakada yanıltıcıydı.
+  (Taban-sonra ölçüm ilkesi: #18 (f).)
+- **Neden bu bir MİMARİ mesele, sadece doküman hatası değil:** single-writer mimarisinde
+  "okuma" kovası ajan **tool-allowlist'lerine** dönüşür. Yanlış sınıflandırılmış bir tool,
+  yazma yetkisi olmayan rollere sessizce yazma yeteneği verir — ilke ihlal edilir ama
+  **hiçbir gate ötmez**, çünkü ihlal izin katmanının kendi içindedir.
+- **⚠ Kaynağı düzelt, dokümanı değil (yalnız):** yanlış bilgi **kodun docstring'inde**
+  durduğu sürece her okuyan yeniden yanılır; playbook'a not düşmek onu **çürütmez**, yanına
+  ikinci bir gerçek koyar. Bu vakada `scripts/sap_adt_lib.py::syntax_check_via_activation`
+  docstring'i ölçülen davranışa göre yeniden yazıldı (davranış DEĞİŞMEDİ — kasıtlı: karar
+  kullanıcınındır, düzeltilen yalnız **iddia**).
+- **Akraba:** **#16** (teşhisin girdisi kanıt gerektirir) · **#19** ("bozuk" karşılaştırmalı
+  iddiadır). Üçünün ortak çekirdeği: **araç hakkındaki her cümle — adı, docstring'i, teşhisi,
+  dönüş bayrağı — bir İDDİADIR; kanıt yalnız ölçümdür.**
+- **Status:** ⚠️ DİSİPLİN + kaynak-fix (docstring). Tool semantiği evi:
+  [`adt-mcp.md`](adt-mcp.md) "Tool SEMANTİĞİ"; envanter tablosu `docs/ix-works-mimari-kilavuzu.md` §10.1.
+
+---
+
 ## 📊 PATTERN İstatistikleri (audit için)
 
 | Pattern | İlk keşif | Tekrar sayısı | Status |
@@ -322,6 +378,7 @@ bağla (*"ada göre ara: `<sembol>`"*) · **(d)** **sayıyı tazelemek sınıfı
 | #17 **Katman katman keşif** — çapraz-kesen işte envantersiz ilerleme | 2026-07-29 | 1 (silme kontrolü: 3 app sanıldı, 7 çıktı; 14 yol sanıldı, 24 çıktı; 6 review turu) | ⚠️ DİSİPLİN → `howto-cok-katmanli-degisiklik.md` |
 | #18 **Bayat sayı/satır referansı** (yorumda `dosya:satır`, "N obje", "N metot") | 2026-07-29 | **6** (obje sayısı · metot sayısı ×2 · veri iddiası · yorum satır-no ×2) | ⚠️ DİSİPLİN (içerik-çapası kuralı) |
 | #19 **"Araç bozuk" kontrol grubu olmadan kurulamaz** + tanıdık semptomda önce hafızayı ara | 2026-07-31 | **2** (classrun "güvenilmez" ×2 — 2026-06-30'da çözülmüştü, 2026-07-30'da unutulup üstüne yanlış yazıldı) | ⚠️ DİSİPLİN |
+| #20 **Salt-okunur sanılan araç yazıyordu** — yetkiyi ad/doküman değil ölçüm belirler | 2026-07-31 | 1 (`adt_syntax_check` → temiz inaktif sürümü AKTİVE ediyor; docstring aksini söylüyordu) | ⚠️ DİSİPLİN + kaynak-fix (docstring) |
 
 > **Hedef:** ACTIVE/⚠️ DİSİPLİN olanları zamanla SOLVED'a çevir (kod gate ile).
 

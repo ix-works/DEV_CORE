@@ -41,10 +41,10 @@ CLASS lcl_event DEFINITION.
   PUBLIC SECTION.
     METHODS on_hotspot
       FOR EVENT hotspot_click OF cl_gui_alv_grid
-      IMPORTING e_row_id e_column_id.
+      IMPORTING e_row_id e_column_id es_row_no.
     METHODS on_double_click
       FOR EVENT double_click OF cl_gui_alv_grid
-      IMPORTING e_row e_column.
+      IMPORTING e_row e_column es_row_no.
     METHODS on_user_command
       FOR EVENT user_command OF cl_gui_alv_grid
       IMPORTING e_ucomm.
@@ -53,14 +53,21 @@ ENDCLASS.
 CLASS lcl_event IMPLEMENTATION.
   METHOD on_hotspot.
     " Hotspot kolonuna tıklama → drill-down / işlem (program-spesifik).
-    READ TABLE gt_data INTO DATA(ls_row) INDEX e_row_id-index.
+    " ⚠ SATIR KİMLİĞİ = ES_ROW_NO-ROW_ID (çıktı tablosu satır no) — E_ROW_ID-INDEX DEĞİL.
+    "   LVC_S_ROW (e_row/e_row_id) = INDEX + ROWTYPE → ROWTYPE ara-toplam/toplam satırına da
+    "   işaret edebilir; do_sum / sıralama / filtre etkinken INDEX artık iç tablo indeksi
+    "   DEĞİLDİR → READ TABLE ... INDEX başka satırı okur (sessiz yanlış bilgi) ya da toplam
+    "   satırında sessiz no-op olur. LVC_S_ROID (es_row_no) = ROW_ID → doğru olan budur.
+    "   (Kaynak: SEOSUBCODF event parametreleri + DD03L struct alanları. Bkz. BE-63.)
+    READ TABLE gt_data INTO DATA(ls_row) INDEX es_row_no-row_id.
     IF sy-subrc = 0.
       MESSAGE |Belge { ls_row-vbeln } seçildi (kolon { e_column_id-fieldname })| TYPE 'I'.
       " ör: SET PARAMETER + CALL TRANSACTION 'VA03'...
     ENDIF.
   ENDMETHOD.
   METHOD on_double_click.
-    READ TABLE gt_data INTO DATA(ls_row) INDEX e_row-index.
+    " Satır kimliği: ES_ROW_NO-ROW_ID (gerekçe yukarıda — E_ROW-INDEX kullanma).
+    READ TABLE gt_data INTO DATA(ls_row) INDEX es_row_no-row_id.
     " ... çift-tık aksiyonu ...
   ENDMETHOD.
   METHOD on_user_command.

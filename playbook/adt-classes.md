@@ -319,6 +319,55 @@ kovalama (çok-app-server asimetrisi, CSRF, bare-header, taze isim).
 
 ---
 
+### 24.10 YORUM KONUMU — `ENDMETHOD.` ↔ `METHOD` arasına yorum KONULAMAZ (ölçüm 2026-07-31)
+
+**Semptom:** source-based class push → `PUT .../source/main` **HTTP 400** ·
+`ExceptionResourceBadRequest` · *"The class contains unknown comments which can't be stored."* ·
+`T100KEY OO_SOURCE_BASED-012`. **Satır numarası YOKTUR** — hata hangi yorumun suçlu olduğunu
+söylemez, yalnız "bir yerde var" der.
+
+**KURAL — belirleyici olan KONUM'dur, bitişiklik değil.** Ölçülen dört konum:
+
+| Yorumun konumu | Sonuç |
+|---|---|
+| `CLASS … DEFINITION` bölümü (**`METHODS`↔`METHODS` arası DAHİL**) | ✅ **SERBEST** — 73 satırlık kesintisiz yorum bandı DEFINITION'da bırakıldı → PUT **200** |
+| Metot **GÖVDESİ** içi (`METHOD x.` satırının ALTI; `TRY.` öncesi dahil) | ✅ **SERBEST** — PUT **200** |
+| `CLASS … IMPLEMENTATION.` ↔ ilk `METHOD` arası | ⛔ **400** |
+| `ENDMETHOD.` ↔ sonraki `METHOD` arası | ⛔ **400** |
+
+⛔ **BİTİŞİKLEME ÇÖZMEZ.** Yorum bandı ile sonraki `METHOD` satırı arasındaki boş satırı silmek
+sonucu **değiştirmez** — aradaki boşluk değil, bandın IMPLEMENTATION gövdesindeki **yeri** kırar.
+"Bitişikle" reçetesi bu ölçümle çürümüştür (bkz. `checklists/bug-checklist-backend.md` BE-10b).
+
+✅ **DOĞRU REÇETE — iki seçenek:**
+1. Bandı **SİL** (metot/alan silinince ortada kalan not = en sık sebep), **veya**
+2. Bandı `METHOD x.` satırının **ALTINA — gövdenin İÇİNE** taşı (içerik korunur, konum düzelir).
+
+**TEŞHİS YÖNTEMİ — satır-no vermeyen 400'lerde genel reçete (yöntemin kendisi değerlidir):**
+
+```
+1. Kaynağın YORUMSUZ sürümünü PUT et.
+     → 200 gelirse: suçlu yorumlardadır (kod değil). Bu adım atlanırsa
+       yanlış hipotez kovalanır (tip/isim/boyut — bkz. §24.6 confound listesi).
+2. N yorum bloğunu TEK TEK geri koyup PUT et (her turda bir blok).
+     → 400 veren bloklar suçludur; konumlarına bak, deseni oradan oku.
+```
+
+Bu, "hangi satır" bilgisi vermeyen her `400`/save-scan reddinde uygulanabilir; §24.6'nın bisect'i
+**kod** için ne ise bu da **yorum** için odur.
+
+**⚠ YEREL GATE'LERİN HİÇBİRİ YAKALAMIYOR (ölçüldü 2026-07-31):** `run_review.py` **PASS** ·
+abaplint **temiz** → SAP **400**. Yani "reviewer geçti" bu tuzağa karşı hiçbir şey söylemez;
+hata yalnız canlı PUT'ta çıkar.
+> **Ön-kapı adayı (henüz YOK — gate değil):** `ENDMETHOD.`/`IMPLEMENTATION.` ↔ yorum ↔ `METHOD`
+> üçlüsünü push'tan ÖNCE tarayan deterministik bir script yazılabilir. ADR 0019 gate-moratoryumu
+> gereği **önce bu doküman + BE-10b denenir**; yetmediği ölçülürse açık onayla gate'lenir.
+
+📌 İlgili: `claude/memory-seed/feedback_detached-leading-abapdoc-class-push-400.md` (yetim-yorum
+teşhisi) · BE-10b.
+
+---
+
 ## 20. ABAP Class — Inline Data / OSQLC Tip Çakışması
 
 ### 25.1 `%_##OSQLC_1` / `%_##OSQLC_2` Çakışması

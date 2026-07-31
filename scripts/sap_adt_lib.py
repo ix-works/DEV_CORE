@@ -2928,17 +2928,27 @@ class SAPADTClient:
         return lock_context()
 
     def syntax_check_via_activation(self, object_name, object_url):
-        """Check syntax using SAP ADT activation endpoint in pre-audit mode.
+        """Check syntax via the SAP ADT activation endpoint (preaudit mode requested).
 
-        This performs a syntax check without actually activating the object.
+        !! NOT READ-ONLY. Real semantics: "activate if clean."
+
+        Measured on this system (2026-07-31): 'preauditRequested=true' is NOT
+        honoured. When the object has a pending INACTIVE version that compiles
+        cleanly, this call ACTIVATES it -- 'adt_inactive_objects' went 1 -> 0 and
+        the '?version=active' source became identical to the pushed source. When
+        the pending version has errors, nothing is activated ("Activation was
+        cancelled") and the errors are returned. So 'activationExecuted' is NOT
+        reliably false here; do not treat this call as side-effect free.
+
+        Note the request carries only the object NAME/URI -- no source is sent.
+        SAP activates whatever version is pending server-side, so calling this
+        while an activation is being deliberately held back (co-activation order,
+        def/impl include pairs) reorders that activation.
+
+        Callers: treat this as a WRITE operation (single-writer / gateway only).
 
         Returns:
             dict with 'valid' (bool), 'errors' (list), 'warnings' (list)
-
-        Note:
-            Uses the activation endpoint with pre-audit mode which checks
-            syntax but does not activate. The response format is the same
-            as activate_object() but activationExecuted will be false.
         """
         # Determine object type from URL
         object_type = self._extract_object_type(object_url)
@@ -2955,7 +2965,8 @@ class SAPADTClient:
             'application/vnd.sap.adt.objectactivation.result.v1+xml'
         )
 
-        # Use preaudit mode - checks syntax but does NOT activate
+        # Preaudit is REQUESTED but not honoured here (measured 2026-07-31):
+        # a clean pending version gets ACTIVATED. See docstring.
         response = self._request_with_csrf_retry(
             'post', f"{self.url}/sap/bc/adt/activation",
             headers=headers,
