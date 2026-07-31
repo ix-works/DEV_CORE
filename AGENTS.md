@@ -1,3 +1,11 @@
+> ⛔ **SUPERSEDED (2026-08-01, D1 — denetim):** Bu dosya EMEKLİDİR ve hiçbir oturumda
+> otomatik yüklenmez (harness AGENTS.md okumaz — resmî). Tekil-değerli içerik taşındı:
+> davranış → `CLAUDE.core.md` §1.1 · SAP-protokol/teyit/yerleşim → `claude/rules/sap-source-protokolu.md`
+> · UI DONE-CRITERIA (ADR 0017) → `claude/rules/ui5-freestyle.md` · ADT-altyapı kapsamı → `MAINTENANCE.md`
+> · 'YAPILAMAZ-sorgula' → `governance/agent-teams-operating-model.md` · TITLE-suffix → `standards/01` ·
+> `--cwd` uyarısı → `playbook/adt-foundation.md`. Kalan metin TARİHÇEDİR — güncel kabul etme
+> (bilinen bayatlar: çıplak `git checkout -b`, hardcoded TR — düzeltilmiş halleri hedef dosyalarda).
+
 # AGENTS.md — <PROJECT_NAME> AI Agent Davranış Kuralları (L1)
 
 > Bu dosya **L1 katman**: AI agent'ın her oturumda nasıl davranması gerektiğini tanımlar. Detay kurallar (kodlama, naming, doc format, ADT pattern) ayrı dosyalarda — referanslar aşağıda.

@@ -1,4 +1,4 @@
-<!-- uretim: 2026-08-01T00:06:33+03:00 · core-commit: 58cb595 — bilgi satiri; tazelik kiyasinda yok sayilir -->
+<!-- uretim: 2026-08-01T00:18:28+03:00 · core-commit: caacea2 — bilgi satiri; tazelik kiyasinda yok sayilir -->
 <!-- URETILMIS DOSYA — elle duzenleme. Uretici: core/scripts/build_core_index.py
      Tazelik gate'i: core/scripts/validators/check_core_index_fresh.py -->
 
