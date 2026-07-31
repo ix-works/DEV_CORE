@@ -201,7 +201,9 @@ TASK_CHECKLISTS = {
 # (yoksa "unrecognized arguments" → crash → sahte BLOCKER). Gate korunur: check yine
 # repo-geneli (yeni artifact da ERP içinde olduğundan kapsanır) çalışır + gate'ler.
 REPO_WIDE_SCANNERS = {
-    'check_amdp_comment_apostrophe.py',
+    # (T1.12, 2026-07-31: check_amdp_comment_apostrophe ÇIKARILDI — artık pozisyonel
+    #  tek-artifact kabul ediyor; push-anı yalnız push edilen dosyayı tarar, repo-geneli
+    #  tarama run_all+CI katmanında sürer. Boş küme meşru — mekanizma yeni üye için durur.)
 }
 
 
