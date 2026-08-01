@@ -74,6 +74,23 @@ def lessons_kayitlari(lessons: Path) -> list[dict]:
     return out
 
 
+def howto_kayitlari(playbook: Path) -> list[dict]:
+    """howto-*.md dosyalarindan H1 baslik + ilk anlamli satir (radar-adopt 2026-08-01 eki)."""
+    out = []
+    for f in sorted(playbook.glob("howto-*.md")):
+        t = f.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r"^#\s+(.+)$", t, re.M)
+        if not m:
+            continue
+        baslik = m.group(1).strip()[:120]
+        m2 = re.search(r"^>?\s*\*\*Tetik:\*\*\s*(.+)$", t, re.M) or              re.search(r"^>?\s*\*\*(?:Ne|Problem[^:]*):\*\*\s*(.+)$", t, re.M)
+        oz = (m2.group(1) if m2 else "")[:200]
+        out.append({"id": f"how:{f.name}", "kaynak": f"core/playbook/{f.name}",
+                    "baslik": baslik, "oz": oz,
+                    "anahtar": tokenle(baslik) * 3 + tokenle(oz) * 2})
+    return out
+
+
 def main() -> int:
     proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     mem_dir = Path.home() / ".claude" / "projects"
@@ -89,6 +106,7 @@ def main() -> int:
     if memory_md:
         kayitlar += memory_kayitlari(memory_md)
     kayitlar += lessons_kayitlari(proj / "core" / "playbook" / "lessons-learned.md")
+    kayitlar += howto_kayitlari(proj / "core" / "playbook")
 
     hedef = proj / ".tmp" / "recall-index.json"
     hedef.parent.mkdir(parents=True, exist_ok=True)

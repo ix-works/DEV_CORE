@@ -102,6 +102,8 @@ applies_to: [s4_private]
 
 > **AKTİVASYON-ONLY uyarısı (BE-21..25):** Bu beş tuzak run_review/abaplint'i GEÇER, yalnız SAP `bactivate`/`adt_syntax_check`'te çıkar (çünkü RAP-context + released-obje + sistem-yetenek gerektirir). Yerel build'de "run_review PASS" ≠ aktive olur. Build'de obje SAP'de yoksa: ÖNCE bu beşini elle tara (özellikle RAP behavior pool yazarken). | HIGH | — | — |
 
+| BE-66 | **Kapsam-dışı İNFRA değişikliği:** diff'te görev-kapsamı DIŞINDA paylaşılan-altyapı dosyası (hook/validator/script/checklist/rules/şablon) değişmiş mi? Değiştiyse: howto-infra-fix EXPRESS-kriterlerini (mekanik+tek-nokta+testli+GEVŞETMESİZ, ayrı-commit) karşılıyor mu — yoksa KUYRUĞA mı gitmeliydi? Kural-GEVŞETMESİ varsa ⚠GEVŞETME bayrağı+kullanıcı-onayı izi aranır. | HIGH | — | howto-infra-fix-proseduru (2026-08-01) |
+
 > **TİP:** Her madde **HATA** (kod/obje yanlış) veya **EKSİK** (çalışıyor ama must-do karşılanmamış — ör. BE-11 audit-fill, BE-18 recon-implemente-değil) tipindedir → Bug_Expert `[HATA]`/`[EKSİK]` etiketler; ikisi de zorunlu. Checklist-DIŞI fikir = `[ÖNERİ]` (bağlayıcı değil).
 > **Pre-existing AYRI:** değişimle ilgisiz kritik = ayrı işaretle, bloklama. **Tahmin YASAK:** her bulgu canlı obje/syntax/readback ile doğrulanır.
 

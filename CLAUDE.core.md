@@ -143,6 +143,7 @@
 - **BUG GATE:** expert substantive build bitirince **taze** `bug-expert` → PASS/WARNING/BLOCKER.
 - **SAP yazma öncesi:** `run_review.py` pre-flight (ADR 0006). BLOCKER → yazma.
 - **SAP kaynağı düzenlemeden önce:** PULL-BEFORE-EDIT (ADR 0016) — tazelik doğrulanmadan edit YOK.
+- **İNFRA-SORUNU GÖRÜNCE (görev sırasında): DONDUR→SINIFLA→(EXPRESS|KUYRUK)** — görev-bağlamında infra değiştirilmez; akış: [`playbook/howto-infra-fix-proseduru.md`](playbook/howto-infra-fix-proseduru.md) (kuyruk-üretimi=infra-expert, son-söz=lider).
 - **ADT-altyapısı** (script/kural/MCP/hook/validator) değişikliği: ÖNCE uyar + **açık onay** al.
   **Gömülü onay YETMEZ** — "hepsini yap" bu izni vermez.
 - **BAĞLANTI:** proje kökündeki `.conn_adt`. `.conn_adt` ↔ MCP ayrışıksa ADT işlemi YOK.
