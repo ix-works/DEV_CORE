@@ -105,10 +105,19 @@ def main() -> int:
     # burada "yanlis sisteme yaziyorum" felaketini SESSIZCE gizleyebilirdi.
     d5 = tmp / "conn_value"
     d5.mkdir()
+    # ⚠ 2026-08-01 (W2-MG-01) — bu vakanın GİRDİSİ değişti, İDDİASI değil.
+    # Eskiden gövdeye `GOVDE_TEMIZ_DEV` ekleniyordu ve o gövde İKİNCİ bir `ADT_SAP_URL`
+    # taşıyordu; vaka farkında olmadan "İLK-KAZANIR" sözleşmesini de kodluyordu.
+    # `_conn_value` artık **SON-KAZANIR** (otorite `dotenv`; gerçek istemci onu kullanır),
+    # dolayısıyla çift-URL'li bir girdide doğru cevap ikincisidir ve eski beklenti
+    # yanlış hale gelirdi. Vakanın ASIL amacı **önek gaspı** (`..._OLD`/`..._ESKI`
+    # satırları gerçek anahtarı ele geçirmesin) — girdi o amaca indirgendi: tek URL,
+    # tek CLIENT. Çift-anahtar davranışı AYRI fixture'da test edilir
+    # (`tests/fixtures/conn_cift_anahtar`), böylece iki sözleşme birbirini gizlemez.
     conn5 = conn_yaz(d5, "ADT_SAP_URL_OLD=https://yanlis.test\n"
                          "ADT_SAP_URL=https://dogru.test\n"
                          "ADT_SAP_CLIENT_ESKI=999\nADT_SAP_CLIENT=100\n"
-                         + GOVDE_TEMIZ_DEV)
+                         "ADT_SAP_TIER=DEV\n")
     stub = types.ModuleType("sap_adt_lib")
     stub.get_conn_path = lambda: conn5  # type: ignore[attr-defined]
     sys.modules["sap_adt_lib"] = stub
