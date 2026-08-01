@@ -48,6 +48,38 @@ CUKY_DTELS = {'waers', 'waerk', 'hwaer'}
 UNIT_DTELS = {'meins', 'vrkme', 'gewei', 'voleh', 'lager', 'unit'}
 
 
+def yorumu_kirp(line: str) -> str:
+    """Satır-sonu `//` yorumunu kırpar — TIRNAK İÇİ `//` KORUNUR.
+
+    NEDEN (2026-08-01 bug-avı, V1): alan deseni `;\\s*$` ile ANCHOR'lı; gerçek DDL'de
+    yaygın olan `netwr : netwr;  // tutar` satırı desene UYMAZ → alan hiç kaydedilmez →
+    eksik CURR-annotation ihlali SESSİZCE kaybolur (gate yeşil yanar, "0 alan bulundu"
+    ile "0 ihlal" ayırt edilemez — run_all'ın "dizin-yok → 0 dosya → OK" sınıfının
+    satır-içi ikizi).
+
+    Aynı sınıfın ikinci yüzü annotation DEĞERİdir: `@Semantics.amount.currencyCode :
+    'ztab.waers'  // para birimi` satırında değer `ztab.waers' // para birimi` olarak
+    okunuyor, `split('.')[-1]` → `waers' // para birimi` → "CUKY tabloda yok" YANLIŞ-
+    POZİTİF'i basılıyordu. Tek kırpma iki yüzü birden kapatır.
+
+    Tırnak-duyarlılık ZORUNLU: `@EndUserText.label : 'http://x'` gibi meşru değerler
+    kırpılırsa annotation bozulur (kaba `split('//')` bu FP'yi üretir).
+    """
+    q = None
+    i, n = 0, len(line)
+    while i < n:
+        c = line[i]
+        if q is not None:
+            if c == q:
+                q = None
+        elif c in "'\"":
+            q = c
+        elif c == '/' and i + 1 < n and line[i + 1] == '/':
+            return line[:i]
+        i += 1
+    return line
+
+
 def parse_source(text: str, src_type: str) -> dict:
     """Source'tan field listesi + annotation'ları çıkar.
 
@@ -73,7 +105,10 @@ def parse_source(text: str, src_type: str) -> dict:
 
     annotation_pattern = re.compile(r'^\s*@(\S+)\s*:\s*(.+?)\s*$')
 
-    for i, line in enumerate(lines, 1):
+    for i, raw_line in enumerate(lines, 1):
+        # Satır-sonu yorumu ÖNCE kırpılır: hem alan deseninin `;$` anchor'ını kurtarır
+        # hem de annotation değerinin sonuna yorum metni bulaşmasını engeller.
+        line = yorumu_kirp(raw_line)
         anno_m = annotation_pattern.match(line)
         if anno_m:
             pending_annotations.append((anno_m.group(1), anno_m.group(2)))
@@ -202,7 +237,10 @@ def check_cds(text: str) -> list[dict]:
 
     # CDS'te basit pattern: @Semantics.amount.currencyCode arıyoruz,
     # değeri qualified mi?
-    for i, line in enumerate(lines, 1):
+    for i, raw_line in enumerate(lines, 1):
+        # YORUMLANMIŞ annotation kontrol edilmez (aynı sınıfın CDS yüzü): `// @Semantics...`
+        # satırı canlı kural DEĞİLDİR; kırpılmazsa ölü metin üzerinden WARNING üretilir.
+        line = yorumu_kirp(raw_line)
         m = re.search(r"@Semantics\.amount\.currencyCode\s*:\s*'([^']+)'", line)
         if m:
             val = m.group(1)

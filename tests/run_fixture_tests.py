@@ -87,6 +87,13 @@ OZEL_TESTLER = [
     ("proje_slug_tek_kaynak", "Claude Code proje-slug'i: tek sozlesme, tek kaynak (S4)"),
     ("git_sorgu_sessiz_bos", "deploy_ui --all-changed: git arizasi != 'degisiklik yok' (S5)"),
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
+    # 2026-08-01 kuyruk-turu (validator ailesi, V1-V6):
+    ("cds_curr_satir_yorumu", "CURR/QUAN: satir-sonu // yorumu alani/degeri gizliyordu (V1)"),
+    ("paket_uzanti_kapsami", "paket naming + paket-siniri: .bdef/.srvd allow-list'te YOKTU (V2)"),
+    ("itg_alan_dolulugu", "ITG S2: bos sablon + [x] BLOCKER gate'ini geciyordu (V3)"),
+    ("gitignore_tam_satir", "core-sizinti kilidi: yorumlu/negatif satir 'kilit var' saniliyordu (V4)"),
+    ("proje_koku_varyantlari", "__file__-koku: glob/joinpath/str-concat/transitive kaciyordu (V5)"),
+    ("ui5_t1_tirnak_sinifi", "UI5 T1: template-literal `_X` tirnak sinifindan kaciyordu (V6)"),
 ]
 
 
