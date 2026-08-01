@@ -45,6 +45,30 @@ OBJECT_TYPE_TO_TASK = {
     "dtel": None,             # dtel_update validators not defined yet
     "msag": None,
     "prog": None,
+    # ── 2026-08-01 adversarial bug-avı (W2-MCPT-03 / MG-02) ────────────────────────
+    # SINIF: push katmanı tip EŞANLAMLILARINI kabul ediyor (`_TYPE_KEY_CANON` +
+    # `_ACTIVATION_URI_SEG`), bu harita ise yalnız kanonik adları tanıyordu. Eksik
+    # anahtar → `.get()` None → pre-flight SESSİZCE atlanır. Ölçüldü: aynı objeye
+    # `object_type="ddls"` ile push → BLOCKER + RED; `"cds"`/`"cdsview"`/`"ddl"` ile
+    # push → SKIP + GEÇTİ. Aynı asimetri `tabl` ↔ `table`/`structure`'da vardı ve
+    # ORADA sonucu daha ağır: `table_update` zinciri `check_table_field_drop`
+    # (VERİ-KAYBI BLOCKER'ı) taşır → `"table"` yazımıyla o guard hiç koşmuyordu.
+    #
+    # ⛔ AYRIM: "eksik anahtar" ≠ "bilinçli None". Eksik = sessiz atlama (bug).
+    # Explicit None = kayda geçmiş karar (zincir henüz yok). Bu yüzden aşağıdaki
+    # tipler DEĞER olarak yazıldı; hangisi olursa olsun ARTIK BEYAN EDİLMİŞ durumda.
+    # Tazeliği `tests/fixtures/reviewer_tip_kapsam` zorlar: push'un kabul ettiği HER
+    # tip burada açıkça bulunmalı — yeni tip eklenip burası unutulursa test KIRILIR.
+    "cds": "cds_update", "cdsview": "cds_update", "ddl": "cds_update",
+    "table": "table_update", "structure": "table_update",
+    "interface": None, "intf": None,          # interface push zinciri tanımlı değil
+    "program": None,                          # `prog` ile aynı (zincir yok)
+    "dcl": None, "accesscontrol": None,       # ACM zinciri yok
+    "ddlx": None, "metadataextension": None,  # MDE zinciri yok
+    "domain": None, "dataelement": None,      # doma/dtel eşanlamlıları
+    "include": None, "prog/i": None,          # klasik include (ana programla gelir)
+    "srvb": None, "servicebinding": None,     # publish yolu ayrı
+    "tabletype": None,
 }
 
 # Composite tool name → task for its created object.
