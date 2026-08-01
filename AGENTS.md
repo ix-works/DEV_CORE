@@ -48,7 +48,7 @@
 
 - ❌ **Transport request yaratma** (yeni TR açma)
 - ❌ **Transport request release etme** (var olanı kapama)
-- ❌ **Package yaratma** (SE21 veya `core/scripts/create_package.py` çalıştırma)
+- ❌ **Package yaratma** (SE21/ADT ya da paket yaratan herhangi bir script — `create_package.py` 2026-08-01'de silindi, geri eklenmez)
 - ❌ Username/enqueue **lock silme**
 - ❌ **System change option** değiştirme
 

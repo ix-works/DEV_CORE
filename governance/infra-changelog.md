@@ -82,6 +82,10 @@ Test-senaryosu: (1) suite 25/25 (2) MUTASYON M2b: baglam SARTINI kaldir -> NEGAT
 | 2026-08-01 | Uc-degerli mantik onarimi (_version_exists + _classify + _exit_kodu) | AV-13: `and`->`or` hatasi nedeniyle biri-None digeri-False -> PHANTOM ("silinmis") -> --discard-phantoms gercek WIP objeyi discard ediyordu (VERI KAYBI); ters yon (True,None)->STALE -> commit-gate sahte-YESIL. Alt katman: `status==200` sunucu arizasini "yok" sayiyordu | 9 siniflama + 9 durum-kodu + cikis-kodu vektoru; mutasyon M4/M5/M6 | tests/fixtures/av13_worklist_classify | core#74 |
 Test-senaryosu: (1) suite 24/24 (2) MUTASYON: `_classify` `or`->`and` -> exit 1 (3) CIKTI-BUTUNLUGU: suite ciktisi >=22 satir olmali; 6 satira duserse worklist_audit'in import-ani stdout devralmasi geri gelmistir (sayac yine "24/24" der - SAYIYA degil SATIRLARA bak).
 
+## scripts/create_package.py (SILINDI)
+| 2026-08-01 | Script SILINDI + 3 atif mekanizma diline cevrildi | Bug-avi E2: tek isi SAP paketi yaratmak = ADR 0005-C yasagi. `check_package.py` paket yoksa kullaniciya 'create_package.py kullan' diye YAZDIRIYORDU — yani yasagi cigneme talimati araciimizin kendi ciktisindaydi. Kullanici karari: ajan paket yaratmamali | KIRIK-REFERANS SUPURMESI: import eden yok (0) · check_package.py compile+--help OK ve paket-yok dali artik operatore yonlendiriyor · MCP'de paket yaratan tool YOK · sap_adt_lib/sap_client'ta `create_package` metodu YOK · compileall OK · run_fixture_tests 27/27 | — | core#77 |
+Test-senaryosu: (1) `grep -rn create_package` -> yalniz 3 tarihsel not (silindigini soyleyenler) (2) `python scripts/check_package.py --help` -> exit 0 (3) paket-yok dali metninde 'create_package' GECMEMELI (4) MCP tool listesinde paket yaratan tool ARANMALI ve BULUNMAMALI.
+
 ---
 
 # GEÇMİŞ BACKFILL (2026-07-08 → 07-31) — infra-expert arkeolojisi 2026-08-01

@@ -4,8 +4,9 @@
 
 This script checks if a package exists in the SAP system via ADT.
 
-To create a package, use create_package.py:
-    python create_package.py --name ZSD000_T --description "ZSD000 Types" --super-package ZSD000 --transport IEDK934921 --cwd /path
+Paket YARATMA burada YOK ve olmayacak: ADR 0005-C paket yaratmayi YASAKLAR.
+Paket yoksa OPERATORE bildir (SE21/SE80 ile o yaratir); AI paket yaratmaz, yaratan
+bir script'i de calistirmaz. (2026-08-01: `create_package.py` bu nedenle SILINDI.)
 
 Usage:
     python check_package.py --name ZSD000_T --cwd /path/to/project
@@ -160,8 +161,8 @@ def main():
         else:
             print(f"[INFO] Package {result['package']} does not exist")
             print("")
-            print("To create this package, use create_package.py:")
-            print(f"  python create_package.py --name {result['package']} --description \"Description\" --super-package PARENT --transport TR12345 --cwd /path")
+            print("ADR 0005-C: paket yaratmak AI'a YASAKTIR. Operatore bildir:")
+            print(f"  SE21/SE80 ile '{result['package']}' paketini yaratmasini iste")
 
     return 0 if result['exists'] else 1
 
