@@ -86,6 +86,54 @@ def test_public_repo_heredoc_YAKALANIR():
         _geri_al()
 
 
+def test_KUMELENMIS_kisa_bayrak_YAKALANIR():
+    """AV-16 (2026-08-01 adversarial bug-avi): `git commit -am` gate'i ATLIYORDU.
+
+    Kok: mesaj cikarici lookbehind'i (`(?<![\\w-])-m`) KUMELENMIS kisa bayragin
+    (`-am`, `-qam`) icindeki `m`'yi reddediyordu -> mesaj HIC cikarilmadi -> taranacak
+    metin yok -> gate bos dondu. "Metin bulunamadi" ile "metin temiz" ayni sonuca
+    (GEC) dusuyordu. Kontrol grubu: ayni icerikle `-m` exit 2 veriyordu.
+    """
+    _kur(True)
+    try:
+        for cmd in (f"cd /c/core && git commit -am 'fix {_SENTINEL}'",
+                    f"cd /c/core && git commit -qam '{_SENTINEL}'",
+                    f"cd /c/core && git commit -m'{_SENTINEL}'",
+                    f"cd /c/core && git commit --message='{_SENTINEL}'",
+                    f"git -C /c/core commit -am '{_SENTINEL}'"):
+            assert G._git_commit_public_leak(cmd, cmd) != "", \
+                f"kumelenmis/uzun bayrak bicimi YAKALANMADI: {cmd}"
+    finally:
+        _geri_al()
+
+
+def test_UZUN_file_bayragi_YAKALANIR():
+    """AV-17: `--file` git'in uzun bicimidir; cikarici yalniz `-F`yi taniyordu."""
+    _kur(True)
+    try:
+        for cmd in ("cd /c/core && git commit --file=yok-boyle.txt",
+                    "cd /c/core && git commit --file yok-boyle.txt"):
+            sonuc = G._git_commit_public_leak(cmd, cmd)
+            assert sonuc != "" and "FAIL-CLOSED" in sonuc, \
+                f"--file okunamadigi halde gecti (fail-open!): {cmd} -> {sonuc!r}"
+    finally:
+        _geri_al()
+
+
+def test_git_DISI_kumelenmis_am_BLOKLANMAZ():
+    """FP ekseni: `-am` bir kara-liste dizgesi DEGILDIR — git DISI komutta gecerse
+    dokunulmaz. Sikilastirmanin bedeli mesru komutlari bloklamak OLMAMALI."""
+    _kur(True)
+    try:
+        for cmd in (f"grep -am 3 '{_SENTINEL}' dosya.txt",
+                    f"tar -am -cf arsiv.tar {_SENTINEL}/",
+                    f"echo 'git commit -am {_SENTINEL}'"):
+            assert G._git_commit_public_leak(cmd, cmd) == "", \
+                f"git DISI baglamda bloklandi (yanlis-pozitif): {cmd}"
+    finally:
+        _geri_al()
+
+
 def test_coklu_m_bayragi_hepsi_taranir():
     """`-m ... -m ...` — IKINCI mesaj da taranmali (baslik temiz, govde sizdirir)."""
     _kur(True)

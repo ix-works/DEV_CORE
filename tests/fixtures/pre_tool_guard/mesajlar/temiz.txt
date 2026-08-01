@@ -1,0 +1,3 @@
+fix(tooling): jenerik commit mesaji, hicbir kimlik izi yok
+
+Co-Authored-By: Bot

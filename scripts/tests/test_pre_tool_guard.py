@@ -217,6 +217,17 @@ hedef = [
     ("gh api user -q .login",                        0, "C: repo-hedefsiz (user)"),
     ("gh api graphql -f query=x",                    0, "C: repo-hedefsiz (graphql)"),
     ("gh api rate_limit",                            0, "C: repo-hedefsiz (rate_limit)"),
+    # ZINCIR (2026-08-01 bug-avi AV-18): hedef-aciklik KOMUTUN TAMAMINDA degil,
+    # HER MUTASYON SEGMENTININ KENDISINDE aranir. Eskiden komutun herhangi bir
+    # yerindeki (hatta salt-okuma bir komuttaki) `--repo`, sonraki HEDEFSIZ
+    # mutasyonu serbest birakiyordu -> canli repro: exit 0.
+    ("gh repo view --repo org/x && gh pr create -t t -b b", 1, "ZINCIR: hedef onceki komutta"),
+    ("gh issue list --repo org/x ; gh secret set FOO", 1, "ZINCIR: ; ayraci"),
+    ("gh pr list --repo org/x | head -3 && gh pr merge 12 --squash", 1, "ZINCIR: boru"),
+    ("gh repo view org/x && gh repo edit --visibility public", 1, "ZINCIR: konumsal hedef odunc"),
+    ("gh pr create --repo org/x -t a -b b && gh pr comment 1 --repo org/x --body ok",
+     0, "MESRU ZINCIR: her mutasyonun KENDI hedefi acik"),
+    ("cd core && gh pr create --repo org/x -t a -b b", 0, "MESRU: cd oneki + hedef acik"),
     # okuma + capa
     ("gh pr list --limit 5",                         0, "okuma: pr list"),
     ("gh pr view 12 --json state",                   0, "okuma: pr view"),
