@@ -51,6 +51,14 @@ source: deep-research (4 paralel subagent, 2026-06-14) — Anthropic/Cognition/L
 
 **Bounded-standing GUARDRAIL (eski model-B echo/kirlenme çöpüne dönme — Alt-B çok-dar):** (1) aynı anda **EN FAZLA 1** feature-expert standing (backend VEYA frontend) + gateway; gerisi lazy. (2) feature bitince/idle'da **zorunlu yık**. (3) **echo-reset tetiği:** ajan bayat-bağlam gösterirse (eski feature/obje adı, çözülmüş bug'a benzetme) → lider kill+taze re-spawn. (4) şüphede lazy. *bounded-standing ≠ standing-roster: tek, aktif, sınırlı, echo-korumalı.*
 
+**PLAN-ARTIFACT (radar 2026-08-01, ADOPT-2 — kullanıcı onaylı):** Çok-adımlı ve
+geri-alınamaz/maliyetli SAP zincirlerinde (örn. domain→DTEL→struct→tablo→CDS→BDEF; toplu
+silme; transport'a çok-objeli yazım) lider, dispatch'ten ÖNCE planı `.tmp/plan-<konu>.md`
+dosyasına yazar (adımlar + obje listesi + geri-alma notu) ve kullanıcı/oturum onayından
+geçirir. "Kararları önce topla" kuralının kalıcı-artefakt hali: RESUME kopmasında plan
+dosyadan rekonstrükte edilir; adım-fail'de baştan değil kalınan adımdan devam edilir.
+Tek-obje/S0 işlerde ZORUNLU DEĞİL (bürokrasi üretme).
+
 **P7 boşta-bekletme kuralı (2026-07-31 denetim ölçümü — 292 transcript):** ajan duvar-saatinin
 **%33'ü** "liderden yeni mesaj bekleyen" boşta ajanlardı. Kural: ajandan FİNAL raporu alınınca
 (bounded-standing gateway hariç) ajanı beklemede TUTMA — sonraki iş YENİ taze spawn'dır
