@@ -814,13 +814,43 @@ def _binding_mismatch() -> tuple:
     return (differ, cur_sys or ch or "?", mcp_sys or mh or "?")
 
 
+def _sozluk(x) -> dict:
+    """Payload'ı güvenli sözlüğe indirger (2026-08-01 bug-avı, W2-VH-01).
+
+    ÖLÇÜLDÜ: `json.load` sarılıydı ama SONRASI girdinin dict/str olduğunu VARSAYIYORDU.
+    10 bozuk payload'ın **6'sında** uncaught `AttributeError` → exit 1 + traceback
+    (`null`, `[]`, `"str"`, `42`, `tool_name:123`, `file_path:123`). Sözleşme exit **2**
+    = blok olduğu için exit 1 "blokladı" DEĞİLDİR: guard'ın 9 kuralı da o çağrıda
+    devre dışı kalır. Kontrol grubu aynı koşumda sağlamdı (hedefsiz `gh` → exit 2,
+    `ls` → exit 0) ve `config_change_guard` 10/10 bozuk girdide ÇÖKMEDİ — yani bu bir
+    ortam artefaktı değil, savunmasız giriş işlemesiydi.
+
+    Politika: çözülemeyen/şekilsiz girdi = **inceleyecek bir şey yok** → kurallar boş
+    girdi görür ve serbest bırakır. Bu, `json.load` hatasındaki mevcut `return 0`
+    politikasıyla TUTARLIDIR; şekilsiz payload'da bloklamak harness tuhaflığında
+    oturumu kilitlerdi. Asıl kazanç: ÇÖKME yok → diğer alanlar hâlâ denetlenir
+    (ör. `file_path` bozuk ama `command` geçerliyse komut yine taranır).
+    """
+    return x if isinstance(x, dict) else {}
+
+
+def _metin(x) -> str:
+    """Alanı güvenli metne indirger — sayı/None/liste gelirse çökmek yerine taranabilir kıl."""
+    if isinstance(x, str):
+        return x
+    if x is None or isinstance(x, (dict, list)):
+        return ""
+    return str(x)
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
     except Exception:
         return 0
+    data = _sozluk(data)
 
-    tool_name = data.get("tool_name", "") or ""
+    tool_name = _metin(data.get("tool_name", ""))
 
     if tool_name in _SAP_YAZMA_TOOLLARI:
         sorun = _yasaklar_damga_sorunu()
@@ -842,18 +872,17 @@ def main() -> int:
                 "sisteme gider. İŞLEM REDDEDİLDİ. DUR → kullanıcı '/mcp' ile yeniden bağlansın.\n")
             return 2
 
-    ti = data.get("tool_input", {}) or {}
-    ham = ""
-    if isinstance(ti, dict):
-        ham = ti.get("command", "") or json.dumps(ti, ensure_ascii=False)
+    ti_ham = data.get("tool_input", {})
+    ti = _sozluk(ti_ham)
+    if ti:
+        ham = _metin(ti.get("command", "")) or json.dumps(ti, ensure_ascii=False)
     else:
-        ham = str(ti)
+        # dict DEĞİL (liste/str/sayı/None): metne indir, yine de tara — çökme YOK.
+        ham = "" if ti_ham is None else _metin(ti_ham) or json.dumps(ti_ham, ensure_ascii=False, default=str)
 
     komut = _komut_govdesi(ham) if tool_name in _KABUK_TOOLLARI else ham
 
-    dosya_hedefi = ""
-    if isinstance(ti, dict):
-        dosya_hedefi = ti.get("file_path", "") or ti.get("notebook_path", "") or ""
+    dosya_hedefi = _metin(ti.get("file_path", "")) or _metin(ti.get("notebook_path", ""))
 
     if tool_name in _KABUK_TOOLLARI or tool_name in _ABAP_TOOLLARI:
         abap = tool_name in _ABAP_TOOLLARI

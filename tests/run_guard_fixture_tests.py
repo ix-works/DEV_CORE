@@ -134,9 +134,17 @@ def _yerlestir(x):
 
 
 def _cagir(vaka: dict, guard: Path = None) -> tuple:
-    payload = json.dumps({"tool_name": vaka["tool_name"],
-                          "tool_input": _yerlestir(vaka["tool_input"])},
-                         ensure_ascii=False)
+    if "ham_payload" in vaka:
+        # SEKILSIZ payload vakalari (2026-08-01 W2-VH-01): guard'in stdin'ine
+        # dict OLMAYAN ya da alan-tipleri yanlis bir govde verilir. Deger `null`/liste/
+        # sayi/string olabilecegi icin normal {tool_name, tool_input} kalibi KULLANILAMAZ.
+        # `"__HAM__"` ozel degeri: JSON bile olmayan ham metin (bos govde / kesik json).
+        h = vaka["ham_payload"]
+        payload = h if isinstance(h, str) and vaka.get("ham_metin") else json.dumps(h, ensure_ascii=False)
+    else:
+        payload = json.dumps({"tool_name": vaka["tool_name"],
+                              "tool_input": _yerlestir(vaka["tool_input"])},
+                             ensure_ascii=False)
     env, cwd = dict(os.environ), None
     env.pop("IX_GENERICIZE_BLOCKLIST", None)
     if vaka.get("proje_koku"):
