@@ -82,7 +82,9 @@ Substantive iş bitince (CDS/BDEF/behavior/class mantığı; trivial değil), **
 2. **Niyet/spec:** ne yapmalıydı
 3. **Blast-radius:** neye dokunuyor (where-used: çağıran CDS/class/BDEF; released-ref; tablo alan; lock/etag)
 + kendi self-verify kanıtın (**abaplint** / `adt_atc_check` / `adt_where_used`).
-⛔ `adt_syntax_check` **kullanma** — tool'un YOK (kaldırıldı) ve salt-okunur değil (yukarı bak).
+⛔ `adt_syntax_check` **kullanma** — **senin tool listende YOK** (bilinçli olarak verilmedi) ve
+salt-okunur DEĞİL (yukarı bak). ⚠ Düzeltme 2026-08-01: tool sistemden *kaldırılmadı*, hâlâ CANLI ve
+yalnız **adt-gateway**'e açık; "kaldırıldı" demek yanlış beyandı (bug avı W2, doküman↔gerçeklik ayrışması).
 Canlı syntax kararı **gateway**'in; sen yerel kanıtı (abaplint) üretirsin.
 Lider verdict'i toplar: **PASS** → lider commit/kabul. **BLOCKER/HATA/EKSİK (kanıtlı)** → lider seni `SendMessage` ile yeniden devreye alır → **ZORUNLU FİX** (builder takdiri değil; ADR 0018). "Gerçek ihlal mi" şüphesi → kanıtla itiraz, ender belirsizlikte lider hakem. Sonuç her durumda lider'de toplanır.
 

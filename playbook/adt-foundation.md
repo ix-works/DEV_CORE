@@ -700,3 +700,19 @@ for token in ['CreateDeliveryAddress', 'CreateDeliveryAddressResult', 'AddressTe
 
 **⚠️ `populate_*.py` çağrılarında `--cwd` argümanı VERME.** Bash'ten path geçerken backslash escape bozulur (`C:\IX\<PROJECT_NAME>` → script'te `C:IX<PROJECT_NAME>` olur, yanlış path). CWD zaten doğru olduğu için argüman gereksiz.
 - Bağlantı testi: `GET /sap/bc/adt/discovery` + `auth=(user, pw)`, `headers={'sap-client':'100','X-CSRF-Token':'Fetch'}`, `verify=False`
+
+## `deploy_common_package.py` — ortak paketi (ZSD000_CLC) toplu deploy
+
+> **Ne zaman:** ortak paketin içeriğini (value-help CDS'leri · ekran-üreteç FUGR/FM ·
+> ALV template program'ları) bağımlılık sırasıyla SAP'ye taşırken. Tek tek push yerine
+> bu script sırayı garanti eder.
+
+```bash
+python core/scripts/deploy_common_package.py --dry-run           # once PLANI gor (SAP'ye dokunmaz)
+python core/scripts/deploy_common_package.py --transport <TR>
+```
+- ⛔ **PAKET YARATMAZ** (ADR 0005-C): paket SAP'de yoksa operatöre yarattır, script onu yapmaz.
+- RFC-enable etmez: FM'i SE37'den "Remote-Enabled" işaretlemek elle bir adımdır (adt-fugr §3).
+- **Doğrulama:** deploy sonrası her obje için `adt_get` readback — "activated" mesajı kanıt değildir.
+- 2026-08-01 bug-avı notu: çağrılmayan/belgesiz script'ti; ölü-kod taramasında incelendi ve
+  **paket yaratmadığı için SİLİNMEDİ**, belgelendi (T9).
