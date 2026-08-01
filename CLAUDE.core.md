@@ -316,6 +316,7 @@ analizi + canlı-test → PR.
 | Mimari kararlar (ADR) | [`governance/decisions/`](governance/decisions/) |
 | **Yeni proje açılışı** | [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) *(E3'te gözden geçirilir)* |
 | **Canlı-çekirdek işletimi** (PR/CI/stable/rollback) | [`MAINTENANCE.md`](MAINTENANCE.md) |
+| **Sistem-denetimi runbook'u** (dönemsel derin tur; kullanıcı bu dosyayı vererek ister) | [`playbook/howto-sistem-denetimi.md`](playbook/howto-sistem-denetimi.md) |
 | Agent teams işletim modeli | [`governance/agent-teams-operating-model.md`](governance/agent-teams-operating-model.md) |
 | Kurulu plugin envanteri | [`governance/tooling-plugins.md`](governance/tooling-plugins.md) |
 | Ekip/proje kurulumu | `python core/scripts/team_setup.py` · yeni proje: `core/scripts/init_project.py` |
