@@ -93,10 +93,19 @@ def howto_kayitlari(playbook: Path) -> list[dict]:
 
 def main() -> int:
     proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
-    mem_dir = Path.home() / ".claude" / "projects"
-    # Proje-kökünden memory dizinini çöz (harness şeması: C--<yol-kebap>)
+    # Memory dizini ÖNCE deterministik slug'dan çözülür (TEK KAYNAK, KAYIT S4); ancak
+    # bulunamazsa eski "ada göre en taze eşleşme" sezgisi KORUNUR (recall fail-open'dır,
+    # indeks üretememek sessiz bir kayıptır). ⚠ Sezginin son çaresi "en taze HERHANGİ
+    # proje"dir → BAŞKA bir projenin hafızası bu projenin recall indeksine girebilir;
+    # deterministik yol o riski normal durumda tümden kaldırır.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from utils.claude_paths import auto_memory_dizini, claude_projects_dir
+    mem_dir = claude_projects_dir()
     memory_md = None
-    if mem_dir.is_dir():
+    kanonik = auto_memory_dizini(proj) / "MEMORY.md"
+    if kanonik.is_file():
+        memory_md = kanonik
+    elif mem_dir.is_dir():
         aday = sorted(mem_dir.glob("*/memory/MEMORY.md"),
                       key=lambda p: p.stat().st_mtime, reverse=True)
         # proje adı geçen en taze eşleşme; yoksa en taze

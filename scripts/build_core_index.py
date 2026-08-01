@@ -42,7 +42,23 @@ PROJ = project_root()
 HEDEF = PROJ / "governance" / "CORE-INDEX.md"
 
 # Taranan core alanları (metodoloji). scripts/ ve mcp_servers/ dışarıda: kod, doküman değil.
+# ÖZYİNELİ alanlar (alt dizinler dahil):
 ALANLAR = ["playbook", "standards", "profiles", "governance/decisions"]
+
+# DÜZ alanlar (YALNIZ o dizinin kendi *.md'si; alt dizinleri AYRI bölümde listelenir).
+# 2026-08-01 (KAYIT S3): `core/governance/` düz dosyaları indekse HİÇ girmiyordu — yalnız
+# `governance/decisions` taranıyordu. Görünmeyenler arasında `infra-changelog.md` ve
+# `infra-test-recipes.md` de vardı: yani infra-expert'in F0'da okumak ZORUNDA olduğu iki
+# dosya, junction-körlüğünü kapatmak için var olan artefaktın kendisinde YOKTU
+# (agent-teams-operating-model / tooling-plugins / tooling-radar / removed-controls da öyle).
+# `rglob` ile "governance" eklemek decisions'ı ÇİFTLERDİ → düz tarama.
+DUZ_ALANLAR = ["governance"]
+
+# İndekse ALINMAYAN üretilmiş dosyalar (CORE-göreli posix yol).
+# CORE-INDEX.md'nin kendisi üretilmiş bir indekstir: DEV_CORE kendi kendisinin projesi
+# olduğunda (PROJ == CORE) indeks KENDİNİ listeler; projeden bakınca da ajanı core'un
+# kendi indeksine yönlendirir = gürültü + özyineli referans.
+HARIC = {"governance/CORE-INDEX.md"}
 
 BASLIK = """<!-- URETILMIS DOSYA — elle duzenleme. Uretici: core/scripts/build_core_index.py
      Tazelik gate'i: core/scripts/validators/check_core_index_fresh.py -->
@@ -72,14 +88,19 @@ def _ozet(p: Path) -> str:
     return m.group(1).strip() if m else ""
 
 
+def _dosyalar(alan: str, ozyineli: bool) -> list[Path]:
+    d = CORE / alan
+    if not d.is_dir():
+        return []
+    ham = d.rglob("*.md") if ozyineli else d.glob("*.md")
+    return sorted(f for f in ham if f.relative_to(CORE).as_posix() not in HARIC)
+
+
 def uret() -> str:
     satirlar = [BASLIK]
     toplam = 0
-    for alan in ALANLAR:
-        d = CORE / alan
-        if not d.is_dir():
-            continue
-        dosyalar = sorted(d.rglob("*.md"))
+    for alan, ozyineli in ([(a, True) for a in ALANLAR] + [(a, False) for a in DUZ_ALANLAR]):
+        dosyalar = _dosyalar(alan, ozyineli)
         if not dosyalar:
             continue
         satirlar.append(f"\n## `core/{alan}/` ({len(dosyalar)} dosya)\n")

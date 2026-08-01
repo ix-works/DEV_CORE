@@ -179,18 +179,38 @@ def deploy_one(app: str, ui_root: Path, conn, env: dict, dry: bool, verify_only:
     return (app, True, f"{ok_note} sha={local_hash[:12]}, BSP={bsp}")
 
 
-def changed_apps(ui_root: Path) -> list:
-    """git status'a göre webapp/ altı değişen app'ler (uncommitted + son commit)."""
-    rc, out = run(f'git -C "{REPO}" diff --name-only HEAD~1 HEAD', REPO, os.environ.copy())
-    rc2, out2 = run(f'git -C "{REPO}" status --porcelain', REPO, os.environ.copy())
+def changed_apps(ui_root: Path) -> tuple[list, list]:
+    """git'e göre webapp/ altı değişen app'ler → (app_listesi, hatalar).
+
+    ⛔ 2026-08-01 (KAYIT S5): eskiden git ÇIKIŞ KODLARI hiç kontrol edilmiyordu ve yalnız
+    `list` dönüyordu. `HEAD~1` çözülemeyen bir ağaçta (tek-commit'lik repo, `--depth 1`
+    shallow clone, detached/köksüz durum) git **exit 128 + stderr'e "fatal:"** verir; o
+    çıktıda hiçbir yol satırı olmadığı için küme BOŞ kalır ve çağıran bunu "değişen app
+    yok" diye okuyup **exit 0 ile sessizce hiçbir şey deploy etmez.** Yani ARAÇ ARIZASI ile
+    İŞ YOKLUĞU ayırt edilemiyordu (ölçüldü: tek-commit'lik sentetik repoda rc=128 → `[]`).
+    Artık hata AYRI dönüyor: çağıran "boş liste"yi ancak git'in ikisi de BAŞARILIYSA
+    'gerçekten değişiklik yok' diye okuyabilir.
+    """
+    hatalar: list[str] = []
+    bloklar = []
+    for etiket, komut in (
+        ("son commit farkı (HEAD~1..HEAD)", f'git -C "{REPO}" diff --name-only HEAD~1 HEAD'),
+        ("çalışma ağacı (status)", f'git -C "{REPO}" status --porcelain'),
+    ):
+        rc, out = run(komut, REPO, os.environ.copy())
+        if rc != 0:
+            hatalar.append(f"{etiket}: git rc={rc} — {out.strip().splitlines()[0] if out.strip() else '(çıktı yok)'}")
+            continue
+        bloklar.append(out)
+
     names = set()
     rel = ui_root.relative_to(REPO).as_posix()
-    for block in (out, out2):
+    for block in bloklar:
         for line in block.splitlines():
             m = re.search(re.escape(rel) + r"/([^/]+)/webapp/", line.replace("\\", "/"))
             if m:
                 names.add(m.group(1))
-    return sorted(names)
+    return sorted(names), hatalar
 
 
 def main() -> int:
@@ -221,7 +241,17 @@ def main() -> int:
                       if d.is_dir() and d.name != "node_modules" and bsp_name(d))
         print(f"[i] --all → {len(apps)} deployable app: {', '.join(apps)}")
     else:
-        apps = changed_apps(ui_root)
+        apps, git_hatalari = changed_apps(ui_root)
+        if git_hatalari:
+            # "Sorgu çalışmadı" ≠ "değişiklik yok". Sessizce 0 dönmek, deploy'u ATLAYIP
+            # başarılı görünmektir (KAYIT S5). Fail-closed: sebebi söyle, alternatifi ver.
+            print("[FAIL] --all-changed: git sorgusu BAŞARISIZ — 'değişen app yok' SONUCU "
+                  "ÇIKARILAMAZ:", file=sys.stderr)
+            for h in git_hatalari:
+                print(f"        · {h}", file=sys.stderr)
+            print("        (tek-commit'lik repo / shallow clone `--depth 1` / git ağacı yok?)\n"
+                  "        Açık liste ver: --app <ad> | --apps a,b | --all", file=sys.stderr)
+            return 1
         if not apps:
             print("[i] git'e göre webapp değişen app yok — deploy edilecek bir şey yok.")
             return 0

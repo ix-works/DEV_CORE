@@ -41,10 +41,12 @@ IDLE_ESIK_SN = 600
 
 
 def _varsayilan_dizin() -> Path:
-    # Claude Code proje-slug'i: mutlak yolun ayirac/':' karakterleri '-' olur.
-    cwd = str(Path.cwd().resolve())
-    slug = cwd.replace(":", "-").replace("\\", "-").replace("/", "-")
-    return Path.home() / ".claude" / "projects" / slug
+    # ⛔ 2026-08-01 KAYIT S4: burasi da ALT CIZGIYI KORUYORDU; Claude Code alt cizgiyi de
+    # '-' yapar (4/4 transcript olcumu). Alt cizgili proje yolunda var-olmayan dizin ->
+    # rapor SESSIZCE bos. Slug TEK KAYNAK: utils/claude_paths.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from utils.claude_paths import transcript_dizini
+    return transcript_dizini(Path.cwd().resolve())
 
 
 def _pts(s: str) -> float:

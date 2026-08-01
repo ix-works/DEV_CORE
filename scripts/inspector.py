@@ -377,11 +377,17 @@ def a4_baseline(proj: Path, satirlar: list[dict]) -> list[Bulgu]:
 # ── Transcript — önceki oturumda hangi dosyalar okundu ──────────────────────────
 
 def _onceki_transcript(proj: Path, bu_oturum: str | None) -> Path | None:
-    kok = Path.home() / ".claude" / "projects"
+    # ⛔ 2026-08-01 KAYIT S4: buradaki slug ALT ÇİZGİYİ KORUYORDU (`:`/`\`/`/` → `-`).
+    # Claude Code alt çizgiyi de `-` yapar (4/4 transcript ölçümü, utils/claude_paths).
+    # Yani `C:\IX\DEV_CORE` gibi ALT ÇİZGİLİ her projede burası var-olmayan bir dizini
+    # gösteriyor, ada-göre-benzerlik fallback'ine düşüyordu (yanlış projenin transcript'i
+    # ile eşleşme riski). Slug TEK KAYNAK'tan gelir.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from utils.claude_paths import claude_projects_dir, transcript_dizini
+    kok = claude_projects_dir()
     if not kok.is_dir():
         return None
-    slug = str(proj).replace(":", "-").replace("\\", "-").replace("/", "-")
-    d = kok / slug
+    d = transcript_dizini(proj)
     if not d.is_dir():
         adaylar = [x for x in kok.iterdir() if x.is_dir() and proj.name.lower() in x.name.lower()]
         if not adaylar:
