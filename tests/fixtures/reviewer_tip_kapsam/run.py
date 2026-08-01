@@ -47,22 +47,51 @@ def _yukle(rel: str, ad: str):
     return m
 
 
-def main() -> int:
-    rv = _yukle("mcp_servers/sap_adt/_reviewer.py", "rv_fx")
-    # atom `_app`/`_reviewer` import eder; tablolari METIN olarak degil MODUL olarak almak
-    # icin paket yolu gerekir. Import zinciri kurulamazsa SESSIZ GECME yerine FAIL.
-    try:
-        atom = _yukle("mcp_servers/sap_adt/tools/atom.py", "atom_fx")
-    except Exception as exc:                            # pragma: no cover
-        print(f"  [FAIL] atom yuklenemedi (sessiz gecme YOK): {exc}")
-        return 1
+def _sabitler(rel: str, adlar: set[str]) -> dict:
+    """Modul-duzeyi sabitleri IMPORT ETMEDEN, AST ile oku.
 
-    harita = rv.OBJECT_TYPE_TO_TASK
+    Neden import degil: `atom.py` MCP SDK'sini (`mcp` paketi) ceker; CI'da o paket YOK
+    ve fixture "ModuleNotFoundError" ile FAIL veriyordu (2026-08-01 CI, PR #80). Bu
+    dogru davranisti — sessiz gecmedi — ama testi CI'da kosulamaz kiliyordu. Ayrica
+    import, MCP sunucusunu ayaga kaldirip yan-etki/log uretiyordu. AST ile okumak hem
+    bagimliliksiz hem yan-etkisiz: bu test TABLOLARIN ICERIGINI karsilastirir, calisma
+    zamani davranisini degil.
+    """
+    import ast
+    agac = ast.parse((REPO / rel).read_text(encoding="utf-8"))
+    out: dict = {}
+    for d in agac.body:
+        if isinstance(d, ast.Assign) and len(d.targets) == 1:
+            t = d.targets[0]
+            if isinstance(t, ast.Name) and t.id in adlar:
+                try:
+                    out[t.id] = ast.literal_eval(d.value)
+                except Exception:
+                    pass
+    return out
+
+
+def main() -> int:
+    # Harita da AST ile okunur: `_reviewer` -> `_app` -> `mcp` SDK zinciri CI'da YOK.
+    # Asil iddialar (kapsam + esanlamli esitligi) bagimliliksiz kosar; canli
+    # `task_for_push` kontrolu import edilebiliyorsa EK olarak kosar ve edilemiyorsa
+    # SESSIZ atlanmaz, "KOSULMADI" diye YAZILIR (yesil isik degil, beyan).
+    rv_t = _sabitler("mcp_servers/sap_adt/_reviewer.py", {"OBJECT_TYPE_TO_TASK"})
+    if "OBJECT_TYPE_TO_TASK" not in rv_t:
+        print("  [FAIL] OBJECT_TYPE_TO_TASK AST ile okunamadi")
+        return 1
+    atom_t = _sabitler("mcp_servers/sap_adt/tools/atom.py",
+                       {"_TYPE_KEY_CANON", "_ACTIVATION_URI_SEG",
+                        "_SOURCE_BASED_TYPES", "_DDIC_XML_TYPES"})
+
+    harita = rv_t["OBJECT_TYPE_TO_TASK"]
     kabul: set[str] = set()
-    kabul |= set(getattr(atom, "_TYPE_KEY_CANON", {}).keys())
-    kabul |= set(getattr(atom, "_ACTIVATION_URI_SEG", {}).keys())
-    kabul |= set(getattr(atom, "_SOURCE_BASED_TYPES", set()))
-    kabul |= set(getattr(atom, "_DDIC_XML_TYPES", set()))
+    for ad in ("_TYPE_KEY_CANON", "_ACTIVATION_URI_SEG", "_SOURCE_BASED_TYPES", "_DDIC_XML_TYPES"):
+        v = atom_t.get(ad)
+        if v is None:
+            print(f"  [FAIL] atom tablosu okunamadi: {ad} (sessiz gecme YOK)")
+            return 1
+        kabul |= set(v.keys() if isinstance(v, dict) else v)
 
     if not kabul:
         print("  [FAIL] push tip tablolari BOS okundu — test hicbir sey olcmuyor")
@@ -85,11 +114,20 @@ def main() -> int:
     sonuc.append(("esanlamli esitligi: table/structure == tabl (VERI-KAYBI guard'i)",
                   {harita.get(k) for k in ("table", "structure")} == {harita.get("tabl")},
                   str({k: harita.get(k) for k in ("table", "structure", "tabl")})))
-    # task_for_push gercekten cozuyor mu (harita dogru ama fonksiyon yanlissa yakala)
-    sonuc.append(("task_for_push('table') veri-kaybi zincirini veriyor",
-                  rv.task_for_push("table") == "table_update", str(rv.task_for_push("table"))))
-    sonuc.append(("task_for_push('CDS') buyuk-harfte de cozuluyor",
-                  rv.task_for_push("CDS") == "cds_update", str(rv.task_for_push("CDS"))))
+    # CANLI kontrol (harita dogru ama FONKSIYON yanlissa yakalar). `mcp` SDK'si yoksa
+    # (CI) kosulamaz -> SESSIZ ATLANMAZ, ekrana "KOSULMADI" yazilir ve sonuca DAHIL
+    # EDILMEZ; boylece "yesil" gorunumu bir seyin kosmadigini gizlemez.
+    try:
+        rv = _yukle("mcp_servers/sap_adt/_reviewer.py", "rv_fx")
+        sonuc.append(("CANLI task_for_push('table') veri-kaybi zincirini veriyor",
+                      rv.task_for_push("table") == "table_update", str(rv.task_for_push("table"))))
+        sonuc.append(("CANLI task_for_push('CDS') buyuk-harfte de cozuluyor",
+                      rv.task_for_push("CDS") == "cds_update", str(rv.task_for_push("CDS"))))
+    except Exception as exc:
+        print(f"  [KOSULMADI] canli task_for_push kontrolu — modul yuklenemedi: "
+              f"{type(exc).__name__}: {str(exc)[:60]}")
+        print("              (AST tabanli kapsam iddialari YINE DE kosuldu; bu satir "
+              "bir SINIRIN beyanidir, gecis degil.)")
 
     gecen = sum(1 for _, ok, _ in sonuc if ok)
     for ad, ok, detay in sonuc:
