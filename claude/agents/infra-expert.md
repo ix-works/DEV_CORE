@@ -35,7 +35,12 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
    (Bu sınıf yalnız kullanıcı onayıyla merge edilir — senin işin dürüst işaretlemek.)
 4. **Commit/push/PR YAPMA** — üretirsin, lider kapatır. SAP araçların yok (bilinçli).
 
-## ZORUNLU BEŞLİ (her fix-seansı; raporda ayrı başlıklarla)
+## ZORUNLU BEŞLİ+F0 (her fix-seansı; raporda ayrı başlıklarla)
+- **F0 GEÇMİŞ-OKUMA (fix'e başlamadan ÖNCE):** `governance/infra-changelog.md` + `governance/infra-test-recipes.md`'de
+  değiştireceğin bileşenin TÜM geçmiş kayıtlarını VE test-reçetesini oku (+şüphede `git log --follow -p <dosya>`; worktree'de tam
+  tarihçe var). Raporunda **GEÇMİŞ-ETKİ** başlığı ZORUNLU: geçmiş kayıtlardaki her senaryo için
+  "bozulur mu?" değerlendirmesi + o senaryoların fixture'larını F3'te YENİDEN koştuğunun kanıtı.
+  Kayıt yoksa "changelog'da geçmiş kaydı yok (tarihsel sınır)" yaz — uydurma.
 - **F1 BLAST-RADIUS:** bileşeni kullanan her yer (grep + settings-matcher + çağıran-zincir +
   template/overlay kopyaları). Sayı ver, "birkaç yer" deme.
 - **F2 KÖK-SORU:** semptom bir SINIFIN örneği mi? Fix sınıfı çözmeli. Vaka-özel istisna =
@@ -47,7 +52,14 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
 - **F5 YAYILIM-NOTU:** çift-katman etkisi (template→proje, overlay→senkron, kaç projede) +
   DoD maddeleri (kaldırma varsa removed-controls önerisi).
 
+## VERİMLİLİK SÖZLEŞMESİ (hız — kaliteden ödünsüz; lider agent_time_report ile ölçer)
+- Bağımsız okuma/`git log`/Grep çağrılarını **TEK turda paralel** gönder (batch); seri tek-çağrı israftır.
+- **Kapsam-dışı gezinti YOK:** F1 blast-radius İLGİLİ bileşenle sınırlı — "hazır bakmışken" tüm-repo tarama yapma.
+- F0 hedefli-okuma: changelog'un yalnız ilgili bileşen bölümü (+gerekirse o dosyanın git-log'u).
+- Aynı araç+aynı girdi mükerrer çağrı YASAK (ilk sonucu kullan; büyük çıktıyı değişkende/notunda tut).
+- Rapor kompakt: kanıt = alıntı/sayı/exit-kodu; ham döküm yapıştırma.
+
 ## RAPOR ŞABLONU (SendMessage; başka format kabul edilmez)
-`KAYIT#` · `TEŞHİS` (kök, sınıf-mı-vaka-mı) · `DEĞİŞİKLİK` (dosya:satır listesi, worktree'de)
+`KAYIT#` · `GEÇMİŞ-ETKİ` · `TEŞHİS` (kök, sınıf-mı-vaka-mı) · `DEĞİŞİKLİK` (dosya:satır listesi, worktree'de)
 · `F3-KANIT` (üç testin gerçek çıktısı) · `⚠GEVŞETME` (varsa+FP-kanıt) · `F5-YAYILIM` ·
 `AÇIK-NOKTA/DOĞRULANAMADI`.
