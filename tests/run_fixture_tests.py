@@ -80,6 +80,7 @@ OZEL_TESTLER = [
     # sayisina guvenmenin bedeli: sayaci degil SATIRLARI oku.
     ("adtget_yokluk_kaniti", "BULUNAMADI != YOK: adt_get DDIC dalinda hata <-> yokluk"),
     ("dogrulama_kosamadi", "DOGRULAMA KOSAMADI != DOGRULANDI (5 kayit, tek kok)"),
+    ("veri_yetki_guardlari", "ADR 0011 PII normalizasyonu + guard'siz mutasyon tool'u (K-1/2/3)"),
 ]
 
 

@@ -95,6 +95,18 @@ python scripts/inspector.py --self-test             # canary    [✓]
   `require_writable_tier(None|"")` REDDEDER (ikinci fail-open katmanı geri gelmesin) ·
   UNKNOWN'da hassas-OLMAYAN okuma SERBEST kalır (salt-okuma kısıtlanmaz) · statusline
   tier-yoksa `TIER-YOK RO` gösterir. Yeni tier kaynağı eklersen fixture'a satır ekle.
+- **Veri/yetki guard'ları (ADR 0011 PII + K-2/K-3):** `python tests/fixtures/veri_yetki_guardlari/run.py` → 57/57, exit 0.
+  Değişmezler: hassaslık **normalize aday-kümesinde** ölçülür — `KNA1 AS K` / `kna1 k` /
+  `SAPABAP1.KNA1` / JOIN'li ifade / `T000, KNA1` / `I_Customer` / `V_KNA1` **BLOK** ·
+  alan-seviyesi guard KABLOLU (`columns=STCD1` ve `SELECT stcd1 ...` → BLOK) ·
+  **iki tool aynı kararı verir** (`adt_table_read` ↔ `adt_sql_query` eşdeğerlik satırları —
+  ayrışma bu kusurun köküydü, yeni tool eklersen o listeye satır ekle) ·
+  `adt_syntax_check` PRD/UNKNOWN'da **RED** + standart objede **RED** + özet satırında
+  "read-only" YASAK · `adt_lock_check` çözülemezse `locked: null` (**`false` DEĞİL**).
+  ⚠ FP-çapaları (T000 · `T000 AS T` · ZSD001_T_* · TADIR · DD02L · /SCWM/AQUA · DEV
+  muafiyeti · açık-onay yolu) **omurgadır** — kaldırılırsa guard günlük okumayı bloklar.
+  ⚠ Fixture opsiyonel data_guard API'lerini `dg_cagir()` ile çağırır: doğrudan çağrı eski
+  sürümde AttributeError → koşucu çöker → mutasyon **0 FAIL** gösterir ("çökme ≠ FAIL").
 
 ## B12 — claude_overlay + team_setup + init_project
 - Bayraksız senkron → fark-listesiyle **RED**; yalnız `--overlay-onayli` ezer.
