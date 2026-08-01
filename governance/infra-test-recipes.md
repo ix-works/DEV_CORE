@@ -72,7 +72,19 @@ python scripts/inspector.py --self-test             # canary    [✓]
 
 ## B11 — mcp_servers/sap_adt
 - Offline: `test_csrf_header_injection` + `test_push_readback_mismatch` + `test_search_objects_type_filter` + import-smoke.
-- Profil fail-closed: profil-boz → tools/list yalnız `ping` (s4_private-19 / btp-18 / profilsiz-1; MCP-restart şart).
+- **ÜÇ-DEĞERLİ DOĞRULAMA (2026-08-01):** `python tests/fixtures/dogrulama_kosamadi/run.py` → **32/32**.
+  Değişmezler: silme-readback okunamazsa `delete_verified: null` (**true DEĞİL**) · push readback
+  koşamazsa `readback_verified: null` + `readback_notice` (ama `ok` DÜŞMEZ — aşırı-sıkılaşma çapası) ·
+  bozuk XML'de `where_used`/ATC/inactive **istisna atar** (boş liste = "temiz" DEĞİL) · `csrf`
+  SystemExit ATMAZ (tool `ok:false` döner) · paket-ucu fallback'inde `package_verified:false` +
+  `scope_verified:false`. Kontrol grubu satırları (404→verified true, geçerli-boş XML→[],
+  biçim-farkı→true, nodestructure→verified true) **silinmez**.
+- Profil fail-closed: profil-boz → tools/list yalnız `ping`. ⚠ **Sayı REÇETEDE DONMUŞTU**
+  ("19/18/1" = 2026-07-10 ölçümü; yüzey o gün 19 tool'du). 2026-08-01 ölçümü: **s4_private 30 /
+  btp_abap 29 / profilsiz 1**. Sabit sayıya değil ŞEKLE bak: `s4_private = btp_abap + 1`
+  (`adt_transport_list`) ve profilsiz = yalnız `ping`. ⚠ Ölçüm harness'i: `server.py`'ı import
+  etmek TEK BAŞINA yalnız `ping` verir (`_register_all()` `main()` içinde çağrılır) — bu tuzağa
+  düşülüp "profil matrisi çöktü" sanıldı; doğrusu `import server; server._register_all()`.
 - Varlık-sondası değişmezi: silinmiş-obje → where_used **count-anahtarı DÖNMEZ** (OBJECT_NOT_FOUND).
 - unit_run 0-test görürsen ÖNCE KONTROL-GRUBU (SE24); inactive_objects çıktısında `stale_deleted`+`tadir_check` OLMALI — `FAILED`'da "silinmiş değil" VARSAYMA; ⛔ TADIR-DELFLAG satırları silinmez.
 - struct-create sonrası koşulsuz içerik-verify ("activated" shell'i maskeleyemez).

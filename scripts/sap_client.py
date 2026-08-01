@@ -664,6 +664,7 @@ class SAPClient:
                         uploaded_norm = source_code.strip().replace('\r\n', '\n').replace('\r', '\n')
                         active_norm = active_source.strip().replace('\r\n', '\n').replace('\r', '\n')
                         if uploaded_norm == active_norm:
+                            result['readback_ok'] = True
                             print(f"      [OK] Active source verified - matches uploaded content")
                         else:
                             # Retry once after another second (SAP caching/load balancer delay)
@@ -671,8 +672,11 @@ class SAPClient:
                             active_source = self.adt_client.get_object_source(object_url, return_etag=False, version='active')
                             active_norm = active_source.strip().replace('\r\n', '\n').replace('\r', '\n')
                             if uploaded_norm == active_norm:
+                                result['readback_ok'] = True
                                 print(f"      [OK] Active source verified (after brief delay)")
                             elif readback_farki_yalniz_bicim_mi(uploaded_norm, active_norm):
+                                result['readback_ok'] = True
+                                result['readback_note'] = 'format_only'
                                 print(f"      [WARNING] Active source differs only in whitespace/formatting")
                                 print(f"      [WARNING] Muhtemelen SAP pretty-printing — İÇERİK aynı")
                             else:
@@ -693,7 +697,19 @@ class SAPClient:
                                 print(f"      [HINT] 'activated'/'uploaded' mesajlarına GÜVENME; kanıt readback eşitliğidir")
                                 print(f"      [HINT] Kaynağı sözdizimi açısından gözden geçir, düzeltip yeniden push et")
                     except Exception as verify_err:
+                        # ⛔ "DOĞRULAMA KOŞAMADI = DOĞRULANDI" sınıfı (2026-08-01 bug-avı):
+                        # burada eskiden SADECE bir [INFO] satırı basılıyor, `result`a hiçbir
+                        # işaret konmuyordu. Aşağıdaki success ifadesi `readback_ok` anahtarını
+                        # YOKSA True varsayıyordu → "readback koştu ve TUTTU" ile "readback
+                        # KOŞAMADI" çağıran için AYIRT EDİLEMEZ hale geliyordu (ikisi de
+                        # success:true). Artık üçüncü değer AÇIKÇA yazılır: None = ölçülemedi.
+                        # (success semantiği DEĞİŞMEZ: yalnız False düşürür — bkz. aşağısı.)
+                        result['readback_ok'] = None
+                        result['readback_reason'] = (
+                            f"post-activation readback KOŞAMADI: {type(verify_err).__name__}: "
+                            f"{str(verify_err)[:160]}")
                         print(f"      [INFO] Post-activation verification skipped (could not read active source)")
+                        print(f"      [INFO] readback_ok=None — 'yazım doğrulandı' SANMA (kanıt üretilemedi)")
                         if self.debug_enabled:
                             self._debug(f"[DEBUG] Post-activation verify failed: {str(verify_err)[:100]}")
                 else:
@@ -794,10 +810,15 @@ class SAPClient:
             # KÖK-FIX (2026-07-28): readback İÇERİK uyuşmazlığı da başarısızlıktır.
             # `readback_ok` yalnız gerçek içerik farkında False olur (pretty-print
             # biçim farkı tetiklemez — bkz. readback_farki_yalniz_bicim_mi).
+            # 2026-08-01: `readback_ok` artık ÜÇ-DEĞERLİ (True/False/None). `is not False`
+            # KASITLI: None (= doğrulama koşamadı) push'u DÜŞÜRMEZ — aksi halde her geçici
+            # okuma hatası meşru push'u başarısız gösterirdi (aşırı-sıkılaşma). Bilgi
+            # kaybolmaz: `readback_ok=None` + `readback_reason` yanıtta görünür ve MCP
+            # katmanı bunu `readback_verified: null` + uyarı olarak yüzeye çıkarır.
             result['success'] = (
                 result['source_uploaded']
                 and result['activated']
-                and result.get('readback_ok', True)
+                and result.get('readback_ok') is not False
             )
 
             print(f"\n{'=' * 70}")
@@ -1159,7 +1180,10 @@ class SAPClient:
                         'name': name,
                         'type': obj_type or '',
                         'uri': uri or '',
-                        'description': description
+                        'description': description,
+                        # Paket üyeliği SAP'nin nodestructure ucundan geldi = KANITLI.
+                        'listing_source': 'nodestructure',
+                        'package_verified': True,
                     })
 
             # Strategy 2: ABAP XML format (SEU_ADT_REPOSITORY_OBJ_NODE)
@@ -1199,7 +1223,9 @@ class SAPClient:
                                 'name': name,
                                 'type': obj_type,
                                 'uri': f'/sap/bc/adt/{obj_type.lower().replace("/", "/")}s/{name.lower()}',
-                                'description': description
+                                'description': description,
+                                'listing_source': 'nodestructure',
+                                'package_verified': True,
                             })
 
             if self.debug_enabled:
@@ -1212,9 +1238,21 @@ class SAPClient:
         except Exception as e:
             # Fallback: Use search if nodestructure fails
             # (common issue: missing S_ADT_RES authorizations or inactive ICF services)
+            #
+            # ⛔ "DOĞRULAMA KOŞAMADI = DOĞRULANDI" sınıfı (2026-08-01 bug-avı):
+            # bu fallback PAKET ÜYELİĞİNİ ÖLÇMEZ; yalnız AD DESENİ arar ve desenlerin
+            # ikisi paket adından türetilen GENİŞ jokerlerdir (`Z_*`, ilk-iki-harf `ZS*`).
+            # Yani hata/yetki durumunda dönen liste BAŞKA PAKETLERİN objelerini içerir ve
+            # eskiden bu, gerçek paket içeriğinden AYIRT EDİLEMEZ biçimde dönüyordu
+            # (`adt_grep_source` bunu log'suz tüketiyordu: `with _capture():` notu da yutuyordu).
+            # Fallback KALDIRILMADI (yetkisiz sistemlerde tek yol; veri kaybı olurdu) ama
+            # artık her kayıt `package_verified: False` ile ETİKETLENİR → çağıran "bu paketin
+            # objeleri" iddiasını üstlenmez.
             if self.debug_enabled:
                 self._debug(f"[DEBUG] nodestructure failed: {e}")
             print(f"Note: nodestructure endpoint failed ({str(e)}), using search as fallback")
+            print(f"[WARN] PAKET UYELIGI DOGRULANAMADI — asagidaki liste AD-DESENLI arama "
+                  f"sonucudur ve BASKA PAKETLERIN objelerini icerebilir (package_verified=False)")
             print(f"This is usually due to missing SAP authorizations (S_ADT_RES for /sap/bc/adt/repository/*)\n")
 
             # Search with multiple patterns to catch all objects in package
@@ -1240,6 +1278,10 @@ class SAPClient:
                     # Deduplicate by name
                     name = obj.get('name', '')
                     if name and name not in all_objects:
+                        # DOĞRULANMAMIŞ üyelik etiketi (yukarıdaki not) — çağıran ayırt etsin.
+                        obj = dict(obj)
+                        obj['listing_source'] = 'name_search_fallback'
+                        obj['package_verified'] = False
                         all_objects[name] = obj
 
             objects = list(all_objects.values())
