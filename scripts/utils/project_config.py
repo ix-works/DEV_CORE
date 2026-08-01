@@ -32,7 +32,14 @@ def _yaml_lite(yol: str) -> dict:
         return out
     aktif_liste: str | None = None
     try:
-        for ham in p.read_text(encoding="utf-8", errors="ignore").splitlines():
+        # ⚠ `utf-8-sig` ZORUNLU, `utf-8` DEĞİL (2026-08-01 bug-avı AV-02).
+        # BOM'lu bir project.yaml'da anahtar SİLİNMEZ — ADI BOZULUR: ilk satır
+        # '﻿sap_profile' olur → `cfg("sap_profile")` None döner → MCP profil
+        # katmanı fail-closed'a düşer ve TÜM SAP tool yüzeyi sessizce `ping`e iner
+        # (mcp_servers/sap_adt/_profile.py). Tetikleyici bizim bilinen tuzağımız:
+        # PowerShell ile yazılan dosyaya BOM eklenir (memory: powershell-utf8-bom-trap).
+        # `utf-8-sig` BOM'suz dosyada `utf-8` ile BAYT-EŞ davranır (regresyon riski yok).
+        for ham in p.read_text(encoding="utf-8-sig", errors="ignore").splitlines():
             s = ham.split("#", 1)[0].rstrip()
             if not s.strip():
                 continue

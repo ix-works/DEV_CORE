@@ -76,7 +76,11 @@ def get_active_tier() -> str:
         from sap_adt_lib import get_conn_path  # type: ignore
         p = get_conn_path()
         if p and p.exists():
-            for line in p.read_text(encoding="utf-8").splitlines():
+            # ⚠ `utf-8-sig` (AV-02) + `_conn_line_value` TAM anahtar (KAYIT-1) BİRLİKTE:
+            # BOM'lu dosyada İLK anahtar sessizce kaybolur (`str.strip()` BOM'u SİLMEZ);
+            # tier ilk satırdaysa PRD → eskiden "DEV varsayıldı"ya düşerdi, artık UNKNOWN
+            # olurdu — yani BOM tek başına da korumayı yanlış tarafa çevirebiliyordu.
+            for line in p.read_text(encoding="utf-8-sig").splitlines():
                 t = _normalize_tier(_conn_line_value(line, "ADT_SAP_TIER"))
                 if t:
                     return t
@@ -102,7 +106,7 @@ def _conn_value(key: str, default: str) -> str:
         from sap_adt_lib import get_conn_path  # type: ignore
         p = get_conn_path()
         if p and p.exists():
-            for line in p.read_text(encoding="utf-8").splitlines():
+            for line in p.read_text(encoding="utf-8-sig").splitlines():  # BOM (AV-02)
                 v = _conn_line_value(line, key)  # TAM anahtar (önek-gaspı yok — KAYIT-1)
                 if v:
                     return v
