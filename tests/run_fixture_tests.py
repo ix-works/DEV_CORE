@@ -73,6 +73,8 @@ OZEL_TESTLER = [
     ("reviewer_tip_kapsam", "ADR 0006 pre-flight: push-tipi <-> reviewer haritasi senkronu"),
     ("conn_cift_anahtar", "ADR 0010: cift-anahtarli .conn_adt (guard <-> baglanti ayrismasi)"),
     ("adtget_yokluk_kaniti", "BULUNAMADI != YOK: adt_get DDIC dalinda hata <-> yokluk"),
+    ("aktivasyon_sahte_ok", "HTTP hatasi da KANIT DEGIL: aktivasyon sahte-OK'i"),
+    ("adtget_yokluk_kaniti", "BULUNAMADI != YOK: adt_get DDIC dalinda hata <-> yokluk"),
 ]
 
 

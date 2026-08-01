@@ -192,10 +192,24 @@ def _activation_failures(resp_text):
     import re
     t = resp_text or ""
     m = re.search(r'activationExecuted="(\w+)"', t)
-    # activationExecuted yoksa eski stil yanıt olabilir → severity tabanlı fallback
-    executed = (m.group(1) == "true") if m else ('severity="E"' not in t and 'severity="A"' not in t)
     errs = re.findall(r'type="[EA]"[^>]*>.*?<txt>([^<]+)', t, re.S)
-    return executed, errs
+    if m:
+        return (m.group(1) == "true"), errs
+
+    # ⚠ BAŞARI KANIT İSTER (2026-08-01 bug-avı, W2-MCPT-02).
+    # Eski fallback `'severity="E"' not in t` idi: yani "hata işareti YOKSA başarılı".
+    # Bu, aktivasyon yanıtı OLMAYAN gövdeleri de başarı sayıyordu. Ölçüldü:
+    #   HTTP 500 hata sayfası → executed=True   (aktive edildi der)
+    #   HTTP 403 logon formu  → executed=True
+    #   BOŞ gövde             → executed=True
+    # Üstelik `activate_and_verify` docstring'i "sahte 'OK' imkansiz" diyordu —
+    # doküman davranışı YALANLIYORDU.
+    # Yeni kural: fallback yalnız gövde GERÇEKTEN bir ADT aktivasyon/checklist yanıtına
+    # benziyorsa uygulanır. Tanınmayan gövde = kanıt yok = BAŞARISIZ (fail-closed).
+    adt_yaniti = any(im in t for im in ("chkl:", "<msg", "adtcore:", "<messages"))
+    if not adt_yaniti:
+        return False, (errs or ["aktivasyon yanıtı tanınmadı (gövde ADT yanıtı değil)"])
+    return ('severity="E"' not in t and 'severity="A"' not in t), errs
 
 
 def activate_and_verify(client, tok, refs):
@@ -214,8 +228,16 @@ def activate_and_verify(client, tok, refs):
         headers={"X-CSRF-Token": tok, "Content-Type": "application/xml", "Accept": "application/xml"},
         data=body.encode("utf-8"), verify=False, timeout=120,
     )
-    executed, errs = _activation_failures(r.text)
     names = ", ".join(n for _, n in refs)
+    # ⚠ HTTP DURUM KODU ÖNCE (2026-08-01 bug-avı, W2-MCPT-02). Bu fonksiyon `r.text`'i
+    # ayrıştırıyor ama `r.status_code`'a HİÇ bakmıyordu → 500/403 gövdeleri "aktive edildi"
+    # sayılıyordu (ölçüldü, kontrol grubuyla). Gövde-ayrıştırması İKİNCİ savunma; birincisi
+    # taşıma katmanının kendisidir.
+    if not (200 <= int(getattr(r, "status_code", 0) or 0) < 300):
+        raise RuntimeError(
+            f"AKTİVASYON BAŞARISIZ ({names}): HTTP {getattr(r, 'status_code', '?')} — "
+            f"bu bir aktivasyon yanıtı DEĞİL. Gövde: {(r.text or '')[:200]}")
+    executed, errs = _activation_failures(r.text)
     if not executed or errs:
         raise RuntimeError(
             f"AKTİVASYON BAŞARISIZ ({names}): activationExecuted={executed}; hatalar={errs[:6]}")
