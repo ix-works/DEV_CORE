@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -126,13 +127,38 @@ def _content_readback(client, name: str, object_type: str) -> dict:
 
 
 def _exists_after_delete(client, name: str, object_type: str):
-    """Delete sonrası varlık readback. True=hâlâ var (silme oturmadı) | False=yok | None=bilinemedi."""
+    """Delete sonrası varlık readback → (durum, sebep).
+
+    durum: True = hâlâ var (silme oturmadı) · False = YOKLUĞU KANITLI (silme oturdu)
+           · None = doğrulama KOŞAMADI (iddia yok).
+
+    ⛔ 2026-08-01 bug-avı, "doğrulama koşamadı = doğrulandı" sınıfı: burada eskiden
+    `return md is not None` yazıyordu. `get_object_metadata` HER istisnayı yutup `None`
+    döndürdüğü için (sap_client.py: `except Exception: print("[ERROR]..."); return None`)
+    aşağıdaki `except` dalı bu yolda HİÇ ateşlenmiyordu → HTTP 500 / 403-logon / timeout /
+    bağlantı kopması hepsi `md=None` → `False` → **`delete_verified: True`**. Yani silmenin
+    OTURDUĞUNA dair kanıt üretilemediği durum, "oturdu" diye raporlanıyordu (silme geri
+    alınamaz ve bir sonraki adım bu iddiaya dayanır: yeniden yaratma / TR kapatma).
+    Artık yokluk yalnız KANITLI ise (404 imzası ya da temiz-boş yanıt) beyan edilir.
+    """
+    log_buf = io.StringIO()
     try:
-        with _capture_stdout():   # SAPClient stdout chatter MCP stdio'yu kirletmesin
+        with _capture_stdout() as out:   # SAPClient stdout chatter MCP stdio'yu kirletmesin
             md = client.get_object_metadata(name, object_type=object_type)
-        return md is not None
-    except Exception:  # noqa: BLE001
-        return None  # NotFound/erişilemez → 'yok' iddiası etme; soft
+        log_buf.write(out.getvalue())
+        if md is not None:
+            return True, ""
+        sinif = _bos_sonuc_sinifi(log_buf.getvalue())
+        if sinif == "yok":
+            return False, ""
+        return None, (
+            f"Silme sonrası varlık readback KOŞAMADI ({sinif}) — obje okunamadı ve sebep "
+            f"BULUNAMADI-DEĞİL bir hata. Bu 'silindi' KANITI DEĞİLDİR; SE80/adt_get ile "
+            f"elle teyit et. Log: {log_buf.getvalue().strip()[:200]}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        # NotFound/erişilemez → 'yok' iddiası etme; soft
+        return None, f"Silme sonrası varlık readback yapılamadı ({type(exc).__name__}: {exc})."
 
 
 def _get_client():
@@ -348,14 +374,51 @@ _NO_DIRECT_READ_HINT = {
 }
 
 
+def _bos_sonuc_sinifi(log_text: str) -> str:
+    """Alt katmanın YUTTUĞU boş sonucu ÜÇ-DEĞERLİ sınıflandır.
+
+    Döner: `"yok"` (yokluk KANITLI) · `"ulasilamadi"` (ağ/erişim) · `"belirsiz"`
+    (hata var ama yokluk imzası YOK — ör. HTTP 500/403).
+
+    ⛔ SINIF-KURALI (2026-08-01 bug-avı, "doğrulama koşamadı = doğrulandı"):
+    `sap_client` katmanındaki okuyucular (`get_ddic_object`, `get_object_metadata`, ...)
+    HER istisnayı yutup `None` döndürür ve sebebi yalnız stdout'a `[ERROR] ...` diye basar.
+    Bu yüzden üst kattaki `except` dalları o yollarda HİÇ ateşlenmez; `None`'ı doğrudan
+    "obje yok" saymak, "sunucu patladı"yı "yok"la AYNI cevaba düşürür. Kanıt tek yerden
+    üretilsin diye sınıflandırma bu TEK fonksiyonda toplandı; `adt_get` (DDIC + klasik),
+    delete-readback ve lock-probe aynı kaynağı kullanır.
+
+    Kanıt kaynağı: `SAPADTError.__str__` = `"[<status>] <mesaj>"` → durum kodu log'a
+    DÜŞER. 404 = yokluk kanıtı; 4xx/5xx = kanıt DEĞİL.
+    """
+    lt = log_text or ""
+    if any(m in lt for m in _UNREACHABLE_MARKERS):
+        return "ulasilamadi"
+    dusuk = lt.lower()
+    kodlar = set(re.findall(r"\[(\d{3})\]", lt))
+    if kodlar - {"404"}:            # 500/403/502... → yokluk BEYAN EDİLMEZ
+        return "belirsiz"
+    if "404" in kodlar:
+        return "yok"
+    yokluk_imzasi = any(s in dusuk for s in
+                        ("not found", "notfound", "404", "does not exist",
+                         "bulunamadı", "bulunamadi"))
+    hata_izi = "[error]" in dusuk
+    if hata_izi and not yokluk_imzasi:
+        return "belirsiz"
+    # Temiz-boş yanıt (hata izi yok) ya da kesin bulunamadı imzası.
+    return "yok"
+
+
 def _miss_or_unreachable(name: str, object_type: str, log_text: str) -> dict:
     """Boş sonucu SINIFLANDIR: gerçekten 'obje yok' mu, yoksa 'ulaşamadım' mı?
 
     exists:false yalnızca SAP'ye ULAŞILDIĞI ve objenin gerçekten bulunmadığı
     durumda döner. Ağ/erişim izi varsa ok:false + unreachable döner -- çağıran
-    bunu "yok" diye okuyamasın.
+    bunu "yok" diye okuyamasın. (Sınıflandırma: `_bos_sonuc_sinifi`.)
     """
-    if any(m in (log_text or "") for m in _UNREACHABLE_MARKERS):
+    _sinif = _bos_sonuc_sinifi(log_text)
+    if _sinif == "ulasilamadi":
         return {
             "ok": False,
             "error": "unreachable",
@@ -375,11 +438,7 @@ def _miss_or_unreachable(name: str, object_type: str, log_text: str) -> dict:
     # Politika: log'da bir HATA izi varsa ve o iz KESİN bir bulunamadı imzası DEĞİLSE,
     # yokluk BEYAN EDİLMEZ → `ok:false` + belirsiz. Temiz-boş yanıt (hata izi yok) eskisi
     # gibi `exists:false` kalır; 404 imzası da öyle (kontrol grubu bunu doğrular).
-    lt = (log_text or "")
-    hata_izi = "[ERROR]" in lt or "[error]" in lt
-    yokluk_imzasi = any(s in lt.lower() for s in
-                        ("not found", "notfound", "404", "does not exist", "bulunamadı"))
-    if hata_izi and not yokluk_imzasi:
+    if _sinif == "belirsiz":
         return {
             "ok": False,
             "error": "belirsiz",
@@ -775,6 +834,23 @@ def adt_push_source(
         if reviewer_warn:
             resp["reviewer"] = reviewer_warn
 
+        # ── READBACK GÖRÜNÜRLÜĞÜ (2026-08-01 bug-avı, "doğrulama koşamadı = doğrulandı") ──
+        # `push_object` aktivasyon sonrası AKTİF kaynağı yüklenenle kıyaslar. Bu kıyas
+        # KOŞAMADIĞINDA (okuma hatası / tip kapsam dışı) eskiden yanıtta HİÇBİR iz kalmıyordu
+        # → `ok:true` hem "doğrulandı" hem "doğrulanamadı" anlamına geliyordu. Artık üç değer
+        # AÇIKÇA yüzeye çıkar. Davranış (ok) DEĞİŞMEZ — yalnız görünürlük (reviewer SKIP
+        # görünürlüğüyle aynı desen, 2026-07-31).
+        if isinstance(result, dict):
+            rb = result.get("readback_ok")
+            resp["readback_verified"] = rb if rb in (True, False) else None
+            if resp["readback_verified"] is None:
+                resp["readback_notice"] = (
+                    "READBACK KOŞMADI/ÖLÇÜLEMEDİ — canlı aktif kaynak yüklenenle "
+                    "KIYASLANAMADI. Bu 'yazım doğrulandı' DEĞİLDİR; kritik objede "
+                    "adt_get(version=active) ile elle teyit et. "
+                    + str(result.get("readback_reason", "")).strip()
+                ).strip()
+
         # Aktivasyon-oncesi canli syntax-check (push_object icinde) basarisizsa yuzeye cikar:
         # push upload etti ama AKTIVE ETMEDI -> ok=False + hatalar (gateway net gorsun, nested kalmasin).
         if isinstance(result, dict) and result.get("syntax_precheck") == "failed":
@@ -873,8 +949,9 @@ def adt_delete(
             "client_log": out.getvalue().strip(),
         }
         # Readback-gate: silme GERÇEKTEN oturdu mu — obje hâlâ varsa BLOCKER.
+        # ÜÇ-DEĞERLİ: True/False/None; None ASLA True'ya katlanmaz (bkz. _exists_after_delete).
         if resp["ok"]:
-            still = _exists_after_delete(client, name, object_type)
+            still, sebep = _exists_after_delete(client, name, object_type)
             if still is True:
                 resp["ok"] = False
                 resp["deleted"] = False
@@ -885,7 +962,8 @@ def adt_delete(
                 resp["delete_verified"] = True
             else:
                 resp["delete_verified"] = None
-                resp["delete_reason"] = "Silme sonrası varlık readback yapılamadı (soft; manuel teyit)."
+                resp["delete_reason"] = sebep or (
+                    "Silme sonrası varlık readback yapılamadı (soft; manuel teyit).")
         # _LAST_PUSHED temizliği — silinen objenin bayat push kaydı kalmasın (tüm tip-varyantları).
         for _k in [k for k in _LAST_PUSHED if k[0] == name.upper()]:
             _LAST_PUSHED.pop(_k, None)

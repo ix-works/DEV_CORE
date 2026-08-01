@@ -23,7 +23,7 @@ import urllib3
 from xml.sax.saxutils import escape as xml_escape
 
 sys.path.insert(0, __import__("os").path.dirname(__file__))
-from sap_adt_lib import SAPADTClient
+from sap_adt_lib import SAPADTClient, SAPADTError
 import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
@@ -73,6 +73,17 @@ def verify_active(names_types):
 
 
 def csrf(client):
+    """CSRF token al. Alınamazsa SAPADTError (SystemExit DEĞİL — aşağıdaki nota bak).
+
+    ⛔ 2026-08-01 bug-avı, "doğrulama koşamadı = doğrulandı" sınıfının 4. örneği:
+    burada `raise SystemExit("[FAIL] CSRF alınamadı")` yazıyordu. Bu fonksiyon bir CLI
+    script'inde yaşıyor ama MCP sunucusunun DÖRT tool'u onu KÜTÜPHANE olarak import ediyor
+    (`adt_activate` çoklu-obje + srvb dalları, `adt_publish_service`, `adt_unit_run`).
+    `SystemExit` `BaseException`'dan türer → o tool'ların `except Exception` dalına
+    TAKILMAZ: tool yapılandırılmış `{ok:false,...}` DÖNDÜREMEZ, çağrı sunucu katmanına
+    kaçar. Yani "token alamadım" (= işlemin ÖN KOŞULU sağlanamadı) bir sonuç olarak
+    raporlanamıyordu. CLI davranışı korunur: `__main__` bunu yakalayıp [FAIL] + exit 1 verir.
+    """
     client._invalidate_csrf_cache()
     r = client.session.get(
         client.url + "/sap/bc/adt/discovery",
@@ -81,7 +92,12 @@ def csrf(client):
     )
     tok = r.headers.get("X-CSRF-Token", "")
     if not tok:
-        raise SystemExit("[FAIL] CSRF alınamadı")
+        raise SAPADTError(
+            "CSRF token alınamadı (discovery yanıtında X-CSRF-Token yok) — aktivasyon/"
+            "publish/unit-run ÇALIŞTIRILAMADI. Bu 'başarısız oldu' değil 'hiç koşmadı'dır.",
+            status_code=getattr(r, "status_code", None),
+            response_text=(getattr(r, "text", "") or "")[:300],
+        )
     print(f"[OK] CSRF: {tok[:20]}...")
     return tok
 
@@ -790,4 +806,11 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # csrf() artık SystemExit yerine SAPADTError atıyor (MCP tool'ları onu import ediyor;
+    # SystemExit `except Exception`'a takılmaz). CLI çıktısı/çıkış kodu DEĞİŞMEZ.
+    try:
+        _rc = main()
+    except SAPADTError as _exc:
+        print(f"[FAIL] {_exc}")
+        _rc = 1
+    raise SystemExit(_rc)

@@ -66,22 +66,30 @@ def test_bos_ve_none_cokmez():
 
 
 def test_result_success_readback_ok_false_ile_duser():
-    """push_object'in success ifadesi readback_ok'i hesaba katmali."""
+    """push_object'in success ifadesi readback_ok'i hesaba katmali (UC-DEGERLI).
+
+    2026-08-01: `readback_ok` artik True/False/None. None = "dogrulama KOSAMADI" ->
+    push'u DUSURMEZ (asiri-sikilasma olurdu) ama success'i de dogrulanmis SAYMAZ;
+    ayrim `readback_reason` + MCP `readback_verified` alanindan okunur.
+    """
     for uploaded, activated, readback, beklenen in [
         (True, True, True, True),
-        (True, True, False, False),   # ASIL REGRESYON
+        (True, True, False, False),   # ASIL REGRESYON (2026-07-28)
+        (True, True, None, True),     # olculemedi -> push dusmez (gorunurluk ayri alanda)
         (True, False, True, False),
         (False, True, True, False),
     ]:
         result = {'source_uploaded': uploaded, 'activated': activated, 'readback_ok': readback}
-        success = result['source_uploaded'] and result['activated'] and result.get('readback_ok', True)
+        success = (result['source_uploaded'] and result['activated']
+                   and result.get('readback_ok') is not False)
         assert success is beklenen, f"{result} -> {success}, beklenen {beklenen}"
 
 
 def test_readback_ok_yoksa_varsayilan_true():
     """Geriye donuk uyum: anahtar hic konmadiysa (dogrulama atlandi) push'u dusurme."""
     result = {'source_uploaded': True, 'activated': True}
-    assert (result['source_uploaded'] and result['activated'] and result.get('readback_ok', True)) is True
+    assert (result['source_uploaded'] and result['activated']
+            and result.get('readback_ok') is not False) is True
 
 
 def test_push_yolu_gercekten_kabloludur():
@@ -105,6 +113,17 @@ def test_push_yolu_gercekten_kabloludur():
         "success ifadesi readback_ok'i OKUMUYOR — icerik uyusmazligi push'u dusurmez"
     for zorunlu in ("source_uploaded", "activated"):
         assert zorunlu in ifade, f"success ifadesinde {zorunlu} kayboldu"
+
+    # 2026-08-01 (bug-avi, "dogrulama kosamadi = dogrulandi"): readback OKUNAMADIGINDA
+    # ucuncu deger ACIKCA yazilmali. Yoksa "kostu ve tuttu" ile "hic kosamadi" ayni
+    # cikti (success:true, isaret yok) olur — iki durum cagiran icin AYIRT EDILEMEZ.
+    assert "result['readback_ok'] = None" in src, \
+        "readback KOSAMADI dali readback_ok=None yazmiyor — ucuncu deger kayboldu"
+    # ⚠ HARNESS NOTU: yukaridaki regex `(.*?)\)` NON-GREEDY -> ilk `)`de kesilir ve
+    # `result.get('readback_ok')` parantezinde durur; bu yuzden uc-degerli okumayi
+    # `ifade` uzerinden ARAMA (yanlis FAIL verir). Tam satiri kaynakta ara.
+    assert "and result.get('readback_ok') is not False" in src, \
+        "success ifadesi None'i False'a katliyor (asiri-siki) ya da uc-degerli okumuyor"
 
 
 def main() -> int:

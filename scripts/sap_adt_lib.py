@@ -5937,8 +5937,19 @@ constants:
                             'description': desc
                         })
                     break  # Only first adtObject child per referencedObject
-        except ET.ParseError:
-            pass
+        except ET.ParseError as e:
+            # ⛔ "DOĞRULAMA KOŞAMADI = DOĞRULANDI" sınıfı (2026-08-01 bug-avı).
+            # Eskiden `pass` vardı → ayrıştırılamayan yanıtta BOŞ LİSTE dönüyordu ve
+            # çağıran bunu "bu objenin tüketicisi YOK" diye okuyordu. Where-used'ın tek
+            # kullanım amacı SİLMEDEN/DEĞİŞTİRMEDEN önce etki ölçmek; boş-liste yanlış
+            # okunduğunda sonuç geri alınamaz (orphan-sweep komşuyu siler). Aynı ders
+            # 2026-07-09'da "obje yok ≠ tüketicisi yok" olarak alınmıştı; bu, o dersin
+            # AYRIŞTIRMA katmanındaki ikizi. Boş liste ancak GEÇERLİ ve boş yanıttan üretilir.
+            raise SAPADTError(
+                "Where-used yanıtı AYRIŞTIRILAMADI (bozuk/kısmi XML) — sonuç 'tüketicisi yok' "
+                "DEĞİLDİR. Bu cevaba dayanıp obje SİLME/DEĞİŞTİRME; tekrar ölç.",
+                response_text=(response.text or "")[:500],
+            ) from e
 
         return results
 
@@ -6041,6 +6052,7 @@ constants:
 
         # Extract result worklist ID from run response
         result_worklist_id = worklist_id
+        worklist_parse_fallback = False
         try:
             root = ET.fromstring(response2.text)
             for elem in root.iter():
@@ -6049,7 +6061,12 @@ constants:
                     result_worklist_id = wl_id
                     break
         except ET.ParseError:
-            pass
+            # Burada TANIMLI bir fallback var (ilk worklist_id) → istisna atmıyoruz; ama
+            # SESSİZ de kalmıyoruz: yanlış worklist okunursa sonuç "0 bulgu" = sahte-temiz
+            # olur. İşaret dönüş sözlüğüne konur, MCP katmanı yüzeye çıkarır (2026-08-01).
+            worklist_parse_fallback = True
+            self._debug("ATC run yanıtı ayrıştırılamadı — ilk worklist_id ile devam "
+                        "(sonuç 'temiz' görünürse şüphelen)")
 
         self._debug(f"ATC run completed, result worklist: {result_worklist_id}")
 
@@ -6093,10 +6110,20 @@ constants:
                         'location': attrs.get('location', '') or attrs.get('uri', ''),
                         'checkId': attrs.get('checkId', '') or attrs.get('checkTitle', '')
                     })
-        except ET.ParseError:
-            pass
+        except ET.ParseError as e:
+            # ⛔ Aynı sınıf: ayrıştırılamayan ATC yanıtı eskiden BOŞ findings → "kod TEMİZ"
+            # (Priority-1 zorunluluğu sessizce atlanırdı). Kanıt üretilemediyse temizlik
+            # BEYAN EDİLMEZ.
+            raise SAPADTError(
+                "ATC sonuç yanıtı AYRIŞTIRILAMADI (bozuk/kısmi XML) — sonuç 'temiz' "
+                "DEĞİLDİR (0 bulgu SANMA). ATC'yi tekrar çalıştır.",
+                response_text=(response3.text or "")[:500],
+            ) from e
 
-        return {'findings': findings}
+        out = {'findings': findings}
+        if worklist_parse_fallback:
+            out['worklist_parse_fallback'] = True
+        return out
 
     def get_inactive_objects(self):
         """Get list of inactive objects for current user
@@ -6136,8 +6163,13 @@ constants:
                         'uri': uri,
                         'user': user
                     })
-        except ET.ParseError:
-            pass
+        except ET.ParseError as e:
+            # ⛔ Aynı sınıf: boş liste = "aktive bekleyen obje YOK" = commit/gün-sonu için
+            # sahte-YEŞİL (AV-13'ün kardeşi). Ayrıştırılamadıysa iddia edilmez.
+            raise SAPADTError(
+                "Inactive-objects yanıtı AYRIŞTIRILAMADI — 'bekleyen obje yok' DEĞİLDİR.",
+                response_text=(response.text or "")[:500],
+            ) from e
 
         return results
 

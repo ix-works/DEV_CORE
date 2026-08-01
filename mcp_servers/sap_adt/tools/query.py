@@ -198,6 +198,20 @@ def adt_atc_check(name: str, object_type: str = "class",
             return str((f or {}).get("priority", "")).strip()
         prio1 = [f for f in findings if _prio(f) == "1"]
         prio_other = [f for f in findings if _prio(f) not in ("1", "")]
+        # ATC run yanıtı ayrıştırılamadıysa sonuç worklist'i TAHMİNDİR → "0 bulgu" temizlik
+        # kanıtı sayılamaz (2026-08-01; sessiz fallback görünür kılındı).
+        if isinstance(res, dict) and res.get("worklist_parse_fallback"):
+            return {
+                "ok": False,
+                "error": "belirsiz",
+                "name": name,
+                "type": object_type,
+                "variant": variant,
+                "message": ("ATC run yanıtı ayrıştırılamadı; sonuçlar TAHMİNİ worklist'ten "
+                            "okundu. Bulgu sayısı GÜVENİLİR DEĞİL — 'temiz' sanma, tekrar çalıştır."),
+                "finding_count_unverified": len(findings),
+                "client_log": buf.getvalue().strip(),
+            }
         return {
             "ok": True,
             "name": name,
@@ -263,19 +277,36 @@ def adt_package_contents(package: str) -> dict:
         package: Paket adı (ör. 'ZSD001_CLC').
 
     Returns:
-        {ok, package, count, objects: [{name, type, uri, ...}], client_log}
+        {ok, package, count, objects: [{name, type, uri, package_verified, ...}],
+         package_verified, warning?, client_log}
+
+    ⚠ `package_verified: false` → liste SAP'nin paket-ucu (nodestructure) yerine AD-DESENLİ
+    ARAMA fallback'inden geldi (yetki/ICF hatası). O durumda liste BAŞKA PAKETLERİN
+    objelerini içerebilir; "bu paketin içeriği" diye kullanma (2026-08-01 bug-avı).
     """
     client = _get_client()
     try:
         with _capture() as buf:
             objs = client.list_package_contents(package)
-        return {
+        objs = objs or []
+        dogrulanmis = all(o.get("package_verified") for o in objs if isinstance(o, dict))
+        out = {
             "ok": True,
             "package": package,
             "count": len(objs) if hasattr(objs, "__len__") else 0,
             "objects": objs,
+            "package_verified": bool(dogrulanmis),
             "client_log": buf.getvalue().strip(),
         }
+        if not dogrulanmis:
+            out["warning"] = (
+                "PAKET ÜYELİĞİ DOĞRULANAMADI: SAP'nin paket ucu (nodestructure) hata verdi, "
+                "liste AD-DESENLİ arama fallback'inden geldi (ör. 'Z_*', ilk-iki-harf 'ZS*'). "
+                "Liste BAŞKA PAKETLERİN objelerini içerebilir ve paketin bazı objelerini "
+                "KAÇIRMIŞ olabilir. Silme/etki analizi/envanter kararı bu listeye DAYANDIRILMAZ; "
+                "her objenin paketini adt_get metadata'sından teyit et."
+            )
+        return out
     except Exception as exc:
         return _err_from_exc(exc)
 
@@ -945,6 +976,8 @@ def adt_grep_source(
     wanted = {t.strip().upper() for t in (object_types.split(",") if object_types else []) if t.strip()}
     client = _get_client()
     targets: list = []
+    kapsam_dogrulanmis = True
+    kapsam_log = ""
     try:
         if objects:
             raw = objects.split(",") if isinstance(objects, str) else list(objects)
@@ -955,9 +988,16 @@ def adt_grep_source(
                 else:
                     targets.append((item, "class"))
         elif package:
-            with _capture():
+            # ⚠ Buradaki `_capture()` eskiden buffer'ı ADSIZ tüketiyordu: paket-ucu
+            # başarısız olup ad-desenli fallback'e düşüldüğünde SAP'nin bastığı uyarı
+            # notu da yutuluyordu → grep, BAŞKA PAKETLERİN objelerinde arama yapıp
+            # sonucu "bu pakette" diye sunuyordu (2026-08-01 bug-avı, sessiz-kapsam).
+            with _capture() as _kbuf:
                 objs = client.list_package_contents(package)
-            for o in (objs or []):
+            kapsam_log = _kbuf.getvalue().strip()[-400:]
+            objs = objs or []
+            kapsam_dogrulanmis = all(o.get("package_verified") for o in objs if isinstance(o, dict))
+            for o in objs:
                 pref = (o.get("type") or "").split("/")[0].upper()
                 if wanted and pref not in wanted:
                     continue
@@ -987,9 +1027,20 @@ def adt_grep_source(
                     break
         if hit_cap:
             break
-    return {"ok": True, "pattern": pattern, "scanned_objects": scanned,
-            "match_count": len(matches), "truncated_object_scope": truncated_scope,
-            "truncated_matches": hit_cap, "matches": matches}
+    out = {"ok": True, "pattern": pattern, "scanned_objects": scanned,
+           "match_count": len(matches), "truncated_object_scope": truncated_scope,
+           "truncated_matches": hit_cap, "matches": matches,
+           "scope_verified": bool(kapsam_dogrulanmis)}
+    if not kapsam_dogrulanmis:
+        out["scope_warning"] = (
+            "KAPSAM DOĞRULANMADI: paket içeriği SAP'nin paket ucundan alınamadı, AD-DESENLİ "
+            "arama fallback'i kullanıldı → taranan objeler BAŞKA PAKETLERE ait olabilir ve bu "
+            "paketin bazı objeleri HİÇ taranmamış olabilir. 'bu pakette geçmiyor' sonucunu "
+            "buradan ÇIKARMA (match_count=0 kanıt değildir)."
+        )
+        if kapsam_log:
+            out["scope_log"] = kapsam_log
+    return out
 
 
 # =============================================================================
@@ -1207,6 +1258,26 @@ def adt_lock_check(name: str, object_type: str = "class") -> dict:
     try:
         with _capture() as buf:
             md = client.get_object_metadata(name, object_type=object_type)
+        if md is None:
+            # ⛔ AYNI SINIF (2026-08-01 bug-avı): `get_object_metadata` HER istisnayı yutup
+            # None döner → aşağıdaki `except SAPLockError` dalı bu yolda HİÇ ateşlenmez ve
+            # eskiden `exists: md is not None` + `locked: False` yazılırdı. Sonuç: sunucu
+            # hatası / yetki / kilit-okuma hatası "obje yok VE kilitli değil" diye
+            # raporlanıyordu — kilit probe'unun tek amacı buyken. Yokluk/kilitsizlik ancak
+            # KANIT varsa (404 imzası ya da temiz-boş yanıt) beyan edilir.
+            from mcp_servers.sap_adt.tools.atom import _bos_sonuc_sinifi
+            sinif = _bos_sonuc_sinifi(buf.getvalue())
+            if sinif != "yok":
+                return {
+                    "ok": False,
+                    "error": "unreachable" if sinif == "ulasilamadi" else "belirsiz",
+                    "name": name,
+                    "type": object_type,
+                    "message": ("Kilit/varlık probe'u SONUÇ ÜRETEMEDİ (obje okunamadı, sebep "
+                                "BULUNAMADI-DEĞİL bir hata). Bu 'obje yok' ya da 'kilitli değil' "
+                                "ANLAMINA GELMEZ — yazma kararını buna dayandırma."),
+                    "client_log": buf.getvalue().strip(),
+                }
         return {
             "ok": True,
             "name": name,
