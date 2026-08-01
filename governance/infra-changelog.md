@@ -120,6 +120,7 @@ Test-senaryosu: (1) `python tests/fixtures/adtget_yokluk_kaniti/run.py` -> 6/6 (
 > reposunda (hook doğuşu 2026-06-02 660a5bbf) — repo-sınırı --follow'u kırar, o dönem AYRI tur.
 > Satır: tarih · değişiklik · NEDEN · NASIL-test · sha/PR. (Tam ayrıntı: infra-expert raporu,
 > transcript 2026-08-01; test-reçeteleri aşağıdaki TEST-REÇETELERİ bölümünde.)
+| 2026-08-01 | core-ci `Bagimliliklar` adimina `mcp` eklendi | adtget_yokluk_kaniti fixture'i MCP tool KATMANINI gercekten import edip davranisini olcuyor (stub'li istemci ile); AST ile okunamaz cunku olculen sey calisma-zamani sinifi. Bagimlilik yokken fixture DOGRU davrandi (sessiz atlamadi, FAIL verdi) ama testi CI'da kosulamaz kiliyordu. Kiyas: reviewer_tip_kapsam TABLO icerigi olctugu icin AST'ye cevrildi — olculen sey ne ise cozum o | CI kosumu (PR core#82) | — | core#82 |
 
 ## pre_tool_guard.py
 - 2026-07-08 · 4-katman doğuş + proje-kökü env-first · junction __file__ daima DEV_CORE'a çözülüyordu (yanlış ağaç korunuyordu) · 9-senaryo sentetik · 1ae10b1

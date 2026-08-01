@@ -24,7 +24,11 @@ jobs:
       # DERLER, import etmez) -> eksik bagimlilik gorunmezdi. CSRF regresyon testi
       # sap_adt_lib'i gercekten import ettigi icin artik zorunlu.
       - name: Bagimliliklar
-        run: pip install --quiet requests urllib3 python-dotenv
+        # `mcp` 2026-08-01'de eklendi: bug-avi fixture'lari (adtget_yokluk_kaniti)
+        # MCP tool KATMANINI gercekten import edip davranisini olcuyor; AST ile
+        # okunamaz (calisma-zamani sinifi). Bagimlilik yokken fixture DOGRU davranip
+        # FAIL veriyordu (sessiz atlamadi) ama testi CI'da kosulamaz kiliyordu.
+        run: pip install --quiet requests urllib3 python-dotenv mcp
 
       # D1 (2026-07-10): kimlik blocklist'i `.git/genericize-blocklist`te yasar ve ASLA
       # klonlanmaz -> CI taze klon yaptigi icin liste hic yuklenmiyordu; public repoya
