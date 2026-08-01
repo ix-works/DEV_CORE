@@ -56,6 +56,14 @@ jobs:
       - name: Guard yuzeyi regresyonu (pre_tool_guard)
         run: python scripts/tests/test_pre_tool_guard.py
 
+      # 2026-08-01 (bug-avi AV-16 yan-bulgusu): bu test 2026-07-28'de yazildi ve
+      # infra-changelog'a "test_commit_message_leak_gate (CI)" diye KAYDEDILDI —
+      # ama CI'a hic baglanmamisti. Uc gun sonra ayni gate `git commit -am` ile
+      # atlatildi, hicbir kirmizi isik yanmadi. Kod != kablolama; kosmayan test
+      # gate degildir. Agsiz (monkeypatch'li), ~1sn.
+      - name: Commit-mesaji sizinti gate regresyonu
+        run: python scripts/tests/test_commit_message_leak_gate.py
+
       # CSRF header enjeksiyonu regresyonu (2026-07-28 canli vaka): cagiranlarin cogu
       # header'i `_request_with_csrf_retry`'dan ONCE kuruyor; soguk session'da token
       # o dict'e HIC yazilmiyordu -> istek CSRF'siz gidiyor, bazi ADT uclari 403 yerine

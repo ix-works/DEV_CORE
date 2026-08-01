@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""run_fixture_tests.py — validator bad/good ciftleri (G1/T3.6) + OZEL fixture kosucular.
+"""run_fixture_tests.py — bozuk-girdi (negatif-test) korpuslarinin TEK giris noktasi.
+
+BOLUM 1 — validator bad/good fixture ciftleri (G1/T3.6).
+BOLUM 2 — pre_tool_guard PAYLOAD korpusu (2026-08-01 bug-avi AV-16/17/18/18b/21;
+          detay + mutasyon-testi: tests/run_guard_fixture_tests.py).
+OZEL    — kendi kosucusunu tasiyan fixture'lar (tier_fail_closed, changelog_gate)
+          ayni tabloya raporlanir.
+Hepsi CI'da bu tek komutla kosar (core-ci.yml "Validator fixture testleri").
 
 Her validator icin tests/fixtures/<validator>/{bad,good}/ altinda gercekci bir mini
 "proje koku" bulunur (SOURCE_CODES/... veya docs/...). Bu dizin CLAUDE_PROJECT_DIR
@@ -424,13 +431,32 @@ def main() -> int:
             print(f"    -> {detail.strip(' |')}")
 
     n_pass = sum(1 for r in rows if r[3] == "PASS")
-    print(f"\nvalidator fixture: {n_pass}/{len(rows)} PASS")
+    print(f"\n{n_pass}/{len(rows)} PASS  (bölüm 1: validator bad/good)")
 
+    # ── BÖLÜM 2: regresyon vektörleri (AV-02/03/13 — kütüphane seviyesi) ──
     r_gecen, r_toplam = regresyon_kos()
-    print(f"\nregresyon vektörleri: {r_gecen}/{r_toplam} PASS")
-    print(f"TOPLAM: {n_pass + r_gecen}/{len(rows) + r_toplam} PASS")
+    print(f"\nregresyon vektörleri: {r_gecen}/{r_toplam} PASS  (bölüm 2)")
 
-    return 0 if (all_ok and r_gecen == r_toplam) else 1
+    # ── BÖLÜM 3: pre_tool_guard payload korpusu (AV-16/17/18/18b/21) ──
+    # Ayrı dosyada yaşar (kendi mutasyon-modu var) ama TEK komutla koşsun diye buradan
+    # çağrılır: CI adımı zaten bu dosyayı işaret ediyor; ikinci bir CI adımı eklemek
+    # "kablolamayı unutma" riskini artırırdı (kod ≠ kablolama dersi — bu turda
+    # test_commit_message_leak_gate tam olarak böyle 3 gün kablosuz kalmıştı).
+    sys.path.insert(0, str(HERE))
+    try:
+        from run_guard_fixture_tests import kosum as guard_kosum
+    except Exception as exc:
+        print(f"\n[DOĞRULANAMADI] guard payload korpusu yüklenemedi: {exc}")
+        return 1
+    print("\n" + "-" * 60)
+    print("pre_tool_guard payload korpusu (blok + serbest)")
+    g_gecen, g_toplam, g_hatalar = guard_kosum(sessiz=True)
+    for h in g_hatalar:
+        print(f"  [FAIL] {h}")
+    print(f"{g_gecen}/{g_toplam} PASS  (bölüm 3: guard payload)")
+
+    print(f"\nTOPLAM: {n_pass + r_gecen + g_gecen}/{len(rows) + r_toplam + g_toplam} PASS")
+    return 0 if (all_ok and r_gecen == r_toplam and not g_hatalar) else 1
 
 
 if __name__ == "__main__":

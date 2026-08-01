@@ -1,0 +1,229 @@
+[
+  {
+    "ad": "AV-16 KONTROL: -m (bu hep calisiyordu)",
+    "vaka": "2026-08-01 bug-avi AV-16 kontrol-grubu",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -m 'fix <SENTINEL> icin'"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-16 ATLATMA: -am (kumelenmis kisa bayrak)",
+    "vaka": "2026-08-01 bug-avi AV-16 — canli repro exit 0 idi",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -am 'fix <SENTINEL> icin'"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-16 varyant: -qam (uc harfli kume)",
+    "vaka": "2026-08-01 bug-avi AV-16 sinif-varyanti",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -qam '<SENTINEL>'"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-16 varyant: -m<deger> (bosluksuz)",
+    "vaka": "2026-08-01 bug-avi AV-16 sinif-varyanti",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -m'<SENTINEL> izi'"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-16 varyant: --message=<deger>",
+    "vaka": "2026-08-01 bug-avi AV-16 sinif-varyanti",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit --message='<SENTINEL>'"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-16 varyant: coklu -m (IKINCI govde sizdiriyor)",
+    "vaka": "2026-07-28 commit-mesaji gate + 2026-08-01",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -m 'temiz baslik' -m 'govde <SENTINEL>'"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-16 3.BAGLAM: PowerShell yuzeyinden -am",
+    "vaka": "2026-07-09 PowerShell matcher dersi + AV-16",
+    "tool_name": "PowerShell",
+    "tool_input": {"command": "cd C:/core; git commit -am 'fix <SENTINEL>'"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-16 3.BAGLAM: git -C <yol> commit -am (worktree/coklu repo)",
+    "vaka": "2026-08-01 — ust-seviye -C degerli opsiyon, alt-komut yine bulunmali",
+    "tool_name": "Bash",
+    "tool_input": {"command": "git -C /c/core commit -am '<SENTINEL>'"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-17 KONTROL: -F <okunamayan> (fail-closed)",
+    "vaka": "2026-08-01 bug-avi AV-17 kontrol-grubu",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -F yok-boyle-dosya.txt"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-17 ATLATMA: --file=<kirli dosya>",
+    "vaka": "2026-08-01 bug-avi AV-17 — canli repro exit 0 idi",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit --file=<FIXTURE>/mesajlar/kirli.txt"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-17 ATLATMA: --file <kirli dosya> (bosluklu)",
+    "vaka": "2026-08-01 bug-avi AV-17 sinif-varyanti",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit --file <FIXTURE>/mesajlar/kirli.txt"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-17 varyant: -F <kirli dosya> (okunabilir; icerik taranmali)",
+    "vaka": "2026-08-01 — 'okunamadi' ile 'kirli' AYRI yollardir",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -F <FIXTURE>/mesajlar/kirli.txt"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-17 varyant: --file=- + heredoc (stdin govdesi)",
+    "vaka": "2026-07-28 yasanan vakanin sekli + AV-17 uzun bicim",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -q --file=- <<'EOF'\ndocs: tuzak notu\n\nKaynak: <SENTINEL> kolonu.\nEOF"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-18 KONTROL: hedefsiz gh pr create",
+    "vaka": "2026-07-10 kural-9 dogusu (kontrol-grubu)",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh pr create --title t --body b"},
+    "gorunurluk": "canli",
+    "tarayici": "gercek",
+    "beklenen_imza": "GH HEDEF BELİRSİZ"
+  },
+  {
+    "ad": "AV-18 ATLATMA: && zinciri — hedef ONCEKI (salt-okuma) komutta",
+    "vaka": "2026-08-01 bug-avi AV-18 — canli repro exit 0 idi",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh repo view --repo ix-works/DEV_CORE && gh pr create --title t --body b"},
+    "gorunurluk": "canli",
+    "tarayici": "gercek",
+    "beklenen_imza": "GH HEDEF BELİRSİZ"
+  },
+  {
+    "ad": "AV-18 varyant: ; zinciri + secret set",
+    "vaka": "2026-08-01 bug-avi AV-18 sinif-varyanti",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh issue list --repo ix-works/DEV_CORE ; gh secret set FOO"},
+    "gorunurluk": "canli",
+    "tarayici": "gercek",
+    "beklenen_imza": "GH HEDEF BELİRSİZ"
+  },
+  {
+    "ad": "AV-18 varyant: | boru zinciri + pr merge",
+    "vaka": "2026-08-01 bug-avi AV-18 sinif-varyanti",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh pr list --repo ix-works/DEV_CORE | head -3 && gh pr merge 12 --squash --admin"},
+    "gorunurluk": "canli",
+    "tarayici": "gercek",
+    "beklenen_imza": "GH HEDEF BELİRSİZ"
+  },
+  {
+    "ad": "AV-18 varyant: GRUP-B konumsal hedef ODUNC alinamaz",
+    "vaka": "2026-08-01 — `gh repo edit` cwd'ye duser",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh repo view ix-works/DEV_CORE && gh repo edit --visibility public"},
+    "gorunurluk": "canli",
+    "tarayici": "gercek",
+    "beklenen_imza": "GH HEDEF BELİRSİZ"
+  },
+  {
+    "ad": "AV-18 3.BAGLAM: PowerShell yuzeyinden zincir",
+    "vaka": "2026-07-09 PowerShell matcher dersi + AV-18",
+    "tool_name": "PowerShell",
+    "tool_input": {"command": "gh repo view --repo ix-works/DEV_CORE; gh release create v1 --notes 'x'"},
+    "gorunurluk": "canli",
+    "tarayici": "gercek",
+    "beklenen_imza": "GH HEDEF BELİRSİZ"
+  },
+  {
+    "ad": "AV-21: core IKIZI (adinda 'core' YOK) — sizintili yazma",
+    "vaka": "2026-08-01 bug-avi AV-21 — worktree'de guard SESSIZCE kapaliydi (exit 0)",
+    "tool_name": "Write",
+    "tool_input": {"file_path": "<AGAC>/cekirdek_ikizi/scripts/yeni.py", "content": "# iletisim: <EPOSTA>"},
+    "gorunurluk": "canli",
+    "tarayici": "gercek",
+    "beklenen_imza": "GENERICIZE-LEAK"
+  },
+  {
+    "ad": "AV-21c tersi: GORELI hedef + GORELI CORE koku hala YAKALANMALI",
+    "vaka": "2026-08-01 PR #75 — mutlaklastirma FP'yi kapatirken pozitif yonu KESMEMELI",
+    "tool_name": "Write",
+    "tool_input": {"file_path": "scripts/yeni.py", "content": "# iletisim: <EPOSTA>"},
+    "proje_koku": "<AGAC>/cekirdek_ikizi",
+    "proje_koku_goreli": true,
+    "gorunurluk": "canli",
+    "tarayici": "gercek",
+    "beklenen_imza": "GENERICIZE-LEAK"
+  },
+  {
+    "ad": "AV-21: core ikizinde MultiEdit yuzeyi de kapali olmali",
+    "vaka": "2026-08-01 — kural 4 tool'u kapsar; ikizde hepsi sessizdi",
+    "tool_name": "MultiEdit",
+    "tool_input": {"file_path": "<AGAC>/cekirdek_ikizi/scripts/mevcut.py", "edits": [{"old_string": "a", "new_string": "sahibi <EPOSTA>"}]},
+    "gorunurluk": "canli",
+    "tarayici": "gercek",
+    "beklenen_imza": "GENERICIZE-LEAK"
+  },
+  {
+    "ad": "AV-18b: zincir once PRIVATE okuma, sonra PUBLIC yayin (CANLI kanitli)",
+    "vaka": "2026-08-01 bug-avi AV-18b — gercek iki repoyla olculdu: blok=False (sizdi)",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh pr view 1 --repo org/private-proj && gh pr create --repo org/public-core -t 'x' -b '<SENTINEL>'"},
+    "gorunurluk": "esleme",
+    "tarayici": "sentinel",
+    "beklenen_imza": "PUBLIC-PR SIZINTI GATE"
+  },
+  {
+    "ad": "AV-18b kardesi: cd zincirinde SON cd gecerlidir (2. commit PUBLIC'te)",
+    "vaka": "2026-08-01 — segment baglami ILK degil SON cd'yi tasimali",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/private-proj && git commit -m 'temiz' && cd /c/public-core && git commit -m '<SENTINEL>'"},
+    "gorunurluk": "esleme",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "AV-18 sinif-kardesi: zincirde IKINCI commit sizdiriyor",
+    "vaka": "2026-08-01 — leak gate'i de artik segment basina degerlendirilir",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -m 'temiz' && git commit --amend -m '<SENTINEL>'"},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  }
+]
