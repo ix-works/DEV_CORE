@@ -38,7 +38,17 @@ IZLENEN_YOLLAR = ["core", ".claude/agents", ".claude/skills", ".claude/commands"
 # Sır/kimlik dosyaları (K3). Satır eşleşmesi TAM SATIR ile yapılır: `.conn_adt` alt-dizgesi
 # `conn/.conn_adt.bak` içinde de geçer → alt-dizge kontrolü yanlış güvence verirdi.
 SIR_SATIRLARI = [".conn_adt", ".csrf_token.json", ".claude/project.local.yaml"]
-SIR_YOLLARI = [".conn_adt", ".csrf_token.json", ".claude/project.local.yaml",
+# ⚠ Pathspec JOKERLİ olmak ZORUNDA (2026-08-01 bug-avı, canlı bulgu).
+# Eskiden düz `".conn_adt"` yazıyordu; git pathspec'inde bu YALNIZ KÖKTEKİ dosyayı eşler.
+# Ölçüldü: DEV_CORE'da `scripts/.conn_adt` ilk çekirdek commit'inden beri (f85e3fd,
+# 2026-07-08) PUBLIC repoda TAKİPLİYDİ ve bu gate onu HİÇ görmüyordu —
+#   `git ls-files -- .conn_adt`   → boş  (gate "temiz" diyordu)
+#   `git ls-files -- "*.conn_adt"` → scripts/.conn_adt
+# O dosyanın değerleri placeholder'dı (kendi sızıntı-desenimizle 0 eşleşme) yani kimlik
+# sızmamıştı; ama kanal açıktı: `create_conn_file()` cwd'ye `.conn_adt` YAZAR, dolayısıyla
+# herhangi bir alt dizinde GERÇEK bir bağlantı dosyası oluşup commit'lenebilirdi ve bu gate
+# yine susardı. Gate'in beyanı "`.conn_adt` index'te YOK olmalı" — kapsamı beyanına eşitlendi.
+SIR_YOLLARI = ["*.conn_adt", "*.csrf_token.json", "*project.local.yaml",
                "conn/.conn_adt.bak"]
 
 
