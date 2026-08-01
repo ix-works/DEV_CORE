@@ -1,0 +1,29 @@
+# AV-03 POZİTİF vektörler — her satırdaki token YAKALANMALI.
+#
+# ⚠ TOKEN'LAR PARÇALI YAZILIR: `{{D}}` → "D", `{{d}}` → "d" (koşucu ikame eder).
+# Sebep: bu dosya PUBLIC çekirdekte yaşar ve sızıntı-gate'i BU DİZİNİ DE TARAR.
+# İlk taslakta literal yazmıştım; gerçek `git commit` bu fixture'ları ihlal sayıp
+# bloklamıştı. Muaf-listeye eklemek çözüm DEĞİL — kalıcı delik açar. Parçalı yazım
+# deliği açmadan gerçek deseni test eder. Adlar SENTETİKtir (gerçek kişi değil).
+#
+# TASARIM: BÜYÜK harf = bağlamsız yakalanır · küçük/karışık harf = YALNIZ kimlik
+# bağlamında (satırda user/kullanıcı/login/hesap/owner gibi bir anahtar varsa).
+#
+# format: <beklenen-eşleşme-sayısı> <TAB> <metin>
+
+# --- (A) BÜYÜK harf: bağlam GEREKMEZ ---
+1	{{D}}_SAMPLEUSER
+1	{{D}}_SAMPLEUSER1
+1	{{D}}_SAMPLE12345
+1	deploy notu: {{D}}_SAMPLEUSER yetkisi ile calisti
+1	{{D}}_XXXXUSER
+1	{{D}}_NNNNUSER
+
+# --- (B) küçük/karışık harf: YALNIZ kimlik bağlamında ---
+1	ADT_SAP_USER={{d}}_sampleuser
+1	kullanici {{d}}_sampleuser sisteme baglandi
+1	User: {{d}}_svcuser01
+1	login={{d}}_svcuser01
+1	hesap sahibi {{D}}_Samplename (karisik yazim)
+# gövdesinde "user" geçen ad KENDİ bağlamını taşır → yalın hâlde bile yakalanır
+1	{{d}}_sampleuser

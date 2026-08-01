@@ -1,0 +1,4 @@
+sap_profile: s4_private
+release: '2025'
+master_language: TR
+source_root: SOURCE_CODES

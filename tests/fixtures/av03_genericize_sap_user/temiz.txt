@@ -1,0 +1,34 @@
+# AV-03 NEGATİF vektörler — HİÇBİRİ eşleşmemeli (yanlış-pozitif = bloke edilen meşru commit).
+#
+# `{{D}}` → "D", `{{d}}` → "d" ikamesi koşucuda yapılır (bkz. sizinti.txt gerekçesi).
+# Buradaki teknik değişken adları da PARÇALI yazılır: literal yazıldıklarında bu dosya
+# KENDİ kapısına takılıyordu — ilk taslağın gerçek commit denemesinde olan tam olarak buydu
+# (temiz.txt tek başına 3 ihlal üretti). Muafiyet değil, parçalı yazım.
+#
+# 1-4:   PLACEHOLDER MUAFİYETİ (2026-07-10; kendi README şablonumuz bu FP'ye takılmıştı) — KORUNUR.
+# 5-6:   eşik altı (4 harften kısa gövde).
+# 7-8:   sınır (lookbehind): önünde harf/alt-çizgi varsa token değildir.
+# 9-12:  ASIL KAZANIM — kimlik bağlamı OLMAYAN satırdaki SIRADAN küçük-harf değişken adları.
+#        İlk (bağlamsız IGNORECASE) taslakta bunlar FP üretiyordu; bağlam-duyarlı tasarımda
+#        üretmiyor. `d_matnr`/`d_bookno` satırları bilinçli: sözlük-freni tasarımı bunları
+#        kapsayamazdı (SAP-vari adlar) — o yüzden reddedildi.
+# 13:    BİLİNÇLİ FN SINIRI, dürüstçe test edilir: bağlam anahtarı olmayan satırdaki yalın
+#        küçük-harf ad KAÇAR. Telafi katmanları: aynı adın BÜYÜK yazımı bağlamsız yakalanır
+#        + isim-listesi katmanı (id_pattern, IGNORECASE) bilinen adları her yazımda yakalar.
+#        ⚠ Gövdesinde "user" geçen bir ad KENDİ BAĞLAMINI TAŞIR → yalın hâlde bile
+#        yakalanır (sizinti.txt'te pozitif vektörü var). Bu yüzden buradaki FN vektörü
+#        bilerek anahtarsız bir gövde kullanır — aksi hâlde test yanlış şey ölçerdi.
+
+0	{{D}}_XXXX
+0	{{D}}_XXXXXXX
+0	{{D}}_NNNN
+0	{{d}}_xxxx
+0	{{D}}_ABC
+0	{{d}}_abc
+0	X{{D}}_SAMPLEUSER
+0	sample_{{d}}_sampleuser
+0	{{d}}_data = json.loads(payload)
+0	toplam = {{d}}_total + {{d}}_rows
+0	DATA: {{d}}_matnr TYPE matnr.
+0	const {{d}}_bookno = rows.length;
+0	{{d}}_samplename

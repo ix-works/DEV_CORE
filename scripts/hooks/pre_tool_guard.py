@@ -502,7 +502,10 @@ def _binding_mismatch() -> tuple:
     if not conn.exists() or not state.exists():
         return (False, "", "")
     try:
-        ct = conn.read_text(encoding="utf-8", errors="ignore")
+        # utf-8-sig ZORUNLU: BOM'lu .conn_adt'de ilk satır ADT_SAP_URL ise `cur_url` BOŞ
+        # kalır → yalnız-host farkı olan senaryoda differ=False → bu ADR-0010 gate'i
+        # SESSİZCE FAIL-OPEN olur (ölçüldü 2026-08-01, AV-02 sınıfı).
+        ct = conn.read_text(encoding="utf-8-sig", errors="ignore")
         cur_url, cur_cl = _conn_field(ct, "ADT_SAP_URL"), _conn_field(ct, "ADT_SAP_CLIENT")
         cur_sys = _conn_field(ct, "ADT_SAP_SYSTEM_NAME")
         st = json.loads(state.read_text(encoding="utf-8"))
