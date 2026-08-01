@@ -79,6 +79,44 @@ değişikliği" maddesi (BE-66/FE-39) · radar-turu kuyruk-eskalasyonu.
 **OPSİYONEL (ayrı onay, İZLE'de):** ConfigChange hook'unu izleme→BLOK moduna almak ·
 CODEOWNERS+branch-protection (T7 adayı).
 
+## SAHA DERSLERİ — 2026-08-01 kuyruk turundan (infra-expert'lerden terfi)
+
+### D1 — Brifingdeki TEŞHİS kanıt değil, HİPOTEZDİR
+Lider brifinginin *"şu bozuk, şu taraf doğru"* cümlesi bir hipotezdir. Fix'e başlamadan
+önce iddiayı **kendi kontrol grubunla** ölç; ölçüm hipotezi çürütürse fix'in **yönünü
+değiştir** ve raporda açıkça *"brifingdeki yön tersti"* de.
+
+*Vaka:* bir kayıt "gerçek klasör adları alt çizgiyi KORUYOR → A yanlış, B doğru" diyordu ve
+kanıt olarak bir dizin adı gösteriyordu. Ölçüm: o dizinde aracın kendi yazdığı hiçbir iz
+yoktu — onu **bizim script'imiz** yaratmıştı. **Dairesel kanıt:** bir aracın konvansiyonunu,
+o araca ait sanılan *kendi çıktımızla* doğrulamak. Gerçek yer-doğrusu bulunduğunda yön
+tersine döndü; brifing uygulansaydı çalışan üç tüketici bozulup bozuk ikisi kanonik ilan
+edilecekti.
+
+**Nasıl uygulanır:** iddia "X doğru, Y yanlış" diyorsa X ve Y'yi AYNI harness'ta aynı
+girdiyle koştur ve **skoru yaz** ("A 4/4, B 2/4"). Kanıt olarak gösterilen artefaktın **kim
+tarafından üretildiğini** sor — bizim aracımız ürettiyse kanıt değeri sıfırdır. Ölçmek
+mümkün değilse `DOĞRULANAMADI` işaretle, tahminle ilerleme.
+
+### D2 — Fixture ÇÖKMEMELİ, ÖLÇMELİ (mutasyon-dostu tasarım)
+F3'te yazdığın fixture iki şeyi baştan sağlamalı:
+
+1. **Mutasyon dostu:** fix-ÖNCESİ koda karşı koşulduğunda **çökmemeli**, kaç vektörün
+   düştüğünü **ölçmeli**. İmza değiştiyse (`list` → `(list, list)`) çağrıyı tolere eden bir
+   sarmalayıcı koy; ana kodu çağıran yerleri `try/except` ile "ölçülen sonuca" çevir. Yoksa
+   mutasyon `Traceback + exit 1` verir ve **hangi vektörün ayırt edici olduğu görünmez** —
+   üstelik `2>/dev/null` ile koşulursa "0 FAIL" diye okunur ve *korpus ölçüyor* sanılır.
+   ⚠ **Çökme ≠ FAIL** kuralı mutasyon testinde de geçerlidir: mutasyon 0 FAIL verdiğinde
+   ÖNCE fixture'ın gerçekten koştuğunu kanıtla (çıkış kodu + `2>&1`).
+2. **Ortam/locale bağımsız:** davranış testi makinenin locale'ine bağlıysa CI'da sessizce
+   boşalır. Nedenselliği açıkça kur (ör. bozuk kodlamayı **kendin yaz**, "makine öyleyse"
+   deme) ve mümkünse yapısal bir AST çapası ekle (açık `encoding=` var mı).
+
+**FP çapası omurgadır.** "Eksik gate → BLOCKER" yaparken "kayıtlı boş zincir → PASS" çapası
+yoksa bilinçli boşluklar da bloklanır; "şu alanı indeksle" derken "mükerrer satır yok"
+çapası yoksa tarama sessizce şişer. Mutasyon koşumlarında **geçen vektörler tam da FP
+çapalarıysa** tasarım doğrudur — bu, aşırı-sıkılaşmadığının kanıtıdır.
+
 ## GERİYE-DÖNÜK DOĞRULAMA (prosedürün kendi kanıtı, 2026-08-01)
 mojibake-stdin fix'i → doğru yol KUYRUK+F1-F3'tü (16 hook etkileniyordu; fiilen öyle yapıldı) ·
 "paths→globs" önerisi → F4+karşı-kanıtla RED edilirdi (edildi) · include-URI/NameError →
