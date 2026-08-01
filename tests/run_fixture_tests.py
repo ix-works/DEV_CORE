@@ -69,6 +69,7 @@ VALIDATORS = [
 OZEL_TESTLER = [
     ("tier_fail_closed", "ADR 0010 tier: fail-closed + tam-anahtar (KAYIT-1)"),
     ("changelog_gate", "pre-commit 4. kontrol: infra-changelog gate (KAYIT-2)"),
+    ("sir_gate", "pre-commit 5. kontrol: sir-dosyasi (canli ihlalle bulundu)"),
 ]
 
 

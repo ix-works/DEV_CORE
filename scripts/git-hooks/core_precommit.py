@@ -123,6 +123,31 @@ def check_changelog(paths: list[str], hatalar: list[str]) -> None:
         f"(gerekçe commit mesajına).")
 
 
+# 5. kontrol — SIR DOSYASI (2026-08-01 bug-avı, CANLI ihlalle bulundu).
+# `check_core_not_committed.py` bu sınıfı PROJE repolarında koruyordu; DEV_CORE'un KENDİSİNİ
+# hiçbir katman denetlemiyordu (core-ci'da adım yok, pre-commit'te kontrol yoktu). Sonuç:
+# `scripts/.conn_adt` ilk çekirdek commit'inden beri (f85e3fd) PUBLIC repoda TAKİPLİYDİ.
+# O dosyanın değerleri placeholder'dı (sızıntı-desenimizle 0 eşleşme) — ama kanal açıktı:
+# `create_conn_file()` cwd'ye `.conn_adt` YAZAR, yani herhangi bir alt dizinde GERÇEK bir
+# bağlantı dosyası oluşup commit'lenebilirdi. Public repoya giden sır GERİ ALINAMAZ (K3).
+# Kaçış YOK: bu sınıfta "gerekçeli istisna" diye bir şey olmamalı.
+SIR_DESENLERI = (".conn_adt", ".csrf_token.json", "project.local.yaml", ".env.local")
+
+
+def check_sir(paths: list[str], hatalar: list[str]) -> None:
+    """Staged yollarda sır/kimlik dosyası var mı (herhangi bir derinlikte)."""
+    for p in paths:
+        ad = p.replace("\\", "/").rsplit("/", 1)[-1]
+        # `.conn_adt.bak`/`.conn_adt.ornek` gibi türevler de sayılır: baştaki adı taşıyorsa yakala.
+        if any(ad == d or ad.startswith(d + ".") for d in SIR_DESENLERI):
+            hatalar.append(
+                f"SIR-DOSYASI  {p} — bağlantı/kimlik dosyası commit'lenemez (K3).\n"
+                f"      DEV_CORE PUBLIC'tir; push'lanan sır GERİ ALINAMAZ (silmek geçmişten "
+                f"kaldırmaz, cache'lenmiş olabilir).\n"
+                f"      Yap: `git rm --cached {p}` + `.gitignore`'a ekle. Şablon gerekiyorsa "
+                f"`claude/conn_adt.template` kullan (değer YOK, yalnız alan adları).")
+
+
 BINARY_EXT = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".ico", ".woff",
               ".woff2", ".ttf", ".xlsx", ".docx", ".pptx", ".exe", ".dll"}
 
@@ -249,6 +274,11 @@ def main() -> int:
     #    "staged" görünür → her koşumda tetiklenirdi (anlamsız + fail-open baskısı).
     if not all_tracked:
         check_changelog(dosyalar, hatalar)
+
+    # 5) SIR DOSYASI — HER İKİ modda (staged + `--all`/CI). `--all`'da da koşar, çünkü
+    #    asıl vaka tam olarak buydu: dosya ZATEN takipliydi ve hiçbir staged-koşum onu
+    #    bir daha görmedi. CI'nın tam-ağaç taraması bu sınıfın tek yakalayıcısıdır.
+    check_sir(dosyalar, hatalar)
 
     for path in dosyalar:
         text = staged_content(path)
