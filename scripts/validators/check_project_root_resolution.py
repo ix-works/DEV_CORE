@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import ast
 import io
+import re
 import sys
 from pathlib import Path
 
@@ -69,7 +70,11 @@ CLAUDE_DIZIN = ".claude"
 CLAUDE_MUAF_ALT = {"memory-seed"}
 
 # `<file-derived-kök>` üzerinde proje-geneli tarama
-TARAMA_ATTR = {"rglob"}
+# `glob` 2026-08-01'de EKLENDİ (bug-avı V5): `rglob` yasaklıyken `glob` serbest kalması
+# keyfiydi — `KOK.glob("*/*/*.cds")` de aynı yanlış ağacı tarar. Canlı core'da doğrudan
+# file-derived bir ad üzerinde `.glob(` çağrısı ÖLÇÜLDÜ: **0 adet** → sıfır FP ile eklendi
+# (LATENT kapatma: bugün ihlal yok, desen yarın yazılırsa yakalanır).
+TARAMA_ATTR = {"rglob", "glob"}
 
 
 def _iceriyor_file(node: ast.AST) -> bool:
@@ -164,6 +169,98 @@ def _zincir(node: ast.AST) -> tuple[str, list[str]] | None:
     return None
 
 
+def _gecisli_koklar(tree: ast.AST, koklar: dict[str, int]) -> dict[str, int]:
+    """Doğrudan file-derived adlardan TÜRETİLEN adlar (`Y = X / "alt"`, `Y = X.parent`).
+
+    NEDEN SINIRLI KULLANIM (2026-08-01, V5): docstring'de "transitive DEĞİL (bilinçli)"
+    yazıyordu ve gerekçesi HAKLIYDI — `PLAYBOOK = CORE / "playbook"` sonra
+    `PLAYBOOK.rglob(...)` meşrudur; geçişlilik TARAMA dedektörlerine verilirse core'un
+    kendi taramaları yanlış-pozitif olur (canlı ölçüm: 26 türetilmiş ad).
+    Buna karşılık `KOK2 = KOK.parent` ardından `KOK2 / "SOURCE_CODES"` GERÇEK bir kaçıştı:
+    ara değişken, kusuru bir adım öteye taşıyıp gate'i kör ediyordu.
+
+    ÇÖZÜM — dedektör başına ayrı küme:
+      • TARAMA dedektörleri (`rglob`/`glob`/`os.walk`) → YALNIZ doğrudan `koklar`
+        (eski davranış; FP koruması aynen durur)
+      • YOL-ZİNCİRİ dedektörleri (`/`, `.joinpath`, metin birleştirme) → geçişli küme
+        (bunlar zaten PROJE-anlamlı ilk segmentle filtreli: SOURCE_CODES/.claude/...
+        → core-içi türetilmiş yollar eşleşemez, FP riski yok)
+    """
+    out = dict(koklar)
+    for _ in range(4):  # sabit noktaya kadar (zincir derinliği pratikte 1-2)
+        onceki = len(out)
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            deger = node.value
+            if deger is None:
+                continue
+            kaynak = deger
+            while isinstance(kaynak, ast.BinOp) and isinstance(kaynak.op, ast.Div):
+                kaynak = kaynak.left
+            while isinstance(kaynak, ast.Attribute):   # `.parent`, `.parents[n]` vb.
+                kaynak = kaynak.value
+            while isinstance(kaynak, ast.Subscript):
+                kaynak = kaynak.value
+                while isinstance(kaynak, ast.Attribute):
+                    kaynak = kaynak.value
+            if not (isinstance(kaynak, ast.Name) and kaynak.id in out):
+                continue
+            hedefler = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for t in hedefler:
+                if isinstance(t, ast.Name) and t.id not in out:
+                    out[t.id] = node.lineno
+        if len(out) == onceki:
+            break
+    return out
+
+
+# Metin birleştirmeyle (`+` / f-string) kurulan proje yolları. Yalnız kökün HEMEN ARDINDAN
+# proje-anlamlı bir segment gelirse ihlal — canlı core'da 8 f-string + 6 `+` ölçüldü ve
+# HEPSİ meşrundu (`print(f"core: {CORE_ROOT}")`, `PYTHONPATH=str(X) + os.pathsep + ...`).
+# Segment filtresi olmadan bu 14 satır sahte FAIL olurdu; alarm-yorgunluğu gate'i öldürür.
+_METIN_IHLAL_RE = re.compile(
+    r"<KÖK>[/\\]+(SOURCE_CODES|ERP|project\.yaml|\.claude|SOURCE_ROOT_NAME)\b")
+
+
+def _metin_sekli(node: ast.AST, koklar: dict[str, int]) -> tuple[str, str] | None:
+    """f-string / `+` zincirini "şekil" metnine indirger; kök adı `<KÖK>` ile temsil edilir.
+
+    Döner: (kök_adı, şekil) — ör. `f"{KOK}/{SOURCE_ROOT_NAME}"` → ("KOK", "<KÖK>/SOURCE_ROOT_NAME")
+    """
+    parcalar: list[str] = []
+    bulunan_kok: str | None = None
+
+    def ekle(n: ast.AST) -> bool:
+        nonlocal bulunan_kok
+        if isinstance(n, ast.Constant) and isinstance(n.value, str):
+            parcalar.append(n.value)
+            return True
+        if isinstance(n, ast.Name):
+            if n.id in koklar:
+                bulunan_kok = bulunan_kok or n.id
+                parcalar.append("<KÖK>")
+            else:
+                parcalar.append(n.id)
+            return True
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "str" \
+                and len(n.args) == 1:
+            return ekle(n.args[0])
+        if isinstance(n, ast.FormattedValue):
+            return ekle(n.value)
+        if isinstance(n, ast.JoinedStr):
+            return all(ekle(v) for v in n.values)
+        if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Add):
+            return ekle(n.left) and ekle(n.right)
+        parcalar.append("?")
+        return True
+
+    ekle(node)
+    if bulunan_kok is None:
+        return None
+    return bulunan_kok, "".join(parcalar)
+
+
 def _zincir_ihlali(segler: list[str]) -> str | None:
     """Segment zinciri PROJE kökü varsayıyor mu? Evetse insan-okur gerekçe döner."""
     ilk = segler[0]
@@ -189,6 +286,9 @@ def _ihlaller(path: Path) -> list[tuple[int, str]]:
     kok_fonksiyonlar = _file_derived_fonksiyonlar(tree)
     if not koklar and not kok_fonksiyonlar:
         return []
+    # Yol-zinciri dedektörleri geçişli kümeyi kullanır; TARAMA dedektörleri `koklar`ı
+    # (gerekçe: `_gecisli_koklar` docstring'i — FP koruması bilinçli olarak korunuyor).
+    koklar_gecisli = _gecisli_koklar(tree, koklar)
 
     bulgular: list[tuple[int, str]] = []
 
@@ -212,7 +312,7 @@ def _ihlaller(path: Path) -> list[tuple[int, str]]:
             if cozum:
                 kok, segler = cozum
                 # kök ya file-derived DEĞİŞKEN, ya da `__file__` döndüren fonksiyonun ÇAĞRISI
-                tanim_satiri = koklar.get(kok)
+                tanim_satiri = koklar_gecisli.get(kok)
                 if tanim_satiri is None and kok.endswith("()"):
                     tanim_satiri = kok_fonksiyonlar.get(kok[:-2])
                 if tanim_satiri is not None:
@@ -235,13 +335,40 @@ def _ihlaller(path: Path) -> list[tuple[int, str]]:
             if node.args and isinstance(node.args[0], ast.Name) and node.args[0].id in koklar:
                 bulgular.append((node.lineno,
                                  f"`os.walk({node.args[0].id})` — proje geneli tarama `__file__` kökünde"))
-        # d2: <kök>.rglob(...)
+        # d2: <kök>.rglob(...) / <kök>.glob(...)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
                 and node.func.attr in TARAMA_ATTR and isinstance(node.func.value, ast.Name) \
                 and node.func.value.id in koklar:
             bulgular.append((node.lineno,
                              f"`{node.func.value.id}.{node.func.attr}(...)` — proje geneli tarama "
                              f"`__file__` kökünde"))
+        # e: <kök>.joinpath("SOURCE_CODES", ...) — `/` operatörünün metot ikizi.
+        #    Aynı yolu kurar, aynı hasarı verir; dedektör yalnız `/`ye bakıyordu.
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and node.func.attr == "joinpath" and isinstance(node.func.value, ast.Name) \
+                and node.func.value.id in koklar_gecisli:
+            segler = [s for s in (_segment(a) for a in node.args) if s is not None]
+            gerekce = _zincir_ihlali(segler) if segler else None
+            if gerekce:
+                yol = ", ".join(f'"{s}"' if not s.isupper() else s for s in segler)
+                bulgular.append((node.lineno,
+                                 f"`{node.func.value.id}.joinpath({yol})` — {gerekce} `__file__` "
+                                 f"kökünden türetiliyor (kök tanımı satır "
+                                 f"{koklar_gecisli[node.func.value.id]})"))
+        # f: metin birleştirme — `str(<kök>) + "/SOURCE_CODES"` · `f"{<kök>}/.claude"`.
+        #    Path aritmetiği yerine dize kurmak dedektörü tamamen atlatıyordu.
+        if isinstance(node, (ast.JoinedStr, ast.BinOp)) and not (
+                isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)):
+            sonuc = _metin_sekli(node, koklar_gecisli)
+            if sonuc:
+                kok, sekil = sonuc
+                m = _METIN_IHLAL_RE.search(sekil)
+                if m:
+                    bulgular.append((node.lineno,
+                                     f"`{sekil}` — proje yolu METİN BİRLEŞTİRMEYLE `__file__` "
+                                     f"kökünden kuruluyor (kök `{kok}`, tanım satır "
+                                     f"{koklar_gecisli.get(kok)}); Path aritmetiği olmaması "
+                                     f"kuralı geçersiz KILMAZ"))
 
     # mesaj None = muaf (core-içi yol) → raporlanmaz
     bulgular.extend((satir, mesaj) for (satir, _kok), (_n, mesaj) in yol_bulgu.items()

@@ -42,6 +42,19 @@ for _e in (_cfg('package_exceptions') or []):
 # Sadece bu klasörlerde obje adı doğrulanır (root'taki .md/.txt'ler ve docs/ muaf)
 CHECK_FOLDERS = {"cds", "classes", "programs", "structures", "tables", "functions", "auth"}
 
+# Obje dosyası sayılan uzantılar (Path.suffix = SON nokta sonrası).
+#
+# ⚠ KAPSAM = BEYAN (2026-08-01 bug-avı, V2). Gate'in beyanı "paket klasöründeki obje
+# dosyaları doğru paket prefix'ini taşır". Listede olmayan uzantı hiç GÖRÜLMEZ ve çıktı
+# yine "[OK] ... doğru paket altında" der — "bakmadım" ile "temiz" ayırt edilemez.
+# Canlı ölçüm: eski küme 340 dosya görüyordu, gerçek obje sayısı 392'ydi → 52 dosya
+# (26 `.bdef`, 15 `.srvd`, 7 `.tabl.ddl`, 3 `.dcl`, 1 `.tabl`) hiçbir zaman kontrol
+# edilmemişti; yanlış-paket-prefiksli bir BDEF/SRVD bu gate'ten sessizce geçerdi.
+# Genişletme sonrası ihlal sayısı 0 → taban temiz, HARD kalabilir (PATTERN#14).
+# Yeni bir SAP obje-uzantısı repoya girdiğinde BURAYA da eklenir (aksi hâlde sessiz boşluk).
+OBJE_UZANTILARI = {".abap", ".cds", ".ddls", ".asddls", ".xml",
+                   ".bdef", ".srvd", ".ddl", ".dcl", ".tabl"}
+
 # Tooling scratch dizini artık .tmp/sap_scratch (ERP DIŞI, gitignored) — ZAI default'u
 # KALDIRILDI (2026-06-18). <source_root>/ZAI ARTIK YASAK: belirirse bu check onu flag'ler
 # (ZAI-resurgence guard). Başka scratch-modül yok → exclude kümesi BOŞ.
@@ -103,7 +116,7 @@ def main() -> int:
                 if not f.is_file():
                     continue
                 # Sadece kod/obje uzantılarını kontrol et
-                if not f.suffix.lower() in {".abap", ".cds", ".ddls", ".asddls", ".xml"}:
+                if f.suffix.lower() not in OBJE_UZANTILARI:
                     continue
                 # .ddls.asddls çift uzantı
                 if f.name.endswith(".ddls.asddls"):

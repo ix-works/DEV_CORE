@@ -56,12 +56,23 @@ _SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp"}
 #     nav property'ler `_Cap` bare token veya `/_Cap` path segmenti. `/Z...` ve `to_...`
 #     yanlış-pozitif vermez (regex'ler kasıtlı dar). ---
 _T1_PATTERNS = [
-    re.compile(r'createEntry\(\s*["\']_[A-Z]'),          # createEntry("_Container", ...)
+    re.compile(r'createEntry\(\s*["\'`]_[A-Z]'),          # createEntry("_Container", ...)
     re.compile(r'/_[A-Z]'),                                # "/_Container", "')/_Destination"
-    re.compile(r'\$expand["\']?\s*:\s*["\']_[A-Z]'),       # "$expand": "_Container"
+    re.compile(r'\$expand["\'`]?\s*:\s*["\'`]_[A-Z]'),     # "$expand": "_Container"
 ]
 # T1'i koda özgü tutmak için: yorum satırlarını ve $batch/url olmayanları azaltmak yerine
 # pattern'leri dar tuttuk. `to_` zaten `_` ile başlamaz → güvenli.
+#
+# TIRNAK SINIFI `["\'`]` — ters-tırnak 2026-08-01'de EKLENDİ (bug-avı V6). Sınıf `["\']`
+# iken ES6 template literal'i (`createEntry(`_Container`)` / ``$expand: `_Container` ``)
+# desenin DIŞINDA kalıyordu; modern UI5 controller'ları template literal'i rutin kullanır,
+# yani kaçış tesadüfi değil zamanla BÜYÜYEN bir boşluktu. T1 bir ERROR'dur (build DURUR):
+# kaçan `_X` nav adı OData V2'de SESSİZCE kırılır (V2'de `to_X` olur) — tam olarak
+# "gate var ama görmüyor" hâli.
+# ⚠ KAPSAM DAR TUTULDU: 2. desen (`/_[A-Z]` yol segmenti) tırnaktan ZATEN bağımsızdır ve
+# DEĞİŞTİRİLMEDİ — ölçüldü, ters-tırnaklı yol ifadelerini hâlihazırda yakalıyor.
+# Kaçış YALNIZ `createEntry` ve `$expand` desenlerindeydi; kapsamı abartmak FP üretirdi.
+# Canlı ölçüm: proje UI kodunda `createEntry(` HİÇ yok → 0 yeni bulgu, 0 FP (LATENT).
 
 _T2_PATTERN = re.compile(r'type\s*=\s*"Number"')
 _T3_PATTERN = re.compile(r'<core:Title\b')
