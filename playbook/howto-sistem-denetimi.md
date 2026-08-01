@@ -108,6 +108,63 @@ yüklenme-gerçeği ölçümü ☐ her öneri şablon-alanları eksiksiz + katma
 disiplini:** ajan bulgusu canlı ölçümle çelişirse ÇÜRÜTÜLDÜ diye yazılır, uygulanmaz
 (ilk örnek: "paths→globs" önerisi böyle düşürüldü).
 
+## 8B. ADVERSARIAL TUR — "doğru çalışıyor mu" DEĞİL, "hangi girdide YANLIŞ davranır"
+*(2026-08-01'de ilk kez koşuldu; uyum-denetiminin ✅ verdiği bileşenlerde 20 doğrulanmış bulgu
+çıkardı, 6'sı KRİTİK — yani **uyum turu bu turun yerini TUTMAZ**, ikisi ayrı işlerdir.)*
+
+**Ayrım.** Uyum turu sorar: kural yazılı mı · kablolu mu · temiz girdi OK · bozuk girdi FAIL.
+Adversarial tur sorar: **bu kodu hangi girdi/durum kandırır?** Senaryoyu denetleyen İCAT eder,
+sentetik olarak KURAR, ÇALIŞTIRIR, çıktısıyla kanıtlar. Teorik bulgu YOK.
+
+**Kapsam kuralı (ilk turun kendi hatası — tekrarlamayın):** hedef envanteri plandan değil
+**taze sayımdan** çıkarılır (`ls`/`glob` ile dosya sayısı). İlk turda plan "45+ validator"
+diyordu, gerçek sayı 49 validator + 93 kök script + 7 utils'ti → ilk dağıtım 22 validator'ı
+ve ~78 script'i sessizce kapsam dışı bıraktı. Yani **avın kendisi desen-2'ye düştü.**
+
+**15 SALDIRI DESENİ** (her bileşene en verimli 3-5'i seçilir):
+1. **Fail-open sapması** — exception/timeout/eksik-dosya/boş-config'te exit 0 mu? *Bir guard'ın
+   en tehlikeli arızası bloklamak değil, bloklaması gerekirken sessizce izin vermektir.*
+   Buna **"varsayılan en izinli değer"** de dahildir (girdi okunamayınca en serbest moda düşmek).
+2. **Sessiz-kapsam-kaybı** — 0 dosya tarayıp "OK" diyor mu? (dizin yok · yanlış kök · prune fazla
+   geniş · uzantı eşleşmiyor). Sorulacak soru: **"kaç dosya taradığını söylüyor mu?"** Söylemiyorsa
+   bu sınıfa açıktır.
+3. **Yanlış-pozitif** — meşru girdiyi blokluyor mu? (yorum-içi token · string-literal · çok-satırlı
+   komut · POSIX/UNC yol · boşluklu yol · yerel karakterler · CRLF). FP ucuz değildir: *atlatma
+   refleksi* doğurur.
+4. **Girdi uç-durumları** — boş dosya · yalnız-BOM · çok büyük dosya · binary · symlink/junction ·
+   silinmiş dosya · eşzamanlı değişen dosya.
+5. **Payload sözleşmesi** — eksik alan · null · yanlış tip · beklenmedik yeni alan · kesik payload ·
+   non-UTF8 bayt.
+6. **Eşzamanlılık/yarış** — iki hook aynı anda · paralel yazımlar · marker/log dosyasına eşzamanlı
+   append (*"O_APPEND atomiktir" iddiası ölçülmeden kabul edilmez*).
+7. **Sıra/idempotans** — iki kez koşunca fark? · yarıda kesilirse tutarsız state?
+8. **Yol/platform** — junction arkası · göreli-vs-mutlak · başka cwd'den koşum · sürücü harfi.
+9. **Regex kaçışı** — kuralın hedefini YAPAN ama yakalanmayan yazım: satıra bölünmüş ifade ·
+   satır-sonu (trailing) yorum · alternatif tırnak (backtick/template literal) · kısa-vs-uzun
+   bayrak biçimi (`-m` ↔ `-am`, `-F` ↔ `--file=`) · büyük/küçük harf · rakam soneki.
+10. **Zaman** — bayatlık eşiğinin tam sınırı · gelecek tarih · aynı gün.
+11. **Sayı/ölçüm** — off-by-one · sıfıra bölme · boş kümede yüzde/medyan.
+12. **Bağımlılık kaybı** — ağ/SAP/git/node/env yok → nazikçe mi, çökerek mi, sessizce mi?
+13. **Çıktı sözleşmesi** — exit kodu mesajla çelişiyor mu · stdout/stderr karışması · yönlendirilince
+    sıra bozulması · non-ASCII konsolda çökme.
+14. **Guard atlatma** — zincir (`&&`/`;`), env-öneki, alias, `sh -c`, çok-satır. *Zincirde bir
+    segmentin sağladığı şart, sonraki segmenti serbest bırakıyor mu?* YALNIZ tespit amaçlı.
+15. **Kendi-kendini doğrulama** — aletin canary'si gerçekten kırmızı yanabiliyor mu? Fixture'ın
+    beklentisini TERSİNE ÇEVİR: test hâlâ PASS diyorsa test sahte-güvencedir.
+
+**Yöntem.** Aile başına bir avcı (`bug-expert`, read-only), paralel fan-out; brif = spawn-brief
+şablonu + bu katalog + şu şart: *repro komutu ve gerçek çıktı (exit kodu dahil) olmayan bulgu
+rapora giremez.* Her avcı kendi bulgusunu önce çürütmeye çalışır.
+
+**Lider doğrulaması ZORUNLU — ve kontrol grubuyla.** İlk turda liderin ilk üç repro denemesi
+harness hatası yüzünden validator'ı hiç tetiklememişti; kontrol grubu olmasaydı üç sahte bulgu
+yazılacaktı. **Kural: "kaçıyor" demeden önce, yakalandığı BİLİNEN varyantın aynı harness'ta
+yakalandığını göster.** (PATTERN #19'un adversarial karşılığı.) Kapsamı daralan/genişleyen
+bulgular "ELENDİ" değil "KAPSAM DÜZELTİLDİ" satırına yazılır — dürüstlük kaydı silinmez.
+
+**Kapanış.** Doğrulanan her bug için kalıcı fixture (G1 korpusu) + changelog satırı +
+test-reçetesi. Fixture'a dönüşmeyen bulgu, bir sonraki turda yeniden keşfedilir.
+
 ## 9. TUR-BAŞI İYİLEŞTİRME ÖNERİLERİ (runbook'un kendisi de evrilsin)
 - **DELTA bölümü:** önceki denetim raporuyla kıyas — altın-listeye YENİ giriş var mı (kalıcılık
   §8.4-soru-3), hangi eski öneriler tuttu/tutmadı.
