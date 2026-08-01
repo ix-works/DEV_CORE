@@ -18,3 +18,4 @@
 | `REPO_WIDE_SCANNERS` üyeliği: `check_amdp_comment_apostrophe` | 2026-07-31 T1.12 | tek-artifact modu geldi; repo-geneli run_all+CI'da | küme BOŞ ama mekanizma durur |
 | AGENTS.md (L1c katmanı) | 2026-08-01 D1 | hiç yüklenmiyordu; tekil içerik taşındı | SUPERSEDED band; tarihsel atıflar radar süpürmesinde |
 | session_start 4-satır yasak-özeti + SKILL TIER-0 kopyası | 2026-08-01 D6 | 9→4 kopya azaltma; damga kanonik | atıf satırları kaldı (bilinçli) |
+| davranis-manifesti yuzeyi: `.claude/settings.local.json` | 2026-08-01 bug-avi AV-20 | Claude Code dosyayi HER izin onayinda kendisi yaziyor -> manifest-diff kalici alarm veriyordu (session_start "cikti'ya GUVENME" + config_change_guard exit 2); surekli calan alarm gercek tamper'i ayirt edilemez kiliyordu | `settings.json` YUZEYDE KALIR (asil davranis yuzeyi); kaybedilen kapsam: o dosyaya ELLE eklenen izin artik alarm uretmez (bilincli takas, kullanici onayli) |

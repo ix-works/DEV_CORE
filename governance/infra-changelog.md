@@ -51,6 +51,13 @@ yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 | 2026-08-01 | PATTERN#20 terfileri (syntax_check gerçeği ×3 + abaplint çıkış-şartı + tool-listeleri) + batch-talimatı + model-beyanları | Core kendi-kendini-yalanlayan talimat dağıtıyordu (denetim R4); model-miras bilinçsizdi (P8) | Deneme-spawn echo'ları + yeni-oturum transcript (BE=opus/FE=sonnet) + grep=0 eski-talimat | — | core#65/#66/#69 |
 
 
+## scripts/behavior_manifest.py (F2 davranis-yuzeyi)
+| 2026-08-01 | `.claude/settings.local.json` yuzeyden CIKARILDI (⚠GEVSETME, kullanici acik onayi) | Bug avi AV-20: dosyayi Claude Code her izin onayinda yeniden yaziyor -> F2 alarmi KALICI aciktı; alarm-yorgunlugu F2'nin varlik amacini (gercek tamper tespiti) ortadan kaldiriyordu | P: temiz->OK; P2: settings.local.json'a dokun->alarm YOK; **N: settings.json'a dokun->alarm VAR (exit 1)**; geri-al->OK | — (elle P/N komutlari test-recipes'te) | (bu PR) |
+Test-senaryosu: (1) `python core/scripts/behavior_manifest.py generate` (2) dogrula -> `[ OK ]` (3) `.claude/settings.local.json`'a bosluk ekle -> **alarm CIKMAMALI** (4) `.claude/settings.json`'a bosluk ekle -> **alarm CIKMALI, exit 1** (5) geri al -> `[ OK ]`. Adim-4 bu gevsetmenin sinir bekcisidir: FAIL vermezse yuzey fazla daralmis demektir.
+
+## scripts/create_transport.py (SILINDI)
+| 2026-08-01 | Script SILINDI | Bug avi E2 olu-kod taramasi: core=0/proje=0 gercek cagiran (grep eslesmelerinin hepsi alakasiz `create_transport_doc` RAP action'i ve `SAPClient.create_transport` kutuphane metodu). Ayrica ADR 0005-C transport yaratmayi ZATEN YASAKLIYOR -> varligi tutarsizlik sinyaliydi | Referans sayimi + eslesme satirlarinin tek tek incelenmesi (ham grep sayisi YANILTICIYDI: 5 core / 10 proje eslesme vardi, hicbiri script'e ait degildi) | — | (bu PR) |
+
 ---
 
 # GEÇMİŞ BACKFILL (2026-07-08 → 07-31) — infra-expert arkeolojisi 2026-08-01
