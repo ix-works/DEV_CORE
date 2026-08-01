@@ -28,8 +28,22 @@ Typed tool layer over `scripts/sap_adt_lib.py` for SAP ABAP Development Tools (A
 | Std obje delete | Reject |
 | Transport release | Tool listesinde yok |
 | Package create | Tool listesinde yok |
+| **Tier ≠ DEV / çözülemez** (ADR 0010) | Mutasyon reddedilir — `require_writable_tier`, **fail-closed** (11 tool) |
+| **Hassas veri, DEV dışı** (ADR 0011) | `require_data_access` — açık onay ister (`adt_table_read`, `adt_sql_query`) |
 
 Bypass yok. Değişiklik için `mcp_servers/sap_adt/guardrails.py` commit edilmeli.
+
+> ⚠ **PII hedefi NORMALİZE edilir** (2026-08-01): `table`/sorgu ham metin olarak
+> değerlendirilMEZ — takma ad (`KNA1 AS K`), JOIN, virgüllü liste, şema öneki
+> (`SAPABAP1.KNA1`), released CDS (`I_Customer`) ve sarmalayıcı görünüm (`V_KNA1`)
+> aday-tablo kümesine çevrilip kontrol edilir; alan listesi (`columns` / SELECT listesi)
+> de guard'a girer. Önceden bunların hepsi guard'ı ATLIYORDU
+> (regresyon: `tests/fixtures/veri_yetki_guardlari/`).
+>
+> ⚠ **`adt_syntax_check` SALT-OKUMA DEĞİLDİR** — temiz bekleyen sürümü AKTİVE eder
+> (ölçüm 2026-07-31); bu yüzden tier + namespace guard'larına tabidir, tek-yazıcı
+> (gateway) disiplinine girer. Yukarıdaki "Tools (v1)" tablosu **kısmi**dir (11/29);
+> kanonik liste `_app.py` register kayıtlarıdır.
 
 ## Kurulum
 

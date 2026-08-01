@@ -236,18 +236,43 @@ def adt_atc_check(name: str, object_type: str = "class",
 
 @profil_tool()
 def adt_syntax_check(name: str, object_type: str = "class") -> dict:
-    """Sözdizimi kontrolü (aktivasyon pre-audit) — aktive ETMEDEN. read-only.
+    """⚠️ YAN ETKİLİ — SALT-OKUMA DEĞİL: temiz bekleyen sürümü AKTİVE EDER. Yazma sayılır.
 
-    SAP'deki inactive sürümü kontrol eder; push-before-activate akışında aktivasyon
-    hatası/patinajını (ADR 0006/T10) önceden yakalar.
+    Gerçek semantik: "temizse aktive et". Alt katman (`sap_adt_lib.
+    syntax_check_via_activation`) ölçtü (2026-07-31): `preauditRequested=true` SAP
+    tarafından ONURLANDIRILMIYOR — bekleyen INACTIVE sürüm temiz derleniyorsa bu çağrı
+    onu AKTİVE EDER (`adt_inactive_objects` 1 → 0 gözlendi). Hatalıysa aktivasyon iptal
+    edilir ve hatalar döner.
+
+    ⚠ 2026-08-01'e kadar bu docstring "read-only" diyordu; alt katman "treat as WRITE"
+    diyordu. Doküman-yalanı yüzünden tool MUTASYON YAPAN TEK GUARD'SIZ araçtı: tier
+    guard'ı da namespace guard'ı da YOKTU → PRD tier'ında ve standart obje üzerinde
+    çağrılabiliyordu. Artık `require_writable_tier` + `require_customer_namespace`
+    diğer mutasyon tool'larıyla (create/push/activate/delete) AYNI kapıdan geçer.
+
+    Kullanım: push-before-activate akışında aktivasyon hatasını (ADR 0006/T10) önceden
+    yakalar — ama bilinçli geciktirilen bir aktivasyonu (co-activation sırası, def/impl
+    include çiftleri) SIRA BOZARAK öne alabilir. Tek-yazıcı (gateway) disiplinine tabidir.
 
     Args:
-        name: Obje adı (Z*/Y*).
+        name: Obje adı (Z*/Y*; standart obje REDDEDİLİR — ADR 0005-A).
         object_type: ADT tipi ('class', 'ddls', 'prog', ...).
 
     Returns:
         {ok, name, type, valid, errors: [...], warnings: [...], client_log}
+        veya guardrail_violation (PRD/QA tier ya da standart obje).
     """
+    from mcp_servers.sap_adt._conn import get_active_tier
+    from mcp_servers.sap_adt.guardrails import (
+        GuardrailViolation, require_customer_namespace, require_writable_tier,
+    )
+    ne = f"{object_type} syntax_check (temiz bekleyen sürümü AKTİVE EDER)"
+    try:
+        require_customer_namespace(name, what=ne, object_type=object_type)
+        require_writable_tier(get_active_tier(), what=ne)
+    except GuardrailViolation as gv:
+        return gv.as_dict()
+
     client = _get_client()
     try:
         with _capture() as buf:
@@ -314,6 +339,10 @@ def adt_package_contents(package: str) -> dict:
 # =============================================================================
 # adt_table_read  (gap-analysis #10 + #2 PII guard, ADR 0011)
 # =============================================================================
+# Tek tanımlayıcı (namespace'li ad dahil: /SCWM/AQUA). Boşluk/parantez/nokta YOK.
+_TABLO_ADI = re.compile(r"^[A-Za-z_/][A-Za-z0-9_/]*$")
+_KOLON_ADI = re.compile(r"^[A-Za-z_][A-Za-z0-9_~/]*$")
+
 
 @profil_tool()
 def adt_table_read(
@@ -351,13 +380,6 @@ def adt_table_read(
     from mcp_servers.sap_adt._conn import get_active_tier
     from mcp_servers.sap_adt.data_guard import require_data_access
     from mcp_servers.sap_adt.guardrails import GuardrailViolation
-    try:
-        require_data_access(
-            get_active_tier(), table,
-            acknowledge_risk=acknowledge_risk, approval_text=approval_text,
-        )
-    except GuardrailViolation as gv:
-        return gv.as_dict()
 
     # İstenen kolonları normalize et (str "A,B" veya liste) → daraltılmış SELECT (off-by-one'sız).
     col_list = None
@@ -365,6 +387,33 @@ def adt_table_read(
         raw = columns.split(",") if isinstance(columns, str) else list(columns)
         col_list = [str(c).strip().upper() for c in raw if str(c).strip()]
     select_cols = ", ".join(col_list) if col_list else "*"
+
+    # ⚠ ALAN-SEVİYESİ GUARD ARTIK KABLOLU (2026-08-01 KAYIT-K1b): `fields=` parametresi
+    # doğuştan beri vardı ve `fields=["STCD1"]` verilince BLOCKED diyordu, ama HİÇBİR tool
+    # onu geçirmiyordu → guard'ın yarısı ÖLÜ KOD'du. `columns` da doğrulanmadan SELECT'e
+    # giriyordu. Guard, ham `table` ifadesini görür (normalizasyon guard içindedir).
+    try:
+        require_data_access(
+            get_active_tier(), table, fields=col_list,
+            acknowledge_risk=acknowledge_risk, approval_text=approval_text,
+        )
+    except GuardrailViolation as gv:
+        return gv.as_dict()
+
+    # ⚠ ŞEKİL DOĞRULAMASI (KAYIT-K1a ikinci katman): `table`/`columns` string olarak
+    # SELECT'e gömülür. Serbest ifadeye izin vermek hem guard-atlatma hem sorgu-enjeksiyon
+    # yüzeyidir ("T000 AS T", "T000 UNION SELECT * FROM KNA1"). Bu tool TEK tablo okur;
+    # takma ad/JOIN isteyen `adt_sql_query`'yi kullanır (o da aynı PII guard'ına tabidir).
+    if not _TABLO_ADI.match((table or "").strip()):
+        return {"ok": False, "error": "gecersiz_tablo_adi",
+                "message": (f"'{table}' tek bir tablo/görünüm adı değil. Bu tool yalnız "
+                            "'SELECT ... FROM <tablo>' yapar; takma ad/JOIN/alt-sorgu için "
+                            "adt_sql_query kullan (aynı PII guard'ı geçerlidir).")}
+    for c in (col_list or []):
+        if not _KOLON_ADI.match(c):
+            return {"ok": False, "error": "gecersiz_kolon_adi",
+                    "message": (f"Kolon '{c}' geçerli bir alan adı değil (harf/rakam/_/~). "
+                                "İfade/fonksiyon gerekiyorsa adt_sql_query kullan.")}
 
     client = _get_client()
     try:
@@ -452,14 +501,19 @@ def adt_sql_query(
                            "Bu tool yalnız salt-okuma SELECT içindir."}
 
     from mcp_servers.sap_adt._conn import get_active_tier
-    from mcp_servers.sap_adt.data_guard import require_data_access
+    from mcp_servers.sap_adt.data_guard import (
+        require_data_access, select_fields, table_candidates,
+    )
     from mcp_servers.sap_adt.guardrails import GuardrailViolation
-    tables = {t.upper() for t in re.findall(
-        r"\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_/]*)", q_nolit, re.IGNORECASE)}
+    # TEK KAYNAK (2026-08-01 KAYIT-K1a): tablo çıkarımı `data_guard.table_candidates`'a
+    # taşındı. Buradaki yerel regex şema önekini kaçırıyordu ("SAPABAP1.KNA1" -> 'SAPABAP1'
+    # okunup serbest bırakılıyordu) ve kardeş `adt_table_read` ile ayrışabiliyordu; iki
+    # tool'un AYRI çözüm taşıması bu kusur sınıfının kökeniydi.
+    tables = table_candidates(q_nolit)
+    alanlar = select_fields(q_nolit)   # alan-seviyesi guard (KAYIT-K1b) burada da devrede
     try:
-        for t in sorted(tables):
-            require_data_access(get_active_tier(), t,
-                                acknowledge_risk=acknowledge_risk, approval_text=approval_text)
+        require_data_access(get_active_tier(), q_nolit, fields=alanlar,
+                            acknowledge_risk=acknowledge_risk, approval_text=approval_text)
     except GuardrailViolation as gv:
         return gv.as_dict()
 
@@ -1236,18 +1290,30 @@ def adt_unit_run(name: str, object_type: str = "class") -> dict:
 
 @profil_tool()
 def adt_lock_check(name: str, object_type: str = "class") -> dict:
-    """Probe whether an SAP object is currently locked.
+    """Bir SAP objesinin kilitli olup olmadığını sorgula — salt-okuma (GET /adt/locks).
 
-    Strategy: issue a metadata read; if SAPLockError fires, object is locked.
-    This is a best-effort probe — some lock types only surface during write.
+    ⚠ ESKİ SÜRÜM KİLİT TESPİTİ YAPAMIYORDU (2026-08-01 KAYIT-K3): strateji
+    "metadata OKU; SAPLockError düşerse kilitlidir" idi. Ama (a) OKUMA kilit hatası
+    üretmez ve (b) alt katman `sap_client.get_object_metadata` HER istisnayı yutup
+    `None` döner → `except` dalına HİÇ girilmez. Sonuç: `locked: True` ULAŞILAMAZ ÖLÜ
+    DAL'dı; tool DAİMA `locked: False` diyordu — yani kilit tespiti fiilen yoktu ve
+    "kilitli değil" cevabı KANITSIZDI. Ayrıca `exists: md is not None` yüzünden ağ/500/
+    403 hatası da sessizce `exists: false` oluyordu (adt_get DDIC dalıyla aynı sınıf,
+    W2-MCPT-01).
+
+    Şimdi: gerçek kilit ucu (`SAPADTClient.is_object_locked` → `GET /sap/bc/adt/locks`,
+    push yolunda da kullanılır: sap_client.py:485) sorgulanır. Uç cevap veremezse
+    `locked: null` + `ok: false` döner — "kilitli değil" DİYE OKUNAMAZ.
 
     Args:
-        name: Object name.
-        object_type: ADT type ('class', 'doma', 'dtel', 'tabl', 'ddls', ...).
+        name: Obje adı.
+        object_type: ADT tipi ('class', 'doma', 'dtel', 'tabl', 'ddls', ...).
 
     Returns:
-        {ok, name, type, locked: bool, lock_owner?: str, exists: bool, client_log}
+        {ok, name, type, locked: bool|null, lock_owner?, exists: bool, client_log}
+        `locked: null` = ÇÖZÜLEMEDİ (kanıt yok). Bu bir "hayır" değildir.
     """
+    from mcp_servers.sap_adt.tools.atom import _miss_or_unreachable  # tek-kaynak sınıflandırıcı
     client = _get_client()
     try:
         from sap_adt_lib import SAPLockError, SAPObjectNotFoundError  # type: ignore
@@ -1255,54 +1321,54 @@ def adt_lock_check(name: str, object_type: str = "class") -> dict:
         SAPLockError = Exception  # type: ignore
         SAPObjectNotFoundError = Exception  # type: ignore
 
+    # ── 1) Varlık: metadata okuması (hata ≠ yokluk — sınıflandırıcıdan geçer) ──────
     try:
         with _capture() as buf:
             md = client.get_object_metadata(name, object_type=object_type)
-        if md is None:
-            # ⛔ AYNI SINIF (2026-08-01 bug-avı): `get_object_metadata` HER istisnayı yutup
-            # None döner → aşağıdaki `except SAPLockError` dalı bu yolda HİÇ ateşlenmez ve
-            # eskiden `exists: md is not None` + `locked: False` yazılırdı. Sonuç: sunucu
-            # hatası / yetki / kilit-okuma hatası "obje yok VE kilitli değil" diye
-            # raporlanıyordu — kilit probe'unun tek amacı buyken. Yokluk/kilitsizlik ancak
-            # KANIT varsa (404 imzası ya da temiz-boş yanıt) beyan edilir.
-            from mcp_servers.sap_adt.tools.atom import _bos_sonuc_sinifi
-            sinif = _bos_sonuc_sinifi(buf.getvalue())
-            if sinif != "yok":
-                return {
-                    "ok": False,
-                    "error": "unreachable" if sinif == "ulasilamadi" else "belirsiz",
-                    "name": name,
-                    "type": object_type,
-                    "message": ("Kilit/varlık probe'u SONUÇ ÜRETEMEDİ (obje okunamadı, sebep "
-                                "BULUNAMADI-DEĞİL bir hata). Bu 'obje yok' ya da 'kilitli değil' "
-                                "ANLAMINA GELMEZ — yazma kararını buna dayandırma."),
-                    "client_log": buf.getvalue().strip(),
-                }
-        return {
-            "ok": True,
-            "name": name,
-            "type": object_type,
-            "exists": md is not None,
-            "locked": False,
-            "client_log": buf.getvalue().strip(),
-        }
+        log = buf.getvalue().strip()
     except Exception as exc:
-        if isinstance(exc, SAPLockError):
-            return {
-                "ok": True,
-                "name": name,
-                "type": object_type,
-                "exists": True,
-                "locked": True,
-                "lock_owner": getattr(exc, "lock_owner", None),
-                "message": str(exc),
-            }
+        if isinstance(exc, SAPLockError):                      # (savunma amaçlı korunur)
+            return {"ok": True, "name": name, "type": object_type, "exists": True,
+                    "locked": True, "lock_owner": getattr(exc, "lock_owner", None),
+                    "message": str(exc)}
         if isinstance(exc, SAPObjectNotFoundError):
-            return {
-                "ok": True,
-                "name": name,
-                "type": object_type,
-                "exists": False,
-                "locked": False,
-            }
+            return {"ok": True, "name": name, "type": object_type,
+                    "exists": False, "locked": False}
         return _err_from_exc(exc)
+
+    if md is None:
+        sinif = _miss_or_unreachable(name, object_type, log)
+        if not sinif.get("ok"):
+            sinif["locked"] = None                             # yokluk DA kilit DE iddia etme
+            return sinif
+        return {"ok": True, "name": name, "type": object_type,
+                "exists": False, "locked": False, "client_log": log}
+
+    # ── 2) Gerçek kilit sondası ───────────────────────────────────────────────────
+    adt = getattr(client, "adt_client", None)
+    bilgi = None
+    try:
+        from object_types import get_object_url  # type: ignore
+        if adt is not None and hasattr(adt, "is_object_locked"):
+            with _capture() as buf2:
+                bilgi = adt.is_object_locked(get_object_url(name, object_type))
+            log = (log + "\n" + buf2.getvalue().strip()).strip()
+    except Exception as exc:                                   # sonda kurulumu bile başarısızsa
+        log = (log + f"\n[ERROR] kilit sondası: {exc}").strip()
+
+    if not isinstance(bilgi, dict):
+        return {
+            "ok": False, "error": "kilit_belirsiz",
+            "name": name, "type": object_type, "exists": True, "locked": None,
+            "message": ("Kilit durumu ÇÖZÜLEMEDİ (kilit ucu cevap vermedi ya da bu "
+                        "kurulumda yok). Bu sonuç 'kilitli DEĞİL' ANLAMINA GELMEZ — "
+                        "yazma denemesi 409/enqueue hatası verebilir. SM12/SE11 ile "
+                        "doğrula."),
+            "client_log": log,
+        }
+    return {
+        "ok": True, "name": name, "type": object_type, "exists": True,
+        "locked": bool(bilgi.get("locked")),
+        "lock_owner": bilgi.get("lock_owner"),
+        "client_log": log,
+    }
