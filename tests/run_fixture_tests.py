@@ -81,6 +81,12 @@ OZEL_TESTLER = [
     ("adtget_yokluk_kaniti", "BULUNAMADI != YOK: adt_get DDIC dalinda hata <-> yokluk"),
     ("dogrulama_kosamadi", "DOGRULAMA KOSAMADI != DOGRULANDI (5 kayit, tek kok)"),
     ("veri_yetki_guardlari", "ADR 0011 PII normalizasyonu + guard'siz mutasyon tool'u (K-1/2/3)"),
+    # 2026-08-01 kuyruk-turu (scripts/ + run_review):
+    ("reviewer_skip_sozlesmesi", "run_review SKIP sozlesmesi: cokme + sahte-PASS (S1+S2)"),
+    ("core_index_kapsam", "CORE-INDEX governance duz dosyalari GORUYOR mu (S3)"),
+    ("proje_slug_tek_kaynak", "Claude Code proje-slug'i: tek sozlesme, tek kaynak (S4)"),
+    ("git_sorgu_sessiz_bos", "deploy_ui --all-changed: git arizasi != 'degisiklik yok' (S5)"),
+    ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
 ]
 
 

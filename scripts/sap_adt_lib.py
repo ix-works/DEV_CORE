@@ -581,6 +581,30 @@ def check_sap_config():
     }
 
 
+def _yaz_conn(path, metin):
+    """`.conn_adt` yazan TEK nokta — DAİMA açık `encoding="utf-8"`.
+
+    ⛔ 2026-08-01 (KAYIT S6): iki yazıcı da `write_text(metin)` diyordu, yani kodlamayı
+    İŞLETİM SİSTEMİ LOCALE'İNE bırakıyordu. Windows-TR'de bu **cp1252**'dir. Şablon metni
+    bir em-dash (U+2014) içerir → cp1252'de tek bayt **0x97** olarak yazılır. Dosyanın
+    TÜKETİCİLERİ ise (sap_adt_lib'in kendi `load_dotenv`'i, `mcp _conn`, `pre_tool_guard`,
+    `project_config` — AV-02'den beri) **utf-8/utf-8-sig** okur:
+
+        UnicodeDecodeError: 'utf-8' codec can't decode byte 0x97 in position 388
+
+    `load_dotenv(conn_path)` bu modülün İMPORT ANINDA koştuğu için sonuç, o dizinden
+    yapılan **her `import sap_adt_lib` çağrısının çökmesidir** → canlı-SAP kontrolü yapan
+    validator'lar "guard atlandı" yoluna düşer. Ölçüldü: 1085 baytlık bozuk dosya, üç
+    okuyucuda da aynı hata (kontrol grubu: aynı metin utf-8 yazılınca üçü de OK).
+
+    SINIF: "üretici taraf, tüketicinin sözleşmesine uymuyor." Okuyucular AV-02'de
+    utf-8-sig'e taşınmıştı; YAZAN taraf geride kalmıştı. Kodlama VARSAYILANA bırakılmaz.
+    ⚠ Şablondaki em-dash bilerek KORUNUYOR: bu fonksiyonun kanaryasıdır (metin ASCII'ye
+    indirgenirse regresyon testi sessizce boşalır — bkz. tests/fixtures/conn_yazici_encoding).
+    """
+    Path(path).write_text(metin, encoding='utf-8')
+
+
 def create_conn_file(sap_url, sap_user, sap_password, sap_client, sap_language='EN',
                      sap_tier='DEV'):
     """
@@ -613,7 +637,7 @@ ADT_SAP_LANGUAGE={sap_language}
 # scripts/switch_tier.py kullan. Onek varyanti (ADT_SAP_TIER_OLD=..) SAYILMAZ.
 ADT_SAP_TIER={sap_tier}
 """
-    conn_path.write_text(conn_content)
+    _yaz_conn(conn_path, conn_content)
 
     # Reload environment variables
     load_dotenv(dotenv_path=conn_path, override=True)
@@ -662,7 +686,7 @@ ADT_SAP_TIER=DEV
 # Optional: SSL certificate verification (default: false for self-signed certs)
 # ADT_SAP_SSL_VERIFY=false
 """
-    conn_path.write_text(template)
+    _yaz_conn(conn_path, template)
     return str(conn_path)
 
 
@@ -1427,7 +1451,10 @@ class SAPADTClient:
         if not cache_path or not cache_path.exists():
             return None
         try:
-            data = json.loads(cache_path.read_text())
+            # encoding AÇIK (KAYIT S6 sınıfı): locale'e bırakılan okuma/yazma, makine
+            # değişince sessizce ayrışır. Burada iki uç da try/except içinde olduğu için
+            # hata GÖRÜNMEZ olurdu (token cache sessizce hep ıskalar → her çağrı yeni CSRF).
+            data = json.loads(cache_path.read_text(encoding='utf-8'))
             age = time.time() - float(data.get('fetched_at', 0))
             if age < 21600:
                 return data.get('token')
@@ -1441,7 +1468,8 @@ class SAPADTClient:
         if not cache_path:
             return
         try:
-            cache_path.write_text(json.dumps({'token': token, 'fetched_at': time.time()}))
+            cache_path.write_text(json.dumps({'token': token, 'fetched_at': time.time()}),
+                                  encoding='utf-8')
         except Exception:
             pass
 

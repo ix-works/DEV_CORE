@@ -69,6 +69,16 @@ python scripts/inspector.py --self-test             # canary    [✓]
 - **Tip-haritası tamlığı (en kritik):** her anahtar+eş-anlamlı için `task_for_push()` non-None (None = sessiz-atlama sınıfı).
 - Kirli-.bdef → BLOCKER/is_blocker · temiz → PASS · kapsam-dışı prog → task=None (bilinçli).
 - SKIP-görünürlüğü: koşmadıysa "PRE-FLIGHT KOŞMADI (sebep)" satırı OLMALI.
+- **SKIP sözleşmesi (2026-08-01):** `python tests/fixtures/reviewer_skip_sozlesmesi/run.py` → 11/11.
+  Değişmezler: eksik BLOCKER gate → **verdict BLOCKER + exit 1** ("koşmadı" ≠ "temiz"; gate'i
+  silmek onu geçmenin yolu OLMAMALI) · eksik WARNING → WARNING/exit 0 · human-mod SKIP'te
+  **çökmez ve VERDICT satırını basar** (eski hâli `KeyError: 'stdout'`) · `--json` anahtarları
+  `skipped_*`/`failed_*` ile MCP `_reviewer`a taşınır.
+  ⚠ **FP çapaları omurgadır:** gate VAR+geçiyor → PASS **ve BOŞ ZİNCİR → PASS**. Boş zincir
+  (`dtel_update`, `rap_service_binding`) KAYITLI bir boşluktur; SKIP ile aynı kefeye konursa
+  meşru push'lar bloklanır. Kayıtsız eksiklik ≠ kayıtlı boşluk.
+  ⚠ Davranış: proje-lokal `check_td_cancelled_fields.py` kurulu DEĞİLSE `struct_creation`
+  artık WARNING verir (PASS değil) — kasıtlı görünürlük, bloklamaz.
 
 ## B11 — mcp_servers/sap_adt
 - Offline: `test_csrf_header_injection` + `test_push_readback_mismatch` + `test_search_objects_type_filter` + import-smoke.
@@ -126,6 +136,43 @@ python scripts/inspector.py --self-test             # canary    [✓]
   (`reset --hard` kaybı); 2. denemede fixture'la birlikte geldi. **Fixture'sız gate kaybolur** —
   kapıyı elden geçirirken önce bu fixture'ı koş, "kod duruyor mu" diye BAKMA (`infra-changelog.md`
   → core_precommit bölümü dürüstlük notu).
+
+## B13b — build_core_index (CORE-INDEX kapsamı)
+- `python tests/fixtures/core_index_kapsam/run.py` → 10/10.
+- Değişmezler: `governance/` DÜZ dosyaları (infra-changelog + infra-test-recipes DAHİL —
+  F0'ın zorunlu okuması) indekste · **mükerrer satır YOK** (governance'ı `rglob` ile eklemek
+  `decisions/`i çiftler) · üretilmiş `CORE-INDEX.md` kendini listelemez · `scripts/`,
+  `mcp_servers/`, `tests/` indekse SIZMAZ (kod ≠ doküman) · indeksteki her yol diskte var.
+- **Değiştirdiysen `python core/scripts/build_core_index.py` YENİDEN KOŞ** — yoksa
+  `check_core_index_fresh` (C-IDX-01) BAYAT der. Damga satırı kıyasta yok sayılır.
+- ⚠ Ölçüldü (2026-08-01): DEV_CORE'un KENDİ `governance/CORE-INDEX.md`'si bayat kalabiliyor;
+  gate'in core deposunda fiilen koşup koşmadığı ayrı bir denetim kalemidir.
+
+## B17 — Claude Code proje-slug'ı (auto-memory / transcript adresleri)
+- `python tests/fixtures/proje_slug_tek_kaynak/run.py` → 7/7. TEK KAYNAK:
+  `scripts/utils/claude_paths.py` (`proje_slug`/`transcript_dizini`/`auto_memory_dizini`).
+- Kanonik kural: **alfanümerik olmayan HER karakter `-`** — alt çizgi DAHİL
+  (`C:\IX\DEV_CORE` → `C--IX-DEV-CORE`).
+- ⚠ **Kanıt kuralı:** konvansiyonu `~/.claude/projects/` altındaki dizin ADLARINA bakarak
+  doğrulama — orada bizim script'lerimizin yarattığı dizinler de var (dairesel kanıt; bu
+  tuzağa bir kez düşüldü). Yer gerçeği `*.jsonl` içindeki `cwd` alanıdır: transcript'i
+  OLMAYAN dizini Claude Code yazmamıştır. Ölçüm: A 4/4, B 2/4.
+- Yeni bir tüketici eklersen slug'ı YENİDEN TÜRETME; fixture'ın V3/V4 vektörleri yakalar.
+
+## B18 — deploy_ui `--all-changed` (git sorgusu)
+- `python tests/fixtures/git_sorgu_sessiz_bos/run.py` → 6/6 (gerçek sentetik git repoları).
+- Değişmez: git ARIZASI ("fatal:", exit≠0) **asla** "değişen app yok"a çevrilmez → exit 1 +
+  sebep + `--app/--apps/--all` alternatifi. Tetikleyiciler: tek-commit'lik repo, `--depth 1`
+  shallow clone, git ağacı olmayan dizin.
+- FP çapası: sağlam repoda app bulunur; son commit `ui/` DIŞINDAysa boş liste MEŞRU kalır.
+
+## B19 — .conn_adt YAZICI tarafı (encoding)
+- `python tests/fixtures/conn_yazici_encoding/run.py` → 7/7 (locale-bağımsız).
+- Değişmez: `.conn_adt` yazan her yol AÇIK `encoding="utf-8"` taşır (AST çapası tüm
+  `write_text` çağrılarını denetler). Okuyucular utf-8/utf-8-sig; yazıcı locale'e bırakılırsa
+  cp1252'de em-dash → `0x97` → **her `import sap_adt_lib` çöker** (1085 baytlık dosya vakası).
+- ⚠ Şablondaki non-ASCII karakter KANARYADIR; ASCII'ye indirgersen test sessizce boşalır (V6).
+- FP çapası: dosya BOM ile BAŞLAMAZ (BOM eklemek AV-02 sınıfını geri getirir).
 
 ## B14 — inspector
 - `--self-test` 5/5-FAIL-üretmeli `[✓]` (üretmezse ALET bozuk); `--json`; çıplak-✓ YASAK (kesir basılır).

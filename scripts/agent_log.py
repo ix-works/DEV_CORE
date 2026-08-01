@@ -14,7 +14,6 @@ Kullanım:
 import argparse
 import json
 import os
-import re
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ importları
@@ -29,9 +28,11 @@ REPO = project_root()
 
 
 def project_dir() -> Path:
-    base = Path.home() / ".claude" / "projects"
-    enc = re.sub(r"[^A-Za-z0-9]", "-", str(REPO))     # <PROJECT_ROOT> -> C--AI-PROJE-<PROJECT_NAME>
-    cand = base / enc
+    # Slug TEK KAYNAK: utils/claude_paths (2026-08-01 KAYIT S4 — kural beş dosyada
+    # bağımsız yazılmış, iki farklı sözleşme oluşmuştu).
+    from utils.claude_paths import claude_projects_dir, transcript_dizini
+    base = claude_projects_dir()
+    cand = transcript_dizini(REPO)
     if cand.exists():
         return cand
     # fallback: en-son aktif *.jsonl barındıran alt-dizin

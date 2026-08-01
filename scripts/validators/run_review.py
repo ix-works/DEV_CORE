@@ -10,6 +10,10 @@ Mantık:
   - Çıktı: PASS / WARNING / BLOCKER (verdict) + checklist results + blind spots
   - BLOCKER → coordinator yazma yapmadan düzeltmeli (exit 1)
   - WARNING → coordinator yazabilir ama kullanıcıya bildirmeli (exit 0)
+  - ⊘ SKIP (script bulunamadı) → o gate HİÇ KOŞMADI. "Koşmadı" ≠ "temiz": kendi
+    şiddetiyle verdict'e SAYILIR (eksik BLOCKER → BLOCKER). BOŞ ZİNCİL (dtel_update,
+    rap_service_binding) bundan AYRIDIR: orada koşacak gate olmadığı BİLİNÇLİ karardır
+    ve PASS kalır — kayıtsız eksiklik ile kayıtlı boşluk aynı şey değildir.
 
 Kullanım:
     # CDS yaratma öncesi
@@ -207,6 +211,28 @@ REPO_WIDE_SCANNERS = {
 }
 
 
+def sonuc_kaydi(validator: str, severity: str, status: str, description: str,
+                stdout: str = '', stderr: str = '', message: str = '') -> dict:
+    """Zincir-sonucu kaydını TEK yerden üret — her kayıt AYNI anahtar kümesini taşır.
+
+    ⛔ SINIF-FIX (2026-08-01, KAYIT S1): SKIP dalı elle kurulmuş bir sözlük döndürüyordu
+    ve `stdout`/`stderr` anahtarları YOKTU. Raporlama döngüsü (`elif r['stdout']`) o kaydı
+    okuyunca `KeyError: 'stdout'` → süreç çöktü → **VERDICT satırı HİÇ BASILMADI** (exit 1
+    ile ayırt edilemez bir "BLOCKER"). Kod yorumu "← KeyError fix" diyordu ama fix eksikti:
+    kayda yalnız `description` eklenmişti. Tek-üretici kalıbı bu sınıfı yapısal kapatır —
+    yeni bir durum eklendiğinde de anahtar kümesi bozulamaz.
+    """
+    return {
+        'validator': validator,
+        'severity': severity,
+        'status': status,          # PASS | FAIL | SKIP
+        'description': description,
+        'stdout': stdout,
+        'stderr': stderr,
+        'message': message,        # SKIP sebebi (koşmadıysa NEDEN koşmadı)
+    }
+
+
 def run_validator(script_path: Path, artifact: str | None, extra_args: list[str]) -> tuple[int, str, str]:
     """Validator script'ini çalıştır, (exit_code, stdout, stderr) döner.
 
@@ -258,13 +284,11 @@ def main() -> int:
             if lokal.exists():
                 script_path = lokal
         if not script_path.exists():
-            results.append({
-                'validator': script_name,
-                'severity': default_severity,
-                'status': 'SKIP',
-                'description': description,          # ← KeyError fix (satır ~316)
-                'message': f'Script {script_name} core+validators-local hiçbirinde yok',
-            })
+            results.append(sonuc_kaydi(
+                script_name, default_severity, 'SKIP', description,
+                message=f'PRE-FLIGHT KOŞMADI: {script_name} core+validators-local '
+                        f'hiçbirinde YOK (aranan: {VALIDATORS_DIR} ve '
+                        f'{PROJ_ROOT / "scripts" / "validators-local"}) — PASS SANMA.'))
             continue
 
         # Tablo tipi için --type table extra arg
@@ -280,18 +304,24 @@ def main() -> int:
         review_artifact = None if script_name in REPO_WIDE_SCANNERS else args.artifact
         rc, out, err = run_validator(script_path, review_artifact, extra_args)
         status = 'PASS' if rc == 0 else 'FAIL'
-        results.append({
-            'validator': script_name,
-            'severity': default_severity,
-            'status': status,
-            'description': description,
-            'stdout': out.strip(),
-            'stderr': err.strip(),
-        })
+        results.append(sonuc_kaydi(script_name, default_severity, status, description,
+                                   stdout=out.strip(), stderr=err.strip()))
 
-    # Verdict hesapla
-    blocker_count = sum(1 for r in results if r['status'] == 'FAIL' and r['severity'] == 'BLOCKER')
-    warning_count = sum(1 for r in results if r['status'] == 'FAIL' and r['severity'] == 'WARNING')
+    # ── Verdict ───────────────────────────────────────────────────────────────
+    # ⛔ SKIP VERDICT'E SAYILIR (2026-08-01, KAYIT S2 — S1 ile AYNI kök: SKIP yolunun
+    # sözleşmesi). Eskiden yalnız 'FAIL' sayılıyordu: BLOCKER olarak sınıflandırılmış bir
+    # gate'in DOSYASI YOKSA (silinmiş / proje-lokal ama kurulmamış / adı değişmiş) zincir
+    # sessizce atlanıyor ve VERDICT 'PASS' + exit 0 → "✓ COORDINATOR: PASS, devam
+    # edebilirsin" yazıyordu. Yani gate'i SİLMEK, onu geçmenin en kolay yoluydu.
+    # "Koşmadı" ≠ "temiz" (bulunamadı ≠ yok): eksik BLOCKER = BLOCKER, eksik WARNING =
+    # WARNING. blocker_count/warning_count TOPLAM'dır (FAIL + SKIP); ayrıntı için
+    # skipped_* alanları eklendi (tüketiciler: MCP _reviewer → atom.py/composite.py rapor).
+    failed_blocker = sum(1 for r in results if r['status'] == 'FAIL' and r['severity'] == 'BLOCKER')
+    failed_warning = sum(1 for r in results if r['status'] == 'FAIL' and r['severity'] == 'WARNING')
+    skipped_blocker = sum(1 for r in results if r['status'] == 'SKIP' and r['severity'] == 'BLOCKER')
+    skipped_warning = sum(1 for r in results if r['status'] == 'SKIP' and r['severity'] == 'WARNING')
+    blocker_count = failed_blocker + skipped_blocker
+    warning_count = failed_warning + skipped_warning
 
     if blocker_count > 0:
         verdict = 'BLOCKER'
@@ -313,8 +343,13 @@ def main() -> int:
             'task': args.task,
             'artifact': str(artifact_path),
             'verdict': verdict,
+            # TOPLAM (FAIL + SKIP) — verdict'i süren sayılar. Ayrıntı aşağıda:
             'blocker_count': blocker_count,
             'warning_count': warning_count,
+            'failed_blocker_count': failed_blocker,
+            'failed_warning_count': failed_warning,
+            'skipped_blocker_count': skipped_blocker,
+            'skipped_warning_count': skipped_warning,
             'checklist_reference': checklist,
             'results': results,
         }
@@ -335,6 +370,9 @@ def main() -> int:
                 if r['stderr']:
                     for line in r['stderr'].splitlines():
                         print(f"    {line}")
+            elif r['status'] == 'SKIP':
+                # Görünürlük şartı (B10 reçetesi): koşmayan gate SESSİZ kalmaz.
+                print(f"    {r['message']}")
             elif r['stdout']:
                 first_line = r['stdout'].splitlines()[0] if r['stdout'] else ''
                 print(f"    {first_line}")
@@ -342,8 +380,15 @@ def main() -> int:
 
         print(f'{"="*70}')
         print(f'VERDICT: {verdict}')
-        print(f'  BLOCKERS: {blocker_count}')
-        print(f'  WARNINGS: {warning_count}')
+        print(f'  BLOCKERS: {blocker_count}'
+              + (f'  (koşan-FAIL {failed_blocker} + KOŞMAYAN {skipped_blocker})'
+                 if skipped_blocker else ''))
+        print(f'  WARNINGS: {warning_count}'
+              + (f'  (koşan-FAIL {failed_warning} + KOŞMAYAN {skipped_warning})'
+                 if skipped_warning else ''))
+        if skipped_blocker or skipped_warning:
+            print(f'  ⊘ {skipped_blocker + skipped_warning} gate HİÇ KOŞMADI '
+                  f'(script yok) — "koşmadı" ≠ "temiz".')
         if checklist:
             print(f'\nManuel checklist (ek kontrol için): {checklist}')
         print(f'{"="*70}\n')
