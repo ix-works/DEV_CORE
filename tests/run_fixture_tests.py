@@ -94,6 +94,8 @@ OZEL_TESTLER = [
     ("gitignore_tam_satir", "core-sizinti kilidi: yorumlu/negatif satir 'kilit var' saniliyordu (V4)"),
     ("proje_koku_varyantlari", "__file__-koku: glob/joinpath/str-concat/transitive kaciyordu (V5)"),
     ("ui5_t1_tirnak_sinifi", "UI5 T1: template-literal `_X` tirnak sinifindan kaciyordu (V6)"),
+    # 2026-08-01 amend-FP (kullanici-onayli GEVSETME — kiyas birimi commit -> dal):
+    ("changelog_amend", "INFRA-CHANGELOG gate: amend/cok-commit dalinda FP; taze dalda birebir-eski"),
 ]
 
 
