@@ -80,10 +80,30 @@ def get_active_tier() -> str:
             # BOM'lu dosyada İLK anahtar sessizce kaybolur (`str.strip()` BOM'u SİLMEZ);
             # tier ilk satırdaysa PRD → eskiden "DEV varsayıldı"ya düşerdi, artık UNKNOWN
             # olurdu — yani BOM tek başına da korumayı yanlış tarafa çevirebiliyordu.
-            for line in p.read_text(encoding="utf-8-sig").splitlines():
-                t = _normalize_tier(_conn_line_value(line, "ADT_SAP_TIER"))
-                if t:
-                    return t
+            # ⚠ SON-KAZANIR + ÇAKIŞMA TESPİTİ (2026-08-01 bug-avı, W2-MG-01).
+            # ÖLÇÜLDÜ: aynı anahtarın İKİ KEZ geçtiği bir `.conn_adt`'de
+            #   bu okuyucu (eski: ilk-kazanır) → DEV
+            #   `dotenv` (gerçek istemcinin kullandığı; `sap_adt_lib` `load_dotenv`) → PRD
+            # Yani guard "DEV, mutasyon serbest" derken bağlantı PRD'ye gidiyordu —
+            # sessiz yanlış-sistem yazımı. Tetikleyici bizim KENDİ mesajımız: fail-closed
+            # uyarısı ".conn_adt'ye ADT_SAP_TIER=... EKLE" diyor; ekleyen çift anahtar üretir.
+            # (switch_tier dosyayı KOPYALADIĞI için çift üretmez — kaynak elle düzenlemedir.)
+            # Politika: otorite dotenv'dir → SON değer alınır; farklı değerlerle çakışma
+            # varsa hangi sistemde olduğumuzu BİLMİYORUZ → UNKNOWN (fail-closed).
+            degerler = [t for t in
+                        (_normalize_tier(_conn_line_value(ln, "ADT_SAP_TIER"))
+                         for ln in p.read_text(encoding="utf-8-sig").splitlines())
+                        if t]
+            if degerler:
+                if len(set(degerler)) > 1:
+                    log.warning(
+                        "ADT_SAP_TIER .conn_adt'de ÇAKIŞIK tanımlı (%s) → tier=UNKNOWN "
+                        "(fail-closed). Bağlantı katmanı dotenv ile SON değeri kullanır; "
+                        "guard ile bağlantı AYRIŞIR → yanlış sisteme yazım riski. "
+                        "Çözüm: fazla satırı SİL (ekleme değil DEĞİŞTİRME) ya da "
+                        "scripts/switch_tier.py kullan.", " ≠ ".join(dict.fromkeys(degerler)))
+                    return TIER_UNKNOWN
+                return degerler[-1]
     except Exception as exc:  # pragma: no cover - defensive
         log.warning("tier: .conn_adt okunamadı (%s), env'e düşülüyor", exc)
 
@@ -101,15 +121,26 @@ def get_active_tier() -> str:
 
 
 def _conn_value(key: str, default: str) -> str:
-    """`.conn_adt`'den bir değeri oku (env fallback, sonra default)."""
+    """`.conn_adt`'den bir değeri oku (env fallback, sonra default).
+
+    ⚠ **SON-KAZANIR** (W2-MG-01): bu fonksiyonun tüketicisi ADR 0010 bağlantı-kayması
+    guard'ıdır ve onun işi "MCP'nin BAĞLI OLDUĞU sistem ile `.conn_adt`'nin gösterdiği
+    sistem aynı mı" sorusudur. Karşılaştırma, istemcinin FİİLEN kullanacağı değere göre
+    yapılmalı; istemci `load_dotenv` ile okur ve dotenv'de **son tanım kazanır**. Eski
+    ilk-kazanır davranışı, çift-anahtarlı bir dosyada guard'ı gerçeklikten koparıyordu
+    (guard `dev.test` kıyaslarken bağlantı `prd.test`'e gidiyordu → mismatch GÖRÜNMEZ).
+    """
     try:
         from sap_adt_lib import get_conn_path  # type: ignore
         p = get_conn_path()
         if p and p.exists():
+            son = None
             for line in p.read_text(encoding="utf-8-sig").splitlines():  # BOM (AV-02)
                 v = _conn_line_value(line, key)  # TAM anahtar (önek-gaspı yok — KAYIT-1)
                 if v:
-                    return v
+                    son = v
+            if son:
+                return son
     except Exception:
         pass
     return os.getenv(key) or default

@@ -71,6 +71,7 @@ OZEL_TESTLER = [
     ("changelog_gate", "pre-commit 4. kontrol: infra-changelog gate (KAYIT-2)"),
     ("sir_gate", "pre-commit 5. kontrol: sir-dosyasi (canli ihlalle bulundu)"),
     ("reviewer_tip_kapsam", "ADR 0006 pre-flight: push-tipi <-> reviewer haritasi senkronu"),
+    ("conn_cift_anahtar", "ADR 0010: cift-anahtarli .conn_adt (guard <-> baglanti ayrismasi)"),
 ]
 
 
