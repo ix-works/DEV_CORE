@@ -546,4 +546,16 @@ Bu çözüm 2026-05-13'de bulundu. Süreç:
 
 ---
 
+## `create_type_group.py` — TYPE-POOL (legacy) yaratma
 
+> **Ne zaman:** yalnız eski (`TYPE-POOLS` ile tüketilen) tip havuzu gerektiğinde. Yeni işte
+> tercih edilmez — tipleri class/interface içinde tanımla. Ad ≤4 karakter önerilir.
+
+```bash
+python core/scripts/create_type_group.py --name ZSD001TY --source-file <yol>/types.txt \n  --description "ZSD001 Tip Tanımları" --package ZSD001_CLC --transport <TR> --cwd <proje-kökü>
+```
+- Kaynak dosya YALNIZ `TYPES`/`CONSTANTS` içerir; `TYPE-POOL` ifadesini script ekler.
+- **Doğrulama:** yazımdan sonra `adt_get` ile canlı okuyup içerik eşitliğini gör (push "[OK]"
+  mesajı kanıt değildir).
+- 2026-08-01 bug-avı notu: bu script çalışır durumdaydı ama hiçbir yerden çağrılmıyordu ve
+  `check_scripts_documented` uyarı veriyordu → referans buraya eklendi (T9).

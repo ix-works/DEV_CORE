@@ -523,4 +523,14 @@ python "<PROJECT_ROOT>\scripts\activate_object.py" --conn "<PROJECT_ROOT>\.conn_
 
 ---
 
+## `run_pretty_printer.py` — sunucu-tarafı ABAP biçimlendirme
 
+> **Ne zaman:** elle düzenlenmiş ABAP kaynağını SAP'nin kendi Pretty Printer'ıyla
+> biçimlendirmek gerektiğinde (girinti/büyük-küçük harf). Zorunlu adım DEĞİL.
+
+```bash
+python core/scripts/run_pretty_printer.py --object-name ZCL_SD001_ORDER --object-type class --cwd <proje-kökü>
+```
+- ⚠ Sunucuda çalışır ve kaynağı **değiştirir** → çalıştırmadan önce yerel kopyanın taze
+  olduğundan emin ol (PULL-BEFORE-EDIT, ADR 0016); sonrasında tekrar çek ki repo ile canlı ayrışmasın.
+- 2026-08-01 bug-avı notu: çağrılmayan/belgesiz script'ti → referans buraya eklendi (T9).
