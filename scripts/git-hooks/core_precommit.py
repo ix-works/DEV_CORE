@@ -100,6 +100,27 @@ def infra_dosyalari(paths: list[str]) -> list[str]:
     return out
 
 
+def _changelog_dalda_degisti() -> bool:
+    """Changelog, DAL genelinde (merge-base(origin/main)..staged-tree) değişti mi?
+
+    ⚠GEVŞETME (kullanıcı onayı 2026-08-01, bug-avı kuyruğu 'amend FP' kaydı):
+    Kıyas birimi COMMIT'ten DAL'a çevrildi. Eski davranışın yanlış-pozitifi:
+    `git commit --amend`'de staged-diff HEAD'e göredir; changelog satırı amend
+    edilen commit'in İÇİNDE olsa bile "bu commit'te değişmiyor" sayılıp
+    bloklanıyordu (3 kez yaşandı, 3 kez IX_NO_CHANGELOG kaçışı kullanıldı —
+    FP'nin normalleştirdiği kaçış, gate'in kendisinden tehlikeli). Aynı FP
+    çok-commit'li dalda da vardı (commit-1 changelog, commit-2 kod → blok).
+    Sınır: TAZE dalda (merge-base == HEAD == origin/main) davranış ESKİSİYLE
+    BİREBİR — gevşeme yalnız dal-içi. origin/main çözülemezse fail-closed
+    (False döner → eski katı yol).
+    """
+    base = _git("merge-base", "HEAD", "origin/main").strip()
+    if not base:
+        return False
+    out = _git("diff", "--cached", "--name-only", base, "--", CHANGELOG_PATH)
+    return bool(out.strip())
+
+
 def check_changelog(paths: list[str], hatalar: list[str]) -> None:
     if os.getenv("IX_NO_CHANGELOG") == "1":
         sys.stderr.write(
@@ -110,6 +131,8 @@ def check_changelog(paths: list[str], hatalar: list[str]) -> None:
     if not infra:
         return
     if CHANGELOG_PATH in [p.replace("\\", "/") for p in paths]:
+        return
+    if _changelog_dalda_degisti():
         return
     ornek = ", ".join(infra[:4]) + (" …" if len(infra) > 4 else "")
     hatalar.append(

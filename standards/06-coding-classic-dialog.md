@@ -104,6 +104,14 @@ Kolonlar göster/gizle + Excel export. Klasik ALV'de bunlar `CL_GUI_ALV_GRID` +
 ## 5. Text element / selection text (TR-master — gap-analysis #C4, ADR 0005-D)
 
 - **Tüm metinler text element/selection text** olarak (literal gömme YASAK — constants rule).
+- **İSTİSNA — kanonik klasik-ALV template (ADR 0012; kullanıcı kararı 2026-08-01):**
+  `playbook/templates/classic-alv-list.prog.abap` ve ondan türeyen programların **iskelet
+  etiketleri** (fieldcat/başlık gibi template-çekirdeği) inline kalabilir — template
+  canlı-çalışan kanıtlanmış örnektir (ZSD000_P_ALV_TEMP1 ailesi), master dil projenin
+  `master_language`'i ve tek-dilli çalışılıyor; salt bu kural için şablonu değiştirmek
+  risk/maliyet üretir. **Seçim-ekranı metinleri istisnaya DAHİL DEĞİL** — onlar
+  selection-text ile yazılır (canlı pratik: paket `programs/textpool/` örnekleri).
+  Template ileride başka sebeple revize edilirse text-element'e geçiş o pakette değerlendirilir.
 - TEXT-xxx, selection texts, GUI title, status text → **TR ve tam**. ADR 0005-D: Z text TR.
 - **Two-pass dil kuralı:** create EN gelirse → TR'ye senkronla; master = TR
   ([[feedback_mcp-post-shell-en-master-lang]]).
