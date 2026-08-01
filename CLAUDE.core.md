@@ -235,6 +235,10 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 - **Kullanıcı-seviyesi `~\.claude\CLAUDE.md`'ye METODOLOJİ YAZILMAZ** (çift-kaynak drift +
   git-dışı + kapsam taşması). Yalnız projeden-bağımsız kişisel tercih.
 - Yeni proje memory'si `claude/memory-seed/`'den tohumlanır (`seed_memory`).
+- **Ders-hijyeni (radar 2026-08-01):** YENİ yazılan veya içeriğine dokunulan her feedback
+  dersine 2 satır eklenir: `Son-doğrulama: <tarih>` + `Applies-to: <bağlam/profil>`. Eski
+  dersler toplu güncellenmez (bürokrasi üretme); radar turu "yaşlanmış ders" (son-doğrulama
+  >90 gün + yüksek-recall) sorgusuyla örneklem denetler.
 
 ## 6. STOP KURALI — Belirsizlik Halinde Forward Progress YOK
 

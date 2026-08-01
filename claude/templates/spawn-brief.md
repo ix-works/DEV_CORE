@@ -28,6 +28,9 @@
 <dosya yolları + ilgili satır bölgeleri + kısa alıntılar/özet kararlar. SAP-kaynakları için
 taze-oku kuralı GEÇERLİ KALIR — hazır-bağlam yalnız değişmeyen referanslar için.>
 
+## 5b. PLAN-ARTIFACT (yalnız çok-adımlı geri-alınamaz zincirlerde)
+<plan dosyası: .tmp/plan-<konu>.md — bu brif o planın hangi adımını kapsıyor: adım N/M>
+
 ## 6. GÖREVE-İLİŞKİN DERSLER (R3 — memory köprüsü; ZORUNLU alan)
 <MEMORY.md'de görev anahtar-kelimeleriyle tarama → eşleşen 2-5 dersin ÖZÜ (kuralın kendisi,
 1-2 satır; dosya adı değil). Eşleşme yoksa AÇIKÇA yaz: "ilgili ders bulunamadı" — boş bırakma.>
