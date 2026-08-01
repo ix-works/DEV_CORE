@@ -866,6 +866,9 @@ _ACTIVATION_URI_SEG = {
     "dataelement": "ddic/dataelements", "dtel": "ddic/dataelements",
     "table": "ddic/tables", "tabl": "ddic/tables", "structure": "ddic/structures",
     "program": "programs/programs", "prog": "programs/programs",
+    # 2026-08-01 (T1.6 pilot bulgusu): klasik program+include co-activation'ı için include
+    # tipi eksikti -> adt_activate(also=[{object_type:"include"}]) unsupported_type veriyordu.
+    "include": "programs/includes", "prog/i": "programs/includes",
     "srvb": "businessservices/bindings", "servicebinding": "businessservices/bindings",
 }
 
