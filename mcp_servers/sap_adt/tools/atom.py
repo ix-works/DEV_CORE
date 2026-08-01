@@ -367,6 +367,32 @@ def _miss_or_unreachable(name: str, object_type: str, log_text: str) -> dict:
             ),
             "client_log": log_text,
         }
+    # ⚠ YOKLUK İDDİASI KANIT İSTER (2026-08-01 bug-avı, W2-MCPT-01).
+    # `_UNREACHABLE_MARKERS` yalnız AĞ katmanını tanır. Sunucu/yetki hataları (HTTP 500,
+    # 502, 403 logon) o listeye girmez ve eskiden sessizce `exists:false`e düşerdi —
+    # yani "sunucu patladı" ile "obje yok" AYNI cevabı veriyordu. Ölçüldü: 500/403/
+    # timeout/bağlantı-kopması dördü de `ok:true, exists:false`.
+    # Politika: log'da bir HATA izi varsa ve o iz KESİN bir bulunamadı imzası DEĞİLSE,
+    # yokluk BEYAN EDİLMEZ → `ok:false` + belirsiz. Temiz-boş yanıt (hata izi yok) eskisi
+    # gibi `exists:false` kalır; 404 imzası da öyle (kontrol grubu bunu doğrular).
+    lt = (log_text or "")
+    hata_izi = "[ERROR]" in lt or "[error]" in lt
+    yokluk_imzasi = any(s in lt.lower() for s in
+                        ("not found", "notfound", "404", "does not exist", "bulunamadı"))
+    if hata_izi and not yokluk_imzasi:
+        return {
+            "ok": False,
+            "error": "belirsiz",
+            "name": name.upper(),
+            "type": object_type,
+            "message": (
+                "Obje okunamadı ve sebep BULUNAMADI-DEĞİL bir hata (ör. HTTP 500/403). "
+                "Bu sonuç 'obje yok' DEĞİLDİR — sunucu/yetki hatası da olabilir. "
+                "⛔ Bu cevaba dayanıp obje YARATMA ya da SİLME (ADR 0005-A). "
+                "Hatayı gider, tekrar ölç."
+            ),
+            "client_log": log_text,
+        }
     out = {"ok": True, "name": name.upper(), "type": object_type, "exists": False,
            "client_log": log_text}
     hint = _NO_DIRECT_READ_HINT.get((object_type or "").lower().strip())
@@ -441,11 +467,27 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
             with _capture_stdout() as out:
                 xml = client.get_ddic_object(ddic_xml_type, name)
             log_buf.write(out.getvalue())
+            if xml is None:
+                # ⚠ "BULUNAMADI ≠ YOK" — DDIC dalı (2026-08-01 bug-avı, W2-MCPT-01).
+                # Eskiden `exists: xml is not None` yazıyordu ve `None` gelen HER durum
+                # "obje yok" sayılıyordu. Ama alt katman (`sap_client.get_ddic_object`)
+                # **her istisnayı yutup None döndürür** → aşağıdaki `except` dalı bu tipler
+                # için HİÇ ateşlenmez. Ölçüldü (stub'lu kontrol grubuyla):
+                #   gerçek 404      → exists:false   ✔ doğru
+                #   HTTP 500 / 403  → exists:false   ✘ ok:true ile, 404'ten AYIRT EDİLEMEZ
+                #   ReadTimeout     → exists:false   ✘
+                #   bağlantı kopuk  → exists:false   ✘
+                # Sonuç: ajan "yok" sanıp yeniden YARATIR (ADR 0005-A sınırı) ya da mevcut
+                # objeyi ezer. Aynı sınıf `class` yolunda 2026-07-31'de kapatılmıştı;
+                # DDIC dalı geride kalmıştı.
+                # POLİTİKA: yokluk iddiası KANIT ister. `exists:false` yalnız log'da KESİN
+                # bir bulunamadı imzası varsa döner; aksi halde yokluk BEYAN EDİLMEZ.
+                return _miss_or_unreachable(name, object_type, log_buf.getvalue().strip())
             return {
                 "ok": True,
                 "name": name,
                 "type": object_type,
-                "exists": xml is not None,
+                "exists": True,
                 "source": xml,
                 "metadata": xml,
                 "client_log": log_buf.getvalue().strip(),
