@@ -295,7 +295,7 @@ def a2_sema_degismedi(satirlar: list[dict]) -> list[Bulgu]:
     if bozuk:
         out.append(Bulgu("A2", f"PAYLOAD ŞEMASI DEĞİŞMİŞ ({len(bozuk)} satır) — logger KÖR",
                          f"örnek: {bozuk[0]['ts']} {bozuk[0]['reason']} {bozuk[0].get('ek','')[:120]}"))
-    MALFORMED_KABUL = 3  # T0.7 (atomik append) ÖNCESİ tarihsel satırlar — veri olarak korunuyor
+    MALFORMED_KABUL = 4  # T0.7-öncesi 3 + geçiş-dönemi 1 (2026-07-31: DEV_CORE bir süre G3-öncesi branch'teyken yazıldı) — veri korunuyor
     yarim = [s for s in satirlar if s["reason"] == "MALFORMED"]
     if len(yarim) > MALFORMED_KABUL:
         out.append(Bulgu("A2", f"YENİ malformed log satırı: {len(yarim) - MALFORMED_KABUL} adet "
