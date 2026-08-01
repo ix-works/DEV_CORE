@@ -120,7 +120,7 @@ Test-senaryosu: (1) `python tests/fixtures/adtget_yokluk_kaniti/run.py` -> 6/6 (
 > reposunda (hook doğuşu 2026-06-02 660a5bbf) — repo-sınırı --follow'u kırar, o dönem AYRI tur.
 > Satır: tarih · değişiklik · NEDEN · NASIL-test · sha/PR. (Tam ayrıntı: infra-expert raporu,
 > transcript 2026-08-01; test-reçeteleri aşağıdaki TEST-REÇETELERİ bölümünde.)
-| 2026-08-01 | core-ci `Bagimliliklar` adimina `mcp` eklendi | adtget_yokluk_kaniti fixture'i MCP tool KATMANINI gercekten import edip davranisini olcuyor (stub'li istemci ile); AST ile okunamaz cunku olculen sey calisma-zamani sinifi. Bagimlilik yokken fixture DOGRU davrandi (sessiz atlamadi, FAIL verdi) ama testi CI'da kosulamaz kiliyordu. Kiyas: reviewer_tip_kapsam TABLO icerigi olctugu icin AST'ye cevrildi — olculen sey ne ise cozum o | CI kosumu (PR core#82) | — | core#82 |
+| 2026-08-01 | adtget fixture'ina MCP-SDK KOPRUSU (CI pip'ine `mcp` EKLENMEDI — denendi, geri alindi) | Fixture MCP tool KATMANINI gercekten import edip davranisini olcuyor (stub'li istemci); AST ile okunamaz cunku olculen sey CALISMA-ZAMANI sinifi. Once `pip install mcp` denendi: gelen paket `mcp.server.fastmcp` SAGLAMADI (yanlis/eski dagitim) -> ikinci CI kirmizisi. Cozum: `atom -> _app -> FastMCP` zincirini karsilayan asgari SAHTE modul, YALNIZ SDK eksikse kurulur; gercek SDK varsa dokunulmaz. Sinir yoruma yazildi: kopru FastMCP davranisini test ETMEZ, onu MCP import-smoke yakalar | Iki eksende dogrulandi: yerelde gercek SDK ile 6/6, `mcp` import'u BLOKLANMIS CI-simulasyonunda da 6/6 | tests/fixtures/adtget_yokluk_kaniti | core#82 |
 
 ## pre_tool_guard.py
 - 2026-07-08 · 4-katman doğuş + proje-kökü env-first · junction __file__ daima DEV_CORE'a çözülüyordu (yanlış ağaç korunuyordu) · 9-senaryo sentetik · 1ae10b1

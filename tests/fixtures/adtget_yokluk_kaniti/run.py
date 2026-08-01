@@ -43,6 +43,39 @@ for p in (REPO, REPO / "scripts", REPO / "scripts" / "utils"):
     sys.path.insert(0, str(p))
 os.environ.setdefault("CLAUDE_PROJECT_DIR", str(REPO))
 
+# ── MCP SDK KOPRUSU (test-harness'i, uretim kodu DEGIL) ──────────────────────────
+# `atom.py` -> `_app.py` -> `from mcp.server.fastmcp import FastMCP` zinciri var. Bu
+# fixture'in OLCTUGU sey `adt_get`'in DDIC dalindaki YOKLUK-SINIFLANDIRMASI; FastMCP'nin
+# kendisi test kapsaminda DEGIL. CI'da SDK yok (once `pip install mcp` denendi, gelen
+# paket `mcp.server.fastmcp` saglamadi) -> alakasiz bir bagimlilik testi kosulamaz
+# kiliyordu. Cozum: yalnizca EKSIKSE, sadece bu import'u karsilayan asgari bir sahte
+# modul kurulur. Gercek SDK varsa DOKUNULMAZ (yerelde gercek zincir kosar).
+# ⚠ Sinir: bu koprü FastMCP davranisini test etmez ve etmemeli; kirilirsa MCP sunucusunun
+# kendi smoke testi (`team_setup` "MCP server import smoke") yakalar.
+try:  # pragma: no cover - ortam kosullu
+    import mcp.server.fastmcp  # type: ignore  # noqa: F401
+except Exception:
+    import types as _t
+    _mcp = _t.ModuleType("mcp")
+    _srv = _t.ModuleType("mcp.server")
+    _fast = _t.ModuleType("mcp.server.fastmcp")
+
+    class _FastMCP:                                          # asgari yuzey
+        def __init__(self, *a, **k):
+            pass
+
+        def tool(self, *a, **k):
+            def _dek(fn):
+                return fn
+            return _dek
+
+    _fast.FastMCP = _FastMCP                                 # type: ignore[attr-defined]
+    _srv.fastmcp = _fast                                     # type: ignore[attr-defined]
+    _mcp.server = _srv                                       # type: ignore[attr-defined]
+    sys.modules.setdefault("mcp", _mcp)
+    sys.modules.setdefault("mcp.server", _srv)
+    sys.modules.setdefault("mcp.server.fastmcp", _fast)
+
 try:
     from mcp_servers.sap_adt.tools import atom
     from sap_adt_lib import SAPADTError, SAPObjectNotFoundError
