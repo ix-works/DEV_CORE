@@ -39,12 +39,36 @@ def _dosyadan(p: Path) -> list[str]:
 
 
 def _git_dir(cwd: Path | None = None) -> Path | None:
-    try:
-        out = subprocess.run(["git", "rev-parse", "--git-dir"], capture_output=True,
-                             text=True, check=True, cwd=str(cwd) if cwd else None)
-        return Path(out.stdout.strip())
-    except Exception:
-        return None
+    """Blocklist'in yaşadığı git dizini — **ORTAK** dizin (`--git-common-dir`).
+
+    ⚠ 2026-08-01 (bug-avı kuyruğu, infra-expert saha-bulgusu): eskiden `--git-dir` idi.
+    Bir git **worktree**'sinde `--git-dir` → `.git/worktrees/<ad>` döner, blocklist ise
+    ANA deponun `.git/genericize-blocklist` dosyasıdır → dosya BULUNAMAZ → `core_precommit`
+    fail-closed'a düşer ve **worktree'den hiçbir commit atılamaz**. Worktree, infra-fix
+    prosedürünün ZORUNLU çalışma alanı olduğu için bu, akışın tamamını kilitliyordu.
+    (Aynı sınıfın yazma-anı kardeşi AV-21'di: `pre_tool_guard` core'u yol-dizgesinden
+    tanıdığı için worktree'de sızıntı guard'ı kapalıydı.)
+
+    ⚠ Dönen değer **göreli** olabilir (`.git`) — platforma göre değişir: Windows'ta mutlak,
+    Linux'ta göreli gelir. Göreli sonuç **sorgunun `cwd`'sine** göre çözülmelidir, sürecin
+    kendi cwd'sine göre DEĞİL. `Path(".git").resolve()` yazmak tam da bu hatadır: süreç
+    başka bir dizindeyse sessizce yanlış yere bakar. (2026-08-01 CI bunu yakaladı; yerelde
+    Windows mutlak döndürdüğü için görünmüyordu — ve bu, AV-21c'nin aynısı: göreli yolu
+    yanlış tabana göre çözmek.)
+    """
+    taban = Path(cwd) if cwd else Path.cwd()
+    for bayrak in ("--git-common-dir", "--git-dir"):   # eski git'lerde ilki yoksa geri düş
+        try:
+            out = subprocess.run(["git", "rev-parse", bayrak], capture_output=True,
+                                 text=True, check=True, cwd=str(cwd) if cwd else None)
+            ham = out.stdout.strip()
+            if not ham:
+                continue
+            p = Path(ham)
+            return p if p.is_absolute() else (taban / p).resolve()
+        except Exception:
+            continue
+    return None
 
 
 def proje_desenleri(proje_koku: Path | None = None, cwd: Path | None = None) -> list[str]:
