@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""DEV_CORE pre-commit gate (B11 — D19/D21). STAGED dosyalar üzerinde 3 kontrol:
+"""DEV_CORE pre-commit gate (B11 — D19/D21). STAGED dosyalar üzerinde 4 kontrol:
 
 1) GENERICIZE-LEAK: proje/müşteri kimliği core'a COMMIT'LENEMEZ. İçerik VE dosya adı
    taranır (D5). Kapsam: isim listesi (env/<git-dir>/<proje>.claude, IGNORECASE) +
@@ -14,6 +14,12 @@
 3) APPLIES_TO ŞEMASI (D21): standards/ + playbook/ altındaki her .md frontmatter'ında
    `applies_to:` olmalı ve değerler enum'da olmalı (profiles/*.yaml adları + 'all').
    Typo = sessiz profil-kaybı — şema doğrulaması bunu yakalar.
+4) İNFRA-CHANGELOG (2026-08-01): staged dosyalar arasında paylaşılan-altyapı KODU varsa
+   aynı commit'te `governance/infra-changelog.md` de değişmiş olmalı. Gerekçe: infra
+   bileşeninin bugünkü hali eski bir vakanın çözümüdür; kaydı olmayan değişiklik
+   infra-expert'in F0 (geçmiş-okuma) adımını sessizce körleştirir. Kaçış:
+   `IX_NO_CHANGELOG=1` (gerekçe commit mesajına). Yalnız pre-commit modunda koşar
+   (`--all`/CI'da anlamsız: tüm ağaç "staged" görünür).
 
 Yalnız staged içerik taranır (git show :path) — working-tree kirliliği gate'i etkilemez.
 CI modu: `--all` ile TÜM tracked dosyalar taranır (core-ci.yml full-tree gate'i).
@@ -58,6 +64,64 @@ SCAN_EXEMPT = {
 LINK_EXEMPT = {
     "governance/CORE-INDEX.md",
 }
+
+# ── 4. kontrol: İNFRA-CHANGELOG gate ────────────────────────────────────────────
+# SINIF TANIMI (dar ve açık tutulur; geniş gate = sürtünme = kaçış-kültürü):
+# "İnfra" = ÇALIŞAN, davranış taşıyan paylaşılan kod. Doküman DEĞİL, veri DEĞİL.
+CHANGELOG_PATH = "governance/infra-changelog.md"
+INFRA_KOD_KOKLERI = ("scripts/", "mcp_servers/", "tests/")
+# Kod-dışı/veri istisnaları (yol öneki ile):
+INFRA_MUAF_KOKLER = (
+    "tests/fixtures/",   # test VERİSİ — bileşen davranışı değil (fixture ekleme teşvik edilir)
+    "attic/",            # fosil arşivi (çalıştırılmıyor)
+)
+# Uzantısız ama çalışan kabuk hook'ları (tam yol):
+INFRA_TAM_YOLLAR = {"scripts/git-hooks/pre-commit"}
+
+
+def infra_dosyalari(paths: list[str]) -> list[str]:
+    """Staged listesinden İNFRA KODU olanları döndür.
+
+    Neden yalnız `.py` + uzantısız git-hook'u: changelog "bileşenin davranışı neden
+    böyle" kaydıdır. `.md` dokümanı ZATEN kaydın kendi ortamıdır (doküman değişikliği
+    için changelog istemek özyineleme + gürültü olurdu); fixture'lar veridir; attic
+    çalıştırılmayan fosildir. Sınır bilinçli DAR — genişletme gerekirse gerekçeli PR.
+    """
+    out = []
+    for p in paths:
+        q = p.replace("\\", "/")
+        if q in INFRA_TAM_YOLLAR:
+            out.append(q)
+            continue
+        if any(q.startswith(m) for m in INFRA_MUAF_KOKLER):
+            continue
+        if q.startswith(INFRA_KOD_KOKLERI) and q.endswith(".py"):
+            out.append(q)
+    return out
+
+
+def check_changelog(paths: list[str], hatalar: list[str]) -> None:
+    if os.getenv("IX_NO_CHANGELOG") == "1":
+        sys.stderr.write(
+            "⚠ IX_NO_CHANGELOG=1 — infra-changelog gate ATLANDI. "
+            "Gerekçeyi commit mesajına yaz (denetim izi).\n")
+        return
+    infra = infra_dosyalari(paths)
+    if not infra:
+        return
+    if CHANGELOG_PATH in [p.replace("\\", "/") for p in paths]:
+        return
+    ornek = ", ".join(infra[:4]) + (" …" if len(infra) > 4 else "")
+    hatalar.append(
+        f"INFRA-CHANGELOG-YOK  {ornek}  ({len(infra)} infra dosyası) — paylaşılan altyapı "
+        f"kodu değişiyor ama `{CHANGELOG_PATH}` bu commit'te DEĞİŞMİYOR.\n"
+        f"      Neden: bileşenin bugünkü hali eski bir vakanın çözümüdür; kaydı olmayan "
+        f"değişiklik infra-expert'in F0 geçmiş-okumasını sessizce körleştirir.\n"
+        f"      Yap: ilgili bileşen bölümüne `| tarih | değişiklik | NEDEN | NASIL test "
+        f"edildi | fixture-ref | PR |` satırı ekle ve stage'le.\n"
+        f"      Gerçekten kayıt gerektirmiyorsa: IX_NO_CHANGELOG=1 git commit … "
+        f"(gerekçe commit mesajına).")
+
 
 BINARY_EXT = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".ico", ".woff",
               ".woff2", ".ttf", ".xlsx", ".docx", ".pptx", ".exe", ".dll"}
@@ -179,7 +243,14 @@ def main() -> int:
             "Müşteri/sistem/kişi adı YAKALANMAZ. `<git-dir>/genericize-blocklist` kur.\n")
 
     hatalar: list[str] = []
-    for path in staged_files(all_tracked):
+    dosyalar = staged_files(all_tracked)
+
+    # 4) İNFRA-CHANGELOG — yalnız pre-commit (staged) modunda. `--all`/CI'da tüm ağaç
+    #    "staged" görünür → her koşumda tetiklenirdi (anlamsız + fail-open baskısı).
+    if not all_tracked:
+        check_changelog(dosyalar, hatalar)
+
+    for path in dosyalar:
         text = staged_content(path)
         if text is None:
             continue

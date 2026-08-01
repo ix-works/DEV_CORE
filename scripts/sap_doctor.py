@@ -79,9 +79,15 @@ def run(probe: str, ptype: str, package: str) -> int:
         from mcp_servers.sap_adt._conn import get_active_tier  # type: ignore
         tier = get_active_tier()
     except Exception:
-        tier = (conn.get("ADT_SAP_TIER") or "DEV").upper()
-    tag = OK if tier == "DEV" else WARN
-    note = "mutasyon serbest" if tier == "DEV" else "SALT-OKUNUR (mutasyon reddedilir)"
+        # KAYIT-1: tier yoksa "DEV" varsayma — UNKNOWN (guard fail-closed reddeder).
+        tier = (conn.get("ADT_SAP_TIER") or "UNKNOWN").upper()
+    if tier == "DEV":
+        tag, note = OK, "mutasyon serbest"
+    elif tier in ("QA", "PRD"):
+        tag, note = WARN, "SALT-OKUNUR (mutasyon reddedilir)"
+    else:
+        tag, note = FAIL, ("ÇÖZÜLEMEDİ → MUTASYON REDDEDİLİR (fail-closed). "
+                           ".conn_adt'ye ADT_SAP_TIER=DEV|QA|PRD ekle")
     results.append((tag, f"Aktif tier = {tier} — {note}"))
 
     # 3. Master language TR

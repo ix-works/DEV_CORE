@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""run_fixture_tests.py — 10 validator icin bad/good fixture ciftlerini kosar (G1/T3.6).
+"""run_fixture_tests.py — validator bad/good ciftleri (G1/T3.6) + OZEL fixture kosucular.
 
 Her validator icin tests/fixtures/<validator>/{bad,good}/ altinda gercekci bir mini
 "proje koku" bulunur (SOURCE_CODES/... veya docs/...). Bu dizin CLAUDE_PROJECT_DIR
@@ -12,13 +12,19 @@ repo-geneli tarama) modunda calisir:
 
 Herhangi bir cift beklenenin tersini verirse (ya da fixture eksikse) NIHAI exit 1.
 
+OZEL_TESTLER (2026-08-01, bug-avi): bazi infra kusurlari "bad/good proje dizini" seklinde
+ifade EDILEMEZ (ornegin tier cozumleme = kod-yolu; changelog gate = gercek git reposu).
+Bunlar `tests/fixtures/<ad>/run.py` olarak yasar, kendi P/N senaryolarini icinde tasir ve
+exit 0/1 doner. Burada ayni tabloya raporlanirlar (tek kosucu = CI'da tek adim).
+
 Kullanim:
     python tests/run_fixture_tests.py
-Cikis: 0 -- 10/10 beklendigi gibi, 1 -- en az bir sapma.
+Cikis: 0 -- hepsi beklendigi gibi, 1 -- en az bir sapma.
 """
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -51,6 +57,13 @@ VALIDATORS = [
     "check_kd_no_raw_mermaid",
 ]
 
+# Kendi kosucusunu tasiyan fixture'lar: tests/fixtures/<ad>/run.py (exit 0 = tum senaryolar OK).
+# Her biri kendi icinde HEM bozuk->BLOK HEM temiz->SERBEST senaryolarini kosar.
+OZEL_TESTLER = [
+    ("tier_fail_closed", "ADR 0010 tier: fail-closed + tam-anahtar (KAYIT-1)"),
+    ("changelog_gate", "pre-commit 4. kontrol: infra-changelog gate (KAYIT-2)"),
+]
+
 
 def run_validator(name: str, fixture_dir: Path) -> tuple[int, str]:
     script = VALIDATORS_DIR / f"{name}.py"
@@ -69,6 +82,26 @@ def run_validator(name: str, fixture_dir: Path) -> tuple[int, str]:
         encoding="utf-8",
         errors="replace",
         timeout=60,
+    )
+    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+
+def run_ozel(ad: str) -> tuple[int, str]:
+    """tests/fixtures/<ad>/run.py — kendi P/N senaryolarini kosan bagimsiz fixture."""
+    script = FIXTURES / ad / "run.py"
+    env = os.environ.copy()
+    for k in list(env):
+        if k == "CLAUDE_PROJECT_DIR" or k.startswith("IX_"):
+            env.pop(k, None)
+    proc = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=str(HERE.parent),          # repo koku (fixture kendi izolasyonunu kurar)
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
     )
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
@@ -117,6 +150,33 @@ def main() -> int:
             "PASS" if ok else "FAIL",
             detail,
         ))
+
+    for ad, aciklama in OZEL_TESTLER:
+        script = FIXTURES / ad / "run.py"
+        if not script.is_file():
+            rows.append((ad, "n/a", "n/a", "DOĞRULANAMADI", f"özel fixture yok: {script}"))
+            all_ok = False
+            continue
+        try:
+            rc, out = run_ozel(ad)
+        except Exception as exc:  # pragma: no cover
+            rows.append((ad, "n/a", "n/a", "DOĞRULANAMADI", f"çalıştırma hatası: {exc}"))
+            all_ok = False
+            continue
+        ok = rc == 0
+        all_ok = all_ok and ok
+        # Ozel fixture P ve N senaryolarini KENDI icinde tasir → tek exit kodu raporlanir.
+        ozet = [s for s in out.splitlines() if re.match(r"^\s*\d+/\d+ OK", s)][-1:] or [""]
+        rows.append((
+            ad,
+            f"P+N içeride ({aciklama[:18]}…)",
+            f"exit={rc} ({'OK' if ok else 'SAPMA'})",
+            "PASS" if ok else "FAIL",
+            "" if ok else f" | {out.strip()[-400:]}",
+        ))
+        if ok:
+            rows[-1] = (rows[-1][0], f"P+N içeride: {ozet[0].strip()}", rows[-1][2],
+                        rows[-1][3], rows[-1][4])
 
     name_w = max(len(r[0]) for r in rows) + 2
     print(f"{'validator':<{name_w}} {'bad (fail beklenir)':<26} {'good (pass beklenir)':<26} sonuç")

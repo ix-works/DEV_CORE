@@ -581,7 +581,8 @@ def check_sap_config():
     }
 
 
-def create_conn_file(sap_url, sap_user, sap_password, sap_client, sap_language='EN'):
+def create_conn_file(sap_url, sap_user, sap_password, sap_client, sap_language='EN',
+                     sap_tier='DEV'):
     """
     Create .conn_adt file with provided SAP credentials.
 
@@ -591,6 +592,9 @@ def create_conn_file(sap_url, sap_user, sap_password, sap_client, sap_language='
         sap_password: SAP password
         sap_client: SAP client number (e.g., 100)
         sap_language: Language code (default: EN)
+        sap_tier: ADR 0010 tier (DEV|QA|PRD, default DEV). Written EXPLICITLY —
+            a missing line means "unknown tier" and every mutation is refused
+            (fail-closed, 2026-08-01 KAYIT-1). Pass QA/PRD for read-only systems.
 
     Returns:
         str: Path to created .conn_adt file
@@ -604,6 +608,10 @@ ADT_SAP_USER={sap_user}
 ADT_SAP_PASSWORD={sap_password}
 ADT_SAP_CLIENT={sap_client}
 ADT_SAP_LANGUAGE={sap_language}
+# ZORUNLU (ADR 0010): DEV|QA|PRD. Satir YOKSA tier cozulemez ve MCP guard
+# MUTASYONU REDDEDER (fail-closed, 2026-08-01 KAYIT-1). Degistirmek icin
+# scripts/switch_tier.py kullan. Onek varyanti (ADT_SAP_TIER_OLD=..) SAYILMAZ.
+ADT_SAP_TIER={sap_tier}
 """
     conn_path.write_text(conn_content)
 
@@ -638,6 +646,10 @@ ADT_SAP_USER=YOUR_USERNAME
 ADT_SAP_PASSWORD=YOUR_PASSWORD
 ADT_SAP_CLIENT=100
 ADT_SAP_LANGUAGE=EN
+# ZORUNLU (ADR 0010): DEV|QA|PRD — bu satir YOKSA tier cozulemez ve her mutasyon
+# REDDEDILIR (fail-closed, 2026-08-01 KAYIT-1). QA/PRD = salt-okunur.
+# Onek varyanti (ADT_SAP_TIER_OLD=...) SAYILMAZ; tam anahtar aranir.
+ADT_SAP_TIER=DEV
 
 # === SAP BTP Cloud (Service Key Auth) ===
 # For BTP cloud systems, use service key instead of username/password:
