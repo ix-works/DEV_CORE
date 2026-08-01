@@ -32,11 +32,24 @@ yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 | 2026-08-01 | `_ACTIVATION_URI_SEG` += include/prog-i | Klasik program+include co-activation'ı unsupported_type veriyordu (T1.6 gateway saha-bulgusu) | N-canlı: var-olmayan include'a activate → unsupported_type GİTTİ (URI çözüldü) | — (canlı-SAP testi) | core#67 |
 | 2026-08-01 | Reviewer SKIP-görünürlüğü ("PRE-FLIGHT KOŞMADI (sebep) — PASS sanma") | doma/dtel/prog tiplerinde pre-flight SESSİZCE atlanıyordu (denetim G2; "reviewer PASS dedi" yanılsaması) | P: DTEL-simülasyonda satır var; N: class_push'ta yok; E: BLOCKER mantığı değişmedi | — | core#69 |
 
+## mcp_servers/sap_adt/_conn.py + guardrails.py + data_guard.py + scripts/switch_tier.py + statusline.py (ADR 0010 tier)
+| 2026-08-01 | **FAIL-CLOSED tier** (`TIER_UNKNOWN`; çözülemezse mutasyon RED) + **TAM-ANAHTAR** satır eşleşmesi (`_conn_line_value`); aynı düzeltme switch_tier/_field_of_file, statusline/sap_system, sap_doctor; `require_writable_tier`/`require_data_access` içindeki `(tier or "DEV")` İKİNCİ fail-open katmanı kaldırıldı; conn-şablonlarına `ADT_SAP_TIER` satırı eklendi | Bug-avı KAYIT-1 (kullanıcı kararı: "fail-closed + tam eşleşme"): (a) tier hiçbir yerde bulunamazsa fonksiyon **DEV** dönüyordu — koruma katmanı, girdisi eksikken korumayı KAPATIYORDU; (b) `s.startswith("ADT_SAP_TIER")` öneki, `ADT_SAP_TIER_OLD=DEV` satırının gerçek `ADT_SAP_TIER=PRD` satırını GASP etmesine izin veriyordu (statusline'da en tehlikeli yön: PRD sisteminde ekranda "DEV") | 24 senaryo / 3 bağlam: MCP (`get_active_tier` 4) + guard katmanı (`require_writable_tier`/`require_data_access` 9, None ve "" dahil) + GÖREV-DIŞI (switch_tier 4, statusline 6, sentetik proje kökünde). **Kontrol-grubu: aynı fixture eski kodda 14/24 — 10 ayırt edici FAIL** | `tests/fixtures/tier_fail_closed/run.py` (run_fixture_tests OZEL_TESTLER) | — |
+
 ## scripts/inspector.py (v2)
 | 2026-08-01 | B5 üçlü-kıyas (fark_raporu TEK-kaynak) + [bilgi]-sınıfı + A2 malformed-eşiği(4) + gerçek negatif-test sayacı | 6 overlay-sapmasının 1'i görünüyordu; "0/45" ölçümsüz sabitti; A3 her-oturum alarm-yorgunluğuydu (denetim R5) | P: canary; N: kasıtlı-sapma 1→0; eşik-4 gerekçesi tarihli (geçiş-dönemi satırı) | inspector --self-test | core#69 |
 
 ## scripts/git-hooks/core_precommit.py
-| 2026-08-01 | 4.kontrol: İNFRA-CHANGELOG gate (staged infra→changelog şart; kaçış IX_NO_CHANGELOG=1) | Kullanıcı talebi: kayıt-güncelliği GARANTİ (nudge yetmez); moratoryum şart-5 açık-onay | Canlı-N: changelog'suz commit BLOK; canlı-P: bu paketin commit'i | — | core#72 |
+| 2026-08-01 | ~~4.kontrol: İNFRA-CHANGELOG gate~~ **BU KAYIT SAHTEYDİ — kod merge EDİLMEDİ** (aşağıdaki dürüstlük notu) | — | — | — | core#72 |
+| 2026-08-01 (2. deneme, GERÇEK) | 4.kontrol: İNFRA-CHANGELOG gate — staged infra KODU (`scripts/**.py`, `mcp_servers/**.py`, `tests/**.py`, `scripts/git-hooks/pre-commit`) varsa aynı commit'te bu dosya da değişmeli; kaçış `IX_NO_CHANGELOG=1`. Muaf: `.md`/doküman, `tests/fixtures/**`, `attic/**`, `--all`/CI modu | Kullanıcı talebi: kayıt-güncelliği GARANTİ (nudge yetmez); moratoryum şart-5 açık-onay ALINMIŞTI. İkinci sebep: kapının kaybı 1 gün fark edilmedi → fixture'sız gate kaybolur | Sandbox git reposunda 13 senaryo: S1 infra+kayıtsız→BLOK · S2 kayıtlı→SERBEST · S3 yalnız-doküman→SERBEST · S4 kaçış→SERBEST+uyarı · S5 fixture-verisi muaf · S6 mcp_servers→BLOK · S7 `--all`→susar · **S8 GERÇEK commit BLOKLANDI · S9 kayıt eklenince GERÇEK commit GEÇTİ** (commit sayısı 1→2). Kontrol-grubu: aynı fixture eski kodda 7/13 (kapı yoktu) | `tests/fixtures/changelog_gate/run.py` (run_fixture_tests OZEL_TESTLER) | — |
+
+> ⚠ **DÜRÜSTLÜK NOTU (2026-08-01, bug-avı KAYIT-2):** Yukarıdaki İLK satır, hiçbir zaman
+> merge edilmemiş bir kodu "canlı test edildi" diye anlatıyordu. Kök sebep: değişiklik
+> yerel `main` üzerinde commit'lendi (66b7d02/e598018), sonra `reset --hard origin/main`
+> ile silindi; changelog satırı AYRI bir PR'la hayatta kaldı, kod kayboldu. Sonuç:
+> `core_precommit.py` 3 kontrol koşarken doküman 4 kontrol vaat etti (sahte-koruma sınıfı,
+> R9/R10 vakasının kardeşi). Kanıt: `git log --all -S IX_NO_CHANGELOG -- scripts/` → 0 eşleşme;
+> dosyanın son dokunuşu e2fcef2 (2026-07-13). **Ders:** "eklendi" satırı, kalıcı bir
+> fixture-ref'i olmadan yazılmamalı — fixture olmayan gate sessizce kaybolur ve kayıt yalan söyler.
 
 ## scripts/utils/claude_overlay.py + team_setup.py
 | 2026-08-01 | fark_raporu() + materyalize(onayli) kapısı + --overlay-onayli | Senkron elle-düzeltmeleri SESSİZCE eziyordu (B5 5-günde-yeniden-bayat vakası; R4c) | N: bayraksız koşum 4-fark listesiyle RED; P: onaylı 6-dosya; +NameError(a/args) EXPRESS-fix'i | — (koşum-kanıtları plan T2.5) | core#69 |

@@ -42,10 +42,25 @@ ciddi olay.
 
 ## Fail-safe
 
-`ADT_SAP_TIER` absent → DEV varsayılır + görünür uyarı (mevcut/eski `.conn_adt`'ler kırılmasın).
-QA/PRD koruması, o sistemlerin conn dosyalarının her zaman `ADT_SAP_TIER=QA|PRD` ile
-etiketlenmesiyle sağlanır (template + switch_tier zorlar). *Backlog: fail-closed + keychain
-(gap-analysis #6) PRD gelince değerlendirilecek.*
+**REVİZE 2026-08-01 (bug avı AV-10; kullanıcı açık onayı) — artık FAIL-CLOSED.**
+`ADT_SAP_TIER` çözülemezse tier `UNKNOWN` olur ve **mutasyon işlemleri REDDEDİLİR**
+(hassas-olmayan salt-okuma serbest kalır). Yol-gösteren mesaj basılır: `.conn_adt`'ye
+`ADT_SAP_TIER=DEV|QA|PRD` ekle ya da `scripts/switch_tier.py` kullan.
+
+> **Eski karar (2026-07, artık GEÇERSİZ):** *"absent → DEV varsayılır + görünür uyarı"*.
+> Neden düştü: bir koruma katmanının girdisi eksikken **en izinli** değere düşmesi korumanın
+> kendisini kapatıyordu; uyarı stderr'e gidip fark edilmiyordu. Adversarial tur ölçtü ki bu
+> tek katman da değildi — `guardrails.require_writable_tier` ve `data_guard.require_data_access`
+> içindeki `(tier or "DEV")` **ikinci bir fail-open katmanıydı**; yalnız `_conn` düzeltilseydi
+> koruma yine açılmazdı.
+
+Ayrıca eşleşme **tam anahtar** ile yapılır: `ADT_SAP_TIER_OLD=DEV` gibi bir satır artık gerçek
+satırı gaspedemez. Aynı önek-hatası `_conn_value`, `switch_tier` ve `statusline`'da da vardı;
+`statusline`'ın son-kazanır döngüsü yüzünden PRD sisteminde ekrana **"DEV"** yazılabiliyordu.
+
+Uyumluluk: tier satırı taşımayan eski/elle yazılmış `.conn_adt`'lerde yazma artık reddedilir —
+bilinçli takas (template'te satır zaten vardı; `create_conn_file`/`create_conn_template` de
+artık üretiyor). Regresyon: `tests/fixtures/tier_fail_closed/` — 26 senaryo, 3 bağlam.
 
 ## Sonuç
 

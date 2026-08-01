@@ -167,10 +167,17 @@ def sap_system(root: Path):
         try:
             for line in conn.read_text(encoding="utf-8", errors="ignore").splitlines():
                 s = line.strip()
-                if s.startswith("ADT_SAP_SYSTEM_NAME") and "=" in s:
-                    name = s.split("=", 1)[1].strip() or name
-                elif s.startswith("ADT_SAP_TIER") and "=" in s:
-                    tier = (s.split("=", 1)[1].strip() or "").upper() or tier
+                # TAM anahtar eslesmesi (2026-08-01 KAYIT-1): eski `startswith` deseni
+                # `ADT_SAP_TIER_OLD=DEV` gibi bir satirin gercek tier'i gaspetmesine
+                # izin veriyordu -> statusline YANLIS tier gosterirdi (PRD'de DEV yazardi).
+                if not s or s.startswith("#") or "=" not in s:
+                    continue
+                k, v = s.split("=", 1)
+                k, v = k.strip(), v.strip()
+                if k == "ADT_SAP_SYSTEM_NAME":
+                    name = v or name
+                elif k == "ADT_SAP_TIER":
+                    tier = v.upper() or tier
         except OSError:
             pass
     name = name or os.getenv("ADT_SAP_SYSTEM_NAME")
@@ -302,7 +309,10 @@ def build_line(root: Path, payload):
         label = sys_name
         if tier:
             label += f"/{tier}"
-        if tier in ("QA", "PRD"):
+        else:
+            # KAYIT-1 fail-closed: tier yoksa MCP mutasyonu REDDEDER -> gorunur olsun.
+            label += "/TIER-YOK"
+        if tier in ("QA", "PRD") or not tier:
             label += " RO"  # salt-okunur: yanlislikla mutasyon denenmesin (ADR 0010)
         parts.append(label)
 

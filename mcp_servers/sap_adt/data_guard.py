@@ -73,8 +73,13 @@ def require_data_access(
 
     Raises:
         GuardrailViolation: QA/PRD'de hassas hedef + yetersiz onay.
+
+    ⚠ FAIL-CLOSED (2026-08-01 KAYIT-1): tier None/boş/UNKNOWN ise DEV muafiyeti
+    UYGULANMAZ. Bilinmeyen tier PRD olabilir; PII muafiyeti "belki DEV'dir"e
+    dayandırılamaz. Hassas-OLMAYAN okuma UNKNOWN'da da serbest kalır (salt-okuma
+    gereksiz kısıtlanmaz) — yalnız hassas hedef açık onay ister.
     """
-    t = (tier or "DEV").strip().upper()
+    t = (tier or "").strip().upper() or "UNKNOWN"
     if t == "DEV":
         return  # DEV muaf (kullanıcı kararı)
 
@@ -87,7 +92,8 @@ def require_data_access(
     raise GuardrailViolation(
         "ADR_0011_PII",
         f"Hassas veri okuma reddedildi (tier={t}, tablo={table}). "
-        f"KVKK: QA/PRD'de hassas tablo/alan okumak için acknowledge_risk=True + "
+        f"KVKK: DEV-DIŞI (QA/PRD ya da ÇÖZÜLEMEYEN tier) hassas tablo/alan okumak için "
+        f"acknowledge_risk=True + "
         f"açık onay kelimesi ('onay'/'approve'/'proceed') gerekir. "
         f"Muğlak ifade ('dene', 'çek') yetmez.",
         tier=t, table=table,

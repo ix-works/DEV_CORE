@@ -120,8 +120,22 @@ def require_writable_tier(tier: str | None, *, what: str = "mutasyon") -> None:
     QA/PRD salt-okunur → yazma reddedilir. "Safety is not memory, it is code":
     tier .conn_adt'den okunur (mcp_servers.sap_adt._conn.get_active_tier), agent
     hatırlamasına bırakılmaz.
+
+    ⚠ FAIL-CLOSED (2026-08-01 KAYIT-1): tier None/boş/UNKNOWN ise DEV VARSAYILMAZ —
+    reddedilir. Eski `(tier or "DEV")` İKİNCİ bir fail-open katmanıydı: _conn
+    fail-closed'a çevrilse bile buradaki varsayılan korumayı yeniden kapatırdı.
     """
-    t = (tier or "DEV").strip().upper()
+    t = (tier or "").strip().upper() or "UNKNOWN"
+    if t == "UNKNOWN":
+        raise GuardrailViolation(
+            "ADR_0010_TIER",
+            f"{what} reddedildi — aktif sistemin tier'ı ÇÖZÜLEMEDİ (fail-closed). "
+            f"Bilinmeyen tier DEV sayılmaz (PRD'de olup DEV sanma riski). Düzelt: "
+            f".conn_adt'ye 'ADT_SAP_TIER=DEV|QA|PRD' satırını ekle (TAM anahtar — "
+            f"'ADT_SAP_TIER_OLD=...' sayılmaz) ya da scripts/switch_tier.py ile geç. "
+            f"Salt-okuma serbesttir.",
+            tier=t,
+        )
     if t not in _WRITABLE_TIERS:
         raise GuardrailViolation(
             "ADR_0010_TIER",
