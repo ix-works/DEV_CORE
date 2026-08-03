@@ -10,6 +10,54 @@ status: active
 
 # CDS View (DDLS/DF)
 
+## ⛔ CDS-NSDM-01 — classic DDIC view'da `MSEG`/`MKPF` (ve her replacement tablosu) YASAK (2026-08-03)
+
+> **Güç: MUST-NOT.** `@AbapCatalog.sqlViewName`'li **classic (DDIC-based) CDS view** ya da SE11
+> view'ın `FROM`/`JOIN`'inde **`DD02L-VIEWREF`'i dolu** bir tablo kullanılamaz. Kullanılırsa view
+> **hatasız aktive olur ve DAİMA 0 satır döner.**
+>
+> **Yerine:** NSDM uyumluluk CDS'i — `mseg` → **`nsdm_e_mseg`** · `mkpf` → **`nsdm_e_mkpf`**
+> (alan adları birebir aynı; `sqlViewName`/alan listesi/key/WHERE/UNION **değişmez** → DB view
+> yaşar → onu `USING` ile tüketen **AMDP bozulmaz**).
+> Emsal: SAP'nin kendi DDIC-based view'ı `C_GdsRcptItemQty` → `select from nsdm_e_mseg`.
+
+**Neden:** S/4'te `MSEG`/`MKPF` **tablo-değiştirme (replacement) objesidir**; veri `MATDOC`'ta,
+fiziksel tablo **boş**. Yönlendirme **Open SQL katmanındadır** — `SELECT ... FROM mseg` çalışır.
+Classic DDIC view ise **DB seviyesinde** üretilip fiziksel tabloyu okur; onun yönlendirilmesi
+view'ın kendi **`DD25L-VIEWREF`**'ine bağlıdır ve bu **yalnız SAP'nin kendi view'larında** dolu
+olur — Z view'ında **asla**. **View entity'de bu sorun YOKTUR** (Open SQL yolundan geçer) — ama
+view entity **DB view üretmez**, yani AMDP `USING` zinciri varsa çözüm o değildir.
+
+**Etkilenen tablo sınıfı (tam liste sistemden okunur):**
+```
+SELECT tabname, viewref FROM dd02l WHERE as4local = 'A' AND viewref <> ''
+```
+MM-IM: `MSEG` `MKPF` · Stok: `MSSA` `MSSL` `MSSQ` `MSCD` `MSFD` `MSID` `MSKU` `MSLB` `MSPR` ·
+Değerleme: `MBEW` `EBEW` `OBEW` `QBEW` `VMBEW` (+`*H` tarihsel) · `MARCH` `MARDH` `MCHBH` `MKOLH` …
+⚠ `MARA`/`MARC`/`MAKT` replacement **DEĞİLDİR** — onlar classic view'da serbesttir.
+
+**Teşhis (view zaten 0 satır dönüyorsa):**
+```
+1) SELECT tabname, viewref  FROM dd02l WHERE tabname  = '<TABLO>'    -- replacement mı?
+2) SELECT viewname, viewref FROM dd25l WHERE viewname = '<SQL_VIEW>' -- null ⇒ KUSUR BU
+3) DD26S ile aynı tabloyu taşıyan TÜM view'lar → her biri COUNT(*) + DD25L-VIEWREF
+   → beklenen ayrışma: VIEWREF dolu ⇒ satır var · null ⇒ 0
+```
+⚠ **Kontrol grubunu kurarken `DD25L-VIEWREF`'i de ölç.** "Standart `CNMSEG` satır döndürüyor,
+demek ki classic view'lar MSEG'i görüyor" **yanlış elemedir** — `CNMSEG`'in VIEWREF'i doludur.
+Ayırt edici değişken ölçülmezse kontrol grubu hipotezi **tersine çevirir** (bkz.
+[`lessons-learned.md`](lessons-learned.md) **PATTERN #21** · #19).
+
+**Neden geç patlar:** ilgili veri kapsamı boşken view zaten 0 döner ve bu **doğru** görünür.
+Kusur ilk gerçek veri girildiği gün — genelde kullanıcı testinin ilk saatinde — ortaya çıkar.
+Aktivasyon/ATC/`adt_inactive_objects` bu sınıfı **yakalamaz**; tek kanıt **satır saymaktır**.
+Ters yönü de unutma: boş view'a `NOT EXISTS`/anti-join yapan sayaç **boşalmaz, ŞİŞER**.
+
+*(applies_to: `s4_private` · `s4_public`. ECC'de bu sınıf yoktur. Gate BİLİNÇLİ olarak
+açılmadı — ADR 0019 §4 merdiven ilkesi: önce doküman. Tekrar ederse validator adayı bu kuraldır.)*
+
+---
+
 ## ⚡ TEK CDS YARATMA — ÖNCE BUNU OKU (KANONİK, MCP) (2026-06-13)
 
 > **Yeni bir CDS view-entity'yi MCP ile yaratıyorsan, tool sırasını TAHMİN ETME — bu 3 adım:**

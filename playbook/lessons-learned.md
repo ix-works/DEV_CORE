@@ -364,6 +364,67 @@ seçtirir; yani fazla-genelleme, bilgiyi silmekle aynı sonucu verir. Uygulanmı
 
 ---
 
+### PATTERN #21: S/4'te **classic DDIC view + "tablo-değiştirme" (replacement) tablosu = SESSİZ 0 SATIR**
+
+*(applies_to: `s4_private` · `s4_public` — ECC'de bu sınıf YOKTUR)*
+
+- **Hata:** S/4'te bir classic DDIC view (`@AbapCatalog.sqlViewName`'li DDIC-based CDS view ya
+  da SE11 view) `MSEG`/`MKPF` gibi bir tablo üzerine kurulur. Aktive olur, sözdizimi temizdir,
+  ATC susar, `adt_inactive_objects` 0 der — ve view **hep 0 satır** döner. Hiçbir hata yok.
+- **Mekanizma:** S/4'te bu tablolar birer **tablo-değiştirme (table replacement) objesidir**
+  (`DD02L-VIEWREF` dolu; ör. `MSEG → NSDM_V_MSEG`). Gerçek veri başka bir tabloya taşınmıştır
+  (MM-IM'de `MATDOC`) ve **fiziksel tablo BOŞTUR**. Yönlendirme **Open SQL katmanındadır**:
+  ABAP `SELECT ... FROM mseg` çalışır. Ama **classic DDIC view DB seviyesinde üretilir ve
+  fiziksel tabloyu okur**; onun yönlendirilmesi ayrı bir mekanizmaya bağlıdır — view'ın kendi
+  `DD25L-VIEWREF`'i. SAP kendi view'larına bunu tanımlar, **senin Z view'ına kimse tanımlamaz**.
+- **Neden bu sınıf özellikle sinsi — dört kat:**
+  1. **Tek uyarı yok.** Aktivasyon başarılı, ATC temiz, syntax temiz. Sessizliğin tek belirtisi
+     boş bir ekran.
+  2. **Doğuştan gelir, GEÇ patlar.** İlgili veri kapsamı boşken (yeni modül, yeni malzeme grubu,
+     test öncesi) view zaten 0 döner ve bu **doğru** görünür. Kusur, ilk gerçek veri girildiği
+     gün — yani genelde kullanıcı testinin ilk saatinde — ortaya çıkar.
+  3. **Aynı obje, iki farklı erişim yolu, iki farklı cevap.** Programın Open SQL'i veriyi görür,
+     aynı programın classic view'ı görmez. "Ama SELECT çalışıyor" refleksi teşhisi saptırır.
+  4. **Ters yönde de bozar.** Boş view'a `NOT EXISTS`/anti-join yapan bir sayaç **şişer**
+     (her satır "eşleşmedi" sayılır). Yani semptom hep "boş" değildir; biri boşalırken
+     diğeri dolabilir ve ikisi aynı kusurdur.
+- **TEŞHİS — üç sorgu, beş dakika:**
+  ```
+  1) SELECT tabname, viewref FROM dd02l WHERE tabname = '<TABLO>'      -- replacement var mı?
+  2) SELECT viewname, viewref FROM dd25l WHERE viewname = '<Z_VIEW>'   -- benimki yönlendirilmiş mi? (null = kusur)
+  3) Kontrol grubu: DD26S ile aynı tabloyu taşıyan TÜM view'ları çıkar, her biri için
+     COUNT(*) + DD25L-VIEWREF ölç → "VIEWREF dolu ⇒ satır var / null ⇒ 0" ayrışması
+  ```
+  ⚠ **KONTROL GRUBUNU SEÇERKEN KONTROL EDİLEN DEĞİŞKENİ DE ÖLÇ.** Bu vakada ilk turda
+  "standart `CNMSEG` satır döndürüyor ⇒ classic view'lar bu tabloyu görebiliyor ⇒ hipotez
+  çürüdü" denip **yanlış elendi**. Meğer `CNMSEG`'in `DD25L-VIEWREF`'i doluymuş — yani o
+  ölçüm hipotezi çürütmüyor, **doğruluyormuş**. Kontrol grubu, ayırt edici değişken
+  ölçülmeden kurulursa **tersini kanıtlar gibi görünür**. (#19'un ince hâli.)
+- **ÇALIŞAN YÖNTEM:** veri kaynağını **NSDM uyumluluk CDS'ine** çevir — `mseg` → `nsdm_e_mseg`,
+  `mkpf` → `nsdm_e_mkpf`. Alan adları birebir aynıdır; `sqlViewName`, alan listesi, key'ler,
+  WHERE ve UNION dalları **DEĞİŞMEZ** → DB view yaşamaya devam eder → onu `USING` ile tüketen
+  **AMDP bozulmaz**. Emsal SAP'nin kendi DDIC-based CDS view'ıdır (`C_GdsRcptItemQty` →
+  `select from nsdm_e_mseg`). Değişiklik yalnız FROM/JOIN adlarıdır.
+- **Denenmesi gereksiz iki yol:**
+  · **Doğrudan hedef tabloya inmek** (`matdoc` + `record_type`/`header_counter`) — çalışır ama
+    SAP'nin uyumluluk semantiğini **elle taklit** etmek demektir; SAP tabloyu genişletince
+    sessizce kayar.
+  · **View entity'ye çevirmek** — Open SQL yönlendirmesi devreye girer, AMA view entity **DB
+    view ÜRETMEZ** → `USING <sql_view>` yapan AMDP kırılır. Classic view bilinçli seçildiyse
+    (AMDP zinciri) bu seçenek tasarımı bozar.
+- **Kapsam taraması (aynı tuzak başka nerede?):** `DD26S`'te Z view'ları tara, ama **genel
+  `viewname LIKE 'Z%'` sorgusu satır tavanına `ZZ1_*` uzantı view'larıyla dayanır** → tabloyu
+  önek önek böl (`tabname LIKE 'MS%'`, `'MB%'`, …) ve **kırpılmadığını göster**. Kırpılmış bir
+  taramaya dayanarak "başka etkilenen yok" DEME (#16).
+- **Gate?** HENÜZ YOK — **bilinçli** (ADR 0019 merdiven ilkesi §4: önce doküman denenir).
+  Bu ders + `adt-cds.md` §"NSDM" ilk savunmadır. Tekrar ederse validator adayı:
+  *"classic DDIC view'ın FROM/JOIN'inde `DD02L-VIEWREF`'i dolu bir tablo varsa BLOCKER."*
+- **Akraba:** **#16** (0 ≠ yok) · **#19** (kontrol grubu) · **#5** (trust without verify).
+  Ortak çekirdek: **"aktive oldu" bir çalışma kanıtı değildir; veri döndürdüğünü ölç.**
+- **Status:** ⚠️ DİSİPLİN. Obje-tipi evi: [`adt-cds.md`](adt-cds.md).
+
+---
+
 ## 📊 PATTERN İstatistikleri (audit için)
 
 | Pattern | İlk keşif | Tekrar sayısı | Status |
@@ -386,6 +447,7 @@ seçtirir; yani fazla-genelleme, bilgiyi silmekle aynı sonucu verir. Uygulanmı
 | #18 **Bayat sayı/satır referansı** (yorumda `dosya:satır`, "N obje", "N metot") | 2026-07-29 | **6** (obje sayısı · metot sayısı ×2 · veri iddiası · yorum satır-no ×2) | ⚠️ DİSİPLİN (içerik-çapası kuralı) |
 | #19 **"Araç bozuk" kontrol grubu olmadan kurulamaz** + tanıdık semptomda önce hafızayı ara | 2026-07-31 | **2** (classrun "güvenilmez" ×2 — 2026-06-30'da çözülmüştü, 2026-07-30'da unutulup üstüne yanlış yazıldı) | ⚠️ DİSİPLİN |
 | #20 **Salt-okunur sanılan araç yazıyordu** — yetkiyi ad/doküman değil ölçüm belirler | 2026-07-31 | 1 (`adt_syntax_check` → temiz inaktif sürümü AKTİVE ediyor; docstring aksini söylüyordu) | ⚠️ DİSİPLİN + kaynak-fix (docstring) |
+| #21 **S/4 classic DDIC view + replacement tablo = sessiz 0 satır** (`s4_*` profilleri) | 2026-08-03 | 1 (classic view `MSEG`/`MKPF` üzerine kurulu → doğuştan 0 satır; 3 tüketici birden boş, 1 sayaç ters yönde şişik; ayrıca kontrol grubu **yanlış eledi** — `DD25L-VIEWREF` ölçülmemişti) | ⚠️ DİSİPLİN (gate BİLİNÇLİ ertelendi — ADR 0019 §4 merdiven) |
 
 > **Hedef:** ACTIVE/⚠️ DİSİPLİN olanları zamanla SOLVED'a çevir (kod gate ile).
 > **Numara notu (2026-07-31):** #1–#2 hiç tanımlanmadı (tarihsel boşluk — yeniden kullanma);
