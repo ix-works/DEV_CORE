@@ -364,6 +364,173 @@ seçtirir; yani fazla-genelleme, bilgiyi silmekle aynı sonucu verir. Uygulanmı
 
 ---
 
+### PATTERN #21: S/4'te **classic DDIC view + "tablo-değiştirme" (replacement) tablosu = SESSİZ 0 SATIR**
+
+*(applies_to: `s4_private` · `s4_public` — ECC'de bu sınıf YOKTUR)*
+
+- **Hata:** S/4'te bir classic DDIC view (`@AbapCatalog.sqlViewName`'li DDIC-based CDS view ya
+  da SE11 view) `MSEG`/`MKPF` gibi bir tablo üzerine kurulur. Aktive olur, sözdizimi temizdir,
+  ATC susar, `adt_inactive_objects` 0 der — ve view **hep 0 satır** döner. Hiçbir hata yok.
+- **Mekanizma:** S/4'te bu tablolar birer **tablo-değiştirme (table replacement) objesidir**
+  (`DD02L-VIEWREF` dolu; ör. `MSEG → NSDM_V_MSEG`). Gerçek veri başka bir tabloya taşınmıştır
+  (MM-IM'de `MATDOC`) ve **fiziksel tablo BOŞTUR**. Yönlendirme **Open SQL katmanındadır**:
+  ABAP `SELECT ... FROM mseg` çalışır. Ama **classic DDIC view DB seviyesinde üretilir ve
+  fiziksel tabloyu okur**; onun yönlendirilmesi ayrı bir mekanizmaya bağlıdır — view'ın kendi
+  `DD25L-VIEWREF`'i. SAP kendi view'larına bunu tanımlar, **senin Z view'ına kimse tanımlamaz**.
+- **Neden bu sınıf özellikle sinsi — dört kat:**
+  1. **Tek uyarı yok.** Aktivasyon başarılı, ATC temiz, syntax temiz. Sessizliğin tek belirtisi
+     boş bir ekran.
+  2. **Doğuştan gelir, GEÇ patlar.** İlgili veri kapsamı boşken (yeni modül, yeni malzeme grubu,
+     test öncesi) view zaten 0 döner ve bu **doğru** görünür. Kusur, ilk gerçek veri girildiği
+     gün — yani genelde kullanıcı testinin ilk saatinde — ortaya çıkar.
+  3. **Aynı obje, iki farklı erişim yolu, iki farklı cevap.** Programın Open SQL'i veriyi görür,
+     aynı programın classic view'ı görmez. "Ama SELECT çalışıyor" refleksi teşhisi saptırır.
+  4. **Ters yönde de bozar.** Boş view'a `NOT EXISTS`/anti-join yapan bir sayaç **şişer**
+     (her satır "eşleşmedi" sayılır). Yani semptom hep "boş" değildir; biri boşalırken
+     diğeri dolabilir ve ikisi aynı kusurdur.
+- **TEŞHİS — üç sorgu, beş dakika:**
+  ```
+  1) SELECT tabname, viewref FROM dd02l WHERE tabname = '<TABLO>'      -- replacement var mı?
+  2) SELECT viewname, viewref FROM dd25l WHERE viewname = '<Z_VIEW>'   -- benimki yönlendirilmiş mi? (null = kusur)
+  3) Kontrol grubu: DD26S ile aynı tabloyu taşıyan TÜM view'ları çıkar, her biri için
+     COUNT(*) + DD25L-VIEWREF ölç → "VIEWREF dolu ⇒ satır var / null ⇒ 0" ayrışması
+  ```
+  ⚠ **KONTROL GRUBUNU SEÇERKEN KONTROL EDİLEN DEĞİŞKENİ DE ÖLÇ.** Bu vakada ilk turda
+  "standart `CNMSEG` satır döndürüyor ⇒ classic view'lar bu tabloyu görebiliyor ⇒ hipotez
+  çürüdü" denip **yanlış elendi**. Meğer `CNMSEG`'in `DD25L-VIEWREF`'i doluymuş — yani o
+  ölçüm hipotezi çürütmüyor, **doğruluyormuş**. Kontrol grubu, ayırt edici değişken
+  ölçülmeden kurulursa **tersini kanıtlar gibi görünür**. (#19'un ince hâli.)
+- **ÇALIŞAN YÖNTEM:** veri kaynağını **NSDM uyumluluk CDS'ine** çevir — `mseg` → `nsdm_e_mseg`,
+  `mkpf` → `nsdm_e_mkpf`. Alan adları birebir aynıdır; `sqlViewName`, alan listesi, key'ler,
+  WHERE ve UNION dalları **DEĞİŞMEZ** → DB view yaşamaya devam eder → onu `USING` ile tüketen
+  **AMDP bozulmaz**. Emsal SAP'nin kendi DDIC-based CDS view'ıdır (`C_GdsRcptItemQty` →
+  `select from nsdm_e_mseg`). Değişiklik yalnız FROM/JOIN adlarıdır.
+- **Denenmesi gereksiz iki yol:**
+  · **Doğrudan hedef tabloya inmek** (`matdoc` + `record_type`/`header_counter`) — çalışır ama
+    SAP'nin uyumluluk semantiğini **elle taklit** etmek demektir; SAP tabloyu genişletince
+    sessizce kayar.
+  · **View entity'ye çevirmek** — Open SQL yönlendirmesi devreye girer, AMA view entity **DB
+    view ÜRETMEZ** → `USING <sql_view>` yapan AMDP kırılır. Classic view bilinçli seçildiyse
+    (AMDP zinciri) bu seçenek tasarımı bozar.
+- **Kapsam taraması (aynı tuzak başka nerede?):** `DD26S`'te Z view'ları tara, ama **genel
+  `viewname LIKE 'Z%'` sorgusu satır tavanına `ZZ1_*` uzantı view'larıyla dayanır** → tabloyu
+  önek önek böl (`tabname LIKE 'MS%'`, `'MB%'`, …) ve **kırpılmadığını göster**. Kırpılmış bir
+  taramaya dayanarak "başka etkilenen yok" DEME (#16).
+- **Gate?** HENÜZ YOK — **bilinçli** (ADR 0019 merdiven ilkesi §4: önce doküman denenir).
+  Bu ders + `adt-cds.md` §"NSDM" ilk savunmadır. Tekrar ederse validator adayı:
+  *"classic DDIC view'ın FROM/JOIN'inde `DD02L-VIEWREF`'i dolu bir tablo varsa BLOCKER."*
+- **Akraba:** **#16** (0 ≠ yok) · **#19** (kontrol grubu) · **#5** (trust without verify).
+  Ortak çekirdek: **"aktive oldu" bir çalışma kanıtı değildir; veri döndürdüğünü ölç.**
+- **Status:** ⚠️ DİSİPLİN. Obje-tipi evi: [`adt-cds.md`](adt-cds.md).
+
+---
+
+### PATTERN #22: Klasik Dynpro diyalog üretecinde — donör-çakışan fcode + `IT_BUTTONS` tam-yeniden-kurulum + ölçülemeyen toolbar
+
+*(applies_to: `s4_private` — `ZSD000_FM_SCREEN_GEN` benzeri bir AI Dynpro/CUA üreteci kullanan
+her proje için geçerli; kaynak vaka bir stok-hareket takip programının 3 modal diyalog ekranı)*
+
+- **Hata sınıfı:** Aynı programda birden çok modal diyalog ekranı (Dynpro) art arda CUA
+  turlarıyla üretilirken, **o turda dokunulmayan bir ekranın toolbar'ı veya fonksiyon
+  etiketi sessizce bozulur.** İki AYRI mekanizma, iki AYRI belirti:
+  1. **Donör-çakışan fcode:** o turun `IT_BUTTONS`'ında verilmeyen ama standart donör
+     status'te de var olan bir fcode (ör. bir "Kaydet" kodu), her `WRITE` çağrısında
+     donör etiketine geri döner — hem de bu turda hiç dokunulmayan **başka bir ekranda**
+     görünür (fonksiyon tanımı program-geneli).
+  2. **`IT_BUTTONS` tam-yeniden-kurulum:** üreteç her `WRITE` çağrısında hedef status'ün
+     toolbar'ını (`but`) koşulsuz sıfırlar ve yalnız o turun `IT_BUTTONS`'ında verilen
+     butonlarla yeniden kurar — o statüsün önceki turda eklenmiş ama bu turda payload'a
+     KONULMAYAN butonu **düşer**.
+- **Neden tehlikeli — sayaçlar bu sınıfı GÖRMEZ:** `FUN`/`PFK`/`BUT`/`TITLES` program-geneli
+  sayaçlardır; fonksiyon tanımları hiç silinmediği için etiket-kaybında bu sayılar
+  **değişmez**. `BUT` yalnız buton-DÜŞMESİNDE değişir, o da yalnız ilgili ekranı etkileyen
+  toplam bir delta olarak görünür — hangi statüde düştüğünü söylemez.
+- **Kök-yanlış-genelleme dersi:** önceki bir kural *"`IT_BUTTONS` `IV_RECREATE` ile KURAR,
+  `IV_RECREATE`'siz sadece EKLER"* diye yazılmıştı ve **YANLIŞTI**. Yanlışın kökü ölçüm
+  hatası değil, **dar bir ölçümün geniş genellenmesiydi**: ilk deney yalnız `FUN`/`PFK`
+  sayaçlarını ölçmüştü (bunlar zaten hiç azalmaz); *"hedef status'ün `IT_BUTTONS`'ından bir
+  butonu bilerek atla, o status'ten düşüyor mu bak"* deneyi hiç yapılmamıştı.
+  **⭐ Genel ilke: bir davranış iddiası, o davranışı ÜRETEN deneyle kurulmalıdır — yan bir
+  sayacın değişmemesi, farklı bir tablonun aynı şekilde davrandığını GÖSTERMEZ.**
+- **ÇALIŞAN YÖNTEM (üç katman):**
+  1. **Önden hesap (yazmadan önce):** per-status toolbar içeriği araçla okunamaz (ikili
+     format) → beklenen `BUT` deltası (`Σ gönderilecek buton − tahmini mevcut buton`,
+     WRITE edilecek her status için) **CUA çağrısından ÖNCE** hesaplanır ve tur-başı
+     sayaçla toplanır; final bu toplamla uyuşmuyorsa **yazmadan** durulur. Kontrol tur
+     SONRASINDA yapılırsa doğru teşhis gelir ama **bir tur geç** — buton bu arada gerçekten
+     düşmüş olur.
+  2. **`FUNDTL` diff (yazdıktan sonra):** tur-başı ve final `IV_MODE='READ'` fonksiyon
+     dökümleri karşılaştırılır — sayaç değil **döküm** diff'lenir; kaybolan fcode yoksa PASS.
+  3. **Tasarım:** birden çok status aynı fcode'u paylaşıyorsa (fonksiyon özniteliği
+     program-geneli olduğu için) tooltip ikisinde birden doğru olamaz → **her ekrana ayrı
+     fcode ver.** "Jenerik etiket yaz" uzlaşması denenip GERİ ALINMIŞTIR (çare değil,
+     sorunun tarifiydi). Bundan sonraki her turda, o turda dokunulmayan status'lerin
+     donör-çakışan fcode'ları da payload'a KONULUR (ya da hepsini içeren status en son
+     koşulur).
+- **Gate?** HENÜZ YOK — **bilinçli** (ADR 0019 merdiven ilkesi §4: önce doküman denenir; bu
+  sınıf yalnız çok-ekranlı CUA üreteci kullanan projelerde oluşur, dar kapsam). Bu ders +
+  [`howto-classic-dynpro-datafield-screens.md`](howto-classic-dynpro-datafield-screens.md) §3
+  ilk savunmadır.
+- **Akraba:** **#19** (kontrol grubu olmadan "araç bozuk" denemez — burada "üreteç butonları
+  bozuyor" hipotezi kontrol grubuyla "tam olarak donör-çakışması"na daraltıldı) · **#16**
+  (arama/ölçüm kapsamı sonucun anlamını belirler — burada "sayı neyi sayıyor" sorusu).
+- **Status:** ⚠️ DİSİPLİN. Obje-tipi evi: [`adt-fugr-functions.md`](adt-fugr-functions.md) §6 ·
+  [`howto-classic-dynpro-datafield-screens.md`](howto-classic-dynpro-datafield-screens.md).
+
+---
+
+### PATTERN #23: Klasik Dynpro datafield ekranında arama-yardımı — bileşene attachment, ekran alan adına DEĞİL; eskimiş "kusur doğamaz" varsayımı
+
+*(applies_to: `s4_private` — DDIC yapıya bağlı (`FROM_DICT`) klasik Dynpro alanı + standart
+search-help attachment kullanan her build; kaynak vaka: aynı stok-hareket takip programının
+depo-yeri F4'ü sondası)*
+
+- **Hata sınıfı 1 — yanlış-elenmiş çözüm:** bir DDIC yapının iki bileşeni aynı tipte olduğunda
+  (ör. iki `lgort_d` alanı: "veren" ve "alan" deposu) *"ikisi aynı DDIC search-help adını
+  taşıyamaz ⇒ attachment yolu kapalı"* diye elenmişti. **YANLIŞ:** search-help attachment
+  ekran ALANININ ADINA değil **yapı BİLEŞENİNE** yapılır (`define structure` içinde her
+  bileşen kendi `with value help ... where` bloğunu taşır) — iki bileşen aynı SHLP'ye ayrı
+  ayrı bağlanabilir. Canlı ölçüm: 7 alanlı bir yapının tümü `MATCHCODE` boş + `FROM_DICT`,
+  ikisi aynı standart SHLP'ye bağlıydı.
+- **Hata sınıfı 2 — eskimiş "kusur doğamaz" varsayımı, ölçümle çürüdü:** *"alan DDIC yapıya
+  bağlıysa ('`FROM_DICT`'), arama yardımının varsayılan parametreye düşmesi kusuru doğamaz"*
+  diye yazılmıştı. **Ölçüm çürüttü:** `FROM_DICT` olsa bile F4, seçilen kaydın YANLIŞ bir
+  alanını (ör. üretim yeri, depo yeri yerine) ekran alanına yazmaya devam etti. **Gerçek kök
+  sebep:** search-help'in kendi parametre-pozisyonu (ör. `FLPOSITION`/ilk `EXPORT`
+  parametresi) ile ekran alanı arasında **eşleme kurulmamıştı** — DDIC'e bağlı olmak bu
+  eşlemeyi kendiliğinden KURMAZ; `where` bloğunda parametre AÇIKÇA verilmelidir.
+- **Hata sınıfı 3 — tekrarlanan yanlış teşhis, önceki not görülmeden:** kusur bir kez elle
+  `MATCHCODE` eklenerek "çözüldü" denip kapatılmıştı; birkaç gün sonra aynı semptomla geri
+  geldiğinde **aynı deney tekrar kuruldu** (matchcode tekrar eklendi) — oysa görev-içi bir
+  teşhis dosyası kök sebebin `MATCHCODE`'un yokluğu değil **parametre eşlemesinin yokluğu**
+  olduğunu ÇOKTAN yazmıştı. O rapora bakılmadan çözülmüş bir teşhisin üstüne yeniden deney
+  kuruldu, ve tekrar çürüdü.
+  **⭐ Kural: tanıdık bir semptomda ÖNCE görev-içi geçici dosyalar + SESSION_NOTES + memory
+  ARANIR, SONRA yeni deney kurulur** — cevap muhtemelen zaten yazılmıştır.
+- **⚠ Dördüncü katman — ekrandaki elle `MATCHCODE` attachment'ın ÖNÜNE geçer:** DDIC
+  yapısına attachment eklense bile, ekran alanında geçmişten kalan elle `MATCHCODE` DEĞERİ
+  varsa **ekran onu kazanır**, attachment hiç devreye girmez. Yeni ekranda `MATCHCODE`
+  BOŞ bırakılmalıdır.
+- **⚠ Beşinci katman — DDIC değişti ama tüketici (ekran) regen edilmedi:** klasik Dynpro,
+  DDIC bilgisini **ÜRETİLDİĞİ anda gömer.** Bir yapıya sonradan attachment eklemek, o yapıyı
+  KULLANAN ekran daha önce üretilmişse, kendiliğinden ekrana inmez — ekranın (yalnız gerekli
+  alanlarla) **bir kez daha üretilmesi (regen)** gerekir. *Obje aktif ≠ tüketici güncel.*
+- **ÇALIŞAN YÖNTEM:** DDIC yapı bileşenine `with value help <shlp> where <param> = <yapı>.
+  <bileşen>` (birden fazla `where` satırı, gerekirse başka bir bileşene referansla) ekle →
+  ekran alanının elle `MATCHCODE`'unu boşalt → ekranı (yalnız etkilenen alanlarla) regen et
+  → §"Doğrulama protokolü" ile kanıtla (`DD35L`/`DD36S` attachment/parametre-eşleme sayısı +
+  `adt_inactive_objects` 0 + sayaç kıyası). "Aktif" metadata'sına güvenme; F4'ün fiilen doğru
+  alanı yazdığını **kullanıcı GUI'de test eder** (araçla okunamaz).
+- **Gate?** HENÜZ YOK — **bilinçli** (dar kapsam: yalnız çok-bileşenli aynı-tipte DDIC
+  yapılarda + Z SHLP yaratılamayan sistemlerde oluşur). Bu ders +
+  [`howto-classic-dynpro-datafield-screens.md`](howto-classic-dynpro-datafield-screens.md) §2
+  ilk savunmadır.
+- **Akraba:** **#19** (kontrol grubu) — "aynı DDIC adını taşıyamaz" iddiası da kontrolsüz
+  bir eleme örneğiydi.
+- **Status:** ⚠️ DİSİPLİN. Obje-tipi evi: [`howto-classic-dynpro-datafield-screens.md`](howto-classic-dynpro-datafield-screens.md).
+
+---
+
 ## 📊 PATTERN İstatistikleri (audit için)
 
 | Pattern | İlk keşif | Tekrar sayısı | Status |
@@ -386,6 +553,7 @@ seçtirir; yani fazla-genelleme, bilgiyi silmekle aynı sonucu verir. Uygulanmı
 | #18 **Bayat sayı/satır referansı** (yorumda `dosya:satır`, "N obje", "N metot") | 2026-07-29 | **6** (obje sayısı · metot sayısı ×2 · veri iddiası · yorum satır-no ×2) | ⚠️ DİSİPLİN (içerik-çapası kuralı) |
 | #19 **"Araç bozuk" kontrol grubu olmadan kurulamaz** + tanıdık semptomda önce hafızayı ara | 2026-07-31 | **2** (classrun "güvenilmez" ×2 — 2026-06-30'da çözülmüştü, 2026-07-30'da unutulup üstüne yanlış yazıldı) | ⚠️ DİSİPLİN |
 | #20 **Salt-okunur sanılan araç yazıyordu** — yetkiyi ad/doküman değil ölçüm belirler | 2026-07-31 | 1 (`adt_syntax_check` → temiz inaktif sürümü AKTİVE ediyor; docstring aksini söylüyordu) | ⚠️ DİSİPLİN + kaynak-fix (docstring) |
+| #21 **S/4 classic DDIC view + replacement tablo = sessiz 0 satır** (`s4_*` profilleri) | 2026-08-03 | 1 (classic view `MSEG`/`MKPF` üzerine kurulu → doğuştan 0 satır; 3 tüketici birden boş, 1 sayaç ters yönde şişik; ayrıca kontrol grubu **yanlış eledi** — `DD25L-VIEWREF` ölçülmemişti) | ⚠️ DİSİPLİN (gate BİLİNÇLİ ertelendi — ADR 0019 §4 merdiven) |
 
 > **Hedef:** ACTIVE/⚠️ DİSİPLİN olanları zamanla SOLVED'a çevir (kod gate ile).
 > **Numara notu (2026-07-31):** #1–#2 hiç tanımlanmadı (tarihsel boşluk — yeniden kullanma);
