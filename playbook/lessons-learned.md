@@ -425,6 +425,112 @@ seçtirir; yani fazla-genelleme, bilgiyi silmekle aynı sonucu verir. Uygulanmı
 
 ---
 
+### PATTERN #22: Klasik Dynpro diyalog üretecinde — donör-çakışan fcode + `IT_BUTTONS` tam-yeniden-kurulum + ölçülemeyen toolbar
+
+*(applies_to: `s4_private` — `ZSD000_FM_SCREEN_GEN` benzeri bir AI Dynpro/CUA üreteci kullanan
+her proje için geçerli; kaynak vaka bir stok-hareket takip programının 3 modal diyalog ekranı)*
+
+- **Hata sınıfı:** Aynı programda birden çok modal diyalog ekranı (Dynpro) art arda CUA
+  turlarıyla üretilirken, **o turda dokunulmayan bir ekranın toolbar'ı veya fonksiyon
+  etiketi sessizce bozulur.** İki AYRI mekanizma, iki AYRI belirti:
+  1. **Donör-çakışan fcode:** o turun `IT_BUTTONS`'ında verilmeyen ama standart donör
+     status'te de var olan bir fcode (ör. bir "Kaydet" kodu), her `WRITE` çağrısında
+     donör etiketine geri döner — hem de bu turda hiç dokunulmayan **başka bir ekranda**
+     görünür (fonksiyon tanımı program-geneli).
+  2. **`IT_BUTTONS` tam-yeniden-kurulum:** üreteç her `WRITE` çağrısında hedef status'ün
+     toolbar'ını (`but`) koşulsuz sıfırlar ve yalnız o turun `IT_BUTTONS`'ında verilen
+     butonlarla yeniden kurar — o statüsün önceki turda eklenmiş ama bu turda payload'a
+     KONULMAYAN butonu **düşer**.
+- **Neden tehlikeli — sayaçlar bu sınıfı GÖRMEZ:** `FUN`/`PFK`/`BUT`/`TITLES` program-geneli
+  sayaçlardır; fonksiyon tanımları hiç silinmediği için etiket-kaybında bu sayılar
+  **değişmez**. `BUT` yalnız buton-DÜŞMESİNDE değişir, o da yalnız ilgili ekranı etkileyen
+  toplam bir delta olarak görünür — hangi statüde düştüğünü söylemez.
+- **Kök-yanlış-genelleme dersi:** önceki bir kural *"`IT_BUTTONS` `IV_RECREATE` ile KURAR,
+  `IV_RECREATE`'siz sadece EKLER"* diye yazılmıştı ve **YANLIŞTI**. Yanlışın kökü ölçüm
+  hatası değil, **dar bir ölçümün geniş genellenmesiydi**: ilk deney yalnız `FUN`/`PFK`
+  sayaçlarını ölçmüştü (bunlar zaten hiç azalmaz); *"hedef status'ün `IT_BUTTONS`'ından bir
+  butonu bilerek atla, o status'ten düşüyor mu bak"* deneyi hiç yapılmamıştı.
+  **⭐ Genel ilke: bir davranış iddiası, o davranışı ÜRETEN deneyle kurulmalıdır — yan bir
+  sayacın değişmemesi, farklı bir tablonun aynı şekilde davrandığını GÖSTERMEZ.**
+- **ÇALIŞAN YÖNTEM (üç katman):**
+  1. **Önden hesap (yazmadan önce):** per-status toolbar içeriği araçla okunamaz (ikili
+     format) → beklenen `BUT` deltası (`Σ gönderilecek buton − tahmini mevcut buton`,
+     WRITE edilecek her status için) **CUA çağrısından ÖNCE** hesaplanır ve tur-başı
+     sayaçla toplanır; final bu toplamla uyuşmuyorsa **yazmadan** durulur. Kontrol tur
+     SONRASINDA yapılırsa doğru teşhis gelir ama **bir tur geç** — buton bu arada gerçekten
+     düşmüş olur.
+  2. **`FUNDTL` diff (yazdıktan sonra):** tur-başı ve final `IV_MODE='READ'` fonksiyon
+     dökümleri karşılaştırılır — sayaç değil **döküm** diff'lenir; kaybolan fcode yoksa PASS.
+  3. **Tasarım:** birden çok status aynı fcode'u paylaşıyorsa (fonksiyon özniteliği
+     program-geneli olduğu için) tooltip ikisinde birden doğru olamaz → **her ekrana ayrı
+     fcode ver.** "Jenerik etiket yaz" uzlaşması denenip GERİ ALINMIŞTIR (çare değil,
+     sorunun tarifiydi). Bundan sonraki her turda, o turda dokunulmayan status'lerin
+     donör-çakışan fcode'ları da payload'a KONULUR (ya da hepsini içeren status en son
+     koşulur).
+- **Gate?** HENÜZ YOK — **bilinçli** (ADR 0019 merdiven ilkesi §4: önce doküman denenir; bu
+  sınıf yalnız çok-ekranlı CUA üreteci kullanan projelerde oluşur, dar kapsam). Bu ders +
+  [`howto-classic-dynpro-datafield-screens.md`](howto-classic-dynpro-datafield-screens.md) §3
+  ilk savunmadır.
+- **Akraba:** **#19** (kontrol grubu olmadan "araç bozuk" denemez — burada "üreteç butonları
+  bozuyor" hipotezi kontrol grubuyla "tam olarak donör-çakışması"na daraltıldı) · **#16**
+  (arama/ölçüm kapsamı sonucun anlamını belirler — burada "sayı neyi sayıyor" sorusu).
+- **Status:** ⚠️ DİSİPLİN. Obje-tipi evi: [`adt-fugr-functions.md`](adt-fugr-functions.md) §6 ·
+  [`howto-classic-dynpro-datafield-screens.md`](howto-classic-dynpro-datafield-screens.md).
+
+---
+
+### PATTERN #23: Klasik Dynpro datafield ekranında arama-yardımı — bileşene attachment, ekran alan adına DEĞİL; eskimiş "kusur doğamaz" varsayımı
+
+*(applies_to: `s4_private` — DDIC yapıya bağlı (`FROM_DICT`) klasik Dynpro alanı + standart
+search-help attachment kullanan her build; kaynak vaka: aynı stok-hareket takip programının
+depo-yeri F4'ü sondası)*
+
+- **Hata sınıfı 1 — yanlış-elenmiş çözüm:** bir DDIC yapının iki bileşeni aynı tipte olduğunda
+  (ör. iki `lgort_d` alanı: "veren" ve "alan" deposu) *"ikisi aynı DDIC search-help adını
+  taşıyamaz ⇒ attachment yolu kapalı"* diye elenmişti. **YANLIŞ:** search-help attachment
+  ekran ALANININ ADINA değil **yapı BİLEŞENİNE** yapılır (`define structure` içinde her
+  bileşen kendi `with value help ... where` bloğunu taşır) — iki bileşen aynı SHLP'ye ayrı
+  ayrı bağlanabilir. Canlı ölçüm: 7 alanlı bir yapının tümü `MATCHCODE` boş + `FROM_DICT`,
+  ikisi aynı standart SHLP'ye bağlıydı.
+- **Hata sınıfı 2 — eskimiş "kusur doğamaz" varsayımı, ölçümle çürüdü:** *"alan DDIC yapıya
+  bağlıysa ('`FROM_DICT`'), arama yardımının varsayılan parametreye düşmesi kusuru doğamaz"*
+  diye yazılmıştı. **Ölçüm çürüttü:** `FROM_DICT` olsa bile F4, seçilen kaydın YANLIŞ bir
+  alanını (ör. üretim yeri, depo yeri yerine) ekran alanına yazmaya devam etti. **Gerçek kök
+  sebep:** search-help'in kendi parametre-pozisyonu (ör. `FLPOSITION`/ilk `EXPORT`
+  parametresi) ile ekran alanı arasında **eşleme kurulmamıştı** — DDIC'e bağlı olmak bu
+  eşlemeyi kendiliğinden KURMAZ; `where` bloğunda parametre AÇIKÇA verilmelidir.
+- **Hata sınıfı 3 — tekrarlanan yanlış teşhis, önceki not görülmeden:** kusur bir kez elle
+  `MATCHCODE` eklenerek "çözüldü" denip kapatılmıştı; birkaç gün sonra aynı semptomla geri
+  geldiğinde **aynı deney tekrar kuruldu** (matchcode tekrar eklendi) — oysa görev-içi bir
+  teşhis dosyası kök sebebin `MATCHCODE`'un yokluğu değil **parametre eşlemesinin yokluğu**
+  olduğunu ÇOKTAN yazmıştı. O rapora bakılmadan çözülmüş bir teşhisin üstüne yeniden deney
+  kuruldu, ve tekrar çürüdü.
+  **⭐ Kural: tanıdık bir semptomda ÖNCE görev-içi geçici dosyalar + SESSION_NOTES + memory
+  ARANIR, SONRA yeni deney kurulur** — cevap muhtemelen zaten yazılmıştır.
+- **⚠ Dördüncü katman — ekrandaki elle `MATCHCODE` attachment'ın ÖNÜNE geçer:** DDIC
+  yapısına attachment eklense bile, ekran alanında geçmişten kalan elle `MATCHCODE` DEĞERİ
+  varsa **ekran onu kazanır**, attachment hiç devreye girmez. Yeni ekranda `MATCHCODE`
+  BOŞ bırakılmalıdır.
+- **⚠ Beşinci katman — DDIC değişti ama tüketici (ekran) regen edilmedi:** klasik Dynpro,
+  DDIC bilgisini **ÜRETİLDİĞİ anda gömer.** Bir yapıya sonradan attachment eklemek, o yapıyı
+  KULLANAN ekran daha önce üretilmişse, kendiliğinden ekrana inmez — ekranın (yalnız gerekli
+  alanlarla) **bir kez daha üretilmesi (regen)** gerekir. *Obje aktif ≠ tüketici güncel.*
+- **ÇALIŞAN YÖNTEM:** DDIC yapı bileşenine `with value help <shlp> where <param> = <yapı>.
+  <bileşen>` (birden fazla `where` satırı, gerekirse başka bir bileşene referansla) ekle →
+  ekran alanının elle `MATCHCODE`'unu boşalt → ekranı (yalnız etkilenen alanlarla) regen et
+  → §"Doğrulama protokolü" ile kanıtla (`DD35L`/`DD36S` attachment/parametre-eşleme sayısı +
+  `adt_inactive_objects` 0 + sayaç kıyası). "Aktif" metadata'sına güvenme; F4'ün fiilen doğru
+  alanı yazdığını **kullanıcı GUI'de test eder** (araçla okunamaz).
+- **Gate?** HENÜZ YOK — **bilinçli** (dar kapsam: yalnız çok-bileşenli aynı-tipte DDIC
+  yapılarda + Z SHLP yaratılamayan sistemlerde oluşur). Bu ders +
+  [`howto-classic-dynpro-datafield-screens.md`](howto-classic-dynpro-datafield-screens.md) §2
+  ilk savunmadır.
+- **Akraba:** **#19** (kontrol grubu) — "aynı DDIC adını taşıyamaz" iddiası da kontrolsüz
+  bir eleme örneğiydi.
+- **Status:** ⚠️ DİSİPLİN. Obje-tipi evi: [`howto-classic-dynpro-datafield-screens.md`](howto-classic-dynpro-datafield-screens.md).
+
+---
+
 ## 📊 PATTERN İstatistikleri (audit için)
 
 | Pattern | İlk keşif | Tekrar sayısı | Status |
