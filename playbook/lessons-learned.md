@@ -560,6 +560,24 @@ depo-yeri F4'ü sondası)*
 > #17–#18'in ayrıntı gövdesi bu dosyada değil `howto-cok-katmanli-degisiklik.md` +
 > içerik-çapası kuralındadır (tablo satırları kanonik sayaçtır).
 
+### PATTERN #24: Bağlantı dosyasını düzeltmek YETMEZ — MCP server kimliği **başlangıçta** okur, restart şart
+
+- **Belirti:** SAP parolası değişti → `.conn_adt` güncellendi → ADT çağrıları **hâlâ 401**.
+  Dosya tarafı doğrulandı (BOM yok, tırnak yok, boşluk yok, mtime taze) ⇒ dosya suçsuz.
+- **Kök sebep:** MCP server bağlantı dosyasını **süreç başlangıcında** okur ve bellekte tutar.
+  Dosya değişince kendiliğinden yenilemez. Süreç yaşadığı sürece **eski parola** kullanılır.
+- **Çözüm:** `.conn_adt` düzelt **VE** MCP server'ı reconnect/restart et (`/mcp`). İkisi birlikte.
+- **Neden bu pattern'e değer:** hata mesajı **401** — yani "yanlış kimlik" diyor, ki doğru; ama
+  yanlış *hangi* kimliğin kullanıldığını söylemiyor. Doğal refleks parolayı tekrar tekrar
+  yazmak/denemektir → **hesap kilidi riski**. Kilit eşiğine yaklaşan bir sistemde bu, tek bir
+  yanlış teşhisin günü kilitlemesi demektir.
+- **Kural:** Kimlik-bilgisi dosyası değiştikten sonraki İLK başarısızlıkta parolayı değil
+  **sürecin tazeliğini** şüphelen. Retry'dan önce restart. Ve kimlik hatalarında **retry
+  bütçesi tut** (kilit eşiği gerçek bir kaynaktır; körlemesine deneme onu harcar).
+- **Genelleme:** Aynı sınıf her uzun-ömürlü süreç için geçerlidir (MCP server, daemon, dil
+  sunucusu, çalışan container). *Config değişikliği ≠ davranış değişikliği* — süreç yeniden
+  okuyana kadar eski dünyada yaşar.
+
 ---
 
 ## 🎯 META-KURAL — "Doubt-Driven"
