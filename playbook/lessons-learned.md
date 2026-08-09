@@ -587,3 +587,87 @@ Bu dosyanın özü tek cümlede:
 > **Bir iddiada bulunmadan önce SAP'a sor. "Tamamlandı" yerine "henüz doğrulamadım" de.**
 
 Forward progress doğal refleks, ama **verification refleksini geliştirmek** sistemli güveni sağlar. User'ın güveni = audit dirençli iddialar = bu kural.
+
+### PATTERN #25: `$metadata` alan doğrulaması **TİP-KAPSAMLI** olmalı — belge-geneli arama sahte-pozitif verir
+
+- **Hata:** Bir OData servisinde alanın varlığı `$metadata` belgesinde **düz metin araması** ile
+  doğrulanır (`grep '<AlanAdı>'`). Belge yalnız iş entity'lerini değil **SADL/altyapı tiplerini**
+  de taşır (`SAP__Signature`, parametre/aksiyon tipleri, complex type'lar) → aynı ada sahip bir
+  altyapı property'si eşleşir ve **alan var sanılır**.
+- **Vaka:** İki ajan aynı servis için **çelişen** sonuç bildirdi; biri "alan var" dedi (altyapı
+  tipinden eşleşme), diğeri "yok". Doğru cevap ancak EntityType izole edilince çıktı.
+- **Ters yüzü de var:** entity izole edilmeden yapılan *"yok"* hükmü de güvenilmez — projeksiyon
+  farklı adla expose ediyor olabilir (SRVD rename).
+- **DOĞRU YÖNTEM:** ① ilgili **EntityType'ı İZOLE ET** (`<EntityType Name="...Type">…</EntityType>`
+  bloğunu ayır) ② alanı **o blok içinde** ara ③ tipini/uzunluğunu da oku (`Type`, `MaxLength`,
+  `sap:sortable`, `sap:filterable`) — bunlar tasarım kararını da doğrular.
+- **Bonus:** `sap:sortable="false"`/`filterable="false"` gördüysen, FE'de `sortProperty`/
+  `filterProperty` **verilmemeli**; verilirse servis 400 döner. Doğrulama tasarımı da denetler.
+- 📌 **Bu ders 2 gün "core'a terfi adayı" damgasıyla proje notunda bekledi.** Aynı sınıfın kardeşi
+  (`known-errors.md` §12.7) o iki günde ısırdı. **Terfi etmeyen ders = çözülmemiş ders.**
+
+### PATTERN #26: Kopya dosya silmeden önce **REFERANS ölç — hash'e bakma**
+
+- **Hata:** Birden çok yerde aynı içerikli dosya bulunur (aynı hash); "kopya" sayılıp toptan
+  silinir ya da tek kaynağa indirgenir. Hash **içerik** eşitliğini söyler, **kullanım**
+  eşitliğini DEĞİL.
+- **Vaka:** Bir hash-ailesinin üyeleri silinseydi, gerçekten **çalışan bir uygulamanın**
+  (kendi kopyasını yükleyen) yolu kırılacaktı. İçerik aynıydı; **tüketicisi farklıydı.**
+- **DOĞRU YÖNTEM:** silmeden önce her kopya için **kim yüklüyor/import ediyor** ölç
+  (`where_used`, `grep -r` ile import/require/manifest/`addStyleClass`/yol dizgesi).
+  Referansı olan kopya **silinmez**; tek kaynağa indirgeme ancak tüm tüketiciler yeni kaynağa
+  bağlandıktan SONRA yapılır.
+- **Sonuç geri alınamaza yakın:** silinen kopya kolay geri gelir, ama kırılan uygulama
+  **fark edilene kadar** üretimde bozuktur.
+- İlişkili: PATTERN #11 (`where_used` count=0 → "orphan" sanma).
+
+### PATTERN #27: Lider, **kendi önerdiği** uygulamayı arayıp bulamayınca "yapılmadı" DEMEZ
+
+- **Hata:** Lider brifingde bir uygulama önerir (sınıf adı, fonksiyon adı, dosya). Doğrulama
+  aşamasında **o adı** arar, `0` bulur ve *"ajan yapmamış"* hükmü verir + ajanı geri gönderir.
+- **Gerçek:** Ajan işi **yapmıştır** — ama gerekçeli olarak **başka (çoğu zaman daha doğru)** bir
+  uygulama seçmiştir. `0` sonucu "yapılmadı" değil, **"başka türlü yapılmış"** demektir.
+- **Vaka:** Lider mevcut bir CSS sınıfının yeniden kullanılmasını önerdi; ajan o sınıfın istenen
+  kombinasyonu (hücre+başlık ayrı boyut) karşılamadığını görüp **aynı desende yeni** bir sınıf
+  tanımladı ve gerekçesini yazdı. Liderin `grep <önerdiği-ad>` → 0 ölçümü "iş yapılmadı" sanıldı;
+  ajanla gereksiz bir "yaptım/yapmadın" turu döndü.
+- **DOĞRULAMA SIRASI:** ① `git status`/`git diff --stat` — **hangi dosyalar** değişti
+  ② **etkiyi** ara, adı değil (font kuralı eklendi mi · kolon bağlandı mı · dal açıldı mı)
+  ③ ancak sonra spesifik ad; `0` dönerse **"başka nasıl yapılmış olabilir"** diye sor.
+- ⚠ **İkinci yüz:** `git diff` (HEAD'e karşı) boş dönmesi de "yapılmadı" DEĞİLDİR — ajanlar
+  **commit etmez** (commit = lider), iş **daima çalışma ağacındadır** (`git status --short`).
+- ⚠ **Üçüncü yüz:** koşan bir ajana gönderilen revizyon, o **tura yetişmeyebilir**. Ajan
+  "yapmadım" değil **"görmedim"** durumundadır. Suçlamadan önce zamanlamayı düşün.
+
+### PATTERN #28: Üretilmiş indeks (CORE-INDEX) **DAL-BAĞIMLIDIR** — küçülme "silinmiş" demek değil
+
+- **Hata:** `CORE-INDEX` proje reposundadır ama içeriği `core/` **junction'ının o an hangi dalda
+  durduğundan** üretilir. Core'da dal değiştikten sonra indeks yeniden üretilirse doküman sayısı
+  **düşer**; ilk okuyuşta *"bir doküman silinmiş"* gibi görünür.
+- **Vaka:** İndeks 87 → 86'ya düştü. Sebep silme değildi: lider core'u kendi PR dalına almıştı ve
+  bir playbook dokümanı **yalnız başka bir dalda** vardı. Core eski dalına dönünce sayı geri geldi.
+- **DOĞRU SIRA:** ① `git -C <CORE> branch --show-current` — beklediğin dal mı? ② yeniden üret,
+  **farkı OKU**; sayı düştüyse **DUR** ③ **hangi dosya** düştü, **neden** yok — ölç
+  ④ indeks **paylaşılan gerçeği** temsil eden daldan üretilir (`main`), kişisel PR dalından değil
+  ⑤ fark yalnız `uretim:`/`core-commit:` yorum satırıysa **commit etme** (tazelik kıyasında yok sayılır).
+- **Meşru düşüş de olur:** doküman gerçekten merge edilmemiş bir daldaysa, `main`'e göre üretilen
+  indeks **doğruyu** söyler — ajan o dokümanı fiilen bulamaz. O hâlde düşüşü **gerekçesiyle** commit'le.
+- Aynı sınıf `_worktrees/` için de geçerli: hangi çalışma ağacının junction'a bağlı olduğunu
+  **varsayma, ölç**.
+
+### PATTERN #29: Auto-mode permission soft-deny **NON-DETERMİNİSTİKTİR** — ret bir olgu değil, sinyaldir
+
+- **Belirti:** SAP-yazma niyeti taşıyan bir eylem (MCP yazma çağrısı **ya da gateway ajanı
+  spawn'ı**) *"Blocked by classifier"* ile reddedilir. Aynı iş, **hiçbir ayar değişmeden**,
+  ikinci denemede **geçer**.
+- **Kanıt (ölçüm):** `permissions` yalnız `allow` taşıyordu — `deny` YOK, `ask` YOK,
+  `defaultMode` YOK, `Agent`/`Task` kuralı YOK ⇒ **kural motoru değil, çağrı başına model kararı.**
+  Kural olsaydı iki deneme de reddedilirdi.
+- **Tetikleyici obje tipi DEĞİL:** ret, "canlı BO/behavior" gibi bir sınıfa bağlı değil; sıradan
+  bir klasik program include'unun push'u için açılan **ajan** da reddedilebiliyor.
+- **YAP:** ① reti **olgu değil sinyal** say ② **önce hafızayı/dersi ara** — bu sınıf kayıtlı
+  ③ kullanıcıya onay sorusu taşımadan **bir kez daha dene** ④ tur canlı obje içeriyorsa
+  **baştan** *"auto-mode'u kapatalım, prompt'ları sen onayla"* diye öner — deneme-yanılma ve
+  onay trafiği ortadan kalkar.
+- ⛔ **YAPMA:** reti dolanmaya çalışma; `settings.local.json`'a kendine izin yazma (self-grant
+  ayrıca bloklanır ve doğru davranış değildir).
