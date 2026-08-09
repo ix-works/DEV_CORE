@@ -146,6 +146,15 @@ def main() -> int:
     # 2) Program objesini kilitle (corrNr=transport).
     print(f"[LOCK] {te_url} (REPT, corrNr={args.transport})")
     lock_handle = adt.lock_object(te_url, access_mode="MODIFY", transport=args.transport)
+    # corrNr, İSTENEN transport'tan değil LOCK YANITINDAN türetilir (kanonik kalıp:
+    # sap_client.py::push_object → `_last_lock_effective_transport or transport`).
+    # SAP, objenin gerçekte kayıtlı olduğu transport'u CORRNR ile döndürür; istenen ile
+    # farklıysa istenen'i kullanmak objenin kayıtlı OLMADIĞI bir transport'a yazmak demektir
+    # → SAP kilidi verir ama değişikliği reddeder (423). Bkz. playbook/known-errors.md §12.7.
+    # CORRNR boşsa `or` sayesinde davranış bugünküyle BİREBİR aynıdır (regresyon yok).
+    eff_transport = getattr(adt, "_last_lock_effective_transport", None) or args.transport
+    if eff_transport != args.transport:
+        print(f"[LOCK] SAP farklı transport atadı: istenen={args.transport} → etkin={eff_transport}")
     print(f"[LOCK] handle={(lock_handle or '')[:40]}...")
 
     # textelements PUT endpoint'i lockHandle'ı ZORUNLU ister (SADT_RESOURCE 017).
@@ -166,7 +175,7 @@ def main() -> int:
             )
             if etags.get(name):
                 headers["If-Match"] = etags[name]
-            params = {"corrNr": args.transport}
+            params = {"corrNr": eff_transport}
             if lock_handle and lock_handle not in ("NO_LOCK_SUPPORT", "IMPLICIT_LOCK", None, ""):
                 params["lockHandle"] = lock_handle
             r = adt._request_with_csrf_retry("put", url, headers=headers, params=params,
