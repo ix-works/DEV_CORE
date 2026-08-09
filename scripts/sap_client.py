@@ -1467,6 +1467,13 @@ class SAPClient:
                             f"etmiyordur: kaynakta INTERFACES if_oo_adt_classrun ara. "
                             f"⛔ TAZE SINIF ADI ILE YENIDEN YARATMA — o eski recete "
                             f"YANLISTI, sorunu cozmez, sadece cop obje birakir."
+                            f"IKINCI OLASILIK — CSRF/soguk-session: istek gecerli "
+                            f"X-CSRF-Token'siz gittiginde SAP 403 yerine 200 + BU "
+                            f"yaniltici govdeyi dondurebilir. 2026-07-28 kok-fix'i "
+                            f"(sap_adt_lib._request_with_csrf_retry + regresyon testi "
+                            f"scripts/tests/test_csrf_header_injection.py) bunu kapatti; "
+                            f"yine de gorursen fetch_csrf_token(force_refresh=True) ile "
+                            f"session'i isit ve TEKRAR DENE (ucuz kontrol)."
                         ),
                     }
                 # Aktif sürümde arayüz VAR ama reset'li retry de başarısız →
