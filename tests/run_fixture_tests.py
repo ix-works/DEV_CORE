@@ -98,6 +98,8 @@ OZEL_TESTLER = [
     ("changelog_amend", "INFRA-CHANGELOG gate: amend/cok-commit dalinda FP; taze dalda birebir-eski"),
     # 2026-08-09 DDIC okuma-yolu (table/structure `/source/main` VAR; diger uc tipte YOK):
     ("ddic_okuma_yolu", "adt_get + sap_sync_pull: DDIC tipi basina dogru uc (XML vs DDL)"),
+    # 2026-08-09 lock yaniti: NoModification -> acik hata; BOS/eksik/taninmayan -> AYNEN eski:
+    ("lock_modification_support", "lock MODIFICATION_SUPPORT: 423'un sinyali (fail-safe)"),
 ]
 
 

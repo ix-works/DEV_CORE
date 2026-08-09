@@ -121,6 +121,20 @@ class SAPTransportError(SAPADTError):
     pass
 
 
+# ── ADT lock yanıtı: MODIFICATION_SUPPORT sözleşmesi (playbook/known-errors.md §12.7) ──
+# Alan adı + sarmalayıcı yol CANLI ÖLÇÜLDÜ (2026-08-09, DDLS kilidi):
+#   asx:abap / asx:values / DATA / MODIFICATION_SUPPORT   (alan adları BÜYÜK HARF)
+# O ölçümde alan BOŞ döndü (`<MODIFICATION_SUPPORT/>`) ve obje sağlıklıydı ⇒ **boş = normal**.
+# `NoModification` DEĞERİ ise dış referanstan gelir (abap-adt-api `AdtLock`); bizde CANLI
+# ÖRNEĞİ YOK. Bu yüzden karşılaştırma harf-durumundan bağımsız ama TAM EŞİTLİK ile yapılır:
+#   · alt-dizge arama YASAK → 'NoModificationAllowed' gibi bilinmeyen bir değer hataya dönmez
+#   · casefold → sürüm/sistem farkı yalnız harf-durumundaysa sinyal kaçmaz
+# Bilinmeyen/boş/eksik değer HATA DEĞİLDİR (fail-safe): kör bir kontrol DDLS/DTEL/DOMA
+# ailelerini kırardı (2026-08-09 kaydı, infra-changelog).
+LOCK_MODIFICATION_SUPPORT_FIELD = 'MODIFICATION_SUPPORT'
+LOCK_NO_MODIFICATION = 'nomodification'   # casefold edilmiş karşılaştırma değeri
+
+
 def parse_sap_error(response):
     """
     Parse SAP ADT error response and return appropriate exception.
@@ -2290,13 +2304,95 @@ class SAPADTClient:
 
         return None
 
-    def _verify_and_return_lock(self, response, object_url, transport, label=''):
+    def _extract_modification_support(self, response):
+        """MODIFICATION_SUPPORT'u lock yanıtından oku — ÜÇ DEĞERLİ, tahmin YOK.
+
+        Returns (deger, durum):
+            ('NoModification', 'value')  — alan dolu bir değer taşıyor
+            (None, 'empty')              — alan VAR, değer YOK (`<MODIFICATION_SUPPORT/>`)
+            (None, 'absent')             — alan yanıtta hiç yok
+            (None, 'unparsable')         — gövde XML olarak çözülemedi
+
+        'empty'/'absent' HATA DEĞİLDİR — 2026-08-09 canlı ölçümünde sağlıklı bir DDLS
+        kilidi tam da self-closing BOŞ alan döndürdü. 'unparsable' da hata değildir ama
+        GÖRÜNÜR kalmalıdır: "doğrulama koşamadı" ≠ "doğrulandı" (infra-changelog §127 sınıfı).
+
+        Not: paylaşılan `_extract_lock_xml_field` (CORRNR/IS_LINK_UP) bu dört hâli TEK bir
+        None'a katlar; onun sözleşmesi değiştirilmedi (blast-radius) — bu yüzden ayrı okuyucu.
+        """
+        alan = re.escape(LOCK_MODIFICATION_SUPPORT_FIELD)
+        govde = getattr(response, 'text', None)
+        if not isinstance(govde, str) or not govde.strip():
+            return None, 'unparsable'
+
+        # 1) Hızlı yol: <ALAN>değer</ALAN> (boş çift de buraya düşer)
+        m = re.search(rf'<(?:\w+:)?{alan}\s*>([^<]*)</(?:\w+:)?{alan}\s*>', govde)
+        if m:
+            deger = m.group(1).strip()
+            return (deger, 'value') if deger else (None, 'empty')
+
+        # 2) Self-closing — CANLI ölçtüğümüz şekil budur: <MODIFICATION_SUPPORT/>
+        if re.search(rf'<(?:\w+:)?{alan}(\s[^<>]*)?/>', govde):
+            return None, 'empty'
+
+        # 3) Tam XML parse (namespace / attribute'lu / biçimlendirilmiş gövde)
+        try:
+            root = ET.fromstring(govde)
+        except Exception:
+            return None, 'unparsable'
+        for elem in root.iter():
+            local = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
+            if local == LOCK_MODIFICATION_SUPPORT_FIELD:
+                deger = (elem.text or '').strip()
+                return (deger, 'value') if deger else (None, 'empty')
+        return None, 'absent'
+
+    def _object_name_from_url(self, object_url):
+        """ADT obje URL'inden obje adını türet (E071 teşhis sorgusu için).
+
+        '/sap/bc/adt/oo/classes/zcl_foo' -> 'ZCL_FOO'
+        Çözülemezse '<OBJE>' yer tutucusu döner — yer tutucu dürüsttür, tahmin edilen ad değil.
+        """
+        try:
+            yol = str(object_url or '').split('?')[0].split('#')[0].rstrip('/')
+            for kuyruk in ('/source/main', '/source'):
+                if yol.lower().endswith(kuyruk):
+                    yol = yol[: -len(kuyruk)].rstrip('/')
+            ad = yol.rsplit('/', 1)[-1].strip()
+            return ad.upper() if ad else '<OBJE>'
+        except Exception:
+            return '<OBJE>'
+
+    def _release_lock_after_failure(self, object_url, lock_handle, ok_message):
+        """Hemen ardından raise edeceğimiz kilidi bırak (stale enqueue bırakma).
+
+        Kilidi bırakmazsak teşhis edilebilir tek hata, bir sonraki çağıran için ikinci ve
+        ALAKASIZ bir hataya (stale lock) dönüşür.
+        """
+        try:
+            actual_handle = lock_handle or 'IMPLICIT_LOCK'
+            if actual_handle and actual_handle != 'IMPLICIT_LOCK':
+                self.unlock_object(object_url, actual_handle)
+                print(ok_message)
+        except Exception:
+            print(f"[WARNING] Could not release lock — use SM12 to clear it manually.")
+
+    def _verify_and_return_lock(self, response, object_url, transport, label='', access_mode='MODIFY'):
         """Extract lock handle + CORRNR + IS_LINK_UP from a successful (200) lock response.
 
         Stores:
           self._last_lock_corrnr          — SAP-assigned transport (authoritative)
           self._last_lock_is_link_up      — 'X' if object is in a FOREIGN transport
           self._last_lock_effective_transport — transport caller should use for PUT
+          self._last_lock_modification_support / _state — MODIFICATION_SUPPORT (üç değerli)
+
+        MODIFICATION_SUPPORT semantics (playbook/known-errors.md §12.7):
+          - 'NoModification' → SAP kilidi VERDİ ama değişikliği kabul ETMEYECEK; PUT sonra
+            423 InvalidLockHandle ile düşer. Tipik kök: obje kullanılan transport'a kayıtlı
+            değil. Bu tek değer için AÇIK hata veririz (yalnız access_mode='MODIFY' iken).
+          - BOŞ / alan yok / tanınmayan değer → HATA YOK (bugünkü davranış aynen korunur).
+            Canlı ölçüm (2026-08-09): sağlıklı DDLS kilidi BOŞ self-closing alan döndürdü.
+          - Gövde parse edilemezse → hata YOK ama GÖRÜNÜR uyarı ("doğrulanmadı" ≠ "temiz").
 
         CORRNR semantics (confirmed from SAP source: CL_ADT_CTS_MANAGEMENT.get_transport_info):
           - SAP always returns the K-type WORKBENCH REQUEST number (e.g. FIDK901507)
@@ -2337,13 +2433,9 @@ class SAPADTClient:
             # Fail fast in both cases — no PUT attempted, no ghost E071 entry written.
             print(f"\n[TRANSPORT MISMATCH] SAP assigned transport: {corrnr_actual}")
             print(f"[TRANSPORT MISMATCH] Requested transport  : {transport}")
-            try:
-                actual_handle = lock_handle or 'IMPLICIT_LOCK'
-                if actual_handle and actual_handle != 'IMPLICIT_LOCK':
-                    self.unlock_object(object_url, actual_handle)
-                    print(f"[OK] Lock released to prevent ghost transport.")
-            except Exception:
-                print(f"[WARNING] Could not release lock — use SM12 to clear it manually.")
+            self._release_lock_after_failure(
+                object_url, lock_handle,
+                f"[OK] Lock released to prevent ghost transport.")
 
             if is_link_up == 'X':
                 # IS_LINK_UP='X': object is in a FOREIGN transport — another developer's.
@@ -2385,6 +2477,46 @@ class SAPADTClient:
                 print(f"      [INFO] SAP-assigned transport (CORRNR): {corrnr_actual}")
             else:
                 print(f"      [INFO] SAP did not return CORRNR in lock response (cannot verify transport assignment)")
+
+        # ── MODIFICATION_SUPPORT: "kilit verildi ama obje değiştirilemez" (§12.7) ──
+        # ⚠ CORRNR boşluğu BİLEREK hata sayılmaz (DDLS'te normal; DTEL/DOMA bu modeli hiç
+        # kullanmıyor) — ayırt edici sinyal yalnızca bu alandır.
+        mod_deger, mod_durum = self._extract_modification_support(response)
+        self._last_lock_modification_support = mod_deger
+        self._last_lock_modification_support_state = mod_durum
+        self._debug(f"{prefix} - MODIFICATION_SUPPORT: {mod_deger!r} (durum={mod_durum})")
+
+        if mod_durum == 'unparsable':
+            # "Doğrulama koşamadı" sessizce "sorun yok"a katlanmaz — iz bırak, ama BLOKLAMA.
+            print("      [WARN] MODIFICATION_SUPPORT could not be read (lock response is not "
+                  "parsable XML) — modifiability NOT verified (this is not a clean bill of health).")
+
+        if (mod_durum == 'value'
+                and mod_deger.casefold() == LOCK_NO_MODIFICATION
+                and str(access_mode or '').upper() == 'MODIFY'):
+            obje = self._object_name_from_url(object_url)
+            self._release_lock_after_failure(
+                object_url, lock_handle,
+                "[OK] Lock released (SAP reported the object as not modifiable).")
+            raise SAPLockError(
+                f"SAP granted the lock but reports the object as NOT modifiable "
+                f"(MODIFICATION_SUPPORT={mod_deger}).\n\n"
+                f"Most likely cause: {obje} is NOT registered in the transport being used"
+                f"{(' (' + str(transport) + ')') if transport else ''}.\n"
+                f"SAP hands out the lock anyway and rejects the later PUT with\n"
+                f"423 InvalidLockHandle — that 423 is the SYMPTOM, not the cause.\n\n"
+                f"Diagnose FIRST (one query, decisive):\n"
+                f"  SELECT trkorr, pgmid, object, obj_name FROM e071 WHERE obj_name = '{obje}'\n"
+                f"  If the corrNr you are using is not in that list, this is the cause.\n\n"
+                f"Fix:\n"
+                f"  1. Use the transport the object is actually recorded in, or\n"
+                f"  2. SE01/SE09 -> move/add the object entry to "
+                f"{transport if transport else 'the transport you intend to use'}\n\n"
+                f"[ACTION REQUIRED] STOP. Do NOT retry, and do NOT chase CSRF/session theories\n"
+                f"  — see playbook/known-errors.md §12.7 (it documents that wrong diagnosis).",
+                status_code=423,
+                response_text=(getattr(response, 'text', '') or '')[:500]
+            )
 
         return lock_handle or 'IMPLICIT_LOCK'
 
@@ -2517,7 +2649,7 @@ class SAPADTClient:
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] lock_object - locked successfully with strategy {attempt_num}")
 
-                    return self._verify_and_return_lock(response, object_url, transport, label=f'strategy {attempt_num}')
+                    return self._verify_and_return_lock(response, object_url, transport, label=f'strategy {attempt_num}', access_mode=access_mode)
 
                 # 404 - This endpoint doesn't exist, try next strategy
                 elif response.status_code == 404:
@@ -2572,7 +2704,7 @@ class SAPADTClient:
                             if self.debug_enabled:
                                 self._debug(f"[DEBUG] lock_object - locked successfully after CSRF refresh with strategy {attempt_num}")
 
-                            return self._verify_and_return_lock(response, object_url, transport, label=f'strategy {attempt_num} after CSRF refresh')
+                            return self._verify_and_return_lock(response, object_url, transport, label=f'strategy {attempt_num} after CSRF refresh', access_mode=access_mode)
                         else:
                             if self.debug_enabled:
                                 self._debug(f"[DEBUG] lock_object attempt {attempt_num} - retry after CSRF refresh failed with status {response.status_code}")
@@ -2658,7 +2790,7 @@ class SAPADTClient:
                             if response.status_code == 200:
                                 if self.debug_enabled:
                                     self._debug(f"[DEBUG] lock_object - Successfully recovered from stale lock")
-                                return self._verify_and_return_lock(response, object_url, transport, label='after stale lock recovery')
+                                return self._verify_and_return_lock(response, object_url, transport, label='after stale lock recovery', access_mode=access_mode)
 
                         except Exception as unlock_ex:
                             if self.debug_enabled:
