@@ -200,7 +200,15 @@ python scripts/inspector.py --self-test             # canary    [✓]
 
 ## B20 — lock yanıtı `MODIFICATION_SUPPORT` (sap_adt_lib `_verify_and_return_lock`)
 - `python tests/fixtures/lock_modification_support/run.py` → **29/29** · MUTASYON:
-  `--mutasyon --ref origin/main` → **17/29** (12 ayırt edici FAIL).
+  `--mutasyon` → **17/29** (12 ayırt edici FAIL). Taban **`b9c1a0b`** (varsayılan).
+- 🔴 **MUTASYON REF'İNE DAL ADI VERME — ÖLÇÜLDÜ (2026-08-10).** Reçete eskiden
+  `--ref origin/main` diyordu; fix merge edilir edilmez `origin/main` **"fix SONRASI"na kaydı**
+  ve aynı komut **17/29 yerine 26/29** döndü: korpus ayırt etmiyormuş gibi göründü, **hata
+  vermeden**. Mutasyon tabanı, kusurun CANLI olduğu **SHA'ya çivilenir**. Koşucu artık tabanı
+  **öz-denetler** (NoModification gerçekten fırlatıyor mu?) ve geçersizse **exit 2** ile durur —
+  `exit 1` (vektör düştü) ile karıştırılmasın; hiçbir sayı raporlanmaz.
+  ⇒ Genel kural: **her mutasyon korpusu tabanını pinlemeli ve tabanın kusurlu olduğunu
+  doğrulamalı** — yoksa fix merge olduğu gün korpus sessizce ölçmeyi bırakır.
 - 🔴 **SÖZLEŞME 2026-08-10'da TERSİNE DÖNDÜ — bu bölümün eski hâli "yalnız `NoModification`
   hata verir" diyordu; O KAPI YANLIŞ-POZİTİFTİ ve tüm class-push'u kapattı.** Bugün:
   **HİÇBİR değer akışı KESMEZ.** Ölçüm: CLAS 5/5 `NoModification` (hepsi başarıyla push
