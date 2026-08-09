@@ -199,8 +199,8 @@ python scripts/inspector.py --self-test             # canary    [✓]
 - FP çapası: dosya BOM ile BAŞLAMAZ (BOM eklemek AV-02 sınıfını geri getirir).
 
 ## B20 — lock yanıtı `MODIFICATION_SUPPORT` (sap_adt_lib `_verify_and_return_lock`)
-- `python tests/fixtures/lock_modification_support/run.py` → **25/25** · MUTASYON:
-  `--mutasyon --ref origin/main` → **16/25** (9 ayırt edici FAIL).
+- `python tests/fixtures/lock_modification_support/run.py` → **29/29** · MUTASYON:
+  `--mutasyon --ref origin/main` → **17/29** (12 ayırt edici FAIL).
 - 🔴 **SÖZLEŞME 2026-08-10'da TERSİNE DÖNDÜ — bu bölümün eski hâli "yalnız `NoModification`
   hata verir" diyordu; O KAPI YANLIŞ-POZİTİFTİ ve tüm class-push'u kapattı.** Bugün:
   **HİÇBİR değer akışı KESMEZ.** Ölçüm: CLAS 5/5 `NoModification` (hepsi başarıyla push
@@ -211,9 +211,16 @@ python scripts/inspector.py --self-test             # canary    [✓]
   alan-yok İZ **basmaz** (V4/V6/V8). ⚠ İz kontrolünü kaldırırsan V8 **sessizce anlamsızlaşır**
   (hiçbir şey hata vermediği için "sonuç=ok" testi her koşulda geçer) — alt-dizgeye kayma fark edilmez.
 - **Kilit BIRAKILMAZ** (V1b): akış sürüyorsa kilidi bırakmak PUT'u 423'e mahkûm eder.
-- **§12.7 teşhisi 423'te basılır** (`set_object_source`, V16/V16b): E071 sorgusu + **iki kök**
-  (transport kaydı **ve** bayat lock handle). 500'de basılmaz (V17 FP çapası). Tek kök dayatmak
-  2026-08-09'da bir saat kaybettiren "transport kovalama" sapmasının kendisiydi.
+- **§12.7 teşhisi 423'te basılır**, ortak helper `put_423_diagnosis` (V16/V16b/V20): E071
+  sorgusu + **iki kök** (transport kaydı **ve** bayat lock handle). 500'de basılmaz (V17 FP
+  çapası). Tek kök dayatmak 2026-08-09'da bir saat kaybettiren sapmanın kendisiydi.
+- ⚠ **ÜÇ PUT yolu vardır, `set_object_source` yalnız biridir:** `push_textpool.py` ve
+  `sap_set_object_description.py` **kendi PUT'unu atar**. Yeni bir PUT yolu eklersen 423
+  dalına helper'ı bağla — V21 (statik) bunu bekçilik eder, V21b metnin kopyalanmasını yasaklar.
+  `push_textpool`'da helper'a **`te_url`** ver (`.../source/<altad>` biten URL obje adını
+  yanlış çözer → E071 sorgusu yanlış ada bakar).
+- ⚠ V21/V21b **STATİK**: "referans var" der, "koştu" demez. Kaynağı modülle aynı yerden okur
+  (mutasyonda `git show <ref>`) — çalışma ağacını okusalardı mutasyonda sahte-PASS verirlerdi.
 - Bozuk XML dalı **görünür iz** basar ("NOT verified") — sessizleştirmek §127 sınıfına düşmektir.
 - ⚠ Gövde şekli 2026-08-09 CANLI ölçümünden alındı (self-closing BOŞ alan = SAĞLIKLI DDLS);
   V15 kanaryası iskeleti korur.

@@ -140,6 +140,9 @@ def main() -> int:
         put_ok = pr.status_code in (200, 204)
         if not put_ok:
             print(f"[FAIL] PUT → HTTP {pr.status_code}: {pr.text[:300]}")
+            # 423 = §12.7'nin semptomu → ORTAK teşhis (metni kopyalama; bkz. helper docstring).
+            if pr.status_code == 423:
+                print(adt.put_423_diagnosis(url, eff_transport))
     finally:
         try:
             adt.unlock_object(url, lock_handle)

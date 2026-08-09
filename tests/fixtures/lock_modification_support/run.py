@@ -419,6 +419,70 @@ kontrol("V19 3.BAĞLAM: clear_enqueue_lock (CLAS + NoModification) → True + ki
         f"(ölçüldü — fırlatan sürümde: dönen=False; kilit yalnız hata-sonrası bırakma yolundan "
         f"düşüyor, temizlik BAŞARISIZ raporlanıyor ve istisna sessizce yutuluyor)")
 
+# ── V20 ORTAK HELPER: teşhis tek yerden üretiliyor (kopya metin YOK) ────────
+try:
+    _c = yeni_istemci()
+    _c._last_lock_modification_support = "NoModification"
+    _metin = _c.put_423_diagnosis(OBJ_URL, TR)
+    _eksik = [p for p in (f"obj_name = '{OBJ_ADI}'", "FROM e071", "12.7", TR,
+                          "KAYITLI DEĞİL", "bayat", "KOVALAMA") if p not in _metin]
+    kontrol("V20 ORTAK HELPER: put_423_diagnosis tek başına tam teşhis üretir (obje adı + TR + iki kök)",
+            not _eksik, f"eksik={_eksik} metin={_metin[:200]!r}")
+except AttributeError as exc:
+    kontrol("V20 ORTAK HELPER: put_423_diagnosis tek başına tam teşhis üretir (obje adı + TR + iki kök)",
+            False, f"AttributeError: {exc}")
+
+# ── V20b HELPER FP ÇAPASI: obje adı çözülemezse UYDURMA, yer tutucu ─────────
+try:
+    _c = yeni_istemci()
+    _bos = _c.put_423_diagnosis("", None)
+    kontrol("V20b HELPER: obje adı çözülemezse '<OBJE>' yer tutucusu (tahmin edilen ad YAZILMAZ)",
+            "<OBJE>" in _bos and "None" not in _bos.split("KAYITLI DEĞİL")[0],
+            f"metin={_bos[:200]!r}")
+except AttributeError as exc:
+    kontrol("V20b HELPER: obje adı çözülemezse '<OBJE>' yer tutucusu (tahmin edilen ad YAZILMAZ)",
+            False, f"AttributeError: {exc}")
+
+# ── V21 KABLOLAMA (STATİK): 423 basan ÜÇ PUT yolunun hepsi helper'ı çağırıyor ─
+#   ⚠ DÜRÜSTLÜK: bu STATİK bir çapadır — "referans var" der, "koştu" DEMEZ. push_textpool ve
+#   sap_set_object_description CLI script'leridir; fixture içinde import etmek stdout'u gasp
+#   etme sınıfına girer (infra-test-recipes B-stdout). Çalışma-anı kanıtı yalnız
+#   set_object_source için var (V16). Bu ayrımı silme — "PASS ≠ baktı".
+#   ⚠ Kaynağı MODÜLLE AYNI YERDEN oku: mutasyon modunda çalışma ağacını okursak çapa
+#   mutasyonu izlemez ve sahte-PASS verir (ölçüm aleti fix'i "görmüş" gibi davranır).
+def oku(rel: str) -> str:
+    if ARG.mutasyon:
+        r = subprocess.run(["git", "-C", str(KOK), "show", f"{ARG.ref}:{rel}"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        return r.stdout if r.returncode == 0 else ""
+    p = KOK / rel
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
+
+_yollar = [
+    "scripts/sap_adt_lib.py",
+    "scripts/push_textpool.py",
+    "scripts/sap_set_object_description.py",
+]
+_kablosuz = []
+for _ad in _yollar:
+    _kaynak = oku(_ad)
+    if not _kaynak:
+        _kablosuz.append(f"{_ad}: kaynak OKUNAMADI (kapsam kanıtı yok)")
+    elif "put_423_diagnosis" not in _kaynak:
+        _kablosuz.append(f"{_ad}: helper çağrısı YOK")
+    elif "423" not in _kaynak:
+        _kablosuz.append(f"{_ad}: 423 dalı YOK")
+kontrol("V21 KABLOLAMA (STATİK): 3 PUT yolunun ÜÇÜ de ortak 423 teşhisini çağırıyor",
+        not _kablosuz, "; ".join(_kablosuz) or f"kontrol edilen: {_yollar}")
+
+# ── V21b KOPYA ÇAPASI: teşhis metni TEK yerde tanımlı (çoğaltma sızmasın) ───
+#   §12.7'nin bedeli "aynı teşhis bir yerde var, kullanılan yolda yok" olmasıydı; metnin
+#   kopyalanması o sınıfı geri getirir (kopyalar birbirinden bağımsız bayatlar).
+_tanim_sayisi = sum(oku(_y).count("FROM e071 ") for _y in _yollar)
+kontrol("V21b KOPYA ÇAPASI: E071 sorgu metni TEK yerde tanımlı (kopyalanmamış)",
+        _tanim_sayisi == 1, f"'FROM e071 ' geçen tanım sayısı={_tanim_sayisi} (beklenen 1)")
+
 os.chdir(_eski_cwd)
 shutil.rmtree(KUM, ignore_errors=True)
 
