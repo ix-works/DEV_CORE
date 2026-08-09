@@ -126,8 +126,15 @@ def main() -> int:
         if etag:
             headers["If-Match"] = etag
         params = {"lockHandle": lock_handle}
-        if args.transport:
-            params["corrNr"] = args.transport
+        # corrNr, İSTENEN transport'tan değil LOCK YANITINDAN türetilir (kanonik kalıp:
+        # sap_client.py::push_object → `_last_lock_effective_transport or transport`).
+        # SAP, objenin gerçekte kayıtlı olduğu transport'u CORRNR ile döndürür; istenen ile
+        # farklıysa istenen'i kullanmak objenin kayıtlı OLMADIĞI bir transport'a yazmak demektir
+        # → SAP kilidi verir ama değişikliği reddeder (423). Bkz. playbook/known-errors.md §12.7.
+        # CORRNR boşsa `or` sayesinde davranış bugünküyle BİREBİR aynıdır (regresyon yok).
+        eff_transport = getattr(adt, "_last_lock_effective_transport", None) or args.transport
+        if eff_transport:
+            params["corrNr"] = eff_transport
         pr = adt.session.put(full, headers=headers, params=params,
                              data=new_body.encode("utf-8"), timeout=adt.timeout_default)
         put_ok = pr.status_code in (200, 204)

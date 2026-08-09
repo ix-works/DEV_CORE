@@ -107,6 +107,18 @@ python scripts/inspector.py --self-test             # canary    [✓]
   düşülüp "profil matrisi çöktü" sanıldı; doğrusu `import server; server._register_all()`.
 - Varlık-sondası değişmezi: silinmiş-obje → where_used **count-anahtarı DÖNMEZ** (OBJECT_NOT_FOUND).
 - unit_run 0-test görürsen ÖNCE KONTROL-GRUBU (SE24); inactive_objects çıktısında `stale_deleted`+`tadir_check` OLMALI — `FAILED`'da "silinmiş değil" VARSAYMA; ⛔ TADIR-DELFLAG satırları silinmez.
+- **DDIC okuma-yolu (2026-08-09):** `python tests/fixtures/ddic_okuma_yolu/run.py` → **31/31**, exit 0.
+  Değişmezler: `table`/`structure` → `/sap/bc/adt/ddic/{tables|structures}/<ad>/source/main`
+  **düz DDL** · `dataelement`/`domain`/`tabletype` → XML yolu ve `/source/main` **HİÇ istenmez**
+  (o uç bu üç tipte 404 verir → obje YANLIŞLIKLA "yok" görünür) · `adt_get` ile `sap_sync_pull`
+  **AYNI** sınıflandırmayı çağırır (tek kaynak: `object_types.ddic_read_mode`) · 404 → `exists:false`
+  **ama log'da 404 kanıtı** · 500 → yokluk BEYAN EDİLMEZ · 200+boş gövde → `source_empty`+uyarı.
+  ⛔ Yeni bir tipi DDL-uçlu ilan etmeden önce **canlı ölç** (en az bir Z + bir STANDART obje;
+  ayrım tipe bağlıdır, Z-olmaya değil). Tip kümesi `scripts/object_types.py`dedir — `atom.py`ye
+  ya da `sap_sync_pull.py`ye YEREL KOPYA yazma (fixture AST çapası bunu yakalar; ayrışan iki
+  kopya bu kusurun kökündeydi).
+  ⚠ Kümeler DÜZ set literali kalmalı (`frozenset(...)` DEĞİL): `reviewer_tip_kapsam` onları
+  `ast.literal_eval` ile okur ve çağrı ifadesini çözemez → "tablo okunamadı" FAIL'i verir.
 - struct-create sonrası koşulsuz içerik-verify ("activated" shell'i maskeleyemez).
 - Canlı-yazma testleri: yalnız gateway + throwaway-Z; eşzamanlı-gateway varken KOŞMA.
 - **Tier (ADR 0010) FAIL-CLOSED:** `python tests/fixtures/tier_fail_closed/run.py` → 24/24, exit 0.
