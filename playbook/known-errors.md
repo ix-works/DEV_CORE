@@ -70,3 +70,49 @@ Hepsi `RPY_DYNPRO_INSERT` / `RS_CUA_INTERNAL_*` ile klasik ekran/status üretimi
 | `mandatory parameter BIV` (RABAX) | `RS_CUA_INTERNAL_WRITE` BIV zorunlu → FETCH'ten gelen biv'i geçir. |
 | GUI status Almanca | SOAP-RFC çağrısında `sap-language` yok → logon-default dil. `sap-language=TR` geç. |
 | Geri/Çıkış çalışmıyor | Donör status jenerik `&F03/&F15/&F12` map'liyor → program PAI `BACK/EXIT/CANCEL` bekliyor. pfk fcode'larını re-map et. |
+
+### 12.7 `423` push'ta — obje o TRANSPORT'a kayıtlı değil (lock verilir, değişiklik reddedilir)
+
+**Belirti:** Bir obje (tipik olarak CLASS) push edilirken **`423 InvalidLockHandle`**. Lock çağrısı
+**başarılı** görünür, handle döner — ama PUT reddedilir. Aynı oturumda **başka objeler sorunsuz
+push edilir** (bu yüzden "araç bozuk" sanılır).
+
+**Kök sebep:** Objeyi, **kayıtlı olmadığı** bir transport (`corrNr`) ile değiştirmeye çalışmak.
+SAP bu durumda kilidi VERİR ama `MODIFICATION_SUPPORT=NoModification` der ve `CORRNR` **boş** döner;
+`423` bunun türevidir. Sık senaryo: elde bir **görev (S)** numarası vardır (`DS4K9xxxxx`), ama obje
+**üst istek (K)** altında ya da **başka bir görevde** kayıtlıdır.
+
+**Teşhis (tek sorgu, kesin):**
+```sql
+SELECT trkorr, pgmid, object, obj_name FROM e071 WHERE obj_name = '<OBJE>'
+```
+Kullandığın `corrNr` bu listede YOKSA sebep budur. (Ölçülmüş vaka: aynı oturumda `..._CL_FLOW_TEXTS`
+kullanılan görevde kayıtlıydı → geçti; `..._CL_AMBTAK_DOCU_RUN` yalnız üst istek + başka görevde
+kayıtlıydı → 423.)
+
+**ÇÖZÜM — `corrNr`'ı SABİT YAZMA, LOCK YANITINDAN OKU.**
+`lock_object()` etkin transport'u `_last_lock_effective_transport`'a koyar (docstring'i bunu uyarır).
+Kanonik kalıp:
+```python
+lock_handle = adt.lock_object(OBJ_URL, transport=TRANSPORT)
+eff = getattr(adt, '_last_lock_effective_transport', None) or TRANSPORT
+params = {'lockHandle': lock_handle, 'corrNr': eff}     # ← eff, TRANSPORT DEĞİL
+```
+⛔ **`corrNr = TRANSPORT` (sabit) yazan her script bu hataya açıktır.** Bugüne kadar iki kez ısırdı.
+
+**⛔ YANLIŞ TEŞHİS UYARISI — bu tuzağa iki kez düşüldü:**
+Semptom `register_object_in_transport()`'un CSRF ön-alımına yıkıldı (*"`self.csrf_token`'ı eziyor"*).
+**YANLIŞ.** ① O ön-alım **kasıtlı ve zorunlu**: SAP `/cts/*` uçlarında `/discovery` token'ını
+yanıltıcı bir **403** ile reddeder. ② Fonksiyonun kendisi **"Bug 19"** düzeltmesidir (R3TR ön-kaydı
+olmadan CTS **her include için ayrı K+S transport** açıyordu) — kaldırmak o hatayı geri getirir.
+③ `CORRNR` boş dönmesi kodda zaten **hata değil `[INFO]`** sayılır (`sap_adt_lib.py:2384-2387`),
+yani "CORRNR yok ⇒ enqueue ölü" zinciri **kodun kendi davranışıyla çelişir**.
+⇒ **`register_object_in_transport`'a DOKUNMA.**
+
+**Kontrol grubu doğru eksende kurulmalı (PATTERN #19):** "sınıf ↔ include" değil,
+**"çalışan sınıf ↔ patlayan sınıf"**. Yanlış eksen, kök sebebi 10 gün boyunca gizledi.
+
+**📌 Tarihçe / bu kaydın var oluş sebebi:** Aynı kalıp **2026-07-30**'da çözülmüştü
+(proje `SESSION_NOTES`'ta kayıtlı) ama **core'a terfi etmedi (T1 kaçtı)** ⇒ 2026-08-09'da
+**yanlış teşhisle yeniden keşfedildi** ve paylaşılan araca neredeyse yanlış bir düzeltme yapılacaktı.
+Ders: *proje notunda çözülen ADT kalıbı core'a terfi etmezse, çözülmemiş sayılır.*
