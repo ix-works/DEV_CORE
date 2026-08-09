@@ -184,6 +184,13 @@ def main() -> int:
             print(f"[PUT] {name}: status={r.status_code} {'OK' if ok else 'FAIL'}")
             if not ok:
                 print(f"      body: {r.text[:600]}")
+                # 423 = §12.7'nin semptomu. Ham gövde tek başına çağıranı CSRF/oturum
+                # teorisine yolluyor (iki kez yaşandı) → ORTAK teşhisi bas, metni kopyalama.
+                # ⚠ `url` DEĞİL `te_url`: alt-kaynak URL'i `.../source/<altad>` ile bittiği
+                # için obje adı "TEXTELEMENTS/…" gibi çözülür ve E071 sorgusu YANLIŞ ada
+                # bakar. te_url programın kendi kaynağıdır → doğru ad.
+                if r.status_code == 423:
+                    print(adt.put_423_diagnosis(te_url, eff_transport))
                 return 3
     finally:
         # 5) Unlock — DOĞRU helper (stateful + csrf). Raw POST csrf'siz başarısız olup

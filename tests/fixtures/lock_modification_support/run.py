@@ -25,9 +25,12 @@ TARİHÇE — bu korpus BİR KEZ YÖN DEĞİŞTİRDİ, ikisi de aynı gün (2026
 423'ünde basılır (`set_object_source`) — semptomu GERÇEKTEN gördüğümüz yerde, yanlış-pozitif
 riski olmadan. V16/V16b/V17 bunu ölçer.
 
-Koşum   : python tests/fixtures/lock_modification_support/run.py
-MUTASYON: python tests/fixtures/lock_modification_support/run.py --mutasyon [--ref origin/main]
-          (fix ÖNCESİ sap_adt_lib.py git'ten yüklenir; ayırt eden vektörler FAIL vermeli)
+Koşum   : python tests/fixtures/lock_modification_support/run.py                → 29/29
+MUTASYON: python tests/fixtures/lock_modification_support/run.py --mutasyon      → 17/29
+          (taban = `b9c1a0b`, guard'ın CANLI olduğu SHA; git'ten yüklenir)
+          ⚠ `--ref`e DAL ADI VERME. `origin/main` fix merge edilince "fix SONRASI"na kayar
+            ve komut 26/29 döner — korpus ayırt etmiyormuş gibi görünür, HATA VERMEDEN.
+            Taban öz-denetimi bu durumu yakalar ve **exit 2** ile durur (vektör FAIL'i = 1).
 """
 from __future__ import annotations
 
@@ -66,7 +69,13 @@ def kontrol(ad: str, ok: bool, detay: str = "") -> None:
 ap = argparse.ArgumentParser(add_help=True)
 ap.add_argument("--mutasyon", action="store_true",
                 help="fix ÖNCESİ sürümü yükle (ayırt-etme kanıtı)")
-ap.add_argument("--ref", default="origin/main", help="mutasyon için git ref'i")
+# ⚠ VARSAYILAN SABİT BİR SHA — DAL ADI DEĞİL (2026-08-10 dersi, ölçüldü).
+# Eskiden `origin/main` idi. Fix merge edilir edilmez `origin/main` "fix SONRASI"na kaydı ve
+# belgelenen komut 17/29 yerine 26/29 verdi: korpus ayırt etmiyormuş gibi göründü, üstelik
+# HATA VERMEDEN. Mutasyon tabanı, kusurun CANLI olduğu ana çivilenir — hareketli ref, ölçüm
+# aletini sessizce boşaltır. (Aşağıdaki öz-denetim bunu ayrıca yakalar.)
+ap.add_argument("--ref", default="b9c1a0b",
+                help="mutasyon tabanı: guard'ın CANLI olduğu SHA (dal adı VERME — kayar)")
 ARG = ap.parse_args()
 
 # sap_adt_lib import-ANINDA cwd/env'den .conn_adt çözer → önce boş bir kum havuzuna geç.
@@ -153,6 +162,24 @@ def cagir(xml: str, transport=TR, access_mode="MODIFY", obj_url=OBJ_URL):
     except Exception as exc:  # noqa: BLE001 — çökme ile hatayı AYIR
         return "cokme", exc, tampon.getvalue(), c
 
+
+# ── ÖZ-DENETİM: mutasyon TABANI gerçekten "fix ÖNCESİ" mi? ───────────────────
+#   "Çökme ≠ FAIL"in taban tarafı: yanlış tabanla koşan bir mutasyon SAYI ÜRETİR ve o sayı
+#   yanıltır. Taban geçerli değilse hiçbir vektör raporlanmaz — exit 2 (alet geçersiz),
+#   exit 1'den (vektör düştü) AYRI tutulur.
+if ARG.mutasyon:
+    _s, _d, _, _ = cagir(govde("<MODIFICATION_SUPPORT>NoModification</MODIFICATION_SUPPORT>"))
+    if _s != "hata":
+        print(f"[DOĞRULANAMADI] MUTASYON TABANI GEÇERSİZ: '{ARG.ref}' fırlatan sürüm DEĞİL "
+              f"(NoModification → sonuç={_s}).")
+        print("  Tipik sebep: --ref bir DAL adı (ör. origin/main) ve dal ilerledi; fix merge "
+              "edilince taban 'fix SONRASI'na kayar.")
+        print("  Bu hâlde korpus ayırt etmiyormuş GİBİ görünür (ölçüldü: 17/29 yerine 26/29).")
+        print("  Çözüm: guard'ın CANLI olduğu SHA'yı ver → --ref b9c1a0b")
+        os.chdir(_eski_cwd)
+        shutil.rmtree(KUM, ignore_errors=True)
+        sys.exit(2)
+    print("### taban öz-denetimi OK — bu ref'te NoModification gerçekten FIRLATIYOR\n")
 
 # ── V1 REGRESYON ÇAPASI: NoModification → AKIŞ DEVAM EDER (bloklamaz) ─────────
 #   Bu vektör 2026-08-10 regresyonunun ta kendisidir: fırlatan sürüm bu sistemde HİÇBİR
@@ -418,6 +445,70 @@ kontrol("V19 3.BAĞLAM: clear_enqueue_lock (CLAS + NoModification) → True + ki
         f"dönen={sonucu!r} unlock={unlocklar} "
         f"(ölçüldü — fırlatan sürümde: dönen=False; kilit yalnız hata-sonrası bırakma yolundan "
         f"düşüyor, temizlik BAŞARISIZ raporlanıyor ve istisna sessizce yutuluyor)")
+
+# ── V20 ORTAK HELPER: teşhis tek yerden üretiliyor (kopya metin YOK) ────────
+try:
+    _c = yeni_istemci()
+    _c._last_lock_modification_support = "NoModification"
+    _metin = _c.put_423_diagnosis(OBJ_URL, TR)
+    _eksik = [p for p in (f"obj_name = '{OBJ_ADI}'", "FROM e071", "12.7", TR,
+                          "KAYITLI DEĞİL", "bayat", "KOVALAMA") if p not in _metin]
+    kontrol("V20 ORTAK HELPER: put_423_diagnosis tek başına tam teşhis üretir (obje adı + TR + iki kök)",
+            not _eksik, f"eksik={_eksik} metin={_metin[:200]!r}")
+except AttributeError as exc:
+    kontrol("V20 ORTAK HELPER: put_423_diagnosis tek başına tam teşhis üretir (obje adı + TR + iki kök)",
+            False, f"AttributeError: {exc}")
+
+# ── V20b HELPER FP ÇAPASI: obje adı çözülemezse UYDURMA, yer tutucu ─────────
+try:
+    _c = yeni_istemci()
+    _bos = _c.put_423_diagnosis("", None)
+    kontrol("V20b HELPER: obje adı çözülemezse '<OBJE>' yer tutucusu (tahmin edilen ad YAZILMAZ)",
+            "<OBJE>" in _bos and "None" not in _bos.split("KAYITLI DEĞİL")[0],
+            f"metin={_bos[:200]!r}")
+except AttributeError as exc:
+    kontrol("V20b HELPER: obje adı çözülemezse '<OBJE>' yer tutucusu (tahmin edilen ad YAZILMAZ)",
+            False, f"AttributeError: {exc}")
+
+# ── V21 KABLOLAMA (STATİK): 423 basan ÜÇ PUT yolunun hepsi helper'ı çağırıyor ─
+#   ⚠ DÜRÜSTLÜK: bu STATİK bir çapadır — "referans var" der, "koştu" DEMEZ. push_textpool ve
+#   sap_set_object_description CLI script'leridir; fixture içinde import etmek stdout'u gasp
+#   etme sınıfına girer (infra-test-recipes B-stdout). Çalışma-anı kanıtı yalnız
+#   set_object_source için var (V16). Bu ayrımı silme — "PASS ≠ baktı".
+#   ⚠ Kaynağı MODÜLLE AYNI YERDEN oku: mutasyon modunda çalışma ağacını okursak çapa
+#   mutasyonu izlemez ve sahte-PASS verir (ölçüm aleti fix'i "görmüş" gibi davranır).
+def oku(rel: str) -> str:
+    if ARG.mutasyon:
+        r = subprocess.run(["git", "-C", str(KOK), "show", f"{ARG.ref}:{rel}"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        return r.stdout if r.returncode == 0 else ""
+    p = KOK / rel
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
+
+_yollar = [
+    "scripts/sap_adt_lib.py",
+    "scripts/push_textpool.py",
+    "scripts/sap_set_object_description.py",
+]
+_kablosuz = []
+for _ad in _yollar:
+    _kaynak = oku(_ad)
+    if not _kaynak:
+        _kablosuz.append(f"{_ad}: kaynak OKUNAMADI (kapsam kanıtı yok)")
+    elif "put_423_diagnosis" not in _kaynak:
+        _kablosuz.append(f"{_ad}: helper çağrısı YOK")
+    elif "423" not in _kaynak:
+        _kablosuz.append(f"{_ad}: 423 dalı YOK")
+kontrol("V21 KABLOLAMA (STATİK): 3 PUT yolunun ÜÇÜ de ortak 423 teşhisini çağırıyor",
+        not _kablosuz, "; ".join(_kablosuz) or f"kontrol edilen: {_yollar}")
+
+# ── V21b KOPYA ÇAPASI: teşhis metni TEK yerde tanımlı (çoğaltma sızmasın) ───
+#   §12.7'nin bedeli "aynı teşhis bir yerde var, kullanılan yolda yok" olmasıydı; metnin
+#   kopyalanması o sınıfı geri getirir (kopyalar birbirinden bağımsız bayatlar).
+_tanim_sayisi = sum(oku(_y).count("FROM e071 ") for _y in _yollar)
+kontrol("V21b KOPYA ÇAPASI: E071 sorgu metni TEK yerde tanımlı (kopyalanmamış)",
+        _tanim_sayisi == 1, f"'FROM e071 ' geçen tanım sayısı={_tanim_sayisi} (beklenen 1)")
 
 os.chdir(_eski_cwd)
 shutil.rmtree(KUM, ignore_errors=True)

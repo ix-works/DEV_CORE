@@ -2191,32 +2191,9 @@ class SAPADTClient:
                       f"{len(_full)} chars:\n{_full}")
 
                 # ── 423 = §12.7'nin SEMPTOMU: teşhis TAM BURADA basılır ────────────────
-                # Teşhis bir zamanlar LOCK anında basılıyordu (#99) ve orada bir KAPI'ya
-                # bağlanmıştı — ölçüm o kapının yanlış-pozitif olduğunu gösterdi (CLAS'ın
-                # HEPSİ `NoModification` döner). Karar semptomu gerçekten gördüğümüz yere,
-                # yani 423'e taşındı: burada yanlış-pozitif üretme riski yok, çünkü PUT
-                # zaten düşmüştür. İki kök birlikte verilir — tek kök dayatmak, 2026-08-09'da
-                # bir saat kaybettiren "transport kovalama" sapmasının ta kendisiydi.
                 _tani = ''
                 if response.status_code == 423:
-                    _obje = self._object_name_from_url(object_url)
-                    _mod = getattr(self, '_last_lock_modification_support', None)
-                    _tani = (
-                        f"\n\n[423 TEŞHİSİ — playbook/known-errors.md §12.7]\n"
-                        f"  SAP kilidi VERDİ ama PUT'u reddetti. İki olası kök var:\n"
-                        f"  1) {_obje} kullanılan transport'a"
-                        f"{(' (' + str(transport) + ')') if transport else ''} KAYITLI DEĞİL.\n"
-                        f"     Tek sorgu, kesin:\n"
-                        f"       SELECT trkorr, pgmid, object, obj_name FROM e071 "
-                        f"WHERE obj_name = '{_obje}'\n"
-                        f"     Kullandığın corrNr o listede YOKSA sebep budur "
-                        f"(SE01/SE09 → kaydı taşı ya da o transport'u kullan).\n"
-                        f"  2) lock handle bayat/geçersiz (oturum düştü ya da lock'tan sonra "
-                        f"araya GET girdi) → TAZE lock al.\n"
-                        f"  ⛔ CSRF/oturum teorisi KOVALAMA — §12.7 o yanlış teşhisi belgeler.\n"
-                        f"  ℹ Lock yanıtındaki MODIFICATION_SUPPORT={_mod!r} bu ayrımı YAPMAZ: "
-                        f"CLAS'ta sağlıklı objede de 'NoModification' döner (§12.7b)."
-                    )
+                    _tani = self.put_423_diagnosis(object_url, transport)
                     print(_tani)
 
                 raise SAPADTError(
@@ -2405,6 +2382,42 @@ class SAPADTClient:
             return ad.upper() if ad else '<OBJE>'
         except Exception:
             return '<OBJE>'
+
+    def put_423_diagnosis(self, object_url, transport=None):
+        """PUT `423` düştüğünde basılacak teşhis metni (playbook/known-errors.md §12.7).
+
+        ⚠ ORTAK HELPER — ÜÇ ayrı PUT yolu bunu kullanır (`set_object_source`,
+        `push_textpool.py`, `sap_set_object_description.py`). Metni kopyalama: §12.7'nin
+        bedeli zaten "aynı teşhis bir yerde var, kullanılan yolda yok" olmasıydı.
+
+        NEDEN LOCK ANINDA DEĞİL DE BURADA (2026-08-10):
+          Teşhis bir zamanlar lock yanıtındaki `MODIFICATION_SUPPORT`'a bağlıydı ve orada
+          bir KAPI'ya dönüşmüştü (#99). Ölçüm o kapının %100 yanlış-pozitif olduğunu
+          gösterdi: bu sistemde CLAS'ın HEPSİ `NoModification` döndürüyor (5/5, hepsi
+          başarıyla push edildi). Karar semptomu GERÇEKTEN gördüğümüz yere ertelendi —
+          burada yanlış-pozitif üretme riski yoktur, çünkü PUT zaten düşmüştür.
+
+        İKİ KÖK BİRLİKTE VERİLİR — tek kök dayatmak, 2026-08-09'da bir saat kaybettiren
+        "transport kovalama" sapmasının ta kendisiydi.
+        """
+        obje = self._object_name_from_url(object_url)
+        mod = getattr(self, '_last_lock_modification_support', None)
+        return (
+            f"\n[423 TEŞHİSİ — playbook/known-errors.md §12.7]\n"
+            f"  SAP kilidi VERDİ ama PUT'u reddetti. İki olası kök var:\n"
+            f"  1) {obje} kullanılan transport'a"
+            f"{(' (' + str(transport) + ')') if transport else ''} KAYITLI DEĞİL.\n"
+            f"     Tek sorgu, kesin:\n"
+            f"       SELECT trkorr, pgmid, object, obj_name FROM e071 "
+            f"WHERE obj_name = '{obje}'\n"
+            f"     Kullandığın corrNr o listede YOKSA sebep budur "
+            f"(SE01/SE09 → kaydı taşı ya da o transport'u kullan).\n"
+            f"  2) lock handle bayat/geçersiz (oturum düştü ya da lock'tan sonra araya "
+            f"GET girdi) → TAZE lock al.\n"
+            f"  ⛔ CSRF/oturum teorisi KOVALAMA — §12.7 o yanlış teşhisi belgeler.\n"
+            f"  ℹ Lock yanıtındaki MODIFICATION_SUPPORT={mod!r} bu ayrımı YAPMAZ: "
+            f"CLAS'ta sağlıklı objede de 'NoModification' döner (§12.7b)."
+        )
 
     def _release_lock_after_failure(self, object_url, lock_handle, ok_message):
         """Hemen ardından raise edeceğimiz kilidi bırak (stale enqueue bırakma).
