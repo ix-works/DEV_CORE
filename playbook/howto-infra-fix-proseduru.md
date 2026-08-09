@@ -111,6 +111,25 @@ F3'te yazdığın fixture iki şeyi baştan sağlamalı:
 2. **Ortam/locale bağımsız:** davranış testi makinenin locale'ine bağlıysa CI'da sessizce
    boşalır. Nedenselliği açıkça kur (ör. bozuk kodlamayı **kendin yaz**, "makine öyleyse"
    deme) ve mümkünse yapısal bir AST çapası ekle (açık `encoding=` var mı).
+3. **Mutasyon koşucusu fixture'ın İÇİNDE yaşar** (2026-08-09): çalışan kodu `git show … >`
+   ile EZİP geri almak yerine fixture'a `--mutasyon [--ref <sha|ref>]` bayrağı koy →
+   `git show <ref>:scripts/<modül>.py` geçici dosyaya, `importlib.util.spec_from_file_location`
+   ile **ayrı adla** yükle, AYNI vektörleri koş. Kazanç: çalışma ağacı hiç kirlenmez, sayı
+   **tekrar üretilebilir** olur (rapora "18/18 → 9/18" diye yazılır ve okuyan doğrulayabilir),
+   "geri almayı unutma" sınıfı tümden kapanır. ⚠ Eski sürümde **olmayan** parametre/metot
+   `TypeError`/`AttributeError` verir → koşucu çöker → mutasyon "0 FAIL" gösterir (yukarıdaki
+   *çökme ≠ FAIL*): imzayı `inspect.signature` ile yokla, çağrıyı sürüm-toleranslı yap,
+   eksik metodu `except AttributeError` ile **FAIL'e çevir** (çökmeye değil).
+4. **Fixture içinde CLI modülü import etmek stdout'u GASP EDEBİLİR** (2026-08-09, iki koşum
+   sonuçsuz "exit 1" verdi): birçok `scripts/*.py` modül gövdesinde
+   `sys.stdout = io.TextIOWrapper(sys.stdout.buffer, …)` yapar (konsol-kodlama koruması).
+   Fixture o modülü import/reload ederse sarmalayıcı çöp-toplandığında **alttaki gerçek
+   buffer'ı KAPATIR** → testin geri kalanı `ValueError: I/O operation on closed file` +
+   `lost sys.stderr` ile ölür ve **hiçbir sonuç satırı basılmaz** (sayaç bile yok).
+   `detach()` ile kurtarma denendi, YETMEDİ. Çalışan çözüm: import'tan ÖNCE `sys.stdout`/
+   `sys.stderr`i **atılabilir** bir `TextIOWrapper(BytesIO())`e çevir, import bitince yedeği
+   geri koy. Bu, *çökme ≠ FAIL*'in harness tarafındaki karşılığıdır: sebep kodda değil
+   ölçüm aletindedir.
 
 **FP çapası omurgadır.** "Eksik gate → BLOCKER" yaparken "kayıtlı boş zincir → PASS" çapası
 yoksa bilinçli boşluklar da bloklanır; "şu alanı indeksle" derken "mükerrer satır yok"
