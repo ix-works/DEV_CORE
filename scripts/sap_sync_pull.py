@@ -47,10 +47,12 @@ def _resolve_session(explicit: str) -> str:
     except Exception:
         return "default"
 
-# adt_get'in çözdüğü XML-tabanlı DDIC tipleri (get_ddic_object yolu; /source/main YOK).
-_DDIC_XML = {"dataelement", "dtel", "domain", "doma", "table", "tabl",
-             "structure", "tabletype", "ttyp"}
-_DDIC_CANON = {"dtel": "dataelement", "doma": "domain", "tabl": "table", "ttyp": "tabletype"}
+# ⚠ DDIC okuma-yolu TEK KAYNAKTAN gelir: `object_types.ddic_read_mode()`.
+# Burada YEREL BIR TIP KUMESI TUTMA. Eskiden bu dosya `atom.py`'dekinin ELLE
+# KOPYALANMIS bir esdegerini tasiyordu ve BES tipin hepsini XML yoluna sokuyordu;
+# `atom.py` duzeltilse bile burasi geride kalirdi -> `adt_get` DDL, `sap_sync_pull`
+# XML dondururdu (okuma tutarsizligi). Ayrica XML govdesi repo dosyasina HAM yazilir,
+# DDL ayiklamasi YAPILMAZ: table/structure pull'u repo'daki DDL'i XML zarfiyla ezerdi.
 
 
 def _now_iso() -> str:
@@ -103,12 +105,25 @@ def main() -> int:
 
     t = args.type.lower().strip()
     try:
-        if t in _DDIC_XML:
-            canon = _DDIC_CANON.get(t, t)
-            src = client.get_ddic_object(canon, obj)        # XML-DDIC: doğru endpoint
-            res = write_repo_from_live(obj, src, object_type=canon, force=args.force)
+        from object_types import ddic_read_mode           # TEK KAYNAK (bkz. yukarıdaki not)
+        ddic_mode, ddic_canon = ddic_read_mode(t)
+    except Exception as exc:
+        print(f"[FAIL] DDIC tip sınıflandırması yapılamadı ({exc}) — pull ATLANDI. "
+              f"Sessizce yanlış uçtan okumaktansa DURUYORUZ; object_types.py'yi kontrol et.")
+        return 1
+
+    try:
+        if ddic_mode == "xml":
+            # dataelement/domain/tabletype: `/source/main` YOK → obje XML'i okunur.
+            # ⚠ Bu tiplerde repo dosyası da XML'dir; DDL ayıklaması SÖZ KONUSU DEĞİL.
+            src = client.get_ddic_object(ddic_canon, obj)
+            res = write_repo_from_live(obj, src, object_type=ddic_canon, force=args.force)
         else:
-            # source-based (cds/ddls/bdef/srvd/srvb/class/program/interface/dcl/ddlx):
+            # source-based (cds/ddls/bdef/srvd/srvb/class/program/interface/dcl/ddlx)
+            # **ve DDL-uçlu DDIC** (ddic_mode == "ddl": table/structure — `/source/main`
+            # ucu GERÇEKTEN var, ölçüldü 2026-08-09). Bu yol `get_object_source(active)`
+            # kullanır ⇒ FIX-B/C/D koruma zinciri (dirty · shrink · geçmiş-commit) tablo
+            # ve struct için de DEVREYE GİRER; XML yolunda bunların hiçbiri yoktu.
             # canlı AKTİF source çek + repo dosyasına yaz (CRLF-korur, tip-farkında).
             res = L.sync_repo_from_live(
                 object_url=None, object_name=obj, object_type=t,

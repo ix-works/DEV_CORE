@@ -81,15 +81,22 @@ def main() -> int:
         print("  [FAIL] OBJECT_TYPE_TO_TASK AST ile okunamadi")
         return 1
     atom_t = _sabitler("mcp_servers/sap_adt/tools/atom.py",
-                       {"_TYPE_KEY_CANON", "_ACTIVATION_URI_SEG",
-                        "_SOURCE_BASED_TYPES", "_DDIC_XML_TYPES"})
+                       {"_TYPE_KEY_CANON", "_ACTIVATION_URI_SEG", "_SOURCE_BASED_TYPES"})
+    # 2026-08-09: DDIC tip kumeleri atom.py'den `scripts/object_types.py`ye TASINDI
+    # (tek kaynak; iki tuketici ayrisiyordu). Kapsam DARALMASIN diye ayni birlesim
+    # oradan okunur — ozellikle `tabletype`, atom'daki DIGER tablolarin HICBIRINDE
+    # gecmez; yalniz bu kumeden gelir (kaldirilirsa sessizce kapsam kaybi olurdu).
+    ot_t = _sabitler("scripts/object_types.py",
+                     {"DDIC_XML_ONLY_TYPES", "DDIC_DDL_SOURCE_TYPES"})
 
     harita = rv_t["OBJECT_TYPE_TO_TASK"]
     kabul: set[str] = set()
-    for ad in ("_TYPE_KEY_CANON", "_ACTIVATION_URI_SEG", "_SOURCE_BASED_TYPES", "_DDIC_XML_TYPES"):
-        v = atom_t.get(ad)
+    for ad, tablo in (("_TYPE_KEY_CANON", atom_t), ("_ACTIVATION_URI_SEG", atom_t),
+                      ("_SOURCE_BASED_TYPES", atom_t),
+                      ("DDIC_XML_ONLY_TYPES", ot_t), ("DDIC_DDL_SOURCE_TYPES", ot_t)):
+        v = tablo.get(ad)
         if v is None:
-            print(f"  [FAIL] atom tablosu okunamadi: {ad} (sessiz gecme YOK)")
+            print(f"  [FAIL] tip tablosu okunamadi: {ad} (sessiz gecme YOK)")
             return 1
         kabul |= set(v.keys() if isinstance(v, dict) else v)
 

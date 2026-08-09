@@ -18,7 +18,7 @@ import io
 import re
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from mcp_servers.sap_adt._app import mcp, log, profil_tool
 from mcp_servers.sap_adt._reviewer import (
@@ -332,22 +332,49 @@ def _capture_stdout():
         yield buf
 
 
-# XML-based DDIC objects have NO /source/main endpoint — they are read as a single
-# object XML (via get_ddic_object), not as source text. Routing them through
-# download_object (which appends /source/main) 404s and the object falsely reports
-# exists:false even when live (recon 2026-06-16, ZSD001_E_RAILN).
-_DDIC_XML_TYPES = {"dataelement", "domain", "table", "structure", "tabletype"}
+# DDIC okuma-yolu TEK KAYNAKTAN gelir: `scripts/object_types.py` ->
+# `DDIC_XML_ONLY_TYPES` / `DDIC_DDL_SOURCE_TYPES` / `ddic_read_mode()`.
+# ⚠ Burada YEREL BIR KOPYA TUTMA. 2026-06-16'da bes DDIC tipi tek kume halinde
+# XML-okuyucuya yonlendirilmisti; dogrusu ikiye ayriliyor:
+#   * dataelement/domain/tabletype -> `/source/main` YOK (404) -> obje XML'i okunur.
+#   * table/structure              -> GERCEK `/source/main` DDL ucu VAR (canli olculdu
+#     2026-08-09; Z ve STANDART objelerde 200) -> duz DDL okunur.
+# Ayni kural `scripts/sap_sync_pull.py`'de de gecerlidir; iki tuketici de ayni
+# fonksiyonu cagirir (eskiden iki bagimsiz literal vardi ve ayrisiyordu).
 
 
-def _ddic_xml_type(object_type: str):
-    """Canonical DDIC XML type name if object_type is an XML-based DDIC object
-    (data element/domain/table/structure/table type), else None."""
+def _ddic_read_mode(object_type: str) -> tuple[Optional[str], Optional[str]]:
+    """`(mode, canonical)` — mode: 'ddl' | 'xml' | None. Tek kaynak: object_types.
+
+    `(None, None)` DDIC-DEGIL demektir ve cagiran genel yola duser. Bu dal SESSIZ
+    bir yanlis-cevap uretmez: genel yol `client.download_object` -> `get_source_url`
+    zincirinden gecer, o da AYNI `object_types` modulunu kullanir. Yani modul
+    gercekten yuklenemiyorsa `sap_client` import'u da coker ve `_get_client()`
+    `ok:false` ile patlar; bilinmeyen tipte ise `get_source_url` ValueError atar ->
+    `_err_from_exc` -> `ok:false`. Iki halde de sessiz `exists:false` YOKTUR.
+    """
     try:
-        from object_types import normalize_object_type  # type: ignore
-        canonical = normalize_object_type(object_type)
+        from object_types import ddic_read_mode  # type: ignore
+        mode, canonical = ddic_read_mode(object_type)
+        return (mode, canonical)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("object_types.ddic_read_mode yuklenemedi (%s) — DDIC ozel yolu atlandi", exc)
+        return (None, None)
+
+
+def _ddic_uri_seg(canonical_type: Optional[str]) -> Optional[str]:
+    """Kanonik DDIC tipi -> ADT uc segmenti (ör. 'ddic/tables'); cozulemezse None.
+
+    Yol tablosu object_types.OBJECT_TYPES'tadir — burada IKINCI bir kopya TUTULMAZ.
+    """
+    if not canonical_type:
+        return None
+    try:
+        from object_types import OBJECT_TYPES  # type: ignore
+        seg = OBJECT_TYPES[canonical_type]["url_path"]
     except Exception:
         return None
-    return canonical if canonical in _DDIC_XML_TYPES else None
+    return seg if isinstance(seg, str) and seg else None
 
 
 # "BULUNAMADI != YOK" (ölçüldü 2026-07-31, dört ayrı vaka aynı gün).
@@ -482,13 +509,30 @@ def _read_source_object(name: str, uri_seg: str, type_label: str) -> dict:
             r = adt.session.get(url, headers={"Accept": "text/plain"}, verify=False, timeout=60)
         log_buf.write(out.getvalue())
         if r.status_code == 404:
+            # ⚠ YOKLUK KANITI ACIK YAZILIR. Ham `requests` GET'i stdout'a hicbir sey
+            # basmaz -> log BOS kalir -> `_bos_sonuc_sinifi("")` "temiz-bos yanit"
+            # dalindan "yok" dondururdu; yani dogru sonuc KAZAYLA cikardi. Durum kodunu
+            # log'a yazinca siniflandirma 404 KANITINA dayanir (kanit-zinciri gorunur).
+            log_buf.write("[404] GET %s\n" % url)
             return _miss_or_unreachable(name, type_label, log_buf.getvalue().strip())
         if r.status_code != 200:
             return {"ok": False, "name": name.upper(), "type": type_label,
                     "error": "http_%d" % r.status_code, "message": (r.text or "")[:500],
                     "client_log": log_buf.getvalue().strip()}
-        return {"ok": True, "name": name.upper(), "type": type_label, "exists": True,
-                "source": r.text, "client_log": log_buf.getvalue().strip()}
+        out_ok = {"ok": True, "name": name.upper(), "type": type_label, "exists": True,
+                  "source": r.text, "client_log": log_buf.getvalue().strip()}
+        if not (r.text or "").strip():
+            # 200 ama GOVDE BOS: obje VAR fakat kaynagi yok (create-POST'un biraktigi
+            # shell/placeholder — playbook adt-tables-structures §28.1). Sessizce bos
+            # source dondurmek "obje bos" yanilgisi uretir ve pull yolunda repo dosyasini
+            # bosaltmaya calisir (write_repo_from_live FIX-C shrink korumasi yakalar).
+            out_ok["source_empty"] = True
+            out_ok["warning"] = (
+                "Uc 200 dondu ama SOURCE BOS. Obje VAR; kaynagi bos (shell/placeholder "
+                "olabilir — create yapildi ama DDL PUT edilmedi ya da aktive edilmedi). "
+                "Bu sonucu 'obje bos/silinebilir' diye OKUMA; once SE11/adt ile teyit et."
+            )
+        return out_ok
     except Exception as exc:
         return _err_from_exc(exc)
 
@@ -518,9 +562,34 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
     client = _get_client()
     log_buf = io.StringIO()
 
-    # XML-based DDIC objects (DTEL/DOMA/TABL/structure/tabletype): read object XML
-    # directly; they have no /source/main source endpoint (see _DDIC_XML_TYPES note).
-    ddic_xml_type = _ddic_xml_type(object_type)
+    # DDIC tipleri IKI YOLA ayrilir (bkz. `_ddic_read_mode` notu):
+    #   'ddl' (table/structure) -> GERCEK `/source/main` ucu var -> DUZ DDL oku.
+    #   'xml' (dtel/doma/ttyp)  -> `/source/main` YOK -> obje XML'i oku.
+    ddic_mode, ddic_canonical = _ddic_read_mode(object_type)
+    if ddic_mode == "ddl":
+        # Tablo/struct'un KAYNAGI DDL'dir: repo dosyalari da DDL tasir (bkz.
+        # source_drift._TYPE_TO_EXTENSIONS) ve create yolu DDL'i `PUT /source/main`
+        # ile yazar. XML zarfi dondurmek okuyucuyu (ve pull yolunu) DDL yerine
+        # `<blue:blueSource>` govdesiyle besliyordu.
+        seg = _ddic_uri_seg(ddic_canonical)
+        if seg is None:
+            # Sozlesme ihlali: mode='ddl' geldi ama uc segmenti cozulemedi. SESSIZCE
+            # XML yoluna DUSMEK yasak — cagiran DDL bekliyor, XML zarfi alirdi ve bunu
+            # fark etmezdi (§127 "dogrulama kosamadi = dogrulandi" sinifi). ACIK HATA.
+            return {
+                "ok": False,
+                "error": "ddic_uri_unresolved",
+                "name": name.upper(),
+                "type": object_type,
+                "message": (
+                    f"DDIC tipi '{ddic_canonical}' icin ADT uc segmenti (url_path) "
+                    "cozulemedi — kaynak OKUNMADI. Bu sonuc 'obje yok' ya da 'kaynak bos' "
+                    "DEGILDIR. object_types.OBJECT_TYPES tablosunu kontrol et."
+                ),
+            }
+        return _read_source_object(name, seg, object_type)
+
+    ddic_xml_type = ddic_canonical if ddic_mode == "xml" else None
     if ddic_xml_type is not None:
         try:
             with _capture_stdout() as out:
