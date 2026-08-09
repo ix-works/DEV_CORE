@@ -196,6 +196,62 @@ def normalize_object_type(object_type):
     raise ValueError(f"Unsupported object type: {object_type}. Supported: {', '.join(OBJECT_TYPES.keys())}")
 
 
+# =============================================================================
+# DDIC OKUMA-YOLU — TEK KAYNAK (2026-08-09)
+# =============================================================================
+# Bes DDIC tipi ADT'de AYNI degildir: ikisinin GERCEK bir `/source/main` DDL ucu
+# vardir, ucunun YOKTUR. Bu ayrim tek yerde tanimlanir cunku iki ayri tuketici
+# (`mcp_servers/sap_adt/tools/atom.py::adt_get` ve `scripts/sap_sync_pull.py`) daha
+# once AYNI kurali BAGIMSIZ birer literal olarak tasiyordu; biri duzeltilip digeri
+# unutuldugunda `adt_get` DDL, `sap_sync_pull` XML donduruyordu (okuma tutarsizligi).
+#
+# CANLI OLCUM (2026-08-09, s4_private DEV, salt-okuma GET; Z + STANDART objelerle):
+#   table       ZSD001_T_*                 XML 200 · /source/main 200 (duz DDL)
+#   table       MARA / VBAK / T156         XML 200 · /source/main 200  <- standartta da calisir
+#   structure   ZSD001_S_* (2 obje)        XML 200 · /source/main 200
+#   structure   BAPIRET2 / SYST            XML 200 · /source/main 200  <- standartta da calisir
+#   dataelement ZSD001_E_* (2 obje)        XML 200 · /source/main 404
+#   domain      ZSD001_D_*                 XML 200 · /source/main 404
+#   tabletype   ZSD001_TT_* (3) / BAPIRET2_T  XML 200 · /source/main 404
+# Yani DDL ucu TIPE baglidir, Z-olup-olmamaya DEGIL. Bir tipi asagi tasimadan once
+# AYNI olcumu yap (en az bir Z + bir standart obje); playbook/adt-domain-dtel.md ve
+# playbook/adt-tables-structures.md ayni ayrimi belgeler.
+
+#: `/source/main` ucu OLMAYAN DDIC tipleri — yalniz obje XML'i okunur (get_ddic_object).
+#: Bunlara `/source/main` eklemek 404 verir ve obje YANLISLIKLA "yok" gorunur.
+#: ⚠ DUZ KUME LITERALI olarak birakildi (frozenset(...) DEGIL): `reviewer_tip_kapsam`
+#: fixture'i bu tablolari `ast.literal_eval` ile OKUR (MCP SDK'siz CI icin) ve bir
+#: cagri ifadesini cozemez -> tablo "okunamadi" diye FAIL eder.
+DDIC_XML_ONLY_TYPES = {'dataelement', 'domain', 'tabletype'}
+
+#: GERCEK `/source/main` DDL ucu OLAN DDIC tipleri — kaynak olarak duz DDL okunur.
+#: (Repo konvansiyonu da DDL'dir: source_drift._TYPE_TO_EXTENSIONS table/structure ->
+#: .asddls/.ddls/.cds, ve create yolu DDL'i `PUT /source/main` ile yazar.)
+DDIC_DDL_SOURCE_TYPES = {'table', 'structure'}
+
+
+def ddic_read_mode(object_type):
+    """DDIC okuma-yolunu sinifla: `'ddl'` | `'xml'` | `None` (DDIC degil/bilinmiyor).
+
+    Esanlamlilar (tabl/ttyp/dtel/doma) `normalize_object_type` ile cozulur; boylece
+    cagiranlar kendi takma-ad tablolarini TASIMAZ (o kopyalar ayrisma kaynagiydi).
+
+    Returns:
+        (mode, canonical_type): mode `'ddl'`/`'xml'` ise canonical_type kanonik DDIC
+        tipidir (`table`/`structure`/`dataelement`/`domain`/`tabletype`).
+        DDIC olmayan ya da cozulemeyen tipte `(None, None)`.
+    """
+    try:
+        canonical = normalize_object_type(object_type)
+    except Exception:
+        return (None, None)
+    if canonical in DDIC_DDL_SOURCE_TYPES:
+        return ('ddl', canonical)
+    if canonical in DDIC_XML_ONLY_TYPES:
+        return ('xml', canonical)
+    return (None, None)
+
+
 def get_object_url(object_name, object_type='class'):
     """Generate SAP ADT object URL for any object type"""
     from urllib.parse import quote

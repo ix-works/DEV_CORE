@@ -129,6 +129,197 @@ def _ui_app_subdir(path: str):
     return None
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# KABUK SÖZDİZİMİ MODELİ (2026-08-01, adversarial bug-avı AV-16/17/18)
+#
+# SINIF-HATA: kurallar komut metnini SERBEST REGEX'le tarıyordu; kabuk dilbilgisinin
+# iki yapısı hiç modellenmemişti → aynı kökten ÜÇ atlatma çıktı (üçü de canlı repro):
+#   AV-16 `git commit -am '<iz>'`   → exit 0  (kontrol: `-m` → exit 2)
+#         kök: `_GIT_M` lookbehind'i `(?<![\w-])` KÜMELENMİŞ kısa bayrağın (`-am`) içindeki
+#         `m`'yi reddediyordu → mesaj HİÇ çıkarılmadı → taranacak metin yok → gate boş döndü.
+#         "Metin bulunamadı" ile "metin temiz" AYNI sonuca (geç) düşüyordu.
+#   AV-17 `git commit --file=<f>`   → exit 0  (kontrol: `-F <f>` → exit 2)
+#         kök: `_ARG_BODYFILE` git'in `--file` uzun biçimini hiç tanımıyordu.
+#   AV-18 `gh repo view --repo O/R && gh pr create -t t -b b` → exit 0
+#         kök: kural-9 `--repo`yu KOMUTUN TAMAMINDA arıyordu; zincirdeki BAŞKA (hatta
+#         salt-okuma) bir komuttaki hedef, sonraki HEDEFSİZ mutasyonu serbest bırakıyordu.
+#
+# ORTAK KÖK: "bayrak biçimi" ve "komut zinciri" modellenmemiş. Vaka-vaka yamamak
+# (bir `-am` alternasyonu eklemek) sınıfı kapatmaz — `-qam`, `-mF`, `--file=`, `;`
+# zinciri hepsi ayrı ayrı geri gelir. Bu yüzden İKİ ortak ilkel kuruluyor:
+#   ① `_kelimeler()`  — tırnak-duyarlı kelime bölme (kabuk word-splitting'in dar modeli)
+#   ② `_segmentler()` — tırnak-DIŞI ayraçlardan segment bölme (her komut kendi bağlamı)
+# ve üstlerine `_bayrak_degerleri()` (POSIX/git/pflag bayrak dilbilgisi) oturuyor.
+#
+# ⚠ PATTERN #12 (tırnak-içi VERİ komut sanılır, 7d78a49): bölme TIRNAK-DUYARLIDIR —
+# `echo 'git commit -am x'` TEK kelimedir, komut değildir; `git commit -m "a && b"`
+# TEK segmenttir. Bu, 2026-07-09'da bir kez çözülmüş sınıfın geri gelmemesi içindir.
+# ═══════════════════════════════════════════════════════════════════════════════
+_ATAMA = re.compile(r"^[A-Za-z_]\w*=")
+_SEG_AYRAC_KARAKTER = ";|&\n()"
+
+
+def _kelimeler(s: str) -> list:
+    """Tırnak-duyarlı kelime bölme. `--m="a b"` → tek kelime (`--m=a b`).
+
+    Bilerek `shlex` DEĞİL: `shlex(posix=True)` Windows yollarındaki ters-eğik çizgiyi
+    kaçış sayıp yutar (`C:\\IX\\x` → `C:IXx`) ve dengesiz tırnakta ValueError atar —
+    guard'ın girdisi keyfi/kirli metindir, ayrıştırıcı ASLA patlamamalı.
+    """
+    kelimeler, cur, tirnak_gordu = [], [], False
+    i, n = 0, len(s or "")
+    while i < n:
+        c = s[i]
+        if c in "'\"":
+            q = c
+            i += 1
+            tirnak_gordu = True
+            while i < n and s[i] != q:
+                if q == '"' and s[i] == "\\" and i + 1 < n:
+                    cur.append(s[i + 1])
+                    i += 2
+                    continue
+                cur.append(s[i])
+                i += 1
+            i += 1                      # kapanış tırnağı (yoksa dizge sonu)
+            continue
+        if c.isspace():
+            if cur or tirnak_gordu:
+                kelimeler.append("".join(cur))
+                cur, tirnak_gordu = [], False
+            i += 1
+            continue
+        cur.append(c)
+        i += 1
+    if cur or tirnak_gordu:
+        kelimeler.append("".join(cur))
+    return kelimeler
+
+
+def _segmentler(s: str) -> list:
+    """Komutu tırnak-DIŞI ayraçlardan (`&& || ; | & \\n ( )`) segmentlere böler.
+
+    Segment = "kendi hedefi/bağlamı olan tek komut". Ayraç kümesi bilerek kuralların
+    komut-başı çapası `(?:^|[\\n;|&(])` ile AYNI: her segmentin başında `^` çapası
+    tutar → mevcut desenler segment üzerinde DEĞİŞMEDEN çalışır (kapsam kaybı yok).
+    """
+    segler, buf = [], []
+    i, n, q = 0, len(s or ""), ""
+    while i < n:
+        c = s[i]
+        if q:
+            buf.append(c)
+            if c == q:
+                q = ""
+            elif q == '"' and c == "\\" and i + 1 < n:
+                buf.append(s[i + 1])
+                i += 1
+            i += 1
+            continue
+        if c in "'\"":
+            q = c
+            buf.append(c)
+            i += 1
+            continue
+        if c in _SEG_AYRAC_KARAKTER:
+            segler.append("".join(buf))
+            buf = []
+            i += 1
+            continue
+        buf.append(c)
+        i += 1
+    segler.append("".join(buf))
+    return [x for x in (t.strip() for t in segler) if x]
+
+
+def _kabuk_baglami(segler: list, idx: int) -> str:
+    """<idx>'ten ÖNCEKİ **SON** `cd` segmenti (görünürlük sorgusu doğru repoya baksın).
+
+    Segment-bazlı değerlendirmeye geçerken `cd /c/core && git commit …` zincirinde
+    `cd` bağlamı kaybolur → `_repo_public_mu` proje köküne düşer → YANLIŞ repo
+    görünürlüğü (hem FP hem FN üretir). Bağlam açıkça taşınır.
+
+    **SON** olmasının sebebi: kabukta geçerli dizin son `cd`dir. `_repo_public_mu`
+    kendisi `_CD_PREFIX.search` ile İLK eşleşmeyi alır; bütün `cd`leri taşısaydık
+    `cd A && git commit … && cd B && git commit …` zincirinde ikinci commit A'nın
+    görünürlüğüyle değerlendirilirdi (yanlış repo → sessiz kaçak).
+    """
+    onceki = [s for s in segler[:idx] if re.match(r"^\s*cd\s+", s)]
+    return (onceki[-1] + "\n") if onceki else ""
+
+
+def _bayrak_degerleri(tokenlar: list, uzun: set, kisa: set) -> list:
+    """Bayrak DEĞERLERİ: `--ad X` · `--ad=X` · `-x X` · `-xX` · KÜMELENMİŞ `-abx X`.
+
+    AV-16'nın kökü tam burasıydı: kümelenmiş kısa bayrak (`-am`, `-qam`) hiçbir
+    regex'te modellenmemişti. Kümede değer ALAN harf bulunursa, ondan SONRAKİ kalan
+    değerdir; kalan boşsa değer bir SONRAKİ token'dır (git/pflag davranışı birebir).
+    `--` sonrası bayrak ayrıştırması durur (POSIX).
+    """
+    degerler, i, n = [], 0, len(tokenlar)
+    while i < n:
+        t = tokenlar[i]
+        if t == "--":
+            break
+        if t.startswith("--") and len(t) > 2:
+            ad, esittir, deger = t[2:].partition("=")
+            if ad in uzun:
+                if esittir:
+                    degerler.append(deger)
+                elif i + 1 < n:
+                    degerler.append(tokenlar[i + 1])
+                    i += 1
+        elif t.startswith("-") and len(t) > 1:
+            harfler = t[1:]
+            for k, ch in enumerate(harfler):
+                if ch in kisa:
+                    kalan = harfler[k + 1:]
+                    if kalan.startswith("="):
+                        kalan = kalan[1:]
+                    if kalan:
+                        degerler.append(kalan)
+                    elif i + 1 < n:
+                        degerler.append(tokenlar[i + 1])
+                        i += 1
+                    break
+        i += 1
+    return degerler
+
+
+# `git <ust-opsiyon> commit` — değer ALAN üst-seviye opsiyonlar (atlanmalı ki alt-komut
+# doğru bulunsun): `git -C <yol> commit -am 'x'` gerçek bir vakadır (worktree/çoklu repo).
+_GIT_UST_DEGERLI = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace",
+                              "--exec-path", "--config-env"})
+_GIT_MSG_UZUN, _GIT_MSG_KISA = frozenset({"message"}), frozenset({"m"})
+_GIT_DOSYA_UZUN, _GIT_DOSYA_KISA = frozenset({"file"}), frozenset({"F"})
+
+
+def _git_commit_arg_dizileri(komut: str) -> list:
+    """`git commit` segmentlerinin ARGÜMAN token listeleri (commit'ten SONRASI).
+
+    `git` KOMUT KONUMUNDA olmalı (segment başı, yalnız `VAR=deger` önekleri atlanır) →
+    `echo "git commit -am x"` (tek kelime, tırnaklı) ve `grep -am 3 …` / `tar -am …`
+    buraya HİÇ girmez: yanlış-pozitif yapısal olarak imkânsız, "-am" kara-listesi değil.
+    """
+    ciktilar = []
+    for seg in _segmentler(komut):
+        t = _kelimeler(seg)
+        i = 0
+        while i < len(t) and _ATAMA.match(t[i]):
+            i += 1
+        if i >= len(t):
+            continue
+        ad = t[i].replace("\\", "/").rsplit("/", 1)[-1].lower()
+        if ad not in ("git", "git.exe"):
+            continue
+        i += 1
+        while i < len(t) and t[i].startswith("-"):
+            i += 2 if t[i] in _GIT_UST_DEGERLI else 1
+        if i < len(t) and t[i].lower() == "commit":
+            ciktilar.append(t[i + 1:])
+    return ciktilar
+
+
 # TEK KAYNAK (D9): desenler `scripts/genericize_common.py`'de; `core_precommit` de aynı
 # modülü kullanır. Eskiden iki guard iki AYRI dosyadan besleniyordu (biri
 # `<proje>/.claude/...`, diğeri `<git-dir>/...`) → biri güncellenip diğeri unutulabiliyordu.
@@ -202,12 +393,27 @@ _GH_MUTASYON = _GH_A  # geriye dönük ad
 def _gh_hedef_belirsiz(komut: str) -> str:
     """Repoyu DEĞİŞTİREN `gh` komutunda hedef açıkça verilmemişse RED gerekçesi döner.
 
-    `gh` hedefi cwd'den çıkarır ve `core/` bir JUNCTION'dır → yanlış dizinde çalışan bir
-    mutasyon private proje içeriğini PUBLIC çekirdeğe yayınlayabilir. Yayın GERİ ALINAMAZ.
+    ⚠ SEGMENT BAŞINA (2026-08-01, AV-18): hedef-açıklık KOMUT ZİNCİRİNİN TAMAMINDA değil,
+    **her mutasyon komutunun KENDİ segmentinde** aranır. Eski hâlinde komutun herhangi bir
+    yerinde geçen bir `--repo` (salt-okuma bir `gh repo view` dahil) sonraki HEDEFSİZ
+    mutasyonu serbest bırakıyordu:
+        gh repo view --repo O/R && gh pr create -t t -b b   → exit 0 (canlı repro)
+    Yeni davranış eskisinin ÜST KÜMESİDİR: aynı segmentte hedef varsa yine geçer;
+    hiçbir yerde yoksa yine bloklanır — yalnız "başka segmentten ödünç hedef" kapanır.
+    """
+    for seg in _segmentler(komut):
+        neden = _gh_hedef_belirsiz_segment(seg)
+        if neden:
+            return neden
+    return ""
+
+
+def _gh_hedef_belirsiz_segment(komut: str) -> str:
+    """TEK segment için hedef-açıklık kararı (üç grup ayrı ele alınır).
 
     ⚠ İlk sürüm `api`'yi de `--repo` istiyordu ve `gh repo create org/X`'i blokluyordu →
     `gh api user` / `graphql` / `rate_limit` ve PROJECT_BOOTSTRAP STEP 1 kırılıyordu
-    (2026-07-10 regresyon testi). Üç grup ayrı ele alınır.
+    (2026-07-10 regresyon testi).
     """
     if _GH_A.search(komut) and not _GH_A_ACIK.search(komut):
         return ("hedef repo BELİRSİZ — `gh` repoyu cwd'den çıkarır ve `core/` bir junction'dır; "
@@ -242,6 +448,22 @@ _ARG_BODYFILE = re.compile(
     r"(?:--body-file|--notes-file|(?<![\w-])-F)[= ]+(?:'([^']+)'|\"([^\"]+)\"|(\S+))")
 _CD_PREFIX = re.compile(r"\bcd\s+([^\s;&|]+)")
 _AYRAC = re.compile(r"\s*(?:\|\||&&|[;|&\n])\s*")
+_POSIX_SURUCU = re.compile(r"^/([A-Za-z])/(.*)$")
+
+
+def _win_yol(yol: str) -> str:
+    """Git-Bash POSIX yolunu Windows yoluna çevirir (`/c/IX/X` → `C:\\IX\\X`).
+
+    NEDEN (2026-07-30 vakası): Bash tool'unda `cd /c/IX/<proje> && git commit …` yazıldığında
+    `_CD_PREFIX` POSIX yolu yakalıyor, `subprocess(cwd=...)` Windows'ta bu yolu bulamıyor →
+    exception → görünürlük sorulamıyor → fail-closed → PRIVATE repo public sayılıp meşru
+    commit bloklanıyordu. Yön güvenliydi ama yanlış-pozitif bypass alışkanlığı doğurur.
+    """
+    yol = (yol or "").strip().strip("'\"")
+    m = _POSIX_SURUCU.match(yol)
+    if m:
+        return f"{m.group(1).upper()}:\\" + m.group(2).replace("/", "\\")
+    return yol
 
 
 def _arg_deger(s: str, ad: str) -> str:
@@ -307,7 +529,9 @@ def _repo_public_mu(hay: str) -> tuple:
         argv.insert(3, m.group(1))
     else:
         c = _CD_PREFIX.search(hay)
-        cwd = c.group(1) if c else str(_PROJ_ROOT)
+        cwd = _win_yol(c.group(1)) if c else str(_PROJ_ROOT)
+        if not Path(cwd).is_dir():          # çözülemeyen cd → proje köküne düş
+            cwd = str(_PROJ_ROOT)           #   (yoksa cwd hatası fail-closed'a kaçar)
     try:
         r = subprocess.run(argv, capture_output=True, text=True, timeout=15, cwd=cwd, shell=False)
         if r.returncode != 0:
@@ -319,18 +543,134 @@ def _repo_public_mu(hay: str) -> tuple:
 
 
 def _gh_pr_public_leak(komut: str, ham: str) -> str:
-    if not _GH_PUBLIC_YAYIN.search(komut):
-        return ""
-    public, repo = _repo_public_mu(komut)
-    if not public:
-        return ""
-    metin, hata = _yayinlanan_metin(komut, ham)
-    if hata:
-        return f"public repo '{repo}' — {hata}"
-    bulgular = [f"{ad}: '{tok}'" for tok, ad in sizintilari_bul(metin, _CORE_LEAK)][:6]
-    if not bulgular:
-        return ""
-    return f"public repo '{repo}' — yayinlanan baslik/govdede " + "; ".join(bulgular)
+    """SEGMENT BASINA (2026-08-01, AV-18b — CANLI kanitli sinif-kardesi).
+
+    Eskiden gorunurluk KOMUTUN TAMAMINDAKI ilk `--repo`dan cozuluyordu. Zincirin ilk
+    komutu PRIVATE bir repoyu isaret ediyorsa (salt-okuma bile olsa) gate "private"
+    diyip SUSUYOR, oysa ikinci komut PUBLIC repoya yayin yapiyordu:
+        gh pr view 1 --repo <PRIVATE> && gh pr create --repo <PUBLIC> -b '<iz>'
+    Canli olcum (2026-08-01, gercek iki repo): blok=False — SIZDI. Artik her yayin
+    segmenti KENDI hedefiyle degerlendirilir.
+    """
+    segler = _segmentler(komut)
+    for i, seg in enumerate(segler):
+        if not _GH_PUBLIC_YAYIN.search(seg):
+            continue
+        public, repo = _repo_public_mu(_kabuk_baglami(segler, i) + seg)
+        if not public:
+            continue
+        metin, hata = _yayinlanan_metin(seg, ham)
+        if hata:
+            return f"public repo '{repo}' — {hata}"
+        bulgular = [f"{ad}: '{tok}'" for tok, ad in sizintilari_bul(metin, _CORE_LEAK)][:6]
+        if bulgular:
+            return f"public repo '{repo}' — yayinlanan baslik/govdede " + "; ".join(bulgular)
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# COMMIT MESAJI SIZINTI GATE (2026-07-28 — yasanmis bosluk)
+#
+# VAKA: DEV_CORE'a (PUBLIC) atilan bir commit'in MESAJINDA proje obje adi vardi.
+# `core_precommit` commit'in ICERIGINI (dosyalari) tarar — MESAJINI TARAMAZ.
+# `_gh_pr_public_leak` ise yalniz `gh` yayin komutlarina bakar. Arada kalan
+# commit mesaji push'la birlikte PUBLIC repoya gider ve GitHub'da kalicidir.
+# Gercekten yasandi: PR govdesi guard'a takildi, ama AYNI ad zaten commit
+# mesajiyla push edilmisti (amend + force-push ile temizlendi).
+#
+# Neden commit ANINDA: mesaji o an degistirmek bedavadir; push'tan sonra
+# gecmisi yeniden yazmak gerekir (ve baskasi cektiyse artik gec kalinmistir).
+# ---------------------------------------------------------------------------
+_GIT_COMMIT = re.compile(
+    r"(?:^|[\n;|&(])\s*(?:[A-Za-z_]\w*=\S+\s+)*git\s+(?:-C\s+\S+\s+)*commit\b",
+    re.IGNORECASE)
+_GIT_C_PATH = re.compile(r"(?:^|[\n;|&(])\s*git\s+-C\s+(?:'([^']+)'|\"([^\"]+)\"|(\S+))")
+_GIT_M = re.compile(r"(?<![\w-])(?:-m|--message)[= ]+(?:'([^']*)'|\"((?:[^\"\\]|\\.)*)\"|(\S+))")
+
+
+# GIT IMZA (trailer) SATIRLARI taramadan cikarilir — YANLIS-POZITIF onlemi.
+# `Co-Authored-By: ... <noreply@...>` ve `Claude-Session: <url>` her commit'te
+# ZORUNLU boilerplate'tir (arac sozlesmesi). Bunlar "kimlik izi" kategorisine
+# takilirsa gate TUM core commit'lerini bloklar -> kapatilir -> koruma sifirlanir.
+# Gurultu yapan bir gate, olmayan bir gate'ten kotudur.
+# ⚠ Dar tutuldu: yalniz SATIR BASINDAKI bilinen trailer anahtarlari. Mesajin
+# govdesinde gecen bir e-posta/kimlik yine YAKALANIR.
+_GIT_IMZA_SATIRI = re.compile(
+    r"^[ \t]*(?:Co-Authored-By|Claude-Session|Signed-off-by|Reviewed-by|Cc)[ \t]*:.*$"
+    r"|^[ \t]*🤖[ \t]*Generated with .*$",
+    re.IGNORECASE | re.MULTILINE)
+
+
+def _git_imza_satirlari_ayikla(metin: str) -> str:
+    """Standart git trailer satirlarini duser (yalniz satir-basi anahtarlar)."""
+    return _GIT_IMZA_SATIRI.sub("", metin or "")
+
+
+def _git_commit_mesaji(komut: str, ham: str) -> tuple:
+    """`git commit` mesajini cikarir. Donus: (metin, hata); cozulemezse FAIL-CLOSED.
+
+    TOKEN-TABANLI (2026-08-01, AV-16/17): tum bayrak bicimleri TEK dilbilgisinden
+    cozulur — `-m X` · `-mX` · `-am X` (KUMELENMIS) · `-qam X` · `--message X` ·
+    `--message=X` · COKLU `-m a -m b` · `-F f` · `-F -` · `--file f` · `--file=f`.
+    Eski regex yolu (`_GIT_M` + `_ARG_BODYFILE`) AYRISTIRICI-SIGORTASI olarak durur:
+    tokenizer bir `git commit` segmenti bulamazsa (beklenmedik sozdizimi) eski yol
+    kosar → kapsam kaybi olmaz, yalnizca EKLENIR.
+    """
+    diziler = _git_commit_arg_dizileri(komut)
+    parcalar, dosyalar = [], []
+    for t in diziler:
+        parcalar += _bayrak_degerleri(t, _GIT_MSG_UZUN, _GIT_MSG_KISA)
+        dosyalar += _bayrak_degerleri(t, _GIT_DOSYA_UZUN, _GIT_DOSYA_KISA)
+    if not diziler:                       # sigorta: eski (regex) yol
+        parcalar += [(m.group(1) or m.group(2) or m.group(3) or "")
+                     for m in _GIT_M.finditer(komut)]
+        bf = _ARG_BODYFILE.search(komut)
+        if bf:
+            dosyalar.append(bf.group(1) or bf.group(2) or bf.group(3))
+    for yol in dosyalar:
+        if yol in ("-", "/dev/stdin"):
+            govde = _heredoc_govdeleri(ham)
+            if not govde.strip():
+                return "", ("-F - (stdin) commit mesaji cozulemedi. FAIL-CLOSED: mesaji "
+                            "heredoc ile ver ya da -F <dosya> kullan.")
+            parcalar.append(govde)
+        else:
+            try:
+                parcalar.append(Path(yol).read_text(encoding="utf-8", errors="replace"))
+            except Exception:
+                return "", (f"-F/--file dosyasi okunamadi ({yol}). FAIL-CLOSED: okunur "
+                            "yap veya -m kullan.")
+    return _git_imza_satirlari_ayikla("\n".join(p for p in parcalar if p)), ""
+
+
+def _git_commit_public_leak(komut: str, ham: str) -> str:
+    """SEGMENT BASINA degerlendirilir (2026-08-01): `cd A && git commit …` zincirinde
+    gorunurluk o segmentin BAGLAMIYLA sorulur; birden fazla commit varsa HER BIRI taranir.
+    Eskiden komutun tamami tek parca sayiliyordu → zincirdeki ilk `--repo`/`cd`
+    yanlis repoyu gosterebiliyordu (AV-18 ile ayni sinif)."""
+    segler = _segmentler(komut)
+    for i, seg in enumerate(segler):
+        diziler = _git_commit_arg_dizileri(seg)
+        if not (diziler or _GIT_COMMIT.search(seg)):
+            continue
+        # `git -C <yol> commit` hedefi: _repo_public_mu `cd` onekine bakar, `-C`'ye bakmaz.
+        # Yolu ona `cd <yol>` gibi gostererek dogru repoyu sorgulatiyoruz.
+        hay = _kabuk_baglami(segler, i) + seg
+        gc = _GIT_C_PATH.search(seg)
+        if gc:
+            hay = f"cd {gc.group(1) or gc.group(2) or gc.group(3)}\n" + hay
+        public, repo = _repo_public_mu(hay)
+        if not public:
+            continue
+        metin, hata = _git_commit_mesaji(seg, ham)
+        if hata:
+            return f"public repo '{repo}' — {hata}"
+        if not metin.strip():
+            continue       # -m/-F yok (editor acilacak) -> taranacak metin yok
+        bulgular = [f"{ad}: '{tok}'" for tok, ad in sizintilari_bul(metin, _CORE_LEAK)][:6]
+        if bulgular:
+            return f"public repo '{repo}' — commit MESAJINDA " + "; ".join(bulgular)
+    return ""
 
 
 _SAP_YAZMA_TOOLLARI = {
@@ -367,11 +707,68 @@ def _yasaklar_damga_sorunu() -> str:
     return "" if ok else mesaj
 
 
+# AV-21 (2026-08-01, KRİTİK): core kimliği YOL-DİZGESİNDEN okunuyordu (`/core/`,
+# `dev_core`). Bir `git worktree` core'un TAM KOPYASIDIR ama adı tutmaz
+# (`C:\IX\_wt\guard`) → GENERICIZE-LEAK kuralı orada SESSİZCE kapalıydı. Üstelik
+# worktree, infra-expert'in ZORUNLU çalışma alanıdır: çekirdeği düzenlediğimiz tek
+# yerde yazım-anı koruması yoktu (ölçüm: aynı payload DEV_CORE'da exit 2, worktree'de
+# exit 0). Hafifletici (CANLI doğrulandı 2026-08-01): commit anında `core_precommit`
+# worktree'de ÇALIŞIYOR (`git rev-parse --show-toplevel` → repo-göreli) — sızıntılı
+# dosya stage'lenip koşuldu, **exit 1**. Yani son kapı ayaktaydı, delik yazım-anındaydı.
+#
+# ÇÖZÜM: yol-dizgesi KALDIRILMADI (junction senaryosunda `<proje>/core/...` yolu
+# çalışan tek ipucu olabilir) — üstüne **işaret-dosyası** ekseni eklendi: bir üst-dizin
+# hem `CLAUDE.core.md` hem `claude/kesin-yasaklar.canonical.md` taşıyorsa orası core
+# deposudur (worktree/klon/yeniden-adlandırma fark etmez). İki işaret birden aranır:
+# tek dosya (kopyalanmış bir CLAUDE.core.md) bir projeyi yanlışlıkla "core" saydırıp
+# meşru proje yazımlarını bloklardı.
+_CORE_ISARETLERI = ("CLAUDE.core.md", "claude/kesin-yasaklar.canonical.md")
+_CORE_ARAMA_DERINLIGI = 12          # ata-dizin taraması üst sınırı (patolojik yol koruması)
+
+
+def _core_deposu_mu(dizin: Path) -> bool:
+    try:
+        return all((dizin / isaret).exists() for isaret in _CORE_ISARETLERI)
+    except Exception:
+        return False
+
+
 def _core_hedef_mi(dosya: str) -> bool:
+    """Hedef core deposunda mı? (yol-dizgesi hızlı yolu + işaret-dosyası ekseni)
+
+    ⚠ İKİ YANLIŞ-POZİTİF FRENİ — ikisi de ÖLÇÜLDÜ (2026-08-01 PR #75 CI kırmızısı;
+    konformans ④ "core DIŞI hedef taranmaz" vakası `template_project` ekseninde düştü):
+
+    ① **MUTLAKLAŞTIRMA.** Göreli yolun `parents`'ı `..` ve `.` ile biter; `.` = ÇALIŞMA
+       DİZİNİ, yani core checkout'unun ta kendisi. Konformans hedefi `docs/x.md` (göreli)
+       + `--project ../template_project` (göreli) verince tırmanış komşu projeden çıkıp
+       **core'un kendi köküne** varıyor ve proje dosyası "core" sanılıyordu. Ölçüm:
+       `parents = ['..\\_tp_probe\\docs', '..\\_tp_probe', '..', '.']` → sonuncusu
+       `C:\\IX\\_wt\\guard` (işaretli) → True. Yol ÖNCE mutlaklaştırılır.
+    ② **DEPO SINIRI.** Mutlak yolda bile tırmanış komşu/üst bir depoya girebilir. Hedefin
+       KENDİ deposunun kökünde durulur: bir dizinde `.git` varsa (worktree'de `.git` bir
+       DOSYADIR ve gerçek depoyu gösterir) orası köktür → daha yukarı BAKILMAZ.
+       Sıra önemli: işaretlere ÖNCE bakılır (core'un kendi kökü de `.git` taşır), sınır
+       SONRA uygulanır — tersi olsaydı AV-21 (worktree = core) geri gelirdi.
+    """
     if not dosya:
         return False
     d = dosya.replace("\\", "/").lower()
-    return "/core/" in d or d.startswith("core/") or "dev_core" in d
+    if "/core/" in d or d.startswith("core/") or "dev_core" in d:
+        return True                 # hızlı yol: dosya-sistemi erişimi YOK (eski davranış aynen)
+    try:
+        p = Path(dosya)
+        if not p.is_absolute():
+            p = _PROJ_ROOT / p
+        p = Path(os.path.abspath(str(p)))          # ① `.` / `..` çözülür
+        for ata in list(p.parents)[:_CORE_ARAMA_DERINLIGI]:
+            if _core_deposu_mu(ata):
+                return True                        # core deposu (klon/worktree/junction farketmez)
+            if (ata / ".git").exists():
+                return False                       # ② hedefin KENDİ deposunun kökü — dur
+    except Exception:
+        return False                # ayrıştırılamayan yol: erken-uyarı katmanı sessiz kalır
+    return False
 
 
 def _komut_konumunda(seg: str, desen: str) -> bool:
@@ -400,7 +797,10 @@ def _binding_mismatch() -> tuple:
     if not conn.exists() or not state.exists():
         return (False, "", "")
     try:
-        ct = conn.read_text(encoding="utf-8", errors="ignore")
+        # utf-8-sig ZORUNLU: BOM'lu .conn_adt'de ilk satır ADT_SAP_URL ise `cur_url` BOŞ
+        # kalır → yalnız-host farkı olan senaryoda differ=False → bu ADR-0010 gate'i
+        # SESSİZCE FAIL-OPEN olur (ölçüldü 2026-08-01, AV-02 sınıfı).
+        ct = conn.read_text(encoding="utf-8-sig", errors="ignore")
         cur_url, cur_cl = _conn_field(ct, "ADT_SAP_URL"), _conn_field(ct, "ADT_SAP_CLIENT")
         cur_sys = _conn_field(ct, "ADT_SAP_SYSTEM_NAME")
         st = json.loads(state.read_text(encoding="utf-8"))
@@ -414,13 +814,43 @@ def _binding_mismatch() -> tuple:
     return (differ, cur_sys or ch or "?", mcp_sys or mh or "?")
 
 
+def _sozluk(x) -> dict:
+    """Payload'ı güvenli sözlüğe indirger (2026-08-01 bug-avı, W2-VH-01).
+
+    ÖLÇÜLDÜ: `json.load` sarılıydı ama SONRASI girdinin dict/str olduğunu VARSAYIYORDU.
+    10 bozuk payload'ın **6'sında** uncaught `AttributeError` → exit 1 + traceback
+    (`null`, `[]`, `"str"`, `42`, `tool_name:123`, `file_path:123`). Sözleşme exit **2**
+    = blok olduğu için exit 1 "blokladı" DEĞİLDİR: guard'ın 9 kuralı da o çağrıda
+    devre dışı kalır. Kontrol grubu aynı koşumda sağlamdı (hedefsiz `gh` → exit 2,
+    `ls` → exit 0) ve `config_change_guard` 10/10 bozuk girdide ÇÖKMEDİ — yani bu bir
+    ortam artefaktı değil, savunmasız giriş işlemesiydi.
+
+    Politika: çözülemeyen/şekilsiz girdi = **inceleyecek bir şey yok** → kurallar boş
+    girdi görür ve serbest bırakır. Bu, `json.load` hatasındaki mevcut `return 0`
+    politikasıyla TUTARLIDIR; şekilsiz payload'da bloklamak harness tuhaflığında
+    oturumu kilitlerdi. Asıl kazanç: ÇÖKME yok → diğer alanlar hâlâ denetlenir
+    (ör. `file_path` bozuk ama `command` geçerliyse komut yine taranır).
+    """
+    return x if isinstance(x, dict) else {}
+
+
+def _metin(x) -> str:
+    """Alanı güvenli metne indirger — sayı/None/liste gelirse çökmek yerine taranabilir kıl."""
+    if isinstance(x, str):
+        return x
+    if x is None or isinstance(x, (dict, list)):
+        return ""
+    return str(x)
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
     except Exception:
         return 0
+    data = _sozluk(data)
 
-    tool_name = data.get("tool_name", "") or ""
+    tool_name = _metin(data.get("tool_name", ""))
 
     if tool_name in _SAP_YAZMA_TOOLLARI:
         sorun = _yasaklar_damga_sorunu()
@@ -442,18 +872,17 @@ def main() -> int:
                 "sisteme gider. İŞLEM REDDEDİLDİ. DUR → kullanıcı '/mcp' ile yeniden bağlansın.\n")
             return 2
 
-    ti = data.get("tool_input", {}) or {}
-    ham = ""
-    if isinstance(ti, dict):
-        ham = ti.get("command", "") or json.dumps(ti, ensure_ascii=False)
+    ti_ham = data.get("tool_input", {})
+    ti = _sozluk(ti_ham)
+    if ti:
+        ham = _metin(ti.get("command", "")) or json.dumps(ti, ensure_ascii=False)
     else:
-        ham = str(ti)
+        # dict DEĞİL (liste/str/sayı/None): metne indir, yine de tara — çökme YOK.
+        ham = "" if ti_ham is None else _metin(ti_ham) or json.dumps(ti_ham, ensure_ascii=False, default=str)
 
     komut = _komut_govdesi(ham) if tool_name in _KABUK_TOOLLARI else ham
 
-    dosya_hedefi = ""
-    if isinstance(ti, dict):
-        dosya_hedefi = ti.get("file_path", "") or ti.get("notebook_path", "") or ""
+    dosya_hedefi = _metin(ti.get("file_path", "")) or _metin(ti.get("notebook_path", ""))
 
     if tool_name in _KABUK_TOOLLARI or tool_name in _ABAP_TOOLLARI:
         abap = tool_name in _ABAP_TOOLLARI
@@ -484,6 +913,18 @@ def main() -> int:
                 "PR başlığı/gövdesi PUBLIC repoya yayınlanır ve cache'lenir — silmek geri "
                 "ALMAZ. core_precommit yalnız commit içeriğini tarar; PR gövdesi commit "
                 "DEĞİLDİR. İŞLEM REDDEDİLDİ. Çözüm: gövdeyi genericize et, tekrar dene.\n")
+            return 2
+
+        sorun = _git_commit_public_leak(komut, ham)
+        if sorun:
+            sys.stderr.write(
+                f"⛔ COMMIT-MESAJI SIZINTI GATE: {sorun}\n"
+                "Commit MESAJI push ile PUBLIC repoya gider ve GitHub'da KALICIDIR. "
+                "core_precommit commit'in İÇERİĞİNİ (dosyaları) tarar — MESAJINI TARAMAZ; "
+                "PR gate'i de yalnız `gh` yayın komutlarına bakar. Arada kalan bu yol "
+                "2026-07-28'de fiilen sızdırdı. İŞLEM REDDEDİLDİ.\n"
+                "Çözüm: mesajı genericize et, tekrar dene. Zaten commit'lediysen ve HENÜZ "
+                "PUSH ETMEDİYSEN: `git commit --amend` ile mesajı düzelt.\n")
             return 2
 
     if (tool_name in _KABUK_TOOLLARI and "adt/activation" in komut and ".post(" in komut

@@ -46,6 +46,31 @@ from object_types import (
 )
 
 
+def readback_farki_yalniz_bicim_mi(yuklenen: str, canli: str) -> bool:
+    """Push sonrası readback farkı BİÇİM mi, İÇERİK mi? (True = yalnız biçim)
+
+    KÖK-FIX (2026-07-28). Vaka: bir CDS kaynağında ABAP tarzı `"` yorumu vardı;
+    CDS DDL'de `"` yorum DEĞİLDİR → SAP kaynağı **sessizce reddetti**. Beş kontrol de
+    yeşil verdi (run_review PASS · abaplint temiz · run_all_validators OK ·
+    adt_syntax_check valid:true · push "[OK] uploaded" + "[OK] activated") ama kaynak
+    canlıya hiç inmedi. Yakalayan tek şey readback karşılaştırmasıydı — o da yalnızca
+    WARNING basıyor, `result`'a başarısızlık işareti koymuyordu.
+
+    Körü körüne hard-fail YAPILAMAZ: SAP bazı obje tiplerinde kaynağı pretty-print eder
+    (gerçek vaka: bir tabloda 12 fark satırı, hepsi hizalama boşluğu, içerik AYNI).
+    Ayrım: **tüm boşluklar atıldığında hâlâ farklıysa** bu biçim değil, gerçek içerik
+    uyuşmazlığıdır → push başarısız sayılır.
+
+    Modül düzeyinde ve ağsızdır ki regresyon testi GERÇEK kod yolunu çağırabilsin
+    (testin mantığı yeniden-uygulaması = sahte güvence).
+    """
+    y = (yuklenen or "").strip().replace("\r\n", "\n").replace("\r", "\n")
+    c = (canli or "").strip().replace("\r\n", "\n").replace("\r", "\n")
+    if y == c:
+        return True
+    return "".join(y.split()) == "".join(c.split())
+
+
 class SAPClient:
     """High-level SAP ABAP Development Client"""
 
@@ -496,6 +521,18 @@ class SAPClient:
                 transport = self._find_existing_transport(object_name, object_type, transport)
 
             # Lock object (pass transport so SAP registers lock under correct corrNr)
+            # ⚠ ETag'i LOCK'TAN ÖNCE çek (2026-07-30, sınıf push'u 423 vakası).
+            # set_object_source() ETag'i kendi içinde çekerse o GET lock ile PUT arasına
+            # girer ve stateful lock context'ini bozar → 423 InvalidLockHandle.
+            # Sınıflarda If-Match ZORUNLU (CL_KU_CLASS_REST_HANDLER), o yüzden ETag'i
+            # atlayamayız — yalnız lock penceresinin DIŞINA taşıyoruz.
+            # Detay + emsal: sap_adt_lib.fetch_source_etag() docstring'i.
+            pre_lock_etag = self.adt_client.fetch_source_etag(source_url)
+            if pre_lock_etag:
+                print(f"      [OK] ETag alindi (lock oncesi): {pre_lock_etag[:24]}...")
+            else:
+                print(f"      [INFO] ETag alinamadi — If-Match'siz denenecek")
+
             print(f"\n[2/4] Locking object...")
             print(f"      corrNr (transport passed to lock): {transport or '[NONE — ghost transport risk!]'}")
 
@@ -533,7 +570,8 @@ class SAPClient:
                 print(f"      Transport: {effective_transport}")
 
             try:
-                self.adt_client.set_object_source(source_url, source_code, lock_handle, effective_transport)
+                self.adt_client.set_object_source(source_url, source_code, lock_handle,
+                                                  effective_transport, etag=pre_lock_etag)
                 result['source_uploaded'] = True
                 print(f"      [OK] Source uploaded")
             except Exception as upload_error:
@@ -626,6 +664,7 @@ class SAPClient:
                         uploaded_norm = source_code.strip().replace('\r\n', '\n').replace('\r', '\n')
                         active_norm = active_source.strip().replace('\r\n', '\n').replace('\r', '\n')
                         if uploaded_norm == active_norm:
+                            result['readback_ok'] = True
                             print(f"      [OK] Active source verified - matches uploaded content")
                         else:
                             # Retry once after another second (SAP caching/load balancer delay)
@@ -633,14 +672,44 @@ class SAPClient:
                             active_source = self.adt_client.get_object_source(object_url, return_etag=False, version='active')
                             active_norm = active_source.strip().replace('\r\n', '\n').replace('\r', '\n')
                             if uploaded_norm == active_norm:
+                                result['readback_ok'] = True
                                 print(f"      [OK] Active source verified (after brief delay)")
+                            elif readback_farki_yalniz_bicim_mi(uploaded_norm, active_norm):
+                                result['readback_ok'] = True
+                                result['readback_note'] = 'format_only'
+                                print(f"      [WARNING] Active source differs only in whitespace/formatting")
+                                print(f"      [WARNING] Muhtemelen SAP pretty-printing — İÇERİK aynı")
                             else:
-                                print(f"      [WARNING] Active source differs from uploaded content!")
-                                print(f"      [WARNING] This may be SAP pretty-printing or a stale class buffer")
-                                print(f"      [HINT] If changes don't take effect, push manually via SE24/Eclipse ADT")
-                                print(f"      [HINT] Or run transaction /$ABAP_BUFFER_RESET in SM04 to clear buffer")
+                                # KÖK-FIX (2026-07-28): içerik uyuşmazlığı = BAŞARISIZLIK.
+                                # Eskiden bu da yalnız WARNING'di ve result'a hiçbir işaret
+                                # konmuyordu → SAP kaynağı sessizce reddettiğinde push
+                                # "başarılı" dönüyordu. Gerekçe: readback_farki_yalniz_bicim_mi
+                                result['readback_ok'] = False
+                                result['readback_mismatch'] = {
+                                    'uploaded_chars': len(uploaded_norm),
+                                    'active_chars': len(active_norm),
+                                }
+                                print(f"      [FAIL] READBACK UYUŞMAZLIĞI — canlı aktif kaynak "
+                                      f"yüklenenle AYNI DEĞİL (boşluk farkı değil, İÇERİK farkı)")
+                                print(f"      [FAIL] yüklenen {len(uploaded_norm)} ch · canlı aktif {len(active_norm)} ch")
+                                print(f"      [FAIL] SAP kaynağı SESSİZCE reddetmiş olabilir "
+                                      f"(ör. CDS'te geçersiz `\"` yorumu — CDS'te yorum // ve /* */)")
+                                print(f"      [HINT] 'activated'/'uploaded' mesajlarına GÜVENME; kanıt readback eşitliğidir")
+                                print(f"      [HINT] Kaynağı sözdizimi açısından gözden geçir, düzeltip yeniden push et")
                     except Exception as verify_err:
+                        # ⛔ "DOĞRULAMA KOŞAMADI = DOĞRULANDI" sınıfı (2026-08-01 bug-avı):
+                        # burada eskiden SADECE bir [INFO] satırı basılıyor, `result`a hiçbir
+                        # işaret konmuyordu. Aşağıdaki success ifadesi `readback_ok` anahtarını
+                        # YOKSA True varsayıyordu → "readback koştu ve TUTTU" ile "readback
+                        # KOŞAMADI" çağıran için AYIRT EDİLEMEZ hale geliyordu (ikisi de
+                        # success:true). Artık üçüncü değer AÇIKÇA yazılır: None = ölçülemedi.
+                        # (success semantiği DEĞİŞMEZ: yalnız False düşürür — bkz. aşağısı.)
+                        result['readback_ok'] = None
+                        result['readback_reason'] = (
+                            f"post-activation readback KOŞAMADI: {type(verify_err).__name__}: "
+                            f"{str(verify_err)[:160]}")
                         print(f"      [INFO] Post-activation verification skipped (could not read active source)")
+                        print(f"      [INFO] readback_ok=None — 'yazım doğrulandı' SANMA (kanıt üretilemedi)")
                         if self.debug_enabled:
                             self._debug(f"[DEBUG] Post-activation verify failed: {str(verify_err)[:100]}")
                 else:
@@ -683,7 +752,8 @@ class SAPClient:
                                     fb_lock2 = self.adt_client.lock_object(object_url, transport=transport)
                                     fb_eff2 = self.adt_client._last_lock_effective_transport or transport
                                     try:
-                                        self.adt_client.set_object_source(source_url, source_code, fb_lock2, fb_eff2)
+                                        self.adt_client.set_object_source(source_url, source_code, fb_lock2,
+                                                                          fb_eff2, etag=pre_lock_etag)
                                         self.adt_client.unlock_object(object_url, fb_lock2)
                                         fb_lock2 = None
                                         act_b5 = self.adt_client.activate_object(object_name, object_url)
@@ -737,11 +807,26 @@ class SAPClient:
                 else:
                     print(f"      [WARNING] Activation failed (manual activation may be required)")
 
-            result['success'] = result['source_uploaded'] and result['activated']
+            # KÖK-FIX (2026-07-28): readback İÇERİK uyuşmazlığı da başarısızlıktır.
+            # `readback_ok` yalnız gerçek içerik farkında False olur (pretty-print
+            # biçim farkı tetiklemez — bkz. readback_farki_yalniz_bicim_mi).
+            # 2026-08-01: `readback_ok` artık ÜÇ-DEĞERLİ (True/False/None). `is not False`
+            # KASITLI: None (= doğrulama koşamadı) push'u DÜŞÜRMEZ — aksi halde her geçici
+            # okuma hatası meşru push'u başarısız gösterirdi (aşırı-sıkılaşma). Bilgi
+            # kaybolmaz: `readback_ok=None` + `readback_reason` yanıtta görünür ve MCP
+            # katmanı bunu `readback_verified: null` + uyarı olarak yüzeye çıkarır.
+            result['success'] = (
+                result['source_uploaded']
+                and result['activated']
+                and result.get('readback_ok') is not False
+            )
 
             print(f"\n{'=' * 70}")
             if result['success']:
                 print(f"  [OK] Push Complete")
+            elif result.get('readback_ok', True) is False:
+                print(f"  [FAIL] Push BAŞARISIZ — canlı aktif kaynak yüklenenle aynı değil")
+                print(f"         (yukarıdaki READBACK UYUŞMAZLIĞI'na bak; kaynak sessizce reddedilmiş olabilir)")
             else:
                 print(f"  [WARNING] Push Incomplete - source uploaded but activation failed")
             print(f"{'=' * 70}")
@@ -963,22 +1048,25 @@ class SAPClient:
         Returns:
             List of objects with name, type, uri, description
 
-        Note:
-            Implements auto-workaround for SAP ADT quickSearch limitation:
-            - Specific patterns (e.g., "ZSD000*") + type filter may return no results
-            - Automatically retries with broader pattern (e.g., "Z*") + filters client-side
+        Note (2026-07-28 — SESSIZ-0 KOK FIX, canli olcumle):
+            `obj_type` artik SUNUCUYA gecirilir (`objectType` parametresi NATIVE
+            desteklenir). Eskiden filtresiz cekilip ISTEMCI tarafinda suzuluyordu;
+            uc-nokta ALFABETIK siralar ve maxResults'ta kirpar -> gec-alfabetik
+            adlar (ZSD001_T_* gibi) hic gelmez -> filtre bos kume suzer -> **ok:true,
+            count:0** doner ve "obje YOK" ile AYIRT EDILEMEZ.
+            Olcum: 'ZSD001*' + maxResults=400 -> 400 satirin ICINDE HIC TABL YOK
+            (son kayit ZSD001_I_*); `objectType=TABL/DT` ile ayni sorgu -> 9 TABL.
+            Ayrica eski "genis desenle yeniden dene" (Z*) yolu KALDIRILDI: daha genis
+            sorgu daha COK kirpilir, yani sorunu buyutuyordu.
         """
         if debug_context:
             self._debug(f"[DEBUG] search_objects context: {debug_context}")
         print(f"Searching for: {query}")
         print(f"Max results: {max_results}\n")
 
-        # Store original query for potential workaround
-        original_query = query
-        original_type = obj_type
-        workaround_used = False
-
-        result_xml = self.adt_client.search_objects(query, max_results=max_results)
+        # Tip filtresi SUNUCUYA gider; istemci-suzgeci yalnizca emniyet kemeri olarak kalir.
+        result_xml = self.adt_client.search_objects(query, max_results=max_results,
+                                                    obj_type=obj_type)
 
         filter_type = obj_type.strip().upper() if obj_type else None
         filter_short = filter_type.split('/')[0] if filter_type else None
@@ -1010,59 +1098,28 @@ class SAPClient:
                     'description': description
                 })
 
-        # Auto-workaround: If no results with specific pattern + type filter, retry with broader pattern
-        # This handles SAP ADT quickSearch limitation where "ZSD000*" + type="INTF" returns no results
-        if not objects and filter_type and '*' in original_query and len(original_query) > 2:
-            # Extract the prefix character for broader search (e.g., "Z" from "ZSD000*")
-            broader_query = original_query[0] + '*'
-            # Use a more aggressive multiplier for broader search to ensure we find the objects
-            # Minimum 500 results or 10x original, whichever is larger
-            max_results_retry = max(500, max_results * 10)
-
-            self._debug(f"[DEBUG] No results with '{original_query}' + type='{filter_type}'")
-            self._debug(f"[DEBUG] Retrying with broader pattern '{broader_query}' (auto-workaround)")
-
-            print(f"[INFO] No results found with specific pattern + type filter")
-            print(f"[INFO] Retrying with broader pattern: {broader_query}\n")
-
-            # Retry with broader pattern
-            result_xml = self.adt_client.search_objects(broader_query, max_results=max_results_retry)
-
-            # Parse broader results
-            root = ET.fromstring(result_xml)
-            for obj in root.findall('.//adtcore:objectReference', namespaces):
-                name = obj.get('{http://www.sap.com/adt/core}name')
-                obj_type_value = obj.get('{http://www.sap.com/adt/core}type')
-                uri = obj.get('{http://www.sap.com/adt/core}uri')
-                description = obj.get('{http://www.sap.com/adt/core}description', '')
-
-                if name:
-                    if filter_type:
-                        obj_type_upper = obj_type_value.upper() if obj_type_value else ''
-                        obj_short = obj_type_upper.split('/')[0] if obj_type_upper else ''
-                        if not (filter_type == obj_type_upper or filter_short == obj_short):
-                            continue
-
-                    # Client-side filter: only include names matching original pattern
-                    # Convert wildcard pattern to prefix match (e.g., "ZSD000*" -> startswith("ZSD000"))
-                    if '*' in original_query:
-                        prefix = original_query.replace('*', '').upper()
-                        if name.upper().startswith(prefix):
-                            objects.append({
-                                'name': name,
-                                'type': obj_type_value or '',
-                                'uri': uri or '',
-                                'description': description
-                            })
-
-            workaround_used = True
+        # KIRPMA UYARISI (sessiz-0/sessiz-eksik karsi-onlemi).
+        # Uc-nokta ALFABETIK sirali doner ve maxResults'ta kirpar. Ham (filtresiz)
+        # sonuc sayisi tavana dayandiysa liste EKSIK olabilir -> bunu SESSIZ birakma.
+        # `objectType` sunucuya gectigi icin tip-filtreli aramalarda kirpma
+        # filtreden SONRA uygulanir; yine de tavana dayanan her sonucta uyar.
+        raw_count = len(root.findall('.//adtcore:objectReference', namespaces))
+        truncated = raw_count >= max_results
+        if truncated:
+            print(f"[UYARI] Sonuc tavana dayandi ({raw_count} >= maxResults={max_results}) — "
+                  f"liste EKSIK olabilir. Uc-nokta ALFABETIK siralar ve kirpar; "
+                  f"gec-alfabetik adlar (ör. *_T_*) disarida kalabilir. "
+                  f"max_results'i yukselt (ust sinir {SAPADTClient.MAX_SEARCH_RESULTS}) "
+                  f"veya sorguyu daralt.\n")
+            self._debug(f"[DEBUG] search_objects TRUNCATED raw={raw_count} max={max_results}")
 
         if not objects:
             print("No results found.\n")
+            if filter_type and truncated:
+                # En tehlikeli kombinasyon: tip filtresi + kirpilmis sayfa.
+                print(f"[UYARI] '{filter_type}' tipinde sonuc YOK — ama sonuc KIRPILMIS. "
+                      f"Bu 'obje yok' ANLAMINA GELMEZ. Tekrar dene: max_results'i artir.\n")
         else:
-            if workaround_used:
-                print(f"[INFO] Auto-workaround used: searched with broader pattern and filtered results\n")
-
             print(f"{'=' * 80}")
             print(f"  Search Results: {len(objects)} objects found")
             print(f"{'=' * 80}\n")
@@ -1123,7 +1180,10 @@ class SAPClient:
                         'name': name,
                         'type': obj_type or '',
                         'uri': uri or '',
-                        'description': description
+                        'description': description,
+                        # Paket üyeliği SAP'nin nodestructure ucundan geldi = KANITLI.
+                        'listing_source': 'nodestructure',
+                        'package_verified': True,
                     })
 
             # Strategy 2: ABAP XML format (SEU_ADT_REPOSITORY_OBJ_NODE)
@@ -1163,7 +1223,9 @@ class SAPClient:
                                 'name': name,
                                 'type': obj_type,
                                 'uri': f'/sap/bc/adt/{obj_type.lower().replace("/", "/")}s/{name.lower()}',
-                                'description': description
+                                'description': description,
+                                'listing_source': 'nodestructure',
+                                'package_verified': True,
                             })
 
             if self.debug_enabled:
@@ -1176,9 +1238,21 @@ class SAPClient:
         except Exception as e:
             # Fallback: Use search if nodestructure fails
             # (common issue: missing S_ADT_RES authorizations or inactive ICF services)
+            #
+            # ⛔ "DOĞRULAMA KOŞAMADI = DOĞRULANDI" sınıfı (2026-08-01 bug-avı):
+            # bu fallback PAKET ÜYELİĞİNİ ÖLÇMEZ; yalnız AD DESENİ arar ve desenlerin
+            # ikisi paket adından türetilen GENİŞ jokerlerdir (`Z_*`, ilk-iki-harf `ZS*`).
+            # Yani hata/yetki durumunda dönen liste BAŞKA PAKETLERİN objelerini içerir ve
+            # eskiden bu, gerçek paket içeriğinden AYIRT EDİLEMEZ biçimde dönüyordu
+            # (`adt_grep_source` bunu log'suz tüketiyordu: `with _capture():` notu da yutuyordu).
+            # Fallback KALDIRILMADI (yetkisiz sistemlerde tek yol; veri kaybı olurdu) ama
+            # artık her kayıt `package_verified: False` ile ETİKETLENİR → çağıran "bu paketin
+            # objeleri" iddiasını üstlenmez.
             if self.debug_enabled:
                 self._debug(f"[DEBUG] nodestructure failed: {e}")
             print(f"Note: nodestructure endpoint failed ({str(e)}), using search as fallback")
+            print(f"[WARN] PAKET UYELIGI DOGRULANAMADI — asagidaki liste AD-DESENLI arama "
+                  f"sonucudur ve BASKA PAKETLERIN objelerini icerebilir (package_verified=False)")
             print(f"This is usually due to missing SAP authorizations (S_ADT_RES for /sap/bc/adt/repository/*)\n")
 
             # Search with multiple patterns to catch all objects in package
@@ -1204,6 +1278,10 @@ class SAPClient:
                     # Deduplicate by name
                     name = obj.get('name', '')
                     if name and name not in all_objects:
+                        # DOĞRULANMAMIŞ üyelik etiketi (yukarıdaki not) — çağıran ayırt etsin.
+                        obj = dict(obj)
+                        obj['listing_source'] = 'name_search_fallback'
+                        obj['package_verified'] = False
                         all_objects[name] = obj
 
             objects = list(all_objects.values())
@@ -1324,17 +1402,27 @@ class SAPClient:
         # "does not implement if_oo_adt_classrun~main" döndürebilir. Accept override.
         base_headers = self.adt_client._get_headers(accept_type='text/plain')
 
-        def _post():
+        def _post(headers):
             return self.adt_client._request_with_csrf_retry(
-                'post', url, headers=dict(base_headers))
+                'post', url, headers=dict(headers))
 
         try:
-            r = _post()
+            r = _post(base_headers)
             body = r.text or ''
-            # Aktivasyon-sonrası ilk run geçici "does not implement" verebilir
-            # (sınıf yükü henüz üretilmemiş) → tek retry.
+            # ⛔ AYNI OTURUMDA RETRY ETKİSİZDİR — 2026-07-31 ölçümü. Eskiden burada
+            #    `_post()` ikinci kez AYNI session'la çağrılıyordu; aktif bir sınıfta
+            #    iki deneme de aynı "does not implement" hatasını verdi.
+            #    KÖK SEBEP: bu istemci süreç ömrü boyunca TEK stateful session tutar.
+            #    Obje BAŞKA BİR SÜREÇTE aktive edildiyse (push/activate ayrı süreç),
+            #    bu sürecin SAP oturumu aktivasyonu görmez ve eski class-load'a bağlı
+            #    kalır. Çare RESET: yeni session = yeni sap-contextid = güncel load.
+            #    Kanıt: taze süreçte aynı çağrı ANINDA çalıştı (tam konsol çıktısıyla).
+            #    Aynı desen jfilak/sapcli d223ed3c: activate() -> new_session() -> execute().
             if r.status_code != 200 or 'does not implement' in body.lower():
-                r = _post()
+                self.adt_client.new_session()
+                # Header'lar eski session'dan türetilmişti (auth + CSRF) → yeniden al.
+                base_headers = self.adt_client._get_headers(accept_type='text/plain')
+                r = _post(base_headers)
             # text/plain charset'siz dönebilir → requests latin-1 varsayar
             # (Türkçe mojibake); out->write UTF-8 olduğundan UTF-8'e zorla.
             try:
@@ -1343,41 +1431,68 @@ class SAPClient:
                 body = r.text or ''
             ok = r.status_code == 200 and 'does not implement' not in body.lower()
 
-            # SERTLEŞTİRME (2026-07-13): retry sonrası HÂLÂ "does not implement"
-            # ise, sınıf yapısal olarak geçerli mi bak. Geçerliyse (aktif +
-            # INTERFACES if_oo_adt_classrun kaynakta) bu, SAP app-server
-            # class-LOAD-cache / aynı-isim sil-yarat binding bozulmasıdır
-            # (playbook howto-rap-eml...:116-117). Aynı-isim retry ETKİSİZ →
-            # körlemesine tekrar yerine NET TEŞHİS dön ki "tooling bozuk"
-            # yanlış-sonucu doğmasın. Çözüm = TAZE class adı.
+            # TEŞHİS (2026-07-31 kök-fix ile YENİDEN YAZILDI).
+            # Buraya yalnız session-RESET'li retry de başarısız olunca gelinir.
+            # ⛔ ESKİ METİN YANLIŞTI ve zarar verdi: "TAZE (daha once kullanilmamis)
+            #    bir sinif adiyla yeniden yarat+kos" diyordu. O reçete iki gereksiz
+            #    obje yarattırdı, sorunu ÇÖZMEDİ ve sistem-geneli "adt_classrun
+            #    GÜVENİLMEZ" yanlış-sonucunu doğurdu. Sebebi: teşhis fonksiyonu
+            #    İNAKTİF kaynağı okuyup "yapısal olarak geçerli" diyordu
+            #    (bkz. _diagnose_classrun_binding — artık version=active okuyor).
+            # GERÇEK sebepler, olasılık sırasıyla:
+            #   1. Sınıf AKTİVE EDİLMEMİŞ → aktif sürüm boş kabuk → mesaj DOĞRU.
+            #   2. Bayat oturum (başka süreçte aktive edildi) → yukarıdaki reset çözer.
+            #   3. Sınıf gerçekten arayüzü implemente etmiyor.
             if not ok and 'does not implement' in body.lower():
                 diag = self._diagnose_classrun_binding(class_name)
-                if diag.get('structurally_valid'):
+                if not diag.get('structurally_valid'):
+                    # AKTİF sürümde arayüz yok → mesaj DOĞRU, tooling sorunu DEĞİL.
+                    nbytes = diag.get('active_source_bytes')
                     return {
                         'ok': False,
                         'class': class_name,
                         'status': r.status_code,
                         'output': body,
-                        'error': 'classrun_load_cache_binding',
+                        'error': 'classrun_class_not_active',
                         'diagnosis': (
-                            f"Sinif {class_name} YAPISAL OLARAK GECERLI (aktif + "
-                            f"INTERFACES if_oo_adt_classrun kaynakta VAR) ama classrun "
-                            f"'does not implement' donuyor. IKI AYRI SEBEP olabilir, "
-                            f"sirayla ele: "
-                            f"(1) CSRF/soguk-session: istek gecerli X-CSRF-Token'siz "
-                            f"gittiginde SAP 403 yerine 200 + bu yaniltici govdeyi "
-                            f"dondurebilir. 2026-07-28 kok-fix'i "
-                            f"(sap_adt_lib._request_with_csrf_retry, regresyon testi "
+                            f"SAP'nin mesaji DOGRU: {class_name} sinifinin AKTIF surumu "
+                            f"if_oo_adt_classrun'i implemente ETMIYOR "
+                            f"(aktif kaynak {nbytes} bayt, arayuz YOK). "
+                            f"En olasi sebep: sinif push edildi ama AKTIVE EDILMEDI — "
+                            f"aktif surum bos kabuk (adt_post_shell iskeleti) olarak duruyor. "
+                            f"YAP: adt_activate calistir, sonra `adt_inactive_objects` ile "
+                            f"DOGRULA (uyari: adtcore:version=\"active\" metadata'si bos "
+                            f"kabuk icin de 'active' der — TEK BASINA KANIT DEGILDIR). "
+                            f"Aktivasyon tamamsa sinif gercekten arayuzu implemente "
+                            f"etmiyordur: kaynakta INTERFACES if_oo_adt_classrun ara. "
+                            f"⛔ TAZE SINIF ADI ILE YENIDEN YARATMA — o eski recete "
+                            f"YANLISTI, sorunu cozmez, sadece cop obje birakir."
+                            f"IKINCI OLASILIK — CSRF/soguk-session: istek gecerli "
+                            f"X-CSRF-Token'siz gittiginde SAP 403 yerine 200 + BU "
+                            f"yaniltici govdeyi dondurebilir. 2026-07-28 kok-fix'i "
+                            f"(sap_adt_lib._request_with_csrf_retry + regresyon testi "
                             f"scripts/tests/test_csrf_header_injection.py) bunu kapatti; "
-                            f"yine de gorursen ONCE fetch_csrf_token(force_refresh=True) "
-                            f"ile session'i isit ve TEKRAR DENE. "
-                            f"(2) SAP app-server class-LOAD-cache / ayni-isim sil-yarat "
-                            f"binding bozulmasi: ayni-isim retry ETKISIZ, TAZE (daha once "
-                            f"kullanilmamis) bir sinif adiyla yeniden yarat+kos. "
-                            f"UYARI: (2)'ye gecmeden once (1)'i ele — taze sinif yaratmak "
-                            f"pahali ve sebep (1) ise SORUNU COZMEZ."
+                            f"yine de gorursen fetch_csrf_token(force_refresh=True) ile "
+                            f"session'i isit ve TEKRAR DENE (ucuz kontrol)."
                         ),
                     }
+                # Aktif sürümde arayüz VAR ama reset'li retry de başarısız →
+                # gerçekten beklenmedik. Körlemesine reçete verme, ölçümü ilet.
+                return {
+                    'ok': False,
+                    'class': class_name,
+                    'status': r.status_code,
+                    'output': body,
+                    'error': 'classrun_unexpected',
+                    'diagnosis': (
+                        f"{class_name} AKTIF surumu arayuzu implemente ediyor "
+                        f"(aktif kaynak {diag.get('active_source_bytes')} bayt) ve "
+                        f"session-RESET'li retry de basarisiz oldu. Bu BILINEN bir "
+                        f"desen DEGIL — recete uydurma. Kanit topla: "
+                        f"SEOMETAREL'de VERSION=1 satiri var mi, `adt_inactive_objects` "
+                        f"ne diyor, ayni cagri TAZE BIR SURECTE calisiyor mu."
+                    ),
+                }
             return {
                 'ok': ok,
                 'class': class_name,
@@ -1388,25 +1503,39 @@ class SAPClient:
             return {'ok': False, 'class': class_name, 'error': str(e)}
 
     def _diagnose_classrun_binding(self, class_name: str) -> Dict[str, Any]:
-        """classrun 'does not implement' teşhisi (sertleştirme yardımcısı).
+        """classrun 'does not implement' teşhisi.
 
-        Sınıf aktif + kaynakta `INTERFACES if_oo_adt_classrun` var mı? Varsa
-        yapısal-geçerli → sorun LOAD-cache/aynı-isim binding (fix = taze isim),
-        tooling/reçete DEĞİL. Yalnız salt-okuma (GET source/main).
+        classrun **AKTİF** sürümü yükler → teşhis de AKTİF sürümü okumalıdır.
+
+        ⛔ 2026-07-31 KÖK-FIX — bu fonksiyon SAHTE TEŞHİS üretiyordu.
+        Eski hâli `source/main`'i **`version=` parametresi VERMEDEN** çekiyordu ve
+        **ADT varsayılanı İNAKTİF sürümdür** (canlı ölçüm: parametresiz GET inaktif
+        gövdeyi döndürdü — 10.659 bayt, arayüz VAR; `version=active` ise 192 baytlık
+        boş kabuk, arayüz YOK). Sonuç: sınıf hiç aktive edilmemişken bile
+        "structurally_valid=True" diyor, oradan da *"tooling bozuk → TAZE class adı
+        dene"* reçetesi doğuyordu. O reçete YANLIŞTI ve bir sistem-geneli "adt_classrun
+        bu sistemde GÜVENİLMEZ" sonucunun kaynağı oldu (6 doküman + 2 gereksiz obje).
+        GERÇEK: SAP'nin "does not implement" mesajı DOĞRUYDU — aktif sürüm gerçekten
+        boş kabuktu, çünkü push edilmiş ama AKTİVE EDİLMEMİŞTİ.
+        📖 Kanıt: `.tmp/classrun-research.md` (SEOMETAREL VERSION=0 · aktif⇄inaktif
+        bayt kıyası · semptomun talep üzerine yeniden üretimi).
+        ⚠ `version=active` parametresini KALDIRMA — kaldırıldığı an sahte teşhis geri gelir.
         """
         try:
             src_url = (f"{self.adt_client.url}/sap/bc/adt/oo/classes/"
                        f"{class_name.lower()}/source/main")
             hdrs = self.adt_client._get_headers(accept_type='text/plain')
             r = self.adt_client._request_with_csrf_retry(
-                'get', src_url, headers=dict(hdrs))
+                'get', src_url, headers=dict(hdrs),
+                params={'version': 'active'})
             src = (r.content.decode('utf-8', errors='replace')
-                   if r.content else '').lower()
-            has_iface = 'if_oo_adt_classrun' in src
+                   if r.content else '')
+            has_iface = 'if_oo_adt_classrun' in src.lower()
             return {
                 'structurally_valid': (r.status_code == 200 and has_iface),
                 'has_interface': has_iface,
                 'source_http': r.status_code,
+                'active_source_bytes': len(src),
             }
         except Exception as e:
             return {'structurally_valid': False, 'error': str(e)}

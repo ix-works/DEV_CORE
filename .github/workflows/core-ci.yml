@@ -19,8 +19,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      # python-dotenv: `scripts/sap_adt_lib.py` onu ust-duzeyde import eder. Bugune dek
+      # CI'da gerekmiyordu cunku hicbir adim modulu IMPORT etmiyordu (compileall yalnizca
+      # DERLER, import etmez) -> eksik bagimlilik gorunmezdi. CSRF regresyon testi
+      # sap_adt_lib'i gercekten import ettigi icin artik zorunlu.
       - name: Bagimliliklar
-        run: pip install --quiet requests urllib3
+        run: pip install --quiet requests urllib3 python-dotenv
 
       # D1 (2026-07-10): kimlik blocklist'i `.git/genericize-blocklist`te yasar ve ASLA
       # klonlanmaz -> CI taze klon yaptigi icin liste hic yuklenmiyordu; public repoya
@@ -37,12 +41,28 @@ jobs:
       - name: Derleme taramasi (py_compile)
         run: python -m compileall -q scripts mcp_servers
 
+      # IMPORT smoke (2026-07-28): compileall yalnizca DERLER — eksik ucuncu-parti
+      # bagimlilik GORUNMEZ kalir. Nitekim `python-dotenv` repo omru boyunca CI'da
+      # eksikti ve ancak sap_adt_lib'i gercekten import eden ilk test yazilinca patladi.
+      # Bu adim ana modulleri ICE AKTARIR -> eksik bagimlilik ANINDA gorunur.
+      - name: Import smoke (eksik bagimlilik erken yakala)
+        run: python -c "import sys; sys.path.insert(0,'scripts'); import sap_adt_lib, sap_client, object_types; print('import smoke OK')"
+
+
       # Guard regresyonu: yanlis-pozitif kapali MI + gercek koruma ayakta MI + ikinci
       # kabuk yuzeyi (PowerShell) kapali MI. Kosmayan test gate degildir.
       # Ag/proje bagimli senaryolar (PUBLIC-PR canli gorunurluk, freeze kokleri)
       # burada otomatik atlanir; tam kosum icin IX_GUARD_TEST_LIVE=1 + repo env'leri.
       - name: Guard yuzeyi regresyonu (pre_tool_guard)
         run: python scripts/tests/test_pre_tool_guard.py
+
+      # 2026-08-01 (bug-avi AV-16 yan-bulgusu): bu test 2026-07-28'de yazildi ve
+      # infra-changelog'a "test_commit_message_leak_gate (CI)" diye KAYDEDILDI —
+      # ama CI'a hic baglanmamisti. Uc gun sonra ayni gate `git commit -am` ile
+      # atlatildi, hicbir kirmizi isik yanmadi. Kod != kablolama; kosmayan test
+      # gate degildir. Agsiz (monkeypatch'li), ~1sn.
+      - name: Commit-mesaji sizinti gate regresyonu
+        run: python scripts/tests/test_commit_message_leak_gate.py
 
       # CSRF header enjeksiyonu regresyonu (2026-07-28 canli vaka): cagiranlarin cogu
       # header'i `_request_with_csrf_retry`'dan ONCE kuruyor; soguk session'da token
@@ -53,6 +73,16 @@ jobs:
       - name: CSRF header enjeksiyonu regresyonu
         run: python scripts/tests/test_csrf_header_injection.py
 
+      # Push readback regresyonu (2026-07-28 canli vaka): CDS'te gecersiz `"` yorumu ->
+      # SAP kaynagi SESSIZCE reddetti; run_review/abaplint/validators/syntax_check/push
+      # BESI DE yesil verdi, kaynak canliya hic inmedi. push_object readback kiyasini
+      # yapiyordu ama yalnizca WARNING basip 'success' True donduruyordu.
+      # Test BICIM (pretty-print, gecer) ile ICERIK (gercek uyusmazlik, duser) ayrimini
+      # kilitler + KABLOLAMAYI dogrular. Sabotaj-kanitli: helper VEYA success ifadesi
+      # bozulunca exit 1.
+      - name: Push readback ayrimi regresyonu
+        run: python scripts/tests/test_push_readback_mismatch.py
+
       # META-GATE (2026-07-10 saglik denetimi): her guard kurali icin ③tetiklenmeli /
       # ④tetiklenmemeli + kablolama + "kanitsiz kural = FAIL". Sahte-gate sinifini
       # yapisal olarak imkansiz kilar. template_project'i de kapsar (iki-proje matrisi).
@@ -60,6 +90,11 @@ jobs:
       # SONRA TAM konformans: template_project (public) clone edilip GERCEK guard'a karsi
       # kosulur → ③④ + KABLOLAMA + META-GATE (kanitsiz kural = FAIL) burada zorlanir.
       # Yalniz --self-test-only meta-gate'i gercek guard'a uygulamaz (notr stub'i okur).
+      # G1 (2026-07-31): HARD validator fixture korpusu — bad→FAIL, good→PASS.
+      # "Kontrol kostu != kontrol bakti" ailesine yapisal panzehir; ilk 10 validator.
+      - name: Validator fixture testleri (G1 negatif-test korpusu)
+        run: python tests/run_fixture_tests.py
+
       - name: template_project clone (tam konformans icin)
         run: git clone --depth 1 https://github.com/ix-works/template_project.git ../template_project
       - name: Guard konformans matrisi (self-test + TAM ucuncu-proje)

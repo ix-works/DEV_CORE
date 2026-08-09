@@ -42,8 +42,8 @@ figcaption { font-size: 9pt; color: #5a6b7b; font-style: italic; margin-top: 7px
 blockquote { border-left: 4px solid #4a90d9; background: #eef5fc; margin: 14px 0; padding: 10px 16px; border-radius: 0 6px 6px 0; }
 blockquote h3 { margin-top: 0; color:#0b4f8a; }
 code { background: #eef1f5; font-family: Consolas,monospace; font-size: 9.2pt; padding: 1px 5px; border-radius: 3px; }
-pre { background: #f6f8fa; border: 1px solid #e1e6eb; border-radius: 6px; padding: 12px; page-break-inside: avoid; }
-pre code { background: none; padding: 0; }
+pre { background: #f6f8fa; border: 1px solid #e1e6eb; border-radius: 6px; padding: 12px; page-break-inside: avoid; font-size: 8.8pt; white-space: pre; overflow-x: auto; }
+pre code { background: none; padding: 0; font-size: inherit; }
 hr { border: none; border-top: 1px solid #dfe5ec; margin: 22px 0; }
 ul, ol { padding-left: 22px; }
 strong { color: #1d3a52; }
@@ -66,8 +66,33 @@ def build(md_path, html_path, title=None):
     print("OK | <img>:", body.count("<img"), "| <figure>:", body.count("<figure>"))
 
 
+def to_pdf(html_path, pdf_path=None):
+    """HTML → PDF (node scripts/html_to_pdf.js).
+
+    ⛔ MUTLAK YOL GÖMÜLMEZ. `html_to_pdf.js` bu script'in KOMŞUSUDUR; yolu `__file__`den
+    türetilir. (Gerekçe: paket-başına kopyalanan eski üreticiler `BASE = r'<eski-kök>'`
+    sabitini gömüyordu; kök taşınınca 19 script birden sessizce kırıldı — kusur ancak
+    "bugün doküman lazım" olduğunda görünüyordu.)
+    """
+    import subprocess
+    pdfjs = os.path.join(os.path.dirname(os.path.abspath(__file__)), "html_to_pdf.js")
+    if not os.path.exists(pdfjs):
+        raise SystemExit("html_to_pdf.js bulunamadı: %s" % pdfjs)
+    pdf_path = pdf_path or (html_path[:-5] + ".pdf" if html_path.endswith(".html") else html_path + ".pdf")
+    r = subprocess.run(["node", pdfjs, os.path.abspath(html_path), os.path.abspath(pdf_path)],
+                       capture_output=True, text=True)
+    print(r.stdout.strip() or r.stderr.strip())
+    if r.returncode != 0:
+        raise SystemExit("PDF FAIL: " + r.stderr)
+    return pdf_path
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("kullanım: python scripts/build_doc_pdf.py <girdi.md> <cikti.html> [başlık]")
+    args = [a for a in sys.argv[1:] if a != "--pdf"]
+    want_pdf = "--pdf" in sys.argv
+    if len(args) < 2:
+        print("kullanım: python scripts/build_doc_pdf.py <girdi.md> <cikti.html> [başlık] [--pdf]")
         sys.exit(2)
-    build(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
+    build(args[0], args[1], args[2] if len(args) > 2 else None)
+    if want_pdf:
+        to_pdf(args[1])

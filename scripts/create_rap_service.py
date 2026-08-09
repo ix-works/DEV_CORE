@@ -23,7 +23,7 @@ import urllib3
 from xml.sax.saxutils import escape as xml_escape
 
 sys.path.insert(0, __import__("os").path.dirname(__file__))
-from sap_adt_lib import SAPADTClient
+from sap_adt_lib import SAPADTClient, SAPADTError
 import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
@@ -73,6 +73,17 @@ def verify_active(names_types):
 
 
 def csrf(client):
+    """CSRF token al. Alınamazsa SAPADTError (SystemExit DEĞİL — aşağıdaki nota bak).
+
+    ⛔ 2026-08-01 bug-avı, "doğrulama koşamadı = doğrulandı" sınıfının 4. örneği:
+    burada `raise SystemExit("[FAIL] CSRF alınamadı")` yazıyordu. Bu fonksiyon bir CLI
+    script'inde yaşıyor ama MCP sunucusunun DÖRT tool'u onu KÜTÜPHANE olarak import ediyor
+    (`adt_activate` çoklu-obje + srvb dalları, `adt_publish_service`, `adt_unit_run`).
+    `SystemExit` `BaseException`'dan türer → o tool'ların `except Exception` dalına
+    TAKILMAZ: tool yapılandırılmış `{ok:false,...}` DÖNDÜREMEZ, çağrı sunucu katmanına
+    kaçar. Yani "token alamadım" (= işlemin ÖN KOŞULU sağlanamadı) bir sonuç olarak
+    raporlanamıyordu. CLI davranışı korunur: `__main__` bunu yakalayıp [FAIL] + exit 1 verir.
+    """
     client._invalidate_csrf_cache()
     r = client.session.get(
         client.url + "/sap/bc/adt/discovery",
@@ -81,7 +92,12 @@ def csrf(client):
     )
     tok = r.headers.get("X-CSRF-Token", "")
     if not tok:
-        raise SystemExit("[FAIL] CSRF alınamadı")
+        raise SAPADTError(
+            "CSRF token alınamadı (discovery yanıtında X-CSRF-Token yok) — aktivasyon/"
+            "publish/unit-run ÇALIŞTIRILAMADI. Bu 'başarısız oldu' değil 'hiç koşmadı'dır.",
+            status_code=getattr(r, "status_code", None),
+            response_text=(getattr(r, "text", "") or "")[:300],
+        )
     print(f"[OK] CSRF: {tok[:20]}...")
     return tok
 
@@ -192,10 +208,24 @@ def _activation_failures(resp_text):
     import re
     t = resp_text or ""
     m = re.search(r'activationExecuted="(\w+)"', t)
-    # activationExecuted yoksa eski stil yanıt olabilir → severity tabanlı fallback
-    executed = (m.group(1) == "true") if m else ('severity="E"' not in t and 'severity="A"' not in t)
     errs = re.findall(r'type="[EA]"[^>]*>.*?<txt>([^<]+)', t, re.S)
-    return executed, errs
+    if m:
+        return (m.group(1) == "true"), errs
+
+    # ⚠ BAŞARI KANIT İSTER (2026-08-01 bug-avı, W2-MCPT-02).
+    # Eski fallback `'severity="E"' not in t` idi: yani "hata işareti YOKSA başarılı".
+    # Bu, aktivasyon yanıtı OLMAYAN gövdeleri de başarı sayıyordu. Ölçüldü:
+    #   HTTP 500 hata sayfası → executed=True   (aktive edildi der)
+    #   HTTP 403 logon formu  → executed=True
+    #   BOŞ gövde             → executed=True
+    # Üstelik `activate_and_verify` docstring'i "sahte 'OK' imkansiz" diyordu —
+    # doküman davranışı YALANLIYORDU.
+    # Yeni kural: fallback yalnız gövde GERÇEKTEN bir ADT aktivasyon/checklist yanıtına
+    # benziyorsa uygulanır. Tanınmayan gövde = kanıt yok = BAŞARISIZ (fail-closed).
+    adt_yaniti = any(im in t for im in ("chkl:", "<msg", "adtcore:", "<messages"))
+    if not adt_yaniti:
+        return False, (errs or ["aktivasyon yanıtı tanınmadı (gövde ADT yanıtı değil)"])
+    return ('severity="E"' not in t and 'severity="A"' not in t), errs
 
 
 def activate_and_verify(client, tok, refs):
@@ -214,8 +244,16 @@ def activate_and_verify(client, tok, refs):
         headers={"X-CSRF-Token": tok, "Content-Type": "application/xml", "Accept": "application/xml"},
         data=body.encode("utf-8"), verify=False, timeout=120,
     )
-    executed, errs = _activation_failures(r.text)
     names = ", ".join(n for _, n in refs)
+    # ⚠ HTTP DURUM KODU ÖNCE (2026-08-01 bug-avı, W2-MCPT-02). Bu fonksiyon `r.text`'i
+    # ayrıştırıyor ama `r.status_code`'a HİÇ bakmıyordu → 500/403 gövdeleri "aktive edildi"
+    # sayılıyordu (ölçüldü, kontrol grubuyla). Gövde-ayrıştırması İKİNCİ savunma; birincisi
+    # taşıma katmanının kendisidir.
+    if not (200 <= int(getattr(r, "status_code", 0) or 0) < 300):
+        raise RuntimeError(
+            f"AKTİVASYON BAŞARISIZ ({names}): HTTP {getattr(r, 'status_code', '?')} — "
+            f"bu bir aktivasyon yanıtı DEĞİL. Gövde: {(r.text or '')[:200]}")
+    executed, errs = _activation_failures(r.text)
     if not executed or errs:
         raise RuntimeError(
             f"AKTİVASYON BAŞARISIZ ({names}): activationExecuted={executed}; hatalar={errs[:6]}")
@@ -768,4 +806,11 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # csrf() artık SystemExit yerine SAPADTError atıyor (MCP tool'ları onu import ediyor;
+    # SystemExit `except Exception`'a takılmaz). CLI çıktısı/çıkış kodu DEĞİŞMEZ.
+    try:
+        _rc = main()
+    except SAPADTError as _exc:
+        print(f"[FAIL] {_exc}")
+        _rc = 1
+    raise SystemExit(_rc)

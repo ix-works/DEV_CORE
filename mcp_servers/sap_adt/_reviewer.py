@@ -21,14 +21,54 @@ _REVIEW_SCRIPT = REPO_ROOT / "scripts" / "validators" / "run_review.py"
 
 # Object type → reviewer task name. Tools pass object_type; we map to a known task.
 # Tasks must exist in run_review.py TASK_VALIDATORS dict.
+# ⚠ Keys are matched RAW (task_for_push lowercases only) — list every synonym that
+#   adt_push_source may receive, otherwise the chain is skipped SILENTLY.
 OBJECT_TYPE_TO_TASK = {
     "ddls": "cds_update",     # CDS view source push
     "tabl": "table_update",   # table or structure
+    # 2026-07-29 — these three were None: ADR 0006 pre-flight was silently skipped for
+    # class/bdef/srvd even though full validator chains existed (class_push has 6
+    # validators / 2 BLOCKERs). Documented-but-unwired == unenforced.
+    # Blast radius MEASURED on the live repo before wiring:
+    #   class_push  → 5 real classes: 0 BLOCKER, 1-2 WARNING (non-blocking)
+    #   rap_bdef_creation → 20 real bdefs: 19 PASS, 1 BLOCKER — and that one is a
+    #     TRUE POSITIVE (managed root without `etag master`, standards/05 §lock).
+    #   rap_service_binding → empty chain, degrades gracefully to PASS.
+    # Emergency escape stays available: adt_push_source(skip_reviewer=True) (justify in commit).
+    "class": "class_push",
+    "clas": "class_push",
+    "bdef": "rap_bdef_creation",
+    "behaviordefinition": "rap_bdef_creation",
+    "srvd": "rap_service_binding",
+    "servicedefinition": "rap_service_binding",
     "doma": None,             # no validator chain defined yet (domain_creation_csv is CSV-batch)
     "dtel": None,             # dtel_update validators not defined yet
     "msag": None,
     "prog": None,
-    "class": None,
+    # ── 2026-08-01 adversarial bug-avı (W2-MCPT-03 / MG-02) ────────────────────────
+    # SINIF: push katmanı tip EŞANLAMLILARINI kabul ediyor (`_TYPE_KEY_CANON` +
+    # `_ACTIVATION_URI_SEG`), bu harita ise yalnız kanonik adları tanıyordu. Eksik
+    # anahtar → `.get()` None → pre-flight SESSİZCE atlanır. Ölçüldü: aynı objeye
+    # `object_type="ddls"` ile push → BLOCKER + RED; `"cds"`/`"cdsview"`/`"ddl"` ile
+    # push → SKIP + GEÇTİ. Aynı asimetri `tabl` ↔ `table`/`structure`'da vardı ve
+    # ORADA sonucu daha ağır: `table_update` zinciri `check_table_field_drop`
+    # (VERİ-KAYBI BLOCKER'ı) taşır → `"table"` yazımıyla o guard hiç koşmuyordu.
+    #
+    # ⛔ AYRIM: "eksik anahtar" ≠ "bilinçli None". Eksik = sessiz atlama (bug).
+    # Explicit None = kayda geçmiş karar (zincir henüz yok). Bu yüzden aşağıdaki
+    # tipler DEĞER olarak yazıldı; hangisi olursa olsun ARTIK BEYAN EDİLMİŞ durumda.
+    # Tazeliği `tests/fixtures/reviewer_tip_kapsam` zorlar: push'un kabul ettiği HER
+    # tip burada açıkça bulunmalı — yeni tip eklenip burası unutulursa test KIRILIR.
+    "cds": "cds_update", "cdsview": "cds_update", "ddl": "cds_update",
+    "table": "table_update", "structure": "table_update",
+    "interface": None, "intf": None,          # interface push zinciri tanımlı değil
+    "program": None,                          # `prog` ile aynı (zincir yok)
+    "dcl": None, "accesscontrol": None,       # ACM zinciri yok
+    "ddlx": None, "metadataextension": None,  # MDE zinciri yok
+    "domain": None, "dataelement": None,      # doma/dtel eşanlamlıları
+    "include": None, "prog/i": None,          # klasik include (ana programla gelir)
+    "srvb": None, "servicebinding": None,     # publish yolu ayrı
+    "tabletype": None,
 }
 
 # Composite tool name → task for its created object.

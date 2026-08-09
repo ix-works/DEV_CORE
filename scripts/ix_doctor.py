@@ -566,8 +566,8 @@ def katman7() -> list[Sonuc]:
     r: list[Sonuc] = []
 
     # 7a — memory: proje slug'ından türetilen klasörde MEMORY.md dolu (seed_memory deseni)
-    slug = re.sub(r"[^A-Za-z0-9]", "-", str(PROJ))
-    mem = Path.home() / ".claude" / "projects" / slug / "memory" / "MEMORY.md"
+    from utils.claude_paths import auto_memory_dizini   # slug TEK KAYNAK (KAYIT S4)
+    mem = auto_memory_dizini(PROJ) / "MEMORY.md"
     if mem.is_file() and mem.stat().st_size > 0:
         r.append((PASS, f"memory dolu: {mem} ({mem.stat().st_size} bayt)"))
     elif mem.is_file():

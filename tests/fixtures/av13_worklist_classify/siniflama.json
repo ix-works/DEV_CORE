@@ -1,0 +1,38 @@
+{
+  "_ne": "AV-13 regresyon vektörleri — worklist_audit._classify + _version_exists.",
+  "_neden": [
+    "_version_exists ÜÇ değer döner: true/false/null(okunamadı). Sınıflama eskiden yalnız",
+    "İKİSİ BİRDEN null ise UNKNOWN diyordu; biri null + diğeri false olduğunda `not None`",
+    "== True olduğu için sonuç PHANTOM ('silinmiş') çıkıyor ve --discard-phantoms gerçek",
+    "bir WIP objeyi discard ediyordu (VERİ KAYBI). Ters yön: (true,null) → STALE ('zaten",
+    "aktif, zararsız') → commit-gate gerçek REAL_INACTIVE varken YEŞİL yanıyordu."
+  ],
+  "siniflama": [
+    {"has_active": true,  "has_inactive": true,  "beklenen": "REAL_INACTIVE", "not": "gerçek bekleyen değişiklik"},
+    {"has_active": true,  "has_inactive": false, "beklenen": "STALE",         "not": "zaten aktif, bayat girdi"},
+    {"has_active": false, "has_inactive": true,  "beklenen": "INACTIVE_ONLY", "not": "yaratılmış, hiç aktive edilmemiş"},
+    {"has_active": false, "has_inactive": false, "beklenen": "PHANTOM",       "not": "silinmiş — discard edilebilir TEK sınıf"},
+    {"has_active": null,  "has_inactive": null,  "beklenen": "UNKNOWN",       "not": "her iki okuma da arızalı"},
+    {"has_active": null,  "has_inactive": false, "beklenen": "UNKNOWN",       "not": "AV-13: eskiden PHANTOM idi → discard = VERİ KAYBI"},
+    {"has_active": false, "has_inactive": null,  "beklenen": "UNKNOWN",       "not": "AV-13: eskiden PHANTOM idi → discard = VERİ KAYBI"},
+    {"has_active": null,  "has_inactive": true,  "beklenen": "UNKNOWN",       "not": "AV-13: eskiden INACTIVE_ONLY (yanlış etiket)"},
+    {"has_active": true,  "has_inactive": null,  "beklenen": "UNKNOWN",       "not": "AV-13: eskiden STALE → commit-gate sahte-YEŞİL"}
+  ],
+  "_durum_kodu_ne": [
+    "Kökün bir alt katmanı: _version_exists eskiden `return r.status_code == 200` idi →",
+    "500/503/403/timeout gibi bir SUNUCU/YETKİ arızası da 'obje yok' (false) sayılıyordu.",
+    "Arıza cevabı YOKLUK BEYANI DEĞİLDİR. 404=yok eşlemesi bu repoda canlı-kanıtlı",
+    "(mcp tools/atom.py adt_get exists:false; sap_client.py 'canlı ölçüm 2026-07-09')."
+  ],
+  "durum_kodlari": [
+    {"status": 200, "beklenen": true,  "not": "var"},
+    {"status": 404, "beklenen": false, "not": "yok — canlı-kanıtlı varlık sondası"},
+    {"status": 410, "beklenen": false, "not": "kalıcı olarak yok"},
+    {"status": 500, "beklenen": null,  "not": "sunucu arızası — yokluk beyanı DEĞİL"},
+    {"status": 503, "beklenen": null,  "not": "geçici — AV-13'ün asıl tetikleyicisi"},
+    {"status": 403, "beklenen": null,  "not": "yetki — okunamadı"},
+    {"status": 401, "beklenen": null,  "not": "oturum düştü — okunamadı"},
+    {"status": 429, "beklenen": null,  "not": "hız sınırı — okunamadı"},
+    {"status": "EXCEPTION", "beklenen": null, "not": "ağ/timeout istisnası"}
+  ]
+}

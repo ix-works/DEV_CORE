@@ -39,12 +39,36 @@ def _dosyadan(p: Path) -> list[str]:
 
 
 def _git_dir(cwd: Path | None = None) -> Path | None:
-    try:
-        out = subprocess.run(["git", "rev-parse", "--git-dir"], capture_output=True,
-                             text=True, check=True, cwd=str(cwd) if cwd else None)
-        return Path(out.stdout.strip())
-    except Exception:
-        return None
+    """Blocklist'in yaşadığı git dizini — **ORTAK** dizin (`--git-common-dir`).
+
+    ⚠ 2026-08-01 (bug-avı kuyruğu, infra-expert saha-bulgusu): eskiden `--git-dir` idi.
+    Bir git **worktree**'sinde `--git-dir` → `.git/worktrees/<ad>` döner, blocklist ise
+    ANA deponun `.git/genericize-blocklist` dosyasıdır → dosya BULUNAMAZ → `core_precommit`
+    fail-closed'a düşer ve **worktree'den hiçbir commit atılamaz**. Worktree, infra-fix
+    prosedürünün ZORUNLU çalışma alanı olduğu için bu, akışın tamamını kilitliyordu.
+    (Aynı sınıfın yazma-anı kardeşi AV-21'di: `pre_tool_guard` core'u yol-dizgesinden
+    tanıdığı için worktree'de sızıntı guard'ı kapalıydı.)
+
+    ⚠ Dönen değer **göreli** olabilir (`.git`) — platforma göre değişir: Windows'ta mutlak,
+    Linux'ta göreli gelir. Göreli sonuç **sorgunun `cwd`'sine** göre çözülmelidir, sürecin
+    kendi cwd'sine göre DEĞİL. `Path(".git").resolve()` yazmak tam da bu hatadır: süreç
+    başka bir dizindeyse sessizce yanlış yere bakar. (2026-08-01 CI bunu yakaladı; yerelde
+    Windows mutlak döndürdüğü için görünmüyordu — ve bu, AV-21c'nin aynısı: göreli yolu
+    yanlış tabana göre çözmek.)
+    """
+    taban = Path(cwd) if cwd else Path.cwd()
+    for bayrak in ("--git-common-dir", "--git-dir"):   # eski git'lerde ilki yoksa geri düş
+        try:
+            out = subprocess.run(["git", "rev-parse", bayrak], capture_output=True,
+                                 text=True, check=True, cwd=str(cwd) if cwd else None)
+            ham = out.stdout.strip()
+            if not ham:
+                continue
+            p = Path(ham)
+            return p if p.is_absolute() else (taban / p).resolve()
+        except Exception:
+            continue
+    return None
 
 
 def proje_desenleri(proje_koku: Path | None = None, cwd: Path | None = None) -> list[str]:
@@ -101,16 +125,77 @@ ORNEK_Z = frozenset({
 # D4: kapsam yalnız ZSD idi → ZBC/ZMM/ZQM/ZFI/ZPP hiç görülmüyordu.
 Z_OBJ_PAT = re.compile(r"(?<![A-Za-z0-9])(Z[A-Z]{2}\d{3})(?!\d)", re.IGNORECASE)
 
-# D4: SAP kullanıcı adı (gerçek kişi). Sadece BÜYÜK harf — `d_data` gibi değişken
-# adlarını yanlış-yakalamamak için IGNORECASE YOK.
+# D4: SAP kullanıcı adı (gerçek kişi).
 # ⚠ Yalnız 'X' ya da yalnız 'N' harflerinden oluşan diziler dokümantasyon PLACEHOLDER'ıdır
 # (gerçek kullanıcı değil) → muaf. 2026-07-10: kendi README şablonumuz bu yanlış-pozitife
-# takıldı. Guard doğru çalışıyordu; desen fazla genişti.
+# takıldı. Guard doğru çalışıyordu; desen fazla genişti. → BU MUAFİYET KORUNUR.
+#
+# D6 (2026-08-01 bug-avı AV-03) — desen İKİ yazım-varyantını kaçırıyordu:
+#   küçük-harf yazım (`d_` + gövde) → KAÇIYORDU — ve bu, bir projenin kendi
+#     `CLAUDE.md`'sinde bağlantı bilgisi yazılırken kullanılan olağan yazımdır
+#   rakam sonekli ad (`D_` + gövde + rakam) → KAÇIYORDU (`(?![A-Za-z0-9])` rakamda kesiyordu)
+# ⚠ Bu yorumda GERÇEK kullanıcı adı ÖRNEK OLARAK YAZILMAZ: bu dosya iki gate'te de
+#   SCAN_EXEMPT'tir, yani buraya yazılan bir kimlik hiçbir kapı tarafından yakalanmaz
+#   ve public çekirdeğe sızar. (İlk taslakta tam da bu oldu; lider FP-ölçümünde yakaladı.)
+# İkisi birden gereken gerçek bir vaka ölçüldü: küçük-harf + rakam-sonekli bir servis
+# kullanıcısı hiçbir katman tarafından görülmüyordu. Bu, PUBLIC çekirdeğe kimlik
+# sızmasını önleyen SON kapıdır (2026-07-10 D1 vakası) → kaçırmak geri-alınamaz.
+#
+# ⚠ İLK TASLAK YANLIŞTI — DÜZELTME GEREKÇESİ (aynı gün, lider canlı kapıyla çürüttü):
+# Deseni topyekûn IGNORECASE yapmıştım. Ölçümüm "çekirdekte FP=0" diyordu ama ÖLÇÜM
+# YÖNTEMİ HATALIYDI: doğrulamayı `core_precommit --all` ile yapmıştım ve `--all`
+# `git ls-files` kullanır = YALNIZ TAKİPLİ dosyalar. Yeni yazdığım fixture'lar
+# takipsizdi → tarama onları YAPISAL OLARAK GÖREMEDİ. Gerçek `git commit`
+# (staged yol) 4 ihlalle bloklandı; ikisi kendi test dosyalarımdı.
+# Ders: "taradım" demeden ÖNCE tarayıcının KAPSAMINI doğrula (--all ≠ tüm dosyalar).
+#
+# Asıl mesele fixture değildi: `d_` + 4+ harf, IGNORECASE'te `d_data`/`d_rows`/`d_total`
+# gibi SIRADAN değişken adlarına uyar → bundan sonra yazılacak olağan kodda da ateşler.
+# FP burada ucuz DEĞİL: kapı commit'i bloklar ve geliştiriciyi bypass refleksine iter
+# (PATTERN #14 / 08bb6e6 dersi).
+#
+# ── ÇÖZÜM: yazım-varyantına göre AYRI ŞİDDET, ölçümle seçildi ────────────────────
+# A) BÜYÜK harf (`D_XXXXXX`, ops. rakam) → BAĞLAMSIZ yakalanır. SAP kullanıcı adının
+#    kanonik yazımı budur; çekirdek ağacında ölçülen FP = 0.
+# B) küçük/karışık harf → YALNIZ KİMLİK BAĞLAMINDA (aynı satırda user/kullanıcı/
+#    login/hesap/owner gibi bir anahtar varsa). Serbest metindeki yalın `d_xxxx`
+#    artık tetiklemez.
+#
+# ÖLÇÜM (2026-08-01; TARANAN KAPSAM AÇIKÇA: `C:\IX\_wt\girdi` çekirdek ağacının TÜM
+# dosyaları — takipli + TAKİPSİZ, `tests/` dahil; hariç: .git, node_modules, attic,
+# __pycache__ — ve ayrıca proje ağacı, core junction'ı hariç):
+#   bağlamsız IGNORECASE (ilk taslak) : çekirdekte 4 FP · projede 3 FP
+#   bağlam-duyarlı (B, seçilen)       : çekirdekte 0 FP · projede 1 FP
+#   ve HER İKİ tasarım da iki gerçek kimliği (biri listede olmayan servis kullanıcısı)
+#   kaçırmadan yakalıyor → FP 4→0 düşerken FN artmadı.
+# Sözlük-freni (data/total/rows... muafiyeti) da ölçüldü; FP'si benzer ama `d_matnr`,
+# `d_bookno` gibi SAP-vari adları kapsayamaz ve büyüyen liste bakım borcu doğurur
+# ("kural kuralı doğurmasın") → REDDEDİLDİ.
+#
+# KABUL EDİLEN SINIR (FN, bilinçli): hiçbir kimlik anahtarı olmayan bir satırdaki YALIN
+# küçük-harf ad kaçar. Telafi katmanları: (1) aynı adın BÜYÜK yazımı bağlamsız yakalanır,
+# (2) isim-listesi katmanı (`id_pattern`, IGNORECASE/D2) bilinen adları her yazımda
+# yakalar — ölçüldü. Yapısal desenin küçük-harf işi, LİSTEDE OLMAYAN adı taze-klon/CI'da
+# yakalamaktır; onu da kimlik bağlamında yapar.
 SAP_USER_PAT = re.compile(
     r"(?<![A-Za-z0-9_])D_"
-    r"(?!X{2,}(?![A-Za-z0-9]))"   # placeholder: D_ + yalnız X'ler
-    r"(?!N{2,}(?![A-Za-z0-9]))"   # placeholder: D_ + yalnız N'ler
-    r"[A-Z]{4,}(?![A-Za-z0-9])")
+    r"(?!X{2,}[0-9]*(?![A-Za-z0-9]))"   # placeholder: D_ + yalnız X'ler (+ops. rakam)
+    r"(?!N{2,}[0-9]*(?![A-Za-z0-9]))"   # placeholder: D_ + yalnız N'ler (+ops. rakam)
+    r"[A-Z]{4,}[0-9]*(?![A-Za-z0-9])")  # rakam soneki SINIRSIZ: {0,4} yazsaydık 5+ rakamlı
+                                        # ad sessizce kaçardı (tasarım-anı ölçümü)
+
+# (B) Yalnız KİMLİK BAĞLAMINDA aranan varyant — küçük/karışık harf de kapsanır.
+SAP_USER_BAGLAMLI_PAT = re.compile(
+    r"(?<![A-Za-z0-9_])D_"
+    r"(?!X{2,}[0-9]*(?![A-Za-z0-9]))"
+    r"(?!N{2,}[0-9]*(?![A-Za-z0-9]))"
+    r"[A-Za-z]{4,}[0-9]*(?![A-Za-z0-9])",
+    re.IGNORECASE)
+
+# Kimlik taşıyan bağlam işaretleri (aynı SATIRDA aranır — açıklanabilir ve test edilebilir
+# sınır; `ADT_SAP_USER=...`, "User: ...", "kullanıcı ..." hepsi bu kümeye düşer).
+KIMLIK_BAGLAMI_PAT = re.compile(
+    r"user|kullanic|kullanıc|login|logon|uname|hesap|account|owner|sap_user", re.IGNORECASE)
 
 
 def z_obje_sizintilari(metin: str) -> list[str]:
@@ -120,7 +205,17 @@ def z_obje_sizintilari(metin: str) -> list[str]:
 
 
 def sap_user_sizintilari(metin: str) -> list[str]:
-    return [m.group(0) for m in SAP_USER_PAT.finditer(metin)]
+    """SAP kullanıcı adı izleri. SATIR SATIR bakar: BÜYÜK-harf yazım her yerde,
+    küçük/karışık yazım YALNIZ kimlik bağlamı taşıyan satırda (yukarıdaki gerekçe).
+    """
+    bulunan: list[str] = []
+    for satir in (metin.splitlines() or [metin]):
+        satirda = [m.group(0) for m in SAP_USER_PAT.finditer(satir)]
+        if KIMLIK_BAGLAMI_PAT.search(satir):
+            satirda += [m.group(0) for m in SAP_USER_BAGLAMLI_PAT.finditer(satir)]
+        # Aynı token iki desenden de gelebilir → satır içinde tekilleştir (sıra korunur).
+        bulunan += list(dict.fromkeys(satirda))
+    return bulunan
 
 
 def sizintilari_bul(metin: str, idp: re.Pattern) -> list[tuple[str, str]]:

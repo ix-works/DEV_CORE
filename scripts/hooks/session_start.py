@@ -50,12 +50,8 @@ def _write_session_marker(data: dict) -> None:
 STATIK = (
     "[session-loader hook]\n"
     "ZORUNLU: Yeni oturumun ILK yaniti CLAUDE.core.md §3 'Ekran Teyidi' formatiyla baslar.\n"
-    "ADR 0005 KESIN YASAKLAR (bypass YOK):\n"
-    "  A) Z/Y ile baslamayan standart SAP objesine dokunma (yarat/degistir/sil) yasak.\n"
-    "  B) Standart tablo verisine direkt INSERT/UPDATE/DELETE/MODIFY yasak "
-    "(BAPI->RFC->BDC->manuel sirasi).\n"
-    "  C) Transport/package yaratma ve release etme yasak.\n"
-    "  D) Z obje = master_language login + 4 alan label TAM o dilde (project.yaml).\n"
+    "ADR 0005 KESIN YASAKLAR aktif (A/B/C/D) — TAM metin kok CLAUDE.md fiziksel damgasinda "
+    "(compact sonrasi CLAUDE.md ile geri gelir; damga=kanonik, check_kesin_yasaklar esligi zorlar).\n"
     "SAP yazma oncesi run_review.py (ADR 0006). Validator FAIL -> once duzelt (STOP).\n"
     "ARAMA (D29): metodoloji araması DAIMA path=core/ ile — kok-Grep core'u GORMEZ.\n"
     "\n"
@@ -246,7 +242,7 @@ def _inspector() -> list[str]:
         satirlar = [str(b).replace("\n", " ") for b in bulgular[:5]]
         if len(bulgular) > 5:
             satirlar.append(f"… +{len(bulgular) - 5} bulgu daha")
-        satirlar.append(f"(negatif-testli gate: {istat['negatif_testli_gate']}/{istat['gate_toplam']} — v2 bekliyor)")
+        satirlar.append(f"(negatif-testli gate: {istat['negatif_testli_gate']}/{istat['gate_toplam']})")
         satirlar.append("detay: .tmp/inspector-report.md · elle: python core/scripts/inspector.py")
         return satirlar
     except Exception:

@@ -51,7 +51,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 REPO = project_root()
 ERP = source_dir()
 
-_SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp"}
+_SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp", "fixtures", "attic"}  # fixtures/attic: bilinçli-bozuk test girdileri (G1) taranmaz
 _SCAN_SUFFIXES = (".clas.abap", ".ccimp.abap")
 _ESCAPE = "#NO_AMDP_APOSTROPHE_CHECK"
 
@@ -75,9 +75,9 @@ def _has_amdp(text: str) -> bool:
     return bool(re.search(r"BY\s+DATABASE\s+(PROCEDURE|FUNCTION)|LANGUAGE\s+SQLSCRIPT", text, re.IGNORECASE))
 
 
-def _scan():
+def _scan(tek_dosya=None):
     findings = []  # (file, lineno, text)
-    for f in _iter_files():
+    for f in ([Path(tek_dosya)] if tek_dosya else _iter_files()):
         try:
             text = f.read_text(encoding="utf-8", errors="replace")
         except Exception:
@@ -96,15 +96,22 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="AMDP SQLScript `--` yorumunda apostrof yasağı (BE-28c)")
     ap.add_argument("--strict", action="store_true", help="(uyumluluk; ERROR zaten fail)")
     ap.add_argument("--quick", action="store_true", help="(uyumluluk; bu kontrol zaten hızlı)")
-    ap.parse_args()
+    # T1.12 (2026-07-31): tek-artifact modu — run_review push-anında yalnız push edilen
+    # dosyayı tarar (repo-geneli maliyet run_all+CI'da zaten var). Argümansız = repo-geneli
+    # (run_all davranışı DEĞİŞMEDİ).
+    ap.add_argument("path", nargs="?", default=None, help="tek dosya (run_review artifact modu)")
+    args = ap.parse_args()
 
-    findings = _scan()
+    findings = _scan(args.path)
     if not findings:
         print("AMDP yorum-apostrof (BE-28c): temiz (SQLScript `--` yorumlarında apostrof yok).")
         return 0
 
     for f, ln, text in findings:
-        rel = f.relative_to(REPO)
+        try:
+            rel = f.relative_to(REPO)
+        except ValueError:  # repo-dışı tek-dosya (test/scratch) — çökme değil, tam yol bas
+            rel = f
         print(f"[İHLAL] {rel}:{ln}  AMDP `--` yorumunda apostrof  → {text}")
 
     print()

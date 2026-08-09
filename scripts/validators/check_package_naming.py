@@ -105,12 +105,25 @@ def validate_classic_include_naming(pkg_dir: Path) -> list[str]:
     return violations
 
 # Klasörler bazında dosya uzantı filtresi
+#
+# ⚠ KAPSAM = BEYAN (2026-08-01 bug-avı, V2). Bu tablo "naming kuralı hangi dosyalara
+# uygulanır"ı belirler; listede olmayan uzantı SESSİZCE hiç doğrulanmaz — ihlal yoktur
+# demez, "bakılmadı" der ve ikisi çıktıda ayırt EDİLEMEZ. Canlı bir projede ölçüldü:
+# `cds/` altındaki 26 `.bdef` + `tables/` altındaki 8 `.tabl.ddl`/`.tabl` hiçbir naming
+# regex'inden geçmiyordu (aynı sınıf: `check_object_in_correct_pkg` uzantı kümesi).
+#
+# ⛔ `.srvd` BİLİNÇLİ OLARAK YOK: Service Definition adı `Z<PKG>_UI_*` / `Z<PKG>_API_*`
+# konvansiyonundadır ama bu kural paket `.rules.md`'lerinde TABLO satırı değil DÜZ METİN
+# olarak yaşıyor → parse edilen regex kümesinde karşılığı yok. Eklenirse doğru adlandırılmış
+# 15 dosya "hiçbir regex'le eşleşmiyor" diye suçlanır (ölçüldü). Önkoşul: `.rules.md`
+# şablonuna "Service Definition" satırı eklenmesi (proje/şablon tarafı). O yapılmadan
+# buraya `*.srvd` EKLEME — PATTERN#14: taban ölçülmeden gate sertleştirilmez.
 FOLDER_FILE_GLOBS = {
-    "cds": ["*.cds"],  # .md spec'leri muaf
+    "cds": ["*.cds", "*.bdef", "*.dcl"],  # .md spec'leri muaf; .srvd için yukarıdaki nota bak
     "classes": ["*.abap"],
     "programs": ["*.abap"],
     "structures": ["*.ddls.asddls", "*.abap"],
-    "tables": ["*.abap", "*.ddls.asddls"],
+    "tables": ["*.abap", "*.ddls.asddls", "*.tabl.ddl", "*.tabl"],
     "functions": ["*.abap"],
 }
 
@@ -197,9 +210,14 @@ def validate_package(pkg_dir: Path, verbose: bool = False) -> list[str]:
             #   class pool : .clas.abap / .clas.locals_imp.abap / .clas.testclasses.abap
             #   RAP behavior pool : .ccimp.abap (CCIMP) / .ccdef.abap (CCDEF) /
             #                       .ccmac.abap (CCMAC) — behavior class lokal include'ları
+            #   test include : .ccau.abap (CCAU) — ADR 0016 + source_drift.py +
+            #                  check_no_rap_commit.py ile AYNI konvansiyon. 2026-07-28'e
+            #                  kadar bu listede YOKTU; repodaki ilk .ccau dosyası yazılınca
+            #                  "hiçbir regex'le eşleşmiyor" FAIL'i verdi (obje adı
+            #                  kırpılamadığı için). Marker listesi konvansiyonla eş tutulmalı.
             #   BDEF : .bdef.abap
             #   program : .prog.abap   function module : .func.abap   FUGR : .fugr.abap
-            _sap_markers = (".clas.", ".ccimp.", ".ccdef.", ".ccmac.", ".bdef.",
+            _sap_markers = (".clas.", ".ccimp.", ".ccdef.", ".ccmac.", ".ccau.", ".bdef.",
                             ".intf.", ".prog.", ".func.", ".fugr.")
             _hit = next((m for m in _sap_markers if m in name), None)
             if _hit:
@@ -209,6 +227,17 @@ def validate_package(pkg_dir: Path, verbose: bool = False) -> list[str]:
                     if name.endswith(ext):
                         name = name[: -len(ext)]
                         break
+            # GENEL NORMALİZASYON (2026-08-01, V2): yukarıdaki iki liste BİLİNEN uzantıları
+            # sayar; bilinmeyen bir uzantı kırpılmadan kalır ve ad NOKTA taşıdığı için
+            # `^Z..._[A-Z0-9_]+$` regex'lerinin HİÇBİRİ eşleşemez → doğru adlandırılmış
+            # dosya "hiçbir regex'le eşleşmiyor" diye SUÇLANIR. `.bdef` glob'a eklenince
+            # ölçüldü: 26 dosyanın 26'sı da FP (adları zaten `_I_`/`_C_` kuralına uygundu).
+            # SAP obje adları NOKTA İÇEREMEZ (namespace `/NS/AD` ile eğik çizgi kullanır) →
+            # "ilk noktaya kadar" kanonik ve uzantıdan bağımsızdır. Bu, 2026-07-28'deki
+            # `.ccau` vakasının (listeye eklenmemiş uzantı → sahte FAIL) tekrarını sınıf
+            # olarak kapatır; marker listesi belgeleme/çapa olarak KALIR.
+            if "." in name:
+                name = name.split(".", 1)[0]
 
             # En az bir regex eşleşmeli
             if not any(rx.match(name) for _, rx in applicable_regexes):

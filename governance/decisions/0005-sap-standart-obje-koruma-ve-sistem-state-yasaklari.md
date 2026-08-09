@@ -65,7 +65,7 @@ Bu kuralları **doküman olarak söylemek yetmez** (LESSONS_LEARNED #4); **kural
 |---|---|
 | C1 | **Transport request yaratma** (`/sap/bc/adt/cts/transportrequests` POST veya benzeri) |
 | C2 | Var olan **transport request'i release etme** (CTS_API_RELEASE_REQUEST vb.) |
-| C3 | **Package yaratma** (SE21 POST veya `scripts/create_package.py` çalıştırma) |
+| C3 | **Package yaratma** — SE21/ADT POST ya da paket yaratan HERHANGİ bir script/tool çağrısı. *(Not: `scripts/create_package.py` 2026-08-01'de SİLİNDİ — tek işi bu yasak fiili yapmaktı; yokluğu kuralın parçasıdır, geri eklenmez.)* |
 | C4 | **Username/lock** silme (kullanıcının enqueue lock'ları) |
 | C5 | **System change option** değiştirme |
 

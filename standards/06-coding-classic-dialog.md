@@ -73,6 +73,17 @@ Kolonlar göster/gizle + Excel export. Klasik ALV'de bunlar `CL_GUI_ALV_GRID` +
 > eksik tanım kolonu, kısa genişlik) kapanır. **Manuel meşru:** basit/az-kolon/ad-hoc rapor. Detay + gerekçe:
 > [ADR 0012 "Karar Rafinasyonu (2026-07-13)"](../governance/decisions/0012-klasik-alv-template-first.md).
 
+> **ALV event'lerinde SATIR KİMLİĞİ = `es_row_no-row_id` (MUST).** `hotspot_click`/`double_click`
+> handler'ında iç tabloyu `READ TABLE … INDEX es_row_no-row_id` ile oku; **`e_row-index` /
+> `e_row_id-index` KULLANILMAZ.** Gerekçe: `LVC_S_ROW` (`e_row`/`e_row_id`) = `INDEX` + **`ROWTYPE`**
+> — `ROWTYPE` satırın ara-toplam/toplam satırı olabileceğini söyler; `do_sum`, sıralama veya filtre
+> etkinken `INDEX` artık iç tablo indeksi değildir → yanlış satır okunur ya da toplam satırında
+> sessiz no-op olur. `LVC_S_ROID` (`es_row_no`) = **`ROW_ID`** = çıktı tablosu satır numarası.
+> Handler imzasına `es_row_no`'yu **eklemeyi unutma** (event onu sunar). Sözdizimi doğru olduğu
+> için **aktivasyon/ATC/abaplint hepsi geçer** — hata yalnız sıralı/toplamlı gridde görülür.
+> Kanonik hâli template'te hazırdır ([`classic-alv-list.prog.abap`](../playbook/templates/classic-alv-list.prog.abap));
+> denetim: `playbook/checklists/bug-checklist-backend.md` **BE-63**.
+
 ## 4. Dynpro / GUI status — AI ÜRETİR (C1 TAMAM, 2026-06-03)
 
 > ⭐ **Klasik Dynpro ekranı + GUI status artık AI tarafından üretiliyor** — operatör SE51/SE41 ŞART DEĞİL.
@@ -93,6 +104,14 @@ Kolonlar göster/gizle + Excel export. Klasik ALV'de bunlar `CL_GUI_ALV_GRID` +
 ## 5. Text element / selection text (TR-master — gap-analysis #C4, ADR 0005-D)
 
 - **Tüm metinler text element/selection text** olarak (literal gömme YASAK — constants rule).
+- **İSTİSNA — kanonik klasik-ALV template (ADR 0012; kullanıcı kararı 2026-08-01):**
+  `playbook/templates/classic-alv-list.prog.abap` ve ondan türeyen programların **iskelet
+  etiketleri** (fieldcat/başlık gibi template-çekirdeği) inline kalabilir — template
+  canlı-çalışan kanıtlanmış örnektir (ZSD000_P_ALV_TEMP1 ailesi), master dil projenin
+  `master_language`'i ve tek-dilli çalışılıyor; salt bu kural için şablonu değiştirmek
+  risk/maliyet üretir. **Seçim-ekranı metinleri istisnaya DAHİL DEĞİL** — onlar
+  selection-text ile yazılır (canlı pratik: paket `programs/textpool/` örnekleri).
+  Template ileride başka sebeple revize edilirse text-element'e geçiş o pakette değerlendirilir.
 - TEXT-xxx, selection texts, GUI title, status text → **TR ve tam**. ADR 0005-D: Z text TR.
 - **Two-pass dil kuralı:** create EN gelirse → TR'ye senkronla; master = TR
   ([[feedback_mcp-post-shell-en-master-lang]]).
@@ -118,7 +137,46 @@ Kolonlar göster/gizle + Excel export. Klasik ALV'de bunlar `CL_GUI_ALV_GRID` +
 - Std program/exit/screen değiştirme YASAK; Z program + Z include.
 - Z text TR (§5). Transport kullanıcının verdiği aktif TR'ye (yaratma yok).
 
-## 8. İlgili
+## 9. Datafield'lı diyalog ekranı (modal form) + DDIC bağlama + F4 karar tablosu
+
+> **Ne zaman bu bölüm?** Ekran çok-satır bir liste/rapor DEĞİL, DDIC yapıya bağlı data-field'lardan
+> oluşan TEK KAYITLIK modal form (düzeltme/ekleme/transfer diyaloğu). Liste ekranı için §3 (ALV)
+> geçerlidir; ikisi aynı programda bir arada olabilir (liste + ondan açılan diyaloglar).
+> **Kanonik şablon:** [`playbook/templates/classic-dynpro-dialog.prog.abap`](../playbook/templates/classic-dynpro-dialog.prog.abap).
+> **Derin referans (karar ağacı + tuzak → aksiyon tablosu):**
+> [`playbook/howto-classic-dynpro-datafield-screens.md`](../playbook/howto-classic-dynpro-datafield-screens.md).
+
+**DDIC bağlama (MUST):** diyalog ekranının data-field'ları program-lokal `gs_*` struct + elle
+`MOVE-CORRESPONDING` köprüsü ile DEĞİL, **DDIC yapıya doğrudan bağlanarak** (`FROM_DICT='X'`,
+ekran-tarafı `MATCHCODE` BOŞ) kurulur. Global work area'nın adı DDIC yapı adıyla aynı olmalı
+(`DATA zsd001_s_dlg TYPE zsd001_s_dlg.`) — ekran alanları `<YAPI>-<ALAN>` diye adreslenir.
+Kazanç: etiket/uzunluk/`CONVERSION_EXIT`/arama-yardımı DDIC'ten gelir, elle senkron gerekmez.
+
+**Dinamik alan kilidi (SHOULD):** kapsam-içi bir kayıt otomatik dolduruluyorsa alan `LOOP AT
+SCREEN` ile PBO'da kilitlenir (`screen-input = 0`); kapsam-dışıysa giriş-etkin bırakılır
+(regresyon yok). Çağrı **PBO'da** olmak zorundadır (PAI'de sessiz kayıp).
+
+**Ekran-başına AYRI fcode (MUST):** fonksiyon tanımının metin+quickinfo'su **program-genelidir**,
+ekran-bazlı DEĞİL. İki diyalog ekranı aynı kaydet/iptal fcode'unu paylaşırsa, quickinfo'su
+ikisinde birden doğru OLAMAZ — her diyalog ekranı **kendi** fcode'unu taşır.
+
+**F4 karar tablosu (özet — detay `howto-classic-dynpro-datafield-screens.md` §2):**
+
+| Mekanizma | Ne zaman | Maliyet |
+|---|---|---|
+| DTEL'e bağlı standart SHLP | Data element zaten bağlıysa | Bedava |
+| Yapı bileşenine `with value help` attachment | Standart SHLP mantıksal uyuyor ama DTEL'de yok | Düşük — DDIC yapı değişikliği + ekran **regen** |
+| Buton + popup (`REUSE_ALV_POPUP_TO_SELECT`) | Süzgeç gerekli VE Z SHLP gerekirdi | Orta — Z SHLP **yaratılamaz** (araç sınırı), bu tek yol |
+| POV modülü | Veriye bağlı süzgeç | Bu üreteçte **desteklenmiyor** — buton+popup ile telafi |
+
+⚠ **Attachment bileşene yapılır, ekran alan adına değil** — aynı yapıda aynı tipten iki alan
+varsa (ör. iki `lgort_d`) attachment tek yoldur, isim-eşleşmesi yeterli değildir. ⚠ Ekrandaki
+elle `MATCHCODE` DDIC attachment'ın önüne geçer — yeni ekranda `MATCHCODE` boş bırakılır.
+⚠ Bir DDIC objesini değiştirmek, onu generate-anında gömen ekranı otomatik güncellemez —
+**regen** ayrı bir adımdır, baştan plana konur.
+
+## 10. İlgili
 - ALV (klasik): **ADR 0012 template-first** → `playbook/templates/classic-alv-list.prog.abap` (örnek `ZSD000_P_ALV_TEMP1`). Ekran/status üretimi: `playbook/adt-fugr-functions.md` §6. Adobe çıktı: `standards/07-output-forms.md`
+- Datafield diyalog: `playbook/templates/classic-dynpro-dialog.prog.abap` · `playbook/howto-classic-dynpro-datafield-screens.md`
 - İskelet üretimi: `scripts/scaffold_classic_program.py` · RAP karşılaştırma: `standards/05`
 - Modül semantiği: `governance/modules/<MOD>/`

@@ -56,7 +56,18 @@ def infer_from_artifact(path: Path) -> tuple[str | None, str | None]:
     m = re.search(r'define\s+structure\s+(\w+)', text, re.IGNORECASE)
     if m:
         return m.group(1).upper(), 'structure'
-    m = re.search(r'define\s+table\s+(\w+)', text, re.IGNORECASE)
+    # ⚠ TABLE FUNCTION, `define table`'DAN ÖNCE denenmeli (2026-07-30 vakası).
+    # `define table function ZSD001_I_X` metni `define\s+table\s+(\w+)` ile eşleşiyor ve
+    # **"function"** kelimesini TABLO ADI sanıyordu → URL `/sap/bc/adt/ddic/tables/function`
+    # → obje bulunamıyor → **false BLOCKER**. Vaka: bir AMDP table function'ın push'u
+    # `activated:true` + "Active source verified" derken üst seviyede BLOCKER döndü;
+    # aktivasyon gerçekte BAŞARILIYDI (içerik bayt-eşit doğrulandı).
+    # Table function bir DDLS'tir (CDS ailesi), TABL değil.
+    m = re.search(r'define\s+table\s+function\s+(\w+)', text, re.IGNORECASE)
+    if m:
+        return m.group(1).upper(), 'ddls'
+    # Negatif lookahead: sıra bozulsa bile "function" tablo adı sanılmasın (çift emniyet).
+    m = re.search(r'define\s+table\s+(?!function\b)(\w+)', text, re.IGNORECASE)
     if m:
         return m.group(1).upper(), 'tabl'
     # CDS: define view NAME / define view entity NAME

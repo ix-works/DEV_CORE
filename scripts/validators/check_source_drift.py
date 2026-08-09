@@ -9,6 +9,12 @@ SAP bağlantısı yoksa (.conn_adt / oturum) freshness gibi SOFT-SKIP (exit 0).
 Bağlantı varsa: drift bulunursa --strict ile fail (exit 1); strict değilse uyarı
 (exit 0). Böylece run_all_validators normal akışı bozmaz ama --strict CI drift'i yakalar.
 
+⚠ KABLOLAMA DURUMU (2026-07-31, T0.12 / Ek-D kararı): Bu validator run_all'a ve CI'ya
+BİLİNÇLİ olarak KABLOLU DEĞİLDİR — CI'da SAP bağlantısı yok, her koşum soft-skip olurdu
+(sahte-yeşil üretir). Tetik: içerik-sağlık radarı turunda (4 haftada bir) ELLE
+`python core/scripts/validators/check_source_drift.py --strict` koşumu. ADR 0016'nın
+sürekli katmanı pull_before_edit'tir; bu araç dönemsel toplu-drift taramasıdır.
+
 Kullanım:
     python scripts/validators/check_source_drift.py
     python scripts/validators/check_source_drift.py --strict

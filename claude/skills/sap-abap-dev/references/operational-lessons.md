@@ -55,7 +55,12 @@ Aktif transport: **`<TRANSPORT>`** (kullanıcı verir, AI yaratmaz — ADR 0005 
 - DDIC objeleri lock istemez: create/change → activate. Class/program/FM: lock → push
   → activate → unlock (unlock'u finally'de garanti et).
 - MCP `_activate_and_verify` artık `adtcore:version="active"` kontrol eder — varlık
-  değil, aktiflik doğrulanır.
+  değil, aktiflik doğrulanır. ⚠ Ama **`version="active"` TEK BAŞINA yetmez**: boş kabuk
+  için de `"active"` döner (kabuk da bir aktif sürümdür). Bağımsız kanıt
+  **`adt_inactive_objects`** + aktif kaynağın içerik kıyası. Aktif kaynağı çekerken
+  **`?version=active` parametresini AÇIKÇA ver** — ADT varsayılanı **İNAKTİF** sürümdür
+  (2026-07-31 ölçümü: aynı sınıf, parametresiz 10.659 bayt dolu / `version=active`
+  192 bayt boş kabuk). Vaka: `playbook/adt-classes.md` §24.9.
 
 ## 5. ABAP pitfall'ları (üretmeden önce)
 

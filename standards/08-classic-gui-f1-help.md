@@ -128,7 +128,7 @@ Dokümanlar **ITF** formatındadır (markdown/HTML DEĞİL). Her satır bir `TDF
 |---|---|---|
 | 1 | **Yeni DDLS/doc shell** `adt_push_source`/`post_shell` ile yaratılamaz | Generic class + `DOCU_UPDATE` zaten doc'u yaratır (shell gerekmez) |
 | 2 | **Title (tdtitle) DSYST `DOKNAME C(20)` sınırı** — obje adı >20 char ise başlık hiçbir header'a yazılmaz, `DOCU_GET` title boş döner | **KOZMETİK** — SE61/F1 başlığı **gövdenin ilk `U1` satırından** alır → her sayfanın ilk satırı U1 başlık (zorunlu). Title param yine geçilir ama görsel etkisi U1'dedir |
-| 3 | **MCP `adt_classrun` tool yanlış "does not implement main" hatası** döndürebilir (parse bug) | Gateway ham HTTP POST `/sap/bc/adt/oo/classrun/<class>` ile aşar; çıktı tamdır (LİDER-lane tooling fix adayı) |
+| 3 | `adt_classrun` → **"does not implement if_oo_adt_classrun~main"**. ⛔ Bu **parse bug DEĞİLDİR** (2026-07-31'de ölçüldü; eski "tool bug" kaydı geri alındı) — mesaj DOĞRU: runner sınıfı ya **aktive edilmemiştir** (aktif sürüm boş kabuk) ya da çağıran süreç **bayat stateful ADT oturumu** tutmaktadır | `adt_activate` → **`adt_inactive_objects`** ile doğrula (`version="active"` metadata'sı boş kabuk için de "active" der → kanıt değil) → gerekirse oturum RESET (`run_classrun` artık otomatik). Ham HTTP POST'un "çözmesi" tesadüfen **taze süreçte** koşmasındandı. ⛔ Taze class adı açma. Bkz. `playbook/adt-classes.md` §24.9 |
 | 4 | **DOCU_UPDATE transport** corr-insert ister; TX/RE doc'ları açık TR'ye gitmeli | Gateway tier-aware; mevcut TR (yeni TR yaratma — ADR 0005-C) |
 | 5 | **DOCU_* released DEĞİL** → ATC cloud-readiness flag | Dev-time tooling + kendi Z objemizin doc'u → kabul; **Prio-1 değil** (Prio 2/3, açık onayla pass) |
 

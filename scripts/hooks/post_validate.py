@@ -38,6 +38,46 @@ TRIGGER = re.compile(
     re.IGNORECASE,
 )
 
+# P1 SEÇİCİLİK (T1.8, denetim 2026-07-31): edit-anında 24 validator'lık tam quick-tur
+# (~13 sn) yerine dosya-SINIFINA göre bilinen-güvenli ALT-KÜME koşulur. İLKE: tabloda
+# eşleşmeyen her TRIGGER dosyası TAM tura düşer (varsayılan DAİMA tam — fail-open yolu
+# yok; ADR 0023). Tam tur pre-commit + CI'da zaten koşuyor → edit-anı erken-uyarı işlevi
+# sınıfla İLGİLİ validator'larla korunur. Sıra önemli: ilk eşleşen sınıf kazanır.
+HIZLI_KUME = [
+    # (sınıf-adı, yol-regex'i, koşulacak validator script'leri)
+    ("rules-md", re.compile(r"\.rules\.md$", re.IGNORECASE),
+     ["check_rule_gate_coverage.py", "check_package_rules_present.py"]),
+    ("validator-py", re.compile(r"/validators/[^/]+\.py$", re.IGNORECASE),
+     ["check_console_utf8.py", "check_project_root_resolution.py",
+      "check_rule_gate_coverage.py"]),
+    ("populate-py", re.compile(r"populate_[^/]*\.py$", re.IGNORECASE),
+     ["check_console_utf8.py", "check_project_root_resolution.py"]),
+    ("standards-decisions", re.compile(r"/(standards|governance/decisions)/.+\.md$", re.IGNORECASE),
+     ["check_core_index_fresh.py", "check_rule_gate_coverage.py"]),
+    ("governance-md", re.compile(r"/governance/.+\.md$", re.IGNORECASE),
+     ["check_core_index_fresh.py", "check_core_not_committed.py"]),
+    # sprint*/SPRINT_PLAN/td_spec: BİLİNÇLİ tabloda YOK → tam tur (sprint kontrolleri
+    # canlı-SAP'li populate-içi gate'lerdir; edit-anında hangi alt-kümenin yeteceği
+    # kanıtlanmadı — kanıtsız daraltma yapılmaz).
+]
+
+
+def _hizli_kume_kos(sinif: str, scriptler: list) -> "tuple[bool, str]":
+    """Alt-kümeyi koşar. (ok, fail_ozeti) döner; koşulamayan script = FAIL sayılır
+    (fail-closed: 'koşamadım' sessiz PASS'e dönüşmez)."""
+    hatalar = []
+    for s in scriptler:
+        yol = REPO / "scripts" / "validators" / s
+        try:
+            r = subprocess.run([sys.executable, str(yol)], cwd=str(REPO),
+                               capture_output=True, text=True, timeout=60)
+            if r.returncode != 0:
+                hatalar.append(f"[{s}]\n" + (r.stdout or r.stderr or "")[-400:])
+        except Exception as e:
+            hatalar.append(f"[{s}] KOŞULAMADI: {e}")
+    return (not hatalar, "\n".join(hatalar))
+
+
 # Seçenek 2 (2026-06-24): DURUM/İZLEME dökümanları kural TAŞIMAZ → governance/ altında
 # olsalar da heavy validator run'ı (run_all --quick) tetiklemezler. RESUME çapaları,
 # SESSION_NOTES, auto-generated registry. Daraltma yönü under-exclude (şüpheli dosya yine
@@ -127,6 +167,19 @@ def main() -> int:
     # Seçenek 2: durum/izleme dökümanı → kural taşımaz, heavy run ATLA (governance/ match'lese bile)
     if not TRIGGER.search(norm) or STATUS_DOC.search(norm):
         return 2 if nudged else 0
+
+    # P1: dosya-sınıfı eşleşirse ALT-KÜME koş; eşleşmezse aşağıdaki TAM tur (varsayılan).
+    for sinif, desen, scriptler in HIZLI_KUME:
+        if desen.search(norm):
+            ok, ozet = _hizli_kume_kos(sinif, scriptler)
+            if ok:
+                return 2 if nudged else 0
+            sys.stderr.write(
+                f"[hook:post_validate] hızlı-küme FAIL (sınıf: {sinif}; "
+                f"{Path(path).name} düzenlendi).\n"
+                "ADR 0006 gate: forward progress YOK -> önce ihlali düzelt.\n"
+                "(Tam tur pre-commit/CI'da ayrıca koşar.)\n--- özet ---\n" + ozet + "\n")
+            return 2
 
     try:
         result = subprocess.run(

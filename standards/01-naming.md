@@ -333,3 +333,26 @@ obje var mı kontrol et. Ortak master/value-help için **ASLA local kopya yaratm
 - https://community.sap.com/t5/sap-for-utilities-blog-posts/sap-s-4hana-2023-fps3-what-s-in-it-for-the-utilities-industry/ba-p/13991664
 - https://community.sap.com/t5/technology-blog-posts-by-sap/abap-extensibility-guide-clean-core-for-sap-s-4hana-cloud-august-2025/ba-p/14175399
 - https://community.sap.com/t5/technology-blog-posts-by-members/clean-core-strategy-a-practical-approach-to-get-a-cleaner-on-premise-system/ba-p/14180311
+
+### Include TITLE-METNİ suffix'i (AGENTS'tan taşındı — D1; ⚠ OBJE-ADI suffix'inden AYRI alan)
+Obje-ADI suffix'i C-INC-NAME-01'dir (`_T01/_C01/...`, gate'li) — kanonik ODUR. Aşağıdaki tablo yalnız
+include'un TITLE/açıklama METNİ içindir; çakışma halinde C-INC-NAME-01 kazanır.
+
+ABAP Include TITLE Suffix Standardı
+
+Ana program: `"<Rapor Adı>"` (örn. `"Ornek Termin Raporu"`)
+
+Include'lar için zorunlu suffix'ler:
+
+| Include Tipi | Suffix | TITLE Örneği |
+|---|---|---|
+| TOP (data declarations) | `TOP` | `"Ornek Termin Raporu - TOP"` |
+| Selection screen | `SEL` | `"Ornek Termin Raporu - SEL"` |
+| Module / dialog logic | `MDL` veya `O01`/`I01` | `"Ornek Termin Raporu - MDL"` |
+| Form (FORM/PERFORM) | `F01` (artarak F02, F03) | `"Ornek Termin Raporu - F01"` |
+| ALV logic | `ALV` | `"Ornek Termin Raporu - ALV"` |
+| Class local definitions | `CL` veya `CLD` | `"Ornek Termin Raporu - CL"` |
+
+TITLE boş veya İngilizce bırakılmaz (⛔ KATEGORİ D — Z'li obje text zorunluluğu).
+
+#

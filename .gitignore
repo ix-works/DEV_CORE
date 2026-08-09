@@ -5,3 +5,6 @@ node_modules/
 .tmp/
 # SAP baglanti dosyasi — kimlik bilgisi icerir, ASLA commit edilmez
 .conn_adt
+
+# ajan hafizasi: yerel kalir (metodoloji-nitelikli ders CORE'a TERFI eder — CLAUDE.core §5)
+.claude/agent-memory/

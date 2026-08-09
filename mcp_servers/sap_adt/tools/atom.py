@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import contextlib
 import io
+import re
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from mcp_servers.sap_adt._app import mcp, log, profil_tool
 from mcp_servers.sap_adt._reviewer import (
@@ -126,13 +127,38 @@ def _content_readback(client, name: str, object_type: str) -> dict:
 
 
 def _exists_after_delete(client, name: str, object_type: str):
-    """Delete sonrası varlık readback. True=hâlâ var (silme oturmadı) | False=yok | None=bilinemedi."""
+    """Delete sonrası varlık readback → (durum, sebep).
+
+    durum: True = hâlâ var (silme oturmadı) · False = YOKLUĞU KANITLI (silme oturdu)
+           · None = doğrulama KOŞAMADI (iddia yok).
+
+    ⛔ 2026-08-01 bug-avı, "doğrulama koşamadı = doğrulandı" sınıfı: burada eskiden
+    `return md is not None` yazıyordu. `get_object_metadata` HER istisnayı yutup `None`
+    döndürdüğü için (sap_client.py: `except Exception: print("[ERROR]..."); return None`)
+    aşağıdaki `except` dalı bu yolda HİÇ ateşlenmiyordu → HTTP 500 / 403-logon / timeout /
+    bağlantı kopması hepsi `md=None` → `False` → **`delete_verified: True`**. Yani silmenin
+    OTURDUĞUNA dair kanıt üretilemediği durum, "oturdu" diye raporlanıyordu (silme geri
+    alınamaz ve bir sonraki adım bu iddiaya dayanır: yeniden yaratma / TR kapatma).
+    Artık yokluk yalnız KANITLI ise (404 imzası ya da temiz-boş yanıt) beyan edilir.
+    """
+    log_buf = io.StringIO()
     try:
-        with _capture_stdout():   # SAPClient stdout chatter MCP stdio'yu kirletmesin
+        with _capture_stdout() as out:   # SAPClient stdout chatter MCP stdio'yu kirletmesin
             md = client.get_object_metadata(name, object_type=object_type)
-        return md is not None
-    except Exception:  # noqa: BLE001
-        return None  # NotFound/erişilemez → 'yok' iddiası etme; soft
+        log_buf.write(out.getvalue())
+        if md is not None:
+            return True, ""
+        sinif = _bos_sonuc_sinifi(log_buf.getvalue())
+        if sinif == "yok":
+            return False, ""
+        return None, (
+            f"Silme sonrası varlık readback KOŞAMADI ({sinif}) — obje okunamadı ve sebep "
+            f"BULUNAMADI-DEĞİL bir hata. Bu 'silindi' KANITI DEĞİLDİR; SE80/adt_get ile "
+            f"elle teyit et. Log: {log_buf.getvalue().strip()[:200]}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        # NotFound/erişilemez → 'yok' iddiası etme; soft
+        return None, f"Silme sonrası varlık readback yapılamadı ({type(exc).__name__}: {exc})."
 
 
 def _get_client():
@@ -306,22 +332,162 @@ def _capture_stdout():
         yield buf
 
 
-# XML-based DDIC objects have NO /source/main endpoint — they are read as a single
-# object XML (via get_ddic_object), not as source text. Routing them through
-# download_object (which appends /source/main) 404s and the object falsely reports
-# exists:false even when live (recon 2026-06-16, ZSD001_E_RAILN).
-_DDIC_XML_TYPES = {"dataelement", "domain", "table", "structure", "tabletype"}
+# DDIC okuma-yolu TEK KAYNAKTAN gelir: `scripts/object_types.py` ->
+# `DDIC_XML_ONLY_TYPES` / `DDIC_DDL_SOURCE_TYPES` / `ddic_read_mode()`.
+# ⚠ Burada YEREL BIR KOPYA TUTMA. 2026-06-16'da bes DDIC tipi tek kume halinde
+# XML-okuyucuya yonlendirilmisti; dogrusu ikiye ayriliyor:
+#   * dataelement/domain/tabletype -> `/source/main` YOK (404) -> obje XML'i okunur.
+#   * table/structure              -> GERCEK `/source/main` DDL ucu VAR (canli olculdu
+#     2026-08-09; Z ve STANDART objelerde 200) -> duz DDL okunur.
+# Ayni kural `scripts/sap_sync_pull.py`'de de gecerlidir; iki tuketici de ayni
+# fonksiyonu cagirir (eskiden iki bagimsiz literal vardi ve ayrisiyordu).
 
 
-def _ddic_xml_type(object_type: str):
-    """Canonical DDIC XML type name if object_type is an XML-based DDIC object
-    (data element/domain/table/structure/table type), else None."""
+def _ddic_read_mode(object_type: str) -> tuple[Optional[str], Optional[str]]:
+    """`(mode, canonical)` — mode: 'ddl' | 'xml' | None. Tek kaynak: object_types.
+
+    `(None, None)` DDIC-DEGIL demektir ve cagiran genel yola duser. Bu dal SESSIZ
+    bir yanlis-cevap uretmez: genel yol `client.download_object` -> `get_source_url`
+    zincirinden gecer, o da AYNI `object_types` modulunu kullanir. Yani modul
+    gercekten yuklenemiyorsa `sap_client` import'u da coker ve `_get_client()`
+    `ok:false` ile patlar; bilinmeyen tipte ise `get_source_url` ValueError atar ->
+    `_err_from_exc` -> `ok:false`. Iki halde de sessiz `exists:false` YOKTUR.
+    """
     try:
-        from object_types import normalize_object_type  # type: ignore
-        canonical = normalize_object_type(object_type)
+        from object_types import ddic_read_mode  # type: ignore
+        mode, canonical = ddic_read_mode(object_type)
+        return (mode, canonical)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("object_types.ddic_read_mode yuklenemedi (%s) — DDIC ozel yolu atlandi", exc)
+        return (None, None)
+
+
+def _ddic_uri_seg(canonical_type: Optional[str]) -> Optional[str]:
+    """Kanonik DDIC tipi -> ADT uc segmenti (ör. 'ddic/tables'); cozulemezse None.
+
+    Yol tablosu object_types.OBJECT_TYPES'tadir — burada IKINCI bir kopya TUTULMAZ.
+    """
+    if not canonical_type:
+        return None
+    try:
+        from object_types import OBJECT_TYPES  # type: ignore
+        seg = OBJECT_TYPES[canonical_type]["url_path"]
     except Exception:
         return None
-    return canonical if canonical in _DDIC_XML_TYPES else None
+    return seg if isinstance(seg, str) and seg else None
+
+
+# "BULUNAMADI != YOK" (ölçüldü 2026-07-31, dört ayrı vaka aynı gün).
+# adt_get, ulaşılamayan SAP'te de `ok:true, exists:false` döndürüyordu; obje CANLIDA
+# VARDI ve client_log'da NameResolutionError yazıyordu. Bir ajan buna dayanıp
+# "obje yok, yaratayım" derse ADR 0005-A sınırına dayanır. Bu yüzden ağ/erişim
+# kaynaklı boş sonuç artık `exists:false` DEĞİL, açık HATA döner.
+_UNREACHABLE_MARKERS = (
+    "NameResolutionError", "getaddrinfo", "ConnectionError", "ConnectTimeout",
+    "Max retries exceeded", "ReadTimeout", "SSLError", "ProxyError",
+    "Connection refused", "Connection aborted",
+)
+
+# Doğrudan okuma yolu OLMAYAN tipler: /source/main eklenerek 404 alınır ve obje
+# yanlışlıkla "yok" görünür. FM örneği ölçüldü (2026-07-31): ZSD001_FM_X canlıda
+# VARdı, adt_get(type='func') exists:false dedi -- çünkü FM'in kaynağı
+# /functions/groups/<fg>/fmodules/<fm>/source/main altındadır, fonksiyon grubu
+# adı da tek başına FM adından çıkarılamaz.
+_NO_DIRECT_READ_HINT = {
+    "func": ("FM'in kaynağı fonksiyon grubu altındadır "
+             "(/functions/groups/<fg>/fmodules/<fm>/source/main) ve grup adı FM adından "
+             "çıkarılamaz. Doğru yol: adt_search_objects ile gerçek URI'yi al, sonra ham GET."),
+    "function": ("FM'in kaynağı fonksiyon grubu altındadır; adt_search_objects ile URI al."),
+}
+
+
+def _bos_sonuc_sinifi(log_text: str) -> str:
+    """Alt katmanın YUTTUĞU boş sonucu ÜÇ-DEĞERLİ sınıflandır.
+
+    Döner: `"yok"` (yokluk KANITLI) · `"ulasilamadi"` (ağ/erişim) · `"belirsiz"`
+    (hata var ama yokluk imzası YOK — ör. HTTP 500/403).
+
+    ⛔ SINIF-KURALI (2026-08-01 bug-avı, "doğrulama koşamadı = doğrulandı"):
+    `sap_client` katmanındaki okuyucular (`get_ddic_object`, `get_object_metadata`, ...)
+    HER istisnayı yutup `None` döndürür ve sebebi yalnız stdout'a `[ERROR] ...` diye basar.
+    Bu yüzden üst kattaki `except` dalları o yollarda HİÇ ateşlenmez; `None`'ı doğrudan
+    "obje yok" saymak, "sunucu patladı"yı "yok"la AYNI cevaba düşürür. Kanıt tek yerden
+    üretilsin diye sınıflandırma bu TEK fonksiyonda toplandı; `adt_get` (DDIC + klasik),
+    delete-readback ve lock-probe aynı kaynağı kullanır.
+
+    Kanıt kaynağı: `SAPADTError.__str__` = `"[<status>] <mesaj>"` → durum kodu log'a
+    DÜŞER. 404 = yokluk kanıtı; 4xx/5xx = kanıt DEĞİL.
+    """
+    lt = log_text or ""
+    if any(m in lt for m in _UNREACHABLE_MARKERS):
+        return "ulasilamadi"
+    dusuk = lt.lower()
+    kodlar = set(re.findall(r"\[(\d{3})\]", lt))
+    if kodlar - {"404"}:            # 500/403/502... → yokluk BEYAN EDİLMEZ
+        return "belirsiz"
+    if "404" in kodlar:
+        return "yok"
+    yokluk_imzasi = any(s in dusuk for s in
+                        ("not found", "notfound", "404", "does not exist",
+                         "bulunamadı", "bulunamadi"))
+    hata_izi = "[error]" in dusuk
+    if hata_izi and not yokluk_imzasi:
+        return "belirsiz"
+    # Temiz-boş yanıt (hata izi yok) ya da kesin bulunamadı imzası.
+    return "yok"
+
+
+def _miss_or_unreachable(name: str, object_type: str, log_text: str) -> dict:
+    """Boş sonucu SINIFLANDIR: gerçekten 'obje yok' mu, yoksa 'ulaşamadım' mı?
+
+    exists:false yalnızca SAP'ye ULAŞILDIĞI ve objenin gerçekten bulunmadığı
+    durumda döner. Ağ/erişim izi varsa ok:false + unreachable döner -- çağıran
+    bunu "yok" diye okuyamasın. (Sınıflandırma: `_bos_sonuc_sinifi`.)
+    """
+    _sinif = _bos_sonuc_sinifi(log_text)
+    if _sinif == "ulasilamadi":
+        return {
+            "ok": False,
+            "error": "unreachable",
+            "name": name.upper(),
+            "type": object_type,
+            "message": (
+                "SAP'ye ULAŞILAMADI — bu sonuç 'obje yok' DEĞİLDİR. Bağlantı/DNS/VPN "
+                "kontrol et ve tekrar ölç. ⛔ Bu cevaba dayanıp obje YARATMA (ADR 0005-A)."
+            ),
+            "client_log": log_text,
+        }
+    # ⚠ YOKLUK İDDİASI KANIT İSTER (2026-08-01 bug-avı, W2-MCPT-01).
+    # `_UNREACHABLE_MARKERS` yalnız AĞ katmanını tanır. Sunucu/yetki hataları (HTTP 500,
+    # 502, 403 logon) o listeye girmez ve eskiden sessizce `exists:false`e düşerdi —
+    # yani "sunucu patladı" ile "obje yok" AYNI cevabı veriyordu. Ölçüldü: 500/403/
+    # timeout/bağlantı-kopması dördü de `ok:true, exists:false`.
+    # Politika: log'da bir HATA izi varsa ve o iz KESİN bir bulunamadı imzası DEĞİLSE,
+    # yokluk BEYAN EDİLMEZ → `ok:false` + belirsiz. Temiz-boş yanıt (hata izi yok) eskisi
+    # gibi `exists:false` kalır; 404 imzası da öyle (kontrol grubu bunu doğrular).
+    if _sinif == "belirsiz":
+        return {
+            "ok": False,
+            "error": "belirsiz",
+            "name": name.upper(),
+            "type": object_type,
+            "message": (
+                "Obje okunamadı ve sebep BULUNAMADI-DEĞİL bir hata (ör. HTTP 500/403). "
+                "Bu sonuç 'obje yok' DEĞİLDİR — sunucu/yetki hatası da olabilir. "
+                "⛔ Bu cevaba dayanıp obje YARATMA ya da SİLME (ADR 0005-A). "
+                "Hatayı gider, tekrar ölç."
+            ),
+            "client_log": log_text,
+        }
+    out = {"ok": True, "name": name.upper(), "type": object_type, "exists": False,
+           "client_log": log_text}
+    hint = _NO_DIRECT_READ_HINT.get((object_type or "").lower().strip())
+    if hint:
+        out["warning"] = (
+            f"'{object_type}' tipi bu uçtan doğrudan okunamaz — exists:false BURADA "
+            f"'obje yok' anlamına GELMEYEBİLİR. {hint}"
+        )
+    return out
 
 
 # =============================================================================
@@ -343,14 +509,30 @@ def _read_source_object(name: str, uri_seg: str, type_label: str) -> dict:
             r = adt.session.get(url, headers={"Accept": "text/plain"}, verify=False, timeout=60)
         log_buf.write(out.getvalue())
         if r.status_code == 404:
-            return {"ok": True, "name": name.upper(), "type": type_label, "exists": False,
-                    "client_log": log_buf.getvalue().strip()}
+            # ⚠ YOKLUK KANITI ACIK YAZILIR. Ham `requests` GET'i stdout'a hicbir sey
+            # basmaz -> log BOS kalir -> `_bos_sonuc_sinifi("")` "temiz-bos yanit"
+            # dalindan "yok" dondururdu; yani dogru sonuc KAZAYLA cikardi. Durum kodunu
+            # log'a yazinca siniflandirma 404 KANITINA dayanir (kanit-zinciri gorunur).
+            log_buf.write("[404] GET %s\n" % url)
+            return _miss_or_unreachable(name, type_label, log_buf.getvalue().strip())
         if r.status_code != 200:
             return {"ok": False, "name": name.upper(), "type": type_label,
                     "error": "http_%d" % r.status_code, "message": (r.text or "")[:500],
                     "client_log": log_buf.getvalue().strip()}
-        return {"ok": True, "name": name.upper(), "type": type_label, "exists": True,
-                "source": r.text, "client_log": log_buf.getvalue().strip()}
+        out_ok = {"ok": True, "name": name.upper(), "type": type_label, "exists": True,
+                  "source": r.text, "client_log": log_buf.getvalue().strip()}
+        if not (r.text or "").strip():
+            # 200 ama GOVDE BOS: obje VAR fakat kaynagi yok (create-POST'un biraktigi
+            # shell/placeholder — playbook adt-tables-structures §28.1). Sessizce bos
+            # source dondurmek "obje bos" yanilgisi uretir ve pull yolunda repo dosyasini
+            # bosaltmaya calisir (write_repo_from_live FIX-C shrink korumasi yakalar).
+            out_ok["source_empty"] = True
+            out_ok["warning"] = (
+                "Uc 200 dondu ama SOURCE BOS. Obje VAR; kaynagi bos (shell/placeholder "
+                "olabilir — create yapildi ama DDL PUT edilmedi ya da aktive edilmedi). "
+                "Bu sonucu 'obje bos/silinebilir' diye OKUMA; once SE11/adt ile teyit et."
+            )
+        return out_ok
     except Exception as exc:
         return _err_from_exc(exc)
 
@@ -380,19 +562,60 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
     client = _get_client()
     log_buf = io.StringIO()
 
-    # XML-based DDIC objects (DTEL/DOMA/TABL/structure/tabletype): read object XML
-    # directly; they have no /source/main source endpoint (see _DDIC_XML_TYPES note).
-    ddic_xml_type = _ddic_xml_type(object_type)
+    # DDIC tipleri IKI YOLA ayrilir (bkz. `_ddic_read_mode` notu):
+    #   'ddl' (table/structure) -> GERCEK `/source/main` ucu var -> DUZ DDL oku.
+    #   'xml' (dtel/doma/ttyp)  -> `/source/main` YOK -> obje XML'i oku.
+    ddic_mode, ddic_canonical = _ddic_read_mode(object_type)
+    if ddic_mode == "ddl":
+        # Tablo/struct'un KAYNAGI DDL'dir: repo dosyalari da DDL tasir (bkz.
+        # source_drift._TYPE_TO_EXTENSIONS) ve create yolu DDL'i `PUT /source/main`
+        # ile yazar. XML zarfi dondurmek okuyucuyu (ve pull yolunu) DDL yerine
+        # `<blue:blueSource>` govdesiyle besliyordu.
+        seg = _ddic_uri_seg(ddic_canonical)
+        if seg is None:
+            # Sozlesme ihlali: mode='ddl' geldi ama uc segmenti cozulemedi. SESSIZCE
+            # XML yoluna DUSMEK yasak — cagiran DDL bekliyor, XML zarfi alirdi ve bunu
+            # fark etmezdi (§127 "dogrulama kosamadi = dogrulandi" sinifi). ACIK HATA.
+            return {
+                "ok": False,
+                "error": "ddic_uri_unresolved",
+                "name": name.upper(),
+                "type": object_type,
+                "message": (
+                    f"DDIC tipi '{ddic_canonical}' icin ADT uc segmenti (url_path) "
+                    "cozulemedi — kaynak OKUNMADI. Bu sonuc 'obje yok' ya da 'kaynak bos' "
+                    "DEGILDIR. object_types.OBJECT_TYPES tablosunu kontrol et."
+                ),
+            }
+        return _read_source_object(name, seg, object_type)
+
+    ddic_xml_type = ddic_canonical if ddic_mode == "xml" else None
     if ddic_xml_type is not None:
         try:
             with _capture_stdout() as out:
                 xml = client.get_ddic_object(ddic_xml_type, name)
             log_buf.write(out.getvalue())
+            if xml is None:
+                # ⚠ "BULUNAMADI ≠ YOK" — DDIC dalı (2026-08-01 bug-avı, W2-MCPT-01).
+                # Eskiden `exists: xml is not None` yazıyordu ve `None` gelen HER durum
+                # "obje yok" sayılıyordu. Ama alt katman (`sap_client.get_ddic_object`)
+                # **her istisnayı yutup None döndürür** → aşağıdaki `except` dalı bu tipler
+                # için HİÇ ateşlenmez. Ölçüldü (stub'lu kontrol grubuyla):
+                #   gerçek 404      → exists:false   ✔ doğru
+                #   HTTP 500 / 403  → exists:false   ✘ ok:true ile, 404'ten AYIRT EDİLEMEZ
+                #   ReadTimeout     → exists:false   ✘
+                #   bağlantı kopuk  → exists:false   ✘
+                # Sonuç: ajan "yok" sanıp yeniden YARATIR (ADR 0005-A sınırı) ya da mevcut
+                # objeyi ezer. Aynı sınıf `class` yolunda 2026-07-31'de kapatılmıştı;
+                # DDIC dalı geride kalmıştı.
+                # POLİTİKA: yokluk iddiası KANIT ister. `exists:false` yalnız log'da KESİN
+                # bir bulunamadı imzası varsa döner; aksi halde yokluk BEYAN EDİLMEZ.
+                return _miss_or_unreachable(name, object_type, log_buf.getvalue().strip())
             return {
                 "ok": True,
                 "name": name,
                 "type": object_type,
-                "exists": xml is not None,
+                "exists": True,
                 "source": xml,
                 "metadata": xml,
                 "client_log": log_buf.getvalue().strip(),
@@ -402,13 +625,7 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
             if isinstance(exc, SAPObjectNotFoundError) or (
                 isinstance(exc, SAPADTError) and getattr(exc, "status_code", None) == 404
             ):
-                return {
-                    "ok": True,
-                    "name": name,
-                    "type": object_type,
-                    "exists": False,
-                    "client_log": log_buf.getvalue().strip(),
-                }
+                return _miss_or_unreachable(name, object_type, log_buf.getvalue().strip())
             return _err_from_exc(exc)
 
     try:
@@ -419,11 +636,15 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
                 source = client.download_object(name, object_type=object_type, save_local=False)
             metadata = client.get_object_metadata(name, object_type=object_type)
         log_buf.write(out.getvalue())
+        # Alt katman istisna ATMADAN None dönebiliyor (ör. ağ hatası yutulmuşsa). O hâlde
+        # "obje yok" değil "ulaşamadım" olabilir -- sınıflandırmayı _miss_or_unreachable yapar.
+        if source is None and metadata is None:
+            return _miss_or_unreachable(name, object_type, log_buf.getvalue().strip())
         return {
             "ok": True,
             "name": name,
             "type": object_type,
-            "exists": source is not None or metadata is not None,
+            "exists": True,
             "source": source,
             "metadata": metadata,
             "client_log": log_buf.getvalue().strip(),
@@ -431,13 +652,7 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
     except Exception as exc:
         from sap_adt_lib import SAPObjectNotFoundError  # type: ignore
         if isinstance(exc, SAPObjectNotFoundError):
-            return {
-                "ok": True,
-                "name": name,
-                "type": object_type,
-                "exists": False,
-                "client_log": log_buf.getvalue().strip(),
-            }
+            return _miss_or_unreachable(name, object_type, log_buf.getvalue().strip())
         return _err_from_exc(exc)
 
 
@@ -658,8 +873,14 @@ def adt_push_source(
             review = run_reviewer(task, str(tmp_file), ack_drop=ack_drop)
             if review.is_blocker:
                 return reject_payload(name, object_type, review)
-            if review.verdict != "SKIP":
-                reviewer_warn = review.to_dict()
+            # G2 (2026-07-31): SKIP artik SESSIZ degil — "PRE-FLIGHT KOSMADI" bilgisi
+            # yanita girer (checklist!=wired sinifinin reviewer versiyonuna karsi).
+            # Davranis DEGISMEZ (push yine gecer); yalniz gorunurluk.
+            reviewer_warn = review.to_dict()
+            if review.verdict == "SKIP":
+                reviewer_warn["notice"] = (
+                    f"PRE-FLIGHT KOSMADI ({review.skip_reason}) — bu tip icin "
+                    "validator zinciri tanimli degil; 'reviewer PASS' SANMA.")
 
         # ADR 0016 REVİZE: pre-push DRIFT GUARD (M1) KALDIRILDI — kasıtlı edit'leri de
         # blokluyordu (repo≠canlı her meşru edit'te doğal). Tazelik artık edit-ÖNCESİ
@@ -681,6 +902,23 @@ def adt_push_source(
         }
         if reviewer_warn:
             resp["reviewer"] = reviewer_warn
+
+        # ── READBACK GÖRÜNÜRLÜĞÜ (2026-08-01 bug-avı, "doğrulama koşamadı = doğrulandı") ──
+        # `push_object` aktivasyon sonrası AKTİF kaynağı yüklenenle kıyaslar. Bu kıyas
+        # KOŞAMADIĞINDA (okuma hatası / tip kapsam dışı) eskiden yanıtta HİÇBİR iz kalmıyordu
+        # → `ok:true` hem "doğrulandı" hem "doğrulanamadı" anlamına geliyordu. Artık üç değer
+        # AÇIKÇA yüzeye çıkar. Davranış (ok) DEĞİŞMEZ — yalnız görünürlük (reviewer SKIP
+        # görünürlüğüyle aynı desen, 2026-07-31).
+        if isinstance(result, dict):
+            rb = result.get("readback_ok")
+            resp["readback_verified"] = rb if rb in (True, False) else None
+            if resp["readback_verified"] is None:
+                resp["readback_notice"] = (
+                    "READBACK KOŞMADI/ÖLÇÜLEMEDİ — canlı aktif kaynak yüklenenle "
+                    "KIYASLANAMADI. Bu 'yazım doğrulandı' DEĞİLDİR; kritik objede "
+                    "adt_get(version=active) ile elle teyit et. "
+                    + str(result.get("readback_reason", "")).strip()
+                ).strip()
 
         # Aktivasyon-oncesi canli syntax-check (push_object icinde) basarisizsa yuzeye cikar:
         # push upload etti ama AKTIVE ETMEDI -> ok=False + hatalar (gateway net gorsun, nested kalmasin).
@@ -780,8 +1018,9 @@ def adt_delete(
             "client_log": out.getvalue().strip(),
         }
         # Readback-gate: silme GERÇEKTEN oturdu mu — obje hâlâ varsa BLOCKER.
+        # ÜÇ-DEĞERLİ: True/False/None; None ASLA True'ya katlanmaz (bkz. _exists_after_delete).
         if resp["ok"]:
-            still = _exists_after_delete(client, name, object_type)
+            still, sebep = _exists_after_delete(client, name, object_type)
             if still is True:
                 resp["ok"] = False
                 resp["deleted"] = False
@@ -792,7 +1031,8 @@ def adt_delete(
                 resp["delete_verified"] = True
             else:
                 resp["delete_verified"] = None
-                resp["delete_reason"] = "Silme sonrası varlık readback yapılamadı (soft; manuel teyit)."
+                resp["delete_reason"] = sebep or (
+                    "Silme sonrası varlık readback yapılamadı (soft; manuel teyit).")
         # _LAST_PUSHED temizliği — silinen objenin bayat push kaydı kalmasın (tüm tip-varyantları).
         for _k in [k for k in _LAST_PUSHED if k[0] == name.upper()]:
             _LAST_PUSHED.pop(_k, None)
@@ -815,6 +1055,9 @@ _ACTIVATION_URI_SEG = {
     "dataelement": "ddic/dataelements", "dtel": "ddic/dataelements",
     "table": "ddic/tables", "tabl": "ddic/tables", "structure": "ddic/structures",
     "program": "programs/programs", "prog": "programs/programs",
+    # 2026-08-01 (T1.6 pilot bulgusu): klasik program+include co-activation'ı için include
+    # tipi eksikti -> adt_activate(also=[{object_type:"include"}]) unsupported_type veriyordu.
+    "include": "programs/includes", "prog/i": "programs/includes",
     "srvb": "businessservices/bindings", "servicebinding": "businessservices/bindings",
 }
 

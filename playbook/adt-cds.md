@@ -10,6 +10,54 @@ status: active
 
 # CDS View (DDLS/DF)
 
+## ⛔ CDS-NSDM-01 — classic DDIC view'da `MSEG`/`MKPF` (ve her replacement tablosu) YASAK (2026-08-03)
+
+> **Güç: MUST-NOT.** `@AbapCatalog.sqlViewName`'li **classic (DDIC-based) CDS view** ya da SE11
+> view'ın `FROM`/`JOIN`'inde **`DD02L-VIEWREF`'i dolu** bir tablo kullanılamaz. Kullanılırsa view
+> **hatasız aktive olur ve DAİMA 0 satır döner.**
+>
+> **Yerine:** NSDM uyumluluk CDS'i — `mseg` → **`nsdm_e_mseg`** · `mkpf` → **`nsdm_e_mkpf`**
+> (alan adları birebir aynı; `sqlViewName`/alan listesi/key/WHERE/UNION **değişmez** → DB view
+> yaşar → onu `USING` ile tüketen **AMDP bozulmaz**).
+> Emsal: SAP'nin kendi DDIC-based view'ı `C_GdsRcptItemQty` → `select from nsdm_e_mseg`.
+
+**Neden:** S/4'te `MSEG`/`MKPF` **tablo-değiştirme (replacement) objesidir**; veri `MATDOC`'ta,
+fiziksel tablo **boş**. Yönlendirme **Open SQL katmanındadır** — `SELECT ... FROM mseg` çalışır.
+Classic DDIC view ise **DB seviyesinde** üretilip fiziksel tabloyu okur; onun yönlendirilmesi
+view'ın kendi **`DD25L-VIEWREF`**'ine bağlıdır ve bu **yalnız SAP'nin kendi view'larında** dolu
+olur — Z view'ında **asla**. **View entity'de bu sorun YOKTUR** (Open SQL yolundan geçer) — ama
+view entity **DB view üretmez**, yani AMDP `USING` zinciri varsa çözüm o değildir.
+
+**Etkilenen tablo sınıfı (tam liste sistemden okunur):**
+```
+SELECT tabname, viewref FROM dd02l WHERE as4local = 'A' AND viewref <> ''
+```
+MM-IM: `MSEG` `MKPF` · Stok: `MSSA` `MSSL` `MSSQ` `MSCD` `MSFD` `MSID` `MSKU` `MSLB` `MSPR` ·
+Değerleme: `MBEW` `EBEW` `OBEW` `QBEW` `VMBEW` (+`*H` tarihsel) · `MARCH` `MARDH` `MCHBH` `MKOLH` …
+⚠ `MARA`/`MARC`/`MAKT` replacement **DEĞİLDİR** — onlar classic view'da serbesttir.
+
+**Teşhis (view zaten 0 satır dönüyorsa):**
+```
+1) SELECT tabname, viewref  FROM dd02l WHERE tabname  = '<TABLO>'    -- replacement mı?
+2) SELECT viewname, viewref FROM dd25l WHERE viewname = '<SQL_VIEW>' -- null ⇒ KUSUR BU
+3) DD26S ile aynı tabloyu taşıyan TÜM view'lar → her biri COUNT(*) + DD25L-VIEWREF
+   → beklenen ayrışma: VIEWREF dolu ⇒ satır var · null ⇒ 0
+```
+⚠ **Kontrol grubunu kurarken `DD25L-VIEWREF`'i de ölç.** "Standart `CNMSEG` satır döndürüyor,
+demek ki classic view'lar MSEG'i görüyor" **yanlış elemedir** — `CNMSEG`'in VIEWREF'i doludur.
+Ayırt edici değişken ölçülmezse kontrol grubu hipotezi **tersine çevirir** (bkz.
+[`lessons-learned.md`](lessons-learned.md) **PATTERN #21** · #19).
+
+**Neden geç patlar:** ilgili veri kapsamı boşken view zaten 0 döner ve bu **doğru** görünür.
+Kusur ilk gerçek veri girildiği gün — genelde kullanıcı testinin ilk saatinde — ortaya çıkar.
+Aktivasyon/ATC/`adt_inactive_objects` bu sınıfı **yakalamaz**; tek kanıt **satır saymaktır**.
+Ters yönü de unutma: boş view'a `NOT EXISTS`/anti-join yapan sayaç **boşalmaz, ŞİŞER**.
+
+*(applies_to: `s4_private` · `s4_public`. ECC'de bu sınıf yoktur. Gate BİLİNÇLİ olarak
+açılmadı — ADR 0019 §4 merdiven ilkesi: önce doküman. Tekrar ederse validator adayı bu kuraldır.)*
+
+---
+
 ## ⚡ TEK CDS YARATMA — ÖNCE BUNU OKU (KANONİK, MCP) (2026-06-13)
 
 > **Yeni bir CDS view-entity'yi MCP ile yaratıyorsan, tool sırasını TAHMİN ETME — bu 3 adım:**
@@ -422,4 +470,32 @@ Bir `define view entity ... union all ...` yazarken SAP 3 kuralı tek tek dayat�
 > **Ne zaman:** base view'da bir alan RENAME edilir (ör. `klm_cikis_ulkesi`→`klm_musteri_ulkesi`) ve consumption view o alanı `as select from` ile tüketir. Tek-obje aktivasyon **iki yönlü kilitlenir** (T6 akrabası — ama T6 JOIN-alanı sil/rename için transitional 3-adım; bu, base↔consumption select bağımlılığı).
 - **Belirti:** base tek-başına aktive → `Field ZSD001_V_INVOICE-KLM_CIKIS_ULKESI is still being used in view ZSD001_C_INVOICE` (aktif consumption hâlâ eski adı kullanıyor). Consumption tek-başına → `column klm_musteri_ulkesi is unknown` (aktif base hâlâ eski). Deadlock.
 - **ÇÖZÜM:** her iki DÜZELTİLMİŞ kaynağı **inaktif upload** et (push, activate etme), sonra **tek POST'ta** `adt_activate(base, also=[consumption])` → atomik co-activation (`activationExecuted=true`, refs=her ikisi). Yeni-yeni birlikte aktive olur, ara-durum kilidi oluşmaz.
+- **🔁 TEKRAR (2026-07-30) — pattern belgeliydi, KİMSE OKUMADI.** Aynı sınıf ikinci kez yaşandı: bir base view'da `islem`→`islem_turu` rename edildi, consumption o alanı seçiyordu. **Belirtiler bu maddedekiyle birebir aynı çıktı** (`... is still being used as a view field in view ...` / `The column ... is unknown`) ve çözüm de aynıydı. **Bedeli:** iki başarısız aktivasyon turu. **Asıl bulgu teknik değil süreçsel:** push paketini hazırlayan ajan, onaylayan lider ve icra eden gateway — **üçü de obje-tipi playbook'unu (bu dosyayı) taramadan** "önce base, sonra consumption" planı kurdu; gateway çözümü **yeniden keşfetti**. Kayıp kurtarılabilir ve gürültülüydü (aktivasyon bağırır) → runtime gate'e ait DEĞİL, **disipline** ait: *push/aktivasyon planı yazmadan önce obje-tipi playbook'unun tuzak listesi taranır* — özellikle **alan RENAME/SİL** içeren her değişiklikte (T6 + T11 birlikte). Kural: **kırıcı alan yeniden-adlandırması = tüm tüketicilerle ATOMİK aktivasyon**, tıpkı BDEF+behavior gibi.
 - **T11-a — `content_mismatch` false-alarm:** co-activation sonrası tool `content_mismatch=true` dönebilir — stale `_LAST_PUSHED` baseline aktifi ESKİ kaynakla kıyaslar. Körü körüne "başarısız" sayma → **`adt_get version=active` ile bağımsız teyit** (kaynakta yeni join/alan var mı). Araç-readback ≠ canlı gerçek (feedback_arac-basarisizligini-zararsiz-sayma tersi de geçerli: false-NEGATIF).
+
+### T12 — `concat` **arg1'in SONDAKİ BOŞLUKLARINI SİLER** → ayıraçlı birleştirme sessizce bozulur; çözüm `concat_with_space` (2026-07-28, ZSD001 birleşik kimlik kolonu)
+> **Ne zaman:** iki kolonu görünür bir ayıraçla birleştiriyorsun — `"KNT1010110101 · 34RRR334"` gibi. Sezgisel yazım **yanlış çıktı üretir ve hiçbir hata vermez.**
+
+- **Belirti (ölçüldü, canlı):**
+  ```
+  concat( col_a, concat( ' · ', col_b ) )   ->  "KNT1010110101 ·34RRR334"   ← ayıraçtan SONRA boşluk YOK
+  ```
+  Aktivasyon geçer, syntax check geçer, ATC geçer. Yalnız **çıktıya bakarsan** görürsün.
+- **Kök neden:** CDS/OpenSQL `concat` **birinci argümanın sondaki boşluklarını kırpar**. `' · '` literali arg1 konumuna düştüğü an `' ·'` olur. İç içe yazımda literal **iç** `concat`'in arg1'idir → boşluk orada ölür.
+- **⛔ ÇALIŞMAYAN "düzeltme":** literali dışa almak da **kurtarmaz** — `concat( concat( col_a, ' · ' ), col_b )` bu kez **dış** `concat` arg1'in (yani birleşimin) sondaki boşluğunu siler → aynı sonuç. *Ölçmeden "böyle olur" deme; bu varyant bug-gate'te önerildi, backend ölçümüyle çürütüldü.*
+- **✅ ÇALIŞAN (KANONİK):**
+  ```
+  concat_with_space( concat_with_space( col_a, '·', 1 ), col_b, 1 )   ->  "KNT1010110101 · 34RRR334"
+  ```
+  Üçüncü argüman eklenen boşluk sayısıdır; ayıracı **boşluksuz** ver, boşlukları fonksiyon koysun.
+- **🆕 PRECEDENT KAYDI — `concat_with_space` VIEW ENTITY'de ÇALIŞIYOR (2026-07-28 aktivasyon + readback ile kanıtlandı).** O tarihe kadar codebase'deki tüm kullanımları **klasik DDL view**'daydı; view entity precedent'i YOKTU ve bu, BE-27 gereği bir risk olarak işaretlenmişti. **Artık kanıtlı — bir daha riskli sayma.**
+  ⚠ Yan gözlem: **Open SQL freestyle ucu** `CAST( concat_with_space( col, '<literal>', 1 ) AS CHAR(n) )` çağrısını **400** ile reddediyor. Bu bir **endpoint** sınırıdır, **dil sınırı DEĞİL** — CDS derleyicisi kabul etti. Data-preview'ın reddini "CDS bunu desteklemiyor" diye okuma (T13'ün akrabası).
+- **Neden sessiz:** birleşim dalı çoğu zaman **hiç tetiklenmez** (her iki kolonun da dolu olduğu satır yoksa). Vakada defekt aylardır canlıydı ve **hiç görünmemişti**; ancak veri koşulu oluştuğunda ortaya çıkacaktı. ⇒ Bir ifadeyi TAŞIRKEN kopyalama — **canlı koş ve çıktısını gör**.
+- **Reviewer dersi:** bug-checklist-BE → "ayıraçlı `concat` birleştirmesi: literal ayıracın boşlukları **kırpılır** → `concat_with_space` kullan; taşınan ifade **çıktısıyla** doğrulanır".
+
+### T13 — ADT data-preview **BOŞ CHAR'ı `null` GÖSTERİR** → "null" ekran çıktısı NULL kanıtı DEĞİL (2026-07-28)
+- **Belirti:** data-preview / `adt_sql_query` çıktısında bir CHAR kolonu `null` görünüyor. Buna dayanıp `coalesce`/`IS NULL` mantığı kuruluyor.
+- **Ölçüm (aynı tabloda):** `WHERE col IS NULL` → **0 satır** · `WHERE col = ''` → **17 satır**. Yani değerler **BOŞ**, NULL değil; `null` sadece görüntüleme biçimi.
+- **Neden önemli:** üç değerli mantıkta ikisi farklı davranır — `col <> ''` boş için **FALSE**, NULL için **UNKNOWN** üretir. `CASE`/`WHERE` dallarında bu fark **sessizce başka dal seçtirir**. Gerçek NULL genelde **LEFT JOIN eşleşmemesinden** doğar (o da ayrı bir dal).
+- **Kural:** NULL'lığı **ekrandan okuma, `IS NULL` ile ÖLÇ.** Bir CASE'in NULL davranışına güveniyorsan, kaynağa **tuzak notunu yaz** — yoksa sonraki okuyan "NULL kontrolü unutulmuş" deyip `coalesce` ekler ve kasıtlı fallback'i öldürür.
+- **Akraba araç sınırları (aynı uç, aynı ders — "400 = endpoint sınırı, dil sınırı değil"):** `adt_sql_query` freestyle ucu `IN ( … )` listesini, 8+ kolonlu `GROUP BY`/`ORDER BY`'ı ve join + çok-`WHEN` `CASE` kombinasyonunu **400**'lüyor. OR-zinciri / az-kolon / tek-`WHEN` ile aşılır. **Aracın reddini dilin reddi sanma;** capability kararını canlı aktivasyonla ver (T9 ile aynı ilke).

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """UserPromptSubmit — tarayıcı/UI-doğrulama + yapısal-kod-arama akış nudge'ları.
 
+⚠ AD TARİHSELDİR (2026-07-31, T0.11): "skill_injector" artık skill ENJEKTE ETMİYOR —
+yalnız 2 akış-nudge regex'i (browser + ast-grep). Ad, settings kablolamasını kırmamak
+için korunuyor; rename ayrı karar (çift-katman: settings.template + tüm projeler).
+
 ⚠ 2026-07-10 SKILL-INJECTION REDİZAYNI: SAP-işi tespiti (`_STRONG`/`_TRANSPORT`) ve
 worktype→checklist (`_WORKTYPES`) BU HOOK'TAN KALDIRILDI. Neden: prompt-KEYWORD regex'i
 kırılgandı ("CDS view yarat" kaçtı, İngilizce "public transport" yanlış-tetikledi) ve

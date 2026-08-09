@@ -5,8 +5,17 @@
   QA  → salt-okunur (mutasyon reddedilir)
   PRD → salt-okunur (mutasyon reddedilir)
 
-Kaynak önceliği: .conn_adt dosyası (otoriter) → os.environ (fallback) → DEV (fail-safe + uyarı).
+Kaynak önceliği: .conn_adt dosyası (otoriter) → os.environ (fallback) → UNKNOWN (FAIL-CLOSED).
 Tier her çağrıda taze okunur (switch_tier.py ile değişim aynı oturumda görülebilir).
+
+⚠ 2026-08-01 bug-avı KAYIT-1 (iki kusur, kullanıcı kararı "fail-closed + tam eşleşme"):
+  1. Eskiden tier çözülemezse **DEV** dönüyordu = koruma katmanı, girdisi eksikken
+     korumayı KAPATIYORDU (en izinli değere düşme). Artık `TIER_UNKNOWN` döner;
+     mutasyon guard'ları (require_writable_tier) UNKNOWN'ı REDDEDER. Salt-okuma
+     serbest kalır (ADR 0011 hassas-veri kapısı kendi kuralıyla işler).
+  2. Satır eşleşmesi `startswith("ADT_SAP_TIER")` idi → `ADT_SAP_TIER_OLD=DEV` gibi bir
+     satır, gerçek `ADT_SAP_TIER=PRD` satırından ÖNCE geliyorsa tier'ı GASP ediyordu.
+     Artık anahtar '=' ile ayrılıp TAM karşılaştırılır (`_conn_line_value`).
 
 Referans: governance/decisions/0010-tier-bazli-readonly-guard.md
 """
@@ -26,28 +35,75 @@ _TIER_ALIASES = {
 }
 
 
+# Tier çözülemedi. Mutasyon guard'ları bunu REDDEDER (fail-closed); "DEV varsaymak"
+# yasak — koruma katmanı girdisi eksikken korumayı kapatamaz (KAYIT-1).
+TIER_UNKNOWN = "UNKNOWN"
+
+
 def _normalize_tier(raw: str | None) -> str | None:
     if not raw:
         return None
     return _TIER_ALIASES.get(raw.strip().upper(), raw.strip().upper())
 
 
+def _conn_line_value(line: str, key: str) -> str | None:
+    """`.conn_adt` satırından değeri döndür — **TAM ANAHTAR** eşleşmesi (KAYIT-1/2).
+
+    Eski `s.startswith(key)` deseni ÖNEK eşleşiyordu: `ADT_SAP_TIER_OLD=DEV` satırı
+    gerçek `ADT_SAP_TIER=PRD` satırından önce gelirse tier'ı ele geçiriyordu.
+    Burada anahtar '=' ile ayrılır, strip edilir ve TAM karşılaştırılır; yorum
+    satırları (#) ve anahtarsız satırlar atlanır. Boşluklu yazım (`KEY = deger`)
+    eskisi gibi desteklenir.
+    """
+    s = line.strip()
+    if not s or s.startswith("#") or "=" not in s:
+        return None
+    k, v = s.split("=", 1)
+    if k.strip() != key:
+        return None
+    return v.strip()
+
+
 def get_active_tier() -> str:
-    """Aktif sistemin tier'ını döndür (DEV/QA/PRD). Bulunamazsa DEV (uyarı loglar).
+    """Aktif sistemin tier'ını döndür (DEV/QA/PRD). **Çözülemezse `TIER_UNKNOWN`.**
 
     Otoriter kaynak .conn_adt dosyasıdır; env değişkeni stale olabilir (dotenv override).
+    UNKNOWN = "bilmiyoruz" → mutasyon guard'ları reddeder (fail-closed, KAYIT-1);
+    DEV varsayımı YASAK (PRD'de olup DEV sanma riski).
     """
     # 1) .conn_adt dosyası (otoriter)
     try:
         from sap_adt_lib import get_conn_path  # type: ignore
         p = get_conn_path()
         if p and p.exists():
-            for line in p.read_text(encoding="utf-8").splitlines():
-                s = line.strip()
-                if s.startswith("ADT_SAP_TIER") and "=" in s:
-                    t = _normalize_tier(s.split("=", 1)[1])
-                    if t:
-                        return t
+            # ⚠ `utf-8-sig` (AV-02) + `_conn_line_value` TAM anahtar (KAYIT-1) BİRLİKTE:
+            # BOM'lu dosyada İLK anahtar sessizce kaybolur (`str.strip()` BOM'u SİLMEZ);
+            # tier ilk satırdaysa PRD → eskiden "DEV varsayıldı"ya düşerdi, artık UNKNOWN
+            # olurdu — yani BOM tek başına da korumayı yanlış tarafa çevirebiliyordu.
+            # ⚠ SON-KAZANIR + ÇAKIŞMA TESPİTİ (2026-08-01 bug-avı, W2-MG-01).
+            # ÖLÇÜLDÜ: aynı anahtarın İKİ KEZ geçtiği bir `.conn_adt`'de
+            #   bu okuyucu (eski: ilk-kazanır) → DEV
+            #   `dotenv` (gerçek istemcinin kullandığı; `sap_adt_lib` `load_dotenv`) → PRD
+            # Yani guard "DEV, mutasyon serbest" derken bağlantı PRD'ye gidiyordu —
+            # sessiz yanlış-sistem yazımı. Tetikleyici bizim KENDİ mesajımız: fail-closed
+            # uyarısı ".conn_adt'ye ADT_SAP_TIER=... EKLE" diyor; ekleyen çift anahtar üretir.
+            # (switch_tier dosyayı KOPYALADIĞI için çift üretmez — kaynak elle düzenlemedir.)
+            # Politika: otorite dotenv'dir → SON değer alınır; farklı değerlerle çakışma
+            # varsa hangi sistemde olduğumuzu BİLMİYORUZ → UNKNOWN (fail-closed).
+            degerler = [t for t in
+                        (_normalize_tier(_conn_line_value(ln, "ADT_SAP_TIER"))
+                         for ln in p.read_text(encoding="utf-8-sig").splitlines())
+                        if t]
+            if degerler:
+                if len(set(degerler)) > 1:
+                    log.warning(
+                        "ADT_SAP_TIER .conn_adt'de ÇAKIŞIK tanımlı (%s) → tier=UNKNOWN "
+                        "(fail-closed). Bağlantı katmanı dotenv ile SON değeri kullanır; "
+                        "guard ile bağlantı AYRIŞIR → yanlış sisteme yazım riski. "
+                        "Çözüm: fazla satırı SİL (ekleme değil DEĞİŞTİRME) ya da "
+                        "scripts/switch_tier.py kullan.", " ≠ ".join(dict.fromkeys(degerler)))
+                    return TIER_UNKNOWN
+                return degerler[-1]
     except Exception as exc:  # pragma: no cover - defensive
         log.warning("tier: .conn_adt okunamadı (%s), env'e düşülüyor", exc)
 
@@ -56,26 +112,35 @@ def get_active_tier() -> str:
     if env_t:
         return env_t
 
-    # 3) Fail-safe: DEV + görünür uyarı (mevcut/eski .conn_adt'ler kırılmasın diye)
+    # 3) FAIL-CLOSED: bilinmiyor → mutasyon reddedilecek (salt-okuma serbest kalır)
     log.warning(
-        "ADT_SAP_TIER tanımlı değil → DEV varsayıldı. "
-        ".conn_adt'ye 'ADT_SAP_TIER=DEV' ekle veya scripts/switch_tier.py kullan."
+        "ADT_SAP_TIER çözülemedi → tier=UNKNOWN; MUTASYON REDDEDİLİR (fail-closed). "
+        ".conn_adt'ye 'ADT_SAP_TIER=DEV|QA|PRD' ekle veya scripts/switch_tier.py kullan."
     )
-    return "DEV"
+    return TIER_UNKNOWN
 
 
 def _conn_value(key: str, default: str) -> str:
-    """`.conn_adt`'den bir değeri oku (env fallback, sonra default)."""
+    """`.conn_adt`'den bir değeri oku (env fallback, sonra default).
+
+    ⚠ **SON-KAZANIR** (W2-MG-01): bu fonksiyonun tüketicisi ADR 0010 bağlantı-kayması
+    guard'ıdır ve onun işi "MCP'nin BAĞLI OLDUĞU sistem ile `.conn_adt`'nin gösterdiği
+    sistem aynı mı" sorusudur. Karşılaştırma, istemcinin FİİLEN kullanacağı değere göre
+    yapılmalı; istemci `load_dotenv` ile okur ve dotenv'de **son tanım kazanır**. Eski
+    ilk-kazanır davranışı, çift-anahtarlı bir dosyada guard'ı gerçeklikten koparıyordu
+    (guard `dev.test` kıyaslarken bağlantı `prd.test`'e gidiyordu → mismatch GÖRÜNMEZ).
+    """
     try:
         from sap_adt_lib import get_conn_path  # type: ignore
         p = get_conn_path()
         if p and p.exists():
-            for line in p.read_text(encoding="utf-8").splitlines():
-                s = line.strip()
-                if s.startswith(key) and "=" in s:
-                    v = s.split("=", 1)[1].strip()
-                    if v:
-                        return v
+            son = None
+            for line in p.read_text(encoding="utf-8-sig").splitlines():  # BOM (AV-02)
+                v = _conn_line_value(line, key)  # TAM anahtar (önek-gaspı yok — KAYIT-1)
+                if v:
+                    son = v
+            if son:
+                return son
     except Exception:
         pass
     return os.getenv(key) or default

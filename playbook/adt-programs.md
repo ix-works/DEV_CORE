@@ -193,6 +193,22 @@ python scripts/push_textpool.py --program ZSD001_P_SOZLESME_KOPYALA --transport 
 
 **Payload konumu:** paket içinde kalıcı → `ERP/<MOD>/<PKG>/programs/textpool/{symbols,selections}.txt`.
 
+**OKUMA reçetesi (yazma yukarıda; okuma AYRI Accept ister) — canlı-doğrulandı 2026-07-31:**
+
+| GET | `Accept` | Sonuç |
+|---|---|---|
+| herhangi biri | `text/plain` | ⛔ **406** — sunucu kabul ettiği tipi **yanıt gövdesinde bildirir** |
+| `/sap/bc/adt/textelements/programs/<prog>` (kök) | `application/vnd.sap.adt.textelements.v1+xml` | ✅ 200 |
+| `…/source/symbols?version=active` | `application/vnd.sap.adt.textelements.symbols.v1` | ✅ 200 |
+| `…/source/selections` | `application/vnd.sap.adt.textelements.selections.v1` | ✅ 200 |
+
+→ **Kural:** kök obje ile alt-obje **aynı** Accept'i kullanmaz; her alt-kaynak **kendi tipini**
+bildirir. Tipi tahmin etme — 406 gövdesini oku, sunucu doğru tipi orada yazar.
+📌 Bu, `adt-message-class.md` §19'daki (`adt_msgclass_read`, "Endpoint tuzakları" tablosu)
+**"API'yi dokümandan değil SUNUCUDAN doğrula"** meta-kuralının aynı uygulaması (orada da reference impl'in `.v2+xml` Accept'i 406 dönmüştü).
+⚠ Doğrulama okumasında `?version=active` ver — aksi hâlde inaktif/working sürüm döner ve
+"yüklendi" sanırsın (§23.7 madde 6).
+
 Örnek: `ZZ1_PRICE_CODE_INV_BDI` alanının rollname'i `ZZ1_PRICE_CODE_INV` → `DATA gv_price TYPE zz1_price_code_inv.`
 
 ---

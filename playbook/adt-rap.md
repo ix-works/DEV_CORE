@@ -766,16 +766,16 @@ create_by_destination Path Prefix'i **her zaman** prepend ettiği için:
 - **Lokal `CALL FUNCTION` (RFC DESTINATION'sız) sorunsuz** (dış comm yok → MESSAGE yok). Bu yüzden RFC-tabanlı read (GetBalance) ilk seferde çalıştı, HTTP uğraştırdı.
 - Klasik SEGW/DPC normal context'te koşar → orada MESSAGE/HTTP hatası dump etmez; **RAP daha katı.**
 
-### Teşhis tekniği — RAP-dışı classrun probe (+ load-cache tuzağı)
+### Teşhis tekniği — RAP-dışı classrun probe (+ "eski çıktı" tuzağı)
 Destination'ı handler'a gömmeden ÖNCE **`if_oo_adt_classrun` probe** ile test et — classrun **RAP BO context'i DIŞINDA** koşar → MESSAGE dump etmez, gerçek HTTP status/exception görünür. create_object.py (shell) + push_object.py (source) + `adt_classrun`.
-- ⚠️ **classrun LOAD-CACHE tuzağı:** runtime yüklenen class'ı cache'ler → source'u düzenleyip tekrar koşunca **ESKİ çıktı** gelir (değişmez!). **Cache bust = YENİ class adı** (`Z..._PRB2`). Belirti: edit'e rağmen çıktı hiç değişmiyor.
+- ⚠️ **"Edit ettim ama ESKİ çıktı geliyor" / "does not implement ...~main"** (2026-07-31 düzeltmesi — eski "LOAD-CACHE → yeni class adı" kaydı **YANLIŞTI**, geri alındı): iki gerçek sebep var — (1) **source push edildi ama AKTİVE EDİLMEDİ** → classrun aktif sürümü koşar, sen inaktif sürümü düzenlemişsindir; (2) **çağıran süreç bayat stateful ADT oturumu** tutuyor → obje başka süreçte aktive edildiyse bu oturum görmez. Çare: `adt_activate` + **`adt_inactive_objects`** ile doğrula (⚠ `version="active"` metadata'sı boş kabuk için de "active" der — kanıt değildir) · sonra oturumu **RESET** et (`new_session()`; `run_classrun` otomatik yapar). ⛔ **Yeni probe adı (`Z..._PRB2`) AÇMA** — iki kez denendi, çözmedi, çöp obje bıraktı. Detay: [`adt-classes.md`](adt-classes.md) §24.9.
 
 ### Servis adı kontrolü
 Teknik servis (`API_..._SRV`) vs Gateway Z-alias (`ZAPI_..._SRV`) ayrı objelerdir. Hangisi aktif/yetkili: `/$metadata` → **200 vs 403/404**. ZSD001'de teknik ad 200, Z-alias 403 → teknik adı kullandık.
 
 ### Reçete (özet sıra)
 1. SM59 destination: **SSL Active + Basic Auth stored user** (operatör/kullanıcı; ADR 0005-C → AI yaratmaz).
-2. classrun probe (yeni-ad) ile destination'ı doğrula → 200 + csrf=VAR.
+2. classrun probe ile destination'ı doğrula → 200 + csrf=VAR. (Probe'u **aktive et** ve `adt_inactive_objects` ile doğrula; ad değiştirmeye gerek YOK.)
 3. Manager'da `create_by_destination` + `set_request_uri( TAM path )` + GET(csrf)→POST. **Parola yok.**
 4. Comm güvenilir → RAP handler'da çalışır (MESSAGE-dump sadece comm kopmasında).
 5. Probe class'larını SİL (adt_delete), kaynak-kodda kimlik olmadığını doğrula.
@@ -824,7 +824,8 @@ ae   = re.search(r'activationExecuted="(\w+)"', r.text)        # "true" olmalı
 errs = re.findall(r'type="E"[^>]*>.*?<txt>([^<]+)', r.text, re.S)  # boş olmalı
 aktif = ae and ae.group(1)=="true" and not errs                # ikisi de değilse FAIL
 ```
-Hazır helper: `create_rap_service.py::verify_active()`. **`severity="E"` aramak YETMEZ** — `<chkl:messages>` formatı + `activationExecuted` flag'ı şart. Function import beklerken son adım: metadata'da `<FunctionImport Name="X">` GERÇEKTEN var mı GET'le doğrula (republish sonrası). Bu kural [[feedback_done-tam-kapsam-dogrula]] + lessons PATTERN #4/#9'un aktivasyon-anı enforcement'ı.
+Hazır helper: `create_rap_service.py::verify_active()`. **`severity="E"` aramak YETMEZ** — `<chkl:messages>` formatı + `activationExecuted` flag'ı şart.
+⚠️ **`adtcore:version="active"` de TEK BAŞINA kanıt değildir** (2026-07-31 ölçümü): **boş kabuk için de "active" der** — kabuk da bir aktif sürümdür. Bağımsız kanıt **`adt_inactive_objects`** (worklist boş mu) + aktif kaynağın **içerik/bayt** kıyası. Aktif kaynağı çekerken **`?version=active` parametresini AÇIKÇA ver**: ADT'nin varsayılanı **İNAKTİF** sürümdür (aynı sınıf: parametresiz 10.659 bayt dolu / `version=active` 192 bayt boş kabuk) → parametresiz doğrulama, hiç aktive edilmemiş objeye "dolu ve geçerli" der. Vaka: [`adt-classes.md`](adt-classes.md) §24.9. Function import beklerken son adım: metadata'da `<FunctionImport Name="X">` GERÇEKTEN var mı GET'le doğrula (republish sonrası). Bu kural [[feedback_done-tam-kapsam-dogrula]] + lessons PATTERN #4/#9'un aktivasyon-anı enforcement'ı.
 
 ---
 

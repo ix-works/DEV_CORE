@@ -48,25 +48,77 @@ ALIAS_PATTERN = re.compile(
 SKIP_TABLE_PREFIXES = ('z', '$session', 'reqd_', 'confd_', 'projection', 'abap')
 
 
-def fetch_table_fields(client, table_name: str) -> set[str]:
-    """SAP'den tablo source'unu çekip field adlarını döner."""
-    try:
-        r = client.session.get(
-            client.url + f'/sap/bc/adt/ddic/tables/{table_name.lower()}/source/main',
-            params={'sap-client': '100', 'sap-language': 'TR'},
-            headers={'Accept': 'text/plain'},
-            verify=False, timeout=10
-        )
-        if r.status_code != 200:
-            return set()
-        # 'fieldname : dtel;' pattern
-        fields = set(re.findall(
-            r'^\s*(?:key\s+)?([a-z][a-z0-9_]*)\s*:\s*[a-z][a-z0-9_]*',
-            r.text, re.MULTILINE
-        ))
-        return {f.lower() for f in fields}
-    except Exception:
-        return set()
+FIELD_LINE = re.compile(
+    r'^\s*(?:key\s+)?([a-z][a-z0-9_]*)\s*:\s*[a-z][a-z0-9_]*', re.MULTILINE | re.IGNORECASE)
+
+# INCLUDE iki biçimde gelir (canlı ölçüm 2026-07-30):
+#   `include emara`                          ← çıplak (noktalı virgül bile olmayabilir)
+#   `likp_status : include likp_status;`      ← adlandırılmış
+# ⚠ Satır-başına DEMİRLENMİŞ: serbest metinde geçen "include for ..." gibi ifadeler
+# include adı sanılırsa çözülemeyen-liste şişer ve gerçek bulgular "doğrulanamadı"ya
+# düşer — yani gürültüyü kesmek korumayı deler. Demirleme bunu kapatır.
+INCLUDE_LINE = re.compile(
+    r'^\s*(?:[a-z][a-z0-9_]*\s*:\s*)?include\s+(/?[a-z][a-z0-9_/]{2,})\s*;?\s*$',
+    re.MULTILINE | re.IGNORECASE)
+
+_KAYNAK_UCLARI = ('structures', 'tables')
+_SOURCE_CACHE: dict = {}
+
+
+def _fetch_source(client, ad: str) -> str:
+    """DDIC objesinin DDL source'u (structures → tables sırası). Önbellekli."""
+    anahtar = ad.lower()
+    if anahtar in _SOURCE_CACHE:
+        return _SOURCE_CACHE[anahtar]
+    from urllib.parse import quote
+    metin = ''
+    for uc in _KAYNAK_UCLARI:
+        try:
+            r = client.session.get(
+                client.url + f'/sap/bc/adt/ddic/{uc}/{quote(anahtar, safe="")}/source/main',
+                params={'sap-client': '100', 'sap-language': 'TR'},
+                headers={'Accept': 'text/plain'}, verify=False, timeout=15)
+            if r.status_code == 200 and r.text.strip():
+                metin = r.text
+                break
+        except Exception:
+            continue
+    _SOURCE_CACHE[anahtar] = metin
+    return metin
+
+
+def fetch_table_fields(client, table_name: str, derinlik: int = 4) -> tuple:
+    """Tablonun alan adları — INCLUDE'lar ÖZYİNELİ çözülerek. Dönüş: (alanlar, çözülemeyenler).
+
+    ⚠ NEDEN ÖZYİNELİ (canlı ölçüm 2026-07-30): S/4 standart tabloları alanlarını
+    büyük ölçüde INCLUDE yapılarından alır — **istisna değil, kural**. `MARA`'nın ~250
+    alanının 248'i `include emara`'dan gelir (doğrudan yalnız `key mandt`, `key matnr`);
+    `LIKP` durum alanları `likp_status : include likp_status;` içindedir. Eski sürüm
+    yalnız tablonun kendi gövdesine baktığı için `mara.matkl` · `mara.meins` ·
+    `likp.wbstk` referansı veren HER CDS'te yanlış bulgu üretiyordu.
+
+    Çözülemeyen include kalırsa bunu ÇAĞIRANA bildirir: "bulunamadı ≠ yok" — kanıtlanamayan
+    yokluk bulgu olarak raporlanmaz, `DOĞRULANAMADI` olarak ayrı listelenir.
+    """
+    alanlar, cozulemeyen, gorulen = set(), [], set()
+    kuyruk = [(table_name.lower(), 0)]
+    while kuyruk:
+        ad, d = kuyruk.pop()
+        if ad in gorulen:
+            continue
+        gorulen.add(ad)
+        metin = _fetch_source(client, ad)
+        if not metin:
+            if ad != table_name.lower():
+                cozulemeyen.append(ad)
+            continue
+        alanlar |= {f.lower() for f in FIELD_LINE.findall(metin)}
+        if d >= derinlik:
+            cozulemeyen.extend(i.lower() for i in INCLUDE_LINE.findall(metin))
+            continue
+        for inc in INCLUDE_LINE.findall(metin):
+            kuyruk.append((inc.lower(), d + 1))
+    return alanlar, cozulemeyen
 
 
 def main() -> int:
@@ -126,31 +178,51 @@ def main() -> int:
         print(f'UYARI: SAP bağlantısı kurulamadı, validator atlandı: {e}', file=sys.stderr)
         return 0
 
-    violations = []
+    violations, dogrulanamayan = [], []
     print(f'Source: {path.name} — {len(candidates)} potansiyel standart tablo referansı kontrol ediliyor...')
 
     for table, fields in candidates.items():
         # Sadece bilinen SAP standart tablolar (basit heuristic — Z olmayan, 4-5 char)
-        actual_fields = fetch_table_fields(client, table)
+        actual_fields, cozulemeyen = fetch_table_fields(client, table)
         if not actual_fields:
             # Tablo bulunamadı, skip (alias olabilir veya CDS view olabilir)
             continue
 
         for field in fields:
-            if field not in actual_fields:
-                # Yakın alternatif bul (basit)
-                similar = [f for f in actual_fields if abs(len(f) - len(field)) <= 2 and (f[:3] == field[:3] or f[-3:] == field[-3:])]
-                violations.append({
-                    'table': table.upper(),
-                    'field': field,
-                    'similar': similar[:3],
-                })
+            if field in actual_fields:
+                continue
+            if cozulemeyen:
+                # "BULUNAMADI ≠ YOK": bu tablonun include zincirinin bir kısmı çözülemedi,
+                # alan orada olabilir. Yokluğu KANITLAYAMADIĞIMIZ için bulgu yazmıyoruz.
+                dogrulanamayan.append({'table': table.upper(), 'field': field,
+                                       'cozulemeyen': cozulemeyen[:3]})
+                continue
+            # Yakın alternatif bul (basit)
+            similar = [f for f in actual_fields if abs(len(f) - len(field)) <= 2 and (f[:3] == field[:3] or f[-3:] == field[-3:])]
+            violations.append({
+                'table': table.upper(),
+                'field': field,
+                'similar': similar[:3],
+            })
+
+    if dogrulanamayan:
+        # stdout: bilgi — gate'i kırmaz. Sessizce yutmak da YASAK (yeşil ışık sanılır).
+        print(f'\n[DOĞRULANAMADI] {len(dogrulanamayan)} alan — include zinciri tam çözülemedi '
+              '(yokluk KANITLANMADI, bulgu sayılmadı):')
+        for d in dogrulanamayan:
+            print(f"  {d['table']}.{d['field']}  (çözülemeyen include: {', '.join(d['cozulemeyen'])})")
 
     if not violations:
-        print(f'OK — {path.name} tüm standart tablo alanları yeni sistemde mevcut')
+        print(f'OK — {path.name} standart tablo alanları doğrulandı '
+              f'(include zinciri özyineli çözüldü)')
         return 0
 
-    print(f'\n[BLOCKER] {len(violations)} standart tablo alanı yeni sistemde YOK:', file=sys.stderr)
+    # ⚠ ŞİDDET KELİMESİ: bu script'in çıktısı eskiden "[BLOCKER]" diyordu ama `run_review.py`
+    # onu 4 yerde de **WARNING**'e eşliyor → yazma bloklanmıyordu. Kelime ile kablolamanın
+    # ayrışması ajanları yanlış yönlendirdi (2026-07-30: bir ajan bunu BLOCKER sanıp raporladı).
+    # Şiddeti run_review atar; script yalnız BULGU bildirir.
+    print(f'\n[BULGU] {len(violations)} standart tablo alanı bulunamadı '
+          '(run_review şiddeti: WARNING):', file=sys.stderr)
     for v in violations:
         print(f"  {v['table']}.{v['field']}", file=sys.stderr)
         if v['similar']:

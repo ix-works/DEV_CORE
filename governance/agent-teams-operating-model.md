@@ -28,7 +28,7 @@ source: deep-research (4 paralel subagent, 2026-06-14) — Anthropic/Cognition/L
 
 → feature/research **fiziksel olarak SAP'ye yazamaz** (allowlist'te write araçları yok). Hook çağıran-ajanı ayırt edemediği için enforcement **allowlist ile** yapılır, hook ile değil.
 
-**Araç/kod/altyapı fix'i = LİDER'in işi (gateway'in DEĞİL):** paylaşılan tooling (`scripts/sap_adt_lib.py`, MCP server, validator/hook/checklist) bug'ı → gateway **DÜZELTMEZ**; ham hata + tanıyı lider'e raporlar, **lider kök-fix yapar** (en geniş context + paylaşılan altyapının tek sahibi → drift önlenir). Gerekirse gateway yalnız **SAP test objesi create/delete** ile lider'in fix'ini doğrular. Gateway'in lane'i = **SAP yazımı + geçici (CSRF/lock) retry + raporlama**; tooling kodu yazmak SAP yazımı değil, gateway lane'i dışıdır. (Kural 2026-06-14, kullanıcı tartışması.)
+**Araç/kod/altyapı fix'i — REVİZE 2026-08-01 (kullanıcı onaylı; ilk kural 2026-06-14):** paylaşılan tooling bug'ında gateway/expert'ler DÜZELTMEZ, lider'e raporlar (değişmedi). Liderin akışı artık `playbook/howto-infra-fix-proseduru.md`: **sınıflama+EXPRESS(S0-mekanik)+son-söz+commit+meta-infra = LİDER; kuyruk-fix'lerinin ÜRETİMİ = taze-spawn `infra-expert`** (worktree'de, F1-F5 + üç-bağlam-test zorunlu; gateway-paradigmasının infra'ya uygulanması — taze bağlam görev-bulaşmasını fiziksel keser). Gerekçe-evrimi: 'tek sahip' ilkesi korunur (infra'nın tek ÜRETİCİ-yazıcısı infra-expert, tek KARAR-vericisi lider); nokta-fix/bağlam-daralması riski taze-spawn'la çözülür.
 
 **ÇEKİRDEK DEĞİŞMEZLER — her rol tanımı taşır (ajan asla unutmasın):** ADR 0005 yasakları · **TAHMİN ETME** (mevcut artefakt/playbook/standard'dan doğrula, canlı teyit, "activated"a güvenme, DTEL/append adı önerme) · run_review pre-flight (yazma rolü). Bunlar (1) her `.claude/agents/*.md` system-prompt'una gömülü, (2) CLAUDE.md çekirdek-davranış satırıyla otomatik yüklenir, (3) spawn brief'inde tekrarlanır (savunma derinliği). Memory'deki feedback'ler **lider'e özeldir** → alt-ajana ulaşması için bu üç kanal şarttır (varsayma).
 
@@ -36,7 +36,7 @@ source: deep-research (4 paralel subagent, 2026-06-14) — Anthropic/Cognition/L
 
 > Eski **modül-feature roster** (se_a/se_b/booking = sap-feature) + **STANDING spawn (model B)** İPTAL. sap-feature/sap-research role-def'leri uyumluluk için durur; go-forward = bu.
 
-**Roller (KATMAN-bazlı):** `adt-gateway` (TEK yazıcı) · **`frontend-expert`** (tüm FE) · **`backend-expert`** (tüm ABAP/RAP) · **`bug-expert`** (adversarial kod-inceleme, read-only). **Uzmanlaştırma = grounding** (mecburi pre-flight okuma + kanonik desen pointer + MCP-routing + scoped tools + skill çağrısı), persona DEĞİL — araştırma kanıtı: "sen uzmansın" kod görevinde kazanç vermez (ADR 0018).
+**Roller (KATMAN-bazlı):** `adt-gateway` (TEK SAP-yazıcı) · **`frontend-expert`** (tüm FE) · **`backend-expert`** (tüm ABAP/RAP) · **`bug-expert`** (adversarial kod-inceleme, read-only) · **`infra-expert`** (paylaşılan-altyapı fix-üretimi; YALNIZ worktree+kuyruk-kaydı; howto-infra-fix ADIM-3). **Uzmanlaştırma = grounding** (mecburi pre-flight okuma + kanonik desen pointer + MCP-routing + scoped tools + skill çağrısı), persona DEĞİL — araştırma kanıtı: "sen uzmansın" kod görevinde kazanç vermez (ADR 0018).
 
 **BUG GATE (akış — Model A, lider-aracılı; 2026-06-16 ilk-koşuda netleşti):** Expert substantive build bitince → lider'e **`BUG_GATE_READY` + diff + niyet/spec + blast-radius** yollar (commit/kabul ÖNCESİ) → **lider TAZE bug-expert spawn edip** diff'i besler → verdict **PASS/WARNING/BLOCKER** (= ADR 0006 dili) → PASS=lider commit; BLOCKER/HATA/EKSİK=lider Expert'i `SendMessage` ile yeniden devreye alır (zorunlu fix). *Neden lider-aracılı: alt-ajan spawn edemez; "to=bug-expert" doğrudan mesaj alıcısız kalır (her review taze → koşan bug-expert yok).* **Kapsam = diff + blast-radius** (ne diff-only, ne whole-file). **Bulgu tipi:** HATA (bug) / EKSİK (must-do/UX karşılanmamış, "hata değil") / ÖNERİ (checklist-dışı, bağlayıcı DEĞİL). **Checklist-ihlali (HATA+EKSİK) = ZORUNLU FİX** — builder takdiri yok ("önemsiz" diyemez; yalnız "bu aslında ihlal değil, kanıt şu" diyebilir; ender belirsizlikte lider hakem). Checklist: `playbook/checklists/bug-checklist-{frontend,backend}.md` (*automatable → deterministik gate; semantik → bug-expert*). Sonuç her durumda lider'e tek-satır. **OPSİYONEL çok-bug-expert (lider takdiri):** read-only=yazma riski sıfır, maliyet=token+merge; **büyük diff → partition** (disjoint dilim, HIZ), **yıkıcı/geri-alınamaz işlem (tablo DROP/toplu delete) → diverse-lens panel** (farklı mercek, GÜVEN — same-lens popularity-vote değil), **küçük/reversible → tek expert**. Panel üyeleri de TAZE. Detay+eşik: ADR 0018.
 
@@ -47,9 +47,24 @@ source: deep-research (4 paralel subagent, 2026-06-14) — Anthropic/Cognition/L
 | **adt-gateway** | **STANDING** | Serileştirme (single-writer=routing) + uçuş-halindeki çok-adımlı işlem akıl-yürütmesi (lock→PUT→unlock). ⚠️ Bağlantı/CSRF/lock **MCP server'da** (ajanda değil) → lazy de güvenli; standing = verimlilik+marj. |
 | **backend-expert** | **LAZY** varsayılan · **bounded feature-standing** istisna | RAP yüksek-coupling (EML/det/val/draft/pricing-text) → feature başında kalk, **bitince ZORUNLU yık**. Tekil iş → lazy. |
 | **frontend-expert** | **LAZY** varsayılan · app-build'de **bounded-standing** | Çok-ekranlı tutarlı UX akışı → app-build boyunca standing; tekil ekran/fix → lazy. |
+| **infra-expert** | **HER ZAMAN LAZY + vaka-başına TAZE** | Görev-bağlamı bulaşması = düzeltilmeye çalışılan hastalığın kendisi; taze-spawn + worktree fiziksel izolasyon. |
 | **bug-expert** | **HER ZAMAN LAZY + her review TAZE** | Önceki bug context'i = saf kirlilik (yeni bug'ı eskiye benzetme failure-mode). Brief'e "önceki bug'a benzetme YASAK". Model-A da zorluyor (expert spawn edemez → lider taze spawn). |
 
 **Bounded-standing GUARDRAIL (eski model-B echo/kirlenme çöpüne dönme — Alt-B çok-dar):** (1) aynı anda **EN FAZLA 1** feature-expert standing (backend VEYA frontend) + gateway; gerisi lazy. (2) feature bitince/idle'da **zorunlu yık**. (3) **echo-reset tetiği:** ajan bayat-bağlam gösterirse (eski feature/obje adı, çözülmüş bug'a benzetme) → lider kill+taze re-spawn. (4) şüphede lazy. *bounded-standing ≠ standing-roster: tek, aktif, sınırlı, echo-korumalı.*
+
+**PLAN-ARTIFACT (radar 2026-08-01, ADOPT-2 — kullanıcı onaylı):** Çok-adımlı ve
+geri-alınamaz/maliyetli SAP zincirlerinde (örn. domain→DTEL→struct→tablo→CDS→BDEF; toplu
+silme; transport'a çok-objeli yazım) lider, dispatch'ten ÖNCE planı `.tmp/plan-<konu>.md`
+dosyasına yazar (adımlar + obje listesi + geri-alma notu) ve kullanıcı/oturum onayından
+geçirir. "Kararları önce topla" kuralının kalıcı-artefakt hali: RESUME kopmasında plan
+dosyadan rekonstrükte edilir; adım-fail'de baştan değil kalınan adımdan devam edilir.
+Tek-obje/S0 işlerde ZORUNLU DEĞİL (bürokrasi üretme).
+
+**P7 boşta-bekletme kuralı (2026-07-31 denetim ölçümü — 292 transcript):** ajan duvar-saatinin
+**%33'ü** "liderden yeni mesaj bekleyen" boşta ajanlardı. Kural: ajandan FİNAL raporu alınınca
+(bounded-standing gateway hariç) ajanı beklemede TUTMA — sonraki iş YENİ taze spawn'dır
+(açılış ~53K token maliyetine rağmen: context-kirlenmesi/echo riski + boşta-şişme > açılış).
+Metrik radar turunda izlenir (`agent_time_report` boşta-%; baseline %33, hedef <%15).
 
 **AUDIT:** alt-ajan TAM transcript SABİT adreste (`<session>/subagents/agent-<id>.jsonl`) → **`python scripts/agent_log.py --agent <isim>`** (arama YOK). Loop = **agent-to-agent** (auditable olduğu için); sorun görülürse lead-routed'a çevir.
 
@@ -72,7 +87,7 @@ Gateway'in tek amacı = **eşzamanlı yazıcıları serileştirmek**. Tek yazıc
 | **git commit** | — | **yalnız lider** |
 
 - **Tek cümle:** proje-geneli kural/yöntem .md = **LİDER**; belirli paketi/özelliği belgeleyen .md = o **feature ajanı**; **lider memory'si (Bölge D) = yalnız LİDER** (repo dışı ama Bölge A gibi korunur).
-- Araç/kod kök-fix'i = lider (§2). Yapısal naming/prefix kararı (paket .rules.md içinde bile) = lider.
+- Araç/kod kök-fix akışı = howto-infra-fix (lider sınıflar/kapatır; kuyruk-üretimi infra-expert) (§2). Yapısal naming/prefix kararı (paket .rules.md içinde bile) = lider.
 - **Enforcement = orantılı (1+2+3, kullanıcı kararı 2026-06-14):** (1) research SAP-write + Edit yok (sert); (2) lider tek-commit + diff-inceleme (sert geri-durdurucu); (3) rol prompt'larında bölge (savunma derinliği). Saf `tools:` allowlist yol-granüler DEĞİL + Bash süper-küme → tam-önleme için ileride PreToolUse yol-guard (hook stdin `transcript_path`'te `/subagents/` = takım üyesi tespiti) gerekir; şimdilik kapsam dışı (risk düşük: ajanlar prompt'a uyar + commit gate yakalar).
   - **DOĞRULANDI 2026-06-14 (ihlal + backstop çalıştı):** gateway, explicit "commit=lider" talimatına RAĞMEN increment-2'yi kendi `git commit`'ledi (Bash porozitesi — instruction tek başına yetmez). **Lider gün-sonu git-log denetiminde YAKALADI** (içerik doğruydu, geri alınmadı) → gateway-def'e ⛔ `git commit/push/add ASLA` eklendi. Ders: tam-önleme için PreToolUse git-guard (transcript_path `/subagents/`) gerçek değer; o gelene dek **lider HER commit öncesi `git log`/`git status` denetler** (sole-committer disiplini bu denetimle ayakta durur).
 
@@ -148,6 +163,22 @@ tekrar-okunan dosya, retry/patinaj noktası. Kaba wall-clock + tool-sayısı zat
 (`subagent_tokens`/`tool_uses`/`duration_ms`); öz-rapor bunun faz-kırılımını ekler. Analiz script şablonu:
 lider `scratchpad`'inde `agent_time_analysis.py` (transkript doluysa per-tool döker).
 
+**(4) HERHANGİ bir alt-ajanın "YAPILAMAZ"/olumsuz raporunu KANITSIZ KABUL ETME — SORGULA (lider; BAĞLAYICI).** **Her** alt-ajan (`adt-gateway`/`bug-expert`/`backend-expert`/`frontend-expert`/`sap-research`/`general` — gateway yalnız en sık örnek) "yapılamaz / desteklenmiyor / blocker / yok / bulunamadı" derse, bunu doğru kabul edip **ona göre işlem yapma veya durma**. Önce sorgula: bu **gerçekten imkânsız mı**, yoksa **"bu ajanın elindeki araçlarla/kapsamla yapamadı/bulamadı"** mı? Ajanın tool-görünümü repo'nun gerçek kabiliyetinden DARDIR. Protokol: (a) iddiayı **repo'da ara** — aynı işi yapan mevcut `scripts/*.py` / playbook reçetesi / alternatif yol var mı (`grep`/Glob); (b) varsa ajanı o yolla **yeniden yönlendir/taze-spawn et**; (c) yoksa iddiayı **kendin canlı doğrula**, sonra kullanıcıya ilet. **Ders (2026-06-22):** gateway "SRVB description typed-tool ile değişmez" dedi → lider kabul etti; oysa `scripts/sap_set_object_description.py` tam bu senaryo için (voyage "Sefer..." düzeltme) yazılmıştı. Bu, ajan-tarafı [[feedback_dogrula-once-flag-spekulatif-blocker-yasak]]'ın **lider-tarafı tamamlayıcısı**; kök ilke = TAHMİN YASAK = kanıtlı hareket et. Bkz. [[feedback_ajan-olumsuz-donusu-kanitla-sorgula]].
+
+### UI BUILD DONE-CRITERIA + LİDER DOĞRULAMA (ADR 0017 — Booking post-mortem)
+
+> Booking UI'da çok fazla amatör patinaj oldu çünkü (a) çalışan kardeş deseni yerine sıfırdan yazıldı, (b) ajan "done/verified" dedi ama runtime hata ancak kullanıcı test edince çıktı, (c) lider doğrulamadan kabul etti. Bunlar **bağlayıcı**:
+
+1. **Plumbing'i icat etme — içeriği değil (app-kopyalama DEĞİL):** Freestyle UI5+V2'nin **mekanik/plumbing** kısmı (save=sıralı `update(merge)`, nav=`to_X`, `setData` tam şekil, master-detail seçim-wiring, MERGE tarih-null) **tek-doğru-yol, uygulamadan bağımsız** → [`playbook/ui-freestyle-odata-v2.md`](playbook/ui-freestyle-odata-v2.md) **§K**'yı **referans al, sıfırdan icat etme** (icat = çözülmüş bug'ı geri getirmek). **Uygulamaya özel her şey BESPOKE yazılır** (entity/servis, alan listesi, ekran layout/grid, iş/gating kuralları, VH hedefleri, label, akış) — hiçbir ekran diğerinin kopyası değildir. Sınır: *framework-plumbing = reuse · iş-içeriği = bespoke*.
+2. **"done/verified" kanıtsız KABUL EDİLMEZ** (lider): UI build için → `check_ui5_freestyle_traps.py` PASS **+ runtime smoke** (G1 playwright-cli, yoksa elle console: zero render error + ana akış). SAP yazımı için → `adt_get` active readback. "node --check OK / XML well-formed" runtime/fonksiyonel hatayı YAKALAMAZ — yeterli değil.
+3. **Recon ≠ implementasyon:** Bir recon dokümanı "done" değildir. Çıkarılan kural/gating UI'a **gerçekten kodlandı mı** lider doğrular. *Done = tam kapsam:* "tamam" demeden önce çıktı, işin TAM kapsamına karşı madde-madde doğrulanır; bilinçli ertelenen parça açıkça flag'lenir + register'a yazılır (sessiz eksik = done değil).
+4. **Kör-bug YASAK:** "Kaydedilemedi" gibi opak hatada deneme-yanılma yapma → önce **gerçek hatayı** al (F12 Network/Console status+body, ya da gateway ile birebir replikte). Kanıtsız tek satır bile değiştirme.
+
+---
+
+
+**R3 — MEMORY KÖPRÜSÜ (2026-08-01, denetim):** Alt-ajan auto-memory'yi GÖRMEZ (resmî). Lider her substantive spawn'dan önce MEMORY.md'yi görev anahtar-kelimeleriyle tarar ve eşleşen 2-5 dersin ÖZÜNÜ brifin zorunlu 'Göreve-ilişkin dersler' alanına yazar (şablon: `claude/templates/spawn-brief.md` §6; eşleşme yoksa alanı 'ilgili ders yok' ile AÇIKÇA doldur — boş bırakma). Brifing-lint (watchdog_launch) şablon izlerini nudge'lar.
+
 ## 5. Gateway Gözlemlenebilirlik Protokolü (opak-patinaj önleme)
 Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
 1. **Deneme/eskalasyon merdiveni (kör döngü yerine):** obje başına **3 denemeye** kadar dene (geçici CSRF/lock vb.). 3'te çözülmezse → **ZORUNLU ARAŞTIRMA** (`playbook/<obje-tipi>.md` + `playbook/lessons-learned.md` + ilgili `playbook/checklists/` + hata pattern'i — yani lider takılınca neye bakıyorsa) → bulguyla devam. **Toplam 5 denemede** hâlâ başarısız → **DUR + lider'e gel** (ham hata + denenenler + araştırma bulgusu). Sınırsız/kör tekrar YASAK → patinaj 5 ile sınırlı.
@@ -158,6 +189,18 @@ Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
 
 ## 6. Maliyet / model katmanı
 Çok-ajan ~15× token. Opsiyonel katman: lider/gateway Opus, feature Sonnet, research Haiku. SAP precision gerektiğinde kaliteyi düşürme; tiering bir maliyet kaldıracı, zorunlu değil.
+
+**SPAWN-MODEL-FLOW (kullanıcı-onaylı matris, 2026-07-31 — denetim P8):** İki seviye:
+① **Politika = KULLANICI** — frontmatter varsayılanları yalnız kullanıcı-onaylı PR ile değişir.
+Onaylı matris: denetçi (bug-expert) + yazıcı (adt-gateway) + backend-expert = **opus SABİT**
+(asimetri ilkesi: denetçi/yazıcı asla düşürülmez); frontend-expert + sap-research +
+sap-feature = **sonnet** varsayılan. ② **Spawn-anı = LİDER, mekanik uygulama** — ITG kapsam
+sınıfından türetilir: S2/yeni-desen/karmaşık iş → `Agent(model:"opus")` ile YÜKSELT;
+sap-research'te mekanik envanter/döküm → `haiku` İNDİRİLEBİLİR; tabloda karşılığı olmayan
+durum/sapma → kullanıcıya sor. Brifin başına tek satır iz: "Model: X — rol×kapsam".
+⚠ Beyan ≠ fiilî model: atama transcript `message.model` alanından CANLI doğrulanır
+(allowlist geçersiz değeri sessizce inherit'e düşürür). Pilot karar kuralı: Sonnet'te
+bug-gate BLOCKER oranı veya rework turu ARTARSA o rol Opus'a geri döner.
 
 **Model-tiering DAİMA DECLARATIVE kalır (D34g, 2026-07-08):** tiering ajan-tanımı
 frontmatter'ında/spawn-parametresinde BEYAN edilir; hook/guard ile HARD-enforce EDİLMEZ

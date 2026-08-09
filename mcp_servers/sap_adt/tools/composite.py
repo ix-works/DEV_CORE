@@ -78,7 +78,16 @@ def _capture():
 
 
 def _exists(client, name: str, object_type: str) -> bool:
-    """Return True if object already exists (even inactive)."""
+    """Return True if object already exists (even inactive).
+
+    ⚠ ÖLÇÜLDÜ, BİLİNÇLİ BIRAKILDI (2026-08-01 bug-avı, "doğrulama koşamadı = doğrulandı"):
+    `get_object_metadata` her istisnayı yutup None döndürdüğü için buradaki `md is not None`
+    de hata durumunda "yok" der (sınıfın 6. örneği). FARK: buradaki yanlış "yok", tek
+    başına yıkıcı DEĞİL — çağıran hemen create'e gider ve SAP zaten var olan objeyi
+    reddeder (SAPObjectExistsError → yapılandırılmış hata; ikinci katman SAP'nin kendisi).
+    Üç-değerliye çevirmek 3 çağıranın sözleşmesini değiştirir; kanıtsız genişletme yapılmadı.
+    Değiştirilirse `_bos_sonuc_sinifi` (atom.py) kullanılmalı. Kayıt: infra-findings [ÖNERİ].
+    """
     try:
         with _capture():
             md = client.get_object_metadata(name, object_type=object_type)

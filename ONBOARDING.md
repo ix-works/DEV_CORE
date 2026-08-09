@@ -83,7 +83,7 @@ Junction bir "klasör görünümlü bağlantı"dır; hedefi (DEV_CORE) TEK fizik
 | Junction'a `rm -rf` / `Remove-Item -Recurse -Force` / `git clean` / `rimraf` / `rmdir /S` | **ASLA.** Özyinelemeli silme junction İÇİNE inip **hedefi (canlı çekirdeği) silebilir** — davranış toolchain-sürümüne bağlıdır (güncel git/PS'te link-sınırında durduğu test edildi; eski PS build'leri, `rimraf`, `robocopy /MIR`, eski `shutil.rmtree` TEST EDİLMEDİ). ⚠ **Seni durduran bir guard YOK:** `pre_tool_guard` R9 özyinelemeli-silme bloğu **2026-07-10'da KALDIRILDI** (bloklanan `rm -rf` yerine aynı dizin `shutil.rmtree` ile silindi → guard aracı değiştirtti, sonucu değil; ayrıca junction silme geri alınabilir: `team_setup.py --repair-junctions`). Negatif test: `rm -rf <proje>/core` ve `Remove-Item -Recurse core` → **exit 0**. Kural sende. |
 | Junction'ı KALDIRMAK gerekiyorsa | Yalnız **`rmdir <yol>`** (cmd, `/S` YOK) — sadece bağlantıyı söker, hedefe dokunmaz. |
 | Junction (yalnız link) silindiyse | Proje çalışmaz hale gelir (loader/hook/skill kaybı) → onarım: `team_setup.py --repair-junctions`. |
-| `<FROZEN_ROOT>` altına yazma | **R10** bloklar (bkz. §3). |
+| `<FROZEN_ROOT>` altına yazma | **Runtime guard YOK** (R10 2026-07-10'da kaldırıldı, bkz. §3) — koruma = disiplin kuralı; kalıcı koruma istenirse OS/ACL. |
 
 ## 5. OneDrive / yedekleme yazılımı uyarısı
 

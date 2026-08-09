@@ -108,9 +108,56 @@ define structure zsd000_s_ornek {
 - **`corrNr` CREATE icin query param** — `?corrNr=TRXXXXXX` — header olarak (`X-sap-adt-transport`) gecmek 400 verir
 - **`object_type='structure'`** — `'TABL/DS'` degil, SAPClient string alias bekliyor
 - **Lock 406 normaldir** — `push_object()` kendi fallback lock mekanizmasini kullaniyor, elle lock almaya gerek yok
-- **`WARNING: Active source differs`** mesaji normaldir — SAP pretty-printing yapiyor, aktivasyon basariliysa sorun yok
+- ⛔ **`WARNING: Active source differs` — "NORMALDIR" DEME, ÖLÇ.** *(2026-07-31'de düzeltildi;
+  eski hâli "SAP pretty-printing yapıyor, aktivasyon başarılıysa sorun yok" diyordu — **bu tavsiye
+  tehlikeliydi**.)* Fark **iki farklı şeyden** gelebilir ve ikisi aynı mesajı üretir:
+  · **zararsız:** SAP normalizasyonu (girinti, `//` yorumların atılması, gereksiz annotation'ın
+    silinmesi — ör. `@Semantics.unitOfMeasure : true` `UNIT` tipli alanda saklanmaz)
+  · **🔴 ÖLÜMCÜL:** kaynak **hiç persist etmedi**, canlıda **boş/eksik shell** duruyor.
+  **Ayırt etme (ucuz ve kesin): BÜYÜKLÜK KIYASLA.** Yüklenen 8.745 karakter ↔ canlı 159 karakter
+  ise bu pretty-print değil, **sessiz kayıp**tır. Vaka: `push_object` `[OK] Object activated` dedi,
+  canlıda **1 alanlık shell** vardı; yakalayan tek şey **readback gate**'i oldu — o olmasa "24 alan
+  aktif" diye raporlanacaktı. Kesin kanıt: `DD03L`'den **alan sayısı** oku.
 - **Dosya lokasyonu:** `ERP\{PACKAGE}\structures\{NAME}.ddls.asddls`
 - **Obje zaten varsa (409):** Direkt Adim 2'ye gec, push_object uzerine yazar
+
+---
+
+### 12.1 ⚠ STRUCTURE'A ÖZEL ÜÇ TUZAK (2026-07-31, canlı ölçüm)
+
+**① `push_object(object_type='structure')` SESSİZ FALSE-OK verir → HAM PUT kullan.**
+`[OK] Object activated successfully` basar ama kaynak **persist etmemiştir**. Kök sebep
+kütüphanenin kendi yorumunda yazılı (`sap_adt_lib.py`, `set_object_source` çevresi):
+**blue-DDIC** objelerinde `set_object_source` sessizce yazmaz → **ham PUT şarttır**.
+`create_structure.py`'nin deterministik ham-PUT yolu bu tuzağa **düşmez**; `push_object`'ın
+structure dalı **düşer**.
+→ Çalışan sıra: **`create_structure.py` (shell) → ham PUT (source) → `adt_activate`.**
+
+**② `adt_post_shell(structure)` DESTEKLENMİYOR** — `Unsupported object type: TABL/DS`.
+Ayrıca `push_object.py` **CLI**'si `--type structure` kabul etmez (choices dar), oysa
+`SAPClient.push_object` API'si destekler → **CLI/API asimetrisi**, script yazarken tuzak.
+
+**③ 🔴 DDL structure kaynağı `//` YORUMU KABUL ETMİYOR.**
+Yorumlu gövde → `HTTP 400 · ExceptionResourceAlreadyExists · "Can't save due to errors in
+source; execute check for details"`. Mesaj **yanıltıcıdır** (obje zaten var demiyor, kaynak
+hatalı diyor).
+
+| Varyant | Sonuç |
+|---|---|
+| annotation + yorum | **400** |
+| annotation YOK, yorum VAR | **400** |
+| **annotation VAR, yorum YOK** | **200** ✅ |
+| yorumlar ASCII-only (uzunluk aynı) | **400** |
+| yorumlar 60 karaktere kırpık | **400** |
+| yalnız tam-satır yorum · yalnız inline yorum | **ikisi de 400** |
+
+**Elenen sebepler:** annotation'lar · non-ASCII (Türkçe/emoji) · satır uzunluğu · yorumun
+tam-satır mı inline mı olduğu.
+⚠ *"`//` yorumunu **hiç** kabul etmiyor"* **kesin kanıtlanmadı** — minimal probe (çalışan
+gövdeye tek `// test` ekleyip PUT) koşulamadı. Güçlü ama eksik kanıt; `/* */` de denenmedi.
+**Pratik kural:** structure DDL kaynağını **yorumsuz** tut; gerekçeleri **kardeş bir `.md`**
+dosyasında sakla (`<NAME>.README.md`) ve kaynağa *"yorum ekleme, push 400 verir"* uyarısını
+o dosyaya yaz. Böylece repo↔canlı **byte-birebir** kalır ve readback gate anlamlı çalışır.
 
 ---
 
@@ -499,4 +546,16 @@ Bu çözüm 2026-05-13'de bulundu. Süreç:
 
 ---
 
+## `create_type_group.py` — TYPE-POOL (legacy) yaratma
 
+> **Ne zaman:** yalnız eski (`TYPE-POOLS` ile tüketilen) tip havuzu gerektiğinde. Yeni işte
+> tercih edilmez — tipleri class/interface içinde tanımla. Ad ≤4 karakter önerilir.
+
+```bash
+python core/scripts/create_type_group.py --name ZSD001TY --source-file <yol>/types.txt \n  --description "ZSD001 Tip Tanımları" --package ZSD001_CLC --transport <TR> --cwd <proje-kökü>
+```
+- Kaynak dosya YALNIZ `TYPES`/`CONSTANTS` içerir; `TYPE-POOL` ifadesini script ekler.
+- **Doğrulama:** yazımdan sonra `adt_get` ile canlı okuyup içerik eşitliğini gör (push "[OK]"
+  mesajı kanıt değildir).
+- 2026-08-01 bug-avı notu: bu script çalışır durumdaydı ama hiçbir yerden çağrılmıyordu ve
+  `check_scripts_documented` uyarı veriyordu → referans buraya eklendi (T9).

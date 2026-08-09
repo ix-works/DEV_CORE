@@ -22,6 +22,45 @@ def emit(obj):
     sys.stdout.write(json.dumps(obj))
 
 
+
+def _brifing_lint(data):
+    """T2.8 (2026-07-31): spawn prompt'unda R2 sablon izleri var mi? BLOKLAMAZ — nudge.
+    Sablon: core/claude/templates/spawn-brief.md. Kisa/mekanik spawn'lar (<400 karakter,
+    ör. test-echo) muaf — sablon zorunlulugu substantive isler icindir."""
+    try:
+        ti = data.get("tool_input") or {}
+        prompt = ti.get("prompt") or ""
+        if len(prompt) < 400:
+            return None
+        # NFKD-katla + regex-toleransli eslesme. Canli FP 2026-08-01: izole testte ayni
+        # metin TEMIZ ama harness-payload'inda 'GÖREV' bulunamadi ('KANIT KURAL' bulundu)
+        # -> temsil farki. Teshis icin bulunamayan anahtarin cevresi .tmp'ye loglanir;
+        # kok-analiz radar madde-7'de.
+        import re as _re
+        import unicodedata
+        duz = "".join(c for c in unicodedata.normalize("NFKD", prompt.upper())
+                      if not unicodedata.combining(c)).replace("İ", "I")
+        desenler = {"GOREV": _re.compile(r"G[OÖ0]?.?REV"), "KANIT KURAL": _re.compile(r"KANIT[ -]KURAL")}
+        eksik = [a for a, rx in desenler.items() if not rx.search(duz)]
+        if eksik:
+            try:
+                import datetime as _dt
+                _proj = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+                with open(os.path.join(_proj, ".tmp", "brifing-lint-debug.log"), "a",
+                          encoding="utf-8") as _f:
+                    _f.write(f"{_dt.datetime.now().isoformat()} eksik={eksik} "
+                             f"ilk300={duz[:300]!r}\n")
+            except Exception:
+                pass
+        if eksik:
+            return ("[BRIFING-LINT] Spawn prompt'unda R2 sablon izleri eksik: "
+                    + ", ".join(eksik)
+                    + " — sablon: core/claude/templates/spawn-brief.md (kanit-kurallari + "
+                      "gorev sinirlari + goreve-iliskin dersler alanlari zorunlu; nudge, blok degil).")
+    except Exception:
+        pass
+    return None
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -41,9 +80,11 @@ def main():
     try:
         if os.path.exists(hb) and (time.time() - os.path.getmtime(hb)) < 200:
             age = int(time.time() - os.path.getmtime(hb))
-            emit({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                  "additionalContext": "[WATCHDOG] Zaten canli (seans basina 1 daemon) — heartbeat %ss taze; "
-                                       "yeniden baslatilmadi (idempotent, hata degil)." % age}})
+            ek = "[WATCHDOG] Zaten canli (seans basina 1 daemon) — heartbeat %ss taze; yeniden baslatilmadi (idempotent, hata degil)." % age
+            lint = _brifing_lint(data)
+            if lint:
+                ek += "\n" + lint
+            emit({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": ek}})
             return
     except Exception:
         pass
@@ -96,6 +137,9 @@ def main():
     except Exception as e:
         msg = "[WATCHDOG] daemon baslatilamadi (%s) — 5dk cron watchdog aktif." % e
 
+    lint = _brifing_lint(data)
+    if lint:
+        msg += "\n" + lint
     emit({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": msg}})
 
 

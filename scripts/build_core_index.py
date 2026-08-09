@@ -42,7 +42,23 @@ PROJ = project_root()
 HEDEF = PROJ / "governance" / "CORE-INDEX.md"
 
 # Taranan core alanları (metodoloji). scripts/ ve mcp_servers/ dışarıda: kod, doküman değil.
+# ÖZYİNELİ alanlar (alt dizinler dahil):
 ALANLAR = ["playbook", "standards", "profiles", "governance/decisions"]
+
+# DÜZ alanlar (YALNIZ o dizinin kendi *.md'si; alt dizinleri AYRI bölümde listelenir).
+# 2026-08-01 (KAYIT S3): `core/governance/` düz dosyaları indekse HİÇ girmiyordu — yalnız
+# `governance/decisions` taranıyordu. Görünmeyenler arasında `infra-changelog.md` ve
+# `infra-test-recipes.md` de vardı: yani infra-expert'in F0'da okumak ZORUNDA olduğu iki
+# dosya, junction-körlüğünü kapatmak için var olan artefaktın kendisinde YOKTU
+# (agent-teams-operating-model / tooling-plugins / tooling-radar / removed-controls da öyle).
+# `rglob` ile "governance" eklemek decisions'ı ÇİFTLERDİ → düz tarama.
+DUZ_ALANLAR = ["governance"]
+
+# İndekse ALINMAYAN üretilmiş dosyalar (CORE-göreli posix yol).
+# CORE-INDEX.md'nin kendisi üretilmiş bir indekstir: DEV_CORE kendi kendisinin projesi
+# olduğunda (PROJ == CORE) indeks KENDİNİ listeler; projeden bakınca da ajanı core'un
+# kendi indeksine yönlendirir = gürültü + özyineli referans.
+HARIC = {"governance/CORE-INDEX.md"}
 
 BASLIK = """<!-- URETILMIS DOSYA — elle duzenleme. Uretici: core/scripts/build_core_index.py
      Tazelik gate'i: core/scripts/validators/check_core_index_fresh.py -->
@@ -72,14 +88,19 @@ def _ozet(p: Path) -> str:
     return m.group(1).strip() if m else ""
 
 
+def _dosyalar(alan: str, ozyineli: bool) -> list[Path]:
+    d = CORE / alan
+    if not d.is_dir():
+        return []
+    ham = d.rglob("*.md") if ozyineli else d.glob("*.md")
+    return sorted(f for f in ham if f.relative_to(CORE).as_posix() not in HARIC)
+
+
 def uret() -> str:
     satirlar = [BASLIK]
     toplam = 0
-    for alan in ALANLAR:
-        d = CORE / alan
-        if not d.is_dir():
-            continue
-        dosyalar = sorted(d.rglob("*.md"))
+    for alan, ozyineli in ([(a, True) for a in ALANLAR] + [(a, False) for a in DUZ_ALANLAR]):
+        dosyalar = _dosyalar(alan, ozyineli)
         if not dosyalar:
             continue
         satirlar.append(f"\n## `core/{alan}/` ({len(dosyalar)} dosya)\n")
@@ -93,6 +114,23 @@ def uret() -> str:
     return "\n".join(satirlar)
 
 
+def _damga() -> str:
+    """Üretim tarihi + core-commit satırı (T0.10, 2026-07-31): okuyan bayatlığı GÖREBİLSİN.
+    --check karşılaştırmasında YOK SAYILIR (yoksa her koşum timestamp farkıyla FAIL olurdu)."""
+    import subprocess
+    from datetime import datetime, timezone
+    try:
+        sha = subprocess.run(["git", "-C", str(CORE), "rev-parse", "--short", "HEAD"],
+                             capture_output=True, text=True, timeout=10).stdout.strip() or "?"
+    except Exception:
+        sha = "?"
+    z = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    return f"<!-- uretim: {z} · core-commit: {sha} — bilgi satiri; tazelik kiyasinda yok sayilir -->\n"
+
+
+_DAMGA_RE = re.compile(r"^<!-- uretim: .*?-->\n", re.MULTILINE)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="yazma; mevcutla karşılaştır")
@@ -103,7 +141,7 @@ def main() -> int:
         if not HEDEF.is_file():
             print(f"  [FAIL] {HEDEF.relative_to(PROJ)} YOK — üret: python core/scripts/build_core_index.py")
             return 1
-        mevcut = HEDEF.read_text(encoding="utf-8", errors="replace")
+        mevcut = _DAMGA_RE.sub("", HEDEF.read_text(encoding="utf-8", errors="replace"), count=1)
         if mevcut.replace("\r\n", "\n") != yeni.replace("\r\n", "\n"):
             print(f"  [FAIL] {HEDEF.relative_to(PROJ)} BAYAT — core dokümanları değişmiş.")
             print("         Bayat indeks = ajana YANLIŞ yol verir (sessiz hata).")
@@ -113,7 +151,7 @@ def main() -> int:
         return 0
 
     HEDEF.parent.mkdir(parents=True, exist_ok=True)
-    HEDEF.write_text(yeni, encoding="utf-8", newline="\n")
+    HEDEF.write_text(_damga() + yeni, encoding="utf-8", newline="\n")
     print(f"[ OK ] yazıldı: {HEDEF}  ({yeni.count(chr(10) + '- [`core/')} doküman)")
     return 0
 

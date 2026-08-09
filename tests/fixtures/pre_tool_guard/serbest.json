@@ -1,0 +1,288 @@
+[
+ {
+  "ad": "FP: PRIVATE repoda -am + iz — proje commit'i MESRUDUR",
+  "vaka": "2026-07-30 POSIX-cd dersi: FP bypass aliskanligi dogurur",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "cd /c/proje && git commit -am 'feat: <SENTINEL> alanlari'"
+  },
+  "gorunurluk": "private",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "FP: public repo + -am TEMIZ mesaj",
+  "vaka": "2026-08-01 — sikilastirma gurultu yapmamali",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "cd /c/core && git commit -am 'fix: jenerik mesaj'"
+  },
+  "gorunurluk": "public",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "FP: grep -am 3 — `-am` git DISI baglamda",
+  "vaka": "2026-08-01 — `-am` kara-listesi DEGIL, komut-konumu modeli",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "grep -am 3 '<SENTINEL>' dosya.txt"
+  },
+  "gorunurluk": "public",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "FP: tar -am — `-am` git DISI baglamda",
+  "vaka": "2026-08-01",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "tar -am -cf arsiv.tar <SENTINEL>/"
+  },
+  "gorunurluk": "public",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "FP: tirnak-ici BAHIS komut sanilmamali (PATTERN #12)",
+  "vaka": "2026-07-09 7d78a49 — tirnak-ici VERI komut sanildi sinifi",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "echo 'git commit -am <SENTINEL>'"
+  },
+  "gorunurluk": "public",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "FP: mesajsiz commit (editor acilacak) — taranacak metin yok",
+  "vaka": "2026-07-28 gate dogusu",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "cd /c/core && git commit --amend --no-edit"
+  },
+  "gorunurluk": "public",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "FP: --file=<TEMIZ dosya> okunur ve temiz",
+  "vaka": "2026-08-01 AV-17 — sikilastirma temiz dosyayi bloklamamali",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "cd /c/core && git commit --file=<FIXTURE>/mesajlar/temiz.txt"
+  },
+  "gorunurluk": "public",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "FP: git imza satirlari (Co-Authored-By) AYIKLANIR",
+  "vaka": "2026-07-28 — gate ilk yazildiginda kendi commit'ini blokladi",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "cd /c/core && git commit -q -F - <<'EOF'\nfix(tooling): jenerik\n\nCo-Authored-By: Bot\nClaude-Session: <url>\nEOF"
+  },
+  "gorunurluk": "public",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP: `git log | grep` — commit DEGIL",
+  "vaka": "2026-07-28 gate siniri",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "git log --oneline | grep <SENTINEL>"
+  },
+  "gorunurluk": "public",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "FP: commit MESAJINDA 'gh pr create' geciyor — komut degil (capa)",
+  "vaka": "2026-07-10 guard_conformance ④ vakasi",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "git commit -m 'gh pr create govdesi taranmali'"
+  },
+  "gorunurluk": "private",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP: gh SALT-OKUMA zinciri (list + view)",
+  "vaka": "2026-07-10 kural-9 kapsam siniri",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "gh pr list --repo ix-works/DEV_CORE && gh pr view 12 --repo ix-works/DEV_CORE"
+  },
+  "gorunurluk": "canli",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP: zincirdeki HER mutasyonun KENDI hedefi acik",
+  "vaka": "2026-08-01 AV-18 fix'inin FP eksenі",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "gh pr create --repo ix-works/DEV_CORE -t 'a' -b 'jenerik' && gh pr comment 12 --repo ix-works/DEV_CORE --body 'ok'"
+  },
+  "gorunurluk": "private",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP: gh repo create <ORG>/<AD> — PROJECT_BOOTSTRAP STEP 1",
+  "vaka": "2026-07-10 regresyonu (ilk surum bunu blokluyordu)",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "gh repo create ix-works/YENI --private"
+  },
+  "gorunurluk": "canli",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP: gh api repo-hedefsiz (user)",
+  "vaka": "2026-07-10 regresyonu",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "gh api user -q .login && gh api rate_limit"
+  },
+  "gorunurluk": "canli",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP AV-21: PROJE kaynagina yazma — obje/kimlik icerigi MESRU",
+  "vaka": "2026-08-01 — sikilastirma proje dosyalarina TASMAMALI",
+  "tool_name": "Write",
+  "tool_input": {
+   "file_path": "<AGAC>/sahte_proje/SOURCE_CODES/ornek.txt",
+   "content": "iletisim: <EPOSTA>"
+  },
+  "gorunurluk": "canli",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP AV-21: core ikizine TEMIZ yazma",
+  "vaka": "2026-08-01",
+  "tool_name": "Write",
+  "tool_input": {
+   "file_path": "<AGAC>/cekirdek_ikizi/scripts/yeni.py",
+   "content": "print('jenerik icerik')"
+  },
+  "gorunurluk": "canli",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP AV-21c (CI #75): GORELI proje koku + GORELI hedef — cwd core olsa bile",
+  "vaka": "2026-08-01 PR #75 CI kirmizisi — goreli yolun parents'i '.'(=core cwd) ile bitiyordu",
+  "tool_name": "Write",
+  "tool_input": {
+   "file_path": "docs/x.md",
+   "content": "iletisim: <EPOSTA>"
+  },
+  "proje_koku": "<AGAC>/sahte_proje",
+  "proje_koku_goreli": true,
+  "gorunurluk": "canli",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP AV-21d: KOMSU depo — core agacinin ICINDE ayri .git kokU",
+  "vaka": "2026-08-01 — isaret-tabanli kimligin klasik FP riski: tirmanis komsu repoyu yakalar",
+  "tool_name": "Write",
+  "tool_input": {
+   "file_path": "<AGAC>/cekirdek_ikizi/komsu_proje/SOURCE_CODES/ornek.txt",
+   "content": "iletisim: <EPOSTA>"
+  },
+  "gorunurluk": "canli",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP AV-21: isaret dosyalarindan YALNIZ BIRI olan dizin core sayilmaz",
+  "vaka": "2026-08-01 — tek isaret (kopyalanmis CLAUDE.core.md) yanlis-blok uretirdi",
+  "tool_name": "Write",
+  "tool_input": {
+   "file_path": "<AGAC>/sahte_proje/CLAUDE.core.md",
+   "content": "iletisim: <EPOSTA>"
+  },
+  "gorunurluk": "canli",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP AV-18b tersi: once PUBLIC okuma, sonra PRIVATE yayin",
+  "vaka": "2026-08-01 — segment-bazli gorunurluk FP uretmemeli",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "gh pr view 1 --repo org/public-core && gh pr create --repo org/private-proj -t 'x' -b '<SENTINEL>'"
+  },
+  "gorunurluk": "esleme",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "FP AV-18b kardesi: SON cd PRIVATE — proje commit'i mesru",
+  "vaka": "2026-08-01",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "cd /c/public-core && git log -1 && cd /c/private-proj && git commit -m '<SENTINEL>'"
+  },
+  "gorunurluk": "esleme",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "FP 3.BAGLAM: PowerShell here-string commit (temiz)",
+  "vaka": "2026-07-09 here-string dersi",
+  "tool_name": "PowerShell",
+  "tool_input": {
+   "command": "git add x; git commit -m @'\nfix: jenerik mesaj govdesi\n'@"
+  },
+  "gorunurluk": "public",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP 3.BAGLAM: cd zinciri sonrasi temiz commit (baglam tasiniyor)",
+  "vaka": "2026-07-30 POSIX-cd + 2026-08-01 segment-baglami",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "cd /c/proje && git add -A && git commit -am 'feat: <SENTINEL> alanlari'"
+  },
+  "gorunurluk": "private",
+  "tarayici": "sentinel"
+ },
+ {
+  "ad": "SEKILSIZ: payload null -> COKME YOK",
+  "vaka": "2026-08-01 W2-VH-01: uncaught AttributeError -> exit 1; sozlesme exit 2=blok oldugu icin 9 kural devre disi kaliyordu",
+  "ham_payload": null
+ },
+ {
+  "ad": "SEKILSIZ: payload liste -> COKME YOK",
+  "vaka": "ayni sinif",
+  "ham_payload": []
+ },
+ {
+  "ad": "SEKILSIZ: payload duz string -> COKME YOK",
+  "vaka": "ayni sinif",
+  "ham_payload": "merhaba"
+ },
+ {
+  "ad": "SEKILSIZ: payload sayi -> COKME YOK",
+  "vaka": "ayni sinif",
+  "ham_payload": 42
+ },
+ {
+  "ad": "SEKILSIZ: tool_name sayi -> COKME YOK",
+  "vaka": "startswith() int uzerinde patliyordu",
+  "ham_payload": {
+   "tool_name": 123,
+   "tool_input": {
+    "command": "ls"
+   }
+  }
+ },
+ {
+  "ad": "SEKILSIZ: file_path sayi -> COKME YOK",
+  "vaka": "replace() int uzerinde patliyordu",
+  "ham_payload": {
+   "tool_name": "Write",
+   "tool_input": {
+    "file_path": 123,
+    "content": "x"
+   }
+  }
+ },
+ {
+  "ad": "SEKILSIZ: tool_input liste -> COKME YOK",
+  "vaka": "ayni sinif",
+  "ham_payload": {
+   "tool_name": "Bash",
+   "tool_input": []
+  }
+ }
+]

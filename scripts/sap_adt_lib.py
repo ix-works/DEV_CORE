@@ -581,7 +581,32 @@ def check_sap_config():
     }
 
 
-def create_conn_file(sap_url, sap_user, sap_password, sap_client, sap_language='EN'):
+def _yaz_conn(path, metin):
+    """`.conn_adt` yazan TEK nokta — DAİMA açık `encoding="utf-8"`.
+
+    ⛔ 2026-08-01 (KAYIT S6): iki yazıcı da `write_text(metin)` diyordu, yani kodlamayı
+    İŞLETİM SİSTEMİ LOCALE'İNE bırakıyordu. Windows-TR'de bu **cp1252**'dir. Şablon metni
+    bir em-dash (U+2014) içerir → cp1252'de tek bayt **0x97** olarak yazılır. Dosyanın
+    TÜKETİCİLERİ ise (sap_adt_lib'in kendi `load_dotenv`'i, `mcp _conn`, `pre_tool_guard`,
+    `project_config` — AV-02'den beri) **utf-8/utf-8-sig** okur:
+
+        UnicodeDecodeError: 'utf-8' codec can't decode byte 0x97 in position 388
+
+    `load_dotenv(conn_path)` bu modülün İMPORT ANINDA koştuğu için sonuç, o dizinden
+    yapılan **her `import sap_adt_lib` çağrısının çökmesidir** → canlı-SAP kontrolü yapan
+    validator'lar "guard atlandı" yoluna düşer. Ölçüldü: 1085 baytlık bozuk dosya, üç
+    okuyucuda da aynı hata (kontrol grubu: aynı metin utf-8 yazılınca üçü de OK).
+
+    SINIF: "üretici taraf, tüketicinin sözleşmesine uymuyor." Okuyucular AV-02'de
+    utf-8-sig'e taşınmıştı; YAZAN taraf geride kalmıştı. Kodlama VARSAYILANA bırakılmaz.
+    ⚠ Şablondaki em-dash bilerek KORUNUYOR: bu fonksiyonun kanaryasıdır (metin ASCII'ye
+    indirgenirse regresyon testi sessizce boşalır — bkz. tests/fixtures/conn_yazici_encoding).
+    """
+    Path(path).write_text(metin, encoding='utf-8')
+
+
+def create_conn_file(sap_url, sap_user, sap_password, sap_client, sap_language='EN',
+                     sap_tier='DEV'):
     """
     Create .conn_adt file with provided SAP credentials.
 
@@ -591,6 +616,9 @@ def create_conn_file(sap_url, sap_user, sap_password, sap_client, sap_language='
         sap_password: SAP password
         sap_client: SAP client number (e.g., 100)
         sap_language: Language code (default: EN)
+        sap_tier: ADR 0010 tier (DEV|QA|PRD, default DEV). Written EXPLICITLY —
+            a missing line means "unknown tier" and every mutation is refused
+            (fail-closed, 2026-08-01 KAYIT-1). Pass QA/PRD for read-only systems.
 
     Returns:
         str: Path to created .conn_adt file
@@ -604,8 +632,12 @@ ADT_SAP_USER={sap_user}
 ADT_SAP_PASSWORD={sap_password}
 ADT_SAP_CLIENT={sap_client}
 ADT_SAP_LANGUAGE={sap_language}
+# ZORUNLU (ADR 0010): DEV|QA|PRD. Satir YOKSA tier cozulemez ve MCP guard
+# MUTASYONU REDDEDER (fail-closed, 2026-08-01 KAYIT-1). Degistirmek icin
+# scripts/switch_tier.py kullan. Onek varyanti (ADT_SAP_TIER_OLD=..) SAYILMAZ.
+ADT_SAP_TIER={sap_tier}
 """
-    conn_path.write_text(conn_content)
+    _yaz_conn(conn_path, conn_content)
 
     # Reload environment variables
     load_dotenv(dotenv_path=conn_path, override=True)
@@ -638,6 +670,10 @@ ADT_SAP_USER=YOUR_USERNAME
 ADT_SAP_PASSWORD=YOUR_PASSWORD
 ADT_SAP_CLIENT=100
 ADT_SAP_LANGUAGE=EN
+# ZORUNLU (ADR 0010): DEV|QA|PRD — bu satir YOKSA tier cozulemez ve her mutasyon
+# REDDEDILIR (fail-closed, 2026-08-01 KAYIT-1). QA/PRD = salt-okunur.
+# Onek varyanti (ADT_SAP_TIER_OLD=...) SAYILMAZ; tam anahtar aranir.
+ADT_SAP_TIER=DEV
 
 # === SAP BTP Cloud (Service Key Auth) ===
 # For BTP cloud systems, use service key instead of username/password:
@@ -650,7 +686,7 @@ ADT_SAP_LANGUAGE=EN
 # Optional: SSL certificate verification (default: false for self-signed certs)
 # ADT_SAP_SSL_VERIFY=false
 """
-    conn_path.write_text(template)
+    _yaz_conn(conn_path, template)
     return str(conn_path)
 
 
@@ -833,46 +869,10 @@ class SAPADTClient:
         self._auth_provider = auth_provider or self._create_auth_provider(auth_type)
 
         # Connection pooling via requests.Session
-        from requests.adapters import HTTPAdapter
-        from urllib3.util.retry import Retry as _Retry
-        self.session = requests.Session()
-        ssl_verify = os.getenv('ADT_SAP_SSL_VERIFY', 'false').lower()
-        self.session.verify = ssl_verify in ('true', '1', 'yes')
-
-        _adapter = HTTPAdapter(
-            pool_connections=4,
-            pool_maxsize=10,
-            max_retries=_Retry(
-                total=3,
-                backoff_factor=0.3,
-                status_forcelist=(429, 500, 502, 503, 504),
-                allowed_methods=('GET', 'HEAD', 'PUT', 'POST', 'DELETE'),
-            ),
-        )
-        self.session.mount('https://', _adapter)
-        self.session.mount('http://', _adapter)
-        self.session.headers.update({'Accept-Encoding': 'gzip, deflate'})
-
-        # Set initial headers with auth from provider
-        auth_headers = self._get_auth_headers()
-        self.session.headers.update(auth_headers)
-        is_saml_init = self._auth_provider and getattr(self._auth_provider, 'auth_type', '') == 'saml'
-        if not is_saml_init:
-            self.session.headers.update({
-                'sap-client': self.client,
-                # ADR 0005-D: logon dilini session-genelinde TR yap. SAP, obje master
-                # dilini session'ın logon diline göre belirler (body masterLanguage tek
-                # başına yetmez). sap-language'ı session default header yapınca İLK auth
-                # dahil tüm istekler TR logon olur → Z obje masterLanguage=TR.
-                # (gap-analysis #20; feedback_mcp-post-shell-en-master-lang)
-                'sap-language': self.language,
-                'x-sap-adt-sessiontype': 'stateful',
-            })
-        else:
-            self.session.headers.update({
-                'sap-language': self.language,
-                'x-sap-adt-sessiontype': 'stateful',
-            })
+        # ⚠ Kurulum `_build_session()`'da — `new_session()` ile AYNI kodu paylaşır.
+        #   Buraya inline kurulum YAZMA: iki kopya sessizce ayrışır (ör. biri
+        #   `sap-language` alır diğeri almaz → master-dil ADR 0005-D ihlali).
+        self.session = self._build_session()
 
         # Apply SAML cookies if using SAML auth provider
         if self._auth_provider and self._auth_provider.auth_type == 'saml':
@@ -930,6 +930,93 @@ class SAPADTClient:
                 return 'cloud'
 
         return 'onprem'
+
+    def _build_session(self) -> requests.Session:
+        """Yeni bir `requests.Session` kur (pooling + auth + ADT default header'ları).
+
+        `__init__` ve `new_session()` **bu tek kaynağı** paylaşır — kurulum kodu
+        kopyalanmaz (iki kopya sessizce ayrışır: biri `sap-language` alır diğeri
+        almaz → ADR 0005-D master-dil ihlali doğar).
+        """
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry as _Retry
+
+        sess = requests.Session()
+        ssl_verify = os.getenv('ADT_SAP_SSL_VERIFY', 'false').lower()
+        sess.verify = ssl_verify in ('true', '1', 'yes')
+
+        _adapter = HTTPAdapter(
+            pool_connections=4,
+            pool_maxsize=10,
+            max_retries=_Retry(
+                total=3,
+                backoff_factor=0.3,
+                status_forcelist=(429, 500, 502, 503, 504),
+                allowed_methods=('GET', 'HEAD', 'PUT', 'POST', 'DELETE'),
+            ),
+        )
+        sess.mount('https://', _adapter)
+        sess.mount('http://', _adapter)
+        sess.headers.update({'Accept-Encoding': 'gzip, deflate'})
+
+        # Set initial headers with auth from provider
+        sess.headers.update(self._get_auth_headers())
+        is_saml_init = (self._auth_provider
+                        and getattr(self._auth_provider, 'auth_type', '') == 'saml')
+        if not is_saml_init:
+            sess.headers.update({
+                'sap-client': self.client,
+                # ADR 0005-D: logon dilini session-genelinde master dile sabitle. SAP,
+                # obje master dilini session'ın logon diline göre belirler (body
+                # masterLanguage tek başına yetmez). sap-language'ı session default
+                # header yapınca İLK auth dahil tüm istekler o dilde logon olur.
+                # (gap-analysis #20; feedback_mcp-post-shell-en-master-lang)
+                'sap-language': self.language,
+                'x-sap-adt-sessiontype': 'stateful',
+            })
+        else:
+            sess.headers.update({
+                'sap-language': self.language,
+                'x-sap-adt-sessiontype': 'stateful',
+            })
+        return sess
+
+    def new_session(self) -> None:
+        """HTTP oturumunu SIFIRLA → yeni cookie kavanozu = **yeni ABAP oturumu**.
+
+        NİÇİN GEREKLİ (2026-07-31, canlı-kanıtlı): bu istemci süreç ömrü boyunca TEK
+        `requests.Session` tutar ve header'ı `x-sap-adt-sessiontype: stateful`'dur.
+        Bir obje **başka bir süreçte** (ör. `push_object.py`) aktive edildiğinde, bu
+        sürecin SAP oturumu o aktivasyonu GÖRMEZ ve bellekteki eski class-load'a bağlı
+        kalır → `classrun` **aktif** bir sınıfa bile *"does not implement
+        if_oo_adt_classrun~main"* der.
+
+        KANIT (ölçüm; aynı sınıf, aktifliği `adt_inactive_objects == 0` ile doğrulanmış):
+        mevcut oturum → hata · **taze süreç/oturum → ÇALIŞTI**, tam konsol çıktısı geldi.
+        Süreç-içi retry ELENDİ: `run_classrun` zaten aynı oturumda iki kez POST ediyordu,
+        ikisi de aynı hatayı verdi → çare retry değil, **RESET**. Aynı desen
+        `jfilak/sapcli` `d223ed3c`'de de var: `activate() → new_session() → execute()`.
+
+        ⚠ Bu bir *önbellek ısıtma* numarası DEĞİL: oturum kimliği (`sap-contextid`)
+        değişmeden SAP yeni class-load'u vermiyor. CSRF token'ı oturuma bağlı olduğu
+        için geçersizleşir; bir sonraki istekte yeniden alınır.
+        """
+        old = getattr(self, 'session', None)
+        self.session = self._build_session()
+        if self._auth_provider and getattr(self._auth_provider, 'auth_type', '') == 'saml':
+            self._apply_saml_cookies()
+        # CSRF token oturuma bağlıdır → yeni oturumda geçersiz. Disk cache'i de
+        # düşür, yoksa bayat token'la 403 alıp gereksiz retry turu döneriz.
+        self.csrf_token = None
+        try:
+            self._invalidate_csrf_cache()
+        except Exception:
+            pass
+        if old is not None:
+            try:
+                old.close()
+            except Exception:
+                pass
 
     def _create_auth_provider(self, auth_type_hint=None) -> Optional[IAuthProvider]:
         """
@@ -1364,7 +1451,10 @@ class SAPADTClient:
         if not cache_path or not cache_path.exists():
             return None
         try:
-            data = json.loads(cache_path.read_text())
+            # encoding AÇIK (KAYIT S6 sınıfı): locale'e bırakılan okuma/yazma, makine
+            # değişince sessizce ayrışır. Burada iki uç da try/except içinde olduğu için
+            # hata GÖRÜNMEZ olurdu (token cache sessizce hep ıskalar → her çağrı yeni CSRF).
+            data = json.loads(cache_path.read_text(encoding='utf-8'))
             age = time.time() - float(data.get('fetched_at', 0))
             if age < 21600:
                 return data.get('token')
@@ -1378,7 +1468,8 @@ class SAPADTClient:
         if not cache_path:
             return
         try:
-            cache_path.write_text(json.dumps({'token': token, 'fetched_at': time.time()}))
+            cache_path.write_text(json.dumps({'token': token, 'fetched_at': time.time()}),
+                                  encoding='utf-8')
         except Exception:
             pass
 
@@ -1823,8 +1914,64 @@ class SAPADTClient:
                 self._debug(f"[DEBUG] get_object_revisions - exception: {str(e)[:100]}")
             return []
 
+    def fetch_source_etag(self, object_url):
+        """`source/main` ETag'ini döndür — **LOCK'TAN ÖNCE çağrılmak üzere**.
+
+        NEDEN AYRI METOT (2026-07-30, sınıf push'u 423 vakası):
+        `set_object_source()` ETag'i kendi içinde çekiyordu; `lock_handle` bir parametre
+        olduğu için bu GET **DAİMA lock alındıktan SONRA** koşuyordu. Stateful ADT
+        oturumunda lock ile PUT arasına giren GET, lock context'ini bozuyor →
+        `423 ExceptionResourceInvalidLockHandle` ("Resource CLASS ... is not locked").
+
+        Emsal (playbook): `adt-fugr-functions.md` §4 aynı sınıfı FM'ler için kaydetmiş
+        (*"Retry/ETag stateful lock'u bozuyor"*) ve çözümü sıkı `lock→PUT→unlock` olan
+        `set_function_module_source()` idi — sınıfların muadili yoktu.
+        ⚠ MSAG/DTEL/Z-tablo çözümü (`If-Match` GÖNDERME) **sınıflara UYGULANAMAZ**:
+        `CL_KU_CLASS_REST_HANDLER.put()` ETag yoksa `cx_adt_res_invalid_etag` fırlatır.
+        Bu yüzden fix `If-Match`'i kaldırmaz, yalnız **GET'i lock penceresinden çıkarır**.
+
+        Neden DDLS/CDS push'ları etkilenmiyordu: DDIC source PUT'u `If-Match` istemez →
+        lock ile PUT arasına GET girmez → lock hayatta kalır. Aynı gün 3 CDS sorunsuz
+        geçip ilk sınıf push'unun anında ölmesi bu açıklamayla tutarlı.
+
+        "Stale inactive" seçimi KORUNDU: inaktif sürüm varsa SAP onun ETag'ini doğrular,
+        o yüzden önce inactive denenir, yoksa active'e düşülür.
+        """
+        if not object_url.endswith('/source/main'):
+            object_url = object_url.rstrip('/') + '/source/main'
+        etag = None
+        try:
+            try:
+                resp_inactive = self.session.get(
+                    f"{self.url}{object_url}",
+                    headers=self._get_headers('text/plain'),
+                    params={'version': 'inactive'},
+                    timeout=self.timeout_short
+                )
+                if resp_inactive.status_code == 200:
+                    etag = (resp_inactive.headers.get('ETag')
+                            or resp_inactive.headers.get('etag'))
+            except Exception as e_inactive:
+                if self.debug_enabled:
+                    self._debug(f"[DEBUG] fetch_source_etag - inactive check failed: {str(e_inactive)[:100]}")
+            if not etag:
+                base_url = object_url.replace('/source/main', '')
+                _, etag = self.get_object_source(base_url, return_etag=True)
+        except Exception as e:
+            if self.debug_enabled:
+                self._debug(f"[DEBUG] fetch_source_etag - failed: {str(e)[:100]}")
+            return None
+        if self.debug_enabled:
+            self._debug(f"[DEBUG] fetch_source_etag - pre-lock ETag: {etag}")
+        return etag
+
     def set_object_source(self, object_url, source_code, lock_handle, transport=None, etag=None, max_retries=5):
         """Push ABAP object source code to SAP with fallback strategies.
+
+        ⚠ `etag` VERİLMEZSE bu metot onu kendisi çeker — ama o GET **lock alındıktan
+        sonra** koşar ve sınıflarda `423 InvalidLockHandle` üretir. Çağıranlar ETag'i
+        **lock'tan ÖNCE** `fetch_source_etag()` ile alıp buraya geçirmelidir.
+        İç fetch yalnız geriye-dönük uyumluluk için duruyor.
 
         Note: Automatically retries with different transport parameter approaches.
         Different SAP versions may require corrNr as query param or X-sap-adt-transport header.
@@ -2821,17 +2968,27 @@ class SAPADTClient:
         return lock_context()
 
     def syntax_check_via_activation(self, object_name, object_url):
-        """Check syntax using SAP ADT activation endpoint in pre-audit mode.
+        """Check syntax via the SAP ADT activation endpoint (preaudit mode requested).
 
-        This performs a syntax check without actually activating the object.
+        !! NOT READ-ONLY. Real semantics: "activate if clean."
+
+        Measured on this system (2026-07-31): 'preauditRequested=true' is NOT
+        honoured. When the object has a pending INACTIVE version that compiles
+        cleanly, this call ACTIVATES it -- 'adt_inactive_objects' went 1 -> 0 and
+        the '?version=active' source became identical to the pushed source. When
+        the pending version has errors, nothing is activated ("Activation was
+        cancelled") and the errors are returned. So 'activationExecuted' is NOT
+        reliably false here; do not treat this call as side-effect free.
+
+        Note the request carries only the object NAME/URI -- no source is sent.
+        SAP activates whatever version is pending server-side, so calling this
+        while an activation is being deliberately held back (co-activation order,
+        def/impl include pairs) reorders that activation.
+
+        Callers: treat this as a WRITE operation (single-writer / gateway only).
 
         Returns:
             dict with 'valid' (bool), 'errors' (list), 'warnings' (list)
-
-        Note:
-            Uses the activation endpoint with pre-audit mode which checks
-            syntax but does not activate. The response format is the same
-            as activate_object() but activationExecuted will be false.
         """
         # Determine object type from URL
         object_type = self._extract_object_type(object_url)
@@ -2848,7 +3005,8 @@ class SAPADTClient:
             'application/vnd.sap.adt.objectactivation.result.v1+xml'
         )
 
-        # Use preaudit mode - checks syntax but does NOT activate
+        # Preaudit is REQUESTED but not honoured here (measured 2026-07-31):
+        # a clean pending version gets ACTIVATED. See docstring.
         response = self._request_with_csrf_retry(
             'post', f"{self.url}/sap/bc/adt/activation",
             headers=headers,
@@ -3374,18 +3532,39 @@ class SAPADTClient:
             'warnings': [], 'response': response.text[:500]
         }
 
-    def search_objects(self, query, max_results=100):
-        """Search for ABAP objects"""
+    # Uc-noktanin OLCULEN sinirlari (2026-07-28, canli probe):
+    #   * maxResults ust siniri = 550 (1000 istensе 550 doner) -> MAX_SEARCH_RESULTS
+    #   * siralama ALFABETIK -> gec-alfabetik adlar (ZSD001_T_* gibi) kirpilan sayfaya DUSER
+    #   * `objectType` parametresi NATIVE DESTEKLENIYOR (objectType=TABL/DT -> yalniz TABL)
+    # Bu ucu VERMEDEN tip filtresini istemci tarafinda uygulamak = kirpilmis sayfayi suzmek
+    # = SESSIZ 0 (bkz. sap_client.search_objects basligi).
+    MAX_SEARCH_RESULTS = 550
+
+    def search_objects(self, query, max_results=100, obj_type=None):
+        """Search for ABAP objects.
+
+        Args:
+            query: ad/wildcard (ör. 'ZSD001*')
+            max_results: ust sinir; uc-nokta 550'de doyar (MAX_SEARCH_RESULTS)
+            obj_type: ADT tipi ('TABL', 'TABL/DT', 'CLAS', ...). VERILDIGINDE
+                      SUNUCU tarafinda filtrelenir — istemci tarafinda degil.
+                      Bu, alfabetik kirpma yuzunden olusan sessiz-0'i onler.
+        """
         headers = self._get_headers('application/xml')
+
+        params = {
+            'operation': 'quickSearch',
+            'query': query,
+            'maxResults': max_results
+        }
+        if obj_type:
+            # Sunucu tarafi filtre: kirpma FILTREDEN SONRA uygulanir -> dogru sonuc.
+            params['objectType'] = obj_type
 
         response = self.session.get(
             f"{self.url}/sap/bc/adt/repository/informationsystem/search",
             headers=headers,
-            params={
-                'operation': 'quickSearch',
-                'query': query,
-                'maxResults': max_results
-            },
+            params=params,
             timeout=self.timeout_short
         )
 
@@ -5786,8 +5965,19 @@ constants:
                             'description': desc
                         })
                     break  # Only first adtObject child per referencedObject
-        except ET.ParseError:
-            pass
+        except ET.ParseError as e:
+            # ⛔ "DOĞRULAMA KOŞAMADI = DOĞRULANDI" sınıfı (2026-08-01 bug-avı).
+            # Eskiden `pass` vardı → ayrıştırılamayan yanıtta BOŞ LİSTE dönüyordu ve
+            # çağıran bunu "bu objenin tüketicisi YOK" diye okuyordu. Where-used'ın tek
+            # kullanım amacı SİLMEDEN/DEĞİŞTİRMEDEN önce etki ölçmek; boş-liste yanlış
+            # okunduğunda sonuç geri alınamaz (orphan-sweep komşuyu siler). Aynı ders
+            # 2026-07-09'da "obje yok ≠ tüketicisi yok" olarak alınmıştı; bu, o dersin
+            # AYRIŞTIRMA katmanındaki ikizi. Boş liste ancak GEÇERLİ ve boş yanıttan üretilir.
+            raise SAPADTError(
+                "Where-used yanıtı AYRIŞTIRILAMADI (bozuk/kısmi XML) — sonuç 'tüketicisi yok' "
+                "DEĞİLDİR. Bu cevaba dayanıp obje SİLME/DEĞİŞTİRME; tekrar ölç.",
+                response_text=(response.text or "")[:500],
+            ) from e
 
         return results
 
@@ -5890,6 +6080,7 @@ constants:
 
         # Extract result worklist ID from run response
         result_worklist_id = worklist_id
+        worklist_parse_fallback = False
         try:
             root = ET.fromstring(response2.text)
             for elem in root.iter():
@@ -5898,7 +6089,12 @@ constants:
                     result_worklist_id = wl_id
                     break
         except ET.ParseError:
-            pass
+            # Burada TANIMLI bir fallback var (ilk worklist_id) → istisna atmıyoruz; ama
+            # SESSİZ de kalmıyoruz: yanlış worklist okunursa sonuç "0 bulgu" = sahte-temiz
+            # olur. İşaret dönüş sözlüğüne konur, MCP katmanı yüzeye çıkarır (2026-08-01).
+            worklist_parse_fallback = True
+            self._debug("ATC run yanıtı ayrıştırılamadı — ilk worklist_id ile devam "
+                        "(sonuç 'temiz' görünürse şüphelen)")
 
         self._debug(f"ATC run completed, result worklist: {result_worklist_id}")
 
@@ -5942,10 +6138,20 @@ constants:
                         'location': attrs.get('location', '') or attrs.get('uri', ''),
                         'checkId': attrs.get('checkId', '') or attrs.get('checkTitle', '')
                     })
-        except ET.ParseError:
-            pass
+        except ET.ParseError as e:
+            # ⛔ Aynı sınıf: ayrıştırılamayan ATC yanıtı eskiden BOŞ findings → "kod TEMİZ"
+            # (Priority-1 zorunluluğu sessizce atlanırdı). Kanıt üretilemediyse temizlik
+            # BEYAN EDİLMEZ.
+            raise SAPADTError(
+                "ATC sonuç yanıtı AYRIŞTIRILAMADI (bozuk/kısmi XML) — sonuç 'temiz' "
+                "DEĞİLDİR (0 bulgu SANMA). ATC'yi tekrar çalıştır.",
+                response_text=(response3.text or "")[:500],
+            ) from e
 
-        return {'findings': findings}
+        out = {'findings': findings}
+        if worklist_parse_fallback:
+            out['worklist_parse_fallback'] = True
+        return out
 
     def get_inactive_objects(self):
         """Get list of inactive objects for current user
@@ -5985,8 +6191,13 @@ constants:
                         'uri': uri,
                         'user': user
                     })
-        except ET.ParseError:
-            pass
+        except ET.ParseError as e:
+            # ⛔ Aynı sınıf: boş liste = "aktive bekleyen obje YOK" = commit/gün-sonu için
+            # sahte-YEŞİL (AV-13'ün kardeşi). Ayrıştırılamadıysa iddia edilmez.
+            raise SAPADTError(
+                "Inactive-objects yanıtı AYRIŞTIRILAMADI — 'bekleyen obje yok' DEĞİLDİR.",
+                response_text=(response.text or "")[:500],
+            ) from e
 
         return results
 

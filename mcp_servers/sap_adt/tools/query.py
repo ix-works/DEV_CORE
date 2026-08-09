@@ -198,6 +198,20 @@ def adt_atc_check(name: str, object_type: str = "class",
             return str((f or {}).get("priority", "")).strip()
         prio1 = [f for f in findings if _prio(f) == "1"]
         prio_other = [f for f in findings if _prio(f) not in ("1", "")]
+        # ATC run yanıtı ayrıştırılamadıysa sonuç worklist'i TAHMİNDİR → "0 bulgu" temizlik
+        # kanıtı sayılamaz (2026-08-01; sessiz fallback görünür kılındı).
+        if isinstance(res, dict) and res.get("worklist_parse_fallback"):
+            return {
+                "ok": False,
+                "error": "belirsiz",
+                "name": name,
+                "type": object_type,
+                "variant": variant,
+                "message": ("ATC run yanıtı ayrıştırılamadı; sonuçlar TAHMİNİ worklist'ten "
+                            "okundu. Bulgu sayısı GÜVENİLİR DEĞİL — 'temiz' sanma, tekrar çalıştır."),
+                "finding_count_unverified": len(findings),
+                "client_log": buf.getvalue().strip(),
+            }
         return {
             "ok": True,
             "name": name,
@@ -222,18 +236,43 @@ def adt_atc_check(name: str, object_type: str = "class",
 
 @profil_tool()
 def adt_syntax_check(name: str, object_type: str = "class") -> dict:
-    """Sözdizimi kontrolü (aktivasyon pre-audit) — aktive ETMEDEN. read-only.
+    """⚠️ YAN ETKİLİ — SALT-OKUMA DEĞİL: temiz bekleyen sürümü AKTİVE EDER. Yazma sayılır.
 
-    SAP'deki inactive sürümü kontrol eder; push-before-activate akışında aktivasyon
-    hatası/patinajını (ADR 0006/T10) önceden yakalar.
+    Gerçek semantik: "temizse aktive et". Alt katman (`sap_adt_lib.
+    syntax_check_via_activation`) ölçtü (2026-07-31): `preauditRequested=true` SAP
+    tarafından ONURLANDIRILMIYOR — bekleyen INACTIVE sürüm temiz derleniyorsa bu çağrı
+    onu AKTİVE EDER (`adt_inactive_objects` 1 → 0 gözlendi). Hatalıysa aktivasyon iptal
+    edilir ve hatalar döner.
+
+    ⚠ 2026-08-01'e kadar bu docstring "read-only" diyordu; alt katman "treat as WRITE"
+    diyordu. Doküman-yalanı yüzünden tool MUTASYON YAPAN TEK GUARD'SIZ araçtı: tier
+    guard'ı da namespace guard'ı da YOKTU → PRD tier'ında ve standart obje üzerinde
+    çağrılabiliyordu. Artık `require_writable_tier` + `require_customer_namespace`
+    diğer mutasyon tool'larıyla (create/push/activate/delete) AYNI kapıdan geçer.
+
+    Kullanım: push-before-activate akışında aktivasyon hatasını (ADR 0006/T10) önceden
+    yakalar — ama bilinçli geciktirilen bir aktivasyonu (co-activation sırası, def/impl
+    include çiftleri) SIRA BOZARAK öne alabilir. Tek-yazıcı (gateway) disiplinine tabidir.
 
     Args:
-        name: Obje adı (Z*/Y*).
+        name: Obje adı (Z*/Y*; standart obje REDDEDİLİR — ADR 0005-A).
         object_type: ADT tipi ('class', 'ddls', 'prog', ...).
 
     Returns:
         {ok, name, type, valid, errors: [...], warnings: [...], client_log}
+        veya guardrail_violation (PRD/QA tier ya da standart obje).
     """
+    from mcp_servers.sap_adt._conn import get_active_tier
+    from mcp_servers.sap_adt.guardrails import (
+        GuardrailViolation, require_customer_namespace, require_writable_tier,
+    )
+    ne = f"{object_type} syntax_check (temiz bekleyen sürümü AKTİVE EDER)"
+    try:
+        require_customer_namespace(name, what=ne, object_type=object_type)
+        require_writable_tier(get_active_tier(), what=ne)
+    except GuardrailViolation as gv:
+        return gv.as_dict()
+
     client = _get_client()
     try:
         with _capture() as buf:
@@ -263,19 +302,36 @@ def adt_package_contents(package: str) -> dict:
         package: Paket adı (ör. 'ZSD001_CLC').
 
     Returns:
-        {ok, package, count, objects: [{name, type, uri, ...}], client_log}
+        {ok, package, count, objects: [{name, type, uri, package_verified, ...}],
+         package_verified, warning?, client_log}
+
+    ⚠ `package_verified: false` → liste SAP'nin paket-ucu (nodestructure) yerine AD-DESENLİ
+    ARAMA fallback'inden geldi (yetki/ICF hatası). O durumda liste BAŞKA PAKETLERİN
+    objelerini içerebilir; "bu paketin içeriği" diye kullanma (2026-08-01 bug-avı).
     """
     client = _get_client()
     try:
         with _capture() as buf:
             objs = client.list_package_contents(package)
-        return {
+        objs = objs or []
+        dogrulanmis = all(o.get("package_verified") for o in objs if isinstance(o, dict))
+        out = {
             "ok": True,
             "package": package,
             "count": len(objs) if hasattr(objs, "__len__") else 0,
             "objects": objs,
+            "package_verified": bool(dogrulanmis),
             "client_log": buf.getvalue().strip(),
         }
+        if not dogrulanmis:
+            out["warning"] = (
+                "PAKET ÜYELİĞİ DOĞRULANAMADI: SAP'nin paket ucu (nodestructure) hata verdi, "
+                "liste AD-DESENLİ arama fallback'inden geldi (ör. 'Z_*', ilk-iki-harf 'ZS*'). "
+                "Liste BAŞKA PAKETLERİN objelerini içerebilir ve paketin bazı objelerini "
+                "KAÇIRMIŞ olabilir. Silme/etki analizi/envanter kararı bu listeye DAYANDIRILMAZ; "
+                "her objenin paketini adt_get metadata'sından teyit et."
+            )
+        return out
     except Exception as exc:
         return _err_from_exc(exc)
 
@@ -283,6 +339,10 @@ def adt_package_contents(package: str) -> dict:
 # =============================================================================
 # adt_table_read  (gap-analysis #10 + #2 PII guard, ADR 0011)
 # =============================================================================
+# Tek tanımlayıcı (namespace'li ad dahil: /SCWM/AQUA). Boşluk/parantez/nokta YOK.
+_TABLO_ADI = re.compile(r"^[A-Za-z_/][A-Za-z0-9_/]*$")
+_KOLON_ADI = re.compile(r"^[A-Za-z_][A-Za-z0-9_~/]*$")
+
 
 @profil_tool()
 def adt_table_read(
@@ -320,13 +380,6 @@ def adt_table_read(
     from mcp_servers.sap_adt._conn import get_active_tier
     from mcp_servers.sap_adt.data_guard import require_data_access
     from mcp_servers.sap_adt.guardrails import GuardrailViolation
-    try:
-        require_data_access(
-            get_active_tier(), table,
-            acknowledge_risk=acknowledge_risk, approval_text=approval_text,
-        )
-    except GuardrailViolation as gv:
-        return gv.as_dict()
 
     # İstenen kolonları normalize et (str "A,B" veya liste) → daraltılmış SELECT (off-by-one'sız).
     col_list = None
@@ -334,6 +387,33 @@ def adt_table_read(
         raw = columns.split(",") if isinstance(columns, str) else list(columns)
         col_list = [str(c).strip().upper() for c in raw if str(c).strip()]
     select_cols = ", ".join(col_list) if col_list else "*"
+
+    # ⚠ ALAN-SEVİYESİ GUARD ARTIK KABLOLU (2026-08-01 KAYIT-K1b): `fields=` parametresi
+    # doğuştan beri vardı ve `fields=["STCD1"]` verilince BLOCKED diyordu, ama HİÇBİR tool
+    # onu geçirmiyordu → guard'ın yarısı ÖLÜ KOD'du. `columns` da doğrulanmadan SELECT'e
+    # giriyordu. Guard, ham `table` ifadesini görür (normalizasyon guard içindedir).
+    try:
+        require_data_access(
+            get_active_tier(), table, fields=col_list,
+            acknowledge_risk=acknowledge_risk, approval_text=approval_text,
+        )
+    except GuardrailViolation as gv:
+        return gv.as_dict()
+
+    # ⚠ ŞEKİL DOĞRULAMASI (KAYIT-K1a ikinci katman): `table`/`columns` string olarak
+    # SELECT'e gömülür. Serbest ifadeye izin vermek hem guard-atlatma hem sorgu-enjeksiyon
+    # yüzeyidir ("T000 AS T", "T000 UNION SELECT * FROM KNA1"). Bu tool TEK tablo okur;
+    # takma ad/JOIN isteyen `adt_sql_query`'yi kullanır (o da aynı PII guard'ına tabidir).
+    if not _TABLO_ADI.match((table or "").strip()):
+        return {"ok": False, "error": "gecersiz_tablo_adi",
+                "message": (f"'{table}' tek bir tablo/görünüm adı değil. Bu tool yalnız "
+                            "'SELECT ... FROM <tablo>' yapar; takma ad/JOIN/alt-sorgu için "
+                            "adt_sql_query kullan (aynı PII guard'ı geçerlidir).")}
+    for c in (col_list or []):
+        if not _KOLON_ADI.match(c):
+            return {"ok": False, "error": "gecersiz_kolon_adi",
+                    "message": (f"Kolon '{c}' geçerli bir alan adı değil (harf/rakam/_/~). "
+                                "İfade/fonksiyon gerekiyorsa adt_sql_query kullan.")}
 
     client = _get_client()
     try:
@@ -421,14 +501,19 @@ def adt_sql_query(
                            "Bu tool yalnız salt-okuma SELECT içindir."}
 
     from mcp_servers.sap_adt._conn import get_active_tier
-    from mcp_servers.sap_adt.data_guard import require_data_access
+    from mcp_servers.sap_adt.data_guard import (
+        require_data_access, select_fields, table_candidates,
+    )
     from mcp_servers.sap_adt.guardrails import GuardrailViolation
-    tables = {t.upper() for t in re.findall(
-        r"\b(?:FROM|JOIN)\s+([A-Za-z_][A-Za-z0-9_/]*)", q_nolit, re.IGNORECASE)}
+    # TEK KAYNAK (2026-08-01 KAYIT-K1a): tablo çıkarımı `data_guard.table_candidates`'a
+    # taşındı. Buradaki yerel regex şema önekini kaçırıyordu ("SAPABAP1.KNA1" -> 'SAPABAP1'
+    # okunup serbest bırakılıyordu) ve kardeş `adt_table_read` ile ayrışabiliyordu; iki
+    # tool'un AYRI çözüm taşıması bu kusur sınıfının kökeniydi.
+    tables = table_candidates(q_nolit)
+    alanlar = select_fields(q_nolit)   # alan-seviyesi guard (KAYIT-K1b) burada da devrede
     try:
-        for t in sorted(tables):
-            require_data_access(get_active_tier(), t,
-                                acknowledge_risk=acknowledge_risk, approval_text=approval_text)
+        require_data_access(get_active_tier(), q_nolit, fields=alanlar,
+                            acknowledge_risk=acknowledge_risk, approval_text=approval_text)
     except GuardrailViolation as gv:
         return gv.as_dict()
 
@@ -551,9 +636,23 @@ def adt_inactive_objects() -> dict:
     `scripts/worklist_audit.py`'nin MCP-native karşılığı. Gün-sonu/commit-öncesi "aktive
     edilmemiş obje var mı" kontrolü tek çağrıya iner. `GET /sap/bc/adt/activation/inactiveobjects`.
 
+    ⚠ **SİLİNMİŞ OBJE TUZAĞI (2026-07-29, canlı vaka).** Bu uç nokta SİLİNMİŞ objeleri de
+    listeler ve kendi `ioc:deleted` alanı bunu ELE VERMEZ (ölçüm: TADIR `DELFLAG='X'` olan
+    iki sınıf için `ioc:deleted="false"` döndü — o alan *bekleyen taslağın* türünü anlatıyor,
+    objenin silinmiş olup olmadığını değil). Ham liste "2 obje aktive bekliyor" gibi okundu;
+    oysa objeler silinmişti (SE24/SE80'de yok, `adt_get` `exists:false`) ve geriye yalnız
+    bayat worklist kaydı kalmıştı. → Bu tool her girdiyi **TADIR DELFLAG** ile çapraz
+    kontrol eder; silinmişler `count`/`inactive_objects`'ten ÇIKARILIR, `stale_deleted`
+    altında ayrıca raporlanır. TADIR sorgusu koşamazsa SUSULMAZ: `tadir_deleted` null olur
+    + `warning` alanı döner.
+    ⚠ TADIR'daki `DELFLAG='X'` satırları **SİLİNMEZ** — silme işleminin transport'la
+    taşınması için gereklidir.
+
     Returns:
-        {ok, count, inactive_objects: [{name, type, uri, user}], client_log}
-        count=0 → aktive-bekleyen ana obje yok (transport/method-seviyesi girdiler elenir).
+        {ok, count, inactive_objects, stale_deleted_count, stale_deleted, client_log}
+        count=0 → AKSİYON GEREKTİREN aktive-bekleyen obje yok (silinmişler + transport/
+        method-seviyesi girdiler elenir). Girdi: {name, type, uri, user, deleted, transport,
+        tadir_deleted}. `tadir_deleted=None` → kontrol koşamadı, `warning`'e bak.
     """
     import xml.etree.ElementTree as ET
     client = _get_client()
@@ -583,10 +682,71 @@ def adt_inactive_objects() -> dict:
             if not a_name or key in seen:
                 continue
             seen.add(key)
-            out.append({"name": a_name.strip(), "type": a_type, "uri": key,
-                        "user": obj.get("{%s}user" % _IOC_NS["ioc"], "") or ""})
-        return {"ok": True, "count": len(out), "inactive_objects": out,
-                "client_log": buf.getvalue().strip()}
+            tr_ref = entry.find("ioc:transport/ioc:ref", _IOC_NS)
+            out.append({
+                "name": a_name.strip(), "type": a_type, "uri": key,
+                "user": obj.get("{%s}user" % _IOC_NS["ioc"], "") or "",
+                # ioc:deleted = BEKLEYEN TASLAĞIN türü ("bu taslak bir silme mi"),
+                # objenin silinmiş olup olmadığı DEĞİL. Ölçüm 2026-07-29: TADIR
+                # DELFLAG='X' olan iki obje için bu alan "false" döndü. Bu yüzden
+                # tek başına yeterli değil → aşağıdaki TADIR çapraz kontrolü.
+                "deleted": (obj.get("{%s}deleted" % _IOC_NS["ioc"], "") or "").lower() == "true",
+                "transport": (tr_ref.get("{%s}name" % _IOC_NS["adtcore"], "") or "")
+                             if tr_ref is not None else "",
+            })
+
+        # ── TADIR çapraz kontrolü: SİLİNMİŞ objeyi "aktive bekliyor" diye raporlama ──
+        # 2026-07-29 vakası: iki sınıf worklist'te duruyordu; SE24/SE80'de yok,
+        # adt_get exists:false, TADIR DELFLAG='X'. Yani obje SİLİNMİŞ, worklist kaydı
+        # bayat kalmıştı. Araç bunu ayırt etmediği için "2 obje aktive bekliyor" diye
+        # okundu ve neredeyse TADIR silme-kaydı temizlenecekti (o kayıtlar silmenin
+        # transport'la taşınması için ZORUNLUDUR — silinseydi gerçek hasar olurdu).
+        tadir_hata = None
+        if out:
+            adlar = sorted({o["name"] for o in out
+                            if o["name"] and all(c.isalnum() or c in "_/" for c in o["name"])})
+            if adlar:
+                liste = ", ".join("'%s'" % a for a in adlar)
+                try:
+                    res = adt_sql_query(
+                        "SELECT obj_name, object, delflag FROM tadir "
+                        "WHERE obj_name IN ( %s )" % liste,
+                        row_limit=max(200, len(adlar) * 2))
+                    if res.get("ok"):
+                        silinmis = {
+                            (str(r.get("OBJ_NAME", "")).strip(),
+                             str(r.get("OBJECT", "")).strip())
+                            for r in (res.get("rows") or [])
+                            if str(r.get("DELFLAG", "")).strip().upper() == "X"
+                        }
+                        for o in out:
+                            # ADT tipi 'CLAS/OC' → TADIR OBJECT 'CLAS'
+                            tadir_obj = (o["type"].split("/")[0] or "").strip()
+                            o["tadir_deleted"] = (o["name"], tadir_obj) in silinmis
+                    else:
+                        tadir_hata = res.get("message") or res.get("error") or "bilinmeyen"
+                except Exception as exc:            # noqa: BLE001 — teşhis bozulmasın
+                    tadir_hata = str(exc)[:200]
+        if tadir_hata:
+            # Ölçülemediyse SUSMA — "silinmiş değil" varsayımı tam da bu tuzağın kendisi.
+            for o in out:
+                o["tadir_deleted"] = None
+
+        bayat = [o for o in out if o.get("tadir_deleted") is True]
+        canli = [o for o in out if o.get("tadir_deleted") is not True]
+        sonuc = {
+            "ok": True,
+            "count": len(canli),              # AKSİYON GEREKTİREN (silinmişler hariç)
+            "inactive_objects": canli,
+            "stale_deleted_count": len(bayat),
+            "stale_deleted": bayat,           # TADIR DELFLAG='X' → obje zaten silinmiş
+            "client_log": buf.getvalue().strip(),
+        }
+        if tadir_hata:
+            sonuc["tadir_check"] = "FAILED: %s" % tadir_hata
+            sonuc["warning"] = ("TADIR DELFLAG kontrolü KOŞMADI → listede silinmiş obje "
+                                "olabilir; 'tadir_deleted' alanları null. Elle doğrula.")
+        return sonuc
     except Exception as exc:
         return _err_from_exc(exc)
 
@@ -870,6 +1030,8 @@ def adt_grep_source(
     wanted = {t.strip().upper() for t in (object_types.split(",") if object_types else []) if t.strip()}
     client = _get_client()
     targets: list = []
+    kapsam_dogrulanmis = True
+    kapsam_log = ""
     try:
         if objects:
             raw = objects.split(",") if isinstance(objects, str) else list(objects)
@@ -880,9 +1042,16 @@ def adt_grep_source(
                 else:
                     targets.append((item, "class"))
         elif package:
-            with _capture():
+            # ⚠ Buradaki `_capture()` eskiden buffer'ı ADSIZ tüketiyordu: paket-ucu
+            # başarısız olup ad-desenli fallback'e düşüldüğünde SAP'nin bastığı uyarı
+            # notu da yutuluyordu → grep, BAŞKA PAKETLERİN objelerinde arama yapıp
+            # sonucu "bu pakette" diye sunuyordu (2026-08-01 bug-avı, sessiz-kapsam).
+            with _capture() as _kbuf:
                 objs = client.list_package_contents(package)
-            for o in (objs or []):
+            kapsam_log = _kbuf.getvalue().strip()[-400:]
+            objs = objs or []
+            kapsam_dogrulanmis = all(o.get("package_verified") for o in objs if isinstance(o, dict))
+            for o in objs:
                 pref = (o.get("type") or "").split("/")[0].upper()
                 if wanted and pref not in wanted:
                     continue
@@ -912,9 +1081,20 @@ def adt_grep_source(
                     break
         if hit_cap:
             break
-    return {"ok": True, "pattern": pattern, "scanned_objects": scanned,
-            "match_count": len(matches), "truncated_object_scope": truncated_scope,
-            "truncated_matches": hit_cap, "matches": matches}
+    out = {"ok": True, "pattern": pattern, "scanned_objects": scanned,
+           "match_count": len(matches), "truncated_object_scope": truncated_scope,
+           "truncated_matches": hit_cap, "matches": matches,
+           "scope_verified": bool(kapsam_dogrulanmis)}
+    if not kapsam_dogrulanmis:
+        out["scope_warning"] = (
+            "KAPSAM DOĞRULANMADI: paket içeriği SAP'nin paket ucundan alınamadı, AD-DESENLİ "
+            "arama fallback'i kullanıldı → taranan objeler BAŞKA PAKETLERE ait olabilir ve bu "
+            "paketin bazı objeleri HİÇ taranmamış olabilir. 'bu pakette geçmiyor' sonucunu "
+            "buradan ÇIKARMA (match_count=0 kanıt değildir)."
+        )
+        if kapsam_log:
+            out["scope_log"] = kapsam_log
+    return out
 
 
 # =============================================================================
@@ -992,7 +1172,9 @@ def adt_impact_analysis(name: str, object_type: str = "ddls",
 _AUNIT_SEG = {"class": "oo/classes", "clas": "oo/classes",
               "program": "programs/programs", "prog": "programs/programs",
               "functiongroup": "functions/groups", "fugr": "functions/groups"}
-_AUNIT_NS = "http://www.sap.com/adt/aunit"
+# NOT: aunit ns yalnız İSTEK gövdesinde (kök <aunit:runConfiguration>) ve YANITIN KÖKÜNDE
+# (<aunit:runResult>) kullanılır. Yanıttaki program/testClass/testMethod/alert ÖNEKSİZDİR →
+# parser'da aunit ns SABİTİ KULLANILMAZ (canlı ölçüm 2026-07-29; bkz. adt_unit_run yorumları).
 _ADTCORE_NS = "http://www.sap.com/adt/core"
 
 
@@ -1030,10 +1212,22 @@ def adt_unit_run(name: str, object_type: str = "class") -> dict:
         from urllib.parse import quote
         adt = getattr(client, "adt_client", None) or client
         objuri = "/sap/bc/adt/" + seg + "/" + quote(name.lower(), safe="")
+        # ⛔ <options> ZORUNLU ve ÖNEKSİZ (canlı ölçüm 2026-07-29, tek-değişkenli matris):
+        #   options YOK        -> HTTP 200, 99 bayt, 0 test  (sunucu filtreleri kapalı sayıyor)
+        #   options ÖNEKLİ     -> HTTP 200, 99 bayt, 0 test  (tanınmayan eleman SESSİZCE yok sayılıyor)
+        #   options ÖNEKSİZ    -> HTTP 200, 2416 bayt, 9 test ✅
+        # Kardeşleri (<external>, <objectSet>) de öneksiz — ipucu gövdedeydi.
+        # Accept DEĞİŞTİRİLMEZ: api.abapunit.run.v1 -> HTTP 406, sunucu "yalnız
+        # ...testruns.result.v2+xml kabul edilir" diyor.
         body = ('<?xml version="1.0" encoding="UTF-8"?>'
                 '<aunit:runConfiguration xmlns:aunit="http://www.sap.com/adt/aunit"'
                 ' xmlns:adtcore="http://www.sap.com/adt/core">'
                 '<external><coverage active="false"/></external>'
+                '<options><uriType value="semantic"/>'
+                '<testDeterminationStrategy sameProgram="true" assignedTests="false"'
+                ' appendAssignedTestsPreview="true"/>'
+                '<testRiskLevels harmless="true" dangerous="true" critical="true"/>'
+                '<testDurations short="true" medium="true" long="true"/></options>'
                 '<adtcore:objectSets><objectSet kind="inclusive"><adtcore:objectReferences>'
                 '<adtcore:objectReference adtcore:uri="' + objuri + '"/>'
                 '</adtcore:objectReferences></objectSet></adtcore:objectSets>'
@@ -1055,14 +1249,22 @@ def adt_unit_run(name: str, object_type: str = "class") -> dict:
         def _an(el, a):
             return el.get("{%s}%s" % (_ADTCORE_NS, a), "")
 
+        # ⛔ Yanıtta YALNIZ kök <runResult> aunit ns'inde; program/testClass/testMethod/alert
+        #   NAMESPACE'SİZ (canlı ölçüm 2026-07-29: .//{aunit}program -> 0, .//program -> 1,
+        #   .//testMethod -> 9). Namespace'li arayan parser DOLU yanıtı bile 0 sayar.
+        #   ⚠ adtcore:name (_an) DOĞRU — `name` attribute'u gerçekten adtcore ns'inde.
+        #   ⚠ Tam-tag eşleşme şart: yanıtta testClasses/testMethods SARMALAYICILARI var;
+        #     substring eşleşmesi 9 yerine 10 sayar.
+        #   ⚠ DOĞRULANAMADI: <alert> ns'i ölçülemedi (9/9 test geçti, 0 alert). Kardeşleri
+        #     öneksiz olduğu için öneksiz varsayıldı — bilerek kırılan bir testle teyit edilmeli.
         classes, mcount, fcount = [], 0, 0
-        for prog in root.iter("{%s}program" % _AUNIT_NS):
-            for tclass in prog.iter("{%s}testClass" % _AUNIT_NS):
+        for prog in root.iter("program"):
+            for tclass in prog.iter("testClass"):
                 methods = []
-                for tm in tclass.iter("{%s}testMethod" % _AUNIT_NS):
+                for tm in tclass.iter("testMethod"):
                     alerts = []
-                    for al in tm.iter("{%s}alert" % _AUNIT_NS):
-                        title_el = al.find("{%s}title" % _AUNIT_NS)
+                    for al in tm.iter("alert"):
+                        title_el = al.find("title")
                         alerts.append({
                             "severity": al.get("severity", ""),
                             "kind": al.get("kind", ""),
@@ -1088,18 +1290,30 @@ def adt_unit_run(name: str, object_type: str = "class") -> dict:
 
 @profil_tool()
 def adt_lock_check(name: str, object_type: str = "class") -> dict:
-    """Probe whether an SAP object is currently locked.
+    """Bir SAP objesinin kilitli olup olmadığını sorgula — salt-okuma (GET /adt/locks).
 
-    Strategy: issue a metadata read; if SAPLockError fires, object is locked.
-    This is a best-effort probe — some lock types only surface during write.
+    ⚠ ESKİ SÜRÜM KİLİT TESPİTİ YAPAMIYORDU (2026-08-01 KAYIT-K3): strateji
+    "metadata OKU; SAPLockError düşerse kilitlidir" idi. Ama (a) OKUMA kilit hatası
+    üretmez ve (b) alt katman `sap_client.get_object_metadata` HER istisnayı yutup
+    `None` döner → `except` dalına HİÇ girilmez. Sonuç: `locked: True` ULAŞILAMAZ ÖLÜ
+    DAL'dı; tool DAİMA `locked: False` diyordu — yani kilit tespiti fiilen yoktu ve
+    "kilitli değil" cevabı KANITSIZDI. Ayrıca `exists: md is not None` yüzünden ağ/500/
+    403 hatası da sessizce `exists: false` oluyordu (adt_get DDIC dalıyla aynı sınıf,
+    W2-MCPT-01).
+
+    Şimdi: gerçek kilit ucu (`SAPADTClient.is_object_locked` → `GET /sap/bc/adt/locks`,
+    push yolunda da kullanılır: sap_client.py:485) sorgulanır. Uç cevap veremezse
+    `locked: null` + `ok: false` döner — "kilitli değil" DİYE OKUNAMAZ.
 
     Args:
-        name: Object name.
-        object_type: ADT type ('class', 'doma', 'dtel', 'tabl', 'ddls', ...).
+        name: Obje adı.
+        object_type: ADT tipi ('class', 'doma', 'dtel', 'tabl', 'ddls', ...).
 
     Returns:
-        {ok, name, type, locked: bool, lock_owner?: str, exists: bool, client_log}
+        {ok, name, type, locked: bool|null, lock_owner?, exists: bool, client_log}
+        `locked: null` = ÇÖZÜLEMEDİ (kanıt yok). Bu bir "hayır" değildir.
     """
+    from mcp_servers.sap_adt.tools.atom import _miss_or_unreachable  # tek-kaynak sınıflandırıcı
     client = _get_client()
     try:
         from sap_adt_lib import SAPLockError, SAPObjectNotFoundError  # type: ignore
@@ -1107,34 +1321,54 @@ def adt_lock_check(name: str, object_type: str = "class") -> dict:
         SAPLockError = Exception  # type: ignore
         SAPObjectNotFoundError = Exception  # type: ignore
 
+    # ── 1) Varlık: metadata okuması (hata ≠ yokluk — sınıflandırıcıdan geçer) ──────
     try:
         with _capture() as buf:
             md = client.get_object_metadata(name, object_type=object_type)
-        return {
-            "ok": True,
-            "name": name,
-            "type": object_type,
-            "exists": md is not None,
-            "locked": False,
-            "client_log": buf.getvalue().strip(),
-        }
+        log = buf.getvalue().strip()
     except Exception as exc:
-        if isinstance(exc, SAPLockError):
-            return {
-                "ok": True,
-                "name": name,
-                "type": object_type,
-                "exists": True,
-                "locked": True,
-                "lock_owner": getattr(exc, "lock_owner", None),
-                "message": str(exc),
-            }
+        if isinstance(exc, SAPLockError):                      # (savunma amaçlı korunur)
+            return {"ok": True, "name": name, "type": object_type, "exists": True,
+                    "locked": True, "lock_owner": getattr(exc, "lock_owner", None),
+                    "message": str(exc)}
         if isinstance(exc, SAPObjectNotFoundError):
-            return {
-                "ok": True,
-                "name": name,
-                "type": object_type,
-                "exists": False,
-                "locked": False,
-            }
+            return {"ok": True, "name": name, "type": object_type,
+                    "exists": False, "locked": False}
         return _err_from_exc(exc)
+
+    if md is None:
+        sinif = _miss_or_unreachable(name, object_type, log)
+        if not sinif.get("ok"):
+            sinif["locked"] = None                             # yokluk DA kilit DE iddia etme
+            return sinif
+        return {"ok": True, "name": name, "type": object_type,
+                "exists": False, "locked": False, "client_log": log}
+
+    # ── 2) Gerçek kilit sondası ───────────────────────────────────────────────────
+    adt = getattr(client, "adt_client", None)
+    bilgi = None
+    try:
+        from object_types import get_object_url  # type: ignore
+        if adt is not None and hasattr(adt, "is_object_locked"):
+            with _capture() as buf2:
+                bilgi = adt.is_object_locked(get_object_url(name, object_type))
+            log = (log + "\n" + buf2.getvalue().strip()).strip()
+    except Exception as exc:                                   # sonda kurulumu bile başarısızsa
+        log = (log + f"\n[ERROR] kilit sondası: {exc}").strip()
+
+    if not isinstance(bilgi, dict):
+        return {
+            "ok": False, "error": "kilit_belirsiz",
+            "name": name, "type": object_type, "exists": True, "locked": None,
+            "message": ("Kilit durumu ÇÖZÜLEMEDİ (kilit ucu cevap vermedi ya da bu "
+                        "kurulumda yok). Bu sonuç 'kilitli DEĞİL' ANLAMINA GELMEZ — "
+                        "yazma denemesi 409/enqueue hatası verebilir. SM12/SE11 ile "
+                        "doğrula."),
+            "client_log": log,
+        }
+    return {
+        "ok": True, "name": name, "type": object_type, "exists": True,
+        "locked": bool(bilgi.get("locked")),
+        "lock_owner": bilgi.get("lock_owner"),
+        "client_log": log,
+    }

@@ -57,6 +57,8 @@ except Exception:
 # Seed KAYNAĞI = core (script core'da yaşar; __file__.resolve() junction'da DEV_CORE'a
 # çözülür — kaynak için DOĞRU). Yeni yerleşim claude/, eski .claude/ fallback.
 CORE_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(CORE_ROOT / "scripts"))
+from utils.claude_paths import auto_memory_dizini, proje_slug  # noqa: E402
 SEED_DIR = CORE_ROOT / "claude" / "memory-seed"
 if not SEED_DIR.exists():
     SEED_DIR = CORE_ROOT / ".claude" / "memory-seed"
@@ -66,13 +68,16 @@ PROJECT_ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
 
 
 def project_slug(path: Path) -> str:
-    """Claude Code proje-hafıza klasör adı: yoldaki alfanümerik-olmayan -> '-'."""
-    return re.sub(r"[^A-Za-z0-9]", "-", str(path))
+    """Claude Code proje-hafıza klasör adı — TEK KAYNAK: utils/claude_paths.proje_slug.
+
+    (2026-08-01 KAYIT S4: bu kural beş dosyada bağımsız yazılmıştı, ikisi alt çizgiyi
+    korumaya çalışıyordu ve YANLIŞ dizini gösteriyordu. Ölçüm + karşı-kanıt: claude_paths.)
+    """
+    return proje_slug(path)
 
 
 def default_target() -> Path:
-    slug = project_slug(PROJECT_ROOT)
-    return Path.home() / ".claude" / "projects" / slug / "memory"
+    return auto_memory_dizini(PROJECT_ROOT)
 
 
 MANIFEST_ADI = ".seed-manifest.json"

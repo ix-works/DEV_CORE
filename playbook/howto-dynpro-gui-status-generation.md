@@ -61,10 +61,37 @@ POST /sap/bc/soap/rfc?sap-client=<client>
 | `IV_CC_NAME` | `SCRCNAME` | `'CC_ALV'` | Custom control adı (CONTAINER tipinde) |
 | `IV_MODE` | `CHAR10` | `'WRITE'` | `WRITE`(üret) / `READ`(oku) / `DELETE`(`RS_SCRP_DELETE`) |
 | `IV_RECREATE` | `CHAR1` | `' '` | `'X'` → mevcut ekranı sil+yeniden kur |
+| **`IT_BUTTONS`** | **`ZSD000_TT_SCREEN_BUTTON`** | **opt** | **App-toolbar butonları** — bkz. §2.1 *(2026-07-31: bu satır EKSİKTİ)* |
 | `EV_RC` / `EV_MESSAGE` | `I` / `STRING` | — | Sonuç (rc=0 OK, rc=2 zaten var) |
 
 **Dinamik isimlendirme:** `IV_DYNPRO=<n>` → ekran `<n>`, flow modülleri `MODULE status_<n>`/`user_command_<n>`,
 GUI status `STAT<n>`, titlebar `TIT<n>`. **FM kodu ekran başına DEĞİŞMEZ** — sadece IV_DYNPRO değişir.
+
+### 2.1 `IT_BUTTONS` — app-toolbar üretimi *(doküman 2026-07-31'de düzeltildi)*
+
+> ⛔ **BU BÖLÜM EKSİKTİ ve bir ajanı yanlış yola soktu.** Doküman `IT_BUTTONS`'ı **hiç anmıyordu**;
+> ajan "üreteç buton üretemiyor" varsayıp ALV-toolbar event'ine yönelmişti. **FM'in imzasında
+> parametre VAR** ve gövde app-toolbar'ı `fun/act/pfk/but/set` zinciriyle kuruyor.
+> **Ders: parametrenin dokümanda olmaması, FM'de olmadığı anlamına gelmez — imzayı KAYNAKTAN oku.**
+
+Satır alanları: `FCODE` · `TEXT` · `ICON` · `QUICKINFO` · `FKEY`.
+
+⚠ **`FKEY`'i BOŞ bırak.** FM, donör status'ün `MAX(pfno)`+sıra mantığıyla **çakışmayan** bir slot
+seçiyor. Sabit bir fonksiyon tuşu (ör. `F11`) vermek donör `pfk` girdileriyle **anahtar çakışması**
+yaratabilir — **denenmedi**, riske girmeye değmez.
+
+**Ne zaman ALV-toolbar yerine app-toolbar:** butonların "etkin/pasif" koşulu varsa app-toolbar
+tercih edilir — `SET PF-STATUS … EXCLUDING` ile **tek yerde** yönetilir. ALV toolbar event'i aynı
+işi dağıtır ve her handler'da tekrarlatır.
+
+⚠ **Hâlâ AÇIK — giriş ALANI üretimi.** `WRITE` modunda `fields_to_containers` (`DYFATC_TAB`)
+**boş** olarak `RPY_DYNPRO_INSERT`'e gidiyor; tablo yalnız `READ` modunda dolduruluyor. Yani
+**container/ALV ekranı üretilir, giriş alanlı modal diyalog ÜRETİLEMEZ.**
+→ Modal diyalog gerekiyorsa: FM'e opsiyonel `IT_FIELDS` eklemek (kalıcı çözüm, `IT_BUTTONS`
+emsaliyle geriye uyumlu) **veya** operatörün SE51'de çizmesi.
+📌 `RPY_DYFATT` bileşen adlarını **tahmin etme** — FM'in kendi `IV_MODE='READ'` yolu
+`fields_to_containers`'ı okuyor; giriş alanlı mevcut bir dynpro'ya READ ile bakıp **SAP'nin
+ürettiği** değerleri ölç (salt-okuma).
 
 ## 3. Adım adım
 

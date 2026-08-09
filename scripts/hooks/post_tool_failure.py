@@ -31,7 +31,10 @@ REMINDER = (
     "  3. TOPLAM 5 denemede hâlâ olmazsa → DUR + lider/kullanıcıya gel (ham hata + denenenler + araştırma bulgusu).\n"
     "  4. Transport: hata mesajındaki numarayı ASLA kullanma; lock conflict → SM12/SE10 sonrası dene.\n"
     "  5. Guardrail (ADR 0005/0010/0011) ihlali ise: kuralı değiştirme — yaklaşımı değiştir veya kullanıcıya sor.\n"
-    "  6. Çözüm bulunca playbook güncelle (T1: çalışan + denenen-başarısız)."
+    "  5b. Hata İNFRA'nın kendisinde mi (validator/hook/script bug'ı ya da yanlış-pozitif)? Görev-içi fix'e ATLAMA: DONDUR→SINIFLA→(EXPRESS|KUYRUK) — core/playbook/howto-infra-fix-proseduru.md\n"
+    "  6. Çözüm bulunca playbook güncelle (T1: çalışan + denenen-başarısız).\n"
+    "  7. AYNI çağrıyı AYNI girdiyle tekrarlamadan önce sor: ilk sonucu neden kullanamıyorum?"
+    " Büyük çıktıyı scratch dosyasına yaz, oradan oku (P6 — ölçüm: çağrıların ~%24'ü birebir mükerrerdi)."
 )
 
 # CDS-YARATMA patinaj imzaları → fail anında GENERIC değil SPESİFİK reçete (2026-06-13,

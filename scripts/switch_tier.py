@@ -44,12 +44,23 @@ _TIER_ALIASES = {
 
 
 def _field_of_file(p: Path, key: str) -> str | None:
+    """Slot dosyasından alan değeri — **TAM ANAHTAR** eşleşmesi (2026-08-01 KAYIT-1).
+
+    Eski `s.startswith(key)` ÖNEK eşliyordu: `ADT_SAP_TIER_OLD=DEV` satırı gerçek
+    `ADT_SAP_TIER=PRD` satırından önce gelirse tier'ı GASP ediyordu (PRD slotu DEV
+    görünür → switch_tier "mutasyon serbest" derdi). Aynı düzeltme
+    `mcp_servers/sap_adt/_conn._conn_line_value`'da (tek kaynak değil — iki ayrı
+    süreç/kapsam; davranış birebir aynı tutulur, fixture ikisini de koşar).
+    """
     if not p.exists():
         return None
     for line in p.read_text(encoding="utf-8").splitlines():
         s = line.strip()
-        if s.startswith(key) and "=" in s:
-            return s.split("=", 1)[1].strip()
+        if not s or s.startswith("#") or "=" not in s:
+            continue
+        k, v = s.split("=", 1)
+        if k.strip() == key:
+            return v.strip()
     return None
 
 
@@ -76,9 +87,11 @@ def _resolve(raw: str) -> tuple[Path, str] | None:
     key = raw.strip().upper()
     reg = _registry()
     # 1) Birebir sistem adı eşleşmesi
+    # tier yoksa "DEV" DEĞİL "UNKNOWN" (KAYIT-1 fail-closed): slot'ta tier satırı
+    # olmaması "DEV'dir" anlamına gelmez; kullanıcıya yalan söylemeyiz.
     for name, path, tier in reg:
         if name == key:
-            return (path, tier or "DEV")
+            return (path, tier or "UNKNOWN")
     # 2) Tier kısaltması → o tier'daki sistemler
     tier_key = _TIER_ALIASES.get(key)
     if tier_key:
@@ -156,6 +169,11 @@ def main(argv: list[str]) -> int:
     if tier in ("QA", "PRD"):
         print(f"⛔ DİKKAT: tier={tier} SALT-OKUNUR. MCP guard mutasyonu reddeder")
         print("   (create/push/activate/delete). Sadece okuma/analiz/teşhis.")
+    elif tier != "DEV":
+        # KAYIT-1: tier çözülemedi → fail-closed. Sessizce DEV varsayma.
+        print(f"⛔ DİKKAT: tier ÇÖZÜLEMEDİ (tier={tier}). MCP guard MUTASYONU REDDEDER.")
+        print(f"   {src.name} dosyasına 'ADT_SAP_TIER=DEV|QA|PRD' satırını ekle")
+        print("   (TAM anahtar — 'ADT_SAP_TIER_OLD=...' sayılmaz) ve tekrar çalıştır.")
     print("ℹ MCP server'ı yeniden başlat (bağlantı cache'i yeni sisteme bağlansın).")
     return 0
 

@@ -24,7 +24,8 @@ Kullanım:
     python scripts/worklist_audit.py --json               # makine-okur çıktı
 
 Exit: 0 = hedef-kapsamda gerçek-inactive YOK (commit güvenli); 1 = var (commit'ten önce çöz/raporla);
-      2 = worklist okunamadı (soft, bağlantı/erişim).
+      2 = OKUNAMADI (soft): worklist çekilemedi VEYA hedef-kapsamda en az bir girdinin sürümü
+          okunamadı (UNKNOWN). 0 "kanıtlandı ki yok" demektir — bilinmeyen varken 0 dönülmez.
 """
 import argparse
 import io
@@ -143,13 +144,33 @@ def _parse_entries(xml_text):
     return out
 
 
+# "Yok" diyen durumlar — canlı-kanıtlı: bu repoda varlık-sondası HER YERDE 404'e bakar
+# (mcp .../atom.py adt_get → exists:false; sap_client.py "canlı ölçüm 2026-07-09";
+# source_drift.py "canlı obje yok (404)").
+_YOK_DURUMLARI = (404, 410)
+
+
 def _version_exists(adt, uri, version):
-    """uri'nin verilen sürümü (active|inactive) SAP'de var mı? (object-structure GET)."""
+    """uri'nin verilen sürümü (active|inactive) SAP'de var mı? ÜÇ DEĞERLİ:
+    True = var · False = YOK (404/410) · None = OKUNAMADI.
+
+    ⚠ AV-13 (2026-08-01) kökü: eskiden `return r.status_code == 200` idi — yani
+    500/503/403/timeout gibi bir SUNUCU/YETKİ arızası da "obje yok" sayılıyordu.
+    Bir arıza cevabı YOKLUK BEYANI DEĞİLDİR; bu katlama üst katmanda gerçek bir WIP
+    objeyi PHANTOM ("silinmiş") gösteriyor ve `--discard-phantoms` onu discard ediyordu.
+    Tanınmayan durum kodunda bilinçli olarak None (=okunamadı) döneriz: "bilmiyorum"
+    dürüst cevaptır ve yıkıcı yolu (discard) kapatır — sessizce yanlış sınıflamaktansa
+    GÖRÜNÜR şekilde UNKNOWN kalır.
+    """
     try:
         r = adt.session.get(f"{adt.url}{uri}", params={"version": version}, timeout=20)
-        return r.status_code == 200
     except Exception:  # noqa: BLE001
         return None
+    if r.status_code == 200:
+        return True
+    if r.status_code in _YOK_DURUMLARI:
+        return False
+    return None
 
 
 def _object_package(client, name, simple_type):
@@ -176,14 +197,21 @@ def _classify(adt, client, e):
       STALE         — active var, distinct inactive YOK (zaten aktif; bayat girdi)
       INACTIVE_ONLY — active YOK, inactive var (yaratılmış, hiç aktive edilmemiş — WIP/terk)
       REAL_INACTIVE — active VAR + distinct inactive VAR (gerçek bekleyen değişiklik)
-      UNKNOWN       — sürüm okunamadı (soft)
+      UNKNOWN       — sürümlerden EN AZ BİRİ okunamadı (soft; sınıflama yapılamaz)
     """
     uri = e["uri"]
     has_active = _version_exists(adt, uri, "active")
     has_inactive = _version_exists(adt, uri, "inactive")
     simple = _SIMPLE.get(e["type"])
     pkg = _object_package(client, e["name"], simple) if simple else None
-    if has_active is None and has_inactive is None:
+    # ⚠ AV-13: `and` DEĞİL `or`. Eskiden yalnız İKİSİ BİRDEN None ise UNKNOWN denirdi;
+    # biri None + diğeri False olduğunda `not None` == True olduğu için sonuç PHANTOM
+    # ("silinmiş") çıkıyordu → tek bir geçici okuma hatası gerçek bir WIP objeyi
+    # silinmiş gösteriyor, `--discard-phantoms` onu discard ediyordu (VERİ KAYBI).
+    # Ters yön de vardı: (True, None) → STALE ("zaten aktif, zararsız") → commit-gate
+    # gerçek bir REAL_INACTIVE varken YEŞİL yanıyordu. Okunamayan sürüm hakkında
+    # HİÇBİR sınıf iddia edilemez.
+    if has_active is None or has_inactive is None:
         cls = "UNKNOWN"
     elif not has_active and not has_inactive:
         cls = "PHANTOM"
@@ -200,6 +228,16 @@ def _classify(adt, client, e):
 # commit-gate'i tetikleyen sınıflar (gerçek bekleyen inactive — yazım yan-etkisi olabilir).
 # (PHANTOM = --discard-phantoms ile temizlenebilir; STALE = bayat, zararsız rapor.)
 _GATE = {"REAL_INACTIVE", "INACTIVE_ONLY"}
+
+
+def _exit_kodu(real_in_scope, unknown_in_scope) -> int:
+    """Çıkış kodu sözleşmesi (AV-13; ayrı fonksiyon = SAP'siz test edilebilir).
+
+    Okunamayan girdi varken 0 dönmek "commit güvenli" YALANI olur: 0'ın anlamı
+    "kanıtlandı ki gerçek-inactive yok". Bilinmeyen varsa script'in KENDİ sözleşmesindeki
+    soft kod 2 ("okunamadı — gate ATLANDI") kullanılır. Gerçek-inactive varsa 1 baskındır.
+    """
+    return 1 if real_in_scope else (2 if unknown_in_scope else 0)
 
 
 def main():
@@ -256,6 +294,8 @@ def main():
         rows = [r for r in rows if r["user"].upper() == me]
     pkg_filter = args.package.upper()
     in_scope = [r for r in rows if (not pkg_filter or (r["package"] or "").upper() == pkg_filter)]
+    real_in_scope = [r for r in in_scope if r["class"] in _GATE]
+    unknown_in_scope = [r for r in in_scope if r["class"] == "UNKNOWN"]
 
     if args.json:
         print(json.dumps({"me": me, "package": pkg_filter or None,
@@ -272,7 +312,7 @@ def main():
         # öneri özeti
         phantom = [r for r in rows if r["class"] == "PHANTOM"]
         stale = [r for r in rows if r["class"] == "STALE"]
-        real = [r for r in in_scope if r["class"] in _GATE]
+        real = real_in_scope
         print("\n--- ÖZET / ÖNERİ ---")
         if phantom:
             print(f"  PHANTOM ({len(phantom)}): silinmiş/yok — worklist bayat girdisi. "
@@ -286,11 +326,15 @@ def main():
                 hint = ("yazım yan-etkisi olabilir → AKTİVE et" if r["class"] == "REAL_INACTIVE"
                         else "yaratılmış/aktive-edilmemiş → WIP mi, terk mi? (aktive/sil kararı insanda)")
                 print(f"      - {r['name']} ({r['class']}, tr={r['transport'] or '-'}): {hint}")
+        elif unknown_in_scope:
+            print(f"  ⚠️ OKUNAMADI ({len(unknown_in_scope)}) — sürüm sorgusu cevap vermedi/arıza "
+                  f"döndü. 'GERÇEK-INACTIVE yok' İDDİA EDİLEMEZ → soft exit 2:")
+            for r in unknown_in_scope:
+                print(f"      - {r['name']} (active={r['has_active']}, inactive={r['has_inactive']})")
         else:
             print("  ✅ Hedef kapsamda GERÇEK-INACTIVE yok — commit güvenli.")
 
-    real_in_scope = [r for r in in_scope if r["class"] in _GATE]
-    return 1 if real_in_scope else 0
+    return _exit_kodu(real_in_scope, unknown_in_scope)
 
 
 if __name__ == "__main__":

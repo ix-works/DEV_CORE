@@ -16,6 +16,11 @@ import sys
 
 if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
     try:
+        # stdin DAHIL (2026-08-01 kok-fix): harness payload'i UTF-8'dir; Windows'ta
+        # varsayilan cp1252 text-wrapper cok-baytli karakterleri MOJIBAKE'ye cevirir
+        # ("GOREV"->"GA-REV") -> Turkce iceren her payload alani sessizce bozulur
+        # (brifing-lint FP'si bu yuzdendi; kanit: .tmp/brifing-lint-debug.log).
+        sys.stdin.reconfigure(encoding="utf-8")
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     except Exception:

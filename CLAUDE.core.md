@@ -69,8 +69,8 @@
 | Katman | Konu | Yer | Nasıl yüklenir |
 |---|---|---|---|
 | **L1a** | Her-oturum davranış değişmezleri | **§1.1 (aşağıda)** | her oturum (bu dosya) |
-| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | **eşleşen dosyaya dokununca** (`paths:` — `globs:` DEĞİL) |
-| **L1c** | Derin davranış referansı | [`AGENTS.md`](AGENTS.md) | ⚠ **OTOMATİK YÜKLENMEZ** — açıkça okunmalı |
+| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | **her oturum yüklenir** (`paths:` yazılı ama harness tembel-tetiği çalıştırmıyor — #17204; ölçüm 2026-07-31: 37/37 oturum koşulsuz. Harness düzelirse inspector A3 fark eder) |
+| ~~L1c~~ | ~~AGENTS.md~~ — **SUPERSEDED (D1 2026-08-01)**: içerik §1.1 + rules/ + MAINTENANCE + operating-model'e taşındı | — | — |
 | **L2** | Stabil kurumsal standartlar (naming, coding, UI, doc format) | [`standards/`](standards/) | on-demand |
 | **L3** | Operasyonel pattern (ADT pattern bankası, lessons-learned) | [`playbook/`](playbook/) | on-demand |
 | **L4** | Paket-spesifik (prefix, bağımlılık, istisna) — **PROJE reposunda** | `<source_root>/<MODULE>/<PKG>/.rules.md` | on-demand |
@@ -92,6 +92,13 @@
 ## 1.1 HER-OTURUM DAVRANIŞ DEĞİŞMEZLERİ (L1a)
 
 - **GIT:** `main`'e doğrudan commit YOK → branch + PR. Commit = **lider**; alt-ajan commit/push etmez.
+  **Branch DAİMA açık başlangıç noktasıyla açılır:** `git fetch -q origin && git checkout -b <ad> origin/main`.
+  Çıplak `git checkout -b <ad>` **bulunduğun yerden** dallanır; bir önceki PR **squash**-merge edilmişse
+  o branch'in commit'leri main'de artık **başka bir SHA** olarak durur → yeni PR **CONFLICTING** açılır.
+  *(Vaka 2026-07-28: `checkout main && pull` bir `&&` zincirinin erken kırılan adımıydı, sessizce hiç
+  koşmadı; sonraki branch eski noktadan açıldı. Başlangıcı komutta vermek bu sınıfı tümden kapatır —
+  senkron adımının koşup koşmadığına bağımlı olmaz.)*
+  ⚠️ Worktree yalnız provizyonlu açılır: `team_setup.py --provision-worktree` (junction + `.conn_adt` provizyonu şart — D16; çıplak `git worktree add` guardrail'siz kalır).
   Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU**.
 - **HEDEF-AÇIKLIK — `gh`/`git` üç değişmez (2026-07-10 dersi; guard kural 9):**
   1. **Repoyu DEĞİŞTİREN her `gh` alt-komutunda hedef AÇIKÇA verilir.** Üç biçim vardır:
@@ -136,11 +143,18 @@
 - **BUG GATE:** expert substantive build bitirince **taze** `bug-expert` → PASS/WARNING/BLOCKER.
 - **SAP yazma öncesi:** `run_review.py` pre-flight (ADR 0006). BLOCKER → yazma.
 - **SAP kaynağı düzenlemeden önce:** PULL-BEFORE-EDIT (ADR 0016) — tazelik doğrulanmadan edit YOK.
+- **İNFRA-SORUNU GÖRÜNCE (görev sırasında): DONDUR→SINIFLA→(EXPRESS|KUYRUK)** — görev-bağlamında infra değiştirilmez; akış: [`playbook/howto-infra-fix-proseduru.md`](playbook/howto-infra-fix-proseduru.md) (kuyruk-üretimi=infra-expert, son-söz=lider).
 - **ADT-altyapısı** (script/kural/MCP/hook/validator) değişikliği: ÖNCE uyar + **açık onay** al.
   **Gömülü onay YETMEZ** — "hepsini yap" bu izni vermez.
 - **BAĞLANTI:** proje kökündeki `.conn_adt`. `.conn_adt` ↔ MCP ayrışıksa ADT işlemi YOK.
 - **"Yüklendi / aktive edildi / başarılı" mesajına GÜVENME** — canlı doğrula. Araç başarısızlığını
-  zararsız sayma. Bulunamadı ≠ yok · kod ≠ kablolama · çökme ≠ FAIL.
+  zararsız sayma. Bulunamadı ≠ yok · kod ≠ kablolama · çökme ≠ FAIL · **"aktif" metadata'sı ≠ kodun aktif**.
+- **"ARAÇ BOZUK" demeden önce KONTROL GRUBU koş (PATTERN #19).** *"X bozuk"* karşılaştırmalı bir
+  iddiadır: sorunlu vaka **+ çalıştığı bilinen vaka** ister. Yoksa elindeki tek cümle *"X bu objede
+  çalışmadı"*dır. Aynı kirli girdiyle yapılan 5 başarısız varyant hipotezi **test etmez**, yalnız
+  ona duyulan güveni haksız yere büyütür. **Ve önce hafızayı ara** — tanıdık semptom bir sezgi değil
+  sinyaldir; cevap zaten yazılmış olabilir (vaka: bir ay önce çözülmüş bulgu unutulup üstüne yanlış
+  sonuç yazıldı). Pahalı bir çare ilk denemede tutmadıysa tekrarlama, **dayandığı kanıtı** sorgula.
 - **Always-allow YASAĞI (D32):** SAP-yazma ve davranış-yüzeyi araçlarına "Always allow" verilmez.
 - **Belirsizlikte DUR ve sor.** Spec yoksa operatör onayı iste; DTEL/append adı önerme.
 
@@ -172,7 +186,7 @@ Her yeni oturum başında, SAP işlemi yapmadan ÖNCE:
 ```
 [Session başladı — <PROJECT_NAME>]
 ⛔ KESİN YASAKLAR aktif (ADR 0005): A/B/C/D (D: master_language=<ML>)
-✓ Core loader yüklendi (junction sağlam) — CLAUDE.core.md (L1a) + claude/rules/ (L1b, glob-tetiklemeli)
+✓ Core loader yüklendi (junction sağlam) — CLAUDE.core.md (L1a) + claude/rules/ (L1b — her oturum; tembel-tetik #17204 nedeniyle pasif)
 ✓ SAP profili: <sap_profile>/<release> (bloklu yetenekler: <profilden>)
 ✓ run_all_validators.py --quick: <OK | N ihlal>
 ✓ Aktif paket: <PKG_FULL veya "belirsiz, kullanıcıya sor">
@@ -188,7 +202,7 @@ Bu format atlanırsa kullanıcı loader'ın yüklenmediğini varsayar → T4.
 |---|---|---|
 | **T1** | ADT işlemi başarısız denemelerden sonra başarılı oldu | `playbook/<obje-tipi>.md` (ÇALIŞAN YÖNTEM + DENENEN BAŞARISIZ) — **core'a, SORU 0 kurallarıyla** |
 | **T2** | Playbook'ta olmayan obje tipi/scenario başarıyla işlendi | Yeni section/dosya `playbook/` (core) |
-| **T3** | Kullanıcı kural koydu | Davranışsa AGENTS.md, standartsa standards/ (core); pakete özelse proje `.rules.md` |
+| **T3** | Kullanıcı kural koydu | Davranışsa CLAUDE.core §1.1/claude-rules, standartsa standards/ (core); pakete özelse proje `.rules.md` |
 | **T4** | Kullanıcı trigger phrase kullandı | `playbook/lessons-learned.md` recurrence + kod gate öner |
 | **T5** | Yeni paket / naming kararı | Proje: `<source_root>/<MODULE>/<PKG>/.rules.md` (bootstrap script) |
 | **T6** | TempScripts'te çalışan script, kalıcı lazım | core `scripts/`e taşı + playbook referansı (genericize!) |
@@ -222,6 +236,10 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 - **Kullanıcı-seviyesi `~\.claude\CLAUDE.md`'ye METODOLOJİ YAZILMAZ** (çift-kaynak drift +
   git-dışı + kapsam taşması). Yalnız projeden-bağımsız kişisel tercih.
 - Yeni proje memory'si `claude/memory-seed/`'den tohumlanır (`seed_memory`).
+- **Ders-hijyeni (radar 2026-08-01):** YENİ yazılan veya içeriğine dokunulan her feedback
+  dersine 2 satır eklenir: `Son-doğrulama: <tarih>` + `Applies-to: <bağlam/profil>`. Eski
+  dersler toplu güncellenmez (bürokrasi üretme); radar turu "yaşlanmış ders" (son-doğrulama
+  >90 gün + yüksek-recall) sorgusuyla örneklem denetler.
 
 ## 6. STOP KURALI — Belirsizlik Halinde Forward Progress YOK
 
@@ -277,8 +295,8 @@ analizi + canlı-test → PR.
 | Konu | Dosya |
 |---|---|
 | Her-oturum davranış değişmezleri | §1.1 (bu dosya) |
-| Dosya-türüne bağlı davranış (glob-tetiklemeli) | [`claude/rules/`](claude/rules/) |
-| Git workflow / ADT-infra — **derin referans, otomatik yüklenmez** | [`AGENTS.md`](AGENTS.md) |
+| Dosya-türüne bağlı davranış (L1b — fiilen her oturum, #17204) | [`claude/rules/`](claude/rules/) |
+| Git workflow / ADT-infra derin referans | §1.1 + [`MAINTENANCE.md`](MAINTENANCE.md) (AGENTS.md SUPERSEDED) |
 | Naming standardı | [`standards/01-naming.md`](standards/01-naming.md) |
 | Klasik backend (SEGW/FE) | [`standards/02-coding-backend.md`](standards/02-coding-backend.md) |
 | RAP kodlama | [`standards/05-coding-rap.md`](standards/05-coding-rap.md) |
@@ -299,6 +317,7 @@ analizi + canlı-test → PR.
 | Mimari kararlar (ADR) | [`governance/decisions/`](governance/decisions/) |
 | **Yeni proje açılışı** | [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) *(E3'te gözden geçirilir)* |
 | **Canlı-çekirdek işletimi** (PR/CI/stable/rollback) | [`MAINTENANCE.md`](MAINTENANCE.md) |
+| **Sistem-denetimi runbook'u** (dönemsel derin tur; kullanıcı bu dosyayı vererek ister) | [`playbook/howto-sistem-denetimi.md`](playbook/howto-sistem-denetimi.md) |
 | Agent teams işletim modeli | [`governance/agent-teams-operating-model.md`](governance/agent-teams-operating-model.md) |
 | Kurulu plugin envanteri | [`governance/tooling-plugins.md`](governance/tooling-plugins.md) |
 | Ekip/proje kurulumu | `python core/scripts/team_setup.py` · yeni proje: `core/scripts/init_project.py` |

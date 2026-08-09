@@ -1,3 +1,4 @@
+<!-- uretim: 2026-08-01T20:31:38+03:00 · core-commit: 14f9381 — bilgi satiri; tazelik kiyasinda yok sayilir -->
 <!-- URETILMIS DOSYA — elle duzenleme. Uretici: core/scripts/build_core_index.py
      Tazelik gate'i: core/scripts/validators/check_core_index_fresh.py -->
 
@@ -12,7 +13,7 @@
 > · `rg -L --no-ignore <p>` · `find -L core`. Kokten path'siz arama = sessiz sifir.
 
 
-## `core/playbook/` (42 dosya)
+## `core/playbook/` (47 dosya)
 
 - [`core/playbook/00-discipline-and-principles.md`](../core/playbook/00-discipline-and-principles.md) — ADT Disiplini, Hızlı Erişim ve Genel Prensipler
 - [`core/playbook/adt-cds.md`](../core/playbook/adt-cds.md) — CDS View (DDLS/DF)
@@ -43,11 +44,16 @@
 - [`core/playbook/checklists/ui-backend-rap-creation.md`](../core/playbook/checklists/ui-backend-rap-creation.md) — Checklist — UI Uygulaması RAP Backend Oluşturma
 - [`core/playbook/checklists/ui-freestyle-creation.md`](../core/playbook/checklists/ui-freestyle-creation.md) — Checklist — Freestyle UI5 (OData V2 / RAP tüketen) Oluşturma
 - [`core/playbook/coding-patterns.md`](../core/playbook/coding-patterns.md) — ABAP Coding Patterns — Range, FOR ALL ENTRIES, İç Tablo, Kur Dönüşümü
+- [`core/playbook/howto-abap-email.md`](../core/playbook/howto-abap-email.md) — ABAP'ten E-posta Gönderme — HTML gövde (+ ek-dosya) · `SO_DOCUMENT_SEND_API1`
+- [`core/playbook/howto-cok-katmanli-degisiklik.md`](../core/playbook/howto-cok-katmanli-degisiklik.md) — HOWTO — Çapraz-kesen (çok katmanlı) davranış değişikliği nasıl yönetilir
+- [`core/playbook/howto-delete-guard.md`](../core/playbook/howto-delete-guard.md) — HOWTO — Silme Kontrolü (delete guard): backend kuralından kullanıcının gördüğü mesaja
 - [`core/playbook/howto-document-lock.md`](../core/playbook/howto-document-lock.md) — How-To: VA02-Tarzı Belge Kilidi (App-Level, ortak ZSD000)
 - [`core/playbook/howto-dynpro-gui-status-generation.md`](../core/playbook/howto-dynpro-gui-status-generation.md) — Klasik Dynpro ekranı + GUI status'u AI'ın RFC FM ile (SOAP-RFC, dialog context) üretmesi
+- [`core/playbook/howto-infra-fix-proseduru.md`](../core/playbook/howto-infra-fix-proseduru.md) — HOWTO — İnfra-Fix Prosedürü: DONDUR → SINIFLA → (EXPRESS | KUYRUK) → İNFRA-EXPERT
 - [`core/playbook/howto-kullanici-dokumani-pdf-ekran-goruntulu.md`](../core/playbook/howto-kullanici-dokumani-pdf-ekran-goruntulu.md) — How-To: Markdown Dökümanı → Ekran Görüntülü Şık PDF (KD/FS/TS)
 - [`core/playbook/howto-packing-instruction-consumption.md`](../core/playbook/howto-packing-instruction-consumption.md) — How-To — Ambalajlama Talimatı Tüketimi (POP/POF → kasa + kasa-içi adet)
 - [`core/playbook/howto-rap-eml-sales-order-create-update.md`](../core/playbook/howto-rap-eml-sales-order-create-update.md) — How-to: Released Sales Order BO (I_SalesOrderTP) EML ile create / update
+- [`core/playbook/howto-sistem-denetimi.md`](../core/playbook/howto-sistem-denetimi.md) — HOWTO — Sistem Denetimi Runbook'u (envanter + hata-tekrarı + verimlilik + sadeleştirme)
 - [`core/playbook/intake-triage.md`](../core/playbook/intake-triage.md) — Geliştirme talebi alım protokolü — kapsam-sınıflama + 3-eksen araştırma + kanıtlı değerlendirme
 - [`core/playbook/known-errors.md`](../core/playbook/known-errors.md) — Bilinen Hatalar ve Çözümlü Durumlar
 - [`core/playbook/lessons-learned.md`](../core/playbook/lessons-learned.md) — Tekrarlayan hata pattern'leri ve trigger phrases
@@ -95,6 +101,16 @@
 - [`core/governance/decisions/0022-intake-triage-gate.md`](../core/governance/decisions/0022-intake-triage-gate.md) — ADR 0022 — Intake Triage Gate (ITG)
 - [`core/governance/decisions/0023-hook-kablolamasi-plugin-e-tasinmaz.md`](../core/governance/decisions/0023-hook-kablolamasi-plugin-e-tasinmaz.md) — ADR 0023 — Hook kablolaması plugin'e TAŞINMAZ (fail-closed-on-absence ifade edilemez)
 
+## `core/governance/` (7 dosya)
+
+- [`core/governance/agent-teams-operating-model.md`](../core/governance/agent-teams-operating-model.md) — Agent Teams İşletim Modeli
+- [`core/governance/infra-changelog.md`](../core/governance/infra-changelog.md) — İNFRA-CHANGELOG — bileşen-başına değişiklik/gerekçe/test kaydı
+- [`core/governance/infra-test-recipes.md`](../core/governance/infra-test-recipes.md) — İNFRA TEST-REÇETELERİ — bileşen-başına "dokunmadan önce/sonra koş" adımları
+- [`core/governance/removed-controls.md`](../core/governance/removed-controls.md) — KALDIRILMIŞ KONTROLLER SÖZLÜĞÜ (T4.4 — sahte-koruma süpürmesinin beslemesi)
+- [`core/governance/tooling-plugins.md`](../core/governance/tooling-plugins.md) — Kurulu Plugin Envanteri — <PROJECT_NAME>
+- [`core/governance/tooling-radar.md`](../core/governance/tooling-radar.md) — Genel Agent-Dev Tooling Radar
+- [`core/governance/vscode-setup.md`](../core/governance/vscode-setup.md) — VS Code Eklenti & Ayar Kurulumu — <PROJECT_NAME>
+
 ---
 
-**Toplam 74 dokuman.** Bu dosya uretilmistir; icerik degistiginde `build_core_index.py` yeniden kosulur.
+**Toplam 86 dokuman.** Bu dosya uretilmistir; icerik degistiginde `build_core_index.py` yeniden kosulur.

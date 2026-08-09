@@ -30,8 +30,16 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 # junction'lar (core'dan gelen agents/skills/commands) manifest DIŞI — onların
 # bütünlüğü core-git'in işidir; buradaki amaç PROJE-LOKAL sapmaları yakalamak.
 YUZEY_DOSYALAR = ["CLAUDE.md", "CLAUDE.local.md", ".mcp.json", "project.yaml",
-                  "scripts/hook_shim.py", ".claude/settings.json",
-                  ".claude/settings.local.json"]
+                  "scripts/hook_shim.py", ".claude/settings.json"]
+# ⚠GEVŞETME (2026-08-01, kullanıcı açık onayı — bug avı AV-20): `.claude/settings.local.json`
+# yüzeyden ÇIKARILDI. Gerekçe: dosyayı Claude Code'un KENDİSİ her izin onayında yeniden yazar
+# (git-ignore'lu, içeriği izin kayıtları) → manifest-diff her oturumda ateşleniyordu:
+# session_start "bu oturumun çıktısına GÜVENME" diyor, config_change_guard exit 2 veriyor.
+# Kalıcı açık alarm = gerçek tamper AYIRT EDİLEMEZ (alarm-yorgunluğu; F2'nin varlık amacını
+# ortadan kaldırıyordu). Kaybedilen kapsam: o dosyaya ELLE eklenen bir izin artık alarm
+# üretmez — bilinçli takas. `settings.json` (paylaşılan, git'li, hook kablolamasını taşıyan
+# dosya) yüzeyde KALIR; asıl davranış-yüzeyi odur. İzin katmanı ayrıca D32 (always-allow
+# yasağı) ile korunur. Geri alınırsa alarm da geri gelir.
 YUZEY_DIZINLER = [".claude/rules"]  # varsa; nested CLAUDE.md'ler ayrıca taranır
 MANIFEST = ".claude/behavior-manifest.json"
 

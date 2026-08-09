@@ -3,7 +3,7 @@
 
 Yönetilen bir SAP source dosyasını (<source_root>/ altı, source uzantısı) düzenlemeden ÖNCE,
 o objenin canlı GÜNCEL hali bu SEANSTA çekilmiş/yazılmış olmalı. Değilse edit
-BLOKLANIR (exit 2) ve agent önce `scripts/sap_sync_pull.py` ile çeker. Böylece
+BLOKLANIR (exit 2) ve agent önce `core/scripts/sap_sync_pull.py` ile çeker. Böylece
 working-copy daima TAZE canlıdan türer → push, canlıdaki belgelenmemiş bir değişikliği
 sessizce ezmez. (Eski M1 pre-push drift-block kaldırıldı; koruma artık edit-öncesine taşındı.)
 
@@ -129,14 +129,24 @@ def main() -> int:
     except Exception:
         return 0   # input parse edilemedi → fail-safe geç
 
-    tool = data.get("tool_name", "") or ""
+    # Savunmacı indirgeme (2026-08-01 bug-avı, W2-VH-02). ÖLÇÜLDÜ: 10 bozuk payload'ın
+    # 5'inde uncaught istisna → exit 1 + traceback (`null`, `[]`, `"str"`, `42`,
+    # `file_path:123` → `TypeError: expected str … not int`). `json.load` sarılıydı ama
+    # sonrası dict/str varsayıyordu. Kontrol grubu aynı koşumda sağlamdı; `config_change_guard`
+    # 10/10 çökmedi → savunmasız giriş işleme, ortam sorunu değil.
+    if not isinstance(data, dict):
+        return 0
+    tool = data.get("tool_name", "")
+    tool = tool if isinstance(tool, str) else ""
     if tool not in ("Edit", "Write", "MultiEdit"):
         return 0
 
-    ti = data.get("tool_input", {}) or {}
-    fp = ti.get("file_path") or ti.get("path") or ""
-    if not fp:
+    ti = data.get("tool_input", {})
+    if not isinstance(ti, dict):
         return 0
+    fp = ti.get("file_path") or ti.get("path") or ""
+    if not isinstance(fp, str) or not fp:
+        return 0                       # sayı/None/liste → yol yok, incelenecek şey yok
     p = Path(fp)
 
     if not _is_managed_sap_source(p):
@@ -158,7 +168,7 @@ def main() -> int:
     sys.stderr.write(
         f"⛔ PULL-BEFORE-EDIT (PreToolUse guard, ADR 0016 revize): '{obj}' bu seansta "
         f"SAP'den çekilMEDİ. Düzenlemeden ÖNCE güncel halini al:\n"
-        f"   python scripts/sap_sync_pull.py {obj} --type {obj_type} --session {session_id}\n"
+        f"   python core/scripts/sap_sync_pull.py {obj} --type {obj_type} --session {session_id}\n"
         f"(canlıyı çeker → {p.name} dosyasına yazar → seans-taze damgalar; sonra edit'i TEKRAR dene.)\n"
         f"AMAÇ: working-copy daima TAZE canlıdan türesin → push, canlıdaki belgelenmemiş "
         f"değişikliği ezmesin. Obje başına seansta yalnız 1 kez.\n"

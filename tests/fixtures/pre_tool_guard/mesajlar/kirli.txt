@@ -1,0 +1,4 @@
+fix(tooling): readback esitligi
+
+Bu satirda YAPAY sizinti isareti var (gercek kimlik izi DEGIL): SIZINTI-SENTINEL
+Co-Authored-By: Bot

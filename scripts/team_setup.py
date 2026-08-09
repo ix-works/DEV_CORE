@@ -79,7 +79,7 @@ def junction_kur(link: Path, hedef: Path) -> bool:
     return False
 
 
-def junctions(proje: Path) -> bool:
+def junctions(proje: Path, overlay_onayli: bool = False) -> bool:
     """5 junction (D25: her biri TEK TEK raporlanır — kopuk agents/skills SESSİZ semptom verir).
     core · .claude/agents · .claude/skills · .claude/commands · .claude/rules (L1b, 2026-07-10).
 
@@ -94,7 +94,7 @@ def junctions(proje: Path) -> bool:
     ok = junction_kur(proje / "core", CORE_ROOT)
     for tip in ov.TIPLER:
         if ov.overlay_var_mi(proje, tip):
-            basarili, mesaj = ov.materyalize(proje, CORE_ROOT, tip)
+            basarili, mesaj = ov.materyalize(proje, CORE_ROOT, tip, onayli=overlay_onayli)
             print(f"  [{'OK' if basarili else 'FAIL'}] overlay .claude/{tip} — {mesaj}")
             ok = ok and basarili
         else:
@@ -245,6 +245,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--project", default=".", help="Proje kökü (default: cwd)")
     ap.add_argument("--repair-junctions", action="store_true")
+    ap.add_argument("--overlay-onayli", action="store_true", help="T2.5: overlay fark-raporu onayi — mevcut .claude kopyalari uretilecekten farkliysa ancak bu bayrakla EZILIR")
     ap.add_argument("--provision-worktree", metavar="PATH")
     ap.add_argument("--no-install", action="store_true")
     ap.add_argument("--no-seed", action="store_true")
@@ -258,7 +259,7 @@ def main() -> int:
     if a.provision_worktree:
         return 0 if provision_worktree(Path(a.provision_worktree).resolve(), proje) else 1
     if a.repair_junctions:
-        ok = junctions(proje)
+        ok = junctions(proje, overlay_onayli=a.overlay_onayli)
         _core_index_yenile(proje)
         return 0 if ok else 1
 
@@ -271,7 +272,7 @@ def main() -> int:
                             str(REQ_FILE)], capture_output=True, text=True)
         say(OK if r.returncode == 0 else WARN, "pip install (MCP requirements)")
 
-    if not junctions(proje):
+    if not junctions(proje, overlay_onayli=a.overlay_onayli):
         say(FAIL, "junction kurulumu TAMAMLANAMADI — yukarıdaki satırlara bak")
         return 1
     dosya_tamamla(proje)

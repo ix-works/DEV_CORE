@@ -476,8 +476,10 @@ project.yaml
    cleancore_policy: balanced ──► policy_axis["balanced"]
    master_language: TR        ──► ADR 0005-D (Z obje login dili + 4 label)
    source_root: SOURCE_CODES  ──► kaynak-kod klasörü adı
-   frozen_readonly_paths      ──► pre_tool_guard yazma bloğu
 ```
+
+> Not (2026-07-31): eski `frozen_readonly_paths` anahtarı ve ona bağlı pre_tool_guard yazma
+> bloğu (R10) **2026-07-10'da kaldırıldı** — anahtar artık `project.yaml`'da YOKTUR (§15.3).
 
 Validator'lar, skill katmanı ve **MCP tool yüzeyi** profili okur. Profil alanları boşsa
 varsayım yapılmaz: **tool yüzeyi kesilir** (Bölüm 10.6).
@@ -854,13 +856,20 @@ zorlayan araçlarla yapılır.
 
 | Grup | Tool | Yazma? |
 |---|---|---|
-| **Okuma / Analiz** | `ping` · `adt_get` · `adt_search_objects` · `adt_where_used` · `adt_table_read` · `adt_package_contents` · `adt_lock_check` · `adt_transport_list` · `adt_syntax_check` · `adt_atc_check` | Hayır |
+| **Okuma / Analiz** | `ping` · `adt_get` · `adt_search_objects` · `adt_where_used` · `adt_table_read` · `adt_package_contents` · `adt_lock_check` · `adt_transport_list` · `adt_atc_check` | Hayır |
 | **Yaratım / DDIC** | `adt_post_shell` · `adt_domain_create` · `adt_dtel_create` · `adt_struct_create` | Evet |
-| **Aktivasyon / Push** | `adt_push_source` · `adt_activate` · `adt_delete` | Evet |
+| **Aktivasyon / Push** | `adt_push_source` · `adt_activate` · `adt_delete` · **`adt_syntax_check`** | **Evet (koşullu)** |
 | **Servis / Yürütme** | `adt_publish_service` · `adt_classrun` | Evet |
 
 Okuma tool'ları hiçbir koşulda yazmaz; bu ayrım ajan tool-allowlist'lerinde fiziksel
 enforcement'ın temelidir (Bölüm 12.1).
+
+> ⚠ **`adt_syntax_check` adına rağmen okuma DEĞİLDİR** (ölçüm 2026-07-31). Uç nokta
+> `POST /sap/bc/adt/activation?method=activate&preauditRequested=true`; bu sistemde preaudit
+> onurlandırılmıyor → **bekleyen inaktif sürüm temizse objeyi AKTİVE ediyor**
+> (`adt_inactive_objects` 1→0 ölçüldü), hatalıysa etmiyor. Bu yüzden yazma kovasındadır ve
+> yalnız tek-yazıcı (gateway) allowlist'inde bulunur. Ayrıntı: `playbook/adt-mcp.md`
+> "Tool SEMANTİĞİ" · `playbook/lessons-learned.md` PATTERN #20.
 
 ### 10.2 Sunucu tarafı guardrail'ler (hardcoded, bypass yok)
 
@@ -1217,8 +1226,11 @@ ister. Muğlak ifade ("dene", "çek") yetmez.
 > gelmesini engelliyor.
 
 ### 15.3 Donmuş (salt-okunur) yedekler
-Arşiv kökler `project.yaml` → `frozen_readonly_paths` ile işaretlenir; bu köklere yazma
-reddedilir, okuma serbesttir.
+Arşiv köklere yazmama bir **DİSİPLİN kuralıdır** (proje `CLAUDE.md`'sinde belgelenir; okuma
+serbesttir). Eski runtime mekanizması — `project.yaml` `frozen_readonly_paths` anahtarı +
+pre_tool_guard R10 yazma bloğu — **2026-07-10'da KALDIRILDI** (fiil-kara-listesi hedefi
+sormuyordu; negatif test 2026-07-26: donmuş köke yazma → exit 0). Seni araç durdurmaz;
+kalıcı koruma istenirse OS/ACL.
 
 ### 15.4 Davranış-yüzeyi güvenlik duvarı
 `CLAUDE.md`, `.claude/**`, `.mcp.json`, `project.yaml`, `hook_shim.py` yalnız lider-onaylı PR

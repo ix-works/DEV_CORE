@@ -1,0 +1,1 @@
+# KESIN YASAKLAR kanonigi (FIXTURE)

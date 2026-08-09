@@ -97,10 +97,49 @@ def _beklenen(proje: Path, core_root: Path, tip: str) -> dict:
     return out
 
 
-def materyalize(proje: Path, core_root: Path, tip: str) -> tuple:
-    """`.claude/<tip>`'i gerçek dizin olarak üret (core + overlay). -> (ok, mesaj)"""
+def _norm(icerik: str) -> str:
+    """Damga satırı + satır-sonu normalizasyonu (fark kıyası için)."""
+    satirlar = [s for s in icerik.replace("\r\n", "\n").split("\n")
+                if not s.startswith("<!-- CORE-URETILDI")]
+    return "\n".join(satirlar).strip()
+
+
+def fark_raporu(proje: Path, core_root: Path, tip: str) -> list:
+    """T2.5 (2026-07-31): senkron ÖNCESİ fark raporu — mevcut `.claude/<tip>` dosyaları
+    üretilecek içerikten (core+overlay) sapıyorsa listeler. Amaç: elle yapılmış proje
+    düzeltmelerinin senkronda SESSİZCE ezilmesini önlemek (B5 vakasının kök ilacı).
+    Boş liste = güvenli; dolu liste = önce terfi/claude-local kararı ver."""
+    h = hedef(proje, tip)
+    if not h.is_dir() or _junction_mu(h):
+        return []
+    beklenen = _beklenen(proje, core_root, tip)
+    farklar = []
+    for ad, (kaynak, _ch) in beklenen.items():
+        mevcut = h / ad
+        if not mevcut.is_file():
+            continue  # yeni dosya — ezme değil ekleme
+        if _norm(mevcut.read_text(encoding="utf-8", errors="replace")) != \
+           _norm(kaynak.read_text(encoding="utf-8", errors="replace")):
+            farklar.append(f"{tip}/{ad}: mevcut kopya, üretilecek içerikten FARKLI "
+                           f"(elle düzeltme olabilir → önce core'a terfi ya da claude-local'e al)")
+    for f in sorted(h.glob("*.md")):
+        if f.name not in beklenen:
+            farklar.append(f"{tip}/{f.name}: üretim kümesinde YOK — senkronda SİLİNİR")
+    return farklar
+
+
+def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) -> tuple:
+    """`.claude/<tip>`'i gerçek dizin olarak üret (core + overlay). -> (ok, mesaj)
+    onayli=False iken mevcut kopyalarda fark varsa ÜRETMEZ (fark-onay kapısı, T2.5)."""
     if not overlay_var_mi(proje, tip):
         return False, f"overlay yok: {overlay_kaynagi(proje, tip)}"
+
+    if not onayli:
+        farklar = fark_raporu(proje, core_root, tip)
+        if farklar:
+            return False, ("FARK VAR — onaysız ezme YOK (T2.5):\n    "
+                           + "\n    ".join(farklar)
+                           + "\n    Karar ver (terfi/claude-local) → sonra --overlay-onayli ile koş.")
 
     h = hedef(proje, tip)
     if _junction_mu(h):
