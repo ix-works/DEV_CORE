@@ -71,6 +71,8 @@ python scripts/inspector.py --self-test             # canary    [✓]
   `git show eec3b77:scripts/validators/<ad>.py > scripts/validators/<ad>.py` → fixture koş → `git checkout` ile geri al.
   Beklenen: V1 7/17 · V2 8/15 · V3 7/11 · V4 5/11 · V5 9/16 · V6 10/14.
   **0 FAIL görürsen ÖNCE fixture'ın koştuğunu kanıtla** (exit kodu + `2>&1`) — çökme ≠ FAIL.
+  📌 YENİ fixture'da bu elle-ezme yerine **fixture-içi `--mutasyon [--ref]`** tercih edilir
+  (çalışma ağacı kirlenmez, sayı tekrar üretilebilir) — kurulumu `playbook/howto-infra-fix-proseduru.md` §D2/3.
 - ⚠ Mutasyonda GEÇEN vektörler tam da FP-çapaları + kontrol grubu OLMALI. Başkası geçiyorsa iddia sayıya bakıyordur, bulgunun KİMLİĞİNE değil (V1'de yaşandı: `BLOCKER>=1` iddiası eski kodda BAŞKA alandan PASS verdi → check_id+alan-adına çevrildi).
 - ⛔ SİLİNMEZ ÇAPALAR: V2 `S3` (`.srvd` naming-glob'unda YOK — `.rules.md` tablo-satırı önkoşul; eklenirse 15 doğru dosya suçlanır) · V5 `N1`/`N7` (core-içi türetilmiş dizinde `.rglob`/`.glob` MEŞRU — geçişlilik taramaya sızarsa 26 FP) · V6 `S3` (`/_[A-Z]` deseni değişmez) · V3 `N4` (`Prior-art: yok` kısa ama meşru) · V4 `N2` (`core/` eşdeğer yazımı).
 - Genişletme yaptıysan CANLI ETKİYİ ÖLÇ (PATTERN#14): `CLAUDE_PROJECT_DIR=<proje> python scripts/validators/run_all_validators.py --quick` → taban 0 değilse HARD YAPMA.
