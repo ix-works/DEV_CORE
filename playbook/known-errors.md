@@ -78,9 +78,16 @@ Hepsi `RPY_DYNPRO_INSERT` / `RS_CUA_INTERNAL_*` ile klasik ekran/status üretimi
 push edilir** (bu yüzden "araç bozuk" sanılır).
 
 **Kök sebep:** Objeyi, **kayıtlı olmadığı** bir transport (`corrNr`) ile değiştirmeye çalışmak.
-SAP bu durumda kilidi VERİR ama `MODIFICATION_SUPPORT=NoModification` der ve `CORRNR` **boş** döner;
-`423` bunun türevidir. Sık senaryo: elde bir **görev (S)** numarası vardır (`DS4K9xxxxx`), ama obje
-**üst istek (K)** altında ya da **başka bir görevde** kayıtlıdır.
+SAP bu durumda kilidi VERİR ama PUT'u reddeder; `423` bunun türevidir. Sık senaryo: elde bir
+**görev (S)** numarası vardır (`DS4K9xxxxx`), ama obje **üst istek (K)** altında ya da **başka
+bir görevde** kayıtlıdır.
+
+> ⛔ **DÜZELTME 2026-08-10 — bu paragraf eskiden şunu diyordu:** *"SAP … `MODIFICATION_SUPPORT=NoModification`
+> der ve `CORRNR` **boş** döner"*. **İKİSİ DE ÖLÇÜLMEMİŞTİ** (cümle dış referanstan yazılmıştı) ve
+> `NoModification` kısmı **ÇÜRÜTÜLDÜ**: bu sistemde **her** CLAS kilidi bu değeri döndürür —
+> başarıyla push edilen sağlıklı sınıflar dahil (5/5, §12.7b). Yani değer bu vakanın **belirtisi
+> değildir**, ayırt edici gücü yoktur. `CORRNR` de ölçülen 5 sağlıklı sınıfta **DOLU** döndü.
+> ⇒ Bu vakanın tek kesin teşhisi aşağıdaki **E071 sorgusudur**; lock yanıtındaki alanlara bakma.
 
 **Teşhis (tek sorgu, kesin):**
 ```sql
@@ -117,3 +124,76 @@ yani "CORRNR yok ⇒ enqueue ölü" zinciri **kodun kendi davranışıyla çeli�
 (proje `SESSION_NOTES`'ta kayıtlı) ama **core'a terfi etmedi (T1 kaçtı)** ⇒ 2026-08-09'da
 **yanlış teşhisle yeniden keşfedildi** ve paylaşılan araca neredeyse yanlış bir düzeltme yapılacaktı.
 Ders: *proje notunda çözülen ADT kalıbı core'a terfi etmezse, çözülmemiş sayılır.*
+
+---
+
+### 12.7b `NoModification` CLAS'ta NORMAL DEĞERDİR — §12.7'den türetilen guard'ın yanlış-pozitifi (2026-08-10)
+
+> ⛔ **BU BÖLÜM §12.7'yi SINIRLANDIRIR.** §12.7 gerçek bir vakayı anlatır (obje o transport'a
+> kayıtlı değil). Ama o kaydın *"SAP `MODIFICATION_SUPPORT=NoModification` der"* cümlesi
+> **ölçülmemişti** ve yanlıştı. Bu değere göre kurulan guard **tüm class-push yolunu kapattı.**
+
+**Belirti (guard yürürlükteyken):** Her sınıf push'u, SAP'ye tek bir yazma bile denenmeden,
+*"SAP granted the lock but reports the object as NOT modifiable"* + §12.7 atfı ile düşer.
+Mesaj transport'u işaret ettiği için teşhis oraya sapar; SAP tarafında **hiçbir şey yanlış değildir.**
+
+**KÖK SEBEP (ölçüldü — 8 obje / 2 paket / 2 tip; ayrım ekseni OBJE TİPİ):**
+
+| Tip | Örnek sayısı | `MODIFICATION_SUPPORT` | Gerçek durum |
+|---|---|---|---|
+| **CLAS** | 5 | **`NoModification` (5/5)** | Hepsi aktif geliştirilen sınıf; hepsi aynı gün başarıyla push edildi |
+| **DDLS** | 3 | boş (3/3) | Sağlıklı |
+
+İki farklı paket çaprazlandı ⇒ ayrım **paket/obje/transport değil, TİP**. Sağlıklı sınıf da,
+§12.7 vakasındaki sınıf da aynı değeri döndürür ⇒ **değerin ayırt edici gücü YOKTUR.**
+
+**⛔ GUARD'IN KENDİ YORUMU İTİRAFTI** (`sap_adt_lib.py`, PR #99):
+> *"`NoModification` DEĞERİ dış referanstan gelir (abap-adt-api `AdtLock`); **bizde CANLI ÖRNEĞİ YOK.**"*
+
+Sözleşmenin **şekli** bir DDLS ölçümünden alınmış (`boş = normal`), **anlamı** dış dokümandan
+varsayılmıştı; CLAS'ın ne döndürdüğü hiç ölçülmemişti. ⇒ **Ölçülmemiş bir değere göre KAPI KURMA.**
+Ölçemiyorsan değeri **kaydet ve yaz**, ama akışı ona bağlama. *(Aynı gün yazılan kayıt, riski
+"koruma çalışmaz, meşru push bloklanmaz" diye tahmin etmişti — **o tahmin de yanlış çıktı.**)*
+
+**ZAMAN EKSENİ — teşhisi tek hamlede çözen soru: "bu daha önce çalışıyor muydu?"**
+
+| Olay | Tarih |
+|---|---|
+| CLAS push'ları **başarıyla** çalışıyor | …2026-07-13 · 2026-07-28 |
+| **Guard merge (#99)** | **2026-08-09 15:40** |
+| Tüm CLAS push'ları bloke | 2026-08-09 17:30+ |
+
+📌 İlk kontrol grubu **CLAS↔DDLS** eksenindeydi ve doğruydu ama **yetmedi**; kilidi açan
+`git log -S'<guard-sembolü>' -- <araç>` oldu. **Regresyonu ayıran şey tip değil, TARİHTİR.**
+
+**MERDİVEN — bir obje yazılamıyorsa, ucuzdan pahalıya:**
+1. **Bu obje tipi DAHA ÖNCE yazılabiliyor muydu?** → araç tarafında `git log -S` + objenin
+   `changedAt`'i. **Evet ise regresyon ara, SAP'yi kovalama.**
+2. **Aynı anda başka tip yazılabiliyor mu?** (CLAS↔DDLS) → tip-bağımlı guard'ı ele verir.
+3. **`e071` sorgusu** → §12.7'nin gerçek vakası. *(Bugün bu teşhis, PUT gerçekten 423 verince
+   `set_object_source` tarafından otomatik basılır — kilit anında DEĞİL.)*
+4. **`EU 510`** *"Kullanıcı X zaten Y öğesini düzenliyor"* → editör/enqueue kilidi.
+   ⚠ Yalnız **aktivasyon** çağrısından döner, lock çağrısından DEĞİL.
+
+**⛔ `adt_lock_check` BU SİSTEMDE İŞLEVSİZ:** `GET /sap/bc/adt/locks` → **HTTP 404**
+(`ExceptionResourceNotFound`). Uç yok ⇒ tool bir kilidi **asla** tespit edemez ve sessizce
+`locked: false` der. 2026-08-10'da bu "kilit yok" diye okundu. **404'ü "hayır" sayan
+sessiz-başarısızlık** — buradaki `false` kanıt değildir.
+
+**⛔ ÇAREN BİR SONRAKİ ENGELİ YARATIR.** Teşhis için kullanıcıya *"SE24'ten bak"* dendi → SE24
+**düzenleme kilidi yarattı** → o kilit bir sonraki turu blokladı (`EU 510` gerçekten çıktı).
+⇒ **GUI'de bir şey yaptırırken kapanışını da söyle:** *"aç → yap → **KAPAT** → SM12'yi kontrol et."*
+Bir SAP ekranını açmak **durum yaratır**.
+
+**📌 IS_LINK_UP** (`sap_adt_lib.py`): *"`IS_LINK_UP='X'` → obje, kullanıcının görevi OLMAYAN
+YABANCI bir isteğe kayıtlı"* demektir. SAP'nin döndürdüğü `CORRNR` otoritedir; onunla savaşma.
+(2026-08-10'da "K vs S görevi" diye bir tez kuruldu — **yanlıştı**; başarıyla yazılan objeler de
+aynı `CORRNR`'ı raporluyordu.)
+
+**Regresyonun ikinci, SESSİZ yüzeyi:** guard yürürlükteyken `clear_enqueue_lock()` de her sınıf
+için başarısız oluyordu — istisnayı yutup `False` döndüğü için **hiç görünmeden.** Yani kilit
+sorununu çözmek için başvurulan araç, yanlış teşhisi besliyordu. (Fixture V19 bunu bekçilik eder.)
+
+**Çapa:** `tests/fixtures/lock_modification_support/run.py` (25 vektör; `--mutasyon` ile fırlatan
+sürüme karşı 9 ayırt edici FAIL). Tanıma (casefold + TAM eşitlik) korunur ama **hiçbir değer
+akışı kesmez**; §12.7 teşhisi 423'te basılır.

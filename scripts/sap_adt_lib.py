@@ -121,16 +121,29 @@ class SAPTransportError(SAPADTError):
     pass
 
 
-# ── ADT lock yanıtı: MODIFICATION_SUPPORT sözleşmesi (playbook/known-errors.md §12.7) ──
+# ── ADT lock yanıtı: MODIFICATION_SUPPORT sözleşmesi (known-errors.md §12.7 + §12.7b) ──
 # Alan adı + sarmalayıcı yol CANLI ÖLÇÜLDÜ (2026-08-09, DDLS kilidi):
 #   asx:abap / asx:values / DATA / MODIFICATION_SUPPORT   (alan adları BÜYÜK HARF)
-# O ölçümde alan BOŞ döndü (`<MODIFICATION_SUPPORT/>`) ve obje sağlıklıydı ⇒ **boş = normal**.
-# `NoModification` DEĞERİ ise dış referanstan gelir (abap-adt-api `AdtLock`); bizde CANLI
-# ÖRNEĞİ YOK. Bu yüzden karşılaştırma harf-durumundan bağımsız ama TAM EŞİTLİK ile yapılır:
-#   · alt-dizge arama YASAK → 'NoModificationAllowed' gibi bilinmeyen bir değer hataya dönmez
+#
+# 🔴 DEĞER SÖZLEŞMESİ ÖLÇÜLDÜ VE DÜZELTİLDİ (2026-08-10; 8 obje / 2 paket / 2 tip):
+#   · DDLS → alan BOŞ (3/3)
+#   · CLAS → `NoModification` (5/5) — ve bu 5 sınıfın hepsi o gün BAŞARIYLA push edildi
+# ⇒ Değer OBJE TİPİNE bağlıdır (paket/transport eksenine değil) ve CLAS için **NORMAL**dir.
+#   Sağlıklı sınıf da, transport'a kayıtlı olmayan sınıf da aynı değeri döndürür ⇒ değerin
+#   AYIRT EDİCİ GÜCÜ YOK: tek başına ne "engel" ne de "sorun var" anlamına gelir.
+#
+# ⛔ ÖNCEKİ SÜRÜMÜN HATASI (aynı gün, #99 — ders olarak DURUYOR): değerin anlamı DIŞ
+#   REFERANSTAN (abap-adt-api `AdtLock`) alınmıştı, kodun kendi notu *"bizde CANLI ÖRNEĞİ
+#   YOK"* diye itiraf ediyordu ve buna rağmen o değere göre `SAPLockError` fırlatan bir KAPI
+#   kuruldu. Sonuç: TÜM class-push yolu kapandı (2026-07-28'e kadar sorunsuz çalışıyordu).
+#   DERS: ölçülmemiş bir değere göre KAPI KURMA — ölç, ölçemiyorsan yalnız KAYDET.
+#
+# Değer bugün yalnız TEŞHİS BAĞLAMI olarak taşınır (`_last_lock_modification_support`);
+# akışı kesmez. §12.7'nin gerçek vakası PUT'un 423'ünde yakalanır (set_object_source).
+# Karşılaştırma harf-durumundan bağımsız ama TAM EŞİTLİK ile yapılır:
+#   · alt-dizge arama YASAK → 'NoModificationAllowed' gibi bilinmeyen bir değer eşleşmez
 #   · casefold → sürüm/sistem farkı yalnız harf-durumundaysa sinyal kaçmaz
-# Bilinmeyen/boş/eksik değer HATA DEĞİLDİR (fail-safe): kör bir kontrol DDLS/DTEL/DOMA
-# ailelerini kırardı (2026-08-09 kaydı, infra-changelog).
+# Bilinmeyen/boş/eksik değer de aynı şekilde nötrdür (fail-safe).
 LOCK_MODIFICATION_SUPPORT_FIELD = 'MODIFICATION_SUPPORT'
 LOCK_NO_MODIFICATION = 'nomodification'   # casefold edilmiş karşılaştırma değeri
 
@@ -2176,9 +2189,39 @@ class SAPADTClient:
                 _full = response.text or ''
                 print(f"[set_object_source] FULL ERROR RESPONSE ({response.status_code}), "
                       f"{len(_full)} chars:\n{_full}")
+
+                # ── 423 = §12.7'nin SEMPTOMU: teşhis TAM BURADA basılır ────────────────
+                # Teşhis bir zamanlar LOCK anında basılıyordu (#99) ve orada bir KAPI'ya
+                # bağlanmıştı — ölçüm o kapının yanlış-pozitif olduğunu gösterdi (CLAS'ın
+                # HEPSİ `NoModification` döner). Karar semptomu gerçekten gördüğümüz yere,
+                # yani 423'e taşındı: burada yanlış-pozitif üretme riski yok, çünkü PUT
+                # zaten düşmüştür. İki kök birlikte verilir — tek kök dayatmak, 2026-08-09'da
+                # bir saat kaybettiren "transport kovalama" sapmasının ta kendisiydi.
+                _tani = ''
+                if response.status_code == 423:
+                    _obje = self._object_name_from_url(object_url)
+                    _mod = getattr(self, '_last_lock_modification_support', None)
+                    _tani = (
+                        f"\n\n[423 TEŞHİSİ — playbook/known-errors.md §12.7]\n"
+                        f"  SAP kilidi VERDİ ama PUT'u reddetti. İki olası kök var:\n"
+                        f"  1) {_obje} kullanılan transport'a"
+                        f"{(' (' + str(transport) + ')') if transport else ''} KAYITLI DEĞİL.\n"
+                        f"     Tek sorgu, kesin:\n"
+                        f"       SELECT trkorr, pgmid, object, obj_name FROM e071 "
+                        f"WHERE obj_name = '{_obje}'\n"
+                        f"     Kullandığın corrNr o listede YOKSA sebep budur "
+                        f"(SE01/SE09 → kaydı taşı ya da o transport'u kullan).\n"
+                        f"  2) lock handle bayat/geçersiz (oturum düştü ya da lock'tan sonra "
+                        f"araya GET girdi) → TAZE lock al.\n"
+                        f"  ⛔ CSRF/oturum teorisi KOVALAMA — §12.7 o yanlış teşhisi belgeler.\n"
+                        f"  ℹ Lock yanıtındaki MODIFICATION_SUPPORT={_mod!r} bu ayrımı YAPMAZ: "
+                        f"CLAS'ta sağlıklı objede de 'NoModification' döner (§12.7b)."
+                    )
+                    print(_tani)
+
                 raise SAPADTError(
                     f"Failed to set source after {len(transport_approaches)} attempts. "
-                    f"Response ({response.status_code}), FULL:\n{_full}",
+                    f"Response ({response.status_code}), FULL:\n{_full}{_tani}",
                     status_code=response.status_code,
                     response_text=_full
                 )
@@ -2386,13 +2429,13 @@ class SAPADTClient:
           self._last_lock_effective_transport — transport caller should use for PUT
           self._last_lock_modification_support / _state — MODIFICATION_SUPPORT (üç değerli)
 
-        MODIFICATION_SUPPORT semantics (playbook/known-errors.md §12.7):
-          - 'NoModification' → SAP kilidi VERDİ ama değişikliği kabul ETMEYECEK; PUT sonra
-            423 InvalidLockHandle ile düşer. Tipik kök: obje kullanılan transport'a kayıtlı
-            değil. Bu tek değer için AÇIK hata veririz (yalnız access_mode='MODIFY' iken).
-          - BOŞ / alan yok / tanınmayan değer → HATA YOK (bugünkü davranış aynen korunur).
-            Canlı ölçüm (2026-08-09): sağlıklı DDLS kilidi BOŞ self-closing alan döndürdü.
-          - Gövde parse edilemezse → hata YOK ama GÖRÜNÜR uyarı ("doğrulanmadı" ≠ "temiz").
+        MODIFICATION_SUPPORT semantics (known-errors.md §12.7 + §12.7b):
+          - HİÇBİR değer akışı KESMEZ. Değer yalnız kaydedilir + tek satır iz bırakılır.
+            Ölçüm (2026-08-10): CLAS 5/5 'NoModification' (hepsi başarıyla push edildi),
+            DDLS 3/3 boş ⇒ değer obje-tipine bağlı NORMAL bir çıktıdır, "engel" değil.
+          - Bir zamanlar (#99, aynı gün) 'NoModification' SAPLockError fırlatıyordu; bu
+            ölçülmemiş bir varsayımdı ve TÜM class-push yolunu kapattı → geri alındı.
+          - Gövde parse edilemezse → GÖRÜNÜR uyarı ("doğrulanmadı" ≠ "temiz"), yine blok yok.
 
         CORRNR semantics (confirmed from SAP source: CL_ADT_CTS_MANAGEMENT.get_transport_info):
           - SAP always returns the K-type WORKBENCH REQUEST number (e.g. FIDK901507)
@@ -2494,29 +2537,18 @@ class SAPADTClient:
         if (mod_durum == 'value'
                 and mod_deger.casefold() == LOCK_NO_MODIFICATION
                 and str(access_mode or '').upper() == 'MODIFY'):
-            obje = self._object_name_from_url(object_url)
-            self._release_lock_after_failure(
-                object_url, lock_handle,
-                "[OK] Lock released (SAP reported the object as not modifiable).")
-            raise SAPLockError(
-                f"SAP granted the lock but reports the object as NOT modifiable "
-                f"(MODIFICATION_SUPPORT={mod_deger}).\n\n"
-                f"Most likely cause: {obje} is NOT registered in the transport being used"
-                f"{(' (' + str(transport) + ')') if transport else ''}.\n"
-                f"SAP hands out the lock anyway and rejects the later PUT with\n"
-                f"423 InvalidLockHandle — that 423 is the SYMPTOM, not the cause.\n\n"
-                f"Diagnose FIRST (one query, decisive):\n"
-                f"  SELECT trkorr, pgmid, object, obj_name FROM e071 WHERE obj_name = '{obje}'\n"
-                f"  If the corrNr you are using is not in that list, this is the cause.\n\n"
-                f"Fix:\n"
-                f"  1. Use the transport the object is actually recorded in, or\n"
-                f"  2. SE01/SE09 -> move/add the object entry to "
-                f"{transport if transport else 'the transport you intend to use'}\n\n"
-                f"[ACTION REQUIRED] STOP. Do NOT retry, and do NOT chase CSRF/session theories\n"
-                f"  — see playbook/known-errors.md §12.7 (it documents that wrong diagnosis).",
-                status_code=423,
-                response_text=(getattr(response, 'text', '') or '')[:500]
-            )
+            # ⛔ BU DAL BLOKLAMAZ — 2026-08-10 REGRESYON DÜZELTMESİ (öncesi: SAPLockError).
+            # Ölçüldü: bu sistemde CLAS kilitleri 5/5 `NoModification` döndürüyor ve o 5
+            # sınıfın hepsi aynı gün BAŞARIYLA push edildi ⇒ değer sağlıklı objede de var,
+            # yani AYIRT EDİCİ DEĞİL. Fırlatan sürüm tüm class-push yolunu kapattı ve mesajı
+            # §12.7'ye atıf yaptığı için teşhisi 5 deneme boyunca transport'a saptırdı.
+            # Değer teşhis BAĞLAMI olarak yukarıda saklandı; §12.7'nin gerçek vakası PUT
+            # 423'ünde yakalanır (set_object_source, "423 TEŞHİSİ" bloğu) — yani KARAR,
+            # semptomu GERÇEKTEN gördüğümüz yere ertelendi. Burada yalnız tek satır iz.
+            print(f"      [INFO] MODIFICATION_SUPPORT={mod_deger} — bu sistemde CLAS kilitleri "
+                  f"için NORMAL (ölçüm 2026-08-10: 5/5 sağlıklı sınıf; DDLS'te alan boş).")
+            print(f"             Tek başına engel DEĞİL, akış sürüyor. PUT 423 ile düşerse "
+                  f"teşhis orada basılır → known-errors.md §12.7 + §12.7b.")
 
         return lock_handle or 'IMPLICIT_LOCK'
 
