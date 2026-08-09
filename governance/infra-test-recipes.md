@@ -199,16 +199,26 @@ python scripts/inspector.py --self-test             # canary    [✓]
 - FP çapası: dosya BOM ile BAŞLAMAZ (BOM eklemek AV-02 sınıfını geri getirir).
 
 ## B20 — lock yanıtı `MODIFICATION_SUPPORT` (sap_adt_lib `_verify_and_return_lock`)
-- `python tests/fixtures/lock_modification_support/run.py` → 18/18 · MUTASYON: `--mutasyon` → 9/18.
-- **Fail-safe sözleşme (omurga):** SADECE `NoModification` hata verir. **BOŞ / alan-yok /
-  tanınmayan değer / bozuk XML → HATA YOK** — bu FP çapaları kaldırılırsa kör kontrol
-  DDLS + DTEL + DOMA ailelerini kırar (`CORRNR` boşluğu DDLS'te NORMAL; satır 2384-2387 `[INFO]` KALIR).
-- Karşılaştırma **casefold + TAM EŞİTLİK**: alt-dizgeye çevirirsen `NoModificationAllowed` gibi
-  bilinmeyen değerler meşru push'u bloklar (V8 tam bunu bekçilik eder).
+- `python tests/fixtures/lock_modification_support/run.py` → **25/25** · MUTASYON:
+  `--mutasyon --ref origin/main` → **16/25** (9 ayırt edici FAIL).
+- 🔴 **SÖZLEŞME 2026-08-10'da TERSİNE DÖNDÜ — bu bölümün eski hâli "yalnız `NoModification`
+  hata verir" diyordu; O KAPI YANLIŞ-POZİTİFTİ ve tüm class-push'u kapattı.** Bugün:
+  **HİÇBİR değer akışı KESMEZ.** Ölçüm: CLAS 5/5 `NoModification` (hepsi başarıyla push
+  edildi) · DDLS 3/3 boş ⇒ değer tip-bağımlı NORMAL çıktı, ayırt edici DEĞİL. (§12.7b)
+- **Tanıma yine de ölçülür ve TAM EŞİTLİKTİR** — ama artık "hata verdi mi" ile değil,
+  **çıktıdaki İZ (`§12.7b`)** ile: `NoModification` + casefold varyantları İZ basar (V1c/V7);
+  `NoModificationAllowed` / `PartialNoModification` / `No Modification` / `Something` / boş /
+  alan-yok İZ **basmaz** (V4/V6/V8). ⚠ İz kontrolünü kaldırırsan V8 **sessizce anlamsızlaşır**
+  (hiçbir şey hata vermediği için "sonuç=ok" testi her koşulda geçer) — alt-dizgeye kayma fark edilmez.
+- **Kilit BIRAKILMAZ** (V1b): akış sürüyorsa kilidi bırakmak PUT'u 423'e mahkûm eder.
+- **§12.7 teşhisi 423'te basılır** (`set_object_source`, V16/V16b): E071 sorgusu + **iki kök**
+  (transport kaydı **ve** bayat lock handle). 500'de basılmaz (V17 FP çapası). Tek kök dayatmak
+  2026-08-09'da bir saat kaybettiren "transport kovalama" sapmasının kendisiydi.
 - Bozuk XML dalı **görünür iz** basar ("NOT verified") — sessizleştirmek §127 sınıfına düşmektir.
-- ⚠ Gövde şekli 2026-08-09 CANLI ölçümünden alındı (self-closing BOŞ alan = SAĞLIKLI obje);
-  V15 kanaryası iskeleti korur. **`NoModification` değerinin CANLI örneği YOKTUR** — dizge
-  yanlışsa davranış bugünküyle birebir aynıdır (koruma çalışmaz, meşru push bloklanmaz).
+- ⚠ Gövde şekli 2026-08-09 CANLI ölçümünden alındı (self-closing BOŞ alan = SAĞLIKLI DDLS);
+  V15 kanaryası iskeleti korur.
+- **3. bağlam = `clear_enqueue_lock` (V19):** ayrı public API + **sessiz başarısızlık** sınıfı
+  (istisnayı yutup `False` döner). Fırlatan sürümde bu araç da her sınıfta görünmeden bozuktu.
 
 ## B14 — inspector
 - `--self-test` 5/5-FAIL-üretmeli `[✓]` (üretmezse ALET bozuk); `--json`; çıplak-✓ YASAK (kesir basılır).
