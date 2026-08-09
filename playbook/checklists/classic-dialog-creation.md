@@ -46,6 +46,22 @@ applies_to: [s4_private]
 | CLC-TXT | TEXT-xxx / selection text / GUI title **TR ve text-element** (literal gömme YASAK). `adt_textpool` (push_source text pool'u kapsamaz) | BLOCKER | std 06 §5 |
 | CLC-005 | Std tabloya direkt INSERT/UPDATE/MODIFY YASAK → BAPI/RFC; std program/exit/screen değiştirme YASAK; transport kullanıcının verdiği aktif TR | BLOCKER | ADR 0005 |
 
+## Faz 5 — Datafield diyalog ekranı (modal form — liste DEĞİL)
+
+> Yalnız ekran DDIC yapıya bağlı data-field'lardan oluşan TEK KAYITLIK modal form ise geçerli
+> (düzeltme/ekleme/transfer diyaloğu). Şablon: [`../templates/classic-dynpro-dialog.prog.abap`](../templates/classic-dynpro-dialog.prog.abap) ·
+> Derin referans: [`../howto-classic-dynpro-datafield-screens.md`](../howto-classic-dynpro-datafield-screens.md).
+
+| ID | Kontrol | Severity | Ref |
+|---|---|---|---|
+| CLC-DLG1 | Data-field'lar DDIC yapıya bağlı (`FROM_DICT='X'`, ekran `MATCHCODE` BOŞ) — elle `gs_*` program-lokal struct + `MOVE-CORRESPONDING` köprüsü YOK | BLOCKER | std 06 §9 |
+| CLC-DLG2 | Dinamik alan kilidi (`LOOP AT SCREEN`) varsa çağrı **PBO'da** (PAI'de sessiz kayıp) | BLOCKER | howto §1 |
+| CLC-DLG3 | Her diyalog ekranı **kendi** kaydet/iptal fcode'unu taşıyor — birden çok ekran aynı fcode'u paylaşmıyor (paylaşırsa quickinfo çakışır) | BLOCKER | howto §3.3 |
+| CLC-DLG4 | F4 mekanizması karar tablosuna göre seçildi (DTEL-std → attachment → buton+popup → POV-yok); Z SHLP **denenmedi** (araç sınırı) | WARNING | std 06 §9 F4 tablosu |
+| CLC-DLG5 | Attachment kullanılıyorsa `where` bloğu parametre eşlemesini AÇIKÇA veriyor (aynı tipte 2. alan varsa özellikle) | BLOCKER | howto §2.2 |
+| CLC-DLG6 | CUA turu: `BUT` deltası **yazmadan önce** hesaplandı + tur-başı sayaçla kıyaslandı; final `FUNDTL` diff alındı (kaybolan fcode yok) | BLOCKER | howto §3.5 / §4 |
+| CLC-DLG7 | DDIC yapı değişti VE ekran daha önce üretilmişti ise **regen** adımı planlandı (obje aktif ≠ tüketici güncel) | BLOCKER | howto §2.2 |
+
 ---
 
-> **NOT — şablonlar istisna:** `ZSD000_P_ALV_TEMP1/2/3` kasıtlı **tek-body** (sadece ALV/screen-gen deseni). CLC-07 gerçek programlar için.
+> **NOT — şablonlar istisna:** `ZSD000_P_ALV_TEMP1/2/3` kasıtlı **tek-body** (sadece ALV/screen-gen deseni). CLC-07 gerçek programlar için. `classic-dynpro-dialog.prog.abap` da aynı istisnaya tabidir (Faz 5 gerçek diyalog programları için).
