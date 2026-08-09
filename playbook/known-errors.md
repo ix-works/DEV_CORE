@@ -86,9 +86,10 @@ SAP bu durumda kilidi VERİR ama `MODIFICATION_SUPPORT=NoModification` der ve `C
 ```sql
 SELECT trkorr, pgmid, object, obj_name FROM e071 WHERE obj_name = '<OBJE>'
 ```
-Kullandığın `corrNr` bu listede YOKSA sebep budur. (Ölçülmüş vaka: aynı oturumda `..._CL_FLOW_TEXTS`
-kullanılan görevde kayıtlıydı → geçti; `..._CL_AMBTAK_DOCU_RUN` yalnız üst istek + başka görevde
-kayıtlıydı → 423.)
+Kullandığın `corrNr` bu listede YOKSA sebep budur.
+(Ölçülmüş vaka — **aynı oturum, aynı araç, iki sınıf**: `ZCL_A` kullanılan görevde kayıtlıydı
+→ **geçti**; `ZCL_B` yalnız üst istek + başka bir görevde kayıtlıydı → **423**. Fark obje tipinde
+ya da araçta değil, **transport kaydında**.)
 
 **ÇÖZÜM — `corrNr`'ı SABİT YAZMA, LOCK YANITINDAN OKU.**
 `lock_object()` etkin transport'u `_last_lock_effective_transport`'a koyar (docstring'i bunu uyarır).
