@@ -112,7 +112,7 @@ F3'te yazdığın fixture iki şeyi baştan sağlamalı:
    boşalır. Nedenselliği açıkça kur (ör. bozuk kodlamayı **kendin yaz**, "makine öyleyse"
    deme) ve mümkünse yapısal bir AST çapası ekle (açık `encoding=` var mı).
 3. **Mutasyon koşucusu fixture'ın İÇİNDE yaşar** (2026-08-09): çalışan kodu `git show … >`
-   ile EZİP geri almak yerine fixture'a `--mutasyon [--ref <sha|ref>]` bayrağı koy →
+   ile EZİP geri almak yerine fixture'a `--mutasyon [--ref <sha>]` bayrağı koy →
    `git show <ref>:scripts/<modül>.py` geçici dosyaya, `importlib.util.spec_from_file_location`
    ile **ayrı adla** yükle, AYNI vektörleri koş. Kazanç: çalışma ağacı hiç kirlenmez, sayı
    **tekrar üretilebilir** olur (rapora "18/18 → 9/18" diye yazılır ve okuyan doğrulayabilir),
@@ -130,6 +130,34 @@ F3'te yazdığın fixture iki şeyi baştan sağlamalı:
    `sys.stderr`i **atılabilir** bir `TextIOWrapper(BytesIO())`e çevir, import bitince yedeği
    geri koy. Bu, *çökme ≠ FAIL*'in harness tarafındaki karşılığıdır: sebep kodda değil
    ölçüm aletindedir.
+
+5. **🔴 D2/5 — MUTASYON TABANI SHA'YA PİNLENİR (DAL ADINA DEĞİL) + korpus tabanı ÖZ-DENETLER**
+   › **MUST** (mutasyon koşucusu olan her korpus) · **Denetim:** F3 öz-koşumu + fix-kapanışında
+   lider'in bağımsız koşumu — **runtime gate YOK, bilinçli** (ADR 0019 moratoryumu: bu bir
+   doküman+korpus *deseni*; ihlali zaten mutasyon çıktısında görünür ve tek çare dokümandır).
+   › Kanıt: aşağıdaki ölçülen vaka. (2026-08-10.) Taban olarak **hareketli** bir referans (`origin/main`, `main`,
+   `HEAD`, `HEAD~n`) verirsen korpus, fix **merge edildiği gün** ölçmeyi bırakır: taban artık
+   *"fix SONRASI"*dır, ayırt edici vektörler PASS'e döner ve komut **hata vermeden** "korpus
+   ayırt etmiyor" izlenimi verir. Isırma anı tam da korumanın başlaması gereken andır ve
+   çoğu zaman **devir-teslimden sonra** gelir — yani yanlış sonucu senden başkası okur.
+   *Ölçülen vaka: bir korpus fix merge edilir edilmez aynı komutta `17/29` yerine `26/29`
+   döndü; iki komut yan yana koşulunca fark görüldü.* (Aynı sınıfın `HEAD` varyantı
+   2026-08-01'de bir reçetede zaten yakalanmıştı — *"HEAD KULLANMA, commit sonrası HEAD
+   fix'tir"*; dal adı onun **daha sinsi** kardeşidir: senin commit'inle değil, **başkasının
+   merge'iyle** kayar.)
+   - **Varsayılan `--ref` = kusurun CANLI olduğu SHA** (`<kusurlu-sha>`), kodda sabit +
+     yanında *neden bu SHA* yazılı. Reçeteye de aynı SHA yazılır.
+   - **Öz-denetim ZORUNLU:** korpus, herhangi bir vektörü raporlamadan ÖNCE tabanın gerçekten
+     **kusurlu davrandığını** ölçer (kusur "fırlatıyordu" ise: fırlatıyor mu? "sessiz
+     geçiyordu" ise: geçiyor mu?). Doğrulayamıyorsa **hiçbir sayı basmaz**; açık
+     `[DOĞRULANAMADI]` + **ayrı çıkış kodu** (`2` = alet geçersiz; `1` = vektör düştü, `0` =
+     temiz) ile durur. Bu, evin *"doğrulama koşamadı ≠ doğrulandı"* kuralının mutasyon-korpusu
+     hâlidir — sayı üretmek, doğrulamış olmak değildir.
+   - **Statik/AST çapaları da kaynağı MODÜLLE AYNI YERDEN okur** (mutasyonda
+     `git show <ref>:<yol>`, çalışma ağacından DEĞİL): aksi hâlde çapa mutasyonu izlemez ve
+     **sahte-PASS** verir — mutasyonda geçen vektör listesi sessizce şişer.
+   - ⚠ Bir mutasyon tarifini `<taban-sha>` gibi **yer tutucuyla** bırakmak da aynı ailedendir:
+     komut çalıştırılamaz, dolayısıyla **hiç çalıştırılmaz.** Tarifi yazarken SHA'yı bul ve yaz.
 
 **FP çapası omurgadır.** "Eksik gate → BLOCKER" yaparken "kayıtlı boş zincir → PASS" çapası
 yoksa bilinçli boşluklar da bloklanır; "şu alanı indeksle" derken "mükerrer satır yok"
