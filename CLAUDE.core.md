@@ -156,6 +156,19 @@
   sinyaldir; cevap zaten yazılmış olabilir (vaka: bir ay önce çözülmüş bulgu unutulup üstüne yanlış
   sonuç yazıldı). Pahalı bir çare ilk denemede tutmadıysa tekrarlama, **dayandığı kanıtı** sorgula.
 - **Always-allow YASAĞI (D32):** SAP-yazma ve davranış-yüzeyi araçlarına "Always allow" verilmez.
+- **KAPSAM-DIŞI BULGU — karar ağacı (kullanıcı kuralı):** görev sırasında ilgisiz bir kusur
+  görürsen: **bizden mi doğdu?** → DÜZELT (kendi işimizin yan etkisi) · **bu işi etkiliyor mu?**
+  → DÜZELT + raporla · **kritik/geri alınamaz mı?** → DERHAL bildir, izinsiz düzeltme ·
+  **ilgisiz mi?** → **açık kalem** yaz (deferred), düzeltme. Her dalda **kanıt zorunlu** —
+  "sanırım bozuk" ile kalem açılmaz. ⚠ Alt-ajanlar auto-memory'yi GÖRMEZ → bu ağacı
+  brifinge açıkça YAZ, yoksa hiç uygulanmaz.
+- **ONAY İSTERKEN 5 UNSUR ZORUNLU** (yoksa talep değil şikâyettir): ① **tetikleyici** — hangi
+  kural/mekanizma onaya bağladı (ADR/kural adı ya da "classifier soft-deny") ② **kapsam** — tam
+  olarak ne yapılacak (obje/dosya listesi, transport, hedef sistem) **ve ne YAPILMAYACAK** ③ **neden
+  şimdi** ④ **onaylamazsa** ne olur (maliyet açıkça) ⑤ **öneri** — "önerim X, çünkü Y".
+  ⛔ Aracın hata mesajını gerekçe yerine koyma ("spawn denied" bir olaydır, sebep değil).
+  ⛔ Onaya gitmeden önce: bilinen sınıf mı diye **hafızaya bak** + mümkünse **bir kez daha dene**;
+  gereksiz onay trafiği de bir maliyettir.
 - **Belirsizlikte DUR ve sor.** Spec yoksa operatör onayı iste; DTEL/append adı önerme.
 
 Proje-özel overlay kapıları: `playbook-local/`, `standards-local/`, `scripts/validators-local/`
