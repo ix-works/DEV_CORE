@@ -96,6 +96,8 @@ OZEL_TESTLER = [
     ("ui5_t1_tirnak_sinifi", "UI5 T1: template-literal `_X` tirnak sinifindan kaciyordu (V6)"),
     # 2026-08-01 amend-FP (kullanici-onayli GEVSETME — kiyas birimi commit -> dal):
     ("changelog_amend", "INFRA-CHANGELOG gate: amend/cok-commit dalinda FP; taze dalda birebir-eski"),
+    # 2026-08-09 DDIC okuma-yolu (table/structure `/source/main` VAR; diger uc tipte YOK):
+    ("ddic_okuma_yolu", "adt_get + sap_sync_pull: DDIC tipi basina dogru uc (XML vs DDL)"),
 ]
 
 
