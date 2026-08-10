@@ -9,8 +9,21 @@ const BASE_URL = process.env.SMOKE_BASE_URL || 'http://localhost:8099';
 const SAP_USER = process.env.SAP_USER || '';
 const SAP_PASS = process.env.SAP_PASS || '';
 
+// VARSAYILAN KOŞUM = YALNIZ JENERİK SMOKE (2026-08-10).
+// Önceki hâlde `testMatch` yoktu → `run_ui_smoke.py --port N` (yani --spec'siz
+// varsayılan kullanım) dizindeki TÜM spec'leri topluyordu (ölçüldü: 3 dosya /
+// 6 test). `shipment.driver.spec.ts` UYGULAMAYA-ÖZELdir; başka bir app'in
+// portunda koşunca G1 YANLIŞ-POZİTİF blok üretir.
+// ⚠ Bu bulgu 2026-08-01'den beri açıktı ama ZARARSIZDI — çünkü sarmalayıcı
+// (run_ui_smoke.py) proje-kökü hatası yüzünden zaten ölüydü. Aynı gün
+// sarmalayıcı düzeltilince bulgu SİLAHLANDI; bu satır o yüzden eklendi.
+// Ders: bir aracı diriltmek, onun uyuyan bulgularını da uyandırır.
+// `--spec <dosya>` ile AÇIK çağrı bu filtreden etkilenmez (bilinçli seçimdir).
+const DEFAULT_SPEC = 'ui.smoke.spec.ts';
+
 export default defineConfig({
   testDir: '.',
+  testMatch: process.env.SMOKE_SPEC ? [process.env.SMOKE_SPEC] : [DEFAULT_SPEC],
   timeout: 60_000,
   retries: 0,                       // LOCKOUT-SAFE: yanlış kimlikte retry YOK (SAP 2-deneme kilidi)
   reporter: [['list']],
