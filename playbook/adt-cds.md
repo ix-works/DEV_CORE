@@ -499,3 +499,53 @@ Bir `define view entity ... union all ...` yazarken SAP 3 kuralı tek tek dayat�
 - **Neden önemli:** üç değerli mantıkta ikisi farklı davranır — `col <> ''` boş için **FALSE**, NULL için **UNKNOWN** üretir. `CASE`/`WHERE` dallarında bu fark **sessizce başka dal seçtirir**. Gerçek NULL genelde **LEFT JOIN eşleşmemesinden** doğar (o da ayrı bir dal).
 - **Kural:** NULL'lığı **ekrandan okuma, `IS NULL` ile ÖLÇ.** Bir CASE'in NULL davranışına güveniyorsan, kaynağa **tuzak notunu yaz** — yoksa sonraki okuyan "NULL kontrolü unutulmuş" deyip `coalesce` ekler ve kasıtlı fallback'i öldürür.
 - **Akraba araç sınırları (aynı uç, aynı ders — "400 = endpoint sınırı, dil sınırı değil"):** `adt_sql_query` freestyle ucu `IN ( … )` listesini, 8+ kolonlu `GROUP BY`/`ORDER BY`'ı ve join + çok-`WHEN` `CASE` kombinasyonunu **400**'lüyor. OR-zinciri / az-kolon / tek-`WHEN` ile aşılır. **Aracın reddini dilin reddi sanma;** capability kararını canlı aktivasyonla ver (T9 ile aynı ilke).
+
+### T14 — `currency_conversion` **DDIC-based view'de** iki ayna kısıt taşır; **view-entity'de bu kısıtlar YOK** (2026-08-10)
+
+**Kısıt tablosu (üç aktivasyon turuyla ölçüldü, ham hata `DDLS 373`):**
+
+| parametre | KABUL | RET | ham hata |
+|---|---|---|---|
+| `AMOUNT` | **Columns**, Paths, Parameters | ifade, cast | *"For parameter AMOUNT only Columns,Paths,Parameters can be passed"* |
+| `EXCHANGE_RATE_TYPE` | Expressions, **Literals**, Parameters | **KOLON** | *"For parameter EXCHANGE_RATE_TYPE only Expressions,Literals,Parameters can be passed"* |
+
+İkisi **birbirinin aynası**: `amount` kolon İSTER, `exchange_rate_type` kolon KABUL ETMEZ. Birini
+düzeltmek diğerini görünür yapar (aktivasyon **ilk hatada iptal eder** → her tur tek bilinmez kapanır;
+"diğer parametreler temiz" **İDDİA EDİLEMEZ**).
+
+- **⛔ EN ÖNEMLİ SONUÇ — prior-art'ı kopyalamadan önce VİEW TİPİNE bak.** Aynı sistemde `ZSD001_I_*`
+  analitik view'ları `exchange_rate_type`'a `CASE`+**kolon** verip **canlı-aktif** olabilir — çünkü onlar
+  **`define view entity`**. DDIC-based (`define view` + `@AbapCatalog.sqlViewName`) aynı kodu **reddeder**.
+  Kısıt **view tipine bağlıdır**; "aynı sistemde çalışan örnek var" tek başına kanıt değildir.
+- **Pratik sonuç 1 — toplam (ör. vergi dahil tutar) doğrudan çevrilemez.** Çare: bileşenleri **ayrı ayrı**
+  çevir ve dışarıda topla (`conv(net) + conv(vergi)`). ⚠ Her çağrı hedef PB ondalığına yuvarladığı için
+  sonuç "toplamı bir kez çevirme"den **≤ 0,01 sapar** — bilinçli ödün olarak kaynağa YAZ.
+- **Pratik sonuç 2 — kur tipi VERİDEN TÜRETİLEMEZ.** Belgenin kendi kur tipini (`VBRK-KURST` vb.)
+  kullanmak DDIC-based'de imkânsız; sabit literal ya da view parametresi olmak zorunda. Parametre eklemek
+  klasik tüketiciyi (`SELECT … FROM <sqlview>`, ALV `TYPE TABLE OF <sqlview>`) **kırar** ⇒ klasik rapora
+  dokunulamıyorsa **sabit literal tek yol**; bu bir **iş kararıdır**, kullanıcıya sor.
+- **Kabul edilenler (aynı turda ölçüldü, DDIC-based'de ÇALIŞTI):** `error_handling => 'SET_TO_NULL'` ✅
+  (view-entity'de `SD_EXPRESSION 146` verir — **ters yönde asimetri**) · DTEL cast
+  (`cast('TRY' as waers)`, `cast(0 as <CURR_DTEL>)`) ✅ · dış `cast( case … end as <CURR_DTEL> )` ✅ ·
+  `coalesce` ✅. Built-in `abap.cuky`/`abap.curr(n,m)` **denenmedi** (DDIC-based'de repo-kanıtı yoktu).
+- **Çalışan reçete:**
+  ```
+  cast( case when <src_cuky> = '<TGT>' then <col_a> + <col_b>
+             when <src_cuky> <> '' and <src_cuky> is not null
+               then coalesce( currency_conversion( amount => <col_a>, source_currency => <src_cuky>,
+                                target_currency => cast( '<TGT>' as waers ), exchange_rate_date => <date_col>,
+                                exchange_rate_type => 'M', error_handling => 'SET_TO_NULL' ), 0 )
+                  + coalesce( currency_conversion( amount => <col_b>, … ), 0 )
+             else 0 end as <CURR_DTEL> )
+  ```
+- **Denenen ve BAŞARISIZ (tekrar deneme):** `amount => cast( (a+b) as <DTEL> )` · `amount => (a+b)` ·
+  `exchange_rate_type => case when <kolon> <> '' then <kolon> else 'M' end`.
+- **Ters kotasyon uyarısı:** TCURR'da bir yön **negatif `UKURS`** ile saklanabilir (ör. TR-özel bir tip
+  TRY→EUR = −55,04 iken `M` EUR→TRY = +55,04 — **aynı kur**, ters kotasyon). `currency_conversion` bunu
+  doğru çözer; **elle çarpım çözmez** (ölçülmüş vaka: 20.000 TRY → −1.032.324). Ayrıca bir kur tipi
+  **yalnız tek yönde** günlük bakımlı olabilir ⇒ hedef PB'ye göre farklı tip gerekebilir; hangi
+  (tip × yön) çiftinin bakımlı olduğunu **TCURR'dan ölç**, varsayma.
+- **@Semantics yan etkisi (klasik ALV):** her çevrilmiş tutar `@Semantics.amount.currencyCode` için bir
+  **sabit PB kolonu** ister; DDIC view'a eklenen bu kolonlar `LVC_FIELDCATALOG_MERGE` + `SELECT *` ile
+  beslenen ALV'de **kolon olarak görünür ve gizlenemez** (`no_out` için programa dokunmak gerekir).
+  Kullanıcıya önceden söyle; alan sırasında tutarların **ardına** koy.
