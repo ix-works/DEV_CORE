@@ -31,7 +31,7 @@ TESPİT (AST; regex değil):
   2) O adın PROJE-anlamlı tüketimi İHLAL'dir:
        a. `<AD> / SOURCE_ROOT_NAME` · `/ "SOURCE_CODES"` · `/ "ERP"`
        b. `<AD> / ".claude"`  (seans state / davranış-yüzeyi)
-       c. `<AD> / "project.yaml"`
+       c. `<AD> / "project.yaml"` · `<AD> / ".conn_adt"`  (proje config/bağlantı)
        d. `os.walk(<AD>)` · `<AD>.rglob(...)`  (proje geneli tarama)
   `sys.path.insert(0, str(Path(__file__)...))` bir ATAMA DEĞİL → hiç görülmez (meşru).
   Core-içi yollar (`<AD> / "playbook"`, `/ "governance"`, `/ "abaplint"` ...) İHLAL DEĞİL.
@@ -60,7 +60,20 @@ SCAN_DIR = CORE_ROOT / "scripts"
 MUAF = {"utils/project_config.py"}
 
 # `<file-derived-kök> / <ilk-segment>` = proje kökü varsayımı
-PROJE_SEGMENT_SABIT = {"SOURCE_CODES", "ERP", "project.yaml"}
+#
+# `.conn_adt` 2026-08-10'da EKLENDİ (KAYIT: ui-smoke proje-kökü): SAP kimlik dosyası
+# PROJE kökündedir (`sap_adt_lib`/`deploy_ui`/`ix_doctor` hepsi env→cwd ile çözer;
+# `deploy_ui.py` yorumu bunu açıkça "`__file__`-türetimi YASAK" diye yazar) — ama
+# dedektör listesinde YOKTU. Canlı hasar: `run_ui_smoke.py` `REPO/".conn_adt"` ile
+# DEV_CORE'a bakıyordu, dosya orada YOK ⇒ G1 UI-smoke gate'i (ADR 0017 deploy
+# done-criteria) HER çağrıda "kimlik okunamadı" ile ölüyordu; CORE-01 ise aynı koşuda
+# "193 script temiz" diyerek SAHTE GÜVEN üretiyordu.
+# FP ÖLÇÜMÜ (ekleme ÖNCESİ, canlı core, validator'ın kendi AST'siyle): taban 0 bulgu →
+# `.conn_adt` ile +1 (yalnız `ui-smoke/run_ui_smoke.py:31`, yani gerçek kusur). Komşu
+# proje-artefaktları da ölçüldü ve EKLENMEDİ (bugün 0 ihlal + 0 FP → gate-moratoryumu
+# ADR 0019: kanıtsız genişletme yok): `conn` · `settings.local.json` · `SESSION_NOTES.md`
+# · `.csrf_token.json` · `project.local.yaml` → hepsi +0.
+PROJE_SEGMENT_SABIT = {"SOURCE_CODES", "ERP", "project.yaml", ".conn_adt"}
 PROJE_SEGMENT_NAME = {"SOURCE_ROOT_NAME"}
 
 # `.claude/` özel: proje state'i (settings/manifest/seans damgası) PROJE kökündedir.
@@ -220,7 +233,7 @@ def _gecisli_koklar(tree: ast.AST, koklar: dict[str, int]) -> dict[str, int]:
 # HEPSİ meşrundu (`print(f"core: {CORE_ROOT}")`, `PYTHONPATH=str(X) + os.pathsep + ...`).
 # Segment filtresi olmadan bu 14 satır sahte FAIL olurdu; alarm-yorgunluğu gate'i öldürür.
 _METIN_IHLAL_RE = re.compile(
-    r"<KÖK>[/\\]+(SOURCE_CODES|ERP|project\.yaml|\.claude|SOURCE_ROOT_NAME)\b")
+    r"<KÖK>[/\\]+(SOURCE_CODES|ERP|project\.yaml|\.conn_adt|\.claude|SOURCE_ROOT_NAME)\b")
 
 
 def _metin_sekli(node: ast.AST, koklar: dict[str, int]) -> tuple[str, str] | None:
@@ -264,6 +277,8 @@ def _metin_sekli(node: ast.AST, koklar: dict[str, int]) -> tuple[str, str] | Non
 def _zincir_ihlali(segler: list[str]) -> str | None:
     """Segment zinciri PROJE kökü varsayıyor mu? Evetse insan-okur gerekçe döner."""
     ilk = segler[0]
+    if ilk == ".conn_adt":
+        return "SAP bağlantı dosyası (PROJE kökünde; env CLAUDE_PROJECT_DIR → cwd)"
     if ilk in PROJE_SEGMENT_SABIT or ilk in PROJE_SEGMENT_NAME:
         return "proje kaynağı/config yolu"
     if ilk == CLAUDE_DIZIN:
