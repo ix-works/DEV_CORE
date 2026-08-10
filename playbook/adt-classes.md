@@ -196,6 +196,22 @@ try_push(minimal, 'minimal baseline')
 birim testi ekliyorsun). Var olan bir `ccau`'yu güncellemek sıradan PUT'tur — bu bölüm
 yalnız **ilk yaratım** içindir.
 
+> ✅ **2026-08-10 — ARTIK ARACIN İŞİ (elle HTTP atma):**
+> ```
+> python scripts/push_object.py --name ZCL_ORNEK --type ccau --transport <TR>
+> ```
+> `push_object.py` alt-include'u tanır (`ccau`/`ccimp`/`ccdef`/`ccmac`; `--name` = **ANA
+> SINIF**), varlığı yoklar, gerekiyorsa POST'la iskeleti yaratır, **her hâlde PUT'la gövdeyi
+> yazar** ve **readback ile bayt kıyası yapar** — aşağıdaki iki uçtan birine çarpman artık
+> mümkün değil. Bu bölüm yine de DURUYOR: aracı okuyan/değiştiren, SAP'nin NEDEN böyle
+> davrandığını bilmeli. **Neden gerekti:** bu sıra 2026-08-10'a kadar YALNIZ BURADA
+> anlatılıyordu, hiçbir yerde implement edilmemişti (`push_object.py --type` listesinde
+> `ccau` yoktu) → her seferinde elle HTTP atılıyor ve tuzağa düşülüyordu.
+> Kod: `object_types.CLASS_INCLUDE_TYPES` + `sap_adt_lib.push_class_include` ·
+> korpus: `tests/fixtures/class_include_push/` (15 vektör; V8 = sahte-yeşil bekçisi).
+> ⚠ `testclasses` dışındaki segment adları bu evde **canlı ölçülmedi** —
+> `CLASS_INCLUDE_TYPES[...]['olculdu']` bunu beyan eder; ilk kullanan doğrular ve günceller.
+
 **ÇALIŞAN YÖNTEM — iki adım, sırayla:**
 
 ```

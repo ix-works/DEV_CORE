@@ -277,12 +277,34 @@ def main() -> int:
         if not ok:
             fail += 1
     if fail:
-        act = "STALE tespit edildi (canlı ≠ kaynak)" if args.verify_only else "deploy DOĞRULANAMADI (bayat gitmiş olabilir)"
+        if args.verify_only:
+            act = "STALE tespit edildi (canlı ≠ kaynak)"
+        elif args.dry_run:
+            act = "BUILD başarısız (deploy zaten yapılmadı)"
+        else:
+            act = "deploy DOĞRULANAMADI (bayat gitmiş olabilir)"
         print(f"\n[FAIL] {fail}/{len(results)} app {act} — yukarıyı incele, kullanıcıya raporla "
               "(asla 'başarılı' deme).", file=sys.stderr)
         return 1
-    tail = "canlı == mevcut kaynak (hepsi güncel)" if args.verify_only else "canlı Component-preload == build çıktısı"
-    print(f"\n[OK] {len(results)} app doğrulandı ({tail}).")
+
+    # ⛔ 2026-08-10 — ÖZET SATIRI ÜÇ-YOLLU OLMAK ZORUNDA. Mod banner'ı (yukarıda) üç
+    # yolluydu ama bu satır İKİ yolluydu: `verify_only` değilse DEPLOY cümlesini basıyordu.
+    # Sonuç: `--dry-run` — ki `deploy_one()` içinde canlıya HİÇ BAKMAZ (`if dry: return`) —
+    # ekrana **"N app doğrulandı (canlı Component-preload == build çıktısı)"** yazıyordu.
+    # Ölçülen bedel (2026-08-10): app STALE'ken bu satır okundu ve "güncel" sanıldı.
+    # Bu script'in VAR OLMA SEBEBİ tam olarak "Successful mesajına güvenme, içeriği kanıtla"
+    # olduğu için, kendi özet satırının koşmayan bir doğrulamayı beyan etmesi kapının
+    # kendisini yalanlıyordu. Kural: KOŞMAYAN doğrulama BEYAN EDİLMEZ — "doğrulandı" ve
+    # "canlı ==" sözcükleri dry-run dalında GEÇMEZ.
+    if args.verify_only:
+        print(f"\n[OK] {len(results)} app doğrulandı (canlı == mevcut kaynak — hepsi güncel).")
+    elif args.dry_run:
+        print(f"\n[i] DRY-RUN bitti: {len(results)} app BUILD edildi. "
+              "DEPLOY YAPILMADI, CANLI İÇERİK OKUNMADI.")
+        print("    Bu çıktı 'canlı == build' KANITI DEĞİLDİR ve app'in güncel olduğunu GÖSTERMEZ.")
+        print("    Bayatlık (stale) taraması için: --verify-only · gerçek deploy için bayraksız koş.")
+    else:
+        print(f"\n[OK] {len(results)} app doğrulandı (canlı Component-preload == build çıktısı).")
     return 0
 
 

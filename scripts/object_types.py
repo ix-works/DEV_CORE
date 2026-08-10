@@ -192,8 +192,122 @@ def normalize_object_type(object_type):
     if obj_type in OBJECT_TYPES:
         return obj_type
 
+    # Sinif ALT-INCLUDE'u mu? (ccau/ccimp/...) — bunlar bagimsiz obje DEGILDIR, bu
+    # yuzden OBJECT_TYPES'a KOYULMAZ (URL'leri ana sinifin adini gerektirir; tek
+    # parametreli get_object_url() onlari uretemez). Ayri bir yol vardir; hata
+    # mesaji cagirani oraya gondersin ki "desteklenmiyor" diye okunmasin.
+    if obj_type in CLASS_INCLUDE_TYPES or obj_type in CLASS_INCLUDE_ALIASES:
+        raise ValueError(
+            f"'{object_type}' bir SINIF ALT-INCLUDE'udur (bagimsiz obje degil). "
+            f"get_object_url() onu uretemez: URL ana sinifin adini gerektirir "
+            f"(/oo/classes/<CLS>/includes/<seg>). "
+            f"Kullan: get_class_include_url(<CLS>, '{obj_type}') / "
+            f"SAPClient.push_class_include(). Bkz. playbook/adt-classes.md 24.8."
+        )
+
     # Unknown type
     raise ValueError(f"Unsupported object type: {object_type}. Supported: {', '.join(OBJECT_TYPES.keys())}")
+
+
+# =============================================================================
+# SINIF ALT-INCLUDE'LARI (ccau / ccimp / ccdef / ccmac) — TEK KAYNAK
+# =============================================================================
+# NEDEN AYRI TABLO: bunlar bagimsiz SAP objesi DEGILDIR. ADT'de ana sinifin ALTINDA
+# yasarlar (/oo/classes/<CLS>/includes/<segment>) ve URL'leri IKI ad ister. OBJECT_TYPES
+# girdileri tek-parametreli `get_object_url(name, type)` ile uretildigi icin buraya
+# konamazlar; ayri tablo + ayri URL uretici bilincli.
+#
+# ⛔ 2026-08-10 KUSUR-4: bu tablo HIC YOKTU. Sonuc: `push_object.py` testclasses'i
+# TANIMIYORDU (--type choices'ta yok), `normalize_object_type` ValueError firlatiyordu
+# ve operator el yordamiyla ham HTTP atmak zorunda kaldi -> dogrudan KUSUR-5/6'ya
+# (POST govdeyi yok sayiyor / var olana POST 500) carpti. Yani uc kusur TEK SINIFTIR:
+# *push zinciri sinif alt-include'unu bir kavram olarak tanimiyordu.*
+#
+# 'olculdu' alani DURUSTLUK ICINDIR — hangi segment adinin bu evde CANLI dogrulandigi:
+#   testclasses    : ÖLÇÜLDÜ (playbook/adt-classes.md 24.8; 2026-07-29 201/500/56-bayt
+#                    olcumu + 2026-08-10'da ZCL_SD015_STOCK_GUARD.ccau canliya girdi)
+#   implementations: repo-ici referans var (sap_adt_lib.py, metot-seviyesi include URL'i)
+#   definitions/macros: ADT konvansiyonu — BU EVDE CANLI OLCULMEDI. Kullanan ilk kisi
+#                    dogrular ve bu alani gunceller (tahmini "olculdu" yazma).
+CLASS_INCLUDE_TYPES = {
+    'testclasses': {
+        'segment': 'testclasses',
+        'abap_include': 'CCAU',
+        'file_extension': '.ccau.abap',
+        'description': 'Class test include (ABAP Unit)',
+        'olculdu': True,
+    },
+    'implementations': {
+        'segment': 'implementations',
+        'abap_include': 'CCIMP',
+        'file_extension': '.ccimp.abap',
+        'description': 'Class local implementations include',
+        'olculdu': False,
+    },
+    'definitions': {
+        'segment': 'definitions',
+        'abap_include': 'CCDEF',
+        'file_extension': '.ccdef.abap',
+        'description': 'Class local definitions include',
+        'olculdu': False,
+    },
+    'macros': {
+        'segment': 'macros',
+        'abap_include': 'CCMAC',
+        'file_extension': '.ccmac.abap',
+        'description': 'Class macros include',
+        'olculdu': False,
+    },
+}
+
+#: Evde kullanilan dosya-uzantisi adlari (.ccau.abap ...) kanonik ada esler.
+CLASS_INCLUDE_ALIASES = {
+    'ccau': 'testclasses',
+    'ccimp': 'implementations',
+    'ccdef': 'definitions',
+    'ccmac': 'macros',
+    'testclass': 'testclasses',
+    'locals_imp': 'implementations',
+    'locals_def': 'definitions',
+}
+
+
+def is_class_include(kind) -> bool:
+    """`kind` bir sinif alt-include tipi mi? (ValueError FIRLATMAZ.)"""
+    if not kind:
+        return False
+    k = str(kind).lower().strip()
+    return k in CLASS_INCLUDE_TYPES or k in CLASS_INCLUDE_ALIASES
+
+
+def normalize_class_include(kind) -> str:
+    """'ccau' / '.ccau.abap' / 'testclasses' -> 'testclasses'."""
+    if not kind:
+        raise ValueError("Sinif alt-include tipi bos olamaz")
+    k = str(kind).lower().strip().lstrip('.')
+    if k.endswith('.abap'):                     # '.ccau.abap' gibi verilirse
+        k = k[:-len('.abap')].rsplit('.', 1)[-1]
+    if k in CLASS_INCLUDE_ALIASES:
+        return CLASS_INCLUDE_ALIASES[k]
+    if k in CLASS_INCLUDE_TYPES:
+        return k
+    raise ValueError(
+        f"Bilinmeyen sinif alt-include tipi: {kind}. "
+        f"Desteklenen: {', '.join(sorted(CLASS_INCLUDE_TYPES))} "
+        f"(esanlamli: {', '.join(sorted(CLASS_INCLUDE_ALIASES))})"
+    )
+
+
+def get_class_include_url(class_name, kind) -> str:
+    """Sinif alt-include'unun ADT URL'i.
+
+    ⚠ Bu URL AYNI ZAMANDA KAYNAK UCUDUR — sonuna `/source/main` EKLENMEZ
+    (siradan objelerden ayrilan nokta; ekleyen 404 alir).
+    """
+    from urllib.parse import quote
+    seg = CLASS_INCLUDE_TYPES[normalize_class_include(kind)]['segment']
+    cls = quote(str(class_name).lower(), safe='')
+    return f'/sap/bc/adt/oo/classes/{cls}/includes/{seg}'
 
 
 # =============================================================================

@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from sap_adt_lib import (
     SAPADTClient,
+    SAPTransportError,
     check_sap_config,
     create_conn_file,
     create_conn_template,
@@ -288,13 +289,22 @@ class SAPClient:
           5. If requested_transport appears in the candidate K-parents, keep it.
              Otherwise return the top-ranked candidate.
 
-        Falls back silently to requested_transport if the data preview API returns an
-        error (e.g. HTTP 500 on systems where E071 is not accessible — see Bug 11).
+        Falls back to requested_transport if the data preview API returns an error
+        (e.g. HTTP 500 on systems where E071 is not accessible — see Bug 11).
+        ⚠ 2026-08-10: bu geri-düşüş artık **SESSİZ DEĞİL** — görünür `[WARN]` basar.
+        Docstring eskiden "Falls back **silently**" diyordu ve bu, düzeltilmesi gereken
+        davranışın kendisinin **itirafıydı**: sessizlik bir tasarım tercihi gibi
+        belgelenmişti. Sonuç `self._last_transport_lookup` ile de okunabilir:
+        `resolved` | `kept` | `no_entry` | `foreign_only` | `shape_unrecognized` |
+        `error:<İstisnaAdı>` — yani "doğrulandı" ile "varsayıldı" AYIRT EDİLEBİLİR.
 
         History:
           - 2026-03-13 (Bug 9): Original — filtered E071~OBJECT='{name}' which is the
             4-char type-code column. Caused HTTP 400 on every call (field width overflow).
             The except-clause silently swallowed the error → fix was a no-op.
+            ⚠ Bu satır 2026-08-10'a kadar bir TARİHÇE notu sanıldı; oysa aynı `except`
+            HÂLÂ oradaydı ve aynı şeyi yapmaya devam ediyordu. Kusuru anlatan yorum,
+            kusurun düzeldiği anlamına gelmez.
           - 2026-04-09: Fixed column name, added S→K resolution, user filter, and
             R3TR CLAS preference. Live-tested on INDEX system against ZSD000_CL_AI_BASE
             (scattered LIMU state) and ZSD000_CL_TMP1 (single R3TR CLAS).
@@ -329,6 +339,17 @@ class SAPClient:
 
             columns = root.findall('.//dp:columns', ns)
             if not columns:
+                # SINIFLAMA: sessiz EVET · kurtarma HAYIR · YANILTICI EVET -> DUZELTILDI.
+                # Gecerli bir datapreview yaniti 0 satirda bile SUTUN METADATASI tasir;
+                # hic `dp:columns` yoksa elimizdeki sey bir SONUC degil, TANIMADIGIMIZ bir
+                # govdedir (ADT hata belgesi / HTML / kirpilmis yanit). Bunu "obje hicbir
+                # transport'a kayitli degil" diye okumak #1'in sekil-korlugunun ta kendisi.
+                # Fallback KORUNUYOR (yazma yolu), yalniz artik GORUNUR.
+                self._last_transport_lookup = 'shape_unrecognized'
+                print(f"      [WARN] Transport sahipligi SORGULANAMADI: yanitta `dp:columns` YOK "
+                      f"(taninmayan govde, {len(result_xml or '')} bayt).")
+                print(f"      [WARN] Bu bir 'kayit yok' SONUCU DEGIL, bir OKUYAMAMA'dir. "
+                      f"'{requested_transport}' ile devam ediliyor (dogrulanmadi).")
                 return requested_transport
 
             # Build column name → list of values
@@ -340,6 +361,11 @@ class SAPClient:
 
             trkorrs = col_data.get('TRKORR', [])
             if not trkorrs:
+                # SINIFLAMA: sessiz EVET · kurtarma EVET · yaniltici HAYIR -> DOKUNULMADI.
+                # Sutunlar VAR ama satir YOK = sorgu KOSTU ve obje gercekten hicbir
+                # degistirilebilir transport'a kayitli degil (yeni obje). Bu MESRU bir
+                # sonuctur ve requested_transport DOGRU cevaptir — burasi FP capasidir.
+                self._last_transport_lookup = 'no_entry'
                 return requested_transport
             strkorrs = col_data.get('STRKORR', [])
             users = col_data.get('AS4USER', [])
@@ -365,6 +391,14 @@ class SAPClient:
             else:
                 own = candidates
             if not own:
+                # SINIFLAMA: sessiz EVET · kurtarma EVET · yaniltici HAYIR -> DOKUNULMADI.
+                # Adaylar VAR ama hepsi BASKA kullanicinin. Fallback burada BILINCLI bir
+                # POLITIKADIR (yukaridaki yorum: "avoid hijacking another developer's
+                # transport") — yani cevap YANLIS degil, KASITLI. Sessizligi tek basina
+                # kusur saymadim; lider kararina uygun olarak DOKUNMADIM.
+                # ACIK KALEM: burada tek satirlik gorunurluk (obje su an baskasinin
+                # transport'unda) tesihse yardimci olurdu — ayri kalem, ayri karar.
+                self._last_transport_lookup = 'foreign_only'
                 return requested_transport
 
             # Rank: R3TR CLAS (catch-all) first, then everything else (LIMU shards).
@@ -391,13 +425,134 @@ class SAPClient:
             if best.upper() != req_upper:
                 print(f"      [INFO] Object already recorded in transport {best} — using it instead of {requested_transport}")
                 print(f"      [INFO] (Prevents ghost transport: SAP class-pool includes must stay in one transport)")
+                self._last_transport_lookup = 'resolved'
+            else:
+                self._last_transport_lookup = 'kept'
             return best
 
         except Exception as e:
+            # ⛔ 2026-08-10 "Bug 11 sessiz fallback" — SESSIZLIK duzeltildi, FALLBACK DEGIL.
+            #
+            # Eskiden bu dal yalnizca `debug_enabled` acikken TEK BIR debug satiri
+            # basiyordu; kapaliyken (varsayilan) hicbir iz birakmadan requested_transport
+            # donuyordu. Bedeli bu dosyanin KENDI tarihcesinde yaziyor (yukarida,
+            # History 2026-03-13): sorgu HER CAGRIDA HTTP 400 veriyordu, except sessizce
+            # yutuyordu ve **fix bir NO-OP olarak aylarca fark edilmedi**. Yani bu except,
+            # kendisini duzeltmeye calisan fix'i de gizledi.
+            #
+            # ⚠ FALLBACK'IN KENDISI YUK TASIYOR, KALDIRILMADI: E071'e erisimi olmayan
+            # sistemlerde bu sorgu HTTP 500 verir ve push'un yine de yurumesi gerekir
+            # (push_object icindeki "Bug 11 auto-retry" tam bu duruma gore yazilmis).
+            # Bu yuzden dogru fix "raise" DEGIL, **gurultulu devam**: sonuc ayni, ama
+            # artik bir DOGRULAMA ile bir VARSAYIM birbirinden ayirt edilebiliyor.
+            self._last_transport_lookup = f'error:{type(e).__name__}'
+            print(f"      [WARN] Transport sahipligi SORGULANAMADI "
+                  f"({type(e).__name__}: {str(e)[:120]})")
+            print(f"      [WARN] '{requested_transport}' ile devam ediliyor — bu bir "
+                  f"DOGRULAMA DEGIL, VARSAYIMDIR.")
+            print(f"      [WARN] Obje baska bir transport'a kayitliysa lock 409/CORRNR "
+                  f"uyusmazligi verebilir (Bug 11 auto-retry devreye girer).")
             if self.debug_enabled:
                 self._debug(f"[DEBUG] _find_existing_transport failed (will use requested transport): {str(e)[:120]}")
 
         return requested_transport
+
+    def push_class_include(self, class_name: str, include_kind: str,
+                           transport: Optional[str] = None,
+                           source_file: Optional[str] = None) -> Dict[str, Any]:
+        """Sınıf alt-include'unu (ccau/ccimp/ccdef/ccmac) push et: kilit → yaz → aktive.
+
+        ⛔ 2026-08-10 KUSUR-4: bu yol HİÇ YOKTU. `push_object.py --type` listesi
+        testclasses'i tanımıyordu ve `normalize_object_type('ccau')` ValueError
+        fırlatıyordu → operatör ham HTTP atmak zorunda kalıyor, oradan da KUSUR-5/6'ya
+        (POST gövdeyi yok sayıyor / var olana POST 500) çarpıyordu. Üçü tek sınıftır.
+
+        Kilit ANA SINIF üzerinden alınır (alt-include'un kendi kilidi yoktur) ve
+        aktivasyon da ANA SINIF üzerinden yapılır — SAP alt-include'u ayrı aktive etmez.
+
+        Returns:
+            dict {success, error, error_type, source_uploaded, activated, include}
+        """
+        from object_types import normalize_class_include, CLASS_INCLUDE_TYPES
+
+        result: Dict[str, Any] = {
+            'success': False, 'error': '', 'error_type': '',
+            'source_uploaded': False, 'activated': False, 'include': None,
+        }
+
+        try:
+            kind = normalize_class_include(include_kind)
+        except ValueError as e:
+            result['error'] = str(e)
+            result['error_type'] = 'ValueError'
+            return result
+
+        class_name = class_name.upper()
+        object_url = get_object_url(class_name, 'class')
+
+        # Yerel dosya: verilmediyse ev konvansiyonundan türet (classes/<CLS>.ccau.abap)
+        if source_file:
+            local_file = Path(source_file)
+        else:
+            from object_types import get_local_subdir
+            local_file = (self.local_base.parent / get_local_subdir('class')
+                          / f"{class_name}{CLASS_INCLUDE_TYPES[kind]['file_extension']}")
+        if not local_file.exists():
+            result['error'] = f"Local file not found: {local_file}"
+            result['error_type'] = 'FileNotFoundError'
+            print(f"\n[ERROR] Local file not found: {local_file}")
+            return result
+
+        source_code = local_file.read_text(encoding='utf-8')
+
+        print(f"\n{'=' * 70}")
+        print(f"  Pushing class include {CLASS_INCLUDE_TYPES[kind]['abap_include']}: "
+              f"{class_name} ({kind})")
+        print(f"{'=' * 70}")
+        print(f"\n[1/4] Reading local file...\n      {local_file}\n"
+              f"      Size: {len(source_code)} characters")
+
+        lock_handle = None
+        try:
+            print(f"\n[2/4] Locking parent class...")
+            lock_handle = self.adt_client.lock_object(object_url, transport=transport)
+            effective_transport = (
+                getattr(self.adt_client, '_last_lock_effective_transport', None) or transport)
+
+            print(f"\n[3/4] Writing include (POST-if-absent -> PUT -> readback)...")
+            result['include'] = self.adt_client.push_class_include(
+                class_name, kind, source_code,
+                lock_handle=lock_handle, transport=effective_transport)
+            result['source_uploaded'] = True
+
+            if lock_handle and lock_handle != 'NO_LOCK_SUPPORT':
+                try:
+                    self.adt_client.unlock_object(object_url, lock_handle)
+                    lock_handle = None
+                except Exception as unlock_err:
+                    print(f"      [WARNING] Pre-activation unlock failed: {str(unlock_err)[:100]}")
+
+            # Aktivasyon ANA SINIF üzerinden — alt-include tek başına aktive edilmez.
+            print(f"\n[4/4] Activating parent class {class_name}...")
+            act = self.adt_client.activate_object(class_name, object_url)
+            result['activated'] = bool(act.get('success')) if isinstance(act, dict) else bool(act)
+            if not result['activated']:
+                result['error'] = f"Activation failed: {act}"
+                result['error_type'] = 'SAPActivationError'
+                return result
+
+            result['success'] = True
+            return result
+
+        except Exception as e:
+            result['error'] = str(e)
+            result['error_type'] = type(e).__name__
+            if lock_handle and lock_handle not in ('NO_LOCK_SUPPORT', 'IMPLICIT_LOCK', None, ''):
+                try:
+                    self.adt_client.unlock_object(object_url, lock_handle)
+                except Exception:
+                    pass
+            return result
 
     def push_object(self, object_name: str, object_type: str = 'class', transport: Optional[str] = None, source_file: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -1662,50 +1817,108 @@ class SAPClient:
 
     # ===== Transport Operations =====
 
+    #: CTS Transport Organizer feed'ini TANIMA işareti. Eşleşme YEREL-ADA göre yapılır
+    #: (aşağıda); bu liste yalnızca "gelen gövde gerçekten bir tm feed'i mi" sorusunu
+    #: yanıtlar — yani "0 transport" cevabının KANITLANMIŞ mı yoksa OKUNAMAMIŞ mı
+    #: olduğunu ayırt eder.
+    _TM_NS_ISARETLERI = ('/cts/adt/tm', '/adt/tm')
+
+    @staticmethod
+    def _yerel_ad(etiket) -> str:
+        """'{ns}request' → 'request'. Namespace-bağımsız eşleşme için."""
+        if not isinstance(etiket, str):
+            return ''
+        return etiket.rsplit('}', 1)[-1]
+
     def list_user_transports(self, user: Optional[str] = None) -> List[Dict[str, str]]:
         """
         List user's transport requests
+
+        ⛔ 2026-08-10 — İKİ SESSİZ SIFIR KAYNAĞI KAPATILDI. Ölçülen semptom: sistemde
+        4 açık transport varken `adt_transport_list` `ok:true, count:0` döndü.
+
+        (a) **Yutulan istisna:** `except Exception: print(...); return []`. Bir XML
+            ParseError ya da ağ hatası, çağıran için "kullanıcının transport'u yok"tan
+            AYIRT EDİLEMEZ bir `[]` üretiyordu. Bu, 2026-08-01'de `where_used`/ATC/
+            `get_inactive_objects` için kapatılan *"DOĞRULAMA KOŞAMADI = DOĞRULANDI"*
+            sınıfının aynısıdır — o süpürme bu metodu ATLAMIŞTI.
+        (b) **Şekil körlüğü:** `user_transports()` 12 farklı Accept header dener ve İLK
+            200'ü döndürür (bir fallback header kazanabilir); gövdenin ŞEKLİ Accept'e
+            göre değişir. Ayrıştırıcı ise TEK bir namespace'e (`cts/adt/tm`) ve tam
+            nitelikli attribute adlarına çivilenmişti → başka şekilde gelen gövdede
+            `findall` boş döner, HATA YOK, `count:0`. Artık eşleşme namespace-bağımsız
+            (yerel ad) yapılır.
+
+        `count:0` ancak gövde GERÇEKTEN tanınmış bir tm feed'iyse rapor edilir; şekil
+        tanınmazsa sıfır İDDİA EDİLMEZ, `SAPTransportError` fırlatılır.
 
         Args:
             user: User name (optional, defaults to current user)
 
         Returns:
-            List of transports
+            List of transports (boş liste = KANITLANMIŞ sıfır)
+
+        Raises:
+            SAPTransportError: gövde ayrıştırılamadı VEYA şekil tanınmadı — bu durumda
+                "transport yok" SONUCU ÇIKARILAMAZ.
         """
+        # NOT: `user_transports()` kendi HTTP hatasını zaten fırlatır (SAPTransportError);
+        # burada onu YAKALAMIYORUZ — yakalamak (a)'nın ta kendisiydi.
+        transports_xml = self.adt_client.user_transports(user)
+        accept = getattr(self.adt_client, '_last_transport_accept', None)
+
         try:
-            transports_xml = self.adt_client.user_transports(user)
-
             root = ET.fromstring(transports_xml)
-            # Fixed namespace: cts/adt/tm (SAP returns this, not adt/tm)
-            namespaces = {'tm': 'http://www.sap.com/cts/adt/tm'}
-            ns_uri = 'http://www.sap.com/cts/adt/tm'
+        except ET.ParseError as e:
+            raise SAPTransportError(
+                f"Transport listesi AYRIŞTIRILAMADI (Accept: {accept}): {e}. "
+                f"'transport yok' SONUCU ÇIKARILAMAZ — gövde ilk 200 karakter: "
+                f"{(transports_xml or '')[:200]!r}"
+            )
 
-            transports = []
-            # Fixed: element is 'request' not 'transport'
-            for tr in root.findall('.//tm:request', namespaces):
-                # Fixed: attributes are namespaced, need full URI
-                transport_id = tr.get('{%s}number' % ns_uri)
-                description = tr.get('{%s}desc' % ns_uri, '')
-                status = tr.get('{%s}status' % ns_uri, '')
+        sekil_tanindi = False
+        transports = []
+        for el in root.iter():
+            tag = el.tag if isinstance(el.tag, str) else ''
+            if any(isaret in tag for isaret in self._TM_NS_ISARETLERI):
+                sekil_tanindi = True
+            if self._yerel_ad(tag) != 'request':
+                continue
+            # Attribute'lar da namespace-bağımsız okunur (fallback header'da namespace
+            # düşebilir ya da değişebilir; tam nitelikli ad aramak sessiz sıfır üretir).
+            attrs = {self._yerel_ad(k): v for k, v in el.attrib.items()}
+            transport_id = attrs.get('number')
+            if transport_id:
+                transports.append({
+                    'number': transport_id,
+                    'description': attrs.get('desc', ''),
+                    'status': attrs.get('status', '')
+                })
 
-                if transport_id:
-                    transports.append({
-                        'number': transport_id,
-                        'description': description,
-                        'status': status
-                    })
+        if not transports and not sekil_tanindi:
+            raise SAPTransportError(
+                f"Transport listesi ŞEKLİ TANINMADI (Accept: {accept}): gövdede ne "
+                f"`request` öğesi ne de bir CTS/tm namespace'i var. Bu bir SIFIR DEĞİL, "
+                f"bir OKUYAMAMA'dır — 'açık transport yok' diye OKUMA. "
+                f"Gövde ilk 300 karakter: {(transports_xml or '')[:300]!r}"
+            )
 
-            print(f"\nUser transports ({len(transports)} found):")
-            print("=" * 80)
-            for tr in transports:
-                print(f"  {tr['number']} - {tr['description']} [{tr['status']}]")
-            print("=" * 80)
+        # Teşhis izi: "0 bulundu" cevabı hangi şekilden çıktı?
+        self._last_transport_meta = {
+            'accept': accept,
+            'shape_recognized': sekil_tanindi,
+            'body_bytes': len(transports_xml or ''),
+        }
 
-            return transports
+        print(f"\nUser transports ({len(transports)} found; Accept={accept}):")
+        print("=" * 80)
+        for tr in transports:
+            print(f"  {tr['number']} - {tr['description']} [{tr['status']}]")
+        if not transports:
+            print("  (tanınan tm feed'i, hiç `request` öğesi yok — KANITLANMIŞ sıfır)")
+        print("=" * 80)
 
-        except Exception as e:
-            print(f"[ERROR] {str(e)}")
-            return []
+        return transports
 
     def create_transport(self, description: str, package_name: str) -> Optional[str]:
         """
