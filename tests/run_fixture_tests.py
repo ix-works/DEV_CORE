@@ -78,7 +78,10 @@ OZEL_TESTLER = [
     # ⚠ 2026-08-01: `adtget_yokluk_kaniti` bir ara bu listede IKI KEZ yaziliydi (PR birlesme
     # artigi) -> ayni fixture iki kez kosuyor ve TOPLAM sayiyi sisiriyordu. "N/N PASS"
     # sayisina guvenmenin bedeli: sayaci degil SATIRLARI oku.
-    ("adtget_yokluk_kaniti", "BULUNAMADI != YOK: adt_get DDIC dalinda hata <-> yokluk"),
+    # ⛔ 2026-08-10: yukaridaki not GECMIS ZAMANLA yazilmisti ama MUKERRER SATIR DURUYORDU
+    # (dersin kendi fix'i eksik kalmis; yorum "duzelttik" demiyor, "olmustu" diyor ve
+    # okuyan onu duzelmis saniyor). Satir bugun SILINDI. Artik bir korpus vektoru bunu
+    # bekliyor: tests/fixtures/sessiz_olumsuzlama_2026_08_10 E1 -> mukerrer kayit = FAIL.
     ("dogrulama_kosamadi", "DOGRULAMA KOSAMADI != DOGRULANDI (5 kayit, tek kok)"),
     ("veri_yetki_guardlari", "ADR 0011 PII normalizasyonu + guard'siz mutasyon tool'u (K-1/2/3)"),
     # 2026-08-01 kuyruk-turu (scripts/ + run_review):
@@ -100,6 +103,11 @@ OZEL_TESTLER = [
     ("ddic_okuma_yolu", "adt_get + sap_sync_pull: DDIC tipi basina dogru uc (XML vs DDL)"),
     # 2026-08-09 lock yaniti: NoModification -> acik hata; BOS/eksik/taninmayan -> AYNEN eski:
     ("lock_modification_support", "lock MODIFICATION_SUPPORT: 423'un sinyali (fail-safe)"),
+    # 2026-08-10 arac-kusurlari turu (7 kusur, 2 kok):
+    ("sessiz_olumsuzlama_2026_08_10",
+     "aracin false/0'i gormedigi katman icin 'hayir' DEGIL (transport/lock/deploy_ui)"),
+    ("class_include_push",
+     "sinif alt-include'u (ccau/ccimp): POST != PUT ve 201 != 'yazildi'"),
 ]
 
 

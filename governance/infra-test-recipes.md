@@ -190,6 +190,79 @@ python scripts/inspector.py --self-test             # canary    [✓]
   shallow clone, git ağacı olmayan dizin.
 - FP çapası: sağlam repoda app bulunur; son commit `ui/` DIŞINDAysa boş liste MEŞRU kalır.
 
+## B18b — deploy_ui `--dry-run` ÖZET SATIRI (koşmayan doğrulamayı beyan etme)
+- `python tests/fixtures/sessiz_olumsuzlama_2026_08_10/run.py` → 29/29 (D bölümü).
+- **Değişmez:** özet satırı ÜÇ-yollu olmak zorunda (banner zaten öyleydi). `--dry-run`
+  canlıya HİÇ bakmaz (`deploy_one`: `if dry: return`) → çıktısında **"doğrulandı"** ve
+  **"canlı =="** sözcükleri GEÇMEZ. Bunun yerine ne yapmadığını söyler + `--verify-only`e
+  yönlendirir.
+- **Neden kritik:** bu script'in var olma sebebi *"'Successful' mesajına güvenme, içeriği
+  kanıtla"*dır; kendi özet satırının koşmayan bir doğrulamayı beyan etmesi **kapının
+  kendisini yalanlar**. Ölçülen bedel 2026-08-10: app STALE'ken satır "güncel" sanıldı.
+- FP çapaları (SİLİNMEZ): gerçek deploy → *"canlı Component-preload == build çıktısı"*
+  HÂLÂ basılır (D2) · `--verify-only` → *"canlı == mevcut kaynak"* HÂLÂ basılır (D3).
+  İkisi de kalkarsa fix, mesajı düzeltmek yerine SİLMİŞ olur.
+
+## B18c — transport listesi / kilit sondası / lock sentinel'i (sessiz olumsuzlama)
+- `python tests/fixtures/sessiz_olumsuzlama_2026_08_10/run.py` → 29/29 · MUTASYON
+  `--mutasyon` (varsayılan `--ref 990f71b`) → **11/29**. 29/29 verirse test BOŞTUR.
+  ⚠ `--ref`e DAL ADI VERME (D2/5); taban öz-denetimi yanlış tabanı yakalar → **exit 2**.
+- **Üç değişmez:**
+  1. `list_user_transports` — parse/ağ hatası `[]`e ÇEVRİLMEZ (`SAPTransportError`);
+     eşleşme namespace-BAĞIMSIZ (12 Accept header ⇒ 12 olası şekil); gövde tanınan bir
+     tm feed'i değilse **sıfır İDDİA EDİLMEZ**.
+  2. `is_object_locked` — **HTTP 404 `locked:False` DEĞİLDİR** (`None` döner). İç kontrol
+     grubu: aynı dosya `lock_object`'te 404'ü *"endpoint not found"* okur.
+  3. `lock_object` — TÜMÜ 404 ise `NO_LOCK_SUPPORT` (eski davranış); **en az bir non-404
+     varsa `SAPLockError`**. Sentinel bir karar olmalı, varsayılan değil.
+- ⚠ **FP çapaları OMURGA — özellikle C1** (tümü 404 → `NO_LOCK_SUPPORT`): kaldırılırsa
+  kilit ucu OLMAYAN sistemlerde TÜM push'lar kapanır = **#99'un birebir tekrarı**
+  (ölçülmüş maliyet: 5 deneme / ~1 saat + kullanıcı boşuna SE24'e yönlendirildi).
+  Diğerleri: A5 (geçerli-boş feed → 0, hata yok) · B2 (200 + kilit yok → `locked:False`;
+  yoksa araç hiçbir zaman "kilitli değil" diyemez).
+- 🔴 **CANLI DOĞRULAMA LİDER/GATEWAY İŞİ:** korpus HTTP katmanını sahteleştirir.
+  `/sap/bc/adt/locks` ucunun bu sistemde gerçekten ne döndürdüğü **DOĞRULANAMADI**.
+  Fix her iki hâlde de dürüst: uç cevap veremezse `locked:null`, "kilitli değil" DEMEZ.
+
+## B18e — `_find_existing_transport` ("Bug 11 sessiz fallback")
+- `python tests/fixtures/sessiz_olumsuzlama_2026_08_10/run.py` → 40/40 (F bölümü) ·
+  MUTASYON → 16/40.
+- **Değişmez:** sorgu başarısız olduğunda **fallback KORUNUR ama SESSİZ DEĞİLDİR** —
+  görünür `[WARN]` + statü + *"bu bir DOĞRULAMA DEĞİL, VARSAYIMDIR"*. Sonuç ayrıca
+  `_last_transport_lookup` ile makine-okunur (`resolved`/`kept`/`no_entry`/`foreign_only`/
+  `shape_unrecognized`/`error:<Ad>`).
+- ⚠ **F2 FP ÇAPASI OMURGADIR:** hata hâlinde HÂLÂ `requested_transport` döner. Bu vektör
+  silinir ya da fix `raise`e çevrilirse **E071 erişimi olmayan her sistemde her push
+  kırılır**. Fallback bir kusur değil TASARIMDIR; kusur SESSİZLİĞİYDİ.
+- ⚠ **FP ÇAPASI ile AYIRT EDİCİYİ AYNI VEKTÖRDE BİRLEŞTİRME.** İlk yazımda F4-F7'ye
+  `durum == ...` şartı da konmuştu; `_last_transport_lookup` fix'le GELDİĞİ için dördü de
+  mutasyonda düştü — yani "FP çapası" etiketli oldukları hâlde fiilen ayırt edici
+  davranıyorlardı ve *"doğru çalışan vaka bozulmadı"* kanıtı yok olmuştu. Davranış (F4-F7)
+  ile teşhis-alanı (F9) **ayrıldı**; geri birleştirme.
+- **BİLEREK DÜZELTİLMEYENLER:** `:343` (sütun var, satır yok = yeni obje) ve `:368`
+  (adaylar başkasının = transport gaspı yasağı) — ikisi de MEŞRU kurtarma, yanıltıcı
+  değil. Triyaj ölçütü: *"cağıran meşru olumsuzdan ayırt edemiyor MU + bu olumsuz bir
+  KARARI besliyor MU"*; ikisi birden yoksa dokunma.
+
+## B18d — sınıf alt-include'u push'u (ccau/ccimp/ccdef/ccmac)
+- `python tests/fixtures/class_include_push/run.py` → 15/15 · MUTASYON → **1/15**.
+- **Değişmez:** yaratım ve içerik AYRI ADIMLARDIR. include YOK → POST(iskelet)+PUT(gövde);
+  include VAR → yalnız PUT (var olana POST **500**). **POST gövdeyi YOK SAYAR** (ölçüldü:
+  11.639 → 56 bayt) ⇒ **readback ZORUNLU**, opsiyonel değil.
+- Sahte-yeşil bekçisi (V8): tüm HTTP kodları 200/201 olsa BİLE içerik iskeletse readback
+  hata verir. Bu vektör kalkarsa `adt_unit_run` `method_count=0` sınıfı geri döner.
+- ⚠ **ÇÖKME ≠ FAIL (D2/2) bu fixture'da BİZZAT yaşandı:** detay dizgeleri eagerly kurulur;
+  mutasyonda `mevcut=None` → `None.encode()` koşucuyu çökertti ve mutasyon "sonuç yok"
+  verdi. `bayt()`/`kirp()` yardımcıları bunun için var — SİLİNMEZ.
+- 🔴 **DOĞRULANAMADI:** statüler `playbook/adt-classes.md §24.8`'in 2026-07-29 canlı
+  ölçümünden; fixture SAP'yi TAKLİT eder. `testclasses` DIŞINDAKİ segment adları bu evde
+  canlı ölçülmedi — `CLASS_INCLUDE_TYPES[...]['olculdu']` bunu beyan eder, **V11 beyanın
+  doğruluğunu denetler**. İlk kullanan canlı doğrular ve alanı günceller (tahmini
+  "olculdu" YAZMA).
+- İlk gerçek kullanımda kabul ölçütü: `adt_get` → include listesinde segment VAR MI ·
+  kaynağı **bayt olarak** repo ile kıyasla · `adt_unit_run` → `method_count == beklenen`
+  (**0 = FAIL**, "yeşil döndü" yetmez).
+
 ## B19 — .conn_adt YAZICI tarafı (encoding)
 - `python tests/fixtures/conn_yazici_encoding/run.py` → 7/7 (locale-bağımsız).
 - Değişmez: `.conn_adt` yazan her yol AÇIK `encoding="utf-8"` taşır (AST çapası tüm

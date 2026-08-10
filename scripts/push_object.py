@@ -24,6 +24,7 @@ sys.path.insert(0, str(script_dir))
 
 from sap_adt_lib import set_explicit_working_dir
 from sap_client import SAPClient
+from object_types import is_class_include
 
 
 def main():
@@ -34,8 +35,15 @@ def main():
                        help='Object name (e.g., ZCL_MY_CLASS)')
     parser.add_argument('--type', default='class',
                        choices=['class', 'clas', 'interface', 'intf', 'program', 'prog',
-                               'report', 'include', 'incl', 'functiongroup', 'fugr'],
-                       help='Object type (default: class)')
+                               'report', 'include', 'incl', 'functiongroup', 'fugr',
+                               # 2026-08-10 KUSUR-4: sinif ALT-INCLUDE'lari bu listede
+                               # HIC YOKTU -> `--type ccau` argparse tarafindan reddediliyor,
+                               # operator ham HTTP atmak zorunda kaliyor ve POST/PUT
+                               # asimetrisine (KUSUR-5/6) carpiyordu.
+                               'testclasses', 'ccau', 'implementations', 'ccimp',
+                               'definitions', 'ccdef', 'macros', 'ccmac'],
+                       help='Object type (default: class). ccau/ccimp/ccdef/ccmac = '
+                            'sinif alt-include (--name ANA SINIF adidir)')
     parser.add_argument('--transport',
                        help='Transport request number (e.g., TRXXXXXX)')
     parser.add_argument('--source-file',
@@ -54,12 +62,23 @@ def main():
 
     try:
         client = SAPClient()
-        result = client.push_object(
-            object_name=args.name,
-            object_type=args.type,
-            transport=args.transport,
-            source_file=args.source_file
-        )
+        # Sinif alt-include'u (ccau/ccimp/...) AYRI bir yoldur: bagimsiz obje degildir,
+        # URL'i ana sinifin adini gerektirir ve yazimi POST-then-PUT sirasi ister
+        # (playbook/adt-classes.md 24.8). --name burada ANA SINIF adidir.
+        if is_class_include(args.type):
+            result = client.push_class_include(
+                class_name=args.name,
+                include_kind=args.type,
+                transport=args.transport,
+                source_file=args.source_file
+            )
+        else:
+            result = client.push_object(
+                object_name=args.name,
+                object_type=args.type,
+                transport=args.transport,
+                source_file=args.source_file
+            )
     except Exception as e:
         print("")
         print("=" * 60)

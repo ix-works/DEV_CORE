@@ -87,18 +87,30 @@ def adt_transport_list(user: str | None = None) -> dict:
     Args:
         user: SAP user name. Defaults to the .conn_adt user.
 
+    ⛔ 2026-08-10 — `count: 0` ARTIK KANITLI BİR SIFIRDIR. Ölçülen vaka: sistemde 4 açık
+    transport varken bu tool `ok:true, count:0` döndü; alt katman hem istisnayı yutuyor
+    (`return []`) hem de tek bir XML şekline çivilenmişti. Artık ayrıştırılamayan/
+    tanınmayan gövde `ok:false` verir. `count: 0` gördüğünde `shape_recognized` alanına
+    bak: True ise sıfır GERÇEKTİR, alan yoksa/False ise sonuç sıfır DEĞİL, okunamamadır.
+
     Returns:
-        {ok, count, transports: [{number, description, status}, ...], client_log}
+        {ok, count, transports: [{number, description, status}, ...],
+         accept_header, shape_recognized, client_log}
     """
     client = _get_client()
     try:
         with _capture() as buf:
             transports = client.list_user_transports(user=user)
+        meta = getattr(client, "_last_transport_meta", None) or {}
         return {
             "ok": True,
             "user": user,
             "count": len(transports),
             "transports": transports,
+            # Hangi Accept header cevapladı + gövde tanınan bir tm feed'i miydi.
+            # "0 transport" iddiasının DAYANAĞI budur; alan olmadan sayı yorumlanamaz.
+            "accept_header": meta.get("accept"),
+            "shape_recognized": meta.get("shape_recognized"),
             "client_log": buf.getvalue().strip(),
         }
     except Exception as exc:
@@ -1357,11 +1369,19 @@ def adt_lock_check(name: str, object_type: str = "class") -> dict:
         log = (log + f"\n[ERROR] kilit sondası: {exc}").strip()
 
     if not isinstance(bilgi, dict):
+        # 2026-08-10: sebep artık YÜZEYE ÇIKAR. Alt katman 404'ü sessizce
+        # `{'locked': False}` yapıyordu (bkz. sap_adt_lib.is_object_locked başlığı);
+        # düzeltildikten sonra bu dala düşen vakanın NEDEN düştüğü görünmezse teşhis
+        # yine "araç bozuk"a saplanır — HTTP kodu ile ağ hatasını ayırt et.
+        sebep = getattr(adt, "_last_lock_check_reason", None)
         return {
             "ok": False, "error": "kilit_belirsiz",
             "name": name, "type": object_type, "exists": True, "locked": None,
+            "reason": sebep,
             "message": ("Kilit durumu ÇÖZÜLEMEDİ (kilit ucu cevap vermedi ya da bu "
-                        "kurulumda yok). Bu sonuç 'kilitli DEĞİL' ANLAMINA GELMEZ — "
+                        "kurulumda yok"
+                        + (f"; sonda sonucu: {sebep}" if sebep else "")
+                        + "). Bu sonuç 'kilitli DEĞİL' ANLAMINA GELMEZ — "
                         "yazma denemesi 409/enqueue hatası verebilir. SM12/SE11 ile "
                         "doğrula."),
             "client_log": log,

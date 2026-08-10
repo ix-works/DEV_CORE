@@ -2637,6 +2637,12 @@ class SAPADTClient:
             (None, False, 'Object-specific lock via URL'),
         ]
 
+        # 2026-08-10: her denemenin SONUCU toplanır. Aşağıdaki döngü-sonu kararı buna
+        # dayanır; eskiden hiçbir yerde tutulmuyordu (bkz. döngü sonundaki açıklama).
+        # Öğe biçimi: (strateji_adı, sonuç) — sonuç int HTTP statüsü ya da 'exc:<Ad>'.
+        self._last_lock_attempts = []
+        deneme_sonuclari = self._last_lock_attempts
+
         # Try each lock strategy
         for attempt_num, (endpoint, use_query_param, description) in enumerate(lock_strategies, 1):
             if self.debug_enabled:
@@ -2698,6 +2704,7 @@ class SAPADTClient:
 
                 # 404 - This endpoint doesn't exist, try next strategy
                 elif response.status_code == 404:
+                    deneme_sonuclari.append((description, 404))
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] lock_object attempt {attempt_num} - endpoint not found (404), trying next strategy")
                     continue
@@ -2751,10 +2758,14 @@ class SAPADTClient:
 
                             return self._verify_and_return_lock(response, object_url, transport, label=f'strategy {attempt_num} after CSRF refresh', access_mode=access_mode)
                         else:
+                            deneme_sonuclari.append(
+                                (f"{description} (CSRF yenileme sonrası)", response.status_code))
                             if self.debug_enabled:
                                 self._debug(f"[DEBUG] lock_object attempt {attempt_num} - retry after CSRF refresh failed with status {response.status_code}")
                             continue
                     except Exception as retry_ex:
+                        deneme_sonuclari.append(
+                            (f"{description} (CSRF yenileme sonrası)", f"exc:{type(retry_ex).__name__}"))
                         if self.debug_enabled:
                             self._debug(f"[DEBUG] lock_object attempt {attempt_num} - CSRF refresh retry failed: {str(retry_ex)[:50]}")
                         continue
@@ -2843,6 +2854,17 @@ class SAPADTClient:
 
                         # Unlock failed, but SAP allows same-user edits even with stale enqueue lock
                         # Return NO_LOCK_SUPPORT and let PUT proceed - it should work
+                        #
+                        # ⚠ BU DAL BİLİNÇLİ BİR KURTARMADIR ve DAVRANIŞI DEĞİŞMEDİ.
+                        # Ama dönen sentinel, "uç bu sistemde YOK" ile AYNI dizgeydi →
+                        # çağıran ikisini ayırt edemiyordu. Artık sebep ayrıca kaydedilir
+                        # (2026-08-10): teşhis "lock endpoint yok" sanılıp yanlış yere
+                        # gitmesin diye.
+                        deneme_sonuclari.append((description, 403))
+                        self._last_lock_no_support_reason = 'STALE_SAME_USER'
+                        print("      [INFO] Kendi bayat enqueue kilidin var, unlock denemesi tutmadı — "
+                              "kilitsiz devam ediliyor (SAP aynı kullanıcının edit'ine izin verir).")
+                        print("      [INFO] Bu 'bu sistemde lock ucu YOK' DEMEK DEĞİLDİR; PUT 423 verirse SM12'ye bak.")
                         if self.debug_enabled:
                             self._debug("[DEBUG] lock_object - Stale lock from same user, returning NO_LOCK_SUPPORT (PUT will likely work)")
                         return 'NO_LOCK_SUPPORT'
@@ -2862,6 +2884,7 @@ class SAPADTClient:
                         )
 
                     # Other 403 - authorization issue, try next strategy
+                    deneme_sonuclari.append((description, 403))
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] lock_object attempt {attempt_num} - 403 authorization issue, trying next strategy")
                     continue
@@ -2890,6 +2913,7 @@ class SAPADTClient:
 
                 # Other errors - try next strategy
                 else:
+                    deneme_sonuclari.append((description, response.status_code))
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] lock_object attempt {attempt_num} - failed with status {response.status_code}")
                     # Try next strategy
@@ -2898,6 +2922,7 @@ class SAPADTClient:
             except SAPLockError:
                 raise
             except Exception as e:
+                deneme_sonuclari.append((description, f"exc:{type(e).__name__}"))
                 if self.debug_enabled:
                     self._debug(f"[DEBUG] lock_object attempt {attempt_num} - exception: {str(e)[:100]}")
                 # Check if this is our custom lock conflict exception
@@ -2906,16 +2931,48 @@ class SAPADTClient:
                 # Try next strategy
                 continue
 
-        # All REST-based lock strategies failed
-        # Only return NO_LOCK_SUPPORT if we got 404 (endpoint not found)
-        # If we got other errors, the lock endpoint exists but has issues
+        # ── TÜM REST kilit stratejileri başarısız — ŞİMDİ SEBEBİ SORUYORUZ ──────────
+        #
+        # ⛔ 2026-08-10: bu blok BİR YALAN TAŞIYORDU. Hemen yukarıdaki yorum yıllardır
+        # *"Only return NO_LOCK_SUPPORT if we got 404 (endpoint not found). If we got
+        # other errors, the lock endpoint exists but has issues"* diyordu — ama kod
+        # statüleri HİÇ TOPLAMIYORDU ve KOŞULSUZ `'NO_LOCK_SUPPORT'` döndürüyordu.
+        # Yani 403-yetki, 500, timeout, bağlantı kopması… hepsi "bu sistemde kilit ucu
+        # yok" sentinel'ine dönüşüyor, çağıran KİLİTSİZ yazmaya devam ediyordu.
+        # Bu, dokümanın kodu yalanladığı bir SAHTE-YETENEK sınıfıdır (kaldırılmış R9/R10
+        # gate'lerinin kardeşi) ve 2026-08-10 turunda lideri yanlış teşhise götürdü.
+        #
+        # Artık yorumun ZATEN DEKLARE ETTİĞİ kural İCRA EDİLİYOR:
+        #   · her deneme 404 → uç GERÇEKTEN yok → NO_LOCK_SUPPORT (davranış AYNEN eski;
+        #     bu FP çapasıdır: kilit ucu olmayan sistemlerde push'lar çalışmaya devam eder)
+        #   · en az bir non-404 kanıt → uç VAR ama kilit ALINAMADI → sessiz sentinel yerine
+        #     SAPLockError (kanıt listesiyle). "Kilitsiz devam" bir karardır, varsayılan değil.
         if self.debug_enabled:
             self._debug("[DEBUG] lock_object - All REST lock strategies failed")
 
-        # Return placeholder - operations will proceed without explicit locking
-        if self.debug_enabled:
-            self._debug("[DEBUG] lock_object - returning NO_LOCK_SUPPORT (will try implicit locking)")
-        return 'NO_LOCK_SUPPORT'
+        yalniz_404 = bool(deneme_sonuclari) and all(s == 404 for _, s in deneme_sonuclari)
+        ozet = "; ".join(f"{ad} -> {s}" for ad, s in deneme_sonuclari) or "(hiç deneme kaydedilmedi)"
+
+        if yalniz_404:
+            self._last_lock_no_support_reason = 'ENDPOINT_ABSENT_404'
+            if self.debug_enabled:
+                self._debug("[DEBUG] lock_object - returning NO_LOCK_SUPPORT (all strategies 404: endpoint absent)")
+            return 'NO_LOCK_SUPPORT'
+
+        self._last_lock_no_support_reason = 'LOCK_FAILED_NOT_404'
+        raise SAPLockError(
+            "Kilit ALINAMADI ve sebep 'bu sistemde kilit ucu yok' DEĞİL.\n\n"
+            f"Deneme sonuçları: {ozet}\n\n"
+            "Tüm denemeler 404 verseydi uç gerçekten yok sayılır ve kilitsiz devam edilirdi.\n"
+            "Burada en az bir non-404 yanıt var: uç VAR, kilit verilmedi (yetki/sunucu/ağ).\n"
+            "Kilitsiz PUT denemek objeyi yanlış transport'a yazabilir ya da 423 ile döner.\n\n"
+            "Yapılacak:\n"
+            "  1. SM12 -> objede bekleyen enqueue kilidi var mı bak\n"
+            "  2. Yanıt 403 ise: yetki (S_DEVELOP) ve transport sahipliğini kontrol et\n"
+            "  3. Yanıt 500 ise: uç geçici arızalı olabilir, tekrar dene; sürerse operatöre bildir\n\n"
+            "[ACTION REQUIRED] Otomatik tekrar deneme YAPMA. Durumu kullanıcıya raporla.",
+            response_text=ozet[:500]
+        )
 
     def unlock_object(self, object_url, lock_handle):
         """
@@ -3019,9 +3076,28 @@ class SAPADTClient:
         """
         Check if an object is currently locked.
 
+        ⛔ 2026-08-10 — HTTP 404 ARTIK "kilitli DEĞİL" DEMEK DEĞİLDİR.
+        Eskiden 404 dalı `{'locked': False}` döndürüyordu. Ama `/sap/bc/adt/locks`
+        ucunun 404'ü **ucun kendisinin yokluğudur** — bu dosyanın KENDİSİ aynı statüyü
+        başka yerde tam böyle okur:
+            · `lock_object()` 404 → *"endpoint not found, try next strategy"*
+            · `lock_object()` sonu → *"Only return NO_LOCK_SUPPORT if we got 404
+              (endpoint not found)"*
+        Yani AYNI dosyada aynı statünün İKİ KARŞIT yorumu vardı ve kilit-sorgusu tarafı
+        bir uç-yokluğunu POZİTİF BİR İDDİAYA (*"obje kilitli değil"*) çeviriyordu.
+        Bedeli ölçüldü (2026-08-10 bağlama turu): `adt_lock_check` ısrarla `locked:false`
+        dedi, obje gerçekte kilitliydi, lider yanlış teşhise yönlendirildi.
+
+        Üst katman (`adt_lock_check`) ZATEN üç değerlidir: dict → iddia, `None` →
+        `locked: null` + `ok:false`. Dolayısıyla çözüm ÜST katmanda değil BURADADIR:
+        cevap kurulamadıysa dict UYDURMA, `None` dön.
+
+        Sebep `self._last_lock_check_reason`'a yazılır (teşhis için; akışı etkilemez).
+
         Returns:
-            dict with keys: locked, lock_owner, lock_handle (if locked by current user)
-            Returns None if check fails
+            dict {locked, lock_owner, lock_handle} — YALNIZCA uç GERÇEKTEN cevap verdiyse
+                (HTTP 200). `locked: False` burada DÜRÜST bir olumsuzlamadır.
+            None — durum ÇÖZÜLEMEDİ (404/500/403/ağ hatası). "Kilitli değil" DEĞİLDİR.
         """
         try:
             headers = self._get_headers()
@@ -3037,22 +3113,216 @@ class SAPADTClient:
                 # Check if locked by parsing response
                 text = response.text
                 if 'LOCK_HANDLE' in text or 'lockHandle' in text:
-            
+
                     owner_match = re.search(r'LOCK_OWNER>([^<]+)</', text)
                     handle_match = re.search(r'LOCK_HANDLE>([^<]+)</', text)
 
+                    self._last_lock_check_reason = 'http_200_locked'
                     return {
                         'locked': True,
                         'lock_owner': owner_match.group(1) if owner_match else 'unknown',
                         'lock_handle': handle_match.group(1) if handle_match else None
                     }
-                return {'locked': False, 'lock_owner': None, 'lock_handle': None}
-            elif response.status_code == 404:
+                # DÜRÜST OLUMSUZLAMA — uç cevap verdi ve kilit YOK. Bu dal KORUNUR:
+                # kaldırılırsa araç hiçbir zaman "kilitli değil" diyemez (aşırı sıkılaşma).
+                self._last_lock_check_reason = 'http_200_no_lock'
                 return {'locked': False, 'lock_owner': None, 'lock_handle': None}
             else:
+                # 404 DAHİL: uç yok / sunucu hatası / yetki — hiçbiri "kilitli değil" DEĞİL.
+                self._last_lock_check_reason = f'http_{response.status_code}'
                 return None
-        except Exception:
+        except Exception as exc:
+            self._last_lock_check_reason = f'{type(exc).__name__}: {str(exc)[:160]}'
             return None
+
+    # ── SINIF ALT-INCLUDE'U YAZMA (ccau/ccimp/ccdef/ccmac) ─────────────────────
+    #: POST'un yarattığı BOŞ iskeletin ÖLÇÜLEN boyutu 56 bayttır (2026-07-29,
+    #: playbook/adt-classes.md §24.8). Eşik bilerek geniş: amaç bayt saymak değil,
+    #: "gövde hiç yazılmamış" hâlini yakalamak.
+    CLASS_INCLUDE_SKELETON_MAX_BYTES = 400
+
+    @staticmethod
+    def _include_karsilastirma_normali(metin) -> str:
+        """Readback kıyası için gürültü temizliği (satır-sonu + satır-sonu boşlukları)."""
+        if not isinstance(metin, str):
+            return ''
+        metin = metin.replace('\r\n', '\n').replace('\r', '\n')
+        return '\n'.join(satir.rstrip() for satir in metin.split('\n')).strip()
+
+    def _class_include_exists(self, tam_url):
+        """Alt-include CANLIDA var mı? True / False / None(çözülemedi).
+
+        ⚠ Burada 404 → False MEŞRUDUR ve `is_object_locked`'un düzeltilen 404 hatasıyla
+        AYNI ŞEY DEĞİLDİR. Fark: orada 404 NİHAİ CEVAPTI (*"kilitli değil"* diye
+        raporlanıyordu, yanlışlanacak ikinci adım yoktu). Burada 404 yalnızca bir
+        YÖNLENDİRME kararıdır ("önce POST at") ve hemen ardından gelen POST yanlışsa
+        GÜRÜLTÜLÜ patlar. Yani iddia değil, hipotez — ve bir sonraki adım onu sınar.
+        Çözülemeyen durumlar (500/403/ağ) yine None döner: POST mu PUT mu bilinmiyorsa
+        körlemesine POST atmak var olan bir include'a 500 yedirir (KUSUR-6).
+        """
+        try:
+            r = self.session.get(tam_url,
+                                 headers=self._get_headers('text/plain'),
+                                 timeout=self.timeout_short)
+        except Exception as exc:
+            self._last_class_include_probe = f'exc:{type(exc).__name__}'
+            return None
+        self._last_class_include_probe = f'http_{r.status_code}'
+        if r.status_code == 200:
+            return True
+        if r.status_code == 404:
+            return False
+        return None
+
+    def push_class_include(self, class_name, include_kind, source,
+                           lock_handle=None, transport=None):
+        """Sınıf alt-include'una (ccau/ccimp/ccdef/ccmac) kaynak yaz — POST ≠ PUT.
+
+        ⛔ 2026-08-10 KUSUR-5 + KUSUR-6'nın kapatıldığı yer. Ölçülen davranış
+        (playbook/adt-classes.md §24.8, 2026-07-29):
+
+            include YOKSA :  PUT  -> HTTP 500 (yazılacak inactive sürüm yok)
+                             POST -> 201, AMA GÖVDEYİ YOK SAYAR
+                                     (11.639 bayt gönderildi -> 56 bayt yazıldı)
+            include VARSA :  POST -> HTTP 500 ("could not be created")
+                             PUT  -> 200 OK
+
+        Yani doğru akış TEK BİR ÇAĞRI DEĞİL, duruma bağlı bir SIRADIR — ve bu sıra
+        bugüne kadar hiçbir yerde implement edilmemişti (yalnız playbook'ta anlatılıyordu),
+        o yüzden her seferinde elle HTTP atılıyor ve iki uçtan birine çarpılıyordu.
+
+        En pahalı yüzü SESSİZLİĞİDİR: POST'un 201'ine "başarı" denip durulursa include
+        56 baytlık iskelet olarak kalır, `adt_unit_run` HTTP 200 + `method_count = 0`
+        döner ve bu *"test altyapısı kapalı"* gibi okunur. Bu yüzden readback burada
+        OPSİYONEL DEĞİLDİR: yazılan gövde canlıdan geri okunup kıyaslanır.
+
+        Args:
+            class_name: Ana sınıf adı (ZCL_*).
+            include_kind: 'testclasses'/'ccau'/'implementations'/'ccimp'/...
+            source: Include'un TAM kaynağı.
+            lock_handle: ANA SINIF üzerinden alınmış kilit (yoksa None).
+            transport: corrNr.
+
+        Returns:
+            dict {kind, url, created, bytes_sent, bytes_live, verified: True}
+
+        Raises:
+            SAPADTError: varlık çözülemedi · POST/PUT reddedildi · readback UYUŞMADI
+                (56-baytlık iskelet vakası dahil — sessiz sahte-yeşil burada ölür).
+        """
+        from object_types import (CLASS_INCLUDE_TYPES, get_class_include_url,
+                                  normalize_class_include)
+
+        kind = normalize_class_include(include_kind)
+        bilgi = CLASS_INCLUDE_TYPES[kind]
+        url = get_class_include_url(class_name, kind)
+        tam = f"{self.url}{url}"
+        gonderilen = source.encode('utf-8')
+
+        if not bilgi.get('olculdu'):
+            print(f"      [WARN] '{kind}' segment adı ({bilgi['abap_include']}) bu evde "
+                  f"CANLI ÖLÇÜLMEDİ — yalnız 'testclasses' ölçülü. Sonucu doğrula ve "
+                  f"object_types.CLASS_INCLUDE_TYPES['{kind}']['olculdu'] alanını güncelle.")
+
+        if not self.csrf_token:
+            self.fetch_csrf_token()
+
+        params = {}
+        if lock_handle and lock_handle not in ['NO_LOCK_SUPPORT', 'IMPLICIT_LOCK', None, '']:
+            params['lockHandle'] = lock_handle
+        if transport:
+            params['corrNr'] = transport
+
+        # ── 1) VARLIK: POST mu PUT mu? Bilinmeden ikisi de yanlış olabilir ─────
+        var = self._class_include_exists(tam)
+        if var is None:
+            raise SAPADTError(
+                f"Alt-include VARLIĞI ÇÖZÜLEMEDİ ({url}); sonda: "
+                f"{getattr(self, '_last_class_include_probe', '?')}. "
+                f"Var-yok bilinmeden POST atmak var olan include'a 500 yedirir, "
+                f"PUT atmak yok olana 500 yedirir — TAHMİN EDİLMEZ."
+            )
+
+        sonuc = {'kind': kind, 'url': url, 'created': False,
+                 'bytes_sent': len(gonderilen), 'bytes_live': None, 'verified': False}
+
+        # ── 2) YOKSA ÖNCE İSKELET YARAT (POST) ────────────────────────────────
+        if not var:
+            print(f"      [1/3] Alt-include yok — iskelet yaratılıyor (POST {url})")
+            r = self._request_with_csrf_retry(
+                'post', tam,
+                headers=self._get_headers('text/plain', 'text/plain'),
+                data=gonderilen, params=params,
+            )
+            if r.status_code not in (200, 201):
+                raise SAPADTError(
+                    f"Alt-include YARATILAMADI (POST {url}): HTTP {r.status_code}",
+                    status_code=r.status_code, response_text=(r.text or '')[:500])
+            sonuc['created'] = True
+            # ⚠ BURADA DURMAK KUSUR-5'TİR. 201 "yaratıldı" der, "yazıldı" DEMEZ.
+            print(f"      [1/3] iskelet yaratıldı (HTTP {r.status_code}) — "
+                  f"gövde HENÜZ YAZILMADI (POST gövdeyi yok sayar)")
+        else:
+            print(f"      [1/3] Alt-include zaten var — POST ATLANIYOR "
+                  f"(var olana POST HTTP 500 verir)")
+
+        # ── 3) GÖVDEYİ YAZ (PUT) — her iki dalda da KOŞAR ─────────────────────
+        print(f"      [2/3] Gövde yazılıyor (PUT {url}, {len(gonderilen)} bayt)")
+        r = self._request_with_csrf_retry(
+            'put', tam,
+            headers=self._get_headers('text/plain', 'text/plain'),
+            data=gonderilen, params=params,
+        )
+        if r.status_code not in (200, 201, 204):
+            raise SAPADTError(
+                f"Alt-include GÖVDESİ YAZILAMADI (PUT {url}): HTTP {r.status_code}"
+                + ("\n[İPUCU] include yeni yaratıldıysa SAP inactive sürümü henüz "
+                   "kurmamış olabilir." if sonuc['created'] else ""),
+                status_code=r.status_code, response_text=(r.text or '')[:500])
+
+        # ── 4) READBACK — "yazdım" demek yazmış olmak DEĞİLDİR ────────────────
+        print(f"      [3/3] Canlıdan geri okunuyor (readback)")
+        try:
+            rb = self.session.get(tam, headers=self._get_headers('text/plain'),
+                                  timeout=self.timeout_short)
+            canli = rb.text if rb.status_code == 200 else None
+        except Exception as exc:
+            canli = None
+            print(f"      [WARN] readback okunamadı: {type(exc).__name__}")
+
+        if canli is None:
+            raise SAPADTError(
+                f"Alt-include yazıldı ama READBACK OKUNAMADI ({url}). Bu 'yazıldı' "
+                f"DEĞİLDİR — 56 baytlık POST iskeleti tam burada gizlenir. "
+                f"adt_get ile elle doğrula.")
+
+        sonuc['bytes_live'] = len(canli.encode('utf-8'))
+
+        if (self._include_karsilastirma_normali(canli)
+                != self._include_karsilastirma_normali(source)):
+            # İSKELET TEŞHİSİ: canlı içerik hem KÜÇÜK hem GÖNDERİLENDEN AZ ise
+            # "POST iskeleti kaldı" vakasıdır.
+            # ⚠ İlk yazımda şart `bytes_sent > EŞİK` idi — yani teşhis, GÖNDERİLENİN
+            # büyük olmasına bağlıydı. 249 bayt gönderip 57 bayt (iskelet) alan vaka
+            # o şarttan kaçıyor ve genel "gövde farklı" mesajına düşüyordu; oysa küçük
+            # bir test include'u da tam olarak bu tuzağa düşer. Fixture V8b yakaladı.
+            iskelet = (sonuc['bytes_live'] <= self.CLASS_INCLUDE_SKELETON_MAX_BYTES
+                       and sonuc['bytes_live'] < sonuc['bytes_sent'])
+            raise SAPADTError(
+                f"Alt-include READBACK UYUŞMADI ({url}): gönderilen "
+                f"{sonuc['bytes_sent']} bayt, canlıda {sonuc['bytes_live']} bayt."
+                + ("\n⛔ BU TAM OLARAK 'POST GÖVDEYİ YOK SAYDI' VAKASIDIR (ölçülen: "
+                   "11.639 -> 56 bayt). Include BOŞ kaldı; `adt_unit_run` bu hâlde "
+                   "HTTP 200 + method_count=0 döner ve SAHTE-YEŞİL görünür.\n"
+                   "Çare: PUT'u tekrarla; sürerse playbook/adt-classes.md §24.8."
+                   if iskelet else
+                   "\nGövde farklı — başka bir oturum yazmış ya da PUT kısmi uygulanmış "
+                   "olabilir. Üzerine yazmadan ÖNCE canlıyı incele."))
+
+        sonuc['verified'] = True
+        print(f"      [OK] Alt-include yazıldı ve DOĞRULANDI "
+              f"({sonuc['bytes_live']} bayt, readback eşit)")
+        return sonuc
 
     def lock_object_with_retry(self, object_url, access_mode='MODIFY', transport=None, max_retries=3, retry_delay=2, allow_no_transport=False):
         """
@@ -4212,6 +4482,12 @@ class SAPADTClient:
             if response.status_code == 200:
                 if i > 0:  # Log if fallback was used
                     print(f"Note: Used fallback Accept header: {accept_type}")
+                # 2026-08-10: HANGİ Accept header'ın cevapladığı ÇAĞIRANA taşınır.
+                # Gövdenin ŞEKLİ Accept'e göre değişir; ayrıştırıcı sıfır bulduğunda
+                # "hangi şekli okumaya çalıştım" sorusu teşhisin yarısıdır. Eskiden bu
+                # bilgi yalnız stdout'a basılıyordu ve yapılandırılmış yanıtta yoktu.
+                self._last_transport_accept = accept_type
+                self._last_transport_accept_index = i
                 return response.text
 
             last_error = (
