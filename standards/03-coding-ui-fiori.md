@@ -222,6 +222,26 @@ python scripts/deploy_ui.py --app dsk_se --dry-run          # build+doğrula pla
 ```
 Script her app için sırayla: **(1) `ui5 build --clean-dest --dest dist` (BUILD ZORUNLU)** → (2) dist/Component-preload.js sha256 → (3) `npx fiori deploy … --yes` (env auth `.conn_adt`) → **(4) canlı `GET …/<bsp>/Component-preload.js?cb=<ts>` (no-cache) → yerel dist ile HASH karşılaştır** → eşleşmezse `[FAIL] STALE/CACHE`. "Successful" mesajına GÜVENMEZ, içeriği kanıtlar. Bkz. `scripts/deploy_ui.py` + `feedback_ui-deploy-noninteractive` (madde 8).
 
+##### 2.4.2 ⚠ `deploy_ui.py` STATİK VARLIKLARI KANITLAMAZ → `verify_ui_static_assets.py`
+
+Yukarıdaki (4) adımı **yalnız `Component-preload.js`**'i kanıtlar. Uygulamanın `webapp/help/**`
+(in-app kullanıcı kılavuzu + ekran görüntüleri) gibi **statik** dosyaları preload paketine **girmez**
+— ayrı servis edilir. Sonuç: **KD bayat kalsa bile `deploy_ui.py` "CANLI==kaynak ✓ (güncel)" der.**
+Sessiz doğrulama boşluğudur; iki ayrı turda (2026-08-07, 2026-08-10) elle ölçmek gerekti.
+
+```bash
+python scripts/verify_ui_static_assets.py --all              # varsayılan: webapp/help
+python scripts/verify_ui_static_assets.py --app <app> --subdir help
+```
+Salt-okuma: her dosyayı canlı BSP'den çeker, içerik kıyaslar; `webapp ≠ dist` durumunu da ayrıca
+uyarır (deploy `dist`'i gönderir). Çıkış: 0 = hepsi aynı · 1 = fark/eksik (negatif-testli).
+
+> ⛔ **HAM BYTE KIYASI YANLIŞ POZİTİF VERİR — bunu bilmeden ölçme.** BSP/ICF runtime servis ettiği
+> HTML'in `<head>`'ine üç meta enjekte eder: `sap-client` · `sap-ui-fesr` · `sap.whitelistService`
+> (~185 karakter, yalnız 1. satır). 2026-08-10'da ham kıyas **12/12 app'i "STALE"** gösterdi, oysa
+> hiçbiri bayat değildi; blok ayıklanınca fark **0/12**. Script bunu zaten ayıklar.
+> 📌 Teşhis ipucu: **dokunulmamış** bir app de kırmızıysa kusur ölçümdedir, deploy'da değil.
+
 ---
 
 #### Altında yatan manuel yöntem (yalnız `deploy_ui.py` çalışmazsa acil geri-dönüş; guard'a takılır)
