@@ -95,6 +95,12 @@ def main():
     print(f"[ok] auth ön-doğrulama: {base} → HTTP {status} (401 değil = kimlik kabul). playwright başlıyor...")
 
     env = dict(os.environ, SAP_USER=u, SAP_PASS=p, SMOKE_BASE_URL=base)
+    # --spec, config'teki `testMatch`'i GENİŞLETMEK için env'e verilir; konumsal
+    # argüman Playwright'ta testMatch'in ÜSTÜNE filtre uygular, yani env'siz
+    # bırakılsa kesişim BOŞ olur ve açık `--spec` çağrısı sessizce 0 test koşardı.
+    # (Varsayılan testMatch = yalnız jenerik smoke — bkz. playwright.config.ts)
+    if args.spec:
+        env["SMOKE_SPEC"] = args.spec
     cmd = ["npx", "playwright", "test", "--config", str(HERE / "playwright.config.ts")]
     if args.spec:
         cmd.append(args.spec)
