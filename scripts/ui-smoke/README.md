@@ -24,6 +24,11 @@ python scripts/ui-smoke/run_ui_smoke.py --base-url http://localhost:8097
 - `playwright.config.ts` — httpCredentials (env'den) + baseURL + headless + retries:0
 - `ui.smoke.spec.ts` — GENERIC smoke: zero gerçek console-error + `$metadata` 200 + sayfa doldu. Dev-noise allowlist (Component-preload/i18n_tr/favicon/fallback-locale). **App-spesifik akış (Create/Change kaydet) için bu spec KOPYALANIP genişletilir** (G2 §K plumbing'i KORU, içeriği bespoke).
 - `run_ui_smoke.py` — `.conn_adt` → env + lockout-safe auth ön-doğrula → `npx playwright test`.
+  ⚠ **`.conn_adt` PROJE kökünde aranır** (kanonik `project_config.project_root()`: env
+  `CLAUDE_PROJECT_DIR` → cwd) — script'in `__file__` konumunda DEĞİL. Yani **proje kökünden
+  koş**, ya da `CLAUDE_PROJECT_DIR`'ı ver; bulunamazsa hata denenen kökü YAZAR.
+  (2026-07-08 göçüşünde bu satır sessizce DEV_CORE'a bakar olmuştu → gate ölmüştü; CORE-01
+  artık `<__file__-kök> / ".conn_adt"` yazımını bloklar.)
 
 ## "Done" kriteri (G4, AGENTS.md §2)
 UI build "done" demeden önce bu gate PASS olmalı + G3 (`check_ui5_freestyle_traps.py`) PASS.

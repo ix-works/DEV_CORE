@@ -315,6 +315,13 @@ python scripts/inspector.py --self-test             # canary    [✓]
 ## B15 — ui-smoke
 - SAP'siz: `npx playwright test --config=selftest.config.ts` (helpers 4-test; ana-config'e dokunmaz).
 - Canlı: paket-`ui/`den `start-noflp` + `run_ui_smoke.py --port 8099` (lockout-safe auth; ısrarlı-popup+lrep-401=hesap-kilidi).
+- **Kök çözümlemesi (2026-08-10):** `.conn_adt` PROJE kökünde → `project_root()` (env→cwd), `__file__` DEĞİL.
+  Korpus `tests/fixtures/conn_adt_proje_koku/run.py` → 13/13 · `--mutasyon --ref add889c` → 6/13.
+  Sarmalayıcı ölü olsa da playwright'ın kendisi sağlam olabilir → **kontrol grubu**: `SMOKE_BASE_URL`+`SAP_USER`/`SAP_PASS` env'iyle `npx playwright test` doğrudan.
+  ⚠ **"Kimlik bulundu" ≠ "gate çalışıyor"** — uçtan uca kanıt şart: app ayaktayken `run_ui_smoke.py --port <N>`
+  → `[ok] auth …(401 değil)` + `N passed` + exit 0 (2026-08-10 ölçümü: **6 passed**, `$metadata` 200).
+  ⚠ Ayrı checkout'ta (worktree) `node_modules` YOKTUR → `npx` paketi indirmeye kalkar; kurulu kopyayı
+  geçici junction'la bağla, ölçüm sonrası **kaldır** (silme hedefe sıçramasın diye).
 - UI5: `.click()` tetiklemez → firePress+model-API; basic-auth header'la; app-içi npm-install YASAK.
 
 ## B16 — templates + agents

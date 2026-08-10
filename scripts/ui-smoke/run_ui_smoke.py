@@ -23,14 +23,30 @@ from pathlib import Path
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
+# `HERE` = bu script'in CORE içindeki dizini → playwright config'i buradan çözülür (MEŞRU:
+# hedef core'un KENDİ ağacı). PROJE kökü için `__file__` KULLANILMAZ: core script'i proje
+# içinden `core/` junction'ıyla koşar, `Path(__file__)` DAİMA DEV_CORE'a çözülür (ADR 0020).
+# `.conn_adt` PROJE kökündedir → kanonik `project_config.project_root()` (env→cwd).
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parent.parent
+sys.path.insert(0, str(HERE.parent))  # core `scripts/` → `utils` paketi
+from utils.project_config import project_root  # noqa: E402
+
+
+def _kok_ve_kaynak():
+    """(proje_kökü, kaynağın insan-okur adı) — hangi kökün DENENDİĞİ hata mesajına yazılır."""
+    env = os.environ.get("CLAUDE_PROJECT_DIR")
+    return project_root(), ("env CLAUDE_PROJECT_DIR" if env else "cwd (CLAUDE_PROJECT_DIR yok)")
 
 
 def read_creds():
-    conn = REPO / ".conn_adt"
+    kok, kaynak = _kok_ve_kaynak()
+    conn = kok / ".conn_adt"
     if not conn.exists():
-        sys.exit(".conn_adt yok — kimlik okunamadı")
+        # GÜRÜLTÜLÜ başarısızlık: cwd yanlışsa sessizce başka köke düşmüş olmayı DEĞİL,
+        # hangi kökün denendiğini gör (sessiz-yanlış > gürültülü-hata dersi).
+        sys.exit(f".conn_adt yok: {conn}\n"
+                 f"  denenen proje kökü : {kok}  ({kaynak})\n"
+                 f"  ÇÖZÜM: proje kökünden koş ya da CLAUDE_PROJECT_DIR=<proje kökü> ver.")
     u = p = None
     for ln in conn.read_text(encoding="utf-8", errors="replace").splitlines():
         s = ln.strip()

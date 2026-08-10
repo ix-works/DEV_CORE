@@ -108,6 +108,9 @@ OZEL_TESTLER = [
      "aracin false/0'i gormedigi katman icin 'hayir' DEGIL (transport/lock/deploy_ui)"),
     ("class_include_push",
      "sinif alt-include'u (ccau/ccimp): POST != PUT ve 201 != 'yazildi'"),
+    # 2026-08-10 ui-smoke proje-koku (arac + gate ayni sinifin iki yuzu):
+    ("conn_adt_proje_koku",
+     ".conn_adt PROJE kokundedir: run_ui_smoke kok cozumlemesi + CORE-01 dedektoru"),
 ]
 
 
