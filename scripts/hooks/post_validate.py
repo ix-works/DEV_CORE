@@ -157,6 +157,9 @@ def main() -> int:
                         lines.append("• COVERAGE AÇIĞI (kural↔gate, ADR 0019):\n" + (res.stdout or "")[-450:])
                 except Exception:
                     pass
+            lines.append("• ÖNCE-ARA (KB-01, CLAUDE.core §4): ① ARA (repo+core path=core/+memory+SESSION_NOTES+register: "
+                         "zaten yazılı mı · regresyon mu ilk temas mı · komşu obje-tipinde var mı) → ② ÖLÇ (kontrol grubu) "
+                         "→ ③ DARALT (kanıtın kapsamını yaz) → ④ YAZ. Kayda `prior-art: bulundu <ref>` VEYA `yok` koy.")
             lines.append("• ONBOARDING (ADR 0019 §5): (1)güç-etiketle MUST/MUST-NOT/SHOULD/MAY (2)enforcement-seç "
                          "(3)gate+fixture(oto) VEYA reviewer+checklist-üyeliği(yargı) (4)stabil-ID (5)coverage-check.")
             lines.append("• RUBRIC metin-KALİTESİ (ADR 0019 §5A, 8 ölçüt): atomik · güç-açık · denetlenebilir(pass/fail) · "

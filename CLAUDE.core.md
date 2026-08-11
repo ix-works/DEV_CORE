@@ -149,12 +149,17 @@
 - **BAĞLANTI:** proje kökündeki `.conn_adt`. `.conn_adt` ↔ MCP ayrışıksa ADT işlemi YOK.
 - **"Yüklendi / aktive edildi / başarılı" mesajına GÜVENME** — canlı doğrula. Araç başarısızlığını
   zararsız sayma. Bulunamadı ≠ yok · kod ≠ kablolama · çökme ≠ FAIL · **"aktif" metadata'sı ≠ kodun aktif**.
-- **"ARAÇ BOZUK" demeden önce KONTROL GRUBU koş (PATTERN #19).** *"X bozuk"* karşılaştırmalı bir
-  iddiadır: sorunlu vaka **+ çalıştığı bilinen vaka** ister. Yoksa elindeki tek cümle *"X bu objede
-  çalışmadı"*dır. Aynı kirli girdiyle yapılan 5 başarısız varyant hipotezi **test etmez**, yalnız
-  ona duyulan güveni haksız yere büyütür. **Ve önce hafızayı ara** — tanıdık semptom bir sezgi değil
-  sinyaldir; cevap zaten yazılmış olabilir (vaka: bir ay önce çözülmüş bulgu unutulup üstüne yanlış
-  sonuç yazıldı). Pahalı bir çare ilk denemede tutmadıysa tekrarlama, **dayandığı kanıtı** sorgula.
+- **⛔ ÖNCE-ARA (KB-01 · MUST) — sıra: ① ARA → ② ÖLÇ → ③ DARALT → ④ YAZ.** Tam metin: **§4**.
+  **TETİKLEYİCİ EYLEM-BAZLIDIR** (yalnız "araç bozuk" demek DEĞİL): *bir kayıt/kural/ders yazacaksan ·
+  bir SINIF iddiası kuracaksan ("X şöyle davranır") · bir register'a madde açacaksan · "bu bozuk /
+  desteklenmiyor / yapılamaz" diyeceksen* → **önce ARA** (repo + core `path=core/` + memory +
+  SESSION_NOTES + ilgili register): zaten yazılı mı · daha önce çalışıyor muydu (regresyon mu, ilk
+  temas mı) · komşu obje-tipi için yazılmış mı. Sonucu kaydın içine yaz: `prior-art: bulundu <ref>` / `yok`.
+  📌 Tanıdık semptom sezgi değil **sinyaldir**; cevap zaten yazılmış olabilir.
+- **② ÖLÇ'ün özü — KONTROL GRUBU (PATTERN #19).** *"X bozuk"* karşılaştırmalı bir iddiadır: sorunlu
+  vaka **+ çalıştığı bilinen vaka** ister. Yoksa elindeki tek cümle *"X bu objede çalışmadı"*dır. Aynı
+  kirli girdiyle yapılan 5 başarısız varyant hipotezi **test etmez**, yalnız ona duyulan güveni haksız
+  yere büyütür. Pahalı bir çare ilk denemede tutmadıysa tekrarlama, **dayandığı kanıtı** sorgula.
 - **Always-allow YASAĞI (D32):** SAP-yazma ve davranış-yüzeyi araçlarına "Always allow" verilmez.
 - **KAPSAM-DIŞI BULGU — karar ağacı (kullanıcı kuralı):** görev sırasında ilgisiz bir kusur
   görürsen: **bizden mi doğdu?** → DÜZELT (kendi işimizin yan etkisi) · **bu işi etkiliyor mu?**
@@ -225,7 +230,31 @@ Bu format atlanırsa kullanıcı loader'ın yüklenmediğini varsayar → T4.
 | **T10** | Patinaj/hata yakalandı | Düzelt + playbook (T1) + "reviewer yakalar mıydı?" → validator/checklist ya da known blind spot (ADR 0006) |
 | **T11** | Tekrar-eden tuzak / yeni iş-türü | [`scripts/hooks/README.md`](scripts/hooks/README.md) §2 karar ağacı: validator / checklist / hook / pre_tool_guard. Playbook'a not YETMEZ |
 
-**SORU 0 (eski T12'nin yerine — yazım-anı hedef kararı):**
+### ⛔ ÖNCE-ARA (KB-01 · MUST · zorlama: post_validate nudge + reviewer; GATE YOK)
+
+> **SORU 0'dan ÖNCE gelir.** SORU 0 *"nereye yazayım"* diye sorar — *"zaten yazılı mı"* diye
+> **sormaz**. Kayıt açmadan/kural yazmadan önce sıra ŞUDUR (adım atlanmaz, sıra değişmez):
+
+```
+① ARA    → repo + core (path=core/!) + memory + SESSION_NOTES + ilgili register.
+           Üç soruyu CEVAPLA: (a) bu zaten yazılı mı? (b) daha önce ÇALIŞIYOR muydu
+           — yani regresyon mu, ilk temas mı? (c) komşu bir obje tipi/bağlam için
+           yazılmış mı (aynı ders orada kanamış olabilir)?
+② ÖLÇ    → kontrol grubu: sorunlu vaka + ÇALIŞTIĞI BİLİNEN vaka (PATTERN #19).
+           Tek yönlü 5 başarısız deneme hipotezi test etmez, yalnız güveni şişirir.
+③ DARALT → kanıtın TAM olarak neyi kanıtladığını yaz. Kanıtlamadığını İDDİA ETME
+           ("bu 2 biçim reddedildi" ≠ "bu hiç çalışmaz"). Sınırı kaydın İÇİNE yaz.
+④ YAZ    → ve kaydın içine arama sonucunu koy: `prior-art: bulundu <ref>` VEYA `yok`.
+           Boş bırakma — "aramadım" ile "yok" aynı şey değildir.
+```
+
+**Neden bu sıra:** ① en ucuz adımdır ve cevabı zaten yazılıysa ②-③'ü tümden gereksiz kılar.
+**Vaka (2026-08-11):** ölç → yaz → (kullanıcı sorunca) ara sırası izlendi; ölçüm doğruydu ama
+kayıt "sınıf iddiası" olarak yazıldı, oysa prior-art araması *"bu uçla ilk temas, regresyon
+değil"* diyordu — iddia sonradan daraltılmak zorunda kaldı. **Aynı turda register'lar için ①
+uygulandı ve çoğaltma önlendi** ⇒ fark kuralın varlığı değil, **doğru anda hatırlanmasıydı.**
+
+**SORU 0 (yazım-anı hedef kararı — ÖNCE-ARA tamamlandıktan SONRA):**
 
 ```
 SORU 0: Bu bilgi metodoloji mi, projeye mi özel?
