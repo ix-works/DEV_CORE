@@ -197,3 +197,57 @@ sorununu çözmek için başvurulan araç, yanlış teşhisi besliyordu. (Fixtur
 **Çapa:** `tests/fixtures/lock_modification_support/run.py` (25 vektör; `--mutasyon` ile fırlatan
 sürüme karşı 9 ayırt edici FAIL). Tanıma (casefold + TAM eşitlik) korunur ama **hiçbir değer
 akışı kesmez**; §12.7 teşhisi 423'te basılır.
+
+---
+
+### 12.7c `423 InvalidLockHandle` CLASS push'ta — sebep transport DEĞİL, **PUT'un 1. denemesi** (2026-08-11; vaka: bir `ZSD0NN_CL_*_DOCU_RUN` sınıfı)
+
+> ⛔ **BU BÖLÜM §12.7'yi İKİNCİ KEZ SINIRLANDIRIR.** §12.7 *"obje o transport'a kayıtlı değil"*
+> der; bu vakada obje **kayıtlıydı** ve push **aynı transport'la** geçti. §12.7'nin teşhisi
+> 2026-08-10'da bu vakaya uygulandı ve **saatler kaybettirdi.**
+
+**Belirti:** `push_object.py` / MCP `adt_push_source` → LOCK **200** + handle döner, PUT
+**4/4 yaklaşımda 423** *"Resource CLASS X is not locked (invalid lock handle: …)"*.
+`E071` sorgusu objeyi kullanılan transport'ta **KAYITLI** gösterir, `E070`'te `TRSTATUS='D'`.
+
+**KÖK SEBEP (kod-kanıtlı — `sap_adt_lib.py::set_object_source`, `transport_approaches`):**
+
+| # | Yaklaşım | Bu vakada |
+|---|---|---|
+| 1 | **`X-sap-adt-transport` header'ı, `corrNr` query param'ı YOK** | SAP reddeder **ve lock handle'ı yakar** |
+| 2 | `corrNr` query param'ı (= çalışan biçim) | **ölü handle** ile gider → 423 |
+| 3 | header + param | ölü handle → 423 |
+| 4 | transport'suz | ölü handle → 423 |
+
+⇒ `423` **yaklaşım-sırasının artefaktıdır**, transport kaydının değil. Aynı istek biçimi (`corrNr`
+query) **taze bir lock'la ilk seferde 200** verir.
+
+**ÇALIŞAN YÖNTEM (CLASS için sıkı lock→PUT→unlock, TEK session — FM `adt-fugr-functions.md §2b`'nin
+sınıf uyarlaması; o ders yalnız FM'e yazılmıştı, CLASS'a hiç uygulanmamıştı):**
+1. `session.headers['X-sap-adt-sessiontype'] = 'stateful'` · `fetch_csrf_token(force_refresh=True)`
+2. **ETag'i LOCK'TAN ÖNCE** çek: `GET /oo/classes/<c>/source/main?version=active` → `ETag`
+3. `POST /oo/classes/<c>?_action=LOCK&accessMode=MODIFY&corrNr=<TR>` → `LOCK_HANDLE`
+4. **`PUT /oo/classes/<c>/source/main?lockHandle=<h>&corrNr=<TR>`** + `If-Match: <etag>` +
+   `Content-Type: text/plain; charset=utf-8` → **200**
+5. `POST /oo/classes/<c>?_action=UNLOCK&lockHandle=<h>` → sonra `adt_activate` (ayrı çağrı)
+
+**DENENEN BAŞARISIZ (tekrarlama):**
+| Deneme | Sonuç |
+|---|---|
+| `push_object.py` / MCP `adt_push_source` (generic `set_object_source`) | 423 ×4 |
+| PUT'u `X-sap-adt-transport` header'ıyla, `corrNr` query'siz göndermek | 423 + handle yanar |
+| `adt_lock_check` ile teşhis | `GET /adt/locks` → **404** (bkz. §12.7b) |
+
+**⚠ İDDİANIN KAPSAMI (dürüst sınır):** yaklaşım-1'in handle'ı yaktığı **güçlü çıkarımdır**
+(aynı biçim ölü handle'la 423, taze handle'la 200) ama tek başına izole edilmiş değildir:
+sıkı-lock yolu ETag'i de farklı seçer (lib **inactive-önce** dener, sıkı yol **active** kullanır).
+Hata kodu `412` değil `423` olduğu için ETag hipotezi zayıftır, **ama çürütülmemiştir.**
+
+**TEŞHİS UYARISI — `<CORRNR/>` boşluğu SEBEP DEĞİL SONUÇTUR:** başarısız push sırasında lock
+yanıtı `<CORRNR/>` boş döndü; **başarılı push'tan sonraki** temiz LOCK aynı objede
+`<CORRNR>…</CORRNR><CORRUSER>…</CORRUSER>` **dolu** döndürdü. §12.7b'nin *"lock yanıtındaki alanlara
+bakma"* kuralı `MODIFICATION_SUPPORT` gibi **CORRNR için de** geçerlidir.
+
+**KİLİT HİJYENİ — `adt_lock_check` 404 verdiğinde pozitif kanıt üret:** iş bitince **taze bir LOCK
+dene → 200 ⇒ sızmış/yabancı kilit YOK** (olsaydı `EU 510`/409 gelirdi) → hemen `UNLOCK`.
+"Tool `locked: false` dedi" kanıt değildir (§12.7b sessiz-başarısızlık).

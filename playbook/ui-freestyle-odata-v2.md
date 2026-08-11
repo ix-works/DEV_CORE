@@ -73,6 +73,19 @@ Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağ
    `RUN.md` (örn. `ZSD001_CLC/ui/order_app_rap/RUN.md`). 2026-06-11'de bu ayrım
    bilinmediği için ~1 saat kayıp.
 
+10. **[UI-RUN-10 · MUST-NOT · zorlama: brifing + reviewer, GATE YOK]** **Lokal sunucuyu
+    KAPATIRKEN hedefli öldür — `taskkill /F /IM node.exe /T` kullanma.**
+    `/IM` *image-name* filtresidir: o isimdeki **TÜM** süreçleri öldürür, yalnız senin
+    başlattığını değil. Paralel çalışan başka bir ajanın mock server'ını, `deploy_ui`
+    altındaki `npm build`'i ya da kullanıcının kendi dev server'ını **sessizce** düşürür —
+    ve öldürdüğün şeyin ne olduğunu bir daha öğrenemezsin. **Doğru şekli:** PID ile
+    (`netstat -ano | findstr :<port>` → `taskkill /F /PID <pid>`) veya pencere-başlığı
+    filtresiyle (`taskkill /F /FI "WINDOWTITLE eq *fiori*"`). *(2026-08-11: bir alt-ajan
+    mock server'ı kapatırken geniş biçimi kullandı ve bunu kendisi raporladı — o turda
+    gözlenen hasar YOK, ama sınıf gerçek. Aynı repoda doğru biçim zaten uygulanıyordu:
+    PID bazlı kapatma + izin listesindeki filtreli `taskkill`.)*
+    ⚠ **Alt-ajan brifinglerine yaz** — ajanlar bu playbook'u okumadan lokal sunucu açabilir.
+
 > Bu maddeler baştan uygulanırsa ORDER'deki patinajların neredeyse tamamı
 > oluşmadan biter.
 
