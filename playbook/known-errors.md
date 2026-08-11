@@ -226,6 +226,14 @@ query) **taze bir lock'la ilk seferde 200** verir.
 sınıf uyarlaması; o ders yalnız FM'e yazılmıştı, CLASS'a hiç uygulanmamıştı):**
 1. `session.headers['X-sap-adt-sessiontype'] = 'stateful'` · `fetch_csrf_token(force_refresh=True)`
 2. **ETag'i LOCK'TAN ÖNCE** çek: `GET /oo/classes/<c>/source/main?version=active` → `ETag`
+   ⚠ **YENİ obje istisnası (2026-08-11 ölçümü):** obje **daha hiç aktive edilmemişse**
+   (`adt_post_shell` ile yeni yaratılmış kabuk), `?version=active` **BAYAT bir ETag** verir ve
+   PUT **412** döner: `Client ETag <A> does not match the object ETag <B>` (ölçülen: A/B yalnız
+   son hanelerde ayrışıyordu — `…091040001000001` ↔ `…091041000000001`).
+   ⇒ **Yeni objede ETag'i `version` parametresiz `GET`'ten al** (güncel sürüm). Kabuk→ilk-push
+   akışında adım 2 böyle okunmalıdır; **aktive edilmiş objelerde `?version=active` doğrudur.**
+   📌 Vaka: `ZEWM000_CL_PACI_ITEM_MOD` ilk push'u — parametresiz ETag ile **PUT 200**, 423 hiç
+   görülmedi (yani bu vaka 423 değil **412** sınıfıdır; teşhisi karıştırma).
 3. `POST /oo/classes/<c>?_action=LOCK&accessMode=MODIFY&corrNr=<TR>` → `LOCK_HANDLE`
 4. **`PUT /oo/classes/<c>/source/main?lockHandle=<h>&corrNr=<TR>`** + `If-Match: <etag>` +
    `Content-Type: text/plain; charset=utf-8` → **200**
@@ -242,6 +250,12 @@ sınıf uyarlaması; o ders yalnız FM'e yazılmıştı, CLASS'a hiç uygulanmam
 (aynı biçim ölü handle'la 423, taze handle'la 200) ama tek başına izole edilmiş değildir:
 sıkı-lock yolu ETag'i de farklı seçer (lib **inactive-önce** dener, sıkı yol **active** kullanır).
 Hata kodu `412` değil `423` olduğu için ETag hipotezi zayıftır, **ama çürütülmemiştir.**
+
+> **↑ Bu paragrafa 2026-08-11 eki:** ETag boyutunun **gerçek** olduğu artık ölçüldü — yeni bir
+> sınıfta yanlış ETag seçimi **412** üretti (yukarıdaki adım-2 istisnası). Bu, iki hata kodunun
+> **ayrı sebepleri** olduğunu doğruluyor: `423` = yanılmış lock handle · `412` = yanılmış ETag.
+> Dolayısıyla yukarıdaki "ETag hipotezi zayıf" cümlesi **423 vakası için** geçerliliğini korur;
+> ETag'in kendi başına bir hata sınıfı ürettiği ise ayrıca kanıtlanmıştır.
 
 **TEŞHİS UYARISI — `<CORRNR/>` boşluğu SEBEP DEĞİL SONUÇTUR:** başarısız push sırasında lock
 yanıtı `<CORRNR/>` boş döndü; **başarılı push'tan sonraki** temiz LOCK aynı objede
