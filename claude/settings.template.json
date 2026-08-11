@@ -66,15 +66,8 @@
         ]
       },
       {
+        "_comment": "recall_inject TEK kayit olmali. 2026-08-11'e kadar bu blokta IKI KEZ kayitliydi (c6c45c8'ten beri, tum projelere yayilmisti) -> her kullanici mesajinda ayni JIT-recall metni IKI KEZ uretiliyordu (sentetik payload'la olculdu: iki cagri da ayni ciktiyi dondurdu). Davranis bozulmuyordu, token israfiydi. Komsu bloktaki iki hook FARKLI (skill_injector + intake_triage); buradaki kopyala-yapistir artigiydi.",
         "hooks": [
-          {
-            "type": "command",
-            "command": "python",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py",
-              "recall_inject"
-            ]
-          },
           {
             "type": "command",
             "command": "python",
