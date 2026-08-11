@@ -671,3 +671,33 @@ Forward progress doğal refleks, ama **verification refleksini geliştirmek** si
   onay trafiği ortadan kalkar.
 - ⛔ **YAPMA:** reti dolanmaya çalışma; `settings.local.json`'a kendine izin yazma (self-grant
   ayrıca bloklanır ve doğru davranış değildir).
+
+### PATTERN #30: Kural VARDI ama ateşlemedi — **kuralı hatırlatan şey KONUMUDUR** (ÖNCE-ARA / KB-01)
+
+> **Kanonik kural metni: [`CLAUDE.core.md §4 ÖNCE-ARA (KB-01)`](../CLAUDE.core.md).** Bu kayıt
+> onun tekrarı değil, **neden atlandığının teşhisi** + JIT-recall'a giriş noktasıdır.
+
+- **Belirti:** Doğru talimat dokümanda **yazılıdır**, ekip onu daha önce uygulamıştır — yine de
+  o tur atlanır. Refleks açıklama *"kural yetersiz yazılmış"* olur; **çoğu zaman yanlıştır.**
+- **Ölçülen dört sebep (vaka 2026-08-11 — prior-art'sız sınıf-iddiası çekirdeğe yazıldı):**
+  1. **Yanlış kapı:** kural, *"X demeden önce…"* diye bir **duruma** bağlıydı; yapılan eylem
+     başka bir eylemdi (*ders yazmak*) ⇒ tetikleyici cümle eşleşmedi. **Tetikleyiciyi
+     EYLEM-bazlı yaz** ("şunu yazacaksan"), durum-bazlı değil.
+  2. **Yazma yolunda adım yok:** hedef-seçme ağacı (SORU 0) *"nereye yazayım"* diye sorar,
+     *"zaten yazılı mı"* diye **sormazdı**. Kural, insanın/ajanın **üstünde durduğu yola**
+     konmalıydı.
+  3. **Hatırlatıcı yanlış olayda:** JIT-recall YALNIZ `UserPromptSubmit`'te koşar. **Sentetik
+     payload'la ölçüldü:** doğru prompt verilince ilgili PATTERN'i **doğru döndürüyor** ⇒
+     indeks/eşleştirme sağlam; sorun hatanın **tur ortasında** yapılmış olması. ⇒ *Kullanıcı
+     mesajına bağlı hatırlatıcı, tur-içi davranışı koruyamaz.*
+  4. **Doğru anda ateşleyen hatırlatıcı eksik listeyle çalışıyordu** (nudge vardı, maddesi yoktu).
+- **KARŞIT KANIT — aynı turda uyulan kural:** başka bir "önce ara" kuralı **uygulandı** ve
+  çoğaltma önlendi. Farkı yaratan şey kuralın kalitesi değil, o dersin **o an bağlamda fiziksel
+  olarak durması**ydı (az önce okunan bir dosyada yazılıydı).
+- **YAP:** ① kuralı **eylemin geçtiği yola** koy (yazma yolu / checklist / o anki dosya)
+  ② tetikleyiciyi **eylem-bazlı** yaz ③ doğru anda ateşleyen mevcut nudge'a **maddeyi ekle**
+  (yeni gate açmadan) ④ **indekslenen** yere de kısa girdi koy — JIT-recall yalnız `MEMORY.md`
+  + `lessons-learned.md` PATTERN başlıkları + `playbook/howto-*.md`'den beslenir; `CLAUDE.core.md`
+  **indekslenmez** (ölçüldü).
+- ⛔ **YAPMA:** "kuralı daha sert yazalım/gate açalım" refleksi — sorun metnin gücü değil
+  **konumu** olabilir; önce onu ölç (moratoryum: ADR 0019 şart-4).
