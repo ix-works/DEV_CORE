@@ -158,7 +158,8 @@ def main() -> int:
                 except Exception:
                     pass
             lines.append("• ÖNCE-ARA (KB-01, CLAUDE.core §4): ① ARA (repo+core path=core/+memory+SESSION_NOTES+register: "
-                         "zaten yazılı mı · regresyon mu ilk temas mı · komşu obje-tipinde var mı) → ② ÖLÇ (kontrol grubu) "
+                         "zaten yazılı mı · regresyon mu ilk temas mı · komşu obje-tipinde var mı) → ② ÖLÇ (kontrol grubu; "
+                         "ölçümü GERÇEK giriş noktasından ve SON hâl üzerinde yap — elle script çağrısı kablolamayı kanıtlamaz) "
                          "→ ③ DARALT (kanıtın kapsamını yaz) → ④ YAZ. Kayda `prior-art: bulundu <ref>` VEYA `yok` koy.")
             lines.append("• ONBOARDING (ADR 0019 §5): (1)güç-etiketle MUST/MUST-NOT/SHOULD/MAY (2)enforcement-seç "
                          "(3)gate+fixture(oto) VEYA reviewer+checklist-üyeliği(yargı) (4)stabil-ID (5)coverage-check.")

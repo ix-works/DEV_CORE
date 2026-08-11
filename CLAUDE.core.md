@@ -242,6 +242,12 @@ Bu format atlanırsa kullanıcı loader'ın yüklenmediğini varsayar → T4.
            yazılmış mı (aynı ders orada kanamış olabilir)?
 ② ÖLÇ    → kontrol grubu: sorunlu vaka + ÇALIŞTIĞI BİLİNEN vaka (PATTERN #19).
            Tek yönlü 5 başarısız deneme hipotezi test etmez, yalnız güveni şişirir.
+           ⛔ ÖLÇÜMÜ **GERÇEK GİRİŞ NOKTASINDAN** YAP — script'i elle çağırmak
+           KABLOLAMAYI kanıtlamaz (hook → `hook_shim`, kural → validator zinciri,
+           UI → mock değil canlı servis). Ve ölçümü **son hâl** üzerinde tekrarla:
+           merge/deploy ÖNCESİ kopyada geçen test, sonrasında geçtiğini göstermez.
+           📌 "kod ≠ kablolama" · "yeşil ≠ yayında" (vaka 2026-08-11: iki boşluk da
+           aynı turda oluştu; kullanıcı sormasa kapanmayacaktı).
 ③ DARALT → kanıtın TAM olarak neyi kanıtladığını yaz. Kanıtlamadığını İDDİA ETME
            ("bu 2 biçim reddedildi" ≠ "bu hiç çalışmaz"). Sınırı kaydın İÇİNE yaz.
 ④ YAZ    → ve kaydın içine arama sonucunu koy: `prior-art: bulundu <ref>` VEYA `yok`.
