@@ -125,6 +125,15 @@ MCP_JSON = """\
         "PYTHONIOENCODING": "utf-8",
         "PYTHONPATH": "${CLAUDE_PROJECT_DIR:-.}/core"
       }
+    },
+    "sap-gui": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "mcp_sap_gui.server", "--read-only", "--profile", "exploration",
+               "--audit-log", ".tmp/sapgui-audit.jsonl"],
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
     }
   }
 }
@@ -233,6 +242,8 @@ def main() -> int:
               " kalıcılaştırma kullanıcı takdirinde")
     print(f"  1. python {CORE_ROOT / 'scripts' / 'team_setup.py'} --project {proje}   (junction'lar + seed)")
     print("  2. .conn_adt + project.yaml __DOLDUR__ alanları  (STEP 4)")
+    print("     (sap-gui MCP harici pip paketidir: `pip show mcp-sap-gui` boşsa kur;"
+          " kurulmadan /mcp'de sap-gui bağlanamaz — sap-adt etkilenmez)")
     print(f"  3. python {CORE_ROOT / 'scripts' / 'behavior_manifest.py'} generate"
           "   (davranış baseline; yoksa ix_doctor K4 FAIL)")
     if a.repo_mode == "full":
