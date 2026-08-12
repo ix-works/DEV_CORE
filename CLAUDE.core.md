@@ -100,6 +100,29 @@
   senkron adımının koşup koşmadığına bağımlı olmaz.)*
   ⚠️ Worktree yalnız provizyonlu açılır: `team_setup.py --provision-worktree` (junction + `.conn_adt` provizyonu şart — D16; çıplak `git worktree add` guardrail'siz kalır).
   Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU**.
+- **⛔ KAPANIŞ DİSİPLİNİ — bir madde konuşmada değil, ARTEFAKTTA kapanır (2026-08-12):**
+  1. **Kapanış anı = artefakt anı.** Madde konuşmada kapandığında **aynı turda** dosyada da
+     kapanır; gün-sonuna bırakılmaz. *(Yeni kural değil — "İCRA ya da açık ertele"nin
+     uygulanmaması. Ortada bırakılan her uyarı **her oturumda geri gelir** ve her seferinde
+     yeniden teşhis edilir.)* Vaka: bir logger kusuru 3 ayrı turda yeniden teşhis edildi;
+     4.'sünde "zararsız" kararının **ölçümü yanlıştı** ve kusur 6 hafta yaşadı.
+  2. **Açık madde TEK yerde yaşar.** Aynı madde iki yerde açık yaşarsa biri kapanınca
+     diğeri bayatlar ve **açılışta geri gelir**. Tip başına kanonik yer:
+
+     | Madde tipi | Kanonik yer |
+     |---|---|
+     | Çok-oturumlu aktif iş | `governance/<konu>-RESUME.md` çapası (kısa: durum + test ölçütü + kapanış koşulu) |
+     | Ertelenmiş / tetiğe bağlı iş | `governance/deferred-triggers.md` |
+     | Mutabakat bekleyen fonksiyonel karar | ilgili **FS'in açık-kararlar bölümü** |
+     | "Bugün ne oldu" | `SESSION_NOTES.md` — **günlüktür, DURUM TUTMAZ** |
+
+     Başka yerde aynı liste tutulmaz; gerekirse **kanonik yere link** verilir.
+  3. **Kapanan çapa dosyası `governance/archive/`'a TAŞINIR** — üste ✅ banner koyup gövde
+     bırakılmaz. Gövdedeki eski 🔴 başlıklar okuyucuyu (ve seni) yanıltır; tarihçe değerliyse
+     arşiv kopyasının başına "ARŞİV — devam noktası değildir" + güncel-durum tablosu konur.
+  4. **Onaylı bir davranış-yüzeyi (F2) değişikliği MERGE OLDUĞU AN** `behavior_manifest.py
+     generate` koşulur — gün-sonuna bırakılmaz. Bırakılırsa ertesi açılışta "manifest-onaysız"
+     alarmı çıkar ve meşruluğu commit diff'i okunarak **elle** doğrulanmak zorunda kalır.
 - **HEDEF-AÇIKLIK — `gh`/`git` üç değişmez (2026-07-10 dersi; guard kural 9):**
   1. **Repoyu DEĞİŞTİREN her `gh` alt-komutunda hedef AÇIKÇA verilir.** Üç biçim vardır:
      · `pr`/`issue`/`release`/`secret`/`variable`/`workflow`/`ruleset`/`label` → **`--repo <ORG>/<REPO>`**
