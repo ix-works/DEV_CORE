@@ -50,11 +50,33 @@ strong { color: #1d3a52; }
 """
 
 
-def build(md_path, html_path, title=None):
+def _diagram_prefix(html_path):
+    """Mermaid PNG ad-uzayını DOKÜMAN BAŞINA ayırır (çıktı dosya adından türetilir).
+
+    ⛔ NEDEN (vaka 2026-08-12): `preprocess_mermaid_fences` varsayılan olarak
+    `diagram-NN.png` yazar ve çıktı klasörü `html_path`ten türer. Aynı klasörde İKİ
+    mermaid'li doküman varsa (tipik: `docs/` içinde FS + KD birlikte) ikinci build
+    birincinin PNG'lerini **SESSİZCE EZER**: birinci dokümanın HTML'i artık yanlış
+    diyagramı gösterir, hiçbir hata/uyarı çıkmaz. Ölçüldü — FS build'i KD'nin
+    diagram-01/02'sini ezdi, KD HTML'i FS'in akış şemasını göstermeye başladı.
+
+    Bu yüzden ayrım **varsayılan davranıştır, opt-in DEĞİL** — sessiz bir kusur,
+    hatırlanması gereken bir bayrağa bırakılamaz. Açık `--prefix` ile ezilebilir.
+
+    'KD-SD-001_Adi_Kullanici_Kilavuzu' → 'kd-sd-001'  (ilk '_' öncesi belge kimliği)
+    """
+    base = os.path.splitext(os.path.basename(html_path))[0]
+    head = base.split("_", 1)[0]
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", head).strip("-").lower()
+    return slug or "diagram"
+
+
+def build(md_path, html_path, title=None, diagram_prefix=None):
     md = open(md_path, encoding="utf-8").read()
     shot_dir = os.path.join(os.path.dirname(html_path), "screenshots")
-    # ```mermaid → PNG
-    md = preprocess_mermaid_fences(md, out_dir=shot_dir, rel_prefix="screenshots")
+    # ```mermaid → PNG  (ad-uzayı doküman başına ayrık — bkz. _diagram_prefix)
+    md = preprocess_mermaid_fences(md, out_dir=shot_dir, rel_prefix="screenshots",
+                                   prefix=diagram_prefix or _diagram_prefix(html_path))
     body = markdown.markdown(md, extensions=["tables", "fenced_code", "sane_lists"])
     # <p><img></p> + <p><em>cap</em></p> → <figure><figcaption>
     body = re.sub(r'<p>(<img[^>]*?>)</p>\s*<p><em>(.*?)</em></p>',
@@ -88,11 +110,25 @@ def to_pdf(html_path, pdf_path=None):
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if a != "--pdf"]
-    want_pdf = "--pdf" in sys.argv
+    argv = sys.argv[1:]
+    want_pdf = "--pdf" in argv
+    prefix, args, i = None, [], 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--pdf":
+            i += 1
+        elif a.startswith("--prefix="):
+            prefix = a.split("=", 1)[1]; i += 1
+        elif a == "--prefix" and i + 1 < len(argv):
+            prefix = argv[i + 1]; i += 2
+        else:
+            args.append(a); i += 1
     if len(args) < 2:
-        print("kullanım: python scripts/build_doc_pdf.py <girdi.md> <cikti.html> [başlık] [--pdf]")
+        print("kullanım: python scripts/build_doc_pdf.py <girdi.md> <cikti.html> "
+              "[başlık] [--prefix <ad>] [--pdf]")
+        print("  --prefix: mermaid PNG ön-eki. VERİLMEZSE çıktı dosya adından türetilir")
+        print("            (aynı klasördeki iki dokümanın diyagramları çakışmaz).")
         sys.exit(2)
-    build(args[0], args[1], args[2] if len(args) > 2 else None)
+    build(args[0], args[1], args[2] if len(args) > 2 else None, diagram_prefix=prefix)
     if want_pdf:
         to_pdf(args[1])
