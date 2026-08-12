@@ -99,7 +99,9 @@
   koşmadı; sonraki branch eski noktadan açıldı. Başlangıcı komutta vermek bu sınıfı tümden kapatır —
   senkron adımının koşup koşmadığına bağımlı olmaz.)*
   ⚠️ Worktree yalnız provizyonlu açılır: `team_setup.py --provision-worktree` (junction + `.conn_adt` provizyonu şart — D16; çıplak `git worktree add` guardrail'siz kalır).
-  Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU**.
+  Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU** +
+  **auto-memory git'i commit+push** (memory dizini kendi PRIVATE remote'lu git'indedir —
+  2026-08-12: makine-lokal tek kopya riski ölçülerek kapatıldı; push'suz memory = yedeksiz).
 - **⛔ KAPANIŞ DİSİPLİNİ — bir madde konuşmada değil, ARTEFAKTTA kapanır (2026-08-12):**
   1. **Kapanış anı = artefakt anı.** Madde konuşmada kapandığında **aynı turda** dosyada da
      kapanır; gün-sonuna bırakılmaz. *(Yeni kural değil — "İCRA ya da açık ertele"nin
@@ -154,7 +156,10 @@
   > Kök sebep kural eksikliği değil, çoğu zaman gereksiz bir çoğaltma/karmaşadır: **önce onu kaldır.**
 - **SUBAGENT KARARI:** önemsiz → kendin · token-ağır seri iş → tek ajan · paralelleşen iş → fan-out.
   Ajan **DAİMA** `run_in_background: true`. Substantive FE/BE build → **expert'e dağıt** (lider build yapmaz).
-  Paylaşılan tooling (hook/validator/MCP) kök-fix'i → **lider'in işi**, expert'e verilmez.
+  Paylaşılan tooling (hook/validator/MCP) **EXPRESS kök-fix'i** (bloklayan, anlık) → **lider'in
+  işi**. **KUYRUK-tipi bakım** (kayıtlı bulgu, batch — talimat-dosyası bakımı DAHİL: CLAUDE/rules
+  dedup, memory yeniden-yapılanma) → **infra-expert'e devredilebilir** (worktree'de hazırlar,
+  lider diff+merge; memory = branch→diff→lider; akış: [`playbook/howto-talimat-dosyasi-bakimi.md`](playbook/howto-talimat-dosyasi-bakimi.md)).
   ⚠ Alt-ajanlar **auto-memory'yi GÖRMEZ** (yalnız `CLAUDE.md` kopyası alırlar; resmî) →
   kanıt kurallarını (TAHMİN YASAK · kanıtsız iddia yazma · negatif-test) **brifinge açıkça YAZ**.
   Brifingin ÇIKTI bölümüne `SendMessage({to:"main"})` ekle, yoksa rapor gelmez.

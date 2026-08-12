@@ -78,24 +78,39 @@ INFRA_MUAF_KOKLER = (
 # Uzantısız ama çalışan kabuk hook'ları (tam yol):
 INFRA_TAM_YOLLAR = {"scripts/git-hooks/pre-commit"}
 
+# B11-GENİŞLETME (2026-08-12, kullanıcı onayı — talimat-hijyeni paketi): TALİMAT dosyaları
+# `.md` olsalar da DAVRANIŞ taşır (her oturum context'e yüklenir) — "md = kaydın kendi ortamı"
+# muafiyet gerekçesi governance-dokümanları içindir, bunlar için GEÇERSİZDİR. Kayıtsız bir
+# rules/CLAUDE.core değişikliği, sonraki bakımcının (infra-expert F0 geçmiş-okuması) gözünde
+# görünmez kalır — bugüne kadar tam da böyle %55 blok-tekrarı birikti (ölçüldü).
+# Sınır bilinçli DAR: agents/templates/memory-seed KAPSAM DIŞI (genişletme = gerekçeli PR).
+TALIMAT_KOKLERI = ("claude/rules/",)
+TALIMAT_TAM_YOLLAR = {"CLAUDE.core.md"}
+
 
 def infra_dosyalari(paths: list[str]) -> list[str]:
-    """Staged listesinden İNFRA KODU olanları döndür.
+    """Staged listesinden İNFRA KODU + TALİMAT DOSYASI olanları döndür.
 
-    Neden yalnız `.py` + uzantısız git-hook'u: changelog "bileşenin davranışı neden
-    böyle" kaydıdır. `.md` dokümanı ZATEN kaydın kendi ortamıdır (doküman değişikliği
-    için changelog istemek özyineleme + gürültü olurdu); fixture'lar veridir; attic
-    çalıştırılmayan fosildir. Sınır bilinçli DAR — genişletme gerekirse gerekçeli PR.
+    Neden `.py` + uzantısız git-hook'u: changelog "bileşenin davranışı neden böyle"
+    kaydıdır. Governance `.md` dokümanı ZATEN kaydın kendi ortamıdır (özyineleme +
+    gürültü olurdu); fixture'lar veridir; attic çalıştırılmayan fosildir.
+    2026-08-12 genişletmesi: `claude/rules/*.md` + `CLAUDE.core.md` İSTİSNADIR —
+    `.md` olsalar da her oturum yüklenen DAVRANIŞ dosyalarıdır, kod gibi kayıt ister
+    (gerekçe: TALIMAT_KOKLERI üstündeki blok). Sınır hâlâ bilinçli DAR.
     """
     out = []
     for p in paths:
         q = p.replace("\\", "/")
-        if q in INFRA_TAM_YOLLAR:
+        if q in INFRA_TAM_YOLLAR or q in TALIMAT_TAM_YOLLAR:
             out.append(q)
             continue
         if any(q.startswith(m) for m in INFRA_MUAF_KOKLER):
             continue
         if q.startswith(INFRA_KOD_KOKLERI) and q.endswith(".py"):
+            out.append(q)
+            continue
+        # talimat dosyaları: .md ama davranış taşır (yukarıdaki B11-GENİŞLETME notu)
+        if q.startswith(TALIMAT_KOKLERI) and q.endswith(".md"):
             out.append(q)
     return out
 

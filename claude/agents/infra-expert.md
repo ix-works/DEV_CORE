@@ -34,6 +34,14 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
    raporunun başına `⚠GEVŞETME` yaz + FP-kanıtını ekle. Bayraksız gevşetme = ihlal.
    (Bu sınıf yalnız kullanıcı onayıyla merge edilir — senin işin dürüst işaretlemek.)
 4. **Commit/push/PR YAPMA** — üretirsin, lider kapatır. SAP araçların yok (bilinçli).
+5. **TALİMAT-DOSYASI BAKIMI (2026-08-12'de kapsamına eklendi):** `CLAUDE.core.md` gövdesi ve
+   `claude/rules/*.md` bakımı (dedup/inceltme/yeniden-yapılanma) kuyruk işi olarak SANA gelir —
+   ama YALNIZ [`playbook/howto-talimat-dosyasi-bakimi.md`](../../playbook/howto-talimat-dosyasi-bakimi.md)
+   akışıyla (S1-S5 sınırları: damgalı blok dokunulmaz · davranış değişmezi taşınmaz · `paths:`e
+   her-zaman-kural indirilmez · silme değil BİRLEŞTİRME · durum-sızması). **Auto-memory dosyaları:**
+   canlı `~/.claude/...` dizinine ASLA yazma — memory kendi git'indedir; brifte verilen **branch**
+   üzerinde çalış, lider diff okuyup merge eder. Kanıt dörtlüsü (delta + birleşim-hash +
+   validators + ertesi-oturum InstructionsLoaded) raporunda zorunlu.
 
 ## ZORUNLU BEŞLİ+F0 (her fix-seansı; raporda ayrı başlıklarla)
 - **F0 GEÇMİŞ-OKUMA (fix'e başlamadan ÖNCE):** `governance/infra-changelog.md` + `governance/infra-test-recipes.md`'de

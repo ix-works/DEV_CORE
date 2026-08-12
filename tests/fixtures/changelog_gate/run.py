@@ -142,6 +142,29 @@ def main() -> int:
             rc == 0 and "INFRA-CHANGELOG-YOK" not in out, f"exit={rc}")
     stage_temizle(kok)
 
+    # --- S10 BOZUK (B11-genisletme 2026-08-12): claude/rules/*.md TALIMAT dosyasidir -> BLOK
+    yaz(kok, "claude/rules/ornek-kural.md", "---\npaths:\n  - '**/*.abap'\n---\n# kural v2\n")
+    git(kok, "add", "claude/rules/ornek-kural.md")
+    rc, out = gate_kos(kok)
+    kontrol("S10 claude/rules/*.md + changelog YOK -> BLOK (exit 1)", rc == 1, f"exit={rc}")
+    stage_temizle(kok)
+
+    # --- S11 BOZUK (B11-genisletme): CLAUDE.core.md tam-yol talimat dosyasi -> BLOK
+    yaz(kok, "CLAUDE.core.md", "# cekirdek loader v2 (sentetik)\n")
+    git(kok, "add", "CLAUDE.core.md")
+    rc, out = gate_kos(kok)
+    kontrol("S11 CLAUDE.core.md + changelog YOK -> BLOK (exit 1)", rc == 1, f"exit={rc}")
+    stage_temizle(kok)
+
+    # --- S12 TEMIZ (B11-genisletme): talimat dosyasi + changelog birlikte -> SERBEST
+    yaz(kok, "claude/rules/ornek-kural.md", "---\npaths:\n  - '**/*.abap'\n---\n# kural v3\n")
+    yaz(kok, CHANGELOG, "# INFRA-CHANGELOG (sentetik)\n\n## claude/rules (talimat)\n"
+                        "| 2026-08-12 | kural v3 | sentetik | fixture | - | - |\n")
+    git(kok, "add", "claude/rules/ornek-kural.md", CHANGELOG)
+    rc, out = gate_kos(kok)
+    kontrol("S12 talimat + changelog birlikte -> SERBEST (exit 0)", rc == 0, f"exit={rc}")
+    stage_temizle(kok)
+
     # --- S8 UCTAN UCA (GERCEK COMMIT): hooksPath kablolu -> commit BLOKLANIR
     yaz(kok, "scripts/hooks/ornek_hook.py", "# v4\nprint('merhaba')\n")
     git(kok, "add", "scripts/hooks/ornek_hook.py")
