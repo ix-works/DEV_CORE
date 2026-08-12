@@ -74,6 +74,9 @@ VALIDATORS = [
     # MEMORY.md'nin yalnız ilk 200 satırı VEYA ilk 25KB'ı yüklenir; gerisi SESSİZCE düşer.
     # Ölü indeks linki / erişilemez hatıra = model için o bilgi YOK. C-MEM-01.
     ("Auto-memory bütçe + indeks bütünlüğü (HARD, C-MEM-01)", "check_memory_index.py", [], "both", None),
+    # Her oturum yüklenen talimat dosyaları sessizce şişer (ölçüldü: %55 blok-tekrar).
+    # warn-first — bloklamaz; HARD terfisi tarihli karar (deferred-triggers). C-BUD-01.
+    ("Talimat-dosyası bütçesi (soft, C-BUD-01)", "check_instruction_budget.py", [], "both", None),
     # "manual-edit: PROHIBITED" diyen ama tazeliği ölçülmeyen artefakt sessizce bayatlar. C-REG-01.
     ("package-registry tazeliği (HARD, C-REG-01)", "check_package_registry_fresh.py", [], "project", None),
     # Hook yazmak ≠ şablona kablolamak. sap_worktype_hint + itg_backstop şablona hiç
