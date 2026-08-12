@@ -295,11 +295,19 @@ def a2_sema_degismedi(satirlar: list[dict]) -> list[Bulgu]:
     if bozuk:
         out.append(Bulgu("A2", f"PAYLOAD ŞEMASI DEĞİŞMİŞ ({len(bozuk)} satır) — logger KÖR",
                          f"örnek: {bozuk[0]['ts']} {bozuk[0]['reason']} {bozuk[0].get('ek','')[:120]}"))
-    MALFORMED_KABUL = 4  # T0.7-öncesi 3 + geçiş-dönemi 1 (2026-07-31: DEV_CORE bir süre G3-öncesi branch'teyken yazıldı) — veri korunuyor
+    # 8'in TAMAMI 2026-08-12 düzeltmesinden ÖNCEye ait (son vaka 08-11) — veri olarak korunuyor.
+    # O tarihe kadar append Windows'ta hiç atomik DEĞİLDİ (CRT `_O_APPEND` = seek+write) ve
+    # satır KAYBETTİRİYORDU; logger `CreateFileW(FILE_APPEND_DATA)`e çevrildi (12×40 eşzamanlı,
+    # gerçek giriş noktası: eski 8 kayıp/1 malformed → yeni 0/0). ⇒ Eşik kalibrasyonu burada
+    # kusuru MASKELEMİYOR; kusur kapandı, bu sayı tarihsel tabandır.
+    # ⚠ Bundan SONRAKİ her yeni malformed satır GERÇEK regresyondur — eşiği bir daha yükseltme,
+    #   sebebini bul (2026-08-10'da eşik yükseltmek bilinçle reddedilmişti: o gün kusur AÇIKTI).
+    MALFORMED_KABUL = 8
     yarim = [s for s in satirlar if s["reason"] == "MALFORMED"]
     if len(yarim) > MALFORMED_KABUL:
         out.append(Bulgu("A2", f"YENİ malformed log satırı: {len(yarim) - MALFORMED_KABUL} adet "
-                         f"(toplam {len(yarim)}; kabul edilen tarihsel {MALFORMED_KABUL}) — atomik-append geriledi mi?",
+                         f"(toplam {len(yarim)}; kabul edilen tarihsel {MALFORMED_KABUL}) — atomik append "
+                         f"GERİLEDİ (2026-08-12'den beri 0 bekleniyor): logger'ın FILE_APPEND_DATA yolu düşmüş olabilir",
                          f"örnek: {yarim[-1].get('ek','')[:100]}"))
     return out
 
