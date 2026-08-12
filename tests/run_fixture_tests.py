@@ -111,6 +111,9 @@ OZEL_TESTLER = [
     # 2026-08-10 ui-smoke proje-koku (arac + gate ayni sinifin iki yuzu):
     ("conn_adt_proje_koku",
      ".conn_adt PROJE kokundedir: run_ui_smoke kok cozumlemesi + CORE-01 dedektoru"),
+    # 2026-08-12 talimat-bakim turu (K2): C-MEM-01 olcum modeli + SKIP gorunurlugu:
+    ("memory_yukleme_butcesi",
+     "C-MEM-01: butce HAM bayti degil YUKLENEN govdeyi olcer (+ KOSMADI != TEMIZ)"),
 ]
 
 

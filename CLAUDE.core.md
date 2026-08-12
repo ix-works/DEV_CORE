@@ -75,19 +75,14 @@
 | **L3** | Operasyonel pattern (ADT pattern bankası, lessons-learned) | [`playbook/`](playbook/) | on-demand |
 | **L4** | Paket-spesifik (prefix, bağımlılık, istisna) — **PROJE reposunda** | `<source_root>/<MODULE>/<PKG>/.rules.md` | on-demand |
 
-> **⚠ 2026-07-10 memory/recall denetimi:** `AGENTS.md` **hiçbir oturumda context'e girmiyordu.**
-> Claude Code `CLAUDE.md` okur, `AGENTS.md` okumaz (resmî: code.claude.com/docs/en/memory) ve
-> buradaki bağlantı `@import` değil düz markdown link'ti. 356 satır / 25 zorunlu kural sessizce
-> ölüydü — üstelik ekran teyidi her oturum "AGENTS.md yüklendi" diyordu. Her-oturum gerekli olan
-> §1.1'e taşındı; dosya-türüne bağlı olan `claude/rules/`e (dosya-tetiklemeli) indi.
-> **"Yüklendi" varsayma — markdown link hiçbir şey yüklemez.**
->
-> **⚠ Aynı gün, ikinci ders (L1b'nin kendisi):** kurallara `globs:` yazmıştık; Claude Code
-> 2.1.206 frontmatter'da **yalnız `paths:`** okuyor. Yanlış anahtar kuralı öldürmedi —
-> *sessizce her oturuma taşıdı* (tembel yükleme hiç çalışmadı, hata da vermedi). Üstelik
-> bunu ölçmek için kurulan `InstructionsLoaded` hook'u da yanlış payload anahtarlarını
-> arıyordu ve log'a `?  ?` yazıp "ölçtük" hissi veriyordu. **Anahtar adını dokümandan değil
-> çalışan sürümden doğrula.** Nasıl: [`docs/claude-rules-nasil-yazilir.md`](docs/claude-rules-nasil-yazilir.md).
+> **⚠ 2026-07-10 memory/recall denetiminin İKİ DEĞİŞMEZİ** (vaka anlatısı + nasıl-yazılır:
+> [`docs/claude-rules-nasil-yazilir.md`](docs/claude-rules-nasil-yazilir.md)):
+> ① Claude Code `CLAUDE.md` okur, **`AGENTS.md` okumaz**; düz markdown link **hiçbir şey
+> yüklemez** → **"yüklendi" varsayma** *(356 satır / 25 zorunlu kural sessizce ölüydü ve ekran
+> teyidi her oturum "yüklendi" diyordu)*.
+> ② Frontmatter'da **yalnız `paths:`** okunur; yanlış anahtar kuralı öldürmez, *sessizce her
+> oturuma taşır* — üstelik bunu ölçmek için kurulan hook da kör olabilir ⇒ **anahtar adını
+> dokümandan değil ÇALIŞAN SÜRÜMDEN doğrula.**
 
 ## 1.1 HER-OTURUM DAVRANIŞ DEĞİŞMEZLERİ (L1a)
 
@@ -339,15 +334,13 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 | PULL-BEFORE-EDIT | `scripts/hooks/pull_before_edit.py` | SAP source düzenleme öncesi (ADR 0016) |
 | Reviewer pre-flight | `scripts/validators/run_review.py` | SAP yazma öncesi (ADR 0006): PASS→yaz · WARNING→yaz+raporla · BLOCKER→yazma |
 
-> ⚠ **Bu tabloda OLMAYANLAR — 2026-07-10'da KALDIRILAN runtime kuralları** (gerekçeler
-> `scripts/hooks/pre_tool_guard.py` başlığında): **freeze/salt-okunur kök yazma bloğu (R10)** ·
-> **özyinelemeli-silme bloğu (R9)** · sızıntı-commit · applies_to. Silinme sebebi ortak:
-> sonuç **geri alınabilir VEYA sessiz değil** (merdiven ilkesi, ADR 0019) ve fiil-kara-listesi
-> hedefi sormadığı için hem sızdırıyor hem zararsız komutu blokluyordu. **Yasağın kendisi
-> DURUYOR** (dondurulmuş köke yazma yok, junction'ı silme yok) — ama *disiplin + OS izni* ile,
-> **runtime guard ile DEĞİL.** Kaldırılmış bir kuralı "aktif gate" diye yazmak = sahte koruma;
-> gate listesine kural eklemeden önce guard'ı sentetik payload'la NEGATİF TEST et
-> (`echo '{"tool_name":...}' | python core/scripts/hooks/pre_tool_guard.py` → 2=blok, 0=serbest).
+> ⚠ **Bu tabloda OLMAYAN, 2026-07-10'da KALDIRILAN runtime kuralları:** R10 freeze/salt-okunur
+> kök-yazma · R9 özyinelemeli-silme · sızıntı-commit · applies_to. Kim/niçin kaldırıldı:
+> [`governance/removed-controls.md`](governance/removed-controls.md) (+ `scripts/hooks/pre_tool_guard.py` başlığı).
+> **Yasağın kendisi DURUYOR** (dondurulmuş köke yazma yok, junction'ı silme yok) — ama
+> *disiplin + OS izni* ile, **runtime guard ile DEĞİL.** Kaldırılmış bir kuralı "aktif gate"
+> diye yazmak = sahte koruma; gate listesine kural eklemeden önce guard'ı sentetik payload'la
+> NEGATİF TEST et (`echo '{"tool_name":...}' | python core/scripts/hooks/pre_tool_guard.py` → 2=blok, 0=serbest).
 
 Tek komut: `python core/scripts/validators/run_all_validators.py` (core + proje `validators-local/` birlikte; profil-modlu).
 ⚠ **Always-allow YASAĞI (D32):** SAP-yazma ve davranış-yüzeyi araçlarına "Always allow" izni VERİLMEZ — izin katmanı hook-safeguard'ları soyar.
