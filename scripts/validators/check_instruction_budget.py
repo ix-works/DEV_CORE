@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
+
 import sys
 from pathlib import Path
 
@@ -41,16 +41,17 @@ for _a in (sys.stdout, sys.stderr):
 
 SATIR_TAVAN = 200          # resmî hedef (code.claude.com/docs/en/memory) — icat değil
 BLOK_BOYU = 5              # ≥5 ardışık dolu satır = anlamlı blok (tek-satır gürültüsü elenir)
-YORUM_RE = re.compile(r"<!--.*?-->", re.S)
+
+# TEK-KAYNAK (2026-08-12, infra-pilot bulgusu): soyma semantiği check_memory_index'teki
+# `_yukleme_govdesi`'nden import edilir — aynı harness davranışının İKİ ayrı uygulaması
+# sessizce ayrışır (claude_paths/S4 sınıfı). O uygulama blok-seviyeli + kod-fence-duyarlı +
+# kapanmamış-yorumda fail-safe'tir; buradaki eski regex satır-içi yorumu da siliyordu (yanlış).
+from check_memory_index import _yukleme_govdesi  # noqa: E402
 
 
 def _soy(metin: str) -> list[str]:
     """Üst-harness yükleme semantiği: frontmatter + blok-HTML-yorumları bütçeye SAYILMAZ."""
-    if metin.startswith("---"):
-        kapanis = metin.find("\n---", 3)
-        if kapanis != -1:
-            metin = metin[kapanis + 4:]
-    return YORUM_RE.sub("", metin).splitlines()
+    return _yukleme_govdesi(metin).splitlines()
 
 
 def _blok_tekrarlari(satirlar: list[str]) -> list[tuple[int, int]]:

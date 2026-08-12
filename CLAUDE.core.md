@@ -75,19 +75,14 @@
 | **L3** | Operasyonel pattern (ADT pattern bankası, lessons-learned) | [`playbook/`](playbook/) | on-demand |
 | **L4** | Paket-spesifik (prefix, bağımlılık, istisna) — **PROJE reposunda** | `<source_root>/<MODULE>/<PKG>/.rules.md` | on-demand |
 
-> **⚠ 2026-07-10 memory/recall denetimi:** `AGENTS.md` **hiçbir oturumda context'e girmiyordu.**
-> Claude Code `CLAUDE.md` okur, `AGENTS.md` okumaz (resmî: code.claude.com/docs/en/memory) ve
-> buradaki bağlantı `@import` değil düz markdown link'ti. 356 satır / 25 zorunlu kural sessizce
-> ölüydü — üstelik ekran teyidi her oturum "AGENTS.md yüklendi" diyordu. Her-oturum gerekli olan
-> §1.1'e taşındı; dosya-türüne bağlı olan `claude/rules/`e (dosya-tetiklemeli) indi.
-> **"Yüklendi" varsayma — markdown link hiçbir şey yüklemez.**
->
-> **⚠ Aynı gün, ikinci ders (L1b'nin kendisi):** kurallara `globs:` yazmıştık; Claude Code
-> 2.1.206 frontmatter'da **yalnız `paths:`** okuyor. Yanlış anahtar kuralı öldürmedi —
-> *sessizce her oturuma taşıdı* (tembel yükleme hiç çalışmadı, hata da vermedi). Üstelik
-> bunu ölçmek için kurulan `InstructionsLoaded` hook'u da yanlış payload anahtarlarını
-> arıyordu ve log'a `?  ?` yazıp "ölçtük" hissi veriyordu. **Anahtar adını dokümandan değil
-> çalışan sürümden doğrula.** Nasıl: [`docs/claude-rules-nasil-yazilir.md`](docs/claude-rules-nasil-yazilir.md).
+> **⚠ 2026-07-10 memory/recall denetiminin İKİ DEĞİŞMEZİ** (vaka anlatısı + nasıl-yazılır:
+> [`docs/claude-rules-nasil-yazilir.md`](docs/claude-rules-nasil-yazilir.md)):
+> ① Claude Code `CLAUDE.md` okur, **`AGENTS.md` okumaz**; düz markdown link **hiçbir şey
+> yüklemez** → **"yüklendi" varsayma** *(356 satır / 25 zorunlu kural sessizce ölüydü ve ekran
+> teyidi her oturum "yüklendi" diyordu)*.
+> ② Frontmatter'da **yalnız `paths:`** okunur; yanlış anahtar kuralı öldürmez, *sessizce her
+> oturuma taşır* — üstelik bunu ölçmek için kurulan hook da kör olabilir ⇒ **anahtar adını
+> dokümandan değil ÇALIŞAN SÜRÜMDEN doğrula.**
 
 ## 1.1 HER-OTURUM DAVRANIŞ DEĞİŞMEZLERİ (L1a)
 
@@ -207,7 +202,7 @@
 Proje-özel overlay kapıları: `playbook-local/`, `standards-local/`, `scripts/validators-local/`
 (proje kökünde; **yoksa indeksleme** — hayalet indeks ajana yanlış yol verir).
 
-## 2. SAP PROFİL MODELİ (§9 — her kural her projede geçerli DEĞİL)
+## 2. SAP PROFİL MODELİ (her kural her projede geçerli DEĞİL)
 
 Proje kimliği `project.yaml`'dadır: `sap_profile` (`ecc|s4_private|s4_public|btp_abap`) +
 `release` + (`ecc`) `db` + (`s4_private`) `cleancore_policy` + `master_language` + `source_root`.
@@ -305,7 +300,7 @@ SORU 2: Tipi? davranış=AGENTS · standart=standards · nasıl-yaparım=playboo
 SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lessons-learned.md
 ```
 
-## 5. MEMORY KURALLARI (§10)
+## 5. MEMORY KURALLARI
 
 - **Memory = hatırlatıcı, CORE = kanonik.** Metodoloji-nitelikli her memory-feedback
   core'a TERFİ eder (gün-sonu kontrolü), memory'de tek satır pointer kalır.
@@ -324,7 +319,7 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 3. Spec yok → operator approval iste
 4. Trigger phrase geldi → pattern bak, kod gate öner
 5. SAP "rename broken"/"still active"/"lock conflict" → audit, sebep bul
-6. **Davranış-yüzeyi uyarısı** (manifest/ConfigChange) → oturuma güvenme, lider'e bildir (§11)
+6. **Davranış-yüzeyi uyarısı** (manifest/ConfigChange) → oturuma güvenme, lider'e bildir (§8)
 
 ## 7. KOD GATE'LERİ (Bypass YASAK; hepsi hook_shim üzerinden — D15)
 
@@ -339,15 +334,13 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 | PULL-BEFORE-EDIT | `scripts/hooks/pull_before_edit.py` | SAP source düzenleme öncesi (ADR 0016) |
 | Reviewer pre-flight | `scripts/validators/run_review.py` | SAP yazma öncesi (ADR 0006): PASS→yaz · WARNING→yaz+raporla · BLOCKER→yazma |
 
-> ⚠ **Bu tabloda OLMAYANLAR — 2026-07-10'da KALDIRILAN runtime kuralları** (gerekçeler
-> `scripts/hooks/pre_tool_guard.py` başlığında): **freeze/salt-okunur kök yazma bloğu (R10)** ·
-> **özyinelemeli-silme bloğu (R9)** · sızıntı-commit · applies_to. Silinme sebebi ortak:
-> sonuç **geri alınabilir VEYA sessiz değil** (merdiven ilkesi, ADR 0019) ve fiil-kara-listesi
-> hedefi sormadığı için hem sızdırıyor hem zararsız komutu blokluyordu. **Yasağın kendisi
-> DURUYOR** (dondurulmuş köke yazma yok, junction'ı silme yok) — ama *disiplin + OS izni* ile,
-> **runtime guard ile DEĞİL.** Kaldırılmış bir kuralı "aktif gate" diye yazmak = sahte koruma;
-> gate listesine kural eklemeden önce guard'ı sentetik payload'la NEGATİF TEST et
-> (`echo '{"tool_name":...}' | python core/scripts/hooks/pre_tool_guard.py` → 2=blok, 0=serbest).
+> ⚠ **Bu tabloda OLMAYAN, 2026-07-10'da KALDIRILAN runtime kuralları:** R10 freeze/salt-okunur
+> kök-yazma · R9 özyinelemeli-silme · sızıntı-commit · applies_to. Kim/niçin kaldırıldı:
+> [`governance/removed-controls.md`](governance/removed-controls.md) (+ `scripts/hooks/pre_tool_guard.py` başlığı).
+> **Yasağın kendisi DURUYOR** (dondurulmuş köke yazma yok, junction'ı silme yok) — ama
+> *disiplin + OS izni* ile, **runtime guard ile DEĞİL.** Kaldırılmış bir kuralı "aktif gate"
+> diye yazmak = sahte koruma; gate listesine kural eklemeden önce guard'ı sentetik payload'la
+> NEGATİF TEST et (`echo '{"tool_name":...}' | python core/scripts/hooks/pre_tool_guard.py` → 2=blok, 0=serbest).
 
 Tek komut: `python core/scripts/validators/run_all_validators.py` (core + proje `validators-local/` birlikte; profil-modlu).
 ⚠ **Always-allow YASAĞI (D32):** SAP-yazma ve davranış-yüzeyi araçlarına "Always allow" izni VERİLMEZ — izin katmanı hook-safeguard'ları soyar.
@@ -356,7 +349,7 @@ Tek komut: `python core/scripts/validators/run_all_validators.py` (core + proje 
 
 Typed MCP tool'lar ([`mcp_servers/sap_adt/`](mcp_servers/sap_adt/)): tek-obje yaratım/aktivasyon/push/search/lock = MCP; CSV-batch/validator/gate = script. Server-side guardrail: ADR 0005 + bağlantı-tutarsızlık gate'i (ADR 0010). **Profil-bazlı tool-blok (§9.4d) CANLI** (D34d, 2026-07-10): tool'lar `available_on` etiketi taşır; profil uymuyorsa tool `tools/list`'te **hiç görünmez** (`mcp_servers/sap_adt/_profile.py` + `_app.profil_tool`). `project.yaml`'da `sap_profile` yok/enum-dışıysa **fail-closed: yalnız `ping` açılır.** Politika tablosu kanıtla dolar — bugün tek matris-kanıtlı daraltma `adt_transport_list` ∉ `btp_abap` (`transport: gcts` → CTS ucu yok); `s4_public` hücresi "NÖTR, canlı doğrulanacak" dediği için BLOKLANMAZ. Bağlantı: proje kökündeki `.conn_adt` (env `CLAUDE_PROJECT_DIR` → cwd fallback).
 
-## 8. DAVRANIŞ GÜVENLİK DUVARI — ÖZET (§11)
+## 8. DAVRANIŞ GÜVENLİK DUVARI — ÖZET
 
 *Davranış taşıyan dosya ya core'dan junction'la gelir ya behavior-manifest'te kayıtlıdır;
 değilse RED ya da intake-gümrüğünden geçer.* Davranış-yüzeyi (CLAUDE.md, `**/CLAUDE.md`,
