@@ -202,7 +202,7 @@
 Proje-özel overlay kapıları: `playbook-local/`, `standards-local/`, `scripts/validators-local/`
 (proje kökünde; **yoksa indeksleme** — hayalet indeks ajana yanlış yol verir).
 
-## 2. SAP PROFİL MODELİ (§9 — her kural her projede geçerli DEĞİL)
+## 2. SAP PROFİL MODELİ (her kural her projede geçerli DEĞİL)
 
 Proje kimliği `project.yaml`'dadır: `sap_profile` (`ecc|s4_private|s4_public|btp_abap`) +
 `release` + (`ecc`) `db` + (`s4_private`) `cleancore_policy` + `master_language` + `source_root`.
@@ -300,7 +300,7 @@ SORU 2: Tipi? davranış=AGENTS · standart=standards · nasıl-yaparım=playboo
 SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lessons-learned.md
 ```
 
-## 5. MEMORY KURALLARI (§10)
+## 5. MEMORY KURALLARI
 
 - **Memory = hatırlatıcı, CORE = kanonik.** Metodoloji-nitelikli her memory-feedback
   core'a TERFİ eder (gün-sonu kontrolü), memory'de tek satır pointer kalır.
@@ -319,7 +319,7 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 3. Spec yok → operator approval iste
 4. Trigger phrase geldi → pattern bak, kod gate öner
 5. SAP "rename broken"/"still active"/"lock conflict" → audit, sebep bul
-6. **Davranış-yüzeyi uyarısı** (manifest/ConfigChange) → oturuma güvenme, lider'e bildir (§11)
+6. **Davranış-yüzeyi uyarısı** (manifest/ConfigChange) → oturuma güvenme, lider'e bildir (§8)
 
 ## 7. KOD GATE'LERİ (Bypass YASAK; hepsi hook_shim üzerinden — D15)
 
@@ -349,7 +349,7 @@ Tek komut: `python core/scripts/validators/run_all_validators.py` (core + proje 
 
 Typed MCP tool'lar ([`mcp_servers/sap_adt/`](mcp_servers/sap_adt/)): tek-obje yaratım/aktivasyon/push/search/lock = MCP; CSV-batch/validator/gate = script. Server-side guardrail: ADR 0005 + bağlantı-tutarsızlık gate'i (ADR 0010). **Profil-bazlı tool-blok (§9.4d) CANLI** (D34d, 2026-07-10): tool'lar `available_on` etiketi taşır; profil uymuyorsa tool `tools/list`'te **hiç görünmez** (`mcp_servers/sap_adt/_profile.py` + `_app.profil_tool`). `project.yaml`'da `sap_profile` yok/enum-dışıysa **fail-closed: yalnız `ping` açılır.** Politika tablosu kanıtla dolar — bugün tek matris-kanıtlı daraltma `adt_transport_list` ∉ `btp_abap` (`transport: gcts` → CTS ucu yok); `s4_public` hücresi "NÖTR, canlı doğrulanacak" dediği için BLOKLANMAZ. Bağlantı: proje kökündeki `.conn_adt` (env `CLAUDE_PROJECT_DIR` → cwd fallback).
 
-## 8. DAVRANIŞ GÜVENLİK DUVARI — ÖZET (§11)
+## 8. DAVRANIŞ GÜVENLİK DUVARI — ÖZET
 
 *Davranış taşıyan dosya ya core'dan junction'la gelir ya behavior-manifest'te kayıtlıdır;
 değilse RED ya da intake-gümrüğünden geçer.* Davranış-yüzeyi (CLAUDE.md, `**/CLAUDE.md`,
