@@ -701,3 +701,26 @@ Forward progress doğal refleks, ama **verification refleksini geliştirmek** si
   **indekslenmez** (ölçüldü).
 - ⛔ **YAPMA:** "kuralı daha sert yazalım/gate açalım" refleksi — sorun metnin gücü değil
   **konumu** olabilir; önce onu ölç (moratoryum: ADR 0019 şart-4).
+
+### PATTERN #31: PowerShell 5.1 → native komuta giden argümanda **gömülü çift-tırnak** sessizce parçalar (`git commit -m` here-string)
+
+- **Belirti:** `git commit -m @'...'@` (tek-tırnaklı here-string) içinde `"kelime"` biçiminde
+  çift-tırnak varsa git, mesajın tırnaktan sonraki kısmını **ayrı argüman = pathspec** sanır:
+  `error: pathspec '...' did not match any file(s)`. Here-string PS içinde literal'dir —
+  kırılma PS→native **komut-satırı yeniden kurulumunda** olur (PS 5.1 gömülü `"` kaçışlamaz).
+- **Ölçüm (2026-08-12, aynı oturum):** çift-tırnaklı 2 mesaj → 2 kez pathspec hatası;
+  aynı kalıpla tırnaksız 3 mesaj → 3 commit temiz. `prior-art: yok` (BOM/heredoc dersleri farklı sınıf).
+- **YAP:** commit/PR mesajında çift-tırnak karakteri **hiç kullanma** (vurgu için tek tırnak
+  ya da tırnaksız yaz). Uzun mesajda `-F <dosya>` doğaldır ama ⚠ `pre_tool_guard` commit-mesajı
+  gate'i `-F` yolunu şu an backslash'sız okuyup FAIL-CLOSED reddediyor (bilinen kusur, infra-kuyrukta)
+  — düzelene dek pratik yol: tırnaksız `-m` here-string.
+- **Sınır:** ölçüm PS 5.1 + git for Windows; `Bash` tool'u ve pwsh 7 ölçülmedi.
+
+### Talimat-bakımı pilotunun 3 dersi (2026-08-12 — T1 terfisi; kaynak: infra-devir pilot raporu)
+
+Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyasi-bakimi.md`](howto-talimat-dosyasi-bakimi.md)):
+1. **Fixture gövdesine md-link koyma** — talimat-bütçe vektörleri onu ölü-link sayar = sahte kırmızı.
+2. **Suite özet satırı `^\d+/\d+ OK` deseniyle başlamalı** — başlamazsa koşucu tabloda sayıyı GÖSTERMEZ
+   (test geçer ama görünmez; "exit 0 ≠ çıktı" sınıfı).
+3. **Worktree dalı main'in GERİSİNDE olabilir** → F0 adımına `git diff HEAD origin/main` ekle
+   (2026-08-12 pilotunda changelog append-append çakışması tam bundan çıktı, öngörülmüştü).
