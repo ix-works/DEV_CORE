@@ -10,19 +10,59 @@
 
 ---
 
-## 1. Envanter — 7 hook (event → görev)
+## 1. Envanter (event → görev)
 
-| Hook | Event | Matcher | Görev | ADR/ref |
+> ⛔ **Başlığa ve metne SAYI YAZMA** ("N hook" deme) — **tablo kanoniktir.** Sayı yazılırsa
+> bayatlar: 2026-08-13'te başlık "7 hook" diyordu, tabloda **6** satır vardı, diskte **16**
+> `.py` vardı ve envanterde hiç geçmeyen 10 hook "yok" diye okunuyordu.
+>
+> **Tazelik kuralı:** kablolama `claude/settings.template.json`'da yaşar, bu tablo onu ANLATIR.
+> Hook ekler/çıkarırsan İKİSİNİ birlikte güncelle.
+> Son çapraz-doğrulama: **2026-08-13 — 16/16 `.py` kablolu, kablosuz dosya YOK, template'te
+> karşılığı olmayan kayıt YOK** (`pre_tool_guard` üç ayrı matcher'a kablolu).
+>
+> ⚠ **BU TABLO GATE'Lİ DEĞİL — tazeliği disiplinle korunur.** `check_settings_template_sync.py`
+> (C-TPL-01) **template ↔ `scripts/hooks/` DİZİNİNİ** karşılaştırır; **bu README'yi okumaz.**
+> Yani yeni hook kablolanmadan geçemez, ama tabloya yazılmadan **geçer** — 2026-08-13'teki
+> bayatlığın sebebi tam olarak budur. (Yeni gate açmak ADR 0019 moratoryumuna tabidir:
+> önce doküman-hatırlatma denenir; bu satır o hatırlatmadır.)
+
+**Parse-fail sütunu** = hook stdin'deki JSON'u okuyamazsa ne olur (ayrıntı: §4).
+`not+serbest` = stderr'e `GIRDI-PARSE-EDILEMEDI` + `exit 0`, işi bırakır ·
+`not+degrade` = not basar ama boş girdiyle devam eder ·
+`not YOK` = **bilinçli**: stdin hiçbir karara girmez, kaybolan bir şey yok.
+
+| Hook | Event | Matcher | Görev | Parse-fail |
 |---|---|---|---|---|
-| `session_start.py` | SessionStart | — | ADR 0005 yasaklar + Ekran Teyidi formatını enjekte | CLAUDE.md §2 |
-| `skill_injector.py` | UserPromptSubmit | — | SAP işi sezilince skill + **iş-türüne özel ZORUNLU checklist**i adıyla söyle | gap #9 / §3 aşağıda |
-| `pre_tool_guard.py` | PreToolUse | `Bash\|mcp__sap-adt` | Transport/release girişimini blokla (exit 2) | ADR 0005-C |
-| `post_validate.py` | PostToolUse | `Edit\|Write\|MultiEdit` | Yönetişim/standart/validator/spec dosyası değişince `run_all_validators --quick` | kod-gate |
-| `post_tool_failure.py` | PostToolUse | `mcp__sap-adt` | Yapısal SAP hatasında patinaj-kesici uyarı | ADR 0006 |
-| `pre_compact.py` | PreCompact | — | SESSION_NOTES + memory flush hatırlatması | bağlam koruma |
+| `session_start.py` | SessionStart | — | Yasaklar + protokol enjeksiyonu + sağlık kontrolleri (junction/manifest) | not+degrade¹ |
+| `tooling_radar_check.py` | SessionStart | — | Agent-Dev Tooling Radar bayatlık kontrolü | **not YOK**² |
+| `instructions_loaded_log.py` | InstructionsLoaded | — | Hangi talimat dosyası ne zaman/neden yüklendi — ölçüm logu | not+serbest |
+| `skill_injector.py` | UserPromptSubmit | — | Tarayıcı/UI-doğrulama + yapısal-kod-arama akış nudge'ları | not+serbest |
+| `intake_triage.py` | UserPromptSubmit | — | INTAKE TRIAGE GATE (ITG) tetiği + protokol enjeksiyonu | not+serbest |
+| `recall_inject.py` | UserPromptSubmit | — | U1 JIT-recall enjeksiyonu (ilgili hafıza kaydını anında getir) | not+serbest |
+| `pre_tool_guard.py` | PreToolUse | `Bash\|PowerShell\|mcp__sap-adt__.*` · `Edit\|Write\|MultiEdit` · `NotebookEdit` | Çok-katmanlı 9 kural: yasaklar, hedef-açıklık, sızıntı, bağlantı-tutarlılık (blok = **exit 2**) | not+serbest |
+| `pull_before_edit.py` | PreToolUse | `Edit\|Write\|MultiEdit` | PULL-BEFORE-EDIT gate — bayat SAP kaynağına edit'i bloklar (ADR 0016) | not+serbest |
+| `sap_worktype_hint.py` | PreToolUse | `mcp__sap-adt__adt_(push_source\|activate\|dtel_create\|domain_create\|struct_create\|publish_service)` | Obje tipinden deterministik worktype→checklist hatırlatması | not+serbest |
+| `itg_backstop.py` | PreToolUse | `mcp__sap-adt__.*` | ITG deterministik backstop — triyajsız SAP işini yakalar (ADR 0022) | not+serbest |
+| `watchdog_launch.py` | PreToolUse | `Agent` | Arka-plan agent spawn'ında detached watchdog daemon'ı başlatır | not+degrade³ |
+| `post_validate.py` | PostToolUse | `Edit\|Write\|MultiEdit` | Governance/standard/validator/spec/`.rules.md` değişince `run_all_validators --quick` | not+serbest |
+| `post_tool_failure.py` | PostToolUse | `mcp__sap-adt__.*` | Başarısız SAP işleminde patinaj-kesici uyarı (ADR 0006) | not+serbest |
+| `config_change_guard.py` | ConfigChange | — | Seans-içi ayar/davranış-yüzeyi değişikliği nöbetçisi (D31; F2'nin runtime bacağı) | not+degrade⁴ |
+| `pre_compact.py` | PreCompact | — | Compaction ÖNCESİ SESSION_NOTES + memory flush hatırlatması | **not YOK**² |
+| `watchdog_stop.py` | SessionEnd | — | Bu seansın detached watchdog daemon'ını durdurur (stop-sentinel) | not+degrade³ |
+
+**Hook OLMAYAN dosyalar** (event'e bağlı değil, envanterde yok sayılmaz): `watchdog_daemon.sh`
+— `watchdog_launch` tarafından spawn edilen yardımcı · `README.md` (bu dosya).
+
+¹ Seans marker'ı `session_id`'siz yazılır → tazelik/seans zinciri (pull_before_edit, intake_triage) sessizce etkilenir.
+² **Bilinçli istisna:** stdin yalnızca boşaltılır, çıktı statiktir → parse-fail'de kaybolan karar yok. Fixture'ın **iç kontrol grubu** (not BASMAMALI).
+³ Seans kimliği `nosid`/boşa düşer → watchdog yanlış anahtarla açılır / durdurulacak daemon bulunamaz.
+⁴ Tespit tamamen payload'a dayanır → parse-fail sessizce "değişiklik yok" gibi okunurdu.
 
 > MCP server **server-side guardrail** (ADR 0005 A/B/C/D) ayrı bir katman — hook'tan bağımsız,
 > bypass yok. İki katman: hook (proaktif) + MCP guard (yazma anı).
+> ⚠ Kablolama `hook_shim.py` üzerinden gider (D15) ve şim hook'u **`runpy` ile AYNI SÜREÇTE**
+> koşturur — bunun sonuçları için §4'teki "ortak yardımcıya bağlanmadı" notuna bak.
 
 ---
 
@@ -88,7 +128,31 @@ Hook eklediğinde/değiştirdiğinde **mutlaka** bu şekilde elle çalıştır (
 
 Stdin'den JSON okuyan hook'lar **bozuk girdide de 0 döner** (`json.load` → `except: return 0`;
 "yabancı girdi serbest" bilinçli fail-safe'i). Dolayısıyla *"guard geçirdi"* ile *"guard payload'ı
-hiç okuyamadı"* **ayırt edilemez** — ve ikincisi "guard bypass edildi" diye raporlanır.
+hiç okuyamadı"* **ayırt edilemez**di — ve ikincisi "guard bypass edildi" diye raporlanıyordu.
+
+> ✅ **KÖK-FIX 2026-08-13 — sessizlik kalktı, `exit 0` DURUYOR.** Girdiye dayalı karar veren
+> **14 hook** parse-fail dalında stderr'e tek satır basar:
+> `[<hook>] GIRDI-PARSE-EDILEMEDI: ... -> fail-safe SERBEST (exit 0); KARAR DEGILDIR ...`
+> **Exit davranışı bilerek DEĞİŞMEDİ** (bozuk/yabancı girdi hiçbir aracı bloklamamalı) —
+> değişen tek şey ayırt edilebilirlik. Artık `0` görünce stderr'e bak: **not varsa ölçümün
+> geçersizdir** (payload hiç okunmadı), **not yoksa gerçekten meşru serbesttir.**
+>
+> - **Not DAİMA stderr'e gider.** Hook'ların bir kısmı stdout'a JSON sözleşmesi basar ve
+>   harness onu parse eder → stdout'a tek bayt sızıntı sözleşmeyi kırar. Fixture bunu
+>   bayt düzeyinde ölçer (V14/V15).
+> - **Not ASCII'dir.** Bazı hook'larda stderr'in utf-8 sarmalayıcısı win32'ye koşulludur;
+>   Türkçe harf cp1252/locale'de `UnicodeEncodeError` → **exit 1** üretip fail-safe'i bozardı.
+> - **Ortak yardımcıya bağlanMADI, her hook'ta yerel.** Ölçüldü: `hook_shim` hook'ları
+>   `runpy.run_path` ile AYNI SÜREÇTE koşturur → `sys.path[0]` `''` olur ve kardeş-modül
+>   importu **canlı kablolamada patlar** (doğrudan çağrıda çalışır → sahte-yeşil). Tek
+>   kaynak, kod paylaşımıyla değil **fixture sözleşmesiyle** korunur (V13/V16).
+> - **KAPSAM DIŞI (bilinçli, 2 hook):** `pre_compact` · `tooling_radar_check` — stdin yalnız
+>   boşaltılır, hiçbir karara girmez → parse-fail'de kaybolan bir şey yok. Bunlar fixture'ın
+>   **iç kontrol grubudur** (not BASMAMALI).
+> - **Gösterim harness'a bağlıdır:** stderr'in kullanıcıya nasıl gösterildiği iddia EDİLMEZ;
+>   sözleşme yalnız **stderr'de notun varlığıdır.**
+> - Yeni bir stdin-okuyan hook eklersen: notu ekle **ve** fixture'daki `HOOK_KAYDI`'na yaz —
+>   yazmazsan `V16 KAYIT TAMLIGI` düşer (sınıf sessizce yeniden büyüyemez).
 
 - **Kök tuzak:** elle yazılan `\\` kabuğa **tek `\`** olarak ulaşır → JSON'da geçersiz escape →
   parse-fail → 0. Ölçüm 2026-08-13 (aynı payload, tek fark yol biçimi): `\\`→**0** · `/`→**2 BLOK** ·

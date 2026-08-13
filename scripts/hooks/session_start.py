@@ -249,10 +249,28 @@ def _inspector() -> list[str]:
         return []
 
 
+def _parse_fail_notu() -> None:
+    """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
+
+    Bu hook bos sozlukle DEVAM eder ama seans MARKER'i session_id'siz yazilir —
+    tazelik/seans zincirine (pull_before_edit, intake_triage) sessizce yansir.
+    Gerekce + sinif kaydi: scripts/hooks/README.md S4. Not STDERR'e gider: bu hook'un
+    STDOUT'u harness tarafindan JSON olarak PARSE edilir, kirletilemez.
+    """
+    try:
+        sys.stderr.write(
+            "[session_start] GIRDI-PARSE-EDILEMEDI: stdin JSON okunamadi -> BOS girdiyle "
+            "devam (degrade, exit 0); seans marker'i session_id'siz. "
+            "Negatif-test: governance/infra-test-recipes.md B0b\n")
+    except Exception:
+        pass
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
     except Exception:
+        _parse_fail_notu()
         data = {}
     _write_session_marker(data if isinstance(data, dict) else {})
 

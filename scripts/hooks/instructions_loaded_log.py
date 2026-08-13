@@ -108,10 +108,26 @@ def _append(log: Path, satir: str) -> None:
         os.close(fd)
 
 
+def _parse_fail_notu() -> None:
+    """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
+
+    Gerekce + sinif kaydi: scripts/hooks/README.md S4. ASCII-only + yazma hatasi
+    fail-safe'i BOZMAMALI (except: pass).
+    """
+    try:
+        sys.stderr.write(
+            "[instructions_loaded_log] GIRDI-PARSE-EDILEMEDI: stdin JSON okunamadi -> "
+            "fail-safe SERBEST (exit 0); KARAR DEGILDIR (girdi hic okunamadi). "
+            "Negatif-test: governance/infra-test-recipes.md B0b\n")
+    except Exception:
+        pass
+
+
 def main() -> int:
     try:
         veri = json.load(sys.stdin)
     except Exception:
+        _parse_fail_notu()
         return 0  # hiçbir zaman bloklamaz
 
     kok = Path(os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd()))

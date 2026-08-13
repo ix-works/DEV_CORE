@@ -61,10 +61,27 @@ def _brifing_lint(data):
         pass
     return None
 
+def _parse_fail_notu() -> None:
+    """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
+
+    Bos sozlukle devam edilir ve seans kimligi 'nosid'e duser -> watchdog YANLIS
+    anahtarla acilir. Gerekce + sinif kaydi: scripts/hooks/README.md S4.
+    Not STDERR'e gider: bu hook'un STDOUT'u JSON sozlesmesidir.
+    """
+    try:
+        sys.stderr.write(
+            "[watchdog_launch] GIRDI-PARSE-EDILEMEDI: stdin JSON okunamadi -> BOS girdiyle "
+            "devam (degrade, exit 0); seans kimligi 'nosid'e duser. "
+            "Negatif-test: governance/infra-test-recipes.md B0b\n")
+    except Exception:
+        pass
+
+
 def main():
     try:
         data = json.load(sys.stdin)
     except Exception:
+        _parse_fail_notu()
         data = {}
     sid = str(data.get("session_id", "nosid")).replace("/", "_").replace("\\", "_")[:64] or "nosid"
     proj = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()

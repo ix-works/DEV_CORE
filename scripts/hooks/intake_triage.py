@@ -115,12 +115,28 @@ _MODULES = [
 _HAZIR_PAKETLER = {"sd"}
 
 
+def _parse_fail_notu() -> None:
+    """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
+
+    Gerekce + sinif kaydi: scripts/hooks/README.md S4. ASCII-only + yazma hatasi
+    fail-safe'i BOZMAMALI (except: pass).
+    """
+    try:
+        sys.stderr.write(
+            "[intake_triage] GIRDI-PARSE-EDILEMEDI: stdin JSON okunamadi -> fail-safe "
+            "SERBEST (exit 0); KARAR DEGILDIR (girdi hic okunamadi). "
+            "Negatif-test: governance/infra-test-recipes.md B0b\n")
+    except Exception:
+        pass
+
+
 def main() -> int:
     try:
         # stdin'i HAM byte olarak UTF-8 decode et — Windows'ta sys.stdin cp1252'ye düşüp
         # Türkçe karakterli prompt'ları ('satış','geliştir') bozar → regex kaçırır (smoke-test bulgusu).
         data = json.loads(sys.stdin.buffer.read().decode("utf-8", errors="replace"))
     except Exception:
+        _parse_fail_notu()
         return 0
     prompt = data.get("prompt", "") or ""
 

@@ -39,10 +39,28 @@ def _duz_metin(obj) -> str:
     return ham.replace("\\\\", "/").replace("\\", "/")
 
 
+def _parse_fail_notu() -> None:
+    """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
+
+    Bu hook bos sozlukle DEVAM eder: tespit tamamen payload'a dayandigi icin
+    parse-fail sessizce "degisiklik yok" gibi okunuyordu.
+    Gerekce + sinif kaydi: scripts/hooks/README.md S4. ASCII-only + yazma hatasi
+    fail-safe'i BOZMAMALI (except: pass).
+    """
+    try:
+        sys.stderr.write(
+            "[config_change_guard] GIRDI-PARSE-EDILEMEDI: stdin JSON okunamadi -> BOS "
+            "girdiyle devam (degrade, exit 0); KARAR DEGILDIR (girdi hic okunamadi). "
+            "Negatif-test: governance/infra-test-recipes.md B0b\n")
+    except Exception:
+        pass
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
     except Exception:
+        _parse_fail_notu()
         data = {}
     metin = _duz_metin(data)
     hit = _YUZEY.search(metin)

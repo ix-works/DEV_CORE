@@ -123,10 +123,27 @@ def _is_fresh(session_id: str, obj: str) -> bool:
     return obj in (store.get("objects") or {})
 
 
+def _parse_fail_notu() -> None:
+    """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
+
+    Gerekce + sinif kaydi: scripts/hooks/README.md S4. ASCII-only yazilir (stderr'in
+    utf-8 sarmalayicisi bu dosyada win32'ye kosulludur). Yazma hatasi fail-safe'i
+    BOZMAMALI -> except: pass.
+    """
+    try:
+        sys.stderr.write(
+            "[pull_before_edit] GIRDI-PARSE-EDILEMEDI: stdin JSON okunamadi -> fail-safe "
+            "SERBEST (exit 0); KARAR DEGILDIR (girdi hic okunamadi). "
+            "Negatif-test: governance/infra-test-recipes.md B0b\n")
+    except Exception:
+        pass
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
     except Exception:
+        _parse_fail_notu()
         return 0   # input parse edilemedi → fail-safe geç
 
     # Savunmacı indirgeme (2026-08-01 bug-avı, W2-VH-02). ÖLÇÜLDÜ: 10 bozuk payload'ın

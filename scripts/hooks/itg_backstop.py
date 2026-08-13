@@ -66,10 +66,26 @@ _ITG_METIN = (
 )
 
 
+def _parse_fail_notu() -> None:
+    """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
+
+    Gerekce + sinif kaydi: scripts/hooks/README.md S4. ASCII-only + yazma hatasi
+    fail-safe'i BOZMAMALI (except: pass).
+    """
+    try:
+        sys.stderr.write(
+            "[itg_backstop] GIRDI-PARSE-EDILEMEDI: stdin JSON okunamadi -> fail-safe "
+            "SERBEST (exit 0); KARAR DEGILDIR (girdi hic okunamadi). "
+            "Negatif-test: governance/infra-test-recipes.md B0b\n")
+    except Exception:
+        pass
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
     except Exception:
+        _parse_fail_notu()
         return 0
     tool = data.get("tool_name", "") or ""
 
