@@ -126,13 +126,26 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
 
 > **Asıl ders (T10):** Tanıdık olmayan üretim/araç görevinde **önce kanıtlı yöntemi araştır**, sonra tek seferde uygula. Kaynak hatasını araç hatası sanma. Bkz. [[feedback_arastir-once-patinaj-uretim-gorev]].
 
-> **İkinci ders — TERFİ EDİLMEMİŞ BİLGİ TEKRAR EDER (2026-08-13).**
-> `prior-art: KISMEN` — `toc`+`slug_tr` deseni **beş proje-lokal üretici script'inde ÇALIŞIR
-> hâlde vardı**, ama ne bu howto'da, ne standartta, ne checklist'te yazılıydı. Yeni bir
-> doküman üretilirken **`toc`suz kardeş script kopyalandı** ve kusur yeniden doğdu — üstelik
-> sessiz olduğu için aylarca fark edilmedi. Bir desenin repoda çalışıyor olması onu **kural
-> yapmaz**; kural olmayan desen kopyalanmaz, **kopyalanan rastgele olur.** Bu yüzden fix üç
-> katmana birden yazıldı: üretici (kod) · bu howto (yöntem) · `doc-checklist` DOC-KD-16 (denetim).
+> **İkinci ders — BAYRAK İCRA DEĞİLDİR; BAYRAK KANONİK YERDE YAŞAMALI (2026-08-13).**
+> `prior-art: **BULUNDU**` — bu kusur **altı gün önce zaten teşhis edilmişti.** Bir doküman
+> turunda `toc` eksikliği bulunmuş, **5 üretici script'inde düzeltilmiş**, ve o turun kaydı
+> şunu aynen yazmıştı: *"kalan 11 build script'i yol-fix aldı ama `toc` fix'i **ALMADI**,
+> koşulmadı (işaretli)."* Yani kalan script'lerin kırık olduğu **biliniyordu ve yazılmıştı.**
+>
+> Kusur yine de kullanıcıya ulaştı. Sebep bilgi eksikliği DEĞİL, **iki ayrı boşluk**:
+> ① **Bayrak icra edilmedi** — "işaretli" denip bırakıldı ([[feedback_flag-degil-icra-bekleyen-is-kapat]]).
+> ② **Bayrak kanonik olmayan bir yerde yaşadı** — bir oturum/proje notunun içinde, açık-kalem
+> register'ında (`deferred-triggers` / RESUME çapası) DEĞİL. Register'da olsaydı her oturum
+> açılışında görünürdü; not içinde kaldığı için yalnız o notu okuyan görebilirdi.
+>
+> ⛔ **Bu yüzden ÖNCE-ARA'da (KB-01) `memory` adımı ATLANAMAZ.** Bu turda arama repo + core'la
+> sınırlı tutuldu, memory'ye bakılmadı ve kayıt önce *"desen vardı ama kural değildi"* diye
+> **yanlış** yazıldı; doğru kök sebep ancak gün-sonunda memory okununca çıktı. Aynı kayıt
+> dosyasının başında **bu dersin kendisi** duruyordu: *"yazılmış ama okunmayan bulgunun bedeli
+> yeniden ödenir."*
+>
+> Fix bu yüzden üç katmana birden yazıldı — biri unutulsa diğeri tutsun: üretici (kod, artık
+> varsayılan doğru) · bu howto (yöntem) · `doc-checklist` DOC-KD-16 (her doküman turunda denetim).
 
 ---
 
