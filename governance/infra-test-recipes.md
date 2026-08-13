@@ -328,3 +328,20 @@ python scripts/inspector.py --self-test             # canary    [✓]
 - Brifing-lint 3-varyant (temiz/şablonsuz/kısa-muaf); Türkçe-FP çıkarsa ÖNCE B1-mojibake.
 - **Model beyanı ≠ fiilî:** aynı-oturum spawn oturum-modelini kullanır (tanımlar oturum-başı) → fiilî-doğrulama YENİ oturumda, transcript'ten.
 - check_settings_template_sync + check_rule_gate_coverage yeşil (çakışan checklist-no böyle yakalandı: FE-38→39).
+
+## B21 — guard TETİK sözleşmesi (`claude/workflows/guard.template.yml` + `.github/workflows/`)
+```bash
+python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
+# MUTASYON (zorunlu): şablondaki `    branches: [main]` satırını SİL → 6/9, exit 1
+```
+- **Değişmez:** `push:` DALSIZ bırakılmaz. Dalsız `push:` + `pull_request` = PR dalına atılan
+  her push'ta AYNI head SHA iki koşuda doğrulanır (2026-08-13'te 5 PR döngüsünde ölçüldü).
+- **Kontrol grubu hazır:** DEV_CORE'un kendi `core-ci.yml`'i baştan beri doğru desende →
+  fixture V6 onu okur; V6 kırmızıya dönerse fix yanlış yöne genişletilmiştir.
+- ⚠ **`import yaml` YAZMA** — repo pyyaml taşımaz (core-ci yalnız requests/urllib3/python-dotenv
+  kurar); `on:` çözümleyicisi bu yüzden elde yazılmıştır. PyYAML'lı çapraz kıyas LOKAL kanıttır.
+- ⚠ **CI YAML'ı lokalde koşturulamaz** → asıl doğrulama merge SONRASI canlıdır:
+  `gh run list --repo <ORG>/<PROJE_REPO> --workflow guard.yml` çıktısında **`ev=push br=<feature>`
+  satırı OLMAMALI**; döngü başına 2 koşu (pull_request + main-push) görülmeli.
+- ⚠ **Şablon→proje yayılımı GATE'Lİ DEĞİL:** C-TPL-01 (`check_settings_template_sync`) yalnız
+  `settings.template.json` hook envanterini denetler; `guard.yml` kopyaları ELLE senkronlanır.

@@ -115,6 +115,10 @@ OZEL_TESTLER = [
     # 2026-08-12 talimat-bakim turu (K2): C-MEM-01 olcum modeli + SKIP gorunurlugu:
     ("memory_yukleme_butcesi",
      "C-MEM-01: butce HAM bayti degil YUKLENEN govdeyi olcer (+ KOSMADI != TEMIZ)"),
+    # 2026-08-13 guard CI cift-tetik: dalsiz `push:` + `pull_request` AYNI SHA'yi iki kez
+    # dogruluyordu (PR basina 3 job israf). Fixture sablonun DOSYASINI okur (kablolama).
+    ("workflow_tetik_dupe",
+     "guard tetigi: dalsiz push + pull_request = ayni SHA iki kosuda (sablon capasi)"),
 ]
 
 
