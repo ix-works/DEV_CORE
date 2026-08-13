@@ -17,6 +17,13 @@ python scripts/inspector.py --self-test             # canary    [✓]
   **önce `git add`.** Untracked dosya ve unstaged değişiklik hiç görülmez: gate exit 0 der,
   taradığı şey senin yazdığın içerik değildir = **sahte-yeşil.** (Ölçüldü 2026-08-13, 4 vektör:
   untracked→0 · tracked-ama-unstaged→0 · her ikisi `git add` sonrası→1.)
+- ⚠ **`--all` CWD-BAĞIMLIDIR — CORE KÖKÜNDEN koş.** Proje kökünden çağrılırsa (junction'lı
+  kurulumda tipik: `python core/scripts/git-hooks/core_precommit.py --all`) taradığı ağaç
+  **projedir**; projedeki meşru Z-obje adları GENERICIZE-LEAK sanılır ve gate **on binlerce
+  sahte ihlalle** exit 1 verir. Bu bir core kusuru DEĞİL, yanlış giriş noktasıdır — ama
+  "core bozuk" diye okunur. (Ölçüldü 2026-08-13: proje kökünden `--all` → 25.960 ihlal ·
+  core kökünden aynı komut, aynı an → **exit 0**. Ayırt edici: ihlal satırları core'da **var
+  olmayan** dosya yollarını gösteriyordu.) Staged-mod (`--all`siz) cwd'den etkilenmez.
 - **Verim:** tam korpus yalnız SON durumda **1×** koşulur; ara adımlarda yalnız dokunduğun fixture.
 
 ### B0-SEÇİM — `--degisen` (ara adımlar; 2026-08-13)

@@ -106,7 +106,14 @@ open(MD, 'w', encoding='utf-8').write(md)
 md = preprocess_mermaid_fences(md, out_dir=SHOT, rel_prefix='screenshots')
 
 # 6) md -> html
-body = markdown.markdown(md, extensions=['tables', 'fenced_code', 'sane_lists'])
+# ⛔ `toc` eklentisi ZORUNLU — yoksa hicbir basliga id verilmez ve dokumandaki TUM
+#    "Icindekiler" baglantilari OLU olur (sessiz kusur: sayfa acilir, tiklama etkisiz;
+#    ne build ne tarayici uyarir). slug_tr = TR-farkindali id ureticisi: varsayilan slug
+#    Turkce harfi cevirmez SILER ("Kilavuz"->"klavuz") -> elle yazilan #kilavuz hedefsiz kalir.
+from build_doc_pdf import slug_tr  # tek kaynak (kopyalanmaz)
+
+body = markdown.markdown(md, extensions=['tables', 'fenced_code', 'sane_lists', 'toc'],
+                         extension_configs={'toc': {'slugify': slug_tr}})
 
 # 7) <p><img></p> + <p><em>cap</em></p> -> <figure><figcaption>
 body = re.sub(r'<p>(<img[^>]*?>)</p>\s*<p><em>(.*?)</em></p>',

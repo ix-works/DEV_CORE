@@ -10,6 +10,7 @@ Kullanım: python scripts/build_doc_pdf.py <girdi.md> <cikti.html> ["Doküman Ba
 import os
 import re
 import sys
+import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import markdown
@@ -71,13 +72,37 @@ def _diagram_prefix(html_path):
     return slug or "diagram"
 
 
+_TR_MAP = str.maketrans("ıİşŞğĞçÇöÖüÜ", "iisSgGcCoOuU")
+
+
+def slug_tr(value, separator="-"):
+    """TR-farkındalı başlık slug'ı — `toc` eklentisinin id üreticisi.
+
+    ⛔ NEDEN (vaka 2026-08-13): python-markdown'un VARSAYILAN slug'ı Türkçe harfleri
+    çevirmez, **siler** ("Kılavuz" → "klavuz") → elle yazılmış `[..](#kilavuz)` bağlantısı
+    hedefsiz kalır. Burada GitHub deseni uygulanır: TR harf → ASCII karşılığı, her boşluk
+    AYRI tireye (ör. "Liste / Tablo" → "liste--tablo").
+    """
+    v = value.translate(_TR_MAP)
+    v = unicodedata.normalize("NFKD", v).encode("ascii", "ignore").decode("ascii")
+    v = re.sub(r"[^\w\s-]", "", v).strip().lower()
+    return re.sub(r"\s", separator, v)
+
+
 def build(md_path, html_path, title=None, diagram_prefix=None):
     md = open(md_path, encoding="utf-8").read()
     shot_dir = os.path.join(os.path.dirname(html_path), "screenshots")
     # ```mermaid → PNG  (ad-uzayı doküman başına ayrık — bkz. _diagram_prefix)
     md = preprocess_mermaid_fences(md, out_dir=shot_dir, rel_prefix="screenshots",
                                    prefix=diagram_prefix or _diagram_prefix(html_path))
-    body = markdown.markdown(md, extensions=["tables", "fenced_code", "sane_lists"])
+    # ⛔ `toc` eklentisi ZORUNLU: olmazsa hiçbir başlığa `id` verilmez → dokümanın
+    #    "İçindekiler" bağlantılarının TAMAMI ölü olur. Kusur **sessizdir**: sayfa açılır,
+    #    görünüm doğrudur, yalnız tıklama hiçbir şey yapmaz; ne build ne tarayıcı uyarır.
+    #    (Ölçüldü 2026-08-13, `toc`suz üretilen 5 kılavuz: 139 iç bağlantının **121'i** ölü;
+    #    kalan 18'i md'ye ELLE konmuş `<a id="..">` çıpaları sayesinde çalışıyordu — yani
+    #    "toc yoksa hiçbiri çalışmaz" DEĞİL, "başlık hedefleri çalışmaz".)
+    body = markdown.markdown(md, extensions=["tables", "fenced_code", "sane_lists", "toc"],
+                             extension_configs={"toc": {"slugify": slug_tr}})
     # <p><img></p> + <p><em>cap</em></p> → <figure><figcaption>
     body = re.sub(r'<p>(<img[^>]*?>)</p>\s*<p><em>(.*?)</em></p>',
                   r'<figure>\1<figcaption>\2</figcaption></figure>', body, flags=re.S)
