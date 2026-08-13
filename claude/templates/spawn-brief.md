@@ -23,6 +23,11 @@
 - Kullan: <öncelikli araçlar/dosyalar>; `path=core/` kuralı: kökten Grep core'u GÖRMEZ (D29).
 - OKU (işe başlamadan): <ilgili playbook/checklist yolları — yalnız gerekli olanlar>
 - Efor ölçeği: basit iş ≈ 3-10 araç çağrısı; kapsamlı iş için alt-hedeflere böl.
+- **CORE/worktree'ye yazan roller:** kimlik izini (müşteri adı · sistem-ID · gerçek repo adı ·
+  SAP kullanıcı adı) **BAŞTAN placeholder yaz** (`<PROJECT_NAME>`, `<SYS>`, `<SAP_USER>`, ZSD001).
+  GENERICIZE-LEAK guard'ı içeriği **üretim BİTTİKTEN sonra** değerlendirir → bedeli düzeltme
+  değil, dosyanın **TAM yeniden-üretimidir** (ölçüldü 2026-08-13: 19,5 KB rapor ≈ 140 sn +
+  10 KB fixture ≈ 69 sn çöp). Sonradan temizlemeyi planlama; ilk yazımda placeholder kullan.
 
 ## 5. HAZIR-BAĞLAM (P6 — liderin zaten bildiği; ajan yeniden KEŞFETMESİN)
 <dosya yolları + ilgili satır bölgeleri + kısa alıntılar/özet kararlar. SAP-kaynakları için
