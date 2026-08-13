@@ -120,6 +120,12 @@ OZEL_TESTLER = [
     # dogruluyordu (PR basina 3 job israf). Fixture sablonun DOSYASINI okur (kablolama).
     ("workflow_tetik_dupe",
      "guard tetigi: dalsiz push + pull_request = ayni SHA iki kosuda (sablon capasi)"),
+    # 2026-08-13 overlay ezme-kapisinin KIYAS TABANI: kopya-simdi <-> en son URETILEN
+    # (manifest `uretilen_hash`). Eski taban "bugun uretilecek" idi -> core her degistiginde
+    # elle-duzeltme yokken de kapi kapaniyordu (kurt masali). Iki mutasyon modu tasir:
+    #   --mutasyon (taban SHA) -> P vektorleri duser · --mutasyon-gevsek -> N capalari duser.
+    ("overlay_kiyas_tabani",
+     "claude_overlay T2.5: 'core degisti' ile 'kopya elle duzeltildi' ayrisir"),
 ]
 
 

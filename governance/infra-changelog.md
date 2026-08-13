@@ -69,6 +69,47 @@ yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
 ## scripts/utils/claude_overlay.py + team_setup.py
 | 2026-08-01 | fark_raporu() + materyalize(onayli) kapısı + --overlay-onayli | Senkron elle-düzeltmeleri SESSİZCE eziyordu (B5 5-günde-yeniden-bayat vakası; R4c) | N: bayraksız koşum 4-fark listesiyle RED; P: onaylı 6-dosya; +NameError(a/args) EXPRESS-fix'i | — (koşum-kanıtları plan T2.5) | core#69 |
+| 2026-08-13 | **KIYAS TABANI kök-fix'i:** manifest'e dosya-başına `uretilen_hash` + `_uretildigi_gibi()`; `fark_raporu` artık kopya-ŞİMDİ ↔ **en son ÜRETİLEN**'i kıyaslar (eskiden "bugün üretilecek" idi) + `inspector.py` üçlü-kıyas dalındaki `except: pass` → görünür B5 bulgusu | ⚠GEVŞETME (bilinçli): eski taban "core değişti" ile "kopya elle düzeltildi"yi AYIRT EDEMİYORDU → core'da bir ajan dosyası değiştiği an, projede hiçbir elle düzeltme olmasa bile kapı kapanıyordu (kurt masalı; junction'lı tipler aynı anda bedavaya tazeleniyordu = kontrol grubu). İkinci bedel: kapı her core commit'inde bağırınca `--overlay-onayli` refleks olur ve gerçek bir elle düzeltmeyi SESSİZCE ezer — koruma kendini aşındırır | **23/23** `tests/fixtures/overlay_kiyas_tabani/run.py`; ÇİFT mutasyon: `--mutasyon` (taban **15e9a51**) → 14/20, düşenler yalnız P (V2/V2b/V5/V8/V13/V15) · `--mutasyon-gevsek` (fix'in sökümü) → 12/20, düşenler yalnız N (V3/V3b/V4/V6/V9/V10/V11/V13b) | `tests/fixtures/overlay_kiyas_tabani/` (run_fixture_tests OZEL_TESTLER'e kablolu) | — |
+
+> **2026-08-13 — GEVŞETME CETVELİ (bu satır okunmadan kapı elden geçirilmesin).**
+> **Artık GEÇEN (eskiden bloklanan):** ① core dosyası değişti + kopya bayt-bayt el değmemiş
+> ② core dosyayı SİLDİ + kopya el değmemiş **ve** manifest onu `kaynak: core` diye tanıyor
+> ③ `claude-local` override'ı değişti + kopya el değmemiş. Üçünde de kaybolan proje emeği YOK
+> (kopya, core/claude-local'in birebir üretimi) — junction davranışına eşitlendi.
+> **Hâlâ DURAN (gevşetilmedi):** kopyada herhangi bir elle düzeltme (V3) · core değişimi +
+> elle düzeltme birlikte, maskelenmez (V4) · silinen dosyanın kopyası elle düzeltilmişse (V6) ·
+> manifestin tanımadığı yabancı dosya (V7) · proje-override kopyasının elle düzeltilmesi (V9) ·
+> **`uretilen_hash` alanı olmayan ESKİ manifest → birebir eski muhafazakâr davranış (V10)** ·
+> okunamayan/bozuk manifest (V11). Kanıt yoksa gevşeme de yok: sessiz gevşetme dalı YOKTUR.
+> **Kalem-2'nin sınırı (Ş2):** gevşetme YALNIZ `kaynak: core` artıklara uzanır; `kaynak: proje`
+> dosyaları silme dalında **her durumda** kapıda kalır (V16 — aşırı-gevşek mutasyon altında
+> bile ayakta). Manifest'te kaydı olmayan dosya kanıtsızdır → aynen bloklar (V7 = Ş1).
+>
+> **TASARIM KARARI — taban neden NORMALİZE edilmedi (D7 emsali ölçüldü).** `session_start.py::
+> _anlamli_imza()` (2026-07-10) aynı sınıftan bir kurt-masalını *kıyası normalize ederek*
+> çözmüştü (ham hash → davranışsal imza; `_comment_*` ve CRLF sayılmaz). Burada aynısı
+> YAPILMADI ve sebebi kavramsaldır: D7 **iki bağımsız üretilmiş artefaktı** (proje settings ↔
+> template) kıyaslar — orada normalizasyon zorunludur. `uretilen_hash` ise dosyayı **kendi
+> kayıtlı geçmişiyle** kıyaslar; o baytları BİZ yazdık, dolayısıyla her sapma dışarıdan bir
+> dokunuşun kanıtıdır. Tabanı normalize etmek "el değmemiş"in tanımını genişletirdi = ölçülmemiş
+> EK gevşetme. İki eksen diktir ve ikisi de yerinde bırakıldı: **`_norm` = neyi kıyaslıyoruz**
+> (normalize — iki bağımsız artefakt), **taban = neye karşı** (bayt-bayt — kendi geçmişi).
+> Bedeli katmanlı emiliyor: taban tutmayınca `_norm`'lu içerik-kıyasına düşülür ve saf CRLF
+> gürültüsü orada yutulur (V18); CRLF + kaynak değişimi birlikte gelirse muhafazakâr davranır
+> (V19, bilinen sınır — yönü güvenli: bloklar, ezmez).
+>
+> ⚠ **Yayılım (ÖLÇÜLDÜ, varsayım değil):** canlı manifestler bu alanı taşımaz → fix ancak
+> projede bir kez `team_setup.py` koştuktan SONRA etkilidir. Gerçek canlı şekil (7 ajan,
+> 1 proje-override, alansız manifest) sandbox'a kopyalanıp ölçüldü: **bayraksız** koşum fark
+> ÜRETMEDİ (`[]`), geçti ve **7/7** dosyayı damgaladı; damgadan sonra core değişimi artık
+> kapıyı kapatmıyor (fark=0, bayraksız üretim True). Yani yayılım adımı **tek bir bayraksız
+> `team_setup.py`**'dir — `--overlay-onayli` GEREKMEZ.
+> **Kapsam sınırı:** bu fix, "fark yoksa senkron kendiliğinden tazelesin" otomatiğini *mümkün
+> ve güvenli* kılar ama onu İÇERMEZ — `.claude/agents`'ı istenmeden yeniden üretmek bir
+> davranış-yüzeyi kararıdır ⇒ AYRI karar, kullanıcı onayına bağlı (bu turda YAPILMADI).
+> **Bugünkü canlı etki 1 proje:** ölçüldü (2026-08-13) — `agents` gerçek dizin yalnız bir
+> projede; diğer iki proje kökünde 4/4 tip junction ve `claude-local` yok ⇒ overlay kodu
+> orada hiç çalışmıyor. Etki alanı: o proje + `claude-local` ekleyen her gelecek proje.
 
 ## scripts/hooks/watchdog_launch.py (brifing-lint)
 | 2026-08-01 | R2-şablon izi nudge'ı (≥400kr, 2-iz, bloklamaz) + NFKD-katlama + debug-log | Şablonsuz-brifing sessiz-kayıp sınıfı; İLK canlı ateşlemede FP çıktı → kök mojibake'ydi (yukarı bkz) — FP-bütçesi ilkesiyle önce teşhis-logu eklendi | P/N: temiz/kötü/kısa-muaf 3-varyant | sentetik-payload | core#69+#71 |

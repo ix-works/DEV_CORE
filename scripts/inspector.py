@@ -248,8 +248,12 @@ def b5_core_baglantisi(proj: Path, core: Path) -> list[Bulgu]:
             for fark in _ov.fark_raporu(proj, core, ad):
                 b.append(Bulgu("B5", f"OVERLAY SAPMA (üçlü-kıyas): {fark}",
                                "terfi/claude-local kararı ver → team_setup --overlay-onayli"))
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            # ⚠ 2026-08-13: burası `pass` idi. Modül core kökünden import edilir; yol/ad
+            # değişirse üçlü-kıyas SESSİZCE hiç koşmaz ve rapor "sapma yok" gibi okunur.
+            # KOŞMADI ≠ TEMİZ → sessiz kaybı görünür bulguya çevir.
+            b.append(Bulgu("B5", f"OVERLAY üçlü-kıyas KOŞAMADI ({ad}) — sapma denetimi YAPILMADI",
+                           f"{type(exc).__name__}: {exc}"))
         if core_d.is_dir():
             eksik = [f.name for f in core_d.glob("*.md") if f.name not in m]
             if eksik:

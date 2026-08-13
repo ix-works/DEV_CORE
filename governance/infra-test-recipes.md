@@ -190,6 +190,38 @@ python scripts/inspector.py --self-test             # canary    [✓]
   sürümde AttributeError → koşucu çöker → mutasyon **0 FAIL** gösterir ("çökme ≠ FAIL").
 
 ## B12 — claude_overlay + team_setup + init_project
+- **KIYAS TABANI (2026-08-13, en güçlü kapı testi):** `python tests/fixtures/overlay_kiyas_tabani/run.py`
+  → 23/23, exit 0. Değişmez: `fark_raporu` **kopya-ŞİMDİ ↔ en son ÜRETİLEN**'i (manifest
+  `uretilen_hash`) kıyaslar — "bugün üretilecek içerik"le DEĞİL. Aksi hâlde core'un her
+  commit'i, elle düzeltme sıfırken bile kapıyı kapatır (kurt masalı → `--overlay-onayli`
+  refleksi → gate kendi koruduğu şeyi ezer).
+  ⚠ **Çapaları SİLME:** V3/V4/V6/V7/V9 (elle düzeltme her biçimde DURDURUR) omurgadır;
+  V10/V11 **geriye-uyum** çapasıdır (`uretilen_hash`siz veya bozuk manifest → birebir ESKİ
+  muhafazakâr davranış; kanıt yoksa gevşeme de yok). K16/K16b/K16c inspector KABLOLAMASI'dır:
+  core-bayatlığı TEK bulgu · elle düzeltme hâlâ görünür · **modül import edilemezse SESSİZ
+  değil görünür bulgu** (o dal 2026-08-13'e kadar `except: pass` idi — KOŞMADI ≠ TEMİZ).
+  ⚠ Fixture'ın sandbox core'u `scripts/utils/claude_overlay.py` iskeletini TAŞIMALI: inspector
+  modülü kendisine verilen core kökünden import eder; iskelet yoksa dal hiç koşmaz ve K16b
+  **sahte-KIRMIZI** verir (ilk koşumda tam bu oldu). Aynı sınıf: modülü bir kez import ettikten
+  sonra dosyayı silmek import'u bozmaz (sys.modules) → K16c önce önbelleği boşaltır.
+  ⚠ ÇİFT mutasyon şart (fix eskiyi KORUYUP yeni davranış EKLEDİ; tek mutasyon yarısını sınamaz):
+  `--mutasyon` (taban **15e9a51**, ⛔ dal adı değil) → P düşer · `--mutasyon-gevsek` → N düşer.
+  ⛔ **ÇIKIŞ KODU SÖZLEŞMESİ — iki modda 0'ın ANLAMI FARKLIDIR** (bu evin `exit 0 ≠ kanıt`
+  tuzağı): *normal modda* `0`=tüm vektörler geçti · `1`=en az bir vektör düştü · `2`=alet
+  geçersiz (taban alınamadı / mutasyon çapası tutmadı / iki mod birden) — hiçbir sayı basılmaz.
+  *Mutasyon modlarında* `0` = **ölçüm GEÇERLİ**, "düşen yok" DEMEK DEĞİLDİR (düşmek zaten
+  beklenen sonuçtur) → kararı `N/M OK` satırından ve hangi vektörün düştüğünden oku, exit'ten
+  DEĞİL. `2` her iki modda da aynı: ölçüm yapılamadı.
+  ⚠ Ş2 çapası **V16**: `kaynak: proje` dosyası silme dalında HER DURUMDA kapıda kalır —
+  gevşetme yalnız core-üretimi artıklara uzanır (V16 **her iki mutasyonda da ayakta**, yani
+  aşırı-gevşek taban altında bile korunuyor). **V17** üçüncü vaka sınıfının çapasıdır
+  ("üretilmiş + bilinçli ÖZELLEŞTİRİLMİŞ", emsal `.github/CODEOWNERS`+`<OWNER_TEAM>`):
+  overlay'de özelleştirmenin AYRI doğruluk-kaynağı (`claude-local/`) olduğu için beklenen
+  içerik zaten özelleştirilmiş içeriktir → drift sanılmaz, normalizasyona ihtiyaç YOK.
+  **V18/V19** normalizasyon sınırını kilitler: taban BAYT-BAYT'tır (kasıtlı — o baytları biz
+  yazdık, sapma dışarıdan dokunuş kanıtıdır); saf CRLF gürültüsü bir alt katmanda `_norm`'lu
+  içerik-kıyasında emilir (V18), CRLF + kaynak değişimi birlikte gelirse muhafazakâr davranır
+  ve `durum()` CRLF'i ayrıca raporlar (V19 = bilinen sınır, yönü güvenli).
 - Bayraksız senkron → fark-listesiyle **RED**; yalnız `--overlay-onayli` ezer.
 - FORMAT-GATE: her .md `---` ile başlar + CRLF-yok + name-parse + damga-frontmatter-SONRA ("sayı ≠ yüklenebilirlik" — 6/6 düşüş vakası).
 - Drift: core-değişti→WARN · yeni-agent→EKSİK · temiz→PASS.
