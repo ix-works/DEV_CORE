@@ -42,6 +42,11 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
    canlı `~/.claude/...` dizinine ASLA yazma — memory kendi git'indedir; brifte verilen **branch**
    üzerinde çalış, lider diff okuyup merge eder. Kanıt dörtlüsü (delta + birleşim-hash +
    validators + ertesi-oturum InstructionsLoaded) raporunda zorunlu.
+6. **PLACEHOLDER-ÖNCE (2026-08-13):** Core/worktree'ye yazdığın her dosyada kimlik izini
+   (müşteri · sistem-ID · repo adı · SAP kullanıcı adı) **ilk yazımda** placeholder yaz.
+   GENERICIZE-LEAK guard'ı içeriği üretim BİTTİKTEN sonra değerlendirir → bedeli düzeltme
+   değil **tam yeniden-üretimdir** (ölçüldü 2026-08-13: 19,5 KB ≈ 140 sn + 10 KB ≈ 69 sn
+   çöp). "Sonra temizlerim" bir plan değildir.
 
 ## ZORUNLU BEŞLİ+F0 (her fix-seansı; raporda ayrı başlıklarla)
 - **F0 GEÇMİŞ-OKUMA (fix'e başlamadan ÖNCE):** `governance/infra-changelog.md` + `governance/infra-test-recipes.md`'de

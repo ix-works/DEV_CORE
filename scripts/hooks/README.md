@@ -79,6 +79,26 @@ echo '{"prompt":"ZSD001 icin ALV report yaz"}' | python scripts/hooks/skill_inje
 echo '{}' | python scripts/hooks/session_start.py
 
 # pre_tool_guard: transport-create denemesi exit 2 + reason dönmeli
+#   payload'i DOSYAYA yaz, yonlendir:  python scripts/hooks/pre_tool_guard.py < payload.json
 ```
 
 Hook eklediğinde/değiştirdiğinde **mutlaka** bu şekilde elle çalıştır (sessiz bozulma = güvence kaybı).
+
+### ⛔ `exit 0` "serbest" DEMEK DEĞİLDİR — negatif testin en sık sahte sonucu
+
+Stdin'den JSON okuyan hook'lar **bozuk girdide de 0 döner** (`json.load` → `except: return 0`;
+"yabancı girdi serbest" bilinçli fail-safe'i). Dolayısıyla *"guard geçirdi"* ile *"guard payload'ı
+hiç okuyamadı"* **ayırt edilemez** — ve ikincisi "guard bypass edildi" diye raporlanır.
+
+- **Kök tuzak:** elle yazılan `\\` kabuğa **tek `\`** olarak ulaşır → JSON'da geçersiz escape →
+  parse-fail → 0. Ölçüm 2026-08-13 (aynı payload, tek fark yol biçimi): `\\`→**0** · `/`→**2 BLOK** ·
+  `\\\\`→**2** · byte-tam `\\` dosyadan→**2**.
+- **Yap:** yolları `/` ile yaz **veya** payload'ı `json.dumps` ile dosyaya ürettirip `<` ile ver.
+- **Pozitif kontrol ZORUNLU:** aynı harness'ta bloklaması bilinen bir payload da koş; o da 0
+  dönüyorsa ölçtüğün şey guard değil **harness'ındır**.
+- 🔴 **Hiçbir boru harness'ına güvenme — güvenilirliği ORTAM-BAĞIMLI** (2026-08-13, iki zıt
+  ölçüm: bir koşumda PS borusu exit 2 / kabuk borusu 2; diğerinde PS borusu 0 / kabuk borusu
+  **255 = taşıyıcı hiç koşmadı**). Ne "PS bozuk" ne "PS sağlam" genellenebilir; `printf`e geçmek
+  de kurtarmaz. **Yap:** payload'ı dosyaya yaz + `<` ile ver + pozitif kontrol; taşıyıcının
+  koştuğunu doğrula (255 / "command not found" bir guard sonucu DEĞİLDİR).
+  Reçete: `governance/infra-test-recipes.md` **B0b**.

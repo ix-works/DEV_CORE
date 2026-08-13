@@ -13,12 +13,43 @@ python scripts/git-hooks/core_precommit.py --all
 python tests/run_fixture_tests.py                   # G1 10/10  [✓]
 python scripts/inspector.py --self-test             # canary    [✓]
 ```
+- ⚠ **`--all` INDEX'i tarar, çalışma ağacını DEĞİL** (`git ls-files` + `git show :<yol>`) →
+  **önce `git add`.** Untracked dosya ve unstaged değişiklik hiç görülmez: gate exit 0 der,
+  taradığı şey senin yazdığın içerik değildir = **sahte-yeşil.** (Ölçüldü 2026-08-13, 4 vektör:
+  untracked→0 · tracked-ama-unstaged→0 · her ikisi `git add` sonrası→1.)
+- **Verim:** tam korpus yalnız SON durumda **1×** koşulur; ara adımlarda yalnız dokunduğun fixture.
+
+## B0b — NEGATİF TEST HARNESS'I (hook'a sentetik payload verirken)
+> Geçerlidir: `pre_tool_guard` · `pull_before_edit` · stdin'den JSON okuyan HER hook.
+- ⛔ **`exit 0` "serbest" DEMEK DEĞİLDİR.** Hook'lar bozuk/yabancı girdide de **0** döner
+  (`json.load` → `except: return 0`, bilinçli fail-safe). Yani *"guard bu payload'ı geçirdi"*
+  ile *"guard payload'ı hiç okuyamadı"* AYNI çıktıyı verir. 0 gördüğünde **önce payload'ın
+  PARSE edildiğini kanıtla** — stderr'de blok mesajı yoksa ölçümün geçersiz olabilir.
+- **Kök tuzak: elle yazılan `\\` kabuğa TEK `\` olarak ulaşır** → JSON'da geçersiz escape
+  (`Invalid \escape`) → parse-fail → 0. Ölçüldü 2026-08-13 (aynı payload, tek fark yol biçimi):
+  `\\`→**0** · `/`→**2 BLOK** · `\\\\`→**2** · byte-tam `\\` dosyadan→**2**.
+- ✅ **Güvenli yollar:** yolları **`/` ile yaz** (Windows'ta `Path` çözer) · VEYA payload'ı
+  **program üretsin** (`json.dumps` → dosya) ve `< payload.json` ile ver.
+- ✅ **Pozitif kontrol ZORUNLU (PATTERN #19):** aynı harness'ta **bloklaması bilinen** bir
+  payload koş; o da 0 dönüyorsa ölçtüğün şey guard değil, harness'ındır.
+- 🔴 **BORU HARNESS'I ORTAM-BAĞIMLIDIR — hiçbirine güvenme (2026-08-13, İKİ ZIT ÖLÇÜM):**
+  aynı worktree/aynı makine, farklı süreç-zinciri → bir koşumda PS borusu **exit 2**
+  (3 payload) ve kabuk borusu **2**; diğer koşumda PS borusu **0**, kabuk borusu **255**
+  (taşıyıcı hiç koşmamış: `cat` yok). ⇒ "PS pipe bozuk" da "PS pipe sağlam" da
+  GENELLENEMEZ. Tek güvenilir yol: **payload'ı dosyaya yaz + `<` ile ver + pozitif kontrol.**
+  `printf`e geçmek de kurtarmaz — kabuk kadar **payload'daki backslash** da belirleyicidir;
+  suçlamadan önce payload'ı `od -c`/`cat -A` ile GÖR ve taşıyıcının KOŞTUĞUNU doğrula
+  (255 / "command not found" = guard sonucu DEĞİL).
+- Korpus: `python tests/fixtures/negatif_test_harness/run.py` → **11/11** · `--mutasyon` → **6/11**.
+  ⚠ Korpus taşıyıcı exit'lerini BASAR ama EŞİTLİĞİNİ assert ETMEZ (ortam-bağımlı); sözleşme
+  yalnız **referans taşıyıcıda** (doğrudan stdin) ölçülür: *imza VAR ⇔ exit 2*.
 
 ## B1 — hook_shim (proje-tarafında yaşar!)
 - Konum-uyarısı: shim DEV_CORE'da YOK — `<proje>/scripts/hook_shim.py`; test proje-kökünden.
 - Mojibake-regresyonu: `printf '%s' '{"prompt":"GÖREV: şu ekrana kolon ekleyelim"}' | python scripts/hook_shim.py intake_triage` → çıktıda `GÖREV` doğru (GA–REV = stdin-reconfigure geriledi).
 - Fail-closed değişmezi: junction-kopukken bloklayıcı hook → **exit 2** (1 değil).
 - **`printf` kullan, `echo` KULLANMA** — echo backslash bozar → JSON-fail → fail-safe-0 → "geçti" sanılır (5d6b90d'nin yaşadığı tuzak).
+  ⚠ **`printf` TEK BAŞINA YETMEZ** (ölçüldü 2026-08-13): elle yazılan `\\` kabuğa zaten tek `\` olarak ulaşır → printf onu sadakatle basar → yine parse-fail/0. Belirleyici olan kabuk değil **payload'daki backslash** — bkz. **B0b**.
 
 ## B2 — pre_tool_guard
 - Pozitif-kontrol (guard yaşıyor mu; PATTERN#19): hedefsiz `gh pr create` payload'ı → **exit 2** `[✓]`; `gh pr list --repo ...` → exit 0 `[✓]`.

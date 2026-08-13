@@ -340,7 +340,7 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 > **Yasağın kendisi DURUYOR** (dondurulmuş köke yazma yok, junction'ı silme yok) — ama
 > *disiplin + OS izni* ile, **runtime guard ile DEĞİL.** Kaldırılmış bir kuralı "aktif gate"
 > diye yazmak = sahte koruma; gate listesine kural eklemeden önce guard'ı sentetik payload'la
-> NEGATİF TEST et (`echo '{"tool_name":...}' | python core/scripts/hooks/pre_tool_guard.py` → 2=blok, 0=serbest).
+> NEGATİF TEST et (`python core/scripts/hooks/pre_tool_guard.py < payload.json` → 2=blok). ⚠ **exit 0 ≠ serbest** — bozuk JSON da 0 döner (fail-safe): yolları `/` ile yaz (elle yazılan `\\` kabuğa tek `\` iner = geçersiz escape), BLOK MESAJINI gör ve bloklaması bilinen bir payload'la pozitif kontrol koş; yoksa ölçüm sahte-yeşildir (reçete: `governance/infra-test-recipes.md` B0b).
 
 Tek komut: `python core/scripts/validators/run_all_validators.py` (core + proje `validators-local/` birlikte; profil-modlu).
 ⚠ **Always-allow YASAĞI (D32):** SAP-yazma ve davranış-yüzeyi araçlarına "Always allow" izni VERİLMEZ — izin katmanı hook-safeguard'ları soyar.
