@@ -20,6 +20,11 @@ GÜVENLİK: `.claude/{agents,skills,commands}/` zaten `.gitignore`'da (R1 sızı
 DRIFT: overlay manifest'i, override edilen her dosyanın **core'daki hash'ini** saklar.
 Core güncellenince `check_claude_overlay` uyarır: "core değişti, overlay'i gözden geçir".
 Böylece overlay sessizce bayatlamaz.
+
+EZME KAPISI (T2.5) ayrı bir sorudur ve ayrı bir tabanı vardır: manifest her dosyanın
+**üretildiği andaki hash'ini** (`uretilen_hash`) de saklar. `fark_raporu` kopyanın
+ŞİMDİKİ hâlini bununla kıyaslar → "core değişti" ile "kopya elle düzeltildi" ayrışır.
+(2026-08-13 kök-fix'i; gerekçe `fark_raporu` docstring'inde.)
 """
 from __future__ import annotations
 
@@ -104,27 +109,70 @@ def _norm(icerik: str) -> str:
     return "\n".join(satirlar).strip()
 
 
+def _manifest_dosyalari(h: Path) -> dict:
+    """`.overlay-manifest.json` → {ad: kayit}. Okunamazsa BOŞ (kanıt yok = muhafazakâr dal)."""
+    try:
+        return json.loads((h / MANIFEST_ADI).read_text(encoding="utf-8")).get("dosyalar", {})
+    except Exception:
+        return {}
+
+
+def _uretildigi_gibi(mevcut: Path, kayit) -> bool:
+    """Kopya, EN SON ÜRETİLDİĞİ hâlde mi (bayt-bayt)?
+
+    Bu, fark kıyasının TABANIDIR. `uretilen_hash` yoksa (2026-08-13 öncesi manifest)
+    kanıt da yoktur → False döner ve çağıran bugünkü muhafazakâr içerik-kıyasına düşer.
+    Sessiz gevşeme olmaz: eski manifestli projeler birebir eski davranışı görür.
+    """
+    beklenen = (kayit or {}).get("uretilen_hash")
+    if not beklenen:
+        return False
+    try:
+        return _hash(mevcut) == beklenen
+    except OSError:
+        return False
+
+
 def fark_raporu(proje: Path, core_root: Path, tip: str) -> list:
-    """T2.5 (2026-07-31): senkron ÖNCESİ fark raporu — mevcut `.claude/<tip>` dosyaları
-    üretilecek içerikten (core+overlay) sapıyorsa listeler. Amaç: elle yapılmış proje
-    düzeltmelerinin senkronda SESSİZCE ezilmesini önlemek (B5 vakasının kök ilacı).
-    Boş liste = güvenli; dolu liste = önce terfi/claude-local kararı ver."""
+    """T2.5 (2026-07-31): senkron ÖNCESİ fark raporu — senkronun EZECEĞİ proje emeği
+    var mı? Boş liste = güvenli; dolu liste = önce terfi/claude-local kararı ver.
+
+    KIYAS TABANI = kopya-ŞİMDİ ↔ en son ÜRETİLEN (manifest `uretilen_hash`).
+    ⚠ 2026-08-13 kök-fix'i: taban eskiden "bugün üretilecek içerik"ti. O taban, ELLE
+    DÜZELTME ile CORE GÜNCELLEMESİNİ ayırt edemiyordu → core'da bir ajan dosyası
+    değiştiği an, projede hiçbir elle düzeltme olmasa bile kapı kapanıyordu (kurt
+    masalı). Bedeli iki katmanlıydı: (a) junction'lı tipler bedavaya tazelenirken
+    overlay'li tip her core commit'inde tören istiyordu; (b) `--overlay-onayli` refleks
+    hâline gelince gerçek bir elle düzeltmeyi SESSİZCE ezecekti — yani kapı kendi
+    koruduğu şeyi aşındırıyordu. Doğru soru "içerik core'dan farklı mı" değil,
+    **"kopyaya senkrondan sonra dokunuldu mu"**dur.
+    """
     h = hedef(proje, tip)
     if not h.is_dir() or _junction_mu(h):
         return []
     beklenen = _beklenen(proje, core_root, tip)
+    kayitlar = _manifest_dosyalari(h)
     farklar = []
     for ad, (kaynak, _ch) in beklenen.items():
         mevcut = h / ad
         if not mevcut.is_file():
             continue  # yeni dosya — ezme değil ekleme
+        if _uretildigi_gibi(mevcut, kayitlar.get(ad)):
+            continue  # el değmemiş üretim artığı: kaynak değişmiş olabilir, KAYIP yok
         if _norm(mevcut.read_text(encoding="utf-8", errors="replace")) != \
            _norm(kaynak.read_text(encoding="utf-8", errors="replace")):
             farklar.append(f"{tip}/{ad}: mevcut kopya, üretilecek içerikten FARKLI "
                            f"(elle düzeltme olabilir → önce core'a terfi ya da claude-local'e al)")
     for f in sorted(h.glob("*.md")):
-        if f.name not in beklenen:
-            farklar.append(f"{tip}/{f.name}: üretim kümesinde YOK — senkronda SİLİNİR")
+        if f.name in beklenen:
+            continue
+        # Aynı sınıfın ikinci yüzü: core bir dosyayı SİLDİYSE, el değmemiş kopyanın
+        # silinmesi zaten doğru sonuçtur (junction'da bedavaya olur). Yalnız manifest
+        # onu core-üretimi diye tanıyor VE bayt-bayt el değmemişse sessizce geç.
+        kayit = kayitlar.get(f.name) or {}
+        if kayit.get("kaynak") == "core" and _uretildigi_gibi(f, kayit):
+            continue
+        farklar.append(f"{tip}/{f.name}: üretim kümesinde YOK — senkronda SİLİNİR")
     return farklar
 
 
@@ -161,6 +209,10 @@ def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) ->
         manifest["dosyalar"][ad] = {
             "kaynak": "proje" if proje_ustu else "core",
             "core_hash": core_hash,       # override edilen core dosyasının hash'i (drift için)
+            # ÜRETİLEN hâlin hash'i = fark_raporu'nun KIYAS TABANI (2026-08-13).
+            # Damga + LF normalizasyonu SONRASI, yani diskteki gerçek bayt: kıyas
+            # "yeniden üretsem ne çıkardı" tahminine değil, ölçüme dayansın.
+            "uretilen_hash": _hash(h / ad),
         }
     (h / MANIFEST_ADI).write_text(json.dumps(manifest, indent=1, ensure_ascii=False),
                                   encoding="utf-8")
