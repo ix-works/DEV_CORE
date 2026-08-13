@@ -1193,6 +1193,15 @@ Takılınca kime/nasıl başvurulur: Key User adı/iletişim, IT destek/ticket k
 - **Emir kipi**: "tıkla, gir, seç" (etken, kısa cümle).
 - ⭐ **GRID LİSTESİ VARSA BÖLÜM 4-A ZORUNLU:** Standart liste/tablo ekranı (`sap.ui.table` + TablePersonalizer, ADR 0008) içeren her uygulamada tablo başlık araçları (sıralama/filtreleme/kolonlar/varyant/Excel'e aktar/yenile + varsa filtre çubuğu) **BÖLÜM 4-A başlığı altında** anlatılır — sabit/fix bölüm, atlanmaz.
 - İçindekiler + her bölüm net başlıkla; role göre grupla.
+- ⭐ **İÇİNDEKİLER TIKLANABİLİR OLMALI — üretim ayarı ZORUNLU (MUST):** HTML/PDF üretiminde
+  `markdown.markdown(...)`'a **`toc` eklentisi + TR-farkındalı slug** verilir
+  (`extensions=[..., 'toc']`, `extension_configs={'toc': {'slugify': slug_tr}}` —
+  kanonik: `scripts/build_doc_pdf.py`). **Verilmezse başlıkların hiçbirine `id` yazılmaz ve
+  içindekilerin TAMAMI ölü bağlantı olur.** Kusur **sessizdir**: doküman açılır, yerleşim
+  kusursuzdur, üretim "OK" der — yalnız tıklama etkisizdir; ancak son kullanıcı fark eder.
+  Bitmiş saymadan önce **küme kontrolü** yapılır: her `href="#x"` için `id="x"` var mı
+  (howto §C). Denetim: doc-checklist **DOC-KD-16** · yöntem:
+  [`playbook/howto-kullanici-dokumani-pdf-ekran-goruntulu.md`](../playbook/howto-kullanici-dokumani-pdf-ekran-goruntulu.md) §B.2/§C.
 - **Her mesaj/hatanın yanında aksiyon** olsun; mesaj metnini **birebir** yaz (aranabilir).
 - Görev-bazlı ("X yapmak için: 1…2…"), "How to" odağı; başta bir **Hızlı Başlangıç**.
 - Terim sözlüğü + "Hâlâ takıldın mı? → destek" bölümü zorunlu.

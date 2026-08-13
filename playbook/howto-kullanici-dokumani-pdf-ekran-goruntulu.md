@@ -52,7 +52,21 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
 1. **Markdown KAYNAĞINI temizle** (en kritik adım):
    - **Placeholder'lar ``` kod-bloğu içindeyse**, fence **BLOĞUNUN TAMAMINI** resimle değiştir — fence İÇİNE `![](..)` koyma, **markdown kod-bloğunda resmi parse ETMEZ** (metin kalır). Regex: ```` ```…[PLACEHOLDER]…``` ```` → `![cap](src)`.
    - **Ham `<figure>` HTML KULLANMA**: `md_in_html` bozar (sadece sonuncu sağ kalır). Yerine **markdown resmi** `![cap](src)` + ardından `*cap*`; HTML üretimi SONRASI `<p><img></p>\s*<p><em>cap</em></p>` → `<figure><figcaption>` regex ile sar.
-2. `markdown.markdown(md, extensions=['tables','fenced_code','sane_lists'])`.
+2. **`markdown.markdown(...)` — `toc` eklentisi ZORUNLU, TR-farkındalı slug ile:**
+   ```python
+   from build_doc_pdf import slug_tr   # tek kaynak; kopyalama
+   body = markdown.markdown(md, extensions=['tables', 'fenced_code', 'sane_lists', 'toc'],
+                            extension_configs={'toc': {'slugify': slug_tr}})
+   ```
+   ⛔ **`toc` YOKSA hiçbir başlığa `id` verilmez → dokümanın "İçindekiler" bağlantılarının
+   TAMAMI ölür.** Kusur **sessizdir**: HTML/PDF açılır, görünüm kusursuzdur, yalnız satıra
+   tıklayınca hiçbir şey olmaz; ne build, ne tarayıcı, ne `<img>` sayımı uyarır — ancak
+   **kullanıcı** fark eder. (Ölçüldü 2026-08-13: `toc`suz üretilmiş 5 kılavuzda 121 iç
+   bağlantının 121'i ölüydü; aynı üretici ailesinin `toc`lu kardeşleri sağlamdı = kontrol grubu.)
+   ⛔ **Neden `slug_tr`:** python-markdown'un VARSAYILAN slug'ı Türkçe harfi çevirmez, **siler**
+   ("Kılavuz" → `klavuz`, "sağ panel" → `sa-panel`) → elle yazılan `#...` hedefi tutmaz.
+   `slug_tr` GitHub desenini uygular: TR harf → ASCII, her boşluk **ayrı** tireye
+   ("Liste / Tablo" → `liste--tablo`).
 3. CSS: A4 `@page`, başlık gradient-banner, tablo (th koyu/zebra), `figure img` (çerçeve+gölge+max-width:100%), `figcaption` (italik gri).
 4. **Servis et — `file://` BLOKLU** (Playwright MCP: *"Access to file: protocol is blocked"*). Çözüm: `python -m http.server <port>` `docs/` içinde → `http://localhost:<port>/<DOC>.html` (görseller `screenshots/` altında, göreli yol çözülür).
 5. **page.pdf** (`browser_run_code_unsafe`):
@@ -67,10 +81,24 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
 - page.pdf öncesi: `document.images.filter(i=>i.complete && i.naturalWidth>0).length` = beklenen.
 - Render teyidi: `figure img` `naturalWidth` **ve** `offsetWidth > 0` (yüklendi + görünür).
 - PDF boyutu mantıklı mı (resim başına ~50–100KB; ZSD001: 1 resim 460KB → 9 resim 1.06MB).
+- ⭐ **İÇİNDEKİLER BAĞLANTILARI HEDEFLİ Mİ** (sessiz kusur — göz kontrolüyle GÖRÜNMEZ):
+  HTML'deki her `href="#x"` için `id="x"` VAR mı? Sayı kıyası yeterli değil, **küme** kıyası şart.
+  ```python
+  import re; c = open(HTML, encoding='utf-8').read()
+  h = re.findall(r'href="#([^"]+)"', c); i = set(re.findall(r'\sid="([^"]+)"', c))
+  print('OLU BAGLANTI:', sorted({x for x in h if x not in i}) or 'YOK')
+  ```
+  PDF karşılığı: PDF içinde `/Subtype /Link` sayısı ≈ iç bağlantı sayısı olmalı; **0 ise**
+  PDF'te hiçbir içindekiler satırı tıklanabilir değildir. İki kusur kaynağı ayrıdır:
+  ① üretici `toc`suz (→ §B.2) · ② kaynak md'deki `#hedef` başlık metniyle uyuşmuyor
+  (başlık sonradan değişmiş / özel karakter). ②'de **href'i düzelt** — bölüm numarası öneki
+  (`4.4.7` → `#447-...`) ile doğru başlığa deterministik eşlenir, tahmin gerekmez.
 
 ## PATİNAJ TUZAKLARI — DENENEN BAŞARISIZ (tekrarlama!)
 | Belirti | Sebep | Çözüm |
 |---|---|---|
+| **İçindekiler satırına tıklanınca hiçbir şey olmuyor** (HTML *ve* PDF) | Üretici `markdown.markdown(...)`'a **`toc` eklentisi vermemiş** → başlıklarda `id` yok, `href="#x"` hedefsiz. *Sessiz:* build "OK" der, görsel sayımı doğrudur | §B.2: `toc` + `slugify=slug_tr`; sonra §C küme-kıyası ile doğrula |
+| Bağlantıların ÇOĞU çalışıyor, **birkaçı** çalışmıyor | Kaynak md'deki elle yazılmış `#hedef`, başlık metniyle uyuşmuyor (başlık sonradan uzamış, TR harf slug'lanmamış, `①`/`ⓘ` gibi işaret) | href'i bölüm-numarası önekinden doğru slug'a çevir (§C); başlığı DEĞİŞTİRME (metin kaybı riski) |
 | HTML'de figcaption var ama `<img>` yok / az | Ham `<figure>` → `md_in_html` bozdu | markdown `![](..)` + post-wrap regex |
 | Resim metin olarak çıkıyor, `<img>` olmuyor | `![](..)` ``` kod-bloğu içinde | fence **bloğunun tamamını** değiştir |
 | "Access to file: protocol is blocked" | Playwright MCP `file://` engelli | `python -m http.server` ile servis et |
@@ -84,6 +112,14 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
 | **Playwright yanlış app'e drift (çok-mock paralel)** | Çok-geliştirici/çok-app repoda aynı anda 2+ mock server + paylaşılan tarayıcı + FLP-preview launchpad reuse → tab başka porta atlıyor, `Element.registry` her iki app'i döndürüyor | İzole adlı session (`playwright-cli -s=<ad>`) + her eval'de `location.port`/component-id ASSERT + gerekiyorsa FLP-preview'siz **izole-port** mock (ZSD001/006 KD dersi) |
 
 > **Asıl ders (T10):** Tanıdık olmayan üretim/araç görevinde **önce kanıtlı yöntemi araştır**, sonra tek seferde uygula. Kaynak hatasını araç hatası sanma. Bkz. [[feedback_arastir-once-patinaj-uretim-gorev]].
+
+> **İkinci ders — TERFİ EDİLMEMİŞ BİLGİ TEKRAR EDER (2026-08-13).**
+> `prior-art: KISMEN` — `toc`+`slug_tr` deseni **beş proje-lokal üretici script'inde ÇALIŞIR
+> hâlde vardı**, ama ne bu howto'da, ne standartta, ne checklist'te yazılıydı. Yeni bir
+> doküman üretilirken **`toc`suz kardeş script kopyalandı** ve kusur yeniden doğdu — üstelik
+> sessiz olduğu için aylarca fark edilmedi. Bir desenin repoda çalışıyor olması onu **kural
+> yapmaz**; kural olmayan desen kopyalanmaz, **kopyalanan rastgele olur.** Bu yüzden fix üç
+> katmana birden yazıldı: üretici (kod) · bu howto (yöntem) · `doc-checklist` DOC-KD-16 (denetim).
 
 ---
 
