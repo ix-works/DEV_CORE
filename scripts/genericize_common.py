@@ -109,6 +109,56 @@ def id_pattern(proje_koku: Path | None = None, cwd: Path | None = None) -> re.Pa
     return re.compile("(" + "|".join(desenler) + ")", re.IGNORECASE)
 
 
+class TembelDesen:
+    """`id_pattern()` sonucunu İLK KULLANIMDA üretir — davranış AYNI, yalnız ZAMAN farklı.
+
+    NEDEN VAR (2026-08-13, süre-vergisi kuyruğu): `pre_tool_guard` deseni MODÜL
+    yüklenirken kuruyordu (`_CORE_LEAK = id_pattern(...)`). `id_pattern` →
+    `proje_desenleri` → `_git_dir` → `subprocess.run(git rev-parse)` zinciri ölçüldü:
+    **~100 ms** (cProfile: thread-lock 87 ms + CreateProcess 20 ms). Bu bedel HER araç
+    çağrısında ödeniyordu — oysa desen yalnız ÜÇ dalda kullanılır (commit-mesajı taraması,
+    `gh` yayın taraması, core'a yazma taraması). Araç çağrılarının çoğunluğu bu dalların
+    hiçbirine girmez ⇒ vergi tümüyle boşa gidiyordu.
+
+    ⚠ DAVRANIŞ DEĞİŞMEZİ: bu sınıf desenin İÇERİĞİNİ değil, KURULMA ANINI değiştirir.
+    Kullanıldığı anda `id_pattern()` aynen çağrılır, aynı kaynaklardan (env + git-dir +
+    proje `.claude/`) aynı birleşim kurulur. Bir dal deseni kullanıyorsa maliyeti orada
+    ödenir; kullanmıyorsa hiç ödenmez.
+
+    ⚠ MEMOIZE EDİLMEDİ (bilinçli, ölçümle): `_git_dir`'e süreç-içi önbellek eklemek
+    cazipti ama `tests/fixtures/worktree_blocklist/run.py` **S6** çapasını SESSİZCE
+    öldürürdü — S6 `subprocess.run`'ı sahteleştirip "git GÖRELİ döndü" (Linux şekli)
+    vakasını sınar; aynı cwd için S1'den gelen önbellek dolu olsaydı sahte hiç
+    çağrılmaz, S6 trivial-yeşil olurdu (bu tam olarak CI'da bir kez patlamış sınıftır).
+    Üstelik tembelleştirmeden SONRA guard süreci deseni zaten en fazla 1 kez kurar ⇒
+    önbelleğin kazancı 0, riski gerçek.
+
+    Yalnız `re.Pattern` yüzeyini devreder (`sizintilari_bul` `.search` kullanır);
+    kullanım yerindeki çağrı metni DEĞİŞMEZ, böylece `_CORE_LEAK` şartnamesini
+    sabitleyen kaynak-metin testi (`test_commit_message_leak_gate`) aynen geçerli kalır.
+    """
+    __slots__ = ("_kw", "_derlenmis")
+
+    def __init__(self, **kw) -> None:
+        self._kw = kw
+        self._derlenmis: re.Pattern | None = None
+
+    def _desen(self) -> re.Pattern:
+        if self._derlenmis is None:
+            self._derlenmis = id_pattern(**self._kw)
+        return self._derlenmis
+
+    def __getattr__(self, ad: str):
+        # __slots__ + __getattr__: yalnız NORMAL arama başarısız olunca çağrılır,
+        # yani `_kw`/`_derlenmis` buraya hiç düşmez → özyineleme yok.
+        return getattr(self._desen(), ad)
+
+
+def tembel_id_pattern(proje_koku: Path | None = None, cwd: Path | None = None) -> TembelDesen:
+    """`id_pattern()`in tembel sarmalayıcısı — modül yükleme yolunda git çağırmaz."""
+    return TembelDesen(proje_koku=proje_koku, cwd=cwd)
+
+
 # --------------------------------------------------------------- Z-obje adları
 # Core dokümanlarında GEÇMESİNE İZİN VERİLEN kanonik örnek adları. Bunlar hiçbir
 # gerçek projenin objesi değildir; naming standardı / playbook örnekleridir.

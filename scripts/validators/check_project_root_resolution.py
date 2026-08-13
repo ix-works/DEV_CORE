@@ -95,17 +95,69 @@ def _iceriyor_file(node: ast.AST) -> bool:
     return any(isinstance(n, ast.Name) and n.id == "__file__" for n in ast.walk(node))
 
 
-def _file_derived_adlar(tree: ast.AST) -> dict[str, int]:
+def _ebeveyn_haritasi(hepsi: list[ast.AST]) -> dict[int, ast.AST]:
+    """çocuk-id → ebeveyn düğüm (tek geçiş)."""
+    harita: dict[int, ast.AST] = {}
+    for ust in hepsi:
+        for alt in ast.iter_child_nodes(ust):
+            harita[id(alt)] = ust
+    return harita
+
+
+def _file_iceren(hepsi: list[ast.AST], ebeveyn: dict[int, ast.AST]) -> set[int]:
+    """Alt-ağacında `__file__` GEÇEN düğümlerin id kümesi.
+
+    `_iceriyor_file()` her çağrıldığında ilgili alt-ağacı yeniden yürüyordu ve bu,
+    dosya başına yüzlerce kez tekrarlanıyordu (profil: dedektörlerin en pahalı parçası).
+    `__file__` bir dosyada tipik olarak 1-3 kez geçer ⇒ o düğümlerden ATALARA doğru bir
+    kez tırmanmak, aynı bilgiyi tam tersi yönde ve çok daha ucuz üretir.
+    Sonuç `_iceriyor_file` ile BİREBİR aynıdır: bir düğümün alt-ağacında `__file__`
+    varsa, o düğüm `__file__` Name'inin atalarından biridir (ve tersi de doğrudur).
+    """
+    iceren: set[int] = set()
+    for n in hepsi:
+        if isinstance(n, ast.Name) and n.id == "__file__":
+            cur: ast.AST | None = n
+            # Ata zaten işaretliyse yukarısı da işaretlidir → erken çık.
+            while cur is not None and id(cur) not in iceren:
+                iceren.add(id(cur))
+                cur = ebeveyn.get(id(cur))
+    return iceren
+
+
+def _dugumler(tree: ast.AST, onceden: list[ast.AST] | None = None) -> list[ast.AST]:
+    """Ağacın TÜM düğümleri — `ast.walk` sırasıyla, TEK geçişte.
+
+    HIZ NOTU (2026-08-13, süre-vergisi kuyruğu): bu dosya dosya-başına DÖRT ayrı tam
+    ağaç yürüyüşü yapıyordu (`_file_derived_adlar`, `_file_derived_fonksiyonlar`,
+    `_gecisli_koklar` — üstelik o, sabit-nokta döngüsünde 4 KEZ — ve `_ihlaller`).
+    Ölçüldü (cProfile, 196 script): `ast.walk` **883.423** çağrı, toplamın ~%76'sı.
+    `ast.walk` BFS sırası deterministiktir ⇒ listeyi bir kez üretip yeniden kullanmak
+    yineleme sırasını AYNEN korur: davranış değişmez, yalnız yürüyüş sayısı düşer.
+
+    Geriye-uyum: yardımcılar `dugumler=None` ile çağrılırsa eskisi gibi kendi
+    yürüyüşünü yapar (fixture'lar `_ihlaller` dışındaki adları da yokluyor).
+    """
+    return onceden if onceden is not None else list(ast.walk(tree))
+
+
+def _file_derived_adlar(tree: ast.AST, dugumler: list[ast.AST] | None = None,
+                        iceren: set[int] | None = None) -> dict[str, int]:
     """`X = <... __file__ ...>` atamalarındaki X adları → satır no.
 
     Transitive DEĞİL (bilinçli): `VALIDATORS_DIR = REPO / "scripts"` file-derived sayılmaz,
     aksi hâlde meşru core-içi alt-yollar yanlış-pozitif üretirdi.
     """
     out: dict[str, int] = {}
-    for node in ast.walk(tree):
+    for node in _dugumler(tree, dugumler):
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             hedefler = node.targets if isinstance(node, ast.Assign) else [node.target]
-            if node.value is None or not _iceriyor_file(node.value):
+            if node.value is None:
+                continue
+            # `iceren` verilmişse ön-hesaplı küme kullanılır (aynı sonuç, ucuz);
+            # verilmemişse eski yol (geriye-uyum: doğrudan çağıran fixture'lar).
+            if not (id(node.value) in iceren if iceren is not None
+                    else _iceriyor_file(node.value)):
                 continue
             for t in hedefler:
                 if isinstance(t, ast.Name):
@@ -113,7 +165,10 @@ def _file_derived_adlar(tree: ast.AST) -> dict[str, int]:
     return out
 
 
-def _file_derived_fonksiyonlar(tree: ast.AST) -> dict[str, int]:
+def _file_derived_fonksiyonlar(tree: ast.AST,
+                               dugumler: list[ast.AST] | None = None,
+                               ebeveyn: dict[int, ast.AST] | None = None,
+                               iceren: set[int] | None = None) -> dict[str, int]:
     """`def f(): return <... __file__ ...>` — kök DÖNDÜREN fonksiyonlar → satır no.
 
     ZORUNLU: bu gate'in doğuş sebebi olan orijinal bug tam bu şekildeydi —
@@ -123,14 +178,40 @@ def _file_derived_fonksiyonlar(tree: ast.AST) -> dict[str, int]:
     tuzağını çağrı yerlerinden GİZLER (`repo_root() / SOURCE_ROOT_NAME` masum görünür) —
     en tehlikeli varyant budur.
     """
+    hepsi = _dugumler(tree, dugumler)
+    if ebeveyn is None:
+        ebeveyn = _ebeveyn_haritasi(hepsi)
+    if iceren is None:
+        iceren = _file_iceren(hepsi, ebeveyn)
+
+    # HIZ (2026-08-13): eski hâl her FunctionDef için ayrı `ast.walk(node)` yapıyordu →
+    # iç içe fonksiyonların alt-ağaçları defalarca geziliyor, üstelik aynı `Return`
+    # değeri her kapsayan fonksiyon için yeniden `_iceriyor_file`'a sokuluyordu.
+    # Ölçüldü: bu dedektör tek başına profilin en pahalı parçasıydı (2,37 sn kümülatif).
+    #
+    # ⚠ DAVRANIŞ DEĞİŞMEZİ — İÇ İÇE FONKSİYON: eski `ast.walk(node)` bir fonksiyonun
+    # alt-ağacındaki TÜM `Return`'leri görürdü, İÇ İÇE tanımlananlar DAHİL. Yani
+    # `def dis(): def ic(): return __file__` eski hâlde `dis`i de işaretlerdi.
+    # Bu yüzden burada "en yakın kapsayan fonksiyon" YETMEZ: nitelikli her `Return`
+    # için TÜM ata fonksiyonlar işaretlenir. (Sadeleştirip en yakına bağlamak,
+    # gate'i sessizce daraltırdı — sarmalayıcı-fonksiyon varyantı bu gate'in
+    # DOĞUŞ bug'ıdır.)
+    nitelikli: set[int] = set()
+    for node in hepsi:
+        if isinstance(node, ast.Return) and node.value is not None \
+                and id(node.value) in iceren:
+            cur = ebeveyn.get(id(node))
+            while cur is not None:
+                if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    nitelikli.add(id(cur))
+                cur = ebeveyn.get(id(cur))
+
+    # Sıra/üzerine-yazma semantiği korunur: düğümler `ast.walk` sırasında gezilir,
+    # aynı adlı iki fonksiyonda sonuncusu kazanır (eski davranışın aynısı).
     out: dict[str, int] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            for alt in ast.walk(node):
-                if isinstance(alt, ast.Return) and alt.value is not None \
-                        and _iceriyor_file(alt.value):
-                    out[node.name] = node.lineno
-                    break
+    for node in hepsi:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and id(node) in nitelikli:
+            out[node.name] = node.lineno
     return out
 
 
@@ -182,7 +263,8 @@ def _zincir(node: ast.AST) -> tuple[str, list[str]] | None:
     return None
 
 
-def _gecisli_koklar(tree: ast.AST, koklar: dict[str, int]) -> dict[str, int]:
+def _gecisli_koklar(tree: ast.AST, koklar: dict[str, int],
+                    dugumler: list[ast.AST] | None = None) -> dict[str, int]:
     """Doğrudan file-derived adlardan TÜRETİLEN adlar (`Y = X / "alt"`, `Y = X.parent`).
 
     NEDEN SINIRLI KULLANIM (2026-08-01, V5): docstring'de "transitive DEĞİL (bilinçli)"
@@ -200,11 +282,14 @@ def _gecisli_koklar(tree: ast.AST, koklar: dict[str, int]) -> dict[str, int]:
         → core-içi türetilmiş yollar eşleşemez, FP riski yok)
     """
     out = dict(koklar)
+    # Sabit-nokta döngüsü ATAMALARI 4 kez gezer; eskiden her turda TÜM ağaç yeniden
+    # yürünüyordu (dosya başına 4 tam yürüyüş). Atama düğümlerini bir kez süzmek
+    # yineleme sırasını ve sonucu AYNEN korur — yalnız yürüyüş sayısı 4→1 olur.
+    atamalar = [n for n in _dugumler(tree, dugumler)
+                if isinstance(n, (ast.Assign, ast.AnnAssign))]
     for _ in range(4):  # sabit noktaya kadar (zincir derinliği pratikte 1-2)
         onceki = len(out)
-        for node in ast.walk(tree):
-            if not isinstance(node, (ast.Assign, ast.AnnAssign)):
-                continue
+        for node in atamalar:
             deger = node.value
             if deger is None:
                 continue
@@ -297,13 +382,19 @@ def _ihlaller(path: Path) -> list[tuple[int, str]]:
         print(f"[UYARI] parse edilemedi: {path} ({e})", file=sys.stderr)
         return []
 
-    koklar = _file_derived_adlar(tree)
-    kok_fonksiyonlar = _file_derived_fonksiyonlar(tree)
+    # TEK YÜRÜYÜŞ (2026-08-13): düğüm listesi bir kez üretilir, tüm dedektörler onu
+    # paylaşır. `ast.walk` sırası deterministik olduğu için sonuç birebir aynıdır.
+    dugumler = list(ast.walk(tree))
+    ebeveyn = _ebeveyn_haritasi(dugumler)
+    iceren = _file_iceren(dugumler, ebeveyn)
+
+    koklar = _file_derived_adlar(tree, dugumler, iceren)
+    kok_fonksiyonlar = _file_derived_fonksiyonlar(tree, dugumler, ebeveyn, iceren)
     if not koklar and not kok_fonksiyonlar:
         return []
     # Yol-zinciri dedektörleri geçişli kümeyi kullanır; TARAMA dedektörleri `koklar`ı
     # (gerekçe: `_gecisli_koklar` docstring'i — FP koruması bilinçli olarak korunuyor).
-    koklar_gecisli = _gecisli_koklar(tree, koklar)
+    koklar_gecisli = _gecisli_koklar(tree, koklar, dugumler)
 
     bulgular: list[tuple[int, str]] = []
 
