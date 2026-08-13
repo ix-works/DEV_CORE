@@ -61,10 +61,16 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
    ⛔ **`toc` YOKSA hiçbir başlığa `id` verilmez → dokümanın "İçindekiler" bağlantılarının
    TAMAMI ölür.** Kusur **sessizdir**: HTML/PDF açılır, görünüm kusursuzdur, yalnız satıra
    tıklayınca hiçbir şey olmaz; ne build, ne tarayıcı, ne `<img>` sayımı uyarır — ancak
-   **kullanıcı** fark eder. (Ölçüldü 2026-08-13: `toc`suz üretilmiş 5 kılavuzda 121 iç
-   bağlantının 121'i ölüydü; aynı üretici ailesinin `toc`lu kardeşleri sağlamdı = kontrol grubu.)
-   ⛔ **Neden `slug_tr`:** python-markdown'un VARSAYILAN slug'ı Türkçe harfi çevirmez, **siler**
-   ("Kılavuz" → `klavuz`, "sağ panel" → `sa-panel`) → elle yazılan `#...` hedefi tutmaz.
+   **kullanıcı** fark eder. (Ölçüldü 2026-08-13, `toc`suz 5 kılavuz: **139 iç bağlantının 121'i
+   ölü**; kalan 18'i md'ye ELLE konmuş `<a id="..">` çıpaları sayesinde çalışıyordu ⇒ iddia
+   *"başlık hedefleri ölür"*, *"hiçbir bağlantı çalışmaz"* DEĞİL. Aynı üretici ailesinin `toc`lu
+   kardeşleri sağlamdı = kontrol grubu. Canlı tarayıcı teyidi: fix öncesi 39 bağlantının 12'si
+   çalışıyordu, sonrası **39/39**.)
+   ⛔ **Neden `slug_tr`:** python-markdown'un VARSAYILAN slug'ı Türkçe harfi ASCII'ye çevirmez;
+   NFKD'de karşılığı olan harf sağ kalır (`ğ`→`g`, `ö`→`o`) ama **karşılığı olmayan `ı`/`İ`
+   tamamen SİLİNİR** — ölçüldü: "1. Bu Kılavuz Hakkında" → `1-bu-klavuz-hakknda`,
+   "4.2.3 Kalem Detayı (sağ panel)" → `423-kalem-detay-sag-panel`. Elle yazılan `#...` hedefi
+   bu yüzden tutmaz.
    `slug_tr` GitHub desenini uygular: TR harf → ASCII, her boşluk **ayrı** tireye
    ("Liste / Tablo" → `liste--tablo`).
 3. CSS: A4 `@page`, başlık gradient-banner, tablo (th koyu/zebra), `figure img` (çerçeve+gölge+max-width:100%), `figcaption` (italik gri).
@@ -85,9 +91,16 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
   HTML'deki her `href="#x"` için `id="x"` VAR mı? Sayı kıyası yeterli değil, **küme** kıyası şart.
   ```python
   import re; c = open(HTML, encoding='utf-8').read()
-  h = re.findall(r'href="#([^"]+)"', c); i = set(re.findall(r'\sid="([^"]+)"', c))
-  print('OLU BAGLANTI:', sorted({x for x in h if x not in i}) or 'YOK')
+  h = re.findall(r'href="#([^"]+)"', c)
+  hedef = set(re.findall(r'\sid="([^"]+)"', c)) | set(re.findall(r'<a[^>]*\sname="([^"]+)"', c))
+  print('OLU BAGLANTI:', sorted({x for x in h if x not in hedef}) or 'YOK')
   ```
+  ⛔ **`name=` ÇIPALARI DA GEÇERLİ HEDEFTİR — yalnız `id=` arama.** Bu evdeki KD'lerin bir
+  kısmı eski usul `<a name="x">` çıpası kullanır ve **tarayıcılar bunu onurlandırır**
+  (canlı ölçüldü 2026-08-13: `id` sayısı 0 olan iki uygulamada 22/22 ve 34/34 bağlantı
+  çalışıyor; PDF'te de 22 `/Subtype /Link` üretildi). Yalnız `id=` sayan bir denetim bu
+  dokümanları **"%100 ölü" diye YANLIŞ raporlar** — bu yanlış-pozitif bir kez gerçekten
+  yaşandı ve 7 uygulamayı hatalı biçimde "kırık" gösterdi.
   PDF karşılığı: PDF içinde `/Subtype /Link` sayısı ≈ iç bağlantı sayısı olmalı; **0 ise**
   PDF'te hiçbir içindekiler satırı tıklanabilir değildir. İki kusur kaynağı ayrıdır:
   ① üretici `toc`suz (→ §B.2) · ② kaynak md'deki `#hedef` başlık metniyle uyuşmuyor

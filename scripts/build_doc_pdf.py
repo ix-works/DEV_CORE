@@ -98,7 +98,9 @@ def build(md_path, html_path, title=None, diagram_prefix=None):
     # ⛔ `toc` eklentisi ZORUNLU: olmazsa hiçbir başlığa `id` verilmez → dokümanın
     #    "İçindekiler" bağlantılarının TAMAMI ölü olur. Kusur **sessizdir**: sayfa açılır,
     #    görünüm doğrudur, yalnız tıklama hiçbir şey yapmaz; ne build ne tarayıcı uyarır.
-    #    (Ölçüldü 2026-08-13: `toc`suz üretilen 5 kılavuzun 121 iç bağlantısının 121'i ölü.)
+    #    (Ölçüldü 2026-08-13, `toc`suz üretilen 5 kılavuz: 139 iç bağlantının **121'i** ölü;
+    #    kalan 18'i md'ye ELLE konmuş `<a id="..">` çıpaları sayesinde çalışıyordu — yani
+    #    "toc yoksa hiçbiri çalışmaz" DEĞİL, "başlık hedefleri çalışmaz".)
     body = markdown.markdown(md, extensions=["tables", "fenced_code", "sane_lists", "toc"],
                              extension_configs={"toc": {"slugify": slug_tr}})
     # <p><img></p> + <p><em>cap</em></p> → <figure><figcaption>
