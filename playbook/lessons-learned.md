@@ -245,7 +245,22 @@ değeri hiçbir şey kanıtlamaz (zaten öyle olabilirdi).
 çürütme notu, sonraki turda **hâlâ geçerli olduğu yerde de** kullanılmaz → yanlış kanal/yöntem
 seçtirir; yani fazla-genelleme, bilgiyi silmekle aynı sonucu verir. Uygulanmış örnek:
 [`adt-fugr-functions.md`](adt-fugr-functions.md) §3.1 (SOAP-RFC vakası koşullu yazıldı).
-**Status:** ⚠️ DİSİPLİN — kaynak: 2026-07-29 silme kontrolü turu · (f)/(g) 2026-07-31.
+**(h) AYNI SAYI İKİ YERDE YAŞIYORSA, GÜNCELLEDİĞİN AN ÖTEKİ BAYATLAR** — ve bu, zamanla
+değil **aynı düzenleme turunda** olur. Kaydın düzyazı bloğunu tazelersin, aynı kaydın **tablo
+satırı** (ya da özet/reçete/rapor kopyası) eski sayıyla kalır; dikkat düzenlediğin bölgeye
+kilitlenir, tablo görsel olarak ayrı bir bölge olduğu için "değişmedi" sanılır.
+*Ölçülen vaka (2026-08-13):* bir fixture korpusu 23→27 vektöre büyüdü, mutasyon sayıları
+14/20→18/24 oldu; düzyazı güncellendi, **tablo satırı 23/23 · 14/20 · 12/20 kaldı** ve merge
+incelemesinde yakalandı. Bayat hâliyle birleşseydi okuyan, korpusun **ayırt etme gücünü**
+yanlış bilecekti — üstelik o sayı, kaydın *"bu fixture neyi kanıtlıyor"* iddiasının dayanağıdır.
+**Mekanik:** yeni sayıyı yazdıktan sonra **ESKİ sayıyı** belge genelinde ARA
+(`grep -n "23/23\|14/20\|12/20" governance/*.md`); sıfır sonuç almadan *"güncelledim"* deme.
+Tipik çift-yaşam yerleri: changelog tablo satırı ↔ altındaki açıklama bloğu · test-reçetesi
+↔ changelog kaydı · ajan raporu ↔ dokümandaki kayıt.
+⚠ Ayrıca **sayı ile KÜME'yi ayır:** ölçüm büyüdüğünde rakam değişir ama onaylanan *küme*
+(hangi vakalar geçiyor/RED alıyor) aynı kalabilir. Onay kümeye verilmiştir → büyümeden sonra
+**kümeyi yeniden ölç** ve sonucu kaydın içine yaz; yalnız rakamı düzeltmek bu soruyu cevaplamaz.
+**Status:** ⚠️ DİSİPLİN — kaynak: 2026-07-29 silme kontrolü turu · (f)/(g) 2026-07-31 · (h) 2026-08-13.
 
 ## 🔄 SELF-UPDATE PROTOKOLÜ
 
