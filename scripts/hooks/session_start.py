@@ -64,6 +64,29 @@ STATIK = (
 )
 
 
+def _overlay_oto_tazele() -> list[str]:
+    """Overlay'li tipleri açılışta KENDİLİĞİNDEN tazele (2026-08-13, kullanıcı onaylı).
+
+    Neden BURADA: bayatlığı bugüne kadar RAPOR eden yer burasıydı ve kullanıcıdan tek
+    istenen şey `team_setup.py`'yi koşmaktı — yani komut, bilgiyi zaten burada olan bir
+    işin elle tekrarıydı. Junction'lı tipler (`skills`/`commands`/`rules`) tazeliği
+    bedavaya alıyor; `agents` yalnız TEK bir proje-override yüzünden kopya olduğu için
+    alamıyordu. Karar `claude_overlay.oto_tazele`'de (fark boşsa üret, doluysa dokunma).
+
+    ⚠ SIRA ÖNEMLİ — bu, `_junction_kontrol`'den ÖNCE çağrılır: core'a yeni bir ajan
+    dosyası eklendiğinde `durum()` "overlay'de EKSİK" der, o satır ⛔ dalına düşer ve
+    ALTINDAKİ tüm kontrolleri bastırır ⇒ else-dalına konsaydı tam da düzeltmesi gereken
+    vakada hiç koşmazdı (kod ≠ kablolama).
+    """
+    try:
+        sys.path.insert(0, str(CORE / "scripts"))
+        from utils import claude_overlay as ov  # type: ignore
+        return ov.oto_tazele(PROJ, CORE)
+    except Exception as e:  # noqa: BLE001
+        return [f"overlay OTO-TAZELEME yuklenemedi: {type(e).__name__}: {e} "
+                f"(oturum bozulmadi; elle: python core/scripts/team_setup.py --repair-junctions)"]
+
+
 def _junction_kontrol() -> list[str]:
     """D25: junction'lar tek tek. OVERLAY'li tipler (claude-local/<tip>) gerçek dizindir."""
     sorun = []
@@ -274,7 +297,10 @@ def main() -> int:
         data = {}
     _write_session_marker(data if isinstance(data, dict) else {})
 
-    saglik: list[str] = []
+    # Tazeleme ÖNCE koşar (docstring'deki sıra gerekçesi), sonucu HER dalda görünür:
+    # ⛔ junction dalı bile bu satırları bastırmamalı — yapılan bir değişikliği gizlemek,
+    # değişikliğin kendisinden daha pahalıdır.
+    saglik: list[str] = ["✓ " + s for s in _overlay_oto_tazele()]
     junctions = _junction_kontrol()
     if junctions:
         saglik += ["⛔ " + s for s in junctions]

@@ -191,7 +191,9 @@ python scripts/inspector.py --self-test             # canary    [✓]
 
 ## B12 — claude_overlay + team_setup + init_project
 - **KIYAS TABANI (2026-08-13, en güçlü kapı testi):** `python tests/fixtures/overlay_kiyas_tabani/run.py`
-  → 23/23, exit 0. Değişmez: `fark_raporu` **kopya-ŞİMDİ ↔ en son ÜRETİLEN**'i (manifest
+  → **27/27**, exit 0 *(bu satır 23/23 diyordu; korpus V16-V19 ile büyümüştü ve rakam burada
+  bayatlamıştı — 2026-08-13'te koşularak düzeltildi. PATTERN #18-h: aynı sayı iki yerde
+  yaşarsa biri bayatlar)*. Değişmez: `fark_raporu` **kopya-ŞİMDİ ↔ en son ÜRETİLEN**'i (manifest
   `uretilen_hash`) kıyaslar — "bugün üretilecek içerik"le DEĞİL. Aksi hâlde core'un her
   commit'i, elle düzeltme sıfırken bile kapıyı kapatır (kurt masalı → `--overlay-onayli`
   refleksi → gate kendi koruduğu şeyi ezer).
@@ -222,6 +224,30 @@ python scripts/inspector.py --self-test             # canary    [✓]
   yazdık, sapma dışarıdan dokunuş kanıtıdır); saf CRLF gürültüsü bir alt katmanda `_norm`'lu
   içerik-kıyasında emilir (V18), CRLF + kaynak değişimi birlikte gelirse muhafazakâr davranır
   ve `durum()` CRLF'i ayrıca raporlar (V19 = bilinen sınır, yönü güvenli).
+- **OTOMATİK TAZELEME (2026-08-13 ikinci yarı):** `python tests/fixtures/overlay_oto_tazeleme/run.py`
+  → **33/33**, exit 0. Otomatik yol **yerinde senkron**dur (rmtree YOK; `materyalize` yalnız elle yolda). Değişmez İKİ tanedir ve ayrı ayrı sınanır: **① EYLEM** — fark boşsa
+  kopya kullanıcı komutu olmadan üretilir · **② İMTİNA** — fark doluysa hiçbir şeye
+  dokunulmaz. Üçüncü değişmez **GÖRÜNÜRLÜK**: her iki dal da satır basar; V19 meta-vektörü
+  *"diski değiştiren her dal satır basar"*ı dört senaryoda birden ölçer (sessiz davranış =
+  denetlenemeyen davranış).
+  ⚠ **ÇİFT mutasyon ŞART:** `--mutasyon` (taban **63e6faa**, ⛔ dal adı değil) → P düşer ·
+  `--mutasyon-gevsek` → N çapaları düşer. **Gevşek mutasyon İKİ çapa keser** (`oto_tazele`
+  ön-kontrolü + `_yerinde_senkron`'un iç kapısı): kapı iki katmanlıdır, tek-noktalı mutasyon hedefi ıskalar ve
+  koşucu sayı BASMAZ (exit 2 — bu doğru davranıştır, alet arızası değil). Çıkış-kodu
+  sözleşmesi kıyas-tabanı fixture'ıyla AYNI (yukarı bkz).
+  ⚠ **Çapaları SİLME:** V3/V4/V10/V16 (elle düzeltme her biçimde DURDURUR) · **V7** (core
+  okunamıyorsa DOKUNMA — otomatik üretim orada tüm kopyaları SİLERDİ) · **V20** (savunma
+  derinliği: `materyalize(onayli=False)` kapıyı kendi içinde de tutar) · **V11** (geri-alma:
+  `IX_OVERLAY_OTO=0` otomatiği tümüyle kapatır) · **V22** (ATOMİKLİK: `oto_tazele` çağrı zincirinde rmtree/materyalize YOK — AST çapası; olmazsa biri otomatiği tekrar `materyalize`'e bağlar ve SESSİZ olur) · **V21** (ilk materyalizasyon = kurulum işi, otomatiğe dahil DEĞİL) · **V2d** (idempotans — yordam ile üretici
+  ayrışırsa her açılışta kendini tetikleyen sonsuz tazeleme olur).
+  ⚠ **Sandbox core `scripts/utils/claude_overlay.py` iskeletini TAŞIMALI** (K20-K24 gerçek
+  `session_start` alt-sürecini koşar ve hook modülü KENDİNE VERİLEN core kökünden import
+  eder). İskelet yoksa import düşer, hook yalnız junction uyarısı basar ve K20/K21
+  **sahte-KIRMIZI** verir — ilk koşumda tam bu oldu.
+  📌 **İDDİA SINIRI:** tazeleme **bir SONRAKİ oturumdan** itibaren etkilidir (ajan tanımları
+  oturum başında okunur; canlı harness'ta 3 koşumla ölçüldü — changelog'daki ÖLÇÜLMÜŞ SINIR
+  bloğu). Fixture bunu doğrudan ölçemez (harness gerekir); ölçtüğü şey diskteki sonuç +
+  hook çıktısındaki duyurudur.
 - Bayraksız senkron → fark-listesiyle **RED**; yalnız `--overlay-onayli` ezer.
 - FORMAT-GATE: her .md `---` ile başlar + CRLF-yok + name-parse + damga-frontmatter-SONRA ("sayı ≠ yüklenebilirlik" — 6/6 düşüş vakası).
 - Drift: core-değişti→WARN · yeni-agent→EKSİK · temiz→PASS.

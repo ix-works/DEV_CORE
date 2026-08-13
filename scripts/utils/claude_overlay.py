@@ -25,6 +25,12 @@ EZME KAPISI (T2.5) ayrı bir sorudur ve ayrı bir tabanı vardır: manifest her 
 **üretildiği andaki hash'ini** (`uretilen_hash`) de saklar. `fark_raporu` kopyanın
 ŞİMDİKİ hâlini bununla kıyaslar → "core değişti" ile "kopya elle düzeltildi" ayrışır.
 (2026-08-13 kök-fix'i; gerekçe `fark_raporu` docstring'inde.)
+
+OTOMATİK TAZELEME (`oto_tazele`, 2026-08-13 ikinci yarı): yukarıdaki taban "fark yok"
+diyebildiği İÇİN senkron artık kullanıcı komutuna bağlı değildir — `session_start`
+her açılışta çağırır, fark boşsa kopyayı sessizce DEĞİL, **tek görünür satırla** tazeler.
+Ölçülmüş sınır: ajan tanımları oturum başında okunur ⇒ tazeleme **bir sonraki oturumdan**
+itibaren etkilidir (kanıt: `oto_tazele` docstring'i).
 """
 from __future__ import annotations
 
@@ -34,6 +40,10 @@ import os
 import re
 import shutil
 from pathlib import Path
+
+# Otomatik tazelemeyi kapatan acil-fren (F5 geri-alma yolu): "0"/"false" ⇒ eski davranış
+# (yalnız raporla, dokunma). Kapalıyken SESSİZDİR — kullanıcı bilerek kapatmıştır.
+OTO_ENV = "IX_OVERLAY_OTO"
 
 # "rules" 2026-07-10'da eklendi (L1b glob-tetiklemeli davranış kuralları). Junction'lanmazsa
 # yeni projede `.claude/rules` HİÇ kurulmaz → kural yazılır ama hiç yüklenmez (kod≠kablolama).
@@ -100,6 +110,26 @@ def _beklenen(proje: Path, core_root: Path, tip: str) -> dict:
         core_esi = core_dizin / f.name
         out[f.name] = (f, _hash(core_esi) if core_esi.is_file() else None)
     return out
+
+
+def _uretilecek_icerik(proje: Path, tip: str, ad: str, kaynak: Path) -> str:
+    """Bir dosyanın ÜRETİLECEK hâli (damga dahil) — `materyalize`'in TEK kaynağı.
+
+    `tazeleme_gerekli()` "bayat mı" sorusunu bununla cevaplar. Ayrı bir kopya-mantık
+    yazılsaydı iki taraf sessizce ayrışabilirdi: yordam "taze" derken üretici başka
+    bayt yazar (= her açılışta kendini tetikleyen sonsuz tazeleme, ya da hiç tetiklenmeyen
+    ölü kontrol). Tek fonksiyon = tanım gereği tutarlı.
+    """
+    icerik = kaynak.read_text(encoding="utf-8", errors="replace")
+    if kaynak.parent == overlay_kaynagi(proje, tip):
+        return icerik                       # proje-lokal dosya damgalanmaz
+    return _damgala(icerik, DAMGA.format(tip=tip, ad=ad))
+
+
+def _yaz(hedef_dosya: Path, icerik: str) -> None:
+    """newline="\\n" ŞART: varsayılan (None) Windows'ta CRLF yazar → frontmatter satırları
+    `---\\r\\n` olur ve bazı parser'lar bozulur; ayrıca sahte diff üretir."""
+    hedef_dosya.write_text(icerik, encoding="utf-8", newline="\n")
 
 
 def _norm(icerik: str) -> str:
@@ -199,13 +229,8 @@ def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) ->
     beklenen = _beklenen(proje, core_root, tip)
     manifest = {"tip": tip, "dosyalar": {}}
     for ad, (kaynak, core_hash) in beklenen.items():
-        icerik = kaynak.read_text(encoding="utf-8", errors="replace")
         proje_ustu = kaynak.parent == overlay_kaynagi(proje, tip)
-        if not proje_ustu:
-            icerik = _damgala(icerik, DAMGA.format(tip=tip, ad=ad))
-        # newline="\n" ŞART: varsayılan (None) Windows'ta CRLF yazar → frontmatter satırları
-        # `---\r\n` olur ve bazı parser'lar bozulur; ayrıca sahte diff üretir.
-        (h / ad).write_text(icerik, encoding="utf-8", newline="\n")
+        _yaz(h / ad, _uretilecek_icerik(proje, tip, ad, kaynak))
         manifest["dosyalar"][ad] = {
             "kaynak": "proje" if proje_ustu else "core",
             "core_hash": core_hash,       # override edilen core dosyasının hash'i (drift için)
@@ -218,6 +243,170 @@ def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) ->
                                   encoding="utf-8")
     n_proje = sum(1 for v in manifest["dosyalar"].values() if v["kaynak"] == "proje")
     return True, f"{tip}: {len(beklenen)} dosya ({n_proje} proje-lokal override)"
+
+
+def tazeleme_gerekli(proje: Path, core_root: Path, tip: str) -> list:
+    """Kopya kümesi BUGÜN üretilecek olandan farklı mı? -> farklı/eksik/fazla dosya adları.
+
+    "Bayat mı" sorusunun tek cevabı budur ve `fark_raporu`'ndan AYRI bir sorudur:
+      · `tazeleme_gerekli` → **ne değişti** (kaynak tarafı; iş var mı?)
+      · `fark_raporu`      → **ne kaybolur** (kopya tarafı; dokunmak güvenli mi?)
+    İkisi karıştırılırsa ya hiç tetiklenmeyen ölü otomatik ya da proje emeğini ezen
+    bir otomatik çıkar. Boş liste = yapılacak iş yok (sessiz no-op).
+    """
+    h = hedef(proje, tip)
+    if not h.is_dir() or _junction_mu(h):
+        return []
+    beklenen = _beklenen(proje, core_root, tip)
+    fark = []
+    for ad, (kaynak, _ch) in beklenen.items():
+        mevcut = h / ad
+        try:
+            if not mevcut.is_file():
+                fark.append(ad)
+            elif mevcut.read_bytes() != _uretilecek_icerik(proje, tip, ad, kaynak).encode("utf-8"):
+                fark.append(ad)
+        except OSError:
+            fark.append(ad)
+    fark += [f.name for f in sorted(h.glob("*.md")) if f.name not in beklenen]
+    return sorted(set(fark))
+
+
+def _manifest_alansiz(proje: Path, tip: str) -> bool:
+    """Manifest 2026-08-13 ÖNCESİ mi (dosya kaydında `uretilen_hash` yok)?
+
+    Bu projeler `fark_raporu`'nun muhafazakâr içerik-kıyasına düşer: core bir dosyayı
+    değiştirdiği an kapı kapanır (kurt masalı sürer). Alan yalnız `materyalize` ile
+    dolar; kopyalar zaten üretileceğin AYNISIYSA bu, içerik değiştirmeyen bir kayıt
+    tazelemesidir — otomatik yapılabilir ve yayılım adımı kendiliğinden kapanır.
+    """
+    kayitlar = _manifest_dosyalari(hedef(proje, tip))
+    if not kayitlar:
+        return True
+    return any(not k.get("uretilen_hash") for k in kayitlar.values())
+
+
+def _yerinde_senkron(proje: Path, core_root: Path, tip: str) -> tuple:
+    """`materyalize`'in ATOMİK-OLMAYAN penceresi olmadan senkron. -> (ok, mesaj)
+
+    `materyalize` dizini `shutil.rmtree` ile SİLİP yeniden kurar. Elle/seyrek koşarken
+    kabul edilebilir bir pencere; ama otomatik yol her oturum açılışında koşacağı için
+    o pencere RUTİN olurdu — üstelik harness'ın ajan tanımlarını okuduğu dizinde. Emsal
+    2026-07-09: overlay üretimindeki bir kusur 6/6 ajanı yüklenemez yaptı ve dosya SAYISI
+    doğru olduğu için sistem "güncel" raporladı (sayı ≠ yüklenebilirlik).
+
+    Bu yüzden otomatik yol: ① beklenen dosyaları ÜZERİNE yaz (dizin hiç silinmez)
+    ② beklenen kümede olmayanları TEK TEK sil — yalnız kanıt varsa (`kaynak == "core"` VE
+    üretildiği gibi); kanıtsız dosya KORUNUR ve mesajda görünür ③ manifest'i EN SON yaz
+    (yarıda kesilirse manifest tutarlı bir geçmişi anlatmaya devam eder).
+
+    `materyalize` DEĞİŞMEDİ: elle yol (`team_setup`, `--overlay-onayli`) aynen eski
+    davranışta. Kısıt yalnız otomatik yola kondu.
+    """
+    farklar = fark_raporu(proje, core_root, tip)
+    if farklar:                       # ikinci savunma katmanı (çağıranın kontrolünden bağımsız)
+        return False, "FARK VAR — yerinde senkron da onaysiz EZMEZ (T2.5): " + "; ".join(farklar)
+
+    h = hedef(proje, tip)
+    beklenen = _beklenen(proje, core_root, tip)
+    kayitlar = _manifest_dosyalari(h)
+
+    for ad, (kaynak, _ch) in beklenen.items():
+        icerik = _uretilecek_icerik(proje, tip, ad, kaynak)
+        mevcut = h / ad
+        if not mevcut.is_file() or mevcut.read_bytes() != icerik.encode("utf-8"):
+            _yaz(mevcut, icerik)      # üzerine yaz — silme yok
+
+    korunan = []
+    for f in sorted(h.glob("*.md")):
+        if f.name in beklenen:
+            continue
+        kayit = kayitlar.get(f.name) or {}
+        if kayit.get("kaynak") == "core" and _uretildigi_gibi(f, kayit):
+            f.unlink()                # tek tek: yalnız el değmemiş core artığı
+        else:
+            korunan.append(f.name)    # kanıt yok → dokunma (fail-safe; kapı zaten elerdi)
+
+    manifest = {"tip": tip, "dosyalar": {}}
+    for ad, (kaynak, core_hash) in beklenen.items():
+        manifest["dosyalar"][ad] = {
+            "kaynak": "proje" if kaynak.parent == overlay_kaynagi(proje, tip) else "core",
+            "core_hash": core_hash,
+            "uretilen_hash": _hash(h / ad),
+        }
+    (h / MANIFEST_ADI).write_text(json.dumps(manifest, indent=1, ensure_ascii=False),
+                                  encoding="utf-8")          # EN SON
+    n_proje = sum(1 for v in manifest["dosyalar"].values() if v["kaynak"] == "proje")
+    mesaj = f"{tip}: {len(beklenen)} dosya ({n_proje} proje-lokal override)"
+    if korunan:
+        mesaj += f" · KANITSIZ, silinmedi: {korunan}"
+    return True, mesaj
+
+
+def oto_tazele(proje: Path, core_root: Path) -> list:
+    """Overlay'li tipleri KULLANICI KOMUTU OLMADAN taze tut. -> görünür satırlar.
+
+    KOŞUL (müzakere edilemez): yalnız `fark_raporu(...) == []` iken üretir. Dolu liste =
+    kopyada elle düzeltme var ⇒ DOKUNMAZ, kararı insana bırakır (T2.5 kapısı aynen
+    yürürlükte — `materyalize` `onayli=False` ile çağrılır, yani kapı bu yolda da açık).
+
+    SESSİZ DEĞİL: her tazeleme/atlama/başarısızlık bir satır döndürür (`session_start`
+    bunu oturum açılışına basar). Yapılacak iş yoksa hiçbir şey döndürmez (gürültü yok).
+
+    ⚠ ÖLÇÜLMÜŞ SINIR — "bu oturumda etkili" DEĞİL. Ajan tanımları oturum başında
+    okunur; SessionStart hook'unun yazdığı dosya O oturuma yansımaz. 2026-08-13'te
+    canlı harness'ta 3 koşumla ölçüldü: (1) hook oturum sırasında yeni bir ajan dosyası
+    yazdı → o oturumun subagent_type listesinde YOK; (2) bir SONRAKİ oturumda VAR;
+    (3) en sert vaka — hook mevcut bir ajanın İÇERİĞİNİ değiştirdi, aynı oturumda o
+    ajan spawn edildi ve ESKİ içerikle davrandı (disk yeniyken). Dolayısıyla vaat
+    "artık hiç komut koşmayacaksın"dır, "anında güncellenir" değil. Junction'lı tipler
+    de aynı oturum-başı okuma kuralına tabidir ⇒ davranış PARİTE.
+
+    Kapatma: `IX_OVERLAY_OTO=0` (F5 geri-alma yolu).
+    """
+    if os.environ.get(OTO_ENV, "1").strip().lower() in ("0", "false", "no"):
+        return []
+    satirlar = []
+    for tip in TIPLER:
+        try:
+            if not overlay_var_mi(proje, tip):
+                continue                      # junction'lı/overlay'siz proje → hiç dokunma
+            h = hedef(proje, tip)
+            if not h.is_dir() or _junction_mu(h):
+                continue                      # henüz materyalize edilmemiş: kurulum işi (team_setup)
+            core_dizin = core_root / "claude" / tip
+            if not core_dizin.is_dir() or not any(core_dizin.glob("*.md")):
+                # Core tarafı OKUNAMIYOR (junction kopuk / dizin boş). Bu durumda
+                # "üretilecek küme" core dosyalarını İÇERMEZ ⇒ otomatik üretim mevcut
+                # kopyaları SİLERDİ. Kanıt yokken silme yok: dur ve görünür uyar.
+                satirlar.append(f"overlay tazeleme ATLANDI: {tip} — core/claude/{tip} okunamadi "
+                                f"(junction kopuk?), otomatik uretim SILME riski tasir")
+                continue
+
+            gerekli = tazeleme_gerekli(proje, core_root, tip)
+            if not gerekli and not _manifest_alansiz(proje, tip):
+                continue                      # taze — sessiz no-op
+            sebep = (f"core/claude-local degisti: {len(gerekli)} dosya" if gerekli
+                     else "manifest kaydi eski (uretilen_hash yok)")
+
+            farklar = fark_raporu(proje, core_root, tip)
+            if farklar:
+                satirlar.append(f"overlay OTO-TAZELEME ATLANDI: {tip} — {len(farklar)} kopyada "
+                                f"elle duzeltme var, dokunulmadi ({sebep}). Karar: terfi ya da "
+                                f"claude-local → sonra team_setup.py --overlay-onayli")
+                continue
+
+            ok, mesaj = _yerinde_senkron(proje, core_root, tip)   # rmtree YOK (atomiklik)
+            satirlar.append((f"overlay tazelendi: {mesaj} [{sebep}]" if ok
+                             else f"overlay tazeleme BASARISIZ: {tip} — {mesaj}"))
+        except Exception as exc:  # noqa: BLE001
+            # `except: pass` YASAK — KOŞMADI ≠ TEMİZ. Oturum bozulmaz ama sessizleşmez.
+            satirlar.append(f"overlay OTO-TAZELEME KOSAMADI: {tip} — "
+                            f"{type(exc).__name__}: {exc} (eski davranis: elle team_setup.py)")
+    if any(s.startswith("overlay tazelendi") for s in satirlar):
+        satirlar.append("(overlay tazelemesi SONRAKI oturumdan itibaren etkilidir — "
+                        "ajan/skill tanimlari oturum basinda okunur; olculdu 2026-08-13)")
+    return satirlar
 
 
 def durum(proje: Path, core_root: Path, tip: str) -> tuple:
