@@ -25,8 +25,13 @@ Bunlar `tests/fixtures/<ad>/run.py` olarak yasar, kendi P/N senaryolarini icinde
 exit 0/1 doner. Burada ayni tabloya raporlanirlar (tek kosucu = CI'da tek adim).
 
 Kullanim:
-    python tests/run_fixture_tests.py
+    python tests/run_fixture_tests.py                         # TAM suite (CI + lider)
+    python tests/run_fixture_tests.py --degisen <dosya> ...    # ISE-OZEL secim (infra-expert)
+    python tests/run_fixture_tests.py --degisen <dosya> --listele   # kuru kosum (ne kosardim)
 Cikis: 0 -- hepsi beklendigi gibi, 1 -- en az bir sapma.
+
+`--degisen` FAIL-CLOSED'dir: verilen dosyalardan BIRI bile haritada yoksa TAM suite
+kosar (gorunur satirla). Sozlesme + gerekce: asagidaki HARITA blogu.
 """
 from __future__ import annotations
 
@@ -133,7 +138,289 @@ OZEL_TESTLER = [
     #   --mutasyon (taban SHA, oto_tazele yok) -> P duser · --mutasyon-gevsek -> N capalari duser.
     ("overlay_oto_tazeleme",
      "overlay bayatligi komutsuz kapanir; elle duzeltme varken DOKUNMAZ"),
+    # 2026-08-13 B0 is-ozel secim modu: `--degisen` haritasinin KENDI korpusu
+    # (secim MANTIGI olculur — suite gercekten kosulmaz; kuru-kosum `--listele`).
+    ("b0_secim",
+     "--degisen: dogru alt-kume, birlesim, bilinmeyen->TAM (fail-closed), harita-tamlik"),
 ]
+
+
+# =============================================================================
+# DOSYA → FIXTURE HARİTASI (`--degisen` iş-özel seçim modu, 2026-08-13)
+#
+# NEDEN: süite 12 → 112+ kontrole büyüdü (ölçüldü 2026-08-13: TAM koşum 169,7 sn /
+# 113 vektör). İnfra-expert bir fix-seansında B0'ı 2× koşuyordu (~6 dk sabit vergi),
+# üstelik CI aynı süiteyi zaten TAM koşuyor. Bu mod **ARA adımların** vergisini düşürür;
+# sigortayı KALDIRMAZ: lider merge-öncesi 1× TAM + CI TAM (bkz.
+# `playbook/howto-infra-fix-proseduru.md` ADIM-3 · `governance/infra-test-recipes.md` B0).
+#
+# SÖZLEŞME (fail-closed):
+#   · Harita AÇIK sabittir — fixture docstring'lerinden ÜRETİLMEZ. (Üretilen harita
+#     bayatladığında bayatlığı görünmez olur; açık tablo en azından okunabilir.)
+#   · Verilen dosyalardan BİRİ bile haritada yoksa → TAM süite + GÖRÜNÜR satır.
+#     Sessiz daraltma ASLA.
+#   · Birden çok desen eşleşirse BİRLEŞİM koşulur (yön daima genişletme).
+#   · TAM koşumda `harita_tamlik()` bir vektör olarak koşar: haritada hiç anılmayan
+#     fixture varsa süite FAIL verir (yeni fixture + güncellenmemiş harita = sessizce
+#     kapsam dışı kalmasın). Yeni gate DEĞİL — mevcut süitenin içinde bir vektör.
+#
+# BİRİM KİMLİKLERİ: `V:<validator>` (bölüm-1 bad/good çifti) · `O:<fixture>`
+# (OZEL_TESTLER) · `R:<AV-nn>` (bölüm-2 regresyon) · `G` (bölüm-3 guard korpusu) ·
+# `TAM` (özel: tam süite).
+#
+# ⚠ Harita "hangi fixture bu dosyaya BAKIYOR" sorusunun cevabıdır — kanıtı fixture'ın
+# kendi kaynağıdır (import/`spec_from_file_location`/subprocess hedefi), docstring'i
+# değil. Yeni bir fixture yazarken buraya SATIR EKLE; unutursan TAM koşum FAIL verir.
+# =============================================================================
+TAM = "TAM"
+
+HARITA: list[tuple[str, tuple[str, ...], str]] = [
+    # ── koşucunun kendisi ───────────────────────────────────────────────────
+    ("tests/run_fixture_tests.py", (TAM, "O:b0_secim"),
+     "seçim mantığı burada yaşar; koşucu değişince kıyas tabanı TAM olmalı"),
+    ("tests/run_guard_fixture_tests.py", ("G",), "guard payload korpusunun koşucusu"),
+
+    # ── bölüm-1 validator bad/good çiftleri ─────────────────────────────────
+    ("scripts/validators/check_bdef_backtick.py", ("V:check_bdef_backtick",), "G1 çifti"),
+    ("scripts/validators/check_cds_srvd_comment_syntax.py",
+     ("V:check_cds_srvd_comment_syntax",), "G1 çifti"),
+    ("scripts/validators/check_list_view_grid.py", ("V:check_list_view_grid",), "G1 çifti"),
+    ("scripts/validators/check_ui5_freestyle_traps.py",
+     ("V:check_ui5_freestyle_traps", "O:ui5_t1_tirnak_sinifi"),
+     "G1 çifti + T1 tırnak-sınıfı korpusu aynı validator'ı ölçer"),
+    ("scripts/validators/check_filter_search_pattern.py",
+     ("V:check_filter_search_pattern",), "G1 çifti"),
+    ("scripts/validators/check_decimal_write_to.py", ("V:check_decimal_write_to",), "G1 çifti"),
+    ("scripts/validators/check_method_param_type_c.py",
+     ("V:check_method_param_type_c",), "G1 çifti"),
+    ("scripts/validators/check_no_rap_commit.py", ("V:check_no_rap_commit",), "G1 çifti"),
+    ("scripts/validators/check_amdp_comment_apostrophe.py",
+     ("V:check_amdp_comment_apostrophe",), "G1 çifti"),
+    ("scripts/validators/check_kd_no_raw_mermaid.py", ("V:check_kd_no_raw_mermaid",), "G1 çifti"),
+
+    # ── validator ailesi: kendi koşucusunu taşıyan korpuslar ────────────────
+    ("scripts/validators/check_cds_currency_reference.py",
+     ("O:cds_curr_satir_yorumu",), "V1 korpusu bu validator'ı import eder"),
+    ("scripts/validators/check_project_root_resolution.py",
+     ("O:proje_koku_varyantlari", "O:conn_adt_proje_koku"),
+     "V5 yazım-varyantları + CORE-01 dedektörünün ikinci yüzü"),
+    ("scripts/validators/check_package_naming.py", ("O:paket_uzanti_kapsami",), "V2 korpusu"),
+    ("scripts/validators/check_object_in_correct_pkg.py",
+     ("O:paket_uzanti_kapsami",), "V2 korpusu (ikinci gate)"),
+    ("scripts/validators/check_core_not_committed.py",
+     ("O:gitignore_tam_satir",), "V4 korpusu"),
+    ("scripts/validators/check_itg_signoff.py", ("O:itg_alan_dolulugu",), "V3 korpusu"),
+    ("scripts/validators/check_instruction_budget.py",
+     ("O:instruction_budget",), "C-BUD-01 korpusu"),
+    ("scripts/validators/check_memory_index.py",
+     ("O:memory_yukleme_butcesi",), "C-MEM-01 korpusu"),
+    ("scripts/validators/run_review.py",
+     ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam"),
+     "SKIP sözleşmesi + push-tipi/reviewer haritası"),
+
+    # ── git-hooks + guard yüzeyi ────────────────────────────────────────────
+    ("scripts/git-hooks/core_precommit.py",
+     ("O:changelog_gate", "O:sir_gate", "O:changelog_amend", "O:worktree_blocklist"),
+     "pre-commit kontrollerinin dördü de bu dosyayı subprocess ile koşar"),
+    ("scripts/genericize_common.py",
+     ("O:worktree_blocklist", "O:tembel_desen", "R:AV-03", "G"),
+     "kimlik/sızıntı deseni: guard + precommit + blocklist aynı modülü kullanır; tembel kurulum korpusu da burada"),
+    ("scripts/hooks/pre_tool_guard.py",
+     ("G", "O:negatif_test_harness", "O:tembel_desen"),
+     "payload korpusu + parse-fail görünürlüğü + tembel desen-kurulumu"),
+    ("scripts/hooks/session_start.py",
+     ("O:overlay_oto_tazeleme", "O:negatif_test_harness"),
+     "oto-tazeleme kablolaması + parse-fail notu"),
+    ("scripts/hooks/*.py", ("O:negatif_test_harness",),
+     "16 hook'un parse-fail sözleşmesi tek korpusta ölçülür"),
+
+    # ── overlay / proje-kurulum yüzeyi ──────────────────────────────────────
+    ("scripts/utils/claude_overlay.py",
+     ("O:overlay_kiyas_tabani", "O:overlay_oto_tazeleme"), "T2.5 kıyas tabanı + oto-tazeleme"),
+    ("scripts/utils/claude_paths.py", ("O:proje_slug_tek_kaynak",), "slug tek-kaynak korpusu"),
+    ("scripts/utils/project_config.py",
+     ("R:AV-02", "O:workflow_tetik_dupe"),
+     "BOM'lu yaml parse + workflow fixture'ının yaml-lite çözümleyicisi"),
+    ("mcp_servers/sap_adt/_profile.py", ("R:AV-02",), "AV-02 kablolama ucu (tool yüzeyi)"),
+
+    # ── SAP araç zinciri ────────────────────────────────────────────────────
+    ("scripts/sap_adt_lib.py",
+     ("O:conn_cift_anahtar", "O:conn_yazici_encoding", "O:dogrulama_kosamadi",
+      "O:lock_modification_support", "O:class_include_push",
+      "O:sessiz_olumsuzlama_2026_08_10"),
+     "altı korpus bu modülü import/mutasyon eder"),
+    ("scripts/sap_client.py",
+     ("O:adtget_yokluk_kaniti", "O:class_include_push", "O:dogrulama_kosamadi",
+      "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari"),
+     "MCP tool'larının alt katmanı"),
+    ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok",), "activate_and_verify"),
+    ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
+    ("scripts/push_object.py", ("O:class_include_push",), "ccau/ccimp push sırası"),
+    ("scripts/push_textpool.py", ("O:lock_modification_support",), "lock sinyali tüketicisi"),
+    ("scripts/sap_set_object_description.py",
+     ("O:lock_modification_support",), "lock sinyali tüketicisi"),
+    ("scripts/object_types.py",
+     ("O:class_include_push", "O:reviewer_tip_kapsam"), "tip normalizasyonu"),
+    ("scripts/deploy_ui.py",
+     ("O:git_sorgu_sessiz_bos", "O:sessiz_olumsuzlama_2026_08_10"),
+     "git sorgusu + sessiz olumsuzlama"),
+    ("scripts/worklist_audit.py", ("R:AV-13",), "üç-değerli sınıflama"),
+    ("scripts/build_core_index.py", ("O:core_index_kapsam",), "indeks kapsamı"),
+    ("scripts/switch_tier.py", ("O:tier_fail_closed",), "tier çözümleme"),
+    ("scripts/statusline.py", ("O:tier_fail_closed",), "tier göstergesi"),
+    ("scripts/ui-smoke/run_ui_smoke.py", ("O:conn_adt_proje_koku",), "proje-kökü çözümlemesi"),
+    ("mcp_servers/sap_adt/_conn.py",
+     ("O:tier_fail_closed", "O:conn_cift_anahtar", "O:veri_yetki_guardlari"),
+     ".conn_adt okuyucusu"),
+    ("mcp_servers/sap_adt/guardrails.py", ("O:tier_fail_closed",), "require_writable_tier"),
+    ("mcp_servers/sap_adt/data_guard.py",
+     ("O:veri_yetki_guardlari", "O:tier_fail_closed"), "ADR 0011 PII + yetki"),
+    ("mcp_servers/sap_adt/_reviewer.py", ("O:reviewer_tip_kapsam",), "push-tipi ↔ reviewer"),
+    ("mcp_servers/sap_adt/tools/atom.py",
+     ("O:adtget_yokluk_kaniti", "O:ddic_okuma_yolu", "O:dogrulama_kosamadi",
+      "O:reviewer_tip_kapsam"),
+     "adt_get/adt_push/adt_delete uçları"),
+    ("mcp_servers/sap_adt/tools/query.py",
+     ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari"), "where_used/ATC + veri sorgusu"),
+
+    # ── CI / şablon tetikleri ───────────────────────────────────────────────
+    ("claude/workflows/*.yml", ("O:workflow_tetik_dupe",), "şablon tetik sözleşmesi"),
+    (".github/workflows/*.yml", ("O:workflow_tetik_dupe",), "core-ci + reusable tetikleri"),
+    ("claude/kesin-yasaklar.canonical.md", ("G", "O:worktree_blocklist"),
+     "core kimliğinin İŞARET DOSYASI (AV-21): guard bu dosyadan core'u tanır"),
+
+    # ── indekslenen dokümantasyon ───────────────────────────────────────────
+    # `build_core_index.uret()` GERÇEK repo ağacını tarar (ALANLAR + DUZ_ALANLAR) →
+    # bu dizinlerdeki bir doküman eklemek/silmek indeksi değiştirir (çiftleme/hariç
+    # tutma çapaları). Diğer korpuslar bu .md'lere BAKMAZ (hepsi sentetik ağaç kurar).
+    ("governance/**", ("O:core_index_kapsam",), "CORE-INDEX düz + decisions alanı"),
+    ("playbook/**", ("O:core_index_kapsam",), "CORE-INDEX alanı"),
+    ("standards/**", ("O:core_index_kapsam",), "CORE-INDEX alanı"),
+    ("profiles/**", ("O:core_index_kapsam",), "CORE-INDEX alanı"),
+]
+
+# Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla
+# birebirdir; bölüm-2/3 korpuslarının dizin adları farklı olduğu için burada eşlenir.
+# ⚠ Bu kural harita-tamlık kontrolünde SAYILMAZ (yoksa kontrol boş bir tören olurdu:
+# her fixture kendi dizini üzerinden "kapsanmış" görünürdü).
+FIXTURE_DIZIN_BIRIMI: dict[str, tuple[str, ...]] = {
+    "av02_project_config_bom": ("R:AV-02",),
+    "av03_genericize_sap_user": ("R:AV-03",),
+    "av13_worklist_classify": ("R:AV-13",),
+    "pre_tool_guard": ("G",),
+}
+
+
+def _desen_regex(desen: str) -> re.Pattern:
+    """`**` = herhangi (bölü dahil) · `*` = tek segment içi · gerisi literal."""
+    parca, i = [], 0
+    while i < len(desen):
+        if desen.startswith("**", i):
+            parca.append(".*")
+            i += 2
+        elif desen[i] == "*":
+            parca.append("[^/]*")
+            i += 1
+        else:
+            parca.append(re.escape(desen[i]))
+            i += 1
+    return re.compile("^" + "".join(parca) + "$")
+
+
+def _repo_goreli(yol: str) -> str | None:
+    """Verilen yolu repo-köküne göreli POSIX yoluna çevir; repo dışıysa None."""
+    kok = HERE.parent
+    try:
+        p = Path(yol)
+        mutlak = p if p.is_absolute() else (Path.cwd() / p)
+        # resolve(): junction/symlink ve `..` normalize edilir. Dosya var olmak
+        # ZORUNDA değil (silinmiş dosya da geçerli girdidir) → strict=False.
+        return mutlak.resolve().relative_to(kok.resolve()).as_posix()
+    except Exception:
+        return None
+
+
+def _eslesme(rel: str) -> tuple[set[str] | None, str]:
+    """(birimler | None, gerekçe). None = haritada YOK → çağıran TAM süiteye düşer."""
+    parca = rel.split("/")
+    if len(parca) >= 3 and parca[0] == "tests" and parca[1] == "fixtures":
+        ad = parca[2]
+        if ad in {a for a, _ in OZEL_TESTLER}:
+            return {f"O:{ad}"}, "fixture dizini"
+        if ad in VALIDATORS:
+            return {f"V:{ad}"}, "fixture dizini (bölüm-1)"
+        if ad in FIXTURE_DIZIN_BIRIMI:
+            return set(FIXTURE_DIZIN_BIRIMI[ad]), "fixture dizini (bölüm-2/3)"
+        return None, f"tanınmayan fixture dizini: {ad}"
+
+    birimler: set[str] = set()
+    gerekceler: list[str] = []
+    for desen, br, gerekce in HARITA:
+        if _desen_regex(desen).match(rel):
+            birimler |= set(br)
+            gerekceler.append(gerekce)
+    if not gerekceler:
+        return None, "haritada desen yok"
+    return birimler, " + ".join(dict.fromkeys(gerekceler))
+
+
+def birimleri_sec(dosyalar: list[str]) -> tuple[set[str] | None, list[str]]:
+    """(seçim | None, görünür notlar). None = TAM süite (fail-closed)."""
+    notlar: list[str] = []
+    if not dosyalar:
+        return None, ["--degisen listesi BOŞ → TAM süite (fail-closed)"]
+
+    secim: set[str] = set()
+    tam = False
+    for ham in dosyalar:
+        rel = _repo_goreli(ham)
+        if rel is None:
+            notlar.append(f"repo DIŞI/çözülemeyen yol: {ham} → TAM süite")
+            tam = True
+            continue
+        br, gerekce = _eslesme(rel)
+        if br is None:
+            notlar.append(f"bilinmeyen dosya {rel} → TAM süite ({gerekce})")
+            tam = True
+            continue
+        if TAM in br:
+            notlar.append(f"{rel} → TAM süite ({gerekce})")
+            tam = True
+            continue
+        if not br:
+            # AÇIKÇA boş bildirilmiş desen (bugün HARITA'da örneği yok — dal, gelecekte
+            # "bu korpusu hiç ilgilendirmeyen" bir alan eklenirse diye duruyor ve
+            # b0_secim N6'da ölçülüyor). Sessizlik yok: karar satır olarak basılır.
+            notlar.append(f"{rel} → bu korpusta ilgili fixture YOK ({gerekce})")
+            continue
+        notlar.append(f"{rel} → {', '.join(sorted(br))}")
+        secim |= br
+    return (None, notlar) if tam else (secim, notlar)
+
+
+def harita_tamlik() -> list[tuple[str, str, bool, str]]:
+    """TAM koşumda vektör: (kısa-ad, açıklama, ok, detay).
+
+    Her fixture haritada anılıyor mu (yeni fixture + güncellenmemiş harita = sessiz
+    kapsam-dışı) + haritada tanımsız birim var mı (yazım hatası = sessiz seçmeme).
+    """
+    tanimli = ({f"V:{n}" for n in VALIDATORS}
+               | {f"O:{a}" for a, _ in OZEL_TESTLER}
+               | {f"R:{k}" for k, _, _ in REGRESYON}
+               | {"G"})
+    anilan: set[str] = set()
+    for _, br, _ in HARITA:
+        anilan |= {b for b in br if b != TAM}
+
+    kapsanmayan = sorted(tanimli - anilan)
+    hayalet = sorted(anilan - tanimli)
+    return [
+        ("HARİTA-TAMLIK/kapsam", "her fixture haritada anılıyor", not kapsanmayan,
+         f"haritada anılmayan birim(ler)={kapsanmayan} → `--degisen` bunları ASLA seçemez; "
+         f"HARITA'ya satır ekle"),
+        ("HARİTA-TAMLIK/hayalet", "haritada tanımsız birim yok", not hayalet,
+         f"tanımsız birim(ler)={hayalet} (yazım hatası?)"),
+    ]
 
 
 def run_validator(name: str, fixture_dir: Path) -> tuple[int, str]:
@@ -377,15 +664,16 @@ def av13_kontrolleri() -> list[tuple]:
     return out
 
 
+# (birim-kimliği, başlık, fonksiyon) — kimlik `--degisen` haritasında `R:<id>` olarak anılır.
 REGRESYON = [
-    ("AV-02 project_config BOM", av02_kontrolleri),
-    ("AV-03 genericize SAP kullanıcı deseni", av03_kontrolleri),
-    ("AV-13 worklist üç-değerli sınıflama", av13_kontrolleri),
+    ("AV-02", "AV-02 project_config BOM", av02_kontrolleri),
+    ("AV-03", "AV-03 genericize SAP kullanıcı deseni", av03_kontrolleri),
+    ("AV-13", "AV-13 worklist üç-değerli sınıflama", av13_kontrolleri),
 ]
 
 
-def regresyon_kos() -> tuple[int, int]:
-    """(gecen, toplam) — ayrıntıyı basar."""
+def regresyon_kos(secim: set[str] | None = None) -> tuple[int, int]:
+    """(gecen, toplam) — ayrıntıyı basar. `secim` verilirse yalnız seçili AV'ler koşar."""
     gecen = toplam = 0
     print("\n=== REGRESYON VEKTÖRLERİ (bug-avı 2026-08-01) ===")
     # ⚠ ZORUNLU FLUSH — `worklist_audit` import-ANINDA sys.stdout'u YENİ bir
@@ -395,7 +683,10 @@ def regresyon_kos() -> tuple[int, int]:
     # (sessiz çıktı kaybı — "PASS ≠ baktı"). Import'lardan ÖNCE boşalt.
     sys.stdout.flush()
     sys.stderr.flush()
-    for baslik, fn in REGRESYON:
+    for birim, baslik, fn in REGRESYON:
+        if secim is not None and f"R:{birim}" not in secim:
+            print(f"  [ATLANDI — seçim modu] {baslik}")
+            continue
         try:
             sonuclar = fn()
         except Exception as exc:  # noqa: BLE001
@@ -414,11 +705,58 @@ def regresyon_kos() -> tuple[int, int]:
     return gecen, toplam
 
 
-def main() -> int:
+def _argumanlari_coz(argv: list[str]) -> tuple[list[str] | None, bool]:
+    """(degisen | None, listele). `None` = argümansız TAM koşum (bugünkü davranış)."""
+    degisen: list[str] | None = None
+    listele = False
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--degisen":
+            degisen = []
+            i += 1
+            while i < len(argv) and not argv[i].startswith("--"):
+                degisen.append(argv[i])
+                i += 1
+            continue
+        if a == "--listele":
+            listele = True
+        else:
+            print(f"[HATA] bilinmeyen argüman: {a}\n{__doc__}")
+            raise SystemExit(2)
+        i += 1
+    if listele and degisen is None:
+        # Kuru koşum yalnız seçim modunun anlamlıdır; argümansız kuru koşum "TAM" der.
+        degisen = []
+    return degisen, listele
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:]) if argv is None else list(argv)
+    degisen, listele = _argumanlari_coz(argv)
+
+    secim: set[str] | None = None
+    if degisen is not None:
+        secim, notlar = birimleri_sec(degisen)
+        print("=== SEÇİM MODU (--degisen) — TAM SÜİTE DEĞİL ===")
+        for n in notlar:
+            print(f"  · {n}")
+        if secim is None:
+            print("  ⇒ KARAR: TAM süite koşulacak (fail-closed)\n")
+        else:
+            print(f"  ⇒ KARAR: {len(secim)} birim — {', '.join(sorted(secim)) or '(yok)'}")
+            print("  ⚠ Bu bir ARA-ADIM koşumudur; merge öncesi 1× TAM süite ZORUNLU.\n")
+        if listele:
+            return 0
+
     rows = []  # (name, bad_desc, good_desc, verdict, detail)
     all_ok = True
+    atlanan = 0
 
     for name in VALIDATORS:
+        if secim is not None and f"V:{name}" not in secim:
+            atlanan += 1
+            continue
         script = VALIDATORS_DIR / f"{name}.py"
         bad_dir = FIXTURES / name / "bad"
         good_dir = FIXTURES / name / "good"
@@ -460,6 +798,9 @@ def main() -> int:
         ))
 
     for ad, aciklama in OZEL_TESTLER:
+        if secim is not None and f"O:{ad}" not in secim:
+            atlanan += 1
+            continue
         script = FIXTURES / ad / "run.py"
         if not script.is_file():
             rows.append((ad, "n/a", "n/a", "DOĞRULANAMADI", f"özel fixture yok: {script}"))
@@ -486,19 +827,31 @@ def main() -> int:
             rows[-1] = (rows[-1][0], f"P+N içeride: {ozet[0].strip()}", rows[-1][2],
                         rows[-1][3], rows[-1][4])
 
-    name_w = max(len(r[0]) for r in rows) + 2
-    print(f"{'validator':<{name_w}} {'bad (fail beklenir)':<26} {'good (pass beklenir)':<26} sonuç")
-    print("-" * (name_w + 26 + 26 + 8))
-    for name, bad_s, good_s, verdict, detail in rows:
-        print(f"{name:<{name_w}} {bad_s:<26} {good_s:<26} {verdict}")
-        if detail:
-            print(f"    -> {detail.strip(' |')}")
+    # ── HARİTA-TAMLIK (yalnız TAM koşumda; seçim modunda kıyas tabanı yok) ──
+    if secim is None:
+        for kisa, aciklama, ok, detay in harita_tamlik():
+            all_ok = all_ok and ok
+            rows.append((kisa, aciklama, "harita ↔ fixture listesi",
+                         "PASS" if ok else "FAIL", "" if ok else f" | {detay}"))
+
+    if rows:
+        name_w = max(len(r[0]) for r in rows) + 2
+        print(f"{'validator':<{name_w}} {'bad (fail beklenir)':<26} "
+              f"{'good (pass beklenir)':<26} sonuç")
+        print("-" * (name_w + 26 + 26 + 8))
+        for name, bad_s, good_s, verdict, detail in rows:
+            print(f"{name:<{name_w}} {bad_s:<26} {good_s:<26} {verdict}")
+            if detail:
+                print(f"    -> {detail.strip(' |')}")
+    else:
+        print("(bölüm 1/OZEL: seçim modunda koşulacak birim yok)")
 
     n_pass = sum(1 for r in rows if r[3] == "PASS")
-    print(f"\n{n_pass}/{len(rows)} PASS  (bölüm 1: validator bad/good)")
+    print(f"\n{n_pass}/{len(rows)} PASS  (bölüm 1: validator bad/good"
+          f"{' + harita-tamlık' if secim is None else ''})")
 
     # ── BÖLÜM 2: regresyon vektörleri (AV-02/03/13 — kütüphane seviyesi) ──
-    r_gecen, r_toplam = regresyon_kos()
+    r_gecen, r_toplam = regresyon_kos(secim)
     print(f"\nregresyon vektörleri: {r_gecen}/{r_toplam} PASS  (bölüm 2)")
 
     # ── BÖLÜM 3: pre_tool_guard payload korpusu (AV-16/17/18/18b/21) ──
@@ -506,20 +859,29 @@ def main() -> int:
     # çağrılır: CI adımı zaten bu dosyayı işaret ediyor; ikinci bir CI adımı eklemek
     # "kablolamayı unutma" riskini artırırdı (kod ≠ kablolama dersi — bu turda
     # test_commit_message_leak_gate tam olarak böyle 3 gün kablosuz kalmıştı).
-    sys.path.insert(0, str(HERE))
-    try:
-        from run_guard_fixture_tests import kosum as guard_kosum
-    except Exception as exc:
-        print(f"\n[DOĞRULANAMADI] guard payload korpusu yüklenemedi: {exc}")
-        return 1
-    print("\n" + "-" * 60)
-    print("pre_tool_guard payload korpusu (blok + serbest)")
-    g_gecen, g_toplam, g_hatalar = guard_kosum(sessiz=True)
-    for h in g_hatalar:
-        print(f"  [FAIL] {h}")
-    print(f"{g_gecen}/{g_toplam} PASS  (bölüm 3: guard payload)")
+    g_gecen = g_toplam = 0
+    g_hatalar: list = []
+    if secim is None or "G" in secim:
+        sys.path.insert(0, str(HERE))
+        try:
+            from run_guard_fixture_tests import kosum as guard_kosum
+        except Exception as exc:
+            print(f"\n[DOĞRULANAMADI] guard payload korpusu yüklenemedi: {exc}")
+            return 1
+        print("\n" + "-" * 60)
+        print("pre_tool_guard payload korpusu (blok + serbest)")
+        g_gecen, g_toplam, g_hatalar = guard_kosum(sessiz=True)
+        for h in g_hatalar:
+            print(f"  [FAIL] {h}")
+        print(f"{g_gecen}/{g_toplam} PASS  (bölüm 3: guard payload)")
+    else:
+        print("\n[ATLANDI — seçim modu] bölüm 3: pre_tool_guard payload korpusu")
 
     print(f"\nTOPLAM: {n_pass + r_gecen + g_gecen}/{len(rows) + r_toplam + g_toplam} PASS")
+    if secim is not None:
+        print(f"⚠ SEÇİLİ KOŞUM ({atlanan} fixture atlandı; bölüm-2/3 atlamaları yukarıda "
+              f"satır satır) — TAM SÜİTE SONUCU DEĞİLDİR. "
+              f"Merge öncesi: python tests/run_fixture_tests.py")
     return 0 if (all_ok and r_gecen == r_toplam and not g_hatalar) else 1
 
 

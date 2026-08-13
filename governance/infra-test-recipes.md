@@ -10,7 +10,7 @@
 python scripts/validators/run_all_validators.py     # CORE modu (CI ile aynı)
 python -m compileall -q scripts mcp_servers
 python scripts/git-hooks/core_precommit.py --all
-python tests/run_fixture_tests.py                   # G1 10/10  [✓]
+python tests/run_fixture_tests.py                   # TAM korpus — sayaca değil SATIRLARA bak
 python scripts/inspector.py --self-test             # canary    [✓]
 ```
 - ⚠ **`--all` INDEX'i tarar, çalışma ağacını DEĞİL** (`git ls-files` + `git show :<yol>`) →
@@ -18,6 +18,35 @@ python scripts/inspector.py --self-test             # canary    [✓]
   taradığı şey senin yazdığın içerik değildir = **sahte-yeşil.** (Ölçüldü 2026-08-13, 4 vektör:
   untracked→0 · tracked-ama-unstaged→0 · her ikisi `git add` sonrası→1.)
 - **Verim:** tam korpus yalnız SON durumda **1×** koşulur; ara adımlarda yalnız dokunduğun fixture.
+
+### B0-SEÇİM — `--degisen` (ara adımlar; 2026-08-13)
+> Ölçüldü: TAM koşum **169,7 sn / 113 vektör**. Tek-validator değişikliği için seçili
+> koşum **0,4 sn**; `claude_overlay` **4,6 sn**; `pre_tool_guard` **32,4 sn** (55-payload
+> korpusu dâhil). Kimin-ne-zaman koştuğu: `playbook/howto-infra-fix-proseduru.md` ADIM-3 B0.
+```bash
+python tests/run_fixture_tests.py --degisen <dosya> [<dosya> ...] --listele   # kuru koşum
+python tests/run_fixture_tests.py --degisen scripts/hooks/pre_tool_guard.py   # seçili koşum
+python tests/run_fixture_tests.py                                            # TAM (lider/CI)
+```
+- Harita = `tests/run_fixture_tests.py::HARITA` (**açık sabit**; docstring'lerden üretilmez).
+  Yeni fixture yazınca satır ekle — eklemezsen TAM koşum `HARİTA-TAMLIK/kapsam` FAIL verir.
+- **FAIL-CLOSED negatif-testi** (fail-open'a kaymadığını böyle ölçersin):
+  ```bash
+  python tests/run_fixture_tests.py --degisen scripts/hic_yok.py --listele
+  # beklenen: "bilinmeyen dosya … → TAM süite" + "⇒ KARAR: TAM süite koşulacak (fail-closed)"
+  python tests/run_fixture_tests.py --degisen --listele        # boş liste → aynı karar
+  ```
+  ⚠ `exit 0` burada da tek başına kanıt değildir — **KARAR satırını oku** (seçili koşum
+  sonunda `⚠ SEÇİLİ KOŞUM … TAM SÜİTE SONUCU DEĞİLDİR` yazar; o satır varken "süite yeşil"
+  denmez).
+- Korpus: `python tests/fixtures/b0_secim/run.py` → **20/20**. İki mutasyon (ikisi de
+  koşulur, biri diğerini kapsamaz):
+  · `--mutasyon-failopen` (bilinmeyen dosya → sessiz daraltma) → **15/18**; düşen: N1 · N1b · N5.
+  · `--mutasyon-tamlik` (harita-tamlık kontrolü sökülü) → **16/18**; düşen: N2 · N3.
+  **FP çapaları her iki mutasyonda da AYAKTA** (P1-P5 · N6 açık-boş bildirim · F1 argümansız
+  davranış · F2 sahte-alarm yok · F4 doküman dalı) ⇒ seçim aşırı-sıkılaşmadı. *(Mutasyon `git show <sha>` ile DEĞİL,
+  fixture içi enjeksiyonla yapılır: kod taban SHA'da hiç yoktu — hedef geçmiş bir commit değil,
+  reddedilen tasarım kararı.)*
 
 ## B0b — NEGATİF TEST HARNESS'I (hook'a sentetik payload verirken)
 > Geçerlidir: `pre_tool_guard` · `pull_before_edit` · stdin'den JSON okuyan HER hook.

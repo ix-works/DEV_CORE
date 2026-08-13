@@ -51,6 +51,41 @@ alternatif yoksa kullanıcıya eskalasyon. Kuyruk-eskalasyonu: content-health-ra
 kayıtları tarar (süresiz-açık kayıt = karantina-çürümesi; flaky-quarantine literatürü).
 
 ## ADIM 3 — İNFRA-EXPERT FIX-SEANSI (kuyruktakiler)
+
+### B0 — HANGİ TESTİ NE ZAMAN KOŞARIZ (2026-08-13)
+› **MUST** (infra-expert + lider) · **Denetim:** görünür çıktı satırı + süite-içi
+`HARİTA-TAMLIK` vektörü + lider DoD'si — **yeni runtime gate YOK** (ADR 0019 moratoryumu:
+mevcut süitenin içinde bir vektör; ihlali zaten çıktıda görünür).
+› `prior-art: bulundu` — `governance/infra-test-recipes.md` B0 (core#126) "tam korpus
+yalnız SON durumda 1× koşulur" verim notunu zaten taşıyordu; bu blok onun **kimin-ne-zaman**
+tarafını netleştirir ve aleti (`--degisen`) ekler. Çoğaltma değil, aynı kaydın devamı.
+› ⚠ Bu bir **YER DEĞİŞTİRMEDİR, gevşetme değil**: hiçbir kontrol kaldırılmadı; ara-adım
+mükerrerliği indi, sigorta (lider TAM + CI TAM) yerinde. Ayrıntılı analiz: `infra-changelog`
+2026-08-13 satırı.
+Süite 12 → 113 vektöre büyüdü: **TAM koşum 169,7 sn** (ölçüm 2026-08-13; sayılar bayatlar —
+kanonik yer `governance/infra-test-recipes.md` §B0-SEÇİM, burada yalnız gerekçe). Eski pratikte
+infra-expert bunu bir seansta 2× koşuyordu; CI de, lider de aynı süiteyi TAM koşuyor ⇒
+**aynı sigorta 3-4×**. Yeni iş bölümü:
+
+| Kim | Ne zaman | Komut |
+|---|---|---|
+| **infra-expert** | ARA adımlar (fix'i şekillendirirken) | `python tests/run_fixture_tests.py --degisen <değişen-dosyalar>` (+ kendi yeni fixture'ını doğrudan koş) |
+| **infra-expert** | teslimden önce, kendi worktree'sinde | reçete B0'ın geri kalanı (`run_all_validators` · `compileall` · `core_precommit --all`) |
+| **LİDER (DoD, ZORUNLU)** | **merge/PR öncesi 1× TAM** | `python tests/run_fixture_tests.py` — argümansız. Seçili koşum bunun yerine GEÇMEZ |
+| **CI** | her PR | değişmedi: `.github/workflows/core-ci.yml` süiteyi TAM koşar |
+
+- `--degisen` **FAIL-CLOSED**'dır: verdiğin dosyalardan biri haritada yoksa TAM süiteye
+  düşer ve **bunu satır satır yazar**. "Sessizce 0 birim koştu" hâli yoktur.
+- Seçili koşumun çıktısı kendini TAM sanmaz: sonunda `⚠ SEÇİLİ KOŞUM … TAM SÜİTE SONUCU
+  DEĞİLDİR` satırı basar. Raporuna bu koşumu **tam süite kanıtı gibi yazma.**
+- Ne koşulacağını önce **kuru-koşumla** gör: `--degisen <dosya> --listele`.
+- Harita `tests/run_fixture_tests.py` içindeki `HARITA` sabitidir. **Yeni fixture yazınca
+  oraya satır ekle** — eklemezsen TAM koşum `HARİTA-TAMLIK/kapsam` vektöründe FAIL verir
+  (kendi korpusu: `tests/fixtures/b0_secim/`).
+- 📌 İlk gerçek infra işlerinde **çift koşum kıyası** yap (seçili + tam, ikisinin kararını
+  yan yana yaz). Kıyas taban veri toplayana kadar geçici bir disiplindir; sapma görülürse
+  harita eksiktir → düzelt + kuyruk kaydı aç.
+
 **Lider hazırlar:** ① worktree açar (`git -C <core> worktree add <yol> -b infra/<konu>`) —
 ajan CANLI çekirdeğe asla yazmaz (junction-anında-yayılım riski fiziksel olarak sıfır) ·
 ② R2-brifing: kuyruk-kaydı + ilgili lessons/removed-controls + worktree-yolu + kapsam-sınırı.
