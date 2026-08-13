@@ -126,6 +126,12 @@ OZEL_TESTLER = [
     #   --mutasyon (taban SHA) -> P vektorleri duser · --mutasyon-gevsek -> N capalari duser.
     ("overlay_kiyas_tabani",
      "claude_overlay T2.5: 'core degisti' ile 'kopya elle duzeltildi' ayrisir"),
+    # 2026-08-13 ikinci yari: kiyas tabani "fark yok" diyebildigi ICIN senkron artik
+    # kullanici komutuna bagli degil -- session_start her acilista otomatik tazeler,
+    # fark DOLU iken dokunmaz ve her iki dal da GORUNUR satir basar (sessiz tazeleme yok).
+    #   --mutasyon (taban SHA, oto_tazele yok) -> P duser · --mutasyon-gevsek -> N capalari duser.
+    ("overlay_oto_tazeleme",
+     "overlay bayatligi komutsuz kapanir; elle duzeltme varken DOKUNMAZ"),
 ]
 
 

@@ -71,6 +71,30 @@ yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 | 2026-08-01 | fark_raporu() + materyalize(onayli) kapısı + --overlay-onayli | Senkron elle-düzeltmeleri SESSİZCE eziyordu (B5 5-günde-yeniden-bayat vakası; R4c) | N: bayraksız koşum 4-fark listesiyle RED; P: onaylı 6-dosya; +NameError(a/args) EXPRESS-fix'i | — (koşum-kanıtları plan T2.5) | core#69 |
 | 2026-08-13 | **KIYAS TABANI kök-fix'i:** manifest'e dosya-başına `uretilen_hash` + `_uretildigi_gibi()`; `fark_raporu` artık kopya-ŞİMDİ ↔ **en son ÜRETİLEN**'i kıyaslar (eskiden "bugün üretilecek" idi) + `inspector.py` üçlü-kıyas dalındaki `except: pass` → görünür B5 bulgusu | ⚠GEVŞETME (bilinçli): eski taban "core değişti" ile "kopya elle düzeltildi"yi AYIRT EDEMİYORDU → core'da bir ajan dosyası değiştiği an, projede hiçbir elle düzeltme olmasa bile kapı kapanıyordu (kurt masalı; junction'lı tipler aynı anda bedavaya tazeleniyordu = kontrol grubu). İkinci bedel: kapı her core commit'inde bağırınca `--overlay-onayli` refleks olur ve gerçek bir elle düzeltmeyi SESSİZCE ezer — koruma kendini aşındırır | **27/27** `tests/fixtures/overlay_kiyas_tabani/run.py`; ÇİFT mutasyon: `--mutasyon` (taban **15e9a51**) → 18/24, düşenler yalnız P (V2/V2b/V5/V8/V13/V15) · `--mutasyon-gevsek` (fix'in sökümü) → 15/24, düşenler yalnız N (V3/V3b/V4/V6/V9/V10/V11/V13b/V19). ⚠ Bu rakamlar **son hâlin** ölçümüdür: korpus ilk rapordan sonra 23→27 vektöre büyüdü (V16-V19 eklendi) ve lider bağımsız yeniden koştu; gevşetme kümesi (mutasyonda düşen P listesi) **değişmedi** — yani onaylanan cetvel aynen geçerli | `tests/fixtures/overlay_kiyas_tabani/` (run_fixture_tests OZEL_TESTLER'e kablolu) | — |
 
+| 2026-08-13 | **OTOMATİK TAZELEME (aynı günün ikinci yarısı, kullanıcı onaylı):** `claude_overlay.oto_tazele()` + `tazeleme_gerekli()` + ortak üretici `_uretilecek_icerik()`; `session_start` her açılışta çağırır (junction kontrolünden **ÖNCE**). Otomatik yol **YERİNDE SENKRON**dur (`_yerinde_senkron`: üzerine yaz → fazlalıkları tek tek sil → manifest EN SON): `materyalize`'in `rmtree` penceresi her açılışta rutin olurdu, harness'ın ajan dizininde — `materyalize` DEĞİŞMEDİ, elle yol aynen. Fark boşsa kopya kendiliğinden üretilir, doluysa DOKUNULMAZ; iki dal da **görünür satır** basar. Kapatma: `IX_OVERLAY_OTO=0` | ⚠GEVŞETME (bilinçli, aşağıdaki cetvel): kıyas tabanı fix'i onay TÖRENİNİ kaldırmıştı ama **komutu** kaldırmamıştı — core bir ajan dosyasını değiştirdiğinde kullanıcı hâlâ `OVERLAY BAYAT` görüp bir kez `team_setup.py` koşuyordu (*"her defasında böyle mi olacak"*). Nag'ın kaynağı ÖLÇÜLDÜ: `fark_raporu` değil **`inspector.py` b5** (manifest `core_hash` ↔ core'un şimdiki hash'i). Junction'lı üç tip tazeliği bedavaya alırken `agents` yalnız TEK proje-override yüzünden alamıyordu | **33/33** `tests/fixtures/overlay_oto_tazeleme/run.py`; ÇİFT mutasyon: `--mutasyon` (taban **63e6faa**, `oto_tazele` yok) → **17/32**, düşenler yalnız P + özelliğe-bağlı K (V2/V2b/V2c/V2d/V3b/V5/V6/V8/V8b/V9/V12/V17/K20/K21/K22) · `--mutasyon-gevsek` (ön-kontrol + `onayli=True`) → **25/32**, düşenler yalnız N çapaları (V3/V4/V10/V16/K23/K24 + V3b). **KABLOLAMA canlı ölçüldü** (elle çağrı değil): gerçek `session_start` alt-süreci kopyayı tazeledi ve duyuru `additionalContext`e düştü (K20/K21); ⛔ junction dalı satırı BASTIRMIYOR (K22); tazeleme sonrası inspector B5 bulgusu 1→0 (K25). **MALİYET** (dönüşümlü 11+11 koşum, gerçek 7 ajan / 63.662 B): açılışa **+22 ms** medyan (234→257 ms); saf `oto_tazele` taze halde 22,7 ms, üretim anında 435 ms (tek seferlik). REGRESYON: `run_fixture_tests` **113/113** · `run_all_validators` (CORE) OK · `compileall` OK · `core_precommit --all` (stage'li) exit 0 · `inspector --self-test` canary OK | `tests/fixtures/overlay_oto_tazeleme/` (run_fixture_tests OZEL_TESTLER'e kablolu) | (bu PR) |
+
+> **⚠ ÖLÇÜLMÜŞ SINIR — iddia bu kadar (2026-08-13, canlı harness'ta 3 koşum).** Tazeleme
+> **bir SONRAKİ oturumdan** itibaren etkilidir; yazıldığı oturumda değil. Sandbox projede
+> ölçüldü: ① SessionStart hook'u oturum sırasında yeni bir ajan dosyası yazdı → o oturumun
+> `subagent_type` listesinde **YOK** ② bir sonraki oturumda **VAR** ③ en sert vaka: hook
+> mevcut bir ajanın İÇERİĞİNİ değiştirdi, aynı oturumda o ajan spawn edildi ve **ESKİ
+> içerikle** davrandı (disk yeniyken). Yani vaat *"artık komut koşmayacaksın"*dır,
+> *"anında güncellenir"* DEĞİL. Junction'lı tipler de aynı oturum-başı okuma kuralına
+> tabidir ⇒ davranış **parite** (mid-session `core pull` orada da bir oturum gecikir).
+>
+> **2026-08-13 — OTOMATİK TAZELEME GEVŞETME CETVELİ.** **Artık kullanıcı istemeden oluyor:**
+> ① core dosyası değişti/eklendi/silindi + kopya el değmemiş → kopya yeniden üretilir
+> ② `claude-local` override'ı değişti + kopya el değmemiş → aynı ③ manifest 2026-08-13
+> öncesi (alansız) VE kopyalar üretilecekle bayt-bayt aynı → yalnız **kayıt** tazelenir,
+> içerik değişmez (yayılım adımı kendiliğinden kapanır) ④ manifest bozuk + kopya el
+> değmemiş → yeniden üretilir. **Hâlâ ELLE onay istiyor (vektörle kanıtlı):** kopyada
+> herhangi bir elle düzeltme (V3/V4) · proje-override kopyasının elle düzeltilmesi (V16) ·
+> manifest bozuk + elle düzeltme (V10) · `core/claude/<tip>` okunamıyor, ör. junction kopuk
+> (V7 — otomatik üretim burada SİLME riski taşır, bu yüzden durur). **Savunma derinliği
+> ÖLÇÜLDÜ (V20):** kapı iki katmanda duruyor — otomatik yoldaki ön-kontrol *ve*
+> `materyalize(onayli=False)`'ın kendi kontrolü; tek-noktalı gevşetme mutasyonu bu yüzden
+> hedefi ıskaladı ve koşucunun öz-denetimi haklı olarak sayı basmadı (exit 2).
+
 > **2026-08-13 — GEVŞETME CETVELİ (bu satır okunmadan kapı elden geçirilmesin).**
 > **Artık GEÇEN (eskiden bloklanan):** ① core dosyası değişti + kopya bayt-bayt el değmemiş
 > ② core dosyayı SİLDİ + kopya el değmemiş **ve** manifest onu `kaynak: core` diye tanıyor
@@ -104,9 +128,13 @@ yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 > ÜRETMEDİ (`[]`), geçti ve **7/7** dosyayı damgaladı; damgadan sonra core değişimi artık
 > kapıyı kapatmıyor (fark=0, bayraksız üretim True). Yani yayılım adımı **tek bir bayraksız
 > `team_setup.py`**'dir — `--overlay-onayli` GEREKMEZ.
-> **Kapsam sınırı:** bu fix, "fark yoksa senkron kendiliğinden tazelesin" otomatiğini *mümkün
-> ve güvenli* kılar ama onu İÇERMEZ — `.claude/agents`'ı istenmeden yeniden üretmek bir
-> davranış-yüzeyi kararıdır ⇒ AYRI karar, kullanıcı onayına bağlı (bu turda YAPILMADI).
+> ✅ **GÜNCELLENDİ (aynı gün, ikinci yarı):** bu yayılım adımı da **elle koşum istemiyor** —
+> `oto_tazele` alansız manifesti (kopyalar üretilecekle bayt-bayt aynıyken) kendiliğinden
+> tazeliyor; bkz. yukarıdaki OTOMATİK TAZELEME satırı + V8/V8b vektörleri.
+> **Kapsam sınırı — ✅ KAPANDI (2026-08-13, kullanıcı onayıyla):** bu fix "fark yoksa senkron
+> kendiliğinden tazelesin" otomatiğini *mümkün ve güvenli* kılıyordu ama İÇERMİYORDU; o AYRI
+> karar aynı gün onaylandı ve yukarıdaki satırda uygulandı. ⚠ Bu paragraf tarihsel bağlam
+> içindir — "yapılmadı" ifadesi ARTIK GEÇERSİZ.
 > **Bugünkü canlı etki 1 proje:** ölçüldü (2026-08-13) — `agents` gerçek dizin yalnız bir
 > projede; diğer iki proje kökünde 4/4 tip junction ve `claude-local` yok ⇒ overlay kodu
 > orada hiç çalışmıyor. Etki alanı: o proje + `claude-local` ekleyen her gelecek proje.
