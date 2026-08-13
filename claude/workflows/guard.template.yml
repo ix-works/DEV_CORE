@@ -15,8 +15,23 @@
 # ⚠ Buraya job EKLEME. Projeye özgü kontrol gerekiyorsa AYRI bir workflow dosyası aç.
 name: guard
 
+# TETİK SÖZLEŞMESİ — `push` DALSIZ BIRAKILMAZ (2026-08-13 ölçümü).
+# Dalsız `push:` + `pull_request:` birlikte, PR dalına atılan her push'ta AYNI head SHA'yı
+# İKİ ayrı koşuda doğrulur. Bir proje reposunun ard arda BEŞ PR döngüsünde ölçüldü:
+# beşinde de branch-push ve pull_request koşuları aynı head SHA'yı doğruluyordu → PR başına
+# 3 koşu × 3 job = 9 job; 3'ü saf çoğaltma. Kaybolan koruma YOK: silinen branch-push
+# koşusunda `behavior-surface` zaten HİÇBİR ŞEY yapmıyordu (REF=refs/heads/<dal> ≠
+# refs/heads/main → F1 bloğu atlanır; canlı log kanıtı: o koşunun çıktısı yalın "OK"),
+# `core-leak`+`validators` ise aynı ağacı PR koşusunda zaten görüyor — üstelik PR koşusu
+# BİRLEŞMİŞ ağacı (refs/pull/N/merge) doğrular, yani daha ilgili olanı.
+# ⛔ `concurrency: cancel-in-progress` bu sınıfı ÇÖZMEZ — denendi ve ÖLÇÜLDÜ: branch-push
+# koşusu, pull_request koşusu DOĞMADAN bitiyor (05:35:07→05:35:31 bitti, PR koşusu 05:35:33
+# doğdu) → iptal edilecek koşu bulunmaz, tasarruf 0.
+# Değişmez KORUNUR: main'e inen her şey ya PR koşusundan ya main-push koşusundan geçer.
+# DEV_CORE'un kendi `core-ci.yml`'i baştan beri bu desendedir (kontrol grubu).
 on:
   push:
+    branches: [main]
   pull_request:
 
 # Reusable workflow izinleri çağırandan devralır; `behavior-surface` job'u

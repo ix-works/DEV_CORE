@@ -12,6 +12,12 @@
 # bayatlar (2026-07-10'da main'in 49 commit gerisindeydi). Bayat bir ref, guard'ı sessizce
 # eski tutardı — tam da kaldırmaya çalıştığımız drift. `@main`'in bedeli gürültülüdür:
 # bozuk bir core commit'i projelerin CI'ını KIRMIZI yapar, sessizce geçmez.
+#
+# ⚠ TETİK BURADA YAŞAMAZ (`workflow_call`) — çağıranın `on:` bloğundadır. Çağıran sözleşmesi
+# (2026-08-13): `push` DALSIZ bırakılmaz, `branches: [main]` ile daraltılır; yoksa PR dalına
+# atılan her push aynı SHA'yı iki koşuda doğrular (ölçüm + neden: guard.template.yml başlığı).
+# Aşağıdaki `behavior-surface` bu sözleşmeye DAYANIR: F1 bloğu yalnız `refs/heads/main`
+# push'unda ve `pull_request`ta iş yapar, feature-dal push'unda zaten no-op'tur.
 name: project-guard
 
 on:
