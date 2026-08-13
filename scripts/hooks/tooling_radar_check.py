@@ -50,6 +50,9 @@ def main() -> int:
     try:
         json.load(sys.stdin)
     except Exception:
+        # KAPSAM DISI (2026-08-13 parse-fail gorunurluk turu): stdin yalnizca BOSALTILIR;
+        # nudge'lar dosya tazeliginden uretilir, payload'dan DEGIL. Parse-fail'de kaybolan
+        # bir karar yok -> not basilmaz (sinif: "girdiye dayali karar", bu hook o sinifta degil).
         pass
 
     nudges = []

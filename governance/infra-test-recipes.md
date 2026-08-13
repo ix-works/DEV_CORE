@@ -25,6 +25,14 @@ python scripts/inspector.py --self-test             # canary    [✓]
   (`json.load` → `except: return 0`, bilinçli fail-safe). Yani *"guard bu payload'ı geçirdi"*
   ile *"guard payload'ı hiç okuyamadı"* AYNI çıktıyı verir. 0 gördüğünde **önce payload'ın
   PARSE edildiğini kanıtla** — stderr'de blok mesajı yoksa ölçümün geçersiz olabilir.
+- ✅ **KÖK-FIX 2026-08-13 — artık AYIRT EDİLEBİLİR (`exit 0` DURUYOR).** Girdiye dayalı karar
+  veren **14 hook** parse-fail dalında stderr'e `GIRDI-PARSE-EDILEMEDI` notu basar (hook adı +
+  "KARAR DEGILDIR" + bu reçeteye atıf). **Ölçüm kuralı:** `0` gördüğünde stderr'e bak —
+  **not VARSA ölçümün GEÇERSİZ** (payload hiç okunmadı), **not YOKSA gerçekten meşru serbest.**
+  Exit davranışı bilerek değişmedi; `2` hâlâ tek blok sinyalidir (not blok imzası SAYILMAZ).
+  Not **stderr**'e gider (stdout JSON sözleşmesi kirlenmez) ve **ASCII**'dir (cp1252 tuzağı).
+  **Kapsam dışı 2 hook** (`pre_compact`, `tooling_radar_check`): stdin yalnız boşaltılır,
+  karara girmez → not basmaz; korpusun **iç kontrol grubudur.**
 - **Kök tuzak: elle yazılan `\\` kabuğa TEK `\` olarak ulaşır** → JSON'da geçersiz escape
   (`Invalid \escape`) → parse-fail → 0. Ölçüldü 2026-08-13 (aynı payload, tek fark yol biçimi):
   `\\`→**0** · `/`→**2 BLOK** · `\\\\`→**2** · byte-tam `\\` dosyadan→**2**.
@@ -40,7 +48,15 @@ python scripts/inspector.py --self-test             # canary    [✓]
   `printf`e geçmek de kurtarmaz — kabuk kadar **payload'daki backslash** da belirleyicidir;
   suçlamadan önce payload'ı `od -c`/`cat -A` ile GÖR ve taşıyıcının KOŞTUĞUNU doğrula
   (255 / "command not found" = guard sonucu DEĞİL).
-- Korpus: `python tests/fixtures/negatif_test_harness/run.py` → **11/11** · `--mutasyon` → **6/11**.
+- Korpus: `python tests/fixtures/negatif_test_harness/run.py` → **15/15**. **İKİ MUTASYON, ikisi de
+  koşulur** (biri diğerini KAPSAMAZ — biri exit'i, diğeri notu çivilliyor):
+  · `--mutasyon` (EXIT değişmezi: stdin fail-safe `return 0`→`return 2`) → **10/15**; düşen 5:
+    V5 · V8 · V9 · V10 · V13. *(Kapsamı `return 0` çapası olan 10 hook; `data = {}` ile devam
+    eden 4 hook bu mutasyonun DIŞINDADIR — onları `--mutasyon-notsuz` ölçer.)*
+  · `--mutasyon-notsuz` (NOT değişmezi = **fix'in sökümü**) → **9/15**; düşen 6:
+    V6 · V7 · V8 · V9 · V13 · V15.
+  **FP çapaları HER İKİ mutasyonda da AYAKTA** (V1/V2 blok · **V3 meşru-serbest hâlâ SESSİZ** ·
+  V4 pozitif kontrol · V14 stdout · V16 kayıt) ⇒ "doğru vaka bozulmadı" kanıtı korunuyor.
   ⚠ Korpus taşıyıcı exit'lerini BASAR ama EŞİTLİĞİNİ assert ETMEZ (ortam-bağımlı); sözleşme
   yalnız **referans taşıyıcıda** (doğrudan stdin) ölçülür: *imza VAR ⇔ exit 2*.
 

@@ -50,6 +50,9 @@ def main() -> int:
     try:
         json.load(sys.stdin)
     except Exception:
+        # KAPSAM DISI (2026-08-13 parse-fail gorunurluk turu): stdin yalnizca BOSALTILIR,
+        # hicbir karara girmez — mesaj statiktir. Parse-fail'de KAYBOLAN bir sey yok, o
+        # yuzden not basilmaz (sinif: "girdiye dayali karar", bu hook o sinifta degil).
         pass
     pkg = _active_pkg()
     msg = (

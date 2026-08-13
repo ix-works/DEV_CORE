@@ -76,7 +76,7 @@ OZEL_TESTLER = [
     ("adtget_yokluk_kaniti", "BULUNAMADI != YOK: adt_get DDIC dalinda hata <-> yokluk"),
     ("aktivasyon_sahte_ok", "HTTP hatasi da KANIT DEGIL: aktivasyon sahte-OK'i"),
     ("worktree_blocklist", "kimlik blocklist'i worktree'de de bulunmali (commit-blogu)"),
-    ("negatif_test_harness", "hook negatif-testi: 'exit 0' serbest DEGIL (bozuk girdi = ayni cikti)"),
+    ("negatif_test_harness", "hook parse-fail gorunurlugu: exit 0 KORUNUR + stderr'de not (bozuk girdi ARTIK ayirt edilebilir)"),
     # ⚠ 2026-08-01: `adtget_yokluk_kaniti` bir ara bu listede IKI KEZ yaziliydi (PR birlesme
     # artigi) -> ayni fixture iki kez kosuyor ve TOPLAM sayiyi sisiriyordu. "N/N PASS"
     # sayisina guvenmenin bedeli: sayaci degil SATIRLARI oku.
