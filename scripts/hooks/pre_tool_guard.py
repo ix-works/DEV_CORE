@@ -324,9 +324,14 @@ def _git_commit_arg_dizileri(komut: str) -> list:
 # modülü kullanır. Eskiden iki guard iki AYRI dosyadan besleniyordu (biri
 # `<proje>/.claude/...`, diğeri `<git-dir>/...`) → biri güncellenip diğeri unutulabiliyordu.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from genericize_common import id_pattern, sizintilari_bul  # noqa: E402
+from genericize_common import sizintilari_bul, tembel_id_pattern  # noqa: E402
 
-_CORE_LEAK = id_pattern(proje_koku=_PROJ_ROOT)  # IGNORECASE (D2)
+# TEMBEL (2026-08-13, süre-vergisi): eskiden burada `id_pattern(...)` DOĞRUDAN çağrılıyordu
+# → modül her yüklendiğinde `git rev-parse` subprocess'i (ölçüldü: ~100 ms) koşuyordu, yani
+# HER araç çağrısında. Desen yalnız 3 dalda kullanılır (commit-mesajı / `gh` yayın / core'a
+# yazma taraması); çoğunluk yolu onu hiç okumaz. Sarmalayıcı deseni İLK KULLANIMDA kurar —
+# içerik ve kaynaklar aynı, yalnız zamanlama değişti. Kullanım yerleri DEĞİŞMEDİ.
+_CORE_LEAK = tembel_id_pattern(proje_koku=_PROJ_ROOT)  # IGNORECASE (D2)
 
 # Desen tanımlayan dosyalar: taranırlarsa kendi desenlerine takılırlar (core_precommit'te
 # SCAN_EXEMPT olarak vardı, burada yoktu). Dosya ADIYLA eşleşir — yol makineye göre değişir.

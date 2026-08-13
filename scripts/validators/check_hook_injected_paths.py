@@ -66,15 +66,29 @@ def _hook_ciktisi(hook: str, prompt: str) -> str:
 def main() -> int:
     kirik: list = []
     toplam = 0
-    for hook in HOOKLAR:
-        for p in ORNEK_PROMPTLAR:
-            metin = _hook_ciktisi(hook, p)
-            if not metin:
-                continue
-            for yol in sorted(set(YOL_DESENI.findall(metin))):
-                toplam += 1
-                if not (PROJ / yol).is_file():
-                    kirik.append(f"{hook}: '{yol}' çözülmüyor (prompt: {p[:30]}…)")
+    # HIZ (2026-08-13, süre-vergisi kuyruğu): iş `HOOKLAR × ORNEK_PROMPTLAR` = 8 AYRI
+    # süreç başlatır ve her biri tam bir Python yorumlayıcısı + hook yüklemesidir.
+    # ÖLÇÜLDÜ (cProfile): 8 `CreateProcess` + 2,8 sn thread-lock beklemesi ⇒ maliyetin
+    # TAMAMI süreç bekleme; doküman/veri büyümesi DEĞİL (kod #4'ten beri değişmedi,
+    # büyüyen şey kombinasyon sayısı ve hook başlangıç maliyetiydi).
+    # Çağrılar BİRBİRİNDEN BAĞIMSIZ (her biri kendi payload'ıyla salt-okur bir hook
+    # koşumu) → paralelleştirilir. `run_all_validators.py` aynı deseni kullanıyor.
+    # ⚠ ÇIKTI SIRASI KORUNUR: sonuçlar KANONİK sırada (hook, prompt) toplanır —
+    # yoksa bulgu listesi koşumdan koşuma değişir ve diff'lenemez hâle gelirdi.
+    from concurrent.futures import ThreadPoolExecutor
+
+    isler = [(hook, p) for hook in HOOKLAR for p in ORNEK_PROMPTLAR]
+    with ThreadPoolExecutor(max_workers=min(8, len(isler))) as havuz:
+        gelecekler = [havuz.submit(_hook_ciktisi, hook, p) for hook, p in isler]
+        ciktilar = [(hook, p, f.result()) for (hook, p), f in zip(isler, gelecekler)]
+
+    for hook, p, metin in ciktilar:
+        if not metin:
+            continue
+        for yol in sorted(set(YOL_DESENI.findall(metin))):
+            toplam += 1
+            if not (PROJ / yol).is_file():
+                kirik.append(f"{hook}: '{yol}' çözülmüyor (prompt: {p[:30]}…)")
 
     if not toplam:
         print("  [WARN] hiçbir yol enjekte edilmedi — örnek prompt'lar tetiklemiyor olabilir")
