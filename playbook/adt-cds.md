@@ -62,6 +62,52 @@ sonuç kümesi **değişmemeli** (değişiyorsa regresyon). Bu, kısıtlı test 
 > güvenilir biçimde ayırt edilemiyor (dolaylı erişim meşru ve yaygın) ⇒ otomatik kural
 > yanlış-pozitif üretirdi.
 
+## ⛔ CDS-DCL-02 — **TERS YÖN**: released halefe geçerken `#CHECK` halef **fail-open** üretebilir (2026-08-14)
+
+> **Güç: MUST (karar kuralı).** Clean Core disiplini *"ham standart tablo yerine released CDS"*
+> der (`released_successors.json` · validator WARNING `C-CC-REL-01`). ⚠ **Ham DDIC tablo DCL
+> TAŞIMAZ; released halef taşıyabilir.** Yani geçiş, DCL'siz bir okumayı **DCL'li** bir okumaya
+> çevirir — CDS-DCL-01'in tuzağını **kendi elinle kurabilirsin.**
+
+**Neden sadece "eksik veri" değil:** okunan veri bir **guard/kontrol** besliyorsa, 0 satır
+*"kontrol maddesi yok"* diye okunur ⇒ **fail-OPEN**. Sessiz kırıklık burada bir **güvenlik
+kusuruna** dönüşür.
+
+> **Ölçülmüş vaka (2026-08-14):** teslimat yaratmadan önce **partner blok kontrolü** ham `VBAK`'tan
+> okuyordu. Halef `I_SalesDocument` `@AccessControl.authorizationCheck: #CHECK` taşıyor (canlı
+> okundu) ⇒ geçilseydi dar yetkili kullanıcıda 0 satır → *"blok yok"* → **bloklu partnere teslimat
+> oluşurdu.** Halef "daha temiz" olduğu hâlde **geçilmedi**; gerekçe kodun içine yazıldı.
+
+**KARAR KURALI — geçiş önerisi geldiğinde (sıra değişmez):**
+① halefin `authorizationCheck` değerini **canlı oku** (annotation; hafızadan/isimden çıkarma)
+② okunan veri bir **karar/guard** mı besliyor, yoksa yalnız görüntü mü?
+③ 0 satırda davranış **fail-open** mu **fail-closed** mu?
+⇒ **`#CHECK` + guard = GEÇME.** Gerekçeyi **koda** yaz — kalıcı WARNING'i susturmak için değil,
+gelecekte *"neden hâlâ ham tablo?"* diye soran kişiye (ve bir sonraki reviewer turuna) cevap olsun diye.
+
+⚠ Kural **"geçme"** değil, **"körlemesine geçme"**: halef `#NOT_REQUIRED` ise geçiş güvenlidir ve
+tercih edilir. `WITH PRIVILEGED ACCESS`'i "geçiş + kontrolü kapat" diye kullanmak da çare değildir —
+o, korunmayan bir okumayı korunuyormuş gibi gösterir (CDS-DCL-01'deki "toplu privileged" yasağı).
+
+📌 **Kapsam şerhi (aynı sınıfın ikinci yarısı):** released disiplini **PROAKTİFTİR** — yazılmakta
+olan koda uygulanır. **Mevcut/eski kodda ham tablo kullanımı otomatik bir iş kalemi DEĞİLDİR**;
+migrasyon bir **proje politikası** kararıdır (bir projede kullanıcı kararı 2026-08-14: *mevcut
+programlar MUAF*). Validator WARNING'i **envanterdir, borç değil** — aksi hâlde her tur aynı liste
+"yapılacak" diye yeniden açılır. 📌 Yarım yazılmış kural (yalnız proaktif yarısı), yazılmamış
+kuraldan tehlikelidir: var sanılır, eksik yarısı her turda yeniden keşfedilir ve arada yanlış iş üretir.
+
+📖 Sessiz-red sınıfının tamamı: [`lessons-learned.md` PATTERN #32](lessons-learned.md) ·
+sözdizimi + uygulanamadığı yerler: **CDS-DCL-01** (yukarıda) · reviewer: checklist **BE-68**.
+
+> **prior-art: BULUNDU ama TERS YÖN YOK** (ölçüldü 2026-08-14): CDS-DCL-01 / PATTERN #32 / BE-67
+> sınıfı aynı gün çekirdeğe indi (#137) — hepsi *"`#CHECK` view'dan okuyorsan dikkat"* diyor.
+> **Geçiş kararına** dair tek satır yoktu: `playbook/` + `standards/` + `claude/agents/` altında
+> released kuralı **koşulsuz** ("released successor öner") yazılıydı. Bu kayıt o boşluğu kapatır.
+> **Enforcement:** doküman + reviewer yargısı (**BE-68**). **Gate AÇILMADI** (ADR 0019 şart-4):
+> mevcut `check_released_objects` WARNING'i zaten öneriyi üretiyor; eksik olan **kararın kuralı**,
+> yeni bir otomatik kontrol değil. Validator çıktısına şerh eklemek **araç değişikliğidir** —
+> ayrı öneri olarak açıldı, bu turda YAPILMADI.
+
 ## ⛔ CDS-NSDM-01 — classic DDIC view'da `MSEG`/`MKPF` (ve her replacement tablosu) YASAK (2026-08-03)
 
 > **Güç: MUST-NOT.** `@AbapCatalog.sqlViewName`'li **classic (DDIC-based) CDS view** ya da SE11

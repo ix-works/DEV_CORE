@@ -789,6 +789,16 @@ Forward progress doğal refleks, ama **verification refleksini geliştirmek** si
 - **Enforcement:** doküman + reviewer yargısı (checklist **BE-67**). **Gate AÇILMADI** (ADR 0019
   şart-4): "doğrudan erişim + `#CHECK`" statik olarak güvenilir ayırt edilemiyor — dolaylı erişim
   meşru ve yaygın ⇒ otomatik kural yanlış-pozitif üretirdi.
+- ⚠ **TERS YÖN — bu tuzağı kendi elinle de kurabilirsin (2026-08-14, ölçülmüş):** Clean Core
+  disiplini *"ham standart tablo yerine released CDS"* der; **ham DDIC tablo DCL taşımaz, released
+  halef taşıyabilir.** Halef `#CHECK` ise geçiş, DCL'siz okumayı **DCL'li** okumaya çevirir — ve
+  okuma bir **guard** besliyorsa 0 satır *"kontrol maddesi yok"* diye okunur = **fail-OPEN**
+  (vaka: partner blok kontrolü `VBAK` → `I_SalesDocument`; geçilseydi **bloklu partnere teslimat**
+  oluşurdu). ⇒ Geçmeden önce halefin `authorizationCheck`'ini **canlı oku**; `#CHECK` + guard ise
+  **geçme**, gerekçeyi koda yaz. Kural "geçme" değil **"körlemesine geçme"**.
+  📌 Aynı sınıfın ikinci yarısı: released disiplini **proaktiftir** — mevcut kodda ham tablo
+  kullanımı **otomatik iş kalemi değildir** (migrasyon = proje politikası; WARNING envanterdir).
+  Detay + karar kuralı: [`adt-cds.md` CDS-DCL-02](adt-cds.md) · reviewer: **BE-68**.
 
 ### Talimat-bakımı pilotunun 3 dersi (2026-08-12 — T1 terfisi; kaynak: infra-devir pilot raporu)
 
