@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""PostToolUse (matcher: mcp__sap-adt__*) — başarısız SAP işleminde PATİNAJ KESİCİ.
+"""PostToolUse (matcher: mcp__sap-adt__* **+ Bash**) — başarısız SAP işleminde PATİNAJ KESİCİ.
+
+⚠ 2026-08-14 — YÜZEY GENİŞLETİLDİ (ölçülmüş boşluk): hook yalnız `mcp__sap-adt__.*`
+matcher'ına bağlıydı. Bir SAP-yazma turunda **12 push denemesinin tamamı `Bash` üzerinden**
+(`python push_object.py …`) koştu ⇒ hook **hiç ateşlemedi**, tek hatırlatma üretmedi —
+oysa aradığı imzalar (`invalidlockhandle`, `is not locked`) listesinde ZATEN vardı ve
+cevap `playbook/known-errors.md` §12.7c'de yazılıydı. "Ağ vardı, delik tam düşülen yerdeydi."
+⇒ Bash dalı eklendi. **İKİ KAPILI (AND)**: komut SAP-yazma aracına benzemeli VE çıktıda
+SAP hata imzası olmalı. Sıradan Bash çağrısında **tam sessiz** (gürültü = hook'un ölümü).
 
 Bir SAP ADT MCP tool'u hata/guardrail/aktivasyon-fail döndürünce, "kör deneme-yanılma"
 döngüsünü (ADR 0006 / T10) sistemsel kesmek için Claude'a hatırlatma enjekte eder:
@@ -27,7 +35,11 @@ _FAIL_ERROR_VALUES = ("guardrail_violation", "activation_failed", "locked",
 REMINDER = (
     "⛔ SAP işlemi BAŞARISIZ. PATİNAJ/ESKALASYON MERDİVENİ (ADR 0006/T10 + agent-teams-operating-model §5):\n"
     "  1. Kör tekrar YOK. Aynı objede EN ÇOK 3 deneme (yalnız geçici CSRF/lock için).\n"
-    "  2. 3'te çözülmezse → ZORUNLU ARAŞTIR: ilgili playbook/adt-*.md + playbook/lessons-learned.md + playbook/checklists/ + hata pattern'i; kök sebebi bul, bulguyla devam.\n"
+    "  2. 3'te çözülmezse → ZORUNLU ARAŞTIR — **ÖNCE `playbook/known-errors.md`'de SEMPTOMU ARA**\n"
+    "     (`Grep path=core/playbook pattern='<hata kodu veya mesaj parçası>'`; ör. 423 · 'is not locked' ·\n"
+    "     'Session Timed Out'). O dosya hata-kodu bazlı düzenlidir ve ÇALIŞAN YÖNTEMİ de taşır.\n"
+    "     Sonra: playbook/adt-*.md + playbook/lessons-learned.md + playbook/checklists/. Kök sebebi bul, bulguyla devam.\n"
+    "     📌 Vaka 2026-08-14: cevap known-errors §12.7c'de 3 gün önce yazılıydı; aranmadığı için ~12 deneme + 2 saat kayboldu.\n"
     "  3. TOPLAM 5 denemede hâlâ olmazsa → DUR + lider/kullanıcıya gel (ham hata + denenenler + araştırma bulgusu).\n"
     "  4. Transport: hata mesajındaki numarayı ASLA kullanma; lock conflict → SM12/SE10 sonrası dene.\n"
     "  5. Guardrail (ADR 0005/0010/0011) ihlali ise: kuralı değiştirme — yaklaşımı değiştir veya kullanıcıya sor.\n"
@@ -54,6 +66,55 @@ CDS_RECIPE = (
     "  (3) adt_get include_source=true → source DOLU + version=active doğrula.\n"
     "  ⛔ YAPMA: push_source-ÖNCE (423) · post_shell ddls (DDLS/DF) · create_cds_view.py (CSRF flaky)."
 )
+
+
+# ── Bash dalı (2026-08-14) — İKİ KAPI: komut SAP-yazma aracı MI + çıktı hata imzası taşıyor MU ──
+# Kapı-1: komut imzası. Salt-okuma araçları (sap_sync_pull/adt_get) BİLEREK yok — onların
+#   başarısızlığı patinaj üretmiyor; liste yalnız YAZMA/aktivasyon yollarını kapsar.
+_BASH_SAP_KOMUT_IMZALARI = (
+    "push_object.py", "push_bo_atomic.py", "sap_client.py", "sap_adt_lib.py",
+    "activate_object.py", "create_access_control.py", "deploy_ui.py",
+    "populate_", "create_rap_service.py", "tight_push",
+)
+# Kapı-2: çıktı imzası. HEPSİ SPESİFİK — çıplak "423"/"error" gibi jenerik token YOK
+#   (jenerik imza = her Bash çağrısında gürültü = hook'un ölümü).
+_BASH_FAIL_IMZALARI = (
+    "invalid lock handle", "invalidlockhandle", "is not locked",
+    "session timed out", "failed to set source", "exceptionresource",
+    "[error] [4", "[error] [5", "activation failed", "aktivasyon basarisiz",
+)
+
+BASH_EKI = (
+    "\n\n📌 Bu hata **Bash** üzerinden koşan bir SAP aracından geldi (MCP değil). Aynı komutu\n"
+    "  AYNI parametrelerle tekrar koşmadan önce known-errors.md'de semptomu ARA — bu hook tam\n"
+    "  bu tekrarı kesmek için var. Araç retry döngüsü asıl hatayı MASKELEYEBİLİR: ilk yanıtın\n"
+    "  ham gövdesine bak (sonraki denemelerin kodu türev olabilir)."
+)
+
+
+def _bash_dali(data: dict) -> int:
+    """Bash yüzeyi: iki kapı da geçilmezse TAM SESSİZ (exit 0, sıfır çıktı)."""
+    ti = data.get("tool_input") or {}
+    komut = str(ti.get("command", "")).lower() if isinstance(ti, dict) else ""
+    if not any(s in komut for s in _BASH_SAP_KOMUT_IMZALARI):
+        return 0  # SAP-yazma aracı değil → hiç bakma
+
+    resp = data.get("tool_response", data.get("tool_result", ""))
+    if isinstance(resp, dict):
+        cikti = " ".join(str(resp.get(k, "")) for k in
+                         ("stdout", "stderr", "output", "error", "content"))
+    else:
+        cikti = str(resp)
+    if not any(s in cikti.lower() for s in _BASH_FAIL_IMZALARI):
+        return 0  # başarılı ya da tanınmayan çıktı → SESSİZ (fail-safe: konuşmamak)
+
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PostToolUse",
+            "additionalContext": REMINDER + BASH_EKI,
+        }
+    }))
+    return 0
 
 
 def _is_cds_create_fail(data: dict, resp: dict) -> bool:
@@ -89,6 +150,10 @@ def main() -> int:
     except Exception:
         _parse_fail_notu()
         return 0
+
+    # Bash yüzeyi ayrı dal: yanıt şekli MCP'den farklı (stdout/stderr, yapısal `ok` YOK)
+    if str(data.get("tool_name", "")) == "Bash":
+        return _bash_dali(data)
 
     resp = data.get("tool_response", data.get("tool_result", {}))
     if isinstance(resp, str):

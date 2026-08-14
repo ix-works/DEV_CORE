@@ -186,7 +186,7 @@
         ]
       },
       {
-        "matcher": "mcp__sap-adt__.*",
+        "matcher": "mcp__sap-adt__.*|Bash",
         "hooks": [
           {
             "type": "command",

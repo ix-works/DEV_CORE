@@ -142,6 +142,11 @@ OZEL_TESTLER = [
     # (secim MANTIGI olculur — suite gercekten kosulmaz; kuru-kosum `--listele`).
     ("b0_secim",
      "--degisen: dogru alt-kume, birlesim, bilinmeyen->TAM (fail-closed), harita-tamlik"),
+    # 2026-08-14: patinaj-kesici hook'un BASH yuzeyi. Hook mcp__sap-adt__.* matcher'ina
+    # bagliydi; 12 push denemesi Bash'ten kostu ve hook HIC atesle(n)medi. Iki degismez:
+    # ATESLEME (SAP komutu + hata imzasi) ve SESSIZLIK (diger her sey).
+    ("post_tool_failure_bash",
+     "Bash yuzeyi: iki kapi (komut imzasi + hata imzasi); FP capalari + MCP dali regresyonu"),
 ]
 
 
@@ -179,6 +184,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("tests/run_fixture_tests.py", (TAM, "O:b0_secim"),
      "seçim mantığı burada yaşar; koşucu değişince kıyas tabanı TAM olmalı"),
     ("tests/run_guard_fixture_tests.py", ("G",), "guard payload korpusunun koşucusu"),
+    ("scripts/hooks/post_tool_failure.py", ("O:post_tool_failure_bash",),
+     "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları)"),
 
     # ── bölüm-1 validator bad/good çiftleri ─────────────────────────────────
     ("scripts/validators/check_bdef_backtick.py", ("V:check_bdef_backtick",), "G1 çifti"),
