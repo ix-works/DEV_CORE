@@ -13,6 +13,14 @@ SEVERITY = WARNING — bloklamaz, yönlendirir):
   CDS/ABAP'ta `from <std_tablo>` / `join <std_tablo>` → released successor öner.
   Z* tabloları (bizim) + zaten released I_* viewlar atlanır.
 
+⚠️ ÖNERİ ≠ EMİR — halef `#CHECK` taşıyorsa geçiş ZARARLI olabilir (CDS-DCL-02):
+ham DDIC tablo DCL taşımaz, released halef taşıyabilir; okuma bir guard/kontrol
+besliyorsa DCL reddi 0 satır döndürür ve kontrol FAIL-OPEN olur (ölçülmüş vaka:
+partner blok kontrolü VBAK → I_SalesDocument). Çıktı bu şerhi basar; karar kuralı
+playbook/adt-cds.md CDS-DCL-02, reviewer üyeliği checklist BE-68.
+📌 Bulgular ENVANTERDİR: kural proaktiftir (yeni kod), mevcut kodda migrasyon
+proje politikasıdır — bu liste otomatik "yapılacak" listesi DEĞİLDİR.
+
 Veri: governance/reference/released_successors.json (curated; SAP resmi JSON ile refresh).
 
 Kullanım:
@@ -108,6 +116,13 @@ def main() -> int:
               f" → released successor: {succ}{note}", file=sys.stderr)
     print("    Not: ADR 0005-B READ'i yasaklamaz; Clean Core Level A için released CDS tercih edilir "
           "(öneri, hard kural değil). Kaynak: SAP resmi cloudification repo (PCE).", file=sys.stderr)
+    print("    ⚠ GEÇMEDEN ÖNCE halefin @AccessControl.authorizationCheck değerini CANLI OKU: "
+          "#CHECK ise ve okuma bir guard/kontrol besliyorsa geçiş FAIL-OPEN üretir "
+          "(ham DDIC tablo DCL taşımaz, halef taşır → 0 satır = 'kontrol maddesi yok'). "
+          "Karar kuralı: playbook/adt-cds.md CDS-DCL-02 · reviewer: BE-68.", file=sys.stderr)
+    print("    📌 Bu liste ENVANTERDİR, iş kalemi değil: released disiplini PROAKTİFTİR "
+          "(yazılmakta olan kod). Mevcut/eski kodda migrasyon = proje politikası kararı.",
+          file=sys.stderr)
     return 1
 
 
