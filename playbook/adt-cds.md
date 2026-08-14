@@ -10,6 +10,58 @@ status: active
 
 # CDS View (DDLS/DF)
 
+## ⛔ CDS-DCL-01 — standart CDS'ten DOĞRUDAN okuma: DCL reddi **0 satır** döner, hata VERMEZ (2026-08-14)
+
+> **Güç: MUST.** `@AccessControl.authorizationCheck: #CHECK` taşıyan bir **standart** CDS view'a
+> **doğrudan** eriştiğinde (ABAP `SELECT` · `READ ENTITIES` · SRVD `expose` · OData `$expand`),
+> yetkisi olmayan kullanıcıda DCL sorgunun WHERE'ine `N'CDS_Access_Control' = N'DENY'` **enjekte
+> eder** ⇒ sorgu **yapısı gereği 0 satır** döner. `sy-subrc` "veri yok" der, **"yetkin yok" demez**;
+> exception **atılmaz**. Geliştiricide (geniş yetki) hiç görünmez.
+>
+> **Kapsam sınırı — ezberlenecek cümle:** implicit access control **yalnız DOĞRUDAN erişimde**
+> çalışır. Bir Z view'in `FROM`/`JOIN`/`ASSOCIATION`'ında `#CHECK` standart view kullanmak
+> **TEK BAŞINA risk DEĞİLDİR** (dolaylı erişimde DCL değerlendirilmez).
+> Kaynak: ABAP CDS – Access Control (`abencds_authorizations`).
+
+**Çare — Open SQL `SELECT` için (canlı derleyicide kanıtlandı 2026-08-14):**
+
+```abap
+" DOĞRU — kloz alias'tan ÖNCE gelir
+SELECT ... FROM i_packinginstructioncomponent WITH PRIVILEGED ACCESS AS comp
+       INNER JOIN i_packinginstructionheader  WITH PRIVILEGED ACCESS AS hdr
+               ON hdr~packinginstruction = comp~packinginstruction
+  ...
+" YANLIŞ — ters sıra derlenmez (abaplint: parser_error; canlı: 400)
+"   FROM i_packinginstructioncomponent AS comp WITH PRIVILEGED ACCESS
+```
+
+**Uygulanamadığı yerler (ölçülmüş):**
+
+| Yer | Durum |
+|---|---|
+| Open SQL `SELECT` | ✅ çalışır (yukarıdaki sözdizimi) |
+| `READ ENTITIES` (RAP BO) | ⛔ **böyle bir kloz YOK** — başka çare gerekir |
+| `@ObjectModel.virtualElement` alanlar | ⛔ **privileged okuma BOŞ getirir** — değer SQL'den değil SADL calc-exit'ten gelir; alttaki table function gövdesi literal `'' as <alan>` döndürebilir. Sessiz-boşu başka bir sessiz-boşla değiştirir. Doğru yol: DCL taşımayan kaynak (metinler için `STXH`/`STXL` + `READ_TEXT`; DDIC tabloları DCL taşımaz) |
+
+⛔ **"Hepsine toplu privileged" ÖNERİLMEZ** — kontrolü kapatmak güvenlik kararıdır. Meşru olduğu
+durum: aynı veri **zaten korunmasız başka bir yoldan** okunuyorsa (ör. sipariş ham `VBAK`'tan).
+Bunu iddia etme, **ÖLÇ**; gerekçeyi kodun içine yaz.
+
+✅ **Düzeltmeyi kontrol grubuyla doğrula:** aynı sorguyu klozlu/klozsuz koş — **yetkili** kullanıcıda
+sonuç kümesi **değişmemeli** (değişiyorsa regresyon). Bu, kısıtlı test kullanıcısı gerektirmez.
+
+📖 Sınıfın tamamı (yazma yoluna bulaşması, kısmî red, PFCG ölçüm tuzağı `AGR_1251` vs **`AGR_1252`**):
+[`lessons-learned.md` PATTERN #32](lessons-learned.md).
+
+> **prior-art: YOK** (ölçüldü 2026-08-14 — `rg "WITH PRIVILEGED ACCESS|CDS_Access_Control"` →
+> `playbook/` + `standards/` altında **0 eşleşme**). Ders 2026-08-11'den beri yalnız bir proje
+> sınıfının yorum bloğunda + o paketin SESSION_NOTES'unda yaşıyordu ⇒ başka bir pakette aynı
+> tuzağa **yeniden düşüldü** (2026-08-14, 5 nokta). Terfi sebebi bu.
+> **Enforcement:** doküman + reviewer yargısı (checklist BE-67). **Gate AÇILMADI** — ADR 0019
+> moratoryumu şart-4: önce doküman katmanı denenir; "doğrudan erişim + `#CHECK`" statik olarak
+> güvenilir biçimde ayırt edilemiyor (dolaylı erişim meşru ve yaygın) ⇒ otomatik kural
+> yanlış-pozitif üretirdi.
+
 ## ⛔ CDS-NSDM-01 — classic DDIC view'da `MSEG`/`MKPF` (ve her replacement tablosu) YASAK (2026-08-03)
 
 > **Güç: MUST-NOT.** `@AbapCatalog.sqlViewName`'li **classic (DDIC-based) CDS view** ya da SE11

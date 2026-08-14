@@ -731,6 +731,65 @@ Forward progress doğal refleks, ama **verification refleksini geliştirmek** si
   — düzelene dek pratik yol: tırnaksız `-m` here-string.
 - **Sınır:** ölçüm PS 5.1 + git for Windows; `Bash` tool'u ve pwsh 7 ölçülmedi.
 
+### PATTERN #32: Standart CDS'ten **doğrudan** okuma — DCL reddi hata vermez, **0 satır** döner (sessiz kırıklık)
+
+- **Belirti:** Kod hatasız çalışır, hiçbir exception atmaz, log temizdir — ama iş sonucu **eksiktir**:
+  ambalaj oluşmaz, müşteri adı boş gelir, notlar boş görünür. Yetkisi geniş bir kullanıcıda
+  (ve geliştiricide) **hiç görünmez**; yalnız dar yetkili kullanıcıda ortaya çıkar.
+- **Mekanizma:** `@AccessControl.authorizationCheck: #CHECK` taşıyan bir standart CDS view'a
+  **doğrudan** eriştiğinde (ABAP `SELECT` · `READ ENTITIES` · SRVD `expose` · OData `$expand`),
+  DCL sorgunun WHERE'ine `N'CDS_Access_Control' = N'DENY'` **enjekte eder** ⇒ sorgu *yapısı gereği*
+  0 satır döner. `sy-subrc` "veri yok" der; **"yetkin yok" DEMEZ.** İki durum ayırt edilemez.
+- ⚠ **Zarar "görünmüyor" ile bitmeyebilir — YAZMA yoluna da bulaşır.** Tipik zincir:
+  *oku → kullanıcı başka bir alanı değiştirip kaydet → **hepsini** geri yaz.* Okuma sessizce boş
+  döndüyse **gerçek verinin üstüne boş yazılır** = geri alınamaz veri kaybı. (Vaka 2026-08-14:
+  sipariş notları; ayrıca bir FE `MERGE`'ü dolu adresi boş string'le eziyordu.)
+- **BELİRLEYİCİ SEMANTİK (bu sınıfın kapsamını bu cümle çizer):** implicit access control **yalnız
+  DOĞRUDAN erişimde** çalışır. Bir Z view'in `FROM`/`JOIN`/`ASSOCIATION`'ında `#CHECK` bir standart
+  view kullanmak **TEK BAŞINA risk DEĞİLDİR** (dolaylı erişimde DCL değerlendirilmez).
+  Kaynak: ABAP CDS – Access Control (abendocu 7.5x, `abencds_authorizations`).
+- **ÇARE — `WITH PRIVILEGED ACCESS`, ama her yerde değil:**
+  - **Open SQL `SELECT`'te ÇALIŞIR.** Sözdizimi (canlı derleyicide kanıtlandı 2026-08-14):
+    `FROM <cds> WITH PRIVILEGED ACCESS AS <alias>` — kloz **alias'tan ÖNCE**; ters sıra derlenmez.
+    `INNER JOIN <cds> WITH PRIVILEGED ACCESS AS hdr` da geçerli.
+  - ⛔ **`READ ENTITIES` üzerinde böyle bir kloz YOKTUR.** RAP BO okumasında bu çare uygulanamaz.
+  - ⛔ **Okumayı "Open SQL'e çevirip privileged ekle" HER ZAMAN İŞE YARAMAZ.** Ölçülmüş karşı-örnek:
+    metin alanları (`LongText`) `@ObjectModel.virtualElement` olabilir ve değeri SQL'den değil bir
+    **SADL calc-exit**'ten gelir; alttaki table function gövdesi literal `'' as LongText` döndürür
+    ⇒ privileged okuma **boş** getirir. Sessiz-boşu başka bir sessiz-boşla değiştirirsin.
+    O durumda doğru yol veriyi **DCL taşımayan** kaynaktan okumaktır (ör. metinler için
+    `STXH`/`STXL` + `READ_TEXT`; DDIC tabloları DCL taşımaz).
+- ⛔ **"Hepsine toplu privileged" ÖNERİLMEZ:** kontrolü kapatmak bir güvenlik kararıdır. Meşru
+  olduğu durum: **aynı veri zaten korunmasız başka bir yoldan okunuyorsa** (ör. uygulama siparişi
+  ham `VBAK`'tan okuyor) — o zaman DCL hiçbir şeyi korumuyor, yalnız tek bir yolu rastgele kırıyor.
+  Bunu **iddia etme, ÖLÇ** ve gerekçeyi kodun içine yaz.
+- **ÖNCE ÖLÇ — "bu boşluk gerçek mi, kimde?" testi kullanıcı GEREKTİRMEZ:** ilgili rollerin PFCG
+  yetki değerleri ile veride fiilen görünen değerlerin **kesişimini** al.
+  ⚠ **ÖLÇÜM TUZAĞI:** org-level alanlar (VKORG/VTWEG/SPART/BUKRS…) `AGR_1251`'de **`$VKORG` gibi
+  placeholder** olarak durur; **gerçek değer `AGR_1252`'dedir.** Yalnız `AGR_1251` okunursa ölçüm
+  ya "kısıt yok" ya da anlamsız çıkar ve **yanlış bir kapanış** verir. Rol tanımı ≠ kullanıcı ana
+  verisi: `AGR_PROF` + `UST04` ile profilin fiilen atandığını da doğrula.
+- **Kırıklığın SINIFINI ayır** (çareyi bu belirler): **tam red** (yetki hiç yok → hep boş) ·
+  **kısmî red** (org-bazlı: bazı satırlar gelir, bazıları gelmez) — kısmî olan **tek kullanıcıyla
+  yapılan testte YAKALANMAZ**; "bazılarında veri yok" normal karşılanır.
+- **YAP:** ① doğrudan erişim noktalarını çıkar (ABAP SELECT · READ ENTITIES · SRVD expose ·
+  `$expand`) ② her birinde 0-satır dalının **ne yaptığını** oku — sessizce mi geçiyor, yoksa
+  ayırt edilebilir mi ③ **yazma yoluna bulaşıyor mu** diye bak (oku→geri yaz deseni) ④ çareyi
+  noktasal seç, gerekçeyi koda yaz ⑤ düzeltmeden sonra **kontrol grubuyla** doğrula: aynı sorguyu
+  klozlu/klozsuz koş — yetkili kullanıcıda **sonuç kümesi değişmemeli** (değişiyorsa regresyon).
+- ⛔ **YAPMA:** 0 satır dönen bir okumayı "veri yok" diye yorumlayıp sessizce geçme; `CATCH cx_root`
+  ile sarıp "hata olmadı" sanma — **DCL reddi exception ATMAZ.**
+- **Vaka izleri:** EWM ambalajlama (2026-08-11, ST05+SU53 ile ölçüldü — mal çıkışında ambalaj hiç
+  oluşmadı, hata da verilmedi) · SD sevk emri ekosistemi (2026-08-14, 5 doğrudan-erişim noktası).
+- **prior-art: YOK** (ölçüldü 2026-08-14: `playbook/`+`standards/` altında `WITH PRIVILEGED ACCESS` /
+  `CDS_Access_Control` → 0 eşleşme; `AGR_1251|AGR_1252` → core genelinde 0). **İlk temas değil,
+  ilk KAYIT:** ders 2026-08-11'de öğrenilmiş ama yalnız bir proje sınıfının yorumunda kalmıştı ⇒
+  3 gün sonra başka bir pakette aynı tuzağa yeniden düşüldü. *Kaydedilmeyen ders, öğrenilmemiş
+  sayılır.* Sözdizimi detayı: [`adt-cds.md` CDS-DCL-01](adt-cds.md).
+- **Enforcement:** doküman + reviewer yargısı (checklist **BE-67**). **Gate AÇILMADI** (ADR 0019
+  şart-4): "doğrudan erişim + `#CHECK`" statik olarak güvenilir ayırt edilemiyor — dolaylı erişim
+  meşru ve yaygın ⇒ otomatik kural yanlış-pozitif üretirdi.
+
 ### Talimat-bakımı pilotunun 3 dersi (2026-08-12 — T1 terfisi; kaynak: infra-devir pilot raporu)
 
 Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyasi-bakimi.md`](howto-talimat-dosyasi-bakimi.md)):
