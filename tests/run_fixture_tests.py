@@ -83,6 +83,7 @@ OZEL_TESTLER = [
     ("worktree_blocklist", "kimlik blocklist'i worktree'de de bulunmali (commit-blogu)"),
     ("negatif_test_harness", "hook parse-fail gorunurlugu: exit 0 KORUNUR + stderr'de not (bozuk girdi ARTIK ayirt edilebilir)"),
     ("tembel_desen", "sizinti deseni TEMBEL kurulur: hiz kazanci korumayi OLU'ye cevirmiyor"),
+    ("abaplint_failopen", "check_abaplint: OLCEMEDIM != TEMIZ (ozet satiri zorunlu kanit, 9 senaryo)"),
     # ⚠ 2026-08-01: `adtget_yokluk_kaniti` bir ara bu listede IKI KEZ yaziliydi (PR birlesme
     # artigi) -> ayni fixture iki kez kosuyor ve TOPLAM sayiyi sisiriyordu. "N/N PASS"
     # sayisina guvenmenin bedeli: sayaci degil SATIRLARI oku.
@@ -186,6 +187,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("tests/run_guard_fixture_tests.py", ("G",), "guard payload korpusunun koşucusu"),
     ("scripts/hooks/post_tool_failure.py", ("O:post_tool_failure_bash",),
      "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları)"),
+    ("scripts/validators/check_abaplint.py", ("O:abaplint_failopen",),
+     "fail-open kilidi: 'ölçemedim' ile 'temiz' AYNI çıkışa düşmemeli (özet satırı zorunlu kanıt)"),
+    ("scripts/abaplint/abaplint.json", ("O:abaplint_failopen",),
+     "config kapsamı değişirse 'M file(s) analyzed' ölçütü de etkilenir"),
 
     # ── bölüm-1 validator bad/good çiftleri ─────────────────────────────────
     ("scripts/validators/check_bdef_backtick.py", ("V:check_bdef_backtick",), "G1 çifti"),
