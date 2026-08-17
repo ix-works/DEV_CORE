@@ -460,6 +460,22 @@ def main() -> int:
         ekle("X7 FP ÇAPASI: KOMŞU dizin (…_wt_infra2) → nudge YOK (str-prefix tuzağı)",
              not _ifade(err), f"exit={rc} nudge={'VAR' if _ifade(err) else 'YOK'}")
 
+        # X8: BAŞKA bir core checkout'u (kökünde CLAUDE.core.md) — canlı ölçümle bulundu:
+        # lider ana oturumdan bir core WORKTREE'sini düzenlerse ② dalı tutmaz.
+        sahte_core = sb / "baska_core"
+        (sahte_core / "scripts" / "validators").mkdir(parents=True, exist_ok=True)
+        (sahte_core / "CLAUDE.core.md").write_text("# core\n", encoding="utf-8")
+        rc, _, err = _hook(sb, hook_adi, _edit(sahte_core / "scripts" / "validators" / "x.py", "oturum-inf7"), shim_var)
+        ekle("X8 BAŞKA core checkout'u (CLAUDE.core.md işaretli) → nudge",
+             _ifade(err), f"exit={rc} nudge={'VAR' if _ifade(err) else 'YOK'}")
+
+        # X9 FP ÇAPASI: aynı şekle sahip ama core OLMAYAN ağaç (işaret dosyası YOK) → SESSİZ
+        sahte_degil = sb / "core_degil"
+        (sahte_degil / "scripts" / "validators").mkdir(parents=True, exist_ok=True)
+        rc, _, err = _hook(sb, hook_adi, _edit(sahte_degil / "scripts" / "validators" / "x.py", "oturum-inf8"), shim_var)
+        ekle("X9 FP ÇAPASI: scripts/validators şekli var ama CLAUDE.core.md YOK → nudge YOK",
+             not _ifade(err), f"exit={rc} nudge={'VAR' if _ifade(err) else 'YOK'}")
+
         # ── ENJEKTE EDİLEN YOLLAR ÇÖZÜLÜYOR MU (C-HOOK-01 sınıfı) ──────────
         # "Ajan bu yolu Read edemez → 'dosya yok' sanır → ZORUNLU protokolü ATLAR."
         # Metin eşleşmesi YETMEZ: yolu sandbox proje kökünden GERÇEKTEN çözüyoruz.

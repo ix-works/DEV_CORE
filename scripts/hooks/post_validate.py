@@ -127,11 +127,20 @@ def _paylasilan_infra(norm: str, ham: str):
     m = re.search(r"/core/(scripts/.+\.py)$", norm, re.IGNORECASE)
     if m:                                # ① junction yazımı (<proje>/core/scripts/…)
         rel = m.group(1)
-    else:                                # ② core deposunun kendisi — resolve + is_relative_to
-        try:                             #    (str-prefix DEĞİL: "…DEV_CORE_wt_x" komşu FP'si)
+    else:
+        try:
             p = Path(ham).resolve()
-            if p.is_relative_to(REPO):
-                rel = p.relative_to(REPO).as_posix()
+            if p.is_relative_to(REPO):   # ② bu hook'un KENDİ core'u — resolve + is_relative_to
+                rel = p.relative_to(REPO).as_posix()  # (str-prefix DEĞİL: "…_wt_x" komşu FP'si)
+            else:
+                # ③ BAŞKA bir core checkout'u/worktree'si (ölçüldü 2026-08-17: lider canlı
+                # oturumdan `…/DEV_CORE_wt_infra/scripts/...` düzenlediğinde ② tutmuyordu —
+                # o yol bu hook'un core'una göre DIŞARIDA). Yapısal işaret: core kökünde
+                # `CLAUDE.core.md` bulunur. Komşu-dizin FP'si üretmez: işaret dosyası yoksa None.
+                for ana in p.parents:
+                    if (ana / "CLAUDE.core.md").is_file():
+                        rel = p.relative_to(ana).as_posix()
+                        break
         except Exception:
             rel = None
     if not rel or not _INFRA_REL.match(rel):

@@ -161,14 +161,19 @@ python tests/run_fixture_tests.py                                            # T
 - Genişletme yaptıysan CANLI ETKİYİ ÖLÇ (PATTERN#14): `CLAUDE_PROJECT_DIR=<proje> python scripts/validators/run_all_validators.py --quick` → taban 0 değilse HARD YAPMA.
 
 ### B9b — FS doküman-standardı üçlüsü (DOC-FS-05/06/07, 2026-08-17)
-- Tek komut: `python tests/fixtures/fs_docstd/run.py` → **36/36**. Kendi sandbox projesini
+- Tek komut: `python tests/fixtures/fs_docstd/run.py` → **38/38**. Kendi sandbox projesini
   (docs/ + project.yaml + governance/ + validators-local/ + hook_shim + `core` junction'ı)
   temp'te kurar, `finally` ile siler.
 - **DOKUZ MUTASYON, hiçbiri diğerini kapsamaz** — hepsi koşulacak; biri tam puan verirse
   korpus O DEĞİŞMEZ için BOŞTUR: `--mutasyon-desen` (A1+A9+A11) · `--mutasyon-katman0` (A2) ·
   `--mutasyon-failclosed` (A6) · `--mutasyon-strict` (A10) · `--mutasyon-esinifi` (A1) ·
   `--mutasyon-baslik` (A11) · `--mutasyon-hook` (B1/B2/B3/B5/B8; **R1-R3 AYAKTA**) ·
-  `--mutasyon-express` (X1/X3/X4; **X5-X7 FP çapaları AYAKTA**) · `--mutasyon-onek` (Y1/Y2).
+  `--mutasyon-express` (X1/X3/X4/Y1; **X5-X9 FP çapaları AYAKTA**) · `--mutasyon-onek` (Y1/Y2).
+- **X8/X9 (2026-08-17, canlı ölçümle bulundu):** paylaşılan-infra tespiti üç kollu — ① `/core/`
+  junction yazımı ② hook'un KENDİ core'u (`is_relative_to`) ③ **BAŞKA bir core checkout'u**
+  (kökünde `CLAUDE.core.md`). ③ olmadan lider ana oturumdan bir core WORKTREE'sini
+  düzenlediğinde nudge SESSİZ kalıyordu (② o yolu "dışarıda" görür). X9 çapası şekli aynı ama
+  işaret dosyası olmayan ağacın SESSİZ kaldığını ölçer (kör `scripts/validators/` eşleşmesi yok).
 - ⛔ SİLİNMEZ FP ÇAPALARI (hepsi ÖLÇÜLMÜŞ bir yanlış-pozitiften doğdu): **A2** temiz FS
   (kapak `| Versiyon | v1.2 |` · başlıksız §1.1 tablosu · §1.3 ilgili-doküman satırı ·
   altbilgi · meşru `L-01/M-02` · ileriye dönük "TS'te canlı ölçülür" · "yazılmıştır") —
