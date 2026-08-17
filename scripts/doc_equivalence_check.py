@@ -53,8 +53,17 @@ STOP_VALUES = {"YENİ", "HAZIR", "TAMAMLANDI", "İPTAL", "ONAY", "EVET", "HAYIR"
 _EKB_PREFIX = re.compile(r"^(?:Gövdede kalan sonuç|Taşınan metin(?: \(aynen\))?|Yeniden ifade edilen orijinal(?: \([^)]*\))?|Tür|Karar/kanıt no)\s*:\s*", re.IGNORECASE)
 
 
+class Okunamadi(Exception):
+    """Girdi okunamadı — 'kayıp var' ile AYNI exit'e düşmemeli (exit 2)."""
+
+
 def read(p: str) -> str:
-    return Path(p).read_text(encoding="utf-8", errors="replace")
+    # Eskiden ham FileNotFoundError traceback'i + exit 1 basıyordu; exit 1 bu araçta
+    # "KAYIP VAR" demek → yol hatası veri kaybı sanılırdı (iki anlamlı çıkış).
+    try:
+        return Path(p).read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        raise Okunamadi(f"{p}: {e.__class__.__name__}: {e}") from None
 
 
 def ids(text: str) -> set[str]:
@@ -125,8 +134,16 @@ def sentences(text: str) -> list[str]:
     return out
 
 
+def kucult(s: str) -> str:
+    """Türkçe-duyarlı küçültme. `"İ".lower()` Python'da `i + U+0307` üretir → düz
+    `.lower()` kıyası "KESİNLİKLE" ile "kesinlikle"yi EŞİTSİZ sayar (ölçüldü 2026-08-17:
+    harf-standardı düzeltmesi sahte "KAYIP VAR" veriyordu). Aynı sınıf: memory
+    `feedback_tr-karakter-varyantli-arama`."""
+    return s.replace("İ", "i").replace("I", "ı").replace("\u0307", "").lower()
+
+
 def norm(s: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[*_`>|]+", "", s)).strip().lower()
+    return kucult(re.sub(r"\s+", " ", re.sub(r"[*_`>|]+", "", s)).strip())
 
 
 def main() -> int:
@@ -166,7 +183,13 @@ def main() -> int:
         P(f"  blok #{k} korunma %{r*100:.0f} — {head}")
 
     # 3 değerler
-    mv = sorted(values(old) - values(new))
+    # ⚠ FP SINIFI (ölçüldü 2026-08-17): "ZORUNLUDUR/REDDEDİLİR" gibi VURGU amaçlı BÜYÜK
+    # sözcükler değer sanılıyordu; aynı PR serisindeki büyük-küçük harf standardı (T3)
+    # tam da bunları küçültüyor ⇒ her uyumlu düzeltme sahte "KAYIP VAR" üretirdi.
+    # STOP_VALUES elle beslenen bir listedir, sınıfı kapatmaz. Kural: token yeni metinde
+    # HARF-DUYARSIZ varsa kaybolmamıştır (yalnızca yeniden yazılmıştır).
+    _yeni_ci = kucult(new)
+    mv = sorted(v for v in (values(old) - values(new)) if kucult(v) not in _yeni_ci)
     P(f"## 3. Değerler (tablo/alan/tcode/sayı/tarih/kod) — eski {len(values(old))} · EKSİK {len(mv)}")
     if mv:
         P("  " + ", ".join(mv[:200]) + (" …" if len(mv) > 200 else ""))
@@ -200,4 +223,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Okunamadi as e:
+        print(f"[ÖLÇÜLEMEDİ] {e} — bu 'denk' ANLAMINA GELMEZ.", file=sys.stderr)
+        sys.exit(2)
