@@ -22,6 +22,7 @@ applies_to: [all]
 |---|---|
 | 0-1-2: Fren + sınıflama + express/kuyruk kararı + EXPRESS fix'ler | **LİDER** |
 | 3: Kuyruk fix-seansı (F1-F5, üç-bağlam test, fixture) | **infra-expert** (taze spawn, worktree) |
+| **YENİ gate / hook-dalı / validator / paylaşılan araç ÜRETİMİ** (bug değil, kural-onboarding'i — ADR 0019 §5 adım 3) | **infra-expert** (aynı F1-F5 disiplini; lider = tasarım kararı + brifing + diff-review + commit). ⚠ 2026-08-17 dersi: lider "kablolamayı garanti et" baskısıyla hook-dalı + gate + aracı kendisi üretti; ilk sürüm hook'u kırdı — kural-metni "fix"e özgü okunmuştu, ruhu (paylaşılan infra üretimi = infra-expert) buraya açıkça yazıldı |
 | Diff-review + testlerin bağımsız koşumu + commit/PR + kullanıcı-onay akışı | **LİDER** |
 | META-İNFRA (ajan tanımları, `.claude/settings*`, hook_shim, damga-zinciri) | **YALNIZ LİDER** (döngü-yasağı: kendi guardrail'ini düzelten ajan = başladığımız problem) |
 
