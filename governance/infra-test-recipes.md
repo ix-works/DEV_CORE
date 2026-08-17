@@ -160,6 +160,42 @@ python tests/run_fixture_tests.py                                            # T
 - ⛔ SİLİNMEZ ÇAPALAR: V2 `S3` (`.srvd` naming-glob'unda YOK — `.rules.md` tablo-satırı önkoşul; eklenirse 15 doğru dosya suçlanır) · V5 `N1`/`N7` (core-içi türetilmiş dizinde `.rglob`/`.glob` MEŞRU — geçişlilik taramaya sızarsa 26 FP) · V6 `S3` (`/_[A-Z]` deseni değişmez) · V3 `N4` (`Prior-art: yok` kısa ama meşru) · V4 `N2` (`core/` eşdeğer yazımı).
 - Genişletme yaptıysan CANLI ETKİYİ ÖLÇ (PATTERN#14): `CLAUDE_PROJECT_DIR=<proje> python scripts/validators/run_all_validators.py --quick` → taban 0 değilse HARD YAPMA.
 
+### B9b — FS doküman-standardı üçlüsü (DOC-FS-05/06/07, 2026-08-17)
+- Tek komut: `python tests/fixtures/fs_docstd/run.py` → **38/38**. Kendi sandbox projesini
+  (docs/ + project.yaml + governance/ + validators-local/ + hook_shim + `core` junction'ı)
+  temp'te kurar, `finally` ile siler.
+- **DOKUZ MUTASYON, hiçbiri diğerini kapsamaz** — hepsi koşulacak; biri tam puan verirse
+  korpus O DEĞİŞMEZ için BOŞTUR: `--mutasyon-desen` (A1+A9+A11) · `--mutasyon-katman0` (A2) ·
+  `--mutasyon-failclosed` (A6) · `--mutasyon-strict` (A10) · `--mutasyon-esinifi` (A1) ·
+  `--mutasyon-baslik` (A11) · `--mutasyon-hook` (B1/B2/B3/B5/B8; **R1-R3 AYAKTA**) ·
+  `--mutasyon-express` (X1/X3/X4/Y1; **X5-X9 FP çapaları AYAKTA**) · `--mutasyon-onek` (Y1/Y2).
+- **X8/X9 (2026-08-17, canlı ölçümle bulundu):** paylaşılan-infra tespiti üç kollu — ① `/core/`
+  junction yazımı ② hook'un KENDİ core'u (`is_relative_to`) ③ **BAŞKA bir core checkout'u**
+  (kökünde `CLAUDE.core.md`). ③ olmadan lider ana oturumdan bir core WORKTREE'sini
+  düzenlediğinde nudge SESSİZ kalıyordu (② o yolu "dışarıda" görür). X9 çapası şekli aynı ama
+  işaret dosyası olmayan ağacın SESSİZ kaldığını ölçer (kör `scripts/validators/` eşleşmesi yok).
+- ⛔ SİLİNMEZ FP ÇAPALARI (hepsi ÖLÇÜLMÜŞ bir yanlış-pozitiften doğdu): **A2** temiz FS
+  (kapak `| Versiyon | v1.2 |` · başlıksız §1.1 tablosu · §1.3 ilgili-doküman satırı ·
+  altbilgi · meşru `L-01/M-02` · ileriye dönük "TS'te canlı ölçülür" · "yazılmıştır") —
+  bunlar temizlenemez satırlardır, işaretlenirse gate'in yeşili ERİŞİLEMEZ olur · **A5**
+  belgenin KENDİ tanımladığı `H-1` gap ID'sine atıf sayılmaz ama aynı dosyadaki
+  "doc-gate M-6" SAYILIR (iç kontrol grubu) · **C4** yalnız büyük/küçük harf değişimi
+  "veri kaybı" DEĞİLDİR (Türkçe `İ`.lower() = `i̇` tuzağı; harf standardı T3 ile çakışırdı).
+- **Warn-first sözleşmesi (A10):** `--strict` bu gate'te **NO-OP**. `run_all_validators --strict`
+  bayrağı tüm validator'lara iletilir; hard'a terfi ADR 0019 §54 gereği AYRI ve bilinçli
+  bir karardır. Bulguda exit 1 isteyen tek tüketici hook'tur → `--bulguda-exit1`.
+- **Üçüncü değer:** okunamayan dosya = **exit 2** (`[ÖLÇÜLEMEDİ]`), "temiz" DEĞİL (A6);
+  `doc_equivalence_check` yol hatası da exit 2 (C3) — eskiden "KAYIP VAR" ile aynı exit 1'di.
+- Hook vektörleri GERÇEK giriş noktasından (`hook_shim` + `core` junction'ı) koşar; junction
+  kurulamazsa koşucu bunu GÖRÜNÜR bir NOT ile bildirip doğrudan çağrıya düşer (sessizce değil).
+- **Y1/Y2 (C-HOOK-01 sınıfı):** nudge metnindeki HER `.md` yolu sandbox proje kökünden
+  GERÇEKTEN açılır (metin eşleşmesi değil `is_file()`). `check_hook_injected_paths` yalnız
+  `additionalContext` üreten hook'ları görür; **stderr nudge'ları kapsamı DIŞINDADIR** —
+  bu iki vektör o boşluğu kapatır. `--mutasyon-onek` ile kanıtlanır.
+- **X1-X7 (infra-EXPRESS nudge'ı):** X2 aynı zamanda *erken-return YOK* kanıtıdır (nudge
+  susunca akış TRIGGER/HIZLI_KUME'ye devam edip exit 0 verir). X7 komşu-dizin çapası dizin
+  YARATMADAN koşar (`resolve()` var olmayan yolu da çözer) — worktree dışına yazılmaz.
+
 ## B10 — run_review
 - **Tip-haritası tamlığı (en kritik):** her anahtar+eş-anlamlı için `task_for_push()` non-None (None = sessiz-atlama sınıfı).
 - Kirli-.bdef → BLOCKER/is_blocker · temiz → PASS · kapsam-dışı prog → task=None (bilinçli).

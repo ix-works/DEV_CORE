@@ -60,6 +60,9 @@ VALIDATORS = [
     ("bdef ters-tırnak (HARD, BE-62)", "check_bdef_backtick.py", [], "project",
      ["s4_private", "s4_public", "btp_abap"]),
     ("KD ham-mermaid yok (DOC-KD-15)", "check_kd_no_raw_mermaid.py", [], "project", None),
+    # FS gövdesi analiz-günlüğüne dönüşmesin (İLKE-2b, 3 katman) — 2026-08-17: 9 sürümlük FS gövdesinde
+    # satırların ~%25'i sürüm etiketi/gate-ID/"canlı ölçüldü" notu taşıyordu, onaya sunulamadı. Warn-first.
+    ("FS gövdesi analiz-günlüğü sızıntısı (warn-first, DOC-FS-05/06)", "check_fs_no_analysis_log.py", [], "project", None),
     ("Proje-kökü çözümlemesi (HARD, CORE-01/ADR 0020)", "check_project_root_resolution.py", [], "both", None),
     ("Kural↔gate coverage (HARD, ADR 0019)", "check_rule_gate_coverage.py", [], "both", None),
     # Hook'lar ajana "OKU: <yol>" der; yol çözülmezse ZORUNLU protokol sessizce atlanır

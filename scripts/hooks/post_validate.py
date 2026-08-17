@@ -9,10 +9,13 @@ kurali: validator fail -> once duzelt). Validator OK ise sessizce cikar (exit 0)
 
 Tetiklemeyen dosyalar (kaynak kod, UI, vb.) icin hicbir sey yapmaz -> sifir gurultu.
 """
+import datetime
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 # Windows konsolu/pipe'i cp1252'dir: non-ASCII basmak UnicodeEncodeError ile COKER
@@ -91,6 +94,81 @@ STATUS_DOC = re.compile(
 )
 
 
+# ── PAYLAŞILAN İNFRA TESPİTİ (PATTERN #30: kuralı hatırlatan şey KONUMUDUR) ──
+# `scripts/**/*.py` core deposunda (DEV_CORE + worktree'leri) VEYA junction üzerinden
+# (`<proje>/core/scripts/...`) VEYA proje-lokal `scripts/validators-local/*.py`.
+_INFRA_REL = re.compile(r"^scripts/.+\.py$", re.IGNORECASE)
+_INFRA_HARIC = re.compile(r"/(tests|attic|TempScripts|__pycache__|\.tmp)/", re.IGNORECASE)
+
+
+def _core_onekle(metin: str) -> str:
+    """Enjekte edilen metodoloji yollarına `core/` öneki (C-HOOK-01).
+
+    `playbook/x.md` ajanın Read()'inde ÇÖZÜLMEZ — metodoloji `core/` junction'ı altında.
+    Tek kaynak `utils/inject_paths`; import `__file__`ten türetilir çünkü hook'lar
+    `hook_shim` içinde `runpy` ile koşar ve `sys.path[0]` boş olur (kardeş-import ölür).
+    Yardımcı bulunamazsa metin AYNEN döner — nudge asla hook'u düşürmez.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # core/scripts
+        from utils.inject_paths import core_onekle  # type: ignore
+        return core_onekle(metin)
+    except Exception:
+        return metin
+
+
+def _paylasilan_infra(norm: str, ham: str):
+    """→ sınıf etiketi ('hooks'/'validators'/'validators-local'/…) ya da None (deterministik)."""
+    if _INFRA_HARIC.search(norm):
+        return None                      # fixture/scratch/derleme artığı infra kararı DEĞİL
+    if re.search(r"/scripts/validators-local/[^/]+\.py$", norm, re.IGNORECASE):
+        return "proje-lokal validator"   # proje reposunda ama AYNI disiplin (overlay gate'i)
+    rel = None
+    m = re.search(r"/core/(scripts/.+\.py)$", norm, re.IGNORECASE)
+    if m:                                # ① junction yazımı (<proje>/core/scripts/…)
+        rel = m.group(1)
+    else:
+        try:
+            p = Path(ham).resolve()
+            if p.is_relative_to(REPO):   # ② bu hook'un KENDİ core'u — resolve + is_relative_to
+                rel = p.relative_to(REPO).as_posix()  # (str-prefix DEĞİL: "…_wt_x" komşu FP'si)
+            else:
+                # ③ BAŞKA bir core checkout'u/worktree'si (ölçüldü 2026-08-17: lider canlı
+                # oturumdan `…/DEV_CORE_wt_infra/scripts/...` düzenlediğinde ② tutmuyordu —
+                # o yol bu hook'un core'una göre DIŞARIDA). Yapısal işaret: core kökünde
+                # `CLAUDE.core.md` bulunur. Komşu-dizin FP'si üretmez: işaret dosyası yoksa None.
+                for ana in p.parents:
+                    if (ana / "CLAUDE.core.md").is_file():
+                        rel = p.relative_to(ana).as_posix()
+                        break
+        except Exception:
+            rel = None
+    if not rel or not _INFRA_REL.match(rel):
+        return None
+    parca = rel.split("/")
+    return "core scripts/" + (parca[1] if len(parca) > 2 else "")
+
+
+def _isaret_koku(dosya_yolu: str) -> Path:
+    """OKU-işaretçisi (dedup marker) dosyasının yazılacağı kök.
+
+    Eskiden `CLAUDE_PROJECT_DIR` yoksa `os.getcwd()` kullanılıyordu; harness'in cwd'si
+    proje olmak ZORUNDA değil → marker rastgele bir dizinde `.tmp/` açar, sonraki
+    düzenlemede BULUNAMAZ ve nudge HER düzenlemede tekrar eder (gürültü = ölü hook).
+    Sıra: env → düzenlenen dosyadan yukarı proje kökü (project.yaml/.git) → temp.
+    """
+    env = os.environ.get("CLAUDE_PROJECT_DIR")
+    if env:
+        return Path(env)
+    try:
+        for ana in Path(dosya_yolu).resolve().parents:
+            if (ana / "project.yaml").exists() or (ana / ".git").exists():
+                return ana
+    except Exception:
+        pass
+    return Path(tempfile.gettempdir())
+
+
 def _parse_fail_notu() -> None:
     """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
 
@@ -134,6 +212,59 @@ def main() -> int:
         )
         return 2  # reminder (Claude'a geri beslenir)
 
+    # 2026-08-17: FS/TS/KD/EK dokümanı düzenlendi → İLKE-2b (3 katman) hatırlat + o dosyada
+    # analiz-günlüğü sızıntısını say (check_fs_no_analysis_log --file --strict). Kullanıcı bulgusu:
+    # 9 sürümlük FS gövdesi sürüm etiketi/gate-ID/"canlı ölçüldü" notuyla dolmuştu ve HİÇBİR hook
+    # doküman düzenlemesinde ateşlemiyordu (TRIGGER'da docs/ yoktu; standart yalnız indeksten
+    # erişilebilirdi) → kural vardı, okunma noktası yoktu. Bu blok: (a) oturumda ilk dokunuşta OKU
+    # işaretçisi (dedup: .tmp marker), (b) her düzenlemede bulgu özeti. Warn-first: mesaj UYARI dilinde,
+    # exit 2 yalnız geri-besleme (edit zaten oldu; ADR 0006 "önce düzelt" gate'i DEĞİL).
+    m_doc = re.search(r"/docs/(FS|TS|KD|EK)-[^/]+\.md$", norm, re.IGNORECASE)
+    if m_doc:
+        kind = m_doc.group(1).upper()
+        lines = []
+        try:
+            proj = _isaret_koku(path)
+            # session_id yoksa sabit "nosession" marker'ı diske KALICI yazılır ve
+            # nudge bir daha HİÇ ateşlemez (sessizce ölen hatırlatıcı). Gün damgası
+            # en kötü durumda günde bir kez konuşmayı garanti eder.
+            sid = str(data.get("session_id") or "").strip()[:12] or \
+                ("gun-" + datetime.date.today().isoformat())
+            marker = proj / ".tmp" / f".hook_docstd_{sid}_{kind}"
+            if not marker.exists():
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                marker.write_text("1", encoding="utf-8")
+                lines.append(_core_onekle(
+                             f"[hook:post_validate] {kind} dokümanı düzenleniyor — ÖNCE OKU (oturumda bir kez): "
+                             "standards/04-documentation-fs-ts.md §2.0 (İLKE-1/2/2b: kullanıcı isteği=kanon · öneri/soru "
+                             "11-A/11-B · ÜÇ KATMAN: gövde=kapanmış hedef durum, karar günlüğü ayrı, analiz süreci FS'e girmez) "
+                             "+ §2.3 · playbook/checklists/doc-checklist.md §B DOC-FS-01…07 (TS için §C). "
+                             "Yeniden yazım/temizlikte veri kaybı=0: "
+                             "core/scripts/doc_equivalence_check.py --old ESKİ --new YENİ --new EK."))
+        except Exception:
+            pass
+        if kind in ("FS", "EK"):
+            try:
+                res = subprocess.run(
+                    [sys.executable, str(REPO / "scripts" / "validators" / "check_fs_no_analysis_log.py"),
+                     "--file", path, "--bulguda-exit1", "--max-examples", "2"],
+                    cwd=str(REPO), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
+                if res.returncode == 1 and (res.stdout or "").strip():
+                    lines.append("[hook:post_validate] UYARI (warn-first, DOC-FS-05/06 — İLKE-2b): gövdede analiz-günlüğü izi var — "
+                                 "sürüm etiketi/gate-ID/\"canlı ölçüldü\"/kullanıcı alıntısı → EK 'Karar ve Kanıt Günlüğü'ne taşı; "
+                                 "§1.1 satırı 1-2 satır. Onaya çıkmadan temizle:\n" + (res.stdout or "")[-900:])
+                elif res.returncode not in (0, 1):
+                    # "ÖLÇEMEDİM" != "TEMİZ": gate okuyamadığı dosya için exit 2 döner.
+                    lines.append(f"[hook:post_validate] NOT: analiz-günlüğü gate'i ÖLÇEMEDİ "
+                                 f"(exit {res.returncode}) — bu 'temiz' ANLAMINA GELMEZ:\n"
+                                 + ((res.stdout or res.stderr or "")[-300:]))
+            except Exception:
+                pass
+        if lines:
+            sys.stderr.write("\n".join(lines) + "\n")
+            return 2  # geri besleme (edit oldu; bloklamaz)
+        return 0
+
     # #7 (2026-06-11): list/report view.xml → grid (sap.ui.table) standardı kontrol (ADR 0008).
     # check_list_view_grid conservative; flag ederse nudge (bloklamaz).
     if re.search(r"/ui/.+\.view\.xml$", norm, re.IGNORECASE):
@@ -155,6 +286,37 @@ def main() -> int:
     # (eskiden YALNIZ checklists → ADR §5 "standards/playbook/checklists" sözünü eksik karşılıyordu).
     # Noise-azalt: edit güç-keyword içermeli (typo/format sessiz); checklist her zaman + coverage somut.
     nudged = False
+
+    # 2026-08-17 — PATTERN #30 ("kural VARDI ama ateşlemedi; kuralı hatırlatan şey KONUMUDUR"):
+    # paylaşılan infra'ya yazarken HİÇBİR hook "bu EXPRESS mi, kuyruk mu?" diye sormuyordu;
+    # howto-infra-fix ADIM 2 yol-ayrımı yalnız playbook'ta duruyordu (okuyan hatırlıyordu).
+    # Bloklamaz, oturumda BİR KEZ, erken-return YOK: TRIGGER/HIZLI_KUME yolu aynen sürer.
+    _sinif = _paylasilan_infra(norm, path)
+    if _sinif:
+        try:
+            _mk = _isaret_koku(path) / ".tmp" / (
+                ".hook_infraexpress_" + (str(data.get("session_id") or "").strip()[:12]
+                                         or ("gun-" + datetime.date.today().isoformat())))
+            if not _mk.exists():
+                _mk.parent.mkdir(parents=True, exist_ok=True)
+                _mk.write_text("1", encoding="utf-8")
+                sys.stderr.write(_core_onekle(
+                    f"[hook:post_validate] PAYLAŞILAN İNFRA düzenleniyor ({_sinif}) — ÖNCE YOL AYRIMI "
+                    "(playbook/howto-infra-fix-proseduru.md ADIM 2):\n"
+                    "  ⚡ EXPRESS (lider, görev-içi) YALNIZ DÖRDÜ BİRDEN sağlanıyorsa: ① mekanik hata "
+                    "(typo/kırık-yol/yanlış-değişken/eksik-import), davranış-kararı YOK · ② blast-radius "
+                    "grep'le TEK-NOKTA kanıtlı · ③ mevcut fixture/negatif-test ≤1 dk'da YEŞİL · "
+                    "④ hiçbir kuralı GEVŞETMİYOR → fix + test + AYRI commit.\n"
+                    "  📥 DÖRDÜ BİRDEN DEĞİLSE → DUR, KUYRUK (varsayılan): governance/infra-findings.md'ye "
+                    "tek satır (tarih | bileşen | semptom | kontrol-grubu | sınıf K1-K4 | görev-bağlamı | "
+                    "önerilen-yön) → fix'i TAZE bir infra-expert AYRI seansta üretir (ADIM 3: F0 geçmiş-okuma · "
+                    "F1 blast-radius · F2 sınıf-mı-vaka-mı · F3 ÜÇ-BAĞLAM + kalıcı fixture · F4 gevşetme-cetveli). "
+                    "Görev DEVAM eder; workaround bypass DEĞİLDİR.\n"
+                    "  (oturumda bir kez · bloklamaz · gate değil hatırlatıcı)\n"))
+                nudged = True
+        except Exception:
+            pass
+
     if re.search(r"/(standards|playbook|governance/decisions)/.+\.md$|/(AGENTS|CLAUDE)\.md$", norm, re.IGNORECASE):
         new_txt = tool_input.get("new_string") or tool_input.get("content") or ""
         for _e in (tool_input.get("edits") or []):

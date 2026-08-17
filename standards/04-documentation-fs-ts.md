@@ -124,6 +124,33 @@ onaylanınca ilgili gereksinime taşınır. Kullanıcının yazdığını **onun
 **paralel sorular** (alternatif + öneri ile) **"BÖLÜM 11-B: AÇIK KARARLAR / SORU SETİ"**ne yazılır.
 Sorular tek-tek, bağlam+öneri ile sorulur ([[sorulari-tek-tek-sor-oneriyle]]).
 
+**İLKE-2b — ÜÇ KATMAN, ÜÇ YER (FS gövdesi ≠ karar günlüğü ≠ analiz süreci).** Dünya pratiği
+(ASAP "issues database", ADR/decision-log, BABOK rationale-ayrı-temsil, ISO 29148 Rationale/Source
+öz-niteliği) ve kendi dersimiz (2026-08-17: 9 sürümlük bir FS'in gövdesi %25 oranında sürüm etiketi,
+gate-bulgu numarası, "canlı ölçüldü/ilk turda yanlış okunmuştu" notu ve kullanıcı alıntısıyla
+dolup **analiz günlüğüne** döndü, onaya sunulamadı) aynı kuralı verir:
+- **Katman 1 — FS gövdesi = yalnız KAPANMIŞ hedef durum.** Ne yapılacak, iş kuralı, ekran, hata,
+  kabul kriteri; her satır *bugün geçerli olan* hâli anlatır. Gövdede **OLMAZ:** sürüm etiketi
+  ("v1.5'te eklendi", "(YENİ, R-12)"), doc-gate bulgu numarası ("H-C/M-2 netleşme"), araştırma/ölçüm
+  süreci ("DEV'de canlı ölçüldü — ilk turda alan adı yanlıştı, 400 döndü", "RESEARCH-02 ters
+  okumuştu"), toplantı/kullanıcı alıntısı ("kullanıcı: '…'"), "önceden şöyleydi → şimdi böyle"
+  anlatısı. Kararın **sonucu** yazılır, **tarihçesi** yazılmaz. Gerekçe gerekiyorsa gereksinime
+  bağlı **tek kısa `Kaynak/Gerekçe` alanı** (§4.1 kolonu ya da satır sonu kısa atıf: "kaynak: K-07")
+  — paragraf değil.
+- **Katman 2 — Karar günlüğü = §11-A/§11-B (açık olanlar) + EK "Karar ve Kanıt Günlüğü" (kapananlar).**
+  Karar no · seçenekler · kim/ne zaman karar verdi · kısa gerekçe · kanıt atfı (RESEARCH/ölçüm
+  dosyası). **Kapanan bir 11-B kararı gövdeye SONUÇ olarak işlenir ve 11-B'den EK'e iner** — 11-B
+  mutabakatta boştur (yalnız bloke etmeyen açıklar kalır). Reddedilen seçenek de "neden dışlandı"
+  ile EK'te kalır (BABOK — aynı talep yeniden açılmasın).
+- **Katman 3 — Analiz/araştırma süreci FS'e HİÇ girmez.** Canlı ölçüm dökümleri, deneme-yanılma,
+  ham veri profili, gate raporları → paket `ref_docs/RESEARCH-*.md`, `docs/…-gate-*.md`,
+  SESSION_NOTES. FS yalnız vardığı sonucu ve dosya atfını taşır.
+- **§1.1 Versiyon geçmişi KISA:** satır başına 1-2 satır "ne değişti" (madde listesi); "neden/nasıl
+  bulundu" anlatısı EK karar günlüğüne. Aynı kural FS eklerine (veri yürüyüşü vb.) de uygulanır.
+- GATE (warn-first): `check_fs_no_analysis_log.py` — DOC-FS-05 (gövdede sürüm-etiketi/gate-ID/
+  süreç-ifadesi sayımı + §1.1 satır uzunluğu). Yeniden yazımda **veri kaybı yasak**: gövdeden çıkan
+  her bilgi EK'e taşınır, kimlik/mockup/değer/cümle denkliği `scripts/doc_equivalence_check.py --old ESKİ --new YENİ --new EK …` ile ölçülür (rapor doc-gate'e kanıt; DOC-FS-07).
+
 **Soru-seti zorunluluğu:** Danışmanın **karar veremediği** her nokta 11-B'de *seçenekler +
 önerilen seçenek* ile durmalıdır. **Hiçbir açık fonksiyonel nokta "geliştirmede/build'de
 netleşir"e ERTELENEMEZ** — FS mutabakatı, 11-A boşalıp 11-B'deki her karar kapandığında olur.
@@ -164,7 +191,10 @@ Durum               : [Taslak / İncelemede / Onaylandı]
 | Versiyon | Tarih | Hazırlayan | Açıklama |
 |----------|-------|------------|----------|
 | 0.1 | GG.AA.YYYY | Ad Soyad | İlk taslak |
-| 1.0 | GG.AA.YYYY | Ad Soyad | Müşteri geri bildirimleri sonrası revize |
+| 1.0 | GG.AA.YYYY | Ad Soyad | Müşteri geri bildirimleri sonrası revize (S-01…S-04 kapandı; ekran 5.2 revize) |
+
+> Açıklama **1-2 satır** — ne değişti (madde/§ atfı). Kararın gerekçesi/kanıtı buraya değil,
+> EK "Karar ve Kanıt Günlüğü"ne (İLKE-2b).
 
 **1.2 Dağıtım Listesi**
 
@@ -252,11 +282,16 @@ SAP ile nasıl olacağını anlatır:
 
 Her gereksinim aşağıdaki formatta yazılır:
 
-| Gereksinim No | Açıklama | Öncelik | Kategori |
-|--------------|----------|---------|----------|
-| FR-001 | Sistem onay için 2 seviyeli hiyerarşi desteklemelidir | Zorunlu | İş Kuralı |
-| FR-002 | Onay bildirimi email ile gönderilmelidir | İstenen | Bildirim |
-| FR-003 | Reddedilen siparişler raporlanabilmelidir | Zorunlu | Raporlama |
+| Gereksinim No | Açıklama | Öncelik | Kategori | Kaynak/Gerekçe (kısa) |
+|--------------|----------|---------|----------|----------|
+| FR-001 | Sistem onay için 2 seviyeli hiyerarşi desteklemelidir | Zorunlu | İş Kuralı | Kullanıcı isteği K-1 |
+| FR-002 | Onay bildirimi email ile gönderilmelidir | İstenen | Bildirim | Öneri Ö-02 (onaylı) |
+| FR-003 | Reddedilen siparişler raporlanabilmelidir | Zorunlu | Raporlama | Kullanıcı isteği K-3 |
+
+> `Kaynak/Gerekçe` **tek kısa atıf** (kullanıcı isteği no · karar no · EK karar günlüğü satırı) —
+> ISO 29148 Rationale/Source; gerekçe **paragrafı** gövdeye yazılmaz (İLKE-2b).
+> **Hacim/performans beklentisi** zorunlu satırdır (ör. "günde ~N kayıt / ayda M / eşzamanlı K
+> kullanıcı") — hacimsiz rapor/arayüz FS'i üretimde çöker; §6 veri hacmi ya da §4.1'de FR olarak.
 
 **Öncelik Kategorileri:**
 - **Zorunlu (Must Have):** Olmadan sistem çalışmaz
@@ -426,7 +461,9 @@ Her rapor için:
 > Danışmanın **karar veremediği** ve **kullanıcının yazdığını netleştiren** her nokta burada
 > *seçenekler + önerilen seçenek* ile durur. Sorular **kullanıcının isteği yönünde** derinleşir
 > (İLKE-1) — onu değiştirmeye değil, tamamlamaya hizmet eder. **Hiçbir fonksiyonel açık nokta
-> "build'de netleşir"e atılamaz.** Tümü kapanınca FS onaylanır.
+> "build'de netleşir"e atılamaz.** Tümü kapanınca FS onaylanır. **Kapanan karar burada BİRİKMEZ:**
+> sonucu ilgili gövde bölümüne işlenir, satır (karar/kim/ne zaman/gerekçe/kanıt) **EK "Karar ve
+> Kanıt Günlüğü"ne** taşınır (İLKE-2b) — 11-B mutabakat anında yalnız bloke etmeyen açıkları taşır.
 
 | # | Açık nokta (hangi isteği netleştiriyor) | Seçenekler | Öneri | Karar |
 |---|---|---|---|---|
@@ -454,6 +491,8 @@ Her rapor için:
 - Kapsam dışı konular açıkça belirtilmeli
 - Müşteri onayı alınmadan geliştirme başlatılmamalı
 - Türkçe projede Türkçe yazılmalı (teknik terimler İngilizce kalabilir)
+- **Gövde = kapanmış hedef durum; karar günlüğü ve analiz süreci ayrı** (İLKE-2b, §2.0) — sürüm etiketi/gate-ID/"canlı ölçüldü"/kullanıcı alıntısı gövdede YOK; §1.1 1-2 satır; kapanan 11-B kararı EK'e. GATE `check_fs_no_analysis_log.py` (DOC-FS-05).
+- **Büyük/küçük harf standardı (FS/TS/KD/ekler — kullanıcı geri bildirimi 2026-08-17):** başlık, menü, İçindekiler ve ekran-dizini metinlerinde cümle düzeni; **durum/aşama adları başlıkta Baş Harfleri Büyük** ("S1. Parse Hatası", "Beyanname Eksik"); vurgu amaçlı BÜYÜK sözcük (KORUNUR/SERBEST) başlıkta YOK. Gövde ve tablolarda BÜYÜK HARF yalnız **ekranda/tabloda görülen sistem değeri** için (`DURUM = PARSE HATASI`, durum makinesi tablosu) — okuyucu için bu ayrım okuma kılavuzunda tek satırla belirtilir. `## BÖLÜM N:` düzeyi büyük, `### x.y` cümle düzeni. Üreteçle (Python DATA → md/HTML) yazılan eklerde bunu tek yerde bir `H()` başlık-normalizasyonu ile uygula, elle düzeltme yapma (emsal: paket `docs/<ek>-src/build_*.py` üreteçleri).
 
 ### YAPILMAMASI GEREKENLER:
 - Teknik detaylara (kod, tablo adı, fonksiyon adı) yer verilmemeli

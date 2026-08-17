@@ -148,6 +148,12 @@ OZEL_TESTLER = [
     # ATESLEME (SAP komutu + hata imzasi) ve SESSIZLIK (diger her sey).
     ("post_tool_failure_bash",
      "Bash yuzeyi: iki kapi (komut imzasi + hata imzasi); FP capalari + MCP dali regresyonu"),
+    # 2026-08-17: FS dokuman-standardi UCLUSU (validator + post_validate doc-fs dali +
+    # denklik araci). Iki yon ayni korpusta: YAKALAMA (analiz-gunlugu izi) ve SESSIZLIK
+    # (belgenin kendi kimlik satiri / mesru hata kodu / katman-2 dosyasi). FP capalari
+    # olculmus bir vakadan gelir: gate ilk halinde 21 dokumanin 16'sini kirli gosteriyordu.
+    ("fs_docstd",
+     "DOC-FS-05/06/07 uclusu: yakalama + FP capalari + hook kablolamasi + komsu dal regresyonu"),
 ]
 
 
@@ -187,6 +193,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("tests/run_guard_fixture_tests.py", ("G",), "guard payload korpusunun koşucusu"),
     ("scripts/hooks/post_tool_failure.py", ("O:post_tool_failure_bash",),
      "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları)"),
+    ("scripts/hooks/post_validate.py", ("O:fs_docstd", "O:negatif_test_harness"),
+     "doc-fs dalı (OKU-işaretçisi + gate özeti) + komşu dalların regresyonu + parse-fail sözleşmesi"),
     ("scripts/validators/check_abaplint.py", ("O:abaplint_failopen",),
      "fail-open kilidi: 'ölçemedim' ile 'temiz' AYNI çıkışa düşmemeli (özet satırı zorunlu kanıt)"),
     ("scripts/abaplint/abaplint.json", ("O:abaplint_failopen",),
@@ -209,6 +217,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/validators/check_amdp_comment_apostrophe.py",
      ("V:check_amdp_comment_apostrophe",), "G1 çifti"),
     ("scripts/validators/check_kd_no_raw_mermaid.py", ("V:check_kd_no_raw_mermaid",), "G1 çifti"),
+    ("scripts/validators/check_fs_no_analysis_log.py", ("O:fs_docstd",),
+     "DOC-FS-05/06 sayacı: yakalama + kimlik-satırı FP çapaları (fixture kendi sandbox'ını kurar)"),
+    ("scripts/doc_equivalence_check.py", ("O:fs_docstd",),
+     "DOC-FS-07 denklik ölçümü: kayıplı/kayıpsız çift + TR harf katlaması FP çapası"),
 
     # ── validator ailesi: kendi koşucusunu taşıyan korpuslar ────────────────
     ("scripts/validators/check_cds_currency_reference.py",
