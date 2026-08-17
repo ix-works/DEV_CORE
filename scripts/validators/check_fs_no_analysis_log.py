@@ -21,7 +21,8 @@ Sayılan işaretler (satır bazında, sınıf sınıf raporlanır):
 
 Warn-first (ADR 0019): varsayılan exit 0 + WARN listesi; `--strict` → bulgu varsa exit 1.
 `--selftest` → gömülü kırmızı-fixture ile kendi kendini test eder (yakalamazsa exit 1).
-Kullanım: python scripts/validators/check_fs_no_analysis_log.py [--strict] [--selftest] [--max-examples N]
+Kullanım: python scripts/validators/check_fs_no_analysis_log.py [--strict] [--selftest] [--max-examples N] [--file YOL]
+Kablolama: run_all_validators (PROJE, pre-commit) + hooks/post_validate.py `doc-fs` sınıfı (FS/TS/KD/EK md düzenlenince o dosya için --file --strict; bulgu → yazara stderr özeti + OKU-işaretçisi, exit 2 = geri besleme).
 """
 # ENFORCES: DOC-FS-05, DOC-FS-06  (ADR 0019 coverage binding)
 import os
@@ -171,9 +172,12 @@ def main() -> int:
     max_examples = 3
     if "--max-examples" in argv:
         max_examples = int(argv[argv.index("--max-examples") + 1])
+    single = None
+    if "--file" in argv:                       # tek doküman (post_validate edit-anı nudge'ı)
+        single = Path(argv[argv.index("--file") + 1])
     total = 0
     n_docs = 0
-    for p in _iter_docs(REPO):
+    for p in ([single] if single else _iter_docs(REPO)):
         n_docs += 1
         try:
             text = p.read_text(encoding="utf-8", errors="replace")

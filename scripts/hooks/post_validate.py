@@ -10,6 +10,7 @@ kurali: validator fail -> once duzelt). Validator OK ise sessizce cikar (exit 0)
 Tetiklemeyen dosyalar (kaynak kod, UI, vb.) icin hicbir sey yapmaz -> sifir gurultu.
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -133,6 +134,48 @@ def main() -> int:
             "(entity/property/function ref'leri canlı metadata ile statik kıyas — tıklama testi DEĞİL).\n"
         )
         return 2  # reminder (Claude'a geri beslenir)
+
+    # 2026-08-17: FS/TS/KD/EK dokümanı düzenlendi → İLKE-2b (3 katman) hatırlat + o dosyada
+    # analiz-günlüğü sızıntısını say (check_fs_no_analysis_log --file --strict). Kullanıcı bulgusu:
+    # 9 sürümlük FS gövdesi sürüm etiketi/gate-ID/"canlı ölçüldü" notuyla dolmuştu ve HİÇBİR hook
+    # doküman düzenlemesinde ateşlemiyordu (TRIGGER'da docs/ yoktu; standart yalnız indeksten
+    # erişilebilirdi) → kural vardı, okunma noktası yoktu. Bu blok: (a) oturumda ilk dokunuşta OKU
+    # işaretçisi (dedup: .tmp marker), (b) her düzenlemede bulgu özeti. Warn-first: mesaj UYARI dilinde,
+    # exit 2 yalnız geri-besleme (edit zaten oldu; ADR 0006 "önce düzelt" gate'i DEĞİL).
+    m_doc = re.search(r"/docs/(FS|TS|KD|EK)-[^/]+\.md$", norm, re.IGNORECASE)
+    if m_doc:
+        kind = m_doc.group(1).upper()
+        lines = []
+        try:
+            proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
+            sid = str(data.get("session_id") or "nosession")[:12]
+            marker = proj / ".tmp" / f".hook_docstd_{sid}_{kind}"
+            if not marker.exists():
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                marker.write_text("1", encoding="utf-8")
+                lines.append(f"[hook:post_validate] {kind} dokümanı düzenleniyor — ÖNCE OKU (oturumda bir kez): "
+                             "standards/04-documentation-fs-ts.md §2.0 (İLKE-1/2/2b: kullanıcı isteği=kanon · öneri/soru "
+                             "11-A/11-B · ÜÇ KATMAN: gövde=kapanmış hedef durum, karar günlüğü ayrı, analiz süreci FS'e girmez) "
+                             "+ §2.3 · playbook/checklists/doc-checklist.md §B DOC-FS-01…07 (TS için §C). "
+                             "Yeniden yazım/temizlikte veri kaybı=0: scripts/doc_equivalence_check.py --old ESKİ --new YENİ --new EK.")
+        except Exception:
+            pass
+        if kind in ("FS", "EK"):
+            try:
+                res = subprocess.run(
+                    [sys.executable, str(REPO / "scripts" / "validators" / "check_fs_no_analysis_log.py"),
+                     "--file", path, "--strict", "--max-examples", "2"],
+                    cwd=str(REPO), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
+                if res.returncode == 1 and (res.stdout or "").strip():
+                    lines.append("[hook:post_validate] UYARI (warn-first, DOC-FS-05/06 — İLKE-2b): gövdede analiz-günlüğü izi var — "
+                                 "sürüm etiketi/gate-ID/\"canlı ölçüldü\"/kullanıcı alıntısı → EK 'Karar ve Kanıt Günlüğü'ne taşı; "
+                                 "§1.1 satırı 1-2 satır. Onaya çıkmadan temizle:\n" + (res.stdout or "")[-900:])
+            except Exception:
+                pass
+        if lines:
+            sys.stderr.write("\n".join(lines) + "\n")
+            return 2  # geri besleme (edit oldu; bloklamaz)
+        return 0
 
     # #7 (2026-06-11): list/report view.xml → grid (sap.ui.table) standardı kontrol (ADR 0008).
     # check_list_view_grid conservative; flag ederse nudge (bloklamaz).
