@@ -45,7 +45,7 @@
 | `sap_worktype_hint.py` | PreToolUse | `mcp__sap-adt__adt_(push_source\|activate\|dtel_create\|domain_create\|struct_create\|publish_service)` | Obje tipinden deterministik worktype→checklist hatırlatması | not+serbest |
 | `itg_backstop.py` | PreToolUse | `mcp__sap-adt__.*` | ITG deterministik backstop — triyajsız SAP işini yakalar (ADR 0022) | not+serbest |
 | `watchdog_launch.py` | PreToolUse | `Agent` | Arka-plan agent spawn'ında detached watchdog daemon'ı başlatır | not+degrade³ |
-| `post_validate.py` | PostToolUse | `Edit\|Write\|MultiEdit` | Governance/standard/validator/spec/`.rules.md` değişince `run_all_validators --quick` | not+serbest |
+| `post_validate.py` | PostToolUse | `Edit\|Write\|MultiEdit` | Governance/standard/validator/spec/`.rules.md` değişince `run_all_validators --quick`; ayrıca **`doc-fs` dalı** (2026-08-17): `**/docs/(FS\|TS\|KD\|EK)-*.md` → oturumda bir kez OKU-işaretçisi + FS/EK için `check_fs_no_analysis_log --file --bulguda-exit1` özeti (warn-first, exit 2 = geri besleme). ayrıca **`infra-express` dalı** (2026-08-17, PATTERN #30): paylaşılan infra (`core/scripts/**/*.py` · proje `scripts/validators-local/*.py`) düzenlenince oturumda BİR KEZ "EXPRESS mi kuyruk mu?" yol-ayrımı (howto-infra-fix ADIM 2); erken-return YOK, TRIGGER/HIZLI_KUME yolu aynen sürer. Korpus: `tests/fixtures/fs_docstd` | not+serbest |
 | `post_tool_failure.py` | PostToolUse | `mcp__sap-adt__.*` | Başarısız SAP işleminde patinaj-kesici uyarı (ADR 0006) | not+serbest |
 | `config_change_guard.py` | ConfigChange | — | Seans-içi ayar/davranış-yüzeyi değişikliği nöbetçisi (D31; F2'nin runtime bacağı) | not+degrade⁴ |
 | `pre_compact.py` | PreCompact | — | Compaction ÖNCESİ SESSION_NOTES + memory flush hatırlatması | **not YOK**² |
