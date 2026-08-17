@@ -8,7 +8,7 @@ belge, yapılacak işi tarif eden bir spesifikasyon olmaktan çıkıp danışman
 buldu). Dünya pratiği 3 katman ister: gövde = kapanmış hedef durum · karar günlüğü (11-A/11-B/EK) ·
 analiz süreci (RESEARCH/notlar). Bu gate katman-1'e sızmayı SAYAR.
 
-Kapsam: proje `**/docs/FS-*.md` ve `**/docs/EK-*.md` (FS ekleri). Gövde = §1.1 versiyon geçmişi
+Kapsam: proje `**/docs/FS-*.md` ve `**/docs/EK-*.md` (FS ekleri; H1'i "Karar ve Kanıt Günlüğü" olan EK = katman-2, tamamı atlanır). Gövde = §1.1 versiyon geçmişi
 tablosu, 11-A/11-B bölümleri ve başlığında "Karar" + ("Günlü"|"Açık"|"Öneri") geçen bölümler
 (katman-2 alanı) HARİÇ kalan her şey. §1.1 için ayrıca satır-uzunluğu eşiği (DOC-FS-06).
 
@@ -43,14 +43,15 @@ _SKIP = {"node_modules", "dist", "tmp", ".tmp", ".git", "fixtures", "attic", "ar
 _TR = "A-Za-zÇĞİÖŞÜçğıöşü"
 PATTERNS = {
     "A sürüm-etiketi": re.compile(
-        r"(?<![A-Za-z0-9])v\d\.\d{1,2}(?:[a-c])?(?:-taslak)?(?![0-9])"      # v1.5, v1.5c, v1.8-taslak
-        r"|\(\*{0,2}YENİ[,\s]"                                                # (YENİ, R-26) / (**YENİ, ...
-        r"|\bv\d\.\d'(?:te|de|da|ta)\b",                                       # v1.6'da
-        re.IGNORECASE),
+        r"(?<![A-Za-z0-9])[vV]\d\.\d{1,2}(?:[a-c])?(?:-taslak)?(?![0-9])"    # v1.5, v1.5c, v1.8-taslak
+        r"|\(\*{0,2}YENİ[,\s]"                                                # (YENİ, R-26) / (**YENİ, ... — BÜYÜK; "(yeni parça" değil
+        r"|\b[vV]\d\.\d'(?:te|de|da|ta)\b"),                                   # v1.6'da  (case-sensitive)
     "B gate-bulgu ID": re.compile(
         r"doc-gate|\bH-[A-D]\b|(?<![%s0-9-])[HML]-[1-9](?![0-9])" % _TR),
     "C süreç ifadesi": re.compile(
-        r"canlı ölç|canlı teyit|DEV'de ölç|DEV canlı|ilk turda|yazılmıştı(?!r)|okumuştu|okunmuştu|sanılmış"
+        # geçmiş-zaman süreç anlatısı; ileriye dönük "TS'te canlı ölçülür/teyit edilir" MEŞRU (sayılmaz)
+        r"canlı ölç(?!ül(?:ür|ecek|meli|sün))|canlı teyit(?: edildi|li)|DEV'de ölç|DEV canlı|ilk turda"
+        r"|yazılmıştı(?!r)|okumuştu|okunmuştu|sanılmış|sanıyordu"
         r"|400 döndü|\b400 verdi|ADT preview|adt_sql|RESEARCH-0\d[^|]{0,40}(?:ters|yanlış)"
         r"|(?:önceden|eskiden|daha önce)[^|]{0,60}(?:yerine|artık)", re.IGNORECASE),
     "D kullanıcı alıntı": re.compile(
@@ -82,6 +83,10 @@ def scan_text(text: str):
     lines = text.splitlines()
     findings = {k: [] for k in PATTERNS}
     long_rows = []
+    # Dosyanın kendisi katman-2 ise (EK "Karar ve Kanıt Günlüğü": H1'de "karar" + "günlü") tamamı atlanır.
+    for ln in lines[:15]:
+        if ln.startswith("# ") and _is_log_heading(ln):
+            return findings, long_rows, 0
     in_log = False
     in_version = False
     in_code = False
@@ -150,6 +155,9 @@ Hata kodu L-01 ve M-02 burada meşru hata kodudur (yakalanmamalı).
 def selftest() -> int:
     f, lr, _ = scan_text(RED_FIXTURE)
     ok = True
+    f2, lr2, bl2 = scan_text("# EK-B — Karar ve Kanıt Günlüğü\n\n## R-22\n(doc-gate v1.5 H-C) canlı ölçüldü, kullanıcı: \"x\"\n")
+    if sum(len(v) for v in f2.values()) or lr2 or bl2:
+        print("[SELFTEST-FAIL] katman-2 dosyası (Karar ve Kanıt Günlüğü) taranmamalıydı"); ok = False
     exp = {"A sürüm-etiketi": 1, "B gate-bulgu ID": 1, "C süreç ifadesi": 1, "D kullanıcı alıntı": 1}
     for k, n in exp.items():
         if len(f[k]) < n:

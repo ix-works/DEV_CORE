@@ -44,7 +44,13 @@ VALUE_RES = [
     r"\b\d{2}\.\d{2}\.\d{4}\b",                # tarih
     r"`[^`\n]{2,60}`",                         # kod tokenı
 ]
-STOP_VALUES = {"YENİ", "HAZIR", "TAMAMLANDI", "İPTAL", "ONAY", "EVET", "HAYIR", "TÜMÜ", "GATE", "HIGH", "MEDIUM", "LOW"}
+# Vurgu amaçlı BÜYÜK sözcükler / durum adları veri değildir (başlık büyük-küçük harf standardı bunları küçültür).
+STOP_VALUES = {"YENİ", "HAZIR", "TAMAMLANDI", "İPTAL", "ONAY", "EVET", "HAYIR", "TÜMÜ", "GATE", "HIGH", "MEDIUM", "LOW",
+               "AÇIKÇA", "KORUNUR", "OTOMATİK", "SERBEST", "SİLİNİR", "YENİDEN", "DEĞİL", "ZORUNLU", "YASAK", "AYNEN",
+               "ASLA", "KESİN", "GERÇEK", "TEMSİLÎ", "KANITLI", "ÖNCE", "SONRA", "ARTIK", "HEMEN", "PASİF", "AKTİF",
+               "KAPANDI", "REVİZE", "DÜŞÜRÜLDÜ", "BÜYÜK", "KÜÇÜK", "VEYA", "TAMAM", "BOŞTUR", "YOKTUR", "VARDIR",
+               "BLOCKER", "WARNING", "PASS", "MÜKERRER", "İŞLENİYOR", "TÜKENDİ"}
+_EKB_PREFIX = re.compile(r"^(?:Gövdede kalan sonuç|Taşınan metin(?: \(aynen\))?|Yeniden ifade edilen orijinal(?: \([^)]*\))?|Tür|Karar/kanıt no)\s*:\s*", re.IGNORECASE)
 
 
 def read(p: str) -> str:
@@ -82,15 +88,38 @@ def code_blocks(text: str) -> list[list[str]]:
     return blocks
 
 
-def sentences(text: str) -> list[str]:
-    out = []
+def _units(text: str) -> list[str]:
+    """Metni karşılaştırma birimlerine ayırır: hard-wrap'li paragraflar ÖNCE birleştirilir (satır sonu
+    kırılımı yazımda değişir), tablo satırları hücrelere ayrılır; sonra her birim aynı ayırıcıyla
+    ([.!?;]) cümlelere bölünür — eski/yeni İKİ tarafta da aynı kural (tutarlı denklik)."""
+    units, para, inb = [], [], False
+    def flush():
+        if para:
+            units.append(" ".join(para)); para.clear()
     for ln in text.splitlines():
         s = ln.strip()
-        if not s or s.startswith("```") or s.startswith("|---") or s.startswith("#"):
+        if s.startswith("```"):
+            flush(); inb = not inb; continue
+        if inb:
             continue
-        parts = [c.strip() for c in s.split("|")] if s.startswith("|") else re.split(r"(?<=[.!?;])\s+", s)
-        for p in parts:
-            p = re.sub(r"[*_`>]+", "", p).strip()
+        if not s or s.startswith("#") or s.startswith("|---"):
+            flush(); continue
+        if s.startswith("|"):
+            flush(); units.extend(c.strip() for c in s.strip("|").split("|")); continue
+        if s.startswith(("- ", "* ", "> ")) or re.match(r"^\d+\.\s", s):
+            flush(); para.append(s.lstrip("->* ").strip()); continue
+        para.append(s)
+    flush()
+    return units
+
+
+def sentences(text: str) -> list[str]:
+    out = []
+    for u in _units(text):
+        u = re.sub(r"[*_`]+", "", u).strip()
+        u = _EKB_PREFIX.sub("", u)
+        for p in re.split(r"(?<=[.!?;])\s+", u):
+            p = p.strip()
             if len(p) >= 40:
                 out.append(p)
     return out
