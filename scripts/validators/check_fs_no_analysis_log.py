@@ -34,7 +34,7 @@ check_package_rules_present "--strict … no-op"). Bulguda exit 1 İSTEYEN tek t
 post_validate hook'udur → `--bulguda-exit1`. ÖLÇÜLEMEDİ (okunamayan dosya) = exit 2.
 `--selftest` → gömülü kırmızı-fixture ile kendi kendini test eder (yakalamazsa exit 1).
 Kullanım: python scripts/validators/check_fs_no_analysis_log.py [--bulguda-exit1] [--selftest] [--max-examples N] [--file YOL]
-Kablolama: run_all_validators (PROJE, pre-commit — warn-first, çıktı görünür ama FAIL etmez) + hooks/post_validate.py `doc-fs` sınıfı (FS/TS/KD/EK md düzenlenince o dosya için `--file --bulguda-exit1`; bulgu → yazara stderr özeti + OKU-işaretçisi, exit 2 = geri besleme). Kalıcı korpus: tests/fixtures/fs_docstd (26 vektör, 5 mutasyon).
+Kablolama: run_all_validators (PROJE, pre-commit — warn-first, çıktı görünür ama FAIL etmez) + hooks/post_validate.py `doc-fs` sınıfı (FS/TS/KD/EK md düzenlenince o dosya için `--file --bulguda-exit1`; bulgu → yazara stderr özeti + OKU-işaretçisi, exit 2 = geri besleme). Kalıcı korpus: tests/fixtures/fs_docstd (38 vektör, 9 mutasyon).
 """
 # ENFORCES: DOC-FS-05, DOC-FS-06  (ADR 0019 coverage binding)
 import os
