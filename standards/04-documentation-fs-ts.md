@@ -454,6 +454,7 @@ Her rapor için:
 - Kapsam dışı konular açıkça belirtilmeli
 - Müşteri onayı alınmadan geliştirme başlatılmamalı
 - Türkçe projede Türkçe yazılmalı (teknik terimler İngilizce kalabilir)
+- **Büyük/küçük harf standardı (FS/TS/KD/ekler — kullanıcı geri bildirimi 2026-08-17):** başlık, menü, İçindekiler ve ekran-dizini metinlerinde cümle düzeni; **durum/aşama adları başlıkta Baş Harfleri Büyük** ("S1. Parse Hatası", "Beyanname Eksik"); vurgu amaçlı BÜYÜK sözcük (KORUNUR/SERBEST) başlıkta YOK. Gövde ve tablolarda BÜYÜK HARF yalnız **ekranda/tabloda görülen sistem değeri** için (`DURUM = PARSE HATASI`, durum makinesi tablosu) — okuyucu için bu ayrım okuma kılavuzunda tek satırla belirtilir. `## BÖLÜM N:` düzeyi büyük, `### x.y` cümle düzeni. Üreteçle (Python DATA → md/HTML) yazılan eklerde bunu tek yerde bir `H()` başlık-normalizasyonu ile uygula, elle düzeltme yapma (emsal: paket `docs/<ek>-src/build_*.py` üreteçleri).
 
 ### YAPILMAMASI GEREKENLER:
 - Teknik detaylara (kod, tablo adı, fonksiyon adı) yer verilmemeli
