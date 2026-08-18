@@ -521,3 +521,43 @@ Test-senaryosu / SINIR: (1) B9b reçetesi (`infra-test-recipes.md`) — 38 vekt�
 
 Test-senaryosu / SINIR: (1) ⚠ **GEVŞETME BEYANI — VAR (bir kalem, ölçümle):** liderin önerdiği **çıplak `\bartık\b`** ve **çıplak `bu turda`** desenleri **BİLEREK ALINMADI.** Ölçüldü (22 doküman): çıplak `artık` **48 satır** eşliyor ve çoğunluğu Türkçe **İSİM** "artık" (= bakiye/kalıntı: *"bölünmeyen artık miktar"*, *"artık = ana miktar − bölünme"*) ya da meşru iş kuralı (*"artık değiştirilemez (BR-008)"*, *"artık belge yok (BR-029)"*); çıplak `bu turda` ise iki anlamlı — *"O-02/O-04/M-02 bu turda da AYRICA çalışır"* (FS-SD-022:1806) **sürecin turu**, analiz turu DEĞİL. Liderin somut örneği *"Bu turda kontrol edilmedi"* C sınıfındaki `(?:kontrol\|test) edilmedi` ile **zaten yakalanıyor** ⇒ belirsiz desene gerek kalmadı. İkisi de checklist DOC-FS-05'e *"gate bilerek saymaz, reviewer bakar"* olarak YAZILDI (sessiz boşluk bırakılmadı). (2) **KAPSANMAYAN ÖRNEK:** *"artık AÇIKÇA yaratılır"* — pozitif yüklemli "artık" alınmadığı için yakalanmaz. Alternatif (çıplak `[RS]-\d` atfını saymak) ÖLÇÜLDÜ ve ELENDİ: tek başına FS-SD-022'de **480 eşleşme / 358 satır** üretiyor (R-n/S-n gövdede meşru gereksinim-ID'sidir) ⇒ gate ilk koşumda ölürdü. (3) İki FP daha turun içinde yakalanıp kapatıldı: `değişti` sınırsızken *"değiştirilir"* içinde eşleşiyordu (`\b` eklendi) · `artık … yerine` tasarım gerekçesinde meşru (EK-A:1077) ⇒ `yerine` yalnız "önceden/eskiden" kolunda. (4) **H1 muafiyeti** başlık taramasının yan-etkisiydi: belge kendi başlığında sürümünü söyler (*"# FS-SD-014 v2.0 — …"*) — katman-0.
 
+# EKLENECEK KAYIT — `core/governance/infra-changelog.md`
+
+> **Lider için:** aşağıdaki bölümü `infra-changelog.md`'nin SONUNA ekle (dosyanın tamamını
+> stage'lemedim; canlı dosya bu tur içinde başka ajanlar tarafından değişmiş olabilir —
+> tam kopya yerine ek-parça vermek çakışma riskini kaldırır). `core_precommit` B11
+> changelog-gate'i bu kaydı aynı commit'te bekler.
+
+---
+
+## scripts/validators/check_fm_signature_doc_sync.py (YENİ, warn-first) + tests/fixtures/fm_imza_doc_sync + üreteç kılavuzu üçlüsü (2026-08-18)
+
+| Tarih | Değişiklik | Sebep (ölçüm) | Test | Fixture | PR |
+|---|---|---|---|---|---|
+| 2026-08-18 | **① Yeni gate `check_fm_signature_doc_sync.py`** (`# ENFORCES: CLC-SCR7`, `run_all_validators` **PROJE** moduna WIRED, warn-first): paylaşılan ABAP üretecinin İMZASI (`<source_root>/…/ZSD000_FM_SCREEN_GEN.func.abap`) ile KILAVUZUNDAKİ makine-okunur `<!-- FM-IMZA: … -->` bloğunu karşılaştırır → `EKSİK` (imzada var, belgede yok) · `HAYALET` (belgede var, imzada yok) · `ÖLÇÜLEMEDİ` (belge/blok yok, ayrıştırma çapası düştü → **exit 2**) · `ATLANDI` (kayıt bu projede yok → exit 0 + sebep). `--strict` NO-OP · bulguda exit 1 yalnız `--bulguda-exit1` · `--selftest` gömülü kırmızı fixture. ⚠ Ad "freshness" İÇERMEZ (bkz. SINIR-2). **② Kılavuz üçlüsü güncellendi** (`howto-dynpro-gui-status-generation.md` 200→482 · `howto-classic-dynpro-datafield-screens.md` 354→398 · `templates/classic-dynpro-dialog.prog.abap` 218→237) + blast-radius'ta çıkan iki dosya (`adt-fugr-functions.md` 327→353 §6 imza bloğu · `checklists/classic-dialog-creation.md` 67→70: **CLC-SCR6** donör/`nav_remap=ON` doğrulama sinyali BLOCKER · **CLC-SCR7** imza-bloğu senkronu WARNING+gate · **CLC-DLG8** etiket satırı BLOCKER). | **Sınıf, vaka değil:** paylaşılan bir Z üretecinin parametreleri değişince kılavuzu **kimsenin sorumluluğunda olmadan** bayatlıyor ve bayat kılavuz "bulunamadı" gibi görünmüyor — bir sonraki ajan onu BULUP eksik bilgiyle çağrı kuruyor. Aynı FM'de **iki kez** oldu: 2026-07-31 `IT_BUTTONS` (ajan "üreteç buton üretemiyor" varsayıp ALV-toolbar event'ine saptı) · 2026-08-14/18 `IV_SRC_PROG`/`IV_SRC_STATUS`/`IV_CUA_MERGE`/`IV_NAV_REMAP` (**4 gün** fark edilmedi). İkisini de hiçbir kontrol görmedi: `check_playbook_freshness` yalnız `create_/populate_/run_*.py` script değişimine bakar, ABAP kaynağı ile kılavuz arasında **hiçbir bağ yoktu**. Somut bedel ölçüldü: bayat §2 zarfı birebir kopyalansaydı **varsayılan (minimal) donör** devreye girer — `&F2..&F5` fcode'larıyla —, `WHEN 'BACK'` bekleyen PAI fcode'ları yakalamaz — hata yalnız ekran GUI'de denenince görülürdü. | **GERÇEK-BAĞLAM (fixture değil, gerçek dosyalar):** **R1** canlı core belgeleri + canlı FM (1325 satır) → **exit 2 ÖLÇÜLEMEDİ** ("blok yok"; sessiz `[OK]` DEĞİL). **R2** BAYAT belge (14.08 öncesi §2 tablosu, blok etiketiyle) + canlı FM → `EKSİK` **tam olarak** `IT_FIELDS, IV_CUA_MERGE, IV_NAV_REMAP, IV_SRC_PROG, IV_SRC_STATUS` (adt-fugr'da ayrıca `IT_BUTTONS`) = **olayın birebir yeniden üretimi**. **R3** yeni belgeler + canlı FM → `16 parametrenin tamamı belgeli` **[OK]** (belgenin tamlığı benim okumamdan BAĞIMSIZ kanıtlandı). **R4** yeni belgeler + repo'daki ESKİ 12-parametreli FM (dal çarpışması senaryosu) → `HAYALET` ×4, **exit 0** (warn-first ⇒ FM'i taşıyan proje dalı merge edilmeden önce core PR'ı hiçbir şeyi KIRMAZ). **KABLOLAMA (core ağacı kopyasında):** `check_rule_gate_coverage --strict` **OK=61/0/0/0** (60→61) · `check_console_utf8` **OK/133 script** · `check_project_root_resolution` **OK/199 script** · `compileall` OK · `run_all_validators --quick` **PROJE modu: gate KOŞTU** (aynı koşuda "Playbook freshness" `[SKIP] (quick)`) · **CORE modu: `[SKIP] (core-modu)`** + sebep. | `tests/fixtures/fm_imza_doc_sync/run.py` — **11/11**; BEŞ MUTASYON, hiçbiri diğerini kapsamaz: `--mutasyon capa` (V8 düşer) · `eksik` (V1) · `hayalet` (V4) · `failopen` (V5) · `blok` (V9 FP çapası) | (bu PR) |
+
+Test-senaryosu / SINIR:
+1. Reçete: `governance/infra-test-recipes.md` **B9c** — `python tests/fixtures/fm_imza_doc_sync/run.py` + 5 mutasyon.
+2. ⚠ **AD SEÇİMİ BİR KORUMA:** `run_all_validators --quick` (pre-commit yolu) adında **"freshness"**
+   geçen validator'ları ATLAR (`if args.quick and "freshness" in script_name`). Gate'e
+   `check_..._freshness.py` demek onu **pre-commit'te ölü** yapardı — ölçüldü ve ad bu yüzden
+   `check_fm_signature_doc_sync.py`. (Sınıf: "erişilemez yeşil = ölü gate".)
+3. ⚠ **GEVŞETME BEYANI — VAR (bir kalem, ölçümle):** `howto-classic-dynpro-datafield-screens.md`
+   §3.5'teki *"per-status toolbar araçla OKUNAMAZ ⇒ `BUT` deltasını ÖNDEN hesapla (ZORUNLU)"*
+   hükmü yumuşatıldı. Gerekçe ölçüm: `TFDIR` → **`RS_CUA_INTERNAL_FETCH` `FMODE='R'`** ⇒ CUA
+   içeriği (pfno slotları dahil) SOAP-RFC ile alan-alan **okunabiliyor**; birincil yöntem artık
+   döküm-diff'i. **Önden-hesap KALDIRILMADI** — ikincil kontrol olarak duruyor ve *"ölçüm yolu
+   kapalıysa yine ZORUNLU"* yazıldı. FP/karşı-kanıt: yazma tarafı hâlâ kapalı (20
+   `RS_CUA_INTERNAL*` içinde `'R'` olan yalnız `_FETCH`; `_WRITE`/`_GENERATE`/`_RESET` `null`)
+   ⇒ okuma yolunun açılması yazma riskini artırmıyor.
+4. **Warn-first, HARD'a terfi AYRI karar (ADR 0019 §54):** bugünkü taban `[OK]`; terfi tetiği =
+   ① FM'i taşıyan proje dalı main'e indikten sonra R4 senaryosu kalkar ② en az bir tam gün 0 bulgu.
+   Terfi edilirse `--bulguda-exit1` run_all kaydına eklenir (gate'in kendi `--strict`'i NO-OP kalır).
+5. **KAPSAM SINIRI (bilinçli):** gate **parametre KÜMESİNİ** korur, metni değil. "Donör artık
+   parametrik" gibi bir DAVRANIŞ değişikliği parametre eklemeden olursa gate SUSAR — o yüzden
+   kılavuz §13.2'ye *"davranış değişikliği §2.1/§2.2/§5'e de işlenir"* yazıldı. Ayrıca kayıt
+   listesi bugün **tek** üreteç taşır (`screen_gen`); ikinci bir paylaşılan üreteç belgelenince
+   `KAYITLAR`'a satır eklenir (yapı buna hazır).
+6. **[ÖLÇÜLMEDİ]** — `IT_FIELDS`/`IT_BUTTONS` payload'ları ve kılavuzdaki zarf **canlı SAP'ye
+   karşı bu turda yeniden koşulmadı** (bu tur salt-belge/gate; zarf, canlıda koşmuş
+   `_g3_run_ddic.py` script'inden ve 2026-08-18 sonda ölçümlerinden alındı).

@@ -4,7 +4,7 @@ layer: L3
 scope: project-wide
 type: howto
 applies-to: backend (classic dialog)
-last-updated: 2026-08-06
+last-updated: 2026-08-18
 status: active
 purpose: Datafield'lı (DDIC yapıya bağlı) klasik Dynpro diyalog ekranı üretimi — karar ağacı, arama-yardımı mekanizmaları, üreteç/CUA turu, doğrulama protokolü
 ---
@@ -55,9 +55,13 @@ farkın anlaşılmaması, elle-bildirilen `gs_*` program-lokal struct'lara geri 
 
 ## 1. DDIC yapıya bağlama (`FROM_DICT`) — neden, nasıl, kazanç
 
-**Neden:** ekran alanı DDIC yapının bir bileşenine bağlanınca (`TEMPLATE = 'Z..._S_...-ALAN'` +
-`FROM_DICT = 'X'`) etiket, uzunluk, `CONVERSION_EXIT`, ve (varsa) arama-yardımı **DDIC'ten
-gelir** — elle verilmez. Kazanç ölçülmüş: bir yapının `QUAN`/`DATS` alanı payload'da kısa
+**Neden:** ekran alanı DDIC yapının bir bileşenine bağlanınca (`NAME = '<YAPI>-<ALAN>'` +
+`TYPE = 'TEMPLATE'` + `FROM_DICT = 'X'`) uzunluk, `CONVERSION_EXIT` ve (varsa) arama-yardımı
+**DDIC'ten gelir** — elle verilmez.
+⚠️ **DÜZELTME (2026-08-18):** bu satır önceden `TEMPLATE = 'Z..._S_...-ALAN'` diyordu; `TEMPLATE`
+bir ALAN DEĞİL, `TYPE` **değeridir**. Alan adı `NAME`'e yazılır (canlıda koşmuş payload:
+`{"NAME": "ZSD001_S_DLG-MATNR", "TYPE": "TEMPLATE", "FROM_DICT": "X", "CONV_EXIT": "MATN1"}`).
+⚠️ **ETİKET DDIC'ten OTOMATİK GELMEZ** — bkz. §1.1 (ayrı `TYPE='TEXT'` satırı gerekir). Kazanç ölçülmüş: bir yapının `QUAN`/`DATS` alanı payload'da kısa
 uzunlukla (`len008`/`len013`) gönderilse bile canlı ekran alanı DDIC'in gerçek uzunluğuna
 (`010`/`017`, `DD04L.OUTPUTLEN`) çıktı — **SAP bunu kendisi düzeltti**, elle senkron gerekmedi.
 
@@ -68,8 +72,23 @@ denenmemişti). Program-lokal `gs_duz`/`gs_trf`/`gs_tah` gibi ad-hoc struct'lar 
 arası `MOVE-CORRESPONDING` köprüsü kurulmuşsa, bu bir **geçiş borcudur** — DDIC yapısına
 geçilince köprü **tamamen silinir** (kod referansı 0 kalmalı), yarım bırakılmaz.
 
-**Nasıl (ekran üreteci tarafı — gateway işi, bu dosyada tekrar edilmez):** `IT_FIELDS` satırı
-`TEMPLATE = '<YAPI>-<ALAN>'` + `FROM_DICT = 'X'` + `MATCHCODE` **BOŞ** taşır. Program tarafında
+### 1.1 ⭐ ETİKET KURALI — giriş alanı kendi etiketini GETİRMEZ (canlı ölçüm 2026-08-18)
+
+Kontrollü sonda (geçici ekran, ölçümden sonra silindi):
+
+| Gönderilen satır | Canlı sonuç |
+|---|---|
+| `NAME='VBAK-ERDAT'` `TYPE='TEMPLATE'` `FROM_DICT='X'`, TEXT satırı YOK | yalnız **giriş alanı** (`fDATS len010`) — **etiket ÜRETİLMEDİ** |
+| `NAME='VBAK-ERNAM'` `TYPE='TEXT'` `FROM_DICT='X'`, `TEXT` **boş** | etiket metni **DDIC'ten** geldi: `"Yaratan"` |
+
+⇒ **Her etiket AYRI bir `TYPE='TEXT'` satırıdır.** Metni elle yazmaya gerek YOK: TEXT satırına
+`FROM_DICT='X'` verip `TEXT`'i **boş bırak** → metin DDIC'ten gelir (**ADR 0005-D dostu**;
+onlarca etiket için AI metin uydurmaz).
+⚠️ **TEXT satırını unutmak SESSİZ kusurdur** — FM uyarı VERMEZ (etiketsiz giriş alanı meşru bir
+kullanımdır). Payload denetiminde **alan sayısını değil, etiket/alan ÇİFTLERİNİ** say.
+
+**Nasıl (ekran üreteci tarafı — gateway işi, ayrıntı: üreteç kılavuzu §4):** `IT_FIELDS` satırı
+`NAME='<YAPI>-<ALAN>'` + `TYPE='TEMPLATE'` + `FROM_DICT='X'` + `MATCHCODE` **BOŞ** taşır. Program tarafında
 tek gereken: global work area'nın adı DDIC yapı adıyla **aynı** olması (`DATA zsd001_s_dlg TYPE
 zsd001_s_dlg.`) — ekran alanları `ZSD001_S_DLG-ALAN` diye adreslenir.
 
@@ -177,6 +196,10 @@ her `IV_RECREATE='X'` ile yeniden üretildiğinde **silinir**. Bu sınıf F4'ler
 
 ### 3.1 Tur sırası (ZORUNLU)
 
+0. **Donör + davranış anahtarlarını KARARLAŞTIR** (üreteç kılavuzu §2.1/§2.2): `IV_SRC_PROG`/
+   `IV_SRC_STATUS` verilmezse **varsayılan minimal donör** gelir ve `&F2..&F5` fcode'ları üretilir;
+   `BACK`/`EXIT`/`CANCEL` bekleyen bir PAI ile bu **sessizce uyuşmaz**. `IV_CUA_MERGE`'i
+   kapatmak (`' '`/`'-'`) programın DİĞER status/titlebar'larını **siler**.
 1. **`IV_MODE='READ'`** ile mevcut ekranın container/alan/toolbar durumunu ölç (tur-başı
    sayaçlar: `TITLES`/`FUN`/`PFK`/`BUT`/`MEN`/`F2C`, aşağıda §3.2).
 2. Payload'ı **canlı-üreten kaynak payload'dan** kur (bir önceki turun kendisi — bkz. §3.4
@@ -252,12 +275,24 @@ sonraki CUA turundan **önceki** bir durumu yansıtıyor olabilir (ör. bir stat
 buton eklenmiş ama payload dosyası ondan önceki turdan kalmış). §3.5'in önden-hesap adımı
 tam olarak bu riski yakalamak içindir — payload'ı "güncel" varsaymadan önce §3.5 uygulanır.
 
-### 3.5 CUA tuzağı ③ — per-status toolbar araçla OKUNAMAZ → `BUT` deltasını ÖNDEN hesapla
+### 3.5 CUA tuzağı ③ — `BUT` deltası (⚠ eski "okunamaz" hükmü 2026-08-18'de DÜŞTÜ)
 
-Bir status'ün **şu an** hangi butonları taşıdığı doğrudan tooling ile okunamaz (toolbar
-ikili/binary formatta saklanır; obje-tipi anahtar taşımaz). Yani *"şu ekranda şu an hangi
-butonlar var?"* sorusunun doğrudan cevabı yok — payload dosyası da tek başına güvenilir
-"kaynak" değildir (§3.4).
+> ⚠️ **ÖLÇÜMLE İPTAL EDİLEN HÜKÜM:** *"per-status toolbar araçla OKUNAMAZ (EUDB ikili cluster)"*
+> **artık geçerli değildir.** `TFDIR` ölçümü: **`RS_CUA_INTERNAL_FETCH` → `FMODE='R'`**
+> (RFC-enabled) ⇒ `STA/FUN/PFK/ACT/SET/BUT/MEN/MTX/TIT/DOC` içeriği **pfno slotları dahil**
+> SOAP-RFC ile **alan-alan** okunabiliyor (11 boş `TABLES` etiketi gönderilmek şartıyla —
+> üreteç kılavuzu §10). Yazma tarafı kapalıdır: 20 `RS_CUA_INTERNAL*` FM'i içinde `'R'` olan
+> **yalnız `_FETCH`**; `_WRITE`/`_GENERATE`/`_RESET` → `null`.
+>
+> ⇒ **BİRİNCİL yöntem artık ÖLÇÜM:** tur öncesi/sonrası **döküm diff'i** (hangi status'te hangi
+> `BUT` satırı var, `pfno` dahil). Aşağıdaki **önden-hesap İKİNCİL kontrol olarak KALIR** — hem
+> RFC erişimi olmayan bağlamda tek yol odur, hem de "ne göndereceğimi biliyor muyum?" sorusunu
+> **yazmadan önce** sorar (ölçüm ancak yazdıktan sonra cevap verir).
+> ⚠ Bu bir **gevşetmedir**: eskiden önden-hesap TEK yoldu ve ZORUNLUydu. Gerekçe ölçümdür,
+> kolaylık değil; ölçüm yolu kapalıysa (RFC yok / FM erişilemez) **önden-hesap yine ZORUNLU**.
+
+Payload dosyası tek başına güvenilir "kaynak" değildir (§3.4) — bu yüzden ölçüm ya da
+önden-hesaptan **en az biri** her turda yapılır.
 
 **ÇARE — ölçülemeyen şeyi ÖLÇÜLEBİLENDEN türet:** `BUT` sayacı **program-geneli**dir ve tüm
 status'lerin toplam toolbar-satır sayısını sayar ⇒ beklenen delta **gönderilecek setlerden
@@ -311,7 +346,12 @@ değil "bu sayı neyi sayıyor?"*
 2. §3.5'in önden-hesaplanan `BUT` deltasını tur-başı sayaçla topla → beklenen final.
 3. WRITE et.
 4. Final sayaçları ölç → adım 2'nin beklentisiyle **birebir** kıyasla.
-5. **`FUNDTL` diff'i al** (§3.3) — kaybolan fcode YOK, yalnız planlanan eklemeler var.
+5. **`FUNDTL` (`[FN:`) diff'i al** (§3.3) — kaybolan fcode YOK, yalnız planlanan eklemeler var.
+   ⭐ Aynı diff artık `RS_CUA_INTERNAL_FETCH` ile **doğrudan** da alınabilir (§3.5) — iki kaynak
+   birbirini doğrular.
+5b. **Üreteç sinyallerini oku** (`EV_MESSAGE`): `nav_remap=ON/OFF(...)` · `cua_merge=...` ·
+   `fields=N io_default=M` · `DIKKAT:` satırları. `nav_remap=OFF` bir ALARMDIR: donör
+   parametreleri gitmemiştir (üreteç kılavuzu §2.1).
 6. İçerik eşitliği: değişmeyen ekranların alan/flow/header'ı **birebir aynı** kalmalı.
 7. `adt_inactive_objects` **0** (bu programın objelerinde) — kanıtı `adt_get`/canlı içerik
    okuması ile teyit et, "aktive edildi" mesajına güvenme.
@@ -340,6 +380,10 @@ değil "bu sayı neyi sayıyor?"*
 | T12 | CUA turu sonrası kontrol (sayaç sonradan bakılıyor) | `BUT` deltasını YAZMADAN ÖNCE hesapla ve tur-başı sayaçla kıyasla |
 | T13 | ATC/gate bulgu sayısını "toplam kapsam" sanmak (ör. literal-metin bulguları) | Bir kontrolün bulduğu sayı **alt sınırdır** — kapsamı koddan çıkar, gate'ten değil |
 | T14 | Tanıdık F4 semptomunda direkt yeni deney kurmak | Önce görev-içi geçici dosyalar/SESSION_NOTES/memory'de önceki teşhisi ARA |
+| T15 | Giriş alanı verip etiketin DDIC'ten geleceğini sanmak | Etiket AYRI `TYPE='TEXT'` satırıdır; `FROM_DICT='X'` + `TEXT` BOŞ → metin DDIC'ten (§1.1). Unutmak SESSİZ kusur |
+| T16 | Donör/anahtar parametrelerini vermeden ekran üretmek | Varsayılan minimal donör → `&F2..&F5`; `BACK/EXIT/CANCEL` bekleyen PAI yakalamaz. `nav_remap=ON` sinyalini DOĞRULA (§3.1 adım-0) |
+| T17 | Alan ekranını `CONTAINER` tipiyle üretmek | `CC_ALV` tüm ekranı kaplar → alan çakışması `rc=6`; alan ekranı **DOCKING** ister |
+| T18 | `EV_MESSAGE`'ı kırpmak (`[:400]`) | `DIKKAT:` tanıları mesajın SONUNDADIR; ölçülen uzunluk 559 karaktere çıkıyor — kırpma tanıyı düşürür |
 
 ---
 
@@ -347,7 +391,7 @@ değil "bu sayı neyi sayıyor?"*
 
 - [`templates/classic-dynpro-dialog.prog.abap`](templates/classic-dynpro-dialog.prog.abap) — kanonik şablon
 - [`templates/classic-alv-list.prog.abap`](templates/classic-alv-list.prog.abap) — kardeş şablon (liste)
-- [`howto-dynpro-gui-status-generation.md`](howto-dynpro-gui-status-generation.md) — üreteç temel kullanım kılavuzu
+- [`howto-dynpro-gui-status-generation.md`](howto-dynpro-gui-status-generation.md) — **üreteç kullanım kılavuzu: 16-parametrelik imza (§2), donör reçetesi (§2.1), fail-closed anahtarlar (§2.2), `IT_FIELDS` (§4), doğrulama (§10)**
 - [`adt-fugr-functions.md`](adt-fugr-functions.md) §6 — üreteç iç-mekanik referansı
 - [`../standards/06-coding-classic-dialog.md`](../standards/06-coding-classic-dialog.md) — include bölme, ALV kuralı, F4 karar tablosu özeti
 - [`checklists/classic-dialog-creation.md`](checklists/classic-dialog-creation.md) — pre-flight checklist

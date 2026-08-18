@@ -235,9 +235,33 @@ taramaya **alır**, ama getirdiği kaynak iskelettir. Paket taramasında `scanne
 
 `ZSD000_FM_SCREEN_GEN` (RFC) tek çağrıda hedef programa **(1) boş Dynpro (screen)** + **(2) GUI status + titlebar** üretir; `/sap/bc/soap/rfc` (dialog context) üzerinden çağrılır. Sonuç: `screen rc=2 (zaten var); status(STAT0100+TIT0100) rc=0` → `ZSD000_P_ALV_TEMP1` syntax valid + **aktif**.
 
-- İmza: IMPORTING `IV_PROGRAM SCRHPROG` / `IV_DYNPRO SCRFDYNNR`(`0100`) / `IV_TRANSPORT TRKORR` opt / **`IV_TITLE RSMPE_TITT-TEXT`(`'Liste'`)** (titlebar+dynpro açıklaması; generic) / **`IV_SCREEN_TYPE CHAR10`(`'DOCKING'`)** → 2 layout: `DOCKING` (container yok, program docking ekler) · `CONTAINER` (1 custom control = `IV_CC_NAME`, vars. `CC_ALV`). *(Split AYRI tip değil → CONTAINER + kodda `cl_gui_splitter_container`.)* / **`IV_CC_NAME SCRCNAME`(`'CC_ALV'`)** / **`IV_MODE CHAR10`(`'WRITE'`)** (`'READ'`→sadece dynpro container+CUA title/fun oku, yazma yok) / **`IV_RECREATE CHAR1`** (`'X'`→mevcut ekranı RS_SCRP_DELETE+INSERT ile yeniden kur; flow/container/status değişimini uygular); EXPORTING `EV_RC I` / `EV_MESSAGE STRING`. ABAP'ta `cl_gui_custom_container( container_name = '<name>' )` ile bağlanır.
+> ⚠️ **BU BÖLÜM İKİ KEZ BAYATLADI** (2026-07-31 `IT_BUTTONS`; 2026-08-14/18 donör + davranış
+> anahtarları). Aşağıdaki blok artık **makine-okunurdur** ve `check_fm_signature_doc_sync` gate'i
+> onu FM kaynağıyla karşılaştırır — parametre değiştiren kişi bu bloğu da günceller.
+> **Adım-adım kullanım + reçeteler:** [`howto-dynpro-gui-status-generation.md`](howto-dynpro-gui-status-generation.md).
+
+<!-- FM-IMZA: ZSD000_FM_SCREEN_GEN -->
+
+IMPORTING `IV_PROGRAM SCRHPROG` (⚠ **Z\*/Y\* ŞART** — `EV_RC=301` guard, ADR 0005-A) /
+`IV_DYNPRO SCRFDYNNR`(`'0100'`, **tam 4 hane rakam** — aksi hâlde `EV_RC=300`) /
+`IV_TRANSPORT TRKORR` opt / `IV_TITLE RSMPE_TITT-TEXT`(`'Liste'`) /
+`IV_SCREEN_TYPE CHAR10`(`'DOCKING'`) → `DOCKING` (container yok) · `CONTAINER` (1 custom
+control = `IV_CC_NAME`) *(Split AYRI tip değil → CONTAINER + kodda `cl_gui_splitter_container`)* /
+`IV_CC_NAME SCRCNAME`(`'CC_ALV'`) / `IV_MODE CHAR10`(`'WRITE'` · `READ` · `DELETE`) /
+`IV_RECREATE CHAR1`(`'X'` → `RS_SCRP_DELETE`+INSERT) /
+**`IV_SRC_PROG SCRHPROG`** opt → boşsa FM'in `c_def_src_prog` sabitindeki **varsayılan (minimal) donör** /
+**`IV_SRC_STATUS RSMPE_STA-CODE`**(`'STATUS_0100'`) (donör status) /
+**`IV_CUA_MERGE CHAR1`**(`'X'`=merge açık · `' '`/`'-'`=KAPALI→**siler** · tanınmayan=açık+uyarı) /
+**`IV_NAV_REMAP CHAR1`**(`' '`=otomatik/legacy · `'X'`=zorla aç · `'-'`=zorla kapa);
+EXPORTING `EV_RC I` / `EV_MESSAGE STRING`;
+TABLES **`IT_BUTTONS ZSD000_TT_SCREEN_BUTTON`** opt (app-toolbar) ·
+**`IT_FIELDS ZSD000_TT_SCREEN_FIELD`** opt (ekran alanları; `IV_SCREEN_TYPE='DOCKING'` şart).
+
+<!-- /FM-IMZA -->
+
+ABAP'ta container `cl_gui_custom_container( container_name = '<name>' )` ile bağlanır.
 - **(1) Screen:** `RPY_DYNPRO_INSERT` — header `rpy_dyhead` (type='N', nextscreen=kendi), flow_logic `rpy_dyflow` (PBO/PAI MODULE satırları), containers/fields boş (docking ALV programatik bağlanır).
-- **(2) Status:** `RS_CUA_INTERNAL_FETCH`(donör=standart `SAPLKKBL` status `STANDARD`) → tablolarda **bloat azalt** (`DELETE sta/set WHERE <> donör`; **`tit` tamamen REFRESH → sadece `TIT0100`** yoksa donörün 16 titlebar'ı 003/800/850/DYN/FIL... programa sızar) → status kodunu `STANDARD`→`STAT0100` rename (sta+set) → `RS_CUA_INTERNAL_WRITE`(program=hedef, tr_key obj_type=PROG/sub_type=CUAD) → ⚠️ **`RS_CUA_GENERATE`(objectname=hedef) ŞART** (WRITE yalnız tanımı yazar; load'u üretmez → runtime `00264 "GUI status ... not generated"`). Standart sadece OKUNUR, yazma Z'ye → ADR 0005 OK. Sahibi biz → sonra fonksiyon kodu eklenebilir.
+- **(2) Status:** `RS_CUA_INTERNAL_FETCH`(donör **artık PARAMETRİK**: `IV_SRC_PROG`/`IV_SRC_STATUS`; varsayılan: FM'in `c_def_src_prog` sabitindeki minimal donör + `STATUS_0100`; legacy jenerik donör `SAPLKKBL`/`STANDARD` **açıkça** istenir — howto §2.1) → tablolarda **bloat azalt** (`DELETE sta/set WHERE <> donör`; **`tit` tamamen REFRESH → sadece `TIT0100`** yoksa donörün 16 titlebar'ı 003/800/850/DYN/FIL... programa sızar) → status kodunu `STANDARD`→`STAT0100` rename (sta+set) → `RS_CUA_INTERNAL_WRITE`(program=hedef, tr_key obj_type=PROG/sub_type=CUAD) → ⚠️ **`RS_CUA_GENERATE`(objectname=hedef) ŞART** (WRITE yalnız tanımı yazar; load'u üretmez → runtime `00264 "GUI status ... not generated"`). Standart sadece OKUNUR, yazma Z'ye → ADR 0005 OK. Sahibi biz → sonra fonksiyon kodu eklenebilir.
 
 ### KRİTİK: dialog-context + SOAP-RFC (classrun ÇALIŞMAZ)
 
@@ -250,7 +274,7 @@ taramaya **alır**, ama getirdiği kaynak iskelettir. Paket taramasında `scanne
 | **tr_key (RS_CUA_INTERNAL_WRITE)** | `obj_type='PROG'`, `obj_name=prog`, `sub_type='CUAD'`, `sub_name=prog`, `devclass=paket`. |
 | **WRITE ≠ generate (hata 00264)** | `RS_CUA_INTERNAL_WRITE` yalnız CUA tanımını yazar; runtime load üretmez → status Menu Painter'da görünür ama çalışınca `00264 "... durumu eksik / not generated"`. → WRITE sonrası **`RS_CUA_GENERATE`(objectname=prog, without_messages/checks='X')** çağır (dialog context). |
 
-**C1 DURUMU: TAMAM.** screen 0100 + STAT0100 + TIT0100 üretildi, `ZSD000_P_ALV_TEMP1` aktif. (İyileştirme: STAT0100 şu an SAPLKKBL fonksiyon havuzunu miras alır; gerekirse SE41'de sadeleştir/genişlet.)
+**C1 DURUMU: TAMAM.** screen 0100 + STAT0100 + TIT0100 üretildi, `ZSD000_P_ALV_TEMP1` aktif. (Not: üretilen status DONÖRÜN fonksiyon havuzunu miras alır — legacy `SAPLKKBL` donöründe `FUN≈185`, varsayılan minimal donörde `FUN=4`; hangi donörün kullanıldığı `EV_MESSAGE`'daki `donor=<prog>/<status>` token'ında yazar.)
 
 ### 6.1 Ekranda CONTAINER / kontrol alanı üretimi (RPY_DYNPRO_INSERT `containers`)
 
@@ -306,7 +330,9 @@ taramaya **alır**, ama getirdiği kaynak iskelettir. Paket taramasında `scanne
 
 **ÇALIŞAN status reçetesi (`ZSD000_FM_SCREEN_GEN`):**
 - `tit` REFRESH → yalnız `TIT0100` (✅ title'lar status'tan bağımsız → GÜVENLİ prune; tek istisna).
-- `pfk` re-map: pfno `03`→`BACK`, `15`→`EXIT`, `12`→`CANCEL` (donör jenerik `&F03/&F15/&F12` yerine; bu kodlar donör fun'ında ZATEN var → geçerli).
+- `pfk` re-map (**KOŞULLU** — yalnız `IV_NAV_REMAP` kararı AÇIK ise; varsayılan: yalnız legacy
+  donörde otomatik açılır): pfno `03`→`BACK`, `15`→`EXIT`, `12`→`CANCEL`. Uygulanan karar
+  `EV_MESSAGE`'da `nav_remap=ON/OFF(...)` olarak GÖRÜNÜR — howto §2.1 doğrulama sinyali.
 - `fun`/`set`: BACK/EXIT/CANCEL yoksa ekle (per-function guard; donörde BACK/EXIT var, CANCEL yok).
 - BACK/EXIT/CANCEL `fun-type` → **NORMAL'e zorla** (`CLEAR <fun>-type`): donörde `EXIT type='E'` gelir; AT EXIT-COMMAND modülü olmadan type-E komut işlenmez (buton tepkisiz). Normal → `user_command_0100` yakalar.
 - Diğer donör tabloları (act/men/but/...) DOKUNMA.

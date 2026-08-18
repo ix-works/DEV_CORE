@@ -37,6 +37,8 @@ applies_to: [s4_private]
 | CLC-SCR2 | CONTAINER: screen 200x255 + CUST_CTRL `element_of` BOŞ + `c_resize_v/h='X'` + `c_line_min/c_coln_min=1` (resize) | BLOCKER | §6.1.1 |
 | CLC-SCR3 | Split = tek CC + `cl_gui_splitter_container` (kodda), 2 container DEĞİL | WARNING | §6.1.2 |
 | CLC-SCR4 | Toolbar/menü temiz: `men`/`mtx`/`but` REFRESH; **`act` KORU** (yoksa `00256` geçersiz fonksiyon) | WARNING | §6.1.2 |
+| CLC-SCR6 | **DONÖR AÇIKÇA verildi** (`IV_SRC_PROG`/`IV_SRC_STATUS`) ve `EV_MESSAGE`'da `nav_remap=ON(F3/Sh+F3/F12->BACK/EXIT/CANCEL)` GÖRÜLDÜ. `nav_remap=OFF` → çağrı yanlış, ekran KULLANILMADAN düzeltilir (varsayılan minimal donör `&F2..&F5` üretir; `WHEN 'BACK'` bekleyen PAI yakalamaz) | BLOCKER | howto-dynpro §2.1 |
+| CLC-SCR7 | Üreteç kılavuzundaki `<!-- FM-IMZA -->` bloğu FM kaynağıyla SENKRON (parametre eklendi/kaldırıldıysa kılavuz aynı turda güncellendi) | WARNING | `check_fm_signature_doc_sync.py` (warn-first) |
 | CLC-SCR5 | BACK/EXIT/CANCEL + ESC çalışır (normal type + `user_command`; ESC=F12=CANCEL). RS_CUA_WRITE sonrası **GENERATE** şart (yoksa `00264`). **Navigasyon hedefi:** BACK/CANCEL → seçim ekranı (`LEAVE TO SCREEN 0`), EXIT → `LEAVE PROGRAM`; BACK'te `LEAVE PROGRAM` = ana-menüye atlama = BLOCKER | BLOCKER | §6.1.2 / §4 |
 
 ## Faz 4 — Metin + ADR 0005
@@ -61,6 +63,7 @@ applies_to: [s4_private]
 | CLC-DLG5 | Attachment kullanılıyorsa `where` bloğu parametre eşlemesini AÇIKÇA veriyor (aynı tipte 2. alan varsa özellikle) | BLOCKER | howto §2.2 |
 | CLC-DLG6 | CUA turu: `BUT` deltası **yazmadan önce** hesaplandı + tur-başı sayaçla kıyaslandı; final `FUNDTL` diff alındı (kaybolan fcode yok) | BLOCKER | howto §3.5 / §4 |
 | CLC-DLG7 | DDIC yapı değişti VE ekran daha önce üretilmişti ise **regen** adımı planlandı (obje aktif ≠ tüketici güncel) | BLOCKER | howto §2.2 |
+| CLC-DLG8 | Her giriş alanının **AYRI `TYPE='TEXT'` etiket satırı** var (`FROM_DICT='X'` + `TEXT` BOŞ → metin DDIC'ten). Giriş alanı kendi etiketini GETİRMEZ; eksikliği SESSİZDİR (FM uyarı vermez) | BLOCKER | howto §1.1 |
 
 ---
 

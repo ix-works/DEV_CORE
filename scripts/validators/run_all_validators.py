@@ -85,6 +85,12 @@ VALIDATORS = [
     # Hook yazmak ≠ şablona kablolamak. sap_worktype_hint + itg_backstop şablona hiç
     # eklenmemişti → init_project geride bir proje üretiyordu (2026-07-10 provası). C-TPL-01.
     ("settings.template ↔ hook envanteri (HARD, C-TPL-01)", "check_settings_template_sync.py", [], "both", None),
+    # Paylaşılan ABAP üretecinin İMZASI değişip KILAVUZU değişmeyince sapma SESSİZ kalıyordu
+    # (ZSD000_FM_SCREEN_GEN: 2026-07-31 IT_BUTTONS · 2026-08-14 donör+anahtarlar — 4 gün).
+    # warn-first (bulguda exit 0); ADR 0019 §54 shakeout sonrası terfi kararı ayrı. CLC-SCR7.
+    # ⚠ Ad "freshness" İÇERMEZ: --quick o deseni atlar, bu gate pre-commit'te KOŞMALI.
+    ("FM imzası ↔ kılavuz senkron (warn-first, CLC-SCR7)", "check_fm_signature_doc_sync.py",
+     [], "project", None),
     ("Playbook freshness (uyarı)", "check_playbook_freshness.py", [], "both", None),
 ]
 

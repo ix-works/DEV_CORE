@@ -154,6 +154,11 @@ OZEL_TESTLER = [
     # olculmus bir vakadan gelir: gate ilk halinde 21 dokumanin 16'sini kirli gosteriyordu.
     ("fs_docstd",
      "DOC-FS-05/06/07 uclusu: yakalama + FP capalari + hook kablolamasi + komsu dal regresyonu"),
+    # 2026-08-18: paylasilan ABAP uretecinin imzasi <-> kilavuzu. Iki yon ayni korpusta:
+    # YAKALAMA (EKSIK/HAYALET/OLCULEMEDI) ve SESSIZLIK (blok DISI API token'lari, markdown
+    # bicim varyantlari, farkli imza sekilleri). "Bakamadim" ile "temiz" AYRI exit'e duser.
+    ("fm_imza_doc_sync",
+     "CLC-SCR7: FM imzasi <-> kilavuz senkronu; 3 durum ayrimi + FP capalari (11 vektor)"),
 ]
 
 
@@ -219,6 +224,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/validators/check_kd_no_raw_mermaid.py", ("V:check_kd_no_raw_mermaid",), "G1 çifti"),
     ("scripts/validators/check_fs_no_analysis_log.py", ("O:fs_docstd",),
      "DOC-FS-05/06 sayacı: yakalama + kimlik-satırı FP çapaları (fixture kendi sandbox'ını kurar)"),
+    ("scripts/validators/check_fm_signature_doc_sync.py", ("O:fm_imza_doc_sync",),
+     "imza ayrıştırma + EKSİK/HAYALET + ÖLÇÜLEMEDİ ayrımı (fixture kendi sandbox'ını kurar)"),
+    ("playbook/howto-dynpro-gui-status-generation.md", ("O:fm_imza_doc_sync",),
+     "kılavuzun FM-IMZA bloğu gate'in girdisidir; blok bozulursa gate ÖLÇÜLEMEDİ vermeli"),
+    ("playbook/adt-fugr-functions.md", ("O:fm_imza_doc_sync",),
+     "§6 imza bloğu aynı gate'in ikinci belgesidir"),
     ("scripts/doc_equivalence_check.py", ("O:fs_docstd",),
      "DOC-FS-07 denklik ölçümü: kayıplı/kayıpsız çift + TR harf katlaması FP çapası"),
 

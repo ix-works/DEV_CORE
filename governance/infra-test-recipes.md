@@ -522,3 +522,42 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   satırı OLMAMALI**; döngü başına 2 koşu (pull_request + main-push) görülmeli.
 - ⚠ **Şablon→proje yayılımı GATE'Lİ DEĞİL:** C-TPL-01 (`check_settings_template_sync`) yalnız
   `settings.template.json` hook envanterini denetler; `guard.yml` kopyaları ELLE senkronlanır.
+# EKLENECEK REÇETE — `core/governance/infra-test-recipes.md`
+
+> **Lider için:** `## B9 — run_all + validator ailesi` bölümünün altına, `### B9b`'den **sonra**
+> ekle (aynı ailenin üçüncü alt-reçetesi).
+
+---
+
+### B9c — FM imzası ↔ kılavuz senkronu (CLC-SCR7, 2026-08-18)
+
+- **Tek komut:** `python tests/fixtures/fm_imza_doc_sync/run.py` → **11/11**. Her vektör kendi
+  sandbox'ını kurar (sahte proje kökü: `project.yaml` + `SOURCE_CODES/…/*.func.abap`; sahte core
+  kökü: `playbook/*.md`) ve `finally` ile siler. Gate GERÇEK dosyasından koşar.
+- **BEŞ MUTASYON — hiçbiri diğerini kapsamaz** (biri tam puan verirse korpus o değişmez için
+  BOŞTUR): `--mutasyon capa` (V8 düşer) · `--mutasyon eksik` (V1) · `--mutasyon hayalet` (V4) ·
+  `--mutasyon failopen` (V5) · `--mutasyon blok` (V9). Mutasyon **TAM-EŞLEŞMELİ** metin
+  cerrahisidir; çapa 1 kez geçmiyorsa koşucu **exit 3 ile DURUR** (sessiz no-op mutasyon =
+  sahte YEŞİL).
+- **ÜÇ DURUM AYRIMI korpusun çekirdeğidir** ("bakamadım" ≠ "temiz"): V5 blok yok → **exit 2** ·
+  V6 belge dosyası yok → **exit 2** · V8 imza ayrıştırma **çapası** (`IV_PROGRAM`) düştü →
+  **exit 2** (aksi hâlde 0 fark = sahte `[OK]`) · V7 ABAP kaynağı yok → **exit 0 + `ATLANDI` +
+  sebep** (kayıt başka projeye ait olabilir; sessiz OK basılmaz).
+- ⛔ **SİLİNMEZ FP ÇAPALARI:** **V9** blok DIŞINDAKİ `IS_LAYOUT`/`IT_OUTTAB` gibi BAŞKA API
+  parametreleri HAYALET sayılmaz (belgelerde ALV örnek kodu rutin olarak geçer — blok sınırı
+  bu yüzden var) · **V10** aynı token'ın markdown biçim varyantları (`**IV_DYNPRO**`,
+  `` `IV_CUA_MERGE` ``, `### IV_PROGRAM`, `<b>IT_BUTTONS</b>`) **belgeli** sayılır (sayaç,
+  saydığı şeyin biçim varyantlarına karşı test edilmeden kanıt değildir) · **V11 ÜÇÜNCÜ BAĞLAM**
+  farklı imza ŞEKLİ (`REFERENCE(...)` + `CHANGING` bölümü + imza içi yorum satırları + karışık
+  harf düzeni) doğru ayrıştırılır.
+- **Warn-first sözleşmesi:** `--strict` **NO-OP** (`run_all_validators --strict` bayrağı tüm
+  validator'lara iletilir; terfi ADR 0019 §54 gereği ayrı karar). Bulguda exit 1 isteyen
+  tüketici `--bulguda-exit1` verir (V2 bunu ölçer).
+- **Gerçek-bağlam kontrolü (fixture DIŞI, gerekince tekrarlanır):** canlı core belgeleri +
+  canlı FM → `exit 2`; bayat belge + canlı FM → `EKSİK` 5 kalem; yeni belgeler + canlı FM →
+  `16/16 [OK]`. Yöntem (ad-hoc, kalıcı betik YOK — makine yolu gömmemek için): geçici bir
+  sandbox projeye FM kaynağının ilgili sürümünü koy, gate'i `--core <belge kökü>` +
+  `CLAUDE_PROJECT_DIR=<sandbox>` ile çağır.
+- ⚠ **Ad sözleşmesi:** gate adında **"freshness" GEÇMEZ** — `run_all_validators --quick`
+  (pre-commit) o deseni atlar. Ad değişirse pre-commit'te sessizce ölür; regresyon çapası:
+  `--quick` çıktısında gate satırının GÖRÜNMESİ (aynı koşuda "Playbook freshness" `[SKIP]`).
