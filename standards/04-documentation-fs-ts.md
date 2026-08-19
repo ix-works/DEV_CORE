@@ -142,6 +142,26 @@ dolup **analiz günlüğüne** döndü, onaya sunulamadı) aynı kuralı verir:
   dosyası). **Kapanan bir 11-B kararı gövdeye SONUÇ olarak işlenir ve 11-B'den EK'e iner** — 11-B
   mutabakatta boştur (yalnız bloke etmeyen açıklar kalır). Reddedilen seçenek de "neden dışlandı"
   ile EK'te kalır (BABOK — aynı talep yeniden açılmasın).
+  - ⭐ **YAYILIM TABLOSU (MUST, 2026-08-19) — bir karar kaydı, DOKUNULACAK YERLERİN listesini
+    taşır; liste tamamlanmadan karar KAPANMIŞ SAYILMAZ.** Bir karar tipik olarak **N yerde**
+    yaşar (gövde kuralı + ekran tablosu + sözde-kod + test + ek belge + onay listesi) ve
+    düzeltme turu **N-1**'ini yapar; kalan tek yer, belgeye sadık geliştiriciye **iptal edilmiş
+    kuralı** kodlatır. Yayılım yüzeyi hiçbir yerde yazılı olmadığı için kararın tamamlandığı
+    **ölçülemez** — tablo bu ölçümü mümkün kılar. Zorunlu kolonlar:
+
+| Karar no | Dokunulacak yer (belge §/dosya) | Durum | Kim / ne zaman |
+|---|---|---|---|
+| K-nn | TS §4.2 iş kuralı metni | ✅ | — |
+| K-nn | TS §7.1 **normatif sözde-kod** | ☐ | — |
+
+  ⛔ **FAIL-OPEN UYARISI: boş ya da eksik doldurulmuş yayılım tablosu ⇒ KAYIT GEÇERSİZ.**
+    Tablo koyup boş bırakmak, tablo koymamaktan **daha kötüdür** — okuyucuda *"yayılım
+    denetlendi"* sanısı üretir ve ikinci kapının ③ yüzeyini (`checklists/doc-checklist.md`
+    §İKİNCİ KAPI) sahte-yeşile çevirir. Boş tablo = kapanmamış karar.
+    *(Vaka 2026-08-19: bir iş kuralının kaldırılması TS'in 3 yerinde uygulanıp bir sonraki
+    bölümün normatif sözde-kodunda kaldı; aynı turda başka bir kural belgenin 3 yerinde yaşarken
+    yalnız 1'i düzeltilmişti ve bir aksiyon sayımı bir kararın **sessizce düşmesine** izin
+    veriyordu.)* Kontrol: doc-checklist **DOC-FS-06** · **DOC-CR-02**.
 - **Katman 3 — Analiz/araştırma süreci FS'e HİÇ girmez.** Canlı ölçüm dökümleri, deneme-yanılma,
   ham veri profili, gate raporları → paket `ref_docs/RESEARCH-*.md`, `docs/…-gate-*.md`,
   SESSION_NOTES. FS yalnız vardığı sonucu ve dosya atfını taşır.

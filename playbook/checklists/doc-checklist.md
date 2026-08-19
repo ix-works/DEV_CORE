@@ -9,6 +9,19 @@ applies_to: [s4_private]
 >
 > Kaynak: `standards/04-documentation-fs-ts.md` (§1.3 görsel ilkesi · §2.3 FS · §3.3 TS · §4.2-4.5 KD) · `playbook/howto-kullanici-dokumani-pdf-ekran-goruntulu.md` (üretim+§C doğrula) · ADR 0008 (grid-liste).
 
+> **⛔ İKİNCİ KAPI — bir düzeltme turu, kendi çıktısına kapı koşmadan KAPANMAZ (2026-08-19).**
+> `kapı → düzeltme → (kapı yok)` zinciri açık kaldıkça **düzeltmenin kendisi** bulgu üretir: bir RAP
+> doküman setinin kapı turunda 6 kapının **44 HIGH/MEDIUM** bulgusunun **~%40'ı önceki düzeltme
+> turlarının kendi çıktısından** doğdu. Vaka: *"şu iş kuralının arama penceresi kaldırıldı"* kararı
+> TS'in 3 yerinde uygulandı, bir sonraki bölümün **normatif sözde-kodunda** kaldı ⇒ belgeye sadık
+> geliştirici **iptal edilmiş kuralı** kodlayacaktı (mükerrer sipariş + teslimat + MÇ + fatura).
+> **İkinci kapı DAR kapsamlıdır — tam yeniden okuma DEĞİL**, yalnız üç yüzey:
+> ① değişen satırlar ② değişen her **sayının/adın** belgedeki DİĞER geçtiği yerler (DOC-CR-02)
+> ③ kararın **yayılım listesi** (std 04 §2.0 İLKE-2b Katman-2 · yayılım tablosu).
+> **Bağımsızlık:** ikinci kapıyı **birinci kapıyı koşan göz koşamaz.**
+> ⚠ Dar kapsam kuralın parçasıdır, kolaylık değil: geniş tutulursa **"kapı yorgunluğu"** doğar ve
+> gate mekanik onaya döner (= gate'in kendisini kaybetmek).
+
 ## §A — KULLANICI DÖKÜMANI (KD)
 
 | ID | Kontrol | Severity | Ref |
@@ -39,7 +52,7 @@ applies_to: [s4_private]
 | DOC-FS-03 | **Ne/neden** odaklı (nasıl-implemente DEĞİL); iş diliyle, çözüm-tarafsız; gereksinimler izlenebilir/numaralı | MEDIUM (EKSİK) | std §2.3 |
 | DOC-FS-04 | İç tutarlılık (FS↔TS↔KD no eşleşmesi; süreç adımları ↔ gereksinim ↔ ekran çelişkisiz) | MEDIUM (EKSİK) | std §1.1 |
 | DOC-FS-05 | **Gövde = kapanmış hedef durum, analiz günlüğü DEĞİL** (İLKE-2b, 3 katman). Gövdede (§1.1 ve 11-A/11-B/EK Karar-Kanıt Günlüğü HARİÇ) şunlar **0**: sürüm etiketi ("v1.5'te eklendi", "(YENİ, R-12)"), doc-gate bulgu numarası ("H-C/M-2 netleşme"), araştırma/ölçüm süreci ("canlı ölçüldü", "ilk turda yanlış okunmuştu", "400 döndü", "RESEARCH-02 ters okumuştu"), kullanıcı alıntısı ("kullanıcı: '…'"), "önceden→şimdi" anlatısı. Reviewer üslup yargısı da yapar: her paragraf **bugün geçerli hâli** mi anlatıyor, yoksa **nasıl bulunduğunu** mu? (2026-08-17: 9 sürümlük FS gövdesi %25 işaretli satırla onaya sunulamadı). **KATMAN-0 (kural DIŞI, temizlenmez):** belgenin kendi kimlik satırları — kapak `| Versiyon | v1.2 |`, §1.1 versiyon tablosu (başlığı yazılmamış olsa da; yalnız SATIR UZUNLUĞU ölçütüne tabi), §1.3 ilgili-doküman satırı, altbilgi — ve belgenin KENDİ tanımladığı gap ID'sine (`| **H-1** | …` satırıyla tanımlanmış) atıf. **BAŞLIKLAR DA GÖVDEDİR** (H1 hariç): "## 6. ETKİLENEN OBJELER (canlı-doğrulanmış…)" gibi süreç izleri başlık parantezinde saklanamaz. **"Önceden→şimdi" anlatısı** da yasaktır ("artık … değil", "R-6 revizyonu", "bu revizyonla", "ilk taslakta") — gövde bugünkü hâli anlatır, değişimi değil. ⚠ Gate BİLEREK saymadığı iki belirsiz kalıp var (reviewer bakar): çıplak "artık" (Türkçede isim de: "artık miktar") ve çıplak "bu turda" (sürecin turu olabilir). GATE (warn-first, sayım): `check_fs_no_analysis_log.py` (kalıcı korpus `tests/fixtures/fs_docstd`). | HIGH (HATA) | std §2.0 İLKE-2b · §2.3 |
-| DOC-FS-06 | **§1.1 kısa + 11-B birikmemiş** — versiyon satırı 1-2 satır ("ne değişti", madde/§ atfı; "neden/nasıl bulundu" yok); §11-B'de yalnız AÇIK (ya da bloke etmeyen) kararlar — kapanan karar gövdeye SONUÇ olarak işlenmiş, satırı EK "Karar ve Kanıt Günlüğü"ne inmiş (karar/kim/ne zaman/gerekçe/kanıt atfı; reddedilen seçenek "neden dışlandı" ile). | MEDIUM (EKSİK) | std §2.0 İLKE-2b · §2.2 B1.1/B11-B |
+| DOC-FS-06 | **§1.1 kısa + 11-B birikmemiş** — versiyon satırı 1-2 satır ("ne değişti", madde/§ atfı; "neden/nasıl bulundu" yok); §11-B'de yalnız AÇIK (ya da bloke etmeyen) kararlar — kapanan karar gövdeye SONUÇ olarak işlenmiş, satırı EK "Karar ve Kanıt Günlüğü"ne inmiş (karar/kim/ne zaman/gerekçe/kanıt atfı; reddedilen seçenek "neden dışlandı" ile). ⭐ **YAYILIM TABLOSU (2026-08-19):** her karar kaydı **dokunulacak yerlerin listesini** taşır ve liste tamamlanmadan karar **kapanmış sayılmaz** — karar N yerde yaşar, düzeltme turu N-1'ini yapar. ⛔ **Boş/eksik yayılım tablosu ⇒ kayıt GEÇERSİZ** (tablo koyup boş bırakmak, tablo koymamaktan **daha kötüdür**: koruma sanısı üretir). | MEDIUM (EKSİK) | std §2.0 İLKE-2b · §2.2 B1.1/B11-B |
 | DOC-FS-07 | **Yeniden yazım/temizlikte VERİ KAYBI = 0** — gövdeden çıkan her bilgi EK'e taşınmış (silinmemiş): kimlik kümeleri (FR/BR/AC/hata kodu/SCR/T/ÖK/G/karar no) eski = yeni; mockup blokları korunmuş; sayısal/kod değerleri (tablo/alan/tcode/miktar/tarih) yeni FS ∪ EK'te var; eski gövdenin her cümlesi yeni FS ∪ EK'te bulunuyor (bulanık eşleşme). Reviewer denklik raporunu (script çıktısı) kanıt olarak ister — "okudum, aynı" yetmez. | HIGH (HATA) | std §2.0 İLKE-2b · feedback_done-tam-kapsam-dogrula |
 
 ## §C — TEKNİK SPESİFİKASYON (TS)
@@ -50,6 +63,14 @@ applies_to: [s4_private]
 | DOC-TS-02 | **Zorunlu bölümler tam** (teknik genel bakış + obje listesi + veri sözlüğü + ekran tasarımı + program/sınıf + DB erişim + enhancement + form + interface + hata + test + transport + onay) | HIGH (EKSİK) | std §3.2 |
 | DOC-TS-03 | **Obje adları/alanlar canlı sistemle tutarlı** (uydurma değil; DDL/CDS/struct gerçeğiyle); naming standardına uygun. **Klasik program include'ları:** `<PKG>_I_<PRG>_<T01/C01/O01/I01/F01/S01>` — program-kökünden TÜRER; generic `_I_TOP`/`_I_F01` (kök+numaralı-suffix yok) YASAK (std 06 §1 · gate C-INC-NAME-01 · .rules.md include alt-kuralı) | HIGH (HATA) | std §3.3 · 01-naming · 06 §1 |
 | DOC-TS-04 | **Clean-core/yasak farkındalığı** (std tablo yerine released CDS; ADR 0005 ihlali anlatılmıyor) | MEDIUM (ÖNERİ) | feedback_clean-core |
+
+## §D — ÇAPRAZ KONTROLLER (tipten bağımsız — KD/FS/TS + EK'ler)
+
+| ID | Kontrol | Severity | Ref |
+|---|---|---|---|
+| DOC-CR-01 | **TERS-YÖN — her `A→B` varlık kontrolünün İKİZİ koşulur: "B var, atıf alıyor mu?"** Tek yönün temiz olması **yarım sonuçtur**; eksik yön tipik olarak *hiç yazılmamış* iş kuralını gizler. En az dört ikiz: ① **mesaj/metin katalogu** — katalogdaki her mesaj (özellikle `E`) belgede bir **üretim noktasına** bağlı mı (yalnız "belgede anılan her mesaj katalogda mı" DEĞİL) ② **onaylı adlar** — onay listesindeki her ad plan/uygulama tarafında geçiyor mu (yalnız "kullanılan her ad onaylı mı" DEĞİL) ③ **DDIC alanı** — her alan için *kim yazar / kim okur*; **ikisi de boşsa yetim alan** ④ **kabul kriteri** — her AC bir teste bağlı mı (yalnız "her test bir AC'ye bağlı mı" DEĞİL). *(2026-08-19: ileri yön ("anılan her mesaj katalogda mı") temizdi, ters yön hiç sorulmamıştı → **4 bulgu**, ikisinde iş kuralı belgede **hiç yazılmamıştı**.)* | HIGH (EKSİK) | bu dosya §İKİNCİ KAPI |
+| DOC-CR-02 | **Sabit sayı/ad bayatlaması — bir rakam iki yerde yaşarsa biri bayatlar ve SAHTE YEŞİL verir.** ① Bir sayı/ad değiştiyse belgedeki **diğer tüm geçtiği yerler** güncellendi mi (ikinci kapının ② yüzeyi — teslimden önce **ESKİ** değeri belge genelinde ara). ② **Ölçüt sabit sayıya değil KAYNAĞA bağlanır:** "6+4 aktif" değil "onay listesindeki TÜM adlar aktif"; sabit sayı kalacaksa kaynağı yanına yazılır. ③ **Kapsama beyanı hangi KÜMEYİ kapsadığını söyler** — "T-01…T-40 kimliklerinin tamamı karşılandı" *T-nn tamlığını* ölçer, **kabul-kriteri kapsamasını değil**. *(2026-08-19: build planı A-18 ölçütü "6+4 aktif" **10 onaylı obje eksikken GEÇTİ**; test kapsama beyanı temizken **7 AC** — biri komple bir özellik — beyanın altından geçti.)* | HIGH (HATA) | bu dosya §İKİNCİ KAPI · CLAUDE.core §7 KAPSAM BEYANI |
+| DOC-CR-03 | **Belge ↔ canlı teyit turu koşuldu mu** — TS build'e girmeden önce içindeki her *"canlıda mevcut / kurulu / bağlı / yapılacak"* iddiası **ölçüldü** mü (ad çakışması pozitif-kontrollü · reuse iddiaları **imza dahil** · uyarlama durumu · paket/inaktif · transport `E070`/`E071`'den). Kanıt = ölçüm çıktısı, "okudum doğru" değil. | HIGH (EKSİK) | [`howto-belge-canli-teyit-turu.md`](../howto-belge-canli-teyit-turu.md) |
 
 ## Verdict
 - **PASS** → bitti denebilir.
