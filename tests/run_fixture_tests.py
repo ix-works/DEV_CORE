@@ -783,6 +783,13 @@ def main(argv: list[str] | None = None) -> int:
     rows = []  # (name, bad_desc, good_desc, verdict, detail)
     all_ok = True
     atlanan = 0
+    # ⛔ TEŞHİS EDİLEBİLİRLİK (2026-08-19): başarısız birimin YAKALANAN çıktısı tablodan
+    # sonra TAM basılır. Öncesinde yalnız son 400 karakter tabloya sığdırılıyordu; fixture
+    # kendi 38 alt vakasını basıyor olsa da CI logunda GÖRÜNMÜYORDU (kuyruk traceback'e
+    # gidiyordu) ⇒ yalnız Windows'ta çalışan bir ekip, Linux runner'da düşen vakayı
+    # teşhis EDEMİYORDU. Bu bir fail-open değil, ama ölçüm aletinin kör noktasıydı.
+    # ⚠ Yalnız BAŞARISIZLIKTA basılır (yeşil koşumda log şişmez).
+    basarisiz_ciktilar: list[tuple[str, str]] = []
 
     for name in VALIDATORS:
         if secim is not None and f"V:{name}" not in secim:
@@ -819,6 +826,11 @@ def main(argv: list[str] | None = None) -> int:
             detail += f" | bad BEKLENMEDİK exit={bad_rc} çıktı: {bad_out.strip()[:200]}"
         if not good_ok:
             detail += f" | good BEKLENMEDİK exit={good_rc} çıktı: {good_out.strip()[:200]}"
+        if not ok:
+            if not bad_ok:
+                basarisiz_ciktilar.append((f"V:{name} [bad]", bad_out))
+            if not good_ok:
+                basarisiz_ciktilar.append((f"V:{name} [good]", good_out))
 
         rows.append((
             name,
@@ -845,6 +857,8 @@ def main(argv: list[str] | None = None) -> int:
             continue
         ok = rc == 0
         all_ok = all_ok and ok
+        if not ok:
+            basarisiz_ciktilar.append((f"O:{ad}", out))
         # Ozel fixture P ve N senaryolarini KENDI icinde tasir → tek exit kodu raporlanir.
         ozet = [s for s in out.splitlines() if re.match(r"^\s*\d+/\d+ OK", s)][-1:] or [""]
         rows.append((
@@ -876,6 +890,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"    -> {detail.strip(' |')}")
     else:
         print("(bölüm 1/OZEL: seçim modunda koşulacak birim yok)")
+
+    # ── BAŞARISIZ BİRİMLERİN TAM ÇIKTISI (yalnız FAIL'de) ──────────────────────
+    # Kırmızı bir koşum LOGDAN teşhis edilebilir olmalı: hangi alt vaka düştü, hangi
+    # ortam varsayımı patladı. Kırpma varsa GÖRÜNÜR ("[KIRPILDI]") — sessiz kesme yok.
+    KIRPMA = 20000
+    for birim, ciktı in basarisiz_ciktilar:
+        gövde = (ciktı or "").rstrip() or "(çıktı YOK — süreç hiçbir şey basmadı)"
+        kirpildi = len(gövde) > KIRPMA
+        print(f"\n{'=' * 78}\nBAŞARISIZ BİRİM ÇIKTISI (tam): {birim}\n{'=' * 78}")
+        print(gövde[-KIRPMA:] if kirpildi else gövde)
+        if kirpildi:
+            print(f"[KIRPILDI] çıktının ilk {len(gövde) - KIRPMA} karakteri atlandı "
+                  f"(toplam {len(gövde)}); yereldeyken fixture'ı doğrudan koş.")
+        print("=" * 78)
 
     n_pass = sum(1 for r in rows if r[3] == "PASS")
     print(f"\n{n_pass}/{len(rows)} PASS  (bölüm 1: validator bad/good"
