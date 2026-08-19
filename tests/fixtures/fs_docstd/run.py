@@ -191,13 +191,54 @@ def _kur(sb: Path) -> None:
 
 
 def _junction(sb: Path) -> bool:
-    """<sandbox>/core → worktree. Junction (mklink /J) yönetici YETKİSİ İSTEMEZ."""
+    """<sandbox>/core → core kökü. **TAŞINABİLİR** (2026-08-19).
+
+    Windows: junction (`mklink /J`) — yönetici YETKİSİ İSTEMEZ.
+    POSIX:   symlink — junction kavramı YOKTUR; ölçülen şey "<proje>/core başka bir ağaca
+             çözülüyor mu" olduğu için symlink eşdeğerdir (`os.readlink`/`resolve()`/
+             `is_relative_to` her iki biçimi de çözer; `session_start`in junction kontrolü de
+             `os.readlink` kullanır).
+
+    ⛔ NEDEN: burada `subprocess.run(["cmd", ...])` KOŞULSUZDU ⇒ Linux'ta `cmd` bulunamayınca
+    `FileNotFoundError` fırlatıyor ve fixture **kurulum aşamasında ÇÖKÜYORDU** — 38 alt vakanın
+    HİÇBİRİ koşmuyordu. Windows'ta 38/38 OK olduğu için aylarca görünmedi; CI'da (Ubuntu)
+    `exit 1`. Kanıt: CI koşumu 32236015054, `run.py:198` traceback.
+
+    ⚠ DESEN UYDURULMADI: aynı işi CI'da yıllardır sorunsuz yapan kardeş artefakt
+    `scripts/tests/guard_conformance.py::_core_link` (win32 → junction, aksi halde
+    `symlink_to`) — bu fonksiyon o desenin aynısıdır. (Kardeş CI'da koşuyor: core-ci
+    "Guard konformans matrisi" adımı.)
+    """
     hedef = sb / "core"
-    if hedef.exists():
+    if hedef.is_symlink() or hedef.exists():
         return True
-    r = subprocess.run(["cmd", "/c", "mklink", "/J", str(hedef), str(KOK)],
-                       capture_output=True, text=True)
-    return r.returncode == 0 and hedef.exists()
+    if os.name == "nt":
+        r = subprocess.run(["cmd", "/c", "mklink", "/J", str(hedef), str(KOK)],
+                           capture_output=True, text=True)
+        return r.returncode == 0 and hedef.exists()
+    try:
+        os.symlink(str(KOK), str(hedef), target_is_directory=True)
+    except OSError as exc:                       # yetki/dosya-sistemi kısıtı — SESSİZ GEÇME
+        print(f"  ⚠ NOT: symlink kurulamadı ({exc}) → kablolama vektörleri doğrudan çağrıyla koşar.")
+        return False
+    return hedef.exists()
+
+
+def _bagi_kaldir(hedef: Path) -> None:
+    """`<sandbox>/core` bağını kaldır — HEDEFİN İÇERİĞİNE DOKUNMADAN.
+
+    Windows junction: `rmdir` bağı siler, hedefi DEĞİL (`shutil.rmtree` junction'ın İÇİNE
+    girip core ağacını silebilir — bu satır o yüzden var). POSIX symlink: `os.unlink`.
+    ⚠ Bu temizlik de eskiden koşulsuz `cmd` çağırıyordu: Linux'ta istisna fırlatıp
+    `shutil.rmtree`e HİÇ gelinmiyordu ⇒ geçici dizinler sızıyordu.
+    """
+    try:
+        if hedef.is_symlink():
+            hedef.unlink()
+        elif hedef.exists() and os.name == "nt":
+            subprocess.run(["cmd", "/c", "rmdir", str(hedef)], capture_output=True)
+    except Exception:
+        pass
 
 
 # ── KOŞUCULAR ─────────────────────────────────────────────────────────────────
@@ -549,8 +590,7 @@ def main() -> int:
                 pass
         for yol in (sb, Path(str(sb) + "2")):
             try:
-                if (yol / "core").exists():
-                    subprocess.run(["cmd", "/c", "rmdir", str(yol / "core")], capture_output=True)
+                _bagi_kaldir(yol / "core")
                 shutil.rmtree(yol, ignore_errors=True)
             except Exception:
                 pass
