@@ -159,6 +159,11 @@ OZEL_TESTLER = [
     # bicim varyantlari, farkli imza sekilleri). "Bakamadim" ile "temiz" AYRI exit'e duser.
     ("fm_imza_doc_sync",
      "CLC-SCR7: FM imzasi <-> kilavuz senkronu; 3 durum ayrimi + FP capalari (11 vektor)"),
+    # 2026-08-19 ADT teshis gorunurlugu (iki kalem, tek tema: SAP'nin SEBEBI cagirana ulasmali)
+    ("retry_500_govde",
+     "retry adapter'i SAP'nin 500 GOVDESINI yutuyordu (429/502/503/504 tekrar KORUNDU)"),
+    ("sorgu_basarisizligi_gorunur",
+     "adt_sql_query/adt_table_read: alt katman None -> ok:false (ok:true + 0 satir = sahte yesil)"),
 ]
 
 
@@ -282,12 +287,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/sap_adt_lib.py",
      ("O:conn_cift_anahtar", "O:conn_yazici_encoding", "O:dogrulama_kosamadi",
       "O:lock_modification_support", "O:class_include_push",
-      "O:sessiz_olumsuzlama_2026_08_10"),
-     "altı korpus bu modülü import/mutasyon eder"),
+      "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde"),
+     "yedi korpus bu modülü import/mutasyon eder"),
     ("scripts/sap_client.py",
      ("O:adtget_yokluk_kaniti", "O:class_include_push", "O:dogrulama_kosamadi",
-      "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari"),
-     "MCP tool'larının alt katmanı"),
+      "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
+      "O:sorgu_basarisizligi_gorunur"),
+     "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil)"),
     ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok",), "activate_and_verify"),
     ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
     ("scripts/push_object.py", ("O:class_include_push",), "ccau/ccimp push sırası"),
@@ -316,7 +322,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:reviewer_tip_kapsam"),
      "adt_get/adt_push/adt_delete uçları"),
     ("mcp_servers/sap_adt/tools/query.py",
-     ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari"), "where_used/ATC + veri sorgusu"),
+     ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur"),
+     "where_used/ATC + veri sorgusu + başarısızlık görünürlüğü"),
 
     # ── CI / şablon tetikleri ───────────────────────────────────────────────
     ("claude/workflows/*.yml", ("O:workflow_tetik_dupe",), "şablon tetik sözleşmesi"),
@@ -787,6 +794,13 @@ def main(argv: list[str] | None = None) -> int:
     rows = []  # (name, bad_desc, good_desc, verdict, detail)
     all_ok = True
     atlanan = 0
+    # ⛔ TEŞHİS EDİLEBİLİRLİK (2026-08-19): başarısız birimin YAKALANAN çıktısı tablodan
+    # sonra TAM basılır. Öncesinde yalnız son 400 karakter tabloya sığdırılıyordu; fixture
+    # kendi 38 alt vakasını basıyor olsa da CI logunda GÖRÜNMÜYORDU (kuyruk traceback'e
+    # gidiyordu) ⇒ yalnız Windows'ta çalışan bir ekip, Linux runner'da düşen vakayı
+    # teşhis EDEMİYORDU. Bu bir fail-open değil, ama ölçüm aletinin kör noktasıydı.
+    # ⚠ Yalnız BAŞARISIZLIKTA basılır (yeşil koşumda log şişmez).
+    basarisiz_ciktilar: list[tuple[str, str]] = []
 
     for name in VALIDATORS:
         if secim is not None and f"V:{name}" not in secim:
@@ -823,6 +837,11 @@ def main(argv: list[str] | None = None) -> int:
             detail += f" | bad BEKLENMEDİK exit={bad_rc} çıktı: {bad_out.strip()[:200]}"
         if not good_ok:
             detail += f" | good BEKLENMEDİK exit={good_rc} çıktı: {good_out.strip()[:200]}"
+        if not ok:
+            if not bad_ok:
+                basarisiz_ciktilar.append((f"V:{name} [bad]", bad_out))
+            if not good_ok:
+                basarisiz_ciktilar.append((f"V:{name} [good]", good_out))
 
         rows.append((
             name,
@@ -849,6 +868,8 @@ def main(argv: list[str] | None = None) -> int:
             continue
         ok = rc == 0
         all_ok = all_ok and ok
+        if not ok:
+            basarisiz_ciktilar.append((f"O:{ad}", out))
         # Ozel fixture P ve N senaryolarini KENDI icinde tasir → tek exit kodu raporlanir.
         ozet = [s for s in out.splitlines() if re.match(r"^\s*\d+/\d+ OK", s)][-1:] or [""]
         rows.append((
@@ -880,6 +901,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"    -> {detail.strip(' |')}")
     else:
         print("(bölüm 1/OZEL: seçim modunda koşulacak birim yok)")
+
+    # ── BAŞARISIZ BİRİMLERİN TAM ÇIKTISI (yalnız FAIL'de) ──────────────────────
+    # Kırmızı bir koşum LOGDAN teşhis edilebilir olmalı: hangi alt vaka düştü, hangi
+    # ortam varsayımı patladı. Kırpma varsa GÖRÜNÜR ("[KIRPILDI]") — sessiz kesme yok.
+    KIRPMA = 20000
+    for birim, ciktı in basarisiz_ciktilar:
+        gövde = (ciktı or "").rstrip() or "(çıktı YOK — süreç hiçbir şey basmadı)"
+        kirpildi = len(gövde) > KIRPMA
+        print(f"\n{'=' * 78}\nBAŞARISIZ BİRİM ÇIKTISI (tam): {birim}\n{'=' * 78}")
+        print(gövde[-KIRPMA:] if kirpildi else gövde)
+        if kirpildi:
+            print(f"[KIRPILDI] çıktının ilk {len(gövde) - KIRPMA} karakteri atlandı "
+                  f"(toplam {len(gövde)}); yereldeyken fixture'ı doğrudan koş.")
+        print("=" * 78)
 
     n_pass = sum(1 for r in rows if r[3] == "PASS")
     print(f"\n{n_pass}/{len(rows)} PASS  (bölüm 1: validator bad/good"

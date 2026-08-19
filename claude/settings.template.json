@@ -2,6 +2,7 @@
   "_comment": "PROJE settings şablonu — init_project.py bundan üretir. TÜM hook'lar proje-lokal hook_shim.py üzerinden (D15: kopuk-junction'da net hata; runpy=+0ms Ö2). Drift kontrolü: session_start D7. Always-allow YASAĞI (D32): SAP-yazma/davranış-yüzeyi araçlarına verilmez.",
   "_comment_yorumlar": "YORUMLAR ÜST SEVİYEDE durur ya da bir hook-BLOĞUNUN içinde ('_comment' alanı). 'hooks' NESNESİNİN doğrudan içine yazılan anahtar bir OLAY adı sanılır (2026-07-10'da bu hata yapıldı).",
   "_comment_instructions_loaded": "InstructionsLoaded (2026-07-10): talimat-dosyası yüklemesi SESSİZDİR — AGENTS.md aylarca yüklenmeden 'yüklendi' teyidi verildi; dokümante 'paths:' frontmatter'ı sessizce çalışmaz (anthropics/claude-code#17204); core/ bir junction'dır (D29). Hook BLOKLAMAZ, yalnız .tmp/instructions-loaded.log'a zaman/matcher/yol yazar → glob-tetiklemeli L1b kuralının GERÇEKTEN yüklendiği kanıtlanabilsin. matcher=path_glob_match görünmüyorsa kural ÖLÜDÜR.",
+  "_comment_permissions_allow": "allow listesi YALNIZ salt-okunur analiz uçları + validator koşumu içindir (D32: always-allow yasağı SAP-YAZMA uçlarına bakar — adt_create/adt_update/adt_activate/transport-release ASLA buraya girmez; onlar izin sorusu üretmeye devam eder). 2026-08-19: 10 salt-okur MCP ucu + 2 validator (run_review, check_abaplint) TD'de aylarca ELLE eklenmiş, template'te yoktu → her oturum 'settings.json template'ten SAPMIS (D7)' uyarısı; ölçüldü, normalize JSON farkının TAMAMI bu 12 kalemdi. ⚠ Liste SIRASI D7 imzasına girer (sort_keys diziyi sıralamaz) — yeni kalem SONA eklenir, mevcut sıra karıştırılmaz.",
   "statusLine": {
     "type": "command",
     "command": "python \"${CLAUDE_PROJECT_DIR}/core/scripts/statusline.py\"",
@@ -252,7 +253,19 @@
       "Bash(python core/scripts/validators/run_all_validators.py:*)",
       "Bash(python core/scripts/build_package_index.py)",
       "Bash(python core/scripts/sprint_gate_check.py:*)",
-      "Bash(python core/scripts/td_spec_check.py:*)"
+      "Bash(python core/scripts/td_spec_check.py:*)",
+      "mcp__sap-adt__adt_sql_query",
+      "mcp__sap-adt__adt_grep_source",
+      "mcp__sap-adt__adt_table_read",
+      "mcp__sap-adt__adt_where_used",
+      "mcp__sap-adt__adt_inactive_objects",
+      "mcp__sap-adt__adt_atc_check",
+      "mcp__sap-adt__adt_enhancements",
+      "mcp__sap-adt__adt_package_contents",
+      "mcp__sap-adt__adt_dump_list",
+      "mcp__sap-gui__sap_list_connections",
+      "Bash(python core/scripts/validators/run_review.py:*)",
+      "Bash(python core/scripts/validators/check_abaplint.py:*)"
     ],
     "ask": [
       "Bash(rm -rf:*)",

@@ -117,9 +117,13 @@ kontrol("P2 çok dosya → BİRLEŞİM (3 birim)",
 # P3: bir dosya birden çok fixture'ı besliyorsa hepsi seçilir (tek-fixture varsayımı
 #     seçim modunun en olası sessiz-daraltma kaynağıdır).
 secim, _ = sec("scripts/sap_adt_lib.py")
-kontrol("P3 çok-tüketicili kaynak → 6 korpusun hepsi",
-        secim is not None and len(secim) == 6
-        and {"O:lock_modification_support", "O:conn_cift_anahtar"} <= secim,
+# ⚠ SAYI HARİTAYA PİNLİ: bu modüle yeni bir korpus eklenirse (2026-08-19: `retry_500_govde`
+# → 6'dan 7'ye) HARİTA ile BU SATIR birlikte güncellenir. Sayıyı gevşetmek (`>=`) çapayı
+# öldürür — sessiz daraltma tam olarak burada görünür.
+kontrol("P3 çok-tüketicili kaynak → 7 korpusun hepsi",
+        secim is not None and len(secim) == 7
+        and {"O:lock_modification_support", "O:conn_cift_anahtar",
+             "O:retry_500_govde"} <= secim,
         f"alınan={sorted(secim) if secim else secim}")
 
 # P4: mutlak yol + ters-bölü (Windows'ta ajanın vereceği gerçek biçim) aynı sonucu verir.

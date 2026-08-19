@@ -978,7 +978,17 @@ class SAPADTClient:
             max_retries=_Retry(
                 total=3,
                 backoff_factor=0.3,
-                status_forcelist=(429, 500, 502, 503, 504),
+                # ⛔ 500 BU LİSTEDE DEĞİL (2026-08-19, ölçülmüş iki vaka).
+                # SAP'nin 500'ü genelde GEÇİCİ DEĞİL, *kalıcı* bir reddin gövdesidir
+                # (ör. `CTS_WBO_API 019/020` — "obje şu kullanıcının şu talebinde bloke").
+                # Retry o cevabı 3 kez tekrarlar ve **gövdeyi atar**: çağırana
+                # `MaxRetryError('too many 500 error responses')` gider, SAP'nin anlattığı
+                # sebep KAYBOLUR. 18.08.2026'da iki push'ta (ekran üreteci FM + DESADV FM)
+                # kök sebep ancak retry sökülüp (`max_retries=0`) ham cevap okunarak bulundu;
+                # bir ajan bu yüzden "kaynak limiti" hipotezine saptı.
+                # ⇒ Tekrar denemek 500'ü ÇÖZMEZ, yalnız TEŞHİSİ SİLER. 429/502/503/504
+                # kalır — onlar gerçekten geçicidir.
+                status_forcelist=(429, 502, 503, 504),
                 allowed_methods=('GET', 'HEAD', 'PUT', 'POST', 'DELETE'),
             ),
         )
