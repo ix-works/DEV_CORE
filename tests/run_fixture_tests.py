@@ -154,6 +154,11 @@ OZEL_TESTLER = [
     # olculmus bir vakadan gelir: gate ilk halinde 21 dokumanin 16'sini kirli gosteriyordu.
     ("fs_docstd",
      "DOC-FS-05/06/07 uclusu: yakalama + FP capalari + hook kablolamasi + komsu dal regresyonu"),
+    # 2026-08-19 ADT teshis gorunurlugu (iki kalem, tek tema: SAP'nin SEBEBI cagirana ulasmali)
+    ("retry_500_govde",
+     "retry adapter'i SAP'nin 500 GOVDESINI yutuyordu (429/502/503/504 tekrar KORUNDU)"),
+    ("sorgu_basarisizligi_gorunur",
+     "adt_sql_query/adt_table_read: alt katman None -> ok:false (ok:true + 0 satir = sahte yesil)"),
 ]
 
 
@@ -271,12 +276,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/sap_adt_lib.py",
      ("O:conn_cift_anahtar", "O:conn_yazici_encoding", "O:dogrulama_kosamadi",
       "O:lock_modification_support", "O:class_include_push",
-      "O:sessiz_olumsuzlama_2026_08_10"),
-     "altı korpus bu modülü import/mutasyon eder"),
+      "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde"),
+     "yedi korpus bu modülü import/mutasyon eder"),
     ("scripts/sap_client.py",
      ("O:adtget_yokluk_kaniti", "O:class_include_push", "O:dogrulama_kosamadi",
-      "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari"),
-     "MCP tool'larının alt katmanı"),
+      "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
+      "O:sorgu_basarisizligi_gorunur"),
+     "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil)"),
     ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok",), "activate_and_verify"),
     ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
     ("scripts/push_object.py", ("O:class_include_push",), "ccau/ccimp push sırası"),
@@ -305,7 +311,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:reviewer_tip_kapsam"),
      "adt_get/adt_push/adt_delete uçları"),
     ("mcp_servers/sap_adt/tools/query.py",
-     ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari"), "where_used/ATC + veri sorgusu"),
+     ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur"),
+     "where_used/ATC + veri sorgusu + başarısızlık görünürlüğü"),
 
     # ── CI / şablon tetikleri ───────────────────────────────────────────────
     ("claude/workflows/*.yml", ("O:workflow_tetik_dupe",), "şablon tetik sözleşmesi"),

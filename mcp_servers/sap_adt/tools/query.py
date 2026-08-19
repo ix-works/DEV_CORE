@@ -33,6 +33,31 @@ def _capture():
         yield buf
 
 
+def _cagri_basarisiz(kod: str, log: str, ozet: str, **ek) -> dict:
+    """Alt katman `None` döndü ⇒ `ok:false` + sebep `error`/`message` alanında.
+
+    ⛔ SESSİZ FAIL-OPEN kapatıldı (2026-08-19, lider bizzat düştü): `sap_client.run_sql_query`
+    başarısızlıkta `None` döner ve sebebi YALNIZ stdout'a basar (`[ERROR] SQL query error:
+    [400] ...`). Bu değer `ok:true` + `row_count:0` + `rows:null` olarak dönüyordu ⇒ çağıran
+    bunu *"TADIR'da 0 obje"* diye okudu = **kanıt sanılan sahte yeşil**. Ölçülmüş kontrol
+    grubu: kısa `IN` listeli sorgu 3 satır + boş `client_log` (sağlıklı) · aynı sorgu 15
+    elemanlı `IN` listesiyle `ok:true` + 0 satır + log'da `[400]`.
+    `client_log` KALDIRILMADI, sorgu davranışı DEĞİŞMEDİ — yalnız başarısızlık GÖRÜNÜR oldu
+    ("üç-değerli doğrulama sözleşmesi", 2026-08-01 sınıfının süpürgeden artan üyesi).
+    """
+    satirlar = [s.strip() for s in (log or "").splitlines() if s.strip()]
+    hata = [s for s in satirlar if "[ERROR]" in s or "error" in s.lower()]
+    sebep = " · ".join((hata or satirlar)[:3])
+    return {
+        "ok": False,
+        "error": kod,
+        "message": (ozet + (" — " + sebep if sebep else
+                            " (alt katman sebep basmadı; sorguyu/uç erişimini elle doğrula)")),
+        "client_log": log,
+        **ek,
+    }
+
+
 # =============================================================================
 # adt_search_objects
 # =============================================================================
@@ -385,7 +410,9 @@ def adt_table_read(
         approval_text: Onay metni (affirmative kelime içermeli).
 
     Returns:
-        {ok, table, data, client_log} veya guardrail_violation (QA/PRD hassas, onaysız).
+        {ok, table, data, client_log} veya guardrail_violation (QA/PRD hassas, onaysız)
+        veya {ok: false, error: "tablo_okunmadi", message} — okuma KOŞMADIYSA (2026-08-19:
+        eskiden `ok:true` + `data:null` idi, "boş tablo" ile ayırt edilemiyordu).
         data.rows_labeled: [{KOLON: değer}, ...] (hizalama-güvenli; satırları BURADAN oku).
         data.columns: kolon adları (referans). data.data (pozisyonel) etiketleme başarılıysa kaldırılır.
     """
@@ -433,6 +460,13 @@ def adt_table_read(
         with _capture() as buf:
             data = client.run_sql_query(
                 f"SELECT {select_cols} FROM {table.upper()}", max_rows=row_limit)
+        log = buf.getvalue().strip()
+        if data is None:
+            # Kardeş kusur (aynı alt katman, aynı sınıf): `run_sql_query` hata halinde None
+            # döner ⇒ eskiden `ok:true` + `data:null` idi. "Tablo boş" ile "okuma KOŞMADI"
+            # ayırt edilemiyordu.
+            return _cagri_basarisiz("tablo_okunmadi", log,
+                                    "Tablo okuma sorgusu KOŞMADI", table=table)
         # Kolon-adı→değer eşlemeli görünüm — pozisyonel diziyi gözle hizalama off-by-one'ını
         # yapısal olarak önler (ders 2026-06-22 DORIT.BATCH/HU_IDENT karıştırma).
         try:
@@ -455,7 +489,7 @@ def adt_table_read(
             "table": table,
             "row_limit": row_limit,
             "data": data,
-            "client_log": buf.getvalue().strip(),
+            "client_log": log,
         }
     except Exception as exc:
         return _err_from_exc(exc)
@@ -496,7 +530,11 @@ def adt_sql_query(
 
     Returns:
         {ok, query, row_count, columns, rows: [{KOLON: değer}, ...], executed?, client_log}
-        veya {ok: false, error, message} (SELECT-değil / yazma-keyword) veya guardrail_violation.
+        veya {ok: false, error, message} (SELECT-değil / yazma-keyword / **sorgu KOŞMADI**)
+        veya guardrail_violation.
+        ⚠ `row_count: 0` YALNIZ `ok: true` iken "0 satır" demektir. Sorgu SAP'de düşerse
+        `ok: false` + `error: "sorgu_kosmadi"` döner (sebep `message`+`client_log`) — 0 satır
+        ile başarısızlık artık AYIRT EDİLEBİLİR (2026-08-19).
         Satırları DAİMA `rows`'tan oku (kolon-adı→değer eşlemeli; hizalama-güvenli).
     """
     q = (query or "").strip().rstrip(";").strip()
@@ -533,6 +571,11 @@ def adt_sql_query(
     try:
         with _capture() as buf:
             data = client.run_sql_query(q, max_rows=row_limit)
+        log = buf.getvalue().strip()
+        if data is None:
+            return _cagri_basarisiz("sorgu_kosmadi", log,
+                                    "ADT data preview sorgusu KOŞMADI",
+                                    query=q, tables=sorted(tables))
         cols = data.get("columns") if isinstance(data, dict) else None
         rows = data.get("data") if isinstance(data, dict) else None
         rows_labeled = ([dict(zip(cols, r)) for r in rows]
@@ -545,7 +588,7 @@ def adt_sql_query(
             "columns": cols,
             "row_count": len(rows) if isinstance(rows, list) else 0,
             "rows": rows_labeled,
-            "client_log": buf.getvalue().strip(),
+            "client_log": log,
         }
     except Exception as exc:
         return _err_from_exc(exc)
