@@ -30,22 +30,13 @@ if sys.platform == 'win32':
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-# Built-in CURR DTEL'leri (genişletilebilir)
-CURR_DTELS = {
-    'netwr', 'mwsbp', 'kbetr', 'dmbtr', 'wrbtr', 'kzwi1', 'kzwi2',
-    'kzwi3', 'kzwi4', 'kzwi5', 'kzwi6', 'sklfr', 'klfre', 'lfrec',
-    'price', 'curr', 'amount',
-}
-
-# Built-in QUAN DTEL'leri
-QUAN_DTELS = {
-    'menge_d', 'kwmeng', 'kwmen', 'lfimg', 'lfime', 'wmeng', 'bmeng',
-    'menge', 'volum', 'ntgew', 'brgew', 'quan',
-}
-
-# Built-in CUKY/UNIT DTEL'leri
-CUKY_DTELS = {'waers', 'waerk', 'hwaer'}
-UNIT_DTELS = {'meins', 'vrkme', 'gewei', 'voleh', 'lager', 'unit'}
+# DTEL sözlükleri — TEK KAYNAK: scripts/utils/ddic_semantics.py (B-13, 2026-08-19).
+# NEDEN taşındı: aynı sözlüğü DDL'i ÜRETEN populate_tables.py de kullanır. İki kopya
+# yaşarsa üretici, bu denetçinin BLOCKER diyeceği annotation'ı üretir (B-13 kökü).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from utils.ddic_semantics import (  # noqa: E402
+    CURR_DTELS, QUAN_DTELS, CUKY_DTELS, UNIT_DTELS,
+)
 
 
 def yorumu_kirp(line: str) -> str:

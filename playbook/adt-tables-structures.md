@@ -397,12 +397,30 @@ python scripts/populate_tables.py ... --force-recreate
 python scripts/populate_tables.py ... --dry-run
 ```
 
-CSV format:
+CSV format — **8 zorunlu + 2 opsiyonel kolon**:
 ```
-table_name,table_desc,delivery_class,data_maint,field_name,is_key,type,description
-ZSD001_T_CONTY,Konteyner Tipleri,A,ALLOWED,MANDT,Y,MANDT,Client
-ZSD001_T_CONTY,Konteyner Tipleri,A,ALLOWED,CONTY,Y,ZSD001_E_CONTY,Konteyner tipi
+table_name,table_desc,delivery_class,data_maint,field_name,is_key,type,description[,unit_field[,unit_kind]]
+ZSD001_T_CONTY,Konteyner Tipleri,A,ALLOWED,MANDT,Y,MANDT,Client,,
+ZSD001_T_CONTY,Konteyner Tipleri,A,ALLOWED,CONTY,Y,ZSD001_E_CONTY,Konteyner tipi,,
+ZSD001_T_CONTY,Konteyner Tipleri,A,ALLOWED,MENGE,N,MENGE_D,Miktar,MEINS,quantity
+ZSD001_T_CONTY,Konteyner Tipleri,A,ALLOWED,MEINS,N,MEINS,Birim,,
+ZSD001_T_CONTY,Konteyner Tipleri,A,ALLOWED,NETWR,N,NETWR,Tutar,WAERS,currency
+ZSD001_T_CONTY,Konteyner Tipleri,A,ALLOWED,WAERS,N,WAERS,Para birimi,,
 ```
+
+| Kolon | Anlam |
+|---|---|
+| `type` | **DTEL adı** (`MANDT`, `ZSD001_E_CONTY`) ya da built-in (`char10`). ⚠ ABAP veri tipi (`CURR`/`QUAN`) **DEĞİLDİR** |
+| `description` | Alan açıklaması — **belgeleme amaçlı, DDL'e yazılmaz**; DDIC alan etiketlerini DTEL'den alır. Tablo açıklaması `table_desc`'tir |
+| `unit_field` | Miktar/tutar alanının birim / para-birimi alanı |
+| `unit_kind` | `quantity` \| `currency` \| boş. Boşsa DTEL sözlüğünden (`scripts/utils/ddic_semantics.py`) çıkarılır; çıkarılamazsa `quantity` + **UYARI**. Geçersiz değer = **hata** (fail-closed) |
+
+> ⚠ **B-13 (2026-08-19):** script eskiden CURR/QUAN ayrımını `type == 'CURR'` ile
+> yapıyordu. `type` kolonunda DTEL adı olduğu için koşul **hiç tutmuyordu** → currency
+> dalı **ulaşılamaz ölü koddu** ve her tutar alanı yanlışlıkla
+> `@Semantics.quantity.unitOfMeasure` alıyordu. Bu, `check_cds_currency_reference.py`
+> denetçisinin **BLOCKER** (C-TBL-CUR-03) verdiği DDL demekti. Üretici ve denetçi artık
+> **aynı DTEL sözlüğünü** kullanır.
 
 ### 28.1 İki Adımlı Yaratma Pattern
 

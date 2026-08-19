@@ -101,6 +101,8 @@ OZEL_TESTLER = [
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
     # 2026-08-01 kuyruk-turu (validator ailesi, V1-V6):
     ("cds_curr_satir_yorumu", "CURR/QUAN: satir-sonu // yorumu alani/degeri gizliyordu (V1)"),
+    ("populate_tables_unit_kind",
+     "B-13: CSV 'type' kolonu ABAP tipi saniliyordu -> CURR dali ULASILAMAZ olu koddu"),
     ("paket_uzanti_kapsami", "paket naming + paket-siniri: .bdef/.srvd allow-list'te YOKTU (V2)"),
     ("itg_alan_dolulugu", "ITG S2: bos sablon + [x] BLOCKER gate'ini geciyordu (V3)"),
     ("gitignore_tam_satir", "core-sizinti kilidi: yorumlu/negatif satir 'kilit var' saniliyordu (V4)"),
@@ -240,7 +242,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
 
     # ── validator ailesi: kendi koşucusunu taşıyan korpuslar ────────────────
     ("scripts/validators/check_cds_currency_reference.py",
-     ("O:cds_curr_satir_yorumu",), "V1 korpusu bu validator'ı import eder"),
+     ("O:cds_curr_satir_yorumu", "O:populate_tables_unit_kind"),
+     "V1 korpusu bu validator'ı import eder; B-13 korpusu ise ÜRETİCİ↔DENETÇİ "
+     "mutabakatını ölçer (ikisi aynı DTEL sözlüğünü kullanır)"),
+    ("scripts/populate_tables.py", ("O:populate_tables_unit_kind",),
+     "B-13/B-9/B-14: unit_kind kararı + CSV kolon sözleşmesi"),
+    ("scripts/utils/ddic_semantics.py",
+     ("O:populate_tables_unit_kind", "O:cds_curr_satir_yorumu"),
+     "DTEL sözlüğü TEK KAYNAK: hem üretici hem denetçi bu modülü import eder"),
     ("scripts/validators/check_project_root_resolution.py",
      ("O:proje_koku_varyantlari", "O:conn_adt_proje_koku"),
      "V5 yazım-varyantları + CORE-01 dedektörünün ikinci yüzü"),

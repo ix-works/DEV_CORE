@@ -561,3 +561,27 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
 - ⚠ **Ad sözleşmesi:** gate adında **"freshness" GEÇMEZ** — `run_all_validators --quick`
   (pre-commit) o deseni atlar. Ad değişirse pre-commit'te sessizce ölür; regresyon çapası:
   `--quick` çıktısında gate satırının GÖRÜNMESİ (aynı koşuda "Playbook freshness" `[SKIP]`).
+
+## B22 — `populate_tables.py` unit_kind kararı (CURR ↔ QUAN) + CSV kolon sözleşmesi
+- Korpus: `python tests/fixtures/populate_tables_unit_kind/run.py` → **16 senaryo + 4 mutasyon**,
+  exit 0. Suite içinden: `python tests/run_fixture_tests.py` (OZEL_TESTLER üyesi).
+- Mutasyonlar korpusun **İÇİNDEDİR** (kaynak metni yamalanır; eski sürümü `git show` ile
+  çekmeye gerek YOK) ve koşucu ayrıca **"yama tuttu mu"** kanıtı basar — yama bugünkü kaynağa
+  uymazsa `sahte-yesil riski` ile exit 1 (mutasyonun sessizce NO-OP'a dönmesine karşı).
+- ⚠ **Fixture'ın kendi dersi (iki tane):**
+  1. `populate_tables` import anında `io.TextIOWrapper(sys.stdout.buffer)` kurar. Yalnız
+     `sys.stdout`'u geri koymak **YETMEZ** — wrapper GC'ye girince sardığı GERÇEK buffer'ı
+     KAPATIR ve sonraki `print` *"I/O operation on closed file"* ile patlar (ölçüldü). Korpus
+     import sırasında stdout'u atılabilir bir `BytesIO`'ya bağlar.
+  2. İkinci sinyal (referans DTEL) mutasyonu önce **KAÇIYORDU**: sinyal sökülünce sonuç yine
+     `quantity` çıkar (varsayılan aynı yön) → annotation'a bakan çapa ayırt edemez. Ayırt edici
+     **uyarı-İZİ**dir (çözüldüyse uyarı YOK, varsayılana düşüldüyse VAR) + yön-ikizi `S4b`
+     (Z'li tutar DTEL'i + standart CUKY ref → currency).
+- **ÜRETİCİ↔DENETÇİ mutabakatı:** DTEL sözlüğü `scripts/utils/ddic_semantics.py`'de TEK
+  kaynaktır; `check_cds_currency_reference.py` de oradan import eder. Sözlüğe dokunulursa
+  **İKİ** korpus koşulur: `populate_tables_unit_kind` + `cds_curr_satir_yorumu` (HARİTA
+  ikisini de bağlar).
+- ⚠ **Suite hijyeni (bu turun ürünü DEĞİL, gözlendi):** `run_fixture_tests.py` koşumu repo
+  kökünde gitignored bir `.conn_adt` **BIRAKIR**; **ikinci ardışık koşumda**
+  `conn_cift_anahtar`'ın "tier YOK → UNKNOWN" vektörü `tier=DEV` okuyup FAIL verir (123/124).
+  Temiz ölçüm için koşumdan önce `rm -f .conn_adt`. Ayrı kuyruk kalemi.
