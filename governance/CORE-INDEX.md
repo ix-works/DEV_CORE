@@ -1,4 +1,4 @@
-<!-- uretim: 2026-08-09T15:32:09+03:00 · core-commit: 2cb170b — bilgi satiri; tazelik kiyasinda yok sayilir -->
+<!-- uretim: 2026-08-18T11:46:06+03:00 · core-commit: ab37296 — bilgi satiri; tazelik kiyasinda yok sayilir -->
 <!-- URETILMIS DOSYA — elle duzenleme. Uretici: core/scripts/build_core_index.py
      Tazelik gate'i: core/scripts/validators/check_core_index_fresh.py -->
 
@@ -13,7 +13,7 @@
 > · `rg -L --no-ignore <p>` · `find -L core`. Kokten path'siz arama = sessiz sifir.
 
 
-## `core/playbook/` (48 dosya)
+## `core/playbook/` (49 dosya)
 
 - [`core/playbook/00-discipline-and-principles.md`](../core/playbook/00-discipline-and-principles.md) — ADT Disiplini, Hızlı Erişim ve Genel Prensipler
 - [`core/playbook/adt-cds.md`](../core/playbook/adt-cds.md) — CDS View (DDLS/DF)
@@ -49,12 +49,13 @@
 - [`core/playbook/howto-cok-katmanli-degisiklik.md`](../core/playbook/howto-cok-katmanli-degisiklik.md) — HOWTO — Çapraz-kesen (çok katmanlı) davranış değişikliği nasıl yönetilir
 - [`core/playbook/howto-delete-guard.md`](../core/playbook/howto-delete-guard.md) — HOWTO — Silme Kontrolü (delete guard): backend kuralından kullanıcının gördüğü mesaja
 - [`core/playbook/howto-document-lock.md`](../core/playbook/howto-document-lock.md) — How-To: VA02-Tarzı Belge Kilidi (App-Level, ortak ZSD000)
-- [`core/playbook/howto-dynpro-gui-status-generation.md`](../core/playbook/howto-dynpro-gui-status-generation.md) — Klasik Dynpro ekranı + GUI status'u AI'ın RFC FM ile (SOAP-RFC, dialog context) üretmesi
+- [`core/playbook/howto-dynpro-gui-status-generation.md`](../core/playbook/howto-dynpro-gui-status-generation.md) — Klasik Dynpro ekranı + GUI status'un ortak üreteç FM ile (SOAP-RFC, dialog context) üretilmesi — 16-parametrelik imza, donör seçimi, ekran alanı/buton üretimi, CUA merge, doğrulama protokolü
 - [`core/playbook/howto-infra-fix-proseduru.md`](../core/playbook/howto-infra-fix-proseduru.md) — HOWTO — İnfra-Fix Prosedürü: DONDUR → SINIFLA → (EXPRESS | KUYRUK) → İNFRA-EXPERT
 - [`core/playbook/howto-kullanici-dokumani-pdf-ekran-goruntulu.md`](../core/playbook/howto-kullanici-dokumani-pdf-ekran-goruntulu.md) — How-To: Markdown Dökümanı → Ekran Görüntülü Şık PDF (KD/FS/TS)
 - [`core/playbook/howto-packing-instruction-consumption.md`](../core/playbook/howto-packing-instruction-consumption.md) — How-To — Ambalajlama Talimatı Tüketimi (POP/POF → kasa + kasa-içi adet)
 - [`core/playbook/howto-rap-eml-sales-order-create-update.md`](../core/playbook/howto-rap-eml-sales-order-create-update.md) — How-to: Released Sales Order BO (I_SalesOrderTP) EML ile create / update
 - [`core/playbook/howto-sistem-denetimi.md`](../core/playbook/howto-sistem-denetimi.md) — HOWTO — Sistem Denetimi Runbook'u (envanter + hata-tekrarı + verimlilik + sadeleştirme)
+- [`core/playbook/howto-talimat-dosyasi-bakimi.md`](../core/playbook/howto-talimat-dosyasi-bakimi.md) — HOWTO — Talimat-Dosyası Bakımı (CLAUDE.md · rules · auto-memory)
 - [`core/playbook/intake-triage.md`](../core/playbook/intake-triage.md) — Geliştirme talebi alım protokolü — kapsam-sınıflama + 3-eksen araştırma + kanıtlı değerlendirme
 - [`core/playbook/known-errors.md`](../core/playbook/known-errors.md) — Bilinen Hatalar ve Çözümlü Durumlar
 - [`core/playbook/lessons-learned.md`](../core/playbook/lessons-learned.md) — Tekrarlayan hata pattern'leri ve trigger phrases
@@ -114,4 +115,4 @@
 
 ---
 
-**Toplam 87 dokuman.** Bu dosya uretilmistir; icerik degistiginde `build_core_index.py` yeniden kosulur.
+**Toplam 88 dokuman.** Bu dosya uretilmistir; icerik degistiginde `build_core_index.py` yeniden kosulur.

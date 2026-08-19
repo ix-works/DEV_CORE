@@ -22,6 +22,16 @@
 *&       fcode, IT_BUTTONS'un HER ÇAĞRIDA toolbar'ı sıfırdan kurması) +
 *&       doğrulama protokolü (tur-başı↔final sayaç + FUNDTL diff)
 *&   playbook/howto-dynpro-gui-status-generation.md — üreteç kullanım kılavuzu
+*&     §2  16 parametrelik imza · §2.1 donör reçetesi (BACK/EXIT/CANCEL ailesi)
+*&     §2.2 fail-closed anahtarlar · §4 IT_FIELDS + etiket kuralı · §10 doğrulama
+*&   ⛔ exit_command_<n> MODÜLÜ YAZMA: üretilen FLOW'da AT EXIT-COMMAND satırı
+*&     YOKTUR → o modül hiç çağrılmaz (ölü kod). ESC = F12 = CANCEL, PAI yakalar.
+*&   ⚠️ Klasik FORM ... USING ALT-SINIF referansını KABUL ETMEZ ("actual parameter
+*&     incompatible", ölçüldü 2026-08-18): cl_gui_docking_container →
+*&     TYPE REF TO cl_gui_container geçirilemez. Upcast yalnız ATAMA ile olur:
+*&       DATA go_parent TYPE REF TO cl_gui_container.
+*&       go_parent = go_docking.   " sonra PERFORM ... USING go_parent
+*&     Canlı emsal: ZSD000_P_ALV_TEMP4 (0100 DOCKING / 0200 CC_ALV / 0300 alanlar)
 *&   standards/06-coding-classic-dialog.md §1 — include bölme (bu şablon
 *&     TEK-BODY gösterir; gerçek programda T01/C01/O01/I01/F01'e bölünür)
 *&---------------------------------------------------------------------*
@@ -46,10 +56,19 @@
 *&      meins      : meins;
 *&    }
 *&
-*&    Ekranı üreten çağrıda her alan `TEMPLATE = 'ZSD001_S_DLG-VER_LGORT'` +
-*&    `FROM_DICT = 'X'` ile verilir (`MATCHCODE` BOŞ bırakılır — elle matchcode
-*&    DDIC attachment'ının ÖNÜNE GEÇER, bkz. howto §3.3). Bu adım GATEWAY işidir
-*&    (ZSD000_FM_SCREEN_GEN çağrısı) — bu template yalnız ABAP tarafını gösterir.
+*&    Ekranı üreten çağrıda her alan şöyle verilir (GATEWAY işi —
+*&    ZSD000_FM_SCREEN_GEN; bu template yalnız ABAP tarafını gösterir):
+*&        NAME='ZSD001_S_DLG-VER_LGORT'  TYPE='TEMPLATE'  FROM_DICT='X'
+*&        MATCHCODE=''   (elle matchcode DDIC attachment'ının ÖNÜNE GEÇER)
+*&    ⚠️ `TEMPLATE` bir ALAN DEĞİL, `TYPE` DEĞERİDİR (düzeltme 2026-08-18).
+*&    ⭐ ETİKET AYRI SATIRDIR: giriş alanı FROM_DICT ile bile kendi etiketini
+*&      GETİRMEZ. Her etiket için TYPE='TEXT' + FROM_DICT='X' + TEXT BOŞ ver →
+*&      metin DDIC'ten gelir (ADR 0005-D dostu). TEXT satırını unutmak SESSİZ
+*&      kusurdur, FM uyarı VERMEZ. (Ölçüm: howto-classic-dynpro-datafield §1.1)
+*&    ⚠️ Alan ekranı IV_SCREEN_TYPE='DOCKING' ister (CONTAINER'da CC_ALV tüm
+*&      ekranı kaplar → rc=6) ve donör/anahtar parametreleri AÇIKÇA verilir
+*&      (varsayılan minimal donör → &F2..&F5 fcode'ları; bu şablonun PAI'si
+*&      BACK/EXIT/CANCEL bekler → howto-dynpro-gui-status-generation §2.1).
 *& ---------------------------------------------------------------------
 *&
 REPORT z____p_xxx.                    " <-- gerçek programda main = INCLUDE'lar + event
