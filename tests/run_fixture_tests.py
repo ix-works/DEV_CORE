@@ -103,6 +103,8 @@ OZEL_TESTLER = [
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
     # 2026-08-01 kuyruk-turu (validator ailesi, V1-V6):
     ("cds_curr_satir_yorumu", "CURR/QUAN: satir-sonu // yorumu alani/degeri gizliyordu (V1)"),
+    ("cds_curr_kaynak_tipi",
+     "CURR/QUAN kaynak-tipi: 'define root view entity' alt-diziye takilmiyordu -> rc=0 SESSIZ (V2)"),
     ("populate_tables_unit_kind",
      "B-13: CSV 'type' kolonu ABAP tipi saniliyordu -> CURR dali ULASILAMAZ olu koddu"),
     ("paket_uzanti_kapsami", "paket naming + paket-siniri: .bdef/.srvd allow-list'te YOKTU (V2)"),
@@ -247,9 +249,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
 
     # ── validator ailesi: kendi koşucusunu taşıyan korpuslar ────────────────
     ("scripts/validators/check_cds_currency_reference.py",
-     ("O:cds_curr_satir_yorumu", "O:populate_tables_unit_kind"),
-     "V1 korpusu bu validator'ı import eder; B-13 korpusu ise ÜRETİCİ↔DENETÇİ "
-     "mutabakatını ölçer (ikisi aynı DTEL sözlüğünü kullanır)"),
+     ("O:cds_curr_satir_yorumu", "O:cds_curr_kaynak_tipi", "O:populate_tables_unit_kind"),
+     "V1 korpusu bu validator'ı import eder; V2 korpusu CLI'yi subprocess ile koşup "
+     "KAYNAK-TİPİ tespitini + çıkış-kodu sözleşmesini (0/1/2) ölçer; B-13 korpusu ise "
+     "ÜRETİCİ↔DENETÇİ mutabakatını ölçer (ikisi aynı DTEL sözlüğünü kullanır)"),
     ("scripts/populate_tables.py", ("O:populate_tables_unit_kind",),
      "B-13/B-9/B-14: unit_kind kararı + CSV kolon sözleşmesi"),
     ("scripts/utils/ddic_semantics.py",

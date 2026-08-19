@@ -611,3 +611,31 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
 - **Dokunulursa BİRLİKTE koşulacaklar:** `negatif_test_harness` (V13/V16 sınıf kaydı) ·
   `fs_docstd` (aynı yüzeydeki `post_validate` infra-express nudge'ı) · `run_guard_fixture_tests`
   (aynı matcher'daki `pre_tool_guard`).
+
+## B24 — `check_cds_currency_reference` KAYNAK-TİPİ tespiti + çıkış-kodu sözleşmesi
+- Korpus: `python tests/fixtures/cds_curr_kaynak_tipi/run.py` → **19/19**, exit 0.
+  Mutasyon: `... run.py --mutasyon` → **4/4 ayırt edici**. Suite içinden:
+  `python tests/run_fixture_tests.py` (OZEL_TESTLER üyesi; HARİTA satırı validator'a bağlı).
+- **ÇIKIŞ-KODU SÖZLEŞMESİ (bu turda yazıldı, tüketicisi `run_review` rc!=0 → FAIL):**
+  `0` = DENETLENDİ, BLOCKER yok (WARNING olabilir) veya table-function bilinçli atlandı ·
+  `1` = DENETLENDİ, en az 1 BLOCKER · `2` = **ÖLÇÜLEMEDİ** (dosya yok VEYA kaynak tipi
+  tespit edilemedi). rc=0 ile "bakmadım"ı ifade etmek YASAK — kusurun kendisi buydu.
+- **Korpus CLI üzerinden (subprocess) ölçer**, fonksiyon import ederek DEĞİL: ölçülmek
+  istenen değişmez `run_review`'in gördüğü ÇIKIŞ KODU'dur; `main()`'deki dallanma
+  fonksiyon-seviyesi testte görünmez.
+- ⚠ **Mutant nerede yaşar:** kopya **gerçek `scripts/validators/` dizinine**
+  `_mutant_*.py` adıyla yazılır (finally'de silinir). Validator kendi yolundan
+  `parents[1]` ile `utils.ddic_semantics`'i import eder → tempdir'e kopyalanırsa import
+  ÖLÜR, her mutasyon "yakalandı" görünür (SAHTE-KIRMIZI).
+- **İki değişmez → iki mutasyon** (M3/M4 ek kapılar): `M1` eski alt-dizi mantığı geri →
+  A-vektörleri düşer · `M2` fail-open (rc=2 yerine 0) → B1/B2/B3 düşer · `M3` abstract
+  entity 'table' yoluna → A4 düşer (FP kapısı) · `M4` TF atlaması sökülü → C5 düşer.
+- ⚠ **Kill edilemeyen aday, bilerek yazılmadı:** tespit fonksiyonundaki `yorumu_kirp`
+  çağrısı savunmacıdır ama ÖLÇÜLEBİLİR etkisi yok (`// define view` satırı zaten
+  `^\s*define` anchor'ına uymaz) → onun için mutasyon UYDURULMADI.
+- **Dokunulursa BİRLİKTE koşulacaklar:** `cds_curr_satir_yorumu` (V1, aynı denetçi) ·
+  `populate_tables_unit_kind` (B-13, aynı DTEL sözlüğü) — HARİTA üçünü de bağlar.
+- **Gerçek-korpus regresyon reçetesi (tüketici projede):** validator'ı `<source_root>`
+  altındaki tüm `*.cds|*.asddls|*.ddl|*.ddls` dosyalarına koş, rc dağılımını fix ÖNCESİ
+  sürümle karşılaştır. Beklenen: yalnız daha önce "tespit edilemedi" diyen dosyaların
+  çıktısı değişir, geri kalan **BAYT AYNI** kalır.

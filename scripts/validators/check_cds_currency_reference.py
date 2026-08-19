@@ -15,9 +15,11 @@ Kullanım:
     python scripts/validators/check_cds_currency_reference.py <artifact_path> --type table
     python scripts/validators/check_cds_currency_reference.py <artifact_path> --type unit
 
-Exit kodu:
-    0 — Tüm CURR/QUAN field'ları doğru annotation'a sahip
-    1 — En az 1 ihlal (stderr'de satır no + öneri)
+Exit kodu (SÖZLEŞME — run_review rc!=0'ı FAIL sayar):
+    0 — DENETLENDİ, BLOCKER yok (yalnız WARNING olabilir) / table-function bilinçli atlandı
+    1 — DENETLENDİ, en az 1 BLOCKER ihlal (stderr'de satır no + öneri)
+    2 — ÖLÇÜLEMEDİ: dosya yok/okunamadı VEYA kaynak tipi tespit edilemedi.
+        "Koşmadı ≠ temiz" (PATTERN #14) — sessiz rc=0 YASAK.
 """
 # ENFORCES: C-CDS-CUR-02, C-CDS-CUR-03, C-RAP-VE-07, C-STR-CUR-02, C-STR-CUR-03, C-STR-CUR-04, C-STR-CUR-05, C-STR-UNIT-01, C-STR-UNIT-02, C-TBL-CUR-02, C-TBL-CUR-03, C-TBL-CUR-04, C-TBL-QUAN-01, C-TBL-QUAN-02  (ADR 0019 coverage binding)
 import argparse
@@ -70,6 +72,72 @@ def yorumu_kirp(line: str) -> str:
         i += 1
     return line
 
+
+# ── Kaynak tipi tespiti (2026-08-19, KAYIT: root-view-entity kapsam kusuru) ────
+# ESKİ KUSUR: `'define view' in text` alt-dizi testiydi. `define root view entity`
+# bu alt-diziyi İÇERMEZ ("root" araya girer) → tip 'tespit edilemedi' → stderr'e
+# UYARI + **rc=0** dönülüyordu. run_review rc=0'ı PASS sayar ⇒ 6 BLOCKER kablolaması
+# (cds_creation/cds_update/table_creation/table_update/struct_creation/rap_cds_creation)
+# bu dosyalara HİÇ BAKMADAN yeşil veriyordu. Ölçüldü: SOURCE_CODES'ta 62 dosya
+# (30 root view entity + 31 abstract entity + 1 `define type`) bu yoldan sessizce geçiyordu.
+# ÇÖZÜM: alt-dizi değil TOKEN dizisi — `define|extend|annotate` sonrası bilinen
+# değiştirici/tür sözcükleri tüketilir, nesne adına gelince durulur.
+_SOURCE_MODIFIERS = frozenset({'root', 'abstract', 'custom', 'transient'})
+_SOURCE_KINDS = frozenset({'view', 'entity', 'table', 'structure', 'type',
+                           'function', 'hierarchy'})
+_DEFINITION_RE = re.compile(
+    r'^\s*(define|extend|annotate)\b((?:\s+[A-Za-z_][A-Za-z0-9_]*)+)', re.IGNORECASE)
+
+
+def kaynak_tipi_tespit(text: str) -> tuple[str | None, str]:
+    """(src_type, biçim_etiketi) döner. src_type ∈ {'table','cds','table_function',None}.
+
+    None = TESPİT EDİLEMEDİ → çağıran fail-closed davranmalı (exit 2), rc=0 DÖNMEMELİ.
+
+    Yönlendirme gerekçesi (ölçülmüş korpus + §15.3):
+      • 'define table/structure/type'  → check_table: DDIC alan listesi şekli
+        (`alan : dtel;`) + qualified 'TABLE.FIELD' referans kuralı geçerli.
+      • 'define [root] view [entity]'  → check_cds: referans EXPOSED ELEMENT adıdır
+        (kanıt: ZSD001_I_SO_ITEM 'Waerk'), qualified zorunlu değil.
+      • 'define [root] abstract entity' / 'define custom entity' → check_cds.
+        NEDEN tablo değil: alan listesi şekli tablo gibi olsa da arkasında DDIC tablo
+        YOKTUR; referans aynı entity'nin elemanıdır → qualified 'TABLE.FIELD' beklemek
+        YANLIŞ-POZİTİF üretirdi. (Korpusta CURR/QUAN taşıyan abstract entity: 0 — bu
+        yönlendirme bugün hiçbir dosyanın sonucunu değiştirmiyor, ileriye dönüktür.)
+      • 'define table function' → TF: return yapısı lokal element adı kullanır,
+        check_table FP basıyordu (2026-06-24 SATNAV) → bilinçli atlama korunur.
+    """
+    gorulen_basliklar: list[str] = []
+    for raw_line in text.splitlines():
+        line = yorumu_kirp(raw_line)
+        m = _DEFINITION_RE.match(line)
+        if not m:
+            continue
+        verb = m.group(1).lower()
+        seq = []
+        for tok in m.group(2).split():
+            t = tok.lower()
+            if t in _SOURCE_MODIFIERS or t in _SOURCE_KINDS:
+                seq.append(t)
+            else:
+                break  # nesne adına gelindi
+        if not seq:
+            # Sözlükte HİÇ tanınmayan başlık (ör. `define role` = DCL, `define behavior`).
+            # Kaydet ve aramaya devam et; teşhis mesajı "başlık YOK" DEMEMELİ — yanlış
+            # teşhis, okuyanı dosyanın boş olduğuna inandırır (ölçüldü: .dcl dosyaları).
+            gorulen_basliklar.append(' '.join(line.split()[:3]))
+            continue
+        etiket = f"{verb} {' '.join(seq)}"
+        if seq[-2:] == ['table', 'function']:
+            return 'table_function', etiket
+        if 'view' in seq or 'hierarchy' in seq:
+            return 'cds', etiket
+        if seq[-1] == 'entity' and ('abstract' in seq or 'custom' in seq):
+            return 'cds', etiket
+        if seq[-1] in ('table', 'structure', 'type'):
+            return 'table', etiket
+        return None, etiket  # tanınan sözcükler ama bilinmeyen kombinasyon
+    return None, (gorulen_basliklar[0] if gorulen_basliklar else '')
 
 def parse_source(text: str, src_type: str) -> dict:
     """Source'tan field listesi + annotation'ları çıkar.
@@ -274,27 +342,33 @@ def main() -> int:
 
     path = Path(args.artifact)
     if not path.exists():
-        print(f'HATA: {path} bulunamadı', file=sys.stderr)
-        return 1
+        print(f'ÖLÇÜLEMEDİ: {path} bulunamadı', file=sys.stderr)
+        return 2
 
     text = path.read_text(encoding='utf-8', errors='replace')
 
     src_type = args.type
     if src_type == 'auto':
-        if 'define table function' in text:
+        tespit, etiket = kaynak_tipi_tespit(text)
+        if tespit == 'table_function':
             # CDS table function = DDLS objesi (DDIC tablo DEĞİL). Return yapısı view gibi
             # LOKAL element-adı kullanır (qualified TABLE.FIELD yok) → check_table FALSE-POSITIVE
             # basıyordu (C-TBL-CUR-03). TF return-yapısı CURR/QUAN kontrolü ayrı bir konu;
             # şimdilik atla (TF-aware kontrol TODO). 2026-06-24 SATNAV BASE.cds.
             print(f'OK — {path.name} (table function) CURR/QUAN reference check atlandı (TF-aware kontrol TODO)')
             return 0
-        if 'define table' in text or 'define structure' in text:
-            src_type = 'table'
-        elif 'define view' in text:
-            src_type = 'cds'
-        else:
-            print(f'UYARI: Source tipi tespit edilemedi (define table/view yok)', file=sys.stderr)
-            return 0
+        if tespit is None:
+            # FAIL-CLOSED: "koşmadı ≠ temiz". Eskiden burada rc=0 dönülüyordu ve
+            # run_review bunu PASS sayıyordu (BLOCKER zinciri sessizce boşa düşüyordu).
+            ek = f" (bulunan başlık: '{etiket}')" if etiket else ' (dosyada define/extend/annotate başlığı YOK)'
+            print(f'ÖLÇÜLEMEDİ: {path.name} kaynak tipi tespit edilemedi{ek} — '
+                  f'CURR/QUAN denetimi KOŞMADI. Beklenen biçimler: define [root] view [entity] · '
+                  f'define [root] abstract entity · define custom entity · define hierarchy · '
+                  f'define table|structure|type · define table function. '
+                  f'Bilinçli istisna gerekiyorsa --type cds|table ile açıkça belirt.',
+                  file=sys.stderr)
+            return 2
+        src_type = tespit
 
     if src_type == 'table':
         violations = check_table(text)
