@@ -83,6 +83,7 @@ OZEL_TESTLER = [
     ("worktree_blocklist", "kimlik blocklist'i worktree'de de bulunmali (commit-blogu)"),
     ("negatif_test_harness", "hook parse-fail gorunurlugu: exit 0 KORUNUR + stderr'de not (bozuk girdi ARTIK ayirt edilebilir)"),
     ("tembel_desen", "sizinti deseni TEMBEL kurulur: hiz kazanci korumayi OLU'ye cevirmiyor"),
+    ("infra_write_guard", "infra yuzeyine ANA-OTURUM yazimi BLOK; infra-expert MUAF (kimlik olculdu)"),
     ("abaplint_failopen", "check_abaplint: OLCEMEDIM != TEMIZ (ozet satiri zorunlu kanit, 9 senaryo)"),
     # ⚠ 2026-08-01: `adtget_yokluk_kaniti` bir ara bu listede IKI KEZ yaziliydi (PR birlesme
     # artigi) -> ayni fixture iki kez kosuyor ve TOPLAM sayiyi sisiriyordu. "N/N PASS"
@@ -273,6 +274,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "oto-tazeleme kablolaması + parse-fail notu"),
     ("scripts/hooks/*.py", ("O:negatif_test_harness",),
      "16 hook'un parse-fail sözleşmesi tek korpusta ölçülür"),
+    ("scripts/hooks/infra_write_guard.py",
+     ("O:infra_write_guard", "O:negatif_test_harness"),
+     "kimlik ayrımı + korunan yüzey listesi + fail-closed degrade; parse-fail sözleşmesi"),
+    ("claude/settings.template.json", ("O:infra_write_guard",),
+     "kablolama korpusun K6 vektöründe ölçülür (kod ≠ kablolama)"),
 
     # ── overlay / proje-kurulum yüzeyi ──────────────────────────────────────
     ("scripts/utils/claude_overlay.py",

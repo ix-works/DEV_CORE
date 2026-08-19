@@ -96,6 +96,7 @@
         ]
       },
       {
+        "_comment": "infra_write_guard 2026-08-19'da EKLENDI (kullanici talimati, AYRI ve ACIK onayla): infra yuzeyine (hook/validator/gate/pre-commit/MCP/paylasilan core-scripts) ANA OTURUMDAN dogrudan yazim BLOKLANIR (exit 2); `agent_type == infra-expert` MUAF (payload semasi olculdu: ana oturumda agent_type/agent_id anahtarlari YOKTUR). Bypass bayragi bilincli olarak YOKTUR; cikis yolu kullanicidan AYRI onaydir. Korpus: tests/fixtures/infra_write_guard.",
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           {
@@ -104,6 +105,14 @@
             "args": [
               "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py",
               "pre_tool_guard"
+            ]
+          },
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py",
+              "infra_write_guard"
             ]
           },
           {

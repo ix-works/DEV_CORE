@@ -561,3 +561,28 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
 - ⚠ **Ad sözleşmesi:** gate adında **"freshness" GEÇMEZ** — `run_all_validators --quick`
   (pre-commit) o deseni atlar. Ad değişirse pre-commit'te sessizce ölür; regresyon çapası:
   `--quick` çıktısında gate satırının GÖRÜNMESİ (aynı koşuda "Playbook freshness" `[SKIP]`).
+
+## B23 — `infra_write_guard` (infra yüzeyine ana-oturum yazımı BLOK)
+- Korpus: `python tests/fixtures/infra_write_guard/run.py` → **26/26**, exit 0. Suite içinden:
+  `python tests/run_fixture_tests.py` (OZEL_TESTLER üyesi).
+- **İKİ mutasyon, ikisi de koşulur** (biri diğerini kapsamaz; herhangi biri tam puan verirse
+  korpus o değişmez için BOŞTUR):
+  `--mutasyon-blok` → **15/26** (düşen: B1-B10 + K3; FP çapalarının hepsi ayakta)
+  `--mutasyon-cokme` → **23/27** (düşen: B10 + S4 + S7 + S9; M1 vektörü `GUARD-COKTU` izini arar)
+- Mutasyonlar **korpusun içinde** ve **bugünkü kaynaktan** üretilir (git ref'i YOK → "fix merge
+  olunca taban kayar" tuzağı yapısal olarak yok). Desen tutmazsa koşucu **exit 3** verir ve
+  **hiçbir sayı raporlamaz**.
+- **Kimlik ayrımının kanıt tabanı** (guard'a dokunan HERKESİN bilmesi gereken tek şey): ana
+  oturum payload'ında `agent_type`/`agent_id` **YOKTUR**, alt-ajanda **VARDIR**; `agent_type`
+  ajan tanımının `name:`idir. Şema değişirse guard sessizce ya herkesi bloklar ya kimseyi —
+  ölçüm reçetesi: sandbox proje + `.claude/settings.json`'a stdin'i dosyaya döken bir
+  PreToolUse hook'u + `claude -p "... Task ile <ajan-tipi> alt-ajanı Write yapsın"`.
+- ⚠ **Korpusun kendi dersleri:** (1) `--mutasyon-cokme`de S4/S7/S9'un düşmesi **kusur değil**,
+  fail-closed degrade'in fiyatıdır — kaba ağ marker/istisna okumaz. (2) **B10 çökmede kaçar**
+  (`scripts/**/*.py` sınıfı kaba ağda yok); kaba ağı genişletmek her projenin `scripts/*.py`'ını
+  bloklardı ⇒ bilinçli sınır. (3) K4 bugün **exit 1** ölçüyor = kopuk junction'da guard devre
+  dışı (`hook_shim._FAIL_CLOSED` üyesi değil); vektör `{1,2}` kabul eder, böylece lider bu
+  kararı verdiğinde test kırılmaz, yalnız etiketi değişir.
+- **Dokunulursa BİRLİKTE koşulacaklar:** `negatif_test_harness` (V13/V16 sınıf kaydı) ·
+  `fs_docstd` (aynı yüzeydeki `post_validate` infra-express nudge'ı) · `run_guard_fixture_tests`
+  (aynı matcher'daki `pre_tool_guard`).
