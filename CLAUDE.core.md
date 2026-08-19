@@ -171,7 +171,8 @@
   **Gömülü onay YETMEZ** — "hepsini yap" bu izni vermez.
 - **BAĞLANTI:** proje kökündeki `.conn_adt`. `.conn_adt` ↔ MCP ayrışıksa ADT işlemi YOK.
 - **"Yüklendi / aktive edildi / başarılı" mesajına GÜVENME** — canlı doğrula. Araç başarısızlığını
-  zararsız sayma. Bulunamadı ≠ yok · kod ≠ kablolama · çökme ≠ FAIL · **"aktif" metadata'sı ≠ kodun aktif**.
+  zararsız sayma. Bulunamadı ≠ yok · kod ≠ kablolama · çökme ≠ FAIL · **"aktif" metadata'sı ≠ kodun aktif**
+  · **"0 bulgu" ≠ "doğru"** (aracın KAPSAM BEYANI'na bak — §7; beyan yoksa sonuç okunamaz).
 - **⛔ ÖNCE-ARA (KB-01 · MUST) — sıra: ① ARA → ② ÖLÇ → ③ DARALT → ④ YAZ.** Tam metin: **§4**.
   **TETİKLEYİCİ EYLEM-BAZLIDIR** (yalnız "araç bozuk" demek DEĞİL): *bir kayıt/kural/ders yazacaksan ·
   bir SINIF iddiası kuracaksan ("X şöyle davranır") · bir register'a madde açacaksan · "bu bozuk /
@@ -342,6 +343,18 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 > diye yazmak = sahte koruma; gate listesine kural eklemeden önce guard'ı sentetik payload'la
 > NEGATİF TEST et (`python core/scripts/hooks/pre_tool_guard.py < payload.json` → 2=blok). ⚠ **exit 0 ≠ serbest** — bozuk JSON da 0 döner (fail-safe): 2026-08-13'ten beri o dal stderr'e `GIRDI-PARSE-EDILEMEDI` notu basar ⇒ **0 görünce stderr'e BAK: not varsa ölçümün geçersiz** (payload hiç okunmadı), not yoksa gerçekten serbest. Yolları `/` ile yaz (elle yazılan `\\` kabuğa tek `\` iner = geçersiz escape) + bloklaması bilinen payload'la pozitif kontrol koş (reçete: `governance/infra-test-recipes.md` B0b).
 
+> ⭐ **KAPSAM BEYANI (MUST, 2026-08-19) — her gate/validator/denetim aracının çıktısı, NEYE
+> BAKMADIĞINI da yazar.** *"0 bulgu"* tek başına *"artefakt doğru"* demek DEĞİLDİR; yalnız
+> *"aracın baktığı yüzeyde bulgu yok"* demektir. Vaka: bir tutarlılık aracı **"0 çelişki"** dedi,
+> lider bunu *"belge doğru"* diye okuyup **bir tur rahatladı** — oysa araç yalnız **sayı**
+> tutarlılığına bakıyordu ve 5 sayıyı da kaçırıyordu. **Kusur araçta değil, çıktısının nasıl
+> OKUNDUĞUNDAYDI** ⇒ çare de çıktıdadır. ① *"bakılanlar"* listesi mümkünse **koddan türetilsin**
+> (elle yazılan liste bayatlar, sahte güven üretir) ② beyan **her koşumda** basılsın — **en
+> kritik an sıfır-bulgu anıdır** (bulgu varken zaten okunur). Ölçülemeyen yüzey **"ÖLÇÜLEMEDİ"**
+> yazılır; sessizce atlanmaz (ölçülemedi ≠ temiz). Doküman karşılığı: doc-checklist **DOC-CR-02**
+> ③ (kapsama beyanı hangi KÜMEYİ kapsadığını söyler). *Bu kuralın bir gate'e dönüşmesi AYRI ve
+> bilinçli bir karardır (ADR 0019 moratoryum) — bugün kural metni + reviewer yargısı.*
+
 Tek komut: `python core/scripts/validators/run_all_validators.py` (core + proje `validators-local/` birlikte; profil-modlu).
 ⚠ **Always-allow YASAĞI (D32):** SAP-yazma ve davranış-yüzeyi araçlarına "Always allow" izni VERİLMEZ — izin katmanı hook-safeguard'ları soyar.
 
@@ -381,6 +394,7 @@ analizi + canlı-test → PR.
 | ADT pattern bankası | [`playbook/README.md`](playbook/README.md) |
 | Hata pattern + trigger phrases | [`playbook/lessons-learned.md`](playbook/lessons-learned.md) |
 | Belge kilidi (ADR 0014) | [`playbook/howto-document-lock.md`](playbook/howto-document-lock.md) |
+| **Belge ↔ canlı teyit turu** (TS build'e girmeden önce canlı-iddia ölçümü) | [`playbook/howto-belge-canli-teyit-turu.md`](playbook/howto-belge-canli-teyit-turu.md) |
 | UI tecrübesi FE+BE (§0 PRE-FLIGHT) | [`playbook/ui-freestyle-odata-v2.md`](playbook/ui-freestyle-odata-v2.md) · [`playbook/ui-backend-rap.md`](playbook/ui-backend-rap.md) |
 | Profil yetenek matrisi | [`profiles/`](profiles/) |
 | Mimari kararlar (ADR) | [`governance/decisions/`](governance/decisions/) |
