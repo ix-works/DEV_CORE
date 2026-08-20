@@ -27,12 +27,20 @@ orada da olur ama gate GORMUYORDU.
   A1 ⭐ AYIRT EDICI  `sed -i ... docs/KD-*.md` -> nudge ATESLER (once: sessiz)
   A2               `> dosya` YONLENDIRMESI de duzenlemedir -> nudge ATESLER
   A3 FP capasi     salt-OKUMA Bash (`cat ...`) -> nudge YOK (gurultu = olu hook)
+                   + IC KONTROL: ayni doku DUZENLENINCE nudge VAR (tek degisken)
   A4 FP capasi     `> /dev/null` / uzantisiz hedef -> yol CIKARILMAZ
   A5 FP capasi     Edit payload'i AYNEN calisir (regresyon yok)
   A6 ⭐ SINIR       matcher `Bash` icerir YA DA kaynak SINIR-NOTU tasir
   B1               gate stderr sondasi KABLOLU (AST) ve BOS DONMUYOR
   B2 ⭐ SINIR       sonda DETERMINISTIK (dedup marker'a takilip sessizce bosalmiyor)
   M1..M4           fix'i sok -> korpus KIRMIZI olmali (M4 = genislemenin POZITIF KONTROLU)
+
+⚠ PLATFORM-BAGIMSIZLIK SOZLESMESI (2026-08-20, DEV_CORE#150 CI kirmizisi):
+   Bash payload'larindaki yollar DAIMA `/` biciminde (Path.as_posix) ve DAIMA kum
+   havuzunda GERCEKTEN yaratilmis olmalidir. Gerekcesi ve olculen bedeli `_bash()`
+   ile A3'un yanindaki notlarda. Sozlesme YAPISAL olarak korunur: `_bash()` ters-bolu
+   iceren komutu AssertionError ile reddeder ⇒ regresyon Windows'ta GURULTULU coker,
+   sessizce platform-sapmasina donusmez.
 
 Kosum: python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py     (exit 0 = PASS)
 """
@@ -41,6 +49,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -77,6 +86,24 @@ def _hook_kos(hook: Path, payload: dict, kum: Path) -> tuple[int, str]:
 
 
 def _bash(komut: str) -> dict:
+    """Bash payload'i uret — Windows yol bicimini YAPISAL olarak REDDEDER.
+
+    ⛔ 2026-08-20 CI DERSI (DEV_CORE#150): vektorler yolu `str(Path)` ile gomuyordu,
+       yani Windows'ta `C:\\...\\docs\\KD-ORNEK.md`. Hook'un yol-cikarimi ve nudge
+       regex'leri `/` uzerinden calisir (`norm = path.replace("\\\\", "/")` HOOK'un
+       ICINDE olur, komut metninde DEGIL) ⇒ ters-bolulu komut, cikarim regex'ini
+       son bileşende KESER. Sonuc OLCULDU: M2 mutasyonu Windows'ta A1/A2'yi
+       kiriyordu (YANLIS sebeple "yakalandi"), Linux'ta hicbirini kirmiyordu ve
+       KACIYORDU. Yani platform, degiskeni gizlice ikilestirmisti.
+       Gercek Bash komutunda yol ZATEN `/` ile yazilir ⇒ tek dogru bicim budur.
+       Bu kontrol, ileride biri `str(kd)`ye donerse Windows'ta GURULTULU coker
+       (sessiz platform-sapmasi yerine acik hata).
+    """
+    if re.search(r"[A-Za-z]:\\|\\\\", komut):
+        raise AssertionError(
+            "korpus hatasi: Bash payload'inda WINDOWS yolu var (`\\`). Bash komutunda "
+            "yol DAIMA `/` olmali (Path.as_posix) — aksi hâlde vektor platform-bagimli "
+            "olur ve mutasyon Linux'ta KACAR. Gorulen: %r" % komut[:120])
     return {"tool_name": "Bash", "tool_input": {"command": komut}}
 
 
@@ -92,7 +119,7 @@ def senaryolar(hook: Path, gate: Path) -> list[tuple[str, bool, str]]:
         kd = kum / "docs" / "KD-ORNEK.md"
         kd.parent.mkdir(parents=True, exist_ok=True)
         kd.write_text("# ornek\n", encoding="utf-8")
-        rc, out = _hook_kos(hook, _bash(f"sed -i 's/a/b/' {kd}"), kum)
+        rc, out = _hook_kos(hook, _bash(f"sed -i 's/a/b/' {kd.as_posix()}"), kum)
         ekle("A1 ⭐ `sed -i ... KD-*.md` -> nudge ATESLER (once: HIC atesle(n)mezdi)",
              rc == 2 and "doc-checklist" in out, f"rc={rc} · {out.strip()[:200]!r}")
     finally:
@@ -108,19 +135,49 @@ def senaryolar(hook: Path, gate: Path) -> list[tuple[str, bool, str]]:
         kd = kum / "docs" / "KD-ORNEK2.md"
         kd.parent.mkdir(parents=True, exist_ok=True)
         kd.write_text("# ornek\n", encoding="utf-8")
-        rc, out = _hook_kos(hook, _bash(f"cat <<'EOF' > {kd}\nicerik\nEOF"), kum)
+        rc, out = _hook_kos(hook, _bash(f"cat <<'EOF' > {kd.as_posix()}\nicerik\nEOF"), kum)
         ekle("A2 `> dosya` YONLENDIRMESI de duzenlemedir -> nudge ATESLER",
              rc == 2 and "doc-checklist" in out, f"rc={rc} · {out.strip()[:200]!r}")
     finally:
         shutil.rmtree(kum, ignore_errors=True)
 
+    # A3 — FP capasi + IC KONTROL GRUBU.
+    # ⛔ 2026-08-20 (DEV_CORE#150 CI KIRMIZISI) — ilk surumun kusuru OLCULDU: A3
+    #    `cat docs/KD-ORNEK.md` diyordu; yol GORELIYDI ve kum havuzunda O DOSYA YOKTU.
+    #    Nudge regex'i `/docs/(FS|TS|KD|EK)-...md$` BASTA `/` ister ⇒ goreli yol ZATEN
+    #    hicbir kosulda nudge uretemezdi. Yani capa "salt-okuma oldugu icin sessiz"
+    #    DEGIL, "yol bicimi tutmadigi icin sessiz" oluyordu — YANLIS SEYI olcuyordu
+    #    (satir 103-107'de A2 icin ogrenilen dersin AYNISI, A3'e uygulanmamisti).
+    #    Bedeli: M2 (acgozlu cikarim) A3'u HIC kirmadi; Windows'ta yalnizca A1/A2'yi
+    #    ters-bolu KAZASIYLA kirdigi icin "[YAKALANDI]" gorunuyordu, Linux'ta ise
+    #    KACIYORDU (144/145).
+    # ⭐ Cozum: (a) yol MUTLAK + `/` bicimli (kum havuzunda GERCEKTEN yaratilmis),
+    #    (b) AYNI dokuya AYNI bicimde yapilan DUZENLEME ic kontrol grubu olarak
+    #    olculur. Boylece tek degisken `cat ... | head` vs `sed -i` kalir: dosya
+    #    varligi da yol bicimi de artik degisken DEGIL.
+    # ⚠ IKI AYRI KUM: doc nudge'i `.tmp/.hook_docstd_<sid>_KD` marker'i ile oturumda
+    #    BIR KEZ konusur. Ayni kumda once duzenleme kosulsa, okuma cagrisi dedup'a
+    #    takilip SESSIZ kalirdi ve capa yine yanlis sebeple yesil olurdu (B2'nin
+    #    dersi). Ayri kum = sira-bagimliligi YOK.
     kum = _kum()
+    kum2 = _kum()
     try:
-        rc, out = _hook_kos(hook, _bash("cat docs/KD-ORNEK.md | head -20"), kum)
-        ekle("A3 FP capasi: salt-OKUMA Bash -> nudge YOK (her komutta gurultu = olu hook)",
-             rc == 0 and not out.strip(), f"rc={rc} · {out.strip()[:200]!r}")
+        kd = kum / "docs" / "KD-ORNEK3.md"
+        kd.parent.mkdir(parents=True, exist_ok=True)
+        kd.write_text("# ornek\n", encoding="utf-8")
+        kd2 = kum2 / "docs" / "KD-ORNEK3.md"
+        kd2.parent.mkdir(parents=True, exist_ok=True)
+        kd2.write_text("# ornek\n", encoding="utf-8")
+        rc_o, o_o = _hook_kos(hook, _bash(f"cat {kd.as_posix()} | head -20"), kum)
+        rc_d, o_d = _hook_kos(hook, _bash(f"sed -i 's/a/b/' {kd2.as_posix()}"), kum2)
+        ekle("A3 FP capasi: AYNI dokuya salt-OKUMA -> nudge YOK; ayni doku DUZENLENINCE "
+             "-> nudge VAR (ic kontrol grubu: tek degisken okuma-vs-duzenleme)",
+             rc_o == 0 and not o_o.strip() and rc_d == 2 and "doc-checklist" in o_d,
+             f"okuma rc={rc_o} · {o_o.strip()[:120]!r} || duzenleme rc={rc_d} · "
+             f"{o_d.strip()[:120]!r}")
     finally:
         shutil.rmtree(kum, ignore_errors=True)
+        shutil.rmtree(kum2, ignore_errors=True)
 
     kum = _kum()
     try:
@@ -136,6 +193,10 @@ def senaryolar(hook: Path, gate: Path) -> list[tuple[str, bool, str]]:
         kd = kum / "docs" / "KD-ORNEK.md"
         kd.parent.mkdir(parents=True, exist_ok=True)
         kd.write_text("# ornek\n", encoding="utf-8")
+        # ⚠ BURADA yerel bicim (`str`) BILEREK: `file_path` gercek Edit aracindan
+        #    NATIVE gelir ve hook onu ICERIDE normalize eder (`path.replace("\\", "/")`).
+        #    Bash KOMUT METNI icin ayni sey gecerli DEGIL — orada yol `/` olmali
+        #    (bkz. `_bash()` notu). Bu ikisini birbirine benzetmeye calisma.
         rc, out = _hook_kos(hook, {"tool_name": "Edit",
                                    "tool_input": {"file_path": str(kd)}}, kum)
         ekle("A5 FP capasi: Edit payload'i AYNEN calisir (regresyon yok)",

@@ -836,7 +836,23 @@ python tests/run_fixture_tests.py                       # 137/137
   `python tests/fixtures/mcp_profil_aktivasyon_offline/run.py`   → **15 + 4**, exit 0
   `python tests/fixtures/ui_smoke_sapsiz/run.py`                 → **8 + 3**, exit 0
   `python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py`     → **9 + 4**, exit 0
-  Tam süit: `python tests/run_fixture_tests.py` → **144/144**, **İKİ ARDIŞIK KOŞUM AYNI**.
+  Tam süit: `python tests/run_fixture_tests.py` → **144/144**, **İKİ ARDIŞIK KOŞUM AYNI**
+  (⚠ süit sayısı bugün **145/145** — B30 ile `byassoc_advisory` korpusu eklendi; bu
+  korpusun kendi sayısı **9 + 4** olarak DEĞİŞMEDİ, A3 yeniden kuruldu ama bölünmedi.)
+
+- ⛔⛔ **PLATFORM, DEĞİŞKENİ GİZLİCE İKİLEŞTİRİR — `[YAKALANDI]` Windows'ta, `[KACTI]`
+  Linux'ta (ölçüldü 2026-08-20, `DEV_CORE#150` CI kırmızısı).** Bir korpus Bash payload'ına
+  yolu `str(Path)` ile gömerse Windows'ta komut metni `C:\…\docs\KD-X.md` olur. Tüketicinin
+  yol-çıkarımı `/` üzerinden çalışır (normalizasyon hook'un İÇİNDEDİR, komut metninde
+  değil) ⇒ ters-bölü, çıkarımı **son bileşende keser**. Sonuç: mutasyon Windows'ta
+  **yanlış sebeple** yakalanır, Linux'ta kaçar. ⇒ **Kural: Bash `command` metnindeki yol
+  DAİMA `Path.as_posix()`; `file_path` payload'ında NATIVE (`str`) — ikisi ayrı yüzeydir.**
+  Yapısal koruma: `_bash()` yardımcı fonksiyonu ters-bölülü komutu `AssertionError` ile
+  REDDEDER (regresyon Windows'ta gürültülü çöker, sessiz platform-sapması olmaz).
+  ⭐ **Yerelde Linux yoksa repro böyle yapılır** (WSL/Docker gerekmez): vektörün yolunu
+  `as_posix()`e çevir — bu, regex/eşleme açısından Linux'un gördüğü metnin birebir aynısıdır
+  (`C:` öneki hiçbir desende eşleşmez). Ölçüldü: aynı mutasyonda `str` → nudge YOK,
+  `as_posix()` → nudge VAR.
 
 - ⛔⛔ **MUTASYON GERÇEK KAYNAĞA YAZILMAZ — bu turda ÜRETİLEN ve yakalanan kirlenme:**
   İlk sürümde dört korpus mutasyonu gerçek dosyaya yazıp `finally`de geri alıyordu.
