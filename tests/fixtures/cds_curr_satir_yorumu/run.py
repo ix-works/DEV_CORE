@@ -74,10 +74,23 @@ def blocker_sayisi(sonuc: tuple[str, object]) -> int | None:
     return sum(1 for v in sonuc[1] if v.get("severity") == "BLOCKER")
 
 
-def uyari_sayisi(sonuc: tuple[str, object]) -> int | None:
+def uyari_sayisi(sonuc: tuple[str, object], check_id: str | None = None) -> int | None:
+    """WARNING sayısı; `check_id` verilirse YALNIZ o kontrolünkiler.
+
+    ⚠ 2026-08-20: filtre EKLENDİ çünkü sayaç iki AYRI kontrolü aynı torbaya atıyordu.
+    E1'in ölçtüğü değişmez *"yorumlanmış annotation'ın DEĞERİ üzerinden BİÇİM uyarısı
+    üretilmesin"* (C-CDS-CUR-02) idi — kardeş yorumu bunu söylüyor: *"aynı geçersiz
+    değer YORUMSUZ → WARNING üretilMELİ"*. Aynı gün eklenen EKSİKLİK denetimi
+    (C-CDS-CUR-05) ise yorumlanmış girdide **haklı olarak** uyarı üretir: annotation
+    yorumdaysa alan GERÇEKTEN annotation'sızdır. Filtresiz sayaç bu ikisini ayırt
+    edemediği için E1 sahte-KIRMIZI verdi. Ölçüt GEVŞETİLMEDİ — KESKİNLEŞTİRİLDİ;
+    E3 aynı girdide eksiklik uyarısının VARLIĞINI ayrıca çivilliyor.
+    """
     if sonuc[0] != "OK" or not isinstance(sonuc[1], list):
         return None
-    return sum(1 for v in sonuc[1] if v.get("severity") == "WARNING")
+    return sum(1 for v in sonuc[1]
+               if v.get("severity") == "WARNING"
+               and (check_id is None or v.get("check_id") == check_id))
 
 
 def bulgu_var(sonuc: tuple[str, object], *parcalar: str) -> bool | None:
@@ -261,13 +274,28 @@ def main() -> int:
                + ("" if n == 0 or n is None else f" :: {s[1]}"))
 
     # ── E. 3. BAĞLAM (görev-dışı): CDS dalı ──
-    w_olu = uyari_sayisi(ihlaller(C_OLU, "cds"))
-    kaydet(w_olu == 0, "E1 3.BAĞLAM CDS: YORUMLANMIŞ annotation uyarı üretmez",
-           f"WARNING={w_olu} (0 bekleniyor)")
-    w_canli = uyari_sayisi(ihlaller(C_CANLI, "cds"))
+    # ⚠ İkisi de C-CDS-CUR-02 (BİÇİM) ile ölçülür — bu vektör çiftinin değişmezi
+    # *"ölü (yorumlanmış) annotation'ın DEĞERİ üzerinden biçim uyarısı üretme"*dir.
+    w_olu = uyari_sayisi(ihlaller(C_OLU, "cds"), "C-CDS-CUR-02")
+    kaydet(w_olu == 0, "E1 3.BAĞLAM CDS: YORUMLANMIŞ annotation BİÇİM uyarısı üretmez",
+           f"C-CDS-CUR-02 WARNING={w_olu} (0 bekleniyor)")
+    w_canli = uyari_sayisi(ihlaller(C_CANLI, "cds"), "C-CDS-CUR-02")
     kaydet(w_canli is not None and w_canli >= 1,
-           "E2 3.BAĞLAM KONTROL: canlı geçersiz annotation UYARI üretir",
-           f"WARNING={w_canli} (>=1 bekleniyor)")
+           "E2 3.BAĞLAM KONTROL: canlı geçersiz annotation BİÇİM uyarısı üretir",
+           f"C-CDS-CUR-02 WARNING={w_canli} (>=1 bekleniyor)")
+    # E3 (2026-08-20, DERİNLİK): annotation YORUMDAYSA alan gerçekten annotation'sızdır
+    # ⇒ EKSİKLİK uyarısı ÜRETİLMELİ. E1 ile aynı girdi, KARŞIT soru — ikisi birlikte
+    # "hangi kontrol ne zaman konuşur"u çivilliyor (E1 tek başına kalırsa, eksiklik
+    # denetimini tümden söken bir mutasyon bu dosyada YEŞİL kalırdı).
+    w_eksik = uyari_sayisi(ihlaller(C_OLU, "cds"), "C-CDS-CUR-05")
+    kaydet(w_eksik is not None and w_eksik >= 1,
+           "E3 3.BAĞLAM DERİNLİK: yorumlanmış annotation = EKSİK annotation (C-CDS-CUR-05)",
+           f"C-CDS-CUR-05 WARNING={w_eksik} (>=1 bekleniyor)")
+    # E4 FP çapası: annotation CANLI ve doğru yerdeyse eksiklik uyarısı ÇIKMAMALI
+    w_fp = uyari_sayisi(ihlaller(C_CANLI, "cds"), "C-CDS-CUR-05")
+    kaydet(w_fp == 0,
+           "E4 FP çapası: canlı annotation varken EKSİKLİK uyarısı YOK",
+           f"C-CDS-CUR-05 WARNING={w_fp} (0 bekleniyor)")
 
     gecen = sum(1 for ok, _ in SONUC if ok)
     for ok, ad in SONUC:

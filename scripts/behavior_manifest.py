@@ -45,8 +45,22 @@ MANIFEST = ".claude/behavior-manifest.json"
 
 
 def _hash(p: Path) -> str:
+    """Dosya imzası — SATIR-SONU NORMALİZE EDİLEREK (2026-08-20).
+
+    ⚠ GEVŞETME (bilinçli, FP-kanıtlı): eskiden ham baytlar hash'leniyordu ⇒ yalnız
+    satır-sonu (LF↔CRLF) farkı olan bir kopya "DEĞİŞMİŞ (manifest-onaysız)" sayılıyordu.
+    ÖLÇÜM: kök `CLAUDE.md` `888e7624…` (5841 B, LF=71, CRLF=0) · worktree kopyası
+    `337bd842…` (5912 B, CRLF=71) · **kök LF→CRLF çevrilince sha `337bd842…`** ⇒ içerik
+    farkı **SIFIR**. Git `autocrlf` bu dönüşümü checkout'ta kendiliğinden yapar, yani
+    uyarı geliştiricinin YAPTIĞI bir şeyi değil, git'in yaptığını bildiriyordu.
+    ⛔ İzlenen yüzey TALİMAT METNİDİR (CLAUDE.md · rules/*.md · settings JSON'u);
+    satır-sonu bu dosyalarda DAVRANIŞ TAŞIMAZ. Gerçek içerik değişikliği (tek karakter
+    dahil) AYNEN yakalanır — korpus bunu mutasyonla kanıtlar.
+    """
+    ham = p.read_bytes()
+    normal = ham.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
     h = hashlib.sha256()
-    h.update(p.read_bytes())
+    h.update(normal)
     return h.hexdigest()[:16]
 
 
@@ -73,7 +87,14 @@ def _topla(proj: Path) -> dict[str, str]:
     # nested CLAUDE.md'ler (kök hariç; core junction'ı atla) — os.walk + DİZİN-BUDAMA.
     # (Eski rglob tüm ağacı yürüyordu; node_modules/.git filtresi sonuçta eleniyordu ama
     # yürüyüş budanmıyordu → session_start ~720ms manifest maliyeti; F2-P bulgusu 2026-07-08.)
-    prune = {"node_modules", ".git", ".tmp", "core", "dist", "__pycache__"}
+    # ⚠ GEVŞETME (bilinçli, FP-kanıtlı): `worktrees` 2026-08-20'de eklendi.
+    # Ajan worktree'leri (`.claude/worktrees/agent-<id>/`) aynı repo'nun GEÇİCİ
+    # checkout'larıdır; içlerindeki `CLAUDE.md` kökün KOPYASIDIR (yukarıdaki `_hash`
+    # notundaki ölçüm: içerik farkı SIFIR, yalnız satır-sonu). Manifest'e yazmak da
+    # YANLIŞ olurdu: her yeni ajan worktree'si aynı uyarıyı yeniden üretir ⇒ UYARI
+    # KÖRLÜĞÜ. Bunlar bağımsız bir davranış yüzeyi DEĞİLDİR.
+    # ⛔ Ana ağaçtaki gerçek bir davranış dosyası AYNEN taranır (korpus çiviliyor).
+    prune = {"node_modules", ".git", ".tmp", "core", "dist", "__pycache__", "worktrees"}
     for dirpath, dirnames, filenames in os.walk(proj):
         dirnames[:] = [d for d in dirnames
                        if d not in prune and not _is_junction(Path(dirpath) / d)]
@@ -85,11 +106,86 @@ def _topla(proj: Path) -> dict[str, str]:
     return kayit
 
 
-def generate(proj: Path) -> Path:
+def generate(proj: Path, only: list[str] | None = None) -> tuple[Path, list[str], list[str]]:
+    """Manifest'i yazar. Döner: (yol, ONAYLANAN sapmalar, BEKLEMEDE kalan sapmalar).
+
+    ⛔ I-1 — `generate` CERRAHİ DEĞİLDİ (2026-08-20 fix): tüm yüzeyi baştan damgalıyordu
+    ⇒ o an bekleyen **HER** sapmayı topluca "onaylanmış" yapıyordu. Bir tur ölçüldü:
+    `verify` **6 sapma** listeliyordu ve `generate` altısını da **sessizce** aklardı —
+    içlerinde bilinçli olanlar da vardı, olmayanlar da. Bu, koruma mekanizmasının
+    kendisini *"ya hep ya hiç"* hâline getirir ve pratikte KULLANILAMAZ kılar.
+
+    ⭐ TASARIM KISITI: `behavior-manifest.json` **gitignore'dadır** (makine-lokal) ⇒
+    değişikliği bir PR'da kimse GÖREMEZ. Tek denetim yüzeyi bu script'in ÇIKTISIDIR.
+    Bu yüzden `generate` artık NEYİ onayladığını ve NEYİ beklemede bıraktığını
+    satır satır basar; sessiz toplu-aklama artık mümkün değil.
+
+    Args:
+        only: yalnız bu göreli yolların kaydı güncellenir; geri kalan sapmalar
+              BEKLEMEDE kalır (bir sonraki `verify` onları hâlâ gösterir).
+    """
     m = proj / MANIFEST
     m.parent.mkdir(parents=True, exist_ok=True)
-    m.write_text(json.dumps(_topla(proj), indent=1, sort_keys=True), encoding="utf-8")
-    return m
+    canli = _topla(proj)
+
+    if only is None:
+        onceki = _manifest_oku(proj) or {}
+        onaylanan = sorted(set(canli) - {k for k, v in onceki.items() if canli.get(k) == v})
+        yeni = canli
+        bekleyen: list[str] = []
+    else:
+        onceki = _manifest_oku(proj)
+        if onceki is None:
+            raise SystemExit(
+                "[FAIL] --only için mevcut manifest GEREKLİ (yok). Önce tam `generate` koş."
+            )
+        istenen = {o.replace("\\", "/").strip() for o in only}
+        bilinmeyen = sorted(i for i in istenen if i not in canli and i not in onceki)
+        if bilinmeyen:
+            raise SystemExit(
+                "[FAIL] --only ile verilen yol(lar) ne canlı yüzeyde ne manifest'te: "
+                + ", ".join(bilinmeyen)
+                + "\n  ⇒ Yol tahmin etme; `verify` çıktısındaki yolu AYNEN kopyala."
+            )
+        yeni = dict(onceki)
+        onaylanan = []
+        for rel in sorted(istenen):
+            if rel in canli:
+                if yeni.get(rel) != canli[rel]:
+                    onaylanan.append(rel)
+                yeni[rel] = canli[rel]
+            else:                      # diskte yok → kaydı DÜŞÜR (silme onayı)
+                yeni.pop(rel, None)
+                onaylanan.append(rel + " (kayıt DÜŞÜRÜLDÜ — diskte yok)")
+        # Onaylanmayan sapmalar BEKLEMEDE kalmalı
+        bekleyen = [s for s in _sapmalar(canli, yeni)]
+
+    m.write_text(json.dumps(yeni, indent=1, sort_keys=True), encoding="utf-8")
+    return m, onaylanan, bekleyen
+
+
+def _manifest_oku(proj: Path) -> dict[str, str] | None:
+    m = proj / MANIFEST
+    if not m.exists():
+        return None
+    try:
+        return json.loads(m.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _sapmalar(canli: dict[str, str], beklenen: dict[str, str]) -> list[str]:
+    """canli ↔ beklenen farkları (verify ile AYNI mantık — ikinci kopya YOK)."""
+    out: list[str] = []
+    for rel, h in canli.items():
+        if rel not in beklenen:
+            out.append(f"KAYITSIZ yeni davranış dosyası: {rel}")
+        elif beklenen[rel] != h:
+            out.append(f"DEĞİŞMİŞ (manifest-onaysız): {rel}")
+    for rel in beklenen:
+        if rel not in canli:
+            out.append(f"manifest'te var, diskte YOK: {rel}")
+    return out
 
 
 def verify_quiet(proj: Path) -> list[str]:
@@ -102,24 +198,43 @@ def verify_quiet(proj: Path) -> list[str]:
         beklenen = json.loads(m.read_text(encoding="utf-8"))
     except Exception as e:
         return [f"manifest OKUNAMADI: {e}"]
-    canli = _topla(proj)
-    sapma: list[str] = []
-    for rel, h in canli.items():
-        if rel not in beklenen:
-            sapma.append(f"KAYITSIZ yeni davranış dosyası: {rel}")
-        elif beklenen[rel] != h:
-            sapma.append(f"DEĞİŞMİŞ (manifest-onaysız): {rel}")
-    for rel in beklenen:
-        if rel not in canli:
-            sapma.append(f"manifest'te var, diskte YOK: {rel}")
-    return sapma
+    # TEK KAYNAK: `generate --only` de aynı fonksiyonu çağırır (ikinci kopya tutulmaz —
+    # ayrışan iki kıyas mantığı bu evde daha önce kusur üretti).
+    return _sapmalar(_topla(proj), beklenen)
 
 
 def main() -> int:
     proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     cmd = sys.argv[1] if len(sys.argv) > 1 else "verify"
     if cmd == "generate":
-        print(f"[ OK ] manifest yazıldı: {generate(proj)} ({len(_topla(proj))} kalem)")
+        # `--only <yol>` tekrarlanabilir; `--only a,b` de kabul edilir.
+        only: list[str] | None = None
+        args = sys.argv[2:]
+        for i, a in enumerate(args):
+            if a == "--only" and i + 1 < len(args):
+                only = (only or []) + [p for p in args[i + 1].split(",") if p.strip()]
+            elif a.startswith("--only="):
+                only = (only or []) + [p for p in a.split("=", 1)[1].split(",") if p.strip()]
+        yol, onaylanan, bekleyen = generate(proj, only=only)
+        kapsam = f"YALNIZ {len(only)} yol" if only is not None else "TÜM yüzey"
+        print(f"[ OK ] manifest yazıldı: {yol} ({len(_topla(proj))} kalem · kapsam: {kapsam})")
+        # ⛔ NE ONAYLANDIĞI GÖRÜNÜR OLMALI: manifest gitignored'dır, PR'da kimse göremez;
+        # tek denetim yüzeyi bu çıktıdır. Sessiz toplu-aklama I-1'in ta kendisiydi.
+        if onaylanan:
+            print(f"  ONAYLANAN {len(onaylanan)} sapma:")
+            for s in onaylanan:
+                print("   ✔ " + s)
+        else:
+            print("  (onaylanan sapma yok — manifest zaten günceldi)")
+        if only is None and len(onaylanan) > 1:
+            print(f"  ⚠ TOPLU ONAY: yukarıdaki {len(onaylanan)} sapmanın HEPSİ tek komutla "
+                  f"onaylandı. Bilinçli olmayan biri varsa ŞİMDİ geri al.")
+            print("    Seçici onay: python core/scripts/behavior_manifest.py generate "
+                  "--only <yol> [--only <yol2>]")
+        if bekleyen:
+            print(f"  ⏳ BEKLEMEDE kalan {len(bekleyen)} sapma (onaylanMADI):")
+            for s in bekleyen:
+                print("   ⛔ " + s)
         return 0
     sapmalar = verify_quiet(proj)
     if not sapmalar:

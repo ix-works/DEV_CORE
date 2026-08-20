@@ -50,7 +50,29 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 REPO = project_root()
-_SKIP = {"node_modules", "dist", "tmp", ".tmp", ".git", "fixtures", "attic", "archive"}
+#
+# ⚠⚠ GEVŞETME (2026-08-20, kullanıcı onaylı): `worktrees` prune'a eklendi.
+# ÖLÇÜLEN FP: infra-expert bir worktree'de çalışırken pre-commit koştu ve bu gate'in
+# özeti **87 işaretli satır / 22 doküman → 174 satır / 44 doküman** oldu; HER bulgu
+# İKİ KEZ listelendi (bir kez gerçek yoldan, bir kez `.claude/worktrees/**` kopyasından).
+# ⛔ Worktree GEÇİCİ bir checkout'tur: oradaki bulgu AYNI bulgudur, düzeltilecek ayrı
+# bir şey yoktur. Daha kötüsü ters yön: worktree'de DÜZELTİLMİŞ bir dosya varken ana
+# ağaçtaki bozuk sürüm de sayılır (ya da tersi) ⇒ *"kaç ihlal kaldı"* sorusu YANILTICI
+# cevap verir. Bu warn-first bir gate'te fark edilmedi; HARD bir gate'te aynı çiftlenme
+# commit'i haksız yere bloklar ya da sayı-eşikli bir kontrolü sessizce bozardı.
+#
+# ⛔ NE GEVŞEMEDİ — ana ağaçtaki GERÇEK ihlal AYNEN yakalanır (korpus pozitif kontrolle
+# kanıtlar). Ayrıca kural KENDİLİĞİNDEN doğru yönü seçer: worktree İÇİNDEN koşulduğunda
+# tarama kökü worktree'nin KENDİSİDİR ve altında `worktrees/` bulunmaz ⇒ kendi ağacı
+# tam taranır. Kaydın istediği davranış buydu: *"ana ağaçtan koşulduğunda worktree'ler
+# hariç; worktree içinden koşulduğunda yalnız kendi ağacı."*
+#
+# ⚠ SINIF NOTU: bu prune kümesi repoda ÜÇ FARKLI ADLA sekiz validator'da yaşıyor
+# (`_SKIP_SEGMENTS` ×4 · `_SKIP` ×1 · `_prune` ×3) + `behavior_manifest.prune`.
+# Sekizine de eklendi. ⚠ Ada göre arama (`rg _SKIP_SEGMENTS`) sınıfın YARISINI ıskalar —
+# walk-prune noktalarını `dirnames[:]` ile ara. Birleştirme AYRI bir karardır: kümeler
+# bilinçli olarak FARKLI (ör. ui5 dar, fs_docstd `archive` taşır).
+_SKIP = {"node_modules", "dist", "tmp", ".tmp", ".git", "fixtures", "attic", "archive", "worktrees"}
 
 _TR = "A-Za-zÇĞİÖŞÜçğıöşü"
 PATTERNS = {

@@ -38,11 +38,37 @@ fi
 #  aynı lokal ortam, aynı yakalama. N-testi: kasıtlı bayat index → run_all adımı YAKALADI.)
 
 # 2) run_all_validators --quick (core + validators-local; profil-modlu)
+#
+# ⛔ 2026-08-20 — SESSİZ ATLAMA KALDIRILDI (fail-open'ın en kötü türü: BAŞARI GİBİ
+#    GÖRÜNEN YOKLUK). Eskiden bu blok yalnız `if [ -f … ]` idi ve `else` YOKTU:
+#    `core/` junction'ı çözülemeyen bir ortamda (yeni klon · worktree · junction
+#    kırık · başka makine) validator zinciri HİÇ KOŞMUYOR, ama hemen aşağıdaki
+#    satır `[pre-commit] OK` basıyordu ⇒ commit denetimsiz geçiyor ve HİÇBİR
+#    belirti üretmiyordu. Bu, ADR 0019'un *"gate'lenmemiş kural ≈ kuralsız"*
+#    hükmünün SESSİZ ihlalidir.
+#    Kardeş desen: core'un kendi `scripts/git-hooks/pre-commit`i, python
+#    bulunamazsa ATLAMAZ — `exit 1` ile BLOKLAR. Şablon ona hizalandı.
 if [ -f core/scripts/validators/run_all_validators.py ]; then
   if ! python core/scripts/validators/run_all_validators.py --quick; then
     echo "HATA: validator ihlali — commit engellendi. Yukarıdaki FAIL'leri düzelt." >&2
     exit 1
   fi
+  VALIDATOR_DURUM="koştu"
+else
+  echo "" >&2
+  echo "⛔ [pre-commit] VALIDATOR ZİNCİRİ KOŞTURULAMADI — commit BLOKLANDI" >&2
+  echo "   Bulunamadı: $ROOT/core/scripts/validators/run_all_validators.py" >&2
+  echo "   Sebep genelde: 'core/' junction'ı yok / kırık (yeni klon · worktree · başka makine)." >&2
+  echo "   ⚠ Bu adım ESKİDEN SESSİZCE ATLANIYORDU ve commit 'OK' görünüyordu;" >&2
+  echo "     yani denetimsiz commit'ler hiçbir iz bırakmadan geçiyordu." >&2
+  echo "   Çözüm: 'python core/scripts/team_setup.py' ile junction'ları kur." >&2
+  echo "   Bilerek denetimsiz commit gerekiyorsa (kullanıcı onayıyla): git commit --no-verify" >&2
+  echo "" >&2
+  exit 1
 fi
 
-echo "[pre-commit] OK"
+# ⚠ Kapanış satırı NE KOŞTUĞUNU söyler: paydasız "OK" bu kusurun yarısıydı.
+# ⚠ KALAN BOŞLUK (bilinçli-bilinen, bu fix KAPATMAZ): `core.hooksPath` unset ise bu
+#    DOSYA hiç çalışmaz ve yine hiçbir şey uyarmaz (bkz. yukarıdaki not + B13 reçetesi).
+#    O katman AYRI bir kalemdir; burada kapanan yalnız `core/` çözümleme katmanıdır.
+echo "[pre-commit] OK — core-sızıntı kontrolü + run_all_validators --quick ($VALIDATOR_DURUM)"

@@ -285,11 +285,131 @@ def check_table(text: str) -> list[dict]:
     return violations
 
 
+# ---------------------------------------------------------------------------
+# EKSİK-annotation tespiti (DERİNLİK, 2026-08-20)
+# ---------------------------------------------------------------------------
+# ⛔ ESKİ KUSUR: `check_cds` yalnız VAR OLAN annotation'ın BİÇİMİNİ denetliyordu;
+# EKSİKLİĞİNİ hiç aramıyordu. Sonuç: bilerek kirletilmiş bir dosya (CURR alan +
+# `@Semantics` YOK + CUKY YOK) `rc=0 "temiz"` dönüyordu ⇒ *"13/13 rc=0"* gibi bir
+# sonuç BİLGİ TAŞIMIYORDU (annotation hiç yoksa da yeşil). Kapsam kusuru `ea1abf1`
+# ile kapandı, DERİNLİK kusuru açıktı.
+#
+# ⚠ TASARIM ÖLÇÜMLE SEÇİLDİ (tahmin değil). İlk aday "DTEL sözlüğünden çöz" idi;
+# gerçek korpus onu çürüttü: proje CDS'leri `klm_kalem_tutari_vh` gibi ÖZEL kolon
+# adları kullanıyor, sözlükteki standart adları değil ⇒ tek başına sözlük neredeyse
+# hiç ateşlemezdi (ölü gate). Ölçüm (233 CDS): açık `abap.curr(`/`abap.quan(` cast'i
+# **117 geçiş / 20 dosya**, sözlük-adlı kolon **81 geçiş / 23 dosya** ⇒ İKİ sinyal de
+# gerçek, ikisi birlikte kullanılır.
+_CAST_CURR = re.compile(r"abap\.curr\s*\(", re.I)
+_CAST_QUAN = re.compile(r"abap\.quan\s*\(", re.I)
+# `x as Y` · `tbl.x as Y` · `cast( … ) as Y` — son `as <alias>` ayrımı
+_ELEMAN = re.compile(r"^\s*(?:key\s+)?(?P<ifade>.+?)\s+as\s+(?P<alias>\w+)\s*,?\s*$", re.I)
+# Yalnız SADE alan referansı (ifade DEĞİL): sözlük eşlemesi yalnız burada güvenli
+_SADE_ALAN = re.compile(r"^(?:(\w+)\.)?(\w+)$")
+# Eleman OLMAYAN ama `as` içerebilen yapısal satırlar — bunlar bekleyen annotation
+# bloğunu SIFIRLAMAZ (ör. `as select from`, association tanımları)
+_YAPISAL = ("{", "}", "define", "as select", "association", "left outer",
+            "inner join", "right outer", "cross join", "*", "//")
+
+
+def _eleman_tipi(ifade: str) -> str | None:
+    """Bir select-eleman ifadesi CURR/QUAN tipli mi? Çözülemezse None.
+
+    İki kanıt kabul edilir:
+      ① AÇIK cast — `cast( … as abap.curr(15,2) )`. İfade içinde geçmesi yeter;
+         `case … else cast( 0 as abap.curr(…) ) end` de tutar.
+      ② SADE alan referansı (`vbrk.netwr`, `netwr`) ve kolon adı PAYLAŞILAN
+         sözlükte. ⛔ İfadelerde sözlüğe BAKILMAZ: `coalesce( x.menge, … )` içinde
+         geçen bir ad, elemanın tipini kanıtlamaz (yol ifadesi tahmini = FP kaynağı).
+    """
+    if _CAST_CURR.search(ifade):
+        return 'CURR'
+    if _CAST_QUAN.search(ifade):
+        return 'QUAN'
+    m = _SADE_ALAN.match(ifade.strip())
+    if m:
+        kolon = m.group(2).lower()
+        if kolon in CURR_DTELS:
+            return 'CURR'
+        if kolon in QUAN_DTELS:
+            return 'QUAN'
+    return None
+
+
+def curr_quan_eleman_sayisi(text: str) -> int:
+    """Tipi KANITLANABİLEN CURR/QUAN eleman sayısı — "temiz"in PAYDASI.
+
+    ⛔ Bu sayı çıktıya basılır çünkü kusurun kökü tam da paydasızlıktı: *"13/13 rc=0"*
+    okunduğunda kimse *"kaç alana bakıldı?"* diye sormuyordu ve cevap **sıfır** olabilirdi.
+    `0 eleman denetlendi` ile `7 eleman denetlendi, hepsi temiz` AYNI ŞEY DEĞİLDİR.
+    ⚠ Sayı, aracın ÇÖZEBİLDİKLERİDİR: sözlükte olmayan bir DTEL adı (ör. `fkimg`) sade
+    referansla geçiyorsa buraya girmez — araç onu tipleyemediğini böylece BEYAN eder,
+    "temiz" diye yutmaz. Kapsamı genişletmenin yolu `utils/ddic_semantics` sözlüğüdür
+    (genişletilebilir, KISALTILAMAZ) ya da açık `cast( … as abap.curr/quan(…) )`.
+    """
+    n = 0
+    for raw_line in text.splitlines():
+        s = yorumu_kirp(raw_line).strip()
+        if not s or s.startswith('@'):
+            continue
+        m = _ELEMAN.match(s)
+        if m and _eleman_tipi(m.group('ifade')):
+            n += 1
+    return n
+
+
+def eksik_annotation_bul(text: str) -> list[dict]:
+    """CURR/QUAN tipli olduğu KANITLANAN ama `@Semantics`'i olmayan elemanlar.
+
+    ⚠ ŞİDDET = WARNING, BLOCKER DEĞİL — ve bu ÖLÇÜLEREK seçildi:
+    gerçek korpusta (233 CDS) **129 CURR/QUAN eleman** tespit ediliyor ve bunların
+    **46'sı / 15 dosyada** annotation taşımıyor. Bu dosyalar CANLIDA AKTİF —
+    yani SAP aktivasyonu bu annotation'ı zorlamıyor. BLOCKER yapmak, çalışan 15
+    dosyayı anında kırmızıya çevirir ve kapı "geçilemez" olduğu için ilk refleks
+    onu KAPATMAK olurdu (erişilemez yeşil = ölü gate). Önce görünürlük, sonra
+    (birikmiş 46 kalem temizlenince) şiddet kararı — o karar kullanıcınındır.
+    """
+    violations = []
+    bekleyen: list[str] = []
+    for i, raw_line in enumerate(text.splitlines(), 1):
+        s = yorumu_kirp(raw_line).strip()
+        if not s:
+            continue
+        if s.startswith('@'):
+            bekleyen.append(s)
+            continue
+        m = _ELEMAN.match(s)
+        if not m:
+            if not s.startswith(_YAPISAL):
+                bekleyen = []
+            continue
+        tip = _eleman_tipi(m.group('ifade'))
+        if tip:
+            blok = ' '.join(bekleyen)
+            gerekli = ('@Semantics.amount.currencyCode' if tip == 'CURR'
+                       else '@Semantics.quantity.unitOfMeasure')
+            if gerekli not in blok:
+                violations.append({
+                    'severity': 'WARNING',
+                    'line': i,
+                    'check_id': 'C-CDS-CUR-05' if tip == 'CURR' else 'C-CDS-QUAN-05',
+                    'message': (f"{tip} tipli '{m.group('alias')}' elemanında "
+                                f"{gerekli} annotation'ı YOK "
+                                f"(kanıt: {m.group('ifade').strip()[:60]})"),
+                    'fix': (f"Elemanın HEMEN ÜSTÜNE `{gerekli}: '<BirimElemani>'` ekle; "
+                            f"birim/para-birimi elemanı da view'da EXPOSED olmalı."),
+                })
+        bekleyen = []
+    return violations
+
+
 def check_cds(text: str) -> list[dict]:
     """CDS source'unda CURR/QUAN reference check.
 
-    Note: CDS'lerde currency reference daha esnek (any view referansı OK).
-    Bu yüzden sadece annotation varlığını + qualified format'ı kontrol et.
+    İKİ SORU birden sorulur:
+      ① VAR OLAN annotation'ın biçimi geçerli mi (C-CDS-CUR-02/03)
+      ② ⭐ CURR/QUAN tipli bir eleman annotation'ı EKSİK Mİ (C-CDS-CUR/QUAN-05)
+    ②'siz hâlde *"rc=0 temiz"* hiçbir bilgi taşımıyordu — bkz. `eksik_annotation_bul`.
     """
     violations = []
     lines = text.splitlines()
@@ -330,6 +450,8 @@ def check_cds(text: str) -> list[dict]:
                     'fix': f"Mümkünse '<view>.{val}' kullan"
                 })
 
+    # ② DERİNLİK: annotation'ın EKSİKLİĞİ (biçimi değil) — 2026-08-20
+    violations.extend(eksik_annotation_bul(text))
     return violations
 
 
@@ -376,7 +498,16 @@ def main() -> int:
         violations = check_cds(text)
 
     if not violations:
-        print(f'OK — {path.name} ({src_type}) CURR/QUAN reference check temiz')
+        # ⛔ PAYDASIZ "temiz" BASMA: kaç elemana bakıldığı yazılmazsa `0 eleman` ile
+        # `7 eleman, hepsi doğru` aynı satıra düşer — kusurun kökü buydu.
+        if src_type == 'cds':
+            n = curr_quan_eleman_sayisi(text)
+            kapsam = (f'{n} CURR/QUAN elemanı denetlendi' if n else
+                      'tipi ÇÖZÜLEBİLEN CURR/QUAN elemanı YOK — bu "temiz" bir '
+                      'KAPSAMA iddiası DEĞİLDİR')
+            print(f'OK — {path.name} ({src_type}) CURR/QUAN reference check temiz · {kapsam}')
+        else:
+            print(f'OK — {path.name} ({src_type}) CURR/QUAN reference check temiz')
         return 0
 
     print(f'\n--- {path.name} ({src_type}) — {len(violations)} ihlal ---', file=sys.stderr)

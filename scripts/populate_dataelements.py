@@ -56,6 +56,7 @@ if sys.platform == 'win32':
 
 sys.path.insert(0, str(Path(__file__).parent))
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ddic_aktivasyon import aktivasyon_notu   # "yaratildi != aktif" kapanis notu (tek kaynak)
 
 
 def build_xml(name: str, description: str, package: str, responsible: str,
@@ -266,16 +267,21 @@ def main():
 
     ok = 0
     fail = 0
+    islenenler = []
     for row in rows:
         if create_one(client=client, csrf=csrf, row=row,
                       package=args.package, responsible=args.responsible,
                       transport=args.transport, force_recreate=args.force_recreate,
                       dry_run=args.dry_run):
             ok += 1
+            islenenler.append(row['name'])
         else:
             fail += 1
 
     print(f'\n=== Sonuç: {ok} başarılı, {fail} hatalı ===')
+    # "exit 0 != kanit": obje islendi ama AKTIF DEGIL. Sessiz [OK] kabul edilemez.
+    if not args.dry_run:
+        print(aktivasyon_notu('dataelement', islenenler, args.cwd))
     return 0 if fail == 0 else 1
 
 

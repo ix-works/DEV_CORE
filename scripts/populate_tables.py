@@ -66,6 +66,7 @@ if sys.platform == 'win32':
 
 sys.path.insert(0, str(Path(__file__).parent))
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ddic_aktivasyon import aktivasyon_notu   # "yaratildi != aktif" kapanis notu (tek kaynak)
 from utils.ddic_semantics import (
     classify_unit_kind, normalize_unit_kind, UnitKindError,
     UNIT_KIND_CURRENCY, UNIT_KIND_QUANTITY,
@@ -432,6 +433,7 @@ def main():
 
     ok = 0
     fail = 0
+    islenenler = []
     print('\n=== Creating tables ===')
     for tname, t in tables.items():
         if create_one(client=client, csrf=csrf, table_name=tname,
@@ -444,10 +446,14 @@ def main():
                       unit_kinds=t.get('unit_kinds', {}),
                       force_recreate=args.force_recreate, dry_run=args.dry_run):
             ok += 1
+            islenenler.append(tname)
         else:
             fail += 1
 
     print(f'\n=== Sonuç: {ok} başarılı, {fail} hatalı ===')
+    # "exit 0 != kanit": obje islendi ama AKTIF DEGIL. Sessiz [OK] kabul edilemez.
+    if not args.dry_run:
+        print(aktivasyon_notu('table', islenenler, args.cwd))
     return 0 if fail == 0 else 1
 
 

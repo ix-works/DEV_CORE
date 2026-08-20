@@ -33,7 +33,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 # (bu validator PROJE dokümanlarını tarar, core'u değil)
 REPO = project_root()
 
-_SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp", ".git", "fixtures", "attic"}  # fixtures/attic: bilinçli-bozuk test girdileri (G1) taranmaz
+_SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp", ".git", "fixtures", "attic", "worktrees"}  # fixtures/attic: bilinçli-bozuk test girdileri (G1) taranmaz
 
 # Ham (render EDİLMEMİŞ) mermaid işaretleri — marked/markdown-it kod-bloğu çıktısı + çıplak div.
 _RAW_MERMAID_RE = re.compile(r'language-mermaid|class="mermaid"|<code[^>]*>\s*flowchart\b', re.IGNORECASE)

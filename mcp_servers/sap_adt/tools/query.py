@@ -112,32 +112,68 @@ def adt_transport_list(user: str | None = None) -> dict:
     Args:
         user: SAP user name. Defaults to the .conn_adt user.
 
-    ⛔ 2026-08-10 — `count: 0` ARTIK KANITLI BİR SIFIRDIR. Ölçülen vaka: sistemde 4 açık
-    transport varken bu tool `ok:true, count:0` döndü; alt katman hem istisnayı yutuyor
-    (`return []`) hem de tek bir XML şekline çivilenmişti. Artık ayrıştırılamayan/
-    tanınmayan gövde `ok:false` verir. `count: 0` gördüğünde `shape_recognized` alanına
-    bak: True ise sıfır GERÇEKTİR, alan yoksa/False ise sonuç sıfır DEĞİL, okunamamadır.
+    ⛔⛔ `count: 0` **KANIT DEĞİLDİR** — `shape_recognized: true` OLSA BİLE.
+
+    ⚠ 2026-08-10 tarihli eski docstring, `shape_recognized` bayrağını sıfırın
+    DOĞRULUK kanıtı olarak sunuyordu. **BU REHBERLİK 2026-08-18'de ÖLÇÜLEREK
+    ÇÜRÜTÜLDÜ ve 2026-08-20'de bu metinden kaldırıldı.** (Çürütülen cümle burada
+    BİLEREK yeniden yazılmıyor: bir korpus çapası onun yokluğunu denetliyor ve
+    "tarihçe olarak alıntılamak" ile "hâlâ öğretmek" metin düzeyinde ayırt
+    edilemez — Parti-1'de aynı tuzağa bir kez düşüldü.) Çürüten ölçümler:
+      · 2026-08-18: `count:0` + `shape_recognized:true` iken `DS4K918705` VARdı
+        (E070: TRFUNCTION='S', TRSTATUS='D', AS4USER eşleşiyor).
+      · 2026-08-19: aynı bileşim, E070'te **iki** açık kayıt.
+      · 2026-08-19 (A-00): aynı bileşim, E070'te **dört** açık görev.
+    ⇒ `shape_recognized` YALNIZCA *"yanıtın BİÇİMİNİ ayrıştırabildim"* der; içeriğin
+    doğruluğu hakkında HİÇBİR ŞEY söylemez. İkisini karıştırmak, yanlış cevaba güven
+    damgası basmaktır.
+
+    ⛔ **NEDEN CİDDİ:** transport teyidi bir **ADR 0005-C kapısıdır**. Araç "TR yok"
+    derse doğal refleks **yeni TR açmaktır** — ki bu YASAKTIR. Yani bu sahte-negatif
+    doğrudan bir yasak ihlaline sürükleyebilir.
+
+    ✅ **DOĞRU YÖNTEM:** sıfır sonucu `E070` (+ içerik için `E071`) ile ÇAPRAZ KONTROL
+    et — `TRSTATUS`, `AS4USER`, `TRFUNCTION`, `STRKORR` alanlarına bak. ⚠ `E070×E071`
+    JOIN + `E07T` tek sorguda **400** döndürür; iki ayrı sorguya böl. ⚠ Ayrıca
+    `IN ('a','b')` listesi de 400 verebilir — `OR` zincirine çevir.
 
     Returns:
-        {ok, count, transports: [{number, description, status}, ...],
-         accept_header, shape_recognized, client_log}
+        {ok, count, transports: [...], accept_header, shape_recognized,
+         zero_verified, zero_notice, client_log}
+
+        `zero_verified`: `None` → count > 0 (soru geçersiz) ·
+                         `False` → count == 0 ve **bu araç sıfırı KANITLAYAMAZ**.
+                         ⛔ Bu alan ASLA `True` olmaz: pozitif kontrolü (dolu döndüğü
+                         bilinen bir sorgu) bu tool koşmaz. Üç-değerli doğrulama
+                         sözleşmesinin kardeşi (`delete_verified`/`readback_verified`).
     """
     client = _get_client()
     try:
         with _capture() as buf:
             transports = client.list_user_transports(user=user)
         meta = getattr(client, "_last_transport_meta", None) or {}
-        return {
+        n = len(transports)
+        sonuc = {
             "ok": True,
             "user": user,
-            "count": len(transports),
+            "count": n,
             "transports": transports,
             # Hangi Accept header cevapladı + gövde tanınan bir tm feed'i miydi.
-            # "0 transport" iddiasının DAYANAĞI budur; alan olmadan sayı yorumlanamaz.
+            # ⚠ Bu alan bir BİÇİM sinyalidir; "0 transport" iddiasının DAYANAĞI DEĞİLDİR.
             "accept_header": meta.get("accept"),
             "shape_recognized": meta.get("shape_recognized"),
+            # Üç-değerli doğrulama: soru geçersiz (None) / kanıtlanamadı (False).
+            "zero_verified": None if n else False,
             "client_log": buf.getvalue().strip(),
         }
+        if not n:
+            sonuc["zero_notice"] = (
+                "count:0 KANIT DEGILDIR (shape_recognized:true olsa bile). Uc olculmus "
+                "vakada bu arac 0 derken E070'te acik transport VARDI. Once E070 ile "
+                "capraz kontrol et (TRSTATUS/AS4USER/TRFUNCTION/STRKORR); teyit etmeden "
+                "'acik istek yok' SONUCUNA VARMA ve YENI TR ACMA (ADR 0005-C)."
+            )
+        return sonuc
     except Exception as exc:
         return _err_from_exc(exc)
 

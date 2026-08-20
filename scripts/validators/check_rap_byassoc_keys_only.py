@@ -43,7 +43,7 @@ USES_FROM = re.compile(r"\bFROM\b", re.IGNORECASE)
 def main() -> int:
     findings = []
     import os
-    _prune = {"node_modules", "dist", ".tmp", "tmp", ".git"}
+    _prune = {"node_modules", "dist", ".tmp", "tmp", ".git", "worktrees"}
     abap_files = []
     for dirpath, dirnames, filenames in os.walk(ERP):  # PERF: node_modules budama
         dirnames[:] = [d for d in dirnames if d.lower() not in _prune]

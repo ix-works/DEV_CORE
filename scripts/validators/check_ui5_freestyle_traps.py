@@ -50,7 +50,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 REPO = project_root()
 ERP = source_dir()
 
-_SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp"}
+_SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp", "worktrees"}
 
 # --- T1: V2 nav `_X` (entity adı DEĞİL; nav property). Entity-set'ler /Z ile başlar,
 #     nav property'ler `_Cap` bare token veya `/_Cap` path segmenti. `/Z...` ve `to_...`

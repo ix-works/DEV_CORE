@@ -639,3 +639,190 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   altındaki tüm `*.cds|*.asddls|*.ddl|*.ddls` dosyalarına koş, rc dağılımını fix ÖNCESİ
   sürümle karşılaştır. Beklenen: yalnız daha önce "tespit edilemedi" diyen dosyaların
   çıktısı değişir, geri kalan **BAYT AYNI** kalır.
+
+## B25 — PARTİ-1 "sessiz veri bozan" dörtlüsü (msgtext guard · aktivasyon notu · çıktı dürüstlüğü)
+- Üç korpus, hepsi OZEL_TESTLER üyesi (suite içinden de koşar):
+  `python tests/fixtures/msgtext_uzunluk_guard/run.py`     → **8 senaryo + 3 mutasyon**, exit 0
+  `python tests/fixtures/ddic_aktivasyon_notu/run.py`      → **9 senaryo + 4 mutasyon**, exit 0
+  `python tests/fixtures/cikti_iddiasi_durustlugu/run.py`  → **9 senaryo + 3 mutasyon**, exit 0
+  Tam suite: `python tests/run_fixture_tests.py` → **130/130** (⚠ önce `rm -f .conn_adt`, bkz. B22 notu).
+- **Mutasyonlar korpusun İÇİNDEDİR** ve BUGÜNKÜ kaynaktan üretilir (git ref'i YOK ⇒ "fix
+  merge olunca taban kayar" tuzağı yapısal olarak yok). Her koşucu ayrıca **"yama tuttu mu"**
+  kanıtı basar; yama bugünkü kaynağa uymazsa sahte-yeşil yerine FAIL verir.
+- ⚠ **stdout gaspı (B22'nin dersi, burada da geçerli):** `populate_message_class`,
+  `run_pretty_printer` ve `sap_sync_pull` import anında `io.TextIOWrapper(sys.stdout.buffer)`
+  kurar. Yalnız `sys.stdout`'u geri koymak YETMEZ — wrapper GC'ye girince sardığı GERÇEK
+  buffer'ı KAPATIR. Üç korpus da import sırasında stdout'u **atılabilir bir BytesIO**'ya
+  bağlar ve wrapper'lara referans tutar (`_mod_refs`). Bu satırlar SİLİNMEZ.
+- ⭐ **METİN ARAMASI İKİ KEZ YANILDI — çapalar AST'dir, `in` değil** (ilk koşumda ikisi de
+  gerçekleşti, kayıt dürüstlük için):
+  ① `"push_object" in src` → `run_pretty_printer` **docstring'inde** *"push_object.py ile yaz"*
+     yazdığı için "YAZMA çağrısı var" sandı (sahte-KIRMIZI). Çözüm: `ast` ile GERÇEK `Call`
+     adları toplanır; yorum/docstring/dize sayılmaz.
+  ② `"_alt_include_uyar(obj" in src` → fonksiyonun kendi **`def` satırıyla** eşleşti ve çağrı
+     sökülmüş olsa bile True döndü ⇒ **M2 mutasyonu KAÇTI**. Çözüm: `_kablolu_mu()` — `main`
+     gövdesinde `ast.Call` arar. **Çağrı ile TANIM metinde birbirine benzer; AST ayırır.**
+- **Değişmez ↔ mutasyon eşlemesi** (biri diğerini KAPSAMAZ; herhangi biri tam puan verirse
+  korpus o değişmez için BOŞTUR):
+  `msgtext`: M1 guard'ı sök (tespit) · M2 yalnız İLK ihlali raporla (tamlık) · M3 eşik 73→200 (değer)
+  `aktivasyon`: M1 boş listede de bas (gürültü) · M2 geçersiz `--type` (üretici↔tüketici) ·
+                M3 çağrıyı sök (kablolama) · M4 non-ASCII geri koy (C-ENC-01)
+  `çıktı`: M1 `applied to` geri (iddia) · M2 uyarıyı sök (sessizlik) · M3 marker'ı yerel
+           kopyaya çevir (tek-kaynak)
+- ⭐ **ÜRETİCİ↔TÜKETİCİ vektörü (S3, `ddic_aktivasyon_notu`):** notun bastığı `--type` değeri
+  `activate_object.py`'nin argparse `choices`'ından **canlı çözülür** (`object_types`
+  import edilir), metin kıyası YAPILMAZ. `list_supported_types()`/`OBJECT_TYPE_ALIASES`
+  değişirse bu vektör kırılır — istenen davranış: notun bastığı komut geçersizleşmesin.
+- **FP çapaları (ayırt edicilerle AYNI vektöre konmaz):** `msgtext` S2/S3/S5/S6/S8 ·
+  `aktivasyon` S2 (boş liste sessiz) · `çıktı` B2 (alt-include yoksa sessiz) + B1 içindeki
+  komşu-sınıf çapası (`ZCL_BASKA.ccimp.abap` uyarıya KARIŞMAMALI).
+- **Dokunulursa BİRLİKTE koşulacaklar:** `populate_tables.py`'ye dokunan her tur
+  `populate_tables_unit_kind` (B22) **ve** `ddic_aktivasyon_notu`'nu koşar (HARİTA ikisini de
+  bağlar). `source_drift.py`'ye dokunan tur `cikti_iddiasi_durustlugu`'nu koşar
+  (`_CLASS_SUBSOURCE_MARKERS` oradan import edilir).
+- ⚠ **DOĞRULANAMADI (canlı):** dördü de SAP'ye karşı koşulmadı — fixture'lar SAP'yi taklit
+  eder / sahte client kullanır. İlk gerçek kullanımda doğrulanacak: ① uzun metinli CSV'de
+  fail-closed'ın CSRF/LOCK/PUT'a **hiç gitmediği** ② `populate_*` kapanış notunun gerçek
+  koşumda göründüğü ve komutun **çalıştığı** ③ `run_pretty_printer`'ın yeni metinleri.
+
+## B26 — PARTİ-2 "sahte yeşil" dörtlüsü (cds-derinlik · transport-sıfır · pre-commit · süit hijyeni)
+- Dört korpus (hepsi OZEL_TESTLER üyesi):
+  `python tests/fixtures/cds_curr_eksik_annotation/run.py`      → **9 senaryo + 5 mutasyon**, exit 0
+  `python tests/fixtures/transport_sifir_kaniti/run.py`         → **7 senaryo + 3 mutasyon**, exit 0
+  `python tests/fixtures/precommit_junction_failclosed/run.py`  → **4 senaryo + 2 mutasyon**, exit 0
+  `python tests/fixtures/suite_ortam_hijyeni/run.py`            → **5 senaryo + 3 mutasyon**, exit 0
+  Tam suite: `python tests/run_fixture_tests.py` → **134/134**.
+- ⭐ **İDEMPOTANS ARTIK KORPUS-DIŞI BİR ADIMDIR (elle koş, B22'nin açık kalemi buydu):**
+  süiti **arka arkaya İKİ KEZ** koş; ikisi de **134/134** vermeli. Ölçüldü 2026-08-20:
+  fix ÖNCESİ 130 → **129** (`conn_cift_anahtar` SAPMA), fix SONRASI 134 → **134**.
+  Korpusa konmadı çünkü iki tam koşum ≈ 6 dk; `suite_ortam_hijyeni` bunun yerine
+  hijyen fonksiyonlarını + AST kablolamasını ölçer.
+- ⚠ **KİRLİ ORTAM SONDASI:** repo kökünde koşumdan ÖNCE `.conn_adt` varsa süit artık
+  **görünür uyarı** basar. O uyarıyı gördüğünde sonucu KANIT SAYMA — `rm -f .conn_adt`
+  ile temiz ölçüm al. ⛔ Süit, koşum öncesi VAR OLAN dosyayı **SİLMEZ** (kullanıcınındır);
+  yalnız kendi ürettiğini siler. `suite_ortam_hijyeni` S4 tam bunu çivilliyor.
+- ⚠ **`cds_curr_eksik_annotation` MUTANTI GERÇEK `scripts/validators/` DİZİNİNDE yaşar**
+  (`_mutant_cds_curr.py`, finally'de silinir) — B24'ün dersi: validator kendi yolundan
+  `parents[1]` ile `utils.ddic_semantics`'i import eder; tempdir'e kopyalanırsa import
+  ÖLÜR ve HER mutasyon "yakalandı" görünür (SAHTE-KIRMIZI).
+- ⚠ **`transport_sifir_kaniti` iki tuzağı belgeler (ikisi de bu turda YAŞANDI):**
+  ① Mutasyon için TÜM modülü `exec` ETME — modül-seviyesi yan etkiler
+     `SAPConnectionError` fırlatır ve koşucu bunu *"mutasyon YAKALANDI"* sayar
+     (**çökme ≠ FAIL**; üç mutasyonun üçü de böyle sahte-yeşil verdi). Çözüm: AST ile
+     yalnız fonksiyon bloğunu ayıkla, **dekoratörü ATLA** (`@profil_tool` profil
+     çözümü `.conn_adt`ye gider), globals olarak gerçek modülün namespace'ini ver.
+  ② Sahte client stub'ı **fonksiyonun KENDİ globals'ına** uygulanmalı; yalnız
+     `query` modülüne uygulanırsa mutant globals KOPYASINDAKİ gerçek `_get_client`i
+     görür ve GERÇEK SAP bağlantısı dener.
+- ⚠ **`precommit_junction_failclosed` GERÇEK git deposu + GERÇEK kabuk kullanır:**
+  şablon `git rev-parse --show-toplevel` çağırır; sahte dizin sessizce BAŞKA bir ağacı
+  gösterirdi ("kod ≠ kablolama"nın kabuk yüzü). `sh` yoksa korpus **exit 1** verir
+  (sessiz geçme YOK).
+- ⭐ **Metin çapası İKİ KEZ daha yanıldı (Parti-1'deki dersin nüksü) — çapa AST'dir:**
+  `_alt_include_uyar(` ve `_ortam_hijyeni_bitir(` gibi adlar fonksiyonun kendi `def`
+  satırıyla eşleşir; ayrıca docstring'de TARİHÇE olarak alıntılanan çürütülmüş cümle
+  "hâlâ öğretiyor" sanılır. ⇒ Çürütülmüş cümle `query.py` docstring'inde **bilerek
+  yeniden yazılmıyor** ve kablolama soruları AST ile sorulur.
+- **Dokunulursa BİRLİKTE koşulacaklar:** `check_cds_currency_reference.py`'ye dokunan
+  tur **dört** korpus koşar: `cds_curr_satir_yorumu` (V1) · `cds_curr_kaynak_tipi` (V2,
+  `--mutasyon` dahil) · `populate_tables_unit_kind` (B-13, aynı sözlük) ·
+  `cds_curr_eksik_annotation` (derinlik). HARİTA dördünü de bağlar.
+- **GERÇEK-KORPUS REGRESYON REÇETESİ (①):** validator'ı `<source_root>` altındaki tüm
+  `*.cds` dosyalarına ESKİ ve YENİ sürümle koş, **rc dağılımını** karşılaştır.
+  Beklenen: rc dağılımı **DEĞİŞMEZ** (WARNING build'i durdurmaz), yalnız
+  `C-CDS-CUR/QUAN-05` satırları eklenir. Ölçüldü: 233 dosya · rc değişen **0** ·
+  yeni bulgu **46**.
+- ⚠ **DOĞRULANAMADI (canlı):** ② SAP'ye karşı koşulmadı. Sahte-sıfırın KÖK SEBEBİ
+  (araç hangi sorguyu koşuyor da `E070`'i ıskalıyor) **gateway'in canlı ölçümüdür**;
+  bu tur yalnız SÖZLEŞMEYİ düzeltti. ③ gerçek bir projede junction kırıp commit
+  denemesiyle bir kez teyit edilmeli (fixture sentetik depo kullanır).
+
+## B27 — PARTİ-2b şablon + manifest üçlüsü (.rules.md.tmpl · spawn-brief/lint · behavior_manifest)
+- İki korpus (ikisi de OZEL_TESTLER üyesi):
+  `python tests/fixtures/sablon_zorunlu_maddeler/run.py` → **9 senaryo + 3 mutasyon**, exit 0
+  `python tests/fixtures/manifest_secici_onay/run.py`    → **9 senaryo + 4 mutasyon**, exit 0
+  Dokunulan hook regresyonu: `python tests/fixtures/prior_art_kb01/run.py` → **17/17**.
+  Tam suite: `python tests/run_fixture_tests.py` → **136/136**.
+- ⭐ **ÖNEKLER KORPUSTA KOPYALANMAZ:** `sablon_zorunlu_maddeler` DDIC öneklerini
+  `standards/01-naming.md` **§4.4.5 tablosundan OKUR**. İkinci bir kopya tutulsaydı
+  bayatlar ve korpus standardı değil **kendi ezberini** doğrulardı. Standardın tablo
+  biçimi değişirse `_std_ddic_onekleri()` boş döner → A1 kırmızı (fail-loud, sessiz
+  geçme yok).
+- ⚠ **Şablon mutasyonu DİSKE yazılır** (`.rules.md.tmpl` geçici olarak yamalanır) ve
+  `finally` ile geri alınır; koşucu ayrıca **kalıntı kontrolü** basar. Mutasyon artığı
+  kalırsa süit FAIL verir — çünkü kalıntı bir sonraki koşumda **sessiz bozulma** olurdu.
+- ⭐ **`brifing-lint` yeni ekseni DAR — genişletmeden ÖNCE TABANI ÖLÇ.** Ölçüm
+  (587 gerçek brif, transcript korpusu, `utils.claude_paths.transcript_dizini`):
+  | Eksen | Ateşleme |
+  |---|---|
+  | ham *"ENGELLENIRSEN maddesi var mı?"* | **%86,7** ⇒ KULLANILAMAZ (uyarı körlüğü) |
+  | **DAR** (başka-ağaç **+** yazma işi, madde yok) | **%16,0** (kapsam %18,4) |
+  | mevcut `GOREV` ekseni (kıyas tabanı) | %25,0 |
+  | KB-01 ekseninin ölçülmüş gürültü tabanı | %13,9 |
+  ⛔ Ekseni gevşetmek (ör. `yazma` şartını kaldırmak) korpusta **M3 mutasyonudur** ve
+  B3 (yalnız-okuma FP çapası) onu kırar.
+- ⚠⚠ **`behavior_manifest`te İKİ GEVŞETME var — dokunmadan önce POZİTİF KONTROLLERİ oku:**
+  (a) `worktrees` prune'da → FP çapası **S1**, pozitif kontrol **S2** (ana ağaçtaki gerçek
+      nested `CLAUDE.md` hâlâ taranır).
+  (b) `_hash` satır-sonunu normalize eder → FP çapası **S3**, pozitif kontrol **S4**
+      (**tek karakterlik** gerçek değişiklik hâlâ yakalanır).
+  ⛔ S2/S4 **SİLİNMEZ**: onlar olmadan iki gevşetmenin "kapıyı körletmediği" iddiası
+  kanıtsız kalır. Mutasyonlar M1/M2 tam da bu iki değişmezi sınar.
+- **`--only` sözleşmesi:** `generate --only <yol>` / `--only a,b` / tekrarlı `--only`.
+  Fail-closed iki dal: bilinmeyen yol → `SystemExit` · manifest yokken `--only` →
+  `SystemExit` (önce tam `generate`). ⛔ `verify` ile `generate` **tek** kıyas fonksiyonu
+  (`_sapmalar`) kullanır — ayrışan iki kıyas mantığı bu evde daha önce kusur üretti.
+- ⓘ `behavior-manifest.json` **gitignore'dadır** (makine-lokal) ⇒ değişikliği PR'da kimse
+  göremez. Tek denetim yüzeyi `generate`in ÇIKTISIDIR; bu yüzden "ONAYLANAN / BEKLEMEDE"
+  listeleri ve TOPLU ONAY uyarısı **çözümün parçasıdır**, kozmetik değil (S7 + M4).
+- ⚠ **DOĞRULANAMADI:** yeni lint ekseninin **canlı bir spawn'da** ateşlediği ölçülmedi
+  (hook kablolaması oturum başında yüklenir); kanıt sentetik payload + gerçek
+  `_brifing_lint` fonksiyonudur. İlk gerçek spawn'da teyit et.
+- ⚠ **AÇIK (bu turda dokunulmadı):** şablonun **Message Class** satırı üç kaynakta üç
+  farklı (standart `MC` · şablon çıplak `{PKG}` · gerçek kullanım `{PKG}_MSG`) ve
+  **Search Help** satırı hiç yok. İkisi de **kural kararıdır (K4)**, mekanik fix değil.
+
+## B28 — PARTİ-3 iki GEVŞETME (itg_signoff biçim toleransı · worktree dışlama)
+```bash
+python tests/fixtures/gevsetme_pozitif_kontrol/run.py   # 11 senaryo + 5 mutasyon, exit 0
+python tests/fixtures/itg_alan_dolulugu/run.py          # 11/11  (2026-08-01 sıkılaştırması)
+python tests/fixtures/fs_docstd/run.py                  # 38/38  + 9 mutasyon (B9b)
+python tests/run_fixture_tests.py                       # 137/137
+```
+- ⛔⛔ **BU KORPUSTA SİLİNEMEZ VEKTÖRLER VAR.** İki gevşetme **kullanıcı onaylı** ve onay
+  *"kapıyı körletmediğini KANITLA"* şartıyla alındı. Kanıt şunlardır:
+  | Vektör | Ne kanıtlar |
+  |---|---|
+  | **A2** boş şablon + `MUTABAKAT:[x]` → BLOCKER | doluluk denetimi ayakta |
+  | **A3** tolere edilen başlık ama **BÖLÜM BOŞ** → BLOCKER | tolerans doluluğu yemedi |
+  | **A4** prior-art **düzyazı** (referans izi yok) → BLOCKER | arama zorunluluğu ayakta |
+  | **B2** ana ağaçtaki **gerçek** ihlal yakalanır | dışlama dedektörü öldürmedi |
+  Bunlardan biri silinirse ilgili gevşetme **kanıtsız** kalır — geri al ya da yeniden kanıtla.
+- ⭐ **SINIR MUTASYONU M3** (`_dolu_mu` hep `True`) korpusun en önemli vektörüdür: doluluk
+  zinciri sökülünce **A3 kırmızı** olmalı. Yeşil kalırsa tolerans doluluğu yemiş demektir.
+- **TOLERANSIN SINIRI ÖLÇÜLÜDÜR:** `_ARA = r"[^\n:]{0,24}"` — satır-sonu ve `:` dışlanır,
+  en fazla 24 karakter. Sınırsız `.*` iki AYRI alanın başlığını birbirine bağlar ve **alan
+  karışması** üretir. **A7** bu sınırı denetler ⇒ genişletmek isteyen A7'yi güncellemek
+  ZORUNDA (sessizce genişletilemez).
+- ⚠ **`check_itg_signoff`te İKİ DEĞER-ÇIKARMA BİÇİMİ var** (`_ALAN_BASLIK` = `Alan: değer`
+  satırı · `_ALAN_MD_BASLIK` = markdown bölüm başlığı). ⛔ Markdown biçiminde **başlık
+  satırının kendisi değere DAHİL EDİLMEZ** — edilseydi boş bir bölüm bile "dolu" görünürdü
+  ve doluluk denetimi **sessizce ölürdü**. A3 tam bunu ölçer.
+- ⚠ **Mutant GERÇEK `scripts/validators/` dizininde yaşar** (`_mutant_itg.py`, `finally`de
+  silinir) — B24 dersi: validator kendi yolundan komşu modülleri çözer; tempdir'e
+  kopyalanırsa import ölür ve HER mutasyon "yakalandı" görünür (SAHTE-KIRMIZI).
+- ⭐ **WALK-PRUNE SINIFINI ADA GÖRE ARAMA.** Aynı küme repoda **üç farklı adla** sekiz
+  validator'da yaşıyor: `_SKIP_SEGMENTS` ×4 · `_SKIP` ×1 · `_prune` ×3 (+ `behavior_manifest`
+  yerel `prune`). `rg _SKIP_SEGMENTS` sınıfın **yarısını ıskalar** — doğru arama
+  `rg "dirnames\[:\]"`. **B4** vektörü bu taramayı ad-bağımsız yapar ve yeni bir walk-pruner
+  eklenip `worktrees` unutulursa kırılır.
+  ⛔ Kümeleri TEK kümede birleştirme AYRI bir karardır: bilinçli olarak farklılar
+  (ui5 dar · fs_docstd `archive` taşır).
+- ⚠ **DOĞRULANAMADI:** worktree çiftlenmesi (ölçülmüş 87→174) bugün **canlı repro
+  edilemedi** — projede şu an **sıfır** worktree var. FP sentetik ağaçla yeniden üretildi
+  (B1) ve M4/M5 onu geri getirdi. Gerçek ortamda ilk worktree açıldığında sayının
+  tekilleştiği bir kez teyit edilmeli.
+- **Dokunulursa BİRLİKTE koşulacaklar:** `check_itg_signoff.py` → `itg_alan_dolulugu`
+  **VE** `gevsetme_pozitif_kontrol` (biri doluluğu, öteki toleransı ölçer; HARİTA ikisini
+  de bağlar). `check_fs_no_analysis_log.py` → `fs_docstd` (9 mutasyonuyla) **VE**
+  `gevsetme_pozitif_kontrol`.
