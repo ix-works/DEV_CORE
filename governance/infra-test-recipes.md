@@ -684,3 +684,55 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   eder / sahte client kullanır. İlk gerçek kullanımda doğrulanacak: ① uzun metinli CSV'de
   fail-closed'ın CSRF/LOCK/PUT'a **hiç gitmediği** ② `populate_*` kapanış notunun gerçek
   koşumda göründüğü ve komutun **çalıştığı** ③ `run_pretty_printer`'ın yeni metinleri.
+
+## B26 — PARTİ-2 "sahte yeşil" dörtlüsü (cds-derinlik · transport-sıfır · pre-commit · süit hijyeni)
+- Dört korpus (hepsi OZEL_TESTLER üyesi):
+  `python tests/fixtures/cds_curr_eksik_annotation/run.py`      → **9 senaryo + 5 mutasyon**, exit 0
+  `python tests/fixtures/transport_sifir_kaniti/run.py`         → **7 senaryo + 3 mutasyon**, exit 0
+  `python tests/fixtures/precommit_junction_failclosed/run.py`  → **4 senaryo + 2 mutasyon**, exit 0
+  `python tests/fixtures/suite_ortam_hijyeni/run.py`            → **5 senaryo + 3 mutasyon**, exit 0
+  Tam suite: `python tests/run_fixture_tests.py` → **134/134**.
+- ⭐ **İDEMPOTANS ARTIK KORPUS-DIŞI BİR ADIMDIR (elle koş, B22'nin açık kalemi buydu):**
+  süiti **arka arkaya İKİ KEZ** koş; ikisi de **134/134** vermeli. Ölçüldü 2026-08-20:
+  fix ÖNCESİ 130 → **129** (`conn_cift_anahtar` SAPMA), fix SONRASI 134 → **134**.
+  Korpusa konmadı çünkü iki tam koşum ≈ 6 dk; `suite_ortam_hijyeni` bunun yerine
+  hijyen fonksiyonlarını + AST kablolamasını ölçer.
+- ⚠ **KİRLİ ORTAM SONDASI:** repo kökünde koşumdan ÖNCE `.conn_adt` varsa süit artık
+  **görünür uyarı** basar. O uyarıyı gördüğünde sonucu KANIT SAYMA — `rm -f .conn_adt`
+  ile temiz ölçüm al. ⛔ Süit, koşum öncesi VAR OLAN dosyayı **SİLMEZ** (kullanıcınındır);
+  yalnız kendi ürettiğini siler. `suite_ortam_hijyeni` S4 tam bunu çivilliyor.
+- ⚠ **`cds_curr_eksik_annotation` MUTANTI GERÇEK `scripts/validators/` DİZİNİNDE yaşar**
+  (`_mutant_cds_curr.py`, finally'de silinir) — B24'ün dersi: validator kendi yolundan
+  `parents[1]` ile `utils.ddic_semantics`'i import eder; tempdir'e kopyalanırsa import
+  ÖLÜR ve HER mutasyon "yakalandı" görünür (SAHTE-KIRMIZI).
+- ⚠ **`transport_sifir_kaniti` iki tuzağı belgeler (ikisi de bu turda YAŞANDI):**
+  ① Mutasyon için TÜM modülü `exec` ETME — modül-seviyesi yan etkiler
+     `SAPConnectionError` fırlatır ve koşucu bunu *"mutasyon YAKALANDI"* sayar
+     (**çökme ≠ FAIL**; üç mutasyonun üçü de böyle sahte-yeşil verdi). Çözüm: AST ile
+     yalnız fonksiyon bloğunu ayıkla, **dekoratörü ATLA** (`@profil_tool` profil
+     çözümü `.conn_adt`ye gider), globals olarak gerçek modülün namespace'ini ver.
+  ② Sahte client stub'ı **fonksiyonun KENDİ globals'ına** uygulanmalı; yalnız
+     `query` modülüne uygulanırsa mutant globals KOPYASINDAKİ gerçek `_get_client`i
+     görür ve GERÇEK SAP bağlantısı dener.
+- ⚠ **`precommit_junction_failclosed` GERÇEK git deposu + GERÇEK kabuk kullanır:**
+  şablon `git rev-parse --show-toplevel` çağırır; sahte dizin sessizce BAŞKA bir ağacı
+  gösterirdi ("kod ≠ kablolama"nın kabuk yüzü). `sh` yoksa korpus **exit 1** verir
+  (sessiz geçme YOK).
+- ⭐ **Metin çapası İKİ KEZ daha yanıldı (Parti-1'deki dersin nüksü) — çapa AST'dir:**
+  `_alt_include_uyar(` ve `_ortam_hijyeni_bitir(` gibi adlar fonksiyonun kendi `def`
+  satırıyla eşleşir; ayrıca docstring'de TARİHÇE olarak alıntılanan çürütülmüş cümle
+  "hâlâ öğretiyor" sanılır. ⇒ Çürütülmüş cümle `query.py` docstring'inde **bilerek
+  yeniden yazılmıyor** ve kablolama soruları AST ile sorulur.
+- **Dokunulursa BİRLİKTE koşulacaklar:** `check_cds_currency_reference.py`'ye dokunan
+  tur **dört** korpus koşar: `cds_curr_satir_yorumu` (V1) · `cds_curr_kaynak_tipi` (V2,
+  `--mutasyon` dahil) · `populate_tables_unit_kind` (B-13, aynı sözlük) ·
+  `cds_curr_eksik_annotation` (derinlik). HARİTA dördünü de bağlar.
+- **GERÇEK-KORPUS REGRESYON REÇETESİ (①):** validator'ı `<source_root>` altındaki tüm
+  `*.cds` dosyalarına ESKİ ve YENİ sürümle koş, **rc dağılımını** karşılaştır.
+  Beklenen: rc dağılımı **DEĞİŞMEZ** (WARNING build'i durdurmaz), yalnız
+  `C-CDS-CUR/QUAN-05` satırları eklenir. Ölçüldü: 233 dosya · rc değişen **0** ·
+  yeni bulgu **46**.
+- ⚠ **DOĞRULANAMADI (canlı):** ② SAP'ye karşı koşulmadı. Sahte-sıfırın KÖK SEBEBİ
+  (araç hangi sorguyu koşuyor da `E070`'i ıskalıyor) **gateway'in canlı ölçümüdür**;
+  bu tur yalnız SÖZLEŞMEYİ düzeltti. ③ gerçek bir projede junction kırıp commit
+  denemesiyle bir kez teyit edilmeli (fixture sentetik depo kullanır).

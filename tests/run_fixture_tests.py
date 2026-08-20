@@ -113,6 +113,14 @@ OZEL_TESTLER = [
      "populate_* AKTIVE ETMIYOR ama sessizce exit 0: kapanis notu + uretici<->tuketici tip sozlesmesi"),
     ("cikti_iddiasi_durustlugu",
      "arac ciktisi kodunun YAPTIGINDAN FAZLASINI iddia etmez (pretty_printer 'applied to' + sync_pull alt-include)"),
+    ("cds_curr_eksik_annotation",
+     "DERINLIK: EKSIK @Semantics hic aranmiyordu (rc=0 bilgi tasimiyordu) + yesilin PAYDASI + WARNING siddeti"),
+    ("transport_sifir_kaniti",
+     "adt_transport_list 'count:0' KANIT DEGIL: uc-degerli zero_verified + curutulmus docstring kalkti"),
+    ("precommit_junction_failclosed",
+     "proje pre-commit sablonu: core/ cozulemezse SESSIZCE atlamaz, BLOKLAR (fail-open kapandi)"),
+    ("suite_ortam_hijyeni",
+     "suit kendi urettigi .conn_adt kalintisini temizler; kullanicininkine DOKUNMAZ (idempotans)"),
     ("paket_uzanti_kapsami", "paket naming + paket-siniri: .bdef/.srvd allow-list'te YOKTU (V2)"),
     ("itg_alan_dolulugu", "ITG S2: bos sablon + [x] BLOCKER gate'ini geciyordu (V3)"),
     ("gitignore_tam_satir", "core-sizinti kilidi: yorumlu/negatif satir 'kilit var' saniliyordu (V4)"),
@@ -210,8 +218,9 @@ TAM = "TAM"
 
 HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # ── koşucunun kendisi ───────────────────────────────────────────────────
-    ("tests/run_fixture_tests.py", (TAM, "O:b0_secim"),
-     "seçim mantığı burada yaşar; koşucu değişince kıyas tabanı TAM olmalı"),
+    ("tests/run_fixture_tests.py", (TAM, "O:b0_secim", "O:suite_ortam_hijyeni"),
+     "seçim mantığı burada yaşar; koşucu değişince kıyas tabanı TAM olmalı; ayrıca ORTAM "
+     "HİJYENİ (kendi ürettiği .conn_adt kalıntısı) bu dosyada yaşar"),
     ("tests/run_guard_fixture_tests.py", ("G",), "guard payload korpusunun koşucusu"),
     ("scripts/hooks/post_tool_failure.py", ("O:post_tool_failure_bash",),
      "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları)"),
@@ -255,10 +264,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
 
     # ── validator ailesi: kendi koşucusunu taşıyan korpuslar ────────────────
     ("scripts/validators/check_cds_currency_reference.py",
-     ("O:cds_curr_satir_yorumu", "O:cds_curr_kaynak_tipi", "O:populate_tables_unit_kind"),
+     ("O:cds_curr_satir_yorumu", "O:cds_curr_kaynak_tipi", "O:populate_tables_unit_kind",
+      "O:cds_curr_eksik_annotation"),
      "V1 korpusu bu validator'ı import eder; V2 korpusu CLI'yi subprocess ile koşup "
      "KAYNAK-TİPİ tespitini + çıkış-kodu sözleşmesini (0/1/2) ölçer; B-13 korpusu ise "
-     "ÜRETİCİ↔DENETÇİ mutabakatını ölçer (ikisi aynı DTEL sözlüğünü kullanır)"),
+     "ÜRETİCİ↔DENETÇİ mutabakatını ölçer (ikisi aynı DTEL sözlüğünü kullanır); "
+     "DERİNLİK korpusu EKSİK annotation'ı + yeşilin PAYDASINI + WARNING şiddetini ölçer"),
     ("scripts/populate_tables.py",
      ("O:populate_tables_unit_kind", "O:ddic_aktivasyon_notu"),
      "B-13/B-9/B-14: unit_kind kararı + CSV kolon sözleşmesi; ayrıca kapanış notunun "
@@ -281,6 +292,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "sınıf alt-include'ları ÇEKİLMEDİĞİ görünür olmalı; marker listesi source_drift'ten (tek kaynak)"),
     ("scripts/source_drift.py", ("O:cikti_iddiasi_durustlugu",),
      "`_CLASS_SUBSOURCE_MARKERS` TEK KAYNAK: sap_sync_pull uyarısı bu listeyi import eder"),
+    ("mcp_servers/sap_adt/tools/query.py",
+     ("O:transport_sifir_kaniti", "O:dogrulama_kosamadi"),
+     "`adt_transport_list` sıfır-kanıtı sözleşmesi (zero_verified/zero_notice) + docstring'in "
+     "çürütülmüş rehberliği taşımaması"),
+    ("claude/git-hooks/pre-commit.template", ("O:precommit_junction_failclosed",),
+     "`core/` çözülemezse validator adımı SESSİZCE atlanmaz — fail-closed + görünür mesaj"),
     ("scripts/utils/ddic_semantics.py",
      ("O:populate_tables_unit_kind", "O:cds_curr_satir_yorumu"),
      "DTEL sözlüğü TEK KAYNAK: hem üretici hem denetçi bu modülü import eder"),
@@ -821,7 +838,69 @@ def _argumanlari_coz(argv: list[str]) -> tuple[list[str] | None, bool]:
     return degisen, listele
 
 
+# ---------------------------------------------------------------------------
+# ORTAM HİJYENİ — süit KENDİ ÖLÇTÜĞÜ ORTAMI KİRLETİYORDU (2026-08-20 fix)
+# ---------------------------------------------------------------------------
+# ⛔ ÖLÇÜLMÜŞ MEKANİZMA: `populate_tables_unit_kind` korpusu `populate_tables.py`yi
+#    exec eder → o da `sap_adt_lib`i import eder → kütüphane repo KÖKÜNE yer-tutucu
+#    bir `.conn_adt` YAZAR. Dosya gitignored olduğu için `git status` TEMİZ görünür.
+#    İKİNCİ ardışık koşumda `conn_cift_anahtar`ın *"tier YOK → UNKNOWN"* vektörü o
+#    dosyadan `tier=DEV` okuyup FAIL verir. Bugün ölçüldü: 1. koşum 130/130,
+#    2. ardışık koşum 129/130 — kalıntı silinince yine 130/130. Süit İDEMPOTENT DEĞİLDİ.
+#
+# ⚠ Bugünkü yön "sahte FAIL" (gürültülü, fark edilir). Ama aynı kirlenme TERS yönde
+#    de çalışabilir: kalıntı BEKLENEN değeri sağlıyorsa, gerçekte kırık bir koruma
+#    YEŞİL görünür — ve yanılan test bir fail-closed TIER korumasının testidir (ADR 0010).
+#
+# ⛔ GEVŞETME DEĞİL: vektör kaldırılmadı, beklenen değer değiştirilmedi. Kirlilik
+#    giderildi, ölçüt AYNEN duruyor.
+_CONN = REPO / ".conn_adt"
+
+
+def _ortam_hijyeni_basla() -> bool:
+    """Koşum ÖNCESİ `.conn_adt` durumunu ölç. True = kalıntı ZATEN vardı.
+
+    Vardıysa SESSİZ KALMAZ: o dosya tier vektörlerinin okuduğu girdidir; sessizce
+    okumak "temiz ağaç" yanılsaması verir (dosya gitignored).
+    """
+    if _CONN.exists():
+        print("⚠ KİRLİ ORTAM: repo kökünde `.conn_adt` ZATEN VAR "
+              f"({_CONN.stat().st_size} B).")
+        print("  Bu dosya tier vektörlerinin GİRDİSİDİR; sonuç yanıltıcı olabilir "
+              "(gitignored ⇒ `git status` temiz gösterir).")
+        print("  Temiz ölçüm için: `rm -f .conn_adt` sonra süiti yeniden koş.\n")
+        return True
+    return False
+
+
+def _ortam_hijyeni_bitir(vardi: bool) -> None:
+    """Koşum SONRASI: süitin KENDİ yarattığı kalıntıyı temizle (try/finally'den çağrılır).
+
+    Yalnız BİZ yarattıysak sileriz — koşumdan önce var olan bir dosya kullanıcınındır,
+    ona DOKUNULMAZ (yoksa gerçek bir `.conn_adt`i sessizce silmiş oluruz).
+    """
+    if vardi or not _CONN.exists():
+        return
+    try:
+        boyut = _CONN.stat().st_size
+        _CONN.unlink()
+        print(f"\n[hijyen] süitin ürettiği `.conn_adt` ({boyut} B) SİLİNDİ — "
+              f"ikinci ardışık koşum artık aynı sonucu verir (idempotent).")
+    except OSError as exc:
+        print(f"\n⚠ [hijyen] süitin ürettiği `.conn_adt` SİLİNEMEDİ ({exc}). "
+              f"Bir sonraki koşumdan ÖNCE elle sil — yoksa tier vektörü sahte FAIL verir.")
+
+
 def main(argv: list[str] | None = None) -> int:
+    kirli_basladi = _ortam_hijyeni_basla()
+    try:
+        return _main(argv)
+    finally:
+        # try/finally: çökmede de temizlenir (yarım koşum kalıntı bırakmasın).
+        _ortam_hijyeni_bitir(kirli_basladi)
+
+
+def _main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:]) if argv is None else list(argv)
     degisen, listele = _argumanlari_coz(argv)
 
