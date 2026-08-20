@@ -25,6 +25,11 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
 from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12: kaynak-klasor adi config'ten
+# K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
+# ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
+from utils.kapsam import Kapsam  # noqa: E402
+
+KAPSAM = Kapsam('.clas/.intf.abap')   # K1: taranan dosya sayaci
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -73,7 +78,7 @@ def main():
             [p for p in (root / SOURCE_ROOT_NAME).rglob("*.abap") if not p.name.endswith(".clas.abap")]
 
     total = 0
-    for f in files:
+    for f in KAPSAM.say(files):
         try:
             txt = f.read_text(encoding="utf-8", errors="replace")
         except Exception:
@@ -88,7 +93,7 @@ def main():
         print(f"\n{total} ihlal — source-based class method-param'da TYPE c LENGTH n save-scan'i "
               f"kırar (satırsız 400). TYPE string / DDIC element kullan.")
         return 1
-    print("[OK] method-param TYPE c LENGTH ihlali yok.")
+    print("[OK] method-param TYPE c LENGTH ihlali yok." + KAPSAM.ek())
     return 0
 
 

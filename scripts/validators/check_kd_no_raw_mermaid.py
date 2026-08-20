@@ -24,6 +24,11 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from utils.project_config import project_root
+# K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
+# ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
+from utils.kapsam import Kapsam  # noqa: E402
+
+KAPSAM = Kapsam('KD .html')   # K1: taranan dosya sayaci
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -54,7 +59,7 @@ def _iter_kd_html():
 
 def _scan():
     findings = []  # (file, lineno, snippet)
-    for f in _iter_kd_html():
+    for f in KAPSAM.say(_iter_kd_html()):
         try:
             lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
         except Exception:
@@ -68,7 +73,8 @@ def _scan():
 def main() -> int:
     findings = _scan()
     if not findings:
-        print("KD ham-mermaid kontrolü: temiz (render edilmemiş diyagram-kaynağı yok).")
+        print("KD ham-mermaid kontrolü: temiz (render edilmemiş diyagram-kaynağı yok)."
+              + KAPSAM.ek())
         return 0
     for f, ln, snippet in findings:
         rel = f.relative_to(REPO)

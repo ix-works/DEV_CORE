@@ -42,6 +42,11 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
 from utils.project_config import project_root, source_dir  # K12: kaynak-klasor adi config'ten
+# K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
+# ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
+from utils.kapsam import Kapsam  # noqa: E402
+
+KAPSAM = Kapsam('.clas.abap')   # K1: taranan dosya sayaci
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -77,7 +82,7 @@ def _has_amdp(text: str) -> bool:
 
 def _scan(tek_dosya=None):
     findings = []  # (file, lineno, text)
-    for f in ([Path(tek_dosya)] if tek_dosya else _iter_files()):
+    for f in KAPSAM.say([Path(tek_dosya)] if tek_dosya else _iter_files()):
         try:
             text = f.read_text(encoding="utf-8", errors="replace")
         except Exception:
@@ -104,7 +109,8 @@ def main() -> int:
 
     findings = _scan(args.path)
     if not findings:
-        print("AMDP yorum-apostrof (BE-28c): temiz (SQLScript `--` yorumlarında apostrof yok).")
+        print("AMDP yorum-apostrof (BE-28c): temiz (SQLScript `--` yorumlarında apostrof yok)."
+              + KAPSAM.ek())
         return 0
 
     for f, ln, text in findings:

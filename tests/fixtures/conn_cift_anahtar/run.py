@@ -54,6 +54,17 @@ def _dene(ad: str, icerik: str, beklenen_tier: str) -> tuple:
     d = Path(tempfile.mkdtemp(prefix="conn_fx_"))
     (d / ".conn_adt").write_text(icerik, encoding="utf-8")
     os.environ.pop("ADT_SAP_TIER", None)
+    # ⛔ K4 SINIFI, IKINCI UYE (2026-08-20 olculdu): asagidaki `sal.get_conn_path`
+    #    yonlendirmesi GEC KALIR. `import sap_adt_lib` IMPORT ANINDA
+    #    `find_conn_file()` + `load_dotenv()` kosar; repo KOKUNDE bir `.conn_adt`
+    #    varsa oradaki `ADT_SAP_TIER=DEV` os.environ'a YAZILIR ve yonlendirme
+    #    kurulmadan once tier ZATEN kirlenmis olur. Sonuc: "tier YOK -> UNKNOWN"
+    #    vektoru DEV okur ve SAHTE FAIL verir.
+    #    ⚠ Suit kosum ORTASINDA repo koküne bir `.conn_adt` yaziyor (olculdu:
+    #    kosumun ~39. saniyesi, 1087 B) ⇒ bu fixture ONCE kosarsa gecer, SONRA
+    #    kosarsa duser: kaynagi belirsiz, ARALIKLI bir kirmizi.
+    #    Cozum: import-anindaki kok cozumlemesini de KUMA yonlendir.
+    os.environ["CLAUDE_PROJECT_DIR"] = str(d)
 
     # Modulu TAZE yukle: `get_active_tier` cache'li ve `get_conn_path` modul-duzeyinde
     # cozulur. Yonlendirme yapilmazsa GERCEK proje dosyasi okunur ve fixture hicbir sey

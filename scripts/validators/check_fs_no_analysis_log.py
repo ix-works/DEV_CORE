@@ -1,5 +1,5 @@
 """
-check_fs_no_analysis_log.py — FS gövdesine "analiz günlüğü" sızması kontrolü (DOC-FS-05/06, İLKE-2b).
+check_fs_no_analysis_log.py — FS gövdesine "analiz günlüğü" sızması kontrolü (DOC-FS-05/06a, İLKE-2b).
 
 Neden: Çok sürümlü bir FS'te her tur "v1.x'te şu değişti", "(doc-gate H-C netleşme)", "DEV'de canlı
 ölçüldü — ilk turda alan adı yanlıştı, 400 döndü", "kullanıcı: '…'" gibi izler GÖVDEYE yazılınca
@@ -10,7 +10,9 @@ analiz süreci (RESEARCH/notlar). Bu gate katman-1'e sızmayı SAYAR.
 
 Kapsam: proje `**/docs/FS-*.md` ve `**/docs/EK-*.md` (FS ekleri; H1'i "Karar ve Kanıt Günlüğü" olan EK = katman-2, tamamı atlanır). Gövde = §1.1 versiyon geçmişi
 tablosu, 11-A/11-B bölümleri ve başlığında "Karar" + ("Günlü"|"Açık"|"Öneri") geçen bölümler
-(katman-2 alanı) HARİÇ kalan her şey. §1.1 için ayrıca satır-uzunluğu eşiği (DOC-FS-06).
+(katman-2 alanı) HARİÇ kalan her şey. §1.1 için ayrıca satır-uzunluğu eşiği (DOC-FS-06a).
+⛔ DOC-FS-06b (11-B birikmemesi + yayılım tablosunun tamlığı) bu gate'in kapsamında DEĞİLDİR —
+o anlam yargısıdır, reviewer bakar; buradaki sessizlik onun hakkında hiçbir şey söylemez.
 
 Sayılan işaretler (satır bazında, sınıf sınıf raporlanır):
   A sürüm-etiketi   : v1.5 / v1.5-taslak / "(YENİ, ...)" / "eklendi|revize edildi|düzeltildi" + sürüm
@@ -36,7 +38,14 @@ post_validate hook'udur → `--bulguda-exit1`. ÖLÇÜLEMEDİ (okunamayan dosya)
 Kullanım: python scripts/validators/check_fs_no_analysis_log.py [--bulguda-exit1] [--selftest] [--max-examples N] [--file YOL]
 Kablolama: run_all_validators (PROJE, pre-commit — warn-first, çıktı görünür ama FAIL etmez) + hooks/post_validate.py `doc-fs` sınıfı (FS/TS/KD/EK md düzenlenince o dosya için `--file --bulguda-exit1`; bulgu → yazara stderr özeti + OKU-işaretçisi, exit 2 = geri besleme). Kalıcı korpus: tests/fixtures/fs_docstd (38 vektör, 9 mutasyon).
 """
-# ENFORCES: DOC-FS-05, DOC-FS-06  (ADR 0019 coverage binding)
+# ENFORCES: DOC-FS-05, DOC-FS-06a  (ADR 0019 coverage binding)
+# GATE-SEVERITY: advisory  (warn-first — default exit 0; bkz. aşağıdaki exit sözleşmesi)
+#
+# ⚠ DOC-FS-06 → 06a/06b BÖLÜNMESİ (2026-08-20, kullanıcı kararı "BÖL"): tek ID İKİ farklı
+# zorlama seviyesi taşıyordu — §1.1 satır UZUNLUĞU mekanik/gate'liydi, "11-B birikmemiş +
+# yayılım tablosu tam" ise REVIEWER yargısıdır (script'i yoktur, olamaz). "DOC-FS-06 FAIL"
+# diyen bir bulguda okuyucu hangi yarımın kırıldığını KODDAN çıkarmak zorunda kalıyordu.
+# Bu gate YALNIZ 06a'yı ölçer (uzunluk); 06b checklist'te reviewer kalemi olarak yaşar.
 import os
 import re
 import sys
@@ -365,7 +374,7 @@ def main() -> int:
         print(f"Özet: {okunamadi} doküman OKUNAMADI (ölçüm eksik) — exit 2.")
         return 2
     if total == 0:
-        print(f"FS analiz-günlüğü kontrolü (DOC-FS-05/06): temiz — {n_docs} FS/EK dokümanı, gövdede işaret yok.")
+        print(f"FS analiz-günlüğü kontrolü (DOC-FS-05/06a): temiz — {n_docs} FS/EK dokümanı, gövdede işaret yok.")
         return 0
     print()
     print(f"Özet: {total} işaretli satır ({n_docs} doküman). Kural: gövde = kapanmış hedef durum; sürüm etiketi/"

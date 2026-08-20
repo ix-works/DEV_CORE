@@ -184,6 +184,51 @@ def _parse_fail_notu() -> None:
         pass
 
 
+# ── K8① (2026-08-20): Bash ile yapılan DÜZENLEME de bir düzenlemedir ──────────
+# Bu hook'un TÜM nudge'ları `tool_input.file_path`e bakıyordu. `sed -i`, heredoc,
+# `> dosya` gibi Bash düzenlemelerinde o anahtar YOKTUR ⇒ nudge HİÇ ateşlemez
+# (post_tool_failure 2026-08-14 sınıfının aynısı: araç değişti, tetik değişmedi).
+#
+# ⚠ SINIR-NOTU — bu kod TEK BAŞINA ÖLÜDÜR: hook `settings.template.json`'da
+#    `matcher: "Edit|Write|MultiEdit"` ile kayıtlıdır; `Bash` eklenmedikçe hook
+#    Bash çağrılarında ÇAĞRILMAZ. Matcher META-İNFRA'dır (bu turun kapsamı dışı)
+#    ⇒ RAPORLANDI, kurulmadı. Aşağısı kablolama gelince ÇALIŞIR hâlde bekler ve
+#    korpusla ölçülür (payload doğrudan hook'a verilerek).
+#
+# ⛔ TUTUCU OLMAK ZORUNDA: yanlış çıkarılan yol = her Bash komutunda gürültü =
+#    ölü hook (alarm yorgunluğu). Bu yüzden YALNIZ yazma deyimleri taranır;
+#    okuma (`cat`, `grep`, `head`) ASLA yol üretmez.
+_BASH_YAZMA = (
+    re.compile(r">>?\s*(?P<y>'[^']+'|\"[^\"]+\"|[^\s|;&<>]+)"),          # > dosya / >> dosya
+    re.compile(r"\btee\s+(?:-a\s+)?(?P<y>'[^']+'|\"[^\"]+\"|[^\s|;&<>]+)"),
+    re.compile(r"\bsed\s+(?:-[a-zA-Z]*i[a-zA-Z]*\S*\s+)(?:-e\s+\S+\s+|'[^']*'\s+|\"[^\"]*\"\s+)*"
+               r"(?P<y>'[^']+'|\"[^\"]+\"|[^\s|;&<>]+)"),                 # sed -i ... dosya
+    re.compile(r"\btouch\s+(?P<y>'[^']+'|\"[^\"]+\"|[^\s|;&<>]+)"),
+)
+
+
+def _bash_duzenlenen_yol(tool_input: dict) -> str:
+    """Bash komutundan DÜZENLENEN dosya yolunu çıkar; emin değilse BOŞ döner.
+
+    Boş dönmek güvenli taraftır: nudge ateşlemez (bugünkü davranış). Yanlış bir yol
+    döndürmek ise her komutta yanlış hatırlatma üretir — o yüzden tahmin YOK.
+    """
+    komut = tool_input.get("command") or ""
+    if not isinstance(komut, str) or not komut.strip():
+        return ""
+    for kalip in _BASH_YAZMA:
+        m = kalip.search(komut)
+        if not m:
+            continue
+        y = m.group("y").strip("'\"")
+        # `/dev/null`, `&1` gibi hedefler dosya DEĞİLDİR; uzantısız hedefe de girmeyiz
+        # (nudge'ların hepsi uzantıya bakar — uzantısızı taşımanın faydası yok).
+        if y.startswith(("/dev/", "&")) or "." not in Path(y).name:
+            continue
+        return y
+    return ""
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
@@ -193,6 +238,8 @@ def main() -> int:
 
     tool_input = data.get("tool_input", {}) or {}
     path = tool_input.get("file_path") or tool_input.get("path") or ""
+    if not path and (data.get("tool_name") or "") == "Bash":
+        path = _bash_duzenlenen_yol(tool_input)
     if not path:
         return 0
 
@@ -250,7 +297,7 @@ def main() -> int:
                      "--file", path, "--bulguda-exit1", "--max-examples", "2"],
                     cwd=str(REPO), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
                 if res.returncode == 1 and (res.stdout or "").strip():
-                    lines.append("[hook:post_validate] UYARI (warn-first, DOC-FS-05/06 — İLKE-2b): gövdede analiz-günlüğü izi var — "
+                    lines.append("[hook:post_validate] UYARI (warn-first, DOC-FS-05/06a — İLKE-2b): gövdede analiz-günlüğü izi var — "
                                  "sürüm etiketi/gate-ID/\"canlı ölçüldü\"/kullanıcı alıntısı → EK 'Karar ve Kanıt Günlüğü'ne taşı; "
                                  "§1.1 satırı 1-2 satır. Onaya çıkmadan temizle:\n" + (res.stdout or "")[-900:])
                 elif res.returncode not in (0, 1):

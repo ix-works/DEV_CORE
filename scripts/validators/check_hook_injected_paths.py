@@ -47,6 +47,29 @@ ORNEK_PROMPTLAR = [
 HOOKLAR = ("skill_injector", "intake_triage")
 YOL_DESENI = re.compile(r"[\w/\-.]+\.md")
 
+# ── K8② (2026-08-20): STDERR nudge'ları da ENJEKSİYONDUR ─────────────────────
+# Gate yalnız `additionalContext` üreten (UserPromptSubmit) hook'ları yokluyordu.
+# Ama `post_validate` gibi PostToolUse hook'ları yolu **stderr**e yazar ve o metin
+# de ajana geri beslenir (exit 2). Yani AYNI kırılma orada da olur — C-HOOK-01
+# onu GÖRMÜYORDU. (Ölçüldü 2026-08-17: iki nudge'da çıplak `playbook/…` vardı.)
+#
+# ⚠ KAPSAM GENİŞLEMESİ (ADR 0019) — ÖLÇÜLDÜ, sertleştirme riski YOK:
+#    bugünkü taban 4 yol / 0 kırık. Yani gate ne ÖLÜ (4 yol görüyor) ne de
+#    GEÇİLEMEZ (0 ihlal). Taban 0 olduğu için mevcut HARD şiddeti korunur.
+#
+# ⚠ DETERMİNİZM: doc-fs nudge'ı bir "OKU-işaretçisi" (dedup marker) tutar; marker
+#    varsa nudge SUSAR. Gerçek proje kökünde yoklarsak sonuç GÜNE göre değişir
+#    (bugün 4 yol, yarın 0) ⇒ gate sessizce boşalır. Bu yüzden stderr sondası
+#    HER KOŞUMDA TEMİZ bir sandbox kökü kullanır: marker asla önceden var olmaz.
+STDERR_HOOKLAR = ("post_validate",)
+
+# (etiket, göreli-yol) — nudge desenlerini tetikleyen temsili düzenlemeler.
+STDERR_PAYLOADLARI = (
+    ("KD dokümanı", "docs/KD-ORNEK.md"),
+    ("FS dokümanı", "docs/ZORNEK-FS-v1.0.md"),
+    ("infra validator", "core/scripts/validators/check_ornek.py"),
+)
+
 
 def _hook_ciktisi(hook: str, prompt: str) -> str:
     shim = PROJ / "scripts" / "hook_shim.py"
@@ -61,6 +84,36 @@ def _hook_ciktisi(hook: str, prompt: str) -> str:
         return json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
     except Exception:
         return ""
+
+
+def _stderr_ciktisi(hook: str, rel_yol: str) -> str:
+    """PostToolUse hook'unu TEMIZ bir sandbox kokUyle kos, stderr'i dondur.
+
+    Sandbox SART: nudge'larin dedup marker'i gercek proje kokUnde ZATEN VAR olabilir
+    -> nudge susar -> gate "hic yol yok" deyip SESSIZCE bosalir (kendini kapatan gate).
+    Temiz kok her kosumda ayni sonucu verir (idempotans).
+    """
+    import shutil
+    import tempfile
+
+    kum = Path(tempfile.mkdtemp(prefix="chip_"))
+    try:
+        (kum / "project.yaml").write_text(
+            "sap_profile: s4_private\nsource_root: SOURCE_CODES\nmaster_language: TR\n",
+            encoding="utf-8")
+        hedef = kum / rel_yol
+        hedef.parent.mkdir(parents=True, exist_ok=True)
+        hedef.write_text("# ornek\n", encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, str(CORE / "scripts" / "hooks" / f"{hook}.py")],
+            input=json.dumps({"tool_name": "Edit", "tool_input": {"file_path": str(hedef)}}),
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600,
+            env=dict(os.environ, CLAUDE_PROJECT_DIR=str(kum), PYTHONIOENCODING="utf-8"))
+        return r.stderr or ""
+    except Exception:
+        return ""
+    finally:
+        shutil.rmtree(kum, ignore_errors=True)
 
 
 def main() -> int:
@@ -81,6 +134,12 @@ def main() -> int:
     with ThreadPoolExecutor(max_workers=min(8, len(isler))) as havuz:
         gelecekler = [havuz.submit(_hook_ciktisi, hook, p) for hook, p in isler]
         ciktilar = [(hook, p, f.result()) for (hook, p), f in zip(isler, gelecekler)]
+
+    # K8②: stderr nudge'lari (PostToolUse) — ayni C-HOOK-01 degismezi orada da gecerli
+    for _hook in STDERR_HOOKLAR:
+        for _etiket, _rel in STDERR_PAYLOADLARI:
+            ciktilar.append((f"{_hook}(stderr:{_etiket})", _rel,
+                             _stderr_ciktisi(_hook, _rel)))
 
     for hook, p, metin in ciktilar:
         if not metin:

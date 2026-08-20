@@ -43,6 +43,11 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
 from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12
+# K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
+# ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
+from utils.kapsam import Kapsam  # noqa: E402
+
+KAPSAM = Kapsam('.cds/.srvd')   # K1: taranan dosya sayaci
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -113,7 +118,7 @@ def main():
             files += [Path(_r) / f for f in _fs if f.lower().endswith((".cds", ".srvd"))]
 
     toplam = 0
-    for f in files:
+    for f in KAPSAM.say(files):
         sfx = f.suffix.lower()
         if sfx not in (".cds", ".srvd"):
             continue
@@ -133,7 +138,7 @@ def main():
               f"'[OK] activated' mesaji BUNU GORMEZ. Kanit = readback esitligi.")
         return 1
 
-    print("CDS/SRVD yorum sozdizimi: temiz.")
+    print("CDS/SRVD yorum sozdizimi: temiz." + KAPSAM.ek())
     return 0
 
 

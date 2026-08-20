@@ -3,7 +3,7 @@
 """FIXTURE — FS doküman-standardı üçlüsü (2026-08-17, infra-expert F1-F5 turu).
 
 KAPSAM (üç artefakt, tek korpus — üçü aynı kuralı üç yüzeyde uygular):
-  ① `scripts/validators/check_fs_no_analysis_log.py`  — DOC-FS-05/06 sayacı (warn-first)
+  ① `scripts/validators/check_fs_no_analysis_log.py`  — DOC-FS-05/06a sayacı (warn-first)
   ② `scripts/hooks/post_validate.py` `doc-fs` dalı    — edit-anı OKU-işaretçisi + özet
   ③ `scripts/doc_equivalence_check.py`                — DOC-FS-07 veri-kaybı ölçümü
 

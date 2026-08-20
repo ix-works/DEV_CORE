@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import os
 import re
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -53,7 +54,11 @@ VALIDATORS_DIR = HERE.parent / "scripts" / "validators"
 
 # G1/T3.6 ilk-10: hepsi CLAUDE_PROJECT_DIR + argumansiz repo-geneli tarama modunu
 # destekler (proje_root()/source_dir() -> env). ATLANDI: check_rap_byassoc_keys_only
-# (kod her zaman `return 0` -- SOFT, fixture'la FAIL uretilemez) ve check_console_utf8
+# (bolum-1 bad/good kalibi ARGUMANSIZ kosar; bu gate ADVISORY'dir -> default exit 0, `bad`
+# dizini FAIL uretemez. 2026-08-20'den beri fixture'LANABILIR: opt-in `--bulguda-exit1`
+# bayragi eklendi ve korpus `O:byassoc_advisory` olarak bolum-1 DISINDA kosuyor -- bayragi
+# gecirebilmek icin kendi run.py'si var. Eski not "SOFT, fixture'la FAIL uretilemez"
+# diyordu; artik uretilebilir, yalniz bolum-1 kalibina girmiyor) ve check_console_utf8
 # (CORE = Path(__file__).resolve().parents[2] hard-code -- kendi scripts/ agacini tarar,
 # CLAUDE_PROJECT_DIR/cwd'den BAGIMSIZ -- fixture ile izole edilemez).
 VALIDATORS = [
@@ -127,6 +132,38 @@ OZEL_TESTLER = [
      "behavior_manifest I-1 cerrahi onay (--only) + I-2 worktree/CRLF sahte pozitifi (pozitif kontrollu)"),
     ("gevsetme_pozitif_kontrol",
      "PARTI-3 iki gevsetme: itg_signoff BICIM toleransi + worktree dislama — her biri POZITIF KONTROLLU"),
+    ("byassoc_advisory",
+     "K5: advisory gate sozlesmesi (default exit 0 KORUNUR) + opt-in `--bulguda-exit1` + "
+     "`--strict` kazara-terfi yasagi + coverage `B bloklayici · A advisory` ozeti"),
+    # 2026-08-20 PARTI-4 (K3): yabanci-proje on-taramasi JSON'u REGEX ile okuyordu ->
+    # kacisli hook komutu raporda KESIK (guvenlik korlugu; arac bir ONAY kararini besler).
+    ("yabanci_proje_json_kacisi",
+     "foreign_project_audit: JSON kacisi komutu KESIYORDU; parse-fail SESSIZ degil GORUNUR"),
+    # 2026-08-20 PARTI-4 (K1): 12 validator (6'si HARD) 0 dosya tarayip "temiz" diyordu —
+    # "ihlal yok" ile "bakacak dosya yok" ayirt edilemiyordu. Ortak payda sozlesmesi.
+    # ⛔ X1/M3 SILINEMEZ: bu bir gate sertlestirmesi DEGIL (0 dosya FAIL uretmez).
+    ("validator_kapsam_paydasi",
+     "validator ailesi: taranan DOSYA SAYISI (payda) gorunur; 0 dosya SESSIZ gecmez, FAIL de degil"),
+    # 2026-08-20 PARTI-4 (K2): C-ENC-01 gate'inin kokU `parents[2]`e civiliydi ->
+    # sentetik agaca yoneltilemiyordu, yani YAKALAMA GUCU hic olculmemisti.
+    ("console_utf8_kok_izolasyonu",
+     "check_console_utf8: kok enjekte edilebilir (--kok/IX_CORE_ROOT); VARSAYILAN core kalir"),
+    # 2026-08-20 PARTI-4 (K4): conn fixture'i KUM DISINA yaziyordu — kalinti degil
+    # VERI KAYBI (78 B gercek .conn_adt -> 522 B sentetik TEST_USER ile EZILDI; repro).
+    ("conn_kum_sizintisi",
+     "conn fixture izolasyonu: yazmadan ONCE hedef kumda mi + suit EZILMEYI bildirir (2 katman)"),
+    # 2026-08-20 PARTI-4 (K6): _ACTIVATION_URI_SEG + profil fail-closed'in tek kaniti
+    # CANLI kosumdu -> CI'da hic olculmuyordu. Ikisi de saf mantik: offline olculur.
+    ("mcp_profil_aktivasyon_offline",
+     "SAP'siz: _activation_uri sozlesmesi + profil fail-closed cebiri + register KABLOLAMASI"),
+    # 2026-08-20 PARTI-4 (K7): ui-smoke CI'da HIC kosmuyordu -> lockout-safe on-dogrulama
+    # (401'de DUR) hic olculmuyordu. Sahte http.server + PATH'e konan sahte `npx` izi.
+    ("ui_smoke_sapsiz",
+     "run_ui_smoke: 401->DUR + playwright KOSMAZ (iz dosyasiyla olculur); TAM 1 istek"),
+    # 2026-08-20 PARTI-4 (K8-1/2): Bash duzenlemesi nudge'i tetiklemiyordu (arac degisti,
+    # tetik degismedi) + C-HOOK-01 stderr nudge'larini GORMUYORDU (kapsam 4->8 yol, kirik 0).
+    ("hook_bash_ve_stderr_kapsami",
+     "post_validate Bash tetigi (matcher META-INFRA: RAPORLANDI) + C-HOOK-01 stderr kapsami"),
     ("paket_uzanti_kapsami", "paket naming + paket-siniri: .bdef/.srvd allow-list'te YOKTU (V2)"),
     ("itg_alan_dolulugu", "ITG S2: bos sablon + [x] BLOCKER gate'ini geciyordu (V3)"),
     ("gitignore_tam_satir", "core-sizinti kilidi: yorumlu/negatif satir 'kilit var' saniliyordu (V4)"),
@@ -179,7 +216,7 @@ OZEL_TESTLER = [
     # (belgenin kendi kimlik satiri / mesru hata kodu / katman-2 dosyasi). FP capalari
     # olculmus bir vakadan gelir: gate ilk halinde 21 dokumanin 16'sini kirli gosteriyordu.
     ("fs_docstd",
-     "DOC-FS-05/06/07 uclusu: yakalama + FP capalari + hook kablolamasi + komsu dal regresyonu"),
+     "DOC-FS-05/06a/07 uclusu: yakalama + FP capalari + hook kablolamasi + komsu dal regresyonu"),
     # 2026-08-18: paylasilan ABAP uretecinin imzasi <-> kilavuzu. Iki yon ayni korpusta:
     # YAKALAMA (EKSIK/HAYALET/OLCULEMEDI) ve SESSIZLIK (blok DISI API token'lari, markdown
     # bicim varyantlari, farkli imza sekilleri). "Bakamadim" ile "temiz" AYRI exit'e duser.
@@ -224,43 +261,66 @@ TAM = "TAM"
 
 HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # ── koşucunun kendisi ───────────────────────────────────────────────────
-    ("tests/run_fixture_tests.py", (TAM, "O:b0_secim", "O:suite_ortam_hijyeni"),
+    ("tests/run_fixture_tests.py", (TAM, "O:b0_secim", "O:suite_ortam_hijyeni",
+     "O:conn_kum_sizintisi"),
      "seçim mantığı burada yaşar; koşucu değişince kıyas tabanı TAM olmalı; ayrıca ORTAM "
      "HİJYENİ (kendi ürettiği .conn_adt kalıntısı) bu dosyada yaşar"),
     ("tests/run_guard_fixture_tests.py", ("G",), "guard payload korpusunun koşucusu"),
     ("scripts/hooks/post_tool_failure.py", ("O:post_tool_failure_bash",),
      "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları)"),
-    ("scripts/hooks/post_validate.py", ("O:fs_docstd", "O:negatif_test_harness"),
+    ("scripts/validators/check_hook_injected_paths.py", ("O:hook_bash_ve_stderr_kapsami",),
+     "C-HOOK-01 kapsami: additionalContext + STDERR nudge'lari (POZITIF KONTROL M4)"),
+    ("scripts/hooks/post_validate.py", ("O:fs_docstd", "O:negatif_test_harness",
+                                        "O:hook_bash_ve_stderr_kapsami"),
      "doc-fs dalı (OKU-işaretçisi + gate özeti) + komşu dalların regresyonu + parse-fail sözleşmesi"),
     ("scripts/hooks/watchdog_launch.py",
      ("O:prior_art_kb01", "O:negatif_test_harness", "O:sablon_zorunlu_maddeler"),
      "KB-01 prior-art ekseni + brifing-lint regresyonu + parse-fail sözleşmesi + "
      "ENGELLENİRSEN ekseni (dar tutuldu: ölçülmüş %18,4 kapsam / %16,0 ateşleme; "
      "ham 'madde var mı' %86,7 ateşleyip uyarı körlüğü üretirdi)"),
+    ("scripts/foreign_project_audit.py", ("O:yabanci_proje_json_kacisi",),
+     "hook/MCP komut ayiklamasi: JSON kacisi + liste ogeleri + parse-fail gorunurlugu"),
+    ("scripts/utils/kapsam.py", ("O:validator_kapsam_paydasi",),
+     "12 validator'un ORTAK payda sozlesmesi; SINIR: 0 dosya FAIL URETMEZ (X1/M3)"),
+    ("scripts/validators/check_console_utf8.py", ("O:console_utf8_kok_izolasyonu",),
+     "kok cozumlemesi (--kok > IX_CORE_ROOT > __file__); SINIR: varsayilan PROJE kokune KAYMAZ"),
+    ("tests/fixtures/conn_yazici_encoding/run.py", ("O:conn_kum_sizintisi",),
+     "bu fixture .conn_adt YAZAR: kum izolasyonu + KUM-DISI capasi burada yasar"),
+    ("mcp_servers/sap_adt/_profile.py", ("O:mcp_profil_aktivasyon_offline",),
+     "fail-closed cebiri (profil None/enum-disi -> hicbir tool) offline olculur"),
+    ("scripts/ui-smoke/run_ui_smoke.py", ("O:conn_adt_proje_koku", "O:ui_smoke_sapsiz"),
+     "proje-kokU cozumlemesi + lockout-safe on-dogrulama (SAP'siz sahte sunucu)"),
     ("scripts/validators/check_abaplint.py", ("O:abaplint_failopen",),
      "fail-open kilidi: 'ölçemedim' ile 'temiz' AYNI çıkışa düşmemeli (özet satırı zorunlu kanıt)"),
     ("scripts/abaplint/abaplint.json", ("O:abaplint_failopen",),
      "config kapsamı değişirse 'M file(s) analyzed' ölçütü de etkilenir"),
 
     # ── bölüm-1 validator bad/good çiftleri ─────────────────────────────────
-    ("scripts/validators/check_bdef_backtick.py", ("V:check_bdef_backtick",), "G1 çifti"),
+    ("scripts/validators/check_audit_fields_autofill.py", ("O:validator_kapsam_paydasi",),
+     "K1 ortak payda sözleşmesi bu dosyada kablolu (taranan dosya sayısı)"),
+    ("scripts/validators/check_rap_byassoc_keys_only.py",
+     ("O:validator_kapsam_paydasi", "O:byassoc_advisory"),
+     "K1 ortak payda sözleşmesi + advisory/opt-in exit sözleşmesi bu dosyada kablolu"),
+    ("scripts/validators/check_rule_gate_coverage.py", ("O:byassoc_advisory",),
+     "GATE-SEVERITY okuması + `N iddia (B bloklayıcı · A advisory)` özeti burada"),
+    ("scripts/validators/check_bdef_backtick.py", ("V:check_bdef_backtick", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_cds_srvd_comment_syntax.py",
-     ("V:check_cds_srvd_comment_syntax",), "G1 çifti"),
-    ("scripts/validators/check_list_view_grid.py", ("V:check_list_view_grid",), "G1 çifti"),
+     ("V:check_cds_srvd_comment_syntax", "O:validator_kapsam_paydasi",), "G1 çifti"),
+    ("scripts/validators/check_list_view_grid.py", ("V:check_list_view_grid", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_ui5_freestyle_traps.py",
-     ("V:check_ui5_freestyle_traps", "O:ui5_t1_tirnak_sinifi"),
+     ("V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi", "O:ui5_t1_tirnak_sinifi"),
      "G1 çifti + T1 tırnak-sınıfı korpusu aynı validator'ı ölçer"),
     ("scripts/validators/check_filter_search_pattern.py",
-     ("V:check_filter_search_pattern",), "G1 çifti"),
-    ("scripts/validators/check_decimal_write_to.py", ("V:check_decimal_write_to",), "G1 çifti"),
+     ("V:check_filter_search_pattern", "O:validator_kapsam_paydasi",), "G1 çifti"),
+    ("scripts/validators/check_decimal_write_to.py", ("V:check_decimal_write_to", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_method_param_type_c.py",
-     ("V:check_method_param_type_c",), "G1 çifti"),
-    ("scripts/validators/check_no_rap_commit.py", ("V:check_no_rap_commit",), "G1 çifti"),
+     ("V:check_method_param_type_c", "O:validator_kapsam_paydasi",), "G1 çifti"),
+    ("scripts/validators/check_no_rap_commit.py", ("V:check_no_rap_commit", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_amdp_comment_apostrophe.py",
-     ("V:check_amdp_comment_apostrophe",), "G1 çifti"),
-    ("scripts/validators/check_kd_no_raw_mermaid.py", ("V:check_kd_no_raw_mermaid",), "G1 çifti"),
+     ("V:check_amdp_comment_apostrophe", "O:validator_kapsam_paydasi",), "G1 çifti"),
+    ("scripts/validators/check_kd_no_raw_mermaid.py", ("V:check_kd_no_raw_mermaid", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_fs_no_analysis_log.py", ("O:fs_docstd",),
-     "DOC-FS-05/06 sayacı: yakalama + kimlik-satırı FP çapaları (fixture kendi sandbox'ını kurar)"),
+     "DOC-FS-05/06a sayacı: yakalama + kimlik-satırı FP çapaları (fixture kendi sandbox'ını kurar)"),
     ("scripts/validators/check_fm_signature_doc_sync.py", ("O:fm_imza_doc_sync",),
      "imza ayrıştırma + EKSİK/HAYALET + ÖLÇÜLEMEDİ ayrımı (fixture kendi sandbox'ını kurar)"),
     ("playbook/howto-dynpro-gui-status-generation.md", ("O:fm_imza_doc_sync",),
@@ -319,7 +379,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "gevşetmesi); ⛔ ikisi AYRI korpusla ölçülür — tolerans doluluğu ASLA zayıflatmaz"),
     ("scripts/validators/check_fs_no_analysis_log.py",
      ("O:fs_docstd", "O:gevsetme_pozitif_kontrol"),
-     "DOC-FS-05/06 desenleri + worktree dışlama (ölçülmüş 87→174 çiftlenmesi); "
+     "DOC-FS-05/06a desenleri + worktree dışlama (ölçülmüş 87→174 çiftlenmesi); "
      "pozitif kontrol: ana ağaçtaki gerçek ihlal hâlâ yakalanır"),
     ("scripts/behavior_manifest.py", ("O:manifest_secici_onay",),
      "I-1 seçici onay (`--only`) + I-2 worktree/CRLF; İKİ GEVŞETME pozitif kontrollü "
@@ -400,7 +460,6 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/build_core_index.py", ("O:core_index_kapsam",), "indeks kapsamı"),
     ("scripts/switch_tier.py", ("O:tier_fail_closed",), "tier çözümleme"),
     ("scripts/statusline.py", ("O:tier_fail_closed",), "tier göstergesi"),
-    ("scripts/ui-smoke/run_ui_smoke.py", ("O:conn_adt_proje_koku",), "proje-kökü çözümlemesi"),
     ("mcp_servers/sap_adt/_conn.py",
      ("O:tier_fail_closed", "O:conn_cift_anahtar", "O:veri_yetki_guardlari"),
      ".conn_adt okuyucusu"),
@@ -410,8 +469,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("mcp_servers/sap_adt/_reviewer.py", ("O:reviewer_tip_kapsam",), "push-tipi ↔ reviewer"),
     ("mcp_servers/sap_adt/tools/atom.py",
      ("O:adtget_yokluk_kaniti", "O:ddic_okuma_yolu", "O:dogrulama_kosamadi",
-      "O:reviewer_tip_kapsam"),
-     "adt_get/adt_push/adt_delete uçları"),
+      "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline"),
+     "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline)"),
     ("mcp_servers/sap_adt/tools/query.py",
      ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur"),
      "where_used/ATC + veri sorgusu + başarısızlık görünürlüğü"),
@@ -883,29 +942,55 @@ def _argumanlari_coz(argv: list[str]) -> tuple[list[str] | None, bool]:
 _CONN = REPO / ".conn_adt"
 
 
-def _ortam_hijyeni_basla() -> bool:
+# ⛔ İKİNCİ KATMAN (K4, 2026-08-20) — hijyen KALINTIYI görüyordu, EZİLMEYİ değil.
+#    Ölçüldü: `conn_yazici_encoding` fixture'ı, repo kökünde ZATEN VAR olan bir
+#    `.conn_adt`yi 522 B sentetik `TEST_USER` verisiyle EZİYORDU (78 B gerçek →
+#    522 B sentetik). Eski hijyen bunu KURTARMIYORDU: "koşumdan önce vardı" gördüğü
+#    için dosyaya dokunmuyordu ⇒ kullanıcının GERÇEK kimlik dosyası sessizce yok
+#    olmuş oluyordu (gitignored ⇒ `git status` temiz).
+#    Asıl önlem fixture tarafındadır (yazmadan önce hedefin kumda olduğunu kanıtlar);
+#    burası SAVUNMA DERİNLİĞİdir: önlem bir gün bozulursa bunu SESSİZ bırakmayız.
+def _conn_imza() -> tuple:
+    """(var mı, bayt, sha1) — ezilmeyi tespit etmek için koşum öncesi/sonrası kıyas."""
+    if not _CONN.exists():
+        return False, 0, ""
+    ham = _CONN.read_bytes()
+    return True, len(ham), hashlib.sha1(ham).hexdigest()
+
+
+def _ortam_hijyeni_basla() -> tuple:
     """Koşum ÖNCESİ `.conn_adt` durumunu ölç. True = kalıntı ZATEN vardı.
 
     Vardıysa SESSİZ KALMAZ: o dosya tier vektörlerinin okuduğu girdidir; sessizce
     okumak "temiz ağaç" yanılsaması verir (dosya gitignored).
     """
-    if _CONN.exists():
-        print("⚠ KİRLİ ORTAM: repo kökünde `.conn_adt` ZATEN VAR "
-              f"({_CONN.stat().st_size} B).")
+    imza = _conn_imza()
+    if imza[0]:
+        print(f"⚠ KİRLİ ORTAM: repo kökünde `.conn_adt` ZATEN VAR ({imza[1]} B).")
         print("  Bu dosya tier vektörlerinin GİRDİSİDİR; sonuç yanıltıcı olabilir "
               "(gitignored ⇒ `git status` temiz gösterir).")
         print("  Temiz ölçüm için: `rm -f .conn_adt` sonra süiti yeniden koş.\n")
-        return True
-    return False
+    return imza
 
 
-def _ortam_hijyeni_bitir(vardi: bool) -> None:
+def _ortam_hijyeni_bitir(onceki: tuple) -> None:
     """Koşum SONRASI: süitin KENDİ yarattığı kalıntıyı temizle (try/finally'den çağrılır).
 
     Yalnız BİZ yarattıysak sileriz — koşumdan önce var olan bir dosya kullanıcınındır,
     ona DOKUNULMAZ (yoksa gerçek bir `.conn_adt`i sessizce silmiş oluruz).
+    ⚠ Ama "dokunmamak" YETMEZ: dosya koşum SIRASINDA ezilmiş olabilir → imza kıyası.
     """
-    if vardi or not _CONN.exists():
+    if onceki[0]:
+        simdiki = _conn_imza()
+        if simdiki[0] and simdiki[2] != onceki[2]:
+            print(f"\n⛔ VERİ KAYBI: repo kökündeki `.conn_adt` koşum SIRASINDA DEĞİŞTİ "
+                  f"({onceki[1]} B → {simdiki[1]} B).")
+            print("   Bu dosya SENİNDİ; bir fixture üzerine sentetik kimlik yazmış olabilir. "
+                  "İçeriğini KONTROL ET (gitignored ⇒ `git status` sessiz kalır).")
+            print("   Beklenen: fixture kendi kumuna yazar "
+                  "(conn_yazici_encoding `KUM-DIŞI HEDEF` çapası).")
+        return
+    if not _CONN.exists():
         return
     try:
         boyut = _CONN.stat().st_size
@@ -918,12 +1003,12 @@ def _ortam_hijyeni_bitir(vardi: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    kirli_basladi = _ortam_hijyeni_basla()
+    onceki_conn = _ortam_hijyeni_basla()
     try:
         return _main(argv)
     finally:
         # try/finally: çökmede de temizlenir (yarım koşum kalıntı bırakmasın).
-        _ortam_hijyeni_bitir(kirli_basladi)
+        _ortam_hijyeni_bitir(onceki_conn)
 
 
 def _main(argv: list[str] | None = None) -> int:

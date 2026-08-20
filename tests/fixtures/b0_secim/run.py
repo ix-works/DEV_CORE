@@ -104,15 +104,17 @@ kontrol("P1 bilinen dosya → yalnız ilgili fixture ({O:core_index_kapsam})",
         secim == {"O:core_index_kapsam"}, f"alınan={secim}")
 
 secim, _ = sec("scripts/validators/check_bdef_backtick.py")
-kontrol("P1b bölüm-1 validator → yalnız kendi bad/good çifti",
-        secim == {"V:check_bdef_backtick"}, f"alınan={secim}")
+kontrol("P1b bölüm-1 validator → kendi bad/good çifti + K1 payda korpusu",
+        secim == {"V:check_bdef_backtick", "O:validator_kapsam_paydasi"},
+        f"alınan={secim}")
 
 # P2: BİRLEŞİM — iki dosya verildiğinde kümeler toplanır (biri diğerini yutmaz).
 secim, _ = sec("scripts/build_core_index.py",
                "scripts/validators/check_ui5_freestyle_traps.py")
-kontrol("P2 çok dosya → BİRLEŞİM (3 birim)",
+kontrol("P2 çok dosya → BİRLEŞİM (4 birim)",
         secim == {"O:core_index_kapsam", "O:ui5_t1_tirnak_sinifi",
-                  "V:check_ui5_freestyle_traps"}, f"alınan={secim}")
+                  "V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi"},
+        f"alınan={secim}")
 
 # P3: bir dosya birden çok fixture'ı besliyorsa hepsi seçilir (tek-fixture varsayımı
 #     seçim modunun en olası sessiz-daraltma kaynağıdır).

@@ -25,6 +25,11 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
 from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12: kaynak-klasor adi config'ten
+# K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
+# ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
+from utils.kapsam import Kapsam  # noqa: E402
+
+KAPSAM = Kapsam('.bdef')   # K1: taranan dosya sayaci
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -82,7 +87,7 @@ def main():
         files = list((root / SOURCE_ROOT_NAME).rglob("*.bdef"))
 
     total = 0
-    for f in files:
+    for f in KAPSAM.say(files):
         try:
             txt = f.read_text(encoding="utf-8", errors="replace")
         except Exception:
@@ -98,7 +103,7 @@ def main():
         print(f"\n{total} uyarı — audit alanı olan .bdef'te setAdmin determination eksik. "
               f"Idempotent admin-determination ile created/changed alanlarını otomatik doldur.")
         return 1
-    print("[OK] audit alanı / setAdmin determination ihlali yok.")
+    print("[OK] audit alanı / setAdmin determination ihlali yok." + KAPSAM.ek())
     return 0
 
 

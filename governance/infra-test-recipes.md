@@ -826,3 +826,177 @@ python tests/run_fixture_tests.py                       # 137/137
   **VE** `gevsetme_pozitif_kontrol` (biri doluluğu, öteki toleransı ölçer; HARİTA ikisini
   de bağlar). `check_fs_no_analysis_log.py` → `fs_docstd` (9 mutasyonuyla) **VE**
   `gevsetme_pozitif_kontrol`.
+
+## B29 — PARTİ-4 son parti (kapsam paydası · kök izolasyonu · JSON kaçışı · kum sızıntısı · offline MCP · SAP'siz ui-smoke · Bash tetiği)
+- Yedi korpus (hepsi OZEL_TESTLER üyesi), tek tek koşum:
+  `python tests/fixtures/validator_kapsam_paydasi/run.py`        → **31 senaryo + 4 mutasyon**, exit 0
+  `python tests/fixtures/console_utf8_kok_izolasyonu/run.py`     → **7 + 3**, exit 0
+  `python tests/fixtures/yabanci_proje_json_kacisi/run.py`       → **10 + 4**, exit 0
+  `python tests/fixtures/conn_kum_sizintisi/run.py`              → **7 + 4**, exit 0
+  `python tests/fixtures/mcp_profil_aktivasyon_offline/run.py`   → **15 + 4**, exit 0
+  `python tests/fixtures/ui_smoke_sapsiz/run.py`                 → **8 + 3**, exit 0
+  `python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py`     → **9 + 4**, exit 0
+  Tam süit: `python tests/run_fixture_tests.py` → **144/144**, **İKİ ARDIŞIK KOŞUM AYNI**
+  (⚠ süit sayısı bugün **145/145** — B30 ile `byassoc_advisory` korpusu eklendi; bu
+  korpusun kendi sayısı **9 + 4** olarak DEĞİŞMEDİ, A3 yeniden kuruldu ama bölünmedi.)
+
+- ⛔⛔ **PLATFORM, DEĞİŞKENİ GİZLİCE İKİLEŞTİRİR — `[YAKALANDI]` Windows'ta, `[KACTI]`
+  Linux'ta (ölçüldü 2026-08-20, `DEV_CORE#150` CI kırmızısı).** Bir korpus Bash payload'ına
+  yolu `str(Path)` ile gömerse Windows'ta komut metni `C:\…\docs\KD-X.md` olur. Tüketicinin
+  yol-çıkarımı `/` üzerinden çalışır (normalizasyon hook'un İÇİNDEDİR, komut metninde
+  değil) ⇒ ters-bölü, çıkarımı **son bileşende keser**. Sonuç: mutasyon Windows'ta
+  **yanlış sebeple** yakalanır, Linux'ta kaçar. ⇒ **Kural: Bash `command` metnindeki yol
+  DAİMA `Path.as_posix()`; `file_path` payload'ında NATIVE (`str`) — ikisi ayrı yüzeydir.**
+  Yapısal koruma: `_bash()` yardımcı fonksiyonu ters-bölülü komutu `AssertionError` ile
+  REDDEDER (regresyon Windows'ta gürültülü çöker, sessiz platform-sapması olmaz).
+  ⭐ **Yerelde Linux yoksa repro böyle yapılır** (WSL/Docker gerekmez): vektörün yolunu
+  `as_posix()`e çevir — bu, regex/eşleme açısından Linux'un gördüğü metnin birebir aynısıdır
+  (`C:` öneki hiçbir desende eşleşmez). Ölçüldü: aynı mutasyonda `str` → nudge YOK,
+  `as_posix()` → nudge VAR.
+
+- ⛔⛔ **MUTASYON GERÇEK KAYNAĞA YAZILMAZ — bu turda ÜRETİLEN ve yakalanan kirlenme:**
+  İlk sürümde dört korpus mutasyonu gerçek dosyaya yazıp `finally`de geri alıyordu.
+  Art arda koşumlarda kalıntı BİRİKTİ; bir noktada `_profile.py` **fail-closed enum
+  doğrulaması SÖKÜLMÜŞ** hâlde diskte kaldı ve komşu korpus `fs_docstd` bu kalıntıyı
+  gerçek ihlal sanıp FAIL verdi (süit 143→142, idempotans kırık). ⇒ Üç güvenli desen:
+    ① **izole ağaç kopyası** — import zinciri gerektiğinde (`utils.*` `parents[1]`den
+       çözülür): `shutil.copytree` ile `scripts/` (+ gerekirse `mcp_servers/`) kopyala,
+       mutasyonu KOPYAYA yaz, tüketiciyi kopyadan koş. ⚠ Yalnız mutasyona uğrayan
+       dosyayı kopyalamak YETMEZ: import ÖLÜR ve **her mutasyon "yakalandı" görünür**.
+    ② **kardeş `_mutant_*.py`** — tüketici dosyayı YOLDAN alıyorsa (hook, script).
+       Aynı dizinde durmalı ki `parents[N]` derinliği ve komşu import'lar değişmesin.
+    ③ **bellekte `exec`** — mutasyona uğrayan şey KOŞMAKTA OLAN koşucunun kendisiyse
+       (`run_fixture_tests.py`): diske yazmak koşan süiti bozar.
+  ⭐ **Her korpusa `F1 İZOLASYON` vektörü ZORUNLU:** koşum sonunda gerçek dosyaların
+  hash'i başlangıçtakiyle AYNI olmalı **ve** kardeş mutant dosya KALMAMIŞ olmalı.
+  Bu bir "temizlik kontrolü" değil, korpusun kendi DEĞİŞMEZİdir.
+
+- ⭐ **BOŞ-SANDBOX SONDASI (K1'in ölçüm yöntemi — yeniden kullanılabilir):** bir
+  validator ailesinin *"yeşilinin paydası"* şöyle ölçülür: `project.yaml` + BOŞ
+  `SOURCE_CODES/` içeren geçici bir proje kur, `CLAUDE_PROJECT_DIR`i oraya çevir,
+  aileyi koş. `[OK]/temiz` diyen ama dosya sayısı basmayan her üye **sessiz kapsam
+  kaybı** adayıdır. Kontrol grubu ŞART: aynı üyeler DOLU sandbox'ta ihlali yakalamalı
+  (yakalamıyorsa sorun görünürlük değil, dedektördür).
+  ⚠ **Regex ile "sayı basıyor mu" ARAMA** — bu turda ilk deneme `rg "(taran|scanned)"`
+  idi ve kelime parçalarına takılıp yanlış sınıf verdi. **Davranışı koş, çıktıyı oku.**
+
+- ⛔ **K1 SINIRI (silinemez):** `n==0` **FAIL ÜRETMEZ**. `validator_kapsam_paydasi`
+  **X1** bunu ölçer (boş sandbox'ta 12'sinin de çıkış kodu 0) ve **M3** ("0 dosyayı
+  FAIL yap") onu kırmızı yakar. Sıfır kapsam MEŞRU olabilir; sertleştirme AYRI bir
+  karardır (ADR 0019 + gate-moratoryumu).
+
+- ⛔ **K8② SINIRI (silinemez):** kapsam genişlemesinin pozitif kontrolü **M4**'tür —
+  bir nudge'a çıplak `playbook/...md` konur ve gate'in **FAIL** vermesi beklenir.
+  Yol sayısının artması (4→8) *"yakalıyor"* demek DEĞİLDİR.
+
+- ⚠ **"Koştu mu" sorusu ÇIKTI METNİYLE cevaplanmaz (K7 dersi):** `[DUR]` görmek
+  playwright'ın koşmadığını KANITLAMAZ (mesaj basılıp yine koşulabilirdi). PATH'e
+  sahte bir `npx` kabuğu konur, kabuk bir **İZ DOSYASI** yazar; ölçüt o dosyanın
+  varlığıdır. Aynı desen "gerçekten alt-süreç başlattı mı" sorularının hepsinde geçerli.
+
+- ⚠ **DEDUP MARKER'LI nudge'ı ölçerken TEMİZ kök kullan (K8② dersi):** `post_validate`
+  doc-fs nudge'ı bir OKU-işaretçisi tutar; gerçek proje kökünde yoklarsan sonuç GÜNE
+  göre değişir (bugün 4 yol, yarın 0) ve gate **sessizce boşalır**. `_stderr_ciktisi`
+  her çağrıda taze sandbox kurar; `B2` vektörü ardışık iki koşumun AYNI toplamı
+  vermesini çivilendirir.
+
+- ⚠ **ÖLÜ VEKTÖR TUZAĞI (K4'te yaşandı):** savunma derinliği varken tek katmanı söken
+  mutasyon ISKALAR; `P1` (veri kaybı olmaz) hiçbir mutasyonla kırılamıyordu ⇒ pratikte
+  **hiç düşmeyen bir yeşil**di. Çözüm `M4`: ÜÇ katmanı (explicit-dir · PWD temizliği ·
+  KUM-DIŞI çapası) BİRDEN sök → P1 kırmızı. **Kural: her ⭐ vektörün onu kıran EN AZ
+  BİR mutasyonu olmalı; yoksa vektör dekordur.**
+
+- ⚠ **Çapayı YANLIŞ ŞEYE bağlama (K8'de yaşandı):** A2 önce bir FS dokümanıyla
+  yazıldı ve FAIL verdi — sebep ölçülen şey (Bash yol çıkarımı) değil, o yolun FS
+  nudge'ını hiç tetiklememesiydi. Nudge'ı ATEŞLEDİĞİ BİLİNEN bir doküman tipi seçilerek
+  değişken tek başına bırakıldı. Aynı sınıf K6/A2'de de çıktı (segment çok parçalı
+  olduğu için `/` SAYMAK yanıltıcıydı → tam eşitlik).
+
+- **Dokunulursa BİRLİKTE koşulacaklar:** `kapsam.py`ye ya da 12 validator'dan birine
+  dokunan tur `validator_kapsam_paydasi` + o validator'ın `V:` çiftini koşar (HARİTA
+  bağladı). `run_fixture_tests.py` hijyen fonksiyonlarına dokunan tur **hem**
+  `suite_ortam_hijyeni` **hem** `conn_kum_sizintisi` koşar (imza sözleşmesi ikisinde
+  de tüketiliyor — bu turda imza `bool`→demet olunca `suite_ortam_hijyeni` ÇÖKTÜ;
+  ters-yön kontrolü olmasaydı sessiz kalırdı).
+
+- ⛔ **KORPUS CI'DA KOŞACAK MI? — `mcp` TUZAĞI (K6'da yakalandı):** `atom.py` modül
+  seviyesinde `_app`i, o da `mcp.server.fastmcp`i çeker. **CI'da `mcp` KURULU DEĞİL**
+  (`core-ci.yml` yalnız `requests urllib3 python-dotenv` kurar) ⇒ onu import eden korpus
+  CI'da ImportError ile KIRMIZI yanar. Prior-art zaten vardı: `reviewer_tip_kapsam`
+  docstring'i *"Neden import değil: atom.py MCP SDK'sini çeker; CI'da o paket YOK"*
+  diyor. ⇒ Yeni korpus yazarken **CI'nın kurduğu bağımlılıkları ÖLÇ**; gerekiyorsa B26
+  reçetesiyle AST'den ayıkla (dekoratörü ATLA). `_profile.py` güvenlidir (yalnız
+  `utils.project_config`). Canlı ölçüm gereken vektör `mcp` varsa koşar, yoksa
+  **`[OLCULEMEDI]`** satırı basar — sessiz SKIP değil, üçüncü değer; kapsamı AST vektörü taşır.
+  **Simülasyon reçetesi:** `PYTHONPATH=<tmp>` altına `mcp/__init__.py` → `raise ImportError`
+  koy, korpusu koş; A/B vektörleri hâlâ ölçmeli.
+
+- ⛔ **`KURULAMADI` ≠ `KACTI` (çökme ≠ FAIL — kendi korpusumda yaşandı):** mutasyon
+  KURULAMAZSA (ör. kardeş mutant dosya yazıldıktan sonra kayboldu → `FileNotFoundError`)
+  eski kalıp `yakalandi=False` atayıp bunu *"mutasyon KAÇTI"* diye raporluyordu — yani
+  **aracın bozulmasını korpusun zayıflığı** sanıyordu. Üçüncü değer şart: ayrı
+  `kurulamadi` listesi + ayrı FAIL satırı. Ayrıca kardeş mutant **yazımdan sonra
+  OKUNARAK doğrulanır** (yazımın hatasız dönmesi dosyanın orada olduğunu kanıtlamaz).
+
+- ⛔ **TIER VEKTÖRLERİ İMPORT-ANINDA KİRLENİR (K4 sınıfının İKİNCİ üyesi, ölçüldü):**
+  `conn_cift_anahtar` `sal.get_conn_path`i yönlendiriyordu ama **geç kalıyordu**:
+  `import sap_adt_lib` İMPORT ANINDA `find_conn_file()` + `load_dotenv()` koşar; repo
+  kökünde bir `.conn_adt` varsa `ADT_SAP_TIER=DEV` `os.environ`a yazılır ve yönlendirme
+  kurulmadan tier ZATEN kirlenir ⇒ *"tier YOK → UNKNOWN"* vektörü **DEV** okur.
+  Süit koşum ORTASINDA (ölçüldü: ~39. saniye, 1087 B) repo köküne yazdığı için bu
+  **aralıklı** bir kırmızıydı: fixture önce koşarsa geçer, sonra koşarsa düşer.
+  Fix: import ÖNCESİ `CLAUDE_PROJECT_DIR`i kuma çevir. Kanıt (kirli kök varken):
+  fix öncesi **5/6** (`tier=DEV`), fix sonrası **6/6**; süit **3 ardışık koşum 144/144**.
+  ⚠ Ders: *"monkeypatch ile yönlendirdim"* yetmez — **import anındaki yan etki** daha
+  erken koşar. Yönlendirmenin İMPORT'TAN ÖNCE mi sonra mı kurulduğunu ölç.
+
+- ⚠ **DOĞRULANAMADI:** K6 canlı `/activation` kabulü (B11) · K7 gerçek UI5/playwright
+  doğruluğu (B15) · K8① canlı Bash düzenlemesinde ateşleme (matcher META-İNFRA,
+  kurulmadı — `settings.template.json` kararı lider/kullanıcıda).
+
+## B30 — PARTİ-4b: advisory gate sözleşmesi (K5) + DOC-FS-06 → 06a/06b bölünmesi (K8③)
+```bash
+python tests/fixtures/byassoc_advisory/run.py           # 10 senaryo + 6 mutasyon, exit 0
+python scripts/validators/check_rap_byassoc_keys_only.py --selftest   # gömülü kırmızı/yeşil
+python scripts/validators/check_rule_gate_coverage.py   # 62 iddia (59 bloklayıcı · 3 advisory)
+python tests/run_fixture_tests.py                       # 145/145
+```
+- ⛔⛔ **SİLİNEMEZ VEKTÖRLER (POZİTİF KONTROL BORCU).** K5'te değişen şey bir *gevşetme
+  değil* **dürüstlük düzeltmesidir** (default `exit 0` AYNEN korundu), ama yeni bir opt-in
+  yol açıldı ⇒ "kapıyı körletmedim" iddiası kanıt ister:
+  | Vektör | Ne kanıtlar |
+  |---|---|
+  | **S1** bulgu VARKEN default exit 0 | canlı 2 **meşru** kod hâlâ bloklanmıyor (davranış değişmezliği) |
+  | **S2** aynı korpus `--bulguda-exit1` → exit 1 | gate artık gerçekten **fixture'lanabilir** (eski engel kalktı) |
+  | **S3** `--strict` → exit 0 | **kazara terfi** yolu kapalı |
+  | **S4a/S4b** temiz korpus her iki modda 0 | bayrak "her şeyi kırmıyor" |
+  | **S8** coverage kendini advisory İLAN ETMEZ | sahte-beyan çapası (aşağıya bak) |
+- ⭐ **SINIR MUTASYONU M2** (`--strict` de exit 1 versin) korpusun en önemli vektörüdür:
+  bayrağın ADI bir tasarım kararıdır. `run_all_validators --strict` bayrağı **TÜM**
+  validator'lara iletir; gate'i oradan hard'a terfi ettirmek terfi kararını kazara bir
+  ÇAĞIRANIN eline verirdi (ADR 0019 §54 shakeout dersi). M2 yeşil kalırsa ad yeniden
+  `--strict`e kaymış demektir. **M3** (default'u hard yap) davranış-değişmezliği çivisidir.
+- ⚠ **`# GATE-SEVERITY:` SATIR-BAŞI ÇAPASI ZORUNLU** (`^[ \t]*#`, MULTILINE). İlk sürüm
+  çıplak `#\s*GATE-SEVERITY:` idi ve **düz metin içindeki anışı da beyan sandı**: bu
+  markörü TARİF eden `check_rule_gate_coverage`'ın **kendi docstring'i**, HARD olan o
+  gate'i "advisory" ilan etti (ölçüldü: özet "2 advisory" derken biri sahteydi).
+  Sınıf: *bir markörü tarif eden metin, onu beyan etmiş sayılamaz.* **S8 + M6** çivi.
+- ⭐ **SAFE DESENİNİ SINAYAN TEK VEKTÖR** `ok_all_fields_but_from_kelimesi_var`
+  (`ALL FIELDS WITH CORRESPONDING #( lt_keys FROM lt_source )`). İlk korpusta YOKTU ve
+  **M5 (SAFE'i sök) hiçbir senaryoyu kırmadı** — yani korpus SAFE'i hiç sınamıyordu.
+  Sebep: temiz vektörlerin hiçbirinde `FROM` **kelimesi** geçmiyordu, dolayısıyla
+  `USES_FROM` tek başına eliyordu. Gerçek işi gören ayrım ancak ikisi bir aradayken görülür.
+- ⚠ **MUTANT KARDEŞ ADI FIXTURE ADIYLA ÖNEKLENİR** (`_mutant_byassoc_advisory.py` /
+  `_mutant_byassoc_coverage.py`). Gerekçe ölçüldü: repoda `_mutant_post_validate.py` adını
+  **İKİ ayrı fixture** (`fs_docstd` + `hook_bash_ve_stderr_kapsami`) paylaşıyor — o
+  çarpışma sınıfına katılmamak için ad benzersiz tutuldu (bkz. kuyruk kaydı).
+- **DOC-FS-06 → 06a/06b:** `06a` = §1.1 satır uzunluğu (**ölçülebilir**, gate'li, ≤400
+  karakter) · `06b` = 11-B birikmemesi + yayılım tablosunun tamlığı (**reviewer yargısı**,
+  script YOK ve olamaz). Gate `# ENFORCES: DOC-FS-05, DOC-FS-06a` beyan eder; `06b`
+  checklist'te gate kolonu OLMADAN durur ⇒ coverage onu auto-gate saymaz (iddia 61→**62**,
+  şişme değil **doğru yönde artış**: 06a gerçekten gate'li).
+- **Dokunulursa BİRLİKTE koşulacaklar:** `check_rap_byassoc_keys_only.py` →
+  `byassoc_advisory` **VE** `validator_kapsam_paydasi` (biri exit sözleşmesini, öteki
+  payda sözleşmesini ölçer; HARİTA ikisini de bağlar). `check_rule_gate_coverage.py` →
+  `byassoc_advisory`. `check_fs_no_analysis_log.py` → `fs_docstd` **VE**
+  `gevsetme_pozitif_kontrol` (B9b/B28 zaten bağlıyor).
