@@ -18,6 +18,44 @@ source: deep-research (4 paralel subagent, 2026-06-14) — Anthropic/Cognition/L
 - **SOLO kal:** tek-dosya/seri iş, basit düzeltme, ardışık bağımlı adımlar. Çok-ajan ~15× token; gereksiz fan-out yapma.
 - **Ölçek kuralı:** basit → 1 ajan; karşılaştırma → 2-4; geniş → 10+. (Karmaşıklığa göre, sabit değil.)
 
+## 1A. SPAWN İZNİ — varsayılan AÇIK (sahip kararı 2026-08-20)
+
+⭐ **Kanonik kural `CLAUDE.core.md` §1.1'dedir** (her oturum yüklenir). Burası **gerekçe ve kanıt** kaydıdır.
+
+**Sorun (ölçüldü — tahmin değil):** Claude Code bazı model/kanal kombinasyonlarında sistem promptuna
+şu iki satırı enjekte eder:
+`Do not call the AgentTool unless the user requested it` ·
+`Do not use workflows or deep-research unless the user requested it`
+
+| Ölçüm (2026-08-20, Claude Code **2.1.237**) | Sonuç |
+|---|---|
+| Metin hangi config'den geliyor? | ⛔ **Hiçbirinden.** `settings.json` (proje+kullanıcı), `settings.local.json`, `output-styles/`, `CLAUDE.md`, `.claude/rules/` — **0 eşleşme** |
+| İkilide var mı? | ✅ `~/.local/share/claude/versions/2.1.237` (330 MB PE32+) içinde **3'er kez** |
+| İlgili bayraklar | `opus_5_prompt_bundle` ×5 · `tengu_fennel_godwit` ×2 · `tengu_heron_brook` ×4 — üçü de ikilide |
+| `~/.claude.json` durumu | `tengu_heron_brook` **yok** · `tengu_fennel_godwit = false` |
+
+⇒ Kısıt **ayardan değil, ikiliden** gelir; `/config` veya `settings.json` ile **kapatılamaz**.
+⚠ *(Enjeksiyon dalının boolean ifadesi disassemble ile izlenmedi; ölçülen şey jeton varlığı +
+config yokluğudur. Karar için yeterli: kaynak her hâlükârda ayar değildir.)*
+
+**Neden bir satır bunu çözer:** kuralın kendi metni *"**unless the user requested it**"* — yani
+**yasak değil, varsayılan kapalı**. `CLAUDE.core.md` bu core'u kullanan her oturumda yüklenen bir
+**kullanıcı talimatı** dosyasıdır; oradaki izin, o istisnanın kalıcı ve açık hâlidir.
+
+**Kapsam kararı (sahip, 2026-08-20):** izin **bu core'u kullanan TÜM projeler için varsayılan**dır.
+⚠ Bu bilinçli bir tercihtir: `DEV_CORE` **public**'tir, dolayısıyla izin core'u fork'layan
+kurulumlara da taşınır. Alternatif tasarım — *mekanizma core'a, rıza projeye* (her proje kendi
+`CLAUDE.md`'sine tek satır rıza yazar) — **değerlendirildi ve reddedildi**: sahibin gerekçesi,
+ajan kullanımının bu metodolojinin (ADR 0018) **kurucu varsayımı** olması; her projede yeniden
+onay istemek kurulumu bozar. Kayıt burada, ileride tartışma yeniden açılırsa gerekçe kaybolmasın.
+
+⛔ **İznin dışında kalanlar** — bunlar için **her seferinde açık talimat** şart:
+`infra-expert` (infra AYRI ve AÇIK onay ister — paylaşılan hook/validator/gate) ·
+**Workflow** (çok-ajanlı orkestrasyon, maliyeti bir büyüklük mertebesi yüksek) · **deep-research**.
+⛔ **BUG GATE zorunluluğu bu izinle düşmez** (§2A). Kullanıcı **"solo"** derse spawn edilmez.
+
+---
+
 ## 2. Roller (`.claude/agents/` — tool-düzeyinde enforcement)
 | Rol | Tanım | SAP yazma | Kullanım |
 |---|---|---|---|

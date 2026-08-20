@@ -14,6 +14,15 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## CLAUDE.core.md §1.1 (her-oturum davranış değişmezleri)
+| 2026-08-20 | ⭐ **SPAWN İZNİ — varsayılan AÇIK** (tüm projeler): `expert build` · `bug-gate` · `gateway` · `sap-research` spawn'ı tur başına onay istemez. Kapsam dışı: `infra-expert` · Workflow · deep-research. BUG GATE zorunluluğu düşmez, "solo" korunur | Harness, model dalında sistem promptuna *"Do not call the AgentTool unless the user requested it"* enjekte ediyor ve bu **ikilide sabit kodlu** — ayarla kapatılamaz. Kural metni *"unless the **user requested** it"* olduğu için **yasak değil varsayılan**; her oturum yüklenen bir kullanıcı-talimatı dosyasındaki izin o istisnayı kalıcı karşılar. Aksi hâlde ADR 0018 roster'ı her turda onay turu harcıyordu (ölçüldü: build ortasında tur kaybı) | **Kaynak araması kontrol gruplu:** `settings.json`(proje+kullanıcı)·`settings.local.json`·`output-styles/`·`CLAUDE.md`·`.claude/rules/` → **0 eşleşme**; ikili (`~/.local/share/claude/versions/2.1.237`, 330 MB PE32+) → her iki ifade **3'er kez**. Jetonlar: `opus_5_prompt_bundle`×5 · `tengu_fennel_godwit`×2 · `tengu_heron_brook`×4. `~/.claude.json`: `heron_brook` yok, `fennel_godwit=false`. ⚠ Enjeksiyon dalının boolean ifadesi **disassemble edilmedi** — ölçülen: jeton varlığı + config yokluğu | *(gate'lenebilir bir davranış değil — izin beyanı; fixture YOK, [ÖNERİ] bile açılmadı: yanlış-pozitif üretecek bir ölçütü yok)* | core#TBD |
+
+**Test-senaryosu:** *(bu satır için otomatik test yok — bilinçli.)* Doğrulama **gözlemsel**: yeni bir
+oturumda `CLAUDE.core.md` yüklendiğinde §1.1'de satır görünür ve alt-ajan spawn'ı ek onay istemeden
+koşar. ⚠ **Negatif kontrol:** `infra-expert` / Workflow / deep-research talebi geldiğinde **hâlâ**
+açık onay sorulmalı — sorulmuyorsa kapsam ifadesi kırılmıştır. ⛔ Bu satırın kapsamı **public core**
+olduğundan, fork'lanan kurulumlar da izni devralır (bilinçli — gerekçe `agent-teams-operating-model.md` §1A).
+
 ## hook_shim (+tüm hook'ların stdin/stdout zemini)
 | 2026-08-01 | stdin UTF-8 reconfigure | Harness payload'ı cp1252-mojibake ulaşıyordu ("GÖREV"→"GA–REV"); 16 hook'ta Türkçe alanlar sessiz bozuktu — brifing-lint FP'sinin kökü (debug-log kanıtı) | Sentetik Türkçe payload: FP-yok(P) + şablonsuz-nudge(N) | elle: sentetik-payload komutu howto-sistem-denetimi §3'te | core#67 |
 
