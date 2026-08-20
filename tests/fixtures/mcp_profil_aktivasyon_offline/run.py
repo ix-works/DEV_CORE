@@ -74,9 +74,30 @@ def _alt_surecte(kod: str, kum: Path, agac_kok: Path = KOK) -> tuple[int, str]:
 
 # Olcum kodu alt-surecte kosar; sonuclari `SONUC:` satirlariyla geri tasir.
 OLCUM = r'''
-import sys
+import ast, sys, types
 sys.path.insert(0, r"{kok}")
-import mcp_servers.sap_adt.tools.atom as A
+
+# ⛔ CI-UYUMLULUK: `atom.py`yi IMPORT ETME. Modul-seviyesinde `_app`i ceker, o da
+#    `mcp.server.fastmcp`i ister; **CI'da `mcp` paketi KURULU DEGIL** (core-ci.yml
+#    yalniz requests/urllib3/python-dotenv kurar) ⇒ import ImportError ile duser ve
+#    korpus CI'da KIRMIZI yanardi. Ayni tuzak `reviewer_tip_kapsam`ta belgelenmis:
+#    *"Neden import degil: atom.py MCP SDK'sini ceker; CI'da o paket YOK."*
+#    Cozum B26 recetesi: AST ile YALNIZ gereken dugumleri ayikla, dekoratoru ATLA.
+_atom_src = open(r"{kok}/mcp_servers/sap_adt/tools/atom.py", encoding="utf-8").read()
+A = types.ModuleType("atom_parcasi")
+_agac = ast.parse(_atom_src)
+for _d in _agac.body:
+    _al = (isinstance(_d, ast.Assign) and len(_d.targets) == 1
+           and getattr(_d.targets[0], "id", "") == "_ACTIVATION_URI_SEG")
+    _fn = isinstance(_d, ast.FunctionDef) and _d.name == "_activation_uri"
+    if _al or _fn:
+        if _fn:
+            _d.decorator_list = []          # dekorator `_app`e gider -> ATLA
+        exec(compile(ast.Module(body=[_d], type_ignores=[]), "<atom>", "exec"), A.__dict__)
+assert hasattr(A, "_activation_uri") and hasattr(A, "_ACTIVATION_URI_SEG"), \
+    "atom.py'den _activation_uri/_ACTIVATION_URI_SEG AYIKLANAMADI (ad degismis olabilir)"
+
+# `_profile` MCP SDK'si CEKMEZ (yalniz utils.project_config) -> dogrudan import GUVENLI.
 from mcp_servers.sap_adt._profile import aktif_profil, uygun_mu
 
 def s(ad, deger):
@@ -105,15 +126,24 @@ s("PROFIL", aktif_profil())
 KABLOLAMA = r'''
 import sys
 sys.path.insert(0, r"{kok}")
-import mcp_servers.sap_adt.tools.atom as A       # import log satirlarini uretir
-from mcp_servers.sap_adt._app import mcp
-import asyncio
+# CANLI kablolama yalniz `mcp` paketi VARSA olculebilir (CI'da YOK). Yoklugu
+# SESSIZCE atlanmaz: MOD acikca bildirilir ve AST vektoru her ortamda kosar.
 try:
-    araclar = asyncio.run(mcp.list_tools())
-    adlar = sorted(getattr(t, "name", str(t)) for t in araclar)
-except Exception as e:
-    adlar = ["<LISTELENEMEDI:%s>" % type(e).__name__]
-print("SONUC:ARACLAR=%r" % (adlar,))
+    import mcp  # noqa: F401
+    _var = True
+except Exception:
+    _var = False
+print("SONUC:MCP_VAR=%r" % (_var,))
+if _var:
+    import mcp_servers.sap_adt.tools.atom as A       # import log satirlarini uretir
+    from mcp_servers.sap_adt._app import mcp as _m
+    import asyncio
+    try:
+        araclar = asyncio.run(_m.list_tools())
+        adlar = sorted(getattr(t, "name", str(t)) for t in araclar)
+    except Exception as e:
+        adlar = ["<LISTELENEMEDI:%s>" % type(e).__name__]
+    print("SONUC:ARACLAR=%r" % (adlar,))
 '''
 
 
@@ -207,14 +237,44 @@ def senaryolar(agac_kok: Path = KOK) -> list[tuple[str, bool, str]]:
         rc1, out1 = _alt_surecte(KABLOLAMA.format(kok=str(agac_kok)), kum_yok, agac_kok)
         rc2, out2 = _alt_surecte(KABLOLAMA.format(kok=str(agac_kok)), kum_var, agac_kok)
         d1, d2 = _oku(out1), _oku(out2)
-        a1 = d1.get("ARACLAR", ["<YOK>"])
-        a2 = d2.get("ARACLAR", ["<YOK>"])
-        gizli1 = "adt_activate" not in a1
-        acik2 = "adt_activate" in a2
-        ekle("B9 ⭐ KABLOLAMA: profil cozulemiyorken `adt_activate` REGISTER EDILMEZ; "
-             "gecerli profilde EDILIR (fail-closed hem kapali hem ACILABILIR)",
-             gizli1 and acik2,
-             f"profilsiz={len(a1)} arac (gizli={gizli1}) · profilli={len(a2)} arac (acik={acik2})")
+
+        # B9a — AST KABLOLAMASI: HER ORTAMDA kosar (CI'da `mcp` yok).
+        # Iki halka olculur: (i) `adt_activate` `@profil_tool` tasiyor mu,
+        # (ii) `profil_tool` `uygun_mu` FALSE iken tool'u REGISTER ETMEDEN donuyor mu.
+        import ast as _ast
+        atom_src = (agac_kok / "mcp_servers" / "sap_adt" / "tools" / "atom.py").read_text(
+            encoding="utf-8")
+        app_src = (agac_kok / "mcp_servers" / "sap_adt" / "_app.py").read_text(encoding="utf-8")
+        dekoratorlu = False
+        for n in _ast.walk(_ast.parse(atom_src)):
+            if isinstance(n, _ast.FunctionDef) and n.name == "adt_activate":
+                dekoratorlu = any(
+                    (isinstance(d, _ast.Call) and getattr(d.func, "id", "") == "profil_tool")
+                    or getattr(d, "id", "") == "profil_tool" for d in n.decorator_list)
+        uygun_cagriliyor = "uygun_mu(available_on, profil)" in app_src
+        register_etmeden_donuyor = "return fn  # register EDİLMEZ" in app_src
+        ekle("B9a ⭐ KABLOLAMA (AST, her ortamda): `adt_activate` `@profil_tool` tasiyor + "
+             "`profil_tool` `uygun_mu` FALSE iken REGISTER ETMEDEN donuyor",
+             dekoratorlu and uygun_cagriliyor and register_etmeden_donuyor,
+             f"dekorator={dekoratorlu} uygun_mu={uygun_cagriliyor} "
+             f"register_etmeden={register_etmeden_donuyor}")
+
+        # B9b — CANLI kablolama: yalniz `mcp` paketi varsa. YOKSA SESSIZ ATLAMA DEGIL,
+        # acik "OLCULEMEDI" satiri (ucuncu deger); B9a zaten kapsami tasiyor.
+        mcp_var = bool(d1.get("MCP_VAR")) and bool(d2.get("MCP_VAR"))
+        if mcp_var:
+            a1 = d1.get("ARACLAR", ["<YOK>"])
+            a2 = d2.get("ARACLAR", ["<YOK>"])
+            gizli1 = "adt_activate" not in a1
+            acik2 = "adt_activate" in a2
+            ekle("B9b ⭐ CANLI KABLOLAMA: profil cozulemiyorken `adt_activate` REGISTER "
+                 "EDILMEZ; gecerli profilde EDILIR (fail-closed hem kapali hem ACILABILIR)",
+                 gizli1 and acik2,
+                 f"profilsiz={len(a1)} arac (gizli={gizli1}) · profilli={len(a2)} arac "
+                 f"(acik={acik2})")
+        else:
+            print("  [OLCULEMEDI] B9b CANLI kablolama — `mcp` paketi YOK (CI ortami). "
+                  "B9a AST vektoru kapsami tasiyor; bu bir PASS DEGILDIR.")
     finally:
         shutil.rmtree(kum_yok, ignore_errors=True)
         shutil.rmtree(kum_var, ignore_errors=True)
@@ -273,7 +333,7 @@ def main() -> int:
     print("  -> %d/%d senaryo PASS" % (len(sonuc) - len(kirik), len(sonuc)))
 
     print("\n--- MUTASYONLAR (her biri korpusu KIRMIZI yapmali) ---")
-    mut_kirik, yama_kirik = [], []
+    mut_kirik, yama_kirik, kurulamadi = [], [], []
     for ad, hedef, mut in MUTASYONLAR:
         bozuk = mut(ham[hedef])
         if bozuk == ham[hedef]:
@@ -288,8 +348,12 @@ def main() -> int:
             yakalandi = any(not ok for _, ok, _ in m_res)
             kacan = [a for a, ok, _ in m_res if not ok]
         except BaseException as e:  # noqa: BLE001
-            yakalandi, kacan = False, []
+            # ⛔ KURULAMADI != KACTI (cokme != FAIL): mutasyon KURULAMADIYSA korpusun
+            #    zayif oldugu SONUCU CIKARILAMAZ — olcum hic yapilamamistir. Ucuncu
+            #    deger olarak ayri raporlanir ve korpusu KIRMIZI yapar.
+            kurulamadi.append("%s -> %s: %s" % (ad, type(e).__name__, e))
             print("  [KURULAMADI] %s -> %s: %s" % (ad, type(e).__name__, e))
+            continue
         finally:
             if izole is not None:
                 shutil.rmtree(izole, ignore_errors=True)
@@ -309,13 +373,16 @@ def main() -> int:
     print("  [PASS] F1 ⭐ izolasyon: gercek atom.py/_profile.py korpus boyunca DEGISMEDI")
 
     print("\n" + "=" * 78)
-    if kirik or mut_kirik or yama_kirik:
+    if kirik or mut_kirik or yama_kirik or kurulamadi:
         if kirik:
             print("FAIL — senaryo: %s" % ", ".join(a for a, _ in kirik))
         if mut_kirik:
             print("FAIL — mutasyon KACTI: %s" % ", ".join(mut_kirik))
         if yama_kirik:
             print("FAIL — mutasyon yamasi kaynaga UYMADI: %s" % ", ".join(yama_kirik))
+        if kurulamadi:
+            print("FAIL — mutasyon KURULAMADI (olcum yapilamadi; korpus zayif DEMEK DEGIL): %s"
+                  % "; ".join(kurulamadi))
         return 1
     print("PASS — %d senaryo + %d mutasyon" % (len(sonuc), len(MUTASYONLAR)))
     return 0

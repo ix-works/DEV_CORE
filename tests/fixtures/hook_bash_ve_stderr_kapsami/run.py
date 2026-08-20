@@ -300,7 +300,7 @@ def main() -> int:
     print("  -> %d/%d senaryo PASS" % (len(sonuc) - len(kirik), len(sonuc)))
 
     print("\n--- MUTASYONLAR (her biri korpusu KIRMIZI yapmali) ---")
-    mut_kirik, yama_kirik = [], []
+    mut_kirik, yama_kirik, kurulamadi = [], [], []
     for ad, hedef, mut in MUTASYONLAR:
         bozuk = mut(ham[hedef])
         if bozuk == ham[hedef]:
@@ -310,6 +310,13 @@ def main() -> int:
         mutant = kardes[hedef]
         try:
             mutant.write_text(bozuk, encoding="utf-8")
+            # ⚠ YAZIMI DOGRULA: bu dosya bir alt-surece YOL olarak veriliyor. Yazimin
+            #    "basarili donmesi" dosyanin ORADA oldugunu kanitlamaz (olculdu: bir
+            #    kosumda FileNotFoundError ile kayboldu). Kanit = okuyarak esitlik.
+            if not mutant.is_file() or mutant.read_text(encoding="utf-8") != bozuk:
+                raise RuntimeError(
+                    "mutant kardes dosya yazildi ama DOGRULANAMADI: %s "
+                    "(dis bir surec temizliyor olabilir)" % mutant)
             if ad.startswith("M4"):
                 # M4 senaryo listesiyle degil, GATE'in KENDI kararayla olculur:
                 # "nudge'a ciplak yol kondu -> gate FAIL veriyor mu?"
@@ -325,8 +332,12 @@ def main() -> int:
                 yakalandi = any(not ok for _, ok, _ in m_res)
                 kacan = [a for a, ok, _ in m_res if not ok]
         except BaseException as e:  # noqa: BLE001
-            yakalandi, kacan = False, []
+            # ⛔ KURULAMADI != KACTI (cokme != FAIL): mutasyon KURULAMADIYSA korpusun
+            #    zayif oldugu SONUCU CIKARILAMAZ — olcum hic yapilamamistir. Ucuncu
+            #    deger olarak ayri raporlanir ve korpusu KIRMIZI yapar.
+            kurulamadi.append("%s -> %s: %s" % (ad, type(e).__name__, e))
             print("  [KURULAMADI] %s -> %s: %s" % (ad, type(e).__name__, e))
+            continue
         finally:
             mutant.unlink(missing_ok=True)
         print("  [%s] %s" % ("YAKALANDI" if yakalandi else "KACTI", ad))
@@ -348,13 +359,16 @@ def main() -> int:
           "mutant kardes dosya KALMADI")
 
     print("\n" + "=" * 78)
-    if kirik or mut_kirik or yama_kirik:
+    if kirik or mut_kirik or yama_kirik or kurulamadi:
         if kirik:
             print("FAIL — senaryo: %s" % ", ".join(a for a, _ in kirik))
         if mut_kirik:
             print("FAIL — mutasyon KACTI: %s" % ", ".join(mut_kirik))
         if yama_kirik:
             print("FAIL — mutasyon yamasi kaynaga UYMADI: %s" % ", ".join(yama_kirik))
+        if kurulamadi:
+            print("FAIL — mutasyon KURULAMADI (olcum yapilamadi; korpus zayif DEMEK DEGIL): %s"
+                  % "; ".join(kurulamadi))
         return 1
     print("PASS — %d senaryo + %d mutasyon" % (len(sonuc), len(MUTASYONLAR)))
     return 0

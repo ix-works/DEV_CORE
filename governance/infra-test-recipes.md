@@ -903,6 +903,37 @@ python tests/run_fixture_tests.py                       # 137/137
   de tüketiliyor — bu turda imza `bool`→demet olunca `suite_ortam_hijyeni` ÇÖKTÜ;
   ters-yön kontrolü olmasaydı sessiz kalırdı).
 
+- ⛔ **KORPUS CI'DA KOŞACAK MI? — `mcp` TUZAĞI (K6'da yakalandı):** `atom.py` modül
+  seviyesinde `_app`i, o da `mcp.server.fastmcp`i çeker. **CI'da `mcp` KURULU DEĞİL**
+  (`core-ci.yml` yalnız `requests urllib3 python-dotenv` kurar) ⇒ onu import eden korpus
+  CI'da ImportError ile KIRMIZI yanar. Prior-art zaten vardı: `reviewer_tip_kapsam`
+  docstring'i *"Neden import değil: atom.py MCP SDK'sini çeker; CI'da o paket YOK"*
+  diyor. ⇒ Yeni korpus yazarken **CI'nın kurduğu bağımlılıkları ÖLÇ**; gerekiyorsa B26
+  reçetesiyle AST'den ayıkla (dekoratörü ATLA). `_profile.py` güvenlidir (yalnız
+  `utils.project_config`). Canlı ölçüm gereken vektör `mcp` varsa koşar, yoksa
+  **`[OLCULEMEDI]`** satırı basar — sessiz SKIP değil, üçüncü değer; kapsamı AST vektörü taşır.
+  **Simülasyon reçetesi:** `PYTHONPATH=<tmp>` altına `mcp/__init__.py` → `raise ImportError`
+  koy, korpusu koş; A/B vektörleri hâlâ ölçmeli.
+
+- ⛔ **`KURULAMADI` ≠ `KACTI` (çökme ≠ FAIL — kendi korpusumda yaşandı):** mutasyon
+  KURULAMAZSA (ör. kardeş mutant dosya yazıldıktan sonra kayboldu → `FileNotFoundError`)
+  eski kalıp `yakalandi=False` atayıp bunu *"mutasyon KAÇTI"* diye raporluyordu — yani
+  **aracın bozulmasını korpusun zayıflığı** sanıyordu. Üçüncü değer şart: ayrı
+  `kurulamadi` listesi + ayrı FAIL satırı. Ayrıca kardeş mutant **yazımdan sonra
+  OKUNARAK doğrulanır** (yazımın hatasız dönmesi dosyanın orada olduğunu kanıtlamaz).
+
+- ⛔ **TIER VEKTÖRLERİ İMPORT-ANINDA KİRLENİR (K4 sınıfının İKİNCİ üyesi, ölçüldü):**
+  `conn_cift_anahtar` `sal.get_conn_path`i yönlendiriyordu ama **geç kalıyordu**:
+  `import sap_adt_lib` İMPORT ANINDA `find_conn_file()` + `load_dotenv()` koşar; repo
+  kökünde bir `.conn_adt` varsa `ADT_SAP_TIER=DEV` `os.environ`a yazılır ve yönlendirme
+  kurulmadan tier ZATEN kirlenir ⇒ *"tier YOK → UNKNOWN"* vektörü **DEV** okur.
+  Süit koşum ORTASINDA (ölçüldü: ~39. saniye, 1087 B) repo köküne yazdığı için bu
+  **aralıklı** bir kırmızıydı: fixture önce koşarsa geçer, sonra koşarsa düşer.
+  Fix: import ÖNCESİ `CLAUDE_PROJECT_DIR`i kuma çevir. Kanıt (kirli kök varken):
+  fix öncesi **5/6** (`tier=DEV`), fix sonrası **6/6**; süit **3 ardışık koşum 144/144**.
+  ⚠ Ders: *"monkeypatch ile yönlendirdim"* yetmez — **import anındaki yan etki** daha
+  erken koşar. Yönlendirmenin İMPORT'TAN ÖNCE mi sonra mı kurulduğunu ölç.
+
 - ⚠ **DOĞRULANAMADI:** K6 canlı `/activation` kabulü (B11) · K7 gerçek UI5/playwright
   doğruluğu (B15) · K8① canlı Bash düzenlemesinde ateşleme (matcher META-İNFRA,
   kurulmadı — `settings.template.json` kararı lider/kullanıcıda).
