@@ -62,6 +62,25 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
   tarihçe var). Raporunda **GEÇMİŞ-ETKİ** başlığı ZORUNLU: geçmiş kayıtlardaki her senaryo için
   "bozulur mu?" değerlendirmesi + o senaryoların fixture'larını F3'te YENİDEN koştuğunun kanıtı.
   Kayıt yoksa "changelog'da geçmiş kaydı yok (tarihsel sınır)" yaz — uydurma.
+- ⭐ **F0b TASARIM-GEREKÇESİ + KALEM TAZELİĞİ (F0 ile aynı anda; fix'e başlamadan ÖNCE):**
+  F0 *"bu bileşende ne DEĞİŞTİ"* sorusunu yanıtlar. **Asıl kaçıran soru başkadır:**
+  *bu davranış bir kusur mu, yoksa **ölçülmüş bir karar** mı?* Kuyruk kaydı bunu **bilmeyebilir** —
+  kaydı yazan da aynı boşluğa düşmüş olabilir. **Dört kaynağa bak** (hedefli, tüm-repo tarama YOK):
+  1. **Bileşenin kendi yorumları** — config `_comment`, docstring, dosya başlığı
+     *(vaka 2026-08-20: `scripts/abaplint/abaplint.json` `_comment` → "`check_syntax` KAPALI,
+     izole dosyada tip-çözümleme gürültü yapar" ⇒ kuyruğa "kapı boşluğu" diye açılan kalem
+     aslında **kararlanmış bir sınırdı**)*
+  2. **`playbook/lessons-learned.md` PATTERN'leri** *(aynı vaka: PATTERN #20 → `adt_syntax_check`
+     salt-okuma DEĞİL ⇒ yerel bir kapıya kablolanamaz)*
+  3. **`standards/`** — kuralın kendisi ve gerekçesi
+  4. **`governance/removed-controls.md`** — ⭐ *"bunu zaten denedik ve **KALDIRDIK**"* tam burada yaşar
+  **AYRICA — kalem hâlâ gerçek mi:** kuyruk kayıtları tarihlidir; araya giren PR'lar kalemi
+  kapatmış olabilir. Kapanmışsa **YAPMA**, "kapanmış" diye **kanıtıyla** raporla.
+  ⛔ **Kapanmış işi yeniden yapmak da bir hata türüdür** — ve gerekçesi yazılı bir kararı
+  "kusur" sanıp geri açmak daha pahalısıdır.
+  Raporunda **TASARIM-GEREKÇESİ** başlığı ZORUNLU; üç değerden biri:
+  `BULUNDU — <ref>` (dosya:satır / PR / PATTERN no) · `ARANDI-YOK — <nerelere bakıldı>` ·
+  `ARANMADI — <gerekçe>`. **Gerekçesiz atlama kabul edilmez.**
 - **F1 BLAST-RADIUS:** bileşeni kullanan her yer (grep + settings-matcher + çağıran-zincir +
   template/overlay kopyaları). Sayı ver, "birkaç yer" deme.
 - **F2 KÖK-SORU:** semptom bir SINIFIN örneği mi? Fix sınıfı çözmeli. Vaka-özel istisna =
@@ -77,10 +96,13 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
 - Bağımsız okuma/`git log`/Grep çağrılarını **TEK turda paralel** gönder (batch); seri tek-çağrı israftır.
 - **Kapsam-dışı gezinti YOK:** F1 blast-radius İLGİLİ bileşenle sınırlı — "hazır bakmışken" tüm-repo tarama yapma.
 - F0 hedefli-okuma: changelog'un yalnız ilgili bileşen bölümü (+gerekirse o dosyanın git-log'u).
+- **F0b de HEDEFLİ:** dört kaynakta **bileşen adı + semptom terimi** aranır — tüm-repo okuma DEĞİL.
+  Dördü de boş dönerse `ARANDI-YOK` yazılır; bu **maliyeti düşük, değeri yüksek** bir turdur
+  (bir kez atlanınca bedeli **tam bir fix seansı**dır — ölçüldü 2026-08-20).
 - Aynı araç+aynı girdi mükerrer çağrı YASAK (ilk sonucu kullan; büyük çıktıyı değişkende/notunda tut).
 - Rapor kompakt: kanıt = alıntı/sayı/exit-kodu; ham döküm yapıştırma.
 
 ## RAPOR ŞABLONU (SendMessage; başka format kabul edilmez)
-`KAYIT#` · `GEÇMİŞ-ETKİ` · `TEŞHİS` (kök, sınıf-mı-vaka-mı) · `DEĞİŞİKLİK` (dosya:satır listesi, worktree'de)
+`KAYIT#` · `GEÇMİŞ-ETKİ` · **`TASARIM-GEREKÇESİ`** (F0b: BULUNDU/ARANDI-YOK/ARANMADI + kalem hâlâ gerçek mi) · `TEŞHİS` (kök, sınıf-mı-vaka-mı) · `DEĞİŞİKLİK` (dosya:satır listesi, worktree'de)
 · `F3-KANIT` (üç testin gerçek çıktısı) · `⚠GEVŞETME` (varsa+FP-kanıt) · `F5-YAYILIM` ·
 `AÇIK-NOKTA/DOĞRULANAMADI`.
