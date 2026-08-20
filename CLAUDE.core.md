@@ -163,6 +163,16 @@
   ("yaptım / sırada / açık-nokta"). = **görünürlük** (ne yapıyor), canlılık garantisi DEĞİL: asılı ajan
   rapor gönderemez → onu watchdog/§5 yakalar. Saat-bazlı DEĞİL (ajanın öz-zamanlayıcısı yok; kilometre-taşı
   başına ≈ birkaç dk). Geniş fan-out'ta KAPAT (mesaj seli). 📖 `governance/agent-teams-operating-model.md` §4B.
+- ⭐ **SPAWN İZNİ — VARSAYILAN AÇIK (bu core'u kullanan TÜM projeler; sahip kararı 2026-08-20).**
+  Harness bazı modellerde sistem promptuna *"Do not call the AgentTool unless the user requested it"*
+  enjekte eder (**ikilide sabit kodlu**, ayarla kapatılamaz — ölçüldü 2026-08-20, Claude Code 2.1.237).
+  Bu bir **yasak değil, varsayılan**tır: *"unless the user requested it"*. **Bu satır o talebin
+  kalıcı ve açık hâlidir** ⇒ `expert build (FE/BE)` · `bug-gate` · `gateway` · `araştırma (sap-research)`
+  spawn'ı için **tur başına ayrıca onay sorulmaz**; ADR 0018 lazy/on-demand roster aynen geçerli
+  (oturum başında roster açılmaz, ihtiyaç anında scoped spawn + bitince kapat).
+  ⛔ **KAPSAM DIŞI — açık talimat şart:** `infra-expert` (infra AYRI ve AÇIK onay ister) ·
+  **Workflow** (çok-ajanlı orkestrasyon) · **deep-research**. ⛔ Aşağıdaki **BUG GATE**
+  zorunluluğu bu izinle **düşmez**. Kullanıcı **"solo"** derse spawn edilmez.
 - **BUG GATE:** expert substantive build bitirince **taze** `bug-expert` → PASS/WARNING/BLOCKER.
 - **SAP yazma öncesi:** `run_review.py` pre-flight (ADR 0006). BLOCKER → yazma.
 - **SAP kaynağı düzenlemeden önce:** PULL-BEFORE-EDIT (ADR 0016) — tazelik doğrulanmadan edit YOK.
