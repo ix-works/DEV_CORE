@@ -52,11 +52,41 @@ def _brifing_lint(data):
                              f"ilk300={duz[:300]!r}\n")
             except Exception:
                 pass
+        notlar = []
         if eksik:
-            return ("[BRIFING-LINT] Spawn prompt'unda R2 sablon izleri eksik: "
-                    + ", ".join(eksik)
-                    + " — sablon: core/claude/templates/spawn-brief.md (kanit-kurallari + "
-                      "gorev sinirlari + goreve-iliskin dersler alanlari zorunlu; nudge, blok degil).")
+            notlar.append("[BRIFING-LINT] Spawn prompt'unda R2 sablon izleri eksik: "
+                          + ", ".join(eksik)
+                          + " — sablon: core/claude/templates/spawn-brief.md (kanit-kurallari + "
+                            "gorev sinirlari + goreve-iliskin dersler alanlari zorunlu; "
+                            "nudge, blok degil).")
+
+        # --- ENGELLENIRSEN ekseni (sablon §9; 2026-08-20) --------------------
+        # ⛔ VAKA: `isolation:"worktree"` ile acilan bir infra ajaninin worktree'si YANLIS
+        # repoda olustu; charter'i canli agaca yazmayi yasakladigi icin YAZACAK YERI YOKTU.
+        # Yasaga uydu, bekledi, HABER VERMEDI -> 26 dk olculebilir cikti SIFIR (watchdog
+        # "heartbeat taze" diyordu: canlilik olcer, ILERLEME olcmez). Kusur ajanda degil
+        # BRIFTEYDI.
+        #
+        # ⭐ EKSEN DAR TUTULDU, OLCULEREK (587 gercek brif, transcript korpusu):
+        #   · ham "madde var mi?"                 -> %86,7 atesler  ⇒ KULLANILAMAZ
+        #     (ilk gunde uyari korlugu; mevcut GOREV ekseninin tabani %25,0)
+        #   · DAR eksen (baska-agac + yazma isi)  -> %18,4 kapsam, %16,0 atesleme
+        #     ⇒ KB-01'in olculmus gurultu tabaniyla (%13,9) ayni bant.
+        # Yani kontrol "herkese sablon ezberlet" demiyor; yalniz BASKA BIR AGACA YAZMA isi
+        # verilen brifte kacis-yolunun yazili olmasini istiyor -- vakanin tam sekli.
+        yer = _re.search(r"WORKTREE|ISOLATION|DEV_CORE|_WT[\\/ ]|AYRI DEPO|BASKA REPO", duz)
+        yazma = _re.search(r"\bFIX\b|DUZELT|YAZ|OLUSTUR|URET|COMMIT|UYGULA|EKLE", duz)
+        engel = _re.search(r"ENGELLEN|YAZACAK YER|DERHAL BILDIR|DERHAL .{0,20}SENDMESSAGE", duz)
+        if yer and yazma and not engel:
+            notlar.append(
+                "[BRIFING-LINT] Bu brif BASKA BIR AGACA yazma isi veriyor ama "
+                "'ENGELLENIRSEN DERHAL BILDIR' maddesi YOK (sablon §9). "
+                "Olculmus vaka: yazacak yeri olmayan bir ajan yasaga uyup 26 dk SESSIZ "
+                "bekledi; watchdog 'heartbeat taze' diyordu (canlilik != ilerleme). "
+                "Ekle: 'Yazacak yerin yoksa/yasakla cakisiyorsan TAHMIN ETME, BEKLEME -> "
+                "DERHAL SendMessage(to:\"main\")'. Ayrica worktree adresini brife YAZ.")
+        if notlar:
+            return "\n".join(notlar)
     except Exception:
         pass
     return None

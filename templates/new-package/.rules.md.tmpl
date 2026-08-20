@@ -19,8 +19,8 @@ status: active
 | CDS Root View | `{PKG}_C_*` | `^{PKG}_C_[A-Z0-9_]+$` |
 | CDS Interface View | `{PKG}_I_*` | `^{PKG}_I_[A-Z0-9_]+$` |
 | DDL Source | `{PKG}_DDL_*` | `^{PKG}_DDL_[A-Z0-9_]+$` |
-| Data Element | `{PKG}_DE_*` veya `{PKG}_DTEL_*` | `^{PKG}_(DE\|DTEL)_[A-Z0-9_]+$` |
-| Domain | `{PKG}_DOM_*` | `^{PKG}_DOM_[A-Z0-9_]+$` |
+| Data Element | `{PKG}_E_*` | `^{PKG}_E_[A-Z0-9_]+$` |
+| Domain | `{PKG}_D_*` | `^{PKG}_D_[A-Z0-9_]+$` |
 | Structure | `{PKG}_S_*` | `^{PKG}_S_[A-Z0-9_]+$` |
 | Table | `{PKG}_T_*` | `^{PKG}_T_[A-Z0-9_]+$` |
 | Table Type | `{PKG}_TT_*` | `^{PKG}_TT_[A-Z0-9_]+$` |
@@ -28,6 +28,17 @@ status: active
 | Message Class | `{PKG}` | tek tablo, paket adıyla aynı |
 
 > Validator: `scripts/validators/check_package_naming.py` bu regex'leri okuyup `cds/`, `classes/`, `programs/`, vb. altındaki dosya adlarını doğrular.
+
+> ⛔ **DTEL/Domain öneki `_E_` / `_D_`'DİR — `_DE_`/`_DTEL_`/`_DOM_` DEĞİL** (2026-08-20'de
+> düzeltildi). Kaynak: `core/standards/01-naming.md` §4.4.5 → Data Element = **`E`**
+> (`ZMM001_E_AMOUNT`), Domain = **`D`** (`ZSD001_D_AMOUNT`). Domain ile DTEL **aynı
+> kısaltmayı paylaşmaz**, ayrı harflerdir; canlı sistemde `_DOM_`/`_DE_` önekli **tek bir
+> obje yok** (ölçüldü 2026-08-17).
+> ⚠ **NEDEN ŞERH DÜŞÜLDÜ:** bu satır şablonda üç yıl yanlış durdu ve **her yeni paket onu
+> miras aldı**; aynı düzeltme üç ayrı pakette **ELLE** yapıldı (2026-05-15 · 2026-08-05 ·
+> 2026-08-17) — üç turda üç kez elle düzeltmek, düzeltmenin **yanlış katmanda** yapıldığının
+> kanıtıdır. Kural dosyası validator'ün GİRDİSİDİR: yanlış olduğunda standarda uygun ad yazan
+> geliştirici **validator hatası** alır ve ya kural bükülür ya ad bozulur.
 
 > **Include alt-kuralı — klasik program (std 06 §1 · gate C-INC-NAME-01):** Klasik report/module-pool **tek-body YAZILMAZ**; main = `INCLUDE` + event blokları. Include adı programdan TÜRER: `{PKG}_P_<PRG>` → `{PKG}_I_<PRG>_<Tip><NN>` — Tip: **T**op·**C**ls·**O**=PBO·**I**=PAI·**F**orm·**S**el; NN=01… Örn `{PKG}_P_SIPARIS` → `{PKG}_I_SIPARIS_T01`/`_C01`/`_F01`. Generic `{PKG}_I_TOP` (program-kökü + numaralı suffix yok) YASAK. Include = PROG/I objesi, `programs/includes/`.
 

@@ -50,3 +50,26 @@ taze-oku kuralı GEÇERLİ KALIR — hazır-bağlam yalnız değişmeyen referan
 ## 8. HEARTBEAT / İLETİŞİM
 - Uzun işte her doğal kilometre-taşında 2-3 satır SendMessage({to:"main"}) ("yaptım/sırada/açık-nokta").
 - "YAPILAMAZ" demeden önce: repo'da alternatif yol ara + denediklerini kanıtla (kanıtsız olumsuz rapor sorgulanır).
+
+## 9. ENGELLENİRSEN — ZORUNLU MADDE (⛔ yazma işi veren her brifte)
+> **Şu satır brife AYNEN girer (ajanın charter'ı bunu tekrarlamaz — brif söylemek zorundadır):**
+>
+> *"Yazacak yerin yoksa, bir yasakla çakışıyorsan, araç yüzeyin yetmiyorsa ya da bir kalem
+> sana yanlış geliyorsa: **TAHMİN ETME, BEKLEME** → **DERHAL `SendMessage(to:"main")`**.
+> Sessiz bekleme bu ekipte kusurdur."*
+
+- ⭐ **NEDEN ZORUNLU (ölçülmüş vaka, 2026-08-19):** bir infra ajanı `isolation:"worktree"` ile
+  açıldı; worktree **bulunulan projenin** açıldı, iş ise **başka repodaydı** ⇒ ajanın charter'ı
+  canlı ağaca yazmayı yasakladığı için **yazacak hiçbir yeri yoktu**. Yasağa uydu, bekledi,
+  **haber vermedi**: **26 dakika ölçülebilir çıktı SIFIR**. ⚠ Watchdog *"heartbeat 17s taze"*
+  diyordu — çünkü heartbeat **canlılık** ölçer, **ilerleme** ölçmez. Doğru adres brife
+  yazılınca aynı iş **~8 dakikada** bitti. Ajanın davranışı şablon açısından **kusursuzdu**;
+  kusur **brifteydi**.
+- **Çok-repolu işte worktree'yi LİDER açar** ve adresini brife YAZAR:
+  `git worktree add -b wip/<konu> <dizin> origin/<dal>` → ajan `git push origin HEAD:<PR-dalı>`.
+  ⚠ Aynı dal canlı ağaçta checkout ise git ikinci worktree'ye izin vermez.
+- **İstediğin her eylemin ajanın `tools:` listesinde olduğunu ÖLÇ** (aynı gün üç vaka: salt-okur
+  role rapor DOSYASI yazdırmak · `SendMessage`'ı olmayan rolden heartbeat istemek).
+- ⓘ Bu maddenin varlığını `brifing-lint` denetler — ama yalnız **başka bir ağaca yazma işi
+  veren** briflerde (ölçüm: 587 gerçek brif · dar eksen %18,4'ünü kapsıyor, ham "madde var mı"
+  kontrolü %86,7 ateşleyip uyarı körlüğü üretirdi).

@@ -736,3 +736,48 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   (araç hangi sorguyu koşuyor da `E070`'i ıskalıyor) **gateway'in canlı ölçümüdür**;
   bu tur yalnız SÖZLEŞMEYİ düzeltti. ③ gerçek bir projede junction kırıp commit
   denemesiyle bir kez teyit edilmeli (fixture sentetik depo kullanır).
+
+## B27 — PARTİ-2b şablon + manifest üçlüsü (.rules.md.tmpl · spawn-brief/lint · behavior_manifest)
+- İki korpus (ikisi de OZEL_TESTLER üyesi):
+  `python tests/fixtures/sablon_zorunlu_maddeler/run.py` → **9 senaryo + 3 mutasyon**, exit 0
+  `python tests/fixtures/manifest_secici_onay/run.py`    → **9 senaryo + 4 mutasyon**, exit 0
+  Dokunulan hook regresyonu: `python tests/fixtures/prior_art_kb01/run.py` → **17/17**.
+  Tam suite: `python tests/run_fixture_tests.py` → **136/136**.
+- ⭐ **ÖNEKLER KORPUSTA KOPYALANMAZ:** `sablon_zorunlu_maddeler` DDIC öneklerini
+  `standards/01-naming.md` **§4.4.5 tablosundan OKUR**. İkinci bir kopya tutulsaydı
+  bayatlar ve korpus standardı değil **kendi ezberini** doğrulardı. Standardın tablo
+  biçimi değişirse `_std_ddic_onekleri()` boş döner → A1 kırmızı (fail-loud, sessiz
+  geçme yok).
+- ⚠ **Şablon mutasyonu DİSKE yazılır** (`.rules.md.tmpl` geçici olarak yamalanır) ve
+  `finally` ile geri alınır; koşucu ayrıca **kalıntı kontrolü** basar. Mutasyon artığı
+  kalırsa süit FAIL verir — çünkü kalıntı bir sonraki koşumda **sessiz bozulma** olurdu.
+- ⭐ **`brifing-lint` yeni ekseni DAR — genişletmeden ÖNCE TABANI ÖLÇ.** Ölçüm
+  (587 gerçek brif, transcript korpusu, `utils.claude_paths.transcript_dizini`):
+  | Eksen | Ateşleme |
+  |---|---|
+  | ham *"ENGELLENIRSEN maddesi var mı?"* | **%86,7** ⇒ KULLANILAMAZ (uyarı körlüğü) |
+  | **DAR** (başka-ağaç **+** yazma işi, madde yok) | **%16,0** (kapsam %18,4) |
+  | mevcut `GOREV` ekseni (kıyas tabanı) | %25,0 |
+  | KB-01 ekseninin ölçülmüş gürültü tabanı | %13,9 |
+  ⛔ Ekseni gevşetmek (ör. `yazma` şartını kaldırmak) korpusta **M3 mutasyonudur** ve
+  B3 (yalnız-okuma FP çapası) onu kırar.
+- ⚠⚠ **`behavior_manifest`te İKİ GEVŞETME var — dokunmadan önce POZİTİF KONTROLLERİ oku:**
+  (a) `worktrees` prune'da → FP çapası **S1**, pozitif kontrol **S2** (ana ağaçtaki gerçek
+      nested `CLAUDE.md` hâlâ taranır).
+  (b) `_hash` satır-sonunu normalize eder → FP çapası **S3**, pozitif kontrol **S4**
+      (**tek karakterlik** gerçek değişiklik hâlâ yakalanır).
+  ⛔ S2/S4 **SİLİNMEZ**: onlar olmadan iki gevşetmenin "kapıyı körletmediği" iddiası
+  kanıtsız kalır. Mutasyonlar M1/M2 tam da bu iki değişmezi sınar.
+- **`--only` sözleşmesi:** `generate --only <yol>` / `--only a,b` / tekrarlı `--only`.
+  Fail-closed iki dal: bilinmeyen yol → `SystemExit` · manifest yokken `--only` →
+  `SystemExit` (önce tam `generate`). ⛔ `verify` ile `generate` **tek** kıyas fonksiyonu
+  (`_sapmalar`) kullanır — ayrışan iki kıyas mantığı bu evde daha önce kusur üretti.
+- ⓘ `behavior-manifest.json` **gitignore'dadır** (makine-lokal) ⇒ değişikliği PR'da kimse
+  göremez. Tek denetim yüzeyi `generate`in ÇIKTISIDIR; bu yüzden "ONAYLANAN / BEKLEMEDE"
+  listeleri ve TOPLU ONAY uyarısı **çözümün parçasıdır**, kozmetik değil (S7 + M4).
+- ⚠ **DOĞRULANAMADI:** yeni lint ekseninin **canlı bir spawn'da** ateşlediği ölçülmedi
+  (hook kablolaması oturum başında yüklenir); kanıt sentetik payload + gerçek
+  `_brifing_lint` fonksiyonudur. İlk gerçek spawn'da teyit et.
+- ⚠ **AÇIK (bu turda dokunulmadı):** şablonun **Message Class** satırı üç kaynakta üç
+  farklı (standart `MC` · şablon çıplak `{PKG}` · gerçek kullanım `{PKG}_MSG`) ve
+  **Search Help** satırı hiç yok. İkisi de **kural kararıdır (K4)**, mekanik fix değil.
