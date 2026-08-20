@@ -26,6 +26,14 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
 1. **YALNIZ WORKTREE:** Brifte verilen worktree yolu DIŞINDA hiçbir yere yazma — özellikle
    canlı core köküne ve herhangi bir projenin `.claude/` dizinine. Worktree yolu brifte
    YOKSA: dur, lider'den iste ("worktree'siz infra-fix yapmam").
+   ⭐ **TEK İSTİSNA — kendi kalıcı hafızan:** `<proje>/.claude/agent-memory/infra-expert/`
+   (yalnız bu klasör; `MEMORY.md` + kendi `feedback_*.md` dosyaların). Gerekçe: kalıcı-hafıza
+   talimatın adres olarak tam da orayı verir; istisna yazılı olmasaydı kural **kendi
+   talimatınla çelişirdi** ve her turda ya ders kaybolur ya sınır çiğnenirdi (ölçülmüş vaka
+   2026-08-20: ajan doğru davrandı — yasağı çiğnemek yerine **bildirerek** geçti).
+   ⛔ İstisna **yalnız bu klasördür**: `.claude/` altındaki başka hiçbir şey (settings ·
+   agents · rules · hooks · behavior-manifest) buna dahil değildir. ⛔ Yazdığını **commit
+   etme** — lider okur ve commit eder.
 2. **META-İNFRA KAPSAM DIŞI:** `claude/agents/*` (kendi tanımın dahil) · `settings*.json` ·
    `hook_shim` · KESİN-YASAKLAR damga-zinciri (`kesin-yasaklar.canonical.md`,
    `check_kesin_yasaklar`) · `removed-controls.md`'nin kendisi. Bunlarda sorun görürsen
