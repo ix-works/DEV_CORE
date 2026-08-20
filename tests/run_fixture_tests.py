@@ -83,7 +83,9 @@ OZEL_TESTLER = [
     ("worktree_blocklist", "kimlik blocklist'i worktree'de de bulunmali (commit-blogu)"),
     ("negatif_test_harness", "hook parse-fail gorunurlugu: exit 0 KORUNUR + stderr'de not (bozuk girdi ARTIK ayirt edilebilir)"),
     ("tembel_desen", "sizinti deseni TEMBEL kurulur: hiz kazanci korumayi OLU'ye cevirmiyor"),
+    ("infra_write_guard", "infra yuzeyine ANA-OTURUM yazimi BLOK; infra-expert MUAF (kimlik olculdu)"),
     ("abaplint_failopen", "check_abaplint: OLCEMEDIM != TEMIZ (ozet satiri zorunlu kanit, 9 senaryo)"),
+    ("prior_art_kb01", "KB-01 ONCE-ARA tur-ici: brifingde adi gecen script'in recetesi SPAWN aninda yuzeye cikar (metin-izi DEGIL arama)"),
     # ⚠ 2026-08-01: `adtget_yokluk_kaniti` bir ara bu listede IKI KEZ yaziliydi (PR birlesme
     # artigi) -> ayni fixture iki kez kosuyor ve TOPLAM sayiyi sisiriyordu. "N/N PASS"
     # sayisina guvenmenin bedeli: sayaci degil SATIRLARI oku.
@@ -101,6 +103,10 @@ OZEL_TESTLER = [
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
     # 2026-08-01 kuyruk-turu (validator ailesi, V1-V6):
     ("cds_curr_satir_yorumu", "CURR/QUAN: satir-sonu // yorumu alani/degeri gizliyordu (V1)"),
+    ("cds_curr_kaynak_tipi",
+     "CURR/QUAN kaynak-tipi: 'define root view entity' alt-diziye takilmiyordu -> rc=0 SESSIZ (V2)"),
+    ("populate_tables_unit_kind",
+     "B-13: CSV 'type' kolonu ABAP tipi saniliyordu -> CURR dali ULASILAMAZ olu koddu"),
     ("paket_uzanti_kapsami", "paket naming + paket-siniri: .bdef/.srvd allow-list'te YOKTU (V2)"),
     ("itg_alan_dolulugu", "ITG S2: bos sablon + [x] BLOCKER gate'ini geciyordu (V3)"),
     ("gitignore_tam_satir", "core-sizinti kilidi: yorumlu/negatif satir 'kilit var' saniliyordu (V4)"),
@@ -205,6 +211,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları)"),
     ("scripts/hooks/post_validate.py", ("O:fs_docstd", "O:negatif_test_harness"),
      "doc-fs dalı (OKU-işaretçisi + gate özeti) + komşu dalların regresyonu + parse-fail sözleşmesi"),
+    ("scripts/hooks/watchdog_launch.py",
+     ("O:prior_art_kb01", "O:negatif_test_harness"),
+     "KB-01 prior-art ekseni + brifing-lint regresyonu + parse-fail sözleşmesi"),
     ("scripts/validators/check_abaplint.py", ("O:abaplint_failopen",),
      "fail-open kilidi: 'ölçemedim' ile 'temiz' AYNI çıkışa düşmemeli (özet satırı zorunlu kanıt)"),
     ("scripts/abaplint/abaplint.json", ("O:abaplint_failopen",),
@@ -240,7 +249,15 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
 
     # ── validator ailesi: kendi koşucusunu taşıyan korpuslar ────────────────
     ("scripts/validators/check_cds_currency_reference.py",
-     ("O:cds_curr_satir_yorumu",), "V1 korpusu bu validator'ı import eder"),
+     ("O:cds_curr_satir_yorumu", "O:cds_curr_kaynak_tipi", "O:populate_tables_unit_kind"),
+     "V1 korpusu bu validator'ı import eder; V2 korpusu CLI'yi subprocess ile koşup "
+     "KAYNAK-TİPİ tespitini + çıkış-kodu sözleşmesini (0/1/2) ölçer; B-13 korpusu ise "
+     "ÜRETİCİ↔DENETÇİ mutabakatını ölçer (ikisi aynı DTEL sözlüğünü kullanır)"),
+    ("scripts/populate_tables.py", ("O:populate_tables_unit_kind",),
+     "B-13/B-9/B-14: unit_kind kararı + CSV kolon sözleşmesi"),
+    ("scripts/utils/ddic_semantics.py",
+     ("O:populate_tables_unit_kind", "O:cds_curr_satir_yorumu"),
+     "DTEL sözlüğü TEK KAYNAK: hem üretici hem denetçi bu modülü import eder"),
     ("scripts/validators/check_project_root_resolution.py",
      ("O:proje_koku_varyantlari", "O:conn_adt_proje_koku"),
      "V5 yazım-varyantları + CORE-01 dedektörünün ikinci yüzü"),
@@ -273,6 +290,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "oto-tazeleme kablolaması + parse-fail notu"),
     ("scripts/hooks/*.py", ("O:negatif_test_harness",),
      "16 hook'un parse-fail sözleşmesi tek korpusta ölçülür"),
+    ("scripts/hooks/infra_write_guard.py",
+     ("O:infra_write_guard", "O:negatif_test_harness"),
+     "kimlik ayrımı + korunan yüzey listesi + fail-closed degrade; parse-fail sözleşmesi"),
+    ("claude/settings.template.json", ("O:infra_write_guard",),
+     "kablolama korpusun K6 vektöründe ölçülür (kod ≠ kablolama)"),
 
     # ── overlay / proje-kurulum yüzeyi ──────────────────────────────────────
     ("scripts/utils/claude_overlay.py",

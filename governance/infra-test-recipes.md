@@ -137,6 +137,7 @@ python tests/run_fixture_tests.py                                            # T
 - Fixture bilinçli YOK (deterministik-LLM'siz) → reçete = sentetik-payload (howto-sistem-denetimi §3).
 
 ## B8 — watchdog / pre_compact / post_tool_failure / instructions_log / radar_check
+- **watchdog_launch brifing eksenleri (2026-08-19):** `[PRIOR-ART / KB-01]` ateşleme ölçütü **metin değil arama**: brifingde adı geçen + `scripts/`te var olan script, `playbook/`de ≤2 dosyada geçiyor ve o dosyalar brifingde ANILMIYOR. ⛔ *"atıf var mı"* diye ölçme — gerçek korpusta brifinglerin **%98,6'sı** zaten yol atfı taşır (trivial yeşil). Gürültü tabanı: **%13,9** ateşleme / 570 brifing, medyan 1 ms. FP çapası şart: reçete zaten anılmış · var-olmayan script adı · >2 reçetede geçen genel araç · <400 karakter. Fail-open yasağı iki çapa ister (dizin-yok + bozuk-payload → `KOSMADI`). Notlar **4 emit yolunun hepsinde** çıkmalı (daemon/bash bulunamasa bile). Korpus: `prior_art_kb01`.
 - watchdog: probes-yok → yalnız reach (SAHTE-ALERT üretme); kopuklukta **1** alert (edge); daemon URL-yoksa graceful-exit; launcher proje-kökünü ARG'la geçirir.
 - pre_compact çıktısı `systemMessage` (additionalContext ŞEMA-GEÇERSİZ — canlı-kanıtlı).
 - post_tool_failure: fail-payload'da merdiven(+5b infra-satırı) · başarıda sessiz.
@@ -561,3 +562,80 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
 - ⚠ **Ad sözleşmesi:** gate adında **"freshness" GEÇMEZ** — `run_all_validators --quick`
   (pre-commit) o deseni atlar. Ad değişirse pre-commit'te sessizce ölür; regresyon çapası:
   `--quick` çıktısında gate satırının GÖRÜNMESİ (aynı koşuda "Playbook freshness" `[SKIP]`).
+
+## B22 — `populate_tables.py` unit_kind kararı (CURR ↔ QUAN) + CSV kolon sözleşmesi
+- Korpus: `python tests/fixtures/populate_tables_unit_kind/run.py` → **16 senaryo + 4 mutasyon**,
+  exit 0. Suite içinden: `python tests/run_fixture_tests.py` (OZEL_TESTLER üyesi).
+- Mutasyonlar korpusun **İÇİNDEDİR** (kaynak metni yamalanır; eski sürümü `git show` ile
+  çekmeye gerek YOK) ve koşucu ayrıca **"yama tuttu mu"** kanıtı basar — yama bugünkü kaynağa
+  uymazsa `sahte-yesil riski` ile exit 1 (mutasyonun sessizce NO-OP'a dönmesine karşı).
+- ⚠ **Fixture'ın kendi dersi (iki tane):**
+  1. `populate_tables` import anında `io.TextIOWrapper(sys.stdout.buffer)` kurar. Yalnız
+     `sys.stdout`'u geri koymak **YETMEZ** — wrapper GC'ye girince sardığı GERÇEK buffer'ı
+     KAPATIR ve sonraki `print` *"I/O operation on closed file"* ile patlar (ölçüldü). Korpus
+     import sırasında stdout'u atılabilir bir `BytesIO`'ya bağlar.
+  2. İkinci sinyal (referans DTEL) mutasyonu önce **KAÇIYORDU**: sinyal sökülünce sonuç yine
+     `quantity` çıkar (varsayılan aynı yön) → annotation'a bakan çapa ayırt edemez. Ayırt edici
+     **uyarı-İZİ**dir (çözüldüyse uyarı YOK, varsayılana düşüldüyse VAR) + yön-ikizi `S4b`
+     (Z'li tutar DTEL'i + standart CUKY ref → currency).
+- **ÜRETİCİ↔DENETÇİ mutabakatı:** DTEL sözlüğü `scripts/utils/ddic_semantics.py`'de TEK
+  kaynaktır; `check_cds_currency_reference.py` de oradan import eder. Sözlüğe dokunulursa
+  **İKİ** korpus koşulur: `populate_tables_unit_kind` + `cds_curr_satir_yorumu` (HARİTA
+  ikisini de bağlar).
+- ⚠ **Suite hijyeni (bu turun ürünü DEĞİL, gözlendi):** `run_fixture_tests.py` koşumu repo
+  kökünde gitignored bir `.conn_adt` **BIRAKIR**; **ikinci ardışık koşumda**
+  `conn_cift_anahtar`'ın "tier YOK → UNKNOWN" vektörü `tier=DEV` okuyup FAIL verir (123/124).
+  Temiz ölçüm için koşumdan önce `rm -f .conn_adt`. Ayrı kuyruk kalemi.
+
+## B23 — `infra_write_guard` (infra yüzeyine ana-oturum yazımı BLOK)
+- Korpus: `python tests/fixtures/infra_write_guard/run.py` → **26/26**, exit 0. Suite içinden:
+  `python tests/run_fixture_tests.py` (OZEL_TESTLER üyesi).
+- **İKİ mutasyon, ikisi de koşulur** (biri diğerini kapsamaz; herhangi biri tam puan verirse
+  korpus o değişmez için BOŞTUR):
+  `--mutasyon-blok` → **15/26** (düşen: B1-B10 + K3; FP çapalarının hepsi ayakta)
+  `--mutasyon-cokme` → **23/27** (düşen: B10 + S4 + S7 + S9; M1 vektörü `GUARD-COKTU` izini arar)
+- Mutasyonlar **korpusun içinde** ve **bugünkü kaynaktan** üretilir (git ref'i YOK → "fix merge
+  olunca taban kayar" tuzağı yapısal olarak yok). Desen tutmazsa koşucu **exit 3** verir ve
+  **hiçbir sayı raporlamaz**.
+- **Kimlik ayrımının kanıt tabanı** (guard'a dokunan HERKESİN bilmesi gereken tek şey): ana
+  oturum payload'ında `agent_type`/`agent_id` **YOKTUR**, alt-ajanda **VARDIR**; `agent_type`
+  ajan tanımının `name:`idir. Şema değişirse guard sessizce ya herkesi bloklar ya kimseyi —
+  ölçüm reçetesi: sandbox proje + `.claude/settings.json`'a stdin'i dosyaya döken bir
+  PreToolUse hook'u + `claude -p "... Task ile <ajan-tipi> alt-ajanı Write yapsın"`.
+- ⚠ **Korpusun kendi dersleri:** (1) `--mutasyon-cokme`de S4/S7/S9'un düşmesi **kusur değil**,
+  fail-closed degrade'in fiyatıdır — kaba ağ marker/istisna okumaz. (2) **B10 çökmede kaçar**
+  (`scripts/**/*.py` sınıfı kaba ağda yok); kaba ağı genişletmek her projenin `scripts/*.py`'ını
+  bloklardı ⇒ bilinçli sınır. (3) K4 bugün **exit 1** ölçüyor = kopuk junction'da guard devre
+  dışı (`hook_shim._FAIL_CLOSED` üyesi değil); vektör `{1,2}` kabul eder, böylece lider bu
+  kararı verdiğinde test kırılmaz, yalnız etiketi değişir.
+- **Dokunulursa BİRLİKTE koşulacaklar:** `negatif_test_harness` (V13/V16 sınıf kaydı) ·
+  `fs_docstd` (aynı yüzeydeki `post_validate` infra-express nudge'ı) · `run_guard_fixture_tests`
+  (aynı matcher'daki `pre_tool_guard`).
+
+## B24 — `check_cds_currency_reference` KAYNAK-TİPİ tespiti + çıkış-kodu sözleşmesi
+- Korpus: `python tests/fixtures/cds_curr_kaynak_tipi/run.py` → **19/19**, exit 0.
+  Mutasyon: `... run.py --mutasyon` → **4/4 ayırt edici**. Suite içinden:
+  `python tests/run_fixture_tests.py` (OZEL_TESTLER üyesi; HARİTA satırı validator'a bağlı).
+- **ÇIKIŞ-KODU SÖZLEŞMESİ (bu turda yazıldı, tüketicisi `run_review` rc!=0 → FAIL):**
+  `0` = DENETLENDİ, BLOCKER yok (WARNING olabilir) veya table-function bilinçli atlandı ·
+  `1` = DENETLENDİ, en az 1 BLOCKER · `2` = **ÖLÇÜLEMEDİ** (dosya yok VEYA kaynak tipi
+  tespit edilemedi). rc=0 ile "bakmadım"ı ifade etmek YASAK — kusurun kendisi buydu.
+- **Korpus CLI üzerinden (subprocess) ölçer**, fonksiyon import ederek DEĞİL: ölçülmek
+  istenen değişmez `run_review`'in gördüğü ÇIKIŞ KODU'dur; `main()`'deki dallanma
+  fonksiyon-seviyesi testte görünmez.
+- ⚠ **Mutant nerede yaşar:** kopya **gerçek `scripts/validators/` dizinine**
+  `_mutant_*.py` adıyla yazılır (finally'de silinir). Validator kendi yolundan
+  `parents[1]` ile `utils.ddic_semantics`'i import eder → tempdir'e kopyalanırsa import
+  ÖLÜR, her mutasyon "yakalandı" görünür (SAHTE-KIRMIZI).
+- **İki değişmez → iki mutasyon** (M3/M4 ek kapılar): `M1` eski alt-dizi mantığı geri →
+  A-vektörleri düşer · `M2` fail-open (rc=2 yerine 0) → B1/B2/B3 düşer · `M3` abstract
+  entity 'table' yoluna → A4 düşer (FP kapısı) · `M4` TF atlaması sökülü → C5 düşer.
+- ⚠ **Kill edilemeyen aday, bilerek yazılmadı:** tespit fonksiyonundaki `yorumu_kirp`
+  çağrısı savunmacıdır ama ÖLÇÜLEBİLİR etkisi yok (`// define view` satırı zaten
+  `^\s*define` anchor'ına uymaz) → onun için mutasyon UYDURULMADI.
+- **Dokunulursa BİRLİKTE koşulacaklar:** `cds_curr_satir_yorumu` (V1, aynı denetçi) ·
+  `populate_tables_unit_kind` (B-13, aynı DTEL sözlüğü) — HARİTA üçünü de bağlar.
+- **Gerçek-korpus regresyon reçetesi (tüketici projede):** validator'ı `<source_root>`
+  altındaki tüm `*.cds|*.asddls|*.ddl|*.ddls` dosyalarına koş, rc dağılımını fix ÖNCESİ
+  sürümle karşılaştır. Beklenen: yalnız daha önce "tespit edilemedi" diyen dosyaların
+  çıktısı değişir, geri kalan **BAYT AYNI** kalır.

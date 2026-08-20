@@ -74,6 +74,7 @@ IZ = "D_" + "TESTUSR"
 # trivial bir vektör olmaktan çıkarır (gate gevşerse fixture boşalır dersi).
 HOOK_KAYDI: list[tuple[str, bool, str]] = [
     ("config_change_guard.py", True, ""),
+    ("infra_write_guard.py", True, ""),
     ("instructions_loaded_log.py", True, ""),
     ("intake_triage.py", True, ""),
     ("itg_backstop.py", True, ""),
