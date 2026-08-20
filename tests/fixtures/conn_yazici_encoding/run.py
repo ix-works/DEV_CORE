@@ -50,10 +50,35 @@ KUM = Path(tempfile.mkdtemp(prefix="s6_"))
 eski_cwd = os.getcwd()
 os.environ["CLAUDE_PROJECT_DIR"] = str(KUM)
 os.chdir(KUM)
+
+# ⛔ K4 (2026-08-20) — ÖLÇÜLMÜŞ VERİ KAYBI, "kalıntı" değil:
+#   `CLAUDE_PROJECT_DIR` + `chdir` İZOLASYON SAĞLAMAZ. `find_conn_file()` adayları
+#   *"dosyanın VAR OLDUĞU ilk yer"* diye seçer; env yalnızca orada dosya VARSA kazanır.
+#   Git-bash `PWD`yi repo köküne kurar ⇒ repo kökünde bir `.conn_adt` VARSA (ki süitin
+#   `populate_tables_unit_kind` korpusu import yan-etkisiyle bir şablon yazar) hedef
+#   oraya kayar ve V4 **KULLANICININ GERÇEK `.conn_adt` DOSYASINI 522 B sentetik
+#   TEST_USER verisiyle EZER**. Repro edildi (78 B gerçek → 522 B sentetik).
+#   Süitin hijyeni bunu KURTARMAZ: "koşumdan önce vardı" gördüğü için dosyaya
+#   dokunmaz — yani ezilmiş dosya olduğu gibi kalır (sessiz, gitignored).
+#
+# ⇒ İki katmanlı önlem: (1) kütüphanenin KENDİ izolasyon kancası, (2) yazmadan önce
+#   hedefin kumda olduğunu KANITLA. (2) olmadan (1) bir gün sessizce bozulur.
+for _kacak in ("PWD", "CLAUDE_CWD", "INIT_CWD", "COPILOT_CWD"):
+    os.environ.pop(_kacak, None)
 sys.path.insert(0, str(KOK / "scripts"))
 import sap_adt_lib as L  # noqa: E402
 
+L.set_explicit_working_dir(KUM)     # kütüphanenin belgelenmiş izolasyon kancası
+
 HEDEF = Path(L.get_conn_path())
+if not HEDEF.resolve().is_relative_to(KUM.resolve()):
+    # SESSİZ GEÇME YOK: buradan sonraki her satır dosyaya KİMLİK YAZAR.
+    os.chdir(eski_cwd)
+    shutil.rmtree(KUM, ignore_errors=True)
+    print(f"  [FAIL] KUM-DIŞI HEDEF: {HEDEF}\n"
+          f"         Bu fixture .conn_adt YAZAR; hedef kum değilse gerçek bir kimlik "
+          f"dosyası EZİLİR. Yazmadan durdu.")
+    sys.exit(1)
 
 # ── V1 — NEDENSELLİK / KONTROL GRUBU: cp1252 yazımı tüketicileri GERÇEKTEN kırar ─
 #   (Bu vektör bug'ın var olduğunu kanıtlar; locale'den bağımsızdır.)
@@ -133,6 +158,9 @@ kontrol("V7 FP ÇAPASI: yazılan dosya BOM ile BAŞLAMIYOR",
         not HEDEF.read_bytes().startswith(b"\xef\xbb\xbf"),
         f"ilk baytlar={HEDEF.read_bytes()[:4]!r}")
 
+# try/finally değil ama ETKİSİ aynı: yukarıdaki her erken çıkış yolunda da geri alınır
+# (KUM-dışı hedef dalı kendi temizliğini yapar). Asıl koruma chdir'i geri almak DEĞİL,
+# hedefin kumda olduğunu yazmadan ÖNCE kanıtlamaktır — chdir sızıntının sebebi değildi.
 os.chdir(eski_cwd)
 shutil.rmtree(KUM, ignore_errors=True)
 

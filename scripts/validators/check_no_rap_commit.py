@@ -41,6 +41,11 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
 from utils.project_config import project_root, source_dir  # K12: kaynak-klasor adi config'ten
+# K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
+# ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
+from utils.kapsam import Kapsam  # noqa: E402
+
+KAPSAM = Kapsam('.clas.abap')   # K1: taranan dosya sayaci
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -93,7 +98,7 @@ def _iter_files():
 
 def _scan():
     findings = []  # (severity, label, file, lineno, text)
-    for f in _iter_files():
+    for f in KAPSAM.say(_iter_files()):
         try:
             lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
         except Exception:
@@ -124,7 +129,8 @@ def main() -> int:
     warns = [x for x in findings if x[0] == "WARN"]
 
     if not findings:
-        print("RAP commit yasağı (BE-26): temiz (class'ta explicit DB-commit yok).")
+        print("RAP commit yasağı (BE-26): temiz (class'ta explicit DB-commit yok)."
+              + KAPSAM.ek())
         return 0
 
     for sev, label, f, ln, text in findings:

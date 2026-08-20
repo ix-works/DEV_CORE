@@ -28,6 +28,11 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
 from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12: kaynak-klasor adi config'ten
+# K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
+# ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
+from utils.kapsam import Kapsam  # noqa: E402
+
+KAPSAM = Kapsam('UI .js/.view.xml')   # K1: taranan dosya sayaci
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -101,13 +106,13 @@ def main() -> int:
         view_files = [f for f in ui_files if f.name.lower() == "filter.view.xml"]
 
     blockers = []
-    for f in js_files:
+    for f in KAPSAM.say(js_files):
         for ln, code in scan_js(f):
             rel = f.relative_to(root) if str(f).startswith(str(root)) else f
             blockers.append((rel, ln, code))
 
     warnings = []
-    for f in view_files:
+    for f in KAPSAM.say(view_files):
         if scan_filter_view(f):
             rel = f.relative_to(root) if str(f).startswith(str(root)) else f
             warnings.append(rel)
@@ -133,7 +138,7 @@ def main() -> int:
     if args.strict and warnings:
         return 1
     if not blockers and not warnings:
-        print("[OK] filtre/VH/grid arama deseni ihlali yok (caseSensitive:false yok; rapor filtreleri select-options).")
+        print("[OK] filtre/VH/grid arama deseni ihlali yok (caseSensitive:false yok; rapor filtreleri select-options)." + KAPSAM.ek())
     return 0
 
 

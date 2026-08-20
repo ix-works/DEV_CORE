@@ -22,6 +22,11 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
 from utils.project_config import project_root, source_dir  # K12: kaynak-klasor adi config'ten
+# K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
+# ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
+from utils.kapsam import Kapsam  # noqa: E402
+
+KAPSAM = Kapsam('.abap')   # K1: taranan dosya sayaci
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -48,7 +53,7 @@ def main() -> int:
     for dirpath, dirnames, filenames in os.walk(ERP):  # PERF: node_modules budama
         dirnames[:] = [d for d in dirnames if d.lower() not in _prune]
         abap_files += [Path(dirpath) / fn for fn in filenames if fn.endswith(".abap")]
-    for f in abap_files:
+    for f in KAPSAM.say(abap_files):
         try:
             txt = f.read_text(encoding="utf-8", errors="replace")
         except Exception:
@@ -72,7 +77,7 @@ def main() -> int:
             print(f"   {rel}:{ln}  READ ENTITIES ... {assoc} ... FROM (ALL FIELDS/FIELDS WITH yok)")
         print("   → Yalnız existence/line_exists ise OK; non-key alan (ls-Field) okunuyorsa ALL FIELDS WITH kullan.")
     else:
-        print("[OK] keys-only BY-assoc read aday'ı yok (tüm BY-assoc read'ler ALL FIELDS/FIELDS WITH veya existence-only).")
+        print("[OK] keys-only BY-assoc read aday'ı yok (tüm BY-assoc read'ler ALL FIELDS/FIELDS WITH veya existence-only)." + KAPSAM.ek())
     return 0   # SOFT
 
 

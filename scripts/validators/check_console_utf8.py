@@ -15,6 +15,7 @@ Onarım:   `from utils.console import utf8_konsol; utf8_konsol()`
 """
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -25,7 +26,31 @@ for _a in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-CORE = Path(__file__).resolve().parents[2]
+def core_kok(argv: list[str] | None = None) -> Path:
+    """Taranacak CORE kökü — öncelik: `--kok <yol>` → env `IX_CORE_ROOT` → `__file__` türevi.
+
+    ⛔ K2 (2026-08-20): kök yalnız `Path(__file__).resolve().parents[2]` idi ⇒ gate
+    HİÇBİR sentetik ağaca yöneltilemiyordu. Sonucu "izole edilemez" değil, ÖLÇÜLEMEZdi:
+    dedektörün gerçekten yakalayıp yakalamadığını kanıtlamanın tek yolu canlı core'a
+    kasten bozuk bir script koymaktı (kimse yapmaz) ⇒ gate fiilen KANITSIZ duruyordu.
+
+    ⚠ `project_root()` BİLEREK kullanılmaz (CORE-01'in tersi görünse de doğrusu budur):
+    bu gate CORE'un KENDİ script'lerini ölçer, projenin değil. Projeye çevirmek gate'i
+    sessizce boşaltırdı (projede `scripts/` ya yok ya da bambaşka bir ağaç).
+    Varsayılan davranış AYNEN korunur — argüman/env verilmezse eski kök çözülür.
+    """
+    argv = list(sys.argv[1:]) if argv is None else list(argv)
+    if "--kok" in argv:
+        i = argv.index("--kok")
+        if i + 1 < len(argv):
+            return Path(argv[i + 1]).resolve()
+    env = os.environ.get("IX_CORE_ROOT")
+    if env:
+        return Path(env).resolve()
+    return Path(__file__).resolve().parents[2]
+
+
+CORE = core_kok()
 
 # Çıktı üreten çağrılar
 _BASAR = re.compile(r"\bprint\s*\(|sys\.(stdout|stderr)\.write\s*\(")
@@ -38,9 +63,10 @@ ATLA_DIZIN = {"__pycache__", "TempScripts", "tests"}
 
 
 def main() -> int:
+    kok = core_kok()          # her cagrida TAZE (bayat modul-global degil)
     riskli: list[str] = []
     toplam = 0
-    for f in sorted((CORE / "scripts").rglob("*.py")):
+    for f in sorted((kok / "scripts").rglob("*.py")):
         if any(p in ATLA_DIZIN for p in f.parts):
             continue
         try:
@@ -53,7 +79,7 @@ def main() -> int:
             continue
         toplam += 1
         if not _KORUMA.search(s):
-            riskli.append(f.relative_to(CORE).as_posix())
+            riskli.append(f.relative_to(kok).as_posix())
 
     if riskli:
         print(f"  [FAIL] {len(riskli)}/{toplam} script non-ASCII basıyor ama UTF-8 konsol "

@@ -826,3 +826,83 @@ python tests/run_fixture_tests.py                       # 137/137
   **VE** `gevsetme_pozitif_kontrol` (biri doluluğu, öteki toleransı ölçer; HARİTA ikisini
   de bağlar). `check_fs_no_analysis_log.py` → `fs_docstd` (9 mutasyonuyla) **VE**
   `gevsetme_pozitif_kontrol`.
+
+## B29 — PARTİ-4 son parti (kapsam paydası · kök izolasyonu · JSON kaçışı · kum sızıntısı · offline MCP · SAP'siz ui-smoke · Bash tetiği)
+- Yedi korpus (hepsi OZEL_TESTLER üyesi), tek tek koşum:
+  `python tests/fixtures/validator_kapsam_paydasi/run.py`        → **31 senaryo + 4 mutasyon**, exit 0
+  `python tests/fixtures/console_utf8_kok_izolasyonu/run.py`     → **7 + 3**, exit 0
+  `python tests/fixtures/yabanci_proje_json_kacisi/run.py`       → **10 + 4**, exit 0
+  `python tests/fixtures/conn_kum_sizintisi/run.py`              → **7 + 4**, exit 0
+  `python tests/fixtures/mcp_profil_aktivasyon_offline/run.py`   → **15 + 4**, exit 0
+  `python tests/fixtures/ui_smoke_sapsiz/run.py`                 → **8 + 3**, exit 0
+  `python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py`     → **9 + 4**, exit 0
+  Tam süit: `python tests/run_fixture_tests.py` → **144/144**, **İKİ ARDIŞIK KOŞUM AYNI**.
+
+- ⛔⛔ **MUTASYON GERÇEK KAYNAĞA YAZILMAZ — bu turda ÜRETİLEN ve yakalanan kirlenme:**
+  İlk sürümde dört korpus mutasyonu gerçek dosyaya yazıp `finally`de geri alıyordu.
+  Art arda koşumlarda kalıntı BİRİKTİ; bir noktada `_profile.py` **fail-closed enum
+  doğrulaması SÖKÜLMÜŞ** hâlde diskte kaldı ve komşu korpus `fs_docstd` bu kalıntıyı
+  gerçek ihlal sanıp FAIL verdi (süit 143→142, idempotans kırık). ⇒ Üç güvenli desen:
+    ① **izole ağaç kopyası** — import zinciri gerektiğinde (`utils.*` `parents[1]`den
+       çözülür): `shutil.copytree` ile `scripts/` (+ gerekirse `mcp_servers/`) kopyala,
+       mutasyonu KOPYAYA yaz, tüketiciyi kopyadan koş. ⚠ Yalnız mutasyona uğrayan
+       dosyayı kopyalamak YETMEZ: import ÖLÜR ve **her mutasyon "yakalandı" görünür**.
+    ② **kardeş `_mutant_*.py`** — tüketici dosyayı YOLDAN alıyorsa (hook, script).
+       Aynı dizinde durmalı ki `parents[N]` derinliği ve komşu import'lar değişmesin.
+    ③ **bellekte `exec`** — mutasyona uğrayan şey KOŞMAKTA OLAN koşucunun kendisiyse
+       (`run_fixture_tests.py`): diske yazmak koşan süiti bozar.
+  ⭐ **Her korpusa `F1 İZOLASYON` vektörü ZORUNLU:** koşum sonunda gerçek dosyaların
+  hash'i başlangıçtakiyle AYNI olmalı **ve** kardeş mutant dosya KALMAMIŞ olmalı.
+  Bu bir "temizlik kontrolü" değil, korpusun kendi DEĞİŞMEZİdir.
+
+- ⭐ **BOŞ-SANDBOX SONDASI (K1'in ölçüm yöntemi — yeniden kullanılabilir):** bir
+  validator ailesinin *"yeşilinin paydası"* şöyle ölçülür: `project.yaml` + BOŞ
+  `SOURCE_CODES/` içeren geçici bir proje kur, `CLAUDE_PROJECT_DIR`i oraya çevir,
+  aileyi koş. `[OK]/temiz` diyen ama dosya sayısı basmayan her üye **sessiz kapsam
+  kaybı** adayıdır. Kontrol grubu ŞART: aynı üyeler DOLU sandbox'ta ihlali yakalamalı
+  (yakalamıyorsa sorun görünürlük değil, dedektördür).
+  ⚠ **Regex ile "sayı basıyor mu" ARAMA** — bu turda ilk deneme `rg "(taran|scanned)"`
+  idi ve kelime parçalarına takılıp yanlış sınıf verdi. **Davranışı koş, çıktıyı oku.**
+
+- ⛔ **K1 SINIRI (silinemez):** `n==0` **FAIL ÜRETMEZ**. `validator_kapsam_paydasi`
+  **X1** bunu ölçer (boş sandbox'ta 12'sinin de çıkış kodu 0) ve **M3** ("0 dosyayı
+  FAIL yap") onu kırmızı yakar. Sıfır kapsam MEŞRU olabilir; sertleştirme AYRI bir
+  karardır (ADR 0019 + gate-moratoryumu).
+
+- ⛔ **K8② SINIRI (silinemez):** kapsam genişlemesinin pozitif kontrolü **M4**'tür —
+  bir nudge'a çıplak `playbook/...md` konur ve gate'in **FAIL** vermesi beklenir.
+  Yol sayısının artması (4→8) *"yakalıyor"* demek DEĞİLDİR.
+
+- ⚠ **"Koştu mu" sorusu ÇIKTI METNİYLE cevaplanmaz (K7 dersi):** `[DUR]` görmek
+  playwright'ın koşmadığını KANITLAMAZ (mesaj basılıp yine koşulabilirdi). PATH'e
+  sahte bir `npx` kabuğu konur, kabuk bir **İZ DOSYASI** yazar; ölçüt o dosyanın
+  varlığıdır. Aynı desen "gerçekten alt-süreç başlattı mı" sorularının hepsinde geçerli.
+
+- ⚠ **DEDUP MARKER'LI nudge'ı ölçerken TEMİZ kök kullan (K8② dersi):** `post_validate`
+  doc-fs nudge'ı bir OKU-işaretçisi tutar; gerçek proje kökünde yoklarsan sonuç GÜNE
+  göre değişir (bugün 4 yol, yarın 0) ve gate **sessizce boşalır**. `_stderr_ciktisi`
+  her çağrıda taze sandbox kurar; `B2` vektörü ardışık iki koşumun AYNI toplamı
+  vermesini çivilendirir.
+
+- ⚠ **ÖLÜ VEKTÖR TUZAĞI (K4'te yaşandı):** savunma derinliği varken tek katmanı söken
+  mutasyon ISKALAR; `P1` (veri kaybı olmaz) hiçbir mutasyonla kırılamıyordu ⇒ pratikte
+  **hiç düşmeyen bir yeşil**di. Çözüm `M4`: ÜÇ katmanı (explicit-dir · PWD temizliği ·
+  KUM-DIŞI çapası) BİRDEN sök → P1 kırmızı. **Kural: her ⭐ vektörün onu kıran EN AZ
+  BİR mutasyonu olmalı; yoksa vektör dekordur.**
+
+- ⚠ **Çapayı YANLIŞ ŞEYE bağlama (K8'de yaşandı):** A2 önce bir FS dokümanıyla
+  yazıldı ve FAIL verdi — sebep ölçülen şey (Bash yol çıkarımı) değil, o yolun FS
+  nudge'ını hiç tetiklememesiydi. Nudge'ı ATEŞLEDİĞİ BİLİNEN bir doküman tipi seçilerek
+  değişken tek başına bırakıldı. Aynı sınıf K6/A2'de de çıktı (segment çok parçalı
+  olduğu için `/` SAYMAK yanıltıcıydı → tam eşitlik).
+
+- **Dokunulursa BİRLİKTE koşulacaklar:** `kapsam.py`ye ya da 12 validator'dan birine
+  dokunan tur `validator_kapsam_paydasi` + o validator'ın `V:` çiftini koşar (HARİTA
+  bağladı). `run_fixture_tests.py` hijyen fonksiyonlarına dokunan tur **hem**
+  `suite_ortam_hijyeni` **hem** `conn_kum_sizintisi` koşar (imza sözleşmesi ikisinde
+  de tüketiliyor — bu turda imza `bool`→demet olunca `suite_ortam_hijyeni` ÇÖKTÜ;
+  ters-yön kontrolü olmasaydı sessiz kalırdı).
+
+- ⚠ **DOĞRULANAMADI:** K6 canlı `/activation` kabulü (B11) · K7 gerçek UI5/playwright
+  doğruluğu (B15) · K8① canlı Bash düzenlemesinde ateşleme (matcher META-İNFRA,
+  kurulmadı — `settings.template.json` kararı lider/kullanıcıda).

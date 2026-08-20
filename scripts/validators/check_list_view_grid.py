@@ -29,6 +29,11 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
 from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12: kaynak-klasor adi config'ten
+# K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
+# ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
+from utils.kapsam import Kapsam  # noqa: E402
+
+KAPSAM = Kapsam('.view.xml')   # K1: taranan dosya sayaci
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -92,7 +97,7 @@ def main():
             files += [Path(dirpath) / fn for fn in filenames if fn.endswith(".view.xml")]
 
     total = 0
-    for f in files:
+    for f in KAPSAM.say(files):
         try:
             txt = f.read_text(encoding="utf-8", errors="replace")
         except Exception:
@@ -113,7 +118,7 @@ def main():
               f"NOT: detay/düzenleme formundaki item-table + akordion belge-listesi MEŞRU — yalnız "
               f"gerçek tablo-tarzı LİSTE ekranı grid olmalı.", file=sys.stderr)
         return 1
-    print("[OK] liste view grid (sap.ui.table) ihlali yok.")
+    print("[OK] liste view grid (sap.ui.table) ihlali yok." + KAPSAM.ek())
     return 0
 
 

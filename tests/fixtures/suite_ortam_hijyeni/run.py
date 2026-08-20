@@ -107,8 +107,10 @@ def senaryolar(modul=S) -> list[tuple[str, bool, str]]:
         with redirect_stdout(buf):
             vardi = modul._ortam_hijyeni_basla()
         c = buf.getvalue()
+        # K4 (2026-08-20): donus (var_mi, bayt, sha1) demetidir — [0] eski `bool`un yerini
+        # alir. Olcut DEGISMEDI: "kalinti VARSA True + gorunur uyari".
         ekle("S1 kalinti VAR -> True + 'KİRLİ ORTAM' uyarisi",
-             vardi is True and "KİRLİ ORTAM" in c and "tier" in c.lower(),
+             vardi[0] is True and "KİRLİ ORTAM" in c and "tier" in c.lower(),
              "vardi=%r cikti=%r" % (vardi, c[:90]))
 
         # --- S2: kalinti YOK -> False + SESSIZ (FP capasi) -----------------
@@ -117,14 +119,14 @@ def senaryolar(modul=S) -> list[tuple[str, bool, str]]:
         with redirect_stdout(buf):
             yok = modul._ortam_hijyeni_basla()
         ekle("S2 kalinti YOK -> False + hicbir sey basilmaz",
-             yok is False and buf.getvalue() == "",
+             yok[0] is False and buf.getvalue() == "",
              "yok=%r cikti=%r" % (yok, buf.getvalue()[:60]))
 
         # --- S3: temizlik — suitin KENDI urettigi silinir ------------------
         sahte.write_text("x" * 40, encoding="utf-8")
         buf = io.StringIO()
         with redirect_stdout(buf):
-            modul._ortam_hijyeni_bitir(False)      # kosum basinda YOKTU
+            modul._ortam_hijyeni_bitir((False, 0, ""))   # kosum basinda YOKTU
         ekle("S3 suitin urettigi kalinti SILINIR (idempotans)",
              not sahte.exists() and "SİLİNDİ" in buf.getvalue(),
              "var_mi=%s cikti=%r" % (sahte.exists(), buf.getvalue()[:80]))
@@ -134,9 +136,13 @@ def senaryolar(modul=S) -> list[tuple[str, bool, str]]:
         # bilgisi olabilir). Onu silmek, kapatmaya calistigimiz "sessiz veri kaybi"
         # sinifini URETMEK olurdu.
         sahte.write_text("GERCEK_BAGLANTI=1\n", encoding="utf-8")
+        # Imza dosyanin O ANKI halinden alinir: "vardi ve DEGISMEDI" durumu.
+        # (Degisseydi K4'un ezilme-tespiti devreye girerdi — o dal `conn_kum_sizintisi`
+        # korpusunda L1/L2 ile olculur, burada FP capasi olarak SESSIZLIK beklenir.)
+        onceki_imza = modul._conn_imza()
         buf = io.StringIO()
         with redirect_stdout(buf):
-            modul._ortam_hijyeni_bitir(True)       # kosum basinda VARDI
+            modul._ortam_hijyeni_bitir(onceki_imza)   # kosum basinda VARDI
         ekle("S4 FP capasi: kosum oncesi var olan dosya SILINMEZ (kullanicinin)",
              sahte.exists() and sahte.read_text(encoding="utf-8") == "GERCEK_BAGLANTI=1\n"
              and buf.getvalue() == "",
@@ -153,16 +159,15 @@ def senaryolar(modul=S) -> list[tuple[str, bool, str]]:
 
 MUTASYONLAR = [
     ("M1 `vardi` korumasini sok (kullanicinin dosyasi da silinsin)",
-     lambda s: s.replace("    if vardi or not _CONN.exists():\n        return\n",
-                         "    if not _CONN.exists():\n        return\n")),
+     lambda s: s.replace("    if onceki[0]:\n", "    if False:\n")),
     ("M2 kirli-ortam uyarisini sok (sessizce oku)",
-     lambda s: s.replace('    if _CONN.exists():\n        print("⚠ KİRLİ ORTAM:',
-                         '    if False:\n        print("⚠ KİRLİ ORTAM:')),
+     lambda s: s.replace('    if imza[0]:\n        print(f"⚠ KİRLİ ORTAM:',
+                         '    if False:\n        print(f"⚠ KİRLİ ORTAM:')),
     ("M3 temizligi `finally`den cikar (cokmede kalinti kalsin)",
      lambda s: s.replace(
          "    try:\n        return _main(argv)\n    finally:\n"
          "        # try/finally: çökmede de temizlenir (yarım koşum kalıntı bırakmasın).\n"
-         "        _ortam_hijyeni_bitir(kirli_basladi)",
+         "        _ortam_hijyeni_bitir(onceki_conn)",
          "    return _main(argv)")),
 ]
 
