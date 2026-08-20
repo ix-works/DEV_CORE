@@ -34,9 +34,12 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 # hâli, kapı olmamasından TEHLİKELİDİR (koruma sanısı).
 #
 # Doğru teknik ZATEN AYNI DOSYADAYDI: `prior-art` için değerin dolu olduğunu arayan
-# `_PRIOR_ART_DOLU` deseni. Kusur o desende değil, DİĞER ÜÇ ALANA UYGULANMAMASINDAYDI —
-# tek dosyada iki farklı titizlik seviyesi. Aşağıda doluluk kontrolü alan-başına
-# genelleştirildi (`_deger` + `_dolu_mu`), prior-art kendi ek kuralını korur.
+# desen. Kusur o desende değil, DİĞER ÜÇ ALANA UYGULANMAMASINDAYDI — tek dosyada iki
+# farklı titizlik seviyesi. Aşağıda doluluk kontrolü alan-başına genelleştirildi
+# (`_deger` + `_dolu_mu`), prior-art kendi ek kuralını korur.
+# ⚠ Ad değişti (2026-08-20): o desen `_PRIOR_ART_DOLU` idi, bugün **`_prior_art_ok()`**
+#   fonksiyonudur. Bu satır tarihçe içindir; ARAYAN kişi güncel adı bulsun diye yazıldı
+#   (var olmayan bir sembole atıf, okuyanı kodda olmayan bir şeyi aramaya gönderir).
 #
 # ⚠⚠ GEVŞETME (2026-08-20, kullanıcı onaylı) — YALNIZ **YAZIM BİÇİMİ**, doluluk DEĞİL.
 # ÖLÇÜLEN FP: içeriği TAM ve canlı-doğrulanmış bir artefakt bu kapıdan **BLOCKER** aldı.
