@@ -51,7 +51,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 REPO = project_root()
 ERP = source_dir()
 
-_SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp", "fixtures", "attic"}  # fixtures/attic: bilinçli-bozuk test girdileri (G1) taranmaz
+_SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp", "fixtures", "attic", "worktrees"}  # fixtures/attic: bilinçli-bozuk test girdileri (G1) taranmaz
 _SCAN_SUFFIXES = (".clas.abap", ".ccimp.abap")
 _ESCAPE = "#NO_AMDP_APOSTROPHE_CHECK"
 

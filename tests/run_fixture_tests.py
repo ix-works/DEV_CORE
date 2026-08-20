@@ -125,6 +125,8 @@ OZEL_TESTLER = [
      "sablon kusuru = her yeni paket/brif miras alir: .rules.md.tmpl DTEL/Domain oneki + brifing ENGELLENIRSEN ekseni"),
     ("manifest_secici_onay",
      "behavior_manifest I-1 cerrahi onay (--only) + I-2 worktree/CRLF sahte pozitifi (pozitif kontrollu)"),
+    ("gevsetme_pozitif_kontrol",
+     "PARTI-3 iki gevsetme: itg_signoff BICIM toleransi + worktree dislama — her biri POZITIF KONTROLLU"),
     ("paket_uzanti_kapsami", "paket naming + paket-siniri: .bdef/.srvd allow-list'te YOKTU (V2)"),
     ("itg_alan_dolulugu", "ITG S2: bos sablon + [x] BLOCKER gate'ini geciyordu (V3)"),
     ("gitignore_tam_satir", "core-sizinti kilidi: yorumlu/negatif satir 'kilit var' saniliyordu (V4)"),
@@ -311,6 +313,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "§4.4.5 DDIC önek tablosu ŞABLONUN OTORİTESİDİR — korpus önekleri buradan OKUR"),
     ("claude/templates/spawn-brief.md", ("O:sablon_zorunlu_maddeler",),
      "§9 ENGELLENİRSEN zorunlu maddesi (26 dk sessiz-ajan vakası)"),
+    ("scripts/validators/check_itg_signoff.py",
+     ("O:itg_alan_dolulugu", "O:gevsetme_pozitif_kontrol"),
+     "DEĞER-DOLULUĞU zinciri (2026-08-01 sıkılaştırması) + BİÇİM toleransı (2026-08-20 "
+     "gevşetmesi); ⛔ ikisi AYRI korpusla ölçülür — tolerans doluluğu ASLA zayıflatmaz"),
+    ("scripts/validators/check_fs_no_analysis_log.py",
+     ("O:fs_docstd", "O:gevsetme_pozitif_kontrol"),
+     "DOC-FS-05/06 desenleri + worktree dışlama (ölçülmüş 87→174 çiftlenmesi); "
+     "pozitif kontrol: ana ağaçtaki gerçek ihlal hâlâ yakalanır"),
     ("scripts/behavior_manifest.py", ("O:manifest_secici_onay",),
      "I-1 seçici onay (`--only`) + I-2 worktree/CRLF; İKİ GEVŞETME pozitif kontrollü "
      "(S2/S4 gerçek ihlalin hâlâ yakalandığını kanıtlar)"),

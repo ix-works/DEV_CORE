@@ -781,3 +781,48 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
 - ⚠ **AÇIK (bu turda dokunulmadı):** şablonun **Message Class** satırı üç kaynakta üç
   farklı (standart `MC` · şablon çıplak `{PKG}` · gerçek kullanım `{PKG}_MSG`) ve
   **Search Help** satırı hiç yok. İkisi de **kural kararıdır (K4)**, mekanik fix değil.
+
+## B28 — PARTİ-3 iki GEVŞETME (itg_signoff biçim toleransı · worktree dışlama)
+```bash
+python tests/fixtures/gevsetme_pozitif_kontrol/run.py   # 11 senaryo + 5 mutasyon, exit 0
+python tests/fixtures/itg_alan_dolulugu/run.py          # 11/11  (2026-08-01 sıkılaştırması)
+python tests/fixtures/fs_docstd/run.py                  # 38/38  + 9 mutasyon (B9b)
+python tests/run_fixture_tests.py                       # 137/137
+```
+- ⛔⛔ **BU KORPUSTA SİLİNEMEZ VEKTÖRLER VAR.** İki gevşetme **kullanıcı onaylı** ve onay
+  *"kapıyı körletmediğini KANITLA"* şartıyla alındı. Kanıt şunlardır:
+  | Vektör | Ne kanıtlar |
+  |---|---|
+  | **A2** boş şablon + `MUTABAKAT:[x]` → BLOCKER | doluluk denetimi ayakta |
+  | **A3** tolere edilen başlık ama **BÖLÜM BOŞ** → BLOCKER | tolerans doluluğu yemedi |
+  | **A4** prior-art **düzyazı** (referans izi yok) → BLOCKER | arama zorunluluğu ayakta |
+  | **B2** ana ağaçtaki **gerçek** ihlal yakalanır | dışlama dedektörü öldürmedi |
+  Bunlardan biri silinirse ilgili gevşetme **kanıtsız** kalır — geri al ya da yeniden kanıtla.
+- ⭐ **SINIR MUTASYONU M3** (`_dolu_mu` hep `True`) korpusun en önemli vektörüdür: doluluk
+  zinciri sökülünce **A3 kırmızı** olmalı. Yeşil kalırsa tolerans doluluğu yemiş demektir.
+- **TOLERANSIN SINIRI ÖLÇÜLÜDÜR:** `_ARA = r"[^\n:]{0,24}"` — satır-sonu ve `:` dışlanır,
+  en fazla 24 karakter. Sınırsız `.*` iki AYRI alanın başlığını birbirine bağlar ve **alan
+  karışması** üretir. **A7** bu sınırı denetler ⇒ genişletmek isteyen A7'yi güncellemek
+  ZORUNDA (sessizce genişletilemez).
+- ⚠ **`check_itg_signoff`te İKİ DEĞER-ÇIKARMA BİÇİMİ var** (`_ALAN_BASLIK` = `Alan: değer`
+  satırı · `_ALAN_MD_BASLIK` = markdown bölüm başlığı). ⛔ Markdown biçiminde **başlık
+  satırının kendisi değere DAHİL EDİLMEZ** — edilseydi boş bir bölüm bile "dolu" görünürdü
+  ve doluluk denetimi **sessizce ölürdü**. A3 tam bunu ölçer.
+- ⚠ **Mutant GERÇEK `scripts/validators/` dizininde yaşar** (`_mutant_itg.py`, `finally`de
+  silinir) — B24 dersi: validator kendi yolundan komşu modülleri çözer; tempdir'e
+  kopyalanırsa import ölür ve HER mutasyon "yakalandı" görünür (SAHTE-KIRMIZI).
+- ⭐ **WALK-PRUNE SINIFINI ADA GÖRE ARAMA.** Aynı küme repoda **üç farklı adla** sekiz
+  validator'da yaşıyor: `_SKIP_SEGMENTS` ×4 · `_SKIP` ×1 · `_prune` ×3 (+ `behavior_manifest`
+  yerel `prune`). `rg _SKIP_SEGMENTS` sınıfın **yarısını ıskalar** — doğru arama
+  `rg "dirnames\[:\]"`. **B4** vektörü bu taramayı ad-bağımsız yapar ve yeni bir walk-pruner
+  eklenip `worktrees` unutulursa kırılır.
+  ⛔ Kümeleri TEK kümede birleştirme AYRI bir karardır: bilinçli olarak farklılar
+  (ui5 dar · fs_docstd `archive` taşır).
+- ⚠ **DOĞRULANAMADI:** worktree çiftlenmesi (ölçülmüş 87→174) bugün **canlı repro
+  edilemedi** — projede şu an **sıfır** worktree var. FP sentetik ağaçla yeniden üretildi
+  (B1) ve M4/M5 onu geri getirdi. Gerçek ortamda ilk worktree açıldığında sayının
+  tekilleştiği bir kez teyit edilmeli.
+- **Dokunulursa BİRLİKTE koşulacaklar:** `check_itg_signoff.py` → `itg_alan_dolulugu`
+  **VE** `gevsetme_pozitif_kontrol` (biri doluluğu, öteki toleransı ölçer; HARİTA ikisini
+  de bağlar). `check_fs_no_analysis_log.py` → `fs_docstd` (9 mutasyonuyla) **VE**
+  `gevsetme_pozitif_kontrol`.

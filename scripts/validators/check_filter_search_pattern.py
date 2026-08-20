@@ -90,7 +90,7 @@ def main() -> int:
     else:
         import os
         # PERF: rglob node_modules'ı (1184 dizin) dolaşıyordu → os.walk ile yürüyüş anında buda.
-        _prune = {"node_modules", "dist", ".tmp", "tmp", ".git"}
+        _prune = {"node_modules", "dist", ".tmp", "tmp", ".git", "worktrees"}
         ui_files = []
         for dirpath, dirnames, filenames in os.walk(root / SOURCE_ROOT_NAME):
             dirnames[:] = [d for d in dirnames if d.lower() not in _prune]
