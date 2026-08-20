@@ -43,6 +43,7 @@ if sys.platform == 'win32':
 sys.path.insert(0, str(Path(__file__).parent))
 
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ddic_aktivasyon import aktivasyon_notu   # "yaratildi != aktif" kapanis notu (tek kaynak)
 
 
 def parse_fixed_values(fv_str: str) -> list:
@@ -262,6 +263,7 @@ def main():
 
     ok_count = 0
     fail_count = 0
+    yaratilanlar = []
     for row in rows:
         success = create_one(
             client=client, csrf=csrf,
@@ -274,10 +276,14 @@ def main():
         )
         if success:
             ok_count += 1
+            yaratilanlar.append(row['name'])
         else:
             fail_count += 1
 
     print(f'\n=== Sonuç: {ok_count} başarılı, {fail_count} hatalı ===')
+    # "exit 0 != kanit": obje YARATILDI ama AKTIF DEGIL. Sessiz [OK] kabul edilemez.
+    if not args.dry_run:
+        print(aktivasyon_notu('domain', yaratilanlar, args.cwd))
     return 0 if fail_count == 0 else 1
 
 

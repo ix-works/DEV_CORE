@@ -2983,7 +2983,16 @@ constants:
 
     def pretty_print(self, object_name: str, object_type: str = 'class') -> Optional[str]:
         """
-        Format ABAP source code using SAP Pretty Printer
+        Bicimlenmis ABAP kaynagini SAP'den ALIR ve DONDURUR. SUNUCUYA YAZMAZ.
+
+        ⛔ Durumsuz bir BICIMLEME SERVISI: kaynagi GET eder, `POST .../prettyprinter`
+        ile bicimletir, metni return eder. `lock` YOK · `PUT source/main` YOK ·
+        `activate` YOK · `transport` YOK. Cagiran metni kalici kilmak istiyorsa
+        AYRI bir push adimi kurmalidir.
+
+        ⚠ Eski cikti metni ("Applying pretty printer to: X") bir SUNUCU DEGISIKLIGI
+        ima ediyordu ve bir turda liderin "bu arac SAP'de kaynagi degistirir"
+        varsayimini besledi (2026-08-20'de olculerek curutuldu).
 
         Args:
             object_name: Object name
@@ -2994,7 +3003,8 @@ constants:
         """
         from object_types import get_object_url, get_source_url
 
-        print(f"\nApplying pretty printer to: {object_name} ({object_type})")
+        print(f"\nFetching pretty-printed source for: {object_name} ({object_type}) "
+              f"— read-only, server is NOT modified")
 
         try:
             object_url = get_object_url(object_name, object_type)

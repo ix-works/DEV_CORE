@@ -177,7 +177,63 @@ def main() -> int:
     _stamp(session, obj)
     print(f"[OK] {obj} ({t}) canlıdan çekildi → {res.get('repo_path')} → seans-taze damgalandı. "
           f"Artık düzenleyebilirsin.")
+
+    # ⛔ SINIF ALT-INCLUDE'LARI ÇEKİLMEDİ — ve damga onları da KAPSIYOR görünüyor.
+    # Bu, "[OK] ... artık düzenleyebilirsin" cümlesinin SESSİZ yalanıydı: pull yalnız
+    # `/source/main`i (ana `.clas.abap`) okur; `.ccimp/.ccau/.ccdef/.ccmac` AYRI ADT
+    # uçlarındadır (`/includes/<segment>`) ve HİÇ okunmaz. Buna rağmen `_stamp` obje
+    # ADINA yazıldığı için pull-before-edit kapısı alt-include'u da TAZE sayar ⇒
+    # geliştirici BAYAT bir `.ccimp.abap`ı taze sanıp düzenler.
+    # ⚠ Çekme YOLU BU TURDA KURULMADI (bilinçli): `object_types.CLASS_INCLUDE_TYPES`
+    # segment adlarının 4'ünden 3'ü (`implementations`/`definitions`/`macros`)
+    # `'olculdu': False` — bu evde CANLI DOĞRULANMAMIŞ. Doğrulanmamış bir uçtan okuyup
+    # repo dosyasının üstüne yazmak, kapatmaya çalıştığımız sessiz-veri-bozan sınıfının
+    # ta kendisi olurdu. Ayrıca `source_drift.find_repo_source_file` alt-include'ları
+    # BİLEREK eler (sahte-drift koruması) — o korumayı gevşetmek ayrı bir karar.
+    # ⇒ Bugün yapılan: boşluğu GÖRÜNÜR kılmak. Sessiz kalmak seçenek değil.
+    _alt_include_uyar(obj, res.get("repo_path"))
     return 0
+
+
+def _alt_include_uyar(obj: str, ana_yol) -> None:
+    """Repo'da bu sınıfa ait alt-include dosyası varsa: ÇEKİLMEDİĞİNİ açıkça söyle.
+
+    Uzanti listesi `source_drift._CLASS_SUBSOURCE_MARKERS`ten gelir — TEK KAYNAK.
+    (Bu dosyada daha önce 'elle kopyalanmış ikinci tip literali' kusuru yaşandı:
+    `_DDIC_XML_TYPES` vakası. İkinci kopya AÇMIYORUZ.)
+    """
+    if not ana_yol:
+        return
+    try:
+        from pathlib import Path as _P
+        from source_drift import _CLASS_SUBSOURCE_MARKERS
+    except Exception as exc:
+        print(f"[WARN] alt-include kontrolu yapilamadi ({exc}) -- "
+              f"'.ccimp/.ccau' dosyalarini ELLE kontrol et.")
+        return
+
+    ana = _P(ana_yol)
+    taban = ana.name.split(".", 1)[0].lower()
+    bulunan = sorted(
+        p.name for p in ana.parent.glob("*")
+        if p.is_file()
+        and p.name.split(".", 1)[0].lower() == taban
+        and p.name.lower().endswith(tuple(_CLASS_SUBSOURCE_MARKERS))
+    )
+    if not bulunan:
+        return
+
+    print("")
+    print("  " + "=" * 72)
+    print(f"  [!] {len(bulunan)} ALT-INCLUDE CEKILMEDI -- seans damgasi onlari KAPSAMIYOR.")
+    print("  " + "=" * 72)
+    for ad in bulunan:
+        print(f"    - {ad}")
+    print("  Bu komut yalniz ana kaynagi (/source/main) ceker; alt-include'lar AYRI")
+    print("  ADT uclarindadir ve OKUNMADI. Damga obje ADINA yazildigi icin kapi")
+    print("  bunlari da 'taze' sayar -> BAYAT icerigi taze sanip duzenleyebilirsin.")
+    print("  Duzenlemeden ONCE icerigi canliyla karsilastir (adt_get + ilgili include).")
+    print("  " + "=" * 72)
 
 
 if __name__ == "__main__":

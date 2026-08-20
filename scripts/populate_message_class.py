@@ -65,19 +65,65 @@ sys.path.insert(0, _PLUGIN_PATH)
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
 
 
+# T100-TEXT alan uzunlugu = CHAR 73 (DD03L'den olculdu 2026-08-20).
+# ⛔ Uzunluk denetimi YOKTU: script CSV'den okudugu metni oldugu gibi XML govdesine
+# koyup PUT ediyordu. Iki sonuc da kotu: ya cagri duser, ya SAP metni SESSIZCE KIRPAR.
+# Kirpilan mesaj ekranda YARIM CUMLEDIR ve "onayli metin buydu" diye kimse suphelenmez
+# -> sessiz-veri-bozan sinifi. Olculmus vaka (2026-08-20, bir mesaj sinifi turu): onayli
+# 143 metnin 14'u siniri asiyordu (en uzunu 94 karakter); arac sayesinde DEGIL, CSV
+# ureticisinin kendi kontrolu sayesinde yakalandi -- yani o turda tesadufen kurtuldu.
+#
+# ⚠ KARAKTER sayilir, BAYT degil: T100-TEXT Unicode kernel'de 73 KARAKTERdir. Bayt
+# olcen bir guard (`len(s.encode('utf-8'))`) diakritikli dilde yanlis-pozitif uretir
+# (18 karakterlik bir metin 20 bayt olabilir). Python `len()` code-point sayar = dogru.
+T100_TEXT_MAXLEN = 73
+
+
+class MesajMetniUzunError(ValueError):
+    """CSV'de T100-TEXT sinirini asan satir(lar) var — YAZMA BASLAMADAN durdurulur."""
+
+
 def load_messages_from_csv(csv_path: Path) -> list:
-    """CSV oku → [(msgno, msgtext, selfexplainatory), ...]"""
+    """CSV oku → [(msgno, msgtext, selfexplainatory), ...]
+
+    ⛔ FAIL-CLOSED: `msgtext` T100-TEXT sinirini (73 karakter) asiyorsa
+    `MesajMetniUzunError` firlatir — CSRF/LOCK/PUT'a HIC gidilmez. Guard bilerek
+    BURADA (uretim noktasinda) duruyor: `main()`e konsaydi bu fonksiyonu dogrudan
+    import eden bir cagiran onu atlardi ("gate'lenmemis kural ~ kuralsiz").
+    `--dry-run` da ayni kapiya carpar; amac zaten yazmadan once yakalamaktir.
+    """
     messages = []
+    asanlar = []
     with open(csv_path, encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
+            satir_no = reader.line_num          # CSV'deki GERCEK satir (header dahil)
             msgno = str(row.get('msgno', '')).strip().zfill(3)  # zero-pad to 3 digits
             msgtext = str(row.get('msgtext', '')).strip()
             self_exp = str(row.get('selfexplainatory', 'false')).strip().lower()
             if self_exp not in ('true', 'false'):
                 self_exp = 'false'
             if msgno and msgtext:
+                if len(msgtext) > T100_TEXT_MAXLEN:
+                    asanlar.append((satir_no, msgno, len(msgtext), msgtext))
                 messages.append((msgno, msgtext, self_exp))
+
+    if asanlar:
+        # TUM ihlaller tek seferde raporlanir: yazar CSV'yi tek turda duzeltsin,
+        # her kosumda bir sonrakini kesfetmesin.
+        detay = '\n'.join(
+            f'    satir {sn}: msgno={mn} — {uz} karakter '
+            f'(+{uz - T100_TEXT_MAXLEN}) — "{mt[:T100_TEXT_MAXLEN]}…{mt[T100_TEXT_MAXLEN:]}"'
+            for sn, mn, uz, mt in asanlar
+        )
+        raise MesajMetniUzunError(
+            f'{len(asanlar)} mesaj metni T100-TEXT sinirini (CHAR {T100_TEXT_MAXLEN}) asiyor '
+            f'— HICBIRI yazilmadi (fail-closed).\n'
+            f'  ⚠ Yazilsaydi SAP ya cagriyi duserdi ya metni SESSIZCE kirpardi.\n'
+            f'  Asan satirlar ("…" = kirpilma noktasi):\n{detay}\n'
+            f'  Cozum: CSV\'deki metinleri {T100_TEXT_MAXLEN} karaktere indir '
+            f'(kisaltma ONAYLI metni degistirir — metin sahibine dogrulat).'
+        )
     return messages
 
 
@@ -276,7 +322,12 @@ def main():
         print(f'[FAIL] CSV bulunamadı: {csv_path}')
         return 1
 
-    messages = load_messages_from_csv(csv_path)
+    try:
+        messages = load_messages_from_csv(csv_path)
+    except MesajMetniUzunError as e:
+        # Traceback yerine okunur teshis: hata CSV'nin icerigindedir, kodun degil.
+        print(f'[FAIL] {e}')
+        return 1
     print(f'[INFO] {csv_path.name} → {len(messages)} mesaj yüklendi')
     if not messages:
         print('[FAIL] CSV boş')

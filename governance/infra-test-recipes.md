@@ -639,3 +639,48 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   altındaki tüm `*.cds|*.asddls|*.ddl|*.ddls` dosyalarına koş, rc dağılımını fix ÖNCESİ
   sürümle karşılaştır. Beklenen: yalnız daha önce "tespit edilemedi" diyen dosyaların
   çıktısı değişir, geri kalan **BAYT AYNI** kalır.
+
+## B25 — PARTİ-1 "sessiz veri bozan" dörtlüsü (msgtext guard · aktivasyon notu · çıktı dürüstlüğü)
+- Üç korpus, hepsi OZEL_TESTLER üyesi (suite içinden de koşar):
+  `python tests/fixtures/msgtext_uzunluk_guard/run.py`     → **8 senaryo + 3 mutasyon**, exit 0
+  `python tests/fixtures/ddic_aktivasyon_notu/run.py`      → **9 senaryo + 4 mutasyon**, exit 0
+  `python tests/fixtures/cikti_iddiasi_durustlugu/run.py`  → **9 senaryo + 3 mutasyon**, exit 0
+  Tam suite: `python tests/run_fixture_tests.py` → **130/130** (⚠ önce `rm -f .conn_adt`, bkz. B22 notu).
+- **Mutasyonlar korpusun İÇİNDEDİR** ve BUGÜNKÜ kaynaktan üretilir (git ref'i YOK ⇒ "fix
+  merge olunca taban kayar" tuzağı yapısal olarak yok). Her koşucu ayrıca **"yama tuttu mu"**
+  kanıtı basar; yama bugünkü kaynağa uymazsa sahte-yeşil yerine FAIL verir.
+- ⚠ **stdout gaspı (B22'nin dersi, burada da geçerli):** `populate_message_class`,
+  `run_pretty_printer` ve `sap_sync_pull` import anında `io.TextIOWrapper(sys.stdout.buffer)`
+  kurar. Yalnız `sys.stdout`'u geri koymak YETMEZ — wrapper GC'ye girince sardığı GERÇEK
+  buffer'ı KAPATIR. Üç korpus da import sırasında stdout'u **atılabilir bir BytesIO**'ya
+  bağlar ve wrapper'lara referans tutar (`_mod_refs`). Bu satırlar SİLİNMEZ.
+- ⭐ **METİN ARAMASI İKİ KEZ YANILDI — çapalar AST'dir, `in` değil** (ilk koşumda ikisi de
+  gerçekleşti, kayıt dürüstlük için):
+  ① `"push_object" in src` → `run_pretty_printer` **docstring'inde** *"push_object.py ile yaz"*
+     yazdığı için "YAZMA çağrısı var" sandı (sahte-KIRMIZI). Çözüm: `ast` ile GERÇEK `Call`
+     adları toplanır; yorum/docstring/dize sayılmaz.
+  ② `"_alt_include_uyar(obj" in src` → fonksiyonun kendi **`def` satırıyla** eşleşti ve çağrı
+     sökülmüş olsa bile True döndü ⇒ **M2 mutasyonu KAÇTI**. Çözüm: `_kablolu_mu()` — `main`
+     gövdesinde `ast.Call` arar. **Çağrı ile TANIM metinde birbirine benzer; AST ayırır.**
+- **Değişmez ↔ mutasyon eşlemesi** (biri diğerini KAPSAMAZ; herhangi biri tam puan verirse
+  korpus o değişmez için BOŞTUR):
+  `msgtext`: M1 guard'ı sök (tespit) · M2 yalnız İLK ihlali raporla (tamlık) · M3 eşik 73→200 (değer)
+  `aktivasyon`: M1 boş listede de bas (gürültü) · M2 geçersiz `--type` (üretici↔tüketici) ·
+                M3 çağrıyı sök (kablolama) · M4 non-ASCII geri koy (C-ENC-01)
+  `çıktı`: M1 `applied to` geri (iddia) · M2 uyarıyı sök (sessizlik) · M3 marker'ı yerel
+           kopyaya çevir (tek-kaynak)
+- ⭐ **ÜRETİCİ↔TÜKETİCİ vektörü (S3, `ddic_aktivasyon_notu`):** notun bastığı `--type` değeri
+  `activate_object.py`'nin argparse `choices`'ından **canlı çözülür** (`object_types`
+  import edilir), metin kıyası YAPILMAZ. `list_supported_types()`/`OBJECT_TYPE_ALIASES`
+  değişirse bu vektör kırılır — istenen davranış: notun bastığı komut geçersizleşmesin.
+- **FP çapaları (ayırt edicilerle AYNI vektöre konmaz):** `msgtext` S2/S3/S5/S6/S8 ·
+  `aktivasyon` S2 (boş liste sessiz) · `çıktı` B2 (alt-include yoksa sessiz) + B1 içindeki
+  komşu-sınıf çapası (`ZCL_BASKA.ccimp.abap` uyarıya KARIŞMAMALI).
+- **Dokunulursa BİRLİKTE koşulacaklar:** `populate_tables.py`'ye dokunan her tur
+  `populate_tables_unit_kind` (B22) **ve** `ddic_aktivasyon_notu`'nu koşar (HARİTA ikisini de
+  bağlar). `source_drift.py`'ye dokunan tur `cikti_iddiasi_durustlugu`'nu koşar
+  (`_CLASS_SUBSOURCE_MARKERS` oradan import edilir).
+- ⚠ **DOĞRULANAMADI (canlı):** dördü de SAP'ye karşı koşulmadı — fixture'lar SAP'yi taklit
+  eder / sahte client kullanır. İlk gerçek kullanımda doğrulanacak: ① uzun metinli CSV'de
+  fail-closed'ın CSRF/LOCK/PUT'a **hiç gitmediği** ② `populate_*` kapanış notunun gerçek
+  koşumda göründüğü ve komutun **çalıştığı** ③ `run_pretty_printer`'ın yeni metinleri.
