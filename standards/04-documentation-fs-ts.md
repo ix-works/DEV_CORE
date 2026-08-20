@@ -161,14 +161,17 @@ dolup **analiz günlüğüne** döndü, onaya sunulamadı) aynı kuralı verir:
     *(Vaka 2026-08-19: bir iş kuralının kaldırılması TS'in 3 yerinde uygulanıp bir sonraki
     bölümün normatif sözde-kodunda kaldı; aynı turda başka bir kural belgenin 3 yerinde yaşarken
     yalnız 1'i düzeltilmişti ve bir aksiyon sayımı bir kararın **sessizce düşmesine** izin
-    veriyordu.)* Kontrol: doc-checklist **DOC-FS-06** · **DOC-CR-02**.
+    veriyordu.)* Kontrol: doc-checklist **DOC-FS-06b** (reviewer yargısı — yayılım tablosunun
+    tamlığı mekanik olarak ölçülemez, arkasında gate YOKTUR) · **DOC-CR-02**.
 - **Katman 3 — Analiz/araştırma süreci FS'e HİÇ girmez.** Canlı ölçüm dökümleri, deneme-yanılma,
   ham veri profili, gate raporları → paket `ref_docs/RESEARCH-*.md`, `docs/…-gate-*.md`,
   SESSION_NOTES. FS yalnız vardığı sonucu ve dosya atfını taşır.
 - **§1.1 Versiyon geçmişi KISA:** satır başına 1-2 satır "ne değişti" (madde listesi); "neden/nasıl
   bulundu" anlatısı EK karar günlüğüne. Aynı kural FS eklerine (veri yürüyüşü vb.) de uygulanır.
-- GATE (warn-first): `check_fs_no_analysis_log.py` — DOC-FS-05 (gövdede sürüm-etiketi/gate-ID/
-  süreç-ifadesi sayımı + §1.1 satır uzunluğu). Yeniden yazımda **veri kaybı yasak**: gövdeden çıkan
+- GATE (warn-first/**advisory** — sayar ve listeler, commit'i DURDURMAZ): `check_fs_no_analysis_log.py`
+  — DOC-FS-05 (gövdede sürüm-etiketi/gate-ID/süreç-ifadesi sayımı) + **DOC-FS-06a** (§1.1 satır
+  uzunluğu ≤400 karakter). **DOC-FS-06b** (11-B birikmemesi/yayılım tablosu) bu gate'in kapsamı
+  DIŞINDADIR — reviewer kalemidir. Yeniden yazımda **veri kaybı yasak**: gövdeden çıkan
   her bilgi EK'e taşınır, kimlik/mockup/değer/cümle denkliği `scripts/doc_equivalence_check.py --old ESKİ --new YENİ --new EK …` ile ölçülür (rapor doc-gate'e kanıt; DOC-FS-07).
 
 **Soru-seti zorunluluğu:** Danışmanın **karar veremediği** her nokta 11-B'de *seçenekler +

@@ -13,6 +13,17 @@ Kaynak-of-truth (canlı, "(WIRED)" etiketine GÜVENMEZ — kendisi hesaplar):
   - WIRED küme: run_all_validators.py::VALIDATORS + run_review.py::TASK_VALIDATORS
     içinde geçen `check_*.py` adları.
   - Binding: gate script'i `# ENFORCES: <rule-id>` ile hangi kuralı koruduğunu beyan eder mi.
+  - Şiddet: gate script'i `# GATE-SEVERITY: advisory` beyan ediyor mu (beyan YOKSA
+    "bloklayıcı" varsayılır — sessiz advisory olmasın diye default sıkı taraftadır).
+
+⚠ NİÇİN ŞİDDET AYRIMI (2026-08-20): "auto-gate iddiası" sayısı, arkasında **bloklayan** bir
+script varmış gibi okunuyordu. Oysa bazı gate'ler bilinçle warn-first/advisory'dir (default
+exit 0) — desen meşru kullanımı hatalıdan AYIRT EDEMEDİĞİ için (ör. `check_rap_byassoc_keys_only`:
+canlı korpusta 2 bulgunun İKİSİ DE meşru). Bunları tek bir "N auto-gate" rakamına katmak
+iddiayı gerçeğinden FAZLA gösterir. Özet artık `N iddia (B bloklayıcı · A advisory)` basar.
+⛔ Bu AYRIM bir GEVŞETME DEĞİLDİR: MISSING/ORPHAN/UNDECLARED bulgu mantığı ve HARD exit 1
+davranışı AYNEN korunur — advisory gate de dosya-var + WIRED + ENFORCES-beyanlı olmak
+ZORUNDADIR. Değişen yalnız ÖZET SATIRININ dürüstlüğüdür.
 
 3-kademe (ADR 0019): (a) dosya var · (b) bir runner'a WIRED · (c) kırmızı-fixture
 (her gate kendi fixture-testini taşır; bu coverage-check a+b+binding'i denetler,
@@ -43,6 +54,14 @@ CHECKLISTS_DIR = REPO / "playbook" / "checklists"
 SCRIPT_RE = re.compile(r"\bcheck_[a-z0-9_]+\.py\b", re.IGNORECASE)
 SCRIPT_BARE_RE = re.compile(r"\bcheck_[a-z0-9_]+(?:\.py)?\b", re.IGNORECASE)
 ENFORCES_RE = re.compile(r"#\s*ENFORCES:\s*(.+)", re.IGNORECASE)
+# `# GATE-SEVERITY: advisory` — beyan YOKSA "blocking" (default sıkı tarafta).
+# ⛔ SATIR-BAŞI ÇAPASI ZORUNLU (`^\s*#`, MULTILINE): ilk sürüm çıplak `#\s*GATE-SEVERITY:`
+# idi ve DÜZ METİN İÇİNDEKİ anışı da beyan sandı — bu dosyanın KENDİ docstring'i markörü
+# tarif ettiği için `check_rule_gate_coverage` (HARD, exit 1) kendini "advisory" ilan etti
+# (ölçüldü 2026-08-20: özet "2 advisory" derken biri bu sahte beyandı). Sınıf: bir markörü
+# TARİF eden metin, o markörü BEYAN etmiş sayılamaz. Çapa fixture'da çivili (S3).
+SEVERITY_RE = re.compile(r"^[ \t]*#\s*GATE-SEVERITY:\s*([A-Za-z]+)", re.MULTILINE)
+ADVISORY_KELIMELER = {"advisory", "soft", "warn", "warn-first"}
 
 
 def wired_scripts() -> set[str]:
@@ -106,6 +125,16 @@ def parse_checklist_claims():
     return claims
 
 
+def script_severity() -> dict[str, str]:
+    """check_*.py → 'advisory' | 'blocking' (beyan yoksa 'blocking')."""
+    out: dict[str, str] = {}
+    for p in VALIDATORS_DIR.glob("check_*.py"):
+        m = SEVERITY_RE.search(p.read_text(encoding="utf-8", errors="replace"))
+        kelime = m.group(1).lower() if m else ""
+        out[p.name.lower()] = "advisory" if kelime in ADVISORY_KELIMELER else "blocking"
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Kural↔gate coverage (ADR 0019 keystone)")
     ap.add_argument("--strict", action="store_true", help="bulgu varsa exit 1")
@@ -135,7 +164,16 @@ def main() -> int:
         for rule_id, script, md in rows:
             print(f"  {md}: {rule_id} → {script}")
 
-    print(f"Coverage-check: {len(claims)} auto-gate iddiası (checklist gate-kolonu check_*.py).")
+    sev = script_severity()
+    adv_iddia = sorted({(r, s) for r, s, _ in claims if sev.get(s) == "advisory"})
+    n_adv = len(adv_iddia)
+    n_blok = len(claims) - n_adv
+    print(f"Coverage-check: {len(claims)} auto-gate iddiası "
+          f"({n_blok} bloklayıcı · {n_adv} advisory) (checklist gate-kolonu check_*.py).")
+    if adv_iddia:
+        # Görünürlük: advisory bir gate BLOKLAMAZ — "korunuyor" sanısı üretmesin.
+        print("  advisory (default exit 0 — bulguyu RAPORLAR, commit'i durdurmaz): "
+              + " · ".join(f"{r}→{s}" for r, s in adv_iddia))
     dump("MISSING — checklist gate-script verir ama DOSYA YOK (sahte-WIRED)", missing)
     dump("ORPHAN — script VAR ama hiçbir runner'a WIRED DEĞİL", orphan)
     dump("UNDECLARED — WIRED ama gate `# ENFORCES:<id>` beyan etmiyor (binding eksik)", undeclared)

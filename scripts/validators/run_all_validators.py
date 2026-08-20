@@ -44,7 +44,9 @@ VALIDATORS = [
     ("Freestyle UI5 tuzaklar (T1 V2-nav hard)", "check_ui5_freestyle_traps.py", [], "project", None),
     ("Liste=grid (sap.ui.table) (HARD, ADR 0008)", "check_list_view_grid.py", [], "project", None),
     ("Filtre/VH/grid arama deseni (HARD, FE-32)", "check_filter_search_pattern.py", [], "project", None),
-    ("RAP BY-assoc keys-only read (soft, BE-20)", "check_rap_byassoc_keys_only.py", [], "project",
+    # ADVISORY (bilinçli): desen meşru existence-read ile hatalı non-key-read'i AYIRT EDEMEZ
+    # (standards/05 §5.1). Bloklamaz, listeler; bulguda exit 1 isteyen opt-in `--bulguda-exit1`.
+    ("RAP BY-assoc keys-only read (advisory, BE-20)", "check_rap_byassoc_keys_only.py", [], "project",
      ["s4_private", "s4_public", "btp_abap"]),
     ("RAP commit yasağı (HARD, BE-26)", "check_no_rap_commit.py", [], "project",
      ["s4_private", "s4_public", "btp_abap"]),
@@ -62,7 +64,7 @@ VALIDATORS = [
     ("KD ham-mermaid yok (DOC-KD-15)", "check_kd_no_raw_mermaid.py", [], "project", None),
     # FS gövdesi analiz-günlüğüne dönüşmesin (İLKE-2b, 3 katman) — 2026-08-17: 9 sürümlük FS gövdesinde
     # satırların ~%25'i sürüm etiketi/gate-ID/"canlı ölçüldü" notu taşıyordu, onaya sunulamadı. Warn-first.
-    ("FS gövdesi analiz-günlüğü sızıntısı (warn-first, DOC-FS-05/06)", "check_fs_no_analysis_log.py", [], "project", None),
+    ("FS gövdesi analiz-günlüğü sızıntısı (advisory/warn-first, DOC-FS-05/06a)", "check_fs_no_analysis_log.py", [], "project", None),
     ("Proje-kökü çözümlemesi (HARD, CORE-01/ADR 0020)", "check_project_root_resolution.py", [], "both", None),
     ("Kural↔gate coverage (HARD, ADR 0019)", "check_rule_gate_coverage.py", [], "both", None),
     # Hook'lar ajana "OKU: <yol>" der; yol çözülmezse ZORUNLU protokol sessizce atlanır

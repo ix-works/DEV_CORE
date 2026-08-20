@@ -54,7 +54,11 @@ VALIDATORS_DIR = HERE.parent / "scripts" / "validators"
 
 # G1/T3.6 ilk-10: hepsi CLAUDE_PROJECT_DIR + argumansiz repo-geneli tarama modunu
 # destekler (proje_root()/source_dir() -> env). ATLANDI: check_rap_byassoc_keys_only
-# (kod her zaman `return 0` -- SOFT, fixture'la FAIL uretilemez) ve check_console_utf8
+# (bolum-1 bad/good kalibi ARGUMANSIZ kosar; bu gate ADVISORY'dir -> default exit 0, `bad`
+# dizini FAIL uretemez. 2026-08-20'den beri fixture'LANABILIR: opt-in `--bulguda-exit1`
+# bayragi eklendi ve korpus `O:byassoc_advisory` olarak bolum-1 DISINDA kosuyor -- bayragi
+# gecirebilmek icin kendi run.py'si var. Eski not "SOFT, fixture'la FAIL uretilemez"
+# diyordu; artik uretilebilir, yalniz bolum-1 kalibina girmiyor) ve check_console_utf8
 # (CORE = Path(__file__).resolve().parents[2] hard-code -- kendi scripts/ agacini tarar,
 # CLAUDE_PROJECT_DIR/cwd'den BAGIMSIZ -- fixture ile izole edilemez).
 VALIDATORS = [
@@ -128,6 +132,9 @@ OZEL_TESTLER = [
      "behavior_manifest I-1 cerrahi onay (--only) + I-2 worktree/CRLF sahte pozitifi (pozitif kontrollu)"),
     ("gevsetme_pozitif_kontrol",
      "PARTI-3 iki gevsetme: itg_signoff BICIM toleransi + worktree dislama — her biri POZITIF KONTROLLU"),
+    ("byassoc_advisory",
+     "K5: advisory gate sozlesmesi (default exit 0 KORUNUR) + opt-in `--bulguda-exit1` + "
+     "`--strict` kazara-terfi yasagi + coverage `B bloklayici · A advisory` ozeti"),
     # 2026-08-20 PARTI-4 (K3): yabanci-proje on-taramasi JSON'u REGEX ile okuyordu ->
     # kacisli hook komutu raporda KESIK (guvenlik korlugu; arac bir ONAY kararini besler).
     ("yabanci_proje_json_kacisi",
@@ -209,7 +216,7 @@ OZEL_TESTLER = [
     # (belgenin kendi kimlik satiri / mesru hata kodu / katman-2 dosyasi). FP capalari
     # olculmus bir vakadan gelir: gate ilk halinde 21 dokumanin 16'sini kirli gosteriyordu.
     ("fs_docstd",
-     "DOC-FS-05/06/07 uclusu: yakalama + FP capalari + hook kablolamasi + komsu dal regresyonu"),
+     "DOC-FS-05/06a/07 uclusu: yakalama + FP capalari + hook kablolamasi + komsu dal regresyonu"),
     # 2026-08-18: paylasilan ABAP uretecinin imzasi <-> kilavuzu. Iki yon ayni korpusta:
     # YAKALAMA (EKSIK/HAYALET/OLCULEMEDI) ve SESSIZLIK (blok DISI API token'lari, markdown
     # bicim varyantlari, farkli imza sekilleri). "Bakamadim" ile "temiz" AYRI exit'e duser.
@@ -291,8 +298,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # ── bölüm-1 validator bad/good çiftleri ─────────────────────────────────
     ("scripts/validators/check_audit_fields_autofill.py", ("O:validator_kapsam_paydasi",),
      "K1 ortak payda sözleşmesi bu dosyada kablolu (taranan dosya sayısı)"),
-    ("scripts/validators/check_rap_byassoc_keys_only.py", ("O:validator_kapsam_paydasi",),
-     "K1 ortak payda sözleşmesi bu dosyada kablolu (taranan dosya sayısı)"),
+    ("scripts/validators/check_rap_byassoc_keys_only.py",
+     ("O:validator_kapsam_paydasi", "O:byassoc_advisory"),
+     "K1 ortak payda sözleşmesi + advisory/opt-in exit sözleşmesi bu dosyada kablolu"),
+    ("scripts/validators/check_rule_gate_coverage.py", ("O:byassoc_advisory",),
+     "GATE-SEVERITY okuması + `N iddia (B bloklayıcı · A advisory)` özeti burada"),
     ("scripts/validators/check_bdef_backtick.py", ("V:check_bdef_backtick", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_cds_srvd_comment_syntax.py",
      ("V:check_cds_srvd_comment_syntax", "O:validator_kapsam_paydasi",), "G1 çifti"),
@@ -310,7 +320,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("V:check_amdp_comment_apostrophe", "O:validator_kapsam_paydasi",), "G1 çifti"),
     ("scripts/validators/check_kd_no_raw_mermaid.py", ("V:check_kd_no_raw_mermaid", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_fs_no_analysis_log.py", ("O:fs_docstd",),
-     "DOC-FS-05/06 sayacı: yakalama + kimlik-satırı FP çapaları (fixture kendi sandbox'ını kurar)"),
+     "DOC-FS-05/06a sayacı: yakalama + kimlik-satırı FP çapaları (fixture kendi sandbox'ını kurar)"),
     ("scripts/validators/check_fm_signature_doc_sync.py", ("O:fm_imza_doc_sync",),
      "imza ayrıştırma + EKSİK/HAYALET + ÖLÇÜLEMEDİ ayrımı (fixture kendi sandbox'ını kurar)"),
     ("playbook/howto-dynpro-gui-status-generation.md", ("O:fm_imza_doc_sync",),
@@ -369,7 +379,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "gevşetmesi); ⛔ ikisi AYRI korpusla ölçülür — tolerans doluluğu ASLA zayıflatmaz"),
     ("scripts/validators/check_fs_no_analysis_log.py",
      ("O:fs_docstd", "O:gevsetme_pozitif_kontrol"),
-     "DOC-FS-05/06 desenleri + worktree dışlama (ölçülmüş 87→174 çiftlenmesi); "
+     "DOC-FS-05/06a desenleri + worktree dışlama (ölçülmüş 87→174 çiftlenmesi); "
      "pozitif kontrol: ana ağaçtaki gerçek ihlal hâlâ yakalanır"),
     ("scripts/behavior_manifest.py", ("O:manifest_secici_onay",),
      "I-1 seçici onay (`--only`) + I-2 worktree/CRLF; İKİ GEVŞETME pozitif kontrollü "

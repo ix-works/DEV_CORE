@@ -937,3 +937,50 @@ python tests/run_fixture_tests.py                       # 137/137
 - ⚠ **DOĞRULANAMADI:** K6 canlı `/activation` kabulü (B11) · K7 gerçek UI5/playwright
   doğruluğu (B15) · K8① canlı Bash düzenlemesinde ateşleme (matcher META-İNFRA,
   kurulmadı — `settings.template.json` kararı lider/kullanıcıda).
+
+## B30 — PARTİ-4b: advisory gate sözleşmesi (K5) + DOC-FS-06 → 06a/06b bölünmesi (K8③)
+```bash
+python tests/fixtures/byassoc_advisory/run.py           # 10 senaryo + 6 mutasyon, exit 0
+python scripts/validators/check_rap_byassoc_keys_only.py --selftest   # gömülü kırmızı/yeşil
+python scripts/validators/check_rule_gate_coverage.py   # 62 iddia (59 bloklayıcı · 3 advisory)
+python tests/run_fixture_tests.py                       # 145/145
+```
+- ⛔⛔ **SİLİNEMEZ VEKTÖRLER (POZİTİF KONTROL BORCU).** K5'te değişen şey bir *gevşetme
+  değil* **dürüstlük düzeltmesidir** (default `exit 0` AYNEN korundu), ama yeni bir opt-in
+  yol açıldı ⇒ "kapıyı körletmedim" iddiası kanıt ister:
+  | Vektör | Ne kanıtlar |
+  |---|---|
+  | **S1** bulgu VARKEN default exit 0 | canlı 2 **meşru** kod hâlâ bloklanmıyor (davranış değişmezliği) |
+  | **S2** aynı korpus `--bulguda-exit1` → exit 1 | gate artık gerçekten **fixture'lanabilir** (eski engel kalktı) |
+  | **S3** `--strict` → exit 0 | **kazara terfi** yolu kapalı |
+  | **S4a/S4b** temiz korpus her iki modda 0 | bayrak "her şeyi kırmıyor" |
+  | **S8** coverage kendini advisory İLAN ETMEZ | sahte-beyan çapası (aşağıya bak) |
+- ⭐ **SINIR MUTASYONU M2** (`--strict` de exit 1 versin) korpusun en önemli vektörüdür:
+  bayrağın ADI bir tasarım kararıdır. `run_all_validators --strict` bayrağı **TÜM**
+  validator'lara iletir; gate'i oradan hard'a terfi ettirmek terfi kararını kazara bir
+  ÇAĞIRANIN eline verirdi (ADR 0019 §54 shakeout dersi). M2 yeşil kalırsa ad yeniden
+  `--strict`e kaymış demektir. **M3** (default'u hard yap) davranış-değişmezliği çivisidir.
+- ⚠ **`# GATE-SEVERITY:` SATIR-BAŞI ÇAPASI ZORUNLU** (`^[ \t]*#`, MULTILINE). İlk sürüm
+  çıplak `#\s*GATE-SEVERITY:` idi ve **düz metin içindeki anışı da beyan sandı**: bu
+  markörü TARİF eden `check_rule_gate_coverage`'ın **kendi docstring'i**, HARD olan o
+  gate'i "advisory" ilan etti (ölçüldü: özet "2 advisory" derken biri sahteydi).
+  Sınıf: *bir markörü tarif eden metin, onu beyan etmiş sayılamaz.* **S8 + M6** çivi.
+- ⭐ **SAFE DESENİNİ SINAYAN TEK VEKTÖR** `ok_all_fields_but_from_kelimesi_var`
+  (`ALL FIELDS WITH CORRESPONDING #( lt_keys FROM lt_source )`). İlk korpusta YOKTU ve
+  **M5 (SAFE'i sök) hiçbir senaryoyu kırmadı** — yani korpus SAFE'i hiç sınamıyordu.
+  Sebep: temiz vektörlerin hiçbirinde `FROM` **kelimesi** geçmiyordu, dolayısıyla
+  `USES_FROM` tek başına eliyordu. Gerçek işi gören ayrım ancak ikisi bir aradayken görülür.
+- ⚠ **MUTANT KARDEŞ ADI FIXTURE ADIYLA ÖNEKLENİR** (`_mutant_byassoc_advisory.py` /
+  `_mutant_byassoc_coverage.py`). Gerekçe ölçüldü: repoda `_mutant_post_validate.py` adını
+  **İKİ ayrı fixture** (`fs_docstd` + `hook_bash_ve_stderr_kapsami`) paylaşıyor — o
+  çarpışma sınıfına katılmamak için ad benzersiz tutuldu (bkz. kuyruk kaydı).
+- **DOC-FS-06 → 06a/06b:** `06a` = §1.1 satır uzunluğu (**ölçülebilir**, gate'li, ≤400
+  karakter) · `06b` = 11-B birikmemesi + yayılım tablosunun tamlığı (**reviewer yargısı**,
+  script YOK ve olamaz). Gate `# ENFORCES: DOC-FS-05, DOC-FS-06a` beyan eder; `06b`
+  checklist'te gate kolonu OLMADAN durur ⇒ coverage onu auto-gate saymaz (iddia 61→**62**,
+  şişme değil **doğru yönde artış**: 06a gerçekten gate'li).
+- **Dokunulursa BİRLİKTE koşulacaklar:** `check_rap_byassoc_keys_only.py` →
+  `byassoc_advisory` **VE** `validator_kapsam_paydasi` (biri exit sözleşmesini, öteki
+  payda sözleşmesini ölçer; HARİTA ikisini de bağlar). `check_rule_gate_coverage.py` →
+  `byassoc_advisory`. `check_fs_no_analysis_log.py` → `fs_docstd` **VE**
+  `gevsetme_pozitif_kontrol` (B9b/B28 zaten bağlıyor).

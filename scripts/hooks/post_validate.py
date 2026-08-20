@@ -297,7 +297,7 @@ def main() -> int:
                      "--file", path, "--bulguda-exit1", "--max-examples", "2"],
                     cwd=str(REPO), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
                 if res.returncode == 1 and (res.stdout or "").strip():
-                    lines.append("[hook:post_validate] UYARI (warn-first, DOC-FS-05/06 — İLKE-2b): gövdede analiz-günlüğü izi var — "
+                    lines.append("[hook:post_validate] UYARI (warn-first, DOC-FS-05/06a — İLKE-2b): gövdede analiz-günlüğü izi var — "
                                  "sürüm etiketi/gate-ID/\"canlı ölçüldü\"/kullanıcı alıntısı → EK 'Karar ve Kanıt Günlüğü'ne taşı; "
                                  "§1.1 satırı 1-2 satır. Onaya çıkmadan temizle:\n" + (res.stdout or "")[-900:])
                 elif res.returncode not in (0, 1):
