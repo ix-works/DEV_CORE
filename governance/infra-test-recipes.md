@@ -1105,3 +1105,83 @@ python tests/run_fixture_tests.py                       # 145/145
   payda sözleşmesini ölçer; HARİTA ikisini de bağlar). `check_rule_gate_coverage.py` →
   `byassoc_advisory`. `check_fs_no_analysis_log.py` → `fs_docstd` **VE**
   `gevsetme_pozitif_kontrol` (B9b/B28 zaten bağlıyor).
+
+## B31 — `hook_gate_coverage` korpusu (ADR 0019 coverage'ın ÜÇ katmanı: hook · matcher · id)
+
+> ⚠ **Bu reçete 2026-08-22'de GEÇ yazıldı.** Korpus iki tur boyunca büyüdü ama `infra-test-recipes`'e
+> hiç girmedi; bir infra-expert **F0 adımında arayıp bulamadı** ve bunu bulgu olarak raporladı.
+> ⛔ **Ders:** fixture yazmak, reçetesini yazmadan **yarım iştir** — F0 okuması reçeteye bakar,
+> fixture'ın kendi docstring'ine değil.
+
+**Koşum:** `python tests/fixtures/hook_gate_coverage/run.py` → **18 vektör**, exit 0.
+Süitten: `python tests/run_fixture_tests.py` (OZEL_TESTLER üyesi).
+
+### Neyi koruyor — üç ayrı katman, biri diğerini KAPSAMAZ
+
+| Katman | Soru | Anahtar vektör |
+|---|---|---|
+| **hook** | Hook dosyası var mı · şablona kablolu mu · `# ENFORCES:` beyanlı mı | `S5` MISSING (`hayalet.py`) · `S4` ORPHAN · `S3`/`S16` UNDECLARED |
+| **matcher** | Kodda **adı geçen** her tool, şablondaki matcher'la o hook'a **yönleniyor** mu | `S13` temiz · **`S14`** delik · **`S18`** ölü-dışlama |
+| **id** | `# ENFORCES:` satırından **hangi token'lar** id sayılıyor | `S11` aşırı-dar · `S12` sınırsız |
+
+⛔ **`S14` niçin ayrı bir dalı gerektiriyor (silinemez gerekçe):** vektör **kablolu** bir hook kurar
+(⇒ `ORPHAN=0`) ama matcher'ı kodun işlediği tool'u yönlendirmez. Yani **ORPHAN dalı bu sınıfı
+YAKALAYAMAZ**. Tarihsel vaka: bir guard'a PowerShell desteği eklendi, **29 senaryoluk test yeşil
+verdi, PR merge edildi**, hook PowerShell'de **hiç tetiklenmedi** (`playbook/lessons-learned.md`
+PATTERN #12 — *"kod-seviyesi koruma ≠ korunuyor"*).
+
+### ⚖ ŞİDDET AYRIMI — `ÖLÇÜLEMEDİ`nin üç kaynağı AYNI SINIF DEĞİL
+
+| Kaynak | Kusur nerede | `rc` |
+|---|---|---|
+| Bozuk `settings.template.json` (`S7`) | ölçüm imkânsız, gate işlevsiz | **1** |
+| Ayrıştırılamayan hook dosyası (`S15`) | **hook'un kendisi bozuk** | **1** |
+| Gate hook'un tool kümesini **okuyamıyor** (`S17`) | **hook DOĞRU, gate sınırlı** | **0** ⚠ |
+
+⛔ **Üçüncüsü BİLEREK bloklamaz (karar 2026-08-22).** `frozenset({...})` · ters karşılaştırma ·
+fonksiyon-içi sabit · sabit-birleştirme gate tarafından **çözülemez** ve bu **kalıcı bir sınırdır**
+(tanıma yeteneği bilerek genişletilmedi — *tamlık değil dürüstlük*). Bloklasaydı tek "onarım"
+*"geçerli Python'unu gate okuyabilsin diye tuple'a çevir"* olurdu — aracın kuyruğunun köpeği
+sallaması. `frozenset` bu evde **yerleşik deyim** (`infra_write_guard` · `pre_tool_guard`).
+⇒ Kör hook **`[ÖLÇÜLEMEDİ]` satırında adıyla görünür**, ama commit'i durdurmaz.
+⛔ Bu **gevşetme DEĞİLDİR**: kör hook düne kadar **hiç görünmüyordu** ve *"tool ayrımı yapmıyor"*
+kovasına düşüp **yanlış biçimde temiz** sayılıyordu (`--mutasyon-kor-kovada` tam bunu çiviler).
+
+### Mutasyonlar — **14 kip**, hiçbiri diğerini kapsamıyor
+
+> ⚠ Sayı ve harita **araçtan** alınmıştır (`--mutasyon-ZIRVA` geçerli kip listesini basar), elle yazılmamıştır.
+
+| Kip | Düşürdüğü vektör(ler) | Neyi çiviliyor |
+|---|---|---|
+| `--mutasyon-optout-genis` | `S16` | Muafiyet **yalnız** kablolamayı kapsar, `UNDECLARED`'ı **değil** |
+| `--mutasyon-optout-yok` | `S10` `S16` | Muaf giriş PASS etmeli (gate merdiveni **adım-6**) |
+| `--mutasyon-kor-sessiz` | `S17` | Kör-yazım **görünmeli** |
+| `--mutasyon-kor-kovada` | `S17` | Kör-yazım **doğru kovaya** düşmeli (ayrı değişmez — `exit=0` ile düşer) |
+| **`--mutasyon-kor-bloklar`** | `S17` | ⭐ **Kör-yazım BLOKLAYICIYA terfi etmesin** (`exit=1` ile düşer). **Turun merkezî şiddet kararının tek çivisi** — bu satır silinirse karar sessizce geri alınabilir |
+| `--mutasyon-mesaj-tek-secenek` | `S18` | Bulgu **İKİ** onarım seçeneği vermeli |
+| `--mutasyon-id-sinirsiz` | `S12` | Yeterince daralttık mı |
+| `--mutasyon-id-asiri-dar` | `S11` | **Fazla mı** daralttık (ters yön — ayrı değişmez) |
+| `--mutasyon-capa-yok` | `S6` | `ENFORCES` satır-başı çapası |
+| `--mutasyon-hook-katmani-yok` | `S3` `S4` `S5` `S6` `S16` | Hook katmanının tamamı |
+| `--mutasyon-hook-parse-sessiz` | `S15` | Ayrıştırılamayan hook **bloklamalı** |
+| `--mutasyon-olcum-sessiz` | `S7` | Bozuk şablon **bloklamalı** (ölçüm hatası sessiz geçmesin) |
+| `--mutasyon-matcher-katmani-yok` | `S14` `S15` `S18` | Matcher katmanının tamamı |
+| `--mutasyon-matcher-adi-uydur` | `S13` `S14` `S18` | Tool adı **uydurulmasın** |
+
+⚠ **Bu harita ÖLÇÜLDÜ** (14 mutasyon tek tek koşuldu, `DOĞRULANAMADI=0`), elle yazılmadı.
+İlk yazımında **elle** yazılmıştı ve **beş noktada yanlıştı** — kapı ölçüp düzeltti.
+⛔ **Ders:** reçete, koruduğu korpusun *"tek kaynağı"* olduğunu iddia ediyorsa (F0 okuması buraya
+bakar), yanlışlığı **azami kaldıraçtadır**. Reçete satırı yazarken aracın kendi çıktısını kopyala.
+
+⛔ **Bilinmeyen `--mutasyon-*` kipi REDDEDİLİR** (`raise SystemExit(<str>)` ⇒ **`rc=1`**) — sessiz tam-puan yok.
+⚠ Kip adları **tam** yazılır (`--mutasyon-olcum-sessiz`); kısaltılmış hâli (`--olcum-sessiz`) reddedilir.
+
+### ⚠ Bu korpusa dokunmadan önce
+
+1. **`OPT_OUT` canlıda BOŞ.** `S4`↔`S10` ve **`S3`↔`S16`** **ikizdir**: biri muafiyetsiz, öteki muafiyetli
+   aynı ağacı kurar. Birini silmek ötekini **anlamsız** kılar.
+2. **`REPO = Path(__file__).resolve().parents[2]` MEŞRUDUR** (CORE-03: core'un kendi varlıkları).
+   ⛔ `project_config.project_root()`'a **çevirme** — gate **sessizce boş tarar**.
+3. Beklenen tool kümesi **AST'den türetilir, elle tablo YOKTUR.** Elle tablo denenmişti ve
+   **yanlıştı** (5 sabitten 3'ünün adı yok, 2 hook atlanmış) ⇒ gate iki sabiti bulamayıp
+   sessizce boş tarardı. **Envanteri yapıdan türet, metin deseninden değil.**

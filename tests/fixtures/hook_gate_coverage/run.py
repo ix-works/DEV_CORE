@@ -34,6 +34,11 @@ KOSUM:  python tests/fixtures/hook_gate_coverage/run.py
         ... --mutasyon-id-asiri-dar    (N4: ayristirma ASIRI daralir -- yalniz ILK token)
         ... --mutasyon-matcher-katmani-yok (N3: MATCHER DELIK bulgusu exit koduna KATILMAZ)
         ... --mutasyon-matcher-adi-uydur  (N3: beklenen kume KODDAN degil ELLE gelir)
+        ... --mutasyon-optout-genis    (N5: muafiyet ENFORCES testini DE yutar)
+        ... --mutasyon-kor-sessiz      (N5: kor yazim sessizce "tool ayrimi yok" sayilir)
+        ... --mutasyon-kor-kovada      (N5: kor hook yanlis kovada da sayilir)
+        ... --mutasyon-mesaj-tek-secenek (N5: MATCHER DELIK mesaji TEK secenek verir)
+        ... --mutasyon-kor-bloklar     (N5: kor-yazim BLOKLAYICIYA terfi eder)
 Cikis:  0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (mutasyon capasi tutmadi)
 
 ⭐ N3 (2026-08-22) — MATCHER-KAPSAMI (S13/S14): hook katmaninin ORPHAN dali "sablona
@@ -44,8 +49,21 @@ hook PowerShell'de HIC tetiklenmedi. S14 tam bu sekli kurar (kod Bash+PowerShell
 bekler, matcher yalniz Bash yonlendirir); S13 ayni agacin TEMIZ halidir (CORE-05:
 ihlal FAIL **ve** temiz PASS -- tek yonlu test hipotezi dogrulamaz).
 
-⚠ SEKIZ MUTASYON, HICBIRI DIGERINI KAPSAMAZ: capa · bulgu->exit kablolamasi ·
-  "olculemedi != temiz" · OPT_OUT muafiyeti · id-daraltmasi · daraltmanin POZITIF KONTROLU.
+⚠ ON DORT MUTASYON, HICBIRI DIGERINI KAPSAMAZ: capa · bulgu->exit kablolamasi ·
+  "olculemedi != temiz" · OPT_OUT muafiyeti (VARLIGI ve KAPSAMI ayri ayri) ·
+  id-daraltmasi · daraltmanin POZITIF KONTROLU · kor-yazim tespiti ve KOVA aritmetigi ·
+  bulgu MESAJININ iki onarim secenegi (metin de bir davranistir) · kor-yazimin SIDDETI.
+
+⭐ N5 (2026-08-22) — DURUSTLUK TURU (S16/S17/S18), YENI YETENEK YOK:
+  · S16: OPT_OUT muafiyeti `continue` ile ENFORCES testini DE yutuyordu -> basilan
+    cumle ("kablolama ARANMAZ") muafiyetin GERCEK kapsamindan DARdi.
+  · S17: `tool_name`e bakan ama yazimi (frozenset/ters-kiyas/fonksiyon-ici sabit/
+    birlestirme) cozulemeyen hook, "tool ayrimi YAPMIYOR (kapsam disi)" kovasina
+    dusuyordu = OLUMLU bicimde YANLIS. ⛔ Korluk KALDI, sadece GORUNUR oldu.
+    ⚠ SIDDET: kor-yazim BLOKLAMAZ (uyarir) -- kusur hook'ta degil GATE'te; bloklamak
+    gecerli Python'u araca uydurmaya zorlardi (`frozenset` bu evde yerlesik deyim).
+  · S18: MATCHER DELIK mesaji TEK onarim veriyordu; olu dislama dali vakasinda o
+    onarim YANLIS (matcher'i genisletmek tetiklenme yuzeyini buyutur).
 
 ⭐ N2 (2026-08-22) — MUAF-GIRIS PASS VEKTORU (S10): ADR 0019 devreye-alma merdiveninin
 ADIM-6'si "IKI fixture: muaf-olmayan ihlal FAIL **ve** muaf giris PASS" der. Hook-ORPHAN
@@ -81,7 +99,8 @@ GATE = VDIR / "check_rule_gate_coverage.py"
 TPL_SYNC = VDIR / "check_settings_template_sync.py"
 HOOKS_GERCEK = REPO / "scripts" / "hooks"
 
-OLCULEMEDI = "[ÖLÇÜLEMEDİ]"
+OLCULEMEDI = "[ÖLÇÜLEMEDİ]"              # BLOKLAYAN olcum hatasi (sablon/hook bozuk)
+OLCULEMEDI_UYARI = "[ÖLÇÜLEMEDİ · UYARI"  # kor-yazim: GORUNUR ama rc'yi ETKILEMEZ
 
 # --- mutasyon capalari (ICERIK capasi; taban SHA DEGIL) ----------------------
 CAPA_RE = ('ENFORCES_RE = re.compile(r"^[ \\t]*#\\s*ENFORCES:\\s*(.+)", '
@@ -103,10 +122,24 @@ CAPA_TOTAL = ("             + len(h_missing) + len(h_orphan) + len(h_undeclared)
 CAPA_OLCUM = ("             + (1 if h_olcum_hatasi else 0)\n"
               "             + len(m_delik) + len(m_parse_hatalari) + "
               "(1 if m_sablon_hatasi else 0))")
-# N2: hook-ORPHAN dalindaki OPT_OUT muafiyeti
-CAPA_OPTOUT = ("        if ad in h_optout:\n"
-               "            continue  # C-TPL-01 muafiyeti (gerekçeli) — "
-               "iki gate AYNI kümeyi okur\n")
+# N2/N5: hook dalindaki OPT_OUT muafiyeti (N5'te `continue` -> `muaf` bayragina dondu:
+# muafiyet YALNIZ ORPHAN testini atlar, ENFORCES testi HERKESE kosar).
+CAPA_OPTOUT = ("        muaf = ad in h_optout  # C-TPL-01 muafiyeti — "
+               "YALNIZ kablolama aranmaz\n")
+# N5: kor-yazim (tool_name gecer ama ad kumesi BOS) -> OLCULEMEDI kaydi
+CAPA_KOR = "        if kaynakta_tool and not bulunan and not onek:\n"
+# N5: "kor hook 'tool ayrimi yapmiyor' kovasindan DUSULUR" aritmetigi
+CAPA_KOR_KOVA = "          f\"{len(h_mevcut) - m_denetlenen - len(h_optout) - m_olculemeyen_hook} \"\n"
+# N5: MATCHER DELIK bulgusunun IKI SECENEKLI onarim metni
+CAPA_MESAJ = ("              f\"MATCHER DELİK=İKİ onarım var, vakaya göre seç: "
+              "(a) koruma ÖLÜ ise \"\n"
+              "              f\"şablondaki matcher'a o tool'u ekle "
+              "(kablolu ama YANLIŞ ADRESTE) \"\n"
+              "              f\"(b) kodda o tool'u işleyen dal ÖLÜ ise DALI KALDIR — "
+              "dışlama dalı + \"\n"
+              "              f\"bilinçli dar matcher bu sınıftadır; orada matcher'ı "
+              "genişletmek \"\n"
+              "              f\"hook'un tetiklenme yüzeyini gereksiz büyütür.\",\n")
 # N4: id ayristirma yardimcisinin GOVDESI
 CAPA_ID = ('    govde = ham.split("(", 1)[0]  # `(` görülünce dur — sonrası insan açıklamasıdır\n'
            '    return {t for t in re.split(r"[,\\s]+", govde.strip()) if _ID_RE.fullmatch(t)}')
@@ -136,7 +169,44 @@ MUTLAR = {
         "+ len(m_delik) + len(m_parse_hatalari) +",
         "+ len(m_delik) + 0 +"),
     # N2 fix'in SOKUMU: muafiyet okunmaz -> muaf hook yine ORPHAN olur (S10 duser).
-    "--mutasyon-optout-yok": (CAPA_OPTOUT, ""),
+    "--mutasyon-optout-yok": (
+        CAPA_OPTOUT, "        muaf = False  # MUTASYON: muafiyet OKUNMAZ\n"),
+    # ⭐ N5 fix'in SOKUMU (AYRI DEGISMEZ): muafiyet ESKI haline (`continue`) doner ->
+    # ORPHAN testiyle BIRLIKTE ENFORCES testini de yutar (S16 duser, S10 PASS kalir).
+    # ⛔ Ustteki mutasyon bunu KAPSAMAZ: biri "muafiyet OKUNUYOR mu", oteki
+    # "muafiyetin KAPSAMI ilan edildigi kadar mi" sorusunu olcer.
+    "--mutasyon-optout-genis": (
+        CAPA_OPTOUT,
+        "        if ad in h_optout:\n"
+        "            continue  # MUTASYON: eski davranis (ENFORCES testini DE yutar)\n"
+        "        muaf = ad in h_optout\n"),
+    # ⭐ N5: KOR-YAZIM tespitinin SOKUMU -> `tool_name`e bakan ama cozulemeyen hook
+    # sessizce "tool ayrimi YAPMIYOR" kovasina duser (S17 duser: ne OLCULEMEDI notu
+    # ne de dogru kova sayisi kalir).
+    "--mutasyon-kor-sessiz": (
+        CAPA_KOR, '        if False:  # MUTASYON: korluk sessizce "temiz" sayilir\n'),
+    # ⭐ N5 IKINCI DEGISMEZ: kayit BASILIR ama kova aritmetigi ESKI kalir -> kor hook
+    # HEM OLCULEMEDI listesinde HEM "tool ayrimi yapmiyor" sayisinda gorunur (cifte
+    # sayim + olumlu-yanlis cumle). S17 YALNIZ kova cengelinden duser => o cengelin
+    # tasiyici oldugunu kanitlar (ustteki mutasyon bunu ayirt EDEMEZ).
+    "--mutasyon-kor-kovada": (
+        CAPA_KOR_KOVA,
+        "          f\"{len(h_mevcut) - m_denetlenen - len(h_optout)} \"\n"),
+    # ⭐ N5 SIDDET CENGELI: kor-yazim `total`e KATILIRSA (yani BLOKLAYICI olursa)
+    # S17 duser. ⛔ AYRI DEGISMEZ: ustteki iki mutasyon "kayit basiliyor mu / dogru
+    # kovada mi" sorusunu olcer, bu "SIDDETI dogru mu" sorusunu. Warn-first bir dal
+    # kazara bloklayiciya terfi ederse yalnizca BURASI kirmizi olur.
+    "--mutasyon-kor-bloklar": (
+        CAPA_MATCHER_TOTAL,
+        "             + len(m_delik) + len(m_parse_hatalari) + len(m_korler) + "
+        "(1 if m_sablon_hatasi else 0))"),
+    # ⭐ N5: MESAJ fix'inin SOKUMU -> TEK onarim secenegi (fix oncesi hali). S18 duser.
+    # ⚠ Mesaj METNI de bir davranistir: yanlis onarim oneren bulgu, bulunmayan
+    # bulgudan pahaliya mal olabilir (matcher'i gereksiz genisletir).
+    "--mutasyon-mesaj-tek-secenek": (
+        CAPA_MESAJ,
+        "              f\"MATCHER DELİK=şablondaki matcher'a o tool'u ekle "
+        "(kablolu ama YANLIŞ ADRESTE).\",\n"),
     # N4 fix'in SOKUMU: sinirsiz split -> parantezli aciklama id uretir (S12 duser).
     "--mutasyon-id-sinirsiz": (
         CAPA_ID,
@@ -204,6 +274,29 @@ HOOK_GOVDELERI = {
                 'if tool_name in _KABUK_TOOLLARI:\n'
                 '    pass\n'
                 'raise SystemExit(0)\n'),
+    # ⭐ N5: KOR YAZIM. `tool_name`e BAKAR ama yazimi ayristiricinin tanidiklarindan
+    # DEGIL (`frozenset(...)` cozulmez) -> ad kumesi BOS kalir. ⛔ Vektor kusurun
+    # GERCEK yazim biciminde yazilir (olculen dort kor yazimdan biri). Bu hook
+    # "tool ayrimi YAPMIYOR" DEGILDIR; gate onu OLCEMEZ -> [ÖLÇÜLEMEDİ].
+    "teta": ('#!/usr/bin/env python3\n'
+             '# ENFORCES: X-08  (ADR 0019 coverage binding)\n'
+             '"""stub hook: tool ayrimi yapar, YAZIMI taninmiyor (fixture)."""\n'
+             'data = {}\n'
+             'if data.get("tool_name") in frozenset({"Bash", "PowerShell"}):\n'
+             '    pass\n'
+             'raise SystemExit(0)\n'),
+    # ⭐ N5: DISLAMA dali (negatif kutupluluk — `itg_backstop`un gercek sekli).
+    # Gate "kodda ADI GECEN tool" sorar, kutupluluk TAHMIN ETMEZ; matcher onu
+    # yonlendirmiyorsa bulgu DOGRUDUR ama dogru onarim matcher'i genisletmek
+    # DEGIL olu dali kaldirmaktir -> mesaj IKI secenek vermek ZORUNDA.
+    "eta": ('#!/usr/bin/env python3\n'
+            '# ENFORCES: X-09  (ADR 0019 coverage binding)\n'
+            '"""stub hook: DISLAMA dali (fixture)."""\n'
+            'data = {}\n'
+            'tool_name = data.get("tool_name", "")\n'
+            'if tool_name == "NotebookEdit":\n'
+            '    raise SystemExit(0)\n'
+            'raise SystemExit(0)\n'),
 }
 
 
@@ -459,6 +552,47 @@ def main() -> int:
              rc == 1 and OLCULEMEDI in out and "zeta" in out
              and "Özet (hook): OK=2" in out,  # hook katmani TEMIZ -> izolasyon kaniti
              f"exit={rc}")
+
+        # === S16 ⭐ MUAF + BEYANSIZ -> HALA exit 1 (N5'in DISI) ==============
+        # S10 ile AYNI kurgu, TEK fark: muaf hook'un `# ENFORCES:` beyani YOK.
+        # Muafiyet KABLOLAMA muafiyetidir; beyan muafiyeti DEGIL. Fix'ten once
+        # `continue` ENFORCES testini de yutuyordu ve bu agac exit 0 veriyordu ⇒
+        # basilan cumle ("kablolama ARANMAZ") muafiyetin GERCEK kapsamindan DARdi.
+        # ⚠ Kardes gate (C-TPL-01) burada exit 0 der ve bu ZIT CEVAP DEGILDIR:
+        # o gate beyani hic okumaz, iki gate FARKLI soru sorar.
+        rc, out, trc, tout = senaryo2("s16", hooklar=["alfa", "delta"],
+                                      kablosuz=("delta",), optout=("delta",))
+        ekle("S16 MUAF+BEYANSIZ hook -> exit 1 + HOOK UNDECLARED (muafiyet beyani YUTMAZ)",
+             rc == 1 and "HOOK UNDECLARED" in out and "delta" in out
+             and "ORPHAN=0" in out and "OPT_OUT" in out and trc == 0,
+             f"cov_exit={rc} tpl_exit={trc}")
+
+        # === S17 ⭐ KOR YAZIM -> OLCULEMEDI ama UYARI (rc=0) ==================
+        # ⛔ Bu vektor TANIMA YETENEGI olcmez -- korluk BILEREK duruyor. Olctugu sey
+        # DURUSTLUK + SIDDET: kor hook (a) [ÖLÇÜLEMEDİ] satirinda ADIYLA gorunur
+        # (b) "tool ayrimi YAPMIYOR" kovasindan DUSULUR (c) ama commit'i DURDURMAZ.
+        # Agacta 2 hook var; alfa gercekten tool ayrimi yapmiyor, teta OLCULEMEDI =>
+        # kova 1 olmali (fix'ten once 2 idi ve teta'yi "kapsam disi" diye
+        # OLUMLU-YANLIS tanimliyordu).
+        # ⭐ `rc == 0` BILINCLI (kullanici karari 2026-08-22): kusur hook'ta DEGIL
+        # gate'te. Bloklamak "gecerli Python'unu araca uydur" derdi; `frozenset` bu
+        # evde yerlesik deyimdir. ⛔ SIDDET CENGELI SILINEMEZ -- `--mutasyon-kor-bloklar`
+        # tam bu satiri sinar (warn-first bir dal kazara BLOKLAYICIYA terfi etmesin).
+        rc, out = senaryo("s17", hooklar=["alfa", "teta"])
+        ekle("S17 kor yazim -> rc=0 (UYARI) + [ÖLÇÜLEMEDİ] teta ADIYLA + kova=1",
+             rc == 0 and OLCULEMEDI_UYARI in out and "teta" in out
+             and "KÖR-YAZIM=1" in out
+             and OLCULEMEDI not in out
+             and "1 hook tool ayrımı YAPMIYOR" in out, f"exit={rc}")
+
+        # === S18 ⭐ OLU DISLAMA DALI -> bulgu DOGRU, onarim IKI SECENEKLI ======
+        # Kod `NotebookEdit`i ADIYLA isler (dislama), matcher yalniz `Bash` yonlendirir.
+        # Bulgu dogrudur; ama burada matcher'a `NotebookEdit` eklemek hook'un
+        # tetiklenme yuzeyini GEREKSIZ buyutur -- dogru onarim OLU DALI kaldirmaktir.
+        rc, out = senaryo("s18", hooklar=["alfa", "eta"], matcherler={"eta": "Bash"})
+        ekle("S18 olu dislama dali -> MATCHER DELIK + mesaj IKI onarim secenegi verir",
+             rc == 1 and "MATCHER DELİK" in out and "NotebookEdit" in out
+             and "DALI KALDIR" in out, f"exit={rc}")
 
         # === S8 KABLOLAMA MANTIGI KOPYALANMADI ==============================
         # C-TPL-01 ile ORTAK okuyucu: ayni olgu iki yerde yasarsa biri bayatlar.
