@@ -188,26 +188,32 @@ python tests/run_fixture_tests.py                                            # T
 
 ## B8 — watchdog / pre_compact / post_tool_failure / instructions_log / radar_check
 - **watchdog_launch brifing eksenleri (2026-08-19):** `[PRIOR-ART / KB-01]` ateşleme ölçütü **metin değil arama**: brifingde adı geçen + `scripts/`te var olan script, `playbook/`de ≤2 dosyada geçiyor ve o dosyalar brifingde ANILMIYOR. ⛔ *"atıf var mı"* diye ölçme — gerçek korpusta brifinglerin **%98,6'sı** zaten yol atfı taşır (trivial yeşil). Gürültü tabanı: **%13,9** ateşleme / 570 brifing, medyan 1 ms. FP çapası şart: reçete zaten anılmış · var-olmayan script adı · >2 reçetede geçen genel araç · <400 karakter. Fail-open yasağı iki çapa ister (dizin-yok + bozuk-payload → `KOSMADI`). Notlar **4 emit yolunun hepsinde** çıkmalı (daemon/bash bulunamasa bile). Korpus: `prior_art_kb01`.
-- ⭐⭐ **D2 KURATLI KANCALAR (2026-08-21) — `_brifing_lint`'e eksen EKLEMEDEN ÖNCE OKU:**
-  ```bash
-  python tests/fixtures/brifing_lint_d2/run.py                     # 18/18
-  python tests/fixtures/brifing_lint_d2/run.py --mutasyon-kimlik    # 14/18
-  python tests/fixtures/brifing_lint_d2/run.py --mutasyon-deploy    # 16/18
-  python tests/fixtures/brifing_lint_d2/run.py --mutasyon-fren      # 17/18  (GEVŞETME yönü)
-  ```
-  - ⛔⛔ **BÜTÇE DOLU — ÜÇÜNCÜ KANCA EKLEME.** Ateşleme oranları **TOPLANIR**: ölçüldü (605
-    gerçek brif) 2 kanca %8,6-26,0 · **3 kanca %19,3-30,2 = BANT ÜSTÜ** · 7 aday %77,9
-    (= reddedilen ham eksenin sınıfı). Yürürlükteki iki kanca birleşik **bant ALTI**.
-    Vektör **B1** bunu YAPISAL olarak çivilliyor: kaynakta `"[BRIFING-LINT/` markeri **2**'yi
-    aşarsa korpus KIRMIZI verir. Yeni kanca önerisi önce
-    `governance/research/brifing-lint-olcum-2026-08-21/d2_aday_olcum.py` ile ölçülür.
-  - ⛔ **Bandı SEZGİYLE değil ÖLÇÜMLE doğrula ve rakamı KOPYALAMA — YENİDEN ÜRET.** Yöntem:
-    gerçek `_brifing_lint` fonksiyonunu **import et** ve 605 brifi ona ver; regex'in ikinci
-    bir kopyasını ölçme (kopya bayatlar ve ölçtüğün şey koşacak kod olmaz).
-    Harness pozitif kontrolü: aynı koşumda mevcut `ENGELLENIRSEN` ekseni **%16,0** civarı
-    çıkmalı (reçetenin altındaki tabloyla örtüşmezse ölçüm harness'ı bozuktur).
-  - ⛔ **Fren şartı (`not fren`) KALDIRILAMAZ** — kaldırılırsa kanca "kural anılan her yazma
-    işinde" ateşler; **A-N1** çapası bunu yakalar (`--mutasyon-fren`).
+- ⛔⛔ **D2 KURATLI KANCALAR (`T3-KİMLİK` + `DEPLOY`) — EKLENDİ ve AYNI GÜN GERİ ALINDI
+  (2026-08-21). Bu blok artık bir REÇETE DEĞİL, bir KALDIRMA KAYDIDIR.**
+  `tests/fixtures/brifing_lint_d2/` **YOKTUR** (kaldırıldı) — buradaki eski koşum satırları
+  (`18/18` · `--mutasyon-kimlik` · `--mutasyon-deploy` · `--mutasyon-fren`) **koşulmaz**.
+  Kanonik gerekçe: **`governance/removed-controls.md`** + `infra-changelog.md`
+  *2026-08-21 (akşam)* satırı. Burada yalnız **`_brifing_lint`'e eksen eklemeden önce**
+  okunması gereken ders durur:
+  - ⛔⛔ **ATEŞLEME ORANI TEK BAŞINA KABUL ÖLÇÜTÜ DEĞİLDİR.** Bu iki kanca *"%4,8 + %5,3 =
+    bant altı ✅"* diye kabul edildi ve **precision 0** ile merge edildi: 609 gerçek brifte
+    `T3-KİMLİK` 30 ateşlemenin **30'u salt-okur**, `DEPLOY` 32 ateşlemenin **0'ı** gerçek
+    deploy işi. Ateşlenen *oran* doğruydu, **ateşlediği şey** değil.
+  - ⭐ **YENİ KABUL ÖLÇÜTÜ — ÜÇÜ BİRDEN:** ateşleme **<%13,9** (ev bandı gürültü tabanı)
+    **VE** precision **≥%70** **VE** recall **≥%50**. Aleti hazır:
+    `governance/research/brifing-lint-olcum-2026-08-21/precision_harness.py`
+    (yer-gerçeğini brifin METNİNDEN değil **rol + açık beyandan** türetir; tartışmalı
+    vakaları `AMBIVALENT` kovasına alıp paydadan çıkarır — ölçüm kendi lehine oynamaz).
+  - ⛔ **BASTIRICI DESEN, HEDEFLE TERS KORELASYONLU OLABİLİR — asıl ders bu.** `fren`
+    deseni çıplak `DOKUNMA` içeriyordu; o kelime **gerçek yazma briflerinin** kapsam-sınırı
+    cümlesidir (*"başka dosyaya dokunma"*) ⇒ tam da hedef sınıfı susturuyordu. Yeni bir
+    bastırıcı yazarsan onu **hedef sınıfta ve karşıt sınıfta AYRI AYRI ölç**.
+  - ⛔ **Kimlik regex'inde `\d` DEĞİL `\d+`**: `-?\d` ⇒ `D-R42`→`D-R4`, `BT-05`→`BT-0`;
+    üretilen not **var olan ama alakasız** bir kararı adlandırır (sessiz yanlış-atıf).
+  - ⛔ **Fixture'ın YEŞİL olması "bakıyor" demek değildir.** `brifing_lint_d2` **18/18**
+    yeşilken kaldırıldı: vektörleri SENTETİK'ti ve tek FP çapası *"fren YAZILMIŞ → sessiz"*
+    idi; gerçek korpusta hiçbir salt-okur brifi o dili kullanmıyor ⇒ **kontrol koştu ama
+    BAKMADI**. Yeni korpusta FP çapaları **gerçek korpustan çekilmiş** briflerle kurulur.
   - ⛔ Genel arama-tabanlı memory-nudge **ELENDİ, yeniden önerme**: evin kendi `recall_inject`
     skorlayıcısı ajan briflerinde **%100** ateşleyip hedef dersi **0/7** getiriyor (PLAN §8.1).
   - Notlar **ASCII** yazılır (komşu lint notlarıyla aynı konvansiyon, C-ENC-01) ve çapa **ham
@@ -835,6 +841,17 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   | **DAR** (başka-ağaç **+** yazma işi, madde yok) | **%16,0** (kapsam %18,4) |
   | mevcut `GOREV` ekseni (kıyas tabanı) | %25,0 |
   | KB-01 ekseninin ölçülmüş gürültü tabanı | %13,9 |
+  | ⛔ `T3-KİMLİK` (2026-08-21, **GERİ ALINDI aynı gün**) | %4,8 — *bant altı* ama **precision 0** |
+  | ⛔ `DEPLOY` (2026-08-21, **GERİ ALINDI aynı gün**) | %5,3 — *bant altı* ama **precision 0** |
+
+  ⛔⛔ **BU TABLONUN KENDİSİ YANILTTI — son iki satır o yüzden burada.** Tablo yalnız
+  *ateşleme* ölçüyor; 2026-08-21'de iki eksen bu tabloya bakılarak (*"%4,8 ve %5,3, bant
+  altı ✅"*) kabul edildi ve **isabetleri sıfır** olduğu için aynı gün geri alındı (609
+  gerçek brif: `T3-KİMLİK` 30 ateşlemenin 30'u salt-okur; `DEPLOY` 32 ateşlemenin 0'ı
+  gerçek deploy işi). **Düşük ateşleme, doğru ateşleme demek değildir** — bir eksen
+  ancak ateşleme **<%13,9** *ve* precision **≥%70** *ve* recall **≥%50** ile kabul edilir.
+  Alet: `governance/research/brifing-lint-olcum-2026-08-21/precision_harness.py`.
+  Kaldırma kaydı: `governance/removed-controls.md` (B8 bölümündeki ders bloğu da oku).
   ⛔ Ekseni gevşetmek (ör. `yazma` şartını kaldırmak) korpusta **M3 mutasyonudur** ve
   B3 (yalnız-okuma FP çapası) onu kırar.
 - ⚠⚠ **`behavior_manifest`te İKİ GEVŞETME var — dokunmadan önce POZİTİF KONTROLLERİ oku:**
