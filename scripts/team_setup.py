@@ -20,6 +20,8 @@ Yaptıkları:
 from __future__ import annotations
 
 import argparse
+import difflib
+import hashlib
 import os
 import shutil
 import subprocess
@@ -115,8 +117,90 @@ def _core_index_yenile(proje: Path) -> None:
           f"{(r.stdout or r.stderr).strip().splitlines()[-1] if (r.stdout or r.stderr).strip() else '?'}")
 
 
+def _sha(yol: Path) -> str:
+    return hashlib.sha256(yol.read_bytes()).hexdigest()
+
+
+def shim_tazele(proje: Path) -> bool:
+    """`scripts/hook_shim.py`'yi şablondan TAZELE — AÇIK ONAYLA (`--tazele-shim`).
+
+    NİÇİN VAR (2026-08-22, kullanıcı kararı: "araç yazsın, rol değil"):
+    prosedür *"META-İNFRA (hook_shim) = yalnız LİDER"* der; `infra_write_guard` ise
+    *"muaf yalnız infra-expert"* der ⇒ **kesişim BOŞ, kimse meşru yazamıyordu.**
+    `dosya_tamamla` idempotenttir ve mevcut dosyayı EZMEZ ⇒ sürüklenen bir shim'i
+    tazeleyecek onaylı yol YOKTU. Bu fonksiyon o yolu açar; **rolü değiştirmez.**
+
+    ⛔ VARSAYILAN DAVRANIŞ DEĞİŞMEZ: bayraksız koşumda bu fonksiyon HİÇ çağrılmaz,
+    `dosya_tamamla` bugünkü gibi idempotent kalır ve hiçbir dosya ezilmez.
+
+    ⚠⚠ TERS YÖN — ASIL TEHLİKE (ölçülmüş, 2026-08-22): proje kopyası şablondan
+    **İLERİDE** olabilir. Tam bugün yaşandı: `infra_write_guard` projedeki shim'de
+    kabloluydu, şablonda YOKTU ⇒ körlemesine tazeleme AKTİF BİR KORUMAYI **sessizce
+    fail-open** yapardı. Bu yüzden tazeleme **farkı ekrana basmadan YAPILMAZ** ve
+    proje-özel satırlar ADEDİYLE + gürültülü bir uyarıyla bildirilir. Aynı ders
+    `claude_overlay` kapısında da kayıtlı (elle düzeltmeyi sessizce ezme).
+    """
+    hedef = proje / "scripts" / "hook_shim.py"
+    kaynak = CORE_ROOT / "claude" / "hook_shim.template.py"
+    if not kaynak.is_file():
+        say(FAIL, f"şablon YOK: {kaynak} — tazeleme yapılamaz")
+        return False
+    if not hedef.is_file():
+        say(WARN, f"{hedef} YOK — tazelenecek bir kopya yok; normal üretim yolu "
+                  f"(dosya_tamamla) zaten oluşturur")
+        return False
+
+    onceki_sha, sablon_sha = _sha(hedef), _sha(kaynak)
+    if onceki_sha == sablon_sha:
+        say(OK, f"hook_shim.py ZATEN şablonla aynı (sha256 {onceki_sha[:12]}) — "
+                f"tazeleme gereksiz, dosyaya DOKUNULMADI")
+        return True
+
+    eski = hedef.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+    yeni = kaynak.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+    fark = list(difflib.unified_diff(yeni, eski, fromfile="ŞABLON (core)",
+                                     tofile="PROJE kopyası", n=2))
+    # `fromfile=ŞABLON`, `tofile=PROJE` ⇒ "+" = YALNIZ PROJEDE olan satır (proje İLERİDE),
+    # "-" = yalnız şablonda olan satır (proje GERİDE). Yön okunmadan tazeleme YAPILMAZ.
+    proje_ozel = [l for l in fark if l.startswith("+") and not l.startswith("+++")]
+    sablon_ozel = [l for l in fark if l.startswith("-") and not l.startswith("---")]
+
+    print(f"\n  --- hook_shim FARK RAPORU (tazelemeden ÖNCE) ---")
+    print(f"  şablon sha256 : {sablon_sha}")
+    print(f"  proje   sha256: {onceki_sha}")
+    for satir in fark:
+        print("  " + satir.rstrip("\n"))
+    print(f"  --- yalnız PROJEDE: {len(proje_ozel)} satır · "
+          f"yalnız ŞABLONDA: {len(sablon_ozel)} satır ---")
+    if proje_ozel:
+        say(WARN, f"⚠ TERS YÖN: proje kopyası şablondan İLERİDE görünüyor "
+                  f"({len(proje_ozel)} satır YALNIZ projede). Tazeleme bu satırları "
+                  f"SİLER. Ölçülmüş vaka: projede kablolu bir hook şablonda yoktu ⇒ "
+                  f"körlemesine tazeleme aktif korumayı SESSİZCE fail-open yapardı. "
+                  f"Devam ediliyor (bayrak AÇIK onaydır) ama önce yedek alınır.")
+
+    yedek = hedef.with_suffix(f".py.yedek-{onceki_sha[:8]}")
+    shutil.copyfile(hedef, yedek)
+    say(OK, f"yedek alındı: {yedek.name} (tazeleme GERİ ALINABİLİR)")
+
+    shutil.copyfile(kaynak, hedef)
+    sonraki_sha = _sha(hedef)
+    if sonraki_sha != sablon_sha:
+        say(FAIL, f"tazeleme DOĞRULANAMADI: sonuç sha256 {sonraki_sha[:12]} != "
+                  f"şablon {sablon_sha[:12]}")
+        return False
+    say(OK, f"hook_shim.py TAZELENDİ — doğrulandı: sonuç sha256 == şablon sha256 "
+            f"({sonraki_sha[:12]})")
+    return True
+
+
 def dosya_tamamla(proje: Path) -> None:
-    """Eksik proje-lokal dosyaları template'ten üret (idempotent — var olanı EZMEZ)."""
+    """Eksik proje-lokal dosyaları template'ten üret (idempotent — var olanı EZMEZ).
+
+    ⛔ BU FONKSİYON DEĞİŞMEDİ (2026-08-22): tazeleme AYRI ve OPT-IN bir yoldur
+    (`shim_tazele` + `--tazele-shim`). Buraya "farklıysa ez" eklemek, kurulumun
+    rutin bir adımını sessiz bir ezme aracına çevirirdi.
+    """
     tpl = CORE_ROOT / "claude"
     hedefler = [
         (proje / ".claude" / "settings.json", tpl / "settings.template.json"),
@@ -246,6 +330,10 @@ def main() -> int:
     ap.add_argument("--project", default=".", help="Proje kökü (default: cwd)")
     ap.add_argument("--repair-junctions", action="store_true")
     ap.add_argument("--overlay-onayli", action="store_true", help="T2.5: overlay fark-raporu onayi — mevcut .claude kopyalari uretilecekten farkliysa ancak bu bayrakla EZILIR")
+    ap.add_argument("--tazele-shim", action="store_true",
+                    help="scripts/hook_shim.py'yi sablondan TAZELE (ACIK onay). Once FARK "
+                         "raporu + sha256 basar, yedek alir, sonra sha esitligini dogrular. "
+                         "Bayraksiz kosumda hicbir dosya EZILMEZ (davranis degismez).")
     ap.add_argument("--provision-worktree", metavar="PATH")
     ap.add_argument("--no-install", action="store_true")
     ap.add_argument("--no-seed", action="store_true")
@@ -256,6 +344,10 @@ def main() -> int:
     proje = Path(a.project).resolve()
     print(f"team_setup — core = {CORE_ROOT}\n            proje = {proje}\n")
 
+    if a.tazele_shim:
+        # AYRI ve ERKEN dal: tazeleme tek işi yapar, kurulumun geri kalanını koşturmaz
+        # (yan etki yüzeyi mümkün olduğunca dar).
+        return 0 if shim_tazele(proje) else 1
     if a.provision_worktree:
         return 0 if provision_worktree(Path(a.provision_worktree).resolve(), proje) else 1
     if a.repair_junctions:

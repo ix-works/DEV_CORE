@@ -29,10 +29,35 @@ KOSUM:  python tests/fixtures/hook_gate_coverage/run.py
         ... --mutasyon-capa-yok        (ENFORCES_RE capasi sokulur -> duzyazi beyan sayilir)
         ... --mutasyon-hook-katmani-yok(hook bulgulari exit koduna KATILMAZ)
         ... --mutasyon-olcum-sessiz    ("OLCULEMEDI" hali sessizce temiz sayilir)
+        ... --mutasyon-optout-yok      (N2: hook-ORPHAN dali OPT_OUT'u OKUMAZ)
+        ... --mutasyon-id-sinirsiz     (N4: ENFORCES id ayristirmasi SINIRSIZ -- fix sokumu)
+        ... --mutasyon-id-asiri-dar    (N4: ayristirma ASIRI daralir -- yalniz ILK token)
+        ... --mutasyon-matcher-katmani-yok (N3: MATCHER DELIK bulgusu exit koduna KATILMAZ)
+        ... --mutasyon-matcher-adi-uydur  (N3: beklenen kume KODDAN degil ELLE gelir)
 Cikis:  0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (mutasyon capasi tutmadi)
 
-⚠ UC MUTASYON, HICBIRI DIGERINI KAPSAMAZ: biri capayi, biri bulgu->exit kablolamasini,
-  biri "olculemedi != temiz" sozlesmesini civiller.
+⭐ N3 (2026-08-22) — MATCHER-KAPSAMI (S13/S14): hook katmaninin ORPHAN dali "sablona
+kablolu mu?" (var/yok) sorusunu yanitlar. S13/S14 bir ADIM ILERI gider: KABLOLU ama
+YANLIS ADRESE mi? Olculmus vaka: `pre_tool_guard`a PowerShell destegi eklendi, 29
+senaryo YESIL verdi, PR merge edildi -- matcher `Bash|mcp__sap-adt__.*` oldugu icin
+hook PowerShell'de HIC tetiklenmedi. S14 tam bu sekli kurar (kod Bash+PowerShell
+bekler, matcher yalniz Bash yonlendirir); S13 ayni agacin TEMIZ halidir (CORE-05:
+ihlal FAIL **ve** temiz PASS -- tek yonlu test hipotezi dogrulamaz).
+
+⚠ SEKIZ MUTASYON, HICBIRI DIGERINI KAPSAMAZ: capa · bulgu->exit kablolamasi ·
+  "olculemedi != temiz" · OPT_OUT muafiyeti · id-daraltmasi · daraltmanin POZITIF KONTROLU.
+
+⭐ N2 (2026-08-22) — MUAF-GIRIS PASS VEKTORU (S10): ADR 0019 devreye-alma merdiveninin
+ADIM-6'si "IKI fixture: muaf-olmayan ihlal FAIL **ve** muaf giris PASS" der. Hook-ORPHAN
+dali ilk yazimda (ayni gun) muafiyeti hic okumadigi icin bu adim ATLANMISTI: C-TPL-01
+"OPT_OUT'a gerekceli ekle" derken bu gate ayni hook'u ORPHAN basip commit'i durduruyordu
+(HARD) ⇒ belgelenmis kacis yolu fiilen KULLANILAMAZ. S10 iki gate'in AYNI cevabi
+verdigini olcer; S4 onun kontrol grubudur (muafiyet YOKken ayni agac exit 1).
+
+⭐ N4 (2026-08-22) — ID AYRISTIRMA SINIRI (S11/S12): kanonik beyan
+`# ENFORCES: CORE-04  (ADR 0019 coverage binding)` idi ve sinirsiz split ACIKLAMAYI da
+id sayiyordu (`0019`, `coverage` ...). S12 daraltmayi, S11 daraltmanin POZITIF KONTROLUNU
+(cok-id'li mesru beyan HALA ikisini de verir) civiller -- biri digerini KAPSAMAZ.
 """
 from __future__ import annotations
 
@@ -61,10 +86,35 @@ OLCULEMEDI = "[ÖLÇÜLEMEDİ]"
 # --- mutasyon capalari (ICERIK capasi; taban SHA DEGIL) ----------------------
 CAPA_RE = ('ENFORCES_RE = re.compile(r"^[ \\t]*#\\s*ENFORCES:\\s*(.+)", '
            're.IGNORECASE | re.MULTILINE)')
-CAPA_TOTAL = ("    total = (len(missing) + len(orphan) + len(undeclared)\n"
-              "             + len(h_missing) + len(h_orphan) + len(h_undeclared)\n"
-              "             + (1 if h_olcum_hatasi else 0))")
-CAPA_OLCUM = "+ (1 if h_olcum_hatasi else 0))"
+# ⚠ CAPALAR N3'te (2026-08-22) TAZELENDI: matcher katmani `total`e uc terim daha
+# ekleyince eski capalar TUTMADI ve iki mutasyon `[DOGRULANAMADI]` (exit 2) dondu.
+# ⛔ BU BIR BASARIDIR, ariza degil: ucuncu deger olmasaydi bayat capa "mutasyon
+# uygulanmadi" halini "mutasyon YAKALANDI" diye raporlardi (KURULAMADI != KACTI).
+# Capalar artik SADECE kendi katmanlarini soker -> mutasyonlar birbirini KAPSAMAZ.
+CAPA_TOTAL = ("             + len(h_missing) + len(h_orphan) + len(h_undeclared)\n"
+              "             + (1 if h_olcum_hatasi else 0)\n")
+# ⛔ CAPA_OLCUM IKI TERIMI BIRDEN SOKER -- ve bu bir GEVSETME DEGIL, MASKELEME
+# ONARIMIDIR (olculdu 2026-08-22): N3 matcher katmani AYNI bozuk sablonu okudugu icin
+# kendi `m_sablon_hatasi` terimini uretti; yalniz hook terimini soken mutasyon exit 1'i
+# HALA goruyordu ve S7 SAHTE-YESIL kaldi (mutasyon KACTI, 14/14). Iki bagimsiz bulgu
+# ayni exit koduna cikiyorsa biri otekini MASKELER -- bu evde olculmus sinif.
+# ⚠ `len(m_delik)` ve `len(m_parse_hatalari)` BILEREK KORUNUR: S14/S15 bu mutasyondan
+# ETKILENMEMELI, aksi halde mutasyonlar birbirini kapsardi.
+CAPA_OLCUM = ("             + (1 if h_olcum_hatasi else 0)\n"
+              "             + len(m_delik) + len(m_parse_hatalari) + "
+              "(1 if m_sablon_hatasi else 0))")
+# N2: hook-ORPHAN dalindaki OPT_OUT muafiyeti
+CAPA_OPTOUT = ("        if ad in h_optout:\n"
+               "            continue  # C-TPL-01 muafiyeti (gerekçeli) — "
+               "iki gate AYNI kümeyi okur\n")
+# N4: id ayristirma yardimcisinin GOVDESI
+CAPA_ID = ('    govde = ham.split("(", 1)[0]  # `(` görülünce dur — sonrası insan açıklamasıdır\n'
+           '    return {t for t in re.split(r"[,\\s]+", govde.strip()) if _ID_RE.fullmatch(t)}')
+
+# N3: MATCHER DELIK bulgusunun exit koduna KABLOLANMASI
+CAPA_MATCHER_TOTAL = "             + len(m_delik) + len(m_parse_hatalari) + (1 if m_sablon_hatasi else 0))"
+# N3: beklenen kumenin KODDAN turetilmesi (AST karsilastirma taramasi)
+CAPA_MATCHER_AST = "                    if isinstance(op, (ast.In, ast.Eq, ast.NotIn, ast.NotEq)):"
 
 MUTLAR = {
     # fix'in SOKUMU: capa kaldirilir -> duzyazidaki anis BEYAN sayilir (S6 duser)
@@ -73,11 +123,42 @@ MUTLAR = {
         'ENFORCES_RE = re.compile(r"#\\s*ENFORCES:\\s*(.+)", re.IGNORECASE)'),
     # KABLOLAMA sokumu: hook bulgulari hesaplanir ama exit koduna KATILMAZ.
     # ⚠ Bu, "gate kodu var ama bagli degil" sinifidir -- tam da ORPHAN'in olctugu sey.
-    "--mutasyon-hook-katmani-yok": (
-        CAPA_TOTAL,
-        "    total = len(missing) + len(orphan) + len(undeclared)"),
+    "--mutasyon-hook-katmani-yok": (CAPA_TOTAL, ""),
     # "OLCULEMEDI != TEMIZ" sozlesmesinin sokumu (S7 duser).
-    "--mutasyon-olcum-sessiz": (CAPA_OLCUM, "+ 0)"),
+    "--mutasyon-olcum-sessiz": (
+        CAPA_OLCUM,
+        "             + 0\n"
+        "             + len(m_delik) + len(m_parse_hatalari) + 0)"),
+    # N3: AYRISTIRILAMAYAN HOOK bulgusunun exit'e kablolanmasi (S15 duser).
+    # ⛔ AYRI MUTASYON SART: bu hata kaynagi sablondan BAGIMSIZDIR (bozuk .py dosyasi),
+    # bu yuzden `--mutasyon-olcum-sessiz` onu HIC sinamaz.
+    "--mutasyon-hook-parse-sessiz": (
+        "+ len(m_delik) + len(m_parse_hatalari) +",
+        "+ len(m_delik) + 0 +"),
+    # N2 fix'in SOKUMU: muafiyet okunmaz -> muaf hook yine ORPHAN olur (S10 duser).
+    "--mutasyon-optout-yok": (CAPA_OPTOUT, ""),
+    # N4 fix'in SOKUMU: sinirsiz split -> parantezli aciklama id uretir (S12 duser).
+    "--mutasyon-id-sinirsiz": (
+        CAPA_ID,
+        '    return {t.strip() for t in re.split(r"[,\\s]+", ham) if t.strip()}'),
+    # N4 POZITIF KONTROLU: daraltma ASIRIYA kacarsa (yalniz ilk token) cok-id'li
+    # mesru beyan KIRILIR (S11 duser). ⛔ Ustteki mutasyon bunu KAPSAMAZ: biri
+    # "yeterince daralttik mi", digeri "fazla daralttik mi" sorusunu olcer.
+    "--mutasyon-id-asiri-dar": (
+        CAPA_ID,
+        '    govde = ham.split("(", 1)[0].split()\n'
+        '    return {govde[0]} if govde and _ID_RE.fullmatch(govde[0]) else set()'),
+    # N3 KABLOLAMA sokumu: delik HESAPLANIR ama exit koduna KATILMAZ -> S14 duser.
+    # ⚠ Bu, gate'in KENDI uzerinde "kod != kablolama" sinifidir: bulgu basilir,
+    # commit gecer. Cikti okunup exit kodu okunmazsa fark edilmez.
+    "--mutasyon-matcher-katmani-yok": (
+        CAPA_MATCHER_TOTAL, "             + 0)"),
+    # N3 TURETME sokumu: AST karsilastirma taramasi olur -> hicbir hook'ta tool adi
+    # BULUNMAZ -> denetlenen 0 olur (OLU GATE). ⛔ S13 bunu yakalar: "denetlenen>0"
+    # bir ERISILEBILIRLIK cengelidir -- kusursuz agacta bile SIFIR denetleyen bir
+    # gate, gecilemez degil GORUNMEZ bir gate'tir.
+    "--mutasyon-matcher-adi-uydur": (
+        CAPA_MATCHER_AST, "                    if False:"),
 }
 
 SABLON_BOZUK = "{ bu gecerli JSON DEGIL "
@@ -103,12 +184,42 @@ HOOK_GOVDELERI = {
              "raise SystemExit(0)\n"),
     # beyani hic olmayan hook
     "delta": _hook_govdesi("# (beyan yok)"),
+    # ⭐ N3: AYRISTIRILAMAYAN hook (SyntaxError). `# ENFORCES:` beyani GECERLI ve
+    # kablolu -> hook katmani TEMIZ der; YALNIZ matcher katmani (AST) sikayet eder.
+    # Boylece S15, S7'den BAGIMSIZ bir olcum-hatasi kaynagi kullanir.
+    "zeta": ('#!/usr/bin/env python3\n'
+             '# ENFORCES: X-07  (ADR 0019 coverage binding)\n'
+             '"""stub hook: AYRISTIRILAMAZ (fixture)."""\n'
+             'def bozuk(  :\n'),
+    # ⭐ N3: kodunda TOOL ADI gecen hook. `pre_tool_guard`in gercek sekli budur:
+    # kabuk tool'lari bir modul sabitinde durur, `tool_name in <sabit>` ile bakilir.
+    # Beklenen kume ELLE VERILMEZ -- gate bunu AST ile KODDAN okur.
+    "epsilon": ('#!/usr/bin/env python3\n'
+                '# ENFORCES: X-06  (ADR 0019 coverage binding)\n'
+                '"""stub hook: tool ayrimi YAPAR (fixture)."""\n'
+                'import json, sys\n'
+                '_KABUK_TOOLLARI = ("Bash", "PowerShell")\n'
+                'data = {}\n'
+                'tool_name = data.get("tool_name", "")\n'
+                'if tool_name in _KABUK_TOOLLARI:\n'
+                '    pass\n'
+                'raise SystemExit(0)\n'),
 }
+
+
+def _validator_govdesi(beyan: str) -> str:
+    """Stub `check_*.py`. `beyan` ham `# ENFORCES:` satiri olarak gomulur."""
+    return ("#!/usr/bin/env python3\n"
+            f"{beyan}\n"
+            '"""stub validator (fixture)."""\n'
+            "raise SystemExit(0)\n")
 
 
 def kur(kok: Path, hooklar: list[str], *, kablosuz: tuple[str, ...] = (),
         checklist_satiri: str = "", sablon_bozuk: bool = False,
-        gate_kaynak: str | None = None) -> Path:
+        gate_kaynak: str | None = None, optout: tuple[str, ...] = (),
+        validatorler: dict[str, str] | None = None,
+        matcherler: dict[str, str] | None = None) -> Path:
     """Izole agac kurar: kopya validator + stub hook'lar + kendi settings.template.json.
 
     `REPO = Path(__file__).resolve().parents[2]` oldugu icin validator'i
@@ -126,16 +237,46 @@ def kur(kok: Path, hooklar: list[str], *, kablosuz: tuple[str, ...] = (),
     # ⛔ Tuketicinin IMPORT KOKU tasinmali: gate, kablolama okuyucusunu C-TPL-01'den
     # import eder (kopya DEGIL). Kardes dosya agacta yoksa olculen sey "fix" degil
     # "kurulum hatasi" olur (KURULAMADI != KACTI).
-    shutil.copy2(TPL_SYNC, kok / "scripts" / "validators" / TPL_SYNC.name)
+    tpl_kaynak = TPL_SYNC.read_text(encoding="utf-8")
+    if optout:
+        # ⛔ OPT_OUT TEK KAYNAKTIR: gate onu C-TPL-01 modulunden IMPORT eder. Fixture
+        # bu yuzden muafiyeti KOPYA bir listeye degil, kardes modulun KENDISINE yazar --
+        # aksi hâlde olculen sey "ortak kaynak" degil fixture'in kendi kurgusu olurdu.
+        eski_optout = "OPT_OUT: set[str] = set()"
+        assert eski_optout in tpl_kaynak, "OPT_OUT capasi C-TPL-01'de bulunamadi"
+        tpl_kaynak = tpl_kaynak.replace(
+            eski_optout, "OPT_OUT: set[str] = {%s}" % ", ".join(repr(a) for a in optout), 1)
+    (kok / "scripts" / "validators" / TPL_SYNC.name).write_text(tpl_kaynak, encoding="utf-8")
+
+    # Stub validator'lar + onlari WIRED gosteren stub runner (yoksa hepsi ORPHAN olurdu).
+    for ad, beyan in (validatorler or {}).items():
+        (kok / "scripts" / "validators" / f"{ad}.py").write_text(
+            _validator_govdesi(beyan), encoding="utf-8")
+    if validatorler:
+        (kok / "scripts" / "validators" / "run_all_validators.py").write_text(
+            "VALIDATORS = [\n"
+            + "".join(f'    "{ad}.py",\n' for ad in validatorler)
+            + "]\n", encoding="utf-8")
 
     for ad in hooklar:
         (kok / "scripts" / "hooks" / f"{ad}.py").write_text(
             HOOK_GOVDELERI[ad], encoding="utf-8")
 
     kablolu = [a for a in hooklar if a not in kablosuz]
-    sablon = {"hooks": {"PreToolUse": [{"hooks": [
-        {"type": "command", "command": "python",
-         "args": ["scripts/hook_shim.py", ad]} for ad in kablolu]}]}}
+    matcherler = matcherler or {}
+
+    def _kanca(ad):
+        return {"type": "command", "command": "python",
+                "args": ["scripts/hook_shim.py", ad]}
+
+    # matcher'i BELIRTILEN hook'lar kendi bloklarinda; otekiler matcher'siz blokta
+    # (matcher yoksa Claude Code semantigi ".*" = her tool -> kapsam TAM).
+    bloklar = [{"matcher": m, "hooks": [_kanca(ad)]}
+               for ad, m in matcherler.items() if ad in kablolu]
+    kalan = [ad for ad in kablolu if ad not in matcherler]
+    if kalan:
+        bloklar.append({"hooks": [_kanca(ad) for ad in kalan]})
+    sablon = {"hooks": {"PreToolUse": bloklar}}
     yol = kok / "claude" / "settings.template.json"
     if sablon_bozuk:
         yol.write_text(SABLON_BOZUK, encoding="utf-8")
@@ -147,6 +288,14 @@ def kur(kok: Path, hooklar: list[str], *, kablosuz: tuple[str, ...] = (),
             "| ID | Kontrol | Gate | Severity |\n|---|---|---|---|\n"
             + checklist_satiri + "\n", encoding="utf-8")
     return hedef
+
+
+def kos_tpl(kok: Path) -> tuple[int, str]:
+    """KARDES GATE (C-TPL-01) ayni agacta ne diyor? -- "iki gate zit cevap vermesin"."""
+    yol = kok / "scripts" / "validators" / TPL_SYNC.name
+    p = subprocess.run([sys.executable, str(yol)], capture_output=True, timeout=180)
+    return p.returncode, (p.stdout.decode("utf-8", "replace")
+                          + p.stderr.decode("utf-8", "replace"))
 
 
 def kos(gate_yolu: Path) -> tuple[int, str]:
@@ -186,6 +335,15 @@ def main() -> int:
         kok.mkdir(parents=True, exist_ok=True)
         return kos(kur(kok, gate_kaynak=gate_kaynak, **kw))
 
+    def senaryo2(ad: str, **kw) -> tuple[int, str, int, str]:
+        """Ayni agacta HER IKI gate -> (cov_rc, cov_out, tpl_rc, tpl_out)."""
+        kok = tmp / ad
+        kok.mkdir(parents=True, exist_ok=True)
+        gate = kur(kok, gate_kaynak=gate_kaynak, **kw)
+        rc, out = kos(gate)
+        trc, tout = kos_tpl(kok)
+        return rc, out, trc, tout
+
     try:
         # === S1 TEMIZ TABAN — kusursuz agac SIFIR bulgu vermeli ===============
         # ⚠ Bu vektor "erisilebilir yesil" kanitidir: gate'in TEMIZLENEBILIR oldugunu
@@ -208,9 +366,12 @@ def main() -> int:
              rc == 1 and "HOOK UNDECLARED" in out and "delta" in out, f"exit={rc}")
 
         # === S4 ORPHAN — kablolanmamis hook (ASIL DERS) ======================
-        rc, out = senaryo("s4", hooklar=["alfa", "beta"], kablosuz=("beta",))
-        ekle("S4 settings.template.json'a KABLOSUZ hook -> exit 1 + HOOK ORPHAN",
-             rc == 1 and "HOOK ORPHAN" in out and "beta" in out, f"exit={rc}")
+        # ⭐ S10'un KONTROL GRUBU: muafiyet YOKken ayni agac -> IKI gate de exit 1.
+        rc, out, trc, tout = senaryo2("s4", hooklar=["alfa", "beta"], kablosuz=("beta",))
+        ekle("S4 KABLOSUZ hook + OPT_OUT=() -> IKI gate de exit 1 (ORPHAN)",
+             rc == 1 and "HOOK ORPHAN" in out and "beta" in out
+             and trc == 1 and "KABLOLU DEĞİL" in tout,
+             f"cov_exit={rc} tpl_exit={trc}")
 
         # === S5 MISSING — checklist yol-iddiasi, dosya YOK ===================
         rc, out = senaryo("s5", hooklar=["alfa"],
@@ -234,11 +395,79 @@ def main() -> int:
         ekle("S7 sablon okunamazsa SESSIZ GECMEZ -> exit 1 + [ÖLÇÜLEMEDİ] notu",
              rc == 1 and OLCULEMEDI in out, f"exit={rc}")
 
+        # === S10 ⭐ MUAF-GIRIS PASS (N2 — ADR 0019 merdiveni ADIM-6) ==========
+        # S4 ile AYNI agac, TEK fark OPT_OUT. Muafiyet kullanildiginda IKI gate de
+        # SUSMALI. Bu vektor olmadan "muafiyet var" iddiasi olculmemis kalirdi --
+        # ve gate muafiyeti sessizce iptal ederken kimse fark etmezdi (olculdu:
+        # ilk yazimda tam bu oluyordu, C-TPL-01 exit 0 / coverage exit 1).
+        rc, out, trc, tout = senaryo2("s10", hooklar=["alfa", "beta"],
+                                      kablosuz=("beta",), optout=("beta",))
+        ekle("S10 MUAF-GIRIS: OPT_OUT=('beta',) -> IKI gate de exit 0 (zit cevap YOK)",
+             rc == 0 and "ORPHAN=0" in out and "OPT_OUT" in out and "beta" in out
+             and trc == 0,
+             f"cov_exit={rc} tpl_exit={trc}")
+
+        # === S11 ⭐ N4 POZITIF KONTROL — cok-id'li MESRU beyan korunur =========
+        # ⛔ SILINEMEZ: N4 bir DARALTMADIR; "yeterince daralttik mi" (S12) ile
+        # "fazla daralttik mi" (S11) AYRI sorulardir ve ayri mutasyonlarla civilidir.
+        cok_id = "# ENFORCES: X-04, X-05  (ADR 0019 coverage binding)"
+        rc, out = senaryo("s11", hooklar=["alfa"],
+                          validatorler={"check_ornek": cok_id},
+                          checklist_satiri=(
+                              "| X-04 | ornek | `check_ornek.py` | BLOCKER |\n"
+                              "| X-05 | ornek | `check_ornek.py` | BLOCKER |"))
+        ekle("S11 `# ENFORCES: X-04, X-05` -> IKI id de beyan sayilir (OK=2, UNDECLARED=0)",
+             rc == 0 and "Özet: OK=2 · MISSING=0 · ORPHAN=0 · UNDECLARED=0" in out,
+             f"exit={rc}")
+
+        # === S12 ⭐ N4 DARALTMA — parantezli ACIKLAMA id URETMEZ ===============
+        # Kanonik beyanin aciklamasindaki `0019` token'i, id biciminE UYAR (rakam) --
+        # yani onu eleyen sey `_ID_RE` DEGIL, `(` durdurucusudur. Vektor bilerek bu
+        # token'i secer: "kaba filtre ince filtreyi maskelemesin".
+        rc, out = senaryo("s12", hooklar=["alfa"],
+                          validatorler={"check_ornek": cok_id},
+                          checklist_satiri="| 0019 | ornek | `check_ornek.py` | BLOCKER |")
+        ekle("S12 aciklamadaki `0019` BEYAN DEGILDIR -> exit 1 + UNDECLARED",
+             rc == 1 and "UNDECLARED=1" in out and "0019" in out, f"exit={rc}")
+
+        # === S13 ⭐ MATCHER TAM KAPSAM (CORE-05'in "temiz PASS" yarisi) =======
+        # ⛔ SILINEMEZ: S14 tek basina "gate bir sey yakaliyor" der; kusursuz agacin
+        # TEMIZLENEBILIR oldugunu YALNIZ S13 kanitlar. Ayrica `denetlenen=1` cengeli
+        # ERISILEBILIRLIK olcusudur: turetme bozulursa (mutasyon) burasi SIFIR gosterir.
+        rc, out = senaryo("s13", hooklar=["alfa", "epsilon"],
+                          matcherler={"epsilon": "Bash|PowerShell"})
+        ekle("S13 kodun andigi TUM tool matcher'da -> exit 0 + DENETLENEN=1 · DELIK=0",
+             rc == 0 and "Özet (matcher): DENETLENEN=1 · DELİK=0" in out, f"exit={rc}")
+
+        # === S14 ⭐ MATCHER DELIK — olculmus PowerShell vakasinin BIREBIR sekli ====
+        # kod: ("Bash","PowerShell") · matcher: yalniz "Bash" ⇒ hook PowerShell'de HIC
+        # tetiklenmez ama envanterde "kablolu" gorunur (ORPHAN DEGIL!). Iste bu yuzden
+        # ORPHAN dali bu sinifi yakalayamaz ve ayri bir dal gerekir.
+        rc, out = senaryo("s14", hooklar=["alfa", "epsilon"],
+                          matcherler={"epsilon": "Bash"})
+        ekle("S14 kod PowerShell bekler, matcher yalniz Bash -> exit 1 + MATCHER DELIK",
+             rc == 1 and "MATCHER DELİK" in out and "PowerShell" in out
+             and "ORPHAN=0" in out,  # kablolu -> ORPHAN DEGIL; sinif AYRI
+             f"exit={rc}")
+
+        # === S15 ⭐ AYRISTIRILAMAYAN HOOK -> OLCULEMEDI (SESSIZ GECMEZ) =======
+        # ⚠ Hook katmani bu agaci TEMIZ gorur (dosya var · kablolu · beyanli) -- yani
+        # bulgu YALNIZ matcher katmanindan gelir. Bozuk bir hook'un "tool ayrimi
+        # yapmiyor" sayilmasi, gate'i bozuk kodla YESILE cevirirdi.
+        rc, out = senaryo("s15", hooklar=["alfa", "zeta"])
+        ekle("S15 ayristirilamayan hook -> exit 1 + [ÖLÇÜLEMEDİ] (sessiz 'tool ayrimi yok' DEGIL)",
+             rc == 1 and OLCULEMEDI in out and "zeta" in out
+             and "Özet (hook): OK=2" in out,  # hook katmani TEMIZ -> izolasyon kaniti
+             f"exit={rc}")
+
         # === S8 KABLOLAMA MANTIGI KOPYALANMADI ==============================
         # C-TPL-01 ile ORTAK okuyucu: ayni olgu iki yerde yasarsa biri bayatlar.
         kaynak = GATE.read_text(encoding="utf-8")
-        ekle("S8 kablolama okuyucusu C-TPL-01'den IMPORT edilir (kopya DEGIL)",
-             "from check_settings_template_sync import _kablolu_hooklar" in kaynak,
+        # ⚠ Capa N2'de genisletildi: OPT_OUT da AYNI moduldan gelir. Iki adin da
+        # ayni import satirinda olmasi "tek kaynak" sozlesmesinin ta kendisidir.
+        ekle("S8 kablolama okuyucusu + OPT_OUT C-TPL-01'den IMPORT edilir (kopya DEGIL)",
+             "from check_settings_template_sync import OPT_OUT, _kablolu_hooklar" in kaynak
+             and "OPT_OUT: set[str]" not in kaynak,
              "kopya mantik = ikinci gercek (olculmus curume sinifi)")
 
         # === S9 GERCEK REPO — mevcut davranis BOZULMADI (pozitif kontrol) ====

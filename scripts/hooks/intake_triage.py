@@ -114,7 +114,20 @@ _MODULES = [
     # "ürün ağacı patlatma" + "bill of materials raporu" HÂLÂ PP önerir).
     ("pp", "PP (Üretim Planlama)", re.compile(
         r"(\büretim\s+sipariş|\bimalat|\biş\s+emri|\bplanlı\s+sipariş|\bCO0\d|\büretim\s+planla|"
-        r"\bürün\s+ağac|"
+        # ⚠ 2026-08-22 — `\bürün\s+ağac` YALNIZ diyakritikli yazımı yakalıyordu:
+        # ASCII yazan kullanıcının "urun agaci" ifadesi KAÇIYORDU. Desen ham prompt'ta DA
+        # `_fold()`lanmış prompt'ta DA aranır (aşağıda) ama ÇİFT ARAMA BU BOŞLUĞU KAPATMAZ:
+        # ham="urun agaci" (ü yok) · folded="urun agaci" (yine ü yok) ⇒ ikisi de eşleşmez.
+        # Komşu ayaklar (`[üu]r[üu]n\s+re[çc]ete`, `BOM\s+…a[ğg]ac`) zaten karakter-sınıfı
+        # stilindeydi — bu satır dosya içinde tek başına stil dışıydı.
+        # ⚠ DARALTMA DEĞİL GENİŞLETMEDİR ⇒ FP ölçümü ZORUNLU ve YAPILDI (korpus =
+        # core + tüketici proje, `*.md`, node_modules HARİÇ; eşleşme ham+folded, hook ile
+        # aynı yöntem): eski desen **6** satırda, yeni desen **7** satırda ateşliyor ⇒
+        # **+1 satır**, o da kusuru TARİF eden kuyruk kaydının kendisi
+        # (`governance/infra-findings.md`, ASCII ifadeyi ALINTILIYOR). Gerçek FP: **0**
+        # — metodoloji metni yakalanmıyor. Pozitif kontrol fixture'da ZORUNLU
+        # (`intake_modul_carpismasi` B9 diyakritikli + B9b ASCII: İKİSİ DE PP önerir).
+        r"\b[üu]r[üu]n\s+a[ğg]ac|"
         r"\b[üu]retim\s+BOM|\bBOM\s+(?:patlat|bile[şs]en|kalem|listesi|a[ğg]ac|yap[ıi]s)|"
         r"\bbill\s+of\s+material|\bCS0\d|\bSTPO\b|\bSTKO\b|"
         r"\b[üu]retim\s+re[çc]ete|\b[üu]r[üu]n\s+re[çc]ete|\bre[çc]ete\s+(?:kalem|bile[şs]en|y[öo]net)|"

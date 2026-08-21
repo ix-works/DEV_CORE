@@ -256,7 +256,14 @@ OZEL_TESTLER = [
     # 29 senaryo yesil, matcher yanlis oldugu icin hook HIC tetiklenmiyordu).
     ("hook_gate_coverage",
      "hook katmani coverage (MISSING/ORPHAN/UNDECLARED) + `# ENFORCES:` satir-basi "
-     "capasi (duzyazidaki anis BEYAN sayilmaz) + OLCULEMEDI != TEMIZ"),
+     "capasi (duzyazidaki anis BEYAN sayilmaz) + OLCULEMEDI != TEMIZ + MATCHER-KAPSAMI "
+     "(kablolu ama YANLIS ADRESE: PowerShell vakasi) + OPT_OUT muaf-giris PASS"),
+    # ⛔ KILITLENME: "META-INFRA = yalniz LIDER" ile "muaf yalniz infra-expert" kesisimi
+    # BOSTU; `dosya_tamamla` idempotent oldugu icin suruklenen shim'i tazeleyecek onayli
+    # yol YOKTU. Korpus IKI degismezi civiller: varsayilan EZMEZ · ters yon GORUNUR.
+    ("shim_tazeleme",
+     "team_setup --tazele-shim: varsayilan kosum EZMEZ (kontrol grubu) + bayrakli yol "
+     "FARKI basar/yedek alir/SHA duyurur + proje SABLONDAN ILERIDE ise gurultulu uyari"),
 ]
 
 
@@ -338,6 +345,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:byassoc_advisory", "O:hook_gate_coverage"),
      "GATE-SEVERITY okuması + `N iddia (B bloklayıcı · A advisory)` özeti burada; "
      "hook katmanı (MISSING/ORPHAN/UNDECLARED) + `# ENFORCES:` çapası da bu dosyada"),
+    # team_setup.py HARITA'da HIC YOKTU (2026-08-22 bulgusu): degisikligi hicbir korpusa
+    # eslesmiyordu -> tazelik kapisi bu dosyada KORDU.
+    ("scripts/team_setup.py", ("O:shim_tazeleme",),
+     "shim tazeleme yolu + `dosya_tamamla` idempotansi burada yasar; varsayilanin "
+     "degismedigi YALNIZ bu korpusta olculur"),
     ("scripts/validators/check_settings_template_sync.py", ("O:hook_gate_coverage",),
      "kablolama okuyucusu (`_kablolu_hooklar`) buradan IMPORT ediliyor — imza değişirse "
      "coverage-gate'in hook ORPHAN dalı sessizce ölür (kopya YOK, tek kaynak)"),
