@@ -15,7 +15,7 @@ status: active
 **Script:** `run_check_logon.py`
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\run_check_logon.py" --conn "<PROJECT_ROOT>\.conn_adt"
+python "<PROJECT_ROOT>\scripts\run_check_logon.py" --cwd "<PROJECT_ROOT>"
 ```
 
 **Başarı göstergesi:** `Logon successful` veya `200 OK`
@@ -29,7 +29,7 @@ python "<PROJECT_ROOT>\scripts\run_check_logon.py" --conn "<PROJECT_ROOT>\.conn_
 ### 2.1 ABAP Class (CLAS)
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\download_object.py" --conn "<PROJECT_ROOT>\.conn_adt" --object-type CLAS --object-name ZCL_ORNEK_CLASS --output-dir "<PROJECT_ROOT>\ERP\ZPKG_ADI\classes"
+python "<PROJECT_ROOT>\scripts\download_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ORNEK_CLASS --output-dir "<PROJECT_ROOT>\ERP\ZPKG_ADI\classes"
 ```
 
 **⚠ Klasör kuralı:** Package adıyla eşleşen klasör altına kaydet.
@@ -40,13 +40,13 @@ python "<PROJECT_ROOT>\scripts\download_object.py" --conn "<PROJECT_ROOT>\.conn_
 ### 2.2 CDS View (DDLS)
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\download_object.py" --conn "<PROJECT_ROOT>\.conn_adt" --object-type DDLS --object-name ZSD001_C_SO_ITEM --output-dir "<PROJECT_ROOT>\ERP\ZSD001_CLC\cds"
+python "<PROJECT_ROOT>\scripts\download_object.py" --cwd "<PROJECT_ROOT>" --object-type DDLS --object-name ZSD001_C_SO_ITEM --output-dir "<PROJECT_ROOT>\ERP\ZSD001_CLC\cds"
 ```
 
 ### 2.3 Function Group (FUGR)
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\download_object.py" --conn "<PROJECT_ROOT>\.conn_adt" --object-type FUGR --object-name ZSD001_FM_GROUP --output-dir "<PROJECT_ROOT>\ERP\ZSD001_CLC\functions"
+python "<PROJECT_ROOT>\scripts\download_object.py" --cwd "<PROJECT_ROOT>" --object-type FUGR --object-name ZSD001_FM_GROUP --output-dir "<PROJECT_ROOT>\ERP\ZSD001_CLC\functions"
 ```
 
 ---
@@ -391,7 +391,7 @@ else:
 ### 3.1 Class Method Push (Genel Akış)
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\push_object.py" --conn "<PROJECT_ROOT>\.conn_adt" --object-type CLAS --object-name ZCL_ORNEK_CLASS --source-file "<PROJECT_ROOT>\ERP\ZPKG\classes\ZCL_ORNEK_CLASS.abap" --transport <TRANSPORT>
+python "<PROJECT_ROOT>\scripts\push_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ORNEK_CLASS --source-file "<PROJECT_ROOT>\ERP\ZPKG\classes\ZCL_ORNEK_CLASS.abap" --transport <TRANSPORT>
 ```
 
 ### 3.2 Function Module Push (FUNC/FF)
@@ -548,7 +548,7 @@ print(result)
 Push başarılı olduktan sonra aktivasyon:
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\activate_object.py" --conn "<PROJECT_ROOT>\.conn_adt" --object-type CLAS --object-name ZCL_ORNEK_CLASS
+python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ORNEK_CLASS
 ```
 
 **⚠ Aktivasyon Önemli Notlar:**
@@ -582,12 +582,12 @@ Her retry SAP'de yeni bir boş K-type transport yaratır.
 **Script:** `run_sql_query.py` veya `run_data_preview.py`
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\run_sql_query.py" --conn "<PROJECT_ROOT>\.conn_adt" --query "SELECT * FROM ZSD001_C_SO_ITEM WHERE VKORG = '1500' UP TO 10 ROWS"
+python "<PROJECT_ROOT>\scripts\run_sql_query.py" --cwd "<PROJECT_ROOT>" --query "SELECT * FROM ZSD001_C_SO_ITEM WHERE VKORG = '1500' UP TO 10 ROWS"
 ```
 
 **Alternatif — CDS data preview:**
 ```powershell
-python "<PROJECT_ROOT>\scripts\run_data_preview.py" --conn "<PROJECT_ROOT>\.conn_adt" --entity-name ZSD001_C_SO_ITEM --max-rows 10
+python "<PROJECT_ROOT>\scripts\run_data_preview.py" --cwd "<PROJECT_ROOT>" --entity-name ZSD001_C_SO_ITEM --max-rows 10
 ```
 
 **⚠ Bilinen sorunlar:**
@@ -599,7 +599,7 @@ python "<PROJECT_ROOT>\scripts\run_data_preview.py" --conn "<PROJECT_ROOT>\.conn
 ## 6. PAKET İÇERİĞİ LISTELEME
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\list_package_contents.py" --conn "<PROJECT_ROOT>\.conn_adt" --package ZSD001_CLC
+python "<PROJECT_ROOT>\scripts\list_package_contents.py" --cwd "<PROJECT_ROOT>" --package ZSD001_CLC
 ```
 
 ---
@@ -611,7 +611,7 @@ python "<PROJECT_ROOT>\scripts\list_package_contents.py" --conn "<PROJECT_ROOT>\
 ### 7.1 Transport Listesi
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\list_transports.py" --conn "<PROJECT_ROOT>\.conn_adt"
+python "<PROJECT_ROOT>\scripts\list_transports.py" --cwd "<PROJECT_ROOT>"
 ```
 
 ### 7.2 Yeni Transport Yaratma
@@ -623,7 +623,7 @@ Yeni transport yaratma gerektiğinde kullanıcıdan numara iste — otomatik yar
 ## 8. OBJE ARAMA
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\search_objects.py" --conn "<PROJECT_ROOT>\.conn_adt" --query "ZSD001*" --object-type CLAS
+python "<PROJECT_ROOT>\scripts\search_objects.py" --cwd "<PROJECT_ROOT>" --query "ZSD001*" --object-type CLAS
 ```
 
 ---
@@ -631,7 +631,7 @@ python "<PROJECT_ROOT>\scripts\search_objects.py" --conn "<PROJECT_ROOT>\.conn_a
 ## 9. WHERE-USED
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\where_used.py" --conn "<PROJECT_ROOT>\.conn_adt" --object-type CLAS --object-name ZCL_ZSD_ORDER_DPC_EXT
+python "<PROJECT_ROOT>\scripts\where_used.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ZSD_ORDER_DPC_EXT
 ```
 
 ---
@@ -639,7 +639,7 @@ python "<PROJECT_ROOT>\scripts\where_used.py" --conn "<PROJECT_ROOT>\.conn_adt" 
 ## 10. ATC KONTROLÜ
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\run_atc_check.py" --conn "<PROJECT_ROOT>\.conn_adt" --object-type CLAS --object-name ZCL_ZSD_ORDER_DPC_EXT
+python "<PROJECT_ROOT>\scripts\run_atc_check.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ZSD_ORDER_DPC_EXT
 ```
 
 ---

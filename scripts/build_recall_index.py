@@ -46,16 +46,82 @@ def tokenle(s: str) -> list[str]:
     return [t for t in re.findall(r"[a-z0-9_çğıöşü]{3,}", katla(s)) if t not in _STOP]
 
 
+_MD_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+\.md)\)")
+_LISTE_SATIRI = re.compile(r"^\s*[-*·]\s")
+
+
+def _fm_description(yol: Path) -> str:
+    """Memory dosyasinin frontmatter `description:` alani.
+
+    ⭐ NEDEN VAR (2026-08-21, olculdu): ureteç YALNIZ `- [Baslik](dosya) — ozet` seklindeki
+    satirlari goruyordu. Canli MEMORY.md'de **146 liste satiri / 163 link** var, indekse giren **90**
+    ⇒ **73 kayit JIT-RECALL'a HIC girmiyordu** ve bunu kimse gormuyordu (sessiz kayip;
+    "0 kayit" ile "0 eslesme" ayni cikti). Ozet-cumlesi elle yazilan bir alandir ve
+    unutulur; `description:` ise memory YAZIM SOZLESMESININ zorunlu alanidir (olculdu:
+    214 dosyanin 213'unde var) ⇒ dogru geri-dusus kaynagi budur, 57 cumleyi elle yazmak
+    degil.
+    """
+    try:
+        t = yol.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
+    if not t.startswith("---"):
+        return ""
+    son = t.find("\n---", 3)
+    if son < 0:
+        return ""
+    m = re.search(r"^description:\s*(.+)$", t[:son], re.M)
+    if not m:
+        return ""
+    return m.group(1).strip().strip('"').strip("'")
+
+
 def memory_kayitlari(memory_md: Path) -> list[dict]:
     out = []
     if not memory_md.is_file():
         return out
-    for m in re.finditer(r"^- \[([^\]]+)\]\(([^)]+)\)\s*[—-]\s*(.+)$",
-                         memory_md.read_text(encoding="utf-8", errors="replace"), re.M):
+    metin = memory_md.read_text(encoding="utf-8", errors="replace")
+    gorulen: set[str] = set()
+
+    # (1) MEVCUT DAVRANIS — `anahtar` formulu (baslik x3 + oz) bilerek AYNEN korunur:
+    #     bu tur skorlama davranisini DEGISTIRMEZ, KAPSAMI acar.
+    #
+    # ⚠ TEK DAVRANISSAL DUZELTME: `\s*` -> `[ \t]*`. `\s` SATIR SONUNU DA KAPSAR, bu yuzden
+    # ozet-cumlesi OLMAYAN bir satir, `\s*`in `\n`i yutmasiyla BIR SONRAKI SATIRIN `-`
+    # isaretini ayrac sanip o satirin METNINI kendi `oz`u yapiyordu (satir-atlamali
+    # kirlenme). Bu, "47 kayit eksik" kusurunun IKINCI, daha sinsi yuzu: kayit VARDI ama
+    # ozeti BASKA BIR DERSE aitti -> skorlama yanlis derse puan veriyordu.
+    # Olculdu (canli MEMORY.md, 2026-08-21): eski desende 90 kaydin **42'si** komsu satirdan
+    # kirlenmisti (lider bagimsiz olctu; kanonik sayi: infra-changelog). Bu kusuru KENDI fixture'i (P1/N1) yakaladi; korpus yazilmadan once
+    # gorunmuyordu cunku eski korpusta ozetsiz satir HIC YOKTU.
+    for m in re.finditer(r"^- \[([^\]]+)\]\(([^)]+)\)[ \t]*[—-][ \t]*(.+)$", metin, re.M):
         baslik, dosya, oz = m.group(1).strip(), m.group(2).strip(), m.group(3).strip()
+        gorulen.add(dosya)
         out.append({"id": f"mem:{dosya}", "kaynak": f"memory/{dosya}",
                     "baslik": baslik, "oz": oz[:160],
                     "anahtar": tokenle(baslik) * 3 + tokenle(oz)})
+
+    # (2) GERI DUSUS — ozet-cumlesi OLMAYAN indeks satirlari.
+    #     ⚠ Kapsam BILEREK `^- [` deseninden GENIS: canli indekste en degerli dersler
+    #     `- ⭐ [Baslik](dosya)` / `- ⛔ [...]` seklinde yaziliyor ve dar desen onlari
+    #     GORMUYORDU (olculdu: 9 satirin 4'u ⭐/⛔ isaretli). Ayrica bir satirda BIRDEN
+    #     COK link olabilir (gruplu referans satirlari) -> her link ayri kayit.
+    for satir in metin.splitlines():
+        if not _LISTE_SATIRI.match(satir):
+            continue
+        for baslik, dosya in _MD_LINK.findall(satir):
+            baslik, dosya = baslik.strip(), dosya.strip()
+            if dosya in gorulen:
+                continue
+            gorulen.add(dosya)
+            oz = _fm_description(memory_md.parent / dosya)
+            if not oz:
+                continue      # ne ozet ne description -> eskisi gibi kapsam disi (sessiz
+                              # uydurma YOK; kaynak yoksa kayit da yok)
+            baslik = re.sub(r"[*_`]", "", baslik)
+            out.append({"id": f"mem:{dosya}", "kaynak": f"memory/{dosya}",
+                        "baslik": baslik, "oz": oz[:160],
+                        "anahtar": tokenle(baslik) * 3 + tokenle(oz)})
     return out
 
 

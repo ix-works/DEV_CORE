@@ -28,6 +28,10 @@
   GENERICIZE-LEAK guard'ı içeriği **üretim BİTTİKTEN sonra** değerlendirir → bedeli düzeltme
   değil, dosyanın **TAM yeniden-üretimidir** (ölçüldü 2026-08-13: 19,5 KB rapor ≈ 140 sn +
   10 KB fixture ≈ 69 sn çöp). Sonradan temizlemeyi planlama; ilk yazımda placeholder kullan.
+- ⛔ **İnfra işini AD VERMEDEN spawn et.** `infra_write_guard` muafiyeti payload'daki
+  `agent_type`'a bakar ve o alan **spawn adıdır**; görev adı verirsen (`infra-atc-p1` gibi)
+  muafiyet düşer ve ajanın infra yazımı **exit 2** ile bloklanır. Ölçülmüş vaka 2026-08-21:
+  bir tur yarıda kaldı, iş halefe devredildi.
 
 ## 5. HAZIR-BAĞLAM (P6 — liderin zaten bildiği; ajan yeniden KEŞFETMESİN)
 <dosya yolları + ilgili satır bölgeleri + kısa alıntılar/özet kararlar. SAP-kaynakları için

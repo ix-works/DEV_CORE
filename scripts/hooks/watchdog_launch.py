@@ -85,6 +85,45 @@ def _brifing_lint(data):
                 "bekledi; watchdog 'heartbeat taze' diyordu (canlilik != ilerleme). "
                 "Ekle: 'Yazacak yerin yoksa/yasakla cakisiyorsan TAHMIN ETME, BEKLEME -> "
                 "DERHAL SendMessage(to:\"main\")'. Ayrica worktree adresini brife YAZ.")
+
+        # --- D2 KURATLI KANCALAR (2026-08-21; EN FAZLA 2 -- BUTCE DOLU) ------
+        # ⛔ UCUNCU KANCA EKLEME. Atesleme oranlari TOPLANIR: olculdu (605 gercek brif)
+        # 2 kanca %8,6-26,0 · 3 kanca %19,3-30,2 = BANT USTU · 7 aday %77,9 (reddedilen
+        # ham eksenin sinifi). Ev bandi %13,9-18,4; bu iki kancanin birlesigi bant ALTI.
+        # Rakamlarin kanonik yeri: governance/infra-test-recipes.md B27 + PLAN-2026-08-21
+        # -BRIFING-DISIPLINI.md §8.2/8.3 (buraya KOPYALANMAZ -- iki yerde yasayan rakam
+        # bayatlar). Yeni kanca ONERISI once o tabloda olculur.
+        #
+        # KANCA A — T3-KIMLIK: brif ONAYLI BIR KURAL KIMLIGI aniyor ∧ yazma isi veriyor
+        # ∧ "yeniden yorumlama freni" YOK. VAKA (YK-4, 2026-08-21): ajan TS-04:1443'un
+        # "dosya butunlugu kurali YOKTUR" hukmune ragmen ROLLBACK sectI = yok denen kurali
+        # FIILEN KOYDU; kapi BLOCKER verdi, maliyet BIR TAM TUR. Ucuncu yol vardi: 0 lot
+        # yerine 99. ⭐ Bu kancayi gate'lenebilir yapan sey KONUSU degil, KARARIN TURUNU
+        # tanimasi: ayni vaka "bug" ekseninde %30,7 (gate'lenemez), kimlik ekseninde %4,8.
+        kimlik = _re.search(r"\b(YK|TY|SZ|AK|SNF|D-R|BT|FZ|TG|DA)-?\d", duz)
+        k_yazma = _re.search(r"\bFIX\b|DUZELT|UYGULA|IMPLEMENT|KOD YAZ|SINIF YAZ|\bPUSH\b", duz)
+        fren = _re.search(r"RAPORLA, DOKUNMA|YENIDEN YORUM|UYGULAMADAN ONCE SOR|"
+                          r"KENDI YORUM|DOKUNMA", duz)
+        if kimlik and k_yazma and not fren:
+            notlar.append(
+                "[BRIFING-LINT/T3-KIMLIK] Bu brif ONAYLI BIR KURAL KIMLIGI (%s) aniyor ve "
+                "yazma isi veriyor, ama 'yeniden yorumlama freni' YOK. Ajana yaz: "
+                "\"Onayli bir kural sana uygulanamaz geliyorsa KENDI YORUMUNU UYGULAMA -> "
+                "SOR. 'Uygula ve beyan et' YETMEZ. 'Iki secenek var, ikisi de kotu' "
+                "varsayimini SORGULA -- ucuncu yolu ara.\" Olculmus vaka 2026-08-21 (YK-4): "
+                "ajan spec'in 'boyle bir kural YOKTUR' hukmune ragmen ROLLBACK secti = yok "
+                "denen kurali fiilen koydu; kapi BLOCKER, maliyet BIR TAM TUR. Ucuncu yol "
+                "vardi (0 lot yerine 99)." % kimlik.group(0))
+
+        # KANCA B — DEPLOY: deploy isi veriliyor ∧ lokal-test/bug-gate sarti YAZILMAMIS.
+        # Kural zaten yazili (feedback_deploy-lokal-test-onayi-sart); eksik olan TETIKLEME.
+        deploy = _re.search(r"DEPLOY|DEPLOY_UI|UI5 YAYIN", duz)
+        d_sart = _re.search(r"LOKAL TEST|LOCAL RUN|BUG.?GATE|ONAY", duz)
+        if deploy and not d_sart:
+            notlar.append(
+                "[BRIFING-LINT/DEPLOY] Bu brif DEPLOY isi veriyor ama lokal-test / bug-gate "
+                "sarti YAZILMAMIS. Ekle: \"Lokal test OK'siz deploy YOK -- build -> bug-gate "
+                "-> LOKAL dogrulama -> deploy.\" Canli UI riski geri alinmasi pahalidir.")
         if notlar:
             return "\n".join(notlar)
     except Exception:

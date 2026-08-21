@@ -233,6 +233,22 @@ OZEL_TESTLER = [
     # UTF-8 stdin (tasinan `policy` METNI bozulmadan ulasir).
     ("atc_p1_sonuc",
      "ATC P1 sonuc kapisi: yapisal alan tetigi + policy TASINIR (uretilmez) + FP capalari"),
+    # 2026-08-21: D2 kuratli kancalar (brifing-lint). ⛔ BUTCE DOLU — vektor B1 kaynakta
+    # EN FAZLA 2 kanca oldugunu civiller (atesleme oranlari TOPLANIR; 3 kanca bant ustu).
+    ("brifing_lint_d2",
+     "brifing-lint D2: T3-KIMLIK + DEPLOY kancalari (olculdu %4,8 + %5,3 = %9,9 bant alti) "
+     "+ FP capalari + D2 BUTCE capasi"),
+    # 2026-08-21: modul-ipucu regex'i ile METODOLOJI SOZLUGU carpismasi (recete/kusur).
+    # ⛔⛔ B* POZITIF KONTROL vektorleri SILINEMEZ: bu bir DARALTMA'dir, "artik atesLEMIYOR"
+    # kaniti tek basina yetmez -- `--mutasyon-asiri-dar` tam da o borcu sinar.
+    ("intake_modul_carpismasi",
+     "intake modul-ipucu: 'recete'/'kusur' metodoloji sozlugu carpismasi (FP 141->90, "
+     "218->6 gercek korpusta) + POZITIF KONTROL (gercek PP/QM HALA yakalanir)"),
+    # 2026-08-21: JIT-recall indeksi ozetsiz memory satirlarini GORMUYORDU (90/147) VE
+    # ozetsiz satir bir SONRAKI satirin metnini `oz` diye yutuyordu (42/90 kirlenmisti).
+    ("recall_index_ozetsiz",
+     "recall-index: ozetsiz satirlar frontmatter `description`ine duser (90->163) + "
+     "satir-atlamali kirlenme kapandi + UYDURMA yasagi (kaynak yoksa kayit yok)"),
 ]
 
 
@@ -283,7 +299,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
                                         "O:hook_bash_ve_stderr_kapsami"),
      "doc-fs dalı (OKU-işaretçisi + gate özeti) + komşu dalların regresyonu + parse-fail sözleşmesi"),
     ("scripts/hooks/watchdog_launch.py",
-     ("O:prior_art_kb01", "O:negatif_test_harness", "O:sablon_zorunlu_maddeler"),
+     ("O:prior_art_kb01", "O:negatif_test_harness", "O:sablon_zorunlu_maddeler",
+      "O:brifing_lint_d2"),
      "KB-01 prior-art ekseni + brifing-lint regresyonu + parse-fail sözleşmesi + "
      "ENGELLENİRSEN ekseni (dar tutuldu: ölçülmüş %18,4 kapsam / %16,0 ateşleme; "
      "ham 'madde var mı' %86,7 ateşleyip uyarı körlüğü üretirdi)"),
@@ -426,6 +443,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/hooks/session_start.py",
      ("O:overlay_oto_tazeleme", "O:negatif_test_harness"),
      "oto-tazeleme kablolaması + parse-fail notu"),
+    ("scripts/build_recall_index.py", ("O:recall_index_ozetsiz",),
+     "MEMORY.md ayrıştırma sözleşmesi: özetsiz satır → frontmatter `description` + "
+     "satır-atlamalı kirlenme + 'kaynak yoksa UYDURMA yok' değişmezi"),
+    ("scripts/hooks/intake_triage.py",
+     ("O:intake_modul_carpismasi", "O:negatif_test_harness"),
+     "modül-ipucu regex'i ↔ metodoloji sözlüğü çarpışması (POZİTİF KONTROL zorunlu: "
+     "daraltma gerçek PP/QM talebini hâlâ yakalamalı) + parse-fail sözleşmesi"),
     ("scripts/hooks/*.py", ("O:negatif_test_harness",),
      "16 hook'un parse-fail sözleşmesi tek korpusta ölçülür"),
     ("scripts/hooks/infra_write_guard.py",
