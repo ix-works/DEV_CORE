@@ -126,6 +126,33 @@ python tests/run_fixture_tests.py                                            # T
 - Diyakritik: "gelistir" TETİKLER; "istersen"/"isteğe bağlı" TETİKLEMEZ.
 - task-notification payload'ı → sessiz. worktype: tip-başına 1 enjeksiyon (struct/tablo AYNI grup!).
 - Sınıf-kuralı: keşif ekleyeceksen NATIVE-description'a, hook-regex'ine DEĞİL.
+- ⭐ **MODÜL-İPUCU REGEX'İ ↔ METODOLOJİ SÖZLÜĞÜ (2026-08-21) — `_MODULES`'a dokunmadan önce:**
+  ```bash
+  python tests/fixtures/intake_modul_carpismasi/run.py                     # 19/19
+  python tests/fixtures/intake_modul_carpismasi/run.py --mutasyon-pp-geri   # 14/19
+  python tests/fixtures/intake_modul_carpismasi/run.py --mutasyon-qm-geri   # 16/19
+  python tests/fixtures/intake_modul_carpismasi/run.py --mutasyon-asiri-dar # 11/19
+  ```
+  - ⛔ **Tek-kelimelik SAP terimi bu evin sözlüğüyle çakışabilir.** `reçete` = playbook tarifi,
+    `kusur` = defect. İkisi de PP/QM kancasıydı ve infra turlarında yanlış ipucu veriyordu.
+  - ⛔⛔ **DARALTMA = POZİTİF KONTROL BORCU.** *"Artık ateşlemiyor"* TEK BAŞINA yetmez;
+    *"gerçek PP/QM talebini HÂLÂ yakalıyor"* da gösterilmelidir. Çapalar **B1-B8** ve
+    **SİLİNEMEZ**; `--mutasyon-asiri-dar` sekizini birden düşürür. 19/19 verirse korpus boştur.
+  - ⛔ **Ölçüm DOSYA-GREP'İ DEĞİL, GERÇEK KULLANICI PROMPT KORPUSUDUR** — hook
+    `UserPromptSubmit`e bağlıdır. Transcript'lerden `type=="user"` mesajları çıkarılır
+    (`utils.claude_paths.transcript_dizini`), eski↔yeni regex AYNI korpusta yan yana koşulur.
+    Dosya-grep'i yalnız bir göstergedir.
+  - ⚠ **FP vektörünü GERÇEK BİÇİMDE yaz:** eski `\breçete` diyakritik-bağımlıydı ⇒ ASCII
+    "recete" içeren bir FP vektörü fix-ÖNCESİ de ateşlemez = **TRIVIAL YEŞİL** (ilk taslakta
+    tam bu oldu; mutasyon altında yine PASS verdi).
+  - ⚠ **Mutasyon yer-tutucusu `r"|"` OLAMAZ** — boş alternatif regex'i HER ŞEYE eşletir;
+    "aşırı-dar" sanılan mutasyon "aşırı-geniş" olur ve ölçüm tersine döner.
+  - ⛔ Kapsam dışı (ayrı karar): tetiğin kendisi (*"infra turu geliştirme talebi sayılıyor"*)
+    ve skill'in `DO NOT USE FOR` listesi — **İPTAL değil, ERTELENDİ**.
+  - ⓘ **Ölçülmüş ama DOKUNULMAMIŞ komşu FP'ler** (aynı sınıf, ayrı karar): PP'de kalan 90
+    ateşin **62'si `\bBOM\b`** (= Byte Order Mark, evin PowerShell-BOM tuzağı), 18'i
+    `yönlendirme`, 8'i `routing`; QM'de kalan 6'nın 4'ü `kalite kontrol` (= belge kalite
+    kontrolü). `BOM` tek başına `reçete`den (51) DAHA BÜYÜK bir FP kaynağıdır.
 
 ## B6 — post_validate
 - HIZLI_KUME 5 sınıf → hızlı-tur; **tablo-DIŞI → TAM tur** (hızlıya düşerse fail-open'a kaydı).
@@ -134,10 +161,58 @@ python tests/run_fixture_tests.py                                            # T
 ## B7 — recall_inject + build_recall_index
 - P: "classrun derdi" → PATTERN#19 · RAP-sorgusu → 3-ders · "validator/hook" → infra-howto ilk-sıra.
 - N: kısa-prompt sessiz · bozuk-indeks exit-0 (fail-open) · alakasız sessiz.
-- Fixture bilinçli YOK (deterministik-LLM'siz) → reçete = sentetik-payload (howto-sistem-denetimi §3).
+- `recall_inject` için fixture bilinçli YOK (deterministik-LLM'siz) → reçete = sentetik-payload
+  (howto-sistem-denetimi §3). **`build_recall_index` için ARTIK FİXTURE VAR** (aşağı bkz.).
+- ⭐ **MEMORY.md AYRIŞTIRMA SÖZLEŞMESİ (2026-08-21) — bu dosyaya dokunmadan önce oku:**
+  ```bash
+  python tests/fixtures/recall_index_ozetsiz/run.py                      # 16/16
+  python tests/fixtures/recall_index_ozetsiz/run.py --mutasyon-geridusus-yok  #  8/16
+  python tests/fixtures/recall_index_ozetsiz/run.py --mutasyon-dar-desen      # 11/16
+  python tests/fixtures/recall_index_ozetsiz/run.py --mutasyon-uydur          # 12/16
+  python tests/fixtures/recall_index_ozetsiz/run.py --mutasyon-satirasan      # 12/16
+  ```
+  - ⛔ **Ayraç deseni `\s*` OLAMAZ** — `\s` satır sonunu kapsar ve özetsiz bir satır bir
+    SONRAKİ satırın metnini `oz` diye yutar (kayıt VAR ama özeti BAŞKA DERSE ait).
+    Canlı `MEMORY.md`'de mevcut 90 kaydın **42'si** böyleydi. Doğrusu `[ \t]*`. Çapa: **C6**,
+    yalnız `--mutasyon-satirasan` altında düşer.
+  - ⛔ **Kaynak yoksa UYDURMA yok**: frontmatter yok / `description:` yok / dosya diskte yok
+    → **kayıt da yok**. Çapalar **N1/N2/N3**; `--mutasyon-uydur` bunları sınar.
+  - ⛔ **Kapsam `^- \[` DEĞİLDİR**: canlı indekste en değerli dersler `- ⭐ [...]` / `- ⛔ [...]`
+    biçimindedir ve dar desen onları GÖRMEZ; bir satırda birden çok link olabilir. Çapalar
+    **P2/P3/P5**; `--mutasyon-dar-desen` bunları sınar.
+  - ⛔ **`anahtar` formülü (`baslik×3 + oz`) DEĞİŞMEZ** — kapsam açılır, skorlama açılmaz (**C3**).
+  - Ölçüm hermetiktir: `CLAUDE_CONFIG_DIR` ile `~/.claude` yönlendirilir ve **gerçek CLI**
+    koşulur (kod ≠ kablolama). Kanonik sayılar: `governance/infra-changelog.md` (bu bölümde
+    tekrarlanmaz — iki yerde yaşayan rakam bayatlar).
+  - ⛔ Mutant **derlenmiyorsa** koşucu **exit 2 / DOGRULANAMADI** verir: *"KURULAMADI ≠ KAÇTI"*.
 
 ## B8 — watchdog / pre_compact / post_tool_failure / instructions_log / radar_check
 - **watchdog_launch brifing eksenleri (2026-08-19):** `[PRIOR-ART / KB-01]` ateşleme ölçütü **metin değil arama**: brifingde adı geçen + `scripts/`te var olan script, `playbook/`de ≤2 dosyada geçiyor ve o dosyalar brifingde ANILMIYOR. ⛔ *"atıf var mı"* diye ölçme — gerçek korpusta brifinglerin **%98,6'sı** zaten yol atfı taşır (trivial yeşil). Gürültü tabanı: **%13,9** ateşleme / 570 brifing, medyan 1 ms. FP çapası şart: reçete zaten anılmış · var-olmayan script adı · >2 reçetede geçen genel araç · <400 karakter. Fail-open yasağı iki çapa ister (dizin-yok + bozuk-payload → `KOSMADI`). Notlar **4 emit yolunun hepsinde** çıkmalı (daemon/bash bulunamasa bile). Korpus: `prior_art_kb01`.
+- ⭐⭐ **D2 KURATLI KANCALAR (2026-08-21) — `_brifing_lint`'e eksen EKLEMEDEN ÖNCE OKU:**
+  ```bash
+  python tests/fixtures/brifing_lint_d2/run.py                     # 18/18
+  python tests/fixtures/brifing_lint_d2/run.py --mutasyon-kimlik    # 14/18
+  python tests/fixtures/brifing_lint_d2/run.py --mutasyon-deploy    # 16/18
+  python tests/fixtures/brifing_lint_d2/run.py --mutasyon-fren      # 17/18  (GEVŞETME yönü)
+  ```
+  - ⛔⛔ **BÜTÇE DOLU — ÜÇÜNCÜ KANCA EKLEME.** Ateşleme oranları **TOPLANIR**: ölçüldü (605
+    gerçek brif) 2 kanca %8,6-26,0 · **3 kanca %19,3-30,2 = BANT ÜSTÜ** · 7 aday %77,9
+    (= reddedilen ham eksenin sınıfı). Yürürlükteki iki kanca birleşik **bant ALTI**.
+    Vektör **B1** bunu YAPISAL olarak çivilliyor: kaynakta `"[BRIFING-LINT/` markeri **2**'yi
+    aşarsa korpus KIRMIZI verir. Yeni kanca önerisi önce
+    `governance/research/brifing-lint-olcum-2026-08-21/d2_aday_olcum.py` ile ölçülür.
+  - ⛔ **Bandı SEZGİYLE değil ÖLÇÜMLE doğrula ve rakamı KOPYALAMA — YENİDEN ÜRET.** Yöntem:
+    gerçek `_brifing_lint` fonksiyonunu **import et** ve 605 brifi ona ver; regex'in ikinci
+    bir kopyasını ölçme (kopya bayatlar ve ölçtüğün şey koşacak kod olmaz).
+    Harness pozitif kontrolü: aynı koşumda mevcut `ENGELLENIRSEN` ekseni **%16,0** civarı
+    çıkmalı (reçetenin altındaki tabloyla örtüşmezse ölçüm harness'ı bozuktur).
+  - ⛔ **Fren şartı (`not fren`) KALDIRILAMAZ** — kaldırılırsa kanca "kural anılan her yazma
+    işinde" ateşler; **A-N1** çapası bunu yakalar (`--mutasyon-fren`).
+  - ⛔ Genel arama-tabanlı memory-nudge **ELENDİ, yeniden önerme**: evin kendi `recall_inject`
+    skorlayıcısı ajan briflerinde **%100** ateşleyip hedef dersi **0/7** getiriyor (PLAN §8.1).
+  - Notlar **ASCII** yazılır (komşu lint notlarıyla aynı konvansiyon, C-ENC-01) ve çapa **ham
+    stdout'ta değil çözülmüş `additionalContext`te** kurulur (`ensure_ascii=True`).
+  - Kanonik oranlar `governance/infra-changelog.md`'dedir; burada TEKRARLANMAZ.
 - watchdog: probes-yok → yalnız reach (SAHTE-ALERT üretme); kopuklukta **1** alert (edge); daemon URL-yoksa graceful-exit; launcher proje-kökünü ARG'la geçirir.
 - pre_compact çıktısı `systemMessage` (additionalContext ŞEMA-GEÇERSİZ — canlı-kanıtlı).
 - post_tool_failure: fail-payload'da merdiven(+5b infra-satırı) · başarıda sessiz.

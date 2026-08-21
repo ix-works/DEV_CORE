@@ -91,18 +91,39 @@ _MODULES = [
         r"\btoplama\s+görev|\baktarım\s+emri|\btransfer\s+order|\btransit\s+depo|\bputaway|\bpicking|"
         r"\bstorage\s+(bin|type)|\bwarehouse\s+task|/SCWM/|\blgnum\b|\bEWM\b|\bWM\b|"
         r"\bLTAK\b|\bLTAP\b|\bLT0\d|\bLX\d\d|\bdepo\s+stok|\bdepo\s+birim)", re.I)),
+    # ⚠ 2026-08-21 — `\breçete` TEK-KELİMELİK kanca olmaktan ÇIKARILDI (çok-kelimeli çapa).
+    # GEREKÇE (ölçüldü): "reçete" bu evin **metodoloji sözlüğüdür** — `governance/
+    # infra-test-recipes.md` bir *test reçetesi* dosyasıdır, PP ürün ağacı değil.
+    # Çarpışma (tüketici proje korpusu: core/playbook + core/governance + governance):
+    # "reçete" **43 dosya** · gerçek PP/QM işareti (üretim sipariş·iş emri·muayene lot·
+    # AFKO·QALS) **4 dosya** ⇒ ~11× daha sık İNFRA anlamında.
+    # ⛔ Bu bir GEVŞETME değil DARALTMA'dır ama kapsam-kaybı riski taşır → pozitif kontrol
+    # fixture'da zorunlu (`tests/fixtures/intake_modul_carpismasi`: gerçek "üretim reçetesi"
+    # HÂLÂ PP önerir). Karakter sınıfları (`[üu]`,`[çc]`) bilinçli: hook desenleri HEM ham
+    # HEM `_fold()`lanmış prompt'ta aranır; ASCII yazan kullanıcı da yakalanmalı.
     ("pp", "PP (Üretim Planlama)", re.compile(
         r"(\büretim\s+sipariş|\bimalat|\biş\s+emri|\bplanlı\s+sipariş|\bCO0\d|\büretim\s+planla|"
-        r"\bürün\s+ağac|\bBOM\b|\breçete|\byönlendirme|\brouting\b|\bMRP\b|\bproduction\s+order|\bAFKO\b|\bAFPO\b|\bRESB\b)", re.I)),
+        r"\bürün\s+ağac|\bBOM\b|"
+        r"\b[üu]retim\s+re[çc]ete|\b[üu]r[üu]n\s+re[çc]ete|\bre[çc]ete\s+(?:kalem|bile[şs]en|y[öo]net)|"
+        r"\bmaster\s+recipe|"
+        r"\byönlendirme|\brouting\b|\bMRP\b|\bproduction\s+order|\bAFKO\b|\bAFPO\b|\bRESB\b)", re.I)),
     ("fi", "FI (Mali Muhasebe)", re.compile(
         r"(\bmuhasebe\s+belge|\bmali\s+belge|\bhesap\s+plan|\bborç|\balacak|\bmizan|\bFB0\d|\bFBL\d|"
         r"\bana\s+hesap|\bBSEG\b|\bBKPF\b|\bGL\s+hesab)", re.I)),
     ("co", "CO (Maliyet-Kontrol)", re.compile(
         r"(\bmaliyet\s+merkez|\bmasraf\s+yer|\biç\s+sipariş|\bmaliyet\s+unsur|\bkarlılık|\bkârlılık|"
         r"\bkâr\s+merkez|\bkar\s+merkez|\bCO-?PA\b|\bcost\s+center|\binternal\s+order|\bKS0\d|\bKO0\d|\bCOEP\b|\bmaliyet\s+analiz)", re.I)),
+    # ⚠ 2026-08-21 — `\bkusur` TEK-KELİMELİK kanca olmaktan ÇIKARILDI (aynı sınıf, bkz. PP).
+    # "kusur" = bu evde **defect/kusur-sınıfı** demektir (infra-changelog · lessons-learned ·
+    # bug-checklist); ölçüldü: 34 dosya infra anlamında, 4 dosya gerçek PP/QM işareti.
+    # ⛔ `kusur\s+sınıf` BİLİNÇLİ OLARAK EKLENMEDİ — "kusur sınıfı" tam da metodoloji
+    # deyimidir; eklenseydi daraltma kendi amacını yerdi (ölçülmüş FP kaynağı).
     ("qm", "QM (Kalite Yönetimi)", re.compile(
         r"(\bkalite\s+yönet|\bkalite\s+kontrol|\bkalite\s+bildirim|\bmuayene\s+lot|\bmuayene\s+plan|"
-        r"\binspection\s+lot|\bquality\s+notification|\bkusur|\bred\s+karar|\busage\s+decision|"
+        r"\binspection\s+lot|\bquality\s+notification|"
+        r"\bkalite\s+kusur|\bkusur\s+(?:bildirim|kod|oran)|\b[üu]r[üu]n\s+kusur|\bmalzeme\s+kusur|"
+        r"\bdefect\s+code|"
+        r"\bred\s+karar|\busage\s+decision|"
         r"\bQA0\d|\bQE\d\d|\bQPMK\b|\bQALS\b|\bQMEL\b)", re.I)),
     ("pm", "PM (Bakım Onarım)", re.compile(
         r"(\bbakım\s+emri|\bbakım\s+sipariş|\barıza\s+bildirim|\bekipman\b|\bfonksiyon\s+yer|"

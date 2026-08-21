@@ -232,7 +232,7 @@ Config  : <PROJECT_ROOT>\.conn_adt
 
 Script çalıştırma base komutu:
 ```powershell
-python <script_path> --conn <PROJECT_ROOT>\.conn_adt
+python <script_path> --cwd <PROJECT_ROOT>
 ```
 
 ---
