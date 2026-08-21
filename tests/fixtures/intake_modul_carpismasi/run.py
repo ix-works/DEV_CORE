@@ -24,6 +24,7 @@ KOSUM:  python tests/fixtures/intake_modul_carpismasi/run.py
         ... --mutasyon-asiri-dar   (SINIR: yeni capalar TUMDEN kaldirilir = kapsam kaybi)
         ... --mutasyon-bom-geri    (BOM: cok-kelimeli capa -> ciplak `\\bBOM\\b`)
         ... --mutasyon-kk-geri     (QM: cok-kelimeli capa -> ciplak `\\bkalite\\s+kontrol`)
+        ... --mutasyon-agac-diyakritik (PP: `ürün ağac` YALNIZ diyakritikli hale doner)
 Cikis:  0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (mutasyon capasi tutmadi)
 
 ⚠ UC MUTASYON, HICBIRI DIGERINI KAPSAMAZ: ikisi FP-dususunu, ucuncusu POZITIF KONTROLU
@@ -75,6 +76,15 @@ BOM_YENI = (r'        r"\b[üu]retim\s+BOM|\bBOM\s+(?:patlat|bile[şs]en|kalem|l
 KK_YENI = (r'        r"\bkalite\s+kontrol\s+(?:lot|plan|karar|sonu[çc]|noktas|'
            r'[öo]l[çc][üu]m|karakteristi)|"')
 
+# --- 2026-08-22 UCUNCU DALGA: `ürün ağac` diyakritik-bağımlılığı (N6) -----------
+# ⚠ BU DALGA ÖNCEKİLERİN TERSİDİR: önceki ikisi DARALTMA idi, bu GENİŞLETME.
+# `\bürün\s+ağac` yalnız diyakritikli yazımı yakalıyordu; ASCII yazan kullanıcı
+# KAÇIYORDU (ham prompt'ta da `_fold()`lanmışında da `ü` yok ⇒ çift arama kurtarmaz).
+# ⛔ KENDİ MUTASYONU ŞART: mevcut mutasyonların HİÇBİRİ bu ayağı sinamaz
+# (`--mutasyon-asiri-dar` PP_YENI'yi söker, bu ayak ONDAN AYRI bir satırdır) —
+# sınıf: "iki değişmez -> iki mutasyon".
+AGAC_YENI = r'        r"\b[üu]r[üu]n\s+a[ğg]ac|"'
+
 MUTLAR = {
     # fix'in SOKUMU: tek-kelimelik kancaya geri don -> FP vektorleri dusmeli
     "--mutasyon-pp-geri": (PP_YENI, r'        r"\breçete|"'),
@@ -88,6 +98,10 @@ MUTLAR = {
     # 2026-08-22 dalgasinin fix-SOKUMLERI (yeni kancalar tek-kelimelige geri doner)
     "--mutasyon-bom-geri": (BOM_YENI, r'        r"\bBOM\b|"'),
     "--mutasyon-kk-geri": (KK_YENI, r'        r"\bkalite\s+kontrol|"'),
+    # N6 fix'in SOKUMU: diyakritik-BAGIMLI hale geri don -> B9b (ASCII) duser,
+    # B9 (diyakritikli) PASS kalir. Ikisinin AYRI dusmesi, iki yazimin AYRI
+    # olculdugunun kanitidir (tek vektor olsaydi hangi yazimin tuttugu bilinmezdi).
+    "--mutasyon-agac-diyakritik": (AGAC_YENI, r'        r"\bürün\s+ağac|"'),
 }
 
 
@@ -206,8 +220,18 @@ def main() -> int:
             # --- 2026-08-22 dalgasinin POZITIF KONTROLU ---------------------------
             # ⭐ B10/B11/B12 ayrica ERISILEBILIRLIK kanitidir: yeni capalarin HICBIR
             # gercek ifadeyle eslesmemesi mumkundu (olu kanca). Bunlar o riski kapatir.
-            ("B9 POZ.KONTROL 'urun agaci' -> PP ipucu VAR (dokunulmamis capa)",
+            # ⛔ ETIKET DUZELTILDI (2026-08-22/N6): eski ad 'urun agaci' (ASCII) diyordu
+            # ama prompt DIYAKRITIKLI idi — yani ASCII yazim HIC olculmemisti ve vektor
+            # kapsadigindan FAZLASINI iddia ediyordu. Sinif: "FP/pozitif-kontrol vektoru
+            # kusurun GERCEK yazim biciminde yazilir".
+            ("B9 POZ.KONTROL ürün ağacı (DIYAKRITIKLI) -> PP ipucu VAR",
              "Ürün ağacı patlatma raporu ekleyelim", PP_MK),
+            # ⭐ B9b — N6'nin ASIL vektoru: ASCII yazim. Eski desen bunu KACIRIYORDU.
+            ("B9b POZ.KONTROL urun agaci (ASCII) -> PP ipucu VAR (N6 genisletmesi)",
+             "Urun agaci patlatma raporu ekleyelim", PP_MK),
+            # ⭐ B9c — KARISIK yazim (kullanicilar diyakritigi kismen kullanir).
+            ("B9c POZ.KONTROL ürün agaci (KARISIK) -> PP ipucu VAR",
+             "Ürün agaci patlatma raporu ekleyelim", PP_MK),
             ("B10 POZ.KONTROL 'bill of materials' -> PP ipucu VAR (YENI capa)",
              "Bill of materials raporu gelistirelim", PP_MK),
             ("B11 POZ.KONTROL 'kalite kontrol plani' -> QM ipucu VAR (YENI capa)",
@@ -260,6 +284,15 @@ def main() -> int:
         ekle("D4 SINIF capasi: ciplak `\\bBOM\\b` / `\\bkalite\\s+kontrol|` GERI GELMEDI",
              r'\bBOM\b|' not in kaynak and r'\bkalite\s+kontrol|' not in kaynak,
              "ciplak kanca geri gelirse Byte-Order-Mark / belge-kalite FP'si geri doner")
+
+        # D5 — N6 (UCUNCU dalga) sinif capasi. AYRI vektor: D3/D4 yalnizca DARALTMA
+        # dalgalarini civiller; diyakritik-bagimli yazim geri gelse ikisi de PASS
+        # verirdi. Sinif: "bir desen ailesinde tek ayak stil disi kalirsa o ayak
+        # sessizce kapsam kaybeder" (komsulari `[üu]`/`[ğg]` stilindeydi).
+        ekle("D5 SINIF capasi: diyakritik-BAGIMLI `\\bürün\\s+ağac` GERI GELMEDI",
+             r'\bürün\s+ağac|' not in kaynak
+             and r'\b[üu]r[üu]n\s+a[ğg]ac|' in kaynak,
+             "diyakritik-bagimli ayak geri gelirse ASCII yazan kullanici yine kacar")
 
     finally:
         if mutant is not None:

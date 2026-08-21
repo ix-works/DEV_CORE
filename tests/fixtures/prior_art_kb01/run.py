@@ -12,9 +12,25 @@ yol/dosya atfi tasiyor**. Metin-izi arayan bir kontrol herkesi gecirirdi (trivia
 Kontrol bu yuzden brifingin metnini YARGILAMAZ: aramayi kendi yapar, brifingin atif
 vermedigi recete dosyasini geri bildirir. Gecmek icin yazilacak sihirli cumle YOKTUR.
 
+AYRICA — AGENT-TYPE TUZAGI dali (2026-08-22, N1). Ayni hook'un UCUNCU nudge dali:
+alt-ajan `subagent_type="infra-expert"` + `name="<baska ad>"` ile spawn edilince harness
+`agent_type`'i VERILEN ADA esitler; `infra_write_guard` muafiyeti `agent_type`'a baktigi
+icin DUSER ve ajan hicbir infra dosyasina yazamaz. 3 kez tekrarladi, her seferinde bir
+ajan turu yandi. Kusuru gorebilen TEK yer spawn anidir (`subagent_type` ile `name` YALNIZ
+burada yan yana durur) -- yazma-tarafi payload'inda ajan TANIMI yoktur, bu yuzden guard'a
+dokunulmadi.
+
+⛔ NEDEN RUNPY VEKTORU (A5) SILINEMEZ: dal, muaf kumeyi `infra_write_guard`tan IMPORT
+eder (kopya liste tutulmaz). Canlida bu hook `hook_shim` uzerinden `runpy.run_path` ile
+kosar ve o yolda `sys.path[0]` BOS olabilir => kardes-import DOGRUDAN cagride YESIL,
+CANLIDA OLU olurdu. A5 tam o cagri seklini kurar (bu evde olculmus kablolama sinifi).
+
 KOSUM:  python tests/fixtures/prior_art_kb01/run.py
         python tests/fixtures/prior_art_kb01/run.py --mutasyon            (kontrolu SOK)
         python tests/fixtures/prior_art_kb01/run.py --mutasyon-failopen   (KOSMADI'yi sustur)
+        python tests/fixtures/prior_art_kb01/run.py --mutasyon-agent-type (N1 dalini SOK)
+        python tests/fixtures/prior_art_kb01/run.py --mutasyon-agent-syspath
+                                                    (N1: runpy sys.path capasini SOK)
 Cikis:  0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (mutasyon capasi tutmadi)
 """
 from __future__ import annotations
@@ -62,6 +78,21 @@ VAKA3 = (
     "C - 9 shell'i bana devret (SE11): tablolari sen SE11'den yaratirsin; 175 alani elle "
     "girmek demek, CSV'ler hazir oldugu icin bu secenegin maliyeti yuksek. GOREV ve KANIT KURAL."
 )
+
+
+# --- N1 mutasyon capalari (2026-08-22) --------------------------------------
+# ⛔ IKI DEGISMEZ -> IKI MUTASYON, hicbiri otekini KAPSAMAZ:
+#   (a) dalin `_ek_notlar` uretim hattina KABLOLU olmasi (kod yazilmis olmasi yetmez)
+#   (b) kardes-import'un RUNPY yolunda ayakta kalmasi (sys.path capasi)
+# (b) olmadan (a) "dogrudan cagride calisiyor" der ve CANLIDA sessizce olurdu.
+MUT_AGENT_TYPE = (
+    "    for _f in (_brifing_lint, _prior_art_nudge, _agent_type_tuzagi):",
+    "    for _f in (_brifing_lint, _prior_art_nudge):")
+MUT_AGENT_SYSPATH = (
+    "    d = os.path.dirname(os.path.abspath(__file__))\n"
+    "    if d not in sys.path:\n"
+    "        sys.path.insert(0, d)\n",
+    "")
 
 
 def _uzun(govde: str) -> str:
@@ -119,7 +150,8 @@ def payload(prompt: str, sid: str = "pa-test") -> dict:
 def main() -> int:
     # BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir
     # yazim hatasi eskiden HIC mutasyon kurmadan TAM PUAN uretiyordu (exit 0).
-    gecerli = {"--mutasyon", "--mutasyon-failopen"}
+    gecerli = {"--mutasyon", "--mutasyon-failopen", "--mutasyon-agent-type",
+               "--mutasyon-agent-syspath"}
     for a in sys.argv[1:]:
         if a.startswith("--mutasyon") and a not in gecerli:
             raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {a} -> gecerli: "
@@ -127,12 +159,19 @@ def main() -> int:
 
     mutasyon = "--mutasyon" in sys.argv
     mut_failopen = "--mutasyon-failopen" in sys.argv
+    mut_at = "--mutasyon-agent-type" in sys.argv
+    mut_syspath = "--mutasyon-agent-syspath" in sys.argv
     hook = HOOK
     yedek = None
 
-    if mutasyon or mut_failopen:
+    if mutasyon or mut_failopen or mut_at or mut_syspath:
         kaynak = HOOK.read_text(encoding="utf-8")
-        eski, yeni = MUT_SOK if mutasyon else MUT_FAILOPEN
+        if mut_at:
+            eski, yeni = MUT_AGENT_TYPE
+        elif mut_syspath:
+            eski, yeni = MUT_AGENT_SYSPATH
+        else:
+            eski, yeni = MUT_SOK if mutasyon else MUT_FAILOPEN
         if eski not in kaynak:
             print("[DOGRULANAMADI] mutasyon capasi tabanda bulunamadi -> mutasyon "
                   "gercekten uygulanmadi; 'gecti' sonucu ANLAMSIZ olurdu.")
@@ -233,6 +272,68 @@ def main() -> int:
         ekle("F1 OLCEMEDIM != TEMIZ: playbook/ yokken KOSMADI der",
              KOSMADI in ctx, "sessiz exit 0 = 'sorun yok' diye okunur; yasak")
         ekle("F1b KOSMADI'da da stdout sozlesmesi korunur", rc == 0 and ok, f"exit={rc}")
+
+        # === A) AGENT-TYPE TUZAGI (N1, 2026-08-22) =========================
+        AT = "[AGENT-TYPE TUZAGI]"
+        AT_KOSMADI = "[AGENT-TYPE] KOSMADI"
+
+        def at_payload(ti):
+            d = payload("x")
+            d["tool_input"] = dict(ti, prompt="kisa spawn")
+            return d
+
+        # ⚠ VEKTORLER GERCEK TRANSCRIPT'TEN (2026-08-22, uc canli spawn):
+        #   {'subagent_type':'infra-expert','name':'infra-kuyruk-2208'}  <- KUSUR
+        #   {'subagent_type':'infra-expert'}                              <- dogru
+        #   {'subagent_type':'bug-expert'}                                <- dogru
+        rc, ctx, _e, ok = kos(hook, sb, at_payload(
+            {"subagent_type": "infra-expert", "name": "infra-kuyruk-2208"}))
+        ekle("A1 KUSURLU spawn (muaf rol + FARKLI ad) -> NOT VAR + exit 0",
+             AT in ctx and "infra-kuyruk-2208" in ctx and rc == 0 and ok,
+             f"exit={rc} json={ok}; nudge basilmali (BLOKLAMAZ)")
+
+        rc, ctx, _e, _ok = kos(hook, sb, at_payload({"subagent_type": "infra-expert"}))
+        ekle("A2 ADSIZ spawn (dogru kullanim) -> SESSIZ",
+             AT not in ctx and AT_KOSMADI not in ctx,
+             "ad verilmediyse agent_type degismez -> uyari GURULTUDUR")
+
+        rc, ctx, _e, _ok = kos(hook, sb, at_payload(
+            {"subagent_type": "bug-expert", "name": "bug-turu-1"}))
+        ekle("A3 MUAF OLMAYAN rol + ad -> SESSIZ",
+             AT not in ctx and AT_KOSMADI not in ctx,
+             "muafiyeti olmayan rolde kaybedilecek muafiyet de yok")
+
+        # ⭐ A4 SINIR: ad == subagent_type ise `agent_type` DEGISMEZ -> uyari gurultudur.
+        rc, ctx, _e, _ok = kos(hook, sb, at_payload(
+            {"subagent_type": "infra-expert", "name": "infra-expert"}))
+        ekle("A4 SINIR: ad == subagent_type -> SESSIZ",
+             AT not in ctx and AT_KOSMADI not in ctx,
+             "esit adda muafiyet DUSMEZ; uyarmak yanlis-pozitif olurdu")
+
+        # ⭐ A5 RUNPY: canli cagri sekli (hook_shim.template.py:79) -- kardes-import
+        # `sys.path[0]=''` altinda da cozulmeli. SILINEMEZ: bu capa olmadan dal
+        # dogrudan cagride YESIL, canlida OLU olur.
+        sim = tmp / "sim_runpy.py"
+        sim.write_text("import runpy, sys\n"
+                       "sys.path[0] = ''\n"
+                       "runpy.run_path(sys.argv[1], run_name='__main__')\n",
+                       encoding="utf-8")
+        env = dict(os.environ)
+        env["CLAUDE_PROJECT_DIR"] = str(sb)
+        env["PYTHONIOENCODING"] = "utf-8"
+        pr = subprocess.run(
+            [sys.executable, str(sim), str(hook)],
+            input=json.dumps(at_payload(
+                {"subagent_type": "infra-expert", "name": "infra-kuyruk-2208"})).encode("utf-8"),
+            env=env, capture_output=True, cwd=str(sb), timeout=120)
+        r_out = pr.stdout.decode("utf-8", "replace")
+        try:
+            r_ctx = json.loads(r_out)["hookSpecificOutput"]["additionalContext"]
+        except Exception:
+            r_ctx = ""
+        ekle("A5 RUNPY (canli hook_shim sekli): kardes-import COZULUR, not VAR",
+             AT in r_ctx and AT_KOSMADI not in r_ctx and pr.returncode == 0,
+             f"exit={pr.returncode}; sys.path[0]='' altinda import olmemeli")
 
         rc, ctx, _e, ok = kos(hook, sb, {"session_id": "pa", "tool_input": "bozuk-tip"})
         ekle("F3 payload SEKLI bozuksa da KOSMADI der (except dali)",

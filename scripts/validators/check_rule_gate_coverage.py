@@ -39,6 +39,7 @@ Bulgu sınıfları:
 Kullanım: python scripts/validators/check_rule_gate_coverage.py [--strict]
 """
 import argparse
+import ast
 import json
 import re
 import sys
@@ -79,6 +80,24 @@ ENFORCES_RE = re.compile(r"^[ \t]*#\s*ENFORCES:\s*(.+)", re.IGNORECASE | re.MULT
 SEVERITY_RE = re.compile(r"^[ \t]*#\s*GATE-SEVERITY:\s*([A-Za-z]+)", re.MULTILINE)
 ADVISORY_KELIMELER = {"advisory", "soft", "warn", "warn-first"}
 
+# ⛔ ID AYRIŞTIRMA SINIRI (2026-08-22) — beyan satırının GÖVDESİ ile AÇIKLAMASI ayrılır.
+# Kanonik yazım `# ENFORCES: CORE-04  (ADR 0019 coverage binding)` olduğu için sınırsız
+# `re.split(r"[,\s]+", ...)` açıklamayı da id sayıyordu: `check_settings_template_sync.py`
+# ölçüldü → {'C-TPL-01', '(ADR', '0019', 'coverage', 'binding)'} yani **4 hayalet id**.
+# Sonuç sessizdi ama iki yönlü zararlıydı: (a) checklist bir gün `0019` ya da `coverage`
+# adlı bir kural iddia etse gate onu "beyan edilmiş" sayıp UNDECLARED üretmezdi
+# (sahte-yeşil); (b) beyan kümesi teşhis çıktısında gürültülüydü.
+# ⛔ Bu bir DARALTMADIR → pozitif kontrol ZORUNLU: çok-id'li meşru beyan (`A, B`) HÂLÂ
+# ikisini de vermeli (fixture `hook_gate_coverage` S10/S11; mutasyon `--mutasyon-id-sinirsiz`).
+# Ölçüldü: canlı korpusta 48 beyan satırının tamamı bu biçime uyar (id kaybı = 0, OK=62 sabit).
+_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*$")
+
+
+def _enforces_idleri(ham: str) -> set[str]:
+    """`# ENFORCES:` satır gövdesinden GERÇEK rule-id'leri ayıklar (açıklama düşer)."""
+    govde = ham.split("(", 1)[0]  # `(` görülünce dur — sonrası insan açıklamasıdır
+    return {t for t in re.split(r"[,\s]+", govde.strip()) if _ID_RE.fullmatch(t)}
+
 
 def wired_scripts() -> set[str]:
     """run_all + run_review içinde geçen check_*.py adları (canlı hesap, etikete güvenme)."""
@@ -102,7 +121,7 @@ def script_enforces() -> dict[str, set[str]]:
     for p in VALIDATORS_DIR.glob("check_*.py"):
         ids: set[str] = set()
         for m in ENFORCES_RE.finditer(p.read_text(encoding="utf-8", errors="replace")):
-            ids |= {t.strip() for t in re.split(r"[,\s]+", m.group(1)) if t.strip()}
+            ids |= _enforces_idleri(m.group(1))
         out[p.name.lower()] = ids
     return out
 
@@ -171,8 +190,8 @@ def mevcut_hooklar() -> set[str]:
     return {p.stem for p in HOOKS_DIR.glob("*.py") if not p.name.startswith("_")}
 
 
-def kablolu_hooklar() -> tuple[set[str], str]:
-    """settings.template.json'a kablolu hook adları + (varsa) ölçüm-hatası.
+def kablolu_hooklar() -> tuple[set[str], set[str], str]:
+    """settings.template.json'a kablolu hook adları + OPT_OUT muafiyeti + ölçüm-hatası.
 
     ⛔ KOPYALAMA YOK: kablolama mantığının TEK KAYNAĞI C-TPL-01
     (`check_settings_template_sync._kablolu_hooklar`) — burada yeniden yazmak "ikinci
@@ -183,14 +202,24 @@ def kablolu_hooklar() -> tuple[set[str], str]:
     ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: şablon okunamazsa boş küme dönmek TÜM hook'ları ORPHAN
     gösterirdi (sahte-kırmızı) ya da sessizce geçerdi (sahte-yeşil). Hata metni geri
     verilir, çağıran bunu AYRI bir çıktı satırı olarak bildirir.
+
+    ⛔ OPT_OUT DA AYNI KAYNAKTAN (2026-08-22): C-TPL-01 kablosuz bir hook için
+    BELGELENMİŞ meşru kaçış yolu tanır (`OPT_OUT`, hata mesajı da onu söyler:
+    "şablona kabla ya da OPT_OUT'a gerekçeli ekle"). Hook-ORPHAN dalı ilk yazımında
+    (2026-08-22) bunu OKUMUYORDU ⇒ muafiyet kullanıldığı AN iki gate ZIT cevap verirdi:
+    C-TPL-01 "muaf, temiz" derken bu gate ORPHAN basıp commit'i durdururdu (bu HARD).
+    Yani belgelenmiş kaçış yolu fiilen KULLANILAMAZ olurdu — muafiyeti sessizce iptal
+    eden bir gate, muafiyeti olmayan bir gate'tir.
+    ⛔ KOPYA LİSTE TUTULMAZ: küme kardeş modülden İMPORT edilir (aynı olgu iki yerde
+    yaşarsa biri bayatlar — bu evde ölçülmüş çürüme sınıfı).
     """
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from check_settings_template_sync import _kablolu_hooklar  # type: ignore
+        from check_settings_template_sync import OPT_OUT, _kablolu_hooklar  # type: ignore
         d = json.loads(SETTINGS_SABLON.read_text(encoding="utf-8"))
-        return _kablolu_hooklar(d, []), ""
+        return _kablolu_hooklar(d, []), set(OPT_OUT), ""
     except Exception as e:  # noqa: BLE001 — teşhis metni raporlanacak
-        return set(), f"{type(e).__name__}: {e}"
+        return set(), set(), f"{type(e).__name__}: {e}"
 
 
 def hook_enforces() -> dict[str, set[str]]:
@@ -201,7 +230,7 @@ def hook_enforces() -> dict[str, set[str]]:
             continue
         ids: set[str] = set()
         for m in ENFORCES_RE.finditer(p.read_text(encoding="utf-8", errors="replace")):
-            ids |= {t.strip() for t in re.split(r"[,\s]+", m.group(1)) if t.strip()}
+            ids |= _enforces_idleri(m.group(1))
         out[p.stem] = ids
     return out
 
@@ -227,6 +256,145 @@ def script_severity() -> dict[str, str]:
         kelime = m.group(1).lower() if m else ""
         out[p.name.lower()] = "advisory" if kelime in ADVISORY_KELIMELER else "blocking"
     return out
+
+
+# ====================== MATCHER-KAPSAMI KATMANI (2026-08-22) ==========================
+# NİÇİN (ölçülmüş vaka — lessons-learned PATTERN #12'nin "EN ÖNEMLİ ALT-DERS"i):
+# `pre_tool_guard`a PowerShell desteği eklendi, `_KABUK_TOOLLARI = ("Bash","PowerShell")`
+# yazıldı, **29 senaryoluk test YEŞİL verdi ve PR merge edildi** — ama `settings` matcher'ı
+# `Bash|mcp__sap-adt__.*` olduğu için hook PowerShell'de **HİÇ tetiklenmedi**. Canlı A/B:
+# aynı komut Bash'te ⛔, PowerShell'de çalıştı. Yani *"kod-seviyesi koruma"* ile
+# *"korunuyor"* arasındaki fark, hiçbir testin bakmadığı yerdeydi: **matcher**.
+#
+# Hook katmanının ORPHAN dalı "hook şablona kablolu mu?" sorusunu yanıtlar (var/yok).
+# Bu katman bir ADIM İLERİ gider: **kablolu ama YANLIŞ ADRESE** kablolu mu? Bir hook
+# şablonda görünürken kodunun beklediği tool'a yönlenmiyorsa ORPHAN değildir — sessizce
+# ölüdür ve envanter onu "korunuyor" diye sayar.
+#
+# ⛔ UYDURMA YOK — BEKLENEN KÜME KODDAN TÜRETİLİR (elle liste TUTULMAZ):
+# hook kaynağı AST ile ayrıştırılır; `tool_name` değerini taşıyan değişkenle KARŞILAŞTIRILAN
+# string literalleri toplanır (modül sabitleri çözülür: tuple/set/list/dict-anahtarı).
+# Elle bakımlı bir "şu hook şunları bekler" tablosu BİLEREK yazılmadı — ölçüldü
+# (2026-08-22): elle hazırlanmış böyle bir tablo 17 hook'un **2'sini yanlış adlandırdı**
+# (`_TOOLLARI`/`_YAZMA` diye var olmayan sabitler) ve **2 hook'u tümden atladı**
+# (`itg_backstop`, `pull_before_edit`). Aynı olgu iki yerde yaşarsa biri bayatlar;
+# burada "bayat" = gate'in sessizce boş taraması.
+#
+# ⚠ SEMANTİK AÇIKÇA "ADI GEÇEN", "BEKLENEN" DEĞİL: operatör kutupluluğu güvenilir bir
+# vekil DEĞİLDİR — ölçüldü: `infra_write_guard` `arac not in _ARACLAR` (erken-çıkış
+# muhafızı ⇒ küme POZİTİF), `itg_backstop` ise `tool == "…ping"` (⇒ DIŞLAMA). Yani `in`
+# pozitif, `==` negatif olabiliyor. Bu yüzden dört operatör de (`in/==/not in/!=`)
+# toplanır ve soru şu biçimde sorulur: **"kodda adı geçen bu tool, hook'a giden bir
+# matcher'la yönleniyor mu?"** Yanıt HAYIR ise iki olasılık var, ikisi de bilinmeye değer:
+# (a) koruma ÖLÜ (asıl kusur sınıfı) · (b) dışlama ölü kod. Ne "beklenti" uydurulur ne de
+# kutupluluk tahmin edilir.
+#
+# ⚠ `startswith("mcp__sap-adt__")` gibi ÖNEK dalları ENUMERE EDİLEMEZ ⇒ kapsam dışıdır ve
+# çıktıda SAYIYLA bildirilir (sessiz atlama değil).
+_TOOL_OLAYLARI = ("PreToolUse", "PostToolUse")  # tool-dağıtımı yapan olaylar
+_TOOL_ANAHTARI = "tool_name"
+
+
+def _ast_str_kume(dugum, sabitler: dict[str, set[str]]) -> set[str]:
+    """AST düğümünden string-literal kümesi (tuple/set/list/dict-anahtarı/Name çözümü)."""
+    out: set[str] = set()
+    if isinstance(dugum, ast.Constant) and isinstance(dugum.value, str):
+        out.add(dugum.value)
+    elif isinstance(dugum, (ast.Tuple, ast.List, ast.Set)):
+        for e in dugum.elts:
+            out |= _ast_str_kume(e, sabitler)
+    elif isinstance(dugum, ast.Dict):
+        for k in dugum.keys:
+            if k is not None:
+                out |= _ast_str_kume(k, sabitler)
+    elif isinstance(dugum, ast.Name) and dugum.id in sabitler:
+        out |= sabitler[dugum.id]
+    return out
+
+
+def _tool_tasiyor_mu(dugum, toolvars: set[str]) -> bool:
+    """Karşılaştırmanın SOL tarafı tool adını taşıyor mu?"""
+    for alt in ast.walk(dugum):
+        if isinstance(alt, ast.Name) and alt.id in toolvars:
+            return True
+        if isinstance(alt, ast.Constant) and alt.value == _TOOL_ANAHTARI:
+            return True
+    return False
+
+
+def hook_tool_adlari() -> tuple[dict[str, set[str]], dict[str, list[str]], list[str]]:
+    """hook → (kodda adı geçen tool'lar, enumere-edilemez önek dalları) + ayrıştırma hataları."""
+    adlar: dict[str, set[str]] = {}
+    onekler: dict[str, list[str]] = {}
+    hatalar: list[str] = []
+    for yol in sorted(HOOKS_DIR.glob("*.py")):
+        if yol.name.startswith("_"):
+            continue
+        try:
+            agac = ast.parse(yol.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError as e:
+            # ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: ayrıştırılamayan hook sessizce "tool ayrımı yok"
+            # sayılsaydı, bozuk bir hook gate'i YEŞİLE çevirirdi.
+            hatalar.append(f"{yol.stem}: SyntaxError: {e}")
+            continue
+        sabitler: dict[str, set[str]] = {}
+        for d in agac.body:
+            if isinstance(d, ast.Assign):
+                hedefler = [t.id for t in d.targets if isinstance(t, ast.Name)]
+                deger = d.value
+            elif isinstance(d, ast.AnnAssign) and isinstance(d.target, ast.Name):
+                hedefler, deger = [d.target.id], d.value
+            else:
+                continue
+            if deger is None:
+                continue
+            k = _ast_str_kume(deger, {})
+            for h in hedefler:
+                if k:
+                    sabitler[h] = k
+        toolvars: set[str] = set()
+        for d in ast.walk(agac):
+            if isinstance(d, ast.Assign) and any(
+                    isinstance(c, ast.Constant) and c.value == _TOOL_ANAHTARI
+                    for c in ast.walk(d.value)):
+                toolvars |= {t.id for t in d.targets if isinstance(t, ast.Name)}
+        bulunan: set[str] = set()
+        onek: list[str] = []
+        for d in ast.walk(agac):
+            if isinstance(d, ast.Compare) and _tool_tasiyor_mu(d.left, toolvars):
+                for op, kar in zip(d.ops, d.comparators):
+                    if isinstance(op, (ast.In, ast.Eq, ast.NotIn, ast.NotEq)):
+                        bulunan |= _ast_str_kume(kar, sabitler)
+            if (isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute)
+                    and d.func.attr == "startswith"
+                    and _tool_tasiyor_mu(d.func.value, toolvars)):
+                for a in d.args:
+                    onek.extend(sorted(_ast_str_kume(a, sabitler)))
+        if bulunan:
+            adlar[yol.stem] = bulunan
+        if onek:
+            onekler[yol.stem] = sorted(set(onek))
+    return adlar, onekler, hatalar
+
+
+def hook_matcherlari() -> tuple[dict[str, list[str]], str]:
+    """hook → PreToolUse/PostToolUse matcher listesi (matcher YOKSA '.*' — Claude Code
+    semantiği; `ix_doctor._kablolama_kontrol` de aynı varsayımı kullanır)."""
+    out: dict[str, list[str]] = {}
+    try:
+        d = json.loads(SETTINGS_SABLON.read_text(encoding="utf-8"))
+    except Exception as e:  # noqa: BLE001
+        return {}, f"{type(e).__name__}: {e}"
+    for olay, bloklar in (d.get("hooks", {}) or {}).items():
+        if olay not in _TOOL_OLAYLARI or not isinstance(bloklar, list):
+            continue
+        for blok in bloklar:
+            m = blok.get("matcher") or ".*"
+            for h in blok.get("hooks", []) or []:
+                args = h.get("args") or []
+                if args:
+                    out.setdefault(str(args[-1]), []).append(str(m))
+    return out, ""
 
 
 def main() -> int:
@@ -275,7 +443,7 @@ def main() -> int:
 
     # ---------------------- HOOK KATMANI (2026-08-22) ----------------------
     h_mevcut = mevcut_hooklar()
-    h_kablolu, h_olcum_hatasi = kablolu_hooklar()
+    h_kablolu, h_optout, h_olcum_hatasi = kablolu_hooklar()
     h_enforces = hook_enforces()
     h_claims = parse_hook_claims()
 
@@ -285,6 +453,8 @@ def main() -> int:
     h_undeclared: list[tuple[str, str, str]] = []
     h_ok = 0
     for ad in sorted(h_mevcut):
+        if ad in h_optout:
+            continue  # C-TPL-01 muafiyeti (gerekçeli) — iki gate AYNI kümeyi okur
         if ad not in h_kablolu:
             h_orphan.append((ad, f"scripts/hooks/{ad}.py", "claude/settings.template.json"))
         elif not h_enforces.get(ad):
@@ -297,6 +467,11 @@ def main() -> int:
     print(f"\nHook-coverage: {len(h_mevcut)} hook script · kablolama kaynağı "
           f"claude/settings.template.json (C-TPL-01 okuyucusu ORTAK, kopya değil) · "
           f"checklist yol-iddiası: {len(h_claims)}.")
+    if h_optout:
+        # ⛔ GİZLİ MUAFİYET YOK: muaf hook'lar ADIYLA basılır (aksi hâlde "17 hook temiz"
+        # cümlesi, denetlenmeyen N hook'u kapsıyormuş gibi okunur).
+        print(f"  OPT_OUT (C-TPL-01 muafiyeti — kablolama ARANMAZ): "
+              + " · ".join(sorted(h_optout)))
     if h_olcum_hatasi:
         # ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ (ve ≠ hepsi ORPHAN). Sessiz geçmek YASAK.
         print(f"  [ÖLÇÜLEMEDİ] settings.template.json okunamadı → ORPHAN hesaplanamadı: "
@@ -307,9 +482,49 @@ def main() -> int:
     print(f"Özet (hook): OK={h_ok} · MISSING={len(h_missing)} · ORPHAN={len(h_orphan)}"
           f" · UNDECLARED={len(h_undeclared)}")
 
+    # -------------------- MATCHER-KAPSAMI DALI (2026-08-22) ---------------------
+    m_adlar, m_onekler, m_parse_hatalari = hook_tool_adlari()
+    m_matcherlar, m_sablon_hatasi = hook_matcherlari()
+    m_delik: list[tuple[str, str, str]] = []
+    m_denetlenen = 0
+    for ad in sorted(m_adlar):
+        if ad in h_optout:
+            continue  # kablolanmaması MEŞRU → matcher aramak anlamsız
+        ms = m_matcherlar.get(ad, [])
+        if not ms:
+            # Hook ORPHAN dalında zaten yakalanır; burada ÇİFT bulgu üretme.
+            continue
+        m_denetlenen += 1
+        for tool in sorted(m_adlar[ad]):
+            try:
+                if not any(re.fullmatch(m, tool) for m in ms):
+                    m_delik.append((ad, tool, " · ".join(ms)))
+            except re.error as e:
+                m_parse_hatalari.append(f"{ad}: geçersiz matcher regex ({e})")
+
+    print(f"\nMatcher-kapsamı: {m_denetlenen} hook denetlendi (kodda tool adı geçen) · "
+          f"{len(h_mevcut) - m_denetlenen - len(h_optout)} hook tool ayrımı YAPMIYOR "
+          f"(SessionStart/PreCompact/UserPromptSubmit vb. — kapsam dışı, uydurulmaz).")
+    if m_onekler:
+        # ⛔ SESSİZ ATLAMA YOK: önek dalları ENUMERE EDİLEMEZ, sayıyla bildirilir.
+        print("  ENUMERE EDİLEMEZ önek dalı (kapsam dışı): "
+              + " · ".join(f"{a}→{','.join(v)}" for a, v in sorted(m_onekler.items())))
+    if m_sablon_hatasi:
+        print(f"  [ÖLÇÜLEMEDİ] matcher okunamadı: {m_sablon_hatasi}", file=sys.stderr)
+    for h in m_parse_hatalari:
+        print(f"  [ÖLÇÜLEMEDİ] hook ayrıştırılamadı: {h}", file=sys.stderr)
+    if m_delik:
+        print(f"\n[MATCHER DELİK — kod bu tool'u adıyla işliyor ama matcher YÖNLENDİRMİYOR] "
+              f"({len(m_delik)})")
+        for ad, tool, ms in m_delik:
+            print(f"  scripts/hooks/{ad}.py: {tool} → matcher: {ms}")
+    print(f"Özet (matcher): DENETLENEN={m_denetlenen} · DELİK={len(m_delik)} · "
+          f"ÖLÇÜLEMEDİ={len(m_parse_hatalari) + (1 if m_sablon_hatasi else 0)}")
+
     total = (len(missing) + len(orphan) + len(undeclared)
              + len(h_missing) + len(h_orphan) + len(h_undeclared)
-             + (1 if h_olcum_hatasi else 0))
+             + (1 if h_olcum_hatasi else 0)
+             + len(m_delik) + len(m_parse_hatalari) + (1 if m_sablon_hatasi else 0))
     if total:
         # HARD (ADR 0019 Gatekeeper TERFİ 2026-06-18): warn-first shakeout temiz geçti
         # (OK=49/0/0/0) → exact-logic detektör (sezgisel FP yok) default-hard'a terfi etti.
@@ -317,11 +532,13 @@ def main() -> int:
         print(f"\n{total} coverage bulgusu — BLOCKER (kural↔gate kopuk). "
               f"MISSING=sahte-WIRED (script yok/ad yanlış) · ORPHAN=run_all/run_review'e wire · "
               f"UNDECLARED=gate'e `# ENFORCES:<id>` ekle. "
-              f"HOOK ORPHAN=claude/settings.template.json'a kabla (kod ≠ kablolama).",
+              f"HOOK ORPHAN=claude/settings.template.json'a kabla (kod ≠ kablolama) · "
+              f"MATCHER DELİK=şablondaki matcher'a o tool'u ekle (kablolu ama YANLIŞ ADRESTE).",
               file=sys.stderr)
         return 1
     print("\n[OK] tüm auto-gate iddiaları: dosya var + WIRED + ENFORCES-beyanlı.")
     print(f"[OK] {len(h_mevcut)} hook: kablolu + ENFORCES-beyanlı.")
+    print(f"[OK] {m_denetlenen} hook: kodda adı geçen her tool matcher'la yönleniyor.")
     return 0
 
 

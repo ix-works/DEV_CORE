@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# ENFORCES: C-TPL-01  (ADR 0019 coverage binding)
 """VALIDATOR — `claude/settings.template.json` hook envanteriyle senkron mu? (C-TPL-01)
 
 NEDEN (2026-07-10 template provası):
@@ -19,7 +20,10 @@ Ayrıca ŞEKİL kontrolü: `hooks` nesnesinin doğrudan içine yazılan bir anah
 tarafından **olay adı** sanılır. 2026-07-10'da `_comment_InstructionsLoaded` böyle konuldu.
 Yorumlar üst seviyede ya da bir hook-bloğunun `_comment` alanında durur.
 
-ENFORCES: C-TPL-01
+Kural: C-TPL-01 — makine-okunur beyan DOSYA BAŞINDADIR (`# ENFORCES:` satırı).
+⛔ Bu satır bilerek çıplaktır: `# ENFORCES:` yazımı yalnız gerçek beyan satırında
+durur (bir markörü TARİF eden metin, o markörü BEYAN etmiş sayılamaz — coverage
+gate'in satır-başı çapası, `check_rule_gate_coverage.py::ENFORCES_RE`).
 Onarım: `core/claude/settings.template.json`'a hook'u kabla (ya da OPT_OUT'a gerekçeli ekle).
 """
 from __future__ import annotations

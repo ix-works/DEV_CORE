@@ -7,6 +7,7 @@ kullaniciya dogrudan (Windows MessageBox + log) haber veren bir daemon'i garanti
 - Session basina TEK daemon (heartbeat dosyasi ile idempotent — os.kill footgun'u YOK).
 - Windows'ta DETACHED_PROCESS ile konsola bagimsiz baslatilir.
 - additionalContext ile lidere de tek-satir bilgi enjekte eder (ilk spawn).
+- UC nudge dali: BRIFING-LINT · PRIOR-ART/KB-01 · AGENT-TYPE TUZAGI (hepsi exit 0).
 """
 import sys, json, os, time, subprocess, re
 
@@ -182,12 +183,76 @@ def _prior_art_nudge(data):
                 "DEGILDIR: KB-01 aramasini ELLE yap." % (type(e).__name__, e))
 
 
+# --- AGENT-TYPE TUZAGI ekseni (2026-08-22, N1) -------------------------------
+# ⛔ OLCULMUS VAKA (3 kez tekrarladi, her seferinde bir ajan turu YANDI): bir alt-ajan
+# `subagent_type="infra-expert"` AMA `name="infra-kuyruk-2208"` ile spawn edilince
+# harness'in yazma tarafina giden payload'da `agent_type` VERILEN ADA esitlenir.
+# `infra_write_guard` muafiyeti (`MUAF_AJANLAR`) `agent_type`'a bakar => muafiyet DUSER
+# ve ajan HICBIR infra dosyasina yazamaz; kusur ajanda degil SPAWN CAGRISINDADIR.
+#
+# ⛔ NEDEN GUARD'A DOKUNULMADI (M1 ELENDI, olcumle): yazma-tarafi payload'inda yalniz
+# `agent_type` + `agent_id` var; ajan TANIMI (subagent_type) oraya HIC ulasmiyor =>
+# guard kimligi "tipten" cozemez. Kusuru gorebilen TEK yer spawn anidir, cunku
+# `subagent_type` ve `name` YALNIZ BURADA yan yana durur.
+#
+# ⛔ SIDDET = NUDGE (bloklamaz), ADR 0019 merdiveni: eylem GERI ALINABILIR (ajan yeniden
+# spawn edilir) => runtime blok mesru degil. Kardes iki dal gibi not basar, exit 0.
+#
+# ⛔ MUAF KUME TEK KAYNAKTAN: `infra_write_guard.MUAF_AJANLAR` IMPORT edilir. Kopya liste
+# tutmak bu evde olculmus curume sinifidir (ayni olgu iki yerde yasarsa biri bayatlar) --
+# ustelik burada bayat kopya, muafiyeti OLMAYAN bir role uyari basmak demektir.
+def _muaf_ajanlar():
+    """infra_write_guard.MUAF_AJANLAR -- TEK KAYNAK.
+
+    ⛔ sys.path ELLE kurulur: bu hook canlida `hook_shim.py` uzerinden `runpy` ile
+    kosar ve o yolda `sys.path[0]` BOS olabilir => kardes-import dogrudan cagride
+    YESIL, canlida OLU olurdu (bu evde olculmus kablolama sinifi). Dizin core'un
+    KENDI varligidir => `__file__` turevi CORE-03 geregi MESRUDUR.
+    """
+    d = os.path.dirname(os.path.abspath(__file__))
+    if d not in sys.path:
+        sys.path.insert(0, d)
+    from infra_write_guard import MUAF_AJANLAR  # type: ignore
+    return set(MUAF_AJANLAR)
+
+
+def _agent_type_tuzagi(data):
+    """spawn'da `name` verilmis + rol MUAF ise: muafiyetin dusecegini SPAWN ANINDA soyle."""
+    ti = data.get("tool_input")
+    if not isinstance(ti, dict):
+        return None
+    st, ad = ti.get("subagent_type"), ti.get("name")
+    if not isinstance(st, str) or not isinstance(ad, str):
+        return None
+    st, ad = st.strip(), ad.strip()
+    # Ad YOKSA tuzak da YOK (dogru kullanim) · ad == tip ise `agent_type` DEGISMEZ.
+    if not st or not ad or ad == st:
+        return None
+    try:
+        muaf = _muaf_ajanlar()
+    except Exception as e:
+        # ⛔ FAIL-OPEN YOK: kume okunamadiysa "muaf degil" VARSAYILMAZ (o varsayim tam da
+        # kacirdigimiz vakayi sessizce gecirirdi). KOSMADI denir, exit 0 korunur.
+        return ("[AGENT-TYPE] KOSMADI -- muaf ajan kumesi okunamadi (%s: %s). Bu SESSIZ "
+                "GECIS DEGILDIR: `name` verdiysen infra_write_guard muafiyetinin dustugunu "
+                "ELLE dogrula." % (type(e).__name__, e))
+    if st not in muaf:
+        return None  # muafiyeti olmayan rolde kaybedilecek muafiyet de yok
+    return ("[AGENT-TYPE TUZAGI] Spawn'da `name` VERILDI (%r) ve `subagent_type` (%r) ile "
+            "AYNI DEGIL => harness `agent_type`'i VERDIGIN ADA esitler. "
+            "`infra_write_guard` muafiyeti `subagent_type`'a DEGIL `agent_type`'a bakar "
+            "(MUAF_AJANLAR) => MUAFIYET DUSER ve ajan hicbir infra dosyasina YAZAMAZ "
+            "(tests/** + governance/** acik kalir). Olculdu: bu 3 kez tekrarladi, her "
+            "seferinde bir ajan turu yandi. ONARIM: `name` alanini KALDIR -- "
+            "`subagent_type` zaten yeterli. (Nudge; bloklamaz.)" % (ad, st))
+
+
 def _ek_notlar(data):
     """brifing-lint + prior-art notlarini birlestirir. DAEMON'DAN BAGIMSIZ calisir:
     daemon/bash bulunamasa bile brifing kontrolleri kosar (eski davraniste bu yollar
     lint'e ulasmadan return ediyordu = sessiz atlama)."""
     parcalar = []
-    for _f in (_brifing_lint, _prior_art_nudge):
+    for _f in (_brifing_lint, _prior_art_nudge, _agent_type_tuzagi):
         try:
             _n = _f(data)
         except Exception as e:  # kontrolun kendisi hook'u dusuremez
