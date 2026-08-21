@@ -250,6 +250,13 @@ OZEL_TESTLER = [
     ("recall_index_ozetsiz",
      "recall-index: ozetsiz satirlar frontmatter `description`ine duser (90->163) + "
      "satir-atlamali kirlenme kapandi + UYDURMA yasagi (kaynak yoksa kayit yok)"),
+    # 2026-08-22: ADR 0019 uc-kademesi YALNIZ validator'lari sayiyordu; 17 hook'un
+    # 0'inda `# ENFORCES:` beyani vardi ve "kablolanmamis hook" hic olculmuyordu.
+    # ⛔ ORPHAN sinifi olculmus bir dersin gate'idir (pre_tool_guard PowerShell vakasi:
+    # 29 senaryo yesil, matcher yanlis oldugu icin hook HIC tetiklenmiyordu).
+    ("hook_gate_coverage",
+     "hook katmani coverage (MISSING/ORPHAN/UNDECLARED) + `# ENFORCES:` satir-basi "
+     "capasi (duzyazidaki anis BEYAN sayilmaz) + OLCULEMEDI != TEMIZ"),
 ]
 
 
@@ -327,8 +334,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/validators/check_rap_byassoc_keys_only.py",
      ("O:validator_kapsam_paydasi", "O:byassoc_advisory"),
      "K1 ortak payda sözleşmesi + advisory/opt-in exit sözleşmesi bu dosyada kablolu"),
-    ("scripts/validators/check_rule_gate_coverage.py", ("O:byassoc_advisory",),
-     "GATE-SEVERITY okuması + `N iddia (B bloklayıcı · A advisory)` özeti burada"),
+    ("scripts/validators/check_rule_gate_coverage.py",
+     ("O:byassoc_advisory", "O:hook_gate_coverage"),
+     "GATE-SEVERITY okuması + `N iddia (B bloklayıcı · A advisory)` özeti burada; "
+     "hook katmanı (MISSING/ORPHAN/UNDECLARED) + `# ENFORCES:` çapası da bu dosyada"),
+    ("scripts/validators/check_settings_template_sync.py", ("O:hook_gate_coverage",),
+     "kablolama okuyucusu (`_kablolu_hooklar`) buradan IMPORT ediliyor — imza değişirse "
+     "coverage-gate'in hook ORPHAN dalı sessizce ölür (kopya YOK, tek kaynak)"),
     ("scripts/validators/check_bdef_backtick.py", ("V:check_bdef_backtick", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_cds_srvd_comment_syntax.py",
      ("V:check_cds_srvd_comment_syntax", "O:validator_kapsam_paydasi",), "G1 çifti"),
@@ -450,13 +462,16 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:intake_modul_carpismasi", "O:negatif_test_harness"),
      "modül-ipucu regex'i ↔ metodoloji sözlüğü çarpışması (POZİTİF KONTROL zorunlu: "
      "daraltma gerçek PP/QM talebini hâlâ yakalamalı) + parse-fail sözleşmesi"),
-    ("scripts/hooks/*.py", ("O:negatif_test_harness",),
-     "16 hook'un parse-fail sözleşmesi tek korpusta ölçülür"),
+    ("scripts/hooks/*.py", ("O:negatif_test_harness", "O:hook_gate_coverage"),
+     "17 hook'un parse-fail sözleşmesi tek korpusta ölçülür + her hook `# ENFORCES:` "
+     "beyanı taşımalı ve settings.template.json'a kablolu olmalı (ADR 0019 hook katmanı)"),
     ("scripts/hooks/infra_write_guard.py",
      ("O:infra_write_guard", "O:negatif_test_harness"),
      "kimlik ayrımı + korunan yüzey listesi + fail-closed degrade; parse-fail sözleşmesi"),
-    ("claude/settings.template.json", ("O:infra_write_guard",),
-     "kablolama korpusun K6 vektöründe ölçülür (kod ≠ kablolama)"),
+    ("claude/settings.template.json",
+     ("O:infra_write_guard", "O:hook_gate_coverage"),
+     "kablolama korpusun K6 vektöründe ölçülür (kod ≠ kablolama); ayrıca bu dosya "
+     "coverage-gate'in hook ORPHAN dalının TEK kablolama kaynağıdır"),
 
     # ── overlay / proje-kurulum yüzeyi ──────────────────────────────────────
     ("scripts/utils/claude_overlay.py",

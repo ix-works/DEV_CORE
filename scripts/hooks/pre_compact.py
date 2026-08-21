@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: C-CMPCT-01  (ADR 0019 coverage binding)
 """PreCompact — context compaction ÖNCESİ SESSION_NOTES/memory flush hatırlatması.
 
 Uzun oturumlarda compaction sırasında "güncel iş durumu" kaybolabilir. Bu hook,

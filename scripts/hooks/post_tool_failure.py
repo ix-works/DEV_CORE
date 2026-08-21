@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: ADR-0006  (ADR 0019 coverage binding)
 """PostToolUse (matcher: mcp__sap-adt__* **+ Bash**) — başarısız SAP işleminde PATİNAJ KESİCİ.
 
 ⚠ 2026-08-14 — YÜZEY GENİŞLETİLDİ (ölçülmüş boşluk): hook yalnız `mcp__sap-adt__.*`

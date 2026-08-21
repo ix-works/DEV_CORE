@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# ENFORCES: C-RECALL-01  (ADR 0019 coverage binding)
 """recall_inject.py — U1 JIT-recall enjeksiyonu (radar 2026-08-01; ADOPT-1, kullanıcı onaylı).
 
 OLAY: UserPromptSubmit. NE YAPAR: prompt'u .tmp/recall-index.json'a karşı skorlar;

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: C-ITG-01  (ADR 0019 coverage binding)
 """PreToolUse (SAP MCP tool'ları) — ITG DETERMİNİSTİK backstop.
 
 NEDEN (2026-07-10 intake_triage redizaynı): ITG keşfi eskiden yalnız `intake_triage.py`

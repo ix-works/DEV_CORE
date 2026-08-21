@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: ADR-0019  (ADR 0019 coverage binding)
 """PreToolUse guard — çok-katman, 9 kural (2026-07-10 sadeleştirmesi).
 
 MERDİVEN İLKESİ (ADR 0019 revizyonu): runtime guard YALNIZ

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# ENFORCES: D31  (ADR 0019 coverage binding)
 """ConfigChange hook — SEANS-İÇİ ayar değişikliği nöbetçisi (D31, §11.6; F2'nin runtime bacağı).
 
 Neden: hooks/settings CANLI reload olur ve proje hook'ları ONAYSIZ çalışır (doküman-teyitli

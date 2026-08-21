@@ -140,6 +140,43 @@ def lessons_kayitlari(lessons: Path) -> list[dict]:
     return out
 
 
+_KOD_CITI = re.compile(r"^(?:```|~~~)")
+
+
+def _ilk_duzyazi(metin: str, baslangic: int) -> str:
+    """H1'den SONRAKI ilk anlamli duzyazi satiri (geri-dusus kaynagi).
+
+    ⭐ NEDEN VAR (2026-08-22, olculdu): `howto_kayitlari` ozeti YALNIZ `**Tetik:**` /
+    `**Ne:**` / `**Problem:**` kaliplarindan cikariyordu; kalip tutmazsa `oz` SESSIZCE
+    bos kaliyordu. Canli indekste 13 `how:` kaydinin **11'i** bos `oz` ile giriyordu
+    (204 kaydin TUM bos-`oz`'u bu daldaydi) -> `anahtar` vektoru yalnizca BASLIK
+    token'lariyla besleniyor, `tokenle(oz)*2` katkisi SIFIR oluyordu. Yani kayit
+    "vardi" ama skorlamaya baslik disinda hicbir sey katmiyordu (sessiz kayip;
+    kardes dal `memory_kayitlari` geri-dususunu 2026-08-21'de zaten kazanmisti).
+
+    ⛔ UYDURMA YOK: kaynak metinde anlamli duzyazi yoksa "" doner (cagiran eskisi gibi
+    bos birakir). Baslik `oz` diye KOPYALANMAZ -- o, kaynagi olmayan bir ozet uretmek olurdu.
+    Kardes desen: `lessons_kayitlari` de H2/H3'ten sonraki ilk satiri ayni mantikla alir.
+    """
+    kod = False
+    for satir in metin[baslangic:].splitlines():
+        s = satir.strip()
+        if _KOD_CITI.match(s):
+            kod = not kod                      # kod bloklari icerik degil
+            continue
+        if kod or not s:
+            continue
+        if s.startswith("#") or s.startswith("|"):
+            continue                           # alt-baslik / tablo satiri
+        if set(s) <= set("-=*_ "):
+            continue                           # yatay cizgi (`---`, `***`)
+        s = re.sub(r"^\s*[-*·>]+\s*", "", s)   # liste/alinti isareti
+        s = re.sub(r"[*_`>]", "", s).strip()
+        if len(s) >= 15:                       # tek kelimelik artik satirlari ele
+            return s
+    return ""
+
+
 def howto_kayitlari(playbook: Path) -> list[dict]:
     """howto-*.md dosyalarindan H1 baslik + ilk anlamli satir (radar-adopt 2026-08-01 eki)."""
     out = []
@@ -151,6 +188,10 @@ def howto_kayitlari(playbook: Path) -> list[dict]:
         baslik = m.group(1).strip()[:120]
         m2 = re.search(r"^>?\s*\*\*Tetik:\*\*\s*(.+)$", t, re.M) or              re.search(r"^>?\s*\*\*(?:Ne|Problem[^:]*):\*\*\s*(.+)$", t, re.M)
         oz = (m2.group(1) if m2 else "")[:200]
+        if not oz:
+            # GERI DUSUS — kalip tutmadi. Kardes dal `memory_kayitlari` ayni sekilde
+            # `description:`e duser; burada kaynak H1-sonrasi ilk duzyazidir.
+            oz = _ilk_duzyazi(t, m.end())[:200]
         out.append({"id": f"how:{f.name}", "kaynak": f"core/playbook/{f.name}",
                     "baslik": baslik, "oz": oz,
                     "anahtar": tokenle(baslik) * 3 + tokenle(oz) * 2})

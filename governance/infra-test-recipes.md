@@ -854,6 +854,18 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   Kaldırma kaydı: `governance/removed-controls.md` (B8 bölümündeki ders bloğu da oku).
   ⛔ Ekseni gevşetmek (ör. `yazma` şartını kaldırmak) korpusta **M3 mutasyonudur** ve
   B3 (yalnız-okuma FP çapası) onu kırar.
+- ⭐⭐ **`ŞABLON` ekseni GERÇEK POZİTİFTİR — oranına bakıp GEVŞETME (ölçüm 2026-08-21).**
+  Tüm korpusta ateşleme **%55,5** görünür ve bu, yukarıdaki bandın (**<%13,9**) çok
+  üstünde olduğu için *"gürültülü eksen, gevşetelim"* diye okunmaya AÇIKTIR. **Yanlış
+  okumadır.** Kontrol grubu: aynı gün öğleden sonra R2 şablonu **tam doldurulan 3 brifin
+  3'ünde de ateşleme %0,0**. Yani eksen gürültü üretmiyor — **başlıksız brifi doğru
+  işaretliyor**; yüksek oran korpusun çoğunun şablonsuz yazılmış olmasından geliyor,
+  eksenin isabetsizliğinden değil.
+  📌 Kabul ölçütü **üç ayaklıdır** (ateşleme · precision · recall); bir eksen yalnız
+  ateşleme oranına bakılarak ne kabul edilir ne reddedilir. Yukarıdaki iki ⛔ satırı
+  *düşük oranın* yanılttığı vakadır; bu satır *yüksek oranın* yanıltabileceği ters
+  vakadır. **İkisinin dersi aynı: oran tek başına karar vermez.**
+  ⛔ Bu ekseni gevşetmek, 2026-08-21'de geri aldığımız hatanın **tersten tekrarı** olur.
 - ⚠⚠ **`behavior_manifest`te İKİ GEVŞETME var — dokunmadan önce POZİTİF KONTROLLERİ oku:**
   (a) `worktrees` prune'da → FP çapası **S1**, pozitif kontrol **S2** (ana ağaçtaki gerçek
       nested `CLAUDE.md` hâlâ taranır).

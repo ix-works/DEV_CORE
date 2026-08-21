@@ -117,6 +117,14 @@ def payload(prompt: str, sid: str = "pa-test") -> dict:
 
 
 def main() -> int:
+    # BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir
+    # yazim hatasi eskiden HIC mutasyon kurmadan TAM PUAN uretiyordu (exit 0).
+    gecerli = {"--mutasyon", "--mutasyon-failopen"}
+    for a in sys.argv[1:]:
+        if a.startswith("--mutasyon") and a not in gecerli:
+            raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {a} -> gecerli: "
+                             + ", ".join(sorted(gecerli)))
+
     mutasyon = "--mutasyon" in sys.argv
     mut_failopen = "--mutasyon-failopen" in sys.argv
     hook = HOOK

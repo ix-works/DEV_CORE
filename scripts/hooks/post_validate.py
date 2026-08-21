@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: ADR-0006  (ADR 0019 coverage binding)
 """PostToolUse hook — governance/standards/validator/spec/.rules.md/populate_*.py
 duzenlemesinden SONRA run_all_validators.py --quick'i otomatik kosturur.
 

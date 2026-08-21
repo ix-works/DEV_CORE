@@ -60,6 +60,14 @@ SABLON_AYAR = REPO / "claude" / "settings.template.json"
 SIM_SABLON = REPO / "claude" / "hook_shim.template.py"
 NEGATIF_KORPUS = REPO / "tests" / "fixtures" / "negatif_test_harness" / "run.py"
 
+# ⛔ BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir yazim
+# hatasi eskiden HIC mutasyon kurmadan TAM PUAN uretiyordu (exit 0). Kardes: atc_p1_sonuc.
+_GECERLI_KIP = {"--mutasyon-blok", "--mutasyon-cokme"}
+for _a in sys.argv[1:]:
+    if _a.startswith("--mutasyon") and _a not in _GECERLI_KIP:
+        raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {_a} — gecerli: "
+                         + ", ".join(sorted(_GECERLI_KIP)))
+
 MUT_BLOK = "--mutasyon-blok" in sys.argv
 MUT_COKME = "--mutasyon-cokme" in sys.argv
 
