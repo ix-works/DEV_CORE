@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# ENFORCES: C-LOAD-01  (ADR 0019 coverage binding)
 """InstructionsLoaded hook — hangi talimat dosyası, NE ZAMAN, NEDEN yüklendi?
 
 NEDEN: `CLAUDE.md` / `.claude/rules/*.md` yüklemesi **sessizdir**. Bir kural hiç yüklenmese

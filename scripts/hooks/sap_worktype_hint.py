@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: ADR-0006  (ADR 0019 coverage binding)
 """PreToolUse (SAP-yazma MCP tool'ları) — DETERMİNİSTİK worktype-checklist hatırlatması.
 
 NEDEN (2026-07-10 skill-injection redizaynı): eski `skill_injector` "bu SAP işi mi + hangi

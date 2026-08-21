@@ -55,6 +55,46 @@
 **Hook OLMAYAN dosyalar** (event'e bağlı değil, envanterde yok sayılmaz): `watchdog_daemon.sh`
 — `watchdog_launch` tarafından spawn edilen yardımcı · `README.md` (bu dosya).
 
+---
+
+## Hook ↔ KURAL BAĞLAMASI (`# ENFORCES:` kütüğü — 2026-08-22)
+
+Her hook 1. satırında `# ENFORCES: <kural-id>` beyan eder; `check_rule_gate_coverage`
+bunu **hook katmanında** denetler (`UNDECLARED` bulgusu). ⛔ Beyan `#` ile başlamalı ve
+satır başında olmalı — düzyazı içine gömülü bir anış **beyan sayılmaz** (çapa 2026-08-22'de
+eklendi; kardeş kural `GATE-SEVERITY` için 2026-08-20'de konmuştu).
+
+**Kural-id'si ZATEN VAR olan 9 hook** (beyan yalnız kayda geçirildi):
+
+| Hook | ENFORCES | Kural nerede tanımlı |
+|---|---|---|
+| `config_change_guard` | `D31` | bu README (yukarıdaki envanter satırı) + F2 davranış-yüzeyi zinciri |
+| `intake_triage` | `ADR-0022` | `governance/decisions/0022-*` (ITG) |
+| `itg_backstop` | `C-ITG-01` | `playbook/checklists/itg-s2-signoff.md` |
+| `post_validate` · `post_tool_failure` · `sap_worktype_hint` | `ADR-0006` | `governance/decisions/0006-*` (reviewer/gate disiplini) |
+| `pre_tool_guard` | `ADR-0019` | `governance/decisions/0019-*` (merdiven ilkesi) |
+| `pull_before_edit` | `ADR-0016` | `governance/decisions/0016-*` (canlı=otorite) |
+| `session_start` | `ADR-0020` | `governance/decisions/0020-*` (loader/çekirdek) |
+
+**2026-08-22'de AÇILAN 7 yeni kural-id** (kullanıcı onaylı). ⚠ Bunlar o güne kadar
+**yazısız** kurallardı: hook davranışı vardı, adı yoktu. Beyan onlara ad verdi; tanımları
+burada yaşar — başka yerde aranmasın:
+
+| Kural-id | Hook | Kuralın kendisi (tek cümle) |
+|---|---|---|
+| `C-INFRA-01` | `infra_write_guard` | Paylaşılan infra yüzeyine (hook · validator · gate · pre-commit · MCP script · paylaşılan `scripts/**.py`) yazım — yaratma da değiştirme de — kullanıcıdan **AYRI ve AÇIK** onay ister; onay başka bir onayın içine gömülemez. *(kullanıcı talimatı 2026-08-19)* |
+| `C-LOAD-01` | `instructions_loaded_log` | Talimat dosyalarının yüklenmesi **sessiz olamaz**: hangi dosya ne zaman neden yüklendi kayda geçer. *(2026-07-10: `AGENTS.md`'nin 356 satırı aylarca ölüydü ve ekran teyidi her oturum "yüklendi" diyordu)* |
+| `C-CMPCT-01` | `pre_compact` | Context compaction ÖNCESİ aktif işin durumu kalıcı artefakta (SESSION_NOTES/memory) düşürülür — compaction "güncel durum"u yutamaz. |
+| `C-RECALL-01` | `recall_inject` | İlgili geçmiş ders, aranmasını beklemeden **prompt anında** enjekte edilir. *(sınıf: "cevap yazılıydı, okunmadı")* |
+| `C-FLOW-01` | `skill_injector` | Tarayıcı/UI doğrulaması ve yapısal kod araması, elle hatırlanmaya bırakılmaz; akış nudge'ı ile önerilir. |
+| `C-RADAR-01` | `tooling_radar_check` | `governance/tooling-radar.md` `cadence-days`'i geçerse açılışta bayatlık uyarısı doğar; bayat değilse **sessiz**. |
+| `C-WATCH-01` | `watchdog_launch` · `watchdog_stop` | Arka-plan ajan koşarken sessiz stall, Claude/lider'e **bağımlı olmadan** kullanıcıya bildirilir; seans bitince daemon temiz kapanır. *(canlılık ≠ ilerleme)* |
+
+⚠ **Bu tablo bir ENVANTERDİR, gate DEĞİL.** `check_rule_gate_coverage` bugün yalnız
+*"beyan VAR mı"* diye bakar, *"beyan edilen id gerçek bir kurala bağlı mı"* diye **bakmaz**.
+Yani bu tablo bayatlarsa gate sessiz kalır. Bağlamayı gate'e taşımak açık bir kuyruk
+kalemidir (`infra-findings` 2026-08-22).
+
 ¹ Seans marker'ı `session_id`'siz yazılır → tazelik/seans zinciri (pull_before_edit, intake_triage) sessizce etkilenir.
 ² **Bilinçli istisna:** stdin yalnızca boşaltılır, çıktı statiktir → parse-fail'de kaybolan karar yok. Fixture'ın **iç kontrol grubu** (not BASMAMALI).
 ³ Seans kimliği `nosid`/boşa düşer → watchdog yanlış anahtarla açılır / durdurulacak daemon bulunamaz.

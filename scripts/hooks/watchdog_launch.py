@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: C-WATCH-01  (ADR 0019 coverage binding)
 """PreToolUse(Agent) hook — arka-plan agent spawn edilince detached watchdog daemon'i baslatir.
 
 Amac: SAP/VPN/MCP kopmasindan dogan sessiz stall'i, Claude/lider'e BAGIMLI OLMADAN,

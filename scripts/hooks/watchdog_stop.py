@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: C-WATCH-01  (ADR 0019 coverage binding)
 """SessionEnd hook — bu session'in detached watchdog daemon'ini durdurur (stop-sentinel).
 
 Daemon her <=10s stop-sentinel kontrol eder -> hizli ve temiz cikar (post-session

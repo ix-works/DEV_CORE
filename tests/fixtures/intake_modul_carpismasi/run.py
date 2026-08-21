@@ -22,6 +22,8 @@ KOSUM:  python tests/fixtures/intake_modul_carpismasi/run.py
         ... --mutasyon-pp-geri     (PP: cok-kelimeli capa -> tek-kelimelik `\\brecete`)
         ... --mutasyon-qm-geri     (QM: cok-kelimeli capa -> tek-kelimelik `\\bkusur`)
         ... --mutasyon-asiri-dar   (SINIR: yeni capalar TUMDEN kaldirilir = kapsam kaybi)
+        ... --mutasyon-bom-geri    (BOM: cok-kelimeli capa -> ciplak `\\bBOM\\b`)
+        ... --mutasyon-kk-geri     (QM: cok-kelimeli capa -> ciplak `\\bkalite\\s+kontrol`)
 Cikis:  0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (mutasyon capasi tutmadi)
 
 ⚠ UC MUTASYON, HICBIRI DIGERINI KAPSAMAZ: ikisi FP-dususunu, ucuncusu POZITIF KONTROLU
@@ -61,6 +63,18 @@ QM_YENI = (r'        r"\bkalite\s+kusur|\bkusur\s+(?:bildirim|kod|oran)|'
            r'\b[üu]r[üu]n\s+kusur|\bmalzeme\s+kusur|"' + "\n"
            r'        r"\bdefect\s+code|"')
 
+# --- 2026-08-22 IKINCI DALGA: `\bBOM\b` + `\bkalite\s+kontrol` daraltmasi -----
+# ⚠ NEDEN AYRI CAPALAR (ve neden ustteki ikisi YETMEZ): 21.08 turu `reçete`/`kusur`
+# kancalarini daraltti ama PP/QM'de KALAN atesLEMELERIN cogunlugu baska iki kelimeden
+# geliyordu. Fix ESKI daraltmayi KORUYUP yenisini EKLEDIGI icin `--mutasyon-pp-geri` /
+# `--mutasyon-qm-geri` bu yeni davranisi HIC sinamaz (sinif: "iki degismez -> iki
+# mutasyon"). Bu yuzden yeni kancalarin KENDI mutasyonlari var.
+BOM_YENI = (r'        r"\b[üu]retim\s+BOM|\bBOM\s+(?:patlat|bile[şs]en|kalem|listesi|'
+            r'a[ğg]ac|yap[ıi]s)|"' + "\n"
+            r'        r"\bbill\s+of\s+material|\bCS0\d|\bSTPO\b|\bSTKO\b|"')
+KK_YENI = (r'        r"\bkalite\s+kontrol\s+(?:lot|plan|karar|sonu[çc]|noktas|'
+           r'[öo]l[çc][üu]m|karakteristi)|"')
+
 MUTLAR = {
     # fix'in SOKUMU: tek-kelimelik kancaya geri don -> FP vektorleri dusmeli
     "--mutasyon-pp-geri": (PP_YENI, r'        r"\breçete|"'),
@@ -71,6 +85,9 @@ MUTLAR = {
     # "asiri-genis" olur (olcum tersine doner). Kendi kosucusunu okumayan mutasyon
     # olcmez -- bu satir o hatanin kalici kaydidir.
     "--mutasyon-asiri-dar": (PP_YENI, r'        r"ZZZ_ASLA_ESLESMEZ_MUT|"'),
+    # 2026-08-22 dalgasinin fix-SOKUMLERI (yeni kancalar tek-kelimelige geri doner)
+    "--mutasyon-bom-geri": (BOM_YENI, r'        r"\bBOM\b|"'),
+    "--mutasyon-kk-geri": (KK_YENI, r'        r"\bkalite\s+kontrol|"'),
 }
 
 
@@ -90,6 +107,14 @@ def kos(hook: Path, proje: Path, prompt: str):
 
 
 def main() -> int:
+    # BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir
+    # yazim hatasi `secili` bos biraktigi icin HIC mutasyon kurmadan TAM PUAN uretiyordu
+    # (exit 0) -- yani "mutasyon yakalandi" sanilan sonuc aslinda mutasyonsuz kosumdu.
+    for a in sys.argv[1:]:
+        if a.startswith("--mutasyon") and a not in MUTLAR:
+            raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {a} -> gecerli: "
+                             + ", ".join(sorted(MUTLAR)))
+
     secili = [a for a in sys.argv[1:] if a in MUTLAR]
     hook = HOOK
     mutant = None
@@ -102,10 +127,15 @@ def main() -> int:
             return 2
         yamali = kaynak.replace(eski, yeni, 1)
         if secili[0] == "--mutasyon-asiri-dar":
-            if QM_YENI not in yamali:
-                print("[DOGRULANAMADI] asiri-dar mutasyonunun QM ayagi tutmadi.")
-                return 2
-            yamali = yamali.replace(QM_YENI, r'        r"ZZZ_ASLA_ESLESMEZ_MUT|"', 1)
+            # SINIR: HER dalganin yeni capalari TUMDEN kaldirilir -> B* pozitif kontrol
+            # vektorleri dusmeli. 2026-08-22'de BOM/kalite-kontrol ayaklari EKLENDI:
+            # eklenmeseydi B9-B12 hicbir mutasyonda dusmezdi = "kapsam korunuyor" iddiasi
+            # KANITSIZ kalirdi (olculmus sinif: capasiz pozitif kontrol trivial-yesildir).
+            for ayak, ad in ((QM_YENI, "QM"), (BOM_YENI, "BOM"), (KK_YENI, "kalite-kontrol")):
+                if ayak not in yamali:
+                    print(f"[DOGRULANAMADI] asiri-dar mutasyonunun {ad} ayagi tutmadi.")
+                    return 2
+                yamali = yamali.replace(ayak, r'        r"ZZZ_ASLA_ESLESMEZ_MUT|"', 1)
         hook = HOOK.with_name("_mutant_intake_triage.py")
         hook.write_text(yamali, encoding="utf-8")
         mutant = hook
@@ -138,6 +168,15 @@ def main() -> int:
             ("A4 'tasarim kusuru' (infra) -> QM ipucu YOK",
              "Bu bir tasarim kusuru mu? Oyleyse validator'e yeni bir kontrol ekleyelim",
              QM_MK),
+            # --- 2026-08-22 dalgasi: `\bBOM\b` = Byte Order Mark, PP urun agaci DEGIL ---
+            # Olculdu (iki depo x *.md): `\bBOM\b` 654 satirda atesliyor, 362'si acikca
+            # encoding baglami. Bu vektor o FP sinifinin GERCEK yazim bicimidir.
+            ("A5 'UTF-8 BOM' (encoding) -> PP ipucu YOK",
+             "PowerShell dosyaya UTF-8 BOM ekliyor; bunu duzeltip yeni bir kontrol ekleyelim",
+             PP_MK),
+            ("A6 'kalite kontrol listesi' (belge/metodoloji) -> QM ipucu YOK",
+             "Commit oncesi kalite kontrol listesi icin yeni bir madde ekleyelim",
+             QM_MK),
         ]
         for ad, pr, mk in A:
             rc, ctx = kos(hook, sb, pr)
@@ -164,6 +203,17 @@ def main() -> int:
             ("B8 POZ.KONTROL 'defect code' -> QM ipucu VAR",
              "Defect code listesini ekrana getirecek gelistirme yapalim ve alan ekleyelim",
              QM_MK),
+            # --- 2026-08-22 dalgasinin POZITIF KONTROLU ---------------------------
+            # ⭐ B10/B11/B12 ayrica ERISILEBILIRLIK kanitidir: yeni capalarin HICBIR
+            # gercek ifadeyle eslesmemesi mumkundu (olu kanca). Bunlar o riski kapatir.
+            ("B9 POZ.KONTROL 'urun agaci' -> PP ipucu VAR (dokunulmamis capa)",
+             "Ürün ağacı patlatma raporu ekleyelim", PP_MK),
+            ("B10 POZ.KONTROL 'bill of materials' -> PP ipucu VAR (YENI capa)",
+             "Bill of materials raporu gelistirelim", PP_MK),
+            ("B11 POZ.KONTROL 'kalite kontrol plani' -> QM ipucu VAR (YENI capa)",
+             "Kalite kontrol plani ekrani gelistirelim", QM_MK),
+            ("B12 POZ.KONTROL 'uretim BOM bilesen' -> PP ipucu VAR (YENI capa)",
+             "Uretim BOM bilesenlerini listeleyen yeni rapor gelistirelim", PP_MK),
         ]
         for ad, pr, mk in B:
             rc, ctx = kos(hook, sb, pr)
@@ -204,6 +254,12 @@ def main() -> int:
              r'r"\breçete' not in kaynak and r'r"\bkusur|' not in kaynak
              and "\\breçete|" not in kaynak and "\\bkusur|" not in kaynak,
              "kanca sessizce eski haline donerse bu vektor kirilir")
+
+        # D4 — 2026-08-22 dalgasinin ayni sinif capasi. AYRI vektor: D3 yalnizca ILK
+        # dalgayi (reçete/kusur) civiliyor; ikinci dalga geri alinsa D3 YINE PASS verirdi.
+        ekle("D4 SINIF capasi: ciplak `\\bBOM\\b` / `\\bkalite\\s+kontrol|` GERI GELMEDI",
+             r'\bBOM\b|' not in kaynak and r'\bkalite\s+kontrol|' not in kaynak,
+             "ciplak kanca geri gelirse Byte-Order-Mark / belge-kalite FP'si geri doner")
 
     finally:
         if mutant is not None:

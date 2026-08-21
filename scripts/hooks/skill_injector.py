@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: C-FLOW-01  (ADR 0019 coverage binding)
 """UserPromptSubmit — tarayıcı/UI-doğrulama + yapısal-kod-arama akış nudge'ları.
 
 ⚠ AD TARİHSELDİR (2026-07-31, T0.11): "skill_injector" artık skill ENJEKTE ETMİYOR —

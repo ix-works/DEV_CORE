@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# ENFORCES: ADR-0020  (ADR 0019 coverage binding)
 """SessionStart hook — yasaklar + protokol enjeksiyonu + SAĞLIK KONTROLLERİ (B9b, ADR 0020).
 
 Statik: ADR 0005 yasak özeti + Ekran-Teyidi zorunluluğu + ADR 0018 çalışma modeli

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# ENFORCES: C-INFRA-01  (ADR 0019 coverage binding)
 """PreToolUse (matcher: Edit|Write|MultiEdit) — İNFRA YÜZEYİNE DOĞRUDAN YAZIM BLOĞU.
 
 KURAL (kullanıcı talimatı 2026-08-19): infra işi (hook · validator · gate · pre-commit ·

@@ -114,6 +114,14 @@ DOSYALAR = {
 
 
 def main() -> int:
+    # BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir
+    # yazim hatasi `secili` bos biraktigi icin HIC mutasyon kurmadan TAM PUAN uretiyordu
+    # (exit 0) -- yani "mutasyon yakalandi" sanilan sonuc aslinda mutasyonsuz kosumdu.
+    for a in sys.argv[1:]:
+        if a.startswith("--mutasyon") and a not in MUTLAR:
+            raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {a} -> gecerli: "
+                             + ", ".join(sorted(MUTLAR)))
+
     secili = [a for a in sys.argv[1:] if a in MUTLAR]
     uretec = URETEC
     mutant = None

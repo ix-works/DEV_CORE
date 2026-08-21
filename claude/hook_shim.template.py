@@ -39,7 +39,7 @@ def proje_koku() -> str:
 
 # Bloklayıcı (PreToolUse) hook'lar: core yoksa aracı REDDET (exit 2). Diğerleri (SessionStart,
 # watchdog, post_validate...) bloklamaz → exit 1 ile yalnız uyarır.
-_FAIL_CLOSED = {"pre_tool_guard", "pull_before_edit"}
+_FAIL_CLOSED = {"pre_tool_guard", "pull_before_edit", "infra_write_guard"}
 
 
 def main() -> int:

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: ADR-0022  (ADR 0019 coverage binding)
 """UserPromptSubmit — INTAKE TRIAGE GATE (ITG) tetik + protokol enjeksiyonu (ADR 0022).
 
 Bir GELİŞTİRME TALEBİ / revizyon / FS-Excel eki / rapor isteği sinyali görülünce, ajanın
@@ -101,9 +102,21 @@ _MODULES = [
     # fixture'da zorunlu (`tests/fixtures/intake_modul_carpismasi`: gerçek "üretim reçetesi"
     # HÂLÂ PP önerir). Karakter sınıfları (`[üu]`,`[çc]`) bilinçli: hook desenleri HEM ham
     # HEM `_fold()`lanmış prompt'ta aranır; ASCII yazan kullanıcı da yakalanmalı.
+    # ⚠ 2026-08-22 — `\bBOM\b` TEK-KELİMELİK kanca olmaktan ÇIKARILDI (reçete/kusur ile AYNI
+    # sınıf, aynı kalıp). GEREKÇE (ölçüldü; korpus = core + tüketici proje, `*.md`,
+    # node_modules HARİÇ): "BOM" **143 satır**, gerçek *Bill of Materials* anlamı **2 satır**
+    # (ikisi de aynı TS belgesinde, "BOM bileşen listesi") ⇒ ~**70:1** yanlış-pozitif.
+    # Baskın anlam **Byte Order Mark** (UTF-8/kodlama/PowerShell) — bu evin GÜNLÜK sözlüğü,
+    # PP işareti değil.
+    # Yerine ÇOK-KELİMELİ çapa: ölçülen tek gerçek kullanım (`BOM bileşen`) precision 1.0;
+    # `bill of materials` korpusta **0 kez** geçiyor ⇒ FP riski yok, kapsam-kaybı yok.
+    # ⛔ GEVŞETME DEĞİL DARALTMA — pozitif kontrol fixture'da ZORUNLU (`intake_modul_carpismasi`:
+    # "ürün ağacı patlatma" + "bill of materials raporu" HÂLÂ PP önerir).
     ("pp", "PP (Üretim Planlama)", re.compile(
         r"(\büretim\s+sipariş|\bimalat|\biş\s+emri|\bplanlı\s+sipariş|\bCO0\d|\büretim\s+planla|"
-        r"\bürün\s+ağac|\bBOM\b|"
+        r"\bürün\s+ağac|"
+        r"\b[üu]retim\s+BOM|\bBOM\s+(?:patlat|bile[şs]en|kalem|listesi|a[ğg]ac|yap[ıi]s)|"
+        r"\bbill\s+of\s+material|\bCS0\d|\bSTPO\b|\bSTKO\b|"
         r"\b[üu]retim\s+re[çc]ete|\b[üu]r[üu]n\s+re[çc]ete|\bre[çc]ete\s+(?:kalem|bile[şs]en|y[öo]net)|"
         r"\bmaster\s+recipe|"
         r"\byönlendirme|\brouting\b|\bMRP\b|\bproduction\s+order|\bAFKO\b|\bAFPO\b|\bRESB\b)", re.I)),
@@ -118,8 +131,18 @@ _MODULES = [
     # bug-checklist); ölçüldü: 34 dosya infra anlamında, 4 dosya gerçek PP/QM işareti.
     # ⛔ `kusur\s+sınıf` BİLİNÇLİ OLARAK EKLENMEDİ — "kusur sınıfı" tam da metodoloji
     # deyimidir; eklenseydi daraltma kendi amacını yerdi (ölçülmüş FP kaynağı).
+    # ⚠ 2026-08-22 — `\bkalite\s+kontrol` ÇIPLAK kanca olmaktan ÇIKARILDI (aynı sınıf).
+    # GEREKÇE (ölçüldü; korpus = core + tüketici proje, `*.md`, node_modules HARİÇ):
+    # "kalite kontrol" **10 satır**, gerçek QM işareti **0 satır** ⇒ precision **0**.
+    # Tamamı metodoloji: "Kalite Kontrol Listesi" (×4) · "Commit/PR kalite kontrol" ·
+    # "belge kalite kontrolü". İki kelime olması onu ÇOK-KELİMELİ ÇAPA yapmaz — bu evde
+    # tek bir lexical kanca gibi davranıyor.
+    # Yerine QM'e ÖZGÜ üçüncü token şartı (lot/plan/karar/sonuç/nokta/ölçüm/karakteristik).
+    # ⛔ Kapsam-kaybı riski YOK: QM sınıfı `\bmuayene\s+lot` · `\bkalite\s+bildirim` ·
+    # `\bQALS\b` gibi BAĞIMSIZ çapalarla ayakta (pozitif kontrol B11 + gerçek QM vektörleri).
     ("qm", "QM (Kalite Yönetimi)", re.compile(
-        r"(\bkalite\s+yönet|\bkalite\s+kontrol|\bkalite\s+bildirim|\bmuayene\s+lot|\bmuayene\s+plan|"
+        r"(\bkalite\s+yönet|\bkalite\s+bildirim|\bmuayene\s+lot|\bmuayene\s+plan|"
+        r"\bkalite\s+kontrol\s+(?:lot|plan|karar|sonu[çc]|noktas|[öo]l[çc][üu]m|karakteristi)|"
         r"\binspection\s+lot|\bquality\s+notification|"
         r"\bkalite\s+kusur|\bkusur\s+(?:bildirim|kod|oran)|\b[üu]r[üu]n\s+kusur|\bmalzeme\s+kusur|"
         r"\bdefect\s+code|"

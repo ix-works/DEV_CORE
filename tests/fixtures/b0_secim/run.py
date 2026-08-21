@@ -58,6 +58,15 @@ R = importlib.util.module_from_spec(_spec)                    # type: ignore[arg
 sys.modules["rft_fx"] = R
 _spec.loader.exec_module(R)                                   # type: ignore[union-attr]
 
+# ⛔ BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir yazim
+# hatasi eskiden HIC mutasyon kurmadan TAM PUAN uretiyordu (exit 0) — yani "mutasyon
+# yakalandi" sanilan sonuc aslinda mutasyonsuz kosumdu. Kardes desen: atc_p1_sonuc/run.py.
+_GECERLI_KIP = {"--mutasyon-failopen", "--mutasyon-tamlik"}
+for _a in sys.argv[1:]:
+    if _a.startswith("--mutasyon") and _a not in _GECERLI_KIP:
+        raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {_a} — gecerli: "
+                         + ", ".join(sorted(_GECERLI_KIP)))
+
 MUT_FAILOPEN = "--mutasyon-failopen" in sys.argv
 MUT_TAMLIK = "--mutasyon-tamlik" in sys.argv
 

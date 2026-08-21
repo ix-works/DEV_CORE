@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: C-RADAR-01  (ADR 0019 coverage binding)
 """SessionStart hook — Genel Agent-Dev Tooling Radar bayatlık kontrolü.
 
 governance/tooling-radar.md frontmatter'ındaki `last-run` tarihini okur; `cadence-days`

@@ -57,6 +57,14 @@ for _s in (sys.stdout, sys.stderr):
 
 REPO = Path(__file__).resolve().parents[3]
 HOOKS = REPO / "scripts" / "hooks"
+# ⛔ BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir yazim
+# hatasi eskiden HIC mutasyon kurmadan TAM PUAN uretiyordu (exit 0). Kardes: atc_p1_sonuc.
+_GECERLI_KIP = {"--mutasyon", "--mutasyon-notsuz"}
+for _a in sys.argv[1:]:
+    if _a.startswith("--mutasyon") and _a not in _GECERLI_KIP:
+        raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {_a} — gecerli: "
+                         + ", ".join(sorted(_GECERLI_KIP)))
+
 MUTASYON = "--mutasyon" in sys.argv
 MUTASYON_NOTSUZ = "--mutasyon-notsuz" in sys.argv
 

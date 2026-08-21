@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ENFORCES: ADR-0016  (ADR 0019 coverage binding)
 """PreToolUse (matcher: Edit|Write) — PULL-BEFORE-EDIT gate (ADR 0016 revize).
 
 Yönetilen bir SAP source dosyasını (<source_root>/ altı, source uzantısı) düzenlemeden ÖNCE,

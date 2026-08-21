@@ -100,6 +100,14 @@ class _GitSayaci:
 
 
 def main() -> int:
+    # BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir
+    # yazim hatasi eskiden HIC mutasyon kurmadan TAM PUAN uretiyordu (exit 0).
+    gecerli = {"--mutasyon-eager", "--mutasyon-bos"}
+    for a in sys.argv[1:]:
+        if a.startswith("--mutasyon") and a not in gecerli:
+            raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {a} — gecerli: "
+                             + ", ".join(sorted(gecerli)))
+
     mut_eager = "--mutasyon-eager" in sys.argv
     mut_bos = "--mutasyon-bos" in sys.argv
 
