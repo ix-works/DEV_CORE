@@ -13,7 +13,12 @@ Bir SAP ADT MCP tool'u hata/guardrail/aktivasyon-fail döndürünce, "kör denem
 döngüsünü (ADR 0006 / T10) sistemsel kesmek için Claude'a hatırlatma enjekte eder:
 playbook'a bak, kök sebep bul, transport hata numarasını ASLA kullanma, körlemesine retry yok.
 
-Hata yoksa sessiz (exit 0, sıfır gürültü). Kısa + hızlı.
+⚠ 2026-08-21 — SÖZLEŞME GENİŞLETİLDİ (bilinçli): hook artık yalnız BAŞARISIZLIĞA değil,
+**politika-ilgili SONUCA** da bakar. `adt_atc_check` `ok: true` dönse bile yanıttaki
+`priority_1_count > 0` (eşdeğeri `must_fix: true`) varsa ATC SONUÇ KAPISI notu basılır.
+Gerekçe + niçin ayrı hook değil: aşağıdaki "ATC Priority-1 SONUÇ ekseni" bloğu.
+
+Hata yoksa VE Priority-1 yoksa sessiz (exit 0, sıfır gürültü). Kısa + hızlı.
 """
 import json
 import sys
@@ -117,6 +122,83 @@ def _bash_dali(data: dict) -> int:
     return 0
 
 
+# ── ATC Priority-1 SONUÇ ekseni (2026-08-21) ─────────────────────────────────────
+# Hook'un eski sözleşmesi "BAŞARISIZ işlemde patinaj kesici" idi. Bu eksen onu bilerek
+# genişletir: `adt_atc_check` BAŞARILI döner (`ok: true`) ama sonucu politika-ilgilidir —
+# Priority-1 bulgu varken ilerlemek sessiz bir ihlaldir. Ölçülmüş vaka (2026-08-21): bir
+# bug-gate turu ATC Priority-1 bulgusunu "LOW" derecelendirdi ve ilerleme sürdü; kural
+# yazılıydı (playbook/checklists/rap-troubleshoot.md §3) ama hiçbir yerde dayatılmıyordu.
+#
+# NİÇİN AYRI HOOK DEĞİL (ölçüldü 2026-08-21): ayrı bir `scripts/hooks/*.py` dosyası
+# `check_settings_template_sync.py` (C-TPL-01) gate'ini **exit 1** yapar ("var ama
+# settings.template.json'da KABLOLU DEĞİL") ve onarımı `claude/settings.template.json`
+# yazmayı gerektirir = META-İNFRA. Bu hook zaten `mcp__sap-adt__.*|Bash` matcher'ındadır
+# ⇒ eksen SIFIR yeni kablolama ister.
+#
+# ⛔ POLİTİKA BURAYA GÖMÜLMEZ. "Priority 1 zorunlu" bir PROJE kararıdır (2026-06-02) ve
+#    taşıyıcısı aracın kendi döndürdüğü `policy` alanıdır. Hook onu YÜZEYE ÇIKARIR,
+#    ÜRETMEZ. `policy` yoksa UYDURULMAZ — yokluğu bildirilir.
+# ⛔ Tetik YAPISAL alandır (`priority_1_count` / `must_fix`), metin DEĞİL: `findings[]`
+#    içindeki `priority` değerleri ve mesaj metinleri TARANMAZ (yukarıdaki "client_log
+#    PROSE'u taranmaz" doktrininin aynısı). Metin denetimi bu sınıfta ölçülüp elenmiştir.
+# ⛔ Priority 2/3 KAPSAM DIŞI (ev politikası: kullanıcının açık onayıyla pass geçilebilir)
+#    ⇒ `other_priority_count` tek başına ASLA konuşturmaz.
+_ATC_POLICY_YOK = (
+    "yanıtta `policy` alanı YOK — politikayı UYDURMA, "
+    "core/playbook/checklists/rap-troubleshoot.md §3'ten doğrula."
+)
+
+_ATC_NOTU = (
+    "⛔ ATC SONUÇ KAPISI — Priority-1 bulgu VAR ({sayi}){obje}.\n"
+    "  ARACIN BİLDİRDİĞİ POLİTİKA: {policy}\n"
+    "  1. Bu bir ÖNERİ değil SONUÇtur: P1 kapanmadan ilerleme YOK — push/aktivasyon,\n"
+    "     'done' beyanı, bir sonraki kaleme geçiş, bug-gate PASS'i hepsi bekler.\n"
+    "  2. ⛔ SEVERITY'Yİ YENİDEN DERECELENDİRME. Ölçülmüş vaka 2026-08-21: bir bug-gate turu\n"
+    "     P1 bulgusunu 'LOW' sayıp ilerledi. Derece senin yargın değil, politikanın kararıdır.\n"
+    "  3. Susturma YASAK (pseudo-comment / pragma / '#EC' ile sessiz pass) ve 'sonra bakarız' YOK.\n"
+    "  4. OKU: core/playbook/checklists/rap-troubleshoot.md §3 (ATC disiplini, no-suppress) ·\n"
+    "     core/playbook/checklists/bug-checklist-backend.md BE-12 (en sık P1 = LOOP-içi SELECT)."
+)
+
+
+def _p1_sayisi(ham):
+    """`priority_1_count` şekil toleransı: 2 · '2' · None. Ayrıştırılamayan = KARAR DEĞİL."""
+    if ham is None or isinstance(ham, bool):
+        return None
+    try:
+        return int(str(ham).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _must_fix_mi(ham) -> bool:
+    """Yalnız AÇIK doğru: bool `True` ya da 'true' dizgesi. Rastgele truthy değer SAYILMAZ."""
+    if ham is True:
+        return True
+    return isinstance(ham, str) and ham.strip().lower() == "true"
+
+
+def _atc_p1_notu(resp: dict) -> str:
+    """ATC yanıtında Priority-1 varsa politika hatırlatması; yoksa BOŞ dizge (tam sessiz)."""
+    if not isinstance(resp, dict):
+        return ""
+    p1 = _p1_sayisi(resp.get("priority_1_count"))
+    if not ((p1 is not None and p1 > 0) or _must_fix_mi(resp.get("must_fix"))):
+        return ""
+
+    obje = ""
+    ad = str(resp.get("name", "")).strip()
+    if ad:
+        tip = str(resp.get("type", "")).strip()
+        varyant = str(resp.get("variant", "")).strip()
+        obje = (" — " + ad + (f" ({tip})" if tip else "")
+                + (f", variant {varyant}" if varyant else ""))
+
+    sayi = f"priority_1_count={p1}" if p1 is not None else "must_fix=true; sayı alanı YOK"
+    policy = str(resp.get("policy", "")).strip() or _ATC_POLICY_YOK
+    return _ATC_NOTU.format(sayi=sayi, obje=obje, policy=policy)
+
+
 def _is_cds_create_fail(data: dict, resp: dict) -> bool:
     """ddls tool'u VEYA bilinen CDS-create hata imzası mı?"""
     ti = data.get("tool_input") or {}
@@ -146,7 +228,15 @@ def _parse_fail_notu() -> None:
 
 def main() -> int:
     try:
-        data = json.load(sys.stdin)
+        # UTF-8 stdin — HAM byte oku, kabuğun text-wrapper'ına güvenme (`intake_triage` +
+        # `skill_injector` ile AYNI desen). 2026-08-21 ölçümü: hook DOĞRUDAN çağrılınca
+        # Windows'ta `sys.stdin` cp1252'ye düşer ve yanıttaki Türkçe alanlar MOJIBAKE olur
+        # ("düzeltilir"→"dÃ¼zeltilir"). Canlı yolda `hook_shim` stdin'i UTF-8'e çeviriyor
+        # AMA bunu `sys.stderr.encoding != "utf-8"` KOŞULUNA bağlıyor ⇒ garanti değil.
+        # ATC ekseni yanıttan gelen `policy` METNİNİ geri bastığı için bu artık önemlidir:
+        # bozuk politika metni okunamaz bir hatırlatma demektir. Parse-fail sözleşmesi
+        # DEĞİŞMEDİ (her istisna → not + exit 0).
+        data = json.loads(sys.stdin.buffer.read().decode("utf-8", errors="replace"))
     except Exception:
         _parse_fail_notu()
         return 0
@@ -179,12 +269,25 @@ def main() -> int:
     if isinstance(rev, dict) and str(rev.get("verdict", "")).upper() == "BLOCKER":
         failed = True
 
+    # ATC SONUÇ ekseni: `failed` DEĞİL de olabilir (ok:true + Priority-1) — bu yüzden
+    # erken-return'ün ÖNÜNDE hesaplanır ve iki dalda da yüzeye çıkar.
+    atc_notu = _atc_p1_notu(resp)
+
     if not failed:
+        if atc_notu:
+            print(json.dumps({
+                "hookSpecificOutput": {
+                    "hookEventName": "PostToolUse",
+                    "additionalContext": atc_notu,
+                }
+            }))
         return 0
 
     context = REMINDER
     if _is_cds_create_fail(data, resp):
         context += CDS_RECIPE
+    if atc_notu:
+        context += "\n\n" + atc_notu
 
     print(json.dumps({
         "hookSpecificOutput": {
