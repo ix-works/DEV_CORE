@@ -233,11 +233,12 @@ OZEL_TESTLER = [
     # UTF-8 stdin (tasinan `policy` METNI bozulmadan ulasir).
     ("atc_p1_sonuc",
      "ATC P1 sonuc kapisi: yapisal alan tetigi + policy TASINIR (uretilmez) + FP capalari"),
-    # 2026-08-21: D2 kuratli kancalar (brifing-lint). ⛔ BUTCE DOLU — vektor B1 kaynakta
-    # EN FAZLA 2 kanca oldugunu civiller (atesleme oranlari TOPLANIR; 3 kanca bant ustu).
-    ("brifing_lint_d2",
-     "brifing-lint D2: T3-KIMLIK + DEPLOY kancalari (olculdu %4,8 + %5,3 = %9,9 bant alti) "
-     "+ FP capalari + D2 BUTCE capasi"),
+    # 2026-08-21 AKSAM: `brifing_lint_d2` korpusu KALDIRILDI — olctugu iki kanca (T3-KIMLIK,
+    # DEPLOY) geri alindi (precision 0 / recall 0; governance/removed-controls.md).
+    # ⛔ DERS (yeniden kurarken oku): o korpus 18/18 YESIL idi ve KUSURU GORMEDI, cunku
+    # vektorleri SENTETIK'ti ve tek FP capasi "fren YAZILMIS -> sessiz" idi. Gercek korpusta
+    # HICBIR salt-okur brifi "fren" dili kullanmiyor => bastirici hic devreye girmiyordu.
+    # Bir eksenin fixture'i, ateslemeyi degil ISABETI (precision) olcmelidir.
     # 2026-08-21: modul-ipucu regex'i ile METODOLOJI SOZLUGU carpismasi (recete/kusur).
     # ⛔⛔ B* POZITIF KONTROL vektorleri SILINEMEZ: bu bir DARALTMA'dir, "artik atesLEMIYOR"
     # kaniti tek basina yetmez -- `--mutasyon-asiri-dar` tam da o borcu sinar.
@@ -299,8 +300,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
                                         "O:hook_bash_ve_stderr_kapsami"),
      "doc-fs dalı (OKU-işaretçisi + gate özeti) + komşu dalların regresyonu + parse-fail sözleşmesi"),
     ("scripts/hooks/watchdog_launch.py",
-     ("O:prior_art_kb01", "O:negatif_test_harness", "O:sablon_zorunlu_maddeler",
-      "O:brifing_lint_d2"),
+     ("O:prior_art_kb01", "O:negatif_test_harness", "O:sablon_zorunlu_maddeler"),
      "KB-01 prior-art ekseni + brifing-lint regresyonu + parse-fail sözleşmesi + "
      "ENGELLENİRSEN ekseni (dar tutuldu: ölçülmüş %18,4 kapsam / %16,0 ateşleme; "
      "ham 'madde var mı' %86,7 ateşleyip uyarı körlüğü üretirdi)"),
