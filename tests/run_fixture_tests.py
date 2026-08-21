@@ -227,6 +227,12 @@ OZEL_TESTLER = [
      "retry adapter'i SAP'nin 500 GOVDESINI yutuyordu (429/502/503/504 tekrar KORUNDU)"),
     ("sorgu_basarisizligi_gorunur",
      "adt_sql_query/adt_table_read: alt katman None -> ok:false (ok:true + 0 satir = sahte yesil)"),
+    # 2026-08-21: ATC Priority-1 SONUC ekseni (ayni hook, YENI degismez sinifi). Tetik
+    # BASARISIZLIK degil, BASARILI bir cagrinin politika-ilgili SONUCU: `priority_1_count>0`.
+    # Dort degismez, dort mutasyon: atesleme-sayi · atesleme-bayrak · SESSIZLIK (esik) ·
+    # UTF-8 stdin (tasinan `policy` METNI bozulmadan ulasir).
+    ("atc_p1_sonuc",
+     "ATC P1 sonuc kapisi: yapisal alan tetigi + policy TASINIR (uretilmez) + FP capalari"),
 ]
 
 
@@ -266,8 +272,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "seçim mantığı burada yaşar; koşucu değişince kıyas tabanı TAM olmalı; ayrıca ORTAM "
      "HİJYENİ (kendi ürettiği .conn_adt kalıntısı) bu dosyada yaşar"),
     ("tests/run_guard_fixture_tests.py", ("G",), "guard payload korpusunun koşucusu"),
-    ("scripts/hooks/post_tool_failure.py", ("O:post_tool_failure_bash",),
-     "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları)"),
+    ("scripts/hooks/post_tool_failure.py",
+     ("O:post_tool_failure_bash", "O:atc_p1_sonuc", "O:negatif_test_harness"),
+     "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları) + "
+     "ATC P1 SONUÇ ekseni (yapısal alan tetiği, `policy` taşınır) + parse-fail sözleşmesi "
+     "(hook stdin'i HAM byte okur → UTF-8; o sözleşme negatif_test_harness'ta yaşar)"),
     ("scripts/validators/check_hook_injected_paths.py", ("O:hook_bash_ve_stderr_kapsami",),
      "C-HOOK-01 kapsami: additionalContext + STDERR nudge'lari (POZITIF KONTROL M4)"),
     ("scripts/hooks/post_validate.py", ("O:fs_docstd", "O:negatif_test_harness",
@@ -472,8 +481,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline"),
      "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline)"),
     ("mcp_servers/sap_adt/tools/query.py",
-     ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur"),
-     "where_used/ATC + veri sorgusu + başarısızlık görünürlüğü"),
+     ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur",
+      "O:atc_p1_sonuc"),
+     "where_used/ATC + veri sorgusu + başarısızlık görünürlüğü + ⚠ `adt_atc_check` yanıt "
+     "ŞEKLİ (priority_1_count · must_fix · policy) post_tool_failure ATC ekseninin "
+     "GİRDİSİDİR: alan adı ya da politika metni değişirse eksen SESSİZCE boşalır"),
 
     # ── CI / şablon tetikleri ───────────────────────────────────────────────
     ("claude/workflows/*.yml", ("O:workflow_tetik_dupe",), "şablon tetik sözleşmesi"),
