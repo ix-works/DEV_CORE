@@ -51,6 +51,36 @@ Görev DEVAM eder. Workaround gerekiyorsa bypass DEĞİL (skip_reviewer vb. YASA
 alternatif yoksa kullanıcıya eskalasyon. Kuyruk-eskalasyonu: content-health-radar turu açık
 kayıtları tarar (süresiz-açık kayıt = karantina-çürümesi; flaky-quarantine literatürü).
 
+### ⛔ KUYRUĞA GİRİŞ EŞİĞİ (2026-08-22 — kullanıcı kararı, MUST)
+
+> **Kuyruk, fark edilen her şeyin günlüğü DEĞİLDİR; yapılmaya değer işlerin listesidir.**
+
+Bir bulgu kuyruğa **ancak** şunlardan **en az biri** varsa girer:
+
+| # | Şart |
+|---|---|
+| **(a)** | **Bugün canlı etkisi var** — bir şeyi bozuyor, yanlış sonuç veriyor ya da iş durduruyor |
+| **(b)** | **Adı konmuş bir tetiği var** — *"X olursa canlı olur"* diye yazılabiliyor (tetik `deferred-triggers`'a da düşer) |
+| **(c)** | **Yayınladığımız bir şey YANLIŞ BİLGİ veriyor** — çıktı/banner/doküman okuyanı yanıltır (sahte-yeşil, sahte-kapsam, eksik ilan) |
+
+**Üçü de yoksa** bulgu **iş kalemi değildir**: dokunduğu dosyaya/changelog'a **not** olarak yazılır ve
+orada kalır. *"Kaybolmasın"* diye kuyruğa eklenmez — çünkü kuyruğa eklemek onu **iş** ilan etmektir.
+
+**⭐ NEDEN (ölçüldü, 2026-08-22):** iki ardışık infra turunda kuyruk **8 → 7 → 12** diye BÜYÜDÜ ve
+kullanıcı haklı olarak sordu: *"7 madde kapattın 12 madde çıktı, ne zaman bitecek bu?"* Sayımı
+yapıldığında son 12 kalemin **12'sinin de yanında "bugün canlı etkisi yok"** yazıyordu ve **5'i
+pre-existing**di (bakıldığı için göründüler, o tur üretmedi). Yani liste büyümüyordu — **envanter
+görünür oluyordu**, ama ikisi aynı yerde tutulduğu için ayırt edilemiyordu. Eşik uygulandığında
+12 kalem **4'e** indi; kalan 8'i not oldu. **Gerçekten önemli olanı, önemsizin arasında saklamak
+da bir kayıptır.**
+
+⚠ **İki yan kural:**
+1. **Şiddet sayıdan önemlidir.** Turlar arası kıyas *"kaç kalem çıktı"* ile değil, *"çıkanların
+   şiddeti düşüyor mu"* ile yapılır. Şiddet düşüyorsa iş yakınsıyordur — sayı yanıltır.
+2. **Kısır tur meşrudur.** Her tur yeni bir gate/yetenek eklerse kapı her turda o yeni kodun kenar
+   durumlarını çıkarır ve zincir bitmez. Bir noktada **hiçbir şey inşa etmeyen**, yalnız kapatan bir
+   tur yapılır; o turun çıktısı ~0 olur ve kuyruk gerçekten kapanır.
+
 ## ADIM 3 — İNFRA-EXPERT FIX-SEANSI (kuyruktakiler)
 
 ### B0 — HANGİ TESTİ NE ZAMAN KOŞARIZ (2026-08-13)

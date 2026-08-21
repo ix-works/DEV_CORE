@@ -322,10 +322,16 @@ def _tool_tasiyor_mu(dugum, toolvars: set[str]) -> bool:
     return False
 
 
-def hook_tool_adlari() -> tuple[dict[str, set[str]], dict[str, list[str]], list[str]]:
-    """hook → (kodda adı geçen tool'lar, enumere-edilemez önek dalları) + ayrıştırma hataları."""
+def hook_tool_adlari() -> tuple[dict[str, set[str]], dict[str, list[str]],
+                                list[str], list[str]]:
+    """hook → (kodda adı geçen tool'lar, önek dalları, KÖR-YAZIM'lar, ayrıştırma hataları).
+
+    ⚠ KÖR-YAZIM ile AYRIŞTIRMA HATASI AYRI DÖNER çünkü ŞiDDETLERİ FARKLIDIR: biri
+    hook'un bozuk olduğunu, öteki GATE'in okuyamadığını söyler (gerekçe: main).
+    """
     adlar: dict[str, set[str]] = {}
     onekler: dict[str, list[str]] = {}
+    korler: list[str] = []
     hatalar: list[str] = []
     for yol in sorted(HOOKS_DIR.glob("*.py")):
         if yol.name.startswith("_"):
@@ -335,8 +341,13 @@ def hook_tool_adlari() -> tuple[dict[str, set[str]], dict[str, list[str]], list[
         except SyntaxError as e:
             # ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: ayrıştırılamayan hook sessizce "tool ayrımı yok"
             # sayılsaydı, bozuk bir hook gate'i YEŞİLE çevirirdi.
-            hatalar.append(f"{yol.stem}: SyntaxError: {e}")
+            hatalar.append(f"hook ayrıştırılamadı: {yol.stem}: SyntaxError: {e}")
             continue
+        # ⛔ "kodda tool_name'e BAKIYOR mu" sorusu AST'den sorulur, ham metinden DEĞİL:
+        # yorum/docstring içindeki bir anış "bakıyor" sayılamaz (bu evde ölçülmüş sınıf:
+        # bir markörü TARİF eden metin, o markörü BEYAN etmiş sayılamaz).
+        kaynakta_tool = any(isinstance(n, ast.Constant) and n.value == _TOOL_ANAHTARI
+                            for n in ast.walk(agac))
         sabitler: dict[str, set[str]] = {}
         for d in agac.body:
             if isinstance(d, ast.Assign):
@@ -374,7 +385,21 @@ def hook_tool_adlari() -> tuple[dict[str, set[str]], dict[str, list[str]], list[
             adlar[yol.stem] = bulunan
         if onek:
             onekler[yol.stem] = sorted(set(onek))
-    return adlar, onekler, hatalar
+        if kaynakta_tool and not bulunan and not onek:
+            # ⛔ KÖRLÜK YANLIŞ KOVAYA DÜŞMESİN (2026-08-22): hook `tool_name`e BAKIYOR
+            # ama yazımı bu ayrıştırıcının tanıdıklarından değil. Ölçülmüş kör yazımlar:
+            # `frozenset({...})` · ters kıyas (`"X" == d.get("tool_name")`) · fonksiyon-İÇİ
+            # sabit · `_A + ("X",)` birleştirmesi. Böyle bir hook aşağıdaki "N hook tool
+            # ayrımı YAPMIYOR (… kapsam dışı)" kovasına düşerse çıktı onu OLUMLU biçimde
+            # YANLIŞ tanımlar ve bu dosyanın iki kez alıntıladığı "ÖLÇÜLEMEDİ ≠ TEMİZ"
+            # sözleşmesiyle çelişir.
+            # ⛔ TANIMA YETENEĞİ BİLEREK GENİŞLETİLMEDİ (tamlık kovalanmıyor): körlük
+            # DURUYOR — değişen tek şey DÜRÜSTLÜK, artık ADIYLA görünür ve sessiz geçmez.
+            korler.append(
+                f"{yol.stem}: kodda '{_TOOL_ANAHTARI}' geçiyor ama tool adı ÇIKARILAMADI "
+                f"(tanınmayan yazım: frozenset/ters-kıyas/fonksiyon-içi sabit/birleştirme) "
+                f"→ matcher kapsamı ÖLÇÜLEMEDİ (bu hook 'tool ayrımı yapmıyor' DEĞİLDİR)")
+    return adlar, onekler, korler, hatalar
 
 
 def hook_matcherlari() -> tuple[dict[str, list[str]], str]:
@@ -453,9 +478,13 @@ def main() -> int:
     h_undeclared: list[tuple[str, str, str]] = []
     h_ok = 0
     for ad in sorted(h_mevcut):
-        if ad in h_optout:
-            continue  # C-TPL-01 muafiyeti (gerekçeli) — iki gate AYNI kümeyi okur
-        if ad not in h_kablolu:
+        # ⛔ MUAFİYETİN KAPSAMI İLAN EDİLDİĞİ KADARDIR (2026-08-22): `continue` ORPHAN
+        # testini atlarken ENFORCES/UNDECLARED testini DE atlıyordu — oysa basılan cümle
+        # yalnız "kablolama ARANMAZ" diyor. C-TPL-01'in muafiyeti KABLOLAMA muafiyetidir;
+        # beyan muafiyeti DEĞİL (o gate beyanı hiç okumaz). Ölçüldü: muaf bir hook'un
+        # ENFORCES'ı sökülünce gate SUSUYORdu ⇒ muafiyet ilan edilenden GENİŞ.
+        muaf = ad in h_optout  # C-TPL-01 muafiyeti — YALNIZ kablolama aranmaz
+        if not muaf and ad not in h_kablolu:
             h_orphan.append((ad, f"scripts/hooks/{ad}.py", "claude/settings.template.json"))
         elif not h_enforces.get(ad):
             # NOT: validator dalında test "bu rule_id beyan edildi mi"dir (iddia var).
@@ -470,7 +499,8 @@ def main() -> int:
     if h_optout:
         # ⛔ GİZLİ MUAFİYET YOK: muaf hook'lar ADIYLA basılır (aksi hâlde "17 hook temiz"
         # cümlesi, denetlenmeyen N hook'u kapsıyormuş gibi okunur).
-        print(f"  OPT_OUT (C-TPL-01 muafiyeti — kablolama ARANMAZ): "
+        print(f"  OPT_OUT (C-TPL-01 muafiyeti — kablolama ARANMAZ; "
+              f"`# ENFORCES:` beyanı YİNE DE aranır): "
               + " · ".join(sorted(h_optout)))
     if h_olcum_hatasi:
         # ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ (ve ≠ hepsi ORPHAN). Sessiz geçmek YASAK.
@@ -483,7 +513,11 @@ def main() -> int:
           f" · UNDECLARED={len(h_undeclared)}")
 
     # -------------------- MATCHER-KAPSAMI DALI (2026-08-22) ---------------------
-    m_adlar, m_onekler, m_parse_hatalari = hook_tool_adlari()
+    m_adlar, m_onekler, m_korler, m_parse_hatalari = hook_tool_adlari()
+    # ⚠ ŞİMDİ SAY: bu listede şu an YALNIZ hook-başına ölçüm hataları var (ayrıştırılamayan
+    # + kör-yazım). Matcher-regex hataları AŞAĞIDA ekleniyor ve onların hook'ları ZATEN
+    # `m_denetlenen` içinde — sonradan sayılsaydı aynı hook iki kez düşülürdü.
+    m_olculemeyen_hook = len(m_parse_hatalari) + len(m_korler)
     m_matcherlar, m_sablon_hatasi = hook_matcherlari()
     m_delik: list[tuple[str, str, str]] = []
     m_denetlenen = 0
@@ -503,7 +537,8 @@ def main() -> int:
                 m_parse_hatalari.append(f"{ad}: geçersiz matcher regex ({e})")
 
     print(f"\nMatcher-kapsamı: {m_denetlenen} hook denetlendi (kodda tool adı geçen) · "
-          f"{len(h_mevcut) - m_denetlenen - len(h_optout)} hook tool ayrımı YAPMIYOR "
+          f"{len(h_mevcut) - m_denetlenen - len(h_optout) - m_olculemeyen_hook} "
+          f"hook tool ayrımı YAPMIYOR "
           f"(SessionStart/PreCompact/UserPromptSubmit vb. — kapsam dışı, uydurulmaz).")
     if m_onekler:
         # ⛔ SESSİZ ATLAMA YOK: önek dalları ENUMERE EDİLEMEZ, sayıyla bildirilir.
@@ -512,14 +547,29 @@ def main() -> int:
     if m_sablon_hatasi:
         print(f"  [ÖLÇÜLEMEDİ] matcher okunamadı: {m_sablon_hatasi}", file=sys.stderr)
     for h in m_parse_hatalari:
-        print(f"  [ÖLÇÜLEMEDİ] hook ayrıştırılamadı: {h}", file=sys.stderr)
+        # Metin KAYNAĞINDA yazılır (ayrıştırılamadı / kör yazım / geçersiz matcher regex):
+        # tek bir sabit önek, kör-yazım kaydını "ayrıştırılamadı" diye YANLIŞ adlandırırdı.
+        print(f"  [ÖLÇÜLEMEDİ] {h}", file=sys.stderr)
+    for h in m_korler:
+        # ⛔ ŞİDDET AYRIMI (2026-08-22, kullanıcı kararı) — KÖR-YAZIM ÖLÇÜLEMEDİ'dir ama
+        # BLOKLAMAZ. Kardeş iki kaynaktan AYRILIR çünkü kusurun YERİ farklıdır:
+        #   · bozuk şablon → hiçbir şey ölçülemiyor, gate işlevsiz            → BLOK
+        #   · ayrıştırılamayan hook → HOOK'un kendisi bozuk                     → BLOK
+        #   · kör yazım → HOOK DOĞRU, GATE okuyamıyor                            → UYARI
+        # Bloklamak tek bir "onarım" dayatırdı: *"geçerli Python'unu, gate okuyabilsin
+        # diye tuple'a çevir"* — aracın kuyruğunun köpeği sallaması. `frozenset` bu evde
+        # yerleşik deyimdir (`infra_write_guard` · `pre_tool_guard`) ⇒ haklıyken commit
+        # durdururdu. ⚠ GEVŞETME DEĞİL: bu dal bugüne dek HİÇ yoktu; kör hook dün
+        # GÖRÜNMÜYORdu, bugünden sonra GÖRÜNÜYOR — sadece durdurmuyor.
+        print(f"  [ÖLÇÜLEMEDİ · UYARI, rc'yi ETKİLEMEZ] {h}", file=sys.stderr)
     if m_delik:
         print(f"\n[MATCHER DELİK — kod bu tool'u adıyla işliyor ama matcher YÖNLENDİRMİYOR] "
               f"({len(m_delik)})")
         for ad, tool, ms in m_delik:
             print(f"  scripts/hooks/{ad}.py: {tool} → matcher: {ms}")
     print(f"Özet (matcher): DENETLENEN={m_denetlenen} · DELİK={len(m_delik)} · "
-          f"ÖLÇÜLEMEDİ={len(m_parse_hatalari) + (1 if m_sablon_hatasi else 0)}")
+          f"ÖLÇÜLEMEDİ={len(m_parse_hatalari) + (1 if m_sablon_hatasi else 0)} (bloklar) · "
+          f"KÖR-YAZIM={len(m_korler)} (uyarı, rc'yi etkilemez)")
 
     total = (len(missing) + len(orphan) + len(undeclared)
              + len(h_missing) + len(h_orphan) + len(h_undeclared)
@@ -533,7 +583,11 @@ def main() -> int:
               f"MISSING=sahte-WIRED (script yok/ad yanlış) · ORPHAN=run_all/run_review'e wire · "
               f"UNDECLARED=gate'e `# ENFORCES:<id>` ekle. "
               f"HOOK ORPHAN=claude/settings.template.json'a kabla (kod ≠ kablolama) · "
-              f"MATCHER DELİK=şablondaki matcher'a o tool'u ekle (kablolu ama YANLIŞ ADRESTE).",
+              f"MATCHER DELİK=İKİ onarım var, vakaya göre seç: (a) koruma ÖLÜ ise "
+              f"şablondaki matcher'a o tool'u ekle (kablolu ama YANLIŞ ADRESTE) "
+              f"(b) kodda o tool'u işleyen dal ÖLÜ ise DALI KALDIR — dışlama dalı + "
+              f"bilinçli dar matcher bu sınıftadır; orada matcher'ı genişletmek "
+              f"hook'un tetiklenme yüzeyini gereksiz büyütür.",
               file=sys.stderr)
         return 1
     print("\n[OK] tüm auto-gate iddiaları: dosya var + WIRED + ENFORCES-beyanlı.")
