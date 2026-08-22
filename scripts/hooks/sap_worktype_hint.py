@@ -20,6 +20,7 @@ checklist'i doğru anda hatırlatan fail-closed sigortadır. Session+worktype ba
 """
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -59,6 +60,157 @@ def _checklist(otype: str):
         return ("classic", "Klasik dialog/report → OKU: playbook/checklists/classic-dialog-creation.md "
                            "· standards/06 (§1 include-böl ZORUNLU)")
     return (None, "")
+
+
+# ── ALT-TÜR ekseni (2026-08-22, kuyruk Q5) ───────────────────────────────────
+# ⛔ ÖLÇÜLMÜŞ VAKA: 11 soyut varlık (`define abstract entity`) `object_type='ddls'` ile
+# push edildi. Bu hook `ddls` görüp KANONİK CDS satırını bastı: "playbook/adt-cds.md
+# 'TEK CDS YARATMA'". Oysa `adt-cds.md:180` (§ ⚡ ABSTRACT ENTITY) tam da o bölümün
+# önerdiği araçların (`create_cds_view.py` · `populate_cds_views.py`) abstract entity'de
+# ÇALIŞMADIĞINI yazar ve şu kuralı koyar: *"yeni DDLS görünce TÜRÜNE bak — SELECT var mı?
+# ... Tahminle araç seçme."* Yani hatırlatıcı, reçetenin kendi kuralını uygulamıyordu:
+# obje-tipinde duruyor, ALT-TÜRE bakmıyordu. (`checklists/cds-creation.md` içinde
+# "abstract" kelimesi HİÇ geçmiyor — ölçüldü.)
+#
+# ⛔ NEDEN BRİFİNG-METNİ DEĞİL KAYNAK: alt-tür brifingden TAHMİN edilmez; artefaktın KENDİ
+# bildirimi (`define [root] abstract entity ...`) onu SÖYLER ve o bildirim bu tool'un
+# payload'ında zaten vardır (`tool_input.source` / `file_path`). Aynı evde brifing-metni
+# tahmini iki kez ölçülüp çürütüldü (eski `skill_injector` 12-regex'i; 2026-08-21 D2).
+#
+# ⛔ SÖZLÜK YOK (kuyruk kaydının tasarım kısıtı): alt-tür → bölüm eşlemesi ELLE
+# tutulmaz. Eşleşme, `_checklist()`in ZATEN andığı reçete dosyalarının KENDİ BAŞLIK
+# satırlarından türetilir. Yeni bir alt-tür bölümü yazıldığı gün kendiliğinden kapsama
+# girer; bölüm silinirse eşleşme kendiliğinden düşer (bayatlayacak ikinci liste yok).
+#
+# ⛔ BELİRSİZSE SUSAR: aynı ifadeyi taşıyan BİRDEN ÇOK başlık varsa hiçbir şey söylenmez
+# (yanlış bölüme yollamak, hiç yollamamaktan pahalıdır).
+
+# ABAP/DDL bildirim açıcıları — SÖZDİZİMİ (eşleme değil): rot etmez. Tanınmayan bir açıcı
+# çıkarsa dal SESSİZ düşer (fail-open), yanlış işaretçi üretmez.
+_ACICILAR = ("define", "extend", "annotate", "managed", "unmanaged", "projection",
+             "class", "interface", "report", "program", "function", "form")
+_TOKEN = re.compile(r"[a-z][a-z0-9_]*")
+_MD_YOL = re.compile(r"(?:playbook/)?(?:checklists/)?[\w-]+\.md")
+_MD_CIPLAK = re.compile(r"\badt-[a-z0-9-]+\b")
+_BASLIK = re.compile(r"^#{2,6}\s+(.*\S)\s*$")
+
+
+def _ikili(satir: str):
+    """Bildirim satırının TÜR bölümünden ardışık 2'li token demeti (küçük harf).
+
+    ⛔ YALNIZ OBJE ADINDAN ÖNCESİ: bir artefaktın TÜRÜ adından önce bildirilir; adından
+    sonrası (`as select from ...`) gövdedir. Ölçülmüş FP (bu turda, düzeltildi): tüm
+    satır alınınca düz bir view-entity `select from` üzerinden `adt-cds.md § T3
+    (read-only consumption)` tuzak notuna yollanıyordu — YANLIŞ bölüm. Kesme ölçütü
+    sözdizimseldir: `_`/rakam taşıyan token (obje adı), `z`/`y` ile başlayan ad, ya da
+    gövde açıcıları (`as` · `{` · `(` · `;`).
+    """
+    t = []
+    for ham in re.split(r"[\s,]+", satir.strip()):
+        h = ham.strip("`'\"")
+        d = h.lower()
+        if not d:
+            continue
+        if d in ("as", "with", "provider") or d[:1] in "{(;":
+            break
+        if "_" in d or any(c.isdigit() for c in d) or (d[:1] in "zy" and len(d) > 3):
+            break
+        m = _TOKEN.match(d)
+        if not m:
+            break
+        t.append(m.group(0))
+    return [" ".join(t[i:i + 2]) for i in range(len(t) - 1)]
+
+
+def _bildirim_ifadeleri(source: str):
+    """Kaynağın KENDİ bildirim satırlarından ifade adayları.
+
+    ⛔ SATIR PENCERESİ YOK: ilk deneme "ilk 60 satır" diyordu; gerçek korpusta (292
+    artefakt) bu **2 abstract entity'yi KAÇIRDI** — bildirim 92. ve 117. satırdaydı
+    (uzun banner yorumu). Dosya boyutu zaten `_kaynak_metni`de sınırlı.
+    """
+    ifadeler = []
+    for ln in (source or "").splitlines():
+        s = ln.strip()
+        if not s or s.startswith(("//", "*", "@", '"', "/*")):
+            continue
+        ilk = s.split(None, 1)[0].lower().rstrip(";")
+        if ilk in _ACICILAR:
+            ifadeler.extend(_ikili(s))
+    # tekrarları koru-sırala; uzun ifade önce (daha ayırt edici)
+    return sorted(set(ifadeler), key=lambda x: (-len(x), x))
+
+
+def _recete_dosyalari(satir: str, kok: Path):
+    """`_checklist()` satırının ANDIĞI reçete dosyaları — TEK KAYNAK (kopya liste yok)."""
+    adaylar = set(_MD_YOL.findall(satir)) | {a + ".md" for a in _MD_CIPLAK.findall(satir)}
+    bulunan = []
+    for ad in sorted(adaylar):
+        temiz = ad.split("/")[-1]
+        for alt in ("", "checklists"):
+            y = kok / "playbook" / alt / temiz if alt else kok / "playbook" / temiz
+            if y.is_file() and y not in bulunan:
+                bulunan.append(y)
+    return bulunan
+
+
+def _alt_tur(source: str, satir: str, kok: Path):
+    """(ifade, göreli-yol, başlık) — alt-türün AYRI bölümü varsa; yoksa None.
+
+    Belirsizlik (>1 başlık) → None. Hata → None (fail-open; taban satırı bozulmaz).
+    """
+    try:
+        ifadeler = _bildirim_ifadeleri(source)
+        if not ifadeler:
+            return None
+        dosyalar = _recete_dosyalari(satir, kok)
+        if not dosyalar:
+            return None
+        basliklar = []
+        for y in dosyalar:
+            try:
+                metin = y.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                continue
+            for ln in metin.splitlines():
+                m = _BASLIK.match(ln)
+                if m:
+                    # ⛔ Başlıktaki KOD PARÇALARI (`...`) eşleşme sözlüğüne GİRMEZ.
+                    # Ölçülmüş FP (292 gerçek artefakt, bu turda yakalandı): §ABSTRACT
+                    # ENTITY başlığı örnek sözdizimini `define [root] abstract entity`
+                    # olarak taşıyor ⇒ "define root" ikilisi başlığa giriyordu ve DÜZ bir
+                    # `define root view entity ...` (30 artefakt) o bölüme yollanıyordu.
+                    # Başlığın kod-DIŞI metni türü zaten adlandırır ("ABSTRACT ENTITY").
+                    duz = re.sub(r"`[^`]*`", " ", m.group(1))
+                    basliklar.append((y, m.group(1), " ".join(_TOKEN.findall(duz.lower()))))
+        for ifade in ifadeler:
+            vurus = [(y, b) for y, b, d in basliklar if ifade in d]
+            if len(vurus) == 1:
+                y, b = vurus[0]
+                try:
+                    goreli = y.relative_to(kok).as_posix()
+                except Exception:
+                    goreli = y.name
+                return (ifade, goreli, b)
+        return None
+    except Exception:
+        return None
+
+
+def _kaynak_metni(ti: dict) -> str:
+    """`source` yoksa `file_path`ten oku (gerçek payload'da iki biçim de görüldü)."""
+    s = ti.get("source")
+    if isinstance(s, str) and s.strip():
+        return s
+    fp = ti.get("file_path")
+    if isinstance(fp, str) and fp.strip():
+        try:
+            p = Path(fp)
+            if p.is_file() and p.stat().st_size < 400_000:
+                return p.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    return ""
 
 
 def _session_id(proj: Path) -> str:
@@ -123,9 +275,22 @@ def main() -> int:
     if not grup:
         return 0                                       # checklist'i olan bir worktype değil
 
+    # ALT-TÜR: artefaktın KENDİ bildiriminden (tahmin değil). core kökü = bu dosyanın
+    # iki üstü — core'un KENDİ varlığı olduğu için `__file__` türevi meşrudur (CORE-03).
+    alt = _alt_tur(_kaynak_metni(ti) if isinstance(ti, dict) else "",
+                   satir, Path(__file__).resolve().parents[2])
+    if alt:
+        satir += (" · ⭐ ALT-TÜR: kaynağın kendi bildirimi `%s` — bu tür için AYRI bölüm "
+                  "VAR, ÖNCE ONU OKU: %s § \"%s\" (kanonik bölüm bu alt-türde "
+                  "geçerli OLMAYABİLİR)" % (alt[0], alt[1], alt[2]))
+
     proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     sid = _session_id(proj)
-    if _already_hinted(proj, sid, grup):
+    # Dedup ANAHTARI alt-türü TAŞIR: aynı obje-tipinin farklı alt-türü FARKLI reçetedir;
+    # tek "cds" anahtarı, ilk view-entity push'undan sonra abstract entity uyarısını
+    # sessizce yutardı (ölçülmüş vakanın ikinci yüzü).
+    anahtar = grup if not alt else "%s:%s" % (grup, alt[0])
+    if _already_hinted(proj, sid, anahtar):
         return 0                                       # bu worktype bu session'da hatırlatıldı
 
     # Yol öneki: core/ junction (öneksiz Read çözülmez — D29).
