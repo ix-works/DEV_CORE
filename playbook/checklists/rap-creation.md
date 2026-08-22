@@ -44,7 +44,7 @@ applies_to: [s4_private]
 
 | ID | Kontrol | Severity | Kural |
 |---|---|---|---|
-| **C-RAP-AE-01** | `as select from` YOK + `define [root] abstract entity` VAR → **abstract reçetesi** mi seçildi (view-entity araçları DEĞİL)? Inline-source POST shell → toplu activate → aktif-source'ta `abstract entity` doğrula. `create_cds_view`/`populate_cds_views` KULLANMA. | BLOCKER | `adt-cds.md` §"ABSTRACT ENTITY" + [[feedback_playbook-once-oku]] |
+| **C-RAP-AE-01** | `as select from` YOK + `define [root] abstract entity` VAR → **abstract reçetesi** mi seçildi (view-entity araçları DEĞİL)? **MUST** olan sıra **ÜÇ** adımdır: ① POST shell → ⛔ **② FILL — `adt_push_source`/`push_object(object_type="ddls", source_file=…)` ile kaynağı DİSKTEN doldur (ZORUNLU, atlanamaz)** → ③ aktivasyon + aktif-source'ta `abstract entity` **ve** `version=active` **ve** yerel↔canlı **sha256 eşitliği** doğrula. ⚠ Adım ② atlanırsa POST **201 CREATED** döner ama source **0 karakter** kalır ve aktivasyon `SDDL_PARSER_MSG 013` ile düşer — **`201` kanıt değildir** (ölçüm: DS4/S4-2025, 2026-08-22, adım-1 tek başına **0/11**, adım-2 ile **11/11**). `create_cds_view`/`populate_cds_views` KULLANMA. | BLOCKER | `adt-cds.md` §"ABSTRACT ENTITY" (rev. 2026-08-22) + [[feedback_playbook-once-oku]] + [[feedback_inline-post-empty-source-trap]] |
 | **C-RAP-AE-02** | Param entity'de `@EndUserText.label` TR + alan tipleri DTEL/built-in doğrulanmış (tahmin yok)? | BLOCKER | ⛔ ADR 0005 D |
 
 ## Checklist — BDEF (rap_bdef_creation)

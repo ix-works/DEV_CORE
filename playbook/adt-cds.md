@@ -177,7 +177,12 @@ açılmadı — ADR 0019 §4 merdiven ilkesi: önce doküman. Tekrar ederse vali
 >
 > **Batch (çok CDS):** `scripts/populate_cds_views.py` (§30.0). **Mevcut CDS güncelle:** doğrudan `adt_push_source`.
 
-### ⚡ ABSTRACT ENTITY (action param/result — `define [root] abstract entity`, SELECT'SİZ) (2026-06-23)
+### ⚡ ABSTRACT ENTITY (action param/result — `define [root] abstract entity`, SELECT'SİZ) (2026-06-23 · **rev. 2026-08-22**)
+
+> **📌 2026-08-22 revizyonu — KURAL GÜCÜ DEĞİŞTİ (MAY → MUST) + ölü referans temizlendi.**
+> **prior-art: bulundu** — reçetenin kendisi (2026-06-23, bu bölüm) · adım-3'ün *"empty-source trap"* uyarısı · §30.1 *"body'yi yok sayar"* notu (view-entity, komşu obje tipi) · memory `feedback_inline-post-empty-source-trap`.
+> ⇒ **Bilgi eksik değildi; adım-2'nin ZORUNLU olduğu yazılı değildi** (*"de olur"* diyordu). Bu revizyon yeni bilgi eklemiyor, **mevcut kuralın gücünü** ölçümle sabitliyor.
+> **Ölçümün kapsamı (daraltılmış):** DS4 / S/4 2025, 2026-08-22, **11 obje**. Kontrol grubu: aynı turda adım-1 tek başına **0/11** doldurdu, adım-2 ile **11/11** doldu ve sha256 eşitliği doğrulandı. ⚠ 2026-06-23'teki turun **hangi sistemde** koştuğu kayıtta yok ⇒ *"davranış değişti"* mi *"o sistemde de böyleydi ama fark edilmedi"* mi **AYIRT EDİLEMEDİ**; iddia **bu sisteme** dairdir.
 
 > **Abstract entity ≠ view-entity.** `as select from` / SQL view YOK → SELECT bekleyen araçlar UYGULANMAZ:
 >
@@ -188,9 +193,12 @@ açılmadı — ADR 0019 §4 merdiven ilkesi: önce doküman. Tekrar ederse vali
 >
 > **ÇALIŞAN (2026-06-23 — nakliye param/result patinajı sonrası):** view-entity 3-adımının abstract uyarlaması —
 >
-> 1. **Inline-source POST shell** (taze CSRF, `masterLanguage=TR`, `<ddl:source>` = `html.escape(.cds)` GÖMÜLÜ) → `/sap/bc/adt/ddic/ddl/sources`. Desen: `scripts/TempScripts/create_trdoc_abstract.py` (= `create_ddls_ve.py`'ın abstract uyarlaması).
-> 2. **Toplu aktivasyon** `/sap/bc/adt/activation` (`DDLS/DF` objectReference'lar). Tek tek `adt_push_source` (object_type `ddls`) de olur — boş-source'u doldurur.
-> 3. **Doğrula:** aktif-source GET → gövdede `abstract entity` GEÇMELİ + `version=active` (empty-source trap).
+> 1. **POST shell** (taze CSRF, `masterLanguage=TR`, `adtcore:packageRef` + `ddl:sourceMainArtifact`) → `POST /sap/bc/adt/ddic/ddl/sources?corrNr=<TR>`, `Content-Type: application/vnd.sap.adt.ddlSource+xml`.
+>    ⛔ **YALNIZ SHELL SAYILIR — inline `<ddl:source>` gömsen bile source'u DOLDURDUĞUNU VARSAYMA.** Ölçüm (**DS4 / S/4 2025, 2026-08-22, 11 obje**): gömülü inline source ile **HTTP 201 CREATED** döndü, aktif source **0 karakter**; ardından toplu aktivasyon `activationExecuted="true"` + `type="E"` **`SDDL_PARSER_MSG 013`** *"The DDIC source code does not contain a valid definition"* ile düştü. ⇒ **`201` tek başına kanıt değildir** (bu evin *"Inline-POST boş-source tuzağı"* dersi; §30.1'in *"body'yi yok sayar"* notuyla aynı davranış).
+> 2. ⛔ **FILL — ZORUNLU adım** (bu sistemde opsiyonel DEĞİL): obje başına `adt_push_source` / `SAPClient.push_object(object_type="ddls", source_file=<yerel .cds>)` — kaynağı **DİSKTEN** okut (LLM'de yeniden üretme). `object_types.get_source_url(name,"ddls")` doğru URL'i verir. Sonra aktivasyon: `/sap/bc/adt/activation` (`DDLS/DF` objectReference) ya da push'un kendi aktivasyonu.
+> 3. **Doğrula (atlanmaz):** `GET …/source/main?version=active` → gövdede `abstract entity` **GEÇMELİ** + `version=active` + yerel kaynakla **sha256 eşitliği** (CR/son-satırsonu normalize).
+>
+> ⚠ **Ölü referans (ölçüldü 2026-08-22):** bu maddenin eski hâli `scripts/TempScripts/create_trdoc_abstract.py`'a işaret ediyordu — **o dosya ve `TempScripts/` dizini DEV_CORE'da YOK** (junction üzerinden `ls`/`ls -L`/`find -L` + doğrudan `C:\IX\DEV_CORE\...` + repo-geneli ad araması: dördü de negatif). Deseni script'ten değil, **yukarıdaki 3 adımdan** kur.
 >
 > **Kural:** "yeni DDLS" görünce TÜRÜNE bak — SELECT var mı? Varsa view-entity 3-adımı; yoksa (param/result/projection-only abstract) bu varyant. Tahminle araç seçme.
 
