@@ -50,7 +50,7 @@ Detay: `governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasak
 ## SAP YAZMA PROTOKOLÜ (her domain/DTEL/CDS/struct/class/RAP push öncesi)
 
 1. **Reviewer pre-flight (ADR 0006):**
-   `python scripts/validators/run_review.py --task <task_type> --artifact <path>`
+   `python core/scripts/validators/run_review.py --task <task_type> --artifact <path>`
    - PASS → yaz · WARNING → yaz + raporda belirt · BLOCKER → yazma, düzelt, tekrar review.
 2. **MCP tool mu, script mi? (ADR 0007):**
    - Tek obje yaratım/aktivasyon/push/search/lock → **MCP `sap-adt` tool** (`adt_*`).

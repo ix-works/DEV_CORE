@@ -40,7 +40,7 @@ sistemde **uçtan uca AI ile yaratıldı + aktive edildi** (operatör=0):
 
 ```powershell
 # 1) reviewer pre-flight (ADR 0006)
-python scripts/validators/run_review.py --task rap_cds_creation --artifact <cds>
+python core/scripts/validators/run_review.py --task rap_cds_creation --artifact <cds>
 # 2) shell+PUT (RAP-aware populate; --cwd YOK, PowerShell)
 python scripts/populate_cds_views.py --package ZSD001_CLC --transport <TRANSPORT> `
   --source-dir ERP/SD/ZSD001_CLC/cds --only ZSD001_I_ORDER [--force-recreate]

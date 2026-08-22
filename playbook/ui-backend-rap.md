@@ -104,7 +104,7 @@ UI'ın CDS/BDEF/behavior'ını kurmadan önce:
 |---|---|---|---|---|
 | **E1** | Brand-new DDLS `adt_push_source` → `[423] InvalidLockHandle`, "SAP did not return CORRNR", her çağrı AYNI handle (deterministik) | MCP server ilk yaratımda stale lock handle cache'liyor | **Retry=patinaj.** `populate_cds_views.py --package … --source-dir … --only <NAME> --force-recreate` → `mcp adt_activate <NAME> ddls`. MEVCUT obje update'inde bug YOK | all |
 | E2 | `adt_post_shell`/`adt_get`/`adt_activate` bazı tip desteklemiyor (DDLS/bdef) | MCP tool kapsamı sınırlı | bdef = `create_rap_service.py --step bdef/ccimp/pbactivate`; ddls activate = MCP `adt_activate` (destekler) | all |
-| E3 | MCP reviewer timeout | MCP wrapper'da bilinen sorun | `skip_reviewer=true` + manuel `python scripts/validators/run_review.py --task rap_cds_creation` (ADR 0006 yine zorunlu) | all |
+| E3 | MCP reviewer timeout | MCP wrapper'da bilinen sorun | `skip_reviewer=true` + manuel `python core/scripts/validators/run_review.py --task rap_cds_creation` (ADR 0006 yine zorunlu) | all |
 | E4 | Z obje EN dilde yaratıldı | MCP post_shell EN | raw REST + `masterLanguage=TR` shell + post-create `adt_get include_source=false` doğrula | all (ADR 0005 D) |
 
 ## §F Audit alanlari auto-fill — STANDART (KANITLANDI 2026-05-19)
