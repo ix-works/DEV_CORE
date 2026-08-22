@@ -343,7 +343,7 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 | **Core-sızıntı kilidi** | `scripts/validators/check_core_not_committed.py` | run_all_validators + pre_tool_guard commit-kapsamı |
 | **Davranış-manifest (F2)** | session_start manifest-diff + **ConfigChange hook** | oturum-başı + seans-içi |
 | PULL-BEFORE-EDIT | `scripts/hooks/pull_before_edit.py` | SAP source düzenleme öncesi (ADR 0016) |
-| Reviewer pre-flight | `scripts/validators/run_review.py` | SAP yazma öncesi (ADR 0006): PASS→yaz · WARNING→yaz+raporla · BLOCKER→yazma |
+| Reviewer pre-flight | `core/scripts/validators/run_review.py` | SAP yazma öncesi (ADR 0006): PASS→yaz · WARNING→yaz+raporla · BLOCKER→yazma |
 
 > ⚠ **Bu tabloda OLMAYAN, 2026-07-10'da KALDIRILAN runtime kuralları:** R10 freeze/salt-okunur
 > kök-yazma · R9 özyinelemeli-silme · sızıntı-commit · applies_to. Kim/niçin kaldırıldı:
