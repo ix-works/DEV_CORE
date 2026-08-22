@@ -89,6 +89,48 @@ ENDFUNCTION.
 
 İmza source'tan set edilir → **imza için SE37 GEREKMEZ.** (Kanıt: ZSD001_FM_SO_CREATE.)
 
+> ### ⛔ `TABLES` PARAMETRESİ — İKİ KISIT BİRDEN (en pahalı tuzak)
+>
+> `TABLES` parametresi yazarken **iki ayrı kural** aynı anda geçerlidir ve **birbirini keser**:
+>
+> | Kısıt | Ne der | İhlalde |
+> |---|---|---|
+> | **ADT push** | `STRUCTURE` **kullanma**, `TYPE` yaz | `[400] FUNC_ADT 015` · *"Parameter `<P>` declares no type"* — **upload anında**, aktivasyona hiç gelmez |
+> | **ABAP sözdizimi** | `TYPE`'tan sonra bir **TABLO TİPİ** gelmeli | Aktivasyon düşer: **`FL 387`** — *"Type `<X>` is not a table type"* (imza satırı, `start=1,0`) |
+> 
+> ⛔⛔ **EN SİNSİ YANI — TUZAK GİZLİ KALIR, RFC İŞARETLENİNCE PATLAR:** `processingType=normal`
+> iken SAP bunu **TOLERE EDER** (obje aktive olur, checkrun **temiz** döner). FM **Remote-Enabled**
+> yapıldığı anda kontrol sertleşir ve **hard error** olur. ⇒ *"FM zaten aktifti, sonra bozuldu"*
+> sanılır; oysa kusur **baştan** oradaydı. Ölçüldü 2026-08-22: aynı kaynağın `active`(normal)
+> sürümü **0 mesaj**, `inactive`(rfc) sürümü **`FL 387`**.
+> 
+> ⚠ **Kural YALNIZ `TABLES`'a özgüdür:** RFC transparan tabloyu genel olarak reddetmez —
+> aynı imzadaki `IMPORTING VALUE(is_x) TYPE z<pkg>_t_kalem` (transparan tablo, yapı olarak)
+> **hiçbir hata üretmedi**. Yanlış genelleme yapma.
+>
+> ⇒ **Transparan tablo ya da yapı adı YETMEZ.** Satır tipi o yapı olan bir **DDIC tablo tipi** gerekir:
+>
+> ```abap
+> " ⛔ YANLIS - push gecer, AKTIVASYON DUSER
+>   TABLES it_x TYPE z<pkg>_t_kalem.      " transparan tablo -> "is not a table type"
+> " ⛔ YANLIS - PUSH REDDEDILIR
+>   TABLES it_x STRUCTURE z<pkg>_t_kalem. " -> FUNC_ADT 015
+> " ✅ DOGRU
+>   TABLES it_x TYPE z<pkg>_tt_kalem.     " satir tipi = z<pkg>_t_kalem olan TABLO TIPI
+> ```
+>
+> 📌 **Standart tablo tipleri hazırdır** (`BAPIRET2_T` gibi) — mesaj tablosu için yeni tip yaratma.
+> 📌 **`LIKE` neden önerilmiyor:** SAP'nin **kendi** standart RFC FM'leri yapı-tipli TABLES'ı
+>   `LIKE` ile yazar (ölçüldü: `BAPI_MATERIAL_SAVEDATA` · `RFC_READ_TABLE`, ikisi de `FMODE='R'`).
+>   Ama `LIKE` **obsolete**tir (ATC gürültüsü) ve ADT-push'un kabul edip etmediği **ölçülmedi**
+>   — `STRUCTURE`'ın eşdeğeri olduğu için `FUNC_ADT 015` riskine yakın. **TTYP yolu kanıtlıdır.**
+> ⚠ **Yeni tablo tipi = yeni DDIC objesi** ⇒ **adı ve kısa metni KULLANICI verir** (ADR 0005-D).
+> Yaratım: `scripts/create_table_type.py` · reçete: [`adt-tables-structures.md`](adt-tables-structures.md).
+>
+> ⭐ **Neden burada yazılı:** bu tuzak [`adt-rap.md`](adt-rap.md) §RFC-sarıcı bölümünde de vardı, ama
+> **FM yazan kişi oraya bakmaz** — 2026-08-22'de tam bu yüzden bir tur kaybedildi (kural VARDI,
+> **konumu yüzünden ateşlemedi**; `lessons-learned` PATTERN #30). İki yerde de duruyor: **bilinçli çoğaltma**.
+
 **Push mekaniği** (`set_function_module_source` içinde — `adt-foundation.md §3.2`):
 1. `self.session.headers['X-sap-adt-sessiontype']='stateful'` (lock'un PUT'a kadar yaşaması için).
 2. `fetch_csrf_token(force_refresh=True)`.

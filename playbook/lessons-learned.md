@@ -808,3 +808,38 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
    (test geçer ama görünmez; "exit 0 ≠ çıktı" sınıfı).
 3. **Worktree dalı main'in GERİSİNDE olabilir** → F0 adımına `git diff HEAD origin/main` ekle
    (2026-08-12 pilotunda changelog append-append çakışması tam bundan çıktı, öngörülmüştü).
+
+
+---
+
+### PATTERN #33: `TABLES p TYPE <yapı>` — **LATENT** hata; FM RFC-enable edilene kadar SESSİZ
+
+- **Belirti:** Fonksiyon modülü **aktif ve çalışıyor**. SE37'de *"Remote-Enabled Module"* işaretlenip
+  kaydedilmek istendiğinde **kaydedilmiyor**; obje `inactive`'e düşüyor ve aktivasyon
+  **`FL 387` — *"Type `<X>` is not a table type"*** ile reddediliyor. Bakan kişi *"çalışıyordu,
+  RFC tıkı bozdu"* sanır — **kusur baştan oradaydı.**
+- **Mekanizma:** `TABLES p TYPE x` sözdiziminde `x` bir **tablo tipi (TTYP)** olmak zorundadır.
+  Transparan tablo ya da yapı adı verilirse SAP bunu `processingType=normal` iken **TOLERE EDER**
+  (obje aktive olur, checkrun **temiz** döner); `rfc` işaretlenince kontrol sertleşir ve **hard
+  error** olur. ⇒ Kusur, **onu ortaya çıkaracak eylem yapılana kadar** görünmez.
+  **Ölçüm (2026-08-22):** aynı kaynağın `active`(normal) sürümü **0 mesaj**, `inactive`(rfc)
+  sürümü **`FL 387`**, imza satırı `start=1,0`. Kanal: `POST /sap/bc/adt/checkruns` (salt-okur).
+- ⚠ **KAPSAM — yanlış genelleme yapma:** kural **yalnız `TABLES`'a özgüdür.** RFC, transparan
+  tabloyu genel olarak reddetmez: aynı imzadaki `IMPORTING VALUE(is_x) TYPE <transparan tablo>`
+  **hiçbir hata üretmedi**. İlk hipotez *"RFC transparan tabloyu kabul etmiyor"* idi ve **çürüdü** —
+  hatanın kendi metni (`FL 387`) otoriteydi.
+- **İKİ KISIT BİRDEN (bu yüzden pahalı):** ADT-push `STRUCTURE` yazımını **upload anında** reddeder
+  (`[400] FUNC_ADT 015` — *"Parameter `<P>` declares no type"*), ABAP ise `TYPE` sonrası TTYP ister.
+  Tek geçerli biçim: **`TYPE <tablo_tipi>`**. Satır tipi o yapı olan bir `Z<PKG>_TT_<KONU>` yaratılır
+  (⚠ **yeni DDIC objesi ⇒ ad + kısa metin KULLANICIDAN**, ADR 0005-D). Standart tipler hazırdır
+  (`BAPIRET2_T`) — mesaj tablosu için yeni tip yaratma.
+- **Neden bu PATTERN yazıldı — kural VARDI ama YANLIŞTI:** `adt-rap.md` RFC-sarıcı tuzak (b)
+  *"`TYPE <struct>`"* diyordu. Ajan kuralı **okudu, uyguladı** ve tam bu hatayı üretti.
+  ⇒ **PATTERN #30'un ikinci yüzü:** #30 *"kural doğru ama yanlış yerde"*ydi; bu vaka
+  *"kural doğru yerde ama **yanlış**"*. Eksik kuraldan **daha tehlikelidir** — okuyan, doğru
+  davrandığını sanır. Düzeltildi + `adt-fugr-functions.md`'ye (FM yazanın baktığı yer) kopyalandı.
+- **Gate?** ⛔ **HAYIR** — gate-moratoryumu ② karşılanmıyor: sonuç **gürültülü** patlıyor
+  (push `400` / aktivasyon `FL 387`), sessiz ya da geri-alınamaz değil. Çare: doğru playbook +
+  **bug-checklist `BE-69`** (bug-expert elle denetler).
+- **Referans:** `playbook/adt-fugr-functions.md` §2 · `playbook/adt-rap.md` RFC-sarıcı tuzak (b) ·
+  `playbook/checklists/bug-checklist-backend.md` **BE-69** · `scripts/create_table_type.py`
