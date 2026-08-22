@@ -91,6 +91,7 @@ OZEL_TESTLER = [
     ("infra_write_guard", "infra yuzeyine ANA-OTURUM yazimi BLOK; infra-expert MUAF (kimlik olculdu)"),
     ("abaplint_failopen", "check_abaplint: OLCEMEDIM != TEMIZ (ozet satiri zorunlu kanit, 9 senaryo)"),
     ("prior_art_kb01", "KB-01 ONCE-ARA tur-ici: brifingde adi gecen script'in recetesi SPAWN aninda yuzeye cikar (metin-izi DEGIL arama)"),
+    ("worktype_alt_tur", "worktype hatirlaticisi ALT-TURE bakar: artefaktin kendi bildirimi (`define abstract entity`) -> AYRI recete bolumu; belirsizse SUSAR"),
     # ⚠ 2026-08-01: `adtget_yokluk_kaniti` bir ara bu listede IKI KEZ yaziliydi (PR birlesme
     # artigi) -> ayni fixture iki kez kosuyor ve TOPLAM sayiyi sisiriyordu. "N/N PASS"
     # sayisina guvenmenin bedeli: sayaci degil SATIRLARI oku.
@@ -318,6 +319,16 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "KB-01 prior-art ekseni + brifing-lint regresyonu + parse-fail sözleşmesi + "
      "ENGELLENİRSEN ekseni (dar tutuldu: ölçülmüş %18,4 kapsam / %16,0 ateşleme; "
      "ham 'madde var mı' %86,7 ateşleyip uyarı körlüğü üretirdi)"),
+    # sap_worktype_hint.py HARITA'da HIC YOKTU (2026-08-22, Q5 turu bulgusu — `team_setup.py`
+    # ile ayni sinif): degisikligi hicbir korpusa eslesmiyordu, tazelik kapisi KORDU.
+    ("scripts/hooks/sap_worktype_hint.py",
+     ("O:worktype_alt_tur", "O:negatif_test_harness"),
+     "ALT-TUR ekseni (artefaktin kendi bildiriminden recete BOLUMU) + obje-tipi -> checklist "
+     "taban satiri + andigi recete yollarinin TAZELIGI; parse-fail sozlesmesi komsu korpusta"),
+    # Recete BASLIKLARI eslesme sozlugudur (ayri sozluk YOK): baslik metni degisirse
+    # `_alt_tur` sessizce susar ya da baska bolume kayar.
+    ("playbook/adt-cds.md", ("O:worktype_alt_tur",),
+     "§ABSTRACT ENTITY basligi ALT-TUR eslesmesinin TEK kaynagi (kopya sozluk yok)"),
     ("scripts/foreign_project_audit.py", ("O:yabanci_proje_json_kacisi",),
      "hook/MCP komut ayiklamasi: JSON kacisi + liste ogeleri + parse-fail gorunurlugu"),
     ("scripts/utils/kapsam.py", ("O:validator_kapsam_paydasi",),

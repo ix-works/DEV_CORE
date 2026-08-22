@@ -1185,3 +1185,35 @@ bakar), yanlışlığı **azami kaldıraçtadır**. Reçete satırı yazarken ar
 3. Beklenen tool kümesi **AST'den türetilir, elle tablo YOKTUR.** Elle tablo denenmişti ve
    **yanlıştı** (5 sabitten 3'ünün adı yok, 2 hook atlanmış) ⇒ gate iki sabiti bulamayıp
    sessizce boş tarardı. **Envanteri yapıdan türet, metin deseninden değil.**
+
+## B32 — `worktype_alt_tur` korpusu (worktype hatırlatıcısı ALT-TÜRE bakar)
+
+**Ne koruyor:** `sap_worktype_hint`, SAP-yazma anında obje-tipinden checklist hatırlatır.
+Obje tipi **iş türünü bitirmez**: aynı `ddls` altında `abstract entity` ile `view entity`
+FARKLI reçetelerdir ve `adt-cds.md` §ABSTRACT ENTITY, kanonik bölümün önerdiği araçların
+abstract'ta **çalışmadığını** yazar. Eksen artefaktın **kendi bildirimini** okur (brifing
+metnini DEĞİL — o sınıf bu evde iki kez çürütüldü).
+
+**Ölçülmüş taban (2026-08-22, gerçek artefakt korpusu — sentetik değil):** 292 canlı
+`.cds/.bdef/.srvd` → **precision %100 · recall %100** (42 abstract entity; 250 diğer
+artefaktta 0 yanlış işaretçi). Ölçüm sırasında **iki gerçek FP** bulundu ve kapatıldı:
+(a) tüm satır taranınca düz view-entity `select from` → §T3 tuzak notu; (b) başlıktaki
+KOD PARÇASI yüzünden `define root view entity` → §ABSTRACT ENTITY (292'nin **30'u**).
+Ayrıca 60-satır penceresi 2 abstract entity'yi kaçırıyordu (bildirim 92./117. satır).
+
+⛔ **SİLİNMEZ ÇAPALAR:** `N1b` (view-entity §T3'e yollanmaz) · `N2` (`define root view
+entity` ABSTRACT'a yollanmaz) — ikisi de GERÇEK korpusta ölçülmüş FP'lerdir, sentetik
+değildir. `T1` (hatırlatıcının andığı her reçete yolu açılabilir = tazelik) ve `S1`
+(yeni bölüm ELLE sözlüğe eklenmeden çözülür = "ayrı sözlük yok" sözleşmesi) de silinemez.
+
+**Mutasyonlar — 4 kip, hiçbiri diğerini kapsamaz:** `--mutasyon` (alt-tür sök) → 14/18 ·
+`--mutasyon-kodspan` → 17/18 (yalnız N2) · `--mutasyon-pencere` → 16/18 (P1/P3) ·
+`--mutasyon-dedup` → 17/18 (yalnız D1). ⚠ `_ikili`'nin obje-adı kesmesi bugün **bağımsız
+olarak ölçülemiyor** (kod-parçası süzgeci aynı yolu kapatıyor) — savunma-derinliği
+örtüşmesi, kaynakta not düşüldü; mutasyon kipi AÇILMADI (kurulamayan mutasyon "kaçtı"
+diye raporlanmaz).
+
+**Nasıl koşulur:** `python tests/fixtures/worktype_alt_tur/run.py [--mutasyon…]`.
+Gerçek-korpus ölçümünü tekrarlamak için: hook'u import edip `_alt_tur`'ü projelerin
+`SOURCE_CODES/**` artefaktlarına uygula; yer-gerçeği = kaynakta `define [root] abstract
+entity` regex'i (matcher'dan BAĞIMSIZ).
