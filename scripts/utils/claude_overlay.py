@@ -258,7 +258,13 @@ def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) ->
     h = hedef(proje, tip)
     if _junction_mu(h):
         try:
-            os.rmdir(h)                 # junction'ı kaldır (hedefe DOKUNMAZ)
+            # Windows junction = DİZİN girdisi → rmdir. POSIX symlink = dizin DEĞİL → unlink.
+            # (Ölçüldü 2026-08-27: CI/Linux'ta rmdir NotADirectoryError veriyordu; bu dal
+            #  POSIX'te hiç çalışmamıştı. Hedefe her iki yolda da DOKUNULMAZ.)
+            try:
+                os.rmdir(h)
+            except NotADirectoryError:
+                os.unlink(h)
         except OSError as exc:
             return False, (f"{tip}: junction kaldirilamadi ({type(exc).__name__}: {exc}) — "
                            f"hicbir sey degistirilmedi")
