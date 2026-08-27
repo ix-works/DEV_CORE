@@ -18,6 +18,9 @@
 ## 3. ÇIKTI FORMATI (output format)
 - Final mesaj = SendMessage({to:"main"}) raporu; şekli: <madde listesi / tablo / diff / dosya-yolu>
 - Büyük çıktıyı scratch/dosyaya YAZ, mesajda yolunu ver (mesaj-şişirme yok).
+- ⛔ **SALT-OKUR rollere dosya yolu ÇIKTI olarak VERİLMEZ.** `tools:` satırında `Write`/`Edit` **olmayan** roller (ör. `bug-expert`) raporu dosyaya yazamaz; çıktıları **mesaja** girer (`SendMessage({to:"main"})`), kalıcılaştırmayı **lider** yapar.
+  ⚠ Aksi hâlde ajan raporu **üretir ama teslim edemez**: `Write` çağrısı `No such tool available` ile düşer ve bulgu **hiçbir kanaldan çıkmaz**. Bu bir nüks sınıfıdır — `infra-findings` `Q29` (2026-08-27) ve aynı sınıf 2026-08-07 · 2026-08-19. Ölçüm: 195 `bug-expert` ajanı / 17 yazma denemesi / **17 hata / 0 başarı**.
+  ✅ Doğru biçim: *"verdict'in TAMAMI mesaja girsin; büyükse özetle, dosya yolu bekleme."*
 
 ## 4. ARAÇ/KAYNAK KILAVUZU (tool guidance)
 - Kullan: <öncelikli araçlar/dosyalar>; `path=core/` kuralı: kökten Grep core'u GÖRMEZ (D29).
