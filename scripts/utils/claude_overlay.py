@@ -31,6 +31,10 @@ diyebildiği İÇİN senkron artık kullanıcı komutuna bağlı değildir — `
 her açılışta çağırır, fark boşsa kopyayı sessizce DEĞİL, **tek görünür satırla** tazeler.
 Ölçülmüş sınır: ajan tanımları oturum başında okunur ⇒ tazeleme **bir sonraki oturumdan**
 itibaren etkilidir (kanıt: `oto_tazele` docstring'i).
+
+ATOMİKLİK (2026-08-27, Q30): HİÇBİR yol dizini silip yeniden kurmaz. `materyalize` de
+`_yerinde_senkron` de "üzerine yaz → fazlalığı tek tek sil → manifest en son → öz-denetle"
+sırasını izler. Gerekçe `materyalize` docstring'inde (ölçülmüş kayıp vakası).
 """
 from __future__ import annotations
 
@@ -38,7 +42,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 from pathlib import Path
 
 # Otomatik tazelemeyi kapatan acil-fren (F5 geri-alma yolu): "0"/"false" ⇒ eski davranış
@@ -208,7 +211,31 @@ def fark_raporu(proje: Path, core_root: Path, tip: str) -> list:
 
 def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) -> tuple:
     """`.claude/<tip>`'i gerçek dizin olarak üret (core + overlay). -> (ok, mesaj)
-    onayli=False iken mevcut kopyalarda fark varsa ÜRETMEZ (fark-onay kapısı, T2.5)."""
+    onayli=False iken mevcut kopyalarda fark varsa ÜRETMEZ (fark-onay kapısı, T2.5).
+
+    ⚠⚠ 2026-08-27 (Q30) — **YIKIM YOK, YERİNDE ÜRETİM.** Eski gövde dizini
+    `shutil.rmtree` ile SİLİP yeniden kuruyordu ve bu "kabul edilebilir pencere"
+    sayılmıştı (2026-08-13 kararı, `_yerinde_senkron` docstring'i). **Ölçülmüş vaka o
+    varsayımı çürüttü:** `rmtree` içerideki 7 ajan tanımını sildi, sonra DİZİNİN
+    KENDİSİNİ silerken `PermissionError [WinError 5]` aldı (Windows'ta dizin üstünde
+    dışarıdan tutulan anlık bir handle — bu makinede repo kökü bir Drive senkron klasörü altında ve
+    `GoogleDriveFS`/Defender/indeksleyici canlı). İstisna `mkdir`+yazma satırlarına
+    gelinmesini engelledi ⇒ `.claude/agents` **BOŞ** kaldı; `.gitignore`'lu olduğu için
+    `git status` sustu, `git checkout` geri getiremezdi. Kayıp yaptırımlı rollerdi
+    (adt-gateway = tek SAP yazıcısı, bug-expert = BUG GATE).
+
+    Kök: yıkım ile inşa AYRI adımlardı ve **arada dizin boş kalıyordu**. Tetik (dış
+    handle) ortadan kaldırılamaz; dayanıklılık koda konur. Yeni sıra `_yerinde_senkron`
+    ile aynıdır: ① üzerine YAZ (dizin hiç silinmez) ② beklenen kümede olmayanı TEK TEK
+    sil ③ manifest EN SON ④ son-durumu ÖZ-DENETLE. En kötü hâlde eski + yeni karışımı
+    kalır — **hiçbir noktada boş kalmaz.**
+
+    ⛔ `_yerinde_senkron` ile BİLEREK ayrı tutuldu (birleştirme = `oto_tazele` çağrı
+    zincirine `materyalize` sokar, `overlay_oto_tazeleme` V22 AST çapası KIRMIZI verir).
+    Semantik de ayrıdır: otomatik yol fazlalığı yalnız KANITLA siler (`kaynak == "core"`
+    + el değmemiş), elle yol `fark_raporu`'nun ilan ettiği gibi ("senkronda SİLİNİR")
+    kayıtsız siler — üstündeki onay kapısı bunun için vardır.
+    """
     if not overlay_var_mi(proje, tip):
         return False, f"overlay yok: {overlay_kaynagi(proje, tip)}"
 
@@ -219,30 +246,91 @@ def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) ->
                            + "\n    ".join(farklar)
                            + "\n    Karar ver (terfi/claude-local) → sonra --overlay-onayli ile koş.")
 
+    # KANIT KAPISI — `oto_tazele`'nin V7 çapasının ELLE-YOL eşi. Core tarafı okunamıyorsa
+    # (junction kopuk / dizin boş) "üretilecek küme" core dosyalarını İÇERMEZ ⇒ üretim
+    # onları FAZLALIK sayıp silerdi. Üstelik `team_setup.py` tam da kopuk junction'ı
+    # onarmak için koşulan komuttur: koruma en çok orada gerek.
+    core_dizin = core_root / "claude" / tip
+    if not core_dizin.is_dir() or not any(core_dizin.glob("*.md")):
+        return False, (f"{tip}: core/claude/{tip} okunamadi (junction kopuk? dizin bos?) — "
+                       f"uretim mevcut kopyalari SILERDI, DOKUNULMADI")
+
     h = hedef(proje, tip)
     if _junction_mu(h):
-        os.rmdir(h)                     # junction'ı kaldır (hedefe DOKUNMAZ)
-    elif h.is_dir():
-        shutil.rmtree(h)                # eski üretim
-    h.mkdir(parents=True, exist_ok=True)
+        try:
+            os.rmdir(h)                 # junction'ı kaldır (hedefe DOKUNMAZ)
+        except OSError as exc:
+            return False, (f"{tip}: junction kaldirilamadi ({type(exc).__name__}: {exc}) — "
+                           f"hicbir sey degistirilmedi")
+    try:
+        h.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return False, f"{tip}: dizin acilamadi ({type(exc).__name__}: {exc})"
 
     beklenen = _beklenen(proje, core_root, tip)
+
+    # ① ÜZERİNE YAZ — silme YOK. Tek dosya yazılamazsa diğerleri yerinde kalır.
+    yazilamayan = []
+    for ad, (kaynak, _ch) in beklenen.items():
+        try:
+            _yaz(h / ad, _uretilecek_icerik(proje, tip, ad, kaynak))
+        except OSError as exc:
+            yazilamayan.append(f"{ad} ({type(exc).__name__})")
+
+    # ② FAZLALIKLARI TEK TEK SİL (dizin silme YOK). `.md` dışı dosyalara dokunulmaz —
+    # eski `rmtree` onları da siliyordu; bilinmeyen dosyayı kanıtsız silmektense
+    # GÖRÜNÜR kılmak seçildi (mesajda listelenir).
+    silinemeyen, yabanci = [], []
+    for f in sorted(h.iterdir()):
+        if f.name in beklenen or f.name == MANIFEST_ADI or not f.is_file():
+            continue
+        if f.suffix != ".md":
+            yabanci.append(f.name)
+            continue
+        try:
+            f.unlink()
+        except OSError as exc:
+            silinemeyen.append(f"{f.name} ({type(exc).__name__})")
+
+    # ③ MANİFEST EN SON (yarıda kesilirse tutarlı bir geçmişi anlatmaya devam eder)
     manifest = {"tip": tip, "dosyalar": {}}
     for ad, (kaynak, core_hash) in beklenen.items():
-        proje_ustu = kaynak.parent == overlay_kaynagi(proje, tip)
-        _yaz(h / ad, _uretilecek_icerik(proje, tip, ad, kaynak))
+        if not (h / ad).is_file():
+            continue                    # yazılamadı → kayıt uydurma
         manifest["dosyalar"][ad] = {
-            "kaynak": "proje" if proje_ustu else "core",
+            "kaynak": "proje" if kaynak.parent == overlay_kaynagi(proje, tip) else "core",
             "core_hash": core_hash,       # override edilen core dosyasının hash'i (drift için)
             # ÜRETİLEN hâlin hash'i = fark_raporu'nun KIYAS TABANI (2026-08-13).
             # Damga + LF normalizasyonu SONRASI, yani diskteki gerçek bayt: kıyas
             # "yeniden üretsem ne çıkardı" tahminine değil, ölçüme dayansın.
             "uretilen_hash": _hash(h / ad),
         }
-    (h / MANIFEST_ADI).write_text(json.dumps(manifest, indent=1, ensure_ascii=False),
-                                  encoding="utf-8")
+    try:
+        (h / MANIFEST_ADI).write_text(json.dumps(manifest, indent=1, ensure_ascii=False),
+                                      encoding="utf-8")
+    except OSError as exc:
+        yazilamayan.append(f"{MANIFEST_ADI} ({type(exc).__name__})")
+
+    # ④ SON-DURUM ÖZ-DENETİMİ — "SAYI ≠ YÜKLENEBİLİRLİK" (2026-07-09: damga frontmatter'ın
+    # ÖNÜNE girmişti, dosya sayısı doğruydu, 6/6 ajan yüklenemiyordu ve sistem "güncel"
+    # diyordu). Üretim kendi çıktısını ölçmeden BAŞARILI demez.
+    eksik = sorted(ad for ad in beklenen if not (h / ad).is_file())
+    bozuk = sorted(ad for ad in beklenen
+                   if tip in ("agents", "skills") and (h / ad).is_file()
+                   and not frontmatter_ile_basliyor(h / ad))
+
     n_proje = sum(1 for v in manifest["dosyalar"].values() if v["kaynak"] == "proje")
-    return True, f"{tip}: {len(beklenen)} dosya ({n_proje} proje-lokal override)"
+    mesaj = f"{tip}: {len(manifest['dosyalar'])}/{len(beklenen)} dosya ({n_proje} proje-lokal override)"
+    if yabanci:
+        mesaj += f" · .md DISI, dokunulmadi: {yabanci}"
+    if silinemeyen:
+        mesaj += f" · SILINEMEDI: {silinemeyen}"
+    if yazilamayan or eksik or bozuk:
+        return False, (mesaj + f" · ⛔ URETIM EKSIK — yazilamayan={yazilamayan} "
+                       f"eksik={eksik} frontmatter-bozuk={bozuk}. "
+                       f"{hedef(proje, tip)} ELDEN GECIRILMELI: bu dizin harness'in "
+                       f"{tip} tanimlarini okudugu YERDIR; eksik/bozuk dosya = o rol YOK.")
+    return True, mesaj
 
 
 def tazeleme_gerekli(proje: Path, core_root: Path, tip: str) -> list:
@@ -289,19 +377,23 @@ def _manifest_alansiz(proje: Path, tip: str) -> bool:
 def _yerinde_senkron(proje: Path, core_root: Path, tip: str) -> tuple:
     """`materyalize`'in ATOMİK-OLMAYAN penceresi olmadan senkron. -> (ok, mesaj)
 
-    `materyalize` dizini `shutil.rmtree` ile SİLİP yeniden kurar. Elle/seyrek koşarken
-    kabul edilebilir bir pencere; ama otomatik yol her oturum açılışında koşacağı için
-    o pencere RUTİN olurdu — üstelik harness'ın ajan tanımlarını okuduğu dizinde. Emsal
-    2026-07-09: overlay üretimindeki bir kusur 6/6 ajanı yüklenemez yaptı ve dosya SAYISI
-    doğru olduğu için sistem "güncel" raporladı (sayı ≠ yüklenebilirlik).
+    ⚠ TARİHSEL: bu fonksiyon 2026-08-13'te AYRI yazıldı çünkü `materyalize` o gün dizini
+    `shutil.rmtree` ile SİLİP yeniden kuruyordu; o pencere "elle/seyrek koşarken kabul
+    edilebilir" sayılmış, yalnız otomatik yola kısıt konmuştu. **2026-08-27 (Q30) o
+    varsayım ÖLÇÜMLE ÇÜRÜDÜ** (rmtree yarıda kaldı, `.claude/agents` boşaldı) ve
+    `materyalize` de yerinde üretime çevrildi. İki fonksiyon YİNE DE ayrıdır: (a)
+    `overlay_oto_tazeleme` V22 AST çapası `oto_tazele` zincirinde `materyalize` görmemeli,
+    (b) silme semantiği farklı — burada fazlalık yalnız KANITLA silinir, `materyalize`'de
+    onay kapısının arkasında kayıtsız silinir.
 
     Bu yüzden otomatik yol: ① beklenen dosyaları ÜZERİNE yaz (dizin hiç silinmez)
     ② beklenen kümede olmayanları TEK TEK sil — yalnız kanıt varsa (`kaynak == "core"` VE
     üretildiği gibi); kanıtsız dosya KORUNUR ve mesajda görünür ③ manifest'i EN SON yaz
     (yarıda kesilirse manifest tutarlı bir geçmişi anlatmaya devam eder).
 
-    `materyalize` DEĞİŞMEDİ: elle yol (`team_setup`, `--overlay-onayli`) aynen eski
-    davranışta. Kısıt yalnız otomatik yola kondu.
+    ⛔ ARTIK GEÇERSİZ: *"`materyalize` DEĞİŞMEDİ, kısıt yalnız otomatik yola kondu"* —
+    2026-08-27'de (Q30) elle yol da yerinde üretime çevrildi; ikisinin de yıkım penceresi
+    YOK. Fark yalnız silme-kanıtı eşiğindedir (yukarı bkz).
     """
     farklar = fark_raporu(proje, core_root, tip)
     if farklar:                       # ikinci savunma katmanı (çağıranın kontrolünden bağımsız)

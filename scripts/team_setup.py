@@ -67,7 +67,14 @@ def junction_kur(link: Path, hedef: Path) -> bool:
             return True
         if mevcut:
             say(WARN, f"junction YANLIŞ hedefe: {link} → {mevcut}; yeniden kuruluyor")
-            link.rmdir()  # linki kaldırır, HEDEFE DOKUNMAZ (silme-matrisi kanıtlı)
+            try:
+                link.rmdir()  # linki kaldırır, HEDEFE DOKUNMAZ (silme-matrisi kanıtlı)
+            except OSError as exc:
+                # Aynı sınıf, Q30 (2026-08-27): Windows'ta dizin/bağ kaldırma dışarıdan
+                # tutulan bir handle yüzünden ANLIK olarak WinError 5 verebilir. Eskiden
+                # istisna main()'e kadar çıkıp kurulumun kalan adımlarını atlatıyordu.
+                say(FAIL, f"junction kaldirilamadi: {link} — {type(exc).__name__}: {exc}")
+                return False
         else:
             say(FAIL, f"{link} junction DEĞİL gerçek klasör — elle incele, DOKUNMADIM")
             return False
@@ -95,12 +102,23 @@ def junctions(proje: Path, overlay_onayli: bool = False) -> bool:
 
     ok = junction_kur(proje / "core", CORE_ROOT)
     for tip in ov.TIPLER:
-        if ov.overlay_var_mi(proje, tip):
-            basarili, mesaj = ov.materyalize(proje, CORE_ROOT, tip, onayli=overlay_onayli)
-            print(f"  [{'OK' if basarili else 'FAIL'}] overlay .claude/{tip} — {mesaj}")
-            ok = ok and basarili
-        else:
-            ok = junction_kur(proje / ".claude" / tip, CORE_ROOT / "claude" / tip) and ok
+        # ⚠ TİP-BAŞINA YALITIM (2026-08-27, Q30): tek bir tipte fırlayan istisna eskiden
+        # main()'e kadar çıkıyordu ⇒ döngünün KALAN tipleri + dosya_tamamla + hookspath_*
+        # + _core_index_yenile HİÇ koşmuyordu. Ölçülmüş vaka: `materyalize`
+        # `PermissionError [WinError 5]` verdi, `.claude/agents` boş kaldı ve kurulumun
+        # geri kalan 5 adımı sessizce atlandı. Yalıtım SUSTURMAZ: FAIL satırı basılır ve
+        # ok=False ile main() 1 döner.
+        try:
+            if ov.overlay_var_mi(proje, tip):
+                basarili, mesaj = ov.materyalize(proje, CORE_ROOT, tip, onayli=overlay_onayli)
+                print(f"  [{'OK' if basarili else 'FAIL'}] overlay .claude/{tip} — {mesaj}")
+            else:
+                basarili = junction_kur(proje / ".claude" / tip, CORE_ROOT / "claude" / tip)
+        except Exception as exc:  # noqa: BLE001
+            say(FAIL, f".claude/{tip} KURULAMADI — {type(exc).__name__}: {exc} "
+                      f"(diger tipler denenmeye DEVAM ediyor; kurulum yine de BASARISIZ sayilir)")
+            basarili = False
+        ok = ok and basarili
     return ok
 
 
