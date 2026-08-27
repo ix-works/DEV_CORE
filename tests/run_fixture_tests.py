@@ -207,6 +207,12 @@ OZEL_TESTLER = [
     #   --mutasyon (taban SHA, oto_tazele yok) -> P duser · --mutasyon-gevsek -> N capalari duser.
     ("overlay_oto_tazeleme",
      "overlay bayatligi komutsuz kapanir; elle duzeltme varken DOKUNMAZ"),
+    # 2026-08-27 (Q30): ELLE yolun (`materyalize`) YIKIM PENCERESI. `rmtree` icerigi silip
+    # dizini silerken WinError 5 aldi -> `.claude/agents` BOS kaldi (7/7 ajan tanimi gitti,
+    # dizin gitignored oldugu icin `git status` sustu). Iki degismez AYRI olculur:
+    #   --mutasyon (taban SHA) -> P+D duser · --mutasyon-gevsek -> yalniz D duser.
+    ("overlay_materyalize_atomik",
+     "materyalize: yikim yok (dizin BOSALMAZ) + eksik/bozuk uretim BASARILI sayilmaz"),
     # 2026-08-13 B0 is-ozel secim modu: `--degisen` haritasinin KENDI korpusu
     # (secim MANTIGI olculur — suite gercekten kosulmaz; kuru-kosum `--listele`).
     ("b0_secim",
@@ -362,9 +368,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "hook katmanı (MISSING/ORPHAN/UNDECLARED) + `# ENFORCES:` çapası da bu dosyada"),
     # team_setup.py HARITA'da HIC YOKTU (2026-08-22 bulgusu): degisikligi hicbir korpusa
     # eslesmiyordu -> tazelik kapisi bu dosyada KORDU.
-    ("scripts/team_setup.py", ("O:shim_tazeleme",),
+    ("scripts/team_setup.py", ("O:shim_tazeleme", "O:overlay_materyalize_atomik"),
      "shim tazeleme yolu + `dosya_tamamla` idempotansi burada yasar; varsayilanin "
-     "degismedigi YALNIZ bu korpusta olculur"),
+     "degismedigi YALNIZ bu korpusta olculur. `junctions()` tip-basina yalitimi "
+     "(Q30: tek tipteki istisna kurulumun kalan 5 adimini atliyordu) atomik korpusta"),
     ("scripts/validators/check_settings_template_sync.py", ("O:hook_gate_coverage",),
      "kablolama okuyucusu (`_kablolu_hooklar`) buradan IMPORT ediliyor — imza değişirse "
      "coverage-gate'in hook ORPHAN dalı sessizce ölür (kopya YOK, tek kaynak)"),
@@ -511,7 +518,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
 
     # ── overlay / proje-kurulum yüzeyi ──────────────────────────────────────
     ("scripts/utils/claude_overlay.py",
-     ("O:overlay_kiyas_tabani", "O:overlay_oto_tazeleme"), "T2.5 kıyas tabanı + oto-tazeleme"),
+     ("O:overlay_kiyas_tabani", "O:overlay_oto_tazeleme", "O:overlay_materyalize_atomik"),
+     "T2.5 kıyas tabanı + oto-tazeleme + `materyalize` atomikliği (Q30 kayıp vakası)"),
     ("scripts/utils/claude_paths.py", ("O:proje_slug_tek_kaynak",), "slug tek-kaynak korpusu"),
     ("scripts/utils/project_config.py",
      ("R:AV-02", "O:workflow_tetik_dupe"),

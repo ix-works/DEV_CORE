@@ -403,6 +403,36 @@ python tests/run_fixture_tests.py                                            # T
   oturum başında okunur; canlı harness'ta 3 koşumla ölçüldü — changelog'daki ÖLÇÜLMÜŞ SINIR
   bloğu). Fixture bunu doğrudan ölçemez (harness gerekir); ölçtüğü şey diskteki sonuç +
   hook çıktısındaki duyurudur.
+- **MATERYALIZE ATOMIKLIGI (2026-08-27, Q30 kayip vakasi):**
+  `python tests/fixtures/overlay_materyalize_atomik/run.py` → **24/24**, exit 0.
+  Degismez IKI tanedir ve AYRI olculur: **① ATOMIKLIK** — `materyalize` dizini SILMEZ
+  (uzerine yaz → fazlaligi tek tek sil → manifest en son); en kotu halde eski+yeni karisimi
+  kalir, **hicbir noktada BOS kalmaz**. **② DURUSTLUK** — uretim kendi ciktisini olcmeden
+  BASARILI demez (kanit kapisi: `core/claude/<tip>` okunamiyorsa DOKUNMA · son-durum
+  oz-denetimi: eksik/frontmatter-bozuk dosya varsa `ok=False` + **elden gecirilecek dizin
+  adiyla** yazilir).
+  ⚠ **CIFT mutasyon SART** (tek mutasyon ikisini ayirt edemez): `--mutasyon` (taban
+  **d51ba09**, ⛔ dal adi degil) → **10/24**, P+D+G+K3 duser, **N1-N8 + K1 + K2 ayakta** ·
+  `--mutasyon-gevsek` (yalniz ② sokulur) → **19/24**, dusen **P3b/D1/D1b/D2/D3** ⇒ D vektorleri
+  atomiklikten BAGIMSIZ olcuyor. Oz-denetim: taban `materyalize`inde rmtree yoksa hicbir sayi
+  BASILMAZ (exit 2). Cikis-kodu sozlesmesi kardes overlay korpuslariyla AYNI.
+  ⚠ **Capalari SILME:** N5/N6 (T2.5 kapisi + onayin anlami) · N7 (fazlalik `.md` hala silinir
+  — atomiklik "hic silme"ye donusmesin) · N8 (junction→gercek dizin donusumu; CORE hedefi
+  dokunulmaz) · **K1** (komsu V22'nin ikizi: `oto_tazele` zincirinde `materyalize` YOK —
+  iki fonksiyonu "DRY" diye birlestiren biri bu satiri kirar) · **K3** (kablolama:
+  `team_setup.junctions` tip-basina yalitim; olculen zarar tek tipteki istisnanin kurulumun
+  kalan 5 adimini atlamasiydi).
+  ⚠ **D3 = 3.BAGLAM GERCEK SEKIL capasi:** `core/claude/skills` dizin-tabanlidir
+  (`<skill>/SKILL.md`), kokunde `*.md` YOKTUR. Overlay mekanizmasi bastan sona `*.md`
+  glob'una dayanir ⇒ bir proje `claude-local/skills/` acarsa uretilecek kume core
+  skill'lerini icermez. Bu satir silinirse o sessiz kayip yolu geri acilir.
+  ⚠ **G1/G1b = GEVSETME capasi:** yeni kod `.md` DISI dosyalari artik SILMIYOR (eski `rmtree`
+  siliyordu) ama mesajda **adlariyla listeliyor**. Bu satirlar silinirse daralmanin siniri
+  olcusuz kalir.
+  ⚠ **Sahte `shutil` GERI ALINABILIR enjekte edilmeli** (`_shutil_enjekte`): taban surumde
+  `shutil` GERCEK bir modul niteligidir, korumasizca `delattr` edilirse sonraki vektor
+  `NameError` ile coker ve kosucu **KURULAMADI'yi KACTI gibi** gosterir (ilk kosumda tam bu
+  oldu).
 - Bayraksız senkron → fark-listesiyle **RED**; yalnız `--overlay-onayli` ezer.
 - FORMAT-GATE: her .md `---` ile başlar + CRLF-yok + name-parse + damga-frontmatter-SONRA ("sayı ≠ yüklenebilirlik" — 6/6 düşüş vakası).
 - Drift: core-değişti→WARN · yeni-agent→EKSİK · temiz→PASS.
