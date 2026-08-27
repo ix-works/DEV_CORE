@@ -67,19 +67,47 @@ def extract_view_name(source: str) -> str:
 #   TADIR orphan + rename broken (shipped DDL rename teknik imkansız, SAP Note 2710405).
 #
 # Whitelist kuralı: sadece tek format OK, geri kalan hepsi RED.
-# B-5 (K12/§9.3): prefix'ler PROJE-CONFIG'ten — core hard-code etmez. project.yaml:
-#   sql_view_prefix: ZSD001_V_   ·   cds_view_name_prefix: zsd001_ddl_
-# Eksikse gate VARSAYMAZ: validate anında NET hatayla durur (fail-safe).
+#
+# ⭐ PREFIX KAYNAĞI — PAKET ADINDAN TÜRETİLİR (2026-08-27; çok-paketli düzeltme)
+# Önceki davranış: prefix YALNIZ project.yaml'daki TEK düz string'ti
+# (`sql_view_prefix` / `cds_view_name_prefix`). Bir proje deposunda birden çok
+# paket yaşadığı için bu, hangi paketin CDS'i doğrulanırsa doğrulansın HERKESE
+# tek paketin prefix'ini dayatıyordu → o paket dışındaki her paketin TÜM canlı
+# `.cds` dosyaları yapısal olarak FAIL veriyordu (ölçüldü: 11 paket / ~121 dosya).
+# Artık prefix `--package` argümanından DETERMİNİSTİK türetilir:
+#     ZMOD001_CLC  →  sqlView: "ZMOD001_V_"   ·   view adı: "zmod001_ddl_"
+# Kök kalıp `RAP_VE_NAME_PATTERN` ile AYNIDIR (Z<MOD 2-4 harf><3 hane>).
+# project.yaml config'i KALKMADI: paket adı kalıba uymuyorsa (ya da paket
+# bilinmiyorsa) fallback olarak kullanılır. İkisi de yoksa gate VARSAYMAZ —
+# validate anında NET hatayla durur (fail-safe).
 import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
 from utils.project_config import cfg as _cfg  # noqa: E402
 
-_SQLP = _cfg("sql_view_prefix")          # örn. "ZSD001_V_"
-_VNP  = _cfg("cds_view_name_prefix")     # örn. "zsd001_ddl_"
-SQL_VIEW_PATTERN  = re.compile(r"^" + re.escape(_SQLP) + r"[A-Z0-9]{1,5}$") if _SQLP else None
-VIEW_NAME_PATTERN = re.compile(r"^" + re.escape(_VNP) + r"[a-z0-9_]+$") if _VNP else None
+_SQLP = _cfg("sql_view_prefix")          # fallback (örn. "ZMOD001_V_")
+_VNP  = _cfg("cds_view_name_prefix")     # fallback (örn. "zmod001_ddl_")
 SQL_VIEW_MAX_LEN  = 14                                          # SAP DB SQL view 14 char limit
+
+# Paket adının namespace kökü: ZMOD001_CLC → ZMOD001 (sondaki `_<suffix>` serbest,
+# suffix'siz düz paket adı da kabul). `\d{3}` sonrası başka rakam/harf gelirse
+# EŞLEŞMEZ → yanlış türetme yerine config fallback'ine düşülür (fail-safe).
+_PKG_PREFIX_RE = re.compile(r"^(Z[A-Z]{2,4}\d{3})(?:_|$)")
+
+
+def _derive_prefixes(package=None):
+    """(sql_view_prefix, cds_view_name_prefix) — paket adından türet, olmazsa config.
+
+    ZMOD001_CLC → ("ZMOD001_V_", "zmod001_ddl_")
+    Paket None / kalıp dışı (ör. "LEGACY_STUFF") → (config, config) — ikisi de
+    None olabilir; o zaman çağıran fail-safe hata döndürür.
+    """
+    if package:
+        m = _PKG_PREFIX_RE.match(str(package).strip().upper())
+        if m:
+            kok = m.group(1)
+            return f"{kok}_V_", f"{kok.lower()}_ddl_"
+    return _SQLP, _VNP
 
 # RAP view entity: `define [root] view entity` — sqlViewName TAŞIMAZ. Klasik
 # whitelist (sqlViewName + `define view <cds_view_name_prefix>`) uygulanmaz; ayrı isim kuralı
@@ -122,29 +150,42 @@ for _cift in (_cfg("cds_legacy_sqlview_exceptions") or []):
         LEGACY_SQLVIEW_EXCEPTIONS[_ad.strip().upper()] = _sv.strip()
 
 
-def validate_sql_view_names(cds_files):
+def validate_sql_view_names(cds_files, package=None):
     """POZİTİF WHITELIST validation — her .cds dosyası TD namespace kurallarına uygun mu?
 
-    KURAL (whitelist-only; prefix'ler project.yaml'dan):
+    KURAL (whitelist-only; prefix'ler PAKET ADINDAN türetilir, yoksa project.yaml):
     - @AbapCatalog.sqlViewName MUTLAKA '<sql_view_prefix><≤5 char>' formatında OLMALI
     - define view MUTLAKA <cds_view_name_prefix><x> formatında OLMALI
     - Source body içinde HİÇBİR cds_banned_literals deseni OLMAMALI (legacy ns vb.)
 
-    Örn. (prefix=ZSD001_V_ / zsd001_ddl_):
-    Doğru:  sqlViewName='ZSD001_V_CONCD', view=zsd001_ddl_container_customer
+    Args:
+        cds_files: doğrulanacak .cds Path'leri
+        package:   hedef ABAP paketi (`--package`). Verilirse prefix BUNDAN türetilir
+                   (ZMOD001_CLC → 'ZMOD001_V_' / 'zmod001_ddl_') — böylece gate
+                   TEK pakete kilitli kalmaz. None ise/kalıp dışıysa project.yaml
+                   config'ine düşülür (geriye-uyum: eski çağrı biçimi aynen çalışır).
+
+    Örn. (package=ZMOD001_CLC → ZMOD001_V_ / zmod001_ddl_):
+    Doğru:  sqlViewName='ZMOD001_V_CONCD', view=zmod001_ddl_container_customer
     Yanlış: sqlViewName='<legacy-prefix>_CONCD'  (eski namespace)
-            sqlViewName='ZSD01CONCD'             (eski kısaltma)
-            sqlViewName='ZSD001_V_TOOLONG'       (>14 char)
+            sqlViewName='ZMD01CONCD'             (eski kısaltma)
+            sqlViewName='ZMOD001_V_TOOLONG'      (>14 char)
             JOIN <legacy>_ddl_orderitems         (source body'de orphan ref)
 
     Returns: hata mesajı listesi (boş = OK)
     """
     errors = []
-    # B-5 fail-safe: prefix config'i yoksa VARSAYMA — gate çalışamaz, NET hata.
-    if SQL_VIEW_PATTERN is None or VIEW_NAME_PATTERN is None:
-        return ["NAMESPACE-GATE KONFİGÜRE DEĞİL (B-5): project.yaml'a "
-                "`sql_view_prefix: <ZMOD00N_V_>` ve `cds_view_name_prefix: <zmod00n_ddl_>` "
-                "ekle — gate prefix VARSAYMAZ, bu doldurulmadan CDS populate REDDEDİLİR."]
+    # Prefix: paket adından türet → olmazsa project.yaml config'i (fallback).
+    _sqlp, _vnp = _derive_prefixes(package)
+    # B-5 fail-safe: ne paket adı çözülebildi ne config var → VARSAYMA, NET hata.
+    if not _sqlp or not _vnp:
+        return [f"NAMESPACE-GATE ÇÖZÜLEMEDİ (B-5): paket adı={package!r} kalıba "
+                f"UYMUYOR (beklenen: 'Z<MOD 2-4 harf><3 hane>_<x>', ör. ZMOD001_CLC) "
+                f"VE project.yaml'da `sql_view_prefix` / `cds_view_name_prefix` YOK. "
+                f"İkisinden BİRİ gerekli — gate prefix VARSAYMAZ, bu doldurulmadan "
+                f"CDS populate REDDEDİLİR."]
+    sql_view_pattern  = re.compile(r"^" + re.escape(_sqlp) + r"[A-Z0-9]{1,5}$")
+    view_name_pattern = re.compile(r"^" + re.escape(_vnp) + r"[a-z0-9_]+$")
     for f in cds_files:
         try:
             source = f.read_text(encoding='utf-8')
@@ -192,17 +233,17 @@ def validate_sql_view_names(cds_files):
         m = re.search(r"@AbapCatalog\.sqlViewName\s*:\s*'([^']+)'", source)
         if not m:
             errors.append(f"{f.name}: @AbapCatalog.sqlViewName annotation EKSİK "
-                          f"(zorunlu, format: '{_SQLP}<≤5 char>')")
+                          f"(zorunlu, format: '{_sqlp}<≤5 char>')")
         else:
             sv = m.group(1)
             if legacy_sv and sv == legacy_sv:
                 # Sprint 3 legacy istisna — OK, atla (kayıt için)
                 pass
-            elif not SQL_VIEW_PATTERN.match(sv):
+            elif not sql_view_pattern.match(sv):
                 errors.append(
                     f"{f.name}: sqlViewName='{sv}' YASAK. "
-                    f"TEK GEÇERLİ FORMAT: '{_SQLP}<1-5 büyük harf/rakam>' "
-                    f"(regex: {SQL_VIEW_PATTERN.pattern}, toplam ≤14 char). "
+                    f"TEK GEÇERLİ FORMAT: '{_sqlp}<1-5 büyük harf/rakam>' "
+                    f"(regex: {sql_view_pattern.pattern}, toplam ≤14 char). "
                     f"(Playbook §17.9)"
                 )
             elif len(sv) > SQL_VIEW_MAX_LEN:
@@ -217,11 +258,11 @@ def validate_sql_view_names(cds_files):
             errors.append(f"{f.name}: 'define view <name>' bulunamadı")
         else:
             vname = vm.group(1).lower()
-            if not VIEW_NAME_PATTERN.match(vname):
+            if not view_name_pattern.match(vname):
                 errors.append(
                     f"{f.name}: define view='{vname}' YASAK. "
-                    f"TEK GEÇERLİ FORMAT: '{_VNP}<x>' "
-                    f"(regex: {VIEW_NAME_PATTERN.pattern}). "
+                    f"TEK GEÇERLİ FORMAT: '{_vnp}<x>' "
+                    f"(regex: {view_name_pattern.pattern}). "
                     f"(Playbook §17.9)"
                 )
 
@@ -459,17 +500,21 @@ def main():
         print(f'[WARN] td_spec_check modülü yüklenemedi: {e}')
         print(f'       Pre-flight TD spec katmanı atlandı.')
 
-    naming_errors = validate_sql_view_names(files_to_check)
+    # Prefix HEDEF PAKETTEN türetilir (tek-paket kilidi kalktı, 2026-08-27)
+    _sqlp_main, _vnp_main = _derive_prefixes(args.package)
+    naming_errors = validate_sql_view_names(files_to_check, package=args.package)
     if naming_errors:
         print(f'\n[FAIL] sqlViewName pre-flight kontrolü başarısız '
               f'({len(naming_errors)} hata):')
         for err in naming_errors:
             print(f'  ✗ {err}')
-        print(f'\nDoğru format: {_SQLP}<≤5 karakter> (toplam ≤14 char)')
+        if _sqlp_main:
+            print(f'\nDoğru format: {_sqlp_main}<≤5 karakter> (toplam ≤14 char) '
+                  f'— paket {args.package} için türetildi')
         print(f'Playbook §17.9 — Namespace Dönüşümü Doğrulama')
         return 1
     print(f'[OK] Pre-flight: {len(files_to_check)} dosya doğru '
-          f'sqlViewName formatında ({_SQLP}<XXX>)')
+          f'sqlViewName formatında ({_sqlp_main}<XXX>)')
 
     client = SAPADTClient()
     csrf = ''

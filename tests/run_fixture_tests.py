@@ -113,6 +113,10 @@ OZEL_TESTLER = [
      "CURR/QUAN kaynak-tipi: 'define root view entity' alt-diziye takilmiyordu -> rc=0 SESSIZ (V2)"),
     ("populate_tables_unit_kind",
      "B-13: CSV 'type' kolonu ABAP tipi saniliyordu -> CURR dali ULASILAMAZ olu koddu"),
+    ("cds_paket_kapsami",
+     "CDS kapilari TEK PAKETE kilitliydi: namespace prefix'i paketten turetilir + "
+     "spec yol-kesfi iki seviye/ref_docs (whitelist dalina giren klasik CDS'lerin bir kismi "
+     "yapisal FAIL veriyordu, RAP view/abstract entity muaf)"),
     ("msgtext_uzunluk_guard",
      "T100-TEXT CHAR 73: uzunluk guard'i YOKTU -> SESSIZ KIRPMA (fail-closed, karakter!=bayt)"),
     ("ddic_aktivasyon_notu",
@@ -399,6 +403,15 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "KAYNAK-TİPİ tespitini + çıkış-kodu sözleşmesini (0/1/2) ölçer; B-13 korpusu ise "
      "ÜRETİCİ↔DENETÇİ mutabakatını ölçer (ikisi aynı DTEL sözlüğünü kullanır); "
      "DERİNLİK korpusu EKSİK annotation'ı + yeşilin PAYDASINI + WARNING şiddetini ölçer"),
+    # 2026-08-27: iki dosya da HARITA'da HIC YOKTU — degisiklikleri hicbir korpusa
+    # eslesmiyordu (tazelik kapisi kordu) ve zaten hic fixture'lari yoktu.
+    ("scripts/populate_cds_views.py", ("O:cds_paket_kapsami",),
+     "namespace-gate prefix'i PAKET ADINDAN turetilir (config yalniz fallback): "
+     "capraz-paket reddi + config-disi paket + fail-safe; RAP dali ve 14-char siniri "
+     "FP capasi olarak ayni korpusta"),
+    ("scripts/td_spec_check.py", ("O:cds_paket_kapsami",),
+     "spec yol-kesfi: iki seviye (<modul>/<paket>) + ref_docs/ adayi + active_package "
+     "onceligi; duz yapi ve modul-seviyesi adaylari GERIYE-UYUM capasi"),
     ("scripts/populate_tables.py",
      ("O:populate_tables_unit_kind", "O:ddic_aktivasyon_notu"),
      "B-13/B-9/B-14: unit_kind kararı + CSV kolon sözleşmesi; ayrıca kapanış notunun "
