@@ -60,18 +60,78 @@ OBJECT_TYPE_FOLDER = {
 }
 
 def _module_roots() -> List[Path]:
-    """Spec aranacak paket kökleri: active_package (config) öncelikli, sonra
-    source_root altındaki TÜM paket klasörleri (yeni paket = otomatik kapsam)."""
+    """Spec aranacak kökler — İKİ SEVİYE (2026-08-27 düzeltmesi).
+
+    Kaynak ağacı gerçekte `<source_root>/<MODÜL>/<PAKET>` (ör. `SD/ZMOD001_CLC`)
+    olabilir. Eski kod yalnız `source_dir().iterdir()` ile TEK seviye iniyordu →
+    eline MODÜL klasörü geçiyordu, PAKET klasörü değil; docstring "paket kökleri"
+    dediği hâlde paket kökü hiç listelenmiyordu ve `active_package` önceliği ÖLÜ
+    daldı (config'teki paket adı tek-katmanda aranıyordu, gerçekte iki-katmandaydı).
+
+    Sıra (yön DAİMA genişletme — hiçbir eski aday KALDIRILMADI):
+      1. active_package — hem `<kök>/<paket>` hem `<kök>/<modül>/<paket>`
+      2. tek seviye: `<kök>/<x>` (eski davranışın TAMAMI, aynı sırayla —
+         düz `<kök>/<paket>` yapısı kullanan projeler için geriye-uyum)
+      3. iki seviye: `<kök>/<modül>/<paket>`
+    (2) tamamen (3)'ten önce gelir: daha önce BULUNAN hiçbir spec'in çözümü
+    kaymaz; yalnız daha önce HİÇ bulunamayanlar bulunur.
+    """
     roots: List[Path] = []
     src = source_dir()
-    aktif = cfg('active_package')
-    if aktif and (src / str(aktif)).is_dir():
-        roots.append(src / str(aktif))
-    if src.is_dir():
-        for d in sorted(src.iterdir()):
-            if d.is_dir() and d not in roots:
-                roots.append(d)
+    if not src.is_dir():
+        return roots
+
+    def _ekle(p: Path) -> None:
+        if p.is_dir() and p not in roots:
+            roots.append(p)
+
+    def _alt_dizinler(p: Path) -> List[Path]:
+        try:
+            return sorted(d for d in p.iterdir() if d.is_dir())
+        except OSError:
+            return []
+
+    birinci_seviye = _alt_dizinler(src)
+
+    # 1) active_package önceliği — iki katmanda da ara
+    aktif = str(cfg('active_package') or '').strip()
+    if aktif:
+        _ekle(src / aktif)
+        for d in birinci_seviye:
+            _ekle(d / aktif)
+
+    # 2) tek seviye (eski davranış, aynı sıra)
+    for d in birinci_seviye:
+        _ekle(d)
+
+    # 3) iki seviye: <modül>/<paket>
+    for d in birinci_seviye:
+        for alt in _alt_dizinler(d):
+            _ekle(alt)
+
     return roots
+
+
+# Spec dosyasının kök ALTINDAKİ konumu: düz `<folder>/` (tarihsel) veya
+# `ref_docs/<folder>/` (paket ağacının bugünkü yerleşimi). Sıra = arama sırası;
+# düz yapı ÖNCE denenir (geriye-uyum: eski çözümler kaymaz).
+_SPEC_ALT_YOLLAR: tuple = ((), ('ref_docs',))
+
+
+def _aday_yollar(object_name: str, folder: str) -> List[Path]:
+    """Aranacak TÜM aday yollar (TD kökleri + legacy fallback), sırayla.
+
+    `find_td_spec` ve `require_td_spec`in hata mesajı BU listeyi kullanır —
+    tek kaynak: "aranan yollar" raporu ile fiilen aranan yollar ayrışamaz.
+    """
+    adaylar: List[Path] = []
+    for kok in _module_roots():
+        for ara in _SPEC_ALT_YOLLAR:
+            adaylar.append(kok.joinpath(*ara, folder, f'{object_name}.md'))
+    for leg_root in _legacy_roots():
+        for ara in _SPEC_ALT_YOLLAR:
+            adaylar.append(leg_root.joinpath(*ara, folder, f'{object_name}.md'))
+    return adaylar
 
 
 def _legacy_roots() -> List[Path]:
@@ -118,23 +178,19 @@ def _legacy_roots() -> List[Path]:
 def find_td_spec(object_name: str, object_type: str) -> Optional[Path]:
     """TD ve fallback klasörlerinde spec MD dosyası ara.
 
-    Arama sırası:
-      1. <source_root>/<paket>/<folder>/<object_name>.md   ← TD karar (öncelik)
-      2. <legacy_spec_roots[i]>/<folder>/<object_name>.md  ← legacy referans (fallback)
+    Arama sırası (kökler için bkz. `_module_roots`; her kökte İKİ yerleşim denenir):
+      1. <TD kök>/<folder>/<object_name>.md              ← düz yapı (tarihsel)
+      2. <TD kök>/ref_docs/<folder>/<object_name>.md     ← paket ağacı yerleşimi
+      3. <legacy_spec_roots[i]>/[ref_docs/]<folder>/<object_name>.md  ← fallback
+
+    TD kökleri: active_package öncelikli, sonra tek seviye, sonra `<modül>/<paket>`.
 
     Returns: Path | None
     """
     folder = OBJECT_TYPE_FOLDER.get(object_type.lower())
     if not folder:
         return None
-    # 1) TD karar otoritesi (paket kökü altında düz yapı)
-    for module_root in _module_roots():
-        candidate = module_root / folder / f'{object_name}.md'
-        if candidate.exists():
-            return candidate
-    # 2) legacy referans fallback (config'te tanımlıysa)
-    for leg_root in _legacy_roots():
-        candidate = leg_root / folder / f'{object_name}.md'
+    for candidate in _aday_yollar(object_name, folder):
         if candidate.exists():
             return candidate
     return None
@@ -157,9 +213,13 @@ def require_td_spec(object_name: str, object_type: str,
     spec_path = find_td_spec(object_name, object_type)
     if spec_path is None:
         folder = OBJECT_TYPE_FOLDER.get(object_type.lower(), '<unknown>')
-        searched = [f'  - {r}/{folder}/{object_name}.md' for r in _module_roots()]
-        searched += [f'  - {r}/{folder}/{object_name}.md (legacy fallback)'
-                     for r in _legacy_roots()]
+        # Aranan yollar FİİLEN aranan listeden üretilir (kopya mantık YOK — mesaj
+        # ile davranış ayrışamaz). `_aday_yollar` boş dönerse hiç kök yok demektir.
+        _legacy_kok = {str(r) for r in _legacy_roots()}
+        searched = []
+        for _ad in _aday_yollar(object_name, folder):
+            _legacy_mi = any(str(_ad).startswith(k) for k in _legacy_kok)
+            searched.append(f'  - {_ad}' + (' (legacy fallback)' if _legacy_mi else ''))
         if not searched:
             searched = ['  - (arama kökü yok: source_root altında paket klasörü ve '
                         'legacy_spec_roots tanımı bulunamadı — project.yaml kontrol et)']
