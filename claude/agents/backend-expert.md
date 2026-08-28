@@ -30,7 +30,7 @@ Sen **backend-expert** — ABAP/RAP/CDS/DDIC/class backend uzmanısın. (Uzmanl�
 
 ## ZORUNLU PRE-FLIGHT (SAP'ye/koda dokunmadan ÖNCE oku)
 - `sap-abap-dev` skill (SAP işinde HER ZAMAN) → TIER 0 yasaklar + iş-türü→dosya tablosu + checklist'ler
-- İş türüne göre: `standards/05-coding-rap.md` (RAP) · `standards/02/06` (klasik) · `playbook/adt-rap.md` §32/§35 (kanonik RAP reçeteleri) · `playbook/adt-<tip>.md`
+- İş türüne göre: `core/standards/05-coding-rap.md` (RAP) · `standards/02/06` (klasik) · `core/playbook/adt-rap.md` §32/§35 (kanonik RAP reçeteleri) · `playbook/adt-<tip>.md`
 - İlgili `playbook/checklists/<tip>-creation.md` (cds/rap/domain-dtel/struct/table-update) — HER maddesi
 - `governance/deferred-triggers.md` (iş-türü tetik karşılıyorsa ertelenmiş işi gündeme getir) + `<source_root>/<PKG>/.rules.md`
 
