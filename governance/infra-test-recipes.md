@@ -1250,3 +1250,88 @@ diye raporlanmaz).
 Gerçek-korpus ölçümünü tekrarlamak için: hook'u import edip `_alt_tur`'ü projelerin
 `SOURCE_CODES/**` artefaktlarına uygula; yer-gerçeği = kaynakta `define [root] abstract
 entity` regex'i (matcher'dan BAĞIMSIZ).
+
+## B33 — İÇERİK-VALIDATOR NORMALİZE TARAMA KATMANI (`scripts/utils/kaynak_tarama.py` + 6 tüketici)
+
+> 2026-08-28 adversarial bug-avı **B2 ailesi**. Bu bölüm **6 validator'ün ORTAK paydasını**
+> anlatır: `check_no_rap_commit` · `check_amdp_comment_apostrophe` ·
+> `check_cds_srvd_comment_syntax` · `check_filter_search_pattern` ·
+> `check_ui5_freestyle_traps` · `check_method_param_type_c`.
+
+### Neyi koruyor — üç sınıf, biri diğerini KAPSAMAZ
+| Sınıf | Belirti | Yön | Nerede ölçülür |
+|---|---|---|---|
+| **Satır-kapsamı** | çok-satırlı dil ifadesi desene takılmaz | **kaçış** (gate kör) | `rap_commit_ifade_kapsami` P1/P2 · `imza_cok_satirli_type_c` P1/P2 |
+| **Yorum-durumu** | `/* */` bloğunun İÇİ kod sayılır | **yanlış-pozitif** (build durur) | `filtre_yorum_ve_tirnak` N1/N2 · `ui5_blok_yorumu` N1/N2/N4 |
+| **Literal-durumu** | literal içi anahtar ihlal sanılır / literal içi tırnak satırı yutar | **iki yönlü** | `rap_commit_ifade_kapsami` N1/E1 · `amdp_satir_sonu_yorumu` N4/N6 |
+
+⛔ **DOKUNMADAN ÖNCE:** `kaynak_tarama.py` ALTI gate'in davranışını taşır. Değiştirirsen
+`--degisen scripts/utils/kaynak_tarama.py` **altısının korpusunu birden** seçer (HARITA'da
+kablolu). Tek fixture'ın yeşili "katman sağlam" DEMEK DEĞİLDİR.
+
+### Koşum
+```bash
+# 1) ORTAK katmanın tüm tüketicileri (HARITA üzerinden seçilir)
+python tests/run_fixture_tests.py --degisen scripts/utils/kaynak_tarama.py
+
+# 2) Tek tek (her biri kendi P/K/E/N vektörlerini içeride koşar)
+python tests/fixtures/rap_commit_ifade_kapsami/run.py     # 16/16
+python tests/fixtures/amdp_satir_sonu_yorumu/run.py       # 11/11
+python tests/fixtures/cds_uzanti_kapsami/run.py           #  9/9
+python tests/fixtures/filtre_yorum_ve_tirnak/run.py       # 12/12
+python tests/fixtures/ui5_blok_yorumu/run.py              #  9/9
+python tests/fixtures/imza_cok_satirli_type_c/run.py      #  9/9
+
+# 3) MUTASYON — taban sürüme karşı (tüm fixture'lar `B2_GATE_KOK` env'ini destekler)
+mkdir -p /tmp/eski && cp -r scripts /tmp/eski/scripts
+rm -f /tmp/eski/scripts/utils/kaynak_tarama.py
+for v in check_no_rap_commit check_amdp_comment_apostrophe check_cds_srvd_comment_syntax \
+         check_filter_search_pattern check_ui5_freestyle_traps check_method_param_type_c; do
+  git show <taban-sha>:scripts/validators/$v.py > /tmp/eski/scripts/validators/$v.py
+done
+B2_GATE_KOK=/tmp/eski/scripts/validators python tests/fixtures/<ad>/run.py
+```
+⚠ Mutasyon **gerçek kaynağa yazılmaz** — izole ağaç kurulur (kalıntı komşuyu kirletmesin).
+`kaynak_tarama.py` izole ağaçtan SİLİNİR: eski validator'lar onu import etmiyordu; dursaydı
+"taban" iddiası yalan olurdu.
+
+**Beklenen mutasyon sonuçları** (2026-08-28 taban `b2ab7f1`; hiçbiri diğerini kapsamaz):
+`rap_commit_ifade_kapsami` **8/16** (düşen: P1·P2·E1·E2·N1·N6 + S1/S2 yapısal) ·
+`amdp_satir_sonu_yorumu` **9/11** (P1·E1) · `cds_uzanti_kapsami` **5/9** (P1·P2·P3 + S1) ·
+`filtre_yorum_ve_tirnak` **6/12** (P1·P2·E2·N1·N2 + S1) · `ui5_blok_yorumu` **6/9**
+(N1·N2·N4) · `imza_cok_satirli_type_c` **5/9** (P1·P2·E1·N3).
+
+### ⛔ SİLİNEMEZ ÇAPALAR (her biri ÖLÇÜLMÜŞ bir sınırı temsil eder)
+- `rap_commit_ifade_kapsami` **K2** — `CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'`: FM adı
+  ABAP'ta **zaten literal içinde** yazılır. Literal temizliği bu kümeye uygulanırsa gerçek
+  pozitif KAYBOLUR. İFADE/KİMLİK ayrımının tek kanıtı budur (+ S1/S2 yapısal çapa).
+- `rap_commit_ifade_kapsami` **N5** (`COMMIT.` + `work = 1.`) ve
+  `imza_cok_satirli_type_c` **N1** (`TYPE c.` + ayrı ifadede `LENGTH`) — mantıksal
+  birleştirmenin SINIRI. Düşerse gate her komşu token'a bağırır.
+- `amdp_satir_sonu_yorumu` **N2/N3** — AMDP gövdesi DIŞINDAKİ ABAP yorumlarında apostrof
+  MEŞRUDUR. Gövde sınırı olmadan gate her Türkçe ABAP yorumuna bağırırdı.
+  **K2** ise eski satır-başı kuralının KALDIRILMADIĞINI çiviler (ekleme, değiştirme değil).
+- `filtre_yorum_ve_tirnak` **E1** / `ui5_blok_yorumu` **E1** — blok yorumu KAPANDIKTAN
+  sonraki gerçek ihlal. Blok durumu "açık kalırsa" dosyanın gerisi sessizce körelir;
+  bu, düzelttiğimiz FP'den DAHA KÖTÜ bir kaçış olurdu.
+- `cds_uzanti_kapsami` **S2** — `.dcl`/`.bdef` BİLİNÇLİ olarak kapsam dışıdır. Ölçüldü
+  (0 bulgu) ama ayrı artefakt sınıflarıdır; emsal: 2026-08-01 `check_package_naming` turunda
+  `.srvd` 15 FP nedeniyle EKLENMEMİŞTİ. Genişletme kanıtla yapılır, refleksle değil.
+
+### ⚠ Bilinen SINIRLAR (bu turda KAPATILMADI — "ölçüldü ama dokunulmadı")
+1. `check_ui5_freestyle_traps` **XML dalı** (T2/T3) hâlâ ham satır bazlıdır: `<!-- -->`
+   içindeki `type="Number"` / `<core:Title` WARN üretir. WARN build durdurmaz ⇒ öncelik
+   düşük, ama sınıf aynıdır.
+2. `check_filter_search_pattern` `_CASE_SENS` alt-dizge eşleşir: `notCaseSensitive: false`
+   **hem eski hem yeni** desende yakalanır. Düzeltmesi desen DARALTMASI = ayrı gevşetme
+   kararı gerektirir.
+3. `js_kod` string durumunu **satır sonunda sıfırlar** (template literal dahil). Dengesiz
+   tırnak (ör. regex literali içindeki `'`) yalnız O SATIRI etkiler — hasarı sınırlı tutmak
+   için bilinçli seçim; tam JS ayrıştırıcısı DEĞİLDİR.
+4. ABAP tam-satır yorumu tespiti mevcut davranışla aynı bırakıldı
+   (`lstrip().startswith("*")`); ABAP'ın gerçek kuralı "sütun 1'de `*`"tır.
+
+### Canlı korpus tabanı (tüketici projede, 2026-08-28)
+`check_no_rap_commit` 0 ERROR / **6 WARN** · `check_ui5_freestyle_traps` 0 ERROR / **7 WARN** ·
+diğer dördü **0 bulgu**. Kapsam paydaları: 81 · 321 (eskiden 280) · 124 · 283.
+**Fix öncesi/sonrası çıktı BAYT AYNI** (tek istisna: cds/srvd payda satırı 280→321).

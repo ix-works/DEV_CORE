@@ -23,7 +23,11 @@ Tuzaklar:
              YAKALAMAZ; bu statik gate + runtime açılış (FE-17) birlikte. (shipment 2026-07-02.)
 
 Kapsam: <source_root>/**/ui/**/webapp altındaki *.xml (view/fragment) + *.js (controller). node_modules,
-dist, test elenir.
+dist, test elenir. JS'te yorumlar (satır + ÇOK-SATIRLI `/* */`) taramadan düşer — 2026-08-28
+(B2-06) öncesi yalnız `//` ve hizalı `*` satırları atlanıyordu, yıldızsız blok yorumunun
+içindeki ölü kod T1 ERROR (build DURDURAN yanlış-pozitif) üretiyordu.
+⚠ XML dalı (T2/T3) bu turda DEĞİŞMEDİ: `<!-- -->` yorum-durumu hâlâ ham satır bazlıdır
+(ölçüldü, ayrı kalem olarak raporlandı — T2/T3 WARN'dır, build durdurmaz).
 
 Kullanım:
     python scripts/validators/check_ui5_freestyle_traps.py
@@ -44,6 +48,8 @@ from utils.project_config import project_root, source_dir  # K12: kaynak-klasor 
 # K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
 # ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
 from utils.kapsam import Kapsam  # noqa: E402
+# B2-06 (2026-08-28): JS blok yorumu ORTAK katmanda, DOSYA GENELİNDE durumlu.
+from utils.kaynak_tarama import js_kod  # noqa: E402
 
 KAPSAM = Kapsam('webapp .js/.xml')   # K1: taranan dosya sayaci
 
@@ -118,13 +124,20 @@ def _scan():
             continue
         is_js = f.suffix.lower() == ".js"
         is_xml = f.suffix.lower() == ".xml"
+        # B2-06: eski hâl `stripped.startswith("//")` VEYA `startswith("*")` idi —
+        # yalnız JSDoc gibi HİZALI blokları atlıyordu. Yıldızsız çok-satırlı
+        # `/* ... */` bloğunun içi KOD sayılıyor ve T1 bir ERROR olduğu için
+        # yorumdaki ölü/örnek kod BUILD DURDURUYORDU (yanlış-pozitif). Blok durumu
+        # artık dosya genelinde tutuluyor; satır numaraları ham dosyayla AYNI kalır
+        # ve ekrana basılan metin yine HAM satırdır (bağlam kaybolmasın).
+        js_kodlar = dict(js_kod("\n".join(lines))) if is_js else {}
         for i, ln in enumerate(lines, 1):
             stripped = ln.strip()
             if is_js:
-                # yorum satırlarını atla (kaba ama yeterli)
-                if stripped.startswith("//") or stripped.startswith("*"):
+                kod = js_kodlar.get(i, "")
+                if not kod.strip():
                     continue
-                if any(p.search(ln) for p in _T1_PATTERNS):
+                if any(p.search(kod) for p in _T1_PATTERNS):
                     findings.append(("ERROR", "T1 V2-nav `_X` (→ to_X)", f, i, stripped[:120]))
             if is_xml:
                 if _T2_PATTERN.search(ln):

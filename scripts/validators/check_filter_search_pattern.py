@@ -10,6 +10,9 @@ parser bu fonksiyonları DESTEKLEMEZ → HTTP 400 "Function toupper/tolower is n
 zaten HARF-DUYARSIZ (DB collation; probe: "gül"→"GÜLAK", 200) → caseSensitive'e GEREK YOK.
 
 HARD (BLOCKER): ui webapp JS'inde `caseSensitive: false` KULLANIMI yasak (kod; yorum HARİÇ).
+  Anahtar TIRNAKLI da olabilir (`"caseSensitive": false`) — B2-03, 2026-08-28.
+  "Yorum HARİÇ" artık ÇOK-SATIRLI `/* */` bloklarını da kapsar (B2-02): eskiden blok
+  yorumunun içi kod sayılıyor ve ölü/örnek kod BLOCKER üretiyordu.
 WARNING (bloklamaz): rapor `Filter.view.xml`'inde tek-değer `<Input ... valueHelpRequest>`
   → select-options için `<MultiInput>` olmalı (çoklu-değer + aralık standardı, FE-32).
   (Tüm raporlar replike edilince temizlenir → sonra HARD'a terfi adayı.)
@@ -31,6 +34,8 @@ from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12: kaynak-k
 # K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
 # ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
 from utils.kapsam import Kapsam  # noqa: E402
+# B2-02 (2026-08-28): cok-satirli `/* */` blok yorumu ORTAK katmanda cozulur.
+from utils.kaynak_tarama import js_kod  # noqa: E402
 
 KAPSAM = Kapsam('UI .js/.view.xml')   # K1: taranan dosya sayaci
 
@@ -38,7 +43,13 @@ if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 # kod-içi caseSensitive:false (yorum DEĞİL) — açık/kapalı tırnak/boşluk varyasyonları
-_CASE_SENS = re.compile(r"caseSensitive\s*:\s*false", re.IGNORECASE)
+# B2-03 (2026-08-28): anahtar TIRNAKLI da yazılır — `"caseSensitive": false` /
+#   `'caseSensitive': false`. Eski desen tırnaksız key varsayıyordu (`caseSensitive`
+#   hemen ardından `\s*:`) → tırnaklı yazımda `"` araya girdiği için EŞLEŞMİYORDU.
+#   CANLI ÖLÇÜM: tırnaksız → BLOCKER, tırnaklı → "[OK] ihlal yok". JS'te iki yazım
+#   da aynı nesne anahtarıdır ve UI5'e aynı `toupper/tolower` $filter'ını ÜRETTİRİR
+#   → aynı HTTP 400. Ayırt edici gate için yazım biçimi meşru bir sınır DEĞİLDİR.
+_CASE_SENS = re.compile(r"""(["'`])?caseSensitive\1?\s*:\s*false""", re.IGNORECASE)
 # rapor filtre ekranında tek-değer F4 input (MultiInput olmalı).
 # NOT: `<Input...valueHelpRequest` regex'i binding'deki `>` (ör. {ui>/...}) yüzünden
 # kırılıyor → daha sağlam: valueHelpRequest VAR + MultiInput YOK ⇒ F4 düz Input'ta.
@@ -47,21 +58,31 @@ _MULTIINPUT = re.compile(r"<MultiInput\b", re.IGNORECASE)
 
 
 def strip_line_comment(line: str) -> str:
-    """// satır-yorumunu at (basit; string-içi // nadirdir, kabul). /* */ inline de at."""
+    """TEK SATIRLIK yorum kırpma (geriye dönük API; `scan_js` artık kullanmaz).
+
+    ⚠ B2-02 (2026-08-28): bu fonksiyon satırlar-arası DURUM TUTMAZ — çok-satırlı
+    `/* ... */` bloğunun İÇİ kod sayılıyordu ve ölü/örnek kod BLOCKER üretiyordu
+    (yanlış-pozitif). Blok durumu artık `utils.kaynak_tarama.js_kod` içinde,
+    dosya genelinde tutuluyor. Fonksiyon SİLİNMEDİ: davranışı kilitleyen bir
+    çapa olarak duruyor (fixture `filtre_yorum_ve_tirnak` S2).
+    """
     line = re.sub(r"/\*.*?\*/", "", line)
     idx = line.find("//")
     return line[:idx] if idx != -1 else line
 
 
 def scan_js(path: Path):
-    """JS'te kod-içi caseSensitive:false → [(satır_no, kod_parçası)] (yorumlar hariç)."""
+    """JS'te kod-içi caseSensitive:false → [(satır_no, kod_parçası)] (yorumlar hariç).
+
+    Yorum temizliği DOSYA GENELİNDE durumludur (çok-satırlı `/* */` dahil) — satır
+    numaraları ham dosyayla aynı kalır.
+    """
     hits = []
     try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        metin = path.read_text(encoding="utf-8", errors="replace")
     except Exception:
         return hits
-    for i, raw in enumerate(lines, 1):
-        code = strip_line_comment(raw)
+    for i, code in js_kod(metin):
         if _CASE_SENS.search(code):
             hits.append((i, code.strip()))
     return hits

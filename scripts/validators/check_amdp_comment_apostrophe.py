@@ -19,9 +19,13 @@ DOĞRU DESEN: AMDP `--` yorumlarında apostrof KULLANMA. Türkçe eki yeniden ya
 ("voyage'a"→"voyaga", "SELECT'te"→"SELECT icinde"), tırnaklı-değer anımını apostrofsuz yaz.
 (Bonus: AMDP gövdesi PUR ASCII-7 olmalı — Türkçe karakter de yasak; bkz. BE-28b.)
 
-Kapsam: <source_root>/**/*.clas.abap, *.ccimp.abap (AMDP gövdesi burada). `^\s*--` ile başlayan
-  satır = SQLScript yorumu (ABAP yorumu `*`/`"` kullanır; `--` ABAP'ta yorum değil) → o
-  satırda apostrof varsa flag.
+Kapsam: <source_root>/**/*.clas.abap, *.ccimp.abap (AMDP gövdesi burada). İKİ tarama:
+  (1) `^\s*--` ile başlayan satır = SQLScript yorumu → apostrof varsa flag (dosyanın
+      tamamında; 2026-06-29'dan beri DEĞİŞMEDİ).
+  (2) 2026-08-28 (B2-09): satır SONUNDAKİ `--` yorumu da flag — ama YALNIZ AMDP gövdesinde
+      (`BY DATABASE PROCEDURE`..`ENDMETHOD`) ve yalnız string literali DIŞINDA. Satır-başı
+      çapası reçeteyi değil TEK BİR YAZIM BİÇİMİNİ denetliyordu; aktivasyonu kıran şey
+      yorumun konumu değil apostrofudur.
   Kaçış: ilgili satıra `#NO_AMDP_APOSTROPHE_CHECK <gerekçe>` (gerçek-gerekli apostrof —
   pratikte yok; kaçış sadece bilinçli istisna için).
 
@@ -45,6 +49,8 @@ from utils.project_config import project_root, source_dir  # K12: kaynak-klasor 
 # K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
 # ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
 from utils.kapsam import Kapsam  # noqa: E402
+# B2-09 (2026-08-28): SATIR-SONU `--` yorumu için ortak, literal-duyarlı ayrıştırma.
+from utils.kaynak_tarama import amdp_govde_araliklari, sqlscript_yorumu  # noqa: E402
 
 KAPSAM = Kapsam('.clas.abap')   # K1: taranan dosya sayaci
 
@@ -60,8 +66,18 @@ _SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp", "fixtures", "attic", "w
 _SCAN_SUFFIXES = (".clas.abap", ".ccimp.abap")
 _ESCAPE = "#NO_AMDP_APOSTROPHE_CHECK"
 
-# SQLScript yorum satırı (`--` ile başlar; baştaki boşluk serbest) + içinde apostrof.
+# ── İKİ DEĞİŞMEZ, İKİ TARAMA (B2-09, 2026-08-28) ────────────────────────────────
+# (1) TAM-SATIR yorumu: `^\s*--` ... ' — 2026-06-29'dan beri var, DEĞİŞMEDİ. Dosyanın
+#     TAMAMINDA aranır (AMDP class'ı ise), çünkü orijinal davranış buydu.
 _RX_COMMENT_APOS = re.compile(r"^\s*--.*'")
+# (2) SATIR-SONU yorumu: `SELECT foo -- Ali'nin notu`. Satır-başı çapası bunu KAÇIRIYORDU
+#     (canlı ölçüm 2026-08-28: satır-başı `--` → 1 ERROR, aynı içerik satır sonunda →
+#     "temiz"). BE-28c reçetesi "`--` yorumlarında apostrof" der; çapa reçeteyi değil
+#     tek bir YAZIM BİÇİMİNİ denetliyordu. Aktivasyonu kıran şey konum değil apostroftur.
+#     ⚠ KAPSAM SINIRI: bu tarama YALNIZ AMDP GÖVDESİ içinde koşar (`BY DATABASE
+#     PROCEDURE`..`ENDMETHOD`). Dışarısı ABAP'tır: orada `--` yorum DEĞİLDİR ve
+#     `* Ali'nin notu` / `" Ali'nin notu` ABAP yorumları MEŞRUDUR — gövde sınırı
+#     olmadan her ABAP yorumu yanlış-pozitif olurdu.
 
 
 def _iter_files():
@@ -89,10 +105,17 @@ def _scan(tek_dosya=None):
             continue
         if not _has_amdp(text):
             continue
+        govde = amdp_govde_araliklari(text)
+        bulunan: set[int] = set()
         for i, raw in enumerate(text.splitlines(), 1):
             if _ESCAPE in raw:
                 continue
-            if _RX_COMMENT_APOS.search(raw):
+            vurdu = bool(_RX_COMMENT_APOS.search(raw))          # (1) tam-satır (eski)
+            if not vurdu and any(b <= i <= s for b, s in govde):  # (2) satır-sonu (yeni)
+                yorum = sqlscript_yorumu(raw)
+                vurdu = yorum is not None and "'" in yorum
+            if vurdu and i not in bulunan:
+                bulunan.add(i)
                 findings.append((f, i, raw.strip()[:120]))
     return findings
 

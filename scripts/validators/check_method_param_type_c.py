@@ -10,6 +10,10 @@ sadece method imzasında kırar. ÇÖZÜM: `TYPE string` veya DDIC data element.
 Bu KÖR-NOKTA idi: hata satırsız geldiği için körlemesine bisect gerekti. Validator
 deterministik regex ile yazma-ÖNCESİ yakalar → bisect'e gerek kalmaz.
 
+2026-08-28 (B2-11): arama SATIR yerine MANTIKSAL BLOK üzerinde yapılır — sarılmış imza
+(`TYPE c` (satır sonu) `LENGTH 100`) tek-satır regex'inden kaçıyordu, yani gate'in kapatmak için
+yazıldığı en pahalı senaryo açıktı.
+
 Kullanım:
     python check_method_param_type_c.py [--file <path>] [--strict]
     (--file verilmezse <source_root>/ altındaki tüm *.clas.abap / *.abap taranır)
@@ -28,6 +32,8 @@ from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12: kaynak-k
 # K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
 # ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
 from utils.kapsam import Kapsam  # noqa: E402
+# B2-11 (2026-08-28): imza SATIRA degil NOKTAYA baglidir -> mantiksal metin.
+from utils.kaynak_tarama import abap_satir, MantiksalMetin  # noqa: E402
 
 KAPSAM = Kapsam('.clas/.intf.abap')   # K1: taranan dosya sayaci
 
@@ -43,21 +49,50 @@ _METHOD_IMPL = re.compile(r"^\s*METHOD\s+\w", re.IGNORECASE)
 
 def scan_text(text):
     """(line_no, line) ihlal listesi döner. METHODS bildiriminden onu kapatan '.'a
-    kadar olan blok içinde TYPE c LENGTH n geçişlerini bulur."""
+    kadar olan blok içinde TYPE c LENGTH n geçişlerini bulur.
+
+    ⚠ B2-11 (2026-08-28): eskiden arama SATIR BAŞINA yapılıyordu. ABAP imzası satıra
+    değil NOKTAYA bağlıdır ve uzun imzalar rutin olarak sarılır:
+        METHODS foo
+          IMPORTING iv_text TYPE c
+                             LENGTH 100.
+    Bu, save-scan'i kıran TAM AYNI bildirimdir (`OO_SOURCE_BASED`, satır no VERMEZ →
+    körlemesine bisect) ama tek-satır regex'i görmüyordu. Artık blok, mantıksal metin
+    olarak birleştirilip aranıyor; bulgu EŞLEŞMENİN BAŞLADIĞI satıra yazılır.
+    Birleştirmenin sınırı KENDİLİĞİNDEN korunur: bloklar `.` ile kapanır, `\\s+` noktayı
+    eşleştirmez → `TYPE c.` + sonraki ifade `LENGTH 100` yanlış-pozitif vermez.
+    """
     hits = []
     lines = text.splitlines()
     in_decl = False
+    blok: list[tuple[int, str]] = []
+
+    def _bosalt():
+        if not blok:
+            return
+        m = MantiksalMetin(blok)
+        for bas, _son in m.bul(_TYPE_C_LEN):
+            hits.append((bas, lines[bas - 1].strip()))
+        blok.clear()
+
     for i, raw in enumerate(lines, 1):
-        line = raw.split('"', 1)[0]  # satır-içi yorum at
+        # ⚠ Yorum temizliği literal-duyarlı: `'a"b'` satırın gerisini YUTMAZ; tam-satır
+        #   `*` yorumu ise tamamen düşer (yorumdaki örnek imza BLOCKER üretmesin).
+        line, _ = abap_satir(raw)
         if _METHOD_IMPL.match(line):
+            _bosalt()
             in_decl = False
             continue
         if _METHODS_START.match(line):
+            _bosalt()
             in_decl = True
-        if in_decl and _TYPE_C_LEN.search(line):
-            hits.append((i, raw.strip()))
-        if in_decl and line.rstrip().endswith("."):
-            in_decl = False
+        if in_decl:
+            blok.append((i, line))
+            if line.rstrip().endswith("."):
+                _bosalt()
+                in_decl = False
+    _bosalt()
+    hits.sort(key=lambda x: x[0])
     return hits
 
 
