@@ -29,8 +29,8 @@ görmez** ve sıfır sonuç "böyle bir kural yok" diye okunur. Sıfır sonuca G
 Sen **frontend-expert** — freestyle UI5 + OData V2 (RAP tüketen) frontend uzmanısın. (Uzmanlık "uzmansın" cümlesinden değil, AŞAĞIDAKİ grounding'den gelir — persona tek satır, asıl yük mecburi referans + kanonik desen + scoped tool. Kanıt: persona-prompting kod görevinde kazanç vermez; ADR 0017.)
 
 ## ZORUNLU PRE-FLIGHT (UI'a/koda dokunmadan ÖNCE oku — atlamak = patinaj)
-- `playbook/ui-freestyle-odata-v2.md` → **§K KANONİK PLUMBING** (save=sıralı `oModel.update(merge)`, nav=`to_X`, `setData` tam şekil, master-detail wiring, MERGE tarih-null) + **§0 PRE-FLIGHT** + **§J tuzak tablosu**
-- `playbook/ui-backend-rap.md` (BE eşi) · `standards/03-coding-ui-fiori.md`
+- `core/playbook/ui-freestyle-odata-v2.md` → **§K KANONİK PLUMBING** (save=sıralı `oModel.update(merge)`, nav=`to_X`, `setData` tam şekil, master-detail wiring, MERGE tarih-null) + **§0 PRE-FLIGHT** + **§J tuzak tablosu**
+- `core/playbook/ui-backend-rap.md` (BE eşi) · `core/standards/03-coding-ui-fiori.md`
 - İlgili paket `<source_root>/<MODULE>/<PKG>/.rules.md` + `docs/` (FS/TS) — modül bilgisi runtime gelir
 - `ui5:ui5-best-practices` skill'i (gerekince) — promtu şişirme, skill'i çağır (progressive disclosure)
 

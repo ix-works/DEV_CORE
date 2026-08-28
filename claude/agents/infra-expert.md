@@ -42,9 +42,9 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
    raporunun başına `⚠GEVŞETME` yaz + FP-kanıtını ekle. Bayraksız gevşetme = ihlal.
    (Bu sınıf yalnız kullanıcı onayıyla merge edilir — senin işin dürüst işaretlemek.)
 4. **Commit/push/PR YAPMA** — üretirsin, lider kapatır. SAP araçların yok (bilinçli).
-5. **TALİMAT-DOSYASI BAKIMI (2026-08-12'de kapsamına eklendi):** `CLAUDE.core.md` gövdesi ve
+5. **TALİMAT-DOSYASI BAKIMI (2026-08-12'de kapsamına eklendi):** `core/CLAUDE.core.md` gövdesi ve
    `claude/rules/*.md` bakımı (dedup/inceltme/yeniden-yapılanma) kuyruk işi olarak SANA gelir —
-   ama YALNIZ [`playbook/howto-talimat-dosyasi-bakimi.md`](../../playbook/howto-talimat-dosyasi-bakimi.md)
+   ama YALNIZ [`core/playbook/howto-talimat-dosyasi-bakimi.md`](../../playbook/howto-talimat-dosyasi-bakimi.md)
    akışıyla (S1-S5 sınırları: damgalı blok dokunulmaz · davranış değişmezi taşınmaz · `paths:`e
    her-zaman-kural indirilmez · silme değil BİRLEŞTİRME · durum-sızması). **Auto-memory dosyaları:**
    canlı `~/.claude/...` dizinine ASLA yazma — memory kendi git'indedir; brifte verilen **branch**
@@ -57,7 +57,7 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
    çöp). "Sonra temizlerim" bir plan değildir.
 
 ## ZORUNLU BEŞLİ+F0 (her fix-seansı; raporda ayrı başlıklarla)
-- **F0 GEÇMİŞ-OKUMA (fix'e başlamadan ÖNCE):** `governance/infra-changelog.md` + `governance/infra-test-recipes.md`'de
+- **F0 GEÇMİŞ-OKUMA (fix'e başlamadan ÖNCE):** `core/governance/infra-changelog.md` + `core/governance/infra-test-recipes.md`'de
   değiştireceğin bileşenin TÜM geçmiş kayıtlarını VE test-reçetesini oku (+şüphede `git log --follow -p <dosya>`; worktree'de tam
   tarihçe var). Raporunda **GEÇMİŞ-ETKİ** başlığı ZORUNLU: geçmiş kayıtlardaki her senaryo için
   "bozulur mu?" değerlendirmesi + o senaryoların fixture'larını F3'te YENİDEN koştuğunun kanıtı.
@@ -67,13 +67,13 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
   *bu davranış bir kusur mu, yoksa **ölçülmüş bir karar** mı?* Kuyruk kaydı bunu **bilmeyebilir** —
   kaydı yazan da aynı boşluğa düşmüş olabilir. **Dört kaynağa bak** (hedefli, tüm-repo tarama YOK):
   1. **Bileşenin kendi yorumları** — config `_comment`, docstring, dosya başlığı
-     *(vaka 2026-08-20: `scripts/abaplint/abaplint.json` `_comment` → "`check_syntax` KAPALI,
+     *(vaka 2026-08-20: `core/scripts/abaplint/abaplint.json` `_comment` → "`check_syntax` KAPALI,
      izole dosyada tip-çözümleme gürültü yapar" ⇒ kuyruğa "kapı boşluğu" diye açılan kalem
      aslında **kararlanmış bir sınırdı**)*
-  2. **`playbook/lessons-learned.md` PATTERN'leri** *(aynı vaka: PATTERN #20 → `adt_syntax_check`
+  2. **`core/playbook/lessons-learned.md` PATTERN'leri** *(aynı vaka: PATTERN #20 → `adt_syntax_check`
      salt-okuma DEĞİL ⇒ yerel bir kapıya kablolanamaz)*
   3. **`standards/`** — kuralın kendisi ve gerekçesi
-  4. **`governance/removed-controls.md`** — ⭐ *"bunu zaten denedik ve **KALDIRDIK**"* tam burada yaşar
+  4. **`core/governance/removed-controls.md`** — ⭐ *"bunu zaten denedik ve **KALDIRDIK**"* tam burada yaşar
   **AYRICA — kalem hâlâ gerçek mi:** kuyruk kayıtları tarihlidir; araya giren PR'lar kalemi
   kapatmış olabilir. Kapanmışsa **YAPMA**, "kapanmış" diye **kanıtıyla** raporla.
   ⛔ **Kapanmış işi yeniden yapmak da bir hata türüdür** — ve gerekçesi yazılı bir kararı
