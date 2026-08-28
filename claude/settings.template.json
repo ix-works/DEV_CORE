@@ -126,6 +126,20 @@
         ]
       },
       {
+        "_comment": "infra_write_guard KABUK KOLU 2026-08-29'da EKLENDI (kayit #47, KULLANICI KARARI: 'dar kapsam + log, blok yok'). AYRI blok, bilincli: yukaridaki Edit|Write|MultiEdit blogu pre_tool_guard + pull_before_edit'i de tasir; matcher'a 'Bash' eklemek o iki hook'u da her Bash cagrisina baglardi (olculmemis yayilim). Bu blokta hook YALNIZ `sed -i <yol>` / `> <yol>` / `tee <yol>` kaliplarindan hedef cikarir, hedef korunan infra yuzeyindeyse stderr'e GORUNUR NOT basar ve exit 0 doner - BLOKLAMAZ. Yol cikarilamiyorsa (heredoc, python -c, cp) SUSAR. Gerekce: fiil-kara-listesi 2026-07-10'da 6 yoldan sizdi; yanlis-pozitif ureten guard guard'sizliktan kotudur. Korpus: tests/fixtures/infra_write_guard (S8, S10-S13, K8).",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py",
+              "infra_write_guard"
+            ]
+          }
+        ]
+      },
+      {
         "_comment": "NotebookEdit AYRI blok: pre_tool_guard freeze/core-leak icin gerekli, ama pull_before_edit SAP-source akisina ozeldir, notebook'a uygulanmaz.",
         "matcher": "NotebookEdit",
         "hooks": [

@@ -80,6 +80,15 @@ REQUIRED_CSV_COLUMNS = (
 )
 OPTIONAL_CSV_COLUMNS = ('unit_field', 'unit_kind')
 
+# Kolon BASLIKTA olmali (yukarisi) ile HUCRE dolu olmali (asagisi) AYRI kurallardir.
+# ⛔ `description` BILEREK DISARIDA: bu kolon SADECE belgeleme icindir, DDL'e YAZILMAZ
+#    (build_ddl docstring'i) ve canli korpusta 3 gercek `table_fields.csv` / **359
+#    satirin 175'i** (bir paketin TAMAMI) bos birakmis. Guard'a alinsaydi 175 FP verir
+#    ve calisan bir paketi kirardi — "bos girdi gecerli degere donusuyor mu?" sorusunun
+#    cevabi burada HAYIR: bos aciklama zaten hicbir seye donusmuyor.
+ROW_REQUIRED_FIELDS = tuple(c for c in REQUIRED_CSV_COLUMNS if c != 'description')
+IS_KEY_GECERLI = ('Y', 'N')
+
 
 def build_ddl(table_name: str, description: str, delivery_class: str,
               data_maint: str, fields: list, unit_refs: dict = None,
@@ -200,12 +209,34 @@ def build_xml(table_name: str, description: str, package: str,
 </blue:blueSource>'''
 
 
-def table_exists(client: SAPADTClient, name: str) -> bool:
-    r = client.session.get(
-        client.url + f'/sap/bc/adt/ddic/tables/{name.lower()}',
-        verify=False, timeout=10
-    )
-    return r.status_code == 200
+def table_varlik_sondasi(client: SAPADTClient, name: str) -> tuple:
+    """Tablo var mi? UC-DEGERLI: (True,'checked_found') · (False,'checked_absent') ·
+    (None,'unavailable:<sebep>').
+
+    ⛔ `None` "YOK" DEGILDIR. Eskiden govde tek satirdi — `return r.status_code == 200`
+    — ve GET **500**/403/timeout False donuyordu; cagiran bunu "obje yok" okuyup
+    dogrudan **CREATE** dalina sapiyordu. Burada sonuc okuma degil YAZMA'dir:
+    yanlis "yok" karari, canlida DURAN bir tablonun uzerine CREATE denemesidir.
+    "bakamadim" ile "yok" ayni sonuca DUSEMEZ.
+
+    Ayni dosyadaki `readback_dogrula` bu ayrimi ZATEN yapiyordu ('OLCULEMEDI' ucuncu
+    degeri); varlik sondasi ondan geri kalmisti — tutarsizlik bu fonksiyondaydi.
+    Kanonik sozluk: `mcp_servers/sap_adt/tools/atom.py` `_varlik_sondasi`
+    (`checked_absent` / `unavailable:http_500`) — yeni sozluk ICAT EDILMEDI.
+    """
+    try:
+        r = client.session.get(
+            client.url + f'/sap/bc/adt/ddic/tables/{name.lower()}',
+            verify=False, timeout=10
+        )
+    except Exception as exc:            # noqa: BLE001 — teshis bozulmasin
+        return None, 'unavailable:%s' % type(exc).__name__
+    kod = getattr(r, 'status_code', None)
+    if kod == 200:
+        return True, 'checked_found'
+    if kod == 404:
+        return False, 'checked_absent'
+    return None, 'unavailable:http_%s' % kod
 
 
 # Bir DDL ALAN satiri: `  [key ]<ad> : <tip>[ not null];`
@@ -271,7 +302,16 @@ def create_one(client: SAPADTClient, csrf: str, table_name: str,
                force_recreate: bool = False,
                dry_run: bool = False) -> bool:
     table_name = table_name.upper()
-    exists = table_exists(client, table_name) if not dry_run else False
+    if dry_run:
+        exists = False
+    else:
+        var, sonda = table_varlik_sondasi(client, table_name)
+        if var is None:
+            # "olculemedi" != "yok" — ne CREATE ne DELETE denenir (fail-closed).
+            print(f'  [FAIL] {table_name} varlik kontrolu OLCULEMEDI — {sonda}')
+            print(f'         "olculemedi" != "yok": CREATE/DELETE DENENMEDI (fail-closed).')
+            return False
+        exists = var
 
     if exists and not force_recreate:
         # ⛔ ESKIDEN: `print('[SKIP] zaten var'); return True` — obje VAR sanilip
@@ -454,28 +494,50 @@ def main():
         if unknown:
             print(f'[WARN] CSV taninmayan kolon(lar) yok sayiliyor: {", ".join(unknown)}')
 
+        satir_ihlalleri = []          # (satir_no, tablo, alan, sebep)
         for row_no, r in enumerate(reader, start=2):
-            tname = r.get('table_name', '').strip().upper()
-            if not tname:
-                continue
-            if only_set and tname not in only_set:
+            # ⚠ HAM alanlar, NORMALIZASYONDAN ONCE okunur (kardes kusur
+            # populate_message_class #41 Y-1: bos girdi sessizce GECERLI bir degere
+            # donusuyordu). Burada ikizleri: bos `is_key` -> `!= 'Y'` testinden gecip
+            # sessizce NON-KEY olur; bos `delivery_class` -> DDL'e `#` yazilir; bos
+            # `field_name`/`type` -> `  : ;` gibi BOZUK bir alan satiri uretir; bos
+            # `table_desc` -> @EndUserText.label bos kalir (ADR 0005-D).
+            ham = {k: str(r.get(k) or '').strip() for k in REQUIRED_CSV_COLUMNS}
+            if not any(ham.values()):
+                continue                          # dolgu/ayirac satiri — hata DEGIL
+            tname = ham['table_name'].upper()
+            if only_set and tname and tname not in only_set:
+                continue                          # --only ile elenen satir denetlenmez
+            bos = [a for a in ROW_REQUIRED_FIELDS if not ham[a]]
+            if bos:
+                for a in bos:
+                    satir_ihlalleri.append((row_no, tname or '?', a, 'BOS'))
+                continue                          # <- FAIL-CLOSED: satir ISLENMEZ
+            if ham['is_key'].upper() not in IS_KEY_GECERLI:
+                # 'Yes'/'X'/'1' gibi bir yazim `== 'Y'` testinden gecemez ve alan
+                # SESSIZCE non-key olur -> yanlis birincil anahtar, hata mesaji YOK.
+                satir_ihlalleri.append((row_no, tname, 'is_key',
+                                        'yalniz Y/N kabul edilir (gorulen: %r)'
+                                        % ham['is_key']))
                 continue
             if tname not in tables:
                 tables[tname] = {
-                    'description': r.get('table_desc', '').strip(),
-                    'delivery_class': r.get('delivery_class', 'A').strip(),
-                    'data_maint': r.get('data_maint', 'ALLOWED').strip(),
+                    'description': ham['table_desc'],
+                    'delivery_class': ham['delivery_class'],
+                    'data_maint': ham['data_maint'],
                     'fields': [],
                     'unit_refs': {},   # quantity_or_amount_field → unit_field
                     'unit_kinds': {},  # quantity_or_amount_field → 'quantity'|'currency'
                 }
-            fname = r.get('field_name', '').strip()
+            fname = ham['field_name']
             unit_field = r.get('unit_field', '').strip()
             tables[tname]['fields'].append({
                 'name': fname,
-                'is_key': r.get('is_key', 'N').strip(),
-                'type': r.get('type', '').strip(),
-                'description': r.get('description', '').strip(),
+                'is_key': ham['is_key'],
+                'type': ham['type'],
+                # `description` GUARD DISI (yukaridaki gerekce): bos olabilir,
+                # zaten DDL'e yazilmaz — yalniz belgeleme icin tasinir.
+                'description': ham['description'],
             })
             if unit_field:
                 tables[tname]['unit_refs'][fname.lower()] = unit_field.lower()
@@ -491,6 +553,19 @@ def main():
                 # unit_kind var ama unit_field yok → referans kurulamaz, sessiz yutma.
                 print(f'[WARN] CSV satir {row_no} ({tname}.{fname}): unit_kind verilmis '
                       f'ama unit_field bos — yok sayildi')
+
+        if satir_ihlalleri:
+            # TUM ihlaller tek seferde (tur tur kesif YOK) ve SAP'ye HIC gidilmeden.
+            print(f'[FAIL] {len(satir_ihlalleri)} CSV alani YARIM/GECERSIZ '
+                  f'— HICBIR tablo yazilmadi (fail-closed).')
+            for sn, tn, alan, sebep in satir_ihlalleri:
+                print(f'    satir {sn} ({tn}): `{alan}` {sebep}')
+            print('  ⚠ Yazilsaydi: bos `is_key` sessizce NON-KEY olur (yanlis birincil '
+                  'anahtar), bos `delivery_class`/`data_maint` DDL\'e `#` yazar, bos '
+                  '`field_name`/`type` BOZUK alan satiri uretir, bos `table_desc` ise '
+                  'ADR 0005-D ihlali olan ACIKLAMASIZ tablo yaratir.')
+            print('  (Not: `description` kolonu BOS BIRAKILABILIR — DDL\'e yazilmaz.)')
+            return 1
 
     print(f'[INFO] CSV → {len(tables)} tablo yüklendi')
     for tname, t in tables.items():

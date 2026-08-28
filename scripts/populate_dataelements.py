@@ -23,8 +23,16 @@ Kullanım:
 CSV format (UTF-8, header'lı):
     name,type_kind,type_name,datatype,length,decimals,description,short,medium,long,heading
 
-    type_kind = 'domain' veya 'BUILTIN'
-    type_name = Domain adı (Z veya SAP standart) — BUILTIN için boş
+    ⛔ TÜM kolonlar ZORUNLUDUR ve hiçbiri boş bırakılamaz (fail-closed; ADR 0005-D
+       + gate `check_dtel_creation_labels.py` R1-R5). Boş `decimals` sessizce `0`
+       OLMAZ — `0` geçerli bir değerdir (canlı korpus: 90 satırın 87'si açıkça `0`).
+
+    type_kind = **yalnız `domain`**. ⛔ `BUILTIN` KABUL EDİLMEZ: SAP'de öyle bir
+                typeKind YOKTUR; `typeKind=BUILTIN` + boş `typeName` aktivasyonda
+                *"No domain or data type was defined"* ile düşer
+                (playbook/adt-domain-dtel.md §26.6).
+    type_name = Domain adı (Z veya SAP standart). Built-in tip için de BURAYA yazılır:
+                `DATS` / `TIMS` / `INT1` / `INT2` / `INT4` / `INT8`.
     datatype  = CHAR / NUMC / DATS / INT2 / INT4 / DEC / QUAN
     length    = numeric (e.g. 10)
     decimals  = numeric (e.g. 0 ya da 3)
@@ -37,7 +45,7 @@ CSV format (UTF-8, header'lı):
 
 Örnek satır:
     ZSD001_E_VOYNO,domain,ZSD001_D_VOYNO,NUMC,10,0,Sefer Numarası,Sefer,Sefer No,Sefer Numarası,Sefer Numarası
-    ZSD001_E_DEPDATE,BUILTIN,,DATS,8,0,Planlanan Kalkış Tarihi,Kalkış,Planlı Kalkış,Planlanan Kalkış Tarihi,Planlanan Kalkış Tarihi
+    ZSD001_E_DEPDATE,domain,DATS,DATS,8,0,Planlanan Kalkış Tarihi,Kalkış,Planlı Kalkış,Planlanan Kalkış Tarihi,Planlanan Kalkış Tarihi
 """
 
 import argparse
@@ -59,37 +67,167 @@ from sap_adt_lib import set_explicit_working_dir, SAPADTClient
 from utils.ddic_aktivasyon import aktivasyon_notu   # "yaratildi != aktif" kapanis notu (tek kaynak)
 
 
+# CSV sozlesmesi — TEK KAYNAK (docstring ile kodun ayrismasini onler; populate_tables B-9)
+REQUIRED_CSV_COLUMNS = ('name', 'type_kind', 'type_name', 'datatype', 'length',
+                        'decimals', 'description', 'short', 'medium', 'long', 'heading')
+OPTIONAL_CSV_COLUMNS = ()
+
+# playbook/adt-domain-dtel.md — TR label max uzunluklari.
+# ⚠ Denetci `scripts/validators/check_dtel_creation_labels.py` (R4) AYNI degerleri
+# kullanir. Ureticiyle denetci ayrisirsa gate yesil derken arac metni kirpar.
+LABEL_MAX = (('short', 10), ('medium', 20), ('long', 40), ('heading', 55))
+
+
+class DtelCsvKolonEksikError(ValueError):
+    """CSV BASLIGINDA zorunlu kolon YOK — yazma BASLAMADAN durdurulur."""
+
+
+class DtelSatiriEksikError(ValueError):
+    """CSV'de YARIM/GECERSIZ doldurulmus satir(lar) var — yazma BASLAMADAN durdurulur."""
+
+
+def load_dataelements_from_csv(csv_path: Path) -> list:
+    """CSV oku -> [{...}, ...]. ⛔ FAIL-CLOSED, yazma (CSRF/POST) BASLAMADAN.
+
+    Guard'lar bilerek BURADA (uretim noktasinda) duruyor: `main()`e konsaydi bu
+    fonksiyonu dogrudan import eden bir cagiran onlari atlardi.
+
+    ⚠ URETICI <-> DENETCI TEK KAYNAK: `scripts/validators/check_dtel_creation_labels.py`
+    (`# ENFORCES: C-DTEL-CREATE-01`) DTEL CSV'sinde su kurallari zorluyor:
+      R1 `name` dolu + Z/Y ile baslar        R2 4 label'in hicbiri bos degil
+      R3 `description` bos degil             R4 label uzunluklari <= 10/20/40/55
+      R5 `type_kind=domain` ise `type_name` dolu
+    Denetci gate'in gerekce notu ureticiyi ACIKCA sucluyordu: *"populate_dataelements.py
+    bu kontrolleri YAPMIYOR: yalniz MAX uzunluga bakiyor ve asarsa `[WARN] (will trim)`
+    deyip SESSIZCE kirpiyor; label/description BOSLUGUNU hic kontrol etmiyor"*.
+    Bu fonksiyon o bosluğu kapatir — gate ne bekliyorsa uretici artik onu yapar.
+
+    ⚠ HAM alan okunur, NORMALIZASYONDAN ONCE (kardes kusur `populate_message_class`
+    #41 Y-1). Ornekler: `int(r.get('decimals','0') or '0')` bos `decimals`i sessizce
+    **0** yapardi ve `0` GECERLI bir degerdir (canli korpus: 2 gercek
+    `dataelements.csv` / 90 satir -> **87 satir acikca `0`**); bos `type_kind` ise
+    `.lower() != 'builtin'` testinden gecip sessizce **'domain'** olurdu ve
+    `<dtel:typeName/>` BOS giderdi -> playbook §26.5: *"domain bagi KAYBOLUR"*
+    (HTTP 201 doner, DTEL bozuk yaratilir).
+
+    TAMAMEN bos satir dolgu sayilir, sessizce atlanir.
+    """
+    rows = []
+    eksikler = []                      # (satir_no, ad, alan, sebep)
+    with open(csv_path, encoding='utf-8-sig', newline='') as f:
+        reader = csv.DictReader(f)
+        basliklar = [(h or '').strip() for h in (reader.fieldnames or [])]
+        yok = [c for c in REQUIRED_CSV_COLUMNS if c not in basliklar]
+        if yok:
+            raise DtelCsvKolonEksikError(
+                'CSV zorunlu kolon(lar) eksik: %s\n'
+                '  Bulunan baslik: %s\n'
+                '  Beklenen      : %s\n'
+                '  ⚠ Eskiden eksik kolon `r.get(kolon, <varsayilan>)` ile SESSIZCE\n'
+                '    varsayilana dusuyordu (length -> 10, datatype -> CHAR,\n'
+                '    type_kind -> domain): label\'siz/yanlis tipli DTEL yaratilir.'
+                % (', '.join(yok), ', '.join(basliklar) or '(bos)',
+                   ', '.join(REQUIRED_CSV_COLUMNS)))
+
+        for r in reader:
+            satir_no = reader.line_num          # CSV'deki GERCEK satir (header dahil)
+            ham = {k: str(r.get(k) or '').strip() for k in REQUIRED_CSV_COLUMNS}
+            if not any(ham.values()):
+                continue                        # dolgu/ayirac satiri — hata DEGIL
+            ad = ham['name']
+            bos = [a for a in REQUIRED_CSV_COLUMNS if not ham[a]]
+            if bos:
+                for a in bos:
+                    eksikler.append((satir_no, ad, a, 'BOS'))
+                continue                        # <- FAIL-CLOSED: satir ISLENMEZ
+
+            hatali = False
+            if not ad.upper().startswith(('Z', 'Y')):
+                eksikler.append((satir_no, ad, 'name',
+                                 'Z/Y ile BASLAMIYOR (KESIN YASAKLAR madde A)'))
+                hatali = True
+            if ham['type_kind'].lower() != 'domain':
+                # ⛔ `BUILTIN` BILEREK REDDEDILIR — playbook/adt-domain-dtel.md §26.6:
+                # `typeKind=BUILTIN` + bos `typeName` AKTIVASYONDA duser
+                # ("No domain or data type was defined"). SAP'de BUILTIN diye bir
+                # typeKind YOKTUR; built-in tip `typeKind=domain` + `type_name=DATS`
+                # (INT2/INT4/TIMS...) olarak yazilir. Canli korpusta (90 satir)
+                # BUILTIN kullanan **0** satir var -> bu ret 0 FP uretir.
+                eksikler.append((satir_no, ad, 'type_kind',
+                                 "yalniz 'domain' kabul edilir (gorulen: %r). "
+                                 "Built-in tip icin: type_kind=domain + "
+                                 "type_name=DATS/TIMS/INT1/INT2/INT4/INT8 "
+                                 "(playbook adt-domain-dtel.md §26.6)"
+                                 % ham['type_kind']))
+                hatali = True
+            for alan, sinir in LABEL_MAX:
+                if len(ham[alan]) > sinir:
+                    eksikler.append((satir_no, ad, alan,
+                                     '%d karakter > %d (populate ESKIDEN SESSIZCE '
+                                     'kirpiyordu; kirpma ONAYLI metni degistirir)'
+                                     % (len(ham[alan]), sinir)))
+                    hatali = True
+            try:
+                uzunluk = int(ham['length'])
+                ondalik = int(ham['decimals'])
+            except ValueError:
+                eksikler.append((satir_no, ad, 'length/decimals',
+                                 'SAYI DEGIL (length=%r decimals=%r)'
+                                 % (ham['length'], ham['decimals'])))
+                hatali = True
+            if hatali:
+                continue
+            rows.append({
+                'name': ad,
+                'type_kind': ham['type_kind'],
+                'type_name': ham['type_name'],
+                'datatype': ham['datatype'].upper(),
+                'length': uzunluk,
+                'decimals': ondalik,
+                'description': ham['description'],
+                'short': ham['short'],
+                'medium': ham['medium'],
+                'long': ham['long'],
+                'heading': ham['heading'],
+            })
+
+    if eksikler:
+        detay = '\n'.join('    satir %d (%s): `%s` %s' % (sn, ad or '?', alan, sebep)
+                          for sn, ad, alan, sebep in eksikler)
+        raise DtelSatiriEksikError(
+            '%d CSV alani YARIM/GECERSIZ — HICBIRI yazilmadi (fail-closed).\n'
+            '  ⚠ Yazilsaydi: bos 4-label ve bos `description` ADR 0005-D ihlali olan\n'
+            '    ETIKETSIZ DTEL yaratirdi; sinir asan label SESSIZCE KIRPILIRDI;\n'
+            '    bos `type_kind` sessizce `domain` olur ve BOS `typeName` ile\n'
+            '    "domain bagi KAYBOLUR" (HTTP 201 doner ama DTEL bozuktur).\n'
+            '  ⛔ Bu arac METIN ONERMEZ (ADR 0005-D): eksik metinleri KULLANICIDAN al.\n'
+            '  Eksik/gecersiz alanlar:\n%s\n'
+            '  (Not: `0` GECERLI bir decimals degeridir — acikca yazildiginda kabul edilir.)'
+            % (len(eksikler), detay))
+    return rows
+
+
 def build_xml(name: str, description: str, package: str, responsible: str,
               type_kind: str, type_name: str,
               datatype: str, length: int, decimals: int,
               short: str, medium: str, long: str, heading: str) -> str:
-    """Build DTEL XML — sabahki başarılı pattern (Playbook §26.2)."""
+    """Build DTEL XML — sabahki başarılı pattern (Playbook §26.2).
+
+    ⚠ Burada uzunluk KIRPMASI YOKTUR ve olmamalidir. Eskiden bu fonksiyon
+    `[WARN] ... (will trim)` deyip label'i SESSIZCE kirpiyordu; kirpilan etiket
+    ekranda YARIM durur ve "onayli metin buydu" diye kimse suphelenmez. Guard artik
+    `load_dataelements_from_csv` icinde (TEK zorlama noktasi) ve YAZMADAN ONCE durur
+    — kardes arac `populate_message_class.build_xml` de ayni sekilde yalniz bicimler.
+    Iki yerde ayni degismezi tutmak, mutasyonla olcumu de imkansiz kilardi.
+    """
     name = name.upper()
     package = package.upper()
     length_str = f'{length:06d}'
     decimals_str = f'{decimals:06d}'
 
-    # Validate label max lengths
-    if len(short) > 10:
-        print(f'  [WARN] {name}: short label "{short}" > 10 chars (will trim)')
-        short = short[:10]
-    if len(medium) > 20:
-        print(f'  [WARN] {name}: medium label "{medium}" > 20 chars (will trim)')
-        medium = medium[:20]
-    if len(long) > 40:
-        print(f'  [WARN] {name}: long label "{long}" > 40 chars (will trim)')
-        long = long[:40]
-    if len(heading) > 55:
-        print(f'  [WARN] {name}: heading "{heading}" > 55 chars (will trim)')
-        heading = heading[:55]
-
-    # type_kind: 'domain' or 'BUILTIN' (case sensitive in SAP)
-    if type_kind.lower() == 'builtin':
-        type_kind_str = 'BUILTIN'
-        type_name_str = ''
-    else:
-        type_kind_str = 'domain'
-        type_name_str = type_name
+    # type_kind: SAP'de yalniz 'domain' vardir (playbook §26.6 — 'BUILTIN' YOK).
+    type_kind_str = 'domain'
+    type_name_str = type_name
 
     return f'''<?xml version="1.0" encoding="UTF-8"?>
 <blue:wbobj adtcore:responsible="{responsible}"
@@ -134,12 +272,28 @@ def build_xml(name: str, description: str, package: str, responsible: str,
 </blue:wbobj>'''
 
 
-def dtel_exists(client: SAPADTClient, name: str) -> bool:
-    r = client.session.get(
-        client.url + f'/sap/bc/adt/ddic/dataelements/{name.lower()}',
-        verify=False, timeout=10
-    )
-    return r.status_code == 200
+def dtel_varlik_sondasi(client: SAPADTClient, name: str) -> tuple:
+    """DTEL var mi? UC-DEGERLI: (True,'checked_found') · (False,'checked_absent') ·
+    (None,'unavailable:<sebep>').
+
+    ⛔ `None` "YOK" DEGILDIR. Eskiden `return r.status_code == 200` idi: GET 500/403/
+    timeout **False** donuyordu ve cagiran "obje yok" okuyup **CREATE** dalina
+    sapiyordu (sonuc okuma degil YAZMA). Kanonik ayrim:
+    `mcp_servers/sap_adt/tools/atom.py` `_varlik_sondasi`.
+    """
+    try:
+        r = client.session.get(
+            client.url + f'/sap/bc/adt/ddic/dataelements/{name.lower()}',
+            verify=False, timeout=10
+        )
+    except Exception as exc:            # noqa: BLE001 — teshis bozulmasin
+        return None, 'unavailable:%s' % type(exc).__name__
+    kod = getattr(r, 'status_code', None)
+    if kod == 200:
+        return True, 'checked_found'
+    if kod == 404:
+        return False, 'checked_absent'
+    return None, 'unavailable:http_%s' % kod
 
 
 def create_one(client: SAPADTClient, csrf: str, row: dict,
@@ -147,7 +301,16 @@ def create_one(client: SAPADTClient, csrf: str, row: dict,
                force_recreate: bool = False, dry_run: bool = False) -> bool:
     name = row['name'].upper()
 
-    exists = dtel_exists(client, name) if not dry_run else False
+    if dry_run:
+        exists = False
+    else:
+        var, sonda = dtel_varlik_sondasi(client, name)
+        if var is None:
+            # "olculemedi" != "yok" — ne CREATE ne DELETE denenir (fail-closed).
+            print(f'  [FAIL] {name} varlik kontrolu OLCULEMEDI — {sonda}')
+            print(f'         "olculemedi" != "yok": CREATE/DELETE DENENMEDI (fail-closed).')
+            return False
+        exists = var
 
     if exists and not force_recreate:
         print(f'  [SKIP] {name} zaten var')
@@ -221,26 +384,12 @@ def main():
         print(f'[FAIL] CSV bulunamadı: {csv_path}')
         return 1
 
-    rows = []
-    with open(csv_path, encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            name = r.get('name', '').strip()
-            if not name:
-                continue
-            rows.append({
-                'name': name,
-                'type_kind': r.get('type_kind', 'domain').strip(),
-                'type_name': r.get('type_name', '').strip(),
-                'datatype': r.get('datatype', 'CHAR').strip().upper(),
-                'length': int(r.get('length', '10')),
-                'decimals': int(r.get('decimals', '0') or '0'),
-                'description': r.get('description', '').strip(),
-                'short': r.get('short', '').strip(),
-                'medium': r.get('medium', '').strip(),
-                'long': r.get('long', '').strip(),
-                'heading': r.get('heading', '').strip(),
-            })
+    # Guard'lar load_dataelements_from_csv ICINDE (uretim noktasi), main()'de DEGIL.
+    try:
+        rows = load_dataelements_from_csv(csv_path)
+    except (DtelCsvKolonEksikError, DtelSatiriEksikError) as e:
+        print(f'[FAIL] {e}')
+        return 1
 
     print(f'[INFO] CSV → {len(rows)} DTEL yüklendi')
 

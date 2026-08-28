@@ -139,6 +139,36 @@ def senaryolar(mod) -> list[tuple[str, bool, str]]:
     ekle("A3 3.baglam: Structure/Table/TableType onekleri bozulmadi",
          not sapan, "sapan=%s" % sapan)
 
+    # --- A4: ⭐ CELISKI KENDINI BELGELEMELI (2026-08-29) --------------------
+    # Sablonun `Message Class` satiri (`{PKG}`) ile STANDARDIN §4.4.5 oneki (`MC`)
+    # AYNI SEYI SOYLEMIYOR; canli kullanim ise ucuncu bir seydir (`{PKG}_MSG`).
+    # Celiskiyi SESSIZCE tasimak, her yeni paketin uc kaynaktan hangisine
+    # uyacagini TAHMIN etmesi demektir (A1/A2'nin kapattigi sinifin ta kendisi).
+    # ⚠ Bu capa KENDINI EMEKLIYE AYIRIR: satir standartla hizalanirsa not
+    # ZORUNLU OLMAKTAN CIKAR. Yani dogru fix'i BLOKLAMAZ, yalniz sessiz
+    # birakilmasini bloklar.
+    mc_std = std.get("Message Class")
+    mc_tmpl = _tmpl_regex("Message Class", tmpl) or ""
+    uyumsuz = bool(mc_std) and not re.search(r"_" + re.escape(mc_std) + r"\b", mc_tmpl)
+    notu_var = "AÇIK KARAR — Message Class" in tmpl
+    ekle("A4 ⭐sablon<->standart Message Class celiskisi BELGELENMIS "
+         "(hizalanirsa not zorunlu degil)",
+         (not uyumsuz) or notu_var,
+         "std=%r sablon=%r uyumsuz=%s not_var=%s" % (mc_std, mc_tmpl, uyumsuz, notu_var))
+
+    # --- A5: not BOS BIR MARKER OLMAMALI — dayanagini tasimali -------------
+    # "Marker koy gec" refleksine karsi: not, kararin iki ENGELINI de adiyla
+    # anmali, yoksa sonraki okuyan yine tahmin eder.
+    if uyumsuz:
+        dayanak = all(x in tmpl for x in
+                      ("standards/01-naming.md", "bootstrap_package.py", "PKG_NOZ"))
+        ekle("A5 AÇIK KARAR notu dayanagini tasiyor (standart + yer-tutucu sinirini anar)",
+             dayanak, "eksik=%s" % [x for x in ("standards/01-naming.md",
+                                                "bootstrap_package.py", "PKG_NOZ")
+                                    if x not in tmpl])
+    else:
+        ekle("A5 AÇIK KARAR notu dayanagini tasiyor (satir hizali -> gerekmiyor)", True)
+
     # --- B1: DAR eksen atesler --------------------------------------------
     n = mod._brifing_lint(_payload(BRIF_YAZMA_ENGELSIZ)) or ""
     ekle("B1 baska-agac + yazma + madde YOK -> lint UYARIR",
@@ -186,6 +216,15 @@ MUTASYONLAR = [
      "lint",
      lambda s: s.replace("        if yer and yazma and not engel:",
                          "        if yer and not engel:")),
+    # A4/A5'in degismezi: celiski VARKEN notu SIL -> korpus KIRMIZI olmali.
+    # (Yoksa "not koydum" iddiasi olculemez ve ilk temizlikte sessizce kaybolur.)
+    ("M4 AÇIK KARAR notunun basligini sil (celiski yine sessiz kalir)",
+     "tmpl",
+     lambda s: s.replace("AÇIK KARAR — Message Class", "eski not")),
+    # A5'in AYRI degismezi: baslik dursun ama DAYANAK kaybolsun (bos marker).
+    ("M5 not dursun ama yer-tutucu sinirini anan dayanagi sil (bos marker)",
+     "tmpl",
+     lambda s: s.replace("PKG_NOZ", "PKG")),
 ]
 
 

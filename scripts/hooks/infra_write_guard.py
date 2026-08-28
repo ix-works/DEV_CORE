@@ -35,25 +35,34 @@ MUAF (sessiz geç, exit 0):
     `SOURCE_CODES/**`, paket `.rules.md`, `tests/`, `attic/`, `TempScripts/`, `.tmp/`.
   * Okuma: guard yalnız Edit/Write/MultiEdit yüzeyindedir; Read/Grep/Glob DOKUNULMAZ.
 
-KAPSAM SINIRI (bilerek): kabuk üzerinden yazım (`Bash` ile `sed -i`/heredoc redirect)
-KAPSANMAZ. Fiil-kara-listesi bu evde bir kez denendi ve 6 yoldan sızdı (pre_tool_guard
-R10 FREEZE-GUARD, 2026-07-10 kaldırma gerekçesi). Kanıtsız ikinci deneme yapılmadı;
-boşluk raporda AÇIK KALEM olarak durur. Korpus çapası: fixture S8.
+KABUK (Bash) KAPSAMI — ⚠ İKİ SEVİYELİ: BLOK **YALNIZ** Edit/Write/MultiEdit'tedir.
+KULLANICI KARARI (2026-08-29, kayıt #47): **"dar kapsam + log, blok yok."** Gerekçesi
+tarihseldir: fiil-kara-listesi bu evde bir kez denendi ve 6 yoldan sızdı (pre_tool_guard
+R10 FREEZE-GUARD, 2026-07-10 kaldırma gerekçesi) — ve **yanlış-pozitif üreten bir guard,
+guard'sızlıktan DAHA KÖTÜDÜR** (salt-okuma/meşru komutları bloklar). Bu yüzden kabuk kolu:
+  · YALNIZ kesin ayırt edilebilen ÜÇ yazma deyiminden hedef çıkarır: `sed -i <yol>` ·
+    `>`/`>>` `<yol>` · `tee [-a] <yol>`  (bkz. `_BASH_YAZMA`);
+  · hedef korunan infra yüzeyindeyse **BLOKLAMAZ** — stderr'e görünür bir NOT basar ve
+    `exit 0` döner (`_bash_kolu`);
+  · yol ÇIKARILAMIYORSA **SUSAR** (heredoc · `python -c` · `cp` · `mv` · `>` içermeyen
+    her şey). Bunlar ölçüldü ve BELİRSİZ sayıldı ⇒ tahmin YOK.
 ⛔ SINIRIN MEKANİĞİ — ÖLÇÜLDÜ 2026-08-29 (kayıt #47; canlı payload, iki yön):
-  Edit payload → `exit=2` + blok mesajı · Bash payload (aynı hedef dosya) → `exit=0`, stderr BOŞ.
-  Kapsamı genişletmek isteyen **ÜÇ** katman bulur, biri değil:
-    1) `_ARACLAR` üyelik testi (aşağıda) — erken `return 0`;
+  Fix ÖNCESİ: Edit payload → `exit=2` + blok mesajı · Bash payload (aynı hedef dosya) →
+  `exit=0`, stderr BOŞ. Kapsamı genişletmek isteyen **ÜÇ** katman vardır, biri değil:
+    1) `_ARACLAR` üyelik testi (aşağıda) — erken `return 0`;      → `"Bash"` EKLENDİ
     2) `main()`'deki yol çıkarımı `ti.get("file_path") or ti.get("path")` — Bash'in
-       `tool_input`'u `{command, description}`'tır, yol ALANI YOKTUR ⇒ boş ⇒ yine `return 0`.
-       ⭐ Bu yüzden **YALNIZ `_ARACLAR`'a `"Bash"` eklemek NO-OP'tur**; "düzelttim" sanılır,
-       hiçbir şey değişmez. (Ölçülmemiş bir tur bu tuzağa girer.)
+       `tool_input`'u `{command, description}`'tır, yol ALANI YOKTUR ⇒ boş ⇒ yine
+       `return 0`.                                                → `_bash_hedef_yolu` EKLENDİ
+       ⭐ Bu yüzden **YALNIZ `_ARACLAR`'a `"Bash"` eklemek NO-OP'tur**; "düzelttim"
+       sanılır, hiçbir şey değişmez. (Ölçülmemiş bir tur bu tuzağa girer.)
     3) `claude/settings.template.json` → `"matcher": "Edit|Write|MultiEdit"` ⇒ hook Bash
-       çağrısında **hiç ÇAĞRILMAZ**. Bu dosya META-İNFRA'dır; ayrı ve açık onay ister.
-  ⇒ Gerçek kapanış = 3 katman + güvenilir yol çıkarımı. Yol çıkarımı (2) için kanıt eşiği
-  yüksektir: `sed -i` · `>`/`>>` · `tee` · heredoc · `python -c` · `cp` gibi biçimlerin
-  hepsinden hedef üretmek gerekir ve **yanlış-pozitif üreten bir guard, guard'sızlıktan
-  DAHA KÖTÜDÜR** (salt-okuma komutlarını bloklar). Açgözlü çıkarım bir kez denendi ve
-  `core-ci` mutasyon korpusunda M2 olarak reddedildi.
+       çağrısında **hiç ÇAĞRILMAZ**.                              → AYRI `"Bash"` bloğu EKLENDİ
+       Bu dosya META-İNFRA'dır ve normalde kapsam dışıdır; **kullanıcı bu turda açıkça
+       yetkilendirdi**. Blok AYRI tutuldu (mevcut `Edit|Write|MultiEdit` bloğuna `Bash`
+       EKLENMEDİ): o blok `pre_tool_guard` + `pull_before_edit`i de taşır ve matcher'a
+       dokunmak o iki hook'u da her Bash çağrısına bağlardı — ölçülmemiş bir yayılım.
+  ⇒ Üçü birden yapılmazsa sonuç NO-OP'tur. Korpus çapaları: S8 (belirsiz kalıp SUSAR) +
+    S10-S13 (kabuk kolu) + K6/K8 (kablolama).
 
 ⛔ BYPASS BAYRAĞI YOKTUR (bilinçli): bayrak kuralı anlamsızlaştırır. Çıkış yolu tek:
 kullanıcıdan AYRI ve AÇIK onay istemek.
@@ -117,7 +126,21 @@ _KABA = ("/scripts/hooks/", "/scripts/validators/", "/scripts/validators-local/"
 
 MUAF_AJANLAR = frozenset({"infra-expert"})
 
-_ARACLAR = ("Edit", "Write", "MultiEdit")
+# BLOK yüzeyi ile LOG yüzeyi AYRI kümelerdir — birbirine karışmasın diye ayrı sabitler.
+_BLOK_ARACLARI = ("Edit", "Write", "MultiEdit")
+_LOG_ARACLARI = ("Bash",)
+_ARACLAR = _BLOK_ARACLARI + _LOG_ARACLARI
+
+# Kabuk yazma deyimleri — DAR ve KESİN (kullanıcı kararı: "dar kapsam + log, blok yok").
+# Kardeş artefakt: `post_validate._BASH_YAZMA` (2026-08-20'de ölçülmüş, mutasyonlanmış
+# desenler) — yeniden İCAT EDİLMEDİ, gerekli üçü kopyalandı. `touch` BİLEREK ALINMADI:
+# içerik yazmaz ve kullanıcının saydığı üç kalıpta yoktur.
+_BASH_YAZMA = (
+    re.compile(r">>?\s*(?P<y>'[^']+'|\"[^\"]+\"|[^\s|;&<>]+)"),           # > dosya / >> dosya
+    re.compile(r"\btee\s+(?:-a\s+)?(?P<y>'[^']+'|\"[^\"]+\"|[^\s|;&<>]+)"),
+    re.compile(r"\bsed\s+(?:-[a-zA-Z]*i[a-zA-Z]*\S*\s+)(?:-e\s+\S+\s+|'[^']*'\s+|\"[^\"]*\"\s+)*"
+               r"(?P<y>'[^']+'|\"[^\"]+\"|[^\s|;&<>]+)"),                 # sed -i ... dosya
+)
 
 
 def _parse_fail_notu() -> None:
@@ -209,6 +232,79 @@ def _blok_mesaji(etiket: str, kanit: str, kim: str, tip: str) -> str:
     )
 
 
+def _bash_hedef_yolu(ti: dict, cwd: str) -> str:
+    """Bash komutundan YAZILAN dosya yolunu çıkar; emin değilse BOŞ döner.
+
+    Boş dönmek güvenli taraftır (sessizlik = bugünkü davranış). Yanlış bir yol döndürmek
+    her komutta yanlış uyarı üretir ve guard'ı gürültüye boğar (alarm yorgunluğu).
+    GÖRECELİ yol payload'ın `cwd`'siyle mutlaklaştırılır: kabuk komutları yolu neredeyse
+    daima göreceli yazar (`sed -i ... scripts/hooks/x.py`) ve `_sinif()` mutlak yol ister
+    (ata-dizin taraması) ⇒ birleştirme yapılmazsa kol CANLIDA ÖLÜ kalırdı.
+    """
+    komut = ti.get("command")
+    if not isinstance(komut, str) or not komut.strip():
+        return ""
+    for kalip in _BASH_YAZMA:
+        m = kalip.search(komut)
+        if not m:
+            continue
+        y = m.group("y").strip("'\"")
+        if y.startswith(("/dev/", "&")):     # `> /dev/null`, `2>&1` dosya DEĞİLDİR
+            continue
+        p = Path(y)
+        if not p.is_absolute() and isinstance(cwd, str) and cwd:
+            y = (Path(cwd) / p).as_posix()
+        return y
+    return ""
+
+
+def _bash_notu(etiket: str, kanit: str, kim: str, tip: str) -> str:
+    kimlik = "ANA OTURUM (lider)" if kim == "ana-oturum" else f"alt-ajan '{tip or '?'}'"
+    return (
+        f"[infra_write_guard] BASH-KAPSAM-UYARISI (BLOK DEGIL, exit 0): {kimlik} kabuk "
+        f"uzerinden korunan bir infra yuzeyine yaziyor gorunuyor.\n"
+        f"   Yuzey: {etiket}  ({kanit})\n"
+        "   KURAL AYNI: infra isi - hook / validator / gate / pre-commit / MCP script / "
+        "paylasilan core-scripts araci - kullanicidan AYRI ve ACIK onay ister; uretimi "
+        "TAZE bir infra-expert yapar (core/playbook/howto-infra-fix-proseduru.md ADIM 3).\n"
+        "   NEDEN BLOK DEGIL (kullanici karari 2026-08-29, kayit #47): kabuk komutundan yol "
+        "cikarimi ancak DAR bir kalip kumesinde kesindir (sed -i / > / tee). Genis bir "
+        "kara-liste bu evde bir kez denendi ve 6 yoldan sizdi; yanlis-pozitif ureten bir "
+        "guard, guard'sizliktan daha kotudur. Bu satir bir OLCUMDUR, bir KARAR degil.\n"
+    )
+
+
+def _bash_kolu(data: dict, ti: dict) -> int:
+    """Kabuk kolu — DAİMA `exit 0`. Tek çıktısı stderr'e basılan görünür nottur.
+
+    ⛔ Blok kolundan YAPISAL OLARAK AYRIDIR (ortak `return 2` yolu YOKTUR): Edit/Write/
+    MultiEdit davranışı bit-bazında korunsun ve iki kolun mutasyonu birbirini maskelemesin.
+    """
+    yol = _bash_hedef_yolu(ti, data.get("cwd") or "")
+    if not yol:
+        return 0                         # belirsiz kalıp → SUS (tahmin YOK)
+    kim, tip = _yazan(data)
+    if kim == "alt-ajan" and tip in MUAF_AJANLAR:
+        return 0                         # üretim zaten onun görevi
+    try:
+        vurgu = _sinif(yol)
+    except Exception as exc:
+        # ⛔ ÇÖKME SESSİZ GEÇMEZ (blok kolundaki sözleşmenin AYNISI) — ama sonuç FAIL-OPEN:
+        # bu kol zaten BLOKLAMIYOR ve kabuk kolunun tüm gerekçesi "belirsizlikte gürültü
+        # üretme"dir; çöken bir sınıflandırıcı azami belirsizliktir. Kaba ağ BİLEREK
+        # kullanılmadı: yanlış bir UYARI, blok kolundaki yanlış bir BLOK kadar pahalı
+        # olmasa da, kabuk yüzeyinde her komutta tekrarlar.
+        sys.stderr.write(
+            f"[infra_write_guard] GUARD-COKTU/BASH ({type(exc).__name__}): siniflandirici "
+            f"hata verdi -> kabuk kolu SESSIZ gecti (fail-open). Bu bir KARAR DEGIL.\n")
+        return 0
+    if vurgu is None:
+        return 0
+    etiket, kanit = vurgu
+    sys.stderr.write(_bash_notu(etiket, kanit, kim, tip))
+    return 0
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
@@ -224,6 +320,13 @@ def main() -> int:
     ti = data.get("tool_input")
     if not isinstance(ti, dict):
         return 0
+
+    # ── KABUK KOLU: LOG-ONLY, buradan AŞAĞIYA GEÇMEZ ───────────────────────────
+    # Erken dönüş bilinçlidir: aşağıdaki blok kolu (exit 2) Bash'i ASLA görmez ⇒
+    # Edit/Write/MultiEdit davranışı bit-bazında korunur (korpus 26 vektör).
+    if arac in _LOG_ARACLARI:
+        return _bash_kolu(data, ti)
+
     yol = ti.get("file_path") or ti.get("path") or ""
     if not isinstance(yol, str) or not yol:
         return 0

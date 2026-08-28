@@ -29,6 +29,43 @@ status: active
 
 > Validator: `scripts/validators/check_package_naming.py` bu regex'leri okuyup `cds/`, `classes/`, `programs/`, vb. altındaki dosya adlarını doğrular.
 
+> ⚠ **AÇIK KARAR — Message Class ve Class satırları (ölçüldü 2026-08-29, karar BEKLİYOR).**
+> Bu iki satır **şablon · kurumsal standart · canlı kullanım** arasında ÜÇ FARKLI şey söylüyor.
+> Şablon bilerek DEĞİŞTİRİLMEDİ (çelişki çözülmeden şablonu değiştirmek çelişkiyi çoğaltır);
+> aşağısı kimin ne dediğinin **sayılı** kaydıdır ki sonraki okuyan tahmin etmesin.
+>
+> | | Message Class | Class (2. biçim) |
+> |---|---|---|
+> | **Bu şablon** | `{PKG}` | `ZCL_{PKG}_*` (ör. `ZCL_ZSD001_*`) |
+> | **`standards/01-naming.md` §4.4.5** | `{PKG}_MC` (örnek `ZSD001_MC`) | (satır yok) |
+> | **Canlı kullanım** | `{PKG}_MSG` | `ZCL_<PKG'nin Z'siz hâli>_*` (ör. `ZCL_SD001_*`) |
+>
+> **Ölçüm (bu core'u tüketen 3 proje ağacı, salt-okur):**
+> · Message Class — `.rules.md` taşıyan 24 paketin 11'inde satır var: **5**'i `{PKG}` (şablonla
+>   aynı), **4**'ü `{PKG}_MSG`, **1**'i `{PKG}_*`; 13'ünde satır YOK. Gerçek ABAP kodunda
+>   `MESSAGE ... ID` ile anılan sınıfların hepsi `_MSG` ekliydi; düz `{PKG}` biçimi **0**,
+>   standardın `{PKG}_MC` biçimi **0**. Dokümantasyonda `_MSG` biçimi **214 kez / 6 ayrı
+>   sınıf**, `_MC` biçimi **0**.
+> · Class — 64 `*.clas.abap` artefaktı: `{PKG}_CL_*` **25 dosya / 14 paket**,
+>   `ZCL_<Z'siz>_*` **39 dosya / 6 paket**, şablonun `ZCL_{PKG}_*` biçimi **0 dosya / 0 paket**
+>   (yani bu alternatif bugüne dek HİÇ kullanılmamış).
+>
+> **Neden bu turda düzeltilmedi (iki ayrı engel):**
+> 1. **Çelişki:** `{PKG}_MSG` yazmak şablonu `standards/01-naming.md` §4.4.5 ile açıkça
+>    çelişkiye sokar. Kararın **önce standartta** verilmesi gerekir (`MC` mi `MSG` mi), sonra
+>    şablon ona hizalanır — tersi, iki kaynağın ikisini de yanlış bırakır.
+> 2. **Yer tutucu YOK:** `ZCL_SD001_*` için `{PKG}`'nin **baştaki Z'si atılmış** hâli gerekir.
+>    `scripts/bootstrap_package.py`'nin yer-tutucu haritası ölçüldü: `PKG` · `PKG_FULL` ·
+>    `TITLE` · `MODULE` · `DATE` · `OWNER` — bu değeri üreten yer tutucu **yok** ve
+>    `PKG = pkg_full.replace("_CLC","")` (ör. `ZSD001`). Şablon dili bunu **ifade edemez**;
+>    uydurmak yerine sınır yazıldı. Çözüm önerisi: `bootstrap_package.py`'ye `PKG_NOZ`
+>    eklemek, sonra bu satırı `ZCL_{PKG_NOZ}_*` yapmak.
+>
+> **O gün gelene kadar ne yapılmalı:** paket gerçekten `ZCL_<Z'siz>_*` kullanacaksa yukarıdaki
+> tabloya **AYRI bir satır** ekle (canlı emsal: `| RAP Behavior Class | ``ZCL_SD001_*`` |
+> ``^ZCL_SD001_[A-Z0-9_]+$`` |`). Validator aynı klasöre eşlenen TÜM regex'leri **VEYA**'lar,
+> yani ek satır mevcut `Class` satırını bozmaz.
+
 > ⛔ **DTEL/Domain öneki `_E_` / `_D_`'DİR — `_DE_`/`_DTEL_`/`_DOM_` DEĞİL** (2026-08-20'de
 > düzeltildi). Kaynak: `core/standards/01-naming.md` §4.4.5 → Data Element = **`E`**
 > (`ZMM001_E_AMOUNT`), Domain = **`D`** (`ZSD001_D_AMOUNT`). Domain ile DTEL **aynı

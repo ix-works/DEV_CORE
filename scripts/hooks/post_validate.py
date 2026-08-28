@@ -288,7 +288,12 @@ def main() -> int:
                              "11-A/11-B · ÜÇ KATMAN: gövde=kapanmış hedef durum, karar günlüğü ayrı, analiz süreci FS'e girmez) "
                              "+ §2.3 · playbook/checklists/doc-checklist.md §B DOC-FS-01…07 (TS için §C). "
                              "Yeniden yazım/temizlikte veri kaybı=0: "
-                             "core/scripts/doc_equivalence_check.py --old ESKİ --new YENİ --new EK."))
+                             "core/scripts/doc_equivalence_check.py --old ESKİ --new YENİ --new EK "
+                             "--kapanmis-karar <KAPANMIŞ_KARARIN_ESKİ_DEĞERİ>  "
+                             "(#12③ — bayrak VERİLMEZSE ters yön HİÇ ölçülmez: 'elenmiştir' "
+                             "cümlesi içinde geçen değer 'korunmuş' sayılır ve gate yeşil kalır. "
+                             "Tekrarlanabilir; hangi değerin kapandığını SEN belirlersin — "
+                             "'çözüm mü, reddedilen alternatif mi' sınıflandırması insana aittir)."))
         except Exception:
             pass
         if kind in ("FS", "EK"):

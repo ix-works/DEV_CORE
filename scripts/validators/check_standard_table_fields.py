@@ -51,14 +51,43 @@ SKIP_TABLE_PREFIXES = ('z', '$session', 'reqd_', 'confd_', 'projection', 'abap')
 FIELD_LINE = re.compile(
     r'^\s*(?:key\s+)?([a-z][a-z0-9_]*)\s*:\s*[a-z][a-z0-9_]*', re.MULTILINE | re.IGNORECASE)
 
-# INCLUDE iki biçimde gelir (canlı ölçüm 2026-07-30):
+# INCLUDE ÜÇ biçimde gelir (canlı ölçüm 2026-07-30 + 2026-08-29):
 #   `include emara`                          ← çıplak (noktalı virgül bile olmayabilir)
 #   `likp_status : include likp_status;`      ← adlandırılmış
+#   `include si_kna1 not null;`               ← DDL KISIT EKLİ  ⭐ 2026-08-29 (kayıt #66)
 # ⚠ Satır-başına DEMİRLENMİŞ: serbest metinde geçen "include for ..." gibi ifadeler
 # include adı sanılırsa çözülemeyen-liste şişer ve gerçek bulgular "doğrulanamadı"ya
 # düşer — yani gürültüyü kesmek korumayı deler. Demirleme bunu kapatır.
+#
+# ⭐ KAYIT #66 — KNA1 SAHTE-POZİTİFİNİN KÖKÜ (canlı ölçüldü, sap-research 2026-08-29):
+#   KNA1'in canlı DDL gövdesi DÖRT include taşır; eski desen bunlardan YALNIZ ÜÇÜNÜ
+#   görüyordu — `include si_kna1 not null;` satırındaki `not null` eki kuyruk demirini
+#   (`\s*;?\s*$`) kırıyordu. `si_kna1` (406 satır) beş disputed alanın BEŞİNİ de taşır:
+#   aufsd:8 · faksd:31 · lifsd:73 · loevm:78 · sperr:107.
+#   ⛔ ASIL ZARAR: kaçırılan include `cozulemeyen`e de DÜŞMÜYORDU — desen onu HİÇ
+#   GÖRMEDİĞİ için "çözülemedi" bile denemiyordu ⇒ 2026-07-30'un "çözülemezse
+#   DOĞRULANAMADI de" garantisi HİÇ DEVREYE GİRMİYOR ⇒ 5 alan doğrudan [BULGU] oluyordu.
+#   "Görmedim" ile "çözemedim" arasındaki fark, tam olarak sahte-pozitifin doğduğu yer.
+#
+# ⛔ GENİŞ ÇARE REDDEDİLDİ — ÖLÇÜMLE (2026-08-29). Önerilen kolay çözüm kuyruk demirini
+#   tamamen kaldırıp `\b` ile kesmekti. Yerel korpusta ölçüldü (1.552 dosya / 490.365
+#   satır, `node_modules` hariç, 263'ü `.cds`):
+#       eski desen 0 eşleşme · GENİŞ varyant **124 YENİ eşleşme** · aşağıdaki DAR varyant **0**
+#   124'ün tamamı DDIC include DEĞİLDİ: klasik ABAP `INCLUDE <prog>_f01.` deyimleri
+#   (nokta ile biter, `;` ile değil), README/SPEC düzyazısı (`include the`, `include one`,
+#   `include any`, `include nested`). Yani geniş varyant, kapatmaya çalıştığı sahte-pozitif
+#   sınıfını BAŞKA BİR YERDE yeniden üretirdi.
+# ⇒ Alınan yol: kuyruk demiri KORUNUR, yanına DAR bir ikinci alternatif eklenir —
+#   "include <ad> + bir veya daha çok ÇIPLAK anahtar sözcük" ancak satır `;` ile
+#   BİTİYORSA kabul edilir. `;` şartı düzyazıyı ve klasik ABAP INCLUDE'unu yapısal olarak
+#   eler; `;`siz çıplak biçim (MARA `include emara`) birinci alternatifte AYNEN durur.
+# ⚠ KAPSAM NİTELEYİCİSİ: kısıt-eki olarak CANLI ÖLÇÜLEN tek biçim `not null`dur. Desen
+#   ek-metnini genel tutar (başka ek gelirse de yakalanır) ama iddia yalnız `not null`
+#   için ölçülmüştür — "her DDL eki desteklenir" DENMEZ.
 INCLUDE_LINE = re.compile(
-    r'^\s*(?:[a-z][a-z0-9_]*\s*:\s*)?include\s+(/?[a-z][a-z0-9_/]{2,})\s*;?\s*$',
+    r'^\s*(?:[a-z][a-z0-9_]*\s*:\s*)?include\s+(/?[a-z][a-z0-9_/]{2,})'
+    r'(?:\s*;?\s*$'                          # (a) ek YOK: `include emara` / `include x;`
+    r'|(?:\s+[a-z][a-z0-9_]*)+\s*;\s*$)',    # (b) DDL kısıt-eki VAR → `;` ZORUNLU
     re.MULTILINE | re.IGNORECASE)
 
 _KAYNAK_UCLARI = ('structures', 'tables')
