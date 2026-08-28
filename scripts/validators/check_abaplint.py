@@ -33,11 +33,20 @@ if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
 
 CONFIG = Path(__file__).resolve().parents[1] / 'abaplint' / 'abaplint.json'
 
-# Sürüm PİNLİ (2026-07-26). Pin'siz `@abaplint/cli` her koşumda upstream latest'i çeker →
-# lint davranışı bizden habersiz değişir (upstream'de 2 haftada 43 commit) + tedarik-zinciri
-# yüzeyi. Bump = BİLİNÇLİ karar: burayı güncelle, bir class/program üzerinde koş, farkı gör.
+# Sürüm PİNLİ (2026-07-26; BUMP 2026-08-28: 2.120.5 → 2.120.38). Pin'siz `@abaplint/cli`
+# her koşumda upstream latest'i çeker → lint davranışı bizden habersiz değişir (upstream'de
+# 2 haftada 43 commit) + tedarik-zinciri yüzeyi. Bump = BİLİNÇLİ karar: burayı güncelle,
+# bir class/program üzerinde koş, farkı gör.
+#
+# 2026-08-28 bump'ı YAN YANA ÖLÇÜLDÜ (aynı 147 artefakt: 65 `.clas.abap` + 80 `.prog.abap`
+# canlı proje korpusu + 2 kontrol dosyası; her dosya bu gate ile TEK TEK koşuldu):
+#   2.120.5  → 126 OK · 20 FINDING · 1 SKIPPED · toplam 28 bulgu
+#   2.120.38 → 126 OK · 20 FINDING · 1 SKIPPED · toplam 28 bulgu
+# Bulgu kümesi (dosya, satır, kural, mesaj) BİREBİR AYNI — yeni yanlış-pozitif YOK, kaybolan
+# bulgu YOK, `IX-GATE-STATUS` satırı 147/147 dosyada basıldı. Çıktı biçimi de değişmedi
+# (`N issue(s) found, M file(s) analyzed`) ⇒ SUMMARY_RE/ISSUE_RE güncellemesi GEREKMEDİ.
 # Fetch edilemezse (offline/cache yok) aşağıdaki except → SKIP (reviewer kırılmaz, mevcut davranış).
-ABAPLINT_PIN = '@abaplint/cli@2.120.5'
+ABAPLINT_PIN = '@abaplint/cli@2.120.38'
 ISSUE_RE = re.compile(r'^(.*\.abap)\[(\d+),\s*(\d+)\]\s*-\s*(.+?)\s*\(([a-z_]+)\)\s*\[[EWI]\]\s*$')
 
 # ⛔ FAIL-OPEN KİLİDİ (2026-08-14) — "bulgu satırı görmedim" ≠ "temiz".
