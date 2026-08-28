@@ -236,6 +236,20 @@ sap-feature = **sonnet** varsayılan. ② **Spawn-anı = LİDER, mekanik uygulam
 sınıfından türetilir: S2/yeni-desen/karmaşık iş → `Agent(model:"opus")` ile YÜKSELT;
 sap-research'te mekanik envanter/döküm → `haiku` İNDİRİLEBİLİR; tabloda karşılığı olmayan
 durum/sapma → kullanıcıya sor. Brifin başına tek satır iz: "Model: X — rol×kapsam".
+⭐ **BEYANSIZ TİP = EBEVEYN MİRASI (ÖLÇÜLDÜ 2026-08-28, Claude Code `2.1.250`):** `model` beyanı
+OLMAYAN bir ajan tipi (`general-purpose` · `Explore`), `Agent(model:…)` override'ı VERİLMEDEN
+spawn edilirse **ebeveynin modelini miras alır** — ucuz bir varsayılana DÜŞMEZ.
+**Kanıt (kontrol gruplu):** aynı oturumda `/tasks` okundu → beyansız `general-purpose`, override'sız
+→ **Opus**; kıyas bacağı `infra-expert` de Opus ama o **kendi frontmatter'ında `model: opus` beyan
+ediyor** ⇒ tek başına kanıt değildi, beyansız tiple ayrıştırıldı. *(Ölçüm enstrümanı sınırlı:
+ajan transkript dosyaları **0 bayt**, `/tasks` yalnız **çalışan** ajanı gösteriyor ⇒ hüküm ancak
+canlı bir prob ajanıyla verilebildi.)*
+⇒ **KURAL:** `general-purpose` / `Explore` spawn'ında **`model` AÇIKÇA verilir.** Verilmezse iş
+sessizce **en pahalı katmanda** koşar. *(Ölçülmüş vaka, aynı gün: 7 radar ajanının 6'sına açıkça
+`sonnet` verildi; override'sız kalan tek `general-purpose` ajanı **112.904 token / 640 sn** boyunca
+**Opus**'ta koştu.)* ⚠ Adlı rollerimizin hepsi model beyan ettiği için **onlar etkilenmez**; §6'nın
+*"sap-research → `haiku` İNDİRİLEBİLİR"* kuralı da sağlam kalır (açık override beyanı ezer).
+
 ⚠ Beyan ≠ fiilî model: atama transcript `message.model` alanından CANLI doğrulanır
 (allowlist geçersiz değeri sessizce inherit'e düşürür). Pilot karar kuralı: Sonnet'te
 bug-gate BLOCKER oranı veya rework turu ARTARSA o rol Opus'a geri döner.
