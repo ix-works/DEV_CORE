@@ -146,6 +146,37 @@ def norm(s: str) -> str:
     return kucult(re.sub(r"\s+", " ", re.sub(r"[*_`>|]+", "", s)).strip())
 
 
+# Aracın ÖLÇMEDİKLERİ — ④ "yeşilin kapsamı okunabilsin" (kayıt #12).
+# ⚠ Bu liste kozmetik değil: 2026-08-18'de bu aracın yeşili *"belge tutarlı"*
+# diye okundu ve imza paketine giden İKİ BLOCKER bu körlükten geçti.
+OLCMEDIKLERI = [
+    "yeni içeriğin DOĞRULUĞU (yalnız ESKİ→YENİ kayıp ölçülür)",
+    "belgeler-arası TUTARLILIK (aynı değer iki belgede çelişebilir)",
+    "KORUNAN-AMA-GEÇERSİZ değer: kapanmış bir kararın eski değeri, 'elenmiştir' "
+    "cümlesi içinde geçtiği için 'korunmuş' sayılır (bkz. --kapanmis-karar)",
+    "kapsam SEÇİMİ: hangi belgelerin pakete dahil olduğu (çağıranın verdiğiyle yetinilir)",
+]
+
+
+def paket_adaylari(yeni_yollar: list[Path], eski_yol: Path) -> list[Path]:
+    """② Aynı klasörlerdeki, `--new`'e VERİLMEYEN .md belgeleri bulur.
+
+    Kök-sebep (2026-08-18): koşum `--new` = FS + EK-B ile yapıldı, **EK-A hiç
+    taranmadı** ve araç bunu bildirmedi. Eksik kapsam SESSİZDİ; yeşil, taranmamış
+    bir belgedeki BLOCKER'ı örttü. Araç kapsamı seçemez ama SUSAMAZ.
+    """
+    verilen = {p.resolve() for p in yeni_yollar} | {eski_yol.resolve()}
+    aday: list[Path] = []
+    for klasor in {p.parent for p in yeni_yollar}:
+        try:
+            for c in sorted(klasor.glob("*.md")):
+                if c.resolve() not in verilen and c.resolve() not in {x.resolve() for x in aday}:
+                    aday.append(c)
+        except OSError:
+            continue
+    return aday
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--old", required=True)
@@ -153,12 +184,36 @@ def main() -> int:
     ap.add_argument("--report", default=None)
     ap.add_argument("--sentence-loss-max", type=float, default=3.0, help="yüzde; varsayılan 3")
     ap.add_argument("--fuzzy", type=float, default=0.72)
+    ap.add_argument("--kapanmis-karar", action="append", default=None, metavar="DEGER",
+                    help="③ TERS YÖN: kapanmış bir kararın ESKİ DEĞERİ (ör. VBKD-IHREZ). "
+                         "Değer YENİ pakette hâlâ geçiyorsa her geçiş listelenir ve "
+                         "BLOCKER olur — insan 'çözüm mü, reddedilen alternatif mi' "
+                         "diye sınıflar. Tekrarlanabilir.")
+    ap.add_argument("--kapsam-uyarisi-kapat", action="store_true",
+                    help="② aynı klasördeki taranmamış .md uyarısını sustur")
     a = ap.parse_args()
 
     old = read(a.old)
-    new = "\n".join(read(p) for p in a.new)
+    yeni_metinler = [(p, read(p)) for p in a.new]
+    new = "\n".join(t for _, t in yeni_metinler)
     lines = []
     P = lines.append
+
+    # ── 0. KAPSAM — ① "taranan: N dosya (adları)" ────────────────────────────
+    # Yeşilin PAYDASI görünür olsun: hangi belgeler ölçüldü, hangileri ölçülmedi.
+    P(f"## 0. Kapsam — taranan: {len(a.new) + 1} dosya")
+    P(f"  eski (1): {a.old}")
+    P(f"  yeni ({len(a.new)}): " + ", ".join(a.new))
+    kapsam_disi = []
+    if not a.kapsam_uyarisi_kapat:
+        kapsam_disi = paket_adaylari([Path(p) for p in a.new], Path(a.old))
+        if kapsam_disi:
+            P(f"  ⚠ AYNI KLASÖRDE TARANMAYAN {len(kapsam_disi)} .md dosyası var — "
+              f"pakete dahilse --new ile ekle:")
+            for c in kapsam_disi:
+                P(f"      - {c}")
+        else:
+            P("  (aynı klasörlerde taranmamış .md yok)")
 
     # 1 kimlikler
     mi = sorted(ids(old) - ids(new))
@@ -211,9 +266,53 @@ def main() -> int:
     for s in lost[:400]:
         P(f"  - {s[:200]}")
 
-    ok = not mi and not lost_blocks and not mv and pct <= a.sentence_loss_max
+    # ── 5. ③ TERS YÖN — kapanmış kararın ESKİ DEĞERİ hâlâ yaşıyor mu? ────────
+    # Denklik kontrolü *"eski değer korunmuş mu"* diye sorar. Bu bölüm TERSİNİ
+    # sorar: *"elenmiş olması gereken değer hâlâ ÇÖZÜM olarak duruyor mu?"*
+    # Ölçülmüş vaka: `VBKD-IHREZ` FS v2.3'te elendi ama "elenmiştir" cümlesi
+    # içinde geçtiği için token KORUNMUŞ sayıldı ⇒ "değer EKSİK 0" YEŞİL;
+    # oysa aynı değer EK-A'da ÇÖZÜM olarak 18 kez duruyordu ve gate görmedi.
+    kapanmis_bulgu = []
+    if a.kapanmis_karar:
+        P("")
+        P(f"## 5. Kapanmış kararlar — TERS YÖN ({len(a.kapanmis_karar)} değer arandı)")
+        for deger in a.kapanmis_karar:
+            hedef = kucult(deger)
+            gecisler = []
+            for yol, metin in yeni_metinler:
+                for i, satir in enumerate(metin.splitlines(), 1):
+                    if hedef in kucult(satir):
+                        gecisler.append((yol, i, satir.strip()))
+            if gecisler:
+                kapanmis_bulgu.append((deger, len(gecisler)))
+                P(f"  🔴 `{deger}` — YENİ pakette {len(gecisler)} geçiş "
+                  f"(kapanmış kararın değeri hâlâ yaşıyor):")
+                for yol, i, satir in gecisler[:40]:
+                    P(f"      {yol}:{i}: {satir[:160]}")
+                if len(gecisler) > 40:
+                    P(f"      … +{len(gecisler) - 40} geçiş daha")
+            else:
+                P(f"  ✅ `{deger}` — yeni pakette geçmiyor")
+        if kapanmis_bulgu:
+            P("  ⚠ Her geçişi SINIFLA: çözüm/koşul ise BLOCKER'dır; "
+              "reddedilen-alternatif ya da ölçüm kaydı ise metinde AÇIKÇA öyle yazmalı.")
+
+    # ── 6. ④ Bu araç NEYİ ÖLÇMEZ (yeşilin kapsamı okunabilsin) ───────────────
     P("")
-    P("SONUÇ: " + ("DENK — veri kaybı yok (1-3 sıfır, 4 eşik altı)" if ok else "KAYIP VAR — yukarıdaki listeler kapatılmadan onaya çıkmaz"))
+    P("## 6. ⚠ BU ARAÇ ŞUNLARI ÖLÇMEZ (yeşil = 'kayıp yok', 'belge doğru' DEĞİL)")
+    for madde in OLCMEDIKLERI:
+        P(f"  - {madde}")
+    if not a.kapanmis_karar:
+        P("  - (bu koşumda --kapanmis-karar verilmedi ⇒ ters yön HİÇ ölçülmedi)")
+
+    ok = (not mi and not lost_blocks and not mv
+          and pct <= a.sentence_loss_max and not kapanmis_bulgu)
+    P("")
+    if kapanmis_bulgu and not (mi or lost_blocks or mv) and pct <= a.sentence_loss_max:
+        P("SONUÇ: KAPANMIŞ KARAR YAŞIYOR — veri kaybı yok, ama elenmiş değer(ler) "
+          "yeni pakette duruyor (bkz. §5); sınıflanmadan onaya çıkmaz")
+    else:
+        P("SONUÇ: " + ("DENK — veri kaybı yok (1-3 sıfır, 4 eşik altı)" if ok else "KAYIP VAR — yukarıdaki listeler kapatılmadan onaya çıkmaz"))
     text = "\n".join(lines)
     print(text)
     if a.report:

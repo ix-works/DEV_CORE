@@ -10,9 +10,13 @@ NEDEN: Windows konsolu/pipe'ı `cp1252`'dir. Türkçe basan script `UnicodeEncod
 yapıyordu. Konvansiyon vardı, ENFORCEMENT yoktu → bu validator.
 
 ENFORCES: C-ENC-01 (non-ASCII basan script UTF-8 konsol koruması taşımalı)
+⚠ Yukarıdaki satır DOCSTRING içindedir ⇒ `ENFORCES_RE` (satır-başı `#` çapalı) onu
+GÖRMEZ: bir markörü TARİF eden metin, o markörü BEYAN etmiş sayılamaz. Makinece
+okunan beyan, docstring'in ALTINDAKİ `# ENFORCES:` satırıdır (2026-08-29).
 Onarım:   `from utils.console import utf8_konsol; utf8_konsol()`
           veya `sys.stdout.reconfigure(encoding="utf-8", errors="replace")`
 """
+# ENFORCES: C-ENC-01  (ADR 0019 coverage binding)
 from __future__ import annotations
 
 import os

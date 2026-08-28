@@ -10,7 +10,11 @@ CORE-INDEX'te (C-IDX-01) aynı dersi almıştık; bu onun ikizi.
 
 ENFORCES: C-REG-01
 Onarım:   python core/scripts/build_package_index.py
+⚠ Yukarıdaki `ENFORCES:` satırı DOCSTRING içindedir ⇒ satır-başı `#` çapalı
+`ENFORCES_RE` onu GÖRMEZ (markörü TARİF eden metin BEYAN değildir). Makinece okunan
+beyan aşağıdaki `# ENFORCES:` satırıdır (2026-08-29).
 """
+# ENFORCES: C-REG-01  (ADR 0019 coverage binding)
 from __future__ import annotations
 
 import os

@@ -45,6 +45,14 @@ SRVB_LABEL = ""                        # SRVB (servis bağlama) description; --s
                                        # srvb_xml). ORDER default sızması fix'i (2026-06-25):
                                        # eskiden SRVB hep "Sefer servisi baglama" alıyordu —
                                        # per-servis label YOKTU.
+BDEF_DESC = ""                         # BDEF description; --bdef-desc ile ZORUNLU verilir
+BCLASS_DESC = ""                       # behavior class description; --bclass-desc ZORUNLU
+# #71 (2026-08-29): bu ikisi eskiden GÖMÜLÜ idi — `"Sefer Başlık davranışı"` ve
+# `"Sefer Başlık davranış uygulaması"`. Script her yeni serviste kullanıldığı için ZSD001'e
+# özgü bu metinler başka paketlerin objelerine de yazılıyordu = kopya-metin borcunun ÜRETECİ
+# (SRVB'de aynı sınıf 2026-06-25'te `--srvb-label` ile kapatılmıştı; bu onun eşleniği).
+# ⛔ VARSAYILAN YOK, TÜRETME YOK: ADR 0005-D uyarınca Z obje metnini AI ÖNERMEZ — operatör
+# verir. Boşsa `_zorunlu_desc()` akışı DURDURUR (sessizce yanlış metin yazmaktansa dur).
 
 SRVD_BASE = "/sap/bc/adt/ddic/srvd/sources"
 SRVB_BASE = "/sap/bc/adt/businessservices/bindings"
@@ -228,6 +236,54 @@ def _activation_failures(resp_text):
     return ('severity="E"' not in t and 'severity="A"' not in t), errs
 
 
+def _zorunlu_desc(deger, bayrak, obje):
+    """Boş description ile obje yaratmayı ENGELLE (#71 · ADR 0005-D).
+
+    Neden hata, neden varsayılan değil: açıklama create anında yazılır ve sonradan
+    düzeltmek REST'ten güvenilir DEĞİLDİR (playbook/adt-rap.md §32.6b: mevcut objenin
+    yalnız `adtcore:description`'ını değiştirme denemesi GET 200 → LOCK 200 → PUT **423**;
+    sonuç *"CREATE anında doğru ver, ya da Eclipse'te elle düzelt"*). Yani yanlış metin
+    ucuz değil — kalıcı. Bir varsayılan üretmek (ör. addan türetmek) de ADR 0005-D ihlalidir:
+    Z obje metnini AI ÖNERMEZ, kullanıcı belirler.
+    """
+    if (deger or "").strip():
+        return deger.strip()
+    raise SAPADTError(
+        f"{obje} açıklaması BOŞ — `{bayrak} \"<TR açıklama>\"` ver. "
+        f"Varsayılan ÜRETİLMEZ (ADR 0005-D: Z obje metnini kullanıcı belirler). "
+        f"Not: açıklama create anında yazılır; sonradan REST ile düzeltmek 423 verir "
+        f"(playbook/adt-rap.md §32.6b) — yani şimdi doğru vermek TEK ucuz an."
+    )
+
+
+def _aktivasyon_yaniti_ok(r):
+    """Aktivasyon POST yanıtının TEK karar noktası (bool döner, exception atmaz).
+
+    #73 (2026-08-29): `step_cdsactivate`/`step_pbactivate`/`step_bactivate` ana yoldan
+    BAĞIMSIZ, kendi kontrolünü taşıyordu:
+        bad = ('severity="E"' in r.text) or ('severity="A"' in r.text) or r.status_code >= 400
+    Bu ifade ÜÇ ayrı kusur taşıyordu:
+      1. `severity=` ADT aktivasyon yanıtında YOKTUR — gerçek şema
+         `<chkl:message ... type="E">`. Koşul **asla eşleşmez** ⇒ sözdizimi hatasıyla
+         çöken bir aktivasyon "başarılı" raporlanırdı (**sessiz yanlış-negatif**).
+         playbook/adt-rap.md:827 — *"`severity="E"` aramak YETMEZ; `<chkl:messages>`
+         formatı + `activationExecuted` flag'ı şart"*.
+      2. `activationExecuted` HİÇ okunmuyordu — 2026-06-11 dersi: POST 200 döner ama
+         `activationExecuted="false"` olabilir, metadata eski kalır.
+      3. Tanınmayan gövdede fail-OPEN — 2026-08-01 W2-MCPT-02: `status>=400` yalnız
+         taşıma katmanını kapatır; "200 + HTTP hata sayfası / boş gövde" açıktı.
+    Karar artık `_activation_failures` + `activate()`in statü kuralıyla AYNI yerden gelir.
+    ⚠ Yeni bir aktivasyon çağrı yeri eklersen hükmü BURADAN al; `severity=` dizgesine
+    dayanma (fixture `aktivasyon_sahte_ok` D bölümü bunu AST ile zorlar).
+    """
+    executed, errs = _activation_failures(r.text)
+    ok = r.status_code in (200, 202) and executed and not errs
+    if not ok and errs:
+        for e in errs[:6]:
+            print("   E: " + e)
+    return ok
+
+
 def activate_and_verify(client, tok, refs):
     """Çoklu obje aktivasyonu + ZORUNLU doğrulama. refs: [(uri, NAME), ...].
     activationExecuted!="true" VEYA type=E mesajı → RuntimeError (sahte 'OK' imkansiz).
@@ -343,7 +399,8 @@ def step_bdef(client, tok, transport, bdef_source_path, bdef_name=BDEF_NAME):
         headers={"X-CSRF-Token": tok,
                  "Content-Type": BDEF_CT + "; charset=utf-8", "Accept": BDEF_CT,
                  "sap-client": "100", "sap-language": "TR"},
-        data=bdef_shell_xml(name, "Sefer Başlık davranışı", PKG).encode("utf-8"),
+        data=bdef_shell_xml(name, _zorunlu_desc(BDEF_DESC, "--bdef-desc", f"BDEF {name}"),
+                            PKG).encode("utf-8"),
         verify=False, timeout=60,
     )
     print(f"[shell] POST status={r.status_code}")
@@ -428,7 +485,9 @@ def step_bclass(client, tok, transport):
         headers={"X-CSRF-Token": tok,
                  "Content-Type": BCLASS_CT + "; charset=utf-8", "Accept": BCLASS_CT,
                  "sap-client": "100", "sap-language": "TR"},
-        data=bclass_shell_xml(name, "Sefer Başlık davranış uygulaması", PKG).encode("utf-8"),
+        data=bclass_shell_xml(name, _zorunlu_desc(BCLASS_DESC, "--bclass-desc",
+                                                  f"Behavior class {name}"),
+                              PKG).encode("utf-8"),
         verify=False, timeout=60,
     )
     print(f"[shell] POST status={r.status_code}")
@@ -495,8 +554,7 @@ def step_cdsactivate(client, tok):
     )
     print(f"[activate] status={r.status_code}")
     print("   " + r.text[:900].replace("\n", " "))
-    bad = ('severity="E"' in r.text) or ('severity="A"' in r.text) or r.status_code >= 400
-    return not bad
+    return _aktivasyon_yaniti_ok(r)
 
 
 def step_ccimp(client, tok, transport, ccimp_path):
@@ -560,7 +618,7 @@ def step_pbactivate(client, tok):
     )
     print(f"[activate] status={r.status_code}")
     print("   " + r.text[:900].replace("\n", " "))
-    return not (('severity="E"' in r.text) or ('severity="A"' in r.text) or r.status_code >= 400)
+    return _aktivasyon_yaniti_ok(r)
 
 
 def step_bactivate(client, tok):
@@ -584,8 +642,7 @@ def step_bactivate(client, tok):
     )
     print(f"[activate] status={r.status_code}")
     print("   " + r.text[:900].replace("\n", " "))
-    bad = ('severity="E"' in r.text) or ('severity="A"' in r.text) or r.status_code >= 400
-    return not bad
+    return _aktivasyon_yaniti_ok(r)
 
 
 def step_srvb(client, tok, transport):
@@ -701,6 +758,7 @@ def step_probe(client, url, accept=None):
 
 def main():
     global SRVD_NAME, SRVB_NAME, EXPOSE_CDS, SRVD_LABEL, SRVB_LABEL, EXPOSE_EXTRA, PKG
+    global BDEF_DESC, BCLASS_DESC
     global BDEF_NAME, BCLASS_NAME, BCLASS_SOURCE
     ap = argparse.ArgumentParser()
     ap.add_argument("--step", required=True,
@@ -725,6 +783,13 @@ def main():
     ap.add_argument("--srvb-label", default="",
                     help="SRVB (servis bağlama) description (per-servis); boşsa "
                          "SRVD_LABEL'dan '<label> bağlama' türetilir")
+    ap.add_argument("--bdef-desc", default="",
+                    help="BDEF açıklaması (TR, ZORUNLU — bdef/all adımlarında). "
+                         "Varsayılan YOK: ADR 0005-D uyarınca Z obje metnini "
+                         "kullanıcı belirler, AI önermez")
+    ap.add_argument("--bclass-desc", default="",
+                    help="Behavior class açıklaması (TR, ZORUNLU — bclass/all "
+                         "adımlarında). Varsayılan YOK (ADR 0005-D)")
     ap.add_argument("--expose-extra", default="",
                     help="virgülle ayrılmış ek expose CDS listesi")
     ap.add_argument("--package", default="",
@@ -756,6 +821,10 @@ def main():
         SRVD_LABEL = a.srvd_label
     if a.srvb_label:
         SRVB_LABEL = a.srvb_label
+    if a.bdef_desc:
+        BDEF_DESC = a.bdef_desc
+    if a.bclass_desc:
+        BCLASS_DESC = a.bclass_desc
     if a.expose_extra:
         EXPOSE_EXTRA = [x.strip() for x in a.expose_extra.split(",")
                         if x.strip()]

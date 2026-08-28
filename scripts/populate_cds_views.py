@@ -413,6 +413,10 @@ def main():
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--force-recreate', action='store_true')
     parser.add_argument('--only', help='Comma-separated CDS names to process')
+    parser.add_argument('--target-sprint',
+                        help='Sprint kapısının hedef sprint ID\'si (ör. 3). '
+                             'Verilmezse project.yaml `cds_target_sprint`; '
+                             'o da yoksa kapı UYGULANMAZ (core tahmin etmez).')
     args = parser.parse_args()
 
     if args.cwd:
@@ -444,15 +448,46 @@ def main():
 
     # ─── PRE-FLIGHT 1/3: Sprint Gate Check (LESSONS_LEARNED.md PATTERN #1) ──
     # Bu populate işlemi hangi sprint'e ait? Önceki sprint'ler kapalı mı?
-    # CDS yaratma → genelde Sprint 3, 4 veya 5. En geniş tahmin: hedef = 5
-    # (en geç sprint'in CDS'i de gerekirse). Hata raporunda kullanıcı düzeltir.
-    try:
-        from sprint_gate_check import ensure_sprint_gates_open
-        target_sprint = '3'  # CDS'in en erken sprint'i
-        if not ensure_sprint_gates_open(target_sprint, raise_on_fail=False):
-            return 1
-    except ImportError as e:
-        print(f'[WARN] sprint_gate_check modülü yüklenemedi: {e}')
+    #
+    # ⛔ ESKIDEN: `target_sprint = '3'` **core'a gömülü tahmindi** (kendi yorumu
+    # *"En geniş tahmin"*). Sonuç yapısal yanlış-pozitifti: sprint panosu TEK bir
+    # paketin planıdır; başka bir paketin CDS'i yazılırken kapı O PAKETİN açık
+    # sprint'lerine bakıp `return 1` ile bloklardı. Ölçüldü 2026-08-19: hedef
+    # paketin hiçbir CDS'i bu araçla yazılamıyordu (vaka değil SINIF).
+    #
+    # ⭐ Hedef sprint artık **proje kaynağından** gelir, core'dan değil:
+    #     1) `--target-sprint` (açık parametre, en yüksek öncelik)
+    #     2) `project.yaml: cds_target_sprint` (env: `IX_CDS_TARGET_SPRINT`)
+    #     3) hiçbiri yoksa → **kapı DEVRE DIŞI** (tahmin YOK, körlemesine blok YOK)
+    # Kapı KALDIRILMADI: tanım verildiğinde aynen bloklar (pozitif kontrol).
+    target_sprint = args.target_sprint
+    if not target_sprint:
+        try:
+            from utils.project_config import cfg
+            v = cfg('cds_target_sprint')
+            target_sprint = str(v).strip() if v else None
+        except Exception as e:
+            print(f'[WARN] proje config okunamadı ({e.__class__.__name__}) — '
+                  f'sprint kapısı hedefi belirlenemedi')
+            target_sprint = None
+
+    if not target_sprint:
+        print('[SKIP] Sprint kapısı: hedef sprint tanımsız — kapı uygulanmadı.'
+              ' (Tanımlamak için: --target-sprint <ID> ya da project.yaml'
+              ' `cds_target_sprint`)')
+    else:
+        try:
+            from sprint_gate_check import ensure_sprint_gates_open
+            if not ensure_sprint_gates_open(target_sprint, raise_on_fail=False):
+                return 1
+        except ImportError as e:
+            print(f'[WARN] sprint_gate_check modülü yüklenemedi: {e}')
+        except ValueError as e:
+            # Hedef, BU projenin panosunda yok. Eskiden bu ham ValueError ile
+            # script'i ÇÖKERTİRDİ; artık görünür SKIP (yanlış panoya ait hedef
+            # bir kod hatası değil, konfigürasyon uyumsuzluğudur).
+            print(f'[SKIP] Sprint kapısı: {e} — bu projenin panosunda yok, '
+                  f'kapı uygulanmadı')
 
     # ─── PRE-FLIGHT 2/3: TD Spec Cross-Check (Playbook §1 §6️⃣) ──────────────
     # Her .cds dosyası için TD spec MD'sini bul, "Silinen Alanlar/Kaldırılan"

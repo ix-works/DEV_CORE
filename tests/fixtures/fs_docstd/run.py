@@ -576,6 +576,66 @@ def main() -> int:
         ekle("C4 FP ÇAPASI: yalnız büyük/küçük harf değişimi → DENK (T3 harf standardı)",
              rc == 0 and "DENK" in out, f"exit={rc}")
 
+        # ── #12: KAPANMIŞ-KARAR körlüğü (2026-08-18'in en pahalı sahte-yeşili) ──
+        # Ölçülmüş vaka: `VBKD-IHREZ` FS v2.3'te ELENDİ; ama "elenmiştir" cümlesi
+        # içinde geçtiği için token KORUNMUŞ sayıldı ⇒ "değer EKSİK 0" YEŞİL.
+        # Aynı değer EK-A'da ÇÖZÜM olarak duruyordu (18 geçiş) ve gate görmedi.
+        # İkinci vaka: tahsis kilidi `STACD='X'` (12 geçiş). İkisi de imza
+        # paketine giden BLOCKER'dı ve bu körlükten geçtiler.
+        kk = dq / "kk"
+        kk.mkdir(exist_ok=True)
+        (kk / "eski.md").write_text(
+            "# FS v2.2\n\nIhracat referansi alani `VBKD-IHREZ` uzerinden tasinir ve"
+            " siparise yazilir.\nTahsis kilidi icin `STACD` alani kullanilir ve degeri"
+            " `X` olarak set edilir.\n", encoding="utf-8")
+        # YENİ gövde cümleleri KORUR (gerçek yeniden-yazımda olduğu gibi) ve
+        # sonuna "elenmistir" ekler ⇒ 1-2-3-4 ölçümlerinin DÖRDÜ DE yeşil olur.
+        (kk / "yeni.md").write_text(
+            "# FS v2.3\n\nIhracat referansi alani `VBKD-IHREZ` uzerinden tasinir ve"
+            " siparise yazilir. Bu yaklasim v2.3 kapsaminda elenmistir.\n"
+            "Tahsis kilidi icin `STACD` alani kullanilir ve degeri `X` olarak set"
+            " edilir. Bu yaklasim v2.3'te elenmistir.\n", encoding="utf-8")
+        (kk / "ek-a.md").write_text(
+            "# EK-A Cozum tasarimi\n\nCozum: ihracat referansi `VBKD-IHREZ`"
+            " alanindan okunur.\nTahsis kilidi `STACD` = `X` olarak yazilir"
+            " (cozum adimi).\n", encoding="utf-8")
+
+        def _dqk(*args):
+            p = subprocess.run([sys.executable, str(DENKLIK), *args], cwd=str(kk),
+                               capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
+            return p.returncode, (p.stdout or "") + (p.stderr or "")
+
+        # C5: KÖRLÜĞÜN KENDİSİ — ters yön sorulmazsa araç YEŞİL der.
+        # Bu senaryo bir kusuru değil, aracın SINIRINI çivller: yeşilin
+        # "belge doğru" anlamına GELMEDİĞİ tam olarak burada görünür.
+        rc, out = _dqk("--old", "eski.md", "--new", "yeni.md", "--new", "ek-a.md")
+        ekle("C5 #12③ sınır: --kapanmis-karar YOKken elenmiş değer yaşıyor ama sonuç DENK",
+             rc == 0 and "DENK" in out and "ters yön HİÇ ölçülmedi" in out,
+             f"exit={rc} (yeşilin kapsamı çıktıda yazılı mı: "
+             f"{'ters yön HİÇ ölçülmedi' in out})")
+
+        # C6: ⭐ FIX — aynı çift + --kapanmis-karar ⇒ BLOCKER, geçişler listelenir
+        rc, out = _dqk("--old", "eski.md", "--new", "yeni.md", "--new", "ek-a.md",
+                       "--kapanmis-karar", "VBKD-IHREZ", "--kapanmis-karar", "STACD")
+        ekle("C6 #12③ ters yön: kapanmış kararın değeri EK-A'da çözüm olarak yaşıyor → exit 1",
+             rc == 1 and "KAPANMIŞ KARAR YAŞIYOR" in out and "ek-a.md" in out,
+             f"exit={rc} ek-a geçişi listelendi={'ek-a.md' in out}")
+
+        # C7: FP ÇAPASI — gerçekten elenmiş değer sahte BLOCKER üretmemeli
+        rc, out = _dqk("--old", "eski.md", "--new", "yeni.md", "--new", "ek-a.md",
+                       "--kapanmis-karar", "ZZZ_HIC_GECMEYEN")
+        ekle("C7 #12③ FP ÇAPASI: gerçekten geçmeyen değer → DENK (sahte BLOCKER yok)",
+             rc == 0 and "DENK" in out, f"exit={rc}")
+
+        # C8: ①+② kapsam — EK-A verilmedi; araç SUSMAMALI (asıl vakanın kökü:
+        # koşum --new = FS + EK-B ile yapıldı, EK-A HİÇ taranmadı ve bildirilmedi)
+        rc, out = _dqk("--old", "eski.md", "--new", "yeni.md")
+        ekle("C8 #12①②: kapsam satırı + taranmayan komşu .md görünür uyarı",
+             "## 0. Kapsam — taranan: 2 dosya" in out and "TARANMAYAN" in out
+             and "ek-a.md" in out,
+             f"kapsam_satiri={'## 0. Kapsam' in out} uyari={'TARANMAYAN' in out}")
+
         gecen = sum(1 for _, ok, _ in sonuc if ok)
         for ad, ok, detay in sonuc:
             print(f"  [{'OK' if ok else 'FAIL'}] {ad} -> {detay}")

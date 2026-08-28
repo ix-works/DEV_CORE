@@ -226,14 +226,24 @@ query) **taze bir lock'la ilk seferde 200** verir.
 sınıf uyarlaması; o ders yalnız FM'e yazılmıştı, CLASS'a hiç uygulanmamıştı):**
 1. `session.headers['X-sap-adt-sessiontype'] = 'stateful'` · `fetch_csrf_token(force_refresh=True)`
 2. **ETag'i LOCK'TAN ÖNCE** çek: `GET /oo/classes/<c>/source/main?version=active` → `ETag`
-   ⚠ **YENİ obje istisnası (2026-08-11 ölçümü):** obje **daha hiç aktive edilmemişse**
-   (`adt_post_shell` ile yeni yaratılmış kabuk), `?version=active` **BAYAT bir ETag** verir ve
-   PUT **412** döner: `Client ETag <A> does not match the object ETag <B>` (ölçülen: A/B yalnız
-   son hanelerde ayrışıyordu — `…091040001000001` ↔ `…091041000000001`).
-   ⇒ **Yeni objede ETag'i `version` parametresiz `GET`'ten al** (güncel sürüm). Kabuk→ilk-push
-   akışında adım 2 böyle okunmalıdır; **aktive edilmiş objelerde `?version=active` doğrudur.**
-   📌 Vaka: `ZEWM000_CL_PACI_ITEM_MOD` ilk push'u — parametresiz ETag ile **PUT 200**, 423 hiç
-   görülmedi (yani bu vaka 423 değil **412** sınıfıdır; teşhisi karıştırma).
+   ⚠ **`?version=active` BAYAT ETag verir → PUT 412** (`Client ETag <A> does not match the object
+   ETag <B>`; ölçülen: A/B yalnız son hanelerde ayrışıyordu — `…091040001000001` ↔ `…091041000000001`).
+   ⭐ **Doğru ayrım "obje YENİ mi / ESKİ mi" DEĞİL — "objenin BEKLEYEN İNAKTİF SÜRÜMÜ var mı":**
+
+   | Objenin durumu | Bekleyen inaktif sürüm | ETag nereden alınır |
+   |---|---|---|
+   | Hiç aktive edilmemiş kabuk (`adt_post_shell` sonrası ilk push) | var (kabuk) | **`version` parametresiz `GET`** |
+   | Aktive edilmiş, **ama son push'u aktive EDİLEMEMİŞ** (aktivasyon düştü, retry ediyorsun) | **var** | **`version` parametresiz `GET`** |
+   | Aktive edilmiş, bekleyen inaktif sürüm YOK | yok | `?version=active` doğrudur |
+
+   ⇒ **Aktivasyonu düşen bir push'tan sonra RETRY yapan herkes bu 412'ye çarpar** — obje "yeni"
+   olmasa bile. Şüphedeysen `adt_inactive_objects` ile bak; bekleyen sürüm varsa parametresiz GET kullan.
+   📌 Vaka 1 (yeni kabuk): `ZEWM000_CL_PACI_ITEM_MOD` ilk push'u — parametresiz ETag ile **PUT 200**,
+   423 hiç görülmedi (yani bu vaka 423 değil **412** sınıfıdır; teşhisi karıştırma).
+   📌 Vaka 2 (2026-08-20 ölçümü — bu ayrımı doğuran vaka): **aktive edilmiş** bir sınıfın ikinci
+   push'u; bir önceki push aktive edilememişti ⇒ `?version=active` bayat kaldı, **PUT 412**
+   (`Client ETag 20260820124149001000181` ↔ `object ETag 20260820133514000000181`); parametresiz
+   GET ile taze ETag alınınca **PUT 200**. Aktivasyon düşüşü o gün **iki kez** yaşandı.
 3. `POST /oo/classes/<c>?_action=LOCK&accessMode=MODIFY&corrNr=<TR>` → `LOCK_HANDLE`
 4. **`PUT /oo/classes/<c>/source/main?lockHandle=<h>&corrNr=<TR>`** + `If-Match: <etag>` +
    `Content-Type: text/plain; charset=utf-8` → **200**

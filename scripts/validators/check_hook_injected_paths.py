@@ -12,7 +12,10 @@ enjekte edilen yollar öneksiz kaldı:
 "o dosya yok" gibi okunur — ajan protokolü atlar. Bu validator o sessiz kırılmayı yakalar.
 
 ENFORCES: C-HOOK-01 (enjekte edilen her .md yolu proje kökünden çözülmeli)
+⚠ Bu satır DOCSTRING içindedir ⇒ satır-başı `#` çapalı `ENFORCES_RE` onu GÖRMEZ
+(markörü TARİF eden metin BEYAN değildir). Makinece okunan beyan aşağıdadır.
 """
+# ENFORCES: C-HOOK-01  (ADR 0019 coverage binding)
 from __future__ import annotations
 
 import json

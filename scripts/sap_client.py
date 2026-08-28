@@ -425,6 +425,17 @@ class SAPClient:
             if best.upper() != req_upper:
                 print(f"      [INFO] Object already recorded in transport {best} — using it instead of {requested_transport}")
                 print(f"      [INFO] (Prevents ghost transport: SAP class-pool includes must stay in one transport)")
+                # #67 (2026-08-29) — DAVRANIS DEGISMEDI, yalniz BEYAN duzeldi.
+                # Kok: yukarida `k_parent = strkorr if strkorr else trkorr` ile her kayit
+                # GOREV(S) -> UST ISTEK(K) cozumlenir. Operator bir GOREV numarasi verdiyse
+                # burada onun UST ISTEGI raporlanir; iki numara farkli GORUNUR ama AYNI
+                # transport ailesidir. Eski iki satir bunu soylemedigi icin kullanici
+                # "istegim yok sayildi" saniyordu (kayit #67'nin sikayeti tam buydu).
+                print(f"      [INFO] Your request was NOT ignored: E070 entries resolve "
+                      f"TASK->PARENT (STRKORR). If {requested_transport} is a TASK, then "
+                      f"{best} is its PARENT request — same transport, shown by its K number.")
+                print(f"      [INFO] Check in SE10/SE09: is {requested_transport} listed under "
+                      f"{best}? If NOT, they are unrelated and the object lives in {best}.")
                 self._last_transport_lookup = 'resolved'
             else:
                 self._last_transport_lookup = 'kept'

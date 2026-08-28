@@ -38,7 +38,22 @@ MUAF (sessiz geç, exit 0):
 KAPSAM SINIRI (bilerek): kabuk üzerinden yazım (`Bash` ile `sed -i`/heredoc redirect)
 KAPSANMAZ. Fiil-kara-listesi bu evde bir kez denendi ve 6 yoldan sızdı (pre_tool_guard
 R10 FREEZE-GUARD, 2026-07-10 kaldırma gerekçesi). Kanıtsız ikinci deneme yapılmadı;
-boşluk raporda AÇIK KALEM olarak durur.
+boşluk raporda AÇIK KALEM olarak durur. Korpus çapası: fixture S8.
+⛔ SINIRIN MEKANİĞİ — ÖLÇÜLDÜ 2026-08-29 (kayıt #47; canlı payload, iki yön):
+  Edit payload → `exit=2` + blok mesajı · Bash payload (aynı hedef dosya) → `exit=0`, stderr BOŞ.
+  Kapsamı genişletmek isteyen **ÜÇ** katman bulur, biri değil:
+    1) `_ARACLAR` üyelik testi (aşağıda) — erken `return 0`;
+    2) `main()`'deki yol çıkarımı `ti.get("file_path") or ti.get("path")` — Bash'in
+       `tool_input`'u `{command, description}`'tır, yol ALANI YOKTUR ⇒ boş ⇒ yine `return 0`.
+       ⭐ Bu yüzden **YALNIZ `_ARACLAR`'a `"Bash"` eklemek NO-OP'tur**; "düzelttim" sanılır,
+       hiçbir şey değişmez. (Ölçülmemiş bir tur bu tuzağa girer.)
+    3) `claude/settings.template.json` → `"matcher": "Edit|Write|MultiEdit"` ⇒ hook Bash
+       çağrısında **hiç ÇAĞRILMAZ**. Bu dosya META-İNFRA'dır; ayrı ve açık onay ister.
+  ⇒ Gerçek kapanış = 3 katman + güvenilir yol çıkarımı. Yol çıkarımı (2) için kanıt eşiği
+  yüksektir: `sed -i` · `>`/`>>` · `tee` · heredoc · `python -c` · `cp` gibi biçimlerin
+  hepsinden hedef üretmek gerekir ve **yanlış-pozitif üreten bir guard, guard'sızlıktan
+  DAHA KÖTÜDÜR** (salt-okuma komutlarını bloklar). Açgözlü çıkarım bir kez denendi ve
+  `core-ci` mutasyon korpusunda M2 olarak reddedildi.
 
 ⛔ BYPASS BAYRAĞI YOKTUR (bilinçli): bayrak kuralı anlamsızlaştırır. Çıkış yolu tek:
 kullanıcıdan AYRI ve AÇIK onay istemek.

@@ -34,7 +34,12 @@ and block-level HTML comments are stripped before the index is loaded… Before 
 Claude Code measured the raw file"*. Yani bu, sürüme bağlı bir DAVRANIŞ DEĞİŞİKLİĞİDİR. Ham
 ölçüm, bakım-notu eklendiğinde SAHTE ALARM verir (ve alarm-yorgunluğu gerçek dolulukları
 görünmez kılar). Ölçüm bu yüzden `_yukleme_govdesi()` çıktısı üzerinden yapılır.
+
+⚠ Yukarıdaki `ENFORCES:` satırı DOCSTRING içindedir ⇒ satır-başı `#` çapalı
+`ENFORCES_RE` onu GÖRMEZ (markörü TARİF eden metin BEYAN değildir). Makinece okunan
+beyan aşağıdaki `# ENFORCES:` satırıdır (2026-08-29).
 """
+# ENFORCES: C-MEM-01  (ADR 0019 coverage binding)
 from __future__ import annotations
 
 import os

@@ -39,7 +39,21 @@ KOSUM:  python tests/fixtures/hook_gate_coverage/run.py
         ... --mutasyon-kor-kovada      (N5: kor hook yanlis kovada da sayilir)
         ... --mutasyon-mesaj-tek-secenek (N5: MATCHER DELIK mesaji TEK secenek verir)
         ... --mutasyon-kor-bloklar     (N5: kor-yazim BLOKLAYICIYA terfi eder)
+        ... --mutasyon-kova-cikarma    (Q1: kova KUME FARKI degil SAYI CIKARMASI)
+        ... --mutasyon-kismi-korluk-yok(Q2: KISMI korluk 'tam denetlendi' sayilir)
 Cikis:  0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (mutasyon capasi tutmadi)
+
+⭐ Q1/Q2 (2026-08-29) — UYUYAN IKI SAHTE-YESIL (S19/S20/S21):
+  · Q1 kova aritmetigi SAYI CIKARMASIYLA yapiliyordu; kumeler cakisinca yalan soyluyordu
+    (`OPT_OUT` ∩ kor-yazim -> ozet **-1 hook** basardi). Kume farki yapisal cozum.
+    ⚠ BUGUNKU VERIDE CAKISMA YOK (olculdu: 17 hook · 7 tool-ayrimi · OPT_OUT=0 ·
+    olculemeyen=0) => basilan sayi DEGISMEDI (10). Duzeltme bugunu degil cakisma GUNUNU
+    hedefler; S19 o gunu sentetik olarak KURAR.
+  · Q2 KISMI korluk: cozulen bir dalin YANINDA cozulemeyen ikinci dal varsa hook hicbir
+    kovaya dusmuyor, gate "[OK] ... her tool matcher'la yonleniyor" diyordu.
+  ⛔ IKI DAL YAPISAL OLARAK AYRIK YAZILDI (`elif` DEGIL): ilk yazimda `elif bos_kiyas:`
+  idi ve TAM korlugu de yakaliyordu -> kardes mutasyon `--mutasyon-kor-sessiz` KACTI
+  (21/21). Savunma-derinligi ust dalin OLCULEBILIRLIGINI yok ediyordu.
 
 ⭐ N3 (2026-08-22) — MATCHER-KAPSAMI (S13/S14): hook katmaninin ORPHAN dali "sablona
 kablolu mu?" (var/yok) sorusunu yanitlar. S13/S14 bir ADIM ILERI gider: KABLOLU ama
@@ -129,7 +143,11 @@ CAPA_OPTOUT = ("        muaf = ad in h_optout  # C-TPL-01 muafiyeti — "
 # N5: kor-yazim (tool_name gecer ama ad kumesi BOS) -> OLCULEMEDI kaydi
 CAPA_KOR = "        if kaynakta_tool and not bulunan and not onek:\n"
 # N5: "kor hook 'tool ayrimi yapmiyor' kovasindan DUSULUR" aritmetigi
-CAPA_KOR_KOVA = "          f\"{len(h_mevcut) - m_denetlenen - len(h_optout) - m_olculemeyen_hook} \"\n"
+# ⚠ CAPA TAZELENDI (2026-08-29, Q1): kova artik SAYI CIKARMASI degil KUME FARKI.
+# Eski capa (`len(h_mevcut) - m_denetlenen - len(h_optout) - m_olculemeyen_hook`)
+# tabanda ARTIK YOK; guncellenmeseydi bu mutasyon [DOGRULANAMADI] (exit 2) donerdi --
+# ki tam da oyle oldu ve UCUNCU DEGER sayesinde "gecti" diye okunmadi.
+CAPA_KOR_KOVA = "    h_ayrim_yapmayan = h_mevcut - h_tool_ayrimi_yapan - h_optout - m_olculemeyen_adlar\n"
 # N5: MATCHER DELIK bulgusunun IKI SECENEKLI onarim metni
 CAPA_MESAJ = ("              f\"MATCHER DELİK=İKİ onarım var, vakaya göre seç: "
               "(a) koruma ÖLÜ ise \"\n"
@@ -191,7 +209,22 @@ MUTLAR = {
     # tasiyici oldugunu kanitlar (ustteki mutasyon bunu ayirt EDEMEZ).
     "--mutasyon-kor-kovada": (
         CAPA_KOR_KOVA,
-        "          f\"{len(h_mevcut) - m_denetlenen - len(h_optout)} \"\n"),
+        "    h_ayrim_yapmayan = h_mevcut - h_tool_ayrimi_yapan - h_optout\n"),
+    # ⭐ Q1 (2026-08-29) — KOVA ARITMETIGININ BICIMI (AYRI DEGISMEZ):
+    # ustteki mutasyon "olculemeyen hook kovadan DUSULUYOR mu" sorusunu olcer;
+    # bu ise "dusulme KUME FARKIYLA mi yoksa SAYI CIKARMASIYLA mi yapiliyor"
+    # sorusunu. Ikisi ayni sey DEGIL: cikarma dogru sayiyi da uretebilir (bugun
+    # uretiyor) ama kumeler CAKISINCA yalan soyler. S19 tam o cakismayi kurar.
+    "--mutasyon-kova-cikarma": (
+        '          f"{len(h_ayrim_yapmayan)} "\n',
+        '          f"{len(h_mevcut) - m_denetlenen - len(h_optout) '
+        '- len(m_olculemeyen_adlar)} "\n'),
+    # ⭐ Q2 (2026-08-29) — KISMI KORLUK dalinin SOKUMU: cozulen bir dalin YANINDA
+    # cozulemeyen ikinci dal tasiyan hook sessizce "tam denetlendi" sayilir (S20 duser).
+    # ⛔ `--mutasyon-kor-sessiz`ten AYRI: o TAM korlugu, bu KISMI korlugu olcer.
+    "--mutasyon-kismi-korluk-yok": (
+        "        if bos_kiyas and (bulunan or onek):\n",
+        "        if False:  # MUTASYON: kismi korluk sessizce 'tam denetlendi' sayilir\n"),
     # ⭐ N5 SIDDET CENGELI: kor-yazim `total`e KATILIRSA (yani BLOKLAYICI olursa)
     # S17 duser. ⛔ AYRI DEGISMEZ: ustteki iki mutasyon "kayit basiliyor mu / dogru
     # kovada mi" sorusunu olcer, bu "SIDDETI dogru mu" sorusunu. Warn-first bir dal
@@ -297,6 +330,26 @@ HOOK_GOVDELERI = {
             'if tool_name == "NotebookEdit":\n'
             '    raise SystemExit(0)\n'
             'raise SystemExit(0)\n'),
+    # ⭐ Q2 (2026-08-29): KISMI KORLUK. `teta`nin (TAM korluk) kardesi ama AYNI SEY DEGIL:
+    # burada BIR dal cozuluyor (`tool_name in _KABUK` -> {"Bash"}) ve IKINCI dal
+    # cozulemiyor (`frozenset(...)`). Fix'ten once bu hook HICBIR kovaya dusmuyordu:
+    # `bulunan` dolu oldugu icin KOR-YAZIM degil, matcher'i oldugu icin DELIK degil
+    # => gate "[OK] ... her tool matcher'la yonleniyor" diyordu. Yani cozulemeyen dalin
+    # tool'lari HIC denetlenmemis olmasina ragmen "tam kapsam" ilan ediliyordu.
+    # ⛔ Vektor kusurun GERCEK yazim biciminde: `frozenset` bu evde yerlesik deyimdir ve
+    # (b) TETIK aynen soyle tarif edilmisti: "mevcut cozulebilir dalin YANINA ikinci bir
+    # tool dali eklendigi gun".
+    "iota": ('#!/usr/bin/env python3\n'
+             '# ENFORCES: X-10  (ADR 0019 coverage binding)\n'
+             '"""stub hook: BIR dal cozulur, IKINCI dal cozulmez (fixture)."""\n'
+             'data = {}\n'
+             '_KABUK = ("Bash",)\n'
+             'tool_name = data.get("tool_name", "")\n'
+             'if tool_name in _KABUK:\n'
+             '    pass\n'
+             'if tool_name in frozenset({"PowerShell", "NotebookEdit"}):\n'
+             '    pass\n'
+             'raise SystemExit(0)\n'),
 }
 
 
@@ -593,6 +646,44 @@ def main() -> int:
         ekle("S18 olu dislama dali -> MATCHER DELIK + mesaj IKI onarim secenegi verir",
              rc == 1 and "MATCHER DELİK" in out and "NotebookEdit" in out
              and "DALI KALDIR" in out, f"exit={rc}")
+
+        # === S19 ⭐ Q1: KOVA ARITMETIGI KUME FARKI OLMALI ====================
+        # ⛔ CAKISAN KUME VEKTORU: tek hook (`teta`) HEM `OPT_OUT`ta HEM kor-yazimli.
+        # ESKI aritmetik (sayi cikarmasi) onu IKI KEZ dusuyordu:
+        #     len(h_mevcut)=1 - m_denetlenen=0 - len(h_optout)=1 - olculemeyen=1 = -1
+        # ve ozet "**-1 hook** tool ayrimi YAPMIYOR" basiyordu. Kume farki NEGATIFE
+        # DUSEMEZ: {teta} - {} - {teta} - {teta} = {} => 0.
+        # ⚠ Bu vektor kaydin (2026-08-22 "Q1") (b) TETIGININ birebir sekli: "OPT_OUT'a
+        # bir hook girdigi gun -- C-TPL-01'in hata mesaji bu kacis yolunu ACIKCA
+        # oneriyor -- ve o hook kor-yazimliysa".
+        # ⛔ NEGATIF SAYI CAPASI SILINEMEZ: yalniz "0" aramak yetmez, eski kod bir gun
+        # baska bir sekilde 0 uretebilir; asil yasak olan NEGATIF sayinin basilmasidir.
+        rc, out = senaryo("s19", hooklar=["teta"], optout=("teta",))
+        ekle("S19 Q1: OPT_OUT ∩ kor-yazim -> kova 0 (NEGATIF sayi YOK)",
+             rc == 0 and "0 hook tool ayrımı YAPMIYOR" in out
+             and "-1 hook" not in out, f"exit={rc}")
+
+        # === S20 ⭐ Q2: KISMI KORLUK 'tam denetlendi' SAYILMAZ ================
+        # `iota` iki tool dali tasir: biri cozulur (Bash), oteki cozulmez (frozenset).
+        # Fix'ten once bu hook hicbir kovaya dusmez ve gate "[OK] ... her tool matcher'la
+        # yonleniyor" derdi -- yani OLCULMEMIS bir dal "denetlendi" sayilirdi.
+        # ⛔ SIDDET S17 ile AYNI (rc=0, UYARI): kusur hook'ta degil GATE'in okuyamamasinda.
+        # ⛔ KOVA CENGELI: `alfa` gercekten tool ayrimi yapmiyor => kova 1 olmali; `iota`
+        # oraya DUSMEMELI (olumlu-yanlis tanim).
+        rc, out = senaryo("s20", hooklar=["alfa", "iota"])
+        ekle("S20 Q2: kismi korluk -> rc=0 (UYARI) + [ÖLÇÜLEMEDİ] iota ADIYLA + kova=1",
+             rc == 0 and OLCULEMEDI_UYARI in out and "iota" in out
+             and "KÖR-YAZIM=1" in out and OLCULEMEDI not in out
+             and "1 hook tool ayrımı YAPMIYOR" in out, f"exit={rc}")
+
+        # === S21 ⭐ Q2 POZITIF KONTROL — TAM cozulen hook UYARI ALMAZ =========
+        # ⛔ SILINEMEZ: S20 tek basina "her hooka kor-yazim de" mutasyonuyla da gecerdi.
+        # `epsilon` tek ve TAMAMEN cozulebilir bir dal tasir => KOR-YAZIM=0 olmali.
+        # (Q2 fix'i asiri-siki olsaydi burasi kirmizi yanardi -- daraltmanin siniri.)
+        rc, out = senaryo("s21", hooklar=["alfa", "epsilon"])
+        ekle("S21 Q2 POZITIF KONTROL: tam cozulen hook UYARI ALMAZ (KÖR-YAZIM=0)",
+             rc == 0 and "KÖR-YAZIM=0" in out and OLCULEMEDI_UYARI not in out
+             and "DENETLENEN=1" in out, f"exit={rc}")
 
         # === S8 KABLOLAMA MANTIGI KOPYALANMADI ==============================
         # C-TPL-01 ile ORTAK okuyucu: ayni olgu iki yerde yasarsa biri bayatlar.

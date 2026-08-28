@@ -323,16 +323,24 @@ def _tool_tasiyor_mu(dugum, toolvars: set[str]) -> bool:
 
 
 def hook_tool_adlari() -> tuple[dict[str, set[str]], dict[str, list[str]],
-                                list[str], list[str]]:
-    """hook → (kodda adı geçen tool'lar, önek dalları, KÖR-YAZIM'lar, ayrıştırma hataları).
+                                list[str], list[str], set[str]]:
+    """hook → (kodda adı geçen tool'lar, önek dalları, KÖR-YAZIM'lar, ayrıştırma
+    hataları, ÖLÇÜLEMEYEN hook ADLARI).
 
     ⚠ KÖR-YAZIM ile AYRIŞTIRMA HATASI AYRI DÖNER çünkü ŞiDDETLERİ FARKLIDIR: biri
     hook'un bozuk olduğunu, öteki GATE'in okuyamadığını söyler (gerekçe: main).
+
+    ⛔ BEŞİNCİ DÖNÜŞ NEDEN VAR (2026-08-29, infra-findings 2026-08-22 "Q1"):
+    çağıran taraf kova aritmetiğini SAYI ÇIKARMASIYLA yapıyordu; mesaj listelerinin
+    UZUNLUĞU çıkarılıyordu, hook ADI değil. Mesaj sayısı bir küme değildir: aynı hook
+    iki kovaya birden girerse (ör. OPT_OUT ∩ kör-yazım) iki kez düşülür ve özet
+    NEGATİF sayı basabilir. Küme farkı yapabilmek için adların DA dönmesi şart.
     """
     adlar: dict[str, set[str]] = {}
     onekler: dict[str, list[str]] = {}
     korler: list[str] = []
     hatalar: list[str] = []
+    olculemeyen: set[str] = set()
     for yol in sorted(HOOKS_DIR.glob("*.py")):
         if yol.name.startswith("_"):
             continue
@@ -342,6 +350,7 @@ def hook_tool_adlari() -> tuple[dict[str, set[str]], dict[str, list[str]],
             # ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: ayrıştırılamayan hook sessizce "tool ayrımı yok"
             # sayılsaydı, bozuk bir hook gate'i YEŞİLE çevirirdi.
             hatalar.append(f"hook ayrıştırılamadı: {yol.stem}: SyntaxError: {e}")
+            olculemeyen.add(yol.stem)
             continue
         # ⛔ "kodda tool_name'e BAKIYOR mu" sorusu AST'den sorulur, ham metinden DEĞİL:
         # yorum/docstring içindeki bir anış "bakıyor" sayılamaz (bu evde ölçülmüş sınıf:
@@ -371,11 +380,23 @@ def hook_tool_adlari() -> tuple[dict[str, set[str]], dict[str, list[str]],
                 toolvars |= {t.id for t in d.targets if isinstance(t, ast.Name)}
         bulunan: set[str] = set()
         onek: list[str] = []
+        bos_kiyas: list[str] = []   # comparator'ı BOŞ kümeye çözülen kıyaslar (Q2)
         for d in ast.walk(agac):
             if isinstance(d, ast.Compare) and _tool_tasiyor_mu(d.left, toolvars):
                 for op, kar in zip(d.ops, d.comparators):
                     if isinstance(op, (ast.In, ast.Eq, ast.NotIn, ast.NotEq)):
-                        bulunan |= _ast_str_kume(kar, sabitler)
+                        k = _ast_str_kume(kar, sabitler)
+                        if k:
+                            bulunan |= k
+                        else:
+                            # ⛔ KISMİ KÖRLÜK (2026-08-29, infra-findings 2026-08-22 "Q2"):
+                            # tool değişkeniyle kıyaslanan bu comparator hiçbir string'e
+                            # çözülemedi. `bulunan` BAŞKA bir daldan dolduysa bu hook
+                            # eskiden hiçbir kovaya düşmüyordu ve gate "[OK] … her tool
+                            # matcher'la yönleniyor" diyordu — oysa o dalın tool'ları
+                            # HİÇ denetlenmemişti. Satır no ile kaydedilir ki bulgu
+                            # "hangi dal" sorusuna cevap verebilsin.
+                            bos_kiyas.append(str(getattr(kar, "lineno", "?")))
             if (isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute)
                     and d.func.attr == "startswith"
                     and _tool_tasiyor_mu(d.func.value, toolvars)):
@@ -399,7 +420,33 @@ def hook_tool_adlari() -> tuple[dict[str, set[str]], dict[str, list[str]],
                 f"{yol.stem}: kodda '{_TOOL_ANAHTARI}' geçiyor ama tool adı ÇIKARILAMADI "
                 f"(tanınmayan yazım: frozenset/ters-kıyas/fonksiyon-içi sabit/birleştirme) "
                 f"→ matcher kapsamı ÖLÇÜLEMEDİ (bu hook 'tool ayrımı yapmıyor' DEĞİLDİR)")
-    return adlar, onekler, korler, hatalar
+            olculemeyen.add(yol.stem)
+        # ⛔ `elif` DEĞİL, AYRIK KOŞULLU AYRI `if` (2026-08-29 — ölçülerek düzeltildi).
+        # İlk yazımda bu dal `elif bos_kiyas:` idi ve TAM körlüğü de yakalıyordu; sonuç:
+        # kardeş mutasyon `--mutasyon-kor-sessiz` (üstteki dalı `if False:` yapar)
+        # **KAÇTI** — fixture 18/18 verdi, çünkü bu dal devreye girip aynı kaydı üretti.
+        # Yani savunma-derinliği, üst dalın ÖLÇÜLEBİLİRLİĞİNİ yok ediyordu (memory:
+        # "mutasyon katman sayısı kadar çapa keser"). İki dal artık YAPISAL OLARAK
+        # AYRIK: üstteki `not bulunan and not onek`, bu ise `(bulunan or onek)` ister.
+        # Her biri kendi mutasyonuyla bağımsız ölçülebilir.
+        if bos_kiyas and (bulunan or onek):
+            # ⛔ KISMİ KÖRLÜK — TAM körlüğün kardeşi (2026-08-29, "Q2").
+            # `M1` (2026-08-22) TAM körlüğü görünür yaptı: hiçbir tool adı çıkarılamayan
+            # hook artık ADIYLA basılıyor. Ama KISMİ körlük — çözülen bir dalın YANINDA
+            # çözülemeyen ikinci bir dal — hiçbir kovaya düşmüyordu: `bulunan` dolu
+            # olduğu için KÖR-YAZIM değil, matcher'ı olduğu için DELİK değil ⇒ gate
+            # "[OK] … her tool matcher'la yönleniyor" diyordu. Bu, PATTERN #12'nin
+            # (pre_tool_guard'a PowerShell eklenmesi) TAM ŞEKLİDİR: koruma kodda var,
+            # kapsam denetlenmemiş, hiçbir test bakmıyor.
+            # ⛔ ŞİDDET TAM KÖRLÜKLE AYNI (UYARI, rc'yi ETKİLEMEZ): kusur HOOK'ta değil,
+            # GATE'in okuyamamasında. Kazanılan tek şey GÖRÜNÜRLÜK — ve zaten istenen o.
+            korler.append(
+                f"{yol.stem}: tool adlarının BİR KISMI çözüldü ({len(bulunan)} ad) ama "
+                f"{len(bos_kiyas)} kıyasın comparator'ı hiçbir string'e çözülemedi "
+                f"(satır: {', '.join(bos_kiyas)}) → o dal(lar)ın matcher kapsamı "
+                f"ÖLÇÜLEMEDİ; bu hook 'tam denetlendi' SAYILAMAZ")
+            olculemeyen.add(yol.stem)
+    return adlar, onekler, korler, hatalar, olculemeyen
 
 
 def hook_matcherlari() -> tuple[dict[str, list[str]], str]:
@@ -513,11 +560,11 @@ def main() -> int:
           f" · UNDECLARED={len(h_undeclared)}")
 
     # -------------------- MATCHER-KAPSAMI DALI (2026-08-22) ---------------------
-    m_adlar, m_onekler, m_korler, m_parse_hatalari = hook_tool_adlari()
-    # ⚠ ŞİMDİ SAY: bu listede şu an YALNIZ hook-başına ölçüm hataları var (ayrıştırılamayan
-    # + kör-yazım). Matcher-regex hataları AŞAĞIDA ekleniyor ve onların hook'ları ZATEN
-    # `m_denetlenen` içinde — sonradan sayılsaydı aynı hook iki kez düşülürdü.
-    m_olculemeyen_hook = len(m_parse_hatalari) + len(m_korler)
+    m_adlar, m_onekler, m_korler, m_parse_hatalari, m_olculemeyen_adlar = hook_tool_adlari()
+    # ⚠ ŞİMDİ TOPLA: bu KÜME şu an YALNIZ hook-başına ölçüm hatalarını taşıyor
+    # (ayrıştırılamayan + kör-yazım). Matcher-regex hataları AŞAĞIDA ekleniyor ve
+    # onların hook'ları ZATEN `m_denetlenen` içinde — sonradan katılsalardı aynı hook
+    # iki kovaya birden girerdi.
     m_matcherlar, m_sablon_hatasi = hook_matcherlari()
     m_delik: list[tuple[str, str, str]] = []
     m_denetlenen = 0
@@ -536,8 +583,23 @@ def main() -> int:
             except re.error as e:
                 m_parse_hatalari.append(f"{ad}: geçersiz matcher regex ({e})")
 
+    # ⛔ KÜME FARKI, SAYI ÇIKARMASI DEĞİL (2026-08-29, infra-findings 2026-08-22 "Q1").
+    # Eski satır: `len(h_mevcut) - m_denetlenen - len(h_optout) - m_olculemeyen_hook`.
+    # Bu bir küme farkı DEĞİL, dört bağımsız sayacın çıkarmasıydı ve kümeler ÇAKIŞINCA
+    # yalan söylüyordu. Ölçülmüş üç sızıntı:
+    #   (1) yalnız `startswith` öneki olan hook → `m_denetlenen`e girmez ama tool ayrımı
+    #       YAPAR ⇒ "ayrım yapmıyor" kovasında OLUMLU BİÇİMDE YANLIŞ görünürdü;
+    #   (2) `OPT_OUT` ∩ kör-yazım (aynı hook) → iki kez düşülür ⇒ özet NEGATİF basardı;
+    #   (3) `adlar`da olup matcher'ı OLMAYAN hook (ORPHAN dalında yakalanır, burada
+    #       `continue` edilir) → `m_denetlenen`e girmez, yine "ayrım yapmıyor" sanılırdı.
+    # Küme farkı üçünü de yapısal olarak kapatır: ne negatife düşer ne çifte sayar.
+    # ⚠ DÜRÜSTLÜK NOTU: bugünkü veride çakışma YOK (ölçüldü 2026-08-29: h_mevcut=17 ·
+    # tool-ayrımı-yapan=7 · OPT_OUT=0 · ölçülemeyen=0) ⇒ basılan sayı **değişmiyor**
+    # (10). Düzeltme bugünü değil, kümeler çakıştığı GÜNÜ hedefler.
+    h_tool_ayrimi_yapan = set(m_adlar) | set(m_onekler)
+    h_ayrim_yapmayan = h_mevcut - h_tool_ayrimi_yapan - h_optout - m_olculemeyen_adlar
     print(f"\nMatcher-kapsamı: {m_denetlenen} hook denetlendi (kodda tool adı geçen) · "
-          f"{len(h_mevcut) - m_denetlenen - len(h_optout) - m_olculemeyen_hook} "
+          f"{len(h_ayrim_yapmayan)} "
           f"hook tool ayrımı YAPMIYOR "
           f"(SessionStart/PreCompact/UserPromptSubmit vb. — kapsam dışı, uydurulmaz).")
     if m_onekler:

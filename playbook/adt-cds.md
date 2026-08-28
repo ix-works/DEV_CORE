@@ -247,19 +247,29 @@ DELETE /sap/bc/adt/ddic/ddl/sources/{name}                       ← sil
 
 ADT type code: `DDLS/DF`
 
-### 30.3 SQL View Adı — 10 Karakter Limit
+### 30.3 SQL View Adı — uzunluk sınırı ⛔ **SÜPERSEDED (§30.9 geçerlidir)**
 
-⚠ **KRİTİK:** `@AbapCatalog.sqlViewName: 'XXX'` değeri **maks 10 karakter** olmalı.
+> ⛔ **BU BÖLÜMÜN ESKİ HÂLİ *"maks 10 karakter, kısaltarak yaz"* diyordu ve aşağıdaki kısaltma
+> tablosunu örnek gösteriyordu. O stil §30.9 whitelist'iyle **YASAKLANDI** — `ZSD01SHTYP`
+> tam olarak Sprint-4'te TADIR orphan'ına yol açan vakadır. Tabloyu **karşı-örnek** olarak
+> bırakıyoruz ki eski CDS'lerde görülünce tanınsın; **yeni CDS'te KULLANMA.**
 
-Örnek: `ZSD001_DDL_ORDER_DESTINATION` için SQL view adı `'ZSD001VYDS'` (10 char) — `ZSD001_V_ORDER_DESTINATION` (uzun) olmaz.
+**Bugün geçerli kural (§30.9, kod-zorlamalı):** `sqlViewName` = `<SQLV_PREFIX><1-5 char>`, prefix hedef
+paketten türer, **toplam ≤14 karakter** (`populate_cds_views.py:90 SQL_VIEW_MAX_LEN = 14`, ihlal `:249`'da
+yakalanır). Örn. `ZSD001_CLC` paketinde `ZSD001_DDL_ORDER_DESTINATION` → **`'ZSD001_V_ORDDS'`** (14 char).
 
-Mantıksal kısaltma yöntemi:
-| CDS Adı | SQL View Adı |
-|---|---|
-| ZSD001_DDL_ORDER_DESTINATION | `ZSD001VYDS` |
-| ZSD001_DDL_ORDER_SHIP_BAL | `ZSD001DSHB` |
-| ZSD001_DDL_ORDER_ORDERES | `ZSD001ORDS` |
-| ZSD001_DDL_SHIPPING_TYPES | `ZSD01SHTYP` (prefix 1 char kısa) |
+❌ **YASAK — eski kısaltma stili (karşı-örnek tablosu; §30.9 pre-flight'ı bunları REDDEDER):**
+
+| CDS Adı | ❌ Eski stil (YASAK) | ✅ Bugünkü format |
+|---|---|---|
+| ZSD001_DDL_ORDER_DESTINATION | `ZSD001VYDS` | `ZSD001_V_ORDDS` |
+| ZSD001_DDL_ORDER_SHIP_BAL | `ZSD001DSHB` | `ZSD001_V_DSHB` |
+| ZSD001_DDL_ORDER_ORDERES | `ZSD001ORDS` | `ZSD001_V_ORDS` |
+| ZSD001_DDL_SHIPPING_TYPES | `ZSD01SHTYP` | `ZSD001_V_SHTYP` |
+
+⚠ SAP'de **zaten aktive edilmiş** eski-stil bir sqlViewName varsa rename teknik olarak imkânsızdır
+(SAP Note 2710405) — o vakalar `project.yaml:cds_legacy_sqlview_exceptions` ile **tek tek** muaf tutulur;
+yeni objede muafiyet YOK.
 
 ### 30.4 Deprecated Annotation: `preserveKey`
 
@@ -303,7 +313,7 @@ Eski <LEGACY_SOURCE> CDS'ini içeri taşırken yapılacak değişiklikler:
 | <LEGACY_SOURCE> | TD |
 |---|---|
 | `zsd_007_ddl_X` | `zsd001_ddl_X` |
-| `ZSD_007_CV_X` veya `ZSD_007_V_X` (SQL view) | **`ZSD001_V_XXXXX`** (SABİT FORMAT, toplam ≤14 char) |
+| `ZSD_007_CV_X` veya `ZSD_007_V_X` (SQL view) | **`<SQLV_PREFIX><≤5 char>`** — prefix HEDEF PAKETTEN türer (`ZSD001_CLC` → `ZSD001_V_`), toplam ≤14 char |
 | `zsd_007_t_X` (Z tablo) | `zsd001_t_X` |
 | `zsd_007_e_X` (Z DTEL) | `zsd001_e_X` |
 | `zsd_007_d_X` (Z domain) | `zsd001_d_X` |
@@ -314,10 +324,15 @@ Eski <LEGACY_SOURCE> CDS'ini içeri taşırken yapılacak değişiklikler:
 | `@AbapCatalog.preserveKey` | **KALDIR** (deprecated) |
 
 **⚠️ SQL View Adı KURALI (Sprint 3'te ihlal edildi):**
-- Format **`ZSD001_V_XXXXX`** sabittir (8 char prefix + ≤5 char suffix = ≤14 char total)
+- Format **`<SQLV_PREFIX><≤5 char>`** — ⚠ prefix **SABİT DEĞİL, hedef paketten TÜRER**
+  (`populate_cds_views.py::_derive_prefixes()`): `Z<MOD 2-4 harf><3 hane>_<x>` kalıbındaki paket adı
+  → `<PKG3><NNN>_V_` + `<pkg><nnn>_ddl_`. Örn. `--package ZSD001_CLC` → `ZSD001_V_` / `zsd001_ddl_`;
+  `--package ZMOD001_CLC` → `ZMOD001_V_` / `zmod001_ddl_`. Toplam ≤14 char sınırı her paket için geçerli.
+- `project.yaml`'daki `sql_view_prefix`/`cds_view_name_prefix` **yalnız fallback/istisnadır** —
+  paket adı kalıba uymuyorsa devreye girer. İkisi de yoksa gate **B-5 NET hatasıyla durur** (varsaymaz).
 - ❌ Eski <LEGACY_SOURCE> prefix korunamaz: `ZSD_007_CV_CONCD` YANLIŞ
 - ❌ Kısaltılmış format kullanılamaz: `ZSD01CONCD` YANLIŞ (eski stil)
-- ✅ Doğru: `ZSD001_V_CONCD`, `ZSD001_V_VOYDS`, `ZSD001_V_ORDIT`
+- ✅ Doğru (paket `ZSD001_CLC` örneğiyle): `ZSD001_V_CONCD`, `ZSD001_V_VOYDS`, `ZSD001_V_ORDIT`
 
 Otomatik dönüştürücü `TempScripts/_convert_cds_sources.py`:
 - **Yanlış:** Manuel `sqlview_map = {'ZSD_007_CV_X': 'ZSD01X', ...}` — entry atlanırsa <LEGACY_SOURCE> prefix kalır
@@ -329,11 +344,14 @@ Otomatik dönüştürücü `TempScripts/_convert_cds_sources.py`:
 
 #### 3 Katmanlı Whitelist Kuralı
 
-| # | Konu | TEK GEÇERLİ FORMAT | Regex (Python) |
+⚠ Aşağıdaki tablo **hedef paket `ZSD001_CLC`** varsayımıyla yazılmıştır. Prefix'ler `--package`
+değerinden türer; başka pakette `ZSD001_V_`/`zsd001_ddl_` yerine o paketin türevi geçerlidir.
+
+| # | Konu | GEÇERLİ FORMAT (paket-türevli) | Regex (Python; `--package ZSD001_CLC` için) |
 |---|---|---|---|
-| 1 | sqlViewName annotation | `'ZSD001_V_<1-5 büyük harf/rakam>'` (≤14 char total) | `^ZSD001_V_[A-Z0-9]{1,5}$` |
-| 2 | `define view <name>` | `zsd001_ddl_<x>` | `^zsd001_ddl_[a-z0-9_]+$` |
-| 3 | Source body referansları | Sadece `zsd001_*` (CDS/tablo/DTEL/domain) | (negative: hiç `zsd_007_*` veya `'ZSD01XXXX'` yok) |
+| 1 | sqlViewName annotation | `'<SQLV_PREFIX><1-5 büyük harf/rakam>'` (≤14 char total) | `^ZSD001_V_[A-Z0-9]{1,5}$` |
+| 2 | `define view <name>` | `<view_prefix><x>` | `^zsd001_ddl_[a-z0-9_]+$` |
+| 3 | Source body referansları | Sadece hedef namespace (CDS/tablo/DTEL/domain) | (negative: proje `cds_banned_literals` desenleri — legacy ns / eski kısaltma) |
 
 **ÖRNEKLER:**
 
@@ -362,34 +380,45 @@ define view zsd_007_ddl_x                       -- Katman 2: eski namespace
 
 `scripts/populate_cds_views.py` → `validate_sql_view_names()` fonksiyonu **dosya okuma + SAP bağlantısı + POST/PUT aktivasyon işleminden ÖNCE** çağrılır. Tek bir ihlal varsa script `exit 1` ile çıkar, hiçbir SAP isteği yapılmaz.
 
+⚠ **İmza `package` alır (2026-08-27'den beri):** `validate_sql_view_names(cds_files, package=None)`.
+Prefix'ler **paket adından türer**; regex'ler modül düzeyinde sabit **değildir**. Yasak literal listesi de
+core'da hard-code değil, **proje `project.yaml` → `cds_banned_literals`**'ten okunur (tanımsızsa o ek
+tarama atlanır; prefix whitelist'i yine zorunlu kalır).
+
 ```python
-SQL_VIEW_PATTERN  = re.compile(r"^ZSD001_V_[A-Z0-9]{1,5}$")
-VIEW_NAME_PATTERN = re.compile(r"^zsd001_ddl_[a-z0-9_]+$")
-SQL_VIEW_MAX_LEN  = 14
+# Paket adı → namespace kökü. ZMOD001_CLC → ZMOD001 (suffix serbest)
+_PKG_PREFIX_RE = re.compile(r"^(Z[A-Z]{2,4}\d{3})(?:_|$)")
 
-BANNED_SOURCE_PATTERNS = [
-    (re.compile(r"\bzsd_007_\w+", re.IGNORECASE),
-     "<LEGACY_SOURCE> namespace referansı"),
-    (re.compile(r"'ZSD_007_(?:CV|V)_\w+'"),
-     "Eski <LEGACY_SOURCE> sqlViewName literal'i"),
-    (re.compile(r"'ZSD\d{2}[A-Z]{4,8}'"),
-     "Eski kısaltılmış sqlViewName literal'i"),
-]
+def _derive_prefixes(package=None):
+    """(sql_view_prefix, cds_view_name_prefix) — paketten türet, olmazsa project.yaml."""
+    if package:
+        m = _PKG_PREFIX_RE.match(str(package).strip().upper())
+        if m:
+            kok = m.group(1)
+            return f"{kok}_V_", f"{kok.lower()}_ddl_"   # ZMOD001_V_ / zmod001_ddl_
+    return _SQLP, _VNP        # project.yaml fallback (ikisi de None olabilir)
 
-def validate_sql_view_names(cds_files):
+def validate_sql_view_names(cds_files, package=None):
     """3 katman whitelist: sqlViewName + view name + source body."""
     errors = []
+    _sqlp, _vnp = _derive_prefixes(package)
+    if not _sqlp or not _vnp:
+        # B-5 fail-safe: ne paket adı çözüldü ne config var → VARSAYMA, NET hata
+        return ["NAMESPACE-GATE ÇÖZÜLEMEDİ (B-5): ... populate REDDEDİLİR."]
+    sql_view_pattern  = re.compile(r"^" + re.escape(_sqlp) + r"[A-Z0-9]{1,5}$")
+    view_name_pattern = re.compile(r"^" + re.escape(_vnp) + r"[a-z0-9_]+$")
     for f in cds_files:
         source = f.read_text(encoding='utf-8')
+        # RAP view entity dalı: sqlViewName TAŞIMAZ → ayrı isim kuralı (aşağıya bak)
         # Katman 1
         m = re.search(r"@AbapCatalog\.sqlViewName\s*:\s*'([^']+)'", source)
-        if not m or not SQL_VIEW_PATTERN.match(m.group(1)):
+        if not m or not sql_view_pattern.match(m.group(1)):
             errors.append(f"{f.name}: sqlViewName whitelist ihlali")
         # Katman 2
         vm = re.search(r"\bdefine\s+view\s+(\S+)", source, re.IGNORECASE)
-        if not vm or not VIEW_NAME_PATTERN.match(vm.group(1).lower()):
+        if not vm or not view_name_pattern.match(vm.group(1).lower()):
             errors.append(f"{f.name}: view name whitelist ihlali")
-        # Katman 3
+        # Katman 3 — desenler project.yaml:cds_banned_literals'ten gelir
         for pat, msg in BANNED_SOURCE_PATTERNS:
             for hit in pat.finditer(source):
                 line = source[:hit.start()].count('\n') + 1
@@ -397,7 +426,20 @@ def validate_sql_view_names(cds_files):
     return errors
 ```
 
+**Çağrı biçimi:** `validate_sql_view_names(cds_files, package=args.package)` — `package` verilmezse
+eski (config-tabanlı) davranış geriye-uyumlu olarak korunur. ⇒ **Yeni bir paket için `project.yaml`'a
+prefix eklemek GEREKMEZ**; paket adı `Z<MOD 2-4 harf><3 hane>` kalıbındaysa gate kendi türetir.
+
+**RAP view entity istisnası:** `define [root] view entity` / `define abstract entity` içeren dosyalarda
+sqlViewName whitelist'i **uygulanmaz** (view entity sqlView taşımaz; `@AbapCatalog.sqlViewName` varsa
+YASAK). Onun yerine ad kuralı: `^Z[A-Z]{2,4}\d{3}_(I|C|R|E)_[A-Z0-9_]+$` (`standards/05-coding-rap.md` §4).
+
 #### Manual Kontrol Komutları (her CDS batch'inden önce çalıştır)
+
+> ⚠ Aşağıdaki komutlar **hedef paket `ZSD001_CLC`** örneğidir. Başka pakette önce prefix'i türet
+> (`Z<MOD><nnn>` kökü + `_V_` / `_ddl_`) ve komutlardaki `ZSD001_V_`/`zsd001_ddl_` yerine onu koy.
+> `cds_banned_literals` (3. komut) proje `project.yaml`'ından gelir; projede tanımlı değilse o
+> tarama **yoktur** (gate atlar).
 
 ```powershell
 # 1. sqlViewName whitelist'te DEĞİL olan dosyalar (BOŞ çıkmalı)

@@ -248,6 +248,111 @@ def senaryolar_pcv(pcv, kum: Path, mut=None) -> list[tuple[str, bool, str]]:
     r.append(("P9 15 karakterlik sqlView -> uzunluk hatasi (sinir korunuyor)",
               len(e) == 1 and "uzunluk=15" in e[0], str(e)))
 
+    r += senaryolar_sprint(pcv, kum)
+    return r
+
+
+# ---------------------------------------------------------------------------
+# SENARYOLAR — #35 sprint kapisi TEK-PAKETE KILITLI degil mi?
+# KOK: `target_sprint = '3'` core'a GOMULU bir TAHMINDI ("En genis tahmin").
+# Sprint panosu TEK bir paketin planidir => baska paketin CDS'i yazilirken kapi
+# O PAKETIN acik sprint'lerine bakip `return 1` ile bloklardi. Olculdu
+# 2026-08-19: hedef paketin HICBIR CDS'i bu araçla yazilamiyordu (SINIF).
+# ---------------------------------------------------------------------------
+def senaryolar_sprint(pcv, kum: Path) -> list[tuple[str, bool, str]]:
+    r = []
+    d = kum / "sprint_src"
+    d.mkdir(parents=True, exist_ok=True)
+    yaz_cds(d, "ZMOD001_DDL_S", "ZMOD001_V_S", "zmod001_ddl_s")
+
+    # ⚠ rc=1 IKI KAYNAKTAN gelebilir: sprint kapisi VE asagidaki TD-spec kapisi.
+    # Ayni exit koduna cikan iki bulgu birbirini MASKELER. Cozunurluk: sprint
+    # kapisi bloklarsa TD-spec mesajina HIC ULASILMAZ -> asil capa bu iz.
+    TD_IZ = "TD spec EKSİK"
+
+    def kos(ekstra, gate_sonuc=True, order=("3",), env=None):
+        g = types.ModuleType("sprint_gate_check")
+        g.cagrildi = None
+
+        def ensure(target, allow_open_priors=False, raise_on_fail=False):
+            g.cagrildi = target
+            if target not in order:
+                raise ValueError("Bilinmeyen sprint: %s" % target)
+            return gate_sonuc
+
+        g.ensure_sprint_gates_open = ensure
+        eski_mod = sys.modules.get("sprint_gate_check")
+        sys.modules["sprint_gate_check"] = g
+        eski_env = {}
+        for k, v in (env or {}).items():
+            eski_env[k] = os.environ.get(k)
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+        class _C:
+            def __getattr__(s, a):
+                raise AssertionError("SAP yuzeyine dokunuldu: %s" % a)
+
+        eski_argv, eski_cli = sys.argv[:], getattr(pcv, "SAPADTClient", None)
+        pcv.SAPADTClient = lambda *a, **k: _C()
+        sys.argv = ["populate_cds_views.py", "--package", "ZMOD001_CLC",
+                    "--transport", "TR1", "--source-dir", str(d), "--dry-run"] + ekstra
+        tut = io.StringIO()
+        saved = sys.stdout
+        sys.stdout = tut
+        try:
+            rc = pcv.main()
+        except SystemExit as e:
+            rc = e.code
+        except BaseException as e:
+            rc = "EXC:%s:%s" % (type(e).__name__, e)
+        finally:
+            sys.stdout = saved
+            sys.argv = eski_argv
+            if eski_cli is not None:
+                pcv.SAPADTClient = eski_cli
+            if eski_mod is None:
+                sys.modules.pop("sprint_gate_check", None)
+            else:
+                sys.modules["sprint_gate_check"] = eski_mod
+            for k, v in eski_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        return rc, tut.getvalue(), g
+
+    bos = {"CLAUDE_PROJECT_DIR": _bos_kok(), "IX_CDS_TARGET_SPRINT": None}
+
+    # SP1 — tanim YOK: kapi UYGULANMAZ, tahmin edilen '3' ile bloklamaz.
+    rc, out, g = kos([], env=bos)
+    r.append(("SP1 hedef sprint tanimsiz -> kapi UYGULANMAZ (tahmin yok)",
+              "hedef sprint tanımsız" in out and g.cagrildi is None and TD_IZ in out,
+              "cagrildi=%r akis_devam=%s" % (g.cagrildi, TD_IZ in out)))
+
+    # SP2 — ⭐ POZITIF KONTROL: tanim VARKEN gercek ihlal HALA bloklanir.
+    # Gevsetmenin sarti budur: kapi kaldirilmadi, parametrelendi.
+    rc, out, g = kos(["--target-sprint", "3"], gate_sonuc=False, env=bos)
+    r.append(("SP2 POZITIF KONTROL: hedef verilince acik sprint HALA bloklar (erken)",
+              rc == 1 and g.cagrildi == "3" and TD_IZ not in out,
+              "rc=%r cagrildi=%r td_spec_e_ulasmadi=%s" % (rc, g.cagrildi, TD_IZ not in out)))
+
+    # SP3 — hedef proje kaynagindan (env/project.yaml) gelir, core'dan degil.
+    rc, out, g = kos([], gate_sonuc=False,
+                     env={"CLAUDE_PROJECT_DIR": _bos_kok(), "IX_CDS_TARGET_SPRINT": "3"})
+    r.append(("SP3 hedef PROJE kaynagindan okunur (IX_CDS_TARGET_SPRINT)",
+              rc == 1 and g.cagrildi == "3" and TD_IZ not in out,
+              "rc=%r cagrildi=%r" % (rc, g.cagrildi)))
+
+    # SP4 — hedef bu projenin panosunda yoksa: ham ValueError ile COKME degil,
+    # gorunur SKIP (yanlis panoya ait hedef kod hatasi degil, konfig uyumsuzlugu).
+    rc, out, g = kos(["--target-sprint", "99"], order=("3",), env=bos)
+    r.append(("SP4 panoda olmayan hedef -> gorunur SKIP, cokme YOK",
+              "Bilinmeyen sprint: 99" in out and "SKIP" in out and not str(rc).startswith("EXC"),
+              "rc=%r out=%r" % (rc, out[:160])))
+
     return r
 
 
@@ -368,6 +473,27 @@ PCV_MUT = [
                          "        return [f\"NAMESPACE-GATE",
                          "    if False:\n"
                          "        return [f\"NAMESPACE-GATE")),
+
+    # --- #35 degismezleri: M1-M3 sprint kapisini HIC sinamaz -------------
+    ("M7 #35 gomulu tahmini geri getir (target_sprint yine '3' sabit)",
+     lambda s: s.replace("    target_sprint = args.target_sprint",
+                         "    target_sprint = args.target_sprint or '3'")),
+
+    ("M8 #35 SINIR: tanim yokken kapiyi BLOKLAYICI yap (korlemesine return 1)",
+     lambda s: s.replace(
+         "        print('[SKIP] Sprint kapısı: hedef sprint tanımsız — kapı uygulanmadı.'",
+         "        return 1\n        print('[SKIP] Sprint kapısı: hedef sprint tanımsız — kapı uygulanmadı.'")),
+
+    ("M9 #35 panoda-olmayan hedefte ham ValueError'a geri don (cokme)",
+     lambda s: s.replace("        except ValueError as e:", "        except _YokBoyleHata as e:")),
+
+    # ⭐ M10 SINIR: kapiyi TUMDEN etkisiz kil (hedef verilse bile bloklamasin).
+    # Bunu YALNIZ pozitif kontroller (SP2/SP3) yakalayabilir; yakalayamazlarsa
+    # "kapi kaldirilmadi, parametrelendi" iddiasi kanitsizdir (gevsetmenin sarti).
+    ("M10 #35 SINIR: kapi hic bloklamasin (pozitif kontrolun capasi)",
+     lambda s: s.replace("            if not ensure_sprint_gates_open(target_sprint, raise_on_fail=False):\n"
+                         "                return 1",
+                         "            ensure_sprint_gates_open(target_sprint, raise_on_fail=False)")),
 ]
 
 TSC_MUT = [

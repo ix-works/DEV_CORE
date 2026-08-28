@@ -9,6 +9,7 @@ With explicit source file:
     python push_object.py --name ZCL_MY_CLASS --type class --source-file /path/to/ZCL_MY_CLASS.abap --transport TRXXXXX --cwd /path/to/project
 """
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -26,9 +27,68 @@ from sap_adt_lib import set_explicit_working_dir
 from sap_client import SAPClient
 from object_types import is_class_include
 
+# ── #30③ (2026-08-29) — REDDEDİLEN TİP İÇİN YÖNLENDİRME ──────────────────────
+# ⛔ `--type` choices GEVŞETİLMEDİ ve gevşetilmemeli. DDIC tiplerinin listede
+# olmaması KUSUR DEĞİL, KORUYUCU: push_object source-based bir yoldur
+# (lock → PUT .../source/main + If-Match). DDIC objelerinin bir kısmı XML-ZARF'tır
+# (`dataelement`=.dtel.xml, `table`/`structure`=.tabl.xml) — `source/main` ucu YOKTUR;
+# üstelik DTEL'de PUT bu sistemde bozuktur (`populate_dataelements.py` başlığı:
+# "Update gerekirse: DELETE + tekrar CREATE (PUT bu sistemde broken)").
+# Değişen TEK ŞEY: ret mesajı. Eskiden argparse çıplak "invalid choice" basıp exit 2
+# veriyordu; operatör NEDEN reddedildiğini ve NEREYE gideceğini bilmiyordu.
+# Aşağıdaki eşleme ÖLÇÜLDÜ (her script açılıp doğrulandı), tahmin değildir.
+TIP_YONLENDIRME = {
+    'dataelement':       'populate_dataelements.py',
+    'domain':            'populate_domains.py',
+    'table':             'populate_tables.py',
+    'structure':         'create_structure.py',
+    'cds':               'populate_cds_views.py',
+    'function':          'create_function_module.py (yalnız SHELL) + '
+                         'sap_adt_lib.set_function_module_source()',
+    'servicedefinition': 'create_rap_service.py --step srvd',
+}
+# `source/main` ucu OLMAYAN, XML zarfı ile yazılan tipler (yukarıdakilerin alt kümesi).
+# ⚠ `cds`/`function`/`servicedefinition` BU KÜMEDE DEĞİL — onlar source-based'dir,
+# yalnızca kendi kanonik araçları vardır. Gerekçeyi karıştırma.
+TIP_XML_ZARF = ('dataelement', 'domain', 'table', 'structure', 'tabletype')
+# Kayıtlı ADT tipi ama bu repoda kanonik YARATMA aracı bulunmayanlar (ölçüldü:
+# yalnız okuma/description yollarında geçiyorlar).
+TIP_YAZICISI_YOK = ('metadataextension', 'accesscontrol', 'tabletype')
+
+
+def tip_yonlendirme_notu(istenen):
+    """Reddedilen `--type` için operatöre yol gösteren not (boş string = not yok)."""
+    t = (istenen or '').strip().lower()
+    if t == 'package':
+        return ("[YONLENDIRME] 'package' bu araca EKLENMEZ: paket YARATMA ADR 0005-C ile "
+                "YASAKTIR (create_package.py 2026-08-01'de silindi, geri eklenmez).")
+    if t in TIP_YONLENDIRME:
+        satir = (f"[YONLENDIRME] '{t}' push_object'e KASTEN kablolanmadi. "
+                 f"Kanonik arac: {TIP_YONLENDIRME[t]}")
+        if t in TIP_XML_ZARF:
+            satir += ("\n              Sebep: bu tip XML-ZARF objesidir ('source/main' ucu "
+                      "YOK); push_object ise lock -> PUT source/main + If-Match yolundan gider.")
+        return satir
+    if t in TIP_YAZICISI_YOK:
+        return (f"[YONLENDIRME] '{t}' kayitli bir ADT tipidir ama bu repoda kanonik bir "
+                f"YARATMA araci YOK. Once playbook/adt-*.md oku; ad-hoc REST ile yazma.")
+    return ''
+
+
+class _YonlendirenParser(argparse.ArgumentParser):
+    """`--type` reddini AYNEN korur (exit 2), yalnız mesaja yönlendirme ekler."""
+
+    def error(self, message):
+        if '--type' in message and 'invalid choice' in message:
+            m = re.search(r"invalid choice: '([^']*)'", message)
+            not_ = tip_yonlendirme_notu(m.group(1) if m else '')
+            if not_:
+                message = f"{message}\n\n{not_}"
+        super().error(message)          # usage + mesaj -> stderr, exit 2 (DEĞİŞMEDİ)
+
 
 def main():
-    parser = argparse.ArgumentParser(
+    parser = _YonlendirenParser(
         description='Push local object changes to SAP (lock -> upload -> activate -> unlock)'
     )
     parser.add_argument('--name', required=True,

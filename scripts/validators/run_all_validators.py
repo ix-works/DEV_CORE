@@ -57,6 +57,15 @@ VALIDATORS = [
     # obje aktive olur, repo canlıdan sapar). BEŞ kontrol de yeşil verirken kaçtı.
     ("CDS/SRVD yorum sözdizimi (HARD, BE-61)", "check_cds_srvd_comment_syntax.py", [], "project",
      ["s4_private", "s4_public", "btp_abap"]),
+    # Miktar/tutar alanı `coalesce()`a HAM girerse SAP aktivasyonu REDDEDER
+    # ("Amounts and quantities are not allowed in expression"). ADR 0006 reviewer o objeye
+    # PASS vermişti (13/13 rc=0) ⇒ hiçbir yerel kapı bu DERLEYİCİ kuralını görmüyordu.
+    # ⛔ warn-first (bulguda exit 0) — BİLİNÇLİ: kural alanın TİPİNİ bilmeyi gerektirir,
+    # yol ifadelerinde (`_Assoc.Alan`) tarama SEZGİSELDİR. Korpusta ölçüldü (2026-08-29):
+    # 263 .cds / 307 kapsanan eleman → 11 bulgu, "doğru emsal" görünümlerde SIFIR FP.
+    # Terfi (BLOCKER) TARİHLİ ayrı karardır; bulguda exit 1 isteyen: --bulguda-exit1.
+    ("CDS miktar/tutar ifade (warn-first, C-CDS-QTYEXPR-01)", "check_cds_qty_in_expression.py",
+     [], "project", ["s4_private", "s4_public", "btp_abap"]),
     # .bdef yorumundaki ters-tırnak SAP'de ÇOĞALIYOR (repo 2 → canlı 8). Sessiz VE büyüyen:
     # push/aktivasyon/syntax_check üçü de yeşil; fark yalnız readback bayt kıyasında. 2 kez yaşandı.
     ("bdef ters-tırnak (HARD, BE-62)", "check_bdef_backtick.py", [], "project",

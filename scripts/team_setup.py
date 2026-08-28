@@ -14,8 +14,22 @@ Yaptıkları:
   5. Claude Code plugin'leri (setup_plugins.py; non-fatal) + seed_memory (--no-seed ile atla)
   6. Smoke: statusline + MCP import
   --repair-junctions      : yalnız junction kur/onar + rapor (session_start'ın önerdiği komut)
-  --provision-worktree P  : D16 — worktree'ye junction'lar + izlenmeyen runtime dosyaları
-                            (.conn_adt, conn/, settings.local.json → hardlink/kopya)
+  --provision-worktree [P]: D16 — worktree'ye junction'lar + izlenmeyen runtime dosyaları
+                            (.conn_adt, conn/, settings.local.json → hardlink/kopya).
+                            P OPSİYONEL: verilmezse içinde bulunulan worktree provizyonlanır.
+
+WORKTREE YAŞAM DÖNGÜSÜ (2026-08-29 — kayıt #80):
+  KANONİK KÖK = `<proje.parent>/.wt/<proje.adı>/<dal-etiketi>` (sürücü/klasör sabiti YOK, D24).
+  ⭐ Kök her reponun DIŞINDADIR: repo kökünden `rglob`/`os.walk` yapan araçlar (statusline,
+     validator'lar, behavior_manifest) worktree kopyalarına YAPISAL olarak ulaşamaz — aynı
+     hata sınıfı (bayat kopya taranması) mekanik olarak imkânsızlaşır.
+  --wt-ac DAL             : kanonik yolda worktree aç + provizyonla (çağıran PATH üretmez)
+  --wt-yolu DAL           : kanonik yolu yalnız BAS (script'ler için)
+  --wt-denetim            : GÜN-SONU süpürgesi — kayıtsız yetim · `git cherry` ile main'e
+                            gitmemiş commit · kirli ağaç · `gitdir`siz bayat metadata.
+                            HİÇBİR ŞEY SİLMEZ; exit 1 = operatör müdahalesi gerek.
+  --wt-kapat DAL|PATH     : kapat — silme sırası DAİMA junction-önce; denetim temiz değilse
+                            `--zorla` ister; her adım tekrar-denemeli.
 """
 from __future__ import annotations
 
@@ -26,6 +40,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -58,9 +73,33 @@ def junction_hedefi(link: Path) -> Path | None:
         return None
 
 
+def _bag_kaldir(link: Path) -> None:
+    """Bagi kaldir, HEDEFE DOKUNMA. Platform-guvenli (silme-matrisi kanitli).
+
+    Windows junction = dizin reparse point => `rmdir` (icerige GIRMEZ).
+    POSIX symlink   = dosya girdisi        => `unlink` (`rmdir` `NotADirectoryError` verir).
+    Sira ONEMLI: once `is_symlink()` sorulur; Windows'ta junction `is_symlink()` False
+    dondurur ve dogru sekilde `rmdir` dalina duser.
+    """
+    if link.is_symlink():
+        link.unlink()
+    else:
+        link.rmdir()
+
+
 def junction_kur(link: Path, hedef: Path) -> bool:
-    """mklink /J (admin gerektirmez). True=sağlam."""
-    if link.exists():
+    """Windows: junction (`mklink /J`, admin gerektirmez) · POSIX: symlink. True=sağlam.
+
+    ⚠ PLATFORM DALI (2026-08-29): eskiden `cmd /c mklink` KOSULSUZ cagriliyordu =>
+    core POSIX'te (Linux gelistirici / konteyner / CI) kurulursa `FileNotFoundError: 'cmd'`.
+    Bugune kadar zararsizdi cunku `team_setup.py` CI'da KOSMUYOR; ilk POSIX kurulumunda patlardi.
+    Emsal desen ICAT EDILMEDI, repoda calisir halde duran iki kardesten alindi:
+    `tests/fixtures/fs_docstd/run.py::_junction` (:213-222) ve
+    `scripts/tests/guard_conformance.py::_core_link` (:59-70).
+    Olculen sey her iki platformda AYNI: "<proje>/core baska bir agaca cozuluyor mu"
+    (`os.readlink`/`resolve()`) — symlink bu olcum icin junction'in esdegeridir.
+    """
+    if link.exists() or link.is_symlink():   # kirik symlink `exists()` False dondurur
         mevcut = junction_hedefi(link)
         if mevcut and mevcut.resolve() == hedef.resolve():
             say(OK, f"junction sağlam: {link} → {hedef}")
@@ -68,7 +107,7 @@ def junction_kur(link: Path, hedef: Path) -> bool:
         if mevcut:
             say(WARN, f"junction YANLIŞ hedefe: {link} → {mevcut}; yeniden kuruluyor")
             try:
-                link.rmdir()  # linki kaldırır, HEDEFE DOKUNMAZ (silme-matrisi kanıtlı)
+                _bag_kaldir(link)  # linki kaldırır, HEDEFE DOKUNMAZ (silme-matrisi kanıtlı)
             except OSError as exc:
                 # Aynı sınıf, Q30 (2026-08-27): Windows'ta dizin/bağ kaldırma dışarıdan
                 # tutulan bir handle yüzünden ANLIK olarak WinError 5 verebilir. Eskiden
@@ -79,13 +118,21 @@ def junction_kur(link: Path, hedef: Path) -> bool:
             say(FAIL, f"{link} junction DEĞİL gerçek klasör — elle incele, DOKUNMADIM")
             return False
     link.parent.mkdir(parents=True, exist_ok=True)
-    r = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(hedef)],
-                       capture_output=True, text=True)
-    if r.returncode == 0:
-        say(OK, f"junction kuruldu: {link} → {hedef}")
-        return True
-    say(FAIL, f"mklink başarısız: {(r.stderr or r.stdout).strip()}")
-    return False
+    if os.name == "nt":
+        r = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(hedef)],
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            say(OK, f"junction kuruldu: {link} → {hedef}")
+            return True
+        say(FAIL, f"mklink başarısız: {(r.stderr or r.stdout).strip()}")
+        return False
+    try:
+        os.symlink(str(hedef), str(link), target_is_directory=True)
+    except OSError as exc:
+        say(FAIL, f"symlink başarısız: {type(exc).__name__}: {exc}")
+        return False
+    say(OK, f"symlink kuruldu (POSIX): {link} → {hedef}")
+    return True
 
 
 def junctions(proje: Path, overlay_onayli: bool = False) -> bool:
@@ -293,6 +340,270 @@ def provision_worktree(worktree: Path, proje: Path) -> bool:
     return ok
 
 
+# ===========================================================================
+# WORKTREE YASAM DONGUSU (2026-08-29) — kanonik kok · gun-sonu denetimi · kapatma
+# ---------------------------------------------------------------------------
+# NEDEN: `--provision-worktree PATH` worktree'yi PROVIZYONLAR ama NEREDE acilacagini
+# SOYLEMEZ. Yol her oturumda yeniden icat edildi; temizlik kimsenin gorevi degildi.
+# Olculdu 2026-08-28: tek makinede DORT artik worktree, DORT farkli adlandirma
+# (`<proje>/.claude/worktrees/agent-<id>` · `<kok>/.wt/core-<konu>` · `<kok>/_wt/<konu>` ·
+# `<kok>/DEV_CORE-<dal>`); ikisi git'e kayitli, ikisi KAYITSIZ YETIM; en eskisi 3 haftalik.
+#
+# ⭐ KANONIK KOK REPO'NUN DISINDADIR — bu bir kolaylik degil, YAPISAL bir koruma:
+# repo kokunden `rglob`/`os.walk` yapan araclar (statusline, validator'lar, behavior_manifest)
+# oraya ULASAMAZ. Ic worktree'lerde ayni sinif iki kez isirdi (2026-08-18: 8 validator bayat
+# kopyayi taradi · 2026-08-28: statusline Sprint/Transport'u donmus kopyadan cozdu).
+# Budama listesi o hatalari SONRADAN kapatir; kokun disarida olmasi onlari MEKANIK olarak
+# imkansizlastirir. Ikisi birbirinin yerine gecmez: budama ESKI/IC worktree'ler icin durur.
+# ===========================================================================
+
+WT_KOK_ADI = ".wt"
+
+
+def wt_kok(proje: Path) -> Path:
+    """KANONIK worktree koku: `<proje.parent>/.wt/<proje.adi>`.
+
+    Olculdu 2026-08-29: bu kokte 7 worktree acildi ve calisti. Surucu/klasor SABIT
+    VARSAYIMI YOK (D24) — kok proje yolundan turetilir, `C:\\...` gomulmez.
+    """
+    return proje.parent / WT_KOK_ADI / proje.name
+
+
+def wt_ad(dal: str) -> str:
+    """Dal adindan dizin etiketi: son '/'-segmenti (`infra/2026-08-29-x` -> `2026-08-29-x`)."""
+    return dal.strip("/").split("/")[-1] or dal
+
+
+def wt_yolu(proje: Path, dal: str) -> Path:
+    """`<kanonik-kok>/<dal-etiketi>` — cagiranin PATH uretmesine gerek YOK."""
+    return wt_kok(proje) / wt_ad(dal)
+
+
+def _git(proje: Path, *arg: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(proje), *arg],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+
+
+def _kayitli_worktreeler(proje: Path) -> list[tuple[Path, str]]:
+    """`git worktree list --porcelain` -> [(yol, dal), ...] (ana agac HARIC)."""
+    r = _git(proje, "worktree", "list", "--porcelain")
+    sonuc, yol, dal = [], None, ""
+    for satir in (r.stdout or "").splitlines():
+        if satir.startswith("worktree "):
+            yol, dal = Path(satir[9:].strip()), ""
+        elif satir.startswith("branch "):
+            dal = satir[7:].strip().replace("refs/heads/", "")
+        elif not satir.strip() and yol is not None:
+            sonuc.append((yol, dal)); yol, dal = None, ""
+    if yol is not None:
+        sonuc.append((yol, dal))
+    ana = proje.resolve()
+    return [(p, d) for p, d in sonuc if p.resolve() != ana]
+
+
+def _disk_worktreeleri(proje: Path) -> list[Path]:
+    """Kanonik kok + ESKI (repo-ici) konum: `<proje>/.claude/worktrees/`."""
+    bulunan: list[Path] = []
+    for kok in (wt_kok(proje), proje / ".claude" / "worktrees"):
+        if kok.is_dir():
+            bulunan += [d for d in kok.iterdir() if d.is_dir()]
+    return bulunan
+
+
+def _yetimde_ozgun_icerik(proje: Path, yetim: Path) -> list[str]:
+    """④ git'siz yetimde OZGUN is var mi — icerik NESNE-VERITABANINDA var mi diye sorulur.
+
+    ⛔ Duz dosya karsilastirmasi YETMEZ: olculdu 2026-08-28, satir-sonu gurultusu
+    **150 "farkli" dosya** gosterdi, gercek fark **24**'tu. `git hash-object` icerigi
+    normalize eder; `git cat-file -e` o nesnenin depoda olup olmadigini KESIN soyler.
+    """
+    ozgun: list[str] = []
+    atla = {".git", "node_modules", "__pycache__", ".tmp", "dist", "core",
+            ".claude", "worktrees"}
+    for dirpath, dirnames, filenames in os.walk(yetim):
+        dirnames[:] = [d for d in dirnames
+                       if d not in atla and junction_hedefi(Path(dirpath) / d) is None]
+        for ad in filenames:
+            f = Path(dirpath) / ad
+            h = _git(proje, "hash-object", str(f))
+            sha = (h.stdout or "").strip()
+            if not sha:
+                continue
+            if _git(proje, "cat-file", "-e", sha).returncode != 0:
+                ozgun.append(str(f.relative_to(yetim)).replace("\\", "/"))
+    return ozgun
+
+
+def _bayat_wt_metadata(proje: Path) -> list[Path]:
+    """`gitdir` dosyasi OLMAYAN `.git/worktrees/<ad>/` kalintilari.
+
+    Olculdu 2026-08-28: `git worktree remove` dizini birakip metadata'yi yarim biraktiginda
+    geriye yalniz `ORIG_HEAD` + bos `refs`/`logs` kalir ve **`git fetch` HER KOSUDA hata verir**.
+    `git worktree prune` bunlari her zaman toplamaz => ayrica raporlanir.
+    """
+    r = _git(proje, "rev-parse", "--git-common-dir")
+    kok = Path((r.stdout or "").strip() or (proje / ".git"))
+    if not kok.is_absolute():
+        kok = (proje / kok).resolve()
+    d = kok / "worktrees"
+    return [x for x in d.iterdir() if x.is_dir() and not (x / "gitdir").is_file()] \
+        if d.is_dir() else []
+
+
+def wt_denetim(proje: Path) -> int:
+    """GUN-SONU WORKTREE SUPURGESI (`CLAUDE.core.md §1.1` gun-sonu adimi).
+
+    Cikis: 0 = temiz · 1 = OPERATOR MUDAHALESI gerek (yetim / main'e gitmemis is / kirli agac).
+    ⛔ Hicbir sey SILMEZ — silme ayri ve acik bir komuttur (`--wt-kapat`).
+    """
+    say(INFO, f"worktree denetimi — proje={proje}  kanonik kok={wt_kok(proje)}")
+    bulgu = 0
+
+    kayitli = _kayitli_worktreeler(proje)
+    kayitli_yollar = {p.resolve() for p, _ in kayitli}
+    diskte = _disk_worktreeleri(proje)
+
+    # ① kayit <-> disk karsilastirmasi (kayitsiz yetim = fark)
+    yetimler = [d for d in diskte if d.resolve() not in kayitli_yollar]
+    say(INFO, f"① git'e kayitli: {len(kayitli)} · diskte: {len(diskte)} · KAYITSIZ YETIM: {len(yetimler)}")
+
+    # ② her dal icin `git cherry -v main <dal>`
+    # ⛔ `--is-ancestor` KULLANILMAZ: squash-merge'de YANILTIR. Olculdu 2026-08-28:
+    #    bes dalin BESI de "merge edilmemis" gorundu, besi de `git cherry` ile `-` cikti.
+    for yol, dal in kayitli:
+        if not dal:
+            say(WARN, f"② {yol} — detached HEAD, dal yok; `git cherry` kosulamadi"); bulgu = 1
+            continue
+        c = _git(proje, "cherry", "-v", "main", dal)
+        if c.returncode != 0:
+            say(WARN, f"② `git cherry` hata ({dal}): {(c.stderr or '').strip()[:120]}"); bulgu = 1
+            continue
+        satirlar = [s for s in (c.stdout or "").splitlines() if s.strip()]
+        yeni = [s for s in satirlar if s.startswith("+")]
+        say(OK if not yeni else FAIL,
+            f"② {dal}: main'de OLMAYAN {len(yeni)} commit / toplam {len(satirlar)} "
+            f"('-' = yamasi main'de ZATEN VAR)")
+        if yeni:
+            bulgu = 1
+            for s in yeni[:5]:
+                print(f"        {s}")
+
+        # ③ calisma agaci kirli mi — SIDDET AYRILIR (korpusa karsi olculdu 2026-08-29)
+        # `--ignored` VAZGECILMEZ: hasat edilmemis is gitignore'lu dizinlerde yasar
+        # (olculmus vaka: 3 worktree'de commit'lenmemis infra-expert hafizasi, kayit #39 I-4).
+        # ⛔ AMA `!!`yi FAIL saymak kapiyi KALICI KIRMIZI yapar: 6 canli worktree'de
+        # 122 kaydin **104'u** (%85) yok-sayilan `.tmp/` scratch ve `__pycache__` idi
+        # => uyari korlugu. Bu yuzden: izlenen/izlenmeyen degisiklik FAIL uretir,
+        # yok-sayilanlar SCRATCH ELENDIKTEN sonra ayrica HASAT ADAYI olarak raporlanir.
+        st = _git(yol, "status", "--short", "--ignored", "--untracked-files=all")
+        satir3 = [s for s in (st.stdout or "").splitlines() if s.strip()]
+        izlenen = [s for s in satir3 if not s.startswith("!!")]
+        yoksayilan = [s for s in satir3 if s.startswith("!!")]
+        hasat = [s for s in yoksayilan
+                 if not any(g in s.replace("\\", "/")
+                            for g in ("/.tmp/", " .tmp/", "__pycache__", ".pyc"))]
+        say(OK if not izlenen else FAIL,
+            f"③ {yol.name}: izlenen/izlenmeyen {len(izlenen)} kayit "
+            f"(+{len(yoksayilan)} yok-sayilan, bunlarin {len(hasat)}'i HASAT ADAYI)")
+        if izlenen:
+            bulgu = 1
+            for s in izlenen[:5]:
+                print(f"        {s}")
+        if hasat:
+            bulgu = 1
+            say(WARN, f"③b {yol.name}: gitignore'lu ama SCRATCH DEGIL — silmeden ONCE hasat et")
+            for s in hasat[:5]:
+                print(f"        {s}")
+
+    # ④ git'siz yetimlerde ozgun icerik var mi
+    for y in yetimler:
+        ozgun = _yetimde_ozgun_icerik(proje, y)
+        say(FAIL if ozgun else WARN,
+            f"④ YETIM {y}: yalnizca-yetimde {len(ozgun)} dosya "
+            f"({'SILME — once hasat et' if ozgun else 'icerigin tamami git nesne-veritabaninda'})")
+        bulgu = 1
+        for s in ozgun[:5]:
+            print(f"        {s}")
+
+    # ⑤ yarim kalan `.git/worktrees/<ad>` metadata'si (`git fetch`'i her koşuda bozar)
+    bayat = _bayat_wt_metadata(proje)
+    if bayat:
+        bulgu = 1
+        say(FAIL, f"⑤ `gitdir`siz metadata kalintisi: {len(bayat)} "
+                  f"(git fetch'i bozar; `git worktree prune` denendikten sonra elle silinir)")
+        for b in bayat[:5]:
+            print(f"        {b}")
+
+    say(OK if bulgu == 0 else FAIL,
+        "worktree denetimi TEMIZ" if bulgu == 0 else "worktree denetimi: OPERATOR MUDAHALESI gerek")
+    return bulgu
+
+
+def wt_kapat(proje: Path, hedef: str, zorla: bool = False) -> bool:
+    """Worktree'yi KAPAT — silme sirasi DAIMA junction-once.
+
+    ⛔ SIRA HAYATIDIR: junction/symlink bir reparse point'tir; `rm -rf`/`rmtree` icine
+    GIRERSE HEDEFI (canli core agacini) siler. Once baglar `rmdir`/`unlink` ile kaldirilir,
+    SONRA agac silinir.
+    ⚠ `git worktree remove` 2026-08-28'de DORT vakada da `Permission denied` verdi ve
+    metadata'yi silip DIZINI BIRAKTI (kismi basarisizlik) => her adim TEKRAR DENENIR.
+    ⛔ Once `wt_denetim` kosar; main'e gitmemis is ya da kirli agac varsa `--zorla` olmadan
+    DOKUNMAZ (yikim-once/insa-sonra sinifi: kismi basarisizlikta kayip TOPLAM olur).
+    """
+    yol = Path(hedef)
+    if not yol.is_absolute():
+        yol = wt_yolu(proje, hedef)
+    if not yol.exists():
+        say(FAIL, f"worktree yok: {yol}"); return False
+
+    if not zorla and wt_denetim(proje) != 0:
+        say(FAIL, "denetim TEMIZ degil — kapatma YAPILMADI. Once hasat et ya da --zorla ver.")
+        return False
+
+    # 1) BAGLAR (junction/symlink) — hedefe DOKUNMADAN
+    for rel in ("core", ".claude/agents", ".claude/skills", ".claude/commands", ".claude/rules"):
+        bag = yol / rel
+        if bag.is_symlink() or (bag.exists() and junction_hedefi(bag) is not None):
+            try:
+                _bag_kaldir(bag); say(OK, f"bag kaldirildi: {rel}")
+            except OSError as exc:
+                say(FAIL, f"bag KALDIRILAMADI: {rel} — {type(exc).__name__}: {exc}")
+                return False                      # ⛔ bag dururken agaca DOKUNMA
+
+    # 2) AGAC — once git'in kendi yolu, sonra rmtree; ikisi de TEKRAR DENEMELI
+    for deneme in (1, 2, 3):
+        if _git(proje, "worktree", "remove", "--force", str(yol)).returncode == 0 \
+                and not yol.exists():
+            break
+        if yol.exists():
+            shutil.rmtree(yol, ignore_errors=True)
+        if not yol.exists():
+            break
+        say(WARN, f"silme {deneme}. denemede tamamlanmadi (handle kilidi?) — tekrar")
+        time.sleep(1.0)
+
+    _git(proje, "worktree", "prune")
+    if yol.exists():
+        say(FAIL, f"worktree DIZINI KALDI: {yol} — elle incele (baglar kaldirildi, hedef guvende)")
+        return False
+    say(OK, f"worktree kapatildi: {yol}")
+    return True
+
+
+def wt_ac(proje: Path, dal: str, taban: str = "origin/main") -> bool:
+    """Kanonik yolda worktree AC + provizyonla. Cagiran PATH vermez — yol turetilir."""
+    yol = wt_yolu(proje, dal)
+    if yol.exists():
+        say(FAIL, f"zaten var: {yol}"); return False
+    yol.parent.mkdir(parents=True, exist_ok=True)
+    _git(proje, "fetch", "-q", "origin")
+    r = _git(proje, "worktree", "add", "-b", dal, str(yol), taban)
+    if r.returncode != 0:
+        say(FAIL, f"git worktree add: {(r.stderr or r.stdout).strip()[:200]}"); return False
+    say(OK, f"worktree acildi: {yol} (dal={dal}, taban={taban})")
+    return provision_worktree(yol, proje)
+
+
 def npm_clis() -> None:
     """Token-verimli CLI'ler (governance/tooling-plugins.md; makine-düzeyi, repo'da DEĞİL):
     playwright-cli = ADR 0017 ui-smoke gate'i + tarayıcı-doğrulamanın TEMELİ (skill core'da,
@@ -352,7 +663,20 @@ def main() -> int:
                     help="scripts/hook_shim.py'yi sablondan TAZELE (ACIK onay). Once FARK "
                          "raporu + sha256 basar, yedek alir, sonra sha esitligini dogrular. "
                          "Bayraksiz kosumda hicbir dosya EZILMEZ (davranis degismez).")
-    ap.add_argument("--provision-worktree", metavar="PATH")
+    # PATH artik OPSIYONEL (2026-08-29): verilmezse icinde bulunulan worktree provizyonlanir.
+    # `const` bilerek bos dizge DEGIL bir SENTINEL: `if a.provision_worktree:` truthiness
+    # testi bos dizgeyi "verilmedi" sanardi (sessiz NO-OP). Kontrol `is not None` ile yapilir.
+    ap.add_argument("--provision-worktree", metavar="PATH", nargs="?", const="<CWD>",
+                    help="D16 provizyonu. PATH verilmezse cwd (bir worktree ICINDE olmali).")
+    ap.add_argument("--wt-ac", metavar="DAL",
+                    help="Kanonik yolda (<proje.parent>/.wt/<proje>/<dal>) worktree AC + provizyonla.")
+    ap.add_argument("--wt-yolu", metavar="DAL",
+                    help="Kanonik worktree yolunu BAS (script'ler icin; hicbir sey yaratmaz).")
+    ap.add_argument("--wt-denetim", action="store_true",
+                    help="GUN-SONU worktree supurgesi: yetim + main'e gitmemis is + kirli agac + bayat metadata. Hicbir sey silmez.")
+    ap.add_argument("--wt-kapat", metavar="DAL|PATH",
+                    help="Worktree'yi kapat (junction-ONCE silme sirasi). Denetim temiz degilse --zorla ister.")
+    ap.add_argument("--zorla", action="store_true", help="--wt-kapat: denetim bulgusuna ragmen sil.")
     ap.add_argument("--no-install", action="store_true")
     ap.add_argument("--no-seed", action="store_true")
     ap.add_argument("--no-plugins", action="store_true")
@@ -366,8 +690,26 @@ def main() -> int:
         # AYRI ve ERKEN dal: tazeleme tek işi yapar, kurulumun geri kalanını koşturmaz
         # (yan etki yüzeyi mümkün olduğunca dar).
         return 0 if shim_tazele(proje) else 1
-    if a.provision_worktree:
-        return 0 if provision_worktree(Path(a.provision_worktree).resolve(), proje) else 1
+    if a.wt_yolu:
+        print(wt_yolu(proje, a.wt_yolu)); return 0
+    if a.wt_denetim:
+        return wt_denetim(proje)
+    if a.wt_kapat:
+        return 0 if wt_kapat(proje, a.wt_kapat, zorla=a.zorla) else 1
+    if a.wt_ac:
+        return 0 if wt_ac(proje, a.wt_ac) else 1
+    if a.provision_worktree is not None:
+        if a.provision_worktree == "<CWD>":
+            hedef = Path.cwd().resolve()
+            gd = subprocess.run(["git", "-C", str(hedef), "rev-parse", "--git-dir"],
+                                capture_output=True, text=True)
+            if "worktrees" not in (gd.stdout or "").replace("\\", "/"):
+                say(FAIL, f"PATH verilmedi ve cwd bir worktree DEGIL: {hedef} "
+                          f"(kanonik kok: {wt_kok(proje)})")
+                return 1
+        else:
+            hedef = Path(a.provision_worktree).resolve()
+        return 0 if provision_worktree(hedef, proje) else 1
     if a.repair_junctions:
         ok = junctions(proje, overlay_onayli=a.overlay_onayli)
         _core_index_yenile(proje)

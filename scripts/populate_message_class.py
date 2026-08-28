@@ -83,30 +83,79 @@ class MesajMetniUzunError(ValueError):
     """CSV'de T100-TEXT sinirini asan satir(lar) var — YAZMA BASLAMADAN durdurulur."""
 
 
+class MesajSatiriEksikError(ValueError):
+    """CSV'de YARIM doldurulmus satir(lar) var — YAZMA BASLAMADAN durdurulur.
+
+    Iki yon de sessiz-veri-bozandi (bkz. asagidaki kok-sebep notu):
+    bos `msgno` -> satir `000` olarak YAZILIYORDU · bos `msgtext` -> satir
+    sessizce DUSURULUYORDU. Ikisi de ayni sinifin ornegi: "yazarin mesaj diye
+    yazdigi satir, haber verilmeden baska bir seye donusur ya da yok olur".
+    """
+
+
 def load_messages_from_csv(csv_path: Path) -> list:
     """CSV oku → [(msgno, msgtext, selfexplainatory), ...]
 
-    ⛔ FAIL-CLOSED: `msgtext` T100-TEXT sinirini (73 karakter) asiyorsa
-    `MesajMetniUzunError` firlatir — CSRF/LOCK/PUT'a HIC gidilmez. Guard bilerek
-    BURADA (uretim noktasinda) duruyor: `main()`e konsaydi bu fonksiyonu dogrudan
-    import eden bir cagiran onu atlardi ("gate'lenmemis kural ~ kuralsiz").
-    `--dry-run` da ayni kapiya carpar; amac zaten yazmadan once yakalamaktir.
+    ⛔ FAIL-CLOSED (iki guard, ikisi de CSRF/LOCK/PUT'a HIC gitmeden):
+      · `msgtext` T100-TEXT sinirini (73 karakter) asiyorsa -> `MesajMetniUzunError`
+      · satir YARIM doldurulmussa (`msgno` XOR `msgtext` bos) -> `MesajSatiriEksikError`
+    Guard'lar bilerek BURADA (uretim noktasinda) duruyor: `main()`e konsaydi bu
+    fonksiyonu dogrudan import eden bir cagiran onlari atlardi ("gate'lenmemis
+    kural ~ kuralsiz"). `--dry-run` da ayni kapiya carpar; amac zaten yazmadan
+    once yakalamaktir.
+
+    Tamamen bos satir (her iki alan da bos) dolgu sayilir ve sessizce atlanir.
     """
     messages = []
     asanlar = []
+    eksikler = []
     with open(csv_path, encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             satir_no = reader.line_num          # CSV'deki GERCEK satir (header dahil)
-            msgno = str(row.get('msgno', '')).strip().zfill(3)  # zero-pad to 3 digits
-            msgtext = str(row.get('msgtext', '')).strip()
+            # ⛔ HAM alan — `zfill(3)`ten ONCE okunur. Sebep: `''.zfill(3)` == `'000'`
+            # ve `'000'` GECERLI bir mesaj numarasidir (serbest metin tasiyicisi).
+            # Olculdu 2026-08-29: 7 gercek `messages.csv`nin 5'i satir 2'de ACIKCA
+            # `000` tanimliyor. zfill SONRASINA bakan bir kontrol "bos" ile "acikca
+            # 000" ayrimini YAPAMAZ -> ya sessiz ezme surer ya 5 paket kirilir.
+            ham_no = str(row.get('msgno', '') or '').strip()
+            msgtext = str(row.get('msgtext', '') or '').strip()
             self_exp = str(row.get('selfexplainatory', 'false')).strip().lower()
             if self_exp not in ('true', 'false'):
                 self_exp = 'false'
-            if msgno and msgtext:
-                if len(msgtext) > T100_TEXT_MAXLEN:
-                    asanlar.append((satir_no, msgno, len(msgtext), msgtext))
-                messages.append((msgno, msgtext, self_exp))
+
+            if not ham_no and not msgtext:
+                # TAMAMEN bos satir = dolgu/ayirac; sessizce atlanir. Yazarin bir
+                # mesaj kastettigine dair HIC iz yok -> yarim satirdan farki budur.
+                continue
+            if not ham_no or not msgtext:
+                eksikler.append((satir_no, ham_no, msgtext))
+                continue                        # <- FAIL-CLOSED: satir YAZILMAZ
+
+            msgno = ham_no.zfill(3)             # zero-pad to 3 digits
+            if len(msgtext) > T100_TEXT_MAXLEN:
+                asanlar.append((satir_no, msgno, len(msgtext), msgtext))
+            messages.append((msgno, msgtext, self_exp))
+
+    if eksikler:
+        # Uzunluk guard'indan ONCE: yarim satir YAPISAL bir CSV hatasidir.
+        # TUM ihlaller tek seferde (#37'nin tasarim karari — tur tur kesif YOK).
+        detay = '\n'.join(
+            (f'    satir {sn}: msgno BOS — msgtext="{mt[:60]}"'
+             if not mn else
+             f'    satir {sn}: msgtext BOS — msgno={mn}')
+            for sn, mn, mt in eksikler
+        )
+        raise MesajSatiriEksikError(
+            f'{len(eksikler)} CSV satiri YARIM doldurulmus '
+            f'— HICBIRI yazilmadi (fail-closed).\n'
+            f'  ⚠ Yazilsaydi: bos `msgno` satiri `000` olarak yazilir ve `000`\n'
+            f'    (serbest metin tasiyicisi) SESSIZCE EZILIRDI; bos `msgtext`\n'
+            f'    satiri ise haber verilmeden DUSURULURDU.\n'
+            f'  Eksik satirlar:\n{detay}\n'
+            f'  Cozum: satiri tamamla, ya da mesaj degilse CSV\'den tumden cikar.\n'
+            f'  (Not: `000` GECERLI bir numaradir — acikca yazildiginda kabul edilir.)'
+        )
 
     if asanlar:
         # TUM ihlaller tek seferde raporlanir: yazar CSV'yi tek turda duzeltsin,
@@ -324,7 +373,7 @@ def main():
 
     try:
         messages = load_messages_from_csv(csv_path)
-    except MesajMetniUzunError as e:
+    except (MesajMetniUzunError, MesajSatiriEksikError) as e:
         # Traceback yerine okunur teshis: hata CSV'nin icerigindedir, kodun degil.
         print(f'[FAIL] {e}')
         return 1

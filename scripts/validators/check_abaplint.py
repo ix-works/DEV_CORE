@@ -12,6 +12,12 @@ Config: scripts/abaplint/abaplint.json (check_syntax/keyword_case/7bit_ascii KAP
 Kullanım: python scripts/validators/check_abaplint.py <artifact.clas.abap> [--strict]
 Exit: 0 temiz/skip · 1 en az 1 lint bulgusu VEYA ÖLÇÜM YAPILAMADI (chain'de WARNING → bloklamaz)
 
+⚠ `exit 0` TEK BAŞINA "temiz" DEMEK DEĞİLDİR (üç ayrı SKIP yolu da 0 döner — bilinçli:
+offline reviewer zinciri kırılmasın). AYIRT ETMEK İÇİN stdout'taki durum satırını oku:
+    IX-GATE-STATUS: gate=check_abaplint status=<OK|FINDING|SKIPPED|FAIL> measured=<true|false> reason=<slug>
+`measured=false` ⇒ lint KOŞMADI, sonuç "temiz" sayılamaz. Sözleşmenin tam gerekçesi
+`durum_beyani()`in üstündeki blokta.
+
 ⛔ FAIL-OPEN KİLİDİ (2026-08-14): "temiz" verdict'i yalnız abaplint'in KENDİ özet satırı
 (`N issue(s) found, M file(s) analyzed`, M≥1) görüldüğünde verilir. Özet yoksa / 0 dosya
 analiz edildiyse / özetteki sayı ayrıştırdığımızla tutmuyorsa → FAIL. Öncesinde bu kod
@@ -47,6 +53,37 @@ ISSUE_RE = re.compile(r'^(.*\.abap)\[(\d+),\s*(\d+)\]\s*-\s*(.+?)\s*\(([a-z_]+)\
 SUMMARY_RE = re.compile(
     r'^abaplint:\s*(\d+)\s*issue\(s\)\s*found,\s*(\d+)\s*file\(s\)\s*analyzed\s*$', re.M)
 
+# ── MAKİNECE OKUNUR DURUM SATIRI (2026-08-29, infra-findings 2026-08-17 kalem ① + ③) ──
+# SORUN (ölçüldü): bu script'in ÜÇ ayrı yolu `exit 0` döndürüyordu — "ölçtüm, temiz",
+# "config yok", "bu obje tipini koşturamıyorum", "npx yok". Metin 2026-08-14'te dürüst
+# hâle getirildi (② eksen, KAPANDI) ama `run_review.py` **metni değil çıkış kodunu**
+# okuyor (`status = 'PASS' if rc == 0 else 'FAIL'`) ⇒ "koşturamadım" ile "temiz" onun
+# için AYNI olaydı. Ajanlar bu boşluğu elle taşımak zorunda kaldı — kanıt: bugün
+# `claude/agents/backend-expert.md:72` *"Exit 0 iki anlama gelir: temiz ya da SKIP"*
+# diye ajana UYARI yazıyor. Yani kusur, tüketicinin dokümantasyonuna sızmış durumda.
+#
+# ⛔ ÇIKIŞ KODU BİLEREK DEĞİŞTİRİLMEDİ: `:91-93`'teki `return 0` **gerekçeli bir karardır**
+# (offline reviewer zinciri kırılmasın). Onu tek taraflı değiştirmek offline her class
+# push'unda yeni bir WARNING üretirdi. Bunun yerine ayırt edilebilirlik **ayrı bir
+# kanala** taşındı: her sonlanma yolu stdout'a tek satırlık, ayrıştırılabilir bir durum
+# beyanı basar. Sözleşme (tüketici tarafı `run_review.py` — AYRI dosya, ayrı sahip):
+#
+#   IX-GATE-STATUS: gate=check_abaplint status=<OK|FINDING|SKIPPED|FAIL> measured=<true|false> reason=<slug>
+#
+#   · `measured=true`  → lint GERÇEKTEN koştu; `status` verdict'tir (OK / FINDING).
+#   · `measured=false` → lint KOŞMADI. `exit 0` görülse bile "temiz" DEĞİLDİR.
+#                        reason: `config-missing` · `unsupported-object-type` · `tool-unavailable`
+# Alan sırası SABİTTİR ve satır `IX-GATE-STATUS:` ile BAŞLAR (satır-başı çapası: bu
+# markörü TARİF eden yorum metni beyan sayılmasın — kardeş ders `check_rule_gate_coverage`
+# ENFORCES_RE çapası). Bu satır SESSİZCE KALDIRILAMAZ: fixture senaryoları onu assert eder.
+_GATE_ADI = 'check_abaplint'
+
+
+def durum_beyani(status: str, measured: bool, reason: str) -> None:
+    """Tek satırlık makinece okunur durum beyanı (yukarıdaki sözleşme). stdout'a basılır."""
+    print(f'IX-GATE-STATUS: gate={_GATE_ADI} status={status} '
+          f'measured={"true" if measured else "false"} reason={reason}')
+
 
 def detect(name: str, text: str):
     """(suffix, objname) veya (None, None) -> desteklenmiyor."""
@@ -70,12 +107,22 @@ def main() -> int:
     if not path.exists():
         print(f'HATA: {path} bulunamadı', file=sys.stderr); return 1
     if not CONFIG.exists():
-        print(f'SKIP — abaplint config yok ({CONFIG})'); return 0
+        print(f'SKIP — abaplint config yok ({CONFIG}) → lint ÖLÇÜLMEDİ; "temiz" anlamına GELMEZ.')
+        durum_beyani('SKIPPED', False, 'config-missing')
+        return 0
 
     text = path.read_text(encoding='utf-8', errors='replace')
     suffix, objname = detect(path.name, text)
     if not suffix:
-        print(f'SKIP — abaplint class/program değil ({path.name}); FM/diğer için adt_syntax_check')
+        # ⚠ "not-applicable" DEĞİL, "unsupported-object-type": FM/FUGR abaplint ile
+        # ÖLÇÜLEBİLİR (abapGit fugr yerleşimiyle; 2026-08-17'de bir ajan bunu kendi
+        # harness'ında kurup `0 issue(s) found, 2 file(s) analyzed` aldı) — biz henüz
+        # o yerleşimi kurmuyoruz. Yani bu bir KAPSAM BOŞLUĞUDUR, "lintlenecek bir şey
+        # yok" değil. İkisini aynı kelimeyle anlatmak boşluğu görünmez yapardı.
+        # (infra-findings 2026-08-17 kalem ④ — AÇIK, bu turda kapsam dışı.)
+        print(f'SKIP — abaplint class/program değil ({path.name}); FM/diğer için adt_syntax_check '
+              '→ lint ÖLÇÜLMEDİ; "temiz" anlamına GELMEZ.')
+        durum_beyani('SKIPPED', False, 'unsupported-object-type')
         return 0
 
     cfg = json.loads(CONFIG.read_text(encoding='utf-8'))
@@ -93,6 +140,7 @@ def main() -> int:
             # "temiz" diye okutmamalı. Ölçüm YAPILDIYSA sessiz-yeşil artık imkânsız (SUMMARY_RE kilidi).
             print(f'SKIP — abaplint KOŞTURULAMADI ({type(e).__name__}) → lint ÖLÇÜLMEDİ; '
                   '"temiz" anlamına GELMEZ (offline/npx yok?). Reviewer zinciri bilerek kırılmadı.')
+            durum_beyani('SKIPPED', False, 'tool-unavailable')
             return 0
         out = (r.stdout or '') + (r.stderr or '')
         rc = r.returncode
@@ -113,6 +161,7 @@ def main() -> int:
         print('  Olası sebep: npx soğuk-başlatma/ağ · pin fetch edilemedi · abaplint çıktı biçimi değişti '
               '(SUMMARY_RE güncellenmeli). Tekrar koş; ısrar ederse ÖNCE bunu çöz, sonucu "temiz" sayma.',
               file=sys.stderr)
+        durum_beyani('FAIL', False, 'no-summary-line')
         return 1
 
     said_issues, files_analyzed = int(sm.group(1)), int(sm.group(2))
@@ -120,6 +169,7 @@ def main() -> int:
         print(f'\n--- {path.name} — abaplint HİÇBİR DOSYA ANALİZ ETMEDİ (C-ABLINT-FAILOPEN) ---', file=sys.stderr)
         print(f'  [FAIL] özet "0 file(s) analyzed" diyor → lint fiilen koşmadı; "temiz" DEĞİLDİR. '
               f'(src/ yerleşimi ya da config kapsamı bozuk olabilir; returncode={rc})', file=sys.stderr)
+        durum_beyani('FAIL', False, 'zero-files-analyzed')
         return 1
     if said_issues != len(issues):
         print(f'\n--- {path.name} — abaplint ÇIKTI AYRIŞTIRMA UYUŞMAZLIĞI (C-ABLINT-FAILOPEN) ---', file=sys.stderr)
@@ -127,10 +177,23 @@ def main() -> int:
               '→ ISSUE_RE çıktı biçimiyle DESYNC. Ayrıştıramadığımız bulgular sessizce kaybolurdu.',
               file=sys.stderr)
         print(f'  Ham çıktı (son 800 kr): {out[-800:]!r}', file=sys.stderr)
+        durum_beyani('FAIL', False, 'issue-count-desync')
         return 1
 
     if not issues:
+        # ⛔ KAPSAM BEYANI ZORUNLU (2026-08-29, infra-findings 2026-08-22 kaydı):
+        # "(tuned)" bir İMA taşıyordu ama NEYİN dışarıda kaldığını SÖYLEMİYORDU. Ölçülmüş
+        # bedel: 2026-08-22'de bir ajan bu yeşili "abaplint ad/tip çözümlemesi yapmıyor =
+        # gate körlüğü" diye KUSUR bildirdi; oysa `scripts/abaplint/abaplint.json:2`
+        # `_comment` bunun BİLİNÇLİ, gerekçeli bir karar olduğunu yazıyor (izole dosyada
+        # tip-çözümlemesi gürültü yapar; otoriter syntax = adt_syntax_check). Ajan boşluğu
+        # kapatmak için kendi pozitif+negatif harness'ını kurdu ve YİNE yanlış sonuca vardı.
+        # Beyan kapsamı ÇIKTIDA taşıyınca ikisi de gereksizleşir. Davranış DEĞİŞMEDİ.
         print(f'OK — {path.name} abaplint temiz (tuned; {said_issues} issue / {files_analyzed} file(s) analyzed)')
+        print('     KAPSAM: tuned kural seti = yapısal/mantık + hijyen. `check_syntax` KAPALI '
+              '⇒ ad/tip çözümlemesi YOK; bu sonuç DERLEME KANITI DEĞİLDİR '
+              '(otoriter syntax: adt_syntax_check; gerekçe: scripts/abaplint/abaplint.json `_comment`).')
+        durum_beyani('OK', True, 'clean')
         return 0
 
     print(f'\n--- {path.name} — {len(issues)} abaplint bulgusu (tuned) ---', file=sys.stderr)
@@ -148,7 +211,9 @@ def main() -> int:
         print(f'    ⚠ {len(parser_errs)} parser_error VAR — modern-class ise abaplint desync gerçek hatayı '
               'gizleyebilir/kaydırabilir; "modern-ABAP false-positive" diye ELEME → CANLI adt_syntax_check '
               'ZORUNLU (bug-checklist BE-36/47/48; ZSD001 EXCUPL 2026-07-12).', file=sys.stderr)
-    print('    Not: tuned kural seti (yapısal/mantık+hijyen). Otoriter syntax = adt_syntax_check.', file=sys.stderr)
+    print('    Not: tuned kural seti (yapısal/mantık+hijyen). `check_syntax` KAPALI ⇒ ad/tip '
+          'çözümlemesi YOK. Otoriter syntax = adt_syntax_check.', file=sys.stderr)
+    durum_beyani('FINDING', True, f'{len(issues)}-lint-issue')
     return 1
 
 

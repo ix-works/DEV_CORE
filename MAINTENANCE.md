@@ -91,7 +91,7 @@ Okuma tek-noktası: `scripts/utils/project_config.py` (`cfg(key)`; env override:
 | `include_naming_exempt` | Klasik include-naming grandfather listesi (C-INC-NAME-01) — isim-isim; **her girişe gerekçe + çıkış şartı yorumu** ("rename edilince listeden SİL"). Yeni ihlaller yakalanmaya devam eder | `[ZSD001_I_KISALT_C01]` |
 | `active_package` | Aktif paket (spec arama önceliği + hook mesajları) | `ZSD001_CLC` |
 | `package_exceptions` | Paket-sınır istisnaları | `["ZSD001_CLC:^ZCL_..."]` |
-| `sql_view_prefix` / `cds_view_name_prefix` | CDS namespace whitelist'i (B-5; eksikse populate NET hatayla durur) | `ZSD001_V_` / `zsd001_ddl_` |
+| `sql_view_prefix` / `cds_view_name_prefix` | ⚠ **YALNIZ FALLBACK/İSTİSNA.** Normalde prefix `--package` değerinden **otomatik türer** (`populate_cds_views.py::_derive_prefixes()`: `Z<MOD 2-4 harf><3 hane>` kökü → `<kök>_V_` / `<kök küçük>_ddl_`) ⇒ kalıba uyan paketlerde bu anahtarları **yazmak GEREKMEZ**. Yalnız paket adı kalıp dışıysa doldur. **Ne türetme ne config** varsa gate B-5 NET hatayla durur (prefix VARSAYMAZ) | `ZSD001_V_` / `zsd001_ddl_` |
 | `cds_banned_literals` | Source-body yasak regex'leri (legacy ns) | `["\\bzsd_legacy_\\w+"]` |
 | `cds_legacy_sqlview_exceptions` | Rename-imkansız eski sqlViewName'ler | `["ZSD001_DDL_X:ZSD01OLDSV"]` |
 | `legacy_spec_roots` | Eski-sistem spec kökleri (td_spec_check fallback) | `[C:/.../LEGACY/MOD]` |

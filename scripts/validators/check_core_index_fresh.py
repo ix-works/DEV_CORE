@@ -9,7 +9,11 @@ körlüğü kapatır — ama **bayat indeks, ajana yanlış yol veren sessiz bir
 
 ENFORCES: C-IDX-01 (CORE-INDEX, core doküman ağacıyla eş olmalı)
 Onarım:   python core/scripts/build_core_index.py
+⚠ Yukarıdaki `ENFORCES:` satırı DOCSTRING içindedir ⇒ satır-başı `#` çapalı
+`ENFORCES_RE` onu GÖRMEZ (markörü TARİF eden metin BEYAN değildir). Makinece okunan
+beyan aşağıdaki `# ENFORCES:` satırıdır (2026-08-29).
 """
+# ENFORCES: C-IDX-01  (ADR 0019 coverage binding)
 from __future__ import annotations
 
 import subprocess
