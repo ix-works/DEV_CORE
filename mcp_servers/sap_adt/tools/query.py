@@ -1127,9 +1127,30 @@ def adt_grep_source(
                  virgüllü liste (package'a alternatif). object_types: paket-taramada tip filtresi
                  (CLAS/PROG/INTF/DDLS/FUGR/BDEF). max_objects: taranacak maks obje. ignore_case.
 
+    ⛔ 2026-08-28 (C-04) — "EŞLEŞME YOK" ile "OKUYAMADIM" ayrı şeylerdir. Eskiden okunamayan
+    obje `if not src: continue` ile SESSİZCE düşüyordu: ne sayılıyor ne raporlanıyordu.
+    Çağıran `match_count: 0` görüp "bu pakette geçmiyor" diye KARAR veriyordu (ölçülmüş
+    vaka: kuyruk Q106 + `playbook/lessons-learned.md` PATTERN #19/#20). Artık kapsamdan
+    düşen her obje **makinece okunur** biçimde döner:
+      `skipped_objects[{object, type, reason, detail}]` — sebep sınıfları:
+        `type_filtered`    → `object_types` filtresi dışladı (ör. varsayılanda FUGR yok)
+        `type_unsupported` → grep'lenebilir tip değil (TABL/DTEL/DOMA/FUNC…)
+        `max_objects`      → `max_objects` sınırının dışında kaldı
+        `read_failed`      → `adt_get` hata döndü (HTTP/parse/timeout)
+        `not_readable`     → `adt_get` `exists:false` dedi (⚠ `func`/FUGR group-resolution
+                             kusuru dahil — playbook/adt-fugr-functions.md §4, §4.1)
+        `source_empty`     → 200 ama gövde BOŞ (ör. behavior pool `source/main`)
+      `partial_objects[{object, type, reason}]` — okundu ama İÇERİK EKSİK:
+        `fugr_skeleton_only` → FUGR'ın yalnız iskelet ana include'u; FM gövdesi
+                               `L<FG>U01`'de ve TARANMADI (playbook §4.1)
+      `coverage_complete` → hiçbir obje düşmedi/eksilmedi mi? (`scope_verified`
+      paket ucunun DOĞRULUĞUNU, bu alan taramanın TAMLIĞINI söyler — ikisi ayrı eksendir)
+    Mevcut alanların hiçbiri kaldırılmadı/anlamı değiştirilmedi (tüketici sözleşmesi).
+
     Returns:
         {ok, pattern, scanned_objects, match_count, truncated_object_scope, truncated_matches,
-         matches: [{object, type, line, text}], client_log}
+         matches: [{object, type, line, text}], scope_verified, coverage_complete,
+         skipped_count, skipped_objects, partial_count, partial_objects, client_log}
     """
     import re as _re
     from mcp_servers.sap_adt.tools.atom import adt_get
@@ -1143,6 +1164,8 @@ def adt_grep_source(
     targets: list = []
     kapsam_dogrulanmis = True
     kapsam_log = ""
+    atlanan: list[dict] = []      # kapsamdan DÜŞEN objeler (sebebiyle)
+    kismi: list[dict] = []        # okundu ama içeriği EKSİK olanlar
     try:
         if objects:
             raw = objects.split(",") if isinstance(objects, str) else list(objects)
@@ -1165,9 +1188,17 @@ def adt_grep_source(
             for o in objs:
                 pref = (o.get("type") or "").split("/")[0].upper()
                 if wanted and pref not in wanted:
+                    # Filtre bir KAPSAM KARARIDIR; sessizce düşerse "taradım" yalanı olur
+                    # (varsayılan `object_types` FUGR içermez — Q106'nın kör noktası).
+                    atlanan.append({"object": o.get("name"), "type": pref,
+                                    "reason": "type_filtered",
+                                    "detail": f"object_types={object_types}"})
                     continue
                 at = _GREP_TYPE_MAP.get(pref)
                 if not at:
+                    atlanan.append({"object": o.get("name"), "type": pref,
+                                    "reason": "type_unsupported",
+                                    "detail": "kaynak-metin grep'i bu tipi desteklemiyor"})
                     continue
                 targets.append((o.get("name"), at))
         else:
@@ -1176,13 +1207,31 @@ def adt_grep_source(
         return _err_from_exc(exc)
 
     truncated_scope = len(targets) > max_objects
+    for n, at in targets[max_objects:]:
+        atlanan.append({"object": n, "type": at, "reason": "max_objects",
+                        "detail": f"max_objects={max_objects} sınırının dışında"})
     targets = targets[:max_objects]
     matches, scanned, hit_cap = [], 0, False
     for n, at in targets:
         r = adt_get(n, object_type=at, include_source=True)
         src = r.get("source")
         if not isinstance(src, str) or not src:
+            # ⛔ SESSİZ DÜŞÜŞ YOK: "eşleşme yok" ile "okuyamadım" ayırt edilebilmeli.
+            if r.get("ok") is False:
+                sebep, detay = "read_failed", str(r.get("error") or r.get("message") or "")[:200]
+            elif r.get("exists") is False:
+                sebep = "not_readable"
+                detay = ("adt_get exists:false — obje YOK ya da bu tip bu uçtan okunamıyor "
+                         "(func/FUGR group-resolution: playbook/adt-fugr-functions.md §4)")
+            else:
+                sebep, detay = "source_empty", "HTTP 200 ama kaynak gövdesi BOŞ"
+            atlanan.append({"object": n, "type": at, "reason": sebep, "detail": detay})
             continue
+        if at == "functiongroup":
+            # Okundu ama İSKELET: FM gövdeleri L<FG>U01… include'larında ve TARANMADI.
+            kismi.append({"object": n, "type": at, "reason": "fugr_skeleton_only",
+                          "detail": ("yalnız iskelet ana include tarandı; FM gövdesi "
+                                     "L<FG>U01… içinde — playbook/adt-fugr-functions.md §4.1")})
         scanned += 1
         for i, line in enumerate(src.splitlines(), 1):
             if rx.search(line):
@@ -1192,10 +1241,26 @@ def adt_grep_source(
                     break
         if hit_cap:
             break
+    tam_kapsam = not atlanan and not kismi and not truncated_scope and not hit_cap
     out = {"ok": True, "pattern": pattern, "scanned_objects": scanned,
            "match_count": len(matches), "truncated_object_scope": truncated_scope,
            "truncated_matches": hit_cap, "matches": matches,
-           "scope_verified": bool(kapsam_dogrulanmis)}
+           "scope_verified": bool(kapsam_dogrulanmis),
+           "coverage_complete": tam_kapsam,
+           "skipped_count": len(atlanan), "skipped_objects": atlanan[:50],
+           "partial_count": len(kismi), "partial_objects": kismi[:50]}
+    if len(atlanan) > 50:
+        out["skipped_truncated"] = True
+    if len(kismi) > 50:
+        out["partial_truncated"] = True
+    if not tam_kapsam:
+        sebepler = sorted({a["reason"] for a in atlanan} | {k["reason"] for k in kismi})
+        out["coverage_warning"] = (
+            "KAPSAM TAM DEĞİL: %d obje taranamadı, %d obje EKSİK içerikle tarandı "
+            "(sebepler: %s). `match_count` bu objeler için KANIT DEĞİLDİR — "
+            "'geçmiyor' sonucunu buradan ÇIKARMA; düşen objeleri `skipped_objects`/"
+            "`partial_objects` listesinden tek tek doğrula."
+            % (len(atlanan), len(kismi), ", ".join(sebepler) or "kesme sınırı"))
     if not kapsam_dogrulanmis:
         out["scope_warning"] = (
             "KAPSAM DOĞRULANMADI: paket içeriği SAP'nin paket ucundan alınamadı, AD-DESENLİ "
@@ -1290,19 +1355,36 @@ _ADTCORE_NS = "http://www.sap.com/adt/core"
 
 
 @profil_tool()
-def adt_unit_run(name: str, object_type: str = "class") -> dict:
+def adt_unit_run(name: str, object_type: str = "class",
+                 allow_risky_tests: bool = False) -> dict:
     """Bir Z objenin ABAP Unit testlerini çalıştır → sonuç/assertion döner. READ-ONLY.
 
     `POST /sap/bc/adt/abapunit/testruns` (run config). Test KOŞAR ama kalıcı obje değişimi
     YOK → ADR 0005 temiz (Z-scope). BUG GATE'i "checklist" seviyesinden "canlı test sonucu"na
     çıkarır. Test yoksa boş sonuç (passed=true, method 0).
 
+    ⛔ 2026-08-28 (C-08) İKİ SIKILAŞTIRMA:
+      1. `require_customer_namespace` EKLENDİ. Tool ABAP kodu çalıştırır ve kardeşleri
+         (`adt_classrun`, `adt_syntax_check`, `adt_post_shell`) bu kapıdan zaten
+         geçiyordu; tek istisna buydu → standart (Z/Y olmayan) obje adıyla
+         çağrılabiliyordu. ADR 0005-A.
+      2. `testRiskLevels` artık VARSAYILAN KAPALI: yalnız `harmless`. `dangerous`/
+         `critical` işaretli ABAP Unit testleri **kalıcı veri değiştirebilir** (SAP'nin
+         risk sınıflandırmasının tanımı budur) — salt-okunur beklentisiyle çağrılan bir
+         tool'un varsayılanı bu olamaz. Açıkça `allow_risky_tests=True` verilirse açılır
+         ve yanıt `risk_levels` alanında hangi bandın koştuğu GÖRÜNÜR olur.
+         `method_count == 0` dönerse yanıt `risk_notice` ile "riskli bant kapalıydı"
+         ihtimalini söyler (sessiz sıfır YOK).
+
     Args:
-        name: Obje (Z*/Y*). object_type: 'class'|'program'|'functiongroup'.
+        name: Obje (Z*/Y*; standart obje REDDEDİLİR — ADR 0005-A).
+        object_type: 'class'|'program'|'functiongroup'.
+        allow_risky_tests: `dangerous`/`critical` bandını da koş (varsayılan False).
 
     Returns:
-        {ok, name, method_count, failed_count, passed, classes: [{class, methods:[{method,
-         status, alerts:[{severity, kind, title}]}]}], client_log}
+        {ok, name, method_count, failed_count, passed, risk_levels, classes: [{class,
+         methods:[{method, status, alerts:[{severity, kind, title}]}]}], client_log}
+        veya guardrail_violation (PRD/QA tier ya da standart obje).
     """
     import xml.etree.ElementTree as ET
     seg = _AUNIT_SEG.get((object_type or "").lower().strip())
@@ -1310,13 +1392,19 @@ def adt_unit_run(name: str, object_type: str = "class") -> dict:
         return {"ok": False, "error": "unsupported_type",
                 "message": "object_type: class|program|functiongroup"}
     # ABAP Unit ABAP KODU çalıştırır (test) → adt_classrun ile aynı risk sınıfı → DEV-tier-gate
-    # (kötü-yazılmış test COMMIT edebilir; ADR 0010).
+    # (kötü-yazılmış test COMMIT edebilir; ADR 0010) + customer-namespace (ADR 0005-A).
     from mcp_servers.sap_adt._conn import get_active_tier
-    from mcp_servers.sap_adt.guardrails import require_writable_tier, GuardrailViolation
+    from mcp_servers.sap_adt.guardrails import (
+        GuardrailViolation, require_customer_namespace, require_writable_tier,
+    )
+    ne = "abap unit run (kod çalıştırır)"
     try:
-        require_writable_tier(get_active_tier(), what="abap unit run (kod çalıştırır)")
+        require_customer_namespace(name, what=ne, object_type=object_type)
+        require_writable_tier(get_active_tier(), what=ne)
     except GuardrailViolation as gv:
         return gv.as_dict()
+    riskli = "true" if allow_risky_tests else "false"
+    risk_bandi = "harmless+dangerous+critical" if allow_risky_tests else "harmless"
     client = _get_client()
     try:
         from create_rap_service import csrf  # type: ignore
@@ -1337,7 +1425,8 @@ def adt_unit_run(name: str, object_type: str = "class") -> dict:
                 '<options><uriType value="semantic"/>'
                 '<testDeterminationStrategy sameProgram="true" assignedTests="false"'
                 ' appendAssignedTestsPreview="true"/>'
-                '<testRiskLevels harmless="true" dangerous="true" critical="true"/>'
+                '<testRiskLevels harmless="true" dangerous="' + riskli +
+                '" critical="' + riskli + '"/>'
                 '<testDurations short="true" medium="true" long="true"/></options>'
                 '<adtcore:objectSets><objectSet kind="inclusive"><adtcore:objectReferences>'
                 '<adtcore:objectReference adtcore:uri="' + objuri + '"/>'
@@ -1388,9 +1477,18 @@ def adt_unit_run(name: str, object_type: str = "class") -> dict:
                                     "status": "failed" if alerts else "passed",
                                     "alerts": alerts})
                 classes.append({"class": _an(tclass, "name"), "methods": methods})
-        return {"ok": True, "name": name.upper(), "method_count": mcount,
-                "failed_count": fcount, "passed": fcount == 0,
-                "classes": classes, "client_log": buf.getvalue().strip()}
+        out = {"ok": True, "name": name.upper(), "method_count": mcount,
+               "failed_count": fcount, "passed": fcount == 0,
+               "classes": classes, "risk_levels": risk_bandi,
+               "client_log": buf.getvalue().strip()}
+        if mcount == 0 and not allow_risky_tests:
+            # "0 test" ile "0 HARMLESS test" ayrı şeylerdir — sessiz sıfır YOK.
+            out["risk_notice"] = (
+                "method_count=0: yalnız `harmless` bandı koştu. Obje `dangerous`/"
+                "`critical` işaretli test taşıyorsa bu sonuç 'test yok' DEMEK DEĞİLDİR "
+                "— `allow_risky_tests=True` ile tekrar koş (o testler KALICI VERİ "
+                "DEĞİŞTİREBİLİR; ADR 0005-B kapsamını önce doğrula).")
+        return out
     except Exception as exc:
         return _err_from_exc(exc)
 

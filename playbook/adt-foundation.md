@@ -676,6 +676,14 @@ python "<PROJECT_ROOT>\scripts\where_used.py" --cwd "<PROJECT_ROOT>" --object-ty
 |---|---|
 | `adt_where_used(type='func')` | Çağıranı **bilinen** bir Z FM için de `OBJECT_NOT_FOUND` döndü ⇒ `0`/hata ayırt edilemiyor |
 | `adt_grep_source(package=…)` | FUGR'ın yalnız iskelet ana include'unu çeker; **FM gövdesini okumaz**. Yine de `truncated:false` + `scope_verified:true` basar — *"taradım, temiz"* diyor, **taramamış** |
+
+> ⭐ **2026-08-28 güncellemesi (C-04) — körlük KALKMADI, ama artık GÖRÜNÜR.** `adt_grep_source`
+> kapsamdan düşen her objeyi `skipped_objects[{object, type, reason}]` ile, okunup içeriği
+> eksik kalanları (FUGR iskeleti) `partial_objects: fugr_skeleton_only` ile bildirir ve
+> `coverage_complete: false` basar. **Okuma kuralı:** `match_count: 0` ancak
+> `coverage_complete: true` iken "geçmiyor" anlamına gelir; aksi hâlde **DOĞRULANAMADI**'dır
+> ve `skipped_objects` tek tek doğrulanmalıdır. FM gövdesi hâlâ taranmıyor — çözüm yine
+> include indirmektir (`adt-fugr-functions.md §4.1`).
 | repo `git grep` | Geçerli, ama **canlı sistemi temsil etmez** (repo'da olmayan/ECC-only kod) |
 
 ⭐ **İLK BAŞVURULACAK YER — statik çapraz-referans tablosu `CROSS`** (sistem geneli; FM/PROG/CLASS):
