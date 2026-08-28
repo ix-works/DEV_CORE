@@ -13,9 +13,13 @@ Kullanım:
 --offline: SAP erişilemezken ÇEKMEDEN taze damgalar (escape; canlıdan ezme riskini bilerek kabul).
 """
 import argparse
+import contextlib
 import io
 import json
+import os
 import sys
+import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -59,17 +63,125 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _stamp(session_id: str, obj: str) -> None:
-    """Seans-tazelik store'una damgala. Store başka seanstansa SIFIRLA (seans-bazlı)."""
+# ⛔ 2026-08-28 (E-02): damga OKU-DEĞİŞTİR-YAZ dizisidir ve KİLİTSİZDİ. İki koşum
+# (paralel ajan / hook + elle pull / arka-plan tur) çakışınca ikisi de AYNI store'u
+# okur, her biri KENDİ objesini ekler ve son yazan diğerinin damgasını SİLER —
+# sessizce. Kayıp damga = "bu dosya çekildi" bilgisinin yok olması; `pull_before_edit`
+# (ADR 0016) o bilgiye bakarak karar verir. Ayrıca `write_text` ATOMİK DEĞİLDİR:
+# truncate+write arasında okuyan süreç YARIM JSON görür → tüketici `except: {}` dalına
+# düşer ve store'un TAMAMI kaybolur.
+#   Kayıp damganın yönü GÜVENLİDİR (hook "taze değil" der, kullanıcı tekrar çeker);
+#   tehlikeli yön SAHTE-TAZE damgadır. Aşağıdaki tasarım hiçbir dalda sahte-taze
+#   üretmez: kilit alınamazsa bile GÖRÜNÜR uyarı basar (sessiz düşüş YOK).
+_KILIT_ZAMAN_ASIMI_S = 10.0   # bu süre boyunca kilit alınamazsa: uyar + yine de yaz
+_KILIT_BAYAT_S = 30.0         # çökmüş süreçten kalan kilit: kır (kalıcı kilitlenme YOK)
+_KILIT_BEKLEME_S = 0.02
+
+
+def _kilit_yolu() -> Path:
+    return FRESH_STORE.with_name(FRESH_STORE.name + ".lock")
+
+
+@contextlib.contextmanager
+def _store_kilidi():
+    """Store'u OKU-DEĞİŞTİR-YAZ boyunca tek yazıcıya kilitle.
+
+    Döndürülen değer: kilit alındıysa None, alınamadıysa GÖRÜNÜR uyarı metni
+    (çağıran onu basar — "sessizce kaybettim" dalı YOK).
+    """
+    kilit = _kilit_yolu()
+    kilit.parent.mkdir(parents=True, exist_ok=True)
+    basla = time.monotonic()
+    tutuyoruz, uyari = False, None
+    while True:
+        try:
+            fd = os.open(str(kilit), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode("ascii"))
+            os.close(fd)
+            tutuyoruz = True
+            break
+        except (FileExistsError, PermissionError):
+            # ⚠ WINDOWS İKİZİ (ölçüldü 2026-08-28, 12 süreç × 30 damga): silinmesi
+            # BEKLEYEN (delete-pending) bir kilide `O_EXCL` ile açılınca Windows
+            # ERROR_ACCESS_DENIED verir → Python bunu **PermissionError** yapar,
+            # FileExistsError DEĞİL. Yalnız FileExistsError yakalayan bir kilit
+            # yüksek eşzamanlılıkta `_stamp`i ÇÖKERTİR (14 çocuk süreç çöktü,
+            # 360 damganın 66'sı bu yüzden hiç yazılamadı). "Meşgul" iki isimle gelir.
+            pass
+        try:
+            bayat = (time.time() - kilit.stat().st_mtime) > _KILIT_BAYAT_S
+        except OSError:
+            bayat = False        # kilit tam o anda kalktı → hemen yeniden dene
+        if bayat:
+            # Çökmüş/öldürülmüş süreçten kalan kilit ARACI KALICI OLARAK
+            # kilitlerdi (erişilemez-yeşil sınıfının kilit hâli) → kır.
+            with contextlib.suppress(OSError):
+                kilit.unlink()
+            continue
+        if (time.monotonic() - basla) > _KILIT_ZAMAN_ASIMI_S:
+            uyari = ("[!] DAMGA KİLİDİ ALINAMADI (%.0fs) — başka bir pull koşuyor "
+                     "olabilir. Damga yine de yazılıyor; eşzamanlı bir damga "
+                     "KAYBOLABİLİR (yön güvenli: kayıp damga = 'taze değil'). "
+                     "Kilit: %s" % (_KILIT_ZAMAN_ASIMI_S, kilit))
+            break
+        time.sleep(_KILIT_BEKLEME_S)
     try:
-        store = json.loads(FRESH_STORE.read_text(encoding="utf-8"))
-    except Exception:
-        store = {}
-    if store.get("session_id") != session_id:
-        store = {"session_id": session_id, "objects": {}}
-    store.setdefault("objects", {})[obj.upper()] = _now_iso()
+        yield uyari
+    finally:
+        if tutuyoruz:
+            with contextlib.suppress(OSError):
+                kilit.unlink()
+
+
+def _store_yaz(store: dict) -> None:
+    """ATOMİK yazım: geçici dosya + `os.replace` → okuyucu ya ESKİYİ ya YENİYİ görür.
+
+    (`write_text` truncate+write yapar; araya giren okuyucu YARIM JSON görür.)
+    """
     FRESH_STORE.parent.mkdir(parents=True, exist_ok=True)
-    FRESH_STORE.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
+    fd, gecici = tempfile.mkstemp(dir=str(FRESH_STORE.parent),
+                                  prefix=FRESH_STORE.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(json.dumps(store, ensure_ascii=False, indent=2))
+            fh.flush()
+            os.fsync(fh.fileno())
+        # ⚠ WINDOWS: hedefi O ANDA OKUYAN bir süreç varsa `os.replace` PermissionError
+        # verebilir (paylaşım kipinde FILE_SHARE_DELETE yok). Kısa yeniden-deneme;
+        # tükenirse istisna GÖRÜNÜR şekilde yükselir (sessiz kayıp YOK).
+        for _deneme in range(20):
+            try:
+                os.replace(gecici, FRESH_STORE)
+                break
+            except PermissionError:
+                time.sleep(0.02)
+        else:
+            os.replace(gecici, FRESH_STORE)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(gecici)
+        raise
+
+
+def _stamp(session_id: str, obj: str) -> None:
+    """Seans-tazelik store'una damgala. Store başka seanstansa SIFIRLA (seans-bazlı).
+
+    OKUMA da YAZMA da kilidin İÇİNDE olmak zorundadır: okuyup kilit dışında yazmak
+    kayıp-güncellemeyi (lost update) çözmez.
+    """
+    with _store_kilidi() as kilit_uyarisi:
+        try:
+            store = json.loads(FRESH_STORE.read_text(encoding="utf-8"))
+        except Exception:
+            store = {}
+        if not isinstance(store, dict):   # bozuk/yabancı şekil (liste, dize) → sıfırdan
+            store = {}
+        if store.get("session_id") != session_id:
+            store = {"session_id": session_id, "objects": {}}
+        store.setdefault("objects", {})[obj.upper()] = _now_iso()
+        _store_yaz(store)
+    if kilit_uyarisi:
+        print(kilit_uyarisi)
 
 
 def main() -> int:

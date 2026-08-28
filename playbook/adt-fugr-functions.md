@@ -255,6 +255,13 @@ içeriğinden **gerçek adı oku, türetme**).
 taramaya **alır**, ama getirdiği kaynak iskelettir. Paket taramasında `scanned_objects` sayısı
 "tarandı" der; **ne tarandığını söylemez.**
 
+> ⭐ **2026-08-28 (C-04):** körlük duruyor, ama **sessiz değil**. Tool artık FUGR'ı
+> `partial_objects: fugr_skeleton_only` ile işaretler ve `coverage_complete: false` basar;
+> `object_types` filtresi dışında kalan FUGR'lar da `skipped_objects: type_filtered` olarak
+> döner. Yani *"ne tarandığını söylemez"* cümlesi artık **yalnız FM gövdesi** için geçerlidir —
+> objenin kapsamdan düştüğü/eksik tarandığı bilgisi makinece okunur. Çözüm değişmedi:
+> include indir (yukarıdaki reçete).
+
 ---
 
 ## 5. DENENEN VE BAŞARISIZ YOLLAR (canlı, 2026-06-02)

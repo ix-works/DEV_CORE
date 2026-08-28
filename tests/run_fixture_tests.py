@@ -336,6 +336,20 @@ OZEL_TESTLER = [
      "check_method_param_type_c: `TYPE c` \\n `LENGTH 100` sarili imza kaciyordu (B2-11) — "
      "gate'in var olus sebebi olan satirsiz-400 senaryosunun ta kendisi; N1 = nokta ile "
      "ayrilan IKI ifade birlesmez"),
+    # 2026-08-28 BUG-AVI (MCP+script parti). Uc kalem, tek tema: SESSIZ DUSUS.
+    # E-02: damga yazimi kilitsizdi -> eszamanli kosumda "cekildi" bilgisi KAYBOLUYORDU.
+    ("damga_yarisi",
+     "sap_sync_pull._stamp: kilit + ATOMIK yazim; kilit alinamazsa GORUNUR uyari "
+     "(sessiz kayip YOK) + bayat kilit KIRILIR + Windows `PermissionError` ikizi"),
+    # C-08: ABAP KOSTURAN tek guard'siz tool + `dangerous/critical` bandi varsayilan ACIK.
+    ("unit_run_guard_riski",
+     "adt_unit_run: namespace kapisi (ADR 0005-A, aile simetrisi) + riskli test bandi "
+     "VARSAYILAN KAPALI + 'method_count=0' icin risk_notice (sessiz sifir YOK)"),
+    # C-04: okunamayan obje sessizce dusuyordu -> "eslesme yok" ile "okuyamadim" ayni cikti
+    # (Q106'nin grep ayagi; playbook/adt-fugr-functions.md §4.1 korlugu de raporlanir).
+    ("grep_kapsam_gorunurlugu",
+     "adt_grep_source: dusen her obje ad+SEBEP ile (`skipped_objects`), FUGR iskeleti "
+     "`partial_objects`, `coverage_complete` AYRI eksen (scope_verified bozulmadan)"),
 ]
 
 
@@ -540,8 +554,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "TÜKETİCİ sözleşmesi: `--type` choices değişirse notun bastığı komut geçersizleşir"),
     ("scripts/run_pretty_printer.py", ("O:cikti_iddiasi_durustlugu",),
      "çıktı SUNUCU YAZMASI iddia etmez ('applied to' yasağı) + YAZMA-çağrısı-yok yapısal çapası"),
-    ("scripts/sap_sync_pull.py", ("O:cikti_iddiasi_durustlugu",),
-     "sınıf alt-include'ları ÇEKİLMEDİĞİ görünür olmalı; marker listesi source_drift'ten (tek kaynak)"),
+    ("scripts/sap_sync_pull.py", ("O:cikti_iddiasi_durustlugu", "O:damga_yarisi"),
+     "sınıf alt-include'ları ÇEKİLMEDİĞİ görünür olmalı; marker listesi source_drift'ten "
+     "(tek kaynak) + seans-tazelik damgasının EŞZAMANLI YAZIM sözleşmesi (kilit + atomik "
+     "`os.replace` + görünür kilit uyarısı) `damga_yarisi`da yaşar"),
+    ("scripts/hooks/pull_before_edit.py", ("O:damga_yarisi",),
+     "damga store'unun TÜKETİCİSİ: `_is_fresh` okuma sözleşmesi yazıcıyla birlikte ölçülür "
+     "(3. bağlam vektörü) — biri değişirse diğeri sessizce boşalır"),
     ("scripts/source_drift.py", ("O:cikti_iddiasi_durustlugu",),
      "`_CLASS_SUBSOURCE_MARKERS` TEK KAYNAK: sap_sync_pull uyarısı bu listeyi import eder"),
     ("mcp_servers/sap_adt/tools/query.py",
@@ -660,17 +679,23 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("mcp_servers/sap_adt/_conn.py",
      ("O:tier_fail_closed", "O:conn_cift_anahtar", "O:veri_yetki_guardlari"),
      ".conn_adt okuyucusu"),
-    ("mcp_servers/sap_adt/guardrails.py", ("O:tier_fail_closed",), "require_writable_tier"),
+    ("mcp_servers/sap_adt/guardrails.py",
+     ("O:tier_fail_closed", "O:unit_run_guard_riski"),
+     "require_writable_tier + `require_customer_namespace` (ABAP KOŞTURAN tool ailesinin "
+     "SINIF çapası `unit_run_guard_riski` G3'te: dördü de iki kapıdan geçmeli)"),
     ("mcp_servers/sap_adt/data_guard.py",
      ("O:veri_yetki_guardlari", "O:tier_fail_closed"), "ADR 0011 PII + yetki"),
     ("mcp_servers/sap_adt/_reviewer.py", ("O:reviewer_tip_kapsam",), "push-tipi ↔ reviewer"),
     ("mcp_servers/sap_adt/tools/atom.py",
      ("O:adtget_yokluk_kaniti", "O:ddic_okuma_yolu", "O:dogrulama_kosamadi",
-      "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline", "O:mcp_sahte_sonuc_uclusu"),
-     "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline)"),
+      "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline", "O:mcp_sahte_sonuc_uclusu",
+      "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu"),
+     "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline) + "
+     "`adt_classrun`/`adt_post_shell` guard SINIF çapası (AST) + `adt_get` dönüş ŞEKLİ "
+     "grep kapsam-muhasebesinin GİRDİSİdir (ok/exists/source → skipped sebebi)"),
     ("mcp_servers/sap_adt/tools/query.py",
      ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur",
-      "O:atc_p1_sonuc"),
+      "O:atc_p1_sonuc", "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu"),
      "where_used/ATC + veri sorgusu + başarısızlık görünürlüğü + ⚠ `adt_atc_check` yanıt "
      "ŞEKLİ (priority_1_count · must_fix · policy) post_tool_failure ATC ekseninin "
      "GİRDİSİDİR: alan adı ya da politika metni değişirse eksen SESSİZCE boşalır"),

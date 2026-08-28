@@ -120,6 +120,17 @@ python tests/run_fixture_tests.py                                            # T
 - Bayat-seans SAP-source Edit-payload → **exit 2** ve mesajdaki komut **`core/scripts/sap_sync_pull.py`** (proje-göreli).
 - Taze-seans → 0; SAP-dışı → 0; damga **proje-kökü** `.claude` altında (DEV_CORE'a yazıyorsa d2d326d regresyonu).
 - `IX_SOURCE_ROOT` farklı-adla hâlâ yakalıyor (4 fixture).
+- **DAMGA EŞZAMANLILIĞI (2026-08-28, E-02):** `python tests/fixtures/damga_yarisi/run.py`
+  → **14/14 + 6 mutasyon**, exit 0 (~42 sn; süreç başlatır, en yavaş vektör budur).
+  Değişmezler: `_stamp` OKUMA+YAZMA'yı **tek kilidin içinde** yapar (yalnız yazımı kilitlemek
+  kayıp-güncellemeyi ÇÖZMEZ — M2 sınır mutasyonu tam bunu sınar) · yazım `os.replace` ile
+  **atomik** · kilit alınamazsa **görünür uyarı** (M4: sessizce yutulursa korpus kırmızı) ·
+  **bayat** kilit kırılır (M3: kırılmazsa araç kalıcı kilitlenir) · Windows'ta kilit
+  `PermissionError` de verir, bu **meşguldür**, çökme değil (M6).
+  ⭐ D1 vektörü yarışa DEĞİL `_now_iso` seam'ine dayanır → deterministtir; yük vektörü
+  (8×12) yalnız istatistiksel destektir, **tek kanıt sayılmaz**.
+  ⛔ 3. bağlam (`pull_before_edit._is_fresh`) SİLİNMEZ: yazıcı ile okuyucu **ayrı modüldür**,
+  biri değişirse eksen sessizce boşalır (HARİTA'da o dosya da bu korpusa bağlıdır).
 
 ## B5 — skill_injector / worktype_hint / ITG-katmanları
 - ITG A/B/C: regex-tetik→marker, backstop-sessiz · keyword-dışı-talep→ilk SAP-tool'da backstop-enjekte · ping/Bash→sessiz.
@@ -311,6 +322,31 @@ python tests/run_fixture_tests.py                                            # T
   düşülüp "profil matrisi çöktü" sanıldı; doğrusu `import server; server._register_all()`.
 - Varlık-sondası değişmezi: silinmiş-obje → where_used **count-anahtarı DÖNMEZ** (OBJECT_NOT_FOUND).
 - unit_run 0-test görürsen ÖNCE KONTROL-GRUBU (SE24); inactive_objects çıktısında `stale_deleted`+`tadir_check` OLMALI — `FAILED`'da "silinmiş değil" VARSAYMA; ⛔ TADIR-DELFLAG satırları silinmez.
+- **ABAP KOŞTURAN TOOL AİLESİ — İKİ KAPI (2026-08-28, C-08):**
+  `python tests/fixtures/unit_run_guard_riski/run.py` → **11/11 + 5 mutasyon**, exit 0.
+  Değişmezler: `adt_unit_run` · `adt_syntax_check` · `adt_classrun` · `adt_post_shell`
+  **DÖRDÜ DE** `require_customer_namespace` **ve** `require_writable_tier` çağırır (G3 AST
+  çapası — vaka değil SINIF) · kapılar **HTTP'den ÖNCE** (G1b: guardrail dönüşünde POST
+  sayısı **0**) · `testRiskLevels` **varsayılan `harmless`**, `dangerous`/`critical` yalnız
+  `allow_risky_tests=True` ile · `method_count == 0` + kapalı bant → `risk_notice`
+  (⛔ bant AÇIKKEN uyarı YOK — alarm yorgunluğu çapası, R3b silinmez).
+  ⚠ `risk_levels`/`risk_notice` alanlarını kaldıran bir "sadeleştirme" bu ekseni **boşaltır**:
+  "0 test" ile "0 HARMLESS test" yeniden ayırt edilemez hâle gelir.
+  🔴 DOĞRULANAMADI: bandın kapanmasının **canlı** test sayısına etkisi ölçülmedi (fixture
+  SAP'ye bağlanmaz). İlk canlı kullanımda `method_count`u SE24 kontrol grubuyla kıyasla.
+- **GREP KAPSAM MUHASEBESİ (2026-08-28, C-04):**
+  `python tests/fixtures/grep_kapsam_gorunurlugu/run.py` → **14/14 + 5 mutasyon**, exit 0.
+  Değişmezler: kapsamdan düşen her obje `skipped_objects` içinde **ad + sebep** ile döner
+  (`type_filtered` · `type_unsupported` · `max_objects` · `read_failed` · `not_readable` ·
+  `source_empty`) · FUGR okunduğunda `partial_objects: fugr_skeleton_only` (playbook
+  `adt-fugr-functions.md §4.1`) · `coverage_complete` **ayrı eksendir**, `scope_verified`in
+  anlamını DEĞİŞTİRMEZ (N1/N2 çapaları; `dogrulama_kosamadi` R5 ile birlikte okunur) ·
+  tam kapsamda **uyarı YOK** (K2b).
+  ⛔ Sebep sınıfları **uydurulmaz**: yeni bir sebep eklemeden önce playbook'ta ölçülmüş
+  körlüğü göster (kaynak: `adt-fugr-functions.md §4/§4.1`, `lessons-learned` #19/#20, Q106).
+  ⚠ ÖLÇÜM ALETİ NOTU: `object_types` filtresi `_GREP_TYPE_MAP` kontrolünden **ÖNCE** koşar —
+  `type_unsupported` dalını ölçmek için filtreye o tipi (ör. TABL) **eklemek** gerekir; yoksa
+  iki farklı sınıf tek sebebe (`type_filtered`) düşer ve dal ölçülmemiş kalır.
 - **DDIC okuma-yolu (2026-08-09):** `python tests/fixtures/ddic_okuma_yolu/run.py` → **31/31**, exit 0.
   Değişmezler: `table`/`structure` → `/sap/bc/adt/ddic/{tables|structures}/<ad>/source/main`
   **düz DDL** · `dataelement`/`domain`/`tabletype` → XML yolu ve `/source/main` **HİÇ istenmez**
