@@ -306,6 +306,36 @@ OZEL_TESTLER = [
      "ctx token segmenti: 250k/300k sinirlari DAHIL sari + yokluk 0'a DUSMEZ (None) + "
      "kisa bicim FLOOR (round olsa yesil renkte sari-bandi sayisi cikardi) + iki katmanli "
      "kablolama (segment ve build_line ayri mutasyonla) + yuzde esiklerinin REGRESYONU"),
+    # ── 2026-08-28 adversarial bug-avi B2 ailesi: icerik-validator'lari kaynagi HAM SATIR
+    #    olarak goruyordu. UC hata sinifi tek kokten: (1) satir-kapsami = cok-satirli dil
+    #    ifadesi kaciyor, (2) yorum-durumu = blok yorumunun ICI kod sayiliyor (FP),
+    #    (3) literal-durumu = literal ici anahtar ihlal saniliyor / literal ici tirnak
+    #    satirin gerisini yutuyor. Ortak cozum: `scripts/utils/kaynak_tarama.py`.
+    #    ⛔ Her fixture'in FP capalari (N*) ve POZITIF KONTROL'leri (K*/E*) SILINEMEZ:
+    #    onlar olmadan "FP'yi duzeltirken gercek pozitifi kaybetmedim" iddiasi kanitsizdir.
+    ("rap_commit_ifade_kapsami",
+     "check_no_rap_commit: `COMMIT`/`WORK.` cok-satirli ifade (B2-07, BLOCKER kacisi) + "
+     "literal ici `'COMMIT WORK'` FP'si (B2-08); IKI KUME AYRI normalize edilir — "
+     "`BAPI_TRANSACTION_COMMIT` literal ICINDE yazilir, literal temizligi ona UYGULANMAZ (K2)"),
+    ("amdp_satir_sonu_yorumu",
+     "check_amdp_comment_apostrophe: `^\\s*--` satir-basi capasi satir-SONU yorumunu "
+     "kaciriyordu (B2-09, KRITIK); yeni tarama AMDP GOVDESIYLE sinirli (N2/N3 = ABAP "
+     "yorumlari mesru) + literal ici `--` yorum degil (N4)"),
+    ("cds_uzanti_kapsami",
+     "check_cds_srvd_comment_syntax: `.ddls/.asddls/.ddl` HIC taranmiyordu (B2-10) — "
+     "tuketici korpusta 41 dosya; 280->321, 0 yeni bulgu. `.dcl`/`.bdef` BILINCLI DISARIDA"),
+    ("filtre_yorum_ve_tirnak",
+     "check_filter_search_pattern: tirnakli anahtar `\"caseSensitive\": false` kaciyordu "
+     "(B2-03) + cok-satirli `/* */` icindeki olu kod BLOCKER uretiyordu (B2-02); E1 = blok "
+     "KAPANDIKTAN sonra korlesme YOK"),
+    ("ui5_blok_yorumu",
+     "check_ui5_freestyle_traps: `startswith('*')` yalniz hizali JSDoc'u atliyordu -> "
+     "yildizsiz blok yorumu T1 ERROR (build DURDURAN yanlis-pozitif, B2-06); "
+     "`_T1_PATTERNS` DEGISMEDI (S1)"),
+    ("imza_cok_satirli_type_c",
+     "check_method_param_type_c: `TYPE c` \\n `LENGTH 100` sarili imza kaciyordu (B2-11) — "
+     "gate'in var olus sebebi olan satirsiz-400 senaryosunun ta kendisi; N1 = nokta ile "
+     "ayrilan IKI ifade birlesmez"),
 ]
 
 
@@ -372,6 +402,15 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "§ABSTRACT ENTITY basligi ALT-TUR eslesmesinin TEK kaynagi (kopya sozluk yok)"),
     ("scripts/foreign_project_audit.py", ("O:yabanci_proje_json_kacisi",),
      "hook/MCP komut ayiklamasi: JSON kacisi + liste ogeleri + parse-fail gorunurlugu"),
+    # ⛔ ORTAK KATMAN: bu dosya ALTI validator'ün tarama davranışını taşır. Değişirse
+    #    altısının korpusu da koşmalı — tek fixture "yeşil" derse diğer beş sessizce kayar
+    #    (2026-08-28 B2 turu; `scripts/utils/kapsam.py` ile aynı sınıf bağımlılık).
+    ("scripts/utils/kaynak_tarama.py",
+     ("O:rap_commit_ifade_kapsami", "O:amdp_satir_sonu_yorumu", "O:cds_uzanti_kapsami",
+      "O:filtre_yorum_ve_tirnak", "O:ui5_blok_yorumu", "O:imza_cok_satirli_type_c",
+      "O:ui5_t1_tirnak_sinifi"),
+     "ABAP/JS normalize edilmiş tarama: yorum-durumu + literal-durumu + mantıksal metin; "
+     "TÜKETİCİLERİN HEPSİ ölçülür (ui5_t1_tirnak_sinifi = komşu regresyon kapısı)"),
     ("scripts/utils/kapsam.py", ("O:validator_kapsam_paydasi",),
      "12 validator'un ORTAK payda sozlesmesi; SINIR: 0 dosya FAIL URETMEZ (X1/M3)"),
     ("scripts/validators/check_console_utf8.py", ("O:console_utf8_kok_izolasyonu",),
@@ -411,17 +450,29 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "coverage-gate'in hook ORPHAN dalı sessizce ölür (kopya YOK, tek kaynak)"),
     ("scripts/validators/check_bdef_backtick.py", ("V:check_bdef_backtick", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_cds_srvd_comment_syntax.py",
-     ("V:check_cds_srvd_comment_syntax", "O:validator_kapsam_paydasi",), "G1 çifti"),
+     ("V:check_cds_srvd_comment_syntax", "O:validator_kapsam_paydasi",
+      "O:cds_uzanti_kapsami"),
+     "G1 çifti + uzantı ailesi korpusu (.ddls/.asddls/.ddl aynı gate'te yaşar)"),
     ("scripts/validators/check_list_view_grid.py", ("V:check_list_view_grid", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_ui5_freestyle_traps.py",
-     ("V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi", "O:ui5_t1_tirnak_sinifi"),
-     "G1 çifti + T1 tırnak-sınıfı korpusu aynı validator'ı ölçer"),
+     ("V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi", "O:ui5_t1_tirnak_sinifi",
+      "O:ui5_blok_yorumu"),
+     "G1 çifti + T1 tırnak-sınıfı korpusu + blok-yorumu FP korpusu (üçü de AYNI T1 "
+     "desenlerini ölçer: desen/tarama-katmanı ayrımı ancak birlikte kanıtlanır)"),
     ("scripts/validators/check_filter_search_pattern.py",
-     ("V:check_filter_search_pattern", "O:validator_kapsam_paydasi",), "G1 çifti"),
+     ("V:check_filter_search_pattern", "O:validator_kapsam_paydasi",
+      "O:filtre_yorum_ve_tirnak"),
+     "G1 çifti + anahtar-yazımı/blok-yorumu korpusu (BLOCKER dalı burada ölçülür)"),
     ("scripts/validators/check_decimal_write_to.py", ("V:check_decimal_write_to", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_method_param_type_c.py",
-     ("V:check_method_param_type_c", "O:validator_kapsam_paydasi",), "G1 çifti"),
-    ("scripts/validators/check_no_rap_commit.py", ("V:check_no_rap_commit", "O:validator_kapsam_paydasi"), "G1 çifti"),
+     ("V:check_method_param_type_c", "O:validator_kapsam_paydasi",
+      "O:imza_cok_satirli_type_c"),
+     "G1 çifti + çok-satırlı imza korpusu (blok birleştirmenin SINIRI orada yaşar)"),
+    ("scripts/validators/check_no_rap_commit.py",
+     ("V:check_no_rap_commit", "O:validator_kapsam_paydasi",
+      "O:rap_commit_ifade_kapsami"),
+     "G1 çifti + ifade-kapsamı/literal-durumu korpusu (İFADE ve KİMLİK kümelerinin AYRI "
+     "normalize edildiği yapısal çapa orada)"),
     ("scripts/validators/check_dtel_creation_labels.py", ("V:check_dtel_creation_labels",),
      "DTEL yaratma CSV'si: 4 label + description doluluk + uzunluk + domain bağı (ADR 0005-D)"),
     ("scripts/validators/check_cds_qty_in_expression.py", ("O:cds_qty_in_expression",),
@@ -432,7 +483,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/hooks/pre_tool_guard.py", ("O:ix_doctor_kablolama",),
      "bu dosyanın tool kümesi ix_doctor kablolama kontrolünün PAYDASIDIR (türetilir)"),
     ("scripts/validators/check_amdp_comment_apostrophe.py",
-     ("V:check_amdp_comment_apostrophe", "O:validator_kapsam_paydasi",), "G1 çifti"),
+     ("V:check_amdp_comment_apostrophe", "O:validator_kapsam_paydasi",
+      "O:amdp_satir_sonu_yorumu"),
+     "G1 çifti + satır-sonu `--` korpusu (eski satır-başı deseninin DEĞİŞMEDİĞİ çapası orada)"),
     ("scripts/validators/check_kd_no_raw_mermaid.py", ("V:check_kd_no_raw_mermaid", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_fs_no_analysis_log.py", ("O:fs_docstd",),
      "DOC-FS-05/06a sayacı: yakalama + kimlik-satırı FP çapaları (fixture kendi sandbox'ını kurar)"),

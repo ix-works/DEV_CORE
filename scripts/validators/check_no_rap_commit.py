@@ -16,6 +16,13 @@ DOĞRU DESEN: commit gerektiren klasik BAPI'yi (BAPI_SHIPMENT_CREATE, SD_SCDS_CR
 RAP'ten çağırırken AYRI LUW kullan → Z RFC-enabled FM + `CALL FUNCTION '...' DESTINATION 'NONE'`.
 Commit yalnız o RFC-FM'de (ayrı roll-area) LEGAL. Reçete: playbook/adt-rap.md.
 
+TARAMA MODELİ (2026-08-28, B2-07/B2-08): satır değil MANTIKSAL İFADE taranır —
+`COMMIT` (satır sonu) `WORK.` ABAP'ta tek ifadedir ve satır-başına regex onu GÖRMÜYORDU.
+Ayrıca literal-durumu iki kümeye AYRI uygulanır: `COMMIT/ROLLBACK WORK` ve
+`COMMIT ENTITIES` literalleri boşaltılmış metinde (string içindeki anım ihlal değil),
+`BAPI_TRANSACTION_*` ve `i_opt_commit='X'` ise literalli metinde aranır (o desenler
+ABAP'ta zaten literal içinde yazılır — boşaltılırsa gerçek pozitif kaybolur).
+
 Kapsam: <source_root>/**/*.clas.abap, *.ccimp.abap, *.ccau.abap.
   Muaf: *.func.abap (RFC-FM wrapper = ayrı LUW → commit orada legal; bu validator taramaz).
   Kaçış: ilgili satıra `"#NO_RAP_COMMIT_CHECK <gerekçe>` (gerçek non-RAP class için; gerekçesiz değil).
@@ -44,6 +51,10 @@ from utils.project_config import project_root, source_dir  # K12: kaynak-klasor 
 # K1 (2026-08-20): ORTAK kapsam sozlesmesi — 'ihlal yok' ile 'bakacak dosya yok'
 # ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
 from utils.kapsam import Kapsam  # noqa: E402
+# B2-07/B2-08 (2026-08-28): ORTAK normalize edilmis tarama — cok-satirli ifade +
+# literal-durumu. Desenler/siddetler BURADA kalir, yalniz "hangi karakter kod"
+# sorusu ortak katmana tasindi.
+from utils.kaynak_tarama import abap_kod, MantiksalMetin  # noqa: E402
 
 KAPSAM = Kapsam('.clas.abap')   # K1: taranan dosya sayaci
 
@@ -61,27 +72,32 @@ _ESCAPE = "#NO_RAP_COMMIT_CHECK"
 
 # ERROR — KLASİK DB-transaction kontrolü: RAP akışı içinde HER ZAMAN yasak (handler VEYA
 #   RAP-LUW'a bağlı helper). Bunlar `COMMIT WORK` yapar → BEHAVIOR_ILLEGAL_STATEMENT.
-_ERROR_PATTERNS = [
+#   İKİ KÜME, İKİ NORMALİZASYON (B2-08, 2026-08-28):
+#   • _ERROR_IFADE — ABAP *ifadesi*. String literalinin İÇİNDE geçmesi ihlal DEĞİLDİR
+#     (`lv_msg = 'COMMIT WORK yapılmadı'`) → literalleri boşaltılmış metinde aranır.
+#     Ayrıca ifade satıra değil NOKTAYA bağlıdır → mantıksal metinde aranır (B2-07):
+#     `COMMIT` \n `WORK.` tek ifadedir, iki satırdır.
+#   • _ERROR_KIMLIK — FM/obje ADI. ABAP'ta ZATEN literal içinde yazılır
+#     (`CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'`) → literal boşaltılırsa GERÇEK
+#     POZİTİF KAYBOLUR. Bu yüzden literalli metinde aranır. İki kümeyi birleştirmek
+#     ya FP ya sessiz-kaçış üretir; ayrılık bilinçlidir.
+_ERROR_IFADE = [
     (re.compile(r"\bCOMMIT\s+WORK\b", re.IGNORECASE), "COMMIT WORK"),
     (re.compile(r"\bROLLBACK\s+WORK\b", re.IGNORECASE), "ROLLBACK WORK"),
+]
+_ERROR_KIMLIK = [
     (re.compile(r"\bBAPI_TRANSACTION_COMMIT\b", re.IGNORECASE), "BAPI_TRANSACTION_COMMIT"),
     (re.compile(r"\bBAPI_TRANSACTION_ROLLBACK\b", re.IGNORECASE), "BAPI_TRANSACTION_ROLLBACK"),
 ]
 # WARN — bağlama-bağlı (deterministik karar veremez; bug-expert context teyit eder):
 #   COMMIT ENTITIES = RAP EML commit; CONSUMER/controller'da MEŞRU, behavior HANDLER içinde YASAK.
 #   i_opt_commit='X' = çağrılan FM kendi içinde COMMIT WORK yapar; RAP'ten DİREKT çağrı = aynı dump.
-_WARN_PATTERNS = [
+_WARN_IFADE = [
     (re.compile(r"\bCOMMIT\s+ENTITIES\b", re.IGNORECASE), "COMMIT ENTITIES (handler'da YASAK / consumer'da OK)"),
+]
+_WARN_KIMLIK = [
     (re.compile(r"\bi_opt_commit\s*=\s*'X'", re.IGNORECASE), "i_opt_commit='X' (FM-içi COMMIT)"),
 ]
-
-
-def _strip_comment(line: str) -> str:
-    """ABAP yorum at: tam-satır `*` → boş; inline `"` → öncesi. ('...' içi `"` nadir, kabul)."""
-    if line.lstrip().startswith("*"):
-        return ""
-    q = line.find('"')
-    return line if q < 0 else line[:q]
 
 
 def _iter_files():
@@ -100,21 +116,33 @@ def _scan():
     findings = []  # (severity, label, file, lineno, text)
     for f in KAPSAM.say(_iter_files()):
         try:
-            lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+            metin = f.read_text(encoding="utf-8", errors="replace")
         except Exception:
             continue
-        for i, raw in enumerate(lines, 1):
-            if _ESCAPE in raw:
-                continue
-            code = _strip_comment(raw)
-            if not code.strip():
-                continue
-            for rx, label in _ERROR_PATTERNS:
-                if rx.search(code):
-                    findings.append(("ERROR", label, f, i, raw.strip()[:120]))
-            for rx, label in _WARN_PATTERNS:
-                if rx.search(code):
-                    findings.append(("WARN", label, f, i, raw.strip()[:120]))
+        lines = metin.splitlines()
+        satirlar = abap_kod(metin)
+        # `#NO_RAP_COMMIT_CHECK` kaçışı SATIR bazlıdır; çok-satırlı eşleşmede
+        # KAPSANAN satırlardan HERHANGİ BİRİ kaçış taşıyorsa bulgu düşer.
+        kacan = {no for no, ham in enumerate(lines, 1) if _ESCAPE in ham}
+        m_kod = MantiksalMetin([(no, kod) for no, kod, _ in satirlar])
+        m_lit = MantiksalMetin([(no, kodsuz) for no, _, kodsuz in satirlar])
+
+        def _ekle(sev, kumeler, mantiksal):
+            for rx, label in kumeler:
+                for bas, son in mantiksal.bul(rx):
+                    if any(no in kacan for no in range(bas, son + 1)):
+                        continue
+                    ham = lines[bas - 1].strip()[:120] if bas <= len(lines) else ""
+                    if son != bas:      # çok-satırlı ifade: kaçtığı görülsün
+                        ham += f"  … (ifade {bas}-{son} satırlarına yayılmış)"
+                    findings.append((sev, label, f, bas, ham))
+
+        _ekle("ERROR", _ERROR_IFADE, m_lit)
+        _ekle("ERROR", _ERROR_KIMLIK, m_kod)
+        _ekle("WARN", _WARN_IFADE, m_lit)
+        _ekle("WARN", _WARN_KIMLIK, m_kod)
+    # çıktı sırası deterministik: dosya (tarama sırası) → satır → ERROR önce
+    findings.sort(key=lambda x: (str(x[2]), x[3], 0 if x[0] == "ERROR" else 1))
     return findings
 
 

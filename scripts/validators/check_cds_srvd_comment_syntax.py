@@ -24,9 +24,12 @@ NEDEN VALIDATOR (ADR 0019 5 sart):
   4. Dokuman katmani yetersiz kaldi: kural yokken sapma sessizce birikti.
   5. Kullanici acik onayi alindi (2026-07-28).
 
-KAPSAM (dar tutuldu, gurultu yok):
-  - `.cds`: yalniz KOD satirinda `"`. Tek-tirnakli literaller ve `//` yorum govdeleri
-    ONCE cikarilir; `/* */` blok yorumlari da cikarilir.
+KAPSAM (desen dar, UZANTI ailesi tam):
+  - CDS DDL kaynagi (`.cds`, `.ddls`, `.asddls`, `.ddl`): yalniz KOD satirinda `"`.
+    Tek-tirnakli literaller ve `//` yorum govdeleri ONCE cikarilir; `/* */` blok
+    yorumlari da cikarilir. (Uzanti ailesi 2026-08-28'de tamamlandi — bkz.
+    `_CDS_UZANTILARI` yanindaki B2-10 notu; onceden yalniz `.cds` taraniyordu ve
+    tuketici projede 41 DDL kaynagi HIC gorulmuyordu.)
   - `.srvd`: `//` veya `/*` (literal disinda).
 
 Kullanim:
@@ -47,7 +50,21 @@ from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12
 # ayrilir. 0 dosya FAIL URETMEZ (mesru olabilir), ama SESSIZ de gecmez.
 from utils.kapsam import Kapsam  # noqa: E402
 
-KAPSAM = Kapsam('.cds/.srvd')   # K1: taranan dosya sayaci
+KAPSAM = Kapsam('CDS-DDL/.srvd')   # K1: taranan dosya sayaci
+
+# ── UZANTI KAPSAMI (B2-10, 2026-08-28) ──────────────────────────────────────────
+# `.cds` TEK BASINA yazilmisti; oysa ayni DDL kaynagi repoda UC uzantiyla yasiyor
+# (`source_drift._TYPE_TO_EXTENSIONS`: table/structure -> `.asddls/.ddls/.cds`).
+# CANLI OLCUM 2026-08-28 (tuketici proje): ayni icerik `.cds`'te `1 ihlal`,
+# `.ddls.asddls`'te "temiz" -> **28 .asddls + 1 .ddls + 12 .ddl dosya HIC
+# TARANMIYORDU**. Bu LATENT degil CANLI bir kapsam bosluguydu.
+# BE-61 kurali dile baglidir ("CDS DDL'de `\"` yorum DEGILDIR"), DOSYA ADINA degil.
+# ⚠ KAPSAMA ALINMAYANLAR (olculdu, bilincli): `.dcl` (3 dosya) ve `.bdef` (32 dosya)
+#    -> ikisi de tara_cds ile 0 bulgu verdi (FP yok) ama AYRI artefakt siniflaridir
+#    (DCL access-control, BDEF davranis tanimi; BDEF'in kendi kapisi var:
+#    check_bdef_backtick). Kapsam genisletmesi KARARDIR; kanit raporda, karar liderde.
+_CDS_UZANTILARI = (".cds", ".ddls", ".asddls", ".ddl")
+_TARANAN_UZANTILAR = _CDS_UZANTILARI + (".srvd",)
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -115,18 +132,18 @@ def main():
         import os as _os
         for _r, _ds, _fs in _os.walk(kok):
             _ds[:] = [d for d in _ds if d not in ("node_modules", ".git", "dist", "coverage")]
-            files += [Path(_r) / f for f in _fs if f.lower().endswith((".cds", ".srvd"))]
+            files += [Path(_r) / f for f in _fs if f.lower().endswith(_TARANAN_UZANTILAR)]
 
     toplam = 0
     for f in KAPSAM.say(files):
         sfx = f.suffix.lower()
-        if sfx not in (".cds", ".srvd"):
+        if sfx not in _TARANAN_UZANTILAR:
             continue
         try:
             txt = f.read_text(encoding="utf-8", errors="replace")
         except Exception:
             continue
-        hits = tara_cds(txt) if sfx == ".cds" else tara_srvd(txt)
+        hits = tara_cds(txt) if sfx in _CDS_UZANTILARI else tara_srvd(txt)
         for ln, icerik, sebep in hits:
             toplam += 1
             rel = f.relative_to(root) if str(f).startswith(str(root)) else f

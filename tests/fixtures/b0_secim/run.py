@@ -118,10 +118,14 @@ kontrol("P1b bölüm-1 validator → kendi bad/good çifti + K1 payda korpusu",
         f"alınan={secim}")
 
 # P2: BİRLEŞİM — iki dosya verildiğinde kümeler toplanır (biri diğerini yutmaz).
+# ⚠ SAYI HARİTAYA PİNLİ (P3 ile aynı sözleşme): `check_ui5_freestyle_traps` korpusu
+#   2026-08-28'de 4'ten 5'e çıktı (`O:ui5_blok_yorumu` — B2-06 blok-yorumu FP'si).
+#   Sayıyı gevşetmek (`>=` / alt-küme) çapayı öldürür; HARİTA ile BU SATIR birlikte
+#   güncellenir.
 secim, _ = sec("scripts/build_core_index.py",
                "scripts/validators/check_ui5_freestyle_traps.py")
-kontrol("P2 çok dosya → BİRLEŞİM (4 birim)",
-        secim == {"O:core_index_kapsam", "O:ui5_t1_tirnak_sinifi",
+kontrol("P2 çok dosya → BİRLEŞİM (5 birim)",
+        secim == {"O:core_index_kapsam", "O:ui5_t1_tirnak_sinifi", "O:ui5_blok_yorumu",
                   "V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi"},
         f"alınan={secim}")
 
