@@ -13,14 +13,28 @@ Kullanım:
     python scripts/validators/check_sap_active_version.py <artifact>   # struct DDL'den auto
 
 Exit kodu:
-    0 — version=="active"
+    0 — version=="active"  (VEYA: ÖLÇÜLEMEDİ — ayrım exit kodunda DEĞİL, `IX-GATE-STATUS`
+        satırındadır; aşağıya bak)
     1 — inactive veya bulunamadı
+
+⛔ `exit 0` ÇOK ANLAMLIDIR — makinece okunur ayrım (2026-08-28, B3-01):
+Bu gate `run_review` zincirinde **BLOCKER**'dır (struct_post_create · sap_active_check).
+BEŞ ayrı yol `return 0` veriyordu ve hiçbiri "obje aktif" demiyordu: desteklenmeyen tip ·
+SAP bağlantısı kurulamadı · GET istisnası · non-200 · version metadata yok. Reviewer
+beşini de "temiz" sayıyordu ⇒ *post-activate doğrulaması, doğrulayamadığı anda yeşil
+yanıyordu*. Çıkış kodu DEĞİŞTİRİLMEDİ; ayrım `_gate_status` kanalından gelir ve
+`run_review.py:271-386` `measured=false` gördüğünde `SKIP` (=BLOCKER) kaydeder.
 """
 # ENFORCES: C-RAP-ACT-01  (ADR 0019 coverage binding)
 import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _gate_status import gate_status, sap_baglanti_yok  # noqa: E402
+
+_GATE = Path(__file__).stem
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -88,7 +102,8 @@ def main() -> int:
     parser.add_argument('artifact', nargs='?', help='İsteğe bağlı: artifact path (auto-infer)')
     parser.add_argument('--name', help='Obje adı (artifact yerine)')
     parser.add_argument('--object-type', help='ADT obje tipi (dtel, doma, tabl, structure, ddls, class)')
-    parser.add_argument('--strict', action='store_true')
+    parser.add_argument('--strict', action='store_true',
+                       help='(uyumluluk; NO-OP — şiddeti DEĞİŞTİRMEZ, run_all --strict kazara terfi ettirmesin; ADR 0019 §54)')
     args = parser.parse_args()
 
     name = args.name
@@ -110,6 +125,9 @@ def main() -> int:
     path_segment = ADT_PATHS.get(obj_type.lower())
     if not path_segment:
         print(f'UYARI: {obj_type} desteklenmiyor, atlandı (desteklenen: {list(ADT_PATHS)})')
+        # Tip tanınmadı ⇒ obje SAP'de HİÇ sorgulanmadı. "Desteklemiyorum" bir aktiflik
+        # hükmü DEĞİLDİR.
+        gate_status(_GATE, 'SKIPPED', False, f'desteklenmeyen-tip-{obj_type.lower()}')
         return 0
 
     sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -118,6 +136,7 @@ def main() -> int:
         client = SAPADTClient()
     except Exception as e:
         print(f'UYARI: SAP bağlantısı kurulamadı, validator atlandı: {e}', file=sys.stderr)
+        sap_baglanti_yok(_GATE)
         return 0
 
     try:
@@ -127,6 +146,7 @@ def main() -> int:
         )
     except Exception as e:
         print(f'UYARI: SAP GET hata: {e}', file=sys.stderr)
+        gate_status(_GATE, 'SKIPPED', False, 'sap-get-istisnasi')
         return 0
 
     if r.status_code == 404:
@@ -134,11 +154,13 @@ def main() -> int:
         return 1
     if r.status_code != 200:
         print(f'UYARI: SAP GET {r.status_code} — validator atlandı', file=sys.stderr)
+        gate_status(_GATE, 'SKIPPED', False, f'sap-get-http-{r.status_code}')
         return 0
 
     m = re.search(r'adtcore:version="(\w+)"', r.text)
     if not m:
         print(f'UYARI: {name} version metadata bulunamadı, atlandı', file=sys.stderr)
+        gate_status(_GATE, 'SKIPPED', False, 'version-metadata-yok')
         return 0
 
     version = m.group(1)
@@ -177,6 +199,7 @@ def main() -> int:
 
     print(f'OK — {name} ({obj_type}) version=active'
           + (' + source dolu' if obj_type.lower() in SOURCE_BEARING else ''))
+    gate_status(_GATE, 'OK', True, 'aktif')
     return 0
 
 

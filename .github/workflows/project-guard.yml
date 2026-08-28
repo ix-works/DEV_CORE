@@ -58,10 +58,24 @@ jobs:
           echo "core klonlandı: $(git -C core rev-parse --short HEAD)"
       - name: python bağımlılıkları
         run: pip install --quiet requests urllib3 || true
+      # ⛔ SIRA ÖNEMLİ (DG-03, 2026-08-28): ÖN-KONTROL, REGENERATE'ten ÖNCE koşar.
+      # Eskiden yalnız aşağıdaki regenerate adımı vardı ve C-IDX-01 doğrulaması
+      # (run_all_validators → check_core_index_fresh --check) ondan SONRA geliyordu ⇒
+      # kontrol DAİMA kendi az önce ürettiği dosyaya bakıyordu: **her koşum yeşil**,
+      # CI'da C-IDX-01 hiçbir şey ölçmüyordu (kendi kendini doğrulayan backstop).
+      - name: CORE-INDEX tazelik ÖN-KONTROLÜ (regenerate'ten ÖNCE — gerçek ölçüm)
+        # `--ci-check` soruyu ancak CEVAPLANABİLİR olduğunda sorar: commit'li indeksin
+        # damgasındaki `core-commit` ile fiilen klonlanan core HEAD'i AYNI ise gerçek
+        # bayatlık kıyası yapar (fark → exit 1). Farklı commit'lerde ölçüm YAPILAMAZ
+        # (doküman-kümesi farkı bayatlık DEĞİLDİR) → `SKIPPED measured=false` + exit 0.
+        # Yani: sahte-yeşil YOK, uydurma-kırmızı da YOK.
+        run: python core/scripts/build_core_index.py --ci-check
+
       - name: CORE-INDEX'i CLONE'lanan core'a göre yeniden üret
-        # C-IDX-01 "üretim adımını unutma" gate'idir; commit'li index gerçek junction'a
-        # (geliştirici makinesi) göre üretilir. CI'da core = fresh clone (satır-sonu/doc-set
-        # farkı olabilir) → burada indeksi CLONE'a göre yeniden üret, sonra doğrula.
+        # Bu adım ÖLÇÜM DEĞİL, HAZIRLIKTIR: aşağıdaki run_all_validators içindeki
+        # check_core_index_fresh (--check) CI'nın fresh-clone core'una göre koşar ve
+        # commit'li indeks başka bir core commit'ine göre üretilmişse yanlış-pozitif
+        # verirdi. Gerçek C-IDX-01 ölçümü YUKARIDAKİ ön-kontrol adımıdır.
         run: python core/scripts/build_core_index.py || true
       - name: run_all_validators (profil-modlu; core + validators-local)
         env:

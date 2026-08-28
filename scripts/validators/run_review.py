@@ -232,7 +232,8 @@ REPO_WIDE_SCANNERS = {
 
 
 def sonuc_kaydi(validator: str, severity: str, status: str, description: str,
-                stdout: str = '', stderr: str = '', message: str = '') -> dict:
+                stdout: str = '', stderr: str = '', message: str = '',
+                olcum_yok: bool = False) -> dict:
     """Zincir-sonucu kaydını TEK yerden üret — her kayıt AYNI anahtar kümesini taşır.
 
     ⛔ SINIF-FIX (2026-08-01, KAYIT S1): SKIP dalı elle kurulmuş bir sözlük döndürüyordu
@@ -250,6 +251,13 @@ def sonuc_kaydi(validator: str, severity: str, status: str, description: str,
         'stdout': stdout,
         'stderr': stderr,
         'message': message,        # SKIP sebebi (koşmadıysa NEDEN koşmadı)
+        # ⛔ SKIP'in İKİ AYRI KÖKENİ VARDIR ve `--cevrimdisi` YALNIZ BİRİNİ indirir:
+        #   olcum_yok=True  → gate KOŞTU, exit 0 verdi ama `measured=false` dedi
+        #                     ("SAP'ye ulaşamadım") → çevrimdışı modda WARNING'e iner.
+        #   olcum_yok=False → gate'in DOSYASI YOK (silinmiş/kurulmamış) → ASLA inmez.
+        # İkisini birleştirmek 2026-08-01 S2 dersini geri açardı: "gate'i SİLMEK, onu
+        # geçmenin en kolay yolu". Çevrimdışı olmak bir gate'in kaybolmasını affetmez.
+        'olcum_yok': olcum_yok,
     }
 
 
@@ -322,11 +330,20 @@ def main() -> int:
     parser.add_argument('--artifact', required=True, help='İncelenecek dosya path')
     parser.add_argument('--json', action='store_true', help='JSON çıktı (programatik)')
     parser.add_argument('--strict', action='store_true', help='WARNING\'i de BLOCKER say')
+    parser.add_argument('--cevrimdisi', action='store_true',
+                        help='BİLİNÇLİ ÇEVRİMDIŞI BEYANI: SAP\'ye ulaşamayan gate\'lerin '
+                             '(measured=false) BLOCKER\'ı WARNING\'e iner. Gerçek bulgular '
+                             've dosyası olmayan gate\'ler ETKİLENMEZ. Env: IX_CEVRIMDISI=1')
     parser.add_argument('--ack-drop', default='',
                         help='Onaylı tablo DROP alanları (virgülle) — check_table_field_drop\'a '
                              'iletilir. SADECE adı verilen alanlar ACK-WARNING; isimsiz drop/tip '
                              'değişikliği yine BLOCKER. Kullanıcı+lider bilinçli onayı (ADR 0005-B).')
     args = parser.parse_args()
+
+    # ⛔ OTOMATİK ÇIKARIM YOK (bilinçli): `.conn_adt` yokluğuna BAKMIYORUZ. Kullanıcının
+    # `.conn_adt`'si VARdır ve yalnız VPN kapalıdır; yokluktan çıkarım tam da TEHLİKELİ
+    # vakayı ("bağlıyım sanıyorum ama ölçmedim") sessizce affederdi. Niyet AÇIK olmalı.
+    cevrimdisi = args.cevrimdisi or os.environ.get('IX_CEVRIMDISI', '') == '1'
 
     artifact_path = Path(args.artifact)
     if not artifact_path.exists():
@@ -382,6 +399,7 @@ def main() -> int:
             # ve SKIP kendi şiddetiyle verdict'e sayılır (bkz. modül docstring'i).
             # check_abaplint WARNING sınıfı olduğu için sonuç WARNING'dir, BLOCKER DEĞİL.
             status = 'SKIP'
+            olcum_yok = True
             mesaj = (f"PRE-FLIGHT ÖLÇMEDİ: {script_name} koştu ve exit 0 döndü ama "
                      f"IX-GATE-STATUS satırı `measured=false` diyor "
                      f"(status={beyan['status']}, reason={beyan['reason']}) — "
@@ -389,8 +407,10 @@ def main() -> int:
         else:
             status = 'PASS' if rc == 0 else 'FAIL'
             mesaj = ''
+            olcum_yok = False
         results.append(sonuc_kaydi(script_name, default_severity, status, description,
-                                   stdout=out.strip(), stderr=err.strip(), message=mesaj))
+                                   stdout=out.strip(), stderr=err.strip(), message=mesaj,
+                                   olcum_yok=olcum_yok))
 
     # ── Verdict ───────────────────────────────────────────────────────────────
     # ⛔ SKIP VERDICT'E SAYILIR (2026-08-01, KAYIT S2 — S1 ile AYNI kök: SKIP yolunun
@@ -405,8 +425,18 @@ def main() -> int:
     failed_warning = sum(1 for r in results if r['status'] == 'FAIL' and r['severity'] == 'WARNING')
     skipped_blocker = sum(1 for r in results if r['status'] == 'SKIP' and r['severity'] == 'BLOCKER')
     skipped_warning = sum(1 for r in results if r['status'] == 'SKIP' and r['severity'] == 'WARNING')
-    blocker_count = failed_blocker + skipped_blocker
-    warning_count = failed_warning + skipped_warning
+    # ── ÇEVRİMDIŞI İNDİRİMİ (opt-in) ──────────────────────────────────────────
+    # Yalnız ÖLÇÜM ÜRETMEYEN (measured=false) BLOCKER'lar iner. `failed_blocker`
+    # (gate koştu, ÖLÇTÜ ve İHLAL BULDU) bu satırların HİÇBİRİNDE geçmez ⇒ gerçek
+    # bulgu bayrakla asla WARNING'e düşemez. Sayaçlar KAYBOLMAZ: `skipped_blocker`
+    # TOPLAM olarak JSON'da ve ekranda aynen kalır.
+    indirilen = [r for r in results
+                 if r['status'] == 'SKIP' and r['severity'] == 'BLOCKER'
+                 and r.get('olcum_yok')] if cevrimdisi else []
+    indirilen_ad = [r['validator'] for r in indirilen]
+
+    blocker_count = failed_blocker + skipped_blocker - len(indirilen)
+    warning_count = failed_warning + skipped_warning + len(indirilen)
 
     if blocker_count > 0:
         verdict = 'BLOCKER'
@@ -435,6 +465,11 @@ def main() -> int:
             'failed_warning_count': failed_warning,
             'skipped_blocker_count': skipped_blocker,
             'skipped_warning_count': skipped_warning,
+            # Çevrimdışı beyanı: tüketici kapsamın EKSİK olduğunu bilmeli.
+            'cevrimdisi': cevrimdisi,
+            'offline_downgraded_count': len(indirilen),
+            'offline_downgraded_gates': indirilen_ad,
+            'kapsam_eksik': bool(indirilen),
             'checklist_reference': checklist,
             'results': results,
         }
@@ -465,16 +500,34 @@ def main() -> int:
 
         print(f'{"="*70}')
         print(f'VERDICT: {verdict}')
-        print(f'  BLOCKERS: {blocker_count}'
-              + (f'  (koşan-FAIL {failed_blocker} + KOŞMAYAN {skipped_blocker})'
-                 if skipped_blocker else ''))
-        print(f'  WARNINGS: {warning_count}'
-              + (f'  (koşan-FAIL {failed_warning} + KOŞMAYAN {skipped_warning})'
-                 if skipped_warning else ''))
+        # ⚠ Aritmetik GÖRÜNÜR olmalı: çevrimdışı indirimi BLOCKER'dan düşüp WARNING'e
+        # eklediği için, indirimi yazmadan "BLOCKERS: 0 (… + KOŞMAYAN 1)" çelişkili okunur.
+        _b_ek = ''
+        if skipped_blocker:
+            _b_ek = f'  (koşan-FAIL {failed_blocker} + KOŞMAYAN {skipped_blocker}'
+            _b_ek += (f' − ÇEVRİMDIŞI-İNDİRİMİ {len(indirilen)})' if indirilen else ')')
+        print(f'  BLOCKERS: {blocker_count}' + _b_ek)
+        _w_ek = ''
+        if skipped_warning or indirilen:
+            _w_ek = f'  (koşan-FAIL {failed_warning} + KOŞMAYAN {skipped_warning}'
+            _w_ek += (f' + ÇEVRİMDIŞI-İNDİRİMİ {len(indirilen)})' if indirilen else ')')
+        print(f'  WARNINGS: {warning_count}' + _w_ek)
         if skipped_blocker or skipped_warning:
             print(f'  ⊘ {skipped_blocker + skipped_warning} gate ÖLÇÜM ÜRETMEDİ '
                   f'(script yok VEYA measured=false) — "koşmadı" ≠ "temiz". '
                   f'Sebep her ⊘ satırının altında yazılıdır.')
+        if cevrimdisi:
+            print(f'\n  ⚠⚠ ÇEVRİMDIŞI MOD (--cevrimdisi / IX_CEVRIMDISI=1) — '
+                  f'BU KOŞUMUN KAPSAMI EKSİKTİR.')
+            if indirilen:
+                print(f'     {len(indirilen)} BLOCKER gate ölçüm üretemedi ve '
+                      f'BİLİNÇLİ olarak WARNING\'e indirildi:')
+                for ad in indirilen_ad:
+                    print(f'       - {ad}')
+                print(f'     Bu gate\'ler SAP\'ye ulaşamadı; ihlal YOK demek DEĞİLDİR. '
+                      f'Bağlantı gelince review\'i TEKRARLA.')
+            else:
+                print('     (indirilen gate yok — ölçüm üretemeyen BLOCKER bulunmadı)')
         if checklist:
             print(f'\nManuel checklist (ek kontrol için): {checklist}')
         print(f'{"="*70}\n')

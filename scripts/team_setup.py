@@ -724,9 +724,21 @@ def main() -> int:
                             str(REQ_FILE)], capture_output=True, text=True)
         say(OK if r.returncode == 0 else WARN, "pip install (MCP requirements)")
 
-    if not junctions(proje, overlay_onayli=a.overlay_onayli):
-        say(FAIL, "junction kurulumu TAMAMLANAMADI — yukarıdaki satırlara bak")
-        return 1
+    # ⛔ ERKEN DÖNÜŞ KALDIRILDI (E-05, 2026-08-28) — GÜVENLİK KABLOLAMASI BLOKLANMAMALI.
+    # Eskiden burada `return 1` vardı. `junctions()` ise overlay farkı ONAY BEKLİYORSA da
+    # False döner (`claude_overlay.materyalize`: "FARK VAR — onaysız ezme YOK, T2.5").
+    # Yani TAMAMEN NORMAL bir onay kapısı, kendisiyle hiç ilgisi olmayan üç adımı
+    # sessizce düşürüyordu: `dosya_tamamla` · `hookspath_core/proje` (pre-commit gate'inin
+    # KABLOLAMASI) · `_core_index_yenile`. Sonuç: yeni bir klonda pre-commit gate'leri
+    # KURULMAMIŞ oluyordu ve bunu hiçbir şey söylemiyordu — "kod ≠ kablolama"nın tam
+    # olarak bu dosyada belgelenmiş sınıfı (bkz. hookspath_proje docstring'i).
+    # ⛔ HATA YUTULMUYOR: `kurulum_ok` aşağıda `return 1` üretir; değişen tek şey,
+    # başarısızlığın kablolamayı da beraberinde götürmemesidir.
+    kurulum_ok = junctions(proje, overlay_onayli=a.overlay_onayli)
+    if not kurulum_ok:
+        say(FAIL, "junction kurulumu TAMAMLANAMADI — yukarıdaki satırlara bak "
+                  "(overlay onay kapısı da bu sonucu verir: --overlay-onayli ile koş). "
+                  "Kablolama adımları YİNE DE koşuluyor; kurulum BAŞARISIZ sayılır.")
     dosya_tamamla(proje)
     hookspath_core()
     hookspath_proje(proje)
@@ -735,6 +747,14 @@ def main() -> int:
     # kırmızı). Kurulumun bir parçası olmalı: junction Grep/Glob'a görünmez, indeks tek
     # kökten-aranabilir giriş noktası (D29).
     _core_index_yenile(proje)
+
+    # E-05: kablolama tamamlandı; ŞİMDİ başarısızlığı bildir. Buradan sonrası (plugin,
+    # memory tohumu, smoke) eskiden de koşmuyordu — davranış farkı YALNIZ yukarıdaki
+    # dört kablolama adımıdır.
+    if not kurulum_ok:
+        say(FAIL, "team_setup BAŞARISIZ (junction/overlay) — git-hook kablolaması ve "
+                  "CORE-INDEX yenilemesi yine de yapıldı; kalan adımlar atlandı.")
+        return 1
 
     if not a.no_plugins:
         alt_arac(proje, "setup_plugins.py", "plugin kurulumu (claude CLI gerekli)")

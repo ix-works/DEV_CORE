@@ -65,7 +65,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("path", nargs="?", help="taranacak dosya (run_review pozisyonel artifact)")
     ap.add_argument("--file")
-    ap.add_argument("--strict", action="store_true")
+    ap.add_argument("--strict", action="store_true",
+                   help="(uyumluluk; NO-OP — şiddeti DEĞİŞTİRMEZ, run_all --strict kazara terfi ettirmesin; ADR 0019 §54)")
     args, _unknown = ap.parse_known_args()  # run_review ek flag geçebilir → yut
 
     # ADR 0020: junction'da __file__ DEV_CORE'a çözülür → kanonik project_root()

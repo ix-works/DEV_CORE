@@ -24,6 +24,11 @@ from pathlib import Path
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _gate_status import gate_status, sap_baglanti_yok  # noqa: E402
+
+_GATE = Path(__file__).stem
+
 if sys.platform == 'win32':
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -154,7 +159,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description='Standart tablo field varlık kontrolü')
     parser.add_argument('artifact')
     parser.add_argument('--type', default='cds', help='cds|table|dtel')
-    parser.add_argument('--strict', action='store_true')
+    parser.add_argument('--strict', action='store_true',
+                       help='(uyumluluk; NO-OP — şiddeti DEĞİŞTİRMEZ, run_all --strict kazara terfi ettirmesin; ADR 0019 §54)')
     args = parser.parse_args()
 
     path = Path(args.artifact)
@@ -196,6 +202,7 @@ def main() -> int:
 
     if not candidates:
         print(f'OK — {path.name} standart tablo referansı yok')
+        gate_status(_GATE, 'OK', True, 'kapsam-disi-std-tablo-yok')
         return 0
 
     # SAP'ye bağlan
@@ -205,6 +212,7 @@ def main() -> int:
         client = SAPADTClient()
     except Exception as e:
         print(f'UYARI: SAP bağlantısı kurulamadı, validator atlandı: {e}', file=sys.stderr)
+        sap_baglanti_yok(_GATE)
         return 0
 
     violations, dogrulanamayan = [], []
@@ -244,6 +252,11 @@ def main() -> int:
     if not violations:
         print(f'OK — {path.name} standart tablo alanları doğrulandı '
               f'(include zinciri özyineli çözüldü)')
+        # ⚠ KAPSAM NİTELEYİCİSİ: `dogrulanamayan` (include zinciri kısmen çözülemedi)
+        # BİLEREK measured=true bırakıldı — o dal zaten stdout'a [DOĞRULANAMADI] basıyor
+        # ve sıklığı canlı SAP olmadan ÖLÇÜLEMEDİ. Kanıtsız sıkılaştırma yapılmadı;
+        # ayrı kalem olarak raporlandı (B3-01 AÇIK-NOKTA).
+        gate_status(_GATE, 'OK', True, 'dogrulandi')
         return 0
 
     # ⚠ ŞİDDET KELİMESİ: bu script'in çıktısı eskiden "[BLOCKER]" diyordu ama `run_review.py`

@@ -23,6 +23,10 @@ from pathlib import Path
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/
+sys.path.insert(0, str(Path(__file__).resolve().parent))      # validators/
+from _gate_status import gate_status  # noqa: E402
+
+_GATE = Path(__file__).stem
 
 
 def main() -> int:
@@ -43,6 +47,7 @@ def main() -> int:
                 "class" if (".clas" in low or ".abap" in low) else None)
     if not name:
         print("SKIP — ne --name ne pozisyonel path verildi; master language kontrol edilemedi")
+        gate_status(_GATE, 'SKIPPED', False, 'obje-adi-verilmedi')
         return 0
     otype = otype or "class"
 
@@ -54,16 +59,19 @@ def main() -> int:
             md = c.get_object_metadata(name, object_type=otype)
     except Exception as exc:
         print(f"SKIP — SAP okunamadı ({type(exc).__name__}: {exc}); master language kontrol edilemedi")
+        gate_status(_GATE, 'SKIPPED', False, 'sap-baglanti-yok')
         return 0
 
     if not md:
         print(f"SKIP — {name} ({otype}) okunamadı/aktif değil")
+        gate_status(_GATE, 'SKIPPED', False, 'metadata-okunamadi')
         return 0
 
     m = re.search(r'masterLanguage="(\w+)"', md if isinstance(md, str) else str(md))
     lang = m.group(1) if m else None
     if lang == "TR":
         print(f"OK — {name} masterLanguage=TR (ADR 0005-D ✓)")
+        gate_status(_GATE, 'OK', True, 'master-language-tr')
         return 0
 
     print(f"\n[BLOCKER] {name} masterLanguage={lang or '?'} — ADR 0005-D TR bekler.",
