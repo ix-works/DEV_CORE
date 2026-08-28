@@ -26,6 +26,9 @@ B) `claude/templates/spawn-brief.md` §9 + `brifing-lint` — "ENGELLENIRSEN" ma
 
   A1-A2  sablon <-> STANDART esligi (E/D) + eski onekler geri gelmemis
   A3     3. BAGLAM: sablonun diger DDIC satirlari standartla tutarli
+  A4-A5  ACIK KARAR notu: `Class` satirinin 2. bicimi (`ZCL_{PKG}_*`) hicbir
+         otoriteye uymuyor ve YER-TUTUCU YOK (`PKG_NOZ`) diye duzeltilemiyor ->
+         celiski hic degilse BELGELENMIS olmali + not DAYANAGINI tasimali
   B1-B2  lint DAR eksen: baska-agac+yazma & madde YOK -> atesler / madde VAR -> susar
   B3-B4  ⭐ FP CAPALARI: yalniz-okuma isi ateslemez · kisa brif muaf
   B5     sablon §9 zorunlu maddeyi TASIYOR
@@ -79,6 +82,22 @@ def _tmpl_regex(obje: str, src: str) -> str | None:
         m = re.match(r"\|\s*" + re.escape(obje) + r"\s*\|\s*`([^`]+)`", satir)
         if m:
             return m.group(1)
+    return None
+
+
+def _tmpl_satir(obje: str, src: str) -> str | None:
+    """Sablondaki naming tablosunun `| <obje> | ... |` satirini AYNEN dondurur.
+
+    ⚠ `_tmpl_regex` yalnizca 2. hucredeki ILK backtick grubunu verir; bir hucre
+    iki bicim tasiyorsa (`{PKG}_CL_*` veya `ZCL_{PKG}_*`) ikincisini GORMEZ.
+    Capa dosyanin TAMAMINDA aranirsa da olmaz: ayni dize aciklama notunun
+    tarihsel alintilarinda da gecer (olculdu 2026-08-29: dosyada 3, satirda 1)
+    ⇒ satir duzelse bile not capayi diri tutar, senaryo KENDINI EMEKLIYE
+    AYIRAMAZ. Bu yuzden kapsam SATIRDIR.
+    """
+    for satir in src.splitlines():
+        if re.match(r"\|\s*" + re.escape(obje) + r"\s*\|", satir):
+            return satir
     return None
 
 
@@ -140,21 +159,29 @@ def senaryolar(mod) -> list[tuple[str, bool, str]]:
          not sapan, "sapan=%s" % sapan)
 
     # --- A4: ⭐ CELISKI KENDINI BELGELEMELI (2026-08-29) --------------------
-    # Sablonun `Message Class` satiri (`{PKG}`) ile STANDARDIN §4.4.5 oneki (`MC`)
-    # AYNI SEYI SOYLEMIYOR; canli kullanim ise ucuncu bir seydir (`{PKG}_MSG`).
+    # Sablonun `Class` satirinin 2. bicimi (`ZCL_{PKG}_*`) UC otoritenin
+    # HICBIRINE uymuyor: standart §4.4.3 `ZCL_<PKG#>_*` (paket adinin Z'siz
+    # hali) diyor, canli artefakt `ZCL_<Z'siz>_*` kullaniyor, sablonun bicimi
+    # ise bugune dek 0 dosyada gecmis. Duzeltilemiyor cunku `{PKG}`nin Z'siz
+    # hali icin `bootstrap_package.py`de yer-tutucu (`PKG_NOZ`) YOK.
     # Celiskiyi SESSIZCE tasimak, her yeni paketin uc kaynaktan hangisine
     # uyacagini TAHMIN etmesi demektir (A1/A2'nin kapattigi sinifin ta kendisi).
-    # ⚠ Bu capa KENDINI EMEKLIYE AYIRIR: satir standartla hizalanirsa not
-    # ZORUNLU OLMAKTAN CIKAR. Yani dogru fix'i BLOKLAMAZ, yalniz sessiz
-    # birakilmasini bloklar.
-    mc_std = std.get("Message Class")
-    mc_tmpl = _tmpl_regex("Message Class", tmpl) or ""
-    uyumsuz = bool(mc_std) and not re.search(r"_" + re.escape(mc_std) + r"\b", mc_tmpl)
-    notu_var = "AÇIK KARAR — Message Class" in tmpl
-    ekle("A4 ⭐sablon<->standart Message Class celiskisi BELGELENMIS "
+    # ⚠ Bu capa KENDINI EMEKLIYE AYIRIR: yer-tutucu eklenip satir
+    # `ZCL_{PKG_NOZ}_*` olarak hizalanirsa not ZORUNLU OLMAKTAN CIKAR. Yani
+    # dogru fix'i BLOKLAMAZ, yalniz sessiz birakilmasini bloklar.
+    # ⓘ 2026-08-29 REPOINT: bu capa `Message Class` ekseninde dogmustu; o eksen
+    # (`{PKG}` -> `{PKG}_MSG`, kullanici karari) KAPANDI ve senaryolar kendini
+    # emekliye ayirdi — ama MUTASYONLAR ayrilamadi (M4 [YAMA TUTMADI] /
+    # M5 [KACTI] ⇒ suit exit 1). Capa hala ACIK olan `Class` eksenine tasindi.
+    cls_satir = _tmpl_satir("Class", tmpl) or ""
+    uyumsuz = "ZCL_{PKG}_*" in cls_satir
+    # ⚠ Capa eksen ADINI da tasir: bambaska bir konudaki artik bir "AÇIK KARAR"
+    # basligi bu eksenin belgelenmis oldugu ANLAMINA GELMEZ.
+    notu_var = "AÇIK KARAR — `Class`" in tmpl
+    ekle("A4 ⭐sablon<->standart `Class` (2.bicim) celiskisi BELGELENMIS "
          "(hizalanirsa not zorunlu degil)",
          (not uyumsuz) or notu_var,
-         "std=%r sablon=%r uyumsuz=%s not_var=%s" % (mc_std, mc_tmpl, uyumsuz, notu_var))
+         "satir=%r uyumsuz=%s not_var=%s" % (cls_satir[:90], uyumsuz, notu_var))
 
     # --- A5: not BOS BIR MARKER OLMAMALI — dayanagini tasimali -------------
     # "Marker koy gec" refleksine karsi: not, kararin iki ENGELINI de adiyla
@@ -216,12 +243,16 @@ MUTASYONLAR = [
      "lint",
      lambda s: s.replace("        if yer and yazma and not engel:",
                          "        if yer and not engel:")),
-    # A4/A5'in degismezi: celiski VARKEN notu SIL -> korpus KIRMIZI olmali.
+    # A4'un degismezi: celiski VARKEN notu SIL -> korpus KIRMIZI olmali.
     # (Yoksa "not koydum" iddiasi olculemez ve ilk temizlikte sessizce kaybolur.)
     ("M4 AÇIK KARAR notunun basligini sil (celiski yine sessiz kalir)",
      "tmpl",
-     lambda s: s.replace("AÇIK KARAR — Message Class", "eski not")),
+     lambda s: s.replace("AÇIK KARAR — `Class`", "eski not")),
     # A5'in AYRI degismezi: baslik dursun ama DAYANAK kaybolsun (bos marker).
+    # ⚠ Iki gecisin IKISI de silinir — A5 `in` ile bakar, tek gecis kalsaydi
+    # mutasyon KACARDI. Yan etki bilincli: not icindeki `ZCL_{PKG_NOZ}_*`
+    # ornegi `ZCL_{PKG}_*`e doner; A4'un capasi SATIR kapsamli oldugu icin
+    # (bkz. `_tmpl_satir`) bu sahte bir `uyumsuz` uretmez.
     ("M5 not dursun ama yer-tutucu sinirini anan dayanagi sil (bos marker)",
      "tmpl",
      lambda s: s.replace("PKG_NOZ", "PKG")),

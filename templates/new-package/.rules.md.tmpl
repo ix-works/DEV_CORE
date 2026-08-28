@@ -25,46 +25,58 @@ status: active
 | Table | `{PKG}_T_*` | `^{PKG}_T_[A-Z0-9_]+$` |
 | Table Type | `{PKG}_TT_*` | `^{PKG}_TT_[A-Z0-9_]+$` |
 | Lock Object | `E{PKG}_*` veya `EZ_{PKG}_*` | (lock obj prefix `E` ile başlar) |
-| Message Class | `{PKG}` | tek tablo, paket adıyla aynı |
+| Message Class | `{PKG}_MSG` veya `{PKG}` (legacy) | `^{PKG}(_MSG)?$` |
 
 > Validator: `scripts/validators/check_package_naming.py` bu regex'leri okuyup `cds/`, `classes/`, `programs/`, vb. altındaki dosya adlarını doğrular.
 
-> ⚠ **AÇIK KARAR — Message Class ve Class satırları (ölçüldü 2026-08-29, karar BEKLİYOR).**
-> Bu iki satır **şablon · kurumsal standart · canlı kullanım** arasında ÜÇ FARKLI şey söylüyor.
-> Şablon bilerek DEĞİŞTİRİLMEDİ (çelişki çözülmeden şablonu değiştirmek çelişkiyi çoğaltır);
-> aşağısı kimin ne dediğinin **sayılı** kaydıdır ki sonraki okuyan tahmin etmesin.
+> ⚠ **AÇIK KARAR — `Class` satırının 2. biçimi (ölçüldü 2026-08-29, karar BEKLİYOR).**
+> ⓘ Bu not 2026-08-29'a kadar **iki** ekseni taşıyordu. **Message Class ekseni KAPANDI**
+> (aşağıdaki ✅ kaydı). Geriye **Class** ekseni kaldı; açık kalma sebebi bir tercih değil,
+> **şablon dilinin bu değeri ifade edememesidir**.
 >
 > | | Message Class | Class (2. biçim) |
 > |---|---|---|
-> | **Bu şablon** | `{PKG}` | `ZCL_{PKG}_*` (ör. `ZCL_ZSD001_*`) |
-> | **`standards/01-naming.md` §4.4.5** | `{PKG}_MC` (örnek `ZSD001_MC`) | (satır yok) |
-> | **Canlı kullanım** | `{PKG}_MSG` | `ZCL_<PKG'nin Z'siz hâli>_*` (ör. `ZCL_SD001_*`) |
+> | **Bu şablon** | `{PKG}_MSG` veya `{PKG}` ✅ hizalandı | `ZCL_{PKG}_*` (ör. `ZCL_ZSD001_*`) |
+> | **`standards/01-naming.md`** | §4.4.5 `MSG` ✅ hizalandı | §4.4.3 notu: **`ZCL_<PKG#>_*`** |
+> | **Canlı kullanım** | `{PKG}_MSG` (yeni) · `{PKG}` (legacy) | `ZCL_<PKG'nin Z'siz hâli>_*` (ör. `ZCL_SD001_*`) |
 >
-> **Ölçüm (bu core'u tüketen 3 proje ağacı, salt-okur):**
-> · Message Class — `.rules.md` taşıyan 24 paketin 11'inde satır var: **5**'i `{PKG}` (şablonla
->   aynı), **4**'ü `{PKG}_MSG`, **1**'i `{PKG}_*`; 13'ünde satır YOK. Gerçek ABAP kodunda
->   `MESSAGE ... ID` ile anılan sınıfların hepsi `_MSG` ekliydi; düz `{PKG}` biçimi **0**,
->   standardın `{PKG}_MC` biçimi **0**. Dokümantasyonda `_MSG` biçimi **214 kez / 6 ayrı
->   sınıf**, `_MC` biçimi **0**.
-> · Class — 64 `*.clas.abap` artefaktı: `{PKG}_CL_*` **25 dosya / 14 paket**,
->   `ZCL_<Z'siz>_*` **39 dosya / 6 paket**, şablonun `ZCL_{PKG}_*` biçimi **0 dosya / 0 paket**
->   (yani bu alternatif bugüne dek HİÇ kullanılmamış).
+> **Ölçüm — Class (bu core'u tüketen proje ağaçları, salt-okur):** 64 `*.clas.abap`
+> artefaktı: `{PKG}_CL_*` **25 dosya / 14 paket**, `ZCL_<Z'siz>_*` **39 dosya / 6 paket**,
+> şablonun `ZCL_{PKG}_*` biçimi **0 dosya / 0 paket** (bugüne dek HİÇ kullanılmamış).
+> ⚠ `core/` **paylaşılandır**; bu sayılar **bu makinedeki proje ağaçlarıyla** sınırlıdır.
 >
-> **Neden bu turda düzeltilmedi (iki ayrı engel):**
-> 1. **Çelişki:** `{PKG}_MSG` yazmak şablonu `standards/01-naming.md` §4.4.5 ile açıkça
->    çelişkiye sokar. Kararın **önce standartta** verilmesi gerekir (`MC` mi `MSG` mi), sonra
->    şablon ona hizalanır — tersi, iki kaynağın ikisini de yanlış bırakır.
-> 2. **Yer tutucu YOK:** `ZCL_SD001_*` için `{PKG}`'nin **baştaki Z'si atılmış** hâli gerekir.
->    `scripts/bootstrap_package.py`'nin yer-tutucu haritası ölçüldü: `PKG` · `PKG_FULL` ·
->    `TITLE` · `MODULE` · `DATE` · `OWNER` — bu değeri üreten yer tutucu **yok** ve
->    `PKG = pkg_full.replace("_CLC","")` (ör. `ZSD001`). Şablon dili bunu **ifade edemez**;
->    uydurmak yerine sınır yazıldı. Çözüm önerisi: `bootstrap_package.py`'ye `PKG_NOZ`
->    eklemek, sonra bu satırı `ZCL_{PKG_NOZ}_*` yapmak.
+> ⭐ **YENİ KANIT (ölçüldü 2026-08-29) — standart bu eksende ZATEN canlı desenle aynı şeyi
+> söylüyor:** `standards/01-naming.md` §4.4.3'ün altındaki not ve `standards/05-coding-rap.md`
+> §4 **`ZCL_<PKG#>_<ad>`** (ör. `ZCL_SD001_ORDER`) diyor **ve** `{PKG}_CL_*` desenini açıkça
+> **LEGACY** ilan ediyor. ⇒ Bu eksende sapan taraf **standart değil, bu şablondur**.
+>
+> **Neden bu turda düzeltilmedi — YER TUTUCU YOK:** `ZCL_SD001_*` için `{PKG}`'nin **baştaki
+> Z'si atılmış** hâli gerekir. `scripts/bootstrap_package.py`'nin yer-tutucu haritası ölçüldü:
+> `PKG` · `PKG_FULL` · `TITLE` · `MODULE` · `DATE` · `OWNER` — bu değeri üreten yer tutucu
+> **yok** ve `PKG = pkg_full.replace("_CLC","")` (ör. `ZSD001`). Şablon dili bunu **ifade
+> edemez**; uydurmak yerine sınır yazıldı. Çözüm: `bootstrap_package.py`'ye `PKG_NOZ`
+> eklemek, sonra bu satırı `ZCL_{PKG_NOZ}_*` yapmak (o dosya 2026-08-29 turunun kapsamı
+> DIŞINDAYDI — sahibi başka bir parttı).
 >
 > **O gün gelene kadar ne yapılmalı:** paket gerçekten `ZCL_<Z'siz>_*` kullanacaksa yukarıdaki
 > tabloya **AYRI bir satır** ekle (canlı emsal: `| RAP Behavior Class | ``ZCL_SD001_*`` |
 > ``^ZCL_SD001_[A-Z0-9_]+$`` |`). Validator aynı klasöre eşlenen TÜM regex'leri **VEYA**'lar,
 > yani ek satır mevcut `Class` satırını bozmaz.
+
+> ✅ **KAPANDI — `Message Class` satırı `{PKG}` → `{PKG}_MSG` (2026-08-29, kullanıcı kararı).**
+> Bu satır 2026-08-29'a kadar çıplak `{PKG}` yazıyordu, `standards/01-naming.md` §4.4.5 ise
+> `MC` diyordu, canlı kullanım ise üçüncü bir şeydi — **üç kaynak üç ayrı şey**. Karar sırası
+> **standart → şablon → kapı** olarak **atomik** yürütüldü (biri eksik kalırsa proje kapısı
+> `HARITA-SAPMASI` üretir).
+> **Ölçüm (bir proje ağacı, salt-okur, 2026-08-29):** `_MC` biçimi **0** atıf. `_MSG` biçimi
+> **6 sınıf / 319 atıf**. 23 paketin `.rules.md`'sinin **10**'unda satır var: **5** çıplak
+> `{PKG}` (4'ü bu şablonun cümlesini *birebir* miras almış — seçim değil **miras**), **4**
+> `{PKG}_MSG`, **1** `{PKG}_*`; 13'ünde satır yok. Gerçek ABAP kodunda (`MESSAGE nnn(...)`)
+> **2 sınıf `_MSG`** (17 + 9 atıf) ve **2 sınıf çıplak** (26 ·
+> 2 atıf) — yani çıplak biçim **canlıda gerçekten vardır**.
+> ⇒ Satır **iki biçimi de** taşır: `{PKG}_MSG` **yeni** objenin biçimidir, çıplak `{PKG}`
+> **legacy olarak geçerlidir** (canlı obje var, rename YOK). Tek biçime indirmek mevcut
+> o iki çıplak sınıfı sebepsiz ihlale düşürürdü.
 
 > ⛔ **DTEL/Domain öneki `_E_` / `_D_`'DİR — `_DE_`/`_DTEL_`/`_DOM_` DEĞİL** (2026-08-20'de
 > düzeltildi). Kaynak: `core/standards/01-naming.md` §4.4.5 → Data Element = **`E`**
