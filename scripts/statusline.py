@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Claude Code statusline — <PROJECT_NAME>.
 
-Format: <SISTEM>/<TIER>[ RO] | ctx <N>% | Sprint <N> (<done>/<total>) | <TRANSPORT> | VPN <icon> | <branch> [| agents:<N>]
+Format: <SISTEM>/<TIER>[ RO] | ctx <N>% <TOK> | Sprint <N> (<done>/<total>) | <TRANSPORT> | VPN <icon> | <branch> [| agents:<N>]
   ctx <N>% = context penceresi kullanim yuzdesi (yesil<50 · sari 50-74 · kirmizi>=75); %50'de proaktif compact/clear hatirlatici
+  <TOK>    = ayni pencereyi dolduran MUTLAK token sayisi, kisa bicim (`412k` · `1.04M`) ve
+             KENDI esikleriyle renkli (yesil<250k · sari 250k-300k dahil · kirmizi>300k).
+             Yuzde pencereye GORELI, token MUTLAK: 1M pencerede 300k = %30 -> iki ayri renk
+             tutarsizlik DEGIL, iki ayri olcut (kullanici karari 2026-08-29).
   agents:<N> = o an aktif calisan ajan/task (ADR 0018 lazy: standing roster YOK; eski 'team:N' fallback kaldirildi — kapanmis ajanlari sayiyordu)
 
 Input: JSON on stdin (model, workspace, cwd, etc.)
@@ -314,12 +318,77 @@ def context_pct(payload):
         return None
 
 
-def _ctx_segment(pct):
+def context_tokens(payload):
+    """Context penceresini DOLDURAN mutlak token sayisi.
+
+    Kaynak alan: `context_window.total_input_tokens`. Alan adi RESMI DOKUMANDAN DEGIL,
+    Claude Code ikilisinden OLCULDU (2026-08-29) — dokuman aranip bulunamadi:
+        context_window: {total_input_tokens, total_output_tokens, context_window_size,
+                         current_usage, used_percentage, remaining_percentage}
+        total_input_tokens = input_tokens + cache_creation_input_tokens + cache_read_input_tokens
+    `used_percentage` TAM BU SAYIDAN turer (ayni kaynagin iki gosterimi).
+
+    ⚠ Yokluk 0'a DUSURULMEZ -> None. (Ikili, `current_usage` null iken bu alani 0 basar;
+    o durumda `used_percentage` de null olur ve segment zaten hic cizilmez.)
+    ⚠ `context_pct`ten TEK sapma: `OverflowError` de yakalanir. `json.loads` varsayilan
+    ayarda `Infinity` ayristirir ve `int(float('inf'))` ValueError DEGIL OverflowError atar;
+    yakalanmazsa satir tumden fallback'e duserdi. Ayni bosluk `context_pct`te DURUYOR —
+    bilerek dokunulmadi (kapsam disi, lider kalemi).
+    """
+    cw = payload.get("context_window")
+    if not isinstance(cw, dict):
+        return None
+    val = cw.get("total_input_tokens")
+    if val is None:
+        return None
+    try:
+        return int(float(val))
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+# Token esikleri — YUZDEDEN BAGIMSIZ (kullanici karari 2026-08-29):
+#   <250k yesil · 250k <= t <= 300k sari (IKI SINIR DA DAHIL) · >300k kirmizi.
+# Yuzde pencere boyutuna GORELIdir, token MUTLAKtir; ayni kaynaktan turerler
+# (`used_percentage` = `total_input_tokens` / `context_window_size`) ama farkli seyi olcerler
+# -> 1M pencerede 300k token %30 gosterir. Iki ayri renk bu yuzden ISTENDI.
+_TOK_SARI_ALT = 250_000
+_TOK_KIRMIZI_ALT = 300_001
+
+
+def _tok_renk(tok):
+    return (_C_RED if tok >= _TOK_KIRMIZI_ALT
+            else _C_YELLOW if tok >= _TOK_SARI_ALT
+            else _C_GREEN)
+
+
+def _tok_bicim(tok):
+    """Dar terminal icin kisa bicim. ASAGI yuvarlar (floor), ASLA yukari.
+
+    Gerekce olculdu: gosterilen sayi DAIMA gercek degerden kucuk-esittir, boylece renk
+    bandiyla CELISMEZ. Yukari yuvarlama 249_999'u `250k` gosterirdi -> YESIL renkte
+    SARI-bandi sayisi = yaniltici. Floor'da tek cakisma band sinirinin tam ustundedir
+    (300_000 sari `300k` / 300_001 kirmizi `300k`); orada ayirt edici RENKtir ve ±1
+    token hassasiyeti zaten hicbir eylem uretmez.
+    """
+    if tok >= 1_000_000:
+        return f"{tok // 10_000 / 100:.2f}M"
+    if tok >= 1_000:
+        return f"{tok // 1_000}k"
+    return str(tok)
+
+
+def _ctx_segment(pct, tok=None):
     # Eylem penceresi %50-60 (kullanici tercihi). Gorunur esik asil kaldirac
     # (CLAUDE_AUTOCOMPACT_PCT_OVERRIDE garantisiz).
     # >=75 kirmizi (acil) · 50-74 sari (devam->compact / kesim->checkpoint+clear) · <50 yesil.
     color = _C_RED if pct >= 75 else _C_YELLOW if pct >= 50 else _C_GREEN
-    return f"{color}ctx {pct}%{_C_RESET}"
+    seg = f"{color}ctx {pct}%{_C_RESET}"
+    # `tok` AYRI ANSI blogu: yuzde rengi ile token rengi birbirini ETKILEMEZ.
+    # `tok=None` varsayilani imzayi geriye uyumlu tutar (eski tek-argumanli cagri calisir).
+    if tok is not None:
+        seg += f" {_tok_renk(tok)}{_tok_bicim(tok)}{_C_RESET}"
+    return seg
 
 
 def short_pkg(name):
@@ -336,6 +405,7 @@ def build_line(root: Path, payload):
     vpn = vpn_ok(root)
     agents = active_agents(payload)
     pct = context_pct(payload)
+    tok = context_tokens(payload)
 
     sys_name, tier = sap_system(root)
     if not sys_name:
@@ -356,9 +426,14 @@ def build_line(root: Path, payload):
             label += " RO"  # salt-okunur: yanlislikla mutasyon denenmesin (ADR 0010)
         parts.append(label)
 
-    # Context kullanim % — sol tarafta (dar terminalde sagdan kirpilmasin). %60'ta sariya doner.
+    # Context kullanim % + token — sol tarafta (dar terminalde sagdan kirpilmasin).
+    # ⛔ KOSUL PCT'YE BAGLI (bilincli karar 2026-08-29): kullanici tokeni "yuzde degerinin
+    # YANINDA" istedi. Ayrica `used_percentage` null iken ikili `total_input_tokens`i 0
+    # basiyor (olculdu) -> pct'siz token cizilseydi her oturum basi anlamsiz bir `0`
+    # gorunurdu. pct VAR/tok YOK dali bugunku davranisi AYNEN korur (tok=None -> segment
+    # degismez); pct YOK/tok VAR dalinda hicbir sey cizilmez.
     if pct is not None:
-        parts.append(_ctx_segment(pct))
+        parts.append(_ctx_segment(pct, tok))
 
     # MCP .conn_adt'den farkli sisteme mi bagli? (switch_tier yapilmis ama /mcp edilmemis)
     mcp_warn = mcp_mismatch_label(root)

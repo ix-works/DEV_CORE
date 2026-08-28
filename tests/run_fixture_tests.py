@@ -299,6 +299,13 @@ OZEL_TESTLER = [
      "check_standard_table_fields INCLUDE kapsami: DDL kisit-ekli include (`not null`) "
      "goruluyor + REDDEDILEN genis varyantin FP capasi (yerel korpusta 124 yanlis "
      "eslesme olculdu) + `cozulemeyen`/DOGRULANAMADI yolu ayakta"),
+    # 2026-08-29 statusline token segmenti (kullanici istegi): yuzdenin YANINDA mutlak
+    # token, KENDI esikleriyle. Sinir degerleri (249_999/250_000/300_000/300_001) ancak
+    # fonksiyon dogrudan cagrilarak olculur -> bad/good dizin kalibina girmez.
+    ("statusline_token_esikleri",
+     "ctx token segmenti: 250k/300k sinirlari DAHIL sari + yokluk 0'a DUSMEZ (None) + "
+     "kisa bicim FLOOR (round olsa yesil renkte sari-bandi sayisi cikardi) + iki katmanli "
+     "kablolama (segment ve build_line ayri mutasyonla) + yuzde esiklerinin REGRESYONU"),
 ]
 
 
@@ -594,7 +601,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/worklist_audit.py", ("R:AV-13",), "üç-değerli sınıflama"),
     ("scripts/build_core_index.py", ("O:core_index_kapsam",), "indeks kapsamı"),
     ("scripts/switch_tier.py", ("O:tier_fail_closed",), "tier çözümleme"),
-    ("scripts/statusline.py", ("O:tier_fail_closed", "O:worktree_yasam_dongusu"), "tier göstergesi + SESSION_NOTES yürüyüşünde worktree budaması"),
+    ("scripts/statusline.py",
+     ("O:tier_fail_closed", "O:worktree_yasam_dongusu", "O:statusline_token_esikleri"),
+     "tier göstergesi + SESSION_NOTES yürüyüşünde worktree budaması + ctx token eşikleri"),
     ("mcp_servers/sap_adt/_conn.py",
      ("O:tier_fail_closed", "O:conn_cift_anahtar", "O:veri_yetki_guardlari"),
      ".conn_adt okuyucusu"),

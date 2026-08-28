@@ -7,7 +7,7 @@ metadata:
   originSessionId: d6233272-ea94-4d94-bc1d-56e619f9dc11
 ---
 
-Context'i **%100→autocompact**'a bırakma. Her dallanma noktasında **5-yollu karar** (statusline `ctx <N>%`: yeşil<%50 · sarı %50-74 · kırmızı≥%75):
+Context'i **%100→autocompact**'a bırakma. Her dallanma noktasında **5-yollu karar** (statusline `ctx <N>% <TOK>`: yüzde yeşil<%50 · sarı %50-74 · kırmızı≥%75 — yanındaki `<TOK>` aynı pencerenin MUTLAK token sayısıdır ve KENDİ eşikleri vardır: yeşil <250k · sarı 250k-300k · kırmızı >300k; yalnız yüzdeyle BİRLİKTE görünür, tek başına değil):
 
 | Durum | Hamle | Neden |
 |---|---|---|
