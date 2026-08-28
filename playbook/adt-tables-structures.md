@@ -391,11 +391,22 @@ python scripts/populate_tables.py `
 python scripts/populate_tables.py ... --only ZSD001_T_CONTY
 
 # Mevcut tabloyu silip yeniden yarat:
-python scripts/populate_tables.py ... --force-recreate
+python scripts/populate_tables.py ... --force-recreate   # ⚠ transport'ta SİLME KALINTISI bırakır — aşağı bak
 
 # XML/DDL preview:
 python scripts/populate_tables.py ... --dry-run
 ```
+
+> ⚠ **`--force-recreate` transport'ta `OBJFUNC='D'` SİLME KALINTISI bırakır (2026-08-19, canlı ölçüm).**
+> Bayrak önce **DELETE** yaptığı için transport görevinde her obje **iki kez** görünür: yaratma girdisi
+> **ve ondan SONRA gelen bir silme girdisi**. Ölçüm: bir `E071` görevinde poz. **50–58 yaratma, 59–67 silme**
+> (9 tablo). Kalıntı **release öncesi** temizlenmezse hedef sisteme "yarat sonra sil" sırası taşınır.
+> **Kapanış adımı (ZORUNLU):** `--force-recreate` sonrası `E071`'i kontrol et —
+> `SELECT trkorr, as4pos, pgmid, object, obj_name, objfunc FROM e071 WHERE trkorr = '<TRANSPORT>'` →
+> `OBJFUNC = 'D'` satırı var mı? Varsa **release ETME**, önce temizle.
+> ⛔ **Temizlik SE09'da yapılır ve KULLANICI işidir** (ADR 0005-C: transport state'ine AI dokunmaz) —
+> AI yalnız tespit eder ve bildirir.
+> ℹ Bu, §15/§28.0'daki kurtarma yolunu **geçersiz kılmaz**; yalnız **eksik olan kapanış adımıdır**.
 
 CSV format — **8 zorunlu + 2 opsiyonel kolon**:
 ```

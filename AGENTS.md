@@ -358,7 +358,7 @@ Bu dosya şunları içerir:
 |---|---|---|
 | Sprint geçiş | `core/scripts/sprint_gate_check.py` | populate_*.py / spec değişikliği |
 | TD spec varlık | `core/scripts/td_spec_check.py` | populate_cds_views.py pre-flight |
-| Namespace whitelist | `populate_cds_views.py::validate_sql_view_names()` | populate_cds_views.py pre-flight |
+| Namespace whitelist (prefix hedef **paketten türer**, `project.yaml` yalnız fallback) | `populate_cds_views.py::validate_sql_view_names(cds_files, package=…)` | populate_cds_views.py pre-flight |
 | Paket .rules.md varlık | `core/scripts/validators/check_package_rules_present.py` | run_all_validators |
 | Paket naming regex | `core/scripts/validators/check_package_naming.py` | run_all_validators |
 | Obje paket sınırı | `core/scripts/validators/check_object_in_correct_pkg.py` | run_all_validators |

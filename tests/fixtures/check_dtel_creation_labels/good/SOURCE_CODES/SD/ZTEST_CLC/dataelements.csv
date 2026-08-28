@@ -1,0 +1,3 @@
+name,type_kind,type_name,datatype,length,decimals,description,short,medium,long,heading
+ZTEST_E_OK,domain,ZTEST_D_OK,CHAR,10,0,Ornek Test Aciklamasi,Kisa,Orta Etiket,Uzun Etiket,Baslik Etiketi
+ZTEST_E_BI,BUILTIN,,CHAR,10,0,Yerlesik Tip Aciklamasi,Kisa,Orta Etiket,Uzun Etiket,Baslik Etiketi

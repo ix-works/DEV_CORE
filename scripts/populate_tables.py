@@ -51,6 +51,7 @@ CSV format (UTF-8, header'lı, satır başına bir alan):
 
 import argparse
 import csv
+import re
 import sys
 import io
 import urllib3
@@ -207,6 +208,60 @@ def table_exists(client: SAPADTClient, name: str) -> bool:
     return r.status_code == 200
 
 
+# Bir DDL ALAN satiri: `  [key ]<ad> : <tip>[ not null];`
+# Annotation (`@...`), baslik (`define table ...`) ve suslu parantez ELENIR.
+_ALAN_SATIRI_RE = re.compile(r'^\s*(?:key\s+)?[A-Za-z_]\w*\s*:\s*[^;]+;\s*$')
+
+
+def ddl_alan_sayisi(ddl: str) -> int:
+    """DDL govdesindeki ALAN tanimlarinin sayisi (annotation/baslik/paranteZ haric).
+
+    Neden alan SAYISI: playbook `adt-tables-structures.md` §12
+    (*"Kesin kanit: DD03L'den alan sayisi oku"*). Metin birebir kiyasi
+    KULLANILMAZ — SAP kaynagi normalize eder (girinti, yorum atma, gereksiz
+    annotation silme) ve her normalizasyon sahte "FARKLI" uretirdi.
+    """
+    n = 0
+    for ln in (ddl or '').splitlines():
+        s = ln.strip()
+        if not s or s.startswith('@') or s.startswith('//') or s.startswith('define'):
+            continue
+        if _ALAN_SATIRI_RE.match(ln):
+            n += 1
+    return n
+
+
+def readback_dogrula(client: SAPADTClient, table_name: str, beklenen_alan: int):
+    """Canlidaki tablonun KAYNAGINI oku ve alan sayisini kiyasla.
+
+    ⛔ Bu fonksiyon `[SKIP] zaten var -> return True` SAHTE YESILININ panzehiridir.
+    Olculmus vaka (2026-08-19): yarim shell uzerinde kosuldu, ekrana *"1 basarili,
+    0 hatali"* yazdi ve **exit 0** verdi; `adt_get` readback'i **tek satirlik shell**
+    gosterdi => HICBIR SEY yazilmamisti. "Obje var" ile "obje DOGRU" ayni sey degildir.
+
+    Doner: (durum, detay, canli_alan_sayisi)
+      durum: 'AYNI' | 'FARKLI' | 'OLCULEMEDI'
+    ⚠ 'OLCULEMEDI' cagirana **temiz** diye donmez — "olculemedi != temiz".
+    """
+    url = client.url + f'/sap/bc/adt/ddic/tables/{table_name.lower()}/source/main'
+    try:
+        r = client.session.get(url, headers={'Accept': 'text/plain'},
+                               verify=False, timeout=30)
+    except Exception as e:
+        return 'OLCULEMEDI', f'kaynak GET hatasi: {e.__class__.__name__}: {e}', None
+    if r.status_code != 200:
+        return 'OLCULEMEDI', f'kaynak GET status={r.status_code}', None
+
+    canli = ddl_alan_sayisi(r.text)
+    if canli == 0:
+        return ('FARKLI',
+                f'canlida 0 alan (BOS/YARIM SHELL), beklenen {beklenen_alan}', canli)
+    if canli != beklenen_alan:
+        return ('FARKLI',
+                f'canli {canli} alan != CSV {beklenen_alan} alan', canli)
+    return 'AYNI', f'{canli} alan eslesti', canli
+
+
 def create_one(client: SAPADTClient, csrf: str, table_name: str,
                description: str, delivery_class: str, data_maint: str,
                fields: list, package: str, transport: str,
@@ -219,8 +274,21 @@ def create_one(client: SAPADTClient, csrf: str, table_name: str,
     exists = table_exists(client, table_name) if not dry_run else False
 
     if exists and not force_recreate:
-        print(f'  [SKIP] {table_name} zaten var')
-        return True
+        # ⛔ ESKIDEN: `print('[SKIP] zaten var'); return True` — obje VAR sanilip
+        # icerigi HIC dogrulanmiyordu (sahte yesil). Idempotans KORUNUR: gercekten
+        # ayni olan obje yine True doner ve hicbir yazma yapilmaz; degisen tek sey
+        # "ayni" iddiasinin artik OLCULMESI.
+        durum, detay, canli = readback_dogrula(client, table_name, len(fields))
+        if durum == 'AYNI':
+            print(f'  [SKIP] {table_name} zaten var — readback DOGRULANDI ({detay})')
+            return True
+        if durum == 'FARKLI':
+            print(f'  [FAIL] {table_name} var AMA icerik farkli — {detay}')
+            print(f'         Yazma YAPILMADI. Icerigi guncellemek icin: --force-recreate')
+            return False
+        print(f'  [FAIL] {table_name} var ama readback DOGRULANAMADI — {detay}')
+        print(f'         "olculemedi" != "temiz" (fail-closed).')
+        return False
 
     ddl = build_ddl(table_name, description, delivery_class, data_maint, fields,
                     unit_refs, unit_kinds,
@@ -278,18 +346,36 @@ def create_one(client: SAPADTClient, csrf: str, table_name: str,
         },
         verify=False, timeout=15
     )
-    import re as _re
-    m = _re.search(r'<LOCK_HANDLE[^>]*>([^<]+)</LOCK_HANDLE>', lr.text)
+    m = re.search(r'<LOCK_HANDLE[^>]*>([^<]+)</LOCK_HANDLE>', lr.text)
     handle = m.group(1) if m else None
     if not handle:
         print(f'  [FAIL] {table_name} LOCK failed: {lr.status_code}')
         return False
 
+    # ②(a) CORRNR — SAP'nin lock yanitindaki deger OTORITEDIR (`sap_adt_lib.py`:
+    # *"SAP's CORRNR in the lock response is authoritative"*). Eskiden yalniz
+    # LOCK_HANDLE okunuyordu ve PUT, KULLANICININ verdigi `transport` ile
+    # gidiyordu. Olculmus sonuc (2026-08-19, kontrol gruplu): S-tipi **gorev**
+    # verilince 9/9 tablo `CTS_WBO_API 020` (409); K-tipi **istek** verilince
+    # 9/9 DDL pushed, 409 YOK. SAP her zaman K-tipi istegi dondurur => onu kullan.
+    mc = re.search(r'<CORRNR[^>]*>([^<]*)</CORRNR>', lr.text)
+    corrnr_actual = (mc.group(1).strip() if mc else '') or None
+    etkin_transport = transport
+    if corrnr_actual and corrnr_actual != transport:
+        etkin_transport = corrnr_actual
+        print(f'  [INFO] {table_name}: SAP CORRNR={corrnr_actual} '
+              f'(istenen {transport}) -> PUT CORRNR ile yapilir')
+    elif not corrnr_actual:
+        # ⚠ Bosluk BLOK DEGIL: bazi obje tiplerinde CORRNR hic donmez. Ama
+        # SESSIZ de kalmaz — 409 gelirse teshis buradan baslasin.
+        print(f'  [WARN] {table_name}: lock yanitinda CORRNR yok '
+              f'-> istenen transport kullanilyor ({transport}), dogrulanamadi')
+
     try:
         # PUT source/main — If-Match GÖNDERME!
         pr = client.session.put(
             client.url + object_url + '/source/main',
-            params={'corrNr': transport, 'lockHandle': handle},
+            params={'corrNr': etkin_transport, 'lockHandle': handle},
             headers={
                 'X-CSRF-Token': csrf,
                 'Content-Type': 'text/plain; charset=utf-8',

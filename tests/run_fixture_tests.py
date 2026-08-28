@@ -71,6 +71,7 @@ VALIDATORS = [
     "check_method_param_type_c",
     "check_no_rap_commit",
     "check_amdp_comment_apostrophe",
+    "check_dtel_creation_labels",
     "check_kd_no_raw_mermaid",
 ]
 
@@ -85,6 +86,16 @@ OZEL_TESTLER = [
     ("conn_cift_anahtar", "ADR 0010: cift-anahtarli .conn_adt (guard <-> baglanti ayrismasi)"),
     ("adtget_yokluk_kaniti", "BULUNAMADI != YOK: adt_get DDIC dalinda hata <-> yokluk"),
     ("aktivasyon_sahte_ok", "HTTP hatasi da KANIT DEGIL: aktivasyon sahte-OK'i"),
+    ("mcp_sahte_sonuc_uclusu", "MCP atom: sahte exists:false / sahte activated / sahte ok:false uclusu"),
+    ("ix_doctor_kablolama", "ix_doctor kablolama: korunan tool kumesi pre_tool_guard'in "
+                            "AST'inden TURETILIR (elle kopya = ikinci gercek, bayatlar); "
+                            "turetme kirilirsa PASS DEGIL 'OLCULEMEDI'"),
+    ("cds_qty_in_expression", "C-CDS-QTYEXPR-01: miktar/tutar alani `coalesce()`a HAM "
+                              "giremez; korpusla olculmus PRECISION (263 .cds: genis varyant "
+                              "49 bulgu + dogru-emsal FP'si -> dar varyant 11 bulgu, 0 FP)"),
+    ("worktree_yasam_dongusu",
+     "worktree yasam dongusu: kanonik kok (D24) + gun-sonu denetimi (`git cherry`, "
+     "`--is-ancestor` DEGIL) + silme sirasi junction-ONCE + statusline budamasi + hook yol oneki"),
     ("worktree_blocklist", "kimlik blocklist'i worktree'de de bulunmali (commit-blogu)"),
     ("negatif_test_harness", "hook parse-fail gorunurlugu: exit 0 KORUNUR + stderr'de not (bozuk girdi ARTIK ayirt edilebilir)"),
     ("tembel_desen", "sizinti deseni TEMBEL kurulur: hiz kazanci korumayi OLU'ye cevirmiyor"),
@@ -368,7 +379,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "hook katmanı (MISSING/ORPHAN/UNDECLARED) + `# ENFORCES:` çapası da bu dosyada"),
     # team_setup.py HARITA'da HIC YOKTU (2026-08-22 bulgusu): degisikligi hicbir korpusa
     # eslesmiyordu -> tazelik kapisi bu dosyada KORDU.
-    ("scripts/team_setup.py", ("O:shim_tazeleme", "O:overlay_materyalize_atomik"),
+    ("scripts/team_setup.py", ("O:shim_tazeleme", "O:overlay_materyalize_atomik", "O:worktree_yasam_dongusu"),
      "shim tazeleme yolu + `dosya_tamamla` idempotansi burada yasar; varsayilanin "
      "degismedigi YALNIZ bu korpusta olculur. `junctions()` tip-basina yalitimi "
      "(Q30: tek tipteki istisna kurulumun kalan 5 adimini atliyordu) atomik korpusta"),
@@ -388,6 +399,15 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/validators/check_method_param_type_c.py",
      ("V:check_method_param_type_c", "O:validator_kapsam_paydasi",), "G1 çifti"),
     ("scripts/validators/check_no_rap_commit.py", ("V:check_no_rap_commit", "O:validator_kapsam_paydasi"), "G1 çifti"),
+    ("scripts/validators/check_dtel_creation_labels.py", ("V:check_dtel_creation_labels",),
+     "DTEL yaratma CSV'si: 4 label + description doluluk + uzunluk + domain bağı (ADR 0005-D)"),
+    ("scripts/validators/check_cds_qty_in_expression.py", ("O:cds_qty_in_expression",),
+     "FP tuzakları (düz cast · `case` yüklemi · birim alanı) korpusla ölçüldü; kapsam daraltması burada yaşar"),
+    ("scripts/ix_doctor.py", ("O:ix_doctor_kablolama",),
+     "korunan tool kümesi pre_tool_guard AST'inden TÜRETİLİR (elle kopya bayatladı: 6 vs 16) "
+     "+ türetme kırılırsa PASS DEĞİL 'ÖLÇÜLEMEDİ'"),
+    ("scripts/hooks/pre_tool_guard.py", ("O:ix_doctor_kablolama",),
+     "bu dosyanın tool kümesi ix_doctor kablolama kontrolünün PAYDASIDIR (türetilir)"),
     ("scripts/validators/check_amdp_comment_apostrophe.py",
      ("V:check_amdp_comment_apostrophe", "O:validator_kapsam_paydasi",), "G1 çifti"),
     ("scripts/validators/check_kd_no_raw_mermaid.py", ("V:check_kd_no_raw_mermaid", "O:validator_kapsam_paydasi"), "G1 çifti"),
@@ -496,7 +516,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("G", "O:negatif_test_harness", "O:tembel_desen"),
      "payload korpusu + parse-fail görünürlüğü + tembel desen-kurulumu"),
     ("scripts/hooks/session_start.py",
-     ("O:overlay_oto_tazeleme", "O:negatif_test_harness"),
+     ("O:overlay_oto_tazeleme", "O:negatif_test_harness", "O:worktree_yasam_dongusu"),
      "oto-tazeleme kablolaması + parse-fail notu"),
     ("scripts/build_recall_index.py", ("O:recall_index_ozetsiz",),
      "MEMORY.md ayrıştırma sözleşmesi: özetsiz satır → frontmatter `description` + "
@@ -551,7 +571,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/worklist_audit.py", ("R:AV-13",), "üç-değerli sınıflama"),
     ("scripts/build_core_index.py", ("O:core_index_kapsam",), "indeks kapsamı"),
     ("scripts/switch_tier.py", ("O:tier_fail_closed",), "tier çözümleme"),
-    ("scripts/statusline.py", ("O:tier_fail_closed",), "tier göstergesi"),
+    ("scripts/statusline.py", ("O:tier_fail_closed", "O:worktree_yasam_dongusu"), "tier göstergesi + SESSION_NOTES yürüyüşünde worktree budaması"),
     ("mcp_servers/sap_adt/_conn.py",
      ("O:tier_fail_closed", "O:conn_cift_anahtar", "O:veri_yetki_guardlari"),
      ".conn_adt okuyucusu"),
@@ -561,7 +581,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("mcp_servers/sap_adt/_reviewer.py", ("O:reviewer_tip_kapsam",), "push-tipi ↔ reviewer"),
     ("mcp_servers/sap_adt/tools/atom.py",
      ("O:adtget_yokluk_kaniti", "O:ddic_okuma_yolu", "O:dogrulama_kosamadi",
-      "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline"),
+      "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline", "O:mcp_sahte_sonuc_uclusu"),
      "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline)"),
     ("mcp_servers/sap_adt/tools/query.py",
      ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur",

@@ -54,15 +54,25 @@ Bu klasör **ADT REST endpoint'lerinin nasıl çağrılacağını gösteren çal
 
 ### 5️⃣ TD Namespace WHITELIST — POZİTİF KURAL (Sprint 3 + Sprint 4 Hataları)
 
-ZSD001 modülünde **tek geçerli format** vardır. Whitelist'te olmayan her şey YASAK. Negatif ifade ("X olmasın") yetmez — pozitif ifade ("**Y OLMALI**") kullan.
+Her pakette **tek geçerli format** vardır. Whitelist'te olmayan her şey YASAK. Negatif ifade ("X olmasın") yetmez — pozitif ifade ("**Y OLMALI**") kullan.
 
-**WHITELIST (üç katmanlı zorunluluk):**
+⚠ **Format paket-türevlidir, modüle SABİTLENMİŞ DEĞİL.** `populate_cds_views.py::_derive_prefixes()`
+hedef paket adından (`--package`) türetir: `Z<MOD 2-4 harf><3 hane>` kökü → `<kök>_V_` + `<kök küçük>_ddl_`.
+Örn. `ZSD001_CLC` → `ZSD001_V_`/`zsd001_ddl_`; `ZMOD001_CLC` → `ZMOD001_V_`/`zmod001_ddl_`.
+Paket adı kalıba uymazsa `project.yaml`'daki `sql_view_prefix`/`cds_view_name_prefix` **fallback**'ine
+düşülür; ikisi de yoksa gate **B-5 NET hatasıyla durur** (prefix VARSAYMAZ). ⇒ Yeni paket için
+`project.yaml`'a prefix eklemek **gerekmez**.
 
-| Katman | TEK GEÇERLİ FORMAT | Regex |
+**WHITELIST (üç katmanlı zorunluluk) — regex sütunu `--package ZSD001_CLC` örneğidir:**
+
+| Katman | GEÇERLİ FORMAT (paket-türevli) | Regex (ZSD001_CLC örneği) |
 |---|---|---|
-| 1. CDS `@AbapCatalog.sqlViewName` | **`ZSD001_V_<1-5 char>`** (≤14 toplam) | `^ZSD001_V_[A-Z0-9]{1,5}$` |
-| 2. CDS `define view <name>` | **`zsd001_ddl_<x>`** | `^zsd001_ddl_[a-z0-9_]+$` |
-| 3. Source body referansları | Sadece `zsd001_*` (Z-CDS/tablo/DTEL) | (hiç `zsd_007_*` veya `'ZSD01XXXX'` yok) |
+| 1. CDS `@AbapCatalog.sqlViewName` | **`<SQLV_PREFIX><1-5 char>`** (≤14 toplam) | `^ZSD001_V_[A-Z0-9]{1,5}$` |
+| 2. CDS `define view <name>` | **`<view_prefix><x>`** | `^zsd001_ddl_[a-z0-9_]+$` |
+| 3. Source body referansları | Sadece hedef namespace (Z-CDS/tablo/DTEL) | proje `project.yaml:cds_banned_literals` desenleri (tanımsızsa bu katman ATLANIR) |
+
+⛔ **RAP `view entity` istisnası:** `define [root] view entity` / `abstract entity` sqlView TAŞIMAZ →
+katman 1-2 uygulanmaz; onun yerine `^Z[A-Z]{2,4}\d{3}_(I|C|R|E)_[A-Z0-9_]+$` ad kuralı geçerlidir.
 
 **Geçmiş hatalar (referans):**
 
@@ -77,19 +87,20 @@ ZSD001 modülünde **tek geçerli format** vardır. Whitelist'te olmayan her şe
 - ❌ Negatif kontrol: "ZSD_007_* olmasın" — `ZSD15XXXX` bypass eder
 
 **HER ZAMAN:**
-- ✅ Whitelist regex: `^ZSD001_V_[A-Z0-9]{1,5}$` — tek format
+- ✅ Whitelist regex: `^<SQLV_PREFIX>[A-Z0-9]{1,5}$` — prefix paketten türer (örn. `^ZSD001_V_[A-Z0-9]{1,5}$`)
 - ✅ Toplu regex dönüşümü: `re.sub(r"'ZSD_007_(?:CV|V)_(\w+)'", lambda m: f"'ZSD001_V_{m.group(1)[:5]}'", src)`
 
 **Kod düzeyi kontrol (mecburi, otomatik):**
 
-`scripts/populate_cds_views.py` → `validate_sql_view_names()` fonksiyonu **3 katmanı da** doğrular. Her `.cds` dosyasında:
+`scripts/populate_cds_views.py` → `validate_sql_view_names(cds_files, package=…)` fonksiyonu **3 katmanı da** doğrular (`package` = hedef ABAP paketi; prefix'ler bundan türer). Her `.cds` dosyasında:
 1. sqlViewName whitelist regex'e uygun mu?
 2. define view name whitelist regex'e uygun mu?
 3. Source body içinde yasak literal var mı (proje-config `cds_banned_literals` desenleri — legacy namespace / eski kısaltma)?
 
 Tek bir ihlal varsa **script HEMEN exit 1**, hiçbir POST/PUT/aktivasyon yapılmaz.
 
-**Manual kontrol komutları (script'i baypas etmek için her şeyden önce çalıştır):**
+**Manual kontrol komutları (script'i baypas etmek için her şeyden önce çalıştır)** — ⚠ prefix'ler
+`ZSD001_CLC` örneğidir; başka pakette o paketin türevini koy:
 ```powershell
 # 1. sqlViewName whitelist dışı (BOŞ çıkmalı)
 grep -EL "^@AbapCatalog\.sqlViewName:\s*'ZSD001_V_[A-Z0-9]{1,5}'" ERP/<paket>/TD/cds_src/*.cds
@@ -175,7 +186,7 @@ python scripts/td_spec_check.py ZSD001_DDL_ORDER_ITEMS cds ERP/SD/ZSD001_CLC/cds
 | **Z Tablo (TABL/DT) yaratma** | Bölüm 15 | POST shell + PUT /source/main (If-Match GÖNDERME), `scripts/populate_tables.py` |
 | **Lock Object (ENQU/DL) yaratma** | Bölüm 16 | URL `/lockobjects/sources/{name}` (sources alt yolu), `scripts/populate_lock_objects.py` |
 | **CDS View (DDLS/DF) yaratma** | Bölüm 17 | 2-step POST shell + LOCK + PUT source/main + UNLOCK (table pattern), `scripts/populate_cds_views.py` |
-| **TD Namespace WHITELIST (sqlViewName + view name + source body)** | Bölüm 17.9 + §1.5 | POZİTİF KURAL: `'ZSD001_V_<≤5>'` + `zsd001_ddl_<x>` + body'de hiç `zsd_007_*` / `'ZSD01XXXX'` yok. Pre-flight `populate_cds_views.py::validate_sql_view_names()` 3 katmanı denetler, ihlal=exit 1 |
+| **TD Namespace WHITELIST (sqlViewName + view name + source body)** | Bölüm 17.9 + §1.5 | POZİTİF KURAL: `'<SQLV_PREFIX><≤5>'` + `<view_prefix><x>` + body'de proje `cds_banned_literals` deseni yok. **Prefix hedef PAKETTEN türer** (`ZSD001_CLC` → `ZSD001_V_`/`zsd001_ddl_`), `project.yaml` yalnız fallback. Pre-flight `populate_cds_views.py::validate_sql_view_names(cds_files, package=…)` 3 katmanı denetler, ihlal=exit 1 |
 | **TD Spec Disiplini (tüm obje tipleri)** | §1.6 | TD spec TEK karar otoritesi. <LEGACY_SOURCE> sadece structural pattern. Spec'te "Silinen" varsa source'ta olmamalı. Spec yoksa **operator approval** şart. Helper: `scripts/td_spec_check.py` — populate scripts ilk satırda çağırır, ihlal=exit 1 |
 | **`@AbapCatalog.preserveKey` deprecated** | Bölüm 17 | S/4'te uyarı verir, kaldır |
 | **Quantity → Unit / Currency → Para Birimi referansı (DDL annotation)** | Bölüm 15.3 | Quantity: `@Semantics.quantity.unitOfMeasure : 'TABLE.UNIT'` / Currency: `@Semantics.amount.currencyCode : 'TABLE.WAERS'` (qualified format ŞART) |

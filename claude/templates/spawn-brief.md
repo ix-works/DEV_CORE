@@ -54,8 +54,25 @@ taze-oku kuralı GEÇERLİ KALIR — hazır-bağlam yalnız değişmeyen referan
 - Bağımsız OKUMA çağrılarını tek turda PARALEL gönder; yazma/sıra-bağımlı seri (P6).
 - Ara ürünleri DİSKE YAZ (login-expiry/kopma = yazılmamış iş kaybı; vaka #50).
 
-## 8. HEARTBEAT / İLETİŞİM
-- Uzun işte her doğal kilometre-taşında 2-3 satır SendMessage({to:"main"}) ("yaptım/sırada/açık-nokta").
+## 8. RAPORLAMA SÖZLEŞMESİ (ZORUNLU — "uzun iş" istisnası YOK)
+**Her ajan hem ÇALIŞIRKEN ara rapor verir, hem BİTİNCE nihai rapor verir.** Aşağıdaki üç madde
+brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
+- **AR-1 · keşif biter bitmez** (ilk ~10 araç çağrısı içinde), **HENÜZ HİÇBİR DEĞİŞİKLİK YAPMADAN**:
+  görevdeki her kalemin bugünkü kodda **doğrulanmış** durumu — hangisi brifle uyuştu, hangisi
+  uyuşmadı, hangisi sandığından büyük çıktı. 3-8 satır.
+- **AR-2 · iş yarılanınca**: ne kapandı · ne kaldı · açılan yeni soru var mı. 3-8 satır.
+- **DERHAL (kilometre taşını BEKLEME):** BLOCKER · çelişki · kapsam-dışı bulgu · yazacak yer yok.
+- **NİHAİ RAPOR — bitince, bu iskeletle:** ① kalem bazında sonuç tablosu
+  (`KAPANDI · KISMİ · KAPSAM-DIŞI · ÇELİŞKİ · DOĞRULANAMADI · YAPILMADI(gerekçe)` + kanıt +
+  `dosya:satır`) ② değişen dosyaların TAM listesi (`git status --short`, birebir) ③ negatif testler
+  (ne bozdum · kapı ateşledi mi · çıktı ne dedi) ④ blast-radius (kim çağırıyor, nasıl ölçüldü)
+  ⑤ ⚠ çelişki/risk/lider kararı bekleyenler ⑥ koşulan kapıların **ÇIKTILARI** ("OK" demek yetmez)
+  ⑦ yayılım notu (aynı sınıf başka nerede olabilir — ölçtüysen sayıyla).
+- ⚠ **Çok-eksenli kalemde "kaydı kapattım" cümlesi YASAK** — her ekseni AYRI raporla
+  ("① kapandı · ② kapandı · ③ kapsam dışı, gerekçe: …"). Yapmadığın ekseni **sessizce atlama**.
+- **Kanal:** `SendMessage({to:"main"})`. ⚠ Bu araç `tools:` beyanında görünmese de çalışma zamanında
+  **vardır**; yoksa (ölç, varsayma) nihai rapor **son mesajın gövdesine** girer — rapor **dosyaya
+  yazılıp orada bırakılamaz** (§3'teki salt-okur kuralı).
 - "YAPILAMAZ" demeden önce: repo'da alternatif yol ara + denediklerini kanıtla (kanıtsız olumsuz rapor sorgulanır).
 
 ## 9. ENGELLENİRSEN — ZORUNLU MADDE (⛔ yazma işi veren her brifte)

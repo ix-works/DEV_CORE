@@ -1,0 +1,7 @@
+name,type_kind,type_name,datatype,length,decimals,description,short,medium,long,heading
+,domain,ZTEST_D_A,CHAR,10,0,Ornek Aciklama,Kisa,Orta,Uzun,Baslik
+ATEST_E_B,domain,ZTEST_D_B,CHAR,10,0,Ornek Aciklama,Kisa,Orta,Uzun,Baslik
+ZTEST_E_C,domain,ZTEST_D_C,CHAR,10,0,Ornek Aciklama,,Orta,Uzun,Baslik
+ZTEST_E_D,domain,ZTEST_D_D,CHAR,10,0,,Kisa,Orta,Uzun,Baslik
+ZTEST_E_E,domain,ZTEST_D_E,CHAR,10,0,Ornek Aciklama,CokUzunKisaLabel,Orta,Uzun,Baslik
+ZTEST_E_F,domain,,CHAR,10,0,Ornek Aciklama,Kisa,Orta,Uzun,Baslik

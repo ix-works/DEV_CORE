@@ -292,6 +292,104 @@ def senaryolar(pt) -> list[tuple[str, bool, str]]:
               "zorunlu kolon" not in out and "unit_field" in out,
               "rc=%r out=%r" % (rc, out[:300])))
 
+    # =====================================================================
+    # #32 ②  —  (b) `[SKIP] zaten var -> return True` SAHTE YESILI
+    #             (a) LOCK yanitindaki CORRNR OKUNMUYORDU
+    # Olculmus vaka (2026-08-19): yarim shell uzerinde kosuldu, ekrana
+    # "1 basarili, 0 hatali" yazdi, exit 0 verdi; `adt_get` readback'i TEK
+    # SATIRLIK shell gosterdi => hicbir sey yazilmamisti. "Obje VAR" ile
+    # "obje DOGRU" ayni sey degildir.
+    # =====================================================================
+    FIELDS = [{"name": "mandt", "is_key": "Y", "type": "mandt", "description": ""},
+              {"name": "vbeln", "is_key": "Y", "type": "vbeln", "description": ""},
+              {"name": "posnr", "is_key": "N", "type": "posnr", "description": ""}]
+    TAM_DDL = pt.build_ddl("ZT", "d", "A", "LIMITED", FIELDS)
+    SHELL_DDL = ("@EndUserText.label : 'd'\ndefine table zt {\n"
+                 "  key mandt : mandt not null;\n}")
+
+    class _Resp:
+        def __init__(s, code=200, text=""):
+            s.status_code, s.text = code, text
+
+    class _Sess:
+        """GET'i URL'e gore YONLENDIRIR: varlik-GET ile kaynak-GET AYRI yanit alir.
+        (Tek yanit verilirse 500 vektoru varlik-GET'i de dusurur ve akis CREATE
+        dalina sapar -> harness hatasi, kod hatasi degil. Olculdu 2026-08-29.)"""
+        def __init__(s, exists_resp, src_resp=None, corrnr="DS4K900029"):
+            s._e, s._s = exists_resp, (src_resp if src_resp is not None else exists_resp)
+            s.put_params = None
+            s._corrnr = corrnr
+        def get(s, url, **k):
+            return s._s if url.endswith("/source/main") else s._e
+        def post(s, url, **k):
+            if (k.get("params") or {}).get("_action") == "LOCK":
+                c = ("<CORRNR>%s</CORRNR>" % s._corrnr) if s._corrnr else ""
+                return _Resp(200, "<asx><LOCK_HANDLE>H1</LOCK_HANDLE>%s</asx>" % c)
+            return _Resp(200, "")
+        def put(s, url, **k):
+            s.put_params = k.get("params")
+            return _Resp(200, "")
+        def delete(s, url, **k):
+            return _Resp(200, "")
+
+    class _Client:
+        def __init__(s, exists_resp, src_resp=None, corrnr="DS4K900029"):
+            s.url = "https://x"
+            s.session = _Sess(exists_resp, src_resp, corrnr)
+
+    def _cagir(c):
+        tut = io.StringIO()
+        saved = sys.stdout
+        sys.stdout = tut
+        try:
+            sonuc = pt.create_one(c, "tok", "ZT", "d", "A", "LIMITED",
+                                  FIELDS, "PKG", "TR001")
+        finally:
+            sys.stdout = saved
+        return sonuc, tut.getvalue()
+
+    # --- S11: obje VAR ama YARIM SHELL -> sahte yesil YOK ------------------
+    c = _Client(_Resp(200, ""), _Resp(200, SHELL_DDL))
+    sonuc, out = _cagir(c)
+    r.append(("S11 #32(b): var-ama-yarim-shell -> False (sahte yesil yok)",
+              sonuc is False and "icerik farkli" in out,
+              "donen=%r out=%r" % (sonuc, out[:200])))
+
+    # --- S12: ⭐ IDEMPOTANS CAPASI — gercekten AYNI ise yine True, yazma YOK
+    # Duzeltmenin BOZMAMASI gereken sey: ayni obje uzerinde tekrar kosmak
+    # hatasiz gecmeli ve HICBIR yazma yapmamali.
+    c = _Client(_Resp(200, ""), _Resp(200, TAM_DDL))
+    sonuc, out = _cagir(c)
+    r.append(("S12 #32(b) FP capasi: icerik ESLESIYOR -> True ve PUT YOK (idempotans)",
+              sonuc is True and c.session.put_params is None,
+              "donen=%r put=%r" % (sonuc, c.session.put_params)))
+
+    # --- S13: readback OLCULEMEDI -> "olculemedi != temiz" ----------------
+    c = _Client(_Resp(200, ""), _Resp(500, "err"))
+    sonuc, out = _cagir(c)
+    r.append(("S13 #32(b): readback olculemedi -> False (olculemedi != temiz)",
+              sonuc is False and "DOGRULANAMADI" in out,
+              "donen=%r out=%r" % (sonuc, out[:200])))
+
+    # --- S14: #32(a) CORRNR OTORITESI -------------------------------------
+    # Kontrol gruplu canli olcum (2026-08-19): S-tipi GOREV verilince 9/9 tablo
+    # `CTS_WBO_API 020` (409); K-tipi ISTEK verilince 9/9 pushed. SAP'nin lock
+    # yanitindaki CORRNR otoritedir -> PUT onunla gitmeli.
+    c = _Client(_Resp(404, ""), corrnr="DS4K900029")
+    sonuc, out = _cagir(c)
+    pp = c.session.put_params or {}
+    r.append(("S14 #32(a): PUT corrNr, lock yanitindaki CORRNR ile gider",
+              pp.get("corrNr") == "DS4K900029",
+              "PUT corrNr=%r (istenen TR001)" % pp.get("corrNr")))
+
+    # --- S15: FP capasi — CORRNR DONMEZSE istenen transport korunur -------
+    c = _Client(_Resp(404, ""), corrnr=None)
+    sonuc, out = _cagir(c)
+    pp = c.session.put_params or {}
+    r.append(("S15 #32(a) FP capasi: CORRNR yoksa istenen transport korunur + uyarilir",
+              pp.get("corrNr") == "TR001" and "CORRNR yok" in out,
+              "PUT corrNr=%r out=%r" % (pp.get("corrNr"), out[:160])))
+
     return r
 
 
@@ -325,6 +423,23 @@ MUTASYONLAR = [
      None,
      lambda s: s.replace("    r = (ref_dtel or '').strip().casefold()",
                          "    r = ''")),
+
+    # --- #32 degismezleri: M1-M4 bunlarin HICBIRINI sinamaz --------------
+    ("M5 #32(b) fix'i geri al: var-ise kosulsuz `return True` (sahte yesil)",
+     lambda s: s.replace(
+         "        durum, detay, canli = readback_dogrula(client, table_name, len(fields))",
+         "        durum, detay, canli = 'AYNI', 'readback YOK', 0"),
+     None),
+
+    ("M6 #32(b) SINIR: 'olculemedi'yi TEMIZ say (fail-open)",
+     lambda s: s.replace("        return 'OLCULEMEDI', f'kaynak GET status={r.status_code}', None",
+                         "        return 'AYNI', 'olculemedi ama temiz sayildi', 0"),
+     None),
+
+    ("M7 #32(a) CORRNR'i yok say (PUT yine istenen transport ile gitsin)",
+     lambda s: s.replace("            params={'corrNr': etkin_transport, 'lockHandle': handle},",
+                         "            params={'corrNr': transport, 'lockHandle': handle},"),
+     None),
 ]
 
 

@@ -16,7 +16,7 @@ applies_to: [s4_private]
 |---|---|---|---|---|
 | **C-CDS-NAME-01** | View adı `ZSD<NNN>_DDL_*` pattern'inde mi? | `check_package_naming.py --type cds` | BLOCKER | `ERP/SD/<PKG>/.rules.md` |
 | **C-CDS-SQLV-01** | `@AbapCatalog.sqlViewName` annotation var mı? | regex:has-sql-view-name | BLOCKER | Zorunlu DDIC field |
-| **C-CDS-SQLV-02** | sqlViewName whitelist regex'ine uyuyor mu? `^ZSD001_V_[A-Z0-9]{1,5}$` | `populate_cds_views.py::validate_sql_view_names` (populate-time, reviewer-DIŞI) | BLOCKER | Playbook §17.9 — Namespace Dönüşümü |
+| **C-CDS-SQLV-02** | sqlViewName whitelist regex'ine uyuyor mu? **Regex SABİT DEĞİL — prefix hedef paketten türer**: `^<SQLV_PREFIX>[A-Z0-9]{1,5}$` (`ZSD001_CLC` → `^ZSD001_V_…$`, `ZMOD001_CLC` → `^ZMOD001_V_…$`). Paket adı `Z<MOD 2-4 harf><3 hane>` kalıbına uymuyorsa `project.yaml`'daki `sql_view_prefix`'e düşer; ikisi de yoksa gate **B-5 hatasıyla durur**. ⛔ RAP `view entity`'de bu kontrol **uygulanmaz** (sqlView taşımaz) | `populate_cds_views.py::validate_sql_view_names(cds_files, package=…)` (populate-time, reviewer-DIŞI) | BLOCKER | Playbook §17.9 — Namespace Dönüşümü |
 | **C-CDS-SQLV-03** | sqlViewName toplam ≤14 char mı? | regex:sql-view-name-length | BLOCKER | SAP DDIC limiti |
 | **C-CDS-LABEL-01** | `@EndUserText.label` annotation var mı ve TR dolu mu? | manual:tr-label-check | BLOCKER | ⛔ KATEGORİ D |
 | **C-CDS-AUTH-01** | `@AccessControl.authorizationCheck` annotation var mı? | regex:has-auth-check | BLOCKER | ABAP CDS zorunlu |

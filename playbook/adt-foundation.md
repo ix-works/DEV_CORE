@@ -594,6 +594,39 @@ python "<PROJECT_ROOT>\scripts\run_data_preview.py" --cwd "<PROJECT_ROOT>" --ent
 - Bazı CDS view'lar data preview'da hata verir (authorization / SADL kısıtı) — SQL sorgusu dene
 - JOIN içeren sorgularda alias kullan
 
+### 5.1 LCHR / uzun-metin alanları (`EDID4.SDATA` vakası) — **`400` = yanlış BİÇİM, "okunamaz" DEĞİL**
+
+⭐ **Kural:** `LCHR` tipindeki bir alan ADT SQL yüzeyinden **tek başına okunamaz**; **kendisinden
+önce gelen `INT2` uzunluk alanıyla BİRLİKTE** ve **açık alan listesiyle** seçilmelidir.
+(`EDID4`'te bu uzunluk alanı `DTINT2`'dir.)
+
+```sql
+-- ✅ ÇALIŞIR
+SELECT segnum, segnam, dtint2, sdata FROM edid4 WHERE docnum = '<IDOC>'
+```
+
+**Ölçülen sınırlar (canlı DEV, 2026-08-19; 2026-08-28'de 53 IDoc üzerinde yeniden doğrulandı):**
+
+| Deneme | Sonuç |
+|---|---|
+| `SELECT *` | ⛔ **400** |
+| `SELECT ... sdata ...` (`DTINT2` olmadan) | ⛔ **400** |
+| `SUBSTRING( sdata, 1, 20 )` | ⛔ **400** — LCHR SQL **ifadesinde** kullanılamaz |
+| `SELECT segnum, segnam, dtint2, sdata` (açık liste) | ✅ **çalışır** |
+
+- ⛔ **Z sınıfı / `adt_classrun` / `IDOC_READ_COMPLETELY` GEREKMEZ.** Bu kayıt bir kez
+  *"ADT bu tipi veremiyor"* diye yanlış teşhis edildi ve üzerine gereksiz bir Z sınıfı yaratıldı.
+- ⚠ `adt_table_read` bu alanda düşer — **`SELECT *` yaptığı için** (LCHR'ı `DTINT2` eşliğinde
+  vermiyor). Araç sınırı; SQL sorgusunu elle yaz.
+- 📌 **IDoc segment AĞACI için `SDATA`'ya HİÇ gerek yok:** `segnum` / `segnam` / `psgnum` yeter.
+  `SDATA` yalnız alan **değerleri** gerekince okunur.
+- 🔪 **`SDATA`'yı alanlara kesmek için offset kaynağı = `EDSAPPL`** (segment alan tanımları:
+  `{pos, name, rollname, leng}`). ⚠ **`EDSAPPL`'i sorgularken kolon adlarını TAHMİN ETME** —
+  `extlen` / `offset` diye kolon **YOKTUR**, uydurursan **400** alırsın. Projeler bu tabloyu bir kez
+  çekip yerel bir JSON'a türetiyor olabilir; varsa **önce ona bak** (canlıdan üretilmiştir).
+- 🧭 **Genel ders:** ADT `400`'lerinde sebep **gövdededir**. Ham gövdeyi okumadan
+  *"araç bu tipi vermiyor"* sonucuna varma — dört ardışık 400'ün dördü de "yanlış biçim" demişti.
+
 ---
 
 ## 6. PAKET İÇERİĞİ LISTELEME
@@ -633,6 +666,33 @@ python "<PROJECT_ROOT>\scripts\search_objects.py" --cwd "<PROJECT_ROOT>" --query
 ```powershell
 python "<PROJECT_ROOT>\scripts\where_used.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ZSD_ORDER_DPC_EXT
 ```
+
+### 9.1 Blast-radius / "çağıranı var mı" — **kanonik enstrüman: `CROSS` tablosu**
+
+⚠ **FM (fonksiyon modülü) çağıranı ararken `adt_where_used` ve `adt_grep_source`'un İKİSİ de kördür**
+(2026-08-18 kontrol-gruplu ölçüm). Bu iki aracın **boş sonucu yokluk kanıtı DEĞİLDİR**:
+
+| Enstrüman | Ölçülen körlük |
+|---|---|
+| `adt_where_used(type='func')` | Çağıranı **bilinen** bir Z FM için de `OBJECT_NOT_FOUND` döndü ⇒ `0`/hata ayırt edilemiyor |
+| `adt_grep_source(package=…)` | FUGR'ın yalnız iskelet ana include'unu çeker; **FM gövdesini okumaz**. Yine de `truncated:false` + `scope_verified:true` basar — *"taradım, temiz"* diyor, **taramamış** |
+| repo `git grep` | Geçerli, ama **canlı sistemi temsil etmez** (repo'da olmayan/ECC-only kod) |
+
+⭐ **İLK BAŞVURULACAK YER — statik çapraz-referans tablosu `CROSS`** (sistem geneli; FM/PROG/CLASS):
+
+```sql
+SELECT * FROM cross WHERE type = 'F' AND name = '<FM_ADI>'
+```
+
+- `type='F'` = fonksiyon modülü. **Sınıf metotlarındaki çağrıları da yakalar** (grep'in FUGR körlüğünü kapatır).
+- **Pozitif kontrol ZORUNLU:** sıfır sonucu rapora yazmadan önce, **çağıranı bilinen** bir objeyle
+  aynı sorguyu koş (ölçülen kalibrasyon: bilinen bir Z FM → **3 satır**, üçü de doğru; ikinci kontrol
+  grubu → 1'er satır). Tablonun dolu olduğunu da doğrula: `type='F' AND name LIKE 'Z%'` → 130 kayıt ölçüldü.
+- ⛔ **Kalıntı sınır (dürüst):** `CROSS` yalnız **statik** `CALL FUNCTION '<literal>'` kaydeder.
+  **Dinamik çağrı** (`CALL FUNCTION lv_name`) görünmez ve salt-okunur araçlarla **dışlanamaz** →
+  bu senaryo için sonuç **DOĞRULANAMADI**'dır, "yok" değil.
+- 🧭 **Kural:** *"çağıranı yok"* negatif iddiası **tek enstrümana** dayandırılamaz; en az bir
+  **pozitif kontrol** (çağıranı bilinen obje) ile kalibre edilmeden yazılmaz.
 
 ---
 

@@ -18,10 +18,24 @@ Bu korpus S(enaryo) + M(utasyon) tasir:
   S1-S2  uc-baglam: bilinen-BOZUK yakalanir / bilinen-TEMIZ gecer
   S3-S4  esik ikizi: tam 73 PASS · 74 FAIL (off-by-one capasi)
   S5     3. BAGLAM — BAYT != KARAKTER: 73 karakter ama >73 bayt diakritikli metin GECMELI
-  S6     3. BAGLAM — atlanan satir (msgno bos): guard tetiklenmemeli
+  S6     3. BAGLAM — AYRISTIRILMIS alan olculur, HAM SATIR degil (virgullu/tirnakli metin)
   S7-S8  GERCEK GIRIS NOKTASI (main + --dry-run): bozuk -> rc=1 ve XML'e HIC ulasilmaz /
          temiz -> rc=0 ve XML uretilir (FP capasi, S7'den AYRI tutulur)
   M1-M3  fix'i sok -> korpus KIRMIZI olmali (yesil kalirsa korpus o degismezi olcmuyor)
+
+IKINCI KUSUR — #41 Y-1 (2026-08-29, ayni dosya, KOMSU EKSEN):
+`msgno` bos gelince `''.strip().zfill(3)` -> `'000'` uretiyordu ve `if msgno and
+msgtext:` testi `'000'`i TRUTHY gorup satiri YAZIYORDU => `000` (serbest metin
+tasiyicisi) SESSIZCE EZILIYORDU. Ters yonde ikiz kusur: bos `msgtext` tasiyan
+satir haber verilmeden DUSURULUYORDU. Ikisi de "yarim satir" sinifidir.
+  S9     bos msgno -> FAIL-CLOSED + satir no raporlanir
+  S10 ⭐ FP CAPASI: ACIKCA yazilan `000` KABUL edilir. Olculdu 2026-08-29: 7 gercek
+         `messages.csv`nin 5'i satir 2'de acikca `000` tanimliyor => guard HAM alana
+         bakmak ZORUNDA; zfill sonrasina bakan yazim 5 paketi kirar.
+  S11    bos msgtext -> FAIL-CLOSED (sessiz dusurme yonu)
+  S12    FP CAPASI: TAMAMEN bos satir dolgudur, sessizce atlanir (hata DEGIL)
+  S13    GERCEK giris noktasi: bos msgno -> rc=1 ve XML'e HIC ulasilmaz
+  M4-M6  yeni degismezlerin mutasyonlari (M5 = SINIR: zfill sonrasina bakan naif yazim)
 
 Kosum: python tests/fixtures/msgtext_uzunluk_guard/run.py     (exit 0 = PASS)
 """
@@ -235,6 +249,66 @@ def senaryolar(mod, tmp: Path) -> list[tuple[str, bool, str]]:
     ekle("S8 main(--dry-run) temiz: rc=0 ve XML URETILIR",
          rc == 0 and xml_var, "rc=%s xml_uretildi=%s" % (rc, xml_var))
 
+    # =====================================================================
+    # #41 Y-1 — BOS msgno SESSIZCE '000' oluyordu (sessiz-veri-bozan)
+    # `''.zfill(3)` == `'000'` ve `if msgno and msgtext:` bunu TRUTHY gorup
+    # satiri YAZIYORDU -> `000` (serbest metin tasiyicisi) EZILIYORDU.
+    # =====================================================================
+    Eksik = mod.MesajSatiriEksikError
+
+    # --- S9: bos msgno + dolu msgtext -> YAZILMAZ + satir no raporlanir ----
+    p = csv_yaz(tmp, "bos_no.csv", [("001", "Ilk"), ("", "NUMARASIZ SATIR"), ("003", "Ucuncu")])
+    try:
+        msgs = mod.load_messages_from_csv(p)
+        ekle("S9 bos msgno FAIL-CLOSED", False,
+             "hata YOK, %d mesaj dondu: %r" % (len(msgs), msgs))
+    except Eksik as e:
+        metin = str(e)
+        # Ayirt edici: SATIR NUMARASI verilmeli (yazar hangi satiri duzeltecegini bilsin).
+        ekle("S9 bos msgno FAIL-CLOSED + satir no raporlanir",
+             "satir 3" in metin, "metinde satir-no var mi: %r" % ("satir 3" in metin))
+
+    # --- S10: ⭐ FP CAPASI — ACIKCA yazilmis '000' KABUL edilmeli ----------
+    # Olculdu 2026-08-29: 7 gercek `messages.csv`nin 5'i satir 2'de ACIKCA `000`
+    # tanimliyor. `zfill` SONRASINA bakan bir guard bunlari REDDEDER -> 5 paket
+    # kirilir. Bu capa, duzeltmenin HAM alana bakmasini zorunlu kilar.
+    p = csv_yaz(tmp, "acik_000.csv", [("000", "Serbest metin tasiyicisi"), ("001", "Ikinci")])
+    try:
+        msgs = mod.load_messages_from_csv(p)
+        ekle("S10 FP capasi: ACIKCA yazilan 000 kabul edilir (5/7 gercek CSV)",
+             len(msgs) == 2 and msgs[0][0] == "000", "donen=%r" % (msgs,))
+    except Eksik:
+        ekle("S10 FP capasi: ACIKCA yazilan 000 kabul edilir (5/7 gercek CSV)",
+             False, "acik 000 REDDEDILDI — zfill SONRASINA bakan guard")
+
+    # --- S11: bos msgtext + dolu msgno -> sessiz DUSURME yonu -------------
+    p = csv_yaz(tmp, "bos_text.csv", [("001", "Var"), ("002", "")])
+    try:
+        msgs = mod.load_messages_from_csv(p)
+        ekle("S11 bos msgtext FAIL-CLOSED (sessiz dusurme)", False,
+             "sessizce dusuruldu, %d mesaj" % len(msgs))
+    except Eksik:
+        ekle("S11 bos msgtext FAIL-CLOSED (sessiz dusurme)", True)
+
+    # --- S12: FP CAPASI — TAMAMEN bos satir dolgudur, hata DEGIL ----------
+    p = tmp / "dolgu.csv"
+    p.write_text('msgno,msgtext,selfexplainatory\n001,"Var",false\n,,\n002,"Iki",false\n',
+                 encoding="utf-8")
+    try:
+        msgs = mod.load_messages_from_csv(p)
+        ekle("S12 FP capasi: tamamen bos satir = dolgu, sessizce atlanir",
+             len(msgs) == 2, "donen=%d mesaj" % len(msgs))
+    except Eksik:
+        ekle("S12 FP capasi: tamamen bos satir = dolgu, sessizce atlanir",
+             False, "dolgu satiri hata verdi (yanlis-pozitif)")
+
+    # --- S13: GERCEK giris noktasi — bos msgno: rc=1 + XML'e HIC ulasilmaz -
+    p = csv_yaz(tmp, "main_bos_no.csv", [("", "NUMARASIZ")])
+    rc, cikti = main_calistir(mod, p)
+    xml_yok = "mc:messageClass" not in cikti
+    ekle("S13 main(--dry-run) bos msgno: rc=1 ve payload'a HIC ulasilmaz",
+         rc == 1 and xml_yok, "rc=%s xml_uretilmedi=%s" % (rc, xml_yok))
+
     return out
 
 
@@ -243,14 +317,35 @@ def senaryolar(mod, tmp: Path) -> list[tuple[str, bool, str]]:
 # olunca taban kayar" tuzagi yapisal olarak yok). Uc degismez -> uc mutasyon.
 # ---------------------------------------------------------------------------
 MUTASYONLAR = [
+    # ⚠ Girinti-duyarli capa DEGIL: 2026-08-29'da `if msgno and msgtext:` sarmali
+    # kaldirilinca bu satir 16 -> 12 bosluga kaydi ve yama SESSIZCE TUTMADI
+    # (korpus "yama-tuttu kanidi" bolumu sayesinde sahte-yesile donmedi, FAIL verdi).
+    # Ders: mutasyon capasi kaynagin BICIMINE degil ANLAMINA baglanmali.
     ("M1 guard'i tumden sok (tespit degismezi)",
-     lambda s: s.replace("                if len(msgtext) > T100_TEXT_MAXLEN:",
-                         "                if False:")),
+     lambda s: s.replace("if len(msgtext) > T100_TEXT_MAXLEN:",
+                         "if False:")),
     ("M2 yalniz ILK ihlali raporla (tamlik degismezi)",
      lambda s: s.replace("            for sn, mn, uz, mt in asanlar\n",
                          "            for sn, mn, uz, mt in asanlar[:1]\n")),
     ("M3 esigi gevset 73 -> 200 (deger degismezi)",
      lambda s: s.replace("T100_TEXT_MAXLEN = 73", "T100_TEXT_MAXLEN = 200")),
+
+    # --- #41 Y-1 degismezleri. "Iki degismez -> iki mutasyon": fix eskiyi
+    # KORUYUP yeni davranis ekledi, o yuzden M1-M3 bunlari HIC sinamaz.
+    ("M4 yarim-satir guard'ini sok (fix'i geri al -> bos msgno yine '000' yazilir)",
+     lambda s: s.replace("            if not ham_no or not msgtext:",
+                         "            if False:")),
+
+    # ⭐ M5 SINIR mutasyonu: guard'i HAM alan yerine ZFILL SONRASINA baktir.
+    # Bu, duzeltmenin "naif" yazimidir ve bos msgno'yu yakalamaya DEVAM eder
+    # (S9 yesil kalir) — ama ACIKCA yazilmis `000`i de reddeder. Yalniz S10
+    # bunu yakalayabilir; yakalayamazsa S10 bos bir capadir.
+    ("M5 SINIR: guard zfill SONRASINA bakar (acik 000'i de reddeder)",
+     lambda s: s.replace("            if not ham_no or not msgtext:",
+                         "            if ham_no.zfill(3) == '000' or not msgtext:")),
+
+    ("M6 hata metninden SATIR NO'yu kaldir (teshis edilebilirlik degismezi)",
+     lambda s: s.replace("f'    satir {sn}: msgno BOS", "f'    msgno BOS")),
 ]
 
 

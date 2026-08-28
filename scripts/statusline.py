@@ -82,8 +82,48 @@ def active_package(root: Path):
     return None, None
 
 
+# Tarama budama kumesi — kardes desen: behavior_manifest.py `prune` + 8 validator
+# (`_SKIP_SEGMENTS` / `_SKIP` / `_prune`). Yeni desen ICAT EDILMEDI, o kume kopyalandi.
+# ⚠ `worktrees`: ajan worktree'leri (`.claude/worktrees/agent-<id>/`) ayni repo'nun GECICI
+# checkout'lariyken icindeki SESSION_NOTES.md kokun BAYAT kopyasidir. Olculdu 2026-08-28:
+# `.claude/active_package` = dogru paket iken statusline notu worktree kopyasindan cozdu
+# (md5 kanonik f3180dca <-> worktree 5a99cc93, 2026-08-26'da donmus) => Sprint/Transport
+# gostergesi bayat veriden geliyordu. 2026-08-20'de ayni sinif 8 validator + behavior_manifest
+# icin kapatilmisti; statusline o kapanisin DISINDA kalmisti (komsu-eksen).
+# ⛔ Ana agactan kosuldugunda worktree'ler haric; worktree ICINDEN kosuldugunda tarama koku
+# worktree'nin kendisidir ve altinda `worktrees/` bulunmaz => kural kendiliginden dogru
+# yonu secer (kendi agacini AYNEN tarar). Kanonik yeni kok (`<proje.parent>/.wt/...`) zaten
+# repo DISINDA oldugu icin bu yuruyus oraya yapisal olarak ulasamaz — budama ESKI/IC
+# worktree'ler icindir, ikisi birbirinin yerine GECMEZ.
+_TARAMA_HARIC = {"node_modules", ".git", ".tmp", "tmp", "core", "dist",
+                 "__pycache__", "worktrees", "attic", "fixtures"}
+
+
+def _junction_mu(p: Path) -> bool:
+    try:
+        os.readlink(p)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _session_notlarini_dolas(kok: Path):
+    """`kok` altindaki SESSION_NOTES.md'leri BUDANMIS yuruyusle uret.
+
+    `rglob` yerine `os.walk` + `dirnames[:]` budamasi: budama noktasi ada gore aranamaz,
+    yuruyusun KENDISI kesilmelidir (rglob tum agaci gezer, filtre sonuctan eler).
+    Junction'lar da atlanir — `<proje>/core` junction'i core deposunun tamamini agaca
+    baglar ve orada da SESSION_NOTES.md fixture'lari bulunur.
+    """
+    for dirpath, dirnames, filenames in os.walk(kok):
+        dirnames[:] = [d for d in dirnames
+                       if d not in _TARAMA_HARIC and not _junction_mu(Path(dirpath) / d)]
+        if SESSION_NOTE_NAME in filenames:
+            yield Path(dirpath) / SESSION_NOTE_NAME
+
+
 def _find_session_notes_by_name(root: Path, pkg: str):
-    for p in root.rglob(SESSION_NOTE_NAME):
+    for p in _session_notlarini_dolas(root):
         if p.parent.name.upper() == pkg.upper():
             return p
     return None
@@ -94,7 +134,7 @@ def _latest_session_notes(root: Path):
     erp = root / SOURCE_ROOT_NAME
     if not erp.exists():
         return None
-    for p in erp.rglob(SESSION_NOTE_NAME):
+    for p in _session_notlarini_dolas(erp):
         try:
             candidates.append((p.stat().st_mtime, p))
         except OSError:

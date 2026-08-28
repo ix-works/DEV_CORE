@@ -61,7 +61,11 @@ STATIK = (
     "  Roller (.claude/agents/): adt-gateway (TEK SAP yazici; standing) ; frontend-expert ;\n"
     "     backend-expert ; bug-expert (adversarial, read-only, HER ZAMAN taze).\n"
     "  BUG GATE: expert substantive build bitince bug-expert'e -> PASS/WARNING/BLOCKER.\n"
-    "  Kullanici 'solo' derse spawn etme. Detay: governance/agent-teams-operating-model.md"
+    # ⚠ `core/` oneki ZORUNLU: bu metin PROJE kokunde okunur ve D29 geregi kok-Grep core'u
+    # GORMEZ; `governance/...` proje kokunden cozulmez => isaretci KIRIK olur ve calisma
+    # modeli fiilen okunamaz. Ayni sinif 2026-08-2x'de `run_review.py` icin 6 yuzeyde
+    # kapatilmisti (#68); bu satir o kapanisin DISINDA kalmisti. Kardes yazim: :88 · :113 · :270.
+    "  Kullanici 'solo' derse spawn etme. Detay: core/governance/agent-teams-operating-model.md"
 )
 
 

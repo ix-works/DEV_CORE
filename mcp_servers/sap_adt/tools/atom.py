@@ -377,6 +377,25 @@ def _ddic_uri_seg(canonical_type: Optional[str]) -> Optional[str]:
     return seg if isinstance(seg, str) and seg else None
 
 
+# ⭐ TABLO <-> YAPI KARDES-UC ESLEMESI (2026-08-18 vakasi, kayit #8).
+# Olculdu: `ZSD000_S_SCREEN_FIELD` / `ZSD000_S_SCREEN_BUTTON` (DDIC YAPI) CANLIDA VARDI,
+# ama `adt_get(object_type="tabl")` `exists:false` dedi (`adt_search_objects` ikisini de
+# buldu). Sebep: `tabl` `/ddic/tables/` ucuna gider, YAPILAR `/ddic/structures/` altinda
+# yasar -> arac "YANLIS UCA SORDUM"u "OBJE YOK" diye raporluyordu.
+# ⛔ NEDEN TEHLIKELI: "on kosul DDIC objesi yok" sonucu ya build'i durdurur ya da MUKERRER
+# obje yaratma karari uretir (ADR 0005-D'ye kadar giden zincir).
+# SINIF: `check_abaplint` SKIP=exit 0 ile AYNI aile -- "yok" ile "bakamadim" ayni cevaba
+# dusuyor. Politika (bu evin kurali): YOKLUK IDDIASI KANIT ISTER.
+# ⇒ Ilk uc 404 verirse KARDES uc de denenir; ikisi de 404 ise yokluk iddiasi GUCLENIR
+# (`probed_endpoints` delili), kardes uc olculemezse yokluk BEYANI DARALTILIR
+# (`sibling_probe: unavailable:...` + warning). Iki yon de kapsanir: bir GELISTIRICI
+# `structure` tipiyle bir TABLOyu da sorabilir -- ayni kusur sinifinin diger yuzu.
+_DDL_KARDES_SEG = {
+    "ddic/tables": ("ddic/structures", "structure"),
+    "ddic/structures": ("ddic/tables", "table"),
+}
+
+
 # "BULUNAMADI != YOK" (ölçüldü 2026-07-31, dört ayrı vaka aynı gün).
 # adt_get, ulaşılamayan SAP'te de `ok:true, exists:false` döndürüyordu; obje CANLIDA
 # VARDI ve client_log'da NameResolutionError yazıyordu. Bir ajan buna dayanıp
@@ -551,6 +570,17 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
         {ok, name, type, exists, source?, metadata?, client_log}
         On miss:  {ok: true, exists: false, name, type}
         On error: {ok: false, error, message}
+
+    ⭐ TABLO/YAPI KARDES-UC (2026-08-18 vakasi): `tabl` `/ddic/tables/`e, `structure`
+    `/ddic/structures/`e sorar. Istenen uc 404 verirse KARDES uc de denenir:
+      • kardeste BULUNURSA → `exists: true` + `resolved_type` / `resolved_endpoint` +
+        `sibling_probe: "checked_found"` + tip duzeltmesi `warning`'i,
+      • ikisi de 404 → `sibling_probe: "checked_absent"` + `probed_endpoints` (yokluk delili),
+      • kardes uc OLCULEMEZSE → `sibling_probe: "unavailable:<sebep>"` + warning
+        (yokluk beyani o uc ile SINIRLIDIR; "bakamadim" != "yok").
+    ⛔ Bu fallback DDIC yapisi/tablosu icindir. DDIC objesinin varligini kritik bir kararda
+    (obje YARATMA/SILME) `adt_get` ile TEK BASINA olcme — `adt_search_objects` ile capraz
+    kontrol et (ADR 0005-A).
     """
     # MSAG (mesaj sınıfı): adt_get msag tipini DESTEKLEMEZ → özel messageclass endpoint'i.
     if (object_type or "").lower().strip() in ("msag", "messageclass"):
@@ -587,7 +617,42 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
                     "DEGILDIR. object_types.OBJECT_TYPES tablosunu kontrol et."
                 ),
             }
-        return _read_source_object(name, seg, object_type)
+        r = _read_source_object(name, seg, object_type)
+        # Kardes-uc fallback: tablo ucunda 404 -> YAPI ucunu da dene (ve tersi).
+        # Bkz. `_DDL_KARDES_SEG` notu (kayit #8, 2026-08-18 ZSD000_S_SCREEN_* vakasi).
+        if r.get("ok") is True and r.get("exists") is False and seg in _DDL_KARDES_SEG:
+            kardes_seg, kardes_tip = _DDL_KARDES_SEG[seg]
+            r2 = _read_source_object(name, kardes_seg, object_type)
+            if r2.get("ok") is True and r2.get("exists") is True:
+                # Obje VAR — yalnizca YANLIS UCA sorulmustu. `type` cagiranin verdigi
+                # deger olarak KALIR (sozlesme sabit); dogru tip AYRI alanda bildirilir.
+                r2["type"] = object_type
+                r2["requested_endpoint"] = seg
+                r2["resolved_endpoint"] = kardes_seg
+                r2["resolved_type"] = kardes_tip
+                r2["sibling_probe"] = "checked_found"
+                r2["warning"] = (
+                    "TIP DUZELTMESI: '%s' tipi '%s' ucuna sorar, ama bu obje '%s' "
+                    "ucunda bulundu (kanonik tip: '%s'). Kaynak DOGRU objeden okundu. "
+                    "Sonraki cagrilarda object_type='%s' kullan."
+                    % (object_type, seg, kardes_seg, kardes_tip, kardes_tip)
+                )
+                return r2
+            if r2.get("ok") is True and r2.get("exists") is False:
+                # Iki ucta da 404 -> yokluk iddiasi GUCLENDI (delil listesi acik yazilir).
+                r["sibling_probe"] = "checked_absent"
+                r["probed_endpoints"] = [seg, kardes_seg]
+            else:
+                # Kardes uc OLCULEMEDI -> yokluk beyani DARALTILIR ("bakamadim" != "yok").
+                r["sibling_probe"] = "unavailable:%s" % (r2.get("error") or "bilinmeyen")
+                r["probed_endpoints"] = [seg]
+                r["warning"] = (
+                    "exists:false YALNIZ '%s' ucu icin KANITLIDIR. Kardes uc ('%s') "
+                    "OLCULEMEDI (%s) — obje bir YAPI/TABLO olarak orada duruyor olabilir. "
+                    "⛔ Bu cevaba dayanip obje YARATMA; adt_search_objects ile capraz kontrol et."
+                    % (seg, kardes_seg, r2.get("error") or "bilinmeyen")
+                )
+        return r
 
     ddic_xml_type = ddic_canonical if ddic_mode == "xml" else None
     if ddic_xml_type is not None:
@@ -753,6 +818,72 @@ def adt_msgclass_read(name: str) -> dict:
 # adt_post_shell
 # =============================================================================
 
+# ⛔ CREATE'IN "BASARISIZ" DONUSU DE KANIT DEGILDIR (kayitlar #20 + #49 — ayni kokun iki yuzu).
+#
+# Olculmus iki vaka:
+#   2026-08-19 `ZCL_SD000_GET_IDOCDATA`: MCP **400** raporladi, obje FIILEN YARATILMISTI
+#     (3. ve 4. denemede sunucu `ExceptionResourceAlreadyExists` dedi; TADIR'dan dogrulandi).
+#     ⚠ AYNI turda GERCEK bir 400 da vardi: sinif kisa metni siniri
+#     `adtcore:descriptionTextLimit="60"`, verilen aciklama 80 karakterdi. Yani iki AYRI 400:
+#     (a) gercek (metin > sinir)  (b) sahte (create basarili ama 400 raporlandi).
+#   2026-08-21 `A-13` (uc sinif): donus `[ERROR] [500] Failed to create CLAS/OC` -> `ok:false`,
+#     ama kabuk UCUNDE DE GERCEKTEN YARATILDI (`adt_get exists=true` · TADIR DEVCLASS dolu,
+#     DELFLAG bos).
+#
+# ⛔ NEDEN CIDDI — RETRY TUZAGI: `ok:false` gorunce dogal refleks TEKRAR DENEMEKTIR. Bir
+# gateway bunu bilmeden yapti -> 400 ("zaten var") aldi; zarar OLMADI ama bu yalniz SAP'nin
+# ikinci yaratmayi reddetmesi sayesinde. Idempotent OLMAYAN bir obje tipinde ayni refleks
+# MUKERRER YARATMA uretirdi. ⇒ "exit 0 != kanit"in TERS YUZU: `ok:false` DA kanit degil.
+#
+# ⚠ MEKANIK SEBEP (olculdu, `sap_client.create_object`): o katman HER istisnayi YUTAR,
+# sebebi yalnizca stdout'a `[ERROR] ...` diye basar ve `None` doner. Yani buradaki
+# `except Exception` dali create hatalarinda HIC atesLENMEZ; tek sinyal `client_log`'tur.
+# Bu, `_bos_sonuc_sinifi`nin cozdugu sinifin aynisidir -> sinyal LOG'DAN cikarilir.
+_CREATE_HATA_IMZALARI = (
+    # (imza (kucuk harf), donus kodu, aciklama)
+    ("exceptionresourcealreadyexists", "already_exists",
+     "SAP 'kaynak ZATEN VAR' dedi — obje mevcut. ⛔ TEKRAR YARATMAYA CALISMA."),
+    ("resourcealreadyexists", "already_exists",
+     "SAP 'kaynak ZATEN VAR' dedi — obje mevcut. ⛔ TEKRAR YARATMAYA CALISMA."),
+    ("descriptiontextlimit", "description_too_long",
+     "GERCEK 400: kisa metin (description) SAP'nin tip-basina sinirini ASIYOR. "
+     "Ham govdedeki `adtcore:descriptionTextLimit` degerine bak (sinif icin olculen: 60) "
+     "ve aciklamayi KISALT. Bu bir sahte-400 DEGILDIR."),
+)
+
+
+def _create_hata_sinifi(log_text: str) -> tuple[str, str]:
+    """create `None` dondugunde sebebi LOG'dan sinifla -> (kod, aciklama).
+
+    Log'da tanidik bir imza yoksa `("create_failed", "")` doner — UYDURMA YOK.
+    """
+    dusuk = (log_text or "").lower()
+    for imza, kod, aciklama in _CREATE_HATA_IMZALARI:
+        if imza in dusuk:
+            return kod, aciklama
+    kodlar = sorted(set(re.findall(r"\[(\d{3})\]", log_text or "")))
+    if kodlar:
+        return "create_failed", "SAP HTTP durum(lari): %s (ham sebep client_log'da)." % ", ".join(kodlar)
+    return "create_failed", ""
+
+
+def _varlik_sondasi(name: str, object_type: str) -> tuple[Optional[bool], str]:
+    """Create hatasi SONRASI objenin GERCEKTEN var olup olmadigini olc.
+
+    Uc-degerli: `True` (var) · `False` (yok) · `None` (OLCULEMEDI — "yok" DEGIL).
+    ⛔ `None`'i "yaratilmadi" diye okuma; bu ayrimin kaybi kaydin ta kendisidir.
+    """
+    try:
+        p = adt_get(name=name, object_type=object_type, include_source=False)
+    except Exception as exc:  # noqa: BLE001 — teshis bozulmasin
+        return None, "unavailable:%s" % type(exc).__name__
+    if p.get("ok") is True and p.get("exists") is True:
+        return True, "checked_found"
+    if p.get("ok") is True and p.get("exists") is False:
+        return False, "checked_absent"
+    return None, "unavailable:%s" % (p.get("error") or "bilinmeyen")
+
+
 @profil_tool()
 def adt_post_shell(
     object_type: str,
@@ -775,8 +906,22 @@ def adt_post_shell(
         description: Short description (TR for Z* objects per ADR 0005 §D).
         extra: Object-specific parameters (e.g., {'datatype':'CHAR','length':10} for domain).
 
+    ⛔ **`ok: false` "OBJE YARATILMADI" DEMEK DEGILDIR — RETRY ETMEDEN ONCE OKU.**
+    Olculdu (2026-08-19 ve 2026-08-21, dort obje): arac `400` / `500` raporladi, kabuk
+    **fiilen YARATILMISTI**. Bu yuzden hata donusune artik bir **VARLIK SONDASI** eklidir:
+      • `exists_after: true`  → obje SAP'de VAR. ⛔ **TEKRAR YARATMAYA CALISMA** (mukerrer
+        obje riski); `adt_push_source` ile devam et.
+      • `exists_after: false` → obje yok, yeniden denenebilir.
+      • `exists_after: null`  → **OLCULEMEDI** ("yok" DEGIL). `exists_probe`'a bak, elle dogrula.
+    `error` degerleri: `already_exists` (SAP `ExceptionResourceAlreadyExists`) ·
+    `description_too_long` (**GERCEK** 400 — kisa metin SAP sinirini asiyor, olculen sinif
+    siniri 60) · `create_failed` (siniflanamadi; ham sebep `client_log`'da).
+    ⇒ Yan kural (iki kez ise yaradi): ADT 400'lerinde **ham govdeyi oku** — sebep orada
+    yazilidir (kolon adi · metin siniri · zaten var). Govdeyi okumadan "flakiness" deme.
+
     Returns:
-        {ok, name, type, object_url?, client_log}
+        {ok, name, type, object_url?, result?, client_log}
+        On failure: {ok: false, error, message, exists_after, exists_probe, client_log}
         On guardrail block: {ok: false, error: 'guardrail_violation', code, message}
     """
     try:
@@ -797,12 +942,43 @@ def adt_post_shell(
                 transport=transport,
                 **(extra or {}),
             )
+        log_text = out.getvalue().strip()
+        if result:
+            # `create_object` basarida obje URL'ini (str) doner. Eskiden yalniz
+            # `result if isinstance(result, dict)` yaziliydi -> str URL her zaman None'a
+            # dusuyordu ve docstring'in vaat ettigi `object_url` HIC dolmuyordu.
+            return {
+                "ok": True,
+                "name": name,
+                "type": object_type,
+                "object_url": result if isinstance(result, str) else None,
+                "result": result if isinstance(result, dict) else None,
+                "client_log": log_text,
+            }
+
+        # ── BASARISIZ GORUNEN DONUS: "olmadi" mi, "oldu ama hata raporlandi" mi? ──
+        # (kayitlar #20 + #49 — retry tuzagi; gerekce icin yukaridaki blok notuna bak)
+        kod, aciklama = _create_hata_sinifi(log_text)
+        var_mi, sonda = _varlik_sondasi(name, object_type)
+        if var_mi is True:
+            mesaj = ("⚠ CREATE HATA RAPORLADI **AMA OBJE SAP'DE VAR** (varlik sondasi: "
+                     "adt_get exists=true). ⛔ TEKRAR YARATMAYA CALISMA — mukerrer obje "
+                     "riski. Kabuk hazir; `adt_push_source` ile devam et.")
+        elif var_mi is False:
+            mesaj = "Obje yaratilmadi (varlik sondasi: adt_get exists=false)."
+        else:
+            mesaj = ("⚠ Obje yaratildi mi OLCULEMEDI (varlik sondasi: %s). Bu sonuc "
+                     "'yaratilmadi' DEGILDIR — ⛔ KOR RETRY YAPMA; once adt_get / TADIR ile "
+                     "varligi ELLE olc." % sonda)
         return {
-            "ok": bool(result),
+            "ok": False,
+            "error": kod,
             "name": name,
             "type": object_type,
-            "result": result if isinstance(result, dict) else None,
-            "client_log": out.getvalue().strip(),
+            "message": (mesaj + (" " + aciklama if aciklama else "")).strip(),
+            "exists_after": var_mi,
+            "exists_probe": sonda,
+            "client_log": log_text,
         }
     except Exception as exc:
         return _err_from_exc(exc)
@@ -1059,7 +1235,72 @@ _ACTIVATION_URI_SEG = {
     # tipi eksikti -> adt_activate(also=[{object_type:"include"}]) unsupported_type veriyordu.
     "include": "programs/includes", "prog/i": "programs/includes",
     "srvb": "businessservices/bindings", "servicebinding": "businessservices/bindings",
+    # 2026-08-22 (kayit #70): `fugr` bu sozlukte HIC YOKTU -> `_activation_uri` None
+    # donuyor, `also=[{object_type:"fugr"}]` atomik co-activate'i `unsupported_type` ile
+    # reddediliyordu. Segment repoda zaten kanitli tek kaynakta: `scripts/object_types.py`
+    # FUGR `url_path='functions/groups'` (kardes tuketici: `query.py` iki yerde ayni esleme).
+    "fugr": "functions/groups", "functiongroup": "functions/groups",
 }
+
+
+# ⛔ AKTIVASYON READBACK'i (kayit #70, olculdu 2026-08-22 bir FUGR uzerinde; ornek ad
+# `ZSD001_FG_ORNEK`):
+#   `adt_activate(object_type='fugr')`      -> **`activated: true`**
+#   ayni anda HAM `POST /activation`        -> **`activationExecuted="false"`**
+#   `adt_inactive_objects`                  -> ayni FUGR (FUGR/F) **LISTEDE**
+#   bagimsiz ucuncu kanit (ATC)             -> "The program SAPL<FUGR> contains
+#                                              **inactive parts**"
+# ⇒ SINIF: sessiz sahte-yesil. Arac "aktive ettim" diyor, obje INAKTIF kaliyor; yalniz
+# `adt_activate` donusune bakan bir ajan YANLIS sonuca varir.
+#
+# ⚠ BUGUNKU BOSLUK YAPISALDIR: klasik yolun TEK dogrulamasi `_content_readback`'tir, o da
+# (a) yalniz `_SOURCE_BASED_TYPES` icin ve (b) yalniz bu seansta `adt_push_source` kaydi
+# varsa kosar. `fugr` (ve dtel/doma/tabl gibi XML-DDIC tipleri, ayrica salt re-activate)
+# ⇒ **HIC dogrulanmiyor**. Bu sonda o bosluga, kaydin KENDI kullandigi bagimsiz sinyalle
+# (aktive-bekleyen worklist'i) cevap verir.
+#
+# ⛔ NEDEN `activate_and_verify` YOLUNA (srvb gibi) TASINMADI: `srvb`'de gerekce
+# "`activate_object` bu tipi DESTEKLEMIYOR"du. `fugr` DESTEKLENIYOR ve klasik yol FUGR icin
+# GEREKLI olan iki-fazli pre-audit + `ioc:inactiveObjects` alt-obje toplamasini yapiyor
+# (FUGR'un FF/I alt-objeleri tam da bu yolla aktive ediliyor). Tipi ref-yoluna tasimak bu
+# mekanizmayi KAYBETTIRIR ve CALISAN aktivasyonlari bozabilir -> SAP'siz olculemez.
+# ⇒ Dar ve olculebilir olan secildi: klasik yol KORUNDU, ustune BAGIMSIZ readback konuldu.
+_AKTIVASYON_WORKLIST_UC = "/sap/bc/adt/activation/inactiveobjects"
+
+
+def _aktivasyon_readback(client, adlar: list) -> tuple[Optional[bool], str, list]:
+    """Aktivasyondan SONRA obje(ler) hala 'aktive bekliyor' listesinde mi?
+
+    Uc-degerli: `True` (aktivasyon DOGRULANDI — listede yok) · `False` (hala INAKTIF) ·
+    `None` (**OLCULEMEDI**; "dogrulandi" DEGIL — `sebep` alanina bak).
+    ⛔ Olcum kurulamamasini "temiz" sayma: bu kaydin kok sinifi tam olarak odur.
+    """
+    import xml.etree.ElementTree as ET
+    hedef = {(a or "").strip().upper() for a in adlar if (a or "").strip()}
+    if not hedef:
+        return None, "unavailable:isim_yok", []
+    try:
+        from mcp_servers.sap_adt.tools.query import _IOC_NS  # tek kaynak (yerel kopya YOK)
+        adt = getattr(client, "adt_client", None) or client
+        with _capture_stdout():
+            r = adt.session.get(adt.url + _AKTIVASYON_WORKLIST_UC,
+                                headers={"Accept": "application/*"}, verify=False, timeout=45)
+        if getattr(r, "status_code", None) != 200:
+            return None, "unavailable:http_%s" % getattr(r, "status_code", "?"), []
+        root = ET.fromstring(r.text or "")
+        hala: list = []
+        for entry in root.findall("ioc:entry", _IOC_NS):
+            obj = entry.find("ioc:object", _IOC_NS)
+            ref = obj.find("ioc:ref", _IOC_NS) if obj is not None else None
+            if ref is None:
+                continue                      # transport-seviyesi girdi (bos object)
+            ad = (ref.get("{%s}name" % _IOC_NS["adtcore"], "") or "").strip().upper()
+            tip = ref.get("{%s}type" % _IOC_NS["adtcore"], "") or ""
+            if ad in hedef and ad not in [h["name"] for h in hala]:
+                hala.append({"name": ad, "type": tip})
+        return (not hala), ("checked_inactive" if hala else "checked_active"), hala
+    except Exception as exc:  # noqa: BLE001 — teshis bozulmasin
+        return None, "unavailable:%s" % type(exc).__name__, []
 
 
 def _activation_uri(name: str, object_type: str):
@@ -1087,6 +1328,17 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
 
     Returns:
         {ok, name, type, activated, errors?, warnings?, refs?, client_log}
+
+    ⛔ **KLASIK YOLDA AKTIVASYON READBACK'i** (kayit #70, olculmus sahte-OK vakasi — `fugr`).
+    Tek-obje klasik aktivasyonda, alt katman "aktive edildi" derse obje **bagimsiz olarak**
+    aktive-bekleyen worklist'inde (`/activation/inactiveobjects`) aranir:
+      • `activation_verified: true`  → obje listede YOK, aktivasyon dogrulandi.
+      • `activation_verified: false` → obje HALA listede ⇒ **SAHTE-OK**: `ok=false`,
+        `activated=false`, `error="activation_not_executed"`, `still_inactive=[...]`.
+      • `activation_verified: null`  → sonda kosamadi ⇒ iddia **KANITLANMADI** (`warning`).
+        Bu "dogrulandi" DEGILDIR.
+    ⚠ `also=` (atomik cok-obje) ve `srvb` yollari zaten `activate_and_verify` ile
+    `activationExecuted` + `type=E` parse eder; readback onlarda TEKRARLANMAZ.
     """
     try:
         require_writable_tier(get_active_tier(), what=f"{object_type} activate")
@@ -1189,6 +1441,35 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
             if rb.get("content_verified") is False:
                 resp["ok"] = False
 
+        # ⛔ AKTIVASYON READBACK'i (kayit #70 — sahte-OK). `_content_readback` KAYNAK
+        # esitligini olcer; bu sonda AKTIVASYON DURUMUNU olcer ve kapsami farklidir
+        # (fugr/XML-DDIC + salt re-activate icin TEK dogrulama). Gerekce: `_aktivasyon_readback`.
+        # ⚠ Yalniz `activated` TRUE iddiasindayken calisir — zaten "olmadi" diyorsa
+        # cakismasi anlamsiz ve fazladan HTTP maliyeti olur.
+        if resp.get("activated") is True:
+            akt_ok, akt_sonda, akt_kalan = _aktivasyon_readback(client, [name])
+            resp["activation_verified"] = akt_ok
+            resp["activation_probe"] = akt_sonda
+            if akt_ok is False:
+                # SAHTE-OK yakalandi: obje HALA aktive-bekleyen worklist'inde.
+                resp["ok"] = False
+                resp["activated"] = False
+                resp["still_inactive"] = akt_kalan
+                resp["error"] = "activation_not_executed"
+                resp["message"] = (
+                    "⛔ SAHTE-OK YAKALANDI: alt katman 'aktive edildi' dedi ama obje HALA "
+                    "aktive-bekleyen worklist'inde (%s). Aktivasyon GERCEKLESMEDI — bu "
+                    "sonuca dayanip zincirin devamina (publish / bagimli obje / test) GECME. "
+                    "Ham yaniti gor: POST /sap/bc/adt/activation -> `activationExecuted`."
+                    % ", ".join("%s (%s)" % (h["name"], h["type"]) for h in akt_kalan)
+                )
+            elif akt_ok is None:
+                resp["warning"] = (
+                    "Aktivasyon DOGRULANAMADI (sonda: %s) — 'aktive edildi' iddiasi bu "
+                    "cagride KANITLANMADI. Kritik zincirde `adt_inactive_objects` ile elle olc."
+                    % akt_sonda
+                )
+
         # ADR 0016 REVİZE: post-write REPO SYNC (M2) KALDIRILDI — gereksiz (push edince repo
         # zaten ≈ canlı; tazelik bir sonraki edit'te pull-before-edit hook ile sağlanır).
         return resp
@@ -1258,11 +1539,37 @@ def adt_classrun(name: str) -> dict:
     sınıflarını çalıştırmak için (ekran/GUI status üretimi — C1). Kod ÇALIŞTIRIR (yazma
     yapabilir) → ADR 0010 tier guard: yalnızca DEV.
 
+    ⛔ **PUSH+ACTIVATE SONRASI ÇIKTI BAYAT OLABİLİR — TEK BAŞINA KANIT DEĞİLDİR.**
+    Ölçülmüş vaka (2026-08-19, `ZCL_SD000_GET_IDOCDATA`): sınıfa `c_docnum = '204075'`
+    sabiti eklenip push+activate edildi; `adt_classrun` **HTTP 200 + dolu, akla yatkın**
+    çıktı verdi — ama **eski kodun** çıktısı (sabit sanki BOŞ). **İkinci çağrı da aynı bayat
+    sonucu** verdi ⇒ tek seferlik aksaklık DEĞİL, tekrarlanabilir. Kaynak tarafı dört
+    bağımsız okumayla temiz ölçüldü (`source/main` default = `?version=active` =
+    `?version=inactive`, aynı sha, sabit VAR; `adt_inactive_objects` count 0).
+    **Kök sebep kaynakta değil, ÇALIŞTIRAN OTURUMDA:** MCP sunucusu tek uzun-ömürlü ABAP
+    oturumu kullanır (`sap-contextid` çerezi) ve **sınıf load'u o oturumda bayat kalır;
+    aktivasyon onu tazelemez.** Kanıt: TAZE oturumdan (yeni logon, kendi süreç,
+    `SAPClient().run_classrun(...)`) aynı sınıf DOĞRU çalıştı.
+    ⚠ Bu, *"araç başarısız"* değil **"araç başarılı görünerek yanlış söylüyor"** sınıfıdır —
+    `adt_transport_list` sahte-sıfırı ve `adt_post_shell` sahte-400'ü ile aynı raf.
+
+    ✅ **DOĞRU YÖNTEM (ikisinden BİRİ zorunlu):**
+      1. **Taze oturumda koştur** — `python -c "...; SAPClient().run_classrun('<AD>')"`
+         (ayrı süreç, yeni logon), **veya**
+      2. **Çıktıyı kaynakla ÇAPRAZ KONTROL et** — çıktıda yeni koda ÖZGÜ bir imza
+         (yeni başlık satırı, yeni sabitin değeri) görünüyor mu? Görünmüyorsa sonucu
+         "davranış yanlış" diye RAPORLAMA; önce bayatlığı ele.
+
+    ⚠ Bu tool bugün dönüşünde bayatlık ölçmez (`session_age`/`context_reused` alanı YOK —
+    oturum tazeleme/uyarı alanı infra kuyruğunda AÇIK kalemdir). Yani aşağıdaki `Returns`
+    sözleşmesinde **tazelik kanıtı yoktur**; kanıtı çağıran üretir.
+
     Args:
         name: Sınıf (Z*/Y*, if_oo_adt_classrun~main implement etmeli).
 
     Returns:
         {ok, class, status, output} — output = out->write konsol çıktısı.
+        ⚠ `ok: true` çıktının GÜNCEL olduğunu KANITLAMAZ (yukarıdaki bayatlık şerhi).
     """
     try:
         require_writable_tier(get_active_tier(), what="classrun execute")

@@ -559,6 +559,26 @@ def adt_sql_query(
       • **PII (ADR 0011):** FROM/JOIN tabloları çıkarılır; DEV serbest, QA/PRD'de hassas
         tablo (KNA1/PA*/banka/TCKN...) için `acknowledge_risk=True` + onay kelimesi ZORUNLU.
 
+    ⚠ **HTTP 400 = "sorgu kabul edilmedi", "tablo erişilemez" DEĞİL** (ölçüldü 2026-08-17,
+    iki ajan bağımsız yaşadı). "400 ⇒ tabloya bakamıyorum" teşhisi bu araçta YANLIŞTIR ve
+    doğrudan *"bulunamadı ≠ yok"* ihlaline götürür. Ölçülmüş üç 400 sebebi:
+
+      1. **UZUN `WHERE`.** Uzun `IN (...)` listesi ya da **5'ten fazla `OR`** → 400.
+         Çözüm (iki ajan da böyle tamamladı): WHERE'i **5'erli parçalara böl**, sonuçları
+         çağıran tarafta birleştir. (Kardeş ölçüm, `adt_transport_list:138`: `E070×E071`
+         JOIN + `E07T` tek sorguda 400; `IN ('a','b')` listesi de 400 verebilir.)
+      2. **VAR OLMAYAN KOLON ADI TAHMİNİ.** `DD30L` sorgusu 400 döndü; sebep erişim değil,
+         **tahmin edilen kolon adıydı**. ⇒ Kolon adını TAHMİN ETME: önce `SELECT *` ile
+         (küçük `row_limit`) kolonları KEŞFET, sonra daralt.
+      3. **ABAP anahtar-kelime çakışması (bağlama göre).** `tadir`'da `object`, `seoclass`'ta
+         `state` kolonu 400 verdi; kolon çıkarılınca sorgu koştu. ⚠ **Genel bir yasak DEĞİL** —
+         aynı turda `E071` `object` kolonuyla sorgulanabildi ve bu modülün kendi
+         `adt_inactive_objects`'i bugün `SELECT obj_name, object, delflag FROM tadir` koşuyor.
+         **Kapsamı ÖLÇÜLMEDİ.** 400 alırsan şüpheli kolonu çıkarıp tekrar ölç.
+
+    ⇒ 400'de refleks: **ham gövdeyi oku** (`message` + `client_log`) — sebep orada yazılıdır.
+    Gövdeyi okumadan "flakiness" hipotezine geçme.
+
     Args:
         query: OpenSQL SELECT. Ör: "SELECT msgnr, text FROM t100 WHERE arbgb = 'ZSD001' AND sprsl = 'T'".
         row_limit: Maks satır (default 100).

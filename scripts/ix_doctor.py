@@ -450,7 +450,44 @@ def katman4() -> list[Sonuc]:
     return r
 
 
-_GUARD_KORUDUGU_TOOLLAR = ("Bash", "PowerShell", "Edit", "Write", "MultiEdit", "NotebookEdit")
+# ⛔ ELLE TUTULAN KOPYA KALDIRILDI (2026-08-29, infra-findings 2026-08-22 "M11").
+# Eskiden burada şu satır vardı:
+#     _GUARD_KORUDUGU_TOOLLAR = ("Bash","PowerShell","Edit","Write","MultiEdit","NotebookEdit")
+# Bu, `pre_tool_guard`ın koruduğu tool kümesinin İKİNCİ bir gerçeğiydi. Aynı olgu iki
+# yerde yaşarsa biri bayatlar — ve BAYATLAMIŞTI: ölçüldü (2026-08-29) ki guard kodu
+# bugün 16 tool adını işliyor, elle liste yalnız 6'sını taşıyordu ⇒ 10 MCP tool'u
+# (`mcp__sap-adt__adt_push_source`, `…adt_activate`, `…adt_post_shell` …) ix_doctor'un
+# kablolama kontrolünde HİÇ denetlenmiyordu. Kontrolün "guard'ın koruduğu 6 tool'un
+# TAMAMI matcher'da" cümlesi doğruydu ama PAYDASI yanlıştı — sessiz kapsam kaybı.
+# Küme artık `check_rule_gate_coverage.hook_tool_adlari()` ile guard'ın KENDİ AST'inden
+# türetilir (N3'ün zaten kullandığı, bloklayan gate'teki okuyucu — kopya DEĞİL, ORTAK).
+def _guard_korudugu_toollar() -> tuple[set[str], list[str], str]:
+    """(tool kümesi, önek dalları, hata) — `pre_tool_guard`ın KODUNDAN türetilir.
+
+    ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: türetme başarısız olursa (import kırık · hook
+    ayrıştırılamıyor · yazım tanınmıyor) BOŞ küme dönmez — hata metni döner ve
+    çağıran bunu PASS'a değil, ölçüm-hatasına çevirir. Boş küme dönseydi kontrol
+    "0 tool'un tamamı matcher'da" diyerek SESSİZCE yeşile düşerdi (ölü gate).
+    """
+    import sys as _sys
+    vdir = Path(__file__).resolve().parent / "validators"
+    if str(vdir) not in _sys.path:
+        _sys.path.insert(0, str(vdir))
+    try:
+        from check_rule_gate_coverage import hook_tool_adlari  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        return set(), [], f"türetme modülü yüklenemedi ({type(e).__name__}: {e})"
+    try:
+        adlar, onekler, korler, hatalar, _olculemeyen = hook_tool_adlari()
+    except Exception as e:  # noqa: BLE001
+        return set(), [], f"hook AST taraması düştü ({type(e).__name__}: {e})"
+    kume = adlar.get("pre_tool_guard", set())
+    if not kume:
+        # Guard'ın tool ayrımı okunamıyor: kör yazım ya da ayrıştırma hatası.
+        neden = next((m for m in list(korler) + list(hatalar) if "pre_tool_guard" in m),
+                     "pre_tool_guard kodunda tool adı ÇIKARILAMADI")
+        return set(), onekler.get("pre_tool_guard", []), neden
+    return set(kume), onekler.get("pre_tool_guard", []), ""
 
 
 def _kablolama_kontrol() -> list:
@@ -474,16 +511,36 @@ def _kablolama_kontrol() -> list:
     if not matcherlar:
         return [(FAIL, "kablolama: PreToolUse'da pre_tool_guard'a giden HİÇBİR matcher yok — guard ÖLÜ")]
 
+    korunan, onekler, turetme_hatasi = _guard_korudugu_toollar()
+    if turetme_hatasi:
+        # ⛔ SESSİZ YEŞİL YOK: küme türetilemediyse kontrol KOŞMADI demektir.
+        r.append((FAIL, f"kablolama ÖLÇÜLEMEDİ: pre_tool_guard'ın koruduğu tool kümesi "
+                        f"KODDAN türetilemedi → {turetme_hatasi}. Bu 'kablolama temiz' "
+                        f"DEĞİLDİR; önce türetmeyi onar."))
+        return r
+
     kapsanmayan = []
-    for tool in _GUARD_KORUDUGU_TOOLLAR:
+    for tool in sorted(korunan):
         if not any(re.fullmatch(m, tool) for m in matcherlar):
             kapsanmayan.append(tool)
     if kapsanmayan:
         r.append((FAIL, f"kablolama DELİK: guard bu tool'ları kodda koruyor ama matcher yönlendirmiyor "
                         f"→ {', '.join(kapsanmayan)}. Kod-seviyesi koruma, kablolanmadan KORUMA DEĞİLDİR."))
     else:
-        r.append((PASS, f"kablolama: guard'ın koruduğu {len(_GUARD_KORUDUGU_TOOLLAR)} tool'un tamamı "
-                        f"PreToolUse matcher'ında ({len(matcherlar)} blok)"))
+        # ⚠ PAYDA ÇIKTIYA BASILIR: "hepsi kapsandı" cümlesi payda görünmeden okunamaz
+        # (M11'in ta kendisi: payda 6'ya düşmüştü ve cümle yine "tamamı" diyordu).
+        # ⚠ PAYDA ÇIKTIYA BASILIR: "hepsi kapsandı" cümlesi payda görünmeden okunamaz
+        # (M11'in ta kendisi: payda 6'ya düşmüştü ve cümle yine "tamamı" diyordu).
+        # ⛔ ÖNEK DALLARI SESSİZ ATLANMAZ ama BULGU da değildir: enumere edilemez
+        # olmaları YAPISAL bir sınırdır, onarılacak bir kusur değil. Kardeş gate
+        # (`check_rule_gate_coverage`) da bunu bilgi satırı olarak basar, bulgu
+        # saymaz — ayrı bir WARN üretmek her koşumda katman 4'ü sarıya boyar ve
+        # uyarı körlüğü üretirdi (bu evde ölçülmüş sınıf).
+        onek_notu = (f" · {len(onekler)} önek dalı ENUMERE EDİLEMEZ "
+                     f"({', '.join(onekler)}) ⇒ o dalın kapsamı ÖLÇÜLMEDİ" if onekler else "")
+        r.append((PASS, f"kablolama: guard'ın koruduğu {len(korunan)} tool'un tamamı "
+                        f"PreToolUse matcher'ında ({len(matcherlar)} blok) "
+                        f"[küme pre_tool_guard.py'den TÜRETİLDİ, elle liste YOK]{onek_notu}"))
     return r
 
 

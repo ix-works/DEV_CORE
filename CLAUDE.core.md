@@ -94,9 +94,42 @@
   koşmadı; sonraki branch eski noktadan açıldı. Başlangıcı komutta vermek bu sınıfı tümden kapatır —
   senkron adımının koşup koşmadığına bağımlı olmaz.)*
   ⚠️ Worktree yalnız provizyonlu açılır: `team_setup.py --provision-worktree` (junction + `.conn_adt` provizyonu şart — D16; çıplak `git worktree add` guardrail'siz kalır).
-  Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU** +
+- **⛔ WORKTREE YAŞAM DÖNGÜSÜ — kanonik yol + kim açar + gün-sonu denetimi (2026-08-29, kayıt #80):**
+  1. **KANONİK YOL (yol icat etme):** `<proje.parent>/.wt/<proje-adı>/<dal-etiketi>`.
+     Açma **tek komutla**: `python core/scripts/team_setup.py --wt-ac <dal>` — yolu **kendisi
+     üretir** (`--wt-yolu <dal>` yalnız basar). *(Vaka 2026-08-28: yol her oturumda yeniden
+     icat edildiği için tek makinede **4 artık worktree / 4 farklı adlandırma**, en eskisi
+     3 haftalık; ikisi git'e kayıtsız yetimdi.)*
+     ⭐ **Kök neden repo DIŞINDA:** repo kökünden `rglob`/`os.walk` yapan araçlar (statusline,
+     validator'lar, `behavior_manifest`) worktree kopyalarına **yapısal olarak ulaşamaz** ⇒
+     "bayat kopya tarandı" hata sınıfı mekanik olarak imkânsızlaşır. Budama listeleri o
+     sınıfı ancak *sonradan* kapatır (2026-08-18 · 2026-08-28 iki ısırık) — **ikisi
+     birbirinin yerine geçmez**: budama eski/iç worktree'ler için durur.
+  2. **KİM AÇAR:** ⭐ **çok-repolu görevde worktree'yi LİDER açar.** Alt-ajana verilen
+     `isolation:"worktree"` yalnız **içinde bulunulan** projenin ağacını verir; hedef başka
+     bir repoysa ajanın **yazacak yeri olmaz**. *(Ölçülmüş vaka 2026-08-19: bir infra-expert
+     bu yüzden **26 dakika** ölçülebilir çıktı üretemedi.)* Brifing worktree yolunu
+     **açıkça** taşır; yol yoksa ajan durup lidere sorar.
+  3. **GÜN-SONU DENETİMİ (aşağıdaki gün-sonu adımının parçası):**
+     `python core/scripts/team_setup.py --wt-denetim` — hiçbir şey silmez, `exit 1` =
+     operatör müdahalesi. Ölçtüğü dört şey: ⓐ `git worktree list` ↔ disk (kayıtsız yetim)
+     ⓑ her dal için **`git cherry -v main <dal>`** ⓒ `git status --short --ignored
+     --untracked-files=all` (izlenen = FAIL · gitignore'lu **scratch-dışı** = hasat adayı)
+     ⓓ yetimlerde `git hash-object` → `git cat-file -e` + `gitdir`siz bayat metadata.
+     ⛔ **`--is-ancestor` KULLANILMAZ** — squash-merge'de yanıltır (ölçüldü: 5 dalın 5'i
+     "merge edilmemiş" göründü, beşi de `git cherry` ile `-` çıktı).
+     ⛔ ⓓ olmadan *"yetimde özgün iş var mı"* **cevaplanamaz**: düz dosya karşılaştırması
+     satır-sonu gürültüsüyle **150 "farklı" dosya** gösterdi, gerçek fark **24**'tü.
+  4. **KAPATMA:** `--wt-kapat <dal>` — **silme sırası DAİMA junction-önce** (`rmdir`/`unlink`
+     ile bağ kaldırılır, sonra ağaç); `rm -rf` bir junction'a girerse **hedefi** siler.
+     Denetim temiz değilse `--zorla` olmadan dokunmaz; `git worktree remove` dört vakada da
+     `Permission denied` verip **metadata'yı silip dizini bıraktığı** için her adım
+     tekrar-denemelidir.
+- Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU** +
   **auto-memory git'i commit+push** (memory dizini kendi PRIVATE remote'lu git'indedir —
-  2026-08-12: makine-lokal tek kopya riski ölçülerek kapatıldı; push'suz memory = yedeksiz).
+  2026-08-12: makine-lokal tek kopya riski ölçülerek kapatıldı; push'suz memory = yedeksiz)
+  + ⭐ **`--wt-denetim` (yukarıdaki madde 3)** — açık worktree'lerde main'e gitmemiş iş ya da
+  hasat edilmemiş hafıza kalmadığı ölçülmeden gün kapanmaz.
 - **⛔ KAPANIŞ DİSİPLİNİ — bir madde konuşmada değil, ARTEFAKTTA kapanır (2026-08-12):**
   1. **Kapanış anı = artefakt anı.** Madde konuşmada kapandığında **aynı turda** dosyada da
      kapanır; gün-sonuna bırakılmaz. *(Yeni kural değil — "İCRA ya da açık ertele"nin
@@ -243,8 +276,17 @@ Her yeni oturum başında, SAP işlemi yapmadan ÖNCE:
 ✓ run_all_validators.py --quick: <OK | N ihlal>
 ✓ Aktif paket: <PKG_FULL veya "belirsiz, kullanıcıya sor">
 ✓ Son session notu: <SESSION_NOTES.md'den 1 satır>
+✓ Spawn izni: AÇIK (core §1.1) — expert/bug-gate/gateway/sap-research sormadan; infra-expert · Workflow · deep-research AYRI onay
 Devam: <soru veya hazır bilgi>
 ```
+
+> ⭐ **`Spawn izni` satırı niye burada (`Q33`, 2026-08-28):** izin §1.1'de yazılıydı, her oturum
+> yükleniyordu — **uygulanmadı**. Harness'ın enjekte ettiği *"Do not call the AgentTool unless the
+> user requested it"* satırının **içinde bir kaçış cümlesi** var; doğru davranış "yasak" deyip
+> geçmek değil **projenin o kaçışı kullanıp kullanmadığına BAKMAK**tı — *hatırlanmadı değil, hiç
+> aranmadı*: düz prose'un karar anında tetikleyicisi yoktu (`gate'lenmemiş kural ≈ kuralsız`).
+> Bu satır kuralı **modelin ilk çıktısındaki kendi beyanına** çevirir. ⚠ **Gevşetme DEĞİL** —
+> var olan izni görünür kılar; kapsam dışı üçlü aynen ayrı ve açık onay ister.
 
 Bu format atlanırsa kullanıcı loader'ın yüklenmediğini varsayar → T4.
 
@@ -338,7 +380,7 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 |---|---|---|
 | Sprint geçiş | `scripts/sprint_gate_check.py` | populate/spec değişikliği |
 | Spec pre-flight | `scripts/td_spec_check.py` | populate_cds_views öncesi |
-| Namespace whitelist | `populate_cds_views.py::validate_sql_view_names()` | (project.yaml `sql_view_prefix`) |
+| Namespace whitelist | `populate_cds_views.py::validate_sql_view_names(cds_files, package=...)` | Prefix **paket adından türetilir** (`_derive_prefixes`); `project.yaml` `sql_view_prefix`/`cds_view_name_prefix` yalnız **fallback/istisna** — sabit tek-format DEĞİL (core PR #161) |
 | Paket kuralları | `scripts/validators/check_package_*.py` | run_all_validators (`source_root`'tan okur) |
 | **Core-sızıntı kilidi** | `scripts/validators/check_core_not_committed.py` | run_all_validators + pre_tool_guard commit-kapsamı |
 | **Davranış-manifest (F2)** | session_start manifest-diff + **ConfigChange hook** | oturum-başı + seans-içi |

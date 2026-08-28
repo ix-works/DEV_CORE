@@ -69,6 +69,16 @@ OBJECT_TYPE_TO_TASK = {
     "include": None, "prog/i": None,          # klasik include (ana programla gelir)
     "srvb": None, "servicebinding": None,     # publish yolu ayrı
     "tabletype": None,
+    # 2026-08-29 (kayıt #70): `fugr`/`functiongroup` `_ACTIVATION_URI_SEG`'e eklendi
+    # (FUGR aktivasyonu + `also=` atomik co-activate için) ⇒ `reviewer_tip_kapsam`
+    # fixture'ı bu iki anahtarı BURADA da beyan edilmiş görmek ister.
+    # ⛔ DEĞER `None` — ve bu bir GEVŞETME DEĞİLDİR: `run_review.TASK_VALIDATORS`
+    # ölçüldü (AST, 14 görev: cds_*, class_push, domain_creation_csv, dtel_update,
+    # itg_s2_signoff, rap_*, sap_active_check, struct_*, table_*) → FUGR için
+    # tanımlı bir zincir YOK. Önceden bu anahtarlar HİÇ yoktu ve `.get()` zaten
+    # None döndürüyordu; tek değişen, kararın artık AÇIKÇA KAYDA GEÇMESİ.
+    # ⇒ FUGR için bir reviewer zinciri tanımlanırsa bu iki satır GÜNCELLENMELİDİR.
+    "fugr": None, "functiongroup": None,
 }
 
 # Composite tool name → task for its created object.
@@ -196,7 +206,8 @@ def run_reviewer(task: Optional[str], artifact_path: Optional[str],
         return ReviewerResult(
             verdict="WARNING", skipped=False, warning_count=1,
             skip_reason=("reviewer_timeout — MCP içi reviewer 30s aştı; push bloke "
-                         "EDİLMEDİ. Manuel doğrula: python scripts/validators/run_review.py "
+                         "EDİLMEDİ. Manuel doğrula (PROJE kökünden): "
+                         "python core/scripts/validators/run_review.py "
                          f"--task {task} --artifact <path>"))
     except Exception as exc:
         log.warning("Reviewer subprocess error: %s", exc)
@@ -244,8 +255,8 @@ def reject_payload(name: str, object_type: str, result: ReviewerResult) -> dict:
         "message": (
             f"Reviewer pre-flight (ADR 0006) BLOCKER verdict: "
             f"{result.blocker_count} blocker, {result.warning_count} warning. "
-            f"Düzelt ve tekrar dene. Manuel: "
-            f"python scripts/validators/run_review.py --task <X> --artifact <path>"
+            f"Düzelt ve tekrar dene. Manuel (PROJE kökünden): "
+            f"python core/scripts/validators/run_review.py --task <X> --artifact <path>"
         ),
         "name": name,
         "type": object_type,

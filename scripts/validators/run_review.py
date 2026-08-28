@@ -126,8 +126,22 @@ TASK_VALIDATORS = {
         ('check_domain_output_length.py', 'BLOCKER',
          'Domain output length formula kontrolü'),
     ],
+    # #30② (2026-08-29): `dtel_update` VARDI ama `dtel_creation` YOKTU → `--task
+    # dtel_creation` argparse'ta exit 2 ile reddediliyordu, yani DTEL YARATIMI hiç
+    # review edilemiyordu. ⛔ SIRA: önce GERÇEK kontrol (check_dtel_creation_labels.py)
+    # yazıldı, görev SONRA bağlandı. Tersi (önce boş görev) exit 2'yi `PASS`+exit 0'a
+    # çevirir ve sıfır kontrollü sahte-yeşil üretirdi — geçici bile olsa kabul edilemez.
+    'dtel_creation': [
+        ('check_dtel_creation_labels.py', 'BLOCKER',
+         'DTEL yaratma CSV\'si: 4 label + description DOLU, uzunluklar sınırda, '
+         'type_kind=domain ise domain bağı tam (ADR 0005-D / madde D)'),
+    ],
     'dtel_update': [
-        # DTEL update için spesifik validator henüz yok — manual review
+        # DTEL update için spesifik validator henüz yok — manual review.
+        # ⚠ BOŞ ZİNCİL BİLİNÇLİDİR (docstring'deki "kayıtlı boşluk" istisnası) ve
+        # `dtel_creation` doldurulduğu için buraya OTOMATİK devralınmaz: update'in
+        # kendi tuzağı AYRIDIR (adt-domain-dtel.md §3b: `adtcore:description` XML'de
+        # İKİ yerde geçer, düz re.sub PAKET açıklamasını da ezer) — o ayrı bir kalem.
     ],
     'class_push': [
         ('check_method_param_type_c.py', 'BLOCKER',
