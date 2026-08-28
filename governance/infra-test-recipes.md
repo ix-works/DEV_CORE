@@ -851,7 +851,10 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
 
 ## B27 — PARTİ-2b şablon + manifest üçlüsü (.rules.md.tmpl · spawn-brief/lint · behavior_manifest)
 - İki korpus (ikisi de OZEL_TESTLER üyesi):
-  `python tests/fixtures/sablon_zorunlu_maddeler/run.py` → **9 senaryo + 3 mutasyon**, exit 0
+  `python tests/fixtures/sablon_zorunlu_maddeler/run.py` → **11 senaryo + 5 mutasyon**, exit 0
+    ⚠ *güncellendi 2026-08-29:* A4/A5 + M4/M5 `6e4a1ec`'te eklenmişti, reçete o gün güncellenmemişti
+    (9+3 yazıyordu — bayat iddia). A4/A5 çapası aynı gün **`Class` eksenine taşındı**: dayandığı
+    Message Class çelişkisi kapandı, `Class` çelişkisi (`ZCL_{PKG}_*` ↔ canlı kısaltılmış biçim `ZCL_<PKG#>_*`) açık kaldı.
   `python tests/fixtures/manifest_secici_onay/run.py`    → **9 senaryo + 4 mutasyon**, exit 0
   Dokunulan hook regresyonu: `python tests/fixtures/prior_art_kb01/run.py` → **17/17**.
   Tam suite: `python tests/run_fixture_tests.py` → **136/136**.

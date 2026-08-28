@@ -241,11 +241,38 @@ The project team uploads data into the SAP system using data migration tools suc
 | Data Element | Z or Y | `E` | `ZMM001_E_AMOUNT` | Yes |
 | Domain | Z or Y | `D` | `ZSD001_D_AMOUNT` | Yes |
 | Search Help | Z or Y | `SH` | `ZSD001_CLC_SH_CUSTOMER` | CDS View |
-| Message Class | Z or Y | `MC` | `ZSD001_MC` | Yes |
+| Message Class | Z or Y | `MSG` | `ZSD001_MSG` | Yes |
 | Number Range | Z or Y | `NR` | `ZSD001_NR` | Yes |
 | Transaction Code | Z or Y | `007` | `ZSD001` | No |
 | Data Definition | Z or Y | `DDL` | `ZSD001_DDL_CUSTOMER_LIST` | Yes |
 | Authorization Object | Z or Y | `Aut` | `Z_PORGIN` | Yes |
+
+> 📌 **Message Class öneki `MC` → `MSG` (düzeltildi 2026-08-29).** Bu satır 2026-08-29'a
+> kadar **`MC`** (örnek `ZSD001_MC`) yazıyordu. **Eski hüküm silinmedi**, tarihsel kayıt
+> olarak burada durur. Gerekçe bir tercih değil **ölçümdür**: `MC` biçiminin
+> (`Z<MOD><NNN>_MC`) canlı kullanımı **0**'dır — 23 paketin `.rules.md`'sinde **0** satır,
+> `*.abap` kodunda **0** atıf, dokümanlarda **0** atıf. Aynı korpusta `_MSG` biçimi
+> **6 ayrı mesaj sınıfı / 319 atıf** ile yaşıyor (`<PKG>_MSG` · `<PKG>_MSG` ·
+> `<PKG>_MSG` · `<PKG>_MSG` · `<PKG>_MSG` · `<PKG>_MSG`); üstelik core'un **kendi
+> araçları** da bu biçimi örnekliyor: `playbook/adt-message-class.md` §18
+> (`--name ZSD001_MSG`) · `scripts/create_message_class.py` (`--name <PKG>_MSG`) ·
+> `standards/04-documentation-fs-ts.md` (`ZSD_ONAY_MSG`). Yazılı kuralın tek bir canlı
+> örneği bile yoksa o kural değil temennidir; **canlı desen kazandı**.
+>
+> ⚠ **LEGACY — hâlâ geçerlidir:** `_MSG` eki taşımayan, paket adıyla birebir aynı mesaj
+> sınıfları canlıda **mevcuttur ve kullanılmaktadır** (iki paketin çıplak sınıfı: 26 + 2 atıf,
+> `MESSAGE nnn(...)` formu). Bunlar **ihlal değildir, rename EDİLMEZ**; kural yalnız
+> **yeni** mesaj sınıfını bağlar → yeni sınıf `_MSG` ile yaratılır.
+>
+> ⚠ **ÖLÇÜMÜN KAPSAMI:** `core/` **paylaşılan** bir repodur. Yukarıdaki sayılar **bu
+> makinedeki proje ağaçlarıyla** sınırlıdır (ölçülen ağaç: bir proje deposunun `SOURCE_CODES/` +
+> `governance/`, 2026-08-29). Başka bir projede yerleşik farklı bir desen varsa bu satır
+> yeniden **ölçülerek** tartışılır — tahminle değiştirilmez.
+>
+> **Kablolama (üçü atomiktir):** bu satır · paket şablonu
+> `templates/new-package/.rules.md.tmpl` · proje kapısı (proje-lokal
+> `scripts/validators-local/check_package_rules_naming_standard.py` gömülü `KANONIK`
+> haritası). Üçü birlikte taşınmazsa kapı `HARITA-SAPMASI` bulgusu üretir.
 
 #### 4.4.6 Public Cloud Objects
 
@@ -312,13 +339,13 @@ _(No specific naming entries beyond the tables above for this category.)_
 Yeni bir alan/obje tiplerken **bu sırayı izle** (yeni yaratmadan önce mevcudu ara):
 
 1. **Standart DE** (released, Clean Core) varsa onu kullan.
-2. **Mevcut Z/CBO DE** (paket veya ortak `ZSD000_*`) varsa onu kullan (duplicate yaratma).
+2. **Mevcut Z/CBO DE** (paket veya ortak `<PKG>_*`) varsa onu kullan (duplicate yaratma).
 3. Yoksa **yeni Z DE** yarat (TR text, ADR 0005-D).
 4. Son çare **primitive** (char/numc...) — tercih edilmez.
 
 **Reuse-first kuralı:** Yeni DTEL/domain/struct/CDS yaratmadan önce, aynı işi gören Z
 obje var mı kontrol et. Ortak master/value-help için **ASLA local kopya yaratma** —
-`ZSD000_I_*` expose + association kullan (ADR 0009).
+`<PKG>_I_*` expose + association kullan (ADR 0009).
 
 > Reviewer: `check_reuse_gate.py` (WARNING) repo-local duplicate + ortak-VH reuse'unu
 > SAP'ye yazmadan yakalar. Tam DDIC reuse için canlı `adt_search_objects` (gelecek).
