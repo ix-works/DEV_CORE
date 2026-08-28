@@ -49,6 +49,31 @@ TABAN_AD = "_zz_taban_team_setup.py"   # gecici; finally'de SILINIR
 
 SONUC: list[tuple[bool, str]] = []
 
+# E-05 fix'inin CAPASI: `junctions()` FALSE dondugunde erken `return 1` YOKTUR
+# (kablolama adimlari yine kosar). Taban/mutasyon bu capayi SOKER.
+_E05_CAPA = ("    kurulum_ok = junctions(proje, overlay_onayli=a.overlay_onayli)\n"
+             "    if not kurulum_ok:\n")
+
+
+def _fix_sok(kaynak: str, nicin: str) -> str:
+    """Guncel team_setup.py'den E-05 fix'ini SOK (erken `return 1` geri gelir).
+
+    ⛔ Zamandan bagimsiz: girdi calisma agacindaki GUNCEL dosyadir, git gecmisi DEGIL.
+    Capa bulunamazsa GURULTULU dur — sessizce 'taban == fix' durumuna dusmek, kirmizi
+    ayagi olu birakir (tam olarak 2026-08-28 regresyonu).
+    """
+    if _E05_CAPA not in kaynak:
+        raise SystemExit(
+            f"TABAN URETILEMEDI ({nicin}): E-05 capasi (`kurulum_ok` kontrolu) "
+            f"team_setup.py icinde bulunamadi. Fix'in yazimi degismis => uretilen "
+            f"'taban' ARTIK kusuru uretmiyor olabilir. _E05_CAPA'yi GUNCELLE.")
+    return kaynak.replace(
+        _E05_CAPA,
+        "    kurulum_ok = junctions(proje, overlay_onayli=a.overlay_onayli)\n"
+        "    if not kurulum_ok:\n"
+        "        return 1  # TABAN/MUTASYON: E-05 oncesi erken donus geri kondu\n"
+        "    if not kurulum_ok:\n", 1)
+
 
 def kontrol(ad: str, kosul: bool, detay: str = "") -> None:
     SONUC.append((kosul, ad))
@@ -108,29 +133,22 @@ def main() -> int:
     try:
         tmp = Path(tmpdir)
 
-        # ── taban surumu (duzeltme ONCESI) scripts/ icine gecici olarak yaz ─────
-        r = subprocess.run(["git", "-C", str(CORE), "show", "HEAD:scripts/team_setup.py"],
-                           capture_output=True, text=True, encoding="utf-8")
-        if r.returncode != 0:
-            raise SystemExit(f"HATA: taban surum alinamadi: {r.stderr[:200]}")
-        taban_yol.write_text(r.stdout, encoding="utf-8", newline="")
+        # ── TABAN (KIRMIZI ayak) — KAYNAKTAN TURETILIR, REPO DURUMUNDAN DEGIL ──
+        # ⛔ `git show HEAD:` KULLANILMAZ (2026-08-28'de main'i kirdi): fix merge
+        #    edilince HEAD *fix*'i icerir => taban = fix => kirmizi ayak yesile doner.
+        # ✅ Guncel `team_setup.py` kopyalanir ve E-05 fix'i SOKULUR: `kurulum_ok`
+        #    kontrolune erken `return 1` geri konur = duzeltme oncesi davranis.
+        #    (Dosya CORE/scripts/ icine yazilir cunku `CORE_ROOT = __file__/../..`;
+        #     temp dizinde CORE_ROOT yanlis cozulurdu. `finally` blogu SILER.)
+        taban_yol.write_text(_fix_sok(TS.read_text(encoding="utf-8"), "taban"),
+                             encoding="utf-8", newline="")
 
         # ── kosulacak "fix" surumu (mutasyonluysa erken donus geri gelir) ───────
         fix_yol = TS
         mut_yol = CORE / "scripts" / "_zz_mut_team_setup.py"
         if a.mutasyon_erken_donus:
-            s = TS.read_text(encoding="utf-8")
-            capa = ('    kurulum_ok = junctions(proje, overlay_onayli=a.overlay_onayli)\n'
-                    '    if not kurulum_ok:\n')
-            if capa not in s:
-                raise SystemExit("YAMA TUTMADI: mutasyon capasi bulunamadi")
-            yeni = s.replace(
-                capa,
-                '    kurulum_ok = junctions(proje, overlay_onayli=a.overlay_onayli)\n'
-                '    if not kurulum_ok:\n'
-                '        return 1  # MUTASYON: erken donus geri getirildi\n'
-                '    if not kurulum_ok:\n', 1)
-            mut_yol.write_text(yeni, encoding="utf-8", newline="")
+            mut_yol.write_text(_fix_sok(TS.read_text(encoding="utf-8"), "mutasyon"),
+                               encoding="utf-8", newline="")
             fix_yol = mut_yol
 
         # ══ KIRMIZI ════════════════════════════════════════════════════════════

@@ -127,11 +127,56 @@ ART_Z_DTEL_IKI = ("define structure ZSD001_S_TEST {\n"
 ART_Z_DTEL_YOK = "define structure ZSD001_S_TEST {\n  alan_a : abap.char(10);\n}\n"
 
 
+# ── TABAN (KIRMIZI ayak) — KAYNAKTAN TURETILIR, REPO DURUMUNDAN DEGIL ─────────
+# ⛔ `git show HEAD:` KULLANILMAZ (2026-08-28'de main'i kirdi): fix merge edilince
+#    HEAD *fix*'i icerir => "taban" = fix olur => kirmizi ayak sessizce YESILE doner
+#    ve fixture yalniz duzeltme commit'lenmeden ONCE gecebilir. Kalici regresyon
+#    capasi olma amaci tumden bosa cikar. Ayni sinif: `git stash`, calisma-agaci
+#    durumu, `--ref <dal>` — hepsi ZAMANA baglidir.
+# ✅ Bunun yerine: GUNCEL kaynak kopyalanir ve B3-01 fix'inin TUM cagri satirlari
+#    (`gate_status(...)` / `sap_baglanti_yok(...)`) SILINIR. Sonuc, duzeltme oncesi
+#    davranisin ta kendisidir: validator kosar, `exit 0` doner, ama IX-GATE-STATUS
+#    satirini BASMAZ => tuketici onu `PASS` sayar. Zamandan bagimsizdir.
+_FIX_CAGRI_RE = re.compile(
+    r"^[ \t]+(?:gate_status|sap_baglanti_yok)\(.*\)[ \t]*\r?\n", re.M)
+
+# BAYATLIK CAPASI (gorunurluk sarti): fix degisip cagri sayisi duserse taban ARTIK
+# kusuru uretmiyor olabilir. Sessizce yesile donmek yerine GURULTULU dur.
+_TABAN_ASGARI = {
+    "check_struct_field_dtel_active": 5,
+    "check_sap_active_version": 6,
+}
+
+_TABAN_BASLIK = (
+    "# ═════════ FIXTURE TARAFINDAN URETILMIS TABAN — ELLE DUZENLEME ═════════\n"
+    "# Kaynak: scripts/validators/<ad>.py (CALISMA AGACINDAKI GUNCEL surum)\n"
+    "# Donusum: B3-01 fix'inin tum `gate_status(...)`/`sap_baglanti_yok(...)` cagri\n"
+    "#          satirlari silindi => IX-GATE-STATUS BASILMAZ => tuketici PASS sayar.\n"
+    "# Nicin:   `git show HEAD:` zamana baglidir; fix merge edilince taban=fix olur.\n"
+    "# Ureten:  tests/fixtures/sap_gate_skip_sozlesmesi/run.py::_taban_uret\n"
+    "# ═══════════════════════════════════════════════════════════════════════\n")
+
+
+def _taban_uret(hedef: Path, validator: str) -> int:
+    """Guncel kaynaktan duzeltme-ONCESI davranisi uret. Silinen cagri sayisini doner."""
+    s = hedef.read_text(encoding="utf-8")
+    yeni, n = _FIX_CAGRI_RE.subn("", s)
+    asgari = _TABAN_ASGARI[validator]
+    if n < asgari:
+        raise SystemExit(
+            f"TABAN URETILEMEDI ({validator}): {n} fix cagrisi silindi, en az {asgari} "
+            f"bekleniyordu. Fix'in yazimi degismis olabilir (ör. `gs.gate_status(...)`) "
+            f"=> uretilen 'taban' ARTIK kusuru uretmiyor ve KIRMIZI AYAK OLU demektir. "
+            f"_FIX_CAGRI_RE / _TABAN_ASGARI degerlerini GUNCELLE.")
+    hedef.write_text(_TABAN_BASLIK + yeni, encoding="utf-8", newline="")
+    return n
+
+
 def sandbox(tmp: Path, validator: str, taban: bool = False,
             mutasyon: str = "") -> Path:
     """Izole agac kur; validator'in kopyasini dondur.
 
-    taban=True  -> `git show HEAD:` surumu (KIRMIZI ayagi; duzeltme ONCESI kod)
+    taban=True  -> GUNCEL kaynak + fix-sokumu (KIRMIZI ayak; bkz. _taban_uret)
     """
     kok = tmp / (("taban_" if taban else "fix_") + validator + ("_" + mutasyon if mutasyon else ""))
     vdir = kok / "scripts" / "validators"
@@ -139,18 +184,14 @@ def sandbox(tmp: Path, validator: str, taban: bool = False,
     (kok / "scripts" / "sap_adt_lib.py").write_text(SAHTE_LIB, encoding="utf-8")
 
     hedef = vdir / f"{validator}.py"
+    shutil.copy2(VAL / f"{validator}.py", hedef)
+    gs = vdir / "_gate_status.py"
+    shutil.copy2(VAL / "_gate_status.py", gs)
     if taban:
-        r = subprocess.run(["git", "-C", str(CORE), "show",
-                            f"HEAD:scripts/validators/{validator}.py"],
-                           capture_output=True, text=True, encoding="utf-8")
-        if r.returncode != 0:
-            raise SystemExit(f"HATA: taban surum alinamadi: {r.stderr[:200]}")
-        hedef.write_text(r.stdout, encoding="utf-8", newline="")
+        # `_gate_status.py` KOPYALANIR ama cagrilar silinir: import satiri zararsiz
+        # kalir (modul mevcuttur), davranis ise duzeltme oncesidir.
+        _taban_uret(hedef, validator)
     else:
-        shutil.copy2(VAL / f"{validator}.py", hedef)
-        gs = vdir / "_gate_status.py"
-        shutil.copy2(VAL / "_gate_status.py", gs)
-
         # ── MUTASYONLAR (yalnizca sandbox kopyasinda) ──────────────────────────
         if mutasyon == "failopen":
             # Fix'i SOK: baglanti dalindaki beyan kaldirilir (duzeltme oncesi davranis).
@@ -234,6 +275,10 @@ def main() -> int:
         # ══ KIRMIZI AYAK — taban surum (duzeltme ONCESI) ════════════════════════
         print("-- KIRMIZI: taban surum (git show HEAD:) baglanti YOKken --")
         tb = sandbox(tmp, "check_struct_field_dtel_active", taban=True)
+        kontrol("R0 taban GERCEKTEN kusurlu: uretilen dosyada IX-GATE-STATUS cagrisi "
+                "KALMADI (kirmizi ayak canli, kozmetik degil)",
+                not _FIX_CAGRI_RE.search(tb.read_text(encoding="utf-8")),
+                "taban dosyasinda fix cagrisi bulunmamali")
         rc, out, _ = kos(tb, a1, "yok")
         kontrol("R1 taban: baglanti yok -> rc=0 (fail-open)", rc == 0, f"rc={rc}")
         kontrol("R1b taban: IX-GATE-STATUS satiri BASILMIYOR (tuketici PASS sayar)",
