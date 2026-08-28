@@ -33,6 +33,8 @@ Mutasyonlar (DÖRDÜ DE koşulur — hiçbiri diğerini kapsamaz):
   --mutasyon-express      infra-EXPRESS nudge'ını sök     → X1/X3/X4 DÜŞMELİ, X5-X7 AYAKTA
   --mutasyon-onek         `core/` önekini sök             → Y1/Y2 DÜŞMELİ (yol çözülmez)
   --mutasyon-hook         doc-fs dalını sök             → B1-B5 DÜŞMELİ, R1-R3 AYAKTA
+  --mutasyon-kapanmis     nudge'dan `--kapanmis-karar`ı sök → Y3 DÜŞMELİ (öğretilen komut
+                          ile aracın yüzeyi ayrışır; Y1/Y2 AYAKTA — ayrı değişmez)
 Herhangi biri tam puan verirse korpus O DEĞİŞMEZ için BOŞTUR.
 """
 import json
@@ -273,8 +275,15 @@ def _edit(yol: Path, sid: str) -> dict:
 def _mutant(kip: str) -> tuple:
     """(validator_yolu, hook_adi) — mutant KOMŞULARININ yanına yazılır (import kırılmasın)."""
     v_yol, h_adi = VALIDATOR, "post_validate"
-    if kip in ("hook", "express", "onek"):
+    if kip in ("hook", "express", "onek", "kapanmis"):
         kaynak = HOOK.read_text(encoding="utf-8")
+        if kip == "kapanmis":
+            # #12③ — nudge'ın ÖĞRETTİĞİ komuttan `--kapanmis-karar` sökülür.
+            yeni, n = re.subn(r'\n\s*"--kapanmis-karar <[^"]*"', "", kaynak, count=1)
+            _capa(n, kip)
+            hedef = HOOK.parent / "_mutant_post_validate.py"
+            hedef.write_text(yeni, encoding="utf-8")
+            return v_yol, "_mutant_post_validate"
         if kip == "onek":
             yeni, n = re.subn(r"        return core_onekle\(metin\)",
                               "        return metin", kaynak, count=1)
@@ -534,6 +543,26 @@ def main() -> int:
         yollar, kirik = _yollar_cozuluyor(err)
         ekle("Y2 doc-fs OKU nudge'ındaki TÜM .md yolları proje kökünden çözülüyor",
              bool(yollar) and not kirik, f"yol={len(yollar)} kirik={kirik}")
+
+        # ── Y3 (#12③, 2026-08-29): ÖĞRETİLEN KOMUT ile ARACIN YÜZEYİ AYNI MI? ──
+        # C partı ters-yön kontrolünü ekledi ama OPT-IN bıraktı; nudge ESKİ komutu
+        # öğretmeye devam ediyordu ⇒ kullanan herkes körlüğü olan biçimi çağırıyordu
+        # ("çürütülmüş rehberlik aracın kendi metninde yaşar" sınıfı). İki ayrı iddia,
+        # ikisi de ölçülür: (a) nudge bayrağı öğretiyor mu, (b) bayrak GERÇEKTEN var mı.
+        # ⛔ Metin eşleşmesi TEK BAŞINA yetmez: bayrak yeniden adlandırılırsa nudge
+        #    yeşil kalır ve ajana ÇALIŞMAYAN bir komut öğretilir.
+        _dq = subprocess.run([sys.executable, str(DENKLIK), "--help"],
+                             capture_output=True, text=True, encoding="utf-8",
+                             errors="replace", timeout=60)
+        _bayraklar = set(re.findall(r"--[a-z0-9][a-z0-9-]+", _dq.stdout or ""))
+        _ogretilen = set(re.findall(r"--[a-z0-9][a-z0-9-]+",
+                                    " ".join(s for s in err.splitlines()
+                                             if "doc_equivalence_check.py" in s)))
+        ekle("Y3 ⭐ nudge `--kapanmis-karar`ı ÖĞRETİYOR ve bayrak araçta GERÇEKTEN var",
+             "--kapanmis-karar" in _ogretilen and "--kapanmis-karar" in _bayraklar
+             and _ogretilen <= _bayraklar,
+             f"ogretilen={sorted(_ogretilen)} arac-tanimaz={sorted(_ogretilen - _bayraklar)} "
+             f"help-rc={_dq.returncode}")
 
         # ── KONTROL GRUBU: doc-fs dalı KOMŞU dalları bozmadı ───────────────
         rc, _, err = _hook(sb, hook_adi, _edit(sb / "ui" / "app" / "webapp" / "manifest.json", "oturum-6"), shim_var)

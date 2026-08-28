@@ -23,17 +23,35 @@ ateşler ⇒ kimlik ayrımı olmasa guard infra-expert'i de bloklar, işlevsiz o
               (hook_shim/runpy) · kopuk-junction · mesaj yollarının çözülmesi · settings
               kablolaması · sınıf kaydı.
 
-⚠ **KAPSAM SINIRI, korpusta AÇIKÇA duruyor (S8):** kabuk üzerinden yazım (`Bash` +
-`sed -i`/heredoc) KAPSANMAZ. Fiil-kara-listesi bu evde bir kez denendi ve 6 yoldan sızdı
-(pre_tool_guard R10, 2026-07-10 kaldırma gerekçesi). S8 bu boşluğu "bilinmiyor" değil
-"ÖLÇÜLDÜ ve açık" hâlinde tutar.
+  (h) S10-S20 KABUK KOLU (2026-08-29, kayıt #47 — KULLANICI KARARI "dar kapsam + log,
+              blok yok"): `sed -i` / `>` / `tee` hedefi korunan yüzeydeyse stderr'e NOT
+              basılır ve **exit 0** dönülür; belirsiz kalıp (heredoc · `cp` · `python -c`)
+              SUSAR; salt-okuma SUSAR; infra-expert muafiyeti burada da geçerlidir,
+  (i) K8      kabuk kolunun KABLOLAMASI (`settings.template.json` ayrı `Bash` bloğu) —
+              kod ≠ kablolama: bu satır olmadan S10-S13 CANLIDA ÖLÜDÜR.
+
+⚠ **KAPSAM SINIRI hâlâ AÇIK ve korpusta ÖLÇÜLÜ (S8/S17/S18):** kabuk kolu **BLOKLAMAZ**
+ve YALNIZ üç kesin kalıbı tanır. Heredoc · `cp` · `python -c` KAPSANMAZ — bu bir eksiklik
+değil, ölçülmüş bir sınırdır: fiil-kara-listesi bu evde bir kez denendi ve 6 yoldan sızdı
+(pre_tool_guard R10, 2026-07-10 kaldırma gerekçesi); yanlış-pozitif üreten bir guard
+guard'sızlıktan daha kötüdür.
 
 Koşum:  python tests/fixtures/infra_write_guard/run.py
-MUTASYON — İKİ AYRI DEĞİŞMEZ (biri diğerini KAPSAMAZ; ikisi de koşulmalı):
-  --mutasyon-blok    → blok kolu `return 2` → `return 0` (BLOK değişmezi = fix'in sökümü)
-  --mutasyon-cokme   → `_sinif()` istisna atar (FAIL-CLOSED DEGRADE değişmezi):
-                       blok vektörleri KABA AĞ ile AYAKTA kalmalı (sessiz geçiş YOK),
-                       bedeli S4/S9'un yanlış-pozitife düşmesidir — bilinçli yön.
+MUTASYON — DÖRT AYRI DEĞİŞMEZ (hiçbiri diğerini KAPSAMAZ; dördü de koşulmalı):
+  --mutasyon-blok      → blok kolu `return 2` → `return 0` (BLOK değişmezi = fix'in sökümü)
+                         ⇒ B1-B10 düşer; kabuk kolu (S10-S13) ETKİLENMEZ — iki kol
+                         YAPISAL OLARAK AYRIDIR ve bu ayrım burada ölçülür.
+  --mutasyon-cokme     → `_sinif()` istisna atar (FAIL-CLOSED DEGRADE değişmezi):
+                         blok vektörleri KABA AĞ ile AYAKTA kalmalı (sessiz geçiş YOK).
+                         ÖLÇÜLEN bedel (30/40): B10 + S4/S7/S9 kaba-ağ FP'si; kabuk kolu
+                         S10-S13b susar ve S14 çökme-notunu görür — kabuk kolu bilinçli
+                         FAIL-OPEN'dır (uyarı üretmek için çökme YETERLİ SEBEP DEĞİL).
+  --mutasyon-bash-kol  → `main()`teki kabuk dalı sökülür (`return _bash_kolu` → `return 0`)
+                         ⇒ S10-S13 düşer; B1-B10 + FP çapaları AYAKTA (NO-OP tuzağının
+                         doğrudan ölçümü: yalnız `_ARACLAR`a "Bash" eklemek YETMEZ).
+  --mutasyon-bash-cwd  → göreceli yolun `cwd` ile mutlaklaştırılması sökülür
+                         ⇒ YALNIZ S13 düşer (kabuk komutları yolu göreceli yazar;
+                         bu satır olmadan kol canlıda büyük ölçüde ÖLÜDÜR).
 Mutasyon BUGÜNKÜ kaynaktan üretilir (git ref'inden DEĞİL: "fix merge olunca taban kayar"
 tuzağı, B20). Desen bulunamazsa koşucu SAYI RAPORLAMADAN durur.
 """
@@ -41,6 +59,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -62,7 +81,8 @@ NEGATIF_KORPUS = REPO / "tests" / "fixtures" / "negatif_test_harness" / "run.py"
 
 # ⛔ BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir yazim
 # hatasi eskiden HIC mutasyon kurmadan TAM PUAN uretiyordu (exit 0). Kardes: atc_p1_sonuc.
-_GECERLI_KIP = {"--mutasyon-blok", "--mutasyon-cokme"}
+_GECERLI_KIP = {"--mutasyon-blok", "--mutasyon-cokme",
+                "--mutasyon-bash-kol", "--mutasyon-bash-cwd"}
 for _a in sys.argv[1:]:
     if _a.startswith("--mutasyon") and _a not in _GECERLI_KIP:
         raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {_a} — gecerli: "
@@ -70,6 +90,8 @@ for _a in sys.argv[1:]:
 
 MUT_BLOK = "--mutasyon-blok" in sys.argv
 MUT_COKME = "--mutasyon-cokme" in sys.argv
+MUT_BASH_KOL = "--mutasyon-bash-kol" in sys.argv
+MUT_BASH_CWD = "--mutasyon-bash-cwd" in sys.argv
 
 BLOK_CAPA = "İNFRA YAZIMI BLOKLANDI"
 ONAY_CAPA = "AYRI ve AÇIK onay"
@@ -92,14 +114,28 @@ _MUT_BLOK_YENI = "    sys.stderr.write(_blok_mesaji(etiket, kanit, kim, tip))\n 
 _MUT_COKME_ESKI = '    norm = ham.replace("\\\\", "/")\n    if _HARIC.search(norm):\n'
 _MUT_COKME_YENI = ('    raise RuntimeError("mutasyon-cokme")  # noqa\n'
                    '    norm = ham.replace("\\\\", "/")\n    if _HARIC.search(norm):\n')
+# Kabuk kolunun İKİ ayrı değişmezi (biri diğerini kapsamaz):
+_MUT_BASH_KOL_ESKI = "    if arac in _LOG_ARACLARI:\n        return _bash_kolu(data, ti)\n"
+_MUT_BASH_KOL_YENI = "    if arac in _LOG_ARACLARI:\n        return 0\n"
+_MUT_BASH_CWD_ESKI = ('        if not p.is_absolute() and isinstance(cwd, str) and cwd:\n'
+                      '            y = (Path(cwd) / p).as_posix()\n')
+_MUT_BASH_CWD_YENI = ('        if False:\n'
+                      '            y = (Path(cwd) / p).as_posix()\n')
 
 
 def hazirla_hook() -> Path:
     """Ölçülecek hook dosyası: gerçek kaynak ya da mutant kopyası."""
-    if not (MUT_BLOK or MUT_COKME):
+    if not (MUT_BLOK or MUT_COKME or MUT_BASH_KOL or MUT_BASH_CWD):
         return KAYNAK
     metin = KAYNAK.read_text(encoding="utf-8")
-    eski, yeni = (_MUT_BLOK_ESKI, _MUT_BLOK_YENI) if MUT_BLOK else (_MUT_COKME_ESKI, _MUT_COKME_YENI)
+    if MUT_BLOK:
+        eski, yeni = _MUT_BLOK_ESKI, _MUT_BLOK_YENI
+    elif MUT_COKME:
+        eski, yeni = _MUT_COKME_ESKI, _MUT_COKME_YENI
+    elif MUT_BASH_KOL:
+        eski, yeni = _MUT_BASH_KOL_ESKI, _MUT_BASH_KOL_YENI
+    else:
+        eski, yeni = _MUT_BASH_CWD_ESKI, _MUT_BASH_CWD_YENI
     if metin.count(eski) != 1:
         print(f"⛔ MUTASYON DESENİ BULUNAMADI/ÇOK EŞLEŞTİ ({metin.count(eski)}x) — "
               f"SAYI RAPORLANMIYOR (sahte-yeşil yerine görünür duruş).")
@@ -125,9 +161,44 @@ def payload(yol: str, arac: str = "Edit", ajan: str | None = None) -> bytes:
     return json.dumps(d, ensure_ascii=False).encode("utf-8")
 
 
-def kos(hook: Path, govde: bytes, env: dict | None = None) -> tuple[int, str, str]:
+def bash_payload(komut: str, cwd: str | None = None, ajan: str | None = None) -> bytes:
+    """Bash PreToolUse payload'ı — `tool_input` = {command, description} (yol ALANI YOK).
+
+    ⛔ PLATFORM SÖZLEŞMESİ (DEV_CORE#150 dersi): komut içindeki yol DAİMA `/` biçiminde
+    olmalı. Windows yolu (`C:\\...\\x`) gömülürse guard'ın `_sinif()` normalizasyonu
+    değil, komut METNİ platforma bağlanır ve mutasyon Linux'ta sessizce KAÇAR.
+    """
+    if re.search(r"[A-Za-z]:\\|\\\\", komut):
+        raise AssertionError(
+            "korpus hatasi: Bash komutunda WINDOWS yolu var (`\\`). Yol DAIMA `/` "
+            f"olmali (as_posix). Gorulen: {komut[:120]!r}")
+    d: dict = {
+        "session_id": "sndbx-0001",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": komut, "description": "sandbox"},
+    }
+    if cwd:
+        d["cwd"] = cwd
+    if ajan:
+        d["agent_type"] = ajan
+        d["agent_id"] = "a" + ajan[:6]
+    return json.dumps(d, ensure_ascii=False).encode("utf-8")
+
+
+def kos(hook: Path, govde: bytes, env: dict | None = None,
+        calisma_dizini: str | None = None) -> tuple[int, str, str]:
+    """⚠ `calisma_dizini` GEREKLİ BİR DEĞİŞKENDİR, süs değil.
+
+    ÖLÇÜLDÜ 2026-08-29: `_sinif()` içindeki `Path.resolve()` GÖRECELİ bir yolu SÜRECİN
+    kendi cwd'sine göre çözer. Korpus repo kökünden koşulduğunda bu, payload'ın `cwd`
+    alanıyla AYNI sonucu verir ⇒ iki katman ÜST ÜSTE biner ve `--mutasyon-bash-cwd`
+    KAÇAR (ilk koşumda tam olarak bu oldu: 38/38, mutasyon hiçbir şey kırmadı).
+    Göreceli-yol vektörleri bu yüzden NÖTR bir çalışma dizininde koşulur; ancak o zaman
+    ölçülen şey gerçekten payload `cwd` birleştirmesidir.
+    """
     r = subprocess.run([sys.executable, str(hook)], input=govde, capture_output=True,
-                       env=env or os.environ.copy())
+                       env=env or os.environ.copy(), cwd=calisma_dizini)
     return (r.returncode,
             r.stdout.decode("utf-8", "replace"),
             r.stderr.decode("utf-8", "replace"))
@@ -194,10 +265,62 @@ def main() -> int:
             rc, out, err = kos(hook, payload(yol, arac, ajan))
             kontrol(ad, rc == 0 and BLOK_CAPA not in err, f"exit={rc} blok={BLOK_CAPA in err}")
 
-        # S8 — KAPSAM SINIRI, ölçülmüş hâlde: kabuk yüzeyi guard'ın matcher'ında YOK.
+        # ── ②b KABUK KOLU (2026-08-29, kayıt #47 — KULLANICI KARARI: dar + LOG, blok YOK) ──
+        # ⛔ ORTAK ÇAPA: kabuk kolu HİÇBİR vektörde exit 2 üretmez. Blok, yalnız
+        #    Edit/Write/MultiEdit'in işidir; iki kol yapısal olarak ayrıdır.
         rc, out, err = kos(hook, payload(f"{A}/scripts/hooks/yeni_guard.py", "Bash", None))
-        kontrol("S8 ⚠ AÇIK KALEM: Bash ile yazım KAPSANMAZ (sessiz geçer; R10 dersi)",
+        kontrol("S8 ⚠ SINIR: heredoc (`python - <<PY`) BELİRSİZ kalıp → SESSİZ geçer (R10 dersi)",
                 rc == 0 and err.strip() == "", f"exit={rc} stderr={len(err)}b")
+
+        UYARI_CAPA = "BASH-KAPSAM-UYARISI"
+        kabuk_log = [
+            ("S10 ⭐ `sed -i <infra dosyası>` → LOG + exit 0 (BLOK DEĞİL)",
+             f"sed -i 's/a/b/' {A}/scripts/hooks/post_validate.py"),
+            ("S11 ⭐ `> <infra dosyası>` yönlendirmesi → LOG",
+             f"echo x > {A}/scripts/validators/check_yeni.py"),
+            ("S12 ⭐ `tee -a <proje-lokal validator>` → LOG",
+             f"echo x | tee -a {B}/scripts/validators-local/check_x.py"),
+        ]
+        for ad, komut in kabuk_log:
+            rc, out, err = kos(hook, bash_payload(komut))
+            kontrol(ad, rc == 0 and UYARI_CAPA in err and BLOK_CAPA not in err,
+                    f"exit={rc} uyari={UYARI_CAPA in err} blok={BLOK_CAPA in err}")
+
+        # S13 ⭐ GÖRECELİ yol + payload `cwd` — kabuk komutları yolu böyle yazar.
+        #    ⚠ NÖTR çalışma dizini ZORUNLU: aksi hâlde `_sinif()`in `resolve()`ü aynı
+        #    işi sürecin cwd'siyle yapar, iki katman üst üste biner ve mutasyon KAÇAR
+        #    (ölçüldü — `kos()` docstring'i). Tek değişken: payload'ın `cwd` alanı.
+        NOTR = str(tmp)
+        rc, out, err = kos(hook, bash_payload("sed -i 's/a/b/' scripts/hooks/post_validate.py",
+                                              cwd=A), calisma_dizini=NOTR)
+        kontrol("S13 ⭐ GÖRECELİ yol payload `cwd`siyle çözülüyor → LOG (kol ölü değil)",
+                rc == 0 and UYARI_CAPA in err, f"exit={rc} uyari={UYARI_CAPA in err}")
+
+        # S13b SINIR BEYANI: payload `cwd` YOKSA ve süreç cwd'si nötrse yol çözülemez →
+        #      SUSAR. Bu bir eksiklik değil, kapsamın ÖLÇÜLMÜŞ sınırıdır (tahmin YOK).
+        rc, out, err = kos(hook, bash_payload("sed -i 's/a/b/' scripts/hooks/post_validate.py"),
+                           calisma_dizini=NOTR)
+        kontrol("S13b ⚠ SINIR: `cwd` yok + nötr süreç dizini → göreceli yol çözülemez, SESSİZ",
+                rc == 0 and err.strip() == "", f"exit={rc} stderr={err.strip()[:80]!r}")
+
+        # ── FP ÇAPALARI: yanlış-pozitif üreten guard, guard'sızlıktan KÖTÜDÜR ───────
+        kabuk_sessiz = [
+            ("S14 FP: `sed -i` ama SIRADAN dosya (aynı fiil, tek değişken yol)",
+             f"sed -i 's/a/b/' {B}/SOURCE_CODES/MOD/PKG/z_ornek.abap", None),
+            ("S15 FP ⭐ İÇ KONTROL: SALT-OKUMA komutu aynı infra dosyasında → SESSİZ",
+             f"cat {A}/scripts/hooks/post_validate.py", None),
+            ("S16 FP: `> /dev/null` hedefi dosya DEĞİLDİR", "echo x > /dev/null", None),
+            ("S17 FP: `cp` BELİRSİZ kalıp (kullanıcı kararı: girme) → SESSİZ",
+             f"cp /tmp/a.py {A}/scripts/hooks/yeni.py", None),
+            ("S18 FP: `python -c` BELİRSİZ kalıp → SESSİZ",
+             f"python -c \"open('{A}/scripts/hooks/y.py','w').write('x')\"", None),
+            ("S19 FP: komut YOK/boş → SESSİZ", "", None),
+            ("S20 ⭐ MUAFİYET kabuk kolunda da geçerli: infra-expert → TAM SESSİZ",
+             f"sed -i 's/a/b/' {A}/scripts/hooks/post_validate.py", "infra-expert"),
+        ]
+        for ad, komut, ajan in kabuk_sessiz:
+            rc, out, err = kos(hook, bash_payload(komut, ajan=ajan))
+            kontrol(ad, rc == 0 and err.strip() == "", f"exit={rc} stderr={err.strip()[:90]!r}")
 
         # ── ③ SÖZLEŞMELER ──────────────────────────────────────────────────────────
         rc, out, err = kos(hook, b'{"tool_name": "Edit", ')      # bozuk JSON
@@ -244,6 +367,24 @@ def main() -> int:
             if all(t in str(blok.get("matcher", "")) for t in ("Edit", "Write", "MultiEdit"))
             for h in blok.get("hooks", []))
         kontrol("K6 settings.template.json: Edit|Write|MultiEdit matcher'ında KABLOLU", kablolu)
+
+        # K8 — KABUK KOLUNUN KABLOLAMASI (2026-08-29, kayıt #47 katman-3). Kod tek başına
+        # ÖLÜDÜR: matcher'da `Bash` yoksa hook Bash çağrısında HİÇ çağrılmaz. AYRICA
+        # kablolamanın AYRI bir blokta olduğu çivilenir — mevcut `Edit|Write|MultiEdit`
+        # bloğuna `Bash` eklemek `pre_tool_guard` + `pull_before_edit`i de her Bash
+        # çağrısına bağlardı (ölçülmemiş yayılım; bilinçli olarak YAPILMADI).
+        _pre = ayar.get("hooks", {}).get("PreToolUse", [])
+        _bash_bloklari = [b for b in _pre if str(b.get("matcher", "")) == "Bash"]
+        _bash_kablolu = any("infra_write_guard" in json.dumps(h)
+                            for b in _bash_bloklari for h in b.get("hooks", []))
+        _bash_yalniz = all(
+            {"infra_write_guard"} == {a for h in b.get("hooks", []) for a in h.get("args", [])
+                                      if not a.startswith("${")}
+            for b in _bash_bloklari) if _bash_bloklari else False
+        kontrol("K8 ⭐ settings.template.json: AYRI `Bash` bloğunda KABLOLU ve o blokta "
+                "YALNIZ infra_write_guard var (komşu hook'lar Bash'e sızdırılmadı)",
+                _bash_kablolu and _bash_yalniz,
+                f"blok={len(_bash_bloklari)} kablolu={_bash_kablolu} yalniz={_bash_yalniz}")
 
         # K7 — SINIF KAYDI: stdin okuyan yeni hook, parse-fail korpusunun kaydında olmalı (V16)
         kontrol("K7 negatif_test_harness HOOK_KAYDI'nda kayıtlı (V16 sessizce büyümesin)",

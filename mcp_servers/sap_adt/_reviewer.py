@@ -42,7 +42,16 @@ OBJECT_TYPE_TO_TASK = {
     "srvd": "rap_service_binding",
     "servicedefinition": "rap_service_binding",
     "doma": None,             # no validator chain defined yet (domain_creation_csv is CSV-batch)
-    "dtel": None,             # dtel_update validators not defined yet
+    # ⚠ 2026-08-29 ÖLÇÜLDÜ (kayıt #3, `_reviewer.py:47` "bayat yorum" iddiası):
+    #   Yorum bayat SANILDI; ölçüm AKSİNİ söyledi ve mapping DEĞİŞTİRİLMEDİ.
+    #   `run_review.TASK_VALIDATORS['dtel_update']` = **0 validator** (AST + canlı koşum:
+    #   `--task dtel_update` → verdict PASS, koşan validator sayısı 0). Yani `None` ile
+    #   `"dtel_update"` DAVRANIŞ OLARAK AYNI; ortada atlanan bir zincir YOKTUR.
+    #   ⛔ Ayrım: "task ANAHTARI var" ≠ "validator TANIMLI" (kapsam niteleyicisi).
+    #   Bu satır DTEL **push/update** eksenidir. DTEL **yaratma** ekseni ayrıdır ve
+    #   2026-08-29'da doldu → `COMPOSITE_TOOL_TO_TASK["adt_dtel_create"]`e bakınız.
+    #   ⇒ `dtel_update` zincirine ilk validator eklendiği gün burası GÜNCELLENMELİDİR.
+    "dtel": None,             # dtel_update zinciri BOŞ (ölçüldü) — atlanan bir gate yok
     "msag": None,
     "prog": None,
     # ── 2026-08-01 adversarial bug-avı (W2-MCPT-03 / MG-02) ────────────────────────
@@ -73,19 +82,44 @@ OBJECT_TYPE_TO_TASK = {
     # (FUGR aktivasyonu + `also=` atomik co-activate için) ⇒ `reviewer_tip_kapsam`
     # fixture'ı bu iki anahtarı BURADA da beyan edilmiş görmek ister.
     # ⛔ DEĞER `None` — ve bu bir GEVŞETME DEĞİLDİR: `run_review.TASK_VALIDATORS`
-    # ölçüldü (AST, 14 görev: cds_*, class_push, domain_creation_csv, dtel_update,
-    # itg_s2_signoff, rap_*, sap_active_check, struct_*, table_*) → FUGR için
-    # tanımlı bir zincir YOK. Önceden bu anahtarlar HİÇ yoktu ve `.get()` zaten
+    # ölçüldü (AST; aynı gün 14 → **15 görev**: `dtel_creation` eklendi. Tam küme:
+    # cds_creation/cds_update, class_push, domain_creation_csv, dtel_creation,
+    # dtel_update, itg_s2_signoff, rap_bdef_creation/rap_cds_creation/
+    # rap_service_binding, sap_active_check, struct_creation/struct_post_create,
+    # table_creation/table_update) → FUGR için tanımlı bir zincir YOK.
+    # ⚠ SAYI BURAYA GÖMÜLÜ: TASK_VALIDATORS büyüdüğünde bu satır BAYATLAR — nitekim
+    # "14" yazıldığı gün içinde 15 oldu. Otoriter kaynak DAİMA AST'tir, bu yorum değil.
+    # Önceden bu anahtarlar HİÇ yoktu ve `.get()` zaten
     # None döndürüyordu; tek değişen, kararın artık AÇIKÇA KAYDA GEÇMESİ.
     # ⇒ FUGR için bir reviewer zinciri tanımlanırsa bu iki satır GÜNCELLENMELİDİR.
     "fugr": None, "functiongroup": None,
 }
 
 # Composite tool name → task for its created object.
+#
+# ⚠ BU HARİTA `OBJECT_TYPE_TO_TASK` İLE AYNI SINIFTAN ÇÜRÜR: `run_review.TASK_VALIDATORS`
+# büyüdüğünde burası kendiliğinden güncellenmez ve YENİ YAZILAN bir gate sessizce
+# KABLOSUZ kalır ("kod ≠ kablolama"). Tazeliği `tests/fixtures/reviewer_tip_kapsam`
+# zorlar: `None` yazan her satır için o adda bir görev VARSA ve görevin zinciri BOŞ
+# DEĞİLSE test KIRILIR.
 COMPOSITE_TOOL_TO_TASK = {
     "adt_struct_create": "struct_creation",
-    "adt_domain_create": None,   # no validators yet — gracefully PASS
-    "adt_dtel_create": None,     # no validators yet
+    # `domain_creation_csv` (1 BLOCKER) bir CSV-toplu görevdir; bu tool TEK domain
+    # yaratır ve adı eşleşmez ⇒ eşleme bilinçli olarak açık bırakıldı (ayrı kalem,
+    # kuyruğa raporlandı 2026-08-29). Değer `None` = KAYDA GEÇMİŞ karar, eksik anahtar DEĞİL.
+    "adt_domain_create": None,
+    # ⭐ 2026-08-29 (kayıt #3, KOMŞU EKSEN): `None` yorumu "no validators yet" diyordu ve
+    # yazıldığı gün DOĞRUYDU. Aynı gün `dtel_creation` görevi + `check_dtel_creation_labels.py`
+    # (BLOCKER, ADR 0005-D: 4 label + description doluluk/uzunluk, domain bağı) eklendi ⇒
+    # yorum bayatladı ve YENİ YAZILAN GATE bu yüzeyde HİÇ KOŞMUYORDU.
+    # BLAST-RADIUS ÖLÇÜLDÜ (canlı, 3 yön):
+    #   · `artifact_path=None` (varsayılan; integration_dtel.py böyle çağırır) → `run_reviewer`
+    #     zaten "no_artifact_path_provided" ile SKIP döner ⇒ DAVRANIŞ DEĞİŞMEZ.
+    #   · `artifact_path=<kirli dataelements.csv>` → verdict BLOCKER (blocker=1) ⇒ push REDDEDİLİR.
+    #     Doğru davranış: ADR 0005-D ihlali yazımdan ÖNCE durur.
+    #   · `artifact_path=<ilgisiz artefakt (.clas.abap)>` → verdict PASS. Gate tek-dosya
+    #     hedefinde repo taramaz (`_aday_dosyalar`: `hedef.is_file()` → [hedef]) ⇒ YANLIŞ-POZİTİF YOK.
+    "adt_dtel_create": "dtel_creation",
 }
 
 

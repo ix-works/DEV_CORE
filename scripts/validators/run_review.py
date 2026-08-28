@@ -10,10 +10,15 @@ Mantık:
   - Çıktı: PASS / WARNING / BLOCKER (verdict) + checklist results + blind spots
   - BLOCKER → coordinator yazma yapmadan düzeltmeli (exit 1)
   - WARNING → coordinator yazabilir ama kullanıcıya bildirmeli (exit 0)
-  - ⊘ SKIP (script bulunamadı) → o gate HİÇ KOŞMADI. "Koşmadı" ≠ "temiz": kendi
-    şiddetiyle verdict'e SAYILIR (eksik BLOCKER → BLOCKER). BOŞ ZİNCİL (dtel_update,
-    rap_service_binding) bundan AYRIDIR: orada koşacak gate olmadığı BİLİNÇLİ karardır
-    ve PASS kalır — kayıtsız eksiklik ile kayıtlı boşluk aynı şey değildir.
+  - ⊘ SKIP → o gate ÖLÇÜM ÜRETMEDİ. İKİ ayrı yol aynı sonuca çıkar:
+      (a) script bulunamadı  → hiç koşmadı;
+      (b) script koştu, `exit 0` döndü ama stdout'ta `IX-GATE-STATUS ... measured=false`
+          (2026-08-29, kayıt #5③): "koşturamadım" (config yok / obje tipi desteklenmiyor /
+          araç yok) — `exit 0` görülse bile TEMİZ DEĞİL.
+    "Koşmadı" ≠ "temiz": SKIP kendi şiddetiyle verdict'e SAYILIR (eksik BLOCKER →
+    BLOCKER, eksik WARNING → WARNING). BOŞ ZİNCİL (dtel_update, rap_service_binding)
+    bundan AYRIDIR: orada koşacak gate olmadığı BİLİNÇLİ karardır ve PASS kalır —
+    kayıtsız eksiklik ile kayıtlı boşluk aynı şey değildir.
 
 Kullanım:
     # CDS yaratma öncesi
@@ -38,6 +43,7 @@ Bkz. ADR 0006 — Reviewer Agent Pattern.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -262,6 +268,53 @@ def run_validator(script_path: Path, artifact: str | None, extra_args: list[str]
         return 2, '', f'EXCEPTION: {script_path.name}: {e}'
 
 
+# ── IX-GATE-STATUS SÖZLEŞMESİ — TÜKETİCİ UCU (2026-08-29, kayıt #5③) ──────────────
+# ÜRETİCİ ucu AYRI dosyadadır (`check_abaplint.py`, 2026-08-29'da eklendi) ve şu tek
+# satırı stdout'a basar:
+#
+#   IX-GATE-STATUS: gate=<ad> status=<OK|FINDING|SKIPPED|FAIL> measured=<true|false> reason=<slug>
+#
+# SORUN (ölçüldü): burada `status = 'PASS' if rc == 0 else 'FAIL'` yazıyordu. Üretici
+# tarafta `exit 0`'ın ÜÇ ayrı anlamı var — "ölçtüm, temiz" · "config yok" · "bu obje
+# tipini koşturamıyorum" · "npx yok" — ve üçü de burada `PASS` olarak kaydediliyordu.
+# Yani sözleşmenin iki ucu vardı ama BİRBİRİNE DEĞMİYORDU: "koşturamadım" ile "temiz"
+# reviewer için AYNI olaydı ("gate'lenmemiş kural ≈ kuralsız").
+#
+# ⛔ ÇIKIŞ KODU DEĞİŞTİRİLMEDİ (ne burada ne üreticide): üreticinin `return 0`'ı
+#    gerekçeli bir karardır (offline reviewer zinciri kırılmasın). Tek taraflı
+#    değiştirmek her offline class push'unda yeni bir WARNING üretirdi. Ayırt
+#    edilebilirlik ÇIKIŞ KODUNA değil, bu AYRI KANALA dayanır.
+#
+# SÖZLEŞME JENERİKTİR: `gate=` alanı vardır çünkü ileride başka gate'ler de aynı satırı
+# basacak. Aynı aile ÖLÇÜLDÜ (2026-08-29): `check_cds_srvd_comment_syntax` ·
+# `check_standard_table_fields` ("SAP bağlantısı kurulamadı → return 0"). Onlar bu turda
+# DEĞİŞTİRİLMEDİ; satırı basmaya başladıkları gün bu ayrıştırıcı onları da karşılar.
+# (`check_cds_currency_reference` zaten rc=2 sözleşmesi taşır — ayrı ve iyi bir örnek.)
+#
+# ⚠ MARKÖRÜ TARİF EDEN METİN BEYAN SAYILMAZ — iki ayrı çapa:
+#   ① satır-başı çapası (`^`, re.M) → yorum/docstring içindeki girintili örnekler elenir;
+#   ② `measured=(true|false)` TAM eşleşme → sözleşmeyi ANLATAN `measured=<true|false>`
+#      şablon metni (üreticinin kendi docstring'i) beyan sanılmaz.
+_GATE_DURUM_RE = re.compile(
+    r'^IX-GATE-STATUS:\s+gate=(?P<gate>\S+)\s+status=(?P<status>\S+)\s+'
+    r'measured=(?P<measured>true|false)\s+reason=(?P<reason>\S+)\s*$', re.M)
+
+
+def gate_durum_beyani(stdout: str, script_name: str) -> dict | None:
+    """stdout'taki IX-GATE-STATUS beyanı (yoksa None → BUGÜNKÜ davranış korunur).
+
+    Birden çok beyan varsa: önce `gate=` alanı KOŞAN script'in adıyla eşleşenler
+    süzülür (bir validator başka bir gate'in çıktısını iletiyorsa yabancı beyan
+    okunmasın), eşleşen yoksa SON beyan alınır (script'in nihai sözü). İki dal da
+    korpusta ayrı ayrı ölçülür — ölü dal bırakılmaz.
+    """
+    beyanlar = [m.groupdict() for m in _GATE_DURUM_RE.finditer(stdout or '')]
+    if not beyanlar:
+        return None
+    kendi = [b for b in beyanlar if b['gate'] == Path(script_name).stem]
+    return (kendi or beyanlar)[-1]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description='Reviewer Agent Orchestrator')
     parser.add_argument('--task', required=True, choices=list(TASK_VALIDATORS.keys()),
@@ -317,9 +370,27 @@ def main() -> int:
         # → artifact=None geç (yoksa "unrecognized arguments" → sahte BLOCKER).
         review_artifact = None if script_name in REPO_WIDE_SCANNERS else args.artifact
         rc, out, err = run_validator(script_path, review_artifact, extra_args)
-        status = 'PASS' if rc == 0 else 'FAIL'
+        # IX-GATE-STATUS tüketimi (kayıt #5③) — YALNIZ `rc == 0` dalında sorulur.
+        # Gerekçe (kapsam niteleyicisi): `rc != 0` zaten GÜRÜLTÜLÜ bir sonuçtur (FAIL,
+        # verdict'e sayılır) — orada "ölçüldü mü" sorusu sessizlik üretmez. Sessiz olan
+        # tek yol `exit 0`'dır ve düzeltilen sınıf odur. `rc != 0` davranışı BİT-BAZINDA
+        # korunur; genişletmek ayrı bir karardır (ölçülmedi ⇒ yapılmadı).
+        beyan = gate_durum_beyani(out, script_name) if rc == 0 else None
+        if beyan is not None and beyan['measured'] == 'false':
+            # "Koşmadı" ≠ "temiz" — S2 sözleşmesinin AYNISI, tek farkla: orada gate'in
+            # DOSYASI yoktu, burada dosya vardı ama ÖLÇÜM yapılmadı. İkisi de SKIP'tir
+            # ve SKIP kendi şiddetiyle verdict'e sayılır (bkz. modül docstring'i).
+            # check_abaplint WARNING sınıfı olduğu için sonuç WARNING'dir, BLOCKER DEĞİL.
+            status = 'SKIP'
+            mesaj = (f"PRE-FLIGHT ÖLÇMEDİ: {script_name} koştu ve exit 0 döndü ama "
+                     f"IX-GATE-STATUS satırı `measured=false` diyor "
+                     f"(status={beyan['status']}, reason={beyan['reason']}) — "
+                     f"bu 'temiz' DEĞİLDİR, PASS SANMA.")
+        else:
+            status = 'PASS' if rc == 0 else 'FAIL'
+            mesaj = ''
         results.append(sonuc_kaydi(script_name, default_severity, status, description,
-                                   stdout=out.strip(), stderr=err.strip()))
+                                   stdout=out.strip(), stderr=err.strip(), message=mesaj))
 
     # ── Verdict ───────────────────────────────────────────────────────────────
     # ⛔ SKIP VERDICT'E SAYILIR (2026-08-01, KAYIT S2 — S1 ile AYNI kök: SKIP yolunun
@@ -401,8 +472,9 @@ def main() -> int:
               + (f'  (koşan-FAIL {failed_warning} + KOŞMAYAN {skipped_warning})'
                  if skipped_warning else ''))
         if skipped_blocker or skipped_warning:
-            print(f'  ⊘ {skipped_blocker + skipped_warning} gate HİÇ KOŞMADI '
-                  f'(script yok) — "koşmadı" ≠ "temiz".')
+            print(f'  ⊘ {skipped_blocker + skipped_warning} gate ÖLÇÜM ÜRETMEDİ '
+                  f'(script yok VEYA measured=false) — "koşmadı" ≠ "temiz". '
+                  f'Sebep her ⊘ satırının altında yazılıdır.')
         if checklist:
             print(f'\nManuel checklist (ek kontrol için): {checklist}')
         print(f'{"="*70}\n')

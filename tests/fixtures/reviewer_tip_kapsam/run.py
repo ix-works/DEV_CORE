@@ -136,6 +136,42 @@ def main() -> int:
         print("              (AST tabanli kapsam iddialari YINE DE kosuldu; bu satir "
               "bir SINIRIN beyanidir, gecis degil.)")
 
+    # ── C1/C2 (2026-08-29, kayit #3) — COMPOSITE haritasi da AYNI SINIFTAN CURUR ─────
+    # OLCULMUS VAKA: ayni gun `check_dtel_creation_labels.py` (BLOCKER) + `dtel_creation`
+    # gorevi yazildi, ama `COMPOSITE_TOOL_TO_TASK["adt_dtel_create"]` `None` kaldi
+    # ("no validators yet" yorumu bayatladi) => YENI YAZILAN GATE bu yuzeyde HIC KOSMADI.
+    # Bu, turun ana dersinin ("kapanis KOMSU EKSENE indi") tam ornegidir. Iki iddia:
+    #   C1 haritadaki her DEGER `TASK_VALIDATORS`ta GERCEKTEN var mi (yazim hatasi guard'i)
+    #   C2 `None` yazan her tool icin `<x>_creation` gorevi VARSA ve zinciri BOS DEGILSE
+    #      bu bir KABLOLANMAMIS gate'tir -> KIRIL. (Gorev YOKSA ya da zincir BOSSA
+    #      `None` mesrudur: "kayitli bosluk" ile "kayitsiz eksiklik" ayrimi korunur.)
+    comp_t = _sabitler("mcp_servers/sap_adt/_reviewer.py", {"COMPOSITE_TOOL_TO_TASK"})
+    rr_t = _sabitler("scripts/validators/run_review.py", {"TASK_VALIDATORS"})
+    comp = comp_t.get("COMPOSITE_TOOL_TO_TASK")
+    gorevler = rr_t.get("TASK_VALIDATORS")
+    if comp is None or gorevler is None:
+        sonuc.append(("COMPOSITE_TOOL_TO_TASK + TASK_VALIDATORS AST ile okundu",
+                      False, f"comp={comp is not None} gorevler={gorevler is not None}"))
+    else:
+        hayalet = sorted(v for v in comp.values() if v is not None and v not in gorevler)
+        sonuc.append(("C1 composite haritasindaki her gorev adi TASK_VALIDATORS'ta var",
+                      not hayalet, f"tool={len(comp)} hayalet={hayalet or 'yok'}"))
+        kablosuz = []
+        for tool, gorev in comp.items():
+            if gorev is not None:
+                continue
+            aday = tool.removeprefix("adt_").removesuffix("_create") + "_creation"
+            if gorevler.get(aday):          # gorev VAR ve zinciri BOS DEGIL
+                kablosuz.append(f"{tool}->{aday}({len(gorevler[aday])} validator)")
+        sonuc.append(("C2 ⭐ `None` yazan composite tool'un DOLU bir gorevi YOK "
+                      "(yeni gate kablosuz kalmiyor)",
+                      not kablosuz, f"kablosuz={kablosuz or 'yok'}"))
+        sonuc.append(("C2b KONTROL GRUBU: adt_dtel_create dolu `dtel_creation` zincirine bagli",
+                      comp.get("adt_dtel_create") == "dtel_creation"
+                      and bool(gorevler.get("dtel_creation")),
+                      f"eslesme={comp.get('adt_dtel_create')} "
+                      f"zincir={len(gorevler.get('dtel_creation') or [])}"))
+
     gecen = sum(1 for _, ok, _ in sonuc if ok)
     for ad, ok, detay in sonuc:
         print(f"  [{'OK' if ok else 'FAIL'}] {ad} -> {detay}")

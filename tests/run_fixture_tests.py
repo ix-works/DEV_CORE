@@ -130,6 +130,11 @@ OZEL_TESTLER = [
      "yapisal FAIL veriyordu, RAP view/abstract entity muaf)"),
     ("msgtext_uzunluk_guard",
      "T100-TEXT CHAR 73: uzunluk guard'i YOKTU -> SESSIZ KIRPMA (fail-closed, karakter!=bayt)"),
+    ("populate_ddic_fail_closed",
+     "#41 Y-1 SINIF TARAMASI (kardes ureticiler) + table_exists 500->CREATE: bos girdi "
+     "GECERLI degere donusuyordu (domains/dtel/tables) ve 'bakamadim' == 'yok' sayiliyordu. "
+     "FP capalari CANLI korpustan: acik decimals=0 53/55 · bos fixed_values 41/55 · "
+     "bos table description 175/359 -> UCU DE KABUL"),
     ("ddic_aktivasyon_notu",
      "populate_* AKTIVE ETMIYOR ama sessizce exit 0: kapanis notu + uretici<->tuketici tip sozlesmesi"),
     ("cikti_iddiasi_durustlugu",
@@ -286,6 +291,14 @@ OZEL_TESTLER = [
     ("shim_tazeleme",
      "team_setup --tazele-shim: varsayilan kosum EZMEZ (kontrol grubu) + bayrakli yol "
      "FARKI basar/yedek alir/SHA duyurur + proje SABLONDAN ILERIDE ise gurultulu uyari"),
+    # 2026-08-29 (kayit #66): KNA1 sahte-pozitifi. `include si_kna1 not null;` satirindaki
+    # DDL kisit-eki INCLUDE_LINE'in kuyruk demirini kiriyordu => include HIC GORULMUYOR =>
+    # `cozulemeyen`e de dusmuyor => 2026-07-30'un "cozulemezse DOGRULANAMADI" garantisi
+    # devreye girmiyor => 5 alan dogrudan [BULGU]. "Gormedim" != "cozemedim".
+    ("std_tablo_include_kapsami",
+     "check_standard_table_fields INCLUDE kapsami: DDL kisit-ekli include (`not null`) "
+     "goruluyor + REDDEDILEN genis varyantin FP capasi (yerel korpusta 124 yanlis "
+     "eslesme olculdu) + `cozulemeyen`/DOGRULANAMADI yolu ayakta"),
 ]
 
 
@@ -366,6 +379,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "fail-open kilidi: 'ölçemedim' ile 'temiz' AYNI çıkışa düşmemeli (özet satırı zorunlu kanıt)"),
     ("scripts/abaplint/abaplint.json", ("O:abaplint_failopen",),
      "config kapsamı değişirse 'M file(s) analyzed' ölçütü de etkilenir"),
+    ("scripts/validators/check_standard_table_fields.py", ("O:std_tablo_include_kapsami",),
+     "INCLUDE_LINE kapsamı: DDL kısıt-ekli include görülmeli; desen genişlerse "
+     "düzyazı/klasik-ABAP INCLUDE yanlış-pozitifi geri gelir (124 eşleşme ölçüldü)"),
 
     # ── bölüm-1 validator bad/good çiftleri ─────────────────────────────────
     ("scripts/validators/check_audit_fields_autofill.py", ("O:validator_kapsam_paydasi",),
@@ -440,19 +456,26 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "spec yol-kesfi: iki seviye (<modul>/<paket>) + ref_docs/ adayi + active_package "
      "onceligi; duz yapi ve modul-seviyesi adaylari GERIYE-UYUM capasi"),
     ("scripts/populate_tables.py",
-     ("O:populate_tables_unit_kind", "O:ddic_aktivasyon_notu"),
+     ("O:populate_tables_unit_kind", "O:ddic_aktivasyon_notu",
+      "O:populate_ddic_fail_closed"),
      "B-13/B-9/B-14: unit_kind kararı + CSV kolon sözleşmesi; ayrıca kapanış notunun "
-     "KABLOLAMASI (AST)"),
+     "KABLOLAMASI (AST); ayrıca satır-içi boş alan guard'ları (`description` BİLEREK "
+     "dışarıda — 175/359 canlı satır boş) + `table_exists` üç-değerli sondası"),
     ("scripts/populate_message_class.py", ("O:msgtext_uzunluk_guard",),
      "T100-TEXT (CHAR 73) fail-closed guard'ı: tespit + tamlık + eşik değişmezleri; "
      "korpus GERÇEK giriş noktasından (main --dry-run) da koşar"),
     ("scripts/utils/ddic_aktivasyon.py", ("O:ddic_aktivasyon_notu",),
      "'işlendi ≠ aktif' kapanış notunun TEK KAYNAĞI: metin + C-ENC-01 (saf ASCII) + "
      "activate_object `--type` sözleşmesi"),
-    ("scripts/populate_domains.py", ("O:ddic_aktivasyon_notu",),
-     "kapanış notunun KABLOLAMASI (AST: main içinde + dry-run dalı dışında)"),
-    ("scripts/populate_dataelements.py", ("O:ddic_aktivasyon_notu",),
-     "kapanış notunun KABLOLAMASI (AST: main içinde + dry-run dalı dışında)"),
+    ("scripts/populate_domains.py",
+     ("O:ddic_aktivasyon_notu", "O:populate_ddic_fail_closed"),
+     "kapanış notunun KABLOLAMASI (AST: main içinde + dry-run dalı dışında); ayrıca "
+     "CSV normalizasyon guard'ları (ham alan) + üç-değerli varlık sondası"),
+    ("scripts/populate_dataelements.py",
+     ("O:ddic_aktivasyon_notu", "O:populate_ddic_fail_closed"),
+     "kapanış notunun KABLOLAMASI (AST: main içinde + dry-run dalı dışında); ayrıca "
+     "label/description/type_kind fail-closed guard'ları ve ÜRETİCİ↔DENETÇİ "
+     "mutabakatı (`check_dtel_creation_labels` ile AYNI karar)"),
     ("scripts/activate_object.py", ("O:ddic_aktivasyon_notu",),
      "TÜKETİCİ sözleşmesi: `--type` choices değişirse notun bastığı komut geçersizleşir"),
     ("scripts/run_pretty_printer.py", ("O:cikti_iddiasi_durustlugu",),

@@ -13,7 +13,13 @@ Kullanım:
         --csv <source_root>/ZSD001_CLC/domains.csv \\
         --cwd <PROJECT_ROOT>
 
-CSV format (UTF-8, header'lı, 5 kolon):
+CSV format (UTF-8, header'lı):
+    ZORUNLU 5 kolon: name,datatype,length,decimals,description
+    OPSİYONEL 1 kolon: fixed_values
+    ⛔ Zorunlu kolonun BAŞLIKTA olmaması ve HÜCRESİNİN boş olması AYRI hatalardır;
+       ikisi de yazma başlamadan durdurulur (fail-closed). Boş `decimals` sessizce
+       `0` OLMAZ — `0` geçerli bir değerdir (canlı korpus: 55 satırın 53'ü açıkça `0`).
+
     name,datatype,length,decimals,description,fixed_values
     ZSD001_D_VOYNO,NUMC,10,0,Sefer Numarası,
     ZSD001_D_BOOKDS,CHAR,6,0,Teslim durumu,YOLDA=Yolda;TESLIM=Teslim edildi
@@ -57,6 +63,107 @@ def parse_fixed_values(fv_str: str) -> list:
             val, label = pair.split('=', 1)
             result.append((val.strip(), label.strip()))
     return result
+
+
+# CSV sozlesmesi — TEK KAYNAK (docstring ile kodun ayrismasini onler; populate_tables B-9)
+REQUIRED_CSV_COLUMNS = ('name', 'datatype', 'length', 'decimals', 'description')
+OPTIONAL_CSV_COLUMNS = ('fixed_values',)
+
+
+class DomainCsvKolonEksikError(ValueError):
+    """CSV BASLIGINDA zorunlu kolon YOK — yazma BASLAMADAN durdurulur.
+
+    Ayri tip: bos HUCRE ile eksik KOLON farkli kusurlardir ve farkli duzeltme
+    ister (satiri doldur / CSV semasini duzelt). Tek tipe indirgenirse iki
+    guard'dan biri digerini maskeler ve mutasyonla olculemez hale gelir.
+    """
+
+
+class DomainSatiriEksikError(ValueError):
+    """CSV'de YARIM/GECERSIZ doldurulmus satir(lar) var — yazma BASLAMADAN durdurulur."""
+
+
+def load_domains_from_csv(csv_path: Path) -> list:
+    """CSV oku -> [{name, datatype, length, decimals, description, fixed_values}, ...]
+
+    ⛔ FAIL-CLOSED. Guard'lar bilerek BURADA (uretim noktasinda) duruyor: `main()`e
+    konsaydi bu fonksiyonu dogrudan import eden bir cagiran onlari atlardi
+    ("gate'lenmemis kural ~ kuralsiz"). `--dry-run` da ayni kapiya carpar.
+
+    ⚠ HAM alan okunur, NORMALIZASYONDAN ONCE. Sinif kanidi — kardes kusur
+    `populate_message_class` #41 Y-1 (2026-08-29): `''.zfill(3)` == `'000'`
+    ve `'000'` GECERLI bir degerdi, yani BOS girdi sessizce GECERLI bir degere
+    donusuyordu. Buradaki ikizi: `int(r.get('decimals','0') or '0')` bos
+    `decimals`i **0** yapardi ve `0` GECERLI bir degerdir — canli korpusta
+    (2 gercek `domains.csv`, 55 satir) **53 satir acikca `0` yaziyor**.
+    Normalizasyon SONRASINA bakan bir kontrol "bos" ile "acikca 0"i ayirt EDEMEZ:
+    ya sessiz ezme surer ya 53 satir kirilir.
+
+    ⚠ `fixed_values` BILEREK guard DISI: ayni korpusta 55 satirin **41'i** bos ve
+    bos olmasi MESRU (sabit degeri olmayan domain). Guard'a alinsaydi 41 FP.
+
+    TAMAMEN bos satir (zorunlu alanlarin hepsi bos) dolgu sayilir, sessizce atlanir.
+    """
+    rows = []
+    eksikler = []                      # (satir_no, ad, alan, sebep)
+    with open(csv_path, encoding='utf-8-sig', newline='') as f:
+        reader = csv.DictReader(f)
+        basliklar = [(h or '').strip() for h in (reader.fieldnames or [])]
+        yok = [c for c in REQUIRED_CSV_COLUMNS if c not in basliklar]
+        if yok:
+            raise DomainCsvKolonEksikError(
+                'CSV zorunlu kolon(lar) eksik: %s\n'
+                '  Bulunan baslik: %s\n'
+                '  Beklenen      : %s   (opsiyonel: %s)\n'
+                '  ⚠ Eskiden eksik kolon `r.get(kolon, <varsayilan>)` ile SESSIZCE\n'
+                '    varsayilana dusuyordu (length -> 10, datatype -> CHAR): YANLIS\n'
+                '    tipte/uzunlukta domain yaratilir ve sebebi ciktida gorunmez.'
+                % (', '.join(yok), ', '.join(basliklar) or '(bos)',
+                   ', '.join(REQUIRED_CSV_COLUMNS), ', '.join(OPTIONAL_CSV_COLUMNS)))
+
+        for r in reader:
+            satir_no = reader.line_num          # CSV'deki GERCEK satir (header dahil)
+            ham = {k: str(r.get(k) or '').strip() for k in REQUIRED_CSV_COLUMNS}
+            if not any(ham.values()):
+                continue                        # dolgu/ayirac satiri — hata DEGIL
+            bos = [a for a in REQUIRED_CSV_COLUMNS if not ham[a]]
+            if bos:
+                for a in bos:
+                    eksikler.append((satir_no, ham['name'], a, 'BOS'))
+                continue                        # <- FAIL-CLOSED: satir ISLENMEZ
+            try:
+                uzunluk = int(ham['length'])
+                ondalik = int(ham['decimals'])
+            except ValueError:
+                eksikler.append((satir_no, ham['name'], 'length/decimals',
+                                 'SAYI DEGIL (length=%r decimals=%r)'
+                                 % (ham['length'], ham['decimals'])))
+                continue
+            rows.append({
+                'name': ham['name'],
+                'datatype': ham['datatype'].upper(),
+                'length': uzunluk,
+                'decimals': ondalik,
+                'description': ham['description'],
+                'fixed_values': parse_fixed_values(r.get('fixed_values', '')),
+            })
+
+    if eksikler:
+        # TUM ihlaller tek seferde: yazar CSV'yi tek turda duzeltsin, her kosumda
+        # bir sonrakini kesfetmesin (populate_message_class #37 tasarim karari).
+        detay = '\n'.join('    satir %d (%s): `%s` %s' % (sn, ad or '?', alan, sebep)
+                          for sn, ad, alan, sebep in eksikler)
+        raise DomainSatiriEksikError(
+            '%d CSV alani YARIM/GECERSIZ — HICBIRI yazilmadi (fail-closed).\n'
+            '  ⚠ Yazilsaydi: bos `decimals` sessizce **0**, bos `length` varsayilan\n'
+            '    uzunluk olurdu; bos `description` ise ADR 0005-D ihlali olan\n'
+            '    ACIKLAMASIZ bir domain yaratirdi ("Title/description bos birakilmaz"),\n'
+            '    bos `name` tasiyan satir ise haber verilmeden DUSURULURDU.\n'
+            '  Eksik/gecersiz alanlar:\n%s\n'
+            '  Cozum: alani doldur, ya da satir domain degilse CSV\'den tumden cikar.\n'
+            '  (Not: `0` GECERLI bir decimals degeridir — acikca yazildiginda kabul edilir.)'
+            % (len(eksikler), detay))
+    return rows
 
 
 def calculate_output_length(datatype: str, length: int, decimals: int) -> int:
@@ -148,12 +255,30 @@ def build_xml(name: str, description: str, package: str, responsible: str,
 </doma:domain>'''
 
 
-def domain_exists(client: SAPADTClient, name: str) -> bool:
-    r = client.session.get(
-        client.url + f'/sap/bc/adt/ddic/domains/{name.lower()}',
-        verify=False, timeout=10
-    )
-    return r.status_code == 200
+def domain_varlik_sondasi(client: SAPADTClient, name: str) -> tuple:
+    """Domain var mi? UC-DEGERLI: (True,'checked_found') · (False,'checked_absent') ·
+    (None,'unavailable:<sebep>').
+
+    ⛔ `None` "YOK" DEGILDIR. Eskiden govde tek satirdi — `return r.status_code == 200`
+    — ve GET 500/403/timeout **False** donuyordu; cagiran bunu "obje yok" okuyup
+    dogrudan **CREATE** dalina sapiyordu. Buradaki sonuc okuma degil YAZMA'dir:
+    "bakamadim" ile "yok" ayni sonuca DUSEMEZ.
+    Kanonik ayrim: `mcp_servers/sap_adt/tools/atom.py` `_varlik_sondasi`
+    (`checked_absent` / `unavailable:http_500`) — yeni sozluk ICAT EDILMEDI.
+    """
+    try:
+        r = client.session.get(
+            client.url + f'/sap/bc/adt/ddic/domains/{name.lower()}',
+            verify=False, timeout=10
+        )
+    except Exception as exc:            # noqa: BLE001 — teshis bozulmasin
+        return None, 'unavailable:%s' % type(exc).__name__
+    kod = getattr(r, 'status_code', None)
+    if kod == 200:
+        return True, 'checked_found'
+    if kod == 404:
+        return False, 'checked_absent'
+    return None, 'unavailable:http_%s' % kod
 
 
 def create_one(client: SAPADTClient, csrf: str, name: str, description: str,
@@ -162,9 +287,16 @@ def create_one(client: SAPADTClient, csrf: str, name: str, description: str,
                fixed_values: list, dry_run: bool = False) -> bool:
     name = name.upper()
 
-    if not dry_run and domain_exists(client, name):
-        print(f'  [SKIP] {name} zaten var')
-        return True
+    if not dry_run:
+        var, sonda = domain_varlik_sondasi(client, name)
+        if var is None:
+            # "olculemedi" != "yok" — CREATE denenmez (fail-closed).
+            print(f'  [FAIL] {name} varlik kontrolu OLCULEMEDI — {sonda}')
+            print(f'         "olculemedi" != "yok": CREATE DENENMEDI (fail-closed).')
+            return False
+        if var:
+            print(f'  [SKIP] {name} zaten var')
+            return True
 
     xml_payload = build_xml(
         name=name, description=description, package=package,
@@ -221,22 +353,12 @@ def main():
         print(f'[FAIL] CSV bulunamadı: {csv_path}')
         return 1
 
-    # Load CSV
-    rows = []
-    with open(csv_path, encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            name = r.get('name', '').strip()
-            if not name:
-                continue
-            rows.append({
-                'name': name,
-                'datatype': r.get('datatype', 'CHAR').strip().upper(),
-                'length': int(r.get('length', '10')),
-                'decimals': int(r.get('decimals', '0') or '0'),
-                'description': r.get('description', '').strip(),
-                'fixed_values': parse_fixed_values(r.get('fixed_values', '')),
-            })
+    # Load CSV — guard'lar load_domains_from_csv ICINDE (uretim noktasi), main()'de DEGIL.
+    try:
+        rows = load_domains_from_csv(csv_path)
+    except (DomainCsvKolonEksikError, DomainSatiriEksikError) as e:
+        print(f'[FAIL] {e}')
+        return 1
 
     print(f'[INFO] CSV → {len(rows)} domain yüklendi')
 
