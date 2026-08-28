@@ -42,7 +42,8 @@ def main() -> int:
     parser.add_argument('--sprint', help='Sprint numarası (örn. 6)')
     parser.add_argument('--since', help='Tarihten itibaren (YYYY-MM-DD)')
     parser.add_argument('--days', type=int, default=7, help='--since verilmediyse son N gün')
-    parser.add_argument('--strict', action='store_true')
+    parser.add_argument('--strict', action='store_true',
+                       help='(uyumluluk; NO-OP — şiddeti DEĞİŞTİRMEZ, run_all --strict kazara terfi ettirmesin; ADR 0019 §54)')
     args = parser.parse_args()
 
     since = args.since or (datetime.now() - timedelta(days=args.days)).strftime('%Y-%m-%d')

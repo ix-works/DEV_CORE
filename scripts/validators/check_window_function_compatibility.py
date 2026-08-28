@@ -38,7 +38,8 @@ PATTERNS = [
 def main() -> int:
     parser = argparse.ArgumentParser(description='CDS window function tespit')
     parser.add_argument('artifact')
-    parser.add_argument('--strict', action='store_true')
+    parser.add_argument('--strict', action='store_true',
+                       help='(uyumluluk; NO-OP — şiddeti DEĞİŞTİRMEZ, run_all --strict kazara terfi ettirmesin; ADR 0019 §54)')
     args = parser.parse_args()
 
     path = Path(args.artifact)

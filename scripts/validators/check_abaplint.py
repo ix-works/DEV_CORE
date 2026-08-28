@@ -109,7 +109,8 @@ def detect(name: str, text: str):
 def main() -> int:
     ap = argparse.ArgumentParser(description='abaplint (tuned) lint — class/program')
     ap.add_argument('artifact')
-    ap.add_argument('--strict', action='store_true')
+    ap.add_argument('--strict', action='store_true',
+                   help='(uyumluluk; NO-OP — şiddeti DEĞİŞTİRMEZ, run_all --strict kazara terfi ettirmesin; ADR 0019 §54)')
     args = ap.parse_args()
 
     path = Path(args.artifact)

@@ -111,6 +111,17 @@ OZEL_TESTLER = [
     # okuyan onu duzelmis saniyor). Satir bugun SILINDI. Artik bir korpus vektoru bunu
     # bekliyor: tests/fixtures/sessiz_olumsuzlama_2026_08_10 E1 -> mukerrer kayit = FAIL.
     ("dogrulama_kosamadi", "DOGRULAMA KOSAMADI != DOGRULANDI (5 kayit, tek kok)"),
+    # 2026-08-28 fail-open/sahte-yesil turu (bug-avi B3-01 · B2-13 · E-05):
+    ("sap_gate_skip_sozlesmesi",
+     "B3-01: SAP-bagimli BLOCKER ailesi baglanti YOKken PASS DEGIL SKIP uretir "
+     "(IX-GATE-STATUS URETICI ucu; tuketici run_review 2026-08-29'da hazirdi ama "
+     "bu aile ona hic baglanmamisti) + POZITIF KONTROL: baglanti varken gate HALA "
+     "olcuyor ('hepsini SKIP yap' gevsetmesi --mutasyon-hepsi-skip ile civilendi) + "
+     "B2-13 `--strict` beyan/mekanik durustlugu"),
+    ("team_setup_hook_kablolama",
+     "E-05: overlay ONAY kapisi (normal T2.5 fark-onayi) git-hook kablolamasini DURDURMAMALI "
+     "— eskiden erken `return 1` yuzunden yeni klonda `core.hooksPath` set edilmiyor "
+     "ve pre-commit gate'leri SESSIZCE kurulmamis kaliyordu (kod != kablolama)"),
     ("veri_yetki_guardlari", "ADR 0011 PII normalizasyonu + guard'siz mutasyon tool'u (K-1/2/3)"),
     # 2026-08-01 kuyruk-turu (scripts/ + run_review):
     ("reviewer_skip_sozlesmesi", "run_review SKIP sozlesmesi: cokme + sahte-PASS (S1+S2)"),
@@ -455,10 +466,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "hook katmanı (MISSING/ORPHAN/UNDECLARED) + `# ENFORCES:` çapası da bu dosyada"),
     # team_setup.py HARITA'da HIC YOKTU (2026-08-22 bulgusu): degisikligi hicbir korpusa
     # eslesmiyordu -> tazelik kapisi bu dosyada KORDU.
-    ("scripts/team_setup.py", ("O:shim_tazeleme", "O:overlay_materyalize_atomik", "O:worktree_yasam_dongusu"),
+    ("scripts/team_setup.py", ("O:shim_tazeleme", "O:overlay_materyalize_atomik",
+                              "O:worktree_yasam_dongusu", "O:team_setup_hook_kablolama"),
      "shim tazeleme yolu + `dosya_tamamla` idempotansi burada yasar; varsayilanin "
      "degismedigi YALNIZ bu korpusta olculur. `junctions()` tip-basina yalitimi "
-     "(Q30: tek tipteki istisna kurulumun kalan 5 adimini atliyordu) atomik korpusta"),
+     "(Q30: tek tipteki istisna kurulumun kalan 5 adimini atliyordu) atomik korpusta. "
+     "E-05: `junctions()` FALSE dondugunde git-hook kablolamasinin YINE DE kosmasi "
+     "(ve hatanin yutulMAmasi) team_setup_hook_kablolama korpusunda olculur"),
     ("scripts/validators/check_settings_template_sync.py", ("O:hook_gate_coverage",),
      "kablolama okuyucusu (`_kablolu_hooklar`) buradan IMPORT ediliyor — imza değişirse "
      "coverage-gate'in hook ORPHAN dalı sessizce ölür (kopya YOK, tek kaynak)"),
@@ -603,9 +617,16 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:instruction_budget",), "C-BUD-01 korpusu"),
     ("scripts/validators/check_memory_index.py",
      ("O:memory_yukleme_butcesi",), "C-MEM-01 korpusu"),
+    ("scripts/validators/_gate_status.py", ("O:sap_gate_skip_sozlesmesi",),
+     "IX-GATE-STATUS ÜRETİCİ ucunun tek kaynağı (B3-01)"),
+    ("scripts/validators/check_struct_field_dtel_active.py", ("O:sap_gate_skip_sozlesmesi",),
+     "B3-01 ailesinin başı: bağlantı yok + kısmi körlük dalları"),
+    ("scripts/validators/check_sap_active_version.py", ("O:sap_gate_skip_sozlesmesi",),
+     "B3-01: BEŞ ayrı ölçmeyen exit-0 yolu"),
     ("scripts/validators/run_review.py",
-     ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam"),
-     "SKIP sözleşmesi + push-tipi/reviewer haritası"),
+     ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam", "O:sap_gate_skip_sozlesmesi"),
+     "SKIP sözleşmesi + push-tipi/reviewer haritası; ayrıca `gate_durum_beyani` "
+     "TÜKETİCİ ucu üretici tarafından sap_gate_skip_sozlesmesi V7 ile çağrılır"),
 
     # ── git-hooks + guard yüzeyi ────────────────────────────────────────────
     ("scripts/git-hooks/core_precommit.py",
@@ -640,8 +661,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
 
     # ── overlay / proje-kurulum yüzeyi ──────────────────────────────────────
     ("scripts/utils/claude_overlay.py",
-     ("O:overlay_kiyas_tabani", "O:overlay_oto_tazeleme", "O:overlay_materyalize_atomik"),
-     "T2.5 kıyas tabanı + oto-tazeleme + `materyalize` atomikliği (Q30 kayıp vakası)"),
+     ("O:overlay_kiyas_tabani", "O:overlay_oto_tazeleme", "O:overlay_materyalize_atomik",
+      "O:team_setup_hook_kablolama"),
+     "T2.5 kıyas tabanı + oto-tazeleme + `materyalize` atomikliği (Q30 kayıp vakası); "
+     "onay kapısının team_setup kablolamasını düşürMEmesi (E-05)"),
     ("scripts/utils/claude_paths.py", ("O:proje_slug_tek_kaynak",), "slug tek-kaynak korpusu"),
     ("scripts/utils/project_config.py",
      ("R:AV-02", "O:workflow_tetik_dupe"),
@@ -671,7 +694,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:git_sorgu_sessiz_bos", "O:sessiz_olumsuzlama_2026_08_10"),
      "git sorgusu + sessiz olumsuzlama"),
     ("scripts/worklist_audit.py", ("R:AV-13",), "üç-değerli sınıflama"),
-    ("scripts/build_core_index.py", ("O:core_index_kapsam",), "indeks kapsamı"),
+    ("scripts/build_core_index.py",
+     ("O:core_index_kapsam", "O:sap_gate_skip_sozlesmesi"),
+     "indeks kapsamı + `--ci-check` (DG-03: CI backstop'u kendi ürettiğini "
+     "doğruluyordu; artık damgadaki core-commit klonla AYNI ise ÖLÇER, değilse "
+     "SKIPPED measured=false — üç dalı da sap_gate_skip_sozlesmesi ölçer)"),
     ("scripts/switch_tier.py", ("O:tier_fail_closed",), "tier çözümleme"),
     ("scripts/statusline.py",
      ("O:tier_fail_closed", "O:worktree_yasam_dongusu", "O:statusline_token_esikleri"),

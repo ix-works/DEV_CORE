@@ -35,6 +35,11 @@ from pathlib import Path
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _gate_status import gate_status, sap_baglanti_yok  # noqa: E402
+
+_GATE = Path(__file__).stem
+
 if sys.platform == 'win32':
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -78,11 +83,16 @@ def main() -> int:
     m = TABLE_NAME_RE.search(new_text)
     if not m:
         print(f'OK — {path.name} bir DDIC tablo tanımı değil (define table yok), kapsam dışı')
+        gate_status(_GATE, 'OK', True, 'kapsam-disi-tablo-degil')
         return 0
     table = m.group(1)
     new_fields = parse_fields(new_text)
     if not new_fields:
         print(f'OK — {path.name} alan çıkarılamadı, kapsam dışı')
+        # ⚠ "alan çıkarılamadı" bir kapsam-dışılık DEĞİL, AYRIŞTIRMA BAŞARISIZLIĞIDIR:
+        # DROP-guard yerel alanları okuyamadıysa canlıyla kıyaslayamaz. Metin "kapsam
+        # dışı" diyor ama ölçüm YAPILMADI (B3-01).
+        gate_status(_GATE, 'SKIPPED', False, 'yerel-alan-cikarilamadi')
         return 0
 
     # SAP'den canlı source çek
@@ -96,20 +106,25 @@ def main() -> int:
             headers={'Accept': 'text/plain'}, verify=False, timeout=15)
     except Exception as e:
         print(f'UYARI: SAP bağlantısı kurulamadı, DROP-guard atlandı: {e}', file=sys.stderr)
+        sap_baglanti_yok(_GATE)
         return 0
 
     if r.status_code == 404:
         print(f'OK — {table.upper()} SAP\'de yok (yeni yaratım) → DROP-guard kapsam dışı')
+        # 404 GERÇEK hüküm: canlı tablo yok => DROP edilecek alan da yok. ÖLÇÜLDÜ.
+        gate_status(_GATE, 'OK', True, 'yeni-yaratim-canli-tablo-yok')
         return 0
     if r.status_code != 200:
         print(f'UYARI: canlı source alınamadı (HTTP {r.status_code}), DROP-guard atlandı',
               file=sys.stderr)
+        gate_status(_GATE, 'SKIPPED', False, f'sap-get-http-{r.status_code}')
         return 0
 
     live_fields = parse_fields(r.text)
     if not live_fields:
         print(f'UYARI: canlı {table.upper()} source\'undan alan çıkarılamadı, atlandı',
               file=sys.stderr)
+        gate_status(_GATE, 'SKIPPED', False, 'canli-alan-cikarilamadi')
         return 0
 
     dropped = [f for f in live_fields if f not in new_fields]
@@ -122,6 +137,7 @@ def main() -> int:
         if added:
             msg += f' (+{len(added)} yeni alan: {", ".join(added)})'
         print(msg)
+        gate_status(_GATE, 'OK', True, 'additive-guvenli')
         return 0
 
     # Onaylı (ack) DROP'ları ayır — kullanıcı+lider bilinçli silme onayı (ADR 0005-B).
@@ -133,6 +149,7 @@ def main() -> int:
         print(f'[ACK-WARNING] {table.upper()} — onaylı DROP (kullanıcı+lider bilinçli, '
               f'ADR 0005-B gate geçildi): {", ".join(ack_dropped)}. '
               f'Diğer drop/tip değişikliği yok; veri-kaybı bilinçli kabul edildi.')
+        gate_status(_GATE, 'OK', True, 'onayli-drop-ack')
         return 0
 
     print(f'\n[BLOCKER] {table.upper()} ALTER veri-kaybı riski '

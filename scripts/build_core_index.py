@@ -129,12 +129,89 @@ def _damga() -> str:
 
 
 _DAMGA_RE = re.compile(r"^<!-- uretim: .*?-->\n", re.MULTILINE)
+_DAMGA_SHA_RE = re.compile(r"core-commit:\s*(\S+)")
+
+
+def _kayitli_core_commit() -> str | None:
+    """Commit'li indeksin damgasındaki `core-commit` kısa-SHA'sı (yoksa None)."""
+    if not HEDEF.is_file():
+        return None
+    ilk = HEDEF.read_text(encoding="utf-8", errors="replace")[:400]
+    m = _DAMGA_SHA_RE.search(ilk)
+    sha = m.group(1) if m else None
+    return sha if sha and sha != "?" else None
+
+
+def _simdiki_core_commit() -> str | None:
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", str(CORE), "rev-parse", "--short", "HEAD"],
+                           capture_output=True, text=True, timeout=10)
+        return r.stdout.strip() or None if r.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def _ci_check() -> int:
+    """CI ÖN-KONTROLÜ (DG-03, 2026-08-28) — TAUTOLOJİYİ kırar.
+
+    KUSUR: `.github/workflows/project-guard.yml` `build_core_index.py`'yi (REGENERATE)
+    `run_all_validators` içindeki `check_core_index_fresh` (--check) adımından ÖNCE
+    koşuyordu ⇒ kontrol DAİMA kendi az önce ürettiği dosyaya bakıyordu: **her zaman
+    yeşil**, C-IDX-01 CI'da hiçbir şey ölçmüyordu (kendi kendini doğrulama).
+
+    ⛔ SIRAYI DÜZ ÇEVİRMEK YETMEZ — regenerate adımının GEREKÇESİ gerçek (workflow'da
+    yazılı): CI'daki `core/` bir FRESH CLONE'dur (`--depth 1`, `main`), commit'li indeks
+    ise geliştiricinin junction'ındaki core'a göre üretilmiştir. İkisi farklı commit'te
+    ise `--check` GERÇEK bir bayatlık değil, **doküman-kümesi farkı** raporlar (FP).
+
+    ÇÖZÜM: soruyu ancak CEVAPLANABİLİR olduğunda sor. Damgadaki `core-commit` ile
+    fiilen klonlanmış core HEAD'i AYNI ise tazelik sorusu anlamlıdır → gerçek kıyas.
+    Farklı ise ölçüm YAPILAMAZ → `SKIPPED measured=false` (sahte-yeşil DEĞİL, dürüst
+    "ölçemedim"). Böylece yeşil ERİŞİLEBİLİR kalır ama BEDAVA değildir.
+    """
+    sys.path.insert(0, str(CORE / "scripts" / "validators"))
+    from _gate_status import gate_status  # type: ignore  # noqa: E402
+
+    if not HEDEF.is_file():
+        print(f"  [FAIL] {HEDEF} YOK — üret: python core/scripts/build_core_index.py")
+        gate_status("build_core_index", "FINDING", True, "indeks-dosyasi-yok")
+        return 1
+
+    kayitli, simdiki = _kayitli_core_commit(), _simdiki_core_commit()
+    if kayitli is None or simdiki is None or kayitli != simdiki:
+        print(f"  [ÖLÇÜLEMEDİ] CORE-INDEX tazeliği CI'da doğrulanamaz: damgadaki "
+              f"core-commit={kayitli or '?'} ↔ klonlanan core HEAD={simdiki or '?'}.")
+        print("               Farklı core commit'i = doküman-kümesi farkı; `--check` "
+              "burada BAYATLIK değil FARK ölçerdi (yanlış-pozitif).")
+        print("               ⚠ Bu 'temiz' DEĞİLDİR — C-IDX-01 bu koşumda ÖLÇÜLMEDİ.")
+        gate_status("build_core_index", "SKIPPED", False, "core-commit-uyusmuyor")
+        return 0
+
+    yeni = uret()
+    mevcut = _DAMGA_RE.sub("", HEDEF.read_text(encoding="utf-8", errors="replace"), count=1)
+    if mevcut.replace("\r\n", "\n") != yeni.replace("\r\n", "\n"):
+        print(f"  [FAIL] CORE-INDEX BAYAT (core-commit={kayitli} ile ÖLÇÜLDÜ) — "
+              f"core dokümanları değişmiş, indeks yeniden üretilmemiş.")
+        print("         Onarım: python core/scripts/build_core_index.py && git add governance/CORE-INDEX.md")
+        gate_status("build_core_index", "FINDING", True, "indeks-bayat")
+        return 1
+    print(f"  [OK] CORE-INDEX güncel ve ÖLÇÜLDÜ (core-commit={kayitli}, "
+          f"{yeni.count(chr(10) + '- [`core/')} doküman)")
+    gate_status("build_core_index", "OK", True, "guncel")
+    return 0
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="yazma; mevcutla karşılaştır")
+    ap.add_argument("--ci-check", action="store_true",
+                    help="CI ön-kontrolü: YALNIZ damgadaki core-commit klonlanan core "
+                         "HEAD'iyle aynıysa ölçer, değilse SKIPPED measured=false (DG-03)")
     a = ap.parse_args()
+
+    if a.ci_check:
+        return _ci_check()
 
     yeni = uret()
     if a.check:

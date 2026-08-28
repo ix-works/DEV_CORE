@@ -25,6 +25,11 @@ from pathlib import Path
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _gate_status import gate_status, sap_baglanti_yok  # noqa: E402
+
+_GATE = Path(__file__).stem
+
 if sys.platform == 'win32':
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -78,7 +83,8 @@ def extract_fields(text: str) -> set[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description='SAP struct active version vs local artifact tutarlılık')
     parser.add_argument('artifact')
-    parser.add_argument('--strict', action='store_true')
+    parser.add_argument('--strict', action='store_true',
+                       help='(uyumluluk; NO-OP — şiddeti DEĞİŞTİRMEZ, run_all --strict kazara terfi ettirmesin; ADR 0019 §54)')
     args = parser.parse_args()
 
     path = Path(args.artifact)
@@ -90,11 +96,14 @@ def main() -> int:
     struct_name = extract_struct_name(local_text)
     if not struct_name:
         print(f'UYARI: {path.name} içinde "define structure NAME" bulunamadı — validator atlandı')
+        # Hedef obje ADI çıkarılamadı => SAP'de hiçbir şey sorgulanmadı.
+        gate_status(_GATE, 'SKIPPED', False, 'struct-adi-cikarilamadi')
         return 0
 
     local_fields = extract_fields(local_text)
     if not local_fields:
         print(f'UYARI: {path.name} içinde alan bulunamadı — validator atlandı')
+        gate_status(_GATE, 'SKIPPED', False, 'yerel-alan-cikarilamadi')
         return 0
 
     # SAP'ye bağlan
@@ -104,6 +113,7 @@ def main() -> int:
         client = SAPADTClient()
     except Exception as e:
         print(f'UYARI: SAP bağlantısı kurulamadı, validator atlandı: {e}', file=sys.stderr)
+        sap_baglanti_yok(_GATE)
         return 0
 
     # SAP'den source çek (structures endpoint)
@@ -114,14 +124,18 @@ def main() -> int:
         )
     except Exception as e:
         print(f'UYARI: SAP GET hata: {e}', file=sys.stderr)
+        gate_status(_GATE, 'SKIPPED', False, 'sap-get-istisnasi')
         return 0
 
     if r.status_code == 404:
         # Struct henüz yok — bu pre-create durumu, validator buradan birşey demiyor
         print(f'OK — {struct_name} SAP\'de henüz yok (pre-create durumu, atlandı)')
+        # 404 GERÇEK bir hükümdür: obje yok => tutarsızlık da olamaz. ÖLÇÜLDÜ.
+        gate_status(_GATE, 'OK', True, 'pre-create-obje-yok')
         return 0
     if r.status_code != 200:
         print(f'UYARI: SAP GET {r.status_code} — validator atlandı', file=sys.stderr)
+        gate_status(_GATE, 'SKIPPED', False, f'sap-get-http-{r.status_code}')
         return 0
 
     sap_source = r.text
@@ -161,6 +175,7 @@ def main() -> int:
 
     if not issues:
         print(f'OK — {struct_name} SAP\'de tutarlı ({len(local_fields)} alan, active)')
+        gate_status(_GATE, 'OK', True, 'tutarli')
         return 0
 
     print(f'\n[BLOCKER] {struct_name} SAP tutarsız:', file=sys.stderr)

@@ -89,7 +89,8 @@ def scan(text: str, table_map: dict) -> list[dict]:
 def main() -> int:
     ap = argparse.ArgumentParser(description='Clean Core released-object / successor check')
     ap.add_argument('artifact')
-    ap.add_argument('--strict', action='store_true')
+    ap.add_argument('--strict', action='store_true',
+                   help='(uyumluluk; NO-OP — şiddeti DEĞİŞTİRMEZ, run_all --strict kazara terfi ettirmesin; ADR 0019 §54)')
     args = ap.parse_args()
 
     path = Path(args.artifact)
