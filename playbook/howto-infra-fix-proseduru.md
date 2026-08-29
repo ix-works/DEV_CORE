@@ -102,8 +102,15 @@ infra-expert bunu bir seansta 2× koşuyordu; CI de, lider de aynı süiteyi TAM
 |---|---|---|
 | **infra-expert** | ARA adımlar (fix'i şekillendirirken) | `python tests/run_battery.py <fixture> [--kardes …]` (taban + TÜM mutasyon kipleri tek komut) · geniş dokunuşta `python tests/run_fixture_tests.py --degisen <değişen-dosyalar>` |
 | **infra-expert** | teslimden önce, kendi worktree'sinde | reçete B0'ın geri kalanı (`run_all_validators` · `compileall` · `core_precommit --all`) |
-| **LİDER (DoD, ZORUNLU)** | **merge/PR öncesi 1× TAM** | `python tests/run_fixture_tests.py` — argümansız. Seçili koşum bunun yerine GEÇMEZ |
-| **CI** | her PR | değişmedi: `.github/workflows/core-ci.yml` süiteyi TAM koşar |
+| **LİDER** | ajanın **"KOD DONDU"** mesajında (md5 listesi gelir gelmez) | worktree'de commit + push + **draft PR** aç → CI ajanın doküman/rapor turuyla PARALEL koşar (2026-08-29 ölçümü: son süit → rapor sonu 4–28 dk, CI 2 dk). Kırmızıysa aynı turda düzelttir; yeni tur açma |
+| **LİDER (DoD)** | merge öncesi | **CI `gates` = SUCCESS** kanıtı (required check; ruleset). Liderin yerel tam süiti **CI'ın ikizi değildir** (sığ klon / POSIX yalnız CI'da görünür) — CI yeşilse yerel tekrar gerekmez; kırmızıysa yerel koşum teşhis içindir |
+| **CI** | her PR (draft dahil) | `.github/workflows/core-ci.yml` süiteyi TAM koşar (derin klon, `fetch-depth: 0`) |
+
+- ⛔ **Merge yalnız CI SUCCESS ise** — komut zinciri `watch ; merge` DEĞİL, `state==SUCCESS` koşulu;
+  `--admin` bypass yazılmaz (2026-08-29: koşulsuz zincir kırmızı PR #181'i main'e soktu → revert).
+- **Bir tur = bir kuyruk kaydı (Q).** Ortak bileşen gerektiren iki Q gerekçeyle birlikte alınabilir;
+  yeni süit bölümü/batarya/araç hiçbir Q'nun "yan ürünü" olamaz — ayrı Q, ayrı tur. (Ölçüm, 110 PR:
+  1–8 dosyalık PR'larda son-head kırmızı 0/81, 9+ dosyada 3/29.)
 
 - `--degisen` **FAIL-CLOSED**'dır: verdiğin dosyalardan biri haritada yoksa TAM süiteye
   düşer ve **bunu satır satır yazar**. "Sessizce 0 birim koştu" hâli yoktur.
@@ -123,6 +130,8 @@ ajan CANLI çekirdeğe asla yazmaz (junction-anında-yayılım riski fiziksel ol
 **infra-expert üretir (tanımındaki zorunlu beşli):**
 - **F1 Blast-radius:** bileşeni kim kullanıyor (grep + settings-matcher + çağıran-zincir + kaç proje).
 - **F2 Kök-soru:** nokta-vaka mı SINIF mı? Fix SINIFI çözmeli; vaka-özel istisna = son çare + gerekçeli.
+  › **Sınıf envanteri MEKANİK:** fix'ten önce desen korpusta grep'lenir; rapor `SINIF-ENVANTERİ: desen → N dosya`
+  satırı taşır (lider kabul kriteri). Envanter fix'e çevrilmez — yalnız kuyruktaki kalem düzeltilir, kalanı Q adayı.
 - **F3 Üç-bağlam testi:** bilinen-bozuk→FAIL + bilinen-temiz→PASS + **görev-DIŞI üçüncü vaka** —
   fixture'lar `tests/fixtures/`e KALICI eklenir (G1 korpusu).
   › **Kadans:** her Edit paketinden sonra `python tests/run_battery.py <fixture> [--kardes …]`
