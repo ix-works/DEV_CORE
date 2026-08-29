@@ -30,7 +30,12 @@ Mutasyonlar (DÖRDÜ DE koşulur — hiçbiri diğerini kapsamaz):
   --mutasyon-strict       --strict yine hard yapsın      → A10 DÜŞMELİ
   --mutasyon-esinifi      E sınıfı desenini körelt        → A1 DÜŞMELİ
   --mutasyon-baslik       başlık taramasını kapat         → A11 DÜŞMELİ
-  --mutasyon-express      infra-EXPRESS nudge'ını sök     → X1/X3/X4 DÜŞMELİ, X5-X7 AYAKTA
+  --mutasyon-express      infra-EXPRESS nudge'ını sök     → X1/X3/X4/X10/X11 DÜŞMELİ,
+                          X5/X6b/X7/X9/X12/X13 AYAKTA
+  --mutasyon-kosucu       core koşucu istisnasını sök (1/3)  → X10/X10b DÜŞMELİ, FP'ler AYAKTA
+  --mutasyon-kosucu2      core koşucu sınıflandırmasını sök (2/3) → X10/X10b DÜŞMELİ
+  --mutasyon-kosucu3      PROJE koşucu dalını sök (3/3)      → X11 DÜŞMELİ
+                          (ÜÇ ayrı mutasyon: her parça tek başına NO-OP'tur — kayıt Q209)
   --mutasyon-onek         `core/` önekini sök             → Y1/Y2 DÜŞMELİ (yol çözülmez)
   --mutasyon-hook         doc-fs dalını sök             → B1-B5 DÜŞMELİ, R1-R3 AYAKTA
   --mutasyon-kapanmis     nudge'dan `--kapanmis-karar`ı sök → Y3 DÜŞMELİ (öğretilen komut
@@ -275,7 +280,7 @@ def _edit(yol: Path, sid: str) -> dict:
 def _mutant(kip: str) -> tuple:
     """(validator_yolu, hook_adi) — mutant KOMŞULARININ yanına yazılır (import kırılmasın)."""
     v_yol, h_adi = VALIDATOR, "post_validate"
-    if kip in ("hook", "express", "onek", "kapanmis"):
+    if kip in ("hook", "express", "onek", "kapanmis", "kosucu", "kosucu2", "kosucu3"):
         kaynak = HOOK.read_text(encoding="utf-8")
         if kip == "kapanmis":
             # #12③ — nudge'ın ÖĞRETTİĞİ komuttan `--kapanmis-karar` sökülür.
@@ -287,6 +292,27 @@ def _mutant(kip: str) -> tuple:
         if kip == "onek":
             yeni, n = re.subn(r"        return core_onekle\(metin\)",
                               "        return metin", kaynak, count=1)
+            _capa(n, kip)
+            hedef = HOOK.parent / "_mutant_post_validate.py"
+            hedef.write_text(yeni, encoding="utf-8")
+            return v_yol, "_mutant_post_validate"
+        if kip in ("kosucu", "kosucu2", "kosucu3"):
+            # ⛔ İKİ MUTASYON, İKİ DEĞİŞMEZ (kayıt Q209): koşucu tanıma İKİ PARÇALIDIR ve
+            # her parça TEK BAŞINA NO-OP'tur — biri sökülünce X10/X10b/X11 düşer, X6b/X12/X13
+            # FP çapaları AYAKTA kalır. Tek mutasyon yazılsaydı yarısının ölü olduğu
+            # görülmezdi (guard'ın 2026-08-29 üç-parçalı NO-OP tuzağının aynısı).
+            if kip == "kosucu":     # (1) `_INFRA_HARIC` istisnası sökülür
+                yeni, n = re.subn(
+                    r"    if _INFRA_HARIC\.search\(norm\) and not \(_KOSUCU and _KOSUCU\.search\(norm\)\):",
+                    "    if _INFRA_HARIC.search(norm):", kaynak, count=1)
+            elif kip == "kosucu2":  # (2) `_INFRA_REL` koşucu sınıflandırması sökülür
+                yeni, n = re.subn(
+                    r"    if _INFRA_REL_KOSUCU is not None and _INFRA_REL_KOSUCU\.match\(rel\):",
+                    "    if False:", kaynak, count=1)
+            else:                   # (3) PROJE koşucu dalı sökülür (ad değil KONUM)
+                yeni, n = re.subn(
+                    r'    if re\.search\(r"/scripts/validators-local/fixtures/\.\+\\\.py\$", norm, re\.IGNORECASE\):',
+                    "    if False:", kaynak, count=1)
             _capa(n, kip)
             hedef = HOOK.parent / "_mutant_post_validate.py"
             hedef.write_text(yeni, encoding="utf-8")
@@ -499,8 +525,44 @@ def main() -> int:
         ekle("X5 FP ÇAPASI: sıradan proje script'i → nudge YOK, exit 0 sessiz",
              rc == 0 and not err.strip(), f"exit={rc} stderr={len(err.strip())}b")
 
-        rc, _, err = _hook(sb, hook_adi, _edit(KOK / "tests" / "fixtures" / "x" / "run.py", "oturum-inf5"), shim_var)
-        ekle("X6 FP ÇAPASI: core tests/fixtures/*.py → nudge YOK (fixture infra KARARI değil)",
+        # ⭐ X6 EMEKLİ (2026-08-29, kayıt Q209). Eski hâli `tests/fixtures/x/run.py` yolunu
+        # "fixture ⇒ infra kararı DEĞİL" FP çapası olarak kullanıyordu. Kardeş kol
+        # `infra_write_guard` aynı gün AYNI yolu KORUMAYA aldı ⇒ iki artefakt aynı dosya
+        # hakkında ZIT şeyler iddia eder oldu. Ölçüm kardeş kolu haklı buldu: KOŞUCU kanıt
+        # aracıdır (gate'in doğruluğu = koşucusunun doğruluğu), KORPUS ise veridir.
+        # X6'nın ASIL NİYETİ (fixture VERİSİ susmalı) X6b'de yaşıyor — senaryo emekli oldu,
+        # değişmez emekli OLMADI.
+        rc, _, err = _hook(sb, hook_adi, _edit(KOK / "tests" / "fixtures" / "x" / "bad" / "veri.py",
+                                               "oturum-inf5"), shim_var)
+        ekle("X6b FP ÇAPASI: fixture KORPUSU (bad/*.py) → nudge YOK (veri, infra KARARI değil)",
+             not _ifade(err), f"exit={rc} nudge={'VAR' if _ifade(err) else 'YOK'}")
+
+        # ── KOŞUCU ALT-SINIFI (kayıt Q209): kopya-tanım drift'i kapandı ────
+        rc, _, err = _hook(sb, hook_adi, _edit(KOK / "tests" / "fixtures" / "x" / "run.py",
+                                               "oturum-inf5b"), shim_var)
+        ekle("X10 ⭐ AYIRT EDİCİ: fixture KOŞUCUSU (tests/fixtures/*/run.py) → nudge VAR "
+             "(guard ile AYNI cevap; önce: sessiz)",
+             _ifade(err), f"exit={rc} nudge={'VAR' if _ifade(err) else 'YOK'}")
+
+        rc, _, err = _hook(sb, hook_adi, _edit(KOK / "tests" / "run_fixture_tests.py",
+                                               "oturum-inf5c"), shim_var)
+        ekle("X10b süit koşucusu (tests/run_*.py) da KOŞUCUDUR → nudge VAR",
+             _ifade(err), f"exit={rc} nudge={'VAR' if _ifade(err) else 'YOK'}")
+
+        # Proje tarafında sınıf AD ile değil KONUM ile tanınır (tüketici projede koşucular
+        # `kur_ve_kos.py` / `mutasyon_kosumu.py` gibi adlar taşır — ad-bağımlı desen ıskalar).
+        rc, _, err = _hook(sb, hook_adi, _edit(sb / "scripts" / "validators-local" / "fixtures" / "kur_ve_kos.py",
+                                               "oturum-inf5d"), shim_var)
+        ekle("X11 proje-lokal koşucu (validators-local/fixtures/**.py, AD değil KONUM) → nudge VAR",
+             _ifade(err), f"exit={rc} nudge={'VAR' if _ifade(err) else 'YOK'}")
+
+        rc, _, err = _hook(sb, hook_adi, _edit(sb / ".tmp" / "deneme" / "run.py", "oturum-inf5e"), shim_var)
+        ekle("X12 FP ÇAPASI: `.tmp/` altındaki run.py → nudge YOK (scratch, koşucu DEĞİL)",
+             not _ifade(err), f"exit={rc} nudge={'VAR' if _ifade(err) else 'YOK'}")
+
+        rc, _, err = _hook(sb, hook_adi, _edit(KOK / "tests" / "fixtures" / "x" / "agac" / "scripts" / "arac.py",
+                                               "oturum-inf5f"), shim_var)
+        ekle("X13 FP ÇAPASI: korpus içindeki SAHTE ağacın scripts/*.py'si → nudge YOK",
              not _ifade(err), f"exit={rc} nudge={'VAR' if _ifade(err) else 'YOK'}")
 
         # KOMŞU-DİZİN çapası: yol dizgesi str-prefix olarak core köküyle EŞLEŞİR ama

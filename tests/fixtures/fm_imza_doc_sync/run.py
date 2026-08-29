@@ -16,7 +16,15 @@ MUTASYON: gate kaynağının bir kopyası üzerinde TAM-EŞLEŞMELİ metin cerra
 
 Kullanım:
     python tests/fixtures/fm_imza_doc_sync/run.py            # 11 vektör
-    python tests/fixtures/fm_imza_doc_sync/run.py --mutasyon capa|eksik|hayalet|failopen|blok
+    python tests/fixtures/fm_imza_doc_sync/run.py --mutasyon-capa   (…-eksik/-hayalet/
+                                                  -failopen/-blok)
+⛔ KİP BİÇİMİ 2026-08-29'da DEĞİŞTİ (kayıt Q210) — ESKİ `--mutasyon <ad>` (iki argüman)
+   KALDIRILDI. Gerekçe ÖLÇÜM: `tests/run_battery.py` kipleri kaynaktan keşfeder ve
+   TEK-ARGÜMAN biçimini tanır; bu koşucu tek `"--mutasyon"` sabiti taşıdığı için batarya
+   onu DEĞERSİZ çağırıyor, `sys.argv[i+1]` **IndexError** ile Traceback üretiyordu
+   (ölçüldü: 34 koşucu / 108 kip taramasında ÇÖKEN 3 kipten biri). Süit yalnız TABANI
+   koştuğu için bunu hiçbir kapı görmüyordu. Eski biçim artık `[KULLANIM]` + exit 1 verir
+   (görünür RED; sessiz çökme DEĞİL).
 ⚠ Core AĞACININ DIŞINDA (staging) koşuluyorsa `utils.project_config` bulunabilmesi için
   PYTHONPATH=<gerçek core>/scripts verilmelidir; core içinde koşarken gerekmez.
 """
@@ -207,6 +215,25 @@ MUTASYONLAR = {
 }
 
 
+# Batarya keşfinin BEYAN katmanı bu literali okur (ad-bağımsız: elemanlarının HEPSİ kip).
+# ⛔ `MUTASYONLAR` sözlüğünün anahtarları çıplak addır (`capa`) ⇒ keşif onları GÖREMEZ;
+# bu yüzden kipler AYRICA tam biçimleriyle burada BEYAN edilir. İkisi ayrışmasın diye
+# `_kip_capasi()` eşliği koşum başında ölçer (bayatlarsa görünür duruş, sessiz değil).
+GECERLI_KIP = {"--mutasyon-capa", "--mutasyon-eksik", "--mutasyon-hayalet",
+               "--mutasyon-failopen", "--mutasyon-blok"}
+
+
+def _kip_capasi() -> None:
+    """BEYAN ↔ uygulama eşliği: biri güncellenip diğeri unutulursa GÖRÜNÜR duruş."""
+    beklenen = {"--mutasyon-" + k for k in MUTASYONLAR}
+    if beklenen != GECERLI_KIP:
+        print(f"[DURDU] kip beyanı ile MUTASYONLAR sözlüğü ayrıştı: "
+              f"yalnız-beyanda={sorted(GECERLI_KIP - beklenen)} "
+              f"yalnız-sözlükte={sorted(beklenen - GECERLI_KIP)} — SAYI RAPORLAMIYORUM.",
+              file=sys.stderr)
+        sys.exit(2)
+
+
 def mutasyonlu_gate(tmp: Path, ad: str) -> Path:
     capa, yeni = MUTASYONLAR[ad]
     kaynak = GATE.read_text(encoding="utf-8")
@@ -220,12 +247,20 @@ def mutasyonlu_gate(tmp: Path, ad: str) -> Path:
 
 
 def main() -> int:
+    _kip_capasi()
     mut = None
-    if "--mutasyon" in sys.argv:
-        mut = sys.argv[sys.argv.index("--mutasyon") + 1]
-        if mut not in MUTASYONLAR:
-            print(f"bilinmeyen mutasyon: {mut} (geçerli: {', '.join(MUTASYONLAR)})", file=sys.stderr)
-            return 3
+    for a in sys.argv[1:]:
+        if not a.startswith("--mutasyon"):
+            continue
+        if a not in GECERLI_KIP:
+            # ⛔ SESSİZ ÇÖKME YERİNE GÖRÜNÜR RED: eski `--mutasyon <ad>` biçimi de,
+            # yazım hatası da, bilinmeyen kip de AYNI kapıdan çıkar (kayıt Q210).
+            print(f"[KULLANIM] gecersiz mutasyon kipi: {a} — gecerli: "
+                  f"{', '.join(sorted(GECERLI_KIP))}. "
+                  "ESKI bicim `--mutasyon <ad>` KALDIRILDI (tek argüman kullanın).",
+                  file=sys.stderr)
+            return 1
+        mut = a[len("--mutasyon-"):]
     if not GATE.is_file():
         print(f"[DUR] gate bulunamadı: {GATE}", file=sys.stderr)
         return 3
