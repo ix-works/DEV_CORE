@@ -5,6 +5,10 @@
 BOLUM 1 — validator bad/good fixture ciftleri (G1/T3.6).
 BOLUM 2 — pre_tool_guard PAYLOAD korpusu (2026-08-01 bug-avi AV-16/17/18/18b/21;
           detay + mutasyon-testi: tests/run_guard_fixture_tests.py).
+BOLUM 4 — KIP KOSABILIRLIGI (2026-08-29, kayit Q210): her kipli kosucunun ILK mutasyon
+          kipi COKMEDEN kosuyor mu. KAPSAM DAR ve BILINCLIDIR (kosucu basina 1 kip,
+          olcut yalniz "kostu mu") — gerekce + olculen maliyet `kip_kosabilirligi()`
+          fonksiyonunun ustundeki blokta.
 OZEL    — kendi kosucusunu tasiyan fixture'lar (tier_fail_closed, changelog_gate)
           ayni tabloya raporlanir.
 Hepsi CI'da bu tek komutla kosar (core-ci.yml "Validator fixture testleri").
@@ -670,6 +674,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/hooks/infra_write_guard.py",
      ("O:infra_write_guard", "O:negatif_test_harness"),
      "kimlik ayrımı + korunan yüzey listesi + fail-closed degrade; parse-fail sözleşmesi"),
+    # Q209 (2026-08-29): KOŞUCU yüzeyinin tek kaynağı. İKİ tüketicisi var ve ikisi de
+    # ölçülmeli — yalnız guard korpusu seçilseydi nudge kolundaki ayrışma (bu turun
+    # teşhisi) yine görünmezdi.
+    ("scripts/utils/infra_yuzeyi.py",
+     ("O:infra_write_guard", "O:fs_docstd"),
+     "koşucu yüzeyi tek-kaynak: BLOK kolu (guard) + NUDGE kolu (post_validate) aynı "
+     "deseni okur; kopya-tanım drift'i bu iki korpusta çapalı"),
     ("claude/settings.template.json",
      ("O:infra_write_guard", "O:hook_gate_coverage"),
      "kablolama korpusun K6 vektöründe ölçülür (kod ≠ kablolama); ayrıca bu dosya "
@@ -881,6 +892,62 @@ def harita_tamlik() -> list[tuple[str, str, bool, str]]:
         ("HARİTA-TAMLIK/hayalet", "haritada tanımsız birim yok", not hayalet,
          f"tanımsız birim(ler)={hayalet} (yazım hatası?)"),
     ]
+
+
+# ── BÖLÜM 4: KİP KOŞABİLİRLİĞİ (2026-08-29, kayıt Q210) ──────────────────────────
+# NEDEN VAR (ölçüldü, brif değil): süit koşucuların YALNIZ TABANINI koşuyordu. Mutasyon
+# kipleri hiçbir kapıda koşmadığı için SESSİZCE çürüyordu — 34 koşucu / 108 kip tek seferlik
+# tarandığında **3 kip Traceback** veriyordu (`fm_imza_doc_sync` çağrı biçimi ·
+# `std_tablo_include_kapsami` iki kipi: mutant kopya kardeş modülü bulamıyor). İkisi de
+# HAFTALARDIR bozuktu ve reçetedeki "X/Y düşmeli" pinleri o süre boyunca DOĞRULANAMAZDI.
+#
+# ⚠ KAPSAM BİLİNÇLİ OLARAK DAR — ÜÇ ÖLÇÜLMÜŞ SINIR:
+#  1. KOŞUCU-BAŞINA BİR KİP (kip-başına DEĞİL). Ölçüm: tüm 108 kip +378,5 sn (süit
+#     283 → 662 sn) ⇒ 600 sn'lik pratik tavanı aşardı (>10 dk koşumlar bu evde SIGTERM
+#     yiyor). Koşucu-başına ilk kip **+78,2 sn** (283 → ~361 sn). Bugünkü çöken 3 kip
+#     2 koşucudan geliyordu ve ikisi de bu daraltmayla YAKALANIRDI (kurulum/çağrı
+#     kusurları koşucu-başınadır, kip-başına değil).
+#  2. ÖLÇÜT YALNIZ "KOŞABİLDİ Mİ" — mutasyonun bir şeyi DÜŞÜRÜP düşürmediğine BAKMAZ.
+#     Gerekçe ölçüldü: kimi kip sonucu ortama duyarlıdır (`atc_p1_sonuc --mutasyon-stdin`
+#     `PYTHONUTF8` set edilmiş kabukta 22/22, edilmemişte 21/22) ⇒ "düşmeli" ölçütü
+#     süiti ortama bağlar. Korpus GÜCÜ `run_battery`nin işidir, süitin değil.
+#  3. Bu bir GATE DEĞİL, mevcut süitin kapsam satırıdır: yeni kural getirmez, yalnız
+#     "var olan kanıt araçları hâlâ çalışıyor mu" sorusunu sorar.
+KIP_ZAMAN_ASIMI = 300
+
+
+def kip_kosabilirligi() -> tuple[int, int, list[str]]:
+    """(geçen, toplam, hatalar) — her kipli koşucunun İLK kipi çökmeden koşuyor mu?"""
+    sys.path.insert(0, str(HERE))
+    try:
+        import run_battery as RB           # type: ignore  # noqa: N814
+    except Exception as exc:               # pragma: no cover
+        return 0, 1, [f"run_battery yüklenemedi: {exc} (kip kapsamı ÖLÇÜLEMEDİ)"]
+
+    gecen = toplam = 0
+    hatalar: list[str] = []
+    for kosucu in sorted(FIXTURES.glob("*/run.py")):
+        try:
+            kipler, _kaynak = RB.kipleri_kesfet(kosucu.read_text(encoding="utf-8",
+                                                                 errors="replace"))
+        except Exception as exc:           # pragma: no cover
+            toplam += 1
+            hatalar.append(f"{kosucu.parent.name}: keşif hatası {exc}")
+            continue
+        if not kipler:
+            continue                       # kipsiz koşucu bu bölümün konusu değil
+        kip = kipler[0]
+        toplam += 1
+        kod, cikti, _sure = RB.kos([sys.executable, str(kosucu), kip],
+                                   HERE.parent, KIP_ZAMAN_ASIMI)
+        etiket, _ok = RB.mutasyon_karari(kod, cikti, None, None)
+        # "KOŞABİLDİ" = çökmedi · kipi reddetmedi · kurulum yapamadan durmadı.
+        if etiket in ("COKTU", "KIP-RED", "KURULAMADI"):
+            hatalar.append(f"{kosucu.parent.name} {kip} → {etiket}(rc={kod}): "
+                           + " | ".join(s.strip() for s in cikti.splitlines()[-3:])[:300])
+        else:
+            gecen += 1
+    return gecen, toplam, hatalar
 
 
 def run_validator(name: str, fixture_dir: Path) -> tuple[int, str]:
@@ -1453,12 +1520,28 @@ def _main(argv: list[str] | None = None) -> int:
     else:
         print("\n[ATLANDI — seçim modu] bölüm 3: pre_tool_guard payload korpusu")
 
-    print(f"\nTOPLAM: {n_pass + r_gecen + g_gecen}/{len(rows) + r_toplam + g_toplam} PASS")
+    # ── BÖLÜM 4: kip koşabilirliği (yalnız TAM koşum; ~+78 sn — gerekçe fonksiyonda) ──
+    k_gecen = k_toplam = 0
+    k_hatalar: list = []
+    if secim is None:
+        print("\n" + "-" * 60)
+        print("kip koşabilirliği (koşucu başına İLK kip; ölçüt: çökmeden koştu mu)")
+        k_gecen, k_toplam, k_hatalar = kip_kosabilirligi()
+        for h in k_hatalar:
+            print(f"  [FAIL] {h}")
+        print(f"{k_gecen}/{k_toplam} PASS  (bölüm 4: kip koşabilirliği — korpus GÜCÜ "
+              f"DEĞİL; onun için: python tests/run_battery.py <fixture>)")
+    else:
+        print("\n[ATLANDI — seçim modu] bölüm 4: kip koşabilirliği")
+
+    print(f"\nTOPLAM: {n_pass + r_gecen + g_gecen + k_gecen}"
+          f"/{len(rows) + r_toplam + g_toplam + k_toplam} PASS")
     if secim is not None:
         print(f"⚠ SEÇİLİ KOŞUM ({atlanan} fixture atlandı; bölüm-2/3 atlamaları yukarıda "
               f"satır satır) — TAM SÜİTE SONUCU DEĞİLDİR. "
               f"Merge öncesi: python tests/run_fixture_tests.py")
-    return 0 if (all_ok and r_gecen == r_toplam and not g_hatalar) else 1
+    return 0 if (all_ok and r_gecen == r_toplam and not g_hatalar
+                 and not k_hatalar) else 1
 
 
 if __name__ == "__main__":
