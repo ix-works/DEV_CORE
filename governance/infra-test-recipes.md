@@ -564,6 +564,8 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   **d51ba09**, ⛔ dal adi degil) → **10/24**, P+D+G+K3 duser, **N1-N8 + K1 + K2 ayakta** ·
   `--mutasyon-gevsek` (yalniz ② sokulur) → **19/24**, dusen **P3b/D1/D1b/D2/D3** ⇒ D vektorleri
   atomiklikten BAGIMSIZ olcuyor. Oz-denetim: taban `materyalize`inde rmtree yoksa hicbir sayi
+  ⚠⚠ **N8 PLATFORM-BAGIMLIDIR (2026-08-29 ileri-fix 2, CI run 33267199186):** N8 junction->dizin donusumunu olcer. Taban `d51ba09:224` **ciplak `os.rmdir`** cagirir; POSIX'te symlink dizin girdisi DEGILDIR => `NotADirectoryError`. Onceden bu istisna disari cikip **kosucuyu cokertiyor ve 30+ vektorun hepsini siliyordu**; artik `--mutasyon` kipinde `N8 ATLANDI/BILINEN` diye **etiketli PASS**tir => yukaridaki *“N1-N8 ayakta”* pini Windows'ta da Linux'ta da **ayni** okunur. Windows'ta dal hic tetiklenmez (junction = gercek dizin) => kusur yerelde **gorunmez**.
+  🔁 **Linux ikizi olmadan dogrula (`--taklit-posix-symlink`; kip DEGIL, batarya kesfi gormez):** `os.rmdir`i yalniz N8 cagrisi boyunca `NotADirectoryError` attirir. Uc kontrol: (1) yakalayici sokulunce `--mutasyon --taklit-posix-symlink` -> **exit 2 + `kosucu coktu`** (CI semptomu birebir; pozitif kontrol SART, yoksa assertion yalanci) (2) fix'li -> **10/24** + etiketli satir (3) **mutasyon DISI** + ayni bayrak -> **24/24**, N8 ATLANMAZ (muafiyetin DAR oldugunun kaniti).
   BASILMAZ (exit 2). Cikis-kodu sozlesmesi kardes overlay korpuslariyla AYNI.
   ⚠ **Capalari SILME:** N5/N6 (T2.5 kapisi + onayin anlami) · N7 (fazlalik `.md` hala silinir
   — atomiklik "hic silme"ye donusmesin) · N8 (junction→gercek dizin donusumu; CORE hedefi
