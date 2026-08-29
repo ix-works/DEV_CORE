@@ -55,6 +55,15 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
+# ⛔ TEŞHİS AKIŞI — düz `print()` KULLANILMAZ (2026-08-29, CI run 33265820879).
+# `yukle()` sap_client import-anı koruması için sys.stdout/sys.stderr'i BytesIO ile
+# SARMALAR; `git_show()` tam o pencerenin İÇİNDEN çağrılır. Kurulum sebebi `print()`
+# ile basılırsa ATILAN tampona gider ve `sys.exit(2)` sonrası dışarıdan görülen tek şey
+# `KURULAMADI(rc=2): <boş>` olur — yani ARIZA VAR ama SEBEBİ YOK (teşhis edilemez).
+# Gerçek akış, swap'tan önce (burada) yakalanır; reconfigure SONRASI olduğu için
+# `errors="replace"` mirasla gelir (cp1254 kabukta `→` patlatmaz).
+_GERCEK_ERR = sys.stderr
+
 KOK = Path(__file__).resolve().parents[3]
 SONUC: list[tuple[str, bool, str]] = []
 
@@ -95,7 +104,10 @@ def git_show(rel: str) -> str:
     r = subprocess.run(["git", "-C", str(KOK), "show", f"{ARG.ref}:{rel}"],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
-        print(f"[DOĞRULANAMADI] git show {ARG.ref}:{rel} → {r.stderr.strip()[:200]}")
+        print(f"[DOĞRULANAMADI] git show {ARG.ref}:{rel} → {r.stderr.strip()[:200]}",
+              file=_GERCEK_ERR, flush=True)
+        print("  Tipik sebep: SIĞ KLON (CI `actions/checkout` fetch-depth 1) — pinli "
+              "taban SHA'nın blob'u o klonda YOK.", file=_GERCEK_ERR, flush=True)
         sys.exit(2)
     return r.stdout
 

@@ -13,7 +13,25 @@ jobs:
   gates:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 ZORUNLU (2026-08-29, kayit Q210 ileri-fix; CI run 33265820879).
+      # Parametresiz `checkout` SIG klon yapar (fetch-depth 1) -> repoda YALNIZ 1 commit
+      # bulunur. Fixture korpusunun bir bolumu mutasyon TABANINI pinli bir SHA'dan alir
+      # (`git show <sha>:<yol>`); sig klonda o blob'lar YOK -> kosucu `exit 2` ile durur.
+      # Olculdu: suit BOLUM 4 (kip kosabilirligi) CI'da 28/34, ayni sig klon yerelde
+      # taklit edilince BIREBIR 28/34 + ayni 6 kosucu. Yani kip korpusunun %18'i CI'da
+      # HIC kosmuyordu; kipler yalnizca sessizce curuyordu (BOLUM 4 tam da bunu
+      # gormek icin yazilmisti ve ilk isinde kendi ortamini tespit etti).
+      # MALIYET: `git count-objects -vH` -> size-pack 6.93 MiB / 233 commit; tam gecmis
+      # ihmal edilebilir. Kardes is akisi `project-guard.yml` zaten `fetch-depth: 0`
+      # kullaniyor (emsal, icat degil).
+      # ⛔ BU SATIR PINLI-SHA TABANINI YENIDEN MESRULASTIRMAZ: (a) `git show HEAD:` hala
+      # YASAK -- zamana baglidir, fix merge edilince taban=fix olur (PR #177/#179'da iki
+      # kez main'i kirdi); (b) squash-merge ile ERISILEMEZ kalan bir SHA burada da
+      # bulunamaz -- fetch-depth 0 yalnizca REF'lerden erisilebilir gecmisi getirir.
+      # Bugunku 5 pinli SHA'nin besi de main'in atasi oldugu olculdu.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:

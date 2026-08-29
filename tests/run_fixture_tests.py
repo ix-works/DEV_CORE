@@ -943,8 +943,16 @@ def kip_kosabilirligi() -> tuple[int, int, list[str]]:
         etiket, _ok = RB.mutasyon_karari(kod, cikti, None, None)
         # "KOŞABİLDİ" = çökmedi · kipi reddetmedi · kurulum yapamadan durmadı.
         if etiket in ("COKTU", "KIP-RED", "KURULAMADI"):
-            hatalar.append(f"{kosucu.parent.name} {kip} → {etiket}(rc={kod}): "
-                           + " | ".join(s.strip() for s in cikti.splitlines()[-3:])[:300])
+            sebep = " | ".join(s.strip() for s in cikti.splitlines()[-3:])[:300].strip()
+            # ⛔ SEBEPSİZ ARIZA RAPORLANMAZ (2026-08-29, CI run 33265820879): iki koşucu
+            # `KURULAMADI(rc=2): ` diye BOŞ mesajla düştü (teşhis sebebini kendi stdout
+            # swap penceresine basıyorlardı). Koşucu tarafı düzeltildi; bu satır SÜİTİN
+            # kendi güvencesidir — çıktı üretmeden ölen HERHANGİ bir koşucuda sebep
+            # alanı asla boş kalmaz, yoksa CI logu "arıza var, sebep yok" der.
+            if not sebep:
+                sebep = ("<KOŞUCU HİÇ ÇIKTI ÜRETMEDİ — sebep bilinmiyor; koşucuyu elle "
+                         f"koş: python {kosucu.as_posix()} {kip}>")
+            hatalar.append(f"{kosucu.parent.name} {kip} → {etiket}(rc={kod}): {sebep}")
         else:
             gecen += 1
     return gecen, toplam, hatalar

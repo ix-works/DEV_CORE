@@ -35,6 +35,32 @@ python scripts/inspector.py --self-test             # canary    [✓]
     --mutasyon-stdin`, `PYTHONUTF8` set edilmiş kabukta 22/22, edilmemişte 21/22) ⇒
     "düşmeli" ölçütü süiti operatörün ortamına bağlardı. Korpus GÜCÜ `run_battery`nin işidir.
   · Yeni bir KURAL getirmez (gate değil, kapsam satırı); `--degisen` seçim modunda ATLANIR.
+  ⭐⭐ **BÖLÜM 4'ÜN İLK BULGUSU CI ORTAMIYDI — "kip CI'da HİÇ koşmamıştı" sınıfı
+  (2026-08-29 ileri-fix, PR #181 kırmızısı, run 33265820879):** yerel süit **208/208 yeşil**
+  iken CI BÖLÜM 4'te **28/34** verdi. Düşen 6 koşucunun tamamı `KURULAMADI(rc=2)` idi ve
+  kök **ürün kodunda değil ORTAMDA**ydı: `actions/checkout@v5` parametresiz = **sığ klon**
+  (`fetch-depth 1`) ⇒ mutasyon tabanını **pinli SHA**'dan alan koşucular (`git show
+  <sha>:<yol>`) blob'u bulamıyordu. Yani kip korpusunun **%17,6'sı (6/34) CI'da hiç
+  koşmamıştı**; BÖLÜM 4 olmasa bu görünmezdi. Çözüm: `core-ci.yml` → `fetch-depth: 0`
+  (maliyet size-pack **6,93 MiB / 233 commit**; emsal `project-guard.yml`). Sonra derin
+  ağaçta **34/34**.
+  🔁 **CI İKİZİNİ YERELDE KUR (bu sınıfta İLK komut, tahmin etme):**
+  `git clone --depth 1 --branch <dal> file:///<repo-yolu> <tmp>` → doğrula:
+  `git -C <tmp> rev-list --count HEAD` = **1** ve `git -C <tmp> cat-file -e <pinli-sha>`
+  = **hata**. Sonra `env -u PYTHONUTF8` ile koş. Bu ikiz PR #181 kırmızısını **birebir**
+  (28/34, aynı 6 koşucu) yeniden üretti.
+  ⛔ **BOŞ SEBEP = AYRI BİR KUSUR, ORTAM DEĞİL:** o 6 FAIL'in **2'si** hiçbir sebep
+  yazmıyordu. Kök: `yukle()` `sap_client` import-anı için `sys.stdout/stderr`'i BytesIO ile
+  sarmalar, `git_show()` o pencerenin İÇİNDEN çağrılır ⇒ `print()` ile basılan teşhis
+  **atılan tampona** gider (`sys.exit(2)` sonrası dışarıya 0 bayt). Ev deseni: teşhis akışı
+  swap'tan ÖNCE `_GERCEK_ERR = sys.stderr` diye yakalanır, `print(..., file=_GERCEK_ERR)`.
+  **F1 kapsamı ölçüldü:** swap YAPAN 10 koşucudan `exit 2/3` ile de duran **3'ü** riskli;
+  `run_battery` fixture'ının exit'leri swap penceresi DIŞINDA ⇒ etkilenen **tam 2 koşucu**.
+  ⚠ **Mutasyon çapası "boş değil" OLAMAZ:** süit tarafına eklenen yer-tutucu
+  (`<KOŞUCU HİÇ ÇIKTI ÜRETMEDİ …>`) koşucu katmanının mutasyonunu MASKELER. Çapa
+  **gerçek metin** olmalı (`git show <sha>:… → fatal`). Negatif kontrol git'siz/ortamsız
+  koşar: `--mutasyon --ref 0000000deadbeef` → sebep **218/217 karakter**, exit 2;
+  `file=_GERCEK_ERR` sökülürse aynı komut **0 karakter**.
 
 ### B0-SEÇİM — `--degisen` (ara adımlar; 2026-08-13)
 > Ölçüldü: TAM koşum **169,7 sn / 113 vektör**. Tek-validator değişikliği için seçili
@@ -185,6 +211,12 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   ÖNCE** geçebiliyordu; commit atılınca taban = fix ⇒ `OLCULEMEDI` (PR #179, run 33258089818).
   **SHA'ya pinlemek de çözüm DEĞİL:** CI `actions/checkout@v5` **sığ klon** yapar (`fetch-depth 1`)
   ⇒ `git show <eski-SHA>:…` blob'u bulamaz (`git clone --depth 1` ile taklit edilip ölçüldü).
+  📌 **GÜNCELLEME 2026-08-29 (Q210 ileri-fix) — ORTAM DEĞİŞTİ, KARAR DEĞİŞMEDİ:** `core-ci.yml`
+  artık `fetch-depth: 0` kullanıyor ⇒ *sığ klon* gerekçesi core-ci için **artık geçerli değil**
+  (pinli, main'den erişilebilir SHA'lar CI'da çözülür). ⛔ Bu, V3'ün tasarımını **geri açmaz**:
+  V3'ün tabanı `git show`'dan **zaman bağımlılığı** yüzünden çıkarılmıştı (fix merge edilince
+  taban = fix) ve bunu hiçbir checkout ayarı düzeltmez. Sığ-klon yalnızca **ikinci** ve bağımsız
+  gerekçeydi. V3 bugünkü hâliyle (kaynaktan türetme) kalır; `git show HEAD:` hâlâ YASAK.
   **Dondurulmuş kopya da REDDEDİLDİ:** tüm dosyayı dondurur ⇒ startup gövdesindeki ilerideki HER
   meşru edit V3'ü kırar, vektör kronik-kırmızıya döner. **Kabul edilen yol** (`fa1adfe`/PR #177
   reçetesinin aynısı): taban BUGÜNKÜ kaynaktan **tek dal satırı** sökülerek türetilir
