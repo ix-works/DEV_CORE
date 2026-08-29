@@ -16,7 +16,7 @@ bulunamadığında araç bunları AYRI etiketlerle ve exit 1 ile bildirmeli.
   (d) kip YOKSA araç çökmez, "KIP YOK" der ve exit 0               → N1
   (e) mutasyon KAÇARSA (exit 0 + AYNI skor) exit 1                 → N2
   (f) taban KIRMIZI ise mutasyonlar KOŞULMAZ + exit 1              → N3, N3b
-  (g) `[DURDU]`/`[KULLANIM]` = KIP-RED · exit 2 VEYA 3 = KURULAMADI ·
+  (g) `[DURDU]`/`[KULLANIM]` = KIP-RED · exit 2 = KURULAMADI ·
       Traceback = COKTU — üçü "düştü" SAYILMAZ                     → N4, N4b, N5
   (h) koşucu YOKSA sessiz atlama yok (exit 0 iki anlamlıdır)        → N6
   (i) skor okunamıyorsa "KACTI" değil "OLCULEMEDI"                 → N8
@@ -32,8 +32,7 @@ bulunamadığında araç bunları AYRI etiketlerle ve exit 1 ile bildirmeli.
 Koşum:  python tests/fixtures/run_battery/run.py
 MUTASYON — ALTI AYRI DEĞİŞMEZ (hiçbiri diğerini kapsamaz; her biri TEK çapayı keser):
   --mutasyon-kacak-kor     KACTI kararı PASS sayılır          → N2 DÜŞMELİ
-  --mutasyon-kurulum-kor   KURULAMADI(exit 2/3) PASS sayılır  → N4b + N4c DÜŞMELİ
-  --mutasyon-uc-kor        exit 3 yeniden "DUSTU" sayılır     → N4c DÜŞMELİ (yalnız o)
+  --mutasyon-kurulum-kor   KURULAMADI(exit 2) PASS sayılır    → N4b DÜŞMELİ
   --mutasyon-red-kor       KIP-RED (marker) PASS sayılır      → N4 DÜŞMELİ
   --mutasyon-cokme-kor     Traceback görmezden gelinir        → N5 DÜŞMELİ
   --mutasyon-olcum-kor     OLCULEMEDI PASS sayılır            → N8 DÜŞMELİ
@@ -65,8 +64,7 @@ ARAC = REPO / "tests" / "run_battery.py"
 
 # ⛔ BİLİNMEYEN KİP SESSİZCE YEŞİL GEÇMESİN (negatif_test_harness sözleşmesi).
 GECERLI_KIP = {"--mutasyon-kacak-kor", "--mutasyon-kurulum-kor", "--mutasyon-red-kor",
-               "--mutasyon-cokme-kor", "--mutasyon-olcum-kor", "--mutasyon-kesif-kor",
-               "--mutasyon-uc-kor"}
+               "--mutasyon-cokme-kor", "--mutasyon-olcum-kor", "--mutasyon-kesif-kor"}
 for _a in sys.argv[1:]:
     if _a not in GECERLI_KIP:
         print(f"[DURDU] bilinmeyen kip: {_a!r} — gecerli: {sorted(GECERLI_KIP)}")
@@ -92,16 +90,8 @@ MUTASYONLAR = {
     "--mutasyon-kurulum-kor": ('        return "KURULAMADI", False',
                                '        return "KURULAMADI", True'),
     "--mutasyon-red-kor": ('        return "KIP-RED", False', '        return "KIP-RED", True'),
-    # exit 3 kapsamı SÖKÜLÜR → eski (bugün ölçülen) sahte-yeşil geri gelir: N4c düşer,
-    # N4b AYAKTA kalır ⇒ iki kodun AYRI değişmez olduğu kanıtlanır.
-    "--mutasyon-uc-kor": ("_KURULAMADI_KODLARI = (2, 3)", "_KURULAMADI_KODLARI = (2,)"),
-    # ⚠ ÇAPA 2026-08-29'da TAZELENDİ: `if kod == 2:` satırı `_KURULAMADI_KODLARI`ye döndü.
-    # Bayatlığı süitin YENİ BÖLÜM 4'ü ilk koşumda yakaladı (dogfooding: kip koşabilirliği
-    # tam da bu sınıf içindir — çapası bayatlamış mutasyon sessizce koşmaz olur).
-    "--mutasyon-cokme-kor": ('    if COKME_IZI in cikti:\n        return "COKTU", False\n'
-                             '    if kod in _KURULAMADI_KODLARI:',
-                             '    if False and COKME_IZI in cikti:\n        return "COKTU", False\n'
-                             '    if kod in _KURULAMADI_KODLARI:'),
+    "--mutasyon-cokme-kor": ('    if COKME_IZI in cikti:\n        return "COKTU", False\n    if kod == 2:',
+                             '    if False and COKME_IZI in cikti:\n        return "COKTU", False\n    if kod == 2:'),
     "--mutasyon-olcum-kor": ('        return "OLCULEMEDI", False',
                              '        return "OLCULEMEDI", True'),
     "--mutasyon-kesif-kor": ('    if belge:\n        return sorted(belge), "DOKUMAN"',
@@ -177,11 +167,8 @@ kontrol("P1 BEYAN katmani: acik kip kumesi okunur",
         f"kaynak={kay1} kip={k1}")
 
 k2, kay2 = _kesif("fs_docstd")
-# ⚠ SAYI KORPUSA PİNLİ (b0_secim P2/P3 ile aynı sözleşme): `fs_docstd`e kip eklenirse
-# (2026-08-29: 10→13, kayıt Q209 koşucu mutasyonları) BU SATIR da güncellenir. Sayıyı
-# gevşetmek (`>=`) çapayı öldürür: keşif katmanının SESSİZ daralması tam burada görünür.
-kontrol("P2 DOKUMAN katmani SART: son-ekle cozen kosucunun 13 kipi bulunur",
-        kay2 == "DOKUMAN" and len(k2) == 13 and "--mutasyon-katman0" in k2,
+kontrol("P2 DOKUMAN katmani SART: son-ekle cozen kosucunun 10 kipi bulunur",
+        kay2 == "DOKUMAN" and len(k2) == 10 and "--mutasyon-katman0" in k2,
         f"kaynak={kay2} n={len(k2)}")
 
 k3, kay3 = _kesif("worktree_yasam_dongusu")
@@ -281,14 +268,6 @@ kosucu("kurulamayan", """
         sys.exit(2)
     print("6/6 OK")
 """)
-kosucu("kurulamayan3", """
-    import sys
-    _GECERLI_KIP = {"--mutasyon-u"}
-    if len(sys.argv) > 1:
-        print("MUTASYON DESENI BULUNAMADI - SAYI RAPORLANMIYOR")
-        sys.exit(3)
-    print("6/6 OK")
-""")
 kosucu("coken", """
     import sys
     _GECERLI_KIP = {"--mutasyon-c"}
@@ -332,14 +311,6 @@ rc, c = arac_kos(["kurulamayan"], KUM)
 kontrol("N4b exit 2 (markorsuz) -> KURULAMADI, 'DUSTU' DEGIL + exit 1",
         rc == 1 and "KURULAMADI" in c and "DUSTU" not in c,
         f"rc={rc} · {satir(c, 'mutasyon-t').strip()[:80]}")
-
-# ⭐ N4c — GERÇEK VAKA (2026-08-29, kayıt Q210): "durdum" sinyali olarak exit 3 kullanan
-# DÖRT koşucu var; araç 3'ü "DUSTU" sayınca çapası bayatlamış mutasyon YEŞİL geçiyordu.
-# Bu vektör tam olarak o sahte-yeşili çiviler ("kurulamadı", "düştü" DEĞİLDİR).
-rc, c = arac_kos(["kurulamayan3"], KUM)
-kontrol("N4c ⭐ exit 3 (markorsuz) -> KURULAMADI, 'DUSTU' DEGIL + exit 1",
-        rc == 1 and "KURULAMADI" in c and "DUSTU" not in c,
-        f"rc={rc} · {satir(c, 'mutasyon-u').strip()[:80]}")
 
 rc, c = arac_kos(["coken"], KUM)
 kontrol("N5 Traceback -> COKTU (cokme != FAIL/DUSTU) + exit 1",

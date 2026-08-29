@@ -25,16 +25,6 @@ python scripts/inspector.py --self-test             # canary    [✓]
   core kökünden aynı komut, aynı an → **exit 0**. Ayırt edici: ihlal satırları core'da **var
   olmayan** dosya yollarını gösteriyordu.) Staged-mod (`--all`siz) cwd'den etkilenmez.
 - **Verim:** tam korpus yalnız SON durumda **1×** koşulur; ara adımlarda yalnız dokunduğun fixture.
-- ⭐ **BÖLÜM 4 — KİP KOŞABİLİRLİĞİ (2026-08-29, kayıt Q210):** TAM süit artık her kipli
-  koşucunun **İLK** mutasyon kipini de koşar ve yalnız **"çöktü mü / kipi reddetti mi /
-  kurulamadan durdu mu"** sorusunu sorar. Kapsam DAR ve bilinçlidir:
-  · **koşucu-başına 1 kip** — tüm 108 kip **+378,5 sn** (süit 283→662 sn, >10 dk tavanı);
-    ilk-kip **+78,2 sn** (283→~361 sn). Bugün bulunan 3 çöken kip **2 koşucudan** geliyordu
-    ve ikisi de bu daraltmayla yakalanır (kurulum/çağrı kusuru koşucu-başınadır).
-  · **ölçüt "düşmeli" DEĞİL** — kimi kip ortama duyarlıdır (ölçüldü: `atc_p1_sonuc
-    --mutasyon-stdin`, `PYTHONUTF8` set edilmiş kabukta 22/22, edilmemişte 21/22) ⇒
-    "düşmeli" ölçütü süiti operatörün ortamına bağlardı. Korpus GÜCÜ `run_battery`nin işidir.
-  · Yeni bir KURAL getirmez (gate değil, kapsam satırı); `--degisen` seçim modunda ATLANIR.
 
 ### B0-SEÇİM — `--degisen` (ara adımlar; 2026-08-13)
 > Ölçüldü: TAM koşum **169,7 sn / 113 vektör**. Tek-validator değişikliği için seçili
@@ -91,22 +81,14 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   dışı kalır. Ölçüldü (2026-08-29): 90 koşucunun 33'ünde kip var, **33/33 çözülüyor, 0 hayalet**.
 - **`exit 0` tek başına anlam taşımaz** — satır etiketleri AYRI: `DUSTU` (exit≠0) ·
   `AYIRDI` (exit 0 + skor tabandan farklı = kendi öz-testini koşan koşucu) · `KACTI` (exit 0 +
-  AYNI skor) · `OLCULEMEDI` (skor okunamadı) · `KURULAMADI` (**exit 2 VEYA 3**) · `KIP-RED`
+  AYNI skor) · `OLCULEMEDI` (skor okunamadı) · `KURULAMADI` (exit 2) · `KIP-RED`
   (`[DURDU]`/`[KULLANIM]`) · `COKTU` (Traceback). ⛔ *"Mutasyon exit≠0 vermeli"* kuralı **YANLIŞ
   olurdu**: canlı korpusta 33 kipin **15'i exit 0** döner (ölçüldü) ⇒ naif kural %45 sahte-FAIL üretirdi.
 - Ölçülen tek-komut maliyeti (2026-08-29, bu makine): `infra_write_guard` **8 birim / 26,6 s** ·
   `run_battery` **7 birim / 30,1 s** · `b0_secim` **3 birim / 6,9 s**.
-- Korpus: `python tests/fixtures/run_battery/run.py` → **25/25**; 7 mutasyon, her biri TEK çapa
-  keser: `--mutasyon-kacak-kor`→N2 · `--mutasyon-kurulum-kor`→N4b+N4c · `--mutasyon-red-kor`→N4 ·
-  `--mutasyon-cokme-kor`→N5 · `--mutasyon-olcum-kor`→N8 · `--mutasyon-kesif-kor`→P2+P10 ·
-  `--mutasyon-uc-kor`→**N4c** (exit-3 kapsamı sökülür).
-- ⭐ **exit 3 = KURULAMADI (2026-08-29, kayıt Q210 — aracın KENDİ sahte-yeşili):** araç
-  başlangıçta yalnız exit 2'yi "kurulamadı" sayıyordu; oysa DÖRT koşucu çapası tutmayınca
-  `sys.exit(3)` döner (`fm_imza_doc_sync` · `infra_write_guard` · `std_tablo_include_kapsami` ·
-  `reviewer_skip_sozlesmesi`). Sonuç: **çapası bayatlamış bir mutasyon `DUSTU(rc=3)` diye
-  YEŞİL raporlanıyordu** — bu tur canlı yaşandı (3 bozuk mutasyon PASS geçti). Genişleme
-  korpustan ölçüldü: 108 kip taramasında DÜŞEN her mutasyon rc=1 verir, hiçbiri 3 vermez ⇒
-  `DUSTU`dan hiçbir gerçek vaka çalınmaz (saf precision düzeltmesi).
+- Korpus: `python tests/fixtures/run_battery/run.py` → **24/24**; 6 mutasyon, her biri TEK çapa
+  keser: `--mutasyon-kacak-kor`→N2 · `--mutasyon-kurulum-kor`→N4b · `--mutasyon-red-kor`→N4 ·
+  `--mutasyon-cokme-kor`→N5 · `--mutasyon-olcum-kor`→N8 · `--mutasyon-kesif-kor`→P2+P10 (22/24).
 - ⚠ **Çocuk ortamına `PYTHONUTF8` ENJEKTE EDİLMEZ** (bilinçli): enjekte edilseydi burada
   yeşil olan koşucu CI'da (env'siz) kırmızı olabilirdi — *lokal yeşil ≠ CI yeşil* sınıfı.
 - ⚠ Batarya **bir kapı değildir**: hiçbir kuralı zorlamaz, `run_all_validators`/pre-commit
@@ -765,23 +747,10 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   sandbox'ını kurar (sahte proje kökü: `project.yaml` + `SOURCE_CODES/…/*.func.abap`; sahte core
   kökü: `playbook/*.md`) ve `finally` ile siler. Gate GERÇEK dosyasından koşar.
 - **BEŞ MUTASYON — hiçbiri diğerini kapsamaz** (biri tam puan verirse korpus o değişmez için
-  BOŞTUR). ⚠ **KİP BİÇİMİ 2026-08-29'da DEĞİŞTİ (kayıt Q210):** eski `--mutasyon <ad>` (iki
-  argüman) **KALDIRILDI** — batarya keşfi tek-argüman biçimini tanır, eski biçimde bataryanın
-  değersiz çağrısı `IndexError`/Traceback üretiyordu. Yeni biçim ve **ölçülen** pinler
-  (2026-08-29, taban 11/11):
-
-  | kip | sonuç | düşen vektör(ler) |
-  |---|---|---|
-  | `--mutasyon-capa` | 10/11 | V8 |
-  | `--mutasyon-eksik` | **9/11** | V1 **+ V2** (tek vektör DEĞİL — eski reçete yalnız V1 diyordu) |
-  | `--mutasyon-hayalet` | 10/11 | V4 |
-  | `--mutasyon-failopen` | 10/11 | V5 |
-  | `--mutasyon-blok` | 10/11 | V9 |
-
-  Mutasyon **TAM-EŞLEŞMELİ** metin cerrahisidir; çapa 1 kez geçmiyorsa koşucu **exit 3 ile
-  DURUR** (sessiz no-op mutasyon = sahte YEŞİL). Geçersiz/eski kip → `[KULLANIM]` + **exit 1**.
-  ⛔ Bu pinler **2026-08-29'a kadar DOĞRULANAMAZDI**: mutasyon kipi Traceback veriyordu ve
-  süit yalnız TABANI koştuğu için hiçbir kapı görmüyordu.
+  BOŞTUR): `--mutasyon capa` (V8 düşer) · `--mutasyon eksik` (V1) · `--mutasyon hayalet` (V4) ·
+  `--mutasyon failopen` (V5) · `--mutasyon blok` (V9). Mutasyon **TAM-EŞLEŞMELİ** metin
+  cerrahisidir; çapa 1 kez geçmiyorsa koşucu **exit 3 ile DURUR** (sessiz no-op mutasyon =
+  sahte YEŞİL).
 - **ÜÇ DURUM AYRIMI korpusun çekirdeğidir** ("bakamadım" ≠ "temiz"): V5 blok yok → **exit 2** ·
   V6 belge dosyası yok → **exit 2** · V8 imza ayrıştırma **çapası** (`IV_PROGRAM`) düştü →
   **exit 2** (aksi hâlde 0 fark = sahte `[OK]`) · V7 ABAP kaynağı yok → **exit 0 + `ATLANDI` +

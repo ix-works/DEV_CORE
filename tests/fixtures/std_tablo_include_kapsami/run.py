@@ -63,10 +63,6 @@ for _s in (sys.stdout, sys.stderr):
 
 KOK = Path(__file__).resolve().parents[3]
 KAYNAK = KOK / "scripts" / "validators" / "check_standard_table_fields.py"
-# Mutant kopya KOMŞULARIN yanında (kardeş-import `__file__`ten çözülür); koşum başında
-# önceki bir çökmeden kalan artık temizlenir.
-MUTANT = KAYNAK.parent / "_mutant_check_standard_table_fields.py"
-MUTANT.unlink(missing_ok=True)
 
 _GECERLI_KIP = {"--mutasyon-kuyruk", "--mutasyon-genis"}
 for _a in sys.argv[1:]:
@@ -137,19 +133,7 @@ def kontrol(ad: str, ok: bool, detay: str = "") -> None:
 
 
 def _modul():
-    """Ölçülecek modül: gerçek kaynak ya da mutant kopyası.
-
-    ⛔ MUTANT KOPYA KAYNAĞIN YANINDA YAŞAR (temp'te DEĞİL) — 2026-08-13 dersinin aynısı,
-    2026-08-29'da bu koşucuda CANLI ÇÖKME olarak ölçüldü (kayıt Q210):
-    `check_standard_table_fields.py` kardeşini `__file__`ten bulur
-    (`sys.path.insert(0, Path(__file__).resolve().parent)` → `from _gate_status import …`).
-    Kopya `%TEMP%`e yazılınca o satır TEMP dizinini işaret eder ⇒
-    `ModuleNotFoundError: _gate_status` ⇒ **her iki mutasyon kipi de Traceback**.
-    Süit yalnız TABANI koştuğu için hiçbir kapı görmüyordu (34 koşucu / 108 kip
-    taramasında çöken 3 kipin 2'si buydu).
-    Kopya `finally` ile SİLİNİR ve koşum başında ARTIK varsa temizlenir (artık-bırakma
-    sınıfı: `git status` temiz kalmalı).
-    """
+    """Ölçülecek modül: gerçek kaynak ya da mutant kopyası (temp'te; kardeş-import YOK)."""
     yol = KAYNAK
     if KIP:
         metin = KAYNAK.read_text(encoding="utf-8")
@@ -162,22 +146,13 @@ def _modul():
             print(f"⛔ MUTASYON DESENİ BULUNAMADI/ÇOK EŞLEŞTİ ({metin.count(eski)}x) "
                   f"[{KIP}] — SAYI RAPORLANMIYOR (sahte-yeşil yerine görünür duruş).")
             sys.exit(3)
-        yol = MUTANT
+        d = Path(tempfile.mkdtemp(prefix="cstf_mut_"))
+        yol = d / "check_standard_table_fields.py"
         yol.write_text(metin.replace(eski, yeni), encoding="utf-8")
-    try:
-        spec = importlib.util.spec_from_file_location("cstf_fx", yol)
-        m = importlib.util.module_from_spec(spec)                 # type: ignore[arg-type]
-        sys.modules["cstf_fx"] = m
-        spec.loader.exec_module(m)                                # type: ignore[union-attr]
-    except Exception as exc:
-        # KURULAMADI ≠ KAÇTI ≠ FAIL: yüklenemeyen mutant SAYI RAPORLAMADAN durur
-        # (Traceback yerine tek satır + exit 2; batarya bunu `KURULAMADI` etiketler).
-        print(f"[DURDU] mutant modül yüklenemedi ({type(exc).__name__}: {exc}) — "
-              "SAYI RAPORLAMIYORUM.", file=sys.stderr)
-        sys.exit(2)
-    finally:
-        if KIP:
-            MUTANT.unlink(missing_ok=True)   # artık bırakma: git status temiz kalmalı
+    spec = importlib.util.spec_from_file_location("cstf_fx", yol)
+    m = importlib.util.module_from_spec(spec)                     # type: ignore[arg-type]
+    sys.modules["cstf_fx"] = m
+    spec.loader.exec_module(m)                                    # type: ignore[union-attr]
     return m
 
 

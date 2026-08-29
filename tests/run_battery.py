@@ -47,7 +47,7 @@ SATIR SONUCU — "exit 0" TEK BAŞINA ANLAM TAŞIMAZ (bu araç dört ayrı hâli
                      koşan koşucu; ölçüldü, korpusta yaygın)                → beklenen
               KACTI(exit 0 ve skor tabanla AYNI = korpus o değişmezi ölçmüyor) → FAIL
               OLCULEMEDI(exit 0 ama skor okunamadı = kıyas yapılamadı)         → FAIL
-              KURULAMADI(exit 2 VEYA 3 = koşucu SAYI RAPORLAMADAN durdu)     → FAIL
+              KURULAMADI(exit 2 = koşucu SAYI RAPORLAMADAN durdu)            → FAIL
               KIP-RED([DURDU]/[KULLANIM] = koşucu kipi tanımadı)             → FAIL
               COKTU(Traceback)                                              → FAIL
   ⛔ "kurulamadı", "kaçtı" DEĞİLDİR ve "çökme", "FAIL" değildir — üçü ayrı satır
@@ -94,15 +94,6 @@ SKOR_RE = re.compile(r"(\d+)\s*/\s*(\d+)")
 PASSFAIL_RE = re.compile(r"(\d+)\s*PASS\s*/\s*(\d+)\s*FAIL")
 COKME_IZI = "Traceback (most recent call last)"
 DURUS_MARKORLERI = ("[DURDU]", "[KULLANIM]")
-# "SAYI RAPORLAMADAN durdum" çıkış kodları. ⚠ 2 KANONİKTİR ama **3 de kullanılıyor**:
-# ölçüldü 2026-08-29 (kayıt Q210) — 4 koşucu mutasyon çapası tutmayınca `sys.exit(3)`
-# döner (`fm_imza_doc_sync` · `infra_write_guard` · `std_tablo_include_kapsami` ·
-# `reviewer_skip_sozlesmesi`). Bu araç 3'ü "DUSTU" sayıyordu ⇒ **çapası bayatlamış bir
-# mutasyon PASS raporlanıyordu** (aracın kendi sahte-yeşili; bu turda canlı yaşandı:
-# 3 bozuk mutasyon "DUSTU(rc=3)" diye yeşil geçti). Kabul ölçütü KORPUSTAN ölçülerek
-# genişletildi: 108 kip taramasında DÜŞEN her mutasyon rc=1 döndürüyor, HİÇBİRİ 3
-# döndürmüyor ⇒ genişleme "DUSTU"dan hiçbir gerçek vaka çalmaz (0 fark, saf precision).
-_KURULAMADI_KODLARI = (2, 3)
 OZET_SATIR_BUTCESI = 22
 NOTLAR: list[str] = []
 
@@ -241,7 +232,7 @@ def mutasyon_karari(kod: int, cikti: str, skor: str | None,
         return "KIP-RED", False
     if COKME_IZI in cikti:
         return "COKTU", False
-    if kod in _KURULAMADI_KODLARI:
+    if kod == 2:
         return "KURULAMADI", False
     if kod != 0:
         return "DUSTU", True
