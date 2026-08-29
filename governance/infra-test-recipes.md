@@ -310,8 +310,12 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
     tekrarlanmaz — iki yerde yaşayan rakam bayatlar).
   - ⛔ Mutant **derlenmiyorsa** koşucu **exit 2 / DOGRULANAMADI** verir: *"KURULAMADI ≠ KAÇTI"*.
 
-## B8 — watchdog / pre_compact / post_tool_failure / instructions_log / radar_check
-- **watchdog_launch brifing eksenleri (2026-08-19):** `[PRIOR-ART / KB-01]` ateşleme ölçütü **metin değil arama**: brifingde adı geçen + `scripts/`te var olan script, `playbook/`de ≤2 dosyada geçiyor ve o dosyalar brifingde ANILMIYOR. ⛔ *"atıf var mı"* diye ölçme — gerçek korpusta brifinglerin **%98,6'sı** zaten yol atfı taşır (trivial yeşil). Gürültü tabanı: **%13,9** ateşleme / 570 brifing, medyan 1 ms. FP çapası şart: reçete zaten anılmış · var-olmayan script adı · >2 reçetede geçen genel araç · <400 karakter. Fail-open yasağı iki çapa ister (dizin-yok + bozuk-payload → `KOSMADI`). Notlar **4 emit yolunun hepsinde** çıkmalı (daemon/bash bulunamasa bile). Korpus: `prior_art_kb01`.
+## B8 — watchdog_launch (spawn nudge'ları) / pre_compact / post_tool_failure / instructions_log / radar_check
+> ⛔ **2026-08-29: SAP watchdog DAEMON mekanizması KALDIRILDI** (kullanıcı kararı —
+> `governance/removed-controls.md`). `watchdog_daemon.sh` + `watchdog_stop.py` **YOK**;
+> `watchdog_launch` yalnız **üç nudge dalı**dır ve söylenecek şey yoksa **stdout BOŞ**tur.
+> Aşağıdaki daemon reçetesi **koşulmaz** (kaldırma kaydına çevrildi).
+- **watchdog_launch brifing eksenleri (2026-08-19):** `[PRIOR-ART / KB-01]` ateşleme ölçütü **metin değil arama**: brifingde adı geçen + `scripts/`te var olan script, `playbook/`de ≤2 dosyada geçiyor ve o dosyalar brifingde ANILMIYOR. ⛔ *"atıf var mı"* diye ölçme — gerçek korpusta brifinglerin **%98,6'sı** zaten yol atfı taşır (trivial yeşil). Gürültü tabanı: **%13,9** ateşleme / 570 brifing, medyan 1 ms. FP çapası şart: reçete zaten anılmış · var-olmayan script adı · >2 reçetede geçen genel araç · <400 karakter. Fail-open yasağı iki çapa ister (dizin-yok + bozuk-payload → `KOSMADI`). Notlar **TEK emit yolundan** geçer (2026-08-29: daemon dalı kalkınca dört dal bire indi; ~~*4 emit yolunun hepsinde*~~ hükmü tarihseldir). Korpus: `prior_art_kb01`.
 - ⛔⛔ **D2 KURATLI KANCALAR (`T3-KİMLİK` + `DEPLOY`) — EKLENDİ ve AYNI GÜN GERİ ALINDI
   (2026-08-21). Bu blok artık bir REÇETE DEĞİL, bir KALDIRMA KAYDIDIR.**
   `tests/fixtures/brifing_lint_d2/` **YOKTUR** (kaldırıldı) — buradaki eski koşum satırları
@@ -343,7 +347,24 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   - Notlar **ASCII** yazılır (komşu lint notlarıyla aynı konvansiyon, C-ENC-01) ve çapa **ham
     stdout'ta değil çözülmüş `additionalContext`te** kurulur (`ensure_ascii=True`).
   - Kanonik oranlar `governance/infra-changelog.md`'dedir; burada TEKRARLANMAZ.
-- watchdog: probes-yok → yalnız reach (SAHTE-ALERT üretme); kopuklukta **1** alert (edge); daemon URL-yoksa graceful-exit; launcher proje-kökünü ARG'la geçirir.
+- ⛔⛔ **DAEMON REÇETESİ KALDIRILDI (2026-08-29) — bu satır artık bir REÇETE DEĞİL, KALDIRMA KAYDIDIR.**
+  Eski hükümler (*probes-yok → yalnız reach · kopuklukta 1 alert (edge) · daemon URL-yoksa
+  graceful-exit · launcher proje-kökünü ARG'la geçirir*) **koşulmaz**: `watchdog_daemon.sh` ve
+  `watchdog_stop.py` **silindi**. Yerine koşulacak reçete:
+  - **KALDIRMANIN KENDİ ÇAPASI:** `python tests/fixtures/prior_art_kb01/run.py` → **22/22**;
+    `--mutasyon-daemon-geri` → **21/22** (düşen TEK vektör **P4**). P4 şunu ölçer: hook
+    `.tmp/claude_watchdog` **YARATMAZ** · çıktıda **`[WATCHDOG]` izi YOK** · nudge yine çıkar.
+    ⛔ Mutasyon *reddedilen tasarımı ENJEKTE eder* (taban artık daemon'suz olduğu için
+    `git show <sha>` ile geri alınacak bir taban YOK) — bu çapa olmadan P4 trivial-yeşildir.
+  - **SESSİZLİK SÖZLEŞMESİ:** söylenecek not yoksa **stdout tam BOŞ** (eskiden her spawn'da en az
+    bir `[WATCHDOG]` satırı basardı). 3.bağlam: proje kökünden `python scripts/hook_shim.py
+    watchdog_launch` (gerçek `runpy` yolu) → kısa brifte stdout `''`, exit 0.
+  - **ENVANTER KAPILARI:** `check_settings_template_sync` → *"↔ 16 hook script senkron"* ·
+    `check_rule_gate_coverage` → `OK=16 · UNDECLARED=0` (hook'un `# ENFORCES:` beyanı
+    **boş bırakılamaz** — envanter-güdümlü tarama UNDECLARED verir; id artık `C-SPAWN-01`).
+  - ⛔ **YENİDEN AÇMA ÖLÇÜTÜ:** idempotentlik (süreç-kimliği/kilit — heartbeat tazeliği DEĞİL) **VE**
+    popup yaşam-döngüsü (kim kapatır) **VE** aksiyon sahibi (alert'i kim okur, ne yapar).
+    Üçü de gösterilemeden açılmaz (`removed-controls.md` 2026-08-29).
 - pre_compact çıktısı `systemMessage` (additionalContext ŞEMA-GEÇERSİZ — canlı-kanıtlı).
 - post_tool_failure: fail-payload'da merdiven(+5b infra-satırı) · başarıda sessiz.
 - **post_tool_failure ATC P1 SONUÇ ekseni (2026-08-21):** tetik **yapısal alan** — `priority_1_count > 0` ya da `must_fix: true`. ⛔ `findings[]` içindeki `priority` değerlerini ya da mesaj METNİNİ tarama (aynı doktrin: "client_log PROSE'u taranmaz"); ⛔ `other_priority_count` tek başına ASLA konuşturmaz (Prio 2/3 ev politikası gereği kapsam dışı); ⛔ hook politikayı ÜRETMEZ — aracın `policy` alanını TAŞIR, yoksa UYDURMAZ. **Çapa AŞAMASI ÖNEMLİ:** hook `json.dumps` varsayılanıyla basar (`ensure_ascii=True`) ⇒ HAM stdout'ta Türkçe substring aramak **sahte-KIRMIZI** verir; çapa daima çözülmüş `additionalContext` üzerinde kurulur. Hook stdin'i **ham byte** okur (`hook_shim`'in UTF-8 çevirimi `sys.stderr.encoding` KOŞULUNA bağlı ⇒ garanti değil) — bu değişmezin kendi mutasyonu vardır. Korpus: `atc_p1_sonuc` → **22/22**; dört mutasyon: `sayi` 18/22 · `bayrak` 20/22 · `esik` 19/22 · `stdin` 21/22. Eksenin GİRDİSİ `mcp_servers/sap_adt/tools/query.py::adt_atc_check` yanıt şeklidir: alan adı ya da `policy` metni değişirse eksen **sessizce boşalır** (HARİTA'da o dosya da korpusa bağlıdır).

@@ -25,12 +25,20 @@ eder (kopya liste tutulmaz). Canlida bu hook `hook_shim` uzerinden `runpy.run_pa
 kosar ve o yolda `sys.path[0]` BOS olabilir => kardes-import DOGRUDAN cagride YESIL,
 CANLIDA OLU olurdu. A5 tam o cagri seklini kurar (bu evde olculmus kablolama sinifi).
 
+⛔ DAEMON KALDIRILDI (2026-08-29, kullanici karari): bu hook artik SAP watchdog daemon'i
+BASLATMAZ. `watchdog_stop.py` + `watchdog_daemon.sh` silindi, `C-WATCH-01` kaldirildi
+(`governance/removed-controls.md`). ESKI P4 vektoru ("dort emit yolunun hepsinde not
+cikar") KENDINI EMEKLIYE AYIRDI ve kaldirmanin KENDI degismezine tasindi: heartbeat
+dizini YARATILMAZ + `[WATCHDOG]` izi YOK. Mutasyonu `--mutasyon-daemon-geri`.
+
 KOSUM:  python tests/fixtures/prior_art_kb01/run.py
         python tests/fixtures/prior_art_kb01/run.py --mutasyon            (kontrolu SOK)
         python tests/fixtures/prior_art_kb01/run.py --mutasyon-failopen   (KOSMADI'yi sustur)
         python tests/fixtures/prior_art_kb01/run.py --mutasyon-agent-type (N1 dalini SOK)
         python tests/fixtures/prior_art_kb01/run.py --mutasyon-agent-syspath
                                                     (N1: runpy sys.path capasini SOK)
+        python tests/fixtures/prior_art_kb01/run.py --mutasyon-daemon-geri
+                                                    (reddedilen daemon tasarimini ENJEKTE et)
 Cikis:  0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (mutasyon capasi tutmadi)
 """
 from __future__ import annotations
@@ -41,7 +49,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 for _s in (sys.stdout, sys.stderr):
@@ -93,6 +100,23 @@ MUT_AGENT_SYSPATH = (
     "    if d not in sys.path:\n"
     "        sys.path.insert(0, d)\n",
     "")
+
+# ⛔ KALDIRMANIN MUTASYONU (2026-08-29) — "yeni kodda mutasyon tabani = REDDEDILEN
+# TASARIM". SAP watchdog daemon mekanizmasi komple kaldirildi; taban artik daemon'suz
+# oldugu icin `git show <sha>` ile geri alinacak bir taban YOK => reddedilen tasarim
+# ENJEKTE edilir (heartbeat dizini + `[WATCHDOG]` satiri) ve P4 DUSMELIDIR. Bu capa
+# olmadan P4 "bugun daemon yok" diye trivial-yesil olurdu ve daemon sessizce geri
+# eklenebilirdi. Gerekce: governance/removed-controls.md (2026-08-29 satiri).
+MUT_DAEMON_GERI = (
+    '    notlar = _ek_notlar(data).strip("\\n")\n',
+    '    notlar = _ek_notlar(data).strip("\\n")\n'
+    "    # MUTASYON: reddedilen daemon tasarimi geri getirildi\n"
+    "    try:\n"
+    "        os.makedirs(os.path.join(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd(),\n"
+    "                                 '.tmp', 'claude_watchdog'), exist_ok=True)\n"
+    "    except Exception:\n"
+    "        pass\n"
+    "    notlar = '[WATCHDOG] Detached daemon baslatildi.\\n' + notlar\n")
 
 
 def _uzun(govde: str) -> str:
@@ -151,7 +175,7 @@ def main() -> int:
     # BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir
     # yazim hatasi eskiden HIC mutasyon kurmadan TAM PUAN uretiyordu (exit 0).
     gecerli = {"--mutasyon", "--mutasyon-failopen", "--mutasyon-agent-type",
-               "--mutasyon-agent-syspath"}
+               "--mutasyon-agent-syspath", "--mutasyon-daemon-geri"}
     for a in sys.argv[1:]:
         if a.startswith("--mutasyon") and a not in gecerli:
             raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {a} -> gecerli: "
@@ -161,15 +185,18 @@ def main() -> int:
     mut_failopen = "--mutasyon-failopen" in sys.argv
     mut_at = "--mutasyon-agent-type" in sys.argv
     mut_syspath = "--mutasyon-agent-syspath" in sys.argv
+    mut_daemon = "--mutasyon-daemon-geri" in sys.argv
     hook = HOOK
     yedek = None
 
-    if mutasyon or mut_failopen or mut_at or mut_syspath:
+    if mutasyon or mut_failopen or mut_at or mut_syspath or mut_daemon:
         kaynak = HOOK.read_text(encoding="utf-8")
         if mut_at:
             eski, yeni = MUT_AGENT_TYPE
         elif mut_syspath:
             eski, yeni = MUT_AGENT_SYSPATH
+        elif mut_daemon:
+            eski, yeni = MUT_DAEMON_GERI
         else:
             eski, yeni = MUT_SOK if mutasyon else MUT_FAILOPEN
         if eski not in kaynak:
@@ -220,17 +247,24 @@ def main() -> int:
              PA in ctx and "adt-tables-structures.md" in ctx,
              "core/ alt dizini YOKken proje kokunun kendisi taranmali")
 
-        # daemon YOK dali (sandbox'ta watchdog_daemon.sh yok) zaten yukarida kosuldu;
-        # ayrica heartbeat TAZE dalinda da notun cikmasi gerekir (dort emit yolu):
-        hb = sb / ".tmp" / "claude_watchdog"
-        hb.mkdir(parents=True, exist_ok=True)
-        (hb / "heartbeat_pa-test").write_text("x", encoding="utf-8")
-        os.utime(hb / "heartbeat_pa-test", (time.time(), time.time()))
-        rc, ctx, _e, _ok = kos(hook, sb, payload(atifsiz))
-        ekle("P4 idempotent-dal (heartbeat taze) da not tasir",
-             PA in ctx and "Zaten canli" in ctx,
-             "not daemon basarisindan BAGIMSIZ olmali (eski kod bu dallarda sessizdi)")
-        shutil.rmtree(hb, ignore_errors=True)
+        # ⭐ P4 (2026-08-29 REPOINT) — DAEMON KALDIRILDI, GERI GELMESIN.
+        # ESKI P4: "dort emit yolunun (idempotent/daemon-yok/bash-yok/basari) hepsinde
+        # not cikar" -- heartbeat dosyasi kurup idempotent dali zorluyordu. SAP watchdog
+        # daemon mekanizmasi komple kaldirilinca (kullanici karari) o senaryo KENDINI
+        # EMEKLIYE AYIRDI: dal YOK, tek emit yolu var. Vektor SILINMEDI, kaldirmanin
+        # KENDI degismezine tasindi -- yoksa mutasyonlar (M) emekli olamaz ve suit
+        # [YAMA TUTMADI]/[KACTI] ile kirmizi kalirdi.
+        # ⛔ DEGISMEZ: hook heartbeat dizinini YARATMAZ, `[WATCHDOG]` BASMAZ; nudge cikar.
+        temiz = tmp / "daemonsuz"
+        sandbox_kur(temiz)
+        wd_yol = temiz / ".tmp" / "claude_watchdog"
+        rc, ctx, _e, ok = kos(hook, temiz, payload(atifsiz))
+        ekle("P4 DAEMON KALDIRILDI: .tmp/claude_watchdog YARATILMAZ + [WATCHDOG] izi YOK "
+             "(nudge yine cikar)",
+             (not wd_yol.exists()) and "[WATCHDOG]" not in ctx and PA in ctx
+             and rc == 0 and ok,
+             f"heartbeat_dizini={wd_yol.exists()} watchdog_izi={'[WATCHDOG]' in ctx} "
+             f"nudge={PA in ctx} exit={rc}")
 
         # --- N: YANLIS-POZITIF CAPALARI (mutasyonda AYAKTA KALMALI) -----------
         rc, ctx, _e, _ok = kos(hook, sb, payload(atifli))

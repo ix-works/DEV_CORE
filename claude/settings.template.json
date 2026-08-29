@@ -254,20 +254,6 @@
           }
         ]
       }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py",
-              "watchdog_stop"
-            ]
-          }
-        ]
-      }
     ]
   },
   "permissions": {

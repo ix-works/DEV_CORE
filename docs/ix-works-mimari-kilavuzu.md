@@ -223,8 +223,10 @@ MCP tool'ları `available_on` etiketi taşır; projenin SAP profiline uymayan to
 Aynı çekirdek dört profili destekler: `ecc`, `s4_private`, `s4_public`, `btp_abap`.
 
 **10. Gerçek kurumsal ortam desteği.**
-Windows junction, VPN-kopukluğunu izleyen arka-plan bekçisi (watchdog), çoklu sistem-katmanı
-ve Windows'a özgü kodlama tuzaklarının çözümü — laboratuvar değil, saha kullanımı için.
+Windows junction, çoklu sistem-katmanı ve Windows'a özgü kodlama tuzaklarının çözümü —
+laboratuvar değil, saha kullanımı için. *(Not: VPN-kopukluğunu izleyen **detached SAP watchdog
+daemon'ı** 2026-08-29'da kaldırıldı — `governance/removed-controls.md`; elle koşulan
+`scripts/agent_watchdog.sh` ayrı araç olarak durur.)*
 
 ---
 
@@ -303,12 +305,13 @@ dosyaları arar.
 
 #### `scripts/` — Python araçları (91 tekil + alt dizinler)
 
-**`scripts/hooks/` — 15 olay-tetikli hook** (hepsi `hook_shim.py` üzerinden):
+**`scripts/hooks/` — olay-tetikli hook'lar** (hepsi `hook_shim.py` üzerinden; kanonik
+envanter `scripts/hooks/README.md` §1'dedir — sayı burada YAZILMAZ, bayatlar):
 
 `session_start` · `tooling_radar_check` · `instructions_loaded_log` · `skill_injector` ·
-`intake_triage` · `pre_tool_guard` · `pull_before_edit` · `sap_worktype_hint` ·
-`itg_backstop` · `watchdog_launch` · `post_validate` · `post_tool_failure` ·
-`config_change_guard` · `pre_compact` · `watchdog_stop`
+`intake_triage` · `recall_inject` · `pre_tool_guard` · `pull_before_edit` ·
+`infra_write_guard` · `sap_worktype_hint` · `itg_backstop` · `watchdog_launch` ·
+`post_validate` · `post_tool_failure` · `config_change_guard` · `pre_compact`
 
 > Envanterin şablonla eşliği **C-TPL-01** gate'iyle zorlanır: `scripts/hooks/` altına düşen
 > her hook `settings.template.json`'da kablolu olmalıdır. Aksi hâlde yeni açılan proje
@@ -525,12 +528,11 @@ veya **`additionalContext` JSON** (bağlam enjekte eder).
 | PreToolUse `Edit\|Write\|MultiEdit` | `pull_before_edit` | SAP source bu seansta çekilmediyse edit'i blokla (ADR 0016) | **Evet** |
 | PreToolUse `mcp__sap-adt__adt_(push_source\|activate\|…)` | `sap_worktype_hint` | **Gerçek obje-tipinden** deterministik checklist hatırlatması | Hayır |
 | PreToolUse `mcp__sap-adt__*` | `itg_backstop` | SAP işi fiilen başladıysa ve ITG-marker yoksa protokolü enjekte | Hayır |
-| PreToolUse `Agent` | `watchdog_launch` | Detached watchdog daemon başlat | Hayır |
+| PreToolUse `Agent` | `watchdog_launch` | Spawn-anı brifing nudge'ları (şablon izi · prior-art/KB-01 · `agent_type` tuzağı) | Hayır |
 | PostToolUse `Edit\|Write\|MultiEdit` | `post_validate` | Kural-taşıyan dosya editlendiyse `run_all_validators --quick` | **Evet** (FAIL'de geri besler) |
 | PostToolUse `mcp__sap-adt__*` | `post_tool_failure` | Yapısal fail'de patinaj-kesici eskalasyon merdiveni | Hayır |
 | ConfigChange | `config_change_guard` | Seans-içi davranış-yüzeyi değişimi manifest-onaysızsa blokla | **Evet** |
 | PreCompact | `pre_compact` | SESSION_NOTES/memory flush hatırlatması | Hayır |
-| SessionEnd | `watchdog_stop` | Watchdog daemon'ı kapat | Hayır |
 
 ### 6.1 Keşif vs güvence — 2026-07-09/10 redizaynı
 

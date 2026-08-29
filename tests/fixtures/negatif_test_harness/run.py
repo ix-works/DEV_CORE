@@ -94,8 +94,10 @@ HOOK_KAYDI: list[tuple[str, bool, str]] = [
     ("sap_worktype_hint.py", True, ""),
     ("session_start.py", True, ""),
     ("skill_injector.py", True, ""),
+    # `watchdog_stop.py` 2026-08-29'da SILINDI (SAP watchdog daemon mekanizmasi komple
+    # kaldirildi — governance/removed-controls.md). Satiri burada birakmak V13'u
+    # "dosya yok" ile dusururdu; V16 zaten diskle kaydin ESITLIGINI olcer.
     ("watchdog_launch.py", True, ""),
-    ("watchdog_stop.py", True, ""),
     # ── KAPSAM DIŞI (bilinçli): stdin yalnızca BOŞALTILIR, hiçbir karara girmez →
     #    parse-fail'de KAYBOLAN bir şey yok, not gürültü olurdu.
     ("pre_compact.py", False, "stdin bosaltilir; mesaj statik"),
@@ -335,8 +337,12 @@ def _kos_vektorler(coz, tmp: Path) -> int:
             sapma.append(f"{ad}(exit={rc}!=0)")
         if var != not_bekleniyor:
             sapma.append(f"{ad}(not={var},beklenen={not_bekleniyor})")
+    # ⛔ SAYI TEK KAYNAKTAN TURETILIR (rakam iki yerde yasarsa biri bayatlar): asagidaki
+    # "N var / M kontrol-grubu yok" ifadesi ELLE yazilmaz, HOOK_KAYDI'ndan sayilir.
+    _var = sum(1 for _a, b, _n in HOOK_KAYDI if b)
+    _yok = len(HOOK_KAYDI) - _var
     kontrol(f"V13 SINIF: {len(HOOK_KAYDI)} hook bozuk girdide exit 0 + not DOGRU YERDE "
-            "(14 var / 2 kontrol-grubu yok)",
+            f"({_var} var / {_yok} kontrol-grubu yok)",
             not sapma, ", ".join(sapma) or f"{len(HOOK_KAYDI)}/{len(HOOK_KAYDI)} uyumlu")
 
     # ── G) STDOUT SÖZLEŞMESİ (V14) — not stderr'e gitti, stdout KİRLENMEDİ.
@@ -353,7 +359,7 @@ def _kos_vektorler(coz, tmp: Path) -> int:
         except Exception as e:
             kirli.append(f"{ad}({type(e).__name__})")
     kontrol("V14 STDOUT SOZLESMESI: parse-fail'de stdout BOS ya da GECERLI JSON",
-            not kirli, ", ".join(kirli) or "16/16 temiz")
+            not kirli, ", ".join(kirli) or f"{len(HOOK_KAYDI)}/{len(HOOK_KAYDI)} temiz")
 
     # ── H) 3. BAĞLAM / GÖREV-DIŞI EKSEN (V15) — fix'in stdout'a DOKUNMADIĞI, aynı payload
     # üzerinde FİX'Lİ ve FİX'SİZ sürüm KARŞILAŞTIRILARAK ölçülür (iddia değil, ölçüm):
@@ -380,7 +386,8 @@ def _kos_vektorler(coz, tmp: Path) -> int:
 
     # ── I) KAYIT TAMLIĞI (V16) — sınıf sessizce yeniden büyüyemesin.
     # stdin'den JSON okuyan YENİ bir hook eklenirse kayda girmeden bu vektör düşer;
-    # yoksa "16 hook temiz" diyen bir korpus 17. hook'u hiç görmezdi (sahte güven).
+    # yoksa "N hook temiz" diyen bir korpus N+1'inci hook'u hiç görmezdi (sahte güven).
+    # ⛔ Ters yön de ölçülür: kayıtta olup DİSKTE olmayan (silinmiş) hook `fazla=` ile düşer.
     diskte = {p.name for p in sorted(HOOKS.glob("*.py"))
               if not p.name.startswith(("_mutant_", "_notsuz_"))
               and "sys.stdin" in p.read_text(encoding="utf-8")}
