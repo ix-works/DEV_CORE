@@ -84,7 +84,12 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
 - **F1 BLAST-RADIUS:** bileşeni kullanan her yer (grep + settings-matcher + çağıran-zincir +
   template/overlay kopyaları). Sayı ver, "birkaç yer" deme.
 - **F2 KÖK-SORU:** semptom bir SINIFIN örneği mi? Fix sınıfı çözmeli. Vaka-özel istisna =
-  son çare + gerekçesi raporda.
+  son çare + gerekçesi raporda. ⭐ **SINIF-ENVANTERİ MEKANİKTİR (2026-08-29):** "sınıf" demek
+  yetmez — fix'ten ÖNCE deseni korpusta **grep'le** (ör. pinli SHA `git show <sha>:` · `HEAD:` ·
+  OS dalı `win32|junction|os.rmdir` · saat `datetime|time.time`) ve raporda
+  `SINIF-ENVANTERİ: <desen> → N dosya: [liste] · dokunulan/bırakılan(neden)` satırını ver.
+  Envanteri **fix'e çevirme** — yalnız kuyruktaki kaleme uygula, kalanı Q adayı olarak raporla.
+  (Ölçülen bedel: 2026-08-29'da V3 fixture'ı vaka-düzeyi düzeltildi, 6 kardeş taranmadı → 2 ek tur.)
 - **F3 ÜÇ-BAĞLAM TESTİ:** ① bilinen-bozuk→FAIL ② bilinen-temiz→PASS ③ **görev-DIŞI üçüncü
   bağlam** (başka paket/proje-şekli/kabuk). Fixture'ları worktree `tests/fixtures/`e KALICI
   ekle. Testsiz teslim YASAK — "kod doğru görünüyor" kabul edilmez (ADR 0017 kanıtsız-done).
@@ -94,6 +99,12 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
 
 ## VERİMLİLİK SÖZLEŞMESİ (hız — kaliteden ödünsüz; lider agent_time_report ile ölçer)
 - Bağımsız okuma/`git log`/Grep çağrılarını **TEK turda paralel** gönder (batch); seri tek-çağrı israftır.
+- ⭐ **"KOD DONDU" KİLOMETRE TAŞI (2026-08-29; ölçüm: son tam süit → rapor sonu 4–28 dk, CI 2 dk):**
+  kod + fixture değişiklikleri bitip batarya yeşil olunca, changelog/reçete/rapora geçmeden ÖNCE
+  `SendMessage(to:"main")` ile **"KOD DONDU"** at: değişen kod/test dosyaları + md5'leri. Lider o anda
+  commit+push+**draft PR** açar → CI sen doküman yazarken koşar, sonucu raporunla birlikte gelir
+  (yerel ≠ CI: sığ klon/POSIX sınıfı yalnız CI'da görünür). Ondan sonra koda dokunursan yeni
+  "KOD DONDU-2" mesajı (md5 çapası bayatlar). Doküman değişiklikleri bu kuralın dışındadır.
 - **TEST KADANSI (2026-08-29, ölçüm: batarya turları koşu başına med 18 fazla tur / 3.3 dk; tam süit ort 2×/koşu = 6 dk):** her Edit paketinden sonra bataryayı **TEK komutla** koş — `python tests/run_battery.py <fixture> [--kardes <ad>] [--precommit]` (taban + tüm mutasyon kipleri + kardeş + precommit, tek özet); kipleri tek tek ayrı turlarda koşturma. Tam süit `python tests/run_fixture_tests.py` **YALNIZ koşu sonunda BİR kez** (ara adımlarda değil; CI zaten koşar). Batarya tam süitin yerine geçmez.
 - **Kapsam-dışı gezinti YOK:** F1 blast-radius İLGİLİ bileşenle sınırlı — "hazır bakmışken" tüm-repo tarama yapma.
 - F0 hedefli-okuma: changelog'un yalnız ilgili bileşen bölümü (+gerekirse o dosyanın git-log'u).
@@ -104,6 +115,6 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
 - Rapor kompakt: kanıt = alıntı/sayı/exit-kodu; ham döküm yapıştırma.
 
 ## RAPOR ŞABLONU (SendMessage; başka format kabul edilmez)
-`KAYIT#` · `GEÇMİŞ-ETKİ` · **`TASARIM-GEREKÇESİ`** (F0b: BULUNDU/ARANDI-YOK/ARANMADI + kalem hâlâ gerçek mi) · `TEŞHİS` (kök, sınıf-mı-vaka-mı) · `DEĞİŞİKLİK` (dosya:satır listesi, worktree'de)
+`KAYIT#` · `GEÇMİŞ-ETKİ` · **`TASARIM-GEREKÇESİ`** (F0b: BULUNDU/ARANDI-YOK/ARANMADI + kalem hâlâ gerçek mi) · `TEŞHİS` (kök, sınıf-mı-vaka-mı) · **`SINIF-ENVANTERİ`** (F2: desen → N dosya, dokunulan/bırakılan) · `DEĞİŞİKLİK` (dosya:satır listesi, worktree'de)
 · `F3-KANIT` (üç testin gerçek çıktısı) · `⚠GEVŞETME` (varsa+FP-kanıt) · `F5-YAYILIM` ·
 `AÇIK-NOKTA/DOĞRULANAMADI`.

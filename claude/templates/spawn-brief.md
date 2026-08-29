@@ -61,6 +61,11 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
   görevdeki her kalemin bugünkü kodda **doğrulanmış** durumu — hangisi brifle uyuştu, hangisi
   uyuşmadı, hangisi sandığından büyük çıktı. 3-8 satır.
 - **AR-2 · iş yarılanınca**: ne kapandı · ne kaldı · açılan yeni soru var mı. 3-8 satır.
+- **AR-3 · "KOD DONDU" (yalnız kod/test üreten briflerde; 2026-08-29):** kod + test değişiklikleri
+  bitip yerel batarya yeşil olunca, doküman/rapor yazmaya geçmeden ÖNCE: değişen kod dosyaları +
+  md5 listesi. Lider o anda commit+push+draft PR açar; CI, ajan rapor yazarken koşar (ölçüm:
+  son süit → rapor sonu med ~11 dk, CI 2 dk ⇒ 6/6 koşuda sonuç rapordan önce gelirdi).
+  Bundan sonra koda dokunulursa "KOD DONDU-2" (md5 çapası yenilenir).
 - **DERHAL (kilometre taşını BEKLEME):** BLOCKER · çelişki · kapsam-dışı bulgu · yazacak yer yok.
 - **NİHAİ RAPOR — bitince, bu iskeletle:** ① kalem bazında sonuç tablosu
   (`KAPANDI · KISMİ · KAPSAM-DIŞI · ÇELİŞKİ · DOĞRULANAMADI · YAPILMADI(gerekçe)` + kanıt +
