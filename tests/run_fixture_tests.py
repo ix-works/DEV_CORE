@@ -103,6 +103,10 @@ OZEL_TESTLER = [
     ("abaplint_failopen", "check_abaplint: OLCEMEDIM != TEMIZ (ozet satiri zorunlu kanit, 9 senaryo)"),
     ("prior_art_kb01", "KB-01 ONCE-ARA tur-ici: brifingde adi gecen script'in recetesi SPAWN aninda yuzeye cikar (metin-izi DEGIL arama)"),
     ("worktype_alt_tur", "worktype hatirlaticisi ALT-TURE bakar: artefaktin kendi bildirimi (`define abstract entity`) -> AYRI recete bolumu; belirsizse SUSAR"),
+    ("session_start_compact_dali",
+     "session_start `source` dali: compact YENI OTURUM DEGIL -> oturum-basi TALEBI "
+     "dusurulur (harness celiskisi) + git'ten DETERMINISTIK durum capasi (state "
+     "dosyasindan DEGIL: `active_package` bayatlar). Fail-safe yon = bugunku davranis"),
     # ⚠ 2026-08-01: `adtget_yokluk_kaniti` bir ara bu listede IKI KEZ yaziliydi (PR birlesme
     # artigi) -> ayni fixture iki kez kosuyor ve TOPLAM sayiyi sisiriyordu. "N/N PASS"
     # sayisina guvenmenin bedeli: sayaci degil SATIRLARI oku.
@@ -639,8 +643,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("G", "O:negatif_test_harness", "O:tembel_desen"),
      "payload korpusu + parse-fail görünürlüğü + tembel desen-kurulumu"),
     ("scripts/hooks/session_start.py",
-     ("O:overlay_oto_tazeleme", "O:negatif_test_harness", "O:worktree_yasam_dongusu"),
-     "oto-tazeleme kablolaması + parse-fail notu"),
+     ("O:overlay_oto_tazeleme", "O:negatif_test_harness", "O:worktree_yasam_dongusu",
+      "O:session_start_compact_dali"),
+     "oto-tazeleme kablolaması + parse-fail notu + `source` dalı (compact gövdesi ile "
+     "startup gövdesinin AYRIŞMASI; startup tarafı BAYT-EŞ kalmalı)"),
     ("scripts/build_recall_index.py", ("O:recall_index_ozetsiz",),
      "MEMORY.md ayrıştırma sözleşmesi: özetsiz satır → frontmatter `description` + "
      "satır-atlamalı kirlenme + 'kaynak yoksa UYDURMA yok' değişmezi"),

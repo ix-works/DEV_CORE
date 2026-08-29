@@ -115,6 +115,15 @@ python tests/run_fixture_tests.py                                            # T
 - İmza 6'lısı: yorum→AYNI · CRLF→AYNI · hook-sil→**FARKLI** · matcher→**FARKLI** · bozuk-JSON→"?" · sıra→AYNI (ilk-üçü ters = FP geri; 3-4 AYNI = kapsam-kaybı).
 - config_change_guard: davranış-dosyası sentetik-değişiklik → exit 2 + config-changes.log satırı.
 - 4 junction TEK TEK raporlanmalı (toplu-OK tek kırığı gizler).
+- **`source` DALI (2026-08-29).** SessionStart girdisindeki `source` (`startup|resume|clear|compact|fork`) gövdeyi ikiye ayırır.
+  ⚠ **Ölçüm kuralı: çıktıyı HAM stdout'ta ARAMA** — hook `json.dumps` varsayılanıyla basar (`ensure_ascii=True`) ⇒ Türkçe harfler `\uXXXX` olarak durur; çapayı JSON'dan ÇÖZ (`hookSpecificOutput.additionalContext`), yoksa **sahte-KIRMIZI** alırsın.
+  · `source="compact"` → oturum-başı TALEBİ (*"Yeni oturumun ILK yaniti …"*) **YOK** + `[DURUM CAPASI …]` **VAR** (dal · son commit · `git status` özeti).
+  · `source="startup"` / alan **YOK** / **tanınmayan** değer / **bozuk girdi** → bugünkü çıktı **BAYT-EŞ** (fail-safe yön = mevcut davranış). `resume`/`clear`/`fork` bu turda **DEĞİŞMEDİ**.
+  ⛔ **ÇAPA TERİM DEĞİL, TALEP:** `"Ekran Teyidi"` dizesi compact gövdesinde de geçer (*"… ISTENMIYOR"*) ⇒ o dizeye dayanan assertion **ayırt edici DEĞİLDİR** (ilk koşumda ölçüldü: 3 vektör sahte-KIRMIZI). Çapa: `"Yeni oturumun ILK yaniti"`.
+  ⛔ **Çapa GİT'ten türetilir, `.claude/active_package`'tan DEĞİL** — state dosyası sessizce bayatlar (ölçülmüş vaka: state bir paketi, fiilen çalışılan iş BAŞKA bir paketi gösterdi; `pre_compact` yanlış SESSION_NOTES'a yönlendirdi). State'e yaslanan çapa o drift'i compact SONRASINA taşır. **Ayırt edici test:** git dalını değiştir, state dosyasına DOKUNMA → çapa değişmeli (V8).
+  · **3. BAĞLAM:** git'siz kök · commit'siz repo → çapa **sessizce düşer**, exit **0**, gövde sağlam (hook birden çok projede koşar; çöken çapa çapanın kendisinden pahalıdır).
+  · Sağlık kontrolleri compact dalında da **KOŞAR** (bilinçli karar: temizken zaten sessizdirler ⇒ maliyet ödenmiyor; compact oturumun ORTASINDADIR ve junction/damga/manifest sinyali tam o aralıkta değişir).
+  Korpus: `python tests/fixtures/session_start_compact_dali/run.py` → **22/22**. **ÜÇ mutasyon** (hiçbiri diğerini kapsamaz): `--mutasyon-dalsiz` → **15/22** (düşen V1·V1b·V2·V8·V8b·V9·V10) · `--mutasyon-capasiz` → **19/22** (V2·V8·V8b) · `--mutasyon-state` → **19/22** (V2·**V7**·V8). FP çapaları (V3 bayt-eşlik · V4/V4b · V5/V6/V6b fail-safe · V11 · V12 · V13 · V14) ÜÇ mutasyonda da **AYAKTA**.
 
 ## B4 — pull_before_edit
 - Bayat-seans SAP-source Edit-payload → **exit 2** ve mesajdaki komut **`core/scripts/sap_sync_pull.py`** (proje-göreli).

@@ -3,8 +3,14 @@
 # ENFORCES: ADR-0020  (ADR 0019 coverage binding)
 """SessionStart hook — yasaklar + protokol enjeksiyonu + SAĞLIK KONTROLLERİ (B9b, ADR 0020).
 
-Statik: ADR 0005 yasak özeti + Ekran-Teyidi zorunluluğu + ADR 0018 çalışma modeli
-(compact sonrası da diri kalsın diye her start/resume/compact'ta enjekte edilir).
+Statik gövde İKİ dallıdır (girdideki `source` alanına göre; 2026-08-29):
+  `STATIK`         — startup/resume/clear/fork VE tanınmayan/eksik `source` (fail-safe yön
+                     = bugünkü davranış): ADR 0005 yasak özeti + Ekran-Teyidi zorunluluğu
+                     + ADR 0018 çalışma modeli.
+  `STATIK_COMPACT` — YALNIZ `source == "compact"`: Ekran-Teyidi satırı ÇIKARILIR (compact
+                     yeni oturum değildir; harness'ın compact talimatıyla çelişiyordu),
+                     yerine git'ten türetilmiş DURUM ÇAPASI eklenir (`_git_capa`).
+Sağlık kontrolleri HER İKİ dalda da koşar (gerekçe `main()` içinde).
 
 Dinamik (v3 mimarisi):
   D25 — 4 junction TEK TEK sağlam mı (kopuk agents/skills SESSİZ semptom verir)
@@ -66,6 +72,46 @@ STATIK = (
     # modeli fiilen okunamaz. Ayni sinif 2026-08-2x'de `run_review.py` icin 6 yuzeyde
     # kapatilmisti (#68); bu satir o kapanisin DISINDA kalmisti. Kardes yazim: :88 · :113 · :270.
     "  Kullanici 'solo' derse spawn etme. Detay: core/governance/agent-teams-operating-model.md"
+)
+
+# ── COMPACT SONRASI GOVDE (2026-08-29) ────────────────────────────────────────
+# NEDEN AYRI: `STATIK`in ilk satiri *"Yeni oturumun ILK yaniti ... Ekran Teyidi"* der.
+# Compact YENI OTURUM DEGILDIR ve harness'in compact-sonrasi talimati bunun TERSINI
+# soyler (*"ozeti anma, kaldigin yerden devam et"*). Olculdu (tek oturum, 2026-08-29):
+# 4 compact -> celiskili talimat 4 kez enjekte edildi. Lider harness'i tercih etti ama
+# bu bir TERCIHTI, garanti degil. Kaynak alani `source` (startup|resume|clear|compact|
+# fork) SessionStart girdisinde ZATEN var; bugune kadar okunmuyordu.
+#
+# ⛔ SATIR SECIMI KORLEMESINE DEGIL, TEK OLCUTLE YAPILDI:
+#    "bu satir compact sonrasi kaybolursa lider YANLIS BIR ADIM atabilir mi?"
+#    Ayrim ekseni: OTURUM-BASI semantigi olan satir DUSER, SONRAKI EYLEMI baglayan
+#    yukumluluk KALIR. Kalan/dusen gerekceleri:
+#  DUSTU · "Yeni oturumun ILK yaniti" (Ekran Teyidi): metnin KENDISI oturum-basi
+#          semantigi tasiyor + harness talimatiyla dogrudan celisiyor. Celiskinin koku.
+#  DUSTU · "Oturum basinda roster SPAWN ETME" ifadesi + 3 satirlik ROL SAYIMI: ilki gene
+#          oturum-basi semantigi; rol listesi `.claude/agents/` altindan kesfedilebilir ve
+#          proje compact-talimatinin 6. maddesi *"kosan alt ajan varsa hangisi"*yi ZATEN
+#          korur. Lazy ilkesinin kendisi asagida tek satira indi + isaretci duruyor.
+#  KALDI · ADR 0005 yasaklar: geri-alinamaz SAP hasarinin tek kapisi; en yuksek bedel,
+#          en ucuz satir. (Tam metin kok CLAUDE.md damgasinda; bu yalnizca "AKTIF" der.)
+#  KALDI · run_review.py: BIR SONRAKI SAP yazimini baglayan on-kapi; proje compact-
+#          talimatinin koruma listesinde boyle bir "gelecekteki yukumluluk" maddesi YOK.
+#  KALDI · adt-gateway + BUG GATE: ikisi de gelecekteki bir olayla tetiklenen yonlendirme
+#          yukumlulugu (SAP yazimi / expert build bitisi) — run_review ile ayni sinif.
+#  KALDI · D29: compact sonrasi her metodoloji Grep'ini yonetir; kaybolursa arama
+#          "bulunamadi" doner ve bu "YOK" diye okunur (bilinen kusur sinifi).
+STATIK_COMPACT = (
+    "[session-loader hook — COMPACT sonrasi]\n"
+    "Bu YENI BIR OTURUM DEGIL: harness'in compact talimati gecerlidir "
+    "(ozeti anma, kaldigin yerden devam et). Ekran Teyidi ISTENMIYOR.\n"
+    "HALA YURURLUKTE — ADR 0005 KESIN YASAKLAR (A/B/C/D); tam metin kok CLAUDE.md "
+    "fiziksel damgasinda.\n"
+    "SAP yazma oncesi run_review.py (ADR 0006). Validator FAIL -> once duzelt (STOP).\n"
+    "SAP yazimi TEK kanaldan: adt-gateway. Expert substantive build bitince "
+    "BUG GATE -> bug-expert.\n"
+    "ARAMA (D29): metodoloji araması DAIMA path=core/ ile — kok-Grep core'u GORMEZ.\n"
+    "Calisma modeli LAZY (ADR 0018): ihtiyac aninda scoped spawn. "
+    "Detay: core/governance/agent-teams-operating-model.md"
 )
 
 
@@ -277,6 +323,54 @@ def _inspector() -> list[str]:
         return []
 
 
+def _git_capa() -> str:
+    """Compact sonrasi DETERMINISTIK durum capasi — GIT'ten turetilir, STATE dosyasindan DEGIL.
+
+    ⛔ NEDEN `active_package` DEGIL (olculdu 2026-08-29): bir musteri projesinde
+    `.claude/active_package` BIR paketi gosterirken fiilen calisilan is BASKA bir
+    paketteydi; `pre_compact` hatirlatmasi (`_active_pkg()`: once state dosyasi, sonra
+    `project.yaml` fallback) bu yuzden YANLIS SESSION_NOTES'a yonlendirdi. Ayni sinif
+    drift IKI kez tekrarladi. State dosyasina yaslanan bir capa o drift'i compact
+    SONRASINA tasir — yani ozetin kaybettigi yerde YANLIS bilgiyle doldurur. Git durumu
+    ozetleyiciden bagimsizdir, elle guncelleme istemez ve otoritedir.
+
+    ⛔ FAIL-SAFE: git yok / repo degil / komut patladi -> BOS dize. Capa satiri SESSIZCE
+    duser, hook exit 0 dondurmeye devam eder. Bu hook birden fazla projede kosuyor ve
+    git'siz bir kokte cokecek bir capa, capanin kendisinden pahaliya mal olur.
+    """
+    def _git(*args: str) -> str | None:
+        try:
+            r = subprocess.run(["git", "-C", str(PROJ), *args], capture_output=True,
+                               text=True, timeout=5, encoding="utf-8", errors="replace")
+            return (r.stdout or "").strip() if r.returncode == 0 else None
+        except Exception:
+            return None
+
+    dal = _git("rev-parse", "--abbrev-ref", "HEAD")
+    son = _git("log", "-1", "--format=%h %s")
+    durum = _git("status", "--short")
+    if dal is None and son is None and durum is None:
+        return ""                                  # git yok/repo degil -> capa YOK
+    parcalar = []
+    if dal:
+        parcalar.append(f"dal: {dal}")
+    if son:
+        parcalar.append(f"son commit: {son[:72]}")
+    if durum is not None:
+        satirlar = [s for s in durum.splitlines() if s.strip()]
+        if not satirlar:
+            parcalar.append("calisma agaci TEMIZ")
+        else:
+            yeni = sum(1 for s in satirlar if s.startswith("??"))
+            # Ilk 5 yol: "neyin ortasindayim" sorusunu ozetten BAGIMSIZ yanitlar.
+            ilk = ", ".join(s[3:][:60] for s in satirlar[:5])
+            parcalar.append(f"degisiklik: {len(satirlar) - yeni} degismis + {yeni} yeni"
+                            f" (ilk {min(5, len(satirlar))}: {ilk}"
+                            f"{' …' if len(satirlar) > 5 else ''})")
+    return ("\n\n[DURUM CAPASI — git'ten turetildi, state dosyasindan DEGIL]\n"
+            + "\n".join(parcalar))
+
+
 def _parse_fail_notu() -> None:
     """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
 
@@ -302,6 +396,14 @@ def main() -> int:
         data = {}
     _write_session_marker(data if isinstance(data, dict) else {})
 
+    # SessionStart girdisindeki `source`: startup | resume | clear | compact | fork.
+    # ⛔ FAIL-SAFE YON = BUGUNKU DAVRANIS: alan yoksa, sozluk degilse ya da deger
+    # taninmiyorsa `STATIK` (startup yolu) AYNEN kosar. Yeni dal YALNIZ `compact`ta acilir.
+    # KAPSAM bilincli olarak DAR: `resume`/`clear`/`fork` de "yeni oturum" olmayabilir ama
+    # olculmedi -> ayri karar (bu turda DEGISTIRILMEDI).
+    kaynak = data.get("source") if isinstance(data, dict) else None
+    compact = (kaynak == "compact")
+
     # Tazeleme ÖNCE koşar (docstring'deki sıra gerekçesi), sonucu HER dalda görünür:
     # ⛔ junction dalı bile bu satırları bastırmamalı — yapılan bir değişikliği gizlemek,
     # değişikliğin kendisinden daha pahalıdır.
@@ -321,7 +423,18 @@ def main() -> int:
             saglik.append("⚠ " + s)
         for s in _inspector():
             saglik.append("⚠ INSPECTOR: " + s)
-    govde = STATIK
+    # ⛔ SAGLIK KONTROLLERI COMPACT DALINDA DA KOSAR (karar, 2026-08-29). Gerekce:
+    #   (1) Temizken bu kontroller ZATEN SESSIZDIR (`_inspector` docstring'i bunu sozlesme
+    #       sayar) -> temiz oturumda token maliyeti SIFIRA yakin; "maliyet" argumani
+    #       varsayilan halde ODENMIYOR.
+    #   (2) Compact tipik olarak oturumun SAATLERCE icindedir — junction/damga/manifest
+    #       sinyalleri tam da o aralikta degisir (ornegin oturum ortasinda CLAUDE.md ya da
+    #       bir davranis dosyasi duzenlenir). Compact'ta susmak, oturum-ortasi bir infra
+    #       degisikligini oturumun GERI KALANI boyunca gizlemek olurdu.
+    #   (3) `main()`in ust yorumundaki ilke aynen gecerli: "yapilan bir degisikligi
+    #       gizlemek, degisikligin kendisinden daha pahalidir". Bastirmak o ilkeyi
+    #       delerdi ve bir GEVSETME olurdu; bu turda kaybedilen kapsam YOK.
+    govde = (STATIK_COMPACT + _git_capa()) if compact else STATIK
     if saglik:
         govde += "\n\n[SAGLIK KONTROLLERI — session_start]\n" + "\n".join(saglik)
         if any(x.startswith("⛔ DAVRANIS") for x in saglik):
