@@ -94,6 +94,7 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
 
 ## VERİMLİLİK SÖZLEŞMESİ (hız — kaliteden ödünsüz; lider agent_time_report ile ölçer)
 - Bağımsız okuma/`git log`/Grep çağrılarını **TEK turda paralel** gönder (batch); seri tek-çağrı israftır.
+- **TEST KADANSI (2026-08-29, ölçüm: batarya turları koşu başına med 18 fazla tur / 3.3 dk; tam süit ort 2×/koşu = 6 dk):** her Edit paketinden sonra bataryayı **TEK komutla** koş — `python tests/run_battery.py <fixture> [--kardes <ad>] [--precommit]` (taban + tüm mutasyon kipleri + kardeş + precommit, tek özet); kipleri tek tek ayrı turlarda koşturma. Tam süit `python tests/run_fixture_tests.py` **YALNIZ koşu sonunda BİR kez** (ara adımlarda değil; CI zaten koşar). Batarya tam süitin yerine geçmez.
 - **Kapsam-dışı gezinti YOK:** F1 blast-radius İLGİLİ bileşenle sınırlı — "hazır bakmışken" tüm-repo tarama yapma.
 - F0 hedefli-okuma: changelog'un yalnız ilgili bileşen bölümü (+gerekirse o dosyanın git-log'u).
 - **F0b de HEDEFLİ:** dört kaynakta **bileşen adı + semptom terimi** aranır — tüm-repo okuma DEĞİL.

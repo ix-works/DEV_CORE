@@ -816,3 +816,49 @@ damga kayboluyor · guard hiç koşmuyor · okunamayan obje hiç sayılmıyor.
 >
 > **⚠ `--cevrimdisi` + `--strict` birlikte:** `--strict` WARNING'i yine BLOCKER'a çevirir (mevcut
 > semantik korundu) — bilinçli.
+
+## KADANS 2026-08-29 — `tests/run_battery.py` (YENİ araç, KAPI DEĞİL) + şablona `env` bloğu
+
+**Tetikleyici (ölçüm, lider brifi — 30 günlük ajan-transkript denetimi):** 71 infra-expert
+koşusunda test bataryası (fixture taban koşumu · her mutasyon kipi · kardeş fixture ·
+`core_precommit --all`) koşu başına **medyan 8 kez** tekrarlanıyor ve her batarya **4-6 ayrı
+kabuk turu** harcıyordu ⇒ tek komuta inseydi düşecek tur **med 18/koşu (p90 41)**. Ayrıca
+30 günde **235 `UnicodeEncodeError`** = tüm Python traceback'lerinin **~%53'ü** (kaynak:
+ajanların ad-hoc `python` koşumları Windows konsol kod sayfasını miras alıyor).
+
+| Tarih | Değişiklik | Sebep (ölçüm) | Test | Fixture | PR |
+|---|---|---|---|---|---|
+| 2026-08-29 | **`tests/run_battery.py` (YENİ).** Tek komutta: taban koşumu → kip **keşfi** → her kipin koşumu → (ops.) kardeş fixture → (ops.) `core_precommit --all` → **tek özet tablo** (≤25 satır); ham çıktılar `.tmp/battery/`e. Keşif **üç katmanlı** (①kip-kümesi literali ②docstring-dışı sabitler ③modül docstring'i), `--help`e güvenmez. Satır etiketleri AYRI: `DUSTU`·`AYIRDI`·`KACTI`·`OLCULEMEDI`·`KURULAMADI`·`KIP-RED`·`COKTU`. ⛔ **Kapı değil**: hiçbir kuralı zorlamaz, tam süitin yerine geçmez (çıktının son satırı bunu her koşumda yazar). | ⭐ **İki tasarım kararı ÖLÇÜMLE belirlendi, tahminle değil.** ① *"Mutasyon exit≠0 vermeli"* **yanlış olurdu**: 33 koşucunun ilk kipleri ölçüldü → **15'i exit 0** döner (kendi mutasyon öz-testini koşar, skoru düşürür) ⇒ naif kural **%45 sahte-FAIL** üretirdi. Kabul edilen ölçüt: *mutasyon tabandan FARKLI bir sonuç üretti mi* (`AYIRDI`). ② **Docstring keşif katmanı ŞART**: `atc_p1_sonuc`·`fs_docstd`·`post_tool_failure_bash` kipleri `startswith("--mutasyon-")` + son-ek ile çözer, geçerli liste **yalnız docstring'de** yaşar ⇒ o katman olmasa **16 kip sessizce** kapsam dışı kalırdı (*exit 0 iki anlamlı*). | Canlı korpusa karşı: 90 koşucu, 33'ünde kip (102 kip) → **33/33 çözüldü, 0 hayalet**; `--mutasyon-ZIRVA` yorumu 8 koşucuda var, **hiçbiri keşfe sızmadı** (FP çapası P4). Tek-komut maliyeti: `infra_write_guard` **8 birim/26,6 s** · `b0_secim` **3 birim/6,9 s** (taban 20/20 + `failopen` 15/18 + `tamlik` 16/18 — reçetedeki pinli sayılarla birebir). | **yeni** `O:run_battery` (24 vektör + 6 mutasyon) | — |
+| 2026-08-29 | **`claude/settings.template.json` — üst düzey `env: {PYTHONUTF8: "1"}` + `_comment_env`.** | Canlı repro (aynı script, aynı makine): env'siz `sys.stdout.encoding=cp1252` → `UnicodeEncodeError`, **exit 1**; env'li `utf-8`, **exit 0**. Şablon bu bloğu taşımıyordu, mevcut bir projenin `settings.json`'u taşıyordu ⇒ **D7 imzası sürekli SAPMIŞ** diyordu. | D7 `_anlamli_imza` **şablonun kendi fonksiyonuyla** ölçüldü: önce `f3306618b1d93185` ≠ `ca51bc04c1d605df`, sonra **BİREBİR EŞİT** (`ca51bc04c1d605df`). C-TPL-01 `[OK] … 17 hook script senkron`. `init_project.py` ile **gerçekten yeni bir proje üretildi**: `env` bloğu ve `_comment_env` üretilen `settings.json`'da VAR, imza şablonla eşit. | — | — |
+| 2026-08-29 | `governance/infra-test-recipes.md` §**B0-BATARYA** + `playbook/howto-infra-fix-proseduru.md` F3 kadans cümlesi + ADIM-3 tablosunun infra-expert satırı. | Araç kablolanmadan alışkanlık değişmez ("kod ≠ kablolama"): kadans **her Edit paketinden sonra batarya, tam süit yalnız koşu SONUNDA 1×**. | Metin F3'ü **gevşetmiyor**: üç-bağlam şartı aynen duruyor, batarya onu *koşan* araç olarak tanımlandı. | — | — |
+
+**Test-senaryosu / SINIR:**
+
+1. ⭐ **ARAÇ KENDİ KORPUSUNDA GERÇEK BİR FP BULDU (dogfooding).** İlk sürüm `run_battery`
+   fixture'ında **10 kip** keşfetti, 4'ü hayaletti (`--mutasyon-dalsiz` vb.) → `KIP-RED` sahte-FAIL.
+   Kök: P-vektörlerindeki **kıyas operandları** (`set(k) == {"--mutasyon-dalsiz", …}`) beyan
+   sanılıyordu. Sınıf: *bir markörü TARİF eden metin onu BEYAN etmiş sayılamaz*. Düzeltme
+   **yapısaldır, ada bakmaz** (kıyas operandı literalleri elenir) ve **POZİTİF KONTROLLÜ**:
+   mevcut 33 koşucuda etkisi ölçüldü → **0 fark** ⇒ daraltma değil, FP düzeltmesi (çapa: P9).
+2. ⭐ **KAPSAM-DIŞI BULGU — İKİ MUTASYON KİPİ BUGÜN ÇÖKÜYOR (bu turda ONARILMADI):**
+   `fm_imza_doc_sync --mutasyon` ve `std_tablo_include_kapsami --mutasyon-genis` **Traceback**
+   veriyor (ikincisi: `ModuleNotFoundError: _gate_status` — mutasyon kopyası kardeş modülü
+   geçici dizine taşımıyor). Süit yalnız TABANI koştuğu için **hiçbir kapı bunu görmüyordu**;
+   ilk batarya koşumunda görünür oldu. Kuyruğa yazılmalı — bu turun kapsamı değil.
+3. **GEVŞETME BEYANI: YOK.** Yeni araç hiçbir kuralın kapsamını/eşiğini daraltmıyor;
+   `run_fixture_tests.py`'a **eklenen** iki kayıt (OZEL_TESTLER + HARITA) dışında mevcut
+   davranış değişmedi. F3 metni **korundu** (kadans cümlesi eklendi, şart çıkarılmadı).
+4. **YAYILIM (`env` bloğu):** yeni projeler `init_project` / `team_setup.dosya_tamamla` ile
+   bloğu **alır** (ölçüldü). ⚠ **Mevcut projeler ALMAZ** (`dosya_tamamla` idempotenttir, ezmez):
+   bu makinedeki **3 yerel projede** ölçüldü — **1'i** bloğu ZATEN taşıyor (imza artık
+   eşit), **2'si** taşımıyor ⇒ o ikisinde oturum-başı **⚠ D7 SAPMIŞ** notu görünecek
+   (hangi projeler olduğu lider'in kapanış notunda; core belgesine proje adı yazılmaz). D7 **bloklamaz** (`additionalContext`'e ⚠ satırı, `return 0`) — düzeltme
+   tek satırlık ve LİDER/DoD kalemidir (ajan proje `.claude/`sine yazmaz).
+5. **SINIR:** `claude/settings.template.json` changelog gate'inin **kapsamında değil**
+   (`INFRA_KOD_KOKLERI` yalnız `scripts/`·`mcp_servers/`·`tests/` + `.py`) — davranış taşıyan
+   bir dosya kayıtsız değişebilir. Bu turda kayıt **elle** yazıldı; kapsam kararı ayrı kalem.
+6. **DOĞRULANAMADI (açıkça):** ① 235 `UnicodeEncodeError` / %53 sayısı **lider ölçümüdür**,
+   bu turda yeniden sayılmadı — bağımsız olarak yalnız **mekanizma** repro edildi.
+   ② Aracın Linux/CI davranışı yerelde ölçülemedi (Windows); kod platform-bağımsız yazıldı
+   (`sys.executable`, `Path`, stdout reconfigure) ve **env'siz** koşum ölçüldü (N11), ama
+   *"CI'da da yeşil"* iddiası bu turda **koşulmadı**.
