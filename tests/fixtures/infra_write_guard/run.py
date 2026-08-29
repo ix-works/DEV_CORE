@@ -61,11 +61,15 @@ MUTASYON — YEDİ AYRI DEĞİŞMEZ (hiçbiri diğerini KAPSAMAZ; yedisi de koş
                          bu satır olmadan kol canlıda büyük ölçüde ÖLÜDÜR).
   ⭐ KOŞUCU DARALTMASININ ÜÇ PARÇASI — her biri TEK BAŞINA daraltmayı NO-OP yapar
   (`_ARACLAR`/Bash vakasının birebir ikizi; üçü de ayrı ayrı ÖLÇÜLDÜ 2026-08-29):
-  --mutasyon-kosucu-haric → `_HARIC` istisnası sökülür  ⇒ B11·B12·S12b düşer (44/47)
-  --mutasyon-kosucu-sinif → `_KORUNAN_CORE` deseni sökülür ⇒ AYNI ÜÇÜ düşer (44/47)
-  --mutasyon-kosucu-proje → `_KORUNAN_PROJE` deseni sökülür ⇒ YALNIZ B13 (46/47);
+  --mutasyon-kosucu-haric → `_HARIC` istisnası sökülür  ⇒ B11·B12·S12b·S14 düşer (45/49)
+  --mutasyon-kosucu-sinif → `_KORUNAN_CORE` deseni sökülür ⇒ AYNI DÖRDÜ düşer (45/49)
+  --mutasyon-kosucu-proje → `_KORUNAN_PROJE` deseni sökülür ⇒ YALNIZ B13 (48/49);
                          diğer iki mutasyonun HİÇBİRİ B13'ü düşürmez — proje sınıfı
                          ayrı tabloda yaşar, bu yüzden ayrı mutasyon HAK EDİYOR.
+  --mutasyon-yuzey-yok → ortak yüzey modülü (`utils/infra_yuzeyi`) import'u kırılır
+                         ⇒ B11·B12·B13·S12b düşer AMA guard'ın kalan 45 vektörü AYAKTA
+                         (degrade SINIRLI) ve S14 stderr NOTUNU görür (degrade GÖRÜNÜR):
+                         45/49. S15 notun KAPSAMININ dar kaldığını çiviler.
 Mutasyon BUGÜNKÜ kaynaktan üretilir (git ref'inden DEĞİL: "fix merge olunca taban kayar"
 tuzağı, B20). Desen bulunamazsa koşucu SAYI RAPORLAMADAN durur.
 ⭐ Bu çapa 2026-08-29'da CANLI ateşledi: `_HARIC` satırı daraltılınca `--mutasyon-cokme`
@@ -100,7 +104,7 @@ NEGATIF_KORPUS = REPO / "tests" / "fixtures" / "negatif_test_harness" / "run.py"
 _GECERLI_KIP = {"--mutasyon-blok", "--mutasyon-cokme",
                 "--mutasyon-bash-kol", "--mutasyon-bash-cwd",
                 "--mutasyon-kosucu-haric", "--mutasyon-kosucu-sinif",
-                "--mutasyon-kosucu-proje"}
+                "--mutasyon-kosucu-proje", "--mutasyon-yuzey-yok"}
 for _a in sys.argv[1:]:
     if _a.startswith("--mutasyon") and _a not in _GECERLI_KIP:
         raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {_a} — gecerli: "
@@ -113,6 +117,7 @@ MUT_BASH_CWD = "--mutasyon-bash-cwd" in sys.argv
 MUT_KOS_HARIC = "--mutasyon-kosucu-haric" in sys.argv
 MUT_KOS_SINIF = "--mutasyon-kosucu-sinif" in sys.argv
 MUT_KOS_PROJE = "--mutasyon-kosucu-proje" in sys.argv
+MUT_YUZEY = "--mutasyon-yuzey-yok" in sys.argv
 
 BLOK_CAPA = "İNFRA YAZIMI BLOKLANDI"
 ONAY_CAPA = "AYRI ve AÇIK onay"
@@ -133,26 +138,34 @@ def kontrol(ad: str, kosul: bool, detay: str = "") -> None:
 _MUT_BLOK_ESKI = "    sys.stderr.write(_blok_mesaji(etiket, kanit, kim, tip))\n    return 2\n"
 _MUT_BLOK_YENI = "    sys.stderr.write(_blok_mesaji(etiket, kanit, kim, tip))\n    return 0\n"
 _MUT_COKME_ESKI = ('    norm = ham.replace("\\\\", "/")\n'
-                   '    if _HARIC.search(norm) and not _KOSUCU.search(norm):\n')
+                   '    if _HARIC.search(norm) and not (_KOSUCU and _KOSUCU.search(norm)):\n')
 _MUT_COKME_YENI = ('    raise RuntimeError("mutasyon-cokme")  # noqa\n'
                    '    norm = ham.replace("\\\\", "/")\n'
-                   '    if _HARIC.search(norm) and not _KOSUCU.search(norm):\n')
+                   '    if _HARIC.search(norm) and not (_KOSUCU and _KOSUCU.search(norm)):\n')
 # ⭐ KOŞUCU DARALTMASININ İKİ AYRI DEĞİŞMEZİ — biri diğerini KAPSAMAZ (NO-OP tuzağı,
 # `_ARACLAR`/Bash vakasının birebir ikizi; ölçüldü 2026-08-29):
 #   `--mutasyon-kosucu-haric` → `_HARIC` istisnası sökülür (sınıflandırma deseni DURUR)
 #   `--mutasyon-kosucu-sinif` → `_KORUNAN_CORE` deseni sökülür (istisna DURUR)
 # Her biri TEK BAŞINA daraltmayı tamamen etkisizleştirir ⇒ ikisi de ayrı ayrı ölçülür.
 # Biri koşulmazsa korpus "yalnız bir yarısını yazdım" hatasını GÖREMEZ.
-_MUT_KOSUCU_HARIC_ESKI = "    if _HARIC.search(norm) and not _KOSUCU.search(norm):\n"
+_MUT_KOSUCU_HARIC_ESKI = "    if _HARIC.search(norm) and not (_KOSUCU and _KOSUCU.search(norm)):\n"
 _MUT_KOSUCU_HARIC_YENI = "    if _HARIC.search(norm):\n"
-_MUT_KOSUCU_SINIF_ESKI = '    (re.compile(r"^" + _KOSUCU_REL), "fixture koşucusu (kanıt aracı)"),\n'
-_MUT_KOSUCU_SINIF_YENI = ""
+_MUT_KOSUCU_SINIF_ESKI = ('    _KORUNAN_CORE += ((re.compile(r"^" + _KOSUCU_REL), '
+                          '"fixture koşucusu (kanıt aracı)"),)\n')
+_MUT_KOSUCU_SINIF_YENI = "    pass\n"
 # ÜÇÜNCÜ bağımsız parça: proje-lokal koşucu sınıfı AYRI bir tabloda (`_KORUNAN_PROJE`)
 # yaşar ve yukarıdaki iki mutasyonun HİÇBİRİ onu düşürmez (ölçüldü: B13 ikisinde de
 # AYAKTA). Mutasyonsuz bırakılsaydı B13'ün ayırt edici olduğu KANITLANMAMIŞ olurdu.
-_MUT_KOSUCU_PROJE_ESKI = ('    (re.compile(_KOSUCU_PROJE, re.IGNORECASE), '
-                          '"proje-lokal fixture koşucusu (kanıt aracı)"),\n')
-_MUT_KOSUCU_PROJE_YENI = ""
+_MUT_KOSUCU_PROJE_ESKI = ('    _KORUNAN_PROJE += ((re.compile(_KOSUCU_PROJE, re.IGNORECASE), '
+                          '"proje-lokal fixture koşucusu (kanıt aracı)"),)\n')
+_MUT_KOSUCU_PROJE_YENI = "    pass\n"
+# ⭐ DÖRDÜNCÜ parça DEĞİL, DEGRADE YOLU (kayıt Q209): koşucu deseni artık ortak modülde
+# (`scripts/utils/infra_yuzeyi.py`) yaşar. Modül okunamazsa koruma DÜŞER — bu bir kurulum
+# arızasıdır ve SESSİZ OLAMAZ. Mutasyon import'u kırar; beklenen ÇİFT: (a) B11/B12/B13
+# düşer AMA guard'ın kalanı AYAKTA (degrade SINIRLI), (b) S14 stderr NOTUNU görür
+# (degrade GÖRÜNÜR). "exit 0 iki anlamlı" tuzağına karşı pozitif kontrol S14'tedir.
+_MUT_YUZEY_ESKI = "    from utils.infra_yuzeyi import (  # type: ignore  # noqa: E402\n"
+_MUT_YUZEY_YENI = "    from utils.infra_yuzeyi_OLMAYAN import (  # type: ignore  # noqa: E402\n"
 # Kabuk kolunun İKİ ayrı değişmezi (biri diğerini kapsamaz):
 _MUT_BASH_KOL_ESKI = "    if arac in _LOG_ARACLARI:\n        return _bash_kolu(data, ti)\n"
 _MUT_BASH_KOL_YENI = "    if arac in _LOG_ARACLARI:\n        return 0\n"
@@ -165,7 +178,7 @@ _MUT_BASH_CWD_YENI = ('        if False:\n'
 def hazirla_hook() -> Path:
     """Ölçülecek hook dosyası: gerçek kaynak ya da mutant kopyası."""
     if not (MUT_BLOK or MUT_COKME or MUT_BASH_KOL or MUT_BASH_CWD
-            or MUT_KOS_HARIC or MUT_KOS_SINIF or MUT_KOS_PROJE):
+            or MUT_KOS_HARIC or MUT_KOS_SINIF or MUT_KOS_PROJE or MUT_YUZEY):
         return KAYNAK
     metin = KAYNAK.read_text(encoding="utf-8")
     if MUT_BLOK:
@@ -180,6 +193,8 @@ def hazirla_hook() -> Path:
         eski, yeni = _MUT_KOSUCU_SINIF_ESKI, _MUT_KOSUCU_SINIF_YENI
     elif MUT_KOS_PROJE:
         eski, yeni = _MUT_KOSUCU_PROJE_ESKI, _MUT_KOSUCU_PROJE_YENI
+    elif MUT_YUZEY:
+        eski, yeni = _MUT_YUZEY_ESKI, _MUT_YUZEY_YENI
     else:
         eski, yeni = _MUT_BASH_CWD_ESKI, _MUT_BASH_CWD_YENI
     if metin.count(eski) != 1:
@@ -310,6 +325,24 @@ def main() -> int:
         rc, out, err = kos(hook, payload(f"{A}/tests/fixtures/ornek/run.py", "Edit", "infra-expert"))
         kontrol("S1b ⭐ infra-expert KOŞUCUYU yazabilir (muafiyet) + TAM SESSİZ",
                 rc == 0 and err.strip() == "", f"exit={rc} stderr={len(err)}b")
+
+        # ⭐ S14 — DEGRADE GÖRÜNÜRLÜĞÜ (kayıt Q209). Koşucu deseni ortak modülden gelir;
+        # modül okunamazsa koruma DÜŞER. Tek değişkenli ÇİFT YÖN: sağlıklı kurulumda NOT
+        # BASILMAZ (gürültü çapası — "her Edit'te bir satır" ölü hook üretir), mutasyonda
+        # BASILIR (pozitif kontrol). Bu vektör olmasaydı `--mutasyon-yuzey-yok` yalnız
+        # "koruma düştü" derdi; "sessizce mi düştü?" sorusu ölçüsüz kalırdı.
+        rc, out, err = kos(hook, payload(f"{A}/tests/fixtures/ornek/run.py", "Edit", None))
+        _not_var = "YUZEY-MODULU YUKLENEMEDI" in err
+        kontrol("S14 ⭐ yüzey-modülü NOTU yalnız modül YOKKEN basılır (degrade GÖRÜNÜR)",
+                _not_var == MUT_YUZEY and rc == (0 if MUT_YUZEY else 2),
+                f"not={'VAR' if _not_var else 'YOK'} beklenen={'VAR' if MUT_YUZEY else 'YOK'} exit={rc}")
+
+        # NOT'un KAPSAMI da dar olmalı: sıradan bir infra yazımında (koşucu OLMAYAN yol)
+        # not BASILMAZ — aksi hâlde bozuk kurulumda her Edit bir satır üretir (ölü hook).
+        rc, out, err = kos(hook, payload(f"{A}/scripts/hooks/yeni_guard.py", "Write", None))
+        kontrol("S15 NOT'un kapsamı DAR: koşucu-olmayan yolda hiçbir kipte basılmaz",
+                "YUZEY-MODULU YUKLENEMEDI" not in err and rc == 2 and BLOK_CAPA in err,
+                f"not={'VAR' if 'YUZEY-MODULU YUKLENEMEDI' in err else 'YOK'} exit={rc}")
 
         serbestler = [
             ("S2 ⭐ lider→governance/infra-findings.md (KAYIT)", f"{B}/governance/infra-findings.md", "Edit", None),
