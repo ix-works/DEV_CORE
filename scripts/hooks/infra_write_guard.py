@@ -18,10 +18,6 @@ NEDEN RUNTIME BLOK (ADR 0019 merdiveni — "geri alınamaz VE sessiz"):
     davranışı korumaz. Kuralı hatırlatan şey KONUMDUR.
 Kardeş katman: `post_validate` `infra-express` dalı AYNI yüzeyde oturumda bir kez
 "EXPRESS mi kuyruk mu?" diye sorar ama BLOKLAMAZ ve yazımdan SONRA konuşur.
-⭐ "AYNI yüzey" 2026-08-29'a kadar bir İDDİAYDI, ölçülünce YANLIŞ çıktı: koşucu istisnası
-yalnız BURAYA eklenmişti, nudge kolu aynı yola "infra değil" diyordu. Kopya-tanım drift'i
-`scripts/utils/infra_yuzeyi.py` TEK KAYNAĞI ile kapatıldı (kayıt Q209); iki kol artık aynı
-deseni okur ve ayrışma korpusta çapalıdır (S14/S15 + fs_docstd X6b/X10/X11).
 
 YAZAN KİM? — ÖLÇÜLDÜ (2026-08-19, `claude -p` + stdin-döken sonda hook, 2 koşum):
   * ana oturum (lider) payload'ında `agent_type`/`agent_id` anahtarları **YOK**;
@@ -121,21 +117,9 @@ _HARIC = re.compile(r"/(tests|attic|TempScripts|__pycache__|\.tmp)/", re.IGNOREC
 # projede aynı sınıf BAŞKA adlarla yaşar (`kur_ve_kos.py` · `mutasyon_kosumu.py` ·
 # `fp_ve_mutasyon.py`) ⇒ orada ad değil KONUM esas alındı: `validators-local/fixtures/**.py`
 # (3/3, korpus dosyaları `.md`/`.yaml` olduğu için FP yok).
-# ⭐ TEK KAYNAK (2026-08-29, kayıt Q209): desen artık `utils/infra_yuzeyi.py`de yaşar —
-# kardeş kol `post_validate` AYNI tanımı oradan okur. Kopya bırakılsaydı ikisi ayrışırdı
-# (bu turun teşhisi tam olarak buydu: guard koşucuyu KORUYOR, nudge "infra değil" diyordu).
-# Import `__file__`ten türetilir → `hook_shim`in `runpy` çağrısında da çözülür (sys.path[0]
-# boş olduğu için DÜZ kardeş-import ölürdü; `utils.inject_paths` aynı deseni üretimde koşar).
-# ⛔ BAŞARISIZLIK SESSİZ DEĞİL: modül okunamazsa koşucu koruması DÜŞER — bu durum
-# `main()`de stderr'e NOT olarak basılır (`_yuzey_notu`), guard'ın geri kalanı çalışır.
-_YUZEY_KAYNAGI = "utils.infra_yuzeyi"
-try:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # core/scripts
-    from utils.infra_yuzeyi import (  # type: ignore  # noqa: E402
-        KOSUCU as _KOSUCU, KOSUCU_PROJE as _KOSUCU_PROJE, KOSUCU_REL as _KOSUCU_REL)
-except Exception as _yuzey_hatasi:                                 # pragma: no cover
-    _YUZEY_KAYNAGI = f"YOK ({type(_yuzey_hatasi).__name__})"
-    _KOSUCU = _KOSUCU_PROJE = _KOSUCU_REL = None
+_KOSUCU_REL = r"tests/(?:fixtures/[^/]+/run\.py|run_[^/]+\.py)$"
+_KOSUCU_PROJE = r"/scripts/validators-local/fixtures/.+\.py$"
+_KOSUCU = re.compile(r"/" + _KOSUCU_REL + r"|" + _KOSUCU_PROJE, re.IGNORECASE)
 
 # `scripts/**` altındaki DOKÜMAN korunmaz: `scripts/hooks/README.md` hook ENVANTERİNİ
 # ANLATIR, davranış TAŞIMAZ (kablolama `settings.template.json`'dadır) — liderin envanter
@@ -153,13 +137,11 @@ _KORUNAN_CORE = (
     (re.compile(r"^claude/rules/"), "davranış kuralı (L1b)"),
     (re.compile(r"^mcp_servers/"), "MCP script"),
     (re.compile(r"^scripts/.+\.py$"), "paylaşılan core/scripts aracı"),
+    # ⭐ Koşucu deseni `_KOSUCU_REL`den TÜRETİLİR (tek kaynak): `_HARIC` istisnası ile bu
+    # sınıflandırma satırı ayrı ayrı yazılsaydı biri bayatlar ve fark SESSİZ olurdu —
+    # istisna açık kalır, sınıflandırma kapanır ⇒ tam olarak bugünkü NO-OP'a dönerdi.
+    (re.compile(r"^" + _KOSUCU_REL), "fixture koşucusu (kanıt aracı)"),
 )
-# ⭐ Koşucu deseni `_KOSUCU_REL`den TÜRETİLİR (tek kaynak): `_HARIC` istisnası ile bu
-# sınıflandırma satırı ayrı ayrı yazılsaydı biri bayatlar ve fark SESSİZ olurdu —
-# istisna açık kalır, sınıflandırma kapanır ⇒ tam olarak bugünkü NO-OP'a dönerdi.
-# Yüzey modülü yoksa koruma DÜŞER ve bu GÖRÜNÜRDÜR (`_yuzey_notu`).
-if _KOSUCU_REL:
-    _KORUNAN_CORE += ((re.compile(r"^" + _KOSUCU_REL), "fixture koşucusu (kanıt aracı)"),)
 
 # CORE DIŞI (proje deposu) korunan yüzeyler — tam yolun SONUNA bakılır.
 _KORUNAN_PROJE = (
@@ -167,12 +149,11 @@ _KORUNAN_PROJE = (
     (re.compile(r"/\.claude/hooks/", re.IGNORECASE), "proje-lokal hook"),
     (re.compile(r"/scripts/git-hooks/", re.IGNORECASE), "proje git-hook"),
     (re.compile(r"/scripts/hook_shim\.py$", re.IGNORECASE), "hook yükleyicisi (hook_shim)"),
+    # Proje-lokal validator'ın KORPUSU değil KOŞUCUSU (aynı sınıf, ad değil KONUM ile):
+    # validator'ın kendisi zaten yukarıda korunuyor; kanıt aracı korunmazsa gate'in
+    # doğruluğu yarım kalır. Ölçüm: 3 dosya, hepsi koşucu, korpus `.md`/`.yaml` ⇒ FP yok.
+    (re.compile(_KOSUCU_PROJE, re.IGNORECASE), "proje-lokal fixture koşucusu (kanıt aracı)"),
 )
-# Proje-lokal validator'ın KORPUSU değil KOŞUCUSU (aynı sınıf, ad değil KONUM ile):
-# validator'ın kendisi zaten yukarıda korunuyor; kanıt aracı korunmazsa gate'in
-# doğruluğu yarım kalır. Ölçüm: 3 dosya, hepsi koşucu, korpus `.md`/`.yaml` ⇒ FP yok.
-if _KOSUCU_PROJE:
-    _KORUNAN_PROJE += ((re.compile(_KOSUCU_PROJE, re.IGNORECASE), "proje-lokal fixture koşucusu (kanıt aracı)"),)
 
 # Guard'ın kendi sınıflandırıcısı çökerse kullanılan KABA ağ (fail-closed yönü). Bilerek
 # aptal: tek bir alt-dizge testi; yanlış-pozitifi yanlış-negatife tercih eder.
@@ -197,32 +178,6 @@ _BASH_YAZMA = (
     re.compile(r"\bsed\s+(?:-[a-zA-Z]*i[a-zA-Z]*\S*\s+)(?:-e\s+\S+\s+|'[^']*'\s+|\"[^\"]*\"\s+)*"
                r"(?P<y>'[^']+'|\"[^\"]+\"|[^\s|;&<>]+)"),                 # sed -i ... dosya
 )
-
-
-def _yuzey_notu(yol: str) -> None:
-    """Kosucu yuzeyi modulu yuklenemediyse SESSIZ KALMA (kurulum bozuk = koruma yarim).
-
-    Guard'in geri kalani calisir; yalniz KOSUCU sinifi korumasiz kalir.
-    ⛔ KAPSAM DAR TUTULUR (olculdu 2026-08-29): not her Edit'te basilsaydi (a) S1/S1b
-    "TAM SESSIZ" sozlesmesi kirilirdi, (b) saglikli olmayan bir kurulumda her arac
-    cagrisi bir satir uretir ve uyari duvar kagidina donerdi. Bu yuzden yalniz
-    KOSUCU OLABILECEK yollarda konusur: `_HARIC` sinifi (tests/attic/...) ya da proje
-    overlay dizini. Muaf yazar (infra-expert) buraya HIC gelmez (once return).
-    ASCII zorunlu (C-ENC-01): cp1252 konsolda Turkce harf UnicodeEncodeError -> exit 1.
-    """
-    if _KOSUCU is not None:
-        return
-    norm = yol.replace("\\", "/")
-    if not (_HARIC.search(norm) or "/validators-local/" in norm.lower()):
-        return
-    try:
-        sys.stderr.write(
-            f"[infra_write_guard] YUZEY-MODULU YUKLENEMEDI ({_YUZEY_KAYNAGI}): fixture "
-            "KOSUCU korumasi DEVRE DISI (scripts/utils/infra_yuzeyi.py okunamadi). "
-            "Guard'in kalan yuzeyleri AYNEN calisiyor. ONARIM: core kurulumunu dogrula "
-            "(python core/scripts/team_setup.py --repair-junctions).\n")
-    except Exception:
-        pass
 
 
 def _parse_fail_notu() -> None:
@@ -254,7 +209,7 @@ def _core_koku(p: Path):
 def _sinif(ham: str):
     """→ (etiket, kanit) korunan infra yüzeyi ise; değilse None. DETERMİNİSTİK."""
     norm = ham.replace("\\", "/")
-    if _HARIC.search(norm) and not (_KOSUCU and _KOSUCU.search(norm)):
+    if _HARIC.search(norm) and not _KOSUCU.search(norm):
         return None                      # fixture KORPUSU/arşiv/scratch: infra KARARI değil
     p = Path(ham)
     kok = _core_koku(p)
@@ -416,8 +371,6 @@ def main() -> int:
     kim, tip = _yazan(data)
     if kim == "alt-ajan" and tip in MUAF_AJANLAR:
         return 0                         # üretim zaten onun görevi (charter'ı ayrı sınırlar)
-
-    _yuzey_notu(yol)                     # kurulum bozuksa koşucu koruması SESSİZCE düşmesin
 
     try:
         vurgu = _sinif(yol)
