@@ -127,7 +127,7 @@ Amaç: kod gate'lerini "agent elle hatırlasın" yerine harness'in otomatik zorl
 
 | Hook | Tetik | Davranış | Script |
 |---|---|---|---|
-| **SessionStart** | startup/resume/compact | ADR 0005 yasak özeti + §2 Ekran Teyidi protokolünü context'e enjekte eder (compaction'a dayanıklı) | `scripts/hooks/session_start.py` |
+| **SessionStart** | `source`'a göre İKİ DAL (2026-08-29) | **startup/resume/clear/fork + tanınmayan/eksik `source`:** ADR 0005 yasak özeti + §3 Ekran Teyidi protokolü + ADR 0018 çalışma modeli. **`source="compact"`:** Ekran Teyidi ÇIKARILIR (compact yeni oturum değildir; harness'ın *"özeti anma, kaldığın yerden devam et"* talimatıyla çelişiyordu), yerine **git'ten** türetilen durum çapası gelir (dal · son commit · `git status` özeti; **state dosyasından DEĞİL** — `active_package` bayatlar). Yasaklar/`run_review`/`adt-gateway`/BUG GATE/D29 **her iki dalda** durur. | `scripts/hooks/session_start.py` |
 | **PostToolUse** (`Edit\|Write\|MultiEdit`) | governance/standards/validator/spec/`.rules.md`/`populate_*.py` düzenlemesi | `run_all_validators.py --quick` koşar; **OK → sessiz**, **FAIL → stderr özet + exit 2** (CLAUDE.md §6 STOP: önce düzelt) | `scripts/hooks/post_validate.py` |
 | **UserPromptSubmit** | güçlü SAP anahtar kelimesi (CDS/RAP/DTEL/ZSDxxx/transport...) | sap-abap-dev skill rehber nudge'ı enjekte (gap-analysis #9) | `scripts/hooks/skill_injector.py` |
 | **PreToolUse** (`Bash\|mcp__sap-adt__*`) | her Bash/SAP-MCP çağrısı | transport release/create + package create deseni → **exit 2 blok** (ADR 0005-C 2. katman) | `scripts/hooks/pre_tool_guard.py` |

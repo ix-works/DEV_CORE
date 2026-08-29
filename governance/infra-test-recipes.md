@@ -115,6 +115,30 @@ python tests/run_fixture_tests.py                                            # T
 - İmza 6'lısı: yorum→AYNI · CRLF→AYNI · hook-sil→**FARKLI** · matcher→**FARKLI** · bozuk-JSON→"?" · sıra→AYNI (ilk-üçü ters = FP geri; 3-4 AYNI = kapsam-kaybı).
 - config_change_guard: davranış-dosyası sentetik-değişiklik → exit 2 + config-changes.log satırı.
 - 4 junction TEK TEK raporlanmalı (toplu-OK tek kırığı gizler).
+- **`source` DALI (2026-08-29).** SessionStart girdisindeki `source` (`startup|resume|clear|compact|fork`) gövdeyi ikiye ayırır.
+  ⚠ **Ölçüm kuralı: çıktıyı HAM stdout'ta ARAMA** — hook `json.dumps` varsayılanıyla basar (`ensure_ascii=True`) ⇒ Türkçe harfler `\uXXXX` olarak durur; çapayı JSON'dan ÇÖZ (`hookSpecificOutput.additionalContext`), yoksa **sahte-KIRMIZI** alırsın.
+  · `source="compact"` → oturum-başı TALEBİ (*"Yeni oturumun ILK yaniti …"*) **YOK** + `[DURUM CAPASI …]` **VAR** (dal · son commit · `git status` özeti).
+  · `source="startup"` / alan **YOK** / **tanınmayan** değer / **bozuk girdi** → bugünkü çıktı **BAYT-EŞ** (fail-safe yön = mevcut davranış). `resume`/`clear`/`fork` bu turda **DEĞİŞMEDİ**.
+  ⛔ **ÇAPA TERİM DEĞİL, TALEP:** `"Ekran Teyidi"` dizesi compact gövdesinde de geçer (*"… ISTENMIYOR"*) ⇒ o dizeye dayanan assertion **ayırt edici DEĞİLDİR** (ilk koşumda ölçüldü: 3 vektör sahte-KIRMIZI). Çapa: `"Yeni oturumun ILK yaniti"`.
+  ⛔ **Çapa GİT'ten türetilir, `.claude/active_package`'tan DEĞİL** — state dosyası sessizce bayatlar (ölçülmüş vaka: state bir paketi, fiilen çalışılan iş BAŞKA bir paketi gösterdi; `pre_compact` yanlış SESSION_NOTES'a yönlendirdi). State'e yaslanan çapa o drift'i compact SONRASINA taşır. **Ayırt edici test:** git dalını değiştir, state dosyasına DOKUNMA → çapa değişmeli (V8).
+  · **3. BAĞLAM:** git'siz kök · commit'siz repo → çapa **sessizce düşer**, exit **0**, gövde sağlam (hook birden çok projede koşar; çöken çapa çapanın kendisinden pahalıdır).
+  · Sağlık kontrolleri compact dalında da **KOŞAR** (bilinçli karar: temizken zaten sessizdirler ⇒ maliyet ödenmiyor; compact oturumun ORTASINDADIR ve junction/damga/manifest sinyali tam o aralıkta değişir).
+  ⛔⛔ **V3'ÜN TABANI GİT'TEN ALINMAZ (2026-08-29, 2. tur — CI kırmızısının kökü).** İlk yazımda
+  taban `git show HEAD:scripts/hooks/session_start.py` idi ⇒ fixture **yalnız fix commit'lenmeden
+  ÖNCE** geçebiliyordu; commit atılınca taban = fix ⇒ `OLCULEMEDI` (PR #179, run 33258089818).
+  **SHA'ya pinlemek de çözüm DEĞİL:** CI `actions/checkout@v5` **sığ klon** yapar (`fetch-depth 1`)
+  ⇒ `git show <eski-SHA>:…` blob'u bulamaz (`git clone --depth 1` ile taklit edilip ölçüldü).
+  **Dondurulmuş kopya da REDDEDİLDİ:** tüm dosyayı dondurur ⇒ startup gövdesindeki ilerideki HER
+  meşru edit V3'ü kırar, vektör kronik-kırmızıya döner. **Kabul edilen yol** (`fa1adfe`/PR #177
+  reçetesinin aynısı): taban BUGÜNKÜ kaynaktan **tek dal satırı** sökülerek türetilir
+  (`_taban_kaynak()`; `_DAL_SATIRI` sabiti `--mutasyon-dalsiz` ile ORTAK ⇒ ayrı ayrı bayatlayamaz).
+  **İki kurulum çapası, ikisi de `exit 2` + SAYI YOK:** dal satırı 1 kez bulunmazsa `TABAN
+  URETILEMEDI` · türetilen taban `compact` girdisinde hâlâ fix gibi davranırsa `TABAN KOZMETIK`
+  (trivial-yeşil koruması). Doğrulaması: N1 satırın YAZIMINI değiştir · N2 türetmeyi NO-OP yap.
+  **Bir kereye mahsus çapraz kontrol (derin klon):** türetilen taban ↔ gerçek `1746040` blob'u
+  → `startup` ve `compact` çıktıları **BAYT-EŞ** (1747 B). ⚠ CI'da bu kontrol YAPILAMAZ (sığ klon);
+  fixture git'e HİÇ bağlı değildir, yalnız kendi sahte deposunu kurar.
+  Korpus: `python tests/fixtures/session_start_compact_dali/run.py` → **22/22**. **ÜÇ mutasyon** (hiçbiri diğerini kapsamaz): `--mutasyon-dalsiz` → **15/22** (düşen V1·V1b·V2·V8·V8b·V9·V10) · `--mutasyon-capasiz` → **19/22** (V2·V8·V8b) · `--mutasyon-state` → **19/22** (V2·**V7**·V8). FP çapaları (V3 bayt-eşlik · V4/V4b · V5/V6/V6b fail-safe · V11 · V12 · V13 · V14) ÜÇ mutasyonda da **AYAKTA**.
 
 ## B4 — pull_before_edit
 - Bayat-seans SAP-source Edit-payload → **exit 2** ve mesajdaki komut **`core/scripts/sap_sync_pull.py`** (proje-göreli).
@@ -736,12 +760,33 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   Temiz ölçüm için koşumdan önce `rm -f .conn_adt`. Ayrı kuyruk kalemi.
 
 ## B23 — `infra_write_guard` (infra yüzeyine ana-oturum yazımı BLOK)
-- Korpus: `python tests/fixtures/infra_write_guard/run.py` → **26/26**, exit 0. Suite içinden:
+- Korpus: `python tests/fixtures/infra_write_guard/run.py` → **47/47**, exit 0. Suite içinden:
   `python tests/run_fixture_tests.py` (OZEL_TESTLER üyesi).
-- **İKİ mutasyon, ikisi de koşulur** (biri diğerini kapsamaz; herhangi biri tam puan verirse
-  korpus o değişmez için BOŞTUR):
-  `--mutasyon-blok` → **15/26** (düşen: B1-B10 + K3; FP çapalarının hepsi ayakta)
-  `--mutasyon-cokme` → **23/27** (düşen: B10 + S4 + S7 + S9; M1 vektörü `GUARD-COKTU` izini arar)
+  ⚠ *(Bu blok 2026-08-29'a kadar **26/26 + 2 mutasyon** diyordu — BAYATTI. Kabuk kolu (kayıt #47)
+  ve koşucu daraltması eklendiğinde sayı güncellenmemişti; rakam iki yerde yaşarsa biri bayatlar.)*
+- **YEDİ mutasyon, yedisi de koşulur** (hiçbiri diğerini kapsamaz; herhangi biri tam puan
+  verirse korpus o değişmez için BOŞTUR):
+  `--mutasyon-blok` → **33/47** · `--mutasyon-cokme` → **35/48** (düşen: B10 + S4/S7/S9 kaba-ağ
+  FP'si + koşucu sınıfı B11/B12/S12b + kabuk kolu; M1 vektörü `GUARD-COKTU` izini arar)
+  `--mutasyon-bash-kol` → **42/47** · `--mutasyon-bash-cwd` → **46/47**
+  **Koşucu daraltmasının ÜÇ parçası** (her biri TEK BAŞINA daraltmayı NO-OP yapar):
+  `--mutasyon-kosucu-haric` → **44/47** (B11·B12·S12b) · `--mutasyon-kosucu-sinif` → **44/47**
+  (AYNI üçü) · `--mutasyon-kosucu-proje` → **46/47** (YALNIZ B13; diğer ikisi onu DÜŞÜRMEZ).
+- ⭐ **KOŞUCU ↔ KORPUS AYRIMI (2026-08-29 daraltması) — dokunmadan önce oku:** `_HARIC` fixture'ı
+  tek parça sayıyordu. Artık **koşucu** (`tests/fixtures/<ad>/run.py` · `tests/run_*.py` · proje
+  `scripts/validators-local/fixtures/**.py`) korunan sınıfta, **korpus** (`bad/`·`good/`·sahte
+  ağaçlar) serbest. ⛔ **YALNIZ `_HARIC`'i daraltmak NO-OP'tur:** `_HARIC` tamamen kapatılınca
+  `tests/` altındaki 139 dosyadan korunan sınıfa giren **1** tanedir ve o bir KORPUS dosyasıdır
+  (`…/cekirdek_ikizi/scripts/mevcut.py`); 90 koşucunun hiçbiri yakalanmaz, çünkü `_KORUNAN_CORE`
+  desenlerinin tamamı `^scripts/` ile başlar. Üç parça (istisna + core deseni + proje deseni)
+  BİRLİKTE gerekir — `_ARACLAR`/Bash NO-OP tuzağının ikizi.
+  **Gerçek-korpus ölçüm reçetesi (FP avı, fixture'dan ÖNCE koş):** `_HARIC`'i `re.compile(r"(?!x)x")`
+  ile kapat, `tests/**` + proje `validators-local/**` üzerinde `_sinif()` çağır, koşucu/korpus
+  ayrımını say. Beklenen: recall 92/92 (core) + 3/3 (proje), FP **0**.
+  ⛔ `_KABA` (çökme ağı) BİLEREK genişletilmedi: alt-dizge testidir, `run.py` her projenin
+  dosyasını yakalardı ⇒ çökme altında koşucu sınıfı serbest kalır (B10 ile aynı sınıf sınır).
+  ⛔ **AÇIK KALEM:** kardeş `post_validate._INFRA_HARIC` (`:102`) hizalanmadı — nudge koşucuları
+  hâlâ "infra değil" sayıyor (blok kolu yazımı zaten durdurduğu için canlıda etkisi ölçülmedi).
 - Mutasyonlar **korpusun içinde** ve **bugünkü kaynaktan** üretilir (git ref'i YOK → "fix merge
   olunca taban kayar" tuzağı yapısal olarak yok). Desen tutmazsa koşucu **exit 3** verir ve
   **hiçbir sayı raporlamaz**.

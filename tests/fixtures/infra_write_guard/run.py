@@ -29,6 +29,11 @@ ateşler ⇒ kimlik ayrımı olmasa guard infra-expert'i de bloklar, işlevsiz o
               SUSAR; salt-okuma SUSAR; infra-expert muafiyeti burada da geçerlidir,
   (i) K8      kabuk kolunun KABLOLAMASI (`settings.template.json` ayrı `Bash` bloğu) —
               kod ≠ kablolama: bu satır olmadan S10-S13 CANLIDA ÖLÜDÜR.
+  (j) B11-B13 ⭐ **KOŞUCU SINIFI (2026-08-29 daraltması):** fixture'ın KOŞUCUSU korunur
+              (`run.py` · `tests/run_*.py` · proje `validators-local/fixtures/**.py`);
+              S1b muafiyet, S12b kabuk kolu, **S21-S23 FP çapaları** korpusun SERBEST
+              kaldığını çiviler. S23 sınırın kendisidir: `run.py` ADI yetmez, KONUM da
+              gerekir — korpus ağacının derinliğindeki `run.py` bir sahte-proje dosyasıdır.
 
 ⚠ **KAPSAM SINIRI hâlâ AÇIK ve korpusta ÖLÇÜLÜ (S8/S17/S18):** kabuk kolu **BLOKLAMAZ**
 ve YALNIZ üç kesin kalıbı tanır. Heredoc · `cp` · `python -c` KAPSANMAZ — bu bir eksiklik
@@ -37,13 +42,15 @@ değil, ölçülmüş bir sınırdır: fiil-kara-listesi bu evde bir kez denendi
 guard'sızlıktan daha kötüdür.
 
 Koşum:  python tests/fixtures/infra_write_guard/run.py
-MUTASYON — DÖRT AYRI DEĞİŞMEZ (hiçbiri diğerini KAPSAMAZ; dördü de koşulmalı):
+MUTASYON — YEDİ AYRI DEĞİŞMEZ (hiçbiri diğerini KAPSAMAZ; yedisi de koşulmalı):
   --mutasyon-blok      → blok kolu `return 2` → `return 0` (BLOK değişmezi = fix'in sökümü)
                          ⇒ B1-B10 düşer; kabuk kolu (S10-S13) ETKİLENMEZ — iki kol
                          YAPISAL OLARAK AYRIDIR ve bu ayrım burada ölçülür.
   --mutasyon-cokme     → `_sinif()` istisna atar (FAIL-CLOSED DEGRADE değişmezi):
                          blok vektörleri KABA AĞ ile AYAKTA kalmalı (sessiz geçiş YOK).
-                         ÖLÇÜLEN bedel (30/40): B10 + S4/S7/S9 kaba-ağ FP'si; kabuk kolu
+                         ÖLÇÜLEN bedel (35/48): B10 + S4/S7/S9 kaba-ağ FP'si + koşucu
+                         sınıfı (B11/B12/S12b — `_KABA`'ya `run.py` EKLENMEDİ: alt-dizge
+                         testi olduğu için HER projenin `run.py`'ını yakalardı); kabuk kolu
                          S10-S13b susar ve S14 çökme-notunu görür — kabuk kolu bilinçli
                          FAIL-OPEN'dır (uyarı üretmek için çökme YETERLİ SEBEP DEĞİL).
   --mutasyon-bash-kol  → `main()`teki kabuk dalı sökülür (`return _bash_kolu` → `return 0`)
@@ -52,8 +59,17 @@ MUTASYON — DÖRT AYRI DEĞİŞMEZ (hiçbiri diğerini KAPSAMAZ; dördü de ko�
   --mutasyon-bash-cwd  → göreceli yolun `cwd` ile mutlaklaştırılması sökülür
                          ⇒ YALNIZ S13 düşer (kabuk komutları yolu göreceli yazar;
                          bu satır olmadan kol canlıda büyük ölçüde ÖLÜDÜR).
+  ⭐ KOŞUCU DARALTMASININ ÜÇ PARÇASI — her biri TEK BAŞINA daraltmayı NO-OP yapar
+  (`_ARACLAR`/Bash vakasının birebir ikizi; üçü de ayrı ayrı ÖLÇÜLDÜ 2026-08-29):
+  --mutasyon-kosucu-haric → `_HARIC` istisnası sökülür  ⇒ B11·B12·S12b düşer (44/47)
+  --mutasyon-kosucu-sinif → `_KORUNAN_CORE` deseni sökülür ⇒ AYNI ÜÇÜ düşer (44/47)
+  --mutasyon-kosucu-proje → `_KORUNAN_PROJE` deseni sökülür ⇒ YALNIZ B13 (46/47);
+                         diğer iki mutasyonun HİÇBİRİ B13'ü düşürmez — proje sınıfı
+                         ayrı tabloda yaşar, bu yüzden ayrı mutasyon HAK EDİYOR.
 Mutasyon BUGÜNKÜ kaynaktan üretilir (git ref'inden DEĞİL: "fix merge olunca taban kayar"
 tuzağı, B20). Desen bulunamazsa koşucu SAYI RAPORLAMADAN durur.
+⭐ Bu çapa 2026-08-29'da CANLI ateşledi: `_HARIC` satırı daraltılınca `--mutasyon-cokme`
+deseni tutmadı ve koşucu `exit 3` ile durdu — sessiz-yeşil ÜRETMEDİ.
 """
 from __future__ import annotations
 
@@ -82,7 +98,9 @@ NEGATIF_KORPUS = REPO / "tests" / "fixtures" / "negatif_test_harness" / "run.py"
 # ⛔ BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir yazim
 # hatasi eskiden HIC mutasyon kurmadan TAM PUAN uretiyordu (exit 0). Kardes: atc_p1_sonuc.
 _GECERLI_KIP = {"--mutasyon-blok", "--mutasyon-cokme",
-                "--mutasyon-bash-kol", "--mutasyon-bash-cwd"}
+                "--mutasyon-bash-kol", "--mutasyon-bash-cwd",
+                "--mutasyon-kosucu-haric", "--mutasyon-kosucu-sinif",
+                "--mutasyon-kosucu-proje"}
 for _a in sys.argv[1:]:
     if _a.startswith("--mutasyon") and _a not in _GECERLI_KIP:
         raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {_a} — gecerli: "
@@ -92,6 +110,9 @@ MUT_BLOK = "--mutasyon-blok" in sys.argv
 MUT_COKME = "--mutasyon-cokme" in sys.argv
 MUT_BASH_KOL = "--mutasyon-bash-kol" in sys.argv
 MUT_BASH_CWD = "--mutasyon-bash-cwd" in sys.argv
+MUT_KOS_HARIC = "--mutasyon-kosucu-haric" in sys.argv
+MUT_KOS_SINIF = "--mutasyon-kosucu-sinif" in sys.argv
+MUT_KOS_PROJE = "--mutasyon-kosucu-proje" in sys.argv
 
 BLOK_CAPA = "İNFRA YAZIMI BLOKLANDI"
 ONAY_CAPA = "AYRI ve AÇIK onay"
@@ -111,9 +132,27 @@ def kontrol(ad: str, kosul: bool, detay: str = "") -> None:
 # türetir; temp'teki kopya import'ta çöker ve exit 1 "FAIL" diye okunur (2026-08-13 dersi).
 _MUT_BLOK_ESKI = "    sys.stderr.write(_blok_mesaji(etiket, kanit, kim, tip))\n    return 2\n"
 _MUT_BLOK_YENI = "    sys.stderr.write(_blok_mesaji(etiket, kanit, kim, tip))\n    return 0\n"
-_MUT_COKME_ESKI = '    norm = ham.replace("\\\\", "/")\n    if _HARIC.search(norm):\n'
+_MUT_COKME_ESKI = ('    norm = ham.replace("\\\\", "/")\n'
+                   '    if _HARIC.search(norm) and not _KOSUCU.search(norm):\n')
 _MUT_COKME_YENI = ('    raise RuntimeError("mutasyon-cokme")  # noqa\n'
-                   '    norm = ham.replace("\\\\", "/")\n    if _HARIC.search(norm):\n')
+                   '    norm = ham.replace("\\\\", "/")\n'
+                   '    if _HARIC.search(norm) and not _KOSUCU.search(norm):\n')
+# ⭐ KOŞUCU DARALTMASININ İKİ AYRI DEĞİŞMEZİ — biri diğerini KAPSAMAZ (NO-OP tuzağı,
+# `_ARACLAR`/Bash vakasının birebir ikizi; ölçüldü 2026-08-29):
+#   `--mutasyon-kosucu-haric` → `_HARIC` istisnası sökülür (sınıflandırma deseni DURUR)
+#   `--mutasyon-kosucu-sinif` → `_KORUNAN_CORE` deseni sökülür (istisna DURUR)
+# Her biri TEK BAŞINA daraltmayı tamamen etkisizleştirir ⇒ ikisi de ayrı ayrı ölçülür.
+# Biri koşulmazsa korpus "yalnız bir yarısını yazdım" hatasını GÖREMEZ.
+_MUT_KOSUCU_HARIC_ESKI = "    if _HARIC.search(norm) and not _KOSUCU.search(norm):\n"
+_MUT_KOSUCU_HARIC_YENI = "    if _HARIC.search(norm):\n"
+_MUT_KOSUCU_SINIF_ESKI = '    (re.compile(r"^" + _KOSUCU_REL), "fixture koşucusu (kanıt aracı)"),\n'
+_MUT_KOSUCU_SINIF_YENI = ""
+# ÜÇÜNCÜ bağımsız parça: proje-lokal koşucu sınıfı AYRI bir tabloda (`_KORUNAN_PROJE`)
+# yaşar ve yukarıdaki iki mutasyonun HİÇBİRİ onu düşürmez (ölçüldü: B13 ikisinde de
+# AYAKTA). Mutasyonsuz bırakılsaydı B13'ün ayırt edici olduğu KANITLANMAMIŞ olurdu.
+_MUT_KOSUCU_PROJE_ESKI = ('    (re.compile(_KOSUCU_PROJE, re.IGNORECASE), '
+                          '"proje-lokal fixture koşucusu (kanıt aracı)"),\n')
+_MUT_KOSUCU_PROJE_YENI = ""
 # Kabuk kolunun İKİ ayrı değişmezi (biri diğerini kapsamaz):
 _MUT_BASH_KOL_ESKI = "    if arac in _LOG_ARACLARI:\n        return _bash_kolu(data, ti)\n"
 _MUT_BASH_KOL_YENI = "    if arac in _LOG_ARACLARI:\n        return 0\n"
@@ -125,7 +164,8 @@ _MUT_BASH_CWD_YENI = ('        if False:\n'
 
 def hazirla_hook() -> Path:
     """Ölçülecek hook dosyası: gerçek kaynak ya da mutant kopyası."""
-    if not (MUT_BLOK or MUT_COKME or MUT_BASH_KOL or MUT_BASH_CWD):
+    if not (MUT_BLOK or MUT_COKME or MUT_BASH_KOL or MUT_BASH_CWD
+            or MUT_KOS_HARIC or MUT_KOS_SINIF or MUT_KOS_PROJE):
         return KAYNAK
     metin = KAYNAK.read_text(encoding="utf-8")
     if MUT_BLOK:
@@ -134,6 +174,12 @@ def hazirla_hook() -> Path:
         eski, yeni = _MUT_COKME_ESKI, _MUT_COKME_YENI
     elif MUT_BASH_KOL:
         eski, yeni = _MUT_BASH_KOL_ESKI, _MUT_BASH_KOL_YENI
+    elif MUT_KOS_HARIC:
+        eski, yeni = _MUT_KOSUCU_HARIC_ESKI, _MUT_KOSUCU_HARIC_YENI
+    elif MUT_KOS_SINIF:
+        eski, yeni = _MUT_KOSUCU_SINIF_ESKI, _MUT_KOSUCU_SINIF_YENI
+    elif MUT_KOS_PROJE:
+        eski, yeni = _MUT_KOSUCU_PROJE_ESKI, _MUT_KOSUCU_PROJE_YENI
     else:
         eski, yeni = _MUT_BASH_CWD_ESKI, _MUT_BASH_CWD_YENI
     if metin.count(eski) != 1:
@@ -241,6 +287,13 @@ def main() -> int:
             ("B8 lider→hook_shim (yükleyici)", f"{B}/scripts/hook_shim.py", "Edit", None),
             ("B9 lider→claude/rules/*.md (davranış)", f"{A}/claude/rules/sap-source-protokolu.md", "Edit", None),
             ("B10 lider→paylaşılan core aracı", f"{A}/scripts/utils/project_config.py", "Edit", None),
+            # ── KOŞUCU SINIFI (2026-08-29 daraltması) ───────────────────────────────
+            # Fixture koşucusu KORPUS DEĞİL, kanıt aracının kendisidir: mutasyon kümesini
+            # ve TABAN STRATEJİSİNİ taşır ⇒ CI'ın yeşil/kırmızı kararını o belirler.
+            ("B11 ⭐ lider→fixture KOŞUCUSU (run.py)", f"{A}/tests/fixtures/ornek/run.py", "Edit", None),
+            ("B12 ⭐ lider→süit koşucusu (tests/run_*.py)", f"{A}/tests/run_fixture_tests.py", "Edit", None),
+            ("B13 ⭐ lider→proje-lokal fixture koşucusu (AD DEĞİL KONUM)",
+             f"{B}/scripts/validators-local/fixtures/q1/kur_ve_kos.py", "Write", None),
         ]
         for ad, yol, arac, ajan in bloklar:
             rc, out, err = kos(hook, payload(yol, arac, ajan))
@@ -252,6 +305,12 @@ def main() -> int:
         kontrol("S1 ⭐ infra-expert AYNI dosyada SERBEST + stderr TAM SESSİZ",
                 rc == 0 and err.strip() == "", f"exit={rc} stderr={len(err)}b")
 
+        # ⭐ Daraltmanın ÇIKIŞ YOLU çalışıyor mu: koşucuyu yazması GEREKEN rol MUAF mı?
+        # Bu vektör olmadan daraltma "kimse yazamaz"a dönerdi — kural değil kilit olurdu.
+        rc, out, err = kos(hook, payload(f"{A}/tests/fixtures/ornek/run.py", "Edit", "infra-expert"))
+        kontrol("S1b ⭐ infra-expert KOŞUCUYU yazabilir (muafiyet) + TAM SESSİZ",
+                rc == 0 and err.strip() == "", f"exit={rc} stderr={len(err)}b")
+
         serbestler = [
             ("S2 ⭐ lider→governance/infra-findings.md (KAYIT)", f"{B}/governance/infra-findings.md", "Edit", None),
             ("S3 lider→governance/*-RESUME.md", f"{B}/governance/ZSD000-RESUME.md", "Write", None),
@@ -260,6 +319,19 @@ def main() -> int:
             ("S6 lider→core/playbook/*.md", f"{A}/playbook/lessons-learned.md", "Edit", None),
             ("S7 KOMŞU AĞAÇ (işaret YOK, ad benzer)", f"{C}/DEV_CORE_benzeri/scripts/hooks/a.py", "Edit", None),
             ("S9 lider→scripts/hooks/README.md (doküman)", f"{A}/scripts/hooks/README.md", "Edit", None),
+            # ── KOŞUCU DARALTMASININ FP ÇAPALARI (korpus SERBEST kalmalı) ───────────
+            # ⛔ Bunlar süs değil: daraltma "tests/ altındaki .py" diye yazılsaydı S22
+            # KIRMIZI olurdu. Gerçek repoda tam olarak o şekilde bir dosya VAR ve
+            # ölçüldü: tests/fixtures/pre_tool_guard/agac/cekirdek_ikizi/scripts/
+            # mevcut.py — sahte ağacın içinde `CLAUDE.core.md` işareti taşıdığı için
+            # "paylaşılan core/scripts aracı" sınıfına giriyor. Korpus VERİdir.
+            ("S21 lider→fixture KORPUSU (bad/ örneği)", f"{A}/tests/fixtures/ornek/bad/kotu.abap", "Edit", None),
+            ("S22 ⭐ FP: korpus içindeki sahte ağacın .py'si (gerçek vaka)",
+             f"{A}/tests/fixtures/ornek/agac/ikiz/scripts/mevcut.py", "Edit", None),
+            # ⭐ SINIRIN KENDİSİ: `run.py` adı YETMEZ, KONUM da gerekir. Korpus ağacının
+            # derinliğindeki bir `run.py` KOŞUCU DEĞİL, sahte projenin dosyasıdır.
+            ("S23 ⭐ SINIR: korpus ağacının DERİNİNDEKİ run.py koşucu DEĞİL",
+             f"{A}/tests/fixtures/ornek/agac/ikiz/run.py", "Edit", None),
         ]
         for ad, yol, arac, ajan in serbestler:
             rc, out, err = kos(hook, payload(yol, arac, ajan))
@@ -280,6 +352,10 @@ def main() -> int:
              f"echo x > {A}/scripts/validators/check_yeni.py"),
             ("S12 ⭐ `tee -a <proje-lokal validator>` → LOG",
              f"echo x | tee -a {B}/scripts/validators-local/check_x.py"),
+            # Yeni KOŞUCU sınıfı kabuk kolunda da görünür: iki kol AYRI ama `_sinif()`
+            # ORTAK. Bu vektör olmadan sınıfın yalnız yarısı ölçülmüş olurdu.
+            ("S12b ⭐ `sed -i <fixture koşucusu>` → LOG (yeni sınıf kabuk kolunda da)",
+             f"sed -i 's/a/b/' {A}/tests/fixtures/ornek/run.py"),
         ]
         for ad, komut in kabuk_log:
             rc, out, err = kos(hook, bash_payload(komut))
