@@ -25,6 +25,42 @@ python scripts/inspector.py --self-test             # canary    [✓]
   core kökünden aynı komut, aynı an → **exit 0**. Ayırt edici: ihlal satırları core'da **var
   olmayan** dosya yollarını gösteriyordu.) Staged-mod (`--all`siz) cwd'den etkilenmez.
 - **Verim:** tam korpus yalnız SON durumda **1×** koşulur; ara adımlarda yalnız dokunduğun fixture.
+- ⭐ **BÖLÜM 4 — KİP KOŞABİLİRLİĞİ (2026-08-29, kayıt Q210):** TAM süit artık her kipli
+  koşucunun **İLK** mutasyon kipini de koşar ve yalnız **"çöktü mü / kipi reddetti mi /
+  kurulamadan durdu mu"** sorusunu sorar. Kapsam DAR ve bilinçlidir:
+  · **koşucu-başına 1 kip** — tüm 108 kip **+378,5 sn** (süit 283→662 sn, >10 dk tavanı);
+    ilk-kip **+78,2 sn** (283→~361 sn). Bugün bulunan 3 çöken kip **2 koşucudan** geliyordu
+    ve ikisi de bu daraltmayla yakalanır (kurulum/çağrı kusuru koşucu-başınadır).
+  · **ölçüt "düşmeli" DEĞİL** — kimi kip ortama duyarlıdır (ölçüldü: `atc_p1_sonuc
+    --mutasyon-stdin`, `PYTHONUTF8` set edilmiş kabukta 22/22, edilmemişte 21/22) ⇒
+    "düşmeli" ölçütü süiti operatörün ortamına bağlardı. Korpus GÜCÜ `run_battery`nin işidir.
+  · Yeni bir KURAL getirmez (gate değil, kapsam satırı); `--degisen` seçim modunda ATLANIR.
+  ⭐⭐ **BÖLÜM 4'ÜN İLK BULGUSU CI ORTAMIYDI — "kip CI'da HİÇ koşmamıştı" sınıfı
+  (2026-08-29 ileri-fix, PR #181 kırmızısı, run 33265820879):** yerel süit **208/208 yeşil**
+  iken CI BÖLÜM 4'te **28/34** verdi. Düşen 6 koşucunun tamamı `KURULAMADI(rc=2)` idi ve
+  kök **ürün kodunda değil ORTAMDA**ydı: `actions/checkout@v5` parametresiz = **sığ klon**
+  (`fetch-depth 1`) ⇒ mutasyon tabanını **pinli SHA**'dan alan koşucular (`git show
+  <sha>:<yol>`) blob'u bulamıyordu. Yani kip korpusunun **%17,6'sı (6/34) CI'da hiç
+  koşmamıştı**; BÖLÜM 4 olmasa bu görünmezdi. Çözüm: `core-ci.yml` → `fetch-depth: 0`
+  (maliyet size-pack **6,93 MiB / 233 commit**; emsal `project-guard.yml`). Sonra derin
+  ağaçta **34/34**.
+  🔁 **CI İKİZİNİ YERELDE KUR (bu sınıfta İLK komut, tahmin etme):**
+  `git clone --depth 1 --branch <dal> file:///<repo-yolu> <tmp>` → doğrula:
+  `git -C <tmp> rev-list --count HEAD` = **1** ve `git -C <tmp> cat-file -e <pinli-sha>`
+  = **hata**. Sonra `env -u PYTHONUTF8` ile koş. Bu ikiz PR #181 kırmızısını **birebir**
+  (28/34, aynı 6 koşucu) yeniden üretti.
+  ⛔ **BOŞ SEBEP = AYRI BİR KUSUR, ORTAM DEĞİL:** o 6 FAIL'in **2'si** hiçbir sebep
+  yazmıyordu. Kök: `yukle()` `sap_client` import-anı için `sys.stdout/stderr`'i BytesIO ile
+  sarmalar, `git_show()` o pencerenin İÇİNDEN çağrılır ⇒ `print()` ile basılan teşhis
+  **atılan tampona** gider (`sys.exit(2)` sonrası dışarıya 0 bayt). Ev deseni: teşhis akışı
+  swap'tan ÖNCE `_GERCEK_ERR = sys.stderr` diye yakalanır, `print(..., file=_GERCEK_ERR)`.
+  **F1 kapsamı ölçüldü:** swap YAPAN 10 koşucudan `exit 2/3` ile de duran **3'ü** riskli;
+  `run_battery` fixture'ının exit'leri swap penceresi DIŞINDA ⇒ etkilenen **tam 2 koşucu**.
+  ⚠ **Mutasyon çapası "boş değil" OLAMAZ:** süit tarafına eklenen yer-tutucu
+  (`<KOŞUCU HİÇ ÇIKTI ÜRETMEDİ …>`) koşucu katmanının mutasyonunu MASKELER. Çapa
+  **gerçek metin** olmalı (`git show <sha>:… → fatal`). Negatif kontrol git'siz/ortamsız
+  koşar: `--mutasyon --ref 0000000deadbeef` → sebep **218/217 karakter**, exit 2;
+  `file=_GERCEK_ERR` sökülürse aynı komut **0 karakter**.
 
 ### B0-SEÇİM — `--degisen` (ara adımlar; 2026-08-13)
 > Ölçüldü: TAM koşum **169,7 sn / 113 vektör**. Tek-validator değişikliği için seçili
@@ -81,14 +117,22 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   dışı kalır. Ölçüldü (2026-08-29): 90 koşucunun 33'ünde kip var, **33/33 çözülüyor, 0 hayalet**.
 - **`exit 0` tek başına anlam taşımaz** — satır etiketleri AYRI: `DUSTU` (exit≠0) ·
   `AYIRDI` (exit 0 + skor tabandan farklı = kendi öz-testini koşan koşucu) · `KACTI` (exit 0 +
-  AYNI skor) · `OLCULEMEDI` (skor okunamadı) · `KURULAMADI` (exit 2) · `KIP-RED`
+  AYNI skor) · `OLCULEMEDI` (skor okunamadı) · `KURULAMADI` (**exit 2 VEYA 3**) · `KIP-RED`
   (`[DURDU]`/`[KULLANIM]`) · `COKTU` (Traceback). ⛔ *"Mutasyon exit≠0 vermeli"* kuralı **YANLIŞ
   olurdu**: canlı korpusta 33 kipin **15'i exit 0** döner (ölçüldü) ⇒ naif kural %45 sahte-FAIL üretirdi.
 - Ölçülen tek-komut maliyeti (2026-08-29, bu makine): `infra_write_guard` **8 birim / 26,6 s** ·
   `run_battery` **7 birim / 30,1 s** · `b0_secim` **3 birim / 6,9 s**.
-- Korpus: `python tests/fixtures/run_battery/run.py` → **24/24**; 6 mutasyon, her biri TEK çapa
-  keser: `--mutasyon-kacak-kor`→N2 · `--mutasyon-kurulum-kor`→N4b · `--mutasyon-red-kor`→N4 ·
-  `--mutasyon-cokme-kor`→N5 · `--mutasyon-olcum-kor`→N8 · `--mutasyon-kesif-kor`→P2+P10 (22/24).
+- Korpus: `python tests/fixtures/run_battery/run.py` → **25/25**; 7 mutasyon, her biri TEK çapa
+  keser: `--mutasyon-kacak-kor`→N2 · `--mutasyon-kurulum-kor`→N4b+N4c · `--mutasyon-red-kor`→N4 ·
+  `--mutasyon-cokme-kor`→N5 · `--mutasyon-olcum-kor`→N8 · `--mutasyon-kesif-kor`→P2+P10 ·
+  `--mutasyon-uc-kor`→**N4c** (exit-3 kapsamı sökülür).
+- ⭐ **exit 3 = KURULAMADI (2026-08-29, kayıt Q210 — aracın KENDİ sahte-yeşili):** araç
+  başlangıçta yalnız exit 2'yi "kurulamadı" sayıyordu; oysa DÖRT koşucu çapası tutmayınca
+  `sys.exit(3)` döner (`fm_imza_doc_sync` · `infra_write_guard` · `std_tablo_include_kapsami` ·
+  `reviewer_skip_sozlesmesi`). Sonuç: **çapası bayatlamış bir mutasyon `DUSTU(rc=3)` diye
+  YEŞİL raporlanıyordu** — bu tur canlı yaşandı (3 bozuk mutasyon PASS geçti). Genişleme
+  korpustan ölçüldü: 108 kip taramasında DÜŞEN her mutasyon rc=1 verir, hiçbiri 3 vermez ⇒
+  `DUSTU`dan hiçbir gerçek vaka çalınmaz (saf precision düzeltmesi).
 - ⚠ **Çocuk ortamına `PYTHONUTF8` ENJEKTE EDİLMEZ** (bilinçli): enjekte edilseydi burada
   yeşil olan koşucu CI'da (env'siz) kırmızı olabilirdi — *lokal yeşil ≠ CI yeşil* sınıfı.
 - ⚠ Batarya **bir kapı değildir**: hiçbir kuralı zorlamaz, `run_all_validators`/pre-commit
@@ -167,6 +211,12 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   ÖNCE** geçebiliyordu; commit atılınca taban = fix ⇒ `OLCULEMEDI` (PR #179, run 33258089818).
   **SHA'ya pinlemek de çözüm DEĞİL:** CI `actions/checkout@v5` **sığ klon** yapar (`fetch-depth 1`)
   ⇒ `git show <eski-SHA>:…` blob'u bulamaz (`git clone --depth 1` ile taklit edilip ölçüldü).
+  📌 **GÜNCELLEME 2026-08-29 (Q210 ileri-fix) — ORTAM DEĞİŞTİ, KARAR DEĞİŞMEDİ:** `core-ci.yml`
+  artık `fetch-depth: 0` kullanıyor ⇒ *sığ klon* gerekçesi core-ci için **artık geçerli değil**
+  (pinli, main'den erişilebilir SHA'lar CI'da çözülür). ⛔ Bu, V3'ün tasarımını **geri açmaz**:
+  V3'ün tabanı `git show`'dan **zaman bağımlılığı** yüzünden çıkarılmıştı (fix merge edilince
+  taban = fix) ve bunu hiçbir checkout ayarı düzeltmez. Sığ-klon yalnızca **ikinci** ve bağımsız
+  gerekçeydi. V3 bugünkü hâliyle (kaynaktan türetme) kalır; `git show HEAD:` hâlâ YASAK.
   **Dondurulmuş kopya da REDDEDİLDİ:** tüm dosyayı dondurur ⇒ startup gövdesindeki ilerideki HER
   meşru edit V3'ü kırar, vektör kronik-kırmızıya döner. **Kabul edilen yol** (`fa1adfe`/PR #177
   reçetesinin aynısı): taban BUGÜNKÜ kaynaktan **tek dal satırı** sökülerek türetilir
@@ -514,6 +564,8 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   **d51ba09**, ⛔ dal adi degil) → **10/24**, P+D+G+K3 duser, **N1-N8 + K1 + K2 ayakta** ·
   `--mutasyon-gevsek` (yalniz ② sokulur) → **19/24**, dusen **P3b/D1/D1b/D2/D3** ⇒ D vektorleri
   atomiklikten BAGIMSIZ olcuyor. Oz-denetim: taban `materyalize`inde rmtree yoksa hicbir sayi
+  ⚠⚠ **N8 PLATFORM-BAGIMLIDIR (2026-08-29 ileri-fix 2, CI run 33267199186):** N8 junction->dizin donusumunu olcer. Taban `d51ba09:224` **ciplak `os.rmdir`** cagirir; POSIX'te symlink dizin girdisi DEGILDIR => `NotADirectoryError`. Onceden bu istisna disari cikip **kosucuyu cokertiyor ve 30+ vektorun hepsini siliyordu**; artik `--mutasyon` kipinde `N8 ATLANDI/BILINEN` diye **etiketli PASS**tir => yukaridaki *“N1-N8 ayakta”* pini Windows'ta da Linux'ta da **ayni** okunur. Windows'ta dal hic tetiklenmez (junction = gercek dizin) => kusur yerelde **gorunmez**.
+  🔁 **Linux ikizi olmadan dogrula (`--taklit-posix-symlink`; kip DEGIL, batarya kesfi gormez):** `os.rmdir`i yalniz N8 cagrisi boyunca `NotADirectoryError` attirir. Uc kontrol: (1) yakalayici sokulunce `--mutasyon --taklit-posix-symlink` -> **exit 2 + `kosucu coktu`** (CI semptomu birebir; pozitif kontrol SART, yoksa assertion yalanci) (2) fix'li -> **10/24** + etiketli satir (3) **mutasyon DISI** + ayni bayrak -> **24/24**, N8 ATLANMAZ (muafiyetin DAR oldugunun kaniti).
   BASILMAZ (exit 2). Cikis-kodu sozlesmesi kardes overlay korpuslariyla AYNI.
   ⚠ **Capalari SILME:** N5/N6 (T2.5 kapisi + onayin anlami) · N7 (fazlalik `.md` hala silinir
   — atomiklik "hic silme"ye donusmesin) · N8 (junction→gercek dizin donusumu; CORE hedefi
@@ -747,10 +799,23 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   sandbox'ını kurar (sahte proje kökü: `project.yaml` + `SOURCE_CODES/…/*.func.abap`; sahte core
   kökü: `playbook/*.md`) ve `finally` ile siler. Gate GERÇEK dosyasından koşar.
 - **BEŞ MUTASYON — hiçbiri diğerini kapsamaz** (biri tam puan verirse korpus o değişmez için
-  BOŞTUR): `--mutasyon capa` (V8 düşer) · `--mutasyon eksik` (V1) · `--mutasyon hayalet` (V4) ·
-  `--mutasyon failopen` (V5) · `--mutasyon blok` (V9). Mutasyon **TAM-EŞLEŞMELİ** metin
-  cerrahisidir; çapa 1 kez geçmiyorsa koşucu **exit 3 ile DURUR** (sessiz no-op mutasyon =
-  sahte YEŞİL).
+  BOŞTUR). ⚠ **KİP BİÇİMİ 2026-08-29'da DEĞİŞTİ (kayıt Q210):** eski `--mutasyon <ad>` (iki
+  argüman) **KALDIRILDI** — batarya keşfi tek-argüman biçimini tanır, eski biçimde bataryanın
+  değersiz çağrısı `IndexError`/Traceback üretiyordu. Yeni biçim ve **ölçülen** pinler
+  (2026-08-29, taban 11/11):
+
+  | kip | sonuç | düşen vektör(ler) |
+  |---|---|---|
+  | `--mutasyon-capa` | 10/11 | V8 |
+  | `--mutasyon-eksik` | **9/11** | V1 **+ V2** (tek vektör DEĞİL — eski reçete yalnız V1 diyordu) |
+  | `--mutasyon-hayalet` | 10/11 | V4 |
+  | `--mutasyon-failopen` | 10/11 | V5 |
+  | `--mutasyon-blok` | 10/11 | V9 |
+
+  Mutasyon **TAM-EŞLEŞMELİ** metin cerrahisidir; çapa 1 kez geçmiyorsa koşucu **exit 3 ile
+  DURUR** (sessiz no-op mutasyon = sahte YEŞİL). Geçersiz/eski kip → `[KULLANIM]` + **exit 1**.
+  ⛔ Bu pinler **2026-08-29'a kadar DOĞRULANAMAZDI**: mutasyon kipi Traceback veriyordu ve
+  süit yalnız TABANI koştuğu için hiçbir kapı görmüyordu.
 - **ÜÇ DURUM AYRIMI korpusun çekirdeğidir** ("bakamadım" ≠ "temiz"): V5 blok yok → **exit 2** ·
   V6 belge dosyası yok → **exit 2** · V8 imza ayrıştırma **çapası** (`IV_PROGRAM`) düştü →
   **exit 2** (aksi hâlde 0 fark = sahte `[OK]`) · V7 ABAP kaynağı yok → **exit 0 + `ATLANDI` +

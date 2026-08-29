@@ -81,6 +81,13 @@ TABAN_SHA = "d51ba09"
 
 SONUC: list[tuple[bool, str]] = []
 
+# N8 dali icin kosum baglami (main() doldurur). Vektor fonksiyonu args almiyor.
+# MUTASYON_KIPI YALNIZ taban-SHA kipinde True olur (--mutasyon); "gevsek" kip
+# CANLI kaynagi kullanir, yani POSIX dali ONDA VARDIR -> orada istisna cikarsa
+# bu GERCEK bir regresyondur ve FAIL olmalidir.
+MUTASYON_KIPI = False
+TAKLIT_POSIX = False
+
 
 def kontrol(ok: bool, ad: str, detay: str = "") -> None:
     SONUC.append((bool(ok), ad + (f" — {detay}" if detay else "")))
@@ -164,6 +171,31 @@ def _shutil_enjekte(ov, sahte):
             ov.shutil = eski
 
 
+@contextlib.contextmanager
+def _posix_symlink_taklidi(etkin: bool):
+    """`os.rmdir`i POSIX symlink gibi davranmaya zorlar (ORTAMSIZ negatif kontrol).
+
+    Neden gerekli: bu evde Linux ikizi kurulamiyor (WSL/docker yok). POSIX'te bir
+    symlink DIZIN GIRDISI DEGILDIR -> `os.rmdir` NotADirectoryError verir; Windows'ta
+    junction gercek bir dizin girdisi oldugu icin ayni cagri BASARILI olur. Yani
+    platform farki bir ISTISNA TIPI farkidir ve tam olarak o taklit edilir.
+    Kapsam DAR: yalniz N8'in `materyalize` cagrisini sarar, sonra geri alinir.
+    """
+    if not etkin:
+        yield False
+        return
+    gercek = os.rmdir
+
+    def sahte(yol, *a, **k):
+        raise NotADirectoryError(20, "Not a directory", str(yol))
+
+    os.rmdir = sahte
+    try:
+        yield True
+    finally:
+        os.rmdir = gercek
+
+
 def _yaz_patlat(mod, patlayan: str):
     """`_yaz`i sar: adı `patlayan` olan dosyada OSError fırlat, diğerlerini gerçek yaz."""
     gercek = mod._yaz
@@ -227,10 +259,29 @@ def senaryolar(ov, ts_kaynak: str, tmp: Path) -> None:
     kaynak_dizin = core2 / "claude" / "agents"
     baglandi = _bagla(kaynak_dizin, hj)
     if baglandi:
-        ok_f, _ = ov.materyalize(proj2, core2, "agents")
-        kontrol(ok_f and hj.is_dir() and not _junction_mu_yerel(hj)
-                and (kaynak_dizin / "alpha.md").is_file(),
-                "N8 (N) junction -> gercek dizin donusumu calisiyor, CORE hedefi dokunulmadan duruyor")
+        # ⛔ ISTISNA DISARI CIKARSA KOSUCU COKER ve 30+ vektorun HEPSI kaybolur
+        # (olculdu 2026-08-29, CI run 33267199186: `COKTU(rc=2)` NotADirectoryError).
+        # Taban surum (d51ba09:224) CIPLAK `os.rmdir(h)` cagirir -- 2026-08-27 fix'inin
+        # getirdigi `except NotADirectoryError -> unlink` dali ONDA YOKTUR. POSIX'te
+        # symlink dizin girdisi olmadigi icin bu, tabanin BILINEN eksigidir; Windows'ta
+        # junction dizin oldugu icin dal hic tetiklenmez. Ayrim ETIKETLI sonuc olarak
+        # raporlanir -- cokme DEGIL.
+        try:
+            with _posix_symlink_taklidi(TAKLIT_POSIX):
+                ok_f, _ = ov.materyalize(proj2, core2, "agents")
+        except NotADirectoryError as exc:
+            if MUTASYON_KIPI:
+                kontrol(True, "N8 (N) ATLANDI/BILINEN: taban surum POSIX symlink dalina "
+                              "sahip degil (2026-08-27 fix'i) -- P-korlugu KORUNUR",
+                        f"{type(exc).__name__}: {exc}")
+            else:
+                kontrol(False, "N8 (N) junction -> gercek dizin donusumu ISTISNA ATTI "
+                               "(fix'li surumde bu dal CALISMALI)",
+                        f"{type(exc).__name__}: {exc}")
+        else:
+            kontrol(ok_f and hj.is_dir() and not _junction_mu_yerel(hj)
+                    and (kaynak_dizin / "alpha.md").is_file(),
+                    "N8 (N) junction -> gercek dizin donusumu calisiyor, CORE hedefi dokunulmadan duruyor")
     else:
         kontrol(True, "N8 (N) ATLANDI: bu ortamda junction/symlink kurulamadi (not: gorunur)")
 
@@ -576,7 +627,15 @@ def main() -> int:
     ap.add_argument("--mutasyon-gevsek", action="store_true",
                     help="yalniz DURUSTLUK degismezini sok (D dusmeli, P ayakta)")
     ap.add_argument("--ref", default=TABAN_SHA)
+    # ORTAMSIZ NEGATIF KONTROL (kip DEGIL -- batarya kesfi `--mutasyon...` arar, bu ad
+    # eslesmez; bilerek boyle adlandirildi ki yeni bir mutasyon kipi SAYILMASIN).
+    ap.add_argument("--taklit-posix-symlink", action="store_true",
+                    help="N8'de os.rmdir'i NotADirectoryError attirir (Linux ikizi yok)")
     a = ap.parse_args()
+
+    global MUTASYON_KIPI, TAKLIT_POSIX
+    MUTASYON_KIPI = bool(a.mutasyon)
+    TAKLIT_POSIX = bool(a.taklit_posix_symlink)
 
     if a.mutasyon and a.mutasyon_gevsek:
         print("[DOGRULANAMADI] iki mutasyon modu ayni anda verilemez")

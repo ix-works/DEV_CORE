@@ -101,6 +101,27 @@ STATUS_DOC = re.compile(
 _INFRA_REL = re.compile(r"^scripts/.+\.py$", re.IGNORECASE)
 _INFRA_HARIC = re.compile(r"/(tests|attic|TempScripts|__pycache__|\.tmp)/", re.IGNORECASE)
 
+# ⭐ KOŞUCU ALT-SINIFI (2026-08-29, kayıt Q209 — kopya-tanım drift'i): `_INFRA_HARIC`
+# fixture'ı TEK PARÇA sayıyordu; oysa KORPUS (veri) ile KOŞUCU (kanıt aracı) ayrı sınıftır.
+# Kardeş kol `infra_write_guard` koşucuları 2026-08-29'da KORUMAYA aldı, bu kol hâlâ
+# "infra değil" diyordu ⇒ aynı dosya hakkında iki hook iki farklı cevap veriyordu.
+# ⛔ DARALTMA İKİ PARÇALIDIR (ölçüldü — biri tek başına NO-OP):
+#   (1) `_INFRA_HARIC` istisnası (aşağıda `_paylasilan_infra` içinde),
+#   (2) `_INFRA_REL` yalnız `^scripts/` ile başlar; `tests/…/run.py` HİÇBİR desene uymaz
+#       ⇒ istisna tek başına açılsaydı sınıflandırma yine `None` dönerdi.
+# Tek kaynak `utils/infra_yuzeyi`; import `__file__`ten türetilir (runpy'de kardeş-import
+# ölür — `_core_onekle` ile aynı desen). Yardımcı yoksa BUGÜNKÜ davranış aynen sürer:
+# nudge susar, hook düşmez (advisory kol; blok kolu guard'dadır ve orada NOT basılır).
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # core/scripts
+    from utils.infra_yuzeyi import (  # type: ignore  # noqa: E402
+        KOSUCU as _KOSUCU, KOSUCU_REL as _KOSUCU_REL)
+except Exception:                                                  # pragma: no cover
+    _KOSUCU = _KOSUCU_REL = None
+
+# Koşucu yolları core köküne göreli olarak `tests/…` ile başlar ⇒ `_INFRA_REL`e EK desen.
+_INFRA_REL_KOSUCU = re.compile(r"^" + _KOSUCU_REL, re.IGNORECASE) if _KOSUCU_REL else None
+
 
 def _core_onekle(metin: str) -> str:
     """Enjekte edilen metodoloji yollarına `core/` öneki (C-HOOK-01).
@@ -120,13 +141,18 @@ def _core_onekle(metin: str) -> str:
 
 def _paylasilan_infra(norm: str, ham: str):
     """→ sınıf etiketi ('hooks'/'validators'/'validators-local'/…) ya da None (deterministik)."""
-    if _INFRA_HARIC.search(norm):
-        return None                      # fixture/scratch/derleme artığı infra kararı DEĞİL
+    if _INFRA_HARIC.search(norm) and not (_KOSUCU and _KOSUCU.search(norm)):
+        return None                      # fixture KORPUSU/scratch/derleme artığı: infra kararı DEĞİL
+    if re.search(r"/scripts/validators-local/fixtures/.+\.py$", norm, re.IGNORECASE):
+        return "proje-lokal fixture koşucusu"   # overlay gate'inin KANIT ARACI
     if re.search(r"/scripts/validators-local/[^/]+\.py$", norm, re.IGNORECASE):
         return "proje-lokal validator"   # proje reposunda ama AYNI disiplin (overlay gate'i)
     rel = None
-    m = re.search(r"/core/(scripts/.+\.py)$", norm, re.IGNORECASE)
-    if m:                                # ① junction yazımı (<proje>/core/scripts/…)
+    # `tests/` 2026-08-29'da EKLENDİ: junction `resolve()` edilemediğinde (bazı kurulumlarda
+    # `is_file()` çözülmez) koşucu yolu YALNIZ bu dalda görünür. Genişleme dar: `/core/docs/x.py`
+    # gibi bir yol rel'e dönüşür ama aşağıdaki iki desenin hiçbirine uymaz ⇒ yine None.
+    m = re.search(r"/core/((?:scripts|tests)/.+\.py)$", norm, re.IGNORECASE)
+    if m:                                # ① junction yazımı (<proje>/core/scripts|tests/…)
         rel = m.group(1)
     else:
         try:
@@ -144,7 +170,11 @@ def _paylasilan_infra(norm: str, ham: str):
                         break
         except Exception:
             rel = None
-    if not rel or not _INFRA_REL.match(rel):
+    if not rel:
+        return None
+    if _INFRA_REL_KOSUCU is not None and _INFRA_REL_KOSUCU.match(rel):
+        return "fixture koşucusu (kanıt aracı)"
+    if not _INFRA_REL.match(rel):
         return None
     parca = rel.split("/")
     return "core scripts/" + (parca[1] if len(parca) > 2 else "")
