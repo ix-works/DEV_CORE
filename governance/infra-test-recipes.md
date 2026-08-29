@@ -55,6 +55,45 @@ python tests/run_fixture_tests.py                                            # T
   fixture içi enjeksiyonla yapılır: kod taban SHA'da hiç yoktu — hedef geçmiş bir commit değil,
   reddedilen tasarım kararı.)*
 
+### B0-BATARYA — `run_battery.py` (ara adımların TEK komutu; 2026-08-29)
+> **Ölçüldü (30 günlük ajan-transkript denetimi):** bir infra koşusunda batarya
+> (taban koşumu · her mutasyon kipi · kardeş fixture · `core_precommit --all`) medyan
+> **8 kez** tekrarlanıyor ve her batarya **4-6 ayrı kabuk turu** yiyordu. `run_battery`
+> bunu **tek tura** indirir; ham çıktı `.tmp/battery/`e yazılır, ekrana ≤25 satır özet çıkar.
+```bash
+python tests/run_battery.py <fixture-adi>                       # taban + TÜM mutasyon kipleri
+python tests/run_battery.py <fixture> --kardes <ad> [<ad> …]    # + komşu regresyon (yalnız TABAN)
+python tests/run_battery.py <fixture> --kardes <ad> --kardes-tam # kardeşin kipleri de koşsun
+python tests/run_battery.py <fixture> --precommit                # + core_precommit --all
+python tests/run_battery.py <fixture> --liste                    # yalnız keşif (hiçbir şey koşulmaz)
+```
+**DÜZEN (kadans):** her **Edit paketinden sonra** `run_battery <dokunduğun fixture>` ·
+`--degisen` seçili süiti komşu korpuslar için · **tam süit (`run_fixture_tests.py`) yalnız
+koşunun SONUNDA 1×** (ara adımlarda değil; CI zaten TAM koşar). ⛔ **Batarya tam süitin
+yerine GEÇMEZ ve F3'ü GEVŞETMEZ:** üç-bağlam şartı (bilinen-bozuk→FAIL · bilinen-temiz→PASS ·
+görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçtır, *azaltan* değil.
+- **Kip keşfi üç katmanlı** (`--help`e güvenmez): ① kaynaktaki kip-kümesi literali (ad-bağımsız;
+  ⚠ **kıyas operandı beyan sayılmaz** — `set(k) == {"--mutasyon-x"}` başka koşucuyu TARİF eder)
+  ② docstring-dışı string sabitleri (yorumlar AST'te yoktur ⇒ `--mutasyon-ZIRVA` örnekleri
+  kendiliğinden elenir) ③ **modül docstring'i — bu katman ŞART**: üç koşucu
+  (`atc_p1_sonuc` · `fs_docstd` · `post_tool_failure_bash`) kipleri `startswith` + son-ek ile
+  çözer, geçerli liste yalnız docstring'dedir. Katman-3 sökülürse **16 kip sessizce** kapsam
+  dışı kalır. Ölçüldü (2026-08-29): 90 koşucunun 33'ünde kip var, **33/33 çözülüyor, 0 hayalet**.
+- **`exit 0` tek başına anlam taşımaz** — satır etiketleri AYRI: `DUSTU` (exit≠0) ·
+  `AYIRDI` (exit 0 + skor tabandan farklı = kendi öz-testini koşan koşucu) · `KACTI` (exit 0 +
+  AYNI skor) · `OLCULEMEDI` (skor okunamadı) · `KURULAMADI` (exit 2) · `KIP-RED`
+  (`[DURDU]`/`[KULLANIM]`) · `COKTU` (Traceback). ⛔ *"Mutasyon exit≠0 vermeli"* kuralı **YANLIŞ
+  olurdu**: canlı korpusta 33 kipin **15'i exit 0** döner (ölçüldü) ⇒ naif kural %45 sahte-FAIL üretirdi.
+- Ölçülen tek-komut maliyeti (2026-08-29, bu makine): `infra_write_guard` **8 birim / 26,6 s** ·
+  `run_battery` **7 birim / 30,1 s** · `b0_secim` **3 birim / 6,9 s**.
+- Korpus: `python tests/fixtures/run_battery/run.py` → **24/24**; 6 mutasyon, her biri TEK çapa
+  keser: `--mutasyon-kacak-kor`→N2 · `--mutasyon-kurulum-kor`→N4b · `--mutasyon-red-kor`→N4 ·
+  `--mutasyon-cokme-kor`→N5 · `--mutasyon-olcum-kor`→N8 · `--mutasyon-kesif-kor`→P2+P10 (22/24).
+- ⚠ **Çocuk ortamına `PYTHONUTF8` ENJEKTE EDİLMEZ** (bilinçli): enjekte edilseydi burada
+  yeşil olan koşucu CI'da (env'siz) kırmızı olabilirdi — *lokal yeşil ≠ CI yeşil* sınıfı.
+- ⚠ Batarya **bir kapı değildir**: hiçbir kuralı zorlamaz, `run_all_validators`/pre-commit
+  yerine geçmez. Çıktısının son satırı bunu her koşumda yazar.
+
 ## B0b — NEGATİF TEST HARNESS'I (hook'a sentetik payload verirken)
 > Geçerlidir: `pre_tool_guard` · `pull_before_edit` · stdin'den JSON okuyan HER hook.
 - ⛔ **`exit 0` "serbest" DEMEK DEĞİLDİR.** Hook'lar bozuk/yabancı girdide de **0** döner

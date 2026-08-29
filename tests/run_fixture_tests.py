@@ -107,6 +107,12 @@ OZEL_TESTLER = [
      "session_start `source` dali: compact YENI OTURUM DEGIL -> oturum-basi TALEBI "
      "dusurulur (harness celiskisi) + git'ten DETERMINISTIK durum capasi (state "
      "dosyasindan DEGIL: `active_package` bayatlar). Fail-safe yon = bugunku davranis"),
+    ("run_battery",
+     "batarya kosucusu (tests/run_battery.py): kip KESFI uc katmanli (BEYAN>AST>DOKUMAN; "
+     "DOKUMAN SART -- uc kosucu kiplerini yalniz docstring'de beyan eder) + sonuc "
+     "SINIFLAMASI (KACTI / OLCULEMEDI / KURULAMADI / KIP-RED / COKTU AYRI etiketler; "
+     "'mutasyon exit!=0 vermeli' naif kurali canli korpusta 33 kipin 15'inde SAHTE-FAIL "
+     "uretirdi -- olculdu)"),
     # ⚠ 2026-08-01: `adtget_yokluk_kaniti` bir ara bu listede IKI KEZ yaziliydi (PR birlesme
     # artigi) -> ayni fixture iki kez kosuyor ve TOPLAM sayiyi sisiriyordu. "N/N PASS"
     # sayisina guvenmenin bedeli: sayaci degil SATIRLARI oku.
@@ -404,6 +410,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "seçim mantığı burada yaşar; koşucu değişince kıyas tabanı TAM olmalı; ayrıca ORTAM "
      "HİJYENİ (kendi ürettiği .conn_adt kalıntısı) bu dosyada yaşar"),
     ("tests/run_guard_fixture_tests.py", ("G",), "guard payload korpusunun koşucusu"),
+    ("tests/run_battery.py", ("O:run_battery",),
+     "batarya aracı: kip keşfi + sonuç sınıflaması burada yaşar. ⛔ Bu araç KAPI DEĞİL; "
+     "TAM süitin yerine GEÇMEZ — koşucunun kendisi (`run_fixture_tests.py`) değişmediği "
+     "sürece kıyas tabanı TAM olmak zorunda değil, kendi korpusu yeter"),
     ("scripts/hooks/post_tool_failure.py",
      ("O:post_tool_failure_bash", "O:atc_p1_sonuc", "O:negatif_test_harness"),
      "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları) + "

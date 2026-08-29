@@ -100,7 +100,7 @@ infra-expert bunu bir seansta 2× koşuyordu; CI de, lider de aynı süiteyi TAM
 
 | Kim | Ne zaman | Komut |
 |---|---|---|
-| **infra-expert** | ARA adımlar (fix'i şekillendirirken) | `python tests/run_fixture_tests.py --degisen <değişen-dosyalar>` (+ kendi yeni fixture'ını doğrudan koş) |
+| **infra-expert** | ARA adımlar (fix'i şekillendirirken) | `python tests/run_battery.py <fixture> [--kardes …]` (taban + TÜM mutasyon kipleri tek komut) · geniş dokunuşta `python tests/run_fixture_tests.py --degisen <değişen-dosyalar>` |
 | **infra-expert** | teslimden önce, kendi worktree'sinde | reçete B0'ın geri kalanı (`run_all_validators` · `compileall` · `core_precommit --all`) |
 | **LİDER (DoD, ZORUNLU)** | **merge/PR öncesi 1× TAM** | `python tests/run_fixture_tests.py` — argümansız. Seçili koşum bunun yerine GEÇMEZ |
 | **CI** | her PR | değişmedi: `.github/workflows/core-ci.yml` süiteyi TAM koşar |
@@ -125,6 +125,10 @@ ajan CANLI çekirdeğe asla yazmaz (junction-anında-yayılım riski fiziksel ol
 - **F2 Kök-soru:** nokta-vaka mı SINIF mı? Fix SINIFI çözmeli; vaka-özel istisna = son çare + gerekçeli.
 - **F3 Üç-bağlam testi:** bilinen-bozuk→FAIL + bilinen-temiz→PASS + **görev-DIŞI üçüncü vaka** —
   fixture'lar `tests/fixtures/`e KALICI eklenir (G1 korpusu).
+  › **Kadans:** her Edit paketinden sonra `python tests/run_battery.py <fixture> [--kardes …]`
+  (taban + tüm mutasyon kipleri TEK komutta), **tam süit yalnız koşunun SONUNDA 1×**. Batarya
+  bir ARAÇTIR, kapı değil: F3'ün üç bağlam şartını **azaltmaz**, onları koşar
+  (reçete: `governance/infra-test-recipes.md` §B0-BATARYA).
 - **F4 Gevşetme-cetveli:** kapsam/eşik DARALIYORSA raporda **⚠GEVŞETME bayrağı** zorunlu +
   FP-kanıtı; bu sınıf yalnız KULLANICI onayıyla merge edilir + `removed-controls.md` kaydı.
 - **F5 Yayılım-notu:** çift-katman etkisi (template/overlay/senkron) + DoD maddeleri.
