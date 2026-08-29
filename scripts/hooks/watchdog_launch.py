@@ -1,15 +1,26 @@
 #!/usr/bin/env python3
-# ENFORCES: C-WATCH-01  (ADR 0019 coverage binding)
-"""PreToolUse(Agent) hook — arka-plan agent spawn edilince detached watchdog daemon'i baslatir.
+# ENFORCES: C-SPAWN-01  (ADR 0019 coverage binding)
+"""PreToolUse(Agent) hook — alt-ajan spawn ANINDA brifing nudge'lari basar (blok YOK).
 
-Amac: SAP/VPN/MCP kopmasindan dogan sessiz stall'i, Claude/lider'e BAGIMLI OLMADAN,
-kullaniciya dogrudan (Windows MessageBox + log) haber veren bir daemon'i garantiye almak.
-- Session basina TEK daemon (heartbeat dosyasi ile idempotent — os.kill footgun'u YOK).
-- Windows'ta DETACHED_PROCESS ile konsola bagimsiz baslatilir.
-- additionalContext ile lidere de tek-satir bilgi enjekte eder (ilk spawn).
-- UC nudge dali: BRIFING-LINT · PRIOR-ART/KB-01 · AGENT-TYPE TUZAGI (hepsi exit 0).
+UC nudge dali, hepsi exit 0 / additionalContext:
+- BRIFING-LINT      : R2 sablon izleri (GOREV/KANIT KURAL) + ENGELLENIRSEN ekseni
+- PRIOR-ART / KB-01 : brifingde adi gecen core script'inin recetesi playbook'ta var mi
+- AGENT-TYPE TUZAGI : `name` verilince infra_write_guard muafiyetinin dusmesi
+
+Soylenecek bir sey yoksa STDOUT BOS kalir (sessiz).
+
+⛔ SAP WATCHDOG DAEMON MEKANIZMASI KALDIRILDI (2026-08-29, kullanici karari) — geri
+   EKLENMEZ. Bu hook detached daemon BASLATMAZ, `.tmp/claude_watchdog` heartbeat'i
+   YAZMAZ, `[WATCHDOG]` satiri BASMAZ; `watchdog_stop.py` + `watchdog_daemon.sh`
+   silindi ve `C-WATCH-01` kurali kaldirildi. Gerekce (olculdu): "oturum basina TEK
+   daemon" iddiasina ragmen ayni anda 4 daemon canliydi (idempotentlik kirik), 2 bayat
+   "SAP WATCHDOG ALERT" MessageBox acik kaldi ve `.tmp/watchdog-alerts.log`
+   `reach=000 fails=26` yazarken kimse aksiyon almadi (uyari korlugu).
+   Kanonik kayit: `governance/removed-controls.md` + `governance/infra-changelog.md`.
+   Kapsam disi (AYRI arac, daemon degil): `scripts/agent_watchdog.sh` — Monitor ile
+   ELLE kosulan stall izleyici.
 """
-import sys, json, os, time, subprocess, re
+import sys, json, os, re
 
 # Windows konsolu/pipe'i cp1252'dir: non-ASCII basmak UnicodeEncodeError ile COKER
 # (exit 1 -> gercek FAIL'den ayirt edilemez). C-ENC-01 / check_console_utf8.py
@@ -48,6 +59,10 @@ def _brifing_lint(data):
             try:
                 import datetime as _dt
                 _proj = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+                # `.tmp` EXIST_OK ile burada acilir: daemon dali kaldirilana kadar (2026-08-29)
+                # dizini main()'in `makedirs(.tmp/claude_watchdog)` cagrisi yan-etkiyle
+                # yaratiyordu. O cagri gidince bu log SESSIZCE olurdu (except: pass).
+                os.makedirs(os.path.join(_proj, ".tmp"), exist_ok=True)
                 with open(os.path.join(_proj, ".tmp", "brifing-lint-debug.log"), "a",
                           encoding="utf-8") as _f:
                     _f.write(f"{_dt.datetime.now().isoformat()} eksik={eksik} "
@@ -66,7 +81,8 @@ def _brifing_lint(data):
         # ⛔ VAKA: `isolation:"worktree"` ile acilan bir infra ajaninin worktree'si YANLIS
         # repoda olustu; charter'i canli agaca yazmayi yasakladigi icin YAZACAK YERI YOKTU.
         # Yasaga uydu, bekledi, HABER VERMEDI -> 26 dk olculebilir cikti SIFIR (watchdog
-        # "heartbeat taze" diyordu: canlilik olcer, ILERLEME olcmez). Kusur ajanda degil
+        # "heartbeat taze" diyordu: canlilik olcer, ILERLEME olcmez -- ve tam da bu yuzden
+        # o daemon 2026-08-29'da kaldirildi; DERS duruyor, MEKANIZMA yok). Kusur ajanda degil
         # BRIFTEYDI.
         #
         # ⭐ EKSEN DAR TUTULDU, OLCULEREK (587 gercek brif, transcript korpusu):
@@ -84,7 +100,8 @@ def _brifing_lint(data):
                 "[BRIFING-LINT] Bu brif BASKA BIR AGACA yazma isi veriyor ama "
                 "'ENGELLENIRSEN DERHAL BILDIR' maddesi YOK (sablon §9). "
                 "Olculmus vaka: yazacak yeri olmayan bir ajan yasaga uyup 26 dk SESSIZ "
-                "bekledi; watchdog 'heartbeat taze' diyordu (canlilik != ilerleme). "
+                "bekledi; o gun kosan daemon 'heartbeat taze' diyordu -- CANLILIK, "
+                "ILERLEME DEGILDIR (daemon 2026-08-29'da kaldirildi; ders duruyor). "
                 "Ekle: 'Yazacak yerin yoksa/yasakla cakisiyorsan TAHMIN ETME, BEKLEME -> "
                 "DERHAL SendMessage(to:\"main\")'. Ayrica worktree adresini brife YAZ.")
         if notlar:
@@ -248,9 +265,12 @@ def _agent_type_tuzagi(data):
 
 
 def _ek_notlar(data):
-    """brifing-lint + prior-art notlarini birlestirir. DAEMON'DAN BAGIMSIZ calisir:
-    daemon/bash bulunamasa bile brifing kontrolleri kosar (eski davraniste bu yollar
-    lint'e ulasmadan return ediyordu = sessiz atlama)."""
+    """UC nudge dalinin notlarini birlestirir; kontrolun kendisi hook'u dusuremez.
+
+    ⛔ TEK EMIT YOLU (2026-08-29): daemon dali kaldirilmadan once bu fonksiyon DORT ayri
+    dala (idempotent / daemon-yok / bash-yok / basari) elle eklenmisti ve eskiden bazi
+    dallar lint'e ULASMADAN return ediyordu = sessiz atlama. Artik dal YOK; not uretimi
+    main()'in tek cikisindan gecer."""
     parcalar = []
     for _f in (_brifing_lint, _prior_art_nudge, _agent_type_tuzagi):
         try:
@@ -265,97 +285,36 @@ def _ek_notlar(data):
 def _parse_fail_notu() -> None:
     """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
 
-    Bos sozlukle devam edilir ve seans kimligi 'nosid'e duser -> watchdog YANLIS
-    anahtarla acilir. Gerekce + sinif kaydi: scripts/hooks/README.md S4.
-    Not STDERR'e gider: bu hook'un STDOUT'u JSON sozlesmesidir.
+    Bos sozlukle devam edilir -> `tool_input` okunamaz, UC nudge dali da SESSIZ kalir
+    (kayip: o spawn icin brifing kontrolu HIC kosmaz). Gerekce + sinif kaydi:
+    scripts/hooks/README.md S4. Not STDERR'e gider: bu hook'un STDOUT'u JSON
+    sozlesmesidir.
     """
     try:
         sys.stderr.write(
             "[watchdog_launch] GIRDI-PARSE-EDILEMEDI: stdin JSON okunamadi -> BOS girdiyle "
-            "devam (degrade, exit 0); seans kimligi 'nosid'e duser. "
+            "devam (degrade, exit 0); bu spawn icin brifing nudge'lari kosmaz. "
             "Negatif-test: governance/infra-test-recipes.md B0b\n")
     except Exception:
         pass
 
 
 def main():
+    """Nudge-only: not varsa additionalContext, yoksa STDOUT BOS.
+
+    ⛔ Daemon dali 2026-08-29'da KALDIRILDI (dosya basligindaki gerekce). Buraya
+    heartbeat / DETACHED Popen / `[WATCHDOG]` satiri GERI EKLENMEZ; capa
+    `tests/fixtures/prior_art_kb01` P4 + `--mutasyon-daemon-geri`.
+    """
     try:
         data = json.load(sys.stdin)
     except Exception:
         _parse_fail_notu()
         data = {}
-    sid = str(data.get("session_id", "nosid")).replace("/", "_").replace("\\", "_")[:64] or "nosid"
-    proj = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    wd = os.path.join(proj, ".tmp", "claude_watchdog")
-    try:
-        os.makedirs(wd, exist_ok=True)
-    except Exception:
-        pass
-
-    hb = os.path.join(wd, "heartbeat_" + sid)
-    # Zaten canli daemon var mi? (heartbeat < 200s taze) -> tekrar baslatma AMA tek-satir teyit ver
-    # (#1: sessiz suppressOutput yerine "zaten canli, hb=Ns" -> "yine baslamadi mi" suphesi kalksin).
-    try:
-        if os.path.exists(hb) and (time.time() - os.path.getmtime(hb)) < 200:
-            age = int(time.time() - os.path.getmtime(hb))
-            ek = "[WATCHDOG] Zaten canli (seans basina 1 daemon) — heartbeat %ss taze; yeniden baslatilmadi (idempotent, hata degil)." % age
-            emit({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": ek + _ek_notlar(data)}})
-            return
-    except Exception:
-        pass
-
-    # Junction'lı projede core script'leri proj/core/ altındadır; core-repo'nun kendisinde proj/scripts/.
-    daemon = os.path.join(proj, "core", "scripts", "hooks", "watchdog_daemon.sh")
-    if not os.path.exists(daemon):
-        daemon = os.path.join(proj, "scripts", "hooks", "watchdog_daemon.sh")
-    if not os.path.exists(daemon):
+    notlar = _ek_notlar(data).strip("\n")
+    if notlar:
         emit({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-              "additionalContext": "[WATCHDOG] daemon script yok (%s) — Monitor/cron'a dus." % daemon
-              + _ek_notlar(data)}})
-        return
-
-    # KRITIK: hook ortaminda 'bash' PATH'te olmayabilir (gercek sebep buydu) -> MUTLAK yol coz.
-    bash_exe = None
-    try:
-        import shutil
-        bash_exe = shutil.which("bash")
-    except Exception:
-        pass
-    if not bash_exe:
-        for c in (r"C:\Program Files\Git\bin\bash.exe",
-                  r"C:\Program Files\Git\usr\bin\bash.exe",
-                  r"C:\Program Files (x86)\Git\bin\bash.exe",
-                  "/usr/bin/bash", "/bin/bash"):
-            if os.path.exists(c):
-                bash_exe = c
-                break
-    if not bash_exe:
-        emit({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-              "additionalContext": "[WATCHDOG] bash bulunamadi — detached daemon yok; 5dk cron watchdog aktif kalsin."
-              + _ek_notlar(data)}})
-        return
-
-    # OUTER Popen = bash_exe MUTLAK (hook PATH'inde bash yok). INNER = bare `bash`
-    # (outer git-bash icinde calisir, orada 'bash' PATH'te var; mutlak-Windows-path'i MSYS exec edemez).
-    # PROJ arg2 olarak açıkça geçilir: daemon core'da yaşadığından BASH_SOURCE-türetimi
-    # junction'da DEV_CORE'a çözülür — proje kökünü launcher bilir (env-first).
-    daemon_posix = daemon.replace("\\", "/")
-    proj_posix = proj.replace("\\", "/")
-    launch_cmd = "nohup bash '%s' '%s' '%s' >/dev/null 2>&1 &" % (daemon_posix, sid, proj_posix)
-    try:
-        subprocess.Popen(
-            [bash_exe, "-c", launch_cmd],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            cwd=proj, close_fds=True,
-        )
-        msg = ("[WATCHDOG] Detached daemon baslatildi (session basina 1). SAP reach ~100s izler; "
-               "2 tur erisimsizde Windows MessageBox + .tmp/watchdog-alerts.log ALERT — SENDEN BAGIMSIZ. "
-               "~2s icinde expire; SessionEnd'de kapanir.")
-    except Exception as e:
-        msg = "[WATCHDOG] daemon baslatilamadi (%s) — 5dk cron watchdog aktif." % e
-
-    emit({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-          "additionalContext": msg + _ek_notlar(data)}})
+              "additionalContext": notlar}})
 
 
 if __name__ == "__main__":

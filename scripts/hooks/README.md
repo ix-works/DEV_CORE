@@ -18,8 +18,9 @@
 >
 > **Tazelik kuralı:** kablolama `claude/settings.template.json`'da yaşar, bu tablo onu ANLATIR.
 > Hook ekler/çıkarırsan İKİSİNİ birlikte güncelle.
-> Son çapraz-doğrulama: **2026-08-13 — 16/16 `.py` kablolu, kablosuz dosya YOK, template'te
-> karşılığı olmayan kayıt YOK** (`pre_tool_guard` üç ayrı matcher'a kablolu).
+> Son çapraz-doğrulama: **2026-08-29 — 16/16 `.py` kablolu, kablosuz dosya YOK, template'te
+> karşılığı olmayan kayıt YOK** (`check_settings_template_sync` EXIT=0 + `check_rule_gate_coverage`
+> `OK=16 · MISSING=0 · ORPHAN=0 · UNDECLARED=0`; `pre_tool_guard` üç ayrı matcher'a kablolu).
 >
 > ⚠ **BU TABLO GATE'Lİ DEĞİL — tazeliği disiplinle korunur.** `check_settings_template_sync.py`
 > (C-TPL-01) **template ↔ `scripts/hooks/` DİZİNİNİ** karşılaştırır; **bu README'yi okumaz.**
@@ -45,15 +46,24 @@
 | `infra_write_guard.py` | PreToolUse | `Edit\|Write\|MultiEdit` | İNFRA YAZIMI BLOĞU — korunan infra yüzeyine (hook/validator/gate/pre-commit/MCP/`claude/rules`/paylaşılan `scripts/**.py`) **ana oturumdan** ya da infra-expert DIŞI bir alt-ajandan doğrudan yazım **exit 2**; `agent_type == infra-expert` MUAF (payload şeması ÖLÇÜLDÜ 2026-08-19). Bypass bayrağı YOK. **2026-08-29:** fixture **KOŞUCULARI** da korunan sınıfta (`tests/fixtures/<ad>/run.py` · `tests/run_*.py` · proje `validators-local/fixtures/**.py`) — kanıt aracı bir infra kararıdır; fixture **KORPUSU** (`bad/`/`good/`/sahte ağaçlar) SERBEST. Korpus: `tests/fixtures/infra_write_guard` (47 vektör / 7 mutasyon) | not+serbest |
 | `sap_worktype_hint.py` | PreToolUse | `mcp__sap-adt__adt_(push_source\|activate\|dtel_create\|domain_create\|struct_create\|publish_service)` | Obje tipinden deterministik worktype→checklist hatırlatması + **ALT-TÜR ekseni** (2026-08-22): artefaktın KENDİ bildirimi (`define abstract entity` …) okunup o alt-türün AYRI reçete bölümü adıyla verilir. Eşleşme, hatırlatıcının ZATEN andığı reçete dosyalarının **kendi başlıklarından** türetilir (ayrı sözlük YOK); belirsizse (>1 başlık) SUSAR. Dedup anahtarı alt-türü taşır. Korpus: `tests/fixtures/worktype_alt_tur` | not+serbest |
 | `itg_backstop.py` | PreToolUse | `mcp__sap-adt__.*` | ITG deterministik backstop — triyajsız SAP işini yakalar (ADR 0022) | not+serbest |
-| `watchdog_launch.py` | PreToolUse | `Agent` | Arka-plan agent spawn'ında detached watchdog daemon'ı başlatır; ayrıca **iki brifing ekseni**: `[BRIFING-LINT]` (R2 şablon izi) ve **`[PRIOR-ART / KB-01]`** (2026-08-19) — brifingde adı geçen core script'inin reçetesi `playbook/`de varsa ve brifing o dosyaya atıf VERMİYORSA yolu **spawn anında** verir. Metin-izi ARAMAZ (ölçüldü: 570 gerçek brifingin %98,6'sı zaten yol atfı taşıyor ⇒ trivial yeşil); aramayı KENDİ yapar. Notlar daemon başarısından BAĞIMSIZ (4 emit yolunun hepsinde). Korpus: `tests/fixtures/prior_art_kb01` | not+degrade³ |
+| `watchdog_launch.py` | PreToolUse | `Agent` | Alt-ajan spawn anında **üç brifing nudge'ı** (blok YOK, söylenecek şey yoksa stdout BOŞ): `[BRIFING-LINT]` (R2 şablon izi + `ENGELLENİRSEN` ekseni) · **`[PRIOR-ART / KB-01]`** (2026-08-19) — brifingde adı geçen core script'inin reçetesi `playbook/`de varsa ve brifing o dosyaya atıf VERMİYORSA yolu **spawn anında** verir; metin-izi ARAMAZ (ölçüldü: 570 gerçek brifingin %98,6'sı zaten yol atfı taşıyor ⇒ trivial yeşil), aramayı KENDİ yapar · `[AGENT-TYPE TUZAĞI]` (2026-08-22). ⛔ **Daemon dalı 2026-08-29'da KALDIRILDI** (aşağıdaki not) — dosya adı korundu, blast-radius küçük tutuldu. Korpus: `tests/fixtures/prior_art_kb01` | not+degrade³ |
 | `post_validate.py` | PostToolUse | `Edit\|Write\|MultiEdit` | Governance/standard/validator/spec/`.rules.md` değişince `run_all_validators --quick`; ayrıca **`doc-fs` dalı** (2026-08-17): `**/docs/(FS\|TS\|KD\|EK)-*.md` → oturumda bir kez OKU-işaretçisi + FS/EK için `check_fs_no_analysis_log --file --bulguda-exit1` özeti (warn-first, exit 2 = geri besleme). ayrıca **`infra-express` dalı** (2026-08-17, PATTERN #30): paylaşılan infra (`core/scripts/**/*.py` · proje `scripts/validators-local/*.py`) düzenlenince oturumda BİR KEZ "EXPRESS mi kuyruk mu?" yol-ayrımı (howto-infra-fix ADIM 2); erken-return YOK, TRIGGER/HIZLI_KUME yolu aynen sürer. Korpus: `tests/fixtures/fs_docstd` | not+serbest |
 | `post_tool_failure.py` | PostToolUse | `mcp__sap-adt__.*` | Başarısız SAP işleminde patinaj-kesici uyarı (ADR 0006) | not+serbest |
 | `config_change_guard.py` | ConfigChange | — | Seans-içi ayar/davranış-yüzeyi değişikliği nöbetçisi (D31; F2'nin runtime bacağı) | not+degrade⁴ |
 | `pre_compact.py` | PreCompact | — | Compaction ÖNCESİ SESSION_NOTES + memory flush hatırlatması | **not YOK**² |
-| `watchdog_stop.py` | SessionEnd | — | Bu seansın detached watchdog daemon'ını durdurur (stop-sentinel) | not+degrade³ |
 
-**Hook OLMAYAN dosyalar** (event'e bağlı değil, envanterde yok sayılmaz): `watchdog_daemon.sh`
-— `watchdog_launch` tarafından spawn edilen yardımcı · `README.md` (bu dosya).
+⛔ **SAP WATCHDOG DAEMON MEKANİZMASI KALDIRILDI — 2026-08-29, kullanıcı kararı. GERİ EKLENMEZ.**
+`watchdog_stop.py` (SessionEnd) + `watchdog_daemon.sh` **silindi**, `settings.template.json`'ın
+`SessionEnd` bloğu kaldırıldı, `watchdog_launch` yalnız nudge'lardan ibaret kaldı ve
+kural-id'si `C-WATCH-01` → **`C-SPAWN-01`** oldu. Gerekçe (ölçüldü): hook *"oturum başına TEK
+daemon"* derken aynı anda **4 daemon** canlıydı (idempotentlik kırık), **2 bayat** "SAP WATCHDOG
+ALERT" MessageBox açık kaldı ve `.tmp/watchdog-alerts.log` `reach=000 fails=26` yazarken kimse
+aksiyon almadı = **uyarı körlüğü**. Kanonik kayıt: `governance/removed-controls.md` (2026-08-29) +
+`governance/infra-changelog.md`. ⚠ **Karıştırma:** `scripts/agent_watchdog.sh` +
+`.claude/watchdog_probes` **AYRI bir araçtır** (Monitor ile ELLE koşulan stall izleyici, daemon
+değil) — kaldırma onu KAPSAMAZ.
+
+**Hook OLMAYAN dosyalar** (event'e bağlı değil, envanterde yok sayılmaz): `README.md` (bu dosya).
 
 ---
 
@@ -88,7 +98,7 @@ burada yaşar — başka yerde aranmasın:
 | `C-RECALL-01` | `recall_inject` | İlgili geçmiş ders, aranmasını beklemeden **prompt anında** enjekte edilir. *(sınıf: "cevap yazılıydı, okunmadı")* |
 | `C-FLOW-01` | `skill_injector` | Tarayıcı/UI doğrulaması ve yapısal kod araması, elle hatırlanmaya bırakılmaz; akış nudge'ı ile önerilir. |
 | `C-RADAR-01` | `tooling_radar_check` | `governance/tooling-radar.md` `cadence-days`'i geçerse açılışta bayatlık uyarısı doğar; bayat değilse **sessiz**. |
-| `C-WATCH-01` | `watchdog_launch` · `watchdog_stop` | Arka-plan ajan koşarken sessiz stall, Claude/lider'e **bağımlı olmadan** kullanıcıya bildirilir; seans bitince daemon temiz kapanır. *(canlılık ≠ ilerleme)* |
+| ~~`C-WATCH-01`~~ → **`C-SPAWN-01`** | `watchdog_launch` | **2026-08-29:** eski `C-WATCH-01` (*"arka-plan ajan koşarken sessiz stall daemon'la bildirilir"*) **KALDIRILDI** — daemon mekanizması söküldü (`removed-controls.md`). Yerine geçen kural **davranışı yeni değildir, adı yeniydi**: alt-ajan **spawn ANINDA** brifingin şablon izi · prior-art/KB-01 borcu · `agent_type` tuzağı **nudge** ile bildirilir; blok YOK, söylenecek şey yoksa **sessiz**. |
 
 ⚠ **Bu tablo bir ENVANTERDİR, gate DEĞİL.** `check_rule_gate_coverage` bugün yalnız
 *"beyan VAR mı"* diye bakar, *"beyan edilen id gerçek bir kurala bağlı mı"* diye **bakmaz**.
@@ -97,7 +107,7 @@ kalemidir (`infra-findings` 2026-08-22).
 
 ¹ Seans marker'ı `session_id`'siz yazılır → tazelik/seans zinciri (pull_before_edit, intake_triage) sessizce etkilenir.
 ² **Bilinçli istisna:** stdin yalnızca boşaltılır, çıktı statiktir → parse-fail'de kaybolan karar yok. Fixture'ın **iç kontrol grubu** (not BASMAMALI).
-³ Seans kimliği `nosid`/boşa düşer → watchdog yanlış anahtarla açılır / durdurulacak daemon bulunamaz.
+³ `tool_input` okunamaz → o spawn için ÜÇ nudge dalı da sessiz kalır (kayıp: brifing kontrolü hiç koşmaz). ⛔ 2026-08-29 öncesi bu dipnot *"seans kimliği `nosid`e düşer → watchdog yanlış anahtarla açılır"* diyordu; daemon kaldırılınca o cümlenin ölçtüğü şey kalmadı.
 ⁴ Tespit tamamen payload'a dayanır → parse-fail sessizce "değişiklik yok" gibi okunurdu.
 
 > MCP server **server-side guardrail** (ADR 0005 A/B/C/D) ayrı bir katman — hook'tan bağımsız,
