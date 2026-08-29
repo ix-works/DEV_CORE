@@ -195,27 +195,22 @@ def main() -> int:
         print("\n-- B) FP CAPASI: bugunku davranis BOZULMADI --")
         rc_s, so_s, _ = kos(hook, {"session_id": "s1", "source": "startup"}, proj)
         c_startup = ctx(so_s)
-        # Fix'ten ÖNCEKİ sürümün startup çıktısıyla BAYT-EŞ mi?
-        # ⛔ TABAN = DONDURULMUŞ KOPYA (`taban_session_start_1746040.py` = `git show
-        # 1746040:scripts/hooks/session_start.py`, fix-öncesi main). `HEAD:` DEĞİL:
-        # ilk sürüm HEAD'i taban aldı; commit atılır atılmaz HEAD fix'i içerdi ve CI
-        # (PR #179, 2026-08-29) V3'te kırmızıya düştü — merge sonrası main'de SÜREKLİ
-        # kırmızı kalırdı. SHA'ya `git show` ile pinlemek de CI'da çalışmaz (checkout
-        # sığ klon, eski blob yok). Kopya bilinçli olarak dondurulmuştur: "fix-öncesi
-        # davranış" tanım gereği değişmez; kopyada STATIK_COMPACT görülürse taban BOZUK.
-        taban_kaynak = Path(__file__).resolve().parent / "taban_session_start_1746040.py"
-        taban_txt = taban_kaynak.read_text(encoding="utf-8") if taban_kaynak.exists() else ""
-        if taban_txt and "STATIK_COMPACT" not in taban_txt:
+        # Fix'ten ÖNCEKİ sürümün startup çıktısıyla BAYT-EŞ mi? Taban = HEAD'deki dosya.
+        taban_src = subprocess.run(["git", "-C", str(REPO), "show",
+                                    "HEAD:scripts/hooks/session_start.py"],
+                                   capture_output=True, text=True, encoding="utf-8",
+                                   errors="replace", timeout=60)
+        if taban_src.returncode == 0 and "STATIK_COMPACT" not in taban_src.stdout:
             taban = tmp / "session_start_taban.py"
-            taban.write_text(taban_txt, encoding="utf-8", newline="\n")
+            taban.write_text(taban_src.stdout, encoding="utf-8", newline="\n")
             _, so_t, _ = kos(taban, {"session_id": "s1", "source": "startup"}, proj)
             kontrol("V3 FP CAPASI: startup ciktisi fix-ONCESI surumle BAYT-ES",
                     so_s == so_t, f"yeni={len(so_s)}B taban={len(so_t)}B")
         else:
-            # ⛔ Taban dosyası yok ya da içine fix sızmış: OLCULEMEDI der (PASS demez).
+            # ⛔ Fix merge edilince taban kayar; o gün bu vektör OLCULEMEDI der (PASS demez).
             kontrol("V3 FP CAPASI: taban surum cozulemedi -> OLCULEMEDI (PASS DEGIL)",
-                    False, f"{taban_kaynak.name} yok ya da STATIK_COMPACT iceriyor "
-                           "(dondurulmus fix-oncesi kopya olmali)")
+                    False, "HEAD:scripts/hooks/session_start.py yok ya da fix HEAD'de "
+                           "(taban artik SHA'ya pinlenmeli)")
 
         kontrol("V4 startup -> oturum-basi TALEBI HALA VAR (kapsam kaybi yok)",
                 TALEP in c_startup, f"ctx={c_startup[:200]!r}")
