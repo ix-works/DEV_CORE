@@ -81,7 +81,8 @@ def _brifing_lint(data):
         # ⛔ VAKA: `isolation:"worktree"` ile acilan bir infra ajaninin worktree'si YANLIS
         # repoda olustu; charter'i canli agaca yazmayi yasakladigi icin YAZACAK YERI YOKTU.
         # Yasaga uydu, bekledi, HABER VERMEDI -> 26 dk olculebilir cikti SIFIR (watchdog
-        # "heartbeat taze" diyordu: canlilik olcer, ILERLEME olcmez). Kusur ajanda degil
+        # "heartbeat taze" diyordu: canlilik olcer, ILERLEME olcmez -- ve tam da bu yuzden
+        # o daemon 2026-08-29'da kaldirildi; DERS duruyor, MEKANIZMA yok). Kusur ajanda degil
         # BRIFTEYDI.
         #
         # ⭐ EKSEN DAR TUTULDU, OLCULEREK (587 gercek brif, transcript korpusu):
@@ -99,7 +100,8 @@ def _brifing_lint(data):
                 "[BRIFING-LINT] Bu brif BASKA BIR AGACA yazma isi veriyor ama "
                 "'ENGELLENIRSEN DERHAL BILDIR' maddesi YOK (sablon §9). "
                 "Olculmus vaka: yazacak yeri olmayan bir ajan yasaga uyup 26 dk SESSIZ "
-                "bekledi; watchdog 'heartbeat taze' diyordu (canlilik != ilerleme). "
+                "bekledi; o gun kosan daemon 'heartbeat taze' diyordu -- CANLILIK, "
+                "ILERLEME DEGILDIR (daemon 2026-08-29'da kaldirildi; ders duruyor). "
                 "Ekle: 'Yazacak yerin yoksa/yasakla cakisiyorsan TAHMIN ETME, BEKLEME -> "
                 "DERHAL SendMessage(to:\"main\")'. Ayrica worktree adresini brife YAZ.")
         if notlar:
