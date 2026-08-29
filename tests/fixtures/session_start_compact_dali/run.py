@@ -30,6 +30,25 @@ gösteriyordu ve `pre_compact` bu yüzden yanlış SESSION_NOTES'a yönlendirdi.
 varsayılanıyla basar (`ensure_ascii=True`) ⇒ ham stdout'ta Türkçe karakter `\\uXXXX` olarak
 durur; ham metinde arama sahte-KIRMIZI verir.
 
+⛔ **V3'ÜN TABANI GİT'TEN ALINMAZ — GÜNCEL KAYNAKTAN TÜRETİLİR (2026-08-29, 2. tur).**
+İlk yazımda taban `git show HEAD:scripts/hooks/session_start.py` idi. Bu, fixture'ı
+**yalnız fix commit'lenmeden ÖNCE** geçebilen bir şeye çevirir: commit atılınca HEAD fix'i
+içerir ⇒ taban = fix ⇒ vektör `OLCULEMEDI` der (PR #179 CI kırmızısı, run 33258089818).
+İKİNCİ ve bağımsız kusur: CI `actions/checkout@v5` **sığ klon** yapar (fetch-depth 1) ⇒
+`git show <eski-SHA>:…` orada blob'u **bulamaz**; yani SHA'ya pinlemek de çözüm değildir.
+Aynı sınıf bir gün önce ölçülmüştü: `fa1adfe` / PR #177 (`sap_gate_skip_sozlesmesi`), ve o
+turda reddedilen tasarımlar dosyaya yazılmıştı: `git show HEAD:` · `git stash` ·
+çalışma-ağacı durumu · `--ref <dal>` — **hepsi zamana bağlıdır**. Bu tur aynı reçeteyi
+uygular: taban, BUGÜNKÜ kaynaktan fix'in dal satırı sökülerek üretilir (`_taban_kaynak`).
+⚠ **Dondurulmuş kopya da REDDEDİLDİ** (denendi, geri alındı): kopya TÜM dosyayı dondurur
+⇒ `session_start.py`'nin startup gövdesinde ilerideki HER meşru değişiklik V3'ü kırar
+(bayt-eşlik iddiası ilgisiz bir edite rehin olur) ⇒ vektör kronik-kırmızıya döner ve
+gevşetilerek ya da silinerek ölür. Kaynaktan türetilen taban bu bağı kurmaz.
+⭐ Taban dönüşümü `--mutasyon-dalsiz` ile AYNI dönüşümdür; bu tesadüf değil **tanımdır**:
+"dalın sökülmüş hâli" = fix öncesi davranış. Kurulum SESSİZ BAŞARISIZ OLAMAZ — dal satırı
+tek kez bulunmazsa ya da türetilen taban compact girdisinde HÂLÂ fix gibi davranırsa
+koşucu SAYI RAPORLAMADAN durur (`exit 2`); "kurulamadı", "kaçtı" değildir.
+
 Koşum:  python tests/fixtures/session_start_compact_dali/run.py
 MUTASYON — ÜÇ AYRI DEĞİŞMEZ (hiçbiri diğerini kapsamaz; fix üç bağımsız parça getirdi):
   --mutasyon-dalsiz    → `compact` ayrımı sökülür (govde daima `STATIK`)   [dal değişmezi]
@@ -72,17 +91,23 @@ def kontrol(ad: str, kosul: bool, detay: str = "") -> None:
     print(f"  {'[OK]' if kosul else '[FAIL]'} {ad}" + (f"  — {detay}" if not kosul and detay else ""))
 
 
+# ⛔ TEK KAYNAK: hem `--mutasyon-dalsiz` hem V3 TABANI bu satırı söker. İki yerde ayrı ayrı
+# yazılsaydı biri bayatlar ve fark SESSİZ olurdu (fix yeniden yazıldığında yalnız biri durur).
+_DAL_SATIRI = "govde = (STATIK_COMPACT + _git_capa()) if compact else STATIK"
+_DALSIZ_SATIRI = "govde = STATIK"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # MUTASYON — bugünkü kaynaktan üretilir; desen tutmazsa GÖRÜNÜR DURUŞ
 # ══════════════════════════════════════════════════════════════════════════════
 def _mutasyonlu_kaynak() -> str:
     src = HOOK.read_text(encoding="utf-8")
     if "--mutasyon-dalsiz" in KIP:
-        hedef = "govde = (STATIK_COMPACT + _git_capa()) if compact else STATIK"
+        hedef = _DAL_SATIRI
         if hedef not in src:
             print("[DURDU] --mutasyon-dalsiz deseni BULUNAMADI (fix yeniden mi yazildi?)")
             sys.exit(2)
-        src = src.replace(hedef, "govde = STATIK")
+        src = src.replace(hedef, _DALSIZ_SATIRI)
     if "--mutasyon-capasiz" in KIP:
         hedef = "def _git_capa() -> str:"
         if hedef not in src:
@@ -103,6 +128,29 @@ def _mutasyonlu_kaynak() -> str:
             '    except Exception:\n'
             '        dal = None'), 1)
     return src
+
+
+def _taban_kaynak() -> str:
+    """V3'ün TABANI: fix ÖNCESİ davranışın kaynağı — GÜNCEL dosyadan türetilir, git'ten DEĞİL.
+
+    Neden git DEĞİL (iki bağımsız sebep, ikisi de ÖLÇÜLDÜ — docstring'in başındaki blok):
+      (1) `git show HEAD:` merge anında tabanı fix'in KENDİSİ yapar → vektör kendi kendini
+          yok eder (PR #177'de ölçülmüş sınıf, PR #179'da tekrarladı);
+      (2) `git show <SHA>:` CI'ın SIĞ klonunda blob'u bulamaz → SHA'ya pinlemek de çözmez.
+    Türetme ZAMANDAN ve REPO DURUMUNDAN bağımsızdır: tek bir dal satırı sökülür.
+
+    ⛔ BAYATLIK ÇAPASI: satır tam olarak BİR kez bulunmazsa (fix yeniden yazıldı / silindi)
+    koşucu SAYI RAPORLAMADAN durur. Sessiz-yeşil yerine görünür duruş; `KURULAMADI` bir
+    `KACTI` değildir ve `PASS` hiç değildir.
+    """
+    src = HOOK.read_text(encoding="utf-8")
+    n = src.count(_DAL_SATIRI)
+    if n != 1:
+        print(f"[DURDU] TABAN URETILEMEDI: dal satiri {n} kez bulundu (1 bekleniyordu) -> "
+              f"{_DAL_SATIRI!r}. Fix yeniden mi yazildi? V3 tabani TURETILEMEZ; sayi "
+              f"raporlanmiyor (sahte-yesil yerine gorunur durus).")
+        sys.exit(2)
+    return src.replace(_DAL_SATIRI, _DALSIZ_SATIRI)
 
 
 def _hook_yolu(tmp: Path) -> Path:
@@ -181,6 +229,23 @@ def main() -> int:
         (proj / ".claude" / "active_package").write_text(BAYAT_STATE + "\n", encoding="utf-8")
         (proj / "yarim_is.txt").write_text("degisiklik\n", encoding="utf-8")  # untracked
 
+        # ── TABAN KURULUMU + KIRMIZI-AYAK DOĞRULAMASI (vektörlerden ÖNCE) ─────
+        # Taban KOZMETİK OLMAMALI: gerçekten fix ÖNCESİ gibi davrandığı ÖLÇÜLÜR, yoksa V3
+        # trivial-yeşile döner (taban≡bugün ⇒ "bayt-eş" iddiası boş bir tören olur).
+        # Kurulum başarısızlığı bir VEKTÖR DÜŞÜŞÜ DEĞİLDİR → sayı raporlanmadan durulur.
+        taban = tmp / "session_start_taban.py"
+        taban.write_text(_taban_kaynak(), encoding="utf-8", newline="\n")
+        _, so_tc, _ = kos(taban, {"session_id": "s1", "source": "compact"}, proj)
+        c_tc = ctx(so_tc)
+        if not (TALEP in c_tc and CAPA_BASLIK not in c_tc):
+            print("[DURDU] TABAN KOZMETIK: turetilen taban `compact` girdisinde HALA "
+                  f"fix gibi davraniyor (TALEP={TALEP in c_tc} CAPA={CAPA_BASLIK in c_tc}). "
+                  "V3 bayt-eslik iddiasi bu tabanla ANLAMSIZ olur; sayi raporlanmiyor.")
+            return 2
+        print(f"  [taban] fix-ONCESI taban BUGUNKU kaynaktan turetildi (git YOK): dal satiri "
+              f"sokuldu; taban `compact` girdisinde PRE-FIX davraniyor "
+              f"(oturum-basi talebi VAR, DURUM CAPASI YOK) — {len(c_tc)}B")
+
         print("\n-- A) COMPACT DALI --")
         rc_c, so_c, _ = kos(hook, {"session_id": "s1", "source": "compact"}, proj)
         c_compact = ctx(so_c)
@@ -195,22 +260,11 @@ def main() -> int:
         print("\n-- B) FP CAPASI: bugunku davranis BOZULMADI --")
         rc_s, so_s, _ = kos(hook, {"session_id": "s1", "source": "startup"}, proj)
         c_startup = ctx(so_s)
-        # Fix'ten ÖNCEKİ sürümün startup çıktısıyla BAYT-EŞ mi? Taban = HEAD'deki dosya.
-        taban_src = subprocess.run(["git", "-C", str(REPO), "show",
-                                    "HEAD:scripts/hooks/session_start.py"],
-                                   capture_output=True, text=True, encoding="utf-8",
-                                   errors="replace", timeout=60)
-        if taban_src.returncode == 0 and "STATIK_COMPACT" not in taban_src.stdout:
-            taban = tmp / "session_start_taban.py"
-            taban.write_text(taban_src.stdout, encoding="utf-8", newline="\n")
-            _, so_t, _ = kos(taban, {"session_id": "s1", "source": "startup"}, proj)
-            kontrol("V3 FP CAPASI: startup ciktisi fix-ONCESI surumle BAYT-ES",
-                    so_s == so_t, f"yeni={len(so_s)}B taban={len(so_t)}B")
-        else:
-            # ⛔ Fix merge edilince taban kayar; o gün bu vektör OLCULEMEDI der (PASS demez).
-            kontrol("V3 FP CAPASI: taban surum cozulemedi -> OLCULEMEDI (PASS DEGIL)",
-                    False, "HEAD:scripts/hooks/session_start.py yok ya da fix HEAD'de "
-                           "(taban artik SHA'ya pinlenmeli)")
+        # Fix'ten ÖNCEKİ davranışla BAYT-EŞ mi? Taban yukarıda KURULDU ve kırmızı-ayağı
+        # DOĞRULANDI (git'e, HEAD'e, klon derinliğine ve çalışma-ağacı durumuna bağlı DEĞİL).
+        _, so_t, _ = kos(taban, {"session_id": "s1", "source": "startup"}, proj)
+        kontrol("V3 FP CAPASI: startup ciktisi fix-ONCESI davranisla BAYT-ES",
+                so_s == so_t, f"yeni={len(so_s)}B taban={len(so_t)}B")
 
         kontrol("V4 startup -> oturum-basi TALEBI HALA VAR (kapsam kaybi yok)",
                 TALEP in c_startup, f"ctx={c_startup[:200]!r}")

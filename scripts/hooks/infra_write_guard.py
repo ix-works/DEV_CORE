@@ -32,7 +32,9 @@ MUAF (sessiz geç, exit 0):
   * `agent_type` ∈ MUAF_AJANLAR (infra-expert) — üretim zaten onun görevi.
   * Korunan sınıfa girmeyen her yol: `governance/**` (özellikle `infra-findings.md` —
     KAYIT yazmak serbest ve teşviklidir), `docs/`, `playbook/`, `standards/`,
-    `SOURCE_CODES/**`, paket `.rules.md`, `tests/`, `attic/`, `TempScripts/`, `.tmp/`.
+    `SOURCE_CODES/**`, paket `.rules.md`, `attic/`, `TempScripts/`, `.tmp/` ve fixture
+    **KORPUSU** (`tests/**` verisi). ⚠ 2026-08-29'dan beri fixture **KOŞUCULARI** bu
+    listede DEĞİL — korunurlar (`_KOSUCU`; gerekçe ve ölçüm orada).
   * Okuma: guard yalnız Edit/Write/MultiEdit yüzeyindedir; Read/Grep/Glob DOKUNULMAZ.
 
 KABUK (Bash) KAPSAMI — ⚠ İKİ SEVİYELİ: BLOK **YALNIZ** Edit/Write/MultiEdit'tedir.
@@ -92,6 +94,33 @@ _ARAMA_DERINLIGI = 12               # ata-dizin taraması üst sınırı (patolo
 # Bu sınıfa giren yollar İNFRA KARARI DEĞİLDİR: fixture/arşiv/scratch/derleme artığı.
 _HARIC = re.compile(r"/(tests|attic|TempScripts|__pycache__|\.tmp)/", re.IGNORECASE)
 
+# ⭐ KOŞUCU İSTİSNASI (2026-08-29, kullanıcı talebi — "aynı infra bu kontrolü de yazsın").
+# `_HARIC` fixture'ı tek parça sayıyordu; oysa bir fixture İKİ AYRI ŞEYDEN oluşur:
+#   · KORPUS (`bad/`, `good/`, sahte ağaçlar, `.md`/`.cds`/`.json` örnekleri) = VERİ.
+#     Bunlar infra kararı taşımaz ve SERBEST kalır — bu tur onlara DOKUNMADI.
+#   · KOŞUCU (`run.py` / `run_*.py`) = KANIT ARACININ KENDİSİ. Mantığı, mutasyon
+#     kümesini ve TABAN STRATEJİSİNİ taşır; CI'ın yeşil/kırmızı kararını o belirler.
+#     Bir gate'in doğruluğu koşucusunun doğruluğu kadardır ⇒ koşucu bir İNFRA KARARIDIR.
+# ⛔ SINIFIN KENDİ VAKASI (ölçüldü 2026-08-29, canlı payload): lider `tests/fixtures/
+# session_start_compact_dali/run.py`yi Edit etti → guard `exit 0`, stderr BOŞ; AYNI turda
+# `scripts/hooks/session_start.py` için `exit 2` bastı. Boşluk YOL'da değil, bu istisnadaydı.
+# ⛔ NEDEN YALNIZ `_HARIC`'i daraltmak YETMEZDİ (ÖLÇÜLDÜ — NO-OP tuzağı, `_ARACLAR`/Bash
+# vakasının ikizi): `_HARIC` tamamen kapatılıp 139 `tests/` dosyası sınıflandırıldığında
+# korunan sınıfa giren dosya sayısı **1**'dir ve o dosya bir KOŞUCU DEĞİL, korpustur
+# (`tests/fixtures/pre_tool_guard/agac/cekirdek_ikizi/scripts/mevcut.py` — sahte ağacın
+# içinde `CLAUDE.core.md` işareti var, bu yüzden "paylaşılan core/scripts aracı" sayılıyor).
+# 90 koşucunun HİÇBİRİ yakalanmıyordu: `_KORUNAN_CORE` desenlerinin tamamı `^scripts/` ile
+# başlar, `tests/…/run.py` hiçbirine uymaz. ⇒ Daraltma İKİ parçalıdır: (1) bu istisna,
+# (2) `_KORUNAN_CORE`/`_KORUNAN_PROJE`'ye koşucu deseni. Yalnız biri NO-OP'tur.
+# ⛔ AD-BAĞIMLILIĞI BİLİNÇLİ ve SINIRI ÖLÇÜLDÜ: core'da 92 koşucunun 92'si (`run.py` ×90 +
+# `tests/run_*.py` ×2) bu adlandırmayı kullanır (precision 92/92, recall 92/92). Tüketici
+# projede aynı sınıf BAŞKA adlarla yaşar (`kur_ve_kos.py` · `mutasyon_kosumu.py` ·
+# `fp_ve_mutasyon.py`) ⇒ orada ad değil KONUM esas alındı: `validators-local/fixtures/**.py`
+# (3/3, korpus dosyaları `.md`/`.yaml` olduğu için FP yok).
+_KOSUCU_REL = r"tests/(?:fixtures/[^/]+/run\.py|run_[^/]+\.py)$"
+_KOSUCU_PROJE = r"/scripts/validators-local/fixtures/.+\.py$"
+_KOSUCU = re.compile(r"/" + _KOSUCU_REL + r"|" + _KOSUCU_PROJE, re.IGNORECASE)
+
 # `scripts/**` altındaki DOKÜMAN korunmaz: `scripts/hooks/README.md` hook ENVANTERİNİ
 # ANLATIR, davranış TAŞIMAZ (kablolama `settings.template.json`'dadır) — liderin envanter
 # tazeliğini yazması gereken bir iştir, bloklanırsa tablo bayatlar (2026-08-13 bayatlığı).
@@ -108,6 +137,10 @@ _KORUNAN_CORE = (
     (re.compile(r"^claude/rules/"), "davranış kuralı (L1b)"),
     (re.compile(r"^mcp_servers/"), "MCP script"),
     (re.compile(r"^scripts/.+\.py$"), "paylaşılan core/scripts aracı"),
+    # ⭐ Koşucu deseni `_KOSUCU_REL`den TÜRETİLİR (tek kaynak): `_HARIC` istisnası ile bu
+    # sınıflandırma satırı ayrı ayrı yazılsaydı biri bayatlar ve fark SESSİZ olurdu —
+    # istisna açık kalır, sınıflandırma kapanır ⇒ tam olarak bugünkü NO-OP'a dönerdi.
+    (re.compile(r"^" + _KOSUCU_REL), "fixture koşucusu (kanıt aracı)"),
 )
 
 # CORE DIŞI (proje deposu) korunan yüzeyler — tam yolun SONUNA bakılır.
@@ -116,6 +149,10 @@ _KORUNAN_PROJE = (
     (re.compile(r"/\.claude/hooks/", re.IGNORECASE), "proje-lokal hook"),
     (re.compile(r"/scripts/git-hooks/", re.IGNORECASE), "proje git-hook"),
     (re.compile(r"/scripts/hook_shim\.py$", re.IGNORECASE), "hook yükleyicisi (hook_shim)"),
+    # Proje-lokal validator'ın KORPUSU değil KOŞUCUSU (aynı sınıf, ad değil KONUM ile):
+    # validator'ın kendisi zaten yukarıda korunuyor; kanıt aracı korunmazsa gate'in
+    # doğruluğu yarım kalır. Ölçüm: 3 dosya, hepsi koşucu, korpus `.md`/`.yaml` ⇒ FP yok.
+    (re.compile(_KOSUCU_PROJE, re.IGNORECASE), "proje-lokal fixture koşucusu (kanıt aracı)"),
 )
 
 # Guard'ın kendi sınıflandırıcısı çökerse kullanılan KABA ağ (fail-closed yönü). Bilerek
@@ -172,8 +209,8 @@ def _core_koku(p: Path):
 def _sinif(ham: str):
     """→ (etiket, kanit) korunan infra yüzeyi ise; değilse None. DETERMİNİSTİK."""
     norm = ham.replace("\\", "/")
-    if _HARIC.search(norm):
-        return None                      # fixture/arşiv/scratch: infra KARARI değil
+    if _HARIC.search(norm) and not _KOSUCU.search(norm):
+        return None                      # fixture KORPUSU/arşiv/scratch: infra KARARI değil
     p = Path(ham)
     kok = _core_koku(p)
     if kok is None:
