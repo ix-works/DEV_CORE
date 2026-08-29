@@ -1005,14 +1005,39 @@ Exception:
 
 ### BÖLÜM 10: HATA YÖNETİMİ (TEKNİK)
 
-**10.1 Mesaj Sınıfı Tanımları**
+**10.1 Mesaj Sınıfı Tanımları — MESAJ ENVANTERİ**
 
-| Mesaj Sınıfı | No | Tip | Metin | Açıklama |
-|-------------|-----|-----|-------|----------|
-| ZSD_ONAY_MSG | 001 | E | Yetki hatası: & işlemi için yetkiniz yok | Yetki hatası |
-| ZSD_ONAY_MSG | 002 | S | Sipariş & başarıyla onaylandı | Başarı mesajı |
-| ZSD_ONAY_MSG | 003 | W | Sipariş & zaten onaylanmış durumda | Uyarı |
-| ZSD_ONAY_MSG | 004 | A | Sistem hatası: & | Kritik hata |
+> **★ MESAJ ENVANTERİ TAMLIĞI (MUST — eksikse TS eksiktir):** Geliştirmenin üreteceği **HER**
+> mesaj bu tabloda listelenir — bu bir **ENVANTERDİR, örnek tablo DEĞİL**. *Gerekçe:* mesaj
+> metnini **yalnız kullanıcı verebilir** (ADR 0005-D — AI, Z'li obje metnini önermez/uydurmaz);
+> TS'te eksik bırakılan her mesaj **build ortasında** doğar ve tam o anda **bloke eden bir onay
+> turu** açar, build durur. *(Ölçüldü: bir pakette `210/211/212` 2026-08-24, `213`+`214`
+> 2026-08-29 — aynı sınıf, beş gün arayla iki kez.)* **Yöntem:** (1) **kısa metin birebir**
+> yazılır ve **≤ 73 karakter** olur — T100-`TEXT` alanı `CHAR 73`'tür; sınırı aşan metin ya
+> çağrıyı düşürür ya SAP tarafından **sessizce KIRPILIR** ve ekranda yarım cümle olarak görünür
+> (`scripts/populate_message_class.py` bunu fail-closed kapı olarak uygular: `T100_TEXT_MAXLEN =
+> 73` → `MesajMetniUzunError`, yazma başlamadan durur) ⇒ 73'ü aşan metin TS'e **yazılamaz**,
+> kullanıcıdan kısaltılmış hâli istenir; (2) yer tutucular **numaralı** yazılır (`&1 &2 &3 &4`
+> — çıplak `&` DEĞİL) ve **her birinin ne taşıdığı** ayrı kolonda belirtilir: çıplak `&` argüman
+> sırasını belirsiz bırakır, `MESSAGE … WITH` sırası TS'ten okunamaz; (3) her mesajın **üretim
+> noktası** (sınıf/metot, ya da RAP validation/determination adı) yazılır — doc-checklist
+> **DOC-CR-01 ①** ters-yön kontrolü tam bu kolonu okur (*katalogdaki her mesaj bir üretim
+> noktasına bağlı mı*), kolon boşsa o kontrol koşulamaz; (4) **kullanıcı aksiyonu** yazılır
+> (kullanıcı mesajı görünce ne yapacak) — `E`/`A` tipinde ZORUNLU, `S`/`I` tipinde `—` yazılır.
+> **Uzun metin (long-text) İSTEĞE BAĞLIDIR:** istenirse *"SE91 gerektirir"* şerhiyle belirtilir —
+> programatik yol YOKTUR (`populate_message_class.py` `mc:documented="false"` değerini **sabit**
+> yazar; uzun metin yalnız SE91'de elle girilir).
+> ⛔ **Build sırasında yeni mesaj ihtiyacı doğarsa TS REVİZE EDİLİR:** metin kullanıcıdan alınır,
+> tabloya işlenir, sonra kodlanır — *"şimdilik geçici bir metin yazayım, sonra ekleriz"* YOK
+> (geçici metin canlıya kaçar ve *"onaylı metin buydu"* diye kimse şüphelenmez). Mesaj envanteri
+> eksik bırakılmış TS = **eksik TS**.
+
+| Mesaj Sınıfı | No | Tip | Metin (birebir, ≤73 karakter) | `&1..&4` anlamı | Üretim noktası (sınıf/metot) | Kullanıcı aksiyonu |
+|---|---|---|---|---|---|---|
+| ZSD_ONAY_MSG | 001 | E | Yetki hatası: &1 işlemi için yetkiniz yok | `&1` = işlem adı (ACTVT metni) | `ZCL_SD_ONAY_HANDLER->approve( )` — yetki kontrolü | Yetki talebi aç (rol `Z_SD_ONAY_USER`) |
+| ZSD_ONAY_MSG | 002 | S | Sipariş &1 başarıyla onaylandı | `&1` = `VBELN` | `ZCL_SD_ONAY_HANDLER->approve( )` — commit sonrası | — (bilgi mesajı) |
+| ZSD_ONAY_MSG | 003 | W | Sipariş &1 zaten onaylanmış durumda | `&1` = `VBELN` | `ZCL_SD_ONAY_HANDLER->approve( )` — ön kontrol | Tekrar denemez; listeyi tazele |
+| ZSD_ONAY_MSG | 004 | A | Sistem hatası: &1 | `&1` = `zcx_sd_onay_exception->get_text( )` | `ZCL_SD_ONAY_HANDLER` — CATCH dalı | Yöneticiye bildir (ST22 dump no ile) |
 
 **10.2 Exception Handling**
 
