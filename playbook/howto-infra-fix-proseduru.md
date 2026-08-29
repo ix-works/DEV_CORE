@@ -102,7 +102,7 @@ infra-expert bunu bir seansta 2× koşuyordu; CI de, lider de aynı süiteyi TAM
 |---|---|---|
 | **infra-expert** | ARA adımlar (fix'i şekillendirirken) | `python tests/run_battery.py <fixture> [--kardes …]` (taban + TÜM mutasyon kipleri tek komut) · geniş dokunuşta `python tests/run_fixture_tests.py --degisen <değişen-dosyalar>` |
 | **infra-expert** | teslimden önce, kendi worktree'sinde | reçete B0'ın geri kalanı (`run_all_validators` · `compileall` · `core_precommit --all`) |
-| **LİDER** | ajanın **"KOD DONDU"** mesajında (md5 listesi gelir gelmez) | worktree'de commit + push + **draft PR** aç → CI ajanın doküman/rapor turuyla PARALEL koşar (2026-08-29 ölçümü: son süit → rapor sonu 4–28 dk, CI 2 dk). Kırmızıysa aynı turda düzelttir; yeni tur açma |
+| **LİDER** | ajanın **"KOD DONDU"** mesajında (md5 listesi gelir gelmez) | worktree'de commit + push + **draft PR** aç → CI ajanın doküman/rapor turuyla PARALEL koşar (2026-08-29 ölçümü: son süit → rapor sonu 4–28 dk, CI 2 dk). Kırmızıysa aynı turda düzelttir; yeni tur açma. ⚠ **B11 (ölçüldü 2026-08-29, #185):** ön-commit kapısı `INFRA-CHANGELOG-YOK` changelog satırını **AYNI commit'te** ister ⇒ KOD DONDU paketi `governance/infra-changelog.md` satırını (gerçek ölçümlü, placeholder'sız) da **içerir**. Ajanın `SendMessage`'ı olmayabilir (araç yüzeyi tura özgü) — lider stage'li seti görünce KOD DONDU'yu **kendisi** tetikler |
 | **LİDER (DoD)** | merge öncesi | **CI `gates` = SUCCESS** kanıtı (required check; ruleset). Liderin yerel tam süiti **CI'ın ikizi değildir** (sığ klon / POSIX yalnız CI'da görünür) — CI yeşilse yerel tekrar gerekmez; kırmızıysa yerel koşum teşhis içindir |
 | **CI** | her PR (draft dahil) | `.github/workflows/core-ci.yml` süiteyi TAM koşar (derin klon, `fetch-depth: 0`) |
 
