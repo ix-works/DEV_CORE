@@ -69,6 +69,57 @@ ENDIF.
 ```
 `CONVERT KEY` yalnız `COMMIT ENTITIES BEGIN..END` bloğu içinde legal.
 
+⚠ **Bu blok yalnız inline/classrun consumer'da geçerlidir (siz `COMMIT ENTITIES`'i elle kontrol
+ediyorsanız).** RAP **behavior-handler action** içinde (`ZCL_*_BEHV.ccimp` static/instance action,
+OData $batch üzerinden çağrılan) `COMMIT ENTITIES` **YASAK** (`BEHAVIOR_ILLEGAL_STATEMENT`) — framework
+request sonunda kendi SAVE'ini yapar, action kodu SAVE'den ÖNCE döner. Bu durumda `ls_mapped-salesorder`
+**boş dönebilir** (numara henüz atanmamış) ve bunu `CONVERT KEY`'le çözecek bir yer YOKTUR. Bkz. §6.
+
+## 6. Action içinde SAVE-fazına bağımlı yan-etki (örn. sipariş notu) — save-hook yoksa ne yapılır
+
+**Senaryo:** `create_sales_order` gibi bir action, kaydı yarattıktan hemen sonra AYNI transaction
+içinde ona bağlı bir yan-etki de yazmak istiyor (ör. `SAVE_TEXT` ile sipariş notu) — ama yukarıdaki
+uyarı gereği gerçek anahtar (VBELN) henüz yok, ve tüketilen BO **unmanaged/released** olduğu için
+`FOR SAVE`/`FINALIZE`/`CHECK_BEFORE_SAVE`/`CLEANUP` gibi bir save-hook da YOK (kendi BDEF'inizde
+CRUD/save-sequence tanımlı değilse bu kancaları koyacak yer olmaz).
+
+**Yanlış refleks:** boş anahtarla yan-etkiyi yine de dene → alt-katman (ör. `SAVE_TEXT`) sessizce
+reddeder → kullanıcıya gerçek dışı bir hata gider ("not kaydedilemedi" — oysa sipariş de not da
+sağlamdır, eksik olan yalnız henüz atanmamış numaradır). Ya da: anahtarı elde etmek için action
+içinde bekleme/polling/senkron COMMIT zorlama — behavior-handler'da illegal, kaçının.
+
+**Doğru desen (fitting-order `ZSD0NN_CL_SO_MANAGER`'da kanıtlı — 2 bağımsız bug-expert turu PASS,
+canlı kullanıcı testi PASS; proje-özel kanıt/satır numaraları için o projenin RESUME/session-notes
+dosyasına bakın, buraya proje-özel Z-adı/satır girilmez):**
+
+1. **Yan-etkiyi AYRI bir action'a taşı**, gerçek anahtarı parametre olarak DIŞARIDAN alsın (yeni
+   param entity — mevcut benzer param entity'lerden alan adı/tip AYNEN kopyalanır, icat edilmez).
+   Orijinal yazıcı metodun gövdesine DOKUNMA — yeni action onu SARMALASIN, test edilmiş mantık
+   tekrar yazılmasın.
+2. **Create action'daki çağrı sitesini anahtar-guard'la KORU:** anahtar boşsa yan-etkiyi hiç
+   DENEME, hiç UYARMA (uyarsan, FE birazdan başarıyla yazacakken kullanıcıya sahte alarm
+   gösterirsin). Sorumluluk FE'ye geçer (adım 4).
+3. **Yeni action'ın kendi guard'larını kur** (icat etme, mevcut mekanizmaları reuse et):
+   - **Anahtar boş guard** — dışarıdan yine boş anahtar gelirse (FE'nin re-query'si de başarısız
+     olduysa) net mesajla reddet, sessiz-boş-yazmaya izin verme.
+   - **Varlık guard'ında released/DCL'li CDS DEĞİL, HAM tabloyu oku** — DCL kısıtlı bir
+     kullanıcıda released CDS exception ATMADAN 0 satır döner, bu "kayıt yok" diye yanlış okunup
+     MEŞRU bir yazmayı fail-closed bloklar. Ham tablo DCL taşımaz (ADR 0005-B standart tabloya
+     YAZMAYI yasaklar, OKUMAYI değil).
+   - **Kilit guard'ı varsa mevcut app-lock mekanizmasını salt-okunur `check()` ile sorgula**
+     (proje-lokal app-lock ADR'ı varsa onu reuse et) — yeni kilit icat etme; yalnız BAŞKASI
+     tutuyorsa reddet, kendi kilidini almayı ZORUNLU kılma (yaratma akışı zaten kilit almıyorsa,
+     "kilit şart" demek kendi yeni action'ını bloklar).
+4. **FE, gerçek anahtarı re-query ile bulduktan SONRA yeni action'ı çağırır** — ve bu iki-adımlı
+   akışın **HER başarısızlık dalını** (yeni action success≠true / yeni action hata / re-query
+   anahtar bulamadı / re-query'nin kendisi hata verdi) kullanıcıya AÇIKÇA uyarır. Bir dal
+   atlanırsa (ör. yalnız "action hata" dalı uyarır, "re-query anahtar bulamadı" dalı sessiz
+   kalırsa) kullanıcı veri kaybettiğini fark etmez — bu sınıfta bug-expert'in yakaladığı tipik
+   regresyon budur, ikinci turda kapanır.
+
+📖 İlgili: [[feedback_kod-yolu-vardi-veri-gecmemisti]] (adım 4'teki "her dal uyarır" disiplini) ·
+proje-lokal app-lock ADR'ı (kilit-guard reuse'u için).
+
 ## 2. PARTNER — neden manuel eklenmez
 
 - Released BO'da `_Partner` create'i `PartnerFunction`'ı **key/read-only** görür:
