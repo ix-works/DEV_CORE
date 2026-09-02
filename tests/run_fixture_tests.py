@@ -140,6 +140,10 @@ OZEL_TESTLER = [
     # 2026-08-01 kuyruk-turu (scripts/ + run_review):
     ("reviewer_skip_sozlesmesi", "run_review SKIP sozlesmesi: cokme + sahte-PASS (S1+S2)"),
     ("core_index_kapsam", "CORE-INDEX governance duz dosyalari GORUYOR mu (S3)"),
+    ("core_index_siralama",
+     "Q214: CORE-INDEX SIRASI platformdan bagimsiz mi — anahtarsiz sorted(Path) "
+     "Windows'ta casefold, Linux'ta degil ⇒ Windows'ta uretilen indeks Linux CI'da "
+     "'BAYAT' cikiyordu (C-IDX-01 bayatlik degil URETICININ PLATFORMUNU olcuyordu)"),
     ("proje_slug_tek_kaynak", "Claude Code proje-slug'i: tek sozlesme, tek kaynak (S4)"),
     ("git_sorgu_sessiz_bos", "deploy_ui --all-changed: git arizasi != 'degisiklik yok' (S5)"),
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
@@ -735,8 +739,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "git sorgusu + sessiz olumsuzlama"),
     ("scripts/worklist_audit.py", ("R:AV-13",), "üç-değerli sınıflama"),
     ("scripts/build_core_index.py",
-     ("O:core_index_kapsam", "O:sap_gate_skip_sozlesmesi"),
-     "indeks kapsamı + `--ci-check` (DG-03: CI backstop'u kendi ürettiğini "
+     ("O:core_index_kapsam", "O:core_index_siralama", "O:sap_gate_skip_sozlesmesi"),
+     "indeks kapsamı + SIRALAMA determinizmi (Q214: anahtarsız `sorted(Path)` "
+     "platforma bağlıydı) + `--ci-check` (DG-03: CI backstop'u kendi ürettiğini "
      "doğruluyordu; artık damgadaki core-commit klonla AYNI ise ÖLÇER, değilse "
      "SKIPPED measured=false — üç dalı da sap_gate_skip_sozlesmesi ölçer)"),
     ("scripts/switch_tier.py", ("O:tier_fail_closed",), "tier çözümleme"),

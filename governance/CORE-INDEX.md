@@ -1,4 +1,4 @@
-<!-- uretim: 2026-08-19T14:37:56+03:00 · core-commit: 828aead — bilgi satiri; tazelik kiyasinda yok sayilir -->
+<!-- uretim: 2026-09-02T18:53:08+03:00 · core-commit: 15d8a0d — bilgi satiri; tazelik kiyasinda yok sayilir -->
 <!-- URETILMIS DOSYA — elle duzenleme. Uretici: core/scripts/build_core_index.py
      Tazelik gate'i: core/scripts/validators/check_core_index_fresh.py -->
 
@@ -16,6 +16,7 @@
 ## `core/playbook/` (50 dosya)
 
 - [`core/playbook/00-discipline-and-principles.md`](../core/playbook/00-discipline-and-principles.md) — ADT Disiplini, Hızlı Erişim ve Genel Prensipler
+- [`core/playbook/README.md`](../core/playbook/README.md) — Playbook — SAP ADT Operasyonel Pattern Bankası
 - [`core/playbook/adt-cds.md`](../core/playbook/adt-cds.md) — CDS View (DDLS/DF)
 - [`core/playbook/adt-classes.md`](../core/playbook/adt-classes.md) — ABAP Class — Create, OSQLC ve Push+Activate Tam Akış
 - [`core/playbook/adt-domain-dtel.md`](../core/playbook/adt-domain-dtel.md) — DDIC Domain ve Data Element (DTEL)
@@ -62,7 +63,6 @@
 - [`core/playbook/lessons-learned.md`](../core/playbook/lessons-learned.md) — Tekrarlayan hata pattern'leri ve trigger phrases
 - [`core/playbook/modules/sd.md`](../core/playbook/modules/sd.md) — ITG modül kural-paketi (SD) — tetik-haritası + kontrol + soru + ders (bilgi-deposu DEĞİL)
 - [`core/playbook/odata-services.md`](../core/playbook/odata-services.md) — OData Services — Pricing Simulation, Function Import, UpdateSO, BAPIRET2
-- [`core/playbook/README.md`](../core/playbook/README.md) — Playbook — SAP ADT Operasyonel Pattern Bankası
 - [`core/playbook/ui-backend-rap.md`](../core/playbook/ui-backend-rap.md) — UI Uygulaması RAP Backend — Operasyonel Tecrübe Bankası
 - [`core/playbook/ui-freestyle-odata-v2.md`](../core/playbook/ui-freestyle-odata-v2.md) — Freestyle UI5 + OData V2 (RAP tüketen) — Operasyonel Tecrübe Bankası
 
