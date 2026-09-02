@@ -64,13 +64,14 @@ python C:\IX\DEV_CORE\scripts\init_project.py C:\IX\XYZ --name XYZ --repo-mode f
 | `CLAUDE.md` (ince) | `claude/CLAUDE.project.template.md`'den: `@core/CLAUDE.core.md` import + boş proje bölümü |
 | `.claude/settings.json` | `claude/settings.template.json`'dan; hook'lar proje-lokal `scripts/hook_shim.py` üzerinden core'a gider |
 | `scripts/hook_shim.py` | `claude/hook_shim.template.py`'den (runpy; kopuk-junction'da NET onarım mesajı) |
-| `.gitignore` | Sızıntı kilidi HAZIR: `/core/`, `.claude/agents|skills|commands/` + standart ignore'lar |
+| `.gitignore` | Sızıntı kilidi HAZIR: `/core/`, `.claude/agents|skills|commands/` + standart ignore'lar. **`conn/` TOPYEKÛN kilitli** (`conn/*` + açık negasyon `*.template` / `README.md` / `.gitkeep`) — tek tek sayım her yeni sır dosyasını sessizce izlenir bırakıyordu (2026-09-02). UI `dist/`+`archive.zip` desenleri `--source-root`'tan gelir |
+| `governance/infra-findings.md` | **İNFRA-BULGU KUYRUĞU tohumu** — `post_validate` hook'u bu yolu ajana enjekte eder; dosya yoksa ilk `git commit` **C-HOOK-01 ile FAIL** verir (ölçüldü 2026-08-30 + 09-02) |
 | `.gitattributes` | CRLF/binary normalizasyon kararı (py/sh/yaml/json = LF; görsel/pdf/zip = binary) |
 | `.mcp.json` | İnce; MCP server core'dan (`PYTHONPATH=core`), bağlantı proje kökündeki `.conn_adt`'den |
 | `project.yaml` | Şablon (repo_mode/source_root dolu gelir; kalanı STEP 4) |
 | `.github/workflows/guard.yml` *(yalnız `full`)* | `claude/workflows/guard.template.yml`'den: core-sızıntı sunucu-tarafı ağı + davranış-yüzeyi çevre duvarı |
 | `.github/CODEOWNERS` *(yalnız `full`)* | `claude/CODEOWNERS.template`'den; **`<OWNER_TEAM>` STEP 4'te doldurulur** |
-| `<source_root>/`, `conn/`, `governance/`, `playbook-local/`, `standards-local/`, `scripts/validators-local/` | Boş overlay/proje klasörleri (governance = proje ADR/registry evi) |
+| `<source_root>/`, `conn/`, `governance/`, `playbook-local/`, `standards-local/`, `scripts/validators-local/` | Boş overlay/proje klasörleri (`governance/` boş DEĞİL: kuyruk tohumunu taşır — proje ADR/registry evi) |
 
 > **Bootstrap provası dersi (2026-07-09):** CI workflow ve CODEOWNERS eskiden
 > üretilmiyordu; projeler bunları başka bir projeden **kopyalıyordu** — private repodan

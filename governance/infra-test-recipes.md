@@ -608,7 +608,34 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 - Bayraksız senkron → fark-listesiyle **RED**; yalnız `--overlay-onayli` ezer.
 - FORMAT-GATE: her .md `---` ile başlar + CRLF-yok + name-parse + damga-frontmatter-SONRA ("sayı ≠ yüklenebilirlik" — 6/6 düşüş vakası).
 - Drift: core-değişti→WARN · yeni-agent→EKSİK · temiz→PASS.
+- **İSKELET KAPIDAN GEÇİYOR MU (2026-09-02, Q213+Q241):**
+  `python tests/fixtures/init_project_iskelet/run.py` → **23/23**, exit 0 (~3,6 sn).
+  Değişmez İKİ tanedir, AYRI ölçülür ⇒ **ÇİFT mutasyon ŞART**:
+  `--mutasyon` (kuyruk tohumu sökülür) → **17/23**, düşen P1/P1b/P1c/P1d/**P2**/U1 ·
+  `--mutasyon-gevsek` (sır kilidi tek-tek sayıma döner) → **18/23**, düşen P4/P5/P6/P7/U2.
+  İki küme AYRIK — bir mutasyon diğerinin çapasını kesmiyor.
+  ⚠ **TABAN `git show <sha>:` DEĞİL:** bugünkü kaynaktan fix SÖKÜLEREK türetilir (sığ klonda
+  SHA çözülmez, merge'de bayatlar). Her sökümün ÇAPASI var; çapa tutmazsa koşucu sayı
+  BASMAZ → `exit 2 · YAMA TUTMADI` (pozitif kontrol koşuldu: sahte çapa → SystemExit 2).
+  ⚠ **Mutant GERÇEK ağaca YAZILMAZ:** izole core iskeleti kurulur (`scripts/utils` + 8
+  `claude/` şablonu); `init_project` `CORE_ROOT=__file__.parent.parent`ten okur ve
+  `utils.yasaklar_stamp` import eder. **K1** o izolasyonun kablolama çapasıdır (mutasyon
+  dışı kipte izole kopya ↔ gerçek dosya md5 EŞİT; mutasyon kipinde FARKLI).
+  ⚠ **`git check-ignore` ÇIKIŞ KODUYLA okunur (`-q`), çıktısıyla DEĞİL:** `-v` NEGASYON
+  satırını da basar ⇒ "çıktı var ⇒ ignore'lu" çıkarımı `!conn/.gitkeep`i yanlış okur
+  (ilk ölçümde tam bu oldu).
+  ⚠ **FP çapaları OMURGA (N1-N7):** kilit GENİŞLEDİ, o yüzden "ne kilitlenmemeli" tarafı da
+  ölçülür — `conn/*.template` (ADR 0010 slotları) · `conn/README.md` · **`conn/.gitkeep`**
+  (yoksa `conn/` dizini repoda hiç doğmaz) · `scripts/hook_shim.py`in kendisi ·
+  `docs/paket.zip` (kök-çapalı `/*.zip`) · `check_core_not_committed` rc=0 (SIR satır kilidi
+  bozulmadı). Bunlar düşerse jeneratör meşru dosyaları sessizce commit'ten düşürür.
+  📌 **KANIT SINIRI:** P2 gerçek C-HOOK-01 kapısını üretilen projeye karşı koşar ama
+  YALNIZ kuyruk yolunu sorar (junction'sız provada `core/…` yolları ayrıca düşer, bu
+  vektörün konusu değil). Junction'lı tam ölçüm: **fix öncesi `1/8` kırık → fix sonrası
+  `[OK] 8/8 çözülüyor`** (elle prova, 2026-09-02).
 - **Template-provası (en güçlü):** template_project'i sıfırdan üret → "bugün koşsa geride proje üretir mi?"
+  (Artık bu provanın **iki değişmezi** korpusa alındı — yukarıdaki `init_project_iskelet`;
+  prova hâlâ daha geniştir, korpus onun yerine GEÇMEZ.)
 - Worktree yalnız `--provision-worktree`.
 
 ## B13 — core_precommit + pre-commit
