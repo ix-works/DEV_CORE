@@ -1015,6 +1015,10 @@ beyan edilmiş) · ①, ② ve `gh api … || echo 0` (**doğru desen — kontro
    — muhtemelen doğru olan, ama YENİ tasarım + kendi korpusu. Üçü de **kullanıcı
    kararıdır**; ayrıca hiçbiri gerçek GitHub Actions'a karşı bu turda koşulamazdı.
    ⇒ Q adayı olarak bırakıldı, kanıtı burada.
+   ⭐ **KAPANDI — AYNI GÜN, seçenek (c) ile** (kullanıcı kararı): aşağıdaki
+   **Q199② kaydı** + korpus `tests/fixtures/guard_f1_taban_failclosed` + reçete **B35**.
+   ⛔ Buradaki üç şıkkın (a)/(b)'si kullanıcı tarafından ELENDİ — bu paragraf
+   **tarihçedir**, açık kalem değildir.
 5. **DOĞRULANAMADI:** ① CI'da (Linux, `bash -e`) koşulmadı — fixture Windows'ta
    Git-for-Windows `sh` ile ölçüldü; şablon POSIX `sh` yazımıdır ve kabuk-özel
    sözdizimi kullanılmadı, ama *"CI'da da yeşil"* bu turda **koşulmadı**.
@@ -1023,3 +1027,142 @@ beyan edilmiş) · ①, ② ve `gh api … || echo 0` (**doğru desen — kontro
    `defaults:` **override YOK** (ölçüldü, 0 isabet) ama varsayılanın kendisi canlı
    ölçülmedi. ⚠ Varsayılan `-e` olmasaydı o ayak da fail-open olurdu (adımın son
    komutu `echo "OK — sızıntı yok"`, rc'yi o belirler) — ayrı bir kalem adayı.
+
+## İNFRA-KUYRUĞU 2026-09-02 — Q199② CI `behavior-surface` (F1) davranış-yüzeyi guard'ı FAIL-OPEN (infra-expert)
+
+**Tetikleyici:** `Q199` eksen ② — aynı gün ①'in yanında **bilinçle bırakılmıştı** (bu dosyadaki
+Q199① kaydı madde 4: *"ayrı bir davranış kararıdır, üçü de kullanıcı kararıdır"*). **Kullanıcı
+kararı geldi: seçenek (c)** — *"erişilemez `BEFORE` yerine `$AFTER^` kullan"*. (a) *çökmeyi
+"dokunuldu" say* ve (b) *tek başına `::error::`+`exit 1`* **kullanıcı tarafından ELENDİ**; (b)'nin
+fail-closed davranışı yalnız **son çare** dalında yaşıyor.
+
+**TASARIM-GEREKÇESİ (F0b) — kalem hâlâ gerçek mi:** `BULUNDU` — kaydın kendisi bunu *"kusur"*
+değil *"karar bekleyen tasarım"* diye işaretlemişti (`infra-changelog` Q199① madde 4 +
+`infra-test-recipes` B34 §Kapsam sınırı madde 1). Kalem **hâlâ açıktı**: fix'ten önce
+`.github/workflows/project-guard.yml:104` satırı `git diff … 2>/dev/null || true` biçimindeydi
+(ölçüldü, grep tek isabet). `removed-controls.md` ve `lessons-learned.md`'de `project-guard` /
+`behavior-surface` / `list_touched` için **0 isabet** (`ARANDI-YOK`) — yani bu davranış daha önce
+denenip KALDIRILMIŞ bir kontrol değil.
+
+**TABAN ÖLÇÜMÜ (fix'ten ÖNCE, gerçek bare origin + gerçek `push --force` + `clone --no-local`):**
+force-push'lanmış `github.event.before` taze checkout'ta **erişilemez** (`git cat-file -e` → rc≠0;
+korpusun kurulum öz-denetimi 4 tabanın 4'ünde bunu doğruluyor) ⇒ `git diff --name-only $BEFORE
+$AFTER` → **rc=128 `fatal: bad object`** ⇒ `2>/dev/null` sebebi, `|| true` rc'yi yutuyor ⇒
+`TOUCHED=''`. Sonuç, **iki yolda iki farklı sahte-yeşil**:
+- **push yolu:** adım hiçbir şey basmadan **çıplak `OK`** ile rc 0 biter — oysa `CLAUDE.md`
+  değişmiştir (korpus `S9`). ⭐ Kaydın *"`:94`'te OK — davranış-yüzeyi dokunuşu yok"* ifadesi bu
+  yol için **fazla iyimserdi**: push yolunda o cümle bile kurulmuyor, yalnız paydasız `OK` var.
+- **PR yolu:** adım kaydın birebir şikâyet ettiği cümleyi kuruyor — **`OK — davranış-yüzeyi
+  dokunuşu yok`** — oysa `CLAUDE.md` değişmiş (korpus `S8t`).
+Ayrıca gate'in KENDİ pathspec'i bozulduğunda (`SURFACE`'e geçersiz magic) eski desen yine **rc 0 +
+çıplak `OK`** veriyor ve git'in `fatal:` metnini de yutuyor (korpus `S10t`).
+
+**F1 BLAST-RADIUS (sayı, "birkaç yer" değil):** ⚠ **Brifing hipotezi ölçümle DÜZELTİLDİ** — brifing
+*"bu workflow DEV_CORE'un KENDİ kapısıdır; her push/PR'da koşar"* diyordu; dosya `on:
+workflow_call`'dır (korpus `workflow_tetik_dupe/V7` bunu zaten çiviliyor) ⇒ **DEV_CORE'un kendi
+push'unda KOŞMAZ**; `core-ci.yml` onu çağırmaz (grep: `.github/` içinde `uses:.*project-guard`
+**0 isabet**, yalnız bir yorum atfı). Gerçek tüketiciler `claude/workflows/guard.template.yml`den
+üretilen **proje** `guard.yml`leridir: liderin makinesinde **3 canlı çağıran**
+(`<PROJECT_A>` · `<PROJECT_B>` · `<PROJECT_C>` → hepsi `.github/workflows/guard.yml:45`), üçü de
+`…/project-guard.yml@main`e sabitli ⇒ **fix bir sonraki koşuda kendiliğinden yayılır**
+(Q199①'in aksine proje-başına elle hizalama borcu YOK). Çağıran tetikleri yalnız
+`push: branches:[main]` + `pull_request` (şablon sözleşmesi) ⇒ `schedule`/`workflow_dispatch`
+yolu bugün mevcut değil. `list_touched` **İKİ** yerden çağrılıyordu (PR yolu `$BASE`, push yolu
+`$BEFORE`) — **ikisi de** fail-open'dı, **ikisi de** düzeltildi ve ikisinin de kendi vektörü var.
+
+**SINIF-ENVANTERİ (MEKANİK + yazım-bağımsız; ①'in envanteri körü körüne devralınmadı, yeniden
+ölçüldü):** fix ÖNCESİ `2>/dev/null || true` → `*.yml/*.sh/*.template`te **1 canlı kod noktası**
+(`project-guard.yml:104` = bu kalem); ①'in şablon noktası bugün kapandığı için kalan isabetler
+zaten yorum/doküman/korpus metniydi. **Fix SONRASI aynı tarama: canlı kod noktası 0**
+(2 isabet kaldı, **ikisi de yorum**: `project-guard.yml:105` bu turun *"ESKİDEN:"* açıklaması ·
+`pre-commit.template:30` ①'in açıklaması). Tüm dosya tiplerinde 9 isabet / 5 dosya — hepsi
+doküman + mutasyon tarifi.
+Yazım-bağımsız tarama (`|| true` · `|| echo` · `|| :` · `2>&1 ||` · çıplak `2>/dev/null`) →
+`*.yml/*.sh/*.template`te **17 satır / 3 dosya**, tek tek sınıflandı:
+- `project-guard.yml` **9**: `:60 pip install … || true` (KURULUM, ölçüm değil — **meşru**) ·
+  `:79 build_core_index.py || true` (kaydında *"ÖLÇÜM DEĞİL, HAZIRLIKTIR"* diye beyan edilmiş;
+  gerçek ölçüm `:72 --ci-check` — **meşru**) · `:105 :106 :112 :120 :121` **5 yorum satırı**
+  (kod değil) · `:124 git cat-file -e … 2>/dev/null` (**bu turda eklendi, meşru**: cevabı **rc
+  taşır**, `|| true` bilerek yazılmadı) · `:187 gh api … || echo 0` (**doğru emsal / kontrol
+  grubu — DOKUNULMADI**). ⇒ **kusurlu kalan: 0**.
+- `pre-commit.template` **4**: hepsi ①'in kapanış yorumları (kod değil).
+- `scripts/agent_watchdog.sh` **4**: `curl`/`grep` çıktısı `$( )` içinde, rc yakalanmıyor
+  (`:21 :28 :37 :40`). **Bu bir kapı DEĞİL, operatör izleme betiğidir** ve eşik kıyasına girer;
+  fail-open olup olmadığı **bu turda ÖLÇÜLMEDİ** ⇒ **ayrı bileşen, Q adayı, DOKUNULMADI**
+  (bir tur = bir Q).
+- `|| :` → **0 isabet** (repoda bu yazım hiç kullanılmıyor).
+⇒ Envanter fix'e çevrilmedi: bu turda **yalnız ②** düzeltildi.
+
+| Tarih | Değişiklik | Sebep (ölçüm) | Test | Fixture | PR |
+|---|---|---|---|---|---|
+| 2026-09-02 | **Q199② — `.github/workflows/project-guard.yml` `behavior-surface` F1 ölçümü fail-closed + taban `$AFTER^` yedeği (kullanıcı kararı: seçenek c).** Beş katman, her biri AYRI mutasyonla ölçüldü: ① `erisilir()` tabanın ERİŞİLEBİLİRLİĞİNİ önce ölçer (`git cat-file -e "$1^{commit}"`; buradaki `2>/dev/null` MEŞRUDUR — cevabı **rc taşır**, `\|\| true` bilerek yazılmadı) ② erişilebilirse **davranış AYNEN eskisi** + tek satır payda (`F1 tabanı: … (erişilebilir)`) ③ erişilemezse taban `$AFTER^` olur ve **GÖRÜNÜR `::notice::F1 TABANI DEĞİŞTİ`** basılır (hangi tabanla ölçüldüğü + *"pencere YALNIZ son commit'i kapsar"* niteleyicisi) ④ `$AFTER^` de yoksa (kök commit / sığ klon) **son çare fail-closed**: `::error::F1 ÖLÇÜLEMEDİ` + `exit 1` ⑤ `git diff` **ve** `git rev-list --parents` rc'leri AYRI yakalanır (`\|\| LT_RC=$?` / `\|\| RL_RC=$?`), stderr YUTULMAZ ve `TOUCHED`'e KARIŞTIRILMAZ. `MERGED_PR` bloğu (doğru emsal) ve `BEFORE=0000…` / `PARENTS<3` kapsam koşulları **bit-bazında DEĞİŞMEDİ**. ⛔ **YAPI KARARI (ölçülmüş):** yardımcılar sonuçlarını GLOBAL değişkene yazar, `$( )` içinde çağrılmaz — ölçüldü: `TOUCHED=$(fn)` yazımında `exit 1` yalnız **alt-kabuğu** öldürür **ve** `::error::` metni komut-ikamesince yutulup **KAYBOLUR**. | Kapı *"eşleşme yok"* ile *"komut çöktü"*yü ayırt edemiyordu; taban ölçümü + iki ayrı sahte-yeşilin kanıtı yukarıda. ⚖ Tasarım İCAT EDİLMEDİ: doğru desen **aynı dosyada** zaten yazılıydı (`gh api … \|\| echo 0` — yokluk *"temiz"* değil ***"suçlu"***); taklit edildi, o satırlara DOKUNULMADI ve `S5` onun hâlâ çalıştığını ölçüyor. ⛔ **`2>&1` ile `TOUCHED`'e karıştırma REDDEDİLDİ** (Q199① ile aynı gerekçe: rc=0'daki bir git uyarısı sahte *"yüzeye dokunuldu"* üretirdi — push yolunda bu **exit 1** demektir). | **F3 ÜÇ BAĞLAM (yeni korpus, 17 senaryo + 6 mutasyon, exit 0, 35,1 sn):** ① bilinen-bozuk `S1` gerçek force-push + `CLAUDE.md` → `::notice::` yedek taban + `::error::` **rc 1** ② bilinen-temiz `S3` normal push + temiz yüzey → **rc 0**, uydurma-kırmızı YOK, `::notice::` YOK ③ **3. bağlam** `S6` kök commit (`$AFTER^` de yok) → son çare rc 1 · `S10` gate'in KENDİ pathspec'i bozuk → rc 1 + git'in KENDİ `fatal:` metni GÖRÜNÜR · `S5` squash-merge (`MERGED_PR>0`) → rc 0. **POZİTİF KONTROL** `S2` (normal push + yüzey → hâlâ rc 1, yedek tabana DÜŞMEDİ) + `S7b` (PR yolu uyarır ama **bloklamaz** — sözleşme korundu). **FP ÇAPALARI:** `S3` · `S4a` (force-push tek başına KIRMIZI DEĞİL — seçenek (b)'nin reddinin çapası) · `S7` · **kapsam çapaları** `S11` merge-commit · `S12` feature dal · `S13` `BEFORE=0000…` (üçü de bilinçli no-op, DEĞİŞMEDİ). **TARİHİ TABAN** `S9`/`S10t`/`S8t` fix'i **bugünkü kaynaktan sökerek** (`fix_sok()`, 6 adet-kontrollü çapa) kusuru birebir yeniden üretir. | **yeni** `tests/fixtures/guard_f1_taban_failclosed` (OZEL_TESTLER + HARİTA; `.github/workflows/*.yml` satırı artık İKİ korpus taşır — `b0_secim` **20/20**, kardeş `workflow_tetik_dupe` **9/9** yeniden ölçüldü) | (bu PR) |
+
+**Test-senaryosu / SINIR / DOĞRULANAMADI:**
+
+1. **Reçete:** `governance/infra-test-recipes.md` **B35**.
+2. **⚠ GEVŞETME CETVELİ — yol yol (bayrak: GEVŞETME YOK, ama bir NİTELEYİCİ var):**
+
+   | Yol | Önce | Sonra | Hüküm |
+   |---|---|---|---|
+   | push, taban erişilebilir, yüzey dokunulmuş | `exit 1` | `exit 1` | **DEĞİŞMEDİ** (`S2`) |
+   | push, taban erişilebilir, yüzey temiz | `OK` rc 0 | `OK` rc 0 + payda satırı | **DEĞİŞMEDİ** (`S3`) |
+   | push, squash-merge (`MERGED_PR>0`) | rc 0 | rc 0 | **DEĞİŞMEDİ** (`S5`) |
+   | push, `PARENTS≥3` / feature dal / `BEFORE=0000…` | no-op rc 0 | no-op rc 0 | **DEĞİŞMEDİ** (`S11`/`S12`/`S13`) |
+   | **push, taban ERİŞİLEMEZ, yüzey dokunulmuş** | sessiz rc 0 | `::notice::` + `exit 1` | **SIKILAŞTI** (`S1`) |
+   | **push, taban ERİŞİLEMEZ, yüzey temiz** | sessiz rc 0 | `::notice::` + rc 0 | **SIKILAŞTI (yalnız görünürlük)** (`S4a`/`S4b`) |
+   | **push, `$AFTER^` de yok (kök/sığ)** | sessiz rc 0 | `::error::` + `exit 1` | **SIKILAŞTI** (`S6`) |
+   | **push, `git diff`/`rev-list` çöktü** | sessiz rc 0 | `::error::` + `exit 1` | **SIKILAŞTI** (`S10`) |
+   | PR, taban erişilebilir | uyarır / `OK` | aynı + payda | **DEĞİŞMEDİ** (`S7`/`S7b`) |
+   | **PR, taban erişilemez** | sahte `OK — … dokunuşu yok` | `::notice::` + doğru uyarı, **hâlâ rc 0** | **SIKILAŞTI** (`S8`) |
+
+   ⇒ **Hiçbir eşik/kapsam DARALTILMADI**, hiçbir yeşil yol kırmızıya çevrilmedi *çünkü ölçüm
+   yapılabiliyordu*; ateşlenen tek yeni yol **ölçümün yapılamadığı** yoldur ve orada eski
+   davranış zaten YANLIŞTI. **`⚠GEVŞETME` bayrağı GEREKMİYOR.**
+   ⚠ **NİTELEYİCİ (dürüstlük borcu, gizlenmiyor):** `$AFTER^` yedek tabanı **ideal pencereden
+   DARDIR** — force-push ile 5 commit gelip yüzeye 3.'sü dokunduysa `$AFTER^..$AFTER` onu
+   göremez. Bu bir *gevşetme değildir* (bugünkü pencere **0 commit**tir, yani ölçüm hiç yok),
+   ama *tam da bu yüzden* karar sessiz bırakılmadı: `::notice::` satırı hem tabanı hem
+   *"pencere YALNIZ son commit'i kapsar"* niteleyicisini insana yazar (`S4b` + `M5` bunu
+   çivilliyor). Erişilemez tabanı geri getirmenin bir yolu yoktur — `fetch-depth: 0`
+   **erişilemeyeni getirmez** (Q210 kaydında da aynı sınır ölçülmüştü).
+3. **MUTASYONLAR (savunma-derinliği maskelemesin diye katman katman; kesilen kümeler):**
+   `M1` tam söküm → {S1,S2,S3,S4a,S4b,S6,S7,S8,S10,S11,S12,S13} · `M2` yalnız `git diff` rc'si
+   yutulur → **{S10}** · `M3` yedek taban sökülür → {S1,**S4a**,S4b,S8} · `M4` pozitif kontrol
+   sökümü (`[ -n "$TOUCHED" ]` → `false`, **her iki yolda**) → **{S1,S2,S5,S7b,S8}** ·
+   `M5` görünürlük sökümü (`::notice::` susturulur) → {S1,S4b,S8} · `M6` son çare sökümü
+   (`olcemedim` artık `exit 1` yerine devam eder) → **{S6,S10}**.
+   ⭐ `M2` ∩ `M4` = ∅ ve `M2` ∩ `M3` = ∅ ⇒ **ayrık çiftler var**; `M6`'nın `S6`'sı ve `M3`'ün
+   `S4a`'sı **tekil**dir. ⚠ `M5` ⊂ `M3` (yedek tabanı sökmek notice'ı da götürür) — **kapsam
+   değil KATMAN ilişkisi**: `M5` *"yedek taban DURUYOR ama SESSİZLEŞTİRİLDİ"* geleceğini
+   yakalar; `S4` bilerek `S4a` (hüküm) + `S4b` (görünürlük) diye **ikiye bölündü**, yoksa
+   kullanıcının şart koştuğu görünürlük `M3`'ün arkasına saklanıp **bedava geçerdi**.
+   ⚠ `M1` altında `S11/S12/S13` yalnız **payda** çapasından (çıplak `OK` → `OK — F1 kontrolü
+   tamamlandı`) düşer, güvenlik ekseninden değil — sayı şişkin görünmesin diye burada yazılı.
+4. **Korpus neden GERÇEK depo + GERÇEK force-push:** *"erişilemez taban"* sahte SHA ile taklit
+   edilemez (sahte SHA `bad object` verir ama **kurulum yanlışsa fark edilmez**); üstelik
+   `git clone` **yerel** modda hardlink'le erişilemez objeleri de taşır ⇒ vektör sessizce
+   sahte olurdu. Bu yüzden korpus bare origin'e gerçek `push --force` atar ve
+   **`clone --no-local`** ile checkout alır; ayrıca **kurulum öz-denetimi** 4 tabanın 4'ünde
+   `cat-file -e` ile erişilemezliği KANITLAR, kanıtlayamazsa **hiçbir sayı basmadan exit 2**
+   (`DOĞRULANAMADI ≠ DOĞRULANDI`). `gh` PATH-stub'unun gerçekten çözüldüğü de ayrıca
+   sondalanır (çözülmezse `S5` ölçülemez ⇒ exit 2).
+5. **Korpus is akışı dosyasını OKUR, metnini KOPYALAMAZ** (`govde_cikar()`): literal kopya
+   ikinci bir gerçek olur ve iş akışı değişince korpus sessizce ESKİ metni ölçmeye devam
+   ederdi. `import yaml` bilerek KULLANILMADI — repo pyyaml taşımaz (core-ci yalnız
+   `requests/urllib3/python-dotenv` kurar) ⇒ CI'da çökerdi; ayrıştırma dar ve `run: |`
+   girintisine kilitli, çözülemezse **exit 2**.
+6. **DOĞRULANAMADI:** ① Korpus **Git-for-Windows `bash -e`** ile koştu; GitHub Actions'ın
+   gerçek koşumu (Linux runner, `bash -e {0}`) bu turda **koşulmadı** (`act` yok). İş akışında
+   `shell:`/`defaults:` override **YOK** (ölçüldü: `project-guard.yml` + `guard.template.yml`de
+   **0 isabet**) ⇒ varsayılan kabuk varsayımı ayakta, ama varsayılanın kendisi canlı ölçülmedi.
+   ② `github.event.before`in force-push sonrası **erişilemez** olduğu, gerçek bir force-push'un
+   **yerel ikizinde** ölçüldü; canlı bir GitHub force-push olayının payload'ı bu turda
+   gözlenmedi. ③ Korpus `EVENT` olarak yalnız `push` ve `pull_request` üretir — şablon
+   sözleşmesi başka tetik tanımlamıyor; `workflow_dispatch`/`schedule` **ölçülmedi**.
+7. ⚠ **YAYILIM / DoD (bu tur YAPMADI, LİDERE):** ① `governance/infra-findings.md`
+   (**kuyruğu tutan PROJE deposunda**, core'da değil ⇒ benim yazma alanımın DIŞINDA)
+   `Q199` kaydının **DURUM** satırı hâlâ
+   *"② AÇIK (KULLANICI KARARI BEKLİYOR)"* diyor — kapanış oraya işlenmeli, yoksa bayat kayıt
+   bir sonraki turda **otorite** sanılır. ② `claude/workflows/guard.template.yml` ÖLÇÜLDÜ:
+   `list_touched` deseni **orada YOK** (şablon yalnız 6 satırlık çağırıcıdır; mantık tek yerde
+   yaşar) ⇒ **çift-katman borcu YOK**, projelere elle dokunulmayacak.

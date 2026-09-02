@@ -177,6 +177,10 @@ OZEL_TESTLER = [
     ("precommit_coreleak_failclosed",
      "Q199(1): core-sizinti kapisinin KENDI olcumu cokerse 'temiz' sayilmaz — "
      "'eslesme yok' != 'komut coktu' (uctan uca: eski desende sizintili commit GECIYORDU)"),
+    ("guard_f1_taban_failclosed",
+     "Q199(2): CI `behavior-surface` F1 — erisilemez `github.event.before` (force-push) "
+     "'dokunus yok' SAYILMAZ; taban `$AFTER^`e duser ve GORUNUR ::notice:: ile bildirilir, "
+     "hicbiri yoksa fail-closed (gercek bare origin + `clone --no-local`)"),
     ("suite_ortam_hijyeni",
      "suit kendi urettigi .conn_adt kalintisini temizler; kullanicininkine DOKUNMAZ (idempotans)"),
     ("sablon_zorunlu_maddeler",
@@ -780,7 +784,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
 
     # ── CI / şablon tetikleri ───────────────────────────────────────────────
     ("claude/workflows/*.yml", ("O:workflow_tetik_dupe",), "şablon tetik sözleşmesi"),
-    (".github/workflows/*.yml", ("O:workflow_tetik_dupe",), "core-ci + reusable tetikleri"),
+    # ⚠ İKİ KORPUS, İKİ AYRI EKSEN: `workflow_tetik_dupe` `on:` bloğunu (TETİK) okur,
+    # `guard_f1_taban_failclosed` `behavior-surface` job'ının `run:` GÖVDESİNİ koşar.
+    # Biri diğerini kapsamaz; bu dosyaya dokunan tur İKİSİNİ DE koşar (Q199②, 2026-09-02).
+    (".github/workflows/*.yml", ("O:workflow_tetik_dupe", "O:guard_f1_taban_failclosed"),
+     "core-ci + reusable tetikleri + F1 davranış-yüzeyi ölçümü"),
     ("claude/kesin-yasaklar.canonical.md", ("G", "O:worktree_blocklist"),
      "core kimliğinin İŞARET DOSYASI (AV-21): guard bu dosyadan core'u tanır"),
 

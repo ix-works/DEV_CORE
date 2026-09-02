@@ -1630,10 +1630,88 @@ dalı; ikisi de bulunamazsa senaryo **KURULAMADI** der, sessizce PASS OLMAZ.
   ASLA yazılmaz ⇒ komşu korpus kirlenmez).
 
 ### ⚠ Kapsam sınırı (ölçüldü, KAPATILMADI)
-1. `Q199②` (`.github/workflows/project-guard.yml:104` `list_touched`) **aynı sınıftadır ve
-   fail-open olduğu ölçülmüştür** (force-push sonrası `github.event.before` erişilemez →
-   `git diff` rc=128 → gate *"dokunuş yok"* der). Fix'i ayrı bir davranış kararıdır; bu
-   korpus onu **kapsamaz**. Gerekçe: `infra-changelog` 2026-09-02 kaydı madde 4.
+1. ⭐ **KAPANDI (2026-09-02, aynı gün — kullanıcı kararı: seçenek (c)).** `Q199②`
+   (`.github/workflows/project-guard.yml` `list_touched`) aynı sınıftaydı ve fail-open olduğu
+   ölçülmüştü (force-push sonrası `github.event.before` erişilemez → `git diff` rc=128 → gate
+   *"dokunuş yok"* der). Fix'i ①'in mekanik ikizi DEĞİLDİ (erişilemez taban → `$AFTER^` +
+   görünür `::notice::`, ikisi de yoksa fail-closed) ⇒ **ayrı korpus**: **B35**. Bu korpus
+   (B34) onu hâlâ **kapsamaz** — iki farklı dosya, iki farklı kapı.
 2. Korpus Windows `sh` ile ölçüldü; **CI'da (Linux `bash -e`) koşulmadı**.
 3. `core.hooksPath` unset ise şablon DOSYASI hiç çalışmaz — B13'ün ayrı ve bilinen kalemi;
    bu korpus o katmanı ölçmez.
+
+## B35 — CI `behavior-surface` (F1): ERİŞİLEMEZ TABAN ≠ "DOKUNUŞ YOK" (Q199②)
+
+```
+python tests/fixtures/guard_f1_taban_failclosed/run.py     # 17 senaryo + 6 mutasyon, exit 0 (~35 sn)
+python tests/fixtures/workflow_tetik_dupe/run.py           # KARDEŞ: 9 vektör (AYNI dosya, BAŞKA eksen)
+python tests/fixtures/b0_secim/run.py                      # HARİTA satırı değişti → 20/20 pin çapaları
+python tests/run_battery.py guard_f1_taban_failclosed --kardes workflow_tetik_dupe --precommit
+```
+
+⛔ **İKİ KORPUS, İKİ AYRI EKSEN — biri diğerini KAPSAMAZ.** İkisi de
+`.github/workflows/project-guard.yml`i okur; HARİTA satırı bu yüzden **ikisini birden** taşır ve
+bu dosyaya dokunan tur **ikisini de** koşar:
+
+| Korpus | Ne okur | Kusur |
+|---|---|---|
+| `workflow_tetik_dupe` | `on:` bloğu (**TETİK**) | dalsız `push:` + `pull_request` aynı SHA'yı iki koşuda doğruluyordu (2026-08-13, B21) |
+| `guard_f1_taban_failclosed` | `behavior-surface` job'ının **`run:` GÖVDESİ** | F1'in **kendi ölçümü** çökünce / taban erişilemez olunca *"dokunuş yok"* sayılıyordu (2026-09-02) |
+
+### Neden GERÇEK force-push + `clone --no-local` (pazarlık dışı)
+*"Erişilemez taban"* **sahte SHA ile taklit edilemez**: sahte SHA de `bad object` verir, ama
+kurulum yanlışsa bu fark edilmez ve vektör sessizce anlamını yitirir. Dahası `git clone` **yerel**
+modda hardlink'le **erişilemez objeleri de** taşır ⇒ taban klonda yine bulunur ve vektör
+**sahte-yeşil** olurdu. Korpus bu yüzden: bare `origin` → gerçek `push --force` → `clone
+--no-local` (= `actions/checkout@v5` + `fetch-depth: 0` eşdeğeri).
+
+### Öz-denetimler — sayı basmadan ÖNCE aleti doğrula (exit 2 = ALET GEÇERSİZ)
+1. `run:` gövdesi iş akışı dosyasından **okunur** (`govde_cikar()`), literal kopyalanmaz;
+   çözülemezse **exit 2**. (`import yaml` YOK: repo pyyaml taşımaz ⇒ CI'da çökerdi.)
+2. `gh` PATH-stub'u gerçekten çözülüyor mu (`Q199_GH_MERGED=7` → çıktı `7`)? Çözülmezse `S5`
+   ölçülemez ⇒ **exit 2**.
+3. `fix_sok()` çapaları bugünkü kaynakta tutuyor mu ⇒ tutmazsa **exit 2**.
+4. ⭐ **Erişilemezlik KANITLANIR:** 4 senaryonun 4'ünde taze checkout'ta `git cat-file -e
+   $BEFORE^{commit}` **başarısız olmalı**; başarılıysa vektör sahtedir ⇒ **exit 2**.
+   (*"Doğrulama koşamadı ≠ doğrulandı"* — sayı üretmek doğrulamış olmak değildir.)
+
+### ⭐ Taban ASLA tarihten çekilmez (S9 / S10t / S8t)
+Tarihî taban fix'i **bugünkü kaynaktan sökerek** üretilir (`fix_sok()`, **6 adet-kontrollü**
+regex çapası); `git show <sha>:` KULLANILMAZ (pinli SHA sığ klonda çözülmez, merge sonrası kayar).
+Çapalardan biri bayatlarsa senaryo **KURULAMADI** der, sessizce PASS OLMAZ.
+
+### ⚠ Eski desenin sessizliği İKİ FARKLI biçimdedir (assertion bunu ayırt eder)
+- **push yolu:** dokunuş bulunmayınca hiçbir şey basılmaz; adım **çıplak `OK`** ile biter ⇒ `S9`
+  eşitlik (`== "OK"`) arar, içerme değil. Kusurun *"payda"* yarısı tam olarak buydu.
+- **PR yolu:** kaydın birebir şikâyet ettiği **`OK — davranış-yüzeyi dokunuşu yok`** cümlesi
+  kurulur ⇒ `S8t`. İlk yazımda ikisi aynı çapayla ölçüldü ve korpus **sahte-KIRMIZI** verdi;
+  hüküm metni yola göre değişir.
+
+### Pinler (bunlar değişirse SEBEBİNİ yaz)
+- Taban: **17/17 senaryo**, exit 0, ~35 sn. Mutasyonların kestiği kümeler:
+  `M1` {S1,S2,S3,S4a,S4b,S6,S7,S8,S10,S11,S12,S13} · `M2` **{S10}** · `M3` {S1,S4a,S4b,S8} ·
+  `M4` **{S1,S2,S5,S7b,S8}** · `M5` {S1,S4b,S8} · `M6` **{S6,S10}**.
+- ⭐ `M2` ∩ `M4` = ∅, `M2` ∩ `M3` = ∅ ⇒ **ayrık çiftler**. `M3`'ün `S4a`'sı ve `M6`'nın `S6`'sı
+  **tekil** kesimlerdir.
+- ⭐ **`S4` bilerek İKİYE bölündü** (`S4a` hüküm · `S4b` görünürlük): `M5` ⊂ `M3` olduğu için
+  birleşik bir `S4` kullanılsaydı, kullanıcının şart koştuğu **görünürlük** (`::notice::` ile
+  hangi tabanla ölçüldüğünü bildirmek) `M3`'ün arkasına saklanıp **bedava geçerdi**. `M5` bugün
+  *"yedek taban DURUYOR ama SESSİZLEŞTİRİLDİ"* geleceğini yakalar.
+- ⚠ `M1` altında `S11/S12/S13` yalnız **payda** çapasından düşer (çıplak `OK` → `OK — F1
+  kontrolü tamamlandı`), güvenlik ekseninden değil — kesim sayısı şişkin görünmesin diye yazılı.
+- `MERGED_PR` **doğru emsali** (`gh api … || echo 0`) DEĞİŞTİRİLMEDİ; `S5` onun hâlâ
+  çalıştığını ölçer. Bozulursa `S5` düşer.
+- Mutasyon kipi CLI'da YOK (batarya `kesif=YOK` der, B34 kardeşiyle aynı): mutasyonlar
+  koşucunun içindedir, betik **bellekte** dönüştürülüp geçici depoya yazılır — **gerçek
+  kaynağa ASLA yazılmaz** ⇒ komşu korpus kirlenmez.
+
+### ⚠ Kapsam sınırı / DOĞRULANAMADI
+1. Korpus **Git-for-Windows `bash -e`** ile koşar (GitHub Actions varsayılanı `bash -e {0}`).
+   İş akışında `shell:`/`defaults:` override **YOK** (ölçüldü: `project-guard.yml` +
+   `guard.template.yml`de 0 isabet), ama **gerçek Actions koşumu ölçülmedi** (`act` yok).
+2. `EVENT` olarak yalnız `push` ve `pull_request` üretilir — şablon tetik sözleşmesi
+   (`push: branches:[main]` + `pull_request`) başkasını tanımlamıyor. `workflow_dispatch` /
+   `schedule` **ölçülmedi**.
+3. Korpus `leak` ve `validators` job'larını **ölçmez** — yalnız `behavior-surface`.
+4. `scripts/agent_watchdog.sh`teki 4 `2>/dev/null` isabeti bu korpusun **dışındadır**
+   (kapı değil, operatör izleme betiği; fail-open olup olmadığı ölçülmedi — Q adayı).
