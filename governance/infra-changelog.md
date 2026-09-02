@@ -937,3 +937,89 @@ kuyruk kipi kayıtta ANILMAMIŞTI — çöken kip sayısı 2 değil **3**). `KAC
    `git clone --depth 1 file://<repo>` + `env -u PYTHONUTF8`.
    ② BÖLÜM 4'ün süite eklediği **+78,2 s** AR-1 taramasından türetilmiş **tahmindir**;
    nihai TAM süit süresi raporda ayrıca ölçüldü.
+
+## İNFRA-KUYRUĞU 2026-09-02 — Q199① `pre-commit.template` core-sızıntı kapısı FAIL-OPEN (infra-expert)
+
+**Tetikleyici:** `Q199` (`governance/infra-findings.md`), eksen ①. Kapının kendi VERİ
+TOPLAMASI çöktüğünde çöküş *"temiz"* diye okunuyordu — `Q197`/`Q105` sınıfının kapı-içi
+hâli. Kayıt bu eksen için `2>/dev/null || true` desenini gösteriyordu; teşhis **hipotez
+olarak alındı ve kontrol grubuyla yeniden ölçüldü** (aşağıdaki taban ölçümü).
+
+**TABAN ÖLÇÜMÜ (fix'ten ÖNCE, gerçek git deposu + gerçek `sh`):** `.git/index` bozulunca
+`git diff --cached --name-only -- 'core/**' …` → **rc=128**, `stderr = "error: bad
+signature 0x555a4f42 / fatal: index file corrupt"`; aynı depoda `git rev-parse
+--show-toplevel` → **rc=0** (yani şablonun ilk çağrısı sağlam, yalnız ölçüm çöküyor).
+Şablon o depoda **rc=0** dönüyor ve `[pre-commit] OK — core-sızıntı kontrolü +
+run_all_validators --quick (koştu)` basıyordu. ⭐ **Ağırlaştırıcı:** o kapanış satırı
+2026-08-20'de tam da *"NE koştuğunu söylesin"* diye eklenmişti (bkz. bu dosyada aynı
+tarihli PARTİ-2 kaydı, madde ③) — taban sürümde **hiç yapılmamış bir kontrolü
+raporluyordu**. Payda eklemek fail-open'ı kapatmıyor.
+
+**UÇTAN UCA (iddia değil, ölçüm):** depo SAĞLAM + `core/sizinti.md` **staged** + gate'in
+kendi pathspec'i geçersiz magic ⇒ eski desende gate **rc 0** → gerçek `git commit`
+**BAŞARILI** → `git rev-list --count HEAD` = **1** (sızıntı repoya girdi). Fix'li
+sürümde gate **rc 1**, commit hiç denenmiyor, sayaç **0**.
+
+**F1 BLAST-RADIUS (sayı, "birkaç yer" değil):** şablonu `scripts/init_project.py:195`
+okur ⇒ `init_project` ile kurulan **her yeni proje** kusuru miras alıyordu. Bugün canlı
+üretilmiş kopya **3 proje** (`<PROJECT_A>` · `<PROJECT_B>` · `<PROJECT_C>`;
+`scripts/git-hooks/pre-commit:29`, her birinde desen **1** kez — ölçüm liderin
+makinesinde `C:\IX\*` altında yapıldı). CORE deposunun KENDİ
+`scripts/git-hooks/pre-commit`i AYRI bir shim'dir (core_precommit'e `exec` eder, bu
+adım onda YOK ⇒ **0** isabet). CI'daki kardeş ayak `project-guard.yml:36` `git ls-files`
+kullanır ve bu deseni **taşımaz** ⇒ kaydın *"tam sızıntı için ikisinin birden düşmesi
+gerekir"* niteleyicisi **doğrulandı**; ama kapsamları AYNI değildir: CI **commit'lenmiş**
+ağacı, pre-commit **staging**'i ölçer ⇒ commit ANINDA tek koruma buydu.
+
+**SINIF-ENVANTERİ:** `2>/dev/null || true` → CORE worktree'sinde **2 kod noktası**
+(`claude/git-hooks/pre-commit.template:29` = Q199① · `.github/workflows/project-guard.yml:104`
+= Q199②), `attic/` **0**; referans proje ağacında (okuma) **1 canlı kopya** + 1 scratch
+(`.tmp/template_prova_…/`) + 3 doküman satırı (kaydın kendisi). Yazım-bağımsız
+tarama (`|| true` · `|| echo`) worktree'de **5** isabet verdi: `pip install … || true`
+(kurulum, ölçüm değil) · `build_core_index.py || true` (kayıtta HAZIRLIK adımı olduğu
+beyan edilmiş) · ①, ② ve `gh api … || echo 0` (**doğru desen — kontrol grubu**).
+⇒ Bu turda **yalnız ①** düzeltildi; ② gerekçesiyle bırakıldı (aşağıda).
+
+| Tarih | Değişiklik | Sebep (ölçüm) | Test | Fixture | PR |
+|---|---|---|---|---|---|
+| 2026-09-02 | **Q199① — `claude/git-hooks/pre-commit.template` adım-1 fail-closed.** Üç katman, her biri AYRI mutasyonla ölçüldü: ① rc AYRI yakalanır (`… ) \|\| SIZ_RC=$?` — `\|\|` listesi olduğu için `set -e` tetiklenmez **ve** rc kaybolmaz) ② stderr **yutulmaz ve `BAD`'e karıştırılmaz**: hiç yönlendirilmez, git'in kendi hata metni doğrudan kullanıcıya akar ③ `rc != 0` ⇒ çökme **BULGU** sayılır → görünür 5 satırlık teşhis + `exit 1`. Gerçek sızıntı dalı (`[ -n "$BAD" ]`) ve kapanış satırı **DEĞİŞMEDİ** (kardeş korpus `precommit_junction_failclosed`'ın M1/M2 çapaları o metinlere pinlidir — bayatlatılmadı, 4/4 + 2/2 yeniden koşuldu). | Kapı *"eşleşme yok"* ile *"komut çöktü"*yü ayırt edemiyordu; taban ölçümü ve uçtan uca commit kanıtı yukarıda. ⚖ Tasarım İCAT EDİLMEDİ: doğru desen aynı repoda zaten yazılıydı (`project-guard.yml:125` `gh api … \|\| echo 0` — yokluk *"temiz"* değil ***"suçlu"***). ⛔ **`2>&1` ile BAD'e karıştırma REDDEDİLDİ:** rc=0 iken gelebilecek bir git uyarısı `[ -n "$BAD" ]`i doğrulayıp **sahte "core sızıntısı"** üretirdi — sertleştirme, yeni bir FP sınıfı doğurmadan yapıldı. | **F3 ÜÇ BAĞLAM (yeni korpus, 8 senaryo + 4 mutasyon):** ① bilinen-bozuk `.git/index` → rc 1 + `KOŞTURULAMADI`, `[pre-commit] OK` YOK ② bilinen-temiz gerçek sızıntı → **hâlâ** rc 1 + junction mesajı (POZİTİF KONTROL: sertleşme gerçek bulguyu öldürmedi) ③ **3. bağlam** depo SAĞLAM ama gate'in KENDİ pathspec'i bozuk → rc 1. Ayrıca S3 FP çapası (sağlam+temiz → rc 0, uydurma-kırmızı YOK) · S5 uçtan uca commit sayacı · S6 git'in hata metni kullanıcıya ULAŞIYOR · S7 `set -e` çapası (rc **1**, sessiz 128 ölümü DEĞİL) · **S8 TARİHİ TABAN** (fix bugünkü kaynaktan sökülerek türetilir — `git show <sha>:` YASAK, sığ klonda çözülmez) kusuru birebir yeniden üretir: rc 0 + `[pre-commit] OK` + commit sayacı 1. **MUTASYONLAR (savunma-derinliği maskelemesin diye katman katman):** M1 tam söküm → S1/S4/S5/S6 · M2 yalnız rc yutulur (`\|\| true`; fail-closed dalı durur ama ÖLÜ) → S1/S4/S5/S7 · M3 `exit 1` uyarıya çevrilir → S1/S4/S5/S7 · M4 gerçek-sızıntı dalı öldürülür → **yalnız S2** (pozitif kontrolün kendi çapası). | **yeni** `tests/fixtures/precommit_coreleak_failclosed` (OZEL_TESTLER + HARİTA; HARİTA satırı artık İKİ korpus taşıyor — `b0_secim` 20/20 ile yeniden ölçüldü) | (bu PR) |
+
+**Test-senaryosu / SINIR / DOĞRULANAMADI:**
+
+1. **Reçete:** `governance/infra-test-recipes.md` **B34**.
+2. **GEVŞETME BEYANI: YOK.** Değişiklik tek yönlü SIKILAŞTIRMADIR: önceden geçen bir
+   girdi sınıfı (ölçüm çökmesi) artık bloklanıyor; hiçbir eşik/kapsam daraltılmadı.
+   **Yeni yanlış-pozitif riski ölçüldü ve SIFIR bulundu:** `BAD` yalnız stdout'tan
+   beslenir (stderr karıştırılmadı), yani `rc == 0` yolunda davranış **birebir**
+   eskisidir — S3 FP çapası + kardeş korpusun S1/S3'ü bunu çivilliyor. Sertleşmenin
+   ateşlediği tek yeni yol `rc != 0`'dır ve o yolda eski davranış zaten YANLIŞTI.
+3. ⚠ **YAYILIM (bu tur YAPMADI — DoD kalemi):** şablon düzeldi, **mevcut projelerin
+   üretilmiş kopyaları KENDİLİĞİNDEN düzelmez.** Üç dosya elle hizalanmalı:
+   `<PROJECT_A>` · `<PROJECT_B>` · `<PROJECT_C>` → `scripts/git-hooks/pre-commit:29`.
+   Hizalanana kadar o projelerde fail-open **DURUYOR**. Aynı sınıfın önceki örneği bu
+   dosyada 2026-08-20 PARTİ-2 madde ③ ile kayıtlı (aynı yayılım borcu); `Q211③` ile
+   ilişkilendirilmesi önerilir.
+4. ⚠ **Q199② DOKUNULMADI — ayrı davranış kararı (bilinçli, kanıtlı):**
+   `project-guard.yml:104` `list_touched()` aynı sınıftadır, **ama fix'i ①'in mekanik
+   ikizi DEĞİLDİR.** Ölçüldü (yerel, `--no-local` klon ile taze checkout taklit
+   edilerek): main'e force-push sonrası `github.event.before` **erişilemez**
+   objedir (`git cat-file -e` → YOK, `fetch-depth: 0` erişilemeyeni getirmez),
+   `git diff --name-only $BEFORE $AFTER` → **rc=128 `fatal: bad object`**, gate bugün
+   *"OK — davranış-yüzeyi dokunuşu yok"* basıyor ⇒ **F1 sessizce açılıyor** (fail-open
+   DOĞRULANDI). Fakat fail-closed'a çevirmek **ULAŞILABİLİR bir yolu** yeşilden
+   kırmızıya çevirir ve üç ayrı tasarım arasında seçim gerektirir: (a) çökme ⇒
+   *"yüzeye dokunuldu"* sayıp mevcut `MERGED_PR` rayına sok — mesaj *"dokunuyor"* der
+   ama bilmiyoruzdur (teşhis yalanı) · (b) adımı `::error::F1 ölçümü YAPILAMADI` ile
+   düşür — dürüst, ama her doğrudan force-push'ta main kırmızı · (c) erişilemez
+   `BEFORE` yerine ölçülebilir bir taban kullan (`$AFTER^` / `git show --name-only`)
+   — muhtemelen doğru olan, ama YENİ tasarım + kendi korpusu. Üçü de **kullanıcı
+   kararıdır**; ayrıca hiçbiri gerçek GitHub Actions'a karşı bu turda koşulamazdı.
+   ⇒ Q adayı olarak bırakıldı, kanıtı burada.
+5. **DOĞRULANAMADI:** ① CI'da (Linux, `bash -e`) koşulmadı — fixture Windows'ta
+   Git-for-Windows `sh` ile ölçüldü; şablon POSIX `sh` yazımıdır ve kabuk-özel
+   sözdizimi kullanılmadı, ama *"CI'da da yeşil"* bu turda **koşulmadı**.
+   ② `project-guard.yml` `core-leak` ayağının fail-closed olduğu iddiası GitHub'ın
+   `run:` için varsayılan `bash -e {0}` kabuğuna dayanır; workflow'da `shell:`/
+   `defaults:` **override YOK** (ölçüldü, 0 isabet) ama varsayılanın kendisi canlı
+   ölçülmedi. ⚠ Varsayılan `-e` olmasaydı o ayak da fail-open olurdu (adımın son
+   komutu `echo "OK — sızıntı yok"`, rc'yi o belirler) — ayrı bir kalem adayı.
