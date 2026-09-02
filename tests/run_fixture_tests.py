@@ -174,6 +174,9 @@ OZEL_TESTLER = [
      "adt_transport_list 'count:0' KANIT DEGIL: uc-degerli zero_verified + curutulmus docstring kalkti"),
     ("precommit_junction_failclosed",
      "proje pre-commit sablonu: core/ cozulemezse SESSIZCE atlamaz, BLOKLAR (fail-open kapandi)"),
+    ("precommit_coreleak_failclosed",
+     "Q199(1): core-sizinti kapisinin KENDI olcumu cokerse 'temiz' sayilmaz — "
+     "'eslesme yok' != 'komut coktu' (uctan uca: eski desende sizintili commit GECIYORDU)"),
     ("suite_ortam_hijyeni",
      "suit kendi urettigi .conn_adt kalintisini temizler; kullanicininkine DOKUNMAZ (idempotans)"),
     ("sablon_zorunlu_maddeler",
@@ -616,8 +619,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:transport_sifir_kaniti", "O:dogrulama_kosamadi"),
      "`adt_transport_list` sıfır-kanıtı sözleşmesi (zero_verified/zero_notice) + docstring'in "
      "çürütülmüş rehberliği taşımaması"),
-    ("claude/git-hooks/pre-commit.template", ("O:precommit_junction_failclosed",),
-     "`core/` çözülemezse validator adımı SESSİZCE atlanmaz — fail-closed + görünür mesaj"),
+    ("claude/git-hooks/pre-commit.template",
+     ("O:precommit_junction_failclosed", "O:precommit_coreleak_failclosed"),
+     "İKİ AYRI fail-open ekseni, İKİ AYRI korpus — biri diğerini KAPSAMAZ: adım-2 "
+     "`core/` çözülemezse validator zinciri atlanmaz (junction) · adım-1 core-sızıntı "
+     "kapısının KENDİ `git diff` ölçümü çökerse 'temiz' sayılmaz (Q199①, coreleak)"),
     ("templates/new-package/.rules.md.tmpl", ("O:sablon_zorunlu_maddeler",),
      "DTEL/Domain öneki `_E_`/`_D_` — kaynak otorite `standards/01-naming.md` §4.4.5; "
      "şablon kusuru HER yeni pakete miras kalır"),

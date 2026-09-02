@@ -24,9 +24,41 @@ echo "[pre-commit] statik gate..."
 
 # 1) core-sızıntı: junction içeriği staging'e girmiş mi (CI'daki core-leak'in lokal ikizi).
 #    'rules' 2026-07-10'da eklendi (L1b) — junction'lanan HER tip burada olmalı.
+#
+# ⛔ 2026-09-02 (Q199①) — FAIL-OPEN KAPANDI. Bu blok eskiden şöyleydi:
+#      [TARİHÇE — ARTIK YOK, aşağıdaki grep isabeti bu YORUM satırıdır, kod DEĞİL]
+#      BAD=$(git diff --cached --name-only -- 'core/**' … 2>/dev/null || true)
+#    `git diff --cached` ÇÖKERSE (bozuk/kilitli `.git/index` · bozuk pathspec magic ·
+#    pathspec'i tanımayan git sürümü · yanlış `GIT_INDEX_FILE`) `2>/dev/null` SEBEBİ,
+#    `|| true` de rc'yi (128) yutuyordu ⇒ `BAD=''` ⇒ `[ -n "$BAD" ]` YANLIŞ ⇒ hüküm
+#    ***"sızıntı yok"*** ⇒ commit GEÇİYORDU. Yani *"eşleşme yok"* ile *"komut çöktü"*
+#    AYIRT EDİLEMİYORDU — üstelik kapanış satırı "core-sızıntı kontrolü ... OK" diye
+#    hiç yapılmamış bir kontrolü RAPORLUYORDU.
+#    ÖLÇÜLDÜ (2026-09-02, gerçek depo + gerçek kabuk): `.git/index` bozulunca
+#    `git diff --cached` **rc=128** ("fatal: index file corrupt") verirken şablon
+#    **rc=0** dönüyor ve `[pre-commit] OK` basıyordu.
+#
+#    ⇒ ÜÇ DEĞİŞİKLİK: ① rc AYRI yakalanır (`|| SIZ_RC=$?` — `||` listesi olduğu için
+#    `set -e` tetiklenmez ve rc kaybolmaz) ② stderr YUTULMAZ ve BAD'e de KARIŞTIRILMAZ:
+#    hiç yönlendirilmez, git'in kendi hata metni doğrudan kullanıcıya akar (`2>&1` ile
+#    BAD'e karıştırmak, rc=0 iken gelen bir uyarıyı "sızıntı" sanma riski doğururdu)
+#    ③ rc≠0 ÇÖKMEYİ BULGU sayar → **fail-closed**, görünür sebep + `exit 1`.
+#    ⚖ Kardeş DOĞRU desen (kontrol grubu, bu repoda zaten var): `project-guard.yml`
+#    `MERGED_PR=$(gh api … || echo 0)` → yokluk *"temiz"* değil ***"suçlu"*** demektir.
+SIZ_RC=0
 BAD=$(git diff --cached --name-only -- \
         'core/**' '.claude/agents/**' '.claude/skills/**' '.claude/commands/**' '.claude/rules/**' \
-        2>/dev/null || true)
+      ) || SIZ_RC=$?
+if [ "$SIZ_RC" -ne 0 ]; then
+  echo "" >&2
+  echo "⛔ [pre-commit] core-sızıntı kontrolü KOŞTURULAMADI — commit BLOKLANDI" >&2
+  echo "   git diff --cached rc=$SIZ_RC (sebep yukarıdaki git hata satırındadır)" >&2
+  echo "   ⚠ Bu 'sızıntı YOK' demek DEĞİL, 'BAKILAMADI' demektir — eskiden sessizce GEÇİYORDU." >&2
+  echo "   Sebep genelde: bozuk/kilitli .git/index · pathspec'i tanımayan git · yanlış GIT_INDEX_FILE." >&2
+  echo "   Bilerek denetimsiz commit gerekiyorsa (kullanıcı onayıyla): git commit --no-verify" >&2
+  echo "" >&2
+  exit 1
+fi
 if [ -n "$BAD" ]; then
   echo "$BAD"
   echo "HATA: core/junction içeriği commit'e girmiş (R1/D26). 'git reset' ile çıkar." >&2

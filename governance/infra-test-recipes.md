@@ -1580,3 +1580,60 @@ B2_GATE_KOK=/tmp/eski/scripts/validators python tests/fixtures/<ad>/run.py
 `check_no_rap_commit` 0 ERROR / **6 WARN** · `check_ui5_freestyle_traps` 0 ERROR / **7 WARN** ·
 diğer dördü **0 bulgu**. Kapsam paydaları: 81 · 321 (eskiden 280) · 124 · 283.
 **Fix öncesi/sonrası çıktı BAYT AYNI** (tek istisna: cds/srvd payda satırı 280→321).
+
+## B34 — `pre-commit.template` core-sızıntı kapısı: ÖLÇÜM ÇÖKMESİ ≠ "TEMİZ" (Q199①)
+
+```
+python tests/fixtures/precommit_coreleak_failclosed/run.py      # 8 senaryo + 4 mutasyon, exit 0
+python tests/fixtures/precommit_junction_failclosed/run.py      # KARDEŞ: 4 senaryo + 2 mutasyon
+python tests/run_battery.py precommit_coreleak_failclosed --kardes precommit_junction_failclosed
+```
+
+⛔ **İKİ KORPUS, İKİ AYRI EKSEN — biri diğerini KAPSAMAZ.** Aynı dosyanın (`claude/git-hooks/
+pre-commit.template`) iki farklı adımını ölçerler; HARİTA satırı bu yüzden **ikisini birden**
+taşır ve şablona dokunan tur **ikisini de** koşar:
+
+| Korpus | Adım | Kusur |
+|---|---|---|
+| `precommit_junction_failclosed` | adım-2 | `core/` çözülemezse validator zinciri **atlanıyordu** (2026-08-20, B26) |
+| `precommit_coreleak_failclosed` | adım-1 | core-sızıntı kapısının **kendi `git diff` ölçümü** çökünce *"temiz"* sayılıyordu (2026-09-02) |
+
+Kardeşin `S3`'ü yalnız *"adım-1 hâlâ blokluyor"* diyen bir **FP çapasıdır** — çökme eksenini
+HİÇ ölçmez. Bunu kapsam sanmak bu turun ilk yanılgısı olurdu.
+
+### ⚠ Çapa hijyeni — kardeşin mutasyonları ŞABLON METNİNE pinlidir
+`precommit_junction_failclosed` M1 `s.index("else\n  echo \"\" >&2")`, M2 ise kapanış
+`echo "[pre-commit] OK — …"` satırının **birebir metnine** dayanır. Şablonda o iki metni
+değiştiren her tur kardeşi **sessizce bayatlatır** (`YAMA TUTMADI`). 2026-09-02 fix'i bu
+yüzden fail-closed dalını `if [ "$SIZ_RC" -ne 0 ]; then` ile açtı (`else` DEĞİL) ve kapanış
+satırına **dokunmadı**; ikisi de koşumla doğrulandı (4/4 + 2/2).
+
+### Neden GERÇEK depo + GERÇEK kabuk (kardeşle aynı gerekçe)
+Şablon `git rev-parse --show-toplevel` çağırır; sahte dizin sessizce **başka** bir ağacı
+gösterir. Ayrıca çökme vektörleri (bozuk `.git/index`, geçersiz pathspec magic) yalnız
+gerçek git ile üretilebilir. `sh`/`bash` yoksa korpus **exit 1** verir — sessiz geçme YOK.
+
+### ⭐ Taban ASLA tarihten çekilmez (S8)
+`S8 TARİHİ TABAN` fix'i **bugünkü kaynaktan sökerek** üretir (`_fix_sok()`), `git show
+<sha>:` KULLANMAZ: pinli SHA sığ klonda çözülmez ve merge sonrası kayar (2026-08-29'da CI'ı
+iki kez kırdı). Söküm iki çapaya bağlıdır — `_ESKI_YAKALAMA` bloğu ve `if [ "$SIZ_RC" -ne 0 ]`
+dalı; ikisi de bulunamazsa senaryo **KURULAMADI** der, sessizce PASS OLMAZ.
+
+### Pinler (bunlar değişirse SEBEBİNİ yaz)
+- Taban: **8/8 senaryo**, exit 0. Mutasyonlar: **M1** → S1/S4/S5/S6 · **M2** → S1/S4/S5/S7 ·
+  **M3** → S1/S4/S5/S7 · **M4** → **yalnız S2**.
+- ⭐ M4'ün TEK senaryo düşürmesi bir **özelliktir**: S2 pozitif kontroldür (gerçek sızıntı
+  hâlâ yakalanıyor mu). Diğer üç mutasyon onu hiç kırmaz ⇒ sertleştirme ile pozitif kontrol
+  **ayrı değişmezlerdir**, aynı çapayla ölçülmezler.
+- Mutasyon kipi CLI'da YOK (batarya `kesif=YOK` der, kardeşiyle aynı) — mutasyonlar koşucunun
+  içindedir, şablon metni bellekte dönüştürülüp **geçici** depoya yazılır (gerçek kaynağa
+  ASLA yazılmaz ⇒ komşu korpus kirlenmez).
+
+### ⚠ Kapsam sınırı (ölçüldü, KAPATILMADI)
+1. `Q199②` (`.github/workflows/project-guard.yml:104` `list_touched`) **aynı sınıftadır ve
+   fail-open olduğu ölçülmüştür** (force-push sonrası `github.event.before` erişilemez →
+   `git diff` rc=128 → gate *"dokunuş yok"* der). Fix'i ayrı bir davranış kararıdır; bu
+   korpus onu **kapsamaz**. Gerekçe: `infra-changelog` 2026-09-02 kaydı madde 4.
+2. Korpus Windows `sh` ile ölçüldü; **CI'da (Linux `bash -e`) koşulmadı**.
+3. `core.hooksPath` unset ise şablon DOSYASI hiç çalışmaz — B13'ün ayrı ve bilinen kalemi;
+   bu korpus o katmanı ölçmez.
