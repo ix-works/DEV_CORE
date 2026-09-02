@@ -111,9 +111,11 @@ def kos_kosucu(*args: str) -> tuple[int, str]:
 secim, _ = sec("scripts/build_core_index.py")
 # ⚠ KÜME HARİTAYA PİNLİ (P3'teki notun aynısı): 2026-08-28'de `build_core_index.py`ye
 # `--ci-check` eklendi (DG-03) ve onu ölçen korpus `sap_gate_skip_sozlesmesi` HARİTA'ya
-# yazıldı → küme 1'den 2'ye çıktı. Gevşetmek (`<=` / `in`) çapayı öldürür.
-kontrol("P1 bilinen dosya → yalnız ilgili fixture'lar (indeks kapsamı + --ci-check)",
-        secim == {"O:core_index_kapsam", "O:sap_gate_skip_sozlesmesi"}, f"alınan={secim}")
+# yazıldı → küme 1'den 2'ye çıktı; 2026-09-02'de Q214 (sıralama determinizmi) korpusu
+# `core_index_siralama` eklendi → 3. Gevşetmek (`<=` / `in`) çapayı öldürür.
+kontrol("P1 bilinen dosya → yalnız ilgili fixture'lar (indeks kapsamı + sıralama + --ci-check)",
+        secim == {"O:core_index_kapsam", "O:core_index_siralama",
+                  "O:sap_gate_skip_sozlesmesi"}, f"alınan={secim}")
 
 secim, _ = sec("scripts/validators/check_bdef_backtick.py")
 kontrol("P1b bölüm-1 validator → kendi bad/good çifti + K1 payda korpusu",
@@ -127,8 +129,9 @@ kontrol("P1b bölüm-1 validator → kendi bad/good çifti + K1 payda korpusu",
 #   güncellenir.
 secim, _ = sec("scripts/build_core_index.py",
                "scripts/validators/check_ui5_freestyle_traps.py")
-kontrol("P2 çok dosya → BİRLEŞİM (6 birim)",
-        secim == {"O:core_index_kapsam", "O:sap_gate_skip_sozlesmesi",
+kontrol("P2 çok dosya → BİRLEŞİM (7 birim)",
+        secim == {"O:core_index_kapsam", "O:core_index_siralama",
+                  "O:sap_gate_skip_sozlesmesi",
                   "O:ui5_t1_tirnak_sinifi", "O:ui5_blok_yorumu",
                   "V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi"},
         f"alınan={secim}")
@@ -149,7 +152,8 @@ kontrol("P3 çok-tüketicili kaynak → 7 korpusun hepsi",
 mutlak = str(KOK / "scripts" / "build_core_index.py")
 secim, _ = sec(mutlak)
 kontrol("P4 mutlak/Windows yolu göreli yolla AYNI kararı verir",
-        secim == {"O:core_index_kapsam", "O:sap_gate_skip_sozlesmesi"},
+        secim == {"O:core_index_kapsam", "O:core_index_siralama",
+                  "O:sap_gate_skip_sozlesmesi"},
         f"girdi={mutlak} alınan={secim}")
 
 # P5: fixture DİZİNİNE dokunmak o fixture'ı seçer (bölüm-2/3 dâhil).
@@ -255,7 +259,9 @@ else:
     kontrol("V12 KABLOLAMA: seçili koşum yalnız seçilen fixture'ı KOŞAR",
             rc == 0 and "core_index_kapsam" in cikti
             and "tier_fail_closed" not in cikti
-            and "TOPLAM: 2/2 PASS" in cikti,   # HARİTA'ya pinli: +sap_gate_skip_sozlesmesi (DG-03)
+            # HARİTA'ya pinli: +sap_gate_skip_sozlesmesi (DG-03, 2026-08-28)
+            # +core_index_siralama (Q214, 2026-09-02) → 2/2 idi, 3/3 oldu.
+            and "TOPLAM: 3/3 PASS" in cikti,
             f"exit={rc} son={cikti.strip()[-200:]!r}")
     kontrol("V12b seçili koşum kendini TAM sanmıyor (görünür uyarı satırı)",
             "TAM SÜİTE SONUCU DEĞİLDİR" in cikti, f"çıktı={cikti[-200:]!r}")

@@ -88,12 +88,45 @@ def _ozet(p: Path) -> str:
     return m.group(1).strip() if m else ""
 
 
+def _siralama_anahtari(f: Path) -> str:
+    """Q214 (2026-09-02) — sıralama anahtarı PLATFORMDAN BAĞIMSIZ olmalı.
+
+    KUSUR: burada eskiden anahtarsız `sorted(f for f in ham ...)` vardı, yani `Path`
+    nesneleri KENDİ `__lt__`'leriyle kıyaslanıyordu. O kıyas platformun flavour'ına
+    bağlıdır: `WindowsPath` parçaları `str.lower()` ile katlar, `PosixPath` katlamaz
+    (Py 3.11 `_cparts`; Py 3.12+ `_str_normcase` — orada ayırıcı karakteri de kıyasa
+    girer). Sonuç: AYNI doküman ağacı Windows'ta ve Linux'ta FARKLI sıralanır.
+    Ölçüldü (2026-09-02, bu repo, 89 doküman): tek fark `playbook/README.md` —
+    Linux'ta bölümün başında, Windows'ta `r`'lerin arasında; diff **2 satır**.
+    Bu, C-IDX-01'i platforma çeviriyordu: Windows'ta üretilip commit'lenen indeks
+    Linux CI'da `--ci-check` → `[FAIL] CORE-INDEX BAYAT` (template_project PR #15,
+    2026-08-30); aynı komut aynı core-commit'te Windows'ta `[OK]`.
+
+    ANAHTAR SEÇİMİ (ölçülmüş, alternatifler REDDEDİLDİ — geri çevirmeden önce oku):
+    • `rel.as_posix()` (SEÇİLEN): yalnız kod-noktası sırasına dayanır; ne büyük/küçük
+      harf tablolarına ne de yol ayırıcısına bağlıdır. Ayrıca **basılan metnin ta
+      kendisidir** (satırlar `core/<rel>` yazar) ⇒ sıra artefaktın üzerinden gözle
+      doğrulanabilir.
+    • `rel.parts` (REDDEDİLDİ): bugünkü ağaçta as_posix ile AYNI çıktıyı verir
+      (ölçüldü: 89/89 özdeş), ama `alt/` dizini ile `alt-ek.md` gibi ÖN-EK çakışması
+      olduğunda ayrışır; iki anahtarı ayrı tutmak yerine tek ve basit olanı seçtik.
+    • `rel.as_posix().lower()` (REDDEDİLDİ): bugünkü Windows çıktısını birebir korur
+      (ölçüldü: 89/89 özdeş ⇒ mevcut indeksler hiç değişmezdi, cazip), AMA sırayı
+      Unicode büyük/küçük-harf tablolarına bağlar — yani düzeltmeye çalıştığımız
+      sınıfın (ortama bağlı kıyas) daha sessiz bir biçimini geri getirir; üstelik
+      tek başına TOTAL değildir (yalnız harf-durumuyla ayrışan iki ad berabere kalır
+      ve sıra `glob` sırasına düşer).
+    """
+    return f.relative_to(CORE).as_posix()
+
+
 def _dosyalar(alan: str, ozyineli: bool) -> list[Path]:
     d = CORE / alan
     if not d.is_dir():
         return []
     ham = d.rglob("*.md") if ozyineli else d.glob("*.md")
-    return sorted(f for f in ham if f.relative_to(CORE).as_posix() not in HARIC)
+    return sorted((f for f in ham if _siralama_anahtari(f) not in HARIC),
+                  key=_siralama_anahtari)
 
 
 def uret() -> str:

@@ -650,7 +650,19 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   kapıyı elden geçirirken önce bu fixture'ı koş, "kod duruyor mu" diye BAKMA (`infra-changelog.md`
   → core_precommit bölümü dürüstlük notu).
 
-## B13b — build_core_index (CORE-INDEX kapsamı)
+## B13b — build_core_index (CORE-INDEX kapsamı + sıralama determinizmi)
+- **Q214 (2026-09-02) sıralama:** `python tests/fixtures/core_index_siralama/run.py`
+  → 12/12 · `--mutasyon` (kaynaktan `key=` sökülür, bellekte exec) → 8/12; düşenler
+  **tam olarak V1·V1b·V4·V5** olmalı. Kardeş: `python tests/fixtures/b0_secim/run.py`
+  → 20/20 (bu fixture HARİTA'ya **4 yerde** pinlidir: P1 · P2 · P4 kümeleri + V12'nin
+  `TOPLAM: 3/3` çapası — yeni bir korpus eklenirse dördü birlikte güncellenir).
+- ⛔ Sıralama anahtarını (`rel.as_posix()`) `parts` ya da `lower()` ile değiştirmeden
+  ÖNCE `build_core_index._siralama_anahtari` docstring'ini oku: iki alternatif de
+  ölçülüp reddedildi (biri ön-ek çakışmasında ayrışıyor, diğeri sırayı Unicode
+  büyük/küçük-harf tablosuna bağlıyor = düzeltilen sınıfın sessiz biçimi).
+- ⚠ Anahtar değişirse **her projede** `python core/scripts/build_core_index.py`
+  yeniden koşulup `governance/CORE-INDEX.md` commit'lenir; koşulmazsa C-IDX-01
+  (pre-commit + proje CI) `BAYAT` der — sessiz kalmaz ama yeşil de olmaz.
 - `python tests/fixtures/core_index_kapsam/run.py` → 10/10.
 - Değişmezler: `governance/` DÜZ dosyaları (infra-changelog + infra-test-recipes DAHİL —
   F0'ın zorunlu okuması) indekste · **mükerrer satır YOK** (governance'ı `rglob` ile eklemek
