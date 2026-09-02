@@ -388,7 +388,8 @@ Sebep: core canlıdır — buraya giren şey junction'lı tüm projelerde **anı
 ├── README.md                    (init_project üretir)
 ├── project.yaml                 (proje kimliği: profil, source_root, gate config'leri)
 ├── .conn_adt                    (SAP bağlantı — gitignore)
-├── conn/                        (çoklu-tier .env'ler — *.env gitignore)
+├── conn/                        (çoklu-tier .env'ler — `conn/*` TOPYEKÛN gitignore;
+│                                 yalnız `*.template` / `README.md` / `.gitkeep` commit'li)
 ├── .mcp.json                    (MCP server tanımı — core'dan yüklenir, env-first)
 ├── .gitignore / .gitattributes  (SIZINTI KİLİDİ + sırlar + runtime + CRLF politikası)
 ├── .github/workflows/guard.yml  (30 satır — core'daki reusable workflow'u ÇAĞIRIR)
@@ -1282,7 +1283,9 @@ python core/scripts/ix_doctor.py
 `init_project.py` **üretir** (kopyalamaz): `CLAUDE.md` (yasaklar damgalı + `@core` import),
 `README.md`, `.claude/settings.json`, `scripts/hook_shim.py`, `scripts/git-hooks/pre-commit`,
 `project.yaml`, `.gitignore` (sızıntı kilidi + sırlar + runtime), `.gitattributes`, `.mcp.json`,
-`.github/workflows/guard.yml`, `.github/CODEOWNERS` ve boş dizin iskeleti.
+`governance/infra-findings.md` (kuyruk tohumu — `post_validate` bu yolu enjekte eder, dosya
+yoksa ilk commit C-HOOK-01 ile FAIL verir), `.github/workflows/guard.yml`,
+`.github/CODEOWNERS` ve boş dizin iskeleti.
 `team_setup.py` beş junction'ı kurar, **projede `core.hooksPath`'i kablolar**, memory tohumlar,
 `CORE-INDEX`'i üretir.
 

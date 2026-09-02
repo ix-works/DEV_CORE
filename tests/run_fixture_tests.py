@@ -213,6 +213,11 @@ OZEL_TESTLER = [
     ("paket_uzanti_kapsami", "paket naming + paket-siniri: .bdef/.srvd allow-list'te YOKTU (V2)"),
     ("itg_alan_dolulugu", "ITG S2: bos sablon + [x] BLOCKER gate'ini geciyordu (V3)"),
     ("gitignore_tam_satir", "core-sizinti kilidi: yorumlu/negatif satir 'kilit var' saniliyordu (V4)"),
+    ("init_project_iskelet",
+     "jeneratorden cikan iskelet KAPIDAN geciyor mu: (1) `governance/infra-findings.md` "
+     "tohumu -- post_validate o yolu enjekte eder, yoksa ilk commit C-HOOK-01 ile FAIL "
+     "(olculdu: 1/8 -> 0/8 kirik) (2) `conn/` TOPYEKUN kilit + acik negasyon (dar kilitte "
+     "`.gmail_app_password`/`mail_list.txt` IZLENIYORDU). Iki degismez -> IKI mutasyon"),
     ("proje_koku_varyantlari", "__file__-koku: glob/joinpath/str-concat/transitive kaciyordu (V5)"),
     ("ui5_t1_tirnak_sinifi", "UI5 T1: template-literal `_X` tirnak sinifindan kaciyordu (V6)"),
     # 2026-08-01 amend-FP (kullanici-onayli GEVSETME — kiyas birimi commit -> dal):
@@ -491,6 +496,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "(Q30: tek tipteki istisna kurulumun kalan 5 adimini atliyordu) atomik korpusta. "
      "E-05: `junctions()` FALSE dondugunde git-hook kablolamasinin YINE DE kosmasi "
      "(ve hatanin yutulMAmasi) team_setup_hook_kablolama korpusunda olculur"),
+    # init_project.py HARITA'da HIC YOKTU (2026-09-02, Q213+Q241 turu — `team_setup.py` ile
+    # ayni sinif): jeneratorun urettigi ISKELET hicbir korpusa eslesmiyordu, o yuzden
+    # "bugun kossa GECEN bir proje uretir mi?" sorusunu yalniz elle template-provasi
+    # yanitliyordu (ve iki tur ust uste kacirildi: C-HOOK-01 FAIL'i + dar sir kilidi).
+    ("scripts/init_project.py", ("O:init_project_iskelet", "O:gitignore_tam_satir"),
+     "uretilen iskeletin KAPIDAN gecmesi (C-HOOK-01 kuyruk tohumu) + `.gitignore` sablonunun "
+     "sir kilidi/FP dengesi burada yasar; kanonik kilit satirlarinin TAM-SATIR okunmasi "
+     "komsu korpusta (gitignore_tam_satir KANONIK bloguyla ayni sablonu tarif eder)"),
     ("scripts/validators/check_settings_template_sync.py", ("O:hook_gate_coverage",),
      "kablolama okuyucusu (`_kablolu_hooklar`) buradan IMPORT ediliyor — imza değişirse "
      "coverage-gate'in hook ORPHAN dalı sessizce ölür (kopya YOK, tek kaynak)"),

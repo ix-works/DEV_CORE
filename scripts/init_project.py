@@ -10,9 +10,11 @@ proje core'a junction'la bakar (junction'ları team_setup.py kurar, STEP 3).
   .claude/settings.json    (claude/settings.template.json'dan)
   scripts/hook_shim.py     (claude/hook_shim.template.py'den — D15)
   project.yaml             (profil + source_root iskeleti — profiles/ + CLAUDE.core.md §2)
-  .gitignore               (SIZINTI KİLİDİ satırları hazır)
+  .gitignore               (SIZINTI KİLİDİ satırları hazır; `conn/` topyekûn kilitli)
   .gitattributes           (CRLF kararı — A3.0/B1 ile aynı)
   .mcp.json                (MCP core'dan yüklenir; D17 env-first)
+  governance/infra-findings.md  (İNFRA-BULGU KUYRUĞU tohumu — post_validate bu yolu
+                            enjekte eder; dosya yoksa ilk commit C-HOOK-01 ile FAIL)
   <source_root>/ conn/ playbook-local/ standards-local/ scripts/validators-local/  (boş)
 
 Kullanım:  python <CORE>/scripts/init_project.py C:\\IX\\<PROJE> [--name <AD>] [--source-root SOURCE_CODES] [--force]
@@ -47,9 +49,17 @@ GITIGNORE = """\
 # 2026-07-10 template provası: bu satırların ÇOĞU şablonda YOKTU; yalnız TD'de
 # birikmişti → yeni açılan her proje bağlantı-yedeğini, CSRF token'ını ve
 # proje-lokal kimlik dosyalarını COMMIT EDİYORDU.
+# 2026-09-02 (Q241): `conn/` altı TEK TEK sayılıyordu (`conn/*.env` + `conn/.conn_adt.bak`).
+# Sayılmayan her yeni sır dosyası (mail parolası, alıcı listesi, ek tier slotu) SESSİZCE
+# izlenir hâle geliyordu — ölçüm: referans projede `conn/.gmail_app_password` ve
+# `conn/mail_list.txt` şablonun HİÇBİR desenine girmiyordu. Kilit topyekûn + AÇIK negasyon:
+# commit'e girecek olan istisnadır (template/README/.gitkeep), kalan her şey kilitli.
+# ⚠ `!conn/.gitkeep` ŞART: `conn/*` onu da yutar ve dizin repoda hiç doğmaz.
 .conn_adt
-conn/*.env
-conn/.conn_adt.bak
+conn/*
+!conn/*.template
+!conn/README.md
+!conn/.gitkeep
 .csrf_token.json
 # genericize blocklist: müşteri/sistem/kişi adları — ASLA commit'lenmez
 .claude/genericize-blocklist.txt
@@ -90,6 +100,18 @@ UI/node_modules/
 .playwright-cli/
 .playwright-mcp/
 *.proposed.cds
+# UI build çıktısı + deploy paketi (kaynak-kök PARAMETREDİR — `--source-root`)
+{source_root}/**/ui/*/dist/
+{source_root}/**/ui/*/archive.zip
+
+# ==== arşiv / yedek — KÖK seviyesi (alt dizinlerdeki meşru .zip'e dokunmaz) ====
+/*.zip
+/*.7z
+/*.tar
+/*.tar.gz
+/*.tgz
+/*.bak
+scripts/hook_shim.py.yedek-*
 
 # ==== editör / OS ====
 *.swp
@@ -97,6 +119,35 @@ UI/node_modules/
 ~$*
 .DS_Store
 Thumbs.db
+"""
+
+# ── İNFRA-BULGU KUYRUĞU TOHUMU (2026-09-02, Q213) ────────────────────────────
+# `hooks/post_validate.py` stderr nudge'ında `governance/infra-findings.md` yolunu ajana
+# ENJEKTE eder; `validators/check_hook_injected_paths.py` (C-HOOK-01) enjekte edilen her
+# yolu PROJE KÖKÜNDEN `is_file()` ile arar. İskelet bu dosyayı üretmediği için jeneratörden
+# çıkan her proje ilk `git commit`inde (pre-commit → run_all_validators --quick) FAIL
+# veriyordu; tek çıkış `--no-verify` ya da elle tohumlamaktı (ölçüldü 2026-08-30 + 09-02).
+# ⚠ Yol `core/` ÖNEKİ ALMAZ ve almamalı: kuyruk PROJENİN kendi dosyasıdır (core'da yok).
+#   Alternatif "nudge yolu koşullu bassın" ELENDİ: yolu gizlemek protokolü gizler.
+INFRA_FINDINGS = """\
+# İNFRA-BULGU KUYRUĞU (howto-infra-fix-proseduru ADIM-2)
+
+> Görev sırasında görülen, EXPRESS kriterlerini karşılamayan infra-bulguları buraya yazılır;
+> fix'i infra-expert AYRI seansta üretir, lider kapatır.
+> **Prosedür:** `core/playbook/howto-infra-fix-proseduru.md` (ADIM 1 sınıfla → 2 yol ayrımı → 3 fix).
+> **Format:** `| tarih | bileşen | semptom | kontrol-grubu | sınıf K1-K4 | görev-bağlamı | önerilen-yön | DURUM |`
+> **Giriş eşiği (MUST):** kayıt ancak (a) bugün canlı etkisi varsa · (b) adı konmuş bir tetiği
+> varsa · (c) yayınladığımız bir şey yanlış bilgi veriyorsa açılır. Üçü de yoksa bulgu iş kalemi
+> değildir: dokunduğu dosyaya NOT olarak yazılır. Kuyruk = yapılmaya değer işlerin listesi.
+> **`prior-art` (ZORUNLU alan, kaydı YAZAN doldurur):** `BULUNDU — <ref>` ·
+> `ARANDI-YOK — <nerelere bakıldı>` · `ARANMADI — <gerekçe>` üçlüsünden biri.
+> **Bu dosya iskelette NEDEN var:** `post_validate` hook'u bu yolu ajana enjekte eder; dosya
+> yoksa C-HOOK-01 (`check_hook_injected_paths`) ilk commit'te FAIL verir — ajan da yolu
+> açamadığı için ZORUNLU protokolü "dosya yok" sanıp atlar.
+
+---
+
+(henüz kayıt yok)
 """
 
 GITATTRIBUTES = """\
@@ -209,7 +260,8 @@ def main() -> int:
         uret(proje / "scripts" / "git-hooks" / "pre-commit", precommit, a.force),
         uret(proje / "project.yaml",
              PROJECT_YAML.format(source_root=a.source_root, repo_mode=a.repo_mode), a.force),
-        uret(proje / ".gitignore", GITIGNORE, a.force),
+        uret(proje / "governance" / "infra-findings.md", INFRA_FINDINGS, a.force),
+        uret(proje / ".gitignore", GITIGNORE.format(source_root=a.source_root), a.force),
         uret(proje / ".gitattributes", GITATTRIBUTES, a.force),
         uret(proje / ".mcp.json", MCP_JSON, a.force),
     ]
