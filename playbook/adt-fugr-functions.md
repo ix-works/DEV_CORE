@@ -122,8 +122,12 @@ ENDFUNCTION.
 > 📌 **Standart tablo tipleri hazırdır** (`BAPIRET2_T` gibi) — mesaj tablosu için yeni tip yaratma.
 > 📌 **`LIKE` neden önerilmiyor:** SAP'nin **kendi** standart RFC FM'leri yapı-tipli TABLES'ı
 >   `LIKE` ile yazar (ölçüldü: `BAPI_MATERIAL_SAVEDATA` · `RFC_READ_TABLE`, ikisi de `FMODE='R'`).
->   Ama `LIKE` **obsolete**tir (ATC gürültüsü) ve ADT-push'un kabul edip etmediği **ölçülmedi**
->   — `STRUCTURE`'ın eşdeğeri olduğu için `FUNC_ADT 015` riskine yakın. **TTYP yolu kanıtlıdır.**
+>   Ama `LIKE` **obsolete**tir (ATC gürültüsü). ⭐ **2026-09-03 güncellemesi — "ölçülmedi" ARTIK
+>   DOĞRU DEĞİL:** `TABLES … LIKE <yapı>` biçimi **ADT-push'ta da aktivasyonda da GEÇTİ**
+>   (ölçüldü 2026-08-30, teyit 2026-09-02); yani `FUNC_ADT 015` hipotezi bu biçim için **çürüdü**.
+>   ⚠ **NİTELEYİCİYİ DÜŞÜRME:** ölçüm `processingType=normal` FM'de yapıldı — **RFC-enabled
+>   (`FMODE='R'`) hâli ÖLÇÜLMEDİ** ve yukarıdaki "RFC işaretlenince sertleşir" kuralı orada
+>   geçerlidir. ⇒ `LIKE` çalışır ama **önerilmez**; **TTYP yolu kanıtlıdır ve tercih edilir.**
 > ⚠ **Yeni tablo tipi = yeni DDIC objesi** ⇒ **adı ve kısa metni KULLANICI verir** (ADR 0005-D).
 > Yaratım: `scripts/create_table_type.py` · reçete: [`adt-tables-structures.md`](adt-tables-structures.md).
 >
@@ -134,8 +138,29 @@ ENDFUNCTION.
 **Push mekaniği** (`set_function_module_source` içinde — `adt-foundation.md §3.2`):
 1. `self.session.headers['X-sap-adt-sessiontype']='stateful'` (lock'un PUT'a kadar yaşaması için).
 2. `fetch_csrf_token(force_refresh=True)`.
-3. **LOCK:** `POST .../fmodules/<fm>?_action=LOCK&accessMode=MODIFY`, header `X-sap-adt-corrNr=<tr>`, Accept `...adt.lock.v1+xml` → cevaptan `LOCK_HANDLE` çek. (Lock endpoint = `.../fmodules/<fm>`, `/source/main` DEĞİL.)
-4. **PUT:** `PUT .../fmodules/<fm>/source/main?lockHandle=<h>&corrNr=<tr>`, Content-Type `text/plain; charset=utf-8`, body=source.
+3. **LOCK:** `POST .../fmodules/<fm>?_action=LOCK&accessMode=MODIFY`, header `X-sap-adt-corrNr=<tr>`, Accept `...adt.lock.v1+xml` → cevaptan `LOCK_HANDLE` **ve `CORRNR`** çek. (Lock endpoint = `.../fmodules/<fm>`, `/source/main` DEĞİL.)
+4. **PUT:** `PUT .../fmodules/<fm>/source/main?lockHandle=<h>&corrNr=<LOCK yanıtındaki CORRNR>`, Content-Type `text/plain; charset=utf-8`, body=source.
+
+> ### ⛔ `corrNr` OTORİTESİ: verdiğin numara DEĞİL, **LOCK yanıtındaki `CORRNR`**
+>
+> `<tr>` yalnız bir **ipucudur**. SAP kilit yanıtında daima **K-tipi İSTEK** numarasını
+> (`CORRNR`) döner ve PUT bununla yapılır. Araca **GÖREV (S)** numarası verilirse:
+>
+> | verilen | PUT `corrNr` | sonuç (ÖLÇÜLDÜ) |
+> |---|---|---|
+> | S-tipi **görev** | verilen (eski davranış) | `500` · `CTS_WBO_API 020` *"Nesne … talebinde bloke edildi"* — kontrol deneyi: **birebir aynı bayt** ikinci denemede de aynı 500 ⇒ içerikten bağımsız |
+> | S-tipi **görev** | LOCK `CORRNR` (bugünkü davranış) | **200** + aktivasyon `activationExecuted=true` |
+> | K-tipi **istek** | ikisi de aynı | 200 |
+>
+> Aynı ölçüm tablo yolunda da var: `populate_tables.py` — görev numarasıyla **9/9** `CTS_WBO_API 020`,
+> istek numarasıyla **9/9** geçti. ⇒ **Araca İSTEK (K) verilir, GÖREV (S) değil.** Görev numarasını
+> isteğe çevirmek gerekirse: `E070.STRKORR` (görev satırının üst isteği).
+>
+> `set_function_module_source()` bunu 2026-09-03'ten beri **kendisi yapar**: `CORRNR` ≠ verilen ise
+> `[WARN]` basıp `CORRNR` ile PUT eder; `IS_LINK_UP='X'` (BAŞKA geliştiricinin transport'u) ise
+> **PUT'u hiç atmaz**, `409` ile durur; `CORRNR` boş dönerse verilen transport'la devam eder ama
+> *"doğrulanmadı"* satırını basar. ⚠ **DOĞRULANAMADI:** FM kilit yanıtında `IS_LINK_UP` alanının
+> gerçekten dönüp dönmediği canlı ölçülmedi — dönmezse kapı ateşlemez (fail-open).
 5. **UNLOCK:** `POST .../fmodules/<fm>?_action=UNLOCK&lockHandle=<h>` (finally).
 
 ### 2c. Activate

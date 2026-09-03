@@ -140,12 +140,13 @@ kontrol("P2 çok dosya → BİRLEŞİM (7 birim)",
 #     seçim modunun en olası sessiz-daraltma kaynağıdır).
 secim, _ = sec("scripts/sap_adt_lib.py")
 # ⚠ SAYI HARİTAYA PİNLİ: bu modüle yeni bir korpus eklenirse (2026-08-19: `retry_500_govde`
-# → 6'dan 7'ye) HARİTA ile BU SATIR birlikte güncellenir. Sayıyı gevşetmek (`>=`) çapayı
-# öldürür — sessiz daraltma tam olarak burada görünür.
-kontrol("P3 çok-tüketicili kaynak → 7 korpusun hepsi",
-        secim is not None and len(secim) == 7
+# → 6'dan 7'ye · 2026-09-03: `transport_gorev_istek_cevrimi` → 7'den 8'e) HARİTA ile BU
+# SATIR birlikte güncellenir. Sayıyı gevşetmek (`>=`) çapayı öldürür — sessiz daraltma tam
+# olarak burada görünür.
+kontrol("P3 çok-tüketicili kaynak → 8 korpusun hepsi",
+        secim is not None and len(secim) == 8
         and {"O:lock_modification_support", "O:conn_cift_anahtar",
-             "O:retry_500_govde"} <= secim,
+             "O:retry_500_govde", "O:transport_gorev_istek_cevrimi"} <= secim,
         f"alınan={sorted(secim) if secim else secim}")
 
 # P4: mutlak yol + ters-bölü (Windows'ta ajanın vereceği gerçek biçim) aynı sonucu verir.
