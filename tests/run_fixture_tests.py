@@ -177,6 +177,10 @@ OZEL_TESTLER = [
     ("precommit_coreleak_failclosed",
      "Q199(1): core-sizinti kapisinin KENDI olcumu cokerse 'temiz' sayilmaz — "
      "'eslesme yok' != 'komut coktu' (uctan uca: eski desende sizintili commit GECIYORDU)"),
+    ("precommit_kopya_surum_esligi",
+     "Q245: SABLON sertlesti != KOPYA sertlesti — dogum yuzeyi (init_project uretimi "
+     "sablonla bayt-es) + iki sertlestirmenin BIRLESIK sokumu (canli kopyalarda yasayan "
+     "surum) fail-open verir; kardes iki korpus bu birlesimi olcmez"),
     ("guard_f1_taban_failclosed",
      "Q199(2): CI `behavior-surface` F1 — erisilemez `github.event.before` (force-push) "
      "'dokunus yok' SAYILMAZ; taban `$AFTER^`e duser ve GORUNUR ::notice:: ile bildirilir, "
@@ -518,10 +522,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # ayni sinif): jeneratorun urettigi ISKELET hicbir korpusa eslesmiyordu, o yuzden
     # "bugun kossa GECEN bir proje uretir mi?" sorusunu yalniz elle template-provasi
     # yanitliyordu (ve iki tur ust uste kacirildi: C-HOOK-01 FAIL'i + dar sir kilidi).
-    ("scripts/init_project.py", ("O:init_project_iskelet", "O:gitignore_tam_satir"),
+    ("scripts/init_project.py", ("O:init_project_iskelet", "O:gitignore_tam_satir",
+                                 "O:precommit_kopya_surum_esligi"),
      "uretilen iskeletin KAPIDAN gecmesi (C-HOOK-01 kuyruk tohumu) + `.gitignore` sablonunun "
      "sir kilidi/FP dengesi burada yasar; kanonik kilit satirlarinin TAM-SATIR okunmasi "
-     "komsu korpusta (gitignore_tam_satir KANONIK bloguyla ayni sablonu tarif eder)"),
+     "komsu korpusta (gitignore_tam_satir KANONIK bloguyla ayni sablonu tarif eder). "
+     "UCUNCUSU (Q245) DOGUM YUZEYI: `uret(... 'pre-commit', precommit, a.force)` cagrisi "
+     "kalkarsa/degisirse kopya sablonla bayt-es olmaz — `uret()` mevcut dosyayi ATLAR, "
+     "bu yuzden sapma yalniz DOGUMDA kapatilabilir"),
     ("scripts/validators/check_settings_template_sync.py", ("O:hook_gate_coverage",),
      "kablolama okuyucusu (`_kablolu_hooklar`) buradan IMPORT ediliyor — imza değişirse "
      "coverage-gate'in hook ORPHAN dalı sessizce ölür (kopya YOK, tek kaynak)"),
@@ -631,10 +639,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "`adt_transport_list` sıfır-kanıtı sözleşmesi (zero_verified/zero_notice) + docstring'in "
      "çürütülmüş rehberliği taşımaması"),
     ("claude/git-hooks/pre-commit.template",
-     ("O:precommit_junction_failclosed", "O:precommit_coreleak_failclosed"),
+     ("O:precommit_junction_failclosed", "O:precommit_coreleak_failclosed",
+      "O:precommit_kopya_surum_esligi"),
      "İKİ AYRI fail-open ekseni, İKİ AYRI korpus — biri diğerini KAPSAMAZ: adım-2 "
      "`core/` çözülemezse validator zinciri atlanmaz (junction) · adım-1 core-sızıntı "
-     "kapısının KENDİ `git diff` ölçümü çökerse 'temiz' sayılmaz (Q199①, coreleak)"),
+     "kapısının KENDİ `git diff` ölçümü çökerse 'temiz' sayılmaz (Q199①, coreleak). "
+     "ÜÇÜNCÜSÜ (Q245) o ikisinin BİRLEŞİMİNİ + şablon→kopya yayılımını ölçer: iki "
+     "sertleştirme AYNI ANDA sökülünce (canlı kopyalarda yaşayan sürüm) ne olur"),
     ("templates/new-package/.rules.md.tmpl", ("O:sablon_zorunlu_maddeler",),
      "DTEL/Domain öneki `_E_`/`_D_` — kaynak otorite `standards/01-naming.md` §4.4.5; "
      "şablon kusuru HER yeni pakete miras kalır"),
