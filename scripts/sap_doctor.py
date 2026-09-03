@@ -106,25 +106,61 @@ def run(probe: str, ptype: str, package: str) -> int:
         results.append((FAIL, f"MCP import hatası: {exc}"))
 
     # 5+6. Canlı SAP probe (VPN/auth/paket)
+    #
+    # ⛔ 2026-09-03 — "DOĞRULAMA KOŞAMADI = DOĞRULANDI" sınıfının BU dosyadaki üyesi.
+    #    Eski kod probe'u `redirect_stdout(StringIO())` ile çağırıp çıktıyı ATIYOR, dönen
+    #    `None`'ı ise KOŞULSUZ "bağlantı + auth OK (VPN ✓, kimlik ✓)" sayıyordu.
+    #    `sap_client.get_object_metadata` HER istisnayı yutup `None` döndürür (KASITLI
+    #    sözleşme — sınıflandırma çağıranın işidir, bkz. `atom._bos_sonuc_sinifi`), bu yüzden
+    #    aşağıdaki `except Connection*` dalı ÖLÜ KODdu: DNS'te çözülmeyen host'ta bile
+    #    SONUÇ=OK basılıyordu. Ölçüldü 2026-09-03: İKİ ayrı projede — <PROJECT_A> (probe'suz) VE <PROJECT_B>
+    #    (probe+paket dolu) — İKİSİ de sahte-OK verdi ⇒ proje kurulumuyla ilgisi yok.
+    #    Bu, 2026-08-01 (atom/push/where_used/ATC/inactive/csrf/package_contents) ve
+    #    2026-08-19 (`run_sql_query`) süpürgelerinin ATLADIĞI üye: her ikisi de MCP tool
+    #    katmanını + `sap_adt_lib`'i taradı, `scripts/` altındaki bu CLI tanı aracını DEĞİL.
+    #    FIX: alt katmanın log'u YUTULMAZ, kanonik üç-değerli sınıflandırıcıya verilir.
+    #    ⚠ `sap_client.get_object_metadata` BİLEREK DEĞİŞTİRİLMEDİ — istisna-yutması iki
+    #    fixture korpusunda (`dogrulama_kosamadi`, `veri_yetki_guardlari`) ÇİVİLİ.
     try:
         from sap_client import SAPClient  # type: ignore
         from sap_adt_lib import SAPObjectNotFoundError  # type: ignore
+        # BAĞIMLILIKSIZ modül — `tools.atom` MCP SDK'sını cekiyor; SDK'sız ortamda
+        # (CI) import patlar ve arac 'ag mi yetki mi' sorusuna 'probe hatasi' derdi.
+        from mcp_servers.sap_adt._bos_sonuc import _bos_sonuc_sinifi  # type: ignore
         client = SAPClient()
+        log_buf = io.StringIO()
         try:
-            with contextlib.redirect_stdout(io.StringIO()):  # SAPClient chatter'ını yut
+            with contextlib.redirect_stdout(log_buf):  # chatter YUTULMAZ — kanıt olarak tutulur
                 md = client.get_object_metadata(probe, object_type=ptype)
-            md_text = md if isinstance(md, str) else str(md or "")
+            md_text = md if isinstance(md, str) else ""
         except SAPObjectNotFoundError:
-            md_text = ""  # bağlantı/auth OK, sadece obje yok
-        results.append((OK, f"SAP bağlantı + auth OK (VPN ✓, kimlik ✓)"))
+            md_text = ""  # sunucuya ULAŞILDI, obje yok
+        client_log = log_buf.getvalue()
+        iz = " ".join(client_log.split())[:200]
+
+        if md_text:
+            # POZİTİF KANIT: canlı gövde okundu ⇒ ağ + kimlik ikisi de kanıtlı.
+            results.append((OK, "SAP bağlantı + auth OK (VPN ✓, kimlik ✓) — canlı metadata okundu"))
+        else:
+            sinif = _bos_sonuc_sinifi(client_log)
+            if sinif == "ulasilamadi":
+                results.append((FAIL, f"SAP'ye ULAŞILAMADI (ağ/DNS/VPN) — bağlantı KANITLANMADI. "
+                                      f"Bu 'OK' DEĞİLDİR; VPN açık mı? İz: {iz or '(log boş)'}"))
+            elif sinif == "belirsiz":
+                results.append((WARN, f"Sunucuya ulaşıldı ama probe 404-DIŞI hata döndü — kimlik/yetki "
+                                      f"TEYİT EDİLMEDİ (401/403/500 olabilir). İz: {iz}"))
+            else:  # "yok" → 404 alındı: TCP+TLS+HTTP+kimlik yolu çalıştı
+                results.append((OK, "SAP bağlantı + auth OK (VPN ✓, kimlik ✓) — probe 404 (sunucuya ulaşıldı)"))
 
         # 6. Paket erişimi (probe metadata paketi içeriyor mu)
         if md_text and package and package.lower() in md_text.lower():
             results.append((OK, f"Aktif paket erişilebilir: {package} (probe {probe} bu pakette)"))
         elif md_text:
             results.append((WARN, f"Probe {probe} erişildi ama paket {package} metadata'da görünmedi (yine de bağlantı OK)"))
-        else:
+        elif sinif == "yok":
             results.append((WARN, f"Probe obje {probe} ({ptype}) bulunamadı — bağlantı OK ama obje yok/paket teyit edilemedi"))
+        else:
+            results.append((WARN, f"Paket erişimi ÖLÇÜLEMEDİ — probe okunamadı (yukarıdaki satır)"))
     except Exception as exc:
         name = type(exc).__name__
         if "Auth" in name:

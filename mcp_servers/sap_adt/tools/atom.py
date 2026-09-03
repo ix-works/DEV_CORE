@@ -401,10 +401,12 @@ _DDL_KARDES_SEG = {
 # VARDI ve client_log'da NameResolutionError yazıyordu. Bir ajan buna dayanıp
 # "obje yok, yaratayım" derse ADR 0005-A sınırına dayanır. Bu yüzden ağ/erişim
 # kaynaklı boş sonuç artık `exists:false` DEĞİL, açık HATA döner.
-_UNREACHABLE_MARKERS = (
-    "NameResolutionError", "getaddrinfo", "ConnectionError", "ConnectTimeout",
-    "Max retries exceeded", "ReadTimeout", "SSLError", "ProxyError",
-    "Connection refused", "Connection aborted",
+# _UNREACHABLE_MARKERS + _bos_sonuc_sinifi 2026-09-03'te BAĞIMLILIKSIZ modüle
+# TAŞINDI (SDK'sız CLI araçları da kullanabilsin). Buradan re-export edilir:
+# mevcut `from ...tools.atom import _bos_sonuc_sinifi` çağrıları AYNEN çalışır.
+from mcp_servers.sap_adt._bos_sonuc import (  # noqa: E402
+    _UNREACHABLE_MARKERS,
+    _bos_sonuc_sinifi,
 )
 
 # Doğrudan okuma yolu OLMAYAN tipler: /source/main eklenerek 404 alınır ve obje
@@ -418,42 +420,6 @@ _NO_DIRECT_READ_HINT = {
              "çıkarılamaz. Doğru yol: adt_search_objects ile gerçek URI'yi al, sonra ham GET."),
     "function": ("FM'in kaynağı fonksiyon grubu altındadır; adt_search_objects ile URI al."),
 }
-
-
-def _bos_sonuc_sinifi(log_text: str) -> str:
-    """Alt katmanın YUTTUĞU boş sonucu ÜÇ-DEĞERLİ sınıflandır.
-
-    Döner: `"yok"` (yokluk KANITLI) · `"ulasilamadi"` (ağ/erişim) · `"belirsiz"`
-    (hata var ama yokluk imzası YOK — ör. HTTP 500/403).
-
-    ⛔ SINIF-KURALI (2026-08-01 bug-avı, "doğrulama koşamadı = doğrulandı"):
-    `sap_client` katmanındaki okuyucular (`get_ddic_object`, `get_object_metadata`, ...)
-    HER istisnayı yutup `None` döndürür ve sebebi yalnız stdout'a `[ERROR] ...` diye basar.
-    Bu yüzden üst kattaki `except` dalları o yollarda HİÇ ateşlenmez; `None`'ı doğrudan
-    "obje yok" saymak, "sunucu patladı"yı "yok"la AYNI cevaba düşürür. Kanıt tek yerden
-    üretilsin diye sınıflandırma bu TEK fonksiyonda toplandı; `adt_get` (DDIC + klasik),
-    delete-readback ve lock-probe aynı kaynağı kullanır.
-
-    Kanıt kaynağı: `SAPADTError.__str__` = `"[<status>] <mesaj>"` → durum kodu log'a
-    DÜŞER. 404 = yokluk kanıtı; 4xx/5xx = kanıt DEĞİL.
-    """
-    lt = log_text or ""
-    if any(m in lt for m in _UNREACHABLE_MARKERS):
-        return "ulasilamadi"
-    dusuk = lt.lower()
-    kodlar = set(re.findall(r"\[(\d{3})\]", lt))
-    if kodlar - {"404"}:            # 500/403/502... → yokluk BEYAN EDİLMEZ
-        return "belirsiz"
-    if "404" in kodlar:
-        return "yok"
-    yokluk_imzasi = any(s in dusuk for s in
-                        ("not found", "notfound", "404", "does not exist",
-                         "bulunamadı", "bulunamadi"))
-    hata_izi = "[error]" in dusuk
-    if hata_izi and not yokluk_imzasi:
-        return "belirsiz"
-    # Temiz-boş yanıt (hata izi yok) ya da kesin bulunamadı imzası.
-    return "yok"
 
 
 def _miss_or_unreachable(name: str, object_type: str, log_text: str) -> dict:

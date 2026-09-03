@@ -295,6 +295,10 @@ OZEL_TESTLER = [
      "retry adapter'i SAP'nin 500 GOVDESINI yutuyordu (429/502/503/504 tekrar KORUNDU)"),
     ("sorgu_basarisizligi_gorunur",
      "adt_sql_query/adt_table_read: alt katman None -> ok:false (ok:true + 0 satir = sahte yesil)"),
+    # 2026-09-03: ayni sinifin 7. uyesi, bu kez CLI tani aracinda (scripts/ altinda oldugu
+    # icin 2026-08-01 ve 2026-08-19 supurgelerinin ikisi de atlamisti).
+    ("doctor_baglanti_kaniti",
+     "sap_doctor canli probe: ulasilamadi -> FAIL (eskiden 'baglanti + auth OK' + exit 0)"),
     # 2026-08-21: ATC Priority-1 SONUC ekseni (ayni hook, YENI degismez sinifi). Tetik
     # BASARISIZLIK degil, BASARILI bir cagrinin politika-ilgili SONUCU: `priority_1_count>0`.
     # Dort degismez, dort mutasyon: atesleme-sayi · atesleme-bayrak · SESSIZLIK (esik) ·
@@ -736,6 +740,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
       "O:sorgu_basarisizligi_gorunur"),
      "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil)"),
+    # sap_doctor.py HARITA'da HİÇ YOKTU (2026-09-03 bulgusu): DNS'te çözülmeyen host'ta
+    # `[OK] SAP bağlantı + auth OK` basan sahte-yeşil hiçbir korpusa değmiyordu.
+    ("scripts/sap_doctor.py", ("O:doctor_baglanti_kaniti",),
+     "canlı probe'un ÜÇ-DEĞERLİ sınıflaması: ulaşılamadı=FAIL · 404=OK · 4xx/5xx=WARN. "
+     "Alt katman (`get_object_metadata`) istisnayı YUTAR ⇒ 'kanıt üretemedim' ile "
+     "'kanıt olumlu' burada ayrılır"),
     ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok",), "activate_and_verify"),
     ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
     ("scripts/push_object.py", ("O:class_include_push",), "ccau/ccimp push sırası"),
@@ -771,7 +781,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("mcp_servers/sap_adt/tools/atom.py",
      ("O:adtget_yokluk_kaniti", "O:ddic_okuma_yolu", "O:dogrulama_kosamadi",
       "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline", "O:mcp_sahte_sonuc_uclusu",
-      "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu"),
+      "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu",
+      "O:doctor_baglanti_kaniti"),
      "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline) + "
      "`adt_classrun`/`adt_post_shell` guard SINIF çapası (AST) + `adt_get` dönüş ŞEKLİ "
      "grep kapsam-muhasebesinin GİRDİSİdir (ok/exists/source → skipped sebebi)"),
