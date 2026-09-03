@@ -496,13 +496,17 @@ kontrol("D3 GEVSETME CAPASI (AST): include yolunda `SAPLockError` yakalayip YENI
 # =============================================================================
 # ⚠ Bu bolum CALISMA AGACINI okur (mutasyonda da bugunku agac) — bilincli: burada
 #   olculen sey "fix kondu mu" degil, SINIFIN GERI KALANININ BEYAN EDILDIGI.
+# ⚠ ENVANTER DARALDI 2026-09-04 (6 -> 4) — Q235 turu iki uyeyi TASFIYE etti:
+#   `scripts/workflows/_clean_recreate.py` ve `scripts/workflows/_full_cycle_v2.py`
+#   `attic/adhoc-fosil/workflows/` altina emekli edildi (cagirani YOK'tu; kusur
+#   `<PROJECT_ROOT>` yer tutucusuydu). Bu satir CI'da FAIL vererek degisimi YAKALADI
+#   — capa amacina gore calisti: kume daralinca da duser, genisleyince de.
+#   Kuyruk kaydi `Q255` bu daralmayi yansitacak sekilde guncellendi.
 HAM_KILIT_ACIK = {
     "scripts/create_rap_service.py",
     "scripts/populate_cds_views.py",
     "scripts/populate_message_class.py",
     "scripts/push_bo_atomic.py",
-    "scripts/workflows/_clean_recreate.py",
-    "scripts/workflows/_full_cycle_v2.py",
 }
 _ham = {}
 for _py in sorted((KOK / "scripts").rglob("*.py")):
