@@ -124,7 +124,9 @@ def run(probe: str, ptype: str, package: str) -> int:
     try:
         from sap_client import SAPClient  # type: ignore
         from sap_adt_lib import SAPObjectNotFoundError  # type: ignore
-        from mcp_servers.sap_adt.tools.atom import _bos_sonuc_sinifi  # type: ignore
+        # BAĞIMLILIKSIZ modül — `tools.atom` MCP SDK'sını cekiyor; SDK'sız ortamda
+        # (CI) import patlar ve arac 'ag mi yetki mi' sorusuna 'probe hatasi' derdi.
+        from mcp_servers.sap_adt._bos_sonuc import _bos_sonuc_sinifi  # type: ignore
         client = SAPClient()
         log_buf = io.StringIO()
         try:

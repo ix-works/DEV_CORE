@@ -113,41 +113,102 @@ def _sadelestir(s: str) -> str:
     return s.upper()
 
 
-# (ad, log, ret, notfound, FAIL_bekle, gorunmeli, GORUNMEMELI)
+# ⛔ NEDEN rc ÖLÇÜLMÜYOR (2026-09-03, CI kırmızısı): `run()`'ın çıkış kodu probe'un DEĞİL
+# TÜM adımların toplamıdır (conn/tier/master-language/MCP-import). SDK'sız CI'da MCP-import
+# adımı FAIL verdiği için rc HER vektörde 1 oldu ve korpus 2/9'a düştü — kusur kodda değil,
+# ÖLÇÜMDEYDİ. Artık PROBE SATIRININ ETİKETİ ölçülür: ortam gürültüsünden bağımsız.
+# (ad, log, ret, notfound, beklenen_etiket, gorunmeli, GORUNMEMELI)
 VEKTORLER = [
     # ── AYIRT EDİCİLER: bağlantı KANITLANAMADIĞI hâller ──────────────────────
     ("A1 DNS çözülmedi -> FAIL (bağlantı iddiası YOK)",
      "[ERROR] HTTPSConnectionPool(...): NameResolutionError getaddrinfo failed", None, False,
-     True, "ULASILAMADI", "AUTH OK"),
+     "FAIL", "ULASILAMADI", "AUTH OK"),
     ("A2 bağlantı reddedildi -> FAIL",
      "[ERROR] Connection refused", None, False,
-     True, "ULASILAMADI", "AUTH OK"),
+     "FAIL", "ULASILAMADI", "AUTH OK"),
     ("A3 HTTP 500 -> sunucuya ULAŞILDI ama kimlik TEYİT EDİLMEDİ (VPN suçlanmaz)",
      "[ERROR] [500] Internal Server Error", None, False,
-     False, "TEYIT EDILMEDI", "VPN"),
+     "WARN", "TEYIT EDILMEDI", "VPN"),
     ("A4 HTTP 401 -> kimlik ✓ İDDİA EDİLMEZ",
      "[ERROR] [401] Unauthorized", None, False,
-     False, "TEYIT EDILMEDI", "KIMLIK ✓"),
+     "WARN", "TEYIT EDILMEDI", "KIMLIK ✓"),
     # ── FP ÇAPALARI: sağlıklı hâllerde HÂLÂ "OK" demeli (aşırı-düzeltme yok) ──
     ("F1 FP ÇAPASI: 404 = sunucuya ulaşıldı + kimlik geçti -> OK",
      "[ERROR] [404] Not found", None, False,
-     False, "AUTH OK", "ULASILAMADI"),
+     "OK", "AUTH OK", "ULASILAMADI"),
     ("F2 FP ÇAPASI: canlı metadata okundu -> OK",
      "", "<adtcore:objectReference package='ZTEST_PKG'/>", False,
-     False, "AUTH OK", "ULASILAMADI"),
+     "OK", "AUTH OK", "ULASILAMADI"),
     ("F3 FP ÇAPASI: SAPObjectNotFoundError (ulaşıldı, obje yok) -> OK",
      "", None, True,
-     False, "AUTH OK", "ULASILAMADI"),
+     "OK", "AUTH OK", "ULASILAMADI"),
 ]
 
-for ad, log, ret, nf, bekle_fail, gorunmeli, gorunmemeli in VEKTORLER:
-    rc, ham = kos(log, ret, nf)
-    o = _sadelestir(ham)
+_PROBE_IZLERI = ("ULAŞILAMADI", "TEYİT EDİLMEDİ", "auth OK")
+
+
+def probe_satiri(cikti: str) -> tuple[str, str]:
+    """(etiket, satır) — probe HÜKMÜNÜ taşıyan satır. Yoksa ("YOK", "")."""
+    for satir in cikti.splitlines():
+        if any(iz in satir for iz in _PROBE_IZLERI):
+            for etiket in ("[FAIL]", "[WARN]", "[OK]"):
+                if etiket in satir:
+                    return etiket.strip("[]"), satir.strip()
+            return "ETIKETSIZ", satir.strip()
+    return "YOK", ""
+
+
+for ad, log, ret, nf, bekle_etiket, gorunmeli, gorunmemeli in VEKTORLER:
+    _rc, ham = kos(log, ret, nf)
+    etiket, satir = probe_satiri(ham)
+    o = _sadelestir(satir)
     g = _sadelestir(gorunmeli) in o
     ng = _sadelestir(gorunmemeli) not in o
-    kontrol(ad, (rc == 1) == bekle_fail and g and ng,
-            f"rc={rc} (FAIL bekleniyordu={bekle_fail}) '{gorunmeli}'={g} "
-            f"'{gorunmemeli}' yok={ng} | çıktı: {' '.join(ham.split())[:200]}")
+    kontrol(ad, etiket == bekle_etiket and g and ng,
+            f"etiket={etiket} (beklenen={bekle_etiket}) '{gorunmeli}'={g} "
+            f"'{gorunmemeli}' yok={ng} | probe satırı: {satir[:220] or '(BULUNAMADI)'} "
+            f"| tam çıktı: {' '.join(ham.split())[:400]}")
+
+# ── V10 — REGRESYON: MCP SDK YOKKEN de siniflandirma calisir (CI'nin yakaladigi kusur) ──
+# 2026-09-03: siniflandirici `tools/atom.py`den import ediliyordu; atom.py `_app` uzerinden
+# MCP SDK'sini ceker. CI `pip install requests urllib3 python-dotenv` yapar, SDK YOKTUR =>
+# ImportError => dis except => arac "SAP probe hatasi" diyordu. Yani "ag mi, yetki mi"
+# sorusuna YANLIS cevap. Siniflandirici bagimliliksiz `_bos_sonuc.py`ye TASINDI.
+# Bu vektor SDK'yi import-engelleyiciyle bloklar ve hukumun HALA dogru ciktigini olcer.
+def _sdk_siz_kos(log_text: str) -> tuple[str, str]:
+    import importlib.util as _iu
+
+    class _Engel:
+        def find_module(self, name, path=None):
+            if name == "mcp" or name.startswith("mcp."):
+                return self
+
+        def load_module(self, name):
+            raise ImportError("No module named 'mcp' (SDK-siz ortam simulasyonu)")
+
+    _stub(log_text)
+    sys.meta_path.insert(0, _Engel())
+    for _m in [k for k in sys.modules if k.startswith("mcp_servers")]:
+        del sys.modules[_m]          # SDK'li onceki yukleme cache'ini dusur
+    try:
+        gercek = sys.stdout
+        _spec = _iu.spec_from_file_location("doctor_sdksiz", DOCTOR)
+        _mod = _iu.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        _CANLI.append(sys.stdout)
+        sys.stdout = gercek
+        _buf = io.StringIO()
+        with contextlib.redirect_stdout(_buf):
+            _mod.run("ZTEST_PROBE", "ddls", "ZTEST_PKG")
+        return probe_satiri(_buf.getvalue())
+    finally:
+        sys.meta_path.remove(_Engel) if False else sys.meta_path.pop(0)
+
+
+_e10, _s10 = _sdk_siz_kos("[ERROR] HTTPSConnectionPool: NameResolutionError getaddrinfo failed")
+kontrol("V10 REGRESYON: MCP SDK YOKKEN de 'ULAŞILAMADI' hükmü verilir ('probe hatası' DEĞİL)",
+        _e10 == "FAIL" and "ULAŞILAMADI" in _s10,
+        f"etiket={_e10} satır={_s10[:200] or '(BULUNAMADI)'}")
 
 # ── V8 — 3. BAĞLAM (görev-dışı): kardeş çağrı yerleri bu kusuru TAŞIMIYOR mu? ──
 # `get_object_metadata`'yı redirect_stdout içinde çağıran diğer üretim dosyaları,
@@ -162,8 +223,8 @@ kontrol("V8 3.BAĞLAM: check_sap_master_language boş metadata'yı 'OK' değil S
 # ── V9 — sözleşme: fix kanonik sınıflandırıcıyı KULLANIYOR (kendi kopyası değil) ──
 _src = DOCTOR.read_text(encoding="utf-8", errors="replace")
 kontrol("V9 sözleşme: sap_doctor kanonik `_bos_sonuc_sinifi`'nı import eder (kopya mantık yok)",
-        "_bos_sonuc_sinifi" in _src and "from mcp_servers.sap_adt.tools.atom import" in _src,
-        "sınıflandırma TEK yerde yaşamalı (2026-08-01 kararı)")
+        "_bos_sonuc_sinifi" in _src and "from mcp_servers.sap_adt._bos_sonuc import" in _src,
+        "sınıflandırma TEK yerde + BAĞIMLILIKSIZ modülde yaşamalı (SDK'sız CI'da da koşar)")
 
 gecen = sum(1 for _, ok, _ in SONUC if ok)
 for ad, ok, detay in SONUC:
