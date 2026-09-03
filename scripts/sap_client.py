@@ -525,7 +525,33 @@ class SAPClient:
 
         lock_handle = None
         try:
+            # ── Q207 (2026-09-03): GÖREV(S) → ÜST İSTEK(K) çözümü BU YOLDA DA koşar ──
+            # Bugüne kadar `transport` HAM geçiyordu. Ölçülmüş sonuç (08-29 ×2 + 08-30 ×3,
+            # `infra-findings` Q207): aynı obje, aynı an, SAP **aynı** `CORRNR=<K>` atamasını
+            # yapıyor; ana sınıf yolu (`push_object` :687) `_find_existing_transport` ile
+            # görev→üst-istek çevirip DEVAM ederken, alt-include yolu aynı atamayı
+            # `[TRANSPORT MISMATCH]` sayıp ABORT ediyordu. Asimetri SAP'de değil,
+            # **iki kod yolu arasındaydı**; burada kapatılıyor.
+            #
+            # ⚠ BU BİR GEVŞETME DEĞİLDİR (ölçüldü):
+            #   · `_find_existing_transport` adaylarını `E070.AS4USER = mevcut kullanıcı`
+            #     ile süzer (kural 3); hepsi başkasınınsa `foreign_only` deyip İSTENEN
+            #     transport'u aynen döndürür ⇒ başka geliştiricinin transport'una kaymaz.
+            #   · `lock_object`'in `IS_LINK_UP='X'` yabancı-transport fail-fast'i aynen durur.
+            #   · Çözüm yine de tutmazsa bu yol ESKİSİ GİBİ sert düşer (aşağıda auto-retry
+            #     YOK — bkz. sonraki not).
+            #
+            # ⛔ BİLEREK EKLENMEYEN (Q220①): `push_object`'in "Bug 11 auto-retry"si buraya
+            # TAŞINMADI. O katman yalnız E071 sorgusunun HİÇ koşamadığı (HTTP 500) sistemler
+            # içindir ve bugün fail-closed olan bir yolu kurtarıcıya çevirirdi = gevşetme.
+            # Kalan asimetri BİLİNÇLİDİR ve dar: "E071 erişilemez + CORRNR uyuşmuyor"
+            # hâlinde ana yol kurtarır, bu yol durur. Kurtarma istenirse AYRI karar.
+            if transport:
+                transport = self._find_existing_transport(class_name, 'class', transport)
+
             print(f"\n[2/4] Locking parent class...")
+            print(f"      corrNr (lock'a verilen transport): "
+                  f"{transport or '[YOK — hayalet transport riski]'}")
             lock_handle = self.adt_client.lock_object(object_url, transport=transport)
             effective_transport = (
                 getattr(self.adt_client, '_last_lock_effective_transport', None) or transport)
@@ -712,8 +738,19 @@ class SAPClient:
                 corrnr_retry = self.adt_client._last_lock_effective_transport
                 is_foreign = (self.adt_client._last_lock_is_link_up == 'X')
                 if corrnr_retry and transport and corrnr_retry.upper() != transport.upper() and not is_foreign:
-                    print(f"      [INFO] Auto-retrying lock with SAP-assigned transport: {corrnr_retry}")
-                    print(f"      [INFO] (Same-user CORRNR mismatch — Bug 11 auto-retry)")
+                    # ⚠ 2026-09-03 (Q220②) — SEVİYE [INFO] → [WARN], KURTARMA AYNEN KALDI.
+                    # Eski iki satır "Auto-retrying …" diyordu ve okuyan bunu *"araç
+                    # hallediyor"* diye okuyordu ⇒ YANLIŞ GİRDİ MASKELENİYORDU. Ölçülmüş
+                    # bedel: aynı yanlış girdi (S-tipi görev numarası) bu evde ilk iki
+                    # vakada sessizce kurtarıldı, ancak kurtarmasız bir yolda (populate_
+                    # tables, sonra `.ccau`) ortaya çıktı — teşhis o güne kadar gecikti.
+                    # "Araç kendiliğinden çalıştı" GİRDİNİN DOĞRU OLDUĞUNU KANITLAMAZ.
+                    print(f"      [WARN] İSTENEN TRANSPORT KABUL EDİLMEDİ: {transport} "
+                          f"— SAP {corrnr_retry} atadı (aynı kullanıcı, CORRNR uyuşmazlığı).")
+                    print(f"      [WARN] Kurtarma yapılıyor (Bug 11 auto-retry) — bu bir "
+                          f"DÜZELTMEDİR, girdinin doğru olduğunun kanıtı DEĞİLDİR.")
+                    print(f"      [WARN] Muhtemel sebep: araca GÖREV (S) numarası verildi; "
+                          f"araca İSTEK (K) verilir. Brifi/`.rules.md`'yi düzelt.")
                     transport = corrnr_retry
                     lock_handle = self.adt_client.lock_object(object_url, transport=transport)
                 else:
@@ -722,8 +759,17 @@ class SAPClient:
             print(f"      Lock handle: {lock_handle[:50] if lock_handle else 'None'}...")
             # _verify_and_return_lock() already printed the CORRNR and raised SAPLockError
             # on mismatch. If we reach here the transport assignment is confirmed correct.
-            # CORRNR always returns the K-type workbench request (not S-type child task),
-            # so effective_transport should always equal the requested transport.
+            #
+            # ⛔ 2026-09-03 (Q219, İKİNCİ KOPYA) — buradaki eski iki satır ÇÜRÜKTÜ. CORRNR'ın
+            # daima K-tipi İSTEK dönmesinden *"etkin transport istenenle daima aynı olur"*
+            # sonucunu çıkarıyordu; öncül doğru, SONUÇ YANLIŞ. Eşitlik yalnız ÇAĞIRAN da
+            # K-tipi İSTEK verdiyse doğar. Çağıran S-tipi GÖREV verirse CORRNR uyuşmazlığı
+            # DAİMA olur (bu evde üç kez tur yaktı — `infra-findings` Q219).
+            # Bu satıra iki yoldan gelinir ve İKİSİ DE bir DÖNÜŞÜMÜN sonucudur:
+            #   (a) çağıran zaten K verdi → eşit;
+            #   (b) `_find_existing_transport` (:687) ya da yukarıdaki Bug-11 retry
+            #       transport'u K'ya ÇEVİRDİ → eşit.
+            # Kural: araca İSTEK (K) verilir, GÖREV (S) değil.
             effective_transport = self.adt_client._last_lock_effective_transport or transport
 
             if lock_handle == 'NO_LOCK_SUPPORT':

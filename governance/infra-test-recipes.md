@@ -725,6 +725,41 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   `/sap/bc/adt/locks` ucunun bu sistemde gerçekten ne döndürdüğü **DOĞRULANAMADI**.
   Fix her iki hâlde de dürüst: uç cevap veremezse `locked:null`, "kilitli değil" DEMEZ.
 
+## B18f — görev(S)→istek(K) çevrimi: `push_class_include` + `set_function_module_source`
+- `python tests/fixtures/transport_gorev_istek_cevrimi/run.py` → **23/23** ·
+  MUTASYON (`--mutasyon`, taban **`e3484a1`**) → **10/23**.
+  ⛔ `--ref`e dal adı/`main`/`HEAD` verme (koşucu öz-denetler → exit 2, sayı raporlamaz).
+  ⚠ Mutasyon `git show <sha>:` kullanır ⇒ **sığ klonda (CI) koşmaz** — CI yalnız tabanı koşar.
+- **Değişmez 1 (Q207):** `SAPClient.push_class_include` lock'tan ÖNCE `_find_existing_transport`
+  çağırır ⇒ S-tipi **görev** numarasıyla alt-include push'u geçer (ana sınıf yoluyla simetri).
+- **Değişmez 2 (Q215):** `set_function_module_source` PUT'unun `corrNr`'ı **LOCK yanıtındaki
+  `CORRNR`**tır, çağıranın verdiği değer değil. Uyuşmazlık `[WARN]` ile ilan edilir.
+- **Değişmez 3 (Q219):** *"CORRNR daima eşleşir"* iddiası **iki dosyada da** yoktur
+  (`sap_adt_lib` docstring + `sap_client` yorumu). Metin kusuruydu, bedeli üç ajan turuydu.
+- ⚠ **GEVŞETME ÇAPALARI OMURGADIR — silinirse korpus kurtarmanın sınırını ölçmez olur:**
+  · **A4** adaylar başka kullanıcınınsa (`foreign_only`) çevrim YAPILMAZ, yol **eskisi gibi
+    sert düşer** ve `lock_object` çağrısı **TEKtir** (Bug-11 auto-retry include yoluna
+    BİLEREK taşınmadı — `D3` AST çapası bunu çivilliyor).
+  · **B4** FM yolunda `IS_LINK_UP='X'` (başka geliştiricinin transport'u) → **PUT HİÇ ATILMAZ**,
+    409. Bu, CORRNR'ı otorite almanın açtığı kurtarmanın **pozitif kontrolüdür**.
+  · **B5** boş `CORRNR` **hata DEĞİL** (2026-08-09 kararı: DDLS/DTEL/DOMA aileleri) — istenen
+    transport'la devam edilir, yalnız *"DOĞRULANMADI"* izi bırakılır.
+- ⚠ **ÇAPA DİZELERİ ÜRETİM METNİNİN GERÇEK YAZIMINDAN alınır:** üretim `[WARN]` metinleri
+  Türkçe aksanlıdır (`KABUL EDİLMEDİ` / `DOĞRULANMADI`). ASCII yazılırsa **negatif çapa daima
+  geçer, pozitif çapa daima düşer**; aksansız alt-dizge kullanılır (`TRANSPORT KABUL ED`).
+- ⚠ **AST çapası metin değil DÜĞÜM sayar:** `ast.get_source_segment` yorumları da getirir;
+  D3 ilk yazımda kendi açıklama yorumundaki `lock_object` geçişlerini çağrı sandı.
+- **KARDEŞ ZORUNLU:** `b0_secim` (P3 `sap_adt_lib.py` → **8 korpus** pinli) ·
+  `class_include_push` · `lock_modification_support` · `sessiz_olumsuzlama_2026_08_10`.
+- 🔴 **CANLI DOĞRULAMA YAPILMADI (lider/gateway işi):** korpus HTTP'yi sahteleştirir. Bir
+  sonraki gerçek `.ccau` push'unda S-görev numarası **geçmeli**; FM push'unda PUT `corrNr`
+  LOCK'un döndürdüğü K-istek olmalı. FM kilit yanıtında `IS_LINK_UP` alanının gerçekten
+  dönüp dönmediği **DOĞRULANAMADI** (dönmezse yabancı-transport kapısı ateşlemez).
+- **AÇIK KALEM (envanter, fix edilmedi):** ham `_action=LOCK` atıp `CORRNR` OKUMAYAN 6 dosya
+  (`create_rap_service` · `populate_cds_views` · `populate_message_class` · `push_bo_atomic` ·
+  `workflows/_clean_recreate` · `workflows/_full_cycle_v2`). Fixture E1 vektörü bu kümeyi
+  **beyan eder**; yeni bir yazma yolu eklenirse o satır düşer.
+
 ## B18e — `_find_existing_transport` ("Bug 11 sessiz fallback")
 - `python tests/fixtures/sessiz_olumsuzlama_2026_08_10/run.py` → 40/40 (F bölümü) ·
   MUTASYON → 16/40.

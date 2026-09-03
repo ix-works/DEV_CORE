@@ -2470,7 +2470,15 @@ class SAPADTClient:
             where the current user has NO task (another developer's transport)
           - IS_LINK_UP=empty means the current user HAS a task in the transport (safe)
           - IMPORTANT: IS_LINK_UP='X' is NOT "S-type child task" — that was incorrect
-            (S-type tasks return K-type in CORRNR which always matches, IS_LINK_UP=empty)
+            (an S-type task yields IS_LINK_UP=empty; the difference surfaces in CORRNR)
+          - ⛔ 2026-09-03 (Q219) — the previous wording drew a FALSE conclusion from a
+            true premise: it said an S-type task returns a K-type CORRNR that therefore
+            never differs. The premise holds, the conclusion does NOT. CORRNR is ALWAYS
+            the K-type WORKBENCH REQUEST, so passing an S-type TASK as `transport`
+            ALWAYS mismatches and fail-fasts below. Pass the REQUEST (K), never the
+            TASK (S). A caller that only knows the task must resolve it first
+            (`sap_client._find_existing_transport` → E070.STRKORR = parent request).
+            Cost of the old sentence: three burned agent turns in this house.
 
         If CORRNR != transport:
           - IS_LINK_UP='X' → FOREIGN transport (another developer's) → fail fast
@@ -6291,7 +6299,12 @@ constants:
                 no SE37 signature step is needed. (Verified: ZSD001_FM_SO_CREATE.)
                 NOTE: RFC-enabling ('Remote-Enabled Module') is a separate one-time
                 SE37 toggle — it is NOT an ADT create attribute.
-            transport: Transport request
+            transport: Transport request. Pass the K-type WORKBENCH REQUEST, not an
+                S-type task. The value is only a HINT: the LOCK response's CORRNR is
+                authoritative and is what the PUT uses (2026-09-03, Q215). A mismatch
+                is reported with [WARN]; a FOREIGN transport (IS_LINK_UP='X') aborts
+                before the PUT. Empty CORRNR is not an error — the requested value is
+                used and the fact that it was NOT verified is printed.
             activate: When True, activate the function module after the push
 
         Returns:
@@ -6330,9 +6343,59 @@ constants:
                                   status_code=lock.status_code,
                                   response_text=lock.text[:500], endpoint=fm_url)
 
+            # ── CORRNR OTORİTEDİR (Q215, 2026-09-03) ─────────────────────────────
+            # Bu yol LOCK yanıtından YALNIZ `LOCK_HANDLE` okuyor, `CORRNR`'ı görmezden
+            # gelip PUT'a çağıranın verdiği transport'u yolluyordu. Ölçülmüş sonuç
+            # (2026-08-30, bir FM imza push'u, kontrol deneyli): S-tipi GÖREV numarasıyla
+            # PUT → `500 / CTS_WBO_API 020` ("nesne … talebinde bloke edildi"); **birebir
+            # aynı bayt** ikinci denemede de aynı 500 (içerikten bağımsız); LOCK yanıtındaki
+            # `CORRNR` (K-tipi istek) ile PUT → **200**.
+            # Aynı ders bu depoda iki yerde ZATEN uygulanmıştı — `populate_tables.py:395-405`
+            # (9/9 görev → `CTS_WBO_API 020`; 9/9 istek → geçti) ve 2026-08-09'da
+            # `push_textpool.py` + `sap_set_object_description.py` (`_last_lock_effective_
+            # transport or args.transport`). FM helper'ı o süpürmenin ATLADIĞI üyeydi.
+            #
+            # ⚠ GEVŞETME SINIRI — bu blok tek başına bir KURTARMA açar (dün sert düşen
+            # PUT bugün yürür), o yüzden yanına bir KAPI konuldu: `IS_LINK_UP='X'`
+            # (obje BAŞKA geliştiricinin transport'unda, bizim orada görevimiz yok) →
+            # PUT HİÇ ATILMAZ. Bugün bu yolda böyle bir kontrol HİÇ yoktu; sınıf yolunun
+            # (`_verify_and_return_lock`) yabancı-transport fail-fast'iyle simetri kuruldu.
+            # ⚠ BOŞ `CORRNR` HATA DEĞİLDİR (2026-08-09 kararı, DDLS/DTEL/DOMA aileleri):
+            # istenen transport'la devam edilir, ama GÖRÜNÜR bir uyarı bırakılır.
+            # ⚠ DOĞRULANAMADI: FM lock yanıtının `IS_LINK_UP` alanını CANLI ölçmedik;
+            # alan yoksa değer boş kalır ⇒ kapı ateşlemez (fail-open, sınıf yoluyla aynı).
+            corrnr_actual = self._extract_lock_xml_field(lock, 'CORRNR')
+            is_link_up = self._extract_lock_xml_field(lock, 'IS_LINK_UP')
+            self._last_lock_corrnr = corrnr_actual
+            self._last_lock_is_link_up = is_link_up
+            self._last_lock_effective_transport = corrnr_actual or transport
+
+            uyusmazlik = bool(corrnr_actual and transport
+                              and corrnr_actual.upper() != transport.upper())
+            if uyusmazlik and is_link_up == 'X':
+                raise SAPADTError(
+                    f"FM {name}: object is recorded in FOREIGN transport {corrnr_actual} "
+                    f"(IS_LINK_UP=X) but {transport} was requested — PUT NOT attempted.\n"
+                    f"That transport belongs to another developer (you have no task in it); "
+                    f"writing into it would inject your changes without the owner's knowledge.\n"
+                    f"Fix: coordinate with the owner (SE01/SE09) or push with a transport "
+                    f"of your own. [ACTION REQUIRED] Do NOT retry automatically.",
+                    status_code=409, response_text=lock.text[:500], endpoint=fm_url)
+            if uyusmazlik:
+                print(f"      [WARN] İSTENEN TRANSPORT KABUL EDİLMEDİ: {transport} "
+                      f"— SAP CORRNR={corrnr_actual} (PUT bununla yapılacak).")
+                print(f"      [WARN] Tipik sebep: araca GÖREV (S) numarası verildi; "
+                      f"CORRNR daima K-tipi İSTEĞİ döner. Araca İSTEK verilir.")
+                print(f"      [WARN] Bu bir DÜZELTMEDİR — girdinin doğru olduğunun "
+                      f"kanıtı DEĞİLDİR (brifi/`.rules.md`'yi düzelt).")
+            elif not corrnr_actual and transport:
+                print(f"      [WARN] FM {name}: lock yanıtında CORRNR YOK "
+                      f"→ istenen transport kullanılıyor ({transport}), DOĞRULANMADI.")
+            etkin_transport = corrnr_actual or transport
+
             put = self.session.put(
                 base + '/source/main',
-                params={'lockHandle': lock_handle, 'corrNr': transport},
+                params={'lockHandle': lock_handle, 'corrNr': etkin_transport},
                 headers={'X-CSRF-Token': csrf,
                          'Content-Type': 'text/plain; charset=utf-8'},
                 data=source_code.encode('utf-8'), timeout=self.timeout_default)

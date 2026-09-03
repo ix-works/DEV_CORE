@@ -242,6 +242,9 @@ OZEL_TESTLER = [
      "aracin false/0'i gormedigi katman icin 'hayir' DEGIL (transport/lock/deploy_ui)"),
     ("class_include_push",
      "sinif alt-include'u (ccau/ccimp): POST != PUT ve 201 != 'yazildi'"),
+    # 2026-09-03 transport turu (Q219+Q207+Q220+Q215 — dordu tek kok):
+    ("transport_gorev_istek_cevrimi",
+     "gorev(S)->istek(K) cevrimi UC yazma yolunda da: LOCK-CORRNR otoritedir"),
     # 2026-08-10 ui-smoke proje-koku (arac + gate ayni sinifin iki yuzu):
     ("conn_adt_proje_koku",
      ".conn_adt PROJE kokundedir: run_ui_smoke kok cozumlemesi + CORE-01 dedektoru"),
@@ -733,13 +736,21 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/sap_adt_lib.py",
      ("O:conn_cift_anahtar", "O:conn_yazici_encoding", "O:dogrulama_kosamadi",
       "O:lock_modification_support", "O:class_include_push",
-      "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde"),
-     "yedi korpus bu modülü import/mutasyon eder"),
+      "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde",
+      "O:transport_gorev_istek_cevrimi"),
+     "sekiz korpus bu modülü import/mutasyon eder (2026-09-03: `set_function_module_source` "
+     "LOCK-CORRNR otoritesi + `_verify_and_return_lock` docstring'i)"),
     ("scripts/sap_client.py",
      ("O:adtget_yokluk_kaniti", "O:class_include_push", "O:dogrulama_kosamadi",
       "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
-      "O:sorgu_basarisizligi_gorunur"),
-     "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil)"),
+      "O:sorgu_basarisizligi_gorunur", "O:transport_gorev_istek_cevrimi"),
+     "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil) + "
+     "görev(S)→istek(K) çevriminin İKİ yazma yolundaki simetrisi"),
+    ("scripts/deploy_common_package.py", ("O:transport_gorev_istek_cevrimi",),
+     "FM helper'ının tek üretim çağıranı: transport'u HAM geçirir ⇒ helper'daki "
+     "CORRNR otoritesini MİRASLA alır (kablolama çapası E3)"),
+    ("playbook/adt-fugr-functions.md", ("O:transport_gorev_istek_cevrimi",),
+     "FM push reçetesi: `corrNr` otoritesi kodla AYNI şeyi söylemeli (dürüstlük çapası E4)"),
     # sap_doctor.py HARITA'da HİÇ YOKTU (2026-09-03 bulgusu): DNS'te çözülmeyen host'ta
     # `[OK] SAP bağlantı + auth OK` basan sahte-yeşil hiçbir korpusa değmiyordu.
     ("scripts/sap_doctor.py", ("O:doctor_baglanti_kaniti",),
@@ -749,9 +760,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok",), "activate_and_verify"),
     ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
     ("scripts/push_object.py", ("O:class_include_push",), "ccau/ccimp push sırası"),
-    ("scripts/push_textpool.py", ("O:lock_modification_support",), "lock sinyali tüketicisi"),
+    ("scripts/push_textpool.py",
+     ("O:lock_modification_support", "O:transport_gorev_istek_cevrimi"),
+     "lock sinyali tüketicisi (+ kanonik `_last_lock_effective_transport` deseninin "
+     "iki bağımsız üyesinden biri — E2 çapası)"),
     ("scripts/sap_set_object_description.py",
-     ("O:lock_modification_support",), "lock sinyali tüketicisi"),
+     ("O:lock_modification_support", "O:transport_gorev_istek_cevrimi"),
+     "lock sinyali tüketicisi (+ kanonik desenin ikinci üyesi — E2 çapası)"),
     ("scripts/object_types.py",
      ("O:class_include_push", "O:reviewer_tip_kapsam"), "tip normalizasyonu"),
     ("scripts/deploy_ui.py",
