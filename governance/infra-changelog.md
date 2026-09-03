@@ -1178,3 +1178,55 @@ Yazım-bağımsız tarama (`|| true` · `|| echo` · `|| :` · `2>&1 ||` · çı
    bir sonraki turda **otorite** sanılır. ② `claude/workflows/guard.template.yml` ÖLÇÜLDÜ:
    `list_touched` deseni **orada YOK** (şablon yalnız 6 satırlık çağırıcıdır; mantık tek yerde
    yaşar) ⇒ **çift-katman borcu YOK**, projelere elle dokunulmayacak.
+
+
+## İNFRA-KUYRUĞU 2026-09-03 — LİDER DOKÜMAN TURU: yayınlanmış **çalışmayan komutlar** + iki kural satırı (Q219③ · Q222③ · B5-KD1)
+
+**Sınıf:** *yayınladığımız bir şey yanlış bilgi veriyor* (kuyruk eşiği **(c)**). Kod davranışı
+değişmedi; değişen, okuyanın kopyaladığı metin. **⚠GEVŞETME YOK** — hiçbir kapı/kural gevşemedi.
+
+**① ÖLÇÜM — tarama hipotezdi, ölçüm daralttı.** Kuyruk kaydı (Q222) iki çürük örnek bildirmişti;
+kökten tarama **12 örnek** gösterdi. Hepsini çürük saymak yerine **her script'in gerçek imzası
+`--help` ile ölçüldü**:
+
+| Script | Gerçek imza | Dokümandaki | Hüküm |
+|---|---|---|---|
+| `push_object.py` | `--name` `--type` | `--object-type/--object-name` | ÇÜRÜK (2 yer) |
+| `activate_object.py` | `--name` `--type` | `--object-type/--object-name` | ÇÜRÜK (3 yer) |
+| `download_object.py` | `--name` `--type` | `--object-type/--object-name` | ÇÜRÜK (3 yer) |
+| `search_objects.py` | `--query` `--type` | `--object-type` | ÇÜRÜK (1 yer) |
+| `where_used.py` | `--object-name` `--object-type` | aynısı | **DOĞRU — dokunulmadı** |
+| `run_atc_check.py` | `--object-name` `--object-type` | aynısı | **DOĞRU — dokunulmadı** |
+| `run_pretty_printer.py` | `--object-name` `--object-type` | aynısı | **DOĞRU — dokunulmadı** |
+
+⭐ Toptan "hepsini düzelt" yapılsaydı **çalışan 3 örnek bozulacaktı.** Sınıf düzeltmesi tarama
+ister, tarama sonucu ise iş listesi değil **hipotezdir**.
+
+**② İkinci kat kusur:** düzeltilen örneklerde tip değeri de **büyük harfti** (`CLAS`). Ölçüldü —
+`argparse` seçenekleri küçük harf; `--type CLAS` → `invalid choice`. Yani bayrak adı düzeltilse
+bile örnek çalışmayacaktı. Hepsi küçük harfe çevrildi (`class` · `fugr`).
+
+**③ `adt-foundation.md §2.2` — var olmayan yetenek ilanı (en sert bulgu).** Bölüm CDS/DDLS
+indirmeyi `download_object.py` ile gösteriyordu; ölçüldü: o script'in `--type` listesinde
+**`ddls`/`cds` HİÇ YOK**. Yani hata bayrak adı değil, **yeteneğin kendisi**. Bölüm ölçümle
+değiştirildi ve doğru rota (`adt_get(object_type="ddls")`) yazıldı.
+
+**④ `adt-mcp.md:131` (B5 denetim bulgusu KD-1):** *"`python scripts/team_setup.py`"* diyordu.
+Ölçüldü — script **4/4 projede** `scripts/` altında YOK (dört proje kökünün dördü de), yalnız çekirdekte var. Doğrusu proje kökünden
+`core/scripts/team_setup.py`.
+
+**⑤ `adt-gateway.md` — İKİ KURAL SATIRI (kod değil, brif):**
+- **Q219③:** *"araca İSTEK (K) verilir, GÖREV (S) değil"* kuralı hiçbir core dokümanında
+  yazılı değildi (`grep -rl STRKORR playbook/ templates/` → **0 dosya**), oysa ev bu hatayı
+  **3 kez** yaptı. `E070.STRKORR` ile ayırt etme tarifi + *"çapa iki numarayı birden yazıyorsa
+  K olanı seç"* + *"409'da yeni transport AÇMA"* eklendi.
+- **Q222③:** `push_object.py` önerisi `--source-file` **olmadan** yazılıydı ⇒ varsayılan olarak
+  repo'dan değil `.tmp/sap_scratch` **ara kopyasından** okunuyordu. Bayrak zorunlu hâle getirildi
+  ve readback'in **yapısal körlüğü** açıkça yazıldı: kapı `canlı ↔ push edilen kopya` eksenini
+  kıyaslar, `canlı ↔ repo` eksenini **göremez** ⇒ "readback eşit" mesajı bu hatayı yapı gereği
+  yakalayamaz.
+
+**Kapsam sınırı (niteleyici korunuyor):** bu tur **yalnız metin** düzeltti. `Q219`/`Q222`'nin
+kod ayakları (`sap_adt_lib.py` docstring'i, `sap_client.py:724-727` yorumu, md5 satırı) **ayrı
+turlarda**; `Q222①` (repo↔staging md5 kapısı) **İPTAL** edildi — `push_object` repo dosyasını
+çözemiyor (`sap_sync_pull.py:299-305`), yanlış eşleme sahte-blocker üretirdi.

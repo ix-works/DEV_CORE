@@ -103,7 +103,7 @@ client.activate_object('ZCL_ORNEK_CLASS', 'class')
 
 veya script ile:
 ```powershell
-python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ORNEK_CLASS
+python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --name ZCL_ORNEK_CLASS --type class
 ```
 
 > ⚠ **AKTİVASYON KANITI = `adt_inactive_objects`, metadata DEĞİL.** `adtcore:version="active"`
@@ -530,11 +530,11 @@ Bu projedeki başarılı `ZCL_ZSD_ORDER_MPC_EXT` push + aktivasyon akışı:
 1. Lokal dosyayı düzenle: `<PROJECT_ROOT>\ERP\ZSD001_CLC\classes\ZCL_ZSD_ORDER_MPC_EXT.abap`
 2. Push:
 ```powershell
-python "<PROJECT_ROOT>\scripts\push_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ZSD_ORDER_MPC_EXT --source-file "<PROJECT_ROOT>\ERP\ZSD001_CLC\classes\ZCL_ZSD_ORDER_MPC_EXT.abap" --transport <TRANSPORT>
+python "<PROJECT_ROOT>\scripts\push_object.py" --cwd "<PROJECT_ROOT>" --name ZCL_ZSD_ORDER_MPC_EXT --type class --source-file "<PROJECT_ROOT>\ERP\ZSD001_CLC\classes\ZCL_ZSD_ORDER_MPC_EXT.abap" --transport <TRANSPORT>
 ```
 3. Aktivasyon:
 ```powershell
-python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ZSD_ORDER_MPC_EXT
+python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --name ZCL_ZSD_ORDER_MPC_EXT --type class
 ```
 
 ---
