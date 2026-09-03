@@ -1250,3 +1250,113 @@ değiştirildi ve doğru rota (`adt_get(object_type="ddls")`) yazıldı.
 kod ayakları (`sap_adt_lib.py` docstring'i, `sap_client.py:724-727` yorumu, md5 satırı) **ayrı
 turlarda**; `Q222①` (repo↔staging md5 kapısı) **İPTAL** edildi — `push_object` repo dosyasını
 çözemiyor (`sap_sync_pull.py:299-305`), yanlış eşleme sahte-blocker üretirdi.
+---
+
+## İNFRA-KUYRUĞU 2026-09-03 — Q245 `pre-commit` kopyaları şablondan sessizce sapıyor (infra-expert)
+
+**Tetikleyici:** `Q245` (`governance/infra-findings.md`) + tazelik denetimi (Parti B5).
+Kayıt *"TD'nin kendi `pre-commit`'i İKİ sertleştirme geride, lokal core-sızıntı kapısı ŞU AN
+fail-open"* diyordu.
+
+**⚠ BRİFİNGDEKİ YÖNÜN BİR YARISI ÇÜRÜDÜ (ölçüm):** brif *"kanonik şablonu doğru/sertleştirilmiş
+hâle getir"* diyordu. Şablon **zaten doğrudur** ve bu turda **dokunulmadı**:
+`md5(claude/git-hooks/pre-commit.template)` worktree'de ve canlı çekirdekte **aynı**
+(`7e11695a32c0fa31fb728b7c07893226`), 106 satır, iki sertleştirmenin ikisi de içinde. İş
+**yalnızca yayılımdır**. ⇒ Bu turda **ürün kodunda 0 değişiklik**; üretilen şey **korpus +
+üç yama**dır.
+
+**F0 GEÇMİŞ-ETKİ:** bu dosyanın ilgili kayıtları — `2026-08-12` (T1.11 backport),
+`2026-08-20` (PARTİ-2 madde ③: adım-2 `else` dalı), `2026-09-02` (Q199① adım-1 fail-closed).
+Üçünün de senaryoları F3'te **yeniden koşuldu**: `precommit_junction_failclosed` **4/4 + 2/2**,
+`precommit_coreleak_failclosed` **8/8 + 4/4** — ikisi de bu turda YEŞİL, çapaları bayatlamadı.
+
+**F0b TASARIM-GEREKÇESİ — BULUNDU, ve kaydın bir varsayımını DARALTIR:** kopyanın *kopya*
+olması bilinçli ve **yapısaldır**: `core.hooksPath` repo-başına ayarlanır ve hook dosyası
+projenin KENDİ deposunda **commit'li** olmalıdır (taze klonda junction henüz yoktur —
+`team_setup.py:295-314` kablolamayı ancak dosya varsa yapar). Yani "junction'lansın"
+seçeneği yoktur. `init_project.py:242-244` yorumu bu dosyanın 2026-07-10'da tam da
+*"doğumda sıfır statik koruma"* kusuru için eklendiğini yazar. ⇒ Kusur **kopyalamak**
+değil, kopyanın **sürümünü ölçen katmanın olmaması**dır.
+
+**TABAN ÖLÇÜMÜ (fix'ten ÖNCE; CRLF-normalize, EXEC-satır sayımı):**
+
+| kopya | exec satır | `SIZ_RC` | `VALIDATOR_DURUM` | HEAD blob |
+|---|---|---|---|---|
+| `claude/git-hooks/pre-commit.template` (referans) | 42 | 4 | 2 | — |
+| `<PROJECT_D>` (2026-09-03 doğumlu) | 42 | 4 | 2 | `5f6b1cb0` |
+| `<PROJECT_C>` | 31 | 0 | 2 | `09d6d650` |
+| `<PROJECT_A>` | 19 | 0 | 0 | `37bc8658` |
+| `<PROJECT_B>` | 19 | 0 | 0 | `37bc8658` (aynı blob) |
+
+⭐ **Sayım EXEC satırda yapılır:** ham `grep` sapmış tabanda `SIZ_RC` için **1** döner — o
+isabet şablonun kendi 29. satırının uyardığı **tarihçe yorumudur, kod değil**.
+⭐ **KONTROL GRUBU ve sınırı:** `<PROJECT_D>`nin HEAD blob'u şablonun LF hâliyle **bayt-eştir**
+(`sha1 = 5f6b1cb0…`, bağımsız hesapla doğrulandı). ⚠ Ama denetimin *"hizalama zararsızdır"*
+çıkarımı **daraltıldı**: o proje `2026-09-03 09:28`de bu şablonla **doğmuştur**, yani olgun
+bir depoda yıllanmamıştır; ampirik desteği **18 commit**tir, daha fazlası değil.
+
+**F1 BLAST-RADIUS (sayı):** dosyayı **yalnız `init_project.py:260` üretir** (`uret(...)`,
+`--force` yoksa mevcut dosyayı **`[ATLA]`**'r — `:215-216`). `team_setup.py` yalnız
+`core.hooksPath`i kablolar, içeriğe **hiç bakmaz**. `grep -rl "pre-commit.template"
+scripts/` → `init_project.py` + `inspector.py`; `inspector.b2_hayalet_gate` şablonu yalnız
+*"var olmayan gate'i anıyor mu"* diye okur — **sürüm/eşlik ölçmez**. Canlı tüketici: **4
+proje**, hepsinde `core.hooksPath` kurulu (ölçüldü), hiçbirinde ek worktree yok.
+
+**F2 SINIF-ENVANTERİ (desen: jeneratörün ŞABLONDAN KOPYALADIĞI dosyalar — junction'lananlar
+DEĞİL):** `init_project.py` **12 dosya** üretir; bunların **7'si core'da bir şablondan** gelir,
+5'i script içi sabittir. Junction'lanan (`team_setup.py:138-140`) **5 yol** bu sınıfın dışındadır.
+7 × 4 proje = **28 kopya**, HEAD blob'larıyla ölçüldü:
+
+| şablondan üretilen dosya | şablonda placeholder | bayt-eş / sapık (4 projede) |
+|---|---|---|
+| `scripts/git-hooks/pre-commit` | **YOK** | **1 / 3** ← bu turun kalemi |
+| `.claude/settings.json` | **YOK** | **0 / 4** (dördü de AYRI hash) |
+| `scripts/hook_shim.py` | VAR (3) | 3 / **1** |
+| `.github/workflows/guard.yml` | VAR (1) | **4 / 0** ← sağlıklı kontrol grubu |
+| `CLAUDE.md` · `README.md` · `.github/CODEOWNERS` | VAR (10/6/2) | 0 / 4 — **beklenen** (proje adı + proje-özel gövde) |
+
+⇒ **Dokunulan: 1 satır (`pre-commit`).** Kalan ikisi **Q adayı olarak raporlandı, fix
+EDİLMEDİ** (kuyruktaki kalem bu değil): ① `.claude/settings.json` — şablonda placeholder
+yok ama **dördü de** sapık; ⚠ *niteleyici:* orada sapmanın bir kısmı **meşrudur**
+(izin listeleri proje-özeldir) ⇒ "placeholder yok ⇒ bayt-eş olmalı" çıkarımı bu dosyaya
+**otomatik uygulanamaz**, ayrıca ölçülmelidir. ② `scripts/hook_shim.py` — tek bir projede
+sapık, diğer üçü şablonla bayt-eş; sapmanın meşru mu drift mi olduğu **ölçülmedi**.
+
+| Tarih | Değişiklik | Sebep (ölçüm) | Test | Fixture | PR |
+|---|---|---|---|---|---|
+| 2026-09-03 | **Q245 — şablon↔kopya sürüm eşliği korpusu + üç hizalama yaması.** Ürün kodunda değişiklik **YOK** (şablon zaten doğru, md5 `7e11695a…` — bkz. yön düzeltmesi yukarıda). Üretilen: ① `tests/fixtures/precommit_kopya_surum_esligi` (9 senaryo + 5 mutasyon) ② üç proje için `.patch` (lider uygular, her repoya ayrı PR) ③ HARİTA'da **iki mevcut satır** genişletildi (`claude/git-hooks/pre-commit.template` 2→3 birim, `scripts/init_project.py` 2→3 birim) + `OZEL_TESTLER`. | Şablon 2026-08-20 ve 2026-09-02'de sertleşti; **hiçbir katman** kopyaların sertleşip sertleşmediğini ölçmüyor ⇒ 4 kopya **3 ayrı sürümde**. İki kopyada core-sızıntı kapısı ve validator zinciri **birlikte** fail-open (aşağıdaki uçtan-uca commit kanıtı). ⚖ Kopyalamanın kendisi tasarımdır (F0b): `core.hooksPath` repo-başınadır, taze klonda junction yoktur ⇒ hook projenin deposunda commit'li olmalıdır. | **F3 ÜÇ BAĞLAM (yeni korpus):** ① **bilinen-BOZUK** sapmış kopya + `core/` çözülemiyor → rc **0** + `[pre-commit] OK` **ve gerçek `git commit` GEÇTİ** (`rev-list --count` = **1**) ② **bilinen-TEMİZ** şablon aynı depoda → rc **1**, commit sayacı **0** ③ **3. BAĞLAM (görev-dışı eksen)** `core/` VAR ama `.git/index` BOZUK → sapmış kopya rc **0** + "OK", şablon rc **1** — iki fail-open ekseni AYNI dosyada BİRLİKTE yaşıyor, kardeş korpusların hiçbiri bu birleşimi ölçmez. Ayrıca **S1 DOĞUM YÜZEYİ** (gerçek `init_project.py`, izole core iskeletinde koşar; ürettiği kopya şablonla **bayt-eş**) · **S6 POZİTİF KONTROL** (gerçek `core/` sızıntısı hâlâ rc 1) · **S7 FP çapası** (sağlam+temiz → rc 0) · **S8/S9 taban kozmetik değil**. ⭐ **TABAN SADAKATİ:** sapmış taban `git show <sha>:` ile TARİHTEN çekilmez (sığ klonda çözülmez) — bugünkü şablondan iki sertleştirme **sökülerek** türetilir ve türetilenin EXEC satırları iki projenin gerçek HEAD blob'uyla **19/19 BİREBİR EŞİT** ölçüldü. **MUTASYONLAR (5, katman katman):** M1 sertleştirme① → S5+S8 · M2 sertleştirme② → S3+S8 · M3 **ikisi birden** (canlı sürüm) → S3+S5+S8+S9 · M4 pozitif-kontrol sökümü → S6 · M5 doğum yüzeyi sökümü (`uret(... 'pre-commit' ...)` çağrısı kalkar) → S1. Mutasyon **yalnız** sertleşmiş tarafa uygulanır; sapmış taban DAİMA pristine şablondan türetilir (aksi hâlde M1/M3 *"YAMA TUTMADI"* verirdi, *"KAÇTI"* değil). | **yeni** `tests/fixtures/precommit_kopya_surum_esligi` (OZEL_TESTLER + HARİTA; `b0_secim` **20/20** ile yeniden ölçüldü) | (bu PR) |
+
+**F4 SIKILAŞTIRMA CETVELİ (yön TERS — gevşetme YOK, ama FP riski ölçüldü):**
+Hizalama iki yerde **bloklamaya** çevirir: (a) `core/` çözülemezse commit BLOKLANIR
+(eskiden sessizce geçiyordu) (b) `git diff --cached` çökerse commit BLOKLANIR.
+**BUGÜN HİÇBİR PROJEDE AKIŞI KIRMAZ (ölçüldü):** 4 projenin 4'ünde de
+`core/scripts/validators/run_all_validators.py` **çözülüyor** ve `core.hooksPath` kurulu;
+hiçbirinde ek `git worktree` **yok** (`git worktree list` → hepsi tek satır).
+⚠ **LATENT MALİYET (bildiriliyor, gizlenmiyor):** bir proje için `git worktree`
+açıldığında `core/` orada **kurulu olmayabilir** (proje `.gitignore`'ları `/core/` taşır)
+⇒ o worktree'den yapılacak commit **BLOKLANIR**. Bu, kusurun kendisi değil kapının
+**amacıdır** (denetimsiz commit'i durdurur), ama operatörün bilmesi gerekir: çözüm
+`python core/scripts/team_setup.py`, bilerek geçiş `git commit --no-verify`.
+⛔ Yeni bir **gate** bu turda ÜRETİLMEDİ (ADR 0019 gate-moratoryumu; tasarım önerisi
+lidere ayrıca raporlandı).
+
+**F5 YAYILIM / DoD (çift-katman: 1 şablon + 4 kopya):**
+1. Bu PR: korpus + HARİTA + bu kayıt (yalnız CORE).
+2. Sonra, **her repoya AYRI PR** (yamalar hazır, `git apply` ile üçü de **rc 0** ve
+   sonuçta oluşan blob üçünde de **`5f6b1cb0…`** — yani `<PROJECT_D>` ile bayt-eş;
+   sığ klonlarda gerçekten uygulanarak doğrulandı). Önerilen sıra: `<PROJECT_C>`
+   (yalnız 1 sertleştirme eksik, en küçük yama) → `<PROJECT_B>` → `<PROJECT_A>`.
+3. `<PROJECT_D>` için **iş YOK** (zaten bayt-eş).
+4. Yamalar **LF**'tir; hedef blob'lar da LF (`* text=auto`, `git show HEAD:… | grep -c CR`
+   → 0). Çalışma ağaçları `core.eol=native` ile CRLF'e döner — beklenen davranış.
+5. Kuyruk kaydı `Q245`'in **DURUM** satırı (PROJE deposunda, core'da değil ⇒ benim yazma
+   alanımın DIŞINDA) yamalar merge edildikten sonra kapatılmalı.
+
+**DOĞRULANAMADI / SINIR:**
+1. `.claude/settings.json` (4/4 sapık) ve `scripts/hook_shim.py` (1/4 sapık) sapmalarının
+   **meşru mu drift mi** olduğu ölçülmedi — Q adayı, bu tur **dokunmadı**.
+2. Yamalar **lider tarafından canlı repolara uygulanmadı**; doğrulama sığ klonlarda yapıldı
+   (aynı `.gitattributes`, aynı `core.autocrlf=false`, aynı HEAD blob'u — ortam eşitlendi).
+3. Hizalamanın **olgun** bir depodaki commit akışına etkisi yalnız statik olarak ölçüldü
+   (junction + hooksPath varlığı); gerçek bir commit **canlı repolarda denenmedi** (yazma
+   yasağı). Sentetik ölçüm korpusun S3/S5/S7 vektörlerindedir.
