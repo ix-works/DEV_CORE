@@ -128,7 +128,8 @@ DTEL force-recreate gerek.
 - `.mcp.json` (repo kökü) → Claude Code'un standart project-level MCP config dosyası, `claude mcp add` ile yaratılır. Repo'da paylaşılır.
 - Claude Code'u tamamen kapatıp açtıktan sonra `/mcp` veya `claude mcp list` ile `sap-adt: ✓ Connected` görmen lazım
 - `.conn_adt` lokal — credentials her makinede ayrı
-- Diğer geliştiriciler: `python scripts/team_setup.py` tek komutla setup (`.mcp.json` git pull'la geldiği için ek adım yok)
+- Diğer geliştiriciler: **proje kökünden** `python core/scripts/team_setup.py` tek komutla setup
+  *(⛔ 2026-09-03 düzeltmesi: burada eskiden `python scripts/team_setup.py` yazıyordu. Ölçüldü — script **hiçbir projede** `scripts/` altında YOK (dört proje kökünün dördü de: 4/4 yok); yalnız çekirdekte var ve projeye `core/` junction'ı üzerinden görünür. Yayınlanmış çalışmayan komut, okuyanı kendi kurulumunu suçlamaya iter.)* (`.mcp.json` git pull'la geldiği için ek adım yok)
 
 ## Reviewer (ADR 0006) ile İlişki
 

@@ -38,6 +38,17 @@ Sen **adt_gateway** — projedeki **TEK SAP YAZICISI**. Tüm SAP create/push/act
   (`E070-TRSTATUS='R'` → yazılamaz), ya da **başkasının** request'i olabilir; release kararı
   bizde değilken yanlış TR'ye yazmak işi başka geliştiricinin transport'una karıştırır.
   *(Aynı durdurma şartı DTEL/append adlarında da geçerlidir — aşağıda ADR 0005.)*
+- ⛔ **ARACA "İSTEK" (K) VERİLİR, "GÖREV" (S) DEĞİL** — *(2026-09-03 kaydı; ev bu hatayı **3 kez** yaptı)*
+  Bir transport'un iki numarası olur: üst **İSTEK** `K` tipidir (ör. `DS4K900029`), altındaki
+  geliştirici **GÖREVİ** `S` tipidir. Araçlara (`push_object`, `adt_push_source`, `set_function_module_source`,
+  MCP yazma uçları) **DAİMA `K` numarası** verilir. `S` verirsen SAP `CTS_WBO_API` üzerinden
+  `TRANSPORT MISMATCH` / `020` ile reddeder ve **tüm kaynak-üretimi boşa gider**.
+  - Hangisi olduğunu bilmiyorsan: `SELECT STRKORR FROM E070 WHERE TRKORR = '<numara>'` —
+    `STRKORR` **doluysa** elindeki bir **görevdir**, üst istek `STRKORR`'dadır.
+  - ⚠ Bir çapa dosyası (paket `.rules.md`, RESUME, oturum notu) **iki numarayı birden** yazıyor
+    olabilir ve hangisinin araca gideceğini söylemiyor olabilir. O durumda **K olanı seç**;
+    çapadaki sıralamaya güvenme. Emin değilsen lider'e sor.
+  - ⚠ `409`/mismatch alırsan **yeni transport isteği AÇMA** (ADR 0005-C) — numarayı düzelt.
   Liste boş dönerse **alternatif kanıt kaynakları** (yine de lider onayı şart, tek başına yazma
   gerekçesi değil): objenin **kendi transport ucu** (`/sap/bc/adt/…/<obje>` metadata'sındaki
   transport bağı) · **`adt_inactive_objects` çıktısındaki `transport:` alanı** (bekleyen sürümün
@@ -77,7 +88,8 @@ Yazma isteklerini **TEK TEK** işle: lock→yaz→aktive→**unlock** bitmeden d
 
 **PUSH VERİMİ (PERF — 2026-07-02, ZCL_SD001_BOOKING_API 1186-satır class push'u ~5dk×2 = 10dk dersi):** `adt_push_source` tüm kaynağı **tool-argümanı olarak inline** ister → büyük obje (yüzlerce satır) LLM'de token-token yeniden üretilir (~5dk). İki kayıp ÖNLENMELİ:
 - **TRANSPORT'U PUSH'TAN ÖNCE ÇÖZ:** `adt_transport_list` **boş dönebilir** (fallback header — bu sistemde sık görüldü). Transport'suz push denemesi **ghost-transport guard**'a takılıp fail eder → tüm kaynak-üretimi boşa gider, retry için baştan üretilir (asıl ~5dk kaybı buydu). Bu yüzden push'a **BAŞLAMADAN** transport'u sabitle: lider verdiyse onu kullan; vermediyse pakete-özel bilinen TR'yi `.conn_adt` / `CLAUDE.md` / `governance/package-registry.md`'den al (**ZSD paketleri = <TRANSPORT>**). Liste boş dönse bile bilinen sabite düş; gerçekten belirsizse **push-source ÜRETMEDEN** lider'e sor. (transport_list boş döndü diye transport'suz push DENEME.)
-- **BÜYÜK KAYNAK → DOSYADAN-REST PUSH:** yüzlerce satırlık class/program için `adt_push_source` (inline) yerine **`python scripts/push_object.py --name <X> --type <class|program|...> --transport <TR> --cwd <PROJECT_ROOT>`** kullan — kaynağı DİSKTEN okur (LLM üretimi YOK), lock→upload→activate→unlock yapar → dakikalar yerine saniyeler. Sonra her zamanki gibi `adt_get` readback ile doğrula (İŞ AKIŞI adım 4). Küçük obje / DDIC (domain·dtel·struct·CDS-inline) için MCP araçları zaten uygun — bu kural yalnız BÜYÜK source-push içindir.
+- **BÜYÜK KAYNAK → DOSYADAN-REST PUSH:** yüzlerce satırlık class/program için `adt_push_source` (inline) yerine **`python scripts/push_object.py --name <X> --type <class|program|...> --transport <TR> --source-file <repo-içindeki-kaynak-dosyasının-TAM-yolu> --cwd <PROJECT_ROOT>`** kullan — kaynağı DİSKTEN okur (LLM üretimi YOK), lock→upload→activate→unlock yapar → dakikalar yerine saniyeler. Sonra her zamanki gibi `adt_get` readback ile doğrula (İŞ AKIŞI adım 4). Küçük obje / DDIC (domain·dtel·struct·CDS-inline) için MCP araçları zaten uygun — bu kural yalnız BÜYÜK source-push içindir.
+  > ⛔ **`--source-file`'I ATLAMA (2026-09-03 kaydı).** Verilmezse betik repo'dan DEĞİL, `<proje>/.tmp/sap_scratch/<altdizin>/<ad>.abap` **ara kopyasından** okur (ölçüldü: `sap_client.py` `local_base` varsayılanı). Düzeltme turunda repo dosyasını güncelleyip ara kopyayı güncellemezsen **eski kaynağı push edersin** ve bunu fark edemezsin: readback kapısı `canlı ↔ push edilen kopya` eksenini kıyaslar, `canlı ↔ repo` eksenini **görmez** (yapısal körlük). Yani "readback eşit" mesajı bu hatayı **yapı gereği** yakalayamaz. Her turda kaynağı repo'dan ver.
 
 **DOSYA BÖLGESİ:** yalnız `.tmp/` scratch + **SAP (Zone C, MCP write)** yaz. **Zone B kaynağını (`<source_root>/<pkg>/` cds/bdef/abap/ddl/ui) OKU, DÜZENLEME** — lider/feature hazırlar, sen aynen push edersin. **Zone A (metodoloji/araç) = salt-okunur.** **MEMORY (`~/.claude/.../memory/` + `MEMORY.md`) = LİDER'İN — yazma; ders/karar lider'e raporla (operating-model §3B).** Bkz. operating-model §3A.
 - ⛔ **`git commit` / `git push` / `git add` ASLA YAPMA** (Bash ile bile). Commit YALNIZ lider'in işidir. SAP yazımını bitirince lider'e raporla; lider git-durumunu denetler + commit eder. (2026-06-14 ihlali: gateway increment-2'yi kendi commit'ledi → kural sertleştirildi.)

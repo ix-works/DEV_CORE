@@ -29,7 +29,7 @@ python "<PROJECT_ROOT>\scripts\run_check_logon.py" --cwd "<PROJECT_ROOT>"
 ### 2.1 ABAP Class (CLAS)
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\download_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ORNEK_CLASS --output-dir "<PROJECT_ROOT>\ERP\ZPKG_ADI\classes"
+python "<PROJECT_ROOT>\scripts\download_object.py" --cwd "<PROJECT_ROOT>" --name ZCL_ORNEK_CLASS --type class --output-dir "<PROJECT_ROOT>\ERP\ZPKG_ADI\classes"
 ```
 
 **⚠ Klasör kuralı:** Package adıyla eşleşen klasör altına kaydet.
@@ -37,16 +37,28 @@ python "<PROJECT_ROOT>\scripts\download_object.py" --cwd "<PROJECT_ROOT>" --obje
 - CDS → `ERP\{PACKAGE}\cds\`
 - Function Group → `ERP\{PACKAGE}\functions\`
 
-### 2.2 CDS View (DDLS)
+### 2.2 CDS View (DDLS) — ⛔ `download_object.py` BUNU YAPMAZ
 
-```powershell
-python "<PROJECT_ROOT>\scripts\download_object.py" --cwd "<PROJECT_ROOT>" --object-type DDLS --object-name ZSD001_C_SO_ITEM --output-dir "<PROJECT_ROOT>\ERP\ZSD001_CLC\cds"
+> **OLCULDU (2026-09-03):** `download_object.py --type` secenek listesi **`ddls`/`cds` ICERMEZ**
+> (`class clas interface intf program prog report include incl functiongroup fugr dataelement dtel
+> domain doma table tabl structure tabletype ttyp`). Bu bolum daha once `--object-type DDLS` diye
+> bir ornek veriyordu; o ornek **iki kez yanlisti** — hem bayrak adlari bugunku betikte yok
+> (`--name`/`--type` var), hem de tip **hic desteklenmiyor**. Kopyalayan `invalid choice` alir.
+> Var olmayan bir yetenegi vaat eden dokuman, eksik dokumandan beterdir: okuyan araci degil
+> kendini suclar ve deneme turu yakar.
+
+**CDS kaynagi icin dogru yol** — MCP araci:
+
+```text
+adt_get(object_name="ZSD001_C_SO_ITEM", object_type="ddls")
 ```
+
+Kaydetmen gerekiyorsa donen kaynagi `ERP\{PACKAGE}\cds\` altina kendin yaz (klasor kurali 2.1).
 
 ### 2.3 Function Group (FUGR)
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\download_object.py" --cwd "<PROJECT_ROOT>" --object-type FUGR --object-name ZSD001_FM_GROUP --output-dir "<PROJECT_ROOT>\ERP\ZSD001_CLC\functions"
+python "<PROJECT_ROOT>\scripts\download_object.py" --cwd "<PROJECT_ROOT>" --name ZSD001_FM_GROUP --type fugr --output-dir "<PROJECT_ROOT>\ERP\ZSD001_CLC\functions"
 ```
 
 ---
@@ -391,7 +403,7 @@ else:
 ### 3.1 Class Method Push (Genel Akış)
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\push_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ORNEK_CLASS --source-file "<PROJECT_ROOT>\ERP\ZPKG\classes\ZCL_ORNEK_CLASS.abap" --transport <TRANSPORT>
+python "<PROJECT_ROOT>\scripts\push_object.py" --cwd "<PROJECT_ROOT>" --name ZCL_ORNEK_CLASS --type class --source-file "<PROJECT_ROOT>\ERP\ZPKG\classes\ZCL_ORNEK_CLASS.abap" --transport <TRANSPORT>
 ```
 
 ### 3.2 Function Module Push (FUNC/FF)
@@ -548,7 +560,7 @@ print(result)
 Push başarılı olduktan sonra aktivasyon:
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --object-type CLAS --object-name ZCL_ORNEK_CLASS
+python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --name ZCL_ORNEK_CLASS --type class
 ```
 
 **⚠ Aktivasyon Önemli Notlar:**
@@ -656,7 +668,7 @@ Yeni transport yaratma gerektiğinde kullanıcıdan numara iste — otomatik yar
 ## 8. OBJE ARAMA
 
 ```powershell
-python "<PROJECT_ROOT>\scripts\search_objects.py" --cwd "<PROJECT_ROOT>" --query "ZSD001*" --object-type CLAS
+python "<PROJECT_ROOT>\scripts\search_objects.py" --cwd "<PROJECT_ROOT>" --query "ZSD001*" --type CLAS
 ```
 
 ---
