@@ -47,6 +47,43 @@ Hata **sessizdir**: exception atmaz, boş liste döner, gate yeşil yanar.
 `project_config.py`'nin docstring'i bunu **zaten** yazıyordu. Kimse okumadı, hiçbir şey zorlamadı.
 **Yorum gate değildir** (ADR 0019). CORE-01 o yorumun zorlayıcı hâlidir.
 
+### İkinci biçim — göç artığı yer tutucu (⚠ kapı bunu GÖRMEZ)
+
+Yukarıdaki biçim `__file__`'dan **yanlış türetir**. İkinci biçim hiç türetmez: proje kökünü
+**doldurulmamış bir kimlik yer tutucusu** olarak taşır ve her çağrıda ölür.
+
+```python
+open(r'<PROJECT_ROOT>\.conn_adt')          # -> OSError: [Errno 22] Invalid argument
+sys.path.insert(0, r'<PROJECT_ROOT>/scripts')  # -> ModuleNotFoundError: sap_adt_lib
+```
+
+⚠ `check_project_root_resolution.py` **bu biçimi yapısal olarak göremez**: AST'si
+`X = <Path(__file__) içeren ifade>` ataması arar; burada `Path(__file__)` hiç yoktur.
+Kapı aynı koşuda *"N core script'inde ihlal yok"* diyerek **sahte güven** üretir.
+(Ölçüldü 2026-09-04 / Q235: 10 kırık script, kapı `[OK]`. Dosyalar `attic/adhoc-fosil/`e
+taşındı — bkz. `governance/removed-controls.md`.)
+
+**Yer tutucu bir eksiklik değil, göçün parmak izidir.** Hiçbir jeneratör `<PROJECT_ROOT>`
+doldurmaz; `MAINTENANCE.md` onu `<SYSTEM_ID>`/`<SAP_USER>` ile birlikte **kimlik-temizleme**
+yer tutucusu olarak sayar. Genericize/göç turu, kimlik taşıyan mutlak yolu yer tutucuyla
+değiştirir — düzyazıda doğru olan bu ikame, **icra konumundaki** dizede çalışan script'i
+fosile çevirir.
+
+📌 **Göç/genericize turundan sonra sorulacak soru** *"kim doldurmayı unuttu"* değil,
+**"eleme filtresinden ne kaçtı"**dır.
+
+**Ayırt edici ölçüt — konum değil, dizenin BAŞI:** aynı yer tutucu düzyazıda meşrudur.
+Ölçüldü (208 script): *"icra konumunda yer tutucu"* ölçütü **21 dosya** yakalar, yalnız 10'u
+gerçek kusurdur (**precision %48**) — `help='Transport (e.g. <TRANSPORT>)'`, guard'ın kendi
+açıklama metni ve `init_project.py`'ın `replace("<source_root>", …)` **ikame anahtarı**
+yanlış yakalanır. Ölçüt *"dize değeri yer tutucuyla **BAŞLIYOR**"* olunca **10/10, 0 FP**:
+
+| Dize | Hüküm |
+|---|---|
+| `'<PROJECT_ROOT>\.conn_adt'` · `'<PROJECT_ROOT>/scripts'` | **yoldur → kusur** (yer tutucu başta) |
+| `'Transport (e.g. <TRANSPORT>)'` | mesaj metnidir → meşru (yer tutucu ortada) |
+| `replace("<source_root>", a.source_root)` | **ikame anahtarıdır → meşru**; yer tutucuyu DOLDURAN kod onu adlandırmak zorundadır — bu ayrımın çapasıdır |
+
 ## Kanonik API
 
 ```python
