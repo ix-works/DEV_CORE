@@ -63,9 +63,56 @@ ADT_PATHS = {
 }
 
 
+# Müşteri ad-alanı (ADR 0005-D): Z*/Y* ya da /NS/ ile başlayan namespace'li ad.
+# `adt_push_source` zaten `require_customer_namespace` ile bunu ZORLUYOR ⇒ artefakttan
+# ÇIKARILAN ad bu kalıba uymuyorsa, ortada var olmayan bir obje değil BAŞARISIZ BİR
+# AYRIŞTIRMA vardır. Kullanım yeri: `main()` içindeki "AD ÇÖZÜLEMEDİ ≠ OBJE YOK" dalı.
+# ⛔ Yalnız ÇIKARILAN ada uygulanır; `--name` ile gelen ad operatörün beyanıdır ve
+#    filtrelenmez (aksi hâlde kapı, operatörün bilerek sorduğu objeyi sessizce atlardı).
+_MUSTERI_AD_RE = re.compile(r'^(?:[ZY]\w*|/\w+/\w+)$', re.IGNORECASE)
+
+# CDS DDL yorum biçimleri. `//` ve `--` TAM SATIR yorumları boşaltılır, `/* */` blok
+# yorumu satır sayısı korunarak silinir.
+_BLOK_YORUM_RE = re.compile(r'/\*.*?\*/', re.DOTALL)
+
+
+def _yorumlari_siyir(text: str) -> str:
+    """Obje adı çıkarımından ÖNCE yorumları sıyır (Q240, 2026-09-04).
+
+    ⛔ VAKA (canlı, ölçüldü): projeksiyon view'ların başlık yorumunda
+    ``//   `define root view entity` (temel `root`, projeksiyon da `root` olmalı).``
+    kalıbı geçiyor. `re.search` İLK eşleşmeyi alır, yorum gerçek `define`'dan önce
+    gelir, ve `(?:\\s+entity)?` grubu kapanış backtick'inde geri-izleyip **`entity`
+    sözcüğünü obje adı sanar** → `/sap/bc/adt/ddic/ddl/sources/entity` → 404 →
+    `[BLOCKER] ENTITY (ddls) SAP'de bulunamadı`. Bu bir SAHTE BLOCKER'dır: aynı obje
+    `--name` ile sorulduğunda `version=active`. Tüketici projede 300 `.cds`'in **3'ü**
+    bu hâldeydi (ölçüm 2026-09-04); ifade bir AÇIKLAMA KALIBI olduğu için tesadüf değil.
+
+    Ev deseni (yeni tasarım DEĞİL): `check_rap_managed_etag._strip_comments` ve
+    `check_rap_readonly_consumption._strip_comments` — iki kardeş kapı da kimlik
+    çıkarmadan ÖNCE yorumu sıyırır. Buradaki tek fark blok yorumun da kapsanması.
+    Ayrıca `playbook/lessons-learned.md` (2026-07-30, "1 eşleşme de 'var' demek
+    değildir") aynı sınıfı yazıyor: *token'ı YORUM içinde bulan arama sinyal üretir*;
+    önerdiği korunma da aynı — "iddiayı TANIMLAYICI satırdan doğrula".
+
+    ⚠ String literalleri BİLEREK sıyrılmaz (`@EndUserText.label: 'define root view
+    entity örneği'` gibi): literal ayrıştırmak yeni bir FP sınıfı açar. O vektör
+    `_MUSTERI_AD_RE` katmanında yakalanır — ayrı değişmez, ayrı mutasyon.
+
+    Satır SAYISI korunur (yorum satırı silinmez, boşaltılır): ileride satır numarası
+    raporlanırsa kaymasın.
+    """
+    text = _BLOK_YORUM_RE.sub(lambda m: '\n' * m.group(0).count('\n'), text)
+    out = []
+    for line in text.splitlines():
+        s = line.lstrip()
+        out.append('' if (s.startswith('//') or s.startswith('--')) else line)
+    return '\n'.join(out)
+
+
 def infer_from_artifact(path: Path) -> tuple[str | None, str | None]:
-    """Artifact'tan name + object_type tahmin et."""
-    text = path.read_text(encoding='utf-8', errors='replace')
+    """Artifact'tan name + object_type tahmin et (YORUMLAR SIYRILMIŞ metinden)."""
+    text = _yorumlari_siyir(path.read_text(encoding='utf-8', errors='replace'))
     # Struct/table: define structure NAME / define table NAME
     m = re.search(r'define\s+structure\s+(\w+)', text, re.IGNORECASE)
     if m:
@@ -115,6 +162,24 @@ def main() -> int:
             print(f'HATA: {p} bulunamadı', file=sys.stderr)
             return 1
         n2, t2 = infer_from_artifact(p)
+        # ── AD ÇÖZÜLEMEDİ ≠ OBJE YOK (Q240 ③, 2026-09-04) ────────────────────────
+        # İki yol da buraya düşer: (a) hiç `define` bulunamadı (ör. `adt_push_source`
+        # DTEL/DOMA çağrısı — kaynak XML'dir, ölçüldü: bugün `HATA: --name ... gerekli`
+        # + rc=1 ⇒ her DTEL/DOMA push'unda verdict BLOCKER, failed_blocker=1) ·
+        # (b) çıkarılan ad müşteri ad-alanında değil (ör. annotation literalinden
+        # gelen `ORNEGI`). İkisi de bir ÖLÇÜM DEĞİL bir AYRIŞTIRMA BAŞARISIZLIĞIDIR;
+        # bunu `rc=1` (=FAIL, "ölçtüm ve ihlal buldum") ya da 404 BLOCKER'ı ile
+        # raporlamak kapıya söylemediği bir şey söyletir. Sözleşme gereği ölçemeyen
+        # gate `measured=false` beyan eder; bloklama kararını TÜKETİCİ verir
+        # (BLOCKER severity ⇒ `run_review` bunu yine SKIP=BLOCKER sayar; sessiz yeşil
+        # DEĞİLDİR — yalnız GEREKÇE dürüstleşir ve `--cevrimdisi` indirimine girer).
+        if not name and (not n2 or not _MUSTERI_AD_RE.match(n2)):
+            print(f'SKIP — {p.name}: obje adı artefakttan çözülemedi '
+                  f'(çıkarılan: {n2!r}); SAP sorgulanMADI. "404 = obje yok" demek '
+                  f'sahte BLOCKER üretir. Adı biliyorsan --name/--object-type ver.',
+                  file=sys.stderr)
+            gate_status(_GATE, 'SKIPPED', False, 'ad-cozulemedi')
+            return 0
         name = name or n2
         obj_type = obj_type or t2
 

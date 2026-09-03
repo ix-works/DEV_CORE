@@ -30,6 +30,19 @@ Kosum:
     python tests/fixtures/sap_gate_skip_sozlesmesi/run.py --mutasyon-failopen
     python tests/fixtures/sap_gate_skip_sozlesmesi/run.py --mutasyon-hepsi-skip
     python tests/fixtures/sap_gate_skip_sozlesmesi/run.py --mutasyon-kismi
+
+Q240 EKI (2026-09-04) — AYNI VALIDATOR'UN AD CIKARIMI:
+`check_sap_active_version` obje adini kaynak metninden cikarir ve YORUMLARI
+siyirmiyordu => basliktaki ``//  `define root view entity` `` ifadesi `entity`
+sozcugunu OBJE ADI yapiyordu => 404 => **SAHTE BLOCKER** (ADR 0006 geregi is durur).
+Uc AYRI degismez, uc AYRI mutasyon (hicbiri digerini kapsamaz):
+    --mutasyon-yorumsuz        (I1: tam-satir `//` `--` siyirma)
+    --mutasyon-blok-yorumsuz   (I2: `/* ... */` siyirma)
+    --mutasyon-ad-guvenilmez   (I3: ad cozulemedi -> SKIP dali)
+    --mutasyon-q240-taban      (KIRMIZI AYAK: I1+I2+I3 birden = fix oncesi ad cikarimi)
+⚠ Dorduncu kip GEREKLI, cunku OLCULDU: tek katman sokulunce digeri gorunur zarari
+  (`ENTITY (ddls) ... bulunamadi`) hala engelliyor => Q1b ancak ucu birden sokulunce
+  duser. "Bir mutasyon yeter" varsayimi burada olcumle curutuldu.
 """
 from __future__ import annotations
 
@@ -67,6 +80,16 @@ MUT_HEDEF = {
     "failopen": {"check_struct_field_dtel_active", "check_sap_active_version"},
     "kismi": {"check_struct_field_dtel_active"},
     "hepsi-skip": {"check_struct_field_dtel_active", "check_sap_active_version"},
+    # Q240 (2026-09-04) — UC AYRI DEGISMEZ, ucu de YALNIZ check_sap_active_version'da
+    # yasar. Ayri ayri mutasyonlanir: tek noktali bir mutasyon ucunu birden sokseydi,
+    # hangi katmanin korpusu tasidigi OLCULEMEZDI (savunma-derinligi maskelemesi).
+    "yorumsuz": {"check_sap_active_version"},
+    "blok-yorumsuz": {"check_sap_active_version"},
+    "ad-guvenilmez": {"check_sap_active_version"},
+    # KIRMIZI AYAK (Q240 ekseni): uc katman BIRDEN sokulur = duzeltme oncesi ad
+    # cikarimi. Gerekli, cunku olculdu: tek katman sokulunce digeri gorunur zarari
+    # (`ENTITY (ddls) ... bulunamadi`) hala engelliyor (savunma derinligi).
+    "q240-taban": {"check_sap_active_version"},
 }
 
 
@@ -125,6 +148,51 @@ ART_Z_DTEL = "define structure ZSD001_S_TEST {\n  alan_a : zsd001_e_foo;\n}\n"
 ART_Z_DTEL_IKI = ("define structure ZSD001_S_TEST {\n"
                   "  alan_a : zsd001_e_foo;\n  alan_b : zsd001_e_bar;\n}\n")
 ART_Z_DTEL_YOK = "define structure ZSD001_S_TEST {\n  alan_a : abap.char(10);\n}\n"
+
+# ── Q240 (2026-09-04) — obje adi cikarimi YORUMDAN etkilenmemeli ─────────────
+# Kusurun GERCEK yazim bicimi (canli artefaktlardan alindi, sentetik degil):
+# projeksiyon view'in basligindaki `//` yorumu ifadeyi BACKTICK icinde tasir.
+# `re.search` ILK eslesmeyi alir, yorum gercek `define`dan once gelir ve
+# `(?:\s+entity)?` grubu kapanis backtick'inde geri-izleyip **`entity` sozcugunu
+# obje adi sanar** => /sap/bc/adt/ddic/ddl/sources/entity => 404 =>
+# `[BLOCKER] ENTITY (ddls) SAP'de bulunamadi` = SAHTE BLOCKER (is durdurur).
+# Canli olcum 2026-09-04: tuketici projede 300 `.cds`in **3'u** bu haldeydi.
+ART_Q240_SATIR_YORUM = (
+    "@AccessControl.authorizationCheck: #NOT_REQUIRED\n"
+    "@Metadata.allowExtensions: true\n"
+    "// =========================================================\n"
+    "// Temel: ZSD001_I_X (davranisli kok) => `as projection on`,\n"
+    "//   `define root view entity` (temel `root`, projeksiyon da `root` olmali).\n"
+    "//\n"
+    "define root view entity ZSD001_C_X as projection on ZSD001_I_X\n"
+    "{ key Alan }\n")
+# Ikinci yorum bicimi = IKINCI DEGISMEZ (ayri mutasyon): blok yorum.
+ART_Q240_BLOK_YORUM = (
+    "/* Aciklama blogu:\n"
+    "   `define root view entity` kullanilir (temel root ise projeksiyon da root).\n"
+    "*/\n"
+    "define root view entity ZSD001_C_Y as projection on ZSD001_I_Y\n"
+    "{ key Alan }\n")
+# String literalleri BILEREK siyrilmaz (literal ayristirmak yeni bir FP sinifi acar)
+# => bu vektorde ad `ORNEGI` cikar; musteri ad-alani DISI oldugu icin gate SAP'yi
+# sorgulamaz ve "404 = obje yok" yerine "ad cozulemedi" der. UCUNCU DEGISMEZ.
+ART_Q240_LITERAL = (
+    "@EndUserText.label: 'define root view entity ornegi'\n"
+    "define root view entity ZSD001_C_Z as projection on ZSD001_I_Z\n"
+    "{ key Alan }\n")
+# `adt_push_source` DTEL/DOMA icin de `sap_active_check` cagirir (tools/atom.py);
+# kaynak XML'dir, icinde `define` YOKTUR. Taban olcumu 2026-09-04: rc=1 +
+# "HATA: --name ve --object-type (veya artifact) gerekli" => run_review
+# failed_blocker=1 => HER DTEL/DOMA push'unda verdict BLOCKER (ikinci canli vektor).
+ART_Q240_DEFINESIZ = '<?xml version="1.0"?>\n<dtel adtcore:name="ZSD001_E_A"/>\n'
+# TARIHSEL CAPALAR — yorum siyirma bu iki dali BOZMAMALI:
+#   table function  (2026-07-30 vakasi, `function` tablo adi saniliyordu)
+#   abstract entity (2026-06-29 vakasi, ad None donuyordu)
+ART_Q240_TF = ("// `define table function` aciklamasi\n"
+               "define table function ZSD001_I_TF\n"
+               "  returns { key a : abap.int4; }\n")
+ART_Q240_ABS = ("// abstract entity aciklamasi\n"
+                "define abstract entity ZSD001_I_ABS { a : abap.char(1); }\n")
 
 
 # ── TABAN (KIRMIZI ayak) — KAYNAKTAN TURETILIR, REPO DURUMUNDAN DEGIL ─────────
@@ -207,6 +275,53 @@ def sandbox(tmp: Path, validator: str, taban: bool = False,
                              'measured=false ')
             _yama_tuttu(s, yeni, "hepsi-skip", gs)
             gs.write_text(yeni, encoding="utf-8", newline="")
+        elif mutasyon == "yorumsuz" and validator in MUT_HEDEF["yorumsuz"]:
+            # I1 sok: tam-satir `//` / `--` yorumlari ARTIK bosaltilmaz.
+            s = hedef.read_text(encoding="utf-8")
+            yeni = s.replace(
+                "        out.append('' if (s.startswith('//') or s.startswith('--')) else line)\n",
+                "        out.append(line)\n")
+            _yama_tuttu(s, yeni, "yorumsuz", hedef)
+            hedef.write_text(yeni, encoding="utf-8", newline="")
+        elif mutasyon == "blok-yorumsuz" and validator in MUT_HEDEF["blok-yorumsuz"]:
+            # I2 sok: `/* ... */` blok yorumu ARTIK silinmez.
+            s = hedef.read_text(encoding="utf-8")
+            yeni = s.replace(
+                "    text = _BLOK_YORUM_RE.sub(lambda m: '\\n' * m.group(0).count('\\n'), text)\n",
+                "")
+            _yama_tuttu(s, yeni, "blok-yorumsuz", hedef)
+            hedef.write_text(yeni, encoding="utf-8", newline="")
+        elif mutasyon == "ad-guvenilmez" and validator in MUT_HEDEF["ad-guvenilmez"]:
+            # I3 sok: "ad cozulemedi" dali kapatilir => cikarilan sacma ad SAP'ye
+            # sorulur (404 => sahte BLOCKER) ya da `HATA: --name ... gerekli` rc=1.
+            s = hedef.read_text(encoding="utf-8")
+            yeni = s.replace(
+                "        if not name and (not n2 or not _MUSTERI_AD_RE.match(n2)):\n",
+                "        if False:  # MUTASYON: ad-guvenilirlik dali sokuldu\n")
+            _yama_tuttu(s, yeni, "ad-guvenilmez", hedef)
+            hedef.write_text(yeni, encoding="utf-8", newline="")
+        elif mutasyon == "q240-taban" and validator in MUT_HEDEF["q240-taban"]:
+            # UCU BIRDEN sok = Q240 duzeltmesi ONCESI ad cikarimi (kirmizi ayak).
+            s = hedef.read_text(encoding="utf-8")
+            yeni = s.replace(
+                "    text = _BLOK_YORUM_RE.sub(lambda m: '\\n' * m.group(0).count('\\n'), text)\n",
+                "")
+            yeni = yeni.replace(
+                "        out.append('' if (s.startswith('//') or s.startswith('--')) else line)\n",
+                "        out.append(line)\n")
+            yeni = yeni.replace(
+                "        if not name and (not n2 or not _MUSTERI_AD_RE.match(n2)):\n",
+                "        if False:  # MUTASYON: ad-guvenilirlik dali sokuldu\n")
+            _yama_tuttu(s, yeni, "q240-taban", hedef)
+            # Uc yamanin UCU DE tutmali: biri sessizce NO-OP'a donerse "kirmizi ayak"
+            # aslinda yarim olur ve dusen vektor sayisi YANLIS okunur.
+            for _capa in ("_BLOK_YORUM_RE.sub", "s.startswith('//')",
+                          "_MUSTERI_AD_RE.match"):
+                if _capa in yeni:
+                    raise SystemExit(
+                        f"YAMA TUTMADI: --mutasyon-q240-taban sonrasi `{_capa}` HALA "
+                        f"duruyor -> kirmizi ayak yarim, sayilar ANLAMSIZ.")
+            hedef.write_text(yeni, encoding="utf-8", newline="")
         elif mutasyon == "kismi" and validator in MUT_HEDEF["kismi"]:
             # ⚠ HEDEF KAPSAMI: `kismi` degismezi YALNIZ dtel_active'de yasar. Mutasyonu
             # her validator'a uygulamaya calismak "YAMA TUTMADI" ile durur (dogru), ama
@@ -252,11 +367,23 @@ def main() -> int:
     ap.add_argument("--mutasyon-kismi", action="store_true")
     ap.add_argument("--mutasyon-cevrimdisi-genis", action="store_true",
                     help="cevrimdisi indirimi TUM BLOCKER'lari yutsun (gevsetme cakisi)")
+    ap.add_argument("--mutasyon-yorumsuz", action="store_true",
+                    help="Q240 I1: tam-satir yorum siyirma sokulur")
+    ap.add_argument("--mutasyon-blok-yorumsuz", action="store_true",
+                    help="Q240 I2: blok yorum siyirma sokulur")
+    ap.add_argument("--mutasyon-ad-guvenilmez", action="store_true",
+                    help="Q240 I3: 'ad cozulemedi' dali sokulur")
+    ap.add_argument("--mutasyon-q240-taban", action="store_true",
+                    help="Q240 KIRMIZI AYAK: I1+I2+I3 birden sokulur (fix oncesi)")
     a = ap.parse_args()
     mut = ("failopen" if a.mutasyon_failopen else
            "hepsi-skip" if a.mutasyon_hepsi_skip else
            "kismi" if a.mutasyon_kismi else
-           "cevrimdisi-genis" if a.mutasyon_cevrimdisi_genis else "")
+           "cevrimdisi-genis" if a.mutasyon_cevrimdisi_genis else
+           "yorumsuz" if a.mutasyon_yorumsuz else
+           "blok-yorumsuz" if a.mutasyon_blok_yorumsuz else
+           "ad-guvenilmez" if a.mutasyon_ad_guvenilmez else
+           "q240-taban" if a.mutasyon_q240_taban else "")
 
     print(__doc__.strip().splitlines()[0])
     print(f"MOD: {'MUTASYON --' + mut if mut else 'NORMAL'}\n")
@@ -356,6 +483,86 @@ def main() -> int:
                 and b[3] == "kismi-okunamadi", f"rc={rc} beyan={b}")
         kontrol("V5b eski YALAN cumle ('hepsi aktif') artik BASILMIYOR",
                 "hepsi aktif" not in out, f"out={out[:120]!r}")
+
+        # ══ Q240: OBJE ADI YORUMDAN DEGIL KODDAN CIKARILIR ══════════════════════
+        # Kusur sinifi: "kapi kaynagi ayristiramiyor" (Q237/Q239 kardesleri). Burada
+        # zarar BLOCKER siniftadir: ADR 0006 geregi BLOCKER gorunce SAP yazimi
+        # yapilmaz => sahte BLOCKER IS DURDURUR.
+        print("\n-- Q240: ad cikarimi (yorum / blok-yorum / literal / definesiz) --")
+        aq1 = art / "ZSD001_C_X.cds"
+        aq1.write_text(ART_Q240_SATIR_YORUM, encoding="utf-8")
+        rc, out, err = kos(fx2, aq1, "ok")
+        b = beyan(out)
+        kontrol("Q1 `//` yorumundaki `define root view entity` OBJE ADI SANILMAZ "
+                "(dogru ad cozulur, OK measured=true)",
+                rc == 0 and "ZSD001_C_X" in out and b is not None
+                and b[1] == "OK" and b[2] == "true",
+                f"rc={rc} out={out.strip()[:110]!r}")
+        # ⚠ OLCULDU (2026-09-04): bu capa TEK BASINA --mutasyon-yorumsuz'da AYAKTA
+        # KALIYOR, cunku I1 sokuldugunde bu kez I3 devreye girip `ENTITY`yi "musteri
+        # ad-alani disi" diye eliyor => sahte BLOCKER METNI yine dogmuyor (savunma
+        # derinligi GERCEK). Yani gorunur-zararin capasi ancak UC KATMAN BIRDEN
+        # sokuldugunde dusebilir => KIRMIZI AYAGI `--mutasyon-q240-taban` tasir.
+        # (Bu satiri yazarken once tek-katman mutasyonuna guvenmistim; olcum curuttu.)
+        kontrol("Q1b GORUNUR-ZARAR CAPASI: kaydin sikayet ettigi metin "
+                "(`ENTITY (ddls) ... bulunamadi`) HICBIR katmandan cikmIYOR",
+                "ENTITY (" not in (out + err).upper(),
+                f"out={out.strip()[:110]!r} err={err.strip()[:110]!r}")
+
+        aq2 = art / "ZSD001_C_Y.cds"
+        aq2.write_text(ART_Q240_BLOK_YORUM, encoding="utf-8")
+        rc, out, err = kos(fx2, aq2, "ok")
+        b = beyan(out)
+        kontrol("Q2 `/* ... */` blok yorumu da siyrilir (IKINCI degismez)",
+                rc == 0 and "ZSD001_C_Y" in out and b is not None and b[2] == "true",
+                f"rc={rc} out={out.strip()[:110]!r}")
+
+        aq3 = art / "ZSD001_C_Z.cds"
+        aq3.write_text(ART_Q240_LITERAL, encoding="utf-8")
+        rc, out, err = kos(fx2, aq3, "ok")
+        b = beyan(out)
+        kontrol("Q3 string literalinden gelen ad (`ORNEGI`) musteri ad-alani DISI -> "
+                "SAP SORGULANMAZ, SKIPPED measured=false reason=ad-cozulemedi",
+                rc == 0 and b is not None and b[1] == "SKIPPED" and b[2] == "false"
+                and b[3] == "ad-cozulemedi", f"rc={rc} beyan={b}")
+
+        aq4 = art / "ZSD001_E_A.dtel.txt"
+        aq4.write_text(ART_Q240_DEFINESIZ, encoding="utf-8")
+        rc, out, err = kos(fx2, aq4, "ok")
+        b = beyan(out)
+        kontrol("Q4 `define` TASIMAYAN artefakt (DTEL/DOMA push kaynagi) -> rc=1 + "
+                "'HATA: --name ... gerekli' DEGIL, SKIPPED measured=false",
+                rc == 0 and b is not None and b[1] == "SKIPPED"
+                and b[3] == "ad-cozulemedi", f"rc={rc} beyan={b}")
+        kontrol("Q4b eski YANILTICI mesaj artik BASILMIYOR",
+                "--name ve --object-type" not in err, f"err={err.strip()[:110]!r}")
+
+        # ⛔ KARSI-KANIT (daraltmanin civisi): daraltma GERCEK vakayi elemiyor.
+        rc, out, err = kos(fx2, aq1, "yok404")
+        kontrol("⛔ Q5 EN KRITIK: ad DOGRU cozuldukten sonra obje SAP'de YOKSA "
+                "gate HALA rc=1 BLOCKER veriyor (daraltma gercek vakayi elemedi)",
+                rc == 1 and "ZSD001_C_X" in err, f"rc={rc} err={err.strip()[:110]!r}")
+
+        # FP capalari: yorum siyirma TARIHSEL dallari bozmamali.
+        aq5 = art / "ZSD001_I_TF.cds"
+        aq5.write_text(ART_Q240_TF, encoding="utf-8")
+        rc, out, _ = kos(fx2, aq5, "ok")
+        kontrol("Q6 FP CAPASI: `define table function` dali korundu (2026-07-30 vakasi)",
+                rc == 0 and "ZSD001_I_TF" in out, f"rc={rc} out={out.strip()[:110]!r}")
+        aq6 = art / "ZSD001_I_ABS.cds"
+        aq6.write_text(ART_Q240_ABS, encoding="utf-8")
+        rc, out, _ = kos(fx2, aq6, "ok")
+        kontrol("Q6b FP CAPASI: `define abstract entity` dali korundu (2026-06-29)",
+                rc == 0 and "ZSD001_I_ABS" in out, f"rc={rc} out={out.strip()[:110]!r}")
+
+        # `--name` ACIKCA verildiginde ad-guvenilirlik dali DEVREYE GIRMEZ:
+        # operatorun bildirdigi ad otoriterdir, artefakt ayristirilmaz.
+        rc, out, _ = kos(fx2, aq3, "ok",
+                         ek=["--name", "ZSD001_C_Z", "--object-type", "ddls"])
+        b = beyan(out)
+        kontrol("Q7 FP CAPASI: --name verilince artefakt ayristirilmaz -> OK measured=true",
+                rc == 0 and b is not None and b[1] == "OK" and b[2] == "true",
+                f"rc={rc} beyan={b}")
 
         # ══ UCUNCU BAGLAM — farkli cwd + pozisyonel artefakt yerine bayrak ══════
         print("\n-- 3. BAGLAM: yabanci cwd (import kablolamasi) --")
