@@ -37,6 +37,13 @@ CORE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(CORE / "scripts"))
 from utils.project_config import project_root  # type: ignore  # noqa: E402
 
+# Sözleşme yardımcısı bu script'in KENDİ dizinindedir. `python <yol>/check_…py` ile
+# koşulduğunda sys.path[0] zaten o dizindir, ama run_all_validators subprocess'i,
+# `runpy` ve `spec_from_file_location` ile yükleyen fixture'lar bunu GARANTİ ETMEZ.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _gate_status import gate_status  # type: ignore  # noqa: E402
+
+_GATE = Path(__file__).stem
 PROJ = project_root()
 
 # Farklı iş-tiplerini tetikleyen örnek prompt'lar (her biri farklı checklist enjekte eder)
@@ -152,16 +159,38 @@ def main() -> int:
             if not (PROJ / yol).is_file():
                 kirik.append(f"{hook}: '{yol}' çözülmüyor (prompt: {p[:30]}…)")
 
+    # ── Q254 (2026-09-04): ÖLÇÜM YOKLUĞU ≠ İHLAL YOKLUĞU ─────────────────────
+    # Eskiden bu dal `[WARN]` basıp **return 0** dönüyordu ⇒ run_all_validators
+    # tablosunda "HARD gate koştu, temiz" diye okunuyordu; oysa ölçülen şey
+    # HİÇBİR ŞEYİN ÖLÇÜLMEDİĞİ.
+    #
+    # ⚠ AYRIM ÖLÇÜLDÜ — bu "kapsamı meşru şekilde boş" DEĞİL, "sonda çalışmadı":
+    # `utils/kapsam.py` sözleşmesi (K1) `n == 0`ı bilerek FAIL yapmaz, çünkü orada
+    # sıfır MEŞRUDUR (`.bdef`i olmayan proje 0 `.bdef` tarar). Burada sıfır meşru
+    # OLAMAZ: sonda hook'ları core'un KENDİ ağacından çağırır (`_hook_ciktisi`
+    # `hook_shim` yoksa `CORE/scripts/hooks/…`ya düşer) ve payload'ları bu dosya
+    # üretir ⇒ payda proje kurulumundan BAĞIMSIZDIR. Ölçüm 2026-09-04, bu ağaçta:
+    # toplam = 8 (4 prompt × 2 hook) + 3 stderr sondası. `toplam == 0` yalnız
+    # 11 alt-sürecin TAMAMI boş döndüğünde olur = sonda mekanizması kırık.
+    # ⇒ Bu, ailenin "ÖLÇEMEDİM" ucudur ve ev kuralı orada FAIL-CLOSED'dır
+    #    (byassoc_advisory S6 · abaplint fail-open fix'i · sap_doctor "ulasilamadi").
     if not toplam:
-        print("  [WARN] hiçbir yol enjekte edilmedi — örnek prompt'lar tetiklemiyor olabilir")
-        return 0
+        gate_status(_GATE, "FAIL", False, "sifir-yol-enjekte-edildi")
+        print("  [FAIL] ÖLÇÜM YOK — hiçbir yol enjekte edilmedi.")
+        print("         Bu \"kırık yol yok\" DEĞİL: sonda HİÇBİR ŞEY ölçemedi, yani")
+        print("         C-HOOK-01 bu koşumda DOĞRULANMADI (payda 0).")
+        print("         Olası kök: hook_shim/hook'lar çöküyor · ORNEK_PROMPTLAR artık")
+        print("         hiçbir checklist tetiklemiyor · STDERR_PAYLOADLARI bayatladı.")
+        return 1
     if kirik:
+        gate_status(_GATE, "FINDING", True, f"{len(kirik)}-kirik-{toplam}-yol")
         print(f"  [FAIL] enjekte edilen {len(kirik)}/{toplam} yol PROJE KÖKÜNDEN ÇÖZÜLMÜYOR:")
         for k in kirik:
             print(f"         - {k}")
         print("         Ajan bu yolu Read edemez → 'dosya yok' sanır → ZORUNLU protokolü atlar.")
         print("         Çözüm: core/scripts/utils/inject_paths.py::core_onekle() ile önekle.")
         return 1
+    gate_status(_GATE, "OK", True, f"{toplam}-yol-cozuldu")
     print(f"  [OK] enjekte edilen {toplam} doküman yolunun tamamı çözülüyor")
     return 0
 
