@@ -311,6 +311,105 @@ _SADE_ALAN = re.compile(r"^(?:(\w+)\.)?(\w+)$")
 _YAPISAL = ("{", "}", "define", "as select", "association", "left outer",
             "inner join", "right outer", "cross join", "*", "//")
 
+# ── ÇOK-SATIRLI ifade + `union` dalı (2026-09-04, kuyruk Q234 + Q237) ─────────
+# ⛔ ÖLÇÜLMÜŞ KUSUR (tüketici projede canlı korpus, 316 CDS/DDL):
+#   Q234 — Tarama FİZİKSEL satır üzerindeydi. `@Semantics…` satırından sonra gelen
+#     çok-satırlı `cast( … )` ifadesinin ARA satırları ne `_ELEMAN`'a uyuyor ne de
+#     `_YAPISAL` ile başlıyordu ⇒ `bekleyen = []` bloğu SİLİYOR, ifadenin SON
+#     satırındaki `as <Alias>` annotation'sız sanılıyordu. Aynı dosya içinde kontrol
+#     grubu: TEK satırlık kardeş eleman aynı annotation'la uyarı ÜRETMİYOR — tek fark
+#     satır sayısı. Sınıf envanteri: **20 çok-satırlı annotation'lı eleman / 11 dosya**
+#     (16'sı CURR/QUAN cast'i taşıyor / 9 dosya) — yani ZSD001 tekil bir vaka DEĞİL.
+#   Q237 — `union [all]` tanınmıyordu. CDS'te element-level `@Semantics.*` **YALNIZ
+#     1. SELECT dalında** yazılabilir (playbook `adt-cds.md` T4-b: 2. dalda
+#     `Annotations are not allowed in this branch`); sonuç-elemanın annotation'ı
+#     1. daldan MİRAS alınır. Kapı 2.+ dalın elemanını ayrı eleman sanıp
+#     "annotation YOK" diyordu ⇒ uyarıyı susturmanın tek yolu **aktivasyonu kıran**
+#     bir düzeltmeydi. Envanter: `^union` satırı taşıyan **12 dosya / 20 dal**,
+#     hepsi tek biçimde (`union all` satır başında, tek başına).
+#
+# ⚠ BU BİR DARALTMADIR (F4). İki koruma bilerek YERİNDE bırakıldı:
+#   ① 1. dalda da annotation yoksa uyarı YİNE çıkar — 1. dalın kendi satırında.
+#   ② 2.+ dalın alias'ı 1. dalda HİÇ görülmediyse (miras kanıtlanamıyor) uyarı çıkar
+#      ve mesaj bunu AÇIKÇA söyler; sessiz yutma YOK.
+_UNION_BASI = re.compile(r'^\s*union\b(?:\s+(?:all|distinct))?', re.I)
+# Kapanmayan ayraç tüm dosyayı yutmasın: bozuk kaynakta birleştirme bu sınırda
+# BIRAKILIR ve satırlar tek tek işlenir — yani degrade yönü "sessizlik" değil
+# "eski davranış (uyarı üret)"tir.
+_MAX_BIRLESIM_SATIR = 80
+# Select-listesi elemanı burada BİTER (parantez derinliği 0 iken).
+_BITIS_KARAKTERLERI = (',', '{', '}', ';')
+# Bu sözcüklerle BAŞLAYAN satır YENİ bir birim açar ⇒ birikmiş tampon ÖNCE boşaltılır.
+# ⚠ ZORUNLU: select listesinin SON elemanında virgül YOKTUR (`… as SnapTarih` ↵ `}`);
+# boşaltılmazsa o eleman `}` ile birleşir, `_ELEMAN` deseni kırılır ve eleman
+# SESSİZCE kaybolur (fix'in kendi üreteceği en tehlikeli gerileme buydu).
+_AYRAC_BASI = re.compile(r'^(?:union\b|\})', re.I)
+
+
+def _denge(s: str, acilar: str, kapatanlar: str) -> int:
+    """TIRNAK DIŞINDAKİ ayraç dengesi.
+
+    Tırnak içi ayraç sayılırsa (`@EndUserText.label: 'Miktar (adet)'`) ifade sınırı
+    yanlış hesaplanır ve sonraki satırlar ifadeye YUTULUR — `yorumu_kirp` ile aynı
+    sınıfın ayraç yüzü.
+    """
+    d, q = 0, None
+    for c in s:
+        if q is not None:
+            if c == q:
+                q = None
+        elif c in "'\"":
+            q = c
+        elif c in acilar:
+            d += 1
+        elif c in kapatanlar:
+            d -= 1
+    return d
+
+
+def _mantiksal_satirlar(text: str):
+    """(ilk_satir_no, birleştirilmiş_metin) üretir — ifade sınırına kadar birleştirir.
+
+    ⚠ SINIR ÖLÇÜLEREK SEÇİLDİ, tahminle değil. İlk tasarım *"parantez dengesi
+    kapanınca biter"* idi; canlı korpus onu ÇÜRÜTTÜ: kusurun İKİNCİ yazım biçimi
+    `case when … then currency_conversion( … ) else cast( 0 as abap.curr(15,2) ) end
+    as <Alias>,` şeklindedir ve **ilk satırı parantez bakımından DENGELİDİR**
+    (`case when x <> '' and x is not null`) ⇒ paren-tabanlı sınır onu hiç
+    birleştirmez, uyarı ayakta kalırdı. Ölçüm: paren-biçimi 20 vaka / 11 dosya,
+    `case`-biçimi 18 vaka daha / 3 dosya. Doğru sınır CDS grameridir:
+    **eleman, derinlik 0'daki ayraçta (`,` `{` `}` `;`) biter.**
+
+    `@…` birimleri ayrıca ele alınır: annotation gövdesi `[ { (` dengesi kapanana
+    kadar birleşir (çok satırlı `@UI.lineItem: [ { … } ]` bir SONRAKİ elemanı
+    yutmasın diye).
+
+    Raporlanan satır no ifadenin **İLK** satırıdır (eskiden alias'ın bulunduğu SON
+    satırdı): düzeltme talimatı *"elemanın HEMEN ÜSTÜNE ekle"* der, dolayısıyla
+    okuyucunun görmesi gereken yer ifadenin başıdır.
+    """
+    buf: list[str] = []
+    ilk = 0
+    derinlik = 0
+    anot = False
+    for i, raw_line in enumerate(text.splitlines(), 1):
+        s = yorumu_kirp(raw_line).strip()
+        if not s:
+            continue
+        if buf and not anot and _AYRAC_BASI.match(s):
+            yield ilk, ' '.join(buf)
+            buf, derinlik = [], 0
+        if not buf:
+            ilk, anot = i, s.startswith('@')
+        buf.append(s)
+        derinlik += (_denge(s, '([{', ')]}') if anot else _denge(s, '(', ')'))
+        tam = derinlik <= 0 and (anot or s.endswith(_BITIS_KARAKTERLERI))
+        if not tam and len(buf) < _MAX_BIRLESIM_SATIR:
+            continue
+        yield ilk, ' '.join(buf)
+        buf, derinlik, anot = [], 0, False
+    if buf:
+        yield ilk, ' '.join(buf)
+
 
 def _eleman_tipi(ifade: str) -> str | None:
     """Bir select-eleman ifadesi CURR/QUAN tipli mi? Çözülemezse None.
@@ -348,10 +447,14 @@ def curr_quan_eleman_sayisi(text: str) -> int:
     (genişletilebilir, KISALTILAMAZ) ya da açık `cast( … as abap.curr/quan(…) )`.
     """
     n = 0
-    for raw_line in text.splitlines():
-        s = yorumu_kirp(raw_line).strip()
-        if not s or s.startswith('@'):
+    for _i, s in _mantiksal_satirlar(text):
+        if s.startswith('@'):
             continue
+        m_union = _UNION_BASI.match(s)
+        if m_union:
+            s = s[m_union.end():].strip()
+            if not s:
+                continue
         m = _ELEMAN.match(s)
         if m and _eleman_tipi(m.group('ifade')):
             n += 1
@@ -368,34 +471,66 @@ def eksik_annotation_bul(text: str) -> list[dict]:
     dosyayı anında kırmızıya çevirir ve kapı "geçilemez" olduğu için ilk refleks
     onu KAPATMAK olurdu (erişilemez yeşil = ölü gate). Önce görünürlük, sonra
     (birikmiş 46 kalem temizlenince) şiddet kararı — o karar kullanıcınındır.
+
+    ⭐ KAPSAM BEYANI (2026-09-04, Q234+Q237 — ev kuralı: kapı kendi kapsamını İLAN eder):
+      • Eleman ifadesi ÇOK SATIRA yayılabilir; eşleme fiziksel satır değil
+        **parantez dengesiyle kapanan mantıksal satır** üzerinden yapılır.
+      • `union [all|distinct]` görüldüğünde dal sayacı artar. **2.+ dallarda eleman
+        annotation'ı ARANMAZ** — CDS orada annotation yazılmasını YASAKLAR ve değer
+        1. daldan miras alınır. Karar 1. dalda verilir: orada annotation yoksa uyarı
+        1. dalın satırında çıkar.
+      • ⛔ SESSİZ YUTMA YOK: 2.+ daldaki bir alias 1. dalda HİÇ görülmediyse (miras
+        kanıtlanamıyor) uyarı yine basılır ve mesaj bunu açıkça yazar.
+      • ⚠ ÖLÇÜLMEYEN: `union`'ın iki dalının alan SIRASI/TİPİ uyumu bu kapının konusu
+        DEĞİLDİR (SAP aktivasyonu zorlar).
     """
     violations = []
     bekleyen: list[str] = []
-    for i, raw_line in enumerate(text.splitlines(), 1):
-        s = yorumu_kirp(raw_line).strip()
-        if not s:
-            continue
+    dal = 0                          # 0 = 1. SELECT dalı (annotation'ın YAŞADIĞI yer)
+    dal0_annotasyonlu: set[str] = set()   # 1. dalda annotation'ı OLAN alias'lar
+    dal0_bulgulu: set[str] = set()        # 1. dalda ZATEN raporlanmış alias'lar
+    for i, s in _mantiksal_satirlar(text):
         if s.startswith('@'):
             bekleyen.append(s)
             continue
+        m_union = _UNION_BASI.match(s)
+        if m_union:
+            dal += 1
+            bekleyen = []
+            s = s[m_union.end():].strip()
+            if not s:
+                continue
         m = _ELEMAN.match(s)
         if not m:
             if not s.startswith(_YAPISAL):
                 bekleyen = []
             continue
-        tip = _eleman_tipi(m.group('ifade'))
+        alias, ifade = m.group('alias'), m.group('ifade')
+        tip = _eleman_tipi(ifade)
         if tip:
             blok = ' '.join(bekleyen)
             gerekli = ('@Semantics.amount.currencyCode' if tip == 'CURR'
                        else '@Semantics.quantity.unitOfMeasure')
-            if gerekli not in blok:
+            eksik, ek = gerekli not in blok, ''
+            if dal == 0:
+                (dal0_bulgulu if eksik else dal0_annotasyonlu).add(alias.lower())
+            elif eksik:
+                # MİRAS KURALI (adt-cds.md T4-b): 2.+ dalda annotation YAZILAMAZ.
+                # 1. dalda alias biliniyorsa karar orada verilmiştir (ya annotation
+                # var ya da uyarı orada BASILDI) → burada mükerrer/yanlış uyarı YOK.
+                eksik = alias.lower() not in (dal0_annotasyonlu | dal0_bulgulu)
+                # ⚠ Niteleyici ASCII bir jetonla başlar (`[union-miras-yok]`): korpus
+                # çapaları Türkçe harfe (ı/İ) bağlanırsa sahte-KIRMIZI üretir.
+                ek = (f" [union-miras-yok] {dal + 1}. dalda tanımlı '{alias}' alias'ı "
+                      f"1. dalda BULUNAMADI — annotation mirası kanıtlanamadı")
+            if eksik:
                 violations.append({
                     'severity': 'WARNING',
                     'line': i,
                     'check_id': 'C-CDS-CUR-05' if tip == 'CURR' else 'C-CDS-QUAN-05',
-                    'message': (f"{tip} tipli '{m.group('alias')}' elemanında "
+                    'message': (f"{tip} tipli '{alias}' elemanında "
                                 f"{gerekli} annotation'ı YOK "
-                                f"(kanıt: {m.group('ifade').strip()[:60]})"),
+                                f"(kanıt: {ifade.strip()[:60]}){ek}"),
                     'fix': (f"Elemanın HEMEN ÜSTÜNE `{gerekli}: '<BirimElemani>'` ekle; "
                             f"birim/para-birimi elemanı da view'da EXPOSED olmalı."),
                 })

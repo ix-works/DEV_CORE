@@ -1502,3 +1502,115 @@ bunun ta kendisiydi.
    `_GREP_TYPE_MAP`'ın `objects=` dalıydı** (bu tur kapatıldı). ⇒ Sınıfın kapsamı `1/6`;
    `adt_grep_source` ayrıca MCP yüzeyindeki **tek iki-dallı kapsam aracıdır** (`if objects:` /
    `elif package:` — repo genelinde başka örneği yok).
+## İNFRA-KUYRUĞU 2026-09-04 — Q234 + Q237 `check_cds_currency_reference` YANLIŞ POZİTİF: çok-satırlı eleman ifadesi + `union` dalı (infra-expert)
+
+⚠ **GEVŞETME (F4) — bu turun tanımlayıcı özelliği.** Değişiklik kapının kapsamını **DARALTIR**
+(daha az uyarı). Bu yüzden kanıt İKİ YÖNLÜ verilmiştir: hem *"susturulan her uyarı gerçekten
+yanlıştı"* hem de *"gerçek bulgu hâlâ yakalanıyor"*. ⛔ **Kullanıcı onayı olmadan merge
+EDİLMEZ.** Kod ve korpus hazırdır; hüküm kullanıcınındır.
+
+**F0b TASARIM-GEREKÇESİ (kalem gerçek mi, yoksa kararlanmış bir sınır mı?):** dört kaynak
+tarandı. `removed-controls.md` → bu kapı/eksen için kayıt **YOK**. `lessons-learned.md` → isabet
+**YOK**. Bileşenin kendi yorumları → `eksik_annotation_bul` docstring'i *şiddet* kararını
+(WARNING) ve *sözlük-ifade* sınırını gerekçelendiriyor, ama **satır-bitişikliği** hiçbir yerde
+bilinçli bir sınır olarak beyan edilmemiş (yani kusur, karar değil). `standards/` + playbook →
+`adt-cds.md` T4-b **kararın ta kendisini** taşıyor: *"Element-level `@Semantics.*` YALNIZ 1.
+(ilk) SELECT dalında → `Annotations are not allowed in this branch`. Sonuç-element
+annotation'ı 1. daldan miras alınır."* ⇒ Q237'nin *"kapının önerdiği düzeltme aktivasyonu
+kırar"* iddiası **ev otoritesiyle doğrulandı**; kayıttaki yön ters DEĞİL. ⚠ Kaydın önerisiyle
+bu turun fix'i **farklı katmandadır**: kayıt kaynağa annotation eklemeyi tartışıyordu, bu tur
+**kapıyı** düzeltir — kaynağa hiç dokunulmaz. Kalemler bugün hâlâ **AÇIK** (canlı ölçümle
+yeniden üretildi).
+
+**F0 GEÇMİŞ-ETKİ (bu bileşenin üç önceki turu okundu, üçünün de korpusu yeniden koşuldu):**
+① 2026-08-01 tırnak-duyarlı satır-sonu `//` kırpma (`cds_curr_satir_yorumu`, core#89) —
+`yorumu_kirp` bu turda **çağrılmaya devam ediyor** ve yeni birleştirici onu her fiziksel satırda
+kullanıyor; korpus **19/19**. ② 2026-08-19 kaynak-tipi TOKEN ayrıştırma + `0/1/2` çıkış-kodu
+sözleşmesi — `kaynak_tipi_tespit`/`main()` **hiç değişmedi**; korpus **19/19 + MUTASYON 4/4**.
+③ 2026-08-20 DERİNLİK (`eksik_annotation_bul` + payda) — bu turun değiştirdiği fonksiyon;
+o turun **9 senaryosu + 5 mutasyonu KORUNDU** ve M1-M5 yamalarının **çapa satırları bilerek
+bayt-aynı bırakıldı** (`'severity': 'WARNING' / 'line': i / 'check_id'` üçlüsü, `_eleman_tipi`
+dalları, payda `print`'i) — aksi hâlde mutasyonlar `YAMA TUTMADI` verip sahte-yeşile düşerdi.
+④ Ortak DTEL sözlüğü (B-13, `utils/ddic_semantics`) **okunmadı bile değiştirilmedi**; üretici
+korpusu `populate_tables_unit_kind` **21/21 + 7 mutasyon**.
+
+**TEŞHİS (kök — ve teşhis bir kez DÜZELTİLDİ):** eşleme **fiziksel satır** üzerindeydi.
+`eksik_annotation_bul` `@…` satırlarını `bekleyen`e biriktirir; `_ELEMAN` desenine uymayan **ve**
+`_YAPISAL` ön ekiyle başlamayan her satır bloğu `bekleyen = []` ile **SIFIRLAR**. Çok satırlı bir
+eleman ifadesinin ARA satırları tam olarak bu tanıma girer ⇒ annotation, alias'a ulaşmadan
+silinir. `union`da ise 2.+ dalın elemanı ayrı bir eleman sanılır — oysa CDS orada annotation
+yazılmasını **yasaklar**. ⭐ **İLK TASARIM CANLI KORPUSLA ÇÜRÜTÜLDÜ:** sınır *"parantez dengesi
+kapanınca biter"* diye kuruldu ve ölçüm 52→24 dedi; kalan 24'ün incelenmesi kusurun **İKİNCİ
+YAZIM BİÇİMİNİ** ortaya çıkardı — `case when x <> '' and x is not null` satırı parantez
+bakımından **DENGELİDİR**, bu yüzden paren-tabanlı sınır o şekli hiç birleştirmiyordu. Sınır CDS
+gramerine taşındı: **eleman, derinlik 0'daki ayraçta (`,` `{` `}` `;`) biter** → 52→9.
+
+**SINIF-ENVANTERİ (F2 — mekanik, tüketici projede 316 `*.cds|*.ddls|*.asddls|*.ddl`):**
+- `union` — `^\s*union\b` satırı: **20 satır / 12 dosya**; **20/20'si tek biçimde** (`union all`,
+  satır başında, tek başına). Satır-içi `union` isabetlerinin **hepsi yorum metni** (ölçüldü).
+- çok-satırlı annotation'lı eleman ifadesi (paren-biçimi): **20 vaka / 11 dosya**, bunların
+  **16'sı CURR/QUAN cast'i taşıyor / 9 dosya**. `case`-biçimi bu taramada **görünmüyordu** ve
+  ancak eski↔yeni bulgu farkı okunarak bulundu — ⚠ *"brifin kapsam sayısı tek biçimi sayar"*
+  dersinin bu turdaki örneği.
+- Etkilenen paket sayısı: bulgusu değişen **13 dosya / 6 farklı paket** — yani kalem tek bir
+  paketin vakası DEĞİL, **sınıf**. Envanter **fix'e çevrilmedi**: yalnız kuyruktaki iki kalem
+  düzeltildi, kapının başka eksenleri (tablo dalı, biçim denetimi) elle sürülmedi.
+
+**F1 BLAST-RADIUS (ölçüldü, sayıyla):** kapıyı **`run_review.py`'nin 15 görevinden 6'sı** çağırır
+(`cds_creation` · `cds_update` · `table_creation` · `table_update` · `struct_creation` ·
+`rap_cds_creation`), altısında da şiddet `BLOCKER` — ama kapı WARNING'de `rc=0` döndüğü için bu
+tur hiçbir görevin akışını değiştirmez. `run_all_validators.py`'nin statik `VALIDATORS` listesinde
+**YOK** ⇒ repo-geneli/`--quick`/pre-commit süpürmesine bağlı **değil** (grep: 0 isabet).
+`.github/` iş akışlarında **0 isabet**. Kapıya atıf yapan playbook checklist'leri: **4 dosya /
+12 check-ID** — `# ENFORCES:` satırına **dokunulmadı**, ID kümesi aynı. Paylaşılan sözlük
+`utils/ddic_semantics` **değişmedi** (üretici `populate_tables.py` etkilenmez). Dağıtım:
+core junction'ı ⇒ **tüm projelere anında**.
+
+**⚠GEVŞETME KANITI — ① susturulan her uyarı yanlıştı (kanıtla):** tüketici projede 316 dosya
+eski ve yeni sürümle koşuldu; **bulgu 52 → 9**, **susturulan 43**. 43'ün **tamamı** bağımsız bir
+kanıt betiğiyle kovalandı (betik fix'in mantığını kullanmaz; kaynağı ham metin olarak, derinlik
+haritasıyla yukarı yürür): **31'inde** gerekli `@Semantics` annotation'ı ifadenin hemen
+üstündedir (Q234), **12'sinde** annotation `union`ın **1. dalındadır** ve alias 1. dalda
+bulunmaktadır (Q237). *"Kanıtı olmayan susturma"* = **0**. **Yeni doğan bulgu = 0.**
+**rc dağılımı DEĞİŞMEDİ** (311×`0` + 5×`1` → aynı) ⇒ hiçbir build'in hükmü değişmiyor.
+⚠ 43'ün 1'i **her iki sınıfa birden** girer (2. dalda **ve** çok satırlı).
+
+**⚠GEVŞETME KANITI — ② daraltma GERÇEK bulguyu elemiyor (karşı-kanıt):** aynı korpusta hayatta
+kalan **4 CDS WARNING**'in tamamı gerçek eksik-annotation'dır (union'suz klasik view'da
+`cast( 0 as abap.quan(…) ) as <Alias>` ve üstünde annotation YOK) — kapı onları **hâlâ**
+basıyor. 5 `BLOCKER` (tablo/struct dalı) de aynen duruyor. Fixture tarafında karşı-kanıt üç ayrı
+vektörle çivilendi: **S11** (aynı çok-satırlı şekil, annotation SÖKÜLÜ → bulgu ÇIKAR),
+**S14** (union'da HİÇBİR dalda annotation yok → **tam 1** bulgu, 1. dalın satırında; mükerrer
+basma yok), **S15** (2. daldaki alias 1. dalda YOKSA miras kanıtlanamaz → bulgu + açık
+niteleyici). ⇒ Daraltma **sessiz yutma üretmiyor**.
+
+| Tarih | Değişiklik | Sebep (ölçüm) | Test | Fixture | PR |
+|---|---|---|---|---|---|
+| 2026-09-04 | **`scripts/validators/check_cds_currency_reference.py` — eleman↔annotation eşlemesi satır-bazlı olmaktan çıktı.** Yeni `_mantiksal_satirlar()` üreteci fiziksel satırları **CDS gramerine göre** birleştirir: eleman derinlik 0'daki ayraçta (`,` `{` `}` `;`) biter; `_AYRAC_BASI` (`union` · `}`) birikmiş tamponu ÖNCE boşaltır; `@…` birimleri `[ { (` dengesi kapanana kadar ayrıca birleşir; `_denge()` **tırnak-duyarlıdır**; `_MAX_BIRLESIM_SATIR=80` kapanmayan ayraçta birleştirmeyi bırakır (degrade yönü *sessizlik* değil *eski davranış*). `eksik_annotation_bul` artık `dal` sayacı tutar: **2.+ `union` dalında annotation ARANMAZ** (CDS orada yazılmasını yasaklar, değer 1. daldan miras alınır); karar 1. dalda verilir. 2.+ daldaki bir alias 1. dalda hiç yoksa uyarı **basılır** ve mesaja ASCII jetonlu `[union-miras-yok]` niteleyicisi eklenir. `curr_quan_eleman_sayisi` (payda) aynı üreteci kullanır. Docstring'e **KAPSAM BEYANI** yazıldı (ne ölçülüyor, ne ölçülmüyor). ⛔ DEĞİŞMEYEN: `# ENFORCES:` ID kümesi · şiddet (WARNING) · çıkış-kodu sözleşmesi (0/1/2) · `kaynak_tipi_tespit` · `check_table` · `yorumu_kirp` · `_eleman_tipi` · ortak DTEL sözlüğü. | ⚠ **DARALTIR — kanıt iki yönlü.** Tüketici projede canlı ölçüm (316 dosya, eski↔yeni): **bulgu 52 → 9**, **rc dağılımı DEĞİŞMEDİ** (311×0 + 5×1). Susturulan **43**: bağımsız kanıt betiğiyle **31 = çok-satırlı** (annotation ifadenin üstünde) + **12 = `union` 2.+ dal** (annotation 1. dalda; 1'i her iki sınıfta birden); **kanıtsız susturma 0**, **yeni doğan bulgu 0**. Kuyruğun işaret ettiği paketin korpusunda uyarı **12 → 0** ve o 12'nin tamamı yanlış pozitifti (gerçek eksik-annotation bulgusu **0**) ⇒ kapı o pakette **hiçbir doğru bilgi üretmiyordu** (körelme riski). Hayatta kalan 4 CDS uyarısı **gerçek** eksik-annotation'dır. ⭐ **TASARIM ÖLÇÜMLE SEÇİLDİ:** ilk sınır *"parantez dengesi"* idi (52→24); kalan 24 okununca kusurun **ikinci yazım biçimi** çıktı — `case when …` satırı paren-DENGELİDİR ⇒ sınır CDS gramerine taşındı (52→9). ⭐ **FIX'İN KENDİ ÜRETEBİLECEĞİ EN TEHLİKELİ GERİLEME ölçülerek kapatıldı:** select listesinin SON elemanı **virgülsüzdür**; birleştirme onu `}` ile kaynaştırsaydı `_ELEMAN` deseni kırılır ve eleman **sessizce kaybolurdu** — `_AYRAC_BASI`'nin `}` dalı tam bunun içindir (M9 bunu öldürür). | `cds_curr_eksik_annotation` **9+5 → 19 senaryo + 11 mutasyon** (11/11 YAKALANDI). YENİ AYIRT EDİCİLER: **S11** karşı-kanıt (çok-satırlı + annotation YOK → bulgu ÇIKAR) · **S14** karşı-kanıt (union'da hiç annotation yok → **tam 1** bulgu, 1. dalda) · **S15** sınır (yabancı alias → bulgu + `[union-miras-yok]`) · **S16** regresyon çapası (virgülsüz+çok-satırlı SON eleman). YENİ FP ÇAPALARI: **S10** · **S12** (ikinci yazım biçimi — çürütülmüş tasarımın kaydı) · **S13** · **S18** (çok-satırlı `@UI` bloğu `@Semantics`'i düşürmez) · **S19** (tırnak-içi `(` sonraki annotation'ı yutmaz). **S17 3.BAĞLAM (görev-dışı):** `define table` yolu birleştirmeden etkilenmez (BLOCKER hâlâ `rc=1`). YENİ MUTASYONLAR M6 birleştirme sökülü · M7 dal sayacı sökülü · M8 miras aşırı geniş (sessiz yutma) · M9 `}` boşaltması sökülü · M10 annotation birleştirmesi sökülü · M11 tırnak-duyarlılık sökülü. ⚠ **M10 İLK YAZIMDA KAÇTI** ve vektör şekli ölçümle keskinleştirildi (2 satırlık `@UI` bloğunda arta kalan parça bir sonraki elemana yapışıp `bekleyen`i düşürmüyordu; 3. satır eklenince parça derinlik 0'da virgülle bitiyor ve blok SIFIRLANIYOR). KARDEŞ KORPUSLAR (HARİTA dördünü de bağlar): `cds_curr_satir_yorumu` **19/19** · `cds_curr_kaynak_tipi` **19/19 + MUTASYON 4/4** · `populate_tables_unit_kind` **21/21 + 7 mutasyon**. | `tests/fixtures/cds_curr_eksik_annotation` (mevcut ev; OZEL_TESTLER + HARİTA açıklamaları güncellendi, **yeni giriş eklenmedi**) | (bu PR) |
+
+**Test-senaryosu / SINIR / DOĞRULANAMADI:**
+1. **Reçete:** `governance/infra-test-recipes.md` **B36**. Tek komut:
+   `python tests/run_battery.py cds_curr_eksik_annotation --kardes populate_tables_unit_kind --precommit`.
+   Kardeşler ayrıca elle: `cds_curr_satir_yorumu` · `cds_curr_kaynak_tipi` (`--mutasyon` dahil).
+2. ⚠ **GEVŞETME — kullanıcı kararına bırakıldı.** Bu PR **merge edilmemelidir**; onay iki
+   sayıya bakarak verilir: *"kanıtsız susturma 0"* ve *"karşı-kanıt vektörleri (S11/S14/S15)
+   yeşil"*. İkisinden biri kırmızıysa fix yanlıştır.
+3. ⚠ **SINIR (bilinçli, beyan edilmiş):** `union`ın iki dalının alan **sırası/tipi** uyumu bu
+   kapının konusu değildir (SAP aktivasyonu zorlar). 2.+ dalda alias eşleşmesi **ad üzerindendir**;
+   CDS union zaten aynı ad/sıra dayattığı için bu güvenlidir, ama ad değiştiren bir dal
+   `[union-miras-yok]` ile **uyarı alır** (sessizce geçmez).
+4. ⚠ **SINIR:** `/* … */` blok yorumu hâlâ ayrıştırılmıyor (kapının **öteden beri** taşıdığı
+   sınır; bu tur onu ne büyüttü ne küçülttü). `yorumu_kirp` yalnız satır-sonu `//` kırpar.
+5. ⚠ **DOĞRULANAMADI (canlı SAP):** *"2. dala annotation eklemek aktivasyonu kırar"* cümlesi bu
+   turda **canlı SAP'de yeniden üretilmedi** — dayanak `playbook/adt-cds.md` T4-b'nin yazılı,
+   aktivasyonda kanıtlanmış kuralıdır. Bu turun fix'i kaynağa dokunmadığı için karar bu
+   dayanağa güvenle verilebilir; yine de *"canlı ölçüldü"* DENMEZ.
+6. ⚠ **YAYILIM / çift-katman:** değişen dosyalar core `scripts/validators` + `tests` altındadır
+   ⇒ junction ile tüm projelere anında yayılır; **şablon/overlay kopyası YOK** (grep: proje
+   tarafında bu validator'ın kopyası bulunmadı) ⇒ **projelere elle dokunulmayacak**.
+7. ⚠ **RAPORLANAN SATIR NO DEĞİŞTİ (bilinçli):** çok satırlı bir ifade için uyarı artık alias'ın
+   bulunduğu SON satırı değil ifadenin **İLK** satırını gösterir — düzeltme talimatı *"elemanın
+   HEMEN ÜSTÜNE ekle"* dediği için doğru hedef budur. Tek satırlık elemanlarda değişiklik yok.
+8. ⚠ **ORTAM NOTU (bu turun ürünü DEĞİL):** `tests/fixtures/b0_secim/run.py` bu worktree'de
+   `10 FAIL / exit 1` veriyor; **kontrol grubu koşuldu** — dokunulmamış `HEAD` sürümüyle çıktı
+   **bayt aynı** ⇒ bu turla ilgisi yok, worktree ortamının (junction) bilinen etkisi.

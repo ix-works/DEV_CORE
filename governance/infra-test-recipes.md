@@ -1847,3 +1847,60 @@ biçimini karıştırır** — OK dalında TOPLAM'ı, FAIL dalında `1/8`in **1*
 Gerçek repoda `.tmp/` gitignore'ludur (`git check-ignore .tmp/battery/… ` → rc=0) ve batarya
 ham çıktılarını oraya yazar; `.gitignore`'suz kumda aracın **kendi artefaktı** "izlenmeyen
 dosya" diye sayılır ve C2 (meşru yeşil) SAHTE-KIRMIZI olur. Kusur değil, kum eksiğidir.
+## B36 — `check_cds_currency_reference` ÇOK-SATIRLI ifade + `union` dalı (Q234+Q237, ⚠GEVŞETME)
+- Korpus (ev genişletildi, yeni dizin YOK):
+  `python tests/fixtures/cds_curr_eksik_annotation/run.py` → **19 senaryo + 11 mutasyon**, exit 0.
+  Tek komutla: `python tests/run_battery.py cds_curr_eksik_annotation --kardes populate_tables_unit_kind --precommit`.
+  ⚠ `run_battery` **tek** `--kardes` kabul eder (son verilen kazanır) — kardeşler ayrıca elle:
+  `cds_curr_satir_yorumu` (**19/19**) · `cds_curr_kaynak_tipi` (**19/19**, ayrıca `--mutasyon`
+  → **4/4**) · `populate_tables_unit_kind` (**21/21 + 7**).
+- ⚠ **BU BİR GEVŞETMEDİR — kabul ölçütü İKİ SAYIDIR, biri yetmez:**
+  ① *"susturulan bulguların kanıtsız olanı = 0"* (FP kanıtı) ve
+  ② *"karşı-kanıt vektörleri S11/S14/S15 yeşil"* (gerçek bulgu hâlâ yakalanıyor).
+  Yalnız ① ile onaylanan bir daraltma, kapıyı sessizce körelten daraltmadır.
+- **GERÇEK-KORPUS REGRESYON REÇETESİ (bu turun asıl kanıtı; her dokunuşta tekrarlanmalı):**
+  validator'ı tüketici projedeki TÜM `*.cds|*.ddls|*.asddls|*.ddl` dosyalarına **eski** ve
+  **yeni** sürümle koş; `(dosya, check_id, satır)` üçlüsü düzeyinde **küme farkı** al. Kabul:
+  `YENİ DOGAN = 0` · `rc dağılımı DEĞİŞMEDİ` · susturulan her üçlü için annotation'ın
+  **nerede olduğu** gösterilebiliyor. Ölçüldü 2026-09-04: **316 dosya · 52 → 9 bulgu ·
+  susturulan 43 (31 çok-satırlı + 12 union 2.+ dal, 1'i her ikisi) · kanıtsız 0 · yeni doğan 0 ·
+  rc 311×0 + 5×1 (değişmedi)**.
+- ⭐ **KANIT BETİĞİ FIX'İN MANTIĞINI KULLANMAZ** (dairesellik yasağı): kaynağı ham metin olarak
+  okur, dosya başından **parantez derinliği haritası** çıkarır, bulgu satırından yukarı yürür.
+  ⚠ Bu betiğin KENDİSİ iki kez yanıldı ve düzeltildi — ikisi de aynı sınıf: **derinliksiz**
+  yukarı yürüyüş `then a else b end,` gibi satırları *"önceki elemanın sonu"* sanıyordu
+  (o virgül `currency_conversion(` argümanının içindedir). Derinlik eklenmeden bulgu kovaları
+  20 vakayı *"kanıt yok"* diye işaretledi — yani **ölçüm aleti**, ölçtüğü şeyden önce
+  doğrulanmalı.
+- ⚠ **TASARIM SINIRI ÖLÇÜMLE SEÇİLDİ — paren-tabanlı sınır YANLIŞTIR:** kusurun iki yazım
+  biçimi var. ① `cast( … ` ile başlayan, ilk satırı paren-DENGESİZ biçim. ② `case when x <> ''
+  and x is not null` ile başlayan, ilk satırı paren-**DENGELİ** biçim. Yalnız ①'i kapatan bir
+  sınır ölçümde **52→24**'te takılır ve kalan 24 *"gerçek bulgu"* sanılır. Doğru sınır CDS
+  gramerinden gelir: eleman **derinlik 0'daki ayraçta** (`,` `{` `}` `;`) biter.
+- ⭐ **FIX'İN KENDİ EN TEHLİKELİ GERİLEMESİ (S16 bunu çivilller):** select listesinin **SON**
+  elemanı **virgülsüzdür**. Birleştirme onu `}` ile kaynaştırırsa `_ELEMAN` deseni kırılır ve
+  eleman **sessizce kaybolur** — daraltmanın en sinsi biçimi budur. `_AYRAC_BASI`'nin `}` dalı
+  tam bunun içindir; **M9** onu öldürür.
+- ⚠ **ÇAPA SATIRLARI BİLEREK BAYT-AYNI BIRAKILDI:** mevcut M1-M5 yamaları
+  `'severity': 'WARNING' / 'line': i / 'check_id'` üçlüsüne, `_eleman_tipi` dallarına ve payda
+  `print`'ine dokunuyor. Yeni kod bu satırları **aynen korur** (döngü değişkeni `i` adı dahil,
+  girinti derinliği dahil). Değişselerdi mutasyonlar `YAMA TUTMADI` verir ve korpus
+  **sahte-yeşile** düşerdi.
+- ⭐ **MUTASYON SAYISI = KATMAN SAYISI:** fix **altı** bağımsız değişmez getirdi, altı mutasyon
+  yazıldı — M6 birleştirme · M7 `union` dal sayacı · M8 miras kuralının GENİŞLİĞİ (sessiz
+  yutma yönü) · M9 `}` boşaltması · M10 annotation ayraç birleştirmesi · M11 tırnak-duyarlılık.
+  ⚠ **M10 İLK YAZIMDA KAÇTI**: iki satırlık `@UI.lineItem: [ { … } ]` bloğunda arta kalan parça
+  bir SONRAKİ elemana yapışıyor ve `bekleyen`i **düşürmüyordu** ⇒ mutasyon gözlenemiyordu.
+  Vektöre üçüncü satır (ikinci `lineItem` girdisi) eklendi; parça artık derinlik 0'da
+  **virgülle** bitiyor, kendi birimi oluyor ve `_YAPISAL` olmadığı için bloğu SIFIRLIYOR.
+  Ders: *"mutasyon KAÇTI"da ilk hipotez 'korpus zayıf' değil, 'o koşula ulaşan bir şekil yok'."*
+- **Dokunulursa BİRLİKTE koşulacaklar:** `check_cds_currency_reference.py`'ye dokunan tur
+  **dört** korpus koşar (B26 ile aynı liste): `cds_curr_satir_yorumu` (V1) ·
+  `cds_curr_kaynak_tipi` (V2, `--mutasyon` dahil) · `populate_tables_unit_kind` (B-13, aynı
+  sözlük) · `cds_curr_eksik_annotation` (derinlik + bu tur). HARİTA dördünü de bağlar.
+- ⚠ **DOĞRULANAMADI (canlı SAP):** *"`union` 2. dala annotation eklemek aktivasyonu kırar"*
+  bu turda canlı sistemde YENİDEN ÜRETİLMEDİ; dayanak `playbook/adt-cds.md` T4-b'nin yazılı,
+  aktivasyonda kanıtlanmış kuralıdır. Fix kaynağa dokunmadığı için karar bu dayanağa
+  güvenle verilir — ama *"canlı ölçüldü"* DENMEZ.
+- ⚠ **ORTAM NOTU:** `b0_secim` bu worktree'de `10 FAIL / exit 1` verir; kontrol grubu
+  (dokunulmamış `HEAD` sürümü) **bayt aynı** çıktı üretir ⇒ bu turla ilgisi yok.

@@ -169,7 +169,8 @@ OZEL_TESTLER = [
     ("cikti_iddiasi_durustlugu",
      "arac ciktisi kodunun YAPTIGINDAN FAZLASINI iddia etmez (pretty_printer 'applied to' + sync_pull alt-include)"),
     ("cds_curr_eksik_annotation",
-     "DERINLIK: EKSIK @Semantics hic aranmiyordu (rc=0 bilgi tasimiyordu) + yesilin PAYDASI + WARNING siddeti"),
+     "DERINLIK: EKSIK @Semantics hic aranmiyordu (rc=0 bilgi tasimiyordu) + yesilin PAYDASI + WARNING siddeti"
+     " + Q234/Q237: cok-satirli ifade ve `union` 2.+ dali YANLIS POZITIF uretiyordu"),
     ("transport_sifir_kaniti",
      "adt_transport_list 'count:0' KANIT DEGIL: uc-degerli zero_verified + curutulmus docstring kalkti"),
     ("precommit_junction_failclosed",
@@ -611,7 +612,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "V1 korpusu bu validator'ı import eder; V2 korpusu CLI'yi subprocess ile koşup "
      "KAYNAK-TİPİ tespitini + çıkış-kodu sözleşmesini (0/1/2) ölçer; B-13 korpusu ise "
      "ÜRETİCİ↔DENETÇİ mutabakatını ölçer (ikisi aynı DTEL sözlüğünü kullanır); "
-     "DERİNLİK korpusu EKSİK annotation'ı + yeşilin PAYDASINI + WARNING şiddetini ölçer"),
+     "DERİNLİK korpusu EKSİK annotation'ı + yeşilin PAYDASINI + WARNING şiddetini ölçer "
+     "ve (2026-09-04) çok-satırlı ifade + `union` miras kuralının YANLIŞ-POZİTİF sınırını çivilller"),
     # 2026-08-27: iki dosya da HARITA'da HIC YOKTU — degisiklikleri hicbir korpusa
     # eslesmiyordu (tazelik kapisi kordu) ve zaten hic fixture'lari yoktu.
     ("scripts/populate_cds_views.py", ("O:cds_paket_kapsami",),
