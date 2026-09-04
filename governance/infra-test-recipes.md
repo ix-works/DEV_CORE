@@ -428,7 +428,19 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 - **Tip-haritası tamlığı (en kritik):** her anahtar+eş-anlamlı için `task_for_push()` non-None (None = sessiz-atlama sınıfı).
 - Kirli-.bdef → BLOCKER/is_blocker · temiz → PASS · kapsam-dışı prog → task=None (bilinçli).
 - SKIP-görünürlüğü: koşmadıysa "PRE-FLIGHT KOŞMADI (sebep)" satırı OLMALI.
-- **SKIP sözleşmesi (2026-08-01):** `python tests/fixtures/reviewer_skip_sozlesmesi/run.py` → 11/11.
+- ⭐ **GÖRÜNÜRLÜK SÖZLEŞMESİ (2026-09-04, Q239+Q238):** *"bir gate'in ÜRETTİĞİ hiçbir metin
+  raporlama döngüsünde SESSİZCE DÜŞMEZ."* `python tests/run_battery.py reviewer_skip_sozlesmesi`
+  → **13/13** (taban **37/37** + 12 kip). Değişmezler: `rc=0` + stderr DOLU → satır `~` işaretli
+  ve bulgu metni BASILI (`✓` DEĞİL) · `FAIL` + stderr BOŞ → stdout'a düşülür · `PASS` stdout'u
+  **kırpılmaz** · BOŞ ZİNCİR bildirimi **stdout'ta** (`⊘ [KAPSAM]` + `VERDICT: PASS (ZİNCİR YOK…)`
+  + `⊘ COORDINATOR: ÖLÇÜM YAPILMADI`). ⛔ **HÜKÜM ÇAPALARI (V18d/V22c): `PASS` + exit 0 DEĞİŞMEZ** —
+  bu tur bilgi ekler, hüküm eklemez; `NOT_MEASURED` verdict'i **reddedilmiş** bir tasarımdır (V6).
+  ⚠ Ölçüm yaparken: taban sürümünü **scratch'te** koşturma — `VALIDATORS_DIR = Path(__file__).parent`
+  olduğu için tüm gate'ler SKIP'e düşer ve sahte "hüküm değişti" üretir; `scripts/` ağacının izole
+  kopyası da yetmez (gate'ler ağaç dışı kaynak okuyor). Geçerli kontrol grubu: **aynı dizinde**
+  `_` önekli kardeş dosya (`_` = `run_all_validators` keşfinden de hariç), ölçüm sonrası SİL.
+- **SKIP sözleşmesi (2026-08-01):** `python tests/fixtures/reviewer_skip_sozlesmesi/run.py` → 37/37
+  (kayıt yazıldığında 11/11 idi; 2026-08-29'da 21, 2026-09-04'te 37).
   Değişmezler: eksik BLOCKER gate → **verdict BLOCKER + exit 1** ("koşmadı" ≠ "temiz"; gate'i
   silmek onu geçmenin yolu OLMAMALI) · eksik WARNING → WARNING/exit 0 · human-mod SKIP'te
   **çökmez ve VERDICT satırını basar** (eski hâli `KeyError: 'stdout'`) · `--json` anahtarları
