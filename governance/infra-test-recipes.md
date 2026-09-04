@@ -1925,7 +1925,7 @@ dosya" diye sayılır ve C2 (meşru yeşil) SAHTE-KIRMIZI olur. Kusur değil, ku
   `/source/main`'i hâlâ kendi içlerinde ekliyor — bu turda bilinçli DOKUNULMADI.
 - Kardeş korpuslar: `class_include_push` (15/15) · `ddic_okuma_yolu` (31/31, DDIC ekseni
   DEĞİŞMEDİ) · `b0_secim` (P3 pini 7→8; HARİTA satırı eklenince BİRLİKTE güncellenir).
-## B36 — `hook_bash_ve_stderr_kapsami/B1b` ÖLÇÜM ÇAPASI İKİ ANLAMA BİRDEN UYUYORDU (Q249)
+## B39 — `hook_bash_ve_stderr_kapsami/B1b` ÖLÇÜM ÇAPASI İKİ ANLAMA BİRDEN UYUYORDU (Q249)
 
 - **Koşum:** `python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py` → **11 senaryo + 5
   mutasyon**, exit 0. (Q249 öncesi 9 + 4; yeni: `B1c` çapa-biçimi · `B1d` iki-dal · `M5`.)
