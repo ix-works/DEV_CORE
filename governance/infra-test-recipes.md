@@ -1281,7 +1281,10 @@ python tests/run_fixture_tests.py                       # 137/137
   `python tests/fixtures/conn_kum_sizintisi/run.py`              → **7 + 4**, exit 0
   `python tests/fixtures/mcp_profil_aktivasyon_offline/run.py`   → **15 + 4**, exit 0
   `python tests/fixtures/ui_smoke_sapsiz/run.py`                 → **8 + 3**, exit 0
-  `python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py`     → **9 + 4**, exit 0
+  `python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py`     → **11 + 5**, exit 0
+    (2026-09-04'e kadar **9 + 4** idi; Q249 ile B1c/B1d vektörleri + M5 mutasyonu eklendi —
+     bkz. aşağıdaki **B36**. ⚠ Bu satır ile B36 AYNI sayıyı taşır; birini güncelleyip
+     ötekini unutmak bayat pin üretir.)
   Tam süit: `python tests/run_fixture_tests.py` → **144/144**, **İKİ ARDIŞIK KOŞUM AYNI**
   (⚠ süit sayısı bugün **145/145** — B30 ile `byassoc_advisory` korpusu eklendi; bu
   korpusun kendi sayısı **9 + 4** olarak DEĞİŞMEDİ, A3 yeniden kuruldu ama bölünmedi.)
@@ -1922,3 +1925,47 @@ dosya" diye sayılır ve C2 (meşru yeşil) SAHTE-KIRMIZI olur. Kusur değil, ku
   `/source/main`'i hâlâ kendi içlerinde ekliyor — bu turda bilinçli DOKUNULMADI.
 - Kardeş korpuslar: `class_include_push` (15/15) · `ddic_okuma_yolu` (31/31, DDIC ekseni
   DEĞİŞMEDİ) · `b0_secim` (P3 pini 7→8; HARİTA satırı eklenince BİRLİKTE güncellenir).
+## B36 — `hook_bash_ve_stderr_kapsami/B1b` ÖLÇÜM ÇAPASI İKİ ANLAMA BİRDEN UYUYORDU (Q249)
+
+- **Koşum:** `python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py` → **11 senaryo + 5
+  mutasyon**, exit 0. (Q249 öncesi 9 + 4; yeni: `B1c` çapa-biçimi · `B1d` iki-dal · `M5`.)
+- ⭐ **BU KORPUS ÜÇ TOPOLOJİDE KOŞULUR — tek topolojide yeşil, KANIT DEĞİLDİR.** Değişken
+  `CLAUDE_PROJECT_DIR`'dir (gate `project_root()` ile proje kökünü oradan alır); koşucunun
+  kendi `KOK`'u DEĞİŞMEZ, bu yüzden üç ölçüm de aynı ağaçtan yapılabilir:
+
+  ```bash
+  # (a) DEV_CORE worktree'si  (core/ junction VAR, governance/infra-findings.md YOK)
+  CLAUDE_PROJECT_DIR=<worktree>     python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py
+  # (b) DEV_CORE ana ağacı    (core/ YOK — core'un kendisi)
+  CLAUDE_PROJECT_DIR=<DEV_CORE>     python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py
+  # (c) gerçek bir proje      (core/ junction VAR, infra-findings.md VAR)
+  CLAUDE_PROJECT_DIR=<proje kökü>   python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py
+  ```
+  ÜÇÜNÜN DE `exit 0` + `11/11 senaryo` + `5/5 mutasyon YAKALANDI` vermesi gerekir.
+  ⚠ Korpusu **bir projenin `core/` junction'ı üzerinden** çağırma (`<proje>/core/tests/...`):
+  `Path(__file__).resolve()` junction'ı çözer ⇒ `KOK` yine DEV_CORE olur ve mutant kardeş
+  dosyalar **canlı core'a** yazılır. Ölçmek istediğin değişken zaten `CLAUDE_PROJECT_DIR`'dir.
+
+- **NEDEN (ölçüldü 2026-09-04):** `_toplam()` sayıyı gate'in insan-okur çıktısından
+  `re.search(r"enjekte edilen (\d+)")` ile kazıyordu. O çapa gate'in **iki dalına birden**
+  uyuyor ve iki **ZIT** şeyi okuyor: OK dalında **TOPLAM**, FAIL dalında **KIRIK** sayısı
+  (`1/8`in `1`i). Aynı kodla, yalnız proje kökü değiştirilerek ölçülen sonuç:
+
+  | proje kökü | sondasız (çapanın okuduğu) | sondalı (çapanın okuduğu) | eski B1b |
+  |---|---|---|---|
+  | DEV_CORE worktree'si | `[OK]` dalı → **4 = TOPLAM** | `[FAIL]` dalı → **1 = KIRIK** (toplam 8) | **FAIL** (gürültülü kırmızı) |
+  | DEV_CORE ana ağacı | `[FAIL]` dalı → **4 = KIRIK** (toplam 4) | `[FAIL]` dalı → **8 = KIRIK** (toplam 8) | PASS — **SAHTE-YEŞİL** |
+  | gerçek proje | `[OK]` dalı → **4 = TOPLAM** | `[OK]` dalı → **8 = TOPLAM** | PASS (doğru) |
+
+  ⇒ Enstrüman yalan söylüyordu, kod değil. Asıl tehlike gürültülü kırmızı DEĞİL, ikinci
+  satırdaki **sahte-yeşil**tir: orada vektör "kırık sayısı"nı kıyaslıyor ve ölçmesi
+  gereken şeyi hiç ölçmüyor.
+
+- **ÇÖZÜM:** gate `olc() -> (toplam, kirik)` **veri** arayüzü verir; `main()` yalnız sunum
+  + exit kararıdır ve **çıktı metni bit düzeyinde değişmedi**. Korpus sayıyı veriden alır.
+  `olc()` kaybolursa `B1c` **gürültülü** FAIL verir (çökme değil) — `M5` bunu ölçer.
+- **Dokunulursa BİRLİKTE koşulacaklar:** `check_hook_injected_paths.py` → bu korpus
+  **VE** `init_project_iskelet` (P2 vektörü aynı gate'i alt-süreç olarak koşar, çıktı
+  METNİNE bakar — metin sözleşmesini kıran değişiklik orada patlar).
+- ⚠ **SINIR / DOĞRULANAMADI:** üç topoloji de **Windows**'ta ölçüldü; Linux (CI) ayrımı
+  bu turda yerel olarak üretilemedi — CI koşumu ayrı kanıttır.
