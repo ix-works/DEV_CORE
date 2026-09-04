@@ -225,7 +225,7 @@ syntax-check turu eklemek hem gereksiz hem — yukarıdaki semantiği yüzünden
 - Composite tool'lar auto-rollback yapmaz (inactive obje değerli olabilir)
 - Tool listesinde `transport_release`, `package_create` **YOK** (ADR 0005 §C)
 - TR karakter validation v1'de sadece boş kontrolü; non-Latin karakter dağılım kontrolü v2'de
-- ⚠️ **`adt_get`/`adt_lock_check` object_type='func' GÜVENİLMEZ** — mevcut FM'e bile `exists:false` (group-resolution bug). Varlık için `adt_search_objects` ya da group-qualified metadata GET (`/sap/bc/adt/functions/groups/<fg>/fmodules/<fm>`). Bkz. `adt-fugr-functions.md` §4. **KAPSAM:** yalnız `object_type='func'`; genel `adt_get` DDIC-okuması güvenilir (KÖK-FIX 2026-06-16, `feedback_adt-get-ddic-read-fixed`) — "adt_get genelde güvenilmez" algısı yok.
+- ⚠️ **`adt_get`/`adt_lock_check` object_type='func' GÜVENİLMEZ** — mevcut FM'e bile `exists:false` (group-resolution bug). ⭐ **2026-09-04'ten sonra `exists:false` DEĞİL, `ok:false` + yönlendiren mesaj** gelir (generic URL tablosu `func` için fail-closed) — yani yanlış "obje yok" iddiası kalktı; okuma yolu yine açılmadı. Varlık için `adt_search_objects` ya da group-qualified metadata GET (`/sap/bc/adt/functions/groups/<fg>/fmodules/<fm>`). Bkz. `adt-fugr-functions.md` §4. **KAPSAM:** yalnız `object_type='func'`; genel `adt_get` DDIC-okuması güvenilir (KÖK-FIX 2026-06-16, `feedback_adt-get-ddic-read-fixed`) — "adt_get genelde güvenilmez" algısı yok.
 - ⚠️ **AĞ/DNS kesintisinde `adt_get` `ok:true` + `exists:false` DÖNEBİLİR** — yani "obje yok" ile
   "sunucuya ulaşamadım" **aynı görünür**. Ayırt edici: yanıtın `client_log` alanında
   `NameResolutionError` (ya da benzeri bağlantı hatası) görünür. **KURAL:** `exists:false`

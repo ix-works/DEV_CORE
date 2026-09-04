@@ -55,13 +55,32 @@ OBJECT_TYPES = {
         'supports_create': True,
         'file_extension': '.fugr.abap'
     },
+    # GENERIC URL YOK -- `url_path: None` BILINCLIDIR (Q221/Q228; canli olculdu
+    # 2026-09-03, DEV, salt-GET):
+    #     /sap/bc/adt/functions/modules/<fm>                           -> HTTP 404 (26 bayt)
+    #     /sap/bc/adt/functions/groups/<fg>/fmodules/<fm>              -> HTTP 406 (obje VAR)
+    #     /sap/bc/adt/functions/groups/<fg>/fmodules/<fm>/source/main  -> HTTP 200 (27721 bayt)
+    # Bu tablo eskiden birinci satiri uretiyordu; 404 "obje YOK" diye okunuyordu (sessiz
+    # yanlis teshis). url_path'i 'functions/groups' YAPMAK COZUM DEGIL: dogru uc FONKSIYON
+    # GRUBUNU icerir ve grup adi FM adindan TURETILEMEZ -> tek-parametreli
+    # get_object_url(name, type) onu URETEMEZ. Ayni yapisal gerekce sinif alt-include'larinda
+    # da vardir (bkz. CLASS_INCLUDE_TYPES basligi); orada cozum "tabloya KOYMA + yonlendiren
+    # ValueError" idi. Burada girdi KALIR (adt_type/file_extension/_TYPE_TO_SUBDIR tuketicileri
+    # var) ama URL uretimi FAIL-CLOSED: yanlis adres uretmektense anlasilir ret.
     'function': {
         'adt_type': 'FUNC/FF',
-        'url_path': 'functions/modules',
+        'url_path': None,
         'xml_namespace': 'function',
         'description': 'Function Module',
         'supports_create': False,  # Use create_function_module() instead (requires function group)
-        'file_extension': '.func.abap'
+        'file_extension': '.func.abap',
+        'generic_url_ret': (
+            "FM'in ADT ucu fonksiyon grubunu ICERIR "
+            "(/sap/bc/adt/functions/groups/<FG>/fmodules/<FM>[/source/main]) ve grup adi FM "
+            "adindan TURETILEMEZ. Yaz: sap_adt_lib.SAPADTClient.set_function_module_source(); "
+            "yarat: scripts/create_function_module.py; oku/ATC: adt_search_objects ile GERCEK "
+            "URI'yi al ve o URI ile cagir. Bkz. playbook/adt-fugr-functions.md."
+        ),
     },
     # DDIC types
     'dataelement': {
@@ -310,6 +329,66 @@ def get_class_include_url(class_name, kind) -> str:
     return f'/sap/bc/adt/oo/classes/{cls}/includes/{seg}'
 
 
+def is_class_include_url(object_url) -> bool:
+    """URL bir SINIF ALT-INCLUDE ucu mu? (`.../oo/classes/<CLS>/includes/<segment>`)
+
+    /programs/includes/<INCL> (KLASIK program include'u) BU DEGILDIR: o siradan bir
+    objedir ve kaynagi `/source/main` altindadir. Kaba bir `'/includes/' in url` kontrolu
+    ikisini karistirir ve klasik include okumasini KIRAR -- bu yuzden kontrol YAPISALDIR
+    (`oo/classes/<ad>/includes/<segment>`) ve segment listesi CLASS_INCLUDE_TYPES'tan
+    okunur (ikinci literal ACILMAZ).
+    """
+    if not object_url:
+        return False
+    parcalar = [p for p in str(object_url).split('?')[0].split('/') if p]
+    if len(parcalar) < 5:
+        return False
+    if parcalar[-2].lower() != 'includes':
+        return False
+    if parcalar[-4].lower() != 'classes' or parcalar[-5].lower() != 'oo':
+        return False
+    return parcalar[-1].lower() in {v['segment'] for v in CLASS_INCLUDE_TYPES.values()}
+
+
+def ensure_source_url(object_url) -> str:
+    """Kaynak ucunu garanti et: gerekiyorsa sonuna `/source/main` EKLE.
+
+    SINIF ALT-INCLUDE uclarina EKLENMEZ -- o URL kaynak ucunun KENDISIDIR
+    (`get_class_include_url` docstring'i bunu 2026-08-10'dan beri yaziyordu, kod uymuyordu:
+    Q217/Q229). CANLI OLCUM 2026-09-03 (DEV, salt-GET): ciplak include ucu HTTP 200
+    (154609 bayt), ayni uc + `/source/main` HTTP 404; kontrol grubu ayni sinifin ANA
+    kaynagi 200. Yani 404 baglanti/yetki degil, URL kurulusu.
+
+    TANINMAYAN bir include segmenti (ornegin `.../includes/beklenmeyen`) icin `/source/main`
+    YINE eklenir: muafiyet TAHMINLE genisletilmez (bu evde canli olculmus segmentler
+    CLASS_INCLUDE_TYPES'ta beyanlidir).
+    """
+    url = str(object_url or '').rstrip('/')
+    if url.endswith('/source/main'):
+        return url
+    if is_class_include_url(url):
+        return url
+    return url + '/source/main'
+
+
+def object_name_from_source_url(object_url) -> str:
+    """ADT URL'inden insan-okunur obje adi (hata mesajlari icin).
+
+    `url.split('/')[-2]` YAZMA: `/source/main` eklenmis bir uctan 'source', alt-include
+    ucundan 'includes' dondurur -- yani hata mesaji VAR OLMAYAN bir obje adi ILAN EDER.
+    Olculdu 2026-09-03: include okumasi `[404] Object not found: source` diyordu; okuyan
+    bunu "obje yok" diye okur ve teshis "aracin yanlis adresi"nden UZAKLASIR.
+    """
+    parcalar = [p for p in str(object_url or '').split('?')[0].split('/') if p]
+    if len(parcalar) >= 3 and parcalar[-1].lower() == 'main' and parcalar[-2].lower() == 'source':
+        parcalar = parcalar[:-2]
+    if not parcalar:
+        return ''
+    if len(parcalar) >= 3 and parcalar[-2].lower() == 'includes':
+        return f"{parcalar[-3]} ({parcalar[-1]} include'u)"
+    return parcalar[-1]
+
+
 # =============================================================================
 # DDIC OKUMA-YOLU — TEK KAYNAK (2026-08-09)
 # =============================================================================
@@ -367,10 +446,23 @@ def ddic_read_mode(object_type):
 
 
 def get_object_url(object_name, object_type='class'):
-    """Generate SAP ADT object URL for any object type"""
+    """Generate SAP ADT object URL for any object type
+
+    Her tipin tek-parametreli generic bir ucu YOKTUR. `url_path` bos olan tip
+    FAIL-CLOSED reddedilir (ValueError + kanonik yolu SOYLEYEN mesaj): yanlis bir adres
+    uretmek 404 dogurur ve 404 "obje YOK" diye okunur -- sessiz yanlis teshis. Bugun bu
+    durumda olan tek tip `function` (FM); gerekce tablodaki yorumda.
+    """
     from urllib.parse import quote
     obj_type = normalize_object_type(object_type)
     type_info = OBJECT_TYPES[obj_type]
+    if not type_info.get('url_path'):
+        raise ValueError(
+            f"'{object_type}' icin generic ADT URL'i URETILEMEZ "
+            f"(get_object_url tek-parametrelidir). "
+            + (type_info.get('generic_url_ret') or
+               "Bu tipin ADT ucu obje adindan turetilemiyor; kanonik aracini kullan.")
+        )
     # Namespaced objects (e.g. /SCWM/DE_HUIDENT) carry slashes in the name; ADT
     # expects these encoded as %2f in the path segment. quote(safe='') leaves
     # plain names (letters/digits/_.-~) untouched and only encodes the slashes.
@@ -403,6 +495,16 @@ def supports_creation(object_type):
     return OBJECT_TYPES[obj_type]['supports_create']
 
 
+def supports_generic_url(object_type):
+    """Tip tek-parametreli `get_object_url()` ile adreslenebilir mi?
+
+    TEK GERCEKTEN turer (`url_path`); ikinci bir bayrak TUTULMAZ -- iki alan ayrisirsa
+    biri bayatlar. Cagiran `get_object_url`u cagirmadan ONCE sorabilsin diye var.
+    """
+    obj_type = normalize_object_type(object_type)
+    return bool(OBJECT_TYPES[obj_type].get('url_path'))
+
+
 def list_supported_types():
     """List all supported object types"""
     return list(OBJECT_TYPES.keys())
@@ -428,7 +530,9 @@ def get_adt_type_from_url(object_url):
     """
     # Build reverse map from url_path -> adt_type
     for obj_type_info in OBJECT_TYPES.values():
-        url_segment = obj_type_info['url_path']
+        url_segment = obj_type_info.get('url_path')
+        if not url_segment:          # generic ucu olmayan tip (bkz. 'function') -- atla
+            continue
         if f'/{url_segment}/' in object_url:
             return obj_type_info['adt_type']
     return 'UNKNOWN'
@@ -483,7 +587,7 @@ if __name__ == '__main__':
         print(f"\n{obj_type.upper()}")
         print(f"  Description: {info['description']}")
         print(f"  ADT Type:    {info['adt_type']}")
-        print(f"  URL Path:    {info['url_path']}")
+        print(f"  URL Path:    {info['url_path'] or '(generic URL YOK -- kanonik arac gerekir)'}")
         print(f"  Extension:   {info['file_extension']}")
         print(f"  Can Create:  {info['supports_create']}")
 
