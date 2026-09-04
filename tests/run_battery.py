@@ -53,8 +53,22 @@ SATIR SONUCU — "exit 0" TEK BAŞINA ANLAM TAŞIMAZ (bu araç dört ayrı hâli
   ⛔ "kurulamadı", "kaçtı" DEĞİLDİR ve "çökme", "FAIL" değildir — üçü ayrı satır
      etiketi taşır, çünkü üçünün onarımı ayrıdır.
 
+  KAPI:       OK(rc=0)                  → PASS  (ölçtü, temiz)
+              IHLAL(rc≠0)               → FAIL
+              OK(rc=0) N IZLENMEYEN     → **ATLA** (Q250: gate `git ls-files` = INDEX
+                                          tarar; izlenmeyen N dosyayı GÖRMEDİ ⇒ bu
+                                          satır "temiz" DEĞİL, "eksik ölçüm"dür)
+              … PAYDA OLCULEMEDI        → **ATLA** (git yok / repo değil)
+
+⭐ ÜÇÜNCÜ İŞARET — `ATLA`: *ölçüm yokluğu ≠ ihlal yokluğu.* `PASS` sütunu YALNIZ
+   gerçekten ölçülmüş birimler içindir; ölçülmeyen satır ne PASS'a ne FAIL'e girer,
+   TOPLAM satırında ayrı sayılır (`3/4 PASS · 1 ATLA`).
+
 NİHAİ EXIT: 1 — taban YEŞİL değilse · bir kip KACTI/KURULAMADI/KIP-RED/COKTU ise ·
             koşucu yoksa · `--precommit` verildi ve gate exit≠0 ise. Aksi hâlde 0.
+            ⛔ `ATLA` çıkış kodunu DEĞİŞTİRMEZ (ölçmemek bir ihlal değildir); yalnız
+            raporu dürüst tutar. Bilinçli: eksik payda her koşumda kırmızı üretseydi
+            araç, işin normal ortasında (yeni dosya yazılmışken) kullanılamaz olurdu.
 
 ÇOCUK ORTAMI: `run_fixture_tests.py::run_ozel` ile BİREBİR aynı (IX_* ve
 CLAUDE_PROJECT_DIR temizlenir, cwd = repo kökü). ⛔ `PYTHONUTF8` ENJEKTE EDİLMEZ:
@@ -262,9 +276,45 @@ def _ham_yaz(repo: Path, ad: str, etiket: str, cikti: str) -> str:
     return str(yol.relative_to(repo)).replace("\\", "/")
 
 
+def _precommit_paydasi(repo: Path) -> tuple[int, int]:
+    """`core_precommit --all`ın PAYDASI: (index'te izlenen, izlenmeyen) dosya sayısı.
+
+    ⛔ Q250 (2026-09-04) — "`--all`" ADI YANILTIYOR: gate `git ls-files` kullanır, yani
+    yalnız **INDEX'teki** yolları tarar. Yeni yazılmış (henüz `git add` edilmemiş)
+    dosyalar YAPISAL OLARAK görünmez ve tabloda hiçbir iz bırakmazdı.
+
+    POZİTİF KONTROL (canlı, 2026-09-04, bu ağaçta): makine-lokal kullanıcı yolu
+    (`<MACHINE_PATH>`) taşıyan bir sonda dosyası
+        izlenmezken  → `--all` rc=0  (639 dosya tarandı, 68 s)
+        `git add` sonrası → `--all` rc=1  GENERICIZE-LEAK
+    ⇒ İki koşum arasındaki tek fark INDEX'tir; çıktı satırı ikisinde de `OK(rc=0) PASS`
+      okunuyordu. Sahte-yeşil bir **kapı tablosunun içindeydi** ve bir kez fiilen ısırdı
+      (`Q199②` turu: EXIT=0 kanıt sanıldı, `git add` sonrası 23 s + iki GENERICIZE-LEAK).
+
+    -1 = ölçülemedi (git yok / repo değil). Ölçülemeyen payda da "0" diye raporlanmaz.
+    """
+    def _say(*arg: str) -> int:
+        try:
+            p = subprocess.run(["git", *arg], cwd=str(repo), capture_output=True,
+                               text=True, encoding="utf-8", errors="replace", timeout=60)
+        except Exception:
+            return -1
+        if p.returncode != 0:
+            return -1
+        return len([x for x in (p.stdout or "").split("\0") if x])
+
+    return _say("ls-files", "-z"), _say("ls-files", "--others", "--exclude-standard", "-z")
+
+
 def _batarya(repo: Path, ad: str, kipler: list[str] | None, zaman_asimi: int,
-             mutasyonlu: bool) -> list[tuple[str, str, str, str, float, bool]]:
-    """(birim, beklenen, sonuc, skor, sure, ok) satırları."""
+             mutasyonlu: bool) -> list[tuple[str, str, str, str, float, bool | None]]:
+    """(birim, beklenen, sonuc, skor, sure, ok) satırları.
+
+    `ok` ÜÇ DEĞERLİDİR: True = PASS · False = FAIL · **None = ATLA (ölçülmedi)**.
+    Üçüncü değer Q250'nin fix'idir: "ölçüm yapılmadı" satırı artık `PASS` sütununa
+    düşmez. `None` nihai çıkış kodunu ETKİLEMEZ (ölçüm yokluğu bir ihlal değildir),
+    ama okuyan onu "koştu ve temiz" diye okuyamaz.
+    """
     kosucu = repo / "tests" / "fixtures" / ad / "run.py"
     if not kosucu.is_file():
         return [(f"{ad}/taban", "tam yesil", "YOK", "-", 0.0, False)]
@@ -338,29 +388,57 @@ def main(argv: list[str] | None = None) -> int:
         if not gate.is_file():
             satirlar.append(("core_precommit --all", "exit 0", "YOK", "-", 0.0, False))
         else:
+            izlenen, izlenmeyen = _precommit_paydasi(repo)
             kod, cikti, sure = kos([sys.executable, str(gate), "--all"], repo, a.zaman_asimi)
             _ham_yaz(repo, "core_precommit", "all", cikti)
-            satirlar.append(("core_precommit --all", "exit 0",
-                             f"{'OK' if kod == 0 else 'IHLAL'}(rc={kod})", "-", sure, kod == 0))
+            etiket = "OK" if kod == 0 else "IHLAL"
+            # PAYDA GORUNUR (Q250). Uc hal ayrilir:
+            #   izlenmeyen > 0  -> gate o dosyalari GORMEDI  => ATLA (PASS DEGIL)
+            #   izlenmeyen == 0 -> payda tam                 => PASS/FAIL
+            #   payda -1        -> paydayi olcemedik         => ATLA
+            if izlenen < 0 or izlenmeyen < 0:
+                sonuc, ok = f"{etiket}(rc={kod}) PAYDA OLCULEMEDI", None
+            elif izlenmeyen > 0 and kod == 0:
+                sonuc, ok = f"{etiket}(rc={kod}) {izlenmeyen} IZLENMEYEN", None
+            else:
+                sonuc, ok = (f"{etiket}(rc={kod})"
+                             + (f" {izlenmeyen} IZLENMEYEN" if izlenmeyen > 0 else ""),
+                             kod == 0)
+            satirlar.append(("core_precommit --all", "exit 0", sonuc,
+                             f"{izlenen}d" if izlenen >= 0 else "?", sure, ok))
+            if izlenmeyen > 0:
+                NOTLAR.append(
+                    f"core_precommit --all: {izlenen} izlenen dosya tarandi, "
+                    f"{izlenmeyen} IZLENMEYEN dosya TARANMADI (gate `git ls-files` "
+                    f"kullanir = INDEX). Kendi yeni dosyalarini olcmek icin ONCE "
+                    f"`git add`, sonra bu bataryayi tekrar kos.")
 
-    dusuk = [s for s in satirlar if not s[5]]
+    dusuk = [s for s in satirlar if s[5] is False]
+    atlanan = [s for s in satirlar if s[5] is None]
+    oncelikli = dusuk + atlanan          # ikisi de gizlenemez: biri ihlal, oteki OLCUM YOKLUGU
     gosterilecek = satirlar
     kisaltildi = 0
     if len(satirlar) > OZET_SATIR_BUTCESI:
-        gecen = [s for s in satirlar if s[5]]
-        gosterilecek = dusuk + gecen[:max(0, OZET_SATIR_BUTCESI - len(dusuk))]
+        gecen = [s for s in satirlar if s[5] is True]
+        gosterilecek = oncelikli + gecen[:max(0, OZET_SATIR_BUTCESI - len(oncelikli))]
         kisaltildi = len(satirlar) - len(gosterilecek)
 
     print(f"\nBATARYA — {a.fixture}" + (f" (+kardes: {', '.join(a.kardes)})" if a.kardes else ""))
-    print(f"{'BIRIM':44s} {'BEKLENEN':10s} {'SONUC':22s} {'SKOR':9s} {'SURE':>7s}  ")
+    # SONUC sutunu 22 -> 26: "OK(rc=0) PAYDA OLCULEMEDI" 25 karakterdir ve 22'de
+    # "PAYDA OLCULEM" diye KESILIYORDU — okuyan icin anlamsiz, arayan icin gorunmez.
+    print(f"{'BIRIM':44s} {'BEKLENEN':10s} {'SONUC':26s} {'SKOR':9s} {'SURE':>7s}  ")
     for birim, beklenen, sonuc, skor, sure, ok in gosterilecek:
-        isaret = "PASS" if ok else "FAIL"
-        print(f"{birim[:44]:44s} {beklenen:10s} {sonuc[:22]:22s} {skor:9s} {sure:6.1f}s  {isaret}")
+        # ⛔ `if ok` YAZILAMAZ: None da falsy'dir ve "olculmedi" satirini FAIL gosterirdi.
+        isaret = "PASS" if ok is True else ("FAIL" if ok is False else "ATLA")
+        print(f"{birim[:44]:44s} {beklenen:10s} {sonuc[:26]:26s} {skor:9s} {sure:6.1f}s  {isaret}")
     if kisaltildi:
         print(f"... +{kisaltildi} PASS satiri gizlendi (ham cikti: .tmp/battery/)")
     for n in NOTLAR:
         print(f"  ↳ {n}")
-    print(f"TOPLAM: {len(satirlar) - len(dusuk)}/{len(satirlar)} PASS  "
+    # ATLA satirlari PAY'a da PAYDA'ya da girmez: "3/4 PASS + 1 ATLA" okunur, cunku
+    # "4/4 PASS" demek olculmeyeni olculmus saymaktir (bu turun tam konusu).
+    print(f"TOPLAM: {len(satirlar) - len(dusuk) - len(atlanan)}/{len(satirlar)} PASS"
+          + (f"  ·  {len(atlanan)} ATLA (OLCULMEDI)" if atlanan else "") + "  "
           f"[{round(time.time() - t0, 1)}s]  ham cikti: .tmp/battery/")
     if dusuk:
         print("DUSEN: " + " · ".join(f"{s[0]}→{s[2]}" for s in dusuk[:8]))

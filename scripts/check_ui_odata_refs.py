@@ -14,7 +14,16 @@ Kullanim:
       --service ZSD001_UI_SO_O2
   (baglanti: .conn_adt; --service yoksa manifest mainService uri'sinden cikarilir)
 
-Cikis kodu: 0 = temiz, 1 = en az bir KIRMIZI (yapisal) uyumsuzluk.
+Cikis kodu: 0 = OLCTUM ve temiz, 1 = en az bir KIRMIZI (yapisal) uyumsuzluk,
+            2 = OLCEMEDIM (servis adi cozulemedi VEYA taranacak dosya bulunamadi).
+
+⛔ Q232 (2026-09-04) — "0 dosya taradim" ile "temiz" AYNI CIKTIYI veriyordu:
+   olmayan bir `--app` yolunda `glob` sessizce `[]` doner, hicbir kontrol calismaz ve
+   arac `TEMIZ` + exit 0 basardi. Iki kosumun ciktisi BAYT-BIREBIR AYNIYDI (olculdu
+   2026-09-02: `--app volvo_mesaj` [yol YOK] ile `--app <tam yol>` [4 dosya]) ⇒
+   cagiran tarafin ayirt etmesi IMKANSIZDI ve bir bug-expert'i fiilen yanilti.
+   Artik: (a) cozulmeyen `--app`/`webapp` = HATA (exit 2), (b) payda HER kosumda
+   basilir, (c) 0 dosya "TEMIZ" DEGIL "OLCUM YOK"tur.
 """
 import argparse, glob, os, re, sys
 import requests, urllib3
@@ -22,7 +31,19 @@ urllib3.disable_warnings()
 try: sys.stdout.reconfigure(encoding="utf-8")
 except Exception: pass
 
+# CORE-03: core'un KENDI agaci icin `__file__` turevi MESRU kullanimdir (proje koku
+# DEGIL, `scripts/` import koku araniyor). Ortak kapsam sozlesmesi orada yasar.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils.kapsam import kapsam_eki  # noqa: E402
+
 JS_KEYS = {"method", "headers", "success", "error", "urlParameters", "filters", "sorters"}
+
+# Q232 IKINCI EKSEN — kapinin GERCEK kapsami artik BELGELI ve CIKTIDA gorunur.
+# `TEMIZ` sozu "bu app'in butun OData referanslari uyumlu" DEMEK DEGILDIR; asagidaki
+# uc desen disinda kalan her sey (Component.js · model/models.js · util/*.js · i18n/* ·
+# localService/*) KAPSAM DISIDIR. Okuyanin bunu cikti satirindan gormesi gerekir.
+KAPSANAN = ("webapp/controller/*.js", "webapp/view/*.xml", "webapp/fragment/*.xml")
+BIRIM = "UI dosyasi [" + " · ".join(KAPSANAN) + "]"
 
 
 def load_conn(cwd):
@@ -77,7 +98,28 @@ def scan_ui(app):
         for m in re.finditer(r'\$select"?\s*:\s*"([^"]+)"', txt):
             for tok in m.group(1).split(","):
                 if tok.strip(): props.add(tok.strip())
-    return callfn, reads, props
+    return callfn, reads, props, len(files)
+
+
+def kapsam_dogrula(app):
+    """`--app` GERCEKTEN cozuluyor mu? Cozulmuyorsa SESSIZ `[]` yerine GORUNUR hata.
+
+    Bu, "kapsam mesru sekilde bos" durumu DEGILDIR (utils/kapsam.py K1 sozlesmesi
+    onu FAIL yapmaz ve hakli): burada kullanici bir yol VERDI ve o yol tutmadi ⇒
+    arac argumani ayristiramadi. Dosyanin kendi konvansiyonu bunu zaten exit 2 ile
+    isaretliyor (`--service` cozulemedigi dal).
+    """
+    if not os.path.isdir(app):
+        print(f"[FAIL] --app yolu YOK: {app}")
+        print(f"       cozulen mutlak yol: {os.path.abspath(app)}")
+        print("       Bu bir OLCUM DEGILDIR — hicbir dosya taranmadi (exit 2).")
+        sys.exit(2)
+    wf = os.path.join(app, "webapp")
+    if not os.path.isdir(wf):
+        print(f"[FAIL] webapp/ dizini YOK: {wf}")
+        print("       --app, webapp'in UST dizini olmali (ornek: .../ui/<app_adi>).")
+        print("       Bu bir OLCUM DEGILDIR — hicbir dosya taranmadi (exit 2).")
+        sys.exit(2)
 
 
 def main():
@@ -86,6 +128,24 @@ def main():
     ap.add_argument("--service", help="OData servis adi (yoksa manifest'ten)")
     ap.add_argument("--cwd", default=".")
     a = ap.parse_args()
+
+    # ⛔ SIRA ONEMLI: kapsam dogrulamasi AGA BAGLANMADAN once kosar. Yol yanlissa
+    #    sonucu degistirecek hicbir sey yok; kullaniciyi bir `$metadata` cagrisi
+    #    bekletmek (ve olasi bir 401'i asil hatanin ustune yazmak) anlamsizdir.
+    kapsam_dogrula(a.app)
+
+    # ⛔ KAPSAM AGDAN ONCE OLCULUR (Q232). Eskiden UI taramasi `fetch_metadata`dan
+    #    SONRA geliyordu; yani arac, kiyaslayacak TEK BIR dosyasi olmadigi hallerde
+    #    bile once SAP'ye gidiyor, sonra "TEMIZ" diyordu. Paydayi once olcmek hem
+    #    dogru (bos kapsamda kiyas edilecek sey yoktur) hem ucuz (aga hic gidilmez).
+    callfn, reads, props, taranan = scan_ui(a.app)
+    if taranan == 0:
+        # `kapsam_eki` ortak sozlesmesi (K1) — "ihlal yok" ile "bakacak dosya yok"u
+        # ayiran KANONIK metin. Yeni mekanizma icat edilmiyor, mevcut katman baglaniyor.
+        print(kapsam_eki(0, BIRIM))
+        print("\nOLCUM YOK — 'TEMIZ' DEGIL: webapp/ var ama taranacak dosya bulunamadi.")
+        print(f"  Beklenen desenler: {' · '.join(KAPSANAN)}")
+        sys.exit(2)
 
     service = a.service
     if not service:
@@ -98,9 +158,12 @@ def main():
     cfg = load_conn(a.cwd)
     md = fetch_metadata(cfg, service)
     entitysets, funcimports, allprops = parse_metadata(md)
-    callfn, reads, props = scan_ui(a.app)
 
-    print(f"Servis {service}: {len(entitysets)} entitySet, {len(funcimports)} functionImport, {len(allprops)} property\n")
+    # PAYDA HER KOSUMDA BASILIR (Q232-b). "Servis su kadar sey iceriyor" satiri
+    # metadata tarafinin paydasiydi; UI tarafininki HIC yazilmiyordu — yanlis-yesilin
+    # gorunmez olmasinin sebebi tam olarak buydu.
+    print(f"Servis {service}: {len(entitysets)} entitySet, {len(funcimports)} functionImport, {len(allprops)} property")
+    print(f"UI kapsami:{kapsam_eki(taranan, BIRIM)}\n")
     red = 0
 
     print("=== callFunction -> function import ===")
@@ -127,7 +190,10 @@ def main():
     else:
         print("  [OK] hepsi metadata'da")
 
-    print(f"\n{'TEMIZ' if red == 0 else str(red) + ' KIRMIZI uyumsuzluk'}")
+    # Niteleyici HUKMUN ICINDE durur: "TEMIZ" tek basina kapsami oldugundan genis
+    # gosteriyordu (Q232 ikinci ekseni). Payda ve desen artik ayni satirda.
+    print(f"\n{'TEMIZ' if red == 0 else str(red) + ' KIRMIZI uyumsuzluk'} "
+          f"({taranan} {BIRIM} tarandi)")
     sys.exit(0 if red == 0 else 1)
 
 

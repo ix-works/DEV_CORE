@@ -1750,3 +1750,72 @@ regex çapası); `git show <sha>:` KULLANILMAZ (pinli SHA sığ klonda çözülm
 3. Korpus `leak` ve `validators` job'larını **ölçmez** — yalnız `behavior-surface`.
 4. `scripts/agent_watchdog.sh`teki 4 `2>/dev/null` isabeti bu korpusun **dışındadır**
    (kapı değil, operatör izleme betiği; fail-open olup olmadığı ölçülmedi — Q adayı).
+
+---
+
+## B36 — ÖLÇÜM-YOKLUĞU SÖZLEŞMESİ: "0 birim taradım" ≠ "ihlal yok" (Q232 · Q250 · Q254)
+
+**Bileşenler:** `scripts/check_ui_odata_refs.py` · `scripts/validators/check_hook_injected_paths.py` ·
+`tests/run_battery.py` (+ tükettikleri ortak katmanlar: `scripts/utils/kapsam.py` ·
+`scripts/validators/_gate_status.py`)
+
+```bash
+# ① korpus (16 vektör, TAMAMI çevrimdışı — SAP/ağ GEREKMEZ)
+python tests/fixtures/olcum_yoklugu_sozlesmesi/run.py            # 16/16 OK
+
+# ② batarya: 5 mutasyon kipinin HEPSİ düşmeli
+python tests/run_battery.py olcum_yoklugu_sozlesmesi             # 6/6 PASS
+
+# ③ kardeşler (aynı sözleşmenin diğer tüketicileri — biri yeşil derse öteki sessizce kayar)
+python tests/fixtures/validator_kapsam_paydasi/run.py            # kapsam_eki K1 sınırı
+python tests/fixtures/run_battery/run.py                         # 25/25 (ATLA işareti eklendi)
+python tests/fixtures/b0_secim/run.py                            # 20/20 (HARITA satırları değişti)
+python tests/fixtures/hook_bash_ve_stderr_kapsami/run.py         # ⚠ aşağıdaki nota bak
+```
+
+**⚠ `hook_bash_ve_stderr_kapsami/B1b` junction'lı worktree'de DÜŞER — ortam artefaktı.**
+Atıf yapmadan "benim değişikliğim kırdı" DEME; kontrol grubu **aynı ağaçta** kurulur
+(farklı dizin kontrol grubu DEĞİLDİR):
+```bash
+# pristine HEAD sürümünü ağaca SERMEDEN exec et; __file__ gerçek yola set edilir ki
+# `parents[2]` core kökünü doğru çözsün. Fixture'ın kendi ölçümü tekrarlanır.
+python - <<'PY'
+import importlib.util, io, contextlib, re, subprocess
+from pathlib import Path
+KOK  = Path.cwd()
+GATE = KOK / "scripts" / "validators" / "check_hook_injected_paths.py"
+def olc(src, etiket):
+    m = importlib.util.module_from_spec(importlib.util.spec_from_loader("_x", loader=None))
+    m.__file__ = str(GATE); exec(compile(src, str(GATE), "exec"), m.__dict__)
+    def t(mm):
+        b = io.StringIO()
+        with contextlib.redirect_stdout(b): mm.main()
+        e = re.search(r"enjekte edilen (\d+)", b.getvalue()); return int(e.group(1)) if e else 0
+    esk = m.STDERR_HOOKLAR; m.STDERR_HOOKLAR = (); a = t(m); m.STDERR_HOOKLAR = esk; b = t(m)
+    print(f"[{etiket}] sondasiz={a} sondali={b} B1b={b>a}")
+olc(subprocess.run(["git","show","HEAD:scripts/validators/check_hook_injected_paths.py"],
+                   capture_output=True).stdout.decode("utf-8"), "PRISTINE HEAD")
+olc(GATE.read_text(encoding="utf-8"), "CALISMA AGACI")
+PY
+# İki satır AYNI ise düşüş ÖN-VARDIR (2026-09-04'te ikisi de `sondasiz=4 sondali=1`).
+```
+**Kök (teşhis, onarım DEĞİL):** worktree'de `governance/infra-findings.md` proje kökünden
+çözülmez ⇒ gate FINDING dalına girer; koşucunun `enjekte edilen (\d+)` regex'i **iki mesaj
+biçimini karıştırır** — OK dalında TOPLAM'ı, FAIL dalında `1/8`in **1**'ini okur. Q adayı.
+
+**Ne ölçülür (sınırlar dâhil):**
+- `A1-A6` — çözülmeyen `--app` / `webapp` yok / 0 dosya **üçü de AYRI** raporlanır ve
+  çıktıları birbirinden FARKLIDIR (eski kusur: bayt-birebir aynıydı).
+- `B1-B3` — payda 0 → `measured=false` + exit 1; gerçek koşumda sıfır-dalı girilmez;
+  kardeş korpusun bağlı olduğu `enjekte edilen <N>` çapası korunur.
+- `C1-C5` — izlenmeyen dosya varken batarya satırı **ATLA** (PASS değil); temiz kurulumda
+  yine PASS; gerçek ihlal hâlâ FAIL; git'siz kökte `PAYDA OLCULEMEDI`.
+- ⭐ **`X1`/`X2` SİLİNEMEZ** — bu turun BİLİNÇLİ olarak *yapmadığı* iki şeyi korurlar:
+  `X1` "ATLA çıkış kodunu değiştirmez", `X2` "`kapsam_eki(0,..)` hâlâ FAIL değil"
+  (`kapsam.py` K1 kararı: sıfır kapsam meşru olabilir). Bunlar olmadan sözleşme bir gün
+  sessizce ya gevşetilir ya da meşru-boş kapsam kırmızıya çevrilir.
+
+**⚠ Fixture kum ORTAMI da kopyalar:** `kum_repo()` sandbox'a `.gitignore` (`.tmp/`) yazar.
+Gerçek repoda `.tmp/` gitignore'ludur (`git check-ignore .tmp/battery/… ` → rc=0) ve batarya
+ham çıktılarını oraya yazar; `.gitignore`'suz kumda aracın **kendi artefaktı** "izlenmeyen
+dosya" diye sayılır ve C2 (meşru yeşil) SAHTE-KIRMIZI olur. Kusur değil, kum eksiğidir.

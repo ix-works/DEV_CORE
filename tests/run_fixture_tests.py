@@ -205,6 +205,15 @@ OZEL_TESTLER = [
     # ⛔ X1/M3 SILINEMEZ: bu bir gate sertlestirmesi DEGIL (0 dosya FAIL uretmez).
     ("validator_kapsam_paydasi",
      "validator ailesi: taranan DOSYA SAYISI (payda) gorunur; 0 dosya SESSIZ gecmez, FAIL de degil"),
+    # 2026-09-04 (Q232+Q250+Q254): AYNI SINIFIN uc vakasi — bir kapi hicbir sey
+    # olcmediginde "temiz" diye raporluyordu. Fix yeni mekanizma ICAT ETMEDI: mevcut
+    # iki ev sozlesmesini (kapsam_eki payda · _gate_status measured) kablolar, batarya
+    # icin ucuncu isaret (ATLA) ekler. ⛔ X1/X2 SILINEMEZ: X1 "ATLA cikis kodunu
+    # degistirmez", X2 "kapsam_eki(0) hala FAIL degil" sinirlarini civiler — ikisi de
+    # bu turun BILINCLI olarak yapmadigi seyi korur.
+    ("olcum_yoklugu_sozlesmesi",
+     "olcum yoklugu != ihlal yoklugu: check_ui_odata_refs (0 dosya) · run_battery "
+     "--precommit (izlenmeyen dosya) · check_hook_injected_paths (payda 0)"),
     # 2026-08-20 PARTI-4 (K2): C-ENC-01 gate'inin kokU `parents[2]`e civiliydi ->
     # sentetik agaca yoneltilemiyordu, yani YAKALAMA GUCU hic olculmemisti.
     ("console_utf8_kok_izolasyonu",
@@ -441,7 +450,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "seçim mantığı burada yaşar; koşucu değişince kıyas tabanı TAM olmalı; ayrıca ORTAM "
      "HİJYENİ (kendi ürettiği .conn_adt kalıntısı) bu dosyada yaşar"),
     ("tests/run_guard_fixture_tests.py", ("G",), "guard payload korpusunun koşucusu"),
-    ("tests/run_battery.py", ("O:run_battery",),
+    ("tests/run_battery.py", ("O:run_battery", "O:olcum_yoklugu_sozlesmesi"),
      "batarya aracı: kip keşfi + sonuç sınıflaması burada yaşar. ⛔ Bu araç KAPI DEĞİL; "
      "TAM süitin yerine GEÇMEZ — koşucunun kendisi (`run_fixture_tests.py`) değişmediği "
      "sürece kıyas tabanı TAM olmak zorunda değil, kendi korpusu yeter"),
@@ -450,8 +459,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları) + "
      "ATC P1 SONUÇ ekseni (yapısal alan tetiği, `policy` taşınır) + parse-fail sözleşmesi "
      "(hook stdin'i HAM byte okur → UTF-8; o sözleşme negatif_test_harness'ta yaşar)"),
-    ("scripts/validators/check_hook_injected_paths.py", ("O:hook_bash_ve_stderr_kapsami",),
-     "C-HOOK-01 kapsami: additionalContext + STDERR nudge'lari (POZITIF KONTROL M4)"),
+    ("scripts/validators/check_hook_injected_paths.py",
+     ("O:hook_bash_ve_stderr_kapsami", "O:olcum_yoklugu_sozlesmesi"),
+     "C-HOOK-01 kapsami: additionalContext + STDERR nudge'lari (POZITIF KONTROL M4) + "
+     "payda-0 fail-closed sozlesmesi (Q254)"),
+    # 2026-09-04: bu dosya HARITA'da HIC YOKTU — degisikligi hicbir korpusa
+    # baglanmiyordu (Q232 tam da bu dosyada yasadi ve TAM suite'e dusuyordu).
+    ("scripts/check_ui_odata_refs.py", ("O:olcum_yoklugu_sozlesmesi",),
+     "UI OData referans araci: KAPSAM kapisi (cozulmeyen --app / 0 dosya) burada yasar"),
     ("scripts/hooks/post_validate.py", ("O:fs_docstd", "O:negatif_test_harness",
                                         "O:hook_bash_ve_stderr_kapsami"),
      "doc-fs dalı (OKU-işaretçisi + gate özeti) + komşu dalların regresyonu + parse-fail sözleşmesi"),
@@ -481,7 +496,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:ui5_t1_tirnak_sinifi"),
      "ABAP/JS normalize edilmiş tarama: yorum-durumu + literal-durumu + mantıksal metin; "
      "TÜKETİCİLERİN HEPSİ ölçülür (ui5_t1_tirnak_sinifi = komşu regresyon kapısı)"),
-    ("scripts/utils/kapsam.py", ("O:validator_kapsam_paydasi",),
+    # 2026-09-04: ikinci tuketici eklendi — `check_ui_odata_refs` de artik `kapsam_eki`ye
+    # baglidir (Q232). Modul degisirse HER IKI korpus kosmali; tek fixture "yesil" derse
+    # oteki sessizce kayar (yukaridaki `kaynak_tarama` ile ayni sinif bagimlilik).
+    ("scripts/utils/kapsam.py", ("O:validator_kapsam_paydasi", "O:olcum_yoklugu_sozlesmesi"),
      "12 validator'un ORTAK payda sozlesmesi; SINIR: 0 dosya FAIL URETMEZ (X1/M3)"),
     ("scripts/validators/check_console_utf8.py", ("O:console_utf8_kok_izolasyonu",),
      "kok cozumlemesi (--kok > IX_CORE_ROOT > __file__); SINIR: varsayilan PROJE kokune KAYMAZ"),
