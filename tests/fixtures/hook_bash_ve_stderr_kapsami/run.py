@@ -31,9 +31,19 @@ orada da olur ama gate GORMUYORDU.
   A4 FP capasi     `> /dev/null` / uzantisiz hedef -> yol CIKARILMAZ
   A5 FP capasi     Edit payload'i AYNEN calisir (regresyon yok)
   A6 ⭐ SINIR       matcher `Bash` icerir YA DA kaynak SINIR-NOTU tasir
-  B1               gate stderr sondasi KABLOLU (AST) ve BOS DONMUYOR
+  B1a/B1b          gate stderr sondasi KABLOLU (AST) ve TOPLAMA katkida bulunuyor
+  B1c ⭐ CAPA       olcum gate'in VERI arayuzunden (`olc()`) okunuyor, METINDEN degil
+  B1d              gate'in temiz/kirik DALLARI da gercekten kosuyor (rc 0 vs 1)
   B2 ⭐ SINIR       sonda DETERMINISTIK (dedup marker'a takilip sessizce bosalmiyor)
-  M1..M4           fix'i sok -> korpus KIRMIZI olmali (M4 = genislemenin POZITIF KONTROLU)
+  M1..M5           fix'i sok -> korpus KIRMIZI olmali (M4 = genislemenin POZITIF
+                   KONTROLU · M5 = Q249 capasinin kendisi)
+
+=== ③ Q249 (2026-09-04): OLCUM CAPASI IKI ANLAMA BIRDEN UYUYORDU ===
+B1b toplami gate'in insan-okur ciktisindan regex ile kaziniyordu; o metin OK dalinda
+TOPLAM'i, FAIL dalinda KIRIK sayisini yaziyor. Ayni capa iki ZIT seyi okudu ⇒ vektor
+TOPOLOJIYE bagli hale geldi (worktree'de gurultulu KIRMIZI, DEV_CORE ana agacinda
+SAHTE-YESIL, gercek projede dogru). Ayrinti + olculen sayilar `senaryolar()` icindeki
+B blogunun basindadir.
 
 ⚠ PLATFORM-BAGIMSIZLIK SOZLESMESI (2026-08-20, DEV_CORE#150 CI kirmizisi):
    Bash payload'larindaki yollar DAIMA `/` biciminde (Path.as_posix) ve DAIMA kum
@@ -231,12 +241,27 @@ def senaryolar(hook: Path, gate: Path) -> list[tuple[str, bool, str]]:
          sonda_tanimli and sonda_cagrili,
          f"tanimli={sonda_tanimli} cagrili={sonda_cagrili}")
 
-    # B1b/B2: gate'in KENDI CIKTISINDAN olc — fonksiyonu tek basina cagirmak YETMEZ.
+    # B1b/B2: gate'in KENDI OLCUMUNDEN olc — fonksiyonu tek basina cagirmak YETMEZ.
     # ⚠ Ilk surumde B vektorleri `_stderr_ciktisi`yi DOGRUDAN cagiriyordu; sondayi
     #   main()'de OLU bir donguye baglayan mutasyon (M3) KACTI: fonksiyon calisiyordu,
     #   ama gate onu kullanmiyordu. Klasik "kod != kablolama".
     # ⚠ SABIT SAYI YOK (bayatlar): olcut KENDINE GORELIDIR — stderr sondasi kapaliyken
     #   ve acikken gate'in raporladigi TOPLAM kiyaslanir. Fark yoksa sonda olu demektir.
+    #
+    # ⛔ 2026-09-04 (Q249) — IKINCI KUSUR OLCULDU ve giderildi: toplam, gate'in
+    #    INSAN-OKUR ciktisindan `re.search(r"enjekte edilen (\d+)")` ile kaziniyordu.
+    #    O capa gate'in IKI dalina BIRDEN uyuyor ve iki ZIT seyi okuyor:
+    #        OK   dali: "enjekte edilen 8 dokuman yolunun tamami ..."  -> 8 = TOPLAM
+    #        FAIL dali: "enjekte edilen 1/8 yol ... COZULMUYOR"        -> 1 = KIRIK
+    #    Yani olcum capasi, olctugu seyin IKI FARKLI ANLAMINA birden uyuyordu. Bedel
+    #    OLCULDU (ayni kod, degisen TEK sey proje koku = hangi dala dusuldugu):
+    #        DEV_CORE worktree'si : 4(TOPLAM) vs 1(KIRIK)  -> B1b GURULTULU KIRMIZI
+    #        DEV_CORE ana agaci   : 4(KIRIK)  vs 8(KIRIK)  -> B1b SAHTE-YESIL (asil tehlike)
+    #        gercek proje         : 4(TOPLAM) vs 8(TOPLAM) -> B1b dogru
+    #    Uc ayri fix turu bu FAIL'i "ortam artefakti" diye atfetmek zorunda kaldi.
+    # ⭐ COZUM: capa METNE degil VERIYE baglanir (`gate.olc() -> (toplam, kirik)`).
+    #    Metin SUNUMDUR, serbestce degisebilir; olcum SOZLESMEDIR. Arayuz kaybolursa
+    #    korpus SESSIZCE yesile donmez, B1c ile GURULTULU kirmizi verir (M5 bunu olcer).
     import contextlib
     import importlib.util
     import io
@@ -247,14 +272,30 @@ def senaryolar(hook: Path, gate: Path) -> list[tuple[str, bool, str]]:
     sys.modules["_k8_gate"] = mod
 
     def _toplam(m) -> int:
-        tampon = io.StringIO()
-        with contextlib.redirect_stdout(tampon):
-            m.main()
-        eslesme = _re.search(r"enjekte edilen (\d+)", tampon.getvalue())
-        return int(eslesme.group(1)) if eslesme else 0
+        """Gate'in olctugu TOPLAM enjekte-yol sayisi — VERIDEN, metinden DEGIL."""
+        olc = getattr(m, "olc", None)
+        if not callable(olc):
+            raise RuntimeError(
+                "gate `olc()` olcum arayuzunu VERMIYOR (Q249): sayi yalnizca insan-okur "
+                "metinden kazinabilirdi ve o metin iki ZIT anlama birden uyuyor")
+        toplam, _kirik = olc()
+        return int(toplam)
 
     try:
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
+        veri_arayuzu = callable(getattr(mod, "olc", None))
+        ekle("B1c ⭐ CAPA-BICIMI (Q249): olcum gate'in VERI arayuzunden (`olc()`) "
+             "okunuyor, insan-okur METINDEN degil — cikti metni degisirse capa "
+             "SESSIZCE curumez",
+             veri_arayuzu, f"olc_callable={veri_arayuzu}")
+        if not veri_arayuzu:
+            # ⛔ COKME != FAIL: olcum yapilamadi, ama korpus COKMEDEN kirmizi verir.
+            for _ad in ("B1b KABLOLAMA: stderr sondasi gate'in TOPLAMINA katkida bulunuyor",
+                        "B2 ⭐ SINIR: sonda DETERMINISTIK",
+                        "B1d ⭐ IKI DAL: gate'in temiz/kirik dallari da GERCEKTEN kosuyor"):
+                ekle(_ad, False, "OLCULEMEDI — gate `olc()` veri arayuzu YOK (B1c)")
+            sys.modules.pop("_k8_gate", None)
+            return r
         eski_hooklar = getattr(mod, "STDERR_HOOKLAR", ())
         mod.STDERR_HOOKLAR = ()
         sondasiz = _toplam(mod)
@@ -268,6 +309,33 @@ def senaryolar(hook: Path, gate: Path) -> list[tuple[str, bool, str]]:
              "(dedup marker'a takilip sessizce bosalmiyor)",
              sondali_1 == sondali_2 and sondali_2 > 0,
              f"1.kosum={sondali_1} · 2.kosum={sondali_2}")
+
+        # B1d — gate'in IKI DALI da gercekten kosuyor mu? (Q249'un on-kosulu.) Olcum
+        # AYNI toplamla (8) yapilir; degisen TEK sey kirik listesidir. Boylece dallar
+        # topolojiden BAGIMSIZ, tek kosumda ve deterministik olarak ureti(li)r.
+        # ⚠ ASSERTION dal metnine DEGIL, dal DAVRANISINA baglidir (rc + verdict eki):
+        #   metnin bir gun netlesmesi bu vektoru kirmamali. Eski METIN capasinin ne
+        #   okudugu `detay`da KANIT olarak tasinir, iddia olarak DEGIL.
+        def _dal(kirik_listesi):
+            gercek = mod.olc
+            mod.olc = lambda: (8, list(kirik_listesi))
+            try:
+                t = io.StringIO()
+                with contextlib.redirect_stdout(t):
+                    _rc = mod.main()
+                return _rc, t.getvalue()
+            finally:
+                mod.olc = gercek
+
+        rc_ok, m_ok = _dal([])
+        rc_fail, m_fail = _dal(["ornek: 'a.md' cozulmuyor"])
+        _e = lambda s: (lambda g: int(g.group(1)) if g else None)(
+            _re.search(r"enjekte edilen (\d+)", s))
+        ekle("B1d ⭐ IKI DAL: gate'in temiz/kirik dallari da GERCEKTEN kosuyor "
+             "(AYNI toplam=8, degisen tek sey kirik listesi) -> rc 0 vs 1",
+             rc_ok == 0 and "[OK]" in m_ok and rc_fail == 1 and "[FAIL]" in m_fail,
+             f"temiz rc={rc_ok} · kirik rc={rc_fail} || KANIT — eski METIN capasinin "
+             f"ayni toplam(8) icin okudugu sayi: OK dali={_e(m_ok)} FAIL dali={_e(m_fail)}")
     finally:
         sys.modules.pop("_k8_gate", None)
     return r
@@ -296,6 +364,13 @@ MUTASYONLAR = [
          '"+ §2.3 · playbook/checklists/doc-checklist.md §B DOC-FS-01…07 (TS için §C). "',
          '"+ §2.3 · playbook/checklists/doc-checklist.md §B DOC-FS-01…07 (TS için §C). "\n'
          '                             "playbook/ciplak-yol-ornegi.md "')),
+    # ⭐ M5 (Q249) = FIX'IN KENDISINI SOK. `olc()` yeniden adlandirilinca korpus sayiyi
+    #    yine yalnizca insan-okur metinden kazinabilir hale gelir — yani duzeltmeden
+    #    ONCEKI dunyaya doner. B1c bunu GURULTULU yakalamali; sessiz yesil YASAK.
+    ("M5 ⭐Q249: gate'in `olc()` VERI arayuzunu sok (capa yine METNE mahkum kalir)",
+     "gate",
+     lambda s: s.replace("def olc() -> tuple[int, list[str]]:",
+                         "def _olc_kaldirildi() -> tuple[int, list[str]]:")),
 ]
 
 

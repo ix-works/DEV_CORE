@@ -126,8 +126,34 @@ def _stderr_ciktisi(hook: str, rel_yol: str) -> str:
         shutil.rmtree(kum, ignore_errors=True)
 
 
-def main() -> int:
-    kirik: list = []
+def olc() -> tuple[int, list[str]]:
+    """ÖLÇÜM ucu — `(toplam_yol, kirik_liste)`. Sunum ve exit kararı `main()`in işidir.
+
+    ⭐ NEDEN AYRI FONKSİYON (2026-09-04, Q249 — kapsam DEĞİŞMEDİ, yalnız ölçüm
+    VERİ olarak da verilebilir hâle geldi):
+
+    Korpus (`tests/fixtures/hook_bash_ve_stderr_kapsami`) bu sayıyı `main()`in
+    İNSAN-OKUR çıktısından regex ile kazıyordu. O çapa gate'in İKİ ayrı dalına
+    birden uyuyor ve iki FARKLI şeyi okuyor (aşağıdaki satırlar örnektir, gerçek
+    çıktı `main()` içindedir):
+
+        OK   dalı:  "... enjekte edilen 8 doküman yolunun tamamı ..."  -> 8 = TOPLAM
+        FAIL dalı:  "... enjekte edilen 1/8 yol ... ÇÖZÜLMÜYOR"        -> 1 = KIRIK
+
+    ÖLÇÜLDÜ 2026-09-04 — aynı kod, DEĞİŞEN TEK ŞEY proje kökü (yani hangi dala
+    düşüldüğü); parantez içi, eski çapanın gerçekte OKUDUĞU şeydir:
+
+        proje kökü = DEV_CORE worktree'si  ->  4 (TOPLAM) vs 1 (KIRIK)  -> gürültülü KIRMIZI
+        proje kökü = DEV_CORE ana ağacı    ->  4 (KIRIK)  vs 8 (KIRIK)  -> SAHTE-YEŞİL
+        proje kökü = gerçek bir proje      ->  4 (TOPLAM) vs 8 (TOPLAM) -> doğru
+
+    ⇒ Metin SUNUMDUR ve serbestçe değişebilir; ölçüm ise bir SÖZLEŞMEDİR. Sayıyı
+    tüketen her yer bu fonksiyonu çağırır — çapa metne değil VERİYE bağlanır ve
+    metin değiştiğinde sessizce çürümek yerine (fonksiyon kaybolursa) gürültülü
+    kırılır. ⛔ Bu fonksiyonu kaldıran/yeniden adlandıran, korpusu da güncellemek
+    ZORUNDADIR: korpusun M5 mutasyonu tam bunu ölçer.
+    """
+    kirik: list[str] = []
     toplam = 0
     # HIZ (2026-08-13, süre-vergisi kuyruğu): iş `HOOKLAR × ORNEK_PROMPTLAR` = 8 AYRI
     # süreç başlatır ve her biri tam bir Python yorumlayıcısı + hook yüklemesidir.
@@ -158,7 +184,11 @@ def main() -> int:
             toplam += 1
             if not (PROJ / yol).is_file():
                 kirik.append(f"{hook}: '{yol}' çözülmüyor (prompt: {p[:30]}…)")
+    return toplam, kirik
 
+
+def main() -> int:
+    toplam, kirik = olc()
     # ── Q254 (2026-09-04): ÖLÇÜM YOKLUĞU ≠ İHLAL YOKLUĞU ─────────────────────
     # Eskiden bu dal `[WARN]` basıp **return 0** dönüyordu ⇒ run_all_validators
     # tablosunda "HARD gate koştu, temiz" diye okunuyordu; oysa ölçülen şey
