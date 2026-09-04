@@ -286,6 +286,15 @@ taramaya **alır**, ama getirdiği kaynak iskelettir. Paket taramasında `scanne
 > döner. Yani *"ne tarandığını söylemez"* cümlesi artık **yalnız FM gövdesi** için geçerlidir —
 > objenin kapsamdan düştüğü/eksik tarandığı bilgisi makinece okunur. Çözüm değişmedi:
 > include indir (yukarıdaki reçete).
+>
+> ⚠ **2026-09-04 (Q206/Q106①/Q226) — yukarıdaki cümle 2026-08-28'den beri YALNIZ `package=`
+> dalı için doğruydu.** `objects="<FG>:FUGR"` çağrısında tip ham geçtiği için (`at="fugr"`)
+> iskelet muhafızı tutmuyor, **`coverage_complete: true` + hiç uyarı yok** dönüyordu — yani
+> obje adı vererek çağıran ajan **sahte-tamlık** görüyordu. Düzeltildi: iki dal artık aynı tip
+> sözlüğünü konuşur, **yazım serbesttir** (`FUGR`/`fugr`/`FuGr`/`functiongroup` aynı şeydir).
+> ⛔ **`0 eşleşme` bir KAPSAM sonucudur, bir VARLIK sonucu değildir** — bir FUGR hedefinde
+> `match_count: 0` görürsen `partial_objects`a bak; orada `fugr_skeleton_only` varsa gövde
+> **hiç taranmamıştır** ve *"canlıda yok"* diye OKUMA (`adt_search_objects` ile çapraz kontrol et).
 
 ---
 

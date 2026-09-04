@@ -1439,3 +1439,66 @@ FINDING dalına giriyor ve koşucunun `enjekte edilen (\d+)` regex'i o dalda `1/
 okuyor (OK dalında TOPLAM'ı okuyordu) ⇒ `sondali > sondasiz` yanlışlanıyor. Bu **koşucunun
 iki mesaj biçimini karıştırması**dır, gate'in kusuru değil — `Q249` ortam artefaktıyla birleşince
 görünür oluyor. **Q adayı olarak raporlandı, bu turda DOKUNULMADI.**
+## İNFRA-KUYRUĞU 2026-09-04 — Q206 + Q106① + Q226: `adt_grep_source` **`objects=` dalı tip sözlüğünü konuşmuyordu** (aynı kök, tek tur)
+
+**Sınıf:** *yayınladığımız bir şey yanlış bilgi veriyor* (eşik **(c)**) — hem aracın bayrağı
+(`coverage_complete: true`), hem `Q206`'nın `KAPANDI-DOĞRULANDI` ilanı. **⚠GEVŞETME YOK**;
+bu tur **SIKILAŞTIRMADIR** (daha çok çağrı `kismi` sayılır, daha çok uyarı basılır).
+
+**KÖK (ölçüldü, tek cümle):** `adt_grep_source`'un İKİ giriş dalı vardı ve **iki ayrı tip
+sözlüğü** konuşuyordu. `package=` dalı `_GREP_TYPE_MAP` ile ADT kanonik adına çeviriyordu
+(`FUGR` → `functiongroup`); `objects=` dalı tipi `t.strip().lower()` ile **ham** geçiriyordu
+(`"<FG>:FUGR"` → `at="fugr"`). Tarama döngüsündeki iskelet muhafızı `at == "functiongroup"`
+diye baktığı için `"fugr"` ile **tutmuyor** ⇒ `kismi` boş → `coverage_complete` **True** →
+`coverage_warning` **hiç basılmıyor**. Obje ise yine okunuyordu (`adt_get`
+→ `object_types.OBJECT_TYPE_ALIASES`: `fugr` → `functiongroup`), yani çağrı **başarılı
+görünüyordu**: kusur tamamen **sessizdi**. ⇒ `C-04`'ün (2026-08-28) kapattığı sahte-tamlık
+`objects=` dalında **aynen duruyordu**; `Q226`'nın *"FUGR'a karşı `0 eşleşme`"* yüzü de
+bunun ta kendisiydi.
+
+| Tarih | Değişiklik | Sebep (ölçüm) | Test | Fixture | PR |
+|---|---|---|---|---|---|
+| 2026-09-04 | **`mcp_servers/sap_adt/tools/query.py` — `_grep_tip_normalize()` (yeni, `:1110`) + `objects=` dalı çağrısı (`:1215`) + docstring'de tüketici notu.** Tip dizesi artık `package=` dalıyla **aynı sözlüğe** çevrilir: `_GREP_TYPE_MAP.get(ham.upper(), ham.lower())`. Bilinmeyen tip (`func`/`incl`…) **yeniden adlandırılmaz**, yalnız küçük harfe düşer. Muhafızın kendisi (`at == "functiongroup"`) **kasten değiştirilmedi**. | `objects=` dalı `_GREP_TYPE_MAP`i **hiç kullanmıyordu**; kanıt fixture ile pinli tabana karşı üretildi: `git show 2c5a24b:…/query.py` → korpus **16/21**, FAIL = `K6·K6b·K6c·K7·N5`, ve tabanda `complete=True uyari=None gelen=[('<FG>','fugr')]`. ⭐ Yazım ekseni ölçüldü: tabanda **`functiongroup`** yazımı DOĞRU çalışıyordu, kusur **yalnız eşanlamlı yazımlarda** (`FUGR`/`fugr`/`FuGr`) — iki canlı vakanın ikisi de eşanlamlı yazım kullanmıştı. | **21/21 senaryo + 7/7 mutasyon** (öncesi 14+5). Kardeşler yeşil: `dogrulama_kosamadi` (R5 çapaları) · `sorgu_basarisizligi_gorunur` · `atc_p1_sonuc` · `unit_run_guard_riski` (11+5) · `veri_yetki_guardlari` · `adtget_yokluk_kaniti` · `ddic_okuma_yolu` · `reviewer_tip_kapsam` · `b0_secim` **20/20** (pinli sayılar sağlam). | **genişletildi** `O:grep_kapsam_gorunurlugu` (K6/K6b/K6c · K7 · N4 · N5/N5b · M6/M7) | — |
+
+**Test-senaryosu / SINIR:**
+
+1. **TEK NOKTA, BİLEREK.** Muhafıza ikinci bir eşanlamlı kontrolü (`at in ("functiongroup","fugr")`)
+   **eklenmedi**: savunma-derinliği gibi görünür ama mutasyonu körleştirir — tek katman kesilince
+   kusur geri gelmelidir (`M6` bunu ölçer). Bu karar `_grep_tip_normalize` docstring'inde de yazılı.
+2. **AŞIRI-GENİŞ FİX REDDEDİLDİ (ölçülmüş gerekçe).** `object_types.normalize_object_type` çağırmak
+   *"kanonik tek kaynak"* diye cazip; ama o tablo `func` → `function`, `incl` → `include` da yapar ve
+   `adt_get`'in **ölçülmüş** FM group-resolution körlüğünü (`playbook/adt-fugr-functions.md §4`) başka
+   bir uca kaydırırdı — `K3`'ün çapası düşerdi. `N4` bu fix'i kırmızı yapan çapadır.
+3. ⚠ **TÜKETİCİ SÖZLEŞMESİ — küçük ama gerçek bir davranış değişikliği:** `objects=` dalında **tip
+   eşanlamlısı** verilen çağrılarda dönüş alanlarındaki `type` artık **kanonik**tir
+   (`"…:INTF"` → `interface`, `"…:FUGR"` → `functiongroup`). `package=` dalı zaten böyleydi; bu, iki
+   dalın çıktısını **eşitler**. Alan **eklenmedi/kaldırılmadı**, yalnız değeri kanonikleşti.
+4. **`Q226`'nın ① maddesi (include ipucu) ayrı metin ÜRETMEDEN karşılandı:** `partial_objects[].detail`
+   zaten `L<FG>U01…` + playbook §4.1 diyor, `coverage_warning` de okuyucuyu **açıkça** o listeye
+   yönlendiriyor (`K6c` ikisini birden çiviler). İkinci bir uyarı metni = ikinci bakım yüzeyi.
+5. 🔴 **DOĞRULANAMADI:** düzeltme **canlı SAP'ye karşı koşulmadı** (fixture SAP'ye bağlanmaz; bu tur
+   salt-okunur infra turuydu). İlk canlı kullanımda `objects="<FG>:fugr"` çağrısının artık
+   `coverage_warning` bastığı **canlı** teyit edilmeli.
+6. **Blast-radius (sayıyla):** üretim kodunda `adt_grep_source`'u **program olarak çağıran 0 modül**
+   var (tek tanım `query.py`, `sap_client.py:1413` yalnız yorumda anar). Yüzey **MCP**: aracı
+   allowlist'inde taşıyan **6 ajan** (`adt-gateway` · `backend-expert` · `bug-expert` ·
+   `frontend-expert` · `sap-feature` · `sap-research`) + `claude/settings.template.json` **1** kayıt.
+   Dokümanda **4 dosya / 11 anma** (`playbook/adt-fugr-functions.md` 5 · `adt-foundation.md` 3 ·
+   `lessons-learned.md` 2 · `howto-delete-guard.md` 1). Test tarafında **3 dosya**.
+   ⇒ Değişiklik ajanların **gördüğü çıktıyı** değiştirir: FUGR hedefli `objects=` çağrılarında artık
+   `coverage_complete: false` + uyarı gelir. Bu **istenen** yöndür (yanlış "tam taradım" beyanı biter).
+7. **F5 YAYILIM — çift katman YOK:** `query.py`'nin şablon/overlay/proje-lokal kopyası **0**
+   (`mcp_servers/` yalnız core'da yaşar; projeler junction'dan okur). `templates/` altında
+   `_GREP_TYPE_MAP` **0 eşleşme**. Yayılım MCP sunucusunun **yeniden başlatılmasıyla** olur
+   (restart sınıfı — `Q206`'nın 2026-08-29 turunda tam bu yüzden eski kod koşuyordu).
+8. **SINIF-ENVANTERİ (mekanik, `mcp_servers/`):** *"tip dizesi bir dalda normalize edilip başka dalda
+   ham geçiyor"* deseni → tip-eşlem tablosu **5** (`_GREP_TYPE_MAP` · `_ENH_SEG` · `_ENHO_TYPE_SEG` ·
+   `_AUNIT_SEG` · `_ACTIVATION_URI_SEG`), tüketim noktası **6**. Beşi **tek girişli ve fail-closed**
+   (çözülemeyen tip → `{"ok": false, "error": "unsupported_type"}`; `_ACTIVATION_URI_SEG` de
+   desteklenen tip listesini basar). Obje-tipi taşıyan üçü (`_ENH_SEG` · `_AUNIT_SEG` ·
+   `_ACTIVATION_URI_SEG`) **her iki yazımı da** tabloda tutar (`fugr`+`functiongroup`,
+   `clas`+`class`, `prog`+`program`) ⇒ eşanlamlı körlüğü yok; dördüncüsü (`_ENHO_TYPE_SEG`)
+   obje tipi değil ENHO alt-tipi alır (eşanlamlı ekseni yok). **Tek fail-OPEN tüketici
+   `_GREP_TYPE_MAP`'ın `objects=` dalıydı** (bu tur kapatıldı). ⇒ Sınıfın kapsamı `1/6`;
+   `adt_grep_source` ayrıca MCP yüzeyindeki **tek iki-dallı kapsam aracıdır** (`if objects:` /
+   `elif package:` — repo genelinde başka örneği yok).

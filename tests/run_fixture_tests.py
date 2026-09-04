@@ -408,9 +408,12 @@ OZEL_TESTLER = [
      "VARSAYILAN KAPALI + 'method_count=0' icin risk_notice (sessiz sifir YOK)"),
     # C-04: okunamayan obje sessizce dusuyordu -> "eslesme yok" ile "okuyamadim" ayni cikti
     # (Q106'nin grep ayagi; playbook/adt-fugr-functions.md §4.1 korlugu de raporlanir).
+    # 2026-09-04 (Q206/Q106①/Q226): AYNI bayrak, OTEKI giris dali — `objects=` dali tipi
+    # `_GREP_TYPE_MAP`ten gecirmiyordu, iskelet muhafizi `"fugr"` yazimini kaciriyordu.
     ("grep_kapsam_gorunurlugu",
      "adt_grep_source: dusen her obje ad+SEBEP ile (`skipped_objects`), FUGR iskeleti "
-     "`partial_objects`, `coverage_complete` AYRI eksen (scope_verified bozulmadan)"),
+     "`partial_objects`, `coverage_complete` AYRI eksen (scope_verified bozulmadan) + "
+     "IKI giris dali (`package=`/`objects=`) AYNI tip sozlugunu konusur (yazim varyanti)"),
 ]
 
 

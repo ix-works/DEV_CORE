@@ -480,8 +480,8 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   "0 test" ile "0 HARMLESS test" yeniden ayırt edilemez hâle gelir.
   🔴 DOĞRULANAMADI: bandın kapanmasının **canlı** test sayısına etkisi ölçülmedi (fixture
   SAP'ye bağlanmaz). İlk canlı kullanımda `method_count`u SE24 kontrol grubuyla kıyasla.
-- **GREP KAPSAM MUHASEBESİ (2026-08-28, C-04):**
-  `python tests/fixtures/grep_kapsam_gorunurlugu/run.py` → **14/14 + 5 mutasyon**, exit 0.
+- **GREP KAPSAM MUHASEBESİ (2026-08-28 C-04 · genişletildi 2026-09-04 Q206/Q106①/Q226):**
+  `python tests/fixtures/grep_kapsam_gorunurlugu/run.py` → **21/21 + 7 mutasyon**, exit 0.
   Değişmezler: kapsamdan düşen her obje `skipped_objects` içinde **ad + sebep** ile döner
   (`type_filtered` · `type_unsupported` · `max_objects` · `read_failed` · `not_readable` ·
   `source_empty`) · FUGR okunduğunda `partial_objects: fugr_skeleton_only` (playbook
@@ -490,6 +490,22 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   tam kapsamda **uyarı YOK** (K2b).
   ⛔ Sebep sınıfları **uydurulmaz**: yeni bir sebep eklemeden önce playbook'ta ölçülmüş
   körlüğü göster (kaynak: `adt-fugr-functions.md §4/§4.1`, `lessons-learned` #19/#20, Q106).
+  ⭐ **2026-09-04 eklenen eksen — İKİ GİRİŞ DALI, TEK TİP SÖZLÜĞÜ (K6/K6b/K6c · K7 · N4 · N5):**
+  yukarıdaki muhasebe `package=` dalında koşuyordu, `objects=` dalında KOŞMUYORDU —
+  tip dizesi ham geçtiği için (`"…:FUGR"` → `at="fugr"`) iskelet muhafızı
+  (`at == "functiongroup"`) tutmuyordu ⇒ `coverage_complete` **sahte-yeşil**,
+  `coverage_warning` hiç yok. Değişmezler: `objects=<FG>:FUGR` → `partial_objects` +
+  uyarı (K6) · `match_count: 0` **sessiz değil** (K6b, Q226 yüzü) · **dört yazım varyantı**
+  (`FUGR`/`fugr`/`FuGr`/`functiongroup`) aynı hüküm + `adt_get`e **kanonik** tip gider (K7) ·
+  bilinmeyen tip (`func`) **yeniden adlandırılmaz** (N4 — aşırı-geniş `normalize_object_type`
+  fix'ini kırmızı yapar) · iki dal aynı FUGR için **aynı hüküm** (N5).
+  ⛔ Normalizasyon **TEK NOKTADADIR** (`_grep_tip_normalize`); muhafıza ikinci bir eşanlamlı
+  kontrolü (`at in ("functiongroup","fugr")`) EKLEME — M6'yı körleştirir (savunma-derinliği
+  mutasyonu kaçırtır).
+  📌 **Taban kırmızılığı ölçüldü (yeniden üretilebilir):** `git show 2c5a24b:mcp_servers/sap_adt/tools/query.py`
+  çıktısını bir dosyaya yazıp fixture'ın `korpus(<o dosya>, "taban")` fonksiyonuna ver →
+  **16/21 PASS, 5 FAIL** (`K6 · K6b · K6c · K7 · N5`); FP çapaları (K1-K5 · N1-N4 · N5b)
+  tabanda da **YEŞİL** kalır — yani beş FAIL gürültü değil, ayırt edicidir.
   ⚠ ÖLÇÜM ALETİ NOTU: `object_types` filtresi `_GREP_TYPE_MAP` kontrolünden **ÖNCE** koşar —
   `type_unsupported` dalını ölçmek için filtreye o tipi (ör. TABL) **eklemek** gerekir; yoksa
   iki farklı sınıf tek sebebe (`type_filtered`) düşer ve dal ölçülmemiş kalır.

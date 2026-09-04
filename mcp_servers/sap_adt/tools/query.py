@@ -1107,6 +1107,34 @@ _GREP_TYPE_MAP = {"CLAS": "class", "PROG": "program", "INTF": "interface",
                   "FUGR": "functiongroup", "DDLS": "ddls", "BDEF": "bdef"}
 
 
+def _grep_tip_normalize(t: str) -> str:
+    """Kullanıcının verdiği tip dizesini `package=` dalının SÖZLÜĞÜNE çevirir.
+
+    ⛔ 2026-09-04 (kuyruk Q206 / Q106① / Q226) — `adt_grep_source`'un İKİ giriş dalı
+    vardı ve İKİ AYRI TİP SÖZLÜĞÜ konuşuyordu: `package=` dalı `_GREP_TYPE_MAP` ile
+    ADT kanonik adına çeviriyordu (`FUGR` → `functiongroup`), `objects=` dalı ise
+    tipi `t.strip().lower()` ile HAM geçiriyordu (`"<FG>:FUGR"` → `"fugr"`).
+    Sonuç SESSİZ bir sahte-tamlıktı: `adt_get` her iki yazımı da kabul ettiğinden
+    (`object_types.OBJECT_TYPE_ALIASES`: `fugr` → `functiongroup`) obje OKUNUYORDU,
+    ama tarama döngüsündeki iskelet muhafızı `at == "functiongroup"` diye baktığı
+    için `"fugr"` ile TUTMUYOR ⇒ `kismi` listesi boş kalıyor, `coverage_complete`
+    **True** oluyor ve `coverage_warning` HİÇ basılmıyordu. Yani araç FUGR
+    iskeletine bakıp "tam taradım" diyordu; `objects=<FG>:fugr` çağrısı
+    `0 eşleşme` + bütün bayraklar yeşil döndürüyor, çağıran bunu *"canlıda yok"*
+    diye okuyabiliyordu (ölçülmüş iki canlı vaka; playbook §4.1).
+
+    ⭐ Normalizasyon TEK NOKTADADIR (bu fonksiyon). Muhafızın kendisi bilerek
+    `at == "functiongroup"` olarak BIRAKILMIŞTIR: ikinci bir eşanlamlı kontrolü
+    (`at in ("functiongroup", "fugr")`) savunma-derinliği gibi görünür ama
+    mutasyon testini körleştirir — tek katman kesilince kusur geri gelmelidir.
+
+    Bilinmeyen tip (`func`/`include`/`incl`…) DEĞİŞTİRİLMEDEN küçük harfe düşer:
+    `adt_get` onları kendi alias tablosuyla çözer, burada kapsam kararı verilmez.
+    """
+    ham = (t or "").strip()
+    return _GREP_TYPE_MAP.get(ham.upper(), ham.lower())
+
+
 @profil_tool()
 def adt_grep_source(
     pattern: str,
@@ -1124,7 +1152,9 @@ def adt_grep_source(
 
     Args:
         pattern: Python regex. package: paket adı (kapsam). objects: "NAME" veya "NAME:type"
-                 virgüllü liste (package'a alternatif). object_types: paket-taramada tip filtresi
+                 virgüllü liste (package'a alternatif; tip yazımı SERBEST — `FUGR`/`fugr`/
+                 `FuGr`/`functiongroup` aynı şeydir, `_grep_tip_normalize` ile `package=`
+                 dalının sözlüğüne çevrilir). object_types: paket-taramada tip filtresi
                  (CLAS/PROG/INTF/DDLS/FUGR/BDEF). max_objects: taranacak maks obje. ignore_case.
 
     ⛔ 2026-08-28 (C-04) — "EŞLEŞME YOK" ile "OKUYAMADIM" ayrı şeylerdir. Eskiden okunamayan
@@ -1146,6 +1176,13 @@ def adt_grep_source(
       `coverage_complete` → hiçbir obje düşmedi/eksilmedi mi? (`scope_verified`
       paket ucunun DOĞRULUĞUNU, bu alan taramanın TAMLIĞINI söyler — ikisi ayrı eksendir)
     Mevcut alanların hiçbiri kaldırılmadı/anlamı değiştirilmedi (tüketici sözleşmesi).
+
+    ⛔ 2026-09-04 (Q206/Q106①/Q226) — yukarıdaki muhasebe `package=` dalında koşuyordu,
+    `objects=` dalında KOŞMUYORDU: tip dizesi ham geçtiği için (`"…:FUGR"` → `"fugr"`)
+    iskelet muhafızı tutmuyor, `coverage_complete` **sahte-yeşil** yanıyordu. Artık iki dal
+    aynı sözlüğü konuşur (`_grep_tip_normalize`). ⚠ TÜKETİCİ NOTU: `objects=` dalında tip
+    eşanlamlısı verilen çağrılarda dönüş alanlarındaki `type` artık KANONİK addır
+    (`"…:INTF"` → `interface`, `"…:FUGR"` → `functiongroup`) — `package=` dalı zaten böyleydi.
 
     Returns:
         {ok, pattern, scanned_objects, match_count, truncated_object_scope, truncated_matches,
@@ -1172,7 +1209,10 @@ def adt_grep_source(
             for item in [str(x).strip() for x in raw if str(x).strip()]:
                 if ":" in item:
                     n, t = item.split(":", 1)
-                    targets.append((n.strip(), t.strip().lower()))
+                    # ⛔ HAM GEÇİRME YOK (Q206/Q106①/Q226): tip `package=` dalıyla AYNI
+                    # sözlüğe çevrilir, yoksa iskelet muhafızı `"fugr"` yazımını kaçırır
+                    # ve `coverage_complete` sahte-yeşil yanar (bkz. _grep_tip_normalize).
+                    targets.append((n.strip(), _grep_tip_normalize(t)))
                 else:
                     targets.append((item, "class"))
         elif package:

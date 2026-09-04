@@ -32,6 +32,24 @@ bilerek ayridir; N1 bunu civiler.
   N3 FP capasi      `matches` ve sayaclarin sekli degismedi (tuketici sozlesmesi)
   M1-M5             fix'i sok -> korpus KIRMIZI olmali
 
+=== IKINCI TUR — 2026-09-04 (Q206 / Q106① / Q226): AYNI BAYRAK, OTEKI GIRIS DALI ===
+Yukaridaki C-04 turu kapsam muhasebesini `package=` dalinda kurdu. `objects=` dali
+(K3) o turda da olculdu — ama YALNIZ `func` ekseninde. Aradaki bosluk: `objects=`
+dali tipi `_GREP_TYPE_MAP`ten GECIRMIYORDU (`t.strip().lower()` ham geciyordu), bu
+yuzden `"<FG>:FUGR"` cagrisinda `at = "fugr"` oluyor ve K4'un civiledigi iskelet
+muhafizi (`at == "functiongroup"`) TUTMUYORDU. Sonuc: `partial_objects` bos,
+`coverage_complete` TRUE, `coverage_warning` HIC yok — yani C-04'un kapattigi
+sahte-tamlik `objects=` dalinda AYNEN duruyordu (Q206'nin "KAPANDI" ilani bu yuzden
+sahte cikti). Q226 ayni kusurun `0 eslesme` yuzu: cagiran bunu "canlida yok" diye
+okuyabiliyordu. Fix: `_grep_tip_normalize` — normalizasyon TEK NOKTADA, muhafiz
+bilerek tek-katman birakildi (ikinci esanlamli kontrolu mutasyonu korlestirirdi).
+
+  K6 ⭐ AYIRT EDICI  `objects=<FG>:FUGR` -> `partial_objects` + uyari (fix oncesi BOS/YESIL)
+  K7 ⭐ 3.BAGLAM     tipin YAZIM VARYANTLARI (FUGR/fugr/FuGr/functiongroup) AYNI hukum
+  N4 FP capasi      bilinmeyen tip (`func`) YENIDEN ADLANDIRILMAZ (asiri-genis fix capasi)
+  N5 FP capasi      bilinen-TEMIZ dal: `package=` bozulmadi + iki dal AYNI hukum
+  M6-M7             normalizasyonu sok / harf-duyarli yap -> korpus KIRMIZI olmali
+
 ⛔ SAP'ye BAGLANMAZ: `adt_get` ve paket ucu sahtelenir. Olculen sey KAPSAM MUHASEBESIDIR,
 SAP'nin gercekten ne dondurdugu DEGIL (o sekiller Q106'nin 2026-08-18 canli olcumunden
 ve playbook §4.1'den alindi).
@@ -121,11 +139,19 @@ def kontrol(ad: str, kosul: bool, detay: str = "") -> None:
     SONUC.append((ad, bool(kosul), detay))
 
 
+# `adt_get`e GIDEN (ad, object_type) cifti — normalizasyonun URUNU burada olculur.
+# (Sahte `adt_get` tipi UMURSAMAZ; o yuzden "okundu mu" ile "DOGRU TIPLE mi okundu"
+#  ayri sorulardir ve ikincisi ancak KAYIT tutularak olculebilir.)
+GELEN: list[tuple[str, str]] = []
+
+
 def _sahte_get(name, object_type="class", include_source=True):
+    GELEN.append((str(name).upper(), str(object_type)))
     return dict(CEVAP.get(str(name).upper(), {"ok": True, "exists": False}))
 
 
 def _kos(q, objeler=None, dogrulanmis=True, **kw):
+    GELEN.clear()
     eski_client, eski_get = q._get_client, atom.adt_get
     q._get_client = lambda: _SahteIstemci(objeler or [], dogrulanmis)
     atom.adt_get = _sahte_get
@@ -246,6 +272,87 @@ def n1_scope_ekseni(q) -> None:
             f"verified={r.get('scope_verified')} uyari={str(r.get('scope_warning'))[:60]!r}")
 
 
+def k6_objects_fugr(q) -> None:
+    """⭐ AYIRT EDICI (Q206 / Q106① / Q226) — BILINEN-BOZUK vektor.
+
+    Fix ONCESI: `objects=` dali tipi HAM gecirdigi icin (`"…:FUGR"` -> `"fugr"`) iskelet
+    muhafizi TUTMAZ => `partial_objects` BOS, `coverage_complete` TRUE, `coverage_warning`
+    HIC basilmaz. Obje yine okundugu icin cagri BASARILI gorunur — kusur SESSIZDIR.
+    ⚠ Yazim BILEREK BUYUK harf: Q206'nin canli vakasi bu yazimla olculdu.
+    """
+    r = _kos(q, objects="ZSD_FG_ORNEK:FUGR")
+    kismi = {k["object"]: k["reason"] for k in r.get("partial_objects", [])}
+    kontrol("K6 ⭐ `objects=<FG>:FUGR` -> `partial_objects` (fugr_skeleton_only) "
+            "[fix oncesi BOS'tu]",
+            kismi == {"ZSD_FG_ORNEK": "fugr_skeleton_only"},
+            f"kismi={kismi} scanned={r.get('scanned_objects')} gelen={GELEN}")
+    kontrol("K6b ⭐ Q226 yuzu: `match_count: 0` ARTIK SESSIZ DEGIL "
+            "(`coverage_complete` FALSE + uyari basili)",
+            r.get("match_count") == 0 and r.get("coverage_complete") is False
+            and bool(r.get("coverage_warning")),
+            f"match={r.get('match_count')} complete={r.get('coverage_complete')} "
+            f"uyari={str(r.get('coverage_warning'))[:70]!r}")
+    kontrol("K6c uyari cagirani `partial_objects`a yonlendiriyor + include ipucu "
+            "(L<FG>U01) orada",
+            "partial_objects" in str(r.get("coverage_warning", ""))
+            and any("L<FG>U01" in (k.get("detail") or "")
+                    for k in r.get("partial_objects", [])),
+            f"uyari={str(r.get('coverage_warning'))[:120]!r}")
+
+
+def k7_yazim_varyanti(q) -> None:
+    """3. BAGLAM (gorev-DISI eksen): tip dizesinin YAZIM VARYANTLARI.
+
+    Iki canli vaka IKI AYRI yazim kullandi (biri BUYUK, biri kucuk harf). Dordu de ayni
+    objeye isaret eder; arac dordunde de AYNI kapsam hukmunu vermeli VE `adt_get`e ayni
+    kanonik tipi gondermelidir. (Harf-duyarli bir "yarim fix" tam burada dusur.)
+    """
+    hukum = {}
+    for yazim in ("FUGR", "fugr", "FuGr", "functiongroup"):
+        r = _kos(q, objects="ZSD_FG_ORNEK:%s" % yazim)
+        hukum[yazim] = (r.get("coverage_complete"),
+                        tuple(sorted(k["reason"] for k in r.get("partial_objects", []))),
+                        tuple(t for _, t in GELEN))
+    bekl = (False, ("fugr_skeleton_only",), ("functiongroup",))
+    sapan = {y: v for y, v in hukum.items() if v != bekl}
+    kontrol("K7 ⭐ 3.BAGLAM dort yazim varyanti AYNI hukum + `adt_get`e KANONIK tip gidiyor",
+            not sapan, f"sapan={sapan} beklenen={bekl}")
+
+
+def n4_bilinmeyen_tip(q) -> None:
+    """FP capasi: normalizasyon YALNIZ `_GREP_TYPE_MAP`i uygular; BILINMEYEN tipi
+    YENIDEN ADLANDIRMAZ. Asiri-genis bir fix (`object_types.normalize_object_type`)
+    `func` -> `function` yapar ve K3'un civiledigi olculmus korlugu BASKA bir uca
+    kaydirirdi. Bu capa o fix'i KIRMIZI yapar."""
+    r = _kos(q, objects="ZFM_ORNEK:FUNC")
+    tipler = {a["object"]: a["type"] for a in r.get("skipped_objects", [])}
+    kontrol("N4 FP capasi: bilinmeyen tip (`FUNC`) yalnizca kucuk harfe duser, "
+            "YENIDEN ADLANDIRILMAZ",
+            tipler == {"ZFM_ORNEK": "func"} and ("ZFM_ORNEK", "func") in GELEN,
+            f"tipler={tipler} adt_get_cagrilari={GELEN}")
+
+
+def n5_dal_esitligi(q) -> None:
+    """FP capasi — BILINEN-TEMIZ dal: `package=` dali bugun DOGRU davraniyordu ve
+    duzeltme onu BOZMAMALIDIR. Degismez: iki dal AYNI FUGR icin AYNI kapsam hukmu."""
+    p = _kos(q, [{"name": "ZSD_FG_ORNEK", "type": "FUGR/F"}],
+             package="ZORNEK_PKG", object_types="FUGR")
+    o = _kos(q, objects="ZSD_FG_ORNEK:FUGR")
+    ozet = [(x.get("coverage_complete"), x.get("partial_count"), x.get("scanned_objects"),
+             [k["reason"] for k in x.get("partial_objects", [])]) for x in (p, o)]
+    kontrol("N5 FP capasi: `package=` ve `objects=` dallari AYNI FUGR icin AYNI hukum "
+            "(paket dali BOZULMADI)",
+            ozet[0] == ozet[1] == (False, 1, 1, ["fugr_skeleton_only"]),
+            f"package={ozet[0]} objects={ozet[1]}")
+    c = _kos(q, objects="ZCL_OKUNUR:CLAS")
+    kontrol("N5b FP capasi: normalizasyon ESLESMEYI bozmadi — temiz sinif cagrisinda "
+            "uyari YOK, `coverage_complete: true` (alarm yorgunlugu)",
+            c.get("scanned_objects") == 1 and c.get("match_count") == 1
+            and c.get("coverage_complete") is True and "coverage_warning" not in c,
+            f"scanned={c.get('scanned_objects')} match={c.get('match_count')} "
+            f"complete={c.get('coverage_complete')}")
+
+
 def korpus(modul_yolu: Path, ad: str) -> list[tuple[str, bool, str]]:
     global SONUC
     SONUC = []
@@ -258,7 +365,9 @@ def korpus(modul_yolu: Path, ad: str) -> list[tuple[str, bool, str]]:
         sys.modules[ad] = q
         spec.loader.exec_module(q)                             # type: ignore[union-attr]
     for bolum in (k1_bes_kapi, k2_pozitif, k3_objects_dali, k4_fugr_kismi,
-                  k5_max_objects, n1_scope_ekseni):
+                  k5_max_objects, n1_scope_ekseni,
+                  k6_objects_fugr, k7_yazim_varyanti, n4_bilinmeyen_tip,
+                  n5_dal_esitligi):
         try:
             bolum(q)
         except BaseException as exc:                           # noqa: BLE001
@@ -302,6 +411,15 @@ MUTASYONLAR = [
      lambda s: s.replace(
          '        if at == "functiongroup":\n',
          '        if False and at == "functiongroup":\n')),
+    # --- 2026-09-04 (Q206/Q106①/Q226) ------------------------------------------
+    ("M6 ⭐AYIRT EDICI kusurun BIREBIR hali: `objects=` dali tipi HAM gecirsin",
+     lambda s: s.replace(
+         "                    targets.append((n.strip(), _grep_tip_normalize(t)))\n",
+         "                    targets.append((n.strip(), t.strip().lower()))\n")),
+    ("M7 ⭐SINIR yarim-fix: normalizasyon HARF-DUYARLI olsun (yalniz BUYUK yazim taninir)",
+     lambda s: s.replace(
+         "    return _GREP_TYPE_MAP.get(ham.upper(), ham.lower())\n",
+         "    return _GREP_TYPE_MAP.get(ham, ham.lower())\n")),
 ]
 
 
