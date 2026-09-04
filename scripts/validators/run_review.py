@@ -19,6 +19,14 @@ Mantık:
     BLOCKER, eksik WARNING → WARNING). BOŞ ZİNCİL (dtel_update, rap_service_binding)
     bundan AYRIDIR: orada koşacak gate olmadığı BİLİNÇLİ karardır ve PASS kalır —
     kayıtsız eksiklik ile kayıtlı boşluk aynı şey değildir.
+  - ~ SESSİZ BULGU (2026-09-04, Q239): gate KOŞTU, ÖLÇTÜ ve BULGU BASTI ama `exit 0`
+    döndü (kendi sözleşmesi "yalnız WARNING → rc 0" diyor). Rapor bunu artık `~` ile
+    işaretler ve bulgu metnini AYNEN basar. ⛔ Verdict aritmetiğine GİRMEZ — bu bir
+    GÖRÜNÜRLÜK kalemidir; şiddet-etiketi ↔ çıkış-kodu hizalaması AYRI bir karardır.
+  - ⊘ ZİNCİR YOK (2026-09-04, Q238): boş zincirde verdict `PASS` + exit 0 KALIR ama
+    rapor GÖVDESİ (stdout) artık bunu söyler; eskiden yalnız stderr'de bir satır vardı
+    ve stdout "✓ COORDINATOR: PASS" diyordu ⇒ iki akışı ayrı yakalayan okuyucu için
+    "ölçüldü ve temiz" ile "ölçecek gate yok" AYNI görünüyordu.
 
 Kullanım:
     # CDS yaratma öncesi
@@ -351,7 +359,18 @@ def main() -> int:
         return 2
 
     validators = TASK_VALIDATORS.get(args.task, [])
-    if not validators:
+    # ⛔ Q238 (2026-09-04) — BOŞ ZİNCİR: HÜKÜM DEĞİŞMEDİ, GÖRÜNÜRLÜK EKLENDİ.
+    # "Koşacak gate yok" BİLİNÇLİ ve KAYITLI bir boşluktur (modül docstring'i;
+    # `dtel_update` · `rap_service_binding`) ⇒ verdict `PASS` + exit 0 BİT-BAZINDA
+    # KORUNUR (`reviewer_skip_sozlesmesi` V6 bunu çiviler; bozmak meşru push'ları
+    # bloklardı — "kayıtsız eksiklik ≠ kayıtlı boşluk").
+    # KUSUR HÜKÜMDE DEĞİL, OKUNUŞTAYDI: bu uyarı YALNIZ stderr'e gidiyordu, `PASS`
+    # hükmü ise stdout'a ⇒ iki akışı AYRI yakalayan okuyucu (ajan/log/rapor) yalnız
+    # "VERDICT: PASS" + "✓ COORDINATOR: PASS" görüyordu (ölçüldü 2026-09-03: SRVD
+    # `rap_service_binding` koşumu). Bayrak artık rapor GÖVDESİNE (stdout) da basılır
+    # ve JSON'da `zincir_bos` alanı olarak taşınır.
+    zincir_bos = not validators
+    if zincir_bos:
         print(f'UYARI: {args.task} için validator zinciri tanımlı değil. '
               f'Manual review gereklidir.', file=sys.stderr)
 
@@ -425,6 +444,16 @@ def main() -> int:
     failed_warning = sum(1 for r in results if r['status'] == 'FAIL' and r['severity'] == 'WARNING')
     skipped_blocker = sum(1 for r in results if r['status'] == 'SKIP' and r['severity'] == 'BLOCKER')
     skipped_warning = sum(1 for r in results if r['status'] == 'SKIP' and r['severity'] == 'WARNING')
+    # ── Q239 (2026-09-04) — SESSİZ BULGU: gate KOŞTU, ÖLÇTÜ, BULGU BASTI ama rc=0 ────
+    # `status == 'PASS'` + `stderr` DOLU. Bu SKIP DEĞİLDİR (ölçüm yapıldı) ve FAIL de
+    # değildir (gate kendi sözleşmesinde "sadece WARNING → rc 0" diyor). Bugüne kadar
+    # raporlama döngüsü PASS dalında stderr'i HİÇ OKUMUYORDU ⇒ `✓ [BLOCKER] gate` satırı
+    # altında 3 bulgu SESSİZCE yutuluyordu (ölçüldü: `check_cds_currency_reference`,
+    # tüketici projede bir CDS → 3 ihlal, `run_review` çıktısında SIFIR satır).
+    # ⛔ VERDICT ARİTMETİĞİNE GİRMEZ (bilinçli, ADR 0019 moratoryumu): şiddet-etiketi ile
+    # çıkış-kodu sözleşmesini hizalamak AYRI bir karardır (Q239③). Burada YALNIZ bilgi
+    # eklenir — hiçbir koşum sınıf değiştirmez, hiçbir exit kodu değişmez.
+    sessiz_bulgular = [r for r in results if r['status'] == 'PASS' and r['stderr']]
     # ── ÇEVRİMDIŞI İNDİRİMİ (opt-in) ──────────────────────────────────────────
     # Yalnız ÖLÇÜM ÜRETMEYEN (measured=false) BLOCKER'lar iner. `failed_blocker`
     # (gate koştu, ÖLÇTÜ ve İHLAL BULDU) bu satırların HİÇBİRİNDE geçmez ⇒ gerçek
@@ -469,7 +498,17 @@ def main() -> int:
             'cevrimdisi': cevrimdisi,
             'offline_downgraded_count': len(indirilen),
             'offline_downgraded_gates': indirilen_ad,
-            'kapsam_eksik': bool(indirilen),
+            # ⚠ KAPSAM GENİŞLETİLDİ (2026-09-04, Q238): boş zincir de "kapsam eksik"tir —
+            # HİÇBİR gate koşmadıysa bu koşumun kapsamı sıfırdır. Alanın anlamı aynı
+            # kalır ("bu koşum eksik ölçtü"), kaynağı `zincir_bos` ile ayırt edilir.
+            'kapsam_eksik': bool(indirilen) or zincir_bos,
+            # Q238 — bilinçli boşluk MAKİNECE de okunabilir olsun (verdict PASS kalır).
+            'zincir_bos': zincir_bos,
+            'kosan_gate_sayisi': len(results),
+            # Q239 — rc=0 döndüğü için PASS sayılan ama BULGU BASAN gate'ler.
+            # ⛔ Verdict'e SAYILMAZ (görünürlük kalemi); tüketici kendi kararını verir.
+            'sessiz_bulgu_count': len(sessiz_bulgular),
+            'sessiz_bulgu_gates': [r['validator'] for r in sessiz_bulgular],
             'checklist_reference': checklist,
             'results': results,
         }
@@ -482,24 +521,54 @@ def main() -> int:
         print(f'Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
         print(f'{"="*70}\n')
 
+        # ⛔ GÖRÜNÜRLÜK SÖZLEŞMESİ (Q239, 2026-09-04): "bir gate'in ÜRETTİĞİ hiçbir metin
+        # bu döngüde SESSİZCE DÜŞMEZ." Eski döngü ÜÇ yerde metin düşürüyordu:
+        #   ① PASS + stderr DOLU        → stderr HİÇ okunmuyordu (Q239'un ölçülmüş vakası)
+        #   ② FAIL + stderr BOŞ         → stdout'a düşülmüyordu ⇒ `✗` satırı GEREKÇESİZ
+        #   ③ PASS + çok satırlı stdout → yalnız İLK satır (kapsam/paydaş satırları düşer)
+        # Üçü de AYNI sınıf: "kapı konuştu, rapor duymadı". ⚠ Hiçbiri verdict/exit
+        # değiştirmez — bilgi eklenir, hüküm eklenmez.
         for r in results:
-            symbol = '✓' if r['status'] == 'PASS' else ('✗' if r['status'] == 'FAIL' else '⊘')
+            sessiz_bulgu = r['status'] == 'PASS' and bool(r['stderr'])
+            # `~` = ÜÇÜNCÜ İŞARET: "koştu, ölçtü, BULGU var ama rc=0". `✓` (temiz) ile
+            # `✗` (düştü) arasındaki bu boşluk okuyucuyu yanıltan tam yerdi.
+            symbol = ('~' if sessiz_bulgu else
+                      '✓' if r['status'] == 'PASS' else
+                      ('✗' if r['status'] == 'FAIL' else '⊘'))
             print(f"{symbol} [{r['severity']}] {r['validator']}")
             print(f"  {r['description']}")
             if r['status'] == 'FAIL':
-                if r['stderr']:
-                    for line in r['stderr'].splitlines():
-                        print(f"    {line}")
+                # stderr ÖNCELİKLİ; BOŞSA stdout'a düş (② — gerekçesiz `✗` bırakma).
+                for line in (r['stderr'] or r['stdout']).splitlines():
+                    print(f"    {line}")
             elif r['status'] == 'SKIP':
                 # Görünürlük şartı (B10 reçetesi): koşmayan gate SESSİZ kalmaz.
                 print(f"    {r['message']}")
-            elif r['stdout']:
-                first_line = r['stdout'].splitlines()[0] if r['stdout'] else ''
-                print(f"    {first_line}")
+            else:
+                if r['stdout']:
+                    for line in r['stdout'].splitlines():   # ③ kırpma YOK
+                        print(f"    {line}")
+                if sessiz_bulgu:                            # ① asıl Q239 düzeltmesi
+                    print(f"    ~ EXIT 0 AMA BULGU BASTI ({len(r['stderr'].splitlines())} "
+                          f"satır, stderr) — bu 'temiz' DEĞİLDİR; verdict'e SAYILMAZ, "
+                          f"OKU ve kendin karar ver:")
+                    for line in r['stderr'].splitlines():
+                        print(f"    {line}")
+            print()
+
+        if zincir_bos:
+            # Q238 — hüküm (PASS/exit 0) korunur, SESSİZLİK kaldırılır.
+            print(f'⊘ [KAPSAM] {args.task}: VALIDATOR ZİNCİRİ TANIMLI DEĞİL — '
+                  f'bu koşumda HİÇBİR gate çalışmadı.')
+            print('  Bu, KAYITLI ve bilinçli bir boşluktur (gate yok ⇒ verdict PASS '
+                  'kalır), ama "PASS" burada "ölçüldü ve temiz" DEMEK DEĞİLDİR:')
+            print('  "ölçülecek gate yok" demektir. Manuel review + checklist ZORUNLU.')
             print()
 
         print(f'{"="*70}')
-        print(f'VERDICT: {verdict}')
+        # Q238: hüküm satırı KENDİ kapsamını taşır (değer `PASS` olarak KALIR).
+        print(f'VERDICT: {verdict}' + ('  (ZİNCİR YOK — hiçbir gate koşmadı; '
+                                       'ölçüm YAPILMADI)' if zincir_bos else ''))
         # ⚠ Aritmetik GÖRÜNÜR olmalı: çevrimdışı indirimi BLOCKER'dan düşüp WARNING'e
         # eklediği için, indirimi yazmadan "BLOCKERS: 0 (… + KOŞMAYAN 1)" çelişkili okunur.
         _b_ek = ''
@@ -512,6 +581,13 @@ def main() -> int:
             _w_ek = f'  (koşan-FAIL {failed_warning} + KOŞMAYAN {skipped_warning}'
             _w_ek += (f' + ÇEVRİMDIŞI-İNDİRİMİ {len(indirilen)})' if indirilen else ')')
         print(f'  WARNINGS: {warning_count}' + _w_ek)
+        if sessiz_bulgular:
+            # Q239: sayaç `BLOCKERS/WARNINGS` satırlarına KARIŞMAZ — ayrı satır, ayrı
+            # işaret. Karıştırmak verdict aritmetiğini değiştirmek olurdu.
+            print(f'  ~ {len(sessiz_bulgular)} gate exit 0 döndü AMA BULGU BASTI '
+                  f'(yukarıda `~` işaretli): '
+                  f'{", ".join(r["validator"] for r in sessiz_bulgular)} — '
+                  f'"exit 0" ≠ "temiz"; verdict\'e SAYILMAZ, sen oku.')
         if skipped_blocker or skipped_warning:
             print(f'  ⊘ {skipped_blocker + skipped_warning} gate ÖLÇÜM ÜRETMEDİ '
                   f'(script yok VEYA measured=false) — "koşmadı" ≠ "temiz". '
@@ -537,6 +613,12 @@ def main() -> int:
                   file=sys.stderr)
         elif verdict == 'WARNING':
             print('⚠ COORDINATOR: Yazabilirsin ama kullanıcıya bildir.\n', file=sys.stderr)
+        elif zincir_bos:
+            # Q238 — en yanıltıcı satır TAM BURASIYDI: ölçüm yokken "PASS, devam
+            # edebilirsin" stdout'a basılıyordu. Hüküm (exit 0) aynı, cümle dürüst.
+            print('⊘ COORDINATOR: ÖLÇÜM YAPILMADI (bu görev tipinde validator zinciri '
+                  'yok) — devam edebilirsin ama bu bir "kapıdan geçti" DEĞİLDİR; '
+                  'manuel review + checklist senin sorumluluğunda.\n')
         else:
             print('✓ COORDINATOR: PASS, devam edebilirsin.\n')
 
