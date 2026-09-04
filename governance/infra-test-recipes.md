@@ -1904,3 +1904,21 @@ dosya" diye sayılır ve C2 (meşru yeşil) SAHTE-KIRMIZI olur. Kusur değil, ku
   güvenle verilir — ama *"canlı ölçüldü"* DENMEZ.
 - ⚠ **ORTAM NOTU:** `b0_secim` bu worktree'de `10 FAIL / exit 1` verir; kontrol grubu
   (dokunulmamış `HEAD` sürümü) **bayt aynı** çıktı üretir ⇒ bu turla ilgisi yok.
+## B37 — ADT uç URL'i: `/source/main` nereye eklenir, nereye eklenmez (Q217=Q229 · Q221=Q228)
+- `python tests/fixtures/adt_uc_url_cozumu/run.py` → **23/23** · MUTASYON (`--mutasyon`, taban `e3484a1`) → **12/23**.
+- **Değişmezler:** ① sınıf alt-include ucu (`/oo/classes/<CLS>/includes/<seg>`) KAYNAK UCUDUR,
+  `/source/main` EKLENMEZ (canlı: çıplak **200 / 154609 bayt** ↔ ekli **404 / 26 bayt**);
+  ② klasik program include'u (`/programs/includes/<X>`) ve TANINMAYAN segment ek ALIR
+  (muafiyet dar); ③ segment listesi `CLASS_INCLUDE_TYPES` — ikinci literal YOK;
+  ④ `func` generic URL'e girerse **ValueError** (sessiz 404 değil), mesaj kanonik ucu
+  (`/functions/groups/<fg>/fmodules/<fm>`) ve kanonik aracı söyler; ⑤ 404 mesajı VAR OLMAYAN
+  obje adı ilan etmez.
+- ⛔ **SİLİNMEZ ÇAPALAR** (mutasyonda da GEÇMELİ — 12 vektör): A2 · A3a-c · A4 · A5 · A8 ·
+  A11 (istisna sözleşmesi: tip/kod/endpoint) · B4 (altı komşu tipin URL'i) · B5 (`function`
+  girdisi silinmedi) · B6 · C2. Bir çapa yardımcı FONKSİYONA bakarsa mutasyonda düşer ve
+  **çapa olmaktan çıkar** (ilk yazımda bu yaşandı, düzeltildi).
+- ⚠ **KAPSAM SINIRI:** `func` için çalışan generic yol AÇILMADI (grup adı türetilemez);
+  yazma yolundaki üç kardeş (`fetch_source_etag` · `set_object_source` · `get_transport_info`)
+  `/source/main`'i hâlâ kendi içlerinde ekliyor — bu turda bilinçli DOKUNULMADI.
+- Kardeş korpuslar: `class_include_push` (15/15) · `ddic_okuma_yolu` (31/31, DDIC ekseni
+  DEĞİŞMEDİ) · `b0_secim` (P3 pini 7→8; HARİTA satırı eklenince BİRLİKTE güncellenir).

@@ -1803,10 +1803,15 @@ class SAPADTClient:
         Raises:
             SAPADTObjectNotFoundError: If object doesn't exist
             SAPConnectionError: If connection fails
+
+        ⛔ `/source/main` eki KOSULSUZ DEGILDIR (Q217/Q229, 2026-09-03): sinif
+        alt-include uclari (`/oo/classes/<CLS>/includes/<seg>`) kaynak ucunun KENDISIDIR;
+        oraya `/source/main` eklemek **404** verir ve cagiran bunu "obje canlida YOK" diye
+        okur. Karar `object_types.ensure_source_url()`e devredildi (TEK KAYNAK; kural zaten
+        `get_class_include_url` docstring'inde yaziliydi, kod uymuyordu).
         """
-        # Ensure /source/main suffix
-        if not object_url.endswith('/source/main'):
-            object_url = object_url.rstrip('/') + '/source/main'
+        from object_types import ensure_source_url, object_name_from_source_url
+        object_url = ensure_source_url(object_url)
 
         params = {}
         if version:
@@ -1821,9 +1826,11 @@ class SAPADTClient:
             )
 
             if response.status_code == 404:
-                object_name = object_url.split('/')[-2]
+                # `split('/')[-2]` VAR OLMAYAN bir ad uretiyordu ('source' / 'includes');
+                # mesaj yanlis obje ILAN edip teshisi saptiriyordu (olculdu 2026-09-03).
+                object_name = object_name_from_source_url(object_url)
                 raise SAPObjectNotFoundError(
-                    message=f"Object not found: {object_name}",
+                    message=f"Object not found: {object_name} (GET {object_url})",
                     status_code=404,
                     endpoint=object_url
                 )

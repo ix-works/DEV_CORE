@@ -415,6 +415,11 @@ OZEL_TESTLER = [
      "adt_grep_source: dusen her obje ad+SEBEP ile (`skipped_objects`), FUGR iskeleti "
      "`partial_objects`, `coverage_complete` AYRI eksen (scope_verified bozulmadan) + "
      "IKI giris dali (`package=`/`objects=`) AYNI tip sozlugunu konusur (yazim varyanti)"),
+    # 2026-09-04 (Q217=Q229 + Q221=Q228): generic URL tablosu ile ozel yolun ayrismasi.
+    ("adt_uc_url_cozumu",
+     "ADT uc URL'i: sinif alt-include'una `/source/main` EKLENMEZ (canli: ciplak 200 / "
+     "ekli 404) + `func` generic yola girerse ANLASILIR RET (grup adi turetilemez); "
+     "11 FP capasi mutasyonda da GECER"),
 ]
 
 
@@ -771,15 +776,18 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:conn_cift_anahtar", "O:conn_yazici_encoding", "O:dogrulama_kosamadi",
       "O:lock_modification_support", "O:class_include_push",
       "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde",
-      "O:transport_gorev_istek_cevrimi"),
-     "sekiz korpus bu modülü import/mutasyon eder (2026-09-03: `set_function_module_source` "
-     "LOCK-CORRNR otoritesi + `_verify_and_return_lock` docstring'i)"),
+      "O:transport_gorev_istek_cevrimi", "O:adt_uc_url_cozumu"),
+     "dokuz korpus bu modülü import/mutasyon eder (2026-09-03: `set_function_module_source` "
+     "LOCK-CORRNR otoritesi + `_verify_and_return_lock` docstring'i · 2026-09-04: "
+     "`get_object_source` URL kuruluşu + 404 mesajının obje adı)"),
     ("scripts/sap_client.py",
      ("O:adtget_yokluk_kaniti", "O:class_include_push", "O:dogrulama_kosamadi",
       "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
-      "O:sorgu_basarisizligi_gorunur", "O:transport_gorev_istek_cevrimi"),
+      "O:sorgu_basarisizligi_gorunur", "O:transport_gorev_istek_cevrimi",
+      "O:adt_uc_url_cozumu"),
      "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil) + "
-     "görev(S)→istek(K) çevriminin İKİ yazma yolundaki simetrisi"),
+     "görev(S)→istek(K) çevriminin İKİ yazma yolundaki simetrisi + `get_object_url` "
+     "TÜKETİCİLERİ (push_object / run_atc_check → Q228 kapanış kanıtı)"),
     ("scripts/deploy_common_package.py", ("O:transport_gorev_istek_cevrimi",),
      "FM helper'ının tek üretim çağıranı: transport'u HAM geçirir ⇒ helper'daki "
      "CORRNR otoritesini MİRASLA alır (kablolama çapası E3)"),
@@ -793,7 +801,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "'kanıt olumlu' burada ayrılır"),
     ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok",), "activate_and_verify"),
     ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
-    ("scripts/push_object.py", ("O:class_include_push",), "ccau/ccimp push sırası"),
+    ("scripts/push_object.py", ("O:class_include_push", "O:adt_uc_url_cozumu"),
+     "ccau/ccimp push sırası + reddedilen tipin YÖNLENDİRME notu (eşanlamlı `func` dahil)"),
     ("scripts/push_textpool.py",
      ("O:lock_modification_support", "O:transport_gorev_istek_cevrimi"),
      "lock sinyali tüketicisi (+ kanonik `_last_lock_effective_transport` deseninin "
@@ -802,7 +811,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:lock_modification_support", "O:transport_gorev_istek_cevrimi"),
      "lock sinyali tüketicisi (+ kanonik desenin ikinci üyesi — E2 çapası)"),
     ("scripts/object_types.py",
-     ("O:class_include_push", "O:reviewer_tip_kapsam"), "tip normalizasyonu"),
+     ("O:class_include_push", "O:reviewer_tip_kapsam", "O:adt_uc_url_cozumu"),
+     "tip normalizasyonu + ADT uç URL'i (`ensure_source_url` / `url_path` fail-closed)"),
     ("scripts/deploy_ui.py",
      ("O:git_sorgu_sessiz_bos", "O:sessiz_olumsuzlama_2026_08_10"),
      "git sorgusu + sessiz olumsuzlama"),

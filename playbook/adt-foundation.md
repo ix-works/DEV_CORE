@@ -686,7 +686,7 @@ python "<PROJECT_ROOT>\scripts\where_used.py" --cwd "<PROJECT_ROOT>" --object-ty
 
 | Enstrüman | Ölçülen körlük |
 |---|---|
-| `adt_where_used(type='func')` | Çağıranı **bilinen** bir Z FM için de `OBJECT_NOT_FOUND` döndü ⇒ `0`/hata ayırt edilemiyor |
+| `adt_where_used(type='func')` | Çağıranı **bilinen** bir Z FM için de `OBJECT_NOT_FOUND` döndü ⇒ `0`/hata ayırt edilemiyor. ⭐ **2026-09-04: ayrım ARTIK yapılabiliyor** — generic URL tablosu `func` için fail-closed (`ValueError`: *grup adı FM adından türetilemez*), yani araç artık "bulamadım" yerine "bu uçtan soramam" diyor. **Körlük KALKMADI**: doğru kanal hâlâ `adt_search_objects` + group-qualified GET |
 | `adt_grep_source(package=…)` | FUGR'ın yalnız iskelet ana include'unu çeker; **FM gövdesini okumaz**. Yine de `truncated:false` + `scope_verified:true` basar — *"taradım, temiz"* diyor, **taramamış** |
 
 > ⭐ **2026-08-28 güncellemesi (C-04) — körlük KALKMADI, ama artık GÖRÜNÜR.** `adt_grep_source`

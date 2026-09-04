@@ -59,6 +59,15 @@ TIP_YAZICISI_YOK = ('metadataextension', 'accesscontrol', 'tabletype')
 def tip_yonlendirme_notu(istenen):
     """Reddedilen `--type` için operatöre yol gösteren not (boş string = not yok)."""
     t = (istenen or '').strip().lower()
+    # Esanlamli tipler de yonlendirilsin: olculdu 2026-09-03 -> `--type func`
+    # ciplak "invalid choice" aliyordu (tabloda yalniz 'function' anahtari var),
+    # yani operator NEREYE gidecegini yine ogrenemiyordu. Esanlamli tablosu
+    # object_types'tan okunur; burada IKINCI bir kopya acilmaz.
+    try:
+        from object_types import OBJECT_TYPE_ALIASES
+        t = OBJECT_TYPE_ALIASES.get(t, t)
+    except Exception:
+        pass
     if t == 'package':
         return ("[YONLENDIRME] 'package' bu araca EKLENMEZ: paket YARATMA ADR 0005-C ile "
                 "YASAKTIR (create_package.py 2026-08-01'de silindi, geri eklenmez).")
