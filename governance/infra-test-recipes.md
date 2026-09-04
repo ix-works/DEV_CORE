@@ -1847,7 +1847,7 @@ biçimini karıştırır** — OK dalında TOPLAM'ı, FAIL dalında `1/8`in **1*
 Gerçek repoda `.tmp/` gitignore'ludur (`git check-ignore .tmp/battery/… ` → rc=0) ve batarya
 ham çıktılarını oraya yazar; `.gitignore`'suz kumda aracın **kendi artefaktı** "izlenmeyen
 dosya" diye sayılır ve C2 (meşru yeşil) SAHTE-KIRMIZI olur. Kusur değil, kum eksiğidir.
-## B36 — `check_cds_currency_reference` ÇOK-SATIRLI ifade + `union` dalı (Q234+Q237, ⚠GEVŞETME)
+## B37 — `check_cds_currency_reference` ÇOK-SATIRLI ifade + `union` dalı (Q234+Q237, ⚠GEVŞETME)
 - Korpus (ev genişletildi, yeni dizin YOK):
   `python tests/fixtures/cds_curr_eksik_annotation/run.py` → **19 senaryo + 11 mutasyon**, exit 0.
   Tek komutla: `python tests/run_battery.py cds_curr_eksik_annotation --kardes populate_tables_unit_kind --precommit`.
@@ -1904,7 +1904,7 @@ dosya" diye sayılır ve C2 (meşru yeşil) SAHTE-KIRMIZI olur. Kusur değil, ku
   güvenle verilir — ama *"canlı ölçüldü"* DENMEZ.
 - ⚠ **ORTAM NOTU:** `b0_secim` bu worktree'de `10 FAIL / exit 1` verir; kontrol grubu
   (dokunulmamış `HEAD` sürümü) **bayt aynı** çıktı üretir ⇒ bu turla ilgisi yok.
-## B37 — ADT uç URL'i: `/source/main` nereye eklenir, nereye eklenmez (Q217=Q229 · Q221=Q228)
+## B38 — ADT uç URL'i: `/source/main` nereye eklenir, nereye eklenmez (Q217=Q229 · Q221=Q228)
 - `python tests/fixtures/adt_uc_url_cozumu/run.py` → **23/23** · MUTASYON (`--mutasyon`, taban `e3484a1`) → **12/23**.
 - **Değişmezler:** ① sınıf alt-include ucu (`/oo/classes/<CLS>/includes/<seg>`) KAYNAK UCUDUR,
   `/source/main` EKLENMEZ (canlı: çıplak **200 / 154609 bayt** ↔ ekli **404 / 26 bayt**);
