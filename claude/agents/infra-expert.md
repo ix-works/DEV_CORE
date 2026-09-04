@@ -124,6 +124,7 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
   (yerel ≠ CI: sığ klon/POSIX sınıfı yalnız CI'da görünür). Ondan sonra koda dokunursan yeni
   "KOD DONDU-2" mesajı (md5 çapası bayatlar). Doküman değişiklikleri bu kuralın dışındadır.
 - **TEST KADANSI (2026-08-29, ölçüm: batarya turları koşu başına med 18 fazla tur / 3.3 dk; tam süit ort 2×/koşu = 6 dk):** her Edit paketinden sonra bataryayı **TEK komutla** koş — `python tests/run_battery.py <fixture> [--kardes <ad>] [--precommit]` (taban + tüm mutasyon kipleri + kardeş + precommit, tek özet); kipleri tek tek ayrı turlarda koşturma. Tam süit `python tests/run_fixture_tests.py` **YALNIZ koşu sonunda BİR kez** (ara adımlarda değil; CI zaten koşar). Batarya tam süitin yerine geçmez.
+  ⭐ **Bataryanın ÜÇÜNCÜ işareti `ATLA` (2026-09-04, Q250):** `PASS`/`FAIL` dışında `ATLA` görürsen o satır **ölçülmemiştir** — `core_precommit --all` `git ls-files`ı tarar, **izlenmeyen dosyaları görmez**; satırın yanındaki `N IZLENMEYEN` sayısı sıfırdan büyükse **önce `git add`**, sonra yeniden koş. `ATLA`yı yeşil sayma.
 - **Kapsam-dışı gezinti YOK:** F1 blast-radius İLGİLİ bileşenle sınırlı — "hazır bakmışken" tüm-repo tarama yapma.
 - F0 hedefli-okuma: changelog'un yalnız ilgili bileşen bölümü (+gerekirse o dosyanın git-log'u).
 - **F0b de HEDEFLİ:** dört kaynakta **bileşen adı + semptom terimi** aranır — tüm-repo okuma DEĞİL.
@@ -131,6 +132,30 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
   (bir kez atlanınca bedeli **tam bir fix seansı**dır — ölçüldü 2026-08-20).
 - Aynı araç+aynı girdi mükerrer çağrı YASAK (ilk sonucu kullan; büyük çıktıyı değişkende/notunda tut).
 - Rapor kompakt: kanıt = alıntı/sayı/exit-kodu; ham döküm yapıştırma.
+
+## ⏱ ZAMAN BÜTÇESİ — SAYILI, AŞILINCA RAPOR ET (Q264, ölçüldü 2026-09-04)
+
+**Neden bu blok var (ölçüm, 6 paralel tur):** T2 **6,2 sa**/4 kayıt · T5 **4,8 sa**/2 · T6 **4,8 sa**/2 ·
+T9 **3,0 sa**/3 · T8 **2,5 sa**/3 · T10 **7,5 sa**/**1 kayıt**. Yukarıdaki TEST KADANSI kuralına
+**uyuldu** — yani süreyi yiyen şey test koşumu **değildi**. Ölçülen üç kaynak: ① F2'nin *dinamik
+koşuma* kayması (bir tur **1778 validator koşumu** yaptı, 25 dk timeout'a takıldı, daraltıp tekrar
+koştu) ② F3 harness'ının kurulup **iki kez çürütülmesi** ③ F0b'nin tavansız olması. Bütçe yazılı
+olmadığı için protokol sonuna kadar götürüldü ve gecelik tur **kapanmadı**.
+
+- ⏱ **KAYIT BAŞINA 45 DAKİKA.** Paket ≤ **2 kayıt** (lider daha fazlasını verirse **itiraz et ve böl**).
+- ⏱ **90 DAKİKADA ARA RAPOR ZORUNLU** — `SendMessage(to:"main")`, kısmi olsa bile: nerede olduğun
+  (F0…F5), kod dondu mu, kalan tahmini süre, engel var mı. **Sessiz kalmak protokol ihlalidir.**
+- ⛔ **F2 SINIF-ENVANTERİ STATİKTİR** — `Grep`/`Glob`/AST/`git log -S`. *"N gate × M artefakt koşumu"*,
+  *"tüm korpusu iki kez tara"* gibi **dinamik envanter YASAK**; gerçekten gerekiyorsa **önce lidere
+  sor** (maliyeti ve neyi ayırt edeceğini yazarak). Envanterin işi **sınıfın ÜYELERİNİ saymaktır**,
+  davranışını ölçmek değil — davranış ölçümü F3'ün işidir ve **örneklemle** yapılır.
+- ⛔ **F0b TAVANI: en fazla 4 hedefli arama** (`removed-controls` · `lessons-learned` · bileşen
+  yorumu/docstring · `git log -S`). Dördü bitince **DUR**: bulduysan yaz, bulmadıysan `ARANDI-YOK`
+  yaz ve **GEÇ**. *"0 eşleşme"* bir ölçümdür; beşinci arama onu güçlendirmez.
+- ⛔ **HARNESS ÇÜRÜTÜLDÜYSE ÜÇÜNCÜ KEZ KURMA** — iki denemede geçerli kontrol grubu kuramadıysan
+  bunu **rapor et** (neyin neden çürüdüğü ölçümdür, kayıptır değil) ve elindeki kanıtla bitir.
+- ✅ Bütçeyi aşmak **serbesttir, gizlemek değildir**: aşacaksan ara raporda **neden**ini ve
+  **ne kadar** daha istediğini yaz — lider kesme/daraltma kararını verir.
 
 ## RAPOR ŞABLONU (SendMessage; başka format kabul edilmez)
 `KAYIT#` · `GEÇMİŞ-ETKİ` · **`TASARIM-GEREKÇESİ`** (F0b: BULUNDU/ARANDI-YOK/ARANMADI + kalem hâlâ gerçek mi) · `TEŞHİS` (kök, sınıf-mı-vaka-mı) · **`SINIF-ENVANTERİ`** (F2: desen → N dosya, dokunulan/bırakılan) · `DEĞİŞİKLİK` (dosya:satır listesi, worktree'de)
