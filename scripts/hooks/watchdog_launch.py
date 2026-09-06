@@ -2,10 +2,11 @@
 # ENFORCES: C-SPAWN-01  (ADR 0019 coverage binding)
 """PreToolUse(Agent) hook — alt-ajan spawn ANINDA brifing nudge'lari basar (blok YOK).
 
-UC nudge dali, hepsi exit 0 / additionalContext:
+DORT nudge dali, hepsi exit 0 / additionalContext:
 - BRIFING-LINT      : R2 sablon izleri (GOREV/KANIT KURAL) + ENGELLENIRSEN ekseni
 - PRIOR-ART / KB-01 : brifingde adi gecen core script'inin recetesi playbook'ta var mi
 - AGENT-TYPE TUZAGI : `name` verilince infra_write_guard muafiyetinin dusmesi
+- DONDURMA TEYIDI   : salt-okur inceleyiciye md5 capasi veriliyor -- teyit alindi mi
 
 Soylenecek bir sey yoksa STDOUT BOS kalir (sessiz).
 
@@ -264,15 +265,93 @@ def _agent_type_tuzagi(data):
             "`subagent_type` zaten yeterli. (Nudge; bloklamaz.)" % (ad, st))
 
 
+# --- DONDURMA TEYIDI ekseni (2026-09-06, Q-DONDURMA) -------------------------
+# ⛔ OLCULMUS VAKA (SEKIZ kez tekrarladi: 2026-08-26 x4 · 09-04 x2 · 09-05 · 09-06).
+# Lider, ureticiden "donduruldu" teyidi ALMADAN bagimsiz kapiyi (`bug-expert`) acar;
+# uretici posta kuyrugundaki bir istegi isleyip dosyaya YAZAR; kapi BAYAT surumu olcer;
+# bulgularin satir numaralari tutmaz; tur yeniden kurulur. Bir vakada kapi 785 satirlik
+# surumu olcerken dosya 792'ydi; baska bir vakada FE'nin beyan ettigi md5 diskte HIC
+# VAR OLMADI. Kanonik kayit: `memory/feedback_kapi-kosarken-dosya-donar-md5-teyidi.md`.
+#
+# ⭐ NEDEN BRIFING METNI DEGIL `subagent_type` (TASARIM, olcumle secildi): bu hook'ta
+# METIN-TAHMINI eden iki kanca (`T3-KIMLIK` + `DEPLOY`) 2026-08-21'de **precision 0** ile
+# kaldirildi (`governance/removed-controls.md`) -- kanca "bir konudan BAHSETMEK" ile
+# "onu YAPMAK" arasindaki farki goremiyordu. Bu dal o sinifa girmez: tetigi bir
+# TAHMIN degil, spawn payload'inin DETERMINISTIK alanidir (`subagent_type`), tipki
+# kardes `_agent_type_tuzagi` dali gibi. Brifin "inceleme brifi gibi gorunmesine"
+# BAKILMAZ -- o yon olculdu ve reddedildi.
+#
+# ⛔ BASTIRICI EKLENMEDI, BILINCLI: "dondur/donduruldu" gecen brifler SUSTURULMAZ.
+# (a) D2'nin kok sebebi tam olarak bir bastiriciydi ve hedefle TERS korelasyonluydu.
+# (b) Kaydin kendi kok mekanizmasi: `BUG_GATE_READY` raporu ICINDE md5 tasir ve tam bu
+#     yuzden dondurma teyidi GIBI GORUNUR -- yani "dondurma" kelimesinin brifte gecmesi
+#     teyidin ALINDIGININ kaniti DEGILDIR. Kelimeye bakan bastirici, kaydin belgeledigi
+#     sekiz vakanin cogunu sessizce gecirirdi. Olculdu: atesleyen 55 brifin 32'sinde
+#     (%58,2) "dondur/bayat/kod dondu" dili ZATEN yaziliydi -- ve vakalar YINE oldu.
+#
+# ⛔ SIDDET = NUDGE (bloklamaz), ADR 0019 merdiveni: surec hijyeni, guvenlik kapisi
+# degil; yanlis pozitifte is durmamali. Kardes uc dal gibi not basar, exit 0.
+#
+# ⭐ KUME, TEK ROL DEGIL (F2 sinif karari): korunan degismez "artefakt YAZMAYAN bagimsiz
+# bir inceleyiciye teslim ediliyor" -- rolun ADI degil. `claude/agents/` envanteri
+# olculdu (7 rol): YAZMAYAN tek adversarial inceleyici bugun `bug-expert`tir
+# ("read-only ... YAZMAZ/degistirmez"). Diger md5 tasiyan roller (`adt-gateway` 24 ·
+# `frontend-expert` 7 · `backend-expert` 6 ...) KALEMI ELINDE TUTAN URETICILERDIR --
+# onlarda dondurma semantigi yoktur, bu yuzden SUSAR. Yeni bir salt-okur inceleyici
+# rolu eklenirse bu KUMEYE girer; yeni dal yazilmaz.
+_INCELEYICI_ROLLER = frozenset({"bug-expert"})
+
+# 32-hex md5. Sinirlar hex-DISI olmali: 40-hex git SHA'si ya da daha uzun bir ozet
+# icinden 32 karakter KESILIP sahte eslesme uretmesin (olculdu: sinirsiz desen
+# `(?<!x)(?!x)` capalari olmadan 40-hex SHA'lari da yakaliyordu).
+_RX_MD5 = re.compile(r"(?<![0-9a-fA-F])[0-9a-f]{32}(?![0-9a-fA-F])")
+
+
+def _dondurma_teyidi(data):
+    """`bug-expert` spawn'i + brifte md5 capasi => "bu md5 dondurma teyidinden mi?" sorar."""
+    ti = data.get("tool_input")
+    if not isinstance(ti, dict):
+        return None
+    st = ti.get("subagent_type")
+    prompt = ti.get("prompt")
+    if not isinstance(st, str) or not isinstance(prompt, str):
+        return None
+    if st.strip() not in _INCELEYICI_ROLLER:
+        return None            # uretici/arastirmaci rollerinde dondurma semantigi YOK
+    m = _RX_MD5.search(prompt)
+    if not m:
+        return None            # capa yoksa sorulacak bir sey de yok
+    return ("[DONDURMA TEYIDI] Bagimsiz kapiya (`%s`) md5 capasi (`%s`) veriliyor. "
+            "Spawn'dan ONCE UC SORU (olculdu: bu sinif SEKIZ kez tekrarladi -- "
+            "2026-08-26 x4 / 09-04 x2 / 09-05 / 09-06 -- her seferinde kapi BAYAT surum "
+            "olctu ve tur yeniden kuruldu):\n"
+            "  1) Bu md5 ureticinin acik 'DONDURULDU' teyidinden mi geliyor, yoksa bir "
+            "ILERLEME raporundan mi? `BUG_GATE_READY` dondurma teyidi DEGILDIR -- rapor "
+            "'yazmayi biraktim' demez, 'bu turu bitirdim' der; ikisi mesaj metninde AYNI "
+            "gorunur ve kaydin belgeledigi kok mekanizma tam budur.\n"
+            "  2) Ureticinin posta kuyrugunda CEVAPLANMAMIS istegin kaldi mi? "
+            "** OLCUM ISTEKLERI DE SAYILIR: 2026-09-06 vakasinda tetikleyici bir yazma "
+            "emri DEGIL, 'su sinifi tara ve negatif testle goster' istegiydi -- ajan "
+            "olcumu yapti ve bulguyu dogru davranarak kodun yorumuna YAZDI. Yazma "
+            "penceresini acan sey 'yazma emri' degil, CEVAPLANMAMIS HERHANGI BIR ISTEKTIR. "
+            "Ozellikle KENDI gonderdigin mesajlari say.\n"
+            "  3) Brifingde 'capa tutmazsa DUR' mu yazdin? Oyleyse DUZELT: kayit "
+            "'DURMA -- diskteki kopyayi olc, farki raporun BASINA yaz, devam et' diyor "
+            "(kapilar bu davranisi iki kez kendiliginden gosterdi ve dogruydu). Durmak "
+            "bosuna tur kaybidir.\n"
+            "  Kaynak: memory/feedback_kapi-kosarken-dosya-donar-md5-teyidi.md "
+            "(Nudge; bloklamaz.)" % (st.strip(), m.group(0)))
+
+
 def _ek_notlar(data):
-    """UC nudge dalinin notlarini birlestirir; kontrolun kendisi hook'u dusuremez.
+    """DORT nudge dalinin notlarini birlestirir; kontrolun kendisi hook'u dusuremez.
 
     ⛔ TEK EMIT YOLU (2026-08-29): daemon dali kaldirilmadan once bu fonksiyon DORT ayri
     dala (idempotent / daemon-yok / bash-yok / basari) elle eklenmisti ve eskiden bazi
     dallar lint'e ULASMADAN return ediyordu = sessiz atlama. Artik dal YOK; not uretimi
     main()'in tek cikisindan gecer."""
     parcalar = []
-    for _f in (_brifing_lint, _prior_art_nudge, _agent_type_tuzagi):
+    for _f in (_brifing_lint, _prior_art_nudge, _agent_type_tuzagi, _dondurma_teyidi):
         try:
             _n = _f(data)
         except Exception as e:  # kontrolun kendisi hook'u dusuremez
@@ -285,7 +364,7 @@ def _ek_notlar(data):
 def _parse_fail_notu() -> None:
     """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
 
-    Bos sozlukle devam edilir -> `tool_input` okunamaz, UC nudge dali da SESSIZ kalir
+    Bos sozlukle devam edilir -> `tool_input` okunamaz, DORT nudge dali da SESSIZ kalir
     (kayip: o spawn icin brifing kontrolu HIC kosmaz). Gerekce + sinif kaydi:
     scripts/hooks/README.md S4. Not STDERR'e gider: bu hook'un STDOUT'u JSON
     sozlesmesidir.
