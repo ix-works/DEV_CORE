@@ -900,6 +900,13 @@ gelmez.
   anahtarıyla tutulur; activate sonrası **aktif** source çekilip normalize-karşılaştırılır.
   Fark varsa `content_verified=False` + `ok=False`. Yalnız isimle key'lemek DDLS/BDEF
   çakışmasında sahte-mismatch üretir.
+  **Baseline'ın tazeliği (Q271, 2026-09-09):** kayıt **UPLOAD** anında yazılır — `ok` anında
+  DEĞİL. Aktif sürümü belirleyen şey upload'dır; aktivasyonu patlayan bir push (T11 kilidi)
+  SAP'deki kaynağı değiştirdiği hâlde eskiden baseline'ı eski kaynakta bırakıyor ve bir
+  sonraki aktivasyonda **sahte `content_mismatch`** üretiyordu. Kayıt artık **kaynak/zaman/
+  kapsam** taşır (`sira`·`ts`·`binding`·`aktive`·`belirsiz`) ve KIRMIZI iddia yalnız baseline
+  kıyasa uygunsa kurulur; uygun değilse **üçüncü değer** döner (`content_verified=null` +
+  `content_probe` sebep kodu) — bu *"doğrulandı"* DEĞİL, *"ölçemedim"*dir.
 
 ### 10.4 Reviewer pre-flight (ADR 0006)
 

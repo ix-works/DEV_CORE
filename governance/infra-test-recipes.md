@@ -453,6 +453,20 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 
 ## B11 — mcp_servers/sap_adt
 - Offline: `test_csrf_header_injection` + `test_push_readback_mismatch` + `test_search_objects_type_filter` + import-smoke.
+- **READBACK BASELINE TAZELİĞİ (Q271, 2026-09-09):** `python tests/fixtures/aktivasyon_baseline_tazeligi/run.py`
+  → **23/23** · MUTASYON (üçü de düşmeli, reddedilen tasarım koda ENJEKTE edilir — `git show`
+  kullanılmaz ⇒ sığ klonda/CI'da da koşar): `--mutasyon` **9/23** · `--mutasyon-yalniz-yazim`
+  **12/23** · `--mutasyon-yalniz-kiyas` **15/23**.
+  **Değişmezler:** `_LAST_PUSHED` baseline'ı **UPLOAD** anında yazılır (`ok` değil — aktivasyonu
+  patlayan push SAP'deki kaynağı DEĞİŞTİRİR) · kayıt `ts`/`sira`/`binding`/`aktive`/`belirsiz`
+  taşır · KIRMIZI iddia (`content_mismatch`) yalnız baseline kıyasa uygunsa kurulur; başka
+  binding ya da belirsiz kaynak → **üçüncü değer** (`content_verified: null` + `content_probe`) ·
+  `content_probe` altı sonucu AYIRT EDER (üç `None` yolu tek değere çökerse ayrım kaybolur).
+  ⛔ **Kontrol grubu satırları SİLİNMEZ** (aksi hâlde fix bir "kapı susturma"ya döner):
+  V4a gerçek uyuşmazlık hâlâ blocker · V4b upload-only baseline'la da yakalanır · V5e belirsiz
+  kayıtta eşitlik hâlâ yeşil · V5f upload'ın olmadığı BİLİNEN yolda belirsizlik SAYILMAZ ·
+  V8b ad-çarpışmasında (aynı ad ddls+bdef) kaydı olmayan tip için iddia ÜRETİLMEZ.
+  ⚠ Koşucu çıktısına ikinci bir `N/M` sayısı yazma — `run_battery` skoru SON eşleşmeden okur.
 - **ÜÇ-DEĞERLİ DOĞRULAMA (2026-08-01):** `python tests/fixtures/dogrulama_kosamadi/run.py` → **32/32**.
   Değişmezler: silme-readback okunamazsa `delete_verified: null` (**true DEĞİL**) · push readback
   koşamazsa `readback_verified: null` + `readback_notice` (ama `ok` DÜŞMEZ — aşırı-sıkılaşma çapası) ·

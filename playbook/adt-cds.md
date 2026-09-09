@@ -620,6 +620,14 @@ Bir `define view entity ... union all ...` yazarken SAP 3 kuralı tek tek dayat�
 - **ÇÖZÜM:** her iki DÜZELTİLMİŞ kaynağı **inaktif upload** et (push, activate etme), sonra **tek POST'ta** `adt_activate(base, also=[consumption])` → atomik co-activation (`activationExecuted=true`, refs=her ikisi). Yeni-yeni birlikte aktive olur, ara-durum kilidi oluşmaz.
 - **🔁 TEKRAR (2026-07-30) — pattern belgeliydi, KİMSE OKUMADI.** Aynı sınıf ikinci kez yaşandı: bir base view'da `islem`→`islem_turu` rename edildi, consumption o alanı seçiyordu. **Belirtiler bu maddedekiyle birebir aynı çıktı** (`... is still being used as a view field in view ...` / `The column ... is unknown`) ve çözüm de aynıydı. **Bedeli:** iki başarısız aktivasyon turu. **Asıl bulgu teknik değil süreçsel:** push paketini hazırlayan ajan, onaylayan lider ve icra eden gateway — **üçü de obje-tipi playbook'unu (bu dosyayı) taramadan** "önce base, sonra consumption" planı kurdu; gateway çözümü **yeniden keşfetti**. Kayıp kurtarılabilir ve gürültülüydü (aktivasyon bağırır) → runtime gate'e ait DEĞİL, **disipline** ait: *push/aktivasyon planı yazmadan önce obje-tipi playbook'unun tuzak listesi taranır* — özellikle **alan RENAME/SİL** içeren her değişiklikte (T6 + T11 birlikte). Kural: **kırıcı alan yeniden-adlandırması = tüm tüketicilerle ATOMİK aktivasyon**, tıpkı BDEF+behavior gibi.
 - **T11-a — `content_mismatch` false-alarm:** co-activation sonrası tool `content_mismatch=true` dönebilir — stale `_LAST_PUSHED` baseline aktifi ESKİ kaynakla kıyaslar. Körü körüne "başarısız" sayma → **`adt_get version=active` ile bağımsız teyit** (kaynakta yeni join/alan var mı). Araç-readback ≠ canlı gerçek (feedback_arac-basarisizligini-zararsiz-sayma tersi de geçerli: false-NEGATIF).
+  > ✅ **KÖKÜ DÜZELTİLDİ (Q271, 2026-09-09) — ama bu satır SİLİNMEDİ.** Sebep: baseline artık
+  > **upload** anında yazılıyor (aktivasyonu patlayan push da baseline'ı günceller) ⇒ T11'in
+  > *"inaktif upload et → `also=` ile co-activate"* akışı **artık sahte mismatch üretmez**
+  > (`tests/fixtures/aktivasyon_baseline_tazeligi` V2c/V8a). Yine de **bağımsız teyit
+  > tavsiyesi geçerlidir**: baseline'ın kaynağı belirsizse ya da başka bir sisteme aitse araç
+  > artık `content_verified: null` + `content_probe` döner — bu *"doğrulandı"* DEĞİLDİR.
+  > ⇒ `content_mismatch: true` bugün **daha güvenilir bir sinyaldir**; `null` gördüğünde
+  > `adt_get(version=active)` ile gözle teyit et.
 
 ### T12 — `concat` **arg1'in SONDAKİ BOŞLUKLARINI SİLER** → ayıraçlı birleştirme sessizce bozulur; çözüm `concat_with_space` (2026-07-28, ZSD001 birleşik kimlik kolonu)
 > **Ne zaman:** iki kolonu görünür bir ayıraçla birleştiriyorsun — `"KNT1010110101 · 34RRR334"` gibi. Sezgisel yazım **yanlış çıktı üretir ve hiçbir hata vermez.**
