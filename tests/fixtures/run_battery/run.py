@@ -178,10 +178,11 @@ kontrol("P1 BEYAN katmani: acik kip kumesi okunur",
 
 k2, kay2 = _kesif("fs_docstd")
 # ⚠ SAYI KORPUSA PİNLİ (b0_secim P2/P3 ile aynı sözleşme): `fs_docstd`e kip eklenirse
-# (2026-08-29: 10→13, kayıt Q209 koşucu mutasyonları) BU SATIR da güncellenir. Sayıyı
+# (2026-08-29: 10→13, kayıt Q209 koşucu mutasyonları · 2026-09-09: 13→14, kayıt Q262
+# `--mutasyon-boskapsam`) BU SATIR da güncellenir. Sayıyı
 # gevşetmek (`>=`) çapayı öldürür: keşif katmanının SESSİZ daralması tam burada görünür.
-kontrol("P2 DOKUMAN katmani SART: son-ekle cozen kosucunun 13 kipi bulunur",
-        kay2 == "DOKUMAN" and len(k2) == 13 and "--mutasyon-katman0" in k2,
+kontrol("P2 DOKUMAN katmani SART: son-ekle cozen kosucunun 14 kipi bulunur",
+        kay2 == "DOKUMAN" and len(k2) == 14 and "--mutasyon-katman0" in k2,
         f"kaynak={kay2} n={len(k2)}")
 
 k3, kay3 = _kesif("worktree_yasam_dongusu")

@@ -220,8 +220,24 @@ def olc(kok: Path, kapi: str, p: Path) -> list[tuple[str, str]]:
 
 # ── PROJE KURULUMU ───────────────────────────────────────────────────────────
 def _junction(link: Path, hedef: Path) -> None:
-    subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(hedef)],
-                   capture_output=True, text=True, timeout=60)
+    """Windows'ta junction, POSIX'te DIZIN SYMLINK'i.
+
+    ⚠ 2026-09-09: bu yardimci ilk yazildiginda KOSULSUZ `cmd /c mklink /J` idi ->
+    Linux CI'da `FileNotFoundError: [Errno 2] 'cmd'` ile COKUYORDU (iki vektor birden
+    dustu: bolum-1 ve bolum-4 `--mutasyon-hamsha`). Windows'ta yesildi, o yuzden
+    gozden kacti; kusur URUNDE degil SANDBOX KURULUMUNDAYDI.
+
+    Neden symlink DENK: tuketici `session_start._junction_kontrol` ayrimi
+    `os.readlink(p)` ile yapar (bkz. scripts/hooks/session_start.py) -- bu cagri
+    Windows junction'inda da POSIX dizin symlink'inde de HEDEFI dondurur, gercek
+    klasorde `OSError` atar. Yani sandbox iki platformda da AYNI seyi olcer.
+    """
+    link.parent.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(hedef)],
+                       capture_output=True, text=True, timeout=60)
+    else:
+        os.symlink(hedef, link, target_is_directory=True)
 
 
 def proje(kok: Path, settings: bytes | None, shim: bytes | None,

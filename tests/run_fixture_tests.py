@@ -160,6 +160,11 @@ OZEL_TESTLER = [
      "Q214: CORE-INDEX SIRASI platformdan bagimsiz mi — anahtarsiz sorted(Path) "
      "Windows'ta casefold, Linux'ta degil ⇒ Windows'ta uretilen indeks Linux CI'da "
      "'BAYAT' cikiyordu (C-IDX-01 bayatlik degil URETICININ PLATFORMUNU olcuyordu)"),
+    ("paket_indeks_siralama",
+     "Q248: package-registry SIRASI platformdan bagimsiz mi — `collect_packages` IKI yerde "
+     "anahtarsiz `sorted(Path)` yapiyordu (Q214'un kardesi, ayni anahtar ilkesi `p.name`). "
+     "⚠ Tek-segmentli adlarda kusur yalniz Windows'ta GORUNUR; mutasyonun iki platformda da "
+     "olmesini V4 (sahte Windows-flavour koku) saglar"),
     ("proje_slug_tek_kaynak", "Claude Code proje-slug'i: tek sozlesme, tek kaynak (S4)"),
     ("git_sorgu_sessiz_bos", "deploy_ui --all-changed: git arizasi != 'degisiklik yok' (S5)"),
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
@@ -870,6 +875,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "platforma bağlıydı) + `--ci-check` (DG-03: CI backstop'u kendi ürettiğini "
      "doğruluyordu; artık damgadaki core-commit klonla AYNI ise ÖLÇER, değilse "
      "SKIPPED measured=false — üç dalı da sap_gate_skip_sozlesmesi ölçer)"),
+    # 2026-09-09 (Q248): bu dosya HARİTA'da HİÇ YOKTU — kardeş üretici `build_core_index.py`
+    # yazılıydı, bu değildi. ⚠ NİTELEYİCİ: eşleşmeyen dosya FAIL-CLOSED olarak TAM süiteye
+    # düşer (`_eslesme` → None), yani koruma SESSİZCE kalkmıyordu; eksik olan, değişikliği
+    # DOĞRUDAN ölçen bir korpustu — ve seçim modu her dokunuşta tam süit koşuyordu.
+    ("scripts/build_package_index.py",
+     ("O:paket_indeks_siralama",),
+     "paket indeksi SIRALAMA determinizmi (Q248: iki anahtarsız `sorted(Path)` platforma "
+     "bağlıydı ⇒ C-REG-01 tazelik değil ÜRETİCİNİN PLATFORMUNU ölçüyordu)"),
     ("scripts/switch_tier.py", ("O:tier_fail_closed",), "tier çözümleme"),
     ("scripts/statusline.py",
      ("O:tier_fail_closed", "O:worktree_yasam_dongusu", "O:statusline_token_esikleri"),

@@ -46,15 +46,37 @@ def extract_frontmatter_status(text: str) -> str:
     return m.group(1) if m else "unknown"
 
 
+def _siralama_anahtari(p: Path) -> str:
+    """Q248 (2026-09-09) — sıralama anahtarı PLATFORMDAN BAĞIMSIZ olmalı.
+
+    ⛔ YENİ İLKE DEĞİL: bu, `build_core_index._siralama_anahtari`'nın (Q214, 2026-09-02)
+    AYNISIDIR. Orada anahtar `rel.as_posix()`; burada sıralanan şey TEK SEVİYELİ kardeş
+    dizinlerdir (`<source_root>/<MODULE>` ve `<MODULE>/<PKG>`) ⇒ göreli posix dizesi tam
+    olarak `p.name`'dir. İkinci bir sıralama ilkesi İCAT EDİLMEDİ; aynı sorunun iki farklı
+    ölçütle çözülmesi tek yanlış çözümden kötüdür. Reddedilen alternatiflerin (`parts`,
+    `as_posix().lower()`) ölçülmüş gerekçeleri o docstring'de durur — geri çevirmeden önce oku.
+
+    KUSUR: burada eskiden anahtarsız `sorted(erp_root.iterdir())` vardı, yani `Path`
+    nesneleri KENDİ `__lt__`'leriyle kıyaslanıyordu. O kıyas platformun flavour'ına
+    bağlıdır: `WindowsPath` parçaları `str.lower()` ile katlar, `PosixPath` katlamaz
+    (Py 3.11 `_cparts`; Py 3.12+ `_str_normcase`). Sonuç: AYNI paket ağacı Windows'ta ve
+    Linux'ta FARKLI sıralanır ⇒ `--check` (C-REG-01, `check_package_registry_fresh.py`)
+    "bayatlık" değil ÜRETİCİNİN PLATFORMUNU ölçer: Windows'ta üretilip commit'lenen
+    registry Linux CI'da `[FAIL] BAYAT` verebilir. Q214'te aynı sınıf CORE-INDEX'te
+    ölçülmüştü (template_project PR #15, CI run 33310331713).
+    """
+    return p.name
+
+
 def collect_packages(erp_root: Path) -> list[dict]:
     """<source_root>/<MODULE>/<PKG>/ — her paketten bilgi topla, modül path'ten alınır."""
     packages = []
-    for module_dir in sorted(erp_root.iterdir()):
+    for module_dir in sorted(erp_root.iterdir(), key=_siralama_anahtari):
         if not module_dir.is_dir() or module_dir.name.startswith("."):
             continue
         module_name = module_dir.name  # SD, MM, FI, ...
 
-        for pkg in sorted(module_dir.iterdir()):
+        for pkg in sorted(module_dir.iterdir(), key=_siralama_anahtari):
             if not pkg.is_dir() or pkg.name.startswith("."):
                 continue
             rules_path = pkg / ".rules.md"

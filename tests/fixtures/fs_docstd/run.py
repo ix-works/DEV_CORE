@@ -40,6 +40,8 @@ Mutasyonlar (DÖRDÜ DE koşulur — hiçbiri diğerini kapsamaz):
   --mutasyon-hook         doc-fs dalını sök             → B1-B5 DÜŞMELİ, R1-R3 AYAKTA
   --mutasyon-kapanmis     nudge'dan `--kapanmis-karar`ı sök → Y3 DÜŞMELİ (öğretilen komut
                           ile aracın yüzeyi ayrışır; Y1/Y2 AYAKTA — ayrı değişmez)
+  --mutasyon-boskapsam    `n_docs == 0` dalını sök (Q262)  → A12/A12b DÜŞMELİ,
+                          A13 (dolu korpus HÂLÂ "temiz" der) AYAKTA — FP çapası
 Herhangi biri tam puan verirse korpus O DEĞİŞMEZ için BOŞTUR.
 """
 import json
@@ -350,6 +352,9 @@ def _mutant(kip: str) -> tuple:
                           kaynak, count=1)
     elif kip == "failclosed":
         yeni, n = re.subn(r'            okunamadi \+= 1\n', '            okunamadi += 0\n', kaynak, count=1)
+    elif kip == "boskapsam":
+        # Q262: sıfır-kapsam dalı sökülür → 0 doküman yine TEMİZ VERDİCT'i alır (eski kusur).
+        yeni, n = re.subn(r'        if n_docs == 0:', '        if False:', kaynak, count=1)
     else:
         raise SystemExit(f"bilinmeyen mutasyon: {kip}")
     _capa(n, kip)
@@ -453,6 +458,38 @@ def main() -> int:
 
         rc, out, _ = _val(validator, "--selftest", env=env)
         ekle("A9 --selftest OK", rc == 0 and "OK" in out, f"exit={rc}")
+
+        # ── Q262 (2026-09-09): SIFIR KAPSAM ≠ TEMİZ ────────────────────────
+        # "0 doküman tarandı" ile "21 doküman tarandı, işaret yok" AYNI cümleye
+        # düşüyordu. Ölçüm KORPUS düzeyindedir (tek dosya değil): `--file` verilince
+        # n_docs her zaman 1'dir, kusur yalnız TAM TARAMADA görünür.
+        # ⚠ ÇAPA "temiz" KELİMESİ DEĞİL, TEMİZ-VERDİCT cümlesidir (A6 ile aynı sözleşme).
+        bos = Path(str(sb) + "3")
+        (bos / "scripts").mkdir(parents=True, exist_ok=True)   # proje var, FS/EK YOK
+        rc, out, err = _val(validator, "--bulguda-exit1",
+                            env=dict(os.environ, CLAUDE_PROJECT_DIR=str(bos)))
+        temiz_verdict = "): temiz" in out
+        ekle("A12 SIFIR KAPSAM: 0 doküman → TEMİZ VERDİCT'i YOK, ayırt edilebilir mesaj "
+             "(exit 0 KORUNUR — sıfır kapsam meşru)",
+             rc == 0 and not temiz_verdict and "BULUNAMADI" in out and "KAPSAM SIFIR" in out,
+             f"exit={rc} temiz_verdict={'VAR' if temiz_verdict else 'YOK'} "
+             f"bulunamadi={'VAR' if 'BULUNAMADI' in out else 'YOK'} "
+             f"kapsam_sifir={'VAR' if 'KAPSAM SIFIR' in out else 'YOK'}")
+        ekle("A12b sıfır-kapsam satırı EYLEME DÖNÜŞÜR: çözülen kök + IX_SOURCE_ROOT yazılı "
+             "(K1 `kapsam_eki` sözleşmesi)",
+             "kök=" in out and "IX_SOURCE_ROOT" in out,
+             f"kok={'VAR' if 'kök=' in out else 'YOK'} out={out.strip()[:90]}")
+
+        # FP ÇAPASI / POZİTİF KONTROL — gerçekten denetlenmiş TEMİZ korpus hâlâ "temiz"
+        # demeli: fix "her yeşili şüpheliye çevirme" yönünde gevşemedi/sertleşmedi.
+        dolu = Path(str(sb) + "4")
+        (dolu / "docs").mkdir(parents=True, exist_ok=True)
+        (dolu / "docs" / "FS-XX-990_temiz.md").write_text(TEMIZ_FS, encoding="utf-8")
+        rc, out, _ = _val(validator, "--bulguda-exit1",
+                          env=dict(os.environ, CLAUDE_PROJECT_DIR=str(dolu)))
+        ekle("A13 FP ÇAPASI: DOLU ve temiz korpus (1 doküman) → HÂLÂ 'temiz' verdict'i + payda",
+             rc == 0 and "): temiz" in out and "1 FS/EK dokümanı" in out,
+             f"exit={rc} out={out.strip()[:90]}")
 
         # ── ② HOOK (GERÇEK KABLOLAMA: hook_shim) ───────────────────────────
         shim_var = (sb / "scripts" / "hook_shim.py").exists() and _junction(sb)
@@ -739,7 +776,7 @@ def main() -> int:
                 artik.unlink()
             except Exception:
                 pass
-        for yol in (sb, Path(str(sb) + "2")):
+        for yol in (sb, Path(str(sb) + "2"), Path(str(sb) + "3"), Path(str(sb) + "4")):
             try:
                 _bagi_kaldir(yol / "core")
                 shutil.rmtree(yol, ignore_errors=True)
