@@ -1937,6 +1937,32 @@ biçimini karıştırır** — OK dalında TOPLAM'ı, FAIL dalında `1/8`in **1*
 Gerçek repoda `.tmp/` gitignore'ludur (`git check-ignore .tmp/battery/… ` → rc=0) ve batarya
 ham çıktılarını oraya yazar; `.gitignore`'suz kumda aracın **kendi artefaktı** "izlenmeyen
 dosya" diye sayılır ve C2 (meşru yeşil) SAHTE-KIRMIZI olur. Kusur değil, kum eksiğidir.
+
+**⭐ DÖRDÜNCÜ ÜYE — Q262 (2026-09-09): `check_fs_no_analysis_log.py` sıfır kapsamda "temiz" diyordu.**
+Bu gate aynı sözleşmenin kapsamındaydı ama K1 turunda (2026-08-20) **bağlanmamıştı** — gate
+08-17'de doğdu, `utils/kapsam.py` yardımcısı 08-20'de yazıldı, arada kaldı. `total == 0` dalı
+`n_docs == 0` ile `n_docs == 21`i **AYNI verdict'e** ("temiz") çöküyordu.
+
+```bash
+python tests/fixtures/fs_docstd/run.py                  # 51/51 (Q262 öncesi 48)
+python tests/run_battery.py fs_docstd                   # 15/15 PASS (14 mutasyon kipi)
+# ⚠ TEK KİP: `--kip=` biçimi ZORUNLU (boşluklu yazım argparse'a option gibi görünür ve
+#   `unrecognized arguments` verir — run_battery docstring'indeki örnek bu yüzden ÇALIŞMIYOR)
+python tests/run_battery.py fs_docstd --kip=--mutasyon-boskapsam   # 2/2 PASS: taban 51/51 +
+                                                        # 49/51 (düşen TAM OLARAK A12+A12b, A13 AYAKTA)
+```
+
+- `A12` — boş sandbox (proje VAR, FS/EK YOK) → temiz-verdict YOK · `BULUNAMADI` + `KAPSAM SIFIR`
+  VAR · **exit 0 KORUNUR** (sıfır kapsam meşrudur; `kapsam.py` K1 kararı, ADR 0019).
+- `A12b` — satır EYLEME DÖNÜŞÜR: çözülen `kök=` + `IX_SOURCE_ROOT` yazılı.
+- ⭐ **`A13` SİLİNEMEZ (FP çapası / pozitif kontrol)** — DOLU ve temiz korpus (1 doküman)
+  HÂLÂ `): temiz` verdict'i + `1 FS/EK dokümanı` paydası vermeli. Onsuz "her yeşili
+  şüpheliye çevirmedim" iddiası kanıtsızdır.
+- ⚠ **ÇAPA "temiz" KELİMESİ DEĞİL, `"): temiz"` VERDİCT CÜMLESİDİR** (A6 ile aynı sözleşme):
+  sıfır dalının metni "temiz" kelimesini BİLEREK kullanmaz.
+- ⚠ **ÖLÇÜM KORPUS DÜZEYİNDEDİR:** `--file <yol>` verilince `n_docs` daima 1'dir ⇒ kusur
+  yalnız TAM TARAMADA görünür. Tek dosyayla test eden bir vektör bunu göremez.
+
 ## B37 — `check_cds_currency_reference` ÇOK-SATIRLI ifade + `union` dalı (Q234+Q237, ⚠GEVŞETME)
 - Korpus (ev genişletildi, yeni dizin YOK):
   `python tests/fixtures/cds_curr_eksik_annotation/run.py` → **19 senaryo + 11 mutasyon**, exit 0.
@@ -2056,3 +2082,41 @@ dosya" diye sayılır ve C2 (meşru yeşil) SAHTE-KIRMIZI olur. Kusur değil, ku
   METNİNE bakar — metin sözleşmesini kıran değişiklik orada patlar).
 - ⚠ **SINIR / DOĞRULANAMADI:** üç topoloji de **Windows**'ta ölçüldü; Linux (CI) ayrımı
   bu turda yerel olarak üretilemedi — CI koşumu ayrı kanıttır.
+
+## B40 — `build_package_index` SIRALAMA determinizmi (Q248; B13b/Q214'ün KARDEŞİ)
+
+**Bileşen:** `scripts/build_package_index.py` (tüketici kapı: **C-REG-01**
+`--check`, `run_all_validators` PROJE modu).
+
+```bash
+python tests/fixtures/paket_indeks_siralama/run.py              # 12/12, exit 0
+python tests/fixtures/paket_indeks_siralama/run.py --mutasyon   # 8/12 — düşenler
+                                                                # TAM OLARAK V1·V1b·V4·V5
+python tests/run_battery.py paket_indeks_siralama --precommit   # taban + mutasyon + precommit
+```
+
+- ⛔ **ANAHTARI DEĞİŞTİRMEDEN ÖNCE `build_core_index._siralama_anahtari` DOCSTRING'İNİ OKU.**
+  Buradaki `_siralama_anahtari` = `p.name`, oradaki `rel.as_posix()` ilkesinin **tek segmentli
+  hâlidir** (sıralanan şey kardeş dizinlerdir; ortak ön-ek sırayı etkilemez). İkinci bir
+  sıralama ilkesi İCAT ETME — `parts` ve `as_posix().lower()` alternatifleri Q214'te ölçülüp
+  reddedildi. `V6` (`PKG001 < PKG10 < PKG2`) doğal/sayısal sıraya sessiz kayışı ÇİVİLER:
+  byte-sırası "yanlış" değil **KARARLIDIR**.
+- ⭐ **`V4`/`V4b` SİLİNEMEZ — mutasyonun Linux'ta da ölmesini SADECE onlar sağlar.** Kusur
+  tek-segmentli adlarda **yapısal olarak yalnız Windows'ta** görünür (POSIX'te anahtarsız
+  `sorted(Path)` zaten byte-sırası verir; Q214'teki `alt/` ↔ `alt-ek.md` ön-ek ekseninin
+  buradaki karşılığı YOKTUR). `V4` üreticiye, `iterdir()`'ü `__lt__`'si Windows-flavour
+  ile kıyaslayan sahte nesneler veren bir kök verir; `V4b` o sahte kıyası **kalibre eder**
+  (V4b olmadan V4 boş törendir). `V2`/`V3` ise korpusun gerçekten ayrıştırıcı olduğunu ve
+  simülatörün bu platformun gerçeğini yeniden ürettiğini ölçer.
+- **Mutasyon bellekte `exec` edilir, repoya dosya YAZILMAZ** (komşu fixture'ları kirletmez).
+  ⛔ Pinli-SHA / `git show HEAD:` tabanı KULLANILMAZ: fix merge edilince taban = fix olur
+  ve mutasyon sessizce ölür.
+- **Anahtar/sıralama değişirse:** `python core/scripts/build_package_index.py` her projede
+  YENİDEN koşulup `governance/package-registry.md` commit'lenir; koşulmazsa **C-REG-01**
+  `[FAIL] package-registry.md BAYAT` der. ⚠ Q248 fix'inin kendisi bunu **gerektirmedi**:
+  geçiş ölçümünde (`--check`, gerçek proje ağacı: 8 modül / 23 paket, adların tümü BÜYÜK
+  harf+rakam) fix ÖNCESİ ve SONRASI **ikisi de `[OK] taze`** ⇒ churn 0.
+- ⚠ **BU KAYIT LATENT'TİR** — "bugün ısırmıyor" ≠ "sorun yok". Karışık harf-durumlu tek bir
+  modül/paket adı doğduğu an Windows'ta üretilen registry Linux CI'da BAYAT görünür.
+- **Dokunulursa BİRLİKTE koşulacaklar:** bu korpus **VE** `python tests/fixtures/core_index_siralama/run.py`
+  (kardeş üretici, aynı ilke — biri sessizce sapmasın).

@@ -34,6 +34,7 @@ terfi ettirmek terfi kararını kazara bir çağıranın eline verirdi (kardeş 
 gate'lerde de aynı sözleşme: check_object_in_correct_pkg / check_package_naming /
 check_package_rules_present "--strict … no-op"). Bulguda exit 1 İSTEYEN tek tüketici
 post_validate hook'udur → `--bulguda-exit1`. ÖLÇÜLEMEDİ (okunamayan dosya) = exit 2.
+SIFIR KAPSAM (0 doküman) = exit 0 ama "temiz" DEĞİL, ayrı cümle + K1 payda satırı (Q262).
 `--selftest` → gömülü kırmızı-fixture ile kendi kendini test eder (yakalamazsa exit 1).
 Kullanım: python scripts/validators/check_fs_no_analysis_log.py [--bulguda-exit1] [--selftest] [--max-examples N] [--file YOL]
 Kablolama: run_all_validators (PROJE, pre-commit — warn-first, çıktı görünür ama FAIL etmez) + hooks/post_validate.py `doc-fs` sınıfı (FS/TS/KD/EK md düzenlenince o dosya için `--file --bulguda-exit1`; bulgu → yazara stderr özeti + OKU-işaretçisi, exit 2 = geri besleme). Kalıcı korpus: tests/fixtures/fs_docstd (38 vektör, 9 mutasyon).
@@ -53,6 +54,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from utils.project_config import project_root  # noqa: E402
+from utils.kapsam import kapsam_eki  # noqa: E402  (K1 payda sözleşmesi — bkz. main())
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -374,6 +376,24 @@ def main() -> int:
         print(f"Özet: {okunamadi} doküman OKUNAMADI (ölçüm eksik) — exit 2.")
         return 2
     if total == 0:
+        # ⛔ PAYDASIZ "temiz" BASMA (Q262, 2026-09-09 — sınıf K1, `utils/kapsam.py`):
+        # burada `n_docs == 0` ile `n_docs == 21` AYNI cümleye ("temiz") çöküyordu, yani
+        #     "dokümanlar denetlendi, gövdede işaret yok"   ile
+        #     "denetlenecek doküman BULUNAMADI"
+        # ayırt edilemiyordu. Bu, dedektörün değil KAPSAMIN sessiz kaybıdır ve yeşil ekran
+        # verir: yanlış `CLAUDE_PROJECT_DIR`, taşınmış `docs/` klasörü ya da `_SKIP`
+        # kümesinin bir dizini yutması hâlinde gate "temiz" diyordu. (K1 ölçümü, 2026-08-20:
+        # boş sandbox'ta 12 validator "temiz/[OK]" dedi, 6'sı HARD gate — bu dosya o turda
+        # bağlanmamıştı; 08-17'de doğmuş, yardımcı 08-20'de yazılmış.)
+        # ⛔ ÇIKIŞ KODU DEĞİŞMEDİ (0): sıfır kapsam MEŞRU bir durumdur — FS'i olmayan bir
+        # proje 0 doküman tarar ve bu bir ihlal değildir. Kapatılan şey SESSİZLİKTİR,
+        # gevşeklik değil (yardımcının kendi sözleşmesi; ADR 0019 gate-moratoryumu).
+        # ⚠ "temiz" KELİMESİ sıfır dalında BİLEREK geçmiyor: fixture çapası (A6)
+        # `"): temiz"` verdict cümlesini arar; sıfır dalı o verdict'i VERMEMELİDİR.
+        if n_docs == 0:
+            print("FS analiz-günlüğü kontrolü (DOC-FS-05/06a): DENETLENECEK DOKÜMAN "
+                  "BULUNAMADI (0 FS/EK dokümanı)." + kapsam_eki(0, "FS/EK dokümanı"))
+            return 0
         print(f"FS analiz-günlüğü kontrolü (DOC-FS-05/06a): temiz — {n_docs} FS/EK dokümanı, gövdede işaret yok.")
         return 0
     print()
