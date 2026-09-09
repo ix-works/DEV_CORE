@@ -39,6 +39,10 @@ KOSUM:  python tests/fixtures/prior_art_kb01/run.py
                                                     (N1: runpy sys.path capasini SOK)
         python tests/fixtures/prior_art_kb01/run.py --mutasyon-daemon-geri
                                                     (reddedilen daemon tasarimini ENJEKTE et)
+        python tests/fixtures/prior_art_kb01/run.py --mutasyon-dondurma
+                                                    (D dalini emit hattindan CIKAR)
+        python tests/fixtures/prior_art_kb01/run.py --mutasyon-dondurma-rol
+                                                    (D dalinin rol kumesini GEVSET)
 Cikis:  0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (mutasyon capasi tutmadi)
 """
 from __future__ import annotations
@@ -92,9 +96,13 @@ VAKA3 = (
 #   (a) dalin `_ek_notlar` uretim hattina KABLOLU olmasi (kod yazilmis olmasi yetmez)
 #   (b) kardes-import'un RUNPY yolunda ayakta kalmasi (sys.path capasi)
 # (b) olmadan (a) "dogrudan cagride calisiyor" der ve CANLIDA sessizce olurdu.
+# ⚠ 2026-09-06: emit tuple'ina 4. dal (`_dondurma_teyidi`) eklenince BU CAPA BAYATLADI
+# ve kip `[DOGRULANAMADI]` (rc=2) verdi -- yani sessizce yesil gecmedi, DOGRU davrandi.
+# Capa tazelendi. DERS: emit tuple'i satirini degistiren her tur, ona capalanan TUM
+# mutasyon kiplerini yeniden kosmak zorundadir (bu evde olculmus bayatlama sinifi).
 MUT_AGENT_TYPE = (
-    "    for _f in (_brifing_lint, _prior_art_nudge, _agent_type_tuzagi):",
-    "    for _f in (_brifing_lint, _prior_art_nudge):")
+    "    for _f in (_brifing_lint, _prior_art_nudge, _agent_type_tuzagi, _dondurma_teyidi):",
+    "    for _f in (_brifing_lint, _prior_art_nudge, _dondurma_teyidi):")
 MUT_AGENT_SYSPATH = (
     "    d = os.path.dirname(os.path.abspath(__file__))\n"
     "    if d not in sys.path:\n"
@@ -107,6 +115,24 @@ MUT_AGENT_SYSPATH = (
 # ENJEKTE edilir (heartbeat dizini + `[WATCHDOG]` satiri) ve P4 DUSMELIDIR. Bu capa
 # olmadan P4 "bugun daemon yok" diye trivial-yesil olurdu ve daemon sessizce geri
 # eklenebilirdi. Gerekce: governance/removed-controls.md (2026-08-29 satiri).
+# ⛔ DONDURMA TEYIDI MUTASYONLARI (2026-09-06) — IKI DEGISMEZ, IKI MUTASYON;
+# hicbiri otekini KAPSAMAZ:
+#   (a) dalin `_ek_notlar` uretim hattina KABLOLU olmasi. Bu, TEORIK bir capa DEGIL:
+#       dal ilk yazildiginda fonksiyon vardi ama tuple'a EKLENMEMISTI ve taban ile
+#       yeni surum AYNI ciktiyi verdi ("kod != kablolama" sinifi, bu evde olculmus).
+#   (b) rol kumesinin DAR kalmasi. Kume genisletilirse (ornek: her spawn'da atesle)
+#       nudge gurultuye doner ve URETICI rollerinin FP capalari duser. Gercek korpusta
+#       md5'li 101 brifin 46'si uretici rolde ⇒ gevsetmenin bedeli olculmustur.
+# (a) olmadan (b) "kod yazilmis" der ve CANLIDA sessizce olurdu; (b) olmadan (a)
+# gurultu patlamasini gormezdi.
+MUT_DONDURMA = (
+    "    for _f in (_brifing_lint, _prior_art_nudge, _agent_type_tuzagi, _dondurma_teyidi):",
+    "    for _f in (_brifing_lint, _prior_art_nudge, _agent_type_tuzagi):")
+MUT_DONDURMA_ROL = (
+    '_INCELEYICI_ROLLER = frozenset({"bug-expert"})',
+    '_INCELEYICI_ROLLER = frozenset({"bug-expert", "backend-expert", "adt-gateway",\n'
+    '                                "frontend-expert"})  # MUTASYON: kume gevsetildi')
+
 MUT_DAEMON_GERI = (
     '    notlar = _ek_notlar(data).strip("\\n")\n',
     '    notlar = _ek_notlar(data).strip("\\n")\n'
@@ -175,7 +201,8 @@ def main() -> int:
     # BILINMEYEN KIP SESSIZCE YESIL GECMESIN (2026-08-22): `--mutasyon-ZIRVA` gibi bir
     # yazim hatasi eskiden HIC mutasyon kurmadan TAM PUAN uretiyordu (exit 0).
     gecerli = {"--mutasyon", "--mutasyon-failopen", "--mutasyon-agent-type",
-               "--mutasyon-agent-syspath", "--mutasyon-daemon-geri"}
+               "--mutasyon-agent-syspath", "--mutasyon-daemon-geri",
+               "--mutasyon-dondurma", "--mutasyon-dondurma-rol"}
     for a in sys.argv[1:]:
         if a.startswith("--mutasyon") and a not in gecerli:
             raise SystemExit(f"[KULLANIM] bilinmeyen mutasyon kipi: {a} -> gecerli: "
@@ -186,10 +213,13 @@ def main() -> int:
     mut_at = "--mutasyon-agent-type" in sys.argv
     mut_syspath = "--mutasyon-agent-syspath" in sys.argv
     mut_daemon = "--mutasyon-daemon-geri" in sys.argv
+    mut_dond = "--mutasyon-dondurma" in sys.argv
+    mut_dond_rol = "--mutasyon-dondurma-rol" in sys.argv
     hook = HOOK
     yedek = None
 
-    if mutasyon or mut_failopen or mut_at or mut_syspath or mut_daemon:
+    if (mutasyon or mut_failopen or mut_at or mut_syspath or mut_daemon
+            or mut_dond or mut_dond_rol):
         kaynak = HOOK.read_text(encoding="utf-8")
         if mut_at:
             eski, yeni = MUT_AGENT_TYPE
@@ -197,6 +227,10 @@ def main() -> int:
             eski, yeni = MUT_AGENT_SYSPATH
         elif mut_daemon:
             eski, yeni = MUT_DAEMON_GERI
+        elif mut_dond:
+            eski, yeni = MUT_DONDURMA
+        elif mut_dond_rol:
+            eski, yeni = MUT_DONDURMA_ROL
         else:
             eski, yeni = MUT_SOK if mutasyon else MUT_FAILOPEN
         if eski not in kaynak:
@@ -368,6 +402,99 @@ def main() -> int:
         ekle("A5 RUNPY (canli hook_shim sekli): kardes-import COZULUR, not VAR",
              AT in r_ctx and AT_KOSMADI not in r_ctx and pr.returncode == 0,
              f"exit={pr.returncode}; sys.path[0]='' altinda import olmemeli")
+
+        # === D) DONDURMA TEYIDI (2026-09-06, Q-DONDURMA) ====================
+        # ⛔ OLCULMUS VAKA (SEKIZ tekrar: 2026-08-26 x4 · 09-04 x2 · 09-05 · 09-06):
+        # lider "donduruldu" teyidi ALMADAN bug-expert kapisini md5 capasiyla acar;
+        # uretici kuyrugundaki istegi isleyip yazar; kapi BAYAT surum olcer.
+        # Kanonik kayit: memory/feedback_kapi-kosarken-dosya-donar-md5-teyidi.md
+        #
+        # ⭐ VEKTORLER GERCEK KORPUSTAN OLCULDU: 845 tekil transcript brifi
+        # (`Agent`/`Task` tool_use -> input.{subagent_type,name,prompt}, >=400 kr).
+        # Rol dagilimi: bug-expert 253 · backend-expert 121 · sap-research 104 ·
+        # infra-expert 95 · adt-gateway 86 · frontend-expert 47 ...
+        # 32-hex md5 tasiyan brif 101 (%12,0); bunlarin 55'i bug-expert.
+        # => YENI DAL ATESLEME %6,51 (55/845), ev bandinin (%13,9) ALTINDA.
+        DT = "[DONDURMA TEYIDI]"
+        MD5_CAPA = "1fbf30a1a2cbbb4e999e4e0171b7718f"
+
+        def dt_brif(capa: str = MD5_CAPA) -> str:
+            g = ("GOREV: ZSD001_INPUT_ORDER islev modulu incelemesi. "
+                 "KANIT KURALLARI gecerlidir. Artefakt: functions/ZSD001_X.func.abap")
+            if capa:
+                g += " tam dosya md5 `%s` 470 satir." % capa
+            else:
+                g += " 470 satir (capa YOK)."
+            return _uzun(g)
+
+        def dt_payload(tip, prompt, ad=None):
+            d = payload(prompt)
+            ti = {"prompt": prompt}
+            if tip is not None:
+                ti["subagent_type"] = tip
+            if ad is not None:
+                ti["name"] = ad
+            d["tool_input"] = ti
+            return d
+
+        # -- D1 AYIRT EDICI: dogru vaka ATESLER (uc soruyu da tasimali)
+        rc, ctx, _e, ok = kos(hook, sb, dt_payload("bug-expert", dt_brif(), "bug-gate-final"))
+        ekle("D1 bug-expert + md5 capasi -> NOT VAR + exit 0",
+             DT in ctx and MD5_CAPA in ctx and "DONDURULDU" in ctx
+             and "CEVAPLANMAMIS" in ctx and "DURMA" in ctx and rc == 0 and ok,
+             f"exit={rc} json={ok}; uc soru da metinde olmali (BLOKLAMAZ)")
+
+        # ⭐ D1b KABLOLAMA CAPASI: dal `_ek_notlar` uretim hattinda mi? Fonksiyonun
+        # YAZILMIS olmasi YETMEZ -- ilk yazimda tam bu kacirildi (fonksiyon vardi,
+        # tuple'a eklenmemisti; dogrudan cagri SESSIZ kaldi ve taban ile YENI surum
+        # AYNI ciktiyi verdi). `--mutasyon-dondurma` bu capayi keser.
+        ekle("D1b KABLOLAMA: not GERCEKTEN emit yolundan cikti (kod != kablolama)",
+             DT in ctx, "fonksiyon var ama tuple'a eklenmemisse burasi FAIL verir")
+
+        # -- D2 FP CAPALARI: URETICI rollerinde SUSAR (dondurma semantigi yok)
+        for _rol in ("backend-expert", "adt-gateway", "frontend-expert"):
+            rc, ctx, _e, _ok = kos(hook, sb, dt_payload(_rol, dt_brif()))
+            ekle("D2 FP: md5'li ama URETICI rol (%s) -> SESSIZ" % _rol,
+                 DT not in ctx,
+                 "kalemi elinde tutan rolde dondurma semantigi YOK; olculdu: bu "
+                 "sinif gercek korpusta 46 brif (adt-gateway 24 · fe 7 · be 6 ...)")
+
+        # -- D5 UZAK-NEG: capa yoksa sorulacak sey de yok
+        rc, ctx, _e, _ok = kos(hook, sb, dt_payload("bug-expert", dt_brif(capa="")))
+        ekle("D5 FP: bug-expert ama md5 capasi YOK -> SESSIZ",
+             DT not in ctx, "her bug-expert spawn'inda atesleseydi gurultu olurdu "
+                            "(253 brifin 55'i = %21,7 md5 tasiyor)")
+
+        # ⭐ D6 SINIR CAPASI: 40-hex git SHA'si md5 DEGILDIR. Hex-disi sinir capalari
+        # olmadan desen 40-hex'in ICINDEN 32 karakter keser ve sahte atesler.
+        rc, ctx, _e, _ok = kos(hook, sb, dt_payload("bug-expert", _uzun(
+            "GOREV: inceleme. KANIT KURALLARI gecerli. commit "
+            "7de91d9c1fbf30a1a2cbbb4e999e4e0171b7718fabcdef01 uzerinde calis.")))
+        ekle("D6 FP: 40-hex git SHA'si md5 sayilmaz -> SESSIZ",
+             DT not in ctx, "(?<![0-9a-fA-F]) / (?![0-9a-fA-F]) sinir capalari")
+
+        # -- D7 SERTLIK: alan yok / yanlis tip -> cokmez, susar
+        rc, ctx, _e, ok = kos(hook, sb, dt_payload(None, dt_brif()))
+        ekle("D7 SERTLIK: subagent_type alani HIC yok -> SESSIZ + exit 0",
+             DT not in ctx and rc == 0 and ok, f"exit={rc}")
+
+        # ⭐ D8 BASTIRICI YOK (BILINCLI, gevsetme DEGIL sertlik): brifte "donduruldu"
+        # YAZIYOR olmasi teyidin ALINDIGININ kaniti DEGILDIR -- `BUG_GATE_READY`
+        # raporu md5 tasir ve teyit GIBI gorunur. Olculdu: atesleyen 55 brifin
+        # 32'sinde (%58,2) bu dil ZATEN yaziliydi ve vakalar YINE oldu. Kelimeye
+        # bakan bir bastirici, kaldirilan D2 kancasinin (precision 0) hatasini
+        # tekrarlardi -- orada da bastirici hedefle TERS korelasyonluydu.
+        rc, ctx, _e, _ok = kos(hook, sb, dt_payload("bug-expert", _uzun(
+            "GOREV: inceleme. KANIT KURALLARI gecerli. Dosyalar DONDURULDU, "
+            "BUG_GATE_READY geldi, md5 `%s` teyit edildi." % MD5_CAPA)))
+        ekle("D8 BASTIRICI YOK: 'donduruldu' yazsa da ATESLER",
+             DT in ctx, "kelime teyidin kaniti degil (kaydin kok mekanizmasi)")
+
+        # -- D9 KONTROL GRUBU: komsu dal (A3) bayatlamadi mi
+        rc, ctx, _e, _ok = kos(hook, sb, at_payload(
+            {"subagent_type": "bug-expert", "name": "bug-turu-1"}))
+        ekle("D9 KONTROL GRUBU: md5'siz kisa bug-expert spawn'i HALA tam sessiz",
+             DT not in ctx and AT not in ctx, "A3'un davranisi bayatlamadi")
 
         rc, ctx, _e, ok = kos(hook, sb, {"session_id": "pa", "tool_input": "bozuk-tip"})
         ekle("F3 payload SEKLI bozuksa da KOSMADI der (except dali)",

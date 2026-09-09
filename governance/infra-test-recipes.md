@@ -320,7 +320,37 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 ## B8 — watchdog_launch (spawn nudge'ları) / pre_compact / post_tool_failure / instructions_log / radar_check
 > ⛔ **2026-08-29: SAP watchdog DAEMON mekanizması KALDIRILDI** (kullanıcı kararı —
 > `governance/removed-controls.md`). `watchdog_daemon.sh` + `watchdog_stop.py` **YOK**;
-> `watchdog_launch` yalnız **üç nudge dalı**dır ve söylenecek şey yoksa **stdout BOŞ**tur.
+> `watchdog_launch` yalnız **dört nudge dalı**dır ve söylenecek şey yoksa **stdout BOŞ**tur.
+
+- **DONDURMA TEYİDİ dalı (2026-09-06):** ateşleme ölçütü **METİN DEĞİL DETERMİNİSTİK ALAN** —
+  `tool_input.subagent_type ∈ _INCELEYICI_ROLLER` **VE** `prompt`ta 32-hex md5. ⛔ *"brif bir
+  inceleme/gate brifi gibi mi görünüyor"* diye **ÖLÇME**: bu hook'ta metin-tahmini eden iki
+  kanca (`T3-KİMLİK`+`DEPLOY`) **precision 0** ile kaldırıldı (`removed-controls.md`); tetik
+  kardeş `_agent_type_tuzagi` gibi payload alanıdır. ⛔ **Bastırıcı EKLEME:** *"donduruldu"*
+  kelimesi teyidin kanıtı DEĞİLDİR (`BUG_GATE_READY` md5 taşır ve teyit gibi görünür);
+  ölçüldü — ateşleyen 55 brifin **32'sinde (%58,2)** bu dil zaten yazılıydı ve vakalar yine oldu.
+  Bir bastırıcı, D2'nin *"hedefle TERS korelasyonlu bastırıcı"* hatasını tekrarlardı.
+  **Gürültü tabanı: %6,51 ateşleme / 845 gerçek brif** (ev bandı %13,9'un altında).
+  FP çapası şart: üretici roller (`backend-expert`/`adt-gateway`/`frontend-expert`) SESSİZ ·
+  md5'siz `bug-expert` SESSİZ · **40-hex git SHA'sı md5 sayılmaz** (hex-dışı sınır çapaları,
+  yoksa desen SHA'nın içinden 32 karakter keser) · alan yok/yanlış tip → sessiz + exit 0.
+  Mutasyonlar: `--mutasyon-dondurma` (kablolama) · `--mutasyon-dondurma-rol` (**gevşetme yönü**).
+  Korpus: `prior_art_kb01` D-bloğu.
+- ⭐ **KORPUS ÜRETİMİ (ateşleme/precision ölçmek için — yeniden üretilebilir):** brifler
+  `<CLAUDE_HOME>/projects/<slug>/*.jsonl` içindeki `tool_use` bloklarından çıkarılır:
+  `name in ("Agent","Task")` → `input.{prompt,subagent_type,name}`, `len(prompt) >= 400`,
+  `(subagent_type, prompt)` ile tekilleştir. 2026-09-06 ölçümü: 925 jsonl / 345.253 satır →
+  **845 tekil brif**. ⛔ **KORPUS COMMIT EDİLMEZ** (müşteri/proje içeriği taşır) — yalnız
+  YÖNTEM burada yaşar; yerel scratchpad'e üretilir. Yöntemin kanonik atası:
+  `governance/research/q5-is-turu-olcumu-2026-08-22/olcum.py` docstring'i.
+- ⚠ **MATCHER'I DA ÖLÇ, koda bakmakla yetinme:** canlı matcher `PreToolUse`/**`Agent`**
+  (4 kurulu projenin dördünde de; `settings.template.json` ile aynı). `Task` **kablolu
+  DEĞİLDİR** ⇒ ateşleme oranını `Task` brifleriyle şişirme. 2026-09-06'da korpusta `Task`
+  brifi **0** çıktı, oran etkilenmedi (846 `Agent` brifinde 55 = %6,50).
+- ⛔ **EMİT TUPLE'I SATIRINI DEĞİŞTİREN HER TUR** (`for _f in (...)` — `_ek_notlar`), o satıra
+  çapalanan **tüm** mutasyon kiplerini yeniden koşmak zorundadır. 2026-09-06'da 4. dal
+  eklenince `--mutasyon-agent-type` çapası bayatladı ve kip **rc=2 `[DOGRULANAMADI]`** verdi
+  (doğru davranış: sessizce yeşil geçmedi). Batarya: `python tests/run_battery.py prior_art_kb01`.
 > Aşağıdaki daemon reçetesi **koşulmaz** (kaldırma kaydına çevrildi).
 - **watchdog_launch brifing eksenleri (2026-08-19):** `[PRIOR-ART / KB-01]` ateşleme ölçütü **metin değil arama**: brifingde adı geçen + `scripts/`te var olan script, `playbook/`de ≤2 dosyada geçiyor ve o dosyalar brifingde ANILMIYOR. ⛔ *"atıf var mı"* diye ölçme — gerçek korpusta brifinglerin **%98,6'sı** zaten yol atfı taşır (trivial yeşil). Gürültü tabanı: **%13,9** ateşleme / 570 brifing, medyan 1 ms. FP çapası şart: reçete zaten anılmış · var-olmayan script adı · >2 reçetede geçen genel araç · <400 karakter. Fail-open yasağı iki çapa ister (dizin-yok + bozuk-payload → `KOSMADI`). Notlar **TEK emit yolundan** geçer (2026-08-29: daemon dalı kalkınca dört dal bire indi; ~~*4 emit yolunun hepsinde*~~ hükmü tarihseldir). Korpus: `prior_art_kb01`.
 - ⛔⛔ **D2 KURATLI KANCALAR (`T3-KİMLİK` + `DEPLOY`) — EKLENDİ ve AYNI GÜN GERİ ALINDI
