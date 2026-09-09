@@ -603,6 +603,13 @@ python "<PROJECT_ROOT>\scripts\run_data_preview.py" --cwd "<PROJECT_ROOT>" --ent
 ```
 
 **⚠ Bilinen sorunlar:**
+- ⛔ **`--max-rows` varsayılanı 100 ve kırpma SESSİZDİR** — uyarı yok, çıktı geçerli görünür.
+  Kırpılmış çekim *"kayıt yok"* bulgusundan ayırt edilemez. **Ölçülmüş vaka (2026-09-07):**
+  limitsiz bir muhatap-tablosu çekimi 551 satırın ilk 100'ünü getirdi ⇒ *"119 belgenin 80'inde
+  başlık muhatabı yok"* + *"10 satır mükerrer riski"* diye **yanlış bulgu** üretildi; limit
+  büyütülünce 17/17 belgede muhatap VAR, gerçek risk 3 satır çıktı. ⇒ **`--max-rows`'u DAİMA
+  açıkça ver**; dönen satır sayısı limite **eşitse kırpılmış varsay** (önce `SELECT COUNT(*)` ile
+  beklenen büyüklüğü ölç).
 - Bazı CDS view'lar data preview'da hata verir (authorization / SADL kısıtı) — SQL sorgusu dene
 - JOIN içeren sorgularda alias kullan
 

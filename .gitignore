@@ -8,3 +8,5 @@ node_modules/
 
 # ajan hafizasi: yerel kalir (metodoloji-nitelikli ders CORE'a TERFI eder — CLAUDE.core §5)
 .claude/agent-memory/
+# oturum-ici durum dosyasi (ITG banner gosterildi mi) — calisma zamani artefakti, commit edilmez
+.claude/.itg_shown.json
