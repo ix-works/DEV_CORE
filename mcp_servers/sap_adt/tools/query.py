@@ -307,6 +307,53 @@ def adt_atc_check(name: str, object_type: str = "class",
 # adt_syntax_check  (gap-analysis #10)
 # =============================================================================
 
+def _gecerlilik(res) -> tuple:
+    """`syntax_check` yanıtından ÜÇ-DEĞERLİ sonuç türet: True / False / **None = ÖLÇÜLEMEDİ**.
+
+    ⛔ Eski hâl (2026-09-09'a kadar): `bool(res.get("valid"))`. `bool(None)` **False**'tur ⇒
+    alt katman ölçüm ÜRETEMEDİĞİNDE tool *"sözdizimi HATALI"* diyordu. Bu, bu evin en sık
+    tekrarlayan kusur sınıfı: **"bakamadım" ile "hayır" AYNI DEĞERE çöküyor.** Kardeşleri
+    aynı dosyada zaten üç-değerli: `adt_lock_check` → `locked: None` + `kilit_belirsiz` ·
+    `adt_transport_list` → `zero_verified` · `adt_atc_check` → `finding_count_unverified`;
+    komşu katmanda `atom.adt_activate` → `activation_verified` · `sap_client` → `readback_ok`.
+
+    ÖLÇÜLMÜŞ vakalar (hipotez değil, kaynakta yazılı):
+      · obje KİLİTLİ (HTTP 403) → `{'valid': False, 'check_executed': False, 'locked': True}`
+        — `scripts/sap_adt_lib.py:3490-3506`
+      · alt katman istisna yakaladı → `{'valid': False, 'error': str(e)}`
+        — `scripts/sap_client.py:1594`
+      · yanıt XML'i ayrıştırılamadı → `valid:False` + YEREL üretilmiş tek mesaj
+        — `scripts/sap_adt_lib.py:3596-3598`
+    Üçünde de sözdizimi **HİÇ kontrol edilmedi**; tool yine de "hatalı" diyordu. Zarar:
+    ajan var olmayan bir sözdizimi hatasını "düzeltmeye" oturur, gerçek sebep (kilit /
+    bağlantı / bozuk yanıt) görünmez kalır.
+
+    Ayrım kuralı:
+      · **Olumlu sonuç çöküşten DOĞAMAZ** — her başarısızlık yolu `False` yazar ⇒ `valid:true`
+        doğrudan ölçümdür.
+      · `valid:false` ancak **SAP'nin KENDİ bulgu kaydı** varsa ölçümdür. SAP'nin msg
+        listesinden gelen her kayıt `type` taşır (`sap_adt_lib.py:3568-3580`: `errors`e yalnız
+        `msg_type == 'E'` olanlar eklenir); kilit metni ve parse-hatası metni gibi YEREL
+        üretilmiş kayıtlar taşımaz. Yapısal ayrım — metin eşleştirmesi YOK.
+    """
+    if not isinstance(res, dict):
+        return None, "alt katman sözlük döndürmedi (çağrı KOŞMADI)"
+    if "valid" not in res:
+        return None, "alt katman 'valid' alanı ÜRETMEDİ"
+    if res.get("valid"):
+        return True, None
+    if res.get("locked"):
+        return None, ("obje KİLİTLİ (%s) — sözdizimi HİÇ kontrol edilmedi; SM12/SE11 ile çöz"
+                      % (res.get("lock_user") or "sahibi bildirilmedi"))
+    if res.get("error") and not res.get("errors"):
+        return None, "alt katman istisna yakaladı: %s" % str(res.get("error"))[:160]
+    hatalar = res.get("errors") or []
+    if not any(isinstance(h, dict) and h.get("type") for h in hatalar):
+        return None, ("valid:false ama SAP'nin kendi bulgu kaydı YOK (%d yerel mesaj) — "
+                      "sözdizimi ÖLÇÜLMEDİ" % len(hatalar))
+    return False, None
+
+
 @profil_tool()
 def adt_syntax_check(name: str, object_type: str = "class") -> dict:
     """⚠️ YAN ETKİLİ — SALT-OKUMA DEĞİL: temiz bekleyen sürümü AKTİVE EDER. Yazma sayılır.
@@ -333,7 +380,12 @@ def adt_syntax_check(name: str, object_type: str = "class") -> dict:
 
     Returns:
         {ok, name, type, valid, errors: [...], warnings: [...], client_log}
-        veya guardrail_violation (PRD/QA tier ya da standart obje).
+        veya guardrail_violation (PRD/QA tier ya da standart obje)
+        veya {ok: false, error: "sozdizimi_belirsiz", valid: null, valid_reason, message}
+        — kontrol KOŞMADIYSA (2026-09-09 / Q205; eskiden ölçülemeyen her durum `valid:false`
+        oluyordu = *"kod hatalı"* sanılan sahte-negatif).
+        ⚠ `valid: false` YALNIZ `ok: true` iken "sözdizimi hatalı" demektir. `valid: null`
+        **"bakamadım"**tır — kodu düzeltmeye oturmadan önce `valid_reason`'ı oku.
     """
     from mcp_servers.sap_adt._conn import get_active_tier
     from mcp_servers.sap_adt.guardrails import (
@@ -350,13 +402,34 @@ def adt_syntax_check(name: str, object_type: str = "class") -> dict:
     try:
         with _capture() as buf:
             res = client.syntax_check(name, object_type=object_type)
+        gecerli, sebep = _gecerlilik(res)
+        hatalar = res.get("errors", []) if isinstance(res, dict) else []
+        uyarilar = res.get("warnings", []) if isinstance(res, dict) else []
+        if gecerli is None:
+            # Emsal AYNI DOSYADA: `adt_lock_check` → `ok:false` + `locked:null` +
+            # "'kilitli DEĞİL' ANLAMINA GELMEZ"; `adt_atc_check` → `ok:false` +
+            # `finding_count_unverified`. Belirsiz sonuç `ok:true` ile SUNULMAZ.
+            return {
+                "ok": False,
+                "error": "sozdizimi_belirsiz",
+                "name": name,
+                "type": object_type,
+                "valid": None,
+                "valid_reason": sebep,
+                "message": ("Sözdizimi ÖLÇÜLEMEDİ (%s). Bu sonuç 'sözdizimi HATALI' "
+                            "ANLAMINA GELMEZ — kodu düzeltmeye oturma; önce sebebi gider, "
+                            "sonra yeniden ölç." % sebep),
+                "errors": hatalar,
+                "warnings": uyarilar,
+                "client_log": buf.getvalue().strip(),
+            }
         return {
             "ok": True,
             "name": name,
             "type": object_type,
-            "valid": bool(res.get("valid")) if isinstance(res, dict) else None,
-            "errors": res.get("errors", []) if isinstance(res, dict) else [],
-            "warnings": res.get("warnings", []) if isinstance(res, dict) else [],
+            "valid": gecerli,
+            "errors": hatalar,
+            "warnings": uyarilar,
             "client_log": buf.getvalue().strip(),
         }
     except Exception as exc:
@@ -740,6 +813,40 @@ _IOC_NS = {"ioc": "http://www.sap.com/abapxml/inactiveCtsObjects",
            "adtcore": "http://www.sap.com/adt/core"}
 
 
+def _tadir_isaretle(out: list, sorulan: set, silinmis: set) -> None:
+    """Her worklist girdisine ÜÇ-DEĞERLİ `tadir_deleted` yaz. `None` = **SORULMADI**.
+
+    ⛔ Eski hâl (2026-09-09'a kadar): TADIR sorgusu koştuğunda `out`'un TAMAMINA
+    `(ad, tip) in silinmis` yazılıyordu — sorguya HİÇ girmemiş adlara da. Ad süzgeci
+    (`isalnum` / `_` / `/`) elediği için `adlar`e alınmayan bir girdi böylece
+    **"ölçüldü: silinmemiş"** damgası alıyordu; oysa hakkında tek bir satır bile
+    sorulmamıştı. Bu, kaydın (Q224) bildirdiği kusurun SESSİZ kardeşidir: orada en
+    azından `warning` basılıyordu, burada hiç basılmıyordu.
+    """
+    for o in out:
+        ad = o.get("name", "")
+        if ad not in sorulan:
+            o["tadir_deleted"] = None
+            continue
+        tadir_obj = (str(o.get("type", "")).split("/")[0] or "").strip()
+        o["tadir_deleted"] = (ad, tadir_obj) in silinmis
+
+
+def _tadir_kovalari(out: list) -> tuple:
+    """ÜÇ kova: ölçülmüş-canlı · ölçülmüş-silinmiş · **ÖLÇÜLEMEDİ**.
+
+    ⛔ Eski hâl: `canli = [o for o in out if o.get("tadir_deleted") is not True]`.
+    `is not True` üç değeri İKİYE indirir ⇒ `None` (**ölçülemedi**) `False`
+    (**ölçüldü: silinmemiş**) ile aynı kovaya düşer ⇒ `count` sahte-pozitif ŞİŞER.
+    Kayıt Q224'ün kökü tam olarak budur; `warning` basılıyordu ama **sayı
+    düzeltilmiyordu** (fail-open: uyarıyı okumayan çağıran yanlış sayıyı alır).
+    """
+    canli = [o for o in out if o.get("tadir_deleted") is False]
+    bayat = [o for o in out if o.get("tadir_deleted") is True]
+    olculemedi = [o for o in out if o.get("tadir_deleted") is None]
+    return canli, bayat, olculemedi
+
+
 @profil_tool()
 def adt_inactive_objects() -> dict:
     """Aktive-bekleyen (inactive) obje worklist'ini oku — READ-ONLY.
@@ -760,10 +867,24 @@ def adt_inactive_objects() -> dict:
     taşınması için gereklidir.
 
     Returns:
-        {ok, count, inactive_objects, stale_deleted_count, stale_deleted, client_log}
+        ÖLÇÜLDÜ (her girdi çapraz kontrol edildi):
+        {ok: true, count, count_verified: true, inactive_objects, stale_deleted_count,
+         stale_deleted, client_log}
         count=0 → AKSİYON GEREKTİREN aktive-bekleyen obje yok (silinmişler + transport/
         method-seviyesi girdiler elenir). Girdi: {name, type, uri, user, deleted, transport,
-        tadir_deleted}. `tadir_deleted=None` → kontrol koşamadı, `warning`'e bak.
+        tadir_deleted}.
+
+        ÖLÇÜLEMEDİ (2026-09-09 / Q224 — en az bir girdide `tadir_deleted: null`):
+        {ok: false, error: "tadir_kontrolu_belirsiz", count_verified: false,
+         confirmed_live_count, unverified_count, confirmed_live, unverified,
+         stale_deleted*, tadir_check, warning, message, client_log}
+        ⛔ Bu dalda **`count` ve `inactive_objects` anahtarları HİÇ BASILMAZ.** Eskiden
+        `warning` basılıyor ama sayı DÜZELTİLMİYORDU: `tadir_deleted is not True` süzgeci
+        `null`ı (=ölçülemedi) `false` (=ölçüldü, silinmemiş) ile aynı kovaya atıyordu ⇒
+        `count` sahte-pozitif şişiyordu ve uyarıyı okumayan çağıran yanlış sayıyı "kanıt"
+        sanıyordu (fail-open). Doğru okuma: `confirmed_live_count` ≤ gerçek ≤
+        `confirmed_live_count + unverified_count`. Emsal: `adt_atc_check`
+        (`finding_count_unverified`) · `adt_lock_check` (`locked: null`).
     """
     import xml.etree.ElementTree as ET
     client = _get_client()
@@ -813,10 +934,12 @@ def adt_inactive_objects() -> dict:
         # okundu ve neredeyse TADIR silme-kaydı temizlenecekti (o kayıtlar silmenin
         # transport'la taşınması için ZORUNLUDUR — silinseydi gerçek hasar olurdu).
         tadir_hata = None
+        sorulan: set = set()
         if out:
             adlar = sorted({o["name"] for o in out
                             if o["name"] and all(c.isalnum() or c in "_/" for c in o["name"])})
             if adlar:
+                sorulan = set(adlar)
                 liste = ", ".join("'%s'" % a for a in adlar)
                 try:
                     res = adt_sql_query(
@@ -830,34 +953,60 @@ def adt_inactive_objects() -> dict:
                             for r in (res.get("rows") or [])
                             if str(r.get("DELFLAG", "")).strip().upper() == "X"
                         }
-                        for o in out:
-                            # ADT tipi 'CLAS/OC' → TADIR OBJECT 'CLAS'
-                            tadir_obj = (o["type"].split("/")[0] or "").strip()
-                            o["tadir_deleted"] = (o["name"], tadir_obj) in silinmis
+                        # ADT tipi 'CLAS/OC' → TADIR OBJECT 'CLAS'; sorulmayan ad → None
+                        _tadir_isaretle(out, sorulan, silinmis)
                     else:
                         tadir_hata = res.get("message") or res.get("error") or "bilinmeyen"
                 except Exception as exc:            # noqa: BLE001 — teşhis bozulmasın
                     tadir_hata = str(exc)[:200]
+            else:
+                tadir_hata = ("worklist'teki adların hiçbiri TADIR sorgusuna uygun değil "
+                              "(ad süzgeci); çapraz kontrol HİÇ KOŞMADI")
         if tadir_hata:
             # Ölçülemediyse SUSMA — "silinmiş değil" varsayımı tam da bu tuzağın kendisi.
             for o in out:
                 o["tadir_deleted"] = None
 
-        bayat = [o for o in out if o.get("tadir_deleted") is True]
-        canli = [o for o in out if o.get("tadir_deleted") is not True]
-        sonuc = {
+        canli, bayat, olculemedi = _tadir_kovalari(out)
+        if olculemedi:
+            # ⛔ SAYI DÜZELTİLMEDEN uyarı basmak FAIL-OPEN'dır (kayıt Q224): uyarıyı
+            # okumayan çağıran şişmiş `count`u "kaç obje aktive bekliyor" sanır.
+            # Emsal AYNI DOSYADA: `adt_atc_check` ayrıştırma tahminîyse `finding_count`
+            # ADINI KULLANMAZ, `finding_count_unverified` der ve `ok:false` döner;
+            # `adt_lock_check` belirsizlikte `ok:false` + `locked:null` döner.
+            # ⇒ Burada da `count` / `inactive_objects` ANAHTARLARI HİÇ BASILMAZ:
+            #    olmayan bir ölçüm, yanlış bir sayıyla temsil edilmez.
+            return {
+                "ok": False,
+                "error": "tadir_kontrolu_belirsiz",
+                "message": (
+                    "TADIR DELFLAG çapraz kontrolü %d girdi için KOŞMADI ⇒ 'aktive bekliyor' "
+                    "ile 'zaten silinmiş' AYIRT EDİLEMEDİ. Bu yüzden `count` alanı BİLEREK "
+                    "döndürülmüyor: doğrulanmış canlı sayısı EN AZ %d, ölçülemeyenler de "
+                    "canlıysa EN ÇOK %d. 'Aktive bekleyen obje yok' SONUCUNA VARMA; "
+                    "SE80/adt_get ile elle doğrula (silinmiş objenin TADIR kaydı SİLİNMEZ)."
+                    % (len(olculemedi), len(canli), len(canli) + len(olculemedi))),
+                "count_verified": False,
+                "confirmed_live_count": len(canli),
+                "unverified_count": len(olculemedi),
+                "confirmed_live": canli,
+                "unverified": olculemedi,     # `tadir_deleted: null` → ölçülemedi
+                "stale_deleted_count": len(bayat),
+                "stale_deleted": bayat,
+                "tadir_check": "FAILED: %s" % (tadir_hata or "girdi sorguya alınmadı"),
+                "warning": ("TADIR DELFLAG kontrolü KOŞMADI → listede silinmiş obje "
+                            "olabilir; 'tadir_deleted' alanları null. Elle doğrula."),
+                "client_log": buf.getvalue().strip(),
+            }
+        return {
             "ok": True,
             "count": len(canli),              # AKSİYON GEREKTİREN (silinmişler hariç)
+            "count_verified": True,           # her girdi TADIR ile çapraz kontrol edildi
             "inactive_objects": canli,
             "stale_deleted_count": len(bayat),
             "stale_deleted": bayat,           # TADIR DELFLAG='X' → obje zaten silinmiş
             "client_log": buf.getvalue().strip(),
         }
-        if tadir_hata:
-            sonuc["tadir_check"] = "FAILED: %s" % tadir_hata
-            sonuc["warning"] = ("TADIR DELFLAG kontrolü KOŞMADI → listede silinmiş obje "
-                                "olabilir; 'tadir_deleted' alanları null. Elle doğrula.")
-        return sonuc
     except Exception as exc:
         return _err_from_exc(exc)
 
