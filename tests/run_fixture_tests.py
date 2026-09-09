@@ -125,6 +125,11 @@ OZEL_TESTLER = [
     # okuyan onu duzelmis saniyor). Satir bugun SILINDI. Artik bir korpus vektoru bunu
     # bekliyor: tests/fixtures/sessiz_olumsuzlama_2026_08_10 E1 -> mukerrer kayit = FAIL.
     ("dogrulama_kosamadi", "DOGRULAMA KOSAMADI != DOGRULANDI (5 kayit, tek kok)"),
+    ("aktivasyon_baseline_tazeligi",
+     "Q271: readback baseline'i UPLOAD aninda yazilir (`ok` degil — aktivasyonu patlayan "
+     "push SAP'deki kaynagi DEGISTIRIR) + baseline KAYNAK/ZAMAN/KAPSAM tasir; belirsiz ya "
+     "da baska-binding baseline KIRMIZI iddia ETMEZ (ucuncu deger + `content_probe`). "
+     "KONTROL GRUBU omurga: gercek uyusmazlik HALA blocker (V4a/V4b/V5f)"),
     # 2026-08-28 fail-open/sahte-yesil turu (bug-avi B3-01 · B2-13 · E-05):
     ("sap_gate_skip_sozlesmesi",
      "B3-01: SAP-bagimli BLOCKER ailesi baglanti YOKken PASS DEGIL SKIP uretir "
@@ -841,10 +846,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:adtget_yokluk_kaniti", "O:ddic_okuma_yolu", "O:dogrulama_kosamadi",
       "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline", "O:mcp_sahte_sonuc_uclusu",
       "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu",
-      "O:doctor_baglanti_kaniti"),
+      "O:doctor_baglanti_kaniti", "O:aktivasyon_baseline_tazeligi"),
      "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline) + "
      "`adt_classrun`/`adt_post_shell` guard SINIF çapası (AST) + `adt_get` dönüş ŞEKLİ "
-     "grep kapsam-muhasebesinin GİRDİSİdir (ok/exists/source → skipped sebebi)"),
+     "grep kapsam-muhasebesinin GİRDİSİdir (ok/exists/source → skipped sebebi) + "
+     "readback-gate BASELINE'ının tazeliği (Q271: `_LAST_PUSHED` yazım tetikleyicisi = "
+     "UPLOAD; künye/binding/üçüncü değer sözleşmesi)"),
     ("mcp_servers/sap_adt/tools/query.py",
      ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur",
       "O:atc_p1_sonuc", "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu"),

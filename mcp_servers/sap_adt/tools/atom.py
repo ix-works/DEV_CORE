@@ -17,6 +17,7 @@ import contextlib
 import io
 import re
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -57,7 +58,26 @@ _sap_client_mtime_seen = None  # son stat'lanan mtime; fast-path (mtime değişm
 # NAME-COLLISION FIX (2026-06-21, gw-deliv kanıtı): ZSD001_I_SHIP_POOL hem DDLS (CDS) hem
 # BDEF olabilir. Yalnız İSİMLE key'lersek BDEF push'u CDS kaydını EZER → BDEF aktive edilince
 # readback CDS-source ile kıyaslayıp SAHTE-mismatch verir. Çözüm: (name.upper(), type_key) ile key.
-_LAST_PUSHED: dict[tuple[str, str], tuple[str, str]] = {}   # (name.upper(), type_key) -> (object_type, source)
+#
+# ⛔ Q271 (2026-09-09) — BAYAT BASELINE → **SAHTE `content_mismatch`** (sahte-negatif sınıfı).
+# ÖLÇÜLEN KÖK: kayıt YALNIZ push TAM başarılıysa yazılıyordu (eski `:1074` → `if ok:`), oysa
+# `push_object` başarısı `source_uploaded AND activated AND readback is not False`tir
+# (`scripts/sap_client.py:1030`). AKTİF kaynağı belirleyen şey **UPLOAD**tur, aktivasyon değil:
+# upload'ı geçip aktivasyonu patlayan bir push (T11 base↔consumption rename kilidi — canlı vaka
+# `playbook/adt-cds.md:622` "T11-a content_mismatch false-alarm") kaydı GÜNCELLEMEZ. Sonraki
+# `adt_activate` (ör. `also=` ile atomik co-activation) canlı YENİ kaynağı bir ÖNCEKİ push'un
+# ESKİ kaynağıyla kıyaslar → "yazım oturmadı, re-push gerekli" diye SAHTE BLOCKER.
+# Kaydın taşımadığı üç şey vardı: **kaynak** (hangi upload), **zaman** (ne kadar eski),
+# **kapsam** (hangi SAP sistemi). Üçü de artık kayıtta ve kıyas anında değerlendirilir.
+#   • baseline UPLOAD anında yazılır (aktivasyon başarısı ölçüt DEĞİL)
+#   • push İSTİSNA ile biterse: yüklenen kaynak BİLİNMİYOR ⇒ kayıt "belirsiz" işaretlenir —
+#     eşitlik hâlâ YEŞİL kanıttır, ama fark artık KIRMIZI İDDİA ETMEZ (⚠ bilinçli gevşetme)
+#   • kayıt başka bir binding'e (host|client) aitse kıyas YAPILMAZ ("doğrulandı" da DEMEZ)
+#   • `content_reason` artık künye (push sırası · yaş · aktive · sistem) + diff YÖNÜ taşır
+_LAST_PUSHED: dict[tuple[str, str], dict] = {}
+# kayıt şeması (değer): {"object_type", "source", "ts", "sira", "binding",
+#                        "aktive": bool, "belirsiz": str|None, "dogrulandi_ts": float|None}
+_PUSH_SIRA = 0   # süreç-içi monoton push sayacı (künye: "kaçıncı upload")
 _TYPE_KEY_CANON = {
     "cds": "ddls", "cdsview": "ddls", "ddl": "ddls", "ddls": "ddls",
     "behaviordefinition": "bdef", "bdef": "bdef",
@@ -80,15 +100,94 @@ _SOURCE_BASED_TYPES = {
 }
 
 
+def _binding_imzasi(client) -> str:
+    """Client'in BAĞLI olduğu sistemin imzası: 'host|client-no'. Çözülemezse ''.
+
+    Q271 KAPSAM boyutu: baseline hangi sisteme yazıldıysa kıyas ancak orada anlamlıdır
+    (switch_tier + /mcp restart edilmemiş süreç → `_guard_binding_current` asıl katman;
+    bu, kaydın KENDİ üzerinde taşıdığı ikinci kayıttır)."""
+    try:
+        from urllib.parse import urlparse
+        adt = getattr(client, "adt_client", None) or client
+        url = str(getattr(adt, "url", "") or "")
+        host = (urlparse(url if "://" in url else "https://" + url).hostname or "").lower()
+        return "%s|%s" % (host, getattr(adt, "client", "") or "")
+    except Exception:  # noqa: BLE001 — künye üretimi ADT işlemini asla kırmaz
+        return ""
+
+
+def _baseline_yaz(client, name: str, object_type: str, source: str, *, aktive: bool) -> None:
+    """Q271: readback baseline'ını YAZ — tetikleyici UPLOAD'dır, aktivasyon başarısı DEĞİL.
+
+    Aktif sürümü belirleyen şey yüklenen kaynaktır; aktivasyon ayrı bir adımdır ve
+    patlayabilir (T11 kilidi). Aktivasyon patladıysa kayıt yine yazılır ama `aktive=False`
+    damgasıyla — böylece bir sonraki `adt_activate` GERÇEKTEN doğru baseline'la kıyaslar."""
+    global _PUSH_SIRA
+    _PUSH_SIRA += 1
+    _LAST_PUSHED[(name.upper(), _type_key(object_type))] = {
+        "object_type": object_type,
+        "source": source,
+        "ts": time.time(),
+        "sira": _PUSH_SIRA,
+        "binding": _binding_imzasi(client),
+        "aktive": bool(aktive),
+        "belirsiz": None,
+        "dogrulandi_ts": None,
+    }
+
+
+def _baseline_belirsiz(name: str, object_type: str, sebep: str) -> None:
+    """Q271: push İSTİSNA ile bitti → SAP'ye ne yüklendiği BİLİNMİYOR.
+
+    Kayıt SİLİNMEZ (eşitlik hâlâ olumlu kanıttır) ama KIRMIZI iddia hakkı düşer:
+    belirsiz baseline'la 'yazım oturmadı' demek, doğru işi yanlış sanmaktır."""
+    rec = _LAST_PUSHED.get((name.upper(), _type_key(object_type)))
+    if isinstance(rec, dict):
+        rec["belirsiz"] = sebep
+
+
+def _baseline_kunye(rec: dict) -> dict:
+    """Kaydın KAYNAK/ZAMAN/KAPSAM künyesi — her content_* yanıtında görünür."""
+    ts = rec.get("ts") or 0.0
+    import datetime as _dt
+    return {
+        "push_sira": rec.get("sira"),
+        "push_zaman": _dt.datetime.fromtimestamp(ts).isoformat(timespec="seconds") if ts else None,
+        "yas_sn": round(max(0.0, time.time() - ts), 1) if ts else None,
+        "push_aktive_etti": rec.get("aktive"),
+        "binding": rec.get("binding") or None,
+        "belirsiz": rec.get("belirsiz"),
+        "onceden_dogrulandi": bool(rec.get("dogrulandi_ts")),
+    }
+
+
+def _kunye_metni(k: dict) -> str:
+    return ("BASELINE: push#%s · %s (%s sn önce) · o push aktive etti mi=%s · sistem=%s%s"
+            % (k.get("push_sira"), k.get("push_zaman"), k.get("yas_sn"),
+               k.get("push_aktive_etti"), k.get("binding"),
+               (" · BELİRSİZ=%s" % k["belirsiz"]) if k.get("belirsiz") else ""))
+
+
 def _content_readback(client, name: str, object_type: str) -> dict:
-    """Activate sonrası: AKTİF source'u çek + bu seansta push edilenle normalize-compare.
+    """Activate sonrası: AKTİF source'u çek + bu seansta YÜKLENEN kaynakla normalize-compare.
 
-    Yalnız source-based tip + bu seansta push kaydı varsa çalışır (salt re-activate'te
-    push kaydı yok → atla). Fark = yazım tam oturmadı → blocker sinyali.
+    Yalnız source-based tip + bu süreçte upload kaydı varsa çalışır (salt re-activate'te
+    kayıt yok → atla). Fark = yazım tam oturmadı → blocker sinyali.
 
-    Returns: {} (uygulanmaz) | {content_verified: True}
-           | {content_verified: False, content_mismatch: True, content_reason, content_diff}
-           | {content_verified: None, content_reason} (readback yapılamadı — soft)
+    ⛔ Q271: KIRMIZI iddia (content_mismatch) yalnız baseline'ın KAYNAĞI, ZAMANI ve KAPSAMI
+    kıyasa uygunsa kurulur. Uygun değilse üçüncü değer (`content_verified: None`) döner —
+    bu 'doğrulandı' DEĞİLDİR, 'ölçemedim'dir; ama sahte blocker da üretmez.
+
+    ⭐ `content_probe` = MAKINE-OKUNUR ayirt edici. Uc `None` yolu ("olcemedim") aksi halde
+    TEK bir degere coker ve kazanilan ayrim kaybolur (lider notu, 2026-09-09):
+      esitlik · fark · baseline_belirsiz · baseline_baska_binding · url_cozulemedi ·
+      okuma_hatasi   (sozlesme: `content_verified` NE ise `content_probe` NEDEN'i verir)
+
+    Returns: {} (uygulanmaz) | {content_verified: True, content_probe: 'esitlik', content_baseline}
+           | {content_verified: False, content_mismatch: True, content_probe: 'fark',
+              content_reason, content_diff, content_baseline}
+           | {content_verified: None, content_probe: <sebep-kodu>, content_reason,
+              content_baseline[, content_diff, content_stale_baseline: True]}
     """
     t = (object_type or "").lower().strip()
     if t not in _SOURCE_BASED_TYPES:
@@ -96,32 +195,84 @@ def _content_readback(client, name: str, object_type: str) -> dict:
     rec = _LAST_PUSHED.get((name.upper(), _type_key(object_type)))
     if not rec:
         return {}
-    _, pushed = rec
+    pushed = rec.get("source") or ""
+    kunye = _baseline_kunye(rec)
+
+    # KAPSAM: kayıt başka bir sisteme yazıldıysa kıyas ANLAMSIZ (tier ayrışması).
+    simdiki = _binding_imzasi(client)
+    if rec.get("binding") and simdiki and rec["binding"] != simdiki:
+        return {
+            "content_verified": None,
+            "content_probe": "baseline_baska_binding",
+            "content_baseline": kunye,
+            "content_reason": (
+                "BASELINE BAŞKA SİSTEME AİT (%s ≠ %s) — içerik kıyası YAPILMADI. "
+                "Bu 'doğrulandı' DEĞİLDİR; aynı sisteme push edip yeniden aktive et ya da "
+                "`adt_get(version=active)` ile elle teyit et. %s"
+                % (rec["binding"], simdiki, _kunye_metni(kunye))),
+        }
     try:
         import sap_adt_lib as L  # type: ignore
         from source_drift import normalize_source  # type: ignore
         adt = getattr(client, "adt_client", None) or client
         url = L._resolve_source_url(name, t)
         if not url:
-            return {"content_verified": None,
+            return {"content_verified": None, "content_probe": "url_cozulemedi",
+                    "content_baseline": kunye,
                     "content_reason": f"source URL çözülemedi (type={t}) — content readback atlandı"}
         with _capture_stdout():   # SAPClient stdout chatter MCP stdio'yu kirletmesin
             live = adt.get_object_source(url, version="active")
     except Exception as exc:  # noqa: BLE001
-        return {"content_verified": None, "content_reason": f"content readback exception: {exc}"}
+        return {"content_verified": None, "content_probe": "okuma_hatasi",
+                "content_baseline": kunye,
+                "content_reason": f"content readback exception: {exc}"}
 
-    if normalize_source(live) == normalize_source(pushed):
-        return {"content_verified": True}
+    n_pushed, n_live = normalize_source(pushed), normalize_source(live)
+    if n_pushed == n_live:
+        rec["dogrulandi_ts"] = time.time()
+        return {"content_verified": True, "content_probe": "esitlik",
+                "content_baseline": kunye}
+
     import difflib
+    p_satir, l_satir = n_pushed.splitlines(), n_live.splitlines()
     diff = "\n".join(difflib.unified_diff(
-        normalize_source(pushed).splitlines(), normalize_source(live).splitlines(),
-        fromfile="pushed", tofile="active", lineterm="", n=1))[:1500]
+        p_satir, l_satir, fromfile="pushed", tofile="active", lineterm="", n=1))[:1500]
+    # YÖN (Q271): hangi tarafta fazlalık var? Yalnız-aktifte satır varsa aktif sürüm
+    # baseline'ın BİLMEDİĞİ içerik taşıyor ⇒ ilk hipotez "push oturmadı" DEĞİL,
+    # "baseline bayat" olmalıdır. Sayı vermeden "uyuşmuyor" demek teşhisi geciktirir.
+    yalniz_push = len([s for s in p_satir if s not in set(l_satir)])
+    yalniz_aktif = len([s for s in l_satir if s not in set(p_satir)])
+    yon = ("YÖN: yalnız-push'ta %d satır · yalnız-aktifte %d satır (aktifte fazlalık varsa "
+           "baseline bayat olabilir — aktif sürüm başka bir yazımdan gelmiş)"
+           % (yalniz_push, yalniz_aktif))
+
+    if rec.get("belirsiz"):
+        # ⚠ GEVŞETME (bilinçli, Q271): baseline'ın KAYNAĞI belirsizken (push istisna ile
+        # bitti → SAP'ye ne yüklendiği bilinmiyor) FARK bir blocker'a çevrilmez. Sebep:
+        # bu durumda "re-push gerekli" iddiası DOĞRU İŞİ yanlış gösterebilir. Bilgi
+        # kaybolmaz: diff + künye + uyarı yanıtta durur, yalnız `ok` düşmez.
+        return {
+            "content_verified": None,
+            "content_probe": "baseline_belirsiz",
+            "content_stale_baseline": True,
+            "content_baseline": kunye,
+            "content_diff": diff,
+            "content_reason": (
+                "AKTİF source baseline'la aynı DEĞİL — ama baseline GÜVENİLMEZ (%s) ⇒ "
+                "'yazım oturmadı' İDDİA EDİLMEDİ (sahte blocker riski). Bu 'doğrulandı' da "
+                "DEĞİLDİR: `adt_get(version=active)` ile kaynağı gözle teyit et. %s · %s"
+                % (rec["belirsiz"], yon, _kunye_metni(kunye))),
+        }
+
     return {
         "content_verified": False,
         "content_mismatch": True,
-        "content_reason": ("AKTİF source push edilenle EŞLEŞMİYOR — yazım SAP'de tam oturmadı "
+        "content_probe": "fark",
+        "content_baseline": kunye,
+        "content_reason": ("AKTİF source YÜKLENEN kaynakla EŞLEŞMİYOR — yazım SAP'de tam oturmadı "
                            "(activate eksik/kısmi ya da aktif sürüm geride; 'where'-kaybı sınıfı). "
-                           "Re-push + re-activate gerekli; pull etmeden ÖNCE düzelt."),
+                           "Re-push + re-activate gerekli; pull etmeden ÖNCE düzelt. %s · %s"
+                           % (yon, _kunye_metni(kunye))),
         "content_diff": diff,
     }
 
@@ -998,6 +1149,7 @@ def adt_push_source(
     client = _get_client()
     tmp_file = None
     reviewer_warn = None
+    push_denendi = False   # Q271: `client.push_object` çağrısına GİRİLDİ mi (belirsizlik sınırı)
     try:
         # Write source to temp file first — needed by both reviewer and SAPClient.push_object.
         with tempfile.NamedTemporaryFile(
@@ -1027,6 +1179,7 @@ def adt_push_source(
         # ADR 0016 REVİZE: pre-push DRIFT GUARD (M1) KALDIRILDI — kasıtlı edit'leri de
         # blokluyordu (repo≠canlı her meşru edit'te doğal). Tazelik artık edit-ÖNCESİ
         # pull-before-edit hook ile sağlanır → push'ta ayrı drift-kontrolü gerekmez.
+        push_denendi = True   # bundan sonra düşen bir istisna "ne yüklendi?" sorusunu AÇIK bırakır
         with _capture_stdout() as out:
             result = client.push_object(
                 object_name=name,
@@ -1069,10 +1222,27 @@ def adt_push_source(
             resp["syntax_precheck"] = "failed"
             resp["syntax_errors"] = result.get("syntax_errors", [])
 
-        # Readback-gate: push edilen source'u kaydet → adt_activate sonrası AKTİF source ile
-        # normalize-compare için (yazımın tam oturduğunu doğrula). Upload başarılıysa.
-        if ok:
-            _LAST_PUSHED[(name.upper(), _type_key(object_type))] = (object_type, source)
+        # Readback-gate baseline'ı → adt_activate sonrası AKTİF source ile normalize-compare.
+        # ⛔ Q271 (2026-09-09): tetikleyici **UPLOAD**, `ok` DEĞİL. Eskiden `if ok:` yazıyordu;
+        # `ok` = upload AND activate AND readback (sap_client.py:1030) ⇒ aktivasyonu patlayan
+        # bir push (T11 base↔consumption kilidi) SAP'deki inaktif sürümü DEĞİŞTİRDİĞİ hâlde
+        # baseline'ı ESKİ kaynakta bırakıyordu → sonraki co-activation'da SAHTE mismatch.
+        # `source_uploaded` False ise kayda DOKUNULMAZ: o zaman en son yüklenen kaynak hâlâ
+        # eski kayıttır (silmek gerçek bir uyuşmazlığı görünmez yapardı).
+        # ⭐ ÖLÇÜLDÜ (2026-09-09): `push_object` HER `Exception`ı yutar ve `result`ı DÖNER
+        # (`sap_client.py` dış `except Exception as e: ... return result`). `source_uploaded`
+        # upload'ın hemen ardından set edilir ⇒ istisna aktivasyonda düşse bile DOĞRUDUR.
+        # Bu yüzden dict dönen yolda BELİRSİZLİK YOKTUR; üçüncü değere gerek yok.
+        if isinstance(result, dict):
+            if result.get("source_uploaded"):
+                _baseline_yaz(client, name, object_type, source,
+                              aktive=bool(result.get("activated")))
+        elif ok:
+            _baseline_yaz(client, name, object_type, source, aktive=True)
+        else:
+            # Beklenmedik dönüş şekli (dict değil + ok değil) → upload olup olmadığı BİLİNMİYOR.
+            _baseline_belirsiz(name, object_type,
+                               f"push beklenmedik dönüş şekli ({type(result).__name__})")
 
         # Sprint 6 T10 — post-push consistency check.
         # Struct/table push'larda placeholder kalma veya version=inactive durumlarını
@@ -1104,6 +1274,15 @@ def adt_push_source(
                     resp["ok"] = False
         return resp
     except Exception as exc:
+        # Q271 — BELİRSİZLİK SINIRI DAR TUTULDU (ölçüm sonrası daraltıldı, 2026-09-09):
+        # istisna `client.push_object`ten KAÇTIYSA SAP'ye ne yüklendiği bilinmiyor → baseline
+        # SİLİNMEZ (eşitlik hâlâ yeşil kanıttır) ama BELİRSİZ damgalanır (farktan blocker
+        # üretilmez). Çağrıya HİÇ girilmediyse (reviewer / tempfile / `_get_client` hatası)
+        # upload da olmamıştır ⇒ eski baseline HÂLÂ GEÇERLİDİR ve dokunulmaz — aksi hâlde
+        # gerçek bir uyuşmazlığı görünmez yapan GEREKSİZ bir gevşetme olurdu.
+        if push_denendi:
+            _baseline_belirsiz(name, object_type,
+                               f"push çağrısı istisna ile kaçtı ({type(exc).__name__})")
         return _err_from_exc(exc)
     finally:
         if tmp_file and tmp_file.exists():
