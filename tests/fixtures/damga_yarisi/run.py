@@ -43,6 +43,7 @@ Kosum: python tests/fixtures/damga_yarisi/run.py     (exit 0 = PASS)
 """
 from __future__ import annotations
 
+import atexit
 import importlib.util
 import json
 import os
@@ -65,6 +66,44 @@ if not (REPO / "scripts").is_dir():
 SCRIPTS = REPO / "scripts"
 HEDEF = SCRIPTS / "sap_sync_pull.py"
 SID = "seans-E02"
+
+# ── Q266 (2026-09-09): MUTANT URETIM AGACINDA YASAR — ama ARTIK BIRAKMAZ ─────
+# ⚖ KONUM DEGISMEDI ve DEGISTIRILEMEZ: B24'un olculmus karari. Mutant `scripts/`
+#   ICINDE olmali, cunku modul komsu yollarini (`utils/`) KENDI konumundan cozer;
+#   tempdir'e kopyalanirsa import PATLAR ve HER mutasyon "yakalandi" gorunur
+#   (SAHTE-KIRMIZI). Kum yalniz VERI icindir. => Kaydin onerdigi "tempdir'e tasi"
+#   yonu REDDEDILDI; gercek kusur konum degil ARTIK BIRAKMA idi.
+# ⛔ Kalan kusur (bu fix onu kapatir): ① kosum SERT olduruluyorsa (suit timeout ->
+#   SIGTERM) `finally` HIC kosmaz ve uretim agacinda artik dosya kalir; sonraki
+#   kapilar onu GERCEK KOD sanar ② iki es zamanli kosum AYNI adi ezerdi.
+# FIX: ad surece OZEL (pid) + kosum BASINDA bayat artik SUPURULUR (gorunur uyari)
+#   + tum dongu try/finally + `atexit` ile sarili.
+MUTANT_ONEK = "_mutant_sap_sync_pull"
+MUTANT = SCRIPTS / ("%s_%d.py" % (MUTANT_ONEK, os.getpid()))
+
+
+def _mutant_supur(baslangic: bool = False) -> list[str]:
+    """Uretim agacindaki `_mutant_sap_sync_pull*` artiklarini siler -> silinen adlar.
+
+    ⚠ Baslangicta bulunan artik BASKA bir kosumun sert olumunun kanitidir:
+    sessizce silinmez, GORUNUR uyari basar (Q247'nin dersi: sessiz temizlik = sessiz kusur).
+    """
+    silinen = []
+    for p in sorted(SCRIPTS.glob(MUTANT_ONEK + "*.py")):
+        if baslangic and p.name == MUTANT.name:
+            continue
+        try:
+            p.unlink()
+            silinen.append(p.name)
+        except Exception as e:                                # noqa: BLE001
+            print("  [!] ARTIK SILINEMEDI: %s -> %s: %s" % (p, type(e).__name__, e))
+    if baslangic and silinen:
+        print("  [!] BAYAT MUTANT ARTIGI SUPURULDU (onceki kosum SERT oldu): %s"
+              % ", ".join(silinen))
+    return silinen
+
+
+atexit.register(lambda: MUTANT.unlink(missing_ok=True))
 
 SONUC: list[tuple[str, bool, str]] = []
 
@@ -524,6 +563,7 @@ def main() -> int:
     if not HEDEF.is_file():
         print(f"FAIL — hedef yok: {HEDEF}")
         return 1
+    _mutant_supur(baslangic=True)          # ⭐ Q266: bayat artik SUPUR (gorunur)
     ham = HEDEF.read_text(encoding="utf-8")
 
     sonuc = korpus(HEDEF, "hedef_taban")
@@ -537,9 +577,44 @@ def main() -> int:
     print("\n--- MUTASYONLAR (her biri korpusu KIRMIZI yapmali) ---")
     # ⚠ Mutant GERCEK `scripts/` dizininde yasar: modul komsu yollari (utils/) kendi
     # konumundan cozer; tempdir'e kopyalanirsa import patlar ve her mutasyon
-    # "yakalandi" gorunur (SAHTE-KIRMIZI). Kum yalniz VERI icindir.
-    mutant = SCRIPTS / "_mutant_sap_sync_pull.py"
+    # "yakalandi" gorunur (SAHTE-KIRMIZI). Kum yalniz VERI icindir.  (B24 karari)
+    # ⭐ Q266: ad surece OZEL, dongu try/finally ile sarili, `atexit` yedegi var.
+    mutant = MUTANT
     mut_kirik, yama_kirik, kurulamadi = [], [], []
+    try:
+        _mutasyon_dongusu(ham, mutant, mut_kirik, yama_kirik, kurulamadi)
+    finally:
+        # ⛔ Dongu ICI `finally` yetmez: dongu DISINDA firlayan her sey (yama lambda'si,
+        #    print, BaseException) artigi uretim agacinda birakirdi.
+        mutant.unlink(missing_ok=True)
+
+    # --- Q266 HIJYEN CAPASI: uretim agacinda artik YOK ----------------------
+    artik = sorted(p.name for p in SCRIPTS.glob(MUTANT_ONEK + "*.py"))
+    kirli = _git_kirli()
+    hijyen_ok = not artik and not kirli
+    print("\n--- HIJYEN (Q266: uretim agacina artik BIRAKMA) ---")
+    print("  [%s] H1 `scripts/` altinda `%s*` artigi YOK + `git status` temiz"
+          % ("PASS" if hijyen_ok else "FAIL", MUTANT_ONEK))
+    print("         artik=%s | git_kirli=%s" % (artik, kirli))
+    if not hijyen_ok:
+        kirik = list(kirik) + [("H1 HIJYEN artik/kirlilik",
+                                "artik=%s git_kirli=%s" % (artik, kirli))]
+        sonuc = list(sonuc) + [("H1 HIJYEN", False, "artik=%s" % artik)]
+    else:
+        sonuc = list(sonuc) + [("H1 HIJYEN", True, "artik YOK")]
+    return _kapanis(sonuc, kirik, mut_kirik, yama_kirik, kurulamadi)
+
+
+def _git_kirli() -> list[str]:
+    """`scripts/` altinda izlenmeyen/degismis dosya var mi (mutant artigi sizdi mi)?"""
+    r = subprocess.run(["git", "-C", str(REPO), "status", "--porcelain", "--", "scripts"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        return ["[DOGRULANAMADI] git status rc=%s" % r.returncode]
+    return [l for l in r.stdout.splitlines() if MUTANT_ONEK in l]
+
+
+def _mutasyon_dongusu(ham, mutant, mut_kirik, yama_kirik, kurulamadi) -> None:
     for i, (ad, mut) in enumerate(MUTASYONLAR):
         bozuk = mut(ham)
         if bozuk == ham:
@@ -564,6 +639,7 @@ def main() -> int:
         else:
             mut_kirik.append(ad)
 
+def _kapanis(sonuc, kirik, mut_kirik, yama_kirik, kurulamadi) -> int:
     print("\n" + "=" * 78)
     if kirik or mut_kirik or yama_kirik or kurulamadi:
         if kirik:

@@ -21,18 +21,35 @@ Kapanis satiri artik NE kostugunu soyler (paydasiz "OK" bu kusurun yarisiydi).
 DOSYA hic calismaz ve yine hicbir sey uyarmaz (B13 recetesi bunu ayri kalem olarak
 beyan eder). Burada kapanan yalniz `core/` COZUMLEME katmanidir.
 
+⭐ HIJYEN KUSURU (Q247, 2026-09-09): korpus senaryo basina GERCEK bir `git init` deposu
+kurar ve `shutil.rmtree(d, ignore_errors=True)` ile silerdi. Windows'ta git gevsek
+objeleri (`.git/objects/**`) SALT-OKUNUR yazar; `rmtree` o dosyayi silemez, `ignore_errors`
+hatayi YUTAR ve dizin `%TEMP%`de KALIR. Olculdu: tek kosum **+12 dizin** (4 senaryo x
+[taban + 2 mutasyon]), 2026-09-02'de 2040 -> 2026-09-09'da 2412 birikmis kalinti.
+⛔ Bu, korpusun KENDI dersinin ihlaliydi: "sessiz yutma" tam da S2'nin olctugu kusur.
+FIX: `_sil()` — `onexc`/`onerror` geri cagirmasi salt-okunur bayragini temizleyip yeniden
+dener; BASARISIZLIK YUTULMAZ, `TEMIZLIK_HATALARI`ya yazilir ve korpusu KIRMIZI yapar.
+Desen ICAT EDILMEDI: ayni repoda `tests/fixtures/guard_f1_taban_failclosed/run.py:172`
+zaten boyle siliyordu (kardes artefakt).
+
   S1  validator VAR + geciyor  -> rc 0 + kapanis satiri NE kostugunu soyler
   S2  ⭐ validator YOK         -> rc 1 + GORUNUR mesaj (eskiden: rc 0 + "OK")
   S3  FP capasi: core-sizinti kontrolu HALA calisiyor (staged core/ -> rc 1)
   S4  3. BAGLAM: validator VAR ama DUSUYOR -> rc 1 (eski davranis KORUNDU)
   M1-M2  fix'i sok -> korpus KIRMIZI olmali
+  H1  ⭐HIJYEN  kurulan HER sentetik depo diskte YOK (koşum sonu, sayarak)
+  H2  ⭐HIJYEN  `%TEMP%/pcgate_*` sayisi koşumla ARTMADI (once/sonra farki <= 0)
+  H3  ⭐TABAN   [win32] eski desen (`rmtree(ignore_errors=True)`) kusuru YENIDEN URETIR
+  H4  ⭐GORUNURLUK  temizlik basarisiz olursa SESSIZCE yutulmaz (sahte `rmtree` ile)
 
 Kosum: python tests/fixtures/precommit_junction_failclosed/run.py   (exit 0 = PASS)
 """
 from __future__ import annotations
 
+import glob
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -50,6 +67,44 @@ SABLON = CORE / "claude" / "git-hooks" / "pre-commit.template"
 
 SH = shutil.which("sh") or shutil.which("bash")
 
+ONEK = "pcgate_"
+# Q247 hijyen defteri: kurulan HER sentetik depo + silinemeyen HER dizin burada.
+KURULAN: list[Path] = []
+TEMIZLIK_HATALARI: list[str] = []
+
+
+def _pcgate_sayisi() -> int:
+    """`%TEMP%` altindaki `pcgate_*` dizin sayisi (sizinti olcusu)."""
+    return len(glob.glob(os.path.join(tempfile.gettempdir(), ONEK + "*")))
+
+
+def _sil(d: Path) -> bool:
+    """Sentetik depoyu GERCEKTEN siler; basarisizligi YUTMAZ -> (silindi mi?).
+
+    ⚠ Duz `rmtree(ignore_errors=True)` Windows'ta SESSIZCE basarisiz olur: git
+    `.git/objects/**` altini SALT-OKUNUR yazar => kalinti `%TEMP%`de YIGAR (Q247).
+    Kardes desen: `tests/fixtures/guard_f1_taban_failclosed/run.py:172` (`_sil`).
+    """
+    def _ac(func, path, _exc):           # noqa: ANN001 - shutil geri cagirma imzasi
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)           # type: ignore[arg-type]
+    except Exception as e:               # noqa: BLE001
+        TEMIZLIK_HATALARI.append("%s -> %s: %s" % (d, type(e).__name__, e))
+        return False
+    if d.exists():
+        # ⛔ Istisna FIRLAMADAN da basarisiz olabilir (geri cagirma yuttu):
+        #    "exit 0 != kanit" — SONUCU olc, cagriyi degil.
+        TEMIZLIK_HATALARI.append("%s -> silinmedi (istisna YOK, dizin HALA VAR)" % d)
+        return False
+    return True
+
 
 def _git(depo: Path, *a):
     return subprocess.run(["git", *a], cwd=str(depo), capture_output=True, text=True,
@@ -63,7 +118,18 @@ def sentetik_depo(sablon_metni: str, validator_var: bool,
     ⚠ Sablon `git rev-parse --show-toplevel` cagirir ⇒ gercek depo SART; sahte dizin
     sessizce baska bir agaci gosterirdi ("kod != kablolama"nin kabuk yuzu).
     """
-    d = Path(tempfile.mkdtemp(prefix="pcgate_"))
+    d = Path(tempfile.mkdtemp(prefix=ONEK))
+    KURULAN.append(d)
+    try:
+        return _sentetik_depo_govde(d, sablon_metni, validator_var,
+                                    validator_rc, core_sizintisi)
+    finally:
+        # ⚠ try/finally SART: eski kod `subprocess` firlatirsa temizlige HIC gelmiyordu.
+        _sil(d)
+
+
+def _sentetik_depo_govde(d: Path, sablon_metni: str, validator_var: bool,
+                         validator_rc: int, core_sizintisi: bool) -> tuple[int, str]:
     _git(d, "init", "-q")
     _git(d, "config", "user.email", "t@t")
     _git(d, "config", "user.name", "t")
@@ -90,7 +156,6 @@ def sentetik_depo(sablon_metni: str, validator_var: bool,
     r = subprocess.run([SH, str(hook)], cwd=str(d), capture_output=True, text=True,
                        encoding="utf-8", errors="replace",
                        env={**os.environ, "PYTHONIOENCODING": "utf-8"})
-    shutil.rmtree(d, ignore_errors=True)
     return r.returncode, (r.stdout + r.stderr)
 
 
@@ -138,6 +203,77 @@ MUTASYONLAR = [
 ]
 
 
+def hijyen_capalari(once: int) -> list[tuple[str, bool, str]]:
+    """Q247 — korpusun KENDI sizintisini olcer (sablonun degil; mutasyonlardan BAGIMSIZ)."""
+    out: list[tuple[str, bool, str]] = []
+
+    # --- H1: kurulan her depo GERCEKTEN gitti mi (deterministik capa) -------
+    kalan = [str(d) for d in KURULAN if d.exists()]
+    out.append(("H1 HIJYEN: kurulan %d sentetik deponun HEPSI silindi" % len(KURULAN),
+                not kalan and not TEMIZLIK_HATALARI,
+                "kalan=%d %s | temizlik_hatalari=%s" % (len(kalan), kalan[:3],
+                                                        TEMIZLIK_HATALARI[:3])))
+
+    # --- H2: %TEMP%/pcgate_* SAYIM farki (kaydin istedigi kanit) -----------
+    sonra = _pcgate_sayisi()
+    out.append(("H2 HIJYEN: TEMP/pcgate_* sayisi ARTMADI (once=%d sonra=%d)"
+                % (once, sonra), (sonra - once) <= 0,
+                "fark=%+d" % (sonra - once)))
+
+    # --- H3: TABAN — eski desen kusuru YENIDEN URETIR (win32) --------------
+    # ⚠ POSIX'te git objeleri de salt-okunurdur AMA dizin yazilabilir oldugu icin
+    #    `rmtree` yine de siler ⇒ kusur PLATFORM-OZELDIR. Linux CI'da iddia
+    #    kurulamaz; "olculemedi" ATLA olarak beyan edilir (yesil sayilmaz).
+    kok = Path(tempfile.mkdtemp(prefix="pcg_taban_"))
+    try:
+        d = kok / "depo"
+        d.mkdir()
+        _git(d, "init", "-q")
+        (d / "x.txt").write_text("x\n", encoding="utf-8")
+        _git(d, "add", "x.txt")
+        shutil.rmtree(d, ignore_errors=True)          # ⬅ ESKI (kusurlu) desen
+        eski_kaldi = d.exists()
+        _sil(d)                                       # ⬅ YENI desen temizler mi?
+        yeni_temiz = not d.exists()
+        if sys.platform == "win32":
+            out.append(("H3 TABAN: eski `rmtree(ignore_errors=True)` kusuru URETIYOR "
+                        "+ yeni `_sil` temizliyor",
+                        eski_kaldi and yeni_temiz,
+                        "eski_kaldi=%s yeni_temiz=%s" % (eski_kaldi, yeni_temiz)))
+        else:
+            out.append(("H3 TABAN [ATLA: win32 disi] yeni `_sil` yine de temizliyor",
+                        yeni_temiz,
+                        "platform=%s eski_kaldi=%s (POSIX'te kusur BEKLENMEZ)"
+                        % (sys.platform, eski_kaldi)))
+    finally:
+        _sil(kok)
+
+    # --- H4: GORUNURLUK — temizlik basarisiz olursa SESSIZCE yutulmaz ------
+    d2 = Path(tempfile.mkdtemp(prefix="pcg_gorunur_"))
+    isaret = len(TEMIZLIK_HATALARI)
+    gercek_rmtree = shutil.rmtree
+    try:
+        def _daima_dus(*a, **k):                      # noqa: ANN001,ANN002,ANN003
+            raise PermissionError("sentetik: silinemedi")
+        shutil.rmtree = _daima_dus                    # type: ignore[assignment]
+        try:
+            dondu = _sil(d2)
+        except BaseException as e:                    # noqa: BLE001
+            # ⛔ COKME != FAIL: `_sil` istisnayi disari kacirirsa bu bir OLCUMDUR,
+            #    korpusu cokertip "kurulamadi"ya cevirmesin — GORUNUR FAIL olsun.
+            dondu = "COKTU:%s(%s)" % (type(e).__name__, e)
+    finally:
+        shutil.rmtree = gercek_rmtree                 # type: ignore[assignment]
+    yeni_hata = TEMIZLIK_HATALARI[isaret:]
+    out.append(("H4 GORUNURLUK: temizlik dusunce SESSIZCE yutulmuyor "
+                "(False doner + defter'e yazar)",
+                dondu is False and len(yeni_hata) == 1,
+                "dondu=%r yeni_hata=%s" % (dondu, yeni_hata)))
+    del TEMIZLIK_HATALARI[isaret:]                    # sentetik hata sonucu KIRLETMEZ
+    _sil(d2)
+    return out
+
+
 def main() -> int:
     print("=" * 78)
     print("precommit_junction_failclosed — `core/` yoksa SESSIZCE ATLAMA YOK")
@@ -146,14 +282,14 @@ def main() -> int:
         print("[DOGRULANAMADI] sh/bash bulunamadi — korpus kosulamadi (sessiz gecme YOK)")
         return 1
 
+    once = _pcgate_sayisi()
     ham = SABLON.read_text(encoding="utf-8")
     sonuc = senaryolar(ham)
-    kirik = [(a, d) for a, ok, d in sonuc if not ok]
     for ad, ok, detay in sonuc:
         print("  [%s] %s" % ("PASS" if ok else "FAIL", ad))
         if not ok:
             print("         gorulen: %s" % detay)
-    print("  -> %d/%d senaryo PASS" % (len(sonuc) - len(kirik), len(sonuc)))
+    print("  -> %d/%d senaryo PASS" % (sum(1 for _, ok, _ in sonuc if ok), len(sonuc)))
 
     print("\n--- MUTASYONLAR (her biri korpusu KIRMIZI yapmali) ---")
     mut_kirik, yama_kirik = [], []
@@ -180,6 +316,15 @@ def main() -> int:
             print("         kiran senaryo(lar): %s" % ", ".join(kacan[:3]))
         else:
             mut_kirik.append(ad)
+
+    # --- Q247 HIJYEN CAPALARI (mutasyonlardan SONRA: tum kosumu kapsamali) ---
+    print("\n--- HIJYEN (Q247: korpusun KENDI sizintisi) ---")
+    hij = hijyen_capalari(once)
+    for ad, ok, detay in hij:
+        print("  [%s] %s" % ("PASS" if ok else "FAIL", ad))
+        print("         %s" % detay)
+    sonuc = sonuc + hij
+    kirik = [(a, d) for a, ok, d in sonuc if not ok]
 
     print("\n" + "=" * 78)
     if kirik or mut_kirik or yama_kirik:
