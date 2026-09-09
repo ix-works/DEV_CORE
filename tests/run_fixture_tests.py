@@ -130,6 +130,17 @@ OZEL_TESTLER = [
      "push SAP'deki kaynagi DEGISTIRIR) + baseline KAYNAK/ZAMAN/KAPSAM tasir; belirsiz ya "
      "da baska-binding baseline KIRMIZI iddia ETMEZ (ucuncu deger + `content_probe`). "
      "KONTROL GRUBU omurga: gercek uyusmazlik HALA blocker (V4a/V4b/V5f)"),
+    ("d7_drift_imzasi",
+     "Q212: AYNI olguyu (settings.json/hook_shim template-drift'i) olcen IKI kapi IKI "
+     "AYRI tanim kullaniyordu -- `session_start` DAVRANISSAL imza, `ix_doctor` HAM sha "
+     "=> her ix_doctor kosumunda sahte WARN (uyari korlugu). Korpus tek cevabi degil "
+     "IKI KAPININ ANLASMASINI olcer; cift yonlu: davranis TASIMAYAN fark sessiz, "
+     "davranis TASIYAN fark HALA WARN (asiri-gevseme capasi)"),
+    ("bos_seans_markeri",
+     "Q253: cozulemeyen oturum kimligi BOS DIZE olarak dedup anahtarina yazilirsa "
+     "kapi SESSIZCE ve KALICI OLARAK oluyor (`\"\" == \"\"` daima True). Sinif "
+     "envanteri 3 okuyucu (itg_backstop/sap_worktype_hint/intake_triage) + beyaz "
+     "listede 1 yazar (session_start); ic kontrol grubu post_validate gun-damgasi"),
     # 2026-08-28 fail-open/sahte-yesil turu (bug-avi B3-01 · B2-13 · E-05):
     ("sap_gate_skip_sozlesmesi",
      "B3-01: SAP-bagimli BLOCKER ailesi baglanti YOKken PASS DEGIL SKIP uretir "
@@ -490,7 +501,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/check_ui_odata_refs.py", ("O:olcum_yoklugu_sozlesmesi",),
      "UI OData referans araci: KAPSAM kapisi (cozulmeyen --app / 0 dosya) burada yasar"),
     ("scripts/hooks/post_validate.py", ("O:fs_docstd", "O:negatif_test_harness",
-                                        "O:hook_bash_ve_stderr_kapsami"),
+                                        "O:hook_bash_ve_stderr_kapsami",
+                                        "O:bos_seans_markeri"),
      "doc-fs dalı (OKU-işaretçisi + gate özeti) + komşu dalların regresyonu + parse-fail sözleşmesi"),
     ("scripts/hooks/watchdog_launch.py",
      ("O:prior_art_kb01", "O:negatif_test_harness", "O:sablon_zorunlu_maddeler"),
@@ -500,7 +512,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # sap_worktype_hint.py HARITA'da HIC YOKTU (2026-08-22, Q5 turu bulgusu — `team_setup.py`
     # ile ayni sinif): degisikligi hicbir korpusa eslesmiyordu, tazelik kapisi KORDU.
     ("scripts/hooks/sap_worktype_hint.py",
-     ("O:worktype_alt_tur", "O:negatif_test_harness"),
+     ("O:worktype_alt_tur", "O:negatif_test_harness", "O:bos_seans_markeri"),
      "ALT-TUR ekseni (artefaktin kendi bildiriminden recete BOLUMU) + obje-tipi -> checklist "
      "taban satiri + andigi recete yollarinin TAZELIGI; parse-fail sozlesmesi komsu korpusta"),
     # Recete BASLIKLARI eslesme sozlugudur (ayri sozluk YOK): baslik metni degisirse
@@ -602,9 +614,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "DTEL yaratma CSV'si: 4 label + description doluluk + uzunluk + domain bağı (ADR 0005-D)"),
     ("scripts/validators/check_cds_qty_in_expression.py", ("O:cds_qty_in_expression",),
      "FP tuzakları (düz cast · `case` yüklemi · birim alanı) korpusla ölçüldü; kapsam daraltması burada yaşar"),
-    ("scripts/ix_doctor.py", ("O:ix_doctor_kablolama",),
+    ("scripts/ix_doctor.py", ("O:ix_doctor_kablolama", "O:d7_drift_imzasi"),
      "korunan tool kümesi pre_tool_guard AST'inden TÜRETİLİR (elle kopya bayatladı: 6 vs 16) "
-     "+ türetme kırılırsa PASS DEĞİL 'ÖLÇÜLEMEDİ'"),
+     "+ türetme kırılırsa PASS DEĞİL 'ÖLÇÜLEMEDİ'; D7 kolunun ölçütü ise `session_start` ile "
+     "ORTAK tanımdan gelir (Q212 — kopya-tanım ayrışması bu korpusta çapalı)"),
     ("scripts/hooks/pre_tool_guard.py", ("O:ix_doctor_kablolama",),
      "bu dosyanın tool kümesi ix_doctor kablolama kontrolünün PAYDASIDIR (türetilir)"),
     ("scripts/validators/check_amdp_comment_apostrophe.py",
@@ -668,7 +681,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "TÜKETİCİ sözleşmesi: `--type` choices değişirse notun bastığı komut geçersizleşir"),
     ("scripts/run_pretty_printer.py", ("O:cikti_iddiasi_durustlugu",),
      "çıktı SUNUCU YAZMASI iddia etmez ('applied to' yasağı) + YAZMA-çağrısı-yok yapısal çapası"),
-    ("scripts/sap_sync_pull.py", ("O:cikti_iddiasi_durustlugu", "O:damga_yarisi"),
+    ("scripts/sap_sync_pull.py", ("O:cikti_iddiasi_durustlugu", "O:damga_yarisi",
+                                  "O:bos_seans_markeri"),
      "sınıf alt-include'ları ÇEKİLMEDİĞİ görünür olmalı; marker listesi source_drift'ten "
      "(tek kaynak) + seans-tazelik damgasının EŞZAMANLI YAZIM sözleşmesi (kilit + atomik "
      "`os.replace` + görünür kilit uyarısı) `damga_yarisi`da yaşar"),
@@ -746,14 +760,27 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "payload korpusu + parse-fail görünürlüğü + tembel desen-kurulumu"),
     ("scripts/hooks/session_start.py",
      ("O:overlay_oto_tazeleme", "O:negatif_test_harness", "O:worktree_yasam_dongusu",
-      "O:session_start_compact_dali"),
+      "O:session_start_compact_dali", "O:d7_drift_imzasi"),
      "oto-tazeleme kablolaması + parse-fail notu + `source` dalı (compact gövdesi ile "
-     "startup gövdesinin AYRIŞMASI; startup tarafı BAYT-EŞ kalmalı)"),
+     "startup gövdesinin AYRIŞMASI; startup tarafı BAYT-EŞ kalmalı) + D7 kolunun ölçütü "
+     "`ix_doctor` ile ORTAK (Q212)"),
+    # Q212 (2026-09-09): D7 "sapma" tanımının tek kaynağı. İKİ tüketicisi var ve İKİSİ de
+    # ölçülmeli — yalnız bir kapının korpusu seçilseydi ayrışma (bu turun teşhisi) yine
+    # görünmezdi. `utils/infra_yuzeyi.py` (Q209) satırıyla AYNI sınıf.
+    ("scripts/utils/drift_imzasi.py", ("O:d7_drift_imzasi",),
+     "D7 imzası tek-kaynak: `session_start` (hook) + `ix_doctor` (CLI) aynı normalizasyonu "
+     "okur; kopya-tanım drift'i ve 'ÖLÇÜLEMEDİ != TEMİZ' sözleşmesi bu korpusta çapalı"),
     ("scripts/build_recall_index.py", ("O:recall_index_ozetsiz",),
      "MEMORY.md ayrıştırma sözleşmesi: özetsiz satır → frontmatter `description` + "
      "satır-atlamalı kirlenme + 'kaynak yoksa UYDURMA yok' değişmezi"),
+    # itg_backstop.py HARITA'da HIC YOKTU (2026-09-09, Q253 turu — `sap_worktype_hint`
+    # ile ayni sinif): degisikligi yalniz `scripts/hooks/*.py` jokerine dusuyordu, yani
+    # ADR 0022 kapisinin KENDI davranisini olcen bir korpus secilemiyordu.
+    ("scripts/hooks/itg_backstop.py", ("O:bos_seans_markeri",),
+     "oturum kimligi cozulemedigi zaman dedup anahtarinin BOS yazilmasi = kalici "
+     "susma; ITG kapisinin ates/sus ayrimi bu korpusta olculur"),
     ("scripts/hooks/intake_triage.py",
-     ("O:intake_modul_carpismasi", "O:negatif_test_harness"),
+     ("O:intake_modul_carpismasi", "O:negatif_test_harness", "O:bos_seans_markeri"),
      "modül-ipucu regex'i ↔ metodoloji sözlüğü çarpışması (POZİTİF KONTROL zorunlu: "
      "daraltma gerçek PP/QM talebini hâlâ yakalamalı) + parse-fail sözleşmesi"),
     ("scripts/hooks/*.py", ("O:negatif_test_harness", "O:hook_gate_coverage"),

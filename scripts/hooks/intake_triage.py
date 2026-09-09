@@ -21,6 +21,7 @@ odaklı; ITG kapsam+modül+protokol işi — ayrık sorumluluk. Sinyal yoksa ses
 DETERMİNİSTİK net. Bu hook fire ederse `.claude/.itg_shown.json` marker'ını yazar → backstop
 çifte-fire etmez (paylaşılan koordinasyon).
 """
+import datetime
 import json
 import os
 import re
@@ -215,6 +216,13 @@ def main() -> int:
         cs = proj / ".claude" / ".current_session"
         if cs.exists():
             sid = str(json.loads(cs.read_text(encoding="utf-8")).get("session_id") or "")
+        # ⛔ BOS ANAHTAR YAZILMAZ (Q253): bu satir PAYLASILAN marker'i uretir ve
+        # `itg_backstop` onu okur. Bos dize yazilirsa okuyan taraf `"" == ""` ile
+        # "zaten gosterildi" der ⇒ ITG kapisi SESSIZCE ve KALICI OLARAK olur.
+        # Cozulemeyen kimlik gun damgasina duser; YAZAN ve OKUYAN ayni kurali
+        # kullanmalidir, yoksa koordinasyon sozlesmesi kirilir.
+        # Gerekce + evin emsalleri: `itg_backstop._session_id` docstring'i.
+        sid = sid or ("gun-" + datetime.date.today().isoformat())
         (proj / ".claude" / ".itg_shown.json").write_text(
             json.dumps({"session": sid}), encoding="utf-8", newline="\n")
     except Exception:

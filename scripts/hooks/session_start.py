@@ -21,7 +21,6 @@ Dinamik (v3 mimarisi):
 
 Proje kökü: env CLAUDE_PROJECT_DIR → cwd (B9-fix: __file__ junction'la CORE'a çözülür).
 """
-import hashlib
 import json
 import os
 import subprocess
@@ -166,39 +165,33 @@ def _junction_kontrol() -> list[str]:
     return sorun
 
 
-def _yorumsuz(nesne):
-    """`_comment*` anahtarlarını özyinelemeli at — JSON'da yorum yoktur, bunlar insan notudur."""
-    if isinstance(nesne, dict):
-        return {k: _yorumsuz(v) for k, v in nesne.items() if not k.startswith("_comment")}
-    if isinstance(nesne, list):
-        return [_yorumsuz(x) for x in nesne]
-    return nesne
-
-
-def _anlamli_imza(p: Path) -> str:
-    """DAVRANIŞSAL imza: JSON'da yorum anahtarları, metinde CRLF/son-boşluk sayılmaz.
-
-    2026-07-10: bu fonksiyon ham `_sha16` idi. TD'nin settings.json'u template'le
-    kablolama olarak BİREBİR aynıyken, tek bir `_comment_yorumlar` anahtarı yüzünden
-    her oturum "SAPMIS (D7)" diye bağırıyordu. Yanlış-pozitif üreten uyarı, uyarıya
-    karşı bağışıklık yaratır — gerçek drift geldiğinde görülmez. Kapsam kaybı yok:
-    atılan alanların ikisi de (yorum, satır-sonu) davranış taşımaz.
-    """
-    try:
-        ham = p.read_bytes()
-        if p.suffix == ".json":
-            veri = _yorumsuz(json.loads(ham.decode("utf-8")))
-            norm = json.dumps(veri, sort_keys=True, ensure_ascii=False).encode("utf-8")
-        else:
-            norm = ham.replace(b"\r\n", b"\n").strip()
-        return hashlib.sha256(norm).hexdigest()[:16]
-    except Exception:
-        return "?"
+# ⭐ TEK KAYNAK (2026-09-09, kayıt Q212): D7'nin "sapma" TANIMI artık
+# `scripts/utils/drift_imzasi.py`de yaşar — kardeş kapı `scripts/ix_doctor.py` 4a kolu AYNI
+# tanımı oradan okur. Kopya bırakılsaydı ikisi ayrışırdı ve bu turun teşhisi tam olarak buydu:
+# aynı dosya için burası "sapma YOK" (33522a6e2f10dcc5 == 33522a6e2f10dcc5), `ix_doctor` ham
+# sha ile "SAPMIŞ" diyordu; fark yalnız `_comment*` anahtarlarıydı (davranış taşımaz).
+# Import `__file__`ten türetilir → `hook_shim`in `runpy` çağrısında da çözülür (sys.path[0]
+# boş olduğu için DÜZ kardeş-import ölürdü; `utils.inject_paths` aynı deseni üretimde koşar).
+# ⛔ BAŞARISIZLIK SESSİZ DEĞİL: modül okunamazsa D7 "sapma yok" DEMEZ — `_drift_kontrol`
+# ÖLÇÜLEMEDİ satırı basar. "Ölçemedim" ile "temiz" aynı değere çökerse kapı ölmüş olur.
+_IMZA_KAYNAGI = "utils.drift_imzasi"
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # core/scripts
+    from utils.drift_imzasi import (  # type: ignore  # noqa: E402
+        anlamli_imza as _anlamli_imza, OKUNAMADI as _OKUNAMADI)
+except Exception as _imza_hatasi:                                  # pragma: no cover
+    _IMZA_KAYNAGI = f"YOK ({type(_imza_hatasi).__name__})"
+    _anlamli_imza = None                                           # type: ignore
+    _OKUNAMADI = "?"
 
 
 def _drift_kontrol() -> list[str]:
     """D7: settings.json + hook_shim template'lerin gerisinde mi (davranışsal imza)."""
     sorun = []
+    if _anlamli_imza is None:
+        return [f"D7 OLCULEMEDI — imza modulu yuklenemedi ({_IMZA_KAYNAGI}): settings.json + "
+                "hook_shim template-sapmasi BU OTURUMDA OLCULMEDI (TEMIZ demek DEGIL). "
+                "Onarim: python core/scripts/team_setup.py --repair-junctions"]
     ciftler = [
         (PROJ / ".claude" / "settings.json", CORE / "claude" / "settings.template.json", "settings.json"),
         (PROJ / "scripts" / "hook_shim.py", CORE / "claude" / "hook_shim.template.py", "hook_shim.py"),
@@ -210,7 +203,7 @@ def _drift_kontrol() -> list[str]:
         if not tpl.exists():
             continue
         y, t = _anlamli_imza(yerel), _anlamli_imza(tpl)
-        if "?" in (y, t):
+        if _OKUNAMADI in (y, t):
             sorun.append(f"{ad} OKUNAMADI/BOZUK — imza cikarilamadi (sessiz gecme)")
         elif y != t:
             sorun.append(f"{ad} template'ten SAPMIS (D7) — bilinçliyse manifest'e isle; degilse: "

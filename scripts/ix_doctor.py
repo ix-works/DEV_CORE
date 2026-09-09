@@ -59,6 +59,18 @@ CORE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CORE_ROOT / "scripts"))
 from utils.project_config import project_root, cfg  # noqa: E402
 
+# ⭐ TEK KAYNAK (2026-09-09, kayıt Q212): D7'nin "sapma" TANIMI `utils/drift_imzasi`de;
+# kardeş kapı `scripts/hooks/session_start.py` aynı modülü okur. Kopya-tanım bu turun
+# TEŞHİSİYDİ (ham sha ↔ davranışsal imza ayrışması) — ikinci kopya AÇILMAZ.
+# ⛔ Yüklenemezse D7 kolu PASS DEMEZ, "ÖLÇÜLEMEDİ" der (bkz. `_d7_drift`).
+_IMZA_KAYNAGI = "utils.drift_imzasi"
+try:
+    from utils.drift_imzasi import anlamli_imza, OKUNAMADI  # noqa: E402
+except Exception as _imza_hatasi:  # pragma: no cover
+    _IMZA_KAYNAGI = f"YOK ({type(_imza_hatasi).__name__})"
+    anlamli_imza = None  # type: ignore
+    OKUNAMADI = "?"
+
 PROJ = project_root()
 PASS, WARN, FAIL, SKIP = "PASS", "WARN", "FAIL", "SKIP"
 _TAG = {PASS: "[PASS]", WARN: "[WARN]", FAIL: "[FAIL]", SKIP: "[skip]"}
@@ -92,11 +104,10 @@ def _git(repo: Path, *args: str, timeout: int = 15) -> tuple[int, str]:
     return _run(["git", "-C", str(repo), *args], timeout=timeout)
 
 
-def _sha16(p: Path) -> str:
-    try:
-        return hashlib.sha256(p.read_bytes()).hexdigest()[:16]
-    except Exception:
-        return "?"
+# ⛔ `_sha16()` (ham `sha256(read_bytes())`) 2026-09-09'da SİLİNDİ (Q212) — tek tüketicisi
+# D7 koluydu ve orada YANLIŞ ölçüttü. Ölü bir ham-hash yardımcısını düzeltilmiş kolun
+# yanında bırakmak, bu turun teşhis ettiği kopya-tanım ayrışmasını yeniden davet ederdi.
+# D7 için doğru ölçüt `utils.drift_imzasi.anlamli_imza`dır (yukarıdaki import).
 
 
 def _readlink(p: Path) -> Path | None:
@@ -384,10 +395,30 @@ def _hook_kos(hook: str, stdin_json: dict, timeout: int = 60) -> tuple[int, str,
     return rc, out, time.perf_counter() - t0
 
 
-def katman4() -> list[Sonuc]:
-    r: list[Sonuc] = []
+def _d7_drift() -> list[Sonuc]:
+    """4a — `.claude/settings.json` + `hook_shim.py` şablonlarından SAPMIŞ mı (D7).
 
-    # 4a — settings.json ↔ template drift (D7, hash)
+    ⭐ TEK KAYNAK (2026-09-09, kayıt Q212): "sapma"nın TANIMI artık
+    `scripts/utils/drift_imzasi.py`de yaşar; kardeş kapı `scripts/hooks/session_start.py`
+    AYNI tanımı oradan okur. Bu kol bugüne kadar HAM `_sha16` ile ölçüyordu ⇒ aynı dosya
+    hakkında iki kapı İKİ FARKLI cevap veriyordu (ölçüldü: `session_start`
+    `33522a6e2f10dcc5 == 33522a6e2f10dcc5` "sapma yok" derken bu kol
+    `[WARN] settings.json template'ten SAPMIŞ` basıyordu). Tek fark `_comment*`
+    anahtarlarıydı — davranış TAŞIMAZLAR ⇒ ix_doctor'ın HER koşumu bir yanlış-pozitif
+    üretiyordu ve yanlış-pozitif üreten uyarı **uyarı körlüğü** yaratır.
+    ⛔ Bu bir GEVŞETME DEĞİLDİR: normalize edilen alanlar (JSON yorum anahtarı, CRLF,
+    son-boşluk) davranış taşımaz; bir hook girdisinin/matcher'ın DÜŞMESİ imzayı hâlâ
+    değiştirir (fixture'ın pozitif kontrolü tam bunu ölçer).
+
+    ⛔ ÖLÇÜLEMEDİ != TEMİZ (iki ayrı dal): (a) ortak modül yüklenemezse PASS DEĞİL FAIL
+    (b) taraflardan biri okunamaz/bozuksa `"?" == "?"` sahte-PASS'ına düşülmez.
+    """
+    if anlamli_imza is None:
+        return [(FAIL, f"D7 ÖLÇÜLEMEDİ — imza modülü yüklenemedi ({_IMZA_KAYNAGI}): "
+                       "settings.json + hook_shim template-sapması BU KOŞUMDA ÖLÇÜLMEDİ "
+                       "(TEMİZ demek DEĞİL). Onarım: core kurulumunu doğrula "
+                       "(python core/scripts/team_setup.py --repair-junctions)")]
+    r: list[Sonuc] = []
     ciftler = [
         (PROJ / ".claude" / "settings.json", CORE_ROOT / "claude" / "settings.template.json", "settings.json"),
         (_shim_yolu(), CORE_ROOT / "claude" / "hook_shim.template.py", "hook_shim.py"),
@@ -395,11 +426,24 @@ def katman4() -> list[Sonuc]:
     for yerel, tpl, ad in ciftler:
         if not yerel.exists():
             r.append((FAIL, f"{ad} YOK — üret: python core/scripts/team_setup.py"))
-        elif _sha16(yerel) == _sha16(tpl):
-            r.append((PASS, f"{ad} template ile hash-eş ({_sha16(yerel)})"))
+            continue
+        y, t = anlamli_imza(yerel), anlamli_imza(tpl)
+        if OKUNAMADI in (y, t):
+            r.append((FAIL, f"{ad} D7 ÖLÇÜLEMEDİ — davranışsal imza çıkarılamadı "
+                            f"(yerel={y} template={t}); okunamayan/bozuk dosya TEMİZ SAYILMAZ"))
+        elif y == t:
+            r.append((PASS, f"{ad} template ile davranışsal imza EŞ ({y})"))
         else:
-            r.append((WARN, f"{ad} template'ten SAPMIŞ (D7: {_sha16(yerel)} ≠ {_sha16(tpl)}) — "
+            r.append((WARN, f"{ad} template'ten SAPMIŞ (D7: {y} ≠ {t}) — "
                             f"bilinçliyse manifest'e işle; değilse core/claude/{tpl.name} ile diff'le"))
+    return r
+
+
+def katman4() -> list[Sonuc]:
+    r: list[Sonuc] = []
+
+    # 4a — settings.json ↔ template drift (D7); tanım `session_start` ile ORTAK (Q212)
+    r += _d7_drift()
 
     # 4b — SHIM_SURUM eşliği
     surum = re.compile(r'SHIM_SURUM\s*=\s*"([^"]+)"')

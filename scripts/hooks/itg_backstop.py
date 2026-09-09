@@ -18,6 +18,7 @@ Koordinasyon: hem (2) hem bu hook `.claude/.itg_shown.json` marker'ını okur/ya
 başına BİR kez gösterilir. (2) prompt-anında set ederse bu hook sessiz; (2) kaçarsa bu hook
 SAP-tool anında yakalar. Non-blocking (additionalContext); gerçek S2 gate `check_itg_signoff`.
 """
+import datetime
 import json
 import os
 import sys
@@ -31,11 +32,36 @@ for _a in (sys.stdout, sys.stderr):
 
 
 def _session_id(proj: Path) -> str:
+    """Oturum kimliği; ⛔ ASLA BOŞ DÖNMEZ — çözülemezse GÜN DAMGASINA düşer (Q253).
+
+    KUSUR (2026-09-04 kaydı): boş dize dönüyordu ve o boş dize `.itg_shown.json`e
+    dedup ANAHTARI olarak yazılıyordu ⇒ sonraki her çözülemeyen oturumda
+    `"" == ""` ⇒ "zaten gösterildi" ⇒ ITG kapısı SESSİZCE ve KALICI OLARAK ölüyordu.
+    ADR 0022 ITG'yi "atlanamaz" ilan ederken kapı susuyordu.
+
+    ⛔ NEDEN FAIL-CLOSED (rc≠0 / bloklama) DEĞİL — kaydın önerisi ÖLÇÜLDÜ ve ELENDİ:
+    bu bir PreToolUse hook'udur; rc≠0 `mcp__sap-adt__*` çağrısını BLOKLAR. Kimliğin
+    çözülemediği hâl istisna değil DEGRADE bir normaldir (`session_start`
+    `_write_session_marker` `if not sid: return` ile marker'ı hiç yazmaz — parse-fail
+    dalında bu HER oturumda olur; taze klonda ilk SessionStart'tan önce de dosya yoktur).
+    Fail-closed, tam da degrade oturumda TÜM SAP işini brick'lerdi: hatırlatıcı bir
+    kapının bedeli, hatırlattığı işten büyük olamaz.
+
+    ⭐ EVİN KENDİ EMSALİ (iki bağımsız yer, ikisi de "boş DEĞİL, dejenere ANAHTAR"):
+      · `post_validate.py:306-311` — aynı sınıf, aynı çözüm, gerekçesi kod içinde
+        yazılı: "session_id yoksa sabit marker diske KALICI yazılır ve nudge bir daha
+        HİÇ ateşlemez (sessizce ölen hatırlatıcı). Gün damgası en kötü durumda günde
+        bir kez konuşmayı garanti eder."
+      · `sap_sync_pull.py:43-50` — çözülemeyen kimlik `"default"`e düşer, boşa değil.
+    SABİT bir anahtar (`"nosession"`) burada YETMEZ: dedup anahtarı sabitse susma yine
+    KALICI olur. Gün damgası dejenerasyonu SINIRLAR: en kötü hâl "günde bir kez".
+    """
     try:
         d = json.loads((proj / ".claude" / ".current_session").read_text(encoding="utf-8"))
-        return str(d.get("session_id") or "")
+        sid = str(d.get("session_id") or "")
     except Exception:
-        return ""
+        sid = ""
+    return sid or ("gun-" + datetime.date.today().isoformat())
 
 
 def itg_shown_bir_kez(proj: Path, sid: str) -> bool:
