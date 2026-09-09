@@ -234,7 +234,14 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 - Taze-seans → 0; SAP-dışı → 0; damga **proje-kökü** `.claude` altında (DEV_CORE'a yazıyorsa d2d326d regresyonu).
 - `IX_SOURCE_ROOT` farklı-adla hâlâ yakalıyor (4 fixture).
 - **DAMGA EŞZAMANLILIĞI (2026-08-28, E-02):** `python tests/fixtures/damga_yarisi/run.py`
-  → **14/14 + 6 mutasyon**, exit 0 (~42 sn; süreç başlatır, en yavaş vektör budur).
+  → **15/15 + 6 mutasyon**, exit 0 (~99 sn; süreç başlatır, en yavaş vektör budur).
+  ⭐ **Q266 (2026-09-09) hijyen çapası `H1` eklendi** (14→15): mutant `scripts/` altında
+  **artık bırakmaz** + `git status --porcelain -- scripts` temiz kalır. Mutantın **konumu
+  bilerek değişmedi** (B24: `utils/` importu kendi konumundan çözülür; tempdir'e taşımak
+  HER mutasyonu sahte-"yakalandı" yapar) — bunun yerine ad **pid'li**, döngü dış
+  `try/finally` + `atexit` ile sarılı ve **koşum başında bayat artık süpürülür** (görünür
+  uyarı: `BAYAT MUTANT ARTIGI SUPURULDU`). Sert ölüm (`taskkill /F`) `finally`yi de
+  `atexit`i de koşturmaz ⇒ **asıl savunma başlangıç süpürgesidir**.
   Değişmezler: `_stamp` OKUMA+YAZMA'yı **tek kilidin içinde** yapar (yalnız yazımı kilitlemek
   kayıp-güncellemeyi ÇÖZMEZ — M2 sınır mutasyonu tam bunu sınar) · yazım `os.replace` ile
   **atomik** · kilit alınamazsa **görünür uyarı** (M4: sessizce yutulursa korpus kırmızı) ·
@@ -1109,7 +1116,11 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
 - Dört korpus (hepsi OZEL_TESTLER üyesi):
   `python tests/fixtures/cds_curr_eksik_annotation/run.py`      → **9 senaryo + 5 mutasyon**, exit 0
   `python tests/fixtures/transport_sifir_kaniti/run.py`         → **7 senaryo + 3 mutasyon**, exit 0
-  `python tests/fixtures/precommit_junction_failclosed/run.py`  → **4 senaryo + 2 mutasyon**, exit 0
+  `python tests/fixtures/precommit_junction_failclosed/run.py`  → **8 senaryo + 2 mutasyon**, exit 0
+      (⭐ Q247, 2026-09-09: 4→8; H1-H4 **hijyen** çapaları. ⚠ Koşum ORTASINDAKİ
+       `-> 4/4 senaryo PASS` satırı yalnız ŞABLON senaryolarını sayar; hijyen çapaları
+       mutasyonlardan SONRA koşar ve **kapanış** satırında toplanır — batarya bu ara
+       satırı okur, `4/4` görmen NORMALDİR, otorite `PASS — 8 senaryo` satırıdır.)
   `python tests/fixtures/suite_ortam_hijyeni/run.py`            → **5 senaryo + 3 mutasyon**, exit 0
   Tam suite: `python tests/run_fixture_tests.py` → **134/134**.
 - ⭐ **İDEMPOTANS ARTIK KORPUS-DIŞI BİR ADIMDIR (elle koş, B22'nin açık kalemi buydu):**
@@ -1651,7 +1662,7 @@ diğer dördü **0 bulgu**. Kapsam paydaları: 81 · 321 (eskiden 280) · 124 ·
 
 ```
 python tests/fixtures/precommit_coreleak_failclosed/run.py      # 8 senaryo + 4 mutasyon, exit 0
-python tests/fixtures/precommit_junction_failclosed/run.py      # KARDEŞ: 4 senaryo + 2 mutasyon
+python tests/fixtures/precommit_junction_failclosed/run.py      # KARDEŞ: 8 senaryo + 2 mutasyon
 python tests/run_battery.py precommit_coreleak_failclosed --kardes precommit_junction_failclosed
 ```
 
