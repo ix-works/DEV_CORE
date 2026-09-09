@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -153,12 +154,32 @@ def _taban_kaynak() -> str:
     return src.replace(_DAL_SATIRI, _DALSIZ_SATIRI)
 
 
+def _kum_hooks(tmp: Path) -> Path:
+    """Kopya sürümlerin (mutant/taban) konacağı KUM `scripts/hooks/` dizini.
+
+    ⛔ NEDEN DÜZ `tmp/` DEĞİL (ölçüldü 2026-09-09, Q212 turunda — V3 sahte-KIRMIZI verdi):
+    `session_start.py` D7 imzasını artık `utils.drift_imzasi`den okur ve import yolunu
+    `Path(__file__).resolve().parents[1]` ile TÜRETİR (hook_shim `runpy` çağrısında düz
+    kardeş-import ölür). Taban/mutant düz `tmp/`ye yazılırsa `parents[1]` temp kökünün
+    DIŞINA çıkar, import düşer ve KOPYA sürüm gerçek dosyada olmayan bir
+    "D7 OLCULEMEDI" satırı basar ⇒ V3 bayt-eşliği kopyanın KONUMU yüzünden kırılır
+    (ölçüldü: taban 1747B ↔ gerçek 1581B). Kum ağacı tüketicinin import KÖKÜNÜ taşımalı.
+    Gerçek kaynağa yine DOKUNULMUYOR — kopya temp altında, yalnız komşuluğu doğru.
+    """
+    hooks = tmp / "kum" / "scripts" / "hooks"
+    if not hooks.exists():
+        hooks.mkdir(parents=True)
+        shutil.copytree(REPO / "scripts" / "utils", hooks.parent / "utils",
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    return hooks
+
+
 def _hook_yolu(tmp: Path) -> Path:
     """Mutasyonlu sürüm İZOLE bir dosyaya yazılır — gerçek kaynağa ASLA dokunulmaz
     (kalıntı birikir ve komşu korpusu kirletir)."""
     if not KIP:
         return HOOK
-    p = tmp / "session_start_mutant.py"
+    p = _kum_hooks(tmp) / "session_start_mutant.py"
     p.write_text(_mutasyonlu_kaynak(), encoding="utf-8", newline="\n")
     return p
 
@@ -233,7 +254,7 @@ def main() -> int:
         # Taban KOZMETİK OLMAMALI: gerçekten fix ÖNCESİ gibi davrandığı ÖLÇÜLÜR, yoksa V3
         # trivial-yeşile döner (taban≡bugün ⇒ "bayt-eş" iddiası boş bir tören olur).
         # Kurulum başarısızlığı bir VEKTÖR DÜŞÜŞÜ DEĞİLDİR → sayı raporlanmadan durulur.
-        taban = tmp / "session_start_taban.py"
+        taban = _kum_hooks(tmp) / "session_start_taban.py"
         taban.write_text(_taban_kaynak(), encoding="utf-8", newline="\n")
         _, so_tc, _ = kos(taban, {"session_id": "s1", "source": "compact"}, proj)
         c_tc = ctx(so_tc)

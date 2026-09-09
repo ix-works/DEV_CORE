@@ -196,6 +196,25 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 ## B3 — session_start + behavior_manifest + config_change_guard
 - `python scripts/behavior_manifest.py` (verify) → temizde sessiz/OK.
 - İmza 6'lısı: yorum→AYNI · CRLF→AYNI · hook-sil→**FARKLI** · matcher→**FARKLI** · bozuk-JSON→"?" · sıra→AYNI (ilk-üçü ters = FP geri; 3-4 AYNI = kapsam-kaybı).
+- ⭐ **İmza 6'lısı ARTIK İKİ KAPIYA BİRDEN uygulanır (2026-09-09, Q212).** Tanım tek kaynakta:
+  `scripts/utils/drift_imzasi.py` (`anlamli_imza`); tüketiciler `session_start._drift_kontrol`
+  **ve** `ix_doctor._d7_drift`. Korpus: `python tests/fixtures/d7_drift_imzasi/run.py` → **19/19**
+  (~29 sn). Mutasyonlar: `--mutasyon-hamsha` **11/19** · `--mutasyon-korel` **14/19** ·
+  `--mutasyon-sessiz` **17/19** · `--mutasyon-modul-sessiz` **17/19**.
+  ⛔ **ÇİFT YÖN ZORUNLU:** *"sahte WARN gitti"* ile *"kapı köreldi"* AYNI görünür (ikisinde de
+  WARN yok). V4/V5/V9/V13/V15 (hook girdisi silindi · matcher değişti · SHIM_SURUM değişti)
+  **SİLİNEMEZ** — `--mutasyon-korel` tam bu borcu sınar; 19/19 verirse korpus BOŞALMIŞTIR.
+  ⚠ **V14/V15 sandbox'ı GERÇEK junction ister** (`mklink /J`): `main()` D7'yi yalnız junction'lar
+  sağlamken koşar (else-dalı) ⇒ junction'sız sandbox'ta V14 **erişilemez-yeşil** olur.
+  ⚠ **Her kapı ölçümü AYRI ALT-SÜREÇTE**: aynı süreçte iki ağaçtan modül yüklenirse `utils`
+  `sys.modules`'ta önbelleklenir ve ikinci ağaç birincinin modülünü kullanır (ölçüldü: F-bloğu
+  sahte-YEŞİL verdi). Kontrol grubu MUTASYONLU ağaçla kıyaslanmaz; kıyas GERÇEK ağaç ↔ AYRI
+  mutasyonsuz geçici ağaç ↔ **beklenen hüküm** (üçlü eşitlik).
+  ⚠ **`session_start.py`'ye dokunan HERKES `session_start_compact_dali`yi de koşmalı**: yeni
+  import `__file__`ten türer ⇒ o korpusun V3 tabanı `tmp/kum/scripts/hooks/` altında ve yanında
+  `scripts/utils` kopyası olmak ZORUNDA (`_kum_hooks`); yoksa V3 KOPYANIN KONUMU yüzünden kırılır.
+- ⚠ AÇIK KALEM: `session_start._drift_kontrol` şablon yoksa SESSİZCE atlar, `ix_doctor._d7_drift`
+  `{ad} YOK` FAIL'i basar — asimetri BEYAN EDİLDİ, bu turda dokunulmadı.
 - config_change_guard: davranış-dosyası sentetik-değişiklik → exit 2 + config-changes.log satırı.
 - 4 junction TEK TEK raporlanmalı (toplu-OK tek kırığı gizler).
 - **`source` DALI (2026-08-29).** SessionStart girdisindeki `source` (`startup|resume|clear|compact|fork`) gövdeyi ikiye ayırır.
@@ -253,6 +272,19 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   biri değişirse eksen sessizce boşalır (HARİTA'da o dosya da bu korpusa bağlıdır).
 
 ## B5 — skill_injector / worktype_hint / ITG-katmanları
+- ⭐ **BOŞ SEANS MARKERİ (2026-09-09, Q253).** `python tests/fixtures/bos_seans_markeri/run.py`
+  → **14/14** (~2,6 sn). Tek komut: `python tests/run_battery.py bos_seans_markeri` → **5/5**.
+  Mutasyonlar: `--mutasyon` **11/14** · `--mutasyon-worktype` **13/14** · `--mutasyon-intake`
+  **12/14** · `--mutasyon-envanter` **13/14**.
+  ⛔ **`exit 0` BURADA İKİ ANLAMLIDIR** — *"SAP tool'u değil / zaten gösterildi"* (meşru sessizlik)
+  ile *"kapı zehirli marker yüzünden öldü"* aynı değere çöker. Ölçüt çıkış kodu DEĞİL:
+  **stdout'ta ITG metni var mı** + **markerın `session` değeri boş mu**.
+  ⛔ **S6 hiçbir kipte DÜŞMEZ ve bu DOĞRUDUR** (gün-damgalı markera karşı fix-öncesi kod da
+  ateşler); S6 kalıcılık SINIRININ sözleşme çapasıdır, mutasyon hedefi değil.
+  ⛔ **S4/S5/S10 SİLİNEMEZ** — dedup'ın (gerçek kimlik varken) bozulmadığını ölçerler; fix bir
+  KURTARMA'dır, dedup'ı kaldırmak DEĞİL. **S13** sınıfın sessizce büyümesini engeller.
+  ⚠ Kabul edilen SINIR: aynı gün ikinci kez ITG gerekiyorsa kapı yine SUSAR — kapatılan şey
+  *kalıcı* susmadır, *hiç* susma değil (bilinçli, kayda geçti).
 - ITG A/B/C: regex-tetik→marker, backstop-sessiz · keyword-dışı-talep→ilk SAP-tool'da backstop-enjekte · ping/Bash→sessiz.
 - Diyakritik: "gelistir" TETİKLER; "istersen"/"isteğe bağlı" TETİKLEMEZ.
 - task-notification payload'ı → sessiz. worktype: tip-başına 1 enjeksiyon (struct/tablo AYNI grup!).

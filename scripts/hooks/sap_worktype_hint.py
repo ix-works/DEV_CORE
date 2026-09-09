@@ -18,6 +18,7 @@ Non-blocking (exit 0 + additionalContext). Gerçek gate ADR 0006 run_review'dur;
 checklist'i doğru anda hatırlatan fail-closed sigortadır. Session+worktype başına BİR kez
 (gürültü olmasın) — pre-flight semantiği.
 """
+import datetime
 import json
 import os
 import re
@@ -214,11 +215,20 @@ def _kaynak_metni(ti: dict) -> str:
 
 
 def _session_id(proj: Path) -> str:
+    """Oturum kimligi; ⛔ ASLA BOS DONMEZ — cozulemezse GUN DAMGASINA duser (Q253 sinifi).
+
+    `_already_hinted` bos kimlikte `"" != ""` -> False verir ⇒ yeni oturumda `hinted`
+    listesi SIFIRLANMAZ, birikir ⇒ hatirlatici o worktype icin KALICI OLARAK SUSAR.
+    itg_backstop'taki Q253 kusurunun kardesi (ayni sinif, ayri dedup sekli: orada `==`,
+    burada `!=` sifirlama). Gerekce + evin emsalleri: `itg_backstop._session_id`
+    docstring'i (post_validate gun-damgasi · sap_sync_pull "default").
+    """
     try:
         d = json.loads((proj / ".claude" / ".current_session").read_text(encoding="utf-8"))
-        return str(d.get("session_id") or "")
+        sid = str(d.get("session_id") or "")
     except Exception:
-        return ""
+        sid = ""
+    return sid or ("gun-" + datetime.date.today().isoformat())
 
 
 def _already_hinted(proj: Path, sid: str, grup: str) -> bool:
