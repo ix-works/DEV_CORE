@@ -23,6 +23,45 @@ applies_to: [ecc, s4_private, s4_public, btp_abap]
 | **CORE-03** | Core'un KENDİ yolları (`playbook/`, `governance/`, `abaplint/`, `scripts/`) için `__file__` kullanımı korunuyor mu? (bunlar meşru — "hepsini değiştir" refleksi core'u kırar) | manual:core-path-review | BLOCKER | ADR 0020 |
 | **CORE-04** | Yeni validator `# ENFORCES: <rule-id>` beyanı taşıyor + `run_all_validators.py`/`run_review.py` zincirine WIRED mi? | `check_rule_gate_coverage.py` | BLOCKER | ADR 0019 |
 | **CORE-05** | Gate **bozuk girdiyle** canlı test edildi mi? (temiz-girdi PASS'i hiçbir şey ispatlamaz) | manual:negative-test | BLOCKER | Health-check dersi 2026-07-09 |
+| **CORE-06** | Toplu yazan script (`populate_*` · `push_*` · `deploy_*`) **ATLANAN** işi `başarılı` kovasına karıştırıyor mu? Kapanış özeti "N başarılı" derken N'in içinde **hiç dokunulmamış** obje varsa bu SAHTE-YEŞİLDİR: `atlandi` AYRI sayılır ve çıkış kodu politikası **yazılı** olur. | manual:sahte-yesil-kova | BLOCKER | Q268 (2026-09-09) · aşağıdaki §populate_* |
+
+---
+
+## `populate_*` / toplu-yazma ailesi — "atlanan ≠ başarılı" (CORE-06)
+
+⛔ **EMSAL VARDI, ATEŞLEMEDİ (PATTERN #30 sınıfı: kural vardı, konumu hatırlatmadı).**
+`populate_tables.py` bu sınıfı **2026-08-19'da** ölçtü ve çözdü — fonksiyon başlığı
+aynen şöyle diyor: *"⛔ Bu fonksiyon `[SKIP] zaten var -> return True` SAHTE
+YESILININ panzehiridir"* (`scripts/populate_tables.py:268`, `readback_dogrula`).
+Ölçülmüş vaka: yarım shell üzerinde koşuldu, ekrana **"1 basarili, 0 hatali"** yazdı,
+**exit 0** verdi; readback tek satırlık shell gösterdi ⇒ **hiçbir şey yazılmamıştı**.
+
+Buna rağmen aynı desen ailede yaşamaya devam etti (2026-09-09 statik envanteri):
+`populate_cds_views.py` (Q268'de düzeltildi) ve `populate_domains.py:298` (AÇIK).
+Emsalin tek bir dosyanın içinde yaşaması onu **görünmez** kıldı — bu satır o
+yüzden var: aileye yeni script yazan ya da dokunan **önce buraya bakar**.
+
+**İki ayrı değişmez (biri diğerini KAPSAMAZ):**
+1. **KOVA** — "atlandı" başarı değildir: özet satırında ayrı sayılır, hiçbir yazma
+   yapılmadıysa görünür uyarı basılır, çıkış kodu politikası kod içinde yazılıdır.
+   İdempotans **korunur** (yeniden koşum meşru bir başarıdır); değişen şey iddianın
+   dürüstlüğüdür. Emsal: `populate_cds_views.py` `SONUC_*` kovaları + `--fail-on-skip`.
+2. **DOĞRULAMA** — "obje VAR" ≠ "obje DOĞRU": atlama kararı canlı içerikle
+   kıyaslanmadan verildiyse bu bir **yazma kanıtı değil, atlama bildirimidir** ve
+   çıktı bunu açıkça söylemelidir. Emsal: `populate_tables.readback_dogrula()`
+   (`OLCULEMEDI` çağırana **temiz** diye dönmez).
+3. **YÖNLENDİRME** — "kanonik YARATMA aracı" ≠ "kanonik GÜNCELLEME yolu": bir tipi
+   reddedip operatörü **yaratıcıya** göndermek, elindeki soru *"nasıl güncellerim"*
+   ise onu tam da yukarıdaki sahte-yeşile sürükler. Ölçülmüş vaka (2026-09-08):
+   `push_object.py --type ddls` reddi koşulsuz `populate_cds_views.py` diyordu;
+   istek MEVCUT bir view'ı güncellemekti, araç onu atladı. Hata *"yanlış araç"*
+   değil **"yanlış iş için doğru araç"**tı. Emsal: `push_object.TIP_GUNCELLEME_YOLU`
+   + `[GUNCELLEME]` satırı. ⚠ Yeni üye eklerken **playbook'ta yazılı bir sınır
+   cümlesi göster** (`cds` için `playbook/adt-cds.md:178`); ölçülmemiş tipe
+   güncelleme yolu **uydurulmaz** (bulunamadı ≠ yok).
+
+Korpus: `tests/fixtures/push_atlandi_ve_kaynak_izi/run.py` (kova ekseni) ·
+`tests/fixtures/populate_ddic_fail_closed/run.py` (fail-closed ekseni).
 
 ---
 

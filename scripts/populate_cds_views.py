@@ -305,16 +305,41 @@ def cds_exists(client: SAPADTClient, name: str) -> bool:
     return r.status_code == 200
 
 
+# ─── SONUÇ KOVALARI — "atlandı" BAŞARI DEĞİLDİR (Q268, 2026-09-09) ────────────
+# ⛔ ESKİDEN: `create_one` bool dönerdi ve `[SKIP] zaten var` dalı **True** verirdi.
+# `main()` bunu `ok += 1` sayıp ekrana *"N başarılı, 0 hatalı"* yazıyor, `exit 0`
+# veriyordu. Sonuç: HİÇBİR ŞEY YAZILMAMIŞKEN iş bitmiş görünüyordu — bu deponun
+# en pahalı hata sınıfı (sahte-yeşil): yeşil bir sonuç kapsamını sorgulatmaz.
+# EMSAL: `populate_tables.py:268` aynı sınıfı 2026-08-19'da ölçtü ve orada
+# `readback_dogrula()` ile çözdü ("obje VAR" ≠ "obje DOĞRU"). Buradaki kova
+# ayrımı o çözümün YERİNE GEÇMEZ, ÖNCESİDİR: CDS yolunda içerik hâlâ
+# doğrulanmıyor (bkz. `[SKIP]` mesajındaki açık beyan ve F5 yayılım notu).
+#
+# Kovalar bilerek DİZE'dir (bool değil): `if create_one(...)` yazan bir çağıran
+# 'hata'yı da truthy görürdü. Ölçüldü (2026-09-09): bu fonksiyonun üretimde TEK
+# çağıranı vardır (`main`, aşağıda) — dizeye geçiş kimseyi kırmaz. Yeni bir
+# çağıran eklenirse `is` ile bu sabitlere KIYASLASIN, truthiness'e GÜVENMESİN.
+SONUC_OLUSTURULDU = 'olusturuldu'   # gerçekten yazıldı (POST+PUT 2xx)
+SONUC_ATLANDI     = 'atlandi'       # zaten vardı, YAZILMADI — başarı DEĞİL
+SONUC_HATA        = 'hata'          # denendi, olmadı
+SONUC_DRY_RUN     = 'dry_run'       # yalnız önizleme; canlıya hiç gidilmedi
+
+
 def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
                package: str, transport: str,
-               force_recreate: bool = False, dry_run: bool = False) -> bool:
+               force_recreate: bool = False, dry_run: bool = False) -> str:
+    """CDS'i yarat/güncelle. Döner: SONUC_* sabitlerinden BİRİ (bool DEĞİL)."""
     name = name.upper()
     description = extract_label(source)
     exists = cds_exists(client, name) if not dry_run else False
 
     if exists and not force_recreate:
-        print(f'  [SKIP] {name} zaten var')
-        return True
+        # ⚠ "var" diyoruz, "doğru" DEMİYORUZ: `cds_exists` yalnız objenin URL'ine
+        # GET atar; canlı source/main ile yereldeki `.cds` KIYASLANMAZ. Bu satır
+        # bir YAZMA KANITI değil, bir ATLAMA BİLDİRİMİDİR.
+        print(f'  [ATLANDI] {name} zaten var — YAZILMADI '
+              f'(içerik DOĞRULANMADI; güncellemek için: --force-recreate)')
+        return SONUC_ATLANDI
 
     shell_xml = build_shell_xml(name, description, package)
 
@@ -323,7 +348,7 @@ def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
         print(f'Description: {description}')
         print(f'Source preview (first 400 chars):')
         print(source[:400])
-        return True
+        return SONUC_DRY_RUN
 
     # Step 1: DELETE if force_recreate
     if force_recreate and exists:
@@ -350,7 +375,7 @@ def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
     if r.status_code not in (200, 201):
         print(f'  [FAIL] {name} POST status={r.status_code}')
         print(f'         Body: {r.text[:400]}')
-        return False
+        return SONUC_HATA
 
     # Step 3: LOCK
     obj_url = f'/sap/bc/adt/ddic/ddl/sources/{name.lower()}'
@@ -368,7 +393,7 @@ def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
     handle = m.group(1) if m else None
     if not handle:
         print(f'  [FAIL] {name} LOCK status={lr.status_code}')
-        return False
+        return SONUC_HATA
 
     try:
         # Step 4: PUT source/main (If-Match GÖNDERME, playbook §28)
@@ -385,11 +410,11 @@ def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
         )
         if pr.status_code in (200, 201, 204):
             print(f'  [OK]   {name}  ({len(source)} bytes pushed)')
-            return True
+            return SONUC_OLUSTURULDU
         else:
             print(f'  [FAIL] {name} PUT source/main status={pr.status_code}')
             print(f'         Body: {pr.text[:400]}')
-            return False
+            return SONUC_HATA
     finally:
         # Step 5: UNLOCK
         try:
@@ -412,6 +437,11 @@ def main():
     parser.add_argument('--cwd')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--force-recreate', action='store_true')
+    parser.add_argument('--fail-on-skip', action='store_true',
+                        help='Zaten var olduğu için ATLANAN CDS varsa koşumu hata '
+                             'say (exit 3). Varsayılan KAPALI: idempotan yeniden '
+                             'koşum meşrudur. CI\'da "hiçbir şey yazılmadıysa yeşil '
+                             'olmasın" demek için aç.')
     parser.add_argument('--only', help='Comma-separated CDS names to process')
     parser.add_argument('--target-sprint',
                         help='Sprint kapısının hedef sprint ID\'si (ör. 3). '
@@ -567,22 +597,65 @@ def main():
             return 1
         print(f'[OK] CSRF: {csrf[:24]}...')
 
-    ok = 0
-    fail = 0
+    sayac = {SONUC_OLUSTURULDU: 0, SONUC_ATLANDI: 0,
+             SONUC_HATA: 0, SONUC_DRY_RUN: 0}
+    atlananlar = []
     for f in cds_files:
         name = f.stem.upper()
         if only_set and name not in only_set:
             continue
         source = f.read_text(encoding='utf-8')
-        if create_one(client=client, csrf=csrf, name=name, source=source,
-                      package=args.package, transport=args.transport,
-                      force_recreate=args.force_recreate, dry_run=args.dry_run):
-            ok += 1
-        else:
-            fail += 1
+        durum = create_one(client=client, csrf=csrf, name=name, source=source,
+                           package=args.package, transport=args.transport,
+                           force_recreate=args.force_recreate, dry_run=args.dry_run)
+        if durum not in sayac:
+            # Tanınmayan durum SESSİZCE başarıya sayılmaz (fail-closed).
+            print(f'  [FAIL] {name} — create_one TANINMAYAN durum döndürdü: {durum!r}')
+            durum = SONUC_HATA
+        sayac[durum] += 1
+        if durum == SONUC_ATLANDI:
+            atlananlar.append(name)
 
-    print(f'\n=== Sonuç: {ok} başarılı, {fail} hatalı ===')
-    return 0 if fail == 0 else 1
+    olusturuldu = sayac[SONUC_OLUSTURULDU]
+    atlandi     = sayac[SONUC_ATLANDI]
+    fail        = sayac[SONUC_HATA]
+    dry         = sayac[SONUC_DRY_RUN]
+
+    # ─── KAPANIŞ ÖZETİ — "atlandı" AYRI KOVA (Q268) ───────────────────────────
+    # Eski satır: "N başarılı, M hatalı" — atlananlar `başarılı`nın içindeydi.
+    ozet = (f'\n=== Sonuç: {olusturuldu} yazıldı, {atlandi} atlandı '
+            f'(YAZILMADI), {fail} hatalı')
+    if dry:
+        ozet += f', {dry} dry-run'
+    print(ozet + ' ===')
+
+    if atlandi:
+        print(f'[ATLANDI] {atlandi} CDS zaten vardı ve DOKUNULMADI: '
+              f'{", ".join(atlananlar)}')
+        print('          "zaten var" = YAZMA KANITI DEĞİLDİR: canlı kaynak '
+              'yereldeki .cds ile KIYASLANMADI.')
+        print('          Güncellemek için: --force-recreate  ·  '
+              'Bu durumu hata saymak için: --fail-on-skip')
+    if olusturuldu == 0 and atlandi and not fail:
+        print('[UYARI] HİÇBİR CDS YAZILMADI — bu koşumun canlıya tek bir yazma '
+              'etkisi olmadı. "Başarılı" sanma.')
+
+    # ─── ÇIKIŞ KODU POLİTİKASI (açıkça yazılı; Q268) ──────────────────────────
+    #   1 → en az bir GERÇEK hata var (değişmedi).
+    #   3 → hata yok ama atlanan var VE `--fail-on-skip` verildi (opt-in sıkılaştırma;
+    #       CI'da "idempotan koşum yeşil sayılmasın" demek için. 1'den AYRI kod:
+    #       çağıran "gerçek hata" ile "hiç yazılmadı"yı ayırt edebilsin).
+    #   0 → yazıldı ve/veya atlandı, hata yok. İDEMPOTANS BİLEREK KORUNDU:
+    #       zaten dolu bir pakete yeniden koşmak meşru bir başarıdır; değişen tek
+    #       şey iddianın DÜRÜSTLÜĞÜ (yukarıdaki özet + uyarı), exit kodu değil.
+    #       ⚠ Bu bir GEVŞETME değildir: eskiden de 0 dönüyordu.
+    if fail:
+        return 1
+    if atlandi and args.fail_on_skip:
+        print('[FAIL] --fail-on-skip: atlanan CDS var, koşum HATA sayılıyor '
+              '(exit 3).')
+        return 3
+    return 0
 
 
 if __name__ == '__main__':
