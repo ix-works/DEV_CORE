@@ -72,6 +72,66 @@ def readback_farki_yalniz_bicim_mi(yuklenen: str, canli: str) -> bool:
     return "".join(y.split()) == "".join(c.split())
 
 
+def kaynak_kimligi(local_file, source_code: str) -> Dict[str, Any]:
+    """Push edilen kaynağın İZİNİ üret: mutlak yol + md5 (dosya VE gönderilen).
+
+    ⛔ NEDEN VAR (Q222②, 2026-09-09): `push_object.py` başarıda yalnız
+    *"[OK] Push completed successfully: <ad>"* yazıyordu. HANGİ dosyanın gittiği
+    çıktıda YOKTU (`--source-file` verilmediğinde yol bu katmanda TÜRETİLİR, çağıran
+    onu hiç görmez) ve `md5` bu yolun HİÇBİR yerinde geçmiyordu ⇒ push'un
+    "staging ↔ repo" kıyası yapılamıyordu. Bu deponun ölçülmüş dersi:
+    **push ara-kopyası BAYATLAR ve readback bunu yapısal olarak GÖREMEZ**
+    (readback canlıyı GÖNDERİLENLE kıyaslar; gönderilen yanlış dosyaysa ikisi de
+    tutar ve yeşil çıkar). Hangi dosyanın gittiğini YAZMAYAN push doğrulanamaz.
+
+    ⚠ İKİ md5 vardır ve KARIŞTIRILMAMALIDIR:
+      · `md5_dosya`     = diskteki BAYTLAR. `md5sum`/`certutil -hashfile` ile
+                          birebir üretilebilir ⇒ repo/staging kıyasının çapası budur.
+      · `md5_gonderilen`= SAP'ye giden metnin md5'i. Dosya CRLF ise Python'un
+                          evrensel satır-sonu çevrimi onu LF'e indirir ⇒ İKİSİ FARKLI
+                          OLUR. Bu bir kusur değil, ölçülmüş bir gerçektir; bu yüzden
+                          fark VARSA ikisi de basılır (tek md5 basmak, iki değerden
+                          hangisiyle kıyaslayacağını bilmeyen operatörü yanıltır).
+
+    Okunamayan dosya "temiz" sayılmaz: `md5_dosya` `None` kalır ve çağıran bunu
+    *"DOĞRULANAMADI"* diye basar ("ölçülemedi" ≠ "aynı").
+    """
+    import hashlib
+    try:
+        yol = str(Path(local_file).resolve())
+    except Exception:
+        yol = str(local_file)
+    try:
+        md5_dosya = hashlib.md5(Path(local_file).read_bytes()).hexdigest()
+    except Exception:
+        md5_dosya = None
+    md5_gonderilen = hashlib.md5((source_code or '').encode('utf-8')).hexdigest()
+    return {
+        'source_path': yol,
+        'source_md5': md5_dosya,
+        'source_md5_sent': md5_gonderilen,
+        'source_bytes': len(source_code or ''),
+    }
+
+
+def kaynak_kimligi_bas(kimlik: Dict[str, Any], girinti: str = '      ') -> None:
+    """`kaynak_kimligi()` çıktısını operatöre GÖRÜNÜR biçimde bas (tek kaynak).
+
+    ⚠ Bu metin İKİ push yolundan da çağrılır. Kopyalayıp yapıştırma — bu bileşen
+    ailesinde "elle kopyalanmış ikinci literal" kusuru daha önce yaşandı
+    (bkz. `utils/ddic_aktivasyon.py` başlığı).
+    """
+    print(f"{girinti}[KAYNAK] {kimlik.get('source_path')}")
+    md5d = kimlik.get('source_md5')
+    if md5d:
+        print(f"{girinti}         md5(dosya)      = {md5d}")
+    else:
+        print(f"{girinti}         md5(dosya)      = DOĞRULANAMADI (dosya baytları okunamadı)")
+    if md5d != kimlik.get('source_md5_sent'):
+        print(f"{girinti}         md5(gönderilen) = {kimlik.get('source_md5_sent')}"
+              f"  (satır sonu çevrimi CRLF->LF)")
+
+
 class SAPClient:
     """High-level SAP ABAP Development Client"""
 
@@ -511,10 +571,12 @@ class SAPClient:
         if not local_file.exists():
             result['error'] = f"Local file not found: {local_file}"
             result['error_type'] = 'FileNotFoundError'
+            result['source_path'] = str(local_file)   # Q222②: ARANAN yol da kanıttır
             print(f"\n[ERROR] Local file not found: {local_file}")
             return result
 
         source_code = local_file.read_text(encoding='utf-8')
+        result.update(kaynak_kimligi(local_file, source_code))   # Q222②
 
         print(f"\n{'=' * 70}")
         print(f"  Pushing class include {CLASS_INCLUDE_TYPES[kind]['abap_include']}: "
@@ -522,6 +584,7 @@ class SAPClient:
         print(f"{'=' * 70}")
         print(f"\n[1/4] Reading local file...\n      {local_file}\n"
               f"      Size: {len(source_code)} characters")
+        kaynak_kimligi_bas(result)
 
         lock_handle = None
         try:
@@ -609,6 +672,10 @@ class SAPClient:
                 source_uploaded (bool): Whether source code was uploaded to SAP
                 activated (bool): Whether the object was activated
                 lock_released (bool): Whether the lock was cleanly released
+                source_path (str): Q222② — ÇÖZÜLMÜŞ mutlak kaynak yolu (dosya
+                    bulunamadığında ARANAN yol). Çağıran bunu basar.
+                source_md5 (str|None): dosya baytlarının md5'i (None = okunamadı)
+                source_md5_sent (str): SAP'ye GÖNDERİLEN metnin md5'i (CRLF->LF)
         """
         from object_types import get_local_subdir
 
@@ -645,6 +712,7 @@ class SAPClient:
                 print(f"[INFO] Specified source: {source_file}")
             result['error'] = f"Local file not found: {local_file}"
             result['error_type'] = 'FileNotFoundError'
+            result['source_path'] = str(local_file)   # Q222②: ARANAN yol da kanıttır
             return result
 
         if self.debug_enabled:
@@ -656,9 +724,12 @@ class SAPClient:
         with open(local_file, 'r', encoding='utf-8') as f:
             source_code = f.read()
 
+        result.update(kaynak_kimligi(local_file, source_code))   # Q222②
+
         print(f"\n[1/4] Reading local file...")
         print(f"      {local_file}")
         print(f"      Size: {len(source_code)} characters")
+        kaynak_kimligi_bas(result)
 
         # Resolve transport BEFORE locking so corrNr is passed during lock.
         # Without corrNr, SAP CTS auto-creates a ghost transport during lock,

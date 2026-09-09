@@ -224,6 +224,18 @@ python scripts/populate_cds_views.py ... --force-recreate
 
 Her CDS için bir `.cds` dosyası (DDL source) — script `@EndUserText.label`'dan description çıkarır.
 
+> ⛔ **BU ARAÇ MEVCUT VIEW'I GÜNCELLEMEZ — ATLAR** (yukarıdaki sınır cümlesinin icra tarafı).
+> Zaten var olan bir view için `[ATLANDI] <ad> zaten var — YAZILMADI (içerik DOĞRULANMADI)`
+> basar; kapanış özeti `atlandı` kovasını **ayrı** sayar ve hiçbir yazma olmadıysa
+> `[UYARI] HİÇBİR CDS YAZILMADI` uyarısı çıkar. **Çıkış kodu yine 0'dır** (idempotan
+> yeniden koşum meşrudur) ⇒ *"exit 0 gördüm, yazıldı"* **çıkarımı yanlıştır**; kova
+> satırını oku. CI'da "hiçbir şey yazılmadıysa yeşil olmasın" demek için `--fail-on-skip`
+> (exit **3**; gerçek hatanın exit 1'inden **ayrı** kod).
+> Güncellemek istiyorsan: `--force-recreate` (DELETE+CREATE) **ya da** mevcut-view yolu —
+> `adt_push_source` / `SAPClient.push_object(object_type='ddls')`.
+> *(2026-09-09 Q268 — ölçülmüş vaka: araç `[SKIP] zaten var` deyip `1 başarılı, 0 hatalı` +
+> exit 0 veriyordu; hiçbir şey yazılmamıştı.)*
+
 ### 30.1 Önemli — 2-Step Pattern Gerek (Tablo Gibi)
 
 Library'nin `create_cds_view()` (`sap_client.py`) **bu sistemde body içine source koyuyor ama SAP body'yi ignore ediyor** (table'daki sorunla aynı, playbook §15).

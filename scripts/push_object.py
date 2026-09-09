@@ -47,6 +47,36 @@ TIP_YONLENDIRME = {
                          'sap_adt_lib.set_function_module_source()',
     'servicedefinition': 'create_rap_service.py --step srvd',
 }
+
+# ── Q268② (2026-09-09) — YARATMA aracı ≠ GÜNCELLEME yolu ─────────────────────
+# ⛔ Yukarıdaki tablo tek bir soruya cevap veriyordu: *"bu tipi NE YARATIR?"*.
+# Operatörün elindeki soru ise çoğu zaman *"bu tipi NASIL GÜNCELLERİM?"*tir ve
+# `cds` için bu İKİSİ AYNI ŞEY DEĞİLDİR — ölçülmüş vaka (2026-09-08, bir proje
+# CDS'i): `--type ddls` reddedildi, not operatörü `populate_cds_views.py`'a
+# gönderdi, o araç MEVCUT view'ı `[ATLANDI]` deyip hiçbir şey yazmadı. Yani
+# yönlendirme "yanlış araç" değil **YANLIŞ İŞ İÇİN DOĞRU ARAÇ** öneriyordu;
+# Q268'in yazma-tarafı onarımı (`populate_cds_views.py` sonuç kovaları) bu
+# satırın YERİNE GEÇMEZ — o, sessizliği bozar; bu, operatörü en baştan doğru
+# yola koyar. İkisi AYRI değişmezdir.
+# OTORİTE, bu dosyanın tahmini değil playbook'un yazılı sınır cümlesidir:
+#   `playbook/adt-cds.md:178` → "Batch (çok CDS): populate_cds_views.py.
+#                                Mevcut CDS güncelle: doğrudan adt_push_source."
+#   `playbook/adt-cds.md:198` → "…/ SAPClient.push_object(object_type='ddls',
+#                                source_file=<yerel .cds>) — kaynağı DİSKTEN okut"
+# ⚠ NİTELEYİCİ: bu tabloda BUGÜN tek üye var. "Diğer tiplerin güncelleme yolu
+# yaratma yoluyla aynıdır" DEMİYORUZ — onlar ÖLÇÜLMEDİ (bulunamadı ≠ yok).
+# Yeni üye eklerken playbook'ta yazılı bir sınır cümlesi göster; tahminle ekleme.
+# ⚠ Degerler BILEREK ASCII: bu metin argparse HATA yolundan stderr'e gider ve
+# `--type` reddi komsu notlarla ayni yuzeydedir (onlar da aksansiz yazilmistir).
+# Aksanli yazmak, konsol kodlamasi UTF-8 olmayan bir kosumda notu kaybettirir —
+# ve notun tek isi ZATEN goruntulenmek.
+TIP_GUNCELLEME_YOLU = {
+    'cds': ("MEVCUT view'i GUNCELLEMEK icin o araca GITME: batch uretici "
+            "mevcut view'i ATLAR (yazmaz). Guncelleme yolu: "
+            "mcp__sap-adt__adt_push_source (object_type='ddls') ya da "
+            "SAPClient.push_object(object_type='ddls', source_file=<.cds>). "
+            "Kaynak: playbook/adt-cds.md 17 (satir 178 ve 198)."),
+}
 # `source/main` ucu OLMAYAN, XML zarfı ile yazılan tipler (yukarıdakilerin alt kümesi).
 # ⚠ `cds`/`function`/`servicedefinition` BU KÜMEDE DEĞİL — onlar source-based'dir,
 # yalnızca kendi kanonik araçları vardır. Gerekçeyi karıştırma.
@@ -73,15 +103,57 @@ def tip_yonlendirme_notu(istenen):
                 "YASAKTIR (create_package.py 2026-08-01'de silindi, geri eklenmez).")
     if t in TIP_YONLENDIRME:
         satir = (f"[YONLENDIRME] '{t}' push_object'e KASTEN kablolanmadi. "
-                 f"Kanonik arac: {TIP_YONLENDIRME[t]}")
+                 f"Kanonik YARATMA araci: {TIP_YONLENDIRME[t]}")
         if t in TIP_XML_ZARF:
             satir += ("\n              Sebep: bu tip XML-ZARF objesidir ('source/main' ucu "
                       "YOK); push_object ise lock -> PUT source/main + If-Match yolundan gider.")
+        # Q268②: yaratma aracına yönlendirmek, GÜNCELLEME isteğini karşılamaz.
+        # Not TEK satırda birleşmez — operatör iki yolu AYIRT ETMELİDİR.
+        if t in TIP_GUNCELLEME_YOLU:
+            satir += f"\n[GUNCELLEME]  {TIP_GUNCELLEME_YOLU[t]}"
         return satir
     if t in TIP_YAZICISI_YOK:
         return (f"[YONLENDIRME] '{t}' kayitli bir ADT tipidir ama bu repoda kanonik bir "
                 f"YARATMA araci YOK. Once playbook/adt-*.md oku; ad-hoc REST ile yazma.")
     return ''
+
+
+# ── Q222② (2026-09-09) — PUSH'TA KAYNAK İZLENEBİLİRLİĞİ ──────────────────────
+# ⛔ ESKİDEN: başarıda tek satır vardı — "[OK] Push completed successfully: <ad>".
+# HANGİ dosyanın gittiği çıktıda YOKTU (`--source-file` verilmediğinde yol
+# `sap_client` içinde TÜRETİLİR) ve `md5` bu dosyanın hiçbir yerinde geçmiyordu
+# ⇒ "staging ↔ repo" kıyası yapılamıyordu. Bu deponun ölçülmüş dersi:
+# **push ara-kopyası BAYATLAR ve readback bunu yapısal olarak GÖREMEZ** — readback
+# canlıyı GÖNDERİLENLE kıyaslar, gönderilen yanlış dosyaysa ikisi de tutar.
+# Değerleri alt katman üretir (`sap_client.kaynak_kimligi`), burası yalnız BASAR:
+# ikinci bir md5 hesabı = ikinci bir doğruluk kaynağı = bayatlayacak kopya.
+def kaynak_izi_satirlari(result, istenen_source_file=None):
+    """result dict'inden `[KAYNAK] <yol> md5 <x>` satırlarını üret.
+
+    ⚠ "ölçülemedi" ≠ "yok": alt katman yol/md5 üretmediyse SESSİZ KALINMAZ,
+    açıkça `DOĞRULANAMADI` basılır (sessizlik, kanıtın var olduğu izlenimini verir).
+    """
+    if not isinstance(result, dict):
+        result = {}
+    yol = result.get('source_path') or istenen_source_file
+    md5 = result.get('source_md5')
+    md5s = result.get('source_md5_sent')
+    satirlar = []
+    if yol:
+        satirlar.append(f"[KAYNAK] {yol}")
+    else:
+        satirlar.append("[KAYNAK] DOĞRULANAMADI — alt katman kaynak yolunu "
+                        "bildirmedi (hangi dosyanın push edildiği ÇIKTIDAN "
+                        "KURULAMAZ).")
+    if md5:
+        satirlar.append(f"         md5(dosya)      = {md5}")
+    elif yol:
+        satirlar.append("         md5(dosya)      = DOĞRULANAMADI "
+                        "(dosya baytları okunamadı)")
+    if md5s and md5s != md5:
+        satirlar.append(f"         md5(gönderilen) = {md5s}"
+                        f"  (satır sonu çevrimi CRLF->LF)")
+    return satirlar
 
 
 class _YonlendirenParser(argparse.ArgumentParser):
@@ -165,8 +237,14 @@ def main():
     # result is a dict with 'success' key (or True/False for backward compat)
     success = result.get('success') if isinstance(result, dict) else bool(result)
 
+    kaynak_izi = kaynak_izi_satirlari(result, args.source_file)
+
     if success:
         print(f"[OK] Push completed successfully: {args.name}")
+        # Q222②: NE gittiğini yazmayan bir "[OK]" doğrulanamaz. Yol + md5 BAŞARI
+        # dalında da basılır — asıl kıyas (staging ↔ repo) tam burada yapılır.
+        for satir in kaynak_izi:
+            print(satir)
         return 0
     else:
         error = result.get('error', '') if isinstance(result, dict) else ''
@@ -179,6 +257,10 @@ def main():
             print(f"[ERROR] {error}")
         if error_type:
             print(f"[ERROR TYPE] {error_type}")
+        # Q222②: hata dalında da HANGİ dosyanın denendiği yazılır — "yanlış dosyayı
+        # push ediyordum" teşhisi aksi hâlde çıktıdan KURULAMAZ.
+        for satir in kaynak_izi:
+            print(satir)
         print("")
         print("[ACTION REQUIRED] Do NOT tell the user the push succeeded.")
         print("[ACTION REQUIRED] Report this failure to the user and ask how to proceed.")

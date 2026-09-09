@@ -425,6 +425,14 @@ OZEL_TESTLER = [
      "ADT uc URL'i: sinif alt-include'una `/source/main` EKLENMEZ (canli: ciplak 200 / "
      "ekli 404) + `func` generic yola girerse ANLASILIR RET (grup adi turetilemez); "
      "11 FP capasi mutasyonda da GECER"),
+    # 2026-09-09 (Q268 + Q222(2)): "push/yukleme akisi sahte basari raporluyor" sinifi.
+    ("push_atlandi_ve_kaynak_izi",
+     "ATLANAN != BASARILI: populate_cds_views uc baglami (yazildi/atlandi/gercek hata) + "
+     "cikis kodu politikasi (0 idempotans / 3 --fail-on-skip / 1 hata) GERCEK main()'den; "
+     "push kaynak izi: yol + IKI md5 (dosya baytlari vs gonderilen; CRLF->LF) ve "
+     "iki push yolunun AST KABLOLAMASI; ayrica YARATMA araci != GUNCELLEME yolu "
+     "(`--type ddls` reddi mevcut view icin adt_push_source'a yollar; olculmemis tip "
+     "icin yol UYDURULMAZ) — 3. baglam ayri surecte gercek CLI"),
 ]
 
 
@@ -626,10 +634,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "ve (2026-09-04) çok-satırlı ifade + `union` miras kuralının YANLIŞ-POZİTİF sınırını çivilller"),
     # 2026-08-27: iki dosya da HARITA'da HIC YOKTU — degisiklikleri hicbir korpusa
     # eslesmiyordu (tazelik kapisi kordu) ve zaten hic fixture'lari yoktu.
-    ("scripts/populate_cds_views.py", ("O:cds_paket_kapsami",),
+    ("scripts/populate_cds_views.py",
+     ("O:cds_paket_kapsami", "O:push_atlandi_ve_kaynak_izi"),
      "namespace-gate prefix'i PAKET ADINDAN turetilir (config yalniz fallback): "
      "capraz-paket reddi + config-disi paket + fail-safe; RAP dali ve 14-char siniri "
-     "FP capasi olarak ayni korpusta"),
+     "FP capasi olarak ayni korpusta. 2026-09-09 (Q268): AYRICA sonuc kovalari — "
+     "`atlandi` basariya KARISMAZ, ozet ayri sayar, cikis kodu politikasi olculur"),
     ("scripts/td_spec_check.py", ("O:cds_paket_kapsami",),
      "spec yol-kesfi: iki seviye (<modul>/<paket>) + ref_docs/ adayi + active_package "
      "onceligi; duz yapi ve modul-seviyesi adaylari GERIYE-UYUM capasi"),
@@ -789,7 +799,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:adtget_yokluk_kaniti", "O:class_include_push", "O:dogrulama_kosamadi",
       "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
       "O:sorgu_basarisizligi_gorunur", "O:transport_gorev_istek_cevrimi",
-      "O:adt_uc_url_cozumu"),
+      "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi"),
      "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil) + "
      "görev(S)→istek(K) çevriminin İKİ yazma yolundaki simetrisi + `get_object_url` "
      "TÜKETİCİLERİ (push_object / run_atc_check → Q228 kapanış kanıtı)"),
@@ -806,8 +816,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "'kanıt olumlu' burada ayrılır"),
     ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok",), "activate_and_verify"),
     ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
-    ("scripts/push_object.py", ("O:class_include_push", "O:adt_uc_url_cozumu"),
-     "ccau/ccimp push sırası + reddedilen tipin YÖNLENDİRME notu (eşanlamlı `func` dahil)"),
+    ("scripts/push_object.py",
+     ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi"),
+     "ccau/ccimp push sırası + reddedilen tipin YÖNLENDİRME notu (eşanlamlı `func` dahil) "
+     "+ 2026-09-09 (Q222②) KAYNAK İZİ: `[KAYNAK] <yol> md5 <x>` HEM başarı HEM hata "
+     "dalında basılır; alt katman iz üretmezse SESSİZ kalınmaz (`DOĞRULANAMADI`) "
+     "+ (Q268②) YARATMA aracı ≠ GÜNCELLEME yolu: `ddls` reddi mevcut view için "
+     "`adt_push_source`'a yollar, ölçülmemiş tip için `[GUNCELLEME]` UYDURULMAZ"),
     ("scripts/push_textpool.py",
      ("O:lock_modification_support", "O:transport_gorev_istek_cevrimi"),
      "lock sinyali tüketicisi (+ kanonik `_last_lock_effective_transport` deseninin "
