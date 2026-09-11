@@ -66,6 +66,19 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
   md5 listesi **+ `infra-changelog` satırı yazılmış ve stage'li** (B11 kapısı aynı commit'te ister; placeholder YOK). Lider o anda commit+push+draft PR açar; CI, ajan rapor yazarken koşar (ölçüm:
   son süit → rapor sonu med ~11 dk, CI 2 dk ⇒ 6/6 koşuda sonuç rapordan önce gelirdi).
   Bundan sonra koda dokunulursa "KOD DONDU-2" (md5 çapası yenilenir).
+- **TALİMAT-DEĞİŞİKLİĞİ TEYİDİ — olay-tetikli, ZORUNLU (2026-09-10; sınıfın 3. vakası):** İş
+  sırasında lider'den **bir kararı değiştiren / iptal eden** mesaj gelirse, yeni işe başlamadan
+  ÖNCE tek `SendMessage`: ① değişikliği **KENDİ CÜMLENLE** özetle ("X ölçütü düştü, yerine Y") —
+  *"aldım / tamam"* **YETMEZ**; yanlış anlamayı yakalayan şey teyidin varlığı değil, **özetin
+  kendisidir** ② o an hangi aşamada olduğunu yaz (henüz yazmadım · yazdım, geri alacağım ·
+  kısmen uyguladım) ③ **ZATEN YAPTIYSAN TEKRARLAMA** — çakışan iki talimat gelirse **sonuncusu**
+  geçerlidir, mükerrer iş yapma, durumu bildir. 2-3 satır.
+  ⚠ **Kapsam dar:** yalnız **kararı değiştiren** mesajlar. Her mesaja teyit = gürültü (§4A).
+  ⚠ **Ad değişikliği içeren talimatta:** yeni adı **yaşadığı HER yerde** kapat — controller,
+  fragment/view binding + handler, i18n anahtarı **ve metni**, testler, yorumlar. Eski kökü
+  repo genelinde tara, kalan isabet sayısını **0 olarak raporla**. (Ölçülmüş vaka: controller
+  yeniden adlandırıldı, fragment eski adda kaldı ⇒ özellik 2/2 app'te ölü + runtime hatası;
+  saf-mantık testleri fragment'ı görmediği için 42/42 yeşildi.)
 - **DERHAL (kilometre taşını BEKLEME):** BLOCKER · çelişki · kapsam-dışı bulgu · yazacak yer yok.
 - **NİHAİ RAPOR — bitince, bu iskeletle:** ① kalem bazında sonuç tablosu
   (`KAPANDI · KISMİ · KAPSAM-DIŞI · ÇELİŞKİ · DOĞRULANAMADI · YAPILMADI(gerekçe)` + kanıt +
