@@ -14,6 +14,13 @@ EKSENLER ve VEKTÖRLER:
   C2  session_start YÜKLEME satırı: ÖN KOŞUL + ÖNCEKİ OTURUM / BU OTURUMUN AÇILIŞI (V12–V19)
   K1  ⚠GEVŞETME behavior_manifest muafiyeti — yalnız el değmemiş core kopyası (V21–V26)
   B4  inspector A3 gerçek bulgu + sid filtresi (V27) · B5 kopya→kaynak eşlemesi (V28)
+  Q288 bağ tespiti yolun YAZIMINDAN bağımsız, ata-bağ koruması KORUNUR (H1–H8 · HN1/HN2 · HG/HG2 · H6n)
+       Eski formül `realpath(p) != abspath(p)` üç yazım biçiminde SAHTE bağ der (ölçüldü 2026-09-12,
+       Py 3.11.9): ① harf (`c:` / tümü küçük) ② 8.3 kısa ad (`<AD>~1`; `normcase` bunu KAPATMAZ)
+       ③ proje köküne BAĞ üzerinden ulaşılması. ①② yalnız Windows'ta anlamlıdır (POSIX dosya sistemi
+       harfe duyarlı, 8.3 yok) → orada GÖRÜNÜR biçimde atlanır ve SAYILMAZ. ③ ile HG iki platformda da
+       koşar. HG = GEVŞETME DEĞİL çapası: kök ALTINDAKİ bir ata (`.claude`) bağ ise hâlâ bağ sayılır ve
+       yazma/silme yolu hedefe dokunmaz (lider kararı 2026-09-12, fail-closed).
 
 ⛔ KURULUM ile DENEK AYRIDIR: materyalize edilmiş durum daima BU REPONUN `scripts/`i ile kurulur;
 denenen kod ise kum-core'daki kopyadır (mutasyonlu ya da `--agac` ile eski ağaç). Böylece eski
@@ -31,6 +38,13 @@ MUTASYON (her biri kum kopyasında tek metin değişikliği; desen 1 kez bulunma
   --mutasyon-coker        ÖLÇÜLEMEDİ → YÜKLENMEDİ'ye çöker                        → V18* düşer
   --mutasyon-a3-bilgi     A3 yeniden "bilgi" (bulgu değil)                      → V27 düşer
   --mutasyon-b5-yol       B5 kaynak eşlemesini kullanmaz                        → V28 düşer
+  --mutasyon-harf-overlay _junction_mu eski realpath!=abspath formülüne döner   → H1–H8 düşer
+  --mutasyon-normcase     _junction_mu yalnız normcase'li formül (brif önerisi) → H6/H7/H7b/H8 düşer
+  --mutasyon-ata-yok      _junction_mu yalnız girdinin kendisine bakar          → HG/HG2 düşer
+  --mutasyon-harf-ss      session_start ÖN KOŞUL eski inline formüle döner      → H1/H2/H7/H8 düşer
+  --mutasyon-q291-dalsiz  materyalize'nin ata-bağ RED dalı sökülür              → Q291a/Q291b düşer
+Q291 (kullanıcı onayı 2026-09-12, Q288 PR'ı): `.claude` bağ iken `.claude/<tip>` YOK ya da BOŞ ise
+`materyalize` bağın HEDEFİNE üretiyordu (ölçüldü: iki vakada da 3 dosya). Yeni dal rmdir'den ÖNCE durur.
 """
 from __future__ import annotations
 
@@ -55,7 +69,11 @@ KURULUM_KODU = KOK / "scripts"
 
 GECERLI_KIP = {"--mutasyon-optin", "--mutasyon-muafiyetsiz", "--mutasyon-gevsek",
                "--mutasyon-sidsiz", "--mutasyon-durum-naif", "--mutasyon-coker",
-               "--mutasyon-a3-bilgi", "--mutasyon-b5-yol"}
+               "--mutasyon-a3-bilgi", "--mutasyon-b5-yol",
+               "--mutasyon-harf-overlay", "--mutasyon-normcase", "--mutasyon-ata-yok",
+               "--mutasyon-harf-ss", "--mutasyon-q291-dalsiz"}
+
+_Q288_YENI = "return p.is_dir() and any(_bag_mi(a) for a in _kok_alti_zinciri(p, kok))"
 
 # (dosya, eski, yeni) — kum kopyasına uygulanır, gerçek kaynağa ASLA.
 MUTASYONLAR = {
@@ -78,6 +96,18 @@ MUTASYONLAR = {
                             'f"→ team_setup.py --repair-junctions", bilgi=True))'),
     "--mutasyon-b5-yol": ("inspector.py",
                           '_kaynak = getattr(_ov0, "core_kaynagi", None)', "_kaynak = None"),
+    "--mutasyon-harf-overlay": ("utils/claude_overlay.py", _Q288_YENI,
+                                "return p.is_dir() and os.path.realpath(p) != os.path.abspath(p)"),
+    "--mutasyon-normcase": ("utils/claude_overlay.py", _Q288_YENI,
+                            "return p.is_dir() and os.path.normcase(os.path.realpath(p)) "
+                            "!= os.path.normcase(os.path.abspath(p))"),
+    "--mutasyon-ata-yok": ("utils/claude_overlay.py",
+                           "any(_bag_mi(a) for a in _kok_alti_zinciri(p, kok))", "_bag_mi(p)"),
+    "--mutasyon-harf-ss": ("hooks/session_start.py", "elif ov._junction_mu(rd, PROJ):",
+                           "elif os.path.realpath(rd) != os.path.abspath(rd):"),
+    "--mutasyon-q291-dalsiz": ("utils/claude_overlay.py",
+                               "ata_bag = [a for a in _kok_alti_zinciri(h, proje)[1:] if _bag_mi(a)]",
+                               "ata_bag = []"),
 }
 
 SONUC: list[tuple[bool, str]] = []
@@ -599,6 +629,167 @@ def insp(k: Kum, s13: Path) -> None:
             "V28b (pozitif kontrol) CLAUDE.core.md degisince B5 kopyayi BAYAT der", str(r)[:500])
 
 
+def kucuk(p: Path) -> Path:
+    return Path(str(p).lower())
+
+
+def surucu_kucuk(p: Path) -> Path:
+    s = str(p)
+    return Path(s[0].lower() + s[1:])
+
+
+def kisa_ad(p: Path) -> Path | None:
+    """Windows 8.3 kısa yazımı; üretilemiyorsa (POSIX / hacimde 8.3 kapalı) None."""
+    if os.name != "nt":
+        return None
+    import ctypes
+    buf = ctypes.create_unicode_buffer(1024)
+    n = ctypes.windll.kernel32.GetShortPathNameW(str(p), buf, 1024)  # type: ignore[attr-defined]
+    if not n or n >= 1024 or buf.value.lower() == str(p).lower():
+        return None
+    return Path(buf.value)
+
+
+def h_q288(k: Kum) -> None:
+    print("\n-- Q288 bag tespiti yazim-bagimsiz + ata korumasi --")
+    bu = {"session_id": SID_BU, "source": "startup"}
+    L_YUK = [ls(SID_ONCEKI, "session_start", "{P}/CLAUDE.md"),
+             ls(SID_ONCEKI, "session_start", "{P}/.claude/rules/00-claude-core.md")]
+    tazelendi = lambda o: any(str(s).startswith("overlay tazelendi") for s in o.get("s", []))  # noqa: E731
+
+    # ── ③ proje köküne BAĞ üzerinden ulaşılır (iki platformda da anlamlı) ──
+    g7 = ss_proje(k, "h7gercek", log=L_YUK)
+    b7 = k.tmp / "h7bag"
+    bag(b7, g7)
+    y = yukleme_satiri(k.hook("session_start.py", b7, bu)[1])
+    kontrol("ÖN KOŞUL: TAMAM" in y and "JUNCTION" not in y,
+            "H7 proje koku BAG uzerinden -> gercek rules kopyasi JUNCTION sayilmaz (ON KOSUL TAMAM)", y)
+
+    c7b = hafif_core(k.tmp, "c_h7b")
+    g7b = bos_proje(k.tmp, "h7b_gercek")
+    k.kur_materyalize(g7b, c7b)
+    b7b = k.tmp / "h7b_bag"
+    bag(b7b, g7b)
+    yaz(c7b / "CLAUDE.core.md", "# core yukleyici\n\nH7B-TAZE\n")
+    o = k.sur(k.kod, "oto", b7b, c7b)
+    kontrol("H7B-TAZE" in oku(kopya(g7b)) and tazelendi(o),
+            "H7b proje koku BAG uzerinden -> oto_tazele SESSIZCE ATLAMAZ, kopyayi tazeler", str(o)[:500])
+
+    c6 = hafif_core(k.tmp, "c_h6")
+    g6 = bos_proje(k.tmp, "h6_gercek")
+    k.kur_materyalize(g6, c6)
+    b6 = k.tmp / "h6_bag"
+    bag(b6, g6)
+    r = k.sur(k.kod, "materyalize", b6, c6, "rules")
+    kontrol(r.get("ok") and not link_mi(rules(g6)),
+            "H6 proje koku BAG uzerinden -> materyalize yeniden kosum BASARILI (dolu dizine rmdir denemez)",
+            str(r)[:500])
+    kontrol(kopya(g6).is_file() and (rules(g6) / "genel.md").is_file(),
+            "H6n (N) her iki kodda da kopyalar YERINDE (eski kodun hatasi yikici degildi)",
+            str(sorted(x.name for x in rules(g6).iterdir())))
+
+    # ── HG: kökün ALTINDAKİ ata (`.claude`) bağ → hâlâ bağ (GEVŞETME DEĞİL çapası) ──
+    hg = bos_proje(k.tmp, "hg")
+    shutil.rmtree(hg / ".claude")
+    bag(hg / "core", k.tam)
+    hedef_claude = k.tmp / "hg_claude_hedef"
+    yaz(hedef_claude / "rules" / "00-claude-core.md", "HEDEF-KOPYA\n")
+    yaz(hedef_claude / "rules" / "yabanci-kural.md", "HEDEF-YABANCI\n")
+    bag(hg / ".claude", hedef_claude)
+    y = yukleme_satiri(k.hook("session_start.py", hg, bu)[1])
+    kontrol("ÖN KOŞUL: EKSİK" in y and "JUNCTION" in y,
+            "HG (N) .claude'un KENDISI bag -> rules HALA JUNCTION sayilir (ata korumasi)", y)
+    r = k.sur(k.kod, "materyalize", hg, hafif_core(k.tmp, "c_hg"), "rules")
+    kontrol(not r.get("ok") and oku(hedef_claude / "rules" / "00-claude-core.md") == "HEDEF-KOPYA\n"
+            and (hedef_claude / "rules" / "yabanci-kural.md").is_file(),
+            "HG2 (N) .claude bag iken materyalize bag HEDEFINE yazmaz/silmez",
+            f"{r} hedef={sorted(x.name for x in (hedef_claude / 'rules').iterdir())}")
+
+    # ── Q291: ata bağ + `.claude/<tip>` YOK / BOŞ → materyalize bağ hedefine HİÇBİR ŞEY yazmaz ──
+    for etiket, vaka in (("Q291a", "yok"), ("Q291b", "bos")):
+        pq = bos_proje(k.tmp, f"q291_{vaka}")
+        shutil.rmtree(pq / ".claude")
+        hq = k.tmp / f"q291_hedef_{vaka}"
+        hq.mkdir()
+        if vaka == "bos":
+            (hq / "rules").mkdir()
+        bag(pq / ".claude", hq)
+        r = k.sur(k.kod, "materyalize", pq, hafif_core(k.tmp, f"c_q291_{vaka}"), "rules")
+        olusan = sorted(x.relative_to(hq).as_posix() for x in hq.rglob("*") if x.is_file())
+        dizin_yerinde = vaka == "yok" or (hq / "rules").is_dir()
+        kontrol(not r.get("ok") and olusan == [] and dizin_yerinde,
+                f"{etiket} .claude bag + rules {vaka.upper()} -> materyalize ok=False, bag hedefinde 0 dosya",
+                f"{r} olusan={len(olusan)} {olusan} dizin_yerinde={dizin_yerinde}")
+
+    if os.name != "nt":
+        print("  [ATLA] H1-H5 · H8 · HN1 · HN2: harf/8.3 vektorleri POSIX'te anlamsiz "
+              "(dosya sistemi harfe duyarli, 8.3 yok) — OLCULMEDI, SAYILMADI")
+        return
+
+    # ── ① harf ──
+    s1 = ss_proje(k, "h1", log=L_YUK)
+    for ad, yol in (("H1 surucu harfi kucuk (c:)", surucu_kucuk(s1)), ("H2 tum yol kucuk harf", kucuk(s1))):
+        y = yukleme_satiri(k.hook("session_start.py", yol, bu)[1])
+        kontrol("ÖN KOŞUL: TAMAM" in y and "JUNCTION" not in y,
+                ad + " -> ON KOSUL TAMAM (sahte JUNCTION yok)", f"{yol} {y}")
+
+    c3 = hafif_core(k.tmp, "c_h3")
+    p3 = bos_proje(k.tmp, "h3")
+    k.kur_materyalize(p3, c3)
+    yaz(c3 / "CLAUDE.core.md", "# core yukleyici\n\nH3-TAZE\n")
+    o = k.sur(k.kod, "oto", kucuk(p3), kucuk(c3))
+    kontrol("H3-TAZE" in oku(kopya(p3)) and tazelendi(o),
+            "H3 kucuk harfli yol -> oto_tazele SESSIZCE ATLAMAZ, kopyayi tazeler", str(o)[:500])
+
+    def ajan_overlayli(ad: str, ajanlar_kopya: bool) -> Path:
+        p = bos_proje(k.tmp, ad)
+        bag(p / "core", k.tam)
+        for t in ("skills", "commands"):
+            bag(p / ".claude" / t, k.tam / "claude" / t)
+        yaz(p / "claude-local" / "agents" / "beta.md", "---\nname: beta\ndescription: proje\n---\n\nB\n")
+        k.kur_materyalize(p, k.tam)
+        if ajanlar_kopya:
+            m = k.sur(KURULUM_KODU, "materyalize", p, k.tam, "agents")
+            if not m.get("ok"):
+                print(f"[DURDU] KURULAMADI: agents materyalize {m}")
+                sys.exit(2)
+        else:
+            bag(p / ".claude" / "agents", k.tam / "claude" / "agents")
+        return p
+
+    p4 = ajan_overlayli("h4", True)
+    rc, so, se = k.hook("session_start.py", kucuk(p4), bu)
+    ctx = ctx_of(so)
+    kontrol(rc == 0 and ctx and "hâlâ junction" not in ctx and "JUNCTION" not in yukleme_satiri(so),
+            "H4 kucuk harfli yol + claude-local agents kopyasi -> session_start sahte 'hala junction' YOK",
+            f"rc={rc} {ctx[-700:]} {se[-200:]}")
+    r = k.sur(k.kod, "katman1", proj=kucuk(p4))
+    satir = r.get("r") or []
+    kontrol(satir and not any("hâlâ junction" in m for _, m in satir)
+            and any(t == "PASS" and ".claude/agents" in m for t, m in satir),
+            "H5 ix_doctor katman1 kucuk harfli yol -> agents overlay PASS, sahte FAIL yok", str(r)[:700])
+
+    hn1 = ss_proje(k, "hn1", kopyali=False, log=L_YUK)
+    y = yukleme_satiri(k.hook("session_start.py", kucuk(hn1), bu)[1])
+    kontrol("ÖN KOŞUL: EKSİK" in y and "JUNCTION" in y,
+            "HN1 (N) kucuk harfli yolda GERCEK rules junction'i HALA JUNCTION", y)
+    hn2 = ajan_overlayli("hn2", False)
+    r = k.sur(k.kod, "katman1", proj=kucuk(hn2))
+    kontrol(any(t == "FAIL" and "hâlâ junction" in m for t, m in (r.get("r") or [])),
+            "HN2 (N) kucuk harfli yolda claude-local VAR + agents GERCEK junction -> FAIL hala basilir",
+            str(r)[:700])
+
+    # ── ② 8.3 kısa ad ──
+    s8 = ss_proje(k, "h8_uzun_proje_dizini", log=L_YUK)
+    kisa = kisa_ad(s8)
+    if kisa is None:
+        print("  [ATLA] H8: 8.3 kisa ad uretilemedi (hacimde 8.3 kapali olabilir) — OLCULMEDI, SAYILMADI")
+    else:
+        y = yukleme_satiri(k.hook("session_start.py", kisa, bu)[1])
+        kontrol("ÖN KOŞUL: TAMAM" in y and "JUNCTION" not in y,
+                "H8 8.3 kisa adli proje yolu -> ON KOSUL TAMAM (sahte JUNCTION yok)", f"{kisa} {y}")
+
+
 def main() -> int:
     arg = sys.argv[1:]
     kipler = [a for a in arg if a.startswith("--mutasyon")]
@@ -627,6 +818,7 @@ def main() -> int:
         ref = c2(k)
         k1(k)
         insp(k, ref["s13"])
+        h_q288(k)
     finally:
         baglari_sok(tmp)
         shutil.rmtree(tmp, ignore_errors=True)

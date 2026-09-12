@@ -167,7 +167,7 @@ def _junction_kontrol() -> list[str]:
                 continue
             h = PROJ / ".claude" / t
             if t in zorunlu and not ov.overlay_var_mi(PROJ, t) and \
-                    (not h.is_dir() or ov._junction_mu(h)):
+                    (not h.is_dir() or ov._junction_mu(h, PROJ)):
                 continue                  # junction/yok → YÜKLEME satırı raporlar (⛔'ye düşürülmez)
             overlayli.add(t)
         for t in overlayli:
@@ -246,7 +246,10 @@ def _on_kosul(ov, tazelenen: bool) -> str:
     parca, eksik, onarim = [], False, False
     if not rd.exists():
         parca.append(".claude/rules YOK"); eksik = onarim = True
-    elif os.path.realpath(rd) != os.path.abspath(rd):
+    # Q288: tek tanım `claude_overlay._junction_mu` (yazım-bağımsız + köke kadar ata korumalı).
+    # Eski satır `realpath != abspath` idi: küçük harfli CLAUDE_PROJECT_DIR'de gerçek kopyayı
+    # "JUNCTION" gösteriyordu. `ov` bu fonksiyona yalnız yüklenebildiyse gelir (_yukleme_satiri).
+    elif ov._junction_mu(rd, PROJ):
         parca.append(".claude/rules JUNCTION (harness dış import sayar → YÜKLENMEZ)")
         eksik = onarim = True
     elif not (rd / adi).is_file():
