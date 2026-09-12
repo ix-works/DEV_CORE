@@ -33,6 +33,11 @@ description'dan kayit olur. Bu yuzden "geri-dusus sokuldu" / "dar desen" mutasyo
 kayitlar YINE var (yetim olarak) ve eski P1..P6 vektorleri YESIL kaldi (olculdu: 16/16 KACTI).
 Ayirt edici olan: BASLIGIN linkten gelmesi (P7) ve `yetim=0` sayaci (C7).
 
+SAHNE 4 (Q290) — hook skorlamasinda GENEL token (indeksin > max(%5*n, 4) kaydinda gecen) sayilmaz.
+Gurultunun koku "tek token" degil "genel token"di; "en az 2 AYRIK token" alternatifi olculup
+REDDEDILDI (alakali satirli prompt 12->6) -> G3 o alternatife capadir (`--mutasyon-ayrik2`).
+G1/G2/G6 eski kodda KIRMIZI; G4 (oran, mutlak N degil) ve G5 (kucuk indeks tabani) mutasyonlarla.
+
 KOSUM:  python tests/fixtures/recall_index_ozetsiz/run.py [--mutasyon-<kip>]
 Cikis:  0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (mutasyon capasi tutmadi/derlenmedi)
 """
@@ -130,6 +135,23 @@ MUTLAR = {
     "--mutasyon-stdout-kirli": ("H",
         '            bilgi = B.uret(proj)',
         '            bilgi = B.uret(proj); print("[OK] recall-index tazelendi")  # MUTASYON'),
+    # --- SAHNE 4 (Q290): genel-token tavani -------------------------------------------
+    "--mutasyon-genel-yok": ("H",
+        '    q = _genel_disi(_tokenle(prompt), kayitlar)',
+        '    q = _tokenle(prompt)  # MUTASYON: genel-token tavani sokuldu'),
+    "--mutasyon-mutlak-tavan": ("H",
+        '    tavan = max(GENEL_ORAN * n, GENEL_TABAN)',
+        '    tavan = GENEL_TABAN  # MUTASYON: oran yok, mutlak N'),
+    "--mutasyon-taban-yok": ("H",
+        '    tavan = max(GENEL_ORAN * n, GENEL_TABAN)',
+        '    tavan = GENEL_ORAN * n  # MUTASYON: kucuk indeks tabani yok'),
+    # Q290'da REDDEDILEN alternatif ("en az 2 AYRIK token") geri gelirse tek guclu kelime susar
+    "--mutasyon-ayrik2": ("H",
+        '        if sk >= ESIK:',
+        '        if sk >= ESIK and len({a for a in k.get("anahtar", []) if a in q}) >= 2:  # MUTASYON'),
+    "--mutasyon-esik1": ("H",
+        'ESIK = 5 ',
+        'ESIK = 1 '),
 }
 
 # ============================== SAHNE 1 ==============================================
@@ -630,6 +652,66 @@ def main() -> int:
              all(r == 0 and (o.strip() == "" or ctx(o) is not None) for r, o in cikis)
              and gecerli_json and not kilit3.exists() and not kalinti(),
              f"rc={[r for r, _ in cikis]} json={gecerli_json} kilit={kilit3.exists()} kalinti={kalinti()}")
+
+        # ======================= SAHNE 4 (Q290: genel-token tavani) ======================
+        # Indeks DOGRUDAN yazilir ve gelecege damgalanir -> tazeleme koSMAZ, yalniz skorlama olculur.
+        # Tavan = max(GENEL_ORAN*n, GENEL_TABAN) = buyuk indekste max(10, 4)=10 · kucukte max(1, 4)=4.
+        def _k(ad, anahtar):
+            return {"id": f"mem:{ad}.md", "kaynak": f"memory/{ad}.md", "baslik": ad.replace("_", " "),
+                    "oz": ad, "anahtar": anahtar}
+
+        def indeks_kur(proj, kayitlar):
+            (proj / ".tmp").mkdir(parents=True, exist_ok=True)
+            hp = proj / ".tmp" / "recall-index.json"
+            hp.write_text(json.dumps({"v": 1, "kayit": kayitlar}), encoding="utf-8")
+            ileri = time.time() + 30 * 86400
+            os.utime(hp, (ileri, ileri))
+
+        def skor_kos(proj, prompt):
+            p = subprocess.run([sys.executable, str(hook)], input=json.dumps({"prompt": prompt}).encode("utf-8"),
+                               env=ortam(proj), cwd=str(proj), capture_output=True, timeout=120)
+            return p.returncode, p.stdout.decode("utf-8", "replace")
+
+        # BUYUK indeks n=200: `zirva` df=41 (%20, GENEL) · `orta` df=8 (%4, oran ALTI ama TABAN USTU)
+        buyuk = [_k("zirva_gurultu_dersi", ["zirva"] * 6), _k("orta_sinyal_dersi", ["orta"] * 6),
+                 _k("periskop_kalibrasyon_dersi", ["periskop"] * 5), _k("esikalti_dersi", ["esikalti"] * 3)]
+        buyuk += [_k(f"dolgu_z{i:03d}", ["zirva", f"dolguz{i:03d}"]) for i in range(40)]
+        buyuk += [_k(f"dolgu_o{i:03d}", ["orta", f"dolguo{i:03d}"]) for i in range(7)]
+        buyuk += [_k(f"dolgu_x{i:03d}", [f"dolgux{i:03d}"]) for i in range(200 - len(buyuk))]
+        proj4 = tmp / "proje4"
+        indeks_kur(proj4, buyuk)
+        DOLGU = " konusunda bir soru sormak istiyorum lutfen yardim"
+
+        rc, out = skor_kos(proj4, "zirva" + DOLGU)
+        ekle("G1 ⭐ GENEL token (df %20) TEK BASINA skoru esige tasiyamaz -> enjeksiyon YOK",
+             rc == 0 and out.strip() == "", f"out={out[:160]!r} (eski kod: zirva dersi enjekte edilirdi)")
+        rc, out = skor_kos(proj4, "zirva ve periskop" + DOLGU)
+        c = ctx(out) or ""
+        ekle("G2 ayirt edici token GENEL gurultunun ARKASINDA kalmaz: periskop VAR, zirva dersi YOK",
+             rc == 0 and "periskop" in c and "zirva gurultu" not in c, f"ctx={c[:200]!r}")
+        rc, out = skor_kos(proj4, "periskop" + DOLGU)
+        ekle("G3 TEK guclu icerik kelimesi (1 ayrik token) enjekte EDILIR — reddedilen 'ayrik>=2' alternatifine capa",
+             rc == 0 and "periskop" in (ctx(out) or ""), f"out={out[:160]!r}")
+        rc, out = skor_kos(proj4, "orta" + DOLGU)
+        ekle("G4 df %4 (oran ALTI, mutlak 4'un USTU) token KORUNUR — tavan ORANDIR, mutlak N degil",
+             rc == 0 and "orta sinyal" in (ctx(out) or ""), f"out={out[:160]!r}")
+        rc, out = skor_kos(proj4, "esikalti" + DOLGU)
+        ekle("G8 esik ALTI skor (3) -> enjeksiyon YOK (ESIK degismedi)", rc == 0 and out.strip() == "",
+             f"out={out[:160]!r}")
+
+        # KUCUK indeks n=20: oran*n=1 -> TABAN (4) devrede
+        kucuk = [_k("kucuk_indeks_dersi", ["kucuk"] * 6), _k("yaygin_kelime_dersi", ["yaygin"] * 6)]
+        kucuk += [_k(f"dolgu_k{i:02d}", ["kucuk", f"dolguk{i:02d}"]) for i in range(2)]      # kucuk df=3
+        kucuk += [_k(f"dolgu_y{i:02d}", ["yaygin", f"dolguy{i:02d}"]) for i in range(9)]     # yaygin df=10
+        kucuk += [_k(f"dolgu_s{i:02d}", [f"dolgus{i:02d}"]) for i in range(20 - len(kucuk))]
+        proj5 = tmp / "proje5"
+        indeks_kur(proj5, kucuk)
+        rc, out = skor_kos(proj5, "kucuk" + DOLGU)
+        ekle("G5 ⭐ KUCUK indeks (n=20): df=3 token KORUNUR -> tavan enjeksiyonu SIFIRA indirmez",
+             rc == 0 and "kucuk indeks" in (ctx(out) or ""), f"out={out[:160]!r}")
+        rc, out = skor_kos(proj5, "yaygin" + DOLGU)
+        ekle("G6 KUCUK indekste de tavan calisir: df=10/20 token -> enjeksiyon YOK",
+             rc == 0 and out.strip() == "", f"out={out[:160]!r}")
 
     finally:
         if mutant is not None:
