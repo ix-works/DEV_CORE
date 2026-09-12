@@ -324,16 +324,29 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 ## B7 — recall_inject + build_recall_index
 - P: "classrun derdi" → PATTERN#19 · RAP-sorgusu → 3-ders · "validator/hook" → infra-howto ilk-sıra.
 - N: kısa-prompt sessiz · bozuk-indeks exit-0 (fail-open) · alakasız sessiz.
-- `recall_inject` için fixture bilinçli YOK (deterministik-LLM'siz) → reçete = sentetik-payload
-  (howto-sistem-denetimi §3). **`build_recall_index` için ARTIK FİXTURE VAR** (aşağı bkz.).
-- ⭐ **MEMORY.md AYRIŞTIRMA SÖZLEŞMESİ (2026-08-21) — bu dosyaya dokunmadan önce oku:**
+- ~~`recall_inject` için fixture bilinçli YOK~~ → **Q287 (2026-09-12): ikisinin de korpusu
+  `tests/fixtures/recall_index_ozetsiz`** (sahne 1 MEMORY.md · sahne 2 hub · sahne 3 hook tazeleme,
+  gerçek hook CLI'si + hook_shim'in runpy ortamı + 6 eşzamanlı süreç). Sentetik-payload reçetesi
+  (howto-sistem-denetimi §3) skorlama için geçerli kalır.
+- ⭐ **AYRIŞTIRMA + TAZELEME SÖZLEŞMESİ — bu iki dosyaya dokunmadan önce oku:**
   ```bash
-  python tests/fixtures/recall_index_ozetsiz/run.py                      # 16/16
-  python tests/fixtures/recall_index_ozetsiz/run.py --mutasyon-geridusus-yok  #  8/16
-  python tests/fixtures/recall_index_ozetsiz/run.py --mutasyon-dar-desen      # 11/16
-  python tests/fixtures/recall_index_ozetsiz/run.py --mutasyon-uydur          # 12/16
-  python tests/fixtures/recall_index_ozetsiz/run.py --mutasyon-satirasan      # 12/16
+  python tests/run_battery.py recall_index_ozetsiz   # taban + 18 mutasyon kipi TEK komutta
+  python tests/fixtures/recall_index_ozetsiz/run.py  # yalnız taban
   ```
+  Kip başına düşmesi beklenen vektörler kanonik olarak `infra-changelog.md` Q287 satırında (burada
+  tekrarlanmaz). Eski koddaki kırmızılığı yeniden üretmek: `git archive <taban> scripts` → ayrı
+  ağaç + yeni `run.py` o ağacın `tests/fixtures/recall_index_ozetsiz/`ine kopyalanır.
+  - ⛔ **Kaynak = `MEMORY.md` + `_indeks-*.md` HUB'ları; hub'lar KAYIT DEĞİLDİR** (H3). İki biçim:
+    `[Başlık](x.md) — öz` ve `[[slug]] — öz` (H1/H2). Link, liste satırında OLMAK ZORUNDA DEĞİL (H8).
+  - ⛔ **Yetim geri-düşüşü mutasyonları MASKELER**: hiçbir indekste geçmeyen dosya description'dan
+    YİNE kayıt olur → geri-düşüş/kapsam mutasyonlarını yalnız **P7** (başlık linkten) + **C7**
+    (`yetim=0`) öldürür (ilk koşuda bunlar yokken 16/16 KAÇTI). Bu iki vektör SİLİNEMEZ.
+  - ⛔ **Tazeleme senkron, kilitli, sessiz**: T1 (YOK → aynı prompt'ta üretim) · T2/T2b (BAYAT) ·
+    T3 (taze → üretim YOK) · T4/T4b (canlı kilit → atla; indeks yoksa sessiz exit 0) · T5 (ölü kilit)
+    · T6 (hata → status HATA + stderr, stdout boş) · **T10 (stdout yalnız hook JSON'u)** · T8 (eşzamanlı).
+  - Canlıda durum: `<proje>/.tmp/recall-index.status` (zaman · tetik · sonuç · kayıt · hub · yetim · ms · hata).
+    `sonuc=HATA` ya da eski `zaman` = tazeleme çalışmıyor; indeks dosyasının VARLIĞI kanıt değildir.
+- (tarihçe) **MEMORY.md AYRIŞTIRMA SÖZLEŞMESİ (2026-08-21)** — aşağıdaki maddeler geçerliliğini korur:
   - ⛔ **Ayraç deseni `\s*` OLAMAZ** — `\s` satır sonunu kapsar ve özetsiz bir satır bir
     SONRAKİ satırın metnini `oz` diye yutar (kayıt VAR ama özeti BAŞKA DERSE ait).
     Canlı `MEMORY.md`'de mevcut 90 kaydın **42'si** böyleydi. Doğrusu `[ \t]*`. Çapa: **C6**,

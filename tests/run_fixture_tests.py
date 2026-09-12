@@ -793,6 +793,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/build_recall_index.py", ("O:recall_index_ozetsiz",),
      "MEMORY.md ayrıştırma sözleşmesi: özetsiz satır → frontmatter `description` + "
      "satır-atlamalı kirlenme + 'kaynak yoksa UYDURMA yok' değişmezi"),
+    ("scripts/hooks/recall_inject.py", ("O:recall_index_ozetsiz",), "Q287 otomatik tazeleme: YOK/BAYAT → senkron üretim + kilit + status (T* vektörleri); joker satırı negatif_test_harness+hook_gate_coverage'ı ayrıca ekler"),
     # itg_backstop.py HARITA'da HIC YOKTU (2026-09-09, Q253 turu — `sap_worktype_hint`
     # ile ayni sinif): degisikligi yalniz `scripts/hooks/*.py` jokerine dusuyordu, yani
     # ADR 0022 kapisinin KENDI davranisini olcen bir korpus secilemiyordu.

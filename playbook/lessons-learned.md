@@ -712,8 +712,8 @@ Forward progress doğal refleks, ama **verification refleksini geliştirmek** si
 - **YAP:** ① kuralı **eylemin geçtiği yola** koy (yazma yolu / checklist / o anki dosya)
   ② tetikleyiciyi **eylem-bazlı** yaz ③ doğru anda ateşleyen mevcut nudge'a **maddeyi ekle**
   (yeni gate açmadan) ④ **indekslenen** yere de kısa girdi koy — JIT-recall yalnız `MEMORY.md`
-  + `lessons-learned.md` PATTERN başlıkları + `playbook/howto-*.md`'den beslenir; `CLAUDE.core.md`
-  **indekslenmez** (ölçüldü).
+  (+ Q287'den beri aynı dizindeki `_indeks-*.md` hub'ları) + `lessons-learned.md` PATTERN
+  başlıkları + `playbook/howto-*.md`'den beslenir; `CLAUDE.core.md` **indekslenmez** (ölçüldü).
 - ⛔ **YAPMA:** "kuralı daha sert yazalım/gate açalım" refleksi — sorun metnin gücü değil
   **konumu** olabilir; önce onu ölç (moratoryum: ADR 0019 şart-4).
 
