@@ -468,6 +468,11 @@ OZEL_TESTLER = [
      "ADT uc URL'i: sinif alt-include'una `/source/main` EKLENMEZ (canli: ciplak 200 / "
      "ekli 404) + `func` generic yola girerse ANLASILIR RET (grup adi turetilemez); "
      "11 FP capasi mutasyonda da GECER"),
+    # 2026-09-13 (Q277): create_cds_view kapisi duz alt-dize ariyordu.
+    ("cds_kaynak_kapisi",
+     "create_cds_view kapisi: `select distinct from` + abstract entity KABUL (korpus 63->2 red), "
+     "yorum/string/yazim hatasi anahtar sozcuk SAYILMAZ, table function/custom entity dogru "
+     "mesajla RED ('duzelt' demez); eski uc red + giris noktasi POST 0/1"),
     # 2026-09-09 (Q268 + Q222(2)): "push/yukleme akisi sahte basari raporluyor" sinifi.
     ("push_atlandi_ve_kaynak_izi",
      "ATLANAN != BASARILI: populate_cds_views uc baglami (yazildi/atlandi/gercek hata) + "
@@ -872,10 +877,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:conn_cift_anahtar", "O:conn_yazici_encoding", "O:dogrulama_kosamadi",
       "O:lock_modification_support", "O:class_include_push",
       "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde",
-      "O:transport_gorev_istek_cevrimi", "O:adt_uc_url_cozumu"),
-     "dokuz korpus bu modülü import/mutasyon eder (2026-09-03: `set_function_module_source` "
+      "O:transport_gorev_istek_cevrimi", "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi"),
+     "on korpus bu modülü import/mutasyon eder (2026-09-03: `set_function_module_source` "
      "LOCK-CORRNR otoritesi + `_verify_and_return_lock` docstring'i · 2026-09-04: "
-     "`get_object_source` URL kuruluşu + 404 mesajının obje adı)"),
+     "`get_object_source` URL kuruluşu + 404 mesajının obje adı · 2026-09-13 Q277: "
+     "`_validate_cds_source` sözcük-dizisi kapısı)"),
     ("scripts/sap_client.py",
      ("O:adtget_yokluk_kaniti", "O:class_include_push", "O:dogrulama_kosamadi",
       "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
