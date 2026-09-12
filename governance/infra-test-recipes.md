@@ -2014,6 +2014,33 @@ python tests/run_battery.py fs_docstd --kip=--mutasyon-boskapsam   # 2/2 PASS: t
 - ⚠ **ÖLÇÜM KORPUS DÜZEYİNDEDİR:** `--file <yol>` verilince `n_docs` daima 1'dir ⇒ kusur
   yalnız TAM TARAMADA görünür. Tek dosyayla test eden bir vektör bunu göremez.
 
+**⭐ BEŞİNCİ ÜYE — Q275 (2026-09-13): aynı gate payda > 0 iken de KAPSAMI GİZLİYORDU.**
+Q262 "0 doküman" sessizliğini kapattı; Q275 "22 doküman tarandı" cümlesinin **neyi saymadığını**
+kapatır: alt klasördeki FS/EK (`docs/<alt>/`) hiç görülmüyordu, TS/KD ad süzgecinde düşüyordu
+ve çıktı bunu söylemiyordu. Artık kapsam = `docs` alt ağacı, TS/KD `--tur` ile opt-in, her
+koşumda `KAPSAM:` satırı (taranmayan türlerin sayısı aynı walk'tan türetilir).
+
+```bash
+python tests/fixtures/fs_docstd/run.py                  # 61/61 (Q275 öncesi 51)
+python tests/run_battery.py fs_docstd                   # taban + 17 mutasyon kipi
+python tests/fixtures/gevsetme_pozitif_kontrol/run.py   # 11 + 5 (_iter_docs uyumu, M5 prune çapası)
+python tests/fixtures/run_battery/run.py                # 25/25 (P2 pini = fs_docstd kip sayısı 17)
+```
+
+- **ESKİ KOD KIRMIZISI ölçülür, varsayılmaz:** HEAD sürümü `scripts/validators/_taban_check_fs.py`,
+  koşucu `tests/fixtures/fs_docstd/_taban_run.py` (yalnız `VALIDATOR` sabiti değişik) olarak AYNI
+  dizinlere kopyalanıp koşulur, sonra ikisi de silinir → **54/61**; düşenler TAM OLARAK
+  A14 · A15 · A15b · A16 · A16b · A16c · A19. A14b (doğrudan `docs/` kontrol grubu) · A14c
+  (`_SKIP` / `ref_docs` / öneksiz / TS-KD varsayılanda FP çapası) · A18 eski kodda da yeşildir.
+- ⭐ **A18 SİLİNEMEZ (3. bağlam FP çapası):** kökün ÜST dizini `docs` adlıysa proje "docs ağacı"
+  sayılmamalı. `docs` bileşenini MUTLAK yolda arayan bir uygulama bu vektörde düşer.
+- **GERÇEK-KORPUS KONTROL GRUBU (her dokunuşta):** tüketici projede eski ve yeni sürümü
+  `--max-examples 0` ile koş; yeni çıktıdaki `[WARN]` bloklarından ebeveyni `docs` olanları süz →
+  eski çıktının bloklarıyla **birebir eşit** olmalı (2026-09-13: 11 = 11, eşit). Yalnız alt klasör
+  blokları eklenir.
+- Mutasyonlar: `--mutasyon-altagac` (eski "ad==docs" süzgeci) · `--mutasyon-beyan` (KAPSAM satırı
+  sökülür) · `--mutasyon-tur` (`--tur` yok sayılır; A16c hata dalı AYAKTA kalır).
+
 ## B37 — `check_cds_currency_reference` ÇOK-SATIRLI ifade + `union` dalı (Q234+Q237, ⚠GEVŞETME)
 - Korpus (ev genişletildi, yeni dizin YOK):
   `python tests/fixtures/cds_curr_eksik_annotation/run.py` → **19 senaryo + 11 mutasyon**, exit 0.
@@ -2171,3 +2198,18 @@ python tests/run_battery.py paket_indeks_siralama --precommit   # taban + mutasy
   modül/paket adı doğduğu an Windows'ta üretilen registry Linux CI'da BAYAT görünür.
 - **Dokunulursa BİRLİKTE koşulacaklar:** bu korpus **VE** `python tests/fixtures/core_index_siralama/run.py`
   (kardeş üretici, aynı ilke — biri sessizce sapmasın).
+
+## B41 — run_all_validators çıktı kipi (--ozet / --ayrintili) (Q203)
+
+```
+python tests/fixtures/run_all_ozet_kipi/run.py          # 13 senaryo, exit 0
+python tests/run_battery.py run_all_ozet_kipi           # + 10 mutasyon kipi (hepsi DÜŞMELİ)
+```
+
+- ⛔ Bayraksız kip BAYT-EŞ kalır: CI · post_validate (stdout kuyruğu) · ix_doctor (son 4 satır) bu biçimi okur. S1a/S1c beklenen metni spesifikasyondan kurar — biçim değişirse önce tüketicileri tara.
+- ⛔ Özet kipi YALNIZ rc=0 kapıya uygulanır. Görünür-zorunlu listeden işaret ÇIKARMAK gevşetmedir (⚠GEVŞETME + FP kanıtı); eklemek serbesttir.
+- ⚠ Süzgeç stdout VE stderr'e ayrı uygulanır: gerçek projede [ÖLÇÜLEMEDİ] ve warn-first [BULGU] satırları stderr'de (ölçüldü). S4b + --mutasyon-stderr-gorunur-yok bu ekseni çiviler.
+- ⚠ `bulgu-etiketi` etiket sayımıdır, validator'ın kendi sayımı DEĞİL; etiketsiz çıktı `gizlenen` sayısında görünür.
+- Canlı etki ölçümü: `CLAUDE_PROJECT_DIR=<proje> python scripts/validators/run_all_validators.py --quick [--ozet]` → stdout+stderr ayrı say; taban kodu `_` önekli kardeş dosya olarak aynı dizinde koş (utils importu __file__'dan çözülür).
+- Şablon çapası: `pre-commit.template` kapanış satırı ve `else` dalı kardeş korpusların (precommit_junction_failclosed M1/M2, precommit_kopya_surum_esligi) çapasıdır; `--ozet` yalnız çağrı satırındadır. Şablona dokunan tur dört korpusu birlikte koşar.
+- Fixture/batarya/b0_secim worktree KÖKÜNDEN koşulur; kök dışından b0_secim sahte 12/20 verir.
