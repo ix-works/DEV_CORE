@@ -346,6 +346,14 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
     · T6 (hata → status HATA + stderr, stdout boş) · **T10 (stdout yalnız hook JSON'u)** · T8 (eşzamanlı).
   - Canlıda durum: `<proje>/.tmp/recall-index.status` (zaman · tetik · sonuç · kayıt · hub · yetim · ms · hata).
     `sonuc=HATA` ya da eski `zaman` = tazeleme çalışmıyor; indeks dosyasının VARLIĞI kanıt değildir.
+- ⭐ **SKORLAMA AYARI (Q290) — `ESIK`/tavan/ağırlığa dokunmadan önce oku:** korpus SAHNE 4 (G*).
+  - ⛔ **Fixture yeşili ayarın doğru olduğunu GÖSTERMEZ** — ayar kararı yalnız **gerçek prompt örneklemi +
+    kör etiket + ayrı bekletme örneklemi** ile verilir; ölçüm yöntemi ve eğri `infra-changelog.md` Q290'da.
+    Aynı örneklemde hem ayar seçip hem ölçmek aşırı uyumdur.
+  - ⛔ "Gürültü" satırını düşüren her ayarda **düşen ALAKALI satırları ayrıca say** — Q290'da en sezgisel
+    aday ("en az 2 ayrık token") alakalı satırlı prompt'u yarıya indirdi, precision'ı artırmadı.
+  - ⛔ Tavan **ORAN + TABAN**'dır: saf oran küçük indekste her token'ı keser (`--mutasyon-taban-yok`
+    sahne 3'ün T* vektörlerini de düşürür), mutlak N büyük indekste içerik kelimesini keser (G4).
 - (tarihçe) **MEMORY.md AYRIŞTIRMA SÖZLEŞMESİ (2026-08-21)** — aşağıdaki maddeler geçerliliğini korur:
   - ⛔ **Ayraç deseni `\s*` OLAMAZ** — `\s` satır sonunu kapsar ve özetsiz bir satır bir
     SONRAKİ satırın metnini `oz` diye yutar (kayıt VAR ama özeti BAŞKA DERSE ait).

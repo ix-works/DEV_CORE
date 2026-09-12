@@ -15,6 +15,9 @@ TASARIM (bilinçli sınırlar):
   · Kısa/selamlaşma prompt'ları (<40 kar) ve düşük skor (<EŞİK) → sıfır çıktı
     (yanlış-pozitif gürültüsü, uyarıya bağışıklık yaratır — inspector D7 dersi).
   · LLM YOK; skorlama = ağırlıklı token-kesişimi (builder ile aynı katlama).
+  · GENEL-TOKEN TAVANI (Q290): indeksin > max(%5·n, 4) kaydında geçen prompt token'ı skora
+    katılmaz (`_genel_disi`). ESIK/TOP_K/MIN_PROMPT ve üretecin `anahtar` formülü DEĞİŞMEDİ.
+    Ölçüm + reddedilen "en az 2 ayrık token" alternatifi: governance/infra-changelog.md Q290.
 
 OTOMATİK TAZELEME (Q287, 2026-09-12):
   ⭐ NEDEN: indeksi tazeleyen HİÇBİR mekanizma yoktu (üretecin fixture dışı çağıranı 0,
@@ -56,15 +59,41 @@ for _a in (sys.stdout, sys.stderr):
 _TR = str.maketrans("İIıŞşĞğÜüÖöÇç", "iiissgguuoocc")
 _STOP = {"ve", "ile", "icin", "bir", "bu", "da", "de", "the", "for", "and",
          "yok", "var", "olan", "her", "gate", "check", "yap", "olarak", "sonra"}
-ESIK = 5          # min skor (başlık-token'ı 3 puan → tek güçlü eşleşme yetmez, 2+ ister)
+ESIK = 5          # min skor = `anahtar` LİSTESİNDE prompt'a düşen eleman sayısı (tekrarlar ayrı sayılır;
+                  # ağırlık üreteçte: başlık ×3 · öz ×1, howto özü ×2 — build_recall_index.py)
 TOP_K = 3
 MIN_PROMPT = 40   # kısa prompt = selamlaşma/komut; recall gürültü olur
+# Q290 — GENEL-TOKEN TAVANI: indeksin > max(GENEL_ORAN·n, GENEL_TABAN) kaydında geçen prompt token'ı
+# skorlamaya KATILMAZ (liste elle tutulmaz, her prompt'ta indeksten türetilir). ORAN çünkü indeks boyu
+# projeye göre onlarca↔yüzlerce kayıt; TABAN çünkü küçük indekste df=2 "genel" demek değildir.
+GENEL_ORAN = 0.05
+GENEL_TABAN = 4
 _KILIT_BAYAT_SN = 30   # üretim ~50 ms; 30 sn'lik kilit ancak çökmüş bir üreticiden kalır
 
 
 def _tokenle(s: str) -> set:
     s = s.translate(_TR).lower()
     return {t for t in re.findall(r"[a-z0-9_]{3,}", s) if t not in _STOP}
+
+
+def _genel_disi(q: set, kayitlar: list) -> set:
+    """Q290: indeksin çok kaydında geçen (GENEL) prompt token'larını skorlamadan çıkarır.
+
+    ⭐ NEDEN (ölçüldü 2026-09-12, 80 gerçek prompt, kör etiket): gürültünün kökü "tek token"
+    DEĞİL "genel token"dı — `once` (43/336 kayıt) · `degil` (49) · `ayni` (22) · `yeni` (24)
+    başlıkta ×3 geçince skoru tek başına 5'e taşıyordu. "En az 2 AYRIK token" alternatifi ÇÜRÜDÜ:
+    alakalı satırlı prompt 12→6 (düşürdüğü alakalı satırlar TEK güçlü içerik kelimesiyle geliyordu:
+    `deploy`, `bos`, `infra`), tuttuğu gürültü ise genel kelime ÇİFTLERİYDİ (`once`+`yeni`).
+    """
+    n = len(kayitlar)
+    if not n or not q:
+        return q
+    df = dict.fromkeys(q, 0)
+    for k in kayitlar:
+        for t in q.intersection(k.get("anahtar", [])):
+            df[t] += 1
+    tavan = max(GENEL_ORAN * n, GENEL_TABAN)
+    return {t for t in q if df[t] <= tavan}
 
 
 def _parse_fail_notu() -> None:
@@ -187,7 +216,7 @@ def main() -> int:
     except Exception:
         return 0
 
-    q = _tokenle(prompt)
+    q = _genel_disi(_tokenle(prompt), kayitlar)
     if not q:
         return 0
     skorlu = []
