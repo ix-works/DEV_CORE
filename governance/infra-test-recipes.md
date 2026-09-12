@@ -722,6 +722,7 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   hook çıktısındaki duyurudur.
 - **MATERYALIZE ATOMIKLIGI (2026-08-27, Q30 kayip vakasi):**
   `python tests/fixtures/overlay_materyalize_atomik/run.py` → **24/24**, exit 0.
+  *(Q295 ek 2026-09-13: **25/25**. Yeni K4, N8'in ölçüt yardımcısını öz-test eder: farklı harfli gerçek dizin False, gerçek junction True. Ölçüt `os.readlink`, üretimdeki `_junction_mu`'dan BAĞIMSIZ. Eski yardımcıyla 24/25, yalnız K4 kırmızı. POSIX'te K4 ATLA.)*
   Degismez IKI tanedir ve AYRI olculur: **① ATOMIKLIK** — `materyalize` dizini SILMEZ
   (uzerine yaz → fazlaligi tek tek sil → manifest en son); en kotu halde eski+yeni karisimi
   kalir, **hicbir noktada BOS kalmaz**. **② DURUSTLUK** — uretim kendi ciktisini olcmeden
@@ -2213,3 +2214,4 @@ python tests/run_battery.py run_all_ozet_kipi           # + 10 mutasyon kipi (he
 - Canlı etki ölçümü: `CLAUDE_PROJECT_DIR=<proje> python scripts/validators/run_all_validators.py --quick [--ozet]` → stdout+stderr ayrı say; taban kodu `_` önekli kardeş dosya olarak aynı dizinde koş (utils importu __file__'dan çözülür).
 - Şablon çapası: `pre-commit.template` kapanış satırı ve `else` dalı kardeş korpusların (precommit_junction_failclosed M1/M2, precommit_kopya_surum_esligi) çapasıdır; `--ozet` yalnız çağrı satırındadır. Şablona dokunan tur dört korpusu birlikte koşar.
 - Fixture/batarya/b0_secim worktree KÖKÜNDEN koşulur; kök dışından b0_secim sahte 12/20 verir.
+- **Q296 ek (2026-09-13):** dosyası bulunmayan validator Özet tablosunda `[FAIL]   <label>  · KOŞTURULAMADI: validator dosyası YOK (<script>)` satırıyla görünür (iki kipte). S6 bu satırı iki kipte çiviler; kip sayısı **11** (yeni `--mutasyon-tablo-eksik-yok`). Eski kod karşıtlığı: `Q203_RAV_KAYNAK=<git show 9934ba7:scripts/validators/run_all_validators.py>` → 12/13, yalnız S6 kırmızı.
