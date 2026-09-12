@@ -3,7 +3,20 @@
 run_all_validators.py — Tüm validator'ları tek noktadan çalıştırır (ADR 0020, B10).
 
 Kullanım (PROJE kökünden):
-    python core/scripts/validators/run_all_validators.py [--strict] [--quick]
+    python core/scripts/validators/run_all_validators.py [--strict] [--quick] [--ozet | --ayrintili]
+
+Çıktı kipleri (Q203, 2026-09-13):
+  --ayrintili (VARSAYILAN; bayraksız çağrı bununla BAYT-EŞ): her validator'ın stdout/stderr'i
+               aynen basılır. CI (core-ci · project-guard) · post_validate · ix_doctor bunu kullanır.
+  --ozet     : pre-commit kipi. rc=0 veren kapının GÖVDESİ gizlenir, kapı başına tek satır
+               (`bulgu-etiketi` + `gizlenen` satır sayısı) Özet bloğunda kalır.
+               ⛔ YUTULMAYANLAR (değişmez): rc≠0 veren kapı DAİMA tam detay basar · dosyası
+               olmayan validator `[FAIL]` · rc=0 kapıda bile KAPSAM SIFIR / ÖLÇÜLEMEDİ /
+               DOĞRULANAMADI / KOŞTURULAMADI / measured=false / [SKIP] / [FAIL] satırları
+               (stdout VE stderr) aynen basılır · çıkış kodu ve --strict iletimi DEĞİŞMEZ.
+               Kipin KENDİ kapsam beyanı her koşumda (sıfır bulguda da) basılır.
+               Neden: pre-commit her commit'te ~24 KB değişmeyen warn-first raporu basıyordu
+               (ölçüldü) → gerçek bulgu ve ÖLÇÜLEMEDİ satırı gürültüde kayboluyordu.
 
 Modlar (D20a):
   PROJE modu : <proje>/project.yaml VAR → scope=project+both validator'lar + profil
@@ -19,8 +32,10 @@ Exit: 0=hepsi geçti · 1=en az biri FAIL.
 """
 import argparse
 import os
+import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -114,10 +129,71 @@ def _local_validators(proj: Path) -> list[tuple[str, Path]]:
     return [(f"LOCAL: {p.stem}", p) for p in sorted(d.glob("*.py")) if not p.name.startswith("_")]
 
 
+# ── ÖZET KİPİ (Q203) ─────────────────────────────────────────────────────────
+# Görünür-zorunlu işaretler: rc=0 kapıda bile SATIR OLARAK basılır. Eşleşme Türkçe
+# harf/büyük-küçük farkından BAĞIMSIZ (`_ascii_ust`): validator'lar aynı kavramı
+# `ÖLÇÜLEMEDİ` · `ölçülemedi` · `OLCULEMEDI` diye üç biçimde yazıyor. Liste GENİŞ
+# tutulur: fazla bir satır basmak ucuzdur, yutulan bir ÖLÇÜLEMEDİ pahalıdır (Q105/Q197).
+_GORUNUR_ZORUNLU = (
+    "OLCULEMEDI", "OLCULMEDI", "DOGRULANAMADI", "KOSTURULAMADI", "KOSULAMADI",
+    "BAKILAMADI", "KAPSAM SIFIR", "MEASURED=FALSE",
+    "[SKIP]", "[FAIL]", "[ERROR]", "[HATA]", "[BLOCKER]",
+)
+# `bulgu-etiketi` sayacı: satır başındaki köşeli etiket. ⚠ Validator'ların ORTAK bulgu
+# biçimi YOKTUR (etiketsiz bulgu basanlar var) — bu sayı yaklaşık bir sinyaldir; etiketsiz
+# çıktı yalnız `gizlenen` sayısında görünür ve kip bunu her koşumda yazar.
+_BULGU_ETIKETI = re.compile(r"^\s*\[(WARN|WARNING|UYARI|BULGU|FAIL|ERROR|HATA|BLOCKER)\b",
+                            re.IGNORECASE)
+_DEVAM_TAVANI = 6  # görünür satırın altındaki daha-girintili devam satırı (ör. KAPSAM SIFIR'ın kök izi)
+
+
+def _ascii_ust(s: str) -> str:
+    s = s.replace("İ", "I").replace("ı", "i")
+    s = unicodedata.normalize("NFKD", s)
+    return "".join(c for c in s if not unicodedata.combining(c)).upper()
+
+
+def _gorunur_zorunlu_mu(satir: str) -> bool:
+    n = _ascii_ust(satir)
+    return any(t in n for t in _GORUNUR_ZORUNLU)
+
+
+def _girinti(s: str) -> int:
+    return len(s) - len(s.lstrip())
+
+
+def _ozet_suz(metin: str) -> tuple[list[str], int, int]:
+    """-> (basılacak satırlar, dolu satır sayısı, bulgu-etiketi sayısı)."""
+    satirlar = (metin or "").splitlines()
+    dolu = sum(1 for s in satirlar if s.strip())
+    etiket = sum(1 for s in satirlar if _BULGU_ETIKETI.match(s))
+    goster: list[str] = []
+    i = 0
+    while i < len(satirlar):
+        s = satirlar[i]
+        if not _gorunur_zorunlu_mu(s):
+            i += 1
+            continue
+        goster.append(s)
+        j = i + 1
+        while (j < len(satirlar) and j - i <= _DEVAM_TAVANI and satirlar[j].strip()
+               and _girinti(satirlar[j]) > _girinti(s)):
+            goster.append(satirlar[j])
+            j += 1
+        i = j
+    return goster, dolu, etiket
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Tüm validator'ları çalıştır")
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--quick", action="store_true", help="freshness check atla")
+    kip = parser.add_mutually_exclusive_group()
+    kip.add_argument("--ozet", action="store_true",
+                     help="rc=0 kapıların gövdesini gizle (FAIL + ÖLÇÜLEMEDİ/KAPSAM SIFIR satırları "
+                          "DAİMA tam basılır; exit kodu değişmez) — pre-commit kipi")
+    kip.add_argument("--ayrintili", action="store_true",
+                     help="her validator çıktısını aynen bas (VARSAYILAN; CI kipi)")
     args = parser.parse_args()
 
     proj = project_root()
@@ -177,28 +253,62 @@ def main() -> int:
         iscik = max(1, int(os.environ.get("IX_VALIDATOR_WORKERS", "8")))
     except ValueError:
         iscik = 8
+    ozet_bilgi: dict[str, tuple[int, int]] = {}  # label -> (bulgu-etiketi, gizlenen satır)
     with ThreadPoolExecutor(max_workers=iscik) as havuz:
         gelecekler = [(label, ad, havuz.submit(_kos, cmd) if cmd else None)
                       for label, ad, cmd in is_listesi]
         for label, ad, fut in gelecekler:  # kanonik sırada bekle+bas
-            print(f"\n--- {label} --- ({ad})")
+            if fut is None or not args.ozet:
+                print(f"\n--- {label} --- ({ad})")
             if fut is None:
                 print("[FAIL] validator dosyası YOK")
                 failed.append(label); continue
             r = fut.result()
-            if r.stdout:
-                sys.stdout.write(r.stdout)
-            if r.stderr:
-                sys.stderr.write(r.stderr)
+            if args.ozet and r.returncode == 0:
+                # Özet kipi YALNIZ rc=0 kapıya uygulanır; rc≠0 aşağıdaki tam-detay dalına düşer.
+                g_out, d_out, e_out = _ozet_suz(r.stdout)
+                g_err, d_err, e_err = _ozet_suz(r.stderr)
+                if g_out or g_err:
+                    print(f"\n--- {label} --- ({ad}) [özet: yalnız görünür-zorunlu satırlar]")
+                    for s in g_out:
+                        print(s)
+                    sys.stdout.flush()
+                    for s in g_err:
+                        print(s, file=sys.stderr)
+                    sys.stderr.flush()
+                ozet_bilgi[label] = (e_out + e_err,
+                                     (d_out + d_err) - sum(1 for s in g_out + g_err if s.strip()))
+            else:
+                if args.ozet:
+                    print(f"\n--- {label} --- ({ad})")
+                if r.stdout:
+                    sys.stdout.write(r.stdout)
+                if r.stderr:
+                    sys.stderr.write(r.stderr)
             ran.append(label)
             if r.returncode != 0:
                 failed.append(label)
 
     print("\n" + "=" * 60 + "\nÖzet:")
     for label in ran:
-        print(f"  [{'FAIL' if label in failed else 'OK'}]   {label}".replace("[OK]  ", "[OK]"))
+        satir = f"  [{'FAIL' if label in failed else 'OK'}]   {label}".replace("[OK]  ", "[OK]")
+        if label in ozet_bilgi:
+            etiket, gizli = ozet_bilgi[label]
+            satir += f"  · bulgu-etiketi={etiket} · gizlenen={gizli} satır"
+        print(satir)
     for label, neden in skipped:
         print(f"  [SKIP] {label} ({neden})")
+
+    if args.ozet:
+        # KAPSAM BEYANI — her koşumda basılır (en kritik an sıfır-bulgu anıdır).
+        toplam_gizli = sum(g for _, g in ozet_bilgi.values())
+        print(f"\nÖZET KİPİ (--ozet): rc=0 veren {len(ozet_bilgi)} kapının gövdesi gizlendi "
+              f"(toplam {toplam_gizli} satır). TAM basılanlar: FAIL veren kapılar + KAPSAM SIFIR / "
+              "ÖLÇÜLEMEDİ / DOĞRULANAMADI / KOŞTURULAMADI / measured=false / [SKIP] / [FAIL] satırları.")
+        print("  bulgu-etiketi = [WARN]/[UYARI]/[BULGU]/[FAIL]/[ERROR]/[HATA]/[BLOCKER] ile başlayan "
+              "satır sayısı — validator'ın kendi bulgu sayımı DEĞİLDİR; etiketsiz çıktı yalnız "
+              "'gizlenen' sayısında görünür.")
+        print("  Tam çıktı: aynı komutu --ozet OLMADAN koş.")
 
     if failed:
         print(f"\n{len(failed)} validator FAIL — yukarıdaki çıktıları incele.", file=sys.stderr)

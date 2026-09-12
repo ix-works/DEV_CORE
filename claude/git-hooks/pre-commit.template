@@ -71,6 +71,12 @@ fi
 
 # 2) run_all_validators --quick (core + validators-local; profil-modlu)
 #
+# ⭐ 2026-09-13 (Q203) — `--ozet`: her commit ~24 KB DEĞİŞMEYEN warn-first raporu basıyordu
+#    (ölçüldü: 24.169 karakter/commit); gerçek bulgu ve [ÖLÇÜLEMEDİ] satırı o gürültüde
+#    kayboluyordu. Özet kipi YALNIZ RAPORLAMAYI değiştirir: ölçüm aynen koşar, FAIL veren
+#    kapı TAM detay basar, ÖLÇÜLEMEDİ/KAPSAM SIFIR satırları gizlenmez, exit kodu aynıdır.
+#    Tam rapor: `python core/scripts/validators/run_all_validators.py --quick` (CI ayrıntılı koşar).
+#
 # ⛔ 2026-08-20 — SESSİZ ATLAMA KALDIRILDI (fail-open'ın en kötü türü: BAŞARI GİBİ
 #    GÖRÜNEN YOKLUK). Eskiden bu blok yalnız `if [ -f … ]` idi ve `else` YOKTU:
 #    `core/` junction'ı çözülemeyen bir ortamda (yeni klon · worktree · junction
@@ -81,7 +87,7 @@ fi
 #    Kardeş desen: core'un kendi `scripts/git-hooks/pre-commit`i, python
 #    bulunamazsa ATLAMAZ — `exit 1` ile BLOKLAR. Şablon ona hizalandı.
 if [ -f core/scripts/validators/run_all_validators.py ]; then
-  if ! python core/scripts/validators/run_all_validators.py --quick; then
+  if ! python core/scripts/validators/run_all_validators.py --quick --ozet; then
     echo "HATA: validator ihlali — commit engellendi. Yukarıdaki FAIL'leri düzelt." >&2
     exit 1
   fi

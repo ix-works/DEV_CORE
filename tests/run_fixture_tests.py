@@ -117,6 +117,10 @@ OZEL_TESTLER = [
      "SINIFLAMASI (KACTI / OLCULEMEDI / KURULAMADI / KIP-RED / COKTU AYRI etiketler; "
      "'mutasyon exit!=0 vermeli' naif kurali canli korpusta 33 kipin 15'inde SAHTE-FAIL "
      "uretirdi -- olculdu)"),
+    ("run_all_ozet_kipi",
+     "Q203: run_all_validators --ozet (pre-commit kipi) rc=0 govdesini gizler ama FAIL "
+     "detayini / OLCULEMEDI-KAPSAM SIFIR satirlarini (stdout+stderr) / exit kodunu YUTMAZ; "
+     "bayraksiz kip BAYT-ES format pin'i; sablon gercek sh+git ile kosulur"),
     # ⚠ 2026-08-01: `adtget_yokluk_kaniti` bir ara bu listede IKI KEZ yaziliydi (PR birlesme
     # artigi) -> ayni fixture iki kez kosuyor ve TOPLAM sayiyi sisiriyordu. "N/N PASS"
     # sayisina guvenmenin bedeli: sayaci degil SATIRLARI oku.
@@ -726,12 +730,17 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "çürütülmüş rehberliği taşımaması"),
     ("claude/git-hooks/pre-commit.template",
      ("O:precommit_junction_failclosed", "O:precommit_coreleak_failclosed",
-      "O:precommit_kopya_surum_esligi"),
+      "O:precommit_kopya_surum_esligi", "O:run_all_ozet_kipi"),
      "İKİ AYRI fail-open ekseni, İKİ AYRI korpus — biri diğerini KAPSAMAZ: adım-2 "
      "`core/` çözülemezse validator zinciri atlanmaz (junction) · adım-1 core-sızıntı "
      "kapısının KENDİ `git diff` ölçümü çökerse 'temiz' sayılmaz (Q199①, coreleak). "
      "ÜÇÜNCÜSÜ (Q245) o ikisinin BİRLEŞİMİNİ + şablon→kopya yayılımını ölçer: iki "
-     "sertleştirme AYNI ANDA sökülünce (canlı kopyalarda yaşayan sürüm) ne olur"),
+     "sertleştirme AYNI ANDA sökülünce (canlı kopyalarda yaşayan sürüm) ne olur. "
+     "DÖRDÜNCÜSÜ (Q203) adım-2'nin ÇIKTI KİPİNİ ölçer: `--ozet` bulguyu yutmuyor mu"),
+    ("scripts/validators/run_all_validators.py", ("O:run_all_ozet_kipi",),
+     "Q203 çıktı kipleri: bayraksız/--ayrintili BAYT-EŞ format pin'i (CI + post_validate + "
+     "ix_doctor bu biçimi okur) + --ozet'in YUTMAMA değişmezleri (FAIL detayı · ÖLÇÜLEMEDİ/"
+     "KAPSAM SIFIR satırları stdout+stderr · exit kodu · --strict iletimi)"),
     ("templates/new-package/.rules.md.tmpl", ("O:sablon_zorunlu_maddeler",),
      "DTEL/Domain öneki `_E_`/`_D_` — kaynak otorite `standards/01-naming.md` §4.4.5; "
      "şablon kusuru HER yeni pakete miras kalır"),
