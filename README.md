@@ -11,7 +11,8 @@ GitHub                                   Lokal disk (her geliştirici)
 ix-works/DEV_CORE  ──clone──►  C:\IX\DEV_CORE\        ← BU repo (working tree = canlı çekirdek)
 ix-works/<PROJECT_NAME> ─clone─► C:\IX\<PROJECT_NAME>\
                                  ├─ core ══junction══► C:\IX\DEV_CORE
-                                 ├─ CLAUDE.md (ince: @core/CLAUDE.core.md + proje bölümü)
+                                 ├─ CLAUDE.md (ince: yasaklar damgası + proje bölümü; @import YOK)
+                                 ├─ .claude\rules\ (FİZİKSEL kopya: 00-claude-core.md + claude\rules\*.md)
                                  └─ .claude\{agents,skills,commands} ══junction══► DEV_CORE\claude\...
 ```
 
@@ -26,7 +27,7 @@ ix-works/<PROJECT_NAME> ─clone─► C:\IX\<PROJECT_NAME>\
 
 | Klasör | İçerik |
 |---|---|
-| `CLAUDE.core.md` | Çekirdek loader — yasaklar (ADR 0005), session protokolü, SORU 0, gate tablosu. Projelerin ince `CLAUDE.md`'si bunu `@core/...` ile import eder |
+| `CLAUDE.core.md` | Çekirdek loader — yasaklar (ADR 0005), session protokolü, SORU 0, gate tablosu. Projelere import ile DEĞİL, `team_setup`'ın ürettiği fiziksel kopya `.claude/rules/00-claude-core.md` olarak girer (Q286) |
 | `AGENTS.md` | L1 — agent davranış kuralları (git, ADT işlem sırası, ADT-infra) |
 | `standards/` | L2 — kurumsal standartlar (naming, backend, RAP, UI5, klasik dialog, FS/TS, forms…) |
 | `playbook/` | L3 — ADT pattern bankası, lessons-learned, checklists, kod template'leri |

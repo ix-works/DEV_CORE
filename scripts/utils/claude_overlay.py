@@ -54,6 +54,22 @@ TIPLER = ("agents", "skills", "commands", "rules")
 MANIFEST_ADI = ".overlay-manifest.json"
 DAMGA = "<!-- CORE-URETILDI: elle duzenleme; kaynak core/claude/{tip}/{ad} -->\n"
 
+# ⛔⛔ ZORUNLU OVERLAY (2026-09-12, kayıt Q286) — `rules` artık OPT-IN DEĞİL, DAİMA KOPYADIR.
+# ÖLÇÜLDÜ (Claude Code 2.1.269, `claude -p` + TOKEN deneyi, pozitif kontrollü): harness bir
+# JUNCTION'ın hedefini "dış import" sayar; proje onay bayrağı (`hasClaudeMdExternalIncludes
+# Approved`) `false` iken junction'daki `.claude/rules/*.md` ve `@core/CLAUDE.core.md`
+# YÜKLENMEZ, onaylı junction'da da `paths:`li kural tembel tetiklenmez. Canlı log: core/rules
+# son yükleme 2026-08-20; sonrası 102 açılış + 111 compact'ta yalnız CLAUDE.md. Aynı dosya
+# GERÇEK dizindeyken (gitignore'lu dahil) koşulsuz yüklenir, 476 satır kırpılmaz, alt ajan da
+# görür, `paths:` tetiği çalışır. ⇒ Tek güvenilir kanal FİZİKSEL KOPYADIR.
+# `CLAUDE.core.md` (L1a) da bu kopyaya `CORE_KOPYA_ADI` adıyla, `paths:`'SİZ girer
+# (koşulsuz yüklenir + compact sonrası yeniden enjekte edilir). claude-local override EDEMEZ.
+ZORUNLU_TIPLER = ("rules",)
+CORE_KOPYA_ADI = "00-claude-core.md"
+# tip → {kopya adı: core köküne GÖRE kaynak yolu}. `core/claude/<tip>/` DIŞINDAN gelen dosyalar.
+EK_KAYNAKLAR = {"rules": {CORE_KOPYA_ADI: "CLAUDE.core.md"}}
+DAMGA_EK = "<!-- CORE-URETILDI: elle duzenleme; kaynak core/{rel} -->\n"
+
 # ⚠ Agent/skill/command dosyaları YAML frontmatter ile BAŞLAMAK ZORUNDADIR (`---`).
 # İlk sürümde damga frontmatter'ın ÖNÜNE konmuştu → 6/6 agent yüklenemez oldu ve harness
 # "agent types no longer available" dedi. Dosya SAYISI doğruydu, FORMAT bozuktu; içerik
@@ -98,8 +114,29 @@ def overlay_var_mi(proje: Path, tip: str) -> bool:
     return k.is_dir() and any(k.glob("*.md"))
 
 
+def overlay_gerekli(proje: Path, tip: str) -> bool:
+    """Bu tip gerçek dizin (kopya) olarak mı üretilmeli? ZORUNLU tip → daima; diğerleri opt-in."""
+    return tip in ZORUNLU_TIPLER or overlay_var_mi(proje, tip)
+
+
 def hedef(proje: Path, tip: str) -> Path:
     return proje / ".claude" / tip
+
+
+def core_kaynagi(core_root: Path, tip: str, ad: str) -> Path:
+    """Kopyadaki `ad` dosyasının core'daki KAYNAĞI — TEK tanım (inspector B5 de bunu okur)."""
+    rel = EK_KAYNAKLAR.get(tip, {}).get(ad)
+    return core_root / rel if rel else core_root / "claude" / tip / ad
+
+
+def reddedilen_overridelar(proje: Path, tip: str) -> list:
+    """claude-local'de, override EDİLEMEZ bir adla duran dosyalar (görünür red için)."""
+    k = overlay_kaynagi(proje, tip)
+    return sorted(ad for ad in EK_KAYNAKLAR.get(tip, {}) if (k / ad).is_file())
+
+
+def _eksik_ek_kaynaklar(core_root: Path, tip: str) -> list:
+    return sorted(rel for rel in EK_KAYNAKLAR.get(tip, {}).values() if not (core_root / rel).is_file())
 
 
 def _beklenen(proje: Path, core_root: Path, tip: str) -> dict:
@@ -109,9 +146,47 @@ def _beklenen(proje: Path, core_root: Path, tip: str) -> dict:
     if core_dizin.is_dir():
         for f in sorted(core_dizin.glob("*.md")):
             out[f.name] = (f, _hash(f))
+    ek = EK_KAYNAKLAR.get(tip, {})
+    for ad in sorted(ek):
+        kaynak = core_kaynagi(core_root, tip, ad)
+        if kaynak.is_file():
+            out[ad] = (kaynak, _hash(kaynak))
     for f in sorted(overlay_kaynagi(proje, tip).glob("*.md")):
+        if f.name in ek:
+            continue                          # override EDİLEMEZ — `reddedilen_overridelar` görünür kılar
         core_esi = core_dizin / f.name
         out[f.name] = (f, _hash(core_esi) if core_esi.is_file() else None)
+    return out
+
+
+def el_degmemis_core_kopyalari(h: Path):
+    """`h` dizininde core'dan ÜRETİLDİĞİ GİBİ duran dosya adları (+ geçerli manifestin adı).
+
+    Tüketici: `behavior_manifest` (F2) bu dosyaları davranış yüzeyinden MUAF tutar
+    (Q286 K1, ⚠GEVŞETME — kullanıcı vetosuna açık). Bütünlüklerinin sahibi core-git +
+    T2.5 kapısıdır; her core değişikliğinde tazelenirler ve F2 bunları sayarsa her core
+    commit'inde "davranış dosyası değişti" alarmı çalar (kurt masalı).
+
+    ⛔ FAIL-CLOSED: manifest yok / okunamıyor / şema bozuk → `None` (muafiyet YOK).
+    ⛔ Yalnız `kaynak == "core"` VE diskteki bayt `uretilen_hash` ile EŞ. Elle düzeltilmiş
+    kopya, manifestte olmayan dosya ve claude-local kaynaklı dosya muaf DEĞİLDİR.
+    Manifestin kendisi yalnız geçerli ayrıştırıldığında muaftır (harness `.md` dışını yüklemez;
+    muaf tutulmazsa her tazelemede değişip alarmı geri getirirdi).
+    """
+    mf = h / MANIFEST_ADI
+    try:
+        veri = json.loads(mf.read_text(encoding="utf-8"))
+        dosyalar = veri["dosyalar"]
+    except Exception:
+        return None
+    if not isinstance(dosyalar, dict):
+        return None
+    out = {MANIFEST_ADI}
+    for ad, kayit in dosyalar.items():
+        if not isinstance(kayit, dict) or "/" in ad or "\\" in ad:
+            continue
+        if kayit.get("kaynak") == "core" and _uretildigi_gibi(h / ad, kayit):
+            out.add(ad)
     return out
 
 
@@ -126,6 +201,9 @@ def _uretilecek_icerik(proje: Path, tip: str, ad: str, kaynak: Path) -> str:
     icerik = kaynak.read_text(encoding="utf-8", errors="replace")
     if kaynak.parent == overlay_kaynagi(proje, tip):
         return icerik                       # proje-lokal dosya damgalanmaz
+    ek_rel = EK_KAYNAKLAR.get(tip, {}).get(ad)
+    if ek_rel:                              # core/claude/<tip> DIŞI kaynak → damga GERÇEK yolu yazar
+        return _damgala(icerik, DAMGA_EK.format(rel=ek_rel))
     return _damgala(icerik, DAMGA.format(tip=tip, ad=ad))
 
 
@@ -197,8 +275,8 @@ def fark_raporu(proje: Path, core_root: Path, tip: str) -> list:
             farklar.append(f"{tip}/{ad}: mevcut kopya, üretilecek içerikten FARKLI "
                            f"(elle düzeltme olabilir → önce core'a terfi ya da claude-local'e al)")
     for f in sorted(h.glob("*.md")):
-        if f.name in beklenen:
-            continue
+        if f.name in beklenen or f.name in EK_KAYNAKLAR.get(tip, {}):
+            continue    # EK kopya (Q286) kaynağı okunamasa da HİÇBİR yolda silinmez → "SİLİNİR" yalan olurdu
         # Aynı sınıfın ikinci yüzü: core bir dosyayı SİLDİYSE, el değmemiş kopyanın
         # silinmesi zaten doğru sonuçtur (junction'da bedavaya olur). Yalnız manifest
         # onu core-üretimi diye tanıyor VE bayt-bayt el değmemişse sessizce geç.
@@ -236,7 +314,7 @@ def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) ->
     + el değmemiş), elle yol `fark_raporu`'nun ilan ettiği gibi ("senkronda SİLİNİR")
     kayıtsız siler — üstündeki onay kapısı bunun için vardır.
     """
-    if not overlay_var_mi(proje, tip):
+    if not overlay_gerekli(proje, tip):
         return False, f"overlay yok: {overlay_kaynagi(proje, tip)}"
 
     if not onayli:
@@ -254,6 +332,10 @@ def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) ->
     if not core_dizin.is_dir() or not any(core_dizin.glob("*.md")):
         return False, (f"{tip}: core/claude/{tip} okunamadi (junction kopuk? dizin bos?) — "
                        f"uretim mevcut kopyalari SILERDI, DOKUNULMADI")
+    # Q286: core/claude/<tip> DIŞI kaynak (CLAUDE.core.md) okunamıyorsa diğer dosyalar yine
+    # üretilir ama sonuç BAŞARILI SAYILMAZ ve o kopya SİLİNMEZ (aşağıda ② `ek_adlar`).
+    eksik_ek = _eksik_ek_kaynaklar(core_root, tip)
+    reddedilen = reddedilen_overridelar(proje, tip)
 
     h = hedef(proje, tip)
     if _junction_mu(h):
@@ -287,9 +369,12 @@ def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) ->
     # eski `rmtree` onları da siliyordu; bilinmeyen dosyayı kanıtsız silmektense
     # GÖRÜNÜR kılmak seçildi (mesajda listelenir).
     silinemeyen, yabanci = [], []
+    ek_adlar = set(EK_KAYNAKLAR.get(tip, {}))
     for f in sorted(h.iterdir()):
         if f.name in beklenen or f.name == MANIFEST_ADI or not f.is_file():
             continue
+        if f.name in ek_adlar:
+            continue                    # kaynağı okunamayan core kopyası: kanıtsız SİLİNMEZ (Q286)
         if f.suffix != ".md":
             yabanci.append(f.name)
             continue
@@ -331,6 +416,12 @@ def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) ->
         mesaj += f" · .md DISI, dokunulmadi: {yabanci}"
     if silinemeyen:
         mesaj += f" · SILINEMEDI: {silinemeyen}"
+    if reddedilen:
+        mesaj += (f" · ⛔ OVERLAY RED (override EDILEMEZ, yok sayildi): "
+                  f"{[f'claude-local/{tip}/{a}' for a in reddedilen]}")
+    if eksik_ek:
+        return False, (mesaj + f" · ⛔ URETIM EKSIK — core kaynagi okunamadi: {eksik_ek} "
+                       f"(mevcut kopyasi SILINMEDI). Bu dosya olmadan core loader YUKLENMEZ.")
     if yazilamayan or eksik or bozuk:
         return False, (mesaj + f" · ⛔ URETIM EKSIK — yazilamayan={yazilamayan} "
                        f"eksik={eksik} frontmatter-bozuk={bozuk}. "
@@ -417,8 +508,8 @@ def _yerinde_senkron(proje: Path, core_root: Path, tip: str) -> tuple:
 
     korunan = []
     for f in sorted(h.glob("*.md")):
-        if f.name in beklenen:
-            continue
+        if f.name in beklenen or f.name in EK_KAYNAKLAR.get(tip, {}):
+            continue                  # EK kopya (Q286): kaynağı okunamasa da silinmez
         kayit = kayitlar.get(f.name) or {}
         if kayit.get("kaynak") == "core" and _uretildigi_gibi(f, kayit):
             f.unlink()                # tek tek: yalnız el değmemiş core artığı
@@ -467,11 +558,14 @@ def oto_tazele(proje: Path, core_root: Path) -> list:
     satirlar = []
     for tip in TIPLER:
         try:
-            if not overlay_var_mi(proje, tip):
+            if not overlay_gerekli(proje, tip):
                 continue                      # junction'lı/overlay'siz proje → hiç dokunma
             h = hedef(proje, tip)
             if not h.is_dir() or _junction_mu(h):
-                continue                      # henüz materyalize edilmemiş: kurulum işi (team_setup)
+                # henüz materyalize edilmemiş: kurulum işi (team_setup). ZORUNLU tipte (Q286)
+                # bu hâl session_start'ın YÜKLEME satırında "ÖN KOŞUL: EKSİK" olarak görünür —
+                # otomatik yol junction'ı KENDİLİĞİNDEN kaldırmaz (kurulum kararı elle kalır).
+                continue
             core_dizin = core_root / "claude" / tip
             if not core_dizin.is_dir() or not any(core_dizin.glob("*.md")):
                 # Core tarafı OKUNAMIYOR (junction kopuk / dizin boş). Bu durumda
@@ -479,6 +573,11 @@ def oto_tazele(proje: Path, core_root: Path) -> list:
                 # kopyaları SİLERDİ. Kanıt yokken silme yok: dur ve görünür uyar.
                 satirlar.append(f"overlay tazeleme ATLANDI: {tip} — core/claude/{tip} okunamadi "
                                 f"(junction kopuk?), otomatik uretim SILME riski tasir")
+                continue
+            eksik_ek = _eksik_ek_kaynaklar(core_root, tip)
+            if eksik_ek:
+                satirlar.append(f"overlay tazeleme ATLANDI: {tip} — core kaynagi okunamadi {eksik_ek} "
+                                f"(Q286: kopya korunur, uretilmez)")
                 continue
 
             gerekli = tazeleme_gerekli(proje, core_root, tip)
@@ -518,8 +617,9 @@ def durum(proje: Path, core_root: Path, tip: str) -> tuple:
                                 f"→ proje agent'ları YÜKLENMİYOR. Onarım: team_setup.py --repair-junctions"]
         return "junction", []
 
-    # gerçek dizin → overlay olmalı ve güncel olmalı
-    if not overlay_var_mi(proje, tip):
+    # gerçek dizin → overlay olmalı ve güncel olmalı. ZORUNLU tip (Q286: rules) claude-local
+    # olmadan da gerçek dizindir — "sızıntı" DEĞİL, tasarımdır.
+    if not overlay_gerekli(proje, tip):
         return "overlay", [f"{tip}: gerçek dizin ama claude-local/{tip} yok → sızıntı riski, elle incele"]
 
     mf = h / MANIFEST_ADI

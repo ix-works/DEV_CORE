@@ -152,8 +152,18 @@ def katman1() -> list[Sonuc]:
     from utils import claude_overlay as _ov  # type: ignore
 
     plan = [("core", PROJ / "core", CORE_ROOT)]
+    # Q286 (2026-09-12): ZORUNLU tip (`rules`) claude-local'siz de GERÇEK dizin olmalıdır;
+    # eski `overlay_var_mi` dalı onu junction planına koyup "gerçek klasör — sızıntı riski"
+    # FAIL'i basıyordu. Hâlâ junction ise ayrı ve açık bir WARN basılır (yüklenmiyor).
+    _gerekli = getattr(_ov, "overlay_gerekli", _ov.overlay_var_mi)
     for _tip in _ov.TIPLER:
-        if _ov.overlay_var_mi(PROJ, _tip):
+        _bag = PROJ / ".claude" / _tip
+        if _tip in getattr(_ov, "ZORUNLU_TIPLER", ()) and _readlink(_bag) is not None:
+            r.append((WARN, f".claude/{_tip} hâlâ JUNCTION — harness junction'daki talimatı dış "
+                            f"import sayar, YÜKLEMEZ (Q286). Onarım: python core/scripts/"
+                            f"team_setup.py --repair-junctions"))
+            continue
+        if _gerekli(PROJ, _tip):
             mod, sorunlar = _ov.durum(PROJ, CORE_ROOT, _tip)
             if sorunlar:
                 for s in sorunlar:

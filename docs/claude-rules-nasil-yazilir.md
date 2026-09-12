@@ -82,5 +82,17 @@ aynı seansta ölçemezsin — **taze oturum şarttır.**
 ## Compaction
 
 `paths:`-scoped kurallar `/compact` sonrası kaybolur; eşleşen dosya tekrar okununca geri
-gelirler. Bu yüzden **anayasa (KESİN YASAKLAR) buraya konmaz** — o, kök `CLAUDE.md`'ye fiziksel
-damgalıdır (ADR 0021) ve compaction'dan sağ çıkan tek yerdir.
+gelirler (ölçüldü 2026-09-12 Q286 M6: compact'ta `load_reason=compact` satırı yok, sonraki
+`Read` ile `path_glob_match`). Bu yüzden **anayasa (KESİN YASAKLAR) buraya konmaz** — o, kök
+`CLAUDE.md`'ye fiziksel damgalıdır (ADR 0021). `paths:`'siz dosyalar (projede çekirdek kopyası
+`00-claude-core.md`) compact'ta `load_reason=compact` ile geri gelir — aynı ölçüm, print modu
+N=1; etkileşimli/otomatik compact ÖLÇÜLMEDİ.
+
+## Projede bu dizin bir KOPYADIR (Q286, 2026-09-12)
+
+Projede `.claude/rules/` artık `claude/rules/`'a junction DEĞİL, `team_setup.py`
+(`claude_overlay`) tarafından üretilen **gerçek klasör**dür: core `claude/rules/*.md` +
+`00-claude-core.md` (= `CLAUDE.core.md`). Neden: junction ardındaki dosyaları harness dış
+import sayıp onaysız YÜKLEMİYORDU (2026-08-20 → 09-12). Yukarıdaki #17204 anlatısındaki
+"her oturum koşulsuz" gözlemi o junction dönemine aittir. Kuralı **core'da** düzenle; kopya
+oturum başında tazelenir, elle düzeltilmiş kopya `behavior_manifest` alarmı üretir.

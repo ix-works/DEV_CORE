@@ -72,7 +72,8 @@ liste yoksa gate **fail-closed** durur.
 
 | Yol | Ne |
 |---|---|
-| `CLAUDE.md` | İnce loader. Üstünde **KESİN YASAKLAR** fiziksel damgası (ADR 0005/0021), altında `@core/CLAUDE.core.md` |
+| `CLAUDE.md` | İnce loader. Üstünde **KESİN YASAKLAR** fiziksel damgası (ADR 0005/0021), altında proje bölümü + `# Compact instructions`; çekirdek import EDİLMEZ |
+| `.claude/rules/` | **Fiziksel kopya** (commit'lenmez): `00-claude-core.md` (= core `CLAUDE.core.md`) + core `claude/rules/*.md`; `team_setup` üretir/tazeler (Q286) |
 | `project.yaml` | Proje kimliği: `sap_profile`, `release`, `master_language`, `source_root`. **Core script'leri buradan okur** |
 | `.claude/settings.json` | Hook kayıtları; hepsi `scripts/hook_shim.py` üzerinden core'a gider |
 | `scripts/hook_shim.py` | Hook köprüsü (junction kopuksa net onarım mesajı) |
@@ -163,7 +164,7 @@ python core/scripts/team_setup.py --repair-junctions   # junction koptuysa
 | Belirti | Çözüm |
 |---|---|
 | Hook "CORE JUNCTION KOPUK" diyor | `python <DEV_CORE>\scripts\team_setup.py --repair-junctions` |
-| Ekran teyidi gelmiyor | `CLAUDE.md`'deki `@core/CLAUDE.core.md` import'u + `core` junction'ı |
+| Ekran teyidi gelmiyor / `core=YÜKLENMEDİ` | `[YUKLEME — session_start]` satırındaki `ÖN KOŞUL`'a bak → `team_setup.py --repair-junctions` (`.claude/rules/00-claude-core.md` kopyasını üretir); `CLAUDE.md`'de eski `@core/...` satırı kaldıysa sil |
 | MCP yanlış sisteme bağlı | Proje kökündeki `.conn_adt` (env `ADT_SAP_*` override eder) |
 | Validator "CORE-modu" diyor | `project.yaml` proje kökünde mi + `sap_profile` dolu mu |
 | MCP tool'ları görünmüyor | `project.yaml` → `sap_profile` boş/geçersiz → **fail-closed**, yalnız `ping` açılır (D34d) |

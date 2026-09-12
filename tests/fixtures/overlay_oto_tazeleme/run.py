@@ -296,6 +296,11 @@ def senaryolar(ov, tmp: Path) -> None:
 
     # ── V12 (K) SINIF mı VAKA mı: dört tipin hepsinde çalışır ──────────────
     core, proj = kur(tmp, "v12", tipler=("agents", "skills", "commands", "rules"))
+    # Q286 (2026-09-12): `rules` tipi artık core kökündeki `CLAUDE.core.md`yi de kopyalar; kaynak
+    # okunamazsa `oto_tazele` tipi görünür ATLANDI ile geçer (kopyayı kanıtsız silmemek için).
+    # Gerçek core bu dosyayı DAİMA taşır ⇒ kum core'u da taşımalı, yoksa V12 tipin kendisini değil
+    # eksik kum şeklini ölçer (ilk bataryada tam bu oldu: tazelenen=['agents','skills','commands']).
+    yaz(core / "CLAUDE.core.md", "# sentetik core yukleyici\n")
     for t in ("agents", "skills", "commands", "rules"):
         ov.materyalize(proj, core, t)
         yaz(core / "claude" / t / "alpha.md", ajan("alpha", f"Alpha govdesi.\n{t} degisimi."))

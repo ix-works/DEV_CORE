@@ -142,6 +142,12 @@ def junctions(proje: Path, overlay_onayli: bool = False) -> bool:
     OVERLAY (opt-in, 2026-07-09): `claude-local/<tip>/*.md` varsa o tip için junction YERİNE
     gerçek dizin üretilir (core + proje override). Yoksa davranış aynen junction — mevcut
     projeler etkilenmez. Detay: utils/claude_overlay.py
+
+    ⛔ ZORUNLU OVERLAY (2026-09-12, Q286): `rules` claude-local OLMASA DA daima gerçek dizindir
+    (core/claude/rules + `CLAUDE.core.md` → `00-claude-core.md`). Junction'daki talimat
+    dosyaları harness'ta "dış import" sayılıp YÜKLENMİYORDU (ölçüldü). Mevcut bir rules
+    junction'ı bu çağrıda kaldırılıp kopyaya çevrilir (`--overlay-onayli` GEREKMEZ: junction'da
+    ezilecek proje emeği yoktur). `provision_worktree` bu fonksiyonu çağırır ⇒ worktree'de de kopya.
     """
     import sys as _sys
     _sys.path.insert(0, str(CORE_ROOT / "scripts"))
@@ -156,7 +162,7 @@ def junctions(proje: Path, overlay_onayli: bool = False) -> bool:
         # geri kalan 5 adımı sessizce atlandı. Yalıtım SUSTURMAZ: FAIL satırı basılır ve
         # ok=False ile main() 1 döner.
         try:
-            if ov.overlay_var_mi(proje, tip):
+            if ov.overlay_gerekli(proje, tip):
                 basarili, mesaj = ov.materyalize(proje, CORE_ROOT, tip, onayli=overlay_onayli)
                 print(f"  [{'OK' if basarili else 'FAIL'}] overlay .claude/{tip} — {mesaj}")
             else:

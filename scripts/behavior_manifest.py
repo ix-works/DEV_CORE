@@ -72,6 +72,36 @@ def _is_junction(p: Path) -> bool:
         return False
 
 
+def _overlay_muafiyeti(d: Path) -> set[str]:
+    """⚠GEVŞETME (2026-09-12, Q286 K1 — lider onaylı, KULLANICI VETOSUNA AÇIK).
+
+    `.claude/rules/` projede artık core'un FİZİKSEL KOPYASIDIR (CLAUDE.core.md dahil) ve
+    `session_start` her core değişikliğinde onu kendiliğinden tazeler. Muafiyet olmasa her
+    core commit'i bu yüzeyde "DEĞİŞMİŞ/KAYITSIZ" üretir: session_start "çıktısına GÜVENME"
+    der, `config_change_guard` exit 2 BLOKLAR ⇒ kalıcı alarm, gerçek tamper ayırt edilemez
+    (2026-08-01 settings.local.json kurt masalıyla aynı sınıf).
+
+    MUAF OLAN (yalnız bu): `.overlay-manifest.json`'da `kaynak == "core"` VE diskteki baytı
+    `uretilen_hash` ile EŞ olan dosya + geçerli ayrıştırılan manifestin kendisi.
+    MUAF OLMAYAN (yüzeyde KALIR): elle düzeltilmiş kopya · manifestte olmayan dosya ·
+    claude-local (`kaynak == "proje"`) dosya · alt dizindeki her şey.
+    ⛔ FAIL-CLOSED: manifest yok/bozuk ya da tanım modülü yüklenemiyor → muafiyet YOK.
+    BİLİNEN SINIR: kopya + manifest hash'i BİRLİKTE elle düzenlenirse muaf görünür; bu
+    kasıtlı iki-dosya müdahalesidir ve bir sonraki açılışta `oto_tazele` kopyayı core'dan
+    YENİDEN yazar (hash tutuyor = "el değmemiş" sayılır) ⇒ müdahale kalıcı olamaz.
+    Tanım TEK KAYNAKTAN: `claude_overlay.el_degmemis_core_kopyalari`.
+    """
+    try:
+        yol = str(Path(__file__).resolve().parent)          # core/scripts (CORE-03: core'un kendi yolu)
+        if yol not in sys.path:
+            sys.path.insert(0, yol)
+        from utils import claude_overlay as _ov  # type: ignore
+        sonuc = _ov.el_degmemis_core_kopyalari(d)
+    except Exception:
+        return set()
+    return set(sonuc) if sonuc else set()
+
+
 def _topla(proj: Path) -> dict[str, str]:
     kayit: dict[str, str] = {}
     for rel in YUZEY_DOSYALAR:
@@ -81,8 +111,11 @@ def _topla(proj: Path) -> dict[str, str]:
     for rel in YUZEY_DIZINLER:
         d = proj / rel
         if d.is_dir() and not _is_junction(d):
+            muaf = _overlay_muafiyeti(d)
             for f in sorted(d.rglob("*")):
                 if f.is_file():
+                    if f.parent == d and f.name in muaf:
+                        continue          # ⚠GEVŞETME Q286: core'dan üretildiği gibi duran kopya
                     kayit[str(f.relative_to(proj)).replace("\\", "/")] = _hash(f)
     # nested CLAUDE.md'ler (kök hariç; core junction'ı atla) — os.walk + DİZİN-BUDAMA.
     # (Eski rglob tüm ağacı yürüyordu; node_modules/.git filtresi sonuçta eleniyordu ama

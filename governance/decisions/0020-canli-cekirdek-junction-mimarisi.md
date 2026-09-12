@@ -46,7 +46,12 @@ C:\IX\<PROJE>\.claude\commands ══► C:\IX\DEV_CORE\claude\commands
 
 Proje kök `CLAUDE.md`'si incedir: KESİN YASAKLAR fiziksel damgası (ADR 0021) +
 `@core/CLAUDE.core.md` import'u + YALNIZ proje-özel bölüm (SAP bağlantısı, aktif paket,
-yerel kurallar). Metodoloji proje dosyasına YAZILMAZ — yazım-anı hedef kararı **SORU 0**
+yerel kurallar).
+> **2026-09-12 Q286: import junction'da yüklenmiyordu, yerine** `team_setup` (`claude_overlay`)
+> çekirdeği `.claude/rules/00-claude-core.md` fiziksel kopyası olarak üretir; `.claude/rules/`
+> junction değil gerçek klasördür ve proje `CLAUDE.md`'sinde `@core` satırı yoktur. Harness
+> junction ardındaki dosyayı dış import sayıp onaysız yüklemiyordu (2026-08-20'den beri).
+> Bu bölümün gövdesi tarihsel karar olarak korunur. Metodoloji proje dosyasına YAZILMAZ — yazım-anı hedef kararı **SORU 0**
 ([CLAUDE.core.md](../../CLAUDE.core.md) §4): metodoloji → core, proje işi → proje.
 Proje-özel genişleme kapıları: `playbook-local/`, `standards-local/`,
 `scripts/validators-local/` (core mekanizmaları bunları otomatik keşfeder).

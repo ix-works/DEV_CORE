@@ -308,6 +308,12 @@ OZEL_TESTLER = [
     #   --mutasyon (taban SHA) -> P+D duser · --mutasyon-gevsek -> yalniz D duser.
     ("overlay_materyalize_atomik",
      "materyalize: yikim yok (dizin BOSALMAZ) + eksik/bozuk uretim BASARILI sayilmaz"),
+    # 2026-09-12 (Q286): harness JUNCTION'daki talimati dis import sayip YUKLEMIYORDU (08-20'den
+    # beri core/rules yuklenmedi). rules ZORUNLU kopya + CLAUDE.core.md kopyasi + YUKLEME satiri
+    # (ON KOSUL / ONCEKI OTURUM / BU OTURUMUN ACILISI) + ⚠GEVSETME behavior_manifest muafiyeti.
+    #   8 mutasyon kipi (docstring); eski kod: --agac <git archive 8e8feef>.
+    ("core_fiziksel_kopya",
+     "rules+CLAUDE.core.md fiziksel kopya, yukleme satiri olculur, K1 muafiyeti yalniz el degmemis kopya"),
     # 2026-08-13 B0 is-ozel secim modu: `--degisen` haritasinin KENDI korpusu
     # (secim MANTIGI olculur — suite gercekten kosulmaz; kuru-kosum `--listele`).
     ("b0_secim",
@@ -569,7 +575,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # team_setup.py HARITA'da HIC YOKTU (2026-08-22 bulgusu): degisikligi hicbir korpusa
     # eslesmiyordu -> tazelik kapisi bu dosyada KORDU.
     ("scripts/team_setup.py", ("O:shim_tazeleme", "O:overlay_materyalize_atomik",
-                              "O:worktree_yasam_dongusu", "O:team_setup_hook_kablolama"),
+                              "O:worktree_yasam_dongusu", "O:team_setup_hook_kablolama",
+                              "O:core_fiziksel_kopya"),
      "shim tazeleme yolu + `dosya_tamamla` idempotansi burada yasar; varsayilanin "
      "degismedigi YALNIZ bu korpusta olculur. `junctions()` tip-basina yalitimi "
      "(Q30: tek tipteki istisna kurulumun kalan 5 adimini atliyordu) atomik korpusta. "
@@ -619,7 +626,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "DTEL yaratma CSV'si: 4 label + description doluluk + uzunluk + domain bağı (ADR 0005-D)"),
     ("scripts/validators/check_cds_qty_in_expression.py", ("O:cds_qty_in_expression",),
      "FP tuzakları (düz cast · `case` yüklemi · birim alanı) korpusla ölçüldü; kapsam daraltması burada yaşar"),
-    ("scripts/ix_doctor.py", ("O:ix_doctor_kablolama", "O:d7_drift_imzasi"),
+    ("scripts/ix_doctor.py", ("O:ix_doctor_kablolama", "O:d7_drift_imzasi", "O:core_fiziksel_kopya"),
      "korunan tool kümesi pre_tool_guard AST'inden TÜRETİLİR (elle kopya bayatladı: 6 vs 16) "
      "+ türetme kırılırsa PASS DEĞİL 'ÖLÇÜLEMEDİ'; D7 kolunun ölçütü ise `session_start` ile "
      "ORTAK tanımdan gelir (Q212 — kopya-tanım ayrışması bu korpusta çapalı)"),
@@ -723,7 +730,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:fs_docstd", "O:gevsetme_pozitif_kontrol"),
      "DOC-FS-05/06a desenleri + worktree dışlama (ölçülmüş 87→174 çiftlenmesi); "
      "pozitif kontrol: ana ağaçtaki gerçek ihlal hâlâ yakalanır"),
-    ("scripts/behavior_manifest.py", ("O:manifest_secici_onay",),
+    ("scripts/behavior_manifest.py", ("O:manifest_secici_onay", "O:core_fiziksel_kopya"),
      "I-1 seçici onay (`--only`) + I-2 worktree/CRLF; İKİ GEVŞETME pozitif kontrollü "
      "(S2/S4 gerçek ihlalin hâlâ yakalandığını kanıtlar)"),
     ("scripts/utils/ddic_semantics.py",
@@ -765,10 +772,18 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "payload korpusu + parse-fail görünürlüğü + tembel desen-kurulumu"),
     ("scripts/hooks/session_start.py",
      ("O:overlay_oto_tazeleme", "O:negatif_test_harness", "O:worktree_yasam_dongusu",
-      "O:session_start_compact_dali", "O:d7_drift_imzasi"),
+      "O:session_start_compact_dali", "O:d7_drift_imzasi", "O:core_fiziksel_kopya"),
      "oto-tazeleme kablolaması + parse-fail notu + `source` dalı (compact gövdesi ile "
      "startup gövdesinin AYRIŞMASI; startup tarafı BAYT-EŞ kalmalı) + D7 kolunun ölçütü "
      "`ix_doctor` ile ORTAK (Q212)"),
+    # Q286 (2026-09-12): uc dosya bu korpusun DENEGIDIR ama haritada yalniz `scripts/hooks/*.py`
+    # glob'u (iki hook) vardi, inspector.py HIC YOKTU -> degisiklik bu korpusu secmezdi.
+    ("scripts/inspector.py", ("O:core_fiziksel_kopya",),
+     "A3 tembel-tetik bulgusu (bilgi degil) + sid filtresi · B5 kopya->kaynak eslemesi claude_overlay'den"),
+    ("scripts/hooks/instructions_loaded_log.py", ("O:core_fiziksel_kopya",),
+     "C1 `sid=` kolonu: session_start YUKLEME satirinin ve inspector A3'un veri kaynagi"),
+    ("scripts/hooks/config_change_guard.py", ("O:core_fiziksel_kopya",),
+     "K1 ⚠GEVSETME muafiyetinin runtime bacagi (el degmemis tazeleme exit 0 / elle duzeltme exit 2)"),
     # Q212 (2026-09-09): D7 "sapma" tanımının tek kaynağı. İKİ tüketicisi var ve İKİSİ de
     # ölçülmeli — yalnız bir kapının korpusu seçilseydi ayrışma (bu turun teşhisi) yine
     # görünmezdi. `utils/infra_yuzeyi.py` (Q209) satırıyla AYNI sınıf.
@@ -809,7 +824,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # ── overlay / proje-kurulum yüzeyi ──────────────────────────────────────
     ("scripts/utils/claude_overlay.py",
      ("O:overlay_kiyas_tabani", "O:overlay_oto_tazeleme", "O:overlay_materyalize_atomik",
-      "O:team_setup_hook_kablolama"),
+      "O:team_setup_hook_kablolama", "O:core_fiziksel_kopya"),
      "T2.5 kıyas tabanı + oto-tazeleme + `materyalize` atomikliği (Q30 kayıp vakası); "
      "onay kapısının team_setup kablolamasını düşürMEmesi (E-05)"),
     ("scripts/utils/claude_paths.py", ("O:proje_slug_tek_kaynak",), "slug tek-kaynak korpusu"),

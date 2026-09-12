@@ -10,6 +10,12 @@ Canlı-çekirdek mimarisinde (ADR 0020) proje `CLAUDE.md`'si ince: metodolojiyi
 "TAHMİN YASAK = kanıtlı hareket et") core'da yaşıyordu ve projeye **yalnızca bu import**
 üzerinden geliyordu.
 
+> **2026-09-12 Q286: import junction'da yüklenmiyordu, yerine** çekirdek
+> `.claude/rules/00-claude-core.md` fiziksel kopyası olarak yüklenir (`team_setup` /
+> `claude_overlay` üretir). Bu ADR'nin öngördüğü risk ("import sessizce context'ten kaybolur")
+> 2026-08-20'den itibaren fiilen gerçekleşti; fiziksel damga kararı o dönemde yasakları
+> taşıyan tek kanal oldu. Gövde tarihsel karar olarak korunur.
+
 İki enforcement modu ayrışır:
 - **Araç-seviyesi** (SAP objesine dokunma, transport yaratma): `pre_tool_guard` + MCP
   server guardrail'leri koruyor; junction kopuksa shim tool'u exit-1 ile bloklar, MCP

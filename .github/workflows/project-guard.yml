@@ -31,7 +31,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: tracked tree'de core/junction içeriği yok
         run: |
-          # 'rules' 2026-07-10'da eklendi (L1b). Junction'lanan HER tip burada olmalı;
+          # 'rules' 2026-07-10'da eklendi (L1b). Core'dan gelen HER tip (junction ya da
+          # fiziksel kopya — Q286: rules + CLAUDE.core.md artik DAIMA kopya) burada olmalı;
           # yoksa core içeriği sunucu tarafında yakalanmadan geçer.
           BAD=$(git ls-files -- 'core/**' '.claude/agents/**' '.claude/skills/**' '.claude/commands/**' '.claude/rules/**')
           if [ -n "$BAD" ]; then

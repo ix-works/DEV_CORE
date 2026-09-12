@@ -242,7 +242,7 @@ olması genericize disiplinini zorunlu kılar (Bölüm 15.2).
 
 | Dosya | İçerik / işlev |
 |---|---|
-| `CLAUDE.core.md` | Çekirdek loader. Proje `CLAUDE.md`'si `@core/CLAUDE.core.md` ile yükler. Katman özeti (L1a–L4), **§1.1 her-oturum davranış değişmezleri**, SAP profil modeli, oturum protokolü, T1–T11 + SORU 0, gate tablosu, dosya indeksi. |
+| `CLAUDE.core.md` | Çekirdek loader. Projede import EDİLMEZ; `team_setup` onu `.claude/rules/00-claude-core.md` fiziksel kopyası olarak üretir (Q286 — junction ardındaki `@core` import'u dış import sayılıp yüklenmiyordu). Katman özeti (L1a–L4), **§1.1 her-oturum davranış değişmezleri**, SAP profil modeli, oturum protokolü, T1–T11 + SORU 0, gate tablosu, dosya indeksi. |
 | `AGENTS.md` | **L1c — derin davranış referansı. OTOMATİK YÜKLENMEZ**; açıkça okunmalıdır. Git workflow detayı, ADT işlem sırası, obje→klasör eşlemesi, reviewer pre-flight ayrıntısı. |
 | `MAINTENANCE.md` | Canlı-çekirdek işletim el kitabı: PR/CI akışı, `stable` tag ile rollback, `project.yaml` anahtar kataloğu. |
 | `ONBOARDING.md` | Yeni/güncellenen geliştiriciyi ortamla senkron etme adımları. |
@@ -379,12 +379,12 @@ Sebep: core canlıdır — buraya giren şey junction'lı tüm projelerde **anı
 │   ├── agents/  ═════════════► DEV_CORE/claude/agents      (junction VEYA overlay)
 │   ├── skills/  ═════════════► DEV_CORE/claude/skills      (junction)
 │   ├── commands/ ════════════► DEV_CORE/claude/commands    (junction)
-│   ├── rules/   ═════════════► DEV_CORE/claude/rules       (junction — L1b, `paths:`)
+│   ├── rules/                   (GERÇEK KLASÖR — fiziksel kopya: 00-claude-core.md + claude/rules/*.md; Q286)
 │   ├── settings.json            (proje-lokal, commit'li — hook zinciri)
 │   ├── settings.local.json      (kişisel, gitignore)
 │   ├── behavior-manifest.json   (davranış-yüzeyi manifest, gitignore runtime)
 │   └── .current_session / .mcp_active_system / .itg_shown.json …  (runtime state, gitignore)
-├── CLAUDE.md                    (ince loader — yasaklar damgalı + @core import + proje-özel)
+├── CLAUDE.md                    (ince loader — yasaklar damgalı + proje-özel + Compact instructions; @import YOK)
 ├── README.md                    (init_project üretir)
 ├── project.yaml                 (proje kimliği: profil, source_root, gate config'leri)
 ├── .conn_adt                    (SAP bağlantı — gitignore)
@@ -731,7 +731,9 @@ tembel yükleme hiç çalışmaz, hata da vermez. Ayrıntı + kanıt yolu:
 `paths:` **olmayan** kural koşulsuz yüklenir (her oturum) — bu meşru bir tercih olabilir.
 **Compaction uyarısı:** `paths:`-scoped kurallar `/compact` sonrası kaybolur (eşleşen dosya
 tekrar okununca döner). Bu yüzden **anayasa buraya konmaz** — kök `CLAUDE.md`'ye fiziksel
-damgalıdır (ADR 0021) ve compaction'dan sağ çıkan tek yerdir.
+damgalıdır (ADR 0021). `paths:`'siz dosyalar — projede çekirdek kopyası `00-claude-core.md` —
+compact'ta `load_reason=compact` ile geri gelir (ölçüldü 2026-09-12 Q286 M6, print modu N=1).
+Projede `.claude/rules/` junction değil `team_setup`'ın ürettiği **gerçek klasör kopyasıdır**.
 
 ⚠ **Bir README'yi `claude/rules/` içine koyma** — o dizindeki her `.md` talimat dosyasıdır.
 
@@ -1287,7 +1289,7 @@ git add -A ; git commit -m "chore(bootstrap): XYZ iskeleti" ; git push -u origin
 python core/scripts/ix_doctor.py
 ```
 
-`init_project.py` **üretir** (kopyalamaz): `CLAUDE.md` (yasaklar damgalı + `@core` import),
+`init_project.py` **üretir** (kopyalamaz): `CLAUDE.md` (yasaklar damgalı + Compact instructions; çekirdek import EDİLMEZ — `.claude/rules/00-claude-core.md` kopyasını STEP 3'te `team_setup` üretir, Q286),
 `README.md`, `.claude/settings.json`, `scripts/hook_shim.py`, `scripts/git-hooks/pre-commit`,
 `project.yaml`, `.gitignore` (sızıntı kilidi + sırlar + runtime), `.gitattributes`, `.mcp.json`,
 `governance/infra-findings.md` (kuyruk tohumu — `post_validate` bu yolu enjekte eder, dosya
