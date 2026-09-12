@@ -132,6 +132,11 @@
   2026-08-12: makine-lokal tek kopya riski ölçülerek kapatıldı; push'suz memory = yedeksiz)
   + ⭐ **`--wt-denetim` (yukarıdaki madde 3)** — açık worktree'lerde main'e gitmemiş iş ya da
   hasat edilmemiş hafıza kalmadığı ölçülmeden gün kapanmaz.
+  + **JIT-recall durum kontrolü (Q287, 2026-09-12):** `.tmp/recall-index.status` oku —
+  `sonuc` `OK` mu, `zaman` bugünden mi, `yetim` düşük ve `memory` sayısı memory dizinindeki
+  ders dosyası sayısıyla uyumlu mu. İndeksi `recall_inject` hook'u kendisi tazeler; bu adım
+  **manuel üretim DEĞİL, gözlemdir**. Dosya yoksa ya da `sonuc` hata ise stderr notunu
+  kaydet (kuyruk kaydı) — "indeks sessizce bayat" sınıfı fail-open hook'ta başka yerde görünmez.
 - **⛔ KAPANIŞ DİSİPLİNİ — bir madde konuşmada değil, ARTEFAKTTA kapanır (2026-08-12):**
   1. **Kapanış anı = artefakt anı.** Madde konuşmada kapandığında **aynı turda** dosyada da
      kapanır; gün-sonuna bırakılmaz. *(Yeni kural değil — "İCRA ya da açık ertele"nin
