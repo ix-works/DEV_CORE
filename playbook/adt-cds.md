@@ -184,12 +184,12 @@ açılmadı — ADR 0019 §4 merdiven ilkesi: önce doküman. Tekrar ederse vali
 > ⇒ **Bilgi eksik değildi; adım-2'nin ZORUNLU olduğu yazılı değildi** (*"de olur"* diyordu). Bu revizyon yeni bilgi eklemiyor, **mevcut kuralın gücünü** ölçümle sabitliyor.
 > **Ölçümün kapsamı (daraltılmış):** DS4 / S/4 2025, 2026-08-22, **11 obje**. Kontrol grubu: aynı turda adım-1 tek başına **0/11** doldurdu, adım-2 ile **11/11** doldu ve sha256 eşitliği doğrulandı. ⚠ 2026-06-23'teki turun **hangi sistemde** koştuğu kayıtta yok ⇒ *"davranış değişti"* mi *"o sistemde de böyleydi ama fark edilmedi"* mi **AYIRT EDİLEMEDİ**; iddia **bu sisteme** dairdir.
 
-> **Abstract entity ≠ view-entity.** `as select from` / SQL view YOK → SELECT bekleyen araçlar UYGULANMAZ:
+> **Abstract entity ≠ view-entity.** `as select from` / SQL view YOK → view-entity araçlarıyla abstract entity'nin **canlı yaratılması bu evde ÖLÇÜLMEDİ**; ölçülmüş yol aşağıdaki 3 adımdır:
 >
-> | Deneme | Sonuç | Neden |
+> | Araç | Bugünkü durum (offline ölçüm, 2026-09-13) | Neden hâlâ reçete değil |
 > |---|---|---|
-> | `create_cds_view.py` | "no SELECT" / projection hatası | araç `as select from` bekler; abstract'ta yok |
-> | `populate_cds_views.py` | **sprint gate** + TD-spec patlar | batch view-entity üreticisi; abstract için değil |
+> | `create_cds_view.py` | Kaynak kapısı abstract entity'yi **GEÇİRİR** (Q277: `define [root] abstract entity <ad> {`). 2026-09-13'e kadar "SELECT FROM yok" diye reddediyordu. | Bu araçla canlı yaratma ölçülmedi. Araç kaynağı POST gövdesine koyar; bu sistemde SAP gövdeyi yok sayar (§30.1 · aşağıda adım 1) ⇒ kaynak **ayrıca push edilir** (adım 2). |
+> | `populate_cds_views.py` | Düz `define abstract entity` → pre-flight **geçer** (TD-spec atlanır, RAP ad kuralı uygulanır). `define root abstract entity` → pre-flight **PATLAR**: RAP deseni `root abstract`ı tanımıyor ⇒ TD-spec aranır + "sqlViewName EKSİK". Sprint kapısı türden bağımsızdır (`cds_target_sprint` tanımlıysa uygulanır). | Abstract entity için canlı yaratma (POST shell + LOCK/PUT) ölçülmedi. |
 >
 > **ÇALIŞAN (2026-06-23 — nakliye param/result patinajı sonrası):** view-entity 3-adımının abstract uyarlaması —
 >

@@ -37,7 +37,8 @@ Mutasyonlar (DÖRDÜ DE koşulur — hiçbiri diğerini kapsamaz):
   --mutasyon-kosucu3      PROJE koşucu dalını sök (3/3)      → X11 DÜŞMELİ
                           (ÜÇ ayrı mutasyon: her parça tek başına NO-OP'tur — kayıt Q209)
   --mutasyon-onek         `core/` önekini sök             → Y1/Y2 DÜŞMELİ (yol çözülmez)
-  --mutasyon-hook         doc-fs dalını sök             → B1-B5 DÜŞMELİ, R1-R3 AYAKTA
+  --mutasyon-hook         doc-fs dalını sök             → B1-B3 · B5 · B8 · B9 · B9b · B11 · B12 · B13 ·
+                          Y2 · Y3 DÜŞMELİ (ölçüldü 2026-09-13, 55/67), R1-R3 AYAKTA
   --mutasyon-kapanmis     nudge'dan `--kapanmis-karar`ı sök → Y3 DÜŞMELİ (öğretilen komut
                           ile aracın yüzeyi ayrışır; Y1/Y2 AYAKTA — ayrı değişmez)
   --mutasyon-boskapsam    `n_docs == 0` dalını sök (Q262)  → A12/A12b DÜŞMELİ,
@@ -46,6 +47,10 @@ Mutasyonlar (DÖRDÜ DE koşulur — hiçbiri diğerini kapsamaz):
                           → A14/A15/A16/A16b DÜŞMELİ; A14b (doğrudan docs/) · A14c · A18 AYAKTA
   --mutasyon-beyan        KAPSAM satırını sök (Q275) → A15/A15b/A16/A16b/A19 DÜŞMELİ
   --mutasyon-tur          `--tur`u yok say (hep FS/EK) (Q275) → A16/A16b DÜŞMELİ, A16c AYAKTA
+  --mutasyon-hookagac     hook kök çözümünü sök → her yol eski "yalnız doğrudan docs/" ölçütüne
+                          düşer (Q294) → B9/B9b/B12 DÜŞMELİ; B1-B8 · B10 · B11 · B13 AYAKTA
+  --mutasyon-hookmutlak   hook `docs`u KÖKE GÖRELİ değil MUTLAK yolda arasın (Q294)
+                          → B11 DÜŞMELİ (3. bağlam FP çapası); B9/B12/B13 AYAKTA
 Herhangi biri tam puan verirse korpus O DEĞİŞMEZ için BOŞTUR.
 """
 import json
@@ -262,12 +267,19 @@ def _val(validator: Path, *args, env=None) -> tuple:
     return p.returncode, (p.stdout or ""), (p.stderr or "")
 
 
-def _hook(sb: Path, hook_adi: str, payload, shim: bool, proje_env: bool = True) -> tuple:
+def _hook(sb: Path, hook_adi: str, payload, shim: bool, proje_env: bool = True,
+          proje: Path = None, tmp: Path = None) -> tuple:
+    """`proje`: CLAUDE_PROJECT_DIR'i sb yerine başka köke kur (Q294 3. bağlam) ·
+    `tmp`: TMP/TEMP'i kum içine al (işaretsiz kökte OKU marker'ı gettempdir'e düşer — kum DIŞINA
+    yazılmasın)."""
     ham = payload if isinstance(payload, str) else json.dumps(payload)
     env = dict(os.environ)
     env.pop("CLAUDE_PROJECT_DIR", None)
     if proje_env:
-        env["CLAUDE_PROJECT_DIR"] = str(sb)
+        env["CLAUDE_PROJECT_DIR"] = str(proje or sb)
+    if tmp is not None:
+        for anahtar in ("TMP", "TEMP", "TMPDIR"):
+            env[anahtar] = str(tmp)
     if shim:
         cmd = [sys.executable, str(sb / "scripts" / "hook_shim.py"), hook_adi]
     else:
@@ -286,8 +298,22 @@ def _edit(yol: Path, sid: str) -> dict:
 def _mutant(kip: str) -> tuple:
     """(validator_yolu, hook_adi) — mutant KOMŞULARININ yanına yazılır (import kırılmasın)."""
     v_yol, h_adi = VALIDATOR, "post_validate"
-    if kip in ("hook", "express", "onek", "kapanmis", "kosucu", "kosucu2", "kosucu3"):
+    if kip in ("hook", "express", "onek", "kapanmis", "kosucu", "kosucu2", "kosucu3",
+               "hookagac", "hookmutlak"):
         kaynak = HOOK.read_text(encoding="utf-8")
+        if kip in ("hookagac", "hookmutlak"):
+            # ⛔ İKİ DEĞİŞMEZ, İKİ MUTASYON (Q294): (1) alt ağaç KAPSAMA girer · (2) `docs`
+            # KÖKE GÖRELİ aranır. Biri tek başına diğerini ölçmez.
+            if kip == "hookagac":
+                yeni, n = re.subn(r"        kok = _docs_koku\(norm\)\n",
+                                  "        kok = None\n", kaynak, count=1)
+            else:
+                yeni, n = re.subn(r"        parcalar = Path\(norm\)\.parent\.relative_to\(kok\)\.parts\n",
+                                  "        parcalar = Path(norm).parent.parts\n", kaynak, count=1)
+            _capa(n, kip)
+            hedef = HOOK.parent / "_mutant_post_validate.py"
+            hedef.write_text(yeni, encoding="utf-8")
+            return v_yol, "_mutant_post_validate"
         if kip == "kapanmis":
             # #12③ — nudge'ın ÖĞRETTİĞİ komuttan `--kapanmis-karar` sökülür.
             yeni, n = re.subn(r'\n\s*"--kapanmis-karar <[^"]*"', "", kaynak, count=1)
@@ -330,8 +356,8 @@ def _mutant(kip: str) -> tuple:
             hedef = HOOK.parent / "_mutant_post_validate.py"
             hedef.write_text(yeni, encoding="utf-8")
             return v_yol, "_mutant_post_validate"
-        yeni, n = re.subn(r'm_doc = re\.search\(r"/docs/\(FS\|TS\|KD\|EK\)-\[\^/\]\+\\\.md\$", norm, re\.IGNORECASE\)',
-                          'm_doc = None', kaynak, count=1)
+        # Q294: çapa `m_doc = re.search(r"/docs/…")` satırından tür-çözücü çağrısına taşındı.
+        yeni, n = re.subn(r"    kind = _doc_turu\(norm\)\n", "    kind = None\n", kaynak, count=1)
         _capa(n, kip)
         hedef = HOOK.parent / "_mutant_post_validate.py"
         hedef.write_text(yeni, encoding="utf-8")
@@ -646,6 +672,64 @@ def main() -> int:
              "ÖNCE OKU" in e1 and "ÖNCE OKU" not in e2,
              f"1.={'OKU' if 'ÖNCE OKU' in e1 else '-'} 2.={'OKU' if 'ÖNCE OKU' in e2 else '-'}")
 
+        # ── Q294 (2026-09-13): doc-fs dalının evreni = `docs` ALT AĞACI (validator Q275 hizası) ──
+        # Kusur: hook yalnız DOĞRUDAN `docs/` çocuğunda ateşliyordu (A14'ün hook kardeşi).
+        # Kontrol grubu B1-B5 (doğrudan docs/) · FP çapaları B6/B10/B11 · daraltma çapası B13.
+        (d / "alt" / "derin").mkdir(parents=True, exist_ok=True)
+        (d / "alt" / "FS-XX-981_altklasor.md").write_text(KIRLI_FS, encoding="utf-8")
+        (d / "alt" / "derin" / "TS-XX-981.md").write_text(KIRLI_FS, encoding="utf-8")
+        (sb / "mydocs" / "alt").mkdir(parents=True, exist_ok=True)
+        (sb / "mydocs" / "alt" / "FS-XX-982.md").write_text(KIRLI_FS, encoding="utf-8")
+
+        rc, _, err = _hook(sb, hook_adi, _edit(d / "alt" / "FS-XX-981_altklasor.md", "oturum-q294a"), shim_var)
+        ekle("B9 ⭐ AYIRT EDİCİ: docs/<alt>/FS-*.md → exit 2 + ÖNCE OKU + UYARI (önce: sessiz)",
+             rc == 2 and "ÖNCE OKU" in err and "UYARI" in err,
+             f"exit={rc} oku={'VAR' if 'ÖNCE OKU' in err else 'YOK'} uyari={'VAR' if 'UYARI' in err else 'YOK'}")
+
+        rc, _, err = _hook(sb, hook_adi, _edit(d / "alt" / "derin" / "TS-XX-981.md", "oturum-q294b"), shim_var)
+        ekle("B9b docs/<alt>/<derin>/TS-*.md → OKU var, FS/EK gate'i KOŞMAZ (TS kapsamı B5 ile aynı)",
+             rc == 2 and "ÖNCE OKU" in err and "UYARI" not in err,
+             f"exit={rc} oku={'VAR' if 'ÖNCE OKU' in err else 'YOK'} uyari={'VAR' if 'UYARI' in err else 'YOK'}")
+
+        rc, _, err = _hook(sb, hook_adi, _edit(sb / "mydocs" / "alt" / "FS-XX-982.md", "oturum-q294c"), shim_var)
+        ekle("B10 FP ÇAPASI: adı `docs` OLMAYAN klasör (mydocs/alt) → exit 0 sessiz",
+             rc == 0 and not err.strip(), f"exit={rc} stderr={len(err.strip())}b")
+
+        # 3. BAĞLAM — kökün ÜST dizini `docs` (A18'in hook kardeşi). ⚠ İç kontrol grubu AYNI
+        # env ile: kök altındaki gerçek `docs/` ateşlemeli — yoksa sessizlik "hook hiç koşmadı"
+        # (shim/env kırığı) ile ayırt edilemez. ⚠ DOĞRUDAN çağrı (shim DEĞİL): shim core'u
+        # `CLAUDE_PROJECT_DIR/core`tan bulur, bu kökte core bağı yok. Kablolama B1-B9'da kanıtlı.
+        ust = Path(str(sb) + "6") / "docs" / "proje"
+        (ust / "docs").mkdir(parents=True, exist_ok=True)
+        (ust / "docs" / "FS-XX-987.md").write_text(KIRLI_FS, encoding="utf-8")
+        rc_n, _, err_n = _hook(sb, hook_adi, _edit(ust / "notlar" / "FS-XX-985.md", "oturum-q294d"),
+                               False, proje=ust)
+        rc_k, _, err_k = _hook(sb, hook_adi, _edit(ust / "docs" / "FS-XX-987.md", "oturum-q294e"),
+                               False, proje=ust)
+        ekle("B11 3.BAĞLAM FP ÇAPASI: kökün ÜSTÜ `docs` → kök/notlar/FS sessiz; iç kontrol kök/docs/FS ateşler",
+             rc_n == 0 and not err_n.strip() and rc_k == 2 and "UYARI" in err_k,
+             f"notlar exit={rc_n} stderr={len(err_n.strip())}b · kontrol exit={rc_k} "
+             f"uyari={'VAR' if 'UYARI' in err_k else 'YOK'}")
+
+        # Windows ters bölü yazımı (payload'da). POSIX'te dosya bu yazımla okunamaz ⇒ gate
+        # ÖLÇEMEDİ notu basabilir; değişmez nudge'ın ATEŞLEMESİDİR, UYARI değil.
+        ters = str(d / "alt" / "FS-XX-981_altklasor.md").replace("/", "\\")
+        rc, _, err = _hook(sb, hook_adi, {"session_id": "oturum-q294f", "tool_name": "Edit",
+                                          "tool_input": {"file_path": ters, "new_string": "x"}}, shim_var)
+        ekle("B12 ters bölülü docs\\alt\\FS-*.md → exit 2 + ÖNCE OKU",
+             rc == 2 and "ÖNCE OKU" in err, f"exit={rc} oku={'VAR' if 'ÖNCE OKU' in err else 'YOK'}")
+
+        # DARALTMA ÇAPASI — kök ÇÖZÜLEMEYEBİLİR (env yok, kumda project.yaml/.git yok): eski
+        # ölçütün ateşlediği doğrudan `docs/` çocuğu yine ateşlemeli. Çapa UYARI'dır (gate
+        # sonucu), OKU değil: marker kökü burada TMP'ye düşer, dedup'a bağlanmasın.
+        isz = Path(str(sb) + "8")
+        (isz / "docs").mkdir(parents=True, exist_ok=True)
+        (isz / "docs" / "FS-XX-970.md").write_text(KIRLI_FS, encoding="utf-8")
+        rc, _, err = _hook(sb, hook_adi, _edit(isz / "docs" / "FS-XX-970.md", "oturum-q294g"),
+                           shim_var, proje_env=False, tmp=isz)
+        ekle("B13 DARALTMA ÇAPASI: env + işaret dosyası YOK, doğrudan docs/FS → exit 2 + UYARI (eski davranış)",
+             rc == 2 and "UYARI" in err, f"exit={rc} uyari={'VAR' if 'UYARI' in err else 'YOK'}")
+
         # ── İNFRA-EXPRESS NUDGE (PATTERN #30): EXPRESS mi kuyruk mu? ───────
         def _ifade(err):
             return ("PAYLAŞILAN İNFRA" in err and "EXPRESS" in err
@@ -888,7 +972,7 @@ def main() -> int:
             except Exception:
                 pass
         for yol in (sb, Path(str(sb) + "2"), Path(str(sb) + "3"), Path(str(sb) + "4"),
-                    Path(str(sb) + "5"), Path(str(sb) + "6")):
+                    Path(str(sb) + "5"), Path(str(sb) + "6"), Path(str(sb) + "8")):
             try:
                 _bagi_kaldir(yol / "core")
                 shutil.rmtree(yol, ignore_errors=True)

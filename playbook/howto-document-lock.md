@@ -133,8 +133,10 @@ _releaseLock(id){ this._stopHeartbeat(); this._callLock("ReleaseLock",id).catch(
 - **`Lock`/`Unlock` RAP'te REZERVE** action adı → `AcquireLock`/`ReleaseLock`.
 - **DTEL manuel REST** (create_dataelement.py domain-binding kaybeder → DTEL aktive olmaz):
   v2 XML + `typeKind=domain` + `typeName` (bkz. `scripts/TempScripts/fix_dtel_setype.py`).
-- **Abstract entity** `create_cds_view` ile yaratılamaz (SELECT FROM arar) → **ham POST**
-  `/sap/bc/adt/ddic/ddl/sources` + LOCK+PUT source (inline-POST boş-source tuzağı).
+- **Abstract entity:** `create_cds_view` kaynak kapısı 2026-09-13'ten (Q277) beri abstract'ı geçirir,
+  ama bu araçla canlı yaratma ölçülmedi ve POST gövdesindeki kaynak bu sistemde yok sayılır ⇒
+  ölçülmüş yol: **ham POST** shell `/sap/bc/adt/ddic/ddl/sources` + kaynak AYRICA LOCK+PUT/push
+  (inline-POST boş-source tuzağı; `adt-cds.md` §ABSTRACT ENTITY).
 - **ccimp include push:** `/sap/bc/adt/oo/classes/<cls>/includes/implementations` (`/source/main` YOK).
 - **DDIC tablo** inline-POST sadece mandt getirir → tam DDL LOCK+PUT (struct-creation deseni).
 - COMMIT WORK handler'da YOK (RAP yasak) — action LUW commit eder.

@@ -64,14 +64,19 @@ def _checklist(otype: str):
 
 
 # ── ALT-TÜR ekseni (2026-08-22, kuyruk Q5) ───────────────────────────────────
-# ⛔ ÖLÇÜLMÜŞ VAKA: 11 soyut varlık (`define abstract entity`) `object_type='ddls'` ile
-# push edildi. Bu hook `ddls` görüp KANONİK CDS satırını bastı: "playbook/adt-cds.md
-# 'TEK CDS YARATMA'". Oysa `adt-cds.md:180` (§ ⚡ ABSTRACT ENTITY) tam da o bölümün
-# önerdiği araçların (`create_cds_view.py` · `populate_cds_views.py`) abstract entity'de
-# ÇALIŞMADIĞINI yazar ve şu kuralı koyar: *"yeni DDLS görünce TÜRÜNE bak — SELECT var mı?
-# ... Tahminle araç seçme."* Yani hatırlatıcı, reçetenin kendi kuralını uygulamıyordu:
-# obje-tipinde duruyor, ALT-TÜRE bakmıyordu. (`checklists/cds-creation.md` içinde
-# "abstract" kelimesi HİÇ geçmiyor — ölçüldü.)
+# ⛔ ÖLÇÜLMÜŞ VAKA (2026-08-22): 11 soyut varlık (`define abstract entity`) `object_type='ddls'`
+# ile push edildi. Bu hook `ddls` görüp KANONİK CDS satırını bastı: "playbook/adt-cds.md
+# 'TEK CDS YARATMA'". Oysa `adt-cds.md` § ⚡ ABSTRACT ENTITY o gün, o bölümün önerdiği
+# araçların (`create_cds_view.py` · `populate_cds_views.py`) abstract entity'de ÇALIŞMADIĞINI
+# yazıyordu ve şu kuralı koyar: *"yeni DDLS görünce TÜRÜNE bak — SELECT var mı? ... Tahminle
+# araç seçme."* Yani hatırlatıcı, reçetenin kendi kuralını uygulamıyordu: obje-tipinde
+# duruyor, ALT-TÜRE bakmıyordu.
+# ⚠ GÜNCEL DURUM (2026-09-13, Q297) — gerekçe değişmedi, araç iddiası değişti: `create_cds_view`
+# kaynak kapısı Q277'den beri abstract entity'yi GEÇİRİR (offline ölçüldü); ama bu araçla canlı
+# yaratma ölçülmedi ve kaynak yine ayrıca push edilir. `populate_cds_views` pre-flight'ı
+# `define root abstract entity`de hâlâ patlar. Ölçülmüş reçete hâlâ AYRI bölümdedir ⇒ ALT-TÜR
+# yönlendirmesi (bu dal) aynen gerekli. (`checklists/cds-creation.md` içinde "abstract" kelimesi
+# HİÇ geçmiyor — 2026-08-22 ölçüldü, 2026-09-13 yeniden ölçüldü: 0.)
 #
 # ⛔ NEDEN BRİFİNG-METNİ DEĞİL KAYNAK: alt-tür brifingden TAHMİN edilmez; artefaktın KENDİ
 # bildirimi (`define [root] abstract entity ...`) onu SÖYLER ve o bildirim bu tool'un
