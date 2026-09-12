@@ -72,6 +72,10 @@ def _blok_tekrarlari(satirlar: list[str]) -> list[tuple[int, int]]:
 
 
 def _hedefler(kok: Path) -> list[Path]:
+    # ⛔ `.claude/rules/` BİLEREK taranmaz (Q286, 2026-09-12): projede o dizin artık core'un
+    # FİZİKSEL KOPYASIDIR (`claude_overlay`: `00-claude-core.md` = CLAUDE.core.md +
+    # `claude/rules/*.md`). Buraya eklenirse aynı içerik iki kez sayılır (kaynak + kopya);
+    # `resolve()` tekilleştirmesi kopyayı YAKALAMAZ (farklı dosya). Bütçe KAYNAKTA ölçülür.
     adaylar = [kok / "CLAUDE.md", kok / "CLAUDE.core.md", kok / "core" / "CLAUDE.core.md"]
     for rd in (kok / "claude" / "rules", kok / "core" / "claude" / "rules"):
         if rd.is_dir():

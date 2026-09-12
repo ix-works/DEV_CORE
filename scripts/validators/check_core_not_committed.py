@@ -28,8 +28,11 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 PROJ = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
-# `.claude/rules/` 2026-07-10'da eklendi (L1b). Junction'lanan her tip bu iki listede
+# `.claude/rules/` 2026-07-10'da eklendi (L1b). Core'dan GELEN her tip bu iki listede
 # OLMAK ZORUNDA — yoksa core içeriği proje reposuna sessizce commit'lenir.
+# ⚠ 2026-09-12 (Q286): "core'dan gelen" = junction YA DA fiziksel kopya. `.claude/rules/`
+# artık DAİMA kopyadır (CLAUDE.core.md dahil, `claude_overlay.ZORUNLU_TIPLER`) — kopya
+# junction'dan DAHA sızıntıya açıktır (gerçek dosya), kilit GEVŞETİLMEZ.
 KILIT_SATIRLARI = ["/core/", ".claude/agents/", ".claude/skills/", ".claude/commands/",
                    ".claude/rules/"]
 IZLENEN_YOLLAR = ["core", ".claude/agents", ".claude/skills", ".claude/commands",

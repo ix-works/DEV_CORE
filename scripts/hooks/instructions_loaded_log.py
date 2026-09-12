@@ -38,6 +38,14 @@ Kontrol gruplu ölçüm (12 süreç × 300 satır): `os.write`+O_APPEND → 3600
 tam da kurulma amacı olan soruda (*"kural gerçekten yüklendi mi?"*) yanlış-negatif verebiliyordu.
 ⇒ Windows yolu `FILE_APPEND_DATA` handle'ına çevrildi (OS append'i tek işlemde yapar).
 Format DEĞİŞMEDİ; POSIX yolu (gerçek O_APPEND) aynen korundu; hata halinde eski yola düşer.
+
+2026-09-12 (Q286 C1) — satır SONUNA `sid=<session_id>` kolonu eklendi (payload'da VAR; ölçüldü
+2.1.269: IL payload anahtarları cwd·file_path·hook_event_name·load_reason·memory_type·
+session_id·transcript_path). Neden: `session_start` "ÖNCEKİ OTURUM core yüklendi mi?" sorusunu
+ancak satırları OTURUMA bağlayarak cevaplayabilir; oturumsuz log yalnız "bir zamanlar
+yüklendi" der. Eklenen kolon EN SONDADIR ⇒ eski okuyucu (inspector `_log_satirlari`: ilk 4
+kolon + `ek`) iki biçimi birlikte ayrıştırır; eski satırlar (sid'siz) veri olarak kalır.
+Payload'da `session_id` yoksa kolon YAZILMAZ (uydurma kimlik yok).
 """
 from __future__ import annotations
 
@@ -150,6 +158,8 @@ def main() -> int:
             tetik = veri.get("trigger_file_path") or ""
             ek = f"\tglobs={','.join(globs)}" if globs else ""
             ek += f"\ttrigger={tetik}" if tetik else ""
+            sid = veri.get("session_id")
+            ek += f"\tsid={sid}" if sid else ""       # Q286 C1: kolon EN SONDA (eski okuyucu uyumlu)
             satir = f"{zaman}\t{sebep}\t{tip or '?'}\t{yol}{ek}\n"
 
         # Atomik append — satır komple oluşturuldu, tek işlemde eklenir (bkz. `_append`).

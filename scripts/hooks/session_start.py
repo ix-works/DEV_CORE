@@ -56,6 +56,8 @@ def _write_session_marker(data: dict) -> None:
 STATIK = (
     "[session-loader hook]\n"
     "ZORUNLU: Yeni oturumun ILK yaniti CLAUDE.core.md §3 'Ekran Teyidi' formatiyla baslar.\n"
+    # Q286 C3: 23 gun boyunca teyit "core yuklendi" dedi, core YUKLENMIYORDU. Beyan yerine olcum.
+    "  Yukleme satirini ([YUKLEME — session_start]) AYNEN aktar; 'yuklendi' diye kendin beyan etme.\n"
     "ADR 0005 KESIN YASAKLAR aktif (A/B/C/D) — TAM metin kok CLAUDE.md fiziksel damgasinda "
     "(compact sonrasi CLAUDE.md ile geri gelir; damga=kanonik, check_kesin_yasaklar esligi zorlar).\n"
     "SAP yazma oncesi run_review.py (ADR 0006). Validator FAIL -> once duzelt (STOP).\n"
@@ -99,10 +101,18 @@ STATIK = (
 #          yukumlulugu (SAP yazimi / expert build bitisi) — run_review ile ayni sinif.
 #  KALDI · D29: compact sonrasi her metodoloji Grep'ini yonetir; kaybolursa arama
 #          "bulunamadi" doner ve bu "YOK" diye okunur (bilinen kusur sinifi).
+#  EKLENDI (2026-09-12, Q286 M6) · cekirdek compact sonrasi GERI GELIR: kaybolursa lider
+#          ya "cekirdek gitti" deyip elle yeniden okur (bosa tur) ya da tersine `paths:`li
+#          bir kuralin da dondugunu sanip eslesen dosyayi okumadan o kurala guvenir. OLCUM
+#          (claude -p + `/compact`, 2.1.269, N=1): IL `load_reason=compact` → 00-claude-core.md
+#          + CLAUDE.md (pozitif kontrol); `paths:`li kural compact'ta YOK, eslesen dosya
+#          okununca `path_glob_match`. Interaktif/otomatik compact OLCULMEDI (niteleyici metinde).
 STATIK_COMPACT = (
     "[session-loader hook — COMPACT sonrasi]\n"
     "Bu YENI BIR OTURUM DEGIL: harness'in compact talimati gecerlidir "
     "(ozeti anma, kaldigin yerden devam et). Ekran Teyidi ISTENMIYOR.\n"
+    "Cekirdek (.claude/rules/00-claude-core.md) compact sonrasi YENIDEN yuklenir (olculdu, print modu); "
+    "paths:'li kurallar ancak eslesen dosya yeniden okununca doner.\n"
     "HALA YURURLUKTE — ADR 0005 KESIN YASAKLAR (A/B/C/D); tam metin kok CLAUDE.md "
     "fiziksel damgasinda.\n"
     "SAP yazma oncesi run_review.py (ADR 0006). Validator FAIL -> once duzelt (STOP).\n"
@@ -138,12 +148,28 @@ def _overlay_oto_tazele() -> list[str]:
 
 
 def _junction_kontrol() -> list[str]:
-    """D25: junction'lar tek tek. OVERLAY'li tipler (claude-local/<tip>) gerçek dizindir."""
+    """D25: junction'lar tek tek. OVERLAY'li tipler (claude-local/<tip>) gerçek dizindir.
+
+    Q286 (2026-09-12): ZORUNLU tip (`rules`) claude-local OLMADAN da gerçek dizindir; o
+    dizin varsa `durum()` ile tazeliği/eksiği denetlenir. Hâlâ junction ya da YOK ise bu
+    listeye GİRMEZ — ⛔ dalı altındaki TÜM sağlık kontrollerini bastırırdı (canlı 4 projenin
+    merge-sonrası ilk açılışları tam bu durumdadır); o hâli `_yukleme_satiri` raporlar.
+    """
     sorun = []
     try:
         sys.path.insert(0, str(CORE / "scripts"))
         from utils import claude_overlay as ov  # type: ignore
-        overlayli = {t for t in ov.TIPLER if ov.overlay_var_mi(PROJ, t)}
+        gerekli = getattr(ov, "overlay_gerekli", ov.overlay_var_mi)
+        zorunlu = getattr(ov, "ZORUNLU_TIPLER", ())
+        overlayli = set()
+        for t in ov.TIPLER:
+            if not gerekli(PROJ, t):
+                continue
+            h = PROJ / ".claude" / t
+            if t in zorunlu and not ov.overlay_var_mi(PROJ, t) and \
+                    (not h.is_dir() or ov._junction_mu(h)):
+                continue                  # junction/yok → YÜKLEME satırı raporlar (⛔'ye düşürülmez)
+            overlayli.add(t)
         for t in overlayli:
             _, s = ov.durum(PROJ, CORE, t)
             sorun.extend(f"overlay {x}" for x in s if "GÜNCELLENDİ" not in x)
@@ -163,6 +189,161 @@ def _junction_kontrol() -> list[str]:
         elif hedef is None:
             sorun.append(f"{ad} junction DEGIL gercek klasor — sizinti riski, elle incele")
     return sorun
+
+
+# ── YÜKLEME SATIRI (2026-09-12, kayıt Q286 C2) ────────────────────────────────
+# SORU: "bu oturumda CLAUDE.core.md + rules yüklendi mi?" 23 gün boyunca Ekran Teyidi
+# "✓ Core loader yüklendi" dedi, oysa harness junction'daki dosyaları dış import sayıp
+# YÜKLEMİYORDU (Q286). Serbest beyan yerine bu satır basılır ve Ekran Teyidi onu AYNEN aktarır.
+# ⛔ ÖLÇÜLMÜŞ SIRA (2.1.269, 3/3): SessionStart hook'u InstructionsLoaded olaylarından ÖNCE
+# koşar (IL +446..+593 ms, SS bitmeden) ⇒ BU oturumun yüklemesi burada ÖLÇÜLEMEZ. Bekleyerek
+# ölçmek (polling) bilinçle REDDEDİLDİ: yarıştır ve her açılışa gecikme ekler.
+# ⇒ İki parça: ① ÖN KOŞUL (deterministik, diskten) ② ÖNCEKİ OTURUMUN ÖLÇÜLMÜŞ değeri
+#   (logger'ın `sid=` kolonundan; "bu oturum" İMA EDİLMEZ, sid8 + zaman yazılır).
+# ⛔ "Ölçemedim" hiçbir dalda "YÜKLENDİ"ye de "YÜKLENMEDİ"ye de ÇÖKMEZ → `_OLCULEMEDI`.
+# ⚠ BİLİNÇLİ İSTİSNA: "temizken sağlık kontrolleri SESSİZDİR" sözleşmesinin (main()) DIŞINDADIR —
+#   bu satır HER açılışta (startup + compact) basılır, çünkü Ekran Teyidi onu alıntılar.
+_OLCULEMEDI = "ÖLÇÜLEMEDİ"
+_CORE_ADLARI = ("00-claude-core.md", "CLAUDE.core.md")
+
+
+def _dis_importlar(claude_md: Path) -> list[str]:
+    """CLAUDE.md'deki `@yol` importlarından PROJE DIŞINA çözülen ya da çözülmeyenler.
+
+    Harness dış importu (junction ardı dahil) onaysız YÜKLEMEZ (Q286 t1/t2). Kod bloğu ve
+    satır-içi kod içindekiler import sayılmaz (harness da saymaz).
+    """
+    import re as _re
+    try:
+        metin = claude_md.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    kok = os.path.realpath(PROJ)
+    out, fence = [], False
+    for satir in metin.splitlines():
+        if satir.lstrip().startswith("```"):
+            fence = not fence
+            continue
+        if fence:
+            continue
+        temiz = _re.sub(r"`[^`]*`", "", satir)
+        for m in _re.finditer(r"(?<![\w@`])@([~\w.][^\s`)\]]*)", temiz):
+            tok = m.group(1).rstrip(".,;:")
+            if "/" not in tok and not tok.endswith(".md"):
+                continue
+            hedef = Path(os.path.expanduser(tok)) if tok.startswith("~") else PROJ / tok
+            gercek = os.path.realpath(hedef)
+            if not os.path.exists(gercek) or \
+                    os.path.normcase(os.path.commonpath([kok, gercek])) != os.path.normcase(kok):
+                out.append(tok)
+    return out
+
+
+def _on_kosul(ov, tazelenen: bool) -> str:
+    """① ÖN KOŞUL — bu oturumun yüklenebilmesi için diskte olması gerekenler (yüklendi DEMEZ)."""
+    rd = PROJ / ".claude" / "rules"
+    adi = getattr(ov, "CORE_KOPYA_ADI", "00-claude-core.md") if ov else "00-claude-core.md"
+    parca, eksik, onarim = [], False, False
+    if not rd.exists():
+        parca.append(".claude/rules YOK"); eksik = onarim = True
+    elif os.path.realpath(rd) != os.path.abspath(rd):
+        parca.append(".claude/rules JUNCTION (harness dış import sayar → YÜKLENMEZ)")
+        eksik = onarim = True
+    elif not (rd / adi).is_file():
+        parca.append(f"{adi} YOK"); eksik = onarim = True
+    else:
+        parca.append(f"kopya VAR ({adi})")
+        try:
+            bayat = ov.tazeleme_gerekli(PROJ, CORE, "rules")
+            if bayat:
+                parca.append(f"BAYAT ({len(bayat)} dosya)"); eksik = True
+            else:
+                parca.append("taze")
+        except Exception as e:  # noqa: BLE001
+            parca.append(f"tazelik {_OLCULEMEDI} ({type(e).__name__})"); eksik = True
+        if tazelenen:
+            parca.append("bu açılışta tazelendi → kesin etkisi SONRAKİ oturum")
+        try:
+            red = ov.reddedilen_overridelar(PROJ, "rules")
+            if red:
+                parca.append(f"claude-local override YOK SAYILDI {red}")
+        except Exception:
+            pass
+    dis = _dis_importlar(PROJ / "CLAUDE.md")
+    if dis:
+        parca.append(f"CLAUDE.md dış @import {len(dis)} ({dis[0]}) → onaysız yüklenmez")
+        eksik = True
+    else:
+        parca.append("dış @import 0")
+    satir = f"ÖN KOŞUL: {'EKSİK' if eksik else 'TAMAM'} — " + " · ".join(parca)
+    if onarim:
+        satir += " → onarım: python core/scripts/team_setup.py --repair-junctions"
+    return satir
+
+
+def _oturum_olcumu(bu_sid, compact: bool) -> str:
+    """② Log'un `sid=` kolonundan ÖLÇÜLMÜŞ core yükleme değeri.
+
+    startup/resume/clear/fork → `ÖNCEKİ OTURUM <sid8>`: bu sid DIŞINDAKİ en son sid (ekleme sırası).
+    compact → `BU OTURUMUN AÇILIŞI <sid8>`: compact YENİ oturum değildir; aynı sid'in
+      `session_start` satırları log'da ZATEN vardır. Bu sid'in açılış satırı yoksa ÖLÇÜLEMEDİ —
+      önceki oturuma DÜŞÜLMEZ (başka oturumun değeri bu oturumunmuş gibi okunurdu).
+    """
+    etiket = "BU OTURUMUN AÇILIŞI" if compact else "ÖNCEKİ OTURUM"
+    if compact and not bu_sid:
+        return f"{etiket}: {_OLCULEMEDI} (girdide session_id yok)"
+    log = PROJ / ".tmp" / "instructions-loaded.log"
+    if not log.is_file():
+        return f"{etiket}: {_OLCULEMEDI} (log yok)"
+    try:
+        satirlar = log.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as e:
+        return f"{etiket}: {_OLCULEMEDI} (log okunamadı: {type(e).__name__})"
+    son, kayit = None, {}
+    for ham in satirlar:
+        p = ham.rstrip("\r").split("\t")
+        if len(p) < 4:
+            continue
+        sid = next((x[4:] for x in p[4:] if x.startswith("sid=")), None)
+        if not sid:
+            continue
+        if compact:
+            if sid != bu_sid or p[1] != "session_start":
+                continue
+        elif sid == bu_sid:
+            continue
+        k = kayit.setdefault(sid, {"core": False})
+        k["ts"] = p[0]
+        if p[3].replace("\\", "/").rsplit("/", 1)[-1] in _CORE_ADLARI:
+            k["core"] = True
+        son = sid
+    if son is None:
+        neden = ("bu sid'in session_start satırı yok — logger sid kolonu öncesi açılmış olabilir"
+                 if compact else
+                 "bu oturum dışında sid'li log satırı yok — logger sid kolonu öncesi ya da ilk oturum")
+        return f"{etiket}: {_OLCULEMEDI} ({neden})"
+    k = kayit[son]
+    zaman = "açılış satırı" if compact else "son satır"
+    ek = "" if compact else "; bu oturum DEĞİL"
+    return (f"{etiket} {son[:8]} ({zaman} {k['ts']}{ek}): "
+            f"core={'YÜKLENDİ' if k['core'] else 'YÜKLENMEDİ'}")
+
+
+def _yukleme_satiri(data: dict, tazelenen: bool, compact: bool = False) -> str:
+    """Tek satır, iki parça: `ÖN KOŞUL: …  |  ÖNCEKİ OTURUM …` (compact'ta `BU OTURUMUN AÇILIŞI …`).
+    Hiçbir koşulda bloklamaz."""
+    try:
+        try:
+            sys.path.insert(0, str(CORE / "scripts"))
+            from utils import claude_overlay as ov  # type: ignore
+        except Exception:
+            ov = None
+        on = _on_kosul(ov, tazelenen) if ov is not None else \
+            f"ÖN KOŞUL: {_OLCULEMEDI} (claude_overlay yüklenemedi — core junction kopuk?)"
+        sid = data.get("session_id") if isinstance(data, dict) else None
+        return on + "  |  " + _oturum_olcumu(sid, compact)
+    except Exception as e:  # noqa: BLE001
+        return f"YÜKLEME {_OLCULEMEDI}: {type(e).__name__}: {e}"
 
 
 # ⭐ TEK KAYNAK (2026-09-09, kayıt Q212): D7'nin "sapma" TANIMI artık
@@ -428,6 +609,11 @@ def main() -> int:
     #       gizlemek, degisikligin kendisinden daha pahalidir". Bastirmak o ilkeyi
     #       delerdi ve bir GEVSETME olurdu; bu turda kaybedilen kapsam YOK.
     govde = (STATIK_COMPACT + _git_capa()) if compact else STATIK
+    # Q286 C2 — BİLİNÇLİ İSTİSNA: "temizken sessiz" sözleşmesinin dışında, HER dalda basılır
+    # (Ekran Teyidi bu satırı alıntılar; compact'ta etiket "BU OTURUMUN AÇILIŞI" olur).
+    tazelenen = any("overlay tazelendi: rules" in s for s in saglik)
+    govde += ("\n\n[YUKLEME — session_start]\n"
+              + _yukleme_satiri(data if isinstance(data, dict) else {}, tazelenen, compact))
     if saglik:
         govde += "\n\n[SAGLIK KONTROLLERI — session_start]\n" + "\n".join(saglik)
         if any(x.startswith("⛔ DAVRANIS") for x in saglik):

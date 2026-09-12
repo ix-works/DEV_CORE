@@ -210,6 +210,16 @@ def b5_core_baglantisi(proj: Path, core: Path) -> list[Bulgu]:
     (b) core'a YENİ dosya eklenmiş, overlay'de hiç yok (sessizce eksik ajan/skill).
     """
     b = []
+    # K2 (Q286): kopya→kaynak eşlemesinin TEK KAYNAĞI claude_overlay.core_kaynagi. Yoksa
+    # `rules/00-claude-core.md` core/claude/rules altında aranır, bulunamaz ve her oturum
+    # sahte "core'da ARTIK YOK" basılırdı. Import başarısızsa eski yol (bulgu aşağıda görünür).
+    try:
+        import sys as _s0
+        _s0.path.insert(0, str(core / "scripts"))
+        from utils import claude_overlay as _ov0  # type: ignore
+        _kaynak = getattr(_ov0, "core_kaynagi", None)
+    except Exception:  # noqa: BLE001
+        _kaynak = None
     for ad in JUNCTION_ADLARI:
         p = proj / ".claude" / ad
         core_d = core / "claude" / ad
@@ -233,7 +243,7 @@ def b5_core_baglantisi(proj: Path, core: Path) -> list[Bulgu]:
         for dosya, meta in m.items():
             if meta.get("kaynak") != "core":
                 continue  # proje override'ı — bilinçli, hash kıyaslanmaz
-            simdiki = _hash16(core_d / dosya)
+            simdiki = _hash16(_kaynak(core, ad, dosya) if _kaynak else core_d / dosya)
             if not simdiki:
                 b.append(Bulgu("B5", f"overlay `{ad}/{dosya}` core'da ARTIK YOK", "silinmiş mi?"))
             elif simdiki != meta.get("core_hash"):
@@ -269,8 +279,10 @@ def _log_satirlari(proj: Path) -> list[dict]:
     for satir in _oku(proj / ".tmp" / "instructions-loaded.log").splitlines():
         p = satir.rstrip("\r").split("\t")
         if len(p) >= 4:
+            # Q286 C1: logger satır SONUNA `sid=<session_id>` ekler; eski satırlarda yoktur.
+            sid = next((x[4:] for x in p[4:] if x.startswith("sid=")), None)
             out.append({"ts": p[0], "reason": p[1], "type": p[2], "path": p[3],
-                        "ek": "\t".join(p[4:])})
+                        "ek": "\t".join(p[4:]), "sid": sid})
         elif len(p) >= 2:
             out.append({"ts": p[0], "reason": p[1], "type": "?", "path": "?", "ek": ""})
         elif satir.strip():
@@ -330,15 +342,28 @@ def _kural_desenleri(core: Path) -> dict[str, list[str]]:
     return out
 
 
-def a3_tembel_yukleme(core: Path, satirlar: list[dict], okunanlar: list[str]) -> list[Bulgu]:
+def a3_tembel_yukleme(core: Path, satirlar: list[dict], okunanlar: list[str],
+                      oturum_sid: str | None = None) -> list[Bulgu]:
     """`paths:`li bir kural, eşleşen dosya okunduğunda GERÇEKTEN yüklendi mi?
 
     Beklenen kanıt: log'da `path_glob_match  Project  .../<kural>.md`.
     Eşleşen dosya hiç okunmadıysa iddia KURULAMAZ → sessiz kal (UNKNOWN, bulgu değil).
+
+    ⛔ 2026-09-12 (Q286 B4): eski sürüm bunu *"BİLİNEN KISIT (#17204) — tembel tetik pasif,
+    kural yine de her oturum yükleniyor"* diye BİLGİ olarak basıyordu. İKİ yarısı da çürüdü:
+    tembel tetik gerçek dizinde ÇALIŞIYOR (ölçüldü t9, gitignore'lu dizinde de M1c) ve kural
+    junction'dayken HİÇ yüklenmiyordu (Q286). ⇒ Eşleşen dosya okunduysa ve tetik görülmediyse
+    bu **gerçek bir bulgudur**: kural o oturumda YÜKLENMEDİ.
+    `oturum_sid` (önceki transcript'in kimliği) verilir ve log'da o sid'li satır varsa kanıt
+    YALNIZ o oturumdan aranır (eski bir oturumun tetiği bu oturumun eksiğini örtmesin);
+    sid'li satır yoksa (logger C1 öncesi) tüm log'a bakılır.
     """
     desenler = _kural_desenleri(core)
     if not desenler or not okunanlar:
         return []
+    kapsam = satirlar
+    if oturum_sid and any(s.get("sid") == oturum_sid for s in satirlar):
+        kapsam = [s for s in satirlar if s.get("sid") == oturum_sid]
     b = []
     for ad, patlar in desenler.items():
         eslesen = [y for y in okunanlar
@@ -346,12 +371,12 @@ def a3_tembel_yukleme(core: Path, satirlar: list[dict], okunanlar: list[str]) ->
                           fnmatch.fnmatch(Path(y).name, Path(p).name) for p in patlar)]
         if not eslesen:
             continue
-        goruldu = any(s["reason"] == "path_glob_match" and s["path"].endswith(ad) for s in satirlar)
+        goruldu = any(s["reason"] == "path_glob_match" and s["path"].endswith(ad) for s in kapsam)
         if not goruldu:
-            b.append(Bulgu("A3", f"BİLİNEN KISIT (#17204): `{ad}` tembel-tetiği pasif — kural yine de "
-                           "her oturum KOŞULSUZ yükleniyor (beyan CLAUDE.core §1'de düzeltildi; izleme sürüyor)",
-                           f"okunan: {eslesen[0]}  · harness düzelirse bu satır kendiliğinden kaybolur",
-                           bilgi=True))
+            b.append(Bulgu("A3", f"TEMBEL KURAL YÜKLENMEDİ: `{ad}` (paths:) ile eşleşen dosya okundu ama "
+                           "log'da path_glob_match YOK — kural o oturumda bağlama GİRMEDİ",
+                           f"okunan: {eslesen[0]} · olası kök: .claude/rules junction (dış import) "
+                           f"→ team_setup.py --repair-junctions"))
     return b
 
 
@@ -464,7 +489,8 @@ def self_test() -> int:
 
 def denetle(proj: Path, core: Path, oturum: str | None = None) -> tuple[list[Bulgu], dict]:
     satirlar = _log_satirlari(proj)
-    okunanlar = _okunan_dosyalar(_onceki_transcript(proj, oturum))
+    onceki = _onceki_transcript(proj, oturum)
+    okunanlar = _okunan_dosyalar(onceki)
 
     bulgular: list[Bulgu] = []
     bulgular += b1_hayalet_hook(proj, core)
@@ -475,7 +501,8 @@ def denetle(proj: Path, core: Path, oturum: str | None = None) -> tuple[list[Bul
     bulgular += a1_logger_canli(proj, satirlar)
     if satirlar:
         bulgular += a2_sema_degismedi(satirlar)
-        bulgular += a3_tembel_yukleme(core, satirlar, okunanlar)
+        bulgular += a3_tembel_yukleme(core, satirlar, okunanlar,
+                                      onceki.stem if onceki is not None else None)
         bulgular += a4_baseline(proj, satirlar)
 
     gate_sayisi = len(list((core / "scripts" / "validators").glob("check_*.py")))

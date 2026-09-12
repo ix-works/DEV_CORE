@@ -716,6 +716,21 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   `shutil` GERCEK bir modul niteligidir, korumasizca `delattr` edilirse sonraki vektor
   `NameError` ile coker ve kosucu **KURULAMADI'yi KACTI gibi** gosterir (ilk kosumda tam bu
   oldu).
+- **FİZİKSEL KOPYA + YÜKLEME ÖLÇÜMÜ (2026-09-12, Q286):** `python tests/fixtures/core_fiziksel_kopya/run.py`
+  → **43/43**, exit 0. `rules` ZORUNLU kopyadır (+ `00-claude-core.md` ← `CLAUDE.core.md`); `session_start`
+  YÜKLEME satırı; logger `sid=`; inspector A3/B5; behavior_manifest ⚠GEVŞETME muafiyeti.
+  ⚠ **8 mutasyon kipi** (optin · muafiyetsiz · gevsek · sidsiz · durum-naif · coker · a3-bilgi · b5-yol) —
+  her biri kum kopyasında tek metin değişikliği; desen 1 kez tutmazsa `[DURDU]` exit 2. Batarya keşfi `BEYAN`.
+  ⚠ **KURULUM ≠ DENEK:** materyalize edilmiş durum daima repo kodu ile kurulur, denek kum-core kopyasıdır ⇒
+  `--agac <eski ağaç>` ile eski kod KUSURUN KENDİSİNDEN kırmızı olur (8e8feef: **11/43**), kurulum yapılamadığı
+  için değil. `--agac` kip DEĞİLDİR (batarya görmez); tek seferlik kanıt adımıdır.
+  ⚠ **Kum core `CLAUDE.core.md` taşımalı:** rules tipi o dosyayı kopyalar; yoksa `oto_tazele` tipi ATLANDI ile
+  geçer. Aynı sebeple `overlay_oto_tazeleme` V12 kum core'una dosya eklendi (ilk bataryada 32/33).
+  ⚠ **GEVŞETME ÇAPALARI (silinmez):** V22 elle düzeltilmiş kopya alarm verir (`KAYITSIZ` — muaf kopya
+  manifest'e hiç kaydedilmez, `DEĞİŞMİŞ` değil) · V23 bozuk overlay manifesti muafiyeti düşürür · V24 claude-local
+  yüzeyde · V25 manifest dışı dosya yüzeyde · V26b guard exit 2.
+  📌 **İDDİA SINIRI:** fixture harness'ın yükleyip yüklemediğini ÖLÇEMEZ (harness yok); ölçtüğü şey diskteki
+  kopya + satırın doğruluğudur. Harness davranışı `.tmp` sandbox + `claude -p` ile ölçüldü (changelog Q286 KÖK).
 - Bayraksız senkron → fark-listesiyle **RED**; yalnız `--overlay-onayli` ezer.
 - FORMAT-GATE: her .md `---` ile başlar + CRLF-yok + name-parse + damga-frontmatter-SONRA ("sayı ≠ yüklenebilirlik" — 6/6 düşüş vakası).
 - Drift: core-değişti→WARN · yeni-agent→EKSİK · temiz→PASS.
