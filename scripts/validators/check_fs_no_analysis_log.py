@@ -8,7 +8,9 @@ belge, yapılacak işi tarif eden bir spesifikasyon olmaktan çıkıp danışman
 buldu). Dünya pratiği 3 katman ister: gövde = kapanmış hedef durum · karar günlüğü (11-A/11-B/EK) ·
 analiz süreci (RESEARCH/notlar). Bu gate katman-1'e sızmayı SAYAR.
 
-Kapsam: proje `**/docs/FS-*.md` ve `**/docs/EK-*.md` (FS ekleri; H1'i "Karar ve Kanıt Günlüğü" olan EK = katman-2, tamamı atlanır). Gövde = §1.1 versiyon geçmişi
+Kapsam: proje içinde adı `docs` olan her klasörün TÜM ALT AĞACINDAKİ `FS-*.md` ve `EK-*.md` (FS ekleri; H1'i
+"Karar ve Kanıt Günlüğü" olan EK = katman-2, tamamı atlanır). TS/KD varsayılanda TARANMAZ — `--tur fs,ek,ts,kd`
+ile açılır; taranmayan türlerin sayısı her koşumda KAPSAM satırında yazılır (Q275). Gövde = §1.1 versiyon geçmişi
 tablosu, 11-A/11-B bölümleri ve başlığında "Karar" + ("Günlü"|"Açık"|"Öneri") geçen bölümler
 (katman-2 alanı) HARİÇ kalan her şey. §1.1 için ayrıca satır-uzunluğu eşiği (DOC-FS-06a).
 ⛔ DOC-FS-06b (11-B birikmemesi + yayılım tablosunun tamlığı) bu gate'in kapsamında DEĞİLDİR —
@@ -36,8 +38,8 @@ check_package_rules_present "--strict … no-op"). Bulguda exit 1 İSTEYEN tek t
 post_validate hook'udur → `--bulguda-exit1`. ÖLÇÜLEMEDİ (okunamayan dosya) = exit 2.
 SIFIR KAPSAM (0 doküman) = exit 0 ama "temiz" DEĞİL, ayrı cümle + K1 payda satırı (Q262).
 `--selftest` → gömülü kırmızı-fixture ile kendi kendini test eder (yakalamazsa exit 1).
-Kullanım: python scripts/validators/check_fs_no_analysis_log.py [--bulguda-exit1] [--selftest] [--max-examples N] [--file YOL]
-Kablolama: run_all_validators (PROJE, pre-commit — warn-first, çıktı görünür ama FAIL etmez) + hooks/post_validate.py `doc-fs` sınıfı (FS/TS/KD/EK md düzenlenince o dosya için `--file --bulguda-exit1`; bulgu → yazara stderr özeti + OKU-işaretçisi, exit 2 = geri besleme). Kalıcı korpus: tests/fixtures/fs_docstd (38 vektör, 9 mutasyon).
+Kullanım: python scripts/validators/check_fs_no_analysis_log.py [--bulguda-exit1] [--selftest] [--max-examples N] [--file YOL] [--tur fs,ek,ts,kd]
+Kablolama: run_all_validators (PROJE, pre-commit — warn-first, çıktı görünür ama FAIL etmez) + hooks/post_validate.py `doc-fs` sınıfı (FS/EK md düzenlenince o dosya için `--file --bulguda-exit1`; bulgu → yazara stderr özeti + OKU-işaretçisi, exit 2 = geri besleme). Kalıcı korpus: tests/fixtures/fs_docstd (vektör/mutasyon sayısı orada — burada tekrarlanmaz, bayatlar).
 """
 # ENFORCES: DOC-FS-05, DOC-FS-06a  (ADR 0019 coverage binding)
 # GATE-SEVERITY: advisory  (warn-first — default exit 0; bkz. aşağıdaki exit sözleşmesi)
@@ -50,6 +52,7 @@ Kablolama: run_all_validators (PROJE, pre-commit — warn-first, çıktı görü
 import os
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -180,15 +183,70 @@ _LOG_HEADING = re.compile(r"karar", re.IGNORECASE)
 _LOG_HEADING2 = re.compile(r"günlü|açık(?!lama)|öneri|11-A|11-B", re.IGNORECASE)
 
 
-def _iter_docs(root: Path):
+# ── KAPSAM (Q275, 2026-09-13) ─────────────────────────────────────────────────
+# ⛔ KAPATILAN KUSUR (ölçüldü, tüketici proje): tarama İKİ süzgeçle yapılıyordu ve ikisi de
+# SESSİZDİ — ① yalnız adı TAM `docs` olan klasörün doğrudan dosyaları (`docs/<alt>/FS-*.md`
+# görünmüyordu: 17 FS/EK, bir paketin FS'lerinin TAMAMI) ② ad öneki yalnız `fs-`/`ek-` (TS 44 ·
+# KD 28 hiç taranmıyordu). Korunan 22, korunmayan 89 ⇒ kapsam %20 ve çıktı bunu SÖYLEMİYORDU.
+# Karar (lider): ① varsayılan davranış = `docs` ALT AĞACININ tamamı · ② TS/KD varsayılana
+# EKLENMEZ (yeni warn-first gürültü doğmasın), `--tur` ile opt-in · her koşumda KAPSAM satırı.
+# ⚠ `docs` bileşeni KÖKE GÖRELİ parçalarda aranır: mutlak yolda aranırsa proje kökünün bir ÜST
+# dizininin adı `docs` olduğunda (ör. `…/docs/Proje`) bütün proje "docs ağacı" sayılırdı.
+# ⚠ Taranmayan türlerin sayısı AYNI walk'tan türetilir (elle yazılan liste bayatlar):
+# `_TURLER` beyanın evrenidir; tür eklenirse beyan kendiliğinden genişler.
+_TURLER = ("fs", "ek", "ts", "kd")
+_VARSAYILAN_TURLER = ("fs", "ek")
+
+
+def _docs_agacinda(dirpath: str, root: Path) -> bool:
+    try:
+        parcalar = Path(dirpath).relative_to(root).parts
+    except ValueError:
+        return False
+    return root.name.lower() == "docs" or any(p.lower() == "docs" for p in parcalar)
+
+
+def _siniflandir(root: Path):
+    """→ (yol, tür): `docs` alt ağacında adı `_TURLER` öneklerinden biriyle başlayan her .md."""
+    root = Path(root)
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d.lower() not in _SKIP]
-        if Path(dirpath).name.lower() != "docs":
+        if not _docs_agacinda(dirpath, root):
             continue
         for fn in filenames:
             low = fn.lower()
-            if low.endswith(".md") and (low.startswith("fs-") or low.startswith("ek-")):
-                yield Path(dirpath) / fn
+            if not low.endswith(".md"):
+                continue
+            for tur in _TURLER:
+                if low.startswith(tur + "-"):
+                    yield Path(dirpath) / fn, tur
+                    break
+
+
+def _kapsam(root: Path, turler=_VARSAYILAN_TURLER):
+    """→ (taranacak yollar, tür başına sayım — taranan VE taranmayan türler birlikte)."""
+    hedefler, sayim = [], Counter()
+    for yol, tur in _siniflandir(root):
+        sayim[tur] += 1
+        if tur in turler:
+            hedefler.append(yol)
+    return hedefler, sayim
+
+
+def _iter_docs(root: Path, turler=_VARSAYILAN_TURLER):
+    return iter(_kapsam(root, turler)[0])
+
+
+def _kapsam_beyani(turler, sayim) -> str:
+    """KAPSAM satırı — sıfır-bulgu anında da basılır ("0 bulgu" ≠ "her şeye bakıldı")."""
+    taranan = sum(sayim[t] for t in turler)
+    bas = f"KAPSAM: {'/'.join(t.upper() for t in turler)} {taranan} tarandı"
+    disarida = [t for t in _TURLER if t not in turler]
+    if not disarida:
+        return f"{bas} · taranmayan tür yok (evren: docs/ alt ağacı)"
+    kalan = " / ".join(f"{t.upper()} {sayim[t]}" for t in disarida)
+    return (f"{bas} · {kalan} TARANMADI (--tur {','.join(_TURLER)} ile aç)"
+            " (evren: docs/ alt ağacı)")
 
 
 def _is_log_heading(h: str) -> bool:
@@ -355,10 +413,34 @@ def main() -> int:
         if i_f >= len(argv):
             print("[HATA] --file için yol verilmedi."); return 2
         single = Path(argv[i_f])
+    # --tur (Q275): opt-in tür kümesi. Değer VERİLEN küme olur (varsayılana EKLENMEZ);
+    # bilinmeyen/boş değer net hata (exit 2) — sessizce varsayılana düşmek kapsamı gizlerdi.
+    turler = _VARSAYILAN_TURLER
+    tur_arg = None
+    for i_t, a in enumerate(argv):
+        if a == "--tur":
+            if i_t + 1 >= len(argv) or argv[i_t + 1].startswith("--"):
+                print(f"[HATA] --tur bir değer ister (ör. --tur {','.join(_TURLER)})."); return 2
+            tur_arg = argv[i_t + 1]
+        elif a.startswith("--tur="):
+            tur_arg = a.split("=", 1)[1]
+    if tur_arg is not None:
+        istenen = [t for t in (x.strip().lower() for x in tur_arg.split(",")) if t]
+        bilinmeyen = [t for t in istenen if t not in _TURLER]
+        if not istenen or bilinmeyen:
+            print(f"[HATA] --tur yalnız {','.join(_TURLER)} değerlerini alır; verilen: {tur_arg!r}."); return 2
+        turler = tuple(t for t in _TURLER if t in istenen)
+    birim = "/".join(t.upper() for t in turler) + " dokümanı"
+    if single:
+        hedefler = [single]
+        beyan = "KAPSAM: --file tek doküman — ağaç TARANMADI, tür sayımı yapılmadı"
+    else:
+        hedefler, sayim = _kapsam(REPO, turler)
+        beyan = _kapsam_beyani(turler, sayim)
     total = 0
     n_docs = 0
     okunamadi = 0
-    for p in ([single] if single else _iter_docs(REPO)):
+    for p in hedefler:
         n_docs += 1
         try:
             text = p.read_text(encoding="utf-8", errors="replace")
@@ -372,6 +454,9 @@ def main() -> int:
             continue
         f, lr, bl = scan_text(text)
         total += _report(p, f, lr, bl, max_examples)
+    # KAPSAM satırı TEK noktada ve verdict'lerden ÖNCE basılır: temiz · sıfır · bulgulu ·
+    # ölçülemedi dallarının DÖRDÜ de onu görür (en kritik an sıfır-bulgu anıdır).
+    print(beyan)
     if okunamadi:
         print(f"Özet: {okunamadi} doküman OKUNAMADI (ölçüm eksik) — exit 2.")
         return 2
@@ -392,9 +477,9 @@ def main() -> int:
         # `"): temiz"` verdict cümlesini arar; sıfır dalı o verdict'i VERMEMELİDİR.
         if n_docs == 0:
             print("FS analiz-günlüğü kontrolü (DOC-FS-05/06a): DENETLENECEK DOKÜMAN "
-                  "BULUNAMADI (0 FS/EK dokümanı)." + kapsam_eki(0, "FS/EK dokümanı"))
+                  f"BULUNAMADI (0 {birim})." + kapsam_eki(0, birim))
             return 0
-        print(f"FS analiz-günlüğü kontrolü (DOC-FS-05/06a): temiz — {n_docs} FS/EK dokümanı, gövdede işaret yok.")
+        print(f"FS analiz-günlüğü kontrolü (DOC-FS-05/06a): temiz — {n_docs} {birim}, gövdede işaret yok.")
         return 0
     print()
     print(f"Özet: {total} işaretli satır ({n_docs} doküman). Kural: gövde = kapanmış hedef durum; sürüm etiketi/"

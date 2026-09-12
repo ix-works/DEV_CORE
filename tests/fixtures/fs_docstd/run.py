@@ -42,6 +42,10 @@ Mutasyonlar (DÖRDÜ DE koşulur — hiçbiri diğerini kapsamaz):
                           ile aracın yüzeyi ayrışır; Y1/Y2 AYAKTA — ayrı değişmez)
   --mutasyon-boskapsam    `n_docs == 0` dalını sök (Q262)  → A12/A12b DÜŞMELİ,
                           A13 (dolu korpus HÂLÂ "temiz" der) AYAKTA — FP çapası
+  --mutasyon-altagac      `docs` alt ağacını eski "yalnız ad==docs" süzgecine döndür (Q275)
+                          → A14/A15/A16/A16b DÜŞMELİ; A14b (doğrudan docs/) · A14c · A18 AYAKTA
+  --mutasyon-beyan        KAPSAM satırını sök (Q275) → A15/A15b/A16/A16b/A19 DÜŞMELİ
+  --mutasyon-tur          `--tur`u yok say (hep FS/EK) (Q275) → A16/A16b DÜŞMELİ, A16c AYAKTA
 Herhangi biri tam puan verirse korpus O DEĞİŞMEZ için BOŞTUR.
 """
 import json
@@ -355,6 +359,17 @@ def _mutant(kip: str) -> tuple:
     elif kip == "boskapsam":
         # Q262: sıfır-kapsam dalı sökülür → 0 doküman yine TEMİZ VERDİCT'i alır (eski kusur).
         yeni, n = re.subn(r'        if n_docs == 0:', '        if False:', kaynak, count=1)
+    elif kip == "altagac":
+        # Q275 ①: alt ağaç → eski "yalnız adı TAM docs olan klasör" süzgeci.
+        yeni, n = re.subn(r'        if not _docs_agacinda\(dirpath, root\):',
+                          '        if Path(dirpath).name.lower() != "docs":', kaynak, count=1)
+    elif kip == "beyan":
+        # Q275 ⭐: KAPSAM satırı sökülür (eski sessizlik).
+        yeni, n = re.subn(r'\n    print\(beyan\)\n', '\n    pass\n', kaynak, count=1)
+    elif kip == "tur":
+        # Q275 ②: `--tur` doğrulanır ama YOK SAYILIR (hep varsayılan küme).
+        yeni, n = re.subn(r'        turler = tuple\(t for t in _TURLER if t in istenen\)',
+                          '        turler = _VARSAYILAN_TURLER', kaynak, count=1)
     else:
         raise SystemExit(f"bilinmeyen mutasyon: {kip}")
     _capa(n, kip)
@@ -490,6 +505,102 @@ def main() -> int:
         ekle("A13 FP ÇAPASI: DOLU ve temiz korpus (1 doküman) → HÂLÂ 'temiz' verdict'i + payda",
              rc == 0 and "): temiz" in out and "1 FS/EK dokümanı" in out,
              f"exit={rc} out={out.strip()[:90]}")
+        out_dolu = out
+
+        # ── Q275 (2026-09-13): KAPSAM = `docs` ALT AĞACI + TÜR BEYANI ──────
+        # Kusur: yalnız adı TAM `docs` olan klasörün doğrudan FS/EK'si taranıyordu
+        # (alt klasör görünmüyordu) ve TS/KD'nin taranmadığı HİÇ söylenmiyordu.
+        # Sandbox bilinçli KARIŞIK: ayırt edici (alt klasör) + kontrol grubu (doğrudan) +
+        # FP çapaları (_SKIP, docs DIŞI, öneksiz, TS/KD varsayılanda) aynı ağaçta.
+        agac = Path(str(sb) + "5")
+        pk = agac / "SOURCE_CODES" / "SD" / "ZSD001_CLC"
+        for alt in (pk / "docs" / "alt" / "node_modules", pk / "docs" / "alt" / "ts-parts",
+                    pk / "ref_docs"):
+            alt.mkdir(parents=True, exist_ok=True)
+        yaz = {
+            pk / "docs" / "FS-XX-980_dogrudan.md": KIRLI_FS,          # kontrol grubu
+            pk / "docs" / "alt" / "FS-XX-981_altklasor.md": KIRLI_FS,  # ⭐ ayırt edici
+            pk / "docs" / "alt" / "EK-A-XX-981.md": TEMIZ_FS,          # alt klasör, temiz
+            pk / "docs" / "TS-XX-980.md": KIRLI_FS,                    # TS doğrudan
+            pk / "docs" / "alt" / "ts-parts" / "TS-XX-981-p1.md": KIRLI_FS,
+            pk / "docs" / "alt" / "KD-XX-981.md": KIRLI_FS,
+            pk / "docs" / "alt" / "node_modules" / "FS-XX-982_paket.md": KIRLI_FS,  # _SKIP
+            pk / "ref_docs" / "FS-XX-983_not.md": KIRLI_FS,            # docs DIŞI
+            pk / "docs" / "alt" / "notlar.md": KIRLI_FS,               # öneksiz
+        }
+        for yol, metin in yaz.items():
+            yol.write_text(metin, encoding="utf-8")
+        env_agac = dict(os.environ, CLAUDE_PROJECT_DIR=str(agac))
+
+        def _warn_adlari(out):
+            return {re.split(r"[\\/]", ln[7:].split(": gövde")[0])[-1]
+                    for ln in out.splitlines() if ln.startswith("[WARN] ")}
+
+        rc, out, err = _val(validator, "--bulguda-exit1", env=env_agac)
+        w = _warn_adlari(out)
+        ekle("A14 ⭐ AYIRT EDİCİ: docs/<alt>/FS-*.md TARANIR (önce: görünmüyordu)",
+             rc == 1 and "FS-XX-981_altklasor.md" in w and "(3 doküman)" in out,
+             f"exit={rc} warn={sorted(w)}")
+        ekle("A14b KONTROL GRUBU: doğrudan docs/FS-*.md HÂLÂ taranır",
+             "FS-XX-980_dogrudan.md" in w, f"warn={sorted(w)}")
+        yasak = {"FS-XX-982_paket.md", "FS-XX-983_not.md", "notlar.md",
+                 "TS-XX-980.md", "TS-XX-981-p1.md", "KD-XX-981.md"}
+        ekle("A14c FP ÇAPASI: _SKIP (node_modules) · docs DIŞI (ref_docs) · öneksiz · TS/KD "
+             "varsayılanda TARANMAZ", not (w & yasak) and "Traceback" not in err,
+             f"sizan={sorted(w & yasak)}")
+        rx_beyan = "KAPSAM: FS/EK 3 tarandı · TS 2 / KD 1 TARANMADI (--tur fs,ek,ts,kd ile aç)"
+        ekle("A15 ⭐ KAPSAM BEYANI: taranan FS/EK + TARANMAYAN TS/KD sayısı (koddan türetilir)",
+             rx_beyan in out, f"beyan={[l for l in out.splitlines() if l.startswith('KAPSAM')]}")
+
+        _, out_bos, _ = _val(validator, env=dict(os.environ, CLAUDE_PROJECT_DIR=str(bos)))
+        ekle("A15b KAPSAM satırı SIFIR-BULGU anında da basılır (temiz korpus + sıfır kapsam)",
+             "KAPSAM: FS/EK 1 tarandı · TS 0 / KD 0 TARANMADI" in out_dolu
+             and "KAPSAM: FS/EK 0 tarandı · TS 0 / KD 0 TARANMADI" in out_bos
+             and "): temiz" in out_dolu,
+             f"dolu={'VAR' if 'KAPSAM:' in out_dolu else 'YOK'} bos={'VAR' if 'KAPSAM:' in out_bos else 'YOK'}")
+
+        rc, out, err = _val(validator, "--bulguda-exit1", "--tur", "fs,ek,ts,kd", env=env_agac)
+        w = _warn_adlari(out)
+        ekle("A16 ⭐ OPT-IN `--tur fs,ek,ts,kd`: TS (alt klasör dahil) + KD taranır, beyan 'taranmayan yok'",
+             rc == 1 and {"TS-XX-980.md", "TS-XX-981-p1.md", "KD-XX-981.md",
+                          "FS-XX-981_altklasor.md"} <= w
+             and not (w & {"FS-XX-982_paket.md", "FS-XX-983_not.md", "notlar.md"})
+             and "KAPSAM: FS/EK/TS/KD 6 tarandı · taranmayan tür yok" in out,
+             f"exit={rc} warn={sorted(w)}")
+
+        rc, out, _ = _val(validator, "--tur=TS", env=env_agac)
+        w = _warn_adlari(out)
+        ekle("A16b `--tur=TS` yalnız TS: FS/EK/KD TARANMADI diye sayılır + warn-first exit 0 KORUNUR",
+             rc == 0 and w == {"TS-XX-980.md", "TS-XX-981-p1.md"}
+             and "KAPSAM: TS 2 tarandı · FS 2 / EK 1 / KD 1 TARANMADI" in out,
+             f"exit={rc} warn={sorted(w)}")
+
+        rc1, out1, err1 = _val(validator, "--tur", "zz", env=env_agac)
+        rc2, out2, err2 = _val(validator, "--tur", env=env_agac)
+        rc3, out3, err3 = _val(validator, "--tur", "--bulguda-exit1", env=env_agac)
+        ekle("A16c `--tur` bilinmeyen/değersiz → net hata exit 2, çökme YOK, sessiz varsayılana DÜŞMEZ",
+             (rc1, rc2, rc3) == (2, 2, 2) and all("[HATA]" in o for o in (out1, out2, out3))
+             and not any("Traceback" in e for e in (err1, err2, err3)),
+             f"exit={(rc1, rc2, rc3)}")
+
+        # 3. BAĞLAM — proje kökünün ÜSTÜNDE `docs` adlı dizin: kapsam genişlememeli.
+        ust = Path(str(sb) + "6") / "docs" / "proje"
+        (ust / "ref_docs").mkdir(parents=True, exist_ok=True)
+        (ust / "notlar").mkdir(parents=True, exist_ok=True)
+        (ust / "ref_docs" / "FS-XX-984.md").write_text(KIRLI_FS, encoding="utf-8")
+        (ust / "notlar" / "FS-XX-985.md").write_text(KIRLI_FS, encoding="utf-8")
+        rc, out, _ = _val(validator, "--bulguda-exit1",
+                          env=dict(os.environ, CLAUDE_PROJECT_DIR=str(ust)))
+        # ⚠ Çapa `BULUNAMADI` DEĞİL, payda: sıfır-dal METNİNE bağlanırsa `--mutasyon-boskapsam`
+        # bu FP çapasını da düşürür (ölçüldü) ve A18 kendi değişmezinden başka bir şeyi ölçer.
+        ekle("A18 3.BAĞLAM FP ÇAPASI: kökün ÜST dizini `docs` → proje 'docs ağacı' SAYILMAZ (0 doküman)",
+             rc == 0 and re.search(r"(?<!\d)0 FS/EK dokümanı", out) is not None
+             and not _warn_adlari(out),
+             f"exit={rc} warn={sorted(_warn_adlari(out))}")
+
+        rc, out, _ = _val(validator, "--file", str(d / "FS-XX-999_kirli.md"), env=env)
+        ekle("A19 --file kipinde de KAPSAM satırı: ağacın TARANMADIĞI söylenir",
+             rc == 0 and "KAPSAM: --file tek doküman" in out, f"exit={rc}")
 
         # ── ② HOOK (GERÇEK KABLOLAMA: hook_shim) ───────────────────────────
         shim_var = (sb / "scripts" / "hook_shim.py").exists() and _junction(sb)
@@ -776,7 +887,8 @@ def main() -> int:
                 artik.unlink()
             except Exception:
                 pass
-        for yol in (sb, Path(str(sb) + "2"), Path(str(sb) + "3"), Path(str(sb) + "4")):
+        for yol in (sb, Path(str(sb) + "2"), Path(str(sb) + "3"), Path(str(sb) + "4"),
+                    Path(str(sb) + "5"), Path(str(sb) + "6")):
             try:
                 _bagi_kaldir(yol / "core")
                 shutil.rmtree(yol, ignore_errors=True)
