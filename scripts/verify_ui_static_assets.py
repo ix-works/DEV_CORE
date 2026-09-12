@@ -15,17 +15,27 @@
    değildi. Enjekte blok ayıklanınca fark **0/12**. PNG/ikili varlıkta böyle bir sorun yok.
    📌 Bu script'i "bozuk" sanmadan önce: dokunulmamış bir app de kırmızıysa kusur ölçümdedir.
 
-Ne yapar (her app için):
+⚠ İKİNCİ İNCELİK — `ui5 build` bazı metin varlıklarını DÖNÜŞTÜRÜR (Q285, 2026-09-13):
+   `.properties` → non-ASCII `\\uXXXX` kaçışı + LF. Eski kıyas tabanı `webapp` olduğu için
+   `--subdir i18n` HER dosyada yanlış "FARKLI" + yanlış "önce build" yönlendirmesi veriyordu
+   (ölçüldü: 19 BSP × 2 dosya → canlı↔webapp bayt 38/38 "FARKLI"; canlı↔dist 38/38 AYNI;
+   `\\uXXXX` çözülünce canlı↔webapp anahtar/değer 38/38 EŞİT).
+
+Ne yapar (her app için, `<subdir>` varsayılan: help):
   1) `ui5-deploy.yaml` → hedef BSP adı
-  2) `webapp/<subdir>/**` altındaki HER dosya (varsayılan subdir: help)
+  2) `webapp/<subdir>/**` ∪ `dist/<subdir>/**` altındaki HER dosya
   3) canlı GET `/sap/bc/ui5_ui5/sap/<bsp>/<subdir>/<rel>?cb=<ts>` (no-cache, identity)
-  4) HTML ise enjekte meta bloğu ayıklanır, satır-sonu normalize edilir → içerik kıyası
-  5) ayrıca `webapp` ↔ `dist` eşitliği (deploy `dist`'i gönderir; `dist` bayatsa canlı da bayat kalır)
+  4) EKSEN ① canlı ↔ dist (deploy edilen şey): HTML'de enjekte meta ayıklanır, satır sonu
+     normalize edilir → fark = `FARKLI`. Dosya dist'te yoksa taban webapp'e düşer (not basılır).
+  5) EKSEN ② canlı ↔ webapp (KAYNAK): `.properties` → `\\uXXXX` çözülmüş (anahtar, değer)
+     dizisi; diğer metin → normalize; ikili → ham bayt. Fark = `KAYNAK FARKI` (canlı == dist
+     ama webapp'te build edilmemiş değişiklik). ⛔ ② KALDIRILAMAZ: help dosyası webapp'te
+     düzenlenip build edilmemişse canlı == (bayat) dist'tir; ② olmadan bu kaçar.
 
 Kullanım:
     python core/scripts/verify_ui_static_assets.py --all
     python core/scripts/verify_ui_static_assets.py --app <app_adi>
-    python core/scripts/verify_ui_static_assets.py --apps a,b --subdir help
+    python core/scripts/verify_ui_static_assets.py --apps a,b --subdir i18n
     # farklı paket: --ui-root <source_root>/<MODULE>/<PKG>/ui  (varsayılan: project.yaml default_ui_root)
 
 Çıkış kodu: 0 = tüm dosyalar canlıda AYNI · 1 = fark/eksik var (ya da yapılandırma hatası).
@@ -59,6 +69,12 @@ INJECTED_META = re.compile(
     r'<meta name="sap\.whitelistService"[^>]*>'
 )
 TEXT_SUFFIXES = {".html", ".htm", ".css", ".js", ".json", ".txt", ".xml", ".properties"}
+# Build'in içeriği KODLAMA düzeyinde dönüştürdüğü uzantılar: kaynak (webapp) kıyası bayt
+# üzerinden değil ÇÖZÜLMÜŞ içerik üzerinden yapılır. Yalnız ÖLÇÜLEN uzantı listelenir.
+BUILD_DONUSUMLU = {".properties"}
+# ÇİFT sayıda ters bölüden sonra gelen `\uXXXX` (`\\u00fc` metnin kendisinde "ü" yazısıdır).
+_U_KACIS = re.compile(r"(?<!\\)((?:\\\\)*)\\u([0-9a-fA-F]{4})")
+_PROP_SATIR = re.compile(r"\s*((?:[^=:\s\\]|\\.)+)\s*[=:]?\s*(.*)$")
 
 
 def normalize(raw: bytes, is_text: bool) -> bytes:
@@ -67,6 +83,44 @@ def normalize(raw: bytes, is_text: bool) -> bytes:
         return raw
     s = raw.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
     return INJECTED_META.sub("", s).encode("utf-8", errors="replace")
+
+
+def properties_cozumle(raw: bytes) -> list:
+    """`.properties` → sıralı (anahtar, değer) listesi. `\\uXXXX` çözülür (ters bölü paritesi
+    korunur, vekil çiftleri birleşir); yorum/boş satır atlanır. Diğer kaçışlar İKİ tarafta da
+    aynen kalır ⇒ kıyas simetriktir. Sıra ve tekrar KORUNUR (sıra değişikliği de kaynak farkıdır)."""
+    t = raw.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+    t = _U_KACIS.sub(lambda m: m.group(1) + chr(int(m.group(2), 16)), t)
+    t = t.encode("utf-16", "surrogatepass").decode("utf-16", errors="replace")
+    ciftler = []
+    for satir in t.split("\n"):
+        s = satir.lstrip()
+        if not s or s[0] in "#!":
+            continue
+        m = _PROP_SATIR.match(satir)
+        ciftler.append((m.group(1), m.group(2)) if m else (s, ""))
+    return ciftler
+
+
+def icerik_esit(a: bytes, b: bytes, sonek: str, cozumle: bool) -> bool:
+    """`cozumle=True` (bir taraf dönüştürülmemiş kaynak) ve uzantı build-dönüşümlüyse
+    çözülmüş içerik; aksi hâlde normalize edilmiş bayt kıyası."""
+    if cozumle and sonek in BUILD_DONUSUMLU:
+        return properties_cozumle(a) == properties_cozumle(b)
+    is_text = sonek in TEXT_SUFFIXES
+    return normalize(a, is_text) == normalize(b, is_text)
+
+
+def _kisalt(adlar: list, n: int = 4) -> str:
+    return ", ".join(adlar[:n]) + (f" (+{len(adlar) - n})" if len(adlar) > n else "")
+
+
+def _prop_fark(a: bytes, b: bytes) -> str:
+    da, db = dict(properties_cozumle(a)), dict(properties_cozumle(b))
+    anahtarlar = sorted(k for k in da.keys() | db.keys() if da.get(k) != db.get(k))
+    if not anahtarlar:
+        return " — anahtar/değer kümesi aynı, SIRA ya da tekrar farkı"
+    return f" — anahtar: {_kisalt(anahtarlar)}"
 
 
 def fetch(base_url: str, user: str, pw: str, client: str, bsp: str, rel_url: str) -> bytes:
@@ -87,29 +141,31 @@ def fetch(base_url: str, user: str, pw: str, client: str, bsp: str, rel_url: str
         return r.read()
 
 
+def _dosyalar(kok: Path) -> dict:
+    if not kok.is_dir():
+        return {}
+    return {p.relative_to(kok).as_posix(): p for p in kok.rglob("*") if p.is_file()}
+
+
 def check_app(app: str, ui_root: Path, subdir: str, conn) -> tuple:
-    """(app, ok, not) — app'in webapp/<subdir> altındaki her dosyasını canlıyla kıyasla."""
+    """(app, ok, not) — app'in <subdir> altındaki her dosyasını canlıyla iki eksende kıyasla."""
     app_dir = ui_root / app
     bsp = bsp_name(app_dir)
     if not bsp:
         return (app, False, "ui5-deploy.yaml yok/BSP adı okunamadı (deployable değil)")
     src = app_dir / "webapp" / subdir
-    if not src.is_dir():
-        return (app, True, f"webapp/{subdir} yok — kıyaslanacak statik varlık yok (atlandı)")
+    dist = app_dir / "dist" / subdir
+    if not src.is_dir() and not dist.is_dir():
+        return (app, True, f"webapp/{subdir} ve dist/{subdir} yok — kıyaslanacak statik varlık yok (atlandı)")
 
     base_url, user, pw, client = conn
-    files = sorted(p for p in src.rglob("*") if p.is_file())
-    same = []
-    diff = []
-    missing = []
-    dist_stale = []
-    for f in files:
-        rel = f.relative_to(src).as_posix()
-        local = f.read_bytes()
-        is_text = f.suffix.lower() in TEXT_SUFFIXES
-        dist_f = app_dir / "dist" / subdir / Path(rel)
-        if dist_f.exists() and dist_f.read_bytes() != local:
-            dist_stale.append(rel)
+    webapp_d, dist_d = _dosyalar(src), _dosyalar(dist)
+    adlar = sorted(webapp_d.keys() | dist_d.keys())
+    same, diff, kaynak_farki, missing, dist_stale = [], [], [], [], []
+    taban_webapp, yalniz_dist, donusum = [], [], []
+    for rel in adlar:
+        w, d = webapp_d.get(rel), dist_d.get(rel)
+        sonek = Path(rel).suffix.lower()
         try:
             live = fetch(base_url, user, pw, client, bsp, f"{subdir}/{rel}")
         except urllib.error.HTTPError as e:
@@ -118,26 +174,62 @@ def check_app(app: str, ui_root: Path, subdir: str, conn) -> tuple:
         except Exception as e:  # ağ/TLS — ölçüm yapılamadı, "aynı" SAYILMAZ
             missing.append(f"{rel} ({type(e).__name__})")
             continue
-        if normalize(live, is_text) == normalize(local, is_text):
-            same.append(rel)
+        wb = w.read_bytes() if w is not None else None
+        # EKSEN ① canlı ↔ deploy edilen şey (dist; yoksa webapp)
+        if d is not None:
+            db = d.read_bytes()
+            if not icerik_esit(live, db, sonek, cozumle=False):
+                diff.append(f"{rel} (canlı={len(live)}B dist={len(db)}B)")
+                if wb is not None and not icerik_esit(db, wb, sonek, cozumle=True):
+                    dist_stale.append(rel)
+                continue
         else:
-            diff.append(f"{rel} (canlı={len(live)}B yerel={len(local)}B)")
+            taban_webapp.append(rel)
+            if not icerik_esit(live, wb, sonek, cozumle=True):
+                diff.append(f"{rel} (canlı={len(live)}B webapp={len(wb)}B — dist'te yok, taban webapp)")
+                continue
+        # EKSEN ② canlı ↔ kaynak (webapp)
+        if wb is None:
+            yalniz_dist.append(rel)
+            same.append(rel)
+            continue
+        if not icerik_esit(live, wb, sonek, cozumle=True):
+            kaynak_farki.append(rel + (_prop_fark(live, wb) if sonek in BUILD_DONUSUMLU else ""))
+            continue
+        if d is not None and sonek in BUILD_DONUSUMLU and db != wb:
+            donusum.append(rel)
+        same.append(rel)
 
     for rel in diff:
         print(f"      ⛔ FARKLI : {rel}")
+    for rel in kaynak_farki:
+        print(f"      ⛔ KAYNAK FARKI : {rel}  (canlı == dist ama webapp'te build edilmemiş değişiklik "
+              "→ build + deploy)")
     for rel in missing:
         print(f"      ⛔ CANLIDA YOK/OKUNAMADI : {rel}")
     for rel in dist_stale:
         print(f"      ⚠ webapp ≠ dist : {rel}  (deploy dist'i gönderir → önce build)")
+    if taban_webapp:
+        print(f"      ℹ dist/{subdir}'de yok → taban webapp ({len(taban_webapp)}): {_kisalt(taban_webapp)}")
+    if yalniz_dist:
+        print(f"      ℹ yalnız dist'te (kaynak kıyası yok) ({len(yalniz_dist)}): {_kisalt(yalniz_dist)}")
+    if donusum:
+        print(f"      ℹ build dönüşümü BEKLENEN ({len(donusum)}): webapp baytı ≠ dist, "
+              f"\\uXXXX çözülünce anahtar/değer EŞİT — {_kisalt(donusum)}")
 
-    ok = not diff and not missing
-    note = f"{len(same)}/{len(files)} dosya canlıda AYNI (BSP={bsp})"
+    ok = not diff and not missing and not kaynak_farki
+    taban = "dist" if dist.is_dir() else "webapp (dist yok)"
+    note = f"{len(same)}/{len(adlar)} dosya canlıda AYNI (BSP={bsp}, taban={taban})"
     if diff:
         note += f" · FARKLI={len(diff)}"
+    if kaynak_farki:
+        note += f" · KAYNAK-FARKI={len(kaynak_farki)}"
     if missing:
         note += f" · YOK={len(missing)}"
     if dist_stale:
         note += f" · webapp≠dist={len(dist_stale)}"
+    if donusum:
+        note += f" · build-dönüşümü={len(donusum)}"
     return (app, ok, note)
 
 
@@ -151,7 +243,7 @@ def main() -> int:
     ap.add_argument("--ui-root", default=DEFAULT_UI_ROOT,
                     help=f"UI workspace kökü (varsayılan: project.yaml default_ui_root={DEFAULT_UI_ROOT})")
     ap.add_argument("--subdir", default="help",
-                    help="webapp altında kıyaslanacak statik klasör (varsayılan: help)")
+                    help="webapp/dist altında kıyaslanacak statik klasör (varsayılan: help)")
     args = ap.parse_args()
 
     if not args.ui_root:
@@ -173,7 +265,8 @@ def main() -> int:
         print(f"[i] --all → {len(apps)} deployable app")
 
     conn = read_conn()
-    print(f"=== STATİK VARLIK DOĞRULAMA [webapp/{args.subdir}] : {', '.join(apps)} ===")
+    print(f"=== STATİK VARLIK DOĞRULAMA [{args.subdir}: canlı↔dist · canlı↔webapp kaynak] : "
+          f"{', '.join(apps)} ===")
     results = []
     for app in apps:
         print(f"\n--- {app} ---")
@@ -188,11 +281,14 @@ def main() -> int:
             fail += 1
     if fail:
         print(f"\n[FAIL] {fail}/{len(results)} app'te statik varlık canlıda GÜNCEL DEĞİL.\n"
-              "       Çare: `deploy_ui.py --app <ad>` (build + deploy) → bu script'i tekrar koş.\n"
+              "       FARKLI (canlı ≠ dist) → `deploy_ui.py --app <ad>` (build + deploy) → bu script'i tekrar koş.\n"
+              "       KAYNAK FARKI (canlı == dist ≠ webapp) → dist bayat: build + deploy.\n"
               "       ⚠ 'FARKLI' çıkanlar dokunulmamış app'leri de kapsıyorsa önce ÖLÇÜMDEN şüphelen "
-              "(enjekte meta bloğu değişmiş olabilir — dosya başlığındaki nota bak).", file=sys.stderr)
+              "(enjekte meta bloğu ya da build dönüşümü değişmiş olabilir — dosya başlığındaki notlara bak).",
+              file=sys.stderr)
         return 1
-    print(f"\n[OK] {len(results)} app — webapp/{args.subdir} altındaki tüm dosyalar canlıda AYNI.")
+    print(f"\n[OK] {len(results)} app — {args.subdir} altındaki tüm dosyalar canlıda AYNI "
+          "(canlı == dist, kaynak webapp ile eşdeğer).")
     return 0
 
 

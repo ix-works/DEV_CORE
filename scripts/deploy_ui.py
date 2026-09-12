@@ -17,6 +17,8 @@ Her app için sırayla (atlanamaz):
   3) npx fiori deploy --config ui5-deploy.yaml --yes   (env auth, .conn_adt'den)
   4) canlı GET .../<bsp>/Component-preload.js?cb=<ts> (no-cache) → sha256 (live)
   5) local == live ?  PASS : FAIL (STALE/CACHE — canlı ≠ dist)
+     ⚠ Q281: `--verify-only`de fark YALNIZ preload string'lerindeki kaçışlı `\\r\\n` ise (içerik
+     modül modül eşit) STALE sayılmaz, `[OK~]` ayrı kovasında basılır. Deploy kipinde katı kalır.
 
 Kullanım:
     python scripts/deploy_ui.py --apps sip_se,dsk_se,fih_se
@@ -93,12 +95,98 @@ def bsp_name(app_dir: Path) -> str:
     return ""
 
 
+def satir_sonu_normalize(b: bytes) -> bytes:
+    """GERÇEK CR/LF baytlarını LF'e indir (sha() ve modül kıyası ORTAK kullanır)."""
+    return b.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def sha(b: bytes) -> str:
     """Satır-sonu NORMALIZE'lı sha256 — SAP BSP dosyayı \\r\\n ile saklar, dist \\n; bu
     CRLF/LF farkı byte-noise'tur (içerik aynı). Normalize etmeden karşılaştırmak yanlış-pozitif
-    STALE üretir (2026-07-06 dsk vakası: 20 byte = 20×\\r). Gerçek içerik farkı korunur."""
-    b = b.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-    return hashlib.sha256(b).hexdigest()
+    STALE üretir (2026-07-06 dsk vakası: 20 byte = 20×\\r). Gerçek içerik farkı korunur.
+    ⚠ Yalnız GERÇEK baytı görür; string İÇİNDEKİ kaçışlı `\\r\\n` için → preload_karsilastir()."""
+    return hashlib.sha256(satir_sonu_normalize(b)).hexdigest()
+
+
+# ── Q281 (2026-09-13): KAÇIŞLI satır sonu — preload STRING'lerinin İÇİNDE ─────────────────
+# `ui5 build` XML/properties/json kaynaklarını preload'a JS STRING olarak gömer:
+#     sap.ui.require.preload({ "<ns>/view/App.view.xml":'<mvc:View\r\n  ...', ... })
+# Çalışma ağacı CRLF ise (git `i/lf w/crlf`) satır sonu string içinde 4 baytlık `\r\n`
+# KAÇIŞI olur. sha() yalnız GERÇEK CR/LF baytını gördüğünden aynı içerik CRLF ağaçtan ve
+# LF ağaçtan build edilince FARKLI hash verir ⇒ yanlış STALE (ölçüldü: 2 BSP'de modül modül
+# içerik EŞİT, fark 0 satır; 19 BSP'lik taramada eski hüküm 2/19 STALE, kaçış indirilince 0/19).
+# ⛔ NORMALİZASYON GLOBAL DEĞİL: preload'un JS KOD bölümünde de kaçışlı `\r` geçebilir
+#    (ölçüldü: 19 BSP'nin 1'inde) ve `split("\r\n")` ↔ `split("\n")` GERÇEK davranış farkıdır.
+#    Kaçış yalnız haritadaki `.xml` / `.properties` / `.json` string modüllerinde indirilir
+#    (19 BSP'lik canlı korpusta haritada ÖLÇÜLEN uzantılar bunlardır). Bu üçünde satır sonu
+#    ayrıştırıcıya görünmez; `.txt`/`.csv`/`.html` gibi HAM metin kaynakta CRLF↔LF kullanıcıya
+#    görünen bir fark olabilir (indirilen şablon) → KATI kalır. JS kodu, `.js` string modülü,
+#    harita iskeleti ve ayrıştırılamayan HER bayt KATI kıyaslanır. Harita yoksa hiçbir şey gevşetilmez.
+# ⛔ Sınıfı yalnız `--verify-only` KABUL eder. Gerçek deploy'dan hemen sonra canlı, yüklenen
+#    dist'in KENDİSİ olmalıdır; orada kaçış farkı "yüklenen dosya canlıda DEĞİL" demektir ⇒
+#    deploy kipinde STALE/CACHE kalır (sınıf yalnız teşhis notu olarak basılır).
+PRELOAD_HARITASI = b"sap.ui.require.preload("
+_PRELOAD_GIRDISI = re.compile(
+    rb'"([^"\\\n]+/[^"\\\n]+\.([A-Za-z0-9]+))"\s*:\s*'
+    rb"('(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\")")
+# ÇİFT sayıda ters bölüden sonra gelen `\r\n` kaçışı. `\\r\\n` (kaçışlanmış ters bölü + "r")
+# metnin kendisinde "\r" YAZISIDIR, satır sonu değildir → dokunulmaz.
+_KACISLI_CRLF = re.compile(rb"(?<!\\)((?:\\\\)*)\\r\\n")
+KACIS_INDIRILEN_UZANTILAR = {b"xml", b"properties", b"json"}
+JS_ISKELETI = "<js-kodu+harita-iskeleti>"
+SATIR_SONU = "SATIR_SONU"
+SATIR_SONU_ETIKETI = "CANLI≈kaynak — YALNIZ SATIR SONU farkı"
+
+
+def preload_modulleri(b: bytes, kacis_indir: bool = True) -> dict | None:
+    """Component-preload.js → {modül-adı: içerik-baytı}. Harita yoksa None (kıyas KATI kalır).
+
+    Haritadaki her string girdi kendi adıyla ayrılır; geri kalan HER bayt (JS kodu, anahtarlar,
+    ayraçlar, ayrıştırılamayan girdiler) `JS_ISKELETI` altında HAM kalır — hiçbir bayt kaybolmaz.
+    `kacis_indir=True` yalnız `KACIS_INDIRILEN_UZANTILAR` (xml/properties/json) string modüllerinde
+    kaçışlı `\\r\\n`'i `\\n`'e indirir.
+    """
+    b = satir_sonu_normalize(b)
+    bas = b.rfind(PRELOAD_HARITASI)
+    if bas < 0:
+        return None
+    moduller: dict = {}
+    iskelet = [b[:bas]]
+    konum = bas
+    for m in _PRELOAD_GIRDISI.finditer(b, bas):
+        iskelet.append(b[konum:m.start(3)])
+        ad = m.group(1).decode("utf-8", "replace")
+        deger = m.group(3)
+        if kacis_indir and m.group(2).lower() in KACIS_INDIRILEN_UZANTILAR:
+            deger = _KACISLI_CRLF.sub(rb"\1\\n", deger)
+        anahtar, n = ad, 2
+        while anahtar in moduller:   # aynı ad iki kez geçerse ikisi de AYRI kıyaslanır
+            anahtar, n = f"{ad}#{n}", n + 1
+        moduller[anahtar] = deger
+        konum = m.end(3)
+    iskelet.append(b[konum:])
+    moduller[JS_ISKELETI] = b"".join(iskelet)
+    return moduller
+
+
+def preload_karsilastir(yerel: bytes, canli: bytes) -> tuple:
+    """→ (sınıf, modüller). Sınıf: `AYNI` (hash eşit) · `SATIR_SONU` (içerik modül modül eşit,
+    fark YALNIZ string modüllerindeki kaçışlı `\\r\\n`) · `FARKLI`. Modüller: SATIR_SONU'da kaçış
+    farkı taşıyan, FARKLI'da içeriği farklı olan modül adları (harita ayrıştırılamadıysa boş)."""
+    if sha(yerel) == sha(canli):
+        return "AYNI", []
+    my, mc = preload_modulleri(yerel), preload_modulleri(canli)
+    if my is None or mc is None:
+        return "FARKLI", []
+    farkli = sorted(k for k in my.keys() | mc.keys() if my.get(k) != mc.get(k))
+    if farkli:
+        return "FARKLI", farkli
+    hy, hc = preload_modulleri(yerel, False), preload_modulleri(canli, False)
+    return SATIR_SONU, sorted(k for k in hy.keys() | hc.keys() if hy.get(k) != hc.get(k))
+
+
+def _kisalt(adlar: list, n: int = 4) -> str:
+    return ", ".join(adlar[:n]) + (f" (+{len(adlar) - n})" if len(adlar) > n else "")
 
 
 def run(cmd: str, cwd: Path, env: dict) -> tuple:
@@ -147,7 +235,8 @@ def deploy_one(app: str, ui_root: Path, conn, env: dict, dry: bool, verify_only:
     dist_preload = app_dir / "dist" / PRELOAD
     if not dist_preload.exists():
         return (app, False, f"build sonrası dist/{PRELOAD} yok — build çıktısı beklenmedik")
-    local_hash = sha(dist_preload.read_bytes())
+    local_bytes = dist_preload.read_bytes()
+    local_hash = sha(local_bytes)
     print(f"  [{app}] dist/{PRELOAD} sha(norm)={local_hash[:12]}…")
 
     if dry:
@@ -168,13 +257,27 @@ def deploy_one(app: str, ui_root: Path, conn, env: dict, dry: bool, verify_only:
         return (app, False, f"canlı çekme HATASI ({type(e).__name__}): {e} — doğrulanamadı")
     live_hash = sha(live)
     if live_hash != local_hash:
+        sinif, moduller = preload_karsilastir(local_bytes, live)
+        # Q281: yalnız VERIFY kipinde ve yalnız içerik modül modül EŞİTSE STALE sayılmaz.
+        if verify_only and sinif == SATIR_SONU:
+            return (app, True,
+                    f"{SATIR_SONU_ETIKETI} (kaçışlı \\r\\n, {len(moduller)} modül: {_kisalt(moduller)}) · "
+                    f"içerik modül modül EŞİT → STALE SAYILMADI · dist(norm)={local_hash[:12]} "
+                    f"canlı(norm)={live_hash[:12]}, BSP={bsp}")
         tag = "⛔ STALE: canlı ≠ mevcut kaynak" if verify_only else "⛔ STALE/CACHE: canlı ≠ dist"
         extra = ("canlı BSP, git/working-tree kaynaktan build ile UYUŞMUYOR — geçmişte bayat "
                  "deploy edilmiş VEYA henüz deploy edilmemiş değişiklik var."
                  if verify_only else
                  "Deploy 'Successful' dedi ama canlı içerik ESKİ — build atlanmış/cache/deploy hatası.")
+        if sinif == SATIR_SONU:
+            modul_notu = (f" Fark YALNIZ kaçışlı satır sonu ({len(moduller)} modül) — içerik eşit ama "
+                          "yüklenen dist canlıda DEĞİL.")
+        elif moduller:
+            modul_notu = f" Farklı modül ({len(moduller)}): {_kisalt(moduller)}."
+        else:
+            modul_notu = " (preload haritası ayrıştırılamadı — modül kıyası YAPILAMADI, hash hükmü geçerli.)"
         return (app, False,
-                f"{tag}! dist(norm)={local_hash[:12]} vs canlı(norm)={live_hash[:12]}. {extra}")
+                f"{tag}! dist(norm)={local_hash[:12]} vs canlı(norm)={live_hash[:12]}. {extra}{modul_notu}")
     ok_note = "CANLI==kaynak ✓ (güncel)" if verify_only else "CANLI==dist ✓ (deploy doğrulandı)"
     return (app, True, f"{ok_note} sha={local_hash[:12]}, BSP={bsp}")
 
@@ -272,10 +375,17 @@ def main() -> int:
 
     print("\n=== SONUÇ ===")
     fail = 0
+    # Q281 · CORE-06: "yalnız satır sonu farkıyla içerik-eşit" AYRI KOVADIR — "hash-eşit" ile
+    # aynı `[OK]` etiketine karışırsa kabul edilen gevşetme görünmez olur.
+    satir_sonu = [app for app, ok, note in results if ok and note.startswith(SATIR_SONU_ETIKETI)]
     for app, ok, note in results:
-        print(f"  {'[OK]  ' if ok else '[FAIL]'} {app}  — {note}")
+        etiket = "[FAIL]" if not ok else ("[OK~] " if app in satir_sonu else "[OK]  ")
+        print(f"  {etiket} {app}  — {note}")
         if not ok:
             fail += 1
+    satir_sonu_notu = (f"    [OK~] = {len(satir_sonu)} app bayt-eş DEĞİL, fark YALNIZ preload string'lerindeki "
+                       f"kaçışlı \\r\\n (CRLF çalışma ağacından build); içerik modül modül eşit, STALE "
+                       f"SAYILMADI: {', '.join(satir_sonu)}")
     if fail:
         if args.verify_only:
             act = "STALE tespit edildi (canlı ≠ kaynak)"
@@ -285,6 +395,8 @@ def main() -> int:
             act = "deploy DOĞRULANAMADI (bayat gitmiş olabilir)"
         print(f"\n[FAIL] {fail}/{len(results)} app {act} — yukarıyı incele, kullanıcıya raporla "
               "(asla 'başarılı' deme).", file=sys.stderr)
+        if satir_sonu:
+            print(satir_sonu_notu, file=sys.stderr)
         return 1
 
     # ⛔ 2026-08-10 — ÖZET SATIRI ÜÇ-YOLLU OLMAK ZORUNDA. Mod banner'ı (yukarıda) üç
@@ -296,7 +408,12 @@ def main() -> int:
     # olduğu için, kendi özet satırının koşmayan bir doğrulamayı beyan etmesi kapının
     # kendisini yalanlıyordu. Kural: KOŞMAYAN doğrulama BEYAN EDİLMEZ — "doğrulandı" ve
     # "canlı ==" sözcükleri dry-run dalında GEÇMEZ.
-    if args.verify_only:
+    if args.verify_only and satir_sonu:
+        print(f"\n[OK] {len(results)} app doğrulandı (canlı == mevcut kaynak — hepsi güncel; "
+              f"{len(results) - len(satir_sonu)}'i hash-eşit, {len(satir_sonu)}'i YALNIZ SATIR SONU "
+              "farkıyla içerik-eşit).")
+        print(satir_sonu_notu)
+    elif args.verify_only:
         print(f"\n[OK] {len(results)} app doğrulandı (canlı == mevcut kaynak — hepsi güncel).")
     elif args.dry_run:
         print(f"\n[i] DRY-RUN bitti: {len(results)} app BUILD edildi. "
