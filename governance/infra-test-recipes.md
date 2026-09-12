@@ -2042,6 +2042,30 @@ python tests/fixtures/run_battery/run.py                # 25/25 (P2 pini = fs_do
 - Mutasyonlar: `--mutasyon-altagac` (eski "ad==docs" süzgeci) · `--mutasyon-beyan` (KAPSAM satırı
   sökülür) · `--mutasyon-tur` (`--tur` yok sayılır; A16c hata dalı AYAKTA kalır).
 
+**⭐ HOOK KARDEŞİ — Q294 (2026-09-13): `post_validate` `doc-fs` dalı aynı evreni kullanır.**
+Hook eskiden yalnız doğrudan `docs/` çocuğunda ateşliyordu; artık `docs` alt ağacı (köke göreli),
+kök çözülemezse eski ölçüt. Sayılar bu bloğun üstündekini GÜNCELLER: korpus **67/67**, batarya
+**taban + 19 kip**, `run_battery` P2 pini **19**.
+
+```bash
+python tests/fixtures/fs_docstd/run.py      # 67/67
+python tests/run_battery.py fs_docstd --kardes hook_bash_ve_stderr_kapsami negatif_test_harness bos_seans_markeri run_battery
+# ⚠ core_precommit --all `git ls-files`i ÇAĞRININ cwd'sinde koşar: kabuğun cwd'si tüketici projeyse
+#   O REPOYU tarar (2026-09-13: 37746 sahte ihlal, hiçbiri bu dalın dosyası değil). cwd = worktree kökü.
+```
+
+- **ESKİ KOD:** HEAD hook'u `scripts/hooks/_taban_post_validate.py`, koşucu `hook_adi="_taban_post_validate"`
+  ile `tests/fixtures/fs_docstd/_taban_run.py` → **64/67** (B9 · B9b · B12), ikisi de silinir.
+- ⛔ **B11 SİLİNEMEZ:** kökün ÜSTÜ `docs` adlıyken hook susmalı; vektör AYNI env'de iç kontrol
+  (kök altındaki `docs/FS` ateşler) taşır ve DOĞRUDAN çağrıyla koşar (shim core'u
+  `CLAUDE_PROJECT_DIR/core`tan bulur, o kökte bağ yok). ⛔ **B13 SİLİNEMEZ:** env + işaret dosyası
+  yokken doğrudan `docs/FS` yine ateşlemeli (daraltma çapası); marker TMP'ye düşer, vektör
+  `TMP/TEMP/TMPDIR`'i kuma alır.
+- Mutasyonlar: `--mutasyon-hookagac` (kök çözümü sökülür → her yol eski ölçüt) · `--mutasyon-hookmutlak`
+  (`docs` mutlak yolda aranır → B11 düşer).
+- ⚠ **Ölçüm betiğinde dedup tuzağı:** işaretsiz kökte hook OKU marker'ını `gettempdir()/.tmp`e
+  yazar; eski/yeni kodu aynı `session_id` ile art arda koşarsan ikinci koşum sahte "OKU yok" basar.
+
 ## B37 — `check_cds_currency_reference` ÇOK-SATIRLI ifade + `union` dalı (Q234+Q237, ⚠GEVŞETME)
 - Korpus (ev genişletildi, yeni dizin YOK):
   `python tests/fixtures/cds_curr_eksik_annotation/run.py` → **19 senaryo + 11 mutasyon**, exit 0.

@@ -40,7 +40,7 @@ applies_to: [s4_private]
 
 ## Checklist — Abstract Entity (action param/result — SELECT'siz)
 
-> ⚠️ Abstract entity (`define [root] abstract entity`, action `parameter`/`result`) = **view-entity DEĞİL**. SELECT/SQL-view taşımaz → SELECT bekleyen araçlar (`create_cds_view.py` "no SELECT", `populate_cds_views.py` sprint-gate) PATLAR. Kök-sebep: nakliye param/result patinajı 2026-06-23.
+> ⚠️ Abstract entity (`define [root] abstract entity`, action `parameter`/`result`) = **view-entity DEĞİL**. SELECT/SQL-view taşımaz. View-entity araçlarıyla **canlı yaratma ölçülmedi**: `create_cds_view.py` kaynak kapısı 2026-09-13'ten (Q277) beri abstract'ı **geçirir** ama kaynak yine ayrıca push edilir; `populate_cds_views.py` pre-flight'ı `define root abstract entity`'de hâlâ **patlar** (TD-spec + sqlViewName), düz `define abstract entity`'de geçer (offline ölçüm). Bu yüzden aşağıdaki ölçülmüş reçete zorunludur. Kök-sebep: nakliye param/result patinajı 2026-06-23.
 
 | ID | Kontrol | Severity | Kural |
 |---|---|---|---|

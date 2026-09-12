@@ -260,6 +260,67 @@ def _bash_duzenlenen_yol(tool_input: dict) -> str:
     return ""
 
 
+# ── Q294 (2026-09-13): doc-fs dalının EVRENİ = `docs` ALT AĞACI (validator Q275 ile hizalı) ──
+# ESKİ KUSUR: `re.search(r"/docs/(FS|TS|KD|EK)-[^/]+\.md$", norm)` yalnız DOĞRUDAN `docs/`
+# çocuğuna uyuyordu ⇒ `docs/<alt>/FS-*.md` düzenlenince OKU nudge'ı ve `--file` kapısı HİÇ
+# ateşlemiyordu (tüketici projede ölçüldü: 55 doküman evrende, alt ağaçta +56; bir paketin
+# FS'lerinin tamamı alt klasörde). Validator tarafı Q275'te düzeldi
+# (`check_fs_no_analysis_log._docs_agacinda`), hook eski kaldı ⇒ aynı dosya için iki yüzey iki
+# farklı cevap veriyordu.
+# ÖLÇÜT (validator ile AYNI): ad `(FS|TS|KD|EK)-*.md` + `docs` bileşeni KÖKE GÖRELİ parçalarda
+# (ya da kökün kendi adı `docs`). ⚠ Mutlak yolda aranırsa kökün ÜST dizini `docs` adlıyken
+# (`…/docs/proje/notlar/FS-x.md`) bütün proje kapsama girerdi (fixture B11 çapası).
+# KÖK: `CLAUDE_PROJECT_DIR` (yol onun altındaysa) → dosyadan yukarı `project.yaml`/`.git`
+# (sözcüksel; resolve() YOK: `<proje>/core` junction'ı başka bir ağaca çözülür).
+# ⛔ Kök çözülemezse (göreli yol, işaretsiz ağaç) ESKİ ölçüt AYNEN uygulanır ⇒ eskinin ateşlediği
+# her durum ateşlemeye devam eder (daraltma YOK; fixture B13). Tür kararı değişmedi: gate yalnız
+# FS/EK'de koşar, TS/KD yalnız OKU işaretçisi alır (aşağıdaki dal).
+# ⚠ İKİ YERDE YAŞAYAN ÖLÇÜT: validator modülü buradan import EDİLMEZ (import anında proje kökünü
+# çözer ve stdout'u yeniden yapılandırır; hook runpy'de koşar) — ölçüt değişirse İKİSİ birlikte.
+_DOC_ADI = re.compile(r"^(FS|TS|KD|EK)-[^/]+\.md$", re.IGNORECASE)
+_DOC_ESKI = re.compile(r"/docs/[^/]+$", re.IGNORECASE)
+
+
+def _docs_koku(norm: str):
+    """doc-fs evreninin kökü (Path) ya da None (çözülemedi → çağıran eski ölçüte düşer)."""
+    p = Path(norm)
+    if not p.is_absolute():
+        return None
+    env = os.environ.get("CLAUDE_PROJECT_DIR")
+    if env:
+        e = Path(env.replace("\\", "/"))
+        try:
+            p.relative_to(e)
+            return e
+        except ValueError:
+            pass
+    for ana in p.parents:
+        try:
+            if (ana / "project.yaml").exists() or (ana / ".git").exists():
+                return ana
+        except OSError:
+            continue
+    return None
+
+
+def _doc_turu(norm: str):
+    """→ 'FS'/'TS'/'KD'/'EK' (doc-fs dalının evrenindeyse) ya da None. Hata → eski ölçüt."""
+    m = _DOC_ADI.match(norm.rsplit("/", 1)[-1])
+    if not m:
+        return None
+    tur = m.group(1).upper()
+    try:
+        kok = _docs_koku(norm)
+        if kok is None:
+            return tur if _DOC_ESKI.search(norm) else None
+        parcalar = Path(norm).parent.relative_to(kok).parts
+        if kok.name.lower() == "docs" or any(x.lower() == "docs" for x in parcalar):
+            return tur
+        return None
+    except Exception:
+        return tur if _DOC_ESKI.search(norm) else None
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
@@ -297,9 +358,8 @@ def main() -> int:
     # erişilebilirdi) → kural vardı, okunma noktası yoktu. Bu blok: (a) oturumda ilk dokunuşta OKU
     # işaretçisi (dedup: .tmp marker), (b) her düzenlemede bulgu özeti. Warn-first: mesaj UYARI dilinde,
     # exit 2 yalnız geri-besleme (edit zaten oldu; ADR 0006 "önce düzelt" gate'i DEĞİL).
-    m_doc = re.search(r"/docs/(FS|TS|KD|EK)-[^/]+\.md$", norm, re.IGNORECASE)
-    if m_doc:
-        kind = m_doc.group(1).upper()
+    kind = _doc_turu(norm)
+    if kind:
         lines = []
         try:
             proj = _isaret_koku(path)

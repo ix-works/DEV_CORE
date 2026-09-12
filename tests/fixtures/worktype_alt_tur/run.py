@@ -5,12 +5,17 @@ NEDEN BU KORPUS VAR (olculmus vaka 2026-08-22, kuyruk Q5)
 ---------------------------------------------------------
 11 soyut varlik (`define abstract entity`) `object_type='ddls'` ile SAP'ye push edildi.
 `sap_worktype_hint` obje-tipini gordu ve KANONIK CDS satirini basti:
-"playbook/adt-cds.md 'TEK CDS YARATMA'". Oysa `playbook/adt-cds.md` §ABSTRACT ENTITY tam
-da o bolumun onerdigi araclarin (`create_cds_view.py` / `populate_cds_views.py`) abstract
-entity'de CALISMADIGINI yazar ve su kurali koyar: *"yeni DDLS gorunce TURUNE bak - SELECT
+"playbook/adt-cds.md 'TEK CDS YARATMA'". Oysa `playbook/adt-cds.md` §ABSTRACT ENTITY o gun,
+o bolumun onerdigi araclarin (`create_cds_view.py` / `populate_cds_views.py`) abstract
+entity'de CALISMADIGINI yaziyordu ve su kurali koyar: *"yeni DDLS gorunce TURUNE bak - SELECT
 var mi? ... Tahminle arac secme."* Yani hatirlatici, recetenin KENDI kuralini uygulamiyor;
 obje tipinde duruyor, ALT-TURE bakmiyordu. (`checklists/cds-creation.md` icinde "abstract"
-kelimesi HIC gecmiyor - olculdu.) Bedel: 1 gateway turu + gereksiz bir infra fix onayi.
+kelimesi HIC gecmiyor - olculdu 2026-08-22, yeniden 2026-09-13: 0.) Bedel: 1 gateway turu +
+gereksiz bir infra fix onayi.
+GUNCEL DURUM (2026-09-13, Q297): `create_cds_view` kaynak kapisi Q277'den beri abstract
+entity'yi GECIRIR (offline olculdu), ama bu aracla canli yaratma OLCULMEDI ve kaynak yine
+ayrica push edilir; `populate_cds_views` pre-flight'i `define root abstract entity`de hala
+patlar. Olculmus recete hala AYRI bolumde => bu korpusun degismezi aynen gecerli.
 
 ⛔ NEDEN BRIFING METNI DEGIL KAYNAK: alt-tur brifingden TAHMIN edilmez; artefaktin KENDI
 bildirimi onu SOYLER ve o bildirim bu tool'un payload'inda zaten vardir. Ayni evde
