@@ -446,7 +446,14 @@ OZEL_TESTLER = [
     ("grep_kapsam_gorunurlugu",
      "adt_grep_source: dusen her obje ad+SEBEP ile (`skipped_objects`), FUGR iskeleti "
      "`partial_objects`, `coverage_complete` AYRI eksen (scope_verified bozulmadan) + "
-     "IKI giris dali (`package=`/`objects=`) AYNI tip sozlugunu konusur (yazim varyanti)"),
+     "IKI giris dali (`package=`/`objects=`) AYNI tip sozlugunu konusur (yazim varyanti) + "
+     "2026-09-13 (Q282) sinif alt-include'lari (CCIMP) metadata listesinden okunup taranir, "
+     "okunamayan `class_includes_not_scanned`"),
+    # 2026-09-13 (Q230): nodestructure `description` SUNUCUDA kayiyor (hata dugumu) —
+    # istemcide duzeltilemez; arac KOSULSUZ `description_verified: false` + dogrulama yolu basar.
+    ("paket_aciklama_dogrulanmadi",
+     "adt_package_contents: `description_verified: false` (iki dalda da, kosulsuz) + uyari "
+     "dogrulama yolunu soyler; arac aciklamayi DUZELTMEYE calismaz (sinir capasi)"),
     # 2026-09-04 (Q217=Q229 + Q221=Q228): generic URL tablosu ile ozel yolun ayrismasi.
     ("adt_uc_url_cozumu",
      "ADT uc URL'i: sinif alt-include'una `/source/main` EKLENMEZ (canli: ciplak 200 / "
@@ -859,7 +866,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:adtget_yokluk_kaniti", "O:class_include_push", "O:dogrulama_kosamadi",
       "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
       "O:sorgu_basarisizligi_gorunur", "O:transport_gorev_istek_cevrimi",
-      "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi"),
+      "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
+      "O:paket_aciklama_dogrulanmadi"),
      "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil) + "
      "görev(S)→istek(K) çevriminin İKİ yazma yolundaki simetrisi + `get_object_url` "
      "TÜKETİCİLERİ (push_object / run_atc_check → Q228 kapanış kanıtı)"),
@@ -937,7 +945,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "UPLOAD; künye/binding/üçüncü değer sözleşmesi)"),
     ("mcp_servers/sap_adt/tools/query.py",
      ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur",
-      "O:atc_p1_sonuc", "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu"),
+      "O:atc_p1_sonuc", "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu",
+      "O:paket_aciklama_dogrulanmadi"),
      "where_used/ATC + veri sorgusu + başarısızlık görünürlüğü + ⚠ `adt_atc_check` yanıt "
      "ŞEKLİ (priority_1_count · must_fix · policy) post_tool_failure ATC ekseninin "
      "GİRDİSİDİR: alan adı ya da politika metni değişirse eksen SESSİZCE boşalır"),

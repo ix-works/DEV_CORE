@@ -454,6 +454,18 @@ def adt_package_contents(package: str) -> dict:
     ⚠ `package_verified: false` → liste SAP'nin paket-ucu (nodestructure) yerine AD-DESENLİ
     ARAMA fallback'inden geldi (yetki/ICF hatası). O durumda liste BAŞKA PAKETLERİN
     objelerini içerebilir; "bu paketin içeriği" diye kullanma (2026-08-01 bug-avı).
+
+    ⛔ `description_verified: false` (DAİMA) — Q230, 2026-09-13 canlı ölçüm (DEV, salt-okuma):
+    `objects[].description` SAP'nin nodestructure yanıtından OLDUĞU GİBİ gelir ve bu araç onu
+    DOĞRULAMAZ. Ölçülen kusur SUNUCU tarafındadır: büyük bir pakette yanıt XML'i bir
+    *"Error loading node: The message content is not acceptable…"* düğümü taşıdı ve o paketin
+    açıklamaları **bir satır kaydı** (karşılaştırılabilen 120/120 obje yanlış; çoğu bir önceki
+    objenin açıklamasını taşıyordu). Kontrol paketi (hata düğümü yok) 10/10 doğru. Kayma HAM
+    XML'dedir (istemci ayrıştırması düğüm-içi okur); `Accept` başlığına `application/atomsvc+xml`
+    eklemek yanıtı DEĞİŞTİRMEDİ (aynı uzunluk, aynı hata düğümü) ⇒ istemcide düzeltilemez.
+    Yanlış açıklama HATA VERMEZ, makul görünür. Obje KİMLİĞİNİ bu alandan çıkarma;
+    açıklama gerekiyorsa `adt_search_objects` (ad bazlı) ya da `adt_get` metadata'sı
+    (`adtcore:description`; MSAG için `adt_msgclass_read`) ile oku.
     """
     client = _get_client()
     try:
@@ -467,6 +479,16 @@ def adt_package_contents(package: str) -> dict:
             "count": len(objs) if hasattr(objs, "__len__") else 0,
             "objects": objs,
             "package_verified": bool(dogrulanmis),
+            # Q230: araç açıklamayı HİÇBİR dalda doğrulamaz — bayrak koşulsuzdur (tahmin eden
+            # bir "kayma var mı" sezgisi YOK; ölçülen sunucu kayması istemciden görünmez).
+            "description_verified": False,
+            "description_warning": (
+                "objects[].description DOĞRULANMADI: SAP nodestructure yanıtından olduğu gibi "
+                "gelir ve büyük pakette SUNUCU TARAFINDA satır kaydığı ölçüldü (yanlış açıklama "
+                "hata vermez, makul görünür). Obje kimliğini bu alandan çıkarma; açıklama "
+                "gerekiyorsa adt_search_objects ya da adt_get metadata'sı (adtcore:description; "
+                "MSAG için adt_msgclass_read) ile oku."
+            ),
             "client_log": buf.getvalue().strip(),
         }
         if not dogrulanmis:
@@ -1284,6 +1306,74 @@ def _grep_tip_normalize(t: str) -> str:
     return _GREP_TYPE_MAP.get(ham.upper(), ham.lower())
 
 
+def _sinif_include_listesi(metadata) -> list | None:
+    """Sınıf metadata XML'inden VAR OLAN alt-include tiplerini çıkarır (`main` hariç).
+
+    `None` = metadata yok / ayrıştırılamadı / şekli tanınmadı ⇒ **"include yok" DEĞİL,
+    "bilinmiyor"** (Q282). Boş liste ise "sınıfın `main` dışında include'u yok" demektir.
+
+    CANLI ÖLÇÜM (2026-09-13, DEV, salt-GET, 2 sınıf): metadata her include için
+    `<class:include class:includeType="…">` elemanı taşır. Listelenen HER tip include
+    ucundan 200 döndü (4/4 ve 5/5); listelenmeyen `testclasses` 404 döndü (1/1). `main`
+    iki sınıfta da listelendi ⇒ şekil tanıma çapası `main`dir — o yoksa liste güvenilmez.
+    """
+    if not isinstance(metadata, str) or not metadata.strip():
+        return None
+    import xml.etree.ElementTree as ET
+    try:
+        kok = ET.fromstring(metadata)
+    except ET.ParseError:
+        return None
+    tipler = []
+    for el in kok.iter():
+        if str(el.tag).rsplit("}", 1)[-1] != "include":
+            continue
+        for k, v in el.attrib.items():
+            if k.rsplit("}", 1)[-1] == "includeType" and v and v.strip():
+                tipler.append(v.strip().lower())
+    if "main" not in tipler:
+        return None
+    return [t for t in dict.fromkeys(tipler) if t != "main"]
+
+
+def _sinif_include_kaynaklari(client, ad: str, metadata) -> tuple:
+    """Sınıfın alt-include kaynaklarını okur → `(okunan[(tip, metin)], taranamayan[str])`.
+
+    ⛔ Q282 (2026-09-11 vakası): `adt_grep_source` sınıfta YALNIZ ana kaynağı okuyordu;
+    behavior pool / local class gövdesi `includes/implementations` (CCIMP) içindedir ve
+    taranmıyordu, üstelik `coverage_complete: true` basılıyordu (sahte negatif).
+    Hangi include'un okunacağı metadata listesinden gelir (tahminle uç denenmez —
+    listelenmeyen ucu yoklamak her sınıfa 404 gürültüsü ekler). Okunamayan HER include
+    `taranamayan` listesine girer; çağıran bunu `partial_objects`e çevirir.
+    """
+    tipler = _sinif_include_listesi(metadata)
+    if tipler is None:
+        return [], ["include listesi alınamadı (sınıf metadata'sı yok/tanınmadı) — "
+                    "includes/* TARANMADI"]
+    adt = getattr(client, "adt_client", None)
+    okunan, taranamayan = [], []
+    for tip in tipler:
+        try:
+            from object_types import get_class_include_url  # type: ignore
+            url = get_class_include_url(ad, tip)
+        except Exception as exc:                                   # noqa: BLE001
+            taranamayan.append("%s: tanınmayan include tipi (%s)" % (tip, type(exc).__name__))
+            continue
+        try:
+            with _capture():
+                metin = adt.get_object_source(url)
+        except Exception as exc:                                   # noqa: BLE001
+            taranamayan.append("%s: okunamadı (%s %s)" % (
+                tip, type(exc).__name__,
+                getattr(exc, "status_code", None) or str(exc)[:80]))
+            continue
+        if not isinstance(metin, str):
+            taranamayan.append("%s: okunamadı (kaynak gövdesi yok)" % tip)
+            continue
+        okunan.append((tip, metin))
+    return okunan, taranamayan
+
+
 @profil_tool()
 def adt_grep_source(
     pattern: str,
@@ -1322,6 +1412,9 @@ def adt_grep_source(
       `partial_objects[{object, type, reason}]` — okundu ama İÇERİK EKSİK:
         `fugr_skeleton_only` → FUGR'ın yalnız iskelet ana include'u; FM gövdesi
                                `L<FG>U01`'de ve TARANMADI (playbook §4.1)
+        `class_includes_not_scanned` → sınıfın ana kaynağı tarandı ama alt-include'larından
+                               (CCIMP/CCDEF/CCMAC/CCAU) en az biri OKUNAMADI ya da include
+                               listesi (sınıf metadata'sı) alınamadı — `detail` hangisi/neden
       `coverage_complete` → hiçbir obje düşmedi/eksilmedi mi? (`scope_verified`
       paket ucunun DOĞRULUĞUNU, bu alan taramanın TAMLIĞINI söyler — ikisi ayrı eksendir)
     Mevcut alanların hiçbiri kaldırılmadı/anlamı değiştirilmedi (tüketici sözleşmesi).
@@ -1333,9 +1426,21 @@ def adt_grep_source(
     eşanlamlısı verilen çağrılarda dönüş alanlarındaki `type` artık KANONİK addır
     (`"…:INTF"` → `interface`, `"…:FUGR"` → `functiongroup`) — `package=` dalı zaten böyleydi.
 
+    ⛔ 2026-09-13 (Q282) — SINIF ALT-INCLUDE'LARI artık TARANIR. Eskiden sınıfta yalnız
+    ana kaynak (`source/main`) okunuyordu; behavior pool / local class gövdesi
+    `includes/implementations` (CCIMP) içindedir ⇒ `match_count: 0` + `coverage_complete:
+    true` = SAHTE NEGATİF (canlı vaka 2026-09-11). Okunacak include'lar sınıf metadata'sının
+    `class:include` listesinden gelir (listelenmeyen uç YOKLANMAZ). Metadata alınamazsa ya
+    da listelenen bir include okunamazsa obje `partial_objects`e
+    `class_includes_not_scanned` ile düşer — "tarandı" ile "taranmadı" karışmaz.
+    ⚠ Maliyet: include'lu her sınıf için listelenen include başına +1 GET.
+    Include'dan gelen eşleşme `include` alanı taşır (`"implementations"` vb.); `line`
+    o include İÇİNDEKİ satırdır. Ana kaynak eşleşmelerinin şekli DEĞİŞMEDİ.
+
     Returns:
         {ok, pattern, scanned_objects, match_count, truncated_object_scope, truncated_matches,
-         matches: [{object, type, line, text}], scope_verified, coverage_complete,
+         scanned_class_include_count,
+         matches: [{object, type, line, text, include?}], scope_verified, coverage_complete,
          skipped_count, skipped_objects, partial_count, partial_objects, client_log}
     """
     import re as _re
@@ -1401,6 +1506,7 @@ def adt_grep_source(
                         "detail": f"max_objects={max_objects} sınırının dışında"})
     targets = targets[:max_objects]
     matches, scanned, hit_cap = [], 0, False
+    taranan_inc = 0               # okunup taranan sınıf alt-include sayısı (Q282)
     for n, at in targets:
         r = adt_get(n, object_type=at, include_source=True)
         src = r.get("source")
@@ -1421,18 +1527,33 @@ def adt_grep_source(
             kismi.append({"object": n, "type": at, "reason": "fugr_skeleton_only",
                           "detail": ("yalnız iskelet ana include tarandı; FM gövdesi "
                                      "L<FG>U01… içinde — playbook/adt-fugr-functions.md §4.1")})
+        inc_kaynaklar: list = []
+        if at == "class":
+            # Q282: sınıfın alt-include'ları (CCIMP/CCDEF/CCMAC/CCAU) ayrı uçlardadır.
+            inc_kaynaklar, inc_eksik = _sinif_include_kaynaklari(client, n, r.get("metadata"))
+            if inc_eksik:
+                kismi.append({"object": n, "type": at, "reason": "class_includes_not_scanned",
+                              "detail": "; ".join(inc_eksik)[:300]})
+            taranan_inc += len(inc_kaynaklar)
         scanned += 1
-        for i, line in enumerate(src.splitlines(), 1):
-            if rx.search(line):
-                matches.append({"object": n, "type": at, "line": i, "text": line.strip()[:200]})
-                if len(matches) >= 500:
-                    hit_cap = True
-                    break
+        for inc, metin in [(None, src)] + inc_kaynaklar:
+            for i, line in enumerate(metin.splitlines(), 1):
+                if rx.search(line):
+                    esl = {"object": n, "type": at, "line": i, "text": line.strip()[:200]}
+                    if inc:
+                        esl["include"] = inc
+                    matches.append(esl)
+                    if len(matches) >= 500:
+                        hit_cap = True
+                        break
+            if hit_cap:
+                break
         if hit_cap:
             break
     tam_kapsam = not atlanan and not kismi and not truncated_scope and not hit_cap
     out = {"ok": True, "pattern": pattern, "scanned_objects": scanned,
            "match_count": len(matches), "truncated_object_scope": truncated_scope,
+           "scanned_class_include_count": taranan_inc,
            "truncated_matches": hit_cap, "matches": matches,
            "scope_verified": bool(kapsam_dogrulanmis),
            "coverage_complete": tam_kapsam,

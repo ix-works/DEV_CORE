@@ -111,22 +111,87 @@ KAYNAK = {
     "ZCL_TEMIZ": "WRITE 'merhaba'.",
     "ZSD_FG_ORNEK": "  INCLUDE lzsd_fg_orneknek_top.\n  INCLUDE lzsd_fg_orneku01.",
 }
-# `adt_get` DONUS SEKILLERI (2026-08-01 uc-degerli sozlesmeden):
+
+
+def _sinif_meta(*tipler: str) -> str:
+    """Sinif metadata XML'i — CANLI SEKIL (2026-09-13, salt-GET, 2 sinif): her include
+    `<class:include class:includeType="...">`; `main` DAIMA listeli. Kimlik alanlari yok."""
+    ic = "".join(
+        '<class:include class:includeType="%s" abapsource:sourceUri="%s" '
+        'adtcore:type="CLAS/I"/>' % (t, "source/main" if t == "main" else "includes/" + t)
+        for t in tipler)
+    return ('<?xml version="1.0" encoding="utf-8"?><class:abapClass '
+            'xmlns:class="http://www.sap.com/adt/oo/classes" '
+            'xmlns:abapsource="http://www.sap.com/adt/abapsource" '
+            'xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="X">%s'
+            '</class:abapClass>' % ic)
+
+
+# `adt_get` DONUS SEKILLERI (2026-08-01 uc-degerli sozlesmeden). Q282 (2026-09-13):
+# sinif cevaplari artik METADATA da tasir — gercek `adt_get` (atom.py) `metadata` doner;
+# eskiden fixture onu vermiyordu, cunku tuketen yoktu. Yalniz `main` listeli = include YOK.
 CEVAP = {
-    "ZCL_OKUNUR": {"ok": True, "exists": True, "source": KAYNAK["ZCL_OKUNUR"]},
-    "ZCL_TEMIZ": {"ok": True, "exists": True, "source": KAYNAK["ZCL_TEMIZ"]},
+    "ZCL_OKUNUR": {"ok": True, "exists": True, "source": KAYNAK["ZCL_OKUNUR"],
+                   "metadata": _sinif_meta("main")},
+    "ZCL_TEMIZ": {"ok": True, "exists": True, "source": KAYNAK["ZCL_TEMIZ"],
+                  "metadata": _sinif_meta("main")},
     "ZCL_OKUNAMAZ": {"ok": False, "error": "http_500", "message": "Internal Server Error"},
     "ZCL_YOK": {"ok": True, "exists": False},
     "ZIF_BOS": {"ok": True, "exists": True, "source": ""},
     "ZSD_FG_ORNEK": {"ok": True, "exists": True, "source": KAYNAK["ZSD_FG_ORNEK"]},
     "ZFM_ORNEK": {"ok": True, "exists": False},      # func: group-resolution kusuru (§4)
+    # --- Q282: behavior pool sekli — `source/main` desen ICERMEZ, govde CCIMP'te ---
+    "ZCL_HAVUZ": {"ok": True, "exists": True,
+                  "source": "CLASS zcl_havuz DEFINITION PUBLIC ABSTRACT FINAL FOR BEHAVIOR.",
+                  "metadata": _sinif_meta("definitions", "implementations", "macros", "main")},
+    "ZCL_HAVUZ_BOZUK": {"ok": True, "exists": True, "source": "CLASS zcl_havuz_bozuk.",
+                        "metadata": _sinif_meta("definitions", "implementations", "main")},
+    "ZCL_METASIZ": {"ok": True, "exists": True, "source": "CLASS zcl_metasiz.",
+                    "metadata": None},
+    "ZCL_METATANIMSIZ": {"ok": True, "exists": True, "source": "CLASS zcl_metatanimsiz.",
+                         "metadata": '<?xml version="1.0"?><class:abapClass '
+                                     'xmlns:class="http://www.sap.com/adt/oo/classes"/>'},
+    "ZCL_TESTLI": {"ok": True, "exists": True, "source": "CLASS zcl_testli.",
+                   "metadata": _sinif_meta("main", "testclasses")},
 }
+
+# Include ucu -> kaynak (yoksa uc HATA verir). Anahtar = `get_class_include_url` URL'i.
+_INC = "/sap/bc/adt/oo/classes/%s/includes/%s"
+INCLUDE_KAYNAK = {
+    _INC % ("zcl_havuz", "definitions"): "* local definitions",
+    _INC % ("zcl_havuz", "implementations"):
+        "CLASS lhc_kok IMPLEMENTATION.\n  METHOD kontrol.\n    SELECT * FROM mara INTO @ls.\n",
+    _INC % ("zcl_havuz", "macros"): "* macros",
+    _INC % ("zcl_havuz_bozuk", "definitions"): "* local definitions",
+    # zcl_havuz_bozuk/implementations BILEREK YOK -> uc hata verir (okunamadi)
+    _INC % ("zcl_testli", "testclasses"): "CLASS ltc_test FOR TESTING.\n  \" desensiz satir",
+}
+
+
+class _UcHatasi(Exception):
+    def __init__(self, kod: int):
+        super().__init__("HTTP %d" % kod)
+        self.status_code = kod
+
+
+class _SahteAdt:
+    """`sap_adt_lib.SAPADTClient.get_object_source` sahtesi; GET edilen URL'leri KAYDEDER."""
+
+    def __init__(self):
+        self.getler: list[str] = []
+
+    def get_object_source(self, url, return_etag=False, version=None):
+        self.getler.append(url)
+        if url not in INCLUDE_KAYNAK:
+            raise _UcHatasi(500)
+        return INCLUDE_KAYNAK[url]
 
 
 class _SahteIstemci:
     def __init__(self, objeler: list[dict], dogrulanmis: bool = True):
         self._objeler, self._dogrulanmis = objeler, dogrulanmis
         self.debug_enabled = False
+        self.adt_client = SAHTE_ADT
 
     def list_package_contents(self, paket):
         return [dict(o, package_verified=self._dogrulanmis) for o in self._objeler]
@@ -150,8 +215,12 @@ def _sahte_get(name, object_type="class", include_source=True):
     return dict(CEVAP.get(str(name).upper(), {"ok": True, "exists": False}))
 
 
+SAHTE_ADT = _SahteAdt()
+
+
 def _kos(q, objeler=None, dogrulanmis=True, **kw):
     GELEN.clear()
+    SAHTE_ADT.getler.clear()
     eski_client, eski_get = q._get_client, atom.adt_get
     q._get_client = lambda: _SahteIstemci(objeler or [], dogrulanmis)
     atom.adt_get = _sahte_get
@@ -353,6 +422,101 @@ def n5_dal_esitligi(q) -> None:
             f"complete={c.get('coverage_complete')}")
 
 
+# =============================================================================
+# UCUNCU TUR — 2026-09-13 (Q282): SINIF ALT-INCLUDE'LARI (CCIMP) TARANMIYORDU
+# =============================================================================
+def k8_sinif_include(q) -> None:
+    """⭐ AYIRT EDICI — BILINEN-BOZUK vektor (canli vaka 2026-09-11 sekli).
+
+    Fix ONCESI: behavior pool'un `source/main`inde desen YOK, govde CCIMP'te; arac yalniz
+    ana kaynagi okudugu icin `match_count: 0` + `coverage_complete: true` (sahte negatif).
+    """
+    r = _kos(q, objects="ZCL_HAVUZ:CLAS")
+    m = r.get("matches") or []
+    kontrol("K8 ⭐ CCIMP'teki desen BULUNUYOR (`include: implementations`, include-ici satir 3) "
+            "[fix oncesi match_count=0]",
+            r.get("match_count") == 1 and m and m[0].get("include") == "implementations"
+            and m[0].get("line") == 3,
+            f"match={r.get('match_count')} matches={m}")
+    kontrol("K8b listelenen UC include da okundu + tam kapsam DURUSTCE true",
+            r.get("scanned_class_include_count") == 3 and r.get("coverage_complete") is True
+            and r.get("partial_count") == 0,
+            f"inc={r.get('scanned_class_include_count')} complete={r.get('coverage_complete')} "
+            f"partial={r.get('partial_objects')}")
+    bekl = {_INC % ("zcl_havuz", t) for t in ("definitions", "implementations", "macros")}
+    kontrol("K8c okunan uclar TAM OLARAK metadata listesi (listelenmeyen `testclasses` "
+            "YOKLANMADI, tahminle uc denenmedi)",
+            set(SAHTE_ADT.getler) == bekl and len(SAHTE_ADT.getler) == 3,
+            f"getler={SAHTE_ADT.getler}")
+
+
+def k9_include_taranamadi(q) -> None:
+    """⭐ "TARANMADI" dalinin UC kapisi — hicbiri `coverage_complete: true` VERMEMELI."""
+    r = _kos(q, objects="ZCL_HAVUZ_BOZUK:CLAS")
+    kismi = {k["object"]: (k["reason"], k.get("detail", "")) for k in r.get("partial_objects", [])}
+    kontrol("K9 ⭐ listelenen include OKUNAMADI -> `class_includes_not_scanned` + hangi include "
+            "(detail) + uyari [fix oncesi coverage_complete=true]",
+            kismi.get("ZCL_HAVUZ_BOZUK", ("",))[0] == "class_includes_not_scanned"
+            and "implementations" in kismi["ZCL_HAVUZ_BOZUK"][1]
+            and r.get("coverage_complete") is False and bool(r.get("coverage_warning")),
+            f"kismi={kismi} complete={r.get('coverage_complete')}")
+    kontrol("K9a okunabilen komsu include (definitions) YINE tarandi (kismi != hic)",
+            r.get("scanned_class_include_count") == 1,
+            f"inc={r.get('scanned_class_include_count')}")
+    r = _kos(q, objects="ZCL_METASIZ:CLAS")
+    kontrol("K9b ⭐ metadata YOK -> 'include yok' SAYILMAZ: `class_includes_not_scanned`",
+            [k["reason"] for k in r.get("partial_objects", [])] == ["class_includes_not_scanned"]
+            and r.get("coverage_complete") is False and not SAHTE_ADT.getler,
+            f"partial={r.get('partial_objects')} getler={SAHTE_ADT.getler}")
+    r = _kos(q, objects="ZCL_METATANIMSIZ:CLAS")
+    kontrol("K9c metadata SEKLI TANINMADI (`main` listesi yok) -> `class_includes_not_scanned`",
+            [k["reason"] for k in r.get("partial_objects", [])] == ["class_includes_not_scanned"]
+            and r.get("coverage_complete") is False,
+            f"partial={r.get('partial_objects')}")
+
+
+def k10_paket_dali_include(q) -> None:
+    """3. BAGLAM (gorev-DISI giris dali): `package=` dali ayni include muhasebesini yapar."""
+    objeler = [{"name": "ZCL_HAVUZ", "type": "CLAS/OC"},
+               {"name": "ZCL_HAVUZ_BOZUK", "type": "CLAS/OC"},
+               {"name": "ZCL_TEMIZ", "type": "CLAS/OC"}]
+    r = _kos(q, objeler, package="ZORNEK_PKG")
+    kismi = {k["object"]: k["reason"] for k in r.get("partial_objects", [])}
+    kontrol("K10 ⭐ 3.BAGLAM `package=` dali: CCIMP eslesmesi bulunur + okunamayan include "
+            "`partial_objects`e duser [fix oncesi ikisi de sessiz]",
+            [(x["object"], x.get("include")) for x in r.get("matches", [])]
+            == [("ZCL_HAVUZ", "implementations")]
+            and kismi == {"ZCL_HAVUZ_BOZUK": "class_includes_not_scanned"}
+            and r.get("scanned_objects") == 3,
+            f"matches={r.get('matches')} kismi={kismi} scanned={r.get('scanned_objects')}")
+
+
+def k11_testclasses(q) -> None:
+    """Metadata `testclasses` listeliyorsa O da okunur (CCAU); listelemediklerine GET yok."""
+    r = _kos(q, objects="ZCL_TESTLI:CLAS")
+    kontrol("K11 listelenen `testclasses` okundu, listelenmeyen `implementations` YOKLANMADI",
+            SAHTE_ADT.getler == [_INC % ("zcl_testli", "testclasses")]
+            and r.get("coverage_complete") is True and r.get("match_count") == 0,
+            f"getler={SAHTE_ADT.getler} complete={r.get('coverage_complete')}")
+
+
+def n6_includesuz_sinif(q) -> None:
+    """FP capasi (eski kodda da GECER): include'suz sinifta EK GET YOK, uyari YOK."""
+    r = _kos(q, objects="ZCL_TEMIZ:CLAS")
+    kontrol("N6 FP capasi: yalniz `main` listeli sinif -> 0 ek GET, `coverage_complete: true`, "
+            "uyari yok (alarm yorgunlugu + maliyet capasi)",
+            not SAHTE_ADT.getler and r.get("coverage_complete") is True
+            and "coverage_warning" not in r
+            and r.get("scanned_class_include_count", 0) == 0,
+            f"getler={SAHTE_ADT.getler} complete={r.get('coverage_complete')}")
+    r = _kos(q, objects="ZSD_FG_ORNEK:FUGR")
+    kontrol("N6b FP capasi: sinif-DISI tip (FUGR) include mantigina GIRMEZ (0 GET, yalniz "
+            "fugr_skeleton_only)",
+            not SAHTE_ADT.getler
+            and [k["reason"] for k in r.get("partial_objects", [])] == ["fugr_skeleton_only"],
+            f"getler={SAHTE_ADT.getler} partial={r.get('partial_objects')}")
+
+
 def korpus(modul_yolu: Path, ad: str) -> list[tuple[str, bool, str]]:
     global SONUC
     SONUC = []
@@ -367,7 +531,9 @@ def korpus(modul_yolu: Path, ad: str) -> list[tuple[str, bool, str]]:
     for bolum in (k1_bes_kapi, k2_pozitif, k3_objects_dali, k4_fugr_kismi,
                   k5_max_objects, n1_scope_ekseni,
                   k6_objects_fugr, k7_yazim_varyanti, n4_bilinmeyen_tip,
-                  n5_dal_esitligi):
+                  n5_dal_esitligi,
+                  k8_sinif_include, k9_include_taranamadi, k10_paket_dali_include,
+                  k11_testclasses, n6_includesuz_sinif):
         try:
             bolum(q)
         except BaseException as exc:                           # noqa: BLE001
@@ -420,6 +586,35 @@ MUTASYONLAR = [
      lambda s: s.replace(
          "    return _GREP_TYPE_MAP.get(ham.upper(), ham.lower())\n",
          "    return _GREP_TYPE_MAP.get(ham, ham.lower())\n")),
+    # --- 2026-09-13 (Q282): sinif alt-include'lari -----------------------------------
+    ("M8 ⭐AYIRT EDICI kusurun BIREBIR hali: sinif include'lari HIC okunmasin",
+     lambda s: s.replace(
+         '        if at == "class":\n'
+         '            # Q282: sınıfın alt-include\'ları (CCIMP/CCDEF/CCMAC/CCAU) ayrı uçlardadır.\n',
+         '        if False and at == "class":\n'
+         '            # Q282: sınıfın alt-include\'ları (CCIMP/CCDEF/CCMAC/CCAU) ayrı uçlardadır.\n')),
+    ("M9 ⭐SINIR yarim-fix: okunamayan include SESSIZ kalsin (partial'a dusmesin)",
+     lambda s: s.replace(
+         "            if inc_eksik:\n",
+         "            if False and inc_eksik:\n")),
+    ("M10 ⭐SINIR metadata YOK = 'include yok' say (bilinmiyor != yok ihlali)",
+     lambda s: s.replace(
+         "    if not isinstance(metadata, str) or not metadata.strip():\n        return None\n",
+         "    if not isinstance(metadata, str) or not metadata.strip():\n        return []\n")),
+    ("M11 ⭐SINIR sekil capasi (`main`) dussun: taninmayan metadata 'include yok' olsun",
+     lambda s: s.replace(
+         '    if "main" not in tipler:\n        return None\n',
+         '    if False:\n        return None\n')),
+    ("M12 ⭐SINIR tahminle yoklama: metadata listesi yerine TUM segmentleri dene",
+     lambda s: s.replace(
+         "    tipler = _sinif_include_listesi(metadata)\n",
+         "    tipler = _sinif_include_listesi(metadata)\n"
+         "    if tipler is not None:\n"
+         "        tipler = [\"definitions\", \"implementations\", \"macros\", \"testclasses\"]\n")),
+    ("M13 ⭐SINIR include eslesmesi ETIKETSIZ (satir no hangi kaynaga ait belirsiz)",
+     lambda s: s.replace(
+         "                    if inc:\n                        esl[\"include\"] = inc\n",
+         "")),
 ]
 
 
