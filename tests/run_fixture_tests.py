@@ -130,6 +130,11 @@ OZEL_TESTLER = [
      "push SAP'deki kaynagi DEGISTIRIR) + baseline KAYNAK/ZAMAN/KAPSAM tasir; belirsiz ya "
      "da baska-binding baseline KIRMIZI iddia ETMEZ (ucuncu deger + `content_probe`). "
      "KONTROL GRUBU omurga: gercek uyusmazlik HALA blocker (V4a/V4b/V5f)"),
+    ("yazma_hukmu_durustlugu",
+     "Q278+Q273: MCP yazma araclarinin hukmu SAP'nin hukmunden ayrismaz — publish basarisi "
+     "HTTP kodundan degil govdedeki SEVERITY'den (ERROR->ok:false, hukumsuz->ok:false+None); "
+     "post_check WARNING/olculemeyen kapi push `ok`unu DUSURMEZ ama gorunur kalir. KONTROL "
+     "omurga: SEVERITY=OK hala ok:true (P2) · BLOCKER/taninmayan verdict hala ok:false (R3/R4)"),
     ("d7_drift_imzasi",
      "Q212: AYNI olguyu (settings.json/hook_shim template-drift'i) olcen IKI kapi IKI "
      "AYRI tanim kullaniyordu -- `session_start` DAVRANISSAL imza, `ix_doctor` HAM sha "
@@ -937,7 +942,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:adtget_yokluk_kaniti", "O:ddic_okuma_yolu", "O:dogrulama_kosamadi",
       "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline", "O:mcp_sahte_sonuc_uclusu",
       "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu",
-      "O:doctor_baglanti_kaniti", "O:aktivasyon_baseline_tazeligi"),
+      "O:doctor_baglanti_kaniti", "O:aktivasyon_baseline_tazeligi",
+      "O:yazma_hukmu_durustlugu"),
      "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline) + "
      "`adt_classrun`/`adt_post_shell` guard SINIF çapası (AST) + `adt_get` dönüş ŞEKLİ "
      "grep kapsam-muhasebesinin GİRDİSİdir (ok/exists/source → skipped sebebi) + "

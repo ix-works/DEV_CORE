@@ -370,7 +370,12 @@ class _R4Session:
 
     def post(self, url, **kw):
         class _C:
-            status_code, text = 200, "<ok/>"
+            # Q278 (2026-09-13): publish hukmu artik GOVDEDEKI SEVERITY'den kurulur. Eski
+            # `"<ok/>"` govdesi HUKUM TASIMIYORDU ve yalniz HTTP-200'e bakan kusurlu sozlesme
+            # altinda "basari" sayiliyordu; bu satirin amaci (CSRF alindi -> calisan yol)
+            # taninan basari govdesiyle korunur. Govde hukmunun kendisi:
+            # tests/fixtures/yazma_hukmu_durustlugu (P1-P7).
+            status_code, text = 200, "<DATA><SEVERITY>OK</SEVERITY></DATA>"
         return _C()
 
 

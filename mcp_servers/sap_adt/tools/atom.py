@@ -312,6 +312,77 @@ def _exists_after_delete(client, name: str, object_type: str):
         return None, f"Silme sonrası varlık readback yapılamadı ({type(exc).__name__}: {exc})."
 
 
+# ── Q273 (2026-09-13) — POST-CHECK `ok` ETKİSİ: yalnız BLOCKER düşürür ─────────────────
+# ÖLÇÜLEN KUSUR: başarılı bir push'ta (`success/source_uploaded/activated` hepsi true)
+# `post_check`'teki bir WARNING kapısı ÖLÇÜM ÜRETEMEYİNCE (`measured=false` → run_review
+# SKIP → verdict WARNING) `ReviewerResult.passed` False oluyor ve eski kod
+# `if not post.passed: resp["ok"] = False` ile TÜM yanıtı başarısız gösteriyordu. Bedel:
+# ajan bir tur yanlış teşhise harcadı; daha kötüsü `ok:false`'ı push hatası sanıp re-push.
+# KARAR (ADR 0006 semantiği ile hizalı: WARNING = "yazabilir ama raporda belirt"):
+#   • `resp.ok` YALNIZ verdict BLOCKER (ya da TANINMAYAN bir verdict, ya da blocker_count>0)
+#     iken düşer — fail-closed kenarı korunur, gevşetme tam olarak WARNING'le sınırlıdır.
+#   • WARNING SESSİZCE YUTULMAZ: ölçülemeyen kapılar `post_check.unmeasured`, ölçülmüş
+#     uyarılar `post_check.warnings` alanına ve üst düzey `post_check_notice`e yazılır.
+#   • `post_check.ok` iç alanı ESKİ anlamını korur (= kapı TEMİZ mi, `passed`); push'un
+#     `ok`'u üzerindeki etkisi ayrı alanda: `post_check.ok_etkisi` ("yok" | "dusurdu").
+# ⛔ "Koşmadı ≠ temiz" kuralı DEĞİŞMEDİ (run_review SKIP'i yine WARNING sayar) — değişen
+#   tek şey `ok`'un anlamı: "push başarısız" ile "post-check ölçemedi" artık karışmaz.
+_POST_CHECK_OK_DUSURMEYEN = ("PASS", "SKIP", "WARNING")
+
+
+def _post_check_ozeti(post) -> tuple[dict, bool]:
+    """Post-check sonucunu yanıt alanına çevir + push `ok`'unu düşürmeli mi söyle (Q273).
+
+    Returns: (post_check_dict, ok_dusur)
+    """
+    verdict = str(getattr(post, "verdict", "") or "")
+    blocker_count = int(getattr(post, "blocker_count", 0) or 0)
+    warning_count = int(getattr(post, "warning_count", 0) or 0)
+    dusur = verdict not in _POST_CHECK_OK_DUSURMEYEN or blocker_count > 0
+    ozet: dict = {
+        "ok": verdict in ("PASS", "SKIP") and blocker_count == 0,
+        "verdict": verdict,
+        "blocker_count": blocker_count,
+        "warning_count": warning_count,
+        "ok_etkisi": "dusurdu" if dusur else "yok",
+    }
+    skip_reason = getattr(post, "skip_reason", "") or ""
+    if skip_reason:
+        ozet["skip_reason"] = skip_reason
+
+    unmeasured, warnings = [], []
+    for r in (getattr(post, "results", None) or []):
+        if not isinstance(r, dict):
+            continue
+        kayit = {"gate": r.get("validator"), "severity": r.get("severity")}
+        if r.get("status") == "SKIP":
+            kayit["reason"] = str(r.get("message") or "")[:240]
+            unmeasured.append(kayit)
+        elif r.get("status") == "FAIL" and r.get("severity") != "BLOCKER":
+            warnings.append(kayit)
+    if verdict == "WARNING" and not unmeasured and not warnings and skip_reason:
+        # reviewer_timeout gibi: zincir sonuç ÜRETMEDİ ama WARNING döndü ⇒ ölçülemedi.
+        unmeasured.append({"gate": "reviewer", "severity": "WARNING",
+                           "reason": skip_reason[:240]})
+    if unmeasured:
+        ozet["unmeasured"] = unmeasured
+    if warnings:
+        ozet["warnings"] = warnings
+    return ozet, dusur
+
+
+def _post_check_notice(ozet: dict) -> str:
+    """WARNING'in görünür izi — `ok` düşmediğinde de yanıtın ÜST düzeyinde durur."""
+    parcalar = []
+    for k in ozet.get("unmeasured") or []:
+        parcalar.append("ÖLÇÜLEMEDİ %s (%s)" % (k.get("gate"), (k.get("reason") or "-")[:120]))
+    for k in ozet.get("warnings") or []:
+        parcalar.append("UYARI %s" % k.get("gate"))
+    return ("POST-CHECK %s — push BAŞARILI, `ok` DÜŞÜRÜLMEDİ (yalnız BLOCKER düşürür, Q273). "
+            "Bu 'post-check temiz' DEĞİLDİR: %s. Kritik objede elle teyit et."
+            % (ozet.get("verdict"), "; ".join(parcalar) or "ayrıntı yok"))
+
+
 def _get_client():
     global _client, _sap_client_sig0, _sap_client_mtime_seen
     if _client is None:
@@ -1247,31 +1318,24 @@ def adt_push_source(
         # Sprint 6 T10 — post-push consistency check.
         # Struct/table push'larda placeholder kalma veya version=inactive durumlarını
         # yakalamak için reviewer'ı tekrar (post-mode) çağır.
+        # ⛔ Q273: `resp.ok` yalnız BLOCKER (ya da tanınmayan verdict) ile düşer; WARNING
+        # görünür kalır (`post_check.unmeasured`/`warnings` + `post_check_notice`).
         if ok and not skip_reviewer:
             obj_lower = (object_type or "").lower()
+            post_task = None
             if obj_lower in ("structure", "struct"):
-                post = run_reviewer("struct_post_create", str(tmp_file))
-                resp["post_check"] = {
-                    "ok": post.passed,
-                    "verdict": post.verdict,
-                    "blocker_count": post.blocker_count,
-                    "warning_count": post.warning_count,
-                }
-                if post.skip_reason:
-                    resp["post_check"]["skip_reason"] = post.skip_reason
-                if not post.passed:
-                    resp["ok"] = False
+                post_task = "struct_post_create"
             elif obj_lower in ("tabl", "ddls", "dtel", "doma"):
                 # Generic active-version check via the same orchestrator.
-                post = run_reviewer("sap_active_check", str(tmp_file))
-                resp["post_check"] = {
-                    "ok": post.passed,
-                    "verdict": post.verdict,
-                }
-                if post.skip_reason:
-                    resp["post_check"]["skip_reason"] = post.skip_reason
-                if not post.passed:
+                post_task = "sap_active_check"
+            if post_task:
+                post = run_reviewer(post_task, str(tmp_file))
+                ozet, dusur = _post_check_ozeti(post)
+                resp["post_check"] = ozet
+                if dusur:
                     resp["ok"] = False
+                elif ozet["verdict"] == "WARNING":
+                    resp["post_check_notice"] = _post_check_notice(ozet)
         return resp
     except Exception as exc:
         # Q271 — BELİRSİZLİK SINIRI DAR TUTULDU (ölçüm sonrası daraltıldı, 2026-09-09):
@@ -1622,6 +1686,94 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
         return _err_from_exc(exc)
 
 
+# ── Q278 (2026-09-13) — PUBLISH HÜKMÜ GÖVDEDEN KURULUR, HTTP KODUNDAN DEĞİL ─────────────
+# ÖLÇÜLEN KUSUR: `published = r.status_code in (200, 201, 202)` — var olmayan bir binding'e
+# publish HTTP 200 + gövdede `<SEVERITY>ERROR</SEVERITY>` + *"Service Binding … does not
+# exist."* döndü; araç `ok:true, published:true` dedi (iki ayrı canlı vaka: 2026-08-07 ve
+# 2026-09-10, 5 servis). Başarılı publish'in gövdesi: `<SEVERITY>OK</SEVERITY> … activated
+# locally` (playbook/adt-rap.md §32.6l). Publish, `$metadata` tazeliğinin son kapısıdır ⇒
+# sahte-OK bayat metadata'yı canlıda bırakır.
+# KARAR — üç değerli `published` (fail-closed):
+#   True  → HTTP 2xx VE gövdedeki TÜM SEVERITY değerleri tanınan başarı (`OK`)
+#   False → HTTP 2xx-dışı, ya da herhangi bir SEVERITY tanınan hata (`ERROR`)
+#   None  → gövde hüküm TAŞIMIYOR (SEVERITY yok) ya da tanınmayan değer ⇒ ÖLÇÜLEMEDİ;
+#           `ok` yine False'tur (belirsiz gövde başarı SAYILMAZ), `publish_notice` nedenini söyler.
+# ⚠ Tanınan değer kümeleri YALNIZ ölçülmüş değerleri içerir; yeni bir değer (ör. WARNING)
+#   canlıda görülürse önce ÖLÇ, sonra buraya ekle — tahminle genişletme.
+# ⚠ Zarf (envelope) şekli repoda HAM olarak kayıtlı değil (yalnız `<SEVERITY>`/`<LONG_TEXT>`
+#   parçaları) ⇒ ayrıştırıcı zarftan BAĞIMSIZDIR: etiket yerel adıyla aranır (ad alanı
+#   öneki yok sayılır), XML ayrıştırılamazsa (kırpılmış gövde) aynı arama regex'le yapılır.
+_PUBLISH_SEVERITY_BASARI = frozenset({"OK"})
+_PUBLISH_SEVERITY_HATA = frozenset({"ERROR"})
+_PUBLISH_MESAJ_ETIKETLERI = ("LONG_TEXT", "SHORT_TEXT", "TEXT", "MESSAGE")
+_SEVERITY_RE = re.compile(r"<(?:[\w.-]+:)?SEVERITY\b[^>]*>\s*([^<]*?)\s*</", re.IGNORECASE)
+_MESAJ_RE = re.compile(r"<(?:[\w.-]+:)?(LONG_TEXT|SHORT_TEXT)\b[^>]*>\s*([^<]*?)\s*</",
+                       re.IGNORECASE)
+
+
+def _publish_govdesi_oku(body: str) -> tuple[list, list, str]:
+    """Publish yanıt gövdesinden (SEVERITY değerleri, mesajlar, okuma yolu) çıkar."""
+    severities: list = []
+    mesajlar: list = []
+    metin = body or ""
+    if not metin.strip():
+        return severities, mesajlar, "bos"
+    try:
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(metin)
+        for el in root.iter():
+            yerel = str(el.tag).rsplit("}", 1)[-1].split(":")[-1].upper()
+            deger = (el.text or "").strip()
+            if yerel == "SEVERITY":
+                severities.append(deger.upper())
+            elif yerel in _PUBLISH_MESAJ_ETIKETLERI and deger:
+                mesajlar.append(deger)
+        return severities, mesajlar, "xml"
+    except Exception:  # noqa: BLE001 — kırpılmış/XML-olmayan gövde: regex yolu
+        severities = [m.group(1).strip().upper() for m in _SEVERITY_RE.finditer(metin)]
+        mesajlar = [m.group(2).strip() for m in _MESAJ_RE.finditer(metin) if m.group(2).strip()]
+        return severities, mesajlar, "regex"
+
+
+def _publish_hukmu(status_code, body: str) -> dict:
+    """Q278: publish sonucunu HTTP kodu + GÖVDEDEKİ SAP hükmünden kur.
+
+    Returns: {ok, published (True|False|None), severity (list), sap_message (str|None),
+              publish_probe (str)[, publish_notice (str)]}
+    publish_probe: http_hata · severity_ok · severity_error · severity_yok · severity_taninmadi
+    """
+    severities, mesajlar, yol = _publish_govdesi_oku(body)
+    mesaj = " | ".join(dict.fromkeys(mesajlar)) or None
+    out: dict = {"severity": severities, "sap_message": mesaj, "body_parse": yol}
+    if status_code not in (200, 201, 202):
+        out.update(ok=False, published=False, publish_probe="http_hata")
+        out["publish_notice"] = "PUBLISH BAŞARISIZ — HTTP %s. %s" % (status_code, mesaj or "")
+        return out
+    if any(s in _PUBLISH_SEVERITY_HATA for s in severities):
+        out.update(ok=False, published=False, publish_probe="severity_error")
+        out["publish_notice"] = (
+            "PUBLISH BAŞARISIZ — HTTP %s ama gövdede SEVERITY=ERROR: %s. HTTP kodu başarı "
+            "KANITI DEĞİLDİR. SRVB adını ölç (SRVD adı ≠ SRVB adı olabilir; binding aktif mi?)."
+            % (status_code, mesaj or "mesaj yok"))
+        return out
+    if severities and all(s in _PUBLISH_SEVERITY_BASARI for s in severities):
+        out.update(ok=True, published=True, publish_probe="severity_ok")
+        return out
+    if not severities:
+        out.update(ok=False, published=None, publish_probe="severity_yok")
+        out["publish_notice"] = (
+            "PUBLISH ÖLÇÜLEMEDİ — HTTP %s ama gövde SEVERITY taşımıyor (okuma yolu: %s). "
+            "Bu 'publish edildi' DEĞİLDİR: `GET /sap/opu/odata/sap/<SRVB>/$metadata` ile teyit et."
+            % (status_code, yol))
+        return out
+    out.update(ok=False, published=None, publish_probe="severity_taninmadi")
+    out["publish_notice"] = (
+        "PUBLISH ÖLÇÜLEMEDİ — gövdede TANINMAYAN SEVERITY %s (tanınan: OK/ERROR). Başarı "
+        "SAYILMADI: `$metadata` ile teyit et; değer canlıda doğrulanırsa `_PUBLISH_SEVERITY_*` "
+        "kümesine eklenir. %s" % (severities, mesaj or ""))
+    return out
+
+
 @profil_tool()
 def adt_publish_service(name: str, version: str = "0001") -> dict:
     """(Re)publish an OData V2 service binding (SRVB) — refreshes the OData $metadata.
@@ -1635,8 +1787,13 @@ def adt_publish_service(name: str, version: str = "0001") -> dict:
         name: Service binding (SRVB) adı, ör. ZSD001_UI_BOOKING_O2.
         version: Servis sürümü (default '0001').
 
+    ⛔ Q278: `ok`/`published` HTTP kodundan DEĞİL gövdedeki SAP `SEVERITY`'sinden kurulur.
+    `published` ÜÇ DEĞERLİDİR: True (SEVERITY=OK) · False (HTTP hata ya da SEVERITY=ERROR) ·
+    None (gövde hüküm taşımıyor / tanınmayan değer ⇒ ÖLÇÜLEMEDİ, `ok` yine False).
+
     Returns:
-        {ok, name, status_code, published, body, client_log}
+        {ok, name, status_code, published, severity, sap_message, publish_probe,
+         [publish_notice], body, client_log}
     """
     try:
         require_writable_tier(get_active_tier(), what="service publish")
@@ -1659,15 +1816,22 @@ def adt_publish_service(name: str, version: str = "0001") -> dict:
                          "sap-client": "100", "sap-language": "TR"},
                 data=publish_xml(name).encode("utf-8"), verify=False, timeout=120,
             )
-        published = r.status_code in (200, 201, 202)
-        return {
-            "ok": published,
+        govde = r.text or ""
+        hukum = _publish_hukmu(r.status_code, govde)
+        resp = {
+            "ok": hukum["ok"],
             "name": name,
             "status_code": r.status_code,
-            "published": published,
-            "body": (r.text or "")[:900],
+            "published": hukum["published"],
+            "severity": hukum["severity"],
+            "sap_message": hukum["sap_message"],
+            "publish_probe": hukum["publish_probe"],
+            "body": govde[:900],
             "client_log": out.getvalue().strip(),
         }
+        if hukum.get("publish_notice"):
+            resp["publish_notice"] = hukum["publish_notice"]
+        return resp
     except Exception as exc:
         return _err_from_exc(exc)
 
