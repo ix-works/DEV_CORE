@@ -25,6 +25,13 @@ overlay_kiyas_tabani overlay_materyalize_atomik manifest_secici_onay b0_secim` �
 korpus körleşmiştir) · ④ Windows'ta junction `mklink /J`, POSIX'te symlink — kum temizliğinden ÖNCE bağlar
 sökülür. ⛔ **SİLİNMEZ ÇAPALAR:** V5 (elle düzeltme ezilmez) · V6 (otomatik yol junction'ı kaldırmaz) · V7 (agents
 opt-in) · V18/V18b/V18c/V12d (ÖLÇÜLEMEDİ çökmez) · V19 (bu oturum iddia edilmez) · V22–V25 (GEVŞETME sınırı).
+⑤ **TAM SÜİT (doküman eksenleri sonrası, tek koşum):** `python tests/run_fixture_tests.py` → **TOPLAM 234/234 PASS**
+(core_fiziksel_kopya 43/43 · overlay_oto_tazeleme 33/33) · `run_all_validators` rc=0 · doküman ekseni (B3/B4/C3/ADR notu/D
+şablon `# Compact instructions`): `init_project` üretimi `CLAUDE.md:64`'te bölümü taşıyor, `@core` satırı YOK.
+⚠ **BİLİNEN SINIR (lider ölçümü, kod değişmedi):** junction tespiti `realpath != abspath` büyük/küçük harfe
+duyarlı — küçük sürücü harfli `CLAUDE_PROJECT_DIR` gerçek dizini JUNCTION gösterir (session_start `_on_kosul`
+yanlış EKSİK · `oto_tazele` sessiz atlar · ix_doctor yanlış WARN); `team_setup` `resolve()` ile güvenli;
+`materyalize` `os.rmdir` dolu dizinde OSError → yıkım yok. Q adayı: `normcase` iki tarafa.
 🔴 **CANLI DOĞRULAMA LİDER İŞİ (merge sonrası):** projede `team_setup.py --repair-junctions` → `.claude/rules/00-claude-core.md`
 gerçek dosya; CLAUDE.md'den `@core/CLAUDE.core.md` satırı kalkar; sonraki oturumun log'unda `00-claude-core.md`
 satırı + `sid=` kolonu; açılışta `ÖN KOŞUL: TAMAM`.

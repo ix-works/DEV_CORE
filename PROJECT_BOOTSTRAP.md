@@ -61,7 +61,7 @@ python C:\IX\DEV_CORE\scripts\init_project.py C:\IX\XYZ --name XYZ --repo-mode f
 
 | Üretilen | Kaynak / içerik |
 |---|---|
-| `CLAUDE.md` (ince) | `claude/CLAUDE.project.template.md`'den: `@core/CLAUDE.core.md` import + boş proje bölümü |
+| `CLAUDE.md` (ince) | `claude/CLAUDE.project.template.md`'den: yasaklar damgası + boş proje bölümü + `# Compact instructions` (çekirdek import EDİLMEZ — `.claude/rules/00-claude-core.md` fiziksel kopyası STEP 3'te `team_setup` ile doğar, Q286) |
 | `.claude/settings.json` | `claude/settings.template.json`'dan; hook'lar proje-lokal `scripts/hook_shim.py` üzerinden core'a gider |
 | `scripts/hook_shim.py` | `claude/hook_shim.template.py`'den (runpy; kopuk-junction'da NET onarım mesajı) |
 | `.gitignore` | Sızıntı kilidi HAZIR: `/core/`, `.claude/agents|skills|commands/` + standart ignore'lar. **`conn/` TOPYEKÛN kilitli** (`conn/*` + açık negasyon `*.template` / `README.md` / `.gitkeep`) — tek tek sayım her yeni sır dosyasını sessizce izlenir bırakıyordu (2026-09-02). UI `dist/`+`archive.zip` desenleri `--source-root`'tan gelir |
@@ -132,7 +132,7 @@ olmalı); (e) `seed_memory` → core memory-seed'den projenin memory'sini tohuml
 
 | # | Kanıt | Nasıl |
 |---|---|---|
-| 1 | Loader + hook'lar çalışıyor | Projede oturum aç → **ekran teyidi formatı geliyor** (= `@core` import + session_start junction üzerinden OK) |
+| 1 | Loader + hook'lar çalışıyor | Projede oturum aç → **ekran teyidi formatı geliyor** + `[YUKLEME — session_start]` satırı `ÖN KOŞUL: TAMAM`; ikinci oturumda `ÖNCEKİ OTURUM <sid8>: core=YÜKLENDİ` (çekirdek = `.claude/rules/00-claude-core.md` fiziksel kopyası, Q286) |
 | 2 | MCP kendi sistemine bağlı | `ping` + read-only `adt_get` → PROJENİN SAP sistemi (başka projeninki DEĞİL) |
 | 3 | Validators PASS | `python core/scripts/validators/run_all_validators.py` (core + varsa local) |
 | 4 | Sızıntı kilidi çalışıyor | `git status` → core içeriği görünMÜyor; `git ls-files core/ .claude/agents` → boş *(repo_mode=none: SKIP)* |
@@ -194,6 +194,6 @@ Uzak repoda metodolojiden TEK SATIR görünmez — sadece iskelet + proje içeri
 | Belirti | Çözüm |
 |---|---|
 | Hook "CORE JUNCTION KOPUK" diyor | `python C:\IX\DEV_CORE\scripts\team_setup.py --repair-junctions` |
-| Ekran teyidi gelmiyor | `CLAUDE.md` içindeki `@core/CLAUDE.core.md` import'u + `core` junction'ını kontrol et |
+| Ekran teyidi gelmiyor / `core=YÜKLENMEDİ` | `[YUKLEME — session_start]` satırındaki `ÖN KOŞUL`'a bak → `python C:\IX\DEV_CORE\scripts\team_setup.py --repair-junctions` (`.claude/rules/00-claude-core.md` kopyasını üretir); `CLAUDE.md`'de eski `@core/...` satırı kaldıysa sil (Q286) |
 | MCP yanlış sisteme bağlı | Proje kökündeki `.conn_adt`'yi kontrol et (env `ADT_SAP_*` override eder — D17) |
 | Validators "CORE-modu" diyor (proje-modu beklerken) | `project.yaml` proje kökünde mi + `sap_profile` dolu mu |

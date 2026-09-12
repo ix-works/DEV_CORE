@@ -6,7 +6,7 @@
 ## DoD — Kural değişikliği (core'a kural yazan/değiştiren PR ise)
 - [ ] Kanonik ev TEK (yeni kopya üretmedim; atıf verdim)
 - [ ] Eski kopyalar/atıflar AYNI PR'da güncellendi
-- [ ] Yüklenme kanalı beyanı doğru (her-oturum / on-demand / brifing — L1b tembel-tetik #17204 pasif)
+- [ ] Yüklenme kanalı beyanı doğru (her-oturum / on-demand / brifing — L1b: `paths:`'li kural eşleşen dosya okununca yüklenir, `paths:`'siz her oturum; projede `.claude/rules/` fiziksel kopyadır, Q286)
 - [ ] Nicel iddialara tarih + içerik-çapası kondu
 
 ## DoD — Kaldırma (gate/guard/validator/anahtar kaldıran PR ise)

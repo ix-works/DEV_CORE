@@ -100,14 +100,17 @@ fiziksel içeriği çoklayıp çakışma üretebilir. Yedekleme ihtiyacını git
   tarafında ignore'ludur → proje kökünden yapılan arama metodolojiyi GÖRMEZ. Metodoloji
   araması DAİMA `path=core/...` ile yapılır; **kökten sıfır-sonuç ≠ "core'da yok".**
 
-## 7. İlk oturum: @import onay diyaloğu — Decline'a BASMA (D18)
+## 7. İlk oturum: çekirdek yükleniyor mu — beyana değil SATIRA bak (D18 → Q286)
 
-Proje `CLAUDE.md`'si çekirdeği `@core/CLAUDE.core.md` ile import eder. İlk oturumda
-Claude Code bu import için **onay diyaloğu** çıkarabilir. **Decline KALICIDIR**: diyalog
-bir daha çıkmaz, import sessizce devre dışı kalır → loader/yasaklar/protokol yüklenmez.
-Belirti (kanarya): oturum ilk yanıtı **"Ekran Teyidi" formatıyla başlamıyor**
-(bkz. [`CLAUDE.core.md`](CLAUDE.core.md) §3). Kazara Decline'ladıysan proje güven
-ayarlarını sıfırlayıp import'u yeniden onayla; emin değilsen liderden yardım iste.
+Proje `CLAUDE.md`'si çekirdeği artık **import ETMEZ** (Q286, 2026-09-12). Eski
+`@core/CLAUDE.core.md` import'u `core/` junction'ı ardında kaldığı için harness'ta **dış
+import** sayılıyor, onay bayrağı kapalıyken **sessizce yüklenmiyordu** (2026-08-20'den beri,
+belirti vermeden). Çekirdek bugün `team_setup.py`'nin ürettiği **fiziksel kopya**
+`.claude/rules/00-claude-core.md` olarak yüklenir — onay diyaloğu yoktur.
+Kanarya: `session_start`'ın `[YUKLEME — session_start]` satırı (`ÖN KOŞUL: TAMAM|EKSİK …` +
+`ÖNCEKİ OTURUM <sid8>: core=YÜKLENDİ|YÜKLENMEDİ|ÖLÇÜLEMEDİ`). `EKSİK` ya da `YÜKLENMEDİ`
+görürsen: `python C:\IX\DEV_CORE\scripts\team_setup.py --repair-junctions`; proje
+`CLAUDE.md`'sinde eski `@core/...` satırı kaldıysa sil. Emin değilsen liderden yardım iste.
 
 ## 8. S2 — MİSAFİR MODU: yabancı projeye ilk temas (§11.3-F3)
 

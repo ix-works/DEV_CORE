@@ -16,7 +16,7 @@ applies_to: [all]
 |---|---|---|
 | S1 | **Damgalı KESİN YASAKLAR bloğuna dokunma** (kök CLAUDE.md fiziksel damga + kanonik) | ADR 0021: duplikasyon TASARIM GEREĞİ; naif dedup onunla savaşır. Drift'i `check_kesin_yasaklar` + `sync_yasaklar.py` yönetir |
 | S2 | **Davranış değişmezi skill'e/başka yere İNDİRİLMEZ** — CLAUDE.md/rules'ta kalır | Alt-ajanlar auto-memory'yi ve skill'leri görmez, CLAUDE.md kopyası alır → taşınan değişmez alt-ajanlarda SESSİZCE kaybolur |
-| S3 | **Her-oturum-gerekli kural `paths:`li rules dosyasına taşınmaz** | `paths:` tembel yükleme bozukken (üst harness #17204) fark yok; DÜZELİRSE kural aniden koşullu olur ve eşleşmeyen oturumlarda yüklenmez |
+| S3 | **Her-oturum-gerekli kural `paths:`li rules dosyasına taşınmaz** | `paths:` tembel yükleme ÇALIŞIYOR (ölçüldü 2026-09-12 Q286: gerçek klasör kopyasında `path_glob_match`; eski "#17204 → her oturum" gözlemi junction dönemine aitti) → taşınan kural eşleşmeyen oturumlarda VE compact sonrası (dosya yeniden okunana dek) yüklenmez |
 | S4 | **Silme değil BİRLEŞTİRME** — tekrar bloklarında kopyalar diff'lenir, birleşim korunur | Ölçülmüş vaka: 3 kopyadan biri sapmıştı (fazladan satır); körlemesine silme kural kaybettirir |
 | S5 | **MEMORY.md durum tutmaz** — proje durumu kanonik defterlere (governance) | Durum iki yerde yaşarsa biri bayatlıyor; indeks bütçesi (200 satır/25KB) durum taşımaya harcanmaz |
 

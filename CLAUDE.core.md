@@ -1,10 +1,12 @@
-# CLAUDE.core.md — Çekirdek Loader (DEV_CORE; her projede @import ile yüklenir)
+# CLAUDE.core.md — Çekirdek Loader (DEV_CORE; her projede fiziksel kopya `.claude/rules/00-claude-core.md` olarak yüklenir)
 
-> **Bu dosya metodoloji çekirdeğinin loader'ıdır.** Projeler ince `CLAUDE.md`'lerinden
-> `@core/CLAUDE.core.md` ile yükler (ADR 0020). Proje-özel bilgi (SAP bağlantısı, aktif
-> paketler, yerel kurallar) PROJE `CLAUDE.md`'sindedir — buraya YAZILMAZ.
-> **Konum bilinci:** Bu dosya proje içinden `core/` junction'ı üzerinden okunur;
-> buradaki TÜM göreli linkler CORE köküne göredir (proje kökünden erişim: `core/<yol>`).
+> **Bu dosya metodoloji çekirdeğinin loader'ıdır.** Projeler bunu `@import` ile DEĞİL,
+> `team_setup.py`'nin (`claude_overlay`) ürettiği fiziksel kopya `.claude/rules/00-claude-core.md`
+> üzerinden yükler (Q286, 2026-09-12 — junction ardındaki import dış import sayılıp onaysız
+> yüklenmiyordu). Proje-özel bilgi (SAP bağlantısı, aktif paketler, yerel kurallar) PROJE
+> `CLAUDE.md`'sindedir — buraya YAZILMAZ.
+> **Konum bilinci:** Kopya proje içinde yaşar ama buradaki TÜM göreli linkler CORE köküne
+> göredir (proje kökünden erişim: `core/<yol>`).
 
 ---
 
@@ -68,8 +70,8 @@
 
 | Katman | Konu | Yer | Nasıl yüklenir |
 |---|---|---|---|
-| **L1a** | Her-oturum davranış değişmezleri | **§1.1 (aşağıda)** | her oturum (bu dosya) |
-| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | **her oturum yüklenir** (`paths:` yazılı ama harness tembel-tetiği çalıştırmıyor — #17204; ölçüm 2026-07-31: 37/37 oturum koşulsuz. Harness düzelirse inspector A3 fark eder) |
+| **L1a** | Her-oturum davranış değişmezleri | **§1.1 (aşağıda)** | her oturum (bu dosyanın projedeki fiziksel kopyası `.claude/rules/00-claude-core.md`) |
+| **L1b** | Dosya-türüne bağlı davranış (ADT sırası, reviewer, yerleşim) | [`claude/rules/`](claude/rules/) | projede `.claude/rules/` **gerçek klasör kopyası** (Q286): `paths:`'li kural eşleşen dosya okununca yüklenir (`path_glob_match`, ölçüldü 2026-09-12). Eski "#17204 → her oturum koşulsuz" gözlemi junction dönemine aitti; 2026-08-20→09-12 arası junction nedeniyle hiç yüklenmedi. Yüklenmeyen tembel kuralı inspector A3 BULGU yazar |
 | ~~L1c~~ | ~~AGENTS.md~~ — **SUPERSEDED (D1 2026-08-01)**: içerik §1.1 + rules/ + MAINTENANCE + operating-model'e taşındı | — | — |
 | **L2** | Stabil kurumsal standartlar (naming, coding, UI, doc format) | [`standards/`](standards/) | on-demand |
 | **L3** | Operasyonel pattern (ADT pattern bankası, lessons-learned) | [`playbook/`](playbook/) | on-demand |
@@ -260,7 +262,7 @@ alanları BOŞSA varsayma — kullanıcıyı setup'a yönlendir, tool-yüzeyi ke
 Her yeni oturum başında, SAP işlemi yapmadan ÖNCE:
 
 ```
-1. Proje CLAUDE.md + bu çekirdek yüklendi → katman özetleri + profil akılda
+1. Proje CLAUDE.md + bu çekirdek (.claude/rules/00-claude-core.md) — yüklendi mi: [YUKLEME — session_start] satırı → katman özetleri + profil akılda
 2. python core/scripts/validators/run_all_validators.py --quick  → mevcut state OK mu?
 3. Çalışılan paket için <source_root>/<MODULE>/<PKG>/SESSION_NOTES.md son entry oku
 4. Kullanıcıyla sprint/iş durumu paylaş, açık eski iş varsa onay al
@@ -271,7 +273,7 @@ Her yeni oturum başında, SAP işlemi yapmadan ÖNCE:
 ```
 [Session başladı — <PROJECT_NAME>]
 ⛔ KESİN YASAKLAR aktif (ADR 0005): A/B/C/D (D: master_language=<ML>)
-✓ Core loader yüklendi (junction sağlam) — CLAUDE.core.md (L1a) + claude/rules/ (L1b — her oturum; tembel-tetik #17204 nedeniyle pasif)
+✓ Yükleme: <[YUKLEME — session_start] satırı AYNEN: "ÖN KOŞUL: TAMAM|EKSİK — …  |  ÖNCEKİ OTURUM <sid8> …: core=YÜKLENDİ|YÜKLENMEDİ|ÖLÇÜLEMEDİ"; satır yoksa "YÜKLEME ÖLÇÜLEMEDİ (hook satırı yok)" — "yüklendi" diye KENDİN beyan etme>
 ✓ SAP profili: <sap_profile>/<release> (bloklu yetenekler: <profilden>)
 ✓ run_all_validators.py --quick: <OK | N ihlal>
 ✓ Aktif paket: <PKG_FULL veya "belirsiz, kullanıcıya sor">
@@ -429,7 +431,7 @@ analizi + canlı-test → PR.
 | Konu | Dosya |
 |---|---|
 | Her-oturum davranış değişmezleri | §1.1 (bu dosya) |
-| Dosya-türüne bağlı davranış (L1b — fiilen her oturum, #17204) | [`claude/rules/`](claude/rules/) |
+| Dosya-türüne bağlı davranış (L1b — projede `.claude/rules/` fiziksel kopyası; `paths:`'li olan eşleşen dosya okununca yüklenir) | [`claude/rules/`](claude/rules/) |
 | Git workflow / ADT-infra derin referans | §1.1 + [`MAINTENANCE.md`](MAINTENANCE.md) (AGENTS.md SUPERSEDED) |
 | Naming standardı | [`standards/01-naming.md`](standards/01-naming.md) |
 | Klasik backend (SEGW/FE) | [`standards/02-coding-backend.md`](standards/02-coding-backend.md) |
