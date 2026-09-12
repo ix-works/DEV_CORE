@@ -27,7 +27,8 @@ ANLATILIYORDU, hiçbir yerde İMPLEMENT EDİLMİYORDU:
    *"kodumuz doğru SIRAYI kuruyor ve iskeleti yakalıyor mu"*dur — SAP'nin gerçekten bu
    statüleri döndürdüğü DEĞİL. Statüler `playbook §24.8`'in CANLI ölçümünden alınmıştır
    (2026-07-29). `testclasses` dışındaki segment adları (implementations/definitions/
-   macros) bu evde CANLI ÖLÇÜLMEDİ — V10 bunun beyan edildiğini denetler.
+   macros) 2026-09-13'e kadar bu evde CANLI ÖLÇÜLMEMİŞTİ; o tarihte salt-GET ile ölçüldü
+   (Q283) — V11 bayrakların ölçüm kaydıyla birebir olduğunu denetler.
 
 Koşum   : python tests/fixtures/class_include_push/run.py            → 14/14
 MUTASYON: python tests/fixtures/class_include_push/run.py --mutasyon  → yetenek YOK (0 vektör
@@ -348,15 +349,20 @@ kontrol("V10 varlık ÇÖZÜLEMEDİ (HTTP 500) → hata; körlemesine POST/PUT A
         and ot.iz == ["GET"],
         f"sonuç={sonuc} iz={ot.iz} değer={str(deger)[:180]!r}")
 
-# ── V11 DÜRÜSTLÜK ÇAPASI: hangi segment adı CANLI ÖLÇÜLDÜ, beyan ediliyor mu ─
+# ── V11 DÜRÜSTLÜK ÇAPASI: 'olculdu' bayrakları CANLI ÖLÇÜM KAYDIYLA birebir mi ─
+#   2026-08-10: yalnız testclasses ölçülüydü. 2026-09-13 (Q283): implementations ·
+#   definitions · macros salt-GET ile ölçüldü (kontrol grubu: metadata'da listelenmeyen
+#   segment 404, uydurma segment 400). Beklenen küme BURADA elle pinlidir: ölçümsüz bir
+#   segment True yapılırsa ya da ölçülmüş bir bayrak geri düşerse V11 kırmızı olur.
+_BEKLENEN_OLCULU = {"testclasses", "implementations", "definitions", "macros"}
 try:
     _olculen = {k for k, v in OT.CLASS_INCLUDE_TYPES.items() if v.get("olculdu")}
-    _v11 = _olculen == {"testclasses"}
-    _d11 = f"ölçülü={sorted(_olculen)} (yalnız testclasses canlı doğrulandı)"
+    _v11 = _olculen == _BEKLENEN_OLCULU
+    _d11 = f"ölçülü={sorted(_olculen)} beklenen={sorted(_BEKLENEN_OLCULU)}"
 except AttributeError as exc:
     _v11, _d11 = False, f"AttributeError: {exc}"
-kontrol("V11 DÜRÜSTLÜK: yalnız 'testclasses' ÖLÇÜLDÜ diye işaretli — diğerleri tahmin "
-        "olarak BEYAN EDİLİYOR",
+kontrol("V11 DÜRÜSTLÜK: 'olculdu' bayrakları ölçüm kaydıyla birebir (4 segment; "
+        "tahmini True yok)",
         _v11, _d11)
 
 # ── V12 3. BAĞLAM (görev-DIŞI): CLI yüzeyi gerçekten kablolandı mı ──────────

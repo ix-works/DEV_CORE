@@ -93,6 +93,13 @@ C:\IX\XYZ\.claude\skills   ══► C:\IX\DEV_CORE\claude\skills
 C:\IX\XYZ\.claude\commands ══► C:\IX\DEV_CORE\claude\commands
 ```
 
+(b′) `.claude\rules` **junction DEĞİLDİR — gerçek dizin kopyasıdır** (zorunlu overlay, Q286):
+`core/claude/rules/*.md` + `CLAUDE.core.md` → `.claude\rules\00-claude-core.md`. Çıktıda
+junction satırlarından **ayrı** bir satır basılır: `[OK] overlay .claude/rules — rules: N/N dosya`.
+**Doğrulama:** bu satır `OK` olmalı ve `.claude\rules\00-claude-core.md` diskte bulunmalı.
+Satır yoksa ya da `FAIL` ise çekirdek oturuma yüklenmez (junction hedefindeki talimat dosyası
+harness'ta dış import sayılır) → STEP 5 madde 1 de geçemez.
+
 (c) core hooksPath (DEV_CORE reposunda pre-commit gate'leri); (d) pip bağımlılıkları +
 Claude Code plugin'leri + npm CLI'ler (makine-düzeyi; NON-FATAL — FE işinden önce tamam
 olmalı); (e) `seed_memory` → core memory-seed'den projenin memory'sini tohumlar
