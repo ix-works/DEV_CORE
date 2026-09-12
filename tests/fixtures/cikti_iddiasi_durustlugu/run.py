@@ -20,6 +20,8 @@ B) `sap_sync_pull.py --type class`
    "artik duzenleyebilirsin" der ⇒ BAYAT bir `.ccimp.abap` taze sanilip duzenlenir.
    ⚠ Cekme yolu bu turda BILEREK kurulmadi: `object_types.CLASS_INCLUDE_TYPES`
    segment adlarinin 4'unden 3'u `'olculdu': False` (bu evde canli dogrulanmamis).
+   (Bu cumle 2026-08-20 durumudur. 2026-09-13'te uc segment de salt-GET ile olculdu
+   ve bayraklar True oldu — Q283. Cekme yolu HALA kurulmadi; B vektorleri etkilenmez.)
    Dogrulanmamis uctan okuyup repo dosyasinin ustune yazmak, kapatmaya calistigimiz
    sinifi URETMEK olurdu. Bugun yapilan: boslugu GORUNUR kilmak.
 

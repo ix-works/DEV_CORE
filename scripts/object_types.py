@@ -244,10 +244,17 @@ def normalize_object_type(object_type):
 #
 # 'olculdu' alani DURUSTLUK ICINDIR — hangi segment adinin bu evde CANLI dogrulandigi:
 #   testclasses    : ÖLÇÜLDÜ (playbook/adt-classes.md 24.8; 2026-07-29 201/500/56-bayt
-#                    olcumu + 2026-08-10'da ZCL_SD015_STOCK_GUARD.ccau canliya girdi)
-#   implementations: repo-ici referans var (sap_adt_lib.py, metot-seviyesi include URL'i)
-#   definitions/macros: ADT konvansiyonu — BU EVDE CANLI OLCULMEDI. Kullanan ilk kisi
-#                    dogrular ve bu alani gunceller (tahmini "olculdu" yazma).
+#                    olcumu + 2026-08-10'da bir Z sinifinin .ccau include'u canliya girdi)
+#   implementations: ÖLÇÜLDÜ (Q283) — 2026-09-11 YAZMA yolu (PUT 82411 bayt + readback ETag +
+#                    ATC bulgu konumu `includes/implementations`) ve 2026-09-13 salt-GET
+#                    HTTP 200 (iki Z sinifi: 1914 / 2006 bayt, ETag var)
+#   definitions    : ÖLÇÜLDÜ (Q283) — 2026-09-13 salt-GET HTTP 200, 165 bayt (iki Z sinifi, ETag var)
+#   macros         : ÖLÇÜLDÜ (Q283) — 2026-09-13 salt-GET HTTP 200, 106 bayt (iki Z sinifi, ETag var)
+#   ⚠ definitions/macros icin olculen SEGMENT ADIDIR (uc cozuluyor + icerik donuyor);
+#     bu iki segmentte YAZMA (PUT) yolu bu evde OLCULMEDI.
+#   KONTROL GRUBU (ayni tur, ayni siniflar): sinif metadata'sinin `includeType` listesinde
+#     OLMAYAN `testclasses` -> HTTP 404 · uydurma segment adi -> HTTP 400 (404 DEGIL) ⇒ 200
+#     her segmente donmuyor. Yeni segment eklersen ayni yontemle olc (tahmini "olculdu" yazma).
 CLASS_INCLUDE_TYPES = {
     'testclasses': {
         'segment': 'testclasses',
@@ -261,21 +268,21 @@ CLASS_INCLUDE_TYPES = {
         'abap_include': 'CCIMP',
         'file_extension': '.ccimp.abap',
         'description': 'Class local implementations include',
-        'olculdu': False,
+        'olculdu': True,     # 2026-09-11 PUT 82411 B + 2026-09-13 GET 200 (Q283)
     },
     'definitions': {
         'segment': 'definitions',
         'abap_include': 'CCDEF',
         'file_extension': '.ccdef.abap',
         'description': 'Class local definitions include',
-        'olculdu': False,
+        'olculdu': True,     # 2026-09-13 GET 200, 165 B (Q283; yazma yolu olculmedi)
     },
     'macros': {
         'segment': 'macros',
         'abap_include': 'CCMAC',
         'file_extension': '.ccmac.abap',
         'description': 'Class macros include',
-        'olculdu': False,
+        'olculdu': True,     # 2026-09-13 GET 200, 106 B (Q283; yazma yolu olculmedi)
     },
 }
 

@@ -56,5 +56,5 @@ applies_to: [s4_private]
 > **TİP:** Her madde **HATA** (kod yanlış) veya **EKSİK** (kod çalışıyor ama must-do/UX standardı karşılanmamış) tipindedir → Bug_Expert raporda `[HATA]`/`[EKSİK]` etiketler, ikisi de **zorunlu** (pass geçilmez). Çoğu FE-01..09 + FE-20/22/25/26/27/28/29/31/33/34 = HATA (FE-06/FE-33 = view/diyalog render-crash; FE-34 = geçersiz-giriş save-guard); FE-13/14/15/18/19/21/23 = EKSİK (UX/completeness/diagnosability). Checklist-DIŞI fikir = `[ÖNERİ]` (bağlayıcı değil).
 > **Pre-existing AYRI:** değişimle ilgisiz görülen kritik = ayrı işaretle, bu değişimi bloklama.
 
-| FE-36 | **Rapor sayıları içerik-çapalı mı?** (BE-63'ün FE eşi) — nicel iddialar içerik çapasıyla mı? Çıplak sayı = EKSİK. | MEDIUM | — | denetim 2026-07-31 R6 |
-| FE-37 | **0-sonuç iddiaları kontrol-gruplu mu?** (BE-64'ün FE eşi.) | MEDIUM | — | denetim 2026-07-31 R6 |
+| FE-40 | **Rapor sayıları içerik-çapalı mı?** (BE-70'in FE eşi) — nicel iddialar içerik çapasıyla mı? Çıplak sayı = EKSİK. | MEDIUM | — | denetim 2026-07-31 R6 · kimlik 2026-09-13'e kadar **FE-36** idi (yukarıdaki FE-36 ile ÇİFT tanım, Q270) |
+| FE-41 | **0-sonuç iddiaları kontrol-gruplu mu?** (BE-64'ün FE eşi.) | MEDIUM | — | denetim 2026-07-31 R6 · kimlik 2026-09-13'e kadar **FE-37** idi (yukarıdaki FE-37 ile ÇİFT tanım, Q270) |
