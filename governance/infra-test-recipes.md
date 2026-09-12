@@ -866,6 +866,22 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   HÂLÂ basılır (D2) · `--verify-only` → *"canlı == mevcut kaynak"* HÂLÂ basılır (D3).
   İkisi de kalkarsa fix, mesajı düzeltmek yerine SİLMİŞ olur.
 
+## B18d — deploy_ui `--verify-only` kaçışlı satır sonu (Q281) + verify_ui_static_assets taban=dist (Q285)
+- `python tests/run_battery.py ui_dogrulama_satir_sonu_kacis --kardes sessiz_olumsuzlama_2026_08_10 git_sorgu_sessiz_bos`
+  → taban 25/25 + 10 kip DÜŞER. Eski kod: `run.py --taban d6c9539` → 14/25 (derin klon ister; sığ klonda exit 2).
+- **Değişmez (Q281):** fark YALNIZ preload haritasındaki `.js`-DIŞI string modüllerinin kaçışlı `\r\n`'i ise
+  verify kipinde `[OK~]` (ayrı kova, özet satırında ayrı sayım). JS kodu · string gömülü `.js` modülü ·
+  harita sözleşmesi olmayan paketleyici · ters bölü paritesi (`\\r\n` yazısı) · **gerçek deploy kipi** → STALE kalır.
+- **Değişmez (Q285):** eksen ① canlı↔dist (normalize) = FARKLI · eksen ② canlı↔webapp kaynak
+  (`.properties` `\uXXXX` çözülmüş sıralı anahtar/değer, diğerleri normalize) = KAYNAK FARKI. dist yoksa taban webapp.
+- ⛔ SİLİNEMEZ çapalar: **A6** (yalnız gerçek CR → `[OK]`, `[OK~]` DEĞİL — BSP her preload'a CR ekler, ölçüldü 19/19;
+  kalkarsa her app gürültülü kovaya düşer) · **A4/A5/A9** (normalizasyonun global olmadığının tek kanıtı) ·
+  **B3/B6** (kaynak ekseni; kalkarsa webapp'te düzenlenip build edilmemiş KD/i18n sessizce yeşil olur) ·
+  **B4** (enjekte-meta kontrol grubu).
+- Canlı salt-okur tekrar (deploy YOK): `CLAUDE_PROJECT_DIR=<proje> python core/scripts/verify_ui_static_assets.py --all --ui-root <ui> --subdir i18n`
+  → eski 38/38 dosya "FARKLI" veren projede 0 FARKLI beklenir; `--subdir help` sonucu DEĞİŞMEMELİ.
+  `deploy_ui.py --verify-only` build yapar (dist yeniden üretilir) — aynı ui kökünde statik doğrulamayla EŞ ZAMANLI koşma.
+
 ## B18c — transport listesi / kilit sondası / lock sentinel'i (sessiz olumsuzlama)
 - `python tests/fixtures/sessiz_olumsuzlama_2026_08_10/run.py` → 29/29 · MUTASYON
   `--mutasyon` (varsayılan `--ref 990f71b`) → **11/29**. 29/29 verirse test BOŞTUR.
