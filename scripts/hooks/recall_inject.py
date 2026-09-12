@@ -16,7 +16,26 @@ TASARIM (bilinçli sınırlar):
     (yanlış-pozitif gürültüsü, uyarıya bağışıklık yaratır — inspector D7 dersi).
   · LLM YOK; skorlama = ağırlıklı token-kesişimi (builder ile aynı katlama).
 
-Test (P/N): tests/fixtures/recall_inject/ + run_fixture_tests koşucusuna uygun
+OTOMATİK TAZELEME (Q287, 2026-09-12):
+  ⭐ NEDEN: indeksi tazeleyen HİÇBİR mekanizma yoktu (üretecin fixture dışı çağıranı 0,
+  zamanlanmış görev 0) → bir projenin indeksi 3 hafta bayat kaldı, üç projede HİÇ yoktu;
+  hook "indeks yok → exit 0" dalında sessizce kör çalışıyordu.
+  · NE ZAMAN: yalnız MIN_PROMPT kapısını geçen prompt'ta (kısa prompt'ta maliyet SIFIR).
+  · ÖLÇÜT: indeks YOK ya da mtime'ı `build_recall_index.kaynak_mtime()`'dan eski
+    (kaynak listesinin TEK tanımı üreteçtedir; burada kopyası YOK). stat ~1,4 ms.
+  · NASIL: AYNI SÜREÇTE senkron `uret()` (ölçüm: medyan 51 ms, max 87 ms / 300 dosya).
+    Ayrık arka-plan süreci BİLİNÇLİ SEÇİLMEDİ: Windows konsol penceresi / yetim süreç /
+    hook zaman aşımı riskini getirir ve bayat prompt eski indeksle hizmet alırdı.
+  · EŞZAMANLILIK: `.tmp/recall-index.lock` (O_CREAT|O_EXCL). Kilit başkasındaysa tazeleme
+    ATLANIR ve mevcut indeks (yoksa hiçbir şey) kullanılır. `_KILIT_BAYAT_SN`'den eski kilit
+    ölü sayılıp kaldırılır. Kilit alındıktan sonra bayatlık YENİDEN ölçülür (çift kontrol).
+    Üretecin yazımı atomiktir (geçici dosya + os.replace) → okuyucu yarım JSON görmez.
+  · GÖRÜNÜRLÜK: her deneme `.tmp/recall-index.status`'a yazılır (zaman · tetik · sonuç ·
+    sayılar · ms · hata). Hata ayrıca stderr'e (ASCII) düşer. additionalContext'e
+    tazeleme hakkında HİÇBİR ŞEY yazılmaz — "ölçemedim" ile "temiz" status'ta ayrışır.
+
+Test: tests/fixtures/recall_index_ozetsiz/run.py (T* vektörleri; gerçek hook CLI'si + hook_shim
+  eşleniği runpy ortamı) · sentetik payload:
   echo '{"prompt":"..."}' | python scripts/hook_shim.py recall_inject
 """
 from __future__ import annotations
@@ -25,6 +44,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 for _a in (sys.stdout, sys.stderr):
@@ -39,6 +59,7 @@ _STOP = {"ve", "ile", "icin", "bir", "bu", "da", "de", "the", "for", "and",
 ESIK = 5          # min skor (başlık-token'ı 3 puan → tek güçlü eşleşme yetmez, 2+ ister)
 TOP_K = 3
 MIN_PROMPT = 40   # kısa prompt = selamlaşma/komut; recall gürültü olur
+_KILIT_BAYAT_SN = 30   # üretim ~50 ms; 30 sn'lik kilit ancak çökmüş bir üreticiden kalır
 
 
 def _tokenle(s: str) -> set:
@@ -61,6 +82,91 @@ def _parse_fail_notu() -> None:
         pass
 
 
+def _uretec():
+    """Üreteci AÇIK YOLLA yükler: hook_shim `runpy` ile çalıştırır → `sys.path[0]` proje
+    kökü DEĞİLDİR, `import build_recall_index` bulunamaz. `__file__` ise runpy'de de doğrudur."""
+    import importlib.util
+    yol = Path(__file__).resolve().parent.parent / "build_recall_index.py"
+    spec = importlib.util.spec_from_file_location("_ix_build_recall_index", str(yol))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+def _durum_yaz(tmp: Path, veri: dict) -> None:
+    try:
+        veri = {"zaman": time.strftime("%Y-%m-%dT%H:%M:%S"), **veri}
+        (tmp / "recall-index.status").write_text(
+            json.dumps(veri, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _kilit_al(kilit: Path):
+    """O_EXCL kilit; alınamazsa None. ⚠ Windows'ta silinmekte olan dosyada O_EXCL
+    `FileExistsError` DEĞİL `PermissionError` verir → ikisi de `OSError` olarak yakalanır."""
+    for deneme in (0, 1):
+        try:
+            return os.open(str(kilit), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except OSError:
+            if deneme:
+                return None
+            try:
+                yas = time.time() - kilit.stat().st_mtime
+            except OSError:
+                continue            # kilit arada kalktı → bir kez daha dene
+            if yas < _KILIT_BAYAT_SN:
+                return None         # canlı üretim sürüyor → mevcut indeksle devam
+            try:
+                kilit.unlink()      # ölü kilit (çökmüş üretici)
+            except OSError:
+                return None
+    return None
+
+
+def _tazele(proj: Path, idx_p: Path) -> None:
+    """Bayat/yok indeksi senkron tazeler. HİÇBİR koşulda istisna fırlatmaz (fail-open)."""
+    tmp = idx_p.parent
+    tetik = "?"
+    try:
+        B = _uretec()
+        tetik = "YOK"
+        if idx_p.is_file():
+            if idx_p.stat().st_mtime >= B.kaynak_mtime(proj):
+                return              # taze — sık yol, yalnız stat
+            tetik = "BAYAT"
+        tmp.mkdir(parents=True, exist_ok=True)
+        fd = _kilit_al(tmp / "recall-index.lock")
+        if fd is None:
+            return
+        try:
+            if idx_p.is_file() and idx_p.stat().st_mtime >= B.kaynak_mtime(proj):
+                return              # çift kontrol: kilidi beklerken başkası üretti
+            t0 = time.perf_counter()
+            bilgi = B.uret(proj)
+            bilgi.pop("hedef", None)
+            _durum_yaz(tmp, {"tetik": tetik, "sonuc": "OK",
+                             "ms": round((time.perf_counter() - t0) * 1000, 1), **bilgi})
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            try:
+                (tmp / "recall-index.lock").unlink()
+            except OSError:
+                pass
+    except Exception as e:
+        hata = f"{type(e).__name__}: {e}"[:300]
+        _durum_yaz(tmp, {"tetik": tetik, "sonuc": "HATA", "hata": hata})
+        try:
+            sys.stderr.write(
+                "[recall_inject] RECALL-INDEX-TAZELENEMEDI: " + hata.encode("ascii", "replace").decode()
+                + " -> mevcut indeks (varsa) kullanildi; ayrinti .tmp/recall-index.status\n")
+        except Exception:
+            pass
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
@@ -73,6 +179,7 @@ def main() -> int:
 
     proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     idx_p = proj / ".tmp" / "recall-index.json"
+    _tazele(proj, idx_p)
     if not idx_p.is_file():
         return 0
     try:
