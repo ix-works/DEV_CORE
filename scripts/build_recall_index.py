@@ -116,6 +116,25 @@ def _satir_linkleri(satir: str) -> list[tuple[str, str]]:
     return out
 
 
+def indeks_hublari(memory_md: Path) -> list[Path]:
+    """`MEMORY.md` ile aynı dizindeki `_indeks-*.md` hub'ları — indeks KAYNAĞI tanımının tek yeri.
+
+    Dışa açık (Q289): `seed_memory._index_onar` "indekste var" kümesini buradan kurar; tanım
+    kopyalanırsa iki okuyucu yeniden ayrışır (Q287'nin sınıfı). ⛔ Mutasyon çapası: aşağıdaki
+    `hub_lar = sorted(...)` satırı `recall_index_ozetsiz --mutasyon-hub-yok` tarafından aranır."""
+    hub_lar = sorted(p for p in memory_md.parent.glob(_HUB_DESENI) if p.is_file())
+    return hub_lar
+
+
+def metin_linkleri(metin: str) -> set[str]:
+    """Metindeki TÜM memory linklerinin DOSYA ADLARI — iki biçim (`[[slug]]` · `[Başlık](x.md)`),
+    liste-satırı şartı YOK (düzyazı satırı da sayılır). Tanım `_satir_linkleri`dir (Q289).
+
+    ⚠ Bu bir "link var" kümesidir, KAYIT kümesi değil: builder'ın yetim geri-düşüşü (hiçbir
+    indekste geçmeyen dosya) burada YOKTUR — çağıran indekste-var semantiğini buna bağlar."""
+    return {Path(d.strip()).name for s in metin.splitlines() for _b, d in _satir_linkleri(s)}
+
+
 def _kayit(dosya: str, baslik: str, oz: str) -> dict:
     return {"id": f"mem:{dosya}", "kaynak": f"memory/{dosya}",
             "baslik": baslik, "oz": oz[:160],
@@ -155,7 +174,7 @@ def memory_kayitlari(memory_md: Path, sayac: dict | None = None) -> list[dict]:
     # Q287: KAYNAK = MEMORY.md + ayni dizindeki `_indeks-*.md` hub'lari. Uc gecis TUM kaynaklar
     # uzerinde (dosya bazinda degil) kosar => bir satirdaki ozet, BASKA bir kaynaktaki
     # description geri-dususunu her zaman yener; tekillestirmede MEMORY.md onceliklidir.
-    hub_lar = sorted(p for p in memory_md.parent.glob(_HUB_DESENI) if p.is_file())
+    hub_lar = indeks_hublari(memory_md)
     parcalar = [memory_md.read_text(encoding="utf-8", errors="replace")]
     for h in hub_lar:
         try:

@@ -366,6 +366,11 @@ OZEL_TESTLER = [
     ("recall_index_ozetsiz",
      "recall-index: ozetsiz satirlar frontmatter `description`ine duser (90->163) + "
      "satir-atlamali kirlenme kapandi + UYDURMA yasagi (kaynak yoksa kayit yok)"),
+    # 2026-09-12 (Q289): seed_memory "indekste var" icin yalniz MEMORY.md `](x.md)` goruyordu;
+    # hub'a tasinmis 45 satiri her kurulumda MEMORY.md'ye geri ekliyordu.
+    ("seed_memory_hub_indeks",
+     "seed_memory: indekste-var = MEMORY.md + `_indeks-*.md`, iki link bicimi (builder'dan "
+     "PAYLASILIR) + yetim 'var' DEGIL + dry-run yazmaz + idempotent"),
     # 2026-08-22: ADR 0019 uc-kademesi YALNIZ validator'lari sayiyordu; 17 hook'un
     # 0'inda `# ENFORCES:` beyani vardi ve "kablolanmamis hook" hic olculmuyordu.
     # ⛔ ORPHAN sinifi olculmus bir dersin gate'idir (pre_tool_guard PowerShell vakasi:
@@ -793,6 +798,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/build_recall_index.py", ("O:recall_index_ozetsiz",),
      "MEMORY.md ayrıştırma sözleşmesi: özetsiz satır → frontmatter `description` + "
      "satır-atlamalı kirlenme + 'kaynak yoksa UYDURMA yok' değişmezi"),
+    # Q289 (2026-09-12): builder'ın `indeks_hublari`/`metin_linkleri`/`_satir_linkleri`
+    # tanımı seed_memory'nin "indekste var" kümesidir — builder değişince seed korpusu da koşmalı.
+    ("scripts/build_recall_index.py", ("O:seed_memory_hub_indeks",),
+     "paylaşılan indeks tanımının İKİNCİ tüketicisi: seed_memory `_index_onar`"),
+    ("scripts/seed_memory.py", ("O:seed_memory_hub_indeks", "O:proje_slug_tek_kaynak"),
+     "indekste-var = MEMORY.md + hub'lar (iki biçim) · yetim 'var' değil · dry-run yazmaz · "
+     "slug tek-kaynak çağıranı"),
     ("scripts/hooks/recall_inject.py", ("O:recall_index_ozetsiz",), "Q287 otomatik tazeleme: YOK/BAYAT → senkron üretim + kilit + status (T* vektörleri); joker satırı negatif_test_harness+hook_gate_coverage'ı ayrıca ekler"),
     # itg_backstop.py HARITA'da HIC YOKTU (2026-09-09, Q253 turu — `sap_worktype_hint`
     # ile ayni sinif): degisikligi yalniz `scripts/hooks/*.py` jokerine dusuyordu, yani

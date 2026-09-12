@@ -59,6 +59,10 @@ except Exception:
 CORE_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(CORE_ROOT / "scripts"))
 from utils.claude_paths import auto_memory_dizini, proje_slug  # noqa: E402
+# Q289: "indekste var" tanımı (MEMORY.md + `_indeks-*.md` hub'ları, `[[slug]]` + `[x](x.md)`)
+# JIT-recall üretecinden PAYLAŞILIR, kopyalanmaz. utils'e taşınmadı: Q287 korpusunun mutasyon
+# çapaları o satırlardadır ve mutant builder kopyası utils'teki regex'i mutasyona sokamazdı.
+import build_recall_index as _recall  # noqa: E402
 SEED_DIR = CORE_ROOT / "claude" / "memory-seed"
 if not SEED_DIR.exists():
     SEED_DIR = CORE_ROOT / ".claude" / "memory-seed"
@@ -142,8 +146,17 @@ def _index_onar(target: Path, seed_index: Path, seed_adlari: set,
         yeni_satirlar.append(s)
     metin = "\n".join(yeni_satirlar)
 
-    # 2) indekste olmayan seed dosyaları için seed'in kendi satırını ekle
-    var_olan = set(LINK_RE.findall(metin))
+    # 2) indekste olmayan seed dosyaları için seed'in kendi satırını ekle.
+    #    Q289: "indekste var" = (adım-1 sonrası) MEMORY.md + `_indeks-*.md` hub'ları, iki link
+    #    biçimi. Eskiden yalnız MEMORY.md `](x.md)` görülüyordu → hub'a taşınmış 45 satır her
+    #    kurulumda MEMORY.md'ye GERİ ekleniyordu (ölçüldü, canlı kopya --dry-run).
+    #    ⚠ Builder'ın YETİM semantiği (diskte olup indekste olmayan) burada "var" DEĞİLDİR.
+    var_olan = _recall.metin_linkleri(metin)
+    for hub in _recall.indeks_hublari(dst):
+        try:
+            var_olan |= _recall.metin_linkleri(hub.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
     eklenecek = []
     for s in seed_metin.split("\n"):
         m = LINK_RE.search(s)
