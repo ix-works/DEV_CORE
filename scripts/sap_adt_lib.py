@@ -5839,18 +5839,101 @@ define table {name.lower()} {{
                 field='cds_source'
             )
 
-        # Check for required CDS keywords (klasik DEFINE VIEW + RAP view entity + projection desteği)
-        cds_upper = cds_source.upper()
-        # 'select from' (klasik/interface) VEYA 'projection on' (RAP consumption projection)
-        if 'SELECT FROM' not in cds_upper and 'PROJECTION ON' not in cds_upper:
+        # ── Q277 (2026-09-13): ALT-DİZE değil SÖZCÜK DİZİSİ ─────────────────────
+        # ESKİ KUSUR: `'SELECT FROM' in cds_upper` + `'DEFINE VIEW'|'VIEW ENTITY' in ...`.
+        # (a) CDS dilbilgisinde `select` ile `from` arasına `distinct` girer ⇒ geçerli
+        #     `as select distinct from` ASLA eşleşmiyordu (tüketici korpusunda 7 dosya).
+        # (b) `define [root] abstract entity` tanımı gereği SELECT taşımaz (54 dosya).
+        # (c) Arama yorum/string ayırt etmiyordu ⇒ yorumunda "select … from" geçen bozuk
+        #     kaynak 1. kontrolü GEÇİYORDU (korpusta ölçülmüş örnek: bir table function).
+        # Mesaj "kaynağını düzelt" diyordu, oysa kaynak doğruydu ⇒ çalışan CDS'i bozmaya
+        # davet (`distinct`i silmek / abstract entity'ye sahte select eklemek).
+        # KABUL KÜMESİ KORPUS KANITLIDIR (kanıtsız genişletme YOK): view · view entity ·
+        # root view entity (select [distinct] from | projection on) · [root] abstract entity.
+        # `transient view entity` (analitik sorgu) korpusta YOK ama ESKİ kapı onu kabul
+        # ediyordu (`VIEW ENTITY` + `PROJECTION ON` alt-dizeleri) ⇒ KORUNUR; reddetmek
+        # geçerli bir biçimde yeni bir yanlış-red üretirdi (fixture B9 çapası).
+        # BİLİNÇLİ RED (doğru mesajla, "düzelt" demeden): table function (AMDP sınıfı ister,
+        # bu araçla yaratılması ölçülmedi — lider kararı 2026-09-13) · custom entity ve
+        # diğer tanım türleri (korpusta örnek yok).
+
+        def _kod_metni(metin):
+            # Yorumları (`//`, `/* */`) ve string içeriğini ('..', `''` kaçışı) atar;
+            # satır sonları korunur. Anahtar sözcük YALNIZ kodda sayılır.
+            cikti = []
+            i, n = 0, len(metin)
+            while i < n:
+                c = metin[i]
+                if c == "'":
+                    j = i + 1
+                    while j < n:
+                        if metin[j] == "'":
+                            if j + 1 < n and metin[j + 1] == "'":
+                                j += 2
+                                continue
+                            break
+                        j += 1
+                    cikti.append("''")
+                    i = j + 1
+                elif metin.startswith('//', i):
+                    j = metin.find('\n', i)
+                    i = n if j < 0 else j
+                elif metin.startswith('/*', i):
+                    j = metin.find('*/', i + 2)
+                    cikti.append(' ')
+                    i = n if j < 0 else j + 2
+                else:
+                    cikti.append(c)
+                    i += 1
+            return ''.join(cikti)
+
+        kod = _kod_metni(cds_source)
+        bicimler = ("define view <name> / define [root|transient] view entity <name> "
+                    "(as select [distinct] from | as projection on) · "
+                    "define [root] abstract entity <name> { ... }")
+        baslik = re.search(
+            r'\bdefine\s+((?:root\s+|transient\s+)?view\s+entity|view|(?:root\s+)?abstract\s+entity'
+            r'|table\s+function|custom\s+entity)\s+([A-Za-z_/][\w/]*)',
+            kod, re.IGNORECASE)
+        if not baslik:
             raise SAPValidationError(
-                "CDS source must contain 'SELECT FROM' or 'PROJECTION ON' keyword",
+                "CDS source has no recognized definition header in code (comments and "
+                f"string literals are ignored). Recognized forms: {bicimler}. If the "
+                "source is valid CDS of another kind, this tool does not create it - "
+                "do NOT rewrite a valid source to satisfy this check; report it.",
                 field='cds_source'
             )
-        # Klasik 'define view' VEYA RAP 'define [root] view entity'
-        if 'DEFINE VIEW' not in cds_upper and 'VIEW ENTITY' not in cds_upper:
+        tur = ' '.join(baslik.group(1).lower().split())
+        govde = kod[baslik.end():]
+        if tur == 'table function':
             raise SAPValidationError(
-                "CDS source must contain 'DEFINE VIEW' or 'DEFINE [ROOT] VIEW ENTITY' keyword",
+                "CDS table function is not created by this tool (it needs its AMDP "
+                "class; creation via this path is unmeasured). No measured creation "
+                "recipe exists in the playbook (activation gotchas: "
+                "playbook/checklists/bug-checklist-backend.md BE-28). The source is not "
+                "necessarily wrong - do NOT rewrite it; report it.",
+                field='cds_source'
+            )
+        if tur == 'custom entity':
+            raise SAPValidationError(
+                "CDS custom entity is not supported by this tool (no measured example). "
+                "The source is not necessarily wrong - do NOT rewrite it; report it.",
+                field='cds_source'
+            )
+        if tur.endswith('abstract entity'):
+            if not re.match(r'\s*\{', govde):
+                raise SAPValidationError(
+                    f"CDS '{tur}' must be followed by its element list '{{ ... }}' "
+                    "(an abstract entity has no select/projection).",
+                    field='cds_source'
+                )
+            return
+        # view / [root] view entity
+        if not re.search(r'\bas\s+(?:select\s+(?:distinct\s+)?from|projection\s+on)\b',
+                         govde, re.IGNORECASE):
+            raise SAPValidationError(
+                f"CDS '{tur}' has no 'as select [distinct] from' or 'as projection on' "
+                "clause in code (comments and string literals are ignored).",
                 field='cds_source'
             )
 
