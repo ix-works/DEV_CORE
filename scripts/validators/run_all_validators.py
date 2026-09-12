@@ -11,7 +11,8 @@ Kullanım (PROJE kökünden):
   --ozet     : pre-commit kipi. rc=0 veren kapının GÖVDESİ gizlenir, kapı başına tek satır
                (`bulgu-etiketi` + `gizlenen` satır sayısı) Özet bloğunda kalır.
                ⛔ YUTULMAYANLAR (değişmez): rc≠0 veren kapı DAİMA tam detay basar · dosyası
-               olmayan validator `[FAIL]` · rc=0 kapıda bile KAPSAM SIFIR / ÖLÇÜLEMEDİ /
+               olmayan validator `[FAIL]` (Q296: Özet tablosunda da `KOŞTURULAMADI`
+               satırı, iki kipte) · rc=0 kapıda bile KAPSAM SIFIR / ÖLÇÜLEMEDİ /
                DOĞRULANAMADI / KOŞTURULAMADI / measured=false / [SKIP] / [FAIL] satırları
                (stdout VE stderr) aynen basılır · çıkış kodu ve --strict iletimi DEĞİŞMEZ.
                Kipin KENDİ kapsam beyanı her koşumda (sıfır bulguda da) basılır.
@@ -254,6 +255,7 @@ def main() -> int:
     except ValueError:
         iscik = 8
     ozet_bilgi: dict[str, tuple[int, int]] = {}  # label -> (bulgu-etiketi, gizlenen satır)
+    kosturulamadi: dict[str, str] = {}  # label -> script adı (dosyası YOK)
     with ThreadPoolExecutor(max_workers=iscik) as havuz:
         gelecekler = [(label, ad, havuz.submit(_kos, cmd) if cmd else None)
                       for label, ad, cmd in is_listesi]
@@ -262,7 +264,9 @@ def main() -> int:
                 print(f"\n--- {label} --- ({ad})")
             if fut is None:
                 print("[FAIL] validator dosyası YOK")
-                failed.append(label); continue
+                # Q296: Özet tablosuna da girer (KOŞTURULAMADI satırı). Önceden yalnız gövde +
+                # stderr sayacında görünüyordu; tabloyu okuyan eksik kapıyı saymıyordu.
+                failed.append(label); ran.append(label); kosturulamadi[label] = ad; continue
             r = fut.result()
             if args.ozet and r.returncode == 0:
                 # Özet kipi YALNIZ rc=0 kapıya uygulanır; rc≠0 aşağıdaki tam-detay dalına düşer.
@@ -292,6 +296,8 @@ def main() -> int:
     print("\n" + "=" * 60 + "\nÖzet:")
     for label in ran:
         satir = f"  [{'FAIL' if label in failed else 'OK'}]   {label}".replace("[OK]  ", "[OK]")
+        if label in kosturulamadi:
+            satir += f"  · KOŞTURULAMADI: validator dosyası YOK ({kosturulamadi[label]})"
         if label in ozet_bilgi:
             etiket, gizli = ozet_bilgi[label]
             satir += f"  · bulgu-etiketi={etiket} · gizlenen={gizli} satır"

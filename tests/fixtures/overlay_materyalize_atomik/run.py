@@ -35,6 +35,9 @@ Tek mutasyon ikisini birden sınamaz; bu yüzden İKİ mutasyon modu vardır.
 ⚠ ÇAPALARI SİLME: N1-N7 fix'in "eski davranışı aynen üretiyor" kanıtıdır (son durum
 bayt-bayt eski çıktıyla aynı olmalı). D1-D3 olmadan fix "hiç patlamayan ama yalan söyleyen"
 bir üretime dönüşür — `exit 0 ≠ kanıt` sınıfı.
+⚠ K4 (Q295) N8'in "artık junction değil" ölçütünün öz-testidir. Ölçüt `os.readlink`,
+üretimden BAĞIMSIZ tutulur (gerekçe `_junction_mu_yerel` docstring'inde). Kaldırılırsa
+yardımcı sessizce eski yazım-kıyaslı formüle dönebilir.
 
 Koşum:    python tests/fixtures/overlay_materyalize_atomik/run.py
 MUTASYON: python tests/fixtures/overlay_materyalize_atomik/run.py --mutasyon [--ref <SHA>]
@@ -419,12 +422,67 @@ def senaryolar(ov, ts_kaynak: str, tmp: Path) -> None:
     # K3 — KABLOLAMA: team_setup.junctions TIP-BASINA YALITILMIS mi?
     kontrol(*_team_setup_yalitim(ts_kaynak, ov, tmp))
 
+    # K4 — N8'in olcut yardimcisinin oz-testi (Q295): yazim-bagimsiz + pozitif kontrol
+    kontrol(*_k4_yardimci_yazim_bagimsiz(tmp))
+
 
 def _junction_mu_yerel(p: Path) -> bool:
+    """`p` GIRDISININ KENDISI junction/symlink mi? Yolun YAZIMINA bakmaz (Q295).
+
+    ⛔ ESKI FORMUL `realpath(p) != abspath(p)` yazimi kiyasliyordu: farkli harf durumlu
+    yazilan GERCEK dizine sahte True veriyordu (Q288'de uretimde olculdu ve duzeltildi;
+    bu kopya kalmisti). Olcut artik `os.readlink` (uretimdeki `_bag_mi` ile ayni ilke).
+    ⛔ Uretimdeki `ov._junction_mu` BILEREK cagrilmaz: (a) `--mutasyon` kipi modulu taban
+    SHA'dan yukler, o surumun yardimcisi eski formulu tasir; (b) N8 uretimin donusum
+    SONUCUNU olcer. Sonucu uretimin kendi dedektoruyle olcmek, dedektor bozulunca
+    kontrolu de korlestirir. Olcut uretimden BAGIMSIZ kalir; oz-testi K4'tedir.
+    """
     try:
-        return p.is_dir() and os.path.realpath(p) != os.path.abspath(p)
-    except OSError:
+        if not p.is_dir():
+            return False
+        os.readlink(p)
+        return True
+    except (OSError, ValueError):
         return False
+
+
+def _k4_yardimci_yazim_bagimsiz(tmp: Path):
+    """K4 (K) — N8'in olcut yardimcisinin OZ-TESTI (Q295).
+
+    Negatif: ayni gercek dizin farkli harf durumuyla yazilinca da False (eski formul True).
+    Pozitif kontrol: gercek junction/symlink -> True (kanonik ve kucuk harf yazimla).
+    Harf-duyarli dosya sisteminde (POSIX) kucuk harf yazim yoktur -> GORUNUR ATLA.
+    """
+    ad = "K4 (K) N8 olcut yardimcisi yazim-bagimsiz: farkli harfli GERCEK dizin False, gercek bag True"
+    kok = tmp / "k4"
+    gercek = kok / "GercekDizin"
+    hedef = kok / "Hedef"
+    bag = kok / "Bag"
+    gercek.mkdir(parents=True, exist_ok=True)
+    hedef.mkdir(parents=True, exist_ok=True)
+    kucuk = Path(str(gercek).lower())
+    buyuk = Path(str(gercek).upper())
+    if not (kucuk.is_dir() and buyuk.is_dir()):
+        return True, f"{ad} — ATLANDI: harf-duyarli dosya sistemi (kucuk/buyuk yazim yok)"
+    if not _bagla(hedef, bag):
+        return True, f"{ad} — ATLANDI: bu ortamda junction/symlink kurulamadi"
+    try:
+        bag_kucuk = Path(str(bag).lower())
+        olcum = {
+            "gercek_kanonik": _junction_mu_yerel(gercek),
+            "gercek_kucuk": _junction_mu_yerel(kucuk),
+            "gercek_buyuk": _junction_mu_yerel(buyuk),
+            "bag_kanonik": _junction_mu_yerel(bag),
+            "bag_kucuk": _junction_mu_yerel(bag_kucuk),
+        }
+    finally:
+        try:                      # kum temizliginden ONCE bag kaldirilir (hedefe dokunmaz)
+            os.rmdir(bag) if os.name == "nt" else os.unlink(bag)
+        except OSError:
+            pass
+    beklenen = {"gercek_kanonik": False, "gercek_kucuk": False, "gercek_buyuk": False,
+                "bag_kanonik": True, "bag_kucuk": True}
+    return olcum == beklenen, ad, f"olcum={olcum}"
 
 
 def _bagla(hedef: Path, link: Path) -> bool:

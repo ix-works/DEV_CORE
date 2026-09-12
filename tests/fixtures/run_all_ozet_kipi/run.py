@@ -26,6 +26,7 @@ Gercek agaca HICBIR sey yazilmaz.
   S5  EXIT PARITESI: ozet rc == ayrintili rc (temiz · FAIL · --strict · dosya-yok);
       --strict iletimi ozet kipinde de calisir ve FAIL detayi gorunur
   S6  validator DOSYASI YOK -> ozet kipinde `[FAIL] validator dosyası YOK` + rc 1
+      + Ozet TABLOSUNDA `KOŞTURULAMADI` satiri, ozet VE bayraksiz kipte (Q296)
   S7  KAPSAM BEYANI sifir-bulgu aninda da basilir; son satir degismez
   S8a ⭐ 3. BAGLAM — GERCEK GIRIS NOKTASI: pre-commit SABLONU gercek `sh` + gercek git
       deposunda kosar -> rc 0 + "[pre-commit] OK" + ozet beyani, warn govdesi YOK
@@ -43,6 +44,7 @@ MUTASYONLAR (her biri korpusu KIRMIZI yapmali; kaynak BELLEKTE bozulur, kuma yaz
   --mutasyon-devam-yok         gorunur satirin devam satirlari (kok izi) yok -> S4a
   --mutasyon-turkce-yok        Turkce/buyuk-kucuk normalizasyonu yok       -> S4b
   --mutasyon-sablon-bayraksiz  pre-commit sablonu `--ozet` gecmez          -> S8a
+  --mutasyon-tablo-eksik-yok   dosyasi olmayan validator tabloya girmez (Q296 oncesi) -> S6
 
 Olcum kaldiraci (CI'da KULLANILMAZ): `Q203_RAV_KAYNAK` / `Q203_SABLON_KAYNAK` env'leri
 korpusu baska bir kaynak dosyaya (ör. fix oncesi taban) karsi kosturur — "eski kod
@@ -353,14 +355,22 @@ def senaryolar(rav_kaynak: str, sablon_metni: str) -> list[tuple[str, bool, str]
 
         # S6 ─────────────────────────────────────────────────────────────────
         eksik_label = etiket.get(EKSIK_SCRIPT, "?")
-        # ⚠ Dosyasi olmayan validator `ran`e GIRMEZ (taban davranisi, fix oncesi de boyle):
-        #   alt Ozet tablosunda satiri YOKTUR — gorunur izi govdedeki [FAIL] satiri + stderr
-        #   sayacidir. Korpus bu iki izi civiler; tabloda satir ARAMAZ (varsayim olurdu).
-        ekle("S6 validator dosyasi YOK -> ozet kipinde govdede [FAIL] satiri + stderr FAIL sayaci + rc 1",
+        # Q296 (2026-09-13): dosyasi olmayan validator artik Ozet TABLOSUNDA da gorunur.
+        #   Onceden yalniz govdedeki [FAIL] satiri + stderr sayaci vardi, tabloda satir YOKTU
+        #   (olculdu). Tablo satiri kanonik sirada, iki kipte de ayni metinle beklenir.
+        tablo_satiri = (f"  [FAIL]   {eksik_label}  · KOŞTURULAMADI: validator dosyası YOK "
+                        f"({EKSIK_SCRIPT})\n")
+        tablo_eO = eO[1].split("\nÖzet:\n", 1)[-1] if "\nÖzet:\n" in eO[1] else ""
+        tablo_eD = eD[1].split("\nÖzet:\n", 1)[-1] if "\nÖzet:\n" in eD[1] else ""
+        ekle("S6 validator dosyasi YOK -> govdede [FAIL] satiri + Ozet TABLOSUNDA KOSTURULAMADI "
+             "satiri (ozet + bayraksiz) + stderr FAIL sayaci + rc 1",
              eO[0] == 1
              and f"\n--- {eksik_label} --- ({EKSIK_SCRIPT})\n[FAIL] validator dosyası YOK\n" in eO[1]
-             and "\n1 validator FAIL" in eO[2],
-             f"rc={eO[0]} out={eO[1][-200:]!r} err={eO[2][-120:]!r}")
+             and "\n1 validator FAIL" in eO[2]
+             and tablo_satiri in tablo_eO and tablo_satiri in tablo_eD,
+             f"rc={eO[0]} tablo_ozet={tablo_satiri in tablo_eO} "
+             f"tablo_bayraksiz={tablo_satiri in tablo_eD} out={eO[1][-200:]!r} "
+             f"err={eO[2][-120:]!r}")
 
         # S7 ─────────────────────────────────────────────────────────────────
         kosan = sum(1 for _l, s, _e, _sc, p in vlist
@@ -436,6 +446,9 @@ KIPLER = {
         '    s = unicodedata.normalize("NFKD", s)\n'
         '    return "".join(c for c in s if not unicodedata.combining(c)).upper()\n',
         "    return s.upper()\n", "turkce-yok"),
+    "--mutasyon-tablo-eksik-yok": _m_rav(
+        "failed.append(label); ran.append(label); kosturulamadi[label] = ad; continue\n",
+        "failed.append(label); continue\n", "tablo-eksik-yok"),
     "--mutasyon-sablon-bayraksiz": lambda rav, sab: (rav, _yama(
         sab, "run_all_validators.py --quick --ozet; then", "run_all_validators.py --quick; then",
         "sablon-bayraksiz")),
