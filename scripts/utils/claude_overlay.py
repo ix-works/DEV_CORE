@@ -81,9 +81,46 @@ def _hash(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()[:16]
 
 
-def _junction_mu(p: Path) -> bool:
+def _bag_mi(p: Path) -> bool:
+    """`p` GİRDİSİNİN KENDİSİ junction/symlink mi? Yolun yazımına (harf, 8.3) BAKMAZ."""
     try:
-        return p.is_dir() and os.path.realpath(p) != os.path.abspath(p)
+        os.readlink(p)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _kok_alti_zinciri(p: Path, kok) -> list:
+    """`p` + köke kadarki ataları (kök HARİÇ). Kök yoksa/`p` onun altında değilse TÜM atalar."""
+    if kok is not None:
+        try:
+            derinlik = len(p.relative_to(kok).parts)
+        except ValueError:
+            derinlik = 0
+        if derinlik:
+            return [p] + list(p.parents)[:derinlik - 1]
+    return [p] + list(p.parents)          # fail-closed: kök bilinmiyorsa her ata sorulur
+
+
+def _junction_mu(p: Path, kok: "Path | None" = None) -> bool:
+    """`p` bağ mı, YA DA köke kadarki bir atası bağ mı? (Q288, 2026-09-12)
+
+    ⛔ ESKİ FORMÜL `realpath(p) != abspath(p)` yolun YAZIMINI kıyaslıyordu: `realpath` kanonik
+    yazımı döndürür, `abspath` girdiyi aynen korur. Ölçüldü (Py 3.11.9, gerçek dizin): sürücü
+    harfi küçük (`c:`) · tümü küçük harf · 8.3 kısa ad (`<AD>~1`) · proje köküne bağ üzerinden
+    ulaşılması → dördü de SAHTE "junction". Sonuç: `oto_tazele` tazelemeyi sessizce atlıyor,
+    `durum` "hâlâ junction" diyordu. `normcase` iki tarafa eklemek YETMEZ (8.3 ve kök-bağı açık
+    kalır) ⇒ yol dizesi kıyaslanmaz, her girdiye `os.readlink` sorulur (kardeş desen:
+    statusline · behavior_manifest · ix_doctor · team_setup).
+
+    ⛔ ATA KORUMASI KORUNUR: kökün ALTINDAKİ bir ata (ör. `.claude`'un kendisi) bağ ise `True`.
+    Çağıranların ikisi YAZMA/SİLME yoludur (`materyalize`, `oto_tazele`); `.claude/<tip>` gerçek
+    dizin sayılsaydı üretim bağın HEDEFİNE yazar/silerdi (lider kararı, fail-closed). Kökün
+    KENDİSİ ve üstü sorulmaz: projeye bağ üzerinden ulaşmak meşrudur. `kok` verilmezse tüm
+    atalar sorulur (daha çok "bağ" der, asla daha az).
+    """
+    try:
+        return p.is_dir() and any(_bag_mi(a) for a in _kok_alti_zinciri(p, kok))
     except OSError:
         return False
 
@@ -259,7 +296,7 @@ def fark_raporu(proje: Path, core_root: Path, tip: str) -> list:
     **"kopyaya senkrondan sonra dokunuldu mu"**dur.
     """
     h = hedef(proje, tip)
-    if not h.is_dir() or _junction_mu(h):
+    if not h.is_dir() or _junction_mu(h, proje):
         return []
     beklenen = _beklenen(proje, core_root, tip)
     kayitlar = _manifest_dosyalari(h)
@@ -338,7 +375,15 @@ def materyalize(proje: Path, core_root: Path, tip: str, onayli: bool = False) ->
     reddedilen = reddedilen_overridelar(proje, tip)
 
     h = hedef(proje, tip)
-    if _junction_mu(h):
+    # Q291 (2026-09-12, kullanıcı onaylı): kökün altındaki bir ATA (ör. `.claude`) bağ ise DUR.
+    # `_junction_mu` bu hâli yalnız `h` dizin olarak VARKEN görür; ölçüldü: `h` YOKSA is_dir False
+    # → dal atlanıyordu, `h` BOŞSA rmdir başarılıyordu → iki vakada da mkdir + 3 dosya bağın
+    # HEDEFİNE yazıldı. rmdir yalnız "`h`'nin KENDİSİ bağ" vakasına kalır.
+    ata_bag = [a for a in _kok_alti_zinciri(h, proje)[1:] if _bag_mi(a)]
+    if ata_bag:
+        return False, (f"{tip}: ata dizin BAG ({ata_bag[0]}) — uretim bagin HEDEFINE yazardi, "
+                       f"hicbir sey degistirilmedi (Q291)")
+    if _junction_mu(h, proje):
         try:
             # Windows junction = DİZİN girdisi → rmdir. POSIX symlink = dizin DEĞİL → unlink.
             # (Ölçüldü 2026-08-27: CI/Linux'ta rmdir NotADirectoryError veriyordu; bu dal
@@ -440,7 +485,7 @@ def tazeleme_gerekli(proje: Path, core_root: Path, tip: str) -> list:
     bir otomatik çıkar. Boş liste = yapılacak iş yok (sessiz no-op).
     """
     h = hedef(proje, tip)
-    if not h.is_dir() or _junction_mu(h):
+    if not h.is_dir() or _junction_mu(h, proje):
         return []
     beklenen = _beklenen(proje, core_root, tip)
     fark = []
@@ -561,7 +606,7 @@ def oto_tazele(proje: Path, core_root: Path) -> list:
             if not overlay_gerekli(proje, tip):
                 continue                      # junction'lı/overlay'siz proje → hiç dokunma
             h = hedef(proje, tip)
-            if not h.is_dir() or _junction_mu(h):
+            if not h.is_dir() or _junction_mu(h, proje):
                 # henüz materyalize edilmemiş: kurulum işi (team_setup). ZORUNLU tipte (Q286)
                 # bu hâl session_start'ın YÜKLEME satırında "ÖN KOŞUL: EKSİK" olarak görünür —
                 # otomatik yol junction'ı KENDİLİĞİNDEN kaldırmaz (kurulum kararı elle kalır).
@@ -611,7 +656,7 @@ def durum(proje: Path, core_root: Path, tip: str) -> tuple:
     h = hedef(proje, tip)
     if not h.exists():
         return "yok", [f"{tip}: dizin yok"]
-    if _junction_mu(h):
+    if _junction_mu(h, proje):
         if overlay_var_mi(proje, tip):
             return "junction", [f"{tip}: claude-local/{tip} VAR ama .claude/{tip} hâlâ junction "
                                 f"→ proje agent'ları YÜKLENMİYOR. Onarım: team_setup.py --repair-junctions"]
