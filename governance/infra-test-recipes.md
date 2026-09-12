@@ -557,6 +557,21 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   kayıtta eşitlik hâlâ yeşil · V5f upload'ın olmadığı BİLİNEN yolda belirsizlik SAYILMAZ ·
   V8b ad-çarpışmasında (aynı ad ddls+bdef) kaydı olmayan tip için iddia ÜRETİLMEZ.
   ⚠ Koşucu çıktısına ikinci bir `N/M` sayısı yazma — `run_battery` skoru SON eşleşmeden okur.
+- **YAZMA HÜKMÜ DÜRÜSTLÜĞÜ (Q278 + Q273, 2026-09-13):** `python tests/fixtures/yazma_hukmu_durustlugu/run.py`
+  → **26/26** · MUTASYON: `--mutasyon` **12/26** · `--mutasyon-publish` **17/26** · `--mutasyon-postcheck` **21/26**
+  · ESKİ KOD: `--taban-dosya <git show 6047fa2:…/atom.py>` **12/26**.
+  **Değişmezler:** `adt_publish_service` hükmü **gövdedeki `SEVERITY`**'den kurulur, HTTP kodundan değil.
+  `ERROR` → `ok:false, published:false` · tüm `OK` → `ok:true` · SEVERITY yok ya da tanınmayan değer →
+  `ok:false, published:None` + `publish_notice` "ÖLÇÜLEMEDİ" (belirsiz gövde başarı SAYILMAZ).
+  Ayrıştırıcı zarftan bağımsızdır (yerel etiket adı; kırpılmış gövdede regex yolu).
+  `adt_push_source` post_check'i push `ok`'unu yalnız BLOCKER / tanınmayan verdict / blocker_count>0 ile
+  düşürür; WARNING `post_check.unmeasured|warnings` + `post_check_notice` ile görünür kalır.
+  ⛔ **Kontrol satırları SİLİNMEZ:** P2 (OK gövdesi hâlâ başarı) · P5 (HTTP 500) · P8 (guardrail POST'tan önce) ·
+  R3/R4/R4b (BLOCKER / tanınmayan verdict / WARNING+blocker hâlâ `ok:false`) · R5/R5b · R6.
+  ⚠ Başka bir fixture `adt_publish_service`'i sahte bir 200 ile koşturuyorsa sahte gövde **`SEVERITY=OK` taşımalı**.
+  Hükümsüz gövde (`<ok/>`) artık "ölçülemedi"dir. Ölçüldü: `dogrulama_kosamadi` R4 bu yüzden kırıldı ve düzeltildi.
+  🔴 Gerçek publish zarfı repoda ham kayıtlı değil (DOĞRULANAMADI). İlk canlı publish'te `body`'yi fixture'ın
+  `_zarf` şekliyle karşılaştır; farklıysa vektöre gerçek gövdeyi ekle.
 - **ÜÇ-DEĞERLİ DOĞRULAMA (2026-08-01):** `python tests/fixtures/dogrulama_kosamadi/run.py` → **32/32**.
   Değişmezler: silme-readback okunamazsa `delete_verified: null` (**true DEĞİL**) · push readback
   koşamazsa `readback_verified: null` + `readback_notice` (ama `ok` DÜŞMEZ — aşırı-sıkılaşma çapası) ·
