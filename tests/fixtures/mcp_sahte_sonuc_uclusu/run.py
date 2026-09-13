@@ -280,13 +280,27 @@ def main() -> int:
          and "KANITLANMADI" in str(r.get("warning") or ""),
          "verified=%s probe=%s" % (r.get("activation_verified"), r.get("activation_probe")))
 
-    # Maliyet capasi: zaten "olmadi" diyorsa sonda KOSMAZ
+    # ⟳ B5 DONUSTU (Q231-b, 2026-09-13, lider onayli SIKILASTIRMA).
+    #   ESKI capa: "activated=false iken sonda KOSMAZ (gereksiz HTTP yok)" + ok TRUE kaliyordu.
+    #   YENI capa: activated=false iken sonda KOSAR ve YALNIZ bilgi tasir (`still_inactive`);
+    #   `ok` false'tur ve ASLA True'ya donmez. Gerekce: Q231 canlida "basarisiz cagri = etkisiz
+    #   cagri" varsayimini curuttu (activated:false donen cagri FUGR/I'yi dusurmustu) ve
+    #   ZSD001-benzeri ikinci grupta `ok:true, activated:false` sahte-yesili olculdu.
     c = _Client({WL: (200, _worklist(FG))}, aktive=False); _kur(c)
     r = _cagir(atom.adt_activate, name=FG, object_type="fugr")
-    ekle("B5 activated=false iken sonda KOSMADI (gereksiz HTTP yok)",
-         r.get("activated") is False and "activation_verified" not in r
-         and not any(WL in u for u in c.session.istenen),
-         "verified=%s istekler=%s" % (r.get("activation_verified"), c.session.istenen))
+    ekle("B5 activated=false -> ok FALSE + sonda KOSTU + still_inactive dolu (kismi etki gorunur)",
+         r.get("ok") is False and r.get("activated") is False
+         and r.get("error") == "activation_failed" and "activation_verified" not in r
+         and [h["name"] for h in (r.get("still_inactive") or [])] == [FG]
+         and any(WL in u for u in c.session.istenen),
+         "ok=%s error=%s still=%s istekler=%s" % (r.get("ok"), r.get("error"),
+                                                  r.get("still_inactive"), c.session.istenen))
+    c = _Client({WL: (200, _worklist())}, aktive=False); _kur(c)
+    r = _cagir(atom.adt_activate, name=FG, object_type="fugr")
+    ekle("B7 activated=false + worklist bos -> ok HALA false (sonda ok'u True YAPMAZ)",
+         r.get("ok") is False and r.get("still_inactive") == [] and bool(r.get("probe_note")),
+         "ok=%s still=%s note=%s" % (r.get("ok"), r.get("still_inactive"),
+                                     "VAR" if r.get("probe_note") else "YOK"))
 
     # `fugr` aktivasyon URI'si (also= atomik co-activate yolu icin)
     ekle("B6 _activation_uri('fugr') / ('functiongroup') cozuluyor (eskiden None)",

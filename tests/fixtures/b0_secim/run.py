@@ -141,14 +141,18 @@ kontrol("P2 çok dosya → BİRLEŞİM (7 birim)",
 secim, _ = sec("scripts/sap_adt_lib.py")
 # ⚠ SAYI HARİTAYA PİNLİ: bu modüle yeni bir korpus eklenirse (2026-08-19: `retry_500_govde`
 # → 6'dan 7'ye · 2026-09-03: `transport_gorev_istek_cevrimi` → 7'den 8'e · 2026-09-04:
-# `adt_uc_url_cozumu` → 8'den 9'a · 2026-09-13: `cds_kaynak_kapisi` → 9'dan 10'a) HARİTA
-# ile BU SATIR birlikte güncellenir. Sayıyı
+# `adt_uc_url_cozumu` → 8'den 9'a · 2026-09-13: `cds_kaynak_kapisi` → 9'dan 10'a ·
+# 2026-09-13 Q187/Q188/Q231: `aktivasyon_govde_hukmu` (kanonik hüküm) + `aciklama_412_retry`
+# (gerçek `activate_object` koşar) + `mcp_sahte_sonuc_uclusu` (atom readback'i artık lib
+# sondasına delege eder) → 10'dan 13'e) HARİTA ile BU SATIR birlikte güncellenir. Sayıyı
 # gevşetmek (`>=`) çapayı öldürür — sessiz daraltma tam olarak burada görünür.
-kontrol("P3 çok-tüketicili kaynak → 10 korpusun hepsi",
-        secim is not None and len(secim) == 10
+kontrol("P3 çok-tüketicili kaynak → 13 korpusun hepsi",
+        secim is not None and len(secim) == 13
         and {"O:lock_modification_support", "O:conn_cift_anahtar",
              "O:retry_500_govde", "O:transport_gorev_istek_cevrimi",
-             "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi"} <= secim,
+             "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi",
+             "O:aktivasyon_govde_hukmu", "O:aciklama_412_retry",
+             "O:mcp_sahte_sonuc_uclusu"} <= secim,
         f"alınan={sorted(secim) if secim else secim}")
 
 # P4: mutlak yol + ters-bölü (Windows'ta ajanın vereceği gerçek biçim) aynı sonucu verir.

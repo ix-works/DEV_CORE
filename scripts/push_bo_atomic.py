@@ -16,9 +16,12 @@ NİYE ATOMİK:
 YÖNTEM: LOCK → PUT(inactive) → UNLOCK  ×N  →  tek atomik `/activation`.
   Kaynak DİSKTEN okunur (LLM üretimi yok — repo neyse o gider).
 
-⚠ AKTİVASYON YANITI SIKI PARSE EDİLİR (playbook `adt-rap.md`: "200 ama aktive etmedi"):
-  `activationExecuted="false"` VEYA `type="E"|"A"` VEYA `severity="E"|"A"` → **FAIL**.
-  HTTP 200 tek başına başarı DEĞİLDİR. ("activated" mesajına güvenme.)
+⚠ AKTİVASYON HÜKMÜ TEK KAYNAKTAN (Q188, 2026-09-13 — `sap_adt_lib.aktivasyon_govde_hukmu`):
+  gövde BAŞARI yalnız `activationExecuted="true"` + E/A mesajı YOK ise. Boş gövde · HTML ·
+  `ioc:inactiveObjects` · E/A mesajı → **FAIL**. Gövde hüküm TAŞIMIYORSA (`activationExecuted=false`
+  + `generationExecuted=true`, ya da bayraksız ADT gövdesi) bağımsız worklist sondası karar verir;
+  sonda kurulamazsa FAIL (DOĞRULANAMADI). HTTP 200 tek başına başarı DEĞİLDİR.
+  (Eski kopya sözleşme BOŞ gövdeyi OK sayıyordu — kaldırıldı.)
 
 KULLANIM:
     python core/scripts/push_bo_atomic.py --transport <TRANSPORT> \
@@ -179,12 +182,19 @@ class Pusher:
 
         txt = r.text or ""
         # HTTP 200 YETMEZ: SAP "aktive etmedim" diyebilir ve yine 200 döner.
-        executed_false = 'activationExecuted="false"' in txt
-        has_err = any(s in txt for s in ('type="E"', 'type="A"',
-                                         'severity="E"', 'severity="A"'))
-        ok = (r.status_code < 400) and not has_err and not executed_false
-        print(f"[ACTIVATE] status={r.status_code} executedFalse={executed_false} "
-              f"errMsg={has_err} -> {'OK' if ok else 'FAIL'}")
+        # ⛔ Q188 (2026-09-13): hüküm TEK KAYNAKTAN (`sap_adt_lib.aktivasyon_govde_hukmu`).
+        # Eskiden dizi eşleşmesiydi: `activationExecuted="false"` YOKSA ve E/A YOKSA → OK
+        # ⇒ BOŞ gövde ve tanınmayan 2xx gövde de "aktive edildi" sayılıyordu (Q187 sınıfı).
+        from sap_adt_lib import (aktivasyon_govde_hukmu, aktivasyon_hedefleri_govdeden,  # noqa: E402
+                                 aktivasyon_worklist_sondasi)
+        hk = aktivasyon_govde_hukmu(txt)
+        hukum, sonda = hk["hukum"], None
+        if r.status_code < 400 and hukum is None:
+            hukum, sonda, _kalan = aktivasyon_worklist_sondasi(
+                self.c, aktivasyon_hedefleri_govdeden("\n".join(body)))
+        ok = (r.status_code < 400) and hukum is True
+        print(f"[ACTIVATE] status={r.status_code} govde={hk['hukum']}({hk['sebep']}) "
+              f"sonda={sonda} errMsg={len(hk['errors'])} -> {'OK' if ok else 'FAIL'}")
         if txt.strip():
             print("   RESP: " + txt[:1200].replace("\n", " "))
         return ok

@@ -849,6 +849,239 @@ def clear_session_credentials():
     return False, msg
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# AKTIVASYON HUKMUNUN TEK KAYNAGI — Q187 + Q188 + Q231 (2026-09-13)
+# ══════════════════════════════════════════════════════════════════════════════
+# NEDEN VAR: aktivasyon yaniti GOVDESINDEN "basari" hukmu cikaran noktalar birbirinden
+# bagimsiz, KOPYA sozlesmeler tasiyordu ve ayrismislardi (olculdu 2026-09-13):
+#   · `SAPADTClient._parse_activation_response`: `activationExecuted=false` +
+#     `generationExecuted=true` -> BASARI (Q187'nin gercek kaynagi) · bos govde -> BASARI
+#   · `create_rap_service._activation_failures`: ayni govde -> BASARISIZ · bayraksiz chkl -> BASARI
+#   · `push_bo_atomic.activate_many`: BOS govde -> OK (fail-open)
+#   · `populate_lock_objects.activate_lock_object`: dizi eslesmesi
+# CANLI KANIT (DEV, FUGR, adt-gateway 2026-09-13): 2. faz toplu gövde
+# `checkExecuted="false" activationExecuted="false" generationExecuted="true"`, 0 mesaj ⇒
+# alt katman "[OK] Object activated"; ayni anda worklist'te FUGR/F + FUGR/FF DURUYORDU.
+# Ölçülen 11 aktivasyon gövdesinin hiçbiri boş değildi ve hepsi `chkl:properties` taşıyordu.
+#
+# SOZLESME (uc degerli; cagiran-ozel esleme YOK):
+#   True  -> `activationExecuted="true"` ve E/A mesaji yok
+#   False -> E/A mesaji var · `activationExecuted="false"` (generation yok) · bos govde ·
+#            ADT yaniti olmayan govde · `ioc:inactiveObjects` (SAP birlikte-aktivasyon istedi)
+#   None  -> GOVDE HUKUM TASIMIYOR: yalniz generation calisti ya da bayrak hic yok ⇒
+#            karari BAGIMSIZ worklist sondasi (`aktivasyon_worklist_sondasi`) verir;
+#            sonda kurulamazsa sonuc BASARI DEGIL, DOGRULANAMADI'dir.
+# ⛔ Yeni bir aktivasyon cagri yeri hukmunu BURADAN alir; `activationExecuted`/
+#    `generationExecuted` dizgesine kendi basina dayanmaz (fixture `aktivasyon_govde_hukmu`
+#    SINIF bolumu AST ile zorlar).
+
+AKTIVASYON_WORKLIST_UC = '/sap/bc/adt/activation/inactiveobjects'
+_AKT_IOC_NS = 'http://www.sap.com/abapxml/inactiveCtsObjects'
+_AKT_ADTCORE_NS = 'http://www.sap.com/adt/core'
+_AKT_ADT_IMLERI = ('chkl:', '<msg', 'adtcore:', '<messages')
+
+# ⚠GEVSETME HUCRESI (lider karari 2026-09-13; kullanici onayi MERGE ONCESI alinir):
+# bayraksiz ADT/checklist govdesi. Eskiden lib -> BASARISIZ, create_rap_service -> BASARI idi.
+# Tek sozlesme: None (worklist sondasi karar verir). Canlida bayraksiz govde ornegi 0
+# (11 aktivasyon govdesi + Q175 govdeleri). Onay cikmazsa bu sabit `False` yapilir — baska
+# hicbir yere dokunulmaz.
+_BAYRAKSIZ_GOVDE_HUKMU = None
+
+
+def aktivasyon_govde_hukmu(text):
+    """Aktivasyon yaniti govdesinden TEK kanonik hukum. Ag cagrisi YOK, istisna atmaz.
+
+    Doner: {'hukum': True|False|None, 'sebep': str, 'activation_executed': bool,
+            'check_executed': bool, 'generation_executed': bool, 'bayrak_var': bool,
+            'ioc': bool, 'errors': [..], 'warnings': [..]}
+    Sozlesme ve gerekce: bu fonksiyonun ustundeki blok.
+    """
+    t = text or ''
+    sonuc = {'hukum': False, 'sebep': '', 'activation_executed': False,
+             'check_executed': False, 'generation_executed': False,
+             'bayrak_var': False, 'ioc': False, 'errors': [], 'warnings': []}
+    if not t.strip():
+        sonuc['sebep'] = 'govde_bos'
+        return sonuc
+    if 'inactiveObjects' in t:
+        sonuc['ioc'] = True
+        sonuc['sebep'] = 'ioc_inaktif_liste'
+        return sonuc
+
+    def _bayrak(ad):
+        m = re.search(r'\b%s="(true|false)"' % ad, t)
+        return None if m is None else (m.group(1) == 'true')
+
+    ae = _bayrak('activationExecuted')
+    ce = _bayrak('checkExecuted')
+    ge = _bayrak('generationExecuted')
+    sonuc['activation_executed'] = ae is True
+    sonuc['check_executed'] = ce is True
+    sonuc['generation_executed'] = ge is True
+    sonuc['bayrak_var'] = ae is not None
+
+    try:
+        root = ET.fromstring(t)
+        for elem in root.iter():
+            if elem.tag.split('}')[-1] != 'msg':
+                continue
+            tip = (elem.get('type') or elem.get('severity') or 'W').upper()
+            metin = ''
+            for cocuk in elem.iter():
+                if cocuk.tag.split('}')[-1] == 'txt' and cocuk.text:
+                    metin = cocuk.text
+                    break
+            bilgi = {'type': tip, 'message': metin, 'object': elem.get('objDescr', ''),
+                     'line': elem.get('line', '0'), 'href': elem.get('href', '')}
+            if tip in ('E', 'A'):
+                sonuc['errors'].append(bilgi)
+            elif tip == 'W':
+                sonuc['warnings'].append(bilgi)
+    except ET.ParseError:
+        for m in re.finditer(r'<(?:\w+:)?msg\b[^>]*\b(?:type|severity)="([EA])"[^>]*>(.*?)'
+                             r'</(?:\w+:)?msg>', t, re.S):
+            mt = re.search(r'<(?:\w+:)?txt>([^<]*)<', m.group(2))
+            sonuc['errors'].append({'type': m.group(1), 'message': mt.group(1) if mt else '',
+                                    'object': '', 'line': '0', 'href': ''})
+    if not sonuc['errors'] and re.search(r'\b(?:type|severity)="[EA]"', t):
+        sonuc['errors'].append({'type': 'E', 'message': '(metinsiz E/A isareti)',
+                                'object': '', 'line': '0', 'href': ''})
+
+    if sonuc['errors']:
+        sonuc['sebep'] = 'hata_mesaji'
+    elif ae is True:
+        sonuc['hukum'], sonuc['sebep'] = True, 'activation_executed'
+    elif ae is False:
+        if ge is True:
+            sonuc['hukum'], sonuc['sebep'] = None, 'yalniz_generation'
+        else:
+            sonuc['sebep'] = 'activation_not_executed'
+    elif any(im in t for im in _AKT_ADT_IMLERI):
+        sonuc['hukum'], sonuc['sebep'] = _BAYRAKSIZ_GOVDE_HUKMU, 'bayrak_yok'
+    else:
+        sonuc['sebep'] = 'govde_taninmadi'
+    return sonuc
+
+
+def _akt_uri_norm(uri):
+    """Worklist/aktivasyon URI'sini karsilastirma bicimine indir (fragman/sorgu/host/kasa)."""
+    from urllib.parse import unquote
+    u = (uri or '').strip()
+    for ayrac in ('#', '?'):
+        u = u.split(ayrac, 1)[0]
+    u = unquote(u).lower()
+    if '://' in u:
+        u = '/' + u.split('://', 1)[1].split('/', 1)[-1]
+    u = u.rstrip('/')
+    if u.endswith('/source/main'):
+        u = u[:-len('/source/main')]
+    return u
+
+
+def aktivasyon_worklist_ayristir(govde):
+    """`/activation/inactiveobjects` govdesi -> [{'name','type','uri','parent_uri'}].
+
+    ⛔ Govde bir `ioc:inactiveObjects` belgesi DEGILSE ValueError atar: HTML/bos/baska bir
+    XML'i "aktive bekleyen yok" diye okumak tam da korunulan sahte-yesildir.
+    """
+    root = ET.fromstring(govde or '')
+    if root.tag != '{%s}inactiveObjects' % _AKT_IOC_NS:
+        raise ValueError('worklist_govdesi_degil:%s' % root.tag.split('}')[-1])
+    girdiler = []
+    for entry in root.findall('{%s}entry' % _AKT_IOC_NS):
+        obj = entry.find('{%s}object' % _AKT_IOC_NS)
+        ref = obj.find('{%s}ref' % _AKT_IOC_NS) if obj is not None else None
+        if ref is None:
+            continue                      # transport-seviyesi girdi (bos ioc:object)
+        girdiler.append({
+            'name': (ref.get('{%s}name' % _AKT_ADTCORE_NS) or '').strip(),
+            'type': (ref.get('{%s}type' % _AKT_ADTCORE_NS) or '').strip(),
+            'uri': ref.get('{%s}uri' % _AKT_ADTCORE_NS) or '',
+            'parent_uri': ref.get('{%s}parentUri' % _AKT_ADTCORE_NS) or '',
+        })
+    return girdiler
+
+
+def aktivasyon_worklist_kalan(girdiler, hedefler):
+    """Worklist girdilerinden HEDEF objelere ait olanlar (= hala inaktif kalanlar).
+
+    hedef = {'uri': .., 'name': .., 'type': ..} (her alan istege bagli). Eslesme:
+      · URI: girdi URI'si hedef URI'sine esit ya da onun ALT kaynagi (`<hedef>/...`,
+        yol SINIRIYLA — `zfg_a` `zfg_ab`'yi yakalamaz) ya da girdinin parentUri'si hedef.
+        (FUGR/FF `.../groups/<fg>/fmodules/<fm>` · CLAS/OM `.../classes/<c>/source/main#..`)
+      · AD+TIP: ad (buyuk/kucuk harf duyarsiz) esit VE tip esit: hedef tipi alt tip
+        tasiyorsa (`FUGR/FF`) TAM tip, tasimiyorsa (`FUGR`) yalniz ana parca karsilastirilir.
+        ⛔ Alt tip varken ana parcaya indirgemek YASAK: canlida FM adi grup adiyla AYNI
+        olabiliyor (FUGR/F + FUGR/FF ayni ad, 2026-09-13 olculdu) -> FF hedefi F'yi "kalan"
+        sanardi. Hedefte URI VARSA ve tip YOKSA ad tek basina eslemez (ayni adli baska tip,
+        ör. BDEF ile kok DDLS, sahte "kalan" uretmesin).
+    """
+    kalan = []
+    for g in girdiler or []:
+        gtip_tam = (g.get('type') or '').upper()
+        if gtip_tam.startswith('/RQ'):
+            continue
+        gu, gp = _akt_uri_norm(g.get('uri')), _akt_uri_norm(g.get('parent_uri'))
+        gad, gtip = (g.get('name') or '').strip().upper(), gtip_tam.split('/')[0]
+        for h in hedefler or []:
+            hu = _akt_uri_norm(h.get('uri'))
+            had = (h.get('name') or '').strip().upper()
+            htip_tam = (h.get('type') or '').strip().upper()
+            uri_es = bool(hu) and (gu == hu or gu.startswith(hu + '/') or (bool(gp) and gp == hu))
+            if htip_tam:
+                tip_es = (gtip_tam == htip_tam) if '/' in htip_tam else (gtip == htip_tam)
+                ad_es = bool(had) and gad == had and tip_es
+            else:
+                ad_es = bool(had) and not hu and gad == had
+            if uri_es or ad_es:
+                kalan.append(dict(g))
+                break
+    return kalan
+
+
+def aktivasyon_worklist_sondasi(adt, hedefler):
+    """BAGIMSIZ aktivasyon sondasi: hedefler aktive-bekleyen worklist'inde mi?
+
+    Doner (dogrulandi, sebep, kalan): True (hicbiri listede yok) · False (kalan dolu) ·
+    None (OLCULEMEDI — `sebep` 'unavailable:..'; "dogrulandi" DEGIL).
+    ⚠ SINIR: obje aktivasyondan ONCE worklist'te degilse "listede yok" ayirt edici degildir
+    (on-snapshot alinmaz; her aktivasyona ek HTTP maliyeti — lider karari 2026-09-13).
+    """
+    if not hedefler:
+        return None, 'unavailable:hedef_yok', []
+    try:
+        r = adt.session.get(adt.url + AKTIVASYON_WORKLIST_UC,
+                            headers={'Accept': 'application/*'}, verify=False, timeout=45)
+        if getattr(r, 'status_code', None) != 200:
+            return None, 'unavailable:http_%s' % getattr(r, 'status_code', '?'), []
+        girdiler = aktivasyon_worklist_ayristir(r.text)
+    except Exception as exc:  # noqa: BLE001 — sonda kurulamadi = OLCULEMEDI
+        return None, 'unavailable:%s' % type(exc).__name__, []
+    kalan = aktivasyon_worklist_kalan(girdiler, hedefler)
+    return (not kalan), ('checked_inactive' if kalan else 'checked_active'), kalan
+
+
+def aktivasyon_hedefleri_govdeden(istek_govdesi):
+    """Aktivasyon ISTEK govdesindeki `adtcore:objectReference`'lardan sonda hedefleri.
+
+    Istegi kendi kuran cagiranlar (create_rap_service `step_*`, push_bo_atomic) icin: hedef
+    listesi ikinci kez elle yazilmaz, gonderilen govdeden turetilir. Ayristirilamazsa [] doner
+    (sonda 'unavailable:hedef_yok' der — "dogrulandi" DEGIL).
+    """
+    try:
+        root = ET.fromstring(istek_govdesi or '')
+    except ET.ParseError:
+        return []
+    hedefler = []
+    for elem in root.iter('{%s}objectReference' % _AKT_ADTCORE_NS):
+        h = {'uri': elem.get('{%s}uri' % _AKT_ADTCORE_NS) or '',
+             'name': elem.get('{%s}name' % _AKT_ADTCORE_NS) or '',
+             'type': elem.get('{%s}type' % _AKT_ADTCORE_NS) or ''}
+        if h['uri'] or h['name']:
+            hedefler.append(h)
+    return hedefler
+
+
 class SAPADTClient:
     """SAP ADT API Client with support for On-Premise and BTP Cloud authentication"""
 
@@ -3724,36 +3957,40 @@ class SAPADTClient:
         Returns dict with keys:
           success (bool), activation_executed (bool), check_executed (bool),
           generation_executed (bool), errors (list), warnings (list),
-          response (str), ioc_refs (list of (uri, type, name) tuples)
+          response (str), ioc_refs (list of (uri, type, name) tuples),
+          ioc_ref_detay (list of dicts incl. parent_uri),
+          aktivasyon_hukmu (True|False|None), hukum_sebep (str)
+
+        ⛔ Q187 (2026-09-13): hukum artik `aktivasyon_govde_hukmu`'ndan (modul duzeyi, TEK
+        KAYNAK) gelir. Eskiden (1) bos govde -> BASARI, (2) `activationExecuted=false` +
+        `generationExecuted=true` -> BASARI idi; (2) canlida FUGR'da sahte-yesil uretti.
+        `aktivasyon_hukmu is None` (govde hukum tasimiyor) iken `success` FALSE'tur; karari
+        `activate_object` bagimsiz worklist sondasiyla kesinlestirir.
         """
-        IOC_NS = 'http://www.sap.com/abapxml/inactiveCtsObjects'
-        ADT_CORE_NS = 'http://www.sap.com/adt/core'
+        IOC_NS = _AKT_IOC_NS
+        ADT_CORE_NS = _AKT_ADTCORE_NS
+        text = response.text or ''
+        hk = aktivasyon_govde_hukmu(text)
 
         result = {
-            'success': False,
-            'activation_executed': False,
-            'check_executed': False,
-            'generation_executed': False,
-            'errors': [],
-            'warnings': [],
+            'success': hk['hukum'] is True,
+            'aktivasyon_hukmu': hk['hukum'],
+            'hukum_sebep': hk['sebep'],
+            'activation_executed': hk['activation_executed'],
+            'check_executed': hk['check_executed'],
+            'generation_executed': hk['generation_executed'],
+            'errors': list(hk['errors']),
+            'warnings': list(hk['warnings']),
             'response': response.text,
             'ioc_refs': [],
+            'ioc_ref_detay': [],
         }
 
-        text = response.text or ''
-
-        # Shape 1: empty body = SAP activated with no messages
-        if not text or len(text.strip()) < 50:
-            result['success'] = True
-            result['activation_executed'] = True
-            return result
-
-        # Shape 2: ioc:inactiveObjects — SAP rejected single-object activation,
+        # ioc:inactiveObjects — SAP rejected single-object activation,
         # returns list of all sub-objects that must be activated together (Bug 13/15)
-        if 'inactiveObjects' in text or f'{{{IOC_NS}}}' in text or 'ioc:inactiveObjects' in text:
+        if hk['ioc']:
             try:
                 root = ET.fromstring(text)
-                refs = []
                 for entry in root.iter(f'{{{IOC_NS}}}entry'):
                     ref = entry.find(f'{{{IOC_NS}}}object/{{{IOC_NS}}}ref')
                     if ref is None:
@@ -3763,72 +4000,157 @@ class SAPADTClient:
                         atype = ref.get(f'{{{ADT_CORE_NS}}}type') or ref.get('type', '')
                         name = ref.get(f'{{{ADT_CORE_NS}}}name') or ref.get('name', object_name)
                         if atype and '/RQ' not in atype:
-                            refs.append((uri, atype, name))
-                result['ioc_refs'] = refs
+                            result['ioc_refs'].append((uri, atype, name))
+                            result['ioc_ref_detay'].append({
+                                'uri': uri, 'type': atype, 'name': name,
+                                'parent_uri': ref.get(f'{{{ADT_CORE_NS}}}parentUri') or ''})
             except ET.ParseError:
                 pass
             return result
 
-        # Shape 3: chkl:messages
-        try:
-            root = ET.fromstring(text)
-            ns_chkl = {'chkl': 'http://www.sap.com/abapxml/checklist'}
-
-            props = root.find('.//chkl:properties', ns_chkl)
-            if props is not None:
-                result['activation_executed'] = props.get('activationExecuted', 'false') == 'true'
-                result['check_executed'] = props.get('checkExecuted', 'false') == 'true'
-                result['generation_executed'] = props.get('generationExecuted', 'false') == 'true'
-
-            for elem in root.iter():
-                tag_name = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
-                if tag_name == 'msg':
-                    msg_type = elem.get('type', 'W')
-                    obj_descr = elem.get('objDescr', '')
-                    line = elem.get('line', '0')
-                    href = elem.get('href', '')
-                    msg_text = ''
-                    for child in elem.iter():
-                        child_tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-                        if child_tag == 'txt' and child.text:
-                            msg_text = child.text
-                            break
-                    message_info = {'type': msg_type, 'message': msg_text,
-                                    'object': obj_descr, 'line': line, 'href': href}
-                    if msg_type == 'E':
-                        result['errors'].append(message_info)
-                    elif msg_type == 'W':
-                        result['warnings'].append(message_info)
-
-            if result['errors']:
-                result['success'] = False
-            elif result['activation_executed']:
-                result['success'] = True
-            elif result['generation_executed']:
-                result['success'] = True
-            else:
-                result['success'] = False
+        if hk['hukum'] is None:
+            result['warnings'].append({
+                'type': 'W',
+                'message': (f"Aktivasyon govdesi hukum TASIMIYOR ({hk['sebep']}): "
+                            f"activationExecuted={hk['activation_executed']} "
+                            f"generationExecuted={hk['generation_executed']} — bagimsiz worklist "
+                            f"sondasi karar verecek."),
+                'object': object_name, 'line': '0', 'href': ''})
+        elif hk['hukum'] is False and not result['errors']:
+            if hk['sebep'] == 'activation_not_executed':
                 result['errors'].append({
                     'type': 'W',
                     'message': 'SAP returned activationExecuted=false with no errors and no generation. '
                                'Object may be inactive. Please verify in SE24 or activate manually.',
-                    'object': object_name, 'line': '0', 'href': ''
-                })
-
-        except ET.ParseError as e:
-            if 'activationExecuted="true"' in text:
-                result['success'] = True
-                result['activation_executed'] = True
-            elif 'generationExecuted="true"' in text and 'type="E"' not in text:
-                result['success'] = True
-                result['generation_executed'] = True
+                    'object': object_name, 'line': '0', 'href': ''})
             else:
-                result['errors'] = [{'message': f'Could not parse activation response: {e}',
-                                     'type': 'E', 'object': object_name, 'line': '0', 'href': ''}]
+                result['errors'].append({
+                    'type': 'E',
+                    'message': (f"Aktivasyon yaniti KANIT TASIMIYOR ({hk['sebep']}) — "
+                                f"'aktive edildi' SAYILMAZ."),
+                    'object': object_name, 'line': '0', 'href': ''})
 
         return result
 
     def activate_object(self, object_name, object_url):
+        """Activate an ABAP object — two-phase flow + TEK KANONIK hukum (Q187/Q188/Q231).
+
+        Iki faz `_activate_object_iki_faz`'dadir (pre-audit + toplu). Donen sonucun
+        `aktivasyon_hukmu`'u `None` ise (govde hukum tasimiyor — ör. yalniz generation),
+        hukum BAGIMSIZ worklist sondasiyla kesinlestirilir:
+          · hedefler listede yok -> success True  (`aktivasyon_dogrulama.sonda=checked_active`)
+          · hedefler listede     -> success False + `kalan_inaktif` (kismi etki gorunur)
+          · sonda kurulamadi     -> success False + `dogrulanamadi=True` (BASARI DEGIL)
+
+        Returns:
+            dict with 'success' (bool), 'errors' (list), 'warnings' (list), 'response' (str),
+            'aktivasyon_hukmu' (True|False|None), 'aktivasyon_dogrulama' (varsa)
+        """
+        sonuc = self._activate_object_iki_faz(object_name, object_url)
+        return self._aktivasyon_hukmunu_kesinlestir(sonuc, object_name, object_url)
+
+    def _aktivasyon_hukmunu_kesinlestir(self, p, object_name, object_url):
+        """`aktivasyon_hukmu is None` sonucunu bagimsiz worklist sondasiyla kesinlestir."""
+        if not isinstance(p, dict):
+            return p
+        hedefler = p.pop('_hedefler', None)
+        if p.get('aktivasyon_hukmu', 'yok') is not None:
+            return p
+        if not hedefler:
+            try:
+                tip = self._extract_object_type(object_url)
+            except Exception:  # noqa: BLE001
+                tip = ''
+            hedefler = [{'uri': object_url, 'name': object_name,
+                         'type': '' if tip in (None, 'UNKNOWN') else tip}]
+        ok, sonda, kalan = aktivasyon_worklist_sondasi(self, hedefler)
+        p['aktivasyon_dogrulama'] = {'kaynak': 'worklist', 'sonda': sonda, 'kalan_inaktif': kalan}
+        p.setdefault('errors', [])
+        if ok is True:
+            p['success'], p['aktivasyon_hukmu'] = True, True
+        elif ok is False:
+            p['success'], p['aktivasyon_hukmu'] = False, False
+            p['errors'].append({
+                'type': 'E',
+                'message': ("Aktivasyon GERCEKLESMEDI: govde hukum tasimiyordu (%s) ve bagimsiz "
+                            "worklist sondasi hedefleri HALA inaktif gordu: %s"
+                            % (p.get('hukum_sebep'),
+                               ', '.join('%s (%s)' % (k['name'], k['type']) for k in kalan))),
+                'object': object_name, 'line': '0', 'href': ''})
+        else:
+            p['success'] = False
+            p['dogrulanamadi'] = True
+            p['errors'].append({
+                'type': 'E',
+                'message': ("Aktivasyon DOGRULANAMADI: govde hukum tasimiyordu (%s) ve worklist "
+                            "sondasi kurulamadi (%s) — 'aktive edildi' SAYILMAZ. "
+                            "`adt_inactive_objects` ile elle olc." % (p.get('hukum_sebep'), sonda)),
+                'object': object_name, 'line': '0', 'href': ''})
+        return p
+
+    _FUGR_GRUP_RE = re.compile(r'^(?:https?://[^/]+)?(/sap/bc/adt/functions/groups/[^/?#]+)', re.I)
+
+    def _fugr_grup_uri(self, object_url, refs):
+        """Aktivasyon bir fonksiyon grubuna (ya da onun FM'ine) mi ait? -> grup URI'si | None."""
+        for u in [object_url] + [r[0] for r in (refs or [])]:
+            m = self._FUGR_GRUP_RE.match(u or '')
+            if m:
+                return m.group(1)
+        return None
+
+    def _fugr_faz2_referanslari(self, grup_uri, object_url, object_type, object_name, p1):
+        """Q231-a: FUGR toplu aktivasyonunun objectReference listesi — OLCULEN CALISAN istek.
+
+        CANLI (2026-09-13, iki grup): 1. faz `ioc:inactiveObjects` yanitinda FUGR/FF YOKTU
+        (yalniz FUGR/F iki kez: grup URI'si + parentUri'li `.../source/main`); FF'siz toplu
+        govde `activationExecuted=false`+`generationExecuted=true` dondu ve worklist'te
+        F + FF KALDI. Calisan istek: `preauditRequested=true`, govdede FUGR/F (grup URI'si) +
+        parentUri'li FUGR/FF -> HTTP 200 `activationExecuted=true`, worklist temiz.
+        FF'ler SAP 1. fazda vermedigi icin aktive-bekleyen worklist'inden TURETILIR.
+        Doner (referanslar, bilgi).
+        """
+        gn = _akt_uri_norm(grup_uri)
+        f_ad, digerleri = None, []
+        for d in (p1.get('ioc_ref_detay') or []):
+            tip = (d.get('type') or '').upper()
+            if tip == 'FUGR/F' and _akt_uri_norm(d.get('uri')) == gn:
+                f_ad = f_ad or d.get('name')
+                continue
+            if tip == 'FUGR/FF':
+                continue                               # worklist'ten parentUri'li gelir
+            digerleri.append({'uri': d.get('uri', ''), 'type': d.get('type', ''),
+                              'name': d.get('name', ''), 'parent_uri': d.get('parent_uri', '')})
+        if f_ad is None and (object_type or '').upper() == 'FUGR/F' and _akt_uri_norm(object_url) == gn:
+            f_ad = object_name
+        bilgi = {'grup_uri': grup_uri, 'ff_kaynak': 'worklist', 'ff': []}
+        ff = []
+        try:
+            r = self.session.get(self.url + AKTIVASYON_WORKLIST_UC,
+                                 headers={'Accept': 'application/*'}, verify=False, timeout=45)
+            if getattr(r, 'status_code', None) != 200:
+                raise ValueError('http_%s' % getattr(r, 'status_code', '?'))
+            for g in aktivasyon_worklist_ayristir(r.text):
+                gt = g['type'].upper()
+                altinda = (_akt_uri_norm(g['parent_uri']) == gn
+                           or _akt_uri_norm(g['uri']).startswith(gn + '/'))
+                if gt == 'FUGR/FF' and altinda:
+                    ff.append({'uri': g['uri'], 'type': g['type'], 'name': g['name'],
+                               'parent_uri': g['parent_uri'] or grup_uri})
+                elif gt == 'FUGR/F' and _akt_uri_norm(g['uri']) == gn and f_ad is None:
+                    f_ad = g['name']
+        except Exception as exc:  # noqa: BLE001 — FF turetilemedi: eski ref'lerle devam, IZLI
+            bilgi['ff_kaynak'] = 'unavailable:%s' % type(exc).__name__
+        bilgi['ff'] = [a['name'] for a in ff]
+        refs = []
+        if f_ad:
+            refs.append({'uri': grup_uri, 'type': 'FUGR/F', 'name': f_ad})
+        refs.extend(ff)
+        refs.extend(digerleri)
+        if not refs:
+            refs = [{'uri': object_url, 'type': object_type, 'name': object_name}]
+        return refs, bilgi
+
+    def _activate_object_iki_faz(self, object_name, object_url):
         """Activate an ABAP object using two-phase pre-audit + batch activation.
 
         Phase 1 (pre-audit): POST with preauditRequested=true on the seed object.
@@ -3899,7 +4221,8 @@ class SAPADTClient:
         if p1['errors'] and any(e.get('type') == 'E' for e in p1['errors']):
             return p1
 
-        # Phase 1 succeeded outright (empty body or activationExecuted=true with no ioc_refs)
+        # Phase 1 succeeded outright (activationExecuted=true with no ioc_refs). Q187: bos govde
+        # artik E ile yukarida durur; yalniz-generation (hukum None) BURADAN donmez, toplu faza gecer.
         if p1['success'] and not p1['ioc_refs']:
             return p1
 
@@ -3912,9 +4235,27 @@ class SAPADTClient:
         else:
             refs = [(object_url, object_type, object_name)]
 
+        # Q231-a (2026-09-13): FUGR icin OLCULEN calisan istek kurulur (F + parentUri'li FF,
+        # preauditRequested=true). FUGR DISI tiplerin govdesi BIREBIR eskisi gibidir
+        # (parentUri eklenmez — olculmemis bir degisiklik yapilmaz).
+        faz2_params = {'method': 'activate'}
+        fugr_bilgi = None
+        grup_uri = self._fugr_grup_uri(object_url, refs)
+        if grup_uri:
+            ref_attrs, fugr_bilgi = self._fugr_faz2_referanslari(
+                grup_uri, object_url, object_type, object_name, p1)
+            faz2_params['preauditRequested'] = 'true'
+        else:
+            ref_attrs = [{'uri': u, 'type': t, 'name': n} for u, t, n in refs]
+        hedefler = [{'uri': object_url, 'name': object_name,
+                     'type': '' if object_type in (None, 'UNKNOWN') else object_type}] + \
+                   [{'uri': a['uri'], 'type': a['type'], 'name': a['name']} for a in ref_attrs]
+
         batch = ''.join(
-            f'<adtcore:objectReference adtcore:uri="{uri}" adtcore:type="{t}" adtcore:name="{n}"/>'
-            for uri, t, n in refs
+            '<adtcore:objectReference adtcore:uri="%s" adtcore:type="%s" adtcore:name="%s"%s/>'
+            % (a['uri'], a['type'], a['name'],
+               (' adtcore:parentUri="%s"' % a['parent_uri']) if a.get('parent_uri') else '')
+            for a in ref_attrs
         )
         batch_body = (
             f'<?xml version="1.0" encoding="UTF-8"?>'
@@ -3927,7 +4268,7 @@ class SAPADTClient:
             'post', f"{self.url}/sap/bc/adt/activation",
             headers=headers,
             data=batch_body,
-            params={'method': 'activate'},
+            params=faz2_params,
         )
 
         if r2.status_code == 403:
@@ -3943,6 +4284,9 @@ class SAPADTClient:
             }
 
         p2 = self._parse_activation_response(r2, object_name)
+        p2['_hedefler'] = hedefler
+        if fugr_bilgi is not None:
+            p2['fugr_faz2'] = fugr_bilgi
 
         if self.debug_enabled:
             self._debug(f"[DEBUG] activate_object phase 2 result: success={p2['success']}, "
@@ -6517,7 +6861,10 @@ constants:
         if activate:
             out['activation'] = self.activate_object(name.upper(), fm_url)
             act = out['activation']
-            out['success'] = bool(act.get('success', True)) if isinstance(act, dict) else True
+            # Q188 (2026-09-13): hukum `activate_object`'in (kanonik) `success`'inden gelir;
+            # anahtar YOKSA ya da sonuc dict DEGILSE "aktive edildi" VARSAYILMAZ
+            # (eski: `act.get('success', True)` / dict-disi -> True = fail-open).
+            out['success'] = isinstance(act, dict) and act.get('success') is True
 
         return out
 

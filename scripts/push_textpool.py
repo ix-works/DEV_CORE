@@ -232,8 +232,14 @@ def main() -> int:
             "post", f"{base}/sap/bc/adt/activation", headers=ph,
             data=px_body.encode("utf-8"),
             params={"method": "activate", "preauditRequested": "true"}, timeout=60)
-        print(f"[ACTIVATE] PROG/PX status={pr.status_code}")
-        if pr.status_code != 200:
+        # Q188 (2026-09-13): gövde TEK KAYNAKTAN okunur ve BASILIR. ⚠ Bu nokta başarı hükmünü
+        # gövdeden KURMAZ — hüküm aşağıdaki `?version=active` readback'indedir (rc=7); o
+        # sözleşme değiştirilmedi.
+        from sap_adt_lib import aktivasyon_govde_hukmu  # noqa: E402
+        px_hk = aktivasyon_govde_hukmu(pr.text)
+        print(f"[ACTIVATE] PROG/PX status={pr.status_code} govde_hukmu={px_hk['hukum']}"
+              f"({px_hk['sebep']}) — nihai hüküm readback'te")
+        if pr.status_code != 200 or px_hk["hukum"] is not True:
             print(f"      body: {pr.text[:500]}")
 
     # 6) Readback DOĞRULAMA — ?version=active ŞART (working DEĞİL).

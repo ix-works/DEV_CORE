@@ -110,7 +110,18 @@ def activate_lock_object(client: SAPADTClient, csrf: str, name: str) -> bool:
         data=body.encode('utf-8'),
         verify=False, timeout=30
     )
-    return r.status_code == 200 and 'activationExecuted="true"' in r.text
+    # ⛔ Q188 (2026-09-13): hüküm TEK KAYNAKTAN (`sap_adt_lib.aktivasyon_govde_hukmu`).
+    # Eskiden `'activationExecuted="true"' in r.text` idi ⇒ aynı gövdede type="E" mesajı
+    # olsa bile BAŞARI sayılıyordu. Gövde hüküm taşımıyorsa bağımsız worklist sondası karar verir.
+    if r.status_code != 200:
+        return False
+    from sap_adt_lib import aktivasyon_govde_hukmu, aktivasyon_worklist_sondasi
+    hk = aktivasyon_govde_hukmu(r.text)
+    if hk['hukum'] is None:
+        dog, _sonda, _kalan = aktivasyon_worklist_sondasi(
+            client, [{'uri': obj_url, 'name': name.upper(), 'type': 'ENQU/DL'}])
+        return dog is True
+    return hk['hukum'] is True
 
 
 def create_one(client: SAPADTClient, csrf: str, name: str, description: str,

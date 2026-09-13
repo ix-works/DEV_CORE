@@ -202,7 +202,10 @@ def activate(client, tok, name, obj_uri):
     # DÜZELTİLDİ (2026-06-11): eski mantık `A and B or C` → C clause sahte-OK üretiyordu.
     # HTTP 200 KANIT DEĞİL → activationExecuted + type=E parse et.
     executed, errs = _activation_failures(r.text)
-    ok = r.status_code in (200, 202) and executed and not errs
+    if r.status_code in (200, 202):
+        executed, errs = _hukmu_kesinlestir(client, executed, errs,
+                                            [{"uri": obj_uri, "name": name.upper()}], name)
+    ok = r.status_code in (200, 202) and executed is True and not errs
     print(f"[{'OK' if ok else 'FAIL'}] activate {name} status={r.status_code} executed={executed}")
     if not ok and errs:
         for e in errs[:6]:
@@ -212,28 +215,42 @@ def activate(client, tok, name, obj_uri):
 
 def _activation_failures(resp_text):
     """Aktivasyon yanıtından gerçek durum. HTTP 200 KANIT DEĞİL.
-    Döner (executed: bool, errors: list[str]). Aktif = executed True ve errors boş."""
-    import re
-    t = resp_text or ""
-    m = re.search(r'activationExecuted="(\w+)"', t)
-    errs = re.findall(r'type="[EA]"[^>]*>.*?<txt>([^<]+)', t, re.S)
-    if m:
-        return (m.group(1) == "true"), errs
+    Döner (executed: True|False|None, errors: list[str]). Aktif = executed True ve errors boş.
 
-    # ⚠ BAŞARI KANIT İSTER (2026-08-01 bug-avı, W2-MCPT-02).
-    # Eski fallback `'severity="E"' not in t` idi: yani "hata işareti YOKSA başarılı".
-    # Bu, aktivasyon yanıtı OLMAYAN gövdeleri de başarı sayıyordu. Ölçüldü:
-    #   HTTP 500 hata sayfası → executed=True   (aktive edildi der)
-    #   HTTP 403 logon formu  → executed=True
-    #   BOŞ gövde             → executed=True
-    # Üstelik `activate_and_verify` docstring'i "sahte 'OK' imkansiz" diyordu —
-    # doküman davranışı YALANLIYORDU.
-    # Yeni kural: fallback yalnız gövde GERÇEKTEN bir ADT aktivasyon/checklist yanıtına
-    # benziyorsa uygulanır. Tanınmayan gövde = kanıt yok = BAŞARISIZ (fail-closed).
-    adt_yaniti = any(im in t for im in ("chkl:", "<msg", "adtcore:", "<messages"))
-    if not adt_yaniti:
-        return False, (errs or ["aktivasyon yanıtı tanınmadı (gövde ADT yanıtı değil)"])
-    return ('severity="E"' not in t and 'severity="A"' not in t), errs
+    ⛔ Q188 (2026-09-13): hüküm TEK KAYNAKTAN gelir — `sap_adt_lib.aktivasyon_govde_hukmu`.
+    Bu dosya eskiden kendi kopya sözleşmesini taşıyordu ve lib'le AYRIŞMIŞTI (bayraksız
+    checklist gövdesi burada BAŞARI, lib'de BAŞARISIZ; yalnız-generation gövdesi burada
+    BAŞARISIZ, lib'de BAŞARI). `None` = gövde hüküm taşımıyor → çağıran BAĞIMSIZ worklist
+    sondası koşar (`_hukmu_kesinlestir`); sonda kurulamazsa başarı SAYILMAZ.
+    Korunan tarihçe (kanonik sözleşmenin içinde): 2026-06-11 (`activationExecuted=false`
+    → başarısız) · 2026-08-01 W2-MCPT-02 (tanınmayan/boş gövde = kanıt yok = başarısız).
+    """
+    from sap_adt_lib import aktivasyon_govde_hukmu
+    hk = aktivasyon_govde_hukmu(resp_text)
+    errs = [(e.get("message") or f"(metinsiz {e.get('type')} mesajı)") for e in hk["errors"]]
+    if hk["hukum"] is False and not errs and hk["sebep"] != "activation_not_executed":
+        errs = [f"aktivasyon yanıtı kanıt taşımıyor ({hk['sebep']})"]
+    return hk["hukum"], errs
+
+
+def _hukmu_kesinlestir(client, executed, errs, hedefler, etiket):
+    """Q188: gövde hüküm TAŞIMIYORSA (executed None, hata yok) BAĞIMSIZ worklist sondası karar verir.
+
+    Döner (executed: bool, errs). Sonda kurulamazsa `False` + DOĞRULANAMADI mesajı —
+    "ölçemedim" asla "aktive edildi"ye katlanmaz. Sınır: obje aktivasyondan ÖNCE worklist'te
+    değilse "listede yok" ayırt edici değildir (sap_adt_lib.aktivasyon_worklist_sondasi).
+    """
+    if executed is not None or errs:
+        return executed is True, errs
+    from sap_adt_lib import aktivasyon_worklist_sondasi
+    dog, sonda, kalan = aktivasyon_worklist_sondasi(client, hedefler)
+    if dog is True:
+        print(f"   [DOGRULANDI] {etiket}: gövde hüküm taşımıyordu; worklist sondası aktif gördü ({sonda})")
+        return True, errs
+    if dog is False:
+        return False, ["aktivasyon GERÇEKLEŞMEDİ — worklist'te hâlâ inaktif: "
+                       + ", ".join(f"{k['name']} ({k['type']})" for k in kalan)]
+    return False, [f"aktivasyon DOĞRULANAMADI — gövde hüküm taşımıyordu, worklist sondası kurulamadı ({sonda})"]
 
 
 def _zorunlu_desc(deger, bayrak, obje):
@@ -256,7 +273,7 @@ def _zorunlu_desc(deger, bayrak, obje):
     )
 
 
-def _aktivasyon_yaniti_ok(r):
+def _aktivasyon_yaniti_ok(r, client=None, istek_govdesi=None):
     """Aktivasyon POST yanıtının TEK karar noktası (bool döner, exception atmaz).
 
     #73 (2026-08-29): `step_cdsactivate`/`step_pbactivate`/`step_bactivate` ana yoldan
@@ -277,7 +294,11 @@ def _aktivasyon_yaniti_ok(r):
     dayanma (fixture `aktivasyon_sahte_ok` D bölümü bunu AST ile zorlar).
     """
     executed, errs = _activation_failures(r.text)
-    ok = r.status_code in (200, 202) and executed and not errs
+    if r.status_code in (200, 202):
+        from sap_adt_lib import aktivasyon_hedefleri_govdeden
+        executed, errs = _hukmu_kesinlestir(client, executed, errs,
+                                            aktivasyon_hedefleri_govdeden(istek_govdesi), "step")
+    ok = r.status_code in (200, 202) and executed is True and not errs
     if not ok and errs:
         for e in errs[:6]:
             print("   E: " + e)
@@ -310,6 +331,8 @@ def activate_and_verify(client, tok, refs):
             f"AKTİVASYON BAŞARISIZ ({names}): HTTP {getattr(r, 'status_code', '?')} — "
             f"bu bir aktivasyon yanıtı DEĞİL. Gövde: {(r.text or '')[:200]}")
     executed, errs = _activation_failures(r.text)
+    executed, errs = _hukmu_kesinlestir(client, executed, errs,
+                                        [{"uri": u, "name": n.upper()} for u, n in refs], names)
     if not executed or errs:
         raise RuntimeError(
             f"AKTİVASYON BAŞARISIZ ({names}): activationExecuted={executed}; hatalar={errs[:6]}")
@@ -554,7 +577,7 @@ def step_cdsactivate(client, tok):
     )
     print(f"[activate] status={r.status_code}")
     print("   " + r.text[:900].replace("\n", " "))
-    return _aktivasyon_yaniti_ok(r)
+    return _aktivasyon_yaniti_ok(r, client, body)
 
 
 def step_ccimp(client, tok, transport, ccimp_path):
@@ -618,7 +641,7 @@ def step_pbactivate(client, tok):
     )
     print(f"[activate] status={r.status_code}")
     print("   " + r.text[:900].replace("\n", " "))
-    return _aktivasyon_yaniti_ok(r)
+    return _aktivasyon_yaniti_ok(r, client, body)
 
 
 def step_bactivate(client, tok):
@@ -642,7 +665,7 @@ def step_bactivate(client, tok):
     )
     print(f"[activate] status={r.status_code}")
     print("   " + r.text[:900].replace("\n", " "))
-    return _aktivasyon_yaniti_ok(r)
+    return _aktivasyon_yaniti_ok(r, client, body)
 
 
 def step_srvb(client, tok, transport):
