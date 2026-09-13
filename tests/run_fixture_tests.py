@@ -495,6 +495,12 @@ OZEL_TESTLER = [
      "iki push yolunun AST KABLOLAMASI; ayrica YARATMA araci != GUNCELLEME yolu "
      "(`--type ddls` reddi mevcut view icin adt_push_source'a yollar; olculmemis tip "
      "icin yol UYDURULMAZ) — 3. baglam ayri surecte gercek CLI"),
+    # 2026-09-13 (Q175): aciklama PUT'u 412 + PUT sonrasi obje sessizce INAKTIF kaliyordu.
+    ("aciklama_412_retry",
+     "sap_set_object_description: 412 govdesindeki ETag ile TEK retry (yeni lock) + PUT sonrasi "
+     "aktive-bekleyen listesi -> aktivasyon -> liste YENIDEN + aktif surum readback; sahte ADT "
+     "sunucusu ETag kuralini modeller, gercek activate_object/get_inactive_objects kosar "
+     "+ GEVSETME SINIRI: envelope degismisse retry YOK (17 vektor + 12 mutasyon; eski kod 4/17)"),
 ]
 
 
@@ -932,8 +938,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "lock sinyali tüketicisi (+ kanonik `_last_lock_effective_transport` deseninin "
      "iki bağımsız üyesinden biri — E2 çapası)"),
     ("scripts/sap_set_object_description.py",
-     ("O:lock_modification_support", "O:transport_gorev_istek_cevrimi"),
-     "lock sinyali tüketicisi (+ kanonik desenin ikinci üyesi — E2 çapası)"),
+     ("O:lock_modification_support", "O:transport_gorev_istek_cevrimi", "O:aciklama_412_retry"),
+     "lock sinyali tüketicisi (+ kanonik desenin ikinci üyesi — E2 çapası) + (Q175) 412 tek "
+     "retry + PUT sonrası aktivasyon/readback davranış korpusu"),
     ("scripts/object_types.py",
      ("O:class_include_push", "O:reviewer_tip_kapsam", "O:adt_uc_url_cozumu",
       "O:fm_okuma_where_used"),
