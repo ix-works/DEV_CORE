@@ -390,8 +390,9 @@ python scripts/populate_tables.py `
 # Sadece bir tablo (test):
 python scripts/populate_tables.py ... --only ZSD001_T_CONTY
 
-# Mevcut tabloyu silip yeniden yarat:
-python scripts/populate_tables.py ... --force-recreate   # ⚠ transport'ta SİLME KALINTISI bırakır — aşağı bak
+# TEK bir mevcut tabloyu silip yeniden yarat (DELETE+CREATE — bağımlı objesi olan tabloda KULLANMA):
+python scripts/populate_tables.py ... --force-recreate --only ZSD001_T_CONTY   # ⚠ transport'ta SİLME KALINTISI bırakır — aşağı bak
+# ⛔ `--only`'siz `--force-recreate` CSV'deki HER mevcut tabloyu siler (bayrak koşumun tamamına uygulanır — Q315)
 
 # XML/DDL preview:
 python scripts/populate_tables.py ... --dry-run

@@ -2460,3 +2460,22 @@ python tests/run_battery.py sorgu_araclari_durustlugu --kardes sorgu_basarisizli
 - Komşu çapalar (bu turda kusuru belgeledikleri için güncellendi, yön ölçüldü): `sorgu_basarisizligi_gorunur` D6 · `fm_okuma_where_used` W1 · I1. Eski kodda FAIL, yeni kodda PASS; ölçüm `git archive eab0180 | tar -x -C <kum>` + güncel fixture kopyası.
 - Canlı teyit (salt-okur, proje kökü `.conn_adt`, maskeli): `COUNT(*)` ile satır sayısı N bilinen bir filtrede `adt_sql_query` `row_limit` N → `truncated:false` · N−1 → `true` · N+5 → `false` (2026-09-13: N=16). ⚠ Canlı MCP süreci yeniden başlatılmadan eski kodu koşar.
 - HARİTA: `sap_adt_lib` (b0_secim P3 = 14) · `sap_client` · `query` · `worklist_audit` · `where_used.py` → `O:sorgu_araclari_durustlugu`; `sap_client` + `syntax_check.py` → `O:aktivasyon_govde_hukmu`. ⚠ `syntax_check.py` girdisi yalnız Q307'li ağaçta anlamlıdır (o korpus orada `syntax_check.py`'yi koşar).
+
+## B54 — `--force-recreate` önerisi TEK objeye daraltılır: `populate_cds_views` `[ATLANDI]` satırı + toplu özet · `populate_tables` readback FARKLI dalı (Q315; B43'ün ve Q268 korpusunun komşusu)
+
+```
+python tests/fixtures/push_atlandi_ve_kaynak_izi/run.py   # 32 senaryo + 15 mutasyon, SAP gerektirmez, exit 0
+python tests/fixtures/populate_tables_unit_kind/run.py    # 24 senaryo + 9 mutasyon, exit 0
+python tests/run_battery.py push_atlandi_ve_kaynak_izi --kardes populate_tables_unit_kind cds_paket_kapsami ddic_aktivasyon_notu populate_ddic_fail_closed adt_uc_url_cozumu class_include_push --precommit
+```
+
+- ⛔ **`--force-recreate` global bayraktır**, kapsamı YALNIZ `--only` daraltır. Bu yüzden tek objeyi anan satır başı `[ATLANDI] <ad>` satırı da `--only <ad>` taşımak zorundadır. Satır tek objeye bağlı GÖRÜNÜR, bayrak koşumun tamamına uygulanır.
+- ⭐ **Ölçüt çıplak dize değildir.** `_force_onerileri(cikti)`, `--force-recreate(?:\s+--only\s+(\S+))?` ile HER geçişi `(satır, --only değeri | None)` olarak döndürür. Vektör: değer `None` değil · virgül içermiyor · aynı satırda `DELETE` + `KULLANMA` var. `--fail-on-skip` eşleşmez (tam ad).
+- Özet kuralı: **1 atlanan → gerçek ad · birden çok → `<ad>` yer tutucusu.** Virgüllü tam liste YASAK (M13 onu geri getirir, F5 ve F7 düşer). `<ad>` kabukta yönlendirme sözdizimidir ⇒ aynen yapıştırılırsa komut koşmaz (güvenli başarısızlık).
+- Gürültü ve FP çapaları: **F1** atlanan yok → öneri yok · **F8** karışımda (1 yazıldı + 1 atlandı + 1 hatalı) yalnız atlanan B'nin adı geçer · **S17** tabloda içerik AYNI → öneri yok · **S18** readback ÖLÇÜLEMEDİ → öneri yok (fark kanıtlanmadan DELETE önerilmez; 3. bağlam).
+- **3. bağlam F7:** koşum zaten `--only zmod001_ddl_a, ZMOD001_DDL_B` ile daraltılmış (küçük harf + boşluk, ayrıştırma strip+upper). İşlenmeyen C adı çıktıda hiç geçmez.
+- Eski-kod karşıtlığı (koşum sonrası iki `_taban_` kopyasını SİL): `git show <taban>:scripts/populate_cds_views.py > scripts/_taban_populate_cds_views.py`, sonra fixture `run.py`'nin `PCV_PATH` satırı `_taban_populate_cds_views.py`'ye çevrilmiş kopyası `tests/fixtures/push_atlandi_ve_kaynak_izi/_taban_run.py` → **25/32** (düşen F2–F8). Tablo için aynı desen: `PT_PATH` → **23/24** (düşen S16). `<taban>` = Q315 merge'ünün ebeveyni (bu tur `18bbe78`). Pinli SHA sığ klonda yoktur ⇒ CI'da koşulmaz, elle.
+- ⚠ **Çökme ≠ yakalandı:** F6 ilk yazımda `None` değerleri sıraladı, eski metin mutasyonunda `TypeError` verip M12'yi `KURULAMADI`'ya düşürdü. Değerler `str()` ile sıralanır. Yeni vektör eklerken eski metnin `None` ürettiğini varsay.
+- ⚠ Mutasyon çapaları (M11–M15 · M8–M9) üretim kodundaki **tam satırlara** bağlıdır; metni değiştiren her tur `yama-tuttu` bloğunda `degisti` görmelidir. `YAMA TUTMADI` = sahte-yeşil riski.
+- Satır sonu: çalışma kopyasında iki script ve iki fixture LF · `playbook/adt-cds.md` CRLF · `playbook/adt-tables-structures.md` LF; indeks blob'larının hepsi LF (`text=auto`). Yalnız ham baytla say ve üç yeri ayrı ölç: çalışma kopyası, `git show HEAD:<dosya>`, `git show :<dosya>`. Bu turda Edit aracı LF olan çalışma kopyasını tümüyle CRLF'e çevirdi. Tüm dosyada churn olup olmadığını `git diff --cached --numstat` gösterir.
+- HARİTA (değişmedi): `scripts/populate_cds_views.py` → `O:cds_paket_kapsami`, `O:push_atlandi_ve_kaynak_izi` · `scripts/populate_tables.py` → `O:populate_tables_unit_kind`, `O:ddic_aktivasyon_notu`, `O:populate_ddic_fail_closed`.

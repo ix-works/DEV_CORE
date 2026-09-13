@@ -16,6 +16,9 @@ Bu korpus S(enaryo) + M(utasyon) tasir:
   S1-S4  uc-baglam + ozel-DTEL: dogru annotation uretiliyor mu
   S5-S8  CSV kolon sozlesmesi: eksik/ekstra/gecersiz/hic-yok
   M1-M4  fix'i sok -> korpus KIRMIZI olmali (yesil kalirsa korpus bu degismezi olcmuyor)
+  S16-S18 + M8-M9 (Q315, 2026-09-13): readback FARKLI dalinin `--force-recreate`
+         onerisi `--only <tablo>` + DELETE/KULLANMA uyarisi tasir; AYNI ve
+         OLCULEMEDI dallarinda oneri HIC basilmaz (gurultu + 3. baglam)
 
 Kosum: python tests/fixtures/populate_tables_unit_kind/run.py     (exit 0 = PASS)
 """
@@ -41,6 +44,18 @@ DS_PATH = SCRIPTS / "utils" / "ddic_semantics.py"
 
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
+
+_FORCE_RE = re.compile(r"--force-recreate(?:\s+--only\s+(\S+))?")
+
+
+def _force_onerileri(cikti: str) -> list:
+    """Q315: ciktidaki HER `--force-recreate` gecisi -> (satir, `--only` degeri | None).
+
+    None = oneri kapsam daraltici TASIMIYOR (bayrak tum CSV tablolarina uygulanir).
+    Kardesi: tests/fixtures/push_atlandi_ve_kaynak_izi/run.py (ayni olcut, CDS yolu).
+    """
+    return [(satir, m.group(1)) for satir in cikti.splitlines()
+            for m in _FORCE_RE.finditer(satir)]
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +369,14 @@ def senaryolar(pt) -> list[tuple[str, bool, str]]:
     r.append(("S11 #32(b): var-ama-yarim-shell -> False (sahte yesil yok)",
               sonuc is False and "icerik farkli" in out,
               "donen=%r out=%r" % (sonuc, out[:200])))
+    # --- S16 (Q315): FARKLI dalinin onerisi TEK tabloya daraltilmis olmali ---
+    # Olcut ciplak dize aramasi DEGIL (uyari da bayragi anabilir): HER
+    # `--force-recreate` gecisi `--only ZT` tasir VE ayni satirda DELETE uyarisi.
+    on = _force_onerileri(out)
+    r.append(("S16 Q315: FARKLI onerisi `--force-recreate --only ZT` + DELETE/KULLANMA",
+              len(on) == 1 and all(v == "ZT" and "DELETE" in s and "KULLANMA" in s
+                                   for s, v in on),
+              "oneriler=%r" % on))
 
     # --- S12: ⭐ IDEMPOTANS CAPASI — gercekten AYNI ise yine True, yazma YOK
     # Duzeltmenin BOZMAMASI gereken sey: ayni obje uzerinde tekrar kosmak
@@ -363,6 +386,9 @@ def senaryolar(pt) -> list[tuple[str, bool, str]]:
     r.append(("S12 #32(b) FP capasi: icerik ESLESIYOR -> True ve PUT YOK (idempotans)",
               sonuc is True and c.session.put_params is None,
               "donen=%r put=%r" % (sonuc, c.session.put_params)))
+    # Q315 GURULTU capasi: icerik ayniyken yeniden-yaratma onerisi basilmaz.
+    r.append(("S17 Q315 gurultu: icerik AYNI -> `--force-recreate` onerisi YOK",
+              _force_onerileri(out) == [], "oneriler=%r" % _force_onerileri(out)))
 
     # --- S13: readback OLCULEMEDI -> "olculemedi != temiz" ----------------
     c = _Client(_Resp(200, ""), _Resp(500, "err"))
@@ -370,6 +396,9 @@ def senaryolar(pt) -> list[tuple[str, bool, str]]:
     r.append(("S13 #32(b): readback olculemedi -> False (olculemedi != temiz)",
               sonuc is False and "DOGRULANAMADI" in out,
               "donen=%r out=%r" % (sonuc, out[:200])))
+    # Q315 3. BAGLAM: olculemeyen icerik icin DELETE onerilmez (fark kanitlanmadi).
+    r.append(("S18 Q315 3.baglam: readback OLCULEMEDI -> `--force-recreate` onerisi YOK",
+              _force_onerileri(out) == [], "oneriler=%r" % _force_onerileri(out)))
 
     # --- S14: #32(a) CORRNR OTORITESI -------------------------------------
     # Kontrol gruplu canli olcum (2026-08-19): S-tipi GOREV verilince 9/9 tablo
@@ -439,6 +468,22 @@ MUTASYONLAR = [
     ("M7 #32(a) CORRNR'i yok say (PUT yine istenen transport ile gitsin)",
      lambda s: s.replace("            params={'corrNr': etkin_transport, 'lockHandle': handle},",
                          "            params={'corrNr': transport, 'lockHandle': handle},"),
+     None),
+
+    # --- Q315: kapsam daraltici ve uyari AYRI degismezler -------------------
+    ("M8 Q315 FARKLI onerisini ESKI metne dondur (--only'siz)",
+     lambda s: s.replace(
+         "            print(f'         Yazma YAPILMADI. Icerigi guncellemek icin: '\n"
+         "                  f'--force-recreate --only {table_name} (DELETE+CREATE yapar, '\n",
+         "            print(f'         Yazma YAPILMADI. Icerigi guncellemek icin: '\n"
+         "                  f'--force-recreate (DELETE+CREATE yapar, '\n"),
+     None),
+    ("M9 Q315 DELETE/KULLANMA uyarisini sok",
+     lambda s: s.replace(
+         "                  f'--force-recreate --only {table_name} (DELETE+CREATE yapar, '\n"
+         "                  f'transport\\'ta silme kalintisi birakir; bagimli objesi olan '\n"
+         "                  f'tabloda KULLANMA)')",
+         "                  f'--force-recreate --only {table_name}')"),
      None),
 ]
 
