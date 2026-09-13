@@ -2552,6 +2552,27 @@ python tests/run_battery.py push_atlandi_ve_kaynak_izi --kardes populate_tables_
 - Satır sonu: `populate_cds_views.py` ve `run.py` `eol=lf` (diskte LF) · `playbook/adt-cds.md` ve bu dosya `text=auto`, Windows checkout'unda CRLF. Ham baytla say.
 - HARİTA (değişmedi): `scripts/populate_cds_views.py` → `O:cds_paket_kapsami`, `O:push_atlandi_ve_kaynak_izi`.
 
+## B59 — Fixture `%TEMP%` kum artıkları: try/finally + salt-okur girdiyi silen `_sil` (Q319; B57'nin `_sil` dersinin sınıf genişlemesi)
+
+```
+python tests/run_fixture_tests.py        # hüküm değişmemeli; ayrıca %TEMP% girdi sayısı önce = sonra (aşağıdaki ölçüm)
+```
+
+- **İzole sızıntı ölçümü (kalıcı betik yok, prosedür budur):** her fixture'ı ayrı ve boş bir TMP kökünde koş. `env` = `os.environ` kopyası; `IX_*` ve `CLAUDE_PROJECT_DIR` çıkarılır; `TMP`=`TEMP`=`TMPDIR`=`%TEMP%\q319_olc\<n>`; `cwd` = repo kökü (`run_ozel` ile aynı). Koşumdan sonra o kökteki girdi sayısı = koşum başına sızıntı. Süitin koştuğu kip de ölçülür: `run_battery.kipleri_kesfet(kaynak)[0][:1]`. Global `%TEMP%` farkı ALINMAZ: paralel turlar aynı dizine yazar.
+- ⛔ **Ölçüm kökünü silmeden önce reparse say** (`os.walk` followlinks=False + `os.lstat(p).st_file_attributes & FILE_ATTRIBUTE_REPARSE_POINT`). >0 ise önce her bağın hedefini `os.readlink` ile yaz ve hedefin dosya sayısı/boyutunu al. Bağı boşaltmadan `os.rmdir` ile kaldır, hedef önce = sonra doğrula, reparse 0 ölç, sonra sil. d7_drift_imzasi kumunda gerçek junction vardır (`proje/core` + `.claude/{agents,skills,commands}`). ⚠ Hedef kontrolünü heredoc'la yazma: `\\?\` öneki tek `\`'e iner ve karşılaştırma sahte "dışarıda" der (ölçüldü). Betiği dosyaya yaz.
+- **Beklenen (2026-09-13):** 26 düzeltilmiş fixture'da taban ve ilk kip → 0 girdi (önce taban 52 · kip 11). HARİÇ üçlü hâlâ 1'er bırakır: `aktivasyon_govde_hukmu` · `sap_gate_skip_sozlesmesi` (`ix_b301_`) · `b0_secim` (çocuk süreç). Bunlar kusur değil, açık Q adayıdır.
+- **Negatif test (mutasyon):** fixture dizininde kardeş kopya `_q319mut_run.py` üret. İlk satır `def _sil(d: Path) -> None:` sonrasına `    return None` ekle; kopyayı izole kökte koş → **>0** beklenir (ölçüldü 26/26, 1…27). Kopya `finally` ile silinir; asıl `run.py`'ye dokunulmaz. ⚠ Kopya fixtures dizininde durduğu için bu koşum sırasında süit/batarya koşturma. Bilgi amaçlı ikinci kip `_sil` → `shutil.rmtree(d, ignore_errors=True); return None`: 12 fixture'da hâlâ >0 (changelog_amend · changelog_gate · worktree_blocklist · adt_uc_url_cozumu · conn_adt_proje_koku · core_fiziksel_kopya · seed_memory_hub_indeks · mcp_profil_aktivasyon_offline · validator_kapsam_paydasi · git_sorgu_sessiz_bos · d7_drift_imzasi · sir_gate). `chmod` dalını "gereksiz" diye sadeleştiren fix bu 12'yi geri açar.
+- **Hüküm imzası (önce/sonra):** rc + `[OK|PASS|FAIL|YAKALANDI|KACTI|KURULAMADI|ATLA]` sayaçları + son 8 satırdaki `N/M` + `PASS —` / `TOPLAM:` / `MUTASYON OZETI` / `SONUC:` satırları. Kum adları (rastgele sonek) imzaya girmez. Önce kaydı DÜZENLEMEDEN ÖNCE alınır. Q319: 35/35 AYNI.
+- **Junction güvenliği (ölçüldü, iddia değil):** `_sil` her `run.py`'den AST ile çıkarılır; modül kodu koşulmaz. `os` yerine `chmod` yollarını kaydeden vekil verilir. Hedef dizin silinen kumun DIŞINDA durur ve salt-okur dosya/alt dizin taşır; ölçüt (dosya sayısı, bayt, RO sayısı, dizin attr) önce = sonra. Python 3.11.9 sonuçları, 26/26:
+  - S1 `kum/a/bag → hedef` + kumda RO dosya, `_sil(kum)`: hedef AYNI, kum silindi, chmod bağ içi 0.
+  - S3 bağın kendisi `attrib +R /L` (hedef RO değil, harness doğrular), `_sil(kum)`: hedef AYNI, kum silindi, onerror chmod 1 kez bağın kendi yolunda.
+  - S2 `_sil(bag)` doğrudan: hedef AYNI ama **bağ kalır** (rmtree link'i reddeder, onerror yalnız bağa chmod). Güvenli ama sızar: `_sil`'i bir junction'a doğrudan çağırma.
+  - POZİTİF KONTROL: `os.walk(followlinks=True)` ile silen temizlik S1/S3'te hedefi 5 → 0 götürür, yakalandı 2/2. Bu satır düşerse harness kördür.
+  - Python 3.12+'da `_sil` `onexc`'e geçer; junction ölçümü o sürümde tekrarlanmalı (DOĞRULANAMADI: 3.12+ bu makinede ölçülmedi).
+- ⭐ **Yeni fixture kum açıyorsa:** aynı `_sil` gövdesini kopyala (26 dosyada docstring hariç AST tek varyant). Yerleşim: fonksiyon-yerel kum → `main` sarmalayıcı `try/finally`; modül seviyesi kum → `atexit.register`; çocuk süreç kumları → çağıranın `finally`'si. `rmtree(ignore_errors=True)` Windows'ta git nesnelerini ve `copytree` ile gelen salt-okur dizinleri sessizce bırakır.
+- ⚠ Toplu yama betiği tuzağı: önce `_sil` gövdesini ekleyip sonra `rmtree(d, ignore_errors=True)` satırını değiştirmeye kalkarsan çapa 2 kez eşleşir, çünkü `_sil`'in fallback satırı aynı dizeyi taşır. Değiştirmeyi eklemeden ÖNCE yap ya da çapaya önceki satırı kat.
+- ⚠ Satır sonu: 26 `run.py` `eol=lf`, diskte LF; ham baytla ölç. Bu iki `.md` `text=auto`, diskte CRLF.
+
 ## B60 — Reviewer haritası FUGR/FM ekseni: `fugr` → `None` kayıtlı istisna, `func` push'u fail-closed (Q308; `reviewer_tip_kapsam` F1–F5)
 
 ```

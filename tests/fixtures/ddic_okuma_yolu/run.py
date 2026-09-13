@@ -32,7 +32,10 @@ SAP GEREKTIRMEZ: HTTP katmani ve DDIC okuyucusu sahtelenir; olculen sey YONLENDI
 from __future__ import annotations
 
 import ast
+import atexit
 import os
+import shutil
+import stat
 import sys
 import tempfile
 import types
@@ -52,6 +55,7 @@ for p in (REPO, REPO / "scripts", REPO / "scripts" / "utils"):
 
 # Yan-etkiler (tazelik damgasi vb.) GERCEK projeye degil gecici koke yazilsin.
 _TMP = tempfile.mkdtemp(prefix="ddic_okuma_yolu_")
+atexit.register(lambda: _sil(Path(_TMP)))   # Q319: modul duzeyi kum; asagidaki SystemExit yollari da kapsanir
 os.environ["CLAUDE_PROJECT_DIR"] = _TMP
 # Asgari profil: yoksa MCP katmani fail-closed davranip her tool icin "GIZLENDI"
 # uyarisi basar (gurultu; testin olctugu sey bu DEGIL). Dogrudan cagri etkilenmez.
@@ -59,6 +63,22 @@ Path(_TMP, "project.yaml").write_text(
     "sap_profile: s4_private\nrelease: '2025'\nsource_root: SOURCE_CODES\n",
     encoding="utf-8",
 )
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
 
 # ── MCP SDK KOPRUSU (test-harness'i; FastMCP test kapsaminda DEGIL) ──────────────
 try:  # pragma: no cover - ortam kosullu

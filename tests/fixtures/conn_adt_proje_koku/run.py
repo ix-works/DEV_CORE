@@ -52,6 +52,7 @@ import argparse
 import importlib.util
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -261,6 +262,22 @@ def _gate_modulu(kaynak: str | None, tmp: Path):
     return m
 
 
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mutasyon", action="store_true",
@@ -285,7 +302,7 @@ def main() -> int:
         arac_testleri(arac_kaynak, tmp)
         gate_testleri(_gate_modulu(gate_kaynak, tmp), tmp)
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        _sil(tmp)                                    # Q319: kopyalanan scripts/utils salt-okur
 
     gecen = sum(1 for ok, _ in SONUC if ok)
     for ok, ad in SONUC:

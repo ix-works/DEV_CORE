@@ -40,6 +40,8 @@ import importlib.util
 import json
 import re
 import os
+import shutil
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -73,6 +75,22 @@ MUTLAR = {
 }
 
 SONUC: list[tuple[str, bool, str]] = []
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def ekle(ad: str, kosul, aciklama: str = "") -> None:
@@ -139,8 +157,9 @@ def main() -> int:
         kaynak = ham.replace(eski, yeni, 1)
 
     tmp = Path(tempfile.mkdtemp(prefix="ixd_kablolama_"))
-    mod, gecici_modul = _modul(kaynak, tmp)
+    gecici_modul = None
     try:
+        mod, gecici_modul = _modul(kaynak, tmp)
         korunan, onekler, hata = mod._guard_korudugu_toollar()
 
         # === S1 TURETME CANLI + PAYDA ELLE LISTEDEN GENIS ====================
@@ -205,6 +224,7 @@ def main() -> int:
     finally:
         if gecici_modul is not None and gecici_modul.exists():
             gecici_modul.unlink()
+        _sil(tmp)                                    # Q319: kum birikiyordu
 
     gecen = sum(1 for _, ok, _ in SONUC if ok)
     for ad, ok, detay in SONUC:

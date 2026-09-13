@@ -37,6 +37,9 @@ Kosum: python tests/fixtures/cikti_iddiasi_durustlugu/run.py     (exit 0 = PASS)
 from __future__ import annotations
 
 import io
+import os
+import shutil
+import stat
 import sys
 import types
 from pathlib import Path
@@ -58,6 +61,22 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 _mod_refs: list = []
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def _yukle(yol: Path, ad: str, mut=None):
@@ -196,38 +215,45 @@ def senaryolar(rpp, sync) -> list[tuple[str, bool, str]]:
          i >= 0 and not izler, "bulunan yazma cagrilari=%s" % izler)
 
     # ================= B) sap_sync_pull alt-include ==========================
+    # Q319: senaryolar() koşum başına 3 kez çağrılır (taban + 2 mutasyon); kumlar
+    # finally'de silinmezse her koşum 3 sync_alt_ + 3 sync_yalin_ bırakıyordu.
     tmp = Path(tempfile.mkdtemp(prefix="sync_alt_"))
-
-    # B1: alt-include VAR -> uyarir + hepsini adlandirir
-    (tmp / "ZCL_TEST.clas.abap").write_text("CLASS zcl_test.\n", encoding="utf-8")
-    (tmp / "ZCL_TEST.ccimp.abap").write_text("* impl\n", encoding="utf-8")
-    (tmp / "ZCL_TEST.ccau.abap").write_text("* test\n", encoding="utf-8")
-    (tmp / "ZCL_BASKA.ccimp.abap").write_text("* baska sinif\n", encoding="utf-8")  # FP capasi
-    tut = io.StringIO()
-    saved = sys.stdout
-    sys.stdout = tut
     try:
-        sync._alt_include_uyar("ZCL_TEST", str(tmp / "ZCL_TEST.clas.abap"))
+        # B1: alt-include VAR -> uyarir + hepsini adlandirir
+        (tmp / "ZCL_TEST.clas.abap").write_text("CLASS zcl_test.\n", encoding="utf-8")
+        (tmp / "ZCL_TEST.ccimp.abap").write_text("* impl\n", encoding="utf-8")
+        (tmp / "ZCL_TEST.ccau.abap").write_text("* test\n", encoding="utf-8")
+        (tmp / "ZCL_BASKA.ccimp.abap").write_text("* baska sinif\n", encoding="utf-8")  # FP capasi
+        tut = io.StringIO()
+        saved = sys.stdout
+        sys.stdout = tut
+        try:
+            sync._alt_include_uyar("ZCL_TEST", str(tmp / "ZCL_TEST.clas.abap"))
+        finally:
+            sys.stdout = saved
+        c = tut.getvalue()
+        ekle("B1 alt-include VAR: uyarir + 2 dosyayi adlandirir + KOMSU sinifi karistirmaz",
+             "CEKILMEDI" in c and "ZCL_TEST.ccimp.abap" in c
+             and "ZCL_TEST.ccau.abap" in c and "ZCL_BASKA" not in c,
+             "cikti=%r" % c[:120])
     finally:
-        sys.stdout = saved
-    c = tut.getvalue()
-    ekle("B1 alt-include VAR: uyarir + 2 dosyayi adlandirir + KOMSU sinifi karistirmaz",
-         "CEKILMEDI" in c and "ZCL_TEST.ccimp.abap" in c
-         and "ZCL_TEST.ccau.abap" in c and "ZCL_BASKA" not in c,
-         "cikti=%r" % c[:120])
+        _sil(tmp)
 
     # B2: alt-include YOK -> SESSIZ (FP capasi, B1'den AYRI)
     tmp2 = Path(tempfile.mkdtemp(prefix="sync_yalin_"))
-    (tmp2 / "ZCL_YALIN.clas.abap").write_text("CLASS zcl_yalin.\n", encoding="utf-8")
-    tut = io.StringIO()
-    saved = sys.stdout
-    sys.stdout = tut
     try:
-        sync._alt_include_uyar("ZCL_YALIN", str(tmp2 / "ZCL_YALIN.clas.abap"))
+        (tmp2 / "ZCL_YALIN.clas.abap").write_text("CLASS zcl_yalin.\n", encoding="utf-8")
+        tut = io.StringIO()
+        saved = sys.stdout
+        sys.stdout = tut
+        try:
+            sync._alt_include_uyar("ZCL_YALIN", str(tmp2 / "ZCL_YALIN.clas.abap"))
+        finally:
+            sys.stdout = saved
+        ekle("B2 alt-include YOK: hicbir sey basilmaz (gurultu yok)",
+             tut.getvalue() == "", "gorulen=%r" % tut.getvalue()[:80])
     finally:
-        sys.stdout = saved
-    ekle("B2 alt-include YOK: hicbir sey basilmaz (gurultu yok)",
-         tut.getvalue() == "", "gorulen=%r" % tut.getvalue()[:80])
+        _sil(tmp2)
 
     # B3: marker listesi TEK KAYNAK (source_drift) — yerel kopya ACILMAMIS
     sync_src = SYNC_PATH.read_text(encoding="utf-8")

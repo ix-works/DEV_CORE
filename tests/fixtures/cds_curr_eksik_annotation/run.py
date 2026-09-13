@@ -70,6 +70,10 @@ Kosum: python tests/fixtures/cds_curr_eksik_annotation/run.py     (exit 0 = PASS
 """
 from __future__ import annotations
 
+import atexit
+import os
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -86,7 +90,24 @@ CORE = HERE.parents[2]
 VALIDATORS = CORE / "scripts" / "validators"
 V_PATH = VALIDATORS / "check_cds_currency_reference.py"
 
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 TMP = Path(tempfile.mkdtemp(prefix="cds_eksik_"))
+atexit.register(_sil, TMP)   # Q319: modul duzeyi kum (main + mutasyon dongusu boyunca yasar)
 
 
 def kos(cds_metni: str, validator: Path = V_PATH) -> tuple[int, str]:

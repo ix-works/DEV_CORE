@@ -35,6 +35,9 @@ from __future__ import annotations
 
 import ast
 import io
+import os
+import shutil
+import stat
 import sys
 import tempfile
 from contextlib import redirect_stdout
@@ -55,6 +58,22 @@ try:
     import run_fixture_tests as S
 except Exception as exc:  # pragma: no cover
     raise SystemExit(f"[fixture-hatasi] suit yuklenemedi (sessiz gecme YOK): {exc}")
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def _kablolu_mu(src: str) -> tuple[bool, str]:
@@ -153,6 +172,7 @@ def senaryolar(modul=S) -> list[tuple[str, bool, str]]:
         ekle("S5 kablolama: main() ikisini de cagirir, BITIR `finally`de", ok, detay)
     finally:
         modul._CONN = eski
+        _sil(tmp)                                    # Q319: senaryolar() koşum başına 3 kez
 
     return out
 

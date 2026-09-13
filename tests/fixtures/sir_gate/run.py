@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -46,8 +48,28 @@ if not GATE.exists():  # sessiz yanlis-sonuc yerine gurultulu hata
     raise SystemExit(f"[fixture-hatasi] gate bulunamadi: {GATE}")
 
 
+_KUMLAR: list[Path] = []
+
+
+def _sil(d: Path) -> None:
+    """Q319: `.git/objects` salt-okurdur; `rmtree(ignore_errors=True)` Windows'ta SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def _repo() -> Path:
     d = Path(tempfile.mkdtemp(prefix="sir_gate_"))
+    _KUMLAR.append(d)                                # Q319: main() finally'de silinir
     subprocess.run(["git", "init", "-q", "."], cwd=d, check=True)
     subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=d, check=True)
     subprocess.run(["git", "config", "user.name", "t"], cwd=d, check=True)
@@ -73,6 +95,14 @@ def _yaz(d: Path, rel: str, icerik: str = "ADT_SAP_URL=https://x\nADT_SAP_PASSWO
 
 
 def main() -> int:
+    try:
+        return _main()
+    finally:
+        for d in _KUMLAR:                            # Q319: koşum başına 6 kum birikiyordu
+            _sil(d)
+
+
+def _main() -> int:
     sonuc: list[tuple[str, bool, str]] = []
 
     def vaka(ad: str, rel: str, beklenen: int, icerik: str | None = None) -> None:

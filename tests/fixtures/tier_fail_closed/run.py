@@ -18,6 +18,8 @@ Kosucu: tests/run_fixture_tests.py (OZEL_TESTLER)
 from __future__ import annotations
 
 import os
+import shutil
+import stat
 import sys
 import tempfile
 import types
@@ -34,6 +36,22 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "scripts"))
 
 SONUC: list[tuple[bool, str]] = []
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def kontrol(ad: str, kosul: bool, detay: str = "") -> None:
@@ -70,6 +88,13 @@ GOVDE_TEMIZ_DEV = "ADT_SAP_URL=https://ornek.test:44300\nADT_SAP_TIER=DEV\n"
 
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="tier_fc_"))
+    try:
+        return _main(tmp)
+    finally:
+        _sil(tmp)                                    # Q319: kum birikiyordu
+
+
+def _main(tmp: Path) -> int:
     os.environ.pop("ADT_SAP_TIER", None)
 
     from mcp_servers.sap_adt.data_guard import require_data_access

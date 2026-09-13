@@ -34,10 +34,27 @@ import hashlib
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 for _s in (sys.stdout, sys.stderr):
     try:
@@ -232,7 +249,7 @@ def main() -> int:
              rc4 == 0 and eklenen2 == set(SEED_ADLARI) - {"feedback_kok.md"}
              and "\n## Feedback\n" in mm2, f"rc={rc4} eklenen={sorted(eklenen2)} err={err4[:200]!r}")
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        _sil(tmp)                                    # Q319: kopyalanan scripts/utils salt-okur
 
     gecen = sum(1 for _a, k, _c in sonuc if k)
     for ad, k, ac in sonuc:
