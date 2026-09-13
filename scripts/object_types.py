@@ -60,6 +60,10 @@ OBJECT_TYPES = {
     #     /sap/bc/adt/functions/modules/<fm>                           -> HTTP 404 (26 bayt)
     #     /sap/bc/adt/functions/groups/<fg>/fmodules/<fm>              -> HTTP 406 (obje VAR)
     #     /sap/bc/adt/functions/groups/<fg>/fmodules/<fm>/source/main  -> HTTP 200 (27721 bayt)
+    # ⚠ 406 UCUN değil ACCEPT başlığının sonucudur (Q261, 2026-09-13): çıplak uç core.v1 /
+    # application/xml ile 406, `application/vnd.sap.adt.functions.fmodules.v3+xml` ile 200.
+    # ÇALIŞAN OKUMA KANALI: `SAPClient.resolve_function_module` / `read_function_module`
+    # (grup, arama indeksinden okunur) — MCP `adt_get`/`adt_where_used` `func` dalı bunu kullanır.
     # Bu tablo eskiden birinci satiri uretiyordu; 404 "obje YOK" diye okunuyordu (sessiz
     # yanlis teshis). url_path'i 'functions/groups' YAPMAK COZUM DEGIL: dogru uc FONKSIYON
     # GRUBUNU icerir ve grup adi FM adindan TURETILEMEZ -> tek-parametreli
@@ -78,8 +82,10 @@ OBJECT_TYPES = {
             "FM'in ADT ucu fonksiyon grubunu ICERIR "
             "(/sap/bc/adt/functions/groups/<FG>/fmodules/<FM>[/source/main]) ve grup adi FM "
             "adindan TURETILEMEZ. Yaz: sap_adt_lib.SAPADTClient.set_function_module_source(); "
-            "yarat: scripts/create_function_module.py; oku/ATC: adt_search_objects ile GERCEK "
-            "URI'yi al ve o URI ile cagir. Bkz. playbook/adt-fugr-functions.md."
+            "yarat: scripts/create_function_module.py; oku / where-used: MCP adt_get / "
+            "adt_where_used (object_type='func'; grubu SAPClient.resolve_function_module "
+            "cozer); ATC: adt_search_objects ile GERCEK URI'yi al ve o URI ile cagir. "
+            "Bkz. playbook/adt-fugr-functions.md."
         ),
     },
     # DDIC types
@@ -476,6 +482,19 @@ def get_object_url(object_name, object_type='class'):
     name_lower = quote(object_name.lower(), safe='')
 
     return f'/sap/bc/adt/{type_info["url_path"]}/{name_lower}'
+
+
+def is_function_module_type(object_type):
+    """Tip bir fonksiyon modülü mü (`func`/`function`)? (Q261)
+
+    FM'in generic URL'i YOKTUR (bkz. `OBJECT_TYPES['function']` yorumu) — çağıran bu
+    tipte `get_object_url` yerine `SAPClient.resolve_function_module` kanalına gider.
+    Çözülemeyen tip adı FM DEĞİLDİR (False); ret kararı `normalize_object_type`'ta kalır.
+    """
+    try:
+        return normalize_object_type(object_type) == 'function'
+    except Exception:
+        return False
 
 
 def get_source_url(object_name, object_type='class'):

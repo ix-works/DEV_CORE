@@ -3048,6 +3048,85 @@ constants:
             print(f"\n[ERROR] {str(e)}")
             return False
 
+    # ===== Function Module (FM) çözümleme — Q261 =====
+    # FM'in ADT ucu FONKSİYON GRUBUNU içerir (`/functions/groups/<fg>/fmodules/<fm>`) ve
+    # grup adı FM adından TÜRETİLEMEZ; bu yüzden `object_types.get_object_url(func)` bilinçli
+    # olarak fail-closed'dır (Q221). Bu blok o kapının yanına ÇALIŞAN kanalı koyar: grup,
+    # SAP'nin kendi arama indeksinden okunur — tahmin edilmez.
+    # CANLI ÖLÇÜM (2026-09-13, DEV, salt-okur):
+    #   quickSearch objectType=FUGR/FF + tam ad   -> 1 isabet, uri FG'yi içerir
+    #   quickSearch objectType=FUNC / FUNC/FF     -> 0 isabet (VAR OLAN FM için de!) ⇒ KULLANMA
+    #   quickSearch ön-ek (tam ad değil)          -> 0 isabet ⇒ eşleşme TAM AD ile yapılır
+    #   GET <uri> Accept core.v1 / application/xml -> 406 (gövde: kabul edilen tip v3+xml)
+    #   GET <uri> Accept fmodules.v3+xml          -> 200 (metadata)
+    #   GET <uri>/source/main Accept text/plain   -> 200 (kaynak)
+    FM_SEARCH_TYPE = 'FUGR/FF'
+    FM_METADATA_ACCEPT = 'application/vnd.sap.adt.functions.fmodules.v3+xml'
+
+    def resolve_function_module(self, function_module: str) -> Dict[str, Any]:
+        """FM adından GERÇEK ADT ucunu (fonksiyon grubu dahil) çöz. READ-ONLY.
+
+        Returns:
+            {'status': 'found'|'not_found', 'name', 'uri', 'function_group', 'probe'}
+            `not_found` YALNIZ arama BAŞARIYLA koştuğunda ve tam-ad eşleşmesi olmadığında
+            döner — `probe` hangi sorunun sorulduğunu yazar (yokluk iddiası kanıt ister).
+
+        Raises:
+            SAPADTError / ağ istisnası: arama koşamadı. Bu, 'not_found' DEĞİLDİR ve
+            ona ÇEVRİLMEZ — "bakamadım" ile "yok" aynı cevaba düşmez.
+            SAPADTError: aynı tam ad için birden fazla uç döndü (hangisi seçilemez).
+        """
+        from sap_adt_lib import SAPADTError
+
+        fm = (function_module or '').strip().upper()
+        if not fm:
+            raise ValueError("resolve_function_module: FM adi bos")
+        probe = (f"quickSearch objectType={self.FM_SEARCH_TYPE} query={fm} "
+                 f"(tam ad + /fmodules/ ucu)")
+        hits = self.search_objects(fm, max_results=50, obj_type=self.FM_SEARCH_TYPE)
+        uris = sorted({(h.get('uri') or '').split('#')[0].rstrip('/')
+                       for h in (hits or [])
+                       if (h.get('name') or '').strip().upper() == fm
+                       and '/fmodules/' in (h.get('uri') or '').lower()})
+        if not uris:
+            return {'status': 'not_found', 'name': fm, 'uri': None,
+                    'function_group': None, 'probe': probe}
+        if len(uris) > 1:
+            raise SAPADTError(
+                f"FM {fm} icin BIRDEN FAZLA ADT ucu dondu ({', '.join(uris)}) — hangisinin "
+                f"istendigi SECILEMEZ. Tahminle birini okumak yanlis objeyi okumaktir.")
+        uri = uris[0]
+        parca = uri.split('/functions/groups/', 1)
+        fg = parca[1].split('/', 1)[0].upper() if len(parca) == 2 else ''
+        if not fg:
+            raise SAPADTError(f"FM {fm} icin donen uc beklenen bicimde degil: {uri}")
+        return {'status': 'found', 'name': fm, 'uri': uri, 'function_group': fg,
+                'probe': probe}
+
+    def read_function_module(self, function_module: str,
+                             include_source: bool = True) -> Dict[str, Any]:
+        """FM'i OKU: çözümle → (isteğe bağlı) kaynak + metadata. READ-ONLY.
+
+        Dönüş `resolve_function_module` alanlarına `source` / `metadata` ekler.
+        `not_found` ise okuma YAPILMAZ. Kaynak/metadata GET'i başarısızsa istisna
+        yükselir (sessiz `None` yok).
+        """
+        from sap_adt_lib import SAPADTError
+
+        sonuc = dict(self.resolve_function_module(function_module))
+        if sonuc['status'] != 'found':
+            return sonuc
+        adt = self.adt_client
+        sonuc['source'] = adt.get_object_source(sonuc['uri']) if include_source else None
+        resp = adt.session.get(f"{adt.url}{sonuc['uri']}",
+                               headers=adt._get_headers(self.FM_METADATA_ACCEPT),
+                               timeout=adt.timeout_short)
+        if resp.status_code != 200:
+            raise SAPADTError("FM metadata okunamadi", status_code=resp.status_code,
+                              response_text=(resp.text or '')[:500], endpoint=sonuc['uri'])
+        sonuc['metadata'] = resp.text
+        return sonuc
+
     def object_exists(self, object_name: str, object_type: str = 'class') -> bool:
         """SAP'de obje var mı? (read-only; kaynak indirmez, yalnız structure sorar)
 
@@ -3057,9 +3136,15 @@ constants:
 
         Not: 404 her zaman SAPObjectNotFoundError olarak gelmez; düz SAPADTError +
         status_code=404 de gelir (canlı ölçüm 2026-07-09) → ikisi de yakalanır.
+
+        FM (`func`/`function`): generic URL yok → `resolve_function_module` (Q261).
+        Arama koşamazsa istisna yükselir; False DÖNMEZ.
         """
-        from object_types import get_object_url
+        from object_types import get_object_url, is_function_module_type
         from sap_adt_lib import SAPADTError, SAPObjectNotFoundError
+
+        if is_function_module_type(object_type):
+            return self.resolve_function_module(object_name)['status'] == 'found'
 
         object_url = get_object_url(object_name, object_type)
         try:
@@ -3090,11 +3175,21 @@ constants:
                 usageReferences 200 + [] döner).
         """
         from sap_adt_lib import SAPObjectNotFoundError
+        from object_types import is_function_module_type
 
         print(f"\nSearching where-used for: {object_name} ({object_type})")
 
         # GATE: varlık önce. Yoksa where_used'ın boş listesi anlamsızdır.
-        if not self.object_exists(object_name, object_type):
+        # FM: varlık VE uç TEK çözümlemeden gelir (Q261) — generic URL üretilemez.
+        object_url = None
+        if is_function_module_type(object_type):
+            fm = self.resolve_function_module(object_name)
+            if fm['status'] == 'found':
+                object_url = fm['uri']
+            varlik = object_url is not None
+        else:
+            varlik = self.object_exists(object_name, object_type)
+        if not varlik:
             raise SAPObjectNotFoundError(
                 f"{object_name} ({object_type}) SAP'de yok — where_used bos liste doner; "
                 f"bunu 'tuketicisi yok' diye okuma.",
@@ -3102,7 +3197,7 @@ constants:
             )
 
         try:
-            object_url = get_object_url(object_name, object_type)
+            object_url = object_url or get_object_url(object_name, object_type)
             results = self.adt_client.where_used(object_url)
             return results
         except Exception as e:

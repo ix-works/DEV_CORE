@@ -631,17 +631,14 @@ from mcp_servers.sap_adt._bos_sonuc import (  # noqa: E402
     _bos_sonuc_sinifi,
 )
 
-# Doğrudan okuma yolu OLMAYAN tipler: /source/main eklenerek 404 alınır ve obje
-# yanlışlıkla "yok" görünür. FM örneği ölçüldü (2026-07-31): ZSD001_FM_X canlıda
-# VARdı, adt_get(type='func') exists:false dedi -- çünkü FM'in kaynağı
-# /functions/groups/<fg>/fmodules/<fm>/source/main altındadır, fonksiyon grubu
-# adı da tek başına FM adından çıkarılamaz.
-_NO_DIRECT_READ_HINT = {
-    "func": ("FM'in kaynağı fonksiyon grubu altındadır "
-             "(/functions/groups/<fg>/fmodules/<fm>/source/main) ve grup adı FM adından "
-             "çıkarılamaz. Doğru yol: adt_search_objects ile gerçek URI'yi al, sonra ham GET."),
-    "function": ("FM'in kaynağı fonksiyon grubu altındadır; adt_search_objects ile URI al."),
-}
+# FM (`func`/`function`) OKUMA KANALI — Q261 (2026-09-13).
+# Eskiden burada FM için bir "exists:false burada 'yok' demek olmayabilir" ipucu
+# sözlüğü vardı. Q221'den (2026-09-04) beri `func` akışı generic URL kapısında
+# ValueError ile `_err_from_exc`'e gidiyordu, bu fonksiyona HİÇ düşmüyordu ⇒ ipucu
+# ERİŞİLEMEZDİ (canlı ölçüldü: adt_get(func) → error:"unexpected", warning YOK).
+# Artık `adt_get` FM'i `_read_function_module` ile grubu çözerek okur; `exists:false`
+# yalnız başarılı bir aramanın KANITIYLA (`probe`) döner. İpucu kalsaydı kanıtlı bir
+# yokluğa "bu uçtan okunamaz" diye YANLIŞ uyarı basacaktı — bu yüzden kaldırıldı.
 
 
 def _miss_or_unreachable(name: str, object_type: str, log_text: str) -> dict:
@@ -686,15 +683,8 @@ def _miss_or_unreachable(name: str, object_type: str, log_text: str) -> dict:
             ),
             "client_log": log_text,
         }
-    out = {"ok": True, "name": name.upper(), "type": object_type, "exists": False,
-           "client_log": log_text}
-    hint = _NO_DIRECT_READ_HINT.get((object_type or "").lower().strip())
-    if hint:
-        out["warning"] = (
-            f"'{object_type}' tipi bu uçtan doğrudan okunamaz — exists:false BURADA "
-            f"'obje yok' anlamına GELMEYEBİLİR. {hint}"
-        )
-    return out
+    return {"ok": True, "name": name.upper(), "type": object_type, "exists": False,
+            "client_log": log_text}
 
 
 # =============================================================================
@@ -744,6 +734,35 @@ def _read_source_object(name: str, uri_seg: str, type_label: str) -> dict:
         return _err_from_exc(exc)
 
 
+def _read_function_module(name: str, object_type: str, include_source: bool) -> dict:
+    """FM oku (Q261) — grubu `SAPClient.read_function_module` çözer. READ-ONLY. (tool DEĞİL)
+
+    Üç ayrık sonuç (hiçbiri diğerine düşmez):
+      · bulundu      → `exists:true` + `resolved_uri` + `function_group` (+ source/metadata)
+      · kanıtlı yok  → `exists:false` + `probe` (hangi arama koşuldu)
+      · bakamadım    → `ok:false` (arama/okuma istisnası) — 'yok' DEĞİLDİR
+    """
+    client = _get_client()
+    log_buf = io.StringIO()
+    try:
+        with _capture_stdout() as out:
+            try:
+                r = client.read_function_module(name, include_source=include_source)
+            finally:
+                log_buf.write(out.getvalue())
+    except Exception as exc:
+        hata = _err_from_exc(exc)
+        hata.setdefault("client_log", log_buf.getvalue().strip())
+        return hata
+    ortak = {"ok": True, "name": name.upper(), "type": object_type,
+             "probe": r.get("probe"), "client_log": log_buf.getvalue().strip()}
+    if r.get("status") != "found":
+        return {**ortak, "exists": False}
+    return {**ortak, "exists": True, "resolved_uri": r.get("uri"),
+            "function_group": r.get("function_group"),
+            "source": r.get("source"), "metadata": r.get("metadata")}
+
+
 @profil_tool()
 def adt_get(name: str, object_type: str = "class", include_source: bool = True) -> dict:
     """Get an SAP ADT object: existence, metadata, and (optionally) source.
@@ -776,6 +795,11 @@ def adt_get(name: str, object_type: str = "class", include_source: bool = True) 
     # BDEF (behavior definition): download_object DESTEKLEMEZ → source/main endpoint'i (raw GET).
     if (object_type or "").lower().strip() in ("bdef", "behaviordefinition"):
         return _read_source_object(name, "bo/behaviordefinitions", "bdef")
+    # FM (func/function): generic URL YOK (grup adı FM adından türetilemez, Q221) →
+    # grubu arama indeksinden çözen kanal (Q261). Generic kapı yerinde KALIR.
+    from object_types import is_function_module_type  # type: ignore
+    if is_function_module_type(object_type):
+        return _read_function_module(name, object_type, include_source)
 
     client = _get_client()
     log_buf = io.StringIO()
