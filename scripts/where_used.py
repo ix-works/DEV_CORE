@@ -24,7 +24,7 @@ script_dir = Path(__file__).parent
 sys.path.insert(0, str(script_dir))
 
 from sap_adt_lib import set_explicit_working_dir, SAPObjectNotFoundError
-from sap_client import SAPClient
+from sap_client import SAPClient, where_used_paket_ayir
 
 
 def main():
@@ -88,9 +88,25 @@ def main():
         print(f"[OK] No usages found for: {args.object_name} (object EXISTS, verified)")
         return 0
 
-    print(f"[OK] Found {len(results)} usage(s) of {args.object_name}:")
+    # Q306② (2026-09-13): usageReferences bir AGACTIR; DEVC/K dugumleri cagiranlarin PAKET
+    # atalaridir, cagiran DEGIL. Sayim yalniz obje referanslarini sayar.
+    objeler, paketler = where_used_paket_ayir(results)
+    if not objeler:
+        print("")
+        print("=" * 60)
+        print(f"[FAIL] WHERE-USED RESULT UNREADABLE - {len(paketler)} package node(s) but NO "
+              f"referencing object for {args.object_name}")
+        print("=" * 60)
+        print("[WHY] Package nodes are ancestors of callers; a tree with packages only is not a")
+        print("known shape. Neither '0 usages' nor 'N usages' can be claimed.")
+        print("[ACTION REQUIRED] Do NOT report this as 'orphan' or 'safe to delete'.")
+        print("=" * 60)
+        return 1
+
+    print(f"[OK] Found {len(objeler)} usage(s) of {args.object_name}"
+          f" ({len(paketler)} package node(s) not counted):")
     print()
-    for ref in results:
+    for ref in objeler:
         obj_type = ref.get('type', 'UNKNOWN')
         obj_name = ref.get('name', '?')
         uri = ref.get('uri', '')

@@ -47,6 +47,81 @@ from object_types import (
 )
 
 
+SAP_HATA_GOVDE_SINIRI = 500
+
+
+def sap_hata_govdesi(exc) -> Optional[Dict[str, Any]]:
+    """Istisnadaki SAP yanit govdesinden cagirana gosterilecek sebebi cikar (Q304).
+
+    Doner: None (istisna govde tasimiyor) | {'status_code', 'message', 'body_excerpt'}.
+    Olculmus govde bicimleri (DEV, 2026-09-13):
+      · 400 datapreview: XML `exc:exception` -> `<message lang="..">sebep</message>`
+      · aralikli 500: HTML "Application Server Error" -> `<title>`
+    Taninmayan govdede `message` govdenin ilk satiridir; ham ilk N bayt ayrica tasinir.
+    """
+    import re as _re
+    govde = getattr(exc, 'response_text', None)
+    if not govde:
+        return None
+    govde = str(govde)
+    mesaj = None
+    try:
+        kok = ET.fromstring(govde)
+        for el in kok.iter():
+            if el.tag.split('}')[-1] == 'message' and (el.text or '').strip():
+                mesaj = el.text.strip()
+                break
+    except ET.ParseError:
+        pass
+    if not mesaj:
+        # HTML ya iyi-bicimli XML olarak AYRISIR (message dugumu yok) ya da ParseError verir;
+        # iki durumda da sebep <title>'dadir (fixture S2: iyi-bicimli HTML'de eskiden ilk satir donuyordu).
+        m = _re.search(r'<title>\s*([^<]+?)\s*</title>', govde, _re.I)
+        if m:
+            mesaj = m.group(1)
+    if not mesaj:
+        mesaj = govde.strip().splitlines()[0][:200] if govde.strip() else None
+    return {'status_code': getattr(exc, 'status_code', None), 'message': mesaj,
+            'body_excerpt': govde[:SAP_HATA_GOVDE_SINIRI]}
+
+
+def worklist_ana_objeleri(govde: str) -> List[Dict[str, Any]]:
+    """Aktive-bekleyen worklist govdesi -> OBJE-seviyesi girdiler (Q310).
+
+    Ayristirma TEK KAYNAKTAN: `sap_adt_lib.aktivasyon_worklist_ayristir` (ioc olmayan govdede
+    ValueError, ayristirilamayan govdede ParseError — ikisi de YUTULMAZ). Ustune iki
+    tuketicinin (MCP `adt_inactive_objects`, `worklist_audit.py`) ortak elemesi:
+    method/alt-obje (`*/OM` tipi ya da `#type=` fragmanli URI) atlanir — ana objenin kendi
+    girdisi vardir; URI (fragman/son `/` atilmis) basina TEK girdi. `uri` alani bu anahtardir.
+    """
+    from sap_adt_lib import aktivasyon_worklist_ayristir
+    out, gorulen = [], set()
+    for g in aktivasyon_worklist_ayristir(govde):
+        tip, uri = g.get('type') or '', g.get('uri') or ''
+        if tip.endswith('/OM') or '#type=' in uri:
+            continue
+        anahtar = uri.split('#')[0].rstrip('/')
+        if not g.get('name') or anahtar in gorulen:
+            continue
+        gorulen.add(anahtar)
+        out.append({**g, 'uri': anahtar})
+    return out
+
+
+def where_used_paket_ayir(refs) -> tuple:
+    """usageReferences listesi -> (obje_referanslari, paket_dugumleri) (Q306②).
+
+    Olculdu (DEV, 2026-09-13, 4 sinif): yanit bir AGACTIR; `DEVC/K` dugumleri cagiran
+    objelerin PAKET ATALARIDIR (10/10 paket dugumu bir obje dugumunun parentUri zincirinde).
+    Paketi cagiran sanmak `count`u sisirir (ornek: 2 cagiran + 3 paket = 5).
+    """
+    objeler, paketler = [], []
+    for r in refs or []:
+        tip = str((r or {}).get('type') or '').upper()
+        (paketler if tip.startswith('DEVC') else objeler).append(r)
+    return objeler, paketler
+
+
 def readback_farki_yalniz_bicim_mi(yuklenen: str, canli: str) -> bool:
     """Push sonrası readback farkı BİÇİM mi, İÇERİK mi? (True = yalnız biçim)
 
@@ -1388,6 +1463,16 @@ class SAPClient:
         # filtreden SONRA uygulanir; yine de tavana dayanan her sonucta uyar.
         raw_count = len(root.findall('.//adtcore:objectReference', namespaces))
         truncated = raw_count >= max_results
+        # Q306① (2026-09-13): sunucu tip TAKMA ADINI kendi tipine cevirebilir (olculdu:
+        # objectType=FUNC -> FUGR/FF isabet); istemci emniyet kemeri o isabeti ELER ve sonuc
+        # sessizce 0 olur. Eleme oldugunda GORUNUR yaz + cagirana sayiyi birak.
+        elenen = (raw_count - len(objects)) if filter_type else 0
+        self._last_search_meta = {'obj_type_sent': obj_type, 'server_hit_count': raw_count,
+                                  'type_filter_dropped': elenen}
+        if elenen and not objects:
+            print(f"[UYARI] Sunucu {raw_count} isabet dondu ama istemci tip suzgeci "
+                  f"('{filter_type}') HEPSINI eledi — 'obje yok' ANLAMINA GELMEZ. Sunucu "
+                  f"tip adini kendi tipine cevirmis olabilir (ör. FUNC -> FUGR/FF).\n")
         if truncated:
             print(f"[UYARI] Sonuc tavana dayandi ({raw_count} >= maxResults={max_results}) — "
                   f"liste EKSIK olabilir. Uc-nokta ALFABETIK siralar ve kirpar; "
@@ -2775,6 +2860,9 @@ class SAPClient:
             for row in result['data']:
                 print(row)
         """
+        # Q304 (2026-09-13): son hatanin SAP GOVDESI. `None` sozlesmesi DEGISMEDI (20+ cagiran);
+        # sebep metni ayrica burada tutulur ki MCP katmani cagirana tasiyabilsin.
+        self.last_sql_error = None
         try:
             response_text = self.adt_client.run_query(query, row_number=max_rows)
 
@@ -2814,6 +2902,9 @@ class SAPClient:
 
         except Exception as e:
             print(f"[ERROR] SQL query error: {str(e)}")
+            self.last_sql_error = sap_hata_govdesi(e)
+            if self.last_sql_error and self.last_sql_error.get('message'):
+                print(f"[ERROR] SAP yaniti: {self.last_sql_error['message']}")
             return None
 
     def create_type_group(self, name: str, types_and_constants: str, description: str,

@@ -48,6 +48,12 @@ def _cagri_basarisiz(kod: str, log: str, ozet: str, **ek) -> dict:
     satirlar = [s.strip() for s in (log or "").splitlines() if s.strip()]
     hata = [s for s in satirlar if "[ERROR]" in s or "error" in s.lower()]
     sebep = " · ".join((hata or satirlar)[:3])
+    # Q304 (2026-09-13): SAP'nin KENDİ sebep metni `sap_error` alanında (alt katman
+    # `SAPClient.last_sql_error`); `message`'a da eklenir — HTTP kodu tek başına sebep değildir.
+    sap = ek.get("sap_error") if isinstance(ek.get("sap_error"), dict) else None
+    sap_mesaj = (sap or {}).get("message")
+    if sap_mesaj and sap_mesaj not in sebep:
+        sebep = (sebep + " · " if sebep else "") + "SAP: " + str(sap_mesaj)
     return {
         "ok": False,
         "error": kod,
@@ -56,6 +62,30 @@ def _cagri_basarisiz(kod: str, log: str, ozet: str, **ek) -> dict:
         "client_log": log,
         **ek,
     }
+
+
+def _sap_hata_eki(client) -> dict:
+    """Alt katmanın son SQL hatasının SAP gövdesi → `{"sap_error": {...}}` ya da `{}` (Q304)."""
+    h = getattr(client, "last_sql_error", None)
+    return {"sap_error": h} if isinstance(h, dict) else {}
+
+
+def _sonda_limiti(row_limit):
+    """Q304: SAP'den `row_limit + 1` satır iste (sonda satırı). Limit yoksa/0 ise aynen."""
+    return row_limit + 1 if isinstance(row_limit, int) and row_limit > 0 else row_limit
+
+
+def _sondayi_kes(rows, row_limit) -> tuple:
+    """Sonda satırını at → `(rows[:row_limit], kirpildi_mi)`.
+
+    `kirpildi_mi` KESİNDİR: `row_limit`'ten FAZLA satır geldiyse sonuç kırpılmıştır. Tam
+    `row_limit` kadar satırı olan sonuç kırpılmış SAYILMAZ (eski `row_count >= row_limit`
+    tahmini bunu sahte-kırpık gösterirdi). `totalRows` KULLANILMAZ: aggregate sorguda alttaki
+    satır sayısıdır (ölçüldü 2026-09-13: `COUNT(*)` → 1 satır, totalRows 249).
+    """
+    if not (isinstance(rows, list) and isinstance(row_limit, int) and row_limit > 0):
+        return rows, False
+    return rows[:row_limit], len(rows) > row_limit
 
 
 # =============================================================================
@@ -76,26 +106,56 @@ def adt_search_objects(
         object_type: Optional ADT type filter ('CLAS', 'INTF', 'DOMA', 'DTEL', 'TABL', 'DDLS', 'PROG').
 
     Returns:
-        {ok, count, results: [{name, type, uri, description}, ...], query, client_log}
+        {ok, count, results: [{name, type, uri, description}, ...], query, object_type,
+         object_type_sent, server_hit_count, type_filter_dropped, warning?, client_log}
+
+    ⚠ FM TİPİ (Q306①, ölçüldü DEV 2026-09-13): quickSearch SUNUCUSU `FUNC`/`FUNC/FF`/`func`
+    filtresine uyar ve FM'i **`FUGR/FF`** tipiyle döndürür (5/5 FM); `sap_client.search_objects`
+    istemci süzgeci o isabeti `FUNC`≠`FUGR` diye ELİYORDU ⇒ var olan FM için `count:0` (sahte
+    sıfır). FM takma adları (`FUNC`, `FUNC/FF`, `FUNCTION`, `func`, `function`) artık sunucuya
+    `FUGR/FF` olarak gider (`object_type_sent`). Başka bir takma adda sunucu isabetleri istemci
+    süzgecinde elenirse `type_filter_dropped > 0` + `warning` döner — `count:0` o durumda KANIT DEĞİLDİR.
     """
+    from object_types import is_function_module_type  # type: ignore
     client = _get_client()
     try:
+        gonderilen = object_type
+        if object_type and (str(object_type).strip().upper() in _FM_ARAMA_TAKMA_ADLARI
+                            or is_function_module_type(object_type)):
+            gonderilen = getattr(client, "FM_SEARCH_TYPE", None) or "FUGR/FF"
         with _capture() as buf:
             results = client.search_objects(
                 query=query,
                 max_results=max_results,
-                obj_type=object_type,
+                obj_type=gonderilen,
             )
-        return {
+        meta = getattr(client, "_last_search_meta", None)
+        meta = meta if isinstance(meta, dict) else {}
+        out = {
             "ok": True,
             "query": query,
             "object_type": object_type,
+            "object_type_sent": gonderilen,
             "count": len(results),
             "results": results,
+            "server_hit_count": meta.get("server_hit_count"),
+            "type_filter_dropped": meta.get("type_filter_dropped"),
             "client_log": buf.getvalue().strip(),
         }
+        if meta.get("type_filter_dropped") and not results:
+            out["warning"] = (
+                "Sunucu %s isabet döndü ama istemci tip süzgeci ('%s') HEPSİNİ eledi — "
+                "count:0 'obje yok' ANLAMINA GELMEZ. Tip filtresini kaldırıp ya da ADT tam "
+                "tipini (ör. FUGR/FF, CLAS/OC) vererek tekrar ara."
+                % (meta.get("server_hit_count"), gonderilen))
+        return out
     except Exception as exc:
         return _err_from_exc(exc)
+
+
+# FM tip takma adları — sunucu FUGR/FF döndürür (Q306①). `func`/`function` ayrıca
+# `object_types.is_function_module_type` ile tanınır (Q261 ile TEK normalizasyon).
+_FM_ARAMA_TAKMA_ADLARI = frozenset({"FUNC", "FUNC/FF", "FUNCTION"})
 
 
 # =============================================================================
@@ -237,12 +297,35 @@ def adt_where_used(name: str, object_type: str = "class") -> dict:
                 return yok
             url = fm["uri"] if fm is not None else get_object_url(name.upper(), object_type)
             refs = client.adt_client.where_used(url)
+        from sap_client import where_used_paket_ayir  # type: ignore
+        objeler, paketler = where_used_paket_ayir(refs)
+        if paketler and not objeler:
+            # Paket düğümleri çağıranların ATASIDIR; yalnız paket içeren ağaç ölçülmüş bir şekil
+            # DEĞİL ⇒ ne "0 çağıran" ne "N çağıran" denebilir (count BASILMAZ, fail-closed).
+            return {
+                "ok": False,
+                "error": "where_used_belirsiz",
+                "name": name,
+                "type": object_type,
+                "package_count": len(paketler),
+                "package_references": paketler,
+                "message": ("usageReferences %d paket düğümü döndü ama TEK obje referansı yok — "
+                            "tanınan bir ağaç şekli değil. 'Tüketicisi yok' SONUCUNA VARMA."
+                            % len(paketler)),
+                "existence_verified": True,
+                "resolved_uri": url,
+                "client_log": buf.getvalue().strip(),
+            }
         return {
             "ok": True,
             "name": name,
             "type": object_type,
-            "count": len(refs) if hasattr(refs, "__len__") else 0,
-            "references": refs,
+            # Q306② (2026-09-13): count YALNIZ obje referanslarıdır; DEVC/K paket düğümleri
+            # (çağıranların ataları — canlı 10/10) ayrı alanda. Eskiden "4 ref" = 1 çağıran + 3 paket.
+            "count": len(objeler),
+            "references": objeler,
+            "package_count": len(paketler),
+            "package_references": paketler,
             "existence_verified": True,
             "resolved_uri": url,
             "client_log": buf.getvalue().strip(),
@@ -608,14 +691,19 @@ def adt_table_read(
         # run_sql_query (table_contents deprecated). OSQL — sadece OKUMA (SELECT).
         with _capture() as buf:
             data = client.run_sql_query(
-                f"SELECT {select_cols} FROM {table.upper()}", max_rows=row_limit)
+                f"SELECT {select_cols} FROM {table.upper()}", max_rows=_sonda_limiti(row_limit))
         log = buf.getvalue().strip()
         if data is None:
             # Kardeş kusur (aynı alt katman, aynı sınıf): `run_sql_query` hata halinde None
             # döner ⇒ eskiden `ok:true` + `data:null` idi. "Tablo boş" ile "okuma KOŞMADI"
             # ayırt edilemiyordu.
             return _cagri_basarisiz("tablo_okunmadi", log,
-                                    "Tablo okuma sorgusu KOŞMADI", table=table)
+                                    "Tablo okuma sorgusu KOŞMADI", table=table,
+                                    **_sap_hata_eki(client))
+        # Q304: kırpma GÖRÜNÜR ve KESİN — row_limit+1 istendi; fazlası geldiyse kırpıldı (sonda atılır).
+        _kirpik = False
+        if isinstance(data, dict) and isinstance(data.get("data"), list):
+            data["data"], _kirpik = _sondayi_kes(data["data"], row_limit)
         # Kolon-adı→değer eşlemeli görünüm — pozisyonel diziyi gözle hizalama off-by-one'ını
         # yapısal olarak önler (ders 2026-06-22 DORIT.BATCH/HU_IDENT karıştırma).
         try:
@@ -637,6 +725,7 @@ def adt_table_read(
             "ok": True,
             "table": table,
             "row_limit": row_limit,
+            "truncated": _kirpik,
             "data": data,
             "client_log": log,
         }
@@ -690,16 +779,15 @@ def adt_sql_query(
          `adt_inactive_objects`'i bugün `SELECT obj_name, object, delflag FROM tadir` koşuyor.
          **Kapsamı ÖLÇÜLMEDİ.** 400 alırsan şüpheli kolonu çıkarıp tekrar ölç.
 
-    ⚠ **SAP'NİN 400/500 GÖVDESİ BU ARACIN ÇIKTISINA GELMEZ** (ölçüldü 2026-09-13). Taşınan
-    YALNIZ alt katmanın `[ERROR]` satırıdır (`_cagri_basarisiz` → `message` + `client_log`):
-    gövdesi *"…must have an alias name"* olan bir 400'de ham değerler
-    `client_log = "[ERROR] SQL query error: [400] Failed to run query"` ve `message` = aynı
-    satırın önüne *"sorgusu KOŞMADI — "* eklenmiş hâli oldu. HTTP kodu görünür, SEBEP görünmez.
-    Gövde alt katmanda `SAPADTError.response_text`'te durur (`scripts/sap_adt_lib.py`
-    `run_query`); `sap_client.run_sql_query` yalnız `str(e)` (= `[kod] Failed to run query`)
-    basar. 2026-08-17 metni sebebin bu iki alanda okunacağını söylüyordu — `[ERROR]` satırı
-    için doğru, SAP'nin sebep metni için DEĞİL. ⇒ 400'de refleks: aynı sorguyu körlemesine
-    TEKRARLAMA; aşağıdaki ölçülmüş biçimlerle **daralt** (tek değişken).
+    ⚠ **SAP'NİN 400/500 GÖVDESİ ARTIK `sap_error` ALANINDA** (Q304, 2026-09-13). 2026-09-13
+    öncesi bu araç gövdeyi TAŞIMIYORDU (ölçüldü: `client_log` yalnız `[ERROR] SQL query error:
+    [400] Failed to run query`; *"…must have an alias name"* sebebi hiçbir alanda yoktu).
+    Şimdi `sap_client.run_sql_query` hata dalı `SAPADTError.response_text`'ten
+    `last_sql_error = {status_code, message, body_excerpt}` üretir; araç bunu `sap_error`
+    olarak döndürür ve `message`'a `SAP: <sebep>` ekler. Ölçülmüş gövde biçimleri: 400 → XML
+    `exc:exception/message` · aralıklı 500 → HTML `<title>` (*Application Server Error*).
+    `body_excerpt` ilk 500 bayttır. ⇒ 400'de refleks: önce `sap_error.message`'ı oku, aynı
+    sorguyu körlemesine TEKRARLAMA; aşağıdaki ölçülmüş biçimlerle **daralt** (tek değişken).
 
     ⚠ **ÖLÇÜLMÜŞ BİÇİM SINIRLARI (Q274 — kayıt 2026-09-08; canlı yeniden ölçüm 2026-09-13,
     DEV, yalnız SELECT; her satır en az 2 çağrı; sebep metinleri SAP gövdesinden):**
@@ -720,10 +808,15 @@ def adt_sql_query(
          bir sonraki normale döndü. ⇒ 500'den sonraki ilk 400'ü "sorgu reddedildi" diye okuma
          (yukarıdaki *"400 = sorgu kabul edilmedi"* kuralının ölçülmüş istisnası); aynı sorguyu
          BİR kez tekrarla.
-      7. **SESSİZ KIRPMA.** `row_limit=10` ile `SELECT LAND1 FROM T005` → `ok:true`,
-         `row_count:10`; aynı yanıtın `totalRows` değeri **249**, ama bu araç o alanı
-         DÖNDÜRMEZ. ⇒ `row_count == row_limit` ise sonuç KIRPILMIŞ olabilir; sayı gerekiyorsa
-         ayrıca `SELECT COUNT(*) …` koş (kayıttaki vaka: `row_limit=300` → tam 300, gerçek 994).
+      7. **KIRPMA (Q304 ile GÖRÜNÜR).** `row_limit=10` ile `SELECT LAND1 FROM T005` →
+         `row_count:10`, SAP `totalRows` **249**. Araç artık `truncated` ve `total_rows` (SAP
+         `totalRows` aynen) döndürür. `truncated` KESİNDİR: araç SAP'den `row_limit + 1` satır
+         ister, fazlası gelirse `true` der ve sondayı atar. Eskiden elde yalnız
+         `row_count == row_limit` vardı ve bu bir TAHMİNDİ: tam `row_limit` kadar satırı olan
+         sonuç da aynı görünürdü. ⚠ `totalRows` sonuç satırı sayısı DEĞİLDİR: aggregate
+         sorguda alttaki satır sayısıdır (ölçüldü: `SELECT COUNT(*) AS cnt FROM t005` → 1 satır,
+         `totalRows` 249) ⇒ `truncated` ondan TÜRETİLMEZ. Sayı gerekiyorsa `row_limit`'i yükselt
+         ya da `SELECT COUNT(*) …` koş (kayıttaki vaka: `row_limit=300` → tam 300, gerçek 994).
       8. **Namespace'li ad TIRNAKSIZ yazılır.** `FROM /scwm/aqua` ve `FROM /SCWM/AQUA` → 200;
          `FROM "/SCWM/AQUA"` → **400** (gövde login dilinde: geçersiz sorgu dizilimi).
 
@@ -741,8 +834,10 @@ def adt_sql_query(
         acknowledge_risk / approval_text: QA/PRD hassas-tablo için (ADR 0011).
 
     Returns:
-        {ok, query, row_count, columns, rows: [{KOLON: değer}, ...], executed?, client_log}
-        veya {ok: false, error, message} (SELECT-değil / yazma-keyword / **sorgu KOŞMADI**)
+        {ok, query, row_count, row_limit, total_rows, truncated, truncated_notice?, columns,
+         rows: [{KOLON: değer}, ...], executed?, client_log}
+        veya {ok: false, error, message, sap_error?} (SELECT-değil / yazma-keyword /
+        **sorgu KOŞMADI**; `sap_error` = {status_code, message, body_excerpt} — Q304)
         veya guardrail_violation.
         ⚠ `row_count: 0` YALNIZ `ok: true` iken "0 satır" demektir. Sorgu SAP'de düşerse
         `ok: false` + `error: "sorgu_kosmadi"` döner (sebep `message`+`client_log`) — 0 satır
@@ -782,26 +877,40 @@ def adt_sql_query(
     client = _get_client()
     try:
         with _capture() as buf:
-            data = client.run_sql_query(q, max_rows=row_limit)
+            # Q304: bir satır FAZLA istenir (sonda) — `row_limit`'ten fazla satır varsa KESİN bilinir.
+            data = client.run_sql_query(q, max_rows=_sonda_limiti(row_limit))
         log = buf.getvalue().strip()
         if data is None:
             return _cagri_basarisiz("sorgu_kosmadi", log,
                                     "ADT data preview sorgusu KOŞMADI",
-                                    query=q, tables=sorted(tables))
+                                    query=q, tables=sorted(tables), **_sap_hata_eki(client))
         cols = data.get("columns") if isinstance(data, dict) else None
         rows = data.get("data") if isinstance(data, dict) else None
+        rows, _kirpik = _sondayi_kes(rows, row_limit)
         rows_labeled = ([dict(zip(cols, r)) for r in rows]
                         if (cols and isinstance(rows, list)) else rows)
-        return {
+        n = len(rows) if isinstance(rows, list) else 0
+        out = {
             "ok": True,
             "query": q,
             "tables": sorted(tables),
             "executed": data.get("executedQueryString") if isinstance(data, dict) else None,
             "columns": cols,
-            "row_count": len(rows) if isinstance(rows, list) else 0,
+            "row_count": n,
+            "row_limit": row_limit,
+            # Q304: SAP `totalRows` AYNEN (aggregate'de alttaki satır sayısıdır — docstring madde 7).
+            "total_rows": data.get("total_rows") if isinstance(data, dict) else None,
+            # KESİN (sonda satırı): row_limit+1 istendi, row_limit'ten FAZLA satır geldi ⇒ kırpıldı.
+            "truncated": _kirpik,
             "rows": rows_labeled,
             "client_log": log,
         }
+        if out["truncated"]:
+            out["truncated_notice"] = (
+                "Sonuç row_limit=%s satırda KIRPILDI (en az bir satır daha var). Tam sayı "
+                "gerekiyorsa row_limit'i yükselt ya da ayrıca SELECT COUNT(*) AS cnt koş."
+                % row_limit)
+        return out
     except Exception as exc:
         return _err_from_exc(exc)
 
@@ -892,8 +1001,10 @@ def adt_dump_list(limit: int = 20, from_ts: str | None = None, to_ts: str | None
 # =============================================================================
 # adt_inactive_objects  (aktive-bekleyen worklist — worklist_audit MCP-native)
 # =============================================================================
-_IOC_NS = {"ioc": "http://www.sap.com/abapxml/inactiveCtsObjects",
-           "adtcore": "http://www.sap.com/adt/core"}
+# Q305 (2026-09-13): TADIR `IN` listesi parça boyutu. Ölçülmüş sınır SABİT DEĞİL: bugün (DEV)
+# 15 ad → 200, 25 ad → 400 (`exc:exception`); 2026-08-19'da 15 ad → 400 ölçülmüştü. Bu yüzden
+# docstring madde 1'in ölçülmüş çözümü (5'erli parçalar) kullanılır — sınıra yakın durulmaz.
+_TADIR_PARCA = 5
 
 
 def _tadir_isaretle(out: list, sorulan: set, silinmis: set) -> None:
@@ -969,7 +1080,7 @@ def adt_inactive_objects() -> dict:
         `confirmed_live_count + unverified_count`. Emsal: `adt_atc_check`
         (`finding_count_unverified`) · `adt_lock_check` (`locked: null`).
     """
-    import xml.etree.ElementTree as ET
+    from sap_client import worklist_ana_objeleri  # type: ignore
     client = _get_client()
     try:
         adt = getattr(client, "adt_client", None) or client
@@ -979,36 +1090,21 @@ def adt_inactive_objects() -> dict:
         if r.status_code != 200:
             return {"ok": False, "error": "http_%d" % r.status_code,
                     "message": (r.text or "")[:300], "client_log": buf.getvalue().strip()}
-        root = ET.fromstring(r.text)
-        out, seen = [], set()
-        for entry in root.findall("ioc:entry", _IOC_NS):
-            obj = entry.find("ioc:object", _IOC_NS)
-            if obj is None:
-                continue
-            ref = obj.find("ioc:ref", _IOC_NS)
-            if ref is None:
-                continue  # transport-seviyesi (boş object)
-            a_type = ref.get("{%s}type" % _IOC_NS["adtcore"], "") or ""
-            a_name = ref.get("{%s}name" % _IOC_NS["adtcore"], "") or ""
-            a_uri = ref.get("{%s}uri" % _IOC_NS["adtcore"], "") or ""
-            if a_type.endswith("/OM") or "#type=" in a_uri:
-                continue  # method/sub-obje → ana obje girdisi var
-            key = a_uri.split("#")[0].rstrip("/")
-            if not a_name or key in seen:
-                continue
-            seen.add(key)
-            tr_ref = entry.find("ioc:transport/ioc:ref", _IOC_NS)
-            out.append({
-                "name": a_name.strip(), "type": a_type, "uri": key,
-                "user": obj.get("{%s}user" % _IOC_NS["ioc"], "") or "",
-                # ioc:deleted = BEKLEYEN TASLAĞIN türü ("bu taslak bir silme mi"),
-                # objenin silinmiş olup olmadığı DEĞİL. Ölçüm 2026-07-29: TADIR
-                # DELFLAG='X' olan iki obje için bu alan "false" döndü. Bu yüzden
-                # tek başına yeterli değil → aşağıdaki TADIR çapraz kontrolü.
-                "deleted": (obj.get("{%s}deleted" % _IOC_NS["ioc"], "") or "").lower() == "true",
-                "transport": (tr_ref.get("{%s}name" % _IOC_NS["adtcore"], "") or "")
-                             if tr_ref is not None else "",
-            })
+        # Q310 (2026-09-13): ayrıştırma TEK KAYNAKTAN (`sap_adt_lib.aktivasyon_worklist_ayristir`
+        # + ortak ana-obje elemesi). ParseError eskisi gibi dış `except`e düşer (ok:false).
+        # ⚠ SIKILAŞTIRMA: ioc OLMAYAN geçerli XML eskiden BOŞ liste → ok:true count:0 idi.
+        try:
+            girdiler = worklist_ana_objeleri(r.text)
+        except ValueError as exc:
+            return {"ok": False, "error": "worklist_govdesi_degil",
+                    "message": ("Worklist ucu 200 döndü ama gövde ioc:inactiveObjects DEĞİL (%s) "
+                                "— 'aktive bekleyen yok' SONUCUNA VARMA." % exc),
+                    "client_log": buf.getvalue().strip()}
+        # ioc:deleted = BEKLEYEN TASLAĞIN türü ("bu taslak bir silme mi"), objenin silinmiş
+        # olup olmadığı DEĞİL (ölçüm 2026-07-29: TADIR DELFLAG='X' iki obje için "false").
+        # Bu yüzden tek başına yeterli değil → aşağıdaki TADIR çapraz kontrolü.
+        out = [{k: g[k] for k in ("name", "type", "uri", "user", "deleted", "transport")}
+               for g in girdiler]
 
         # ── TADIR çapraz kontrolü: SİLİNMİŞ objeyi "aktive bekliyor" diye raporlama ──
         # 2026-07-29 vakası: iki sınıf worklist'te duruyordu; SE24/SE80'de yok,
@@ -1022,30 +1118,46 @@ def adt_inactive_objects() -> dict:
             adlar = sorted({o["name"] for o in out
                             if o["name"] and all(c.isalnum() or c in "_/" for c in o["name"])})
             if adlar:
-                sorulan = set(adlar)
-                liste = ", ".join("'%s'" % a for a in adlar)
-                try:
-                    res = adt_sql_query(
-                        "SELECT obj_name, object, delflag FROM tadir "
-                        "WHERE obj_name IN ( %s )" % liste,
-                        row_limit=max(200, len(adlar) * 2))
-                    if res.get("ok"):
-                        silinmis = {
-                            (str(r.get("OBJ_NAME", "")).strip(),
-                             str(r.get("OBJECT", "")).strip())
-                            for r in (res.get("rows") or [])
-                            if str(r.get("DELFLAG", "")).strip().upper() == "X"
-                        }
-                        # ADT tipi 'CLAS/OC' → TADIR OBJECT 'CLAS'; sorulmayan ad → None
-                        _tadir_isaretle(out, sorulan, silinmis)
-                    else:
-                        tadir_hata = res.get("message") or res.get("error") or "bilinmeyen"
-                except Exception as exc:            # noqa: BLE001 — teşhis bozulmasın
-                    tadir_hata = str(exc)[:200]
+                # Q305: ad listesi `_TADIR_PARCA`'lık parçalara bölünür; her parça AYRI ölçülür.
+                # Başarısız parçanın adları SORULMAMIŞ sayılır (`tadir_deleted: null`).
+                silinmis: set = set()
+                hatalar: list = []
+                for i in range(0, len(adlar), _TADIR_PARCA):
+                    parca = adlar[i:i + _TADIR_PARCA]
+                    liste = ", ".join("'%s'" % a for a in parca)
+                    try:
+                        res = adt_sql_query(
+                            "SELECT obj_name, object, delflag FROM tadir "
+                            "WHERE obj_name IN ( %s )" % liste,
+                            row_limit=max(200, len(parca) * 2))
+                    except Exception as exc:        # noqa: BLE001 — teşhis bozulmasın
+                        hatalar.append(str(exc)[:200])
+                        continue
+                    if not res.get("ok"):
+                        hatalar.append(res.get("message") or res.get("error") or "bilinmeyen")
+                        continue
+                    if res.get("truncated"):
+                        # Kırpılmış yanıtta DELFLAG='X' satırı dışarıda kalmış olabilir ⇒
+                        # "silinmemiş" damgası basılamaz.
+                        hatalar.append("TADIR yanıtı row_limit'te KIRPILDI (%s satır)"
+                                       % res.get("row_count"))
+                        continue
+                    sorulan.update(parca)
+                    silinmis |= {
+                        (str(r.get("OBJ_NAME", "")).strip(),
+                         str(r.get("OBJECT", "")).strip())
+                        for r in (res.get("rows") or [])
+                        if str(r.get("DELFLAG", "")).strip().upper() == "X"
+                    }
+                if hatalar:
+                    tadir_hata = " · ".join(dict.fromkeys(hatalar))[:800]
+                if sorulan:
+                    # ADT tipi 'CLAS/OC' → TADIR OBJECT 'CLAS'; sorulmayan ad → None
+                    _tadir_isaretle(out, sorulan, silinmis)
             else:
                 tadir_hata = ("worklist'teki adların hiçbiri TADIR sorgusuna uygun değil "
                               "(ad süzgeci); çapraz kontrol HİÇ KOŞMADI")
-        if tadir_hata:
+        if tadir_hata and not sorulan:
             # Ölçülemediyse SUSMA — "silinmiş değil" varsayımı tam da bu tuzağın kendisi.
             for o in out:
                 o["tadir_deleted"] = None
@@ -1669,6 +1781,7 @@ def adt_impact_analysis(name: str, object_type: str = "ddls",
     client = _get_client()
     try:
         from object_types import get_object_url, is_function_module_type  # type: ignore
+        from sap_client import where_used_paket_ayir  # type: ignore
         adt = getattr(client, "adt_client", None) or client
         with _capture() as buf:
             if is_function_module_type(object_type):
@@ -1688,10 +1801,15 @@ def adt_impact_analysis(name: str, object_type: str = "ddls",
             frontier = [root_url]
             levels = []
             truncated = False
+            paket_atlanan = 0
             for depth in range(max_depth):
                 level_nodes, next_frontier = [], []
                 for url in frontier:
                     refs = adt.where_used(url) or []
+                    # Q306②: DEVC/K paket düğümleri çağıran DEĞİL (atalar — canlı 10/10) ⇒
+                    # ne etkilenen sayılır ne de özyinelemeye (paket URI'si) girer.
+                    refs, _paketler = where_used_paket_ayir(refs)
+                    paket_atlanan += len(_paketler)
                     for r in refs:
                         rn = (r.get("name") or "").upper()
                         rt = (r.get("type") or "")
@@ -1715,6 +1833,7 @@ def adt_impact_analysis(name: str, object_type: str = "ddls",
         all_nodes = [n for lvl in levels for n in lvl]
         return {"ok": True, "name": name.upper(), "type": object_type, "max_depth": max_depth,
                 "impacted_count": len(all_nodes), "truncated": truncated,
+                "packages_skipped": paket_atlanan,
                 "by_depth": [{"depth": i + 1, "count": len(lvl), "objects": lvl}
                              for i, lvl in enumerate(levels)],
                 "client_log": buf.getvalue().strip()}
