@@ -217,7 +217,11 @@ değişken yolu da kıyaslanır (bulunamazsa UYARI, kırmızı değil).
 ⚠ **exit 0 tek başına "temiz" demek değildir — HÜKÜM SATIRINI OKU:** `TEMIZ DEGIL: entity ekseni
 OLCULMEDI` = araç hiç binding göremedi. `=== OLCULMEDI ===` bloğu aracın BAKMADIĞI yüzeyi sayılarıyla
 yazar: değişkenli `new Filter(sProp, …)` · view `{Prop}` · Component/model/util dosyaları.
-Araç tek servis kıyaslar; ikincil modelden (`getModel("x").read(...)`) okunan setler KIRMIZI görünebilir.
+**Çok servisli app:** manifest `dataSources` + `models` haritasıyla `getModel("x")` · `this._yardimci()` ·
+`oX = getModel("x")` · `oDlg.setModel(...)` alıcıları ve `{x>/Set}` binding'leri O servise karşı ölçülür
+(satır sonunda `(servis X)`). Modeli statik çözülemeyen referans (ör. arama handler'ında kurulan Filter)
+ana servise karşı ölçülür → KIRMIZI yanlış olabilir; `Model haritasi` satırı sayısını verir.
+**exit 2 = OLCEMEDIM** (`$metadata` alınamadı: ağ · 401/404 · zaman aşımı · `.conn_adt` yok) — KIRMIZI değil, ölçüm yok.
 
 **SEGW→RAP göç tuzakları (hepsi gerçek bir göçte yaşandı + bu araçla yakalandı):**
 | Tuzak | Belirti | Çözüm |
