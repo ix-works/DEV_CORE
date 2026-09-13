@@ -212,7 +212,12 @@ ALV-grid gerekmeyen, mobil-responsive veya hücre-zengin (wrap, değişken yüks
 python scripts/check_ui_odata_refs.py --app ERP/SD/<PKG>/ui/<app> --service <SRVB_ADI>
 ```
 callFunction→FunctionImport(+param), read/binding→EntitySet, Filter/$orderby/$select→Property
-kontrol eder; KIRMIZI uyumsuzlukta exit 1.
+kontrol eder; KIRMIZI uyumsuzlukta exit 1. Tek ve çift tırnak aynı sayılır; `var X = "/Set"`
+değişken yolu da kıyaslanır (bulunamazsa UYARI, kırmızı değil).
+⚠ **exit 0 tek başına "temiz" demek değildir — HÜKÜM SATIRINI OKU:** `TEMIZ DEGIL: entity ekseni
+OLCULMEDI` = araç hiç binding göremedi. `=== OLCULMEDI ===` bloğu aracın BAKMADIĞI yüzeyi sayılarıyla
+yazar: değişkenli `new Filter(sProp, …)` · view `{Prop}` · Component/model/util dosyaları.
+Araç tek servis kıyaslar; ikincil modelden (`getModel("x").read(...)`) okunan setler KIRMIZI görünebilir.
 
 **SEGW→RAP göç tuzakları (hepsi gerçek bir göçte yaşandı + bu araçla yakalandı):**
 | Tuzak | Belirti | Çözüm |

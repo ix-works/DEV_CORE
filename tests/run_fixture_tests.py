@@ -249,6 +249,12 @@ OZEL_TESTLER = [
     ("olcum_yoklugu_sozlesmesi",
      "olcum yoklugu != ihlal yoklugu: check_ui_odata_refs (0 dosya) · run_battery "
      "--precommit (izlenmeyen dosya) · check_hook_injected_paths (payda 0)"),
+    # 2026-09-13 (Q284): ayni aracin BIR KAT ASAGISI — dosya VAR ama binding GORULMUYOR
+    # (tek tirnakli XML path + degiskendeki entity yolu) -> yine "TEMIZ" diyordu.
+    # ⛔ V3/V5 SILINEMEZ: degisken yolu UYARI (KIRMIZI degil) ve JSON-model literalleri
+    # KIRMIZI URETMEZ — ikisi de olculmus FP sinirlaridir (korpus: 67 JSON yolu, 2/16 baska servis).
+    ("ui_odata_refs_kapsami",
+     "check_ui_odata_refs: tek/cift tirnak sinifi + degisken yolu + bos eksen 'TEMIZ' degil OLCULMEDI"),
     # 2026-08-20 PARTI-4 (K2): C-ENC-01 gate'inin kokU `parents[2]`e civiliydi ->
     # sentetik agaca yoneltilemiyordu, yani YAKALAMA GUCU hic olculmemisti.
     ("console_utf8_kok_izolasyonu",
@@ -539,8 +545,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "payda-0 fail-closed sozlesmesi (Q254)"),
     # 2026-09-04: bu dosya HARITA'da HIC YOKTU — degisikligi hicbir korpusa
     # baglanmiyordu (Q232 tam da bu dosyada yasadi ve TAM suite'e dusuyordu).
-    ("scripts/check_ui_odata_refs.py", ("O:olcum_yoklugu_sozlesmesi",),
-     "UI OData referans araci: KAPSAM kapisi (cozulmeyen --app / 0 dosya) burada yasar"),
+    ("scripts/check_ui_odata_refs.py", ("O:olcum_yoklugu_sozlesmesi", "O:ui_odata_refs_kapsami"),
+     "UI OData referans araci: KAPSAM kapisi (cozulmeyen --app / 0 dosya) + desen kapsami "
+     "(tek/cift tirnak sinifi, degisken yolu, bos eksen OLCULMEDI — Q284) burada yasar"),
     ("scripts/hooks/post_validate.py", ("O:fs_docstd", "O:negatif_test_harness",
                                         "O:hook_bash_ve_stderr_kapsami",
                                         "O:bos_seans_markeri"),
