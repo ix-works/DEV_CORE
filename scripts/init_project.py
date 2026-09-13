@@ -212,9 +212,26 @@ master_language: __DOLDUR__    # örn. TR / EN (ADR 0005-D bu dille uygulanır)
 """
 
 
+# Q314 (2026-09-13): `[ATLA]` satırı eskiden `(mevcut; --force ile ez)` diyordu ve bir koşumda
+# 9–12 kez tekrarlanıyordu (ölçüldü: --repo-mode none + tek eksik dosya → 9, full → 12). Oysa `--force` tek dosyayı değil üretilen HER dosyayı ezer
+# (kum ölçümü: CLAUDE.md · README.md · project.yaml · governance/infra-findings.md içindeki
+# proje-özel satır 4/4 gitti). Tek dosyalık yol ayrı ölçüldü: dosya taşınıp AYNI argümanlarla
+# yeniden koşulunca yalnız o dosya üretildi, kalan dört dosyadaki proje-özel satır korundu.
+# Satır başına öneri yok; not koşum başına BİR KEZ basılır ve metni TEK yerde yaşar (Q303 dersi).
+ATLA_ETIKETI = "[ATLA]"
+ATLA_NOTU = (
+    "NOT: [ATLA] satırlarındaki dosyalar mevcut olduğu için DOKUNULMADI.\n"
+    "  Tek dosyayı yeniden üretmek için: o dosyayı başka yere TAŞI, bu komutu AYNI argümanlarla\n"
+    "  (--name / --source-root / --repo-mode) yeniden koş. Eksik olan her dosya üretilir, mevcutlar\n"
+    "  yine atlanır; argüman farklıysa (örn. --name yok) yer tutucular doldurulmaz.\n"
+    "  --force KULLANMA: tek dosyayı değil üretilen TÜM dosyaları ezer (CLAUDE.md · README.md · "
+    "project.yaml · governance/infra-findings.md dahil)."
+)
+
+
 def uret(hedef: Path, icerik: str, force: bool) -> str:
     if hedef.exists() and not force:
-        return f"[ATLA] {hedef} (mevcut; --force ile ez)"
+        return f"{ATLA_ETIKETI} {hedef} (mevcut; dokunulmadı)"
     hedef.parent.mkdir(parents=True, exist_ok=True)
     hedef.write_text(icerik, encoding="utf-8", newline="\n")
     return f"[ OK ] {hedef}"
@@ -284,6 +301,8 @@ def main() -> int:
         sonuc.append(f"[ OK ] {p}\\  (klasör)")
 
     print("\n".join(sonuc))
+    if any(s.startswith(ATLA_ETIKETI) for s in sonuc):
+        print("\n" + ATLA_NOTU)
     print(f"\nSONRAKİ ADIMLAR (PROJECT_BOOTSTRAP — repo_mode={a.repo_mode}):")
     if a.repo_mode == "full":
         print("  0. GitHub'da boş repo aç + clone/remote bağla (STEP 1)")

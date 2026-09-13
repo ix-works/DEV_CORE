@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """init_project_iskelet — jeneratörden çıkan iskelet KAPIDAN geçiyor mu + sır kilidi TOPYEKÛN mü?
 
-İKİ DEĞİŞMEZ, İKİ MUTASYON (fix ikisini AYNI dosyada yaptı; tek mutasyon yarısını sınamaz):
+ÜÇ DEĞİŞMEZ, DÖRT MUTASYON (her değişmez kendi mutasyonuyla sınanır; tek mutasyon yarısını sınamaz):
 
   ① KUYRUK TOHUMU (Q213) — `hooks/post_validate.py` stderr nudge'ında
      `governance/infra-findings.md` yolunu ajana ENJEKTE eder; `check_hook_injected_paths`
@@ -25,10 +25,19 @@
      Kilit `conn/*` + AÇIK negasyon; `!conn/.gitkeep` ŞARTTIR (yoksa `conn/` dizini repoda
      hiç doğmaz — kilidin yan etkisi).
 
+  ③ [ATLA] TEK DOSYA İÇİN `--force` ÖNERMEZ (Q314, 2026-09-13) — `uret` mevcut dosyada
+     `[ATLA] <yol> (mevcut; --force ile ez)` basıyordu, bir koşumda 9–12 kez. `--force`
+     üretilen HER dosyayı ezer (kum: proje-özel satır 4/4 dosyada gitti). Şimdi satır başına
+     öneri yok; [ATLA] varsa koşum başına BİR not: "dosyayı TAŞI + AYNI argümanlarla yeniden
+     koş · --force KULLANMA". ÖLÇÜT ANLAMLIDIR, literal değil: not metni `--force`'u UYARI
+     olarak taşır ⇒ öneri = `--force` geçen ve AYNI satırda `KULLANMA` taşımayan satır
+     (`force_onerileri`). A5 notun söylediği yolun gerçekten işlediğini ölçer (Q303 Q4 deseni).
+
 ⚠ FP ÇAPALARI OMURGADIR (N1-N5): kilit GENİŞLEDİ, bu yüzden "ne kilitlenmemeli" tarafı da
   ölçülür. `docs/paket.zip` izlenir (kök-çapalı `/*.zip`), `scripts/hook_shim.py` izlenir
   (yalnız `.yedek-*` kilitli), core-sızıntı + SIR satır kilidi (`check_core_not_committed`)
   bozulmadı. Bunlar düşerse jeneratör meşru dosyaları sessizce commit'ten düşürür.
+  A4 (ilk koşumda not YOK) ③'ün FP çapasıdır: notu her koşumda basan fix gürültü üretir.
 
 ⚠ TABAN NASIL TÜRETİLİR: `git show <sha>:` YOK (sığ klonda çözülmez, merge'de bayatlar) —
   taban BUGÜNKÜ kaynaktan fix SÖKÜLEREK türetilir ve her sökümün ÇAPASI vardır; çapa
@@ -37,10 +46,16 @@
   `init_project` `CORE_ROOT = __file__.parent.parent`ten şablon okur ve `utils.yasaklar_stamp`
   import eder.
 
+⚠ TEMİZLİK `_sil` ile (Q314 turunda ölçüldü): `shutil.rmtree(ignore_errors=True)` Windows'ta
+  her koşumda `%TEMP%\\initproj_*` bırakıyordu (143 → 144; kalan `izole_core/scripts/utils`
+  + `__pycache__`, salt-okur). Desen `precommit_kopya_surum_esligi._sil`.
+
 Koşum:    python tests/fixtures/init_project_iskelet/run.py
-MUTASYON: --mutasyon        → ① sökülür (kuyruk tohumu üretilmez)
-          --mutasyon-gevsek → ② sökülür (conn kilidi tek-tek sayıma, arşiv/yedek + kaynak-kök
-                              desenleri yok, `.format` kablolaması geri alınır)
+MUTASYON: --mutasyon                → ① sökülür (kuyruk tohumu üretilmez)
+          --mutasyon-gevsek         → ② sökülür (conn kilidi tek-tek sayıma, arşiv/yedek + kaynak-kök
+                                      desenleri yok, `.format` kablolaması geri alınır)
+          --mutasyon-force-onerisi  → ③a eski `[ATLA] … (mevcut; --force ile ez)` satırı geri gelir
+          --mutasyon-not-yok        → ③b koşum sonu [ATLA] notu basılmaz
 ÇIKIŞ KODU SÖZLEŞMESİ (kardeş korpuslarla aynı): normal 0=hepsi geçti · 1=düşen var ·
   2=alet geçersiz (yama tutmadı / iki kip birden). Mutasyon kipinde 0 "düşen yok" DEMEK
   DEĞİLDİR — kararı `N/M OK` satırından oku.
@@ -50,6 +65,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -68,8 +84,11 @@ SIZINTI = KOK / "scripts" / "validators" / "check_core_not_committed.py"
 
 MUT = "--mutasyon" in sys.argv
 MUT_GEVSEK = "--mutasyon-gevsek" in sys.argv
-if MUT and MUT_GEVSEK:
+MUT_FORCE = "--mutasyon-force-onerisi" in sys.argv
+MUT_NOT = "--mutasyon-not-yok" in sys.argv
+if sum((MUT, MUT_GEVSEK, MUT_FORCE, MUT_NOT)) > 1:
     print("HATA: iki mutasyon kipi birlikte verilemez"); raise SystemExit(2)
+HERHANGI_MUT = MUT or MUT_GEVSEK or MUT_FORCE or MUT_NOT
 
 SONUC: list[tuple[bool, str]] = []
 
@@ -106,6 +125,11 @@ scripts/hook_shim.py.yedek-*
 
 """
 FORMAT_CAGRISI = "GITIGNORE.format(source_root=a.source_root)"
+# ③ Q314 çapaları (ESKİ satır = 18bbe78'deki literal)
+ATLA_SATIRI_YENI = 'f"{ATLA_ETIKETI} {hedef} (mevcut; dokunulmadı)"'
+ATLA_SATIRI_ESKI = 'f"[ATLA] {hedef} (mevcut; --force ile ez)"'
+NOT_BASKISI = ('    if any(s.startswith(ATLA_ETIKETI) for s in sonuc):\n'
+               '        print("\\n" + ATLA_NOTU)\n')
 
 
 def _sok(metin: str, capa: str, yeni: str, etiket: str) -> str:
@@ -125,6 +149,10 @@ def kaynak_uret() -> str:
         metin = _sok(metin, KAYNAK_KOK_BLOGU, "", "kaynak-kök UI desenleri")
         metin = _sok(metin, ARSIV_BLOGU, "", "arşiv/yedek bloğu")
         metin = _sok(metin, FORMAT_CAGRISI, "GITIGNORE", ".format kablolaması")
+    if MUT_FORCE:
+        metin = _sok(metin, ATLA_SATIRI_YENI, ATLA_SATIRI_ESKI, "[ATLA] satırı (Q314)")
+    if MUT_NOT:
+        metin = _sok(metin, NOT_BASKISI, "", "[ATLA] koşum sonu notu (Q314)")
     return metin
 
 
@@ -147,6 +175,22 @@ def izole_core(kum: Path) -> Path:
     (core / "scripts" / "init_project.py").write_text(kaynak_uret(), encoding="utf-8",
                                                       newline="\n")
     return core
+
+
+def _sil(d: Path) -> None:
+    """Windows'ta salt-okur dizin/dosya `ignore_errors` ile SESSİZCE kalır (Q314: koşum başına 1)."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def temiz_env() -> dict:
@@ -181,6 +225,24 @@ def md5(p: Path) -> str:
     return hashlib.md5(p.read_bytes()).hexdigest()
 
 
+# ── ③ ÇIKTI ÖLÇÜTLERİ (anlam, literal değil) ─────────────────────────────────
+def atla_satirlari(cikti: str) -> list[str]:
+    return [s for s in cikti.splitlines() if s.startswith("[ATLA]")]
+
+
+def force_onerileri(cikti: str) -> list[str]:
+    """`--force` geçen ve AYNI satırda `KULLANMA` taşımayan satır = öneri."""
+    return [s for s in cikti.splitlines() if "--force" in s and "KULLANMA" not in s]
+
+
+def not_sayisi(cikti: str) -> int:
+    return sum(1 for s in cikti.splitlines() if s.startswith("NOT: [ATLA]"))
+
+
+def ok_dosyalari(cikti: str) -> list[str]:
+    return [s for s in cikti.splitlines() if s.startswith("[ OK ]") and "(klasör)" not in s]
+
+
 def main() -> int:
     kum = Path(tempfile.mkdtemp(prefix="initproj_"))
     try:
@@ -189,9 +251,9 @@ def main() -> int:
         # ── K1 KABLOLAMA: izole ağaçtaki üretici, mutasyon DIŞI kipte gerçek dosyanın
         #    BİREBİR kopyasıdır (aksi hâlde bu korpus başka bir şeyi ölçerdi).
         ayni = md5(core / "scripts" / "init_project.py") == md5(GERCEK)
-        kontrol(ayni if not (MUT or MUT_GEVSEK) else not ayni,
+        kontrol(ayni if not HERHANGI_MUT else not ayni,
                 "K1 KABLOLAMA izole üretici ↔ gerçek dosya "
-                + ("EŞİT (mutasyon yok)" if not (MUT or MUT_GEVSEK) else "FARKLI (mutasyon var)"))
+                + ("EŞİT (mutasyon yok)" if not HERHANGI_MUT else "FARKLI (mutasyon var)"))
 
         # ── TABAN PROJE (full) ────────────────────────────────────────────────
         proje = kum / "proje_full"
@@ -232,6 +294,37 @@ def main() -> int:
                 "P3 ikinci koşum var olan kuyruğu EZMEZ ([ATLA])",
                 f"rc={rc2}")
 
+        # ── ③ [ATLA] ÇIKTISI (Q314) ──────────────────────────────────────────
+        atla2 = atla_satirlari(cikti2)
+        kontrol(len(atla2) >= 1, "A1 ÇAPA ikinci koşumda [ATLA] satırı VAR (A2/A3 boş kümede geçmesin)",
+                f"[ATLA]={len(atla2)}")
+        oneriler2 = force_onerileri(cikti2)
+        kontrol(not oneriler2,
+                "A2 KULLANMA bağlamı dışında `--force` önerisi 0 (ikinci koşum, full)",
+                f"öneri={len(oneriler2)}" + (f" ilk: {oneriler2[0].strip()[-80:]}" if oneriler2 else ""))
+        kontrol(not_sayisi(cikti2) == 1 and "TAŞI" in cikti2 and "--force KULLANMA" in cikti2,
+                "A3 [ATLA] notu koşum başına TAM 1 kez (TAŞI + --force KULLANMA)",
+                f"not={not_sayisi(cikti2)}")
+        kontrol(not_sayisi(cikti) == 0,
+                "A4 FP ilk koşumda [ATLA] yok → not da YOK", f"not={not_sayisi(cikti)}")
+
+        # A5 — notun söylediği yol GERÇEKTEN işler: dosyayı taşı + AYNI argümanla yeniden koş.
+        ozel = "PROJE-OZEL-SATIR-Q314"
+        claude_md = proje / "CLAUDE.md"
+        claude_md.write_text(claude_md.read_text(encoding="utf-8") + f"\n{ozel}\n",
+                             encoding="utf-8", newline="\n")
+        ayar = proje / ".claude" / "settings.json"
+        ayar_md5 = md5(ayar)
+        ayar.replace(kum / "tasinan_settings.json")
+        rc4, cikti4 = uret_proje(core, proje)
+        ok4 = ok_dosyalari(cikti4)
+        kontrol(rc4 == 0 and len(ok4) == 1 and ok4[0].endswith("settings.json")
+                and ayar.is_file() and md5(ayar) == ayar_md5
+                and ozel in claude_md.read_text(encoding="utf-8")
+                and "ELLE YAZILMIŞ KAYIT" in kuyruk.read_text(encoding="utf-8"),
+                "A5 taşı + aynı argümanla yeniden koş → YALNIZ taşınan üretilir, proje-özel içerik korunur",
+                f"rc={rc4} üretilen={[Path(s.split('] ', 1)[1]).name for s in ok4]}")
+
         # ── ② SIR KİLİDİ ──────────────────────────────────────────────────────
         git_init(proje)
         kilitli = {rel: ignore_mu(proje, rel) for rel in
@@ -268,8 +361,8 @@ def main() -> int:
 
         # ── ÜÇÜNCÜ BAĞLAM: görev-dışı şekil (--repo-mode none + farklı kaynak-kök) ─
         proje3 = kum / "proje_lite"
-        rc3, cikti3 = uret_proje(core, proje3, "--repo-mode", "none",
-                                 "--source-root", "ABAP_SRC")
+        ek3 = ("--repo-mode", "none", "--source-root", "ABAP_SRC")
+        rc3, cikti3 = uret_proje(core, proje3, *ek3)
         gi3 = (proje3 / ".gitignore").read_text(encoding="utf-8") if (proje3 / ".gitignore").exists() else ""
         kontrol(rc3 == 0 and (proje3 / "governance" / "infra-findings.md").is_file(),
                 "U1 3.BAĞLAM (--repo-mode none) kuyruk tohumu YİNE üretiliyor", f"rc={rc3}")
@@ -280,15 +373,26 @@ def main() -> int:
         kontrol("{source_root}" not in gi3 and "{source_root}" not in gi_metin,
                 "U4 KABLOLAMA doldurulmamış placeholder KALMADI (.format çağrıldı)")
 
+        # U5 — kaydın ölçüldüğü biçim: LITE proje + tek eksik dosya (pre-commit) → yeniden koşum.
+        (proje3 / "scripts" / "git-hooks" / "pre-commit").unlink()
+        rc5, cikti5 = uret_proje(core, proje3, *ek3)
+        atla5, ok5 = atla_satirlari(cikti5), ok_dosyalari(cikti5)
+        kontrol(rc5 == 0 and len(atla5) >= 1 and not force_onerileri(cikti5)
+                and len(ok5) == 1 and ok5[0].endswith("pre-commit"),
+                "U5a 3.BAĞLAM LITE + eksik pre-commit: yalnız o üretilir, `--force` önerisi 0",
+                f"rc={rc5} [ATLA]={len(atla5)} öneri={len(force_onerileri(cikti5))} "
+                f"üretilen={len(ok5)}")
+        kontrol(not_sayisi(cikti5) == 1, "U5b 3.BAĞLAM [ATLA] notu TAM 1 kez",
+                f"not={not_sayisi(cikti5)}")
+
         gecen = sum(1 for ok, _ in SONUC if ok)
         for ok, ad in SONUC:
             print(("  [OK]   " if ok else "  [FAIL] ") + ad)
         print(f"\n{gecen}/{len(SONUC)} OK"
-              + ("  (MUTASYON KİPİ — düşmesi BEKLENEN vektörler var)"
-                 if (MUT or MUT_GEVSEK) else ""))
+              + ("  (MUTASYON KİPİ — düşmesi BEKLENEN vektörler var)" if HERHANGI_MUT else ""))
         return 0 if gecen == len(SONUC) else 1
     finally:
-        shutil.rmtree(kum, ignore_errors=True)
+        _sil(kum)
 
 
 if __name__ == "__main__":
