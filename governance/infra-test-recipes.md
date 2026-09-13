@@ -2479,3 +2479,21 @@ python tests/run_battery.py push_atlandi_ve_kaynak_izi --kardes populate_tables_
 - ⚠ Mutasyon çapaları (M11–M15 · M8–M9) üretim kodundaki **tam satırlara** bağlıdır; metni değiştiren her tur `yama-tuttu` bloğunda `degisti` görmelidir. `YAMA TUTMADI` = sahte-yeşil riski.
 - Satır sonu: çalışma kopyasında iki script ve iki fixture LF · `playbook/adt-cds.md` CRLF · `playbook/adt-tables-structures.md` LF; indeks blob'larının hepsi LF (`text=auto`). Yalnız ham baytla say ve üç yeri ayrı ölç: çalışma kopyası, `git show HEAD:<dosya>`, `git show :<dosya>`. Bu turda Edit aracı LF olan çalışma kopyasını tümüyle CRLF'e çevirdi. Tüm dosyada churn olup olmadığını `git diff --cached --numstat` gösterir.
 - HARİTA (değişmedi): `scripts/populate_cds_views.py` → `O:cds_paket_kapsami`, `O:push_atlandi_ve_kaynak_izi` · `scripts/populate_tables.py` → `O:populate_tables_unit_kind`, `O:ddic_aktivasyon_notu`, `O:populate_ddic_fail_closed`.
+
+## B56 — DDIC sözdizimi kontrolü `valid` üç değerli: `syntax_check.py::check_ddic_object` aktif sürüm doğrulanmadan `True` demez (Q313; B51'in DDIC kardeşi)
+
+```
+python tests/fixtures/aktivasyon_govde_hukmu/run.py                  # 111 vektör (K = Q313), SAP gerektirmez, exit 0
+python tests/fixtures/aktivasyon_govde_hukmu/run.py --taban 18bbe78  # Q313 öncesi üretim kodu → 106/111, exit 0 = karşıtlık VAR
+python tests/run_battery.py aktivasyon_govde_hukmu --kardes aktivasyon_sahte_ok mcp_sahte_sonuc_uclusu sorgu_basarisizligi_gorunur veri_yetki_guardlari --precommit
+```
+
+- K bölümü gerçek `check_ddic_object` (K1–K8) ve `syntax_check.main` (K9–K11) koşar. Sahte olanlar yalnız `requests.get` (fonksiyon çağrı anında `import requests` yapar, bu yüzden modül özniteliği yamalanır), `syntax_check.SAPADTClient` (`csrf_token` · `url` · `cookies` · `_get_headers`) ve CLI için `syntax_check.SAPClient`. Hepsi `finally` ile geri alınır.
+- Gövdeler: `canli/ddic_dtel_aktif.xml` + `canli/ddic_tabl_aktif.xml` = 2026-09-13 DEV aktif gövdeleri, **MASKELİ** (ad `ZSD001_*`, paket `zsd001_pkg`, kullanıcı `SAP_USER`, sistem `SYS`, açıklama/etiket `Ornek`). Bölüm, kök `adtcore:version="active"` her gövdede TAM 1 kez geçmezse `[fixture-hatasi]` yazar ve durur.
+- ⚠ **İnaktif gövde SENTETİKTİR:** canlıda inaktif DDIC yoktu (worklist 0). Aktif DTEL gövdesinde kök sürüm `inactive` (K3) ve `workingArea` (K4) yapılır. SAP'nin gerçek değeri DOĞRULANAMADI; K4 hükmün değere bağlı olmadığını ölçer.
+- `--taban 18bbe78` beklenen: düşenler **tam olarak** K3 · K4 · K5 · K6 · K9. KONTROL satırlarından biri (K1 · K2 · K7 · K8 · K10 · K11) düşerse vektör ya da harness bozuktur, karşıtlık değildir.
+- ⚠ Çapa tuzağı (B51 ile aynı): K9 ölçülemedi çıktısı *"does NOT mean the source has syntax errors"* cümlesini taşır. Ayırt edici dizgeler `[FAIL] SYNTAX CHECK FAILED` ve `[OK] Check passed`'tir.
+- ⛔ SİLİNMEZ: K1 · K2 · K10 (aktif gövde True / rc 0) · K7 · K8 · K11 (404 ve HTTP≠200 BİLEREK False) · K4/M27.
+- Mutasyon satırında `MUTASYON OZETI: 30/30` satırını oku (B50 uyarısı aynen geçerli).
+- ⚠ Satır sonu: `.py` `eol=lf` (diskte LF). `.md` ve `.xml` `text=auto`, eol belirsiz ⇒ Windows checkout'unda `.md` diskte CRLF, blob LF. Bu turda "HEAD blob LF ↔ disk CRLF" yanlışlıkla araç dönüşümü sanıldı ve üç `.md` LF'e çevrildi; içerik değişmedi (`git hash-object` == index blob). Ölçüt: ham bayt + dokunulmamış kardeş `.md` + `git check-attr text eol`.
+- Canlı teyit (SALT-OKUR, proje kökü `.conn_adt` → `set_explicit_working_dir(<proje kökü>)`, çıktı maskeli): `type_map`'in her ucu için aktif bir Z örnekte `check_ddic_object` → `valid:True` + kök `adtcore:version="active"` (2026-09-13: 9 takma ad / 5 uç, hepsi). Bekleyen inaktif sürümü olan bir DDIC bulunursa (`GET /sap/bc/adt/activation/inactiveobjects` içinde `DTEL`/`DOMA`/`TABL`/`TTYP`) parametresiz GET'in kök sürüm değeri kaydedilir. Bu, B56'nın iki DOĞRULANAMADI maddesini kapatır. LOCK/PUT/POST YOK.
