@@ -20,6 +20,11 @@ NEDEN VAR (canlı ölçüm, DEV, adt-gateway 2026-09-13; ham gövdeler `canli/` 
     (ya da öznitelik yokken) `valid:True` dönüyordu; CLI rc 0 `[OK] Check passed`. Artık None +
     `sozdizimi_sebep` (K bölümü; canlı aktif DTEL/TABL gövdeleri `canli/ddic_*.xml`, MASKELİ).
     ⚠ İnaktif gövde SENTETİKTİR: canlıda inaktif DDIC yoktu; SAP'nin tam değeri DOĞRULANAMADI.
+  · Q317 — CLI "kontrol KOŞMADI"yı `has syntax errors` diye basıyordu: `SAPClient.syntax_check`
+    istisna sözlüğü (`valid:False` + `error`, errors YOK) ve `check_ddic_object` HTTP≠200/404 +
+    istisna dalları. Artık CLI `olculemedi_sebebi` → `[UNVERIFIED] … NOT MEASURED` rc 1 (J25 · K8 ·
+    K12–K14); DDIC dalları `valid:None` + `ddic_http_<kod>` / `ddic_istisna:<Tip>`. sap_client sözlüğü
+    DEĞİŞMEDİ (push ön-kontrolü + MCP `_gecerlilik` onu zaten ölçülemedi okuyor).
 
 SÖZLEŞME (`sap_adt_lib.aktivasyon_govde_hukmu`): True · False · None ("gövde hüküm taşımıyor"
 → BAĞIMSIZ worklist sondası karar verir; sonda kurulamazsa BAŞARI DEĞİL, DOĞRULANAMADI).
@@ -37,7 +42,9 @@ SÖZLEŞME (`sap_adt_lib.aktivasyon_govde_hukmu`): True · False · None ("gövd
     J13 + J14 — BİLEREK KORUNAN iki `valid:False` (ayrıştırılamayan gövde · HTTP 403 kilit):
     `sap_client.push_object` ön-kontrolü bunlarda aktivasyonu durdurmaya devam eder.
   · K1 + K2 + K10 — Q313 KONTROL GRUPLARI: canlı aktif DDIC gövdesi `valid:True` / CLI rc 0 kalır.
-    K7 + K8 + K11 — BİLEREK KORUNAN `valid:False` (404 · HTTP≠200). K4/M27 — hüküm sürüm DEĞERİNE bağlı değil.
+    K7 + K11 — BİLEREK KORUNAN `valid:False` (404 = gerçek cevap). K4/M27 — hüküm sürüm DEĞERİNE bağlı değil.
+  · J24 + J26 + J27 + K11 — Q317 KONTROL GRUPLARI: errors DOLU False (SAP E mesajı · 403 kilit · 404)
+    CLI'de `[FAIL]` kalır; ölçülemedi koşulu gerçek hatayı GİZLEMEZ. K8 çapası Q317 ile ÇEVRİLDİ (False→None).
 ⚠ SINIR (yazılı, ölçülemez): obje aktivasyondan ÖNCE worklist'te değilse "listede yok" ayırt
   edici değildir — ön-snapshot alınmaz (lider kararı).
 
@@ -667,9 +674,9 @@ def bolum_j(L, SC, Q, CONN, SCK):
     ekle("J15 KONTROL istek bicimi degismedi: tek POST, method=activate + preauditRequested=true",
          sv.postlar == [{"method": "activate", "preauditRequested": "true"}], sv.postlar)
 
-    def istemci(govde):
+    def istemci(govde, kod=200):
         ist = object.__new__(SC.SAPClient)
-        ist.adt_client = _sahte_lib(L, _SozSunucu(200, govde))
+        ist.adt_client = _sahte_lib(L, _SozSunucu(kod, govde))
         ist.debug_enabled = False
         return ist
 
@@ -709,8 +716,8 @@ def bolum_j(L, SC, Q, CONN, SCK):
 
     eski_argv, eski_sc = sys.argv, SCK.SAPClient
     try:
-        def cli(govde):
-            ist = istemci(govde)
+        def cli(govde, kod=200, ist=None):
+            ist = ist if ist is not None else istemci(govde, kod)
             SCK.SAPClient = lambda: ist
             sys.argv = ["syntax_check.py", "--name", SOZ_AD, "--type", "class"]
             return _yakala(SCK.main)
@@ -725,6 +732,34 @@ def bolum_j(L, SC, Q, CONN, SCK):
         rc, log = cli(_govde(msg=_msg("E")))
         ekle("J24 KONTROL CLI E -> rc 1 + SYNTAX CHECK FAILED", rc == 1 and "[FAIL] SYNTAX CHECK FAILED" in log,
              f"rc={rc}")
+        # Q317: GERCEK yol — HTTP 400 -> lib SAPADTError -> SAPClient.syntax_check yutar
+        # -> {'valid': False, 'error': ...} (errors YOK). Kontrol KOSMADI.
+        ist = istemci("<html>Bad Request</html>", kod=400)
+        r_ic, _ = _yakala(ist.syntax_check, SOZ_AD, object_type="class")
+        rc, log = cli(None, ist=ist)
+        ekle("J25 ⭐Q317 CLI sap_client istisna sozlugu (valid False, errors YOK) -> rc 1 + NOT MEASURED + "
+             "reason kontrol_istisnasi, [FAIL]/'has syntax errors' basligi YOK (eski: rc 1 has syntax errors)",
+             r_ic.get("valid") is False and not r_ic.get("errors") and bool(r_ic.get("error"))
+             and rc == 1 and "NOT MEASURED" in log and "reason: kontrol_istisnasi:" in log
+             and "[FAIL] SYNTAX CHECK FAILED" not in log and "[OK] Check passed" not in log,
+             f"sozluk={sorted(r_ic)} rc={rc} log={log.strip()[-90:]!r}")
+        rc, log = cli(KILIT_403, kod=403)
+        ekle("J26 KONTROL CLI 403 kilit (errors DOLU, yerel) -> rc 1 + [FAIL] (bilerek korunur; baslik Q adayi)",
+             rc == 1 and "[FAIL] SYNTAX CHECK FAILED" in log and "NOT MEASURED" not in log, f"rc={rc}")
+
+        class _SozlukIstemci:
+            def __init__(self, sozluk):
+                self.sozluk = sozluk
+
+            def syntax_check(self, object_name, object_type="class"):
+                return dict(self.sozluk)
+
+        # SENTETIK sinir: hem SAP hata kaydi hem `error` metni -> gercek hata KAZANIR.
+        rc, log = cli(None, ist=_SozlukIstemci({"valid": False, "error": "ek metin",
+                                                 "errors": [{"type": "E", "line": 3, "message": "Ornek hata"}]}))
+        ekle("J27 KONTROL CLI errors DOLU + error -> rc 1 + [FAIL] + satir, NOT MEASURED YOK (gercek hata gizlenmez)",
+             rc == 1 and "[FAIL] SYNTAX CHECK FAILED" in log and "Line 3: Ornek hata" in log
+             and "NOT MEASURED" not in log, f"rc={rc} log={log.strip()[-90:]!r}")
     finally:
         sys.argv, SCK.SAPClient = eski_argv, eski_sc
 
@@ -801,28 +836,56 @@ def bolum_k(SCK):
         ekle("K7 KONTROL 404 -> valid False + not found (bilerek korunur)",
              r.get("valid") is False and "not found" in str(r.get("errors")), f"valid={r.get('valid')}")
         r, log = lib(500, HTML500)
-        ekle("K8 KONTROL HTTP 500 -> valid False (bilerek korunur; Q adayi)",
-             r.get("valid") is False and "HTTP 500" in str(r.get("errors")), f"valid={r.get('valid')}")
+        # Q317 ile K8 CAPASI CEVRILDI: eskiden "HTTP 500 -> valid False (bilerek korunur; Q adayi)".
+        ekle("K8 ⭐Q317 HTTP 500 -> valid None + ddic_http_500, errors YOK (eski: False 'Failed to check object')",
+             r.get("valid") is None and r.get("sozdizimi_sebep") == "ddic_http_500" and not r.get("errors"),
+             f"valid={r.get('valid')} sebep={r.get('sozdizimi_sebep')} errors={r.get('errors')}")
+
+        def patlayan_get(url, **kw):
+            istekler.append((url, (kw.get("headers") or {}).get("Accept")))
+            raise requests.exceptions.ConnectionError("sahte baglanti hatasi (ornek)")
+
+        requests.get = patlayan_get
+        r, log = _yakala(SCK.check_ddic_object, None, DDIC_AD, "dtel")
+        ekle("K12 ⭐Q317 istek istisnasi -> valid None + ddic_istisna:ConnectionError, errors YOK (eski: False)",
+             r.get("valid") is None and str(r.get("sozdizimi_sebep") or "").startswith("ddic_istisna:ConnectionError")
+             and not r.get("errors"), f"valid={r.get('valid')} sebep={r.get('sozdizimi_sebep')}")
 
         SCK.SAPClient = lambda: object()
 
-        def cli(kod, govde):
-            sun(kod, govde)
+        def cli(kod, govde, get=None):
+            if get is None:
+                sun(kod, govde)
+            else:
+                requests.get = get
             sys.argv = ["syntax_check.py", "--name", DDIC_AD, "--type", "dtel"]
             return _yakala(SCK.main)
 
         rc, log = cli(200, inaktif)
         ekle("K9 ⭐Q313 CLI inaktif DDIC -> rc 1 + NOT MEASURED + reason ddic_aktif_degil, [OK]/[FAIL] YOK "
-             "(eski: rc 0 [OK] Check passed)",
+             "+ ⭐Q317 baslik 'SAP did not run' DEMEZ (eski: rc 0 [OK] Check passed)",
              rc == 1 and "NOT MEASURED" in log and "reason: ddic_aktif_degil:inactive" in log
-             and "[OK] Check passed" not in log and "[FAIL] SYNTAX CHECK FAILED" not in log,
+             and "[OK] Check passed" not in log and "[FAIL] SYNTAX CHECK FAILED" not in log
+             and "SAP did not run" not in log,
              f"rc={rc} log={log.strip()[-90:]!r}")
         rc, log = cli(200, dtel)
         ekle("K10 KONTROL CLI aktif DDIC -> rc 0 + [OK] Check passed", rc == 0 and "[OK] Check passed" in log,
              f"rc={rc}")
         rc, log = cli(404, '<?xml version="1.0"?><exc:exception/>')
-        ekle("K11 KONTROL CLI 404 -> rc 1 + [FAIL] SYNTAX CHECK FAILED",
-             rc == 1 and "[FAIL] SYNTAX CHECK FAILED" in log, f"rc={rc}")
+        ekle("K11 KONTROL CLI 404 -> rc 1 + [FAIL] '<ad> has syntax errors' + not found (bilerek korunur)",
+             rc == 1 and f"[FAIL] SYNTAX CHECK FAILED - {DDIC_AD} has syntax errors" in log
+             and "not found" in log and "NOT MEASURED" not in log, f"rc={rc}")
+        rc, log = cli(500, HTML500)
+        ekle("K13 ⭐Q317 CLI HTTP 500 -> rc 1 + NOT MEASURED + reason ddic_http_500, [FAIL] YOK "
+             "(eski: rc 1 has syntax errors)",
+             rc == 1 and "NOT MEASURED" in log and "reason: ddic_http_500" in log
+             and "[FAIL] SYNTAX CHECK FAILED" not in log and "[OK] Check passed" not in log,
+             f"rc={rc} log={log.strip()[-90:]!r}")
+        rc, log = cli(0, "", get=patlayan_get)
+        ekle("K14 ⭐Q317 CLI istek istisnasi -> rc 1 + NOT MEASURED + reason ddic_istisna, [FAIL] YOK "
+             "(eski: rc 1 has syntax errors)",
+             rc == 1 and "NOT MEASURED" in log and "reason: ddic_istisna:ConnectionError" in log
+             and "[FAIL] SYNTAX CHECK FAILED" not in log, f"rc={rc} log={log.strip()[-90:]!r}")
     finally:
         requests.get, SCK.SAPADTClient, SCK.SAPClient, sys.argv = eski_get, eski_cls, eski_sc, eski_argv
 
@@ -974,7 +1037,8 @@ MUTASYONLAR = [
      "            if result.get('valid') is None:\n                # Q307",
      "            if False:\n                # Q307"),
     ("M23 CLI None dali sokuldu (rc 1 'has syntax errors')", "scripts/syntax_check.py",
-     "    if result.get('valid') is None:\n        # Q307", "    if False:\n        # Q307"),
+     "    sebep = olculemedi_sebebi(result)\n    if sebep is not None:",
+     "    sebep = olculemedi_sebebi(result)\n    if False:"),
     ("M24 Q313 geri: DDIC aktif degil -> valid True", "scripts/syntax_check.py",
      "                return {'valid': None, 'errors': [], 'active': False,",
      "                return {'valid': True, 'errors': [], 'active': False,"),
@@ -989,6 +1053,25 @@ MUTASYONLAR = [
     ("M28 404 False -> None (bulunamadi olculemedi'ye kayar)", "scripts/syntax_check.py",
      "                'valid': False,\n                'errors': [{'message': f'Object {object_name} not found'}]",
      "                'valid': None,\n                'errors': [{'message': f'Object {object_name} not found'}]"),
+    ("M29 Q317 asiri-genis: errors DOLU False da UNVERIFIED (gercek hata gizlenir)", "scripts/syntax_check.py",
+     "    if result.get('valid') is False and not result.get('errors') and result.get('error'):",
+     "    if result.get('valid') is False:"),
+    ("M30 Q317 errors kosulu dustu (errors + error birlikteyse hata gizlenir)", "scripts/syntax_check.py",
+     "and not result.get('errors') and result.get('error'):", "and result.get('error'):"),
+    ("M31 Q317 olculemedi rc 0'a dustu", "scripts/syntax_check.py",
+     "        return 1\n    if result.get('valid'):", "        return 0\n    if result.get('valid'):"),
+    ("M32 Q317 daraltma: DDIC HTTP≠200/404 dali False'ta kaldi", "scripts/syntax_check.py",
+     "        return {'valid': None, 'errors': [], 'active': None,\n                'sozdizimi_sebep': f'ddic_http_",
+     "        return {'valid': False, 'errors': [{'message': 'Failed to check object: HTTP'}], 'active': None,\n"
+     "                'sozdizimi_sebep': f'ddic_http_"),
+    ("M33 Q317 daraltma: DDIC istisna dali False'ta kaldi", "scripts/syntax_check.py",
+     "        return {'valid': None, 'errors': [], 'active': None,\n                'sozdizimi_sebep': f'ddic_istisna:",
+     "        return {'valid': False, 'errors': [{'message': 'istisna'}], 'active': None,\n"
+     "                'sozdizimi_sebep': f'ddic_istisna:"),
+    ("M34 Q317 daraltma: yalniz DDIC, sap_client istisna sozlugu CLI'de hala FAIL", "scripts/syntax_check.py",
+     "        return 'kontrol_istisnasi:' + str(result.get('error'))[:160]", "        return None"),
+    ("M35 Q317 baslik geri: 'SAP did not run the check' (DDIC icin yanlis)", "scripts/syntax_check.py",
+     "syntax of {args.name} could not be verified", "SAP did not run the check for {args.name}"),
 ]
 
 

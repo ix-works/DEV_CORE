@@ -53,7 +53,7 @@ status: active
 
 **Kural:** syntax_check hata verse bile `activate_object.py` dene. Gerçek aktivasyon başarılı olabilir. SAP GUI'den kontrol et.
 
-**Ayırt et — rc 1 her zaman "hata" değildir:** `[FAIL] SYNTAX CHECK FAILED` = SAP bir hata döndürdü. `[UNVERIFIED] SYNTAX NOT MEASURED` = kontrol **ölçülemedi**: sınıf/program için SAP kontrolü koşmadı (Q307), DDIC için obje metadata'sı **aktif sürüm** taşımıyor ya da sürüm okunamadı (Q313). İkincisi "kod hatalı" demek değildir, "geçerli" de değildir; `reason:` satırını oku.
+**Ayırt et — rc 1 her zaman "hata" değildir:** `[FAIL] SYNTAX CHECK FAILED` = SAP bir hata döndürdü. `[UNVERIFIED] SYNTAX NOT MEASURED` = kontrol **ölçülemedi**: sınıf/program için SAP kontrolü koşmadı (Q307), DDIC için obje metadata'sı **aktif sürüm** taşımıyor ya da sürüm okunamadı (Q313). Bağlantı/istisna ve HTTP≠200/404 da bu gruptadır (Q317): `reason: kontrol_istisnasi:…` · `ddic_http_<kod>` · `ddic_istisna:<Tip>`. İkincisi "kod hatalı" demek değildir, "geçerli" de değildir; `reason:` satırını oku. DDIC'te 404 (`not found`) gerçek bir cevaptır ve `[FAIL]` kalır.
 
 ---
 
