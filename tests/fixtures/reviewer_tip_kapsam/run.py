@@ -19,12 +19,36 @@ AYRIM (onemli): "eksik anahtar" ile "bilincli None" ayni sey DEGILDIR.
   - eksik  -> sessiz atlama = BUG
   - None   -> kayda gecmis karar ("zincir henuz yok") = kabul
 Bu yuzden test ANAHTAR VARLIGI arar, deger DOLULUGU degil.
+
+Q308 PINI (2026-09-13, F1-F5) — FUGR/FM eksenindeki `None` OLCULMUS bir karardir:
+  F1  `fugr`/`functiongroup` anahtari VAR ve degeri None (kayitli bosluk).
+  F2  `func`/`function` haritada YOK — cunku push yolu o tipi YAZAMAZ:
+  F3  `SAPClient.push_object(.., 'func'|'function')` ValueError atar ve adt_client'e
+      HIC dokunmaz (SAP istegi yok; `get_object_url` try'dan ONCE, sap_client.py:767).
+  F4  KONTROL GRUBU: ayni sahte istemciyle `fugr` push'u istemciye ULASIR (F3 bos gecmesin).
+  F5  `fugr` kaynak ucu = FG ANA INCLUDE (`/functions/groups/<fg>/source/main`), `fmodules`
+      DEGIL. FM govdesi `set_function_module_source` ile yazilir (MCP disi, reviewer yok).
+  Olcum (Q308, 10 FM/FUGR artefakti, `class_push` zinciri): BLOCKER 0, 10/10 WARNING
+  (abaplint measured=false), anlamli sinyal yalniz released_objects => bagla(ma) karari.
+  ⚠ TABAN (d79cc5e) ZATEN YESILDIR: Q308 davranis DEGISTIRMEDI, yalniz pinledi.
+  Karsitlik MUTASYONDAN gelir (bellekte, dosyaya yazilmaz):
+    --mutasyon-fugr-class-push   harita['fugr'] = 'class_push'           -> F1 duser
+    --mutasyon-func-anahtar      harita['func'] = None eklenir           -> F2 duser
+    --mutasyon-func-url          OBJECT_TYPES['function'].url_path dolar -> F3 duser
 """
 from __future__ import annotations
 
 import importlib.util
+import io
 import sys
+import tempfile
 from pathlib import Path
+
+GECERLI_KIP = {"--mutasyon-fugr-class-push", "--mutasyon-func-anahtar", "--mutasyon-func-url"}
+KIP = next((a for a in sys.argv[1:] if a.startswith("--")), None)
+if KIP is not None and KIP not in GECERLI_KIP:
+    print(f"[KULLANIM] bilinmeyen kip: {KIP} (gecerli: {sorted(GECERLI_KIP)})")
+    raise SystemExit(2)
 
 for _s in (sys.stdout, sys.stderr):
     try:
@@ -90,6 +114,12 @@ def main() -> int:
                      {"DDIC_XML_ONLY_TYPES", "DDIC_DDL_SOURCE_TYPES"})
 
     harita = rv_t["OBJECT_TYPE_TO_TASK"]
+    # Q308 mutasyonlari AST ile okunan haritaya BELLEKTE uygulanir (okumadan SONRA —
+    # diskten yeniden okuyan vektor mutasyonu goremez, sahte-KACAR olurdu).
+    if KIP == "--mutasyon-fugr-class-push":
+        harita["fugr"] = "class_push"
+    elif KIP == "--mutasyon-func-anahtar":
+        harita["func"] = None
     kabul: set[str] = set()
     for ad, tablo in (("_TYPE_KEY_CANON", atom_t), ("_ACTIVATION_URI_SEG", atom_t),
                       ("_SOURCE_BASED_TYPES", atom_t),
@@ -171,6 +201,72 @@ def main() -> int:
                       and bool(gorevler.get("dtel_creation")),
                       f"eslesme={comp.get('adt_dtel_create')} "
                       f"zincir={len(gorevler.get('dtel_creation') or [])}"))
+
+    # ── Q308 F1-F5 — FUGR/FM ekseni: `None` olculmus karar, `func` push'u fail-closed ──────
+    sonuc.append(("F1 Q308: `fugr`/`functiongroup` anahtari VAR ve degeri None (kayitli bosluk)",
+                  all(k in harita and harita[k] is None for k in ("fugr", "functiongroup")),
+                  str({k: harita.get(k, "<YOK>") for k in ("fugr", "functiongroup")})))
+    sonuc.append(("F2 Q308: `func`/`function` haritada YOK (push o tipi yazamaz; bkz. F3)",
+                  not any(k in harita for k in ("func", "function")),
+                  str({k: (k in harita) for k in ("func", "function")})))
+
+    class _Dur(Exception):
+        pass
+
+    class _SahteAdt:
+        """adt_client'e yapilan HER erisimi kaydeder ve ilk cagrida durdurur (SAP istegi yok)."""
+        def __init__(self):
+            self.cagri: list[str] = []
+
+        def __getattr__(self, ad):
+            def _f(*a, **kw):
+                self.cagri.append(ad)
+                raise _Dur(ad)
+            return _f
+
+    gecici = tempfile.TemporaryDirectory(prefix="q308_")   # koşum sonunda silinir (artık bırakmaz)
+    try:
+        import object_types as OT          # scripts/ sys.path'te; sap_client ayni modulu kullanir
+        import sap_client as SC
+        if KIP == "--mutasyon-func-url":
+            OT.OBJECT_TYPES["function"]["url_path"] = "functions/modules"
+        kaynak = Path(gecici.name) / "ZSD001_FM_ORNEK.abap"
+        kaynak.write_text("FUNCTION zsd001_fm_ornek.\nENDFUNCTION.\n", encoding="utf-8")
+
+        def _push(ad, tip):
+            stub = _SahteAdt()
+            c = object.__new__(SC.SAPClient)
+            c.adt_client = stub
+            c.debug_enabled = False
+            yedek, sys.stdout = sys.stdout, io.StringIO()
+            try:
+                c.push_object(object_name=ad, object_type=tip, transport=None,
+                              source_file=str(kaynak))
+                hata = None
+            except _Dur:
+                hata = "_Dur"
+            except Exception as exc:                    # noqa: BLE001
+                hata = type(exc).__name__
+            finally:
+                sys.stdout = yedek
+            return hata, stub.cagri
+
+        f3 = {t: _push("ZSD001_FM_ORNEK", t) for t in ("func", "function")}
+        sonuc.append(("F3 Q308: push_object('func'|'function') ValueError + adt_client'e SIFIR cagri",
+                      all(h == "ValueError" and not c for h, c in f3.values()), str(f3)))
+        f4 = _push("ZSD001_FG_ORNEK", "fugr")
+        sonuc.append(("F4 KONTROL GRUBU: ayni sahte istemciyle `fugr` push'u istemciye ULASIR",
+                      f4[0] == "_Dur" and bool(f4[1]), str(f4)))
+        f5 = OT.get_source_url("ZSD001_FG_ORNEK", "fugr")
+        sonuc.append(("F5 Q308: `fugr` kaynak ucu FG ANA INCLUDE'dur (fmodules DEGIL)",
+                      f5 == "/sap/bc/adt/functions/groups/zsd001_fg_ornek/source/main"
+                      and "fmodules" not in f5, f5))
+    except Exception as exc:                            # noqa: BLE001
+        # Yuklenemezse SESSIZ gecme: F3-F5 FAIL olarak sayilir.
+        sonuc.append(("F3-F5 Q308: object_types/sap_client yuklenip olculdu", False,
+                      f"{type(exc).__name__}: {str(exc)[:120]}"))
+    finally:
+        gecici.cleanup()
 
     gecen = sum(1 for _, ok, _ in sonuc if ok)
     for ad, ok, detay in sonuc:

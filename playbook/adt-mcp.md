@@ -156,9 +156,10 @@ adt_struct_create(name, fields, artifact_path='ERP/SD/.../X.asddls', ...)
 |---|---|---|
 | `adt_struct_create` | `struct_creation` | `artifact_path` parametresi verildiyse |
 | `adt_domain_create` | (henüz validator yok → SKIP) | aynı |
-| `adt_dtel_create` | (henüz validator yok → SKIP) | aynı |
+| `adt_dtel_create` | `dtel_creation` (`check_dtel_creation_labels`, BLOCKER; `_reviewer.py` `COMPOSITE_TOOL_TO_TASK`) | aynı *(2026-09-13 düzeltmesi: bu satır "henüz validator yok → SKIP" diyordu; görev 2026-08-29'da bağlandı)* |
 | `adt_push_source` (object_type='ddls') | `cds_update` | otomatik (source text → temp file) |
 | `adt_push_source` (object_type='tabl') | `table_update` | otomatik |
+| `adt_push_source` (object_type='fugr') | ⛔ **KAYITLI İSTİSNA (Q308)**: görev YOK → SKIP | Bu push yalnız **FG ana include**'unu yazar (`/functions/groups/<fg>/source/main` = `FUNCTION-POOL` satırı). **FM gövdesi** `set_function_module_source` ile yazılır: MCP aracı yok, **reviewer yok** ([`adt-fugr-functions.md` §2b](adt-fugr-functions.md)). `func`/`function` push'u `get_object_url` ValueError ile fail-closed. **FM yazmadan önce elle:** `run_review --task class_push --artifact <fm>.abap` + `adt_syntax_check`. Beklenen tablo (ölçüldü: 10 FM/FUGR artefaktı): **BLOCKER 0**, 10/10 **WARNING**. `check_abaplint` `measured=false` WARNING'i **beklenen gürültüdür** (FM'yi lintlemez). Anlamlı tek sinyal `check_released_objects`'tir (3/10 bulgu). Diğer dört validator'ın tetikleyici deseni FM'de yok (METHODS / AMDP / DOCU runner / API marker). Oradaki "tarandı" satırı uygulandı demek DEĞİLDİR. Pin: `tests/fixtures/reviewer_tip_kapsam` F1-F5 |
 | `adt_push_source` (diğer) | (validator yok → SKIP) | otomatik |
 
 `adt_push_source`'ta `skip_reviewer=True` flag'i var ama acil durum dışında **kullanma**.

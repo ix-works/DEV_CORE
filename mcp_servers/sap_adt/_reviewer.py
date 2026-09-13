@@ -92,6 +92,11 @@ OBJECT_TYPE_TO_TASK = {
     # Önceden bu anahtarlar HİÇ yoktu ve `.get()` zaten
     # None döndürüyordu; tek değişen, kararın artık AÇIKÇA KAYDA GEÇMESİ.
     # ⇒ FUGR için bir reviewer zinciri tanımlanırsa bu iki satır GÜNCELLENMELİDİR.
+    # Q308 (2026-09-13, ölçüldü): `fugr` push'u yalnız FG ANA INCLUDE'unu yazar
+    # (`/functions/groups/<fg>/source/main` = `FUNCTION-POOL` satırı); FM gövdesi
+    # `sap_adt_lib.set_function_module_source` ile yazılır (MCP dışı) ⇒ bu anahtarı
+    # doldurmak FM gövdesini KAPSAMAZ. `func`/`function` bilinçli olarak YOK: push yolu
+    # `get_object_url` ValueError ile fail-closed. Pin: `reviewer_tip_kapsam` F1-F5.
     "fugr": None, "functiongroup": None,
 }
 
