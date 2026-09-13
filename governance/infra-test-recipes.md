@@ -2269,3 +2269,15 @@ python tests/run_battery.py ui_odata_refs_kapsami --kardes olcum_yoklugu_sozlesm
 - ⚠ Mutasyon çapaları satır ÖNEKİyle bulunur (`RE_PATH = ` …) ve her biri TAM 1 kez olmalı. Desen satırını yeniden adlandıran tur `KURULAMADI` görür (KACTI değil).
 - ⚠ Satır sonu/CR ölçümünü kabukta `grep -c $'\r'` ile iç içe `$(…)` içinde YAPMA: 2026-09-13'te her satırı saydı (sahte "CRLF"). Bayttan ölç + `git hash-object --no-filters` == index blob.
 
+## B43 — `populate_cds_views` RAP başlık tespiti (`define [root] view|abstract entity`) (Q298)
+
+```
+python tests/fixtures/cds_paket_kapsami/run.py     # 27 senaryo + 14 mutasyon, exit 0
+python tests/run_battery.py cds_paket_kapsami --kardes push_atlandi_ve_kaynak_izi worktype_alt_tur --precommit
+```
+
+- ⛔ Başlık deseni TEK yerde yaşar (`RAP_BASLIK_DESENI`): tespit (`RAP_VIEW_ENTITY_RE`) ve ad yakalama ondan türer. İkinci bir literal yazma — M12 ikisinin ayrışmasını yakalar.
+- ⛔ Muafiyetin kapsamı = TD-spec kapısı + klasik sqlViewName/`define view` kuralı. RAP dalının ad kalıbı ve sqlViewName **yasağı** root abstract'ta da işler: P10c/P10d bunu çiviler, SİLİNMEZ. P10e klasik dalın pozitif kontrolüdür (M14 aşırı geniş tespiti onunla yakalar).
+- Eski kod karşıtlığı: `git show afae4be:scripts/populate_cds_views.py > scripts/_taban_populate_cds_views.py` + `PCV_PATH`'i ona çeviren `tests/fixtures/cds_paket_kapsami/_taban_run.py` → **23/27** (P10a · P10c · P10d · RA1). İkisini koşum sonrası sil. Mutasyonlar bellekte `exec` edilir, pinli SHA yok ⇒ sığ klonda (CI) da koşar.
+- Desen genişletilecekse (ör. `transient view entity`): önce gerçek bir `.cds` korpusunda eski/yeni **dal geçişini** say (çapraz geçiş = kapsam değişikliği = ⚠GEVŞETME) ve Q277 kapısıyla (`sap_adt_lib._validate_cds_source`) aynı biçim kümesini hedefle.
+- Bilinen sınır (ölçüldü, değiştirilmedi): ad `{` ile bitişikse `(\S+)` `{`'yi yutar → sahte RAP ad hatası (düz ve root abstract'ta aynı). Çok satırlı `define root\n abstract entity` tanınır.

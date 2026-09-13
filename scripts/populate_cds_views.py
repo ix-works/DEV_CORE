@@ -115,7 +115,14 @@ def _derive_prefixes(package=None):
 # view entity / root view entity / abstract entity — hepsi RAP teknik CDS:
 # TD-spec + sqlViewName whitelist UYGULANMAZ (abstract entity = RAP action/function
 # param/result tipi; veri-CDS veya legacy→TD dönüşümü değil). 2026-06-03 RAP spike.
-RAP_VIEW_ENTITY_RE  = re.compile(r"\bdefine\s+(?:(?:root\s+)?view|abstract)\s+entity\b", re.IGNORECASE)
+# ⭐ Q298 (2026-09-13): `root` öneki abstract'a da uygulanır (`define root abstract
+# entity`). Eski desen `(?:(?:root\s+)?view|abstract)` root'u YALNIZ view'a bağlıyordu ⇒
+# root abstract TD-spec'e + klasik sqlViewName dalına düşüp 2 sahte hata alıyordu.
+# Başlık deseni TEK yerde: tespit (RAP_VIEW_ENTITY_RE) ile ad yakalama aynı kaynaktan
+# türer, biri diğerinden sapamaz. Kardeş: sap_adt_lib._validate_cds_source (Q277).
+# `transient view entity` bu desende YOK (Q277 kapısı tanır) — bilinçli, ayrı kalem.
+RAP_BASLIK_DESENI   = r"\bdefine\s+(?:root\s+)?(?:view|abstract)\s+entity"
+RAP_VIEW_ENTITY_RE  = re.compile(RAP_BASLIK_DESENI + r"\b", re.IGNORECASE)
 # Modül-bağımsız RAP view entity adı (NTTDATA: Z<MOD><nnn>_<I|C|R|E>_*;
 # MOD = SD/MM/FI/CO/PP/QM/PM/EWM... 2-4 harf). Paket-doğru olma kontrolü
 # check_package_naming.py'de (.rules.md regex'i); burası RAP-naming sanity
@@ -205,13 +212,11 @@ def validate_sql_view_names(cds_files, package=None):
                     f"YASAK (view entity sqlView taşımaz). Kaldır. "
                     f"(checklist C-RAP-VE-02)"
                 )
-            vem = re.search(
-                r"\bdefine\s+(?:(?:root\s+)?view|abstract)\s+entity\s+(\S+)",
-                source, re.IGNORECASE,
-            )
+            vem = re.search(RAP_BASLIK_DESENI + r"\s+(\S+)", source, re.IGNORECASE)
             if not vem:
                 errors.append(
-                    f"{f.name}: 'define [root] view entity <name>' bulunamadı"
+                    f"{f.name}: 'define [root] view entity <name>' / "
+                    f"'define [root] abstract entity <name>' bulunamadı"
                 )
             elif not RAP_VE_NAME_PATTERN.match(vem.group(1).upper()):
                 errors.append(
