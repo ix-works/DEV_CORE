@@ -2297,3 +2297,19 @@ python tests/run_battery.py ui_odata_refs_kapsami --kardes olcum_yoklugu_sozlesm
 - ⚠ Tam süit çıktısını dosyaya yazıyorsan ZAMAN DAMGASINI oku: aynı scratchpad'de önceki turdan kalan dosya "tamam" gibi okundu (2026-09-13: mtime 01:36, gerçek koşum 11:42).
 - ⚠ Batarya `--precommit` satırında `ATLA` + IZLENMEYEN: provizyonlu worktree'de `.claude/` + `core/` izlenmeyendir. Kendi yeni dosyan yoksa ATLA bu sayıdan gelir — `git status --short -uall` ile ayır; provizyon dosyalarını `git add` ETME.
 
+## B45 — FM (`func`) OKUMA KANALI + where-used'da "YOK" ↔ "0 ÇAĞIRAN" (Q261; B38/Q221'in kanal ayağı)
+
+```
+python tests/fixtures/fm_okuma_where_used/run.py        # 25 vektör, exit 0
+python tests/run_battery.py fm_okuma_where_used --kardes adt_uc_url_cozumu dogrulama_kosamadi mcp_sahte_sonuc_uclusu grep_kapsam_gorunurlugu adtget_yokluk_kaniti --precommit
+```
+
+- **Kanal:** `SAPClient.resolve_function_module` (quickSearch `objectType=FUGR/FF` + TAM ad + `/fmodules/` uri) → `read_function_module` (kaynak `<uri>/source/main` text/plain · metadata çıplak uç `fmodules.v3+xml`). Tüketiciler: MCP `adt_get` · `adt_where_used` · `adt_impact_analysis` · `SAPClient.object_exists`/`where_used` (CLI `scripts/where_used.py`).
+- ⛔ Generic `get_object_url(func)` ValueError'u DURUR (R10 silinmez çapa). Kanal kapının YANINDADIR; kapıyı "düzeltme" (grup adı FM adından türetilemez — B38).
+- ⛔ Resolver filtresi `FUGR/FF`'dir. `FUNC` / `FUNC/FF` VAR OLAN FM için de 0 döner (canlı ölçüldü) — `--mutasyon-func-filtresi` bunu çiviler, R9a emülatörü kalibre eder.
+- ⛔ 406 ucun değil ACCEPT'in sonucudur: çıplak FM ucu `core.v1`/`application/xml` ile 406, `fmodules.v3+xml` ile 200. 406 görünce gövdeyi oku (kabul tipi orada yazar).
+- **Üç ayrık sonuç:** bulundu · kanıtlı yok (`probe`) · bakamadım (`ok:false`). Arama ya da usageReferences hatasını "yok"a veya 0'a ÇEVİRME (`--mutasyon-bakamadim-yok` → R5·W5·C3). Var olmayan FM ucunda usageReferences **500** döner (sınıfta 200+[] — PATTERN #11), bu yüzden FM'de varlık önce çözülür.
+- **7 mutasyon kipi** bellekte `exec` edilir (repoya yazmaz). Çapa dizesi tam 1 kez eşleşmezse `[KURULAMADI]` exit 2 — fix satırı yeniden yazılırsa ÖNCE `MUTASYONLAR` çapasını güncelle. Silinmez çapalar R9a · R10 · W6a; W6b yalnız `where-used-ayrim-sokuk`ta düşer (sınıf/FM "yok" dalı ortak).
+- **Eski kod karşıtlığı:** dört modülün `git show 4b05609:<yol>` çıktısı aynı dizine `_` önekli kardeş (`scripts/_object_types.py`, `scripts/_sap_client.py`, `mcp_servers/sap_adt/tools/_atom.py`, `.../_query.py`) + `Q261_TABAN_ONEK=_` → **11/25**. Eski kodda geçen 11'in 4'ü kontrol (R9a·R10·W6a·W6b); 7'si (R4b·R5·R6·R8·W4·W5·C3) eski kod fail-closed olduğu için geçer — onların ayırt ediciliği MUTASYONA karşıdır, eski koda karşı değil. Kardeşleri koşum sonrası SİL.
+- **Canlı teyit (salt-okur, 3. bağlam):** var olan FM · çağıransız FM (ör. IDoc inbound FM) · var olmayan ad · kontrol grubu sınıf (var/yok) üzerinde `adt_get` / `adt_where_used` / `adt_impact_analysis` func. ⚠ Canlı MCP sunucusu yeniden başlatılana kadar ESKİ kodu koşar — worktree kodunu Python import ile ölç.
+- ⚠ **Bilinen sınırlar (bu turda değiştirilmedi):** usageReferences `references` listesi DEVC paket satırlarını da sayar (`count` şişer) · `adt_atc_check`/`adt_lock_check` func için kanal yok (ValueError) · `adt_search_objects(object_type='FUNC')` sahte 0 · resolver'ın yokluk kanıtı arama indeksidir (tam ad, `max_results=50`).

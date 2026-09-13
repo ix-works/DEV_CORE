@@ -201,14 +201,27 @@ def adt_where_used(name: str, object_type: str = "class") -> dict:
     "count=0" sorusu "tüketicisi yok mu?" ile "obje yok mu?" ayrımını YAPAMAZ — bu
     ayrım orphan-sweep'te yanlış silmeye yol açar. Varlık önce doğrulanır; obje yoksa
     count HİÇ dönmez ki çağıran onu 0 sanmasın.
+
+    FM (`func`/`function`, Q261): generic URL yok; uç ve varlık TEK çözümlemeden gelir
+    (`SAPClient.resolve_function_module`). Üç ayrık sonuç:
+      · obje YOK (arama koştu, tam ad yok) → `OBJECT_NOT_FOUND` + `probe`
+      · obje VAR, 0 çağıran              → `ok:true, count:0, existence_verified:true`
+      · arama/usageReferences koşamadı   → `ok:false` (ölçülmüş: var olmayan FM ucunda
+        usageReferences **500** döner — 0'a ÇEVRİLMEZ)
     """
     client = _get_client()
     try:
-        from object_types import get_object_url  # type: ignore
+        from object_types import get_object_url, is_function_module_type  # type: ignore
 
         with _capture() as buf:
-            if not client.object_exists(name.upper(), object_type):
-                return {
+            fm = None
+            if is_function_module_type(object_type):
+                fm = client.resolve_function_module(name)
+                varlik = fm.get("status") == "found"
+            else:
+                varlik = client.object_exists(name.upper(), object_type)
+            if not varlik:
+                yok = {
                     "ok": False,
                     "error_code": "OBJECT_NOT_FOUND",
                     "name": name,
@@ -219,7 +232,10 @@ def adt_where_used(name: str, object_type: str = "class") -> dict:
                     ),
                     "client_log": buf.getvalue().strip(),
                 }
-            url = get_object_url(name.upper(), object_type)
+                if fm is not None:
+                    yok["probe"] = fm.get("probe")
+                return yok
+            url = fm["uri"] if fm is not None else get_object_url(name.upper(), object_type)
             refs = client.adt_client.where_used(url)
         return {
             "ok": True,
@@ -227,6 +243,8 @@ def adt_where_used(name: str, object_type: str = "class") -> dict:
             "type": object_type,
             "count": len(refs) if hasattr(refs, "__len__") else 0,
             "references": refs,
+            "existence_verified": True,
+            "resolved_uri": url,
             "client_log": buf.getvalue().strip(),
         }
     except Exception as exc:
@@ -1607,13 +1625,22 @@ def adt_impact_analysis(name: str, object_type: str = "ddls",
     """
     client = _get_client()
     try:
-        from object_types import get_object_url  # type: ignore
+        from object_types import get_object_url, is_function_module_type  # type: ignore
         adt = getattr(client, "adt_client", None) or client
         with _capture() as buf:
-            if not client.object_exists(name.upper(), object_type):
+            if is_function_module_type(object_type):
+                # Q261: FM ucu grubu içerir → tek çözümleme (varlık + uç).
+                fm = client.resolve_function_module(name)
+                if fm.get("status") != "found":
+                    return {"ok": False, "error_code": "OBJECT_NOT_FOUND", "name": name,
+                            "type": object_type, "probe": fm.get("probe"),
+                            "client_log": buf.getvalue().strip()}
+                root_url = fm["uri"]
+            elif not client.object_exists(name.upper(), object_type):
                 return {"ok": False, "error_code": "OBJECT_NOT_FOUND", "name": name,
                         "type": object_type, "client_log": buf.getvalue().strip()}
-            root_url = get_object_url(name.upper(), object_type)
+            else:
+                root_url = get_object_url(name.upper(), object_type)
             seen = {name.upper() + "|" + object_type.lower()}
             frontier = [root_url]
             levels = []

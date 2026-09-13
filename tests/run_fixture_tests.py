@@ -478,6 +478,10 @@ OZEL_TESTLER = [
      "ADT uc URL'i: sinif alt-include'una `/source/main` EKLENMEZ (canli: ciplak 200 / "
      "ekli 404) + `func` generic yola girerse ANLASILIR RET (grup adi turetilemez); "
      "11 FP capasi mutasyonda da GECER"),
+    # 2026-09-13 (Q261): FM okuma kanali + where-used "yok" <-> "0 cagiran" ayrimi.
+    ("fm_okuma_where_used",
+     "Q261: FM okuma kanali (grup arama indeksinden cozulur, FUGR/FF) + where-used "
+     "'obje yok' (probe) ile 'var, 0 cagiran' (existence_verified) AYRI; arama/500 ok:false"),
     # 2026-09-13 (Q277): create_cds_view kapisi duz alt-dize ariyordu.
     ("cds_kaynak_kapisi",
      "create_cds_view kapisi: `select distinct from` + abstract entity KABUL (korpus 63->2 red), "
@@ -898,7 +902,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
       "O:sorgu_basarisizligi_gorunur", "O:transport_gorev_istek_cevrimi",
       "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
-      "O:paket_aciklama_dogrulanmadi"),
+      "O:paket_aciklama_dogrulanmadi", "O:fm_okuma_where_used"),
      "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil) + "
      "görev(S)→istek(K) çevriminin İKİ yazma yolundaki simetrisi + `get_object_url` "
      "TÜKETİCİLERİ (push_object / run_atc_check → Q228 kapanış kanıtı)"),
@@ -930,7 +934,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:lock_modification_support", "O:transport_gorev_istek_cevrimi"),
      "lock sinyali tüketicisi (+ kanonik desenin ikinci üyesi — E2 çapası)"),
     ("scripts/object_types.py",
-     ("O:class_include_push", "O:reviewer_tip_kapsam", "O:adt_uc_url_cozumu"),
+     ("O:class_include_push", "O:reviewer_tip_kapsam", "O:adt_uc_url_cozumu",
+      "O:fm_okuma_where_used"),
      "tip normalizasyonu + ADT uç URL'i (`ensure_source_url` / `url_path` fail-closed)"),
     ("scripts/deploy_ui.py",
      ("O:git_sorgu_sessiz_bos", "O:sessiz_olumsuzlama_2026_08_10", "O:ui_dogrulama_satir_sonu_kacis"),
@@ -974,7 +979,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline", "O:mcp_sahte_sonuc_uclusu",
       "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu",
       "O:doctor_baglanti_kaniti", "O:aktivasyon_baseline_tazeligi",
-      "O:yazma_hukmu_durustlugu"),
+      "O:yazma_hukmu_durustlugu", "O:fm_okuma_where_used"),
      "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline) + "
      "`adt_classrun`/`adt_post_shell` guard SINIF çapası (AST) + `adt_get` dönüş ŞEKLİ "
      "grep kapsam-muhasebesinin GİRDİSİdir (ok/exists/source → skipped sebebi) + "
@@ -983,7 +988,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("mcp_servers/sap_adt/tools/query.py",
      ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur",
       "O:atc_p1_sonuc", "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu",
-      "O:paket_aciklama_dogrulanmadi"),
+      "O:paket_aciklama_dogrulanmadi", "O:fm_okuma_where_used"),
      "where_used/ATC + veri sorgusu + başarısızlık görünürlüğü + ⚠ `adt_atc_check` yanıt "
      "ŞEKLİ (priority_1_count · must_fix · policy) post_tool_failure ATC ekseninin "
      "GİRDİSİDİR: alan adı ya da politika metni değişirse eksen SESSİZCE boşalır"),

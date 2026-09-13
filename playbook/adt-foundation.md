@@ -693,7 +693,7 @@ python "<PROJECT_ROOT>\scripts\where_used.py" --cwd "<PROJECT_ROOT>" --object-ty
 
 | Enstrüman | Ölçülen körlük |
 |---|---|
-| `adt_where_used(type='func')` | Çağıranı **bilinen** bir Z FM için de `OBJECT_NOT_FOUND` döndü ⇒ `0`/hata ayırt edilemiyor. ⭐ **2026-09-04: ayrım ARTIK yapılabiliyor** — generic URL tablosu `func` için fail-closed (`ValueError`: *grup adı FM adından türetilemez*), yani araç artık "bulamadım" yerine "bu uçtan soramam" diyor. **Körlük KALKMADI**: doğru kanal hâlâ `adt_search_objects` + group-qualified GET |
+| `adt_where_used(type='func')` | Çağıranı **bilinen** bir Z FM için de `OBJECT_NOT_FOUND` döndü ⇒ `0`/hata ayırt edilemiyor. ⭐ **2026-09-13 (Q261): KANAL AÇILDI** — araç fonksiyon grubunu arama indeksinden çözer; üç sonuç ayrıktır: yok → `OBJECT_NOT_FOUND` + `probe` · var ama çağıransız → `ok:true, count:0, existence_verified:true` · arama/usageReferences hatası → `ok:false` (var olmayan FM ucunda usageReferences 500 döner, 0'a çevrilmez). ⚠ `count` DEVC paket satırlarını da sayar (ölçüldü: "4" = 1 çağıran + 3 paket) — `references[].type`'a bak. *(Tarihçe: 2026-09-04'e kadar `OBJECT_NOT_FOUND`/`ValueError` dönüyordu.)* |
 | `adt_grep_source(package=…)` | FUGR'ın yalnız iskelet ana include'unu çeker; **FM gövdesini okumaz**. Yine de `truncated:false` + `scope_verified:true` basar — *"taradım, temiz"* diyor, **taramamış** |
 
 > ⭐ **2026-08-28 güncellemesi (C-04) — körlük KALKMADI, ama artık GÖRÜNÜR.** `adt_grep_source`
