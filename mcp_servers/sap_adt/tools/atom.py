@@ -1255,6 +1255,14 @@ def adt_push_source(
             resp["ok"] = False
             resp["syntax_precheck"] = "failed"
             resp["syntax_errors"] = result.get("syntax_errors", [])
+        # ⛔ Q312: on-kontrol OLCULEMEDI -> push aktivasyona DEVAM etti (`ok` DEGISMEZ) ama gateway
+        # bunu ust seviyede gorsun (`readback_notice` deseni); nested `result` icinde de durur.
+        elif isinstance(result, dict) and result.get("syntax_precheck") == "olculemedi":
+            resp["syntax_precheck"] = "olculemedi"
+            resp["syntax_precheck_notice"] = (
+                "SOZDIZIMI ON-KONTROLU OLCULEMEDI — push aktivasyona devam etti; bu 'sozdizimi "
+                "temiz' DEGILDIR (aktivasyon hukmu ve readback ayri kapidir). Sebep: "
+                + str(result.get("sozdizimi_sebep") or "bildirilmedi"))
 
         # Readback-gate baseline'ı → adt_activate sonrası AKTİF source ile normalize-compare.
         # ⛔ Q271 (2026-09-09): tetikleyici **UPLOAD**, `ok` DEĞİL. Eskiden `if ok:` yazıyordu;

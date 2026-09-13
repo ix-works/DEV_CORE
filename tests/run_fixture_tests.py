@@ -510,6 +510,12 @@ OZEL_TESTLER = [
      "aktive-bekleyen listesi -> aktivasyon -> liste YENIDEN + aktif surum readback; sahte ADT "
      "sunucusu ETag kuralini modeller, gercek activate_object/get_inactive_objects kosar "
      "+ GEVSETME SINIRI: envelope degismisse retry YOK (17 vektor + 12 mutasyon; eski kod 4/17)"),
+    # 2026-09-13 (Q312): push on-kontrolu kosmadiginda (valid None / kontrol istisnasi) iz yoktu.
+    ("push_onkontrol_olculemedi",
+     "SAPClient.push_object sozdizimi on-kontrolu OLCULEMEDI (valid None · istisna yutuldu · cagri "
+     "istisnasi) -> push DEVAM + syntax_precheck='olculemedi' + sozdizimi_sebep + [UNVERIFIED]; MCP "
+     "adt_push_source ust seviye + CLI push_object.py hukum satiri; KONTROL: E/403 durdurur, temiz "
+     "isaretsiz, prog kapsam disi (15 vektor + 9 mutasyon; eski kod 8/15)"),
 ]
 
 
@@ -927,7 +933,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:sorgu_basarisizligi_gorunur", "O:transport_gorev_istek_cevrimi",
       "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
       "O:paket_aciklama_dogrulanmadi", "O:fm_okuma_where_used",
-      "O:sorgu_araclari_durustlugu", "O:aktivasyon_govde_hukmu"),
+      "O:sorgu_araclari_durustlugu", "O:aktivasyon_govde_hukmu", "O:push_onkontrol_olculemedi"),
      "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil) + "
      "görev(S)→istek(K) çevriminin İKİ yazma yolundaki simetrisi + `get_object_url` "
      "TÜKETİCİLERİ (push_object / run_atc_check → Q228 kapanış kanıtı)"),
@@ -953,7 +959,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "kilit objesi aktivasyon hükmü TEK KAYNAKTAN (type=E artık yok sayılmaz)"),
     ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
     ("scripts/push_object.py",
-     ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi"),
+     ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
+      "O:push_onkontrol_olculemedi"),
      "ccau/ccimp push sırası + reddedilen tipin YÖNLENDİRME notu (eşanlamlı `func` dahil) "
      "+ 2026-09-09 (Q222②) KAYNAK İZİ: `[KAYNAK] <yol> md5 <x>` HEM başarı HEM hata "
      "dalında basılır; alt katman iz üretmezse SESSİZ kalınmaz (`DOĞRULANAMADI`) "
@@ -1022,7 +1029,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline", "O:mcp_sahte_sonuc_uclusu",
       "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu",
       "O:doctor_baglanti_kaniti", "O:aktivasyon_baseline_tazeligi",
-      "O:yazma_hukmu_durustlugu", "O:fm_okuma_where_used", "O:aktivasyon_govde_hukmu"),
+      "O:yazma_hukmu_durustlugu", "O:fm_okuma_where_used", "O:aktivasyon_govde_hukmu",
+      "O:push_onkontrol_olculemedi"),
      "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline) + "
      "`adt_classrun`/`adt_post_shell` guard SINIF çapası (AST) + `adt_get` dönüş ŞEKLİ "
      "grep kapsam-muhasebesinin GİRDİSİdir (ok/exists/source → skipped sebebi) + "

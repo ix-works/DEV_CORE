@@ -2480,6 +2480,25 @@ python tests/run_battery.py push_atlandi_ve_kaynak_izi --kardes populate_tables_
 - Satır sonu: çalışma kopyasında iki script ve iki fixture LF · `playbook/adt-cds.md` CRLF · `playbook/adt-tables-structures.md` LF; indeks blob'larının hepsi LF (`text=auto`). Yalnız ham baytla say ve üç yeri ayrı ölç: çalışma kopyası, `git show HEAD:<dosya>`, `git show :<dosya>`. Bu turda Edit aracı LF olan çalışma kopyasını tümüyle CRLF'e çevirdi. Tüm dosyada churn olup olmadığını `git diff --cached --numstat` gösterir.
 - HARİTA (değişmedi): `scripts/populate_cds_views.py` → `O:cds_paket_kapsami`, `O:push_atlandi_ve_kaynak_izi` · `scripts/populate_tables.py` → `O:populate_tables_unit_kind`, `O:ddic_aktivasyon_notu`, `O:populate_ddic_fail_closed`.
 
+## B55 — `push_object` sözdizimi ön-kontrolü ÖLÇÜLEMEDİ işareti: sonuç alanı + MCP üst seviye + CLI hüküm satırı (Q312; B51'in tüketici tarafı)
+
+```
+python tests/fixtures/push_onkontrol_olculemedi/run.py                  # 15 vektör, SAP gerektirmez, exit 0
+python tests/fixtures/push_onkontrol_olculemedi/run.py --mutasyon       # 9 mutasyon kopya ağaçta, "MUTASYON OZETI: 9/9", exit 0
+python tests/fixtures/push_onkontrol_olculemedi/run.py --taban 18bbe78  # Q312 öncesi üretim kodu → 8/15, exit 0 = karşıtlık VAR
+python tests/run_battery.py push_onkontrol_olculemedi --kardes dogrulama_kosamadi aktivasyon_baseline_tazeligi yazma_hukmu_durustlugu push_atlandi_ve_kaynak_izi class_include_push adt_uc_url_cozumu aktivasyon_govde_hukmu mcp_sahte_sonuc_uclusu b0_secim --precommit
+```
+
+- **Harness:** gerçek `SAPClient.push_object` + `SAPClient.syntax_check` + lib `syntax_check_via_activation` koşar. `SAPADTClient` alt sınıfı yalnız `__init__`/CSRF/çerezi ve push'un yazma uçlarını sahteler (transport bilgisi · kilit · ETag · upload · unlock · `activate_object` SAYACI · aktif kaynak okuma). Sahte HTTP yalnız sözdizimi POST'una sabit (kod, gövde) döner. ② gerçek yoldan kurulur: HTTP 400 → lib `SAPADTError` → `SAPClient.syntax_check` `{'valid': False, 'error': …}`. ③ için örneğe istisna fırlatan `syntax_check` bağlanır. MCP bölümü `atom._get_client` + `atom.get_active_tier`'ı, CLI bölümü `push_object.SAPClient` + `sys.argv`'ı yamalar ve `finally` ile geri alır.
+- ⛔ **Çapa tuzağı:** ölçülemedi satırı genel kelimeyle aranmaz. Ayırt edici dizgeler `on-kontrolu OLCULEMEDI` (sap_client) ve `PUSH SOZDIZIMI ON-KONTROLU OLCULEMEDI` (CLI; büyük harf, sap_client satırıyla karışmaz). K12/K15 CLI satırının hüküm satırından (`[OK] Push completed` / `[FAIL] PUSH FAILED`) SONRA geldiğini sırayla ölçer.
+- `--taban 18bbe78` beklenen: düşenler **tam olarak** K1–K4 · K9 · K12 · K15. KONTROL satırı düşerse harness bozuktur, karşıtlık değildir. `URETIM` = `sap_client.py` + `atom.py` + `push_object.py`.
+- ⛔ SİLİNMEZ: K5 · K6 · K10 · K14 (durdurma aynen) · K7 · K11 · K13 (temiz = işaretsiz) · K1/K9 aktivasyon sayacı (None'da ENGEL yok) · K8 (prog, BE-46 dışlaması ölçülemedi değildir).
+- Batarya mutasyon satırı `AYIRDI(rc=0)` görünür (koşucu hepsi yakalanınca exit 0 döner); **`MUTASYON OZETI: 9/9`** satırını ayrıca oku (B50 uyarısı aynen).
+- K1–K4 detayındaki `sc_q307_satiri` tanıdır, ölçüt değil: eski ve yeni kodda ① için VAR, ②/③ için YOK (Q307 satırı yalnız None dalında basılır).
+- ⚠ MCP restart: `atom.py`/`sap_client.py` değişikliği çalışan MCP sürecine yalnız `/mcp` restart ile yansır; CLI `push_object.py` anında etkilenir.
+- 🔴 Canlı teyit bu turda YOK (push yazma yoludur). Yapılacaksa kullanıcı onayı + adt-gateway ile, zaten aktif bir Z sınıfında içerik değiştirmeden `adt_push_source`: yanıtta `syntax_precheck` ya YOK (SAP kontrolü koştu) ya `olculemedi` + `syntax_precheck_notice` olmalı; `failed` gelirse kaynak gerçekten hatalıdır.
+- HARİTA: `sap_client` · `push_object.py` · `atom` → `O:push_onkontrol_olculemedi` (b0_secim P3 `sap_adt_lib` pini etkilenmez).
+
 ## B56 — DDIC sözdizimi kontrolü `valid` üç değerli: `syntax_check.py::check_ddic_object` aktif sürüm doğrulanmadan `True` demez (Q313; B51'in DDIC kardeşi)
 
 ```

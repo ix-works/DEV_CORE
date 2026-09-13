@@ -985,10 +985,12 @@ class SAPClient:
             # bug-checklist BE-46). Blok yalniz valid:False + somut error listesi varsa.
             _ABAP_SRC_PRECHECK = {'class', 'clas', 'interface', 'intf'}
             if (object_type or '').lower().strip() in _ABAP_SRC_PRECHECK:
+                _pre_istisna = ''
                 try:
                     _pre = self.syntax_check(object_name, object_type=object_type)
                 except Exception as _pre_exc:
                     _pre = None
+                    _pre_istisna = f"{type(_pre_exc).__name__}: {str(_pre_exc)[:160]}"
                     print(f"      [INFO] Pre-activation syntax-check kosulamadi (SOFT, devam): {str(_pre_exc)[:80]}")
                 if isinstance(_pre, dict) and _pre.get('valid') is False and _pre.get('errors'):
                     result['activated'] = False
@@ -1002,6 +1004,31 @@ class SAPClient:
                         _ln = _e.get('line', '') if isinstance(_e, dict) else ''
                         print(f"          Line {_ln}: {_m}")
                     return result
+                # ⛔ Q312 (2026-09-13): ON-KONTROL OLCULEMEDI = GORUNUR IZ, ENGEL DEGIL.
+                # Durdurulmayan ve `valid is True` OLMAYAN her sonuc "kontrol kosmadi"dir:
+                #   ① valid None (Q307: SAP kontrolu kosmadi)
+                #   ② syntax_check istisnayi yuttu -> {'valid': False, 'error': ...}, errors YOK
+                #   ③ syntax_check cagrisi istisna firlatti -> _pre None
+                # Uc yol ESKIDEN DE aktivasyona devam ediyordu ama sonucta HICBIR alan birakmiyordu
+                # ("olculemedi" ile "temiz" cagiran icin ayirt edilemezdi). Davranis DEGISMEZ:
+                # ENGELLEMEK sahte-HATA uretir (PATTERN #20 — None'un bir kismi cagrinin kendisinin
+                # aktive ettigi temiz surumdur; canli siklik olculmedi). Aktivasyon hukmu ayri kapidir.
+                # Tuketiciler: MCP `adt_push_source` ust seviyeye tasir · CLI `push_object.py` hukmun
+                # yanina basar. Korpus: tests/fixtures/push_onkontrol_olculemedi.
+                if not (isinstance(_pre, dict) and _pre.get('valid') is True):
+                    _pre_d = _pre if isinstance(_pre, dict) else {}
+                    if _pre_d.get('sozdizimi_sebep'):
+                        _pre_sebep = str(_pre_d.get('sozdizimi_sebep'))
+                    elif _pre_d.get('error'):
+                        _pre_sebep = 'kontrol_istisnasi:' + str(_pre_d.get('error'))[:160]
+                    elif _pre_istisna:
+                        _pre_sebep = 'cagri_istisnasi:' + _pre_istisna
+                    else:
+                        _pre_sebep = 'sebep_bildirilmedi'
+                    result['syntax_precheck'] = 'olculemedi'
+                    result['sozdizimi_sebep'] = _pre_sebep
+                    print(f"      [UNVERIFIED] Aktivasyon-oncesi sozdizimi on-kontrolu OLCULEMEDI ({_pre_sebep[:120]}) "
+                          f"-> aktivasyona DEVAM; bu 'sozdizimi temiz' DEGILDIR")
 
             activation_result = self.adt_client.activate_object(object_name, object_url)
             if isinstance(activation_result, dict):

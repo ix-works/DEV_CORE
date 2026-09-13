@@ -239,11 +239,21 @@ def main():
 
     kaynak_izi = kaynak_izi_satirlari(result, args.source_file)
 
+    # ⛔ Q312 (2026-09-13): aktivasyon-öncesi sözdizimi ön-kontrolü ÖLÇÜLEMEDİYSE hükmün
+    # YANINA basılır (alt katmanın satırı akışın çok yukarısında kalır). Push'u DURDURMAZ.
+    onkontrol_izi = []
+    if isinstance(result, dict) and result.get('syntax_precheck') == 'olculemedi':
+        onkontrol_izi.append(
+            "[UNVERIFIED] PUSH SOZDIZIMI ON-KONTROLU OLCULEMEDI (%s) -- 'sozdizimi temiz' DEGILDIR; "
+            "aktivasyon hukmu ayri kapidir." % (result.get('sozdizimi_sebep') or 'sebep bildirilmedi'))
+
     if success:
         print(f"[OK] Push completed successfully: {args.name}")
         # Q222②: NE gittiğini yazmayan bir "[OK]" doğrulanamaz. Yol + md5 BAŞARI
         # dalında da basılır — asıl kıyas (staging ↔ repo) tam burada yapılır.
         for satir in kaynak_izi:
+            print(satir)
+        for satir in onkontrol_izi:
             print(satir)
         return 0
     else:
@@ -260,6 +270,8 @@ def main():
         # Q222②: hata dalında da HANGİ dosyanın denendiği yazılır — "yanlış dosyayı
         # push ediyordum" teşhisi aksi hâlde çıktıdan KURULAMAZ.
         for satir in kaynak_izi:
+            print(satir)
+        for satir in onkontrol_izi:
             print(satir)
         print("")
         print("[ACTION REQUIRED] Do NOT tell the user the push succeeded.")
