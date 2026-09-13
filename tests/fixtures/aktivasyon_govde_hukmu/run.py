@@ -16,6 +16,10 @@ NEDEN VAR (canlı ölçüm, DEV, adt-gateway 2026-09-13; ham gövdeler `canli/` 
     mesajsız; boş/kısa gövde; ioc; bayraksız) `valid:True` dönüyordu. Artık `valid` üç değerli
     (None = ÖLÇÜLEMEDİ) ve gövde hükmü kanonik `aktivasyon_govde_hukmu`'ndan gelir (J bölümü;
     lib + `sap_client.syntax_check` + MCP `adt_syntax_check` + `syntax_check.py` CLI).
+  · Q313 — `syntax_check.py::check_ddic_object` HTTP 200 + kök `adtcore:version` "active" DEĞİLKEN
+    (ya da öznitelik yokken) `valid:True` dönüyordu; CLI rc 0 `[OK] Check passed`. Artık None +
+    `sozdizimi_sebep` (K bölümü; canlı aktif DTEL/TABL gövdeleri `canli/ddic_*.xml`, MASKELİ).
+    ⚠ İnaktif gövde SENTETİKTİR: canlıda inaktif DDIC yoktu; SAP'nin tam değeri DOĞRULANAMADI.
 
 SÖZLEŞME (`sap_adt_lib.aktivasyon_govde_hukmu`): True · False · None ("gövde hüküm taşımıyor"
 → BAĞIMSIZ worklist sondası karar verir; sonda kurulamazsa BAŞARI DEĞİL, DOĞRULANAMADI).
@@ -32,6 +36,8 @@ SÖZLEŞME (`sap_adt_lib.aktivasyon_govde_hukmu`): True · False · None ("gövd
     temiz gövde `valid:True`, E mesajı `valid:False` kalır ("her şeye None" diyen fix geçemesin).
     J13 + J14 — BİLEREK KORUNAN iki `valid:False` (ayrıştırılamayan gövde · HTTP 403 kilit):
     `sap_client.push_object` ön-kontrolü bunlarda aktivasyonu durdurmaya devam eder.
+  · K1 + K2 + K10 — Q313 KONTROL GRUPLARI: canlı aktif DDIC gövdesi `valid:True` / CLI rc 0 kalır.
+    K7 + K8 + K11 — BİLEREK KORUNAN `valid:False` (404 · HTTP≠200). K4/M27 — hüküm sürüm DEĞERİNE bağlı değil.
 ⚠ SINIR (yazılı, ölçülemez): obje aktivasyondan ÖNCE worklist'te değilse "listede yok" ayırt
   edici değildir — ön-snapshot alınmaz (lider kararı).
 
@@ -723,6 +729,104 @@ def bolum_j(L, SC, Q, CONN, SCK):
         sys.argv, SCK.SAPClient = eski_argv, eski_sc
 
 
+class _DdicSahteIstemci:
+    """`check_ddic_object` kendi SAPADTClient'ini kurar: yalniz kullandigi yuzey sahtedir."""
+    csrf_token, url, cookies = "sahte", "https://SAP_HOST", None
+
+    def fetch_csrf_token(self, *a, **k):
+        return self.csrf_token
+
+    def _get_headers(self, accept_type=None, content_type=None):
+        return {"Accept": accept_type}
+
+
+DDIC_AD = "ZSD001_E_ORNEK"
+HTML200 = "<html><head><title>Logon</title></head><body>SAP NetWeaver Application Server</body></html>"
+
+
+@bolum("K DDIC surum hukmu (Q313)")
+def bolum_k(SCK):
+    import requests
+    dtel, tabl = _oku("ddic_dtel_aktif.xml"), _oku("ddic_tabl_aktif.xml")
+    kok_aktif = 'adtcore:version="active"'
+    if dtel.count(kok_aktif) != 1 or tabl.count(kok_aktif) != 1:
+        ekle("[fixture-hatasi] canli DDIC govdesinde kok surum TAM 1 kez olmali", False,
+             f"dtel={dtel.count(kok_aktif)} tabl={tabl.count(kok_aktif)}")
+        return
+    # SENTETIK: canlida inaktif DDIC YOKTU (worklist 2026-09-13: 0 DDIC girdisi). Olculmus aktif
+    # govdenin kok surumu degistirilir. SAP'nin inaktif DDIC icin tam degeri DOGRULANAMADI.
+    inaktif = dtel.replace(kok_aktif, 'adtcore:version="inactive"')
+    calisma = dtel.replace(kok_aktif, 'adtcore:version="workingArea"')
+    istekler: list = []
+    eski_get, eski_cls, eski_sc, eski_argv = requests.get, SCK.SAPADTClient, SCK.SAPClient, sys.argv
+    try:
+        SCK.SAPADTClient = _DdicSahteIstemci
+
+        def sun(kod, govde):
+            def sahte_get(url, **kw):
+                istekler.append((url, (kw.get("headers") or {}).get("Accept")))
+                return _Y(kod, govde, url)
+            requests.get = sahte_get
+
+        def lib(kod, govde, tip="dtel"):
+            sun(kod, govde)
+            return _yakala(SCK.check_ddic_object, None, DDIC_AD, tip)
+
+        r, log = lib(200, dtel)
+        ekle("K1 KONTROL canli DTEL aktif govde -> valid True + active True + dataelements ucu",
+             r.get("valid") is True and r.get("active") is True
+             and istekler[-1] == ("https://SAP_HOST/sap/bc/adt/ddic/dataelements/zsd001_e_ornek",
+                                  "application/vnd.sap.adt.dataelements.v2+xml"),
+             f"valid={r.get('valid')} active={r.get('active')} istek={istekler[-1:]}")
+        r, log = lib(200, tabl, tip="table")
+        ekle("K2 KONTROL canli TABL aktif govde (tables ucu) -> valid True",
+             r.get("valid") is True and r.get("active") is True, f"valid={r.get('valid')}")
+        r, log = lib(200, inaktif)
+        ekle("K3 ⭐Q313 SENTETIK kok surum inactive -> valid None + ddic_aktif_degil (eski: True)",
+             r.get("valid") is None and r.get("sozdizimi_sebep") == "ddic_aktif_degil:inactive"
+             and r.get("active") is False and not r.get("errors"),
+             f"valid={r.get('valid')} sebep={r.get('sozdizimi_sebep')} active={r.get('active')}")
+        r, log = lib(200, calisma)
+        ekle("K4 ⭐Q313 SENTETIK kok surum workingArea -> None, hukum DEGERE bagli degil (eski: True)",
+             r.get("valid") is None and r.get("sozdizimi_sebep") == "ddic_aktif_degil:workingArea",
+             f"valid={r.get('valid')} sebep={r.get('sozdizimi_sebep')}")
+        r, log = lib(200, HTML200)
+        ekle("K5 ⭐Q313 200 HTML sayfasi (surum ozniteligi yok) -> None + ddic_surum_okunamadi (eski: True)",
+             r.get("valid") is None and r.get("sozdizimi_sebep") == "ddic_surum_okunamadi",
+             f"valid={r.get('valid')} sebep={r.get('sozdizimi_sebep')}")
+        r, log = lib(200, "")
+        ekle("K6 ⭐Q313 200 BOS govde -> None (eski: True)", r.get("valid") is None,
+             f"valid={r.get('valid')} sebep={r.get('sozdizimi_sebep')}")
+        r, log = lib(404, '<?xml version="1.0"?><exc:exception/>')
+        ekle("K7 KONTROL 404 -> valid False + not found (bilerek korunur)",
+             r.get("valid") is False and "not found" in str(r.get("errors")), f"valid={r.get('valid')}")
+        r, log = lib(500, HTML500)
+        ekle("K8 KONTROL HTTP 500 -> valid False (bilerek korunur; Q adayi)",
+             r.get("valid") is False and "HTTP 500" in str(r.get("errors")), f"valid={r.get('valid')}")
+
+        SCK.SAPClient = lambda: object()
+
+        def cli(kod, govde):
+            sun(kod, govde)
+            sys.argv = ["syntax_check.py", "--name", DDIC_AD, "--type", "dtel"]
+            return _yakala(SCK.main)
+
+        rc, log = cli(200, inaktif)
+        ekle("K9 ⭐Q313 CLI inaktif DDIC -> rc 1 + NOT MEASURED + reason ddic_aktif_degil, [OK]/[FAIL] YOK "
+             "(eski: rc 0 [OK] Check passed)",
+             rc == 1 and "NOT MEASURED" in log and "reason: ddic_aktif_degil:inactive" in log
+             and "[OK] Check passed" not in log and "[FAIL] SYNTAX CHECK FAILED" not in log,
+             f"rc={rc} log={log.strip()[-90:]!r}")
+        rc, log = cli(200, dtel)
+        ekle("K10 KONTROL CLI aktif DDIC -> rc 0 + [OK] Check passed", rc == 0 and "[OK] Check passed" in log,
+             f"rc={rc}")
+        rc, log = cli(404, '<?xml version="1.0"?><exc:exception/>')
+        ekle("K11 KONTROL CLI 404 -> rc 1 + [FAIL] SYNTAX CHECK FAILED",
+             rc == 1 and "[FAIL] SYNTAX CHECK FAILED" in log, f"rc={rc}")
+    finally:
+        requests.get, SCK.SAPADTClient, SCK.SAPClient, sys.argv = eski_get, eski_cls, eski_sc, eski_argv
+
+
 @bolum("I SINIF (AST)")
 def bolum_i():
     # Q307: `syntax_check_via_activation` artik bayrak dizgesine dayanmaz -> serbest listesinden CIKTI.
@@ -795,8 +899,9 @@ def main() -> int:
         CONN = _sessiz_import("mcp_servers.sap_adt._conn")
         SCK = _sessiz_import("syntax_check")
         bolum_j(L, SC, Q, CONN, SCK)
+        bolum_k(SCK)
     except Exception as exc:
-        ekle("[BOLUM COKTU] J import", False, f"{type(exc).__name__}: {exc}")
+        ekle("[BOLUM COKTU] J/K import", False, f"{type(exc).__name__}: {exc}")
     bolum_i()
     gecen = sum(1 for _, ok, _ in S if ok)
     for ad, ok, detay in S:
@@ -870,6 +975,20 @@ MUTASYONLAR = [
      "            if False:\n                # Q307"),
     ("M23 CLI None dali sokuldu (rc 1 'has syntax errors')", "scripts/syntax_check.py",
      "    if result.get('valid') is None:\n        # Q307", "    if False:\n        # Q307"),
+    ("M24 Q313 geri: DDIC aktif degil -> valid True", "scripts/syntax_check.py",
+     "                return {'valid': None, 'errors': [], 'active': False,",
+     "                return {'valid': True, 'errors': [], 'active': False,"),
+    ("M25 Q313 geri: DDIC surum okunamadi -> valid True", "scripts/syntax_check.py",
+     "            return {'valid': None, 'errors': [], 'active': None,",
+     "            return {'valid': True, 'errors': [], 'active': None,"),
+    ("M26 asiri-siki: aktif DDIC -> None", "scripts/syntax_check.py",
+     "                return {'valid': True, 'errors': [], 'active': True}",
+     "                return {'valid': None, 'errors': [], 'active': True}"),
+    ("M27 deger-bagimli: yalniz 'inactive' aktif-degil sayilir", "scripts/syntax_check.py",
+     "            if surum:\n", "            if surum == 'inactive':\n"),
+    ("M28 404 False -> None (bulunamadi olculemedi'ye kayar)", "scripts/syntax_check.py",
+     "                'valid': False,\n                'errors': [{'message': f'Object {object_name} not found'}]",
+     "                'valid': None,\n                'errors': [{'message': f'Object {object_name} not found'}]"),
 ]
 
 

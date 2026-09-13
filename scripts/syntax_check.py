@@ -7,6 +7,7 @@ Usage:
     python syntax_check.py --name ZSD000_D_TEST --type domain --cwd /path/to/project
 """
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -84,16 +85,24 @@ def check_ddic_object(client: SAPClient, object_name: str, object_type: str) -> 
             }
 
         if response.status_code == 200:
-            # Check if object is active
-            content = response.text
-            is_active = 'version="active"' in content
+            # Q313: `valid` is THREE-valued like syntax_check_via_activation (Q307).
+            # Only a body whose `adtcore:version` is "active" is valid. A version that is
+            # not active, or a 200 body without the attribute (HTML page, empty body),
+            # is NOT measured -> valid None (was: valid True + "[OK] Check passed").
+            content = response.text or ''
+            m = re.search(r'\badtcore:version="([^"]*)"', content)
+            surum = m.group(1) if m else None
 
-            if is_active:
+            if surum == 'active':
                 print("[OK] DDIC object exists and is active")
                 return {'valid': True, 'errors': [], 'active': True}
-            else:
-                print("[INFO] DDIC object exists but may not be active")
-                return {'valid': True, 'errors': [], 'active': False}
+            if surum:
+                print(f"[UNVERIFIED] DDIC object exists but its version is '{surum}', not active")
+                return {'valid': None, 'errors': [], 'active': False,
+                        'sozdizimi_sebep': f'ddic_aktif_degil:{surum}'}
+            print("[UNVERIFIED] DDIC metadata carries no adtcore:version attribute")
+            return {'valid': None, 'errors': [], 'active': None,
+                    'sozdizimi_sebep': 'ddic_surum_okunamadi'}
         else:
             return {
                 'valid': False,
