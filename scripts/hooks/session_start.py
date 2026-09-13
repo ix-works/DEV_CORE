@@ -362,27 +362,29 @@ _IMZA_KAYNAGI = "utils.drift_imzasi"
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # core/scripts
     from utils.drift_imzasi import (  # type: ignore  # noqa: E402
-        anlamli_imza as _anlamli_imza, OKUNAMADI as _OKUNAMADI)
+        anlamli_imza as _anlamli_imza, OKUNAMADI as _OKUNAMADI,
+        d7_ciftleri as _d7_ciftleri)
 except Exception as _imza_hatasi:                                  # pragma: no cover
     _IMZA_KAYNAGI = f"YOK ({type(_imza_hatasi).__name__})"
     _anlamli_imza = None                                           # type: ignore
     _OKUNAMADI = "?"
+    _d7_ciftleri = None                                            # type: ignore
 
 
 def _drift_kontrol() -> list[str]:
-    """D7: settings.json + hook_shim template'lerin gerisinde mi (davranışsal imza)."""
+    """D7: proje kopyaları (settings.json · hook_shim.py · pre-commit) şablonların gerisinde mi.
+
+    Çift listesi + onarım metinleri `utils.drift_imzasi.D7_CIFTLERI`de (Q245②) — burada
+    literal liste TUTULMAZ; kardeş kapı `ix_doctor._d7_drift` aynı listeyi okur.
+    """
     sorun = []
     if _anlamli_imza is None:
-        return [f"D7 OLCULEMEDI — imza modulu yuklenemedi ({_IMZA_KAYNAGI}): settings.json + "
-                "hook_shim template-sapmasi BU OTURUMDA OLCULMEDI (TEMIZ demek DEGIL). "
+        return [f"D7 OLCULEMEDI — imza modulu yuklenemedi ({_IMZA_KAYNAGI}): proje kopyalarinin "
+                "template-sapmasi (tum D7 ciftleri) BU OTURUMDA OLCULMEDI (TEMIZ demek DEGIL). "
                 "Onarim: python core/scripts/team_setup.py --repair-junctions"]
-    ciftler = [
-        (PROJ / ".claude" / "settings.json", CORE / "claude" / "settings.template.json", "settings.json"),
-        (PROJ / "scripts" / "hook_shim.py", CORE / "claude" / "hook_shim.template.py", "hook_shim.py"),
-    ]
-    for yerel, tpl, ad in ciftler:
+    for yerel, tpl, ad, yok_onarim, sapma_onarim, tpl_rel in _d7_ciftleri(PROJ, CORE):
         if not yerel.exists():
-            sorun.append(f"{ad} YOK — team_setup ile uret")
+            sorun.append(f"{ad} YOK — {yok_onarim}")
             continue
         if not tpl.exists():
             continue
@@ -390,8 +392,8 @@ def _drift_kontrol() -> list[str]:
         if _OKUNAMADI in (y, t):
             sorun.append(f"{ad} OKUNAMADI/BOZUK — imza cikarilamadi (sessiz gecme)")
         elif y != t:
-            sorun.append(f"{ad} template'ten SAPMIS (D7) — bilinçliyse manifest'e isle; degilse: "
-                         f"template'ten yenile (fark: core/claude/{tpl.name} ile diff'le)")
+            sorun.append(f"{ad} template'ten SAPMIS (D7) — {sapma_onarim} "
+                         f"(fark: core/{tpl_rel} ile diff'le)")
     return sorun
 
 

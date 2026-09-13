@@ -65,11 +65,12 @@ from utils.project_config import project_root, cfg  # noqa: E402
 # ⛔ Yüklenemezse D7 kolu PASS DEMEZ, "ÖLÇÜLEMEDİ" der (bkz. `_d7_drift`).
 _IMZA_KAYNAGI = "utils.drift_imzasi"
 try:
-    from utils.drift_imzasi import anlamli_imza, OKUNAMADI  # noqa: E402
+    from utils.drift_imzasi import anlamli_imza, OKUNAMADI, d7_ciftleri  # noqa: E402
 except Exception as _imza_hatasi:  # pragma: no cover
     _IMZA_KAYNAGI = f"YOK ({type(_imza_hatasi).__name__})"
     anlamli_imza = None  # type: ignore
     OKUNAMADI = "?"
+    d7_ciftleri = None  # type: ignore
 
 PROJ = project_root()
 PASS, WARN, FAIL, SKIP = "PASS", "WARN", "FAIL", "SKIP"
@@ -406,7 +407,8 @@ def _hook_kos(hook: str, stdin_json: dict, timeout: int = 60) -> tuple[int, str,
 
 
 def _d7_drift() -> list[Sonuc]:
-    """4a — `.claude/settings.json` + `hook_shim.py` şablonlarından SAPMIŞ mı (D7).
+    """4a — proje kopyaları (`.claude/settings.json` · `hook_shim.py` · `scripts/git-hooks/pre-commit`)
+    şablonlarından SAPMIŞ mı (D7). Çift listesi `utils.drift_imzasi.D7_CIFTLERI` (Q245②).
 
     ⭐ TEK KAYNAK (2026-09-09, kayıt Q212): "sapma"nın TANIMI artık
     `scripts/utils/drift_imzasi.py`de yaşar; kardeş kapı `scripts/hooks/session_start.py`
@@ -425,17 +427,15 @@ def _d7_drift() -> list[Sonuc]:
     """
     if anlamli_imza is None:
         return [(FAIL, f"D7 ÖLÇÜLEMEDİ — imza modülü yüklenemedi ({_IMZA_KAYNAGI}): "
-                       "settings.json + hook_shim template-sapması BU KOŞUMDA ÖLÇÜLMEDİ "
-                       "(TEMİZ demek DEĞİL). Onarım: core kurulumunu doğrula "
+                       "proje kopyalarının template-sapması (tüm D7 çiftleri) BU KOŞUMDA "
+                       "ÖLÇÜLMEDİ (TEMİZ demek DEĞİL). Onarım: core kurulumunu doğrula "
                        "(python core/scripts/team_setup.py --repair-junctions)")]
     r: list[Sonuc] = []
-    ciftler = [
-        (PROJ / ".claude" / "settings.json", CORE_ROOT / "claude" / "settings.template.json", "settings.json"),
-        (_shim_yolu(), CORE_ROOT / "claude" / "hook_shim.template.py", "hook_shim.py"),
-    ]
-    for yerel, tpl, ad in ciftler:
+    # Çift listesi + onarım metinleri TEK KAYNAKTA (`utils.drift_imzasi.D7_CIFTLERI`, Q245②):
+    # settings.json · hook_shim.py · scripts/git-hooks/pre-commit. Kardeş: session_start.
+    for yerel, tpl, ad, yok_onarim, sapma_onarim, tpl_rel in d7_ciftleri(PROJ, CORE_ROOT):
         if not yerel.exists():
-            r.append((FAIL, f"{ad} YOK — üret: python core/scripts/team_setup.py"))
+            r.append((FAIL, f"{ad} YOK — {yok_onarim}"))
             continue
         y, t = anlamli_imza(yerel), anlamli_imza(tpl)
         if OKUNAMADI in (y, t):
@@ -445,14 +445,14 @@ def _d7_drift() -> list[Sonuc]:
             r.append((PASS, f"{ad} template ile davranışsal imza EŞ ({y})"))
         else:
             r.append((WARN, f"{ad} template'ten SAPMIŞ (D7: {y} ≠ {t}) — "
-                            f"bilinçliyse manifest'e işle; değilse core/claude/{tpl.name} ile diff'le"))
+                            f"{sapma_onarim}; fark: core/{tpl_rel} ile diff'le"))
     return r
 
 
 def katman4() -> list[Sonuc]:
     r: list[Sonuc] = []
 
-    # 4a — settings.json ↔ template drift (D7); tanım `session_start` ile ORTAK (Q212)
+    # 4a — proje kopyaları ↔ template drift (D7); imza + çift listesi `session_start` ile ORTAK (Q212 · Q245②)
     r += _d7_drift()
 
     # 4b — SHIM_SURUM eşliği

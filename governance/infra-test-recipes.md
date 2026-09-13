@@ -2374,3 +2374,20 @@ python tests/run_battery.py sorgu_basarisizligi_gorunur --kardes sablon_zorunlu_
 - ⚠ Eski şablon A6'da da düşer: 2026-08-29 notu `{PKG_NOZ}` metnini taşıyordu ve bootstrap onu üretilen `.rules.md`'ye harfiyen yazıyordu (gizli kusur; not kapanınca gitti).
 - 3. bağlam (salt-okur): tüketici projedeki her `classes/` paketinin adıyla bootstrap + gerçek validator koşulur. Sonuç: yeni biçimde 20 pakette tek red BAdI implementasyonu `ZCL_IM_*` (eskide de red); eski biçimde 43 gerçek `ZCL_<Z'siz>_*` sınıfı red.
 - `scripts/bootstrap_package.py` `run_fixture_tests` HARİTA'sında YOK (2026-09-13) ⇒ yalnız bootstrap değişen bir PR bu korpusu otomatik seçmez; kardeşi elle ver.
+
+## B49 — D7 üçüncü çift: `scripts/git-hooks/pre-commit` ↔ `claude/git-hooks/pre-commit.template` (Q245②; B3'ün devamı)
+
+```
+python tests/fixtures/d7_drift_imzasi/run.py        # 28/28 (~16 sn)
+python tests/run_battery.py d7_drift_imzasi --kardes session_start_compact_dali ix_doctor_kablolama core_fiziksel_kopya precommit_kopya_surum_esligi b0_secim --precommit
+```
+
+- Çift listesi ve çift başına onarım metni TEK KAYNAKTA: `scripts/utils/drift_imzasi.py::D7_CIFTLERI` (+ `d7_ciftleri(proj, core)`). `session_start` ile `ix_doctor` literal liste TUTMAZ (V27). Yeni çift = yalnız bu tuple'a bir satır + G-bloğu benzeri vektörler.
+- ⭐ SATIR SONU: pre-commit uzantısız ⇒ imzanın METİN dalı (CRLF→LF + strip). Ham bayt kıyası YAPILMAZ: Windows çalışma kopyası CRLF, blob/CI LF, bazı projelerin çalışma kopyası LF (ölçüldü 2026-09-13: şablon md5 ≠ kopya md5, imza EŞİT). V21 + `--mutasyon-hamsha` bunu çiviler.
+- ⛔ ONARIM METNİ settings/shim'den KOPYALANMAZ (V24a/V24b + `--mutasyon-yanlis-onarim`): `team_setup.dosya_tamamla` pre-commit ÜRETMEZ · `init_project --force` tüm üretilen dosyaları ezer · pre-commit behavior-manifest yüzeyinde değil · `tpl.name` `git-hooks/` alt dizinini düşürür.
+- ⛔ `hukum(..., "precommit")` tüm satırlara geri DÜŞMEZ: ix_doctor ES'i satırla söyler; satır yoksa `SATIR-YOK` (eski kodda V20 trivial-yeşil olmasın diye).
+- Sandbox projesi varsayılan olarak şablonun BAYT-EŞ pre-commit kopyasını taşır (`proje(..., precommit=_SABLON)`); aksi hâlde A/B vektörlerine "pre-commit YOK" gürültüsü girer ve V14'ün sessizlik hükmü pre-commit'i kapsamaz.
+- ⭐ Eski-kod karşıtlığı: `git archive <taban> scripts claude tests/fixtures/d7_drift_imzasi | tar -x -C <kum>` → yeni `run.py`'yi kuma kopyala → koş. Beklenen **18/28** (düşen V20·V21·V22·V23·V24a·V24b·V11·V25·V26·V27).
+- 3. BAĞLAM (gerçek projeler, SALT-OKUR): `session_start.main()` ve `ix_doctor --layer 4` proje köküne YAZAR (oturum işaretçisi `.tmp`, origin önbelleği + core `git fetch`, hook koşumları) ⇒ başka projede tam giriş noktası koşulmaz. Yerine her kapı AYRI alt-süreçte `CLAUDE_PROJECT_DIR=<proje>` ile import edilip yalnız `_drift_kontrol()` / `_d7_drift()` çağrılır; tam giriş noktası kanıtı sandbox'taki V25/V26'dadır.
+- ⚠ D7 ÇALIŞMA AĞACINI ölçer, `main`i değil: bir proje PR dalında checkout durumdaysa hizalanmış görünür. Merge durumu `gh api repos/<ORG>/<REPO>/contents/scripts/git-hooks/pre-commit?ref=main --jq .sha` ile ayrıca okunur (yerel `origin/main` fetch edilmemişse bayattır).
+
