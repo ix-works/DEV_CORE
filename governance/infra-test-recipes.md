@@ -2255,3 +2255,17 @@ python tests/run_battery.py run_all_ozet_kipi           # + 10 mutasyon kipi (he
 - Şablon çapası: `pre-commit.template` kapanış satırı ve `else` dalı kardeş korpusların (precommit_junction_failclosed M1/M2, precommit_kopya_surum_esligi) çapasıdır; `--ozet` yalnız çağrı satırındadır. Şablona dokunan tur dört korpusu birlikte koşar.
 - Fixture/batarya/b0_secim worktree KÖKÜNDEN koşulur; kök dışından b0_secim sahte 12/20 verir.
 - **Q296 ek (2026-09-13):** dosyası bulunmayan validator Özet tablosunda `[FAIL]   <label>  · KOŞTURULAMADI: validator dosyası YOK (<script>)` satırıyla görünür (iki kipte). S6 bu satırı iki kipte çiviler; kip sayısı **11** (yeni `--mutasyon-tablo-eksik-yok`). Eski kod karşıtlığı: `Q203_RAV_KAYNAK=<git show 9934ba7:scripts/validators/run_all_validators.py>` → 12/13, yalnız S6 kırmızı.
+## B42 — `check_ui_odata_refs` DESEN KAPSAMI: dosya var ama binding görülmüyor ≠ "TEMIZ" (Q284; B36/Q232'nin bir kat aşağısı)
+
+```
+python tests/fixtures/ui_odata_refs_kapsami/run.py                     # 14 vektör, TAMAMI çevrimdışı
+python tests/run_battery.py ui_odata_refs_kapsami --kardes olcum_yoklugu_sozlesmesi b0_secim
+```
+
+- Çevrimdışı mekanizma: araç BELLEKTE exec edilir, `load_conn`/`fetch_metadata` sentetik `$metadata` döndürecek şekilde yamanır, sonra gerçek `main()` + argparse koşar. Yama `main()` çağrısından ÖNCE yapılır (global adlar çağrı anında çözülür).
+- ⛔ V3 ve V5 SİLİNEMEZ: değişken yolu metadata'da yoksa `[?] UYARI` (KIRMIZI değil) ve JSON-model `"/Ad"` literalleri KIRMIZI üretmez. İkisi de korpusta ölçülmüş FP sınırıdır (67 JSON yolu · 2/16 başka servis). `--mutasyon-uyari-kirmizi` bu sınırı çiviler.
+- ⭐ Eski-kod karşıtlığı: fixture'ı ve `git show <taban>:scripts/check_ui_odata_refs.py`'yi (+ `scripts/utils/kapsam.py`) aynı göreli düzende bir kum ağacına kopyala, fixture'ı oradan koş. Beklenen: yalnız kontrol/sınır vektörleri geçer (V1c · V6 · V6b · V9 = 4/14).
+- Canlı önce/sonra (proje kökünde `.conn_adt`, salt-GET): her `ui/*/webapp/manifest.json` için `python scripts/check_ui_odata_refs.py --app <app> --cwd <proje>` → `[X]`/`[!]` satır kümesini önce/sonra kıyasla. Ölçüt: KIRMIZI kümesi AYNI; farklar yalnız `[OK]` binding + `[?]` uyarı satırlarında.
+- ⚠ Mutasyon çapaları satır ÖNEKİyle bulunur (`RE_PATH = ` …) ve her biri TAM 1 kez olmalı. Desen satırını yeniden adlandıran tur `KURULAMADI` görür (KACTI değil).
+- ⚠ Satır sonu/CR ölçümünü kabukta `grep -c $'\r'` ile iç içe `$(…)` içinde YAPMA: 2026-09-13'te her satırı saydı (sahte "CRLF"). Bayttan ölç + `git hash-object --no-filters` == index blob.
+
