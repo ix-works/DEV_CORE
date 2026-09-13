@@ -275,3 +275,15 @@ bakma"* kuralı `MODIFICATION_SUPPORT` gibi **CORRNR için de** geçerlidir.
 **KİLİT HİJYENİ — `adt_lock_check` 404 verdiğinde pozitif kanıt üret:** iş bitince **taze bir LOCK
 dene → 200 ⇒ sızmış/yabancı kilit YOK** (olsaydı `EU 510`/409 gelirdi) → hemen `UNLOCK`.
 "Tool `locked: false` dedi" kanıt değildir (§12.7b sessiz-başarısızlık).
+
+**↑ §12.7c eki (2026-09-13, Q175) — ENVELOPE (açıklama) PUT'unda da 412, ve PUT objeyi İNAKTİFE DÜŞÜRÜR:**
+yukarıdaki sürüm tablosu `source/main` PUT'u içindir. `scripts/sap_set_object_description.py` objenin
+**ana envelope'unu** PUT eder (envelope ETag'i ≠ `source/main` ETag'i). Ölçülen (bir DDLS, aynı metin):
+bekleyen inaktif sürüm **YOKKEN** bile envelope GET'in ETag'i sunucunun beklediği değildi →
+`412 SADT_RESOURCE 043`. Gövdedeki `T100KEY-V2` (= mesajdaki *object ETag*) ile **yeni bir LOCK
+döngüsünde** tek retry → **200**. ⚠ Başarılı envelope PUT'u objeyi **hemen** aktive-bekleyen
+listesine düşürür ⇒ açıklama değişikliği kozmetik değildir: aktivasyon + listenin yeniden okunması +
+`?version=active` readback şarttır (script bunu yapar; yapamazsa exit 1 + "İNAKTİF KALDI").
+⚠ Sınır: ölçüm tek tip (DDLS); başka tiplerde inaktife düşme ÖLÇÜLMEDİ. Sunucunun ETag'iyle retry
+`If-Match`'in kayıp-güncelleme korumasını atlar ⇒ script retry'ı yalnız envelope ilk okumadan beri
+bayt bayt aynıysa yapar.

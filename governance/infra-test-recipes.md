@@ -2331,3 +2331,18 @@ python tests/run_battery.py yazma_hukmu_durustlugu --kardes aktivasyon_baseline_
 - ⚠ Composite sahte istemcisi tek nesnede `session` + `get_object_metadata` + `create_structure` + `activate_object` taşır. `get_object_metadata` yaratmadan önce None dönmeli; aksi hâlde araç `already_exists` döner ve C vektörleri post-check'e hiç ulaşmaz.
 - ⚠ MCP restart: `atom.py` / `composite.py` / `_reviewer.py` değişikliği çalışan MCP sürecine yalnız restart'la yansır. `atom._publish_hukmu` her çağrıda `import create_rap_service` yapar ama süreç önbelleği (`sys.modules`) yüzünden yine restart gerekir. CLI (`create_rap_service.py`) anında etkilenir.
 - 🔴 Canlı SAP doğrulaması yok (B11 Q278 ile aynı sınır).
+
+## B48 — `sap_set_object_description` PUT 412 tek retry + PUT sonrası aktivasyon/readback (Q175)
+
+```
+python tests/fixtures/aciklama_412_retry/run.py      # 17 vektör + 12 mutasyon, TAMAMI çevrimdışı, exit 0
+python tests/run_battery.py aciklama_412_retry --kardes lock_modification_support transport_gorev_istek_cevrimi b0_secim --precommit
+```
+
+- Çevrimdışı mekanizma: sahte ADT sunucusu senaryo listesi değil **kural** taşır (`If-Match` == beklenen ETag → 200, değilse 412 gövdesi; 200 objeyi inaktife düşürür; aktive-bekleyen listesi durumdan üretilir). Gerçek `SAPADTClient.activate_object` · `_parse_activation_response` · `get_inactive_objects` · `_request_with_csrf_retry` koşar; yalnız HTTP oturumu, lock/unlock ve 423 teşhisi sahtedir. Script tek alt süreçte bellekte `exec` edilir (`__file__` gerçek yola çivili); her vektörün stdout/stderr'i ayrı bellek tamponuna alınır, script'in win32 akış sarmalaması gerçek akışa dokunmaz.
+- Eski kod karşıtlığı: `git show 4b05609:scripts/sap_set_object_description.py > <scratch>/taban.py` → `run.py --kaynak <scratch>/taban.py` → **4/17** (V5 · V10 · V13 · V15). Repoya dosya yazılmaz.
+- ⛔ SİLİNMEZ: **V16/M12** (⚠GEVŞETME sınırı: sunucunun ETag'iyle retry `If-Match` korumasını atlar, yalnız envelope bayt-eşitse yapılır) · **M8** (LOCK ile PUT arasına GET = 2026-07-30 423 sınıfı; ölçüt her PUT'tan hemen önce kendi LOCK'u) · **V10/M11** (komşu ad/URI FP çapası, gereksiz aktivasyon yok) · **V9/M6** (liste objeyi görmese de `?version=active` readback yakalar).
+- ⚠ Mutasyon çapaları kaynaktaki metin parçalarıdır ve TAM 1 kez geçmelidir; satırı yeniden yazan tur `KURULAMADI` görür (KACTI değil).
+- ⚠ Batarya `mutasyon` satırı `KIP YOK` der: mutasyonlar taban koşumunun İÇİNDE koşar (`cds_paket_kapsami` deseni); 12 `YAKALANDI` satırı taban çıktısındadır.
+- ⚠ Provizyonlu worktree'de batarya precommit satırı `ATLA` olabilir: izlenmeyenler `.claude/` ve `core/` provizyonudur, kendi dosyalarını `git add` et, junction'ı `git add -A` ile süpürme.
+- Canlı teyit (YAZMA — kullanıcı onayı + adt-gateway): açıklaması zaten doğru olan bir DDLS'te `--force-put` (içerik değişmez). Beklenen: `[FORCE-PUT]` → `[RETRY] … 412` (ya da doğrudan 200) → `[INFO] … inaktife düşürdü` → `[OK] … AKTİF sürümde readback DOĞRULANDI`, exit 0; ardından bağımsız olarak `adt_inactive_objects` listede obje yok.
