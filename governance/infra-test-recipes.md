@@ -2497,3 +2497,20 @@ python tests/run_battery.py aktivasyon_govde_hukmu --kardes aktivasyon_sahte_ok 
 - Mutasyon satırında `MUTASYON OZETI: 30/30` satırını oku (B50 uyarısı aynen geçerli).
 - ⚠ Satır sonu: `.py` `eol=lf` (diskte LF). `.md` ve `.xml` `text=auto`, eol belirsiz ⇒ Windows checkout'unda `.md` diskte CRLF, blob LF. Bu turda "HEAD blob LF ↔ disk CRLF" yanlışlıkla araç dönüşümü sanıldı ve üç `.md` LF'e çevrildi; içerik değişmedi (`git hash-object` == index blob). Ölçüt: ham bayt + dokunulmamış kardeş `.md` + `git check-attr text eol`.
 - Canlı teyit (SALT-OKUR, proje kökü `.conn_adt` → `set_explicit_working_dir(<proje kökü>)`, çıktı maskeli): `type_map`'in her ucu için aktif bir Z örnekte `check_ddic_object` → `valid:True` + kök `adtcore:version="active"` (2026-09-13: 9 takma ad / 5 uç, hepsi). Bekleyen inaktif sürümü olan bir DDIC bulunursa (`GET /sap/bc/adt/activation/inactiveobjects` içinde `DTEL`/`DOMA`/`TABL`/`TTYP`) parametresiz GET'in kök sürüm değeri kaydedilir. Bu, B56'nın iki DOĞRULANAMADI maddesini kapatır. LOCK/PUT/POST YOK.
+
+## B57 — `init_project.uret` `[ATLA]` satırı: `--force` önerisi yok, koşum başına tek not (Q314; B52'nin kardeşi)
+
+```
+python tests/fixtures/init_project_iskelet/run.py                            # 30/30 (~5 sn)
+python tests/fixtures/init_project_iskelet/run.py --mutasyon-force-onerisi   # 28/30 · düşer A2 · U5a
+python tests/fixtures/init_project_iskelet/run.py --mutasyon-not-yok         # 28/30 · düşer A3 · U5b
+python tests/run_battery.py init_project_iskelet --kardes gitignore_tam_satir precommit_kopya_surum_esligi team_setup_hook_kablolama d7_drift_imzasi --precommit
+```
+
+- Not metni `init_project.py`'de TEK sabittir (`ATLA_NOTU`), satır başına tekrarlanmaz. Metni değiştirmek = sabiti değiştirmek. `--force` argparse tanımı ve `PROJECT_BOOTSTRAP.md` tanımı bu kaydın dışındadır.
+- ⛔ Ölçüt ANLAMSALDIR, literal değil (`force_onerileri`): öneri = `--force` geçen ve AYNI satırda `KULLANMA` taşımayan satır. Not `--force KULLANMA` uyarısını taşır, "çıktıda `--force` yok" diye bir ölçüt yazılırsa doğru fix KIRMIZI olur (Q303'teki literal vektör dersi). Not metni yeniden düzenlenirken `--force` ile `KULLANMA` aynı satırda kalmalı.
+- ⭐ A1 çapası A2/A3'ün boş kümede geçmesini engeller (ikinci koşumda en az bir [ATLA]). A4 notun ilk koşumda basılmadığını ölçer (her koşumda basan fix gürültüdür).
+- ⭐ A5 notu İZLER: `.claude/settings.json` taşınır, aynı argümanla yeniden koşulur → yalnız o dosya `[ OK ]`, md5 ilk üretimle eş, CLAUDE.md ve kuyruktaki proje-özel satırlar korunur. Eski ve yeni kodda yeşildir (davranış değil mesaj değişti).
+- ⭐ Taban güncel kaynaktan çapayla türetilir (`ATLA_SATIRI_YENI` → 18bbe78'deki eski literal · `NOT_BASKISI` sökülür). Çapa tutmazsa exit 2 `YAMA TUTMADI`. Eski kod karşıtlığı: `git archive <taban> scripts claude tests/fixtures/init_project_iskelet | tar -x -C <kum>` → yeni `run.py`'yi kopyala → koş. Beklenen **26/30** (A2 · A3 · U5a · U5b).
+- ⚠ Temizlik `_sil` ile. Kaynaktaki `scripts/utils` dizininin salt-okur özniteliği (attr `0x11`) `copytree` ile kuma taşınır; `rmtree(ignore_errors=True)`'e dönülürse her koşumda bir `%TEMP%\initproj_*` kalır. Doğrulama: koşumdan önce ve sonra `initproj_*` sayısı eşit olmalı. `onexc` Python 3.12+ ister, `_sil` sürüme göre `onerror`'a düşer.
+- ⚠ Satır sonu: `init_project.py` ve `run.py` HEAD blob'u ve çalışma kopyası LF. Yalnız ham baytla ölç (`open(f,"rb").read().count(b"\r\n")`).
