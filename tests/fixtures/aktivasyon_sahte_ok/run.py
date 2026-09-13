@@ -81,7 +81,12 @@ def main() -> int:
     for ad, govde, bekl in [
         ("KONTROL basari govdesi -> executed", BASARI, True),
         ("KONTROL type=E -> executed degil", HATA_E, False),
-        ("ESKI STIL (chkl, severity yok) -> executed", ESKI_STIL, True),
+        # ⟳ Q188 (2026-09-13, lider karari): bu capa SILINMEDI, DONUSTU. Eskiden True
+        # bekliyordu (bu dosyanin kopya sozlesmesi); tek kanonik sozlesmede bayraksiz govde
+        # "hukum tasimiyor" = None -> bagimsiz worklist sondasi karar verir. Capanin NIYETI
+        # ("gercek aktivasyon reddedilmesin") `aktivasyon_govde_hukmu` fixture'inin D3 satirinda
+        # (bayraksiz govde + obje listede yok -> True) korunur. ⚠GEVSETME hucresi: A12 orada.
+        ("ESKI STIL (chkl, bayrak yok) -> None (hukum yok, sonda karar verir)", ESKI_STIL, None),
         ("HTTP 500 govdesi -> KANIT YOK", HTTP500, False),
         ("HTTP 403 logon -> KANIT YOK", HTTP403, False),
         ("BOS govde -> KANIT YOK", "", False),

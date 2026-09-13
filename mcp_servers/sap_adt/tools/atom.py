@@ -1448,29 +1448,31 @@ def _aktivasyon_readback(client, adlar: list) -> tuple[Optional[bool], str, list
     ⛔ Olcum kurulamamasini "temiz" sayma: bu kaydin kok sinifi tam olarak odur.
     """
     import xml.etree.ElementTree as ET
-    hedef = {(a or "").strip().upper() for a in adlar if (a or "").strip()}
+    # Q188 (2026-09-13): eslestirme + ayristirma TEK KAYNAKTA —
+    # `sap_adt_lib.aktivasyon_worklist_sondasi` (URI sinirli onek / parentUri / ad+tip).
+    # Eskiden burada yalniz AD eslemesi ve `ioc:inactiveObjects` OLMAYAN 200 govdeyi de
+    # "aktive bekleyen yok" sayan ayri bir kopya yasiyordu.
+    hedef: list = []
+    for a in adlar or []:
+        if isinstance(a, dict):
+            if (a.get("name") or "").strip() or (a.get("uri") or "").strip():
+                hedef.append(a)
+        elif (a or "").strip():
+            hedef.append({"name": a.strip()})
     if not hedef:
         return None, "unavailable:isim_yok", []
     try:
-        from mcp_servers.sap_adt.tools.query import _IOC_NS  # tek kaynak (yerel kopya YOK)
+        from sap_adt_lib import aktivasyon_worklist_sondasi  # type: ignore
         adt = getattr(client, "adt_client", None) or client
         with _capture_stdout():
-            r = adt.session.get(adt.url + _AKTIVASYON_WORKLIST_UC,
-                                headers={"Accept": "application/*"}, verify=False, timeout=45)
-        if getattr(r, "status_code", None) != 200:
-            return None, "unavailable:http_%s" % getattr(r, "status_code", "?"), []
-        root = ET.fromstring(r.text or "")
+            ok, sebep, kalan = aktivasyon_worklist_sondasi(adt, hedef)
         hala: list = []
-        for entry in root.findall("ioc:entry", _IOC_NS):
-            obj = entry.find("ioc:object", _IOC_NS)
-            ref = obj.find("ioc:ref", _IOC_NS) if obj is not None else None
-            if ref is None:
-                continue                      # transport-seviyesi girdi (bos object)
-            ad = (ref.get("{%s}name" % _IOC_NS["adtcore"], "") or "").strip().upper()
-            tip = ref.get("{%s}type" % _IOC_NS["adtcore"], "") or ""
-            if ad in hedef and ad not in [h["name"] for h in hala]:
-                hala.append({"name": ad, "type": tip})
-        return (not hala), ("checked_inactive" if hala else "checked_active"), hala
+        for k in kalan:
+            kayit = {"name": (k.get("name") or "").strip().upper(), "type": k.get("type") or "",
+                     "uri": k.get("uri") or ""}
+            if (kayit["name"], kayit["type"]) not in [(h["name"], h["type"]) for h in hala]:
+                hala.append(kayit)
+        return ok, sebep, hala
     except Exception as exc:  # noqa: BLE001 — teshis bozulmasin
         return None, "unavailable:%s" % type(exc).__name__, []
 
@@ -1501,14 +1503,22 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
     Returns:
         {ok, name, type, activated, errors?, warnings?, refs?, client_log}
 
+    ⛔ **KLASIK YOLDA `ok` = `activated`** (Q231-b, 2026-09-13). Eskiden `activated:false`
+    iken `ok:true` donuyordu (canlida olculdu). Artik `activated` True degilse `ok=false`,
+    `error="activation_failed"`. Alt katmanin hukmu TEK KAYNAKTAN gelir
+    (`sap_adt_lib.aktivasyon_govde_hukmu` + worklist sondasi — Q188).
+
     ⛔ **KLASIK YOLDA AKTIVASYON READBACK'i** (kayit #70, olculmus sahte-OK vakasi — `fugr`).
-    Tek-obje klasik aktivasyonda, alt katman "aktive edildi" derse obje **bagimsiz olarak**
-    aktive-bekleyen worklist'inde (`/activation/inactiveobjects`) aranir:
-      • `activation_verified: true`  → obje listede YOK, aktivasyon dogrulandi.
-      • `activation_verified: false` → obje HALA listede ⇒ **SAHTE-OK**: `ok=false`,
-        `activated=false`, `error="activation_not_executed"`, `still_inactive=[...]`.
+    Obje **bagimsiz olarak** aktive-bekleyen worklist'inde (`/activation/inactiveobjects`)
+    aranir; eslestirme URI-siniri + ad+tip ile (`sap_adt_lib.aktivasyon_worklist_kalan`):
+      • `activated: true` + `activation_verified: true`  → obje listede YOK, dogrulandi.
+      • `activated: true` + `activation_verified: false` → obje HALA listede ⇒ **SAHTE-OK**:
+        `ok=false`, `activated=false`, `error="activation_not_executed"`, `still_inactive=[...]`.
       • `activation_verified: null`  → sonda kosamadi ⇒ iddia **KANITLANMADI** (`warning`).
         Bu "dogrulandi" DEGILDIR.
+      • `activated: false` → sonda YINE kosar ama YALNIZ BILGI tasir (`still_inactive`,
+        `activation_probe`); `ok` false KALIR. Liste temizse `probe_note`: obje aktivasyondan
+        ONCE listede degilse "temiz" ayirt edici DEGILDIR (on-snapshot alinmaz).
     ⚠ `also=` (atomik cok-obje) ve `srvb` yollari zaten `activate_and_verify` ile
     `activationExecuted` + `type=E` parse eder; readback onlarda TEKRARLANMAZ.
     """
@@ -1597,13 +1607,21 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
             if line.startswith("  - ") and "warning" in log_text.lower():
                 warnings.append(line[4:].strip())
 
+        # ⛔ Q231-b (2026-09-13): `ok` artik `activated`'dan BAGIMSIZ set EDILMEZ. Eskiden
+        # `"ok": True` sabitti ⇒ canli olculdu: SAP "Resource SAPL<FG> REPS is not locked in
+        # a transport request" iken MCP yaniti `ok:true, activated:false` dondu.
         resp = {
-            "ok": True,
+            "ok": bool(activated),
             "name": name,
             "type": object_type,
             "activated": bool(activated),
             "client_log": log_text.strip(),
         }
+        if not activated:
+            resp["error"] = "activation_failed"
+            resp["message"] = (
+                "Aktivasyon BASARISIZ ya da DOGRULANAMADI (alt katman hukmu; SAP mesajlari "
+                "client_log'da). Zincirin devamina (publish / bagimli obje / test) GECME.")
 
         # Readback-gate: aktive edilen source-based obje için AKTİF source'u push edilenle
         # karşılaştır. Fark → yazım tam oturmadı → BLOCKER (ok=False). XML-DDIC/kayıtsız → no-op.
@@ -1616,10 +1634,25 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
         # ⛔ AKTIVASYON READBACK'i (kayit #70 — sahte-OK). `_content_readback` KAYNAK
         # esitligini olcer; bu sonda AKTIVASYON DURUMUNU olcer ve kapsami farklidir
         # (fugr/XML-DDIC + salt re-activate icin TEK dogrulama). Gerekce: `_aktivasyon_readback`.
-        # ⚠ Yalniz `activated` TRUE iddiasindayken calisir — zaten "olmadi" diyorsa
-        # cakismasi anlamsiz ve fazladan HTTP maliyeti olur.
+        # Q231-b: `activated` FALSE iken de kosar — "basarisiz cagri = etkisiz cagri" varsayimi
+        # canlida curudu (Q231: activated:false donen cagri FUGR/I'yi dusurmustu). Bu dalda
+        # sonda YALNIZ BILGI tasir (`still_inactive`); `ok`'u ASLA True'ya cevirmez.
+        akt_hedef = {"name": name, "uri": _activation_uri(name, object_type) or ""}
+        try:
+            from object_types import get_adt_type  # type: ignore
+            akt_hedef["type"] = get_adt_type(object_type) or ""
+        except Exception:  # noqa: BLE001 — tip yoksa URI/ad eslemesi yeter
+            akt_hedef["type"] = ""
+        if resp.get("activated") is not True:
+            akt_ok, akt_sonda, akt_kalan = _aktivasyon_readback(client, [akt_hedef])
+            resp["activation_probe"] = akt_sonda
+            resp["still_inactive"] = akt_kalan if akt_ok is not None else None
+            if akt_ok is True:
+                resp["probe_note"] = (
+                    "Obje aktive-bekleyen listesinde YOK. ⚠ Bu ayirt edici DEGIL: obje "
+                    "aktivasyondan once listede degilse de ayni sonuc cikar. `ok` false KALIR.")
         if resp.get("activated") is True:
-            akt_ok, akt_sonda, akt_kalan = _aktivasyon_readback(client, [name])
+            akt_ok, akt_sonda, akt_kalan = _aktivasyon_readback(client, [akt_hedef])
             resp["activation_verified"] = akt_ok
             resp["activation_probe"] = akt_sonda
             if akt_ok is False:

@@ -91,6 +91,8 @@ OZEL_TESTLER = [
     ("adtget_yokluk_kaniti", "BULUNAMADI != YOK: adt_get DDIC dalinda hata <-> yokluk"),
     ("aktivasyon_sahte_ok", "HTTP hatasi da KANIT DEGIL: aktivasyon sahte-OK'i"),
     ("mcp_sahte_sonuc_uclusu", "MCP atom: sahte exists:false / sahte activated / sahte ok:false uclusu"),
+    ("aktivasyon_govde_hukmu", "Q187/Q188/Q231: aktivasyon hukmu TEK KAYNAK (uc degerli govde hukmu + "
+                               "ayirt edici worklist sondasi + FUGR FF toplu istek; 19 mutasyon)"),
     ("ix_doctor_kablolama", "ix_doctor kablolama: korunan tool kumesi pre_tool_guard'in "
                             "AST'inden TURETILIR (elle kopya = ikinci gercek, bayatlar); "
                             "turetme kirilirsa PASS DEGIL 'OLCULEMEDI'"),
@@ -906,11 +908,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:conn_cift_anahtar", "O:conn_yazici_encoding", "O:dogrulama_kosamadi",
       "O:lock_modification_support", "O:class_include_push",
       "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde",
-      "O:transport_gorev_istek_cevrimi", "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi"),
+      "O:transport_gorev_istek_cevrimi", "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi",
+      "O:aktivasyon_govde_hukmu", "O:aciklama_412_retry", "O:mcp_sahte_sonuc_uclusu"),
      "on korpus bu modülü import/mutasyon eder (2026-09-03: `set_function_module_source` "
      "LOCK-CORRNR otoritesi + `_verify_and_return_lock` docstring'i · 2026-09-04: "
      "`get_object_source` URL kuruluşu + 404 mesajının obje adı · 2026-09-13 Q277: "
-     "`_validate_cds_source` sözcük-dizisi kapısı)"),
+     "`_validate_cds_source` sözcük-dizisi kapısı · 2026-09-13 Q187/Q188/Q231: aktivasyon hükmünün "
+     "TEK KAYNAĞI `aktivasyon_govde_hukmu` + worklist sondası + FUGR FF toplu istek)"),
     ("scripts/sap_client.py",
      ("O:adtget_yokluk_kaniti", "O:class_include_push", "O:dogrulama_kosamadi",
       "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
@@ -931,8 +935,15 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "canlı probe'un ÜÇ-DEĞERLİ sınıflaması: ulaşılamadı=FAIL · 404=OK · 4xx/5xx=WARN. "
      "Alt katman (`get_object_metadata`) istisnayı YUTAR ⇒ 'kanıt üretemedim' ile "
      "'kanıt olumlu' burada ayrılır"),
-    ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok", "O:yazma_hukmu_durustlugu"),
+    ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok", "O:yazma_hukmu_durustlugu",
+                                    "O:aktivasyon_govde_hukmu"),
      "activate_and_verify + (Q292) publish hükmü TEK KAYNAĞI `publish_hukmu` · `step_publish` üç değerli"),
+    # 2026-09-13 (Q188): iki dosya HARİTA'da HİÇ YOKTU — aktivasyon gövdesinden hüküm çıkaran
+    # iki bağımsız kopya sözleşme taşıyorlardı (boş gövde → OK · dizi eşleşmesi); artık kanonik yardımcıya bağlı.
+    ("scripts/push_bo_atomic.py", ("O:aktivasyon_govde_hukmu",),
+     "atomik aktivasyon hükmü TEK KAYNAKTAN (`aktivasyon_govde_hukmu` + worklist sondası)"),
+    ("scripts/populate_lock_objects.py", ("O:aktivasyon_govde_hukmu",),
+     "kilit objesi aktivasyon hükmü TEK KAYNAKTAN (type=E artık yok sayılmaz)"),
     ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
     ("scripts/push_object.py",
      ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi"),
@@ -942,7 +953,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "+ (Q268②) YARATMA aracı ≠ GÜNCELLEME yolu: `ddls` reddi mevcut view için "
      "`adt_push_source`'a yollar, ölçülmemiş tip için `[GUNCELLEME]` UYDURULMAZ"),
     ("scripts/push_textpool.py",
-     ("O:lock_modification_support", "O:transport_gorev_istek_cevrimi"),
+     ("O:lock_modification_support", "O:transport_gorev_istek_cevrimi", "O:aktivasyon_govde_hukmu"),
      "lock sinyali tüketicisi (+ kanonik `_last_lock_effective_transport` deseninin "
      "iki bağımsız üyesinden biri — E2 çapası)"),
     ("scripts/sap_set_object_description.py",
@@ -991,7 +1002,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:veri_yetki_guardlari", "O:tier_fail_closed"), "ADR 0011 PII + yetki"),
     ("mcp_servers/sap_adt/_reviewer.py", ("O:reviewer_tip_kapsam", "O:yazma_hukmu_durustlugu"),
      "push-tipi ↔ reviewer + (Q293) post-check hükmü TEK KAYNAĞI `post_check_ozeti`"),
-    ("mcp_servers/sap_adt/tools/composite.py", ("O:yazma_hukmu_durustlugu",),
+    ("mcp_servers/sap_adt/tools/composite.py", ("O:yazma_hukmu_durustlugu", "O:aktivasyon_govde_hukmu"),
      "adt_struct_create post-check hükmü (Q293: ok yalnız BLOCKER düşürür, ölçülemeyen kapı "
      "unmeasured+hukum+notice ile görünür)"),
     ("mcp_servers/sap_adt/tools/atom.py",
@@ -999,7 +1010,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline", "O:mcp_sahte_sonuc_uclusu",
       "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu",
       "O:doctor_baglanti_kaniti", "O:aktivasyon_baseline_tazeligi",
-      "O:yazma_hukmu_durustlugu", "O:fm_okuma_where_used"),
+      "O:yazma_hukmu_durustlugu", "O:fm_okuma_where_used", "O:aktivasyon_govde_hukmu"),
      "adt_get/adt_push/adt_delete uçları + _activation_uri sözleşmesi (offline) + "
      "`adt_classrun`/`adt_post_shell` guard SINIF çapası (AST) + `adt_get` dönüş ŞEKLİ "
      "grep kapsam-muhasebesinin GİRDİSİdir (ok/exists/source → skipped sebebi) + "

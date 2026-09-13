@@ -2334,6 +2334,24 @@ python tests/run_battery.py yazma_hukmu_durustlugu --kardes aktivasyon_baseline_
 - ⚠ MCP restart: `atom.py` / `composite.py` / `_reviewer.py` değişikliği çalışan MCP sürecine yalnız restart'la yansır. `atom._publish_hukmu` her çağrıda `import create_rap_service` yapar ama süreç önbelleği (`sys.modules`) yüzünden yine restart gerekir. CLI (`create_rap_service.py`) anında etkilenir.
 - 🔴 Canlı SAP doğrulaması yok (B11 Q278 ile aynı sınır).
 
+## B50 — Aktivasyon hükmü TEK KAYNAK: `aktivasyon_govde_hukmu` + worklist sondası + FUGR 2. faz FF (Q187 + Q188 + Q231)
+
+```
+python tests/fixtures/aktivasyon_govde_hukmu/run.py                 # 75 vektör, SAP gerektirmez, exit 0
+python tests/fixtures/aktivasyon_govde_hukmu/run.py --taban e34b2b2 # eski üretim kodu (geçici kopya) → 15/75, exit 0 = karşıtlık VAR
+python tests/run_battery.py aktivasyon_govde_hukmu --kardes aktivasyon_sahte_ok mcp_sahte_sonuc_uclusu --precommit
+python tests/run_battery.py b0_secim                                # HARİTA pini (P3 = 13)
+```
+
+- Çevrimdışı mekanizma: sahte sunucu senaryo listesi değil **kural** taşır. 1. aktivasyon POST'u canlı faz-1 ioc gövdesini alır. Toplu gövdede parentUri'li FUGR/FF varsa hepsi-true gövde döner ve FUGR girdileri worklist'ten düşer, yoksa canlı yalnız-generation gövdesi döner. Worklist canlı biçimde (transport girdisi dahil) üretilir. Gerçek `SAPADTClient.activate_object` (alt sınıf yalnız `__init__`/CSRF'i sahteler), `create_rap_service` · `push_bo_atomic.Pusher.activate_many` · `populate_lock_objects.activate_lock_object` · `SAPClient` + `composite._activate_and_verify` · `atom.adt_activate` koşar.
+- `canli/` = 2026-09-13 DEV gövdeleri, **maskeli** (grup/FM/sınıf adları `ZSD001_*`, transport `SAHK90000N`, kullanıcı `SAP_USER_A/B`; `<` XML özniteliğinde geçersiz olduğu için `<SAP_USER>` kullanılamadı). Yeni gövde eklerken önce maskele, sonra sızıntı taraması.
+- Eşleştirme vektörleri `worklist_*.xml`'yi **fixture-yerel** ayrıştırıcıyla okur (`_canli_girdiler`), üretim ayrıştırıcısını çağırmaz: mutasyon tabanı olmasın.
+- Mutasyonlar kopya ağaçta koşar (`scripts/` + `mcp_servers/` + fixture). Çapa parçası TAM 1 kez geçmezse `KURULAMADI` (KAÇTI değil). Koşucu hepsi yakalanınca **exit 0** döner ⇒ batarya satırı `AYIRDI` der; bu beklenen durumdur. ⚠ Tersi tuzak: koşucu kaçan mutasyonda exit 1 döndüğü için batarya onu `DUSTU/PASS` gösterir. Mutasyon satırında **`MUTASYON OZETI: N/N`** satırını ayrıca oku (bu turda M13 böyle gizlendi).
+- ⛔ SİLİNMEZ: A12/M17 (⚠GEVŞETME hücresi `_BAYRAKSIZ_GOVDE_HUKMU`; karar değişirse ikisi BİLEREK birlikte güncellenir) · B7 (canlı aynı-ad F/FF; tip indirgemesi FF hedefine F'yi kalan dedirtir) · B4/B9 (FP) · E5/F5 (sonda kurulamadı = FAIL; sonda True/False iken hüküm zaten ezildiği için `is True`→`is not False` mutasyonunun TEK ayırt edicisi) · C4 (FUGR dışı tek POST, worklist GET 0).
+- `--taban` beklenen: eski kodda A/B bölümleri adıyla düşer (fonksiyon yok = FAIL, çökme değil) · KONTROL satırları yeşil · C1 ve C5 eski kodun sahte başarısıyla yeşil (C1b/C1c/C1d/C5b düşer).
+- Fixture'ı **repo kökünden** koş (b0_secim gibi seçim korpusları cwd'ye göre çözer; yanlış cwd sahte-KIRMIZI verir).
+- Canlı teyit (YAZMA — kullanıcı onayı + adt-gateway, en dar kapsam): ① bekleyen FM'i olan bir FUGR'da `adt_activate(object_type="fugr")` → `ok:true` · `activation_verified:true` · bağımsız `adt_inactive_objects`'te grup ve FM yok · istemci günlüğünde 2. faz gövdesinde parentUri'li FUGR/FF + `preauditRequested=true` ② aynı turda zaten aktif bir DDLS'i yeniden aktive et → başarı, tek POST, worklist GET yok (kontrol grubu).
+
 ## B48 — `sap_set_object_description` PUT 412 tek retry + PUT sonrası aktivasyon/readback (Q175)
 
 ```
