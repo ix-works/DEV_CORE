@@ -2533,3 +2533,21 @@ python tests/run_battery.py init_project_iskelet --kardes gitignore_tam_satir pr
 - ⭐ Taban güncel kaynaktan çapayla türetilir (`ATLA_SATIRI_YENI` → 18bbe78'deki eski literal · `NOT_BASKISI` sökülür). Çapa tutmazsa exit 2 `YAMA TUTMADI`. Eski kod karşıtlığı: `git archive <taban> scripts claude tests/fixtures/init_project_iskelet | tar -x -C <kum>` → yeni `run.py`'yi kopyala → koş. Beklenen **26/30** (A2 · A3 · U5a · U5b).
 - ⚠ Temizlik `_sil` ile. Kaynaktaki `scripts/utils` dizininin salt-okur özniteliği (attr `0x11`) `copytree` ile kuma taşınır; `rmtree(ignore_errors=True)`'e dönülürse her koşumda bir `%TEMP%\initproj_*` kalır. Doğrulama: koşumdan önce ve sonra `initproj_*` sayısı eşit olmalı. `onexc` Python 3.12+ ister, `_sil` sürüme göre `onerror`'a düşer.
 - ⚠ Satır sonu: `init_project.py` ve `run.py` HEAD blob'u ve çalışma kopyası LF. Yalnız ham baytla ölç (`open(f,"rb").read().count(b"\r\n")`).
+
+## B58 — `populate_cds_views --force-recreate` DELETE yanıtı: 2xx/404 → devam · başka kod → o obje HATA, POST yok · istisna → koşum DURUR (Q318; B54'ün ve Q268 korpusunun komşusu)
+
+```
+python tests/fixtures/push_atlandi_ve_kaynak_izi/run.py   # 43 senaryo + 20 mutasyon, SAP gerektirmez, exit 0
+python tests/run_battery.py push_atlandi_ve_kaynak_izi --kardes populate_tables_unit_kind cds_paket_kapsami ddic_aktivasyon_notu populate_ddic_fail_closed adt_uc_url_cozumu class_include_push --precommit
+```
+
+- D bölümü (`senaryolar_delete`) `populate_cds_views.main`'i GERÇEK giriş noktasından koşar. Sahte olan yalnız `SAPADTClient` ve `td_spec_check`. `_SahteSession.delete` `plan["delete_durum"] = {AD: kod | "istisna"}` okur; varsayılan 200 olduğu için C/F senaryoları değişmez.
+- ⛔ **Ölçüt çıktı metni değil ADIM listesidir.** `_adimlar(izler, ad)` bir objeye giden `DELETE`/`POST`/`PUT` dizisini verir (GET hariç; LOCK/UNLOCK izlenmez). "POST gönderilmedi" iddiası `== ["DELETE"]` ile ölçülür. `[FAIL]` basıp POST'u yine de gönderen bir fix D4/D5 ile düşer (M18).
+- ⭐ **İki dal, iki davranış:** kabul dışı HTTP kodunda silinmediği BİLİNİR → o obje HATA, sonraki objeler işlenir (D8). İstisnada sonuç BİLİNMEZ → koşum durur (D9: B'ye GET dahil HİÇ istek yok + `[DUR]` satırı B'yi anar). İstisna dalını "kalan objelere devam et"e çeviren fix M20 ile düşer. Bu ayrım lider kararıdır; eski kod istisnada çöküp duruyordu, devam etmek yazma yolunu genişletirdi.
+- Kabul kümesi iki yönden çapalı: **D3** 404 → devam (M16 "404'ü FAIL say" düşer) · **D4/D6/D8** 403/423 → HATA (M17 "yalnız 5xx FAIL" düşer).
+- Gürültü çapaları: **D10** `--force-recreate` ama obje yok → DELETE gönderilmez · **D11** bayraksız mevcut obje → `[ATLANDI]`, DELETE gönderilmez. İkisi eski kodda da yeşildir.
+- Eski-kod karşıtlığı (pinli SHA sığ klonda yok ⇒ CI'da değil, elle): `git archive d79cc5e scripts tests/fixtures/push_atlandi_ve_kaynak_izi | tar -x -C <kum>` → yeni `run.py`'yi kuma kopyala → koş. Beklenen **37/43**, düşenler **tam olarak** D4 · D5 · D6 · D7 · D8 · D9; M16–M20 `YAMA TUTMADI` (çapa yok, beklenen). KONTROL satırlarından biri (D1 · D2 · D3 · D10 · D11) düşerse harness bozuktur, karşıtlık değildir. Kum `onerror` chmod'lu `rmtree` ile silinir (`scripts/utils` salt-okur özniteliği taşınır).
+- ⚠ Mutasyon çapaları üretim kodundaki tam satırlara bağlıdır: `return 200 <= kod < 300 or kod == 404` · `Obje SİLİNMEDİ — POST/PUT denenmedi.` + `return SONUC_HATA` · `raise SilmeSonucuBilinmiyor(name) from e` · `main` içindeki tek `            break`. Dosyaya yeni bir 12 boşluk girintili `break` eklenirse M20 yanlış satırı yamalar; `yama-tuttu` bloğu bunu göstermez (çapa sayısını elle ölç: her biri tam 1).
+- ⚠ Sahte session'ın DELETE/POST yanıtları SENTETİKTİR. SAP'nin mevcut objede POST'a verdiği yanıt ve kilitli/tüketicili view'da DELETE'in döndürdüğü kod DOĞRULANAMADI (yazma yolu, canlı koşulmadı).
+- Satır sonu: `populate_cds_views.py` ve `run.py` `eol=lf` (diskte LF) · `playbook/adt-cds.md` ve bu dosya `text=auto`, Windows checkout'unda CRLF. Ham baytla say.
+- HARİTA (değişmedi): `scripts/populate_cds_views.py` → `O:cds_paket_kapsami`, `O:push_atlandi_ve_kaynak_izi`.
