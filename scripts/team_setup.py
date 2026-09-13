@@ -299,6 +299,26 @@ def hookspath_core() -> None:
     say(OK if r.returncode == 0 else FAIL, f"core.hooksPath=scripts/git-hooks ({CORE_ROOT})")
 
 
+def _precommit_yok_onarimi() -> str:
+    """pre-commit YOK onarım metni — TEK KAYNAK `utils.drift_imzasi.D7_CIFTLERI` (Q303).
+
+    ⛔ Burada eskiden "init_project --force ile üret" yazıyordu (2026-09-13 ölçümü, kum
+    projede): `--force` üretilen HER dosyayı ezer — CLAUDE.md · README.md · project.yaml ·
+    governance/infra-findings.md dahil (proje-özel içerik 4/4 dosyada gitti). Tek eksik
+    dosya için doğru yol D7'nin çift başına onarım metnidir (şablondan KOPYALA → bu
+    kurulumu yeniden koş); aynı metni `session_start` ile `ix_doctor` de basar. Literal
+    KOPYALANMAZ: kopya-tanım iki kapıyı ayrıştırır (Q212/Q245② sınıfı).
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(CORE_ROOT / "scripts"))
+    from utils.drift_imzasi import D7_CIFTLERI  # type: ignore
+    for rel_yerel, _sablon, _ad, yok_onarim, _sapma in D7_CIFTLERI:
+        if rel_yerel == "scripts/git-hooks/pre-commit":
+            return yok_onarim
+    # Çift listeden çıkarılırsa GÜRÜLTÜLÜ dur: sessiz boş metin operatörü onarımsız bırakır.
+    raise RuntimeError("D7_CIFTLERI'nde scripts/git-hooks/pre-commit çifti yok (Q303 tek kaynağı)")
+
+
 def hookspath_proje(proje: Path) -> None:
     """PROJE reposunda pre-commit gate'ini kabla (2026-07-10 template provası).
 
@@ -311,7 +331,7 @@ def hookspath_proje(proje: Path) -> None:
         say(WARN, "proje git reposu değil — pre-commit kablolaması atlandı (repo_mode=none)")
         return
     if not hook.is_file():
-        say(WARN, "proje scripts/git-hooks/pre-commit yok — init_project --force ile üret")
+        say(WARN, f"proje scripts/git-hooks/pre-commit yok — {_precommit_yok_onarimi()}")
         return
     try:
         os.chmod(hook, os.stat(hook).st_mode | 0o111)  # POSIX'te çalıştırılabilir olmalı

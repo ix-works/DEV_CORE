@@ -2425,6 +2425,22 @@ python tests/run_battery.py d7_drift_imzasi --kardes session_start_compact_dali 
 - 3. BAĞLAM (gerçek projeler, SALT-OKUR): `session_start.main()` ve `ix_doctor --layer 4` proje köküne YAZAR (oturum işaretçisi `.tmp`, origin önbelleği + core `git fetch`, hook koşumları) ⇒ başka projede tam giriş noktası koşulmaz. Yerine her kapı AYRI alt-süreçte `CLAUDE_PROJECT_DIR=<proje>` ile import edilip yalnız `_drift_kontrol()` / `_d7_drift()` çağrılır; tam giriş noktası kanıtı sandbox'taki V25/V26'dadır.
 - ⚠ D7 ÇALIŞMA AĞACINI ölçer, `main`i değil: bir proje PR dalında checkout durumdaysa hizalanmış görünür. Merge durumu `gh api repos/<ORG>/<REPO>/contents/scripts/git-hooks/pre-commit?ref=main --jq .sha` ile ayrıca okunur (yerel `origin/main` fetch edilmemişse bayattır).
 
+## B52 — `team_setup.hookspath_proje` pre-commit YOK uyarısı: D7 tek-kaynak onarım metni (Q303; B49'un kardeşi)
+
+```
+python tests/fixtures/team_setup_hook_kablolama/run.py                           # 14/14 (~8 sn)
+python tests/fixtures/team_setup_hook_kablolama/run.py --mutasyon-force-onerisi  # 11/14 · düşer Q1·Q3·Q5
+python tests/run_battery.py team_setup_hook_kablolama --kardes d7_drift_imzasi core_fiziksel_kopya shim_tazeleme overlay_materyalize_atomik worktree_yasam_dongusu init_project_iskelet precommit_kopya_surum_esligi session_start_compact_dali ix_doctor_kablolama --precommit
+```
+
+- Onarım metni `team_setup.py`'de literal DEĞİL: `_precommit_yok_onarimi()` → `utils.drift_imzasi.D7_CIFTLERI`. Metni değiştirmek = `_PRECOMMIT_YOK`'u değiştirmek. Üç kapı (`session_start` · `ix_doctor` · `team_setup`) birlikte değişir, Q3 bunu çiviler.
+- ⛔ Onarım önerisi `init_project --force` OLAMAZ: `--force` üretilen her dosyayı ezer (kum ölçümü: proje-özel içerik 4/4 dosyada gitti). `init_project`'i `--force`'suz koşmak da tek dosyalık onarım değildir: eksik olan her dosyayı ve dizini varsayılanlarla üretir.
+- ⭐ Taban (Q2) GÜNCEL `team_setup.py`'den türetilir (`_Q303_CAPA` → eski literal). Çapa bulunamazsa korpus GÜRÜLTÜLÜ durur (`TABAN URETILEMEDI`). Eski-kod karşıtlığı kumda yapılır: `git archive <taban> | tar -x -C <kum>`, yeni `run.py`'yi kopyala, `_q303_sok`'u "eski literal varsa kaynağı aynen döndür" diye KUMDA yamala. Beklenen **11/14** (Q1·Q3·Q5).
+- ⭐ Q4 mesajı İZLER: projedeki `core/claude/git-hooks/pre-commit.template` (team_setup'ın kurduğu junction üzerinden) kopyalanır, kurulum yeniden koşulur → hooksPath set + uyarı yok. Mesajdaki bir yol çözülmüyorsa Q4 düşer.
+- ⚠ `d7_drift_imzasi` V17 tüketici kümesi TAM eşitliktir: `utils.drift_imzasi`'nı import eden yeni her `scripts/` dosyası V17'yi düşürür. Yeni tüketici = kümeye beyanla ekle + V27 literal taramasına kat.
+- ⚠ Satır sonu: bu dört dosyanın HEAD blob'u ve çalışma kopyası LF. Yalnız ham baytla ölç (`open(f,"rb").read().count(b"\r\n")`). Komut ikamesi içindeki `grep -c $'\r$'` bu turda yanlış sonuç verdi (dört dosyayı CRLF sandırdı).
+- ⚠ Temizlik `_sil` ile (salt-okur `.git/objects` için chmod + onerror/onexc). `shutil.rmtree(ignore_errors=True)`'e geri dönülürse Q5'in commit'i koşum başına bir `%TEMP%\ix_e05_*` bırakır. Doğrulama: koşumdan önce ve sonra `ix_e05_*` sayısı eşit olmalı.
+
 ## B53 — MCP okuma/sorgu araçlarının dürüstlüğü: SAP gövdesi + kesin kırpma · TADIR parçalama · FM arama takma adı · where-used paket düğümü · kanonik worklist (Q304 + Q305 + Q306 + Q310; B45 · B50'nin komşusu)
 
 ```
@@ -2444,4 +2460,3 @@ python tests/run_battery.py sorgu_araclari_durustlugu --kardes sorgu_basarisizli
 - Komşu çapalar (bu turda kusuru belgeledikleri için güncellendi, yön ölçüldü): `sorgu_basarisizligi_gorunur` D6 · `fm_okuma_where_used` W1 · I1. Eski kodda FAIL, yeni kodda PASS; ölçüm `git archive eab0180 | tar -x -C <kum>` + güncel fixture kopyası.
 - Canlı teyit (salt-okur, proje kökü `.conn_adt`, maskeli): `COUNT(*)` ile satır sayısı N bilinen bir filtrede `adt_sql_query` `row_limit` N → `truncated:false` · N−1 → `true` · N+5 → `false` (2026-09-13: N=16). ⚠ Canlı MCP süreci yeniden başlatılmadan eski kodu koşar.
 - HARİTA: `sap_adt_lib` (b0_secim P3 = 14) · `sap_client` · `query` · `worklist_audit` · `where_used.py` → `O:sorgu_araclari_durustlugu`; `sap_client` + `syntax_check.py` → `O:aktivasyon_govde_hukmu`. ⚠ `syntax_check.py` girdisi yalnız Q307'li ağaçta anlamlıdır (o korpus orada `syntax_check.py`'yi koşar).
-

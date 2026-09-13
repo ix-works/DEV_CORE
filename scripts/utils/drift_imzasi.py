@@ -34,6 +34,8 @@ S4 vektörüyle ZATEN çivili bir sınıf).
 
 Tüketiciler: `scripts/hooks/session_start.py` · `scripts/ix_doctor.py`
 (ikisi hem `anlamli_imza`yı hem `d7_ciftleri`ni buradan okur — Q245②, 2026-09-13)
+· `scripts/team_setup.py` (yalnız `D7_CIFTLERI`in pre-commit YOK onarım metni —
+`hookspath_proje` uyarısı; eskiden `init_project --force` öneriyordu, Q303)
 Korpus: tests/fixtures/d7_drift_imzasi/run.py
 """
 from __future__ import annotations
