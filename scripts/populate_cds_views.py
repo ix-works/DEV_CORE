@@ -347,6 +347,32 @@ def force_recreate_onerisi(ad: str) -> str:
             f'(DELETE+CREATE yapar; tüketicisi olan view\'da KULLANMA)')
 
 
+# ─── `--force-recreate` DELETE YANITI OKUNUR (Q318, 2026-09-13) ───────────────
+# ⛔ ESKİDEN: `client.session.delete(...)` dönüşü atanmıyordu. Sahte session ile
+# ölçüldü (SAP'siz): DELETE 403/500 + POST 201 → `[OK]` + "1 yazıldı" + exit 0,
+# DELETE hatası çıktıda HİÇ yoktu · DELETE 403/423 + POST 400 → `[FAIL] POST
+# status=400` (sebep yanlış adıma atfediliyor) · DELETE istisnası → traceback,
+# özet yok, kalan objeler işlenmiyor.
+# ŞİMDİ: kabul edilmeyen kodda o obje HATA sayılır ve POST/LOCK/PUT GÖNDERİLMEZ
+# (silinmemiş objenin üstüne yaratma denenmez). 404 kabul edilir: `cds_exists`
+# GET'i ile DELETE arasında obje zaten yok olmuştur, yaratma meşrudur.
+# Kardeş `populate_tables.py` yanıtı okur ama yalnız `[WARN]` basıp POST'a geçer
+# (404'ü de WARN sayar) — orası bu turda DEĞİŞMEDİ (ayrı kalem).
+def delete_yaniti_kabul(kod) -> bool:
+    """DELETE HTTP kodu POST'a devam için yeterli mi? 2xx veya 404."""
+    return 200 <= kod < 300 or kod == 404
+
+
+# DELETE İSTİSNASI (timeout/bağlantı) KOŞUMU DURDURUR — kabul edilmeyen HTTP kodundan
+# FARKLI. Kodda silinmediği BİLİNİR (obje HATA, sonraki objeler işlenir, POST
+# FAIL'iyle aynı); istisnada DELETE'in SAP'de uygulanıp uygulanmadığı BİLİNMEZ.
+# Eski kod burada çöküyor ve sonraki SAP yazımları hiç yapılmıyordu; devam etmek
+# yazma yolunu GENİŞLETİRDİ (gevşetme). `main` bunu yakalar: HATA say, kalan
+# objeleri İŞLENMEDİ diye listele, özeti bas, exit 1 (lider kararı, 2026-09-13).
+class SilmeSonucuBilinmiyor(Exception):
+    """`create_one` DELETE'ten yanıt alamadı — koşum durmalı."""
+
+
 def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
                package: str, transport: str,
                force_recreate: bool = False, dry_run: bool = False) -> str:
@@ -373,13 +399,24 @@ def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
         print(source[:400])
         return SONUC_DRY_RUN
 
-    # Step 1: DELETE if force_recreate
+    # Step 1: DELETE if force_recreate — yanıt OKUNUR (Q318, bkz. delete_yaniti_kabul)
     if force_recreate and exists:
-        client.session.delete(
-            client.url + f'/sap/bc/adt/ddic/ddl/sources/{name.lower()}',
-            params={'corrNr': transport},
-            headers={'X-CSRF-Token': csrf}, verify=False, timeout=30
-        )
+        try:
+            dr = client.session.delete(
+                client.url + f'/sap/bc/adt/ddic/ddl/sources/{name.lower()}',
+                params={'corrNr': transport},
+                headers={'X-CSRF-Token': csrf}, verify=False, timeout=30
+            )
+        except Exception as e:
+            print(f'  [FAIL] {name} DELETE istisna: {type(e).__name__} — silme sonucu '
+                  f'BİLİNMİYOR, obje silinmiş olabilir; GET ile doğrula')
+            print(f'         Ayrıntı: {e}')
+            raise SilmeSonucuBilinmiyor(name) from e
+        if not delete_yaniti_kabul(dr.status_code):
+            print(f'  [FAIL] {name} DELETE status={dr.status_code}')
+            print(f'         Body: {(dr.text or "")[:400]}')
+            print(f'         Obje SİLİNMEDİ — POST/PUT denenmedi.')
+            return SONUC_HATA
 
     # Step 2: POST shell create
     r = client.session.post(
@@ -623,14 +660,24 @@ def main():
     sayac = {SONUC_OLUSTURULDU: 0, SONUC_ATLANDI: 0,
              SONUC_HATA: 0, SONUC_DRY_RUN: 0}
     atlananlar = []
-    for f in cds_files:
+    islenmeyenler = []
+    hedefler = [f for f in cds_files
+                if not only_set or f.stem.upper() in only_set]
+    for sira, f in enumerate(hedefler):
         name = f.stem.upper()
-        if only_set and name not in only_set:
-            continue
         source = f.read_text(encoding='utf-8')
-        durum = create_one(client=client, csrf=csrf, name=name, source=source,
-                           package=args.package, transport=args.transport,
-                           force_recreate=args.force_recreate, dry_run=args.dry_run)
+        try:
+            durum = create_one(client=client, csrf=csrf, name=name, source=source,
+                               package=args.package, transport=args.transport,
+                               force_recreate=args.force_recreate, dry_run=args.dry_run)
+        except SilmeSonucuBilinmiyor:
+            # Q318: DELETE sonucu bilinmiyor → sonraki objelere YAZMA YOK.
+            sayac[SONUC_HATA] += 1
+            islenmeyenler = [g.stem.upper() for g in hedefler[sira + 1:]]
+            print(f'  [DUR]  {name} DELETE sonucu bilinmiyor — koşum DURDURULDU; '
+                  f'İŞLENMEDİ ({len(islenmeyenler)}): '
+                  f'{", ".join(islenmeyenler) or "-"}')
+            break
         if durum not in sayac:
             # Tanınmayan durum SESSİZCE başarıya sayılmaz (fail-closed).
             print(f'  [FAIL] {name} — create_one TANINMAYAN durum döndürdü: {durum!r}')

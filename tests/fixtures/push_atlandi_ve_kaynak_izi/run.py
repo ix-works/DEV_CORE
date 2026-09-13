@@ -50,6 +50,14 @@ Korpus S(enaryo) + M(utasyon) tasir:
          uyarisi + ozette silmesiz yol (adt_push_source). Bayrak global oldugu
          icin satir-basi `[ATLANDI]` satiri da `--only` tasir. F7 = 3. baglam
          (zaten `--only` ile daraltilmis kosum); F1/F8 gurultu + FP capalari.
+  D1-D11 + M16-M20 (Q318, 2026-09-13): `--force-recreate` DELETE yaniti OKUNUR.
+         2xx/404 -> POST'a devam (D1-D3; D3 404 FP capasi) · baska kod -> o obje
+         HATA, POST/PUT GONDERILMEZ, sebep DELETE satirinda (D4-D6), kalan objeler
+         islenir (D8 = 3. baglam, `--only`'siz) · istisna -> HATA + "BILINMIYOR",
+         KOSUM DURUR, sonraki objeye HIC istek gitmez, ozet basilir (D7, D9) ·
+         D10/D11 gurultu: DELETE gonderilmemesi gereken yerde gonderilmez.
+         Olcut sahte session'in ADIM listesidir (POST gercekten gitti mi).
+         Eski kodda (d79cc5e) D4-D9 KIRMIZI, D1-D3/D10/D11 yesil.
 
 Kosum: python tests/fixtures/push_atlandi_ve_kaynak_izi/run.py   (exit 0 = PASS)
 """
@@ -256,9 +264,14 @@ class _SahteSession:
         return _SahteYanit(204, "")
 
     def delete(self, url, **kw):
+        # Q318: plan["delete_durum"] = {AD: http_kodu | "istisna"}; varsayilan 200
+        # (onceki senaryolar degismez).
         ad = url.rstrip("/").rsplit("/", 1)[-1].upper()
         self.izler.append(("DELETE", ad))
-        return _SahteYanit(200, "")
+        durum = self.plan.get("delete_durum", {}).get(ad, 200)
+        if durum == "istisna":
+            raise TimeoutError("sahte DELETE zaman asimi")
+        return _SahteYanit(durum, "ADT: delete yaniti %s" % durum)
 
 
 def _sahte_client_sinifi(plan):
@@ -459,6 +472,111 @@ def senaryolar_pcv(pcv, kum: Path) -> list:
                      create_one_yerine=lambda **kw: "beklenmedik_deger")
     r.append(("C6 create_one taninmayan deger -> HATA sayilir, exit 1",
               rc == 1 and "TANINMAYAN durum" in c, "rc=%r ozet=%r" % (rc, _ozet(c))))
+
+    r += senaryolar_delete(pcv, kum, temel)
+    return r
+
+
+# ---------------------------------------------------------------------------
+# SENARYOLAR — Q318 `--force-recreate` DELETE yaniti
+# ---------------------------------------------------------------------------
+def _adimlar(izler, ad) -> list:
+    """Bir objeye giden YAZMA adimlari (GET haric; LOCK/UNLOCK izlenmez)."""
+    return [t[0] for t in izler if t[1] == ad and t[0] != "GET"]
+
+
+def senaryolar_delete(pcv, kum: Path, temel: list) -> list:
+    """DELETE 2xx/404 -> POST'a devam · baska kod / istisna -> o obje HATA, POST YOK.
+
+    Olcut cikti METNI degil yalniz: sahte session'in izledigi ADIM dizisi
+    (POST gercekten gonderildi mi) + rc + ozet kovalari. Ayirt edici: eski kod
+    DELETE 403/500'de POST+PUT gonderip `[OK]` + rc 0 veriyordu.
+    """
+    r = []
+    d = kum / "b8"
+    a = yaz_cds(d, "A")
+    b = yaz_cds(d, "B")
+    tam = [a, b]
+
+    def kos(delete_durum, only=a, var=(a, b), force=True, **ek):
+        plan = {"var": var, "delete_durum": delete_durum}
+        plan.update(ek)
+        argv = temel + [str(d)] + (["--force-recreate"] if force else [])
+        if only:
+            argv += ["--only", only]
+        rc, c = kos_main(pcv, argv, plan)
+        return rc, c, plan["izler"]
+
+    tam_yol = ["DELETE", "POST", "PUT"]
+
+    # KONTROL: basarili DELETE -> akis aynen surer (eski ve yeni kodda yesil).
+    for kod, etiket in ((200, "D1"), (204, "D2")):
+        rc, c, iz = kos({a: kod})
+        r.append(("%s KONTROL DELETE %d -> POST+PUT, [OK], 1 yazildi, exit 0" % (etiket, kod),
+                  rc == 0 and _adimlar(iz, a) == tam_yol and "1 yazıldı" in _ozet(c)
+                  and "DELETE status" not in c,
+                  "rc=%r adim=%r ozet=%r" % (rc, _adimlar(iz, a), _ozet(c))))
+
+    # FP capasi: 404 = obje zaten yok -> yaratma mesrudur (asiri sikilastirma yok).
+    rc, c, iz = kos({a: 404})
+    r.append(("D3 FP DELETE 404 -> POST'a devam, 1 yazildi, exit 0",
+              rc == 0 and _adimlar(iz, a) == tam_yol and "1 yazıldı" in _ozet(c),
+              "rc=%r adim=%r ozet=%r" % (rc, _adimlar(iz, a), _ozet(c))))
+
+    # AYIRT EDICI: yetki (403) ve sunucu (500) hatasi -> HATA, POST gonderilmez.
+    for kod, etiket in ((403, "D4"), (500, "D5")):
+        rc, c, iz = kos({a: kod})
+        r.append(("%s DELETE %d -> [FAIL] DELETE status=%d, POST/PUT YOK, 1 hatali, exit 1"
+                  % (etiket, kod, kod),
+                  rc == 1 and _adimlar(iz, a) == ["DELETE"]
+                  and ("[FAIL] %s DELETE status=%d" % (a, kod)) in c
+                  and "0 yazıldı" in _ozet(c) and "1 hatalı" in _ozet(c),
+                  "rc=%r adim=%r ozet=%r" % (rc, _adimlar(iz, a), _ozet(c))))
+
+    # SEBEP: kilit (423) + POST'un da duseceği plan -> sebep DELETE'e atfedilir.
+    rc, c, iz = kos({a: 423}, post_hata=(a,))
+    r.append(("D6 DELETE 423 -> sebep DELETE satirinda, 'POST status' satiri YOK",
+              rc == 1 and ("DELETE status=423" in c) and "POST status" not in c,
+              "rc=%r adim=%r cikti_son=%r" % (rc, _adimlar(iz, a), c[-240:])))
+
+    # ISTISNA: cokme degil HATA + "sonuc BILINMIYOR" beyani; ozet basilir.
+    rc, c, iz = kos({a: "istisna"})
+    r.append(("D7 DELETE istisnasi -> [FAIL] DELETE istisna + BİLİNMİYOR, POST YOK, "
+              "ozet var, exit 1",
+              rc == 1 and _adimlar(iz, a) == ["DELETE"]
+              and ("[FAIL] %s DELETE istisna" % a) in c and "BİLİNMİYOR" in c
+              and "0 yazıldı" in _ozet(c) and "1 hatalı" in _ozet(c),
+              "rc=%r adim=%r ozet=%r" % (rc, _adimlar(iz, a), _ozet(c))))
+
+    # 3. BAGLAM (gorev-disi bicim): `--only`'siz toplu kosum. A kilitli, B silinir.
+    # HATA obje-basidir: B etkilenmez, kovalar ayri sayilir.
+    rc, c, iz = kos({a: 423, b: 200}, only=None)
+    r.append(("D8 *3.BAGLAM* `--only`'siz: A 423 -> yalniz DELETE, B 200 -> tam yol; "
+              "1 yazildi + 1 hatali, exit 1",
+              rc == 1 and _adimlar(iz, a) == ["DELETE"] and _adimlar(iz, b) == tam_yol
+              and "1 yazıldı" in _ozet(c) and "1 hatalı" in _ozet(c),
+              "rc=%r A=%r B=%r ozet=%r" % (rc, _adimlar(iz, a), _adimlar(iz, b), _ozet(c))))
+    # ISTISNA KOSUMU DURDURUR (lider karari): DELETE SAP'de uygulanmis olabilir,
+    # sonraki objelere YAZMA yapilmaz. Capa: B'ye HICBIR istek (GET dahil) gitmez.
+    rc, c, iz = kos({a: "istisna", b: 200}, only=None)
+    b_istek = [t for t in iz if t[1] == b]
+    r.append(("D9 `--only`'siz: A istisna -> koşum DURUR, B'ye HIC istek yok, "
+              "[DUR] B'yi anar, ozet 0 yazildi/1 hatali, exit 1",
+              rc == 1 and b_istek == [] and _adimlar(iz, a) == ["DELETE"]
+              and any(s.lstrip().startswith("[DUR]") and b in s for s in c.splitlines())
+              and "0 yazıldı" in _ozet(c) and "1 hatalı" in _ozet(c),
+              "rc=%r A=%r B_istek=%r ozet=%r" % (rc, _adimlar(iz, a), b_istek, _ozet(c))))
+
+    # GURULTU capalari: DELETE hic gonderilmemesi gereken yerde gonderilmez.
+    rc, c, iz = kos({a: 403}, var=())
+    r.append(("D10 gurultu: --force-recreate ama obje YOK -> DELETE gonderilmez, POST+PUT, exit 0",
+              rc == 0 and _adimlar(iz, a) == ["POST", "PUT"] and "DELETE" not in c,
+              "rc=%r adim=%r" % (rc, _adimlar(iz, a))))
+    rc, c, iz = kos({a: 403}, force=False)
+    r.append(("D11 gurultu: bayraksiz mevcut obje -> ATLANDI, DELETE gonderilmez, exit 0",
+              rc == 0 and _adimlar(iz, a) == [] and "[ATLANDI] %s" % a in c,
+              "rc=%r adim=%r" % (rc, _adimlar(iz, a))))
+    assert sorted(tam) == sorted({a, b})
     return r
 
 
@@ -738,6 +856,25 @@ PCV_MUT = [
          "        print('          Güncellemek için (silmesiz): '\n"
          "              \"mcp__sap-adt__adt_push_source (object_type='ddls')\")\n",
          "")),
+    # Q318 — DELETE yaniti: kabul kumesi iki yonde + iki dal (kod / istisna) +
+    # istisnada kosumun durmasi AYRI degismezler.
+    ("M16 404'u de FAIL say (asiri sikilastirma)",
+     lambda s: s.replace("    return 200 <= kod < 300 or kod == 404\n",
+                         "    return 200 <= kod < 300\n")),
+    ("M17 yalniz 5xx FAIL say (daraltma: 403/423 kabul)",
+     lambda s: s.replace("    return 200 <= kod < 300 or kod == 404\n",
+                         "    return kod < 500\n")),
+    ("M18 DELETE kodu FAIL olsa da POST'a gec",
+     lambda s: s.replace(
+         "            print(f'         Obje SİLİNMEDİ — POST/PUT denenmedi.')\n"
+         "            return SONUC_HATA\n",
+         "            print(f'         Obje SİLİNMEDİ — POST/PUT denenmedi.')\n")),
+    ("M19 DELETE istisnasini yut, POST'a gec",
+     lambda s: s.replace(
+         "            raise SilmeSonucuBilinmiyor(name) from e\n",
+         "            dr = type('R', (), {'status_code': 200, 'text': ''})()\n")),
+    ("M20 istisnada kalan objelere DEVAM et (kosum durmaz)",
+     lambda s: s.replace("            break\n", "            continue\n")),
 ]
 
 PO_MUT = [

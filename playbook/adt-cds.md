@@ -236,6 +236,10 @@ Her CDS için bir `.cds` dosyası (DDL source) — script `@EndUserText.label`'d
 > `--force-recreate --only <ad>` — DELETE+CREATE yapar; tüketicisi olan view'da (BDEF/servis/üst
 > view) **KULLANMA**, transport'ta silme kalıntısı bırakır. ⛔ `--only`'siz `--force-recreate`
 > `--source-dir`deki **her** mevcut view'ı siler (bayrak koşumun tamamına uygulanır — Q315).
+> DELETE yanıtı okunur (Q318): 2xx/404 → yaratma sürer · başka kod → `[FAIL] <ad> DELETE
+> status=<kod>`, o obje için POST/PUT **gönderilmez**, kalan objeler işlenir · DELETE istisnası
+> (timeout/bağlantı) → silme sonucu **BİLİNMİYOR**, koşum **durur** (`[DUR]` satırı işlenmeyenleri
+> listeler), exit 1 ⇒ objenin durumunu GET ile doğrula, körlemesine yeniden koşma.
 > *(2026-09-09 Q268 — ölçülmüş vaka: araç `[SKIP] zaten var` deyip `1 başarılı, 0 hatalı` +
 > exit 0 veriyordu; hiçbir şey yazılmamıştı.)*
 
