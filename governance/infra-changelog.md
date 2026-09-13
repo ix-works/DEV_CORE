@@ -14,6 +14,13 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## claude/templates/spawn-brief.md — §3 çıktı kanalı · §4 worktree `.conn_adt` yer tutucu · §8 `SendMessage` kanal yedeği · §9 araç-yüzeyi ölçümü (doküman)
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-09-13 | **Doküman, davranış kodu yok.** ① §8 "Kanal": *"`tools:` beyanında görünmese de çalışma zamanında **vardır**"* cümlesi kaldırıldı — varlık ne beyandan ne önceki turdan çıkarılır; `SendMessage` isteyen her brife AYNEN girecek kanal-yoksa yedeği eklendi (AR/HB'ler nihai raporun başına `### AR-n` · DERHAL maddede DUR · dosyaya bırakma yok) + lider→ajan yönünün durmuş ajanı uyandırdığı notu. ② §9 araç-yüzeyi maddesi yalnız DOSYA eylemlerine daraltıldı; `SendMessage` kuralın dışında (`tools:` belirleyici değil). ③ §3 final mesaj satırı §8 kanalına bağlandı. ④ §4 yeni madde: canlı SAP ölçümü isteyen brif bağlantıyı açıkça verir — `--wt-ac` worktree'sindeki `.conn_adt` YER TUTUCUDUR (`Configuration Incomplete — Placeholder values`); `set_explicit_working_dir(<proje kökü>)` salt-okur + Git Bash `MSYS_NO_PATHCONV=1`. | Kanal ölçümleri çelişiyor: adlı spawn beyanda yokken çalıştı · adsız arka-plan spawn beyanda varken yoktu · aynı gün aynı kipte `adt-gateway`'de yok, `infra-expert`'te var ⇒ şablonun "vardır" cümlesi yedeksiz brif üretti, AR-1 bir turda nihai mesajla gelip ajan durdu. `.conn_adt`: üç ayrı turda üç ajan yer tutucu bağlantıyla durdu (SAP'ye istek gitmedi); brif "worktree'de bağlantı var" diyordu, ölçülmemişti. Proje kuyruğunun tetik koşulu ("üçüncü ajan aynı engelle durursa şablona not") karşılandı. | `tests/fixtures/sablon_zorunlu_maddeler/run.py` → PASS (14 senaryo + 7 mutasyon; §9 ENGELLENİRSEN zorunlu maddesi korunuyor). Başlıklar değişmedi (`watchdog_launch._brifing_lint` GÖREV / KANIT KURAL / ENGELLENİRSEN desenleri). CRLF korundu. | `tests/fixtures/sablon_zorunlu_maddeler` | — |
+
+**Test-senaryosu (spawn-brief kanal/.conn_adt):** `python tests/fixtures/sablon_zorunlu_maddeler/run.py` → PASS. ⛔ **SİLİNMEZ:** §8 kanal-yoksa yedeği cümlesi · §4 `.conn_adt` yer tutucu maddesi (kaldırılırsa üç-tur durma sınıfı geri gelir).
+
 ## Q303 — scripts/team_setup.py (`hookspath_proje` "pre-commit yok" uyarısı → D7 tek-kaynak onarım metni) · scripts/utils/drift_imzasi.py (docstring) · tests/fixtures/team_setup_hook_kablolama · tests/fixtures/d7_drift_imzasi (V17 · V27)
 | tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
 |---|---|---|---|---|---|

@@ -16,7 +16,7 @@
 - Model: <X — rol×kapsam matrisi satırı (operating-model §6); beyan≠fiilî, transcript kanıt>
 
 ## 3. ÇIKTI FORMATI (output format)
-- Final mesaj = SendMessage({to:"main"}) raporu; şekli: <madde listesi / tablo / diff / dosya-yolu>
+- Final mesaj = rapor (kanal §8: `SendMessage({to:"main"})`, yoksa son mesajın gövdesi); şekli: <madde listesi / tablo / diff / dosya-yolu>
 - Büyük çıktıyı scratch/dosyaya YAZ, mesajda yolunu ver (mesaj-şişirme yok).
 - ⛔ **SALT-OKUR rollere dosya yolu ÇIKTI olarak VERİLMEZ.** `tools:` satırında `Write`/`Edit` **olmayan** roller (ör. `bug-expert`) raporu dosyaya yazamaz; çıktıları **mesaja** girer (`SendMessage({to:"main"})`), kalıcılaştırmayı **lider** yapar.
   ⚠ Aksi hâlde ajan raporu **üretir ama teslim edemez**: `Write` çağrısı `No such tool available` ile düşer ve bulgu **hiçbir kanaldan çıkmaz**. Bu bir nüks sınıfıdır — `infra-findings` `Q29` (2026-08-27) ve aynı sınıf 2026-08-07 · 2026-08-19. Ölçüm: 195 `bug-expert` ajanı / 17 yazma denemesi / **17 hata / 0 başarı**.
@@ -35,6 +35,13 @@
   `agent_type`'a bakar ve o alan **spawn adıdır**; görev adı verirsen (`infra-atc-p1` gibi)
   muafiyet düşer ve ajanın infra yazımı **exit 2** ile bloklanır. Ölçülmüş vaka 2026-08-21:
   bir tur yarıda kaldı, iş halefe devredildi.
+- ⛔ **Canlı SAP ölçümü isteyen brif bağlantıyı AÇIKÇA verir — worktree'deki `.conn_adt` YER
+  TUTUCUDUR.** Public çekirdekte gerçek bağlantı yoktur; `team_setup.py --wt-ac` o yer tutucuyu
+  bağlar ⇒ `SAPADTClient()` `Configuration Incomplete — Placeholder values` ile düşer (üç ayrı
+  turda üç ajan bu yüzden durdu; SAP'ye istek gitmedi). Brife yaz: *"taze süreçte
+  `set_explicit_working_dir(r"<proje kökü>")` (ya da `CLAUDE_PROJECT_DIR=<proje kökü>`), yalnız
+  <izinli salt-okur çağrılar>; `.conn_adt` açılmaz, kopyalanmaz, loglanmaz"*. "Worktree'de
+  bağlantı var" yazmadan önce **ölç**. Git Bash'te `/sap/...` argümanı için `MSYS_NO_PATHCONV=1`.
 
 ## 5. HAZIR-BAĞLAM (P6 — liderin zaten bildiği; ajan yeniden KEŞFETMESİN)
 <dosya yolları + ilgili satır bölgeleri + kısa alıntılar/özet kararlar. SAP-kaynakları için
@@ -88,9 +95,15 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
   ⑦ yayılım notu (aynı sınıf başka nerede olabilir — ölçtüysen sayıyla).
 - ⚠ **Çok-eksenli kalemde "kaydı kapattım" cümlesi YASAK** — her ekseni AYRI raporla
   ("① kapandı · ② kapandı · ③ kapsam dışı, gerekçe: …"). Yapmadığın ekseni **sessizce atlama**.
-- **Kanal:** `SendMessage({to:"main"})`. ⚠ Bu araç `tools:` beyanında görünmese de çalışma zamanında
-  **vardır**; yoksa (ölç, varsayma) nihai rapor **son mesajın gövdesine** girer — rapor **dosyaya
-  yazılıp orada bırakılamaz** (§3'teki salt-okur kuralı).
+- **Kanal:** `SendMessage({to:"main"})`. ⚠ Varlığı **ne `tools:` beyanından ne önceki turdan
+  çıkarılır** — ölçümler çelişiyor: adlı spawn'da beyanda yokken çalıştı · adsız arka-plan
+  spawn'da beyanda varken YOKTU · aynı gün, aynı kipte bir rolde var, diğerinde yok. Bu yüzden
+  aşağıdaki yedek `SendMessage` isteyen **her** brife AYNEN girer:
+  *"`SendMessage`'ı çağır. Araç yoksa: ① ara raporları (AR/HB) beklemeden işe devam et, nihai
+  raporun BAŞINA `### AR-n` başlıklarıyla o anki hâlleriyle taşı ② bir DERHAL maddesi doğarsa o
+  noktada DUR, işi diske yaz, durumu nihai mesajla raporla — lider seni mesajla devam ettirir
+  ③ rapor dosyaya yazılıp orada bırakılamaz (§3)."*
+  ⓘ Lider → ajan yönü (`SendMessage(to:<agentId>)`) durmuş ajanı yeniden uyandırır.
 - "YAPILAMAZ" demeden önce: repo'da alternatif yol ara + denediklerini kanıtla (kanıtsız olumsuz rapor sorgulanır).
 
 ## 9. ENGELLENİRSEN — ZORUNLU MADDE (⛔ yazma işi veren her brifte)
@@ -110,8 +123,9 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
 - **Çok-repolu işte worktree'yi LİDER açar** ve adresini brife YAZAR:
   `git worktree add -b wip/<konu> <dizin> origin/<dal>` → ajan `git push origin HEAD:<PR-dalı>`.
   ⚠ Aynı dal canlı ağaçta checkout ise git ikinci worktree'ye izin vermez.
-- **İstediğin her eylemin ajanın `tools:` listesinde olduğunu ÖLÇ** (aynı gün üç vaka: salt-okur
-  role rapor DOSYASI yazdırmak · `SendMessage`'ı olmayan rolden heartbeat istemek).
+- **İstediğin her DOSYA eyleminin (`Write`/`Edit`) ajanın `tools:` listesinde olduğunu ÖLÇ**
+  (salt-okur role rapor DOSYASI yazdırmak = §3 nüks sınıfı). ⚠ `SendMessage` bu kuralın
+  **dışındadır** — `tools:` satırı belirleyici değil; §8'deki yedeği koy.
 - ⓘ Bu maddenin varlığını `brifing-lint` denetler — ama yalnız **başka bir ağaca yazma işi
   veren** briflerde (ölçüm: 587 gerçek brif · dar eksen %18,4'ünü kapsıyor, ham "madde var mı"
   kontrolü %86,7 ateşleyip uyarı körlüğü üretirdi).
