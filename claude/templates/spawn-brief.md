@@ -12,7 +12,8 @@
 
 ## 2. GÖREV SINIRLARI (task boundaries — scope-creep freni)
 - KAPSAM İÇİ: <...>
-- KAPSAM DIŞI: <"şunu da düzelteyim" YOK; bulursan RAPORLA, dokunma>
+- KAPSAM DIŞI: <"şunu da düzelteyim" YOK; ilgisiz bulguyu RAPORLA, dokunma>
+- KARDEŞ TARAMASI (lider, spawn ÖNCESİ — düzeltme işlerinde): <desen → N dosya: [liste]> — aynı sınıftaki vakalar KAPSAM İÇİ'ne yazılır, sonradan kuyruğa ayrı kayıt olarak AÇILMAZ (kuyruk yakınsamaz). Ajanın yeni bulduğu aynı-desen kardeş kendi dosya kümesindeyse ara raporda bildirilip kapsama alınır (infra-expert F2).
 - Model: <X — rol×kapsam matrisi satırı (operating-model §6); beyan≠fiilî, transcript kanıt>
 
 ## 3. ÇIKTI FORMATI (output format)
