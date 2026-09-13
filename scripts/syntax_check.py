@@ -151,6 +151,19 @@ def main():
         print("=" * 60)
         return 1
 
+    if result.get('valid') is None:
+        # Q307: SAP did NOT run the check -> neither "passed" nor "has syntax errors".
+        print("")
+        print("=" * 60)
+        print(f"[UNVERIFIED] SYNTAX NOT MEASURED - SAP did not run the check for {args.name}")
+        print("=" * 60)
+        print(f"  reason: {result.get('sozdizimi_sebep') or 'not reported'}")
+        print("  This does NOT mean the source has syntax errors.")
+        print("")
+        print("[ACTION REQUIRED] Do NOT tell the user the syntax is valid.")
+        print("[ACTION REQUIRED] Report this to the user and ask how to proceed.")
+        print("=" * 60)
+        return 1
     if result.get('valid'):
         print("[OK] Check passed")
         return 0

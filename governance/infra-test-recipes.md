@@ -2334,11 +2334,26 @@ python tests/run_battery.py yazma_hukmu_durustlugu --kardes aktivasyon_baseline_
 - ⚠ MCP restart: `atom.py` / `composite.py` / `_reviewer.py` değişikliği çalışan MCP sürecine yalnız restart'la yansır. `atom._publish_hukmu` her çağrıda `import create_rap_service` yapar ama süreç önbelleği (`sys.modules`) yüzünden yine restart gerekir. CLI (`create_rap_service.py`) anında etkilenir.
 - 🔴 Canlı SAP doğrulaması yok (B11 Q278 ile aynı sınır).
 
+## B51 — Sözdizimi kontrolü `valid` üç değerli: `syntax_check_via_activation` kanonik gövde hükmüne bağlı (Q307)
+
+```
+python tests/fixtures/aktivasyon_govde_hukmu/run.py                 # 100 vektör (J = Q307), exit 0
+python tests/fixtures/aktivasyon_govde_hukmu/run.py --taban eab0180 # Q307 öncesi üretim kodu → 88/100, exit 0 = karşıtlık VAR
+python tests/run_battery.py aktivasyon_govde_hukmu --kardes aktivasyon_sahte_ok mcp_sahte_sonuc_uclusu sorgu_basarisizligi_gorunur veri_yetki_guardlari --precommit
+```
+
+- J bölümü dört giriş noktasını gerçek kodla koşar: lib `syntax_check_via_activation` (J1–J15) · `SAPClient.syntax_check` basılan metin (J16–J18) · MCP `query.adt_syntax_check` (J19–J21; `_conn.get_active_tier` ve `query._get_client` bölüm içinde yamalanır, `finally` ile geri alınır) · `syntax_check.main` rc + metin (J22–J24; `sys.argv` ve `SAPClient` geri alınır). Sahte sunucu (`_SozSunucu`) yalnız aktivasyon POST'una sabit gövde döner; GET gelirse 599 döner (sözdizimi kontrolü worklist okumaz).
+- `--taban eab0180` beklenen: düşenler **tam olarak** J6–J12 · J16 · J19 · J22 · I1 · I2. KONTROL satırlarından biri düşerse vektör ya da harness bozuktur, karşıtlık değildir. `URETIM` artık `sap_client.py` + `syntax_check.py` içerir; taban kopyası üçünü birlikte geri alır.
+- ⚠ Çapa tuzağı (bu turda yaşandı): CLI'nin ölçülemedi metni *"does NOT mean the source has syntax errors"* cümlesini içerir. Ayırt edici dizge `[FAIL] SYNTAX CHECK FAILED`'dir, `has syntax errors` DEĞİL.
+- ⛔ SİLİNMEZ: J1–J5 · J17/J18 · J20/J21 · J23/J24 (kontrol koştuysa True/False korunur) · J13/J14 + M21 (ayrıştırılamayan gövde ve 403 kilit BİLEREK `valid:False`: `push_object` ön-kontrolü durdurmaya devam eder) · J15 (istek biçimi: tek POST, `method=activate`, `preauditRequested=true`).
+- Mutasyon satırında `MUTASYON OZETI: 25/25` satırını oku (B50 uyarısı aynen geçerli).
+- Canlı teyit (YAZMA — temiz bekleyen sürümü AKTİVE EDER; kullanıcı onayı + adt-gateway): bekleyen sürümü olmayan, zaten aktif bir Z sınıfında `adt_syntax_check` → gövdede `checkExecuted` değeri ve dönen `valid` / `valid_reason` kaydedilir. `checkExecuted=false` gelirse yeni `sozdizimi_belirsiz` görünürlüğünün gerçek bir vakasıdır (Q aday ② sondası değerlendirilir).
+
 ## B50 — Aktivasyon hükmü TEK KAYNAK: `aktivasyon_govde_hukmu` + worklist sondası + FUGR 2. faz FF (Q187 + Q188 + Q231)
 
 ```
-python tests/fixtures/aktivasyon_govde_hukmu/run.py                 # 75 vektör, SAP gerektirmez, exit 0
-python tests/fixtures/aktivasyon_govde_hukmu/run.py --taban e34b2b2 # eski üretim kodu (geçici kopya) → 15/75, exit 0 = karşıtlık VAR
+python tests/fixtures/aktivasyon_govde_hukmu/run.py                 # 100 vektör (A–J; J bölümü = Q307, B51), SAP gerektirmez, exit 0
+python tests/fixtures/aktivasyon_govde_hukmu/run.py --taban e34b2b2 # eski üretim kodu (geçici kopya) → 29/100 (J eklenmeden önce 15/75), exit 0 = karşıtlık VAR
 python tests/run_battery.py aktivasyon_govde_hukmu --kardes aktivasyon_sahte_ok mcp_sahte_sonuc_uclusu --precommit
 python tests/run_battery.py b0_secim                                # HARİTA pini (P3 = 13)
 ```
