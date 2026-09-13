@@ -103,17 +103,35 @@ def check_ddic_object(client: SAPClient, object_name: str, object_type: str) -> 
             print("[UNVERIFIED] DDIC metadata carries no adtcore:version attribute")
             return {'valid': None, 'errors': [], 'active': None,
                     'sozdizimi_sebep': 'ddic_surum_okunamadi'}
-        else:
-            return {
-                'valid': False,
-                'errors': [{'message': f'Failed to check object: HTTP {response.status_code}'}]
-            }
+        # Q317: any other HTTP status (500, 401, 403, ...) means the metadata was NOT read ->
+        # NOT measured (valid None), not "has syntax errors". Only 404 above is a real answer.
+        return {'valid': None, 'errors': [], 'active': None,
+                'sozdizimi_sebep': f'ddic_http_{response.status_code}'}
 
     except Exception as e:
-        return {
-            'valid': False,
-            'errors': [{'message': str(e)}]
-        }
+        # Q317: network/session failure -> the object was never looked at -> NOT measured.
+        return {'valid': None, 'errors': [], 'active': None,
+                'sozdizimi_sebep': f'ddic_istisna:{type(e).__name__}: {str(e)[:160]}'}
+
+
+def olculemedi_sebebi(result: dict):
+    """Q317: reason text if the check was NOT measured, else None.
+
+    Not measured = the check did not produce a verdict, which is NOT the same as
+    "syntax errors":
+      - valid None (Q307 syntax_check_via_activation / Q313 check_ddic_object)
+      - valid False with NO error records but an `error` text: `SAPClient.syntax_check`
+        swallowed an exception ({'valid': False, 'error': ...}).
+    A False result that carries error records stays a FAIL (a real SAP error, a 404,
+    a lock), so real errors are never hidden.
+    """
+    if not isinstance(result, dict):
+        return 'no result dict'
+    if result.get('valid') is None:
+        return result.get('sozdizimi_sebep') or 'not reported'
+    if result.get('valid') is False and not result.get('errors') and result.get('error'):
+        return 'kontrol_istisnasi:' + str(result.get('error'))[:160]
+    return None
 
 
 def main():
@@ -160,13 +178,16 @@ def main():
         print("=" * 60)
         return 1
 
-    if result.get('valid') is None:
-        # Q307: SAP did NOT run the check -> neither "passed" nor "has syntax errors".
+    sebep = olculemedi_sebebi(result)
+    if sebep is not None:
+        # Q307/Q313/Q317: the check produced no verdict -> neither "passed" nor
+        # "has syntax errors". Header is branch-neutral (DDIC reads metadata, it does
+        # not run an SAP check); the `reason:` line says what happened.
         print("")
         print("=" * 60)
-        print(f"[UNVERIFIED] SYNTAX NOT MEASURED - SAP did not run the check for {args.name}")
+        print(f"[UNVERIFIED] SYNTAX NOT MEASURED - syntax of {args.name} could not be verified")
         print("=" * 60)
-        print(f"  reason: {result.get('sozdizimi_sebep') or 'not reported'}")
+        print(f"  reason: {sebep}")
         print("  This does NOT mean the source has syntax errors.")
         print("")
         print("[ACTION REQUIRED] Do NOT tell the user the syntax is valid.")
@@ -181,20 +202,16 @@ def main():
         print("=" * 60)
         print(f"[FAIL] SYNTAX CHECK FAILED - {args.name} has syntax errors")
         print("=" * 60)
-        errors = result.get('errors', [])
-        if not errors and result.get('error'):
-            print(f"  {result.get('error')}")
-        else:
-            for error in errors:
-                if isinstance(error, dict):
-                    line = error.get('line', '')
-                    msg = error.get('message', '')
-                    if line:
-                        print(f"  Line {line}: {msg}")
-                    else:
-                        print(f"  {msg}")
+        for error in result.get('errors') or []:
+            if isinstance(error, dict):
+                line = error.get('line', '')
+                msg = error.get('message', '')
+                if line:
+                    print(f"  Line {line}: {msg}")
                 else:
-                    print(f"  {error}")
+                    print(f"  {msg}")
+            else:
+                print(f"  {error}")
         print("")
         print("[ACTION REQUIRED] Do NOT tell the user this operation succeeded.")
         print("[ACTION REQUIRED] Report this failure to the user and ask how to proceed.")
