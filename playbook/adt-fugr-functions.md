@@ -89,6 +89,12 @@ ENDFUNCTION.
 
 İmza source'tan set edilir → **imza için SE37 GEREKMEZ.** (Kanıt: ZSD001_FM_SO_CREATE.)
 
+> ⚠ **Reviewer (ADR 0006) bu yolda OTOMATİK KOŞMAZ** (Q308, 2026-09-13). `set_function_module_source`
+> MCP dışıdır ve `run_review` çağırmaz. `adt_push_source(object_type='fugr')` ise FM gövdesini değil
+> yalnız FG ana include'unu yazar. ⇒ FM push'undan ÖNCE elle `run_review --task class_push` +
+> `adt_syntax_check` koş. Beklenen tablo (WARNING'in neden gürültü olduğu, anlamlı tek sinyal):
+> [`adt-mcp.md` → Reviewer ile İlişki](adt-mcp.md).
+
 > ### ⛔ `TABLES` PARAMETRESİ — İKİ KISIT BİRDEN (en pahalı tuzak)
 >
 > `TABLES` parametresi yazarken **iki ayrı kural** aynı anda geçerlidir ve **birbirini keser**:

@@ -2551,3 +2551,21 @@ python tests/run_battery.py push_atlandi_ve_kaynak_izi --kardes populate_tables_
 - ⚠ Sahte session'ın DELETE/POST yanıtları SENTETİKTİR. SAP'nin mevcut objede POST'a verdiği yanıt ve kilitli/tüketicili view'da DELETE'in döndürdüğü kod DOĞRULANAMADI (yazma yolu, canlı koşulmadı).
 - Satır sonu: `populate_cds_views.py` ve `run.py` `eol=lf` (diskte LF) · `playbook/adt-cds.md` ve bu dosya `text=auto`, Windows checkout'unda CRLF. Ham baytla say.
 - HARİTA (değişmedi): `scripts/populate_cds_views.py` → `O:cds_paket_kapsami`, `O:push_atlandi_ve_kaynak_izi`.
+
+## B60 — Reviewer haritası FUGR/FM ekseni: `fugr` → `None` kayıtlı istisna, `func` push'u fail-closed (Q308; `reviewer_tip_kapsam` F1–F5)
+
+```
+python tests/fixtures/reviewer_tip_kapsam/run.py                              # 15/15, SAP gerektirmez (~5 sn)
+python tests/fixtures/reviewer_tip_kapsam/run.py --mutasyon-fugr-class-push   # 14/15 · düşer F1
+python tests/fixtures/reviewer_tip_kapsam/run.py --mutasyon-func-anahtar      # 14/15 · düşer F2
+python tests/fixtures/reviewer_tip_kapsam/run.py --mutasyon-func-url          # 14/15 · düşer F3
+python tests/run_battery.py reviewer_tip_kapsam --kardes adt_uc_url_cozumu mcp_profil_aktivasyon_offline reviewer_skip_sozlesmesi mcp_sahte_sonuc_uclusu --precommit
+```
+
+- ⚠ **Taban (Q308 öncesi kod) zaten YEŞİLDİR.** Q308 davranış değiştirmedi, ölçülmüş bir kararı pinledi. Karşıtlık **mutasyondan** gelir; mutasyonlar bellekte uygulanır, dosyaya yazılmaz. F1/F2 haritayı AST ile **okuduktan sonra** mutasyona uğratır (diskten yeniden okuyan vektör mutasyonu göremez). F3 mutasyonu `object_types.OBJECT_TYPES['function']['url_path']`'i doldurur.
+- F3: `SAPClient.push_object` `object.__new__` ile kurulur. `adt_client` her erişimi kaydeden sahte istemcidir, ilk çağrıda `_Dur` atar. Beklenen: `func`/`function` → `ValueError` + **0 çağrı** (`get_object_url` `try`'dan önce, `sap_client.py:767`).
+- ⛔ SİLİNMEZ: **F4** kontrol grubu. Aynı sahte istemciyle `fugr` push'u `get_transport_info` çağrısına ulaşmalı. Silinirse F3'ün "0 çağrı" hükmü, istemcisi hiç çağrılamayan bir harness'ta da yeşil kalır. **F5** `fugr` kaynak ucu = `/functions/groups/<fg>/source/main` (`fmodules` değil). İstisnanın gerekçesi budur: `fugr` push'u FM gövdesini yazmaz.
+- Bir gün `fugr` bir göreve bağlanırsa F1 KIRMIZI olur. Bu doğru davranıştır: önce Q308 ölçümü tekrarlanır (aşağıda), sonra F1 ve `adt-mcp.md` istisna satırı birlikte güncellenir.
+- **Uygunluk ölçümünü tekrarlama (SAP'siz, yalnız okuma):** proje `<source_root>/**/functions/*.abap` FM'leri + aynı paketlerden `classes/*.clas.abap` ve `programs/*.prog.abap` kontrol grubu. Her dosya için `CLAUDE_PROJECT_DIR=<proje> python scripts/validators/run_review.py --task class_push --artifact <dosya> --json`. Atom'un temp adıyla da koş (`<ad>.fugr.txt`). 2026-09-13 sonucu: 10 FM/FUGR → BLOCKER 0, 10/10 WARNING (`check_abaplint` `measured=false`), `check_released_objects` 3/10. Diğer dört validator'ın tetikleyici deseni (METHODS · AMDP · DOCU runner · API marker) 10/10 dosyada 0 kez geçti. Çıktıdaki "(1 .clas/.intf.abap tarandı)" bir **birim etiketidir**, kuralın uygulandığını göstermez.
+- Geçici dizin: F3 kaynağını `TemporaryDirectory(prefix="q308_")` altına yazar ve `finally` ile siler. Doğrulama: koşumdan önce ve sonra `%TEMP%\q308_*` sayısı eşit (2026-09-13: 0 → 0).
+- ⚠ Satır sonu: `run.py` ve `_reviewer.py` LF. Bu dosya ve playbook `.md`'leri diskte CRLF. Ham baytla ölç.
