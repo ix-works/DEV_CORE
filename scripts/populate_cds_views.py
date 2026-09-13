@@ -330,6 +330,23 @@ SONUC_HATA        = 'hata'          # denendi, olmadı
 SONUC_DRY_RUN     = 'dry_run'       # yalnız önizleme; canlıya hiç gidilmedi
 
 
+# ─── `--force-recreate` ÖNERİSİ DAİMA TEK OBJEYE DARALTILIR (Q315) ────────────
+# `--force-recreate` koşumun TAMAMINA uygulanan global bir bayraktır (argparse
+# store_true → `main` her dosyaya aynı değeri geçirir); kapsamı YALNIZ `--only`
+# daraltır. Eski metin (`güncellemek için: --force-recreate`) aynen koşulursa
+# `--source-dir`deki HER mevcut view DELETE + yeniden CREATE edilirdi. DELETE:
+# tüketicisi olan view'da cascade kırar (playbook/adt-rap.md "Mevcut AKTİF root
+# CDS güncelleme") ve transport'ta silme kalıntısı bırakır. Tek-obje `[ATLANDI]`
+# satırı da bu yüzden `--only <ad>` taşır: satır tek objeyi anar ama bayrak
+# koşumun tamamına uygulanır. `--only` virgüllü liste kabul eder; öneri BİLEREK
+# tek ad verir (tam liste yine toplu silme olurdu). Silmesiz güncelleme yolu
+# `adt_push_source`tur (playbook/adt-cds.md sınır cümlesi).
+def force_recreate_onerisi(ad: str) -> str:
+    """Tek objeye daraltılmış `--force-recreate` önerisi + DELETE uyarısı."""
+    return (f'--force-recreate --only {ad} '
+            f'(DELETE+CREATE yapar; tüketicisi olan view\'da KULLANMA)')
+
+
 def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
                package: str, transport: str,
                force_recreate: bool = False, dry_run: bool = False) -> str:
@@ -343,7 +360,8 @@ def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
         # GET atar; canlı source/main ile yereldeki `.cds` KIYASLANMAZ. Bu satır
         # bir YAZMA KANITI değil, bir ATLAMA BİLDİRİMİDİR.
         print(f'  [ATLANDI] {name} zaten var — YAZILMADI '
-              f'(içerik DOĞRULANMADI; güncellemek için: --force-recreate)')
+              f'(içerik DOĞRULANMADI; yeniden yaratmak için: '
+              f'{force_recreate_onerisi(name)})')
         return SONUC_ATLANDI
 
     shell_xml = build_shell_xml(name, description, package)
@@ -639,8 +657,14 @@ def main():
               f'{", ".join(atlananlar)}')
         print('          "zaten var" = YAZMA KANITI DEĞİLDİR: canlı kaynak '
               'yereldeki .cds ile KIYASLANMADI.')
-        print('          Güncellemek için: --force-recreate  ·  '
-              'Bu durumu hata saymak için: --fail-on-skip')
+        # Q315: 1 atlanan → gerçek ad; birden çok → `<ad>` yer tutucusu (listeden
+        # TEK ad). Virgüllü tam liste VERİLMEZ: o yine toplu DELETE olurdu.
+        hedef = atlananlar[0] if len(atlananlar) == 1 else '<ad>'
+        print('          Güncellemek için (silmesiz): '
+              "mcp__sap-adt__adt_push_source (object_type='ddls')")
+        print(f'          Yeniden yaratmak için, TEK obje: '
+              f'{force_recreate_onerisi(hedef)}')
+        print('          Bu durumu hata saymak için: --fail-on-skip')
     if olusturuldu == 0 and atlandi and not fail:
         print('[UYARI] HİÇBİR CDS YAZILMADI — bu koşumun canlıya tek bir yazma '
               'etkisi olmadı. "Başarılı" sanma.')

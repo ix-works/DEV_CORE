@@ -218,8 +218,8 @@ python scripts/populate_cds_views.py `
 # Sadece bir CDS:
 python scripts/populate_cds_views.py ... --only ZSD001_DDL_CONTAINER_TYPES
 
-# Yeniden yarat:
-python scripts/populate_cds_views.py ... --force-recreate
+# TEK bir mevcut view'ı silip yeniden yarat (DELETE+CREATE — tüketicisi olan view'da KULLANMA):
+python scripts/populate_cds_views.py ... --force-recreate --only ZSD001_DDL_CONTAINER_TYPES
 ```
 
 Her CDS için bir `.cds` dosyası (DDL source) — script `@EndUserText.label`'dan description çıkarır.
@@ -231,8 +231,11 @@ Her CDS için bir `.cds` dosyası (DDL source) — script `@EndUserText.label`'d
 > yeniden koşum meşrudur) ⇒ *"exit 0 gördüm, yazıldı"* **çıkarımı yanlıştır**; kova
 > satırını oku. CI'da "hiçbir şey yazılmadıysa yeşil olmasın" demek için `--fail-on-skip`
 > (exit **3**; gerçek hatanın exit 1'inden **ayrı** kod).
-> Güncellemek istiyorsan: `--force-recreate` (DELETE+CREATE) **ya da** mevcut-view yolu —
-> `adt_push_source` / `SAPClient.push_object(object_type='ddls')`.
+> Güncellemek istiyorsan: mevcut-view yolu (silmesiz) — `adt_push_source` /
+> `SAPClient.push_object(object_type='ddls')`. Yeniden yaratmak kaçınılmazsa **TEK obje**:
+> `--force-recreate --only <ad>` — DELETE+CREATE yapar; tüketicisi olan view'da (BDEF/servis/üst
+> view) **KULLANMA**, transport'ta silme kalıntısı bırakır. ⛔ `--only`'siz `--force-recreate`
+> `--source-dir`deki **her** mevcut view'ı siler (bayrak koşumun tamamına uygulanır — Q315).
 > *(2026-09-09 Q268 — ölçülmüş vaka: araç `[SKIP] zaten var` deyip `1 başarılı, 0 hatalı` +
 > exit 0 veriyordu; hiçbir şey yazılmamıştı.)*
 

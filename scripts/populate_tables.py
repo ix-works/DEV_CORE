@@ -324,7 +324,14 @@ def create_one(client: SAPADTClient, csrf: str, table_name: str,
             return True
         if durum == 'FARKLI':
             print(f'  [FAIL] {table_name} var AMA icerik farkli — {detay}')
-            print(f'         Yazma YAPILMADI. Icerigi guncellemek icin: --force-recreate')
+            # Q315: `--force-recreate` global bayraktir (tum CSV tablolarina
+            # uygulanir); kapsami yalniz `--only` daraltir => oneri TEK tabloya
+            # daraltilir. DELETE transport'ta silme kalintisi birakir
+            # (playbook/adt-tables-structures.md, 2026-08-19 canli olcum).
+            print(f'         Yazma YAPILMADI. Icerigi guncellemek icin: '
+                  f'--force-recreate --only {table_name} (DELETE+CREATE yapar, '
+                  f'transport\'ta silme kalintisi birakir; bagimli objesi olan '
+                  f'tabloda KULLANMA)')
             return False
         print(f'  [FAIL] {table_name} var ama readback DOGRULANAMADI — {detay}')
         print(f'         "olculemedi" != "temiz" (fail-closed).')

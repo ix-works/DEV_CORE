@@ -44,6 +44,12 @@ Korpus S(enaryo) + M(utasyon) tasir:
          cozumu korunur, ve 3. BAGLAM = ayri surecte GERCEK CLI (rc=2 korunur)
   M1-M10 fix'i sok -> korpus KIRMIZI olmali (yesil kalirsa korpus o degismezi
          olcmuyor). Uc dosya x bagimsiz degismezler.
+  F1-F8 + M11-M15 (Q315, 2026-09-13): `--force-recreate` onerisi DAIMA tek
+         objeye daraltilir (`--only <ad>`; 1 atlanan -> gercek ad, cok atlanan ->
+         `<ad>` yer tutucusu, virgullu liste YOK) + ayni satirda DELETE/KULLANMA
+         uyarisi + ozette silmesiz yol (adt_push_source). Bayrak global oldugu
+         icin satir-basi `[ATLANDI]` satiri da `--only` tasir. F7 = 3. baglam
+         (zaten `--only` ile daraltilmis kosum); F1/F8 gurultu + FP capalari.
 
 Kosum: python tests/fixtures/push_atlandi_ve_kaynak_izi/run.py   (exit 0 = PASS)
 """
@@ -343,6 +349,9 @@ def senaryolar_pcv(pcv, kum: Path) -> list:
               and "[OK]   ZMOD001_DDL_A" in c and yazildi
               and "HİÇBİR CDS YAZILMADI" not in c,
               "rc=%r put=%r ozet=%r" % (rc, yazildi, _ozet(c))))
+    # Q315 GURULTU capasi: atlanan yokken yeniden-yaratma onerisi HIC basilmaz.
+    r.append(("F1 atlanan YOKKEN `--force-recreate` onerisi basilmaz (gurultu)",
+              _force_onerileri(c) == [], str(_force_onerileri(c))))
 
     # --- BAGLAM 2: zaten var -> "atlandi", "basarili" DEMEMELI ---------------
     d2 = kum / "b2"
@@ -360,6 +369,51 @@ def senaryolar_pcv(pcv, kum: Path) -> list:
     # GURULTU degil KANIT: hicbir sey yazilmadiginda GORUNUR uyari.
     r.append(("C2c hic yazma yokken '[UYARI] HİÇBİR CDS YAZILMADI' basilir",
               "HİÇBİR CDS YAZILMADI" in c, _ozet(c)))
+
+    # --- Q315: `--force-recreate` onerisi TEK objeye daraltilmis olmali -------
+    # Olcut CIPLAK dize aramasi DEGIL: uyari metni de bayragi anabilir (Q303
+    # dersi). Her gecis `--only <tek ad>` tasimali VE ayni satirda DELETE uyarisi.
+    on = _force_onerileri(c)
+    r.append(("F2 1 atlanan: HER `--force-recreate` gecisi `--only ZMOD001_DDL_A` "
+              "tasir (satir-basi + ozet)",
+              len(on) >= 2 and all(v == "ZMOD001_DDL_A" for _, v in on),
+              str(on)))
+    r.append(("F3 1 atlanan: oneri satirinda DELETE uyarisi + 'KULLANMA' var",
+              bool(on) and all("DELETE" in s and "KULLANMA" in s for s, _ in on),
+              str([s for s, _ in on])))
+    r.append(("F4 ozet silmesiz guncelleme yolunu (adt_push_source) soyler",
+              any("adt_push_source" in s for s in _atlandi_blogu(c)),
+              str(_atlandi_blogu(c))))
+
+    # COK atlanan: ozet yer tutucu verir, tam listeyi (virgul) ASLA vermez.
+    d6 = kum / "b6"
+    adlar6 = [yaz_cds(d6, h) for h in ("A", "B", "C")]
+    plan6 = {"var": tuple(adlar6)}
+    rc, c6 = kos_main(pcv, temel + [str(d6)], plan6)
+    on6 = _force_onerileri(c6)
+    ozet_on6 = [v for s, v in on6 if s.lstrip().startswith("Yeniden")]
+    # `str()`: eski metinde deger None olur; siralama COKMEMELI, FAIL vermeli
+    # (cokme != FAIL — mutasyon KURULAMADI'ya dusurdu, olculdu).
+    satir_on6 = sorted(str(v) for s, v in on6 if "[ATLANDI] ZMOD" in s)
+    r.append(("F5 3 atlanan: ozet `--only <ad>` yer tutucusu, virgullu liste YOK",
+              ozet_on6 == ["<ad>"]
+              and all(v is not None and "," not in v for _, v in on6),
+              str(on6)))
+    r.append(("F6 3 atlanan: satir-basi oneriler KENDI adini tasir (3/3)",
+              satir_on6 == sorted(adlar6), str(satir_on6)))
+
+    # 3. BAGLAM (gorev-disi): kullanici ZATEN `--only` ile daraltmis kosum.
+    # Islenmeyen C hic anilmaz; iki atlanan -> yer tutucu.
+    plan7 = {"var": tuple(adlar6)}
+    rc, c7 = kos_main(pcv, temel + [str(d6), "--only",
+                                    "zmod001_ddl_a, ZMOD001_DDL_B"], plan7)
+    on7 = _force_onerileri(c7)
+    r.append(("F7 *3.BAGLAM* `--only A,B` kosumu: C ANILMAZ, ozet yer tutucu, "
+              "hepsi `--only`li",
+              "ZMOD001_DDL_C" not in c7 and "2 atlandı" in c7
+              and [v for s, v in on7 if s.lstrip().startswith("Yeniden")] == ["<ad>"]
+              and all(v is not None and "," not in v for _, v in on7),
+              "on=%r ozet=%r" % (on7, _ozet(c7))))
 
     # --- BAGLAM 2': cikis kodu POLITIKASI opt-in sikilastirma ---------------
     plan2b = {"var": ("ZMOD001_DDL_A",)}
@@ -390,6 +444,12 @@ def senaryolar_pcv(pcv, kum: Path) -> list:
     # FP capasi: yazilan varken "HICBIR CDS YAZILMADI" uyarisi BASILMAMALI.
     r.append(("C5b yazilan varken 'HİÇBİR CDS YAZILMADI' uyarisi BASILMAZ (gurultu)",
               "HİÇBİR CDS YAZILMADI" not in c, _ozet(c)))
+    # Q315 FP capasi: karisimda oneri YALNIZ atlanan B'yi anar (yazilan A /
+    # hatali C icin DELETE onerilmez).
+    on5 = _force_onerileri(c)
+    r.append(("F8 karisim: oneri yalniz atlanan ZMOD001_DDL_B (A/C icin DELETE onerilmez)",
+              len(on5) >= 2 and all(v == "ZMOD001_DDL_B" for _, v in on5),
+              str(on5)))
 
     # --- FAIL-CLOSED: taninmayan durum sessizce basariya sayilmaz ------------
     d5 = kum / "b5"
@@ -407,6 +467,36 @@ def _ozet(cikti: str) -> str:
         if satir.startswith("=== Sonuç:"):
             return satir
     return "<ozet satiri YOK>"
+
+
+_FORCE_RE = re.compile(r"--force-recreate(?:\s+--only\s+(\S+))?")
+
+
+def _force_onerileri(cikti: str) -> list:
+    """Ciktidaki HER `--force-recreate` gecisi -> (satir, `--only` degeri | None).
+
+    `--fail-on-skip` gibi komsu bayraklar eslesmez (tam ad). Deger None ise
+    oneri kapsam daraltici TASIMIYOR demektir (Q315'in ta kendisi).
+    """
+    sonuc = []
+    for satir in cikti.splitlines():
+        for m in _FORCE_RE.finditer(satir):
+            sonuc.append((satir, m.group(1)))
+    return sonuc
+
+
+def _atlandi_blogu(cikti: str) -> list:
+    """Ozetteki `[ATLANDI] N CDS` satiri ve ardindan gelen girintili satirlar."""
+    satirlar = cikti.splitlines()
+    for i, s in enumerate(satirlar):
+        if s.startswith("[ATLANDI] ") and " CDS zaten vardı" in s:
+            blok = [s]
+            for t in satirlar[i + 1:]:
+                if not t.startswith("          "):
+                    break
+                blok.append(t)
+            return blok
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -624,6 +714,30 @@ PCV_MUT = [
     ("M4 taninmayan durum fail-closed'ini sok",
      lambda s: s.replace("        if durum not in sayac:",
                          "        if False:")),
+    # Q315 — iki satir, uyari, yer tutucu, silmesiz yol: AYRI degismezler.
+    ("M11 ozet onerisini ESKI metne dondur (--only'siz)",
+     lambda s: s.replace(
+         "        print(f'          Yeniden yaratmak için, TEK obje: '\n"
+         "              f'{force_recreate_onerisi(hedef)}')",
+         "        print('          Güncellemek için: --force-recreate')")),
+    ("M12 satir-basi [ATLANDI] onerisini ESKI metne dondur",
+     lambda s: s.replace(
+         "              f'(içerik DOĞRULANMADI; yeniden yaratmak için: '\n"
+         "              f'{force_recreate_onerisi(name)})')",
+         "              f'(içerik DOĞRULANMADI; güncellemek için: --force-recreate)')")),
+    ("M13 ozette yer tutucu yerine TAM LISTE (virgullu --only = toplu DELETE)",
+     lambda s: s.replace(
+         "        hedef = atlananlar[0] if len(atlananlar) == 1 else '<ad>'",
+         "        hedef = ','.join(atlananlar)")),
+    ("M14 DELETE/KULLANMA uyarisini sok",
+     lambda s: s.replace(
+         "            f'(DELETE+CREATE yapar; tüketicisi olan view\\'da KULLANMA)')",
+         "            f'')")),
+    ("M15 silmesiz guncelleme yolu (adt_push_source) satirini sok",
+     lambda s: s.replace(
+         "        print('          Güncellemek için (silmesiz): '\n"
+         "              \"mcp__sap-adt__adt_push_source (object_type='ddls')\")\n",
+         "")),
 ]
 
 PO_MUT = [
