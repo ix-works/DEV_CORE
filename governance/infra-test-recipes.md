@@ -1315,7 +1315,9 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
 
 ## B27 — PARTİ-2b şablon + manifest üçlüsü (.rules.md.tmpl · spawn-brief/lint · behavior_manifest)
 - İki korpus (ikisi de OZEL_TESTLER üyesi):
-  `python tests/fixtures/sablon_zorunlu_maddeler/run.py` → **11 senaryo + 5 mutasyon**, exit 0
+  `python tests/fixtures/sablon_zorunlu_maddeler/run.py` → **14 senaryo + 7 mutasyon**, exit 0
+    ⚠ *güncellendi 2026-09-13 (Q193②):* bu satır **11 + 5** diyordu. `Class` ekseni KAPANDI; A4/A5 + M4/M5
+    kapanışa ve üreticiye (bootstrap `PKG_NOZ`) taşındı, A6–A8 + M6/M7 eklendi — ayrıntı **B44 (b)**.
     ⚠ *güncellendi 2026-08-29:* A4/A5 + M4/M5 `6e4a1ec`'te eklenmişti, reçete o gün güncellenmemişti
     (9+3 yazıyordu — bayat iddia). A4/A5 çapası aynı gün **`Class` eksenine taşındı**: dayandığı
     Message Class çelişkisi kapandı, `Class` çelişkisi (`ZCL_{PKG}_*` ↔ canlı kısaltılmış biçim `ZCL_<PKG#>_*`) açık kaldı.
@@ -2346,3 +2348,29 @@ python tests/run_battery.py aciklama_412_retry --kardes lock_modification_suppor
 - ⚠ Batarya `mutasyon` satırı `KIP YOK` der: mutasyonlar taban koşumunun İÇİNDE koşar (`cds_paket_kapsami` deseni); 12 `YAKALANDI` satırı taban çıktısındadır.
 - ⚠ Provizyonlu worktree'de batarya precommit satırı `ATLA` olabilir: izlenmeyenler `.claude/` ve `core/` provizyonudur, kendi dosyalarını `git add` et, junction'ı `git add -A` ile süpürme.
 - Canlı teyit (YAZMA — kullanıcı onayı + adt-gateway): açıklaması zaten doğru olan bir DDLS'te `--force-put` (içerik değişmez). Beklenen: `[FORCE-PUT]` → `[RETRY] … 412` (ya da doğrudan 200) → `[INFO] … inaktife düşürdü` → `[OK] … AKTİF sürümde readback DOĞRULANDI`, exit 0; ardından bağımsız olarak `adt_inactive_objects` listede obje yok.
+
+## B44 — `adt_sql_query` ölçülmüş biçim sınırları docstring'de (Q274) · paket şablonu `ZCL_{PKG_NOZ}_*` + `bootstrap_package` `PKG_NOZ` (Q193②)
+
+```
+python tests/run_battery.py sorgu_basarisizligi_gorunur --kardes sablon_zorunlu_maddeler veri_yetki_guardlari transport_sifir_kaniti b0_secim --precommit
+```
+
+**(a) Q274 — belge çapaları (`sorgu_basarisizligi_gorunur` D1–D7)**
+- D1–D7 `adt_sql_query.__doc__`'u **boşluk normalize ederek** okur: docstring satır sarar; ham metinde D1 yanlış paragraftaki özet kopyaya çapalanıyordu (ölçüldü: gövde mutasyonu D1'i de düşürüyordu).
+- Kipler: `--mutasyon-q274-sinir` (sınır bölümü söküldü → D1–D5, D7 · **36/42**) · `--mutasyon-q274-govde` (çürük "sebep message/client_log'da" rehberi geri geldi → yalnız D6 · **41/42**). Taban **42/42**. Pinli `--modul` (`ab37296`) lanesi **14/42** (öncesi 14/35).
+- ⭐ Docstring = MCP `tools/list` açıklaması. Gerçek SDK ile ölçüldü (2026-09-13): `FastMCP().tool()(Q.adt_sql_query)` + `list_tools()` → açıklamada 7/7 çapa. CI'da SDK yoksa fixture köprüsü yalnız `__doc__` okur; açıklama üretimini ölçmez.
+- ⛔ Canlı yeniden ölçüm (yalnız SELECT, DEV): proje kökünün `.conn_adt`'i `CLAUDE_PROJECT_DIR` ile verilir. Worktree kökündeki `.conn_adt` **yer tutucudur** (2026-09-13 ölçüldü); kopyalama.
+- ⛔ SAP'nin 400/500 sebep metni MCP aracında görünmez; araç yalnız `[ERROR] SQL query error: [kod] Failed to run query` satırını taşır. Gövde için `client.adt_client.run_query` çağrısının `SAPADTError.response_text` alanını oku.
+- ⚠ Bir 500'den hemen sonraki 400 "Session Timed Out" olabilir (2/2 vaka). Biçim hükmü vermeden aynı sorguyu bir kez tekrarla. Tekrarlanamayan kayıt iddiaları docstring'de `TEKRARLANAMAYANLAR` başlığının altında durur; D7 onları kural listesine taşımayı kırmızı yapar.
+
+**(b) Q193② — şablon + üretici birlikte (`sablon_zorunlu_maddeler` A4–A8 · M4–M7)**
+- A6/A7 **gerçek** `bootstrap_package.main()`'i geçici ağaçta koşar (argparse; `--templates-root` ve `--source-root` mutlak) ve **gerçek** `check_package_naming.validate_package`'i boş `.clas.abap` dosyalarıyla çağırır. Taban **14 senaryo + 7 mutasyon**.
+- M5/M6 bootstrap kaynağını BELLEKTE bozar (diske yazmaz; `__file__` gerçek yolda kalır, yoksa `utils` importu kopar). M4/M7 şablonu diske yazar ve kalıntı kontrolü basar.
+- ⭐ Eski-kod karşıtlığı: `git show 4b05609:` ile eski şablon ve bootstrap alınır. Fixture modülü import edilir, `TMPL` globali kum kopyasına çevrilir, `senaryolar(lint, boot_src=<eski>)` koşulur. Beklenen:
+  - eski şablon + eski bootstrap **9/14** (A4–A8 düşer)
+  - yeni şablon + eski bootstrap **11/14** (A6–A8: yer tutucu harfiyen yazılır)
+  - eski şablon + yeni bootstrap **11/14** (A4, A5, A7)
+  - ⇒ şablon ve üretici **atomik** değişmeli.
+- ⚠ Eski şablon A6'da da düşer: 2026-08-29 notu `{PKG_NOZ}` metnini taşıyordu ve bootstrap onu üretilen `.rules.md`'ye harfiyen yazıyordu (gizli kusur; not kapanınca gitti).
+- 3. bağlam (salt-okur): tüketici projedeki her `classes/` paketinin adıyla bootstrap + gerçek validator koşulur. Sonuç: yeni biçimde 20 pakette tek red BAdI implementasyonu `ZCL_IM_*` (eskide de red); eski biçimde 43 gerçek `ZCL_<Z'siz>_*` sınıfı red.
+- `scripts/bootstrap_package.py` `run_fixture_tests` HARİTA'sında YOK (2026-09-13) ⇒ yalnız bootstrap değişen bir PR bu korpusu otomatik seçmez; kardeşi elle ver.

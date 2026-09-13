@@ -770,6 +770,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("templates/new-package/.rules.md.tmpl", ("O:sablon_zorunlu_maddeler",),
      "DTEL/Domain öneki `_E_`/`_D_` — kaynak otorite `standards/01-naming.md` §4.4.5; "
      "şablon kusuru HER yeni pakete miras kalır"),
+    ("scripts/bootstrap_package.py", ("O:sablon_zorunlu_maddeler",),
+     "şablonun yer tutucu haritası (Q193② {PKG_NOZ}) — çözülmeyen yer tutucu üretilen "
+     ".rules.md'ye harfiyen yazılır; fixture gerçek main()'i koşar"),
     ("standards/01-naming.md", ("O:sablon_zorunlu_maddeler",),
      "§4.4.5 DDIC önek tablosu ŞABLONUN OTORİTESİDİR — korpus önekleri buradan OKUR"),
     ("claude/templates/spawn-brief.md", ("O:sablon_zorunlu_maddeler",),
