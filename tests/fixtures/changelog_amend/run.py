@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -48,6 +50,22 @@ spec.loader.exec_module(cpc)                                # type: ignore[union
 
 INFRA = "scripts/validators/check_sentetik.py"
 CHLOG = cpc.CHANGELOG_PATH
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def _kos(*a, cwd):
@@ -86,6 +104,13 @@ def _gate_bloklar_mi(depo: Path) -> bool:
 
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="chlog_amend_"))
+    try:
+        return _main(tmp)
+    finally:
+        _sil(tmp)                                    # Q319: git nesneleri salt-okur; kum birikiyordu
+
+
+def _main(tmp: Path) -> int:
     sonuc: list[tuple[str, bool, str]] = []
 
     # ── K1 + K2 + S1: taze dal (HEAD == origin/main) ────────────────────────────

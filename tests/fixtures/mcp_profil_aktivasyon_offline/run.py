@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,22 @@ PROFIL = KOK / "mcp_servers" / "sap_adt" / "_profile.py"
 
 PROJE_YAML = ("sap_profile: {p}\nrelease: '2025'\nmaster_language: TR\n"
               "source_root: SOURCE_CODES\n")
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def _kum(profil: str | None) -> Path:
@@ -356,7 +373,7 @@ def main() -> int:
             continue
         finally:
             if izole is not None:
-                shutil.rmtree(izole, ignore_errors=True)
+                _sil(izole)                          # Q319: kopyalanan agac salt-okur
         print("  [%s] %s" % ("YAKALANDI" if yakalandi else "KACTI", ad))
         if yakalandi:
             print("         kiran senaryo(lar): %s" % ", ".join(kacan[:3]))

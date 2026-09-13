@@ -17,6 +17,8 @@ Kosucu: tests/run_fixture_tests.py (OZEL_TESTLER)
 from __future__ import annotations
 
 import os
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -34,6 +36,22 @@ HOOKS_DIR = REPO / "scripts" / "git-hooks"
 CHANGELOG = "governance/infra-changelog.md"
 
 SONUC: list[tuple[bool, str]] = []
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def kontrol(ad: str, kosul: bool, detay: str = "") -> None:
@@ -91,7 +109,13 @@ def main() -> int:
         print(f"DOGRULANAMADI: gate bulunamadi {GATE}")
         return 1
     kok = sandbox_kur()
+    try:
+        return _main(kok)
+    finally:
+        _sil(kok)                                    # Q319: git nesneleri salt-okur; kum birikiyordu
 
+
+def _main(kok: Path) -> int:
     # --- S1 BOZUK: infra kodu staged, changelog YOK -> BLOK
     yaz(kok, "scripts/hooks/ornek_hook.py", "# v2 davranis degisti\nprint('merhaba')\n")
     git(kok, "add", "scripts/hooks/ornek_hook.py")

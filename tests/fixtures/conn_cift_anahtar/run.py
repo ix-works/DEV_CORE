@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -50,8 +52,31 @@ except Exception as exc:                                   # pragma: no cover
     raise SystemExit(f"[fixture-hatasi] dotenv yok (sessiz gecme YOK): {exc}")
 
 
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def _dene(ad: str, icerik: str, beklenen_tier: str) -> tuple:
     d = Path(tempfile.mkdtemp(prefix="conn_fx_"))
+    try:
+        return _dene_kumda(ad, icerik, beklenen_tier, d)
+    finally:
+        _sil(d)                                      # Q319: koşum başına 6 kum birikiyordu
+
+
+def _dene_kumda(ad: str, icerik: str, beklenen_tier: str, d: Path) -> tuple:
     (d / ".conn_adt").write_text(icerik, encoding="utf-8")
     os.environ.pop("ADT_SAP_TIER", None)
     # ⛔ K4 SINIFI, IKINCI UYE (2026-08-20 olculdu): asagidaki `sal.get_conn_path`

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -31,6 +32,22 @@ for _s in (sys.stdout, sys.stderr):
 
 KOK = Path(__file__).resolve().parents[3]
 SONUC: list[tuple[str, bool, str]] = []
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def kontrol(ad: str, ok: bool, detay: str = "") -> None:
@@ -123,7 +140,7 @@ kontrol("V6 sözleşme: changed_apps() -> (list, list) ikilisi döner",
         f"dönen tip={type(ham).__name__}")
 
 for d in (TEK.parent, COK.parent, BOS.parent, DEGIL):
-    shutil.rmtree(d, ignore_errors=True)
+    _sil(d)                                          # Q319: .git/objects salt-okur
 
 gecen = sum(1 for _, ok, _ in SONUC if ok)
 for ad, ok, detay in SONUC:

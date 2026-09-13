@@ -60,6 +60,9 @@ Kosum: python tests/fixtures/populate_ddic_fail_closed/run.py     (exit 0 = PASS
 from __future__ import annotations
 
 import io
+import os
+import shutil
+import stat
 import subprocess
 import sys
 import types
@@ -75,6 +78,22 @@ HERE = Path(__file__).resolve().parent
 CORE = HERE.parents[2]
 SCRIPTS = CORE / "scripts"
 GATE_DTEL = SCRIPTS / "validators" / "check_dtel_creation_labels.py"
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
 
 YOLLAR = {
     "dom": SCRIPTS / "populate_domains.py",
@@ -639,11 +658,17 @@ MUTASYONLAR = [
 def main() -> int:
     import tempfile
 
+    tmp = Path(tempfile.mkdtemp(prefix="pddic_"))
+    try:
+        return _main(tmp)
+    finally:
+        _sil(tmp)                                    # Q319: kum birikiyordu
+
+
+def _main(tmp: Path) -> int:
     print("=" * 78)
     print("populate_ddic_fail_closed — normalizasyon sinifi + uc-degerli varlik sondasi")
     print("=" * 78)
-
-    tmp = Path(tempfile.mkdtemp(prefix="pddic_"))
 
     mods = {k: load(k) for k in YOLLAR}
     sonuc = senaryolar(mods, tmp)

@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -46,6 +48,22 @@ sys.modules["gc_fx"] = g
 spec.loader.exec_module(g)                                  # type: ignore[union-attr]
 
 
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def _kos(*a, cwd=None):
     return subprocess.run(list(a), cwd=str(cwd) if cwd else None,
                           capture_output=True, text=True)
@@ -53,6 +71,13 @@ def _kos(*a, cwd=None):
 
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="wt_bl_"))
+    try:
+        return _main(tmp)
+    finally:
+        _sil(tmp)                                    # Q319: ana depo + worktree; git nesneleri salt-okur
+
+
+def _main(tmp: Path) -> int:
     ana = tmp / "ana"
     ana.mkdir()
     _kos("git", "init", "-q", ".", cwd=ana)

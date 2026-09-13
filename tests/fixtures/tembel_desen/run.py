@@ -48,6 +48,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -68,6 +70,22 @@ if not (REPO / "scripts").is_dir():
 SENTETIK = "SENTETIK" + "_MUSTERI_ADI"
 # Yapisal e-posta capasi (T7) — literal DEGIL, parcalardan kurulur (yukaridaki tuzak notu).
 SENTETIK_EPOSTA = "birisi" + "@" + "ornek-firma" + ".com"
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def _yukle(ad: str, yol: Path):
@@ -123,6 +141,13 @@ def main() -> int:
 
     # Sentetik proje kokU: blocklist'i olan, ama gercek hicbir depoya dokunmayan bir agac.
     tmp = Path(tempfile.mkdtemp(prefix="tembel_"))
+    try:
+        return _kumda(g, tmp)
+    finally:
+        _sil(tmp)                                    # Q319: kum birikiyordu
+
+
+def _kumda(g, tmp: Path) -> int:
     proje = tmp / "proje"
     (proje / ".claude").mkdir(parents=True)
     (proje / ".claude" / "genericize-blocklist.txt").write_text(

@@ -47,9 +47,13 @@ Mutant BUGÜNKÜ kaynaktan üretilir; desen bulunamazsa koşucu SAYI RAPORLAMADA
 """
 from __future__ import annotations
 
+import atexit
 import contextlib
 import importlib.util
 import io
+import os
+import shutil
+import stat
 import sys
 import tempfile
 import types
@@ -129,6 +133,22 @@ FP_METIN = (
     "  // include si_kna1 not null;\n"                # yorum satiri
 )
 
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 SONUC: list[tuple[str, bool, str]] = []
 
 
@@ -200,6 +220,7 @@ kontrol("N2 ⭐ 5 disputed KNA1 alanının 5'i de çözülen zincirde BULUNUYOR"
 
 # ── N3 — UÇTAN UCA: sahte `[BULGU]` üretilmiyor (asıl kullanıcı-görünür sonuç) ───
 sb = Path(tempfile.mkdtemp(prefix="cstf_"))
+atexit.register(_sil, sb)    # Q319: modul duzeyi betik; sys.exit yollari da kapsanir
 art = sb / "ZSD001_TEST_DDL.cds"
 art.write_text("define view ZTest as select from kna1 {\n  " +
                ",\n  ".join(f"kna1.{f}" for f in DISPUTED) + "\n}\n", encoding="utf-8")

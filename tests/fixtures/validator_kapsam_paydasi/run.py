@@ -48,6 +48,7 @@ from __future__ import annotations
 import ast
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -114,6 +115,22 @@ IHLALLI_AGAC["SOURCE_CODES/SD/ZTEST/ZTEST.bdef"] = (
 IHLALLI_AGAC["SOURCE_CODES/SD/ZTEST/ui/webapp/view/List.view.xml"] = (
     '<mvc:View xmlns:mvc="sap.ui.core.mvc" xmlns="sap.m">\n'
     '  <Table id="tbl"/>   <!-- sap.m.Table = liste-grid ihlali -->\n</mvc:View>\n')
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def _izole_agac() -> Path:
@@ -326,7 +343,7 @@ def main() -> int:
             continue
         finally:
             if izole is not None:
-                shutil.rmtree(izole, ignore_errors=True)
+                _sil(izole)                          # Q319: kopyalanan scripts/ salt-okur
         print("  [%s] %s" % ("YAKALANDI" if yakalandi else "KACTI", ad))
         if yakalandi:
             print("         kiran senaryo(lar): %s" % ", ".join(kacan[:3]))

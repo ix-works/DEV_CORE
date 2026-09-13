@@ -125,6 +125,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -153,9 +154,25 @@ def _tmp(onek: str = "d7imza_") -> Path:
     return d
 
 
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def temizle() -> None:
     for d in _GECICI:
-        shutil.rmtree(d, ignore_errors=True)
+        _sil(d)                                      # Q319: kopyalanan scripts/ salt-okur
 
 
 def dur(mesaj: str) -> None:

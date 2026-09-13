@@ -9,6 +9,9 @@ N: şişkin (>200 soyulmuş satır) + blok-tekrarlı ağaç → WARN'lar; defaul
 """
 from __future__ import annotations
 
+import os
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -25,6 +28,22 @@ V = REPO / "scripts" / "validators" / "check_instruction_budget.py"
 SONUC: list[tuple[bool, str]] = []
 
 
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def kontrol(ad: str, kosul: bool, detay: str = "") -> None:
     SONUC.append((kosul, f"{ad}{(' -> ' + detay) if detay else ''}"))
 
@@ -37,6 +56,13 @@ def kos(kok: Path, *args: str) -> tuple[int, str]:
 
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="bud_fix_"))
+    try:
+        return _main(tmp)
+    finally:
+        _sil(tmp)                                    # Q319: kum birikiyordu
+
+
+def _main(tmp: Path) -> int:
 
     # --- P: temiz ağaç
     p = tmp / "temiz"

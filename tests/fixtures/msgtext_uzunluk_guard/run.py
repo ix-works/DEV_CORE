@@ -42,6 +42,9 @@ Kosum: python tests/fixtures/msgtext_uzunluk_guard/run.py     (exit 0 = PASS)
 from __future__ import annotations
 
 import io
+import os
+import shutil
+import stat
 import sys
 import types
 from pathlib import Path
@@ -61,6 +64,22 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 _mod_refs: list = []   # GC-koruma: modulun kurdugu stdout wrapper'lari
+
+
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 class _SahteClient:
@@ -352,11 +371,17 @@ MUTASYONLAR = [
 def main() -> int:
     import tempfile
 
+    tmp = Path(tempfile.mkdtemp(prefix="msgtext_guard_"))
+    try:
+        return _main(tmp)
+    finally:
+        _sil(tmp)                                    # Q319: kum birikiyordu
+
+
+def _main(tmp: Path) -> int:
     print("=" * 78)
     print("msgtext_uzunluk_guard — T100-TEXT (CHAR 73) fail-closed korpusu")
     print("=" * 78)
-
-    tmp = Path(tempfile.mkdtemp(prefix="msgtext_guard_"))
 
     mod = load()
     sonuc = senaryolar(mod, tmp)

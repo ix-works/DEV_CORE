@@ -48,8 +48,11 @@ Kosum: python tests/fixtures/gevsetme_pozitif_kontrol/run.py     (exit 0 = PASS)
 """
 from __future__ import annotations
 
+import atexit
+import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -68,7 +71,24 @@ VALIDATORS = CORE / "scripts" / "validators"
 ITG = VALIDATORS / "check_itg_signoff.py"
 FSLOG = VALIDATORS / "check_fs_no_analysis_log.py"
 
+def _sil(d: Path) -> None:
+    """Q319: Windows'ta salt-okur girdi `rmtree(ignore_errors=True)` ile SESSİZCE kalır."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 TMP = Path(tempfile.mkdtemp(prefix="gevsetme_"))
+atexit.register(_sil, TMP)   # Q319: modul duzeyi kum (fsagac_ kumlari kendi finally'sinde siliniyordu, bu DEGIL)
 
 
 def kos_itg(metin: str, validator: Path = ITG) -> tuple[int, str]:
