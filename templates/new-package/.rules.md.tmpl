@@ -13,7 +13,7 @@ status: active
 |---|---|---|
 | Program | `{PKG}_P_*` | `^{PKG}_P_[A-Z0-9_]+$` |
 | Include | `{PKG}_I_*` | `^{PKG}_I_[A-Z0-9_]+$` |
-| Class | `{PKG}_CL_*` veya `ZCL_{PKG}_*` | `^({PKG}_CL_\|ZCL_{PKG}_)[A-Z0-9_]+$` |
+| Class | `ZCL_{PKG_NOZ}_*` veya `{PKG}_CL_*` (legacy) | `^(ZCL_{PKG_NOZ}_\|{PKG}_CL_)[A-Z0-9_]+$` |
 | Function Group | `{PKG}_FG_*` | `^{PKG}_FG_[A-Z0-9_]+$` |
 | Function Module | `{PKG}_FM_*` | `^{PKG}_FM_[A-Z0-9_]+$` |
 | CDS Root View | `{PKG}_C_*` | `^{PKG}_C_[A-Z0-9_]+$` |
@@ -29,39 +29,31 @@ status: active
 
 > Validator: `scripts/validators/check_package_naming.py` bu regex'leri okuyup `cds/`, `classes/`, `programs/`, vb. altındaki dosya adlarını doğrular.
 
-> ⚠ **AÇIK KARAR — `Class` satırının 2. biçimi (ölçüldü 2026-08-29, karar BEKLİYOR).**
-> ⓘ Bu not 2026-08-29'a kadar **iki** ekseni taşıyordu. **Message Class ekseni KAPANDI**
-> (aşağıdaki ✅ kaydı). Geriye **Class** ekseni kaldı; açık kalma sebebi bir tercih değil,
-> **şablon dilinin bu değeri ifade edememesidir**.
+> ✅ **KAPANDI — `Class` satırının 2. biçimi hizalandı (2026-09-13, Q193②; kullanıcı kararı
+> 2026-08-29: *"şablonu canlı desene uydur"*).** Satır 2026-09-13'e kadar `{PKG}_CL_*` veya
+> **`ZCL_{PKG}_*`** diyordu (ör. `ZCL_ZSD001_*`) ve bir `⚠ AÇIK KARAR` notu taşıyordu. Artık
+> **`ZCL_{PKG_NOZ}_*`** (ör. `ZCL_SD001_*`) + legacy `{PKG}_CL_*`.
 >
-> | | Message Class | Class (2. biçim) |
-> |---|---|---|
-> | **Bu şablon** | `{PKG}_MSG` veya `{PKG}` ✅ hizalandı | `ZCL_{PKG}_*` (ör. `ZCL_ZSD001_*`) |
-> | **`standards/01-naming.md`** | §4.4.5 `MSG` ✅ hizalandı | §4.4.3 notu: **`ZCL_<PKG#>_*`** |
-> | **Canlı kullanım** | `{PKG}_MSG` (yeni) · `{PKG}` (legacy) | `ZCL_<PKG'nin Z'siz hâli>_*` (ör. `ZCL_SD001_*`) |
+> **Otorite:** `standards/01-naming.md` §4.4.3 notu ve `standards/05-coding-rap.md` §4
+> **`ZCL_<PKG#>_<ad>`** (ör. `ZCL_SD001_ORDER`) der ve `{PKG}_CL_*` desenini **LEGACY** ilan
+> eder ⇒ bu eksende sapan taraf şablondu, standart değil.
 >
-> **Ölçüm — Class (bu core'u tüketen proje ağaçları, salt-okur):** 64 `*.clas.abap`
-> artefaktı: `{PKG}_CL_*` **25 dosya / 14 paket**, `ZCL_<Z'siz>_*` **39 dosya / 6 paket**,
-> şablonun `ZCL_{PKG}_*` biçimi **0 dosya / 0 paket** (bugüne dek HİÇ kullanılmamış).
-> ⚠ `core/` **paylaşılandır**; bu sayılar **bu makinedeki proje ağaçlarıyla** sınırlıdır.
+> **Ölçüm (bu makinedeki proje ağaçları, salt-okur, 2026-09-13; `ref_docs/` hariç):** 70
+> `*.clas.abap` / 20 paket: `ZCL_<Z'siz>_*` **44** · `{PKG}_CL_*` **25** · eski şablon biçimi
+> `ZCL_Z<...>NNN_*` **0** · diğer **1** (BAdI implementasyonu `ZCL_IM_*` — iki biçime de
+> uymaz, paket istisnası olarak yazılır). *(2026-08-29 ölçümü: 64 dosya — 39 / 25 / 0.)*
 >
-> ⭐ **YENİ KANIT (ölçüldü 2026-08-29) — standart bu eksende ZATEN canlı desenle aynı şeyi
-> söylüyor:** `standards/01-naming.md` §4.4.3'ün altındaki not ve `standards/05-coding-rap.md`
-> §4 **`ZCL_<PKG#>_<ad>`** (ör. `ZCL_SD001_ORDER`) diyor **ve** `{PKG}_CL_*` desenini açıkça
-> **LEGACY** ilan ediyor. ⇒ Bu eksende sapan taraf **standart değil, bu şablondur**.
+> **Neden 2026-08-29'da yapılamamıştı:** şablon dili değeri ifade edemiyordu —
+> `scripts/bootstrap_package.py`'nin yer-tutucu haritasında paket adının baştaki Z'si
+> atılmış hâli yoktu. Haritaya **`PKG_NOZ`** eklendi (`pkg_noz_turet`: YALNIZ büyük `Z`
+> atılır; `Y`/öneksiz adda değer değişmez ve araç `[BİLGİ]` basar — `YSD001` → `SD001`
+> olsaydı sınıf deseni `ZSD001` paketinin ad alanına düşerdi).
 >
-> **Neden bu turda düzeltilmedi — YER TUTUCU YOK:** `ZCL_SD001_*` için `{PKG}`'nin **baştaki
-> Z'si atılmış** hâli gerekir. `scripts/bootstrap_package.py`'nin yer-tutucu haritası ölçüldü:
-> `PKG` · `PKG_FULL` · `TITLE` · `MODULE` · `DATE` · `OWNER` — bu değeri üreten yer tutucu
-> **yok** ve `PKG = pkg_full.replace("_CLC","")` (ör. `ZSD001`). Şablon dili bunu **ifade
-> edemez**; uydurmak yerine sınır yazıldı. Çözüm: `bootstrap_package.py`'ye `PKG_NOZ`
-> eklemek, sonra bu satırı `ZCL_{PKG_NOZ}_*` yapmak (o dosya 2026-08-29 turunun kapsamı
-> DIŞINDAYDI — sahibi başka bir parttı).
->
-> **O gün gelene kadar ne yapılmalı:** paket gerçekten `ZCL_<Z'siz>_*` kullanacaksa yukarıdaki
-> tabloya **AYRI bir satır** ekle (canlı emsal: `| RAP Behavior Class | ``ZCL_SD001_*`` |
-> ``^ZCL_SD001_[A-Z0-9_]+$`` |`). Validator aynı klasöre eşlenen TÜM regex'leri **VEYA**'lar,
-> yani ek satır mevcut `Class` satırını bozmaz.
+> ⚠ **Kabul kümesi değişti (⚠GEVŞETME + SIKILAŞTIRMA, kullanıcı onaylı):** yeni pakette
+> `ZCL_SD001_*` **KABUL** (önceden RED), `ZCL_ZSD001_*` **RED** (önceden KABUL; canlı
+> kullanımı 0). `{PKG}_CL_*` legacy olarak geçerli kalır (canlı dosya var, rename YOK).
+> ⛔ Mevcut paketlerin `.rules.md`'leri bu değişiklikten ETKİLENMEZ — şablon yalnız yeni
+> pakete kopyalanır. Eski satırı taşıyan bir paket elle düzeltilir.
 
 > ✅ **KAPANDI — `Message Class` satırı `{PKG}` → `{PKG}_MSG` (2026-08-29, kullanıcı kararı).**
 > Bu satır 2026-08-29'a kadar çıplak `{PKG}` yazıyordu, `standards/01-naming.md` §4.4.5 ise

@@ -10,6 +10,7 @@ Yapılanlar:
 2. templates/new-package/ içeriğini kopyalar
 3. Placeholder'ları doldurur:
    - {PKG} → ZSD001
+   - {PKG_NOZ} → SD001  (baştaki `Z` atılmış; sınıf biçimi `ZCL_{PKG_NOZ}_*` için — bkz. pkg_noz_turet)
    - {PKG_FULL} → ZSD001_CLC
    - {TITLE} → "Sevkiyat Optimizasyon"
    - {MODULE} → SD
@@ -50,6 +51,21 @@ def get_git_user() -> str:
         return "UNKNOWN"
 
 
+def pkg_noz_turet(pkg: str) -> str:
+    """`{PKG_NOZ}`: paket kısa adının BAŞTAKİ `Z`'si atılmış hâli (`ZSD001` → `SD001`).
+
+    Neden (Q193②, 2026-09-13): sınıf adı standardı `ZCL_<PKG#>_*`'dir (`standards/01-naming.md`
+    §4.4.3 notu + `standards/05-coding-rap.md` §4, ör. `ZCL_SD001_ORDER`). Şablon bunu
+    `{PKG}` ile yazamıyordu (`ZCL_{PKG}_*` → `ZCL_ZSD001_*`, canlıda 0 kullanım).
+
+    ⛔ YALNIZ büyük `Z` atılır. `Y` ATILMAZ: `YSD001` → `SD001` olsaydı sınıf deseni
+    `ZCL_SD001_*` olur ve `ZSD001` paketinin ad alanına düşerdi. ADR 0002 paket adını
+    `ZSD<NNN>_CLC` olarak sabitler (Y/öneksiz ad zaten `main()`de UYARI alır); öyle bir adda
+    değer DEĞİŞMEZ ve şablonun `ZCL_{PKG_NOZ}_*` satırı elle düzeltilmelidir.
+    """
+    return pkg[1:] if len(pkg) > 1 and pkg[0] == "Z" else pkg
+
+
 def substitute(text: str, mapping: dict) -> str:
     """Placeholder'ları değiştirir: {KEY} → değer."""
     for key, val in mapping.items():
@@ -86,6 +102,11 @@ def main() -> int:
         )
 
     pkg_short = pkg_full.replace("_CLC", "")
+    pkg_noz = pkg_noz_turet(pkg_short)
+    if pkg_noz == pkg_short:
+        print(f"[BİLGİ] PKG_NOZ = PKG ('{pkg_short}' büyük Z ile başlamıyor): .rules.md'deki "
+              f"`ZCL_{{PKG_NOZ}}_*` sınıf satırı `ZCL_{pkg_short}_*` üretir — ad alanına uymuyorsa "
+              f"satırı elle düzelt.", file=sys.stderr)
     # Güvenli-varsayılan: kimlik gömme. Gerçek ad ancak AÇIKÇA istenirse yazılır.
     if args.owner:
         owner = args.owner
@@ -99,6 +120,7 @@ def main() -> int:
 
     mapping = {
         "PKG": pkg_short,
+        "PKG_NOZ": pkg_noz,
         "PKG_FULL": pkg_full,
         "TITLE": args.title,
         "MODULE": args.module,

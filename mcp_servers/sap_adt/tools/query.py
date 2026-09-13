@@ -663,7 +663,8 @@ def adt_sql_query(
 
     `adt_table_read` yalnız `SELECT * FROM tablo` yapar (WHERE yok); bu tool ADT Data
     Preview freestyle (`/datapreview/freestyle`) ile tam OpenSQL SELECT'i koşar:
-    WHERE, JOIN, GROUP BY, COUNT/SUM. INTO/UP TO **YAZMA** — SAP kendi ekler.
+    WHERE, JOIN, GROUP BY, COUNT/SUM (başka kolonla birlikte aggregate'e ALIAS şart — madde 4).
+    INTO/UP TO **YAZMA** — SAP kendi ekler.
 
     Guard'lar:
       • **SELECT-only (ADR 0005-B):** SELECT/WITH ile başlamalı; yazma/DDL keyword'ü
@@ -689,8 +690,50 @@ def adt_sql_query(
          `adt_inactive_objects`'i bugün `SELECT obj_name, object, delflag FROM tadir` koşuyor.
          **Kapsamı ÖLÇÜLMEDİ.** 400 alırsan şüpheli kolonu çıkarıp tekrar ölç.
 
-    ⇒ 400'de refleks: **ham gövdeyi oku** (`message` + `client_log`) — sebep orada yazılıdır.
-    Gövdeyi okumadan "flakiness" hipotezine geçme.
+    ⚠ **SAP'NİN 400/500 GÖVDESİ BU ARACIN ÇIKTISINA GELMEZ** (ölçüldü 2026-09-13). Taşınan
+    YALNIZ alt katmanın `[ERROR]` satırıdır (`_cagri_basarisiz` → `message` + `client_log`):
+    gövdesi *"…must have an alias name"* olan bir 400'de ham değerler
+    `client_log = "[ERROR] SQL query error: [400] Failed to run query"` ve `message` = aynı
+    satırın önüne *"sorgusu KOŞMADI — "* eklenmiş hâli oldu. HTTP kodu görünür, SEBEP görünmez.
+    Gövde alt katmanda `SAPADTError.response_text`'te durur (`scripts/sap_adt_lib.py`
+    `run_query`); `sap_client.run_sql_query` yalnız `str(e)` (= `[kod] Failed to run query`)
+    basar. 2026-08-17 metni sebebin bu iki alanda okunacağını söylüyordu — `[ERROR]` satırı
+    için doğru, SAP'nin sebep metni için DEĞİL. ⇒ 400'de refleks: aynı sorguyu körlemesine
+    TEKRARLAMA; aşağıdaki ölçülmüş biçimlerle **daralt** (tek değişken).
+
+    ⚠ **ÖLÇÜLMÜŞ BİÇİM SINIRLARI (Q274 — kayıt 2026-09-08; canlı yeniden ölçüm 2026-09-13,
+    DEV, yalnız SELECT; her satır en az 2 çağrı; sebep metinleri SAP gövdesinden):**
+
+      4. **Aggregate başka kolonla birlikteyse ALIAS ŞART.** `SELECT lgnum, COUNT(*) FROM likp
+         GROUP BY lgnum` → **400**, gövde *"all expressions in the projection list must have
+         an alias name"*. Aynısı `COUNT(*) AS cnt` ile → **200**. ⇒ Sebep `GROUP BY` DEĞİL,
+         alias'sız ifade; değer başına ayrı `COUNT` koşmaya gerek yok. Tek başına `COUNT(*)`
+         alias'lı da alias'sız da 200.
+      5. **Kolon-kolon karşılaştırmada sağ taraf `tablo~kolon` yazılır.** `WHERE vrkme <> meins`
+         (ve `= meins`) → **400**, gövde *"The variable "MEINS" must be escaped using "@""* —
+         çıplak ad host değişkeni sanılıyor. `WHERE vrkme <> lips~meins` ve
+         `WHERE lips~vrkme <> lips~meins` → **200**. Kolon-literal karşılaştırma zaten 200.
+      6. **Aralıklı 500, ardından "Session Timed Out" 400 — SORGUYA AİT DEĞİL.** Başka
+         çağrılarda 200 dönen sorgular (`SELECT land1 FROM t005`, `SELECT * FROM t320`) tek
+         seferlik **500** döndü (gövde SAP mesajı değil, HTML *"Application Server Error"*);
+         iki vakada da HEMEN SONRAKİ çağrı **400** + gövde *"400 Session Timed Out"* verdi,
+         bir sonraki normale döndü. ⇒ 500'den sonraki ilk 400'ü "sorgu reddedildi" diye okuma
+         (yukarıdaki *"400 = sorgu kabul edilmedi"* kuralının ölçülmüş istisnası); aynı sorguyu
+         BİR kez tekrarla.
+      7. **SESSİZ KIRPMA.** `row_limit=10` ile `SELECT LAND1 FROM T005` → `ok:true`,
+         `row_count:10`; aynı yanıtın `totalRows` değeri **249**, ama bu araç o alanı
+         DÖNDÜRMEZ. ⇒ `row_count == row_limit` ise sonuç KIRPILMIŞ olabilir; sayı gerekiyorsa
+         ayrıca `SELECT COUNT(*) …` koş (kayıttaki vaka: `row_limit=300` → tam 300, gerçek 994).
+      8. **Namespace'li ad TIRNAKSIZ yazılır.** `FROM /scwm/aqua` ve `FROM /SCWM/AQUA` → 200;
+         `FROM "/SCWM/AQUA"` → **400** (gövde login dilinde: geçersiz sorgu dizilimi).
+
+      ⓘ **2026-09-08'de ölçülüp 2026-09-13'te TEKRARLANAMAYANLAR — kural DEĞİL:**
+      `COUNT(*) AS CNT` → 500 (bugün 6/6 çağrı 200) · belirli bir alanda `<>` → 400
+      (`I_EWM_HANDLINGUNITHDR` `handlingunitindicator <> 'A'` bugün 2/2 200; `=` ve `<>`
+      sayıları toplamla tutarlı) · `SELECT * FROM T320` → 400 (bugün 8/8 200; bir kez 500 =
+      madde 6) · "terim bütçesi" (7 alan + 1 WHERE → 400, 14 alan → 500) — bugün `lips`'ten
+      4/6/7/8/14 alan + 1 WHERE her biri 2/2 200. Kayıttaki vakaların madde 6'nın aralıklı
+      500/oturum ikilisi olup olmadığı **DOĞRULANMADI**.
 
     Args:
         query: OpenSQL SELECT. Ör: "SELECT msgnr, text FROM t100 WHERE arbgb = 'ZSD001' AND sprsl = 'T'".

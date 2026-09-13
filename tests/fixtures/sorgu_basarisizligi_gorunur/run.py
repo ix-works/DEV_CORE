@@ -61,6 +61,7 @@ KULLANIM
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -253,7 +254,21 @@ def modul_yukle(yol: Path | None):
 # ⛔ Her DEGISMEZ kendi kolunu alir: tek kol iki katmani birden sokerse "hangi capa
 #   olcuyor" ayirt edilemez (ders: mutasyon katman sayisi kadar capa keser).
 _GECERLI_KIP = frozenset({"--mutasyon-q205", "--mutasyon-q224-kova",
-                          "--mutasyon-q224-isaret"})
+                          "--mutasyon-q224-isaret", "--mutasyon-q274-sinir",
+                          "--mutasyon-q274-govde"})
+
+# Q274 (2026-09-13): docstring BELGE mutasyonlari — `adt_sql_query.__doc__` BELLEKTE bozulur.
+# Iki degismez, iki kol: (sinir) olculmus bicim sinirlari bolumu kaybolur -> D1-D5, D7 ·
+# (govde) curutulmus "sebep message/client_log'da" rehberligi geri gelir -> D6.
+_ESKI_GOVDE_REHBERI = ("    ⇒ 400'de refleks: **ham gövdeyi oku** (`message` + `client_log`) — "
+                       "sebep orada yazılıdır.\n")
+_DOK_MUT = {
+    "--mutasyon-q274-sinir": lambda d: re.sub(
+        r"    ⚠ \*\*ÖLÇÜLMÜŞ BİÇİM SINIRLARI.*?(?=\n    Args:)", "", d, flags=re.S),
+    "--mutasyon-q274-govde": lambda d: re.sub(
+        r"    ⚠ \*\*SAP'NİN 400/500 GÖVDESİ.*?\(tek değişken\)\.\n", _ESKI_GOVDE_REHBERI,
+        d, flags=re.S),
+}
 
 
 def _eski_gecerlilik(res):
@@ -289,7 +304,17 @@ def main(modul_yolu: str | None = None, mutasyon: str | None = None) -> int:
     Q = modul_yukle(Path(modul_yolu) if modul_yolu else None)
     CONN.get_active_tier = lambda: "DEV"          # type: ignore[assignment]
     print("modul:", getattr(Q, "__file__", "?"))
-    if mutasyon:
+    if mutasyon in _DOK_MUT:
+        dok = Q.adt_sql_query.__doc__ or ""
+        bozuk = _DOK_MUT[mutasyon](dok)
+        if bozuk == dok:
+            # "KURULAMADI" != "KACTI": yama tutmadiysa SAYI RAPORLAMA.
+            sys.stderr.write("[DOGRULANAMADI] belge mutasyonu kurulamadi: docstring'de "
+                             "capa bolumu YOK (%s) -> hicbir sayi raporlanmadi.\n" % mutasyon)
+            return 3
+        Q.adt_sql_query.__doc__ = bozuk
+        print("mutasyon:", mutasyon, "-> adt_sql_query.__doc__")
+    elif mutasyon:
         ad, eski = _MUT_KOL[mutasyon]
         if not hasattr(Q, ad):
             # "KURULAMADI" != "KACTI": mutasyon kurulamadiysa SAYI RAPORLAMA.
@@ -495,6 +520,40 @@ def main(modul_yolu: str | None = None, mutasyon: str | None = None) -> int:
     kontrol("H8 3.BAGLAM worklist ucu 500 -> eski http_500 dali DEGISMEDI",
             r.get("ok") is False and r.get("error") == "http_500",
             "ok=%r error=%r" % (r.get("ok"), r.get("error")))
+
+    # ═══ D) Q274 — `adt_sql_query` OLCULMUS bicim sinirlari DOCSTRING'de ════════════
+    # Docstring = MCP `tools/list` aciklamasi (FastMCP `fn.__doc__`) ⇒ ajanin sorgu yazmadan
+    # ONCE gordugu tek metin. Capalar SAP GOVDESINDEN okunan sebep metinlerine baglidir
+    # (2026-09-13 canli yeniden olcum); tekrarlanamayan kayit iddialari KURAL olarak
+    # yazilmamali (D7).
+    # ⚠ BOSLUK NORMALIZE: docstring satir sarar ("must have\n an alias name"). Ham metinde
+    # arasaydik D1 yalniz govde paragrafindaki OZET kopyaya capalanirdi (olculdu: govde
+    # mutasyonu D1'i de dusuruyordu = iki degismez tek capada).
+    dok = " ".join((Q.adt_sql_query.__doc__ or "").split())
+    kontrol("D1 alias sarti: SAP govdesi + calisan bicim (AS cnt)",
+            "must have an alias name" in dok and "COUNT(*) AS cnt" in dok,
+            "alias=%s" % ("must have an alias name" in dok))
+    kontrol("D2 kolon-kolon: host-degiskeni govdesi + `tablo~kolon` bicimi",
+            "must be escaped using" in dok and "lips~meins" in dok,
+            "tilde=%s" % ("lips~meins" in dok))
+    kontrol("D3 aralikli 500 + 'Session Timed Out' 400 -> tekrar dene notu",
+            "Session Timed Out" in dok and "Application Server Error" in dok
+            and "tekrarla" in dok, "session=%s" % ("Session Timed Out" in dok))
+    kontrol("D4 sessiz kirpma: totalRows donmez + row_count == row_limit uyarisi",
+            "totalRows" in dok and "row_count == row_limit" in dok,
+            "kirpma=%s" % ("row_count == row_limit" in dok))
+    kontrol("D5 namespace'li ad TIRNAKSIZ (tirnakli bicim 400)",
+            'FROM "/SCWM/AQUA"' in dok and "TIRNAKSIZ" in dok,
+            "ns=%s" % ('FROM "/SCWM/AQUA"' in dok))
+    kontrol("D6 ⭐govde GELMEZ (yalniz [ERROR] satiri) + curuk rehber cumlesi YOK",
+            "GÖVDESİ BU ARACIN ÇIKTISINA GELMEZ" in dok
+            and "sebep orada yazılıdır" not in dok,
+            "curuk=%s" % ("sebep orada yazılıdır" in dok))
+    i_tek = dok.find("TEKRARLANAMAYANLAR")
+    kontrol("D7 tekrarlanamayan iddialar KURAL degil, ayri basliğin ALTINDA",
+            i_tek > 0 and all(dok.find(x) > i_tek for x in
+                              ("COUNT(*) AS CNT", "terim bütçesi", "SELECT * FROM T320")),
+            "baslik_idx=%d" % i_tek)
 
     hata = 0
     for ad, ok, detay in SONUC:
