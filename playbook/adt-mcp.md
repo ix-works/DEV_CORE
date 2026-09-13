@@ -215,6 +215,12 @@ Ayrı bir "zararsız ön-derleyici turu" **kurmaya gerek YOK** — push bunu iç
   ise `ok=False` + `syntax_errors` yanıta çıkarılır (nested kalmaz).
 - Kapsam sınırı: preaudit **class/interface** push'unda koşar; `prog`/`fugr`/`include` DIŞLANMIŞTIR
   (standalone include preaudit FAKE — `checklists/bug-checklist-backend.md` BE-46).
+- **Ölçülemedi ≠ temiz (Q312):** ön-kontrol koşmazsa (`valid=None` · kontrol istisnası yutuldu ·
+  çağrı istisnası) push **aktivasyona devam eder** — engel değildir — ama sonuç
+  `syntax_precheck='olculemedi'` + `sozdizimi_sebep` taşır. MCP yanıtı üst seviyede `syntax_precheck`
+  + `syntax_precheck_notice` verir (`ok` değişmez); CLI `push_object.py` hükmün yanına
+  `[UNVERIFIED] PUSH SOZDIZIMI ON-KONTROLU OLCULEMEDI` basar. Korpus:
+  `tests/fixtures/push_onkontrol_olculemedi`.
 
 ⇒ Doğru sıra: **push → (hata varsa dur, düzelt) → `adt_activate` → readback**. Araya elle bir
 syntax-check turu eklemek hem gereksiz hem — yukarıdaki semantiği yüzünden — **yan etkilidir**.
