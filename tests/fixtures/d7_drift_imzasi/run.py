@@ -65,7 +65,8 @@ SENARYOLAR
   E-blogu (TEK KAYNAK — sinif sessizce yeniden bolunemez)
     V16 ⭐ `_comment` normalizasyonunu YAPAN dosya `scripts/` altinda TAM 1
     V17 ⭐ iki tuketici de `utils.drift_imzasi`i import eder + `ix_doctor`da sablona
-        karsi ham-sha kiyasi KALMADI
+        karsi ham-sha kiyasi KALMADI (Q303: `team_setup.py` beyanli UCUNCU tuketici —
+        yalniz pre-commit YOK onarim metni; kume TAM esitlik, V27 literal taramasi onu da kapsar)
   F-blogu (OLCULEMEDI != TEMIZ; ortak modul yoksa)
     V18 ⭐ modul yok -> `ix_doctor` D7 FAIL + "ÖLÇÜLEMEDİ" (PASS DEGIL, SESSIZ DEGIL)
     V19 ⭐ modul yok -> `session_start` sorun listesi BOS DEGIL + "OLCULEMEDI"
@@ -632,15 +633,22 @@ def main() -> int:
           yapan == ["scripts/utils/drift_imzasi.py"], f"yapan={yapan}")
     ix_src = (kok / "scripts" / "ix_doctor.py").read_text(encoding="utf-8")
     ham_kiyas = "hashlib.sha256(p.read_bytes())" in ix_src or "def _sha16" in ix_src
-    kayit("V17 ⭐ iki tuketici de ortak modulu import eder + ix_doctor'da ham-sha kiyasi YOK",
-          set(tuketici) == {"scripts/ix_doctor.py", "scripts/hooks/session_start.py"}
+    # Q303 (2026-09-13): `team_setup.py` UCUNCU tuketici — yalniz `D7_CIFTLERI`in pre-commit
+    # YOK onarim metnini okur (imza hesaplamaz). Kume TAM esitlik olarak kalir: beyansiz yeni
+    # bir tuketici hala V17'yi dusurur.
+    kayit("V17 ⭐ tuketiciler (iki D7 kapisi + team_setup onarim metni) ortak modulu import "
+          "eder + ix_doctor'da ham-sha kiyasi YOK",
+          set(tuketici) == {"scripts/ix_doctor.py", "scripts/hooks/session_start.py",
+                            "scripts/team_setup.py"}
           and not ham_kiyas,
           f"tuketici={sorted(tuketici)} ham_sha_kaldi={ham_kiyas}")
     # Q245② — CIFT LISTESI de tek kaynakta: tuketicilerde literal `ciftler = [` YOK, sablon
     # yolu (`pre-commit.template`) tuketicide GECMEZ, `D7_CIFTLERI` yalniz ortak modulde.
     ss_src = (kok / "scripts" / "hooks" / "session_start.py").read_text(encoding="utf-8")
+    ts_src = (kok / "scripts" / "team_setup.py").read_text(encoding="utf-8")
     ortak_src = (kok / "scripts" / "utils" / "drift_imzasi.py").read_text(encoding="utf-8")
-    literal = [ad for ad, s in (("ix_doctor", ix_src), ("session_start", ss_src))
+    literal = [ad for ad, s in (("ix_doctor", ix_src), ("session_start", ss_src),
+                                ("team_setup", ts_src))
                if "ciftler = [" in s or "pre-commit.template" in s]
     kayit("V27 ⭐ D7 cift listesi TEK KAYNAK: tuketicilerde literal liste/sablon yolu YOK, "
           "`D7_CIFTLERI` ortak modulde pre-commit'i tasir",

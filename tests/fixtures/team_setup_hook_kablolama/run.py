@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""E-05 — overlay ONAY KAPISI git-hook kablolamasini DURDURMAMALI.
+"""E-05 — overlay ONAY KAPISI git-hook kablolamasini DURDURMAMALI (+ Q303 onarim metni).
 
 KUSUR (2026-08-01 bug-avi, `E-05`; 2026-08-28'de duzeltildi):
 `team_setup.main()` icinde `if not junctions(...): return 1` vardi. `junctions()`
@@ -21,17 +21,32 @@ UC AYAK:
   POZITIF - overlay YOKken normal kurulum akisi BOZULMADI (her iki surumde de rc=0
   KONTROL   ve hooksPath set) => fix "hatayi yutarak" calismiyor.
 
+Q303 (2026-09-13) — `hookspath_proje`nin "pre-commit yok" uyarisi operatoru
+`init_project --force`a yolluyordu; `--force` CLAUDE.md · README.md · project.yaml ·
+governance/infra-findings.md dahil HER uretilen dosyayi ezer. Yeni metin D7'nin tek
+kaynagindan (`utils.drift_imzasi.D7_CIFTLERI`) okunur: sablondan KOPYALA -> kurulumu
+yeniden kos. Vektorler:
+  Q1 fix: satir tek dosyalik onarimi gosterir, `--force` ONERMEZ (yalniz "KULLANMA" uyarisi)
+  Q2 taban (Q303 fix'i SOKULMUS guncel kaynak): eski oneri geri gelir -> KIRMIZI ayak canli
+  Q3 metin TEK KAYNAK: satir `D7_CIFTLERI`deki pre-commit YOK metnini AYNEN tasir
+  Q4 onarim GERCEKTEN isler: mesajdaki iki yol projede cozulur; sablon kopyalanip kurulum
+     yeniden kosulunca hooksPath set ve uyari kaybolur
+  Q5 3. BAGLAM — git WORKTREE'si olan proje (`.git` DOSYA): ayni metin + ayni onarim
+
 ⛔ Bu korpus SAP'ye baglanmaz, ag kullanmaz. Sandbox proje temp dizindedir.
 
 Kosum:
     python tests/fixtures/team_setup_hook_kablolama/run.py
     python tests/fixtures/team_setup_hook_kablolama/run.py --mutasyon-erken-donus
+    python tests/fixtures/team_setup_hook_kablolama/run.py --mutasyon-force-onerisi
 """
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -46,6 +61,8 @@ for _a in (sys.stdout, sys.stderr):
 CORE = Path(__file__).resolve().parents[3]
 TS = CORE / "scripts" / "team_setup.py"
 TABAN_AD = "_zz_taban_team_setup.py"   # gecici; finally'de SILINIR
+TABAN_Q303_AD = "_zz_taban_q303_team_setup.py"
+MUT_AD = "_zz_mut_team_setup.py"
 
 SONUC: list[tuple[bool, str]] = []
 
@@ -53,6 +70,13 @@ SONUC: list[tuple[bool, str]] = []
 # (kablolama adimlari yine kosar). Taban/mutasyon bu capayi SOKER.
 _E05_CAPA = ("    kurulum_ok = junctions(proje, overlay_onayli=a.overlay_onayli)\n"
              "    if not kurulum_ok:\n")
+
+# Q303 fix'inin CAPASI: uyari metni tek kaynaktan gelir. Taban/mutasyon eski literali geri koyar.
+_Q303_CAPA = ('        say(WARN, f"proje scripts/git-hooks/pre-commit yok — '
+              '{_precommit_yok_onarimi()}")\n')
+_Q303_ESKI = ('        say(WARN, "proje scripts/git-hooks/pre-commit yok — '
+              'init_project --force ile üret")\n')
+_PC_SABLON_REL = "core/claude/git-hooks/pre-commit.template"
 
 
 def _fix_sok(kaynak: str, nicin: str) -> str:
@@ -75,17 +99,59 @@ def _fix_sok(kaynak: str, nicin: str) -> str:
         "    if not kurulum_ok:\n", 1)
 
 
+def _q303_sok(kaynak: str, nicin: str) -> str:
+    """Guncel team_setup.py'den Q303 fix'ini SOK (eski `--force` onerisi geri gelir).
+
+    E-05 ile ayni sozlesme: girdi GUNCEL dosya (git gecmisi degil); capa yoksa GURULTULU dur.
+    """
+    if _Q303_CAPA not in kaynak:
+        raise SystemExit(
+            f"TABAN URETILEMEDI ({nicin}): Q303 capasi (`_precommit_yok_onarimi()` cagrisi) "
+            f"team_setup.py icinde bulunamadi. _Q303_CAPA'yi GUNCELLE.")
+    return kaynak.replace(_Q303_CAPA, _Q303_ESKI, 1)
+
+
+def _d7_precommit_yok_metni() -> str:
+    """Tek kaynagi DOGRUDAN oku (team_setup'in cevirisine guvenmeden)."""
+    sys.path.insert(0, str(CORE / "scripts"))
+    from utils.drift_imzasi import D7_CIFTLERI  # type: ignore
+    for rel_y, _t, _ad, yok, _s in D7_CIFTLERI:
+        if rel_y == "scripts/git-hooks/pre-commit":
+            return yok
+    raise SystemExit("D7_CIFTLERI'nde pre-commit cifti yok — Q303 tek kaynagi kayip")
+
+
+def _sil(d: Path) -> None:
+    """Windows'ta `.git/objects` SALT-OKUNUR yazilir; duz `ignore_errors` SESSIZCE basarisiz
+    olur ve `%TEMP%` altinda depo YIGAR. Desen: `precommit_kopya_surum_esligi/run.py::_sil`.
+    Q303 olcumu (2026-09-13): Q5'in `commit`i 3 salt-okur nesne birakiyordu -> koşum basina
+    1 artik `ix_e05_*` dizini (bir gunde 12). Junction'lara GIRMEZ (rmtree link'i izlemez)."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def kontrol(ad: str, kosul: bool, detay: str = "") -> None:
     SONUC.append((kosul, ad))
     print(f"  [{'OK' if kosul else 'FAIL'}] {ad}" + (f"  -- {detay}" if detay else ""))
 
 
-def sandbox_proje(kok: Path, overlay: bool, etiket: str) -> Path:
+def sandbox_proje(kok: Path, overlay: bool, etiket: str, precommit: bool = True) -> Path:
     """Sahte proje: git reposu + pre-commit dosyasi (+ istege bagli ONAY BEKLEYEN overlay)."""
     p = kok / f"proje_{etiket}"
     (p / "scripts" / "git-hooks").mkdir(parents=True)
-    (p / "scripts" / "git-hooks" / "pre-commit").write_text(
-        "#!/bin/sh\nexit 0\n", encoding="utf-8", newline="\n")
+    if precommit:
+        (p / "scripts" / "git-hooks" / "pre-commit").write_text(
+            "#!/bin/sh\nexit 0\n", encoding="utf-8", newline="\n")
     subprocess.run(["git", "init", "-q", str(p)], check=True, capture_output=True)
     # commit sart degil; hookspath_proje yalniz `.git` varligina ve dosyaya bakar.
 
@@ -119,16 +185,52 @@ def hookspath(proje: Path) -> str:
     return (r.stdout or "").strip()
 
 
+def pc_yok_satirlari(cikti: str) -> list[str]:
+    return [s for s in cikti.splitlines() if "pre-commit yok" in s]
+
+
+def tek_dosya_onarimi(satirlar: list[str]) -> bool:
+    """Q303 olcutu: TEK satir · sablon yolu + KOPYALA · `--force` yalniz 'KULLANMA' uyarisi olarak.
+
+    ⚠ Kaydin literal vektoru "metin `--force` icermez" idi; tek kaynak metni `init_project
+    --force KULLANMA` uyarisini TASIR (operatore tuzagi adiyla soyler). Olcut bu yuzden
+    ONERIYI yakalar: 'KULLANMA' ile izlenmeyen her `--force` = oneri.
+    """
+    if len(satirlar) != 1:
+        return False
+    s = satirlar[0]
+    return (re.search(r"--force(?! KULLANMA)", s) is None
+            and _PC_SABLON_REL in s and "KOPYALA" in s)
+
+
+def q303_onarimi_uygula(proje: Path) -> bool:
+    """Mesajin soyledigini AYNEN yap: projedeki (junction'li) sablonu kopyala. Yol yoksa False."""
+    sablon = proje.joinpath(*_PC_SABLON_REL.split("/"))
+    if not sablon.is_file():
+        return False
+    hedef = proje / "scripts" / "git-hooks" / "pre-commit"
+    hedef.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(sablon, hedef)
+    return hedef.read_bytes() == sablon.read_bytes()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mutasyon-erken-donus", action="store_true",
                     help="fix'i SOK: erken `return 1`u geri getir (taban davranis)")
+    ap.add_argument("--mutasyon-force-onerisi", action="store_true",
+                    help="Q303 fix'ini SOK: uyari yine `init_project --force` onerir")
     a = ap.parse_args()
+    mutasyon = a.mutasyon_erken_donus or a.mutasyon_force_onerisi
 
     print(__doc__.strip().splitlines()[0])
-    print(f"MOD: {'MUTASYON --erken-donus' if a.mutasyon_erken_donus else 'NORMAL'}\n")
+    kip = ("MUTASYON --erken-donus" if a.mutasyon_erken_donus else
+           "MUTASYON --force-onerisi" if a.mutasyon_force_onerisi else "NORMAL")
+    print(f"MOD: {kip}\n")
 
     taban_yol = CORE / "scripts" / TABAN_AD
+    taban_q303_yol = CORE / "scripts" / TABAN_Q303_AD
+    mut_yol = CORE / "scripts" / MUT_AD
     tmpdir = tempfile.mkdtemp(prefix="ix_e05_")
     try:
         tmp = Path(tmpdir)
@@ -140,15 +242,17 @@ def main() -> int:
         #    kontrolune erken `return 1` geri konur = duzeltme oncesi davranis.
         #    (Dosya CORE/scripts/ icine yazilir cunku `CORE_ROOT = __file__/../..`;
         #     temp dizinde CORE_ROOT yanlis cozulurdu. `finally` blogu SILER.)
-        taban_yol.write_text(_fix_sok(TS.read_text(encoding="utf-8"), "taban"),
-                             encoding="utf-8", newline="")
+        kaynak = TS.read_text(encoding="utf-8")
+        taban_yol.write_text(_fix_sok(kaynak, "taban"), encoding="utf-8", newline="")
+        taban_q303_yol.write_text(_q303_sok(kaynak, "taban-q303"), encoding="utf-8", newline="")
 
-        # ── kosulacak "fix" surumu (mutasyonluysa erken donus geri gelir) ───────
+        # ── kosulacak "fix" surumu (mutasyonluysa ilgili fix sokulur) ───────────
         fix_yol = TS
-        mut_yol = CORE / "scripts" / "_zz_mut_team_setup.py"
         if a.mutasyon_erken_donus:
-            mut_yol.write_text(_fix_sok(TS.read_text(encoding="utf-8"), "mutasyon"),
-                               encoding="utf-8", newline="")
+            mut_yol.write_text(_fix_sok(kaynak, "mutasyon"), encoding="utf-8", newline="")
+            fix_yol = mut_yol
+        elif a.mutasyon_force_onerisi:
+            mut_yol.write_text(_q303_sok(kaynak, "mutasyon-q303"), encoding="utf-8", newline="")
             fix_yol = mut_yol
 
         # ══ KIRMIZI ════════════════════════════════════════════════════════════
@@ -199,19 +303,74 @@ def main() -> int:
         kontrol("V2 gitsiz proje: cokmez, uyari verir (repo_mode=none dali)",
                 rc5 in (0, 1) and "pre-commit kablolamas" in cikti5,
                 f"rc={rc5}")
+
+        # ══ Q303 — "pre-commit yok" uyarisi tek dosyalik onarimi gostermeli ════
+        print("\n-- Q303: pre-commit YOK uyarisi --force ONERMEMELI --")
+        q_fix = sandbox_proje(tmp, overlay=False, etiket="q303_fix", precommit=False)
+        _rcq, ciktiq = kos(fix_yol, q_fix)
+        satir_fix = pc_yok_satirlari(ciktiq)
+        kontrol("Q1 fix: uyari TEK dosyalik onarimi gosterir (sablon yolu + KOPYALA), "
+                "`--force` ONERMEZ", tek_dosya_onarimi(satir_fix), f"satir={satir_fix}")
+
+        q_tab = sandbox_proje(tmp, overlay=False, etiket="q303_taban", precommit=False)
+        _rct, ciktit = kos(taban_q303_yol, q_tab)
+        satir_tab = pc_yok_satirlari(ciktit)
+        kontrol("Q2 taban (Q303 fix'i sokulmus): eski `init_project --force` onerisi GERI "
+                "GELIR ve Q1 olcutu onu REDDEDER (kirmizi ayak canli)",
+                len(satir_tab) == 1 and "init_project --force ile" in satir_tab[0]
+                and not tek_dosya_onarimi(satir_tab), f"satir={satir_tab}")
+
+        d7_metin = _d7_precommit_yok_metni()
+        kontrol("Q3 metin TEK KAYNAK: satir `D7_CIFTLERI` pre-commit YOK metnini AYNEN tasir",
+                len(satir_fix) == 1 and satir_fix[0].rstrip().endswith(d7_metin),
+                f"d7={d7_metin!r}")
+
+        ts_proje = q_fix / "core" / "scripts" / "team_setup.py"
+        kopyalandi = q303_onarimi_uygula(q_fix)
+        hp_q_once = hookspath(q_fix)
+        _rcq2, ciktiq2 = kos(fix_yol, q_fix)
+        hp_q = hookspath(q_fix)
+        kontrol("Q4 onarim GERCEKTEN isler: mesajdaki iki yol projede cozulur, sablon "
+                "kopyalanip kurulum yeniden kosulunca hooksPath set + uyari KAYBOLUR",
+                kopyalandi and ts_proje.is_file() and hp_q_once == ""
+                and hp_q == "scripts/git-hooks" and not pc_yok_satirlari(ciktiq2),
+                f"kopya={kopyalandi} ts={ts_proje.is_file()} once={hp_q_once!r} "
+                f"sonra={hp_q!r} uyari={pc_yok_satirlari(ciktiq2)}")
+
+        # ══ Q303 3. BAGLAM — git WORKTREE'si (`.git` DOSYA, dizin degil) ═══════
+        print("\n-- Q303 3. BAGLAM: pre-commit'siz projenin git worktree'si --")
+        ana = sandbox_proje(tmp, overlay=False, etiket="q303_ana", precommit=False)
+        (ana / "README.md").write_text("x\n", encoding="utf-8", newline="\n")
+        for komut in (["add", "README.md"],
+                      ["-c", "user.email=fixture", "-c", "user.name=fixture",
+                       "commit", "-q", "-m", "ilk"],
+                      ["worktree", "add", "-q", str(tmp / "q303_wt"), "-b", "q303wt"]):
+            subprocess.run(["git", "-C", str(ana), *komut], check=True, capture_output=True)
+        wt = tmp / "q303_wt"
+        _rcw, ciktiw = kos(fix_yol, wt)
+        satir_wt = pc_yok_satirlari(ciktiw)
+        wt_kopya = q303_onarimi_uygula(wt)
+        _rcw2, ciktiw2 = kos(fix_yol, wt)
+        hp_wt = hookspath(wt)
+        kontrol("Q5 worktree (`.git` DOSYA): ayni tek-dosya onarimi + onarim sonrasi uyari "
+                "KAYBOLUR ve hooksPath set",
+                (wt / ".git").is_file() and tek_dosya_onarimi(satir_wt) and wt_kopya
+                and not pc_yok_satirlari(ciktiw2) and hp_wt == "scripts/git-hooks",
+                f".git_dosya={(wt / '.git').is_file()} satir={satir_wt} kopya={wt_kopya} "
+                f"hooksPath={hp_wt!r}")
     finally:
-        for y in (taban_yol, CORE / "scripts" / "_zz_mut_team_setup.py"):
+        for y in (taban_yol, taban_q303_yol, mut_yol):
             try:
                 y.unlink()
             except FileNotFoundError:
                 pass
-        shutil.rmtree(tmpdir, ignore_errors=True)
+        _sil(Path(tmpdir))
 
     gecen = sum(1 for ok, _ in SONUC if ok)
     print(f"\n{'=' * 62}\nSONUC: {gecen}/{len(SONUC)}")
     if gecen != len(SONUC):
         print("Dusen: " + ", ".join(ad for ok, ad in SONUC if not ok))
-    if a.mutasyon_erken_donus:
+    if mutasyon:
         print("(MUTASYON: dusus BEKLENIR)")
         return 0
     return 0 if gecen == len(SONUC) else 1
