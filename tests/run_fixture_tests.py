@@ -135,7 +135,7 @@ OZEL_TESTLER = [
      "da baska-binding baseline KIRMIZI iddia ETMEZ (ucuncu deger + `content_probe`). "
      "KONTROL GRUBU omurga: gercek uyusmazlik HALA blocker (V4a/V4b/V5f)"),
     ("yazma_hukmu_durustlugu",
-     "Q278+Q273: MCP yazma araclarinin hukmu SAP'nin hukmunden ayrismaz — publish basarisi "
+     "Q278+Q273 (+Q292/Q293 kardesler: create_rap_service publish, adt_struct_create post-check): MCP yazma araclarinin hukmu SAP'nin hukmunden ayrismaz — publish basarisi "
      "HTTP kodundan degil govdedeki SEVERITY'den (ERROR->ok:false, hukumsuz->ok:false+None); "
      "post_check WARNING/olculemeyen kapi push `ok`unu DUSURMEZ ama gorunur kalir. KONTROL "
      "omurga: SEVERITY=OK hala ok:true (P2) · BLOCKER/taninmayan verdict hala ok:false (R3/R4)"),
@@ -917,7 +917,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "canlı probe'un ÜÇ-DEĞERLİ sınıflaması: ulaşılamadı=FAIL · 404=OK · 4xx/5xx=WARN. "
      "Alt katman (`get_object_metadata`) istisnayı YUTAR ⇒ 'kanıt üretemedim' ile "
      "'kanıt olumlu' burada ayrılır"),
-    ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok",), "activate_and_verify"),
+    ("scripts/create_rap_service.py", ("O:aktivasyon_sahte_ok", "O:yazma_hukmu_durustlugu"),
+     "activate_and_verify + (Q292) publish hükmü TEK KAYNAĞI `publish_hukmu` · `step_publish` üç değerli"),
     ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
     ("scripts/push_object.py",
      ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi"),
@@ -973,7 +974,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "SINIF çapası `unit_run_guard_riski` G3'te: dördü de iki kapıdan geçmeli)"),
     ("mcp_servers/sap_adt/data_guard.py",
      ("O:veri_yetki_guardlari", "O:tier_fail_closed"), "ADR 0011 PII + yetki"),
-    ("mcp_servers/sap_adt/_reviewer.py", ("O:reviewer_tip_kapsam",), "push-tipi ↔ reviewer"),
+    ("mcp_servers/sap_adt/_reviewer.py", ("O:reviewer_tip_kapsam", "O:yazma_hukmu_durustlugu"),
+     "push-tipi ↔ reviewer + (Q293) post-check hükmü TEK KAYNAĞI `post_check_ozeti`"),
+    ("mcp_servers/sap_adt/tools/composite.py", ("O:yazma_hukmu_durustlugu",),
+     "adt_struct_create post-check hükmü (Q293: ok yalnız BLOCKER düşürür, ölçülemeyen kapı "
+     "unmeasured+hukum+notice ile görünür)"),
     ("mcp_servers/sap_adt/tools/atom.py",
      ("O:adtget_yokluk_kaniti", "O:ddic_okuma_yolu", "O:dogrulama_kosamadi",
       "O:reviewer_tip_kapsam", "O:mcp_profil_aktivasyon_offline", "O:mcp_sahte_sonuc_uclusu",

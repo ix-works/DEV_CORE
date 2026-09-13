@@ -558,7 +558,8 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   V8b ad-çarpışmasında (aynı ad ddls+bdef) kaydı olmayan tip için iddia ÜRETİLMEZ.
   ⚠ Koşucu çıktısına ikinci bir `N/M` sayısı yazma — `run_battery` skoru SON eşleşmeden okur.
 - **YAZMA HÜKMÜ DÜRÜSTLÜĞÜ (Q278 + Q273, 2026-09-13):** `python tests/fixtures/yazma_hukmu_durustlugu/run.py`
-  → **26/26** · MUTASYON: `--mutasyon` **12/26** · `--mutasyon-publish` **17/26** · `--mutasyon-postcheck` **21/26**
+  → ⚠ **güncel skorlar B46'dadır** (korpus 2026-09-13'te Q292/Q293 kardeşleriyle 26 → 53 oldu); bu satırdaki sayılar Q278/Q273 turunun
+  tarihsel ölçümüdür: **26/26** · MUTASYON: `--mutasyon` **12/26** · `--mutasyon-publish` **17/26** · `--mutasyon-postcheck` **21/26**
   · ESKİ KOD: `--taban-dosya <git show 6047fa2:…/atom.py>` **12/26**.
   **Değişmezler:** `adt_publish_service` hükmü **gövdedeki `SEVERITY`**'den kurulur, HTTP kodundan değil.
   `ERROR` → `ok:false, published:false` · tüm `OK` → `ok:true` · SEVERITY yok ya da tanınmayan değer →
@@ -2313,3 +2314,20 @@ python tests/run_battery.py fm_okuma_where_used --kardes adt_uc_url_cozumu dogru
 - **Eski kod karşıtlığı:** dört modülün `git show 4b05609:<yol>` çıktısı aynı dizine `_` önekli kardeş (`scripts/_object_types.py`, `scripts/_sap_client.py`, `mcp_servers/sap_adt/tools/_atom.py`, `.../_query.py`) + `Q261_TABAN_ONEK=_` → **11/25**. Eski kodda geçen 11'in 4'ü kontrol (R9a·R10·W6a·W6b); 7'si (R4b·R5·R6·R8·W4·W5·C3) eski kod fail-closed olduğu için geçer — onların ayırt ediciliği MUTASYONA karşıdır, eski koda karşı değil. Kardeşleri koşum sonrası SİL.
 - **Canlı teyit (salt-okur, 3. bağlam):** var olan FM · çağıransız FM (ör. IDoc inbound FM) · var olmayan ad · kontrol grubu sınıf (var/yok) üzerinde `adt_get` / `adt_where_used` / `adt_impact_analysis` func. ⚠ Canlı MCP sunucusu yeniden başlatılana kadar ESKİ kodu koşar — worktree kodunu Python import ile ölç.
 - ⚠ **Bilinen sınırlar (bu turda değiştirilmedi):** usageReferences `references` listesi DEVC paket satırlarını da sayar (`count` şişer) · `adt_atc_check`/`adt_lock_check` func için kanal yok (ValueError) · `adt_search_objects(object_type='FUNC')` sahte 0 · resolver'ın yokluk kanıtı arama indeksidir (tam ad, `max_results=50`).
+
+## B46 — Yazma hükmü kardeşleri: `create_rap_service.step_publish` gövde hükmü + `adt_struct_create` post-check üç durumu (Q292 + Q293; B11'deki Q278/Q273'ün kardeşi)
+
+```
+python tests/fixtures/yazma_hukmu_durustlugu/run.py     # 53/53, exit 0
+python tests/run_battery.py yazma_hukmu_durustlugu --kardes aktivasyon_baseline_tazeligi dogrulama_kosamadi b0_secim mcp_sahte_sonuc_uclusu reviewer_tip_kapsam aktivasyon_sahte_ok unit_run_guard_riski transport_gorev_istek_cevrimi mcp_profil_aktivasyon_offline --precommit
+```
+
+- ⛔ TEK KAYNAK: publish hükmü `scripts/create_rap_service.py::publish_hukmu`'dadır; atom yalnız sarmalar (K5). Post-check hükmü `mcp_servers/sap_adt/_reviewer.py::post_check_ozeti`'dedir; atom ve composite aynı nesneyi kullanır (R8 · C10). İkinci bir kopya yazma. SEVERITY kümesi genişletilecekse `PUBLISH_SEVERITY_*` tek yerdedir.
+- ⛔ `step_publish` ÜÇ DEĞERLİDİR: True / False / **None** (ölçülemedi). Çağıran `if ok` ile okur, yani None da zinciri durdurur (K6c → exit 1). None'ı True'ya çeviren bir "sadeleştirme" belirsiz gövdeyi başarı sayar.
+- ⛔ SKIP ≠ temiz. `ReviewerResult.passed` SKIP'i geçmiş sayar; pre-flight için bu doğrudur. Post-check'te ise SKIP = zincir KOŞMADI ⇒ `unmeasured` + `hukum: olculemedi` + notice (C3 · C3b · R5c). `ok` değişmez.
+- ⛔ KONTROL satırları SİLİNMEZ: K2 · K4 · K6b · C4 · C5 · C6 · C6b · C7 · C8 (+ B11'dekiler). C4/C6/C6b ⚠GEVŞETME sınırıdır.
+- Mutasyon kipleri (/53, hepsi düşmeli): `--mutasyon` 36 · `--mutasyon-publish` 43 · `--mutasyon-postcheck` 46 · `--mutasyon-crs` 38 · `--mutasyon-composite` 45 · `--mutasyon-gorunurluk` 43. `--mutasyon-crs` atom P* vektörlerini de düşürür; bu harness kusuru değil, tek kaynağın kanıtıdır.
+- Eski kod karşıtlığı (tek seferlik, CI'da koşmaz): `git show 4b05609:scripts/create_rap_service.py > scripts/_create_rap_service.py` + `git show 4b05609:mcp_servers/sap_adt/tools/composite.py > mcp_servers/sap_adt/tools/_composite.py` → `run.py --taban-kardes` → **39/53** (K1×2 · K3×2 · K6a · K6c · C1 · C1b · C2 · C3 · C3b · C8b · C9 · C10). Kopyalar `_` adıyla ayrı modül olarak yüklenir; gerçek modüller `sys.modules`'ta değişmez, çünkü atom onlara bağlıdır. Koşum sonrası SİL: `core_precommit --all` izlenmeyen dosyayı görmez.
+- ⚠ Composite sahte istemcisi tek nesnede `session` + `get_object_metadata` + `create_structure` + `activate_object` taşır. `get_object_metadata` yaratmadan önce None dönmeli; aksi hâlde araç `already_exists` döner ve C vektörleri post-check'e hiç ulaşmaz.
+- ⚠ MCP restart: `atom.py` / `composite.py` / `_reviewer.py` değişikliği çalışan MCP sürecine yalnız restart'la yansır. `atom._publish_hukmu` her çağrıda `import create_rap_service` yapar ama süreç önbelleği (`sys.modules`) yüzünden yine restart gerekir. CLI (`create_rap_service.py`) anında etkilenir.
+- 🔴 Canlı SAP doğrulaması yok (B11 Q278 ile aynı sınır).

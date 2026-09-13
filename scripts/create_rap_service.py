@@ -672,7 +672,100 @@ def step_srvbactivate(client, tok):
     return activate(client, tok, name, f"{SRVB_BASE}/{name.lower()}")
 
 
+# ── PUBLISH HÜKMÜ GÖVDEDEN KURULUR, HTTP KODUNDAN DEĞİL — TEK KAYNAK ────────────────────
+# Q278 (2026-09-13, `adt_publish_service`) · Q292 (2026-09-13, bu dosyanın `step_publish`'i —
+# birebir aynı kusur: `return r.status_code in (200, 201, 202)`). Hüküm buraya TAŞINDI; MCP
+# tool'u (`atom._publish_hukmu`) ince sarmalayıcıdır ⇒ iki tüketici tek sözleşme.
+# ÖLÇÜLEN KUSUR: var olmayan bir binding'e publish HTTP 200 + gövdede `<SEVERITY>ERROR</SEVERITY>`
+# + *"Service Binding … does not exist."* döndü; araç başarı dedi (iki canlı vaka: 2026-08-07 ve
+# 2026-09-10, 5 servis). Başarılı publish'in gövdesi: `<SEVERITY>OK</SEVERITY> … activated
+# locally` (playbook/adt-rap.md §32.6l). Publish, `$metadata` tazeliğinin son kapısıdır ⇒
+# sahte-OK bayat metadata'yı canlıda bırakır.
+# KARAR — üç değerli `published` (fail-closed):
+#   True  → HTTP 2xx VE gövdedeki TÜM SEVERITY değerleri tanınan başarı (`OK`)
+#   False → HTTP 2xx-dışı, ya da herhangi bir SEVERITY tanınan hata (`ERROR`)
+#   None  → gövde hüküm TAŞIMIYOR (SEVERITY yok) ya da tanınmayan değer ⇒ ÖLÇÜLEMEDİ;
+#           `ok` yine False'tur (belirsiz gövde başarı SAYILMAZ), `publish_notice` nedenini söyler.
+# ⚠ Tanınan değer kümeleri YALNIZ ölçülmüş değerleri içerir; yeni bir değer (ör. WARNING)
+#   canlıda görülürse önce ÖLÇ, sonra buraya ekle — tahminle genişletme.
+# ⚠ Zarf (envelope) şekli repoda HAM olarak kayıtlı değil (yalnız `<SEVERITY>`/`<LONG_TEXT>`
+#   parçaları) ⇒ ayrıştırıcı zarftan BAĞIMSIZDIR: etiket yerel adıyla aranır (ad alanı
+#   öneki yok sayılır), XML ayrıştırılamazsa (kırpılmış gövde) aynı arama regex'le yapılır.
+PUBLISH_SEVERITY_BASARI = frozenset({"OK"})
+PUBLISH_SEVERITY_HATA = frozenset({"ERROR"})
+_PUBLISH_MESAJ_ETIKETLERI = ("LONG_TEXT", "SHORT_TEXT", "TEXT", "MESSAGE")
+_SEVERITY_RE = re.compile(r"<(?:[\w.-]+:)?SEVERITY\b[^>]*>\s*([^<]*?)\s*</", re.IGNORECASE)
+_MESAJ_RE = re.compile(r"<(?:[\w.-]+:)?(LONG_TEXT|SHORT_TEXT)\b[^>]*>\s*([^<]*?)\s*</",
+                       re.IGNORECASE)
+
+
+def _publish_govdesi_oku(body: str) -> tuple:
+    """Publish yanıt gövdesinden (SEVERITY değerleri, mesajlar, okuma yolu) çıkar."""
+    severities: list = []
+    mesajlar: list = []
+    metin = body or ""
+    if not metin.strip():
+        return severities, mesajlar, "bos"
+    try:
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(metin)
+        for el in root.iter():
+            yerel = str(el.tag).rsplit("}", 1)[-1].split(":")[-1].upper()
+            deger = (el.text or "").strip()
+            if yerel == "SEVERITY":
+                severities.append(deger.upper())
+            elif yerel in _PUBLISH_MESAJ_ETIKETLERI and deger:
+                mesajlar.append(deger)
+        return severities, mesajlar, "xml"
+    except Exception:  # noqa: BLE001 — kırpılmış/XML-olmayan gövde: regex yolu
+        severities = [m.group(1).strip().upper() for m in _SEVERITY_RE.finditer(metin)]
+        mesajlar = [m.group(2).strip() for m in _MESAJ_RE.finditer(metin) if m.group(2).strip()]
+        return severities, mesajlar, "regex"
+
+
+def publish_hukmu(status_code, body: str) -> dict:
+    """Publish sonucunu HTTP kodu + GÖVDEDEKİ SAP hükmünden kur (Q278/Q292).
+
+    Returns: {ok, published (True|False|None), severity (list), sap_message (str|None),
+              body_parse, publish_probe (str)[, publish_notice (str)]}
+    publish_probe: http_hata · severity_ok · severity_error · severity_yok · severity_taninmadi
+    """
+    severities, mesajlar, yol = _publish_govdesi_oku(body)
+    mesaj = " | ".join(dict.fromkeys(mesajlar)) or None
+    out: dict = {"severity": severities, "sap_message": mesaj, "body_parse": yol}
+    if status_code not in (200, 201, 202):
+        out.update(ok=False, published=False, publish_probe="http_hata")
+        out["publish_notice"] = "PUBLISH BAŞARISIZ — HTTP %s. %s" % (status_code, mesaj or "")
+        return out
+    if any(s in PUBLISH_SEVERITY_HATA for s in severities):
+        out.update(ok=False, published=False, publish_probe="severity_error")
+        out["publish_notice"] = (
+            "PUBLISH BAŞARISIZ — HTTP %s ama gövdede SEVERITY=ERROR: %s. HTTP kodu başarı "
+            "KANITI DEĞİLDİR. SRVB adını ölç (SRVD adı ≠ SRVB adı olabilir; binding aktif mi?)."
+            % (status_code, mesaj or "mesaj yok"))
+        return out
+    if severities and all(s in PUBLISH_SEVERITY_BASARI for s in severities):
+        out.update(ok=True, published=True, publish_probe="severity_ok")
+        return out
+    if not severities:
+        out.update(ok=False, published=None, publish_probe="severity_yok")
+        out["publish_notice"] = (
+            "PUBLISH ÖLÇÜLEMEDİ — HTTP %s ama gövde SEVERITY taşımıyor (okuma yolu: %s). "
+            "Bu 'publish edildi' DEĞİLDİR: `GET /sap/opu/odata/sap/<SRVB>/$metadata` ile teyit et."
+            % (status_code, yol))
+        return out
+    out.update(ok=False, published=None, publish_probe="severity_taninmadi")
+    out["publish_notice"] = (
+        "PUBLISH ÖLÇÜLEMEDİ — gövdede TANINMAYAN SEVERITY %s (tanınan: OK/ERROR). Başarı "
+        "SAYILMADI: `$metadata` ile teyit et; değer canlıda doğrulanırsa `PUBLISH_SEVERITY_*` "
+        "kümesine eklenir (scripts/create_rap_service.py). %s" % (severities, mesaj or ""))
+    return out
+
+
 def step_publish(client, tok):
+    """Binding'i publish et. Dönüş ÜÇ DEĞERLİ (Q292): True (SEVERITY=OK) · False (HTTP hata /
+    SEVERITY=ERROR) · None (gövde hüküm taşımıyor ⇒ ÖLÇÜLEMEDİ). Yalnız True truthy'dir:
+    `main` None'da da zinciri durdurur ve exit 1 verir (belirsiz gövde başarı SAYILMAZ)."""
     print(f"\n=== PUBLISH: {SRVB_NAME} ===")
     # discovery: /businessservices/odatav2/publishjobs{?servicename,serviceversion}
     r = client.session.post(
@@ -684,8 +777,16 @@ def step_publish(client, tok):
         data=publish_xml(SRVB_NAME).encode("utf-8"), verify=False, timeout=120,
     )
     print(f"[publish] POST status={r.status_code}")
-    print("   BODY: " + r.text[:900].replace("\n", " "))
-    return r.status_code in (200, 201, 202)
+    govde = getattr(r, "text", "") or ""
+    print("   BODY: " + govde[:900].replace("\n", " "))
+    # ⛔ Q292: HTTP 2xx başarı KANITI DEĞİL — hüküm gövdedeki SEVERITY'den (publish_hukmu).
+    hukum = publish_hukmu(r.status_code, govde)
+    print(f"[publish] hukum: published={hukum['published']} probe={hukum['publish_probe']} "
+          f"severity={hukum['severity']}")
+    if hukum.get("publish_notice"):
+        etiket = "FAIL" if hukum["published"] is False else "OLCULEMEDI"
+        print(f"[{etiket}] {hukum['publish_notice']}")
+    return hukum["published"]
 
 
 def step_e2e(client):
