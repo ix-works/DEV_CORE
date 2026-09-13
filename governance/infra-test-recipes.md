@@ -2281,3 +2281,19 @@ python tests/run_battery.py cds_paket_kapsami --kardes push_atlandi_ve_kaynak_iz
 - Eski kod karşıtlığı: `git show afae4be:scripts/populate_cds_views.py > scripts/_taban_populate_cds_views.py` + `PCV_PATH`'i ona çeviren `tests/fixtures/cds_paket_kapsami/_taban_run.py` → **23/27** (P10a · P10c · P10d · RA1). İkisini koşum sonrası sil. Mutasyonlar bellekte `exec` edilir, pinli SHA yok ⇒ sığ klonda (CI) da koşar.
 - Desen genişletilecekse (ör. `transient view entity`): önce gerçek bir `.cds` korpusunda eski/yeni **dal geçişini** say (çapraz geçiş = kapsam değişikliği = ⚠GEVŞETME) ve Q277 kapısıyla (`sap_adt_lib._validate_cds_source`) aynı biçim kümesini hedefle.
 - Bilinen sınır (ölçüldü, değiştirilmedi): ad `{` ile bitişikse `(\S+)` `{`'yi yutar → sahte RAP ad hatası (düz ve root abstract'ta aynı). Çok satırlı `define root\n abstract entity` tanınır.
+
+## B47 — `check_ui_odata_refs` ÇOK SERVİS + ÖLÇEMEDİM (Q299 + Q300; B42'nin devamı)
+
+```
+python tests/fixtures/ui_odata_refs_kapsami/run.py                     # 31 vektör, TAMAMI çevrimdışı
+python tests/run_battery.py ui_odata_refs_kapsami --kardes olcum_yoklugu_sozlesmesi b0_secim --precommit
+```
+
+- Çevrimdışı mekanizma B42 ile aynı. `kos(app, md=dict, conn=…, session=…)`: `md` servis başına gövde ya da istisna; `session` verilirse `fetch_metadata` YAMANMAZ, gerçek fonksiyon sahte `requests.Session` ile koşar (N5 `timeout` kwarg'ını bu yolla çiviler).
+- ⛔ W2b · W3 · W5 SİLİNEMEZ: "birleşime karşı ölçme yok" · "çözülemeyen referans ana servise karşı KIRMIZI kalır" · "ikincil ölçülemezse exit 2". Üçü de gevşetme sınırıdır; `--mutasyon-birlesim` · `--mutasyon-alici` · `--mutasyon-kismi-yesil` bunları çiviler.
+- ⭐ Eski-kod karşıtlığı: B42'deki kum yöntemi (`git show <taban>:` araç + `utils/kapsam.py` + fixture kopyası). Beklenen: yalnız V vektörleri geçer (14/31). ⚠ Kum dizinini `rm -rf` ile temizlemeye çalışma (izin katmanı soru çıkarır); her koşuma YENİ dizin adı ver.
+- Canlı önce/sonra (salt-GET, proje kökünde `.conn_adt`): taban kodu `_` önekli kardeş dosya olarak `scripts/`e yaz (utils importu `__file__`dan çözülür), her `ui/*/webapp/manifest.json` için iki sürümü koş, KIRMIZI satırlarını `(servis X)` son ekini atarak kıyasla. Ölçüt: yeni ⊆ eski (yeni KIRMIZI yok). Kalan her KIRMIZI için adın app'in TÜM servislerindeki varlığını ayrıca ölç — kalanın sahte mi gerçek mi olduğu buradan okunur. Bitince `_` dosyayı sil.
+- Ağ/HTTP davranışı: yerel `http.server` sahte sunucusu (servis adına göre 401/404/500/HTML-200/asılı) + boş port (bağlantı reddi) + `.conn_adt`'siz cwd. ⛔ Canlıda 401 deneme (hesap kilidi). Beklenen yeni kod: hepsi rc=2, traceback 0; asılı sunucu ≈60 sn'de `ReadTimeout`.
+- ⚠ Tam süit çıktısını dosyaya yazıyorsan ZAMAN DAMGASINI oku: aynı scratchpad'de önceki turdan kalan dosya "tamam" gibi okundu (2026-09-13: mtime 01:36, gerçek koşum 11:42).
+- ⚠ Batarya `--precommit` satırında `ATLA` + IZLENMEYEN: provizyonlu worktree'de `.claude/` + `core/` izlenmeyendir. Kendi yeni dosyan yoksa ATLA bu sayıdan gelir — `git status --short -uall` ile ayır; provizyon dosyalarını `git add` ETME.
+
