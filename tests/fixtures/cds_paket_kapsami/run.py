@@ -25,6 +25,12 @@ Korpus S(enaryo) + M(utasyon) tasir:
          (FP capasi), active_package onceligi, hata mesajinin DURUSTLUGU
   M1-M6  fix'i sok -> korpus KIRMIZI olmali (yesil kalirsa korpus o degismezi
          olcmuyor). Iki dosya x uc bagimsiz degismez = alti ayri mutasyon.
+  P10a-e + RA1/RA2 + M11-M14 (Q298, 2026-09-13): `define root abstract entity`
+         RAP dalina girer ve TD-spec'ten atlanir (duz abstract ile ayni). Eski desen
+         root'u yalniz view'a bagliyordu. ESKI KOD (afae4be) bu korpusta 23/27:
+         duser TAM OLARAK P10a · P10c · P10d · RA1. P10b/P10e/RA2 eski kodda da yesil
+         (degismez + pozitif kontrol). ⛔ P10c/P10d SILINMEZ: muafiyetin RAP dalinin
+         kendi kurallarini (ad kalibi, sqlViewName yasagi) dusurmedigini onlar olcer.
 
 Kosum: python tests/fixtures/cds_paket_kapsami/run.py     (exit 0 = PASS)
 """
@@ -159,6 +165,25 @@ def yaz_rap(dizin: Path, ad: str, entity: str) -> Path:
     return p
 
 
+def yaz_abstract(dizin: Path, ad: str, entity: str, root: bool,
+                 sqlview: str | None = None) -> Path:
+    """Q298: abstract entity (RAP action param/result tipi) — SELECT TASIMAZ.
+    `root=True` -> `define root abstract entity` (kusurun bicimi)."""
+    dizin.mkdir(parents=True, exist_ok=True)
+    p = dizin / f"{ad}.cds"
+    bas = f"@AbapCatalog.sqlViewName: '{sqlview}'\n" if sqlview else ""
+    p.write_text(
+        bas
+        + "@EndUserText.label: 'Test param'\n"
+        + ("define root abstract entity " if root else "define abstract entity ")
+        + f"{entity}\n"
+        + "{\n"
+        + "  Param1 : abap.char(10);\n"
+        + "}\n",
+        encoding="utf-8")
+    return p
+
+
 # ---------------------------------------------------------------------------
 # SENARYOLAR — populate_cds_views
 # ---------------------------------------------------------------------------
@@ -248,6 +273,43 @@ def senaryolar_pcv(pcv, kum: Path, mut=None) -> list[tuple[str, bool, str]]:
     r.append(("P9 15 karakterlik sqlView -> uzunluk hatasi (sinir korunuyor)",
               len(e) == 1 and "uzunluk=15" in e[0], str(e)))
 
+    # P10 — Q298: `define root abstract entity` RAP dalina girer (duz abstract gibi).
+    # Eski desen root'u yalniz view'a bagliyordu -> klasik dala dusup 2 SAHTE hata.
+    # ⚠ Muafiyet YALNIZ TD namespace kurali + sqlViewName zorunlulugudur; RAP dalinin
+    # kendi kurallari (ad kalibi, sqlViewName YASAGI) root abstract'ta da ISLEMELI.
+    fa_root = yaz_abstract(d, "ZMOD002_I_PRM_P", "ZMOD002_I_PRM_P", root=True)
+    fa_duz = yaz_abstract(d, "ZMOD002_I_PRM_R", "ZMOD002_I_PRM_R", root=False)
+    e_root, e_duz = dogrula([fa_root], "ZMOD002_CLC"), dogrula([fa_duz], "ZMOD002_CLC")
+    r.append(("P10a root abstract entity (dogru ad) -> hata YOK (kusur)",
+              e_root == [], str(e_root)))
+    r.append(("P10b duz abstract entity (dogru ad) -> hata YOK (degismez)",
+              e_duz == [], str(e_duz)))
+
+    fa_kotu = yaz_abstract(d, "ZMOD002_BADPRM", "ZMOD002_X_PRM", root=True)
+    e = dogrula([fa_kotu], "ZMOD002_CLC")
+    r.append(("P10c root abstract ad kalibi disi (X_) -> YALNIZ RAP ad hatasi (muafiyet "
+              "ad kuralini dusurmez)",
+              len(e) == 1 and "RAP view entity adı='ZMOD002_X_PRM'" in e[0], str(e)))
+
+    fa_sv = yaz_abstract(d, "ZMOD002_I_PRM_SV", "ZMOD002_I_PRM_SV", root=True,
+                         sqlview="ZMOD002_V_PRM")
+    e = dogrula([fa_sv], "ZMOD002_CLC")
+    r.append(("P10d root abstract + @AbapCatalog.sqlViewName -> RAP YASAGI (klasik dalda "
+              "gecerli sayilmaz)",
+              len(e) == 1 and "@AbapCatalog.sqlViewName YASAK" in e[0], str(e)))
+
+    # P10e — POZITIF KONTROL: klasik dal hala ISLIYOR (genisleyen desen klasik view'i
+    # yutmadi). sqlViewName'siz klasik view -> tek EKSIK hatasi.
+    d.mkdir(parents=True, exist_ok=True)
+    fk = d / "ZMOD002_DDL_NOSV.cds"
+    fk.write_text("@EndUserText.label: 'Test view'\n"
+                  "define view zmod002_ddl_nosv as select from t000 {\n"
+                  "  key t000.mandt as Client\n"
+                  "}\n", encoding="utf-8")
+    e = dogrula([fk], "ZMOD002_CLC")
+    r.append(("P10e POZITIF KONTROL: sqlViewName'siz KLASIK view -> hala EKSIK hatasi",
+              len(e) == 1 and "sqlViewName annotation EKSİK" in e[0], str(e)))
+
     r += senaryolar_sprint(pcv, kum)
     return r
 
@@ -270,7 +332,7 @@ def senaryolar_sprint(pcv, kum: Path) -> list[tuple[str, bool, str]]:
     # kapisi bloklarsa TD-spec mesajina HIC ULASILMAZ -> asil capa bu iz.
     TD_IZ = "TD spec EKSİK"
 
-    def kos(ekstra, gate_sonuc=True, order=("3",), env=None):
+    def kos(ekstra, gate_sonuc=True, order=("3",), env=None, src=None):
         g = types.ModuleType("sprint_gate_check")
         g.cagrildi = None
 
@@ -298,7 +360,7 @@ def senaryolar_sprint(pcv, kum: Path) -> list[tuple[str, bool, str]]:
         eski_argv, eski_cli = sys.argv[:], getattr(pcv, "SAPADTClient", None)
         pcv.SAPADTClient = lambda *a, **k: _C()
         sys.argv = ["populate_cds_views.py", "--package", "ZMOD001_CLC",
-                    "--transport", "TR1", "--source-dir", str(d), "--dry-run"] + ekstra
+                    "--transport", "TR1", "--source-dir", str(src or d), "--dry-run"] + ekstra
         tut = io.StringIO()
         saved = sys.stdout
         sys.stdout = tut
@@ -352,6 +414,21 @@ def senaryolar_sprint(pcv, kum: Path) -> list[tuple[str, bool, str]]:
     r.append(("SP4 panoda olmayan hedef -> gorunur SKIP, cokme YOK",
               "Bilinmeyen sprint: 99" in out and "SKIP" in out and not str(rc).startswith("EXC"),
               "rc=%r out=%r" % (rc, out[:160])))
+
+    # RA1/RA2 — Q298 GERCEK GIRIS (main): abstract entity TD-spec kapisindan ATLANIR.
+    # Spec YOK (bos kok). Eski kodda root abstract "TD spec EKSİK" + rc=1 alirdi.
+    # POZITIF KONTROL ayni fonksiyonda: SP1 klasik view'da TD_IZ'yi GORUYOR -> TD-spec
+    # kapisi kaldirilmadi, yalniz abstract icin atlaniyor.
+    for etiket, root in (("RA1 root abstract", True), ("RA2 duz abstract", False)):
+        ra = kum / ("ra_src_" + ("root" if root else "duz"))
+        yaz_abstract(ra, "ZMOD001_I_PRM", "ZMOD001_I_PRM", root=root)
+        rc, out, g = kos([], env=bos, src=ra)
+        r.append(("%s main(): TD-spec ATLANIR + pre-flight OK -> dry-run rc=0" % etiket,
+                  rc == 0 and TD_IZ not in out and "[OK] Pre-flight" in out
+                  and "DRY-RUN: ZMOD001_I_PRM" in out,
+                  "rc=%r td_iz=%s preflight=%s dry=%s" % (
+                      rc, TD_IZ in out, "[OK] Pre-flight" in out,
+                      "DRY-RUN: ZMOD001_I_PRM" in out)))
 
     return r
 
@@ -494,6 +571,27 @@ PCV_MUT = [
      lambda s: s.replace("            if not ensure_sprint_gates_open(target_sprint, raise_on_fail=False):\n"
                          "                return 1",
                          "            ensure_sprint_gates_open(target_sprint, raise_on_fail=False)")),
+
+    # --- Q298 degismezleri: dort bagimsiz eksen ---------------------------
+    ("M11 Q298 eski baslik desenini geri getir (root yalniz view'a bagli)",
+     lambda s: s.replace(
+         r'RAP_BASLIK_DESENI   = r"\bdefine\s+(?:root\s+)?(?:view|abstract)\s+entity"',
+         r'RAP_BASLIK_DESENI   = r"\bdefine\s+(?:(?:root\s+)?view|abstract)\s+entity"')),
+    ("M12 Q298 ad yakalama tespitten AYRISSIN (yalniz :209 eski desen)",
+     lambda s: s.replace(
+         r'            vem = re.search(RAP_BASLIK_DESENI + r"\s+(\S+)", source, re.IGNORECASE)',
+         r'            vem = re.search(r"\bdefine\s+(?:(?:root\s+)?view|abstract)\s+entity\s+(\S+)", '
+         r'source, re.IGNORECASE)')),
+    ("M13 Q298 TD-spec kapisinda RAP atlamasini sok (kablolama)",
+     lambda s: s.replace(
+         "                if RAP_VIEW_ENTITY_RE.search(f.read_text(encoding='utf-8')):\n"
+         "                    continue",
+         "                if False:\n"
+         "                    continue")),
+    ("M14 Q298 SINIR: tespit asiri genis (her `define` RAP sayilsin, klasik dal olsun)",
+     lambda s: s.replace(
+         r'RAP_VIEW_ENTITY_RE  = re.compile(RAP_BASLIK_DESENI + r"\b", re.IGNORECASE)',
+         r'RAP_VIEW_ENTITY_RE  = re.compile(r"\bdefine\s", re.IGNORECASE)')),
 ]
 
 TSC_MUT = [

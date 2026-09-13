@@ -189,7 +189,7 @@ açılmadı — ADR 0019 §4 merdiven ilkesi: önce doküman. Tekrar ederse vali
 > | Araç | Bugünkü durum (offline ölçüm, 2026-09-13) | Neden hâlâ reçete değil |
 > |---|---|---|
 > | `create_cds_view.py` | Kaynak kapısı abstract entity'yi **GEÇİRİR** (Q277: `define [root] abstract entity <ad> {`). 2026-09-13'e kadar "SELECT FROM yok" diye reddediyordu. | Bu araçla canlı yaratma ölçülmedi. Araç kaynağı POST gövdesine koyar; bu sistemde SAP gövdeyi yok sayar (§30.1 · aşağıda adım 1) ⇒ kaynak **ayrıca push edilir** (adım 2). |
-> | `populate_cds_views.py` | Düz `define abstract entity` → pre-flight **geçer** (TD-spec atlanır, RAP ad kuralı uygulanır). `define root abstract entity` → pre-flight **PATLAR**: RAP deseni `root abstract`ı tanımıyor ⇒ TD-spec aranır + "sqlViewName EKSİK". Sprint kapısı türden bağımsızdır (`cds_target_sprint` tanımlıysa uygulanır). | Abstract entity için canlı yaratma (POST shell + LOCK/PUT) ölçülmedi. |
+> | `populate_cds_views.py` | `define abstract entity` **ve** `define root abstract entity` → pre-flight **geçer**: ikisi de RAP dalına girer, TD-spec atlanır, RAP ad kuralı (`Z<MOD><nnn>_<I\|C\|R\|E>_<x>`) ve sqlViewName **yasağı** uygulanır (Q298; 2026-09-13'e kadar root abstract TD-spec'e ve klasik sqlViewName dalına düşüp 2 sahte hata alıyordu). ⚠ Ad `{` ile bitişik yazılırsa (`… entity ZMOD001_I_PRM{`) ad kuralı `{`'yi adın parçası sayıp reddeder — adla `{` arasına boşluk/satır sonu koy. Sprint kapısı türden bağımsızdır (`cds_target_sprint` tanımlıysa uygulanır). | Abstract entity için canlı yaratma (POST shell + LOCK/PUT) ölçülmedi. |
 >
 > **ÇALIŞAN (2026-06-23 — nakliye param/result patinajı sonrası):** view-entity 3-adımının abstract uyarlaması —
 >
