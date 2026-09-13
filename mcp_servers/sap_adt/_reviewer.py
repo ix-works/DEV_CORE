@@ -281,6 +281,90 @@ def task_for_composite(tool_name: str) -> Optional[str]:
     return COMPOSITE_TOOL_TO_TASK.get(tool_name)
 
 
+# ── POST-CHECK HÜKMÜ — TEK KAYNAK (Q273 atom.py'de doğdu · Q293 2026-09-13 buraya taşındı) ──
+# ÖLÇÜLEN KUSUR (Q273, `adt_push_source`): başarılı push'ta WARNING kapısı ÖLÇÜM ÜRETEMEYİNCE
+# (`measured=false` → run_review WARNING) `ReviewerResult.passed` False → `ok:false` (sahte-FAIL).
+# AYNI SINIF (Q293, `adt_struct_create`): `consistency_ok = consistency.passed` İKİ YÖNDE ayrışıyordu:
+#   · WARNING (reviewer_timeout / measured=false) → `ok:false` (sahte-FAIL, re-create/yanlış teşhis)
+#   · SKIP (artifact_not_found / reviewer_exception / script_missing) → `ok:true` + `post_check.ok:true`
+#     ⇒ post-check HİÇ KOŞMADI ama yanıt "temiz" görünüyordu (ölçülemedi = geçti).
+# ⭐ `passed` = verdict ∈ {PASS, SKIP} (yukarıda). run_review.py JSON'da yalnız BLOCKER/WARNING/PASS
+#   üretir (`run_review.py:471-478`) ⇒ SKIP verdict'i DAİMA bu sarmalayıcıdan gelir = zincir KOŞMADI.
+# KARAR (ADR 0006: WARNING = "yazabilir ama raporda belirt"):
+#   • işlemin `ok`'u YALNIZ verdict BLOCKER, TANINMAYAN verdict ya da blocker_count>0 iken düşer.
+#   • ölçülemeyen kapı SESSİZ KALMAZ: `unmeasured` (+ sebep), ölçülmüş uyarı `warnings`,
+#     açık üç-durumlu hüküm `hukum` ∈ {gecti, uyari, olculemedi, kaldi}; çağıran üst düzeye notice koyar.
+#   • `ok` iç alanı ESKİ anlamını korur (= `passed` ve blocker_count==0); etkisi `ok_etkisi`nde.
+# ⛔ `ReviewerResult.passed` DEĞİŞMEDİ (pre-flight tüketicileri SKIP'i "geç" sayar — doğru).
+POST_CHECK_OK_DUSURMEYEN = ("PASS", "SKIP", "WARNING")
+
+
+def post_check_ozeti(post) -> tuple[dict, bool]:
+    """Post-check sonucunu yanıt alanına çevir + işlemin `ok`'unu düşürmeli mi söyle.
+
+    Returns: (post_check_dict, ok_dusur)
+    """
+    verdict = str(getattr(post, "verdict", "") or "")
+    blocker_count = int(getattr(post, "blocker_count", 0) or 0)
+    warning_count = int(getattr(post, "warning_count", 0) or 0)
+    dusur = verdict not in POST_CHECK_OK_DUSURMEYEN or blocker_count > 0
+    ozet: dict = {
+        "ok": verdict in ("PASS", "SKIP") and blocker_count == 0,
+        "verdict": verdict,
+        "blocker_count": blocker_count,
+        "warning_count": warning_count,
+        "ok_etkisi": "dusurdu" if dusur else "yok",
+    }
+    skip_reason = getattr(post, "skip_reason", "") or ""
+    if skip_reason:
+        ozet["skip_reason"] = skip_reason
+
+    unmeasured, warnings = [], []
+    for r in (getattr(post, "results", None) or []):
+        if not isinstance(r, dict):
+            continue
+        kayit = {"gate": r.get("validator"), "severity": r.get("severity")}
+        if r.get("status") == "SKIP":
+            kayit["reason"] = str(r.get("message") or "")[:240]
+            unmeasured.append(kayit)
+        elif r.get("status") == "FAIL" and r.get("severity") != "BLOCKER":
+            warnings.append(kayit)
+    if not unmeasured and not warnings:
+        if verdict == "WARNING" and skip_reason:
+            # reviewer_timeout gibi: zincir sonuç ÜRETMEDİ ama WARNING döndü ⇒ ölçülemedi.
+            unmeasured.append({"gate": "reviewer", "severity": "WARNING",
+                               "reason": skip_reason[:240]})
+        elif verdict == "SKIP":
+            # Q293: SKIP = zincir hiç koşmadı (sebep: skip_reason) ⇒ "temiz" DEĞİL, ölçülemedi.
+            unmeasured.append({"gate": "reviewer", "severity": "SKIP",
+                               "reason": (skip_reason or "reviewer sonuç üretmedi")[:240]})
+    if unmeasured:
+        ozet["unmeasured"] = unmeasured
+    if warnings:
+        ozet["warnings"] = warnings
+    if dusur:
+        ozet["hukum"] = "kaldi"
+    elif unmeasured:
+        ozet["hukum"] = "olculemedi"
+    elif warnings or verdict == "WARNING":
+        ozet["hukum"] = "uyari"
+    else:
+        ozet["hukum"] = "gecti"
+    return ozet, dusur
+
+
+def post_check_notice(ozet: dict, islem: str = "push") -> str:
+    """WARNING/ölçülemeyen kapının görünür izi — `ok` düşmediğinde yanıtın ÜST düzeyinde durur."""
+    parcalar = []
+    for k in ozet.get("unmeasured") or []:
+        parcalar.append("ÖLÇÜLEMEDİ %s (%s)" % (k.get("gate"), (k.get("reason") or "-")[:120]))
+    for k in ozet.get("warnings") or []:
+        parcalar.append("UYARI %s" % k.get("gate"))
+    return ("POST-CHECK %s — %s BAŞARILI, `ok` DÜŞÜRÜLMEDİ (yalnız BLOCKER düşürür, Q273). "
+            "Bu 'post-check temiz' DEĞİLDİR: %s. Kritik objede elle teyit et."
+            % (ozet.get("verdict"), islem, "; ".join(parcalar) or "ayrıntı yok"))
+
+
 def reject_payload(name: str, object_type: str, result: ReviewerResult) -> dict:
     """Build the MCP error payload when reviewer returns BLOCKER."""
     return {

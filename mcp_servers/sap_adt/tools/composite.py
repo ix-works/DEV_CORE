@@ -32,6 +32,9 @@ from mcp_servers.sap_adt._reviewer import (
     run_reviewer,
     task_for_composite,
 )
+# Q293: post-check hükmü tek kaynakta (atom `adt_push_source` ile AYNI sözleşme).
+from mcp_servers.sap_adt._reviewer import post_check_notice as _post_check_notice
+from mcp_servers.sap_adt._reviewer import post_check_ozeti as _post_check_ozeti
 from mcp_servers.sap_adt.guardrails import (
     GuardrailViolation,
     require_all_labels,
@@ -540,18 +543,21 @@ def adt_struct_create(
     # Sprint 6 T10 — post-create consistency check (placeholder + field count diff).
     # adt_struct_create fields[] yöntemi bazen SAP'de sadece placeholder bırakır.
     # artifact_path verilmişse, lokal artifact ile SAP'deki source'u karşılaştır.
+    # ⛔ Q293 (2026-09-13): `consistency_ok = consistency.passed` İKİ YÖNDE yanlıştı —
+    # WARNING (reviewer_timeout / measured=false) `ok:false` (sahte-FAIL), SKIP (post-check HİÇ
+    # koşmadı) `ok:true` + `post_check.ok:true` (ölçülemedi = temiz). Artık Q273 sözleşmesi
+    # (tek kaynak `_reviewer.post_check_ozeti`): `ok` yalnız BLOCKER / tanınmayan verdict /
+    # blocker_count>0 ile düşer; ölçülemeyen kapı `post_check.unmeasured` + `hukum` +
+    # üst düzey `post_check_notice` ile GÖRÜNÜR.
     consistency_ok = True
+    notice_ozet = None
     if artifact_path:
         consistency = run_reviewer("struct_post_create", artifact_path)
-        steps["post_check"] = {
-            "ok": consistency.passed,
-            "verdict": consistency.verdict,
-            "blocker_count": consistency.blocker_count,
-            "warning_count": consistency.warning_count,
-        }
-        if consistency.skip_reason:
-            steps["post_check"]["skip_reason"] = consistency.skip_reason
-        consistency_ok = consistency.passed
+        ozet, dusur = _post_check_ozeti(consistency)
+        steps["post_check"] = ozet
+        consistency_ok = not dusur
+        if not dusur and (ozet.get("verdict") == "WARNING" or ozet.get("unmeasured")):
+            notice_ozet = ozet
 
     ok_overall = (steps["create"].get("ok") and tail.get("activated")
                   and tail.get("verified") and consistency_ok and content_ok)
@@ -562,6 +568,10 @@ def adt_struct_create(
         "fields_count": len(fields),
         "steps": steps,
     }
+    if notice_ozet is not None and ok_overall:
+        # Notice "yaratma BAŞARILI" der ⇒ yalnız işlem gerçekten başarılıyken üst düzeye konur;
+        # başarısız yanıtta ölçülemeyen kapı `steps.post_check.unmeasured`'da zaten durur.
+        out["post_check_notice"] = _post_check_notice(notice_ozet, islem="yaratma")
     if warn:
         out["reviewer"] = warn["reviewer"]
     return out
