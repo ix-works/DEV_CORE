@@ -106,8 +106,16 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
   yetmez — fix'ten ÖNCE deseni korpusta **grep'le** (ör. pinli SHA `git show <sha>:` · `HEAD:` ·
   OS dalı `win32|junction|os.rmdir` · saat `datetime|time.time`) ve raporda
   `SINIF-ENVANTERİ: <desen> → N dosya: [liste] · dokunulan/bırakılan(neden)` satırını ver.
-  Envanteri **fix'e çevirme** — yalnız kuyruktaki kaleme uygula, kalanı Q adayı olarak raporla.
-  (Ölçülen bedel: 2026-08-29'da V3 fixture'ı vaka-düzeyi düzeltildi, 6 kardeş taranmadı → 2 ek tur.)
+  ⭐ **ENVANTER KAPSAMA GİRER (kullanıcı kuralı 2026-09-13):** lider envanteri spawn ÖNCESİ çıkarıp
+  brifte KAPSAM olarak verir. Çalışırken yeni kardeş bulursan — aynı desen + senin dosya kümende +
+  aynı YÖNTEM uygulanabiliyor — ara raporda bildir ve **KAPSAMA AL** (her kardeşte mekanizmayı ayrıca
+  ölç: sınıf aynı, düzeltme farklı olabilir). Q adayı olarak (gerekçeyle) YALNIZ şunlar raporlanır:
+  başka ajanın uçuştaki dosyası · farklı sınıf/mekanizma · kapsamı riskli büyüten vaka (ör. ayrı bir
+  SAP yazma yolu, ayrı blast-radius). Kozmetik yan bulgu (hüküm/SAP etkilemez) önce "riske değer mi"
+  süzgecinden geçer.
+  (Ölçülen bedel: 2026-08-29'da V3 fixture'ı vaka-düzeyi düzeltildi, 6 kardeş taranmadı → 2 ek tur ·
+  2026-09-13'te eski "envanteri fix'e çevirme, Q adayı yaz" kuralıyla bir turda 7 madde kapandı,
+  10 yeni açıldı — kuyruk yakınsamadı.)
 - **F3 ÜÇ-BAĞLAM TESTİ:** ① bilinen-bozuk→FAIL ② bilinen-temiz→PASS ③ **görev-DIŞI üçüncü
   bağlam** (başka paket/proje-şekli/kabuk). Fixture'ları worktree `tests/fixtures/`e KALICI
   ekle. Testsiz teslim YASAK — "kod doğru görünüyor" kabul edilmez (ADR 0017 kanıtsız-done).
