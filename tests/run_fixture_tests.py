@@ -176,6 +176,10 @@ OZEL_TESTLER = [
      "olmesini V4 (sahte Windows-flavour koku) saglar"),
     ("proje_slug_tek_kaynak", "Claude Code proje-slug'i: tek sozlesme, tek kaynak (S4)"),
     ("git_sorgu_sessiz_bos", "deploy_ui --all-changed: git arizasi != 'degisiklik yok' (S5)"),
+    ("ui_dogrulama_satir_sonu_kacis",
+     "Q281+Q285: deploy_ui --verify-only kacisli \\r\\n yanlis STALE ([OK~] ayri kova, JS kodu/"
+     ".js modulu/deploy kipi KATI) + verify_ui_static_assets taban=dist, .properties \\uXXXX "
+     "cozulmus kaynak kiyasi (webapp'te build edilmemis degisiklik HALA FAIL)"),
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
     # 2026-08-01 kuyruk-turu (validator ailesi, V1-V6):
     ("cds_curr_satir_yorumu", "CURR/QUAN: satir-sonu // yorumu alani/degeri gizliyordu (V1)"),
@@ -922,8 +926,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:class_include_push", "O:reviewer_tip_kapsam", "O:adt_uc_url_cozumu"),
      "tip normalizasyonu + ADT uç URL'i (`ensure_source_url` / `url_path` fail-closed)"),
     ("scripts/deploy_ui.py",
-     ("O:git_sorgu_sessiz_bos", "O:sessiz_olumsuzlama_2026_08_10"),
-     "git sorgusu + sessiz olumsuzlama"),
+     ("O:git_sorgu_sessiz_bos", "O:sessiz_olumsuzlama_2026_08_10", "O:ui_dogrulama_satir_sonu_kacis"),
+     "git sorgusu + sessiz olumsuzlama + (Q281) preload kaçışlı satır sonu sınıfı"),
+    # 2026-09-13 (Q285): bu dosya HARİTA'da HİÇ YOKTU ve korpusu da yoktu (canlı BSP gerektirdiği
+    # için 2026-08-10'da "fixture YOK" diye bırakılmıştı); ağ/kimlik sahtelenerek artık ölçülüyor.
+    ("scripts/verify_ui_static_assets.py",
+     ("O:ui_dogrulama_satir_sonu_kacis",),
+     "taban=dist + .properties çözülmüş kaynak kıyası + help enjekte-meta kontrol grubu"),
     ("scripts/worklist_audit.py", ("R:AV-13",), "üç-değerli sınıflama"),
     ("scripts/build_core_index.py",
      ("O:core_index_kapsam", "O:core_index_siralama", "O:sap_gate_skip_sozlesmesi"),
