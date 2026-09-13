@@ -33,6 +33,7 @@ DEMEZ**, "ÖLÇÜLEMEDİ" der (ölçüm-yokluğu sözleşmesi — bu evde `ix_do
 S4 vektörüyle ZATEN çivili bir sınıf).
 
 Tüketiciler: `scripts/hooks/session_start.py` · `scripts/ix_doctor.py`
+(ikisi hem `anlamli_imza`yı hem `d7_ciftleri`ni buradan okur — Q245②, 2026-09-13)
 Korpus: tests/fixtures/d7_drift_imzasi/run.py
 """
 from __future__ import annotations
@@ -52,6 +53,59 @@ for _akis in (sys.stdout, sys.stderr):
 # görürse "eş/eş değil" diye karar VERMEZ, ölçüm yapılamadığını İLAN eder. (İki taraf da
 # okunamazsa `"?" == "?"` sahte-PASS üretirdi — çağıran bu sabiti AYRICA kontrol eder.)
 OKUNAMADI = "?"
+
+# ⭐ D7 ÇİFT LİSTESİ — TEK KAYNAK (2026-09-13, kayıt Q245②).
+# Liste bugüne kadar İKİ kapıda AYRI literal olarak yaşıyordu (`session_start._drift_kontrol`
+# + `ix_doctor._d7_drift`) — Q212'nin teşhis ettiği kopya-tanım sınıfının ikinci yüzü: yeni bir
+# çift eklemek İKİ yere yazmayı gerektiriyordu ve biri unutulursa iki kapı yine ayrışırdı.
+# Onarım metinleri de burada, çünkü çiftten çifte DEĞİŞİR (aşağıdaki pre-commit notu).
+#
+# `scripts/git-hooks/pre-commit` NEDEN BURADA (Q245②, ölçüldü 2026-09-13): `init_project.py`
+# kopyayı doğumda BİR KEZ yazar (`uret`, var olanı ezmez), `team_setup.py` yalnız
+# `core.hooksPath`i kablolar, içeriğe bakmaz ⇒ şablon sertleştikçe doğmuş projelerdeki kopya
+# SESSİZCE geride kalıyordu (bir projede core-sızıntı kapısı bu yüzden fail-open kaldı).
+# Şablonda yer tutucu YOK ⇒ davranışsal imza birebir eşit olmalıdır.
+#
+# ⛔ ONARIM METNİ KOPYALANMAZ — ölçülmüş üç tuzak (pre-commit için):
+#   · `team_setup.dosya_tamamla` pre-commit ÜRETMEZ (yalnız settings.json + hook_shim.py)
+#     ⇒ "team_setup ile üret" demek operatörü hiçbir şey üretmeyen bir komuta yollar.
+#   · `init_project --force` CLAUDE.md · settings.json · project.yaml dahil HER üretilen
+#     dosyayı ezer ⇒ tek dosya için önerilemez.
+#   · pre-commit behavior-manifest yüzeyinde DEĞİL (`behavior_manifest.YUZEY_DOSYALAR`)
+#     ⇒ "bilinçliyse manifest'e işle" bu çift için anlamsızdır.
+_GENEL_YOK = "python core/scripts/team_setup.py ile uret"
+_GENEL_SAPMA = "bilinçliyse manifest'e işle; değilse template'ten yenile"
+_PRECOMMIT_YOK = ("sablondan KOPYALA (core/claude/git-hooks/pre-commit.template -> "
+                  "scripts/git-hooks/pre-commit), sonra python core/scripts/team_setup.py "
+                  "(core.hooksPath kablolar); init_project --force KULLANMA (tum dosyalari ezer)")
+_PRECOMMIT_SAPMA = ("sablonda yer tutucu YOK, proje-ozel uyarlama beklenmez: sablondan yenile ve "
+                    "projenin kendi deposunda PR ile commit'le (manifest yuzeyinde DEGIL)")
+
+# (proje-göreli kopya, core-göreli şablon, görünen ad, YOK onarımı, SAPMA onarımı)
+D7_CIFTLERI = (
+    (".claude/settings.json", "claude/settings.template.json", "settings.json",
+     _GENEL_YOK,
+     _GENEL_SAPMA),
+    ("scripts/hook_shim.py", "claude/hook_shim.template.py", "hook_shim.py",
+     _GENEL_YOK,
+     _GENEL_SAPMA),
+    ("scripts/git-hooks/pre-commit", "claude/git-hooks/pre-commit.template", "pre-commit",
+     _PRECOMMIT_YOK,
+     _PRECOMMIT_SAPMA),
+)
+
+
+def d7_ciftleri(proj: Path, core: Path) -> list[tuple[Path, Path, str, str, str, str]]:
+    """-> [(yerel, sablon, ad, yok_onarim, sapma_onarim, sablon_core_goreli)]
+
+    `core` çağırana göre değişir: `session_start` → `PROJ/core` (junction), `ix_doctor` →
+    kendi `CORE_ROOT`u. Şablon yolu mesajda core-GÖRELİ basılır (`tpl.name` DEĞİL:
+    `git-hooks/` alt dizinini düşürür ve operatörü olmayan bir dosyaya yollar).
+    """
+    out = []
+    for rel_y, rel_t, ad, yok, sapma in D7_CIFTLERI:
+        out.append((proj / rel_y, core / rel_t, ad, yok, sapma, rel_t))
+    return out
 
 
 def yorumsuz(nesne):

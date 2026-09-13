@@ -144,7 +144,9 @@ OZEL_TESTLER = [
      "AYRI tanim kullaniyordu -- `session_start` DAVRANISSAL imza, `ix_doctor` HAM sha "
      "=> her ix_doctor kosumunda sahte WARN (uyari korlugu). Korpus tek cevabi degil "
      "IKI KAPININ ANLASMASINI olcer; cift yonlu: davranis TASIMAYAN fark sessiz, "
-     "davranis TASIYAN fark HALA WARN (asiri-gevseme capasi)"),
+     "davranis TASIYAN fark HALA WARN (asiri-gevseme capasi). Q245②: ucuncu cift "
+     "`scripts/git-hooks/pre-commit` (G-blogu) — cift listesi + onarim metni TEK KAYNAK, "
+     "satir sonu farki ES, fail-open sapma SAPMIS, YOK'ta dogru onarim yolu"),
     ("bos_seans_markeri",
      "Q253: cozulemeyen oturum kimligi BOS DIZE olarak dedup anahtarina yazilirsa "
      "kapi SESSIZCE ve KALICI OLARAK oluyor (`\"\" == \"\"` daima True). Sinif "
@@ -756,13 +758,15 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "çürütülmüş rehberliği taşımaması"),
     ("claude/git-hooks/pre-commit.template",
      ("O:precommit_junction_failclosed", "O:precommit_coreleak_failclosed",
-      "O:precommit_kopya_surum_esligi", "O:run_all_ozet_kipi"),
+      "O:precommit_kopya_surum_esligi", "O:run_all_ozet_kipi", "O:d7_drift_imzasi"),
      "İKİ AYRI fail-open ekseni, İKİ AYRI korpus — biri diğerini KAPSAMAZ: adım-2 "
      "`core/` çözülemezse validator zinciri atlanmaz (junction) · adım-1 core-sızıntı "
      "kapısının KENDİ `git diff` ölçümü çökerse 'temiz' sayılmaz (Q199①, coreleak). "
      "ÜÇÜNCÜSÜ (Q245) o ikisinin BİRLEŞİMİNİ + şablon→kopya yayılımını ölçer: iki "
      "sertleştirme AYNI ANDA sökülünce (canlı kopyalarda yaşayan sürüm) ne olur. "
-     "DÖRDÜNCÜSÜ (Q203) adım-2'nin ÇIKTI KİPİNİ ölçer: `--ozet` bulguyu yutmuyor mu"),
+     "DÖRDÜNCÜSÜ (Q203) adım-2'nin ÇIKTI KİPİNİ ölçer: `--ozet` bulguyu yutmuyor mu. "
+     "BEŞİNCİSİ (Q245②) D7'nin şablon↔proje kopyası kıyasıdır: G-bloğunun sapma vektörü "
+     "şablondaki bir `exit 1`i `exit 0`a çevirerek türetilir (şablon o çapayı taşımalı)"),
     ("scripts/validators/run_all_validators.py", ("O:run_all_ozet_kipi",),
      "Q203 çıktı kipleri: bayraksız/--ayrintili BAYT-EŞ format pin'i (CI + post_validate + "
      "ix_doctor bu biçimi okur) + --ozet'in YUTMAMA değişmezleri (FAIL detayı · ÖLÇÜLEMEDİ/"
@@ -843,8 +847,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # ölçülmeli — yalnız bir kapının korpusu seçilseydi ayrışma (bu turun teşhisi) yine
     # görünmezdi. `utils/infra_yuzeyi.py` (Q209) satırıyla AYNI sınıf.
     ("scripts/utils/drift_imzasi.py", ("O:d7_drift_imzasi",),
-     "D7 imzası tek-kaynak: `session_start` (hook) + `ix_doctor` (CLI) aynı normalizasyonu "
-     "okur; kopya-tanım drift'i ve 'ÖLÇÜLEMEDİ != TEMİZ' sözleşmesi bu korpusta çapalı"),
+     "D7 imzası + ÇİFT LİSTESİ (`D7_CIFTLERI`, Q245②) tek-kaynak: `session_start` (hook) + "
+     "`ix_doctor` (CLI) aynı normalizasyonu ve aynı çiftleri okur; kopya-tanım drift'i, "
+     "çift-başına onarım metni ve 'ÖLÇÜLEMEDİ != TEMİZ' sözleşmesi bu korpusta çapalı"),
     ("scripts/build_recall_index.py", ("O:recall_index_ozetsiz",),
      "MEMORY.md ayrıştırma sözleşmesi: özetsiz satır → frontmatter `description` + "
      "satır-atlamalı kirlenme + 'kaynak yoksa UYDURMA yok' değişmezi"),
