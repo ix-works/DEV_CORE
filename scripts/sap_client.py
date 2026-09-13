@@ -1627,7 +1627,11 @@ class SAPClient:
             # Use activation pre-audit to check syntax without activating
             result = self.adt_client.syntax_check_via_activation(object_name, object_url)
 
-            if result.get('valid'):
+            if result.get('valid') is None:
+                # Q307: SAP kontrolu KOSMADI -> "gecerli" de "hatali" da DEGIL.
+                print("[UNVERIFIED] Syntax NOT measured (OLCULEMEDI): %s"
+                      % (result.get('sozdizimi_sebep') or 'sebep bildirilmedi'))
+            elif result.get('valid'):
                 print("[OK] Syntax check passed")
 
                 # Show warnings if any

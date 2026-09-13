@@ -12,6 +12,10 @@ NEDEN VAR (canlı ölçüm, DEV, adt-gateway 2026-09-13; ham gövdeler `canli/` 
   · Q231-a — tipli FUGR toplu aktivasyonu gövdeye FUGR/FF koymuyordu (SAP 1. fazda FF
     vermiyor); çalışan istek F + parentUri'li FF + preauditRequested=true idi.
   · Q231-b — `adt_activate` klasik yol `activated:false` iken `ok:true` dönüyordu.
+  · Q307 — `syntax_check_via_activation` SAP kontrolü KOŞMADIĞINDA (`checkExecuted=false`,
+    mesajsız; boş/kısa gövde; ioc; bayraksız) `valid:True` dönüyordu. Artık `valid` üç değerli
+    (None = ÖLÇÜLEMEDİ) ve gövde hükmü kanonik `aktivasyon_govde_hukmu`'ndan gelir (J bölümü;
+    lib + `sap_client.syntax_check` + MCP `adt_syntax_check` + `syntax_check.py` CLI).
 
 SÖZLEŞME (`sap_adt_lib.aktivasyon_govde_hukmu`): True · False · None ("gövde hüküm taşımıyor"
 → BAĞIMSIZ worklist sondası karar verir; sonda kurulamazsa BAŞARI DEĞİL, DOĞRULANAMADI).
@@ -24,6 +28,10 @@ SÖZLEŞME (`sap_adt_lib.aktivasyon_govde_hukmu`): True · False · None ("gövd
     ad+tip ve alt-kaynak (FF) eşleşmesi kaçmaz. İkisi birlikte "worklist temiz" hükmünü
     AYIRT EDİCİ tutar (lider kararı 2026-09-13, madde 3).
   · A12 — ⚠GEVŞETME HÜCRESİ (`_BAYRAKSIZ_GOVDE_HUKMU`): karar değişirse bu satır BİLEREK güncellenir.
+  · J1–J5 + J17/J18 + J20/J21 + J23/J24 — Q307 KONTROL GRUPLARI: SAP kontrolü GERÇEKTEN koştuysa
+    temiz gövde `valid:True`, E mesajı `valid:False` kalır ("her şeye None" diyen fix geçemesin).
+    J13 + J14 — BİLEREK KORUNAN iki `valid:False` (ayrıştırılamayan gövde · HTTP 403 kilit):
+    `sap_client.push_object` ön-kontrolü bunlarda aktivasyonu durdurmaya devam eder.
 ⚠ SINIR (yazılı, ölçülemez): obje aktivasyondan ÖNCE worklist'te değilse "listede yok" ayırt
   edici değildir — ön-snapshot alınmaz (lider kararı).
 
@@ -68,7 +76,8 @@ LOCK_URI = "/sap/bc/adt/ddic/lockobjects/sources/ezsd001_ornek"
 # ÜRETİM PROD DOSYALARI — `--taban` bunları eski sürümle değiştirir; SINIF bölümü bunları tarar.
 URETIM = ["scripts/sap_adt_lib.py", "scripts/create_rap_service.py", "scripts/push_bo_atomic.py",
           "scripts/populate_lock_objects.py", "scripts/push_textpool.py",
-          "mcp_servers/sap_adt/tools/atom.py", "mcp_servers/sap_adt/tools/composite.py"]
+          "mcp_servers/sap_adt/tools/atom.py", "mcp_servers/sap_adt/tools/composite.py",
+          "scripts/sap_client.py", "scripts/syntax_check.py"]
 
 HTML500 = "<html><head><title>500 Internal Server Error</title></head><body>SAP Web AS</body></html>"
 ESKI_STIL = '<?xml version="1.0"?><chkl:messages><msg severity="I"><txt>ok</txt></msg></chkl:messages>'
@@ -574,9 +583,150 @@ def bolum_h(L, ATOM):
          f"ok={r.get('ok')} verified={r.get('activation_verified')}")
 
 
+class _SozSunucu:
+    """Sozdizimi kontrolu POST'u: sabit (kod, govde) doner, istek parametrelerini kaydeder."""
+
+    def __init__(self, kod, govde):
+        self.kod, self.govde, self.postlar = kod, govde, []
+
+    def request(self, method, url, headers=None, timeout=None, **kw):
+        if method.lower() == "post" and url.endswith("/sap/bc/adt/activation"):
+            self.postlar.append(dict(kw.get("params") or {}))
+            return _Y(self.kod, self.govde, url)
+        return _Y(599, "beklenmeyen istek", url)
+
+    def post(self, url, params=None, headers=None, data=None, verify=None, timeout=None, **kw):
+        return self.request("post", url, headers=headers, data=data, params=params)
+
+    def get(self, url, **kw):
+        return _Y(599, "beklenmeyen istek", url)
+
+
+BAYRAKSIZ_NS = '<?xml version="1.0"?><chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist"/>'
+KILIT_403 = ('<?xml version="1.0"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/'
+             'communicationframework"><properties><entry key="T100KEY-V1">SAP_USER_B</entry>'
+             '</properties></exc:exception>')
+SOZ_AD, SOZ_URI = "ZCL_SD001_ORNEK_A", "/sap/bc/adt/oo/classes/zcl_sd001_ornek_a"
+
+
+def _yakala(fn, *a, **k):
+    eski = (sys.stdout, sys.stderr)
+    tampon = io.StringIO()
+    sys.stdout = sys.stderr = tampon
+    try:
+        return fn(*a, **k), tampon.getvalue()
+    finally:
+        sys.stdout, sys.stderr = eski
+
+
+@bolum("J sozdizimi kontrolu (Q307)")
+def bolum_j(L, SC, Q, CONN, SCK):
+    def lib(govde, kod=200):
+        sv = _SozSunucu(kod, govde)
+        return _sessiz(_sahte_lib(L, sv).syntax_check_via_activation, SOZ_AD, SOZ_URI), sv
+
+    tablo = [
+        ("J1 KONTROL canli check/act=true -> valid True", _oku("govde_true.xml"), True),
+        ("J2 KONTROL check=true act=false mesajsiz -> True (SAP kontrolu kosturdu)",
+         _govde(ae="false", ce="true"), True),
+        ("J3 KONTROL act=true check=false mesajsiz -> True (aktivasyon kosturdu)", _govde(ce="false"), True),
+        ("J4 KONTROL check=true + type=W -> True (uyari normal)", _govde(msg=_msg("W")), True),
+        ("J5 KONTROL check=true + type=E -> False", _govde(msg=_msg("E")), False),
+        ("J6 ⭐Q307 canli yalniz-generation check=false 0 mesaj -> None (eski: True)",
+         _oku("govde_yalniz_generation.xml"), None),
+        ("J7 ⭐Q307 check/act/gen=false mesajsiz -> None (eski: True)", _govde(ae="false", ce="false"), None),
+        ("J8 ⭐Q307 BOS govde -> None (eski: True 'Assume valid')", "", None),
+        ("J9 ⭐Q307 KISA govde (<50) -> None (eski: True)", "<ok/>", None),
+        ("J10 ⭐Q307 canli ioc:inactiveObjects -> None (eski: True)", _oku("faz1_ioc.xml"), None),
+        ("J11 ⭐Q307 bayraksiz chkl -> None (eski: True)", BAYRAKSIZ_NS, None),
+        ("J12 ⭐type=A mesaji -> False (eski: True, A toplanmiyordu)", _govde(msg=_msg("A")), False),
+        ("J13 KONTROL ayristirilamayan govde -> False + YEREL mesaj (bilerek korunur)", ESKI_STIL, False),
+    ]
+    for ad, govde, bekl in tablo:
+        r, sv = lib(govde)
+        ek = True
+        hatalar = r.get("errors") or []
+        if bekl is False and ad.startswith("J13"):
+            ek = bool(hatalar) and not any(h.get("type") for h in hatalar)
+        elif bekl is False:
+            ek = bool(hatalar) and all(h.get("type") in ("E", "A") for h in hatalar)
+        elif bekl is None:
+            ek = bool(r.get("sozdizimi_sebep")) and not hatalar
+        ekle(ad, r.get("valid") is bekl and ek,
+             f"valid={r.get('valid')} sebep={r.get('sozdizimi_sebep')} hata={len(hatalar)}")
+    r, sv = lib(KILIT_403, kod=403)
+    ekle("J14 KONTROL HTTP 403 kilit -> valid False + locked True (bilerek korunur)",
+         r.get("valid") is False and r.get("locked") is True, f"valid={r.get('valid')} locked={r.get('locked')}")
+    r, sv = lib(_oku("govde_true.xml"))
+    ekle("J15 KONTROL istek bicimi degismedi: tek POST, method=activate + preauditRequested=true",
+         sv.postlar == [{"method": "activate", "preauditRequested": "true"}], sv.postlar)
+
+    def istemci(govde):
+        ist = object.__new__(SC.SAPClient)
+        ist.adt_client = _sahte_lib(L, _SozSunucu(200, govde))
+        ist.debug_enabled = False
+        return ist
+
+    r, log = _yakala(istemci(_oku("govde_yalniz_generation.xml")).syntax_check, SOZ_AD, object_type="class")
+    ekle("J16 ⭐sap_client valid None -> 'Syntax errors found' BASILMAZ + [UNVERIFIED] basilir",
+         r.get("valid") is None and "Syntax errors found" not in log and "[UNVERIFIED]" in log
+         and "[OK] Syntax check passed" not in log, f"valid={r.get('valid')} log={log.strip()[:120]!r}")
+    r, log = _yakala(istemci(_oku("govde_true.xml")).syntax_check, SOZ_AD, object_type="class")
+    ekle("J17 KONTROL sap_client temiz -> valid True + [OK] Syntax check passed",
+         r.get("valid") is True and "[OK] Syntax check passed" in log, log.strip()[:120])
+    r, log = _yakala(istemci(_govde(msg=_msg("E"))).syntax_check, SOZ_AD, object_type="class")
+    ekle("J18 KONTROL sap_client E -> [FAIL] Syntax errors found basilir",
+         r.get("valid") is False and "Syntax errors found" in log, log.strip()[:120])
+
+    eski_tier, eski_cli = CONN.get_active_tier, Q._get_client
+    try:
+        CONN.get_active_tier = lambda: "DEV"
+
+        def mcp(govde):
+            ist = istemci(govde)
+            Q._get_client = lambda: ist
+            return _sessiz(Q.adt_syntax_check, name=SOZ_AD, object_type="class")
+
+        r = mcp(_oku("govde_yalniz_generation.xml"))
+        ekle("J19 ⭐3.BAGLAM MCP adt_syntax_check yalniz-generation -> ok False + sozdizimi_belirsiz + valid None "
+             "(eski: ok True valid True)",
+             r.get("ok") is False and r.get("error") == "sozdizimi_belirsiz" and r.get("valid") is None,
+             f"ok={r.get('ok')} error={r.get('error')} valid={r.get('valid')}")
+        r = mcp(_oku("govde_true.xml"))
+        ekle("J20 KONTROL MCP temiz -> ok True + valid True", r.get("ok") is True and r.get("valid") is True,
+             f"ok={r.get('ok')} valid={r.get('valid')}")
+        r = mcp(_govde(msg=_msg("E")))
+        ekle("J21 KONTROL MCP E -> ok True + valid False", r.get("ok") is True and r.get("valid") is False,
+             f"ok={r.get('ok')} valid={r.get('valid')}")
+    finally:
+        CONN.get_active_tier, Q._get_client = eski_tier, eski_cli
+
+    eski_argv, eski_sc = sys.argv, SCK.SAPClient
+    try:
+        def cli(govde):
+            ist = istemci(govde)
+            SCK.SAPClient = lambda: ist
+            sys.argv = ["syntax_check.py", "--name", SOZ_AD, "--type", "class"]
+            return _yakala(SCK.main)
+
+        rc, log = cli(_oku("govde_yalniz_generation.xml"))
+        ekle("J22 ⭐4.BAGLAM CLI syntax_check.py yalniz-generation -> rc 1 + NOT MEASURED, 'SYNTAX CHECK FAILED' YOK "
+             "(eski: rc 0 [OK])",
+             rc == 1 and "NOT MEASURED" in log and "[FAIL] SYNTAX CHECK FAILED" not in log
+             and "[OK] Check passed" not in log, f"rc={rc} log={log.strip()[-90:]!r}")
+        rc, log = cli(_oku("govde_true.xml"))
+        ekle("J23 KONTROL CLI temiz -> rc 0 + [OK] Check passed", rc == 0 and "[OK] Check passed" in log, f"rc={rc}")
+        rc, log = cli(_govde(msg=_msg("E")))
+        ekle("J24 KONTROL CLI E -> rc 1 + SYNTAX CHECK FAILED", rc == 1 and "[FAIL] SYNTAX CHECK FAILED" in log,
+             f"rc={rc}")
+    finally:
+        sys.argv, SCK.SAPClient = eski_argv, eski_sc
+
+
 @bolum("I SINIF (AST)")
 def bolum_i():
-    serbest = {("sap_adt_lib.py", "aktivasyon_govde_hukmu"), ("sap_adt_lib.py", "syntax_check_via_activation")}
+    # Q307: `syntax_check_via_activation` artik bayrak dizgesine dayanmaz -> serbest listesinden CIKTI.
+    serbest = {("sap_adt_lib.py", "aktivasyon_govde_hukmu")}
     kirli = []
     for yol in URETIM:
         kaynak = (REPO / yol).read_text(encoding="utf-8")
@@ -605,7 +755,8 @@ def bolum_i():
                 ("scripts/create_rap_service.py", "_activation_failures"),
                 ("scripts/push_bo_atomic.py", "activate_many"),
                 ("scripts/populate_lock_objects.py", "activate_lock_object"),
-                ("scripts/push_textpool.py", "main")]
+                ("scripts/push_textpool.py", "main"),
+                ("scripts/sap_adt_lib.py", "syntax_check_via_activation")]
     for yol, fonk in beklenen:
         agac = ast.parse((REPO / yol).read_text(encoding="utf-8"))
         fn = next((d for d in ast.walk(agac) if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -638,6 +789,14 @@ def main() -> int:
             ekle(f"[BOLUM COKTU] {ad} import", False, f"{type(exc).__name__}: {exc}")
             continue
         fn(L, m)
+    try:
+        SC = _sessiz_import("sap_client")
+        Q = _sessiz_import("mcp_servers.sap_adt.tools.query")
+        CONN = _sessiz_import("mcp_servers.sap_adt._conn")
+        SCK = _sessiz_import("syntax_check")
+        bolum_j(L, SC, Q, CONN, SCK)
+    except Exception as exc:
+        ekle("[BOLUM COKTU] J import", False, f"{type(exc).__name__}: {exc}")
     bolum_i()
     gecen = sum(1 for _, ok, _ in S if ok)
     for ad, ok, detay in S:
@@ -695,6 +854,22 @@ MUTASYONLAR = [
      '            "ok": bool(activated),', '            "ok": True,'),
     ("M17 ⚠GEVSETME hucresi False'a cevrildi (karar degisirse A12 BILEREK guncellenir)",
      "scripts/sap_adt_lib.py", "_BAYRAKSIZ_GOVDE_HUKMU = None", "_BAYRAKSIZ_GOVDE_HUKMU = False"),
+    ("M18 Q307 geri: kontrol kosmadi -> valid True", "scripts/sap_adt_lib.py",
+     "result['valid'], result['sozdizimi_sebep'] = None, 'kontrol_kosmadi:' + hk['sebep']",
+     "result['valid'], result['sozdizimi_sebep'] = True, 'kontrol_kosmadi:' + hk['sebep']"),
+    ("M19 Q307 geri: bos/kisa govde -> valid True ('Assume valid')", "scripts/sap_adt_lib.py",
+     "                'valid': None,\n                'sozdizimi_sebep': 'govde_bos_veya_kisa',",
+     "                'valid': True,\n                'sozdizimi_sebep': 'govde_bos_veya_kisa',"),
+    ("M20 asiri-siki: checkExecuted dali sokuldu (kosan kontrol None'a duser)", "scripts/sap_adt_lib.py",
+     "elif hk['check_executed'] or hk['activation_executed']:", "elif hk['activation_executed']:"),
+    ("M21 ayristirilamayan govde False -> None (push on-kontrolu durdurmaz olur)", "scripts/sap_adt_lib.py",
+     "                'valid': False,\n                'sozdizimi_sebep': 'govde_ayristirilamadi',",
+     "                'valid': None,\n                'sozdizimi_sebep': 'govde_ayristirilamadi',"),
+    ("M22 sap_client None dali sokuldu (sahte 'Syntax errors found')", "scripts/sap_client.py",
+     "            if result.get('valid') is None:\n                # Q307",
+     "            if False:\n                # Q307"),
+    ("M23 CLI None dali sokuldu (rc 1 'has syntax errors')", "scripts/syntax_check.py",
+     "    if result.get('valid') is None:\n        # Q307", "    if False:\n        # Q307"),
 ]
 
 

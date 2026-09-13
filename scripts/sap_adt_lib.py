@@ -3693,7 +3693,11 @@ class SAPADTClient:
         Callers: treat this as a WRITE operation (single-writer / gateway only).
 
         Returns:
-            dict with 'valid' (bool), 'errors' (list), 'warnings' (list)
+            dict with 'valid' (True / False / None), 'sozdizimi_sebep', 'hukum_sebep',
+            'errors' (list), 'warnings' (list).
+            'valid' is None when SAP did NOT run the check (Q307): empty/short body,
+            generation-only body, flagless body, inactiveObjects list. None is NOT
+            "valid" and NOT "syntax errors" -- it means "not measured".
         """
         # Determine object type from URL
         object_type = self._extract_object_type(object_url)
@@ -3747,89 +3751,64 @@ class SAPADTClient:
                 response_text=response.text[:500]
             )
 
-        # Handle empty response (some SAP configurations return empty for pure pre-audit)
-        if not response.text or len(response.text.strip()) < 50:
+        # ⛔ Q307 (2026-09-13): `valid` UC DEGERLIDIR — True · False · None (OLCULEMEDI).
+        # Eskiden iki dal kontrol KOSMADAN "gecerli" diyordu: (a) govde bos/<50 karakter ->
+        # "Assume valid" (b) mesaj yok + SAP kontrolu atladi -> "already clean / generation
+        # only" (yorum; kaniti yoktu). Canli ayni gövde (`checkExecuted=false` +
+        # yalniz generation, 0 mesaj) FUGR'da GERCEK BASARISIZLIKTI (Q187).
+        # Govde hukmu TEK KAYNAKTAN: `aktivasyon_govde_hukmu` (bayrak/mesaj ayristirmasi burada
+        # YENIDEN yazilmaz — Q188). Sozdizimi izdusumu:
+        #   False -> SAP'nin kendi E/A mesaji (her kayit `type` tasir)
+        #   True  -> mesaj yok VE SAP kontrolu ya da aktivasyonu GERCEKTEN kosturdu
+        #   None  -> geri kalan her sey (bos/kisa govde · yalniz generation · bayraksiz ·
+        #            ioc:inactiveObjects · tanınmayan govde): sozdizimi HIC olculmedi
+        # ⚠ Iki davranis BILEREK korunur: HTTP 403 (kilit) ve >=50 karakterlik AYRISTIRILAMAYAN
+        # govde `valid:False` + yerel mesaj doner (`sap_client.push_object` on-kontrolu bunlarda
+        # aktivasyonu durdurmaya devam eder; MCP `_gecerlilik` yerel mesaji zaten None okur).
+        text = response.text or ''
+        if len(text.strip()) < 50:
             return {
-                'valid': True,  # Assume valid if no errors returned
+                'valid': None,
+                'sozdizimi_sebep': 'govde_bos_veya_kisa',
+                'hukum_sebep': 'govde_bos',
                 'errors': [],
                 'warnings': [],
                 'activation_executed': False,
-                'check_executed': True
+                'check_executed': False,
+                'generation_executed': False,
             }
 
-        # Parse the XML response (same format as activate_object)
-
-
-        result = {
-            'valid': False,
-            'activation_executed': False,
-            'check_executed': False,
-            'generation_executed': False,
-            'errors': [],
-            'warnings': []
-        }
-
         try:
-            root = ET.fromstring(response.text)
-
-            # Namespace for checklist
-            ns_chkl = {'chkl': 'http://www.sap.com/abapxml/checklist'}
-
-            # Check properties
-            props = root.find('.//chkl:properties', ns_chkl)
-            if props is not None:
-                result['activation_executed'] = props.get('activationExecuted', 'false') == 'true'
-                result['check_executed'] = props.get('checkExecuted', 'false') == 'true'
-                result['generation_executed'] = props.get('generationExecuted', 'false') == 'true'
-
-            # Collect messages (errors and warnings)
-            for elem in root.iter():
-                tag_name = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
-
-                if tag_name == 'msg':
-                    msg_type = elem.get('type', 'W')
-                    obj_descr = elem.get('objDescr', '')
-                    line = elem.get('line', '0')
-                    href = elem.get('href', '')
-
-                    text = ''
-                    for child in elem.iter():
-                        child_tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-                        if child_tag == 'txt' and child.text:
-                            text = child.text
-                            break
-
-                    message_info = {
-                        'type': msg_type,
-                        'message': text,
-                        'object': obj_descr,
-                        'line': line,
-                        'href': href
-                    }
-
-                    if msg_type == 'E':
-                        result['errors'].append(message_info)
-                    elif msg_type == 'W':
-                        result['warnings'].append(message_info)
-
-            # Valid if:
-            # 1. checkExecuted=true and no errors → SAP ran the check, it passed
-            # 2. No errors and SAP skipped check (already clean / generation only) → valid
-            # 3. Errors present → always invalid
-            if result['errors']:
-                result['valid'] = False
-            elif result['check_executed']:
-                result['valid'] = True
-            elif not result['errors']:
-                # SAP skipped the check (object already clean or only generation ran)
-                result['valid'] = True
-            else:
-                result['valid'] = False
-
+            ET.fromstring(text)
         except ET.ParseError as e:
-            result['valid'] = False
-            result['errors'] = [{'message': f'Could not parse syntax check response: {e}'}]
+            return {
+                'valid': False,
+                'sozdizimi_sebep': 'govde_ayristirilamadi',
+                'hukum_sebep': '',
+                'activation_executed': False,
+                'check_executed': False,
+                'generation_executed': False,
+                'errors': [{'message': f'Could not parse syntax check response: {e}'}],
+                'warnings': [],
+            }
 
+        hk = aktivasyon_govde_hukmu(text)
+        result = {
+            'valid': None,
+            'sozdizimi_sebep': '',
+            'hukum_sebep': hk['sebep'],
+            'activation_executed': hk['activation_executed'],
+            'check_executed': hk['check_executed'],
+            'generation_executed': hk['generation_executed'],
+            'errors': hk['errors'],
+            'warnings': hk['warnings'],
+        }
+        if hk['errors']:
+            result['valid'], result['sozdizimi_sebep'] = False, 'sap_hata_mesaji'
+        elif hk['check_executed'] or hk['activation_executed']:
+            result['valid'], result['sozdizimi_sebep'] = True, 'sap_kontrol_kostu'
+        else:
+            result['valid'], result['sozdizimi_sebep'] = None, 'kontrol_kosmadi:' + hk['sebep']
         return result
 
     def clear_enqueue_lock(self, object_url, transport=None):
