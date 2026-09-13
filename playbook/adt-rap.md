@@ -221,8 +221,12 @@ python core/scripts/push_bo_atomic.py --transport <TRANSPORT> \
 - **Niye script, MCP değil:** `adt_push_source` **bdef ve ccimp DESTEKLEMEZ** —
   `scripts/object_types.py::OBJECT_TYPES`'ta `bdef` girdisi **hiç yok** (kanıtlı).
   Bu iki tip yalnız raw ADT REST ile yazılır.
-- **Sıkı doğrulama:** `activationExecuted="false"` VEYA `type/severity=E|A` → **FAIL**
-  (exit 5). HTTP 200 tek başına başarı DEĞİL — "200 ama aktive etmedi" tuzağı.
+- **Sıkı doğrulama (Q187/Q188, 2026-09-13 — hüküm tek kaynaktan `sap_adt_lib.aktivasyon_govde_hukmu`):**
+  BAŞARI yalnız `activationExecuted="true"` + E/A mesajı YOK. Boş gövde · HTML ·
+  `ioc:inactiveObjects` · `type/severity=E|A` → **FAIL** (exit 5). Gövde hüküm TAŞIMIYORSA
+  (`activationExecuted="false"` + `generationExecuted="true"`, ya da bayraksız gövde) bağımsız
+  worklist sondası karar verir; sonda kurulamazsa FAIL (DOĞRULANAMADI). HTTP 200 tek başına
+  başarı DEĞİL — "200 ama aktive etmedi" tuzağı.
 - PUT başarısızsa aktivasyon **hiç denenmez** (exit 2) → yarım yazım olmaz.
 - Bağlantı/`sap-client`/dil `.conn_adt`'den; transport CLI'dan (gömülü değil);
   proje kökü `__file__`'dan türetilmez (CORE-01 / ADR 0020).
@@ -818,13 +822,20 @@ ZSD001 text ID'leri: 0001/Z006/Z007, text object VBBK. **EML _Text recipe (FIELD
 Detay: memory `feedback_source-based-class-type-c-trap-ve-vague-scan-bisect`.
 
 **D) AKTİVASYON DOĞRULAMASI ZORUNLU (HTTP 200 KANIT DEĞİL) — wire et, not yetmez:**
-Combined bdef+class activation `POST /sap/bc/adt/activation` **200 dönse bile aktive ETMEMİŞ olabilir** (2026-06-11: 200 ama `activationExecuted="false"` + `<chkl:messages type="E">` → metadata eski kaldı, saatler kayboldu). **Her activate sonrası MUTLAKA parse et:**
+Combined bdef+class activation `POST /sap/bc/adt/activation` **200 dönse bile aktive ETMEMİŞ olabilir** (2026-06-11: 200 ama `activationExecuted="false"` + `<chkl:messages type="E">` → metadata eski kaldı, saatler kayboldu). **Her activate sonrası MUTLAKA hükmü TEK KAYNAKTAN al — elle regex YAZMA** (Q187/Q188, 2026-09-13: elle yazılan kopya sözleşmeler ayrıştı; biri yalnız-generation gövdesini başarı, diğeri başarısızlık sayıyordu):
 ```python
-ae   = re.search(r'activationExecuted="(\w+)"', r.text)        # "true" olmalı
-errs = re.findall(r'type="E"[^>]*>.*?<txt>([^<]+)', r.text, re.S)  # boş olmalı
-aktif = ae and ae.group(1)=="true" and not errs                # ikisi de değilse FAIL
+from sap_adt_lib import aktivasyon_govde_hukmu, aktivasyon_worklist_sondasi
+hk = aktivasyon_govde_hukmu(r.text)   # {'hukum': True|False|None, 'sebep', 'errors', ...}
+# True  : activationExecuted="true" ve E/A mesajı yok
+# False : boş/HTML/ioc:inactiveObjects gövde, E/A mesajı, ya da yürütülmedi
+# None  : gövde hüküm taşımıyor (ör. activationExecuted="false" + generationExecuted="true")
+if hk['hukum'] is None:               # bağımsız worklist sondası karar verir
+    ok, sebep, kalan = aktivasyon_worklist_sondasi(client, hedefler)  # [{'uri','name','type'}]
+    aktif = ok is True                # sonda kurulamadı (None) = FAIL, başarı DEĞİL
+else:
+    aktif = hk['hukum'] is True
 ```
-Hazır helper: `create_rap_service.py::verify_active()`. **`severity="E"` aramak YETMEZ** — `<chkl:messages>` formatı + `activationExecuted` flag'ı şart.
+Hazır uygulamalar: `create_rap_service.py::activate_and_verify()` / `_aktivasyon_yaniti_ok()` · `sap_adt_lib.SAPADTClient.activate_object()` (dict: `success` · `aktivasyon_hukmu` · `hukum_sebep`). `create_rap_service.py::verify_active()` ayrıca aktif sürümün kaynak-dolu olduğunu doğrular. **`severity="E"` aramak YETMEZ** — `<chkl:messages>` formatı + `activationExecuted` flag'ı şart. ⚠ Sınır: obje aktivasyondan ÖNCE worklist'te değilse "listede yok" ayırt edici değildir.
 ⚠️ **`adtcore:version="active"` de TEK BAŞINA kanıt değildir** (2026-07-31 ölçümü): **boş kabuk için de "active" der** — kabuk da bir aktif sürümdür. Bağımsız kanıt **`adt_inactive_objects`** (worklist boş mu) + aktif kaynağın **içerik/bayt** kıyası. Aktif kaynağı çekerken **`?version=active` parametresini AÇIKÇA ver**: ADT'nin varsayılanı **İNAKTİF** sürümdür (aynı sınıf: parametresiz 10.659 bayt dolu / `version=active` 192 bayt boş kabuk) → parametresiz doğrulama, hiç aktive edilmemiş objeye "dolu ve geçerli" der. Vaka: [`adt-classes.md`](adt-classes.md) §24.9. Function import beklerken son adım: metadata'da `<FunctionImport Name="X">` GERÇEKTEN var mı GET'le doğrula (republish sonrası). Bu kural [[feedback_done-tam-kapsam-dogrula]] + lessons PATTERN #4/#9'un aktivasyon-anı enforcement'ı.
 
 ---

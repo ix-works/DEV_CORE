@@ -114,7 +114,7 @@ sonra **`adt_push_source(object_type='structure')`** ile full DDL push.
 | `adt_struct_create(artifact_path=...)` | MCP içi reviewer subprocess 120s timeout |
 | `adt_push_source(object_type='tabl')` struct için | "Invalid lock handle" 423 hatası |
 | `adt_post_shell` ile struct yaratma denemesi | `Unsupported object type: TABL/DS` |
-| MCP `verify: {ok: true}`'ye güvenip post-check atlama | Old behavior sadece existence kontrol ediyordu, content kontrol etmiyordu (yeni `_activate_and_verify` version=active kontrol eder, ama MCP server restart şart) |
+| MCP `verify: {ok: true}`'ye güvenip post-check atlama | Old behavior sadece existence kontrol ediyordu, content kontrol etmiyordu. Bugün `composite._activate_and_verify` aktivasyon hükmünü `sap_client.activate_object` → `sap_adt_lib.activate_object` `success`'inden alır (kanonik `aktivasyon_govde_hukmu` + worklist sondası, Q187/Q188); `version="active"` metadata kontrolü bunun üstüne EK şarttır, tek başına kanıt değildir (boş kabuk da "active" der). İçerik doğrulaması hâlâ çağıranda: aktif kaynağı çek, bayt/içerik kıyasla. Kod değişince MCP server restart şart |
 
 **T10 bulgu: DTEL/CSV domain consistency** — Sprint 1B'de bazı DTEL'ler CSV'nin söylediği SAP std
 domain yerine Z domain ile yaratılmıştı. Foreign key hedef alanla domain mismatch → struct
