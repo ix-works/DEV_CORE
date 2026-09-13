@@ -979,10 +979,15 @@ def _akt_uri_norm(uri):
 
 
 def aktivasyon_worklist_ayristir(govde):
-    """`/activation/inactiveobjects` govdesi -> [{'name','type','uri','parent_uri'}].
+    """`/activation/inactiveobjects` govdesi -> [{'name','type','uri','parent_uri',
+    'user','deleted','transport'}].
 
     ⛔ Govde bir `ioc:inactiveObjects` belgesi DEGILSE ValueError atar: HTML/bos/baska bir
     XML'i "aktive bekleyen yok" diye okumak tam da korunulan sahte-yesildir.
+    Q310 (2026-09-13): `user` (ioc:object/@ioc:user) · `deleted` (ioc:object/@ioc:deleted
+    == 'true'; BEKLEYEN TASLAGIN turu, objenin silinmis olup olmadigi DEGIL) · `transport`
+    (girdinin ioc:transport/ioc:ref adi, yoksa '') EKLENDI — MCP `adt_inactive_objects` ve
+    `worklist_audit.py` ayni ucu bu fonksiyonla okur. Liste/eleme davranisi DEGISMEDI.
     """
     root = ET.fromstring(govde or '')
     if root.tag != '{%s}inactiveObjects' % _AKT_IOC_NS:
@@ -993,11 +998,16 @@ def aktivasyon_worklist_ayristir(govde):
         ref = obj.find('{%s}ref' % _AKT_IOC_NS) if obj is not None else None
         if ref is None:
             continue                      # transport-seviyesi girdi (bos ioc:object)
+        tr_ref = entry.find('{%s}transport/{%s}ref' % (_AKT_IOC_NS, _AKT_IOC_NS))
         girdiler.append({
             'name': (ref.get('{%s}name' % _AKT_ADTCORE_NS) or '').strip(),
             'type': (ref.get('{%s}type' % _AKT_ADTCORE_NS) or '').strip(),
             'uri': ref.get('{%s}uri' % _AKT_ADTCORE_NS) or '',
             'parent_uri': ref.get('{%s}parentUri' % _AKT_ADTCORE_NS) or '',
+            'user': obj.get('{%s}user' % _AKT_IOC_NS) or '',
+            'deleted': (obj.get('{%s}deleted' % _AKT_IOC_NS) or '').lower() == 'true',
+            'transport': ((tr_ref.get('{%s}name' % _AKT_ADTCORE_NS) or '')
+                          if tr_ref is not None else ''),
         })
     return girdiler
 

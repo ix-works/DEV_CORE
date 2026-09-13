@@ -486,6 +486,11 @@ OZEL_TESTLER = [
     ("fm_okuma_where_used",
      "Q261: FM okuma kanali (grup arama indeksinden cozulur, FUGR/FF) + where-used "
      "'obje yok' (probe) ile 'var, 0 cagiran' (existence_verified) AYRI; arama/500 ok:false"),
+    # 2026-09-13 (Q304/Q305/Q306/Q310): MCP okuma/sorgu araclarinin durustlugu.
+    ("sorgu_araclari_durustlugu",
+     "Q304 SAP govdesi sap_error + truncated KESIN (row_limit+1) · Q305 TADIR 5'erli parca, "
+     "basarisiz/kirpik parca yalniz kendi adlarini null yapar · Q306 FM takma adi FUGR/FF + "
+     "where-used paket dugumu sayilmaz · Q310 worklist ayristirmasi kanonik (iki yol ayni liste)"),
     # 2026-09-13 (Q277): create_cds_view kapisi duz alt-dize ariyordu.
     ("cds_kaynak_kapisi",
      "create_cds_view kapisi: `select distinct from` + abstract entity KABUL (korpus 63->2 red), "
@@ -909,7 +914,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:lock_modification_support", "O:class_include_push",
       "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde",
       "O:transport_gorev_istek_cevrimi", "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi",
-      "O:aktivasyon_govde_hukmu", "O:aciklama_412_retry", "O:mcp_sahte_sonuc_uclusu"),
+      "O:aktivasyon_govde_hukmu", "O:aciklama_412_retry", "O:mcp_sahte_sonuc_uclusu",
+      "O:sorgu_araclari_durustlugu"),
      "on korpus bu modülü import/mutasyon eder (2026-09-03: `set_function_module_source` "
      "LOCK-CORRNR otoritesi + `_verify_and_return_lock` docstring'i · 2026-09-04: "
      "`get_object_source` URL kuruluşu + 404 mesajının obje adı · 2026-09-13 Q277: "
@@ -920,7 +926,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",
       "O:sorgu_basarisizligi_gorunur", "O:transport_gorev_istek_cevrimi",
       "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
-      "O:paket_aciklama_dogrulanmadi", "O:fm_okuma_where_used"),
+      "O:paket_aciklama_dogrulanmadi", "O:fm_okuma_where_used",
+      "O:sorgu_araclari_durustlugu", "O:aktivasyon_govde_hukmu"),
      "MCP tool'larının alt katmanı (`run_sql_query` None sözleşmesi dahil) + "
      "görev(S)→istek(K) çevriminin İKİ yazma yolundaki simetrisi + `get_object_url` "
      "TÜKETİCİLERİ (push_object / run_atc_check → Q228 kapanış kanıtı)"),
@@ -972,7 +979,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/verify_ui_static_assets.py",
      ("O:ui_dogrulama_satir_sonu_kacis",),
      "taban=dist + .properties çözülmüş kaynak kıyası + help enjekte-meta kontrol grubu"),
-    ("scripts/worklist_audit.py", ("R:AV-13",), "üç-değerli sınıflama"),
+    ("scripts/worklist_audit.py", ("R:AV-13", "O:sorgu_araclari_durustlugu"),
+     "üç-değerli sınıflama + (Q310) worklist ayrıştırması kanonik `aktivasyon_worklist_ayristir`"),
+    ("scripts/where_used.py", ("O:sorgu_araclari_durustlugu",),
+     "(Q306②) CLI where-used: DEVC paket düğümü kullanım sayılmaz, yalnız paket → exit 1"),
+    ("scripts/syntax_check.py", ("O:aktivasyon_govde_hukmu",),
+     "syntax_check_via_activation'ın CLI girişi — hüküm kanonik aktivasyon gövdesinden (Q307)"),
     ("scripts/build_core_index.py",
      ("O:core_index_kapsam", "O:core_index_siralama", "O:sap_gate_skip_sozlesmesi"),
      "indeks kapsamı + SIRALAMA determinizmi (Q214: anahtarsız `sorted(Path)` "
@@ -1019,7 +1031,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("mcp_servers/sap_adt/tools/query.py",
      ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur",
       "O:atc_p1_sonuc", "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu",
-      "O:paket_aciklama_dogrulanmadi", "O:fm_okuma_where_used"),
+      "O:paket_aciklama_dogrulanmadi", "O:fm_okuma_where_used",
+      "O:sorgu_araclari_durustlugu"),
      "where_used/ATC + veri sorgusu + başarısızlık görünürlüğü + ⚠ `adt_atc_check` yanıt "
      "ŞEKLİ (priority_1_count · must_fix · policy) post_tool_failure ATC ekseninin "
      "GİRDİSİDİR: alan adı ya da politika metni değişirse eksen SESSİZCE boşalır"),

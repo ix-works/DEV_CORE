@@ -43,8 +43,6 @@ if sys.platform == "win32":
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
-_NS = {"ioc": "http://www.sap.com/abapxml/inactiveCtsObjects",
-       "adtcore": "http://www.sap.com/adt/core"}
 _WORKLIST_URI = "/sap/bc/adt/activation/inactiveobjects"
 _WORKLIST_ACCEPT = "application/vnd.sap.adt.inactivectsobjects.v1+xml"
 
@@ -100,48 +98,29 @@ def _discard_phantom(adt, token, entry):
         return False
 
 
+_GIRDI_ALANLARI = ("name", "type", "uri", "user", "deleted", "transport")
+
+
 def _parse_entries(xml_text):
     """XML → obje-seviyesi girdiler. transport-seviyesi (boş object) + method (CLAS/OM) ELE.
 
-    Döner: [{name, type, uri, user, deleted, transport}, ...] (yalnız ana objeler).
+    Q310 (2026-09-13): ayrıştırma TEK KAYNAKTAN — `sap_client.worklist_ana_objeleri` →
+    `sap_adt_lib.aktivasyon_worklist_ayristir` (MCP `adt_inactive_objects` ile AYNI yol).
+    ⚠ SIKILAŞTIRMA: `ioc:inactiveObjects` OLMAYAN geçerli bir XML eskiden BOŞ liste
+    dönüyordu ("Worklist BOŞ — temiz", exit 0); artık None (exit 2 — okunamadı).
+
+    Döner: [{name, type, uri, user, deleted, transport}, ...] (yalnız ana objeler) | None.
     """
-    out, seen = [], set()
     try:
-        root = ET.fromstring(xml_text)
+        from sap_client import worklist_ana_objeleri  # type: ignore
+        girdiler = worklist_ana_objeleri(xml_text)
     except ET.ParseError as exc:
         print(f"[FAIL] worklist XML parse: {exc}")
         return None
-    for entry in root.findall("ioc:entry", _NS):
-        obj = entry.find("ioc:object", _NS)
-        if obj is None:
-            continue
-        ref = obj.find("ioc:ref", _NS)
-        if ref is None:
-            continue                                   # transport-seviyesi (boş <ioc:object/>)
-        a_type = ref.get(f"{{{_NS['adtcore']}}}type", "") or ""
-        a_name = ref.get(f"{{{_NS['adtcore']}}}name", "") or ""
-        a_uri = ref.get(f"{{{_NS['adtcore']}}}uri", "") or ""
-        if a_type.endswith("/OM") or "#type=" in a_uri:
-            continue                                   # method/sub-obje → ana class girdisi var
-        key = a_uri.split("#")[0].rstrip("/")
-        if not a_name or key in seen:
-            continue
-        seen.add(key)
-        tr = entry.find("ioc:transport", _NS)
-        tr_name = ""
-        if tr is not None:
-            tref = tr.find("ioc:ref", _NS)
-            if tref is not None:
-                tr_name = tref.get(f"{{{_NS['adtcore']}}}name", "") or ""
-        out.append({
-            "name": a_name.strip(),
-            "type": a_type,
-            "uri": key,
-            "user": obj.get(f"{{{_NS['ioc']}}}user", "") or "",
-            "deleted": (obj.get(f"{{{_NS['ioc']}}}deleted", "") or "").lower() == "true",
-            "transport": tr_name,
-        })
-    return out
+    except ValueError as exc:
+        print(f"[FAIL] worklist govdesi ioc:inactiveObjects DEGIL ({exc}) — 'bos' SAYILMADI")
+        return None
+    return [{k: g[k] for k in _GIRDI_ALANLARI} for g in girdiler]
 
 
 # "Yok" diyen durumlar — canlı-kanıtlı: bu repoda varlık-sondası HER YERDE 404'e bakar

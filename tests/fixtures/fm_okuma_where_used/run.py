@@ -10,7 +10,10 @@ NEDEN VAR (Q261 = Q217/Q221 turunun artığı + Q106'nın where_used ayağı):
   ② "Obje yok" ile "0 çağıran" ayrımı FM'de ölçülemiyordu.
   CANLI ÖLÇÜM (2026-09-13, DEV, salt-okur) — bu emülatörün kurallarının kaynağı:
      quickSearch objectType=FUGR/FF + tam ad          -> 1 isabet (uri FG'yi içerir)
-     quickSearch objectType=FUNC | FUNC/FF             -> 0 isabet (VAR OLAN FM için de)
+     sap_client.search_objects(type=FUNC | FUNC/FF)    -> 0 (VAR OLAN FM için de)
+       ⚠ 2026-09-13 (Q306①) düzeltme: bu 0 SUNUCUDAN DEĞİL, istemci tip süzgecinden gelir —
+       ham quickSearch FUNC/FUNC/FF/func → 1 isabet `FUGR/FF` döner, süzgeç `FUNC≠FUGR` diye eler.
+       MCP `adt_search_objects` artık FM takma adını FUGR/FF'ye çevirir (sorgu_araclari_durustlugu U1).
      GET <fm-uri>  Accept core.v1 / application/xml    -> 406 (gövde kabul tipini söyler)
      GET <fm-uri>  Accept fmodules.v3+xml              -> 200 (metadata)
      GET <fm-uri>/source/main text/plain               -> 200 (kaynak)
@@ -27,7 +30,7 @@ NEDEN VAR (Q261 = Q217/Q221 turunun artığı + Q106'nın where_used ayağı):
   R7-R8  Tam-ad eşleşmesi: yalnız ön-ek komşusu dönerse "yok"; komşu+tam ad → tam ad;
          aynı ad iki uç → `ok:false` (tahminle seçilmez).                  [FP]
   R9     `FUNC` filtresinin sahte sıfırı resolver'ı ETKİLEMEZ (resolver FUGR/FF sorar);
-         R9a emülatörü kalibre eder (FUNC → 0, FUGR/FF → 1).
+         R9a emülatörü kalibre eder (sap_client katmanında FUNC → 0, FUGR/FF → 1).
   R10    Generic kapı yerinde: `get_object_url(..,'func')` hâlâ ValueError.  [GEVŞETME YOK]
   W1-W5  `adt_where_used(func)`: çağıranlı → count · çağıransız → `count:0` +
          `existence_verified:true` · yok → OBJECT_NOT_FOUND + probe (count YOK) ·
@@ -466,8 +469,12 @@ kontrol("R10 GEVŞETME YOK: generic get_object_url(func) hâlâ ValueError", _ge
 # ── W: WHERE-USED (adt_where_used) ────────────────────────────────────────────────
 c, sap = kur()
 r = cagir(query.adt_where_used, FM_VAR, "func")
-kontrol("W1 çağıranlı FM → ok:true count:2 + resolved_uri",
-        r.get("ok") is True and r.get("count") == 2 and r.get("resolved_uri") == fm_uri(FG, FM_VAR),
+# ⚠ 2026-09-13 Q306②: W1 eskiden `count:2` bekliyordu — emülatörün DEVC/K paket satırı
+# DAHİL sayılıyordu (kusuru belgeleyen çapa). Paket düğümü çağıranın ATASIDIR (canlı 10/10):
+# count = 1 obje, paket ayrı alanda. Davranış `sorgu_araclari_durustlugu` V1-V6'da ölçülür.
+kontrol("W1 çağıranlı FM → ok:true count:1 (+1 paket düğümü ayrı) + resolved_uri",
+        r.get("ok") is True and r.get("count") == 1 and r.get("package_count") == 1
+        and r.get("resolved_uri") == fm_uri(FG, FM_VAR),
         kisa(r))
 r = cagir(query.adt_where_used, FM_BOS, "func")
 kontrol("W2 AYRIM çağıransız FM → ok:true count:0 + existence_verified:true",
@@ -501,8 +508,11 @@ kontrol("W6b KONTROL sınıf yok → OBJECT_NOT_FOUND (usageReferences'ın 200+[
 # ── I: IMPACT ANALYSIS ────────────────────────────────────────────────────────────
 c, sap = kur()
 r = cagir(query.adt_impact_analysis, FM_VAR, "func", max_depth=1)
-kontrol("I1 adt_impact_analysis(func) var → ok:true impacted_count:2",
-        r.get("ok") is True and r.get("impacted_count") == 2, kisa(r))
+# ⚠ 2026-09-13 Q306②: I1 eskiden `impacted_count:2` bekliyordu (DEVC/K paket satırı etkilenen
+# sayılıyordu — kusuru belgeleyen çapa). Paket düğümü atlanır ve ayrıca sayılır.
+kontrol("I1 adt_impact_analysis(func) var → ok:true impacted_count:1 (+packages_skipped:1)",
+        r.get("ok") is True and r.get("impacted_count") == 1 and r.get("packages_skipped") == 1,
+        kisa(r))
 r = cagir(query.adt_impact_analysis, FM_YOK, "func", max_depth=1)
 kontrol("I2 adt_impact_analysis(func) yok → OBJECT_NOT_FOUND",
         r.get("ok") is False and r.get("error_code") == "OBJECT_NOT_FOUND", kisa(r))

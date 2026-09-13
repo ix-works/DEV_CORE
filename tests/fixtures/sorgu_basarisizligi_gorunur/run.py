@@ -545,8 +545,12 @@ def main(modul_yolu: str | None = None, mutasyon: str | None = None) -> int:
     kontrol("D5 namespace'li ad TIRNAKSIZ (tirnakli bicim 400)",
             'FROM "/SCWM/AQUA"' in dok and "TIRNAKSIZ" in dok,
             "ns=%s" % ('FROM "/SCWM/AQUA"' in dok))
-    kontrol("D6 ⭐govde GELMEZ (yalniz [ERROR] satiri) + curuk rehber cumlesi YOK",
-            "GÖVDESİ BU ARACIN ÇIKTISINA GELMEZ" in dok
+    # ⚠ 2026-09-13 Q304: bu capa eskiden "GÖVDESİ BU ARACIN ÇIKTISINA GELMEZ" cumlesini
+    # ariyordu = KUSURU BELGELEYEN capaydi; kusur kapaninca belge "ARTIK `sap_error` ALANINDA"
+    # oldu. Degismez AYNI: belge govdenin NEREDE okunacagini dogru soyler + curuk rehber YOK.
+    # Davranisin kendisi `sorgu_araclari_durustlugu` S1-S3'te olculur.
+    kontrol("D6 ⭐govde `sap_error` alaninda (Q304) + curuk rehber cumlesi YOK",
+            "GÖVDESİ ARTIK `sap_error` ALANINDA" in dok
             and "sebep orada yazılıdır" not in dok,
             "curuk=%s" % ("sebep orada yazılıdır" in dok))
     i_tek = dok.find("TEKRARLANAMAYANLAR")
