@@ -130,8 +130,19 @@ r = client.session.post(
     data=body.encode('utf-8'),
     verify=False
 )
-# Success kontrolü: response.text içinde `activationExecuted="true"` olmalı
+# Success kontrolü (Q188, 2026-09-13): dizi araması YETMEZ — aynı gövdede type="E" olsa da
+# 'activationExecuted="true"' geçer. Hüküm tek kaynaktan:
+from sap_adt_lib import aktivasyon_govde_hukmu, aktivasyon_worklist_sondasi
+hk = aktivasyon_govde_hukmu(r.text)          # True / False / None
+if hk['hukum'] is None:                      # gövde hüküm taşımıyor → bağımsız worklist sondası
+    ok, _sebep, _kalan = aktivasyon_worklist_sondasi(
+        client, [{'uri': f'/sap/bc/adt/ddic/lockobjects/sources/{name.lower()}',
+                  'name': name.upper(), 'type': 'ENQU/DL'}])
+    basarili = ok is True                    # sonda kurulamadı (None) = FAIL
+else:
+    basarili = hk['hukum'] is True
 ```
+Hazır uygulama: `scripts/populate_lock_objects.py::activate_lock_object`.
 
 ### 29.7 Generated Functions
 
