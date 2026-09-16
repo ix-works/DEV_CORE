@@ -843,3 +843,59 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
   **bug-checklist `BE-69`** (bug-expert elle denetler).
 - **Referans:** `playbook/adt-fugr-functions.md` §2 · `playbook/adt-rap.md` RFC-sarıcı tuzak (b) ·
   `playbook/checklists/bug-checklist-backend.md` **BE-69** · `scripts/create_table_type.py`
+
+### PATTERN #34: **Ölçüm ön koşuluna bağlanan risk şerhi REGISTER'a hiç düşmez — sessizce ölür**
+
+- **Belirti:** Bir kusur sıfırdan teşhis edilir, ölçülür, çözülür… ve sonra **aynı riskin zaten yazılı
+  olduğu** görülür. Şerh doğruydu, yeri doğruydu, kimse silmemişti. Yine de **hiç kimseyi uyarmadı.**
+- **Ölçülmüş vaka (2026-09-16):** bir controller'ın şerhinde 2026-09-05 tarihli bir risk duruyordu:
+  *"bu parametre URL'e serileşiyor, büyük yükte sınıra çarpabilir — **ölçülmeli**"*. 11 gün sonra tam o
+  kusur canlıda patladı (**HTTP 414**) ve **baştan** teşhis edildi: duvarın sahibi arandı, eşik ikili
+  aramayla bulundu, üç ayrı çözüm denendi. Prior-art araması sonradan yapıldığında şerh **bulundu**.
+  Aynı taramada `core/`'da **414 ile ilgili sıfır kayıt** çıktı.
+- **Mekanizma — şerh bir KAYIT değil, bir NİYETTİR.** *"Ölçülmeli"* diyen cümle, ölçüm **yapılmadıkça**
+  hiçbir yere düşmez: `deferred-triggers.md`'ye girmez (tetiği yok), çapaya girmez (aktif iş değil),
+  checklist'e girmez (henüz sınıf değil). Yalnız **o dosyayı açan** kişi görür — ve o kişi zaten o
+  dosyaya başka bir iş için bakmaktadır. ⇒ **Şerhin görünürlüğü, onu okumak için bağımsız bir sebep
+  olmasına bağlıdır.** Kusur patladığında ise kimse şerhi aramaz, **semptomu** arar.
+- ⚠ **"Sonra ölçeriz" bir ERTELEME DEĞİLDİR, bir DÜŞÜRMEDİR** — ölçümü yapacak tetikleyici
+  tanımlanmadıkça. Kapanış disiplininin (*"açık madde TEK yerde yaşar"*) kapsamadığı boşluk tam burası:
+  madde **hiçbir** yerde açık değildi, çünkü hiç **açılmamıştı**.
+- **Çare (ucuz, gate değil):** koda *"ölçülmeli/riskli olabilir"* yazdığın anda **aynı turda**
+  `governance/deferred-triggers.md`'ye bir tetik aç ve şerhe **tetik kimliğini** yaz. Tetiği yoksa
+  cümleyi **yazma** — ya ölç, ya da *"ölçülmedi, sınırı bilmiyoruz"* diye **bilgi** olarak yaz.
+  Çift yönlü çapa (şerh ↔ register) olmadan ikisi de bayatlar.
+- **KB-01 ile ilişki:** ÖNCE-ARA ① *"bu zaten yazılı mı"* diye sorar ve bu vakada **işe yaradı** —
+  ama **sonradan** koşturuldu (kullanıcı istediği için). Önce koşsaydı üç çözüm denemesinin biri
+  gereksizdi. ⇒ ①'in maliyeti dakikalar, atlamanın maliyeti **bir tur**.
+- **Gate?** ⛔ HAYIR — moratoryum ② karşılanmıyor bakımından tartışmalı (sonuç sessiz, evet) ama ④
+  hiç denenmedi: **önce bu kural**, sonra gerekirse *"şerhte `ölçülmeli` geçiyor ama tetik yok"*
+  taraması konuşulur (ayrı ve açık onay — ADR 0019).
+- **Referans:** `standards/03-coding-ui-fiori.md` §18.5a · `playbook/checklists/bug-checklist-frontend.md`
+  **FE-42** · KB-01 (core §4) · kapanış disiplini (core §1.1)
+
+### PATTERN #35: **"Paylaşılıyor mu?" sorusu KAYNAK OKUMASIYLA cevaplanmaz — önbellek/paylaşım anahtarı ÇALIŞMA ZAMANINDA doğar**
+
+- **Belirti:** Kütüphane kaynağı okunur, paylaşım mekanizması **doğru** anlaşılır, hüküm **yine de**
+  yanlış çıkar. Çünkü okunan şey *mekanizma*dır; belirleyici olan **o çalıştırmadaki anahtarın değeri**.
+- **Ölçülmüş vaka (2026-09-16, UI5 `ODataModel`):** ikinci bir model kuruldu; soru *"metadata yeniden
+  indirilecek mi?"*. Kaynak okuması *"paylaşılıyor, ek maliyet yok"* dedi — **iki kez**, iki ayrı
+  okuyucu tarafından. **Canlı ağ izi çürüttü:** ikinci bir `$metadata` GET'i fiilen vardı.
+  Sebep: iki AYRI havuz var — CSRF verisi **servis URL'i** başına, metadata **metadata URL'i** başına
+  paylaşılıyor; ve çerçeve, manifest'ten kurulan modele `sap-language`'i **kendisi ekliyor**.
+  ⇒ Mekanizma doğru okundu, **anahtarın ayrıştığı** görülmedi. Paylaşılan `oServiceData`'ydı, `oMetadata` değil.
+- **Genel kural:** *"X paylaşılıyor mu / önbellekten gelir mi / aynı örnek mi?"* soruları
+  **ÖLÇÜLEREK** cevaplanır: ağ izi · örnek kimliği (`a.x === b.x`) · sayaç. Kaynak okuması **hipotez**
+  üretir, **hüküm** değil. Anahtar bir dizgeyse, o dizgeyi **kim ve nerede** zenginleştiriyor diye sor —
+  cevap çoğu zaman senin kodunda değil, **çerçevenin sarmalayıcısındadır**.
+- ⚠ **İki okuyucunun aynı sonuca varması KANIT DEĞİLDİR** — ikisi de aynı dosyayı, aynı eksik soruyla
+  okuduysa hata da paylaşılır. Bağımsızlık **yöntemde** olmalı, kişide değil: biri okur, öteki **ölçer**.
+- **Bedeli (bu vakada):** hüküm üç kez değişti (önce *"ek maliyet var"*, sonra kaynak okumasıyla
+  *"yok"*, sonra canlı ölçümle yine *"var"*). Kullanıcıya iki kez yanlış bilgi gitti.
+  ⭐ Daha ağırı: ilk kapı bu yanlış hükme dayanarak gerçek bir **asılma riskini eledi** — hüküm
+  düzeltilince risk **geri açıldı** ve tek satırla kapatıldı. *Yanlış "sorun yok" bulgusu,
+  bulgunun kendisinden pahalıdır.*
+- **Gate?** ⛔ HAYIR — bu bir **ölçüm disiplini**, desen taraması değil. Çare: bu kural +
+  `bug-checklist-frontend.md` **FE-43** (ikinci model kurulumunda anahtar devri denetlenir).
+- **Referans:** `standards/03-coding-ui-fiori.md` §18.5a · `playbook/checklists/bug-checklist-frontend.md`
+  **FE-43** · PATTERN #19 (kontrol grubu) · core §1.1 *"kod ≠ kablolama"*
