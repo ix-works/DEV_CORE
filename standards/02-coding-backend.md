@@ -514,6 +514,51 @@ CLASS zcl_{app}_bapi_helper IMPLEMENTATION.
 ENDCLASS.
 ```
 
+### ⛔ BAPI sarmalayıcı — `TABLES` aktüelleri YAZILABİLİR olmalı (MUST)
+
+> **Kural:** Bir metot BAPI'yi sarmalıyorsa, `CALL FUNCTION … TABLES` bloğuna **metodun kendi
+> `IMPORTING` parametresini DOĞRUDAN geçirme.** `TABLES` referansla çalışır ve FM içeriden
+> **geri yazabilir**; `IMPORTING` ABAP'ta salt-okunurdur.
+
+```abap
+" ⛔ YANLIŞ — çalışma zamanında düşer, statik hiçbir katman görmez
+METHODS call_so_create IMPORTING it_itm TYPE ty_t_sditm ...
+...
+  CALL FUNCTION 'BAPI_SALESORDER_CREATEFROMDAT2'
+    TABLES order_items_in = it_itm.        " <-- salt-okunur aktüel
+
+" ✅ DOĞRU — yerel yazılabilir kopya; imza DEĞİŞMEZ, çağıranlara sıçrama yok
+  " BAPI'nin uzun-MATNR çevirici katmanı (CL_MATNR_CHK_MAPPER) bu tabloya GERİ YAZAR;
+  " IMPORTING salt-okunur olduğu için kopya ŞART. Gerekçesiz görünüp silinmesin.
+  DATA(lt_itm) = it_itm.
+  CALL FUNCTION 'BAPI_SALESORDER_CREATEFROMDAT2'
+    TABLES order_items_in = lt_itm.
+```
+
+**Belirti (ölçüldü 2026-09-16):** çalışma zamanında `CX_SY_NO_HANDLER`'ın **sarmaladığı**
+`CX_SY_DYN_CALL_ILLEGAL_TYPE` —
+*"Call of the method `BAPI_TABLES_CONV_TAB_X_NUM` of the class `CL_MATNR_CHK_MAPPER` has
+failed; the actual parameter for `CT_MATNR` is write-protected"*.
+
+⛔ **Neden tehlikeli:** sözdizimi doğrudur ⇒ `adt_syntax_check`, **aktivasyon**, abaplint ve ATC
+**hepsi geçer**. Kusur yalnız FM geri yazmaya kalkınca patlar. Üstelik mesaj `SYMSGV` CHAR 50'de
+kesilirse ekranda yalnız `"An exception with the type CX_SY_DYN_CALL_ILLEGAL_"` görünür ve
+sebep **hiç görünmez** — `previous` zincirini yazan bir hata işleyici yoksa teşhis imkânsızdır.
+
+**Ek kurallar:**
+- **Kardeş tarama zorunlu:** bir sarmalayıcıda bulunduysa **zincirin tamamını** tara. Ölçülen
+  vakada kusur üç ardışık adımda birdendi (sipariş · teslimat · fatura); yalnız ilki
+  düzeltilseydi bir sonraki koşu ikinci adımda aynı hatayı verirdi.
+- **Kopyadan önce ölç:** çağıran o tabloyu çağrıdan SONRA okuyorsa kopya geri-yazılan veriyi
+  sessizce düşürür ⇒ o durumda `CHANGING` gerekir.
+- `EXPORTING` parametreler (`et_return` vb.) **zaten yazılabilir** — onlara kopya gerekmez.
+- Salt-okunur diğer kaynaklar da aynı hatayı verir: sabit/literal, `VALUE #( )` ifadesi,
+  salt-okunur `FIELD-SYMBOLS`.
+
+**Denetim:** `bug-checklist-backend.md` → **BE-71** (deterministik gate YOK — bug-expert statik
+tarar: `TABLES` aktüelleri ↔ çevreleyen metot imzası). Kardeş maddeler farklı katmandır:
+**BE-30** formal param yönü · **BE-69** `TABLES` parametresinin tipi.
+
 ### Error Handling — Gateway Exception Hierarchy
 
 > **Kural:** Doğru exception tipini seç. Birden fazla hata mesajı varsa `message_container` kullan.
