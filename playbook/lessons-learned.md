@@ -899,3 +899,25 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
   `bug-checklist-frontend.md` **FE-43** (ikinci model kurulumunda anahtar devri denetlenir).
 - **Referans:** `standards/03-coding-ui-fiori.md` §18.5a · `playbook/checklists/bug-checklist-frontend.md`
   **FE-43** · PATTERN #19 (kontrol grubu) · core §1.1 *"kod ≠ kablolama"*
+
+### PATTERN #36: **Paralel düzenlenen bir dosyaya SATIR NUMARASI çakmak — şerh dakikalar içinde bayatlar**
+
+- **Belirti:** Bir şerh/kayıt, başka bir dosyadaki satırı `dosya:NNN` diye gösterir. Numara **yazıldığı
+  anda doğrudur**. Aynı oturumda ikinci bir ajan/tur o dosyayı düzenler ve numara kayar. Okuyucu artık
+  **makul görünen ama yanlış** bir yere bakar — "dosya yok" gibi bir hata vermez, sessizce yanıltır.
+- **Ölçülmüş vaka (2026-09-16):** Bir ABAP şerhi iki ön-uç dosyasına satır çaktı. Dosya mtime'ları:
+  ABAP `19:51:18` · birinci FE `19:52:25` (+67 sn) · ikinci FE `19:53:28` (+130 sn). Sonuç: `:75-80`
+  → gerçekte `:84-89` (drift +9) · `:1036/:1041` → `:1067/:1072` (drift **+31**). **İki dakikada bayat.**
+  Üstelik bu, aynı turda **düzeltilen** bir bayat atfın yerine yazılan yeni numaraydı ⇒ sınıf kendini
+  **ikinci kez** üretti; düzeltme turunun kendi regresyonu.
+- **Genel kural:** **Dosya-dışı atıf satır numarası taşımaz.** Aranabilir bir **metin çapası** kullan:
+  `⚓ Çapa: ZCL_X → METHOD y → IF it_z IS NOT INITIAL dalındaki SELECT` gibi. Çapa dosya değişse de
+  bulunur; numara bulunmaz, üstelik **bulunduğunu sanırsın**.
+  ⛔ Aynı dosya içindeki `:NNN` atıfları da kayar ama orada diff en azından görünürdür — asıl tehlike
+  **başka dosyaya** çakılan numaradır.
+- ⭐ **Düzeltme anı seçimi de dersin parçası:** bayat bir numarayı, dosya **hâlâ hareket hâlindeyken**
+  yenisiyle değiştirmek sınıfı yeniden üretir. Doğru sıra: ① numarayı **at** (çapaya çevir) ya da
+  ② dosya donana kadar bekle. *"Güncel numarayı yaz"* üçüncü kez bayatlamanın reçetesidir.
+- **Gate?** ⛔ HAYIR (ADR 0019 ⑤ — önce doküman denendi mi?). Bugünkü çare: bu kural + kayıt yazarken
+  *"bu dosyayı şu an başkası düzenliyor mu?"* sorusu. Mekanik bir çare mümkündür (atıfları `git`
+  mtime'ıyla karşılaştıran bir denetçi) ama **bugün yazılmadı** — yazıldığı gün bu satır güncellenir.
