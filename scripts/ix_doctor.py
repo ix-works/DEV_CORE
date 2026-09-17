@@ -244,14 +244,26 @@ def katman1() -> list[Sonuc]:
 
 # ---------------------------------------------------------------- katman 2
 
-def _repo_git_kontrol(etiket: str, repo: Path, beklenen_org: str) -> list[Sonuc]:
+def _repo_git_kontrol(etiket: str, repo: Path, beklenen_org: str,
+                     org_zorunlu: bool = True, beklenen_ad: str = "") -> list[Sonuc]:
     r: list[Sonuc] = []
     org, ad = _remote_org_repo(repo)
     if not org:
         r.append((FAIL, f"{etiket}: origin remote YOK/çözülemedi ({repo})"))
         return r
     if beklenen_org and org != beklenen_org:
-        r.append((FAIL, f"{etiket}: remote org '{org}' ≠ beklenen '{beklenen_org}' ({org}/{ad})"))
+        if org_zorunlu:
+            r.append((FAIL, f"{etiket}: remote org '{org}' ≠ beklenen '{beklenen_org}' ({org}/{ad})"))
+        elif beklenen_ad and ad == beklenen_ad:
+            # Tüketici/fork topolojisi: çekirdek upstream'den ya da onun FORK'undan gelir,
+            # proje ise klonlayanın KENDİ org'undadır. Repo ADI tuttuğu sürece bu meşrudur.
+            r.append((PASS, f"{etiket}: remote = {org}/{ad} (proje org'undan farklı — "
+                            f"upstream/fork topolojisi, repo adı '{beklenen_ad}' ile eşleşiyor)"))
+        else:
+            # Repo ADI da tutmuyorsa bu artık topoloji değil, YANLIŞ REPO olabilir → uyar.
+            r.append((WARN, f"{etiket}: remote = {org}/{ad} — proje org'u '{beklenen_org}' değil "
+                            f"VE repo adı beklenen '{beklenen_ad or '?'}' değil; doğru çekirdeği "
+                            f"klonladığını doğrula (project.yaml `core_upstream: <org>/<repo>`)"))
     else:
         r.append((PASS, f"{etiket}: remote = {org}/{ad}"))
 
@@ -286,7 +298,15 @@ def katman2() -> list[Sonuc]:
         r.append((WARN, "beklenen org türetilemedi (proje remote'u yok + project.yaml github_org yok)"))
 
     r += _repo_git_kontrol("proje", PROJ, beklenen_org)
-    r += _repo_git_kontrol("core", CORE_ROOT, beklenen_org)
+    # ⛔ core, PROJE org'una BAĞLI DEĞİLDİR (2026-09-17, ölçülmüş tüketici vakası): çekirdeği
+    # klonlayan kişi kendi org'unda proje açar; core remote'u upstream ya da onun fork'udur.
+    # Eskiden bu ayrım yoktu → o kurulumda katman-2 kalıcı FAIL veriyordu ve GERÇEK fail'ler
+    # bu gürültüde kayboluyordu. Kontrol kalkmadı, ÖLÇÜTÜ değişti: org yerine REPO ADI.
+    core_upstream = str(cfg("core_upstream") or "")           # "<org>/<repo>" (opsiyonel beyan)
+    beklenen_core_ad = (core_upstream.split("/")[-1] if "/" in core_upstream
+                        else (core_upstream or CORE_ROOT.name))
+    r += _repo_git_kontrol("core", CORE_ROOT, beklenen_org,
+                           org_zorunlu=False, beklenen_ad=beklenen_core_ad)
 
     # stable tag (core rollback çapası — D20b)
     rc, out = _git(CORE_ROOT, "rev-parse", "--short", "refs/tags/stable")

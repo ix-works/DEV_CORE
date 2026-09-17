@@ -21,7 +21,33 @@
 | Node.js + npm | `node --version` (UI5/FE araç zinciri için) |
 | Claude Code CLI | `claude --version` |
 | GitHub CLI + auth | `gh auth status` (PR/CI akışı + ix_doctor katman-3 için) |
+| **Kullanıcı-düzeyi ayarlar** (`~/.claude/settings.json`) | Şablonla **ELLE birleştir**: [`claude/user-settings.template.json`](claude/user-settings.template.json) — `permissions.allow/deny` + `defaultMode`. ⚠ Otomatik uygulanmaz. Bu dosya yoksa rutin komutlar sürekli onay sorusu çıkarır ve otonom adımlar yarıda kalır (ölçüldü 2026-09-17: iki makine arasındaki en büyük davranış farkı buydu). ⛔ D32: SAP-yazma/davranış-yüzeyi araçları bu listeye GİRMEZ |
 | Claude Code plugin seti | `team_setup` içindeki `setup_plugins.py` kurar (ui5 · playwright-MCP · pyright-lsp · plugin-dev vb.) — makine-düzeyi, clone ile GELMEZ; envanter: [`governance/tooling-plugins.md`](governance/tooling-plugins.md) |
+
+## 0a. KURULUM KAPSAMI — hangi yüzeyi KİM üretir (klonla GELMEYENLER)
+
+> Bir kurulum *"aynı çalışmıyor"* dediğinde sorun neredeyse her zaman bu tablodadır: repo
+> klonu yalnız **ilk satırı** getirir, geri kalan her şey makine-lokaldir. Tablo, iki makine
+> arasında ölçülen farklardan türetilmiştir (2026-09-17, `parity_probe`).
+
+| Yüzey | Nerede yaşar | Kim üretir | Nasıl doğrulanır | Klonla gelir mi |
+|---|---|---|---|---|
+| Çekirdek metodoloji (`core/**`) | çekirdek klonu | `git clone` | `git -C core log -1` | ✅ |
+| Junction'lar (`core`, `.claude/agents\|skills\|commands`) | proje | `team_setup.py` | `ix_doctor` K1/K4 | ❌ |
+| Çekirdek fiziksel kopyası `.claude/rules/00-claude-core.md` | proje | `team_setup` (claude_overlay) | `session_start` **[YUKLEME]** satırı (Q286) | ❌ |
+| `.claude/settings.json` · `scripts/hook_shim.py` | proje | `team_setup.dosya_tamamla()` | `session_start` D7 drift | ❌ |
+| `.claude/active_package` | proje | `team_setup.dosya_tamamla()` → `project.yaml`'dan türetir | `parity_probe` → `aktif_paket_drift` | ❌ |
+| auto-memory (dersler) | kullanıcı profili `~/.claude/projects/<slug>/memory/` | `seed_memory.py` | `parity_probe` → `memory.ders_sayisi` | ❌ |
+| **Kullanıcı-düzeyi ayarlar** (`permissions`, `defaultMode`) | `~/.claude/settings.json` | **ELLE** — `claude/user-settings.template.json` ile birleştir | `parity_probe` → `mcp_ve_profil` | ❌ |
+| SAP bağlantısı `.conn_adt` | proje kökü | **KULLANICI** (şifreyi kendisi yazar — sohbete YAZILMAZ) | MCP `ping` · `ix_doctor` | ❌ |
+| CLI'lar: `claude` · `gh` · `node`/`npm` · `python` | makine | installer/winget (`winget install --id GitHub.cli -e`) | `ix_doctor` K3 | ❌ |
+| Claude Code plugin seti (ui5 · playwright-MCP · pyright-lsp …) | makine | `team_setup` → `setup_plugins.py` | [`governance/tooling-plugins.md`](governance/tooling-plugins.md) | ❌ |
+| git **global** baseline (`autocrlf`/`longpaths`/`defaultBranch`) | makine | elle `git config --global` | `ix_doctor` K2 · `parity_probe` → `yol_hijyeni` | ❌ |
+| `.playwright*/` çıktı klasörleri (erişilebilirlik dökümü, log) | proje | **aracın kendisi**, ilk koşumda | gitignore'ludur; **prosedür gerekmez** — gereken *araç* zaten plugin setinde | ❌ (gerekmez) |
+
+⚠ **"Klonla gelir mi ❌" olan her satır, yeni makinede TEKRAR yapılır.** Biri atlanırsa
+kurulum çalışır **görünür** ama farklı davranır — en sık atlananlar: kullanıcı-düzeyi
+ayarlar, `gh`, memory tohumu.
 
 ## 1. Mimari: canlı çekirdek + junction (NEDEN böyle — ADR 0020)
 
@@ -170,10 +196,10 @@ girmez (yalnız var-mı + sayım), `--anon` kullanıcı adı/host maskeler · ek
   git dahil yazma YOK — **disiplin kuralı, guard yok** (§3).
 - **Core'a yazma:** herkes PR + CI required-check (lider dahil) — [`MAINTENANCE.md`](MAINTENANCE.md).
   Genericize-on-write: core'a proje/müşteri kimliği GİREMEZ (pre-commit gate + CI tarar).
-- **Core kırıldıysa:** `git -C C:\IX\DEV_CORE checkout stable` → bilinen-iyiye dönüş;
+- **Core kırıldıysa:** `git -C core checkout stable` (proje kökünden; core bir junction'dır) → bilinen-iyiye dönüş;
   onarım sonrası `git switch main`. Junction'a dokunulmaz.
-- **Core pull:** makinede TEK yerden — `git -C C:\IX\DEV_CORE pull` (projelerde core pull
-  yoktur; `session_start` "origin'in gerisindesin" uyarır).
+- **Core pull:** makinede TEK yerden — `git -C core pull` — proje kökünden çalışır ve **sabit sürücü/klasör varsayımı taşımaz** (D24). ⚠ Dokümanda gördüğün `C:\IX\...` biçimi bir örnektir, kural değil; `session_start` "origin'in gerisindesin" uyarır).
+- **Çekirdekte bir şeyi değiştirmen gerekirse ve upstream'e yazma yetkin YOKSA:** DUR — önce kusurun kurulumda mı çekirdekte mi olduğunu ölç, sonra **fork + PR** ya da **Issue** (kanıt formatı zorunlu): [`playbook/howto-cekirdek-bulgu-bildirimi.md`](playbook/howto-cekirdek-bulgu-bildirimi.md) · [`MAINTENANCE.md`](MAINTENANCE.md) §6b. Lokal yama meşrudur ama **kendi dalında** ve görünür olmalı.
 - **⛔ KESİN YASAKLAR (ADR 0005)** her projenin kök `CLAUDE.md`'sine fiziksel damgalıdır;
   SAP işlemleri playbook-önce disiplinine tabidir ([`AGENTS.md`](AGENTS.md) §6).
 
@@ -185,6 +211,9 @@ girmez (yalnız var-mı + sayım), `--anon` kullanıcı adı/host maskeler · ek
 - [ ] `.conn_adt` KENDİ kimliğinle (şifre sohbete yazılmaz)
 - [ ] İlk oturum: @import onayı VER (Decline KALICI — §7) + MCP `sap-adt` onayı
 - [ ] Ekran-teyidi formatı geliyor mu (gelmiyorsa §7 + `--repair-junctions`)
+- [ ] `~/.claude/settings.json` ← `claude/user-settings.template.json` ile **elle birleştirildi** (§0)
+- [ ] `.claude/active_package` var (yoksa `team_setup` yeniden koş) — §0a
+- [ ] memory tohumu: `python core/scripts/seed_memory.py --dry-run` → eklenecek 0 ya da bilinçli
 - [ ] `python core/scripts/ix_doctor.py` → FAIL yok
 - [ ] (ikinci makine varsa) `python core/scripts/parity_probe.py` → iki raporu karşılaştır (§9.1)
 - [ ] OneDrive/sync kapsamında `C:\IX` YOK (§5)

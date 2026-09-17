@@ -187,7 +187,12 @@ def main() -> int:
         print(f"[FAIL] Seed klasörü yok: {SEED_DIR}", file=sys.stderr)
         return 1
 
-    seed_files = sorted(SEED_DIR.glob("feedback_*.md"))
+    # Q289+: hub indeksleri (`_indeks-*.md`) de tohuma dahildir. Aksi hâlde MEMORY.md'nin
+    # hub satırları hedefte BOŞA düşer (dosya yok) ve hub'daki dersler indekssiz kalır —
+    # üstelik `_index_onar` hub satırını `seed_adlari`'nda bulamadığı için mevcut bir
+    # MEMORY.md'ye hiç EKLEYEMEZ. Ölçüldü 2026-09-17: hub'sız kopyada 108 ders yetim.
+    seed_files = sorted(list(SEED_DIR.glob("feedback_*.md"))
+                        + list(SEED_DIR.glob("_indeks-*.md")))
     seed_index = SEED_DIR / "MEMORY.md"
     if not seed_files:
         print(f"[WARN] {SEED_DIR} içinde feedback_*.md yok — tohumlanacak bir şey yok.")

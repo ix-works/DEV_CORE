@@ -85,3 +85,64 @@
 - [Inactive-worklist audit (HTTP-200≠aktif)](feedback_inactive-worklist-audit-http200-degil.md) — commit+gün-sonu worklist_audit.py; root-CDS-alan FOR-BEHAVIOR BDEF'i sessizce inactive; canlı re-verify
 - [Çözülmüş tooling-bug'ları (10)](feedback_resolved-tooling-bugs.md) — regresyon ref: adt_dtel_create·adt_get-ddic·source-drift·bdef-blues·csrf·push-stale-lock·cds-escape·mcp-stdio·table-read
 - [Behavior pool main boş → CCIMP tuzağı](feedback_behavior-pool-main-empty-ccimp-trap.md) — managed pool source/main DAİMA boş; handler CCIMP'te; incelemeden ÖNCE CCIMP çek, BDEF↔lhc_* eşle
+
+---
+
+## Feedback — konu indeksleri (2. tohum turu, 2026-09-17)
+
+> Aşağıdaki dersler tek tek bu dosyada DEĞİL, konu **hub**'larında yaşar — `MEMORY.md` her
+> oturum yüklendiği için burada şişmesin. Hub tam listeyi taşır ve `seed_memory` hub'a girmiş
+> bir dersi bu indekse GERİ eklemez (Q289).
+
+> ⚠ **`ARAÇ İDDİASI` damgalı dersler** (`Son-doğrulama` bloğu olanlar) *"bugün şu araç böyle
+> davranıyor"* der; yapısal olgu değildir — dayanmadan önce bir kez ölç.
+
+> 📌 Örneklerdeki `ZSD001`/`ZSD000` ve `<PAKET-A>` adları **jeneriktir** (genericize kuralı);
+> dersin mekanizması gerçek, adlar temsilîdir.
+
+### Kanıt · ölçüm · doğrulama disiplini
+- **49 ders:** [tam indeks](_indeks-kanit-olcum.md)
+- ⭐ [Aktardigin olcum emre donusunce kanitini tasi](feedback_aktardigin-olcum-emre-donusunce-kanitini-tasi.md) — Ajana verdiğin talimat bir OLGU iddiası taşıyorsa ölçümünü de taşı ya da 'ölçülmedi' diye işaretle — ölçmediğin bir şeyi emir kılığında göndermek ajanı bug yazmaya sürükler
+- ⭐ [Ayni sinif ayni duzeltme degildir](feedback_ayni-sinif-ayni-duzeltme-degildir.md) — Kusur SINIFI nereye bakılacağını söyler, ne yapılacağını SÖYLEMEZ — kardeş vakanın düzeltmesini taşımadan önce mekanizmayı yeniden ölç
+- ⭐ [Bulgu listesi ornektir sinif duzeltmesi tarama ister](feedback_bulgu-listesi-ornektir-sinif-duzeltmesi-tarama-ister.md) — Kapının verdiği bulgu listesi bir ÖRNEKLEMDİR, sayım değil — bir SINIF düzeltilirken liste değil TARAMA kapatır; kapı bile ilk turda 4'ün 3'ünü görmüştü
+
+### Ajan · takım yönetimi
+- **19 ders:** [tam indeks](_indeks-ajan-takim.md)
+- ⭐ [Ajan bulgusu dogru mekanizmasi yanlis](feedback_ajan-bulgusu-dogru-mekanizmasi-yanlis.md) — Ajanın POZİTİF bulgusunu kabul ederken GEREKÇESİNİ ayrı ölç — bulgu doğru, mekanizma yanlış olabilir; yanlış mekanizma kayda geçerse sonraki okuyucu yanlış yerde arar
+- ⭐ [Ajan kurali brifingde degil taniminda yasar](feedback_ajan-kurali-brifingde-degil-taniminda-yasar.md) — Her yeni ajanın tekrarladığı bir hata varsa kural brifingde değil ajan TANIMINDA eksiktir — brifing uçucu, tanım kalıcıdır
+- ⭐ [Brifinge koydugun yolu once kendin kos](feedback_brifinge-koydugun-yolu-once-kendin-kos.md) — Spawn brifingine yazdığın dosya yolu/komut bir İDDİADIR — göndermeden önce kendin koş; yanlış yol o ekseni SESSİZCE koşmamış bırakır
+
+### Karar · iletişim · iş yönetimi
+- **9 ders:** [tam indeks](_indeks-karar-iletisim.md)
+- ⭐ [Alinti onay turu acmaz toren enflasyonu](feedback_alinti-onay-turu-acmaz-toren-enflasyonu.md) — ALINTI onay turu AÇMAZ — provenance damgası (`[TS]`/`[ONERI]`) onay kuyruğu değildir; <PAKET-A>'de bu ayrımın kaybı 15 onay belgesi + çok turlu 'metin onay töreni' üretti (kardeş <PAKET-B>: 1750 anahtar, 0 belge)
+- ⭐ [Github actions asili queued kosu pr kapat ac](feedback_github-actions-asili-queued-kosu-pr-kapat-ac.md) — GitHub Actions koşusu saatlerce `queued` + 0 job asılı kalırsa cancel/rerun çelişkili döner; PR'ı kapat+yeniden aç (tek komutta) yeni koşu doğurur
+- ⭐ [Grup bazli genisletmede her grup kendi dali ve metodu](feedback_grup-bazli-genisletmede-her-grup-kendi-dali-ve-metodu.md) — Müşteri grubu bazlı mantığı yeni gruplara açarken her grup KENDİ WHEN dalı + KENDİ MODIFY_<GRUP> metodu alır; OR ile birleştirme / başka grubun metodunu çağırma YOK — gövde bugün kopya olsa bile
+
+### İnfra · gate · dosya yetkisi
+- **2 ders:** [tam indeks](_indeks-infra-gate.md)
+
+### Araç · kabuk · kodlama tuzakları
+- **8 ders:** [tam indeks](_indeks-arac-tuzaklari.md)
+- ⭐ [Mojibake taramasi ciplak karakter aramaz](feedback_mojibake-taramasi-ciplak-karakter-aramaz.md) — Brifinge yazılan mojibake taraması çıplak `Â`/`Ã` aramaz — Türkçede meşru (hâlâ, kâr); mojibake İKİLİ dizidir. Liderin brifing kapısı da bir kapıdır, ajan ona itaat edip doğru metni bozar
+- ⭐ [Python yazdigi liste crlf tasir xargs sessizce bosa koser](feedback_python-yazdigi-liste-crlf-tasir-xargs-sessizce-bosa-koser.md) — Windows'ta Python'un yazdığı satır listesi CRLF taşır; git/xargs'a beslenince her ad sonunda \r kalır, eşleşme tutmaz ve işlem SESSİZCE hiçbir şey yapmaz. `| wc -l` çıktıyı sayarken HATA satırlarını sayar ⇒ başarı gibi görünür.
+- ⭐ [Tr karakter varyantli arama](feedback_tr-karakter-varyantli-arama.md) — Müşteri/metin aramasında Türkçe İ/Ş/Ç varyantı — ASCII LIKE 'yok' der (TRİGO vakası)
+
+### SAP · ABAP · RAP
+- **14 ders:** [tam indeks](_indeks-sap-abap-rap.md)
+- ⭐ [Adt include objesi prog tipiyle 404 sahte negatif](feedback_adt-include-objesi-prog-tipiyle-404-sahte-negatif.md) — ADT araclarinda include objesi 'prog' tipiyle sorgulanirsa 404/exists:false doner — SAHTE NEGATIF; dogru tip 'include'
+- ⭐ [Bos gondermek hic gondermemek degildir](feedback_bos-gondermek-hic-gondermemek-degildir.md) — SAP API/BAPI'de bir alanı BOŞ göndermek ile HİÇ göndermemek farklı sonuç verir: boş = boş yaz, yok = kaynaktan türet
+- ⭐ [E070 as4date istegin tarihidir obje degisim tarihi adt versions](feedback_e070-as4date-istegin-tarihidir-obje-degisim-tarihi-adt-versions.md) — \"Bu obje ne zaman değişti\" sorusu E071×E070 ile ÇÖZÜLEMEZ — AS4DATE isteğin tarihidir; doğru araç ADT versions ucu (Accept - */* şart)
+
+### UI · freestyle UI5
+- **4 ders:** [tam indeks](_indeks-ui.md)
+- ⭐ [Playwright pdf page margin ve thead tekrar tuzagi](feedback_playwright-pdf-page-margin-ve-thead-tekrar-tuzagi.md) — HTML→PDF (Playwright/Chromium) dört tuzak — dokümanın kendi @page{margin:0}'ı JS page.pdf({margin})'i SESSİZCE ezer; <thead> tekrarı bu zincirde çalışmaz, headerTemplate çalışır; marginTop SABİT OLMAZ — header içerikle büyüdüğü için ölçülerek türetilir (Chromium sabit ~2,4mm daha yüksek çizer); headerTemplate ZEMİN BOYAMAZ — orada mürekkep yalniz border+metinden gelir
+- ⭐ [Tarayici araci secimi playwright vs chrome eklentisi](feedback_tarayici-araci-secimi-playwright-vs-chrome-eklentisi.md) — İki tarayıcı aracı VAR — Playwright (deterministik KAPI) ve Claude in Chrome eklentisi (canlı GÖZ); hangisi ne zaman + eklentinin kurulum durumu
+
+### Doküman · spec
+- **3 ders:** [tam indeks](_indeks-dokuman.md)
+- ⭐ [Ecc referansi is anlayisi icin mimari degil](feedback_ecc-referansi-is-anlayisi-icin-mimari-degil.md) — ECC/legacy dump'ı ve PRD verisi YALNIZ 'ne, neden, nasıl takip edilmek isteniyor'u anlamak içindir — kodlama/tablo mantığı/mimari ŞABLON DEĞİLDİR; S/4 tasarımı SD-LE-EDI-ABAP uzman gözüyle sıfırdan yapılır
+- ⭐ [Fs ts html uretilmez teslim bicimi](feedback_fs-ts-html-uretilmez-teslim-bicimi.md) — FS/TS teslim biçimi .md + .pdf'tir — .html repoda DURMAZ ve güncellenmez; KD ise .md + .pdf + .html ister
+
+### Araç kök-fix tarihçesi (regresyon sözlüğü)
+- **10 kayıt:** [tam indeks](_indeks-arac-kok-fixleri.md) — *"bu bug daha önce oldu mu"* sorusunun yeri; güncel kural DEĞİL
+
