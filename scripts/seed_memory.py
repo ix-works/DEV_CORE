@@ -36,6 +36,13 @@ Kullanım (repo kökünde):
     python scripts/seed_memory.py --prune    # seed'den kalkmış, dokunulmamış dosyaları sil
     python scripts/seed_memory.py --force    # var olanları da seed'le ez (DİKKAT)
     python scripts/seed_memory.py --target <yol>  # hedef memory klasörünü elle ver
+    python scripts/seed_memory.py --terfi-adaylari  # SALT-OKUNUR: ters yönü (yerel → tohum) listele
+
+TERS YÖN / TERFİ GÖRÜNÜRLÜĞÜ (Q325, 2026-09-18): yukarıdaki akışın tamamı tohum → makine
+yönündedir. Bu makinede yazılan metodoloji-nitelikli bir dersin tohuma girip girmediğini
+söyleyen hiçbir yüzey YOKTU. `--terfi-adaylari` o boşluğu KAPATMAZ, GÖRÜNÜR kılar:
+listeler, karar vermez, kopyalamaz (hedef repo PUBLIC; genericize yargı ister).
+Kararın kendisi ders YAZILIRKEN `metadata.seed: evet|hayir` alanına konur — CLAUDE.core §5.
 """
 from __future__ import annotations
 
@@ -174,6 +181,164 @@ def _index_onar(target: Path, seed_index: Path, seed_adlari: set,
     return islem
 
 
+# ─────────────────────── TERFİ ADAYLARI (SALT-OKUNUR listeleyici, Q325) ────────────
+# NEDEN (kayıt Q325, 2026-09-18): bu script TEK YÖNLÜDÜR — tohum → makine. Ters yön
+# (yerelde doğan metodoloji dersi → tohum) ne araçta ne kontrol listesinde vardı; karar
+# hiçbir yerde kaydedilmiyordu. Sonuç ölçüldü: tohum bayatladığında yalnız yeni kurulum
+# değil, MEVCUT tüketici makinelerin her güncellemesi eksik kalır (tohum merge-safe'tir,
+# eksiği kimse fark etmez).
+#
+# ⛔ BU BİR KAPI DEĞİLDİR ve KOPYALAMA YAPMAZ (ADR 0019 merdiveni + kullanıcı kararı):
+# hedef repo PUBLIC, genericize yargı ister. Araç LİSTELER, insan KARAR VERİR.
+#
+# ⚠ `genericize_common` import'u FONKSİYON İÇİNDEDİR, modül başında değil: o modülün
+# `id_pattern()` zinciri `git rev-parse` çağırır (~100 ms, tembel_desen korpusunda
+# ölçüldü). Normal tohumlama yolunun bu bedeli ödemesi için hiçbir sebep yok.
+SEED_ETIKET_RE = re.compile(r"^\s*seed:\s*(\S+)\s*$", re.MULTILINE)
+
+
+def _frontmatter(metin: str) -> str:
+    """Dosyanın EN BAŞINDAKİ `---` bloğu. Yoksa boş dize (etiket 'YOK' sayılır)."""
+    if not metin.startswith("---"):
+        return ""
+    son = metin.find("\n---", 3)
+    return metin[:son] if son != -1 else ""
+
+
+def _seed_etiketi(metin: str) -> tuple[str, str]:
+    """(kova, ham-değer). Kova: 'evet' | 'hayir' | '<YOK>'.
+
+    `hayir:proje-ozel` gibi tek kelimelik gerekçe SERBEST ama zorunlu değil → kova
+    değerin ilk `:`'inden ÖNCEki parçadır. Tanınmayan değer kendi adıyla kovalanır
+    (sessizce 'YOK' saymak, yazım hatasını "karar verilmedi"ye çevirirdi).
+    """
+    m = SEED_ETIKET_RE.search(_frontmatter(metin))
+    if not m:
+        return "<YOK>", ""
+    ham = m.group(1).strip().strip('"\'')
+    return ham.split(":", 1)[0].lower(), ham
+
+
+def terfi_adaylari(target: Path) -> int:
+    from genericize_common import id_pattern, proje_desenleri, sizintilari_bul
+
+    seed_adlari = {p.name for p in SEED_DIR.glob("feedback_*.md")}
+    print("\n=== TERFİ ADAYLARI (SALT-OKUNUR — hiçbir dosya yazılmaz/kopyalanmaz) ===")
+    print(f"[INFO] Yerel memory : {target}")
+    print(f"[INFO] Tohum        : {SEED_DIR}")
+    if not target.is_dir():
+        print("[ÖLÇÜLEMEDİ] Yerel memory dizini YOK — bu makinede henüz tohumlanmamış ya da "
+              "proje kökü yanlış (CLAUDE_PROJECT_DIR). Karşılaştırma yapılamaz.")
+        print(f"             (aranan slug kaynağı: {PROJECT_ROOT})")
+        return 0
+
+    yerel = sorted(target.glob("feedback_*.md"))
+    eksik = [p for p in yerel if p.name not in seed_adlari]
+    print("\n--- SAYIM ---")
+    print(f"  yerel feedback_*.md      : {len(yerel)}")
+    print(f"  tohumdaki feedback_*.md  : {len(seed_adlari)}")
+    print(f"  yerelde VAR, tohumda YOK : {len(eksik)}")
+
+    # --- etiket kovaları: karar YAZIM ANINDA verilir, burada yalnız OKUNUR ---
+    kova: dict[str, list[Path]] = {}
+    gerekce: dict[str, int] = {}
+    for p in eksik:
+        try:
+            metin = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            kova.setdefault("<OKUNAMADI>", []).append(p)
+            continue
+        k, ham = _seed_etiketi(metin)
+        kova.setdefault(k, []).append(p)
+        if ":" in ham:
+            gerekce[ham.split(":", 1)[1]] = gerekce.get(ham.split(":", 1)[1], 0) + 1
+    print("\n--- ETİKET KOVALARI (`metadata.seed:`) — yalnız tohumda OLMAYAN dosyalar ---")
+    for k in sorted(kova, key=lambda x: (x != "<YOK>", x)):
+        ek = "   ← karar VERİLMEDİ (asıl iş bu)" if k == "<YOK>" else ""
+        print(f"  {k:12}: {len(kova[k]):4}{ek}")
+    if gerekce:
+        print("  gerekçeler: " + ", ".join(f"{g}×{n}" for g, n in sorted(gerekce.items())))
+
+    # --- kimlik ön-taraması: KAPI İLE AYNI KAYNAK (kopya desen değil) ---
+    desenler = proje_desenleri(proje_koku=PROJECT_ROOT)
+    idp = id_pattern(proje_koku=PROJECT_ROOT)
+    aday = sorted(kova.get("evet", []) + kova.get("<YOK>", []), key=lambda p: p.name)
+    izli, izsiz = [], []
+    for p in aday:
+        try:
+            metin = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        # Dosya ADI da taranır (D5): ad kimlik taşıyabilir, gövde temiz olabilir.
+        bulgu = sizintilari_bul(metin, idp) + sizintilari_bul(p.name, idp)
+        (izli if bulgu else izsiz).append((p, bulgu))
+    print(f"\n--- KİMLİK ÖN-TARAMASI (kova 'evet' + '<YOK>' = {len(aday)} dosya) ---")
+    print(f"  blocklist girdi sayısı   : {len(desenler)}"
+          + ("  ⚠ BOŞ → kimlik taraması YARIM (yalnız yapısal desenler)" if not desenler else ""))
+    print(f"  kimlik izi TAŞIYAN       : {len(izli)}   → genericize gerekir, elle çevrilir")
+    print(f"  izsiz (doğrudan aday)    : {len(izsiz)}")
+    for p, bulgu in izli:
+        turler = ", ".join(sorted({f"{ad}:'{tok}'" for tok, ad in bulgu}))
+        print(f"    · {p.name}  [{turler}]")
+    for p, _ in izsiz:
+        print(f"    ✓ {p.name}")
+
+    # --- tohumlanmış dosyalarda SAPMA (iki yön) ---
+    manifest = _manifest_oku(target)
+    print("\n--- TOHUMLANMIŞ DOSYALARDA SAPMA (iki yön) ---")
+    if not manifest:
+        print("  [ÖLÇÜLEMEDİ] `.seed-manifest.json` YOK → hangi dosyanın tohumdan geldiği "
+              "bilinemez; sapma yönü hesaplanamaz (yön ayrımı manifest sha'sına dayanır).")
+    else:
+        # ⚠ SATIR-SONU GÜRÜLTÜSÜ AYRI SAYILIR (ölçüldü 2026-09-18, canlı memory):
+        # ham sha ile bakınca (b) kovası 26 dosya gösteriyordu; CRLF↔LF normalize edilince
+        # GERÇEK içerik farkı **0** çıktı — yani rapor, hiç iş olmayan yerde 26 kalemlik iş
+        # uydurmuş olurdu. (a) kovasında da 168'in 8'i yalnız satır-sonuydu. Kaynak: tohum
+        # `shutil.copy2` ile bayt-bayt kopyalanır, yerel kopyayı düzenleyen editör CRLF
+        # yazabilir. Gürültüyü ayırmayan bir liste, okunmamaya mahkûmdur.
+        a_gercek, a_gurultu, b_gercek, b_gurultu = [], [], [], []
+        for ad, man_sha in sorted(manifest.items()):
+            dst, src = target / ad, SEED_DIR / ad
+            if not dst.is_file() or not src.is_file():
+                continue
+            yb, tb = dst.read_bytes(), src.read_bytes()
+            if yb == tb:
+                continue
+            gurultu = yb.replace(b"\r\n", b"\n") == tb.replace(b"\r\n", b"\n")
+            if hashlib.sha1(yb).hexdigest() != man_sha:   # (a) yerelde düzenlenmiş
+                (a_gurultu if gurultu else a_gercek).append(ad)
+            else:                                          # (b) tohum ilerledi, yerel eski
+                (b_gurultu if gurultu else b_gercek).append(ad)
+        print(f"  (a) yerelde DÜZENLENMİŞ (geri akış adayı) : {len(a_gercek)}"
+              f"   [+{len(a_gurultu)} yalnız satır-sonu farkı = gürültü]")
+        for ad in a_gercek:
+            print(f"    · {ad}")
+        print(f"  (b) tohum İLERLEMİŞ, yerel kopya ESKİ     : {len(b_gercek)}"
+              f"   [+{len(b_gurultu)} yalnız satır-sonu farkı = gürültü]")
+        print("      ⚠ Normal tohumlama mevcut dosyayı EZMEZ (merge-safe) ⇒ bu sapma bugün "
+              "başka hiçbir yüzeyde GÖRÜNMEZ; `--force` bilinçli bir karardır.")
+        for ad in b_gercek:
+            print(f"    · {ad}")
+
+    # --- KAPSAM BEYANI (core §7: 'bakmadığım yüzey' de yazılır) ---
+    print("\n--- KAPSAM BEYANI (neye BAKMADIM) ---")
+    print("  · Bu rapor metodoloji/proje ayrımına KARAR VERMEZ — kovalar yalnız yazım anında")
+    print("    konmuş `metadata.seed:` etiketini OKUR. '<YOK>' = etiket yok, 'terfi etmeli' DEĞİL.")
+    print("  · YALNIZ `feedback_*.md` taranır. `project_*` / `reference_*` / `user_*` dosyaları")
+    print("    ve `_indeks-*.md` hub'ları KAPSAM DIŞIDIR (tohum da yalnız feedback taşır).")
+    print(f"  · Kimlik taraması BLOCKLIST'E BAĞLIDIR ({len(desenler)} girdi): listede olmayan bir")
+    print("    müşteri/sistem adı 'TEMİZ' görünür. 'izsiz' = 'yayına hazır' DEĞİL, 'bu listeyle")
+    print("    iz bulunamadı' demektir. Yapısal desenler (makine yolu, e-posta, Z-obje adı,")
+    print("    SAP kullanıcı adı) listeden bağımsız çalışır.")
+    print("  · Genericize YAPMAZ, dosya KOPYALAMAZ, PR AÇMAZ. Çıktı bir iş listesidir.")
+    print("  · Sapma yalnız CRLF↔LF normalize edilerek gürültüden ayrılır; başka hiçbir")
+    print("    normalizasyon (boşluk, sıra, biçim) yapılmaz — 'gerçek fark' kovası biçimsel")
+    print("    değişiklikleri de içerebilir.")
+    print("  · Tohumdaki ama yerelde OLMAYAN dosyalar bu raporun konusu değildir (o yön")
+    print("    `--dry-run`'ın 'Eklendi' sayısıdır).")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Repo memory tohumunu makineye seed et")
     ap.add_argument("--target", default=None, help="Hedef memory klasörü (vermezsen otomatik hesaplanır)")
@@ -181,11 +346,19 @@ def main() -> int:
     ap.add_argument("--force", action="store_true", help="Var olan dosyaları da seed ile ez")
     ap.add_argument("--prune", action="store_true",
                     help="Seed'den kalkmış + kullanıcı dokunmamış tohum dosyalarını sil")
+    ap.add_argument("--terfi-adaylari", action="store_true",
+                    help="SALT-OKUNUR: yerelde olup tohumda olmayan dersleri `metadata.seed:` "
+                         "kovalarıyla + kimlik ön-taramasıyla listele (hiçbir şey yazmaz)")
     args = ap.parse_args()
 
     if not SEED_DIR.exists():
         print(f"[FAIL] Seed klasörü yok: {SEED_DIR}", file=sys.stderr)
         return 1
+
+    # ⚠ Bu dal HER YAZMA ADIMINDAN ÖNCE döner: aşağıdaki `target.mkdir(...)` bile
+    # koşmaz. Listeleyicinin salt-okunurluğu SÖZDE değil, AKIŞTA garanti edilir.
+    if args.terfi_adaylari:
+        return terfi_adaylari(Path(args.target) if args.target else default_target())
 
     # Q289+: hub indeksleri (`_indeks-*.md`) de tohuma dahildir. Aksi hâlde MEMORY.md'nin
     # hub satırları hedefte BOŞA düşer (dosya yok) ve hub'daki dersler indekssiz kalır —

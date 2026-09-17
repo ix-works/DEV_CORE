@@ -137,6 +137,12 @@
   ders dosyası sayısıyla uyumlu mu. İndeksi `recall_inject` hook'u kendisi tazeler; bu adım
   **manuel üretim DEĞİL, gözlemdir**. Dosya yoksa ya da `sonuc` hata ise stderr notunu
   kaydet (kuyruk kaydı) — "indeks sessizce bayat" sınıfı fail-open hook'ta başka yerde görünmez.
+  + **Tohum terfi gözlemi (Q325, 2026-09-18):** `python core/scripts/seed_memory.py
+  --terfi-adaylari` — bugün yazılan derslerden hangileri tohuma girmemiş, hangilerinde
+  `metadata.seed:` kararı hâlâ `<YOK>`. Bu adım da **gözlemdir, GATE DEĞİL**: araç
+  salt-okunurdur, kopyalamaz; kararı §5'e göre dersi yazan verir. `<YOK>` kovası boşalmıyorsa
+  terfi kontrolü *"core dokümanına yazdım"* ayağında kalmış demektir — "başka makineye ulaştı"
+  ayağı ölçülmemiştir.
 - **⛔ KAPANIŞ DİSİPLİNİ — bir madde konuşmada değil, ARTEFAKTTA kapanır (2026-08-12):**
   1. **Kapanış anı = artefakt anı.** Madde konuşmada kapandığında **aynı turda** dosyada da
      kapanır; gün-sonuna bırakılmaz. *(Yeni kural değil — "İCRA ya da açık ertele"nin
@@ -364,9 +370,31 @@ SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lesson
 
 - **Memory = hatırlatıcı, CORE = kanonik.** Metodoloji-nitelikli her memory-feedback
   core'a TERFİ eder (gün-sonu kontrolü), memory'de tek satır pointer kalır.
+  ⭐ **TERFİNİN İKİ YÜZEYİ VARDIR — ikincisi bugüne kadar hiç ANILMAMIŞTI (Q325, 2026-09-18):**
+  ① core **dokümanı** (playbook / standards / bu dosya) = *"kural nerede yazılı"* ·
+  ② `claude/memory-seed/` **tohumu** = dersin **başka makinelere ulaştığı tek yol**.
+  ①'siz ders kanonikleşmez; ②'siz ders **yalnız bu makinede kalır**. Tohum `team_setup`
+  zincirinde koşar ve merge-safe'tir ⇒ tohum bayatsa yalnız yeni kurulum değil, **mevcut
+  her tüketici makinenin her güncellemesi** eksik kalır (2026-09-17'de iki makine arasında
+  ölçülen ders farkı: 92 ↔ 318). Bu yüzden terfi kontrolü *"core'a yazdım mı"* ile bitmez.
+- **`metadata.seed: evet|hayir` — kararı DERSİ YAZAN verir, YAZIM ANINDA.** Her
+  `feedback_*.md` frontmatter'ının `metadata:` bloğuna bu alan konur:
+  · `evet` = metodoloji-nitelikli, tohuma girmeli (kimlik izi varsa **önce genericize**)
+  · `hayir` = bu projeye/makineye özel; tek kelimelik gerekçe eklenebilir
+  (`hayir:proje-ozel`, `hayir:makine-lokal`) — **serbest, zorunlu değil**.
+  ⛔ **Alan YOKSA bu "hayır" DEMEK DEĞİLDİR, "karar verilmedi" demektir.** Gerekçe ölçüldü:
+  tohumda olmayan derslerin bir kısmı önceki turlarda **bilerek** dışarıda bırakılmıştı,
+  ama hangisinin hangisi olduğunu söyleyen kayıt yoktu ⇒ ayrım kaybolmuş, bugün yeniden
+  üretilemiyor. Karar **en ucuz anda** verilir; sonradan vermek dersi baştan okumaktır.
+  ⚠ C-MEM-01 (`check_memory_index.py`) fazladan frontmatter anahtarını yasaklamaz (yalnız
+  zorunlu alanların varlığını + `type` enum'unu arar) ⇒ bu alan gate'i kırmaz.
 - **Kullanıcı-seviyesi `~\.claude\CLAUDE.md`'ye METODOLOJİ YAZILMAZ** (çift-kaynak drift +
   git-dışı + kapsam taşması). Yalnız projeden-bağımsız kişisel tercih.
-- Yeni proje memory'si `claude/memory-seed/`'den tohumlanır (`seed_memory`).
+- Yeni proje memory'si `claude/memory-seed/`'den tohumlanır (`seed_memory`). **Ters yön
+  (yerel ders → tohum) otomatik DEĞİLDİR ve olmayacaktır** — hedef repo PUBLIC, genericize
+  yargı ister. Görünürlük katmanı: `python core/scripts/seed_memory.py --terfi-adaylari`
+  (SALT-OKUNUR — etiket kovaları + kimlik ön-taraması + iki yönlü sapma + KAPSAM BEYANI).
+  **Listeler; karar vermez, kopyalamaz.**
 - **Ders-hijyeni (radar 2026-08-01):** YENİ yazılan veya içeriğine dokunulan her feedback
   dersine 2 satır eklenir: `Son-doğrulama: <tarih>` + `Applies-to: <bağlam/profil>`. Eski
   dersler toplu güncellenmez (bürokrasi üretme); radar turu "yaşlanmış ders" (son-doğrulama

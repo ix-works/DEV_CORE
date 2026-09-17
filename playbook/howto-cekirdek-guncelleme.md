@@ -105,6 +105,11 @@ sonra `--dry-run`'ı tekrarla.
 ⚠ Tohum **merge-safe**: bu makinede yazılmış hiçbir ders ezilmez, `MEMORY.md`'ye yalnız **eksik**
 satırlar eklenir. `--force` KULLANMA.
 
+⭐ **TERS YÖN (Q325):** yukarıdaki adım yalnız *tohum → makine* yönünü doğrular. Bu makinede
+yazılmış bir dersin tohuma girip girmediğini `python core/scripts/seed_memory.py --terfi-adaylari`
+söyler (SALT-OKUNUR; hiçbir şey yazmaz/kopyalamaz). Kararın kendisi ders yazılırken
+`metadata.seed:` alanına konur — kural `CLAUDE.core.md` §5'tedir, burada TEKRARLANMAZ.
+
 ## 5. Makine-lokal yüzeyler — `team_setup` bunları YAPMAZ
 
 Bu üçü klonla gelmez ve betik üretmez; ilk kurulumda bir kez, sonra değiştikçe yapılır.
