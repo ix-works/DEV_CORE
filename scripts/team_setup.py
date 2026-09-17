@@ -287,6 +287,34 @@ def dosya_tamamla(proje: Path) -> None:
             shutil.copyfile(kaynak, hedef)
             say(OK, f"template'ten üretildi: {hedef}")
 
+    # `.claude/active_package` — hook'ların BİRİNCİL kaynağı (statusline · pre_compact ·
+    # session_start; `project.yaml` yalnız fallback'tir). Şablondan GELMEZ, `project.yaml`'dan
+    # TÜRETİLİR. Eksikse `aktif_paket_drift` alarmı doğar ve hook'lar yanlış pakete yönlendirir
+    # (ölçüldü 2026-09-17, taze klonlu ikinci makine: dosya hiç yaratılmamıştı).
+    # ⛔ VAR OLANI EZMEZ — bu dosya ile `project.yaml` ayrışabilir ve hangisinin taze olduğunu
+    # kurulum betiği bilemez; drift'i ölçmek AYRI bir iştir (git log + RESUME karşılaştırması).
+    ap = proje / ".claude" / "active_package"
+    if ap.exists():
+        say(OK, f"mevcut: active_package = {ap.read_text(encoding='utf-8').strip()[:40]}")
+    else:
+        deger = ""
+        py = proje / "project.yaml"
+        if py.exists():
+            try:
+                sys.path.insert(0, str(CORE_ROOT / "scripts"))
+                from utils.project_config import _yaml_lite  # type: ignore
+                deger = str(_yaml_lite(str(py)).get("active_package") or "").strip()
+            except Exception as e:                       # noqa: BLE001
+                say(WARN, f"project.yaml okunamadı ({type(e).__name__}) — active_package atlandı")
+        if deger:
+            ap.parent.mkdir(parents=True, exist_ok=True)
+            ap.write_text(deger + chr(10), encoding="utf-8")
+            say(OK, f"project.yaml'dan türetildi: .claude/active_package = {deger}")
+        else:
+            # ÖLÇÜLEMEDİ ≠ TEMİZ: sessizce geçme, operatör bilsin.
+            say(WARN, "active_package YAZILAMADI — project.yaml'da `active_package:` yok; "
+                      "paket belirlenince elle yaz (.claude/active_package + project.yaml birlikte)")
+
 
 def hookspath_core() -> None:
     """D19: core reposunda versiyonlanan git-hook'ları etkinleştir."""

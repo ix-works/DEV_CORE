@@ -1,0 +1,79 @@
+name: Çekirdek bulgu bildirimi
+description: DEV_CORE'u klonlamış bir kurulumda ölçülmüş bir kusur/eksik bildir
+title: "[bulgu]: "
+labels: ["cekirdek-bulgu"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⛔ **BU REPO PUBLIC.** Müşteri adı, sistem/host adı, SID, istemci no, kullanıcı kodu,
+        e-posta, gerçek belge/obje numarası **yazma**. Paket gerekiyorsa `ZSD001` gibi jenerik
+        bir ad, yol gerekiyorsa `<PROJE-KOKU>` kullan. Kimlik taşıyan bildirim düzenlenmez —
+        **kapatılır** ve temizi istenir (yayın cache'lenir, geri alınamaz).
+
+        📖 Doldurmadan önce: `core/playbook/howto-cekirdek-bulgu-bildirimi.md` (klonunda var).
+        Önce `ix_doctor` FAIL'lerini kapat — bildirimlerin çoğu aslında kurulum eksiğidir.
+  - type: textarea
+    id: ozet
+    attributes:
+      label: ÖZET
+      description: Tek cümle — hangi mekanizma, hangi koşulda, ne yanlış yapıyor.
+      placeholder: "`<script>` şu girdiyle sessizce 0 satır döndürüyor, oysa N satır bekleniyor."
+    validations: {required: true}
+  - type: textarea
+    id: ortam
+    attributes:
+      label: ORTAM
+      value: |
+        - core commit      : 
+        - Claude Code sürümü: 
+        - OS / kabuk       : 
+        - ix_doctor        : PASS=  WARN=  FAIL=
+    validations: {required: true}
+  - type: textarea
+    id: beklenen_gozlenen
+    attributes:
+      label: BEKLENEN / GÖZLENEN
+      description: Beklentini NEYE dayandırdığını yaz (kural adı ya da dosya:satır).
+    validations: {required: true}
+  - type: textarea
+    id: uretim
+    attributes:
+      label: YENİDEN ÜRETİM
+      description: Kopyalanıp çalıştırılabilir en kısa komut dizisi (3-5 satır).
+      render: shell
+    validations: {required: true}
+  - type: textarea
+    id: kanit
+    attributes:
+      label: KANIT (komut ÇIKTISI)
+      description: Ekran anlatımı değil, çıktının kendisi. Kırptıysan nerede kırptığını yaz.
+      render: text
+    validations: {required: true}
+  - type: textarea
+    id: kontrol_grubu
+    attributes:
+      label: KONTROL GRUBU
+      description: Aynı mekanizmanın ÇALIŞTIĞI bilinen bir vaka — yoksa "bulunamadı, çünkü ...".
+    validations: {required: true}
+  - type: textarea
+    id: kapsam
+    attributes:
+      label: KAPSAM BEYANI
+      description: Neye BAKMADIN? Hangi profil/OS/obje tipi denenmedi? "ölçülemedi" ≠ "temiz".
+    validations: {required: true}
+  - type: textarea
+    id: oneri
+    attributes:
+      label: ÖNERİ (opsiyonel)
+      description: Düzeltme fikri + neden bu biçim; denenip çalışmayan yollar ve nedeni.
+    validations: {required: false}
+  - type: checkboxes
+    id: onay
+    attributes:
+      label: Beyan
+      options:
+        - label: Bu bildirimde müşteri/sistem/kişi kimliği taşıyan hiçbir veri YOK.
+          required: true
+        - label: İddiayı ölçtüm; yukarıdaki kanıt gerçek bir koşumun çıktısıdır (tahmin değil).
+          required: true

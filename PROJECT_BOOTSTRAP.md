@@ -11,6 +11,12 @@ yapılmaz: ne clone, ne kopya, ne branch. Tüm projeler **aynı tek fiziksel DEV
 bakar — core'a düşen her düzeltme hepsine anında yansır.
 Makine ön-koşulları (Python/git/Node/Claude CLI): [`README.md`](README.md) "Kurulum".
 
+⭐ **Hangi yüzeyi kim üretir** (klonla GELMEYEN her şey — junction · `.claude/*` · memory ·
+kullanıcı-düzeyi `permissions` · `.conn_adt` · CLI'lar · plugin seti · `.playwright*/`):
+[`ONBOARDING.md`](ONBOARDING.md) **§0a KURULUM KAPSAMI** tablosu. Yeni bir makinede
+*"aynı çalışmıyor"* denen durumların kaynağı neredeyse daima o tablodaki bir eksiktir;
+STEP 3 ve STEP 5 onu varsayar.
+
 ## STEP 0 — Ön-kararlar (5 dk, kod yok; cevaplanmadan STEP 1'e geçilmez)
 
 | Karar | Nereye girecek |
