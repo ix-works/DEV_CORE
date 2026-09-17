@@ -104,7 +104,7 @@ YAPISAL = [
 
 
 def id_pattern(proje_koku: Path | None = None, cwd: Path | None = None) -> re.Pattern:
-    """İsim listesi + yapısal desenler. IGNORECASE (D2: 'trakya' de yakalanmalı)."""
+    """İsim listesi + yapısal desenler. IGNORECASE (D2: kimlik listesindeki ad küçük harfle de yakalanmalı)."""
     desenler = proje_desenleri(proje_koku, cwd) + YAPISAL
     return re.compile("(" + "|".join(desenler) + ")", re.IGNORECASE)
 
@@ -169,8 +169,8 @@ ORNEK_Z = frozenset({
     "ZPP001", "ZFI001",            # standards/01-naming.md tablo örnekleri
     "ZBC001", "ZQM001",            # playbook API-proxy örnekleri
     # ── 3-4 harfli modül kodları: D7 genişletmesiyle GÖRÜNÜR olan jenerik adlar ──
-    # ⛔ `ZEWM000` BİLEREK BURADA DEĞİL: kayıt Q326 onu "jenerik" sayıyordu, ölçüm çürüttü —
-    #    gerçek bir müşteri paketidir (proje reposunda `ZEWM000_CLC` + sınıfı). Allowlist'e
+    # ⛔ Q326'nın "jenerik" saydığı 4 harfli bir ad BİLEREK BURADA DEĞİL: ölçüm çürüttü —
+    #    gerçek bir müşteri paketidir (tüketici proje reposunda canlı paket + sınıfı). Allowlist'e
     #    almak, D7'nin ilk gerçek bulgusunu meşrulaştırmak olurdu. Doğru çare adı allowlist'e
     #    almak değil, çekirdekteki geçtiği yeri genericize etmektir.
     "ZMOD001",                     # "<MODÜL>" yerine geçen kanonik paket adı: playbook/adt-cds,
@@ -181,7 +181,7 @@ ORNEK_Z = frozenset({
 })
 
 # D3: eski desen `\bzsd0(?!00|01)\d{2}` idi. `_` ve `z` ikisi de word-char olduğu için
-# `\b` alt-çizgiden SONRA eşleşmiyordu → `project_zsd015`, `zcl_zsd009_mizan` KAÇIYORDU.
+# `\b` alt-çizgiden SONRA eşleşmiyordu → `project_zsd001`, `zcl_zsd001_mizan` biçimindeki adlar KAÇIYORDU.
 # D4: kapsam yalnız ZSD idi → ZBC/ZMM/ZQM/ZFI/ZPP hiç görülmüyordu.
 #
 # D7 (2026-09-18, kayıt Q326) — desen ÜÇÜNCÜ kez genişliyor ve sınıf her seferinde AYNI:
@@ -189,7 +189,7 @@ ORNEK_Z = frozenset({
 # D4 "yalnız ZSD" kapsamıydı, D7 ise "yalnız 2 harfli modül kodu" (`Z[A-Z]{2}\d{3}`).
 # SAP modül/uygulama kısaltması 2 harfle sınırlı DEĞİLDİR (SD, MM ama EWM, MOD, CRM…)
 # ⇒ 3-4 harfli her Z adı kapıdan görünmeden geçiyordu; kontrol grubuyla ölçüldü
-# (`ZSD022` yakalanırken `ZEWM000` YAKALANMIYORDU — mekanizma sağlam, kapsam dardı).
+# (2 harfli modül kodu yakalanırken 3-4 harflisi YAKALANMIYORDU — mekanizma sağlam, kapsam dardı).
 # Bu desen bir SINIFI (SAP Z obje adı) tarif etmelidir, elimizdeki örnekleri değil.
 #
 # ⚠ Genişletmenin bedeli ORNEK_Z'dedir: desen genişleyince core'un KENDİ jenerik örnek
