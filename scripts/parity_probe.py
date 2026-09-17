@@ -17,11 +17,11 @@ KULLANIM (proje kokunde, ornegin C:\\IX\\<PROJE>):
 Cikti: parity-<host>-<YYYYMMDD-HHMM>.json (proje kokune) + ekrana ozet.
 """
 from __future__ import annotations
-import argparse, hashlib, json, platform, re, socket, subprocess, sys, tempfile
+import argparse, hashlib, json, os, platform, re, socket, subprocess, sys, tempfile
 from datetime import datetime
 from pathlib import Path
 
-SURUM = "parity_probe/1.1"
+SURUM = "parity_probe/1.2"
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -233,6 +233,32 @@ def main() -> int:
         "remote": run(["git", "-C", str(PROJ), "config", "--get", "remote.origin.url"])["out"],
     }
 
+    # ------------------------------------------------------------ 3b. yol hijyeni
+    # NEDEN: kurulum sabit klasor VARSAYMAZ (team_setup D24) ama YOLUN KENDISI uc
+    # sinifta kirilma uretir: (a) tasima/yeniden-adlandirma sonrasi YETIM memory slug'i
+    # (b) bayat junction hedefi (c) senkron klasoru (OneDrive/Dropbox) icindeki calisma koku.
+    SYNC_IZLERI = ("onedrive", "dropbox", "google drive", "googledrive", "yandex.disk", "icloud")
+    yollar = {"proje": str(PROJ), "core": str(CORE.resolve()) if CORE.exists() else str(CORE)}
+    sync_bulgu = {k: [t for t in SYNC_IZLERI if t in v.lower()] for k, v in yollar.items()}
+    junction_kirik = None
+    if CORE.exists():
+        try:
+            junction_kirik = not CORE.resolve().is_dir()
+        except Exception:
+            junction_kirik = True
+    R["yol_hijyeni"] = {
+        "proje_yolu_uzunluk": len(str(PROJ)),
+        "core_yolu_uzunluk": len(yollar["core"]),
+        "bosluk_iceriyor": {k: (" " in v) for k, v in yollar.items()},
+        "ascii_disi_iceriyor": {k: any(ord(c) > 127 for c in v) for k, v in yollar.items()},
+        "senkron_klasoru_izi": {k: v for k, v in sync_bulgu.items() if v} or "YOK",
+        "ONEDRIVE_env": bool(os.environ.get("OneDrive") or os.environ.get("OneDriveCommercial")),
+        "core_junction_kirik": junction_kirik,
+        "CLAUDE_PROJECT_DIR_env": mask(os.environ.get("CLAUDE_PROJECT_DIR", "<yok>")),
+        "git_longpaths": run(["git", "config", "--global", "core.longpaths"])["out"] or "<yok>",
+        "git_autocrlf": run(["git", "config", "--global", "core.autocrlf"])["out"] or "<yok>",
+    }
+
     # ------------------------------------------------------------ 4. memory
     try:
         sys.path.insert(0, str(CORE / "scripts"))
@@ -277,6 +303,21 @@ def main() -> int:
         "memory_git_var": (mem_dir / ".git").exists(),
         "dosya_adlari": dosyalar,
     }
+    # YETIM SLUG: proje klasoru TASINDI/YENIDEN ADLANDIRILDI ise eski yoldan turetilen
+    # slug altinda dolu bir memory kalir ve YENI oturum onu HIC gormez (sessiz kayip).
+    yetim = []
+    kokler = HOME / ".claude" / "projects"
+    if kokler.is_dir():
+        for d in kokler.iterdir():
+            md = d / "memory"
+            if not md.is_dir() or md.resolve() == mem_dir.resolve():
+                continue
+            n = len([x for x in md.glob("*.md") if x.name != "MEMORY.md"])
+            if n:
+                yetim.append({"slug": mask(d.name), "ders": n})
+    yetim.sort(key=lambda x: -x["ders"])
+    R["memory"]["diger_slug_klasorleri"] = yetim[:10]
+    R["memory"]["yetim_supheli"] = bool(yetim and yetim[0]["ders"] > len(dosyalar))
 
     # ------------------------------------------------------------ 5. MCP / profil
     mcp = PROJ / ".mcp.json"
@@ -372,6 +413,14 @@ def main() -> int:
     p("  tohumlanmamis  : %s / %s seed  (manifest=%s)" % (
         R["memory"]["tohumlanmamis_seed_sayisi"], R["memory"]["seed_havuzu_sayisi"],
         R["memory"]["seed_manifest_var"]))
+    yh = R["yol_hijyeni"]
+    p("YOL HIJYENI      : senkron-izi=%s  junction-kirik=%s  bosluk=%s  ascii-disi=%s" % (
+        yh["senkron_klasoru_izi"], yh["core_junction_kirik"],
+        yh["bosluk_iceriyor"], yh["ascii_disi_iceriyor"]))
+    if R["memory"]["diger_slug_klasorleri"]:
+        p("  DIGER SLUG'LAR : %s%s" % (
+            R["memory"]["diger_slug_klasorleri"][:3],
+            "   <-- YETIM SUPHESI (tasima/yeniden-adlandirma?)" if R["memory"]["yetim_supheli"] else ""))
     p("MCP / profil     : %s  conn_adt=%s  %s" % (
         R["mcp_ve_profil"]["mcp_sunuculari"], R["mcp_ve_profil"]["conn_adt_var"],
         R["mcp_ve_profil"]["project_yaml"]))
