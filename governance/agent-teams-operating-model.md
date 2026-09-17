@@ -225,6 +225,14 @@ Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
 3. **Canlı output-dosyası peek:** arka plan ajanının transkripti `...\tasks\<id>.output` dosyasında; sessiz kalırsa lider o dosyayı **okur** → neye takıldığını görür.
 4. **Lider watchdog:** makul sürede "bitti" gelmezse lider output-dosyasını okur / "durum?" sorar / takıldı sayar.
 5. **Küçük batch:** gateway'e 1-3 obje/iş ver → opaklık penceresi minimal.
+6. **Takılma bekçisi — `scripts/agent_stall_watch.py` (2026-09-17, Q322; TÜM alt-ajanlar için, yalnız gateway değil).** Madde 4'ün ("lider watchdog") elle yapılan kısmını ölçülebilir hale getirir. Lider spawn'dan sonra **`Monitor` ile ELLE başlatır** — hook DEĞİL, daemon DEĞİL, salt-okur, `--sure-dk` dolunca kendini bitirir:
+   `python core/scripts/agent_stall_watch.py --esik-dk 12 --aralik-sn 60 --sure-dk 60`
+   - **Sinyal = İLERLEME, canlılık değil:** alt-ajan transkriptinde (`<config>/projects/<slug>/<seans>/subagents/agent-*.jsonl` — **çalışırken canlı yazılır**) *sonucu gelmemiş `tool_use` + yaşı*. ⚠ Madde 3'teki `tasks/<id>.output` **AYRI bir yüzeydir** ve güvenilir kalıcılaşmaz (§4C ölçümü) — bu araç onu kullanmaz.
+   - ⛔ **Çıplak sessizlik süresi sinyal DEĞİLDİR** (ölçüldü, 865 transkript: %95,7 `text` ile biter, %2,2 eşleşmemiş `tool_use`, %2,3 `tool_result`) — sessizlik "bitti" ile "asıldı"yı ayırt edemez.
+   - **Eşik 12 dk** (Bash p99 ≈ 2 dk · SAP araçları max 2,1 dk · Bash timeout tavanı 10 dk). **Taban filtresi:** yalnız bekçinin penceresinde doğmuş çağrılar — korpustaki ~19 kalıcı kalıntı (öldürülmüş ajan) aksi hâlde her yoklamada yeniden ateşler = uyarı körlüğü.
+   - **Çıktı yalnız OLAY:** `ASILI? <ajan> <araç> N dk → SendMessage probe, cevap yoksa TaskStop` · `ÇÖZÜLDÜ …` · `ÖLÇÜLEMEDİ <sebep>`. Aksiyon satırın içinde yazılıdır; **aksiyon sahibi lider**dir. Kök yok / 0 transkript ⇒ sessiz "temiz" YOK: `ÖLÇÜLEMEDİ` + exit 2 (core §7 KAPSAM BEYANI).
+   - ⛔ **BİLİNEN SINIR:** turunu bitirmiş ama **engellenmiş** ajan (yazacak yeri yok, sessiz bekliyor) bu sinyalle yakalanmaz — orada bekleyen `tool_use` yoktur; onu brifingdeki *"ENGELLENİRSEN DERHAL bildir"* maddesi kapsar.
+   - **Yeni gate YOK** (ADR 0019): kanca eklenmedi, hiçbir akış bloklanmaz. `scripts/agent_watchdog.sh` (SAP curl tabanlı) ve kaldırılmış SAP watchdog **daemon**'u (`removed-controls.md` satır 25) ile karıştırma.
 
 ## 6. Maliyet / model katmanı
 Çok-ajan ~15× token. Opsiyonel katman: lider/gateway Opus, feature Sonnet, research Haiku. SAP precision gerektiğinde kaliteyi düşürme; tiering bir maliyet kaldıracı, zorunlu değil.

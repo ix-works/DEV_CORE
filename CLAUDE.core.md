@@ -207,8 +207,12 @@
   **Checkpoint-heartbeat (uzun/token-ağır ajan):** brifinge ekle → ajan her doğal kilometre-taşında
   (ön-okuma bitti · canlı-teyit bitti · her ana metot/INCLUDE) 2-3 satır `SendMessage({to:"main"})`
   ("yaptım / sırada / açık-nokta"). = **görünürlük** (ne yapıyor), canlılık garantisi DEĞİL: asılı ajan
-  rapor gönderemez → onu watchdog/§5 yakalar. Saat-bazlı DEĞİL (ajanın öz-zamanlayıcısı yok; kilometre-taşı
-  başına ≈ birkaç dk). Geniş fan-out'ta KAPAT (mesaj seli). 📖 `governance/agent-teams-operating-model.md` §4B.
+  rapor gönderemez → onu **`python core/scripts/agent_stall_watch.py`** yakalar (lider `Monitor` ile
+  ELLE başlatır; hook/daemon DEĞİL, salt-okur). Sinyal **ilerlemedir**: alt-ajan transkriptinde
+  *sonucu gelmemiş `tool_use` + yaş* (eşik 12 dk). ⛔ *"Sessizlik süresi"* sinyal DEĞİLDİR —
+  ölçüldü (865 transkript): bitmiş ajanların bir kısmı da `tool_result`/sessizlikle biter.
+  Saat-bazlı DEĞİL (ajanın öz-zamanlayıcısı yok; kilometre-taşı başına ≈ birkaç dk). Geniş
+  fan-out'ta KAPAT (mesaj seli). 📖 `governance/agent-teams-operating-model.md` §4B + §5-6.
 - ⭐ **SPAWN İZNİ — VARSAYILAN AÇIK (bu core'u kullanan TÜM projeler; sahip kararı 2026-08-20).**
   Harness bazı modellerde sistem promptuna *"Do not call the AgentTool unless the user requested it"*
   enjekte eder (**ikilide sabit kodlu**, ayarla kapatılamaz — ölçüldü 2026-08-20, Claude Code 2.1.237).
