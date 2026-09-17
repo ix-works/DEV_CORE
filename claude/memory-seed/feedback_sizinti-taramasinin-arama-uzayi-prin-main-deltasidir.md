@@ -27,7 +27,7 @@ turda `docs/shipment/mock_toplama/` altında **<MUSTERI-B> OTOMOTIV SAN. VE TİC
 `<CARI-2>` + `REXROTH …` buldu. İki ayrı ölçüm boşluğu:
 - **Benimki:** dar uzay. Doğru uzayı kurunca (**101 dosya**) gerçek kirlilik yalnız
   `mock_toplama/` çıktı (7 dosya); kalan 8 eşleşme zararsızdı (dizin adı
-  `valeo_cpi_delfor`, mühendislik notundaki müşteri numarası, main'de zaten var olan dosya).
+  `<musteri-b>_cpi_delfor`, mühendislik notundaki müşteri numarası, main'de zaten var olan dosya).
 - **Kapınınki:** yalnız çıktıya baktı. `build_mock.py:266-268` gerçek `SoldTo`/ad taşıyordu
   ve `:118-120` bunu **canlı KNA1'den** okuduğunu yazıyordu
   (`SELECT kunnr,name1 FROM kna1 WHERE kunnr='<CARI-2>'`). Ayrıca kapı `git status`'taki
