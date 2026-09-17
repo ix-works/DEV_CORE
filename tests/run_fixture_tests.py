@@ -529,6 +529,14 @@ OZEL_TESTLER = [
      "genericize Z_OBJ_PAT kapsami: 3-4 harfli modul kodu YAKALANIR, D3/D4 eksenleri "
      "bozulmaz, ORNEK_Z'de olu satir yok ve GERCEK proje paketi allowlist'e GIRMEZ; "
      "kablolama gercek `core_precommit` staged yolunda olculur (16 vektor + 2 mutasyon)"),
+    # 2026-09-17 (Q322): alt-ajan takilma bekcisi — GOZLEMCI, kapi DEGIL.
+    ("agent_stall_watch",
+     "agent_stall_watch: sinyal ILERLEMEDIR (eslesmemis tool_use + yas), canlilik degil; "
+     "uc sessiz kusur sinifi civilenir — sahte-ASILI (genc/bitmis/kalinti cagri) · sessiz "
+     "KACIS (kimliksiz blok) · sessiz TEMIZ (kok-yok/kapsam-sifir -> OLCULEMEDI + exit 2). "
+     "Taban filtresi CIFT YONLU olculur (S4a/S4b); satir bolme capasi GERCEK korpustan "
+     "dogdu (splitlines Unicode sinirlarini boluyordu); ozet satiri olay token'ini "
+     "tekrarlamaz (grep uyari korlugu) — 27 vektor + 4 mutasyon"),
 ]
 
 
@@ -1019,6 +1027,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:paket_indeks_siralama",),
      "paket indeksi SIRALAMA determinizmi (Q248: iki anahtarsız `sorted(Path)` platforma "
      "bağlıydı ⇒ C-REG-01 tazelik değil ÜRETİCİNİN PLATFORMUNU ölçüyordu)"),
+    # 2026-09-17 (Q322): lider tarafından ELLE başlatılan gözlemci — kapı DEĞİL, hook DEĞİL.
+    ("scripts/agent_stall_watch.py", ("O:agent_stall_watch",),
+     "takılma sinyalinin TANIMI burada yaşar (eşleşmemiş tool_use + yaş + taban filtresi) "
+     "ve üç sessiz kusur sınıfının (sahte-ASILI / sessiz KAÇIŞ / sessiz TEMİZ) çapası "
+     "o korpustadır; çıkış kodu hüküm taşımadığı için regresyon YALNIZ olay satırından ölçülür"),
     ("scripts/switch_tier.py", ("O:tier_fail_closed",), "tier çözümleme"),
     ("scripts/statusline.py",
      ("O:tier_fail_closed", "O:worktree_yasam_dongusu", "O:statusline_token_esikleri"),
