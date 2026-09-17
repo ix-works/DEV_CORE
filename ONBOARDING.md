@@ -140,6 +140,27 @@ Claude-katmanı (settings/shim drift + hook smoke + freeze-guard canlı test), M
 validator+performans, iş-akışı smoke — her kontrol kanıt-satırı basar; exit 0 = FAIL yok.
 Tamamlayıcı: `python core/scripts/validators/run_all_validators.py` (proje kökünden).
 
+### 9.1 İki makine arasında EŞLİK ölçümü: `parity_probe`
+
+```powershell
+python core/scripts/parity_probe.py             # --no-doctor (hızlı/ağsız) · --anon (maskeli)
+```
+
+**Ne zaman:** *"aynı çekirdeği klonladım ama diğer makinede Claude tam aynı çalışmıyor"* şüphesi.
+`ix_doctor` **tek makinenin** sağlığını sorar (FAIL var mı); `parity_probe` **iki makineyi
+karşılaştırır** — aynı enstrüman iki vakada koşulur, JSON'lar diff'lenir (kontrol grubu, PATTERN #19).
+
+Ölçtüğü yüzey, özellikle **klonla GELMEYEN** katmanlar: harness (Claude Code sürümü · `model` ·
+`autoMode` · plugin) · `.claude/rules/00-claude-core.md` **fiziksel kopyası** (Q286 — izlenmiyor,
+yalnız `team_setup` overlay'i üretir) · kanca envanteri ↔ `settings.template.json` farkı ·
+junction'lar + `core` dal/HEAD/gerilik · **auto-memory** (ders sayısı, tip dağılımı, tohumlanmamış
+seed listesi) · MCP/profil · `ix_doctor` 7 katman + `run_all_validators --quick` sonucu.
+
+Kurallar: **salt-okunur** (hiçbir proje/core dosyasına yazmaz, SAP'ye bağlanmaz) · raporu
+**sistem temp**'ine yazar, proje kökünü kirletmez · `.conn_adt` ve izin listesi **içeriği** rapora
+girmez (yalnız var-mı + sayım), `--anon` kullanıcı adı/host maskeler · eksik kaynakta
+*"fark YOK"* demez, **`OLCULEMEDI`** yazar (ölçülemedi ≠ temiz — `CLAUDE.core.md` §7 kapsam beyanı).
+
 ## 10. Çalışma düzeni — bilmen gereken minimum
 
 - **Git modeli (L1, [`AGENTS.md`](AGENTS.md) §1):** tek uzun-yaşayan branch = `main`;
@@ -165,6 +186,7 @@ Tamamlayıcı: `python core/scripts/validators/run_all_validators.py` (proje kö
 - [ ] İlk oturum: @import onayı VER (Decline KALICI — §7) + MCP `sap-adt` onayı
 - [ ] Ekran-teyidi formatı geliyor mu (gelmiyorsa §7 + `--repair-junctions`)
 - [ ] `python core/scripts/ix_doctor.py` → FAIL yok
+- [ ] (ikinci makine varsa) `python core/scripts/parity_probe.py` → iki raporu karşılaştır (§9.1)
 - [ ] OneDrive/sync kapsamında `C:\IX` YOK (§5)
 - [ ] Yabancı projeye temas edeceksen §8 protokolünü ezberle
 
