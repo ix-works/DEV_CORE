@@ -42,7 +42,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 # Tek kaynak: scripts/genericize_common.py (D9). İsim listesi env + <git-dir> +
 # <proje>/.claude birleşimi; yapısal desenler (makine-yolu, e-posta, Z-obje, SAP
-# kullanıcı adı) her zaman devrede. IGNORECASE → 'trakya' de yakalanır (D2).
+# kullanıcı adı) her zaman devrede. IGNORECASE → listedeki ad küçük harfle de yakalanır (D2).
 ID_PAT = id_pattern()
 
 # Dosya-bazlı izinli token'lar (taramadan ÖNCE içerikten çıkarılır; kalan yine taranır)
