@@ -168,12 +168,37 @@ ORNEK_Z = frozenset({
     "ZMM001", "ZMM002", "ZMM004",  # standards/01-naming.md ağaç örnekleri
     "ZPP001", "ZFI001",            # standards/01-naming.md tablo örnekleri
     "ZBC001", "ZQM001",            # playbook API-proxy örnekleri
+    # ── 3-4 harfli modül kodları: D7 genişletmesiyle GÖRÜNÜR olan jenerik adlar ──
+    # ⛔ `ZEWM000` BİLEREK BURADA DEĞİL: kayıt Q326 onu "jenerik" sayıyordu, ölçüm çürüttü —
+    #    gerçek bir müşteri paketidir (proje reposunda `ZEWM000_CLC` + sınıfı). Allowlist'e
+    #    almak, D7'nin ilk gerçek bulgusunu meşrulaştırmak olurdu. Doğru çare adı allowlist'e
+    #    almak değil, çekirdekteki geçtiği yeri genericize etmektir.
+    "ZMOD001",                     # "<MODÜL>" yerine geçen kanonik paket adı: playbook/adt-cds,
+                                   # cds-creation checklist, populate_cds_views + td_spec_check öneri metinleri
+    "ZMOD002", "ZMOD003",          # cds_paket_kapsami korpusu: paket-adı çözümleme vektörleri
+    "ZMOD005",                     # aynı korpus: modül-altı düz (paket dizini olmayan) yerleşim vektörü
+    "ZMOD009",                     # aynı korpus: `<PKG>_CLC` sonekli paket vektörü
 })
 
 # D3: eski desen `\bzsd0(?!00|01)\d{2}` idi. `_` ve `z` ikisi de word-char olduğu için
 # `\b` alt-çizgiden SONRA eşleşmiyordu → `project_zsd015`, `zcl_zsd009_mizan` KAÇIYORDU.
 # D4: kapsam yalnız ZSD idi → ZBC/ZMM/ZQM/ZFI/ZPP hiç görülmüyordu.
-Z_OBJ_PAT = re.compile(r"(?<![A-Za-z0-9])(Z[A-Z]{2}\d{3})(?!\d)", re.IGNORECASE)
+#
+# D7 (2026-09-18, kayıt Q326) — desen ÜÇÜNCÜ kez genişliyor ve sınıf her seferinde AYNI:
+# *desen, yazıldığı gün karşılaştığı kümeye göre daraltılıyor.* D3 alt-çizgi sınırıydı,
+# D4 "yalnız ZSD" kapsamıydı, D7 ise "yalnız 2 harfli modül kodu" (`Z[A-Z]{2}\d{3}`).
+# SAP modül/uygulama kısaltması 2 harfle sınırlı DEĞİLDİR (SD, MM ama EWM, MOD, CRM…)
+# ⇒ 3-4 harfli her Z adı kapıdan görünmeden geçiyordu; kontrol grubuyla ölçüldü
+# (`ZSD022` yakalanırken `ZEWM000` YAKALANMIYORDU — mekanizma sağlam, kapsam dardı).
+# Bu desen bir SINIFI (SAP Z obje adı) tarif etmelidir, elimizdeki örnekleri değil.
+#
+# ⚠ Genişletmenin bedeli ORNEK_Z'dedir: desen genişleyince core'un KENDİ jenerik örnek
+# adları da "sızıntı" sayılır ve her commit bloklanır. Allowlist'e alınacak kümenin
+# KURALI şudur (sayı YAZILMAZ — bayatlar): *core ağacında geçen, hiçbir gerçek projenin
+# objesi olmayan, doküman/fixture içinde yer-tutucu olarak kullanılan adlar.* Yeni bir
+# ad çıkarsa allowlist'e almadan ÖNCE gerçek bir objeye ait olmadığı ÖLÇÜLÜR; ölçmeden
+# eklemek kapıyı sessizce gevşetir (yayın cache'lenir, geri alınamaz).
+Z_OBJ_PAT = re.compile(r"(?<![A-Za-z0-9])(Z[A-Z]{2,4}\d{3})(?!\d)", re.IGNORECASE)
 
 # D4: SAP kullanıcı adı (gerçek kişi).
 # ⚠ Yalnız 'X' ya da yalnız 'N' harflerinden oluşan diziler dokümantasyon PLACEHOLDER'ıdır

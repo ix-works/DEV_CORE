@@ -516,6 +516,19 @@ OZEL_TESTLER = [
      "istisnasi) -> push DEVAM + syntax_precheck='olculemedi' + sozdizimi_sebep + [UNVERIFIED]; MCP "
      "adt_push_source ust seviye + CLI push_object.py hukum satiri; KONTROL: E/403 durdurur, temiz "
      "isaretsiz, prog kapsam disi (15 vektor + 9 mutasyon; eski kod 8/15)"),
+    # 2026-09-18 (Q325): tohum TEK YONLUYDU; yerelde dogan dersin tohuma girip girmedigini
+    # soyleyen yuzey yoktu. `--terfi-adaylari` bir KAPI DEGIL, gorunurluk katmanidir.
+    ("tohum_terfi_gorunurlugu",
+     "seed_memory --terfi-adaylari: SALT-OKUNUR (md5 once==sonra, dizin yaratmaz) + "
+     "`metadata.seed:` kovalari (etiket YOK = 'karar verilmedi', 'hayir' DEGIL) + kimlik "
+     "on-taramasi govde VE dosya adi (D5) + iki yonlu sapma ve CRLF-only GURULTU ayrimi "
+     "(canli olcumde 26 hayali kalem) + KAPSAM BEYANI; 27 vektor + 4 mutasyon"),
+    # 2026-09-18 (Q326/D7): desen 3. kez genisledi; 2 harfle sinirli desen 3-4 harfli
+    # modul kodunu KACIRIYORDU (kontrol grubu: 2 harfli yakalaniyordu).
+    ("z_obje_desen_kapsami",
+     "genericize Z_OBJ_PAT kapsami: 3-4 harfli modul kodu YAKALANIR, D3/D4 eksenleri "
+     "bozulmaz, ORNEK_Z'de olu satir yok ve GERCEK proje paketi allowlist'e GIRMEZ; "
+     "kablolama gercek `core_precommit` staged yolunda olculur (16 vektor + 2 mutasyon)"),
 ]
 
 
@@ -1063,6 +1076,17 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("playbook/**", ("O:core_index_kapsam",), "CORE-INDEX alanı"),
     ("standards/**", ("O:core_index_kapsam",), "CORE-INDEX alanı"),
     ("profiles/**", ("O:core_index_kapsam",), "CORE-INDEX alanı"),
+
+    # ── Q325/Q326 (2026-09-18): tohum terfi gorunurlugu + Z-desen kapsami ────
+    # `seed_memory.py` satiri YUKARIDA da var (Q289) — `_eslesme` BIRLESIM alir,
+    # iki satir birbirini bastirmaz (tek-satir varsayimi sessiz daraltma kaynagidir).
+    ("scripts/seed_memory.py", ("O:tohum_terfi_gorunurlugu",),
+     "ters yon: `--terfi-adaylari` salt-okunurlugu + kova semantigi + sapma/gurultu ayrimi"),
+    ("scripts/genericize_common.py", ("O:tohum_terfi_gorunurlugu", "O:z_obje_desen_kapsami"),
+     "D7 desen kapsami + ORNEK_Z olcutu; ayrica terfi listeleyicisinin kimlik on-taramasi "
+     "AYNI modulu cagirir (listeleyici kapidan dar olamaz)"),
+    ("scripts/git-hooks/core_precommit.py", ("O:z_obje_desen_kapsami",),
+     "D7'nin KABLOLAMA ucu: desen gercek staged commit yolunda olculur"),
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla
