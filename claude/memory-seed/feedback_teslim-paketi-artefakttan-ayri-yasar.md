@@ -11,7 +11,7 @@ Bir artefaktı doğrulamak, o artefaktın **paketlenmiş kopyasını** doğrulam
 yaşam sürer: bir kez kurulur, sonra kaynak dosya değişir, paket eskir — ve **hiçbir kapı paketi
 görmez**.
 
-**Vaka (2026-08-25, ZSD001 <MUSTERI-D> CPI):** kullanıcı 14:46'da `VOLVO_V8.zip` kurdu; düzeltme ajanı
+**Vaka (2026-08-25, ZSD001 <MUSTERI-D> CPI):** kullanıcı 14:46'da `<MUSTERI-D>_V8.zip` kurdu; düzeltme ajanı
 14:50'de `.mmap`'i yazdı. Zip eski dosyayı taşıyordu (`634ad7c5…`, `context=9`, `E1EDP36` açık),
 canlı dosya yenisini (`d9569376…`, `context=11`, `E1EDP36` kapalı). Eşlik eden not *"E1EDP36
 kapattık, context ekledik"* diyordu. Gönderilseydi karşı taraf **tam tersini** taşıyan dosyayı

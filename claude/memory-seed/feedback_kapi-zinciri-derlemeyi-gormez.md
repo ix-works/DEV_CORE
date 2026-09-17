@@ -41,7 +41,7 @@ Bkz. [[feedback_exit0-degil-cikti-kaniti]] ·
 
 Yukarisi ABAP/derleme. Ayni mekanizma UI5'te **daha sinsi** bicimde tekrarladi.
 
-**Olculmus vaka — ZSD001 `volvo_beyan`:** iki rota (`lots`/EKR-03, `alloc`/EKR-04)
+**Olculmus vaka — ZSD001 `<musteri-d>_beyan`:** iki rota (`lots`/EKR-03, `alloc`/EKR-04)
 tarayicida **BOMBOS** aciliyordu. Konsol: `failed to load 'sap/m/layoutData.js'` →
 `The following error occurred while displaying routing target with name 'lots'`.
 Kok neden: `<layoutData>` agregasyon etiketi **ondeksiz** yazilmis, yani view'in

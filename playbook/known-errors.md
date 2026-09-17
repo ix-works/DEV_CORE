@@ -240,7 +240,7 @@ sınıf uyarlaması; o ders yalnız FM'e yazılmıştı, CLASS'a hiç uygulanmam
 
    ⇒ **Aktivasyonu düşen bir push'tan sonra RETRY yapan herkes bu 412'ye çarpar** — obje "yeni"
    olmasa bile. Şüphedeysen `adt_inactive_objects` ile bak; bekleyen sürüm varsa parametresiz GET kullan.
-   📌 Vaka 1 (yeni kabuk): `ZEWM000_CL_PACI_ITEM_MOD` ilk push'u — parametresiz ETag ile **PUT 200**,
+   📌 Vaka 1 (yeni kabuk): `ZMOD001_CL_ITEM_MOD` ilk push'u — parametresiz ETag ile **PUT 200**,
    423 hiç görülmedi (yani bu vaka 423 değil **412** sınıfıdır; teşhisi karıştırma).
    📌 Vaka 2 (2026-08-20 ölçümü — bu ayrımı doğuran vaka): **aktive edilmiş** bir sınıfın ikinci
    push'u; bir önceki push aktive edilememişti ⇒ `?version=active` bayat kaldı, **PUT 412**

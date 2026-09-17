@@ -2058,3 +2058,23 @@ Test-senaryosu: (1) `python tests/run_battery.py d7_drift_imzasi --kardes sessio
 **TEK KAYNAK notu:** `/core-guncelle` komutu adımları **tekrarlamaz**, howto'ya delege eder ve çakışmada howto'nun kazandığını açıkça yazar; aynı prosedürün iki yerde yaşayıp birinin bayatlaması sınıfı böyle kapatıldı.
 
 **SINIR / DOĞRULANAMADI:** ① overlay kapısının ATEŞLEDİĞİ dal bu turda canlı görülmedi (kaynak koddan okundu, sentetik vaka üretilmedi) — `ÖLÇÜLEMEDİ` ② `/core-guncelle` komutu tüketici makinede henüz koşulmadı ③ `gh` taşınabilir-zip kurulum yolu bu makinede denenmedi (winget ile kurulu).
+
+
+## claude/memory-seed/*.md + scripts/check_ui_odata_refs.py — Q327 KİMLİK SIZINTISI: alt-çizgiye bitişik müşteri adları public çekirdekte duruyordu (lider, EXPRESS)
+
+**Tetikleyen ölçüm (2026-09-18):** Q326 kapsamında kimlik blocklist'ine müşteri unvanları eklendi; hemen ardından `git ls-files` üzerinde koşan tarama **798 dosyada 7 eşleşme / 5 dosya** gösterdi. Yani desen eklenir eklenmez, çekirdeğin **hâlihazırda taşıdığı** izler görünür oldu.
+
+**Düzeltilen 7 iz:** üç ayrı müşteri unvanının **alt-çizgiye bitişik** varyantları — bir ABAP metot adında (`MODIFY_<ad>`, hem büyük hem küçük harf), bir UI uygulama adında (`<ad>_beyan`), bir referans klasörü adında (`<ad>_cpi_delfor`), bir teslim paketi adında (`<ad>_V8.zip`) ve bir script docstring örneğinde (`--app <ad>_mesaj`). Altısı `claude/memory-seed/` içindeydi ve 2026-09-17 tohum turundan geldi; yedincisi `scripts/check_ui_odata_refs.py` içindeydi ve **2026-09-02**'den beri duruyordu (tohum turundan önce ⇒ sınıf o turdan eski). Yerine dünkü turun sözlüğüyle **aynı** yer tutucular kondu — dosyaların içinde o yer tutucular zaten kullanılıyordu, tutarlılık korundu.
+
+**KÖK NEDEN — İKİ KATMAN AYNI ANDA KÖR KALDI:**
+
+1. 2026-09-17 tohum üretecinin (tek seferlik, scratchpad) eşleme deseni **kelime-sınırı** (`\b`) kullanıyordu. `_` bir word-char olduğu için kelime-sınırı alt çizgiden SONRA **eşleşmez** ⇒ `METOT_<ad>` biçimindeki her varyant sessizce kaçtı. ⚠ Bu, `genericize_common.py`'nin **kendi D3 yorumunda yazılı olan** tuzağın birebir tekrarıdır — yani ders yazılıydı, üretecin yazarı onu uygulamadı.
+2. Kapı da yakalayamazdı: **müşteri unvanları kimlik listesinde hiç yoktu** (Q326). Listede bulunan proje/sistem adları her yerde yakalanıyordu; firma unvanları için liste **boştu** ⇒ isimsiz yapısal desenler bu sınıfı tanım gereği göremez.
+
+⭐ **Sınıf:** tek kapıya değil, **iki bağımsız katmana** güvenilen bir yerde ikisi de aynı boşluğa düştü. Kapının isim listesi, üretecin desen sınırı — ikisi de "başka biri yakalar" varsayımıyla yazılmıştı.
+
+**F4 GEVŞETME: YOK.** Yalnız içerik düzeltmesi + blocklist genişlemesi (SIKILAŞTIRMA).
+
+**⛔ SINIR — GERİ ALINAMAYAN KISIM:** `ix-works/DEV_CORE` **PUBLIC**'tir ve bu izler merge edilmiş commit'lerde (tohum turu 2026-09-17 `55cf6fb`; `check_ui_odata_refs.py` 2026-09-02) **git geçmişinde durmaya devam eder**. Bu düzeltme yalnız HEAD'i temizler; yayınlanmış olanı geri almaz. Geçmiş yeniden yazımı (filter-repo + force-push) **kullanıcı kararıdır**, bu turda YAPILMADI.
+
+**DOĞRULAMA:** düzeltme sonrası aynı tarama `git ls-files` üzerinde **0 kalıntı**. ⚠ KAPSAM: tarama yalnız **takipli** dosyaları kapsar (`git ls-files`) ve yalnız **yedi müşteri unvanını** arar; başka bir kimlik sınıfı (ör. listede olmayan bir firma) bu ölçümün dışındadır — `ÖLÇÜLEMEDİ`.

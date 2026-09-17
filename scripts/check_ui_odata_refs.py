@@ -40,7 +40,7 @@ Cikis kodu: 0 = KIRMIZI YOK (hukum satiri TEMIZ mi, OLCULMEYEN eksen mi, UYARI m
 ⛔ Q232 (2026-09-04) — "0 dosya taradim" ile "temiz" AYNI CIKTIYI veriyordu:
    olmayan bir `--app` yolunda `glob` sessizce `[]` doner, hicbir kontrol calismaz ve
    arac `TEMIZ` + exit 0 basardi. Iki kosumun ciktisi BAYT-BIREBIR AYNIYDI (olculdu
-   2026-09-02: `--app volvo_mesaj` [yol YOK] ile `--app <tam yol>` [4 dosya]) ⇒
+   2026-09-02: `--app <musteri-d>_mesaj` [yol YOK] ile `--app <tam yol>` [4 dosya]) ⇒
    cagiran tarafin ayirt etmesi IMKANSIZDI ve bir bug-expert'i fiilen yanilti.
    Artik: (a) cozulmeyen `--app`/`webapp` = HATA (exit 2), (b) payda HER kosumda
    basilir, (c) 0 dosya "TEMIZ" DEGIL "OLCUM YOK"tur.
