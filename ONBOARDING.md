@@ -49,6 +49,10 @@
 kurulum çalışır **görünür** ama farklı davranır — en sık atlananlar: kullanıcı-düzeyi
 ayarlar, `gh`, memory tohumu.
 
+> ⭐ **Çekirdek GÜNCELLEMESİ** (ilk kurulum değil) ayrı ve kanonik bir prosedürdür:
+> [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md) — slash komutu
+> `/core-guncelle`. Bu tablo onun 5. adımının (makine-lokal yüzeyler) referansıdır.
+
 ## 1. Mimari: canlı çekirdek + junction (NEDEN böyle — ADR 0020)
 
 Metodoloji (standartlar, playbook, script/validator/hook, MCP server, agent/skill

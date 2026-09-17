@@ -104,6 +104,9 @@ Okuma tek-noktası: `scripts/utils/project_config.py` (`cfg(key)`; env override:
 Dosya-tabanlı olanlar: `.claude/watchdog_probes` ("path|desen" satırları — agent_watchdog),
 `governance/sprint-gates.json` (sprint tanımları).
 
+> 📌 Güncelleme yolunun adım adım prosedürü: [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md) (`/core-guncelle`) — pull tek başına yetmez;
+> `team_setup` zinciri, overlay ezme kapısı (T2.5) ve makine-lokal yüzeyler oradadır.
+
 ## 6b. TÜKETİCİ klonu — upstream'e yazma yetkisi olmayan kurulum
 
 Çekirdeği klonlayan herkes onu **değiştirmek** isteyebilir; ama `ix-works/DEV_CORE`'a yazma
