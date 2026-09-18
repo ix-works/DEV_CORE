@@ -121,6 +121,7 @@
 ### İnfra · gate · dosya yetkisi
 - **2 ders:** [tam indeks](_indeks-infra-gate.md)
 - ⛔ [Muafiyetin gerekcesi ALT-KUMEYE aitse muafiyet kor nokta olur](feedback_muafiyetin-gerekcesi-alt-kumeye-aitse-muafiyet-kor-nokta-olur.md) — Bir kapının bilinçli muafiyeti gerekçesinden GENİŞ yazılmışsa (dosya-bazlı muafiyet, gerekçe yalnız dosyanın bir bölümü için geçerli) kör noktaya döner; dokunulmazlığı yüzünden o kapının EN UZUN YAŞAYAN kör noktası olur. Düzeltmenin AÇIKLAMA metni bile o boşluktan sızabilir. Daraltma: muafiyeti satır/token bazlı yap.
+- ⛔ [Merge-safe dagitimda SATIR yalniz ONARILAN dosyaya ulasir](feedback_merge-safe-dagitimda-satir-yalniz-onarilan-dosyaya-ulasir.md) — Mevcut dosyayi EZMEYEN bir dagitici eklenen DOSYAYI herkese ulastirir ama eklenen SATIRI ulastirmaz; satir yalniz dagiticinin OZEL OLARAK ONARDIGI dosyada tasinir. Dogrulamayi bos dizine degil, once eski surumle kurulmus sahte bir "mevcut makine"ye yap + negatif kontrol koy.
 - ⛔ [Tek seferlik script paylasilan modulun desenini yeniden turetmez](feedback_tek-seferlik-script-paylasilan-modulun-desenini-yeniden-turetmez.md) — O modülün yorumları senin düşeceğin tuzağın kaydıdır. Asıl kural: redundans, katmanlar BAĞIMSIZ değilse redundans değildir — ve bir katmanı düzeltmek öbürünün körlüğünü meşrulaştırmaz, GÖRÜNMEZ kılar.
 
 ### Araç · kabuk · kodlama tuzakları
