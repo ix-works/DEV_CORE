@@ -24,6 +24,7 @@ applies_to: [ecc, s4_private, s4_public, btp_abap]
 | **CORE-04** | Yeni validator `# ENFORCES: <rule-id>` beyanı taşıyor + `run_all_validators.py`/`run_review.py` zincirine WIRED mi? | `check_rule_gate_coverage.py` | BLOCKER | ADR 0019 |
 | **CORE-05** | Gate **bozuk girdiyle** canlı test edildi mi? (temiz-girdi PASS'i hiçbir şey ispatlamaz) | manual:negative-test | BLOCKER | Health-check dersi 2026-07-09 |
 | **CORE-06** | Toplu yazan script (`populate_*` · `push_*` · `deploy_*`) **ATLANAN** işi `başarılı` kovasına karıştırıyor mu? Kapanış özeti "N başarılı" derken N'in içinde **hiç dokunulmamış** obje varsa bu SAHTE-YEŞİLDİR: `atlandi` AYRI sayılır ve çıkış kodu politikası **yazılı** olur. | manual:sahte-yesil-kova | BLOCKER | Q268 (2026-09-09) · aşağıdaki §populate_* |
+| **CORE-07** | Fixture'daki metin-değiştirme mutasyon kipi (`replace(eski, yeni, 1)`) çapanın **TAM BİR KEZ** eşleştiğini (`count(eski) != 1` → `[DOGRULANAMADI]` + exit 2), mutantın **derlendiğini** ve **BEKLENEN** vektörün düştüğünü ayrıca doğruluyor mu? Yalnız `eski not in kaynak` kontrolü YETMEZ: çoklu eşleşmede ilk yer sessizce mutasyona uğrar; uygulanmamış mutasyon "korpus kör" diye sahte bulgu üretir. | manual:mutasyon-capa-benzersiz | WARNING | `howto-infra-fix-proseduru.md` §D2/6 (Q331, 2026-09-18) |
 
 ---
 

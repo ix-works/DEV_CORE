@@ -24,6 +24,7 @@ Kullanım:  python core/scripts/build_core_index.py [--check]
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from pathlib import Path
@@ -43,7 +44,13 @@ HEDEF = PROJ / "governance" / "CORE-INDEX.md"
 
 # Taranan core alanları (metodoloji). scripts/ ve mcp_servers/ dışarıda: kod, doküman değil.
 # ÖZYİNELİ alanlar (alt dizinler dahil):
-ALANLAR = ["playbook", "standards", "profiles", "governance/decisions"]
+# 2026-09-18 (Q331): `claude/templates` eklendi. Ölçüldü (bir tüketici projenin indeksinde):
+# `claude/`=0 · `spawn-brief`=0 eşleşme; 24 ajanlık bir turda spawn şablonu BULUNAMADI ve
+# sıfırdan yeniden icat edildi — oysa `spawn-brief.md` kendi başında "Kanonik ev BURASI"
+# diyor. ⛔ `claude/` BÜTÜNÜYLE eklenmez: `claude/rules` ve `claude/agents` projeye FİZİKSEL
+# kopya olarak iner (kökten zaten aranır → indekste ÇİFT olurdu), `memory-seed` ders
+# deposudur, kalanı ayar/şablon dosyasıdır.
+ALANLAR = ["playbook", "standards", "profiles", "governance/decisions", "claude/templates"]
 
 # DÜZ alanlar (YALNIZ o dizinin kendi *.md'si; alt dizinleri AYRI bölümde listelenir).
 # 2026-08-01 (KAYIT S3): `core/governance/` düz dosyaları indekse HİÇ girmiyordu — yalnız
@@ -59,6 +66,28 @@ DUZ_ALANLAR = ["governance"]
 # olduğunda (PROJ == CORE) indeks KENDİNİ listeler; projeden bakınca da ajanı core'un
 # kendi indeksine yönlendirir = gürültü + özyineli referans.
 HARIC = {"governance/CORE-INDEX.md"}
+
+# KOD İŞARETÇİLERİ (Q331, 2026-09-18) — doküman DEĞİL, AYRI bölüm + AYRI satır öneki.
+# Ölçüldü (aynı tüketici indeksi): `tests/`=0 · `run_battery`=0 · `mutasyon`=0 eşleşme ⇒
+# mutasyon altyapısı (tek-komut batarya + fixture-içi mutasyon kipleri) kökten aramada
+# görünmüyordu ve yeniden icat edildi. Kapsam bilinçli DAR: yalnız bu dizinlerin KENDİ
+# `*.py`'si (DÜZ — alt dizin yok). `tests/fixtures/` altı TEK TEK listelenmez: her infra
+# PR'ı fixture ekler; liste ya da sayı basılsaydı her PR, tüketen TÜM projelerde C-IDX-01'i
+# "bayat"a düşürürdü. Bölüm başlığı bunun yerine SABİT metinle yönteme ve bulma komutuna
+# yönlendirir (`ISARETCI_NOTU`).
+ISARETCI_ALANLAR = ["tests"]
+# Doküman satırı `- [`core/` ile başlar ve üç sayaç (`--check`, `--ci-check`, yazma) onu
+# SAYAR; işaretçi satırı bu önekle BAŞLAMAMALI, yoksa doküman sayısı sessizce şişer.
+ISARETCI_ONEK = "- (kod) "
+ISARETCI_NOTU = """> **Bu bolum dokuman DEGILDIR — kod isaretcisidir.** Yalniz `core/tests/*.py` (duz; alt
+> dizin yok) listelenir; ozet = modul docstring'inin ILK satiri.
+> **Mutasyon yontemi** (fixture-ici `--mutasyon-<kip>`, sandbox, capa `count != 1` ise
+> `[DOGRULANAMADI]` + exit 2): `core/playbook/howto-infra-fix-proseduru.md` §D2.
+> **Fixture korpuslari:** `core/tests/fixtures/<ad>/run.py` — burada TEK TEK LISTELENMEZ
+> (her infra PR'i fixture ekler; liste basilsaydi indeks her PR'da bayatlardi). Bul:
+> `find -L core/tests/fixtures -name run.py` · mutasyon kipli olanlar:
+> `rg -l -g run.py -- --mutasyon core/tests/fixtures` · taban + tum kipler tek komut:
+> `python core/tests/run_battery.py <fixture-adi>`."""
 
 BASLIK = """<!-- URETILMIS DOSYA — elle duzenleme. Uretici: core/scripts/build_core_index.py
      Tazelik gate'i: core/scripts/validators/check_core_index_fresh.py -->
@@ -120,13 +149,40 @@ def _siralama_anahtari(f: Path) -> str:
     return f.relative_to(CORE).as_posix()
 
 
-def _dosyalar(alan: str, ozyineli: bool) -> list[Path]:
+def _dosyalar(alan: str, ozyineli: bool, desen: str = "*.md") -> list[Path]:
     d = CORE / alan
     if not d.is_dir():
         return []
-    ham = d.rglob("*.md") if ozyineli else d.glob("*.md")
+    ham = d.rglob(desen) if ozyineli else d.glob(desen)
     return sorted((f for f in ham if _siralama_anahtari(f) not in HARIC),
                   key=_siralama_anahtari)
+
+
+def _kod_ozeti(p: Path) -> str:
+    """Modül docstring'inin İLK dolu satırı (AST — regex değil); okunamazsa ''.
+
+    ⛔ Sessiz atlama YOK: çağıran satırı özet boş olsa da BASAR (dosya indekste
+    görünür kalır). `str.splitlines()` KULLANILMAZ — Unicode satır sınırlarında da
+    böler; yalnız `\\n` ayırıcıdır.
+
+    PLATFORM DETERMİNİZMİ (tüketici CI'ı Windows'ta üretilen indeksi Linux'ta aynı
+    core-commit'te yeniden üretip kıyaslar — `_ci_check`): açık `utf-8` (locale'e
+    bağlı değil) · `read_text` evrensel satır sonu çevirir ⇒ autocrlf'li Windows
+    checkout'ta da özet `\\r` taşımaz · `clean=True` girintiyi normalize eder ·
+    kenar boşluğu kırpılır.
+    ÇÖKMEZLİK: bu üretici tüketicinin session/CI zincirindedir; tek bir bozuk
+    `tests/*.py` (sözdizimi · null bayt · UTF-8 olmayan bayt · okunamaz) üretimi
+    düşürmemeli — çökme C-IDX-01 kırmızısı olurdu. Bu yüzden istisna GENİŞ yakalanır.
+    """
+    try:
+        kaynak = p.read_text(encoding="utf-8").lstrip("﻿")
+        doc = ast.get_docstring(ast.parse(kaynak, filename=str(p)), clean=True)
+    except Exception:  # noqa: BLE001 — bilinçli: yukarıdaki ÇÖKMEZLİK notu
+        return ""
+    for satir in (doc or "").split("\n"):
+        if satir.strip():
+            return satir.strip()
+    return ""
 
 
 def uret() -> str:
@@ -142,7 +198,22 @@ def uret() -> str:
             ozet = _ozet(f)
             satirlar.append(f"- [`core/{rel}`](../core/{rel})" + (f" — {ozet}" if ozet else ""))
             toplam += 1
-    satirlar.append(f"\n---\n\n**Toplam {toplam} dokuman.** Bu dosya uretilmistir; "
+    isaretci = 0
+    for alan in ISARETCI_ALANLAR:
+        dosyalar = _dosyalar(alan, False, "*.py")
+        if not dosyalar:
+            continue
+        satirlar.append(f"\n## Kod isaretcileri — `core/{alan}/` ({len(dosyalar)} dosya; "
+                        f"KOD, dokuman degil)\n")
+        satirlar.append(ISARETCI_NOTU + "\n")
+        for f in dosyalar:
+            rel = f.relative_to(CORE).as_posix()
+            ozet = _kod_ozeti(f)
+            satirlar.append(f"{ISARETCI_ONEK}[`core/{rel}`](../core/{rel})"
+                            + (f" — {ozet}" if ozet else ""))
+            isaretci += 1
+    satirlar.append(f"\n---\n\n**Toplam {toplam} dokuman · {isaretci} kod isaretcisi.** "
+                    f"Bu dosya uretilmistir; "
                     f"icerik degistiginde `build_core_index.py` yeniden kosulur.\n")
     return "\n".join(satirlar)
 

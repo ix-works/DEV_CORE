@@ -827,11 +827,36 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 - ⚠ Anahtar değişirse **her projede** `python core/scripts/build_core_index.py`
   yeniden koşulup `governance/CORE-INDEX.md` commit'lenir; koşulmazsa C-IDX-01
   (pre-commit + proje CI) `BAYAT` der — sessiz kalmaz ama yeşil de olmaz.
-- `python tests/fixtures/core_index_kapsam/run.py` → 10/10.
+- **Kapsam (S3 + Q331, 2026-09-18):** `python tests/fixtures/core_index_kapsam/run.py` → **19/19**
+  (eskiden 10/10). Batarya: `python tests/run_battery.py core_index_kapsam --kardes
+  core_index_siralama b0_secim` → 8 kipin 8'i `DUSTU(rc=1)`. Her kip BEKLENEN vektörünü
+  kendisi denetler; düşmezse (ya da çapa `count != 1` / mutant derlenmez / kontrol grubu
+  bozuk) `[DOGRULANAMADI]` + **exit 2** — başka vektörün düşmesi yetmez.
+  Fix-ÖNCESİ üretici (`e0e58ba`) bu korpusta **12/19**, çökmeden (V9–V11 · V13–V15 düşer).
+
+| Kip | Skor | Düşmesi ZORUNLU | Yan düşüş (bilgi) |
+|---|---|---|---|
+| `--mutasyon-templates-yok` | 18/19 | V9 | — |
+| `--mutasyon-isaretci-yok` | 16/19 | V10 · V10b | V11 |
+| `--mutasyon-dokuman-onekli` | 14/19 | V5 · V13 | V10 · V11 · V14 |
+| `--mutasyon-ozyineli` | 16/19 | V11 · V12 | V14 |
+| `--mutasyon-dar-istisna` | 18/19 | V14 | — |
+| `--mutasyon-bos-bolum` | 18/19 | V15 | — |
+| `--mutasyon-kirpmasiz` | 18/19 | V14 | — |
+| `--mutasyon-sira` | 18/19 | V16 | — |
+
 - Değişmezler: `governance/` DÜZ dosyaları (infra-changelog + infra-test-recipes DAHİL —
   F0'ın zorunlu okuması) indekste · **mükerrer satır YOK** (governance'ı `rglob` ile eklemek
   `decisions/`i çiftler) · üretilmiş `CORE-INDEX.md` kendini listelemez · `scripts/`,
-  `mcp_servers/`, `tests/` indekse SIZMAZ (kod ≠ doküman) · indeksteki her yol diskte var.
+  `mcp_servers/`, `tests/` DOKÜMAN olarak indekse SIZMAZ (kod ≠ doküman) · `core/claude/`
+  altında YALNIZ `templates/` doküman alanıdır (V5) · indeksteki her yol diskte var.
+- **Q331 kod işaretçisi değişmezleri:** `core/tests/*.py` (DÜZ) AYRI bölümde, `- (kod) `
+  önekiyle — doküman sayacına (`\n- [`core/`) GİRMEZ (V13) · `tests/fixtures/<ad>` TEK TEK
+  ANILMAZ, fixture sayısı basılmaz (V12 churn çapası: basılsaydı her infra PR'ı tüketen tüm
+  projelerde C-IDX-01'i bayata düşürürdü) · bozuk/null-bayt/UTF-8 dışı/docstring'siz `.py`
+  satırı YİNE basılır, özet boş kalır, üretim ÇÖKMEZ (V14) · `tests/` ya da
+  `claude/templates/` olmayan klonda bölüm sessizce atlanır (V15) · iki çağrı bayt-eş,
+  `\r` yok (V16 — tüketici CI'ı Windows'ta üretilen indeksi Linux'ta kıyaslar).
 - **Değiştirdiysen `python core/scripts/build_core_index.py` YENİDEN KOŞ** — yoksa
   `check_core_index_fresh` (C-IDX-01) BAYAT der. Damga satırı kıyasta yok sayılır.
 - ⚠ Ölçüldü (2026-08-01): DEV_CORE'un KENDİ `governance/CORE-INDEX.md`'si bayat kalabiliyor;

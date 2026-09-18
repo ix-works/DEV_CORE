@@ -238,6 +238,30 @@ F3'te yazdığın fixture iki şeyi baştan sağlamalı:
    - ⚠ Bir mutasyon tarifini `<taban-sha>` gibi **yer tutucuyla** bırakmak da aynı ailedendir:
      komut çalıştırılamaz, dolayısıyla **hiç çalıştırılmaz.** Tarifi yazarken SHA'yı bul ve yaz.
 
+6. **🔴 D2/6 — METİN-DEĞİŞTİRME MUTASYONU: çapa TAM BİR KEZ eşleşir + BEKLENEN vektör düşer**
+   (2026-09-18, Q331) › **MUST** (`kaynak.replace(eski, yeni, 1)` ile mutant üreten her kip) ·
+   **Denetim:** F3 öz-koşumu + bug-gate yargısı — **runtime gate YOK, bilinçli** (ADR 0019; D2/5
+   ile aynı gerekçe). › prior-art: bulundu — `agent_stall_watch/run.py`, `bos_seans_markeri/run.py`
+   `count(eski) != 1` desenini zaten uyguluyordu; kural yazılı değildi, desen kopyalanarak yayılıyordu.
+   `--ref <sha>` ile eski sürüm yüklemek (madde 3) mümkün değilse kip, sandbox kopyada bir metin
+   parçasını değiştirir. O yolun üç sessiz hatası vardır; üçü de **sahte hüküm** üretir:
+   - **Çapa YOK** → `replace` hiçbir şey yapmaz, test doğal olarak yeşil kalır ve kip
+     *"vektör DÜŞMEDİ = korpus kör"* diye raporlar. Uygulanmamış mutasyon **sahte-POZİTİF bulgu**
+     üretir. ⇒ `[DOGRULANAMADI]` + exit 2.
+   - **Çapa BİRDEN FAZLA** (`kaynak.count(eski) > 1`) → `replace(…, 1)` **ilk** eşleşmeyi alır;
+     değişen yer amaçlanan yer olmayabilir ve bu hiçbir yerde görünmez. ⇒ `count(eski) != 1`
+     ise `[DOGRULANAMADI]` + exit 2 — yalnız `eski not in kaynak` kontrolü **YETMEZ**.
+     Çapayı benzersiz olana kadar genişlet (komşu satırı da içine al).
+   - **Yanlış vektör düştü** → exit 1 "mutasyon yakalandı" demek değildir. Her kip **hangi
+     vektörün düşmesini beklediğini** beyan eder ve koşucu o vektörün düştüğünü ayrıca doğrular;
+     başka bir vektörün düşmesi ayrı bir hükümdür (çapa yanlış yerde, ya da vektörler bağımsız değil).
+   Ek olarak mutant **derlenmeli** (`compile(...)`); derlenmeyen mutant testin kuralı koruduğunu
+   göstermez ⇒ yine exit 2. Referans uygulama: `tests/fixtures/core_index_kapsam/run.py`.
+   *Ölçüm (2026-09-18, sezgisel regex — farklı yazılmış bir kontrol sayılmamış olabilir ⇒ 20 bir
+   ÜST sınırdır):* `replace(…, 1)` kullanan 27 mutasyon koşucusunun 20'sinde `count(…)`
+   benzersizlik kontrolü bulunamadı. Mevcut
+   koşucuların geriye dönük onarımı ayrı kayıttır; **yeni yazılan kip bu maddeye uyar.**
+
 **FP çapası omurgadır.** "Eksik gate → BLOCKER" yaparken "kayıtlı boş zincir → PASS" çapası
 yoksa bilinçli boşluklar da bloklanır; "şu alanı indeksle" derken "mükerrer satır yok"
 çapası yoksa tarama sessizce şişer. Mutasyon koşumlarında **geçen vektörler tam da FP

@@ -38,6 +38,32 @@ python core/scripts/parity_probe.py --out .tmp/parity.json   # sahibin makinesiy
 - ⛔ **"Bende çalışmıyor" tek başına bulgu değildir.** Bulgu = *"şu mekanizma şu girdiyle şu
   yanlış sonucu veriyor"*. Kontrol grubu olmadan iddia kurma: çalıştığı bilinen bir vaka da göster.
 
+### 1b. İddiayı GÜNCEL `origin/main`'de doğrula — "yok" diyeceksen iki kez
+
+Bildirim, senin **yerel** çekirdeğine karşı ölçülür; sahibi onu **güncel** `main`'e karşı okur.
+Aradaki fark kapanmış bir konuyu "eksik" diye taşır. Pull edemiyorsan da (koşan ajanların altındaki
+metodolojiyi değiştirmek istemiyorsan — meşru) doğrulama **salt-okur** yapılabilir; çalışma ağacı
+değişmez:
+
+```bash
+git -C core fetch -q origin
+git -C core rev-list --count HEAD..origin/main          # kaç commit gerideyim (ORTAM'a yaz)
+git -C core log --oneline HEAD..origin/main             # arada ne girdi — iddianla ilgili mi?
+git -C core grep -n -i "<desen>" origin/main -- .       # "X yok" iddiasını GÜNCEL ağaçta ara
+git -C core show origin/main:<yol>                      # dosyanın güncel hâli
+```
+
+- **"X çekirdekte YOK" iddiası en pahalı iddiadır** — yanlışsa sahibi baştan bir ölçüm turu açar.
+  Yazmadan önce ÜÇ yüzeyde ara: ① `governance/CORE-INDEX.md` (kökten aranır) ② `git -C core grep`
+  (junction'dan bağımsız, **tüm** ağaç — `claude/`, `tests/` dahil) ③ `claude/templates/spawn-brief.md`
+  ve `tests/run_battery.py` gibi kod-içi metodoloji. Yalnız `playbook/` + `memory-seed/`'e bakmak
+  yetmez. Aramanın kendisini KAPSAM BEYANI'na yaz (hangi desen, hangi dizin, kaç sonuç).
+- Gerideysen ve iddia arada giren bir commit'e dokunuyorsa: bildirimi **o commit'e karşı** yeniden
+  ölç ya da maddeyi bildirimden çıkar.
+- *Ölçülmüş vaka (2026-09-18):* birkaç commit geride bir tüketici 6 maddelik bildirim yazdı; güncel
+  `main`'e karşı yeniden ölçülünce **4'ü zaten var**, 1'i kısmen vardı — hepsi *"yok"* iddiasıydı ve
+  aranmamış dizinlerde (`claude/templates/`, `tests/`) duruyordu.
+
 ## 2. Bildirim KANIT FORMATI (zorunlu — eksikse talep geri döner)
 
 Sahibi tarafındaki Claude, gelen metni **ihbar** sayar, kanıt saymaz: iddiayı kendi
@@ -49,6 +75,7 @@ makinesinde yeniden ölçer. Ölçebilmesi için şunlar gerekir. Başlıkları 
 
 ## ORTAM
 - core commit      : <git -C core rev-parse --short HEAD>   (+ dal adı)
+- core geride      : <fetch sonrası git -C core rev-list --count HEAD..origin/main> commit (§1b)
 - Claude Code sürümü: <claude --version>
 - OS / kabuk       : <Windows 11 / Git Bash · PowerShell 5.1 ...>
 - ix_doctor        : <PASS/WARN/FAIL sayıları — tam çıktı değil>

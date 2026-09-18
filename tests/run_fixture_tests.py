@@ -1103,6 +1103,20 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("playbook/**", ("O:core_index_kapsam",), "CORE-INDEX alanı"),
     ("standards/**", ("O:core_index_kapsam",), "CORE-INDEX alanı"),
     ("profiles/**", ("O:core_index_kapsam",), "CORE-INDEX alanı"),
+    # Q331 (2026-09-18): `claude/templates` doküman alanı + `tests/*.py` KOD İŞARETÇİSİ
+    # (docstring'in ilk satırı indekse basılır). ⚠ Bilinçli olarak `claude/templates/**` /
+    # `tests/*.py` GLOB'u DEĞİL, bugünkü dosyalar tek tek: glob, haritada olmayan YENİ bir
+    # şablonu / `tests/*.py`'yi fail-closed TAM süiteden tek korpusa DARALTIRDI (sessiz
+    # daraltma). Yeni dosya TAM'a düşer — TAM zaten core_index_kapsam'ı içerir. Bu satırlar
+    # yukarıdaki kendi satırlarıyla BİRLEŞİR (yön daima genişletme).
+    ("claude/templates/spawn-brief.md", ("O:core_index_kapsam",),
+     "CORE-INDEX alanı (Q331: `claude/templates`)"),
+    ("tests/run_battery.py", ("O:core_index_kapsam",),
+     "CORE-INDEX kod işaretçisi (Q331: docstring ilk satırı indekste)"),
+    ("tests/run_guard_fixture_tests.py", ("O:core_index_kapsam",),
+     "CORE-INDEX kod işaretçisi (Q331: docstring ilk satırı indekste)"),
+    ("tests/run_fixture_tests.py", ("O:core_index_kapsam",),
+     "CORE-INDEX kod işaretçisi (Q331: docstring ilk satırı indekste)"),
 
     # ── Q325/Q326 (2026-09-18): tohum terfi gorunurlugu + Z-desen kapsami ────
     # `seed_memory.py` satiri YUKARIDA da var (Q289) — `_eslesme` BIRLESIM alir,

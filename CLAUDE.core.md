@@ -201,8 +201,10 @@
   işi**. **KUYRUK-tipi bakım** (kayıtlı bulgu, batch — talimat-dosyası bakımı DAHİL: CLAUDE/rules
   dedup, memory yeniden-yapılanma) → **infra-expert'e devredilebilir** (worktree'de hazırlar,
   lider diff+merge; memory = branch→diff→lider; akış: [`playbook/howto-talimat-dosyasi-bakimi.md`](playbook/howto-talimat-dosyasi-bakimi.md)).
-  ⚠ Alt-ajanlar **auto-memory'yi GÖRMEZ** (yalnız `CLAUDE.md` kopyası alırlar; resmî) →
-  kanıt kurallarını (TAHMİN YASAK · kanıtsız iddia yazma · negatif-test) **brifinge açıkça YAZ**.
+  ⚠ Alt-ajanlar **auto-memory'yi GÖRMEZ** (yalnız `CLAUDE.md` kopyası alırlar; resmî) → brifi
+  **ŞABLONDAN kur:** [`claude/templates/spawn-brief.md`](claude/templates/spawn-brief.md) — §7 kanıt
+  kuralları (değişmez blok) · §8 rapor + hüküm sözlüğü · §9 engellenirsen. Elle düzyazı BİRİKMEZ:
+  iki ajanda tekrarlayan hata brife değil **ajan tanımına** yazılır, döngü-içi yöntem **paylaşılan araca**.
   Brifingin ÇIKTI bölümüne `SendMessage({to:"main"})` ekle, yoksa rapor gelmez.
   **Checkpoint-heartbeat (uzun/token-ağır ajan):** brifinge ekle → ajan her doğal kilometre-taşında
   (ön-okuma bitti · canlı-teyit bitti · her ana metot/INCLUDE) 2-3 satır `SendMessage({to:"main"})`
