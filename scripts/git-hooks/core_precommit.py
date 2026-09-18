@@ -9,6 +9,9 @@
    Desenler `scripts/genericize_common.py`'de; `pre_tool_guard` AYNI kaynağı kullanır (D9).
    İsim listesi yoksa `--all` (CI) modunda FAIL-CLOSED (D1).
    pre_tool_guard yazım-anı erken-uyarıdır; KESİN gate budur (+ CI'da aynısı).
+   MUAFİYET (Q329, 2026-09-18): dosya-bazlı `SCAN_EXEMPT` KALDIRILDI; yerine SATIR
+   bazlı, GEREKÇESİ ZORUNLU `genericize-allow: <gerekçe>` işaretçisi geldi. Muaf
+   satır sayısı her koşumda basılır (KAPSAM BEYANI) — ayrıntı: `MUAF_ISARET` bloğu.
 2) LINK-AUDIT: staged .md'lerdeki göreli linkler çözülmeli (dosya-dizininden VEYA
    repo-kökünden). Kopuk link = FAIL.
 3) APPLIES_TO ŞEMASI (D21): standards/ + playbook/ altındaki her .md frontmatter'ında
@@ -50,12 +53,52 @@ ALLOWED_TOKENS = {
     # mimari şemadaki placeholder (gerçek proje/müşteri adı YASAK)
     "README.md": ["<PROJECT_NAME>"],
 }
-# Desen-sözlüğü taşıyan dosyalar (tarama anlamsız — kendileri desen tanımlar)
-SCAN_EXEMPT = {
-    "scripts/hooks/pre_tool_guard.py",
-    "scripts/git-hooks/core_precommit.py",
-    "scripts/genericize_common.py",
-}
+# ── SATIR-BAZLI MUAFİYET (Q329, 2026-09-18 — kullanıcı onaylı DARALTMA) ─────────
+# ⛔ ESKİ HAL: `SCAN_EXEMPT` üç dosyayı (`pre_tool_guard` · `core_precommit` ·
+# `genericize_common`) sızıntı taramasından KOMPLE muaf tutuyordu. Gerekçesi
+# *"tarama anlamsız — kendileri desen tanımlar"* idi ve desen LİTERALLERİ için
+# doğrudur; ama muafiyet DOSYANIN TAMAMINI kapsadığı için o dosyaların düz-yazı
+# yorum ve docstring'leri de muaf oluyordu. Bu kör noktadan **8 gerçek kimlik izi**
+# geçti; dördü, ironik biçimde *"bu ad allowlist'e ALINMADI"* diyen gerekçe
+# yorumlarının içinde (#266), en eskisi **38 gün** public çekirdekte kaldı (#267 ile
+# temizlendi — içerik ayağı; muafiyetin kendisi bu commit'in konusu).
+# ⭐ SINIF: *bilinçli bir muafiyetin gerekçesi bir ALT-KÜME için geçerliyken muafiyet
+# ÜST-KÜMEye yazılırsa, muafiyet kör noktaya döner — ve dokunulmazlığı yüzünden en
+# uzun yaşayan kör nokta olur.*
+#
+# ÖLÇÜLDÜ (2026-09-18, 802 takipli dosya, `check_generic` tüm ağaçta koşuldu):
+# `SCAN_EXEMPT` DOLU iken **0 bulgu**, BOŞ iken de **0 bulgu**. Üç dosyada Z-obje
+# desenine uyan **11 satır** var ve **11'i de** `ORNEK_Z` allowlist'inde; YAPISAL
+# desenler (makine-yolu, e-posta) üçünün hiçbir satırında eşleşmiyor ⇒ muafiyet
+# bugün HİÇBİR ŞEYİ korumuyordu. Kaldırılması saf DARALTMADIR (gevşetme değil).
+#
+# YENİ HAL — muafiyet SATIR bazlıdır ve GEREKÇESİ ZORUNLUDUR:
+#     <yorum-karakteri> genericize-allow: <bu satırdaki iz neden meşru>
+# · Yalnız İŞARETÇİNİN BULUNDUĞU SATIR muaf olur; blok/bölge/dosya muafiyeti YOKTUR.
+# · Gerekçe yoksa/yetersizse işaretçi YOK SAYILIR → satır yine bloklanır. Bu şart,
+#   mekanizmanın sessiz bir `# noqa`ya dönüşmesini engeller (`post_tool_failure.py`:
+#   *"Susturma YASAK (pseudo-comment / pragma / '#EC' ile sessiz pass)"*).
+# · Dosya ADI taraması (D5) MUAFİYET DIŞIDIR — dosya adına işaretçi konamaz.
+# · Muaf satır sayısı HER koşumda basılır (`kapsam_beyani`; CLAUDE.core §7 KAPSAM
+#   BEYANI + checklist CORE-06): *"0 bulgu"* asla *"hiçbir şey muaf değil"* diye
+#   okunamaz. Muaf kova, temiz kovaya KARIŞMAZ.
+MUAF_ISARET = "genericize-allow"
+# ⚠ Literal, `MUAF_ISARET + ":"` biçiminde KURULUR: tek parça yazılsaydı aşağıdaki
+# satırın kendisi geçerli bir işaretçi olurdu (kapının kendi desenine takılması sınıfı).
+MUAF_RE = re.compile(re.escape(MUAF_ISARET) + r":[ \t]*(.*)$")
+# Gerekçe ölçütü. Eşik BİLİNÇLİ DÜŞÜK: amaç "iyi gerekçe" yargılamak DEĞİL, tek
+# harflik pragmayı (`... genericize-allow: x`) elemektir. Bugünkü FP riski ölçülebilir
+# biçimde SIFIR — ağaçta hiç işaretçi yok (yukarıdaki ölçüm).
+MUAF_MIN_KARAKTER = 10
+MUAF_MIN_KELIME = 2
+# Gerekçenin sonundaki yorum-kapatıcıları (`-->`, `*/`, `#`) gerekçeden sayılmaz.
+_GEREKCE_KIRP = " \t-–—*/#>"
+
+
+def gerekce_gecerli(gerekce: str) -> bool:
+    """Gerekçe ZORUNLU: boş/yetersiz ise işaretçi yok sayılır (satır yine taranır)."""
+    g = gerekce.strip().strip(_GEREKCE_KIRP).strip()
+    return len(g) >= MUAF_MIN_KARAKTER and len(g.split()) >= MUAF_MIN_KELIME
 
 # Link-check muafiyeti: build_core_index.py'nin ÜRETTİĞİ CORE-INDEX kasıtlı olarak PROJE-göreli
 # `../core/...` link'leri taşır (proje-kökünden junction ile çözülür; core-repo-kökünden çözülmez).
@@ -226,24 +269,84 @@ def profile_enum(repo: Path) -> set[str]:
     return enum
 
 
-def check_generic(path: str, text: str, hatalar: list[str]) -> None:
-    if path in SCAN_EXEMPT:
-        return
+def yeni_sayac() -> dict:
+    """KAPSAM BEYANI sayaçları — `muaf` kovası `temiz` kovasına KARIŞMAZ (CORE-06)."""
+    return {"dosya": 0, "ikili": 0, "muaf": 0, "gerekcesiz": 0, "muaf_satir": []}
+
+
+def check_generic(path: str, text: str, hatalar: list[str],
+                  sayac: dict | None = None) -> None:
+    """Sızıntı taraması — Q329'dan beri SATIR SATIR (muafiyet satır bazlı olduğu için).
+
+    ⚠ `str.splitlines()` KULLANILMAZ: o, Unicode satır sınırlarında da (U+0B, U+1C,
+    U+2028 …) böler ⇒ satır numaraları git'in saydığıyla AYRIŞIR ve tek kayıt iki
+    satır sanılır. `split("\\n")` git'in satır kavramıyla birebirdir.
+
+    Satır-satır taramanın ikinci etkisi bir SIKILAŞTIRMADIR: eski kod isim-listesi
+    eşleşmesini `idp.search(text)` ile dosya başına YALNIZ BİR KEZ raporluyordu
+    (ilk eşleşme); artık her satır ayrı raporlanır ve satır numarası token'ın GERÇEK
+    yerini gösterir (eskiden `re.search(token)` ile ilk geçtiği satır yazılıyordu).
+    """
     # D5: dosya ADI da taranır. İçeriği genericize edilmiş ama adı unutulmuş dosyalar
     # (ör. `feedback_<müşteri>-full-dump.md`) eskiden gate'ten geçiyordu — canlı oldu.
+    # ⛔ MUAFİYET DIŞI: dosya adına işaretçi konamaz, dolayısıyla bu dal susturulamaz.
     for tok, ad in sizintilari_bul(path, ID_PAT):
         hatalar.append(
             f"GENERICIZE-LEAK  {path}  (DOSYA ADI) '{tok}' ({ad}) — core'a proje/müşteri "
             f"izi giremez; dosyayı yeniden adlandır.")
 
-    for tok in ALLOWED_TOKENS.get(path, []):
-        text = text.replace(tok, "")
-    for tok, ad in sizintilari_bul(text, ID_PAT):
-        m = re.search(re.escape(tok), text)
-        satir = text[: m.start()].count("\n") + 1 if m else 0
-        hatalar.append(
-            f"GENERICIZE-LEAK  {path}:{satir}  '{tok}' ({ad}) — core'a proje/müşteri izi "
-            f"giremez; placeholder'la (<SYSTEM_ID>, <SAP_USER>, ZSD001 ...)")
+    izinli = ALLOWED_TOKENS.get(path, [])
+    for no, ham in enumerate(text.split("\n"), 1):
+        satir = ham
+        for tok in izinli:
+            satir = satir.replace(tok, "")
+        bulgular = sizintilari_bul(satir, ID_PAT)
+        if not bulgular:
+            continue
+        m = MUAF_RE.search(satir)
+        if m and gerekce_gecerli(m.group(1)):
+            if sayac is not None:
+                sayac["muaf"] += len(bulgular)
+                # ⚠ TOKEN BASILMAZ, yalnız TÜRÜ: bu satır her YEŞİL koşumda da basılır ve
+                # CI günlüğü PUBLIC'tir — muaf tutulan bir izi her koşumda log'a yazmak
+                # kapının kendisini sızıntı kanalına çevirirdi.
+                sayac["muaf_satir"].append(
+                    (path, no, sorted({ad for _, ad in bulgular}),
+                     m.group(1).strip().strip(_GEREKCE_KIRP).strip()))
+            continue
+        ek = ""
+        if m:
+            if sayac is not None:
+                sayac["gerekcesiz"] += 1
+            ek = (f"\n      ⚠ Bu satırda `{MUAF_ISARET}:` işaretçisi VAR ama gerekçesi "
+                  f"yok/yetersiz (en az {MUAF_MIN_KARAKTER} karakter ve "
+                  f"{MUAF_MIN_KELIME} kelime) → YOK SAYILDI. Gerekçesiz muafiyet sessiz "
+                  f"bir pragmadır; bu kapı onu kabul etmez.")
+        for tok, ad in bulgular:
+            hatalar.append(
+                f"GENERICIZE-LEAK  {path}:{no}  '{tok}' ({ad}) — core'a proje/müşteri izi "
+                f"giremez; placeholder'la (<SYSTEM_ID>, <SAP_USER>, ZSD001 ...)" + ek)
+
+
+def kapsam_beyani(sayac: dict) -> None:
+    """HER koşumda basılır — bulgu olsun olmasın (CLAUDE.core §7 · checklist CORE-06).
+
+    ÇIKIŞ KODU POLİTİKASI (yazılı olması CORE-06 şartıdır):
+      · geçerli işaretçili MUAF satır çıkış kodunu DEĞİŞTİRMEZ — bilinçli, gerekçeli
+        ve diff'te görünür bir istisnadır; ama *"temiz"* SAYILMAZ, ayrı basılır.
+      · GEREKÇESİZ işaretçi bulguyu AYAKTA bırakır ⇒ exit 1 (susturma yok).
+      · Taranamayan (ikili) dosya ÖLÇÜLEMEDİ'dir — *"temiz"* değil.
+    """
+    print(f"[KAPSAM] genericize-scan: {sayac['dosya']} dosya (içerik, satır satır) + "
+          f"dosya ADI (D5) · muaf-satır {sayac['muaf']} · "
+          f"gerekçesiz işaretçi {sayac['gerekcesiz']} (YOK SAYILDI)")
+    print(f"         muafiyet biçimi `{MUAF_ISARET}: <gerekçe>` (aynı satır, gerekçe "
+          f"ZORUNLU) · dosya ADI taraması muafiyet DIŞI")
+    if sayac["ikili"]:
+        print(f"         ÖLÇÜLEMEDİ: {sayac['ikili']} ikili/okunamayan dosya — içeriği DE "
+              f"adı DA taranmadı (bugünkü sınır; 'temiz' demek değildir)")
+    for path, no, turler, gerekce in sayac["muaf_satir"]:
+        print(f"         MUAF  {path}:{no}  ({', '.join(turler)}) ← {gerekce}")
 
 
 def check_links(path: str, text: str, repo: Path, hatalar: list[str]) -> None:
@@ -318,22 +421,30 @@ def main() -> int:
     #    bir daha görmedi. CI'nın tam-ağaç taraması bu sınıfın tek yakalayıcısıdır.
     check_sir(dosyalar, hatalar)
 
+    sayac = yeni_sayac()
     for path in dosyalar:
         text = staged_content(path)
         if text is None:
+            sayac["ikili"] += 1
             continue
-        check_generic(path, text, hatalar)
+        sayac["dosya"] += 1
+        check_generic(path, text, hatalar, sayac)
         if path.endswith(".md"):
             check_links(path, text, repo, hatalar)
             if path.startswith(("standards/", "playbook/")):
                 check_applies_to(path, text, enum, hatalar)
+
+    # KAPSAM BEYANI — bulgu olsun olmasın, HER koşumda (en kritik an sıfır-bulgu anıdır).
+    kapsam_beyani(sayac)
+
     if hatalar:
         print("⛔ pre-commit GATE (B11) — commit BLOKLANDI:\n")
         for h in hatalar:
             print("  " + h)
         print(f"\n  Toplam {len(hatalar)} ihlal. Düzelt → tekrar commit. "
-              f"(Bypass YASAK — ADR 0005 kültürü; gerçekten istisna ise ALLOWED_TOKENS/"
-              f"SCAN_EXEMPT'e GEREKÇELİ PR ile ekle.)")
+              f"(Bypass YASAK — ADR 0005 kültürü; sızıntı taramasında gerçekten meşru "
+              f"TEK BİR satır varsa o satıra `{MUAF_ISARET}: <gerekçe>` yaz — gerekçe "
+              f"ZORUNLU, muafiyet yalnız o satıra işler ve her koşumda sayılıp basılır.)")
         return 1
     return 0
 

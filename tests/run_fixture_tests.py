@@ -529,6 +529,15 @@ OZEL_TESTLER = [
      "genericize Z_OBJ_PAT kapsami: 3-4 harfli modul kodu YAKALANIR, D3/D4 eksenleri "
      "bozulmaz, ORNEK_Z'de olu satir yok ve GERCEK proje paketi allowlist'e GIRMEZ; "
      "kablolama gercek `core_precommit` staged yolunda olculur (16 vektor + 2 mutasyon)"),
+    # 2026-09-18 (Q329): sizinti kapisinin MUAFIYETI dosya-bazliydi; gerekcesi desen
+    # LITERALLERI icin dogruydu ama muafiyet UST-KUMEYE (dosyanin tamami) yazildigi
+    # icin duz-yazi yorumlar da muafti -> 8 gercek kimlik izi bu yoldan gecti.
+    ("genericize_muafiyet_satir_bazli",
+     "genericize muafiyeti SATIR bazli + gerekce ZORUNLU: isaretci yalniz kendi satirini "
+     "muaf tutar (blok/dosya muafiyeti yok), gerekcesiz isaretci YOK SAYILIR, dosya ADI "
+     "taramasi (D5) muafiyet DISI, muaf sayisi HER kosumda basilir (KAPSAM BEYANI) ve "
+     "muaf token CI gunlugune BASILMAZ; ters yon tarihi `SCAN_EXEMPT` kopyasiyla olculur "
+     "(24 vektor + 4 mutasyon)"),
     # 2026-09-17 (Q322): alt-ajan takilma bekcisi — GOZLEMCI, kapi DEGIL.
     ("agent_stall_watch",
      "agent_stall_watch: sinyal ILERLEMEDIR (eslesmemis tool_use + yas), canlilik degil; "
@@ -855,11 +864,16 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
 
     # ── git-hooks + guard yüzeyi ────────────────────────────────────────────
     ("scripts/git-hooks/core_precommit.py",
-     ("O:changelog_gate", "O:sir_gate", "O:changelog_amend", "O:worktree_blocklist"),
-     "pre-commit kontrollerinin dördü de bu dosyayı subprocess ile koşar"),
+     ("O:changelog_gate", "O:sir_gate", "O:changelog_amend", "O:worktree_blocklist",
+      "O:genericize_muafiyet_satir_bazli"),
+     "pre-commit kontrollerinin dördü de bu dosyayı subprocess ile koşar; muafiyet "
+     "mekanizması (satır-bazlı + KAPSAM BEYANI) ayrı korpusta"),
     ("scripts/genericize_common.py",
-     ("O:worktree_blocklist", "O:tembel_desen", "R:AV-03", "G"),
-     "kimlik/sızıntı deseni: guard + precommit + blocklist aynı modülü kullanır; tembel kurulum korpusu da burada"),
+     ("O:worktree_blocklist", "O:tembel_desen", "R:AV-03", "G",
+      "O:genericize_muafiyet_satir_bazli"),
+     "kimlik/sızıntı deseni: guard + precommit + blocklist aynı modülü kullanır; tembel "
+     "kurulum korpusu da burada. Muafiyet korpusu bu dosyayı KİRLİ bir kopya olarak "
+     "stage'ler (tarihi `SCAN_EXEMPT` karşıtlığı) ⇒ içeriği değişince o eksen de ölçülür"),
     ("scripts/hooks/pre_tool_guard.py",
      ("G", "O:negatif_test_harness", "O:tembel_desen"),
      "payload korpusu + parse-fail görünürlüğü + tembel desen-kurulumu"),
