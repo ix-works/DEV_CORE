@@ -147,6 +147,9 @@
 - ⭐ [Ecc referansi is anlayisi icin mimari degil](feedback_ecc-referansi-is-anlayisi-icin-mimari-degil.md) — ECC/legacy dump'ı ve PRD verisi YALNIZ 'ne, neden, nasıl takip edilmek isteniyor'u anlamak içindir — kodlama/tablo mantığı/mimari ŞABLON DEĞİLDİR; S/4 tasarımı SD-LE-EDI-ABAP uzman gözüyle sıfırdan yapılır
 - ⭐ [Fs ts html uretilmez teslim bicimi](feedback_fs-ts-html-uretilmez-teslim-bicimi.md) — FS/TS teslim biçimi .md + .pdf'tir — .html repoda DURMAZ ve güncellenmez; KD ise .md + .pdf + .html ister
 
+### 2026-09-18 tohum terfisi (konu başlıklı)
+- **54 ders:** [tam indeks](_indeks-terfi-2026-09-18.md) — kanıt/ölçüm 9 · ajan 5 · karar 6 · infra-gate 10 · araç 4 · SAP/ABAP/RAP 13 · UI 3 · doküman 4
+
 ### Araç kök-fix tarihçesi (regresyon sözlüğü)
 - **10 kayıt:** [tam indeks](_indeks-arac-kok-fixleri.md) — *"bu bug daha önce oldu mu"* sorusunun yeri; güncel kural DEĞİL
 
