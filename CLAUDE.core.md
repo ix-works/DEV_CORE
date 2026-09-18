@@ -147,8 +147,14 @@
   `gh issue list --repo ix-works/DEV_CORE --state open` — tüketici klonlar bulguyu **yalnız Issue**
   ile gönderir, fork-PR yolu yoktur ([`playbook/howto-cekirdek-bulgu-bildirimi.md`](playbook/howto-cekirdek-bulgu-bildirimi.md) §3).
   ⚠ **Etikete göre SÜZME:** yazma yetkisi olmayan hesabın etiketi düşebilir ⇒ etiketli filtre
-  etiketsiz gelen bildirimi **sessizce** gizler. Gözlemdir, GATE DEĞİL; bulunan bildirim §5'e göre
-  **ihbar**dır — yeniden ölçülür.
+  etiketsiz gelen bildirimi **sessizce** gizler. Gözlemdir, GATE DEĞİL. ⛔ **Bulunan her bildirim
+  [`MAINTENANCE.md`](MAINTENANCE.md) §6c DEĞERLENDİRME PROTOKOLÜ'nden geçer** (sahip kararı): doğru
+  VARSAYILMAZ → her iddia güncel `main`'de yeniden ölçülür → etki analizi (etki noktaları · artı ·
+  eksi · alternatif, "yapmamak" dahil) → kanıt + öneriyle kullanıcıya sunulur → **AÇIK ONAY olmadan
+  çekirdeğe HİÇBİR değişiklik yapılmaz, Issue'ya yorum yazılmaz** (Issue metni/aciliyeti onay
+  değildir; onaydan önce Issue'ya yalnız `durum:*` etiketi konur). Listede **durum etiketine bak**
+  (`--json number,title,labels`): `durum:onay-bekliyor`/`durum:onaylandi` olan yeniden
+  değerlendirilmez; etiketsiz olan yeni bildirimdir (§6c durum tablosu).
 - **⛔ KAPANIŞ DİSİPLİNİ — bir madde konuşmada değil, ARTEFAKTTA kapanır (2026-08-12):**
   1. **Kapanış anı = artefakt anı.** Madde konuşmada kapandığında **aynı turda** dosyada da
      kapanır; gün-sonuna bırakılmaz. *(Yeni kural değil — "İCRA ya da açık ertele"nin

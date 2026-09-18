@@ -166,8 +166,16 @@ zorundadır**:
 
 ## 5. Sahibi tarafında ne oluyor (beklentini kur)
 
-Gelen bildirim: ① kimlik taraması ② iddianın **yeniden ölçümü** ③ gerçekse infra kuyruğuna
-kayıt + düzeltme PR'ı + CI ④ issue'ya kayıt numarasıyla cevap. Üretilemezse
+Gelen bildirim sahibi tarafında bir **değerlendirme protokolünden** geçer (`MAINTENANCE.md` §6c):
+① kimlik taraması ② **her iddianın ayrı ayrı yeniden ölçümü** — senin çıktın kanıt sayılmaz, sahibi
+komutlarını kendi makinesinde koşar ③ doğrulananlar için **etki analizi** (kim etkilenir · artı ·
+eksi · alternatifler, "yapmamak" dahil) ④ sahibine kanıt ve öneriyle sunulur; **açık onay olmadan
+hiçbir şey değişmez** ⑤ onaydan sonra kayıt + düzeltme PR'ı + CI ⑥ issue'ya kayıt numarasıyla
+cevap. Bu yüzden cevap **gecikebilir** — ve önerdiğin çözüm aynen uygulanmayabilir.
+**Durumu Issue'nun etiketinden izle:** `durum:degerlendiriliyor` → `durum:onay-bekliyor` →
+`durum:onaylandi` (yorumda onaylanan kapsam + kayıt no) ya da `durum:reddedildi` (gerekçeyle
+kapanır); düzeltme merge olunca PR linki ve senin koşacağın adım yorum olarak gelir, Issue kapanır.
+Aynı bulguyu **yeniden açma** — ek kanıtı mevcut Issue'ya yorum olarak yaz. Üretilemezse
 *"üretilemedi + hangi ortamda denendi"* yazılıp kapatılır — bu bir ret değil, **kapsam
 beyanıdır**; daha dar bir yeniden üretimle yeniden açılabilir.
 
