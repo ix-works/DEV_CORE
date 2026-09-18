@@ -424,9 +424,28 @@ def _manifest_kontrol() -> list[str]:
         return [f"manifest kontrolu calismadi: {e}"]
 
 
+def _core_geri_sayisi() -> int:
+    """`HEAD..origin/main` commit sayısı — YEREL ref'lerden, AĞSIZ (ucuz; her çağrıda)."""
+    try:
+        r = subprocess.run(["git", "-C", str(CORE), "rev-list", "--count", "HEAD..origin/main"],
+                           capture_output=True, text=True, timeout=5)
+        return int((r.stdout or "0").strip() or 0) if r.returncode == 0 else 0
+    except Exception:
+        return 0
+
+
 def _origin_kontrol() -> list[str]:
     """Ö3+D20b: DEV_CORE origin-geride mi. THROTTLE: saatte 1 fetch (cache .tmp/),
-    fetch timeout 2 sn; aradaki oturumlar cache'lenmiş sonucu gösterir."""
+    fetch timeout 2 sn.
+
+    ⛔ Q337 (Issue #276, 2026-09-18): önbellek YALNIZ son fetch ZAMANINI tutar; gerilik
+    sayısı HER çağrıda yerel `rev-list --count HEAD..origin/main` ile hesaplanır. Eskiden
+    `behind` de önbellekteydi ve 1 saat yeniden kullanılıyordu ⇒ araya giren `git -C core
+    pull` önbelleği geçersiz kılmadığı için pull SONRASI oturum olmayan bir geriliği
+    bildiriyordu (ölçülen: bildirilen 10, gerçek 0). Throttle'lanan şey AĞ (fetch)'tır,
+    sayım değil. Eski biçimli önbellek (`behind` alanlı) kırılmadan okunur: yalnız `ts`
+    kullanılır, `behind` YOK SAYILIR. Sınır: fetch'ler arası upstream'e giren commit, bir
+    sonraki fetch'e dek sayılmaz (bilinçli — ağ maliyeti değişmedi)."""
     out = []
     core_git = CORE / ".git"
     if not core_git.exists():
@@ -443,29 +462,23 @@ def _origin_kontrol() -> list[str]:
         pass
     cache = PROJ / ".tmp" / ".core_fetch_cache.json"
     simdi = time.time()
-    durum = {}
+    son_fetch = 0.0
     try:
-        durum = json.loads(cache.read_text(encoding="utf-8"))
+        son_fetch = float(json.loads(cache.read_text(encoding="utf-8")).get("ts", 0))
     except Exception:
-        pass
-    if simdi - float(durum.get("ts", 0)) > 3600:  # saatte 1
+        pass  # yok/bozuk/eski biçim okunamıyor → süresi dolmuş say (fetch dener)
+    if simdi - son_fetch > 3600:  # saatte 1
         try:
             subprocess.run(["git", "-C", str(CORE), "fetch", "--quiet", "origin", "main"],
                            capture_output=True, timeout=2)
         except Exception:
             pass  # ağ yok/yavaş → sessiz; cache'e yine de zaman yaz
         try:
-            r = subprocess.run(["git", "-C", str(CORE), "rev-list", "--count", "HEAD..origin/main"],
-                               capture_output=True, text=True, timeout=5)
-            durum = {"ts": simdi, "behind": int((r.stdout or "0").strip() or 0)}
-        except Exception:
-            durum = {"ts": simdi, "behind": 0}
-        try:
             cache.parent.mkdir(parents=True, exist_ok=True)
-            cache.write_text(json.dumps(durum), encoding="utf-8")
+            cache.write_text(json.dumps({"ts": simdi}), encoding="utf-8")
         except Exception:
             pass
-    behind = int(durum.get("behind", 0))
+    behind = _core_geri_sayisi()
     if behind > 0:
         out.append(f"DEV_CORE origin'in {behind} commit GERISINDE — `git -C core pull` onerilir")
     return out

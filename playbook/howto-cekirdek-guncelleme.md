@@ -90,6 +90,26 @@ python core/scripts/team_setup.py --overlay-onayli
 turda hiç ateşlemedi, zincir tek koşumda tamamlandı). *"Nasılsa ateşler"* diye baştan
 `--overlay-onayli` ile başlama — o bayrak fark raporunu görmeden ezme iznidir.
 
+### 3c. MCP import smoke — `return 1`'in İKİNCİ sebebi (Q335, 2026-09-18)
+
+Kurulumun sonunda team_setup, sap-adt MCP sunucusunu `.mcp.json` ortamıyla import etmeyi dener.
+Import başarısızsa (ör. makinede `mcp 2.x` kurulu) şunu basar ve **`return 1` ile çıkar**
+(`team_setup TAMAM` basılmaz):
+
+```
+[FAIL] MCP server import smoke BAŞARISIZ — exit 1: <son anlamlı hata satırı> · … Onarım: …
+[FAIL] team_setup BAŞARISIZ (MCP server import smoke) — …
+```
+
+⛔ **Bu durumda `--overlay-onayli` ÇARE DEĞİLDİR** — overlay kapısıyla ilgisi yoktur. FAIL
+satırındaki onarımı uygula (`<python> -m pip install -r core/mcp_servers/sap_adt/requirements.txt`;
+requirements `mcp<2` sınırını taşır ve kurulu 2.x'i `--upgrade`'siz indirir), sonra team_setup'ı
+yeniden koş. `ix_doctor --layer 5` aynı denetimi 5b2 satırında yapar. ⚠ Son satır
+`No module named 'mcp_servers'` ise sorun paket değil YOLDUR — pip çare DEĞİLDİR: `.mcp.json`
+sap-adt `env.PYTHONPATH` = `${CLAUDE_PROJECT_DIR:-.}/core` olmalı ve proje `core` bağı bulunmalı
+(`team_setup --repair-junctions`); `.mcp.json` bozuksa (geçersiz JSON / `sap-adt` yok) denetim
+ÖLÇÜLEMEDİ der ve çare dosyayı onarmaktır. FAIL satırındaki çare metni bu ayrımı kendisi yapar.
+
 **Doğrulama:** çıktıda `FAIL` satırı yok · son satır `team_setup TAMAM` · `.claude/active_package` var.
 
 ## 4. Memory tohumunu doğrula

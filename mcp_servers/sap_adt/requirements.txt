@@ -1,3 +1,6 @@
-mcp>=1.0.0
+# mcp<2: 2.x'te `mcp.server.fastmcp` kaldirildi (import aninda ModuleNotFoundError);
+# _app.py v1 API'sini kullanir. Ust sinir v2 gocu ayri is olarak yapilana dek durur
+# (Issue #274 / Q335). pip `-r` ile kurulu 2.x'i --upgrade'siz de 1.x'e indirir (olculdu).
+mcp>=1.0.0,<2
 requests>=2.31.0
 python-dotenv>=1.0.0

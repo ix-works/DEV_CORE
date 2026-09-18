@@ -149,11 +149,12 @@ olmalı); (e) `seed_memory` → core memory-seed'den projenin memory'sini tohuml
 | 2 | MCP kendi sistemine bağlı | `ping` + read-only `adt_get` → PROJENİN SAP sistemi (başka projeninki DEĞİL) |
 | 3 | Validators PASS | `python core/scripts/validators/run_all_validators.py` (core + varsa local) |
 | 4 | Sızıntı kilidi çalışıyor | `git status` → core içeriği görünMÜyor; `git ls-files core/ .claude/agents` → boş *(repo_mode=none: SKIP)* |
-| 5 | Kurulum sağlığı | `python core/scripts/ix_doctor.py` → FAIL yok (7-katman tarama) |
+| 5 | Kurulum sağlığı | `python core/scripts/ix_doctor.py` → FAIL yok (7-katman tarama). **Tek gerekçeli istisna:** iskelet/LITE projede K5a `.conn_adt YOK` FAIL'i — gerekçesi proje `CLAUDE.md`'sinde yazılıysa KABUL edilir (aşağıdaki not). Başka her FAIL — K5'in diğer satırları dahil — gate'i geçirmez |
 
 **Gerekçeli SKIP'ler** (kayda geçir, sessizce geçme):
-`.conn_adt` yoksa (iskelet/LITE proje) madde 2 SKIP edilir ve `ix_doctor` K5 FAIL verir —
-bu beklenen davranıştır, gerekçesi `CLAUDE.md`'ye yazılır.
+`.conn_adt` yoksa (iskelet/LITE proje) madde 2 SKIP edilir ve `ix_doctor` K5, K5a `.conn_adt YOK` satırıyla FAIL verir —
+bu beklenen davranıştır (madde 5'in tek gerekçeli istisnası), gerekçesi `CLAUDE.md`'ye yazılır. K5'in **diğer** satırları
+(MCP server dosya erişimi · MCP server import) bu istisnaya GİRMEZ: onlar FAIL ise kurulum sağlıksızdır.
 
 ## STEP 6 — İlk paket + ilk commit
 

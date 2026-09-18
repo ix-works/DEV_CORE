@@ -161,6 +161,20 @@ OZEL_TESTLER = [
      "bu aile ona hic baglanmamisti) + POZITIF KONTROL: baglanti varken gate HALA "
      "olcuyor ('hepsini SKIP yap' gevsetmesi --mutasyon-hepsi-skip ile civilendi) + "
      "B2-13 `--strict` beyan/mekanik durustlugu"),
+    ("mcp_import_denetimi",
+     "Q335 (Issue #274): mcp 2.x SHIM'i (`mcp.server.fastmcp` import aninda ModuleNotFoundError) "
+     "— requirements `<2` + team_setup smoke FAIL/exit1/TAMAM-yok + ix_doctor K5 import satiri "
+     "(.conn_adt'den bagimsiz) + SON anlamli satir; denetim ortami == .mcp.json ortami "
+     "(kullanici PYTHONPATH'i EZILIR; sablon init_project MCP_JSON); sahte mcp + GERCEK zincir"),
+    ("ix_doctor_repo_mode",
+     "Q336 (Issue #275) ⚠GEVSETME siniri: repo_mode local|none'da K3 ruleset+CI SKIP; "
+     "anahtar yok/full/taninmayan deger BUGUNKU ile BAYT-ES; 3c sizinti LITE'ta da kosar"),
+    ("ix_doctor_ps_politika",
+     "Q339 (Issue #278): K1 1e PowerShell yurutme politikasi KAYIT DEFTERINDEN (alt surec YOK — "
+     "surec kapsamli Bypass yanlis PASS verir) × npm .ps1 shim'i → WARN; okunamazsa OLCULEMEDI"),
+    ("session_start_origin_geriligi",
+     "Q337 (Issue #276): core gerilik sayisi onbellekten degil HER cagrida yerel rev-list; "
+     "pull sonrasi olmayan gerilik bildirilmez; fetch throttle (saatte 1) KORUNDU"),
     ("team_setup_hook_kablolama",
      "E-05: overlay ONAY kapisi (normal T2.5 fark-onayi) git-hook kablolamasini DURDURMAMALI "
      "— eskiden erken `return 1` yuzunden yeni klonda `core.hooksPath` set edilmiyor "
@@ -668,7 +682,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # eslesmiyordu -> tazelik kapisi bu dosyada KORDU.
     ("scripts/team_setup.py", ("O:shim_tazeleme", "O:overlay_materyalize_atomik",
                               "O:worktree_yasam_dongusu", "O:team_setup_hook_kablolama",
-                              "O:core_fiziksel_kopya"),
+                              "O:core_fiziksel_kopya", "O:mcp_import_denetimi"),
      "shim tazeleme yolu + `dosya_tamamla` idempotansi burada yasar; varsayilanin "
      "degismedigi YALNIZ bu korpusta olculur. `junctions()` tip-basina yalitimi "
      "(Q30: tek tipteki istisna kurulumun kalan 5 adimini atliyordu) atomik korpusta. "
@@ -679,7 +693,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # "bugun kossa GECEN bir proje uretir mi?" sorusunu yalniz elle template-provasi
     # yanitliyordu (ve iki tur ust uste kacirildi: C-HOOK-01 FAIL'i + dar sir kilidi).
     ("scripts/init_project.py", ("O:init_project_iskelet", "O:gitignore_tam_satir",
-                                 "O:precommit_kopya_surum_esligi"),
+                                 "O:precommit_kopya_surum_esligi", "O:mcp_import_denetimi"),
      "uretilen iskeletin KAPIDAN gecmesi (C-HOOK-01 kuyruk tohumu) + `.gitignore` sablonunun "
      "sir kilidi/FP dengesi burada yasar; kanonik kilit satirlarinin TAM-SATIR okunmasi "
      "komsu korpusta (gitignore_tam_satir KANONIK bloguyla ayni sablonu tarif eder). "
@@ -718,10 +732,18 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "DTEL yaratma CSV'si: 4 label + description doluluk + uzunluk + domain bağı (ADR 0005-D)"),
     ("scripts/validators/check_cds_qty_in_expression.py", ("O:cds_qty_in_expression",),
      "FP tuzakları (düz cast · `case` yüklemi · birim alanı) korpusla ölçüldü; kapsam daraltması burada yaşar"),
-    ("scripts/ix_doctor.py", ("O:ix_doctor_kablolama", "O:d7_drift_imzasi", "O:core_fiziksel_kopya"),
+    ("scripts/ix_doctor.py", ("O:ix_doctor_kablolama", "O:d7_drift_imzasi", "O:core_fiziksel_kopya",
+                              "O:mcp_import_denetimi", "O:ix_doctor_repo_mode",
+                              "O:ix_doctor_ps_politika"),
      "korunan tool kümesi pre_tool_guard AST'inden TÜRETİLİR (elle kopya bayatladı: 6 vs 16) "
      "+ türetme kırılırsa PASS DEĞİL 'ÖLÇÜLEMEDİ'; D7 kolunun ölçütü ise `session_start` ile "
-     "ORTAK tanımdan gelir (Q212 — kopya-tanım ayrışması bu korpusta çapalı)"),
+     "ORTAK tanımdan gelir (Q212 — kopya-tanım ayrışması bu korpusta çapalı); K5 import satırı "
+     "(Q335) · K3 repo_mode LITE SKIP sınırı (Q336) · K1 1e PowerShell politikası (Q339)"),
+    ("scripts/utils/mcp_import_denetimi.py", ("O:mcp_import_denetimi",),
+     "MCP import denetiminin TEK KAYNAĞI (team_setup smoke + ix_doctor K5 ortak; Q335); ortamı "
+     "`.mcp.json` sap-adt env'inden, yoksa `init_project.py::MCP_JSON`'dan türetir"),
+    ("mcp_servers/sap_adt/requirements.txt", ("O:mcp_import_denetimi",),
+     "`mcp<2` üst sınırı (Q335 M1 vektörü)"),
     ("scripts/hooks/pre_tool_guard.py", ("O:ix_doctor_kablolama",),
      "bu dosyanın tool kümesi ix_doctor kablolama kontrolünün PAYDASIDIR (türetilir)"),
     ("scripts/validators/check_amdp_comment_apostrophe.py",
@@ -879,7 +901,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "payload korpusu + parse-fail görünürlüğü + tembel desen-kurulumu"),
     ("scripts/hooks/session_start.py",
      ("O:overlay_oto_tazeleme", "O:negatif_test_harness", "O:worktree_yasam_dongusu",
-      "O:session_start_compact_dali", "O:d7_drift_imzasi", "O:core_fiziksel_kopya"),
+      "O:session_start_compact_dali", "O:d7_drift_imzasi", "O:core_fiziksel_kopya",
+      "O:session_start_origin_geriligi"),
      "oto-tazeleme kablolaması + parse-fail notu + `source` dalı (compact gövdesi ile "
      "startup gövdesinin AYRIŞMASI; startup tarafı BAYT-EŞ kalmalı) + D7 kolunun ölçütü "
      "`ix_doctor` ile ORTAK (Q212)"),

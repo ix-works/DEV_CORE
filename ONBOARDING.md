@@ -19,6 +19,7 @@
 | Python ≥ 3.10 | `python --version` |
 | git + **global baseline** | `git config --global core.autocrlf false` · `git config --global core.longpaths true` · `git config --global init.defaultBranch main` (ix_doctor katman-2 bunları denetler) |
 | Node.js + npm | `node --version` (UI5/FE araç zinciri için) |
+| PowerShell kullanıcısı (Windows) | `Get-ExecutionPolicy -List` → etkin politika `Restricted`/`AllSigned` ise npm CLI'ları (`npm`, `ast-grep`, `mmdc`…) `.ps1` shim'i yüzünden PowerShell'de ÇALIŞMAZ → `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` ya da `<ad>.cmd` / Git Bash (`ix_doctor` K1 1e uyarır) |
 | Claude Code CLI | `claude --version` |
 | GitHub CLI + auth | `gh auth status` (PR/CI akışı + ix_doctor katman-3 için) |
 | **Kullanıcı-düzeyi ayarlar** (`~/.claude/settings.json`) | Şablonla **ELLE birleştir**: [`claude/user-settings.template.json`](claude/user-settings.template.json) — `permissions.allow/deny` + `defaultMode`. ⚠ Otomatik uygulanmaz. Bu dosya yoksa rutin komutlar sürekli onay sorusu çıkarır ve otonom adımlar yarıda kalır (ölçüldü 2026-09-17: iki makine arasındaki en büyük davranış farkı buydu). ⛔ D32: SAP-yazma/davranış-yüzeyi araçları bu listeye GİRMEZ |
@@ -40,7 +41,7 @@
 | auto-memory (dersler) | kullanıcı profili `~/.claude/projects/<slug>/memory/` | `seed_memory.py` | `parity_probe` → `memory.ders_sayisi` | ❌ |
 | **Kullanıcı-düzeyi ayarlar** (`permissions`, `defaultMode`) | `~/.claude/settings.json` | **ELLE** — `claude/user-settings.template.json` ile birleştir | `parity_probe` → `mcp_ve_profil` | ❌ |
 | SAP bağlantısı `.conn_adt` | proje kökü | **KULLANICI** (şifreyi kendisi yazar — sohbete YAZILMAZ) | MCP `ping` · `ix_doctor` | ❌ |
-| CLI'lar: `claude` · `gh` · `node`/`npm` · `python` | makine | installer/winget (`winget install --id GitHub.cli -e`) | `ix_doctor` K3 | ❌ |
+| CLI'lar: `claude` · `gh` · `node`/`npm` · `python` | makine | installer/winget (`winget install --id GitHub.cli -e`) | `ix_doctor` K1 1d (node/npm/claude; Windows'ta 1e PowerShell politikası) · K3 (gh) | ❌ |
 | Claude Code plugin seti (ui5 · playwright-MCP · pyright-lsp …) | makine | `team_setup` → `setup_plugins.py` | [`governance/tooling-plugins.md`](governance/tooling-plugins.md) | ❌ |
 | git **global** baseline (`autocrlf`/`longpaths`/`defaultBranch`) | makine | elle `git config --global` | `ix_doctor` K2 · `parity_probe` → `yol_hijyeni` | ❌ |
 | `.playwright*/` çıktı klasörleri (erişilebilirlik dökümü, log) | proje | **aracın kendisi**, ilk koşumda | gitignore'ludur; **prosedür gerekmez** — gereken *araç* zaten plugin setinde | ❌ (gerekmez) |
