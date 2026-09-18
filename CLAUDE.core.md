@@ -143,6 +143,12 @@
   salt-okunurdur, kopyalamaz; kararı §5'e göre dersi yazan verir. `<YOK>` kovası boşalmıyorsa
   terfi kontrolü *"core dokümanına yazdım"* ayağında kalmış demektir — "başka makineye ulaştı"
   ayağı ölçülmemiştir.
+  + **Gelen çekirdek bildirimi gözlemi (yalnız çekirdek SAHİBİ makinede, 2026-09-18):**
+  `gh issue list --repo ix-works/DEV_CORE --state open` — tüketici klonlar bulguyu **yalnız Issue**
+  ile gönderir, fork-PR yolu yoktur ([`playbook/howto-cekirdek-bulgu-bildirimi.md`](playbook/howto-cekirdek-bulgu-bildirimi.md) §3).
+  ⚠ **Etikete göre SÜZME:** yazma yetkisi olmayan hesabın etiketi düşebilir ⇒ etiketli filtre
+  etiketsiz gelen bildirimi **sessizce** gizler. Gözlemdir, GATE DEĞİL; bulunan bildirim §5'e göre
+  **ihbar**dır — yeniden ölçülür.
 - **⛔ KAPANIŞ DİSİPLİNİ — bir madde konuşmada değil, ARTEFAKTTA kapanır (2026-08-12):**
   1. **Kapanış anı = artefakt anı.** Madde konuşmada kapandığında **aynı turda** dosyada da
      kapanır; gün-sonuna bırakılmaz. *(Yeni kural değil — "İCRA ya da açık ertele"nin

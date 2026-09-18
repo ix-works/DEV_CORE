@@ -203,7 +203,7 @@ girmez (yalnız var-mı + sayım), `--anon` kullanıcı adı/host maskeler · ek
 - **Core kırıldıysa:** `git -C core checkout stable` (proje kökünden; core bir junction'dır) → bilinen-iyiye dönüş;
   onarım sonrası `git switch main`. Junction'a dokunulmaz.
 - **Core pull:** makinede TEK yerden — `git -C core pull` — proje kökünden çalışır ve **sabit sürücü/klasör varsayımı taşımaz** (D24). ⚠ Dokümanda gördüğün `C:\IX\...` biçimi bir örnektir, kural değil; `session_start` "origin'in gerisindesin" uyarır).
-- **Çekirdekte bir şeyi değiştirmen gerekirse ve upstream'e yazma yetkin YOKSA:** DUR — önce kusurun kurulumda mı çekirdekte mi olduğunu ölç, sonra **fork + PR** ya da **Issue** (kanıt formatı zorunlu): [`playbook/howto-cekirdek-bulgu-bildirimi.md`](playbook/howto-cekirdek-bulgu-bildirimi.md) · [`MAINTENANCE.md`](MAINTENANCE.md) §6b. Lokal yama meşrudur ama **kendi dalında** ve görünür olmalı.
+- **Çekirdekte bir şeyi değiştirmen gerekirse ve upstream'e yazma yetkin YOKSA:** DUR — önce kusurun kurulumda mı çekirdekte mi olduğunu ölç, sonra **yalnız Issue** aç (kanıt formatı zorunlu; fork + PR yolu yok — düzeltme fikri Issue'nun `ÖNERİ` bölümüne): [`playbook/howto-cekirdek-bulgu-bildirimi.md`](playbook/howto-cekirdek-bulgu-bildirimi.md) · [`MAINTENANCE.md`](MAINTENANCE.md) §6b. Lokal yama meşrudur ama **kendi dalında** ve görünür olmalı.
 - **⛔ KESİN YASAKLAR (ADR 0005)** her projenin kök `CLAUDE.md`'sine fiziksel damgalıdır;
   SAP işlemleri playbook-önce disiplinine tabidir ([`AGENTS.md`](AGENTS.md) §6).
 
