@@ -111,37 +111,40 @@ ekran görüntüsü, gerçek belge numarası **geçemez**. Paket adı gerekiyors
 jenerik bir ad kullan; yol gerekiyorsa `<PROJE-KOKU>` yaz. Kimlik taşıyan bir bildirim
 düzeltilmez — **kapatılır** ve temizi yeniden istenir (yayın cache'lenir, geri alınamaz).
 
-## 3. YOL SEÇİMİ — üçü de meşru
+## 3. YOL — YALNIZ Issue (sahip kararı)
 
-| Durum | Yol |
+Bildirimin **tek** kanalı `DEV_CORE` deposunda açılan bir **Issue**'dur. Fork + PR ile çekirdeğe
+kod önermek bu süreçte **kullanılmaz** — düzeltme fikrin varsa Issue'nun `ÖNERİ` bölümüne yaz
+(gerekirse kısa bir diff parçasıyla); düzeltmeyi sahibi tarafı ölçer, yazar ve PR'lar.
+Gerekçe (üç ayak):
+① **Süreç eşliği yok.** Çekirdek değişikliği sahibi tarafında bir infra sürecinden geçer (kayıt +
+prior-art · worktree · fixture + mutasyon · bağımsız bug-gate · tüketici yayılımı ölçümü). Bu
+sürecin bir kısmı **makineye bağlıdır** (infra kuyruğu proje reposunda, dersler auto-memory'de) ve
+tüketici makinede **olmayabilir** ⇒ orada üretilen bir PR bu süreçten geçmemiş koddur; sahibi onu
+ancak baştan yeniden üreterek doğrulayabilir.
+② **Bayat çekirdek.** Tüketici geride olabilir; ölçülmüş vaka (2026-09-18): 6 maddelik bir
+bildirimin 4'ü güncel `main`'de zaten vardı — PR olarak gelseydi var olanı yeniden yazacaktı.
+③ **CI fork'ta eksik koşar.** `core-ci` `pull_request` ile tetiklenir; GitHub fork'tan gelen PR'a
+repository secret'larını vermez (belgelenmiş davranış; burada fork PR ile ölçülmedi) ⇒ kimlik
+blocklist'i `IX_GENERICIZE_BLOCKLIST` yüklenemez ve sızıntı kapısı fail-closed **kırmızı** döner.
+
+| Durum | Ne yaparsın |
 |---|---|
-| Düzeltmeyi **yazabiliyorsun** ve küçük/orta | **Fork + PR** (§3a) — en hızlısı, tartışma kodun üstünde olur |
-| Düzeltmeyi yazamıyorsun / tasarım kararı gerek | **Issue** (§3b) |
-| Acil ve karşı taraf çevrimiçi | Doğrudan mesaj + **arkasından mutlaka Issue/PR** (sözlü bildirim kaybolur) |
+| Kusur / eksik / öneri | **Issue** (aşağıda) — §2 formatıyla |
+| Acil ve karşı taraf çevrimiçi | Doğrudan mesaj + **arkasından mutlaka Issue** (sözlü bildirim kaybolur) |
+| İşin durmasın diye yerel yama gerekiyor | §4 geçici yama disiplini **+ yine Issue** |
 
-### 3a. Fork + PR (yazma yetkisi GEREKTİRMEZ)
-
-```bash
-gh repo fork ix-works/DEV_CORE --clone=false --remote=false   # bir kez; kendi hesabına kopyalar
-git -C core remote add fork https://github.com/<KENDI-KULLANICI>/DEV_CORE.git
-git -C core fetch -q origin
-git -C core checkout -b fix/<kisa-ad> origin/main
-#   ... düzeltmeyi yap, TEK konuya odaklı tut ...
-git -C core commit -am "fix(<alan>): <tek cümle>"
-git -C core push -u fork fix/<kisa-ad>
-gh pr create --repo ix-works/DEV_CORE --base main --head <KENDI-KULLANICI>:fix/<kisa-ad> \
-  --title "fix(<alan>): <tek cümle>" --body-file <kanit-dosyasi.md>
-```
-
-PR gövdesi = §2 formatının **aynısı** (ÖZET…KAPSAM BEYANI). CI (`behavior-surface` ·
-`core-leak` · `validators`) fork PR'ında da koşar; kırmızıysa düzeltmek **sende**.
-
-### 3b. Issue
+Issue açmak depoya **yazma yetkisi gerektirmez**: herkese açık depoda her GitHub hesabı Issue açabilir.
 
 ```bash
-gh issue create --repo ix-works/DEV_CORE --label cekirdek-bulgu \
-  --title "<tek cümle>" --body-file <kanit-dosyasi.md>
+gh issue create --repo ix-works/DEV_CORE --label cekirdek-bulgu   --title "<tek cümle>" --body-file <kanit-dosyasi.md>
 ```
+
+⚠ Hesabının depoda yazma yetkisi yoksa `--label` **reddedilebilir** ya da sessizce düşebilir. Komut
+etiket yüzünden hata verirse `--label cekirdek-bulgu` kısmını **çıkarıp aynen tekrar** koş — sahibi
+bildirimleri etikete göre değil **tüm açık Issue'lar** üzerinden tarar; etiketsiz bildirim
+kaybolmaz. ⛔ Hatayı "gönderildi" sayma: komut bir Issue URL'i basmadıysa bildirim **açılmamıştır**.
+Açıldıysa URL'i kullanıcına ver — takip o URL üzerinden yürür (§5 ④ cevap oraya yazılır).
 
 `gh` yoksa: tarayıcıdan **https://github.com/ix-works/DEV_CORE/issues/new/choose** →
 *"Çekirdek bulgu bildirimi"* formu (alanlar zaten §2'nin alanlarıdır). `gh` kurulumu:
