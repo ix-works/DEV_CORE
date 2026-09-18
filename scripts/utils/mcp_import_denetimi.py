@@ -3,7 +3,7 @@
 
 Tüketiciler (ikisi de BU modülü çağırır; deseni yeniden türetmez):
   · `scripts/team_setup.py::smoke`   — kurulum sonu; başarısızsa kurulum TAMAM DEMEZ (exit 1)
-  · `scripts/ix_doctor.py::katman5`  — sağlık taraması 5c; `.conn_adt`'den BAĞIMSIZ koşar
+  · `scripts/ix_doctor.py::katman5`  — sağlık taraması 5b2; `.conn_adt`'den BAĞIMSIZ koşar
 
 NEDEN VAR (Issue #274, 2026-09-18): `requirements.txt` `mcp>=1.0.0` üst sınırsızdı; temiz
 makinede pip `mcp 2.x` kurdu ve 2.x'te `mcp.server.fastmcp` bir SHIM'dir — import anında
@@ -35,6 +35,19 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
+# C-ENC-01 (check_console_utf8): bu modül KENDİSİ hiçbir şey BASMAZ — gate, aşağıdaki `KOMUT`
+# dizesindeki `print(` metnini (alt-süreç komutu) çıktı çağrısı sayar (metin arar, çalıştırmaz;
+# `utils/kapsam.py` notundaki aynı sınıf). Koruma yine de konur, ama KOŞULLU: yalnız akış
+# UTF-8 DEĞİLSE yeniden yapılandırılır ⇒ zaten UTF-8 kurmuş çağıranın (`team_setup` ·
+# `ix_doctor`, ikisi de modül başında kurar) `errors` politikası import yan etkisiyle
+# DEĞİŞMEZ (koşulsuz kardeş deseni `errors="replace"`i sessizce dayatırdı — ölçüldü 2026-09-18).
+for _akis in (sys.stdout, sys.stderr):
+    try:
+        if (getattr(_akis, "encoding", "") or "").lower().replace("-", "") != "utf8":
+            _akis.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
 ISARET = "import-ok"
 KOMUT = "import mcp_servers.sap_adt.server; print('import-ok')"
