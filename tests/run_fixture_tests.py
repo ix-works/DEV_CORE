@@ -164,7 +164,8 @@ OZEL_TESTLER = [
     ("mcp_import_denetimi",
      "Q335 (Issue #274): mcp 2.x SHIM'i (`mcp.server.fastmcp` import aninda ModuleNotFoundError) "
      "— requirements `<2` + team_setup smoke FAIL/exit1/TAMAM-yok + ix_doctor K5 import satiri "
-     "(.conn_adt'den bagimsiz) + SON anlamli satir; sahte mcp paketi + GERCEK server.py zinciri"),
+     "(.conn_adt'den bagimsiz) + SON anlamli satir; denetim ortami == .mcp.json ortami "
+     "(kullanici PYTHONPATH'i EZILIR; sablon init_project MCP_JSON); sahte mcp + GERCEK zincir"),
     ("ix_doctor_repo_mode",
      "Q336 (Issue #275) ⚠GEVSETME siniri: repo_mode local|none'da K3 ruleset+CI SKIP; "
      "anahtar yok/full/taninmayan deger BUGUNKU ile BAYT-ES; 3c sizinti LITE'ta da kosar"),
@@ -692,7 +693,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # "bugun kossa GECEN bir proje uretir mi?" sorusunu yalniz elle template-provasi
     # yanitliyordu (ve iki tur ust uste kacirildi: C-HOOK-01 FAIL'i + dar sir kilidi).
     ("scripts/init_project.py", ("O:init_project_iskelet", "O:gitignore_tam_satir",
-                                 "O:precommit_kopya_surum_esligi"),
+                                 "O:precommit_kopya_surum_esligi", "O:mcp_import_denetimi"),
      "uretilen iskeletin KAPIDAN gecmesi (C-HOOK-01 kuyruk tohumu) + `.gitignore` sablonunun "
      "sir kilidi/FP dengesi burada yasar; kanonik kilit satirlarinin TAM-SATIR okunmasi "
      "komsu korpusta (gitignore_tam_satir KANONIK bloguyla ayni sablonu tarif eder). "
@@ -739,7 +740,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "ORTAK tanımdan gelir (Q212 — kopya-tanım ayrışması bu korpusta çapalı); K5 import satırı "
      "(Q335) · K3 repo_mode LITE SKIP sınırı (Q336) · K1 1e PowerShell politikası (Q339)"),
     ("scripts/utils/mcp_import_denetimi.py", ("O:mcp_import_denetimi",),
-     "MCP import denetiminin TEK KAYNAĞI (team_setup smoke + ix_doctor K5 ortak; Q335)"),
+     "MCP import denetiminin TEK KAYNAĞI (team_setup smoke + ix_doctor K5 ortak; Q335); ortamı "
+     "`.mcp.json` sap-adt env'inden, yoksa `init_project.py::MCP_JSON`'dan türetir"),
     ("mcp_servers/sap_adt/requirements.txt", ("O:mcp_import_denetimi",),
      "`mcp<2` üst sınırı (Q335 M1 vektörü)"),
     ("scripts/hooks/pre_tool_guard.py", ("O:ix_doctor_kablolama",),

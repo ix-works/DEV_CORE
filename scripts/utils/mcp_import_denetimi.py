@@ -17,21 +17,31 @@ açılmaz, oturumda sap-adt `Connection closed` görünür. Eski smoke bunu GÖR
 ⛔ SON satır, İLK değil: Python traceback'inde bilgi taşıyan satır SONDADIR (istisna sınıfı +
 mesaj). Boş satırlar atlanır; stderr önceliklidir, boşsa stdout'a bakılır.
 
-⛔ PYTHONPATH ÖNE EKLENİR, EZİLMEZ (2026-09-18 davranış değişikliği; eski smoke
-`PYTHONPATH=<core>` ile EZİYORDU): core kökü DAİMA İLK girdidir ⇒ kullanıcının PYTHONPATH'i
-core modüllerini (`mcp_servers.*`) gölgeleyemez; yalnız core'da OLMAYAN paketler (örn. `mcp`)
-kullanıcı yolundan gelebilir. Bu, MCP sunucusunun gerçek çalışma zamanına (kullanıcı
-ortamını devralan süreç) daha yakındır ve fixture'ın sahte `mcp` paketiyle GERÇEK
-`server.py` zincirini koşabilmesini sağlar. Değişen YALNIZ bu denetimin alt-sürecidir —
-`.mcp.json` / MCP çalışma zamanı ortamına dokunulmaz.
+⛔ ORTAM = `.mcp.json` ORTAMI (2026-09-18 düzeltme — bug-gate F1): denetim alt-sürecinin ortamı,
+MCP sunucusunun GERÇEK çalışma zamanının ortamıdır ve **aynı kaynaktan türetilir**, yeniden
+türetilmez: `<proje>/.mcp.json` → `mcpServers["sap-adt"]["env"]` (`${VAR}` / `${VAR:-varsayılan}`
+genişletilir; `CLAUDE_PROJECT_DIR` = proje). Dosya yoksa / okunamazsa / `sap-adt` yoksa aynı
+değerin ÜRETİCİSİ `init_project.py::MCP_JSON` şablonu okunur (AST ile, import yan etkisi yok);
+o da okunamazsa denetim ÖLÇÜLEMEDİ = başarısız döner. Çalışma zamanı env'i
+`"PYTHONPATH": "${CLAUDE_PROJECT_DIR:-.}/core"` ile kullanıcının PYTHONPATH'ini EZER ⇒ denetim
+de EZER. ⚠ İlk sürüm (aynı gün) core'u kullanıcı yolunun ÖNÜNE ekleyip kullanıcı yolunu
+koruyordu, gerekçe "gerçek çalışma zamanına daha yakın" idi — **YANLIŞTI** (`.mcp.json`'a
+bakılmamıştı): kullanıcı PYTHONPATH'inde çalışan bir `mcp 1.x`, site-packages'ta `2.x` varken
+denetim PASS, sunucu AÇILMAZDI (sahte-yeşil). `ek_yol` parametresi YALNIZ TEST içindir
+(fixture'ın sahte `mcp` paketini site-packages benzeri, `.mcp.json` yolunun ARKASINA koyar);
+üretimde hiçbir çağıran vermez ⇒ varsayılan `None` iken ortam `.mcp.json` ortamına EŞİTTİR.
 
 KAPSAM BEYANI (çıktıya da yazılır): yalnız `import mcp_servers.sap_adt.server` ölçülür, BU
-yorumlayıcıyla (`sys.executable`). Tool kaydı (`_register_all`), `.conn_adt` ve SAP
-bağlantısı ÖLÇÜLMEZ. `.mcp.json`'daki yorumlayıcı farklıysa onun ortamı ÖLÇÜLMEMİŞTİR.
+yorumlayıcıyla (`sys.executable`) ve `.mcp.json` sap-adt ORTAMIYLA. `.mcp.json`'un `command`
+alanı (yorumlayıcı) UYGULANMAZ — farklıysa onun site-packages'ı ÖLÇÜLMEMİŞTİR. Tool kaydı
+(`_register_all`), `.conn_adt` ve SAP bağlantısı ÖLÇÜLMEZ.
 """
 from __future__ import annotations
 
+import ast
+import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -51,8 +61,11 @@ for _akis in (sys.stdout, sys.stderr):
 
 ISARET = "import-ok"
 KOMUT = "import mcp_servers.sap_adt.server; print('import-ok')"
-KAPSAM = ("yalnız `import mcp_servers.sap_adt.server` ölçüldü (bu yorumlayıcı); tool kaydı, "
+KAPSAM = ("yalnız `import mcp_servers.sap_adt.server` ölçüldü (bu yorumlayıcı + .mcp.json "
+          "sap-adt ortamı; .mcp.json `command` yorumlayıcısı uygulanmadı); tool kaydı, "
           ".conn_adt ve SAP bağlantısı ÖLÇÜLMEDİ")
+SUNUCU = "sap-adt"
+_DEGISKEN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 _AZAMI = 500
 
 
@@ -65,26 +78,99 @@ def son_anlamli_satir(metin: str | None) -> str:
     return ""
 
 
-def alt_surec_ortami(core_root: Path, proje: Path, taban: dict | None = None) -> dict:
-    """Denetim alt-sürecinin ortamı: core kökü PYTHONPATH'in BAŞINA (ezme değil) +
-    `CLAUDE_PROJECT_DIR`. `taban` verilmezse `os.environ` kopyalanır."""
+def _sunucu_env(metin: str) -> dict | None:
+    """`.mcp.json` metninden `mcpServers["sap-adt"]["env"]`; sunucu yoksa / bozuksa None."""
+    try:
+        s = json.loads(metin)["mcpServers"][SUNUCU]
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(s, dict):
+        return None
+    env = s.get("env", {})
+    return {str(k): str(v) for k, v in env.items()} if isinstance(env, dict) else None
+
+
+def _sablon_metni(core_root: Path) -> str | None:
+    """`init_project.py::MCP_JSON` — `.mcp.json`'u ÜRETEN şablon (AST; modül import EDİLMEZ)."""
+    try:
+        agac = ast.parse((Path(core_root) / "scripts" / "init_project.py").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return None
+    for dugum in agac.body:
+        if isinstance(dugum, ast.Assign) and any(
+                isinstance(h, ast.Name) and h.id == "MCP_JSON" for h in dugum.targets):
+            try:
+                return ast.literal_eval(dugum.value)
+            except Exception:  # noqa: BLE001
+                return None
+    return None
+
+
+def mcp_calisma_env(core_root: Path, proje: Path) -> tuple[dict | None, str]:
+    """(sap-adt sunucusunun `.mcp.json` env'i — HAM, genişletilmemiş · kaynak etiketi).
+
+    Öncelik: `<proje>/.mcp.json` → `init_project.py::MCP_JSON` şablonu (aynı değerin
+    üreticisi). İkisi de yoksa (None, neden) ⇒ çağıran ÖLÇÜLEMEDİ der."""
+    mj = Path(proje) / ".mcp.json"
+    neden = ".mcp.json YOK"
+    if mj.is_file():
+        try:
+            env = _sunucu_env(mj.read_text(encoding="utf-8-sig"))
+            neden = f".mcp.json'da `{SUNUCU}` sunucusu yok/bozuk"
+        except Exception as e:  # noqa: BLE001
+            env, neden = None, f".mcp.json okunamadı ({type(e).__name__})"
+        if env is not None:
+            return env, str(mj)
+    sablon = _sablon_metni(core_root)
+    env = _sunucu_env(sablon) if sablon is not None else None
+    if env is not None:
+        return env, f"init_project.py MCP_JSON şablonu ({neden})"
+    return None, f"{neden}; init_project.py MCP_JSON şablonu da okunamadı"
+
+
+def _genislet(deger: str, ortam: dict) -> str:
+    """`${VAR}` / `${VAR:-varsayılan}` — tanımsız ve varsayılansız değişken OLDUĞU GİBİ kalır
+    (sessizce boşaltılmaz; import başarısızlığı ayrıntıda görünür)."""
+    def _yerine(m: re.Match) -> str:
+        v = ortam.get(m.group(1))
+        if v:
+            return v
+        return m.group(2) if m.group(2) is not None else m.group(0)
+    return _DEGISKEN.sub(_yerine, deger)
+
+
+def alt_surec_ortami(core_root: Path, proje: Path, taban: dict | None = None,
+                     ek_yol: list[str] | None = None) -> tuple[dict | None, str]:
+    """(denetim alt-sürecinin ortamı · kaynak). Ortam = `taban` (varsayılan `os.environ`)
+    + `CLAUDE_PROJECT_DIR=proje` + `.mcp.json` sap-adt env'i (genişletilmiş; aynı anahtarı
+    EZER — çalışma zamanı gibi). `ek_yol` YALNIZ TEST: PYTHONPATH'in SONUNA eklenir."""
+    ham, kaynak = mcp_calisma_env(core_root, proje)
+    if ham is None:
+        return None, kaynak
     env = dict(os.environ if taban is None else taban)
-    onceki = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = str(core_root) + (os.pathsep + onceki if onceki else "")
     env["CLAUDE_PROJECT_DIR"] = str(proje)
-    return env
+    for k, v in ham.items():
+        env[k] = _genislet(v, env)
+    if ek_yol:
+        env["PYTHONPATH"] = os.pathsep.join([p for p in [env.get("PYTHONPATH", "")] if p]
+                                            + [str(y) for y in ek_yol])
+    return env, kaynak
 
 
-def mcp_import_denetimi(core_root: Path, proje: Path, timeout: int = 60) -> tuple[bool, str]:
+def mcp_import_denetimi(core_root: Path, proje: Path, timeout: int = 60,
+                        ek_yol: list[str] | None = None) -> tuple[bool, str]:
     """(başarılı mı, ayrıntı). Başarısızlıkta ayrıntı = `exit <rc>: <son anlamlı satır>`.
 
     ⛔ ÖLÇÜLEMEDİ ≠ BAŞARILI: alt süreç başlatılamaz / zaman aşımına uğrarsa False döner
     (ayrıntıda neden yazar) — sessizce geçilmez.
     """
+    env, kaynak = alt_surec_ortami(core_root, proje, ek_yol=ek_yol)
+    if env is None:
+        return False, f"ÖLÇÜLEMEDİ — sap-adt MCP ortamı türetilemedi ({kaynak})"
     try:
         r = subprocess.run([sys.executable, "-c", KOMUT], capture_output=True, text=True,
                            encoding="utf-8", errors="replace", cwd=str(proje),
-                           env=alt_surec_ortami(core_root, proje), timeout=timeout)
+                           env=env, timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, f"TIMEOUT ({timeout} sn) — import tamamlanmadı"
     except Exception as e:  # noqa: BLE001

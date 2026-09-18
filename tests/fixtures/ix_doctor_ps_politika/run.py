@@ -260,20 +260,26 @@ def main() -> int:
         # ⛔ Yamalar finally'de GERİ ALINIR: ilk yazımda `_kayit_oku` geri alınmıyordu ve C3
         # "gerçek kayıt defteri" diye SAHTE okuyucuyu ölçtü (bu makinede HKCU=RemoteSigned
         # iken C3 "varsayılan Restricted" bastı ve YEŞİL geçti — sahte-yeşil, 2026-09-18).
-        gercek_oku, gercek_run = g["_kayit_oku"], g["_run"]
-        os.environ["PATH"] = str(ps1_dir)
-        g["_WINDOWS"], g["_kayit_oku"] = True, okuyucu({})
-        g["_run"] = lambda *a, **k: (0, "")          # setup_plugins --list (claude CLI) atlanır
-        try:
-            k1 = g["katman1"]()
-        except Exception as e:  # noqa: BLE001
-            k1 = [("HATA", f"{type(e).__name__}: {e}")]
-        finally:
-            os.environ["PATH"] = eski_path
-            g["_WINDOWS"], g["_kayit_oku"], g["_run"] = gercek_windows, gercek_oku, gercek_run
-        satir = [(t, m) for t, m in k1 if "PowerShell yürütme politikası" in m]
-        kontrol("W1 KABLOLAMA: katman1 1e satirini uretir (1d which → .ps1 shim → WARN)",
-                len(satir) == 1 and satir[0][0] == "WARN" and "npm" in satir[0][1], f"{satir or k1[-3:]}")
+        w1_ad = "W1 KABLOLAMA: katman1 1e satirini uretir (1d which → .ps1 shim → WARN)"
+        gercek_oku, gercek_run = g.get("_kayit_oku"), g.get("_run")
+        if gercek_oku is None or gercek_run is None or "katman1" not in g:
+            # Taban (eski kod) kipinde `_kayit_oku` yoktur: ÇÖKME değil, anlamlı FAIL (KeyError
+            # ile düşmek "0/13" değil "kurulamadı" okunurdu — bug-gate F2, 2026-09-18).
+            kontrol(w1_ad, False, "`_kayit_oku`/`_run`/`katman1` yok (eski kod) — 1e kablolamasi yok")
+        else:
+            os.environ["PATH"] = str(ps1_dir)
+            g["_WINDOWS"], g["_kayit_oku"] = True, okuyucu({})
+            g["_run"] = lambda *a, **k: (0, "")      # setup_plugins --list (claude CLI) atlanır
+            try:
+                k1 = g["katman1"]()
+            except Exception as e:  # noqa: BLE001
+                k1 = [("HATA", f"{type(e).__name__}: {e}")]
+            finally:
+                os.environ["PATH"] = eski_path
+                g["_WINDOWS"], g["_kayit_oku"], g["_run"] = gercek_windows, gercek_oku, gercek_run
+            satir = [(t, m) for t, m in k1 if "PowerShell yürütme politikası" in m]
+            kontrol(w1_ad, len(satir) == 1 and satir[0][0] == "WARN" and "npm" in satir[0][1],
+                    f"{satir or k1[-3:]}")
 
         # ── C3 gerçek platform ─────────────────────────────────────────────────
         if fn is None:

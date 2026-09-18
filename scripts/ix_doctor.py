@@ -766,25 +766,27 @@ _CONN_ZORUNLU = ("ADT_SAP_URL", "ADT_SAP_USER", "ADT_SAP_PASSWORD", "ADT_SAP_CLI
 
 
 def _mcp_import_kontrol() -> Sonuc:
-    """5b2 — `mcp_servers.sap_adt.server` bu yorumlayıcıyla import edilebiliyor mu.
+    """5b2 — `mcp_servers.sap_adt.server` bu yorumlayıcıyla, `.mcp.json` sap-adt ORTAMIYLA
+    (kullanıcı PYTHONPATH'i çalışma zamanındaki gibi EZİLİR) import edilebiliyor mu.
 
     ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: ortak yardımcı yüklenemezse PASS değil FAIL (neden yazılı).
     Başarısızlıkta mesaj, alt sürecin SON anlamlı satırını taşır (traceback başlığı DEĞİL).
     """
     try:
-        from utils.mcp_import_denetimi import mcp_import_denetimi, KAPSAM  # type: ignore
+        from utils.mcp_import_denetimi import mcp_import_denetimi, mcp_calisma_env, KAPSAM  # type: ignore
     except Exception as e:  # noqa: BLE001
         return (FAIL, f"MCP server import denetimi ÖLÇÜLEMEDİ — ortak yardımcı yüklenemedi "
                       f"({type(e).__name__}: {e}); import sağlığı BU KOŞUMDA ölçülmedi "
                       f"(TEMİZ demek DEĞİL)")
     ok, ayrinti = mcp_import_denetimi(CORE_ROOT, PROJ)
+    ortam = mcp_calisma_env(CORE_ROOT, PROJ)[1]    # denetim ortamının kaynağı (.mcp.json / şablon)
     req = CORE_ROOT / "mcp_servers" / "sap_adt" / "requirements.txt"
     if ok:
-        return (PASS, f"MCP server import edilebilir (import-ok; yorumlayıcı {sys.executable}) "
-                      f"[{KAPSAM}]")
+        return (PASS, f"MCP server import edilebilir (import-ok; yorumlayıcı {sys.executable}; "
+                      f"ortam {ortam}) [{KAPSAM}]")
     return (FAIL, f"MCP server IMPORT EDİLEMİYOR — {ayrinti} · sunucu açılmaz (oturumda "
                   f"sap-adt 'Connection closed'). Onarım: \"{sys.executable}\" -m pip install "
-                  f"-r \"{req}\" (requirements `mcp<2` sınırını taşır) [{KAPSAM}]")
+                  f"-r \"{req}\" (requirements `mcp<2` sınırını taşır) (ortam {ortam}) [{KAPSAM}]")
 
 
 def katman5(live_sap: bool) -> list[Sonuc]:
