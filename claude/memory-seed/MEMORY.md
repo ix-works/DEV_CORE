@@ -120,9 +120,12 @@
 
 ### İnfra · gate · dosya yetkisi
 - **2 ders:** [tam indeks](_indeks-infra-gate.md)
+- ⛔ [Muafiyetin gerekcesi ALT-KUMEYE aitse muafiyet kor nokta olur](feedback_muafiyetin-gerekcesi-alt-kumeye-aitse-muafiyet-kor-nokta-olur.md) — Bir kapının bilinçli muafiyeti gerekçesinden GENİŞ yazılmışsa (dosya-bazlı muafiyet, gerekçe yalnız dosyanın bir bölümü için geçerli) kör noktaya döner; dokunulmazlığı yüzünden o kapının EN UZUN YAŞAYAN kör noktası olur. Düzeltmenin AÇIKLAMA metni bile o boşluktan sızabilir. Daraltma: muafiyeti satır/token bazlı yap.
+- ⛔ [Tek seferlik script paylasilan modulun desenini yeniden turetmez](feedback_tek-seferlik-script-paylasilan-modulun-desenini-yeniden-turetmez.md) — O modülün yorumları senin düşeceğin tuzağın kaydıdır. Asıl kural: redundans, katmanlar BAĞIMSIZ değilse redundans değildir — ve bir katmanı düzeltmek öbürünün körlüğünü meşrulaştırmaz, GÖRÜNMEZ kılar.
 
 ### Araç · kabuk · kodlama tuzakları
 - **8 ders:** [tam indeks](_indeks-arac-tuzaklari.md)
+- ⛔ [Monitor CI izleyicisi SESSIZ kalabilir](feedback_monitor-sessiz-oldu-bash-background-ile-dogrula.md) — İzleyicinin sessizliği "iş henüz bitmedi" ile AYIRT EDİLEMEZ: iki izleyici de sıfır olayla doldu, oysa her iki CI de bitmişti. Kontrol grubu: Bash + run_in_background aynı işi iki kez yaptı. Sonucu daima bir kez doğrudan sor.
 - ⭐ [Mojibake taramasi ciplak karakter aramaz](feedback_mojibake-taramasi-ciplak-karakter-aramaz.md) — Brifinge yazılan mojibake taraması çıplak `Â`/`Ã` aramaz — Türkçede meşru (hâlâ, kâr); mojibake İKİLİ dizidir. Liderin brifing kapısı da bir kapıdır, ajan ona itaat edip doğru metni bozar
 - ⭐ [Python yazdigi liste crlf tasir xargs sessizce bosa koser](feedback_python-yazdigi-liste-crlf-tasir-xargs-sessizce-bosa-koser.md) — Windows'ta Python'un yazdığı satır listesi CRLF taşır; git/xargs'a beslenince her ad sonunda \r kalır, eşleşme tutmaz ve işlem SESSİZCE hiçbir şey yapmaz. `| wc -l` çıktıyı sayarken HATA satırlarını sayar ⇒ başarı gibi görünür.
 - ⭐ [Tr karakter varyantli arama](feedback_tr-karakter-varyantli-arama.md) — Müşteri/metin aramasında Türkçe İ/Ş/Ç varyantı — ASCII LIKE 'yok' der (TRİGO vakası)
