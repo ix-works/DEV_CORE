@@ -104,7 +104,11 @@ Import başarısızsa (ör. makinede `mcp 2.x` kurulu) şunu basar ve **`return 
 ⛔ **Bu durumda `--overlay-onayli` ÇARE DEĞİLDİR** — overlay kapısıyla ilgisi yoktur. FAIL
 satırındaki onarımı uygula (`<python> -m pip install -r core/mcp_servers/sap_adt/requirements.txt`;
 requirements `mcp<2` sınırını taşır ve kurulu 2.x'i `--upgrade`'siz indirir), sonra team_setup'ı
-yeniden koş. `ix_doctor --layer 5` aynı denetimi 5b2 satırında yapar.
+yeniden koş. `ix_doctor --layer 5` aynı denetimi 5b2 satırında yapar. ⚠ Son satır
+`No module named 'mcp_servers'` ise sorun paket değil YOLDUR — pip çare DEĞİLDİR: `.mcp.json`
+sap-adt `env.PYTHONPATH` = `${CLAUDE_PROJECT_DIR:-.}/core` olmalı ve proje `core` bağı bulunmalı
+(`team_setup --repair-junctions`); `.mcp.json` bozuksa (geçersiz JSON / `sap-adt` yok) denetim
+ÖLÇÜLEMEDİ der ve çare dosyayı onarmaktır. FAIL satırındaki çare metni bu ayrımı kendisi yapar.
 
 **Doğrulama:** çıktıda `FAIL` satırı yok · son satır `team_setup TAMAM` · `.claude/active_package` var.
 

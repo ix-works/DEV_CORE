@@ -713,7 +713,8 @@ def smoke(proje: Path) -> bool:
     try:
         if str(CORE_ROOT / "scripts") not in sys.path:
             sys.path.insert(0, str(CORE_ROOT / "scripts"))
-        from utils.mcp_import_denetimi import mcp_import_denetimi, mcp_calisma_env, KAPSAM  # type: ignore
+        from utils.mcp_import_denetimi import (mcp_import_denetimi, mcp_calisma_env,  # type: ignore
+                                               onarim_metni, KAPSAM)
     except Exception as e:  # noqa: BLE001
         say(FAIL, f"MCP server import smoke ÖLÇÜLEMEDİ — ortak yardımcı yüklenemedi "
                   f"({type(e).__name__}: {e}); import sağlığı bilinmiyor (temiz demek DEĞİL)")
@@ -724,9 +725,8 @@ def smoke(proje: Path) -> bool:
         say(OK, f"MCP server import smoke (import-ok; yorumlayıcı {sys.executable}; ortam {ortam}) [{KAPSAM}]")
     else:
         say(FAIL, f"MCP server import smoke BAŞARISIZ — {ayrinti} · sap-adt MCP sunucusu bu "
-                  f"kurulumda AÇILMAZ. Onarım: \"{sys.executable}\" -m pip install -r "
-                  f"\"{REQ_FILE}\" (requirements `mcp<2` sınırını taşır), sonra team_setup'ı "
-                  f"yeniden koş (ortam {ortam}) [{KAPSAM}]")
+                  f"kurulumda AÇILMAZ. Onarım: {onarim_metni(ayrinti, REQ_FILE, sys.executable)}, "
+                  f"sonra team_setup'ı yeniden koş (ortam {ortam}) [{KAPSAM}]")
     return ok
 
 

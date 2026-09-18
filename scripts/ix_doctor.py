@@ -773,7 +773,8 @@ def _mcp_import_kontrol() -> Sonuc:
     Başarısızlıkta mesaj, alt sürecin SON anlamlı satırını taşır (traceback başlığı DEĞİL).
     """
     try:
-        from utils.mcp_import_denetimi import mcp_import_denetimi, mcp_calisma_env, KAPSAM  # type: ignore
+        from utils.mcp_import_denetimi import (mcp_import_denetimi, mcp_calisma_env,  # type: ignore
+                                               onarim_metni, KAPSAM)
     except Exception as e:  # noqa: BLE001
         return (FAIL, f"MCP server import denetimi ÖLÇÜLEMEDİ — ortak yardımcı yüklenemedi "
                       f"({type(e).__name__}: {e}); import sağlığı BU KOŞUMDA ölçülmedi "
@@ -785,8 +786,8 @@ def _mcp_import_kontrol() -> Sonuc:
         return (PASS, f"MCP server import edilebilir (import-ok; yorumlayıcı {sys.executable}; "
                       f"ortam {ortam}) [{KAPSAM}]")
     return (FAIL, f"MCP server IMPORT EDİLEMİYOR — {ayrinti} · sunucu açılmaz (oturumda "
-                  f"sap-adt 'Connection closed'). Onarım: \"{sys.executable}\" -m pip install "
-                  f"-r \"{req}\" (requirements `mcp<2` sınırını taşır) (ortam {ortam}) [{KAPSAM}]")
+                  f"sap-adt 'Connection closed'). Onarım: {onarim_metni(ayrinti, req, sys.executable)} "
+                  f"(ortam {ortam}) [{KAPSAM}]")
 
 
 def katman5(live_sap: bool) -> list[Sonuc]:

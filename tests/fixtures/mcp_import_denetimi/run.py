@@ -35,6 +35,11 @@ VEKTÖRLER
   M4c EZME ters yön: kullanıcı PYTHONPATH'inde v2 + "kurulu" v1 ⇒ (True)
   M4d `.mcp.json` YOK ⇒ `init_project` şablonuna düşer (PYTHONPATH = <proje>/core, kaynak şablon)
   M4e ne `.mcp.json` ne şablon ⇒ (False, ÖLÇÜLEMEDİ) — fail-closed
+  M4f `.mcp.json` VAR ama geçersiz JSON ⇒ (False, ÖLÇÜLEMEDİ + neden) — şablona DÜŞMEZ
+  M4g `.mcp.json` VAR ama `sap-adt` sunucusu yok ⇒ (False, ÖLÇÜLEMEDİ) — şablona DÜŞMEZ
+  M4h `.mcp.json` VAR, `sap-adt.env` nesne değil (liste) ⇒ (False, ÖLÇÜLEMEDİ)
+  M4i `sap-adt` var ama `env` anahtarı YOK ⇒ `{}` = kullanıcı ortamı (şablona düşmez, ÖLÇÜLEMEDİ değil)
+      (M4f/M4g/M4h'de "kurulu" mcp v1'dir ⇒ şablona düşülseydi `import-ok` dönerdi)
   M5  yardımcı: zaman aşımı → (False, TIMEOUT) · stderr boşsa stdout'un son satırı — sahte core
       `.mcp.json`'da MUTLAK yol olarak verilir ⇒ değer dosyadan okunmazsa iki vektör de düşer
   M6  ix_doctor CLI `--layer 5` ("kurulu" v2, kullanıcı v1): import satırı FAIL + son satır;
@@ -44,21 +49,31 @@ VEKTÖRLER
       YOK, exit ≠ 0
   M9  team_setup CLI ("kurulu" v1, kullanıcı v2): OK satırı + `team_setup TAMAM` + exit 0
   M10 team_setup CLI (v2, --no-smoke): `--no-smoke` sözleşmesi değişmedi (TAMAM + exit 0)
+  M11 ix_doctor CLI: proje `core` bağı YOK ⇒ `No module named 'mcp_servers'` ⇒ FAIL satırındaki
+      çare `.mcp.json`/`core` bağıdır, `pip install` DEĞİL (M6: `mcp` hatasında çare pip)
+  M12 team_setup CLI: `.mcp.json` PYTHONPATH olmayan dizini gösteriyor ⇒ aynı ayrım team_setup'ta
+      (M8: `mcp` hatasında çare pip)
 
 MUTASYON (bugünkü kaynaktan üretilir; çapa tam 1 kez bulunmazsa exit 2 = KURULAMADI):
-  --mutasyon-ilk-satir      yardımcı İLK anlamlı satırı alır         → M2·M4b·M5b·M6·M8 düşer
+  --mutasyon-ilk-satir      yardımcı İLK anlamlı satırı alır         → M2·M4b·M5b·M6·M8·M11·M12 düşer
   --mutasyon-one-ekle       yardımcı kullanıcı PYTHONPATH'ini KORUR   → M4a·M4b·M4c·M6·M7·M8·M9 düşer
                             (ilk sürümün reddedilen davranışı — bug-gate F1)
-  --mutasyon-yeniden-turet  yardımcı `.mcp.json`'u okumaz, core kökünü yazar → M4a·M4d·M4e·M5a·M5b düşer
-  --mutasyon-doctor-kablosuz ix_doctor 5b2 satırı çağrılmaz           → M6 · M7 düşer
-  --mutasyon-warn           team_setup eski sözleşme (WARN + TAMAM)   → M8 düşer
+  --mutasyon-yeniden-turet  yardımcı `.mcp.json`'u okumaz, core kökünü yazar
+                            → M4a·M4d·M4e·M4f·M4g·M4h·M4i·M5a·M5b·M11·M12 düşer
+  --mutasyon-doctor-kablosuz ix_doctor 5b2 satırı çağrılmaz           → M6·M7·M11 düşer
+  --mutasyon-warn           team_setup eski sözleşme (WARN + TAMAM)   → M8·M12 düşer
   --mutasyon-pinsiz         requirements `<2` sınırı yok             → M1 düşer
+  --mutasyon-bozuk-sablona  bozuk `.mcp.json`'da şablona düşer (ilk sürüm) → M4f·M4g·M4h düşer
+  --mutasyon-envsiz-sablona `env` anahtarı yoksa ÖLÇÜLEMEDİ der          → M4i düşer
+  --mutasyon-tek-care       çare metni her durumda pip                  → M11·M12 düşer
 TABAN (eski kod, tek seferlik ölçüm): --kaynak-dizini <DIR> → DIR içindeki `team_setup.py`,
   `ix_doctor.py`, `requirements.txt` (varsa) GERÇEK `__file__` ile koşulur.
   ⚠ Tabanda M8 Issue senaryosunu ÜRETMEZ: eski smoke PYTHONPATH'i core'a EZER ve yardımcıyı
   çağırmaz ⇒ `ek_yol` hiç uygulanmaz, makinede kurulu GERÇEK `mcp` import edilir (bu makinede
   1.x ⇒ import-ok ⇒ M8 "OK" diye düşer; kurulu mcp yoksa hiç import edemez). M6/M7 tabanda
   5b2 satırı OLMADIĞI için düşer (satir={}); gerçek 2.x kanıtı changelog'daki venv ölçümüdür.
+  Taban `ab68ba9`: 15/21 — düşenler M1·M6·M7·M8·M11·M12 (M11/M12: eski kodda çare ayrımı ve
+  `.mcp.json` okuması yok).
 
 ⛔ SAP'ye bağlanmaz, ağ kullanmaz. Sandbox proje temp'tedir; team_setup'ın kurduğu
 junction'lar silme ÖNCESİ bağ olarak kaldırılır (hedef = gerçek core, ASLA silinmez).
@@ -93,7 +108,8 @@ KOSUCU = HERE / "_kosucu.py"
 
 GECERLI_KIP = ("--mutasyon-ilk-satir", "--mutasyon-one-ekle", "--mutasyon-yeniden-turet",
                "--mutasyon-doctor-kablosuz",
-               "--mutasyon-warn", "--mutasyon-pinsiz")
+               "--mutasyon-warn", "--mutasyon-pinsiz", "--mutasyon-bozuk-sablona",
+               "--mutasyon-envsiz-sablona", "--mutasyon-tek-care")
 KIP: set[str] = set()
 KAYNAK_DIZINI: Path | None = None
 _a = sys.argv[1:]
@@ -151,6 +167,15 @@ def _yardimci_metni() -> str:
         m = _degistir(m, "    ham, kaynak = mcp_calisma_env(core_root, proje)\n",
                       "    ham, kaynak = {'PYTHONPATH': str(core_root), 'PYTHONIOENCODING': 'utf-8'}, 'turetildi'\n",
                       "yeniden-turet")
+    if "--mutasyon-bozuk-sablona" in KIP:
+        m = _degistir(m, '        return None, f"{mj} bozuk: {neden} — şablona DÜŞÜLMEZ (çalışma zamanı bu dosyayla açılmaz)"\n',
+                      "", "bozuk-sablona")
+    if "--mutasyon-envsiz-sablona" in KIP:
+        m = _degistir(m, '        return {}, "env yok (kullanıcı ortamı)"\n',
+                      '        return None, "env yok"\n', "envsiz-sablona")
+    if "--mutasyon-tek-care" in KIP:
+        m = _degistir(m, "    if _MCP_SERVERS_YOK.search(ayrinti):\n",
+                      "    if False and _MCP_SERVERS_YOK.search(ayrinti):\n", "tek-care")
     return m
 
 
@@ -422,6 +447,36 @@ def main() -> int:
         kontrol("M4e ne .mcp.json ne sablon → (False, OLCULEMEDI) — fail-closed",
                 oke is False and "ÖLÇÜLEMEDİ" in ayre, f"ok={oke} ayrinti={ayre!r}")
 
+        def bozuk(etiket: str, metin: str) -> tuple[bool, str]:
+            pb = tmp / f"bozuk_{etiket}"
+            bag_kur(pb / "core", REPO)
+            _yaz(pb / ".mcp.json", metin)
+            geri_ = _kullanici_yolu(None)
+            try:
+                return yard.mcp_import_denetimi(REPO, pb, ek_yol=[str(v1)])   # kurulu = v1
+            finally:
+                geri_()
+
+        okf, ayrf = bozuk("json", "{not json")
+        kontrol("M4f .mcp.json VAR + gecersiz JSON → (False, OLCULEMEDI + neden), sablona DUSMEZ",
+                okf is False and "ÖLÇÜLEMEDİ" in ayrf and "geçersiz JSON" in ayrf,
+                f"ok={okf} ayrinti={ayrf[:200]!r}")
+        okg, ayrg = bozuk("sunucusuz", json.dumps({"mcpServers": {"sap-gui": {"command": "python"}}}))
+        kontrol("M4g .mcp.json VAR + sap-adt sunucusu YOK → (False, OLCULEMEDI), sablona DUSMEZ",
+                okg is False and "ÖLÇÜLEMEDİ" in ayrg and "sunucusu YOK" in ayrg,
+                f"ok={okg} ayrinti={ayrg[:200]!r}")
+        okh, ayrh = bozuk("envliste", json.dumps({"mcpServers": {"sap-adt": {"env": ["PYTHONPATH"]}}}))
+        kontrol("M4h .mcp.json sap-adt.env LISTE → (False, OLCULEMEDI)",
+                okh is False and "ÖLÇÜLEMEDİ" in ayrh and "nesne değil" in ayrh,
+                f"ok={okh} ayrinti={ayrh[:200]!r}")
+        pi = tmp / "envsiz_proje"
+        _yaz(pi / ".mcp.json", json.dumps({"mcpServers": {"sap-adt": {"command": "python"}}}))
+        e_i, k_i = yard.alt_surec_ortami(REPO, pi, {"PYTHONPATH": "KULLANICI-YOLU-CAPASI"})
+        kontrol("M4i sap-adt var, env YOK → {} = kullanici ortami (sablon DEGIL, OLCULEMEDI DEGIL)",
+                e_i is not None and e_i.get("PYTHONPATH") == "KULLANICI-YOLU-CAPASI"
+                and k_i == str(pi / ".mcp.json"),
+                f"PYTHONPATH={None if e_i is None else e_i.get('PYTHONPATH')!r} kaynak={k_i!r}")
+
         # ── M5 kenar dalları (sahte core, .mcp.json'da MUTLAK yol) ───────────────
         sc = sahte_core(tmp)
         ps = tmp / "sahte_proje"
@@ -447,7 +502,8 @@ def main() -> int:
         conn_fail = '".conn_adt YOK' in c6 or ".conn_adt YOK" in c6
         kontrol("M6 ix_doctor --layer 5 (kurulu v2, kullanici v1, .conn_adt YOK): import satiri FAIL + son satir",
                 bool(s6) and s6.get("tag") == "FAIL" and V2_CAPA in s6.get("mesaj", "")
-                and TRACEBACK_BASLIK not in s6.get("mesaj", "") and conn_fail,
+                and TRACEBACK_BASLIK not in s6.get("mesaj", "") and conn_fail
+                and "pip install -r" in s6.get("mesaj", "") and "YOLDA YOK" not in s6.get("mesaj", ""),
                 f"rc={rc6} satir={s6!r} conn_fail={conn_fail} cikti_sonu={c6[-300:]!r}")
         (pd / ".conn_adt").write_text(
             "ADT_SAP_URL=https://ornek.invalid:44300\nADT_SAP_USER=ornek\n"
@@ -458,10 +514,25 @@ def main() -> int:
         kontrol("M7 ix_doctor --layer 5 (kurulu v1, kullanici v2, .conn_adt dolu; KONTROL GRUBU): import satiri PASS",
                 bool(s7) and s7.get("tag") == "PASS", f"rc={rc7} satir={s7!r} cikti_sonu={c7[-300:]!r}")
 
-        # ── M8/M9/M10 team_setup CLI ───────────────────────────────────────────
-        def ts(etiket: str, kurulu: Path, kullanici: Path, ek: list[str]) -> tuple[int, str]:
+        # ── M11 ix_doctor: proje `core` bağı YOK ⇒ mcp_servers yolda yok ⇒ çare pip DEĞİL
+        pn = tmp / "bagsiz_proje"
+        pn.mkdir()
+        rc11, c11 = _kos(DOCTOR, _doctor_metni(), ["--layer", "5", "--json"],
+                         _ortam(v1, v1, pn), tmp, pn)
+        s11 = _doctor_import_satiri(c11)
+        m11 = (s11 or {}).get("mesaj", "")
+        kontrol("M11 ix_doctor (core bagi YOK → No module named 'mcp_servers'): care .mcp.json/core bagi, pip DEGIL",
+                bool(s11) and s11.get("tag") == "FAIL" and "No module named 'mcp_servers" in m11
+                and "YOLDA YOK" in m11 and "pip install -r" not in m11,
+                f"rc={rc11} satir={s11!r}")
+
+        # ── M8/M9/M10/M12 team_setup CLI ───────────────────────────────────────
+        def ts(etiket: str, kurulu: Path, kullanici: Path, ek: list[str],
+               mcp_env: dict | None = None) -> tuple[int, str]:
             p = tmp / f"ts_{etiket}"
             p.mkdir()
+            if mcp_env is not None:
+                mcp_json_yaz(p, mcp_env)
             return _kos(TS, _ts_metni(), ["--project", str(p), "--no-install", "--no-plugins",
                                           "--no-seed", *ek], _ortam(kurulu, kullanici), tmp, p)
 
@@ -470,7 +541,8 @@ def main() -> int:
         kontrol("M8 team_setup (kurulu v2, kullanici v1): FAIL + son satir, `team_setup TAMAM` YOK, exit != 0",
                 len(fail8) == 1 and V2_CAPA in fail8[0] and TRACEBACK_BASLIK not in fail8[0]
                 and "team_setup TAMAM" not in c8 and rc8 != 0
-                and "team_setup BAŞARISIZ (MCP server import smoke)" in c8,
+                and "team_setup BAŞARISIZ (MCP server import smoke)" in c8
+                and "pip install -r" in fail8[0] and "YOLDA YOK" not in fail8[0],
                 f"rc={rc8} fail_satirlari={fail8!r} cikti_sonu={c8[-400:]!r}")
         rc9, c9 = ts("v1", v1, v2, [])
         kontrol("M9 team_setup (kurulu v1, kullanici v2; KONTROL GRUBU): OK + `team_setup TAMAM` + exit 0",
@@ -480,6 +552,13 @@ def main() -> int:
         kontrol("M10 team_setup --no-smoke (v2): sozlesme degismedi (smoke yok, TAMAM, exit 0)",
                 rc10 == 0 and "team_setup TAMAM" in c10 and "MCP server import smoke" not in c10,
                 f"rc={rc10} cikti_sonu={c10[-400:]!r}")
+        rc12, c12 = ts("yolsuz", v1, v1, [], {"PYTHONIOENCODING": "utf-8",
+                                               "PYTHONPATH": "${CLAUDE_PROJECT_DIR:-.}/olmayan_core"})
+        fail12 = [s for s in c12.splitlines() if s.startswith("[FAIL] MCP server import smoke")]
+        kontrol("M12 team_setup (.mcp.json PYTHONPATH olmayan dizin): care .mcp.json/core bagi, pip DEGIL",
+                len(fail12) == 1 and "No module named 'mcp_servers" in fail12[0]
+                and "YOLDA YOK" in fail12[0] and "pip install -r" not in fail12[0] and rc12 != 0,
+                f"rc={rc12} fail_satirlari={fail12!r} cikti_sonu={c12[-300:]!r}")
     finally:
         _sil(tmp)
 

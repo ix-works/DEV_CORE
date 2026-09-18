@@ -20,9 +20,15 @@ mesaj). Boş satırlar atlanır; stderr önceliklidir, boşsa stdout'a bakılır
 ⛔ ORTAM = `.mcp.json` ORTAMI (2026-09-18 düzeltme — bug-gate F1): denetim alt-sürecinin ortamı,
 MCP sunucusunun GERÇEK çalışma zamanının ortamıdır ve **aynı kaynaktan türetilir**, yeniden
 türetilmez: `<proje>/.mcp.json` → `mcpServers["sap-adt"]["env"]` (`${VAR}` / `${VAR:-varsayılan}`
-genişletilir; `CLAUDE_PROJECT_DIR` = proje). Dosya yoksa / okunamazsa / `sap-adt` yoksa aynı
-değerin ÜRETİCİSİ `init_project.py::MCP_JSON` şablonu okunur (AST ile, import yan etkisi yok);
-o da okunamazsa denetim ÖLÇÜLEMEDİ = başarısız döner. Çalışma zamanı env'i
+genişletilir; `CLAUDE_PROJECT_DIR` = proje). Şablona düşüş YALNIZ dosya HİÇ YOKKEN: o zaman
+aynı değerin ÜRETİCİSİ `init_project.py::MCP_JSON` okunur (AST ile, import yan etkisi yok); o
+da okunamazsa ÖLÇÜLEMEDİ = başarısız. ⛔ Dosya VAR ama okunamıyor / geçersiz JSON / `sap-adt`
+sunucusu yok / sunucu ya da `env` nesne değil ⇒ **ÖLÇÜLEMEDİ = başarısız, şablona DÜŞÜLMEZ**
+(bug-gate-2 M1, 2026-09-18: ilk sürüm bu durumda şablona düşüp `import-ok` diyordu — oysa
+çalışma zamanı o bozuk dosyayla sunucuyu hiç açmaz; ölçülen ortam ≠ çalışma zamanı ortamı).
+`sap-adt` var ama `env` anahtarı YOKSA çalışma zamanı ortamı kullanıcının ortamıdır ⇒ `{}`
+kabul edilir (şablona düşülmez); o durumda import çoğunlukla `No module named 'mcp_servers'`
+ile düşer ve çare metni (`onarim_metni`) pip DEĞİL `.mcp.json`/`core` bağını gösterir. Çalışma zamanı env'i
 `"PYTHONPATH": "${CLAUDE_PROJECT_DIR:-.}/core"` ile kullanıcının PYTHONPATH'ini EZER ⇒ denetim
 de EZER. ⚠ İlk sürüm (aynı gün) core'u kullanıcı yolunun ÖNÜNE ekleyip kullanıcı yolunu
 koruyordu, gerekçe "gerçek çalışma zamanına daha yakın" idi — **YANLIŞTI** (`.mcp.json`'a
@@ -78,16 +84,25 @@ def son_anlamli_satir(metin: str | None) -> str:
     return ""
 
 
-def _sunucu_env(metin: str) -> dict | None:
-    """`.mcp.json` metninden `mcpServers["sap-adt"]["env"]`; sunucu yoksa / bozuksa None."""
+def _sunucu_env(metin: str) -> tuple[dict | None, str]:
+    """`.mcp.json` metninden (`mcpServers["sap-adt"]["env"]`, neden). Bozuksa (None, neden).
+    `env` anahtarı YOKSA `{}` (çalışma zamanı kullanıcı ortamıyla açılır — bozukluk değil)."""
     try:
-        s = json.loads(metin)["mcpServers"][SUNUCU]
-    except Exception:  # noqa: BLE001
-        return None
+        veri = json.loads(metin)
+    except Exception as e:  # noqa: BLE001
+        return None, f"geçersiz JSON ({type(e).__name__}: {str(e)[:80]})"
+    sunucular = veri.get("mcpServers") if isinstance(veri, dict) else None
+    if not isinstance(sunucular, dict) or SUNUCU not in sunucular:
+        return None, f"`mcpServers.{SUNUCU}` sunucusu YOK"
+    s = sunucular[SUNUCU]
     if not isinstance(s, dict):
-        return None
-    env = s.get("env", {})
-    return {str(k): str(v) for k, v in env.items()} if isinstance(env, dict) else None
+        return None, f"`{SUNUCU}` girdisi nesne değil ({type(s).__name__})"
+    if "env" not in s:
+        return {}, "env yok (kullanıcı ortamı)"
+    env = s["env"]
+    if not isinstance(env, dict):
+        return None, f"`{SUNUCU}.env` nesne değil ({type(env).__name__})"
+    return {str(k): str(v) for k, v in env.items()}, ""
 
 
 def _sablon_metni(core_root: Path) -> str | None:
@@ -109,23 +124,23 @@ def _sablon_metni(core_root: Path) -> str | None:
 def mcp_calisma_env(core_root: Path, proje: Path) -> tuple[dict | None, str]:
     """(sap-adt sunucusunun `.mcp.json` env'i — HAM, genişletilmemiş · kaynak etiketi).
 
-    Öncelik: `<proje>/.mcp.json` → `init_project.py::MCP_JSON` şablonu (aynı değerin
-    üreticisi). İkisi de yoksa (None, neden) ⇒ çağıran ÖLÇÜLEMEDİ der."""
+    Dosya VARSA yalnız o okunur — bozuksa (None, neden) ⇒ çağıran ÖLÇÜLEMEDİ der (şablona
+    DÜŞÜLMEZ: çalışma zamanı bozuk dosyayla sunucuyu açmaz). Dosya YOKSA
+    `init_project.py::MCP_JSON` şablonu (aynı değerin üreticisi); o da yoksa (None, neden)."""
     mj = Path(proje) / ".mcp.json"
-    neden = ".mcp.json YOK"
-    if mj.is_file():
+    if mj.exists():
         try:
-            env = _sunucu_env(mj.read_text(encoding="utf-8-sig"))
-            neden = f".mcp.json'da `{SUNUCU}` sunucusu yok/bozuk"
+            env, neden = _sunucu_env(mj.read_text(encoding="utf-8-sig"))
         except Exception as e:  # noqa: BLE001
-            env, neden = None, f".mcp.json okunamadı ({type(e).__name__})"
+            env, neden = None, f"okunamadı ({type(e).__name__})"
         if env is not None:
             return env, str(mj)
+        return None, f"{mj} bozuk: {neden} — şablona DÜŞÜLMEZ (çalışma zamanı bu dosyayla açılmaz)"
     sablon = _sablon_metni(core_root)
-    env = _sunucu_env(sablon) if sablon is not None else None
+    env, neden = _sunucu_env(sablon) if sablon is not None else (None, "okunamadı")
     if env is not None:
-        return env, f"init_project.py MCP_JSON şablonu ({neden})"
-    return None, f"{neden}; init_project.py MCP_JSON şablonu da okunamadı"
+        return env, "init_project.py MCP_JSON şablonu (.mcp.json YOK)"
+    return None, f".mcp.json YOK; init_project.py MCP_JSON şablonu da kullanılamadı ({neden})"
 
 
 def _genislet(deger: str, ortam: dict) -> str:
@@ -155,6 +170,27 @@ def alt_surec_ortami(core_root: Path, proje: Path, taban: dict | None = None,
         env["PYTHONPATH"] = os.pathsep.join([p for p in [env.get("PYTHONPATH", "")] if p]
                                             + [str(y) for y in ek_yol])
     return env, kaynak
+
+
+_MCP_SERVERS_YOK = re.compile(r"No module named '(mcp_servers)(\.[\w.]+)?'")
+
+
+def onarim_metni(ayrinti: str, req_file: Path | str, python: str) -> str:
+    """Başarısızlık AYRINTISINDAN (son anlamlı satır) çare metni — tek kaynak (team_setup +
+    ix_doctor). ⛔ `mcp_servers` bulunamıyorsa sorun PAKET değil YOLDUR: `pip install` onu
+    düzeltmez (tekrar koşunca aynı FAIL — bug-gate-2 L1) ⇒ `.mcp.json`/`core` bağı çaresi.
+    Ortam türetilemediyse (`ÖLÇÜLEMEDİ`) çare `.mcp.json`'u onarmaktır. Diğer her durum
+    (`mcp` paketi / bağımlılık / shim hatası) ⇒ pip + requirements (`mcp<2` sınırı)."""
+    if ayrinti.startswith("ÖLÇÜLEMEDİ"):
+        return ("proje `.mcp.json`'unu onar — geçerli JSON, `mcpServers.sap-adt` nesnesi ve "
+                "`env` nesnesi olmalı (üretici şablon: `init_project.py` MCP_JSON, "
+                "`env.PYTHONPATH` = `${CLAUDE_PROJECT_DIR:-.}/core`); pip ÇARE DEĞİL")
+    if _MCP_SERVERS_YOK.search(ayrinti):
+        return ("`mcp_servers` YOLDA YOK — proje `.mcp.json` sap-adt `env.PYTHONPATH` "
+                "`${CLAUDE_PROJECT_DIR:-.}/core` olmalı ve proje kökünde `core` bağı (junction) "
+                "bulunmalı (`team_setup --repair-junctions`); pip ÇARE DEĞİL")
+    return (f"\"{python}\" -m pip install -r \"{req_file}\" (requirements `mcp<2` sınırını "
+            f"taşır)")
 
 
 def mcp_import_denetimi(core_root: Path, proje: Path, timeout: int = 60,
