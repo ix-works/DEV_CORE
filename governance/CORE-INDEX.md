@@ -1,4 +1,4 @@
-<!-- uretim: 2026-09-02T18:53:08+03:00 · core-commit: 15d8a0d — bilgi satiri; tazelik kiyasinda yok sayilir -->
+<!-- uretim: 2026-09-18T12:53:57+03:00 · core-commit: e0e58ba — bilgi satiri; tazelik kiyasinda yok sayilir -->
 <!-- URETILMIS DOSYA — elle duzenleme. Uretici: core/scripts/build_core_index.py
      Tazelik gate'i: core/scripts/validators/check_core_index_fresh.py -->
 
@@ -13,7 +13,7 @@
 > · `rg -L --no-ignore <p>` · `find -L core`. Kokten path'siz arama = sessiz sifir.
 
 
-## `core/playbook/` (50 dosya)
+## `core/playbook/` (52 dosya)
 
 - [`core/playbook/00-discipline-and-principles.md`](../core/playbook/00-discipline-and-principles.md) — ADT Disiplini, Hızlı Erişim ve Genel Prensipler
 - [`core/playbook/README.md`](../core/playbook/README.md) — Playbook — SAP ADT Operasyonel Pattern Bankası
@@ -47,6 +47,8 @@
 - [`core/playbook/coding-patterns.md`](../core/playbook/coding-patterns.md) — ABAP Coding Patterns — Range, FOR ALL ENTRIES, İç Tablo, Kur Dönüşümü
 - [`core/playbook/howto-abap-email.md`](../core/playbook/howto-abap-email.md) — ABAP'ten E-posta Gönderme — HTML gövde (+ ek-dosya) · `SO_DOCUMENT_SEND_API1`
 - [`core/playbook/howto-belge-canli-teyit-turu.md`](../core/playbook/howto-belge-canli-teyit-turu.md) — HOWTO — Belge ↔ Canlı Teyit Turu (TS build'e girmeden önce)
+- [`core/playbook/howto-cekirdek-bulgu-bildirimi.md`](../core/playbook/howto-cekirdek-bulgu-bildirimi.md) — HOWTO — Çekirdekte bir şeyi değiştirmek isteyen TÜKETİCİ klonu ne yapar?
+- [`core/playbook/howto-cekirdek-guncelleme.md`](../core/playbook/howto-cekirdek-guncelleme.md) — HOWTO — Çekirdek güncellemesi (`core güncelle` / `/core-guncelle`)
 - [`core/playbook/howto-classic-dynpro-datafield-screens.md`](../core/playbook/howto-classic-dynpro-datafield-screens.md) — Datafield'lı (DDIC yapıya bağlı) klasik Dynpro diyalog ekranı üretimi — karar ağacı, arama-yardımı mekanizmaları, üreteç/CUA turu, doğrulama protokolü
 - [`core/playbook/howto-cok-katmanli-degisiklik.md`](../core/playbook/howto-cok-katmanli-degisiklik.md) — HOWTO — Çapraz-kesen (çok katmanlı) davranış değişikliği nasıl yönetilir
 - [`core/playbook/howto-delete-guard.md`](../core/playbook/howto-delete-guard.md) — HOWTO — Silme Kontrolü (delete guard): backend kuralından kullanıcının gördüğü mesaja
@@ -104,6 +106,10 @@
 - [`core/governance/decisions/0022-intake-triage-gate.md`](../core/governance/decisions/0022-intake-triage-gate.md) — ADR 0022 — Intake Triage Gate (ITG)
 - [`core/governance/decisions/0023-hook-kablolamasi-plugin-e-tasinmaz.md`](../core/governance/decisions/0023-hook-kablolamasi-plugin-e-tasinmaz.md) — ADR 0023 — Hook kablolaması plugin'e TAŞINMAZ (fail-closed-on-absence ifade edilemez)
 
+## `core/claude/templates/` (1 dosya)
+
+- [`core/claude/templates/spawn-brief.md`](../core/claude/templates/spawn-brief.md) — SPAWN-BRİFİNG ŞABLONU (R2 — denetim 2026-07-31; Anthropic 4-alan deseni + TD ekleri)
+
 ## `core/governance/` (7 dosya)
 
 - [`core/governance/agent-teams-operating-model.md`](../core/governance/agent-teams-operating-model.md) — Agent Teams İşletim Modeli
@@ -114,6 +120,22 @@
 - [`core/governance/tooling-radar.md`](../core/governance/tooling-radar.md) — Genel Agent-Dev Tooling Radar
 - [`core/governance/vscode-setup.md`](../core/governance/vscode-setup.md) — VS Code Eklenti & Ayar Kurulumu — <PROJECT_NAME>
 
+## Kod isaretcileri — `core/tests/` (3 dosya; KOD, dokuman degil)
+
+> **Bu bolum dokuman DEGILDIR — kod isaretcisidir.** Yalniz `core/tests/*.py` (duz; alt
+> dizin yok) listelenir; ozet = modul docstring'inin ILK satiri.
+> **Mutasyon yontemi** (fixture-ici `--mutasyon-<kip>`, sandbox, capa `count != 1` ise
+> `[DOGRULANAMADI]` + exit 2): `core/playbook/howto-infra-fix-proseduru.md` §D2.
+> **Fixture korpuslari:** `core/tests/fixtures/<ad>/run.py` — burada TEK TEK LISTELENMEZ
+> (her infra PR'i fixture ekler; liste basilsaydi indeks her PR'da bayatlardi). Bul:
+> `find -L core/tests/fixtures -name run.py` · mutasyon kipli olanlar:
+> `rg -l -g run.py -- --mutasyon core/tests/fixtures` · taban + tum kipler tek komut:
+> `python core/tests/run_battery.py <fixture-adi>`.
+
+- (kod) [`core/tests/run_battery.py`](../core/tests/run_battery.py) — run_battery.py — TEK komutla fixture BATARYASI (taban + tüm mutasyon kipleri).
+- (kod) [`core/tests/run_fixture_tests.py`](../core/tests/run_fixture_tests.py) — run_fixture_tests.py — bozuk-girdi (negatif-test) korpuslarinin TEK giris noktasi.
+- (kod) [`core/tests/run_guard_fixture_tests.py`](../core/tests/run_guard_fixture_tests.py) — run_guard_fixture_tests.py — pre_tool_guard PAYLOAD fixture korpusu (kalici, agsiz).
+
 ---
 
-**Toplam 89 dokuman.** Bu dosya uretilmistir; icerik degistiginde `build_core_index.py` yeniden kosulur.
+**Toplam 92 dokuman · 3 kod isaretcisi.** Bu dosya uretilmistir; icerik degistiginde `build_core_index.py` yeniden kosulur.
