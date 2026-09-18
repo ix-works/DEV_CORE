@@ -334,8 +334,13 @@ from genericize_common import sizintilari_bul, tembel_id_pattern  # noqa: E402
 # içerik ve kaynaklar aynı, yalnız zamanlama değişti. Kullanım yerleri DEĞİŞMEDİ.
 _CORE_LEAK = tembel_id_pattern(proje_koku=_PROJ_ROOT)  # IGNORECASE (D2)
 
-# Desen tanımlayan dosyalar: taranırlarsa kendi desenlerine takılırlar (core_precommit'te
-# SCAN_EXEMPT olarak vardı, burada yoktu). Dosya ADIYLA eşleşir — yol makineye göre değişir.
+# Desen tanımlayan dosyalar: taranırlarsa kendi desenlerine takılırlar. Dosya ADIYLA
+# eşleşir — yol makineye göre değişir.
+# ⚠ Q329 (2026-09-18): `core_precommit`in eşdeğer dosya-bazlı muafiyeti (`SCAN_EXEMPT`)
+# KALDIRILDI — orada muafiyet artık SATIR bazlı ve gerekçe ZORUNLU. Buradaki dosya-bazlı
+# muafiyet DURUYOR (yazım-anı guard'ı; kapsam dışı bırakıldı, ayrı karar) ⇒ iki katman
+# ARTIK AYNI DEĞİL: bu dosyalara yazılan bir kimlik yazım anında görünmez, commit anında
+# görünür. Bu asimetri bilinçlidir ve kayıt Q329'da yazılıdır.
 _DESEN_TANIMLAYAN = frozenset({
     "genericize_common.py",
     "core_precommit.py",
@@ -982,8 +987,10 @@ def main() -> int:
 
     if tool_name in ("Edit", "Write", "MultiEdit", "NotebookEdit") and _core_hedef_mi(dosya_hedefi):
         # Desen-sözlüğü taşıyan dosyalar taranmaz — kendileri deseni TANIMLAR, o yüzden
-        # kaçınılmaz olarak "eşleşirler". `core_precommit.SCAN_EXEMPT` ile aynı liste;
-        # burada YOKTU → guard kendi düzeltmesini blokluyordu (2026-07-10).
+        # kaçınılmaz olarak "eşleşirler". Bu liste 2026-07-10'da `core_precommit`in
+        # `SCAN_EXEMPT`iyle eş kurulmuştu (burada YOKTU → guard kendi düzeltmesini
+        # blokluyordu). ⚠ Q329'dan beri EŞ DEĞİL: `core_precommit` tarafı satır-bazlı
+        # gerekçeli muafiyete geçti, bu dal dosya-bazlı kaldı (bkz. `_DESEN_TANIMLAYAN`).
         if Path(str(dosya_hedefi)).name in _DESEN_TANIMLAYAN:
             return 0
         parcalar = []

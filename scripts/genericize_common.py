@@ -209,9 +209,12 @@ Z_OBJ_PAT = re.compile(r"(?<![A-Za-z0-9])(Z[A-Z]{2,4}\d{3})(?!\d)", re.IGNORECAS
 #   küçük-harf yazım (`d_` + gövde) → KAÇIYORDU — ve bu, bir projenin kendi
 #     `CLAUDE.md`'sinde bağlantı bilgisi yazılırken kullanılan olağan yazımdır
 #   rakam sonekli ad (`D_` + gövde + rakam) → KAÇIYORDU (`(?![A-Za-z0-9])` rakamda kesiyordu)
-# ⚠ Bu yorumda GERÇEK kullanıcı adı ÖRNEK OLARAK YAZILMAZ: bu dosya iki gate'te de
-#   SCAN_EXEMPT'tir, yani buraya yazılan bir kimlik hiçbir kapı tarafından yakalanmaz
-#   ve public çekirdeğe sızar. (İlk taslakta tam da bu oldu; lider FP-ölçümünde yakaladı.)
+# ⚠ Bu yorumda GERÇEK kullanıcı adı ÖRNEK OLARAK YAZILMAZ. Gerekçe Q329'dan (2026-09-18)
+#   sonra DARALDI ama kaybolmadı: `core_precommit` artık bu dosyayı SATIR SATIR tarar
+#   (dosya-bazlı `SCAN_EXEMPT` kaldırıldı) ⇒ commit anında yakalanır; ama YAZIM anındaki
+#   guard `pre_tool_guard` hâlâ dosya ADIYLA muaf tutar (`_DESEN_TANIMLAYAN`) ⇒ Edit/Write
+#   sırasında uyarı GELMEZ. (İlk taslakta tam da bu oldu; lider FP-ölçümünde yakaladı.)
+#   Desen literali gerçekten gerekiyorsa: o satıra `genericize-allow: <gerekçe>`.
 # İkisi birden gereken gerçek bir vaka ölçüldü: küçük-harf + rakam-sonekli bir servis
 # kullanıcısı hiçbir katman tarafından görülmüyordu. Bu, PUBLIC çekirdeğe kimlik
 # sızmasını önleyen SON kapıdır (2026-07-10 D1 vakası) → kaçırmak geri-alınamaz.
