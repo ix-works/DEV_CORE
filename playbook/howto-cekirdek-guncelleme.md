@@ -121,6 +121,22 @@ ile **birleştir** (mevcut anahtarları silme; `permissions` hiç yoksa olduğu 
 ⛔ Şablonda `model`/`autoMode` bilerek yoktur — hesap/plan bağımlı. ⛔ **D32:** SAP-yazma ve
 davranış-yüzeyi araçları bu listeye eklenmez.
 
+⛔ **İzin listesi TARAMAYLA ÜRETİLMEZ — tek kaynak şablondur.** Bu adımda ekrana izin öneren bir
+sihirbaz/soru gelebilir (ölçülmüş vaka 2026-09-18, tüketici makine: *"also scan shell history"* ·
+*"also scan your other repos"* · *"how you use Claude here"*). Kaynağı bu prosedür DEĞİLDİR ve
+**varsayılanına basılmaz**:
+- **Tarama seçeneklerinin HİÇBİRİ seçilmez.** Kabuk geçmişi elle yazılmış şifre/token taşıyabilir
+  (ör. UI deploy parolası, bağlantı bilgisi) ve okunduğu an oturum kaydına girer — **geri alınamaz**.
+  Diğer repolar başka proje/müşteri içeriğidir, kapsam dışıdır. Geçmişten türeyen liste ayrıca
+  bir kez koşmuş SAP-yazma komutunu da aday yapar (D32 ihlali).
+- Yalnız tarif eden, izin vermeyen sorular (kullanım biçimi gibi) zararsızdır; gerçeğe uyanı seç.
+- Sihirbaz sonunda bir izin listesi önerirse **uygulama**: önce şablonla karşılaştır; şablonda
+  olmayan her satır için kullanıcıya sor. Emin değilsen reddet — şablonu elle birleştirmek yeter.
+- Soru ekrana gelmeden kullanıcı bu adıma gelmişse ona **önceden** söyle: *"izin önerisi/tarama
+  sorusu çıkarsa hiçbir taramayı seçme."* (Vakada kullanıcı varsayılana basmak üzereydi ve
+  yalnız sorduğu için durdu; ekrandaki varsayılanın ne olduğu **ölçülmedi** — bu yüzden kural
+  varsayılana güvenmez.)
+
 ```bash
 python -c "import json,os;d=json.load(open(os.path.expanduser('~/.claude/settings.json'),encoding='utf-8'));p=d.get('permissions',{});print('allow',len(p.get('allow',[])),'deny',len(p.get('deny',[])),'mode',p.get('defaultMode'))"
 ```

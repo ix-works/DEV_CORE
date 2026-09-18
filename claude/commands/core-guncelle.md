@@ -23,6 +23,9 @@ Bu turda kolayca kaçırılan üç şey:
 3. ⛔ **`team_setup` makine-lokal yüzeyleri üretmez:** `~/.claude/settings.json` izin tabanı
    (şablon: `core/claude/user-settings.template.json`, **elle birleştirilir**), `gh` kurulumu/auth,
    git global baseline. Bunlar atlanırsa kurulum çalışır **görünür** ama farklı davranır.
+   ⛔ İzin listesi **taramayla üretilmez**: ekrana *"scan shell history / scan other repos"* gibi
+   bir izin sihirbazı gelirse **hiçbir tarama seçilmez**, varsayılana basılmaz, önerdiği liste
+   şablonla karşılaştırılmadan uygulanmaz (howto §5a). Kullanıcıyı bu adımdan ÖNCE uyar.
 
 ⛔ Bu tur SAP'ye yazmaz · `--force` kullanmaz · junction'a özyinelemeli silme uygulamaz.
 ⛔ Ölçemediğin hiçbir şeyi "temiz" sayma; raporda `ÖLÇÜLEMEDİ: <sebep>` diye yaz.
