@@ -50,8 +50,17 @@ os.environ.setdefault("CLAUDE_PROJECT_DIR", str(REPO))
 # paket `mcp.server.fastmcp` saglamadi) -> alakasiz bir bagimlilik testi kosulamaz
 # kiliyordu. Cozum: yalnizca EKSIKSE, sadece bu import'u karsilayan asgari bir sahte
 # modul kurulur. Gercek SDK varsa DOKUNULMAZ (yerelde gercek zincir kosar).
-# ⚠ Sinir: bu koprü FastMCP davranisini test etmez ve etmemeli; kirilirsa MCP sunucusunun
-# kendi smoke testi (`team_setup` "MCP server import smoke") yakalar.
+# ⚠ Sinir: bu koprü FastMCP davranisini test etmez ve etmemeli.
+# ⛔ DUZELTME (Q335, 2026-09-18): burada eskiden "kirilirsa `team_setup` MCP server import
+# smoke'u yakalar" yaziyordu — OLCULDU, YANLISTI: o smoke yalniz WARN basiyordu (ilk 60
+# karakter = traceback basligi) ve kurulum yine `team_setup TAMAM` + exit 0 ile bitiyordu;
+# `ix_doctor` bu yuzeye hic bakmiyordu. Bugunku gercek: SDK kirilmasini (orn. mcp 2.x —
+# `mcp.server.fastmcp` import aninda ModuleNotFoundError) KOSULDUGU MAKINEDE `team_setup`
+# smoke'u (FAIL + exit 1) ve `ix_doctor` K5 5b2 yakalar; ikisi de `utils.mcp_import_denetimi`
+# kullanir, korpus: `tests/fixtures/mcp_import_denetimi`. ⛔ CI YAKALAMAZ: core-ci mcp
+# KURMAZ (bilincli) ve bu kopru eksik SDK'yi sahteyle kapatir. Yukaridaki "gelen paket
+# `mcp.server.fastmcp` saglamadi" gozlemi 2.x shim'iyle UYUMLUDUR; o denemenin surumu
+# kayitli degil (DOGRULANAMADI).
 try:  # pragma: no cover - ortam kosullu
     import mcp.server.fastmcp  # type: ignore  # noqa: F401
 except Exception:

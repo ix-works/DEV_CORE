@@ -9,16 +9,19 @@ basar; katman durumu = kontrollerin en kötüsü (FAIL > WARN > PASS).
 
 Katmanlar (GECIS-EXEC-CHECKLIST BLOK F / F2.1–F2.7):
   1. FS+BAĞIMLILIK : 4 junction → gerçek core'a çözülüyor · managed-policy ·
-                     plugin envanteri (setup_plugins --list) · CLI mevcudiyeti
+                     plugin envanteri (setup_plugins --list) · CLI mevcudiyeti ·
+                     (Windows) PowerShell politikası × npm .ps1 shim'i (Q339)
   2. GIT           : remote org tutarlı · main==origin/main · stable tag ·
                      hooksPath · global baseline · working-tree temizliği
   3. GITHUB-ENFORCE: ruleset ACTIVE · CI yeşil · repo tree'de core-sızıntısı yok
-                     (gh CLI yoksa katman SKIP+WARN)
+                     (gh CLI yoksa katman SKIP+WARN; project.yaml `repo_mode` local|none
+                     ise ruleset+CI SKIP — Q336)
   4. CLAUDE        : settings/shim template-drift (D7) · SHIM_SURUM · behavior-
                      manifest ↔ ağaç (F2) · hook smoke (örnek-stdin)
                      (freeze-guard canlı testi 2026-07-10'da R10 ile birlikte KALDIRILDI — bkz. 4e)
   5. MCP/SAP       : .conn_adt var+placeholder'sız · MCP server dosyaları
-                     junction'dan erişilebilir · (--live-sap ile) canlı probe
+                     junction'dan erişilebilir · MCP server IMPORT edilebilir (Q335;
+                     .conn_adt'den bağımsız) · (--live-sap ile) canlı probe
   6. VALIDATORS+PERF: run_all_validators TAM PASS + süre · session_start <1.5sn
   7. İŞ-AKIŞI SMOKE: memory (MEMORY.md dolu) · deploy-zinciri import-sağlığı ·
                      aktif paket .rules.md
@@ -226,10 +229,13 @@ def katman1() -> list[Sonuc]:
             r.append((PASS, "plugin envanteri temiz (setup_plugins --list: eksik yok)"))
 
     # 1d — CLI mevcudiyeti (yalnız shutil.which; sürüm-çağrısı YOK)
+    bulunan: dict[str, str] = {}
     for ad, kur in (("node", "Node.js LTS kur → https://nodejs.org"),
                     ("npm", "Node.js LTS ile gelir → https://nodejs.org"),
                     ("claude", "npm install -g @anthropic-ai/claude-code")):
         yol = shutil.which(ad)
+        if yol:
+            bulunan[ad] = yol
         r.append((PASS, f"CLI mevcut: {ad} ({yol})") if yol
                  else (FAIL, f"CLI YOK: {ad} — kurulum: {kur}"))
     for ad, kur in (("playwright-cli", "npm install -g @playwright/cli"),
@@ -237,9 +243,100 @@ def katman1() -> list[Sonuc]:
                     ("mmdc", "npm install -g @mermaid-js/mermaid-cli"),
                     ("marp", "npm install -g @marp-team/marp-cli")):
         yol = shutil.which(ad)
+        if yol:
+            bulunan[ad] = yol
         r.append((PASS, f"CLI mevcut (opsiyonel): {ad}") if yol
                  else (WARN, f"opsiyonel CLI yok: {ad} — kurulum: {kur}"))
+
+    # 1e — PowerShell yürütme politikası × npm `.ps1` shim'i (Q339; YALNIZ Windows)
+    r += _ps_politika_kontrol(bulunan)
     return r
+
+
+# ---------------------------------------------------------------- 1e (Q339)
+# NEDEN VAR (Issue #278, 2026-09-18): 1d `shutil.which` ile `npm.CMD`yi bulur ve PASS der;
+# PowerShell ise çıplak `npm`i `npm.ps1`e çözer ve `Restricted`/`AllSigned` politikası onu
+# BLOKLAR (`UnauthorizedAccess`). Araç kurulu ve sağlam, ama kullanıcının birincil
+# kabuğunda çağrılamıyor — 1d'nin PASS'ı bunu söylemiyordu.
+# ⛔ ALT SÜREÇ AÇILMAZ (`powershell Get-ExecutionPolicy` YASAK): alt süreç çağıranın
+# SÜREÇ-kapsamlı politikasını (env `PSExecutionPolicyPreference`, örn. araçların açtığı
+# `Bypass`) DEVRALIR ve kullanıcının etkin politikası yerine onu raporlar ⇒ yanlış PASS.
+# Politika kayıt defterinden okunur; öncelik PowerShell'in kendi sırasıdır, SÜREÇ HARİÇ:
+#   MachinePolicy (GPO, HKLM) > UserPolicy (GPO, HKCU) > CurrentUser (HKCU) > LocalMachine (HKLM)
+# hiçbiri yoksa Windows İSTEMCİ varsayılanı `Restricted`.
+# KAPSAM: Windows PowerShell 5.1 kayıt defteri. pwsh 7 politikası JSON dosyasında yaşar
+# (powershell.config.json) — ÖLÇÜLMEZ; Windows Server varsayılanı (RemoteSigned) ayırt EDİLMEZ.
+_WINDOWS = os.name == "nt"
+_PS_GPO = r"SOFTWARE\Policies\Microsoft\Windows\PowerShell"
+_PS_SHELLID = r"SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell"
+_PS_ENGELLEYEN = ("restricted", "allsigned")
+_PS_KAPSAM = ("kapsam: Windows PowerShell 5.1 kayıt defteri; pwsh 7 ve süreç kapsamı "
+              "(PSExecutionPolicyPreference) ölçülmedi; FAIL üretmez")
+
+
+def _kayit_oku(kok: str, yol: str, ad: str):
+    """Kayıt defteri değeri; anahtar/değer YOKSA None. Başka her hata YUKARI çıkar
+    (çağıran onu ÖLÇÜLEMEDİ'ye çevirir). 64-bit görünüm (32-bit Python'da HKLM\\SOFTWARE
+    WOW6432Node'a yönlenir; PowerShell 64-bit görünümü okur)."""
+    import winreg  # yalnız Windows; çağrı `_WINDOWS` ile korunur
+    hive = {"HKLM": winreg.HKEY_LOCAL_MACHINE, "HKCU": winreg.HKEY_CURRENT_USER}[kok]
+    try:
+        with winreg.OpenKey(hive, yol, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as k:
+            deger, _tip = winreg.QueryValueEx(k, ad)
+            return deger
+    except FileNotFoundError:
+        return None
+
+
+def _ps_tanimli(deger) -> bool:
+    return deger is not None and str(deger).strip() not in ("", "Undefined")
+
+
+def _ps_etkin_politika(okuyucu=None) -> tuple[str, str]:
+    """(etkin politika, kaynak). Okuma hatası YUKARI çıkar."""
+    oku = okuyucu or _kayit_oku
+    for kok, kaynak in (("HKLM", "GPO/MachinePolicy"), ("HKCU", "GPO/UserPolicy")):
+        etkin = oku(kok, _PS_GPO, "EnableScripts")
+        if etkin is not None and str(etkin).strip() == "0":
+            return "Restricted", f"{kaynak} — {kok}\\{_PS_GPO} EnableScripts=0"
+        pol = oku(kok, _PS_GPO, "ExecutionPolicy")
+        if _ps_tanimli(pol):
+            return str(pol).strip(), f"{kaynak} — {kok}\\{_PS_GPO}"
+    for kok, kaynak in (("HKCU", "CurrentUser"), ("HKLM", "LocalMachine")):
+        pol = oku(kok, _PS_SHELLID, "ExecutionPolicy")
+        if _ps_tanimli(pol):
+            return str(pol).strip(), f"{kaynak} — {kok}\\{_PS_SHELLID}"
+    return "Restricted", "varsayılan — hiçbir kapsamda kayıt yok (Windows istemci varsayılanı)"
+
+
+def _ps_politika_kontrol(bulunan: dict[str, str], okuyucu=None) -> list[Sonuc]:
+    """1e satırı. Windows-dışı: hiçbir şey eklenmez. FAIL YOK; okunamazsa ÖLÇÜLEMEDİ (WARN)."""
+    if not _WINDOWS:
+        return []
+    shimler = sorted(ad for ad, yol in bulunan.items()
+                     if yol and Path(yol).with_suffix(".ps1").is_file())
+    try:
+        pol, kaynak = _ps_etkin_politika(okuyucu)
+    except Exception as e:  # noqa: BLE001
+        return [(WARN, f"PowerShell yürütme politikası ÖLÇÜLEMEDİ ({type(e).__name__}: {e}) — "
+                       f"npm .ps1 shim'lerinin ({', '.join(shimler) or 'yok'}) PowerShell'de "
+                       f"çağrılabilirliği BİLİNMİYOR [{_PS_KAPSAM}]")]
+    if pol.lower() in _PS_ENGELLEYEN and shimler:
+        if kaynak.startswith("GPO"):
+            care = ("politika GPO'dan geliyor, `Set-ExecutionPolicy` onu EZEMEZ — "
+                    "`<ad>.cmd` ya da Git Bash kullan (kalıcı çözüm: BT/GPO)")
+        else:
+            care = ("`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` ya da "
+                    "`<ad>.cmd` / Git Bash kullan")
+        return [(WARN, f"PowerShell yürütme politikası {pol} ({kaynak}) — PowerShell'de çıplak "
+                       f"{', '.join(shimler)} `.ps1` shim'ine çözülür ve BLOKLANIR "
+                       f"(UnauthorizedAccess; 1d PASS'ı yalnız PATH varlığıdır). Çare: {care} "
+                       f"[{_PS_KAPSAM}]")]
+    if pol.lower() in _PS_ENGELLEYEN:
+        return [(PASS, f"PowerShell yürütme politikası {pol} ({kaynak}) — PATH'teki CLI'ların "
+                       f"yanında .ps1 shim'i yok, çağrılabilirliğe etkisi yok [{_PS_KAPSAM}]")]
+    return [(PASS, f"PowerShell yürütme politikası {pol} ({kaynak}) — .ps1 shim'leri "
+                   f"({len(shimler)}) PowerShell'de çalışır [{_PS_KAPSAM}]")]
 
 
 # ---------------------------------------------------------------- katman 2
@@ -337,17 +434,57 @@ def katman2() -> list[Sonuc]:
 
 # ---------------------------------------------------------------- katman 3
 
+# Q336 (Issue #275, 2026-09-18): LITE kipler. PROJECT_BOOTSTRAP LITE akışı (repo_mode
+# local|none) STEP 1'i — ruleset kurulumu dahil — ATLATIR; `init_project` ruleset
+# talimatını yalnız `full`'da basar. ix_doctor bunu okumuyordu ⇒ local projede K3 kalıcı
+# FAIL (ruleset yok) ve sonuç hesap planına göre WARN↔FAIL değişiyordu.
+# ⚠ GEVŞETME (bilinçli, dar): YALNIZ bu iki değer. Anahtar yok / `full` / TANINMAYAN
+# değer ⇒ bugünkü davranış AYNEN (fail-safe: yazım hatası denetimi kapatmaz).
+_LITE_REPO_MODLARI = ("local", "none")
+
+
+def _repo_modu() -> str:
+    """project.yaml `repo_mode` (küçük harf, kırpılmış); yoksa "" (= full davranışı)."""
+    v = cfg("repo_mode")
+    return str(v).strip().lower() if v not in (None, "") else ""
+
+
 def katman3() -> list[Sonuc]:
     r: list[Sonuc] = []
+    mod = _repo_modu()
+    lite = mod in _LITE_REPO_MODLARI
+    org, repo = _remote_org_repo(PROJ)
+    if lite:
+        # INFO etiketi YOK (ix_doctor --json şeması PASS/WARN/FAIL/SKIP; parity_probe +
+        # fixture'lar tüketir) ⇒ "remote var" bilgisi SKIP mesajının içinde taşınır.
+        uzak = (f" · remote VAR ({org}/{repo}) ama bu kipte ruleset/CI beklenmez — kasıtlı "
+                f"değilse ve GitHub korumaları isteniyorsa project.yaml `repo_mode: full` yap"
+                if org else " · proje remote'u yok")
+        r.append((SKIP, f"ruleset denetimi atlandı — repo_mode={mod}: LITE kipte GitHub "
+                        f"ruleset beklenmez (PROJECT_BOOTSTRAP LITE akışı STEP 1'i atlar){uzak}"))
+        r.append((SKIP, f"CI denetimi atlandı — repo_mode={mod}: LITE kipte CI koşusu beklenmez"))
+        if not org:
+            r.append((SKIP, f"core-sızıntı tree taraması atlandı — repo_mode={mod} ve proje "
+                            f"remote'u yok (taranacak uzak ağaç yok)"))
+            return r
     gh = shutil.which("gh")
     if not gh:
+        if lite:   # remote VAR: 3c (sızıntı) anlamlı ama ölçülemiyor → sessiz geçilmez
+            return r + [(WARN, "gh CLI yok — remote'lu projede core-sızıntı tree taraması "
+                               "ÖLÇÜLEMEDİ; gh CLI kur (https://cli.github.com) + `gh auth login`")]
         return [(SKIP, "gh CLI yok — GitHub-enforce katmanı atlandı"),
                 (WARN, "gh CLI kur (https://cli.github.com) + `gh auth login` → bu katman koşulabilsin")]
-    org, repo = _remote_org_repo(PROJ)
     if not org:
         return [(WARN, "proje remote'u çözülemedi — gh kontrolleri atlandı")]
     tam = f"{org}/{repo}"
+    if not lite:
+        r += _katman3_ruleset_ci(gh, tam)
+    r += _katman3_sizinti(gh, tam)
+    return r
 
+
+def _katman3_ruleset_ci(gh: str, tam: str) -> list[Sonuc]:
+    r: list[Sonuc] = []
     # 3a — ruleset'ler ACTIVE
     rc, out = _run([gh, "api", f"repos/{tam}/rulesets"], timeout=30)
     if rc != 0:
@@ -385,8 +522,13 @@ def katman3() -> list[Sonuc]:
                                     f"{son.get('conclusion')} — kasıtlı test değilse incele"))
         except Exception as e:
             r.append((WARN, f"CI yanıtı parse edilemedi: {e}"))
+    return r
 
-    # 3c — org-repo tree'de core-içerik sızıntısı yok
+
+def _katman3_sizinti(gh: str, tam: str) -> list[Sonuc]:
+    r: list[Sonuc] = []
+    # 3c — org-repo tree'de core-içerik sızıntısı yok (repo_mode'dan BAĞIMSIZ: remote'a
+    #      push edilen her ağaçta sızıntı anlamlıdır)
     rc, out = _run([gh, "api", f"repos/{tam}/git/trees/HEAD?recursive=1",
                     "--jq", "[.truncated, ([.tree[].path | select(startswith(\"core/\"))] | length)] | @tsv"],
                    timeout=60)
@@ -623,6 +765,28 @@ def _kablolama_kontrol() -> list:
 _CONN_ZORUNLU = ("ADT_SAP_URL", "ADT_SAP_USER", "ADT_SAP_PASSWORD", "ADT_SAP_CLIENT")
 
 
+def _mcp_import_kontrol() -> Sonuc:
+    """5b2 — `mcp_servers.sap_adt.server` bu yorumlayıcıyla import edilebiliyor mu.
+
+    ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: ortak yardımcı yüklenemezse PASS değil FAIL (neden yazılı).
+    Başarısızlıkta mesaj, alt sürecin SON anlamlı satırını taşır (traceback başlığı DEĞİL).
+    """
+    try:
+        from utils.mcp_import_denetimi import mcp_import_denetimi, KAPSAM  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        return (FAIL, f"MCP server import denetimi ÖLÇÜLEMEDİ — ortak yardımcı yüklenemedi "
+                      f"({type(e).__name__}: {e}); import sağlığı BU KOŞUMDA ölçülmedi "
+                      f"(TEMİZ demek DEĞİL)")
+    ok, ayrinti = mcp_import_denetimi(CORE_ROOT, PROJ)
+    req = CORE_ROOT / "mcp_servers" / "sap_adt" / "requirements.txt"
+    if ok:
+        return (PASS, f"MCP server import edilebilir (import-ok; yorumlayıcı {sys.executable}) "
+                      f"[{KAPSAM}]")
+    return (FAIL, f"MCP server IMPORT EDİLEMİYOR — {ayrinti} · sunucu açılmaz (oturumda "
+                  f"sap-adt 'Connection closed'). Onarım: \"{sys.executable}\" -m pip install "
+                  f"-r \"{req}\" (requirements `mcp<2` sınırını taşır) [{KAPSAM}]")
+
+
 def katman5(live_sap: bool) -> list[Sonuc]:
     r: list[Sonuc] = []
 
@@ -650,6 +814,12 @@ def katman5(live_sap: bool) -> list[Sonuc]:
     mcp = PROJ / "core" / "mcp_servers" / "sap_adt" / "server.py"
     r.append((PASS, f"MCP server junction'dan erişilebilir: {mcp}") if mcp.is_file()
              else (FAIL, f"MCP server dosyası junction'dan ERİŞİLEMİYOR: {mcp}"))
+
+    # 5b2 — MCP server IMPORT edilebiliyor mu (Q335-C, Issue #274). ⛔ `.conn_adt`'den
+    #       BAĞIMSIZ koşar: dosya var ama import çöküyorsa sunucu hiç açılmaz (mcp 2.x
+    #       vakası — 5b PASS, 5a bağlantısız projede FAIL'di ve kusuru HİÇBİR katman
+    #       görmüyordu). Yöntem team_setup smoke'uyla ORTAK (`utils.mcp_import_denetimi`).
+    r.append(_mcp_import_kontrol())
 
     # 5c — canlı SAP probe (yalnız --live-sap; default'ta ağ denemesi YOK)
     if not live_sap:
@@ -732,7 +902,7 @@ KATMANLAR: list[tuple[int, str]] = [
     (2, "GIT (remote/main/stable/hooksPath/baseline/tree)"),
     (3, "GITHUB ENFORCE (ruleset/CI/sızıntı)"),
     (4, "CLAUDE KATMANI (drift/manifest/hook-smoke)"),
-    (5, "MCP / SAP (.conn_adt/junction-erişim/canlı-probe)"),
+    (5, "MCP / SAP (.conn_adt/junction-erişim/import/canlı-probe)"),
     (6, "VALIDATORS + PERF (run_all + session_start süresi)"),
     (7, "İŞ-AKIŞI SMOKE (memory/deploy-zinciri/.rules.md)"),
 ]

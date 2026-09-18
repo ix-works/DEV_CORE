@@ -694,7 +694,15 @@ def alt_arac(proje: Path, ad: str, non_fatal_msg: str) -> None:
         f"{ad} (exit {r.returncode}) {(r.stdout or '').strip().splitlines()[-1][:70] if (r.stdout or '').strip() else non_fatal_msg}")
 
 
-def smoke(proje: Path) -> None:
+def smoke(proje: Path) -> bool:
+    """statusline smoke (WARN-düzeyi) + MCP server import smoke (FAIL-düzeyi).
+
+    Dönüş: MCP import smoke başarılı mı. ⛔ Q335 (Issue #274, 2026-09-18): eskiden import
+    smoke'u WARN'dı ve çıktının İLK 60 karakterini basıyordu (`Traceback (most recent ...`);
+    kurulum yine `team_setup TAMAM` + exit 0 ile bitiyordu ⇒ MCP sunucusu açılamayan kurulum
+    "tamam" görünüyordu. Yöntem artık TEK KAYNAKTA (`utils.mcp_import_denetimi`, ix_doctor
+    K5 ile ORTAK); hata satırı SON anlamlı satırdır.
+    """
     st = CORE_ROOT / "scripts" / "statusline.py"
     try:
         r = subprocess.run([sys.executable, str(st)], input="{}", capture_output=True,
@@ -702,12 +710,23 @@ def smoke(proje: Path) -> None:
         say(OK if r.returncode == 0 else WARN, f"statusline smoke (exit {r.returncode})")
     except subprocess.TimeoutExpired:
         say(WARN, "statusline smoke timeout")
-    env = dict(os.environ, PYTHONPATH=str(CORE_ROOT), CLAUDE_PROJECT_DIR=str(proje))
-    r = subprocess.run([sys.executable, "-c",
-                        "import mcp_servers.sap_adt.server; print('import-ok')"],
-                       capture_output=True, text=True, cwd=proje, env=env, timeout=60)
-    say(OK if "import-ok" in (r.stdout or "") else WARN,
-        f"MCP server import smoke ({((r.stdout or r.stderr) or '').strip()[:60]})")
+    try:
+        if str(CORE_ROOT / "scripts") not in sys.path:
+            sys.path.insert(0, str(CORE_ROOT / "scripts"))
+        from utils.mcp_import_denetimi import mcp_import_denetimi, KAPSAM  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        say(FAIL, f"MCP server import smoke ÖLÇÜLEMEDİ — ortak yardımcı yüklenemedi "
+                  f"({type(e).__name__}: {e}); import sağlığı bilinmiyor (temiz demek DEĞİL)")
+        return False
+    ok, ayrinti = mcp_import_denetimi(CORE_ROOT, proje, timeout=60)
+    if ok:
+        say(OK, f"MCP server import smoke (import-ok; yorumlayıcı {sys.executable}) [{KAPSAM}]")
+    else:
+        say(FAIL, f"MCP server import smoke BAŞARISIZ — {ayrinti} · sap-adt MCP sunucusu bu "
+                  f"kurulumda AÇILMAZ. Onarım: \"{sys.executable}\" -m pip install -r "
+                  f"\"{REQ_FILE}\" (requirements `mcp<2` sınırını taşır), sonra team_setup'ı "
+                  f"yeniden koş [{KAPSAM}]")
+    return ok
 
 
 def main() -> int:
@@ -820,8 +839,12 @@ def main() -> int:
 
     if not (proje / ".conn_adt").exists():
         say(WARN, ".conn_adt YOK — SAP için doldurulmalı (PROJECT_BOOTSTRAP STEP 4)")
-    if not a.no_smoke:
-        smoke(proje)
+    # Q335: MCP import smoke başarısızsa kurulum TAMAM DEĞİLDİR — E-05 bloğundaki mevcut
+    # sözleşme (FAIL satırı + `return 1`) aynen; yeni çıkış kodu/biçim icat edilmedi.
+    if not a.no_smoke and not smoke(proje):
+        say(FAIL, "team_setup BAŞARISIZ (MCP server import smoke) — sap-adt MCP sunucusu "
+                  "açılamaz; yukarıdaki FAIL satırındaki onarımı uygula ve yeniden koş.")
+        return 1
     say(OK, "team_setup TAMAM — kabul gate'i: oturum aç → ekran-teyidi + MCP ping + validators")
     return 0
 
