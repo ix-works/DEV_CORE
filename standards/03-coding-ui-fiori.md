@@ -279,25 +279,44 @@ FIORI_TOOLS_USER="$U" FIORI_TOOLS_PASSWORD="$P" \
 
 ---
 
-## 2.5 index.html — UI5 Sürüm Sabitleme (ZORUNLU)
+## 2.5 index.html — UI5 Bootstrap: SAP sunucusunun KENDİ UI5'i (ZORUNLU)
 
-`index.html` bootstrap'ı **sabit UI5 sürümüyle** yüklenir; `manifest.json`
-`minUI5Version` ile aynı olmalı. Sürümsüz CDN (latest) core ↔ locale-data skew
-yaratır.
+`index.html` bootstrap'ı UI5'i **backend'in kendi UI5 kopyasından**, kök-göreli yolla yükler.
+Böylece sürüm **daima backend ile birebir aynıdır** (FLP'nin kullandığı kopya) ve dış CDN'in
+yaşam döngüsüne bağımlı kalınmaz. `manifest.json` `minUI5Version` backend sürümüyle aynı olmalı.
 
 ```html
 <!-- DOĞRU -->
 <script id="sap-ui-bootstrap"
-  src="https://ui5.sap.com/1.120.23/resources/sap-ui-core.js"
+  src="/sap/public/bc/ui5_ui5/resources/sap-ui-core.js"
   data-sap-ui-theme="sap_horizon"
   data-sap-ui-language="tr" ...></script>
 
-<!-- YASAK: src=".../resources/sap-ui-core.js" (sürümsüz) -->
+<!-- YASAK: src="resources/sap-ui-core.js"              (sürümsüz/göreli — BSP altında çözülmez)  -->
+<!-- YASAK: src="https://ui5.sap.com/<sürüm>/resources/…" (CDN — bakım dışı patch'ler silinir)     -->
 ```
 
-**Vaka (ZSD001 ORDER, 2026-05-15):** sürümsüz bootstrap + `tr` locale →
+- **Deploy edilmiş BSP:** `/sap/public/bc/ui5_ui5/…` aynı host'ta çözülür (FLP'nin UI5'i).
+- **Lokal `fiori run`:** `ui5.yaml`'daki `backend: - path: /sap` proxy'si bu yolu backend'e taşır
+  (§2.3) — ek ayar gerekmez. `/test-resources` backend'de yoktur (404); `test/flpSandbox.html`
+  gibi sandbox sayfaları CDN'de kalabilir (canlıya gitmez).
+- **Doğrulama:** konsolda `sap.ui.version` = backend sürümü ve
+  `…/resources/sap/ui/core/cldr/<dil>.json` **200** olmalı; tarih ayı proje dilinde basılmalı
+  (örn. TR: "23 Eyl 2026").
+
+**Vaka 1 (2026-05-15):** sürümsüz bootstrap + `tr` locale →
 `TypeError: this.oLocaleData.getDatePlaceholder is not a function`
-(`DateRangeSelection` çöktü, beyaz ekran). Sürüm 1.120.23'e sabitlenince çözüldü.
+(`DateRangeSelection` çöktü, beyaz ekran). Sürüm sabitlenince çözüldü — **kök neden core ↔ locale-data
+sürüm farkı**; backend'in kendi kopyası bu farkı tanım gereği sıfırlar.
+
+**Vaka 2 (2026-09-23):** CDN'de sabitlenen patch (`1.120.23`) bakım dışı kalınca
+`ui5.sap.com/versionoverview.json`'da `removed: true` işaretlendi ve silme **yarım** yapıldı:
+`sap-ui-core.js` 200 ama `cldr/tr.json`·`fr`·`it` 404 (`de`/`en` 200) ⇒ UI5 sessizce `en`'e
+düşüp tarihleri İngilizce bastı ("Sep 21, 2026"); hata/uyarı yok. FLP etkilenmediği için canlı
+kullanıcı görmedi — yalnız doğrudan BSP URL ve lokal test. ⇒ **CDN pin'i "sabit" değildir;
+patch'ler takvimle silinir.**
+Denetim: `playbook/checklists/bug-checklist-frontend.md` **FE-46** · ders `playbook/lessons-learned.md` **PATTERN #37**.
+
 Ayrıca `Component.js`'te `sap/ui/model/json/JSONModel` **define bağımlılığı**
 olmadan global `sap.ui.model.json.JSONModel` kullanımı = async/strict'te fırlatır
 → her zaman `sap.ui.define([...])` ile require et.
@@ -490,7 +509,7 @@ sap.ui.define([
     </style>
     <script
         id="sap-ui-bootstrap"
-        src="resources/sap-ui-core.js"
+        src="/sap/public/bc/ui5_ui5/resources/sap-ui-core.js"
         data-sap-ui-theme="sap_horizon"
         data-sap-ui-resource-roots='{
             "com.example.<alan>.<uygulama>": "./"

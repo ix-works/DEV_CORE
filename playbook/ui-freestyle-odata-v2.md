@@ -33,8 +33,8 @@ source: ORDER (ZSD001) ilk freestyle RAP-tüketen UI — ilk yayından kapanış
 
 Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağla**:
 
-1. **Bootstrap (kopyala, doğrulanmış):** `index.html` UI5 sürümü **PIN'li**
-   (`https://ui5.sap.com/1.120.x/resources/sap-ui-core.js`) +
+1. **Bootstrap (kopyala, doğrulanmış):** `index.html` UI5 **backend'in kendi kopyasından**
+   (`/sap/public/bc/ui5_ui5/resources/sap-ui-core.js` — standards/03 §2.5; CDN pin'i YASAK) +
    `data-sap-ui-language="tr"`. `manifest.json` modelleri: `i18n` +
    `""` (OData V2: `defaultBindingMode:TwoWay`, `useBatch:false`,
    `defaultCountMode:Inline`) + `ui` (JSON: `{busy,filter:{}}`).
