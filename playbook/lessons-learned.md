@@ -424,9 +424,11 @@ Tipik çift-yaşam yerleri: changelog tablo satırı ↔ altındaki açıklama b
   · **Doğrudan hedef tabloya inmek** (`matdoc` + `record_type`/`header_counter`) — çalışır ama
     SAP'nin uyumluluk semantiğini **elle taklit** etmek demektir; SAP tabloyu genişletince
     sessizce kayar.
-  · **View entity'ye çevirmek** — Open SQL yönlendirmesi devreye girer, AMA view entity **DB
-    view ÜRETMEZ** → `USING <sql_view>` yapan AMDP kırılır. Classic view bilinçli seçildiyse
-    (AMDP zinciri) bu seçenek tasarımı bozar.
+  · **View entity'ye çevirmek** — ⛔ **ÇÖZMEZ** *(düzeltme 2026-09-23: eski metin "Open SQL
+    yönlendirmesi devreye girer" diyordu — canlı ölçüm çürüttü)*: `MSKU` üzerine kurulu bir Z view
+    entity 0 satır döndü, aynı Open SQL 3 satır; fiziksel tabloda anahtarlar vardı, miktarlar 0.
+    View entity de fiziksel tabloyu okur. Üstelik DB view üretmediği için `USING <sql_view>` yapan
+    AMDP'yi de kırar. Miktar için released `I_MaterialStock_2` (group by + sum) ya da `nsdm_e_*`.
 - **Kapsam taraması (aynı tuzak başka nerede?):** `DD26S`'te Z view'ları tara, ama **genel
   `viewname LIKE 'Z%'` sorgusu satır tavanına `ZZ1_*` uzantı view'larıyla dayanır** → tabloyu
   önek önek böl (`tabname LIKE 'MS%'`, `'MB%'`, …) ve **kırpılmadığını göster**. Kırpılmış bir
