@@ -123,8 +123,19 @@ sözdizimi + uygulanamadığı yerler: **CDS-DCL-01** (yukarıda) · reviewer: c
 fiziksel tablo **boş**. Yönlendirme **Open SQL katmanındadır** — `SELECT ... FROM mseg` çalışır.
 Classic DDIC view ise **DB seviyesinde** üretilip fiziksel tabloyu okur; onun yönlendirilmesi
 view'ın kendi **`DD25L-VIEWREF`**'ine bağlıdır ve bu **yalnız SAP'nin kendi view'larında** dolu
-olur — Z view'ında **asla**. **View entity'de bu sorun YOKTUR** (Open SQL yolundan geçer) — ama
-view entity **DB view üretmez**, yani AMDP `USING` zinciri varsa çözüm o değildir.
+olur — Z view'ında **asla**. ⛔ **View entity de bu tuzağa DÜŞER** *(düzeltme 2026-09-23 — eski
+metin "view entity'de bu sorun YOKTUR (Open SQL yolundan geçer)" diyordu; canlı ölçüm ÇÜRÜTTÜ)*:
+`MSKU` üzerine kurulu bir Z **view entity** `COUNT(*)=0` döndü; aynı süzgeçli Open SQL `msku` 3 satır,
+fiziksel tablo (yönlendirmesiz klasik view ile okundu) **anahtarları taşıyordu ama tüm miktarlar
+0**'dı ⇒ view entity de **fiziksel tabloyu** okur, Open SQL yönlendirmesinden GEÇMEZ.
+**Tuzağın biçimi tabloya göre değişir:** `MSEG`/`MKPF`'te fiziksel tablo **boş** (0 satır);
+`MSKU` gibi stok tablolarında **satırlar/anahtarlar VAR, miktar alanları 0** ⇒ `kulab > 0` gibi bir
+süzgeç sessizce 0 satır, süzgeçsiz okuma ise "stok 0" gösterir (daha sinsi).
+**Yerine (view entity):** released stok görünümü **`I_MaterialStock_2`** (hareket düzeyi ⇒
+`group by` + `sum(MatlWrhsStkQtyInMatlBaseUnit)`; `InventorySpecialStockType`/`InventoryStockType`
+ile süz — ör. müşteri konsinyesi serbest = `'W'` + `'01'`) ya da `nsdm_e_*` (released DEĞİL — clean
+core politikasına bak). Classic view'da ek olarak: view entity **DB view üretmez**, yani AMDP
+`USING` zinciri varsa view entity'ye çevirmek de çözüm değildir.
 
 **Etkilenen tablo sınıfı (tam liste sistemden okunur):**
 ```
@@ -132,7 +143,11 @@ SELECT tabname, viewref FROM dd02l WHERE as4local = 'A' AND viewref <> ''
 ```
 MM-IM: `MSEG` `MKPF` · Stok: `MSSA` `MSSL` `MSSQ` `MSCD` `MSFD` `MSID` `MSKU` `MSLB` `MSPR` ·
 Değerleme: `MBEW` `EBEW` `OBEW` `QBEW` `VMBEW` (+`*H` tarihsel) · `MARCH` `MARDH` `MCHBH` `MKOLH` …
-⚠ `MARA`/`MARC`/`MAKT` replacement **DEĞİLDİR** — onlar classic view'da serbesttir.
+⚠ `MARA`/`MAKT` replacement **DEĞİLDİR**. ⛔ **`MARC` replacement'TIR** (`VIEWREF = NSDM_V_MARC`,
+ölçüldü 2026-09-23 — eski metin "MARC değildir" diyordu) — ama yalnız **stok/miktar alanları**
+etkilenir; ana veri alanları (ör. `STAWN`) fiziksel tabloda doğru okundu (canlı kıyas). Kural:
+replacement tablodan **miktar** okuyorsan yukarıdaki yola geç; ana veri okuyorsan satır kıyasıyla
+kanıtla, varsayma.
 
 **Teşhis (view zaten 0 satır dönüyorsa):**
 ```
