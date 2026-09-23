@@ -923,3 +923,32 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
 - **Gate?** ⛔ HAYIR (ADR 0019 ⑤ — önce doküman denendi mi?). Bugünkü çare: bu kural + kayıt yazarken
   *"bu dosyayı şu an başkası düzenliyor mu?"* sorusu. Mekanik bir çare mümkündür (atıfları `git`
   mtime'ıyla karşılaştıran bir denetçi) ama **bugün yazılmadı** — yazıldığı gün bu satır güncellenir.
+
+### PATTERN #37: **Dış CDN'e "sabitlenmiş" sürüm SABİT DEĞİLDİR — patch silinince uygulama HATASIZ bozulur**
+
+- **Belirti:** Uygulama açılıyor, konsolda anlamlı hata yok, ama tarih/ay adları proje dili yerine
+  İngilizce basılıyor ("Sep 21, 2026"). Aynı uygulama FLP'den açılınca **doğru** görünüyor ⇒ "sorun
+  lokal ortamda / Windows bölge ayarında / tarayıcı önbelleğinde" diye yanlış yere bakılıyor.
+- **Ölçülmüş vaka (2026-09-23):** standart, `index.html` bootstrap'ını CDN'deki bir patch'e
+  (`ui5.sap.com/1.120.23`) sabitliyordu — gerekçesi doğruydu (sürümsüz CDN core ↔ locale-data farkıyla
+  çökmüştü). Patch bakım dışı kalınca `versionoverview.json`'da `removed: true` oldu ve silme **yarım**
+  yapıldı: `sap-ui-core.js` **200**, `cldr/tr.json`·`fr`·`it` **404**, `de`/`en` **200**. UI5 locale
+  verisini bulamayınca **sessizce `en`'e düştü**. 18 uygulamanın hepsi etkilendi; FLP backend'in
+  kendi UI5'ini kullandığı için canlı kullanıcı görmedi, yalnız doğrudan BSP URL + lokal testte çıktı.
+  Kullanıcının önceki ekran görüntüsündeki doğru tarih ("23 Eyl") büyük olasılıkla silme öncesi
+  önbellekti — yani belirti **aynı gün** içinde "vardı/yoktu" gibi göründü.
+- **Denenip çalışmayan:** lokal `ui5.yaml` `ui5:` proxy'sini backend'e yönlendirmek (`pathReplace`)
+  — proxy doğru dosyayı 200 ile verdi ama **hiçbir etkisi olmadı**: `index.html` mutlak CDN adresi
+  kullandığı için istek proxy'ye hiç uğramıyordu. *"Proxy doğru servis ediyor" ≠ "uygulama proxy'den
+  yüklüyor"* — kod ≠ kablolama.
+- **Teşhisi kısaltan ölçüm:** *"bizim kodumuz farklı mı?"* sorusuna kod okuyarak değil, kaynağı
+  **dosya dosya HTTP ile** yoklayarak cevap verildi (CDN'de `tr.json` 404 ↔ backend'de 200) + kontrol
+  grubu olarak **bir sonraki patch** (1.120.30'da hepsi 200) ⇒ kusur kodda değil, dağıtım kaynağında.
+- **Genel kural:** Çalışma zamanı bağımlılığını **kontrolün dışındaki** bir dağıtım noktasına
+  sabitlemek, "sürüm sabit" güvencesi vermez — dağıtıcı eski sürümü **takvimle siler**, üstelik
+  silme atomik olmayabilir. Aynı güvenceyi veren **kendi** kaynağın varsa (burada backend'in UI5'i,
+  FLP'nin kullandığıyla aynı) onu kullan; sürüm tanım gereği eşitlenir.
+- **Çare:** `standards/03-coding-ui-fiori.md` §2.5 (bootstrap = `/sap/public/bc/ui5_ui5/resources/…`)
+  + `bug-checklist-frontend.md` **FE-46** (grep ile yakalanabilir). **Gate?** ⛔ şimdilik HAYIR
+  (ADR 0019: önce doküman/checklist) — FE-46 "Automatable ✅" işaretli; tekrarlarsa validator adayıdır.
+- **Referans:** std 03 §2.5 · FE-46 · PATTERN #19 (kontrol grubu) · core §1.1 *"kod ≠ kablolama"*

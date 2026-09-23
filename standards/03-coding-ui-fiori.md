@@ -315,6 +315,7 @@ sürüm farkı**; backend'in kendi kopyası bu farkı tanım gereği sıfırlar.
 düşüp tarihleri İngilizce bastı ("Sep 21, 2026"); hata/uyarı yok. FLP etkilenmediği için canlı
 kullanıcı görmedi — yalnız doğrudan BSP URL ve lokal test. ⇒ **CDN pin'i "sabit" değildir;
 patch'ler takvimle silinir.**
+Denetim: `playbook/checklists/bug-checklist-frontend.md` **FE-46** · ders `playbook/lessons-learned.md` **PATTERN #37**.
 
 Ayrıca `Component.js`'te `sap/ui/model/json/JSONModel` **define bağımlılığı**
 olmadan global `sap.ui.model.json.JSONModel` kullanımı = async/strict'te fırlatır
