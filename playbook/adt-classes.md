@@ -4,7 +4,7 @@ layer: L3
 scope: project-wide
 type: playbook
 applies-to: backend
-last-updated: 2026-05-14
+last-updated: 2026-09-24
 status: active
 ---
 
@@ -539,14 +539,73 @@ python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --name
 
 ---
 
-## `run_pretty_printer.py` — sunucu-tarafı ABAP biçimlendirme
+## `run_pretty_printer.py` — SAP Pretty Printer çıktısını ALIR (sunucuya YAZMAZ)
 
-> **Ne zaman:** elle düzenlenmiş ABAP kaynağını SAP'nin kendi Pretty Printer'ıyla
-> biçimlendirmek gerektiğinde (girinti/büyük-küçük harf). Zorunlu adım DEĞİL.
+> **Ne zaman:** bir ABAP kaynağının SAP'nin kendi Pretty Printer'ına göre nasıl görünmesi
+> gerektiğini görmek için. Zorunlu adım DEĞİL.
 
 ```bash
 python core/scripts/run_pretty_printer.py --object-name ZCL_SD001_ORDER --object-type class --cwd <proje-kökü>
 ```
-- ⚠ Sunucuda çalışır ve kaynağı **değiştirir** → çalıştırmadan önce yerel kopyanın taze
-  olduğundan emin ol (PULL-BEFORE-EDIT, ADR 0016); sonrasında tekrar çek ki repo ile canlı ayrışmasın.
-- 2026-08-01 bug-avı notu: çağrılmayan/belgesiz script'ti → referans buraya eklendi (T9).
+- ⛔ **Kaynağı DEĞİŞTİRMEZ.** `POST /sap/bc/adt/abapsource/prettyprinter` durumsuz bir biçimleme
+  servisidir: lock / PUT / activate / transport YOK; biçimlenmiş metin ekrana basılır. Kalıcı kılmak
+  için metni yerel dosyaya al ve AYRI bir push adımıyla yaz (`push_object.py`). *(Bu bölüm 2026-09-24'e
+  kadar "sunucuda çalışır ve kaynağı değiştirir" diyordu — YANLIŞTI; 2026-08-20'de ölçülerek çürütüldü:
+  koşum öncesi/sonrası aktif kaynak SHA'sı aynı. Araç çıktısı core#147'de düzeltildi, bu satır bayat kalmıştı.)*
+- ⚠ Kapsamı dar: yalnız **canlı** `source/main`'i okur. Yerel (düzenlenmiş) dosyayı ya da sınıf alt
+  include'larını (`ccau`/`ccimp`/`ccdef`) biçimlemek için aynı ucu doğrudan çağır — uç kendisine verilen
+  her metni biçimler (`object_url` kullanılmaz):
+  `SAPClient().adt_client.pretty_print(None, <kaynak metni>)`.
+- Uç **kullanıcının ADT Pretty Printer ayarını** kullanır (`GET /sap/bc/adt/abapsource/prettyprinter/settings`
+  → ör. `style="keywordUpper"` `indentation="true"`). ATC ise kendi varyant parametrelerini kullanır
+  (aşağıda) — ikisi farklıysa sonuç ATC'yi tatmin etmez.
+
+### ATC "Incorrect Pretty Print state" — mekanizma ve nasıl kapatılır
+
+> **Kanıt (s4_private 2025, yerel ATC koşumu; standart sınıf canlı okundu 2026-09-24):** bulgu standart
+> check **`CL_CI_TEST_PRETTY_PRINT`** (ATC check tipi `CI_PRETTY_PRINT`) `RUN` metodundan gelir.
+
+**Mekanizma (kaynak kodundan):**
+1. Taranan objenin program seviyeleri (`REF_SCAN->LEVELS`, `TYPE = 'P'`) **birim**dir. Sınıfta:
+   her metot kendi include'u (`…CM###`) ⇒ **metot başına bir birim**; `ccau` / `ccimp` / `ccdef` /
+   `ccmac` ⇒ **include'un tamamı tek birim**. Fonksiyon grubunda `TOP` ve main include'u ayrı birimdir.
+2. İsim son eki `CP` / `CU` / `CO` / `CI` / `IP` / `IU` olan seviyeler **dışlanır** (`check … <> 'CU'` vb.)
+   ⇒ sınıfın **public/protected/private section tanımları kontrol EDİLMEZ**: `METHODS` parametre hizası
+   farklı olsa da orada bulgu çıkmaz.
+3. Her birim `PRETTY_PRINTER` FM'iyle biçimlenip satır satır karşılaştırılır; **ilk farklı satırda TEK
+   bulgu** (`INFORM`) üretilir ve döngüden `exit` ile çıkılır ⇒ birimdeki diğer farklar **raporlanmaz**.
+   Konum, birim içi satırdır (metotta `…#type=CLAS/OM;name=<METOT>;start=<n>`).
+4. Biçim ayarı `CASE` / `INDENT` / `KEEP_CASE` = **ATC varyantının check parametreleri** (kişisel tercih değil).
+
+**Sonuç:** bulgunun gösterdiği satırı düzeltmek bulguyu kapatmaz — bir sonraki ATC koşusunda aynı birimin
+bir sonraki farkı raporlanır. **Birim bütünüyle** biçimlenmelidir.
+
+**Reçete (ölçülmüş: 10 sınıf / 23 bulgu → 0, yeni bulgu 0):**
+1. **Kardeş taraması:** paketteki tüm sınıflarda ATC koş (`run_atc_check.py --variant <ATC_VARIANT>`),
+   `Incorrect Pretty Print state` konumlarını topla. Taban ATC çıktısını **sakla** (sonradan küme farkı için).
+2. PULL-BEFORE-EDIT: dokunulacak her include'da canlı aktif kaynak == yerel dosya (rstrip kıyas).
+3. Yerel dosyayı uçla biçimlet (`pretty_print(None, kaynak)`), farkı birimlere grupla; **yalnız ATC'nin
+   işaretlediği birimlere** uygula. İşaretsiz farklara (tanım bölümü hizası, bulgusuz birimler) dokunma.
+4. Davranış eşdeğerliğini mekanik kanıtla: kod token'ları küçük harfte eşit; `'…'` · `` `…` `` · `|…|`
+   şablon **metni** · yorum ve sözde yorumlar bayt bayt aynı; bir negatif test (kasıtlı bozuk kopya kırmızı).
+   Şablon içindeki `{ ifade }` koddur, harfi değişebilir.
+5. Push → readback (rstrip) → `adt_inactive_objects` → unit testler → ATC yeniden; Pretty Print sayısı 0
+   ve taban↔sonra **küme farkında YENİ bulgu 0**.
+
+**Tipik kök nedenler (aynı turda ölçüldü):** Open SQL'de karışık harfli CDS alan/görünüm adları
+(`SELECT SalesDocument …` → `salesdocument`); yerel tanımlayıcılar (`lhc_*`, `FOR ACTION entity~action`, `%param-Field`);
+imza/yapı bileşeni `TYPE` hizası; **`CALL FUNCTION … EXPORTING p = x`** gibi parametrenin anahtar kelimeyle
+aynı satırda olması (Pretty Printer satıra böler ⇒ dosya satır sayısı artar, `dosya:satır` yorum atıfları kayar).
+Sözde yorum `"#…` statement'ın ilk satırında kalır.
+
+**Sınır — ÖLÇÜLMEDİ:**
+- `RUN`'ın **uzak** dalı (`SRCID` + hedef sistem, merkezi ATC): `RS_ABAP_PRETTY_PRINT_E` RFC'si çağrılır ve o
+  dalda `exit` yoktur ⇒ birim başına birden çok bulgu mümkün olabilir; davranışı doğrulanmadı.
+- "Yalnız ilk satırı düzelt → yeniden koş → sıradaki satır çıkar" canlı denenmedi; sonuç kaynak kodun
+  zorunlu çıkarımıdır.
+- Resmî SAP dokümantasyonunda bu iç davranış bulunamadı.
+
+**Önceki vakalar (prior-art):** 2026-07/08'de bulgular ya muaf tutuldu ya da elle biçimlendirilerek
+düşürüldü (bir turda 7/7); biri "yorum hizası mı?" diye nedensellik kanıtlanamadan bırakıldı — bu
+mekanizma bilinmediği için. Fonksiyon grubu taramasında `TOP`/main'deki bulgular SAP'nin ürettiği iskelettir
+(bizim kodumuz değil).
