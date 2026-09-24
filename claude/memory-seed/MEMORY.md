@@ -132,10 +132,11 @@
 - ⭐ [Tr karakter varyantli arama](feedback_tr-karakter-varyantli-arama.md) — Müşteri/metin aramasında Türkçe İ/Ş/Ç varyantı — ASCII LIKE 'yok' der (TRİGO vakası)
 
 ### SAP · ABAP · RAP
-- **14 ders:** [tam indeks](_indeks-sap-abap-rap.md)
+- **15 ders:** [tam indeks](_indeks-sap-abap-rap.md)
 - ⭐ [Adt include objesi prog tipiyle 404 sahte negatif](feedback_adt-include-objesi-prog-tipiyle-404-sahte-negatif.md) — ADT araclarinda include objesi 'prog' tipiyle sorgulanirsa 404/exists:false doner — SAHTE NEGATIF; dogru tip 'include'
 - ⭐ [Bos gondermek hic gondermemek degildir](feedback_bos-gondermek-hic-gondermemek-degildir.md) — SAP API/BAPI'de bir alanı BOŞ göndermek ile HİÇ göndermemek farklı sonuç verir: boş = boş yaz, yok = kaynaktan türet
 - ⭐ [E070 as4date istegin tarihidir obje degisim tarihi adt versions](feedback_e070-as4date-istegin-tarihidir-obje-degisim-tarihi-adt-versions.md) — \"Bu obje ne zaman değişti\" sorusu E071×E070 ile ÇÖZÜLEMEZ — AS4DATE isteğin tarihidir; doğru araç ADT versions ucu (Accept - */* şart)
+- ⭐ [Msag tam put govdeden cikarmak silmez](feedback_msag-tam-put-govdeden-cikarmak-silmez.md) — Mesaj sınıfından mesaj SİLMEK: tam PUT gövdeden çıkarılanı SİLMEZ (200, no-op) — `<mc:deletedmessages>`; araç populate_message_class.py --delete
 
 ### UI · freestyle UI5
 - **4 ders:** [tam indeks](_indeks-ui.md)

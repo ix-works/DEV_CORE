@@ -4,7 +4,7 @@ layer: L3
 scope: project-wide
 type: playbook
 applies-to: both
-last-updated: 2026-05-14
+last-updated: 2026-09-24
 status: active
 purpose: Tekrarlayan hata pattern'leri ve trigger phrases
 ---
@@ -47,6 +47,7 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 | "doğrudan ileri gidiyorsun" | Backward verification atlandı | Audit yap, sonra ilerle |
 | "okudun mu" | Documentation skipped | İlgili dosyayı oku, sonra cevapla |
 | "kontrol et" / "test et" | Verification eksik | Code-level/SAP-level doğrulama |
+| "mesaj sil" · "atıl mesaj" · "SE91'den sil" · "PUT silmiyor" | Mesaj sınıfından mesaj silme — tam PUT gövdeden çıkarılanı SİLMEZ | **PATTERN #38** → `adt-message-class.md` §27.5 (`populate_message_class.py --delete`) |
 
 **Tepki protokolü:**
 1. Forward progress STOP — devam etme
@@ -952,3 +953,26 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
   + `bug-checklist-frontend.md` **FE-46** (grep ile yakalanabilir). **Gate?** ⛔ şimdilik HAYIR
   (ADR 0019: önce doküman/checklist) — FE-46 "Automatable ✅" işaretli; tekrarlarsa validator adayıdır.
 - **Referans:** std 03 §2.5 · FE-46 · PATTERN #19 (kontrol grubu) · core §1.1 *"kod ≠ kablolama"*
+
+---
+
+### PATTERN #38: **Mesaj sınıfından mesaj silmek: tam PUT gövdeden çıkarılanı SİLMEZ — silme `<mc:deletedmessages>` ile, `populate_message_class.py --delete`**
+
+- **Belirti:** atıl mesaj temizliği / "mesaj sil" / "SE91'den silmek lazım" / "PUT silmiyor" — mesaj
+  sınıfının tam gövdesi eksik listeyle PUT edildi, LOCK/PUT/UNLOCK 200 döndü, ama mesajlar yerinde.
+- **Ölçülmüş vaka (2026-09-24, `s4_private` 2025):** 229 mesajlı sınıfa 17'si çıkarılmış 212'lik tam
+  gövde → üç çağrı da 200, T100 **229 → 229**. Kaynak: `CL_ADT_MC_RES_CONTROLLER=>DO_UPDATE`'teki
+  "listede olmayanı sil" döngüsü **yorum satırında**. Aktif silme yolu gövdedeki
+  `<mc:deletedmessages mc:msgno="NNN"/>` koleksiyonu → `cl_adt_message_class_api=>delete( iv_number … )`.
+  Canlıda önce 1, sonra 16 mesaj tek PUT'ta silindi; kalanlar birebir.
+- **Yanlış sonuçlar (hepsi bu turda yazılmıştı):** *"PUT listesi REPLACE eder"* (çürüdü) ·
+  *"ADT REST'te silme yolu yok, yalnız SE91"* (çürüdü) · mesaj alt kaynağı `/messages/{nr}` LOCK/DELETE
+  (423/403 — kilit bırakılamamış kalabilir, TEKRARLAMA).
+- **Genel kural:** "PUT 200" silmenin kanıtı değildir — no-op da 200 döner. Silme sonucu yalnız
+  **önce/sonra mesaj kümesi** kıyasıyla söylenir (`changedAt` silmede güncellenmez). Boş `msgno`
+  SAP'de `000`'ı siler.
+- **Çare:** `python scripts/populate_message_class.py --name <MSAG> --transport <TRANSPORT> --delete
+  006,011` (önce `--dry-run`) — korumalar + önce/sonra kapısı araçta; exit 3 = kapı TUTMADI.
+  **Gate?** ⛔ HAYIR (ADR 0019) — araç kendi çıktısında kapıyı taşır; ayrı validator gerekmiyor.
+- **Referans:** [`adt-message-class.md`](adt-message-class.md) §27.5 (yöntem + kaynak kanıtı + T1–T13
+  tuzakları) · §27.6 (başarısız yollar) · PATTERN #19 (kontrol grubu) · PATTERN #16 (kapsam beyanı).

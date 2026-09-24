@@ -3,7 +3,7 @@ applies_to: [s4_private]
 layer: L3
 scope: project-wide
 type: index
-last-updated: 2026-05-14
+last-updated: 2026-09-24
 ---
 
 # Playbook — SAP ADT Operasyonel Pattern Bankası
@@ -24,7 +24,7 @@ Bu klasör **L3 katman** dosyaları içerir: SAP ADT REST işlemleri için **den
 | **Domain + Data Element (DTEL)** | [`adt-domain-dtel.md`](adt-domain-dtel.md) | §14 |
 | **Lock Object (ENQU/DL)** | [`adt-lock-objects.md`](adt-lock-objects.md) | §16 |
 | **CDS View (DDLS/DF)** | [`adt-cds.md`](adt-cds.md) | §17 |
-| **Mesaj Sınıfı (MSAG)** | [`adt-message-class.md`](adt-message-class.md) | §18 |
+| **Mesaj Sınıfı (MSAG)** — yarat · mesaj yaz · **mesaj SİL** | [`adt-message-class.md`](adt-message-class.md) | §18 · silme §27.5 (`populate_message_class.py --delete`; tam PUT gövdeden çıkarılanı SİLMEZ) |
 | **ABAP Class** (create, OSQLC, push+activate flow) | [`adt-classes.md`](adt-classes.md) | §19, §20, §26 |
 | **ABAP Report (PROG/P)** | [`adt-programs.md`](adt-programs.md) | §21 |
 | **Function Group + Function Module** (create/imza/RFC) + **Klasik Dynpro ekranı & GUI status ÜRETİMİ** | [`adt-fugr-functions.md`](adt-fugr-functions.md) | FG/FM tam pattern + §6 `ZSD000_FM_SCREEN_GEN` (RPY_DYNPRO_INSERT + RS_CUA, SOAP-RFC) — **yeni klasik ALV/Dynpro programında ÖNER** |
@@ -53,6 +53,7 @@ Her playbook section'ı `scripts/` altındaki **kanonik implementasyon**'a refer
 | Lock Object | [`scripts/create_lock_object.py`](../scripts/create_lock_object.py) | `adt-lock-objects.md` |
 | CDS View | [`scripts/create_cds_view.py`](../scripts/create_cds_view.py) | `adt-cds.md` |
 | Message Class | [`scripts/create_message_class.py`](../scripts/create_message_class.py) | `adt-message-class.md` |
+| Message Class — mesaj yaz / **sil** | [`scripts/populate_message_class.py`](../scripts/populate_message_class.py) (`--messages-csv` · `--delete NNN,...`) | `adt-message-class.md` §27.0 · §27.5 |
 | Class | [`scripts/create_object.py`](../scripts/create_object.py), [`push_object.py`](../scripts/push_object.py) | `adt-classes.md` |
 | Function Group | [`scripts/create_function_group.py`](../scripts/create_function_group.py) | `adt-fugr-functions.md` (placeholder) |
 | Function Module | [`scripts/create_function_module.py`](../scripts/create_function_module.py) | `adt-fugr-functions.md` (placeholder) |
