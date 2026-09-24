@@ -4,7 +4,7 @@ layer: L3
 scope: project-wide
 type: playbook
 applies-to: backend
-last-updated: 2026-05-14
+last-updated: 2026-09-24
 status: active
 ---
 
@@ -197,12 +197,28 @@ finally:
         pass
 ```
 
-### 27.5 Tam PUT — Replace Semantiği
+### 27.5 Tam PUT — EKLER/GÜNCELLER, SİLMEZ (ölçüldü 2026-09-24 — eski "REPLACE" iddiası ÇÜRÜDÜ)
 
-Önemli: PUT body'sindeki mesaj listesi **mevcut listeyi REPLACE eder**. Yani:
-- Mevcut 5 mesaj var → PUT 3 yeni mesaj → sonuçta 3 mesaj kalır (mevcut 5 silinir)
-- Mevcut 5 mesaj var + 5 mesaj korunmasını istiyorsan, PUT body'sine 5'i de eklemen lazım
-- `populate_message_class.py` bu mantığı tek-PUT olarak kullanır — CSV'deki mesajlar nihai liste olur
+> ⛔ **Önceki metin** *"PUT body'sindeki liste mevcut listeyi REPLACE eder, listede olmayan
+> silinir"* diyordu. **Silme yönünde ölçüldü ve TUTMADI** (`s4_private`, release 2025):
+> 229 mesajlı bir sınıfa, 17'si çıkarılmış **212 mesajlık** tam gövde §27.1 akışıyla
+> (LOCK → PUT, If-Match YOK → UNLOCK) gönderildi → LOCK/PUT/UNLOCK **üçü de 200**, ama
+> readback'te T100 **229 → 229** (17'sinin 17'si yerinde), metin/bayrak değişimi 0, sınıfın
+> `changedAt` değeri **değişmedi**. Karşılaştırma iki bağımsız kanaldan (T100 SQL + ADT GET).
+
+**Bugün kanıtlı olan (dar):**
+- Tam PUT, gövdedeki mesajları **ekler / metnini günceller** (bu yol defalarca readback'le doğrulandı).
+- Tam PUT, gövdede **olmayan** mesajı **SİLMEZ** — ölçülen tek vakada; başka sürüm/profil ÖLÇÜLMEDİ.
+- ⇒ `populate_message_class.py`'ye **eksik** CSV vermek bu sürümde mesaj kaybettirmez; ama CSV'den
+  çıkarmak da mesajı **silmez**. "CSV nihai listedir" varsayımıyla silme planlama.
+- ⚠ Yine de gövdeye **mevcut mesajların tamamını** koy (§27.0 akışı canlıdan başlar): davranışın
+  başka sürümde REPLACE olmadığı ölçülmedi — korunması gereken mesajı gövdeden düşürme.
+
+**Mesaj SİLME için ADT REST'te çalışan yol bugün YOK** (denenenler §27.6). Kanıtlı tek yol:
+**SE91'de elle silme** (kullanıcı) → ardından T100 readback (`SELECT msgnr, text FROM t100
+WHERE sprsl = '<ML>' AND arbgb = '<MSAG>'`) ile sayı + kalanların metni silme öncesi fotoğrafla
+karşılaştırılır. Uzun metinli mesajda (DOKHL `ID='NA'`, `OBJECT = <MSAG><NR>`) SE91 uzun metnin
+akıbetini ayrıca sorar.
 
 ### 27.6 Başarısız Yolların Arşivi (referans amaçlı)
 
@@ -221,8 +237,16 @@ Test edilip çalışmadığı **kanıtlanan** yöntemler — tekrar deneme:
 | `_action=UPDATE/REPLACE/UPSERT` | 400 URI mapping error |
 | `accessMode=stateless/READ` | 400 invalid value |
 | `forceLock=true`, `overwrite=true` | Tanınmıyor — 403 |
+| **Tam PUT ile SİLME** (gövdeden mesaj çıkarmak) — 2026-09-24 | LOCK/PUT/UNLOCK 200 ama **no-op**: çıkarılan mesajlar yerinde, `changedAt` değişmedi (§27.5) |
+| Sınıf LOCK → `DELETE /messageclass/{mc}/messages/{nr}?lockHandle=<sınıf>&corrNr=…` — 2026-09-24 | **423** `ExceptionResourceInvalidLockHandle` (SADT_RESOURCE 026: *"Resource <mesaj> is not locked"*) — sınıf kilidi mesaj alt kaynağını kapsamıyor. Sınıf UNLOCK 200 |
+| Alt kaynak `POST /messageclass/{mc}/messages/{nr}?_action=LOCK` → aynı tutamaçla `DELETE` → aynı tutamaçla `UNLOCK` — 2026-09-24 | LOCK **200 + tutamaç**, DELETE **423** (026), UNLOCK **403** `ExceptionResourceNoAccess` (SADT_RESOURCE 029 *"could not be locked"*). ⛔ **TEKRARLAMA — kilit bırakılamamış hâlde kalabilir**; SM12 kontrolü kullanıcıdadır (lock silme ADR 0005-C yasağı) |
 
-**Tek çalışan yol:** §18.0 production script veya §18.1 inline pattern.
+**Tek çalışan yol (ekleme/güncelleme):** §18.0 production script veya §18.1 inline pattern.
+**Silme:** ADT REST'te çalışan yol yok — SE91 (kullanıcı) + T100 readback (§27.5).
+
+> 🔎 **Okuma tuzağı (2026-09-24):** `GET /messageclass/{mc}/messages/{nr}` **her numara için**
+> 200 + boş `<msg:message msg:msgno="" msg:msgtext=""/>` döner — var olmayan numara (`999`) dahil.
+> ⇒ Bir mesajın varlığına bu uçtan hüküm verilmez; sınıf GET'i ya da T100 okunur.
 
 ### 27.7 Hızlı Çözüm Hatırlatma
 
@@ -230,7 +254,7 @@ Test edilip çalışmadığı **kanıtlanan** yöntemler — tekrar deneme:
 |---|---|
 | 1 | `python scripts/create_message_class.py --name ... --description ... --package ... --transport ... --cwd ...` → **shell (SE91 GEREKMEZ)** |
 | 2 | Mesaj listesini CSV'ye yaz: `msgno,msgtext,selfexplainatory` (⚠ msgtext ≤ **73 char** — T100 limiti) |
-| 3 | `python scripts/populate_message_class.py --name ... --messages-csv ...` (shell'e PUT-replace) |
+| 3 | `python scripts/populate_message_class.py --name ... --messages-csv ...` (shell'e tam PUT — **ekler/günceller, SİLMEZ**; §27.5) |
 | 4 | `adt_msgclass_read` (veya `--verify-only`) ile mesajları + master_language=TR doğrula |
 | 5 | Ayrı aktivasyon genelde GEREKMEZ — populate T100'e save-eder (readback ile doğrula) |
 
