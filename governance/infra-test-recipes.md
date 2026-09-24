@@ -2653,3 +2653,44 @@ python tests/run_battery.py mcp_import_denetimi --kardes ix_doctor_repo_mode ix_
 - ⚠ **`ix_doctor_ps_politika` yamaları `finally`'de GERİ ALINIR.** İlk yazımda W1'in `_kayit_oku` yaması geri alınmıyordu; C3 ("gerçek kayıt defteri") sahte okuyucuyu ölçtü ve YEŞİL geçti. C3 artık `reg query` kontrol grubuyla kıyaslar (GPO varsa kıyası atlar). Yeni vektör eklerken modül globaline yama yapıyorsan geri al.
 - ⚠ **`session_start_origin_geriligi` sandbox'ı BAĞ ister:** `core` + `.claude/{agents,skills,commands}` junction/symlink değilse `_junction_kontrol` ⛔ dalına düşer ve `_origin_kontrol` HİÇ çağrılmaz (S2/S5 "0" döner — kurulum hatası, kusur değil). Silme bağ-ÖNCE (`os.rmdir`/`unlink`), hedef = temp klon.
 - Gerçek mcp 2.x ile elle 3. bağlam (ağ + pip ister, süite girmez): `python -m venv <v> && <v>/python -m pip install "mcp>=2" requests python-dotenv` → `CLAUDE_PROJECT_DIR=<bos-dizin> <v>/python scripts/ix_doctor.py --layer 5` → `[FAIL] MCP server IMPORT EDİLEMİYOR — exit 1: ModuleNotFoundError: … or pin 'mcp<2' …`; ardından `<v>/python -m pip install -r mcp_servers/sap_adt/requirements.txt` (`--upgrade`'siz) → `mcp 1.x`'e iner.
+
+## B63 — `populate_message_class --delete`: MSAG'dan tek tek mesaj silme (korumalar + önce/sonra kapısı; B25'in komşusu)
+
+```
+python tests/fixtures/msag_mesaj_silme/run.py          # 32 senaryo + 16 mutasyon (SAP'siz, ~1 sn)
+python tests/fixtures/msgtext_uzunluk_guard/run.py     # 13 senaryo + 6 mutasyon (aynı dosya, CSV kipi)
+python tests/fixtures/transport_gorev_istek_cevrimi/run.py   # 23/23 — E1 envanteri bu dosyayı da sayar
+python tests/run_battery.py msag_mesaj_silme --kardes msgtext_uzunluk_guard --precommit
+```
+
+- ⭐ **Sahte ADT sunucusu SAP'nin ÖLÇÜLMÜŞ davranışını taklit eder:** gövdede olmayan mesaja
+  dokunmaz, yalnız `deletedmessages`'ı siler (boş `msgno` → `000`). Üç BOZUK kip (`noop` = eski
+  tam-PUT: 200 ama silmez · `fazla` · `degistir`) kapının yakaladığını çiviller. ⛔ `noop` vektörü
+  (S9) SİLİNMEZ: "PUT 200 == silindi" varsayan her yazım orada rc 0 verir.
+- ⭐ **Korumaların HER BİRİ iki şeyle ölçülür:** rc 2 **ve** sahte sunucuya SIFIR yazma çağrısı
+  (LOCK/PUT). Yalnız rc'ye bakan senaryo, yazmadan sonra hata veren bir kodu da geçirirdi.
+- ⭐ **Savunma derinliği = ayrı vektör:** biçim koruması iki katmanda (ayrıştırıcı + planlayıcı)
+  durur; ikisi aynı girdiyi yakaladığı için ilk yazımda planlayıcı mutasyonu (M2) **KAÇTI**. U2b
+  (canlıda boş anahtar varken planlayıcının kendi koruması) bu yüzden eklendi — silinmez.
+  Aynı gerekçeyle gövde öz-denetimi (`silme_govdesi_dogrula`) U5'te **tek başına** ölçülür (M13);
+  önceden yalnız M7–M9 üzerinden dolaylı ölçülüyordu.
+- ⭐ **TOCTOU (S20, M12/M14):** sahte sunucu LOCK anında `002`'nin metnini değiştirir → rc 2,
+  **sıfır PUT**, 1 UNLOCK, yeni metin korunur. Koruma yokken (bug-gate ölçümü) rc 0 + `002` ESKİ
+  metne dönüyordu. ⚠ **GET sırası:** 1 = ÖNCE · 2 = kilit altında yeniden okuma · 3 = SONRA —
+  `get_hata`/`get_istisna` bu numaralarla verilir (S19 = `{3}`, S21 = `{2}`).
+- **İstisna sınıfı (S22–S24, M15):** PUT gönderildikten SONRAKİ ağ istisnası → rc 3 + KAPSAM
+  (silme gerçekleşmiş olabilir); PUT'tan ÖNCEKİ (LOCK) istisna → rc 1. Ayırt edici
+  `iz['put_gonderildi']`dir. Sahte sunucu PUT istisnasında silmeyi UYGULAR (en kötü hâl).
+- **TAB/LF/CR (S25, M16):** çok satırlı canlı metinle silme rc 0 olmalı; kaçış yoksa öz-denetim
+  yanıltıcı "öznitelik-farkı" ile rc 2 verir.
+- **Mutasyon çapaları TAM BİR KEZ eşleşmeli** (CORE-07): koşucu `count != 1` → `DOGRULANAMADI`
+  + exit 2. Kaynağa dokunan her değişiklikte çapayı yeniden ölç.
+- ⚠ **E1 tuzağı (`transport_gorev_istek_cevrimi`):** envanter, ham `_action=LOCK` atıp görev
+  numarasını OKUMAYAN dosyaları sayar; ölçüt dosyada `CORR` + `NR` bitişik dizesinin geçmesidir.
+  `populate_message_class.py`'ye bu dize (yorumda bile) yazılırsa dosya kümeden düşer, E1 kırılır.
+- **Gerçek veriyle kontrol grubu (tüketici projede, çekirdeğe GİRMEZ):** canlı sınıf GET'ini
+  (`sinif_xml_ayristir`) ve canlıda çalışmış gönderilmiş gövdeyi al; `silme_planla` +
+  `silme_govdesi` ile aynı silme kümesinin gövdesini üret → **bayt-aynı** olmalı (2026-09-24:
+  16'lı silmede bayt-aynı; 1'li silmede fark yalnız gövdeye eklenen DEĞİŞMEMİŞ kalan mesajlardı).
+- **DOĞRULANAMADI (bu reçetede):** canlı SAP yazması — korpus SAP'siz koşar; canlı kanıt
+  `infra-changelog` kaydındaki tek-seferlik ölçümdür. Başka sürüm/profil ölçülmedi.

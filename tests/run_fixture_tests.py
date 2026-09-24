@@ -211,6 +211,8 @@ OZEL_TESTLER = [
      "yapisal FAIL veriyordu, RAP view/abstract entity muaf)"),
     ("msgtext_uzunluk_guard",
      "T100-TEXT CHAR 73: uzunluk guard'i YOKTU -> SESSIZ KIRPMA (fail-closed, karakter!=bayt)"),
+    ("msag_mesaj_silme",
+     "MSAG tek tek mesaj silme (--delete): tam PUT gövdeden çıkarılanı SİLMEZ -> deletedmessages + korumalar (boş msgno 000'ı siler) + önce/sonra kapısı + tırnak kaçışı"),
     ("populate_ddic_fail_closed",
      "#41 Y-1 SINIF TARAMASI (kardes ureticiler) + table_exists 500->CREATE: bos girdi "
      "GECERLI degere donusuyordu (domains/dtel/tables) ve 'bakamadim' == 'yok' sayiliyordu. "
@@ -788,9 +790,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "B-13/B-9/B-14: unit_kind kararı + CSV kolon sözleşmesi; ayrıca kapanış notunun "
      "KABLOLAMASI (AST); ayrıca satır-içi boş alan guard'ları (`description` BİLEREK "
      "dışarıda — 175/359 canlı satır boş) + `table_exists` üç-değerli sondası"),
-    ("scripts/populate_message_class.py", ("O:msgtext_uzunluk_guard",),
+    ("scripts/populate_message_class.py", ("O:msgtext_uzunluk_guard", "O:msag_mesaj_silme"),
      "T100-TEXT (CHAR 73) fail-closed guard'ı: tespit + tamlık + eşik değişmezleri; "
-     "korpus GERÇEK giriş noktasından (main --dry-run) da koşar"),
+     "korpus GERÇEK giriş noktasından (main --dry-run) da koşar; --delete kipi: "
+     "korumalar + önce/sonra kapısı sahte ADT sunucusuna karşı (noop/fazla/değiştir)"),
     ("scripts/utils/ddic_aktivasyon.py", ("O:ddic_aktivasyon_notu",),
      "'işlendi ≠ aktif' kapanış notunun TEK KAYNAĞI: metin + C-ENC-01 (saf ASCII) + "
      "activate_object `--type` sözleşmesi"),

@@ -41,6 +41,29 @@ Kullanım:
         msgno,msgtext,selfexplainatory
         001,"Müşteri bulunamadı",false
         002,"Tarih boş olamaz",true
+
+⛔ CSV'DEN ÇIKARMAK MESAJI SİLMEZ (ölçüldü 2026-09-24, s4_private 2025): tam PUT gövdede
+OLMAYAN mesaja dokunmaz — SAP'nin "listede olmayanı sil" döngüsü kaynakta YORUM SATIRINDA
+(CL_ADT_MC_RES_CONTROLLER=>DO_UPDATE). Silme yalnız gövdedeki `<mc:deletedmessages>`
+koleksiyonuyla olur. Playbook: adt-message-class.md §27.5.
+
+SİLME KİPİ (--delete) — mesaj sınıfından TEK TEK mesaj silme:
+    python populate_message_class.py --name ZSD001_MSG --transport <TRANSPORT> \\
+        --delete 006,011 [--dry-run] [--body-out <dosya.xml>] --cwd <PROJECT_ROOT>
+
+  Akış: canlı GET (sınıf + tüm mesajlar, CANLI öznitelikleriyle) → korumalar → gövde
+  (kalan mesajlar birebir + her silinen için `<mc:deletedmessages mc:msgno="NNN"/>`)
+  → `populate()` yazma akışı (CSRF → LOCK → KİLİT ALTINDA canlıyı YENİDEN OKU; ÖNCE'den
+    farklıysa PUT GÖNDERİLMEZ → PUT, If-Match YOK → UNLOCK finally)
+  → ÖNCE/SONRA KAPISI (canlıyı yeniden okur: giden küme == silme kümesi, kalanlar birebir).
+  Çıkış kodu: 0 = silindi + kapı tuttu · 2 = YAZMADAN durduruldu (girdi/koruma/okuma/
+              kilit altında canlı değişmiş) · 1 = yazma başarısız (PUT gönderilmedi ya da
+              reddedildi) · 3 = yazıldı ama kapı TUTMADI ya da ÖLÇÜLEMEDİ (PUT gönderildikten
+              sonra istisna dahil — canlıyı elle doğrula).
+  Korumalar (hepsi yazmadan ÖNCE): numara tam 3 hane ve BOŞ DEĞİL (boş msgno SAP'de
+  `000`'ı siler) · her numara canlıda VAR · liste boş değil · tekrar yok · en az bir
+  mesaj KALIR (tüm sınıfı silmek bu aracın işi değil) · sınıfın master dili = oturum dili
+  (farklıysa SAP yalnız o dilin T100 satırını siler — yarım silme).
 """
 
 import argparse
@@ -48,7 +71,9 @@ import csv
 import re
 import sys
 import io
+import tempfile
 import urllib3
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
@@ -176,22 +201,51 @@ def load_messages_from_csv(csv_path: Path) -> list:
     return messages
 
 
+# `"` + satır/sekme karakterleri: XML öznitelik değeri NORMALLEŞTİRMESİ çıplak TAB/LF/CR'yi
+# boşluğa çevirir ⇒ kaçışlanmazsa gönderilen metin canlıdakinden FARKLI okunur (öz-denetim
+# yanıltıcı "öznitelik farkı" ile dururdu).
+_ATTR_KACIS = {'"': '&quot;', '\t': '&#9;', '\n': '&#10;', '\r': '&#13;'}
+
+
+def attr_escape(metin: str) -> str:
+    """XML ÖZNİTELİK değeri kaçışı: `& < >` + ÇİFT TIRNAK.
+
+    ⛔ Çıplak `xml_escape()` `"` işaretini KAÇIRMAZ (ölçüldü 2026-09-24:
+    `escape('a"b')` -> `'a"b'`). Öznitelikler çift tırnakla yazıldığı için tırnaklı
+    bir mesaj metni gövdeyi BOZUYORDU. Silme kipi canlı metni olduğu gibi geri
+    gönderir ⇒ tırnaklı tek bir canlı mesaj bütün silmeyi düşürürdü.
+    """
+    return xml_escape(metin, _ATTR_KACIS)
+
+
 def build_xml(name: str, description: str, package: str, responsible: str,
-              messages: list) -> str:
-    """Build full message class XML with embedded messages."""
-    msgs_xml = '\n'.join(
-        f'  <mc:messages mc:msgno="{n}" mc:msgtext="{xml_escape(t)}" '
-        f'mc:selfexplainatory="{s}" mc:documented="false" adtcore:name=""/>'
-        for n, t, s in messages
-    )
+              messages: list, language: str = 'TR', deleted=()) -> str:
+    """Build full message class XML with embedded messages.
+
+    `messages` öğeleri `(msgno, msgtext, selfexplainatory)` ya da — silme kipinde,
+    CANLI öznitelikleri korumak için — `(msgno, msgtext, selfexplainatory, documented)`.
+    3'lü öğede `documented` eskisi gibi `"false"` yazılır (CSV kipi DEĞİŞMEDİ).
+
+    `deleted`: silinecek numaralar → her biri için `<mc:deletedmessages mc:msgno="NNN"/>`,
+    `<mc:messages>` satırlarından SONRA (SAP ST `ST_ADT_MESSAGE_CLASS` sırası).
+    """
+    satirlar = []
+    for m in messages:
+        n, t, s = m[0], m[1], m[2]
+        d = m[3] if len(m) > 3 else 'false'
+        satirlar.append(
+            f'  <mc:messages mc:msgno="{n}" mc:msgtext="{attr_escape(t)}" '
+            f'mc:selfexplainatory="{s}" mc:documented="{d}" adtcore:name=""/>')
+    satirlar += [f'  <mc:deletedmessages mc:msgno="{n}"/>' for n in deleted]
+    msgs_xml = '\n'.join(satirlar)
 
     return f'''<?xml version="1.0" encoding="utf-8"?>
 <mc:messageClass adtcore:responsible="{responsible}"
-                 adtcore:masterLanguage="TR"
+                 adtcore:masterLanguage="{language}"
                  adtcore:name="{name}"
                  adtcore:type="MSAG/N"
-                 adtcore:description="{xml_escape(description)}"
-                 adtcore:language="TR"
+                 adtcore:description="{attr_escape(description)}"
+                 adtcore:language="{language}"
                  xmlns:mc="http://www.sap.com/adt/MessageClass"
                  xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package.lower()}"
@@ -203,15 +257,32 @@ def build_xml(name: str, description: str, package: str, responsible: str,
 
 def populate(client: SAPADTClient, name: str, description: str, package: str,
              responsible: str, transport: str, messages: list,
-             dry_run: bool = False) -> bool:
+             dry_run: bool = False, language: str = 'TR', sap_client: str = '100',
+             xml_payload: str = None, kilit_sonrasi_kontrol=None,
+             iz: dict = None) -> bool:
     """
     Lock, PUT messages, unlock. Returns True on success.
+
+    `kilit_sonrasi_kontrol` (silme kipi): LOCK alındıktan SONRA, PUT'tan ÖNCE çağrılır;
+    `None` dışında bir metin dönerse PUT GÖNDERİLMEZ (UNLOCK yine `finally`'de) ve metin
+    `iz['kilit_sonrasi_red']`e yazılır. Neden: ÖNCE okuması kilitten önce yapılır; arada
+    başkası kalan bir mesajın metnini değiştirirse gövde onu ESKİ metne geri çevirirdi
+    (SAP metni farklı mesajı günceller) ve kapı bayat ÖNCE'yle kıyaslayıp "tuttu" derdi.
+    `iz['put_gonderildi']` PUT isteği başlamadan hemen önce True olur — sonraki bir
+    istisnada çağıran "yazılmış olabilir" ile "hiç yazılmadı"yı ayırt edebilsin.
+
+    `language` / `sap_client` varsayılanları eski SABİT değerlerdir (CSV kipi değişmedi);
+    silme kipi sınıfın master dilini ve oturumun client'ını açıkça verir.
+    `xml_payload` verilirse gövde üretilmez, olduğu gibi gönderilir (silme kipi —
+    gövde canlıdan kurulup `silme_govdesi_dogrula` ile doğrulanmış olmalı).
     """
     name = name.upper()
     object_url = f'/sap/bc/adt/messageclass/{name.lower()}'
 
     # Build payload
-    xml_payload = build_xml(name, description, package, responsible, messages)
+    if xml_payload is None:
+        xml_payload = build_xml(name, description, package, responsible, messages,
+                                language=language)
 
     if dry_run:
         print('\n=== DRY-RUN — XML preview (first 1500 chars) ===')
@@ -222,7 +293,7 @@ def populate(client: SAPADTClient, name: str, description: str, package: str,
     client._invalidate_csrf_cache()
     r = client.session.get(
         client.url + '/sap/bc/adt/discovery',
-        params={'sap-client': '100', 'sap-language': 'TR'},
+        params={'sap-client': sap_client, 'sap-language': language},
         headers={'X-CSRF-Token': 'Fetch'},
         verify=False, timeout=15
     )
@@ -259,8 +330,19 @@ def populate(client: SAPADTClient, name: str, description: str, package: str,
             return False
         print(f'[OK] Lock handle: {handle[:16]}...')
 
+        # 2b. (silme kipi) kilit ALTINDA canlı yeniden okunur — TOCTOU koruması
+        if kilit_sonrasi_kontrol is not None:
+            red = kilit_sonrasi_kontrol()
+            if red:
+                if iz is not None:
+                    iz['kilit_sonrasi_red'] = red
+                print(f'[FAIL] Kilit sonrası kontrol TUTMADI — PUT GÖNDERİLMEDİ: {red}')
+                return False
+
         # 3. PUT — winning pattern: NO If-Match!
         print(f'[INFO] PUT {len(messages)} message(s)...')
+        if iz is not None:
+            iz['put_gonderildi'] = True
         r = client.session.put(
             client.url + object_url,
             params={'corrNr': transport, 'lockHandle': handle,
@@ -271,8 +353,8 @@ def populate(client: SAPADTClient, name: str, description: str, package: str,
                                 'charset=utf-8',
                 'Accept': '*/*',
                 'X-sap-adt-sessiontype': 'stateful',
-                'sap-client': '100',
-                'sap-language': 'TR',
+                'sap-client': sap_client,
+                'sap-language': language,
                 # !!! NO If-Match — kritik! !!!
             },
             data=xml_payload.encode('utf-8'),
@@ -329,6 +411,344 @@ def verify(client: SAPADTClient, name: str) -> list:
     )
 
 
+# ═══════════════════════════ SİLME KİPİ (--delete) ═══════════════════════════
+# Kanıt (2026-09-24, s4_private 2025, DEV): 229 mesajlı sınıfta önce 1 (229→228, giden
+# tam {006}) sonra 16 mesaj tek PUT'ta silindi (→212); kalanlar metin/bayrak birebir,
+# T100U 229→212, silinenin uzun metni (DOKHL) gitti, sınıfın `changedAt`'i DEĞİŞMEDİ.
+# SAP kaynağı: DO_UPDATE → `tt_deletedmessage` döngüsü → cl_adt_message_class_api=>
+# delete( iv_number = <nr> ) — `iv_number` DAİMA verilir ⇒ "tüm sınıfı sil" dalı bu
+# yoldan ULAŞILAMAZ. Ayrıntı + tuzaklar: playbook/adt-message-class.md §27.5-§27.6.
+
+_NS_MC = '{http://www.sap.com/adt/MessageClass}'
+_NS_CORE = '{http://www.sap.com/adt/core}'
+MSGNO_RE = re.compile(r'^\d{3}$')
+
+# Önce/sonra kapısının KAPSAM BEYANI (core §7): "kapı tuttu" yalnız aşağıdaki
+# yüzey için doğrudur. Bakılmayan yüzey "temiz" DEĞİL, ÖLÇÜLMEDİ'dir.
+KAPSAM_BAKILAN = (
+    'ADT GET /sap/bc/adt/messageclass/<ad> (master dilde) — silmeden ÖNCE ve SONRA: '
+    'mesaj numarası kümesi + her kalan mesajın msgtext / selfexplainatory / documented değeri',
+)
+KAPSAM_BAKILMAYAN = (
+    'T100 (SQL) — özellikle master dil DIŞINDAKİ çeviri satırları: ÖLÇÜLMEDİ',
+    'T100U (değişiklik kaydı) · DOKHL/DOKTL (uzun metin): ÖLÇÜLMEDİ '
+    '(SAP uzun metni transport kaydı AÇMADAN siler — başka sisteme taşımada DOĞRULANMADI)',
+    'E071 (transport nesne satırı): ÖLÇÜLMEDİ — tek mesaj silmesinin görev satırı '
+    'bu araçla kanıtlanmaz',
+    "sınıfın changedAt değeri: BİLEREK kullanılmadı (silme onu GÜNCELLEMİYOR — ölçüldü)",
+)
+
+
+class SilmeGirdiHatasi(ValueError):
+    """Silme listesi / canlı durum korumalarından biri tuttu — YAZMADAN durdurulur."""
+
+
+def sinif_xml_ayristir(metin: str) -> dict:
+    """Sınıf GET yanıtı → {'name','masterLanguage','language','description',
+    'responsible','package','messages': {msgno: (msgtext, selfexp, documented)}}.
+
+    Öznitelik SIRASINDAN bağımsızdır (ElementTree) — `verify()`'ın regex'i sıraya
+    bağlıdır; silme kararı ona dayandırılmaz. Metinler kaçışı çözülmüş hâldedir.
+    """
+    kok = ET.fromstring(metin)
+    if kok.tag != _NS_MC + 'messageClass':
+        raise SilmeGirdiHatasi(f'beklenmeyen kök eleman: {kok.tag}')
+    paket = kok.find(_NS_CORE + 'packageRef')
+    mesajlar = {}
+    for m in kok.findall(_NS_MC + 'messages'):
+        no = m.get(_NS_MC + 'msgno', '')
+        if no in mesajlar:
+            raise SilmeGirdiHatasi(f'canlı yanıtta mükerrer msgno: {no!r}')
+        mesajlar[no] = (m.get(_NS_MC + 'msgtext', ''),
+                        m.get(_NS_MC + 'selfexplainatory', 'false'),
+                        m.get(_NS_MC + 'documented', 'false'))
+    return {
+        'name': kok.get(_NS_CORE + 'name', ''),
+        'masterLanguage': kok.get(_NS_CORE + 'masterLanguage', ''),
+        'language': kok.get(_NS_CORE + 'language', ''),
+        'description': kok.get(_NS_CORE + 'description', ''),
+        'responsible': kok.get(_NS_CORE + 'responsible', ''),
+        'package': paket.get(_NS_CORE + 'name', '') if paket is not None else '',
+        'messages': mesajlar,
+        'deleted_in_response': len(kok.findall(_NS_MC + 'deletedmessages')),
+    }
+
+
+def silme_listesi_ayristir(ham: str) -> list:
+    """'006,011 , 071' → ['006','011','071']. Normalizasyon YOK (zfill yok, bilerek).
+
+    ⛔ Boş öğe (`"006,,011"`) ve 3 haneli olmayan öğe (`"6"`) REDDEDİLİR: SAP'de boş
+    `msgno` ilkel değeri `000`dır ve `000`ı SİLER (DO_UPDATE'teki
+    `lv_msg_number EQ 000 AND msgnr EQ 000` dalı). `"6"`yı `"006"`ya çevirmek de
+    yazarın niyetini TAHMİN etmektir.
+    """
+    if ham is None:
+        raise SilmeGirdiHatasi('silme listesi verilmedi')
+    ogeler = [o.strip() for o in ham.split(',')]
+    hatali = [o for o in ogeler if not MSGNO_RE.match(o)]
+    if not ham.strip() or hatali:
+        raise SilmeGirdiHatasi(
+            'silme listesinde geçersiz numara(lar): '
+            + ', '.join(repr(o) for o in (hatali or [ham]))
+            + ' — her numara TAM 3 hane rakam olmalı (örn. 006). Boş numara SAP\'de '
+              '`000`ı siler; bu yüzden yazılmaz.')
+    tekrar = sorted({o for o in ogeler if ogeler.count(o) > 1})
+    if tekrar:
+        raise SilmeGirdiHatasi(f'silme listesinde tekrar eden numara(lar): {tekrar}')
+    return ogeler
+
+
+def silme_planla(canli: dict, silinecek: list, oturum_dili: str) -> list:
+    """Korumaları uygular; KALAN mesajları [(no, metin, selfexp, documented), ...] döner.
+
+    TÜM ihlaller tek seferde raporlanır (CSV guard'larıyla aynı tasarım kararı).
+    """
+    hatalar = []
+    mesajlar = canli['messages']
+    if not silinecek:
+        hatalar.append('silme listesi BOŞ')
+    for no in silinecek:
+        if not MSGNO_RE.match(no or ''):
+            hatalar.append(f'geçersiz numara {no!r} (tam 3 hane rakam; boş numara 000\'ı siler)')
+    yok = [no for no in silinecek if no not in mesajlar]
+    if yok:
+        hatalar.append(f'canlıda OLMAYAN numara(lar): {yok} — sınıf {canli["name"]} '
+                       f'içinde {len(mesajlar)} mesaj var')
+    kalan = [(no,) + mesajlar[no] for no in sorted(mesajlar) if no not in set(silinecek)]
+    if silinecek and not yok and not kalan:
+        hatalar.append('silme listesi sınıfın TÜM mesajlarını kapsıyor — en az bir mesaj '
+                       'kalmalı (tüm sınıfı silmek bu aracın işi değil)')
+    ml = (canli.get('masterLanguage') or '').upper()
+    od = (oturum_dili or '').upper()
+    if not ml or ml != od:
+        hatalar.append(
+            f'master dil ({ml or "?"}) ≠ oturum dili ({od or "?"}) — SAP silmeyi gövde dili '
+            f'oturum diliyle AYNI değilse yalnız o dilin T100 satırında yapar (yarım silme). '
+            f'Oturumu master dilde aç (.conn_adt dil satırı).')
+    if hatalar:
+        raise SilmeGirdiHatasi('SİLME DURDURULDU — hiçbir şey yazılmadı:\n  - '
+                               + '\n  - '.join(hatalar))
+    return kalan
+
+
+def silme_govdesi(canli: dict, silinecek: list, kalan: list) -> str:
+    """Canlı başlık + kalan mesajlar (CANLI öznitelikleriyle) + deletedmessages."""
+    # `responsible` build_xml'de KAÇIŞSIZ yazılır (CSV kipi davranışı — varsayılan yer
+    # tutucusu değişmesin diye); canlıdan gelen değer burada kaçışlanır.
+    return build_xml(canli['name'], canli['description'], canli['package'],
+                     attr_escape(canli['responsible']), kalan,
+                     language=canli['masterLanguage'], deleted=silinecek)
+
+
+def silme_govdesi_dogrula(govde: str, canli: dict, silinecek: list) -> list:
+    """Gönderilecek gövdeyi GERİ AYRIŞTIRIR; hata listesi döner (boş = tamam).
+
+    Ölçtüğü değişmezler: deletedmessages sayısı/numaraları == silme listesi, hiçbirinin
+    msgno'su boş değil, hepsi son `<mc:messages>`'tan SONRA; gövdedeki mesajlar ==
+    canlı − silinecek ve her kalan canlı öznitelikleriyle BİREBİR (metin değişirse SAP
+    o mesajı "güncelle" listesine alır — istenmeyen yan etki).
+    """
+    hatalar = []
+    try:
+        kok = ET.fromstring(govde)
+    except ET.ParseError as e:
+        return [f'gövde XML olarak ayrıştırılamadı: {e}']
+    dm = [d.get(_NS_MC + 'msgno') for d in kok.findall(_NS_MC + 'deletedmessages')]
+    if dm != list(silinecek):
+        hatalar.append(f'deletedmessages {dm} ≠ silme listesi {list(silinecek)}')
+    if any(not d for d in dm):
+        hatalar.append('boş msgno taşıyan deletedmessages var (SAP 000\'ı silerdi)')
+    cocuklar = list(kok)
+    son_msg = max((i for i, c in enumerate(cocuklar) if c.tag == _NS_MC + 'messages'),
+                  default=-1)
+    ilk_del = min((i for i, c in enumerate(cocuklar) if c.tag == _NS_MC + 'deletedmessages'),
+                  default=len(cocuklar))
+    if ilk_del < son_msg:
+        hatalar.append('deletedmessages <mc:messages> satırlarından ÖNCE geliyor')
+    gv = sinif_xml_ayristir(govde)['messages']
+    beklenen = {no: v for no, v in canli['messages'].items() if no not in set(silinecek)}
+    if gv != beklenen:
+        eksik = sorted(set(beklenen) - set(gv))
+        fazla = sorted(set(gv) - set(beklenen))
+        farkli = sorted(n for n in set(gv) & set(beklenen) if gv[n] != beklenen[n])
+        hatalar.append(f'gövdedeki mesajlar canlı−silinecek ile aynı değil: '
+                       f'eksik={eksik} fazla={fazla} öznitelik-farkı={farkli}')
+    return hatalar
+
+
+def silme_kapisi(once: dict, sonra: dict, silinecek: list) -> list:
+    """ÖNCE/SONRA kapısı — hata listesi döner (boş = tuttu). `changedAt` KULLANILMAZ."""
+    hatalar = []
+    o, s = once['messages'], sonra['messages']
+    giden = set(o) - set(s)
+    yeni = set(s) - set(o)
+    if giden != set(silinecek):
+        hatalar.append(f'giden küme {sorted(giden)} ≠ silme kümesi {sorted(silinecek)} '
+                       f'(silinmeyen: {sorted(set(silinecek) - giden)} · beklenmeden giden: '
+                       f'{sorted(giden - set(silinecek))})')
+    if yeni:
+        hatalar.append(f'sonradan beliren numara(lar): {sorted(yeni)}')
+    if len(s) != len(o) - len(silinecek):
+        hatalar.append(f'kalan sayı {len(s)} ≠ önce {len(o)} − {len(silinecek)}')
+    degisen = sorted(n for n in set(o) & set(s) if o[n] != s[n])
+    if degisen:
+        hatalar.append('kalan mesajlarda öznitelik değişimi: ' + '; '.join(
+            f'{n}: {o[n]} → {s[n]}' for n in degisen[:10])
+            + (f' (+{len(degisen) - 10})' if len(degisen) > 10 else ''))
+    return hatalar
+
+
+def kapsam_beyani_bas() -> None:
+    print('\n[KAPSAM] Bakılan:')
+    for s in KAPSAM_BAKILAN:
+        print(f'  + {s}')
+    print('[KAPSAM] BAKILMAYAN (ÖLÇÜLMEDİ — "kapı tuttu" bunları KAPSAMAZ):')
+    for s in KAPSAM_BAKILMAYAN:
+        print(f'  - {s}')
+
+
+def sinif_oku(client: SAPADTClient, name: str, language: str = None):
+    """Canlı sınıf GET → (http_durum, gövde_metni). Yazma YOK."""
+    params = {'sap-language': language} if language else {}
+    r = client.session.get(
+        client.url + f'/sap/bc/adt/messageclass/{name.lower()}',
+        headers={'Accept': 'application/vnd.sap.adt.mc.messageclass+xml'},
+        params=params, verify=False, timeout=60)
+    return r.status_code, r.text
+
+
+def mesaj_sil(client: SAPADTClient, name: str, transport: str, silme_ham: str,
+              dry_run: bool = False, body_out: str = None,
+              package: str = None) -> int:
+    """--delete kipinin tamamı. Çıkış kodu: 0 / 2 (yazmadan durdu) / 1 / 3 (docstring)."""
+    name = name.upper()
+    oturum_dili = getattr(client, 'language', None) or ''
+    oturum_client = getattr(client, 'client', None) or ''
+    try:
+        silinecek = silme_listesi_ayristir(silme_ham)
+    except SilmeGirdiHatasi as e:
+        print(f'[FAIL] {e}')
+        return 2
+    if not dry_run and not transport:
+        print('[FAIL] --transport verilmedi — LOCK için gerekli; hiçbir şey yazılmadı.')
+        return 2
+    if not dry_run and not oturum_client:
+        print('[FAIL] oturumun sap-client değeri çözülemedi (.conn_adt) — hiçbir şey yazılmadı.')
+        return 2
+
+    durum, metin = sinif_oku(client, name, oturum_dili or None)
+    if durum != 200:
+        print(f'[FAIL] canlı sınıf okunamadı (HTTP {durum}) — ÖLÇÜLEMEDİ, hiçbir şey yazılmadı.')
+        return 2
+    try:
+        once = sinif_xml_ayristir(metin)
+        if once['name'].upper() != name:
+            raise SilmeGirdiHatasi(f'yanıttaki sınıf adı {once["name"]!r} ≠ {name!r}')
+        if package and once['package'].upper() != package.upper():
+            raise SilmeGirdiHatasi(f'--package {package} ≠ sınıfın canlı paketi '
+                                   f'{once["package"]} — yanlış sınıf olabilir')
+        kalan = silme_planla(once, silinecek, oturum_dili)
+    except (SilmeGirdiHatasi, ET.ParseError) as e:
+        print(f'[FAIL] {e}')
+        return 2
+    print(f'[INFO] {name}: canlıda {len(once["messages"])} mesaj · silinecek '
+          f'{len(silinecek)} {silinecek} · kalacak {len(kalan)} · master dil '
+          f'{once["masterLanguage"]}')
+    for no in silinecek:
+        print(f'  - {no}: {once["messages"][no][0][:90]}')
+
+    govde = silme_govdesi(once, silinecek, kalan)
+    hatalar = silme_govdesi_dogrula(govde, once, silinecek)
+    if hatalar:
+        print('[FAIL] üretilen gövde öz-denetimi TUTMADI — yazılmadı:\n  - '
+              + '\n  - '.join(hatalar))
+        return 2
+    hedef = Path(body_out) if body_out else \
+        Path(tempfile.gettempdir()) / f'msag_delete_{name.lower()}.xml'
+    hedef.parent.mkdir(parents=True, exist_ok=True)
+    with open(hedef, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(govde)
+    print(f'[OK] gövde yazıldı + öz-denetim tuttu: {hedef}')
+
+    if dry_run:
+        print('[DRY-RUN] SAP\'ye YAZILMADI.')
+        kapsam_beyani_bas()
+        return 0
+
+    def _kilit_alti_yeniden_oku():
+        # TOCTOU: ÖNCE kilitten önce okundu. Arada kalan bir mesajın metni değiştiyse
+        # gövde onu ESKİ metne geri çevirir (SAP metni farklı mesajı günceller) ve kapı
+        # bayat ÖNCE'yle kıyasladığı için bunu GÖREMEZ ⇒ kilit ALTINDA yeniden oku.
+        try:
+            d2, m2 = sinif_oku(client, name, oturum_dili or None)
+            if d2 != 200:
+                return f'kilit altında yeniden okuma HTTP {d2} — değişmediği ölçülemedi'
+            simdi = sinif_xml_ayristir(m2)
+        except Exception as e:  # noqa: BLE001 — ölçülemeyen = yazılmaz
+            return f'kilit altında yeniden okuma başarısız ({type(e).__name__}: {e})'
+        fark = [a for a in ('description', 'responsible', 'package', 'masterLanguage')
+                if simdi[a] != once[a]]
+        o, n = once['messages'], simdi['messages']
+        fark_no = sorted(k for k in set(o) | set(n) if o.get(k) != n.get(k))
+        if fark or fark_no:
+            return (f'canlı sınıf ÖNCE okumasından beri DEĞİŞTİ (başlık: {fark} · mesaj: '
+                    f'{fark_no[:10]}) — gövde bu değişikliği geri alırdı; yeniden koş')
+        return None
+
+    iz = {'put_gonderildi': False, 'kilit_sonrasi_red': None}
+    try:
+        ok = populate(client=client, name=name, description=once['description'],
+                      package=once['package'], responsible=once['responsible'],
+                      transport=transport, messages=kalan, dry_run=False,
+                      language=once['masterLanguage'], sap_client=oturum_client,
+                      xml_payload=govde,
+                      kilit_sonrasi_kontrol=_kilit_alti_yeniden_oku,
+                      iz=iz)
+    except Exception as e:  # noqa: BLE001 — ağ/HTTP istisnası; UNLOCK populate'in finally'sinde
+        if iz['put_gonderildi']:
+            print(f'[FAIL] PUT gönderildikten sonra istisna ({type(e).__name__}: {e}) — '
+                  f'silme GERÇEKLEŞMİŞ OLABİLİR, ÖLÇÜLEMEDİ: canlıyı elle doğrula.')
+            kapsam_beyani_bas()
+            return 3
+        print(f'[FAIL] PUT gönderilmeden istisna ({type(e).__name__}: {e}) — yazılmadı.')
+        return 1
+    if iz['kilit_sonrasi_red']:
+        print('[FAIL] kilit altında canlı değişmiş bulundu — PUT GÖNDERİLMEDİ, hiçbir şey '
+              'yazılmadı.')
+        return 2
+    if not ok:
+        print('\n[FAIL] silme yazması başarısız (ayrıntı yukarıda).')
+        return 1
+
+    try:
+        durum, metin = sinif_oku(client, name, oturum_dili or None)
+    except Exception as e:  # noqa: BLE001
+        print(f'[FAIL] SONRA okuması istisna verdi ({type(e).__name__}: {e}) — PUT 200 döndü '
+              f'ama silme ÖLÇÜLEMEDİ: canlıyı elle doğrula.')
+        kapsam_beyani_bas()
+        return 3
+    if durum != 200:
+        print(f'[FAIL] SONRA okunamadı (HTTP {durum}) — PUT 200 döndü ama silme '
+              f'ÖLÇÜLEMEDİ. "PUT 200" silindiği anlamına GELMEZ (tam PUT no-op da 200 döner).')
+        kapsam_beyani_bas()
+        return 3
+    try:
+        sonra = sinif_xml_ayristir(metin)
+    except (SilmeGirdiHatasi, ET.ParseError) as e:
+        print(f'[FAIL] SONRA yanıtı ayrıştırılamadı ({e}) — silme ÖLÇÜLEMEDİ.')
+        kapsam_beyani_bas()
+        return 3
+    hatalar = silme_kapisi(once, sonra, silinecek)
+    if hatalar:
+        print('[FAIL] ÖNCE/SONRA KAPISI TUTMADI:\n  - ' + '\n  - '.join(hatalar))
+        kapsam_beyani_bas()
+        return 3
+    print(f'[OK] KAPI TUTTU: {len(once["messages"])} → {len(sonra["messages"])} · giden tam '
+          f'{sorted(silinecek)} · kalan {len(sonra["messages"])} mesaj öznitelikleriyle birebir')
+    kapsam_beyani_bas()
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Populate SAP message class with messages via ADT REST '
@@ -336,15 +756,18 @@ def main():
     )
     parser.add_argument('--name', required=True,
                         help='Message class name (e.g. ZSD001)')
-    parser.add_argument('--package', required=True,
-                        help='Package name (e.g. ZSD000_CLC)')
-    parser.add_argument('--transport', required=True,
+    # --package/--transport/--description/--messages-csv CSV (yazma) kipinde ZORUNLU;
+    # zorunluluk asagida kipe gore denetlenir (silme kipi bunlari CANLIDAN alir).
+    parser.add_argument('--package',
+                        help='Package name (e.g. ZSD000_CLC); --delete ile verilirse '
+                             'canli paketle eslesmeli')
+    parser.add_argument('--transport',
                         help='Transport request (e.g. <TRANSPORT>)')
-    parser.add_argument('--description', required=True,
+    parser.add_argument('--description',
                         help='Class description')
     parser.add_argument('--responsible', default='<SAP_USER>',
                         help='Responsible user (default: <SAP_USER>)')
-    parser.add_argument('--messages-csv', required=True,
+    parser.add_argument('--messages-csv',
                         help='CSV file: msgno,msgtext,selfexplainatory')
     parser.add_argument('--cwd',
                         help='Working dir with .conn_adt')
@@ -352,12 +775,33 @@ def main():
                         help='Build XML and print, do not POST')
     parser.add_argument('--verify-only', action='store_true',
                         help='Skip write, just GET and list current messages')
+    parser.add_argument('--delete', metavar='NNN[,NNN...]',
+                        help='SILME KIPI: virgulle ayrilmis 3 haneli mesaj numaralari '
+                             "(orn. 006,011). CSV'den cikarmak SILMEZ — silmenin tek yolu "
+                             'bu kip (playbook adt-message-class.md §27.5)')
+    parser.add_argument('--body-out',
+                        help='--delete: gonderilecek govdenin yazilacagi dosya '
+                             '(varsayilan: sistem temp dizini)')
     args = parser.parse_args()
+
+    if args.delete is not None and args.messages_csv:
+        parser.error('--delete ile --messages-csv birlikte verilemez (iki ayri kip)')
+    if args.delete is None and not args.verify_only:
+        eksik = [f'--{a.replace("_", "-")}' for a in
+                 ('package', 'transport', 'description', 'messages_csv')
+                 if not getattr(args, a)]
+        if eksik:
+            parser.error('CSV (yazma) kipinde zorunlu: ' + ', '.join(eksik))
 
     if args.cwd:
         set_explicit_working_dir(args.cwd)
 
     client = SAPADTClient()
+
+    if args.delete is not None:
+        return mesaj_sil(client, args.name, args.transport, args.delete,
+                         dry_run=args.dry_run, body_out=args.body_out,
+                         package=args.package)
 
     if args.verify_only:
         msgs = verify(client, args.name)
@@ -386,6 +830,14 @@ def main():
     if not args.dry_run:
         before = verify(client, args.name)
         print(f'[INFO] Mevcut mesaj sayısı: {len(before)}')
+        # UYARI (davranis DEGISMEDI): tam PUT gövdede OLMAYAN mesajı SİLMEZ (ölçüldü
+        # 2026-09-24). "CSV nihai liste" varsayımıyla çıkarılan mesaj canlıda KALIR.
+        yalniz_canli = sorted({nr for nr, _ in before} - {m[0] for m in messages})
+        if yalniz_canli:
+            print(f"[UYARI] Canlıda olup CSV'de OLMAYAN {len(yalniz_canli)} mesaj: "
+                  f'{yalniz_canli[:20]}{" ..." if len(yalniz_canli) > 20 else ""}')
+            print("        CSV'den çıkarmak mesajı SİLMEZ — bu mesajlar canlıda kalacak. "
+                  'Silmek için: --delete NNN[,NNN...] (playbook adt-message-class.md §27.5)')
 
     ok = populate(
         client=client,
