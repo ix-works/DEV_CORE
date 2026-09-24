@@ -14,6 +14,13 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## claude/agents/*.md — `effort: high` frontmatter (Opus 5.5 varsayılan-efor düşüşüne karşı sabitleme; kullanıcı onayı 2026-09-24)
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-09-24 | 7 ajan tanımının frontmatter'ına `model:` satırının hemen altına **`effort: high`** eklendi (adt-gateway · backend-expert · bug-expert · frontend-expert · infra-expert · sap-feature · sap-research). Başka hiçbir satır değişmedi. **Gevşetme değil — eski fiilî davranışa geri dönüş.** | Resmî efor dokümanı: Opus 5.5'te efor verilmeyen istek bir kademe düşük (`medium`) koşar; Opus 5'te `high` idi. **Transcript ölçümü (bir tüketici proje):** Opus 5 oturumları `"effort":"high"` (1692 · 1229 mesaj) → Opus 5.5 oturumları `"effort":"medium"` (1767 · 70); aynı gün `model: opus` ajanları (gateway, backend) `medium`, `model: sonnet` ajanları `high`. Yani model yükseltmesiyle opus ajanları SESSİZCE bir kademe düştü. Frontmatter'da `effort` anahtarının geçerli olduğu çalışan sürümde (2.1.281) doğrulandı: ajan-alan listesi `["name","description","prompt","tools","disallowedTools","model","effort",…]`. Sonnet ajanlarına da eklendi: bugün zaten `high` koşuyorlar (değişim yok), ileride varsayılan düşerse aynı sessiz düşüşe karşı sabitler. | Frontmatter anahtarı çalışan ikilide ölçüldü (yukarı). Fiilî etki **merge + overlay yeniden kurulumu sonrası** ölçülecek: yeni spawn edilen opus ajanın transcript'inde `"effort":"high"` görülmeli (ölçüm reçetesi: `grep -o '"effort":"[a-z]*"' <subagent>.jsonl \| sort \| uniq -c`). | Fixture YOK (frontmatter; davranış transcript ile ölçülür). | — |
+
+**Yayılım:** `.claude/agents/` projelerde overlay kopyasıdır ⇒ merge sonrası her projede `team_setup` overlay yeniden kurulumu gerekir. Proje-lokal `claude-local/agents/*` override'ları bu değişikliği ALMAZ — her projede ayrıca eklenmeli (ölçülen tüketici: `claude-local/agents/backend-expert.md`).
+
 ## scripts/parity_probe.py (YENİ) · ONBOARDING.md §9.1 — iki makine arası EŞLİK ölçümü (salt-okur teşhis; gate DEĞİL)
 | tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
 |---|---|---|---|---|---|
