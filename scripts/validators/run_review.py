@@ -67,6 +67,55 @@ VALIDATORS_DIR = Path(__file__).parent
 # __file__ junction'la CORE'a çözülür → env CLAUDE_PROJECT_DIR öncelikli, cwd fallback.
 PROJ_ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
 
+WIN_MAX_PATH = 259  # MAX_PATH (260) - sondaki NUL
+
+
+def _longpaths_enabled() -> int | None:
+    """HKLM\\...\\FileSystem\\LongPathsEnabled — Windows dışında / okunamazsa None."""
+    if os.name != "nt":
+        return None
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                            r"SYSTEM\CurrentControlSet\Control\FileSystem") as k:
+            return int(winreg.QueryValueEx(k, "LongPathsEnabled")[0])
+    except OSError:
+        return None
+
+
+def uzun_yol_ipucu(yollar, os_adi: str | None = None,
+                   longpaths: int | None = None, onek_var=None) -> str:
+    """Issue #285 — 'validator YOK' teşhisine uzun-yol ipucu (HÜKME DOKUNMAZ).
+
+    Windows'ta `LongPathsEnabled=0` iken MAX_PATH'i aşan yolda git dosyayı YAZAR ama Python
+    `Path.exists()` onu GÖREMEZ ⇒ 'kurulmamış/silinmiş' sanılır, oysa sebep yol uzunluğu.
+    İpucu YALNIZ Windows'ta ve aranan yollardan biri >259 karakterse eklenir (kısa yolda
+    gürültü üretmez). `\\\\?\\` önekiyle varlık AYRICA sorulur: dosya oradaysa kesin kanıt.
+    Parametreler test içindir (platformdan bağımsız ölçüm); verilmezse canlı değer okunur.
+    """
+    os_adi = os.name if os_adi is None else os_adi
+    if os_adi != "nt":
+        return ""
+    uzun = [Path(y) for y in yollar if len(str(y)) > WIN_MAX_PATH]
+    if not uzun:
+        return ""
+    if longpaths is None:
+        longpaths = _longpaths_enabled()
+    if onek_var is None:
+        def onek_var(p: Path) -> bool:
+            try:
+                return os.path.exists("\\\\?\\" + os.path.abspath(str(p)))
+            except (OSError, ValueError):
+                return False
+    en_uzun = max(uzun, key=lambda p: len(str(p)))
+    bulundu = [p for p in uzun if onek_var(p)]
+    lp = {0: "0 (kapalı)", 1: "1 (açık)"}.get(longpaths, "OKUNAMADI")
+    return (f' ⚠ UZUN-YOL OLASILIĞI: aranan yol {len(str(en_uzun))} karakter '
+            f'(> {WIN_MAX_PATH}), LongPathsEnabled={lp}. Dosya diskte olup Python '
+            f'göremiyor olabilir — `\\\\?\\` önekiyle: '
+            + ("VAR (sebep yol uzunluğu, kurulum eksikliği DEĞİL)" if bulundu else "YOK")
+            + '. Çare: klonu daha kısa bir yola taşı ya da LongPathsEnabled=1 (yönetici).')
+
 # Görev tipi → validator zinciri
 # Her validator: (script_name, severity_default, description)
 TASK_VALIDATORS = {
@@ -387,11 +436,16 @@ def main() -> int:
             if lokal.exists():
                 script_path = lokal
         if not script_path.exists():
+            # Issue #285: HÜKÜM DEĞİŞMEZ (SKIP → severity'ye göre verdict, fail-closed);
+            # yalnız TEŞHİS metni uzun-yol olasılığını anar.
+            ipucu = uzun_yol_ipucu([VALIDATORS_DIR / script_name,
+                                    PROJ_ROOT / "scripts" / "validators-local" / script_name])
             results.append(sonuc_kaydi(
                 script_name, default_severity, 'SKIP', description,
                 message=f'PRE-FLIGHT KOŞMADI: {script_name} core+validators-local '
                         f'hiçbirinde YOK (aranan: {VALIDATORS_DIR} ve '
-                        f'{PROJ_ROOT / "scripts" / "validators-local"}) — PASS SANMA.'))
+                        f'{PROJ_ROOT / "scripts" / "validators-local"}) — PASS SANMA.'
+                        + ipucu))
             continue
 
         # Tablo tipi için --type table extra arg

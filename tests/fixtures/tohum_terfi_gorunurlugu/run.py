@@ -35,6 +35,7 @@ MUTASYON (korpusun bos-yesil olmadigini kanitlar):
   --mutasyon-etiketsiz-hayir etiket yoksa "hayir" sayilir                   -> K DUSMELI
   --mutasyon-gurultu-sayilir CRLF normalizasyonu kalkar                     -> D DUSMELI
   --mutasyon-beyansiz        blocklist kapsam satiri silinir                -> B DUSMELI
+  --mutasyon-kanalsiz        yetkisiz klon terfi kanali satiri silinir (#286) -> B DUSMELI
 """
 from __future__ import annotations
 
@@ -75,6 +76,10 @@ MUTLAR = {
         'print(f"  · Kimlik taraması BLOCKLIST\'E BAĞLIDIR ({len(desenler)} girdi): '
         'listede olmayan bir")',
         'print("  · (kapsam notu)")'),
+    # Issue #286 (2026-09-25): yazma yetkisiz klonun terfi kanali beyanda yazili olmali.
+    "--mutasyon-kanalsiz": (
+        '"`core/playbook/howto-cekirdek-bulgu-bildirimi.md` kanalıyla (Issue) iletilir.")',
+        '"(kanal notu)")'),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -280,8 +285,13 @@ def main() -> int:
                 ("KARAR VERMEZ", "karar vermez"),
                 ("KAPSAM DIŞIDIR", "taranmayan dosya turleri"),
                 ("BLOCKLIST'E BAĞLIDIR", "blocklist bagimliligi"),
-                ("KOPYALAMAZ", "kopyalamaz")):
+                ("KOPYALAMAZ", "kopyalamaz"),
+                ("howto-cekirdek-bulgu-bildirimi.md", "yetkisiz klon terfi kanali (#286)")):
             ekle(f"B:{etiket} beyanda VAR", anahtar in out, f"aranan={anahtar!r}")
+        # #286 yonlendirmesi GERCEK bir dosyayi gostermeli (bayat yol = olu tavsiye)
+        ekle("B:terfi kanali dokumani repoda VAR",
+             (REPO / "playbook" / "howto-cekirdek-bulgu-bildirimi.md").is_file(),
+             "beyandaki yol cozulmuyor")
 
         # ══ 3. BAGLAM: hic tohumlanmamis makine sekli (hedef dizin YOK) ════════
         # Ayri bir EV: baska cwd, baska proje slug'i, hedef dizin hic yok. Bu sekil
