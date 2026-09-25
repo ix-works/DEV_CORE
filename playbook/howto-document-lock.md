@@ -135,7 +135,7 @@ _releaseLock(id){ this._stopHeartbeat(); this._callLock("ReleaseLock",id).catch(
 > `sServiceUrl`'de YOKTUR — ana modelden devralınmazsa iki client açık tarayıcıda bırakma öbür client'a gider (FE-48).
 >
 > ⚠ **2 — Bırakmadan sonra kilit bayrağını sıfırla.** Bırakma artık gerçekten ulaştığı için: ekrandan geri /
-> kayıt / silme ile çıkılıp `readOnly` false kalırsa, kullanıcı listedeyken sekme kapanınca unload aynı
+> kayıt / silme ile çıkılıp `readOnly` false kalırsa, kullanıcı listedeyken sayfadan ayrılınca (ör. yenileme / başka adrese gitme) unload aynı
 > belgeye yeniden bırakma gönderir; `release` yalnız `locked_by = sy-uname` sildiği için kullanıcının
 > **başka sekmede** (S2) tuttuğu kilit düşer. Bayrağı `_releaseLock` içinde sıfırlamak tüm çağıranları kapsar.
 - `<KeyParam>` = managed'de key alanı (DocumentId), unmanaged'de param (IvSalesOrder).

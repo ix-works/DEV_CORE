@@ -1015,8 +1015,9 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
 ### PATTERN #40: **Çerçevenin eklediği parametreyi elle kurulan istek ALMAZ — hata vermez, YANLIŞ VERİ döner**
 
 - **Belirti:** Uygulama tek sekmede kusursuz; aynı tarayıcıda aynı host'un başka client'ı açılınca ilk
-  sekmede bazı listeler öbür client'ın verisini gösterir, kaydet/yükle öbür client'a yazar, kilit bırakma
-  hiç ulaşmaz. Hata mesajı, dump, 4xx YOK.
+  sekmede bazı listeler öbür client'ın verisini gösterir, kaydet/yükle öbür client'a yazar. Ayrı ve tek
+  sekmede de görülen ikinci belirti: sayfadan ayrılırken kilit bırakma ulaşmaz (navigasyonda ölçüldü).
+  Hata mesajı, dump, 4xx YOK.
 - **Ölçülmüş vaka (S/4 private, freestyle V2, 2026-09-25):** UI5 manifest modeline `sap-client`'ı
   **Component** ekler; `new ODataModel(...)` ile kurulan varyant/`$batch` modelleri ve `sServiceUrl + "…"`
   ile kurulan ham XHR'lar **almıyordu** (`sServiceUrl` sorgusuz saklanır). `sap-client`'sız istek tarayıcının

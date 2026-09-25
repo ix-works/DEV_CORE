@@ -160,7 +160,7 @@ bildirmez); **yorum ve kapatma 5. adımdan sonradır** (public ve kalıcıdır):
 6. **Onaydan SONRA** normal infra süreci: kayıt (`infra-findings`) + prior-art · worktree · kod ise
    infra-expert · fixture + mutasyon · bağımsız bug-gate · PR · CI · merge · tüketici yayılımı ölçümü.
    Sonra Issue'ya **kimliksiz KAPANIŞ YORUMU** (aşağıdaki iskelet) ve kapanış. Reddedilen/çürüyen bildirim de
-   gerekçesiyle (hangi ortamda ne ölçüldü) kapatılır — ret değil **kapsam beyanıdır**.
+   aynı iskeletle kapatılır (1. bölüm = gerekçe: hangi ortamda ne ölçüldü) — ret değil **kapsam beyanıdır**.
 
 **Durum etiketleri — mükerrer değerlendirmeyi önler, gönderene takip verir (sahip kararı 2026-09-18):**
 
@@ -169,7 +169,7 @@ bildirmez); **yorum ve kapatma 5. adımdan sonradır** (public ve kalıcıdır):
 | `durum:degerlendiriliyor` | bildirim ilk görüldüğünde (1. adım) | YOK — salt etiket |
 | `durum:onay-bekliyor` | analiz sahibe sunulduğunda (4. adım) | YOK — salt etiket |
 | `durum:onaylandi` | açık onaydan sonra (5. adım) | ✅ kısa, kimliksiz: iddia bazında hüküm + onaylanan kapsam + kayıt no |
-| `durum:reddedildi` | çürüyen / yapılmayacak bildirim (5. adım kararı) | ✅ gerekçe (hangi ortamda ne ölçüldü) → **kapat** |
+| `durum:reddedildi` | çürüyen / yapılmayacak bildirim (5. adım kararı) | ✅ KAPANIŞ YORUMU iskeleti (1. bölüm = gerekçe: hangi ortamda ne ölçüldü) → **kapat** |
 
 Merge sonrası: **KAPANIŞ YORUMU** (aşağıdaki iskelet) → **kapat**. Bir sonraki durum
 etiketi konurken önceki kaldırılır (tek Issue'da tek durum). ⚠ `durum:onay-bekliyor` /
@@ -195,7 +195,7 @@ değerlendirmede daraltılabilir (ör. güvenlik), çekirdek güncellemesi her �
 6. **Doğrulama** — "bende düzeldi" demek için koşulacak komut + beklenen çıktı (merge ≠ bende düzeldi).
 7. **Yeniden açma koşulu** — hangi gözlemde aynı Issue'ya yorum yazılır.
 
-Yorum kimliksizdir (§2 genericize · §6b public repo kuralı); yol/komut yer tutucuyla yazılır (`<proje>`, `<app>`).
+Yorum kimliksizdir (§2 genericize); yol/komut yer tutucuyla yazılır (`<proje>`, `<app>`).
 
 ## 7. Yeni içerik nereye? (SORU 0 kısa aynası)
 
