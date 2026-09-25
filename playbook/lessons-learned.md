@@ -49,7 +49,7 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 | "kontrol et" / "test et" | Verification eksik | Code-level/SAP-level doğrulama |
 | "mesaj sil" · "atıl mesaj" · "SE91'den sil" · "PUT silmiyor" | Mesaj sınıfından mesaj silme — tam PUT gövdeden çıkarılanı SİLMEZ | **PATTERN #38** → `adt-message-class.md` §27.5 (`populate_message_class.py --delete`) |
 | "açılışta ayar uyarısı" · "permission rule … :* that is not at the end" · "uyarı yine geldi" | Ayar düzeltmesi ölçülmeden "kapandı" sayıldı | **PATTERN #39** → gerçek Claude Code probu (önce/sonra stderr) |
-| "iki client açıkken yanlış veri" · "tek sekmede sorun yok" · "başka client'ın verisi geldi" · "kilit bırakılmıyor / 5 dk bekledi" | Elle kurulan istek çerçevenin eklediği parametreyi (sap-client) taşımıyor; sayfa kapanırken senkron XHR gitmiyor | **PATTERN #40** → ayırıcı veriyle iki bağlam ölçümü · std/03 §18.5b · FE-48/FE-49 |
+| "iki client açıkken yanlış veri" · "tek sekmede sorun yok" · "başka client'ın verisi geldi" · "kilit bırakılmıyor / 5 dk bekledi" | Elle kurulan istek çerçevenin eklediği parametreyi (sap-client) taşımıyor; sayfadan ayrılırken senkron XHR gitmiyor | **PATTERN #40** → ayırıcı veriyle iki bağlam ölçümü · std/03 §18.5b · FE-48/FE-49 |
 
 **Tepki protokolü:**
 1. Forward progress STOP — devam etme
@@ -1035,7 +1035,8 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
   Sayfa-kapanışı istekleri için: lokal sunucuya karşı normal-an kontrolü + `beforeunload`/`pagehide`/`unload`
   × navigasyon. Sekme kapatma bu vakadaki harness'ta ayırt EDİLEMEDİ: `page.close({runBeforeUnload:true})`
   tetiğinde `sendBeacon` dahil hiçbir yöntem ulaşmadı ⇒ kapsam beyanına "ölçülemedi" yaz, yöntem hükmüne
-  katma (varsayılan `page.close()` unload işleyicilerini hiç koşmaz — `runBeforeUnload:true` ver).
+  katma (varsayılan `page.close()` unload işleyicilerini hiç koşmaz — `runBeforeUnload:true` ver; o da kapanmayı
+  BEKLEMEZ ⇒ hipotez, ölçülmedi: bağlam/sunucu hemen kapanıyorsa 0/3'ün sebebi bu olabilir — kapatmadan sonra bekle).
 - **Kardeş taraması:** tek util çoğu kez birebir kopyalarla N app'te yaşar — `new ODataModel(`,
   `XMLHttpRequest`, `fetch(`, `sServiceUrl +` tüm paketlerde taranır; düzeltme kanonik şablona da işlenir
   (yoksa sonraki kopya kusuru geri getirir — bu vakada kanonik util ve std/03 örneği kusurluydu).

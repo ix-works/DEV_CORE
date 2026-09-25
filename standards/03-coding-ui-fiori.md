@@ -1442,7 +1442,7 @@ ederek aynı ölçüm koşulabilir.
 **Kardeş taraması ZORUNLU:** `new ODataModel(`, `new XMLHttpRequest`, `fetch(` ve `sServiceUrl +` geçen
 **her** satır — bir paketteki tek util çoğu kez birebir kopyalarla birden çok app'te yaşar (ölçülen vakada 14
 kopya). Kontrol maddesi: `bug-checklist-frontend.md` **FE-48**. Sayfa kapanırken gönderilen istek (belge kilidi
-bırakma) ayrıca **FE-49**'a tabidir (ölçüm yalnız Chromium 153, navigasyon; sekme kapatma / Firefox / Safari / FLP ölçülmedi).
+bırakma) ayrıca **FE-49**'a tabidir (ölçüm yalnız Chromium 153, navigasyon; sekme kapatma ayırt edilemedi; Firefox / Safari / FLP ölçülmedi).
 
 ### 18.5 $batch Request Handling
 

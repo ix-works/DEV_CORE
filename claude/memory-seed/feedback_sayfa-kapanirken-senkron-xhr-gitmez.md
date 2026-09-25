@@ -1,13 +1,13 @@
 ---
 name: feedback_sayfa-kapanirken-senkron-xhr-gitmez
-description: beforeunload/pagehide içindeki SENKRON XHR Chromium'da sunucuya hiç gitmez (try/catch yutar) — belge kilidi bırakma için fetch+keepalive+CSRF; bırakmadan sonra kilit bayrağını sıfırla
+description: sayfadan ayrılırken (beforeunload/pagehide/unload) SENKRON XHR Chromium'da sunucuya gitmez (navigasyonda ölçüldü) (try/catch yutar) — belge kilidi bırakma için fetch+keepalive+CSRF; bırakmadan sonra kilit bayrağını sıfırla
 metadata:
   node_type: memory
   type: feedback
   seed: evet
 ---
 
-Sayfa kapanırken/ayrılırken (`beforeunload`/`pagehide`/`unload`) açılan `XMLHttpRequest(..., false)` Chromium'da sunucuya **ulaşmaz**; `try/catch` içindeyse hiçbir iz bırakmaz. Doğrusu `fetch(url, {method:"POST", keepalive:true, credentials:"same-origin", headers:{"x-csrf-token": oModel.getSecurityToken()}}).catch(...)`. `sendBeacon` özel başlık (CSRF) taşıyamaz.
+Sayfadan ayrılırken (`beforeunload`/`pagehide`/`unload`; navigasyonda ölçüldü, sekme kapatma ayırt edilemedi) açılan `XMLHttpRequest(..., false)` Chromium'da sunucuya **ulaşmaz**; `try/catch` içindeyse hiçbir iz bırakmaz. Doğrusu `fetch(url, {method:"POST", keepalive:true, credentials:"same-origin", headers:{"x-csrf-token": oModel.getSecurityToken()}}).catch(...)`. `sendBeacon` özel başlık (CSRF) taşıyamaz.
 
 **Why:** ölçüldü (2026-09-25, Chromium 153, lokal sunucu, `beforeunload`/`pagehide`/`unload` × navigasyonla sayfadan ayrılış): senkron XHR 0/3 (normal anda 1/1), keepalive fetch 3/3 CSRF başlığıyla; gerçek uygulama fonksiyonları eski 0/5 · yeni 5/5. Belge kilidi reçetesi "senkron XHR" öneriyordu ⇒ kilit yalnız 5 dk zaman aşımıyla düşüyordu. Sekme KAPATMA ayırt edilemedi (`page.close({runBeforeUnload:true})`'da `sendBeacon` dahil hiçbiri ulaşmadı — ölçüm sınırı, iddia değil); Firefox/Safari/FLP ölçülmedi.
 

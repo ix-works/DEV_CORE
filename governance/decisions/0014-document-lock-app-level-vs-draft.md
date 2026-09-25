@@ -53,6 +53,7 @@ senaryolar için **hâlâ standart best practice**'tir (bkz. standards/05).
 > yalnız unload bırakmanın **taşıma biçimi** düzeltildi. Senkron XHR Chromium'da sayfadan ayrılırken
 > gönderilmiyor (ölçüm: navigasyonda 0/3; sekme kapatma ayırt edilemedi) ⇒ **`fetch` + `keepalive` + CSRF +
 > ana modelin `sap-client`'ı**; bırakmadan sonra kilit bayrağı sıfırlanır ve unload dinleyicisi bayrağa bakar.
+> Yukarıdaki "senkron ReleaseLock" ve aşağıdaki S4 "anında" ifadeleri bu nota tabidir.
 > Reçete: `playbook/howto-document-lock.md` §4 ⚠ 1-2 · kontrol FE-48/FE-49.
 
 ### Senaryo davranışları
