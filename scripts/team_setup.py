@@ -510,6 +510,10 @@ def _bayat_wt_metadata(proje: Path) -> list[Path]:
 
 ICERIK_FARKI_NOTU = ("icerik farkli — main bu dosyaya sonradan dokunduysa BEKLENEBILIR "
                      "(paylasilan dosyada sik); farki elle incele (sessiz onay degildir)")
+# Kiyas YEREL `main`e karsidir (bilincli: `origin/main` denetimi fetch'e bagimli kilardi).
+# Yerel main bayatsa squash'lanmis is de FARKLI gorunur — guvenli yonde gurultu.
+BAYAT_MAIN_NOTU = ("kiyas YEREL main'e karsi — yerel main BAYAT olabilir: once `git fetch` "
+                   "+ main'i guncelle (pull), sonra yeniden denetle")
 
 
 def _z_liste(cikti: str) -> list[str]:
@@ -526,22 +530,58 @@ def _dal_icerik_farki(proje: Path, dal: str) -> tuple[list[str], list[str], str]
     satirina tasimaz (cok dosyali dalda Windows komut satiri sinirina takilmaz).
     `--no-renames`: yeniden adlandirmada ESKI yol da listelenir (silinen yol main'de
     duruyorsa fark sayilir). Donus: (dal_dosyalari, farkli_dosyalar, hata_metni).
+    ⛔ Dal `refs/heads/<dal>` olarak verilir: ayni adda bir TAG varsa git kisa adi TAG'e
+    cozer (`refname is ambiguous`) => tag main'deyse sonuc `([], [], '')` = SAHTE "is
+    main'de" (olculdu 2026-09-25, PR #300 bug-gate F1). `--` revizyonlari yollardan ayirir
+    (dal adi = dosya adi belirsizligi).
     """
-    mb = _git(proje, "merge-base", "main", dal)
+    ref = f"refs/heads/{dal}"
+    mb = _git(proje, "merge-base", "main", ref)
     taban = (mb.stdout or "").strip()
     if mb.returncode != 0 or not taban:
         return [], [], f"merge-base main {dal}: {(mb.stderr or 'ortak ata yok').strip()}"
-    d1 = _git(proje, "diff", "--no-renames", "--name-only", "-z", taban, dal)
+    d1 = _git(proje, "diff", "--no-renames", "--name-only", "-z", taban, ref, "--")
     if d1.returncode != 0:
         return [], [], f"git diff {taban[:10]} {dal}: {(d1.stderr or '').strip()}"
     dal_dosyalari = sorted(set(_z_liste(d1.stdout)))
     if not dal_dosyalari:
         return [], [], ""
-    d2 = _git(proje, "diff", "--no-renames", "--name-only", "-z", "main", dal)
+    d2 = _git(proje, "diff", "--no-renames", "--name-only", "-z", "main", ref, "--")
     if d2.returncode != 0:
         return dal_dosyalari, [], f"git diff main {dal}: {(d2.stderr or '').strip()}"
     farkli = sorted(set(dal_dosyalari) & set(_z_liste(d2.stdout)))
     return dal_dosyalari, farkli, ""
+
+
+def _dal_hukmu_bas(proje: Path, dal: str) -> int:
+    """② tek dal icin hukmu BASAR; 1 = operator mudahalesi (ALARM ya da hata), 0 = OK.
+
+    Ayri fonksiyon cunku ②'nin her kolu `return` ile biter — cagiranda `continue`
+    GEREKMEZ ve ③ (kirli agac) hicbir ② kolunda atlanamaz (PR #300 bug-gate F4:
+    hata/detached kolundaki `continue` ③'u o worktree icin hic kosturmuyordu).
+    """
+    dal_dosyalari, farkli, hata = _dal_icerik_farki(proje, dal)
+    if hata:
+        say(WARN, f"② icerik karsilastirmasi hata ({dal}): {hata[:160]}")
+        return 1
+    c = _git(proje, "cherry", "-v", "main", f"refs/heads/{dal}")  # EK SINYAL — hukme girmez
+    c_sat = [s for s in (c.stdout or "").splitlines() if s.strip()] \
+        if c.returncode == 0 else []
+    c_arti = sum(1 for s in c_sat if s.startswith("+"))
+    sinyal = (f"ek sinyal `git cherry`: +{c_arti}/{len(c_sat)}"
+              if c.returncode == 0 else "ek sinyal `git cherry`: KOSULAMADI")
+    if not farkli:
+        say(OK, f"② {dal}: icerik main'de — dalin degistirdigi {len(dal_dosyalari)} "
+                f"dosyanin 0'i main'den farkli · {sinyal}"
+                + (" (cok commit'li squash'ta '+' BEKLENIR)" if c_arti else ""))
+        return 0
+    say(FAIL, f"② {dal}: dalin degistirdigi {len(dal_dosyalari)} dosyanin "
+              f"{len(farkli)}'i main'den FARKLI · {sinyal}")
+    say(WARN, f"② {dal}: {ICERIK_FARKI_NOTU}")
+    say(WARN, f"② {dal}: {BAYAT_MAIN_NOTU}")
+    for s in farkli[:5]:
+        print(f"        {s}")
+    return 1
 
 
 def wt_denetim(proje: Path) -> int:
@@ -574,32 +614,14 @@ def wt_denetim(proje: Path) -> int:
     # Bilinen sinir: squash SONRASI main ayni dosyaya dokunduysa icerik farkli gorunur =>
     #    ALARM + "BEKLENEBILIR" notu; sessiz onay DEGIL, fark elle incelenir.
     for yol, dal in kayitli:
+        # ⛔ Bu dongude `continue` YOK: ③ (kirli agac) HER kayitli worktree icin kosar —
+        # detached HEAD ve ② hata kolu dahil (olculdu: once OK kolunda V5, sonra
+        # detached/hata kolunda PR #300 F4 yakaladi; `--zorla` commit'lenmemis isi silerdi).
         if not dal:
             say(WARN, f"② {yol} — detached HEAD, dal yok; icerik karsilastirmasi kosulamadi")
             bulgu = 1
-            continue
-        dal_dosyalari, farkli, hata = _dal_icerik_farki(proje, dal)
-        if hata:
-            say(WARN, f"② icerik karsilastirmasi hata ({dal}): {hata[:160]}"); bulgu = 1
-            continue
-        c = _git(proje, "cherry", "-v", "main", dal)            # EK SINYAL — hukme girmez
-        c_sat = [s for s in (c.stdout or "").splitlines() if s.strip()] \
-            if c.returncode == 0 else []
-        c_arti = sum(1 for s in c_sat if s.startswith("+"))
-        sinyal = (f"ek sinyal `git cherry`: +{c_arti}/{len(c_sat)}"
-                  if c.returncode == 0 else "ek sinyal `git cherry`: KOSULAMADI")
-        if not farkli:
-            say(OK, f"② {dal}: icerik main'de — dalin degistirdigi {len(dal_dosyalari)} "
-                    f"dosyanin 0'i main'den farkli · {sinyal}"
-                    + (" (cok commit'li squash'ta '+' BEKLENIR)" if c_arti else ""))
-        else:
-            # ⛔ `continue` YOK: ③ (kirli agac) her dal icin kosmali (olculdu: V5 yakaladi)
+        elif _dal_hukmu_bas(proje, dal):
             bulgu = 1
-            say(FAIL, f"② {dal}: dalin degistirdigi {len(dal_dosyalari)} dosyanin "
-                      f"{len(farkli)}'i main'den FARKLI · {sinyal}")
-            say(WARN, f"② {dal}: {ICERIK_FARKI_NOTU}")
-            for s in farkli[:5]:
-                print(f"        {s}")
 
         # ③ calisma agaci kirli mi — SIDDET AYRILIR (korpusa karsi olculdu 2026-08-29)
         # `--ignored` VAZGECILMEZ: hasat edilmemis is gitignore'lu dizinlerde yasar

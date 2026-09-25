@@ -17,6 +17,9 @@ Kurulum hatasi `KACTI` DEGILDIR -> ucuncu deger `KURULAMADI` basilir.
 Issue #280 (2026-09-25): ② hukmu `git cherry`den ICERIK karsilastirmasina tasindi
   (V4 yapisal + V10 gercek-git 5 kollu matris; M10-M12). Issue #284: `--wt-kapat`
   ReadOnly oznitelikli dizinde kalici bloklanmaz + teshis siniflidir (V11; M13-M15).
+PR #300 bug-gate (2026-09-25): F1 tag+dal ayni ad (V10h; M17) · F2 `--no-renames`
+  yeniden adlandirma + silme kollari (V10g/V10i; M16) · F4 ③ detached ve ② hata kolunda
+  da kosar (V12/V12b; M18/M19) · F5 ALARM'a "yerel main bayat olabilir" notu (V10j; M20).
 
 UC BAGLAM (F3):
   (1) bilinen-BOZUK  : fix sokulmus kod (mutasyon dali)
@@ -148,7 +151,7 @@ def v4_cherry(src: str) -> None:
     """
     agac = ast.parse(src)
     fns = {n.name: n for n in ast.walk(agac) if isinstance(n, ast.FunctionDef)
-           and n.name in ("wt_denetim", "_dal_icerik_farki")}
+           and n.name in ("wt_denetim", "_dal_hukmu_bas", "_dal_icerik_farki")}
     if "wt_denetim" not in fns:
         sonuc("V4 wt_denetim AST'te bulundu", False, "fonksiyon yok")
         return
@@ -156,7 +159,10 @@ def v4_cherry(src: str) -> None:
     # fonksiyon govdesindeki dizge SABITLERI sayilir (yorumlar AST'e girmez).
     sabitler = [n.value for f in fns.values() for n in ast.walk(f)
                 if isinstance(n, ast.Constant) and isinstance(n.value, str)]
-    cagrilar = {n.func.id for n in ast.walk(fns["wt_denetim"])
+    # ② hukmu PR #300 F4 ile `_dal_hukmu_bas`a tasindi (③ hicbir ② kolunda atlanmasin)
+    # => cagri zinciri wt_denetim + _dal_hukmu_bas birlikte taranir.
+    cagrilar = {n.func.id for ad in ("wt_denetim", "_dal_hukmu_bas") if ad in fns
+                for n in ast.walk(fns[ad])
                 if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
     sonuc("V4 hukum `_dal_icerik_farki` (merge-base + `diff --name-only`) ile",
           "_dal_icerik_farki" in cagrilar and "merge-base" in sabitler
@@ -174,6 +180,9 @@ def kum_icerik_kur(kok: Path, ts) -> tuple[Path, dict]:
     proje = kok / "ICPROJ"
     proje.mkdir()
     (proje / "taban.txt").write_text("taban\n", encoding="utf-8")
+    # K6/K8 icin taban dosyalari (diger kollar bunlara DOKUNMAZ — kollar ayrik kalir)
+    (proje / "eski.txt").write_text(ESKI_ICERIK, encoding="utf-8")
+    (proje / "sil.txt").write_text("silinecek\n", encoding="utf-8")
     git(proje, "init", "-q", "-b", "main")
     git(proje, "config", "user.email", "fixture")
     git(proje, "config", "user.name", "fixture")
@@ -202,8 +211,26 @@ def kum_icerik_kur(kok: Path, ts) -> tuple[Path, dict]:
     dal("k4-baska", [[("e1.txt", "1\n")], [("e2.txt", "2\n")]])
     yaz_commit([("f_main.txt", "main\n")], "main baska dosya")
     dal("k5-yok", [[("g.txt", "g\n")]], squash=False)
+    # K6 (F2): dal eski.txt -> yeni.txt YENIDEN ADLANDIRDI; main yalniz yeni.txt'yi aldi
+    #   (eski.txt main'de duruyor) => is main'de DEGIL. `--no-renames` olmadan dalin
+    #   degistirdigi dosyalar yalniz [yeni.txt] gorunur => sahte "icerik main'de".
+    git(proje, "checkout", "-q", "-b", "k6-ren", "main")
+    git(proje, "mv", "eski.txt", "yeni.txt")
+    git(proje, "commit", "-q", "-m", "k6 yeniden adlandirma")
+    git(proje, "checkout", "-q", "main")
+    yaz_commit([("yeni.txt", ESKI_ICERIK)], "main yalniz yeni.txt'yi aldi")
+    # K7 (F1): dal ile AYNI ADDA bir tag, main ucunda. Kisa ad tag'e cozulurse
+    #   merge-base = tag = diff bos => sahte "icerik main'de".
+    git(proje, "tag", "k7-tag", "main")
+    dal("k7-tag", [[("h.txt", "h\n")]], squash=False)
+    # K8 (F2 istege bagli): birlesmemis SILME => ALARM (silinen yol main'de duruyor)
+    git(proje, "checkout", "-q", "-b", "k8-sil", "main")
+    git(proje, "rm", "-q", "sil.txt")
+    git(proje, "commit", "-q", "-m", "k8 silme")
+    git(proje, "checkout", "-q", "main")
     yollar = {}
-    for d in ("k1-tek", "k2-cok", "k3-ayni", "k4-baska", "k5-yok"):
+    for d in ("k1-tek", "k2-cok", "k3-ayni", "k4-baska", "k5-yok", "k6-ren", "k7-tag",
+              "k8-sil"):
         w = ts.wt_yolu(proje, d)
         w.parent.mkdir(parents=True, exist_ok=True)
         git(proje, "worktree", "add", "-q", str(w), d)
@@ -211,7 +238,10 @@ def kum_icerik_kur(kok: Path, ts) -> tuple[Path, dict]:
     return proje, yollar
 
 
-def v10_icerik_matrisi(cikti: str) -> None:
+ESKI_ICERIK = "".join(f"satir {i}\n" for i in range(12))   # rename tespiti icin %100 benzer
+
+
+def v10_icerik_matrisi(cikti: str, ts=None, proje=None) -> None:
     """Issue #280: hukum ICERIK karsilastirmasi — cherry yalniz ek sinyal."""
     def sat(dal):
         return [s for s in cikti.splitlines() if f"② {dal}:" in s]
@@ -238,6 +268,69 @@ def v10_icerik_matrisi(cikti: str) -> None:
     sonuc("V10f K3 ALARM'i 'BEKLENEBILIR' + 'sessiz onay degildir' notu tasir",
           any("BEKLENEBILIR" in s and "sessiz onay degildir" in s for s in sat("k3-ayni")),
           next((s for s in sat("k3-ayni") if "BEKLENEBILIR" in s), None))
+    # --- PR #300 bug-gate ---
+    # F2: ALARM yetmez, ESKI yolun farkli listesinde olmasi da olculur (hukmu belirleyen
+    # tam o yol). Dogrudan cagri: cikti yalniz ilk 5 yolu basar, satir-capasi kirilgan.
+    farkli6 = ts._dal_icerik_farki(proje, "k6-ren")[1] if ts is not None else None
+    sonuc("V10g K6 yeniden adlandirma, main yalniz yeniyi aldi -> ALARM + farkli'da eski.txt",
+          alarm("k6-ren") and farkli6 is not None and "eski.txt" in farkli6,
+          f"{ilk('k6-ren')} · farkli={farkli6}")
+    sonuc("V10h K7 dal ile AYNI ADDA tag (main'de), is main'de degil -> ALARM",
+          alarm("k7-tag"), ilk("k7-tag"))
+    sonuc("V10i K8 birlesmemis silme -> ALARM", alarm("k8-sil"), ilk("k8-sil"))
+    # F5: ALARM satiri yerel-main-bayat notunu tasir (FP capasi: OK dalinda YOK)
+    sonuc("V10j ALARM 'yerel main BAYAT olabilir … git fetch' notunu tasir; OK dal tasimaz",
+          any("BAYAT" in s and "git fetch" in s for s in sat("k5-yok"))
+          and not any("BAYAT" in s for s in sat("k1-tek")),
+          next((s for s in sat("k5-yok") if "BAYAT" in s), None))
+
+
+def v12_kirli_her_kolda(ts, kok: Path) -> None:
+    """PR #300 F4: ③ (kirli agac) ②'nin detached ve hata kollarinda da KOSAR.
+
+    Risk: ③ atlanirsa operator `--zorla` ile commit'lenmemis isi siler. Iki kol:
+    (a) detached HEAD worktree + izlenmeyen dosya · (b) ② HATA kolu (main ile ortak
+    atasi olmayan dal => merge-base hatasi) + izlenmeyen dosya.
+    """
+    proje = kok / "KIRPROJ"
+    proje.mkdir()
+    (proje / "a.txt").write_text("a\n", encoding="utf-8")
+    git(proje, "init", "-q", "-b", "main")
+    git(proje, "config", "user.email", "fixture")
+    git(proje, "config", "user.name", "fixture")
+    git(proje, "add", "-A")
+    git(proje, "commit", "-q", "-m", "taban")
+    det = ts.wt_yolu(proje, "det-kirli")
+    det.parent.mkdir(parents=True, exist_ok=True)
+    git(proje, "worktree", "add", "-q", "--detach", str(det), "main")
+    (det / "kirli.txt").write_text("commit'lenmemis is\n", encoding="utf-8")
+    # ortak atasiz dal: bos agacli kok commit (checkout'suz; ana agaca dokunmaz)
+    bos = subprocess.run(["git", "-C", str(proje), "mktree"], input="", capture_output=True,
+                         text=True).stdout.strip()
+    kc = git(proje, "commit-tree", bos, "-m", "iliskisiz kok").stdout.strip()
+    git(proje, "branch", "hata-kirli", kc)
+    hk = ts.wt_yolu(proje, "hata-kirli")
+    git(proje, "worktree", "add", "-q", str(hk), "hata-kirli")
+    (hk / "kirli2.txt").write_text("commit'lenmemis is\n", encoding="utf-8")
+    cikti = denetim_kos(ts, proje)
+
+    def uc(ad):
+        return next((s for s in cikti.splitlines()
+                     if s.startswith("[FAIL]") and f"③ {ad}:" in s), None)
+    # KONTROL: kurulum gercekten ②'nin o kollarina dustu mu (yoksa vektor bos olcer)
+    kol_det = any("detached HEAD" in s for s in cikti.splitlines())
+    kol_hata = any("② icerik karsilastirmasi hata (hata-kirli)" in s
+                   for s in cikti.splitlines())
+    sonuc("V12 detached HEAD + kirli agac -> ② WARN VE ③ FAIL (izlenmeyen 1)",
+          kol_det and uc("det-kirli") is not None
+          and "izlenen/izlenmeyen 1 kayit" in (uc("det-kirli") or ""),
+          uc("det-kirli") or f"② detached kolu={kol_det}; ③ satiri YOK")
+    sonuc("V12b ② HATA kolu (ortak atasiz dal) + kirli agac -> ③ FAIL (izlenmeyen 1)",
+          kol_hata and uc("hata-kirli") is not None
+          and "izlenen/izlenmeyen 1 kayit" in (uc("hata-kirli") or ""),
+          uc("hata-kirli") or f"② hata kolu={kol_hata}; ③ satiri YOK")
+    for w in (det, hk):
+        git(proje, "worktree", "remove", "--force", str(w))
 
 
 def _salt_okunur_yap(d: Path) -> None:
@@ -461,9 +554,11 @@ def tur(ts_mut=None, sl_mut=None, ss_mut=None, sadece=None) -> None:
                 git(proje, "worktree", "remove", "--force", str(w))
         if sadece in (None, "icerik"):
             icproje, icyollar = kum_icerik_kur(kok, ts)
-            v10_icerik_matrisi(denetim_kos(ts, icproje))
+            v10_icerik_matrisi(denetim_kos(ts, icproje), ts, icproje)
             for w in icyollar.values():
                 git(icproje, "worktree", "remove", "--force", str(w))
+        if sadece in (None, "kirli3"):
+            v12_kirli_her_kolda(ts, kok)
         if sadece in (None, "silme"):
             v11_salt_okunur_silme(ts, kok)
         if sadece in (None, "statusline"):
@@ -484,7 +579,7 @@ MUTASYONLAR = [
      ('    if os.name == "nt":\n        r = subprocess.run(["cmd", "/c", "mklink"',
       '    if True:\n        r = subprocess.run(["cmd", "/c", "mklink"'), "platform"),
     ("M4 #80 `git cherry` yerine `--is-ancestor`", "team_setup",
-     ('c = _git(proje, "cherry", "-v", "main", dal)',
+     ('c = _git(proje, "cherry", "-v", "main", f"refs/heads/{dal}")',
       'c = _git(proje, "merge-base", "--is-ancestor", "main", dal)'), "yol"),
     # ⛔ MUTASYON KUM DISINA YAZMAMALI. Ilk yazim `Path(os.sep + 'sabit')` idi ve
     # olculdu: mutasyon turu diskin KOKUNDE (`C:\sabit\.wt\PROJ\...`) 25 girdilik gercek
@@ -509,11 +604,11 @@ MUTASYONLAR = [
       "            if True:\n                ozgun.append"), "denetim"),
     # --- Issue #280: hukum icerikten, cherry yalniz ek sinyal ---
     ("M10 #280 hukum yeniden `git cherry`ye baglanir", "team_setup",
-     ("        if not farkli:\n", "        if not c_arti:\n"), "icerik"),
+     ("    if not farkli:\n", "    if not c_arti:\n"), "icerik"),
     ("M11 #280 icerik main'e degil ortak ataya kiyaslanir", "team_setup",
-     ('"-z", "main", dal)', '"-z", taban, dal)'), "icerik"),
+     ('"-z", "main", ref, "--")', '"-z", taban, ref, "--")'), "icerik"),
     ("M12 #280 ALARM'dan 'BEKLENEBILIR' notu duser", "team_setup",
-     ('            say(WARN, f"② {dal}: {ICERIK_FARKI_NOTU}")\n', ""), "icerik"),
+     ('    say(WARN, f"② {dal}: {ICERIK_FARKI_NOTU}")\n', ""), "icerik"),
     # --- Issue #284: ReadOnly oznitelik silmeyi kalici bloklamaz ---
     ("M13 #284 onarici isleyici chmod YAPMAZ", "team_setup",
      ("                os.chmod(hedef, os.stat(hedef).st_mode | stat.S_IWRITE)",
@@ -524,6 +619,22 @@ MUTASYONLAR = [
     ("M15 #284 siniflandirma her seye 'handle kilidi' der", "team_setup",
      ('    if getattr(exc, "winerror", None) in (32, 33):',
       "    if True:"), "silme"),
+    # --- PR #300 bug-gate F1/F2/F4/F5 ---
+    ("M16 F2 dalin-dosyalari diff'inden `--no-renames` duser", "team_setup",
+     ('"diff", "--no-renames", "--name-only", "-z", taban, ref, "--")',
+      '"diff", "--name-only", "-z", taban, ref, "--")'), "icerik"),
+    ("M17 F1 `refs/heads/` oneki duser (kisa ad tag'e cozulebilir)", "team_setup",
+     ('    ref = f"refs/heads/{dal}"\n', "    ref = dal\n"), "icerik"),
+    ("M18 F4 detached kolunda `continue` geri gelir (③ atlanir)", "team_setup",
+     ("            bulgu = 1\n        elif _dal_hukmu_bas(proje, dal):\n",
+      "            bulgu = 1\n            continue\n        elif _dal_hukmu_bas(proje, dal):\n"),
+     "kirli3"),
+    ("M19 F4 ② ALARM/hata kolunda `continue` geri gelir (③ atlanir)", "team_setup",
+     ("        elif _dal_hukmu_bas(proje, dal):\n            bulgu = 1\n",
+      "        elif _dal_hukmu_bas(proje, dal):\n            bulgu = 1\n            continue\n"),
+     "kirli3"),
+    ("M20 F5 ALARM'dan 'yerel main bayat' notu duser", "team_setup",
+     ('    say(WARN, f"② {dal}: {BAYAT_MAIN_NOTU}")\n', ""), "icerik"),
 ]
 
 
