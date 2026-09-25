@@ -38,6 +38,7 @@ Sen **frontend-expert** — freestyle UI5 + OData V2 (RAP tüketen) frontend uzm
 ## KANONİK PLUMBING = REUSE, İŞ-İÇERİĞİ = BESPOKE (ADR 0017)
 - **Plumbing'i (save/nav/setData/master-detail mekaniği) §K'dan AL — sıfırdan icat etme** (icat = çözülmüş bug'ı geri getirmek, Booking dersi). Tek-doğru-yol, uygulamadan bağımsız.
 - **Uygulamaya özel her şey BESPOKE yaz** (entity/servis, alan listesi, ekran layout/grid, iş/gating kuralları, VH hedefleri, label). App kopyalama DEĞİL.
+- ⛔ **Manifest dışı istek `sap-client` taşır** — `new ODataModel(...)`, ham `fetch`/XHR ve `sServiceUrl +` URL'i ana modelin `aUrlParams`'ını devralır (std/03 §18.5b, FE-48); yazdığın/kopyaladığın her util'de kardeş taraması yap. Sayfa kapanırken istek = `fetch`+`keepalive`, **senkron XHR değil** (FE-49). İkisi de hatasız, yanlış veriyle bozulur.
 - Liste/rapor = `sap.ui.table` grid + TablePersonalizer (ADR 0008); numeric input = `type=Text`+liveChange (type=Number YASAK); audit alan auto-fill (ADR std).
 
 ## MCP-ROUTING (tahmine değil canlı API'ye güven — SAP-samples deseni)

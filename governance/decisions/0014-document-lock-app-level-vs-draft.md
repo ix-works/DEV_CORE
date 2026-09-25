@@ -46,6 +46,10 @@ senaryolar için **hâlâ standart best practice**'tir (bkz. standards/05).
   (COMMIT WORK yok; action LUW'unda RAP commit eder).
 - UI (freestyle): Değiştir aç → AcquireLock; başkası tutuyorsa **read-only + uyarı**.
   Kaydet/Geri → ReleaseLock. **`beforeunload` → senkron ReleaseLock** (temiz kapanış).
+  > **Değişiklik notu (2026-09-25):** kararın kendisi (app-level kilit, heartbeat, timeout) değişmedi;
+  > yalnız unload bırakmanın **taşıma biçimi** düzeltildi. Senkron XHR Chromium'da sayfa kapanırken
+  > gönderilmiyor (ölçüm: 0/6) ⇒ **`fetch` + `keepalive` + CSRF + ana modelin `sap-client`'ı**; bırakmadan
+  > sonra kilit bayrağı sıfırlanır. Reçete: `playbook/howto-document-lock.md` §4 ⚠ 1-2 · kontrol FE-48/FE-49.
   **2 dk heartbeat** (sekme açıkken kilidi tazeler → bekleyen kullanıcı devralınmaz).
   List Sil → önce AcquireLock (kilitliyse silinmez).
 

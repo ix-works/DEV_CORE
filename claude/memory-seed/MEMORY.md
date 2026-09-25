@@ -139,7 +139,7 @@
 - ⭐ [Msag tam put govdeden cikarmak silmez](feedback_msag-tam-put-govdeden-cikarmak-silmez.md) — Mesaj sınıfından mesaj SİLMEK: tam PUT gövdeden çıkarılanı SİLMEZ (200, no-op) — `<mc:deletedmessages>`; araç populate_message_class.py --delete
 
 ### UI · freestyle UI5
-- **4 ders:** [tam indeks](_indeks-ui.md)
+- **6 ders:** [tam indeks](_indeks-ui.md)
 - ⭐ [Playwright pdf page margin ve thead tekrar tuzagi](feedback_playwright-pdf-page-margin-ve-thead-tekrar-tuzagi.md) — HTML→PDF (Playwright/Chromium) dört tuzak — dokümanın kendi @page{margin:0}'ı JS page.pdf({margin})'i SESSİZCE ezer; <thead> tekrarı bu zincirde çalışmaz, headerTemplate çalışır; marginTop SABİT OLMAZ — header içerikle büyüdüğü için ölçülerek türetilir (Chromium sabit ~2,4mm daha yüksek çizer); headerTemplate ZEMİN BOYAMAZ — orada mürekkep yalniz border+metinden gelir
 - ⭐ [Tarayici araci secimi playwright vs chrome eklentisi](feedback_tarayici-araci-secimi-playwright-vs-chrome-eklentisi.md) — İki tarayıcı aracı VAR — Playwright (deterministik KAPI) ve Claude in Chrome eklentisi (canlı GÖZ); hangisi ne zaman + eklentinin kurulum durumu
 

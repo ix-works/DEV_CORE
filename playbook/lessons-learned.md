@@ -49,6 +49,7 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 | "kontrol et" / "test et" | Verification eksik | Code-level/SAP-level doğrulama |
 | "mesaj sil" · "atıl mesaj" · "SE91'den sil" · "PUT silmiyor" | Mesaj sınıfından mesaj silme — tam PUT gövdeden çıkarılanı SİLMEZ | **PATTERN #38** → `adt-message-class.md` §27.5 (`populate_message_class.py --delete`) |
 | "açılışta ayar uyarısı" · "permission rule … :* that is not at the end" · "uyarı yine geldi" | Ayar düzeltmesi ölçülmeden "kapandı" sayıldı | **PATTERN #39** → gerçek Claude Code probu (önce/sonra stderr) |
+| "iki client açıkken yanlış veri" · "tek sekmede sorun yok" · "başka client'ın verisi geldi" · "kilit bırakılmıyor / 5 dk bekledi" | Elle kurulan istek çerçevenin eklediği parametreyi (sap-client) taşımıyor; sayfa kapanırken senkron XHR gitmiyor | **PATTERN #40** → ayırıcı veriyle iki bağlam ölçümü · std/03 §18.5b · FE-48/FE-49 |
 
 **Tepki protokolü:**
 1. Forward progress STOP — devam etme
@@ -1010,3 +1011,33 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
 - **Gate?** ⛔ HAYIR (ADR 0019) — doğrulayıcı Claude Code ikilisinin içindedir ve sürümle değişir; onu
   bir validator'a kopyalamak bayatlayan ikinci bir kaynak üretir. Otorite gerçek ikilidir → reçete.
 - **Referans:** PATTERN #19 (kontrol grubu) · PATTERN #16 (kapsam beyanı) · `claude/settings.template.json`.
+
+### PATTERN #40: **Çerçevenin eklediği parametreyi elle kurulan istek ALMAZ — hata vermez, YANLIŞ VERİ döner**
+
+- **Belirti:** Uygulama tek sekmede kusursuz; aynı tarayıcıda aynı host'un başka client'ı açılınca ilk
+  sekmede bazı listeler öbür client'ın verisini gösterir, kaydet/yükle öbür client'a yazar, kilit bırakma
+  hiç ulaşmaz. Hata mesajı, dump, 4xx YOK.
+- **Ölçülmüş vaka (S/4 private, freestyle V2, 2026-09-25):** UI5 manifest modeline `sap-client`'ı
+  **Component** ekler; `new ODataModel(...)` ile kurulan varyant/`$batch` modelleri ve `sServiceUrl + "…"`
+  ile kurulan ham XHR'lar **almıyordu** (`sServiceUrl` sorgusuz saklanır). `sap-client`'sız istek tarayıcının
+  tek `sap-usercontext` çerezine göre yönlenir; çerezi en son açılan client yazar. Ayırıcı veri ile ölçüldü:
+  110 sekmesinde varyant modeli 100'ün 3 kaydını, yükleme modeli 100'ün 16 kaydını okudu (110'da 0). Etki:
+  14 util kopyası + 2 veri yazan model + 5 kilit bırakma isteği. Aynı turda ikinci, bağımsız bir sessiz
+  kusur çıktı: sayfa kapanırken gönderilen **senkron XHR Chromium'da hiç gitmiyordu** (0/6; `fetch keepalive` 3/3).
+- **Ders (genelleme):** bir çerçeve bir parametreyi/başlığı **kendi kurduğu nesneye** otomatik ekliyorsa,
+  aynı adresi **elle** kuran her kod o parametreyi **kendisi** taşımak zorundadır — ve eksikliği ancak
+  parametrenin **farklı değer aldığı** bir ortamda görünür. Tek client, tek dil, tek sekmeyle yapılan test
+  bu sınıfı **yapısal olarak** yakalayamaz.
+- **Nasıl ölçülür:** kaynak okuması yetmez (bkz. PATTERN #19). İki farklı parametre değeriyle iki bağlam
+  kur (iki client'lı iki sekme), **ayırıcı veri** seç (iki bağlamda sayısı farklı entity; iki tarafta aynı
+  sayı dönen entity hiçbir şey kanıtlamaz), ağ izinde parametreyi ve dönen veriyi birlikte oku.
+  Sayfa-kapanışı istekleri için: lokal sunucuya karşı normal-an kontrolü + `beforeunload`/`pagehide` ile
+  navigasyon; sekme kapatma Playwright'ta ölçülemez (`sendBeacon` da ulaşmaz — harness sınırı, kapsam beyanına yaz).
+- **Kardeş taraması:** tek util çoğu kez birebir kopyalarla N app'te yaşar — `new ODataModel(`,
+  `XMLHttpRequest`, `fetch(`, `sServiceUrl +` tüm paketlerde taranır; düzeltme kanonik şablona da işlenir
+  (yoksa sonraki kopya kusuru geri getirir — bu vakada kanonik util ve std/03 örneği kusurluydu).
+- **Gate?** ⛔ Şimdilik HAYIR (ADR 0019 şart 4 — önce doküman: std/03 §18.5b, FE-48/FE-49,
+  UI-BOOT-05/UI-SAVE-05, frontend-expert tanımı). Doküman yetmediği görülürse aday: `new ODataModel(`/ham
+  istek → `aUrlParams` devri taraması.
+- **Referans:** std/03 §18.5b · `howto-document-lock.md` §4 ⚠ 1-2 · ADR 0014 değişiklik notu · FE-43 (metadata
+  ayağı — ayrı) · PATTERN #19 (kontrol grubu). prior-art: FE-43 bulundu (yalnız `metadataUrlParams`); `sap-client` ayağı yok.
