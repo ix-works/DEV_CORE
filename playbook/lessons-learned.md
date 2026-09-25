@@ -48,6 +48,7 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 | "okudun mu" | Documentation skipped | İlgili dosyayı oku, sonra cevapla |
 | "kontrol et" / "test et" | Verification eksik | Code-level/SAP-level doğrulama |
 | "mesaj sil" · "atıl mesaj" · "SE91'den sil" · "PUT silmiyor" | Mesaj sınıfından mesaj silme — tam PUT gövdeden çıkarılanı SİLMEZ | **PATTERN #38** → `adt-message-class.md` §27.5 (`populate_message_class.py --delete`) |
+| "açılışta ayar uyarısı" · "permission rule … :* that is not at the end" · "uyarı yine geldi" | Ayar düzeltmesi ölçülmeden "kapandı" sayıldı | **PATTERN #39** → gerçek Claude Code probu (önce/sonra stderr) |
 
 **Tepki protokolü:**
 1. Forward progress STOP — devam etme
@@ -976,3 +977,36 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
   **Gate?** ⛔ HAYIR (ADR 0019) — araç kendi çıktısında kapıyı taşır; ayrı validator gerekmiyor.
 - **Referans:** [`adt-message-class.md`](adt-message-class.md) §27.5 (yöntem + kaynak kanıtı + T1–T13
   tuzakları) · §27.6 (başarısız yollar) · PATTERN #19 (kontrol grubu) · PATTERN #16 (kapsam beyanı).
+
+### PATTERN #39: **Claude Code ayar uyarısı "düzeltildi" demek için GERÇEK Claude Code ile ölç — elle okuma aynı satırdaki ikinci kusuru kaçırır**
+
+- **Belirti:** Claude Code açılışta bir ayar uyarısı basıyor (ör. *"Permission deny rule (.claude\settings.json):
+  Bash(…) has a :\* that is not at the end …"*); düzeltme PR'ı merge edilip kurulum güncellendikten sonra
+  **aynı uyarı ertesi açılışta yine geliyor**.
+- **Ölçülmüş vaka (2026-09-24/25, Claude Code 2.1.282):** şablondaki deny kuralı `Bash(dd if=:* of=/dev/:*)`
+  **iki** ortada-`:*` taşıyordu. İlk tur yalnız sondakini düzeltti (`of=/dev/*`) ve *"kardeş taraması:
+  ortada `:*` taşıyan BAŞKA kural 0"* yazdı — tarama başka satırlara baktı, düzeltilen satırın **kendisine**
+  bakmadı; uyarının kaybolduğu da ölçülmedi (*"yeni oturumda görülecek"*). Ertesi açılış uyarıyı geri
+  getirdi. İkinci tur: gerçek Claude Code probu düzeltme öncesi **1** ayar uyarısı, sonrası **0**.
+- **Kural sözdizimi (Claude Code'un kendi doğrulayıcısından, 2.1.282):** `:*` yalnız Bash kuralının
+  **SONUNDA** önek anlamı taşır. Ortada `:*` → `:` literal + `*` joker (uyarı; kural çoğu zaman hiç
+  eşleşmez). `*` ile sondaki `:*` karışırsa `*` açılmaz. `Write(…)`/`Glob(…)` dosya izin kontrolünde
+  eşlenmez (`Edit(…)`/`Read(…)` kullan). `WebFetch` yalnız `domain:` alır. MCP kuralı parantez almaz.
+  Allow'da `Bash(git * status)` biçimi araya giren seçenekleri de onaylar (uyarı).
+- **Doğrulama reçetesi (ayar dosyası değiştiğinde, merge'den ÖNCE):**
+  1. Scratch'te boş klasör aç; `.claude/settings.json` (+ varsa `settings.local.json`, `.mcp.json`)
+     kopyasını koy; kopyadan `hooks` bloğunu boşalt, `statusLine`'ı çıkar (proje hook'ları scratch'te
+     koşmasın, oturum kayıtlarını kirletmesin).
+  2. `claude -p "yalnizca OK yaz" --max-turns 1 --debug-file <scratch>/debug.log 2> <scratch>/err.txt`
+  3. `err.txt` = kullanıcının açılışta gördüğü ayar uyarıları. **Önce düzeltilmemiş kopyayla koş**
+     (pozitif kontrol: uyarı GÖRÜNMELİ), sonra düzeltilmişle (0 olmalı).
+  - Proba özgü, kalıcı olmayan gürültü: *"workspace has not been trusted"* (scratch güvenilmemiş klasör)
+    ve MCP bağlantı hataları (scratch'te bağlantı dosyası yok).
+  - Maliyet: tek kısa model çağrısı. `--bare` KULLANILMAZ (OAuth okumaz, oturum açamaz). `claude doctor`
+    ayar dosyalarını denetlemez, yalnız kurulumu.
+  - **Kapsam beyanı:** kullanıcı + proje ayarlarının açılış doğrulaması ölçülür; `hooks` bloğu
+    boşaltıldığı için **hook yapılandırma uyarıları ÖLÇÜLMEZ**; managed settings yalnız makinede varsa
+    yüklenir.
+- **Gate?** ⛔ HAYIR (ADR 0019) — doğrulayıcı Claude Code ikilisinin içindedir ve sürümle değişir; onu
+  bir validator'a kopyalamak bayatlayan ikinci bir kaynak üretir. Otorite gerçek ikilidir → reçete.
+- **Referans:** PATTERN #19 (kontrol grubu) · PATTERN #16 (kapsam beyanı) · `claude/settings.template.json`.
