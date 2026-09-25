@@ -570,6 +570,15 @@ OZEL_TESTLER = [
      "Taban filtresi CIFT YONLU olculur (S4a/S4b); satir bolme capasi GERCEK korpustan "
      "dogdu (splitlines Unicode sinirlarini boluyordu); ozet satiri olay token'ini "
      "tekrarlamaz (grep uyari korlugu) — 27 vektor + 4 mutasyon"),
+    # 2026-09-25 (DEV_CORE Issue #302): get_object_revisions sinif/include/arayuzde surum
+    # gecmisini okuyamiyor (obje GET 406, atom: onekli GORELI baglanti) ve her hatayi [] yapiyordu.
+    ("revizyon_okuma",
+     "get_object_revisions: 'okuyamadim' != 'surum yok' — obje GET Accept */*, atom:link rel/href "
+     "sira-bagimsiz, goreli href obje altina ('./<ad>/...' BDEF/tablo/SRVD bicimi RFC-cozumlu), "
+     "sinifta includes/main/versions; 404 -> NotFound, "
+     "200-disi/ag/XML-olmayan govde/ayristirilamayan surum baglantisi/taninmayan entry -> "
+     "SAPADTError; KONTROL: baglanti yok + bos feed (onekli/oneksiz) mesru []. Gercek cagiran "
+     "list_revisions.py ayri surecte (24 vektor + 20 mutasyon; eski kod 5/24 = yalniz kontrol grubu)"),
 ]
 
 
@@ -991,12 +1000,18 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde",
       "O:transport_gorev_istek_cevrimi", "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi",
       "O:aktivasyon_govde_hukmu", "O:aciklama_412_retry", "O:mcp_sahte_sonuc_uclusu",
-      "O:sorgu_araclari_durustlugu"),
+      "O:sorgu_araclari_durustlugu", "O:revizyon_okuma"),
      "on korpus bu modülü import/mutasyon eder (2026-09-03: `set_function_module_source` "
      "LOCK-CORRNR otoritesi + `_verify_and_return_lock` docstring'i · 2026-09-04: "
      "`get_object_source` URL kuruluşu + 404 mesajının obje adı · 2026-09-13 Q277: "
      "`_validate_cds_source` sözcük-dizisi kapısı · 2026-09-13 Q187/Q188/Q231: aktivasyon hükmünün "
-     "TEK KAYNAĞI `aktivasyon_govde_hukmu` + worklist sondası + FUGR FF toplu istek)"),
+     "TEK KAYNAĞI `aktivasyon_govde_hukmu` + worklist sondası + FUGR FF toplu istek · "
+     "2026-09-25 Issue #302: `get_object_revisions` okuyamama ≠ sürüm yok)"),
+    # list_revisions.py HARITA'da HIC YOKTU (2026-09-25, Issue #302): tek tüketicisi olduğu
+    # `get_object_revisions`'ın gerçek çağıranı olarak `revizyon_okuma` onu AYRI süreçte koşar.
+    ("scripts/list_revisions.py", ("O:revizyon_okuma",),
+     "get_object_revisions'ın tek CLI çağıranı: istisna → [FAIL] rc 1, meşru boş → [INFO] rc 0, "
+     "ayırıcı satırında literal `\\n` yok"),
     ("scripts/sap_client.py",
      ("O:adtget_yokluk_kaniti", "O:class_include_push", "O:dogrulama_kosamadi",
       "O:sessiz_olumsuzlama_2026_08_10", "O:veri_yetki_guardlari",

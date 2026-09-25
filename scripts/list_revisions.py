@@ -93,14 +93,16 @@ def main():
         print("=" * 60)
         return 1
 
+    # Boş liste artık YALNIZ meşru boştur (obje sürüm bağlantısı taşımıyor / feed'de kayıt yok);
+    # okunamayan her durum get_object_revisions'tan istisna olarak gelir → yukarıda [FAIL] (Issue #302).
     if not revisions:
         print(f"[INFO] No revisions found for object: {args.name or args.url}")
         return 0
 
     # Display revisions
-    print(f"\\n{'='*80}")
+    print(f"\n{'='*80}")
     print(f"Revision History: {args.name or args.url}")
-    print(f"{'='*80}\\n")
+    print(f"{'='*80}\n")
 
     for i, rev in enumerate(revisions[:args.limit], 1):
         print(f"Revision {i}:")

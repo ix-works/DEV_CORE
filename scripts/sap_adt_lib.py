@@ -2111,95 +2111,160 @@ class SAPADTClient:
             object_url: URL of the object (e.g., /sap/bc/adt/oo/classes/zcl_my_class)
 
         Returns:
-            List of revision dicts with keys: uri, date, author, version, versionTitle
-        """
-        # First, get object structure to find revisions link
-        try:
-            headers = self._get_headers()
-            headers['Accept'] = 'application/vnd.sap.adt.objectstructure+xml'
+            List of revision dicts with keys: uri, date, author, version, versionTitle.
+            Empty list ONLY when the object has no versions link or the feed has no entries.
 
+        Raises:
+            SAPObjectNotFoundError: object does not exist (404).
+            SAPADTError: object or feed could not be read (non-200, network error) —
+                "could not read" is NOT reported as "no revisions" (Issue #302).
+        """
+        # Obje yapısından sürüm bağlantısını bul. Ölçüm (Issue #302, s4_private DEV): obje GET'i
+        # `objectstructure+xml` ve `application/xml` ile 406, `*/*` ile 200 döner; bağlantı
+        # `<atom:link>` önekli ve GÖRELİ gelir (`source/main/versions`, sınıfta `includes/<ad>/versions`
+        # × 4 — ana kaynak `includes/main/versions`; sınıfta `source/main/versions` 404).
+        headers = self._get_headers()
+        headers['Accept'] = '*/*'
+        try:
             response = self.session.get(
                 f"{self.url}{object_url}",
                 headers=headers,
                 timeout=self.timeout_short
             )
+        except requests.exceptions.RequestException as e:
+            raise SAPADTError(
+                f"Object could not be read for revisions: {object_url} ({type(e).__name__})",
+                endpoint=object_url
+            ) from e
 
-            if response.status_code == 404:
-                raise SAPObjectNotFoundError(
-                    f"Object not found: {object_url}",
-                    status_code=404,
-                    endpoint=object_url
-                )
-
-            # Parse object structure to find revisions link
-            # The revisions link has rel="http://www.sap.com/adt/relations/versions"
-    
-            revisions_link_match = re.search(
-                r'<link[^>]*rel="http://www\.sap\.com/adt/relations/versions"[^>]*href="([^"]+)"',
-                response.text
+        if response.status_code == 404:
+            raise SAPObjectNotFoundError(
+                f"Object not found: {object_url}",
+                status_code=404,
+                endpoint=object_url
+            )
+        if response.status_code != 200:
+            raise SAPADTError(
+                f"Object could not be read for revisions: {object_url} (HTTP {response.status_code})",
+                status_code=response.status_code,
+                endpoint=object_url,
+                response_text=response.text[:500]
+            )
+        # 200 ama XML olmayan gövde (ör. HTML giriş sayfası) "bağlantı yok" DEĞİLDİR — okunamadı.
+        if not re.match(r'\s*<(?:\?xml\b|[A-Za-z_][\w.-]*:[A-Za-z_])', response.text):
+            raise SAPADTError(
+                f"Object could not be read for revisions: {object_url} (HTTP 200, body is not ADT XML)",
+                status_code=response.status_code,
+                endpoint=object_url,
+                response_text=response.text[:500]
             )
 
-            if not revisions_link_match:
-                # Try alternate format
-                revisions_link_match = re.search(
-                    r'<link[^>]*href="([^"]+)"[^>]*rel="http://www\.sap\.com/adt/relations/versions"',
-                    response.text
+        # rel/href sırasından ve `atom:` önekinden bağımsız
+        hrefs = []
+        for attrs in re.findall(r'<(?:atom:)?link\b([^>]*)>', response.text):
+            if 'rel="http://www.sap.com/adt/relations/versions"' not in attrs:
+                continue
+            href_match = re.search(r'\bhref="([^"]+)"', attrs)
+            if href_match:
+                hrefs.append(href_match.group(1))
+
+        if not hrefs:
+            # Gövde sürüm ilişkisini ANIYOR ama bağlantı ayrıştırılamadı (tek tırnaklı öznitelik,
+            # başka öznitelikte `>`, `atom:` dışı önek …) → "bağlantı yok" DEĞİL, okunamadı.
+            if 'relations/versions' in response.text:
+                raise SAPADTError(
+                    f"Object could not be read for revisions: {object_url} "
+                    f"(versions relation present but link not recognized)",
+                    status_code=response.status_code,
+                    endpoint=object_url,
+                    response_text=response.text[:500]
                 )
+            return []
 
-            if not revisions_link_match:
-                return []
+        main_hrefs = [h for h in hrefs if h.rstrip('/').endswith('/main/versions')]
+        revisions_href = main_hrefs[0] if main_hrefs else hrefs[0]
+        # Göreli href çözümü İKİ biçimlidir (ölçüm, Issue #302 — 6 tip, hiçbirinde `xml:base` yok):
+        #   · `./<obje_adı>/source/main/versions` (BDEF · tablo `blue:blueSource` · SRVD) → RFC 3986
+        #     çözümü, EBEVEYN-göreli: `urljoin(object_url, href)` = `<obje>/source/main/versions`
+        #   · diğer göreli (`source/main/versions` · sınıf `includes/main/versions` · DDLS `versions`)
+        #     → obje URL'inin ALTINA (obje = dizin); RFC çözümü burada YANLIŞ (ebeveyne düşer → 404)
+        if revisions_href.startswith(('http://', 'https://')):
+            revisions_url = revisions_href
+        elif revisions_href.startswith('/'):
+            revisions_url = f"{self.url}{revisions_href}"
+        elif revisions_href.startswith('./'):
+            from urllib.parse import urljoin
+            # sondaki `/` (`--url …/zdemo_r_ornek/`) urljoin'i obje DİZİNİNE çözdürür → ad iki kez
+            revisions_url = f"{self.url}{urljoin(object_url.rstrip('/'), revisions_href)}"
+        else:
+            revisions_url = f"{self.url}{object_url.rstrip('/')}/{revisions_href}"
 
-            revisions_url = revisions_link_match.group(1)
-            # Make it absolute if relative
-            if revisions_url.startswith('/'):
-                revisions_url = f"{self.url}{revisions_url}"
-
-            # Get revisions feed
-            headers = self._get_headers()
-            headers['Accept'] = 'application/atom+xml;type=feed'
-
+        # Get revisions feed
+        headers = self._get_headers()
+        headers['Accept'] = 'application/atom+xml;type=feed'
+        try:
             response = self.session.get(
                 revisions_url,
                 headers=headers,
                 timeout=self.timeout_short
             )
+        except requests.exceptions.RequestException as e:
+            raise SAPADTError(
+                f"Revisions feed could not be read: {revisions_url} ({type(e).__name__})",
+                endpoint=revisions_url
+            ) from e
 
-            if response.status_code != 200:
-                if self.debug_enabled:
-                    self._debug(f"[DEBUG] get_object_revisions - failed with status {response.status_code}")
-                return []
+        if response.status_code != 200:
+            raise SAPADTError(
+                f"Revisions feed could not be read: {revisions_url} (HTTP {response.status_code})",
+                status_code=response.status_code,
+                endpoint=revisions_url,
+                response_text=response.text[:500]
+            )
 
-            # Parse Atom feed for revisions
-            revisions = []
-            entries = re.findall(r'<atom:entry>(.*?)</atom:entry>', response.text, re.DOTALL)
+        # Parse Atom feed for revisions
+        revisions = []
+        # öznitelikli `<atom:entry xml:lang="…">` da tanınır (eski desen yalnız çıplak etiketi alıyordu)
+        entries = re.findall(r'<atom:entry\b[^>]*>(.*?)</atom:entry>', response.text, re.DOTALL)
 
-            for entry in entries:
-                # Extract revision information from each entry
-                uri_match = re.search(r'<atom:content[^>]*src="([^"]+)"', entry)
-                version_match = re.search(r'<atom:link[^>]*type="application/vnd\.sap\.adt\.transportrequests\.v1\+xml"[^>]*adtcore:name="([^"]+)"', entry)
-                if not version_match:
-                    version_match = re.search(r'<atom:link[^>]*adtcore:name="([^"]+)"', entry)
-                title_match = re.search(r'<atom:title>([^<]+)</atom:title>', entry)
-                date_match = re.search(r'<atom:updated>([^<]+)</atom:updated>', entry)
-                author_match = re.search(r'<atom:name>([^<]+)</atom:name>', entry)
+        for entry in entries:
+            # Extract revision information from each entry
+            uri_match = re.search(r'<atom:content[^>]*src="([^"]+)"', entry)
+            version_match = re.search(r'<atom:link[^>]*type="application/vnd\.sap\.adt\.transportrequests\.v1\+xml"[^>]*adtcore:name="([^"]+)"', entry)
+            if not version_match:
+                version_match = re.search(r'<atom:link[^>]*adtcore:name="([^"]+)"', entry)
+            title_match = re.search(r'<atom:title>([^<]+)</atom:title>', entry)
+            date_match = re.search(r'<atom:updated>([^<]+)</atom:updated>', entry)
+            author_match = re.search(r'<atom:name>([^<]+)</atom:name>', entry)
 
-                revision = {
-                    'uri': uri_match.group(1) if uri_match else '',
-                    'version': version_match.group(1) if version_match else '',
-                    'versionTitle': title_match.group(1) if title_match else '',
-                    'date': date_match.group(1) if date_match else '',
-                    'author': author_match.group(1) if author_match else 'Unknown'
-                }
-                revisions.append(revision)
+            revision = {
+                'uri': uri_match.group(1) if uri_match else '',
+                'version': version_match.group(1) if version_match else '',
+                'versionTitle': title_match.group(1) if title_match else '',
+                'date': date_match.group(1) if date_match else '',
+                'author': author_match.group(1) if author_match else 'Unknown'
+            }
+            revisions.append(revision)
 
-            return revisions
+        # Sıfır kayıt yalnız GERÇEKTEN boş bir Atom feed'inde "sürüm yok"tur: feed öğesi yoksa
+        # (HTML/başka gövde) ya da entry var ama bu ayrıştırıcı tanımıyorsa → okunamadı (Issue #302).
+        if not revisions:
+            if not re.search(r'<(?:[\w.-]+:)?feed\b', response.text):
+                raise SAPADTError(
+                    f"Revisions feed could not be read: {revisions_url} (HTTP 200, body is not an Atom feed)",
+                    status_code=response.status_code,
+                    endpoint=revisions_url,
+                    response_text=response.text[:500]
+                )
+            if re.search(r'<(?:[\w.-]+:)?entry\b', response.text):
+                raise SAPADTError(
+                    f"Revisions feed could not be read: {revisions_url} (entries in unrecognized format)",
+                    status_code=response.status_code,
+                    endpoint=revisions_url,
+                    response_text=response.text[:500]
+                )
 
-        except SAPObjectNotFoundError:
-            raise
-        except Exception as e:
-            if self.debug_enabled:
-                self._debug(f"[DEBUG] get_object_revisions - exception: {str(e)[:100]}")
-            return []
+        return revisions
 
     def fetch_source_etag(self, object_url):
         """`source/main` ETag'ini döndür — **LOCK'TAN ÖNCE çağrılmak üzere**.
