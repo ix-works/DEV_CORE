@@ -24,7 +24,7 @@ purpose: ITG modül kural-paketi (SD) — tetik-haritası + kontrol + soru + der
 |---|---|---|
 | SD-K1 | **Std objeleri where-used + CANLI oku, VARSAYMA** — VBAK/VBAP (sipariş), VBEP (termin), VBFA (doc-flow), LIKP/LIPS (teslimat), VBRK/VBRP (fatura), KONV/PRCD_ELEMENTS (pricing), VTTK/VTTS (nakliye), VFKP (navlun) | TAHMİN YASAK (hafıza=hipotez, canlı=otorite; ADR 0016) |
 | SD-K2 | **Akış-eksenini belirle** — sipariş → teslimat → fatura hangisinde? (copy-control/doc-flow etkisi) | model bütünlüğü |
-| SD-K3 | **Std belge YAZMA** — LIKP/VTTK/VBRK/VBAK'a direkt yazım YASAK → released-API → BAPI → BDC sırası (BAPI_OUTB_DELIVERY_CREATE_SLS, BAPI_SHIPMENT_CREATE, SD_SCDS_CREATE). Z katman icra belgesi yazmaz, **doğru belirleyicilerle besler** | ⛔ ADR 0005 A/B · ADR 0015 |
+| SD-K3 | **Std belge YAZMA** — LIKP/VTTK/VBRK/VBAK'a direkt yazım YASAK → released-API → BAPI → BDC sırası — genel karar ağacı [`standards/10`](../../standards/10-standart-veriye-yazma-api-secimi.md); SD örnekleri: BAPI_OUTB_DELIVERY_CREATE_SLS, BAPI_SHIPMENT_CREATE, SD_SCDS_CREATE. Z katman icra belgesi yazmaz, **doğru belirleyicilerle besler** | ⛔ ADR 0005 A/B · ADR 0015 |
 | SD-K4 | **Müşteri/BP verisi released CDS'ten** — ham KNA1/KNVV/BUT000 YASAK → I_Customer / I_CustomerSalesArea / I_BusinessPartner / I_Supplier | ⛔ ADR 0005 A · clean-core |
 | SD-K5 | **Commit'li BAPI ayrı LUW** — SD belgesi yaratan commit'li FM (BAPI_SHIPMENT_CREATE, SD_SCDS_CREATE `i_opt_commit`) RAP handler'dan DİREKT çağrılamaz → RFC-FM ayrı LUW | [[bug-checklist-backend]] BE-26 |
 

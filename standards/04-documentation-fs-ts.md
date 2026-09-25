@@ -919,6 +919,13 @@ SELECT a~onay_id, a~vbeln, a~status, a~talep_tarihi,
   INTO TABLE @DATA(lt_onay_list).
 ```
 
+**6.4 API Seçimi (standart nesneye yazan her geliştirmede ZORUNLU)**
+
+Standart iş nesnesine create/update/delete/action varsa: değerlendirilen **her** yöntem
+(EML `I_…TP` · BAPI · OData · RFC FM · BDC) — sistemde var mı (canlı) · released mı · ADIM 0
+bağlamındaki commit kuralı · hata yönetimi · **karar ve reddedilenlerin nedeni** + Clean Core
+seviyesi. Tablo biçimi ve karar ağacı: [`10-standart-veriye-yazma-api-secimi.md`](10-standart-veriye-yazma-api-secimi.md).
+
 **6.3 Performans Kuralları**
 
 - SELECT * kullanılmaz, sadece ihtiyaç duyulan alanlar seçilir

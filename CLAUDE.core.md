@@ -26,7 +26,7 @@
 > kanonik değişince yeniden damgalar. **Özet (tam metin kök CLAUDE.md'de):**
 >
 > - **A — Standart SAP objeleri** (Z/Y ile başlamayan): yarat/değiştir/sil YASAK; append/DTEL adını AI önermez.
-> - **B — Standart tablo verileri**: direkt `INSERT/UPDATE/DELETE/MODIFY` YASAK (BAPI→RFC→BDC→manuel).
+> - **B — Standart tablo verileri**: direkt `INSERT/UPDATE/DELETE/MODIFY` YASAK (released API→BAPI→RFC→BDC→manuel; ağaç: `standards/10`).
 > - **C — Sistem state**: transport/package yaratma/release, enqueue lock silme YASAK.
 > - **D — Z'li obje**: login = projenin `master_language`'i; 4 field label TAM; activate öncesi REST GET doğrula.
 >
@@ -515,6 +515,7 @@ analizi + canlı-test → PR.
 | FS/TS şablonları | [`standards/04-documentation-fs-ts.md`](standards/04-documentation-fs-ts.md) |
 | Klasik GUI F1/KD yardımı | [`standards/08-classic-gui-f1-help.md`](standards/08-classic-gui-f1-help.md) |
 | Ambalajlama talimatı tüketimi | [`standards/09-packing-instruction-consumption.md`](standards/09-packing-instruction-consumption.md) |
+| **Standart veriye yazma — API seçimi** (EML / BAPI / OData / RFC / BDC karar ağacı) | [`standards/10-standart-veriye-yazma-api-secimi.md`](standards/10-standart-veriye-yazma-api-secimi.md) |
 | İş-alım / kapsam-triage / modül-persona (ADR 0022) | [`playbook/intake-triage.md`](playbook/intake-triage.md) · modül paketleri [`playbook/modules/`](playbook/modules/) |
 | ADT pattern bankası | [`playbook/README.md`](playbook/README.md) |
 | Hata pattern + trigger phrases | [`playbook/lessons-learned.md`](playbook/lessons-learned.md) |

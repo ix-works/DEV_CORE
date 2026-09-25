@@ -30,7 +30,7 @@ SAP S/4HANA 2025 on-premise, Clean Core **Level A** (RAP) hedefi. Bu standart: R
 | Senaryo | Track |
 |---|---|
 | Yeni Z transactional doküman (Z tablo, std doküman/BAPI sarmıyor) | **RAP managed** |
-| Std doküman (VBAK/LIKP vb.) üzerine create/update | **RAP unmanaged** (released BAPI/EML) veya klasik DPC_EXT — std tabloya DİREKT yazma yasak (ADR 0005 B) |
+| Std doküman (VBAK/LIKP vb.) üzerine create/update | **RAP unmanaged** (released BAPI/EML) veya klasik DPC_EXT — std tabloya DİREKT yazma yasak (ADR 0005 B). **Hangi API:** [`10-standart-veriye-yazma-api-secimi.md`](10-standart-veriye-yazma-api-secimi.md) |
 | Salt-okunur liste/worklist/value help (büyük veri, pushdown) | **Salt-okunur query CDS** (RAP servisinde davranışsız expose) |
 | Klasik dialog/rapor, mevcut SEGW servisi | **Klasik track (02)** — dokunma, RAP'a zorla taşıma yok |
 
@@ -113,7 +113,7 @@ SAP, Behavior Definition'ın adının **root view entity ile aynı** olmasını 
 | ADR 0005 | RAP'taki tezahürü |
 |---|---|
 | **A** Std obje koruma | Interface/projection view **sadece Z tablo/Z CDS** kaynaklı. Std CDS/BO append/extend etme. Std behavior'a `extension` yazma yasak. |
-| **B** Std tablo direkt I/U/D | Behavior EML'i (managed) **sadece Z tablo**a yazar. Std doküman gerekiyorsa unmanaged + **released BAPI/RFC** (sıra: BAPI→RFC FM→BDC→manuel). Std tabloya `MODIFY ENTITIES`/SQL = YASAK. |
+| **B** Std tablo direkt I/U/D | Behavior EML'i (managed) **sadece Z tablo**a yazar. Std doküman gerekiyorsa unmanaged + **released BAPI/RFC** (sıra: released API→BAPI→RFC FM→BDC→manuel — [`10`](10-standart-veriye-yazma-api-secimi.md)). Std tabloya `MODIFY ENTITIES`/SQL = YASAK. |
 | **C** Sistem state | Transport/package **yaratma yok**. BDEF/CDS/SD/SB hep kullanıcının verdiği aktif TR'ye. Service binding publish bir **transport** kullanır, yenisini yaratmaz. |
 | **D** Z text TR + tam | CDS `@EndUserText.label`, BDEF `@EndUserText`, SD başlığı **TR ve tam**; **tahmin edilmez** — <LEGACY_SOURCE> SEVKEMRI/TD spec'ten (hafıza: `feedback_zli-obje-text-tahmin-yasak`). Text, aktivasyon doğrulama readback'inde teyit edilir (mekanizma **tek-ev → §9**). |
 

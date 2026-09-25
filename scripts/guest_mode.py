@@ -25,7 +25,7 @@ SABLON = """# MİSAFİR MODU — güvenlik kuralları (guest_mode.py üretti; ot
 ## ⛔ KESİN YASAKLAR (ADR 0005 aynası — bypass yok)
 - **A:** Z/Y ile başlamayan standart SAP objesine dokunma (yarat/değiştir/sil) YASAK.
 - **B:** Standart tablo verisine direkt INSERT/UPDATE/DELETE/MODIFY YASAK
-  (sıra: BAPI → RFC FM → BDC → kullanıcıdan manuel).
+  (sıra: released API → BAPI → RFC FM → BDC → kullanıcıdan manuel).
 - **C:** Transport/package yaratma + TR release YASAK.
 - **D:** Z'li objede master-language login + 4 field label TAM.
 
