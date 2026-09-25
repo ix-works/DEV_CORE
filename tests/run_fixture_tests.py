@@ -574,10 +574,11 @@ OZEL_TESTLER = [
     # gecmisini okuyamiyor (obje GET 406, atom: onekli GORELI baglanti) ve her hatayi [] yapiyordu.
     ("revizyon_okuma",
      "get_object_revisions: 'okuyamadim' != 'surum yok' — obje GET Accept */*, atom:link rel/href "
-     "sira-bagimsiz, goreli href obje altina, sinifta includes/main/versions; 404 -> NotFound, "
+     "sira-bagimsiz, goreli href obje altina ('./<ad>/...' BDEF/tablo/SRVD bicimi RFC-cozumlu), "
+     "sinifta includes/main/versions; 404 -> NotFound, "
      "200-disi/ag/XML-olmayan govde/taninmayan entry -> SAPADTError; KONTROL: baglanti yok + bos "
-     "feed mesru []. Gercek cagiran list_revisions.py ayri surecte (18 vektor + 15 mutasyon; "
-     "eski kod 4/18 = yalniz kontrol grubu)"),
+     "feed mesru []. Gercek cagiran list_revisions.py ayri surecte (20 vektor + 17 mutasyon; "
+     "eski kod 4/20 = yalniz kontrol grubu)"),
 ]
 
 

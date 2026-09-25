@@ -2173,10 +2173,18 @@ class SAPADTClient:
 
         main_hrefs = [h for h in hrefs if h.rstrip('/').endswith('/main/versions')]
         revisions_href = main_hrefs[0] if main_hrefs else hrefs[0]
+        # Göreli href çözümü İKİ biçimlidir (ölçüm, Issue #302 — 6 tip, hiçbirinde `xml:base` yok):
+        #   · `./<obje_adı>/source/main/versions` (BDEF · tablo `blue:blueSource` · SRVD) → RFC 3986
+        #     çözümü, EBEVEYN-göreli: `urljoin(object_url, href)` = `<obje>/source/main/versions`
+        #   · diğer göreli (`source/main/versions` · sınıf `includes/main/versions` · DDLS `versions`)
+        #     → obje URL'inin ALTINA (obje = dizin); RFC çözümü burada YANLIŞ (ebeveyne düşer → 404)
         if revisions_href.startswith(('http://', 'https://')):
             revisions_url = revisions_href
         elif revisions_href.startswith('/'):
             revisions_url = f"{self.url}{revisions_href}"
+        elif revisions_href.startswith('./'):
+            from urllib.parse import urljoin
+            revisions_url = f"{self.url}{urljoin(object_url, revisions_href)}"
         else:
             revisions_url = f"{self.url}{object_url.rstrip('/')}/{revisions_href}"
 

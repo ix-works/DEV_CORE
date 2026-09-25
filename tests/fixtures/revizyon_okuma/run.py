@@ -9,6 +9,10 @@ CANLI ÖLÇÜLEN MEKANİZMA (2026-09-25, s4_private DEV, salt-okur GET; sınıf 
     href GÖRELİ (`source/main/versions`); sınıfta 4 bağlantı (`includes/definitions|implementations|
     macros|main/versions`), ana kaynak `includes/main/versions` (sınıfta `source/main/versions` 404)
   · feed (`application/atom+xml;type=feed`) 200, `<atom:entry>` başına bir sürüm
+  · göreli href İKİ biçimli (6 tip ölçüldü, hiçbirinde `xml:base` yok): `./<obje_adı>/source/main/versions`
+    (BDEF · tablo `blue:blueSource` · SRVD) RFC çözümüyle (ebeveyn-göreli) `<obje>/source/main/versions`;
+    diğer göreli (`source/main/versions` · `includes/main/versions` · DDLS `versions`) obje URL'inin ALTINA
+    — RFC çözümü bunlarda YANLIŞ (ebeveyne düşer, 404)
 ESKİ KOD: 406'yı, çözülmeyen bağlantıyı ve her istisnayı `[]` yapıyordu ⇒ çağıran "sürüm yok" sanıyordu
 (canlıda üç obje tipinde 0/0/0 kayıt; düzeltmeyle 1/1/1).
 
@@ -72,10 +76,10 @@ def _link(href, rel_once=False, onek="atom:"):
     return f'<{onek}link href="{href}" {REL} xmlns:atom="http://www.w3.org/2005/Atom"/>'
 
 
-def _obje(linkler):
-    return ('<?xml version="1.0" encoding="utf-8"?><class:abapClass xmlns:class="http://www.sap.com/adt/oo/classes">'
+def _obje(linkler, kok="class:abapClass", ns='xmlns:class="http://www.sap.com/adt/oo/classes"'):
+    return (f'<?xml version="1.0" encoding="utf-8"?><{kok} {ns}>'
             + "".join(linkler) + '<atom:link href="source/main" rel="http://www.sap.com/adt/relations/source"/>'
-            '</class:abapClass>')
+            f'</{kok}>')
 
 
 def _feed(n, entry_ac="<atom:entry>"):
@@ -125,6 +129,11 @@ class _Oturum:
 
 SINIF_LINKLERI = [_link(f"includes/{a}/versions") for a in ("definitions", "implementations", "macros", "main")]
 AR_FEED = ARAYUZ + "/source/main/versions"
+# BDEF / tablo (`blue:blueSource`) / SRVD biçimi: href `./<obje_adı>/source/main/versions` — RFC çözümü
+# (ebeveyn-göreli) `<obje>/source/main/versions` verir; "obje altına ekle" `<obje>/./<ad>/…` → 404.
+BDEF = "/sap/bc/adt/bo/behaviordefinitions/zdemo_r_ornek"
+BDEF_NS = 'xmlns:blue="http://www.sap.com/wbobj/blue"'
+DDLS = "/sap/bc/adt/ddic/ddl/sources/zdemo_i_ornek"
 
 VEKTORLER = [
     ("V1 sinif: 4 atom:link, goreli, ana kaynak SONDA -> includes/main feed'i (2 surum)",
@@ -179,6 +188,16 @@ VEKTORLER = [
     ("V15 http(s) mutlak href aynen kullanilir (1 surum)",
      dict(objeler={ARAYUZ: _obje([_link(BASE + AR_FEED)])},
           feedler={AR_FEED: (200, _feed(1))}, url=ARAYUZ),
+     ("sayi", 1)),
+    ("V16 BDEF/tablo bicimi './<ad>/source/main/versions' -> RFC cozumu <obje>/source/main/versions (2 surum)",
+     dict(objeler={BDEF: _obje([_link("./zdemo_r_ornek/source/main/versions")],
+                               kok="blue:blueSource", ns=BDEF_NS)},
+          feedler={BDEF + "/source/main/versions": (200, _feed(2))}, url=BDEF),
+     ("sayi", 2)),
+    ("V17 DDLS bicimi 'versions' (main'siz) -> obje ALTINA <obje>/versions (1 surum)",
+     dict(objeler={DDLS: _obje([_link("versions")], kok="ddl:ddlSource",
+                               ns='xmlns:ddl="http://www.sap.com/adt/ddic/ddlsources"')},
+          feedler={DDLS + "/versions": (200, _feed(1))}, url=DDLS),
      ("sayi", 1)),
 ]
 
@@ -238,6 +257,11 @@ MUTASYONLAR = [
      r"if re.search(r'<(?:[\w.-]+:)?entry\b', response.text):", "if False:"),
     ("M13 oznitelikli entry taninmiyor (eski desen)",
      r"r'<atom:entry\b[^>]*>(.*?)</atom:entry>'", r"r'<atom:entry>(.*?)</atom:entry>'"),
+    ("M14 './' dali yok (BDEF/tablo href'i obje altina eklenir -> 404)",
+     "elif revisions_href.startswith('./'):", "elif False:"),
+    ("M15 TUM goreli href'ler RFC-cozumlu (obje=dizin bicimi ebeveyne duser)",
+     "revisions_url = f\"{self.url}{object_url.rstrip('/')}/{revisions_href}\"",
+     "revisions_url = f\"{self.url}{__import__('urllib.parse').parse.urljoin(object_url, revisions_href)}\""),
 ]
 # list_revisions.py mutasyonları (çapa dosyada TAM 1 kez)
 LR_MUTASYONLAR = [
