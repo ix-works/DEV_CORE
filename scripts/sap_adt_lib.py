@@ -2169,6 +2169,16 @@ class SAPADTClient:
                 hrefs.append(href_match.group(1))
 
         if not hrefs:
+            # Gövde sürüm ilişkisini ANIYOR ama bağlantı ayrıştırılamadı (tek tırnaklı öznitelik,
+            # başka öznitelikte `>`, `atom:` dışı önek …) → "bağlantı yok" DEĞİL, okunamadı.
+            if 'relations/versions' in response.text:
+                raise SAPADTError(
+                    f"Object could not be read for revisions: {object_url} "
+                    f"(versions relation present but link not recognized)",
+                    status_code=response.status_code,
+                    endpoint=object_url,
+                    response_text=response.text[:500]
+                )
             return []
 
         main_hrefs = [h for h in hrefs if h.rstrip('/').endswith('/main/versions')]
@@ -2184,7 +2194,8 @@ class SAPADTClient:
             revisions_url = f"{self.url}{revisions_href}"
         elif revisions_href.startswith('./'):
             from urllib.parse import urljoin
-            revisions_url = f"{self.url}{urljoin(object_url, revisions_href)}"
+            # sondaki `/` (`--url …/zdemo_r_ornek/`) urljoin'i obje DİZİNİNE çözdürür → ad iki kez
+            revisions_url = f"{self.url}{urljoin(object_url.rstrip('/'), revisions_href)}"
         else:
             revisions_url = f"{self.url}{object_url.rstrip('/')}/{revisions_href}"
 

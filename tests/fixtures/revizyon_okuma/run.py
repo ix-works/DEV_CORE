@@ -33,8 +33,8 @@ KULLANIM:
         #   git show <taban>:scripts/sap_adt_lib.py > <kum>/eski_lib.py
         #   git show <taban>:scripts/list_revisions.py > <kum>/eski_lr.py
         #   → --kaynak <kum>/eski_lib.py --lr-kaynak <kum>/eski_lr.py
-        # beklenen: yalnız KONTROL grubu (V4 · V5 · V6 · L3) geçer.
-⚠ V4/V5/V6/L3 KONTROL GRUBU — silinmez (meşru boş/yok da istisnaya çevrilirse onlar kırılır).
+        # beklenen: yalnız KONTROL grubu (V4 · V5 · V6 · V21 · L3) geçer.
+⚠ V4/V5/V6/V21/L3 KONTROL GRUBU — silinmez (meşru boş/yok da istisnaya çevrilirse onlar kırılır).
 Mutasyonlar yalnız `get_object_revisions` gövdesinde (segment-kapsamlı çapa, tam 1 eşleşme) ve
 `list_revisions.py`'de uygulanır; kaynak dosyalara YAZILMAZ (bellekte / geçici kum).
 """
@@ -199,6 +199,25 @@ VEKTORLER = [
                                ns='xmlns:ddl="http://www.sap.com/adt/ddic/ddlsources"')},
           feedler={DDLS + "/versions": (200, _feed(1))}, url=DDLS),
      ("sayi", 1)),
+    ("V18 surum iliskisi var ama TEK TIRNAKLI oznitelik (ayristirilamaz) -> SAPADTError, 'baglanti yok' DEGIL",
+     dict(objeler={ARAYUZ: _obje(["<atom:link href='source/main/versions' "
+                                  "rel='http://www.sap.com/adt/relations/versions'/>"])},
+          feedler={AR_FEED: (200, _feed(1))}, url=ARAYUZ),
+     ("istisna", "SAPADTError", 200)),
+    ("V19 surum iliskisi var ama 'atom:' disi onek (<a:link>) -> SAPADTError",
+     dict(objeler={ARAYUZ: _obje([_link("source/main/versions", onek="a:")])},
+          feedler={AR_FEED: (200, _feed(1))}, url=ARAYUZ),
+     ("istisna", "SAPADTError", 200)),
+    ("V20 './' bicimi + obje URL'i SONDA '/' ile -> ad iki kez eklenmez (2 surum)",
+     dict(objeler={BDEF + "/": _obje([_link("./zdemo_r_ornek/source/main/versions")],
+                                     kok="blue:blueSource", ns=BDEF_NS)},
+          feedler={BDEF + "/source/main/versions": (200, _feed(2))}, url=BDEF + "/"),
+     ("sayi", 2)),
+    ("V21 KONTROL: oneksiz (varsayilan ad alanli) BOS feed <feed xmlns=Atom></feed> -> mesru []",
+     dict(objeler={ARAYUZ: _obje([_link("source/main/versions")])},
+          feedler={AR_FEED: (200, '<?xml version="1.0" encoding="utf-8"?>'
+                                  '<feed xmlns="http://www.w3.org/2005/Atom"></feed>')}, url=ARAYUZ),
+     ("sayi", 0)),
 ]
 
 CLI_SENARYOLARI = {
@@ -262,6 +281,13 @@ MUTASYONLAR = [
     ("M15 TUM goreli href'ler RFC-cozumlu (obje=dizin bicimi ebeveyne duser)",
      "revisions_url = f\"{self.url}{object_url.rstrip('/')}/{revisions_href}\"",
      "revisions_url = f\"{self.url}{__import__('urllib.parse').parse.urljoin(object_url, revisions_href)}\""),
+    ("M16 ayristirilamayan surum iliskisi sessiz [] (F1 geri)",
+     "if 'relations/versions' in response.text:", "if False:"),
+    ("M17 './' dalinda sondaki '/' soyulmuyor (F2 geri)",
+     "urljoin(object_url.rstrip('/'), revisions_href)", "urljoin(object_url, revisions_href)"),
+    ("M18 feed kok kapisi yalniz 'atom:' onekine daraldi",
+     r"if not re.search(r'<(?:[\w.-]+:)?feed\b', response.text):",
+     r"if not re.search(r'<atom:feed\b', response.text):"),
 ]
 # list_revisions.py mutasyonları (çapa dosyada TAM 1 kez)
 LR_MUTASYONLAR = [
