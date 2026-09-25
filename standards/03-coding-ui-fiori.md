@@ -1315,7 +1315,8 @@ duvarına çarpar: **HTTP 414 Request-URI Too Long**. Kusur RAP/Gateway'de deği
 _getBatchModel: function () {
   if (!this._oBatchModel) {
     var oMain = this.getView().getModel();
-    this._oBatchModel = new ODataModel(oMain.sServiceUrl, {
+    // ⛔ ZORUNLU: URL ana modelin istemci parametrelerini (sap-client …) taşır — §18.5b.
+    this._oBatchModel = new ODataModel(this._secondModelUrl(oMain.sServiceUrl, oMain), {
       useBatch:           true,
       defaultBindingMode: "TwoWay",
       defaultCountMode:   "Inline",
@@ -1386,6 +1387,63 @@ kaynaktan** beslenir (iki ayrı literal = sessiz ayrışma); istek hiç doğmada
 **Kardeş vaka taraması ZORUNLU.** Aynı kusur, aynı servisi tüketen **her** `callFunction` çağrısında
 potansiyeldir ve satır sayısıyla doğrusal büyür: ölçülen bir uygulamada satır başına ~437 B ⇒ **~20 satır**
 eşiği geçiyordu. Bir 414 bulduğunda **tüm `callFunction` sitelerini tara**, eşiği satır-başı bayt ile hesapla.
+
+### 18.5b Elle kurulan istek `sap-client` TAŞIMAZ — ana modelin istemci parametrelerini devret (2026-09-25)
+
+**Kural:** manifest'te tanımlı OLMAYAN her istek — `new ODataModel(...)` (ikinci/yardımcı model, varyant
+modeli, `$batch` modeli), ham `fetch`/`XMLHttpRequest`, `sServiceUrl` ile elle kurulan URL — ana modelin
+sorgu parametrelerini (`sap-client`, `sap-server` ve ana modelde ne varsa — `sap-statistics` hariç) **URL sorgusunda** taşır. Etkilenmediği varsayılmaz:
+`sap-client`'sız istek ortamına göre farklı davranır ve bunun belirtisi **yanlış veridir, hata değil**.
+
+**Mekanizma (UI5 1.120.23 kaynağı + canlı ölçüm):**
+1. Bileşen, **manifest** modellerinin URI'sine `sap-client`/`sap-server` ekler — yalnız değer doluysa (sayfa
+   URL'inde ya da yapılandırmada varsa; `Component.js` `addSapParams`, `:84-93`). Elle kurulan model bunu **almaz**.
+2. `ODataModel` servis URL'inin sorgusunu **`aUrlParams`'a ayırır** ve `sServiceUrl`'i sorgusuz saklar
+   (`ODataModel.js:396-405`, sondaki `/` da silinir). Her kendi isteğine `aUrlParams`'ı ekler (`:1432-1442`).
+   ⇒ `new ODataModel(oMain.sServiceUrl)` ya da `oMain.sServiceUrl + "/X?…"` **`sap-client`'ı sessizce düşürür.**
+3. `sap-client`'sız istek ICF'de tarayıcının **TEK** `sap-usercontext` çerezine göre yönlenir; çerezi **en son
+   açık `sap-client`'lı yanıt** yazar. Aynı host'ta iki client (ör. DEV 100 + QA 110) aynı tarayıcıda açıkken
+   ikinci sekme ilkinin çerezini ezer ⇒ **çapraz-client okuma VE yazma**. Tek client açıkken görünmez.
+   *Ölçülen (S/4 private, 2026-09-25): 110 sekmesi açıkken aynı tarayıcıda 100 açılınca 110 sekmesindeki
+   varyant modeli 100'ün 3 varyantını, veri yazan yükleme modeli 100'ün 16 kaydını okudu; ana model doğru.*
+
+**Doğrusu — ana modelden devral (literal client YAZMA):**
+
+```javascript
+// Ana modelin sorgu parametreleri; sap-statistics hariç (UI5 her modele kendi ekler, ham isteğe gereksiz).
+_mainClientParams: function (oMain) {
+  var aFlat = [];
+  ((oMain && Array.isArray(oMain.aUrlParams)) ? oMain.aUrlParams : []).forEach(function (s) {
+    String(s || "").split("&").forEach(function (p) { if (p) { aFlat.push(p); } });
+  });
+  return aFlat.filter(function (s) { return !/^sap-statistics=/i.test(s); });
+},
+_secondModelUrl: function (sBaseUrl, oMain) {
+  var a = this._mainClientParams(oMain);
+  return sBaseUrl + (a.length ? ("?" + a.join("&")) : "");
+}
+```
+
+- **Ana model = manifest modeli.** `onInit` sırasında view henüz yerleşmemiştir ⇒ `this.getView().getModel()`
+  (ya da util'e verilen kontrolün `getModel()`'i) **`undefined`** olabilir ve boş parametre önbelleğe girer.
+  Util'lerde sahip bileşenden al: `Component.getOwnerComponentFor(oControl).getModel()` (1.120'de public).
+- `aUrlParams` UI5-özel alandır (ESLint `sap-no-ui5base-prop`) — **bilinçli istisna**: public bir API yok;
+  `Array.isArray` koruması alan kaybolursa eski davranışa (çereze) düşer, patlamaz.
+- Ham istek URL'i: `oMain.sServiceUrl + "/<Yol>?" + <kendi sorgun> + "&" + params.join("&")`.
+- `metadataUrlParams` devri (FE-43, §18.5a) **ayrıca** gerekir — biri öbürünün yerine geçmez.
+
+**Doğrulama (kaynak okuması YETMEZ — ağ izi + ayırıcı veri):** aynı tarayıcı bağlamında iki client'lı iki
+sekme aç: önce A (ör. 110), sonra B (100), sonra A'da elle kurulan modeli/isteği tetikle. İstek URL'inde
+`sap-client=<A>` ve dönen veri A'nın verisi olmalı. **Ayırıcı veri şart:** iki client'ta sayısı FARKLI bir
+entity seç (biri boş olabilir); iki client'ta aynı sayı dönen entity hiçbir şey kanıtlamaz. Deploy öncesi:
+dağıtılmış BSP'de `Component-preload.js`'i `page.route` ile engelleyip yerel `webapp/` dosyalarını servis
+ederek aynı ölçüm koşulabilir.
+
+**Kardeş taraması ZORUNLU:** `new ODataModel(`, `new XMLHttpRequest`, `fetch(` ve `sServiceUrl +` geçen
+**her** satır — bir paketteki tek util çoğu kez birebir kopyalarla birden çok app'te yaşar (ölçülen vakada 14
+kopya). Kontrol maddesi: `bug-checklist-frontend.md` **FE-48**. Sayfa kapanırken gönderilen istek (belge kilidi
+bırakma) ayrıca **FE-49**'a tabidir (ölçüm yalnız Chromium 153, navigasyon; sekme kapatma ayırt edilemedi; Firefox / Safari / FLP ölçülmedi).
+
 ### 18.5 $batch Request Handling
 
 > **Kapsam notu:** Yalnız `useBatch:true` kullanan senaryolar için. TD'nin SEGW-V2 servisleri

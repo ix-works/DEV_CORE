@@ -104,18 +104,40 @@ aç = read-only. (App↔app ve VA02↔VA02 KENDİ içinde aynı-kullanıcı serb
 
 ## 4. UI (freestyle) — değiştir controller
 ```js
-// onInit: beforeunload → _releaseLockSync ; onExit: _stopHeartbeat + listener kaldır
+// onInit: beforeunload → if (!readOnly && id) _releaseLockOnUnload(id)   // ⛔ bayrak koruması (⚠ 2)
+//         onExit: _stopHeartbeat + listener kaldır
 // route matched: readOnly=true (teyide kadar) → _loadDoc + _acquireLock(id)
 _callLock(fn,id){ return new Promise((res,rej)=> oModel.callFunction("/"+fn,{method:"POST",
   urlParameters:{ <KeyParam>: id }, success:()=>res(true), error:rej })); }
 _acquireLock(id){ this._callLock("AcquireLock",id)
   .then(()=>{ readOnly=false; lockedBy=""; this._startHeartbeat(id); })
   .catch(e=>{ this._stopHeartbeat(); readOnly=true; lockedBy=this._parseError(e); }); }
-_releaseLock(id){ this._stopHeartbeat(); this._callLock("ReleaseLock",id).catch(()=>{}); }
-// _releaseLockSync: sync XHR + getSecurityToken() (sendBeacon CSRF set edemez)
+_releaseLock(id){ this._stopHeartbeat(); this._callLock("ReleaseLock",id).catch(()=>{});
+  readOnly=true; }   // ⛔ bırakıldı ⇒ unload aynı belgeye TEKRAR bırakmasın (aşağıda ⚠ 2)
+// _releaseLockOnUnload (beforeunload): fetch + keepalive — SENKRON XHR DEĞİL (aşağıda ⚠ 1)
+//   fetch(oModel.sServiceUrl + "/ReleaseLock?<KeyParam>=" + encodeURIComponent("'"+id+"'")
+//         + "&" + <ana modelin client parametreleri — std/03 §18.5b>,
+//         { method:"POST", keepalive:true, credentials:"same-origin",
+//           headers:{ "x-csrf-token": oModel.getSecurityToken() } }).catch(()=>{});
 // _startHeartbeat: setInterval(120000) → _callLock("AcquireLock",id)  (timeout 5dk'dan kısa)
 // onSave success + onNavBack → _releaseLock(id)
 ```
+
+> ⚠ **1 — Sayfadan ayrılırken senkron XHR GİTMEZ (ölçüldü 2026-09-25).** Bu reçetenin önceki hâli
+> *"sync XHR + getSecurityToken()"* diyordu. Chromium `beforeunload`/`pagehide`/`unload` içindeki senkron
+> XHR'ı sunucuya **göndermiyor** (lokal ölçüm, Chromium 153, üç olayın her biri × navigasyonla sayfadan
+> ayrılış: senkron XHR 0/3 — aynı istek normal anda gidiyor; `fetch`+`keepalive` 3/3, CSRF başlığıyla). Hata `try/catch`'te yutulduğu için **sessizdir**;
+> kilit yalnız 5 dk zaman aşımıyla düşer (ADR 0014 S4'teki "anında" değil). `sendBeacon` CSRF başlığı taşıyamaz.
+> Sekme **kapatma** bu harness'ta ayırt EDİLEMEDİ: `page.close({runBeforeUnload:true})` tetiğinde `sendBeacon`
+> ve keepalive dahil hiçbir yöntem ulaşmadı. Firefox/Safari/FLP ölçülmedi. Kontrol: `bug-checklist-frontend.md` **FE-49**.
+> URL `oModel.sServiceUrl + "/..."` ile kurulur — `sServiceUrl` sondaki `/`'ı taşımaz; `/` unutulursa istek
+> `…_O2ReleaseLock` adlı olmayan servise gider (307 → 403 `/IWFND/MED/170`, ölçüldü). `sap-client` de
+> `sServiceUrl`'de YOKTUR — ana modelden devralınmazsa iki client açık tarayıcıda bırakma öbür client'a gider (FE-48).
+>
+> ⚠ **2 — Bırakmadan sonra kilit bayrağını sıfırla.** Bırakma artık gerçekten ulaştığı için: ekrandan geri /
+> kayıt / silme ile çıkılıp `readOnly` false kalırsa, kullanıcı listedeyken sayfadan ayrılınca (ör. yenileme / başka adrese gitme) unload aynı
+> belgeye yeniden bırakma gönderir; `release` yalnız `locked_by = sy-uname` sildiği için kullanıcının
+> **başka sekmede** (S2) tuttuğu kilit düşer. Bayrağı `_releaseLock` içinde sıfırlamak tüm çağıranları kapsar.
 - `<KeyParam>` = managed'de key alanı (DocumentId), unmanaged'de param (IvSalesOrder).
 - View: Save `visible="{= !readOnly }"`, MessageStrip `text="{lockedBy} — salt-okunur" visible="{readOnly}"`,
   tüm edit kontrolleri `editable/enabled="{= !readOnly }"`, tablo `mode="{= readOnly ? 'None':'MultiSelect' }"`.
@@ -127,7 +149,7 @@ _releaseLock(id){ this._stopHeartbeat(); this._callLock("ReleaseLock",id).catch(
 | S1 | user-1 içeride, user-2 giriyor | user-2 read-only + uyarı; timer-heartbeat user-1'i korur |
 | S2 | aynı kullanıcı başka browser | acquire `sahibi=sen` → izin (ETag/BAPI korur) — S3'ü temiz tutar |
 | S3 | kapatıp tekrar giriyor | beforeunload bıraktı; bırakmadıysa `sahibi=sen` → anında girer |
-| S4 | kapattı, başkası giriyor | beforeunload anında; çökmede 5dk timeout devralır |
+| S4 | kapattı, başkası giriyor | beforeunload'da keepalive fetch (§4 ⚠ 1 — sayfadan ayrılışta ölçüldü, sekme kapatmada ayırt edilemedi; senkron XHR ile bırakma gitmiyordu); bırakma gitmezse / çökmede 5dk timeout devralır |
 
 ## 6. TUZAKLAR (tekrar etme)
 - **`Lock`/`Unlock` RAP'te REZERVE** action adı → `AcquireLock`/`ReleaseLock`.

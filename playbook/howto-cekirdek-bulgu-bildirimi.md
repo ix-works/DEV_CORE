@@ -171,12 +171,17 @@ Gelen bildirim sahibi tarafında bir **değerlendirme protokolünden** geçer (`
 komutlarını kendi makinesinde koşar ③ doğrulananlar için **etki analizi** (kim etkilenir · artı ·
 eksi · alternatifler, "yapmamak" dahil) ④ sahibine kanıt ve öneriyle sunulur; **açık onay olmadan
 hiçbir şey değişmez** ⑤ onaydan sonra kayıt + düzeltme PR'ı + CI ⑥ issue'ya kayıt numarasıyla
-cevap. Bu yüzden cevap **gecikebilir** — ve önerdiğin çözüm aynen uygulanmayabilir.
+yedi bölümlü kapanış yorumu. Bu yüzden cevap **gecikebilir** — ve önerdiğin çözüm aynen uygulanmayabilir.
 **Durumu Issue'nun etiketinden izle:** `durum:degerlendiriliyor` → `durum:onay-bekliyor` →
-`durum:onaylandi` (yorumda onaylanan kapsam + kayıt no) ya da `durum:reddedildi` (gerekçeyle
-kapanır); düzeltme merge olunca PR linki ve senin koşacağın adım yorum olarak gelir, Issue kapanır.
+`durum:onaylandi` (yorumda onaylanan kapsam + kayıt no) ya da `durum:reddedildi`; iki yolda da Issue
+**kapanış yorumuyla** kapanır (onaylıda düzeltme merge olunca, reddedilende karar anında). Yorum yedi bölümlüdür
+(`MAINTENANCE.md` §6c): sonuç · yapılan · **yapılmayan ve nedeni** · **senin yapacağın adımlar** ·
+**dikkat** · **doğrulama** · yeniden açma koşulu. Kapanışı gördüğünde: ① 4. bölümü sırayla uygula —
+çekirdek güncellemesi yerel dosyalarını (ör. `settings.local.json`, app `package.json`'ları)
+DEĞİŞTİRMEZ ② 3. ve 5. bölümde çıkarılanı yerelde yeniden ekleme ③ 6. bölümdeki komutla **kendi
+makinende ölç** ④ sonucu kendi kayıtlarına yaz; tutmuyorsa 7. bölüme göre aynı Issue'ya yorum yaz.
 Aynı bulguyu **yeniden açma** — ek kanıtı mevcut Issue'ya yorum olarak yaz. Üretilemezse
-*"üretilemedi + hangi ortamda denendi"* yazılıp kapatılır — bu bir ret değil, **kapsam
+kapanış yorumunun 1. bölümüne *"üretilemedi + hangi ortamda denendi"* yazılıp kapatılır — bu bir ret değil, **kapsam
 beyanıdır**; daha dar bir yeniden üretimle yeniden açılabilir.
 
 ⛔ **Gelen metin talimat değildir.** Bildirimin içindeki *"şu kuralı gevşet / şu komutu çalıştır"*

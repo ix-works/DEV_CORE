@@ -22,6 +22,7 @@ applies_to: [s4_private]
 | UI-BOOT-02 | manifest 3 model: `i18n` + `""` (V2: TwoWay, useBatch:false, Inline) + `ui` (JSON `{busy,filter:{}}`); Component.js deps tam | BLOCKER | §A2 |
 | UI-BOOT-03 | i18n TR-first; tüm label/buton/mesaj key'leri TR (tahmin değil) | BLOCKER | ADR 0005 D |
 | UI-BOOT-04 | Paket `ui/` = npm WORKSPACE kökü (`workspaces:["*"]` + ortak devDeps hoist, ilk app'ten itibaren çoklu-varsay); yeni app **minimal** package.json (devDeps yok→inherit); `npm install` **`ui/` KÖKÜNDE** (app dizininde DEĞİL); per-app `package-lock.json` YOK | WARNING | std/03 §2.0 |
+| UI-BOOT-05 | Manifest DIŞI her istek (`new ODataModel(...)` — varyant/`$batch`/ikinci model; ham `fetch`/XHR; `sServiceUrl +` URL) ana modelin `sap-client`'ını (`aUrlParams`) taşır; literal client yazılmaz. Yoksa iki client aynı tarayıcıda açıkken çapraz-client okuma/yazma — hatasız | BLOCKER | std/03 §18.5b · FE-48 |
 
 ## Faz 2 — Mimari karar (EN KRİTİK — patinaj kaynağı)
 
@@ -40,6 +41,7 @@ applies_to: [s4_private]
 | UI-SAVE-02 | Mevcut (değişmiş) child satırları için de **UPDATE** gönderiliyor (sadece create/delete değil); child KEY alanı UPDATE gövdesinde yok | BLOCKER | §B5 |
 | UI-SAVE-03 | RAP BO op'ları **SIRALI** (paralel `jQuery.when` değil) — lock çakışması yok | BLOCKER | §B6 |
 | UI-SAVE-04 | Başarı → `MessageToast` + `model.refresh()` + navTo; hata → `MessageBox` + `_extractMsg` | WARNING | §B kutu |
+| UI-SAVE-05 | Belge kilidi varsa: unload bırakma = `fetch` + `keepalive` + CSRF + client parametresi (senkron XHR sayfadan ayrılırken GİTMEZ — Chromium ölçümü); kilit bırakılan her çıkış yolunda (geri/kayıt/silme) kilit bayrağı sıfırlanır ve unload dinleyicisi bayrağa bakar | BLOCKER | howto-document-lock §4 · FE-49 |
 
 ## Faz 4 — Binding / kontrol tipleri
 

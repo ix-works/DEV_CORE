@@ -159,8 +159,8 @@ bildirmez); **yorum ve kapatma 5. adımdan sonradır** (public ve kalıcıdır):
    **değildir**. Onay yoksa: değişiklik yok; Issue açık kalır.
 6. **Onaydan SONRA** normal infra süreci: kayıt (`infra-findings`) + prior-art · worktree · kod ise
    infra-expert · fixture + mutasyon · bağımsız bug-gate · PR · CI · merge · tüketici yayılımı ölçümü.
-   Sonra Issue'ya **kimliksiz** cevap (kayıt no + PR) ve kapanış. Reddedilen/çürüyen bildirim de
-   gerekçesiyle (hangi ortamda ne ölçüldü) kapatılır — ret değil **kapsam beyanıdır**.
+   Sonra Issue'ya **kimliksiz KAPANIŞ YORUMU** (aşağıdaki iskelet) ve kapanış. Reddedilen/çürüyen bildirim de
+   aynı iskeletle kapatılır (1. bölüm = gerekçe: hangi ortamda ne ölçüldü) — ret değil **kapsam beyanıdır**.
 
 **Durum etiketleri — mükerrer değerlendirmeyi önler, gönderene takip verir (sahip kararı 2026-09-18):**
 
@@ -169,14 +169,33 @@ bildirmez); **yorum ve kapatma 5. adımdan sonradır** (public ve kalıcıdır):
 | `durum:degerlendiriliyor` | bildirim ilk görüldüğünde (1. adım) | YOK — salt etiket |
 | `durum:onay-bekliyor` | analiz sahibe sunulduğunda (4. adım) | YOK — salt etiket |
 | `durum:onaylandi` | açık onaydan sonra (5. adım) | ✅ kısa, kimliksiz: iddia bazında hüküm + onaylanan kapsam + kayıt no |
-| `durum:reddedildi` | çürüyen / yapılmayacak bildirim (5. adım kararı) | ✅ gerekçe (hangi ortamda ne ölçüldü) → **kapat** |
+| `durum:reddedildi` | çürüyen / yapılmayacak bildirim (5. adım kararı) | ✅ KAPANIŞ YORUMU iskeleti (1. bölüm = gerekçe: hangi ortamda ne ölçüldü) → **kapat** |
 
-Merge sonrası: kısa yorum (PR linki + tüketicinin koşacağı adım) → **kapat**. Bir sonraki durum
+Merge sonrası: **KAPANIŞ YORUMU** (aşağıdaki iskelet) → **kapat**. Bir sonraki durum
 etiketi konurken önceki kaldırılır (tek Issue'da tek durum). ⚠ `durum:onay-bekliyor` /
 `durum:onaylandi` taşıyan Issue **yeniden değerlendirmeye alınmaz** — gün-sonu gözlemi onu yalnız
 "açık iş" olarak sayar; yeni yorum gelmişse o yorum **yeni bir bildirim** gibi 1. adımdan geçer.
 Etiketler depo etiketi olarak `gh label create --repo ix-works/DEV_CORE` ile bir kez açılır;
 etiketi yalnız yazma yetkili sahip koyar (gönderenin etiketi düşebilir — §6b).
+
+**KAPANIŞ YORUMU İSKELETİ (sahip kararı 2026-09-25 — MUST; `durum:reddedildi` kapanışı da aynı
+iskeleti kullanır, uygulanmayan bölüm "yok" diye yazılır, atlanmaz).** Okuyucusu Issue'yu açan
+tüketici ajandır: sahibin konuşmasını, kayıtlarını ve kararlarını **görmez** — işi kapatabilmesi
+için bilmesi gereken her şey yorumdadır. *"PR linki + koşacağın adım"* yetmez: onaylı kapsam
+değerlendirmede daraltılabilir (ör. güvenlik), çekirdek güncellemesi her şeyi taşımaz (merge-safe
+şablon satırları kurulu makineye kendiliğinden ulaşmaz; tüketicinin kendi dosyaları hiç değişmez).
+
+1. **Sonuç** — iddia bazında hüküm (DOĞRULANDI · KISMEN · ÇÜRÜDÜ · ÖLÇÜLEMEDİ) + hangi ortamda ölçüldü.
+2. **Yapılan** — PR + merge commit'i · değişen dosyalar · kayıt no.
+3. **Yapılmayan ve nedeni** — önerinin uygulanmayan / daraltılan / ertelenen her parçası, kanıtıyla.
+4. **Senin yapacağın adımlar** — sıralı, komutlarıyla: önce çekirdek güncelleme prosedürü
+   (`playbook/howto-cekirdek-guncelleme.md`), sonra güncellemenin TAŞIMADIĞI yerel adımlar.
+5. **Dikkat** — yapılmaması gerekenler (ör. çıkarılan kalıbı yerelde yeniden ekleme), ölçülmeyen
+   yüzeyler, bilinen sınırlar.
+6. **Doğrulama** — "bende düzeldi" demek için koşulacak komut + beklenen çıktı (merge ≠ bende düzeldi).
+7. **Yeniden açma koşulu** — hangi gözlemde aynı Issue'ya yorum yazılır.
+
+Yorum kimliksizdir (§2 genericize); yol/komut yer tutucuyla yazılır (`<proje>`, `<app>`).
 
 ## 7. Yeni içerik nereye? (SORU 0 kısa aynası)
 

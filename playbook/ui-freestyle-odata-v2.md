@@ -167,6 +167,11 @@ Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağ
 > **Kanonik reusable util:** `ERP/SD/ZSD001_CLC/ui/<report>_app/webapp/util/TablePersonalizer.js`
 > (grid sürümü; tüm app'lerde birebir, sadece namespace farkı). **Kanonik şablon app (kopyala-uyarla):**
 > `ERP/SD/ZSD001_CLC/ui/<report>_app/` — yeni rapor = bunu kopyala + kolon/filtre/servis değiştir, sıfırdan yazma.
+>
+> ⚠ **Kopyalamadan önce (2026-09-25):** util'in varyant modeli (`_varModel` → `new ODataModel(VAR_SERVICE_URL)`)
+> ana modelin `sap-client`'ını taşımalı — eski kopyalar taşımıyordu (std/03 **§18.5b**, FE-48). Kopyaladığın
+> sürümde std/03 §18.5b'deki `_mainClientParams` karşılığı yoksa ekle; ana modeli util'e verilen kontrolün sahip
+> bileşeninden al — `Component.getOwnerComponentFor(<kontrol>).getModel()` (onInit'te tablonun modeli henüz `undefined`).
 
 **GRID KURULUM (5 parça):**
 1. **manifest** libs: `sap.ui.table` + `sap.ui.export`. View `xmlns:table="sap.ui.table"`.
