@@ -134,7 +134,7 @@ SAP objelerini local'e indirirken **varsayılan `ZAI` klasörünü KULLANMA** (d
 
 ## 9. KESİN YASAKLAR (ADR 0005 — hatırlatma; tam metin kök CLAUDE.md'de)
 Z/Y ile başlamayan standart objeye dokunma · standart tablo verisine direkt SQL yok
-(BAPI→RFC→BDC→manuel) · transport/package yaratma-release yok · Z obje = `master_language`
+(released API→BAPI→RFC→BDC→manuel; `core/standards/10`) · transport/package yaratma-release yok · Z obje = `master_language`
 login + 4 alan label TAM.
 
 ---

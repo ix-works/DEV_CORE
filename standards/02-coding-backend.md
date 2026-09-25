@@ -40,7 +40,7 @@ Your expertise covers:
 | Priority | Scenario | Technology |
 |---|---|---|
 | 1 | Read-heavy lists, reports, value helps | **CDS View → OData v2 (automatic exposure via @OData.publish)** |
-| 2 | Transactional operations (create/update/delete) | **RFC/BAPI wrapped in DPC_EXT** |
+| 2 | Transactional operations (create/update/delete) | **RFC/BAPI wrapped in DPC_EXT** — standart nesnede API seçimi: [`10-standart-veriye-yazma-api-secimi.md`](10-standart-veriye-yazma-api-secimi.md) |
 | 3 | Complex queries with joins/aggregations | **CDS View** (with AMDP if HANA-specific logic needed) |
 | 4 | Mixed (read via CDS + write via RFC) | **Hybrid: CDS entity in MPC + RFC call in DPC_EXT** |
 | 5 | Legacy integration where no CDS possible | **Pure RFC → SEGW function import** |

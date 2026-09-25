@@ -20,7 +20,7 @@ applies_to: [s4_private]
 | **C-RAP-PKG-01** | Obje ZSD001_CLC paketinde mi (cross-pkg sızıntı yok)? | `check_object_in_correct_pkg.py` | BLOCKER | ADR 0003 |
 | **C-RAP-TR-01** | Transport kullanıcının verdiği aktif TR mi? Yeni TR/paket YOK? | manual | BLOCKER | ⛔ ADR 0005 C |
 | **C-RAP-TXT-01** | `@EndUserText.label`/başlık TR, tam, **tahmin değil** (spec/<LEGACY_SOURCE> kaynaklı)? | manual:tr-label-check | BLOCKER | ⛔ ADR 0005 D |
-| **C-RAP-STD-01** | Std obje/tablo direkt yazımı yok? (managed EML sadece Z tablo; std → released BAPI) | manual | BLOCKER | ⛔ ADR 0005 A/B |
+| **C-RAP-STD-01** | Std obje/tablo direkt yazımı yok? (managed EML sadece Z tablo; std → [`standards/10`](../../standards/10-standart-veriye-yazma-api-secimi.md) sırası) | manual | BLOCKER | ⛔ ADR 0005 A/B |
 | **C-RAP-REL-01** | ⭐ **Clean Core: interface CDS std tablo (VBAP/LIPS/MARA) yerine released CDS okuyor mu?** **KOD YAZMADAN ÖNCE** `released_successors.json` bak (MARA→I_Product). Tüm-tip released-API için native ATC "Usage of APIs". Bilinçli tablo ise gerekçe; WARNING sessiz geçilmez | `check_released_objects.py` | WARNING | `standards/05` §9X · `feedback_clean-core-released-cds-proaktif` |
 | **C-RAP-ACT-01** | Aktivasyon sonrası `adtcore:version="active"` **VE aktif source dolu/valid** doğrulandı mı? (status-200/script-return YETMEZ — boş-shell de "var" döner; 2026-06-10 ITEM/DORBN boş-source vakası) | `check_sap_active_version.py` (içerik-farkındalıklı, 2026-06-10) — raw create scriptleri de `verify_active()` ile çağırır | BLOCKER | Dependency cascade + [[feedback_inline-post-empty-source-trap]] |
 | **C-RAP-LANG-01** | Post-create `adt_get include_source=false` → `adtcore:masterLanguage="TR"` mı? (⚠️ MCP post_shell EN yaratır — class/BDEF/SRVD raw REST + TR shell) | `manual:tr-master-lang-check` + `check_sap_master_language.py` (⚠️ ORPHAN — script mevcut, hiçbir runner'a wire EDİLMEMİŞ; T11 wire adayı) | BLOCKER | ⛔ ADR 0005 D · `feedback_mcp-post-shell-en-master-lang` |
@@ -51,7 +51,7 @@ applies_to: [s4_private]
 
 | ID | Kontrol | Severity | Kural |
 |---|---|---|---|
-| **C-RAP-BD-01** | implementation type gerekçeli (managed=Z-only; unmanaged=std→released BAPI)? | BLOCKER | 05-coding-rap §5 |
+| **C-RAP-BD-01** | implementation type gerekçeli (managed=Z-only; unmanaged=std→released API/BAPI, `standards/10`)? | BLOCKER | 05-coding-rap §5 |
 | **C-RAP-BD-02** | Draft kararı açık (varsayılan draft'sız; draft varsa `ZSDxxx_A_*_D`)? | BLOCKER | Pilot kararı |
 | **C-RAP-BD-03** | Numbering NR objesi **kullanıcı kaynaklı** (AI NR yaratmıyor)? | BLOCKER | ⛔ ADR 0005 C |
 | **C-RAP-BD-04** | EML std tabloya yazmıyor; tek MODIFY bloğu, %cid unique, COMMIT ENTITIES yok? | BLOCKER | Playbook §29 |

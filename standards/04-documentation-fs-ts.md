@@ -926,6 +926,13 @@ SELECT a~onay_id, a~vbeln, a~status, a~talep_tarihi,
 - Loop içinde SELECT yapılmaz (for all entries veya JOIN kullanılır)
 - Büyük veri setlerinde PACKAGE SIZE kullanılır
 
+**6.4 API Seçimi (standart nesneye yazan her geliştirmede ZORUNLU)**
+
+Standart iş nesnesine create/update/delete/action varsa: değerlendirilen **her** yöntem
+(EML `I_…TP` · BAPI · OData · RFC FM · BDC) — sistemde var mı (canlı) · released mı · ADIM 0
+bağlamındaki commit kuralı · hata yönetimi · **karar ve reddedilenlerin nedeni** + Clean Core
+seviyesi. Tablo biçimi ve karar ağacı: [`10-standart-veriye-yazma-api-secimi.md`](10-standart-veriye-yazma-api-secimi.md).
+
 ---
 
 ### BÖLÜM 7: ENHANCEMENTler VE BADİ'ler
@@ -1481,6 +1488,7 @@ Her FS gereksinimi ile TS teknik çözümü arasında bağ kurulmalıdır:
 [ ] DD nesneleri (tablo, domain, element) tam tasarlanmış
 [ ] Class/Program tasarımı pseudocode ile açıklanmış
 [ ] Performans noktaları değerlendirilmiş
+[ ] Standart nesneye yazma varsa API seçimi (6.4) — reddedilenler nedeniyle yazılı
 [ ] BAdI/Enhancement yaklaşımı belirtilmiş
 [ ] Hata mesajları ve mesaj sınıfı tanımlanmış
 [ ] Unit test senaryoları yazılmış

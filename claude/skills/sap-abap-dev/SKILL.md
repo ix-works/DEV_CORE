@@ -39,7 +39,7 @@ Her SAP işleminden önce bunlar geçerlidir. İhlal riski varsa: **DUR → AÇI
 > **KANONİK METİN = kök `CLAUDE.md` fiziksel damgası** (ADR 0021; `check_kesin_yasaklar`
 > eşliği zorlar — burada KOPYA tutulmaz, D6 2026-08-01). Özet: **A)** standart objeye
 > dokunma (append/DTEL adını AI önermez) **B)** standart tablo verisine direkt SQL yok
-> (BAPI→RFC→BDC→manuel) **C)** transport/package yaratma-release, lock silme yok
+> (released API→BAPI→RFC→BDC→manuel; `standards/10`) **C)** transport/package yaratma-release, lock silme yok
 > **D)** Z obje = projenin **`master_language`** login'i (hardcoded-TR DEĞİL — `project.yaml`)
 > + 4 label TAM + activate öncesi REST GET.
 

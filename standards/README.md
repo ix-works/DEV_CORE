@@ -19,6 +19,7 @@ Bu klasör **L2 katman** dosyaları içerir: stabil, değişme sıklığı düş
 | [`03-coding-ui-fiori.md`](03-coding-ui-fiori.md) | ui | Fiori UI5 proje yapısı, manifest, controller, OData binding, CSS, deploy (ui5-deploy.yaml) |
 | [`04-documentation-fs-ts.md`](04-documentation-fs-ts.md) | both | FS ve TS şablonları, versiyon kontrolü, onay süreci |
 | [`05-coding-rap.md`](05-coding-rap.md) | backend | **RAP track:** view entity katmanlama, BDEF (managed/unmanaged), service definition/binding/publish, ADR 0005 RAP yüzeyi (02'nin alternatifi, all-or-nothing) |
+| [`10-standart-veriye-yazma-api-secimi.md`](10-standart-veriye-yazma-api-secimi.md) | backend | **Standart nesneye yazma — API seçimi:** bağlam/commit kuralı → released RAP BO (EML, canlı teyitli) → released BAPI → OData → RFC FM → BDC → manuel; profil ayarı; TS gerekçe tablosu (ADR 0005 B ayrıntısı) |
 
 ## Ne Zaman Buraya Yazılır?
 

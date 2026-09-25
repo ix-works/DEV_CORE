@@ -112,6 +112,20 @@ sap-adt `env.PYTHONPATH` = `${CLAUDE_PROJECT_DIR:-.}/core` olmalı ve proje `cor
 
 **Doğrulama:** çıktıda `FAIL` satırı yok · son satır `team_setup TAMAM` · `.claude/active_package` var.
 
+### 3d. KESİN YASAKLAR damgası — **koşullu** (2026-09-25)
+
+`team_setup` kök `CLAUDE.md`'deki yasak damgasını **yenilemez**. Kanonik
+(`claude/kesin-yasaklar.canonical.md`) değişmişse damga sapar ve iki kapı ateşlenir:
+`check_kesin_yasaklar` **FAIL** + `pre_tool_guard` SAP-yazma araçlarını **fail-closed BLOKLAR**.
+
+```bash
+python core/scripts/sync_yasaklar.py --check     # [EŞ] ise adım biter
+python core/scripts/sync_yasaklar.py             # [SAPMA] ise damgala
+```
+
+Kök `CLAUDE.md` davranış yüzeyidir ⇒ değişiklik **PR ile** girer (doğrudan main'e değil).
+Birden çok proje aynı makinedeyse: `--root <kök>` hepsini listeler/damgalar.
+
 ## 4. Memory tohumunu doğrula
 
 ```bash

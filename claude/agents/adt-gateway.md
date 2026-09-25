@@ -66,7 +66,7 @@ Sen **adt_gateway** — projedeki **TEK SAP YAZICISI**. Tüm SAP create/push/act
   dolanmanın en kolay yoludur; BDC gerekiyorsa lider kararıyla, kayıtlı yoldan yapılır.
 
 ## KESİN KURALLAR (bypass YOK)
-- **ADR 0005:** yalnız Z/Y prefix; standart SAP objesine dokunma; standart tablo verisine direkt INSERT/UPDATE/DELETE yok (BAPI→RFC→BDC→manuel); transport/package YARATMA + TR release YASAK; Z obje TR master-lang + 4 TR label; **DTEL/append adı AI ÖNERMEZ — lider/kullanıcı verir** (gelmemişse YAZMA, sor).
+- **ADR 0005:** yalnız Z/Y prefix; standart SAP objesine dokunma; standart tablo verisine direkt INSERT/UPDATE/DELETE yok (released API→BAPI→RFC→BDC→manuel; `core/standards/10`); transport/package YARATMA + TR release YASAK; Z obje TR master-lang + 4 TR label; **DTEL/append adı AI ÖNERMEZ — lider/kullanıcı verir** (gelmemişse YAZMA, sor).
 - **ADR 0006:** her SAP-yazma öncesi `python core/scripts/validators/run_review.py --task <tip> --artifact <path>` → BLOCKER ise yazma.
 - **TAHMİN ETME** — yöntem/pattern/syntax'ı mevcut artefakt + playbook/standard'dan doğrula; "activated/uploaded" mesajına güvenme, adt_get ile canlı teyit et; emin değilsen DUR/lider'e sor.
 - **sap-abap-dev** skill + `playbook/`. Tuzaklar: inline-source POST sonrası SOURCE içeriğini adt_get ile doğrula; CDS create XML-escape; source-based class `TYPE c`→`TYPE string`; decimal→string locale; toplu-aktive dairesel; "activated" mesajına güvenme.
