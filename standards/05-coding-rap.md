@@ -95,7 +95,7 @@ SAP, Behavior Definition'ın adının **root view entity ile aynı** olmasını 
 
 | Konu | Kural |
 |---|---|
-| Implementation type | Z tablo + std sarmıyorsa **managed**. Std doküman sarıyorsa **unmanaged** (released BAPI/EML; std tabloya direkt EML yazma = ADR 0005 B ihlali). |
+| Implementation type | Z tablo + std sarmıyorsa **managed**. Std doküman sarıyorsa **unmanaged** (released BAPI/EML; std tabloya direkt EML yazma = ADR 0005 B ihlali). Hangi API: [`10`](10-standart-veriye-yazma-api-secimi.md) |
 | Draft | Varsayılan **draft'sız** (pilot kararı). Draft gerekirse ayrı değerlendirilir; draft DB tablo `ZSDxxx_A_*_D`. |
 | Numbering | Managed early/late numbering; NR objesi **kullanıcı tarafından** sağlanır/yaratılır (ADR 0005 C — AI NR yaratmaz). BDEF `numbering : managed;` veya determination'da NR FM. |
 | Actions | Factory/instance action camelCase: `copyWithReference`. İş mantığı behavior sınıfında. |
