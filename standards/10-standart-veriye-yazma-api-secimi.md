@@ -70,10 +70,12 @@ ardından, **release edilmemiş** BAPI/FM'den (ADIM 4) ÖNCE gelir (sahip karar�
 
 - ADIM 1 teyitlerinden biri tutmazsa (1a-1d: BO yok · operasyon kapalı · alan yazılamıyor · boşluk çözülemiyor) **VE** released BAPI yoksa (ADIM 2) — ya da uzak tüketimde.
 - Aynı sistemde iç çağrı **iç gateway proxy** ile yapılır (BE-14 · `playbook/adt-rap.md` "## 34. SAP-içi HTTP/OData servis çağrısı"); SM59/RFC-dest legacy'dir.
-- Yerel bağlamda (klasik GUI, job, RAP handler) EML ya da **released** BAPI varken **seçilmez** — aynı BO'ya HTTP katmanı eklemek gereksiz karmaşadır.
+- Yerel bağlamda (klasik GUI, job, SEGW DPC_EXT, RAP handler) EML ya da **released** BAPI varken **seçilmez** — aynı BO'ya HTTP katmanı eklemek gereksiz karmaşadır.
   Release edilmemiş bir BAPI OData'nın önüne **geçmez** (o ADIM 4'tür): elde yalnız release edilmemiş BAPI + released OData
-  varsa OData seçilir. ADIM 4'e yalnız OData'nın kendi teyidi tutmazsa inilir (1b/1c'nin OData karşılığı: servis metadata'sında
-  operasyon açık — `sap:creatable`/`sap:updatable` — ve gereken alan yazılabilir); "HTTP katmanı
+  varsa OData seçilir. ADIM 4'e yalnız OData'nın kendi teyidi tutmazsa inilir (1b/1c'nin OData karşılığı: `$metadata`'da EntitySet üzerinde
+  `sap:creatable="false"`/`sap:updatable="false"` **YOKSA** operasyon açıktır — varsayılan true, `="true"` diye aranmaz;
+  gereken alan için aynı öznitelik `Property` üzerinde aranır. Ölçüldü: `API_SALES_ORDER_SRV` (bir S/4 private DEV) —
+  `="true"` 0 kez, `="false"` 250+ kez. Metadata açık ≠ yazıyor: ilk gerçek çağrı + read-back teyidin parçasıdır); "HTTP katmanı
   karmaşası" bu durumda gerekçe DEĞİLDİR. İniş TS 6.4'e yazılır.
 
 ## ADIM 4 — Released OLMAYAN ama resmi BAPI / FM — RFC-enabled ya da değil *(Level C)*
