@@ -100,8 +100,10 @@ OZEL_TESTLER = [
                               "giremez; korpusla olculmus PRECISION (263 .cds: genis varyant "
                               "49 bulgu + dogru-emsal FP'si -> dar varyant 11 bulgu, 0 FP)"),
     ("worktree_yasam_dongusu",
-     "worktree yasam dongusu: kanonik kok (D24) + gun-sonu denetimi (`git cherry`, "
-     "`--is-ancestor` DEGIL) + silme sirasi junction-ONCE + statusline budamasi + hook yol oneki"),
+     "worktree yasam dongusu: kanonik kok (D24) + gun-sonu denetimi (ICERIK karsilastirmasi; "
+     "`git cherry` yalniz ek sinyal, `--is-ancestor` DEGIL — Issue #280) + silme sirasi "
+     "junction-ONCE + ReadOnly oznitelikli agac silme (Issue #284) + statusline budamasi "
+     "+ hook yol oneki"),
     ("worktree_blocklist", "kimlik blocklist'i worktree'de de bulunmali (commit-blogu)"),
     ("negatif_test_harness", "hook parse-fail gorunurlugu: exit 0 KORUNUR + stderr'de not (bozuk girdi ARTIK ayirt edilebilir)"),
     ("tembel_desen", "sizinti deseni TEMBEL kurulur: hiz kazanci korumayi OLU'ye cevirmiyor"),
@@ -182,6 +184,11 @@ OZEL_TESTLER = [
     ("veri_yetki_guardlari", "ADR 0011 PII normalizasyonu + guard'siz mutasyon tool'u (K-1/2/3)"),
     # 2026-08-01 kuyruk-turu (scripts/ + run_review):
     ("reviewer_skip_sozlesmesi", "run_review SKIP sozlesmesi: cokme + sahte-PASS (S1+S2)"),
+    # 2026-09-25 (Issue #285): 'validator YOK' teshisi uzun-yol olasiligini anar, HUKUM AYNI.
+    ("reviewer_uzun_yol_ipucu",
+     "run_review 'bulunamadi' mesaji: Windows'ta >259 karakterlik aranan yolda uzun-yol ipucu "
+     "(+ uzun-yol onekli varlik sondasi); kisa yol/POSIX'te gurultu YOK; verdict+exit "
+     "uzun/kisa yolda AYNI (7 vektor + 3 mutasyon)"),
     ("core_index_kapsam", "CORE-INDEX governance duz dosyalari GORUYOR mu (S3)"),
     ("core_index_siralama",
      "Q214: CORE-INDEX SIRASI platformdan bagimsiz mi — anahtarsiz sorted(Path) "
@@ -538,7 +545,8 @@ OZEL_TESTLER = [
      "seed_memory --terfi-adaylari: SALT-OKUNUR (md5 once==sonra, dizin yaratmaz) + "
      "`metadata.seed:` kovalari (etiket YOK = 'karar verilmedi', 'hayir' DEGIL) + kimlik "
      "on-taramasi govde VE dosya adi (D5) + iki yonlu sapma ve CRLF-only GURULTU ayrimi "
-     "(canli olcumde 26 hayali kalem) + KAPSAM BEYANI; 27 vektor + 4 mutasyon"),
+     "(canli olcumde 26 hayali kalem) + KAPSAM BEYANI (+ yazma yetkisiz klonun Issue "
+     "kanali, #286); 29 vektor + 5 mutasyon"),
     # 2026-09-18 (Q326/D7): desen 3. kez genisledi; 2 harfle sinirli desen 3-4 harfli
     # modul kodunu KACIRIYORDU (kontrol grubu: 2 harfli yakalaniyordu).
     ("z_obje_desen_kapsami",
@@ -883,7 +891,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/validators/check_sap_active_version.py", ("O:sap_gate_skip_sozlesmesi",),
      "B3-01: BEŞ ayrı ölçmeyen exit-0 yolu"),
     ("scripts/validators/run_review.py",
-     ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam", "O:sap_gate_skip_sozlesmesi"),
+     ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam", "O:sap_gate_skip_sozlesmesi",
+      "O:reviewer_uzun_yol_ipucu"),
      "SKIP sözleşmesi + push-tipi/reviewer haritası; ayrıca `gate_durum_beyani` "
      "TÜKETİCİ ucu üretici tarafından sap_gate_skip_sozlesmesi V7 ile çağrılır"),
 

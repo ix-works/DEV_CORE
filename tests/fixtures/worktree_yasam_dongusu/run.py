@@ -14,6 +14,10 @@ KIRMIZIYA dondugu olculur. Mutasyon GERCEK KAYNAGA YAZILMAZ (kalinti komsu turla
 kirletir): kaynak metni okunur, bellekte degistirilir, izole bir modul olarak exec edilir.
 Kurulum hatasi `KACTI` DEGILDIR -> ucuncu deger `KURULAMADI` basilir.
 
+Issue #280 (2026-09-25): ② hukmu `git cherry`den ICERIK karsilastirmasina tasindi
+  (V4 yapisal + V10 gercek-git 5 kollu matris; M10-M12). Issue #284: `--wt-kapat`
+  ReadOnly oznitelikli dizinde kalici bloklanmaz + teshis siniflidir (V11; M13-M15).
+
 UC BAGLAM (F3):
   (1) bilinen-BOZUK  : fix sokulmus kod (mutasyon dali)
   (2) bilinen-TEMIZ  : bugunku kod
@@ -26,6 +30,7 @@ import ast
 import contextlib
 import io
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -132,24 +137,182 @@ def v2_v3_yetim(cikti: str) -> None:
 
 
 def v4_cherry(src: str) -> None:
-    """#80(2)b: squash-merge'de yaniltan `--is-ancestor` DEGIL, `git cherry` kullanilir.
+    """#80(2)b + Issue #280: hukum ICERIK karsilastirmasindan; `--is-ancestor` YOK.
 
+    Eski capa "`git cherry` cagriliyor" idi — Issue #280 ile `cherry` yalniz EK SINYAL
+    oldu (cok commit'li squash'ta yanlis alarm). Hukmun DAVRANISI V10'da gercek git
+    matrisiyle olculur; burasi yalniz yapisal capadir.
     ⛔ `src` PARAMETRE olarak gelir, diskten OKUNMAZ: mutasyon bellekte uygulaniyor;
     kaynagi burada yeniden okumak mutasyonu SAHTE-KACIRIR (olculdu: M3+M4 ilk koşumda
     "korpus gormedi" dedi, oysa vektor mutasyonsuz metni olcuyordu).
     """
-    fn = next((n for n in ast.walk(ast.parse(src))
-               if isinstance(n, ast.FunctionDef) and n.name == "wt_denetim"), None)
-    if fn is None:
+    agac = ast.parse(src)
+    fns = {n.name: n for n in ast.walk(agac) if isinstance(n, ast.FunctionDef)
+           and n.name in ("wt_denetim", "_dal_icerik_farki")}
+    if "wt_denetim" not in fns:
         sonuc("V4 wt_denetim AST'te bulundu", False, "fonksiyon yok")
         return
     # CAPA AST-TABANLI: duz `"cherry" in src` docstring'e/yoruma takilirdi. Burada YALNIZ
     # fonksiyon govdesindeki dizge SABITLERI sayilir (yorumlar AST'e girmez).
-    sabitler = [n.value for n in ast.walk(fn)
+    sabitler = [n.value for f in fns.values() for n in ast.walk(f)
                 if isinstance(n, ast.Constant) and isinstance(n.value, str)]
-    sonuc("V4 `git cherry` cagriliyor", "cherry" in sabitler)
+    cagrilar = {n.func.id for n in ast.walk(fns["wt_denetim"])
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    sonuc("V4 hukum `_dal_icerik_farki` (merge-base + `diff --name-only`) ile",
+          "_dal_icerik_farki" in cagrilar and "merge-base" in sabitler
+          and "--name-only" in sabitler)
     sonuc("V4b `--is-ancestor` KULLANILMIYOR",
           not any("is-ancestor" in s for s in sabitler), "squash-merge'de yaniltir")
+
+
+def kum_icerik_kur(kok: Path, ts) -> tuple[Path, dict]:
+    """Issue #280 matrisi — izole depo, her kol KENDI dosyalarina dokunur (kollar ayrik).
+
+    K1 tek commit+squash · K2 cok commit+squash · K3 squash + main SONRA AYNI dosya ·
+    K4 squash + main SONRA BASKA dosya · K5 birlesmemis dal. Her dal gercek bir worktree'dir.
+    """
+    proje = kok / "ICPROJ"
+    proje.mkdir()
+    (proje / "taban.txt").write_text("taban\n", encoding="utf-8")
+    git(proje, "init", "-q", "-b", "main")
+    git(proje, "config", "user.email", "fixture")
+    git(proje, "config", "user.name", "fixture")
+    git(proje, "add", "-A")
+    git(proje, "commit", "-q", "-m", "taban")
+
+    def yaz_commit(dosyalar, mesaj):
+        for ad, icerik in dosyalar:
+            (proje / ad).write_text(icerik, encoding="utf-8")
+        git(proje, "add", "-A")
+        git(proje, "commit", "-q", "-m", mesaj)
+
+    def dal(ad, commitler, squash=True):
+        git(proje, "checkout", "-q", "-b", ad, "main")
+        for i, c in enumerate(commitler):
+            yaz_commit(c, f"{ad} c{i + 1}")
+        git(proje, "checkout", "-q", "main")
+        if squash:
+            git(proje, "merge", "-q", "--squash", ad)
+            git(proje, "commit", "-q", "-m", f"squash {ad}")
+
+    dal("k1-tek", [[("a1.txt", "k1\n")]])
+    dal("k2-cok", [[("b1.txt", "1\n")], [("b2.txt", "2\n")]])
+    dal("k3-ayni", [[("d.txt", "dal\n")], [("d2.txt", "x\n")]])
+    yaz_commit([("d.txt", "dal\nmain-sonra-ekledi\n")], "main d.txt'ye dokundu")
+    dal("k4-baska", [[("e1.txt", "1\n")], [("e2.txt", "2\n")]])
+    yaz_commit([("f_main.txt", "main\n")], "main baska dosya")
+    dal("k5-yok", [[("g.txt", "g\n")]], squash=False)
+    yollar = {}
+    for d in ("k1-tek", "k2-cok", "k3-ayni", "k4-baska", "k5-yok"):
+        w = ts.wt_yolu(proje, d)
+        w.parent.mkdir(parents=True, exist_ok=True)
+        git(proje, "worktree", "add", "-q", str(w), d)
+        yollar[d] = w
+    return proje, yollar
+
+
+def v10_icerik_matrisi(cikti: str) -> None:
+    """Issue #280: hukum ICERIK karsilastirmasi — cherry yalniz ek sinyal."""
+    def sat(dal):
+        return [s for s in cikti.splitlines() if f"② {dal}:" in s]
+
+    def tamam(dal):
+        return any("icerik main'de" in s for s in sat(dal)) and \
+            not any("FARKLI" in s for s in sat(dal))
+
+    def alarm(dal):
+        return any("main'den FARKLI" in s and s.startswith("[FAIL]") for s in sat(dal))
+
+    ilk = lambda d: (sat(d) or [None])[0]  # noqa: E731
+    sonuc("V10 K1 tek commit+squash -> PASS", tamam("k1-tek"), ilk("k1-tek"))
+    # KONTROL GRUBU ayni satirda: cherry burada '+2/2' der (eski hukum ALARM verirdi).
+    sonuc("V10b K2 cok commit+squash -> PASS (cherry +2/2 iken)",
+          tamam("k2-cok") and any("+2/2" in s for s in sat("k2-cok")), ilk("k2-cok"))
+    sonuc("V10c K4 squash + main BASKA dosyaya ilerledi -> PASS",
+          tamam("k4-baska"), ilk("k4-baska"))
+    # FP CAPASI (ters yon): gercek pozitif hala yakalanmali — "her seye PASS" diyen
+    # bir denetim V10/V10b/V10c'yi gecerdi.
+    sonuc("V10d K5 birlesmemis dal -> ALARM", alarm("k5-yok"), ilk("k5-yok"))
+    sonuc("V10e K3 squash + main AYNI dosyaya dokundu -> ALARM",
+          alarm("k3-ayni"), ilk("k3-ayni"))
+    sonuc("V10f K3 ALARM'i 'BEKLENEBILIR' + 'sessiz onay degildir' notu tasir",
+          any("BEKLENEBILIR" in s and "sessiz onay degildir" in s for s in sat("k3-ayni")),
+          next((s for s in sat("k3-ayni") if "BEKLENEBILIR" in s), None))
+
+
+def _salt_okunur_yap(d: Path) -> None:
+    os.chmod(d, stat.S_IREAD if os.name == "nt" else (stat.S_IREAD | stat.S_IEXEC))
+
+
+def _yazilabilir_geri(kok: Path) -> None:
+    for dp, dn, fn in os.walk(kok):
+        for x in dn + fn:
+            try:
+                os.chmod(os.path.join(dp, x), stat.S_IREAD | stat.S_IWRITE | stat.S_IEXEC)
+            except OSError:
+                pass
+
+
+def v11_salt_okunur_silme(ts, kok: Path) -> None:
+    """Issue #284: ReadOnly oznitelikli dizin `--wt-kapat`i KALICI bloklamamali."""
+    # KONTROL GRUBU: kurulum hatayi GERCEKTEN uretiyor mu? (duz rmtree birakmali)
+    kontrol = kok / "ro_kontrol"
+    (kontrol / "alt").mkdir(parents=True)
+    (kontrol / "alt" / "b.txt").write_text("b", encoding="utf-8")
+    _salt_okunur_yap(kontrol / "alt")
+    ts.shutil.rmtree(kontrol, ignore_errors=True)
+    uretildi = kontrol.exists()
+    _yazilabilir_geri(kok)
+    if not uretildi:
+        sonuc("V11 kontrol: ReadOnly kurulumu hatayi URETEMEDI -> DOGRULANAMADI (atlandi)",
+              True, "platform/yetki (root?) salt-okunur dizini silmeyi engellemedi")
+        return
+    sonuc("V11 kontrol: duz rmtree(ignore_errors) ReadOnly dizini BIRAKIYOR (hata uretildi)",
+          uretildi)
+    # V11a: yardimci dogrudan
+    a = kok / "ro_a"
+    (a / "alt").mkdir(parents=True)
+    (a / "alt" / "b.txt").write_text("b", encoding="utf-8")
+    _salt_okunur_yap(a / "alt")
+    kalan = ts._agac_sil(a)
+    sonuc("V11a `_agac_sil` ReadOnly dizini SILDI", not a.exists(),
+          f"kalan={[(p, type(e).__name__) for p, e in kalan][:3]}")
+    _yazilabilir_geri(kok)
+    # V11b: uctan uca `wt_kapat` (gercek git worktree, --zorla)
+    proje = kok / "ROPROJ"
+    (proje / "alt").mkdir(parents=True)
+    (proje / "a.txt").write_text("a\n", encoding="utf-8")
+    (proje / "alt" / "b.txt").write_text("b\n", encoding="utf-8")
+    git(proje, "init", "-q", "-b", "main")
+    git(proje, "config", "user.email", "fixture")
+    git(proje, "config", "user.name", "fixture")
+    git(proje, "add", "-A")
+    git(proje, "commit", "-q", "-m", "taban")
+    w = ts.wt_yolu(proje, "ro-dal")
+    w.parent.mkdir(parents=True, exist_ok=True)
+    git(proje, "worktree", "add", "-q", "-b", "ro-dal", str(w), "main")
+    _salt_okunur_yap(w / "alt")
+    tampon = io.StringIO()
+    with contextlib.redirect_stdout(tampon):
+        ok = ts.wt_kapat(proje, str(w), zorla=True)
+    kalan_sat = [s for s in tampon.getvalue().splitlines() if "KALDI" in s]
+    sonuc("V11b `wt_kapat --zorla` ReadOnly alt dizinli worktree'yi KAPATTI",
+          ok and not w.exists(), kalan_sat[0].strip() if kalan_sat else None)
+    _yazilabilir_geri(kok)
+    # V11c: siniflandirma — handle kilidi ile ReadOnly AYRI teshis
+    class _Kilit(PermissionError):
+        winerror = 32
+    ro = kok / "ro_c"
+    ro.mkdir()
+    (ro / "f.txt").write_text("x", encoding="utf-8")
+    _salt_okunur_yap(ro / "f.txt")
+    _salt_okunur_yap(ro)
+    s_kilit = ts._silme_hatasi_sinifi(str(kok / "yok.txt"), _Kilit(13, "kilitli"))
+    s_ro = ts._silme_hatasi_sinifi(str(ro / "f.txt"), PermissionError(13, "erisim"))
+    _yazilabilir_geri(kok)
+    sonuc("V11c WinError 32 -> HANDLE KILIDI", "HANDLE" in s_kilit, s_kilit)
+    sonuc("V11d salt-okunur yol -> ReadOnly (handle kilidi DEGIL)",
+          "ReadOnly" in s_ro and "HANDLE" not in s_ro, s_ro)
 
 
 def v5_siddet(cikti: str) -> None:
@@ -296,6 +459,13 @@ def tur(ts_mut=None, sl_mut=None, ss_mut=None, sadece=None) -> None:
                 v7_platform(ts_kaynak)
             for w in (w1, w2):
                 git(proje, "worktree", "remove", "--force", str(w))
+        if sadece in (None, "icerik"):
+            icproje, icyollar = kum_icerik_kur(kok, ts)
+            v10_icerik_matrisi(denetim_kos(ts, icproje))
+            for w in icyollar.values():
+                git(icproje, "worktree", "remove", "--force", str(w))
+        if sadece in (None, "silme"):
+            v11_salt_okunur_silme(ts, kok)
         if sadece in (None, "statusline"):
             v8_statusline(kok, sl_mut)
         if sadece in (None, "yol_oneki"):
@@ -337,6 +507,23 @@ MUTASYONLAR = [
      ('            if _git(proje, "cat-file", "-e", sha).returncode != 0:\n'
       "                ozgun.append",
       "            if True:\n                ozgun.append"), "denetim"),
+    # --- Issue #280: hukum icerikten, cherry yalniz ek sinyal ---
+    ("M10 #280 hukum yeniden `git cherry`ye baglanir", "team_setup",
+     ("        if not farkli:\n", "        if not c_arti:\n"), "icerik"),
+    ("M11 #280 icerik main'e degil ortak ataya kiyaslanir", "team_setup",
+     ('"-z", "main", dal)', '"-z", taban, dal)'), "icerik"),
+    ("M12 #280 ALARM'dan 'BEKLENEBILIR' notu duser", "team_setup",
+     ('            say(WARN, f"② {dal}: {ICERIK_FARKI_NOTU}")\n', ""), "icerik"),
+    # --- Issue #284: ReadOnly oznitelik silmeyi kalici bloklamaz ---
+    ("M13 #284 onarici isleyici chmod YAPMAZ", "team_setup",
+     ("                os.chmod(hedef, os.stat(hedef).st_mode | stat.S_IWRITE)",
+      "                pass"), "silme"),
+    ("M14 #284 wt_kapat eski `rmtree(ignore_errors=True)`a doner", "team_setup",
+     ("            kalan = _agac_sil(yol)",
+      "            shutil.rmtree(yol, ignore_errors=True)"), "silme"),
+    ("M15 #284 siniflandirma her seye 'handle kilidi' der", "team_setup",
+     ('    if getattr(exc, "winerror", None) in (32, 33):',
+      "    if True:"), "silme"),
 ]
 
 

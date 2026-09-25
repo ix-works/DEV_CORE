@@ -331,6 +331,8 @@ def terfi_adaylari(target: Path) -> int:
     print("    iz bulunamadı' demektir. Yapısal desenler (makine yolu, e-posta, Z-obje adı,")
     print("    SAP kullanıcı adı) listeden bağımsız çalışır.")
     print("  · Genericize YAPMAZ, dosya KOPYALAMAZ, PR AÇMAZ. Çıktı bir iş listesidir.")
+    print("  · Yazma yetkisi OLMAYAN klonda `evet` dersler tohuma buradan terfi edemez → "
+          "`core/playbook/howto-cekirdek-bulgu-bildirimi.md` kanalıyla (Issue) iletilir.")
     print("  · Sapma yalnız CRLF↔LF normalize edilerek gürültüden ayrılır; başka hiçbir")
     print("    normalizasyon (boşluk, sıra, biçim) yapılmaz — 'gerçek fark' kovası biçimsel")
     print("    değişiklikleri de içerebilir.")

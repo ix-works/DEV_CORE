@@ -25,8 +25,9 @@ WORKTREE YAŞAM DÖNGÜSÜ (2026-08-29 — kayıt #80):
      hata sınıfı (bayat kopya taranması) mekanik olarak imkânsızlaşır.
   --wt-ac DAL             : kanonik yolda worktree aç + provizyonla (çağıran PATH üretmez)
   --wt-yolu DAL           : kanonik yolu yalnız BAS (script'ler için)
-  --wt-denetim            : GÜN-SONU süpürgesi — kayıtsız yetim · `git cherry` ile main'e
-                            gitmemiş commit · kirli ağaç · `gitdir`siz bayat metadata.
+  --wt-denetim            : GÜN-SONU süpürgesi — kayıtsız yetim · İÇERİK karşılaştırmasıyla
+                            main'e gitmemiş iş (`git cherry` yalnız ek sinyal; Issue #280)
+                            · kirli ağaç · `gitdir`siz bayat metadata.
                             HİÇBİR ŞEY SİLMEZ; exit 1 = operatör müdahalesi gerek.
   --wt-kapat DAL|PATH     : kapat — silme sırası DAİMA junction-önce; denetim temiz değilse
                             `--zorla` ister; her adım tekrar-denemeli.
@@ -38,6 +39,7 @@ import difflib
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -506,6 +508,42 @@ def _bayat_wt_metadata(proje: Path) -> list[Path]:
         if d.is_dir() else []
 
 
+ICERIK_FARKI_NOTU = ("icerik farkli — main bu dosyaya sonradan dokunduysa BEKLENEBILIR "
+                     "(paylasilan dosyada sik); farki elle incele (sessiz onay degildir)")
+
+
+def _z_liste(cikti: str) -> list[str]:
+    """`git ... -z` ciktisi -> yol listesi (NUL ayrik; CRLF/tirnaklama tuzagi YOK)."""
+    return [p for p in (cikti or "").split("\0") if p]
+
+
+def _dal_icerik_farki(proje: Path, dal: str) -> tuple[list[str], list[str], str]:
+    """② HUKUM: dalin degistirdigi dosyalar main'de AYNI icerikte mi?
+
+    = `git diff --name-only $(git merge-base main <dal>) <dal>` dosyalari ∩
+      `git diff --name-only main <dal>`  (bos kesisim => dalin isi main'de).
+    Kesisim, `git diff main <dal> -- <dosyalar>` ile AYNI sonuctur; dosya listesini komut
+    satirina tasimaz (cok dosyali dalda Windows komut satiri sinirina takilmaz).
+    `--no-renames`: yeniden adlandirmada ESKI yol da listelenir (silinen yol main'de
+    duruyorsa fark sayilir). Donus: (dal_dosyalari, farkli_dosyalar, hata_metni).
+    """
+    mb = _git(proje, "merge-base", "main", dal)
+    taban = (mb.stdout or "").strip()
+    if mb.returncode != 0 or not taban:
+        return [], [], f"merge-base main {dal}: {(mb.stderr or 'ortak ata yok').strip()}"
+    d1 = _git(proje, "diff", "--no-renames", "--name-only", "-z", taban, dal)
+    if d1.returncode != 0:
+        return [], [], f"git diff {taban[:10]} {dal}: {(d1.stderr or '').strip()}"
+    dal_dosyalari = sorted(set(_z_liste(d1.stdout)))
+    if not dal_dosyalari:
+        return [], [], ""
+    d2 = _git(proje, "diff", "--no-renames", "--name-only", "-z", "main", dal)
+    if d2.returncode != 0:
+        return dal_dosyalari, [], f"git diff main {dal}: {(d2.stderr or '').strip()}"
+    farkli = sorted(set(dal_dosyalari) & set(_z_liste(d2.stdout)))
+    return dal_dosyalari, farkli, ""
+
+
 def wt_denetim(proje: Path) -> int:
     """GUN-SONU WORKTREE SUPURGESI (`CLAUDE.core.md §1.1` gun-sonu adimi).
 
@@ -523,25 +561,44 @@ def wt_denetim(proje: Path) -> int:
     yetimler = [d for d in diskte if d.resolve() not in kayitli_yollar]
     say(INFO, f"① git'e kayitli: {len(kayitli)} · diskte: {len(diskte)} · KAYITSIZ YETIM: {len(yetimler)}")
 
-    # ② her dal icin `git cherry -v main <dal>`
+    # ② her dal icin ICERIK karsilastirmasi: dalin degistirdigi dosyalar main'de AYNI mi?
     # ⛔ `--is-ancestor` KULLANILMAZ: squash-merge'de YANILTIR. Olculdu 2026-08-28:
     #    bes dalin BESI de "merge edilmemis" gorundu, besi de `git cherry` ile `-` cikti.
+    # ⛔ `git cherry` HUKUM DEGIL, yalniz EK SINYAL (Issue #280, 2026-09-25): squash tek
+    #    commit uretir; dal BIRDEN COK commit tasiyorsa hicbirinin patch-id'si eslesmez =>
+    #    birlesmis is "+" (main'de yok) gorunur. 2026-08-28 olcumu yanlis degildi, KOLU
+    #    DARDI (bes dal da tek commit'liydi). 8 kollu matriste icerik karsilastirmasi
+    #    squash (tek/cok commit) · squash-sonrasi-main-baska-dosya · dolayli-merge ·
+    #    rebase-merge kollarinin HEPSINDE dogru; `merge-tree` 3-yollu karsilastirma
+    #    iyilestirme GETIRMEDI (main'in ayni dosyaya dokundugu kolda o da alarm verdi).
+    # Bilinen sinir: squash SONRASI main ayni dosyaya dokunduysa icerik farkli gorunur =>
+    #    ALARM + "BEKLENEBILIR" notu; sessiz onay DEGIL, fark elle incelenir.
     for yol, dal in kayitli:
         if not dal:
-            say(WARN, f"② {yol} — detached HEAD, dal yok; `git cherry` kosulamadi"); bulgu = 1
-            continue
-        c = _git(proje, "cherry", "-v", "main", dal)
-        if c.returncode != 0:
-            say(WARN, f"② `git cherry` hata ({dal}): {(c.stderr or '').strip()[:120]}"); bulgu = 1
-            continue
-        satirlar = [s for s in (c.stdout or "").splitlines() if s.strip()]
-        yeni = [s for s in satirlar if s.startswith("+")]
-        say(OK if not yeni else FAIL,
-            f"② {dal}: main'de OLMAYAN {len(yeni)} commit / toplam {len(satirlar)} "
-            f"('-' = yamasi main'de ZATEN VAR)")
-        if yeni:
+            say(WARN, f"② {yol} — detached HEAD, dal yok; icerik karsilastirmasi kosulamadi")
             bulgu = 1
-            for s in yeni[:5]:
+            continue
+        dal_dosyalari, farkli, hata = _dal_icerik_farki(proje, dal)
+        if hata:
+            say(WARN, f"② icerik karsilastirmasi hata ({dal}): {hata[:160]}"); bulgu = 1
+            continue
+        c = _git(proje, "cherry", "-v", "main", dal)            # EK SINYAL — hukme girmez
+        c_sat = [s for s in (c.stdout or "").splitlines() if s.strip()] \
+            if c.returncode == 0 else []
+        c_arti = sum(1 for s in c_sat if s.startswith("+"))
+        sinyal = (f"ek sinyal `git cherry`: +{c_arti}/{len(c_sat)}"
+                  if c.returncode == 0 else "ek sinyal `git cherry`: KOSULAMADI")
+        if not farkli:
+            say(OK, f"② {dal}: icerik main'de — dalin degistirdigi {len(dal_dosyalari)} "
+                    f"dosyanin 0'i main'den farkli · {sinyal}"
+                    + (" (cok commit'li squash'ta '+' BEKLENIR)" if c_arti else ""))
+        else:
+            # ⛔ `continue` YOK: ③ (kirli agac) her dal icin kosmali (olculdu: V5 yakaladi)
+            bulgu = 1
+            say(FAIL, f"② {dal}: dalin degistirdigi {len(dal_dosyalari)} dosyanin "
+                      f"{len(farkli)}'i main'den FARKLI · {sinyal}")
+            say(WARN, f"② {dal}: {ICERIK_FARKI_NOTU}")
+            for s in farkli[:5]:
                 print(f"        {s}")
 
         # ③ calisma agaci kirli mi — SIDDET AYRILIR (korpusa karsi olculdu 2026-08-29)
@@ -595,6 +652,77 @@ def wt_denetim(proje: Path) -> int:
     return bulgu
 
 
+SILME_SINIFI_SALT_OKUNUR = "ReadOnly OZNITELIGI/IZNI (yazilabilir yapma da kaldiramadi)"
+SILME_SINIFI_HANDLE = "HANDLE KILIDI (baska bir surec dosyayi acik tutuyor)"
+
+
+def _salt_okunur_mu(p: Path) -> bool:
+    """Windows: FILE_ATTRIBUTE_READONLY · POSIX: sahibin yazma biti yok. Okunamazsa False."""
+    try:
+        st = os.stat(p, follow_symlinks=False)
+    except OSError:
+        return False
+    if os.name == "nt":
+        return bool(getattr(st, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_READONLY)
+    return not (st.st_mode & stat.S_IWUSR)
+
+
+def _silme_hatasi_sinifi(p: str, exc: BaseException) -> str:
+    """Kalan silme hatasini SINIFLA: ReadOnly-oznitelik ↔ handle-kilidi AYRI teshislerdir.
+
+    Handle kilidi = WinError 32/33 (paylasim/kilit ihlali) — beklemek/sureci kapatmak cozer.
+    ReadOnly = yol ya da ebeveyni hala salt-okunur — beklemek HICBIR SEY degistirmez.
+    """
+    if getattr(exc, "winerror", None) in (32, 33):
+        return SILME_SINIFI_HANDLE
+    yp = Path(p)
+    if isinstance(exc, PermissionError) and (_salt_okunur_mu(yp) or _salt_okunur_mu(yp.parent)):
+        return SILME_SINIFI_SALT_OKUNUR
+    return f"DIGER ({type(exc).__name__}: {exc})"[:160]
+
+
+def _silme_teshisi(kalan: list[tuple[str, BaseException]]) -> str:
+    if not kalan:
+        return "bilinmiyor (rmtree hata bildirmedi)"
+    return " + ".join(sorted({_silme_hatasi_sinifi(p, e) for p, e in kalan}))
+
+
+def _agac_sil(yol: Path) -> list[tuple[str, BaseException]]:
+    """`rmtree` + ONARICI hata isleyici (Issue #284) -> onarilamayan (yol, istisna) listesi.
+
+    Hata veren girdi ve EBEVEYNI yazilabilir yapilir (`| S_IWRITE` — mevcut bitler korunur),
+    islem BIR KEZ yeniden denenir. Windows'ta ReadOnly OZNITELIGINI kaldirir; POSIX'te salt-
+    okunur ebeveyn dizinin cocuk silmeyi engellemesini kaldirir. Yine de basarisizsa hata
+    YUTULMAZ, siniflandirilmak uzere doner. ⚠ Junction-once sirasi DEGISMEDI: bu cagri baglar
+    kaldirildiktan SONRA kosar; `chmod` yalniz yazma bitini ACAR, hicbir icerigi silmez.
+    """
+    kalan: list[tuple[str, BaseException]] = []
+
+    def _onar(fn, p, hata) -> None:
+        ilk = hata[1] if isinstance(hata, tuple) else hata      # onerror: exc_info · onexc: exc
+        if fn not in (os.rmdir, os.unlink, os.remove):
+            # os.open/os.scandir/os.lstat vb. tek argumanla YENIDEN CAGRILAMAZ -> kaydet, gec
+            kalan.append((str(p), ilk))
+            return
+        for hedef in (p, os.path.dirname(p)):
+            try:
+                os.chmod(hedef, os.stat(hedef).st_mode | stat.S_IWRITE)
+            except OSError:
+                pass
+        try:
+            fn(p)
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            kalan.append((str(p), exc))
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(yol, onexc=_onar)       # 3.12+: `onerror` deprecated
+    else:
+        shutil.rmtree(yol, onerror=_onar)     # MIN_PY 3.10
+    return kalan
+
+
 def wt_kapat(proje: Path, hedef: str, zorla: bool = False) -> bool:
     """Worktree'yi KAPAT — silme sirasi DAIMA junction-once.
 
@@ -627,20 +755,29 @@ def wt_kapat(proje: Path, hedef: str, zorla: bool = False) -> bool:
                 return False                      # ⛔ bag dururken agaca DOKUNMA
 
     # 2) AGAC — once git'in kendi yolu, sonra rmtree; ikisi de TEKRAR DENEMELI
+    #    ⛔ `ignore_errors=True` KULLANILMAZ (Issue #284): ReadOnly oznitelikli tek bir alt
+    #    dizin silmeyi KALICI bloklar, hata yutulur ve arac "handle kilidi?" diye YANLIS
+    #    teshis koyar — bekleme ozniteligi degistirmez. `_agac_sil` onarip yeniden dener
+    #    ve kalan hatalari SINIFLI dondurur.
+    kalan: list[tuple[str, BaseException]] = []
     for deneme in (1, 2, 3):
         if _git(proje, "worktree", "remove", "--force", str(yol)).returncode == 0 \
                 and not yol.exists():
             break
         if yol.exists():
-            shutil.rmtree(yol, ignore_errors=True)
+            kalan = _agac_sil(yol)
         if not yol.exists():
             break
-        say(WARN, f"silme {deneme}. denemede tamamlanmadi (handle kilidi?) — tekrar")
+        say(WARN, f"silme {deneme}. denemede tamamlanmadi — neden: "
+                  f"{_silme_teshisi(kalan)} — tekrar")
         time.sleep(1.0)
 
     _git(proje, "worktree", "prune")
     if yol.exists():
-        say(FAIL, f"worktree DIZINI KALDI: {yol} — elle incele (baglar kaldirildi, hedef guvende)")
+        say(FAIL, f"worktree DIZINI KALDI: {yol} — neden: {_silme_teshisi(kalan)} "
+                  f"— elle incele (baglar kaldirildi, hedef guvende)")
+        for p, exc in kalan[:5]:
+            print(f"        {p} — {type(exc).__name__}: {exc}")
         return False
     say(OK, f"worktree kapatildi: {yol}")
     return True

@@ -115,11 +115,19 @@
   3. **GÜN-SONU DENETİMİ (aşağıdaki gün-sonu adımının parçası):**
      `python core/scripts/team_setup.py --wt-denetim` — hiçbir şey silmez, `exit 1` =
      operatör müdahalesi. Ölçtüğü dört şey: ⓐ `git worktree list` ↔ disk (kayıtsız yetim)
-     ⓑ her dal için **`git cherry -v main <dal>`** ⓒ `git status --short --ignored
+     ⓑ her dal için **İÇERİK karşılaştırması** — dalın değiştirdiği dosyalar
+     (`git diff --name-only $(git merge-base main <dal>) <dal>`) main'de aynı mı
+     (`git diff --name-only main <dal> -- <dosyalar>` boş ⇒ iş main'de); `git cherry -v`
+     yalnız **ek sinyal** ⓒ `git status --short --ignored
      --untracked-files=all` (izlenen = FAIL · gitignore'lu **scratch-dışı** = hasat adayı)
      ⓓ yetimlerde `git hash-object` → `git cat-file -e` + `gitdir`siz bayat metadata.
      ⛔ **`--is-ancestor` KULLANILMAZ** — squash-merge'de yanıltır (ölçüldü: 5 dalın 5'i
-     "merge edilmemiş" göründü, beşi de `git cherry` ile `-` çıktı).
+     "merge edilmemiş" göründü). ⛔ **`git cherry` hüküm DEĞİLDİR** — çok commit'li dal
+     squash-merge edilince her commit `+` çıkar (Issue #280; o 5 dal tek commit'liydi).
+     Bilinen sınır: squash **sonrası** main aynı dosyaya dokunduysa içerik farklı görünür ⇒
+     ALARM **beklenebilir (paylaşılan dosyada sık)**; farkı elle incele — sessiz onay değildir.
+     Prior-art: `merge-tree` 3-yollu karşılaştırma denendi (2026-09-25, 8 kollu matris) —
+     main'in aynı dosyaya dokunduğu kolda o da yanlış alarm verdi, iyileştirme yok.
      ⛔ ⓓ olmadan *"yetimde özgün iş var mı"* **cevaplanamaz**: düz dosya karşılaştırması
      satır-sonu gürültüsüyle **150 "farklı" dosya** gösterdi, gerçek fark **24**'tü.
   4. **KAPATMA:** `--wt-kapat <dal>` — **silme sırası DAİMA junction-önce** (`rmdir`/`unlink`
