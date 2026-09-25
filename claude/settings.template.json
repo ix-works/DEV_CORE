@@ -306,7 +306,7 @@
       "Bash(rm -rf /*)",
       "Bash(mkfs:*)",
       "Bash(fdisk:*)",
-      "Bash(dd if=:* of=/dev/:*)"
+      "Bash(dd if=:* of=/dev/*)"
     ]
   }
 }
