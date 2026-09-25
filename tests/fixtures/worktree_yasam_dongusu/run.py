@@ -20,6 +20,8 @@ Issue #280 (2026-09-25): ② hukmu `git cherry`den ICERIK karsilastirmasina tasi
 PR #300 bug-gate (2026-09-25): F1 tag+dal ayni ad (V10h; M17) · F2 `--no-renames`
   yeniden adlandirma + silme kollari (V10g/V10i; M16) · F4 ③ detached ve ② hata kolunda
   da kosar (V12/V12b; M18/M19) · F5 ALARM'a "yerel main bayat olabilir" notu (V10j; M20).
+PR #300 bug-gate 2 B1 (2026-09-25): `main` tarafi `refs/heads/main` — `main` ADLI tag
+  dal ucunda (V10k/V10l; M21 merge-base · M22 ikinci diff · M23 ek sinyal cherry).
 
 UC BAGLAM (F3):
   (1) bilinen-BOZUK  : fix sokulmus kod (mutasyon dali)
@@ -283,6 +285,48 @@ def v10_icerik_matrisi(cikti: str, ts=None, proje=None) -> None:
           any("BAYAT" in s and "git fetch" in s for s in sat("k5-yok"))
           and not any("BAYAT" in s for s in sat("k1-tek")),
           next((s for s in sat("k5-yok") if "BAYAT" in s), None))
+
+
+def v10k_main_adli_tag(ts, kok: Path) -> None:
+    """PR #300 bug-gate 2 B1 (V10h'nin SIMETRIGI): `main` ADLI bir TAG dalin ucunda,
+    `refs/heads/main` dalin isini ALMADI => ALARM beklenir.
+
+    Kisa `main` adi tag'e cozulurse (`refname 'main' is ambiguous`) merge-base = dal ucu
+    => dalin dosyalari bos => SAHTE "icerik main'de" (olculdu: eski kod `([], [], '')`).
+    AYRI depo: `main` tag'i ICPROJ'de kurulsa K1–K8'in hepsini golgelerdi.
+    """
+    proje = kok / "MTPROJ"
+    proje.mkdir()
+    (proje / "a.txt").write_text("a\n", encoding="utf-8")
+    git(proje, "init", "-q", "-b", "main")
+    git(proje, "config", "user.email", "fixture")
+    git(proje, "config", "user.name", "fixture")
+    git(proje, "add", "-A")
+    git(proje, "commit", "-q", "-m", "taban")
+    git(proje, "checkout", "-q", "-b", "k9-maintag")
+    (proje / "h.txt").write_text("h\n", encoding="utf-8")
+    git(proje, "add", "-A")
+    git(proje, "commit", "-q", "-m", "k9 is")
+    git(proje, "checkout", "-q", "main")
+    git(proje, "tag", "main", "k9-maintag")      # tag `main` dal ucunda; gercek main isi ALMADI
+    w = ts.wt_yolu(proje, "k9-maintag")
+    w.parent.mkdir(parents=True, exist_ok=True)
+    git(proje, "worktree", "add", "-q", str(w), "k9-maintag")
+    # KONTROL: kurulum kisa adi GERCEKTEN golgeliyor mu (yoksa vektor bos olcer)
+    kisa = git(proje, "rev-parse", "main").stdout.strip()
+    dal_ucu = git(proje, "rev-parse", "refs/heads/k9-maintag").stdout.strip()
+    gercek_main = git(proje, "rev-parse", "refs/heads/main").stdout.strip()
+    golge = bool(kisa) and kisa == dal_ucu and kisa != gercek_main
+    cikti = denetim_kos(ts, proje)
+    sat = [s for s in cikti.splitlines() if "② k9-maintag:" in s]
+    alarm = any("main'den FARKLI" in s and s.startswith("[FAIL]") for s in sat)
+    ilk = sat[0] if sat else None
+    sonuc("V10k `main` ADLI tag dal ucunda, refs/heads/main isi almadi -> ALARM",
+          golge and alarm, ilk if golge else f"KURULUM golgelemedi: main={kisa[:8]}")
+    # Ek sinyal de GERCEK main'e karsi: `cherry main` tag'e cozulurse +0/0 derdi.
+    sonuc("V10l ayni kolda ek sinyal `git cherry` gercek main'e karsi (+1/1)",
+          golge and any("+1/1" in s for s in sat), ilk)
+    git(proje, "worktree", "remove", "--force", str(w))
 
 
 def v12_kirli_her_kolda(ts, kok: Path) -> None:
@@ -557,6 +601,8 @@ def tur(ts_mut=None, sl_mut=None, ss_mut=None, sadece=None) -> None:
             v10_icerik_matrisi(denetim_kos(ts, icproje), ts, icproje)
             for w in icyollar.values():
                 git(icproje, "worktree", "remove", "--force", str(w))
+        if sadece in (None, "maintag"):
+            v10k_main_adli_tag(ts, kok)
         if sadece in (None, "kirli3"):
             v12_kirli_her_kolda(ts, kok)
         if sadece in (None, "silme"):
@@ -579,7 +625,7 @@ MUTASYONLAR = [
      ('    if os.name == "nt":\n        r = subprocess.run(["cmd", "/c", "mklink"',
       '    if True:\n        r = subprocess.run(["cmd", "/c", "mklink"'), "platform"),
     ("M4 #80 `git cherry` yerine `--is-ancestor`", "team_setup",
-     ('c = _git(proje, "cherry", "-v", "main", f"refs/heads/{dal}")',
+     ('c = _git(proje, "cherry", "-v", "refs/heads/main", f"refs/heads/{dal}")',
       'c = _git(proje, "merge-base", "--is-ancestor", "main", dal)'), "yol"),
     # ⛔ MUTASYON KUM DISINA YAZMAMALI. Ilk yazim `Path(os.sep + 'sabit')` idi ve
     # olculdu: mutasyon turu diskin KOKUNDE (`C:\sabit\.wt\PROJ\...`) 25 girdilik gercek
@@ -606,7 +652,7 @@ MUTASYONLAR = [
     ("M10 #280 hukum yeniden `git cherry`ye baglanir", "team_setup",
      ("    if not farkli:\n", "    if not c_arti:\n"), "icerik"),
     ("M11 #280 icerik main'e degil ortak ataya kiyaslanir", "team_setup",
-     ('"-z", "main", ref, "--")', '"-z", taban, ref, "--")'), "icerik"),
+     ('"-z", "refs/heads/main", ref, "--")', '"-z", taban, ref, "--")'), "icerik"),
     ("M12 #280 ALARM'dan 'BEKLENEBILIR' notu duser", "team_setup",
      ('    say(WARN, f"② {dal}: {ICERIK_FARKI_NOTU}")\n', ""), "icerik"),
     # --- Issue #284: ReadOnly oznitelik silmeyi kalici bloklamaz ---
@@ -635,6 +681,15 @@ MUTASYONLAR = [
      "kirli3"),
     ("M20 F5 ALARM'dan 'yerel main bayat' notu duser", "team_setup",
      ('    say(WARN, f"② {dal}: {BAYAT_MAIN_NOTU}")\n', ""), "icerik"),
+    # --- PR #300 bug-gate 2 B1: `main` tarafi `refs/heads/main` (uc cagri, uc mutasyon —
+    #     her cagri AYRI kirilabilir; tek mutasyon digerlerinin korumasini olcmezdi) ---
+    ("M21 B1 merge-base `refs/heads/main` -> kisa `main`", "team_setup",
+     ('_git(proje, "merge-base", "refs/heads/main", ref)',
+      '_git(proje, "merge-base", "main", ref)'), "maintag"),
+    ("M22 B1 ikinci diff `refs/heads/main` -> kisa `main`", "team_setup",
+     ('"-z", "refs/heads/main", ref, "--")', '"-z", "main", ref, "--")'), "maintag"),
+    ("M23 B1 ek sinyal cherry `refs/heads/main` -> kisa `main`", "team_setup",
+     ('"cherry", "-v", "refs/heads/main",', '"cherry", "-v", "main",'), "maintag"),
 ]
 
 

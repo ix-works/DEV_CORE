@@ -524,29 +524,37 @@ def _z_liste(cikti: str) -> list[str]:
 def _dal_icerik_farki(proje: Path, dal: str) -> tuple[list[str], list[str], str]:
     """② HUKUM: dalin degistirdigi dosyalar main'de AYNI icerikte mi?
 
-    = `git diff --name-only $(git merge-base main <dal>) <dal>` dosyalari ∩
-      `git diff --name-only main <dal>`  (bos kesisim => dalin isi main'de).
-    Kesisim, `git diff main <dal> -- <dosyalar>` ile AYNI sonuctur; dosya listesini komut
-    satirina tasimaz (cok dosyali dalda Windows komut satiri sinirina takilmaz).
+    = `git diff --no-renames --name-only $(git merge-base refs/heads/main refs/heads/<dal>)
+      refs/heads/<dal> --` dosyalari ∩ `git diff --no-renames --name-only refs/heads/main
+      refs/heads/<dal> --`  (bos kesisim => dalin isi main'de).
+    Kesisim, `git diff refs/heads/main refs/heads/<dal> -- <dosyalar>` ile AYNI sonuctur;
+    dosya listesini komut satirina tasimaz (cok dosyali dalda Windows komut satiri
+    sinirina takilmaz). Dalin dosyalari BOSSA ikinci diff KOSULMAZ (elle recetede bos
+    `-- <dosyalar>` main'in TUM farkini listelerdi => sahte ALARM).
     `--no-renames`: yeniden adlandirmada ESKI yol da listelenir (silinen yol main'de
     duruyorsa fark sayilir). Donus: (dal_dosyalari, farkli_dosyalar, hata_metni).
     ⛔ Dal `refs/heads/<dal>` olarak verilir: ayni adda bir TAG varsa git kisa adi TAG'e
     cozer (`refname is ambiguous`) => tag main'deyse sonuc `([], [], '')` = SAHTE "is
     main'de" (olculdu 2026-09-25, PR #300 bug-gate F1). `--` revizyonlari yollardan ayirir
     (dal adi = dosya adi belirsizligi).
+    ⛔ `main` tarafi da `refs/heads/main`: `main` ADLI bir tag dal ucundaysa kisa ad ona
+    cozulur => merge-base = dal ucu => ayni SAHTE "is main'de" (PR #300 bug-gate 2 B1).
+    Yerel main dali yoksa once de simdi de hata kolu: kisa `main` `origin/main`e
+    cozulmez (olculdu 2026-09-25: ikisi de rc=128 `Not a valid object name`).
     """
     ref = f"refs/heads/{dal}"
-    mb = _git(proje, "merge-base", "main", ref)
+    mb = _git(proje, "merge-base", "refs/heads/main", ref)
     taban = (mb.stdout or "").strip()
     if mb.returncode != 0 or not taban:
-        return [], [], f"merge-base main {dal}: {(mb.stderr or 'ortak ata yok').strip()}"
+        return [], [], (f"merge-base refs/heads/main {dal}: "
+                        f"{(mb.stderr or 'ortak ata yok').strip()}")
     d1 = _git(proje, "diff", "--no-renames", "--name-only", "-z", taban, ref, "--")
     if d1.returncode != 0:
         return [], [], f"git diff {taban[:10]} {dal}: {(d1.stderr or '').strip()}"
     dal_dosyalari = sorted(set(_z_liste(d1.stdout)))
     if not dal_dosyalari:
         return [], [], ""
-    d2 = _git(proje, "diff", "--no-renames", "--name-only", "-z", "main", ref, "--")
+    d2 = _git(proje, "diff", "--no-renames", "--name-only", "-z", "refs/heads/main", ref, "--")
     if d2.returncode != 0:
         return dal_dosyalari, [], f"git diff main {dal}: {(d2.stderr or '').strip()}"
     farkli = sorted(set(dal_dosyalari) & set(_z_liste(d2.stdout)))
@@ -564,7 +572,7 @@ def _dal_hukmu_bas(proje: Path, dal: str) -> int:
     if hata:
         say(WARN, f"② icerik karsilastirmasi hata ({dal}): {hata[:160]}")
         return 1
-    c = _git(proje, "cherry", "-v", "main", f"refs/heads/{dal}")  # EK SINYAL — hukme girmez
+    c = _git(proje, "cherry", "-v", "refs/heads/main", f"refs/heads/{dal}")  # EK SINYAL — hukme girmez
     c_sat = [s for s in (c.stdout or "").splitlines() if s.strip()] \
         if c.returncode == 0 else []
     c_arti = sum(1 for s in c_sat if s.startswith("+"))

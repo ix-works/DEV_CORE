@@ -116,10 +116,11 @@
      `python core/scripts/team_setup.py --wt-denetim` — hiçbir şey silmez, `exit 1` =
      operatör müdahalesi. Ölçtüğü dört şey: ⓐ `git worktree list` ↔ disk (kayıtsız yetim)
      ⓑ her dal için **İÇERİK karşılaştırması** — dalın değiştirdiği dosyalar
-     (`git diff --no-renames --name-only $(git merge-base main refs/heads/<dal>) refs/heads/<dal>`)
-     main'de aynı mı (`git diff --no-renames --name-only main refs/heads/<dal> -- <dosyalar>`
-     boş ⇒ iş main'de; `--no-renames` yoksa yeniden adlandırmada eski yol düşer, `refs/heads/`
-     yoksa aynı adlı tag dalı gölgeler); `git cherry -v`
+     (F = `git diff --no-renames --name-only $(git merge-base refs/heads/main refs/heads/<dal>) refs/heads/<dal> --`)
+     main'de aynı mı (`git diff --no-renames --name-only refs/heads/main refs/heads/<dal> -- <F>`
+     boş ⇒ iş main'de; **F boşsa dalda iş yok — ikinci komutu koşma**: boş `--` main'in tüm farkını
+     listeler; `--no-renames` yoksa yeniden adlandırmada eski yol düşer, `refs/heads/` iki tarafta
+     da yoksa aynı adlı tag dalı ya da `main`'i gölgeler); `git cherry -v`
      yalnız **ek sinyal** ⓒ `git status --short --ignored
      --untracked-files=all` (izlenen = FAIL · gitignore'lu **scratch-dışı** = hasat adayı)
      ⓓ yetimlerde `git hash-object` → `git cat-file -e` + `gitdir`siz bayat metadata.
