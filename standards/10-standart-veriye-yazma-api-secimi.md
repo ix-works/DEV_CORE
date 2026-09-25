@@ -6,7 +6,7 @@ applies-to: backend
 version: 1.0
 last-updated: 2026-09-25
 status: active
-source: ADR 0005 B (anayasal sıra) + standards/05 §2 + playbook/modules/sd.md SD-K3 + bug-checklist-backend BE-14/24/26/37/53/74 + playbook/adt-rap.md §33-§35 — dağınık sahada-yaşanmış dersler tek sıraya dizildi (sahip kararı 2026-09-25)
+source: ADR 0005 B (anayasal sıra) + standards/05 §2 + playbook/modules/sd.md SD-K3 + bug-checklist-backend BE-14/24/26/37/53/74 + playbook/adt-rap.md §33-§35 + playbook/howto-rap-eml-sales-order-create-update.md + BE-08 — dağınık sahada-yaşanmış dersler tek sıraya dizildi (sahip kararı 2026-09-25)
 ---
 
 # Standart Veriye Yazma — API Seçimi Karar Ağacı
@@ -47,9 +47,9 @@ Nesne + operasyon için released bir RAP BO (`I_*TP`) varsa **ilk aday** budur. 
 | # | Teyit | Nasıl | Tutmazsa |
 |---|---|---|---|
 | 1a | BDEF canlıda var, release durumu uygun | `adt_get` BDEF + ATC **"Usage of APIs"** (otorite; regex'le taklit edilmez) | ADIM 2 |
-| 1b | **İstenen operasyon AÇIK** | *"operation UPDATE/CREATE is not activated for entity"* — yalnız aktivasyonda/çalışma zamanında görünür | BE-24 → ADIM 3 (OData) ya da ADIM 2 |
-| 1c | Gereken alanlar **yazılabilir** | projeksiyon CDS kaynağında `@ObjectModel.editableFieldFor` / `readonly` / suppress | `playbook/adt-rap.md` §35 (key'in `…ForEdit` muadili) |
-| 1d | Bilinen boşluklar kontrol edildi | metin (`CREATE BY \_Text`) buffer'da başarılı ama **persist etmez** → `SAVE_TEXT` · late numbering → numara handler'da **senkron dönmez** · mevcut belgeye `CREATE BY \_assoc` rolü boş bırakabilir | `playbook/adt-rap.md` §33-§35 |
+| 1b | **İstenen operasyon AÇIK** | BDEF'te `use create` / `use update` / ilgili `use association … { create; }` satırı (`adt_get <BO> bdef`). ⚠ BDEF satırı **gerekli ama yeterli değil**: operasyon sistemde yine kapalı olabilir (*"operation UPDATE/CREATE is not activated for entity"*) ve bu yalnız aktivasyonda/çalışma zamanında görünür — önceden tespit eden ölçülmüş bir yöntem YOK ⇒ ilk gerçek create/update denemesi teyidin parçasıdır | BE-24 → ADIM 3 (OData) ya da ADIM 2 |
+| 1c | Gereken alanlar **yazılabilir** | BDEF'te `field ( readonly )` / `field ( suppress )` + projeksiyon CDS kaynağında `@ObjectModel.editableFieldFor` / `readonly` | `playbook/adt-rap.md` "§35 — Mevcut belgeye partner/child EKLEME" (key'in `…ForEdit` muadili) |
+| 1d | Bilinen boşluklar kontrol edildi | **metin:** RAP handler bağlamında `CREATE BY \_Text` buffer'da başarılı ama **persist etmez**; **varsayılan `SAVE_TEXT` de persist etmez** → `SAVE_TEXT … savemode_direct = 'X'` ZORUNLU (sessiz veri kaybı: `subrc=0`, metin yok) · **late numbering:** handler'da numara senkron dönmez; klasik tüketicide `COMMIT ENTITIES BEGIN … END` + `CONVERT KEY` · **partner:** standart partnerlar otomatik belirlenir, manuel ekleme dump/`VPD 030` üretir; mevcut belgeye `CREATE BY \_assoc` rolü boş bırakabilir | BE-08 · `playbook/adt-rap.md` "§34 — Source-based class TUZAĞI + RAP text node" ve "§35" · [`../playbook/howto-rap-eml-sales-order-create-update.md`](../playbook/howto-rap-eml-sales-order-create-update.md) §0 |
 
 - `reported`'daki **tüm** hata mesajları yüzeye çıkarılır (BE-53).
 - Buffer başarısı (`fc=0`, `subrc=0`, HTTP 200) **persist kanıtı DEĞİLDİR** → read-back (std/05 "Persist ≠ buffer").
@@ -64,14 +64,20 @@ EML yoksa ya da 1a-1d'den biri tutmadıysa. Sınıflandırmanın otoritesi yine 
 
 ## ADIM 3 — Released OData API (`API_*_SRV`) — **yalnız şu durumlarda**
 
+Anayasadaki "released API" katmanının üçüncü biçimidir (EML ve released BAPI ile birlikte);
+iş mantığından geçer, ADR 0005 B4 ihlali değildir. Sırada EML ve BAPI'nin ardından gelir:
+
+
 - EML operasyonu kapalıysa (1b) ya da uzak tüketimde.
-- Aynı sistemde iç çağrı **iç gateway proxy** ile yapılır (BE-14 · `playbook/adt-rap.md` §34); SM59/RFC-dest legacy'dir.
+- Aynı sistemde iç çağrı **iç gateway proxy** ile yapılır (BE-14 · `playbook/adt-rap.md` "## 34. SAP-içi HTTP/OData servis çağrısı"); SM59/RFC-dest legacy'dir.
 - Klasik GUI bağlamında EML ya da BAPI varken **seçilmez** — aynı BO'ya HTTP katmanı eklemek gereksiz karmaşadır.
 
 ## ADIM 4 — Released OLMAYAN ama resmi RFC FM / BAPI *(Level C)*
 
 - Gerekçe TS'e yazılır (aşağıda). `cleancore_policy: strict` ve `s4_public`'te **kapalı**.
-- ⛔ **İç FM API değildir.** BAPI'nin altındaki iç katman (ör. `SD_SALESDOCUMENT_CREATE`) iş mantığının bir kısmını atlar → seçilmez.
+- ⛔ **İç FM API değildir.** Tanım (ölçülebilir): **ATC "Usage of APIs"ta released/klasik API olarak sınıflandırılmamış VE aynı işi yapan bir BAPI'nin altında çağrılan** FM. Böyle bir FM BAPI'nin yaptığı kontrollerin bir kısmını atlayabilir → seçilmez; üstündeki BAPI kullanılır.
+  Örnek `SD_SALESDOCUMENT_CREATE` (`BAPI_SALESORDER_CREATEFROMDAT2`'nin altında) — sınıflandırması **DOĞRULANMADI** (bir proje araştırmasının değerlendirmesi; ATC ile ölçülmedi).
+  Üstünde BAPI olmayan resmi FM'ler (ör. SD modül paketindeki `SD_SCDS_CREATE`) bu tanıma girmez; ADIM 4'ün asıl konusudur — sınıfı ATC ile ölçülür.
 
 ## ADIM 5 — BDC (transaction) · ADIM 6 — kullanıcıdan manuel
 
@@ -81,7 +87,7 @@ ADIM 6'ya gelindiyse **akış-dışı çözüm İCAT EDİLMEZ** (ADR 0005 B6).
 ### ⛔ HİÇBİR ZAMAN
 
 - Standart tabloya SQL (`INSERT/UPDATE/DELETE/MODIFY`) — Z'li programda bile (ADR 0005 B5).
-- Standart tabloya managed Z BO üzerinden `MODIFY ENTITIES` (std/05 §5 B satırı).
+- Standart tabloya managed Z BO üzerinden `MODIFY ENTITIES` (std/05 §6 B satırı).
 - İş mantığını atlayan iç FM (ADIM 4 ⛔).
 
 ---
@@ -90,11 +96,11 @@ ADIM 6'ya gelindiyse **akış-dışı çözüm İCAT EDİLMEZ** (ADR 0005 B6).
 
 | Profil / politika | Uygulanan adımlar | Durum |
 |---|---|---|
-| `s4_private` + `balanced` / `classic` | 1 → 6 tam zincir | ölçüldü (satış siparişi: EML + BAPI canlı) |
-| `s4_private` + `strict` | 1 · 2 (yalnız released) · 3 → 6 | matristen (`released_apis_only: true`), ölçülmedi |
-| `s4_public` | 1 · 2 (yalnız released) · 3 → 6 | matristen (platform-enforce), ölçülmedi |
-| `btp_abap` | 3 (uzak released API) → 6 | matristen, ölçülmedi |
-| `ecc` | 2 (BAPI) → 4 → 5 → 6 — released kavramı yok | matristen, ölçülmedi |
+| `s4_private` + `balanced` / `classic` | 1 · 2 · 3 · 4 · 5 · 6 (tam zincir) | ADIM 1-2 ölçüldü (satış siparişi, `balanced`); ADIM 3-6 ve `classic` ölçülmedi |
+| `s4_private` + `strict` | 1 · 2 (yalnız released) · 3 · 6 — **4 kapalı**; 5 (BDC) matriste açıkça yok → kullanmadan önce sor | matristen (`released_apis_only: true`), ölçülmedi |
+| `s4_public` | 1 · 2 (yalnız released) · 3 · 6 — **4 ve 5 kapalı** (`classic_reports: forbidden`, batch-input dahil) | matristen (platform-enforce), ölçülmedi |
+| `btp_abap` | 3 (uzak released API) · 6 — yerel S/4 objesi yok, klasik yollar kapalı | matristen, ölçülmedi |
+| `ecc` | 2 (BAPI) · 4 · 5 · 6 — released kavramı yok | matristen, ölçülmedi |
 
 ---
 
@@ -109,7 +115,7 @@ Standart nesneye yazan her geliştirmenin TS'inde **"API seçimi"** alt bölüm�
 | BAPI `BAPI_…` | … | … | … | … | … |
 | OData / FM / BDC | … | … | … | … | … |
 
-+ Clean Core seviyesi (A/B/C/D — `01-naming.md` §5). **Reddedilen alternatif ve nedeni
+Ek olarak Clean Core seviyesi (A/B/C/D — `01-naming.md` §5). **Reddedilen alternatif ve nedeni
 yazılmadan seçim tamamlanmış sayılmaz** — sonraki geliştirici aynı araştırmayı baştan yapar.
 
 ## Sınırlar (kapsam beyanı)
@@ -124,8 +130,9 @@ yazılmadan seçim tamamlanmış sayılmaz** — sonraki geliştirici aynı ara�
 ## İlgili
 
 - [`../governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md`](../governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasaklari.md) — anayasal sıra
-- [`05-coding-rap.md`](05-coding-rap.md) §2 · §5 · §9X — RAP track, Clean Core okuma
+- [`05-coding-rap.md`](05-coding-rap.md) §2 · §6 · §9X — RAP track, ADR 0005 RAP yüzeyi, Clean Core okuma
 - [`02-coding-backend.md`](02-coding-backend.md) — klasik track (SEGW + BAPI)
-- [`../playbook/adt-rap.md`](../playbook/adt-rap.md) §33-§35 — EML reçeteleri ve tuzakları
+- [`../playbook/adt-rap.md`](../playbook/adt-rap.md) §33 · "## 34." · "## §34 —" · §35 — EML reçeteleri ve tuzakları
+- [`../playbook/howto-rap-eml-sales-order-create-update.md`](../playbook/howto-rap-eml-sales-order-create-update.md) — ölçülmüş tek nesnenin (`I_SalesOrderTP`) tam EML reçetesi: tüketici bağlamında COMMIT, `CONVERT KEY`, iki aşamalı FAILED kontrolü, partner tuzakları
 - [`../playbook/checklists/bug-checklist-backend.md`](../playbook/checklists/bug-checklist-backend.md) — BE-14 · BE-24 · BE-26 · BE-37 · BE-53 · BE-73 · BE-74 · BE-76
 - [`../playbook/modules/sd.md`](../playbook/modules/sd.md) SD-K3/K5 — SD'ye özgü BAPI örnekleri

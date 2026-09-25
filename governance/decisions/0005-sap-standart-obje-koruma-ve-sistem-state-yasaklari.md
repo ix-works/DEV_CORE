@@ -57,9 +57,9 @@ Bu kuralları **doküman olarak söylemek yetmez** (LESSONS_LEARNED #4); **kural
 | B5 | **Z'li programda yazdığın ABAP kodunda** standart tabloya direkt INSERT/UPDATE/MODIFY/DELETE — kendi yazdığın Z* programı içinde olsa bile YASAK |
 | B6 | Aşağıdaki **ZORUNLU akış** (released API→BAPI→RFC FM→BDC) tükendiyse direkt-SQL / business-logic-bypass **İCAT ETME** → kullanıcıdan manuel iste. *(BDC/RFC aramak "icat" DEĞİL — kanonik akışın parçası; "icat" = akış-dışı bypass çözüm.)* |
 
-**ZORUNLU akış:** Önce **released API** ara — released RAP BO (EML, `I_*TP`) ya da released BAPI; released RAP BO ancak canlı teyitleri geçerse (operasyon açık, alanlar yazılabilir) kullanılır. Yoksa SAP standart **BAPI** ara (`BAPI_*_CREATE`, `BAPI_*_CHANGE`), bulamazsan **RFC FM** ara (iç FM değil), bulamazsan **transaction (BDC)** ara, hâlâ bulamazsan kullanıcıdan manuel yapmasını iste. Asla direkt SQL yazma.
+**ZORUNLU akış:** Önce **released API** ara — released RAP BO (EML, `I_*TP`), released BAPI ya da released OData API (`API_*_SRV`; EML operasyonu kapalıysa ya da uzak tüketimde); released RAP BO ancak canlı teyitleri geçerse (operasyon açık, alanlar yazılabilir) kullanılır. Yoksa SAP standart **BAPI** ara (`BAPI_*_CREATE`, `BAPI_*_CHANGE`), bulamazsan **RFC FM** ara (iç FM değil — tanım std/10 ADIM 4), bulamazsan **transaction (BDC)** ara, hâlâ bulamazsan kullanıcıdan manuel yapmasını iste. Asla direkt SQL yazma.
 Ayrıntılı karar ağacı (bağlam/commit kuralı, adım başına canlı teyitler, profil ayarı, TS gerekçe tablosu): [`standards/10-standart-veriye-yazma-api-secimi.md`](../../standards/10-standart-veriye-yazma-api-secimi.md).
-> **Revizyon 2026-09-25 (sahip kararı):** eski sıra *BAPI → RFC FM → BDC → manuel* released API/EML'i anmıyordu; std/05 §2 ve SD modül paketi ise onu BAPI'nin ÖNÜNE koyuyordu. Yasak GEVŞEMEDİ — değişen yalnız izinli yolların sırası.
+> **Revizyon 2026-09-25 (sahip kararı):** eski sıra *BAPI → RFC FM → BDC → manuel* released API/EML'i anmıyordu; SD modül paketi (SD-K3) ise onu BAPI'nin ÖNÜNE koyuyordu ve std/05 kendi içinde tutarsızdı (§2 sıra vermeden "released BAPI/EML", §6 eski sıra). Yasak GEVŞEMEDİ — değişen yalnız izinli yolların sırası.
 
 ### KATEGORİ C — Sistem State Yönetimi
 
