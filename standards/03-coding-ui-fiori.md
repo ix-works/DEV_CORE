@@ -1392,12 +1392,12 @@ eşiği geçiyordu. Bir 414 bulduğunda **tüm `callFunction` sitelerini tara**,
 
 **Kural:** manifest'te tanımlı OLMAYAN her istek — `new ODataModel(...)` (ikinci/yardımcı model, varyant
 modeli, `$batch` modeli), ham `fetch`/`XMLHttpRequest`, `sServiceUrl` ile elle kurulan URL — ana modelin
-istemci parametrelerini (`sap-client`, `sap-server`) **URL sorgusunda** taşır. Etkilenmediği varsayılmaz:
+sorgu parametrelerini (`sap-client`, `sap-server` ve ana modelde ne varsa — `sap-statistics` hariç) **URL sorgusunda** taşır. Etkilenmediği varsayılmaz:
 `sap-client`'sız istek ortamına göre farklı davranır ve bunun belirtisi **yanlış veridir, hata değil**.
 
 **Mekanizma (UI5 1.120.23 kaynağı + canlı ölçüm):**
-1. Bileşen, **manifest** modellerinin URI'sine `sap-client`/`sap-server` ekler (`Component.js` `addSapParams`,
-   `:84-93`). Elle kurulan model bunu **almaz**.
+1. Bileşen, **manifest** modellerinin URI'sine `sap-client`/`sap-server` ekler — yalnız değer doluysa (sayfa
+   URL'inde ya da yapılandırmada varsa; `Component.js` `addSapParams`, `:84-93`). Elle kurulan model bunu **almaz**.
 2. `ODataModel` servis URL'inin sorgusunu **`aUrlParams`'a ayırır** ve `sServiceUrl`'i sorgusuz saklar
    (`ODataModel.js:396-405`, sondaki `/` da silinir). Her kendi isteğine `aUrlParams`'ı ekler (`:1432-1442`).
    ⇒ `new ODataModel(oMain.sServiceUrl)` ya da `oMain.sServiceUrl + "/X?…"` **`sap-client`'ı sessizce düşürür.**
@@ -1442,7 +1442,7 @@ ederek aynı ölçüm koşulabilir.
 **Kardeş taraması ZORUNLU:** `new ODataModel(`, `new XMLHttpRequest`, `fetch(` ve `sServiceUrl +` geçen
 **her** satır — bir paketteki tek util çoğu kez birebir kopyalarla birden çok app'te yaşar (ölçülen vakada 14
 kopya). Kontrol maddesi: `bug-checklist-frontend.md` **FE-48**. Sayfa kapanırken gönderilen istek (belge kilidi
-bırakma) ayrıca **FE-49**'a tabidir.
+bırakma) ayrıca **FE-49**'a tabidir (ölçüm yalnız Chromium 153, navigasyon; sekme kapatma / Firefox / Safari / FLP ölçülmedi).
 
 ### 18.5 $batch Request Handling
 

@@ -104,7 +104,8 @@ aç = read-only. (App↔app ve VA02↔VA02 KENDİ içinde aynı-kullanıcı serb
 
 ## 4. UI (freestyle) — değiştir controller
 ```js
-// onInit: beforeunload → _releaseLockSync ; onExit: _stopHeartbeat + listener kaldır
+// onInit: beforeunload → if (!readOnly && id) _releaseLockOnUnload(id)   // ⛔ bayrak koruması (⚠ 2)
+//         onExit: _stopHeartbeat + listener kaldır
 // route matched: readOnly=true (teyide kadar) → _loadDoc + _acquireLock(id)
 _callLock(fn,id){ return new Promise((res,rej)=> oModel.callFunction("/"+fn,{method:"POST",
   urlParameters:{ <KeyParam>: id }, success:()=>res(true), error:rej })); }
@@ -122,12 +123,13 @@ _releaseLock(id){ this._stopHeartbeat(); this._callLock("ReleaseLock",id).catch(
 // onSave success + onNavBack → _releaseLock(id)
 ```
 
-> ⚠ **1 — Sayfa kapanırken senkron XHR GİTMEZ (ölçüldü 2026-09-25).** Bu reçetenin önceki hâli
+> ⚠ **1 — Sayfadan ayrılırken senkron XHR GİTMEZ (ölçüldü 2026-09-25).** Bu reçetenin önceki hâli
 > *"sync XHR + getSecurityToken()"* diyordu. Chromium `beforeunload`/`pagehide`/`unload` içindeki senkron
-> XHR'ı sunucuya **göndermiyor** (lokal ölçüm, Chromium 153, sayfadan ayrılış: senkron XHR 0/6 — normal
-> anda gidiyor; `fetch`+`keepalive` 3/3, CSRF başlığıyla). Hata `try/catch`'te yutulduğu için **sessizdir**;
+> XHR'ı sunucuya **göndermiyor** (lokal ölçüm, Chromium 153, üç olayın her biri × navigasyonla sayfadan
+> ayrılış: senkron XHR 0/3 — aynı istek normal anda gidiyor; `fetch`+`keepalive` 3/3, CSRF başlığıyla). Hata `try/catch`'te yutulduğu için **sessizdir**;
 > kilit yalnız 5 dk zaman aşımıyla düşer (S4 "anında" değil). `sendBeacon` CSRF başlığı taşıyamaz.
-> Sekme **kapatma** ölçülemedi (harness'ta `sendBeacon` da ulaşmadı — ölçüm sınırı). Kontrol: `bug-checklist-frontend.md` **FE-49**.
+> Sekme **kapatma** bu harness'ta ayırt EDİLEMEDİ: `page.close({runBeforeUnload:true})` tetiğinde `sendBeacon`
+> ve keepalive dahil hiçbir yöntem ulaşmadı. Firefox/Safari/FLP ölçülmedi. Kontrol: `bug-checklist-frontend.md` **FE-49**.
 > URL `oModel.sServiceUrl + "/..."` ile kurulur — `sServiceUrl` sondaki `/`'ı taşımaz; `/` unutulursa istek
 > `…_O2ReleaseLock` adlı olmayan servise gider (307 → 403 `/IWFND/MED/170`, ölçüldü). `sap-client` de
 > `sServiceUrl`'de YOKTUR — ana modelden devralınmazsa iki client açık tarayıcıda bırakma öbür client'a gider (FE-48).
@@ -147,7 +149,7 @@ _releaseLock(id){ this._stopHeartbeat(); this._callLock("ReleaseLock",id).catch(
 | S1 | user-1 içeride, user-2 giriyor | user-2 read-only + uyarı; timer-heartbeat user-1'i korur |
 | S2 | aynı kullanıcı başka browser | acquire `sahibi=sen` → izin (ETag/BAPI korur) — S3'ü temiz tutar |
 | S3 | kapatıp tekrar giriyor | beforeunload bıraktı; bırakmadıysa `sahibi=sen` → anında girer |
-| S4 | kapattı, başkası giriyor | beforeunload anında (keepalive fetch — §4 ⚠ 1; senkron XHR ile bırakma gitmiyordu); çökmede 5dk timeout devralır |
+| S4 | kapattı, başkası giriyor | beforeunload'da keepalive fetch (§4 ⚠ 1 — sayfadan ayrılışta ölçüldü, sekme kapatmada ÖLÇÜLMEDİ; senkron XHR ile bırakma gitmiyordu); bırakma gitmezse / çökmede 5dk timeout devralır |
 
 ## 6. TUZAKLAR (tekrar etme)
 - **`Lock`/`Unlock` RAP'te REZERVE** action adı → `AcquireLock`/`ReleaseLock`.

@@ -1023,7 +1023,8 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
   tek `sap-usercontext` çerezine göre yönlenir; çerezi en son açılan client yazar. Ayırıcı veri ile ölçüldü:
   110 sekmesinde varyant modeli 100'ün 3 kaydını, yükleme modeli 100'ün 16 kaydını okudu (110'da 0). Etki:
   14 util kopyası + 2 veri yazan model + 5 kilit bırakma isteği. Aynı turda ikinci, bağımsız bir sessiz
-  kusur çıktı: sayfa kapanırken gönderilen **senkron XHR Chromium'da hiç gitmiyordu** (0/6; `fetch keepalive` 3/3).
+  kusur çıktı: sayfadan ayrılırken gönderilen **senkron XHR Chromium'da gitmiyordu** (navigasyonda 0/3;
+  `fetch keepalive` 3/3; sekme kapatma ayırt edilemedi).
 - **Ders (genelleme):** bir çerçeve bir parametreyi/başlığı **kendi kurduğu nesneye** otomatik ekliyorsa,
   aynı adresi **elle** kuran her kod o parametreyi **kendisi** taşımak zorundadır — ve eksikliği ancak
   parametrenin **farklı değer aldığı** bir ortamda görünür. Tek client, tek dil, tek sekmeyle yapılan test
@@ -1031,8 +1032,10 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
 - **Nasıl ölçülür:** kaynak okuması yetmez (bkz. PATTERN #19). İki farklı parametre değeriyle iki bağlam
   kur (iki client'lı iki sekme), **ayırıcı veri** seç (iki bağlamda sayısı farklı entity; iki tarafta aynı
   sayı dönen entity hiçbir şey kanıtlamaz), ağ izinde parametreyi ve dönen veriyi birlikte oku.
-  Sayfa-kapanışı istekleri için: lokal sunucuya karşı normal-an kontrolü + `beforeunload`/`pagehide` ile
-  navigasyon; sekme kapatma Playwright'ta ölçülemez (`sendBeacon` da ulaşmaz — harness sınırı, kapsam beyanına yaz).
+  Sayfa-kapanışı istekleri için: lokal sunucuya karşı normal-an kontrolü + `beforeunload`/`pagehide`/`unload`
+  × navigasyon. Sekme kapatma bu vakadaki harness'ta ayırt EDİLEMEDİ: `page.close({runBeforeUnload:true})`
+  tetiğinde `sendBeacon` dahil hiçbir yöntem ulaşmadı ⇒ kapsam beyanına "ölçülemedi" yaz, yöntem hükmüne
+  katma (varsayılan `page.close()` unload işleyicilerini hiç koşmaz — `runBeforeUnload:true` ver).
 - **Kardeş taraması:** tek util çoğu kez birebir kopyalarla N app'te yaşar — `new ODataModel(`,
   `XMLHttpRequest`, `fetch(`, `sServiceUrl +` tüm paketlerde taranır; düzeltme kanonik şablona da işlenir
   (yoksa sonraki kopya kusuru geri getirir — bu vakada kanonik util ve std/03 örneği kusurluydu).
