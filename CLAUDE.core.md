@@ -132,6 +132,15 @@
   2026-08-12: makine-lokal tek kopya riski ölçülerek kapatıldı; push'suz memory = yedeksiz)
   + ⭐ **`--wt-denetim` (yukarıdaki madde 3)** — açık worktree'lerde main'e gitmemiş iş ya da
   hasat edilmemiş hafıza kalmadığı ölçülmeden gün kapanmaz.
+  + ⭐ **Ertelenmiş-iş süpürmesi (kullanıcı kuralı 2026-09-25):** `governance/deferred-triggers.md`
+  bir **iş listesidir** ⇒ gün-sonunda güncellenen dosyalar arasındadır. O gün dokunulan paket/konunun
+  kalemleri taranır: bugün **kapanan · iptal kararı verilen · başka bir işe/maddeye katılan** her
+  kalem **kaynağıyla** (PR/commit · karar cümlesi · katıldığı iş) işaretlenip `governance/archive/`
+  altındaki deferred arşivine **taşınır** — canlı dosyada yalnız açık kalem kalır; bugün doğan
+  ertelenmiş iş aynı anda eklenir. *(Vaka 2026-09-25: kalemler başka maddeyle yapılmış ya da
+  vazgeçilmiş göründüğü hâlde "açık" duruyordu, kapananlar gövdeleriyle kaldığı için dosya 7.937
+  satıra şişip taranamaz olmuştu. Aşağıdaki kapanış disiplini madde 1 vardı; kaçtığında onu
+  yakalayan ikinci ağ yoktu.)*
   + **JIT-recall durum kontrolü (Q287, 2026-09-12):** `.tmp/recall-index.status` oku —
   `sonuc` `OK` mu, `zaman` bugünden mi, `yetim` düşük ve `memory` sayısı memory dizinindeki
   ders dosyası sayısıyla uyumlu mu. İndeksi `recall_inject` hook'u kendisi tazeler; bu adım
