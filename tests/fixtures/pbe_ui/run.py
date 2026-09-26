@@ -16,7 +16,9 @@ Eksenler:
      yolda (Windows harf biçimi + `..` — yazım biçimi sahte-muaf üretmez) · KAPSAM kararı bağı İZLEMEYEN
      yolda (proje ağacındaki junction/symlink arkasındaki webapp kapıda kalır)
      ⚠ PLATFORM: harf ayağı yalnız HARF DUYARSIZ dosya sisteminde (Windows NTFS varsayılanı) anlamlıdır;
-     koşum anında YOKLANIR — harf duyarlı FS'te (Linux CI, `fsutil … setCaseSensitiveInfo`) o ayaklar
+     koşum anında YOKLANIR — harf duyarlı FS'te (Linux CI; Windows'ta `fsutil … setCaseSensitiveInfo` +
+     TEMP — bu Linux CI'ın YALNIZ HARF ekseni karşılığıdır, symlink eksenini TAKLİT ETMEZ: 5. turda C8
+     o bağlamda yeşil, Linux CI'da kırmızıydı) o ayaklar
      görünür `[ATLA]` basar, `..` ayakları iki FS'te de koşar; `rel-normpath` kipi orada HARF SINIFI
      İÇİN eşdeğer mutanttır → KURULAMADI (beyan; webapp içinden `test/`'e bağ iki formu ayırabilir ama
      o davranışın doğrusu ertelenen kalemdir — vektör kurulmadı). Harf ayakları İKİ özelliğe dayanır:
@@ -30,7 +32,10 @@ Eksenler:
      yanlış BSP → rc 2, damga YOK · proje kökü DIŞI webapp → damga (mutlak anahtar) ·
      YALNIZ-CANLI test/ DEPLOY-DISI SAYILMAZ · `--offline` → indirmesiz damga + uyarı ·
      seans çözülemedi → rc 2 · `--damgala` YOKKEN rc semantiği DEĞİŞMEZ · damga seans boyunca
-     geçerli (sonraki düzenlemeler bloklanmaz)
+     geçerli (sonraki düzenlemeler bloklanmaz) · `dizin_oku` dizin bağını PLATFORMDAN BAĞIMSIZ izler
+     (B18: `webapp/lnkdis/s.js` bağ üzerinden listelenir) · ata gösteren bağda SONLANIR (B19)
+     ⚠ POSIX symlink ekseni bu makinede (symlink yetkisi yok) YALNIZ simülasyonla ölçülür: `os.scandir`
+     sarılıp junction POSIX symlink DirEntry semantiğiyle gösterilir; gerçek doğrulama Linux CI'dır.
   C  3. BAĞLAM — GERÇEK kapı alt süreci (`hooks/pull_before_edit.py`, stdin payload) + GERÇEK
      store (`source_drift.tazelik_damgala`): damgasız → exit 2 + komut · damgadan sonra → exit 0 ·
      deploy-dışı dosya → exit 0 · başka seans → exit 2 · kök DIŞI webapp: blok → damgala → serbest
@@ -155,6 +160,14 @@ MUTASYONLAR = {
     # B — DEPLOY-DISI etiketi YALNIZ-CANLI'ya da basılır (M1: canlıdaki test/ dosyası gizlenir)
     "--mutasyon-deploy-disi-canli": (FUS, "DEPLOY_DISI if s == YALNIZ_YEREL and",
                                      "DEPLOY_DISI if s in (YALNIZ_YEREL, YALNIZ_CANLI) and"),
+    # B — `dizin_oku` HİÇBİR dizin bağını izlemez (junction + symlink): realpath ≠ yazılan yol ⇒ inilmez.
+    # (Eski `rglob` semantiği `is_dir(follow_symlinks=False)` Windows junction'da EŞDEĞER mutanttır —
+    #  eski kod junction'ı zaten izliyordu; o semantiği ölçmek POSIX/simülasyon ister, kip değil — beyan.)
+    "--mutasyon-bag-izleme-yok": (FUS, "                if gercek not in atalar:   # bağ kendi atasını",
+                                  "                if gercek == os.path.normcase(os.path.abspath(e.path)):   # bağ kendi atasını"),
+    # B — döngü koruması kalkar (ata gösteren bağa inilir → sonsuz özyineleme / ELOOP / yol sınırı)
+    "--mutasyon-dongu-korumasi-yok": (FUS, "                if gercek not in atalar:   # bağ kendi atasını",
+                                      "                if True:   # bağ kendi atasını"),
 }
 
 
@@ -500,17 +513,6 @@ def bag_kur(bag: Path, hedef: Path) -> str | None:
     return None
 
 
-def bag_sok(bag: Path) -> None:
-    """Bağı KENDİSİ kaldır (hedefe girme): junction → rmdir, symlink → unlink."""
-    try:
-        if os.name == "nt":
-            os.rmdir(bag)
-        else:
-            os.unlink(bag)
-    except OSError:
-        pass
-
-
 DISARI = Path(tempfile.mkdtemp(prefix="pbe_ui_disari_"))
 GECICI.append(DISARI)
 _hedef_app = app_kur("appj", "ZSD001_APPJ", YEREL_TESTLI, kok=DISARI / "ui")
@@ -752,6 +754,55 @@ kontrol("B17b env boş ama cwd proje kökü (project.yaml) → rc 0, store satı
         f"rc={_r.returncode}\n{_out[-900:]}")
 for _k in _sil(CWD_DIS):
     print(f"[UYARI] temizlik: {_k}")
+
+
+# Bug gate 5. tur (BLOCKER, Linux CI run 36267140819): `dizin_oku` `rglob` idi — Py 3.11/3.12 junction'a
+# iner, POSIX symlink'e (ve Windows dizin symlink'ine) İNMEZ ⇒ kapı `webapp/lnkdis/s.js`'i bloklar ama
+# `--damgala` onu hiç listelemez = KALICI KİLİT (C8 uçtan uca). B18 listeyi doğrudan ölçer: bağ ÜZERİNDEN
+# görünen rel (`lnkdis/s.js`) = kapının `rel`i (`uygulama_coz`) = damga anahtarının gösterdiği dosya.
+def dizin_oku_guvenli(kok: Path) -> tuple[dict | None, str]:
+    try:
+        return F.dizin_oku(kok), ""
+    except BaseException as e:   # noqa: BLE001 — RecursionError/OSError (döngü) FAIL olarak görünür
+        if isinstance(e, KeyboardInterrupt):
+            raise
+        return None, f"{type(e).__name__}: {str(e)[:200]}"
+
+
+if LNK_HATA is None:
+    _d, _h = dizin_oku_guvenli(APP_LNK / "webapp")
+    _c = P.uygulama_coz(LNK / "s.js", KUM)
+    kontrol("B18 dizin_oku webapp içi DIŞARI bağı İZLER: `lnkdis/s.js` listede (bağ üzerinden rel) = kapının rel'i · "
+            "içerik hedefin baytı · başka fazla/eksik dosya yok",
+            _d is not None and _c is not None and _c[1] in _d and _d.get("lnkdis/s.js") == CTRL
+            and set(_d) == set(yerel_kaynak()) | {"lnkdis/s.js"}
+            and anahtar(APP_LNK / "webapp" / _c[1]) == anahtar(LNK / "s.js") == anahtar(APP_LNK / "shared" / "s.js"),
+            f"hata={_h} liste={sorted(_d) if _d else _d} coz={_c!r}")
+else:
+    atla("B18 dizin_oku webapp içi dışarı bağ", f"bağ kurulamadı ({LNK_HATA})")
+# Döngü vektörü: webapp içinde kendi ATASINI gösteren bağ (webapp'in kendisi · app dizini). Proje ağacı
+# (KUM/SOURCE_CODES) DIŞINDA kurulur — başka bir `rglob` (source_drift) bu döngüye girmesin.
+DONGU = Path(tempfile.mkdtemp(prefix="pbe_ui_dongu_"))
+GECICI.append(DONGU)
+_dongu_dosyalar = {"Component.js": CTRL, "view/List.view.xml": VIEW}
+_d1 = dizin_yaz(_dongu_dosyalar, DONGU / "a1" / "webapp")
+_d2 = dizin_yaz(_dongu_dosyalar, DONGU / "a2" / "webapp")
+(DONGU / "a2" / "ui5.yaml").write_bytes(b"specVersion: \"4.0\"\n")
+_dongu_bag = [(_d1 / "dongu", _d1), (_d2 / "yukari", DONGU / "a2")]
+_dongu_hata = None
+for _b, _t in _dongu_bag:
+    _dongu_hata = _dongu_hata or bag_kur(_b, _t)
+    BAGLAR.append(_b)
+if _dongu_hata is None:
+    _l1, _h1 = dizin_oku_guvenli(_d1)
+    _l2, _h2 = dizin_oku_guvenli(_d2)
+    kontrol("B19 DÖNGÜ: `webapp/dongu → webapp` ve `webapp/yukari → app` → dizin_oku SONLANIR, her dosya BİR kez "
+            "(ata gösteren bağa inilmez; `yukari/` altında yalnız app'in webapp DIŞI dosyası)",
+            _l1 is not None and _l2 is not None and set(_l1) == set(_dongu_dosyalar)
+            and set(_l2) == set(_dongu_dosyalar) | {"yukari/ui5.yaml"},
+            f"hata1={_h1} hata2={_h2} l1={sorted(_l1) if _l1 else _l1} l2={sorted(_l2) if _l2 else _l2}")
+else:
+    atla("B19 dizin_oku döngü koruması", f"bağ kurulamadı ({_dongu_hata})")
 
 for _k, _v in _asil_sd.items():   # C eksenine GERÇEK API ile geç
     if _v is None:

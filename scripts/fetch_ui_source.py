@@ -482,7 +482,33 @@ def zip_indir(bsp: str, conn) -> tuple[bytes, dict]:
 
 
 def dizin_oku(kok: Path) -> dict[str, bytes]:
-    return {p.relative_to(kok).as_posix(): p.read_bytes() for p in sorted(kok.rglob("*")) if p.is_file()}
+    """`kok` altındaki her dosya → {bağ ÜZERİNDEN görünen posix rel: bayt}.
+
+    Dizin bağları (Windows junction · Windows dizin symlink'i · POSIX symlink) PLATFORMDAN BAĞIMSIZ
+    izlenir (Q352-B 5. tur). Eskiden `rglob("*")`: Py 3.11/3.12 `entry.is_dir(follow_symlinks=False)`
+    ile özyineler ⇒ junction'a iner, symlink'e inmez (3.13'te `recurse_symlinks` ayrı). Sonuç: kapı
+    `webapp/lnkdis/s.js`'i bloklar ama symlink platformunda `--damgala` o dosyayı hiç listelemezdi ⇒
+    blok mesajındaki komut kilidi açamazdı = kalıcı kilit (Linux CI, fixture pbe_ui C8).
+    Döngü koruması: yalnız ATA zincirindeki bir dizini (realpath) gösteren bağa inilmez — aynı hedefe
+    giden iki ayrı bağ iki kez listelenir (junction'daki eski davranış). G/Ç hatası YUTULMAZ
+    (çağıranlar OSError'ı ÖLÇÜLEMEDİ'ye çevirir; `rglob` PermissionError'lı dizini sessizce atlıyordu)."""
+    sonuc: dict[str, bytes] = {}
+
+    def gez(dizin: str, onek: str, atalar: frozenset) -> None:
+        with os.scandir(dizin) as it:
+            girdiler = sorted(it, key=lambda e: e.name)
+        for e in girdiler:
+            rel = onek + e.name
+            if e.is_dir():   # follow_symlinks=True (varsayılan): junction + symlink AYNI davranır
+                gercek = os.path.normcase(os.path.realpath(e.path))
+                if gercek not in atalar:   # bağ kendi atasını gösteriyorsa (döngü) inilmez
+                    gez(e.path, rel + "/", atalar | {gercek})
+            elif e.is_file():   # dosya symlink'i izlenir; kırık bağ atlanır (eski `is_file()` ile aynı)
+                with open(e.path, "rb") as f:
+                    sonuc[rel] = f.read()
+
+    gez(str(kok), "", frozenset({os.path.normcase(os.path.realpath(kok))}))
+    return dict(sorted(sonuc.items()))
 
 
 def harf_cakismasi(adlar) -> list[tuple[str, str]]:
