@@ -205,6 +205,10 @@ OZEL_TESTLER = [
      "Q281+Q285: deploy_ui --verify-only kacisli \\r\\n yanlis STALE ([OK~] ayri kova, JS kodu/"
      ".js modulu/deploy kipi KATI) + verify_ui_static_assets taban=dist, .properties \\uXXXX "
      "cozulmus kaynak kiyasi (webapp'te build edilmemis degisiklik HALA FAIL)"),
+    ("fetch_ui_source",
+     "Issue #304: BSP kaynagini geri kurma (-dbg kurali, metin LF/ikili ham, kaynak haritasi "
+     "sondasi) + karsilastirma (YALNIZ olculmus build donusumleri) + --eslik (preload + tam liste; "
+     "sahte ui5 CLI alt sureci)"),
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
     # 2026-08-01 kuyruk-turu (validator ailesi, V1-V6):
     ("cds_curr_satir_yorumu", "CURR/QUAN: satir-sonu // yorumu alani/degeri gizliyordu (V1)"),
@@ -1064,13 +1068,18 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:fm_okuma_where_used"),
      "tip normalizasyonu + ADT uç URL'i (`ensure_source_url` / `url_path` fail-closed)"),
     ("scripts/deploy_ui.py",
-     ("O:git_sorgu_sessiz_bos", "O:sessiz_olumsuzlama_2026_08_10", "O:ui_dogrulama_satir_sonu_kacis"),
+     ("O:git_sorgu_sessiz_bos", "O:sessiz_olumsuzlama_2026_08_10", "O:ui_dogrulama_satir_sonu_kacis",
+      "O:fetch_ui_source"),
      "git sorgusu + sessiz olumsuzlama + (Q281) preload kaçışlı satır sonu sınıfı"),
     # 2026-09-13 (Q285): bu dosya HARİTA'da HİÇ YOKTU ve korpusu da yoktu (canlı BSP gerektirdiği
     # için 2026-08-10'da "fixture YOK" diye bırakılmıştı); ağ/kimlik sahtelenerek artık ölçülüyor.
     ("scripts/verify_ui_static_assets.py",
-     ("O:ui_dogrulama_satir_sonu_kacis",),
+     ("O:ui_dogrulama_satir_sonu_kacis", "O:fetch_ui_source"),
      "taban=dist + .properties çözülmüş kaynak kıyası + help enjekte-meta kontrol grubu"),
+    # 2026-09-26 (Issue #304): deploy_ui + verify_ui_static_assets yardımcılarını import eder ⇒
+    # o iki dosyadaki değişiklik bu korpusu da koşturur (satırları yukarıda; tüketici burada).
+    ("scripts/fetch_ui_source.py", ("O:fetch_ui_source",),
+     "BSP kaynağını geri kurma + karşılaştırma + eşlik kapısı (sahte ui5 CLI)"),
     ("scripts/worklist_audit.py", ("R:AV-13", "O:sorgu_araclari_durustlugu"),
      "üç-değerli sınıflama + (Q310) worklist ayrıştırması kanonik `aktivasyon_worklist_ayristir`"),
     ("scripts/where_used.py", ("O:sorgu_araclari_durustlugu",),

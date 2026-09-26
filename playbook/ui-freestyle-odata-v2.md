@@ -301,4 +301,5 @@ RAP composition `_Container`/`_Destination` → OData V2 metadata'da **`to_Conta
 - Standart (L2): [`../standards/03-coding-ui-fiori.md`](../standards/03-coding-ui-fiori.md)
 - **Backend eşi (aynı mantık, bu dosyanın KAPSAMI DIŞI):** [`ui-backend-rap.md`](ui-backend-rap.md) — kanonik: [`adt-rap.md`](adt-rap.md) §32 (early numbering, MCP lock-cache, CDS/BDEF)
 - Checklist (yeni UI öncesi): [`checklists/ui-freestyle-creation.md`](checklists/ui-freestyle-creation.md)
+- **Kaynak yerelde yok / başka makinede revize edilmiş** (BSP'den geri kur → eşlik → karşılaştır → deploy öncesi liste + drift): [`howto-ui-kaynagi-geri-kurma.md`](howto-ui-kaynagi-geri-kurma.md) · araç `scripts/fetch_ui_source.py`
 - Cross-cutting hata kataloğu: [`lessons-learned.md`](lessons-learned.md)
