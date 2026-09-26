@@ -24,10 +24,13 @@ tek fonksiyon: `sinifla(path: Path, root: Path) -> Optional[dict]`
     ["not": str]}
     · `komut` = YALNIZ çalıştırılabilir komut (nesne çözülemiyorsa argüman yer tutucusu,
       ör. `<BSP_ADI>`). ⛔ Eklenti `--session` BASMAZ: kapı seans kimliğini komutun SONUNA
-      kendisi ekler (komutta zaten yoksa) — marker başka seansı gösterirken damga yanlış
-      seansa gidip kapı döngüye giriyordu (bug gate N1, 2026-09-26).
-    · `not` (opsiyonel) = açıklama/kaçış (`--offline` vb.); blok mesajında komuttan sonra
-      basılır. Eksik anahtar = eski davranış.
+      kendisi ekler — marker başka seansı gösterirken damga yanlış seansa gidip kapı
+      döngüye giriyordu (bug gate N1, 2026-09-26). Komutta FARKLI bir `--session X` varsa
+      kapı onu KENDİ kimliğiyle DEĞİŞTİRİR + görünür not basar (kapının okuduğu tek değer
+      budur; başka değer döngüyü garanti eder). Aynı değer → dokunulmaz.
+      Komut hiç verilmezse gösterilen yer tutucuya `--session` EKLENMEZ.
+    · `not` (opsiyonel) = açıklama/kaçış (`--offline` vb.); iki uçtan kırpılıp blok
+      mesajında komuttan sonra basılır. Eksik anahtar = eski davranış.
     Tazelik AYNI store'dan, AYNI anahtarla (`tazelik_anahtari`) okunur; çekici damgayı
     `source_drift.tazelik_damgala` ile yazar.
   · Eklenti dosyası YOKSA (tam o adla ModuleNotFoundError) → sessiz atla (kapsam yok).
@@ -49,6 +52,7 @@ Bayatsa exit 2 (stderr → agent'a geri besler, ne yapacağını söyler).
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -139,12 +143,14 @@ def _ek_sinifla(p: Path):
             sonuc = None
         if isinstance(sonuc, dict):
             komut = sonuc.get("komut")
-            if not isinstance(komut, str) or not komut.strip():
+            yer_tutucu = not isinstance(komut, str) or not komut.strip()
+            if yer_tutucu:
                 komut = f"<{ad}: canlıdan-çekme komutu verilmedi>"
             not_ = sonuc.get("not")
             return {"tur": "eklenti", "ad": str(sonuc.get("nesne") or "<AD>"),
                     "tip": str(sonuc.get("tip") or ad), "aile": None, "komut": komut.strip(),
-                    "eklenti": ad, "not": not_ if isinstance(not_, str) and not_.strip() else ""}
+                    "komut_yer_tutucu": yer_tutucu, "eklenti": ad,
+                    "not": not_.strip() if isinstance(not_, str) else ""}
     return None
 
 
@@ -205,18 +211,32 @@ def _siniflandirma_yok_notu(fp: str) -> None:
         pass
 
 
-def _komut(s: dict, p: Path, session_id: str) -> str:
+_SESSION_ARG = re.compile(r"(?<!\S)--session(=|\s+)(\S+)")
+
+
+def _komut(s: dict, p: Path, session_id: str) -> tuple:
+    """-> (gösterilecek komut, ek not satırı ya da "")."""
     if s.get("komut"):
         # Eklenti komutu (sözleşme: YALNIZ çalıştırılabilir komut). Seans kimliğini KAPI
         # ekler (bug gate N1: marker başka seansı gösterirken damga yanlış seansa yazılıyor,
-        # kapı döngüye giriyordu). Komutta zaten `--session` varsa dokunulmaz.
+        # kapı döngüye giriyordu).
         komut = s["komut"]
-        if not any(t == "--session" or t.startswith("--session=") for t in komut.split()):
-            komut = f"{komut} --session {session_id}"
-        return komut
+        if s.get("komut_yer_tutucu"):
+            return komut, ""               # çalıştırılabilir komut YOK → yer tutucuya ekleme
+        eski = [m.group(2) for m in _SESSION_ARG.finditer(komut)]
+        if not eski:
+            return f"{komut} --session {session_id}", ""
+        if all(v == session_id for v in eski):
+            return komut, ""
+        # Takip turu 3: FARKLI kimlik → kapının okuduğu kimlikle DEĞİŞTİR (bırakılsa damga
+        # başka seansa yazılır, retry yine bloklanır = N1 döngüsü). Görünür not: sözleşme ihlali.
+        komut = _SESSION_ARG.sub(lambda m: f"--session{m.group(1)}{session_id}", komut)
+        return komut, (f"(not: eklenti komutundaki --session {', '.join(sorted(set(eski)))} "
+                       f"kapının seans kimliğiyle değiştirildi — sözleşme: eklenti --session "
+                       f"basmaz, kapı ekler.)\n")
     ad = s.get("ad") or "<AD>"
     return (f"python core/scripts/sap_sync_pull.py {ad} --type {s['tip']} "
-            f"--file \"{p}\" --session {session_id}")
+            f"--file \"{p}\" --session {session_id}"), ""
 
 
 def main() -> int:
@@ -274,7 +294,7 @@ def main() -> int:
     if _is_fresh(session_id, anahtar):
         return 0                       # bu seansta bu DOSYA çekildi → TAZE, geç
 
-    cmd = _komut(s, p, session_id)
+    cmd, cmd_notu = _komut(s, p, session_id)
     ek = ""
     if s.get("eklenti"):
         # Eklentinin çekicisi `--offline` kaçışını desteklemeyebilir → sözünü veremeyiz.
@@ -285,8 +305,9 @@ def main() -> int:
         baslik = "bu seansta canlıyla TAZE doğrulanMADI. Düzenlemeden ÖNCE:"
         ne_olur = (f"(komutu koş → {p.name} seans-taze damgalanır (canlıyla eşitse); sonra "
                    f"edit'i TEKRAR dene.)\n")
+        ne_olur += cmd_notu
         if s.get("not"):
-            ne_olur += f"{s['not'].rstrip()}\n"   # eklentinin açıklaması/kaçışı (opsiyonel)
+            ne_olur += f"{s['not']}\n"   # eklentinin açıklaması/kaçışı (opsiyonel; kırpılmış)
     else:
         kacis = ("SAP erişilemiyorsa: aynı komuta `--offline` ekle (fetch'siz taze damgalar; "
                  "canlıdan ezme riskini bilerek kabul edersin).\n")

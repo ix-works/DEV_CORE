@@ -71,9 +71,12 @@ kaydı** `_EK_DENETCILER = ("_pbe_ui", "_pbe_msag_textpool")` — her eklenti
 sınıflandırmanın tanımadığı dosyada eklentilere sorar, tazeliği AYNI store'dan
 (`source_drift.tazelik_anahtari`) okur, çekici `source_drift.tazelik_damgala` ile yazar.
 `komut` = YALNIZ çalıştırılabilir komut; ⛔ eklenti `--session` BASMAZ — kapı hook'un seans
-kimliğini komutun SONUNA kendisi ekler (komutta `--session`/`--session=` yoksa; marker başka
-seansı gösterirken damga yanlış seansa gidip kapı döngüye giriyordu — bug gate N1). `not`
-(opsiyonel, str) blok mesajında komuttan sonra basılır; anahtar yoksa eski davranış.
+kimliğini komutun SONUNA kendisi ekler (marker başka seansı gösterirken damga yanlış seansa
+gidip kapı döngüye giriyordu — bug gate N1). Komutta FARKLI bir `--session X` varsa kapı onu
+kendi kimliğiyle DEĞİŞTİRİR + görünür not basar; aynı değer → dokunulmaz; komut hiç yoksa
+gösterilen yer tutucuya `--session` eklenmez. `not` (opsiyonel, str) iki uçtan kırpılıp blok
+mesajında komuttan sonra basılır; anahtar yoksa eski davranış. ⚠ Eklenti HAM yolu alır
+(`..` normalize edilmemiş olabilir) — çekirdek sınıflandırma `os.path.normpath` uygular.
 Eklenti dosyası yok → sessiz · yüklenemez → `EKLENTI-YUKLENEMEDI` · `sinifla()` istisnası →
 `EKLENTI-HATA` (ikisi de exit 0; **`SystemExit` DAHİL** — yalnız `KeyboardInterrupt` yükselir;
 import anında `sys.exit(2)` eskiden ilgisiz her edit'i BLOKLUYORDU — bug gate M2). ⛔ Eklentiye `_`siz ad verme: C-TPL-01 onu kablosuz hook

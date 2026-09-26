@@ -330,8 +330,12 @@ MUTASYONLAR = [
                          'f"[OK] Pretty printer applied to: {args.object_name}"')),
     ("M2 alt-include cekmesini main()'den sok (B: kablolama degismezi)",
      "sync-ast",
-     lambda s: s.replace("        rc = max(rc, _sinif_includelari(obj, session, client.adt_client, "
-                         "args.force))\n", "        pass\n")),
+     # main()'deki HER çağrı sökülür (ana dal + `--type auto` sınıf dalı). Eski düz-metin çapası
+     # iki satırı ortak son-ek sayesinde birlikte vuruyordu; takip turu 1 (2026-09-26) çağrıya
+     # `kardes_koku` ekleyince girinti farkı ortak son-eki bozdu → tek satır sökülüp M2 KAÇTI.
+     # Desen girintiden bağımsız: `rc = max(rc, _sinif_includelari(...))` → `pass`.
+     lambda s: __import__("re").sub(
+         r"rc = max\(rc, _sinif_includelari\([^()]*\)\)", "pass", s)),
     ("M3 damga anahtarini YEREL kurala cevir (B: tek-kaynak degismezi)",
      "sync",
      lambda s: s.replace("    return tazelik_damgala(session, repo_path, ROOT)\n",

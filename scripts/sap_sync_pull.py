@@ -79,11 +79,16 @@ def _dosya_tutarsizligi(obj: str, t: str, repo_file) -> str:
     except Exception as exc:  # noqa: BLE001
         return f"--file doğrulanamadı ({exc}) — yazma/damga YOK"
     def _n(x: str) -> str:
-        # `normalize_object_type` bdef/srvb gibi tiplerde ValueError atar → ham ad (küçük harf)
+        # `normalize_object_type` bdef/srvb ailesinde ValueError atar. Eşanlamlılık o zaman
+        # `_TYPE_TO_EXTENSIONS`ten TÜRETİLİR (uzantı kümesi aynı olan adlar tek tip:
+        # bdef = behaviordefinition = bdo · srvb = servicebinding). Yalnız normalize EDİLEMEYEN
+        # adlara uygulanır → `.abap` paylaşan class/program gibi farklı tipler birleşmez.
         try:
             return normalize_object_type(x)
         except Exception:  # noqa: BLE001
-            return str(x).lower().strip()
+            ham = str(x).lower().strip()
+            exts = _TYPE_TO_EXTENSIONS.get(ham)
+            return "uzanti:" + ",".join(exts) if exts else ham
 
     govde = repo_file.name.split(".", 1)[0].upper()
     if govde != obj.upper():
@@ -243,19 +248,22 @@ def _hedef_dosyalar(obj: str, t: str, repo_file):
     return [f] if f else []
 
 
-def _sinif_includelari(obj: str, session: str, client, force: bool) -> int:
+def _sinif_includelari(obj: str, session: str, client, force: bool, erp_root=None) -> int:
     """Sınıfın repo'da bulunan alt-include'larını KENDİ uçlarından çek + AYRI damgala.
 
     Eskiden burada yalnız "ÇEKİLMEDİ" uyarısı vardı (çekme yolu kurulmamıştı; segment
     adları o gün ölçülmemişti). Q283 (2026-09-13) dört segmenti ölçtü, Q352 (2026-09-26)
     yeniden ölçtü → yol kuruldu. Her include bağımsızdır: biri korunur/404 verirse diğerleri
     çekilir, korunan DAMGALANMAZ ve çıktı onu "ÇEKİLMEDİ" diye adlandırır.
+    `erp_root`: `--file` verildiyse O dosyanın kaynak kökü (`source_drift.pbe_kaynak_koku`) —
+    alt-include'lar ana kaynağın yazıldığı AĞAÇTA aranır (takip turu 1: proje kökünde
+    aranıyordu → `.wt` ana kaynağı + ANA ağacın include'ları yazılıyordu).
     """
     try:
         import sap_adt_lib as L
         from object_types import get_class_include_url
         from source_drift import find_repo_class_includes
-        includes = find_repo_class_includes(obj)
+        includes = find_repo_class_includes(obj, erp_root)
     except Exception as exc:
         print(f"[WARN] {obj}: alt-include listesi çıkarılamadı ({exc}) — alt-include'lar "
               f"ÇEKİLMEDİ, damgalanMADI (kapı onları 'taze değil' sayar).")
@@ -332,6 +340,10 @@ def main() -> int:
         return 1
 
     dosya_eki = f' --file "{repo_file}"' if repo_file is not None else ""
+    kardes_koku = None                     # alt-include'lar --file'ın AĞACINDA (takip turu 1)
+    if repo_file is not None:
+        from source_drift import pbe_kaynak_koku
+        kardes_koku = pbe_kaynak_koku(repo_file)
 
     # ── SINIF ALT-INCLUDE'u: kendi ucundan (`/oo/classes/<C>/includes/<segment>`) ──────
     try:
@@ -387,7 +399,8 @@ def main() -> int:
             return 1
         rc = _sonuc(obj, cozulen, res, session, dosya_eki, komut_tipi="auto")
         if cozulen == "class":
-            rc = max(rc, _sinif_includelari(obj, session, client.adt_client, args.force))
+            rc = max(rc, _sinif_includelari(obj, session, client.adt_client, args.force,
+                                            kardes_koku))
         return rc
 
     try:
@@ -435,7 +448,8 @@ def main() -> int:
     except Exception:
         sinif_mi = False
     if sinif_mi:
-        rc = max(rc, _sinif_includelari(obj, session, client.adt_client, args.force))
+        rc = max(rc, _sinif_includelari(obj, session, client.adt_client, args.force,
+                                        kardes_koku))
     return rc
 
 

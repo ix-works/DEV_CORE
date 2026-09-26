@@ -43,6 +43,13 @@ Kipler (her biri düzeltmenin bir ayağını geri alır → korpus KIRMIZI olmal
   --mutasyon-force-tipi          L1 auto dalında tekrar komutu çözülen tiple basılır
   --mutasyon-offline-rc          L2 `--offline` damgalayamasa da rc 0
   --mutasyon-drift-tablo         L3 check_source_drift tablo uzantısını tanımaz
+  Takip turu (bug gate PASS sonrası, 2026-09-26):
+  --mutasyon-kardes-kok    alt-include'lar `--file`'ın ağacında değil proje kökünde aranır
+  --mutasyon-noktanokta    `..` içeren yol normalize edilmez (docs/.. sahte-muaf)
+  --mutasyon-session-ez    eklenti komutundaki FARKLI --session kapıyla değiştirilmez
+  --mutasyon-yer-tutucu    komutsuz eklentinin yer tutucusuna --session eklenir
+  --mutasyon-not-kirp      eklenti `not`u iki uçtan kırpılmaz
+  --mutasyon-esanlam       --file tip eşanlamlıları (behaviordefinition/bdo) reddedilir
 
 Koşum: python tests/fixtures/pbe_kapsam/run.py [--mutasyon-…]   (exit 0 = PASS)
 """
@@ -72,7 +79,9 @@ GECERLI_KIP = {"--mutasyon-ad-anahtari", "--mutasyon-include-muaf",
                "--mutasyon-abap-class", "--mutasyon-tabl-yok",
                "--mutasyon-eklenti-yok", "--mutasyon-file-dogrulama-yok",
                "--mutasyon-systemexit", "--mutasyon-eklenti-session", "--mutasyon-dirty-kok",
-               "--mutasyon-force-tipi", "--mutasyon-offline-rc", "--mutasyon-drift-tablo"}
+               "--mutasyon-force-tipi", "--mutasyon-offline-rc", "--mutasyon-drift-tablo",
+               "--mutasyon-kardes-kok", "--mutasyon-noktanokta", "--mutasyon-session-ez",
+               "--mutasyon-yer-tutucu", "--mutasyon-not-kirp", "--mutasyon-esanlam"}
 
 # kip -> [(kopyadaki dosya, eski metin, yeni metin)]  — eski metin kopyada TAM 1 kez geçmeli
 MUTASYONLAR = {
@@ -106,8 +115,8 @@ MUTASYONLAR = {
          "        except Exception as exc:  # noqa: BLE001\n")],
     "--mutasyon-eklenti-session": [(
         "hooks/pull_before_edit.py",
-        "            komut = f\"{komut} --session {session_id}\"\n",
-        "            komut = komut\n")],
+        "            return f\"{komut} --session {session_id}\", \"\"\n",
+        "            return komut, \"\"\n")],
     "--mutasyon-dirty-kok": [(
         "hooks/pull_before_edit.py",
         "            [\"git\", \"-C\", str(p.parent), \"status\", \"--porcelain\", \"--\", p.name],\n",
@@ -124,6 +133,30 @@ MUTASYONLAR = {
         "validators/check_source_drift.py",
         "    \".tabl.ddl\": [\"table\"],\n    \".tabl\": [\"table\"],\n",
         "")],
+    "--mutasyon-kardes-kok": [(
+        "sap_sync_pull.py",
+        "        includes = find_repo_class_includes(obj, erp_root)\n",
+        "        includes = find_repo_class_includes(obj)\n")],
+    "--mutasyon-noktanokta": [(
+        "source_drift.py",
+        "    p = Path(normpath(str(path)))\n    n = p.name.lower()\n",
+        "    p = Path(path)\n    n = p.name.lower()\n")],
+    "--mutasyon-session-ez": [(
+        "hooks/pull_before_edit.py",
+        "        if all(v == session_id for v in eski):\n",
+        "        if eski:\n")],
+    "--mutasyon-yer-tutucu": [(
+        "hooks/pull_before_edit.py",
+        "            return komut, \"\"               # çalıştırılabilir komut YOK → yer tutucuya ekleme\n",
+        "            pass\n")],
+    "--mutasyon-not-kirp": [(
+        "hooks/pull_before_edit.py",
+        "                    \"not\": not_.strip() if isinstance(not_, str) else \"\"}",
+        "                    \"not\": not_ if isinstance(not_, str) else \"\"}")],
+    "--mutasyon-esanlam": [(
+        "sap_sync_pull.py",
+        "            return \"uzanti:\" + \",\".join(exts) if exts else ham\n",
+        "            return ham\n")],
     "--mutasyon-tabl-yok": [(
         "source_drift.py",
         '    (".tabl.ddl", "ddl"), (".tabl", "ddl"),\n',
@@ -197,6 +230,8 @@ DOSYALAR = {
     # eklenti arayüzü (E*): çekirdek sınıflandırmanın TANIMADIĞI dosyalar
     "SD/ZSD001_CLC/ui/webapp/Component.js": "sap.ui.define([], function () {});\n",
     "SD/ZSD001_CLC/ui/webapp/Other.js": "sap.ui.define([], function () {});\n",
+    "SD/ZSD001_CLC/ui/webapp/Ayni.js": "sap.ui.define([], function () {});\n",
+    "SD/ZSD001_CLC/ui/webapp/Bos.js": "sap.ui.define([], function () {});\n",
     "SD/ZSD001_CLC/ui/webapp/view/Main.view.xml": "<mvc:View/>\n",
 }
 
@@ -232,7 +267,9 @@ def kapi(scripts: Path, proje: Path, dosya: Path | str, govde: bytes | None = No
     r = subprocess.run([sys.executable, str(scripts / "hooks" / "pull_before_edit.py")],
                        input=govde, capture_output=True, env=_env(proje), cwd=str(proje),
                        timeout=60)
-    return r.returncode, r.stderr.decode("utf-8", errors="replace")
+    # CRLF -> LF: Windows metin kipi stderr satır sonunu CRLF yapar; satır-sınırlı iddialar
+    # (komut satırının SONU, not satırı) platformdan bağımsız ölçülsün.
+    return r.returncode, r.stderr.decode("utf-8", errors="replace").replace("\r\n", "\n")
 
 
 def cekici(scripts: Path, proje: Path, *arg: str) -> tuple[int, str]:
@@ -487,13 +524,20 @@ def sinifla(path, root):
     p = Path(path)
     if "webapp" not in [x.lower() for x in p.parts] or not p.name.endswith(".js"):
         return None
-    if p.name == "Other.js":        # not YOK + komutta --session ZATEN var (çiftlenmemeli)
+    if p.name == "Other.js":        # not YOK + komutta FARKLI --session (sözleşme ihlali)
         return {"nesne": "ZSD001_UI", "tip": "ui5",
                 "komut": "python core/scripts/fetch_ui_source.py ZSD001_UI --session=HAZIR"}
+    if p.name == "Ayni.js":         # komutta kapının KENDİ kimliği zaten var → dokunulmaz
+        return {"nesne": "ZSD001_UI", "tip": "ui5",
+                "komut": "python core/scripts/fetch_ui_source.py ZSD001_UI --session __SID__"}
+    if p.name == "Bos.js":          # komut YOK + boşluklu not
+        return {"nesne": "ZSD001_UI", "tip": "ui5", "komut": "",
+                "not": "   NOT-BOSLUK   \\n\\n"}
     return {"nesne": "ZSD001_UI", "tip": "ui5",
             "komut": "python core/scripts/fetch_ui_source.py ZSD001_UI --karsilastir",
             "not": "NOT-STUB: SAP erisilemiyorsa elle karsilastir."}
 """
+_STUB_UI = _STUB_UI.replace("__SID__", SID)
 _STUB_IMPORT_EXIT = "import sys\nsys.exit(2)\n"                          # M2 import dalı
 _STUB_CAGRI_EXIT = "import sys\ndef sinifla(path, root):\n    sys.exit(0)\n"   # M2 çağrı dalı
 _STUB_BOZUK = "def sinifla(path, root)\n    return None\n"          # SyntaxError
@@ -525,9 +569,21 @@ def eklenti_arayuzu(scripts: Path, kum: Path) -> None:
     kontrol("E14 N1: eklentinin `not`u blok mesajinda basilir", "NOT-STUB:" in err,
             f"err={err[-160:]!r}")
     rc, err = kapi(scripts, proje, ui / "Other.js")
-    kontrol("E15 N1: `not` yoksa basilmaz + komutta --session varsa CIFTLENMEZ",
-            rc == 2 and "NOT-STUB" not in err and "--session=HAZIR" in err
-            and f"--session {SID}" not in err, f"rc={rc} err={err[:200]!r}")
+    kontrol("E15 takip-3: komutta FARKLI --session -> kapinin kimligiyle DEGISTIRILIR + gorunur not "
+            "(`not` yokken NOT-STUB basilmaz, ekleme CIFTLENMEZ)",
+            rc == 2 and "NOT-STUB" not in err and f"ZSD001_UI --session={SID}\n" in err
+            and "--session=HAZIR" not in err and "seans kimliğiyle değiştirildi" in err
+            and err.count(f"--session {SID}") == 0, f"rc={rc} err={err[:260]!r}")
+    rc, err = kapi(scripts, proje, ui / "Ayni.js")
+    kontrol("E18 takip-3 KONTROL: komutta kapinin KENDI kimligi -> dokunulmaz, not YOK",
+            rc == 2 and f"ZSD001_UI --session {SID}\n" in err and err.count(f"--session {SID}") == 1
+            and "değiştirildi" not in err, f"rc={rc} err={err[:200]!r}")
+    rc, err = kapi(scripts, proje, ui / "Bos.js")
+    kontrol("E19 takip-4: komutsuz eklenti -> yer tutucuya --session EKLENMEZ",
+            rc == 2 and "<_pbe_ui: canlıdan-çekme komutu verilmedi>\n" in err,
+            f"rc={rc} err={err[:200]!r}")
+    kontrol("E20 takip-4: `not` iki uctan kirpilir (bosluk/bos satir basilmaz)",
+            "\nNOT-BOSLUK\nAMAÇ" in err, f"err={err[-260:]!r}")
     rc, err = kapi(scripts, proje, xml)
     kontrol("E3 eklenti None -> o dosya kapsam disi (SESSIZ)", rc == 0 and err.strip() == "",
             f"rc={rc}")
@@ -716,6 +772,77 @@ def duzeltme_turu(scripts: Path, kum: Path) -> None:
             f"{d}")
 
 
+def takip_turu(scripts: Path, kum: Path) -> None:
+    """Bug gate PASS sonrası takip turu: 1 (alt-include ağacı) · 2 (`..`/harf) · 5 (eşanlamlı)."""
+    C = "SOURCE_CODES/SD/ZSD001_CLC/classes/"
+
+    # ── 1: `--type class --file <.wt ağacı>` → alt-include'lar AYNI ağaçta ──────
+    proje = proje_kur(kum / "proje5")
+    wt = proje_kur(kum / "wt" / "proje5" / "dal")         # kanonik .wt: proje kökü DIŞINDA
+    ana_ccimp = (proje / C / "ZCL_SD001_X.ccimp.abap").read_bytes()
+    canli = {"/sap/bc/adt/oo/classes/zcl_sd001_x/source/main": "CLASS zcl_sd001_x DEFINITION.\n",
+             "/sap/bc/adt/oo/classes/zcl_sd001_x/includes/implementations": "* CANLI impl\n",
+             "/sap/bc/adt/oo/classes/zcl_sd001_x/includes/testclasses": "* CANLI test\n"}
+    rc, out = cekici_sahte(scripts, proje, ["ZCL_SD001_X", "--type", "class", "--file",
+                                            str(wt / C / "ZCL_SD001_X.clas.abap")], canli)
+    st = store(proje).get("objects") or {}
+    k_wt, k_ana = _anahtar(scripts, proje, [wt / C / "ZCL_SD001_X.ccimp.abap",
+                                            proje / C / "ZCL_SD001_X.ccimp.abap"])
+    kontrol("K1 takip-1: --file .wt ana kaynagi -> alt-include'lar AYNI agacta cekilip damgalanir",
+            rc == 0 and (wt / C / "ZCL_SD001_X.ccimp.abap").read_text(encoding="utf-8") == "* CANLI impl\n"
+            and k_wt in st, f"rc={rc} wt_damga={k_wt in st} {out[-200:]!r}")
+    kontrol("K2 takip-1: ANA proje agacinin alt-include'una DOKUNULMAZ (yazma + damga YOK)",
+            (proje / C / "ZCL_SD001_X.ccimp.abap").read_bytes() == ana_ccimp and k_ana not in st,
+            f"ana_damga={k_ana in st}")
+
+    # ── 2: `..` içeren yol + harf farkı (gerçek kapı alt süreci) ────────────────
+    proje = proje_kur(kum / "proje6")
+    dz = proje / "SOURCE_CODES" / "SD" / "ZSD001_CLC"
+    duz = dz / "classes" / "ZCL_SD001_X.ccimp.abap"
+    # `docs`/`DOCS` GERÇEK (boş) dizin: POSIX `a/docs/../b`yi fiziksel çözer (docs yoksa ENOENT),
+    # Win32 sözdizimsel çözer — dizin varken ikisi AYNI dosyayı açar ⇒ vektör CI'da (ubuntu) da
+    # koşar. Harf-duyarsız FS'te `DOCS` ile `docs` aynı dizindir (exist_ok).
+    for d in ("docs", "DOCS"):
+        (dz / d).mkdir(exist_ok=True)
+    rc0, _ = kapi(scripts, proje, duz)
+    rc1, _ = kapi(scripts, proje, str(dz) + "/docs/../classes/ZCL_SD001_X.ccimp.abap")
+    rc2, _ = kapi(scripts, proje, str(dz) + "/DOCS/../classes/ZCL_SD001_X.ccimp.abap")
+    kontrol("G1 takip-2: `docs/..` / `DOCS/..` yol -> BLOK (sahte-muaf YOK; kontrol `..`'suz = 2)",
+            rc0 == 2 and rc1 == 2 and rc2 == 2, f"duz={rc0} docs/..={rc1} DOCS/..={rc2}")
+    nn = str(dz) + "/docs/../classes/ZCL_SD001_X.ccimp.abap"
+    rc, out = cekici(scripts, proje, "ZCL_SD001_X", "--type", "implementations", "--offline",
+                     "--file", nn)
+    st = store(proje).get("objects") or {}
+    kontrol("G2 takip-2: sap_sync_pull `--file` `..`li yol -> kabul + damga KANONIK anahtarda",
+            rc == 0 and _anahtar(scripts, proje, [duz])[0] in st, f"rc={rc} {out[-160:]!r}")
+    # G3 — harf farkı YALNIZ harf-duyarsız FS'te anlamlıdır (harf-duyarlı FS'te harf-farklı yol
+    # BAŞKA, var olmayan bir dosyadır → kapı "yeni dosya" der). FS YOKLANIR, görünür ATLANDI.
+    proje_b = proje_kur(kum / "proje6b")
+    duz_b = proje_b / "SOURCE_CODES" / "SD" / "ZSD001_CLC" / "classes" / "ZCL_SD001_X.ccimp.abap"
+    harf = str(duz_b).replace("SOURCE_CODES", "source_codes").replace("classes", "CLASSES")
+    if not Path(harf).exists():
+        print("  [ATLANDI] G3 harf-farkli yol (harf duyarli FS — ayak harf-duyarsiz FS'e ozgu)")
+    else:
+        rc_hb, _ = kapi(scripts, proje_b, harf)
+        rc_d, _ = cekici(scripts, proje_b, "ZCL_SD001_X", "--type", "implementations", "--offline",
+                         "--file", str(duz_b))
+        rc_h, _ = kapi(scripts, proje_b, harf)
+        kontrol("G3 takip-2 (sozlesme capasi): harf-farkli yol -> damgasizken BLOK, kanonik damga okunur",
+                rc_hb == 2 and rc_d == 0 and rc_h == 0, f"damgasiz={rc_hb} damga={rc_d} damgali={rc_h}")
+
+    # ── 5: `--file` tip eşanlamlıları (`_TYPE_TO_EXTENSIONS`ten türetilir) ───────
+    proje = proje_kur(kum / "proje7")
+    bdef = proje / "SOURCE_CODES" / "SD" / "ZSD001_CLC" / "cds" / "ZSD001_I_X.bdef"
+    sonuc = {}
+    for tip in ("bdef", "behaviordefinition", "bdo", "srvd"):
+        rc, out = cekici(scripts, proje, "ZSD001_I_X", "--type", tip, "--offline", "--file", str(bdef))
+        sonuc[tip] = rc
+    kontrol("F7 takip-5: --file .bdef + behaviordefinition/bdo (esanlamli) -> kabul",
+            sonuc["bdef"] == 0 and sonuc["behaviordefinition"] == 0 and sonuc["bdo"] == 0, f"{sonuc}")
+    kontrol("F8 takip-5 KONTROL: --file .bdef + srvd (farkli tip) -> hala [FAIL]",
+            sonuc["srvd"] == 1, f"{sonuc}")
+
+
 def ucuncu_baglam(scripts: Path, kum: Path) -> None:
     """3. BAĞLAM: `source_root` farklı adlı proje — kök segmenti config'ten okunur."""
     proje = proje_kur(kum / "proje2", source_root="ABAP_SRC")
@@ -748,6 +875,7 @@ def main(argv: list[str]) -> int:
         ucuncu_baglam(scripts, kum)
         eklenti_arayuzu(scripts, kum)
         duzeltme_turu(scripts, kum)
+        takip_turu(scripts, kum)
     finally:
         _sil(kum)
     kirik = [a for a, ok, _ in SONUC if not ok]

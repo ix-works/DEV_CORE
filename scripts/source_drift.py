@@ -624,8 +624,17 @@ def pbe_siniflandir(path, kok_segmentleri=None) -> Optional[dict]:
       aile : 'auto' tiplerde ADT arama süzgeci ('abap' | 'ddl'), diğerlerinde None
     Muafiyet kuralları kapının ESKİ davranışıyla aynıdır: kaynak-kök segmenti yoksa ya da
     yolun HERHANGİ bir parçası muaf klasörse (ref_docs/docs/.tmp/...) → None.
+    Yol ÖNCE sözdizimsel olarak normalize edilir (`os.path.normpath`): `..` içeren yol
+    `parts` üzerinden değerlendirilince `…/docs/../classes/X.ccimp.abap` (docs dizini hiç
+    olmasa bile işletim sistemi onu `…/classes/X.ccimp.abap` diye açar) muaf SAYILIYOR,
+    kapı sahte-muaf geçiyordu (kardeş B bug gate'i, 2026-09-26; ölçüldü: kontrol grubu
+    `..`'suz aynı dosya exit 2, `docs/..` exit 0). `resolve()` DEĞİL: junction/symlink
+    izlemez (kaynak kökü bir bağ olabilir → segment kaybolup kapı kapanırdı); Win32 yol
+    normalizasyonu da sözdizimseldir. Harf: kıyas zaten küçük harfle (ölçüldü: harf-farklı
+    yol hâlâ BLOK, canonical yolla yazılan damga harf-farklı yolla okunuyor).
     """
-    p = Path(path)
+    from os.path import normpath
+    p = Path(normpath(str(path)))
     n = p.name.lower()
     parts = {s.lower() for s in p.parts}
     if not ((kok_segmentleri or PBE_KOK_SEGMENTLERI) & parts):
@@ -642,6 +651,22 @@ def pbe_siniflandir(path, kok_segmentleri=None) -> Optional[dict]:
     for ek, aile in _PBE_AUTO_AILE:
         if n.endswith(ek):
             return {"tur": "kaynak", "ad": ad, "tip": "auto", "aile": aile}
+    return None
+
+
+def pbe_kaynak_koku(path) -> Optional[Path]:
+    """Dosyanın AİT OLDUĞU kaynak kökü (`<ağaç>/<source_root>`) — dosyaya EN YAKIN kök segmenti.
+
+    Takip turu 1 (2026-09-26, ölçüldü): `sap_sync_pull --type class --file <.wt/.../X.clas.abap>`
+    ana kaynağı worktree'ye yazıyor ama alt-include'ları proje kökünün `SOURCE_CODES`'unda
+    arayıp ORAYA yazıyor/damgalıyordu (worktree'deki `.ccimp` bayat + damgasız kalıyor, başka
+    ağacın dosyası sessizce eziliyordu). Kardeş dosyalar `--file`'ın ağacında aranır.
+    """
+    from os.path import normpath
+    p = Path(normpath(str(path)))
+    for ata in p.parents:
+        if ata.name.lower() in PBE_KOK_SEGMENTLERI:
+            return ata
     return None
 
 

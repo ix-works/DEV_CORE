@@ -281,6 +281,8 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
 # pbe_kapsam taban 62/62 · ad-anahtari 57 · include-muaf 54 · abap-class 56 · tabl-yok 58 · eklenti-yok 52
 # bug gate #306: file-dogrulama-yok 57 · systemexit 60 · eklenti-session 61 · dirty-kok 61
 #                force-tipi 61 · offline-rc 61 · drift-tablo 60   (13/13 kip PASS, ~415 sn)
+# takip turu: taban 72/72 · kardes-kok · noktanokta · session-ez · yer-tutucu · not-kirp · esanlam
+#             (her biri YALNIZ kendi vektörünü düşürür — sayılar changelog Q352 (8)'de)
 ```
 - ⭐ **AYIRT EDİCİ ÇİFT (silinmez):** H3 *ana sınıf damgası `.ccimp`'i kapsamaz* + T7 *aynı adlı
   CDS damgası BDEF'i kapsamaz* — ad-anahtarına dönüşü yakalayan bunlardır; P3 uçtan uca
@@ -308,6 +310,21 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
   uzantısına canlı tip + tablo ucu (sahte istemci). ⛔ L1 satır seçimi: `--force` kelimesi
   KORUMA açıklama satırında da geçer → komut satırını `sap_sync_pull.py` + `--force` ile seç
   (ilk denemede açıklama satırını seçip sahte-kırmızı verdi).
+- **Takip turu vektörleri (2026-09-26):** K1/K2 `--file` proje kökü DIŞI (`.wt`) ağaçta
+  alt-include'lar AYNI ağaçta çekilir, ANA ağacın include'una dokunulmaz · G1 `docs/..` +
+  `DOCS/..` yol BLOK (kontrol: `..`'suz = 2; `docs` GERÇEK boş dizin — POSIX `..`yi fiziksel
+  çözer, dizin yoksa ENOENT → vektör ubuntu'da sessizce "yeni dosya" olurdu) · G2 `..`li
+  `--file` kabul + damga kanonik anahtarda · G3 harf-farklı yol sözleşme çapası — **FS
+  yoklamalı**: harf-duyarlı FS'te görünür `[ATLANDI] G3` (ölçüldü: `fsutil file
+  setCaseSensitiveInfo <dir> enable` + TEMP/TMP oraya → 71/71 + G3 ATLANDI; normal TEMP 72/72) ·
+  E15/E18 eklenti komutunda farklı `--session` değişir +
+  not / aynısı dokunulmaz · E19/E20 komutsuz eklenti yer tutucusuna `--session` yok, `not`
+  kırpılır · F7/F8 `--file` eşanlamlıları (`behaviordefinition`/`bdo`) kabul, farklı tip red.
+  ⛔ Kapı stderr'i Windows'ta CRLF'tir — satır-sınırlı iddia (`...\n`) kurarken `kapi()`
+  çıktısı LF'ye indirgenir (ilk koşuda 4 sahte-kırmızı verdi).
+  ⛔ `cikti_iddiasi_durustlugu` M2 (kablolama sökümü) çapası **regex**tir: eski düz-metin çapası
+  main()'deki iki çağrıyı ortak son-ek sayesinde birlikte vuruyordu; çağrıya `kardes_koku`
+  eklenince girinti farkı son-eki bozdu, yalnız biri söküldü ve M2 **KAÇTI** (bataryada yakalandı).
 - **Canlı uç ölçümü (salt-GET) tekrar gerekirse:** `/oo/classes/<c>/includes/<segment>` (include
   yoksa 404 — "segment yanlış" değil; uydurma segment 400) · include + `/source/main` = 404 ·
   quickSearch `?operation=quickSearch&query=<AD>&maxResults=…` tam-ad + `adtcore:type`.
