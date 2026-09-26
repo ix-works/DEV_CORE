@@ -44,6 +44,23 @@ NE YAPAR (yalnız GET — SAP'ye hiçbir şey yazmaz):
                              Deploy SONRASI yeniden indirilen zip'le koşulunca tam-liste doğrulamasıdır.
      `--zip-kaydet <dosya>`  indirilen ham zip'i saklar (sonraki drift kıyası için anlık görüntü).
      `--zip <dosya>`         AĞ YOK: daha önce kaydedilmiş zip'i girdi olarak kullanır.
+     `--damgala`             PULL-BEFORE-EDIT (ADR 0016, Q352-B) seans-tazelik damgası: `--karsilastir
+                             <app>/webapp` TEMİZ çıkarsa o webapp'in dosyaları seans-taze damgalanır →
+                             kapı (`hooks/_pbe_ui`) düzenlemeye izin verir. Damga YALNIZ: taze indirme
+                             (`--zip` → YOK) · rc 0 · kaynak haritası sapması yok · webapp kapının kapsamında
+                             (proje kökü DIŞINDAKİ `.wt` worktree'si dahil — anahtar mutlak; ABAP kapısıyla
+                             simetrik) ve BSP'si app'in `ui5-deploy.yaml`'ıyla tutarlı. ⚠ Store + anahtar
+                             kökü `CLAUDE_PROJECT_DIR`'den, boşsa CWD'den çözülür (ABAP ile ortak;
+                             ertelendi T-PBE-KOK-CWD) ⇒ kapı damgayı YALNIZ araç proje kökünden (ya da
+                             `CLAUDE_PROJECT_DIR` ile) koşulduğunda görür; araç yazdığı store'u + kökü basar. Bu kipte YALNIZ `deploy-to-abap` görevinin `configuration.exclude`
+                             önekleri (HARF DUYARLI — deploy aracı `RegExp(regex,"g")`) altındaki
+                             YALNIZ-YEREL dosyalar `DEPLOY-DISI` etiketlenir (canlıya hiç gitmez;
+                             rc'ye sayılmaz). rc 1/2'de ASLA damga yok. `--session` opsiyonel geçersiz kılma
+                             (varsayılan: SessionStart marker'ı, `source_drift.seans_kimligi`).
+     `--offline`             (yalnız `--damgala` ile) İNDİRMEDEN damgala — `sap_sync_pull --offline` ile
+                             aynı anlam: SAP erişilemiyor / yerel canlıdan İLERİDE (commit'li ama henüz
+                             deploy edilmemiş iş); canlıdaki belgelenmemiş değişikliği ezme riskini
+                             BİLEREK kabul edersin. Görünür uyarı basar.
 
 BUILD DÖNÜŞÜMLERİ (`--karsilastir`; yalnız ÖLÇÜLENLER, başka hiçbir fark gevşetilmez):
   · `.properties` — `ui5 build` non-ASCII'yi `\\uXXXX`'e çevirir (Q285). İki taraf da çözülüp
@@ -117,6 +134,7 @@ MANIFEST_BUILD_YOLLARI = (
 )
 AYNI, BUILD, GERCEK, YALNIZ_CANLI, YALNIZ_YEREL = (
     "AYNI", "BUILD-DONUSUMU", "GERCEK-FARK", "YALNIZ-CANLI", "YALNIZ-YEREL")
+DEPLOY_DISI = "DEPLOY-DISI"   # yalnız --damgala: deploy `exclude` altında YALNIZ-YEREL (canlıya hiç gitmez)
 ESLIK_TAM, ESLIK_SATIR_SONU, ESLIK_YOK = "ESLIK-TAM", "ESLIK-SATIR-SONU", "ESLIK-YOK"
 _BSP_ADI = re.compile(r"^[A-Za-z0-9_/]+$")
 
@@ -326,6 +344,81 @@ def liste_kiyasla(canli: dict[str, bytes], dist: dict[str, bytes]) -> tuple[list
             len(ortak) - len(degisen))
 
 
+def ui_eklenti_modulu():
+    """PULL-BEFORE-EDIT UI eklentisi (`hooks/_pbe_ui.py`; `_` öneki = hook değil yardımcı modül, C-TPL-01) — kapsam + deploy-exclude TEK KAYNAĞI."""
+    hooks = str(Path(__file__).resolve().parent / "hooks")
+    if hooks not in sys.path:
+        sys.path.append(hooks)
+    import _pbe_ui
+    return _pbe_ui
+
+
+def deploy_disi_etiketle(satirlar: list, onekler) -> list:
+    """YALNIZ-YEREL + deploy `exclude` altında → DEPLOY-DISI (yalnız --damgala kipinde çağrılır)."""
+    pbe = ui_eklenti_modulu()
+    return [(r, DEPLOY_DISI if s == YALNIZ_YEREL and pbe.deploy_haric_mi(r, onekler) else s, d, f)
+            for r, s, d, f in satirlar]
+
+
+def damga_engeli(satirlar: list, zip_taze: bool, sapma: list, rc: int) -> str | None:
+    """Damga kararı (saf). None = damgalanabilir; aksi hâlde görünür NEDEN.
+
+    ⛔ Damga = kapıya "bu dosya canlıyla eşit" beyanıdır; sahte-taze damga kapıyı öldürür.
+    Bu yüzden ölçüm kanıtı zayıf her dal (anlık görüntü, harita sapması, rc≠0) damgayı keser."""
+    if not zip_taze:
+        return "girdi `--zip` anlık görüntüsü — canlının BUGÜNKÜ hâli ölçülmedi"
+    if rc != 0:
+        return f"çıkış kodu {rc} (istenen adımlardan biri temiz değil)"
+    if sapma:
+        return f"kaynak haritası sapması ({len(sapma)}) — geri kurulan -dbg özgün kaynak olmayabilir"
+    kalan = [r for r, s, _, _ in satirlar if s not in (AYNI, BUILD, DEPLOY_DISI)]
+    if kalan:
+        return f"{len(kalan)} dosya canlıyla eşit değil: {_kisalt(kalan)}"
+    return None
+
+
+def damga_yeri() -> str:
+    """Damganın HANGİ store'a, hangi köke göre yazıldığı (bug gate 2. tur: cwd'ye düşen kök
+    yanıltıcı \"damgalandı\" üretiyordu — kapı başka store'a bakar). Kök çözümü değişmez."""
+    try:
+        import source_drift as sd
+        store = str(sd.FRESH_STORE)
+    except Exception as e:   # noqa: BLE001
+        return f"store=ÖLÇÜLEMEDİ ({type(e).__name__}) · anahtar kökü={REPO}"
+    s = f"store={store} · anahtar kökü={REPO}"
+    # Uyarı YALNIZ kök şüpheliyse (3. tur): env boş ajan Bash'inde olağandır; proje kökünden koşulduğunda
+    # (kökte `project.yaml` var) tek satır bilgi yeter. Env boş VE kökte proje işareti yoksa ⚠.
+    if not os.environ.get("CLAUDE_PROJECT_DIR") and not (Path(REPO) / "project.yaml").is_file():
+        s += (f" · ⚠ CLAUDE_PROJECT_DIR BOŞ ve çalışma dizini ({Path.cwd()}) proje kökü DEĞİL (project.yaml yok) "
+              "— kapı başka kökte koşuyorsa bu damgayı GÖRMEZ (proje kökünden koş ya da CLAUDE_PROJECT_DIR=<proje> ver)")
+    return s
+
+
+def damgala(webapp: Path, rels: list, session: str | None) -> tuple[list[str], str | None]:
+    """webapp/rel dosyalarını seans-taze damgala → (yazılan anahtarlar, hata ya da None).
+
+    Tek kaynak: `source_drift.seans_kimligi` + `tazelik_damgala` (kapı AYNI anahtarı okur)."""
+    try:
+        import source_drift as sd
+        seans = sd.seans_kimligi(session or "")
+        damga = sd.tazelik_damgala
+    except (ImportError, AttributeError) as e:
+        return [], f"damga altyapısı yüklenemedi (source_drift: {type(e).__name__}: {e})"
+    if not seans or seans == "default":
+        return [], ("seans kimliği çözülemedi (SessionStart marker'ı yok) — kapı bu damgayı "
+                    "EŞLEŞTİRMEZ; `--session <id>` ver")
+    yazilan, eksik = [], []
+    for rel in rels:
+        k = damga(seans, webapp / rel, REPO)
+        if k:
+            yazilan.append(k)
+        else:
+            eksik.append(rel)
+    if eksik:
+        return yazilan, f"{len(eksik)} dosya damgalanamadı: {_kisalt(eksik)}"
+    return yazilan, None
+
+
 def eslik_sinifi(build_preload: bytes, canli_preload: bytes) -> tuple[str, list[str]]:
     """deploy_ui.preload_karsilastir sözlüğü → eşlik sınıfı."""
     sinif, moduller = preload_karsilastir(build_preload, canli_preload)
@@ -389,7 +482,34 @@ def zip_indir(bsp: str, conn) -> tuple[bytes, dict]:
 
 
 def dizin_oku(kok: Path) -> dict[str, bytes]:
-    return {p.relative_to(kok).as_posix(): p.read_bytes() for p in sorted(kok.rglob("*")) if p.is_file()}
+    """`kok` altındaki her dosya → {bağ ÜZERİNDEN görünen posix rel: bayt}.
+
+    Dizin bağları (Windows junction · Windows dizin symlink'i · POSIX symlink) PLATFORMDAN BAĞIMSIZ
+    izlenir (Q352-B 5. tur). Eskiden `rglob("*")`: Py 3.11/3.12 `entry.is_dir(follow_symlinks=False)`
+    ile özyineler ⇒ junction'a iner, symlink'e inmez (3.13'te `recurse_symlinks` ayrı). Sonuç: kapı
+    `webapp/lnkdis/s.js`'i bloklar ama symlink platformunda `--damgala` o dosyayı hiç listelemezdi ⇒
+    blok mesajındaki komut kilidi açamazdı = kalıcı kilit (Linux CI, fixture pbe_ui C8).
+    Döngü koruması: yalnız ATA zincirindeki bir dizini (realpath) gösteren bağa inilmez — aynı hedefe
+    giden iki ayrı bağ iki kez listelenir (junction'daki eski davranış). G/Ç hatası YUTULMAZ
+    (çağıranlar OSError'ı ÖLÇÜLEMEDİ'ye çevirir; `rglob` PermissionError'lı dizini sessizce atlıyordu)."""
+    sonuc: dict[str, bytes] = {}
+
+    def gez(dizin: str, onek: str, atalar: frozenset) -> None:
+        with os.scandir(dizin) as it:
+            girdiler = sorted(it, key=lambda e: e.name)
+        for e in girdiler:
+            rel = onek + e.name
+            if e.is_dir():   # follow_symlinks=True (varsayılan): junction + symlink AYNI davranır
+                gercek = os.path.normcase(os.path.realpath(e.path))
+                if gercek not in atalar:   # bağ kendi atasını gösteriyorsa (döngü) inilmez
+                    gez(e.path, rel + "/", atalar | {gercek})
+            elif e.is_file():   # dosya symlink'i izlenir; kırık POSIX symlink atlanır · kırık Windows junction
+                                # (`is_dir()` önbellekten True) üstteki scandir'de OSError verir — eskisiyle aynı
+                with open(e.path, "rb") as f:
+                    sonuc[rel] = f.read()
+
+    gez(str(kok), "", frozenset({os.path.normcase(os.path.realpath(kok))}))
+    return dict(sorted(sonuc.items()))
 
 
 def harf_cakismasi(adlar) -> list[tuple[str, str]]:
@@ -515,7 +635,7 @@ def istek_durumu(istendi: bool, sebep: str) -> str:
 
 
 def kapsam_beyani(zip_kaynagi: str, eslik_durumu: str, karsilastirma: str, deploy_notu: str,
-                  out_notu: str) -> str:
+                  out_notu: str, damga_notu: str = "İSTENMEDİ") -> str:
     return "\n".join([
         "KAPSAM BEYANI:",
         f"  bakılan  : {zip_kaynagi} · geri kurma = -dbg kuralı (ui5 builder debugFileRegex tersi)",
@@ -524,6 +644,7 @@ def kapsam_beyani(zip_kaynagi: str, eslik_durumu: str, karsilastirma: str, deplo
         f"  --out    : {out_notu}",
         f"  deploy listesi: {deploy_notu}",
         f"  karşılaştırma: {karsilastirma}",
+        f"  PBE damgası: {damga_notu}",
         "  BAKILMAYAN: canlı = indirilen zip anı (ICF servis katmanı / HTML meta enjeksiyonu ölçülmedi) ·",
         "             TypeScript ya da özel build — preload kıyası KÜÇÜLTÜLMÜŞ kodu ölçer, transpile edilmiş -dbg",
         "             ondan eşit çıktı üretebilir; tek ayırt edici kaynak haritası sondasıdır (canlı TS BSP'de",
@@ -547,6 +668,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ui5-cli", help="ui5 CLI yolu (varsayılan: PATH'teki `ui5`)")
     ap.add_argument("--zip-kaydet", help="indirilen ham zip'i bu dosyaya yaz")
     ap.add_argument("--diff-satir", type=int, default=400, help="dosya başına basılan diff satırı üst sınırı")
+    ap.add_argument("--damgala", action="store_true",
+                    help="--karsilastir <app>/webapp TEMİZse webapp dosyalarını PULL-BEFORE-EDIT seans-taze damgala")
+    ap.add_argument("--session", default="", help="(--damgala) seans kimliği; boşsa SessionStart marker'ı")
+    ap.add_argument("--offline", action="store_true",
+                    help="(--damgala) İNDİRMEDEN damgala — canlıdan ezme riskini BİLEREK kabul (sap_sync_pull --offline)")
     a = ap.parse_args(argv)
 
     out = Path(a.out) if a.out else None
@@ -563,6 +689,52 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[KULLANIM] --dist-karsilastir dizini yok: {dist_kok} (önce `npm run build`)", file=sys.stderr)
         return 2
 
+    # PULL-BEFORE-EDIT damgası (Q352-B): kullanım denetimleri İNDİRMEDEN önce — sahte-taze damga
+    # üretebilecek her bileşim burada reddedilir (rc 2, hiçbir şey damgalanmaz).
+    damga_onekler: list[str] = []
+    damga_anlasilmayan: list[str] = []
+    if a.offline and not a.damgala:
+        print("[KULLANIM] --offline yalnız --damgala ile anlamlıdır", file=sys.stderr)
+        return 2
+    if a.damgala:
+        if yerel_kok is None:
+            print("[KULLANIM] --damgala, --karsilastir <app>/webapp ister (damga = karşılaştırılan dosyalar)",
+                  file=sys.stderr)
+            return 2
+        if a.zip:
+            print("[KULLANIM] --damgala TAZE indirme ister; --zip anlık görüntüsüyle damga YAZILMAZ "
+                  "(canlının bugünkü hâli ölçülmemiş olur)", file=sys.stderr)
+            return 2
+        if a.offline and (a.eslik or out is not None or dist_kok is not None or a.zip_kaydet):
+            print("[KULLANIM] --offline indirme yapmaz; --eslik/--out/--dist-karsilastir/--zip-kaydet ile birlikte "
+                  "kullanılamaz", file=sys.stderr)
+            return 2
+        # Proje kökü DIŞINDAKİ webapp (kanonik `.wt` worktree'si) da damgalanır — kapı onu kapsıyor
+        # (`uygulama_coz` mutlak yolda kök segmentini arar); anahtar `tazelik_anahtari`'nin mutlak dalı,
+        # store PROJE kökününki. Aksi hâlde kapı bloklar ama damga yolu olmaz = kalıcı kilit (bug gate).
+        try:
+            pbe = ui_eklenti_modulu()
+            cozum = pbe.uygulama_coz(yerel_kok / "_", REPO) if yerel_kok.name.lower() == pbe.WEBAPP else None
+        except Exception as e:   # noqa: BLE001 — eklenti yüklenemezse damga YOK (sahte-taze yok)
+            print(f"[OLCULEMEDI] PULL-BEFORE-EDIT UI eklentisi yüklenemedi ({type(e).__name__}: {e}) — "
+                  "damga YAZILMADI", file=sys.stderr)
+            return 2
+        if cozum is None:
+            print(f"[KULLANIM] --damgala yalnız PULL-BEFORE-EDIT kapısının kapsadığı bir `<kök-segment>/…/<app>/webapp` "
+                  f"dizini için (ref_docs/docs/.tmp/node_modules … altı değil): {yerel_kok}", file=sys.stderr)
+            return 2
+        app = cozum[0]
+        app_bsp = bsp_name(app)
+        if a.app_dir and Path(a.app_dir).resolve() != app.resolve():
+            print(f"[KULLANIM] --app-dir ({a.app_dir}) ile --karsilastir ({yerel_kok}) FARKLI uygulama — "
+                  "bir BSP'nin canlısıyla başka app damgalanamaz", file=sys.stderr)
+            return 2
+        if a.bsp and app_bsp and a.bsp.upper() != app_bsp.upper():
+            print(f"[KULLANIM] --bsp {a.bsp} ama {app}/ui5-deploy.yaml BSP'si {app_bsp} — damga YAZILMAZ",
+                  file=sys.stderr)
+            return 2
+        damga_onekler, damga_anlasilmayan = pbe.deploy_haric_desenleri(app)
+
     # Kapsam beyanı: koşmayan ama İSTENEN adım "İSTENMEDİ" yazılmaz (bug-gate 2026-09-26, bulgu 5).
     bekliyor = istek_durumu(True, "henüz koşmadı")
     durum = {
@@ -570,19 +742,45 @@ def main(argv: list[str] | None = None) -> int:
         "kars": istek_durumu(yerel_kok is not None, "henüz koşmadı"),
         "dist": istek_durumu(dist_kok is not None, "henüz koşmadı"),
         "out": istek_durumu(out is not None, "henüz koşmadı"),
+        "damga": istek_durumu(a.damgala, "henüz koşmadı"),
     }
+    exclude_notu = (f" · deploy exclude önekleri {damga_onekler or '[]'}"
+                    + (f" · ANLAŞILMAYAN (muafiyet YOK): {damga_anlasilmayan}" if damga_anlasilmayan else ""))
 
     def beyan(zip_k: str, sebep: str | None = None) -> str:
         if sebep is not None:   # erken çıkış: istenip henüz koşmamış her adım bu sebeple işaretlenir
             for k in durum:
                 if durum[k] == bekliyor:
                     durum[k] = istek_durumu(True, sebep)
-        return kapsam_beyani(zip_k, durum["eslik"], durum["kars"], durum["dist"], durum["out"])
+        return kapsam_beyani(zip_k, durum["eslik"], durum["kars"], durum["dist"], durum["out"],
+                             durum["damga"] + (exclude_notu if a.damgala else ""))
 
     def olculemedi(zip_k: str, mesaj: str) -> int:
         print(f"[OLCULEMEDI] {mesaj}", file=sys.stderr)
         print(beyan(zip_k, f"ÖLÇÜLEMEDİ: {mesaj}"))
         return 2
+
+    if a.offline:   # yalnız --damgala ile (yukarıda denetlendi): İNDİRME YOK
+        try:
+            yerel_dosyalar = dizin_oku(yerel_kok)
+        except OSError as e:
+            return olculemedi("— (--offline: indirme YOK)", f"--karsilastir dizini okunamadı ({type(e).__name__}: {e})")
+        pbe = ui_eklenti_modulu()
+        rels = [r for r in sorted(yerel_dosyalar) if not pbe.deploy_haric_mi(r, damga_onekler)]
+        yazilan, hata = damgala(yerel_kok, rels, a.session)
+        durum["kars"] = istek_durumu(True, "--offline: canlı İNDİRİLMEDİ, karşılaştırma YOK")
+        if hata:
+            durum["damga"] = f"BAŞARISIZ — {hata} (yazılan {len(yazilan)})"
+            print(f"[OLCULEMEDI] PBE damgası: {hata}", file=sys.stderr)
+            print("\n" + beyan("— (--offline: indirme YOK)"))
+            return 2
+        durum["damga"] = f"OFFLINE — {len(yazilan)} dosya, canlıyla KARŞILAŞTIRILMADAN · {damga_yeri()}"
+        print(f"[OFFLINE] {yerel_kok}: fetch YAPILMADI, {len(yazilan)} dosya seans-taze damgalandı "
+              f"({damga_yeri()}). "
+              "DİKKAT: canlıdaki belgelenmemiş değişikliği (başka makinenin deploy'u) ezme riskini kabul ettin "
+              "(sap_sync_pull --offline ile aynı anlam).")
+        print("\n" + beyan("— (--offline: indirme YOK)"))
+        return 0
 
     zip_kaynagi = "— (indirme BAŞARISIZ)"
     try:
@@ -686,6 +884,8 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as e:   # re-gate P-1
             return olculemedi(zip_kaynagi, f"--karsilastir dizini okunamadı ({type(e).__name__}: {e})")
         satirlar = karsilastir(kaynak, yerel_dosyalar)
+        if a.damgala:
+            satirlar = deploy_disi_etiketle(satirlar, damga_onekler)
         print(f"\n=== KARŞILAŞTIR: canlı (geri kurulan) ↔ yerel {yerel_kok} ===")
         sayim: dict[str, int] = {}
         for rel, sinif, detay, fark in satirlar:
@@ -698,7 +898,8 @@ def main(argv: list[str] | None = None) -> int:
             if len(fark) > a.diff_satir:
                 print(f"      … diff kısaltıldı: {len(fark) - a.diff_satir} satır daha (--diff-satir)")
         print("  ÖZET: " + " · ".join(f"{k}={sayim.get(k, 0)}"
-                                      for k in (AYNI, BUILD, GERCEK, YALNIZ_CANLI, YALNIZ_YEREL))
+                                      for k in (AYNI, BUILD, GERCEK, YALNIZ_CANLI, YALNIZ_YEREL)
+                                      + ((DEPLOY_DISI,) if a.damgala else ()))
               + f" (toplam {len(satirlar)})")
         if any(sayim.get(k) for k in (GERCEK, YALNIZ_CANLI, YALNIZ_YEREL)):
             rc = 1
@@ -724,6 +925,27 @@ def main(argv: list[str] | None = None) -> int:
                   "`excludes` mu? Kullanıcıya göster (standards/03 §2.4).")
             rc = 1
         durum["dist"] = f"canlı ham ↔ {dist_kok} (ad + içerik)"
+
+    if a.damgala:
+        engel = damga_engeli(satirlar, zip_taze=not a.zip, sapma=sapma, rc=rc)
+        if engel:
+            durum["damga"] = f"YAPILMADI — {engel}"
+            print(f"\n=== PBE DAMGASI: YAPILMADI — {engel} ===\n"
+                  "  → kapı bu webapp'in dosyalarını bloklamaya devam eder. Fark varsa: canlıyı anlık görüntüle "
+                  "(`--zip-kaydet`), `--zip <snap> --out <scratch>/webapp` ile geri kur, otoriteyi KULLANICI seçer, "
+                  "seçerek kopyala, sonra bu komutu yeniden koş (playbook howto-ui-kaynagi-geri-kurma §2.1).")
+            rc = max(rc, 1)
+        else:
+            rels = [r for r, s, _, _ in satirlar if s in (AYNI, BUILD)]
+            yazilan, hata = damgala(yerel_kok, rels, a.session)
+            if hata:
+                durum["damga"] = f"BAŞARISIZ — {hata} (yazılan {len(yazilan)})"
+                print(f"\n[OLCULEMEDI] PBE damgası: {hata}", file=sys.stderr)
+                rc = 2
+            else:
+                durum["damga"] = f"YAZILDI — {len(yazilan)} dosya (canlıyla eşit ölçülenler) · {damga_yeri()}"
+                print(f"\n=== PBE DAMGASI: {len(yazilan)} dosya seans-taze damgalandı ({yerel_kok}) ===\n"
+                      f"  {damga_yeri()}")
 
     print("\n" + beyan(zip_kaynagi))
     return rc

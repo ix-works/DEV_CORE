@@ -238,6 +238,9 @@ OZEL_TESTLER = [
     ("pbe_kapsam",
      "pull_before_edit + sap_sync_pull: damga ADA degil DOSYAYA (ana sinif .ccimp'i, CDS ayni "
      "adli BDEF'i taze saymaz) + alt-include/include/FM/yapi/Z tablo kapsamda + auto 0/>1 aday DUR"),
+    ("pbe_ui",
+     "Q352-B: PULL-BEFORE-EDIT UI eklentisi (webapp/**, deploy exclude muafiyeti, fail-closed desen) + "
+     "fetch_ui_source --damgala/--offline (damga yalniz taze+temiz; GERCEK kapi alt sureci + GERCEK store)"),
     ("cds_curr_eksik_annotation",
      "DERINLIK: EKSIK @Semantics hic aranmiyordu (rc=0 bilgi tasimiyordu) + yesilin PAYDASI + WARNING siddeti"
      " + Q234/Q237: cok-satirli ifade ve `union` 2.+ dali YANLIS POZITIF uretiyordu"),
@@ -1066,6 +1069,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "alt-include abapGit son-ekleri + `AUTO_AILE_ADT_TIPLERI` (auto aile süzgeci)"),
     ("scripts/validators/check_source_drift.py", ("O:pbe_kapsam",),
      "uzantı→canlı tip tamlığı (`SOURCE_EXTENSIONS` ⊆ `_EXT_TO_TYPES`) + tablo DDL ucu (L3)"),
+    ("scripts/hooks/_pbe_ui.py", ("O:pbe_ui",), "PBE UI eklentisi: sinifla + deploy exclude"),
+    ("scripts/fetch_ui_source.py", ("O:pbe_ui",), "--damgala/--offline: damga_engeli, DEPLOY-DISI"),
+    ("scripts/hooks/pull_before_edit.py", ("O:pbe_ui",), "eklenti kaydı → gerçek alt süreç (C)"),
+    ("scripts/source_drift.py", ("O:pbe_ui",), "tazelik_damgala/seans_kimligi gerçek store (C)"),
+    ("scripts/deploy_ui.py", ("O:pbe_ui",), "bsp_name — pbe_ui BSP çözümü"),
     ("scripts/push_object.py",
      ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
       "O:push_onkontrol_olculemedi"),

@@ -107,6 +107,48 @@ python core/scripts/fetch_ui_source.py --app-dir <ui>/<app> --dist-karsilastir <
 ```
 Beklenen: `YALNIZ-CANLI=0 · değişecek=0 · yalnız-dist=0` ve `GERCEK-FARK=0`.
 
+## 2.1 PULL-BEFORE-EDIT kapısı — `webapp/` düzenlemesi bloklandıysa (Q352-B, ADR 0016)
+
+`<source_root>/…/<app>/webapp/**` altındaki bir dosyayı düzenlemek, o seansta canlıyla eşitliği
+ölçülüp **damgalanmadıysa** bloklanır (`scripts/hooks/_pbe_ui.py`; kapı `pull_before_edit`). Proje kökü
+**dışındaki** webapp (kanonik `.wt` worktree'si) ve proje ağacındaki bir junction/symlink'in **arkasındaki**
+webapp de kapsamdadır (kapsam kararı bağı izlemeyen, `..`'sı sadeleşmiş yolda) — ABAP kapısıyla simetrik; damga mutlak
+yol anahtarıyla yazılır. ⚠ Store ve anahtar kökü `CLAUDE_PROJECT_DIR`'den, boşsa **çalışma dizininden**
+çözülür (ABAP kapısıyla ortak sınır; ertelendi T-PBE-KOK-CWD) ⇒ damga kapının baktığı store'a YALNIZ komut
+**proje kökünden (ya da `CLAUDE_PROJECT_DIR=<proje>` ile)** koşulduğunda gider. Araç yazdığı store'u ve kökü
+basar (`store=… · anahtar kökü=…`; env boş VE çalışma dizini proje kökü değilse — `project.yaml` yok —
+`⚠ CLAUDE_PROJECT_DIR BOŞ` uyarısı) — "damgalandı" dediği hâlde
+kapı yine bloklıyorsa önce o satıra bak. Blok mesajı şu komutu verir — sonuna kapı **o seansın**
+`--session <id>`'sini ekler; komutu kopyalayıp proje kökünden **olduğu gibi** koş:
+```bash
+python core/scripts/fetch_ui_source.py --app-dir "<ui>/<app>" --karsilastir "<ui>/<app>/webapp" --damgala --session <id>
+```
+Elle (blok mesajı olmadan) koşarken `--session` verilmezse araç SessionStart marker'ına
+(`.claude/.current_session`) düşer; marker yoksa **damga yazılmaz** (rc 2, `--session` istenir) —
+marker başka bir oturumun kimliğini taşıyorsa damga o oturuma gider ve kapı seni yine bloklar, bu yüzden
+blok mesajındaki `--session`'lı komut tercih edilir.
+| Sonuç | Anlamı | Ne yapılır |
+|---|---|---|
+| rc 0 · `PBE damgası: YAZILDI — N dosya` | canlı = yerel (yalnız `AYNI` / `BUILD-DONUSUMU` / `DEPLOY-DISI`) | düzenle; damga **seans boyunca** geçerli (kendi deploy'undan sonra da) |
+| rc 1 · `YAPILMADI — … eşit değil` | canlıda yerelde olmayan iş var (`GERCEK-FARK` / `YALNIZ-CANLI`) ya da deploy edilmemiş yerel dosya | ③/④: diff'i kullanıcıya göster, **otoriteyi kullanıcı seçer**; canlı seçilirse `--zip-kaydet` → `--zip … --out <scratch>/webapp` → seçerek kopyala → komutu yeniden koş |
+| rc 2 | ÖLÇÜLEMEDİ / kullanım (`--zip` ile damga yok · başka app'in `--app-dir`'i · BSP uyuşmazlığı · kapı kapsamı dışında dizin · seans çözülemedi) | nedeni gider; **damga yazılmadı** |
+
+- **Kapsam dışı:** YALNIZ app'in `ui5-deploy.yaml`'ındaki `deploy-to-abap` görevinin `configuration.exclude`
+  önekleri (ör. `/test/`) — canlıya hiç gitmez; `--damgala` kipinde bu yollardaki **yalnız-yerel** dosyalar
+  `DEPLOY-DISI` etiketlenir ve rc'ye sayılmaz (canlıda olup yerelde olmayan dosya `YALNIZ-CANLI` kalır).
+  Builder `resources.excludes`, başka görevlerin ve görev-düzeyi `exclude` **muafiyet değildir** (ölçüldü:
+  `localService/` canlıda VAR). Eşleşme **HARF DUYARLI**dır (deploy aracı her girdiyi `RegExp(regex, "g")`
+  ile, `i` bayrağı olmadan kıyaslar — `@sap/ux-ui5-tooling` 1.25.0 kodundan ölçüldü): diskteki `Test/…`
+  `/test/` ile muaf DEĞİLDİR. Kapı kararı **çözülmüş** yolda verir (`..` çözülür, Windows'ta diskteki harf
+  biçimi) — yolun nasıl yazıldığı (`test/x.js` / `test/../view/a.xml`) muafiyeti belirlemez (harf ayağı
+  yalnız harf duyarsız FS'te — Windows NTFS varsayılanı — doğar; Linux'ta `Test/` ile `test/` ayrı dizindir). `/test/**`,
+  regex ve satır-içi liste gibi anlaşılmayan biçimler muafiyet VERMEZ (kapsam beyanında listelenir).
+- **`--offline` kaçışı** (`sap_sync_pull --offline` ile aynı anlam): SAP erişilemiyorsa ya da yerel canlıdan
+  **ileride**yse (commit'li ama henüz deploy edilmemiş iş) aynı komuta `--offline` ekle — indirmeden
+  damgalar, `[OFFLINE]` uyarısı basar; canlıdaki belgelenmemiş değişikliği ezme riskini bilerek kabul edersin.
+- `ui5-deploy.yaml` yoksa blok komutu `--bsp <BSP_ADI>` yer tutucusunu taşır; hiç deploy edilmemiş app → `--offline`.
+- Git'te commit'lenmemiş (dirty) dosya ve henüz var olmayan dosya kapıdan muaftır (çekirdek kapı kuralı).
+
 ## 3. Kapsam sınırı (araç her koşumda KAPSAM BEYANI basar — oku)
 
 - Ölçülen: `s4_private`, freestyle UI5 1.120, OData V2, JavaScript kaynak, @ui5/cli 4.x.
@@ -114,6 +156,10 @@ Beklenen: `YALNIZ-CANLI=0 · değişecek=0 · yalnız-dist=0` ve `GERCEK-FARK=0`
   namespace'li BSP adı (`/X/…`) · `s4_public`/`btp_abap` · deploy'un canlıdan dosya SİLME
   davranışı · ADT filestore yolu (`/sap/bc/adt/filestore/ui5-bsp/…`; bir makinede zaman aşımı).
 - Canlı = indirilen zip anı; ICF servis katmanı ölçülmez.
+- PBE kapısı: deploy `exclude` girdisi yalnız webapp köküne göre, harf duyarlı **önek** yorumlanır.
+  Deploy aracı girdiyi çapasız regex olarak `/resources/<proje-adı>/<rel>` üzerinde arar ⇒ iç içe yolları
+  (`view/test/…`) da dışlar; kapının yorumu bunun **alt kümesidir** (daha dar muafiyet = daha çok kapı,
+  güvenli yön; karar çözülmüş yolda verildiği için sahte-muaf yok).
 
 ## İlgili
 - `scripts/fetch_ui_source.py` (docstring: kipler, çıkış kodları) · `scripts/deploy_ui.py` · `scripts/verify_ui_static_assets.py`
