@@ -168,6 +168,10 @@ MUTASYONLAR = {
     # B — döngü koruması kalkar (ata gösteren bağa inilir → sonsuz özyineleme / ELOOP / yol sınırı)
     "--mutasyon-dongu-korumasi-yok": (FUS, "                if gercek not in atalar:   # bağ kendi atasını",
                                       "                if True:   # bağ kendi atasını"),
+    # B — ata kümesi BİRİKMEZ (yalnız kök ata sayılır): kök olmayan atayı gösteren bağda (sub/loop → sub)
+    # yol sınırına kadar inilir → OSError (B19c)
+    "--mutasyon-ata-birikimi-yok": (FUS, "gez(e.path, rel + \"/\", atalar | {gercek})",
+                                   "gez(e.path, rel + \"/\", atalar)"),
 }
 
 
@@ -787,8 +791,9 @@ GECICI.append(DONGU)
 _dongu_dosyalar = {"Component.js": CTRL, "view/List.view.xml": VIEW}
 _d1 = dizin_yaz(_dongu_dosyalar, DONGU / "a1" / "webapp")
 _d2 = dizin_yaz(_dongu_dosyalar, DONGU / "a2" / "webapp")
+_d3 = dizin_yaz(dict(_dongu_dosyalar, **{"sub/a.js": CTRL}), DONGU / "a3" / "webapp")
 (DONGU / "a2" / "ui5.yaml").write_bytes(b"specVersion: \"4.0\"\n")
-_dongu_bag = [(_d1 / "dongu", _d1), (_d2 / "yukari", DONGU / "a2")]
+_dongu_bag = [(_d1 / "dongu", _d1), (_d2 / "yukari", DONGU / "a2"), (_d3 / "sub" / "loop", _d3 / "sub")]
 _dongu_hata = None
 for _b, _t in _dongu_bag:
     _dongu_hata = _dongu_hata or bag_kur(_b, _t)
@@ -801,6 +806,11 @@ if _dongu_hata is None:
             _l1 is not None and _l2 is not None and set(_l1) == set(_dongu_dosyalar)
             and set(_l2) == set(_dongu_dosyalar) | {"yukari/ui5.yaml"},
             f"hata1={_h1} hata2={_h2} l1={sorted(_l1) if _l1 else _l1} l2={sorted(_l2) if _l2 else _l2}")
+    _l3, _h3 = dizin_oku_guvenli(_d3)
+    kontrol("B19c DÖNGÜ (kök OLMAYAN ata): `webapp/sub/loop → webapp/sub` → SONLANIR, `sub/a.js` BİR kez "
+            "(ata kümesi derinlikte birikir; yalnız kök sayılsa yol sınırına kadar inilirdi)",
+            _l3 is not None and set(_l3) == set(_dongu_dosyalar) | {"sub/a.js"},
+            f"hata3={_h3} l3={sorted(_l3) if _l3 else _l3}")
 else:
     atla("B19 dizin_oku döngü koruması", f"bağ kurulamadı ({_dongu_hata})")
 

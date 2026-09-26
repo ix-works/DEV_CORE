@@ -503,7 +503,8 @@ def dizin_oku(kok: Path) -> dict[str, bytes]:
                 gercek = os.path.normcase(os.path.realpath(e.path))
                 if gercek not in atalar:   # bağ kendi atasını gösteriyorsa (döngü) inilmez
                     gez(e.path, rel + "/", atalar | {gercek})
-            elif e.is_file():   # dosya symlink'i izlenir; kırık bağ atlanır (eski `is_file()` ile aynı)
+            elif e.is_file():   # dosya symlink'i izlenir; kırık POSIX symlink atlanır · kırık Windows junction
+                                # (`is_dir()` önbellekten True) üstteki scandir'de OSError verir — eskisiyle aynı
                 with open(e.path, "rb") as f:
                     sonuc[rel] = f.read()
 
