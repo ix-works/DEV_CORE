@@ -12,6 +12,10 @@ KULLANIM
     python core/scripts/pull_msag_textpool.py msag     --name ZSD001     --file <messages-*.csv>
     python core/scripts/pull_msag_textpool.py textpool --program ZSD001_P_X --file <…/textpool/*.txt>
       ortak: [--session <sid>] [--cwd <proje-kökü>] [--dry-run] [--force] [--offline]
+    `--session`: kapının blok mesajındaki komut bunu HOOK'un session_id'siyle zaten taşır
+    (kapı ekler) — komutu olduğu gibi kopyala. Elle koşarken verilmezse
+    `.claude/.current_session` marker'ına düşülür; aynı projede iki oturum açıksa marker
+    ÖTEKİ oturumu gösterebilir → damga yanlış seansa gider, kapı bloklamaya devam eder.
 
 BİRLEŞTİRME KURALI (lider/kullanıcı kararı 2026-09-26 — iki tür için AYNI):
   · canlıda olup yerelde olmayan girdi → dosyanın SONUNA eklenir (başka makinede eklenen gelsin)
@@ -649,7 +653,9 @@ def main(argv=None, client=None) -> int:
                        help="mesaj sınıfı adı" if ad == "msag" else "program adı")
         p.add_argument("--file", required=True, help="yerel dosya (kapının verdiği yol)")
         p.add_argument("--session", default="",
-                       help="seans kimliği; boşsa .claude/.current_session marker'ı")
+                       help="seans kimliği (kapının verdiği komut hook session_id'sini "
+                            "taşır); boşsa .claude/.current_session marker'ı — iki oturum "
+                            "açıksa yanlış seans olabilir")
         p.add_argument("--cwd", default="", help=".conn_adt'nin bulunduğu proje kökü")
         p.add_argument("--dry-run", action="store_true",
                        help="karşılaştır + raporla; YAZMA ve DAMGA yok")

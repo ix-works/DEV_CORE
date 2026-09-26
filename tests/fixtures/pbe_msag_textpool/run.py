@@ -253,6 +253,16 @@ CSV_ESIT = ('msgno,msgtext,selfexplainatory\n001,"Belge &1 bulunamadı",false\n'
             '002,"Miktar sıfır olamaz",false\n003,"Alan ""&1"" zorunlu",true\n')
 
 
+def _saf(r) -> bool:
+    """Komut/not sözleşmesi (Q352): `komut` YALNIZ çalıştırılabilir komut — kapı sonuna
+    `--session` ekler ⇒ eklenti `--session` basmaz, açıklama/kaçış komutun arkasına yazılmaz;
+    kaçış (`--offline`/`--dry-run`) `not` alanında."""
+    k, n = r.get("komut", ""), r.get("not", "")
+    return ("--session" not in k and "\n" not in k and "--offline" not in k
+            and "--dry-run" not in k and k.rstrip().endswith('"')
+            and isinstance(n, str) and "--offline" in n and "--dry-run" in n)
+
+
 def senaryolar(M, H):
     s = {}
     msag_yol = f"SOURCE_CODES/SD/{PAKET}/messages-zsd001.csv"
@@ -263,14 +273,17 @@ def senaryolar(M, H):
     f = dosya(k, msag_yol, b"x")
     r = H.sinifla(f, k)
     s["H1 msag son-ek"] = bool(r and r["nesne"] == "ZSD001" and r["tip"] == "msag"
-                                and "--name ZSD001" in r["komut"])
+                                and "--name ZSD001" in r["komut"] and _saf(r)
+                                and "<MSAG_ADI>" not in r["not"])
     r = H.sinifla(dosya(k, f"SOURCE_CODES/SD/{PAKET}/messages-all.csv", b"x"), k)
-    s["H2 messages-all yer tutucu"] = bool(r and r["nesne"] == H.MSAG_YER_TUTUCU)
+    s["H2 messages-all yer tutucu"] = bool(r and r["nesne"] == H.MSAG_YER_TUTUCU and _saf(r)
+                                           and "<MSAG_ADI>" in r["not"])
     s["H3 ref_docs muaf"] = H.sinifla(
         dosya(k, f"SOURCE_CODES/SD/{PAKET}/ref_docs/messages.csv", b"x"), k) is None
     r = H.sinifla(dosya(k, f"{tp_dizin}/{PROG}.selections.txt", b"x"), k)
     s["H4 adlı textpool"] = bool(r and r["nesne"] == PROG and r["tip"] == "textpool"
-                                 and f"--program {PROG}" in r["komut"])
+                                 and f"--program {PROG}" in r["komut"] and _saf(r)
+                                 and "<PROGRAM_ADI>" not in r["not"])
     dosya(k, f"SOURCE_CODES/SD/{PAKET}/programs/{PROG}.prog.abap", b"x")
     r = H.sinifla(dosya(k, f"{tp_dizin}/symbols.txt", b"x"), k)
     s["H5 çıplak ad + tek program"] = bool(r and r["nesne"] == PROG)
@@ -279,7 +292,8 @@ def senaryolar(M, H):
     r = H.sinifla(dosya(k, f"SOURCE_CODES/SD/{BASKA_PAKET}/programs/textpool/selections.txt",
                         b"x"), k)
     s["H6 çıplak ad + iki program → yer tutucu"] = bool(
-        r and r["nesne"] == H.PROG_YER_TUTUCU and "--program" in r["komut"])
+        r and r["nesne"] == H.PROG_YER_TUTUCU and "--program <PROGRAM_ADI>" in r["komut"]
+        and _saf(r) and "<PROGRAM_ADI> yerine" in r["not"])
     s["H7 kapsam dışı biçimler None"] = all(H.sinifla(dosya(k, g, b"x"), k) is None for g in (
         f"{tp_dizin}/{PROG}.textpool.txt", f"{tp_dizin}/{PROG}.README.md",
         f"SOURCE_CODES/SD/{PAKET}/programs/symbols.txt"))
@@ -442,6 +456,14 @@ def senaryolar(M, H):
     return s
 
 
+def _kapi_sozlesmesi(stderr: str, p) -> bool:
+    """Blok mesajı: komut satırı `--file "<p>" --session SID-E2E` ile biter (tek `--session`,
+    kopyalanabilir) + `not` kaçışı (`--offline`, `--dry-run`) mesajda."""
+    return (f'--file "{p}" --session SID-E2E' in stderr and stderr.count("--session") == 1
+            and "SAP erişilemiyorsa" in stderr and "--offline" in stderr
+            and "--dry-run" in stderr)
+
+
 def e2e(M) -> str:
     """A kolunun kapısı ağaçtaysa uçtan uca: blok → pull damgası → serbest."""
     kapi = KAPI_PATH.read_text(encoding="utf-8") if KAPI_PATH.exists() else ""
@@ -470,8 +492,10 @@ def e2e(M) -> str:
         rc = M.main(["msag", "--name", SINIF, "--file", str(p), "--session", "SID-E2E"],
                     client=Sahte(msag=msag_xml(CANLI)))
     r2 = kapi_kos()
+    # Sözleşme (Q352): kapı eklentinin SAF komutunun sonuna HOOK'un session_id'sini ekler
+    # (tek `--session`) ve `not` metnini (kaçış) blok mesajına basar.
     ok = r1.returncode == 2 and "pull_msag_textpool.py msag" in r1.stderr and rc == 0 \
-        and r2.returncode == 0
+        and r2.returncode == 0 and _kapi_sozlesmesi(r1.stderr, p)
     if not ok:
         return (f"FAIL msag (blok rc={r1.returncode} pull rc={rc} sonra rc={r2.returncode}: "
                 f"{r1.stderr[-300:]!r})")
@@ -489,8 +513,8 @@ def e2e(M) -> str:
                       "--session", "SID-E2E"],
                      client=Sahte(tp={"selections": "P_FILE  =Dosya"}, prog_paket=BASKA_PAKET))
     t2 = kapi_kos()
-    ok = t1.returncode == 2 and "<PROGRAM_ADI>" in t1.stderr and "--offline" in t1.stderr \
-        and rct == 0 and t2.returncode == 0
+    ok = t1.returncode == 2 and "<PROGRAM_ADI> yerine" in t1.stderr \
+        and _kapi_sozlesmesi(t1.stderr, t) and rct == 0 and t2.returncode == 0
     return ("PASS (msag + textpool yer tutucu)" if ok else
             f"FAIL textpool (blok rc={t1.returncode} pull rc={rct} sonra rc={t2.returncode}: "
             f"{t1.stderr[-300:]!r})")
@@ -521,6 +545,14 @@ MUTASYONLAR = [
      "    return not (_MUAF_KLASORLER & parts)", "    return True"),
     ("MU10 çıplak ad çok programda ilkini seçer", HOOK_PATH,
      "    if len(adaylar) != 1:", "    if not adaylar:"),
+    ("MU13 kaçış metni komutun arkasına döner (msag)", HOOK_PATH,
+     """                "komut": f'{_PULL} msag --name {nesne} --file "{p}"',""",
+     """                "komut": f'{_PULL} msag --name {nesne} --file "{p}"' + _KACIS,"""),
+    ("MU14 eklenti --session basar (textpool)", HOOK_PATH,
+     """            "komut": f'{_PULL} textpool --program {prog} --file "{p}"',""",
+     """            "komut": f'{_PULL} textpool --program {prog} --file "{p}" --session S',"""),
+    ("MU15 yer tutucu nedeni nottan düşer (textpool)", HOOK_PATH,
+     '"<PROGRAM_ADI> yerine programı yaz; pull o DOSYAYI damgalar. ")', '"")'),
     ("MU12 kimlik (ortak anahtar) denetimi sökülür", PULL_PATH,
      "    if yerel and not (set(yerel) & set(canli)):", "    if False:"),
     ("MU11 msag öz-denetimi etkisiz + sıra bozuk", PULL_PATH,

@@ -7,7 +7,14 @@ Kapı (`hooks/pull_before_edit.py`) çekirdek sınıflandırmanın TANIMADIĞI b
 
     sinifla(path: Path, root: Path) -> Optional[dict]
         None → bu dosya benim değil
-        dict → {"nesne": <MSAG / PROGRAM adı>, "tip": "msag"|"textpool", "komut": <pull komutu>}
+        dict → {"nesne": <MSAG / PROGRAM adı>, "tip": "msag"|"textpool",
+                "komut": <YALNIZ çalıştırılabilir pull komutu>, "not": <açıklama + kaçışlar>}
+
+SÖZLEŞME (Q352, 2026-09-26): `komut` SAF komuttur — kapı onun SONUNA `--session <hook
+session_id>` ekler (iki oturum aynı projede açıkken marker YANLIŞ seansı gösterir → damga
+öteki seansa gider → kapı bloklamaya devam eder). Bu yüzden ① `komut` `--session` BASMAZ
+(çift olmasın) ② açıklama / kaçış / yer tutucu nedeni `komut`un ARKASINA yazılmaz (kapının
+eklediği `--session` metnin ortasına düşer, komut kopyalanamaz) → hepsi `not` alanında.
 
 Tazelik kontrolünü KAPI yapar (damga anahtarı = dosya yolu, `source_drift.tazelik_anahtari`);
 damgayı `scripts/pull_msag_textpool.py` yazar. Bu modül SAP'ye gitmez, yalnız yola bakar.
@@ -52,9 +59,10 @@ _SAP_AD_RE = re.compile(r"^[ZY][A-Z0-9_/]*$")
 MSAG_YER_TUTUCU = "<MSAG_ADI>"
 PROG_YER_TUTUCU = "<PROGRAM_ADI>"
 _PULL = "python core/scripts/pull_msag_textpool.py"
-# Kapının blok mesajı eklentide `--offline`ı SÖYLEMEZ → kaçışı komut metni kendisi taşır.
-_KACIS = ("\n   (SAP erişilemiyorsa: aynı komuta --offline ekle — ÇEKMEDEN damgalar, canlıdaki "
-          "değişikliği ezme riskini bilerek kabul edersin. Önce bakmak için: --dry-run)")
+# Kapının blok mesajı eklentide `--offline`ı SÖYLEMEZ → kaçış `not` alanında taşınır
+# (komutun ARKASINDA değil: kapı komutun sonuna `--session` ekler).
+_KACIS = ("SAP erişilemiyorsa: aynı komuta --offline ekle — ÇEKMEDEN damgalar, canlıdaki "
+          "değişikliği ezme riskini bilerek kabul edersin. Önce bakmak için: --dry-run.")
 
 
 def _kok_segmentleri() -> set:
@@ -105,10 +113,11 @@ def sinifla(path, root=None) -> Optional[dict]:
     if m:
         ek = (m.group("ek") or "").upper()
         nesne = ek if (ek and ek != "ALL" and _SAP_AD_RE.match(ek)) else MSAG_YER_TUTUCU
-        not_ = "" if nesne != MSAG_YER_TUTUCU else (
-            "   (mesaj sınıfı adı dosya adından çıkmıyor — <MSAG_ADI> yerine sınıf adını yaz)")
+        neden = "" if nesne != MSAG_YER_TUTUCU else (
+            "Mesaj sınıfı adı dosya adından çıkmıyor — <MSAG_ADI> yerine sınıf adını yaz. ")
         return {"nesne": nesne, "tip": "msag",
-                "komut": f'{_PULL} msag --name {nesne} --file "{p}"' + not_ + _KACIS}
+                "komut": f'{_PULL} msag --name {nesne} --file "{p}"',
+                "not": neden + _KACIS}
 
     if p.parent.name.lower() != "textpool":
         return None
@@ -118,8 +127,9 @@ def sinifla(path, root=None) -> Optional[dict]:
             return None
     else:
         prog = _tek_program(p.parent.parent) or PROG_YER_TUTUCU
-    not_ = "" if prog != PROG_YER_TUTUCU else (
-        "   (program adı dosyadan çıkmıyor ve üst `programs/` dizininde tek program yok — "
-        "<PROGRAM_ADI> yerine programı yaz; pull o DOSYAYI damgalar)")
+    neden = "" if prog != PROG_YER_TUTUCU else (
+        "Program adı dosyadan çıkmıyor ve üst `programs/` dizininde tek program yok — "
+        "<PROGRAM_ADI> yerine programı yaz; pull o DOSYAYI damgalar. ")
     return {"nesne": prog, "tip": "textpool",
-            "komut": f'{_PULL} textpool --program {prog} --file "{p}"' + not_ + _KACIS}
+            "komut": f'{_PULL} textpool --program {prog} --file "{p}"',
+            "not": neden + _KACIS}
