@@ -2,6 +2,12 @@
 # -*- coding: utf-8 -*-
 """E-02 — `sap_sync_pull._stamp()` KILITSIZ oku-degistir-yaz: damga SESSIZCE kayboluyordu.
 
+⚠ HEDEF TASINDI (Q352, 2026-09-26): store YAZIM mekanizmasi (`_stamp` + `_store_kilidi` +
+`_store_yaz` + `_now_iso`) `sap_sync_pull`dan `source_drift`e AYNEN tasindi; public yuzey
+`source_drift.tazelik_damgala` / `seans_kimligi` (UI / mesaj sinifi / textpool cekicileri
+de ayni yolu kullanir). Bu korpus artik `source_drift.py`yi olcer; mutasyon capalari
+metin olarak degismedi. `sap_sync_pull` yerel kopya TASIMAZ (N6 capasi).
+
 === KOK ===
 `_stamp` seans-tazelik store'unu (`.claude/.session_fresh.json`) OKUR, kendi objesini
 EKLER, geri YAZAR. Bu dizi kilitsizdi. Iki kosum (paralel ajan · hook + elle pull ·
@@ -32,6 +38,7 @@ fix hicbir dalda sahte-taze uretmez; kilit alinamazsa bile GORUNUR uyari basar
   N3 FP capasi      bozuk store -> sifirdan yazilir (mevcut davranis korunur)
   N4 3.BAGLAM       TUKETICI `pull_before_edit._is_fresh` iki damgayi da TAZE goruyor
   N5 FP capasi      hijyen: `.tmp` ve `.lock` kalintisi YOK
+  N6 TEK KAYNAK     `sap_sync_pull` yerel store yazicisi tasimaz (Q352 tasima capasi)
   M1-M6             fix'i sok -> korpus KIRMIZI olmali
 
 🔴 DOGRULANAMADI (durustluk siniri): "yazim atomiktir" iddiasi satir-ici yarista
@@ -64,7 +71,7 @@ REPO = Path(__file__).resolve().parents[3]
 if not (REPO / "scripts").is_dir():
     raise SystemExit(f"[fixture-hatasi] repo koku yanlis cozuldu: {REPO}")
 SCRIPTS = REPO / "scripts"
-HEDEF = SCRIPTS / "sap_sync_pull.py"
+HEDEF = SCRIPTS / "source_drift.py"   # Q352: store yazimi burada
 SID = "seans-E02"
 
 # ── Q266 (2026-09-09): MUTANT URETIM AGACINDA YASAR — ama ARTIK BIRAKMAZ ─────
@@ -78,12 +85,12 @@ SID = "seans-E02"
 #   kapilar onu GERCEK KOD sanar ② iki es zamanli kosum AYNI adi ezerdi.
 # FIX: ad surece OZEL (pid) + kosum BASINDA bayat artik SUPURULUR (gorunur uyari)
 #   + tum dongu try/finally + `atexit` ile sarili.
-MUTANT_ONEK = "_mutant_sap_sync_pull"
+MUTANT_ONEK = "_mutant_source_drift"
 MUTANT = SCRIPTS / ("%s_%d.py" % (MUTANT_ONEK, os.getpid()))
 
 
 def _mutant_supur(baslangic: bool = False) -> list[str]:
-    """Uretim agacindaki `_mutant_sap_sync_pull*` artiklarini siler -> silinen adlar.
+    """Uretim agacindaki `_mutant_source_drift*` artiklarini siler -> silinen adlar.
 
     ⚠ Baslangicta bulunan artik BASKA bir kosumun sert olumunun kanitidir:
     sessizce silinmez, GORUNUR uyari basar (Q247'nin dersi: sessiz temizlik = sessiz kusur).
@@ -346,6 +353,27 @@ def s3_yuk(kum_modul_yolu: Path) -> None:
 
 
 # =============================================================================
+# N6 — TEK KAYNAK (Q352): store'a yazan cekici yerel KILITSIZ kopya tasimaz
+# =============================================================================
+def n6_tek_kaynak() -> None:
+    """`sap_sync_pull` store'a YALNIZ `source_drift.tazelik_damgala` ile yazar (AST).
+
+    Tasima sonrasi en ucuz geri donus yolu: birinin `sap_sync_pull`a yeniden yerel bir
+    `_stamp`/`write_text` damgasi eklemesi -> bu korpus onu GORMEZDI (HEDEF artik
+    source_drift). Capa: yerel yazici tanimi YOK + `_damgala` public API'yi cagirir.
+    """
+    import ast
+    agac = ast.parse((SCRIPTS / "sap_sync_pull.py").read_text(encoding="utf-8"))
+    yerel = sorted(f.name for f in ast.walk(agac) if isinstance(f, ast.FunctionDef)
+                   and f.name in ("_stamp", "_store_yaz", "_store_kilidi"))
+    cagri = any(isinstance(n, ast.Call) and getattr(n.func, "id", "") == "tazelik_damgala"
+                for f in ast.walk(agac) if isinstance(f, ast.FunctionDef) and f.name == "_damgala"
+                for n in ast.walk(f))
+    kontrol("N6 tek kaynak: sap_sync_pull yerel store yazicisi TASIMAZ + tazelik_damgala'yi cagirir",
+            not yerel and cagri, f"yerel_yazici={yerel} damgala_cagrisi={cagri}")
+
+
+# =============================================================================
 # A1/A2 — atomik yazim (yapisal capa + gurultu olcumu)
 # =============================================================================
 def a1_yapisal(modul_yolu: Path) -> None:
@@ -472,7 +500,8 @@ def korpus(modul_yolu: Path, ad: str) -> list[tuple[str, bool, str]]:
                   (lambda: a1_yapisal(modul_yolu)),
                   (lambda: a2_gurultu(modul_yolu)),
                   (lambda: n_fp(mod, modul_yolu)),
-                  (lambda: n4_tuketici(modul_yolu))):
+                  (lambda: n4_tuketici(modul_yolu)),
+                  n6_tek_kaynak):
         try:
             bolum()
         except BaseException as exc:                          # noqa: BLE001

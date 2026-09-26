@@ -14,23 +14,23 @@ A) `run_pretty_printer.py` + `sap_client.pretty_print()`
    O turda kayip olmadi (bicim zaten ayniydi) ama FARK CIKSAYDI sessizce kaybolurdu.
 
 B) `sap_sync_pull.py --type class`
-   Yalniz `/source/main` (ana `.clas.abap`) cekilir; `.ccimp/.ccau/.ccdef/.ccmac`
-   AYRI ADT uclarindadir ve HIC okunmaz. Ama `_stamp` obje ADINA yazildigi icin
-   pull-before-edit kapisi alt-include'u da TAZE sayar ve cikti
-   "artik duzenleyebilirsin" der ⇒ BAYAT bir `.ccimp.abap` taze sanilip duzenlenir.
-   ⚠ Cekme yolu bu turda BILEREK kurulmadi: `object_types.CLASS_INCLUDE_TYPES`
-   segment adlarinin 4'unden 3'u `'olculdu': False` (bu evde canli dogrulanmamis).
-   (Bu cumle 2026-08-20 durumudur. 2026-09-13'te uc segment de salt-GET ile olculdu
-   ve bayraklar True oldu — Q283. Cekme yolu HALA kurulmadi; B vektorleri etkilenmez.)
-   Dogrulanmamis uctan okuyup repo dosyasinin ustune yazmak, kapatmaya calistigimiz
-   sinifi URETMEK olurdu. Bugun yapilan: boslugu GORUNUR kilmak.
+   (2026-08-20) Yalniz `/source/main` cekiliyordu; `.ccimp/.ccau/.ccdef/.ccmac` AYRI ADT
+   uclarindadir ve HIC okunmuyordu. Damga obje ADINA yazildigi icin kapi alt-include'u
+   da TAZE sayiyordu => BAYAT `.ccimp` taze sanilip duzenlenebiliyordu. O gun cekme yolu
+   BILEREK kurulmadi (segmentler olculmemisti) ve bosluk "CEKILMEDI" uyarisiyla GORUNUR
+   kilindi. Q283 (2026-09-13) segmentleri olctu; Q352 (2026-09-26) yeniden olcup cekme
+   yolunu kurdu: her alt-include KENDI ucundan cekilir ve DOSYA anahtariyla AYRI damgalanir.
+   Iddia AYNI kaldi, vektorler yeni koda gore yeniden yazildi (vektor silinmedi):
+   cekilen -> [OK] + damga · cekilemeyen (404/istisna/KORUMA) -> "CEKILMEDI" + damga YOK
+   + rc=1 · alt-include yoksa SESSIZ.
 
 DEGISMEZ (ikisinde de ayni): cikti, kodun yapabildiginden fazlasini SOYLEMEZ;
 yapamadigini da SESSIZ GECMEZ.
 
   A1-A4  pretty printer: basari/hata metni + docstring + YAZMA-YOK yapisal capasi
-  B1-B4  sync_pull: alt-include varsa UYARIR · yoksa SESSIZ · marker TEK KAYNAK · ASCII
-  M1-M3  fix'i sok -> korpus KIRMIZI olmali
+  B1-B6  sync_pull: cekilen [OK]+damga · cekilemeyen CEKILMEDI+damga yok+rc1 · yoksa
+         SESSIZ · anahtar/marker TEK KAYNAK · istisna ve KORUMA dali · kablolama
+  M1-M4  fix'i sok -> korpus KIRMIZI olmali
 
 Kosum: python tests/fixtures/cikti_iddiasi_durustlugu/run.py     (exit 0 = PASS)
 """
@@ -97,6 +97,7 @@ def _yukle(yol: Path, ad: str, mut=None):
     try:
         mod = types.ModuleType(ad)
         mod.__file__ = str(yol)
+        mod.__kaynak__ = src   # AST vektorleri MUTANT metni okur (diskteki degil)
         exec(compile(src, str(yol), "exec"), mod.__dict__)
     finally:
         sys.stdout, sys.stderr = saved_out, saved_err
@@ -215,61 +216,107 @@ def senaryolar(rpp, sync) -> list[tuple[str, bool, str]]:
          i >= 0 and not izler, "bulunan yazma cagrilari=%s" % izler)
 
     # ================= B) sap_sync_pull alt-include ==========================
-    # Q319: senaryolar() koşum başına 3 kez çağrılır (taban + 2 mutasyon); kumlar
-    # finally'de silinmezse her koşum 3 sync_alt_ + 3 sync_yalin_ bırakıyordu.
-    tmp = Path(tempfile.mkdtemp(prefix="sync_alt_"))
-    try:
-        # B1: alt-include VAR -> uyarir + hepsini adlandirir
-        (tmp / "ZCL_TEST.clas.abap").write_text("CLASS zcl_test.\n", encoding="utf-8")
-        (tmp / "ZCL_TEST.ccimp.abap").write_text("* impl\n", encoding="utf-8")
-        (tmp / "ZCL_TEST.ccau.abap").write_text("* test\n", encoding="utf-8")
-        (tmp / "ZCL_BASKA.ccimp.abap").write_text("* baska sinif\n", encoding="utf-8")  # FP capasi
-        tut = io.StringIO()
-        saved = sys.stdout
+    # `_sinif_includelari` GERCEK kodla kosar; yalniz AG (sap_adt_lib.sync_repo_from_live)
+    # ve STORE yazimi (_stamp -> kaydedici) sahtedir. Repo taramasi GERCEK
+    # `find_repo_class_includes` (kok = kum) -> komsu sinif eslemesi de olculur.
+    import source_drift as _sd
+
+    def _kos(obj, kum, davranis):
+        """davranis: dosya-adi -> 'yaz' | '404' | 'istisna' | 'dirty'. -> (rc, cikti, damgalar)."""
+        damgalar = []
+        sahte = types.ModuleType("sap_adt_lib")
+
+        def _sync(object_url, object_name, object_type, client=None, force=False, repo_file=None):
+            d = davranis.get(Path(repo_file).name, "404")
+            if d == "yaz":
+                return {"written": True, "repo_path": str(repo_file), "url": object_url}
+            if d == "istisna":
+                raise ConnectionError("ag yok")
+            if d == "dirty":
+                return {"written": False, "blocked_dirty": True, "repo_path": str(repo_file),
+                        "reason": "commit'siz yerel degisiklik"}
+            return {"written": False, "repo_path": str(repo_file), "reason": "404 obje yok"}
+
+        sahte.sync_repo_from_live = _sync
+        eski_mod = sys.modules.get("sap_adt_lib")
+        eski_bul = _sd.find_repo_class_includes
+        eski_stamp = _sd._stamp        # store YAZIMI source_drift'te (Q352 arayuz)
+        sys.modules["sap_adt_lib"] = sahte
+        _sd.find_repo_class_includes = lambda ad, erp_root=None: eski_bul(ad, kum)
+        _sd._stamp = lambda sid, anahtar: damgalar.append(anahtar)
+        tut, saved = io.StringIO(), sys.stdout
         sys.stdout = tut
         try:
-            sync._alt_include_uyar("ZCL_TEST", str(tmp / "ZCL_TEST.clas.abap"))
+            rc = sync._sinif_includelari(obj, "fx-sid", object(), False)
         finally:
             sys.stdout = saved
-        c = tut.getvalue()
-        ekle("B1 alt-include VAR: uyarir + 2 dosyayi adlandirir + KOMSU sinifi karistirmaz",
-             "CEKILMEDI" in c and "ZCL_TEST.ccimp.abap" in c
-             and "ZCL_TEST.ccau.abap" in c and "ZCL_BASKA" not in c,
-             "cikti=%r" % c[:120])
+            _sd._stamp = eski_stamp
+            _sd.find_repo_class_includes = eski_bul
+            if eski_mod is None:
+                sys.modules.pop("sap_adt_lib", None)
+            else:
+                sys.modules["sap_adt_lib"] = eski_mod
+        return rc, tut.getvalue(), damgalar
+
+    def _anahtar(f):
+        return _sd.tazelik_anahtari(f, sync.ROOT)
+
+    # Q319: senaryolar() kosum basina birden cok kez cagrilir; kum finally'de silinir.
+    tmp = Path(tempfile.mkdtemp(prefix="sync_alt_"))
+    try:
+        (tmp / "ZCL_TEST.clas.abap").write_text("CLASS zcl_test.\n", encoding="utf-8")
+        imp = tmp / "ZCL_TEST.ccimp.abap"
+        tst = tmp / "ZCL_TEST.ccau.abap"
+        imp.write_text("* impl\n", encoding="utf-8")
+        tst.write_text("* test\n", encoding="utf-8")
+        (tmp / "ZCL_BASKA.ccimp.abap").write_text("* baska sinif\n", encoding="utf-8")  # FP capasi
+
+        # B1: biri cekildi, biri 404 -> cekilen [OK]+damga; cekilemeyen CEKILMEDI+damga YOK+rc1
+        rc, c, dm = _kos("ZCL_TEST", tmp, {imp.name: "yaz", tst.name: "404"})
+        ekle("B1 cekilen [OK]+DAMGA · 404 alan 'CEKILMEDI'+damga YOK · rc=1 · komsu sinif yok",
+             rc == 1 and "[OK] ZCL_TEST (implementations)" in c
+             and "ALT-INCLUDE ÇEKİLMEDİ: ZCL_TEST.ccau.abap" in c
+             and "ALT-INCLUDE ÇEKİLMEDİ: ZCL_TEST.ccimp.abap" not in c
+             and dm == [_anahtar(imp)] and "ZCL_BASKA" not in c,
+             "rc=%s damgalar=%s cikti=%r" % (rc, dm, c[-200:]))
+
+        # B4: ag istisnasi -> cokmez, 'CEKILMEDI' der, damga YOK, rc1 (yapilmayan iddia edilmez)
+        rc, c, dm = _kos("ZCL_TEST", tmp, {imp.name: "istisna", tst.name: "istisna"})
+        ekle("B4 ag istisnasi: iki include da 'CEKILMEDI' · damga YOK · rc=1",
+             rc == 1 and c.count("ALT-INCLUDE ÇEKİLMEDİ") == 2 and dm == [] and "[OK]" not in c,
+             "rc=%s damgalar=%s" % (rc, dm))
+
+        # B6: KORUMA (commit'siz yerel is) -> EZILMEDI, damga YOK, 'CEKILMEDI'
+        rc, c, dm = _kos("ZCL_TEST", tmp, {imp.name: "dirty", tst.name: "yaz"})
+        ekle("B6 KORUMA dali: dirty include damgalanmaz + adlandirilir; kardesi cekilir",
+             rc == 1 and "[KORUMA]" in c and "ALT-INCLUDE ÇEKİLMEDİ: ZCL_TEST.ccimp.abap" in c
+             and dm == [_anahtar(tst)],
+             "rc=%s damgalar=%s" % (rc, dm))
     finally:
         _sil(tmp)
 
-    # B2: alt-include YOK -> SESSIZ (FP capasi, B1'den AYRI)
+    # B2: alt-include YOK -> SESSIZ, rc0, damga yok (FP capasi, B1'den AYRI)
     tmp2 = Path(tempfile.mkdtemp(prefix="sync_yalin_"))
     try:
         (tmp2 / "ZCL_YALIN.clas.abap").write_text("CLASS zcl_yalin.\n", encoding="utf-8")
-        tut = io.StringIO()
-        saved = sys.stdout
-        sys.stdout = tut
-        try:
-            sync._alt_include_uyar("ZCL_YALIN", str(tmp2 / "ZCL_YALIN.clas.abap"))
-        finally:
-            sys.stdout = saved
-        ekle("B2 alt-include YOK: hicbir sey basilmaz (gurultu yok)",
-             tut.getvalue() == "", "gorulen=%r" % tut.getvalue()[:80])
+        rc, c, dm = _kos("ZCL_YALIN", tmp2, {})
+        ekle("B2 alt-include YOK: hicbir sey basilmaz, rc=0, damga yok (gurultu yok)",
+             rc == 0 and c == "" and dm == [], "rc=%s gorulen=%r" % (rc, c[:80]))
     finally:
         _sil(tmp2)
 
-    # B3: marker listesi TEK KAYNAK (source_drift) — yerel kopya ACILMAMIS
-    sync_src = SYNC_PATH.read_text(encoding="utf-8")
-    ekle("B3 marker listesi source_drift'ten import edilir (ikinci kopya yok)",
-         "from source_drift import _CLASS_SUBSOURCE_MARKERS" in sync_src
-         and ".ccimp.abap\"" not in sync_src and ".ccimp.abap'" not in sync_src,
-         "import_var=%s"
-         % ("from source_drift import _CLASS_SUBSOURCE_MARKERS" in sync_src))
+    # B3: TEK KAYNAK — sap_sync_pull'da alt-include son-eki LITERALI yok; damga anahtari
+    # kapinin okudugu fonksiyondan (source_drift.tazelik_anahtari) gelir (AST).
+    sync_src = getattr(sync, "__kaynak__", None) or SYNC_PATH.read_text(encoding="utf-8")
+    literal = [m for m in ('.ccimp.abap"', ".ccimp.abap'", '.ccau.abap"', ".ccau.abap'")
+               if m in sync_src]
+    kablolu = _kablolu_mu(sync_src, "_damgala", "tazelik_damgala")
+    ekle("B3 tek kaynak: marker literali YOK + _damgala source_drift.tazelik_damgala'yi cagirir (AST)",
+         not literal and kablolu, "literal=%s kablolu=%s" % (literal, kablolu))
 
-    # B4: C-ENC-01 — uyari blogu saf ASCII (cp1252 konsolda cokmez)
-    ekle("B4 C-ENC-01: uyari blogu saf ASCII",
-         c.isascii(), "ascii-disi=%s" % sorted({x for x in c if not x.isascii()}))
-
-    # B5: KABLOLAMA (kod != kablolama) — uyari main()'den GERCEKTEN cagriliyor mu
-    ekle("B5 kablolama: main() icinde _alt_include_uyar cagrisi var (AST)",
-         _kablolu_mu(sync_src, "main", "_alt_include_uyar"),
+    # B5: KABLOLAMA (kod != kablolama) — main() alt-include cekmesini GERCEKTEN cagiriyor mu
+    ekle("B5 kablolama: main() icinde _sinif_includelari cagrisi var (AST)",
+         _kablolu_mu(sync_src, "main", "_sinif_includelari"),
          "main() govdesinde cagri bulunamadi")
 
     return out
@@ -281,13 +328,20 @@ MUTASYONLAR = [
      lambda s: s.replace('f"[OK] Bicimlenmis kaynak DONDU: {args.object_name} '
                          '({len(result)} karakter)"',
                          'f"[OK] Pretty printer applied to: {args.object_name}"')),
-    ("M2 alt-include uyarisini sok (B: sessizlik degismezi)",
+    ("M2 alt-include cekmesini main()'den sok (B: kablolama degismezi)",
+     "sync-ast",
+     lambda s: s.replace("        rc = max(rc, _sinif_includelari(obj, session, client.adt_client, "
+                         "args.force))\n", "        pass\n")),
+    ("M3 damga anahtarini YEREL kurala cevir (B: tek-kaynak degismezi)",
      "sync",
-     lambda s: s.replace("    _alt_include_uyar(obj, res.get(\"repo_path\"))\n", "")),
-    ("M3 marker'i YEREL KOPYAYA cevir (B: tek-kaynak degismezi)",
+     lambda s: s.replace("    return tazelik_damgala(session, repo_path, ROOT)\n",
+                         "    from source_drift import _stamp\n"
+                         "    anahtar = Path(repo_path).name.split('.', 1)[0].upper()\n"
+                         "    _stamp(session, anahtar)\n"
+                         "    return anahtar\n")),
+    ("M4 yazilmayani da damgala (B: 'cekilmeyen cekildi denmez' degismezi)",
      "sync",
-     lambda s: s.replace("        from source_drift import _CLASS_SUBSOURCE_MARKERS",
-                         "        _CLASS_SUBSOURCE_MARKERS = (\".ccimp.abap\",)")),
+     lambda s: s.replace('    if not res.get("written"):\n', "    if False:\n")),
 ]
 
 
@@ -313,12 +367,12 @@ def main() -> int:
             if hedef == "rpp":
                 m_res = senaryolar(_yukle(RPP_PATH, "run_pretty_printer", mut), sync)
             else:
-                # M2 main() govdesini, M3 yardimciyi bozar; ikisi de KAYNAK metninde.
-                if "uyarisini sok" in ad:
+                # M2 main() govdesini bozar (AST), M3/M4 yardimcilari (davranis).
+                if hedef == "sync-ast":
                     # KABLOLAMA mutasyonu: cagri main()'den sokuldu mu (AST).
                     bozuk = mut(SYNC_PATH.read_text(encoding="utf-8"))
-                    m_res = [("B0 kablolama: main() icinde _alt_include_uyar cagrisi",
-                              _kablolu_mu(bozuk, "main", "_alt_include_uyar"),
+                    m_res = [("B5 kablolama: main() icinde _sinif_includelari cagrisi",
+                              _kablolu_mu(bozuk, "main", "_sinif_includelari"),
                               "cagri main()'de YOK")]
                 else:
                     m_res = senaryolar(rpp, _yukle(SYNC_PATH, "sap_sync_pull", mut))

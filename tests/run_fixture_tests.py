@@ -233,6 +233,11 @@ OZEL_TESTLER = [
      "populate_* AKTIVE ETMIYOR ama sessizce exit 0: kapanis notu + uretici<->tuketici tip sozlesmesi"),
     ("cikti_iddiasi_durustlugu",
      "arac ciktisi kodunun YAPTIGINDAN FAZLASINI iddia etmez (pretty_printer 'applied to' + sync_pull alt-include)"),
+    # Q352 (2026-09-26): PULL-BEFORE-EDIT kapsami — damga DOSYA anahtarli, sinif alt-include'lari
+    # kendi ucundan, tipi adindan kesin olmayan dosyada `--type auto` (canli ADT aramasi).
+    ("pbe_kapsam",
+     "pull_before_edit + sap_sync_pull: damga ADA degil DOSYAYA (ana sinif .ccimp'i, CDS ayni "
+     "adli BDEF'i taze saymaz) + alt-include/include/FM/yapi/Z tablo kapsamda + auto 0/>1 aday DUR"),
     ("cds_curr_eksik_annotation",
      "DERINLIK: EKSIK @Semantics hic aranmiyordu (rc=0 bilgi tasimiyordu) + yesilin PAYDASI + WARNING siddeti"
      " + Q234/Q237: cok-satirli ifade ve `union` 2.+ dali YANLIS POZITIF uretiyordu"),
@@ -483,7 +488,8 @@ OZEL_TESTLER = [
     # 2026-08-28 BUG-AVI (MCP+script parti). Uc kalem, tek tema: SESSIZ DUSUS.
     # E-02: damga yazimi kilitsizdi -> eszamanli kosumda "cekildi" bilgisi KAYBOLUYORDU.
     ("damga_yarisi",
-     "sap_sync_pull._stamp: kilit + ATOMIK yazim; kilit alinamazsa GORUNUR uyari "
+     "seans-tazelik damgasi (Q352'den beri source_drift._stamp/tazelik_damgala): kilit + "
+     "ATOMIK yazim; kilit alinamazsa GORUNUR uyari "
      "(sessiz kayip YOK) + bayat kilit KIRILIR + Windows `PermissionError` ikizi"),
     # C-08: ABAP KOSTURAN tek guard'siz tool + `dangerous/critical` bandi varsayilan ACIK.
     ("unit_run_guard_riski",
@@ -833,14 +839,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "çıktı SUNUCU YAZMASI iddia etmez ('applied to' yasağı) + YAZMA-çağrısı-yok yapısal çapası"),
     ("scripts/sap_sync_pull.py", ("O:cikti_iddiasi_durustlugu", "O:damga_yarisi",
                                   "O:bos_seans_markeri"),
-     "sınıf alt-include'ları ÇEKİLMEDİĞİ görünür olmalı; marker listesi source_drift'ten "
-     "(tek kaynak) + seans-tazelik damgasının EŞZAMANLI YAZIM sözleşmesi (kilit + atomik "
+     "sınıf alt-include'ı çekilemezse 'ÇEKİLMEDİ' + damga YOK (Q352'den beri kendi ucundan "
+     "çekilir); damga anahtarı source_drift'ten (tek kaynak) + seans-tazelik damgasının EŞZAMANLI YAZIM sözleşmesi (kilit + atomik "
      "`os.replace` + görünür kilit uyarısı) `damga_yarisi`da yaşar"),
     ("scripts/hooks/pull_before_edit.py", ("O:damga_yarisi",),
      "damga store'unun TÜKETİCİSİ: `_is_fresh` okuma sözleşmesi yazıcıyla birlikte ölçülür "
      "(3. bağlam vektörü) — biri değişirse diğeri sessizce boşalır"),
     ("scripts/source_drift.py", ("O:cikti_iddiasi_durustlugu",),
-     "`_CLASS_SUBSOURCE_MARKERS` TEK KAYNAK: sap_sync_pull uyarısı bu listeyi import eder"),
+     "`tazelik_anahtari` TEK KAYNAK: sap_sync_pull damgayı bu fonksiyonla yazar"),
     ("mcp_servers/sap_adt/tools/query.py",
      ("O:transport_sifir_kaniti", "O:dogrulama_kosamadi"),
      "`adt_transport_list` sıfır-kanıtı sözleşmesi (zero_verified/zero_notice) + docstring'in "
@@ -1047,6 +1053,17 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/populate_lock_objects.py", ("O:aktivasyon_govde_hukmu",),
      "kilit objesi aktivasyon hükmü TEK KAYNAKTAN (type=E artık yok sayılmaz)"),
     ("scripts/sap_sync_pull.py", ("O:ddic_okuma_yolu",), "DDIC okuma-yolu ikinci tüketici"),
+    # Q352 (2026-09-26): kapı ↔ çekici DOSYA-anahtarı sözleşmesi + PBE sınıflandırması. AYRI
+    # satırlar (mevcut satırların kümesi büyütülmedi — b0_secim çapaları).
+    ("scripts/sap_sync_pull.py", ("O:pbe_kapsam",),
+     "damga DOSYAYA + alt-include çekme + `--type auto` aday seçimi (0/>1 → DUR)"),
+    ("scripts/hooks/pull_before_edit.py", ("O:pbe_kapsam",),
+     "kapsam (alt-include/include/FM/yapı/Z tablo) + önerilen komut + fail-safe notları"),
+    ("scripts/source_drift.py", ("O:pbe_kapsam", "O:damga_yarisi", "O:bos_seans_markeri"),
+     "`pbe_siniflandir` + `tazelik_anahtari` (kapı ve çekicinin TEK kaynağı) + store YAZIMI "
+     "(`tazelik_damgala`: kilit + atomik — `damga_yarisi` HEDEF'i) + `seans_kimligi` (S14 emsali)"),
+    ("scripts/object_types.py", ("O:pbe_kapsam",),
+     "alt-include abapGit son-ekleri + `AUTO_AILE_ADT_TIPLERI` (auto aile süzgeci)"),
     ("scripts/push_object.py",
      ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
       "O:push_onkontrol_olculemedi"),

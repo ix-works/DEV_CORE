@@ -261,6 +261,9 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   `try/finally` + `atexit` ile sarılı ve **koşum başında bayat artık süpürülür** (görünür
   uyarı: `BAYAT MUTANT ARTIGI SUPURULDU`). Sert ölüm (`taskkill /F`) `finally`yi de
   `atexit`i de koşturmaz ⇒ **asıl savunma başlangıç süpürgesidir**.
+  ⚠ Q352 (2026-09-26): yazım mekanizması `source_drift`e AYNEN taşındı (korpus HEDEF'i o
+  dosya; public `tazelik_damgala`); `sap_sync_pull` yerel kopya taşımaz (N6 çapası) →
+  **16 senaryo + 6 mutasyon**.
   Değişmezler: `_stamp` OKUMA+YAZMA'yı **tek kilidin içinde** yapar (yalnız yazımı kilitlemek
   kayıp-güncellemeyi ÇÖZMEZ — M2 sınır mutasyonu tam bunu sınar) · yazım `os.replace` ile
   **atomik** · kilit alınamazsa **görünür uyarı** (M4: sessizce yutulursa korpus kırmızı) ·
@@ -270,6 +273,29 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   (8×12) yalnız istatistiksel destektir, **tek kanıt sayılmaz**.
   ⛔ 3. bağlam (`pull_before_edit._is_fresh`) SİLİNMEZ: yazıcı ile okuyucu **ayrı modüldür**,
   biri değişirse eksen sessizce boşalır (HARİTA'da o dosya da bu korpusa bağlıdır).
+
+### B4-Q352 — kapsam (alt-include · auto tip · Z tablo) + DOSYA-anahtarlı damga + eklenti arayüzü (2026-09-26)
+```bash
+python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_yarisi \
+    bos_seans_markeri ddic_okuma_yolu class_include_push adt_uc_url_cozumu --precommit
+# pbe_kapsam taban 42/42 · ad-anahtari 37 · include-muaf 36 · abap-class 37 · tabl-yok 40 · eklenti-yok 37
+```
+- ⭐ **AYIRT EDİCİ ÇİFT (silinmez):** H3 *ana sınıf damgası `.ccimp`'i kapsamaz* + T7 *aynı adlı
+  CDS damgası BDEF'i kapsamaz* — ad-anahtarına dönüşü yakalayan bunlardır; P3 uçtan uca
+  **yazanın anahtarı = okuyanın anahtarı** (ikisi de `source_drift.tazelik_anahtari`).
+- ⛔ `--type auto` **tahmin etmez:** P7 (>1 aday) ve P8 (yalnız önek eşleşmesi) DUR vektörleri
+  **yazma YOK + damga YOK** ölçer; yalnız rc'ye bakan kontrol sahte-yeşil verir.
+- ⛔ Mutasyon yaması **kaynak metne uymazsa** koşucu `[KURULAMADI]` + exit 3 verir (sahte-kırmızı
+  değil). Ölçülmüş tuzak: dosya-ailesi tablosunu sözdizimsel olarak bozan bir mutasyon *her*
+  vektörü düşürür (4/41 ölçüldü) — o ayırt edici DEĞİLDİR; mutasyon eski davranışı **yeniden kurmalıdır**
+  (eski `_infer_type`: `.prog.abap`→program, `.abap`→class).
+- **Eklenti sözleşmesi (E1-E11):** `scripts/hooks/<ad>.py::sinifla(path, root) -> Optional[dict]`
+  (`{"nesne","tip","komut"}`). Dosya yok → sessiz · yüklenemez → `EKLENTI-YUKLENEMEDI` + exit 0 ·
+  `sinifla()` istisnası → `EKLENTI-HATA: <ad>: <tip>` notu + geçiş (fail-open ama GÖRÜNÜR). Yeni eklenti eklenince bu korpusun E
+  vektörleri **stub** ile sözleşmeyi ölçmeye devam eder; eklentinin KENDİ korpusu ayrıdır.
+- **Canlı uç ölçümü (salt-GET) tekrar gerekirse:** `/oo/classes/<c>/includes/<segment>` (include
+  yoksa 404 — "segment yanlış" değil; uydurma segment 400) · include + `/source/main` = 404 ·
+  quickSearch `?operation=quickSearch&query=<AD>&maxResults=…` tam-ad + `adtcore:type`.
 
 ## B5 — skill_injector / worktype_hint / ITG-katmanları
 - ⭐ **BOŞ SEANS MARKERİ (2026-09-09, Q253).** `python tests/fixtures/bos_seans_markeri/run.py`
