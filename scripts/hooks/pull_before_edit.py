@@ -20,13 +20,20 @@ Q352 (2026-09-26) — iki değişiklik:
 EKLENTİ KAYDI (Q352 arayüz, 2026-09-26) — `_EK_DENETCILER`: çekirdek sınıflandırma bir
 dosyayı TANIMAZSA (None) kayıtlı eklentilere sırayla sorulur. Eklenti = `scripts/hooks/<ad>.py`,
 tek fonksiyon: `sinifla(path: Path, root: Path) -> Optional[dict]`
-    None → bu dosya benim değil · dict → {"nesne": str, "tip": str, "komut": str}
-    (`komut` = blok mesajında gösterilecek canlıdan-çekme komutu; nesne çözülemiyorsa
-    açıklayıcı yer tutucu). Tazelik AYNI store'dan, AYNI anahtarla (`tazelik_anahtari`)
-    okunur; çekici damgayı `source_drift.tazelik_damgala` ile yazar.
+    None → bu dosya benim değil · dict → {"nesne": str, "tip": str, "komut": str,
+    ["not": str]}
+    · `komut` = YALNIZ çalıştırılabilir komut (nesne çözülemiyorsa argüman yer tutucusu,
+      ör. `<BSP_ADI>`). ⛔ Eklenti `--session` BASMAZ: kapı seans kimliğini komutun SONUNA
+      kendisi ekler (komutta zaten yoksa) — marker başka seansı gösterirken damga yanlış
+      seansa gidip kapı döngüye giriyordu (bug gate N1, 2026-09-26).
+    · `not` (opsiyonel) = açıklama/kaçış (`--offline` vb.); blok mesajında komuttan sonra
+      basılır. Eksik anahtar = eski davranış.
+    Tazelik AYNI store'dan, AYNI anahtarla (`tazelik_anahtari`) okunur; çekici damgayı
+    `source_drift.tazelik_damgala` ile yazar.
   · Eklenti dosyası YOKSA (tam o adla ModuleNotFoundError) → sessiz atla (kapsam yok).
-  · Eklenti yüklenemezse (başka hata) → görünür not, o dosya için fail-safe SERBEST.
-  · `sinifla()` hata atarsa → `EKLENTI-HATA: <ad>: <tip>` notu; o eklenti bu dosyayı
+  · Eklenti yüklenemezse (başka hata, `SystemExit` DAHİL; yalnız KeyboardInterrupt hariç) →
+    görünür `EKLENTI-YUKLENEMEDI` notu, o dosya için fail-safe SERBEST.
+  · `sinifla()` hata atarsa (`SystemExit` DAHİL) → `EKLENTI-HATA: <ad>: <tip>` notu; o eklenti bu dosyayı
     tanımadı sayılır (fail-open ama GÖRÜNÜR, blok YOK — lider kararı 2026-09-26).
   Öncelik: çekirdek sınıflandırma önce; eklenti yalnız çekirdeğin tanımadığı dosyaya bakar.
 
@@ -110,7 +117,11 @@ def _ek_sinifla(p: Path):
                 continue                       # eklenti henüz yok → kapsam yok (sessiz)
             _ek_yukleme_notu(ad, exc)
             continue
-        except Exception as exc:  # noqa: BLE001 — kapı asla çökmemeli
+        except KeyboardInterrupt:
+            raise
+        except BaseException as exc:  # noqa: BLE001 — kapı asla çökmemeli
+            # Bug gate M2: `SystemExit` `Exception` DEĞİLDİR — import anında `sys.exit(2)`
+            # ilgisiz HER dosya edit'ini rc 2 BLOKLUYORDU (brick). Not yolu + devam.
             _ek_yukleme_notu(ad, exc)
             continue
         fn = getattr(mod, "sinifla", None)
@@ -119,7 +130,9 @@ def _ek_sinifla(p: Path):
             continue
         try:
             sonuc = fn(p, ROOT)
-        except Exception as exc:  # noqa: BLE001
+        except KeyboardInterrupt:
+            raise
+        except BaseException as exc:  # noqa: BLE001 — M2: SystemExit(0) sessiz açık bırakmasın
             # Lider kararı 2026-09-26: fail-open ama GÖRÜNÜR (sessiz geçiş "kapsam yok"
             # ile ayırt edilemezdi). Blok YOK; bu eklenti bu dosyayı tanımadı sayılır.
             _ek_hata_notu(ad, exc)
@@ -128,17 +141,24 @@ def _ek_sinifla(p: Path):
             komut = sonuc.get("komut")
             if not isinstance(komut, str) or not komut.strip():
                 komut = f"<{ad}: canlıdan-çekme komutu verilmedi>"
+            not_ = sonuc.get("not")
             return {"tur": "eklenti", "ad": str(sonuc.get("nesne") or "<AD>"),
-                    "tip": str(sonuc.get("tip") or ad), "aile": None, "komut": komut,
-                    "eklenti": ad}
+                    "tip": str(sonuc.get("tip") or ad), "aile": None, "komut": komut.strip(),
+                    "eklenti": ad, "not": not_ if isinstance(not_, str) and not_.strip() else ""}
     return None
 
 
 def _git_dirty(p: Path) -> bool:
-    """Working-tree'de commit'siz değişiklik var mı? (WIP → pull EZMESİN)."""
+    """Working-tree'de commit'siz değişiklik var mı? (WIP → pull EZMESİN).
+
+    Bug gate N2: git dosyanın KENDİ dizininde koşar (`-C <dosya.parent>`, yol = dosya adı) —
+    `-C ROOT` kök dışındaki dosyada (kanonik `.wt` worktree) "outside repository" hatası
+    verip BOŞ dönüyordu ⇒ WIP muafiyeti ölüydü. Kardeş `source_drift._git_working_copy_dirty`
+    zaten bu desendedir.
+    """
     try:
         r = subprocess.run(
-            ["git", "-C", str(ROOT), "status", "--porcelain", "--", str(p)],
+            ["git", "-C", str(p.parent), "status", "--porcelain", "--", p.name],
             capture_output=True, text=True, timeout=8,
         )
         return bool(r.stdout.strip())
@@ -187,7 +207,13 @@ def _siniflandirma_yok_notu(fp: str) -> None:
 
 def _komut(s: dict, p: Path, session_id: str) -> str:
     if s.get("komut"):
-        return s["komut"]              # eklenti kendi çekme komutunu verir
+        # Eklenti komutu (sözleşme: YALNIZ çalıştırılabilir komut). Seans kimliğini KAPI
+        # ekler (bug gate N1: marker başka seansı gösterirken damga yanlış seansa yazılıyor,
+        # kapı döngüye giriyordu). Komutta zaten `--session` varsa dokunulmaz.
+        komut = s["komut"]
+        if not any(t == "--session" or t.startswith("--session=") for t in komut.split()):
+            komut = f"{komut} --session {session_id}"
+        return komut
     ad = s.get("ad") or "<AD>"
     return (f"python core/scripts/sap_sync_pull.py {ad} --type {s['tip']} "
             f"--file \"{p}\" --session {session_id}")
@@ -259,6 +285,8 @@ def main() -> int:
         baslik = "bu seansta canlıyla TAZE doğrulanMADI. Düzenlemeden ÖNCE:"
         ne_olur = (f"(komutu koş → {p.name} seans-taze damgalanır (canlıyla eşitse); sonra "
                    f"edit'i TEKRAR dene.)\n")
+        if s.get("not"):
+            ne_olur += f"{s['not'].rstrip()}\n"   # eklentinin açıklaması/kaçışı (opsiyonel)
     else:
         kacis = ("SAP erişilemiyorsa: aynı komuta `--offline` ekle (fetch'siz taze damgalar; "
                  "canlıdan ezme riskini bilerek kabul edersin).\n")

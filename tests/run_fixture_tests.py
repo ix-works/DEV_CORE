@@ -1064,6 +1064,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "(`tazelik_damgala`: kilit + atomik — `damga_yarisi` HEDEF'i) + `seans_kimligi` (S14 emsali)"),
     ("scripts/object_types.py", ("O:pbe_kapsam",),
      "alt-include abapGit son-ekleri + `AUTO_AILE_ADT_TIPLERI` (auto aile süzgeci)"),
+    ("scripts/validators/check_source_drift.py", ("O:pbe_kapsam",),
+     "uzantı→canlı tip tamlığı (`SOURCE_EXTENSIONS` ⊆ `_EXT_TO_TYPES`) + tablo DDL ucu (L3)"),
     ("scripts/push_object.py",
      ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
       "O:push_onkontrol_olculemedi"),

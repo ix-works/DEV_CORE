@@ -35,6 +35,14 @@ Kipler (her biri düzeltmenin bir ayağını geri alır → korpus KIRMIZI olmal
   --mutasyon-abap-class    `.abap` ailesi yine `--type class` önerir (auto yok)
   --mutasyon-tabl-yok      `.tabl.ddl/.tabl` kapsamdan düşer
   --mutasyon-eklenti-yok   kapı eklenti kaydına hiç sormaz (arayüz kablolanmamış)
+  Bug gate #306 düzeltme turu (her bulgu geri sokulunca KIRMIZI):
+  --mutasyon-file-dogrulama-yok  M1 `--file` obje adı/tipiyle doğrulanmaz
+  --mutasyon-systemexit          M2 eklentide SystemExit `Exception` sanılır
+  --mutasyon-eklenti-session     N1 kapı eklenti komutuna `--session` eklemez
+  --mutasyon-dirty-kok           N2 dirty kontrolü dosyanın deposunda değil ROOT'ta
+  --mutasyon-force-tipi          L1 auto dalında tekrar komutu çözülen tiple basılır
+  --mutasyon-offline-rc          L2 `--offline` damgalayamasa da rc 0
+  --mutasyon-drift-tablo         L3 check_source_drift tablo uzantısını tanımaz
 
 Koşum: python tests/fixtures/pbe_kapsam/run.py [--mutasyon-…]   (exit 0 = PASS)
 """
@@ -62,7 +70,9 @@ SID = "fx-pbe-kapsam"
 
 GECERLI_KIP = {"--mutasyon-ad-anahtari", "--mutasyon-include-muaf",
                "--mutasyon-abap-class", "--mutasyon-tabl-yok",
-               "--mutasyon-eklenti-yok"}
+               "--mutasyon-eklenti-yok", "--mutasyon-file-dogrulama-yok",
+               "--mutasyon-systemexit", "--mutasyon-eklenti-session", "--mutasyon-dirty-kok",
+               "--mutasyon-force-tipi", "--mutasyon-offline-rc", "--mutasyon-drift-tablo"}
 
 # kip -> [(kopyadaki dosya, eski metin, yeni metin)]  — eski metin kopyada TAM 1 kez geçmeli
 MUTASYONLAR = {
@@ -83,6 +93,37 @@ MUTASYONLAR = {
         "hooks/pull_before_edit.py",
         "        s = _ek_sinifla(p)",
         "        s = None")],
+    "--mutasyon-file-dogrulama-yok": [(
+        "sap_sync_pull.py",
+        "        hata = _dosya_tutarsizligi(obj, t, repo_file)\n",
+        "        hata = \"\"\n")],
+    "--mutasyon-systemexit": [
+        ("hooks/pull_before_edit.py",
+         "        except BaseException as exc:  # noqa: BLE001 — kapı asla çökmemeli\n",
+         "        except Exception as exc:  # noqa: BLE001\n"),
+        ("hooks/pull_before_edit.py",
+         "        except BaseException as exc:  # noqa: BLE001 — M2: SystemExit(0) sessiz açık bırakmasın\n",
+         "        except Exception as exc:  # noqa: BLE001\n")],
+    "--mutasyon-eklenti-session": [(
+        "hooks/pull_before_edit.py",
+        "            komut = f\"{komut} --session {session_id}\"\n",
+        "            komut = komut\n")],
+    "--mutasyon-dirty-kok": [(
+        "hooks/pull_before_edit.py",
+        "            [\"git\", \"-C\", str(p.parent), \"status\", \"--porcelain\", \"--\", p.name],\n",
+        "            [\"git\", \"-C\", str(ROOT), \"status\", \"--porcelain\", \"--\", str(p)],\n")],
+    "--mutasyon-force-tipi": [(
+        "sap_sync_pull.py",
+        "        rc = _sonuc(obj, cozulen, res, session, dosya_eki, komut_tipi=\"auto\")\n",
+        "        rc = _sonuc(obj, cozulen, res, session, dosya_eki)\n")],
+    "--mutasyon-offline-rc": [(
+        "sap_sync_pull.py",
+        "                rc = 1\n        return rc\n",
+        "                pass\n        return rc\n")],
+    "--mutasyon-drift-tablo": [(
+        "validators/check_source_drift.py",
+        "    \".tabl.ddl\": [\"table\"],\n    \".tabl\": [\"table\"],\n",
+        "")],
     "--mutasyon-tabl-yok": [(
         "source_drift.py",
         '    (".tabl.ddl", "ddl"), (".tabl", "ddl"),\n',
@@ -117,6 +158,9 @@ def kopya_kur(kum: Path, kip: str | None) -> Path:
     for ad in ("source_drift.py", "object_types.py", "sap_sync_pull.py", "sap_adt_lib.py"):
         shutil.copy2(SCRIPTS / ad, hedef / ad)
     shutil.copy2(SCRIPTS / "hooks" / "pull_before_edit.py", hedef / "hooks" / "pull_before_edit.py")
+    (hedef / "validators").mkdir()
+    shutil.copy2(SCRIPTS / "validators" / "check_source_drift.py",
+                 hedef / "validators" / "check_source_drift.py")
     shutil.copytree(SCRIPTS / "utils", hedef / "utils",
                     ignore=shutil.ignore_patterns("__pycache__"))
     for rel, eski, yeni in MUTASYONLAR.get(kip or "", []):
@@ -152,6 +196,7 @@ DOSYALAR = {
     "SD/ZSD001_CLC/NOTLAR.md": "not\n",
     # eklenti arayüzü (E*): çekirdek sınıflandırmanın TANIMADIĞI dosyalar
     "SD/ZSD001_CLC/ui/webapp/Component.js": "sap.ui.define([], function () {});\n",
+    "SD/ZSD001_CLC/ui/webapp/Other.js": "sap.ui.define([], function () {});\n",
     "SD/ZSD001_CLC/ui/webapp/view/Main.view.xml": "<mvc:View/>\n",
 }
 
@@ -420,6 +465,19 @@ def senaryolar(scripts: Path, kum: Path) -> None:
     kontrol("P8 auto: tam-ad aday YOK (onek eslesmesi sayilmaz) -> DUR",
             rc == 1 and "YOK" in out and yapi.read_bytes() == once, f"rc={rc}")
 
+    # P9/P10 — Z TABLO uçtan uca (DoD ①): auto -> TABL/DT -> `/ddic/tables/<t>/source/main`
+    # (canlı ölçüm 200) -> `.tabl.ddl` / `.tabl` dosyasına yazılır -> kapı GEÇER.
+    for ad_, dosya_, obj_ in (("P9 .tabl.ddl", tabl1, "ZSD001_T_X"), ("P10 .tabl", tabl2, "ZSD001_T_Y")):
+        kucuk = obj_.lower()
+        ara = _arama_xml((f"/sap/bc/adt/ddic/tables/{kucuk}", "TABL/DT", obj_))
+        govde = f"define table {kucuk} {{\n  key mandt : mandt not null;\n}}\n"
+        rc, out = cekici_sahte(scripts, proje, [obj_, "--type", "auto", "--file", str(dosya_)],
+                               {f"/sap/bc/adt/ddic/tables/{kucuk}/source/main": govde}, ara)
+        rc_k, _ = kapi(scripts, proje, dosya_)
+        kontrol(f"{ad_} auto: TABL/DT tablo ucundan cekildi + dosyaya yazildi + kapi GECIYOR",
+                rc == 0 and "TABL/DT" in out and "key mandt" in dosya_.read_text(encoding="utf-8")
+                and rc_k == 0, f"rc={rc} kapi={rc_k} {out[-200:]!r}")
+
 
 # Eklenti STUB'ları — gerçek eklentiler başka PR'larda gelir; burada yalnız SÖZLEŞME ölçülür.
 _STUB_UI = """from pathlib import Path
@@ -429,9 +487,15 @@ def sinifla(path, root):
     p = Path(path)
     if "webapp" not in [x.lower() for x in p.parts] or not p.name.endswith(".js"):
         return None
+    if p.name == "Other.js":        # not YOK + komutta --session ZATEN var (çiftlenmemeli)
+        return {"nesne": "ZSD001_UI", "tip": "ui5",
+                "komut": "python core/scripts/fetch_ui_source.py ZSD001_UI --session=HAZIR"}
     return {"nesne": "ZSD001_UI", "tip": "ui5",
-            "komut": "python core/scripts/fetch_ui_source.py ZSD001_UI --karsilastir"}
+            "komut": "python core/scripts/fetch_ui_source.py ZSD001_UI --karsilastir",
+            "not": "NOT-STUB: SAP erisilemiyorsa elle karsilastir."}
 """
+_STUB_IMPORT_EXIT = "import sys\nsys.exit(2)\n"                          # M2 import dalı
+_STUB_CAGRI_EXIT = "import sys\ndef sinifla(path, root):\n    sys.exit(0)\n"   # M2 çağrı dalı
 _STUB_BOZUK = "def sinifla(path, root)\n    return None\n"          # SyntaxError
 _STUB_PATLAYAN = "def sinifla(path, root):\n    raise RuntimeError('stub')\n"
 
@@ -456,6 +520,14 @@ def eklenti_arayuzu(scripts: Path, kum: Path) -> None:
             # eklenti komutu dosyaya YAZMAYABİLİR -> "çeker/yazar" iddiası verilmez
             and "dosyasına yazar" not in err and "SAP'den çekilMEDİ" not in err
             and "seans-taze damgalanır" in err, f"rc={rc} err={err[:160]!r}")
+    kontrol("E13 N1: kapi eklenti komutunun SONUNA hook'un seans kimligini ekler",
+            f"--karsilastir --session {SID}" in err, f"err={err[:200]!r}")
+    kontrol("E14 N1: eklentinin `not`u blok mesajinda basilir", "NOT-STUB:" in err,
+            f"err={err[-160:]!r}")
+    rc, err = kapi(scripts, proje, ui / "Other.js")
+    kontrol("E15 N1: `not` yoksa basilmaz + komutta --session varsa CIFTLENMEZ",
+            rc == 2 and "NOT-STUB" not in err and "--session=HAZIR" in err
+            and f"--session {SID}" not in err, f"rc={rc} err={err[:200]!r}")
     rc, err = kapi(scripts, proje, xml)
     kontrol("E3 eklenti None -> o dosya kapsam disi (SESSIZ)", rc == 0 and err.strip() == "",
             f"rc={rc}")
@@ -525,9 +597,123 @@ def eklenti_arayuzu(scripts: Path, kum: Path) -> None:
     kontrol("E12 eklenti adlari `_` onekli (C-TPL-01: hook sayilmaz)",
             bool(kayit) and all(a.startswith("_") for a in kayit), f"kayit={kayit}")
 
+    # E16/E17 — M2: SystemExit `Exception` DEĞİLDİR. Import anında sys.exit(2) ilgisiz her
+    # edit'i BLOKLUYORDU (brick); sinifla() içindeki SystemExit(0) sessiz açık bırakıyordu.
+    (hooks / "_pbe_msag_textpool.py").write_text(_STUB_IMPORT_EXIT, encoding="utf-8")
+    rc, err = kapi(scripts, proje, xml)
+    kontrol("E16 M2: eklenti IMPORT aninda SystemExit -> exit 0 + EKLENTI-YUKLENEMEDI (brick YOK)",
+            rc == 0 and "EKLENTI-YUKLENEMEDI: _pbe_msag_textpool" in err, f"rc={rc} err={err[:140]!r}")
+    (hooks / "_pbe_msag_textpool.py").write_text(_STUB_CAGRI_EXIT, encoding="utf-8")
+    rc, err = kapi(scripts, proje, xml)
+    kontrol("E17 M2: sinifla() icinde SystemExit(0) -> EKLENTI-HATA notu (sessiz DEGIL)",
+            rc == 0 and "EKLENTI-HATA: _pbe_msag_textpool: SystemExit" in err,
+            f"rc={rc} err={err[:140]!r}")
+
     # stub'ları kaldır (kum zaten silinir; sonraki senaryolar eklentisiz ortam varsayar)
     for ad in ("_pbe_ui.py", "_pbe_msag_textpool.py"):
         (hooks / ad).unlink(missing_ok=True)
+
+
+def duzeltme_turu(scripts: Path, kum: Path) -> None:
+    """Bug gate #306 bulguları — her biri AYRI mutasyon kipiyle geri sokulur."""
+    proje = proje_kur(kum / "proje4")
+    S = proje / "SOURCE_CODES" / "SD" / "ZSD001_CLC"
+    main_ = S / "classes" / "ZCL_SD001_X.clas.abap"
+    ccimp = S / "classes" / "ZCL_SD001_X.ccimp.abap"
+    ccau = S / "classes" / "ZCL_SD001_X.ccau.abap"
+    incl = S / "programs" / "includes" / "ZSD001_I_X_TOP.prog.abap"
+    prog = S / "programs" / "ZSD001_P_X.prog.abap"
+    fm = S / "functions" / "ZSD001_FM_X.func.abap"
+
+    def _st():
+        return store(proje).get("objects") or {}
+
+    # ── M1: --file obje adı + tip ile tutarlı olmalı ──────────────────────────
+    once = main_.read_bytes()
+    rc, out = cekici_sahte(scripts, proje, ["ZCL_SD001_BASKA", "--type", "class", "--file", str(main_)],
+                           {"/sap/bc/adt/oo/classes/zcl_sd001_baska/source/main": "CLASS baska.\n"})
+    kontrol("F1 M1: BASKA objenin adi + bu dosya -> [FAIL], yazma YOK, damga YOK",
+            rc == 1 and "[FAIL]" in out and main_.read_bytes() == once and not _st(),
+            f"rc={rc} damga={sorted(_st())} {out[-160:]!r}")
+    rc, out = cekici_sahte(scripts, proje, ["ZCL_SD001_X", "--type", "class", "--file", str(ccimp)], {})
+    kontrol("F2 M1: --type class + .ccimp dosyasi -> [FAIL] (tur tutarsiz)",
+            rc == 1 and "[FAIL]" in out and not _st(), f"rc={rc} {out[-160:]!r}")
+    rc, out = cekici(scripts, proje, "ZCL_SD001_BASKA", "--type", "class", "--offline", "--file", str(main_))
+    kontrol("F3 M1: --offline da dogrular (baska ad) -> [FAIL], damga YOK",
+            rc == 1 and "[FAIL]" in out and not _st(), f"rc={rc} {out[-160:]!r}")
+    rc, out = cekici(scripts, proje, "ZCL_SD001_X", "--type", "implementations", "--offline",
+                     "--file", str(ccau))
+    kontrol("F4 M1: --type implementations + .ccau (kardes tur) -> [FAIL], damga YOK",
+            rc == 1 and "[FAIL]" in out and not _st(), f"rc={rc} {out[-160:]!r}")
+    rc, out = cekici(scripts, proje, "ZSD001_I_BASKA", "--type", "auto", "--offline", "--file", str(incl))
+    kontrol("F5 M1: auto dali da dogrular (baska ad) -> [FAIL], damga YOK",
+            rc == 1 and "[FAIL]" in out and not _st(), f"rc={rc} {out[-160:]!r}")
+    rc, out = cekici(scripts, proje, "ZSD001_P_X", "--type", "program", "--offline", "--file", str(prog))
+    kontrol("F6 KONTROL M1: dogru ad + uzantiyi kabul eden acik tip -> damgalanir (asiri-red YOK)",
+            rc == 0 and _anahtar(scripts, proje, [prog])[0] in _st(), f"rc={rc} {out[-160:]!r}")
+
+    # ── L1: auto dalında KORUMA tekrar komutu `--type auto` ile ───────────────
+    fm.write_text("FUNCTION zsd001_fm_x.\n* yerel WIP\n", encoding="utf-8")
+    ara = _arama_xml(("/sap/bc/adt/functions/groups/zsd001_fg/fmodules/zsd001_fm_x", "FUGR/FF", "ZSD001_FM_X"))
+    rc, out = cekici_sahte(scripts, proje, ["ZSD001_FM_X", "--type", "auto", "--file", str(fm)],
+                           {"/sap/bc/adt/functions/groups/zsd001_fg/fmodules/zsd001_fm_x/source/main":
+                            "FUNCTION zsd001_fm_x.\n* canli\n"}, ara)
+    satir = next((x for x in out.splitlines() if "sap_sync_pull.py" in x and "--force" in x), "")
+    kontrol("L1 auto + KORUMA: tekrar komutu `--type auto` (cozulen `function` DEGIL)",
+            rc == 1 and "[KORUMA]" in out and "--type auto" in satir and "--type function" not in satir,
+            f"rc={rc} satir={satir!r}")
+    subprocess.run(["git", "-C", str(proje), "checkout", "--", str(fm)], capture_output=True)
+
+    # ── L2: --offline damga yazılamazsa rc 1 (başarı iddiası YOK) ─────────────
+    kod = ("import sys; sys.path.insert(0, %r)\n"
+           "import source_drift; source_drift.tazelik_damgala = lambda *a, **k: ''\n"
+           "import sap_sync_pull as S\n"
+           "sys.argv = ['sap_sync_pull.py', 'ZSD001_P_X', '--type', 'program', '--offline', "
+           "'--file', %r, '--session', %r]\n"
+           "print('RC=%%s' %% S.main())\n" % (str(scripts), str(prog), SID))
+    r = subprocess.run([sys.executable, "-c", kod], capture_output=True, env=_env(proje),
+                       cwd=str(proje), timeout=60)
+    o = (r.stdout + r.stderr).decode("utf-8", "replace")
+    kontrol("L2 --offline damga YAZILAMADI -> rc=1 + [FAIL] ([OFFLINE] basari satiri YOK)",
+            "RC=1" in o and "[FAIL]" in o and "[OFFLINE]" not in o, o[-200:])
+
+    # ── N2: kök DIŞI depodaki (kanonik .wt worktree) dosyada dirty muafiyeti ────
+    wt = kum / "wt_repo"
+    wtf = wt / "SOURCE_CODES" / "SD" / "ZSD001_CLC" / "classes" / "ZCL_SD001_W.ccimp.abap"
+    wtf.parent.mkdir(parents=True)
+    wtf.write_text("* impl\n", encoding="utf-8")
+    for c in (["init", "-q"], ["config", "user.email", "fx"], ["config", "user.name", "fx"],
+              ["add", "-A"], ["commit", "-q", "-m", "taban"]):
+        subprocess.run(["git", "-C", str(wt), *c], check=True, capture_output=True)
+    rc_temiz, _ = kapi(scripts, proje, wtf)
+    wtf.write_text("* yerel WIP\n", encoding="utf-8")
+    rc_kirli, err = kapi(scripts, proje, wtf)
+    kontrol("N2 kok DISI depoda git-DIRTY -> GECIS (temizken BLOK = kontrol)",
+            rc_temiz == 2 and rc_kirli == 0, f"temiz={rc_temiz} kirli={rc_kirli} {err[:100]!r}")
+
+    # ── L3: check_source_drift tablo DDL'ini tanır (canlı uç ölçülmüş) ─────────
+    kod = ("import sys, json; sys.path.insert(0, %r); sys.path.insert(0, %r)\n"
+           "import check_source_drift as C\n"
+           "from source_drift import SOURCE_EXTENSIONS\n"
+           "istek = []\n"
+           "class _R:\n    status_code = 200\n    text = 'define table zsd001_t_x {\\n}\\n'\n"
+           "class _S:\n    def get(self, url, **k):\n        istek.append(url); return _R()\n"
+           "class _C:\n    url = 'https://sap.invalid'\n    session = _S()\n"
+           "src, tip = C._fetch_active_source(_C(), 'ZSD001_T_X', '.tabl.ddl')\n"
+           "print(json.dumps({'eksik': [e for e in SOURCE_EXTENSIONS if e not in C._EXT_TO_TYPES],"
+           " 'tip': tip, 'istek': istek}))\n" % (str(scripts), str(scripts / "validators")))
+    r = subprocess.run([sys.executable, "-c", kod], capture_output=True, env=_env(proje),
+                       cwd=str(proje), timeout=60)
+    try:
+        d = json.loads(r.stdout.decode("utf-8").strip().splitlines()[-1])
+    except Exception:
+        d = {"eksik": ["<olculemedi>"], "tip": None, "istek": [], "hata": r.stderr.decode()[-200:]}
+    kontrol("L3a check_source_drift: SOURCE_EXTENSIONS'in HER uzantisinin canli tipi var (tamlik)",
+            d.get("eksik") == [], f"eksik={d.get('eksik')} {d.get('hata', '')}")
+    kontrol("L3b check_source_drift: .tabl.ddl -> table + `/ddic/tables/<t>/source/main` ucu",
+            d.get("tip") == "table"
+            and any(u.endswith("/sap/bc/adt/ddic/tables/zsd001_t_x/source/main") for u in d.get("istek", [])),
+            f"{d}")
 
 
 def ucuncu_baglam(scripts: Path, kum: Path) -> None:
@@ -561,6 +747,7 @@ def main(argv: list[str]) -> int:
         senaryolar(scripts, kum)
         ucuncu_baglam(scripts, kum)
         eklenti_arayuzu(scripts, kum)
+        duzeltme_turu(scripts, kum)
     finally:
         _sil(kum)
     kirik = [a for a, ok, _ in SONUC if not ok]

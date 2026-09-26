@@ -42,11 +42,25 @@ objenin canlı GÜNCEL hali bu SEANSTA çekilmiş/yazılmış olmalı. Değilse 
 (exit 2) ve agent önce `sap_sync_pull.py` ile çeker → working-copy daima TAZE canlıdan
 türer → push, canlıdaki belgelenmemiş bir değişikliği ezmez. Subagent edit'lerinde de
 tetiklenir (kanıtlandı 2026-06-16: project-level PreToolUse subagent tool-çağrısında fire eder).
-**Muafiyet (sessiz GEÇ):** SAP-dışı dosya · ref_docs/docs/.tmp · class alt-include · dosya
+**Muafiyet (sessiz GEÇ):** SAP-dışı dosya · ref_docs/docs/.tmp · dosya
 YOK (yeni obje) · **git-DIRTY (commit'siz WIP = zaten üstünde çalışıyorsun → pull EZMESİN)** ·
 session_id/store yoksa fail-safe.
 
+> **Revize Q352 (2026-09-26, kullanıcı onayı):** ① **Class alt-include'ları ARTIK MUAF DEĞİL**
+> (eski "ana sınıfla gelir" varsayımı yanlıştı: alt-include'lar ayrı ADT uçlarındadır ve pull
+> onları okumuyordu). ② Tazelik damgası **DOSYA** anahtarlıdır (`source_drift.tazelik_anahtari`),
+> obje adı değil — ad-anahtarı ana sınıf çekilince `.ccimp`'i, DDLS çekilince aynı adlı BDEF'i
+> sahte-taze sayıyordu. ③ Tipi dosya adından kesin çıkmayan dosyalarda (`.abap/.prog.abap/
+> .func.abap`, DDL ailesi, Z tablo `.tabl.ddl/.tabl`) önerilen komut `--type auto`dur: tip canlı
+> ADT aramasıyla (tam ad + dosya ailesi) çözülür, 0/>1 aday → DUR. ④ Kapı, çekirdek
+> sınıflandırmanın tanımadığı dosyalar için `_` önekli eklenti modüllerine sorar
+> (`scripts/hooks/README.md`). Ayrıntı: `governance/infra-changelog.md` Q352.
+
 ### P2 — Sync helper (`scripts/sap_sync_pull.py`)
+> **Revize Q352:** `--type class` repo'daki alt-include'ları da KENDİ uçlarından çeker ve her
+> DOSYAYI ayrı damgalar (çekilemeyen `ÇEKİLMEDİ` der, damgalanmaz); `--file <yol>` hedef dosyayı
+> açıkça verir; `--type auto` tipi canlı aramayla çözer. Store yazımı (kilit + atomik) tek
+> yerdedir: `source_drift.tazelik_damgala` / `seans_kimligi` (diğer çekiciler de onu kullanır).
 Canlı AKTİF source'u çek → repo dosyasına yaz (CRLF korur, **tip-farkında** dosya eşleme:
 aynı-adlı `.cds`/`.bdef` çakışmasını object_type ile çözer) → seans-tazelik store'una
 (`.claude/.session_fresh.json`) damgala. Source-based tipler `sync_repo_from_live`; XML-DDIC
@@ -69,7 +83,9 @@ uyarı olarak görünür, push'u sadece o objeyi push ederken bloklar.
 ### Kapsam dışı (sahte-pozitif önleme)
 - `ref_docs/`/`docs/`/`.tmp/` altındakiler (ADR 0013: deploy edilebilir kaynak değil) → muaf.
 - Class ALT-source include'ları (`.ccimp`/`.ccdef`/`.ccau`/`.clas.locals_*`/`.clas.testclasses`)
-  ayrı ADT URL'lerine map olur (`/includes/...`, `/source/main` DEĞİL) → basename eşlemesinde elenir.
+  ayrı ADT URL'lerine map olur (`/includes/...`, `/source/main` DEĞİL) → **drift/basename
+  eşlemesinde** (ana kaynağın dosyası aranırken) elenir. ⚠ Bu, P1 kapısının muafiyeti DEĞİLDİR
+  (Q352'den beri kapı alt-include'u kendi damgasıyla ister; çekici onu kendi ucundan çeker).
 
 ## Enforcement (yeni model — pull-before-edit)
 

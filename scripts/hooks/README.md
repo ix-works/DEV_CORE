@@ -64,6 +64,20 @@ aksiyon almadı = **uyarı körlüğü**. Kanonik kayıt: `governance/removed-co
 değil) — kaldırma onu KAPSAMAZ.
 
 **Hook OLMAYAN dosyalar** (event'e bağlı değil, envanterde yok sayılmaz): `README.md` (bu dosya).
+⭐ **`_` önekli `*.py` = YARDIMCI MODÜL, hook DEĞİL** (C-TPL-01 `check_settings_template_sync`
+envanteri `_` ile başlayanları saymaz). Bugünkü tek kullanım: `pull_before_edit`'in **eklenti
+kaydı** `_EK_DENETCILER = ("_pbe_ui", "_pbe_msag_textpool")` — her eklenti
+`sinifla(path, root) -> Optional[dict]` (`{"nesne","tip","komut",["not"]}`) verir; kapı çekirdek
+sınıflandırmanın tanımadığı dosyada eklentilere sorar, tazeliği AYNI store'dan
+(`source_drift.tazelik_anahtari`) okur, çekici `source_drift.tazelik_damgala` ile yazar.
+`komut` = YALNIZ çalıştırılabilir komut; ⛔ eklenti `--session` BASMAZ — kapı hook'un seans
+kimliğini komutun SONUNA kendisi ekler (komutta `--session`/`--session=` yoksa; marker başka
+seansı gösterirken damga yanlış seansa gidip kapı döngüye giriyordu — bug gate N1). `not`
+(opsiyonel, str) blok mesajında komuttan sonra basılır; anahtar yoksa eski davranış.
+Eklenti dosyası yok → sessiz · yüklenemez → `EKLENTI-YUKLENEMEDI` · `sinifla()` istisnası →
+`EKLENTI-HATA` (ikisi de exit 0; **`SystemExit` DAHİL** — yalnız `KeyboardInterrupt` yükselir;
+import anında `sys.exit(2)` eskiden ilgisiz her edit'i BLOKLUYORDU — bug gate M2). ⛔ Eklentiye `_`siz ad verme: C-TPL-01 onu kablosuz hook
+sayar ve CI düşer (ölçülmüş vaka 2026-09-26, Q352; `pbe_kapsam` E12 çiviler).
 
 ---
 

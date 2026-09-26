@@ -59,6 +59,61 @@ def _dosya_coz(arg_file: str):
     return p if p.is_absolute() else (ROOT / p)
 
 
+def _dosya_tutarsizligi(obj: str, t: str, repo_file) -> str:
+    """`--file` obje adı ve `--type` ile tutarlı mı? Tutarlıysa "", değilse hata metni.
+
+    Bug gate M1 (2026-09-26): `--file` doğrulanmıyordu → `ZCL_BASKA --type class --file
+    ZCL_SD001_X.clas.abap` BAŞKA objenin kaynağını yazıp damgalıyor, `[OK]` diyordu.
+    ① Ad: dosya adının ilk noktaya kadarki gövdesi (BÜYÜK) == obje adı. Farklı ad taşıyan
+       meşru bir aile ÖLÇÜLMEDİ (tüketici korpusta `#` namespace dosyası 0; FM/include/
+       alt-include dosyaları da obje adını taşır) → gevşetme YOK.
+    ② Tip: dosya kapının sınıflandırmasıyla (`pbe_siniflandir`, TEK KAYNAK) uyuşmalı —
+       alt-include dosyası yalnız alt-include tipiyle ve AYNI türle; tipi dosyadan kesin
+       olan dosya yalnız o tiple; `auto` ailesindeki dosya `auto` ya da uzantısını kabul
+       eden açık bir tiple (`source_drift._TYPE_TO_EXTENSIONS`).
+    """
+    try:
+        from source_drift import pbe_siniflandir, _TYPE_TO_EXTENSIONS
+        from object_types import (is_class_include, normalize_class_include,
+                                  normalize_object_type)
+    except Exception as exc:  # noqa: BLE001
+        return f"--file doğrulanamadı ({exc}) — yazma/damga YOK"
+    def _n(x: str) -> str:
+        # `normalize_object_type` bdef/srvb gibi tiplerde ValueError atar → ham ad (küçük harf)
+        try:
+            return normalize_object_type(x)
+        except Exception:  # noqa: BLE001
+            return str(x).lower().strip()
+
+    govde = repo_file.name.split(".", 1)[0].upper()
+    if govde != obj.upper():
+        return (f"--file '{repo_file.name}' obje adı '{govde}' taşıyor, istenen '{obj}' — "
+                f"başka objenin dosyası YAZILMAZ/DAMGALANMAZ")
+    s = pbe_siniflandir(repo_file)
+    if not s:
+        return (f"--file '{repo_file.name}' PULL-BEFORE-EDIT kapsamında bir kaynak dosyası "
+                f"değil (kaynak kökü/uzantı) — yazma/damga YOK")
+    include_istek = is_class_include(t)
+    if s["tur"] == "sinif_include" or include_istek:
+        if not (s["tur"] == "sinif_include" and include_istek
+                and normalize_class_include(t) == s["tip"]):
+            return (f"--file '{repo_file.name}' türü '{s['tip']}', istenen --type '{t}' — "
+                    f"sınıf alt-include'u yalnız KENDİ türüyle çekilir (ör. --type {s['tip']})")
+        return ""
+    if t == "auto":
+        return ""  # aile uyumu auto dalında ayrıca denetlenir (tipi kesin dosya → red)
+    if s["tip"] != "auto":
+        if _n(t) != _n(s["tip"]):
+            return (f"--file '{repo_file.name}' tipi '{s['tip']}', istenen --type '{t}' — "
+                    f"tutarsız (ör. --type {s['tip']})")
+        return ""
+    izinli = _TYPE_TO_EXTENSIONS.get(t) or _TYPE_TO_EXTENSIONS.get(_n(t)) or ()
+    if not repo_file.name.lower().endswith(tuple(izinli)):
+        return (f"--file '{repo_file.name}' uzantısı --type '{t}' ile uyuşmuyor "
+                f"(izinli: {', '.join(izinli) or '-'}) — `--type auto` kullan")
+    return ""
+
+
 def _damgala(session: str, repo_path) -> str:
     """YAZILAN/DOĞRULANAN dosyayı seans-taze damgala → anahtar (boşsa damgalanmadı).
 
@@ -74,13 +129,18 @@ def _damgala(session: str, repo_path) -> str:
     return tazelik_damgala(session, repo_path, ROOT)
 
 
-def _sonuc(etiket: str, t: str, res: dict, session: str, komut_eki: str = "") -> int:
+def _sonuc(etiket: str, t: str, res: dict, session: str, komut_eki: str = "",
+           komut_tipi: str = "") -> int:
     """Tek dosyanın çekme sonucunu bildir; yalnız GERÇEKTEN yazılan/eşit bulunan dosya damgalanır.
 
     Döner: 0 = taze damgalandı · 1 = çekilmedi/korundu (damga YOK).
+    `komut_tipi`: önerilen tekrar komutunun `--type`i (verilmezse `t`). `--type auto` ile
+    çözülen tip (ör. `function`) doğrudan çekilebilir bir tip OLMAYABİLİR → auto dalı
+    tekrar komutunu yine `auto` ile basar (bug gate L1: "source URL türetilemedi" döngüsü).
     """
     yol = res.get("repo_path")
-    tekrar = f"python core/scripts/sap_sync_pull.py {etiket} --type {t}{komut_eki} --force"
+    tekrar = (f"python core/scripts/sap_sync_pull.py {etiket} --type {komut_tipi or t}"
+              f"{komut_eki} --force")
     if res.get("blocked_dirty"):
         # FIX-B: yerelde commit'siz değişiklik var → pull EZMEDİ (WIP korundu). Taze
         # DAMGALAMADIK ve exit 1 — manuel çağıran (gateway/ajan) net "korundu" sinyali alır.
@@ -238,6 +298,11 @@ def main() -> int:
     session = seans_kimligi(args.session)
     t = args.type.lower().strip()
     repo_file = _dosya_coz(args.file)
+    if repo_file is not None:
+        hata = _dosya_tutarsizligi(obj, t, repo_file)
+        if hata:
+            print(f"[FAIL] {obj} ({t}) {hata}")
+            return 1
 
     if args.offline:
         hedefler = _hedef_dosyalar(obj, t, repo_file)
@@ -245,11 +310,16 @@ def main() -> int:
             print(f"[FAIL] {obj} ({t}) --offline: damgalanacak repo dosyası çözülemedi "
                   f"(damga DOSYAYA yazılır). `--file <yol>` ver.")
             return 1
+        rc = 0
         for f in hedefler:
             if _damgala(session, f):
                 print(f"[OFFLINE] {f} fetch YAPILMADI, seans-taze damgalandı. "
                       f"DİKKAT: canlıdaki belgelenmemiş değişikliği ezme riskini kabul ettin.")
-        return 0
+            else:
+                # bug gate L2: damga yazılamadıysa başarı iddia EDİLMEZ (kapı hâlâ bloklar)
+                print(f"[FAIL] {f} --offline: damga YAZILAMADI — kapı bu dosyayı 'taze değil' sayar.")
+                rc = 1
+        return rc
 
     try:
         from sap_client import SAPClient
@@ -315,7 +385,7 @@ def main() -> int:
         except Exception as exc:
             print(f"[FAIL] {obj} ({cozulen}) canlıdan çekilemedi: {exc}")
             return 1
-        rc = _sonuc(obj, cozulen, res, session, dosya_eki)
+        rc = _sonuc(obj, cozulen, res, session, dosya_eki, komut_tipi="auto")
         if cozulen == "class":
             rc = max(rc, _sinif_includelari(obj, session, client.adt_client, args.force))
         return rc

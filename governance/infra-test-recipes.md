@@ -278,7 +278,9 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 ```bash
 python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_yarisi \
     bos_seans_markeri ddic_okuma_yolu class_include_push adt_uc_url_cozumu --precommit
-# pbe_kapsam taban 44/44 · ad-anahtari 39 · include-muaf 37 · abap-class 39 · tabl-yok 42 · eklenti-yok 39
+# pbe_kapsam taban 62/62 · ad-anahtari 57 · include-muaf 54 · abap-class 56 · tabl-yok 58 · eklenti-yok 52
+# bug gate #306: file-dogrulama-yok 57 · systemexit 60 · eklenti-session 61 · dirty-kok 61
+#                force-tipi 61 · offline-rc 61 · drift-tablo 60   (13/13 kip PASS, ~415 sn)
 ```
 - ⭐ **AYIRT EDİCİ ÇİFT (silinmez):** H3 *ana sınıf damgası `.ccimp`'i kapsamaz* + T7 *aynı adlı
   CDS damgası BDEF'i kapsamaz* — ad-anahtarına dönüşü yakalayan bunlardır; P3 uçtan uca
@@ -296,6 +298,16 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
   kablosuz HOOK sayılır ve CI düşer (E12). Eklenti blok metni "çeker/yazar" DEMEZ (komut
   yalnız karşılaştırıp damgalayabilir) — E2 ölçer, H1b çekirdek metnin korunduğunu ölçer. Yeni eklenti eklenince bu korpusun E
   vektörleri **stub** ile sözleşmeyi ölçmeye devam eder; eklentinin KENDİ korpusu ayrıdır.
+- **Bug gate #306 vektörleri (her biri AYRI mutasyonla geri sokulur, hepsi düşer):**
+  F1-F5 `--file` ad/tip tutarsızlığı → `[FAIL]` + **yazma YOK + damga YOK** (F6 KONTROL: doğru
+  ad + uzantıyı kabul eden açık tip damgalanır — aşırı-red yok) · E16/E17 eklentide `SystemExit`
+  (import + çağrı dalı) → not + exit 0 · E13-E15 kapı `--session <hook-sid>` ekler, `not` basılır,
+  `not` yokken basılmaz, hazır `--session=` çiftlenmez · N2 kök DIŞI depoda (kanonik `.wt`)
+  git-dirty muafiyeti (temiz = BLOK kontrolü) · L1 auto+KORUMA tekrar komutu `--type auto` ·
+  L2 `--offline` damga yazılamazsa rc 1 · L3a/L3b `check_source_drift` her `SOURCE_EXTENSIONS`
+  uzantısına canlı tip + tablo ucu (sahte istemci). ⛔ L1 satır seçimi: `--force` kelimesi
+  KORUMA açıklama satırında da geçer → komut satırını `sap_sync_pull.py` + `--force` ile seç
+  (ilk denemede açıklama satırını seçip sahte-kırmızı verdi).
 - **Canlı uç ölçümü (salt-GET) tekrar gerekirse:** `/oo/classes/<c>/includes/<segment>` (include
   yoksa 404 — "segment yanlış" değil; uydurma segment 400) · include + `/source/main` = 404 ·
   quickSearch `?operation=quickSearch&query=<AD>&maxResults=…` tam-ad + `adtcore:type`.
