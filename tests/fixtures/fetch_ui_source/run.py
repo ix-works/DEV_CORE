@@ -68,12 +68,51 @@ MUTASYONLAR = {
         "        if canlida:\n            _yol_sil(c, yol)\n"),
     # C — dolu --out dizinine yazılır
     "--mutasyon-out-dolu": (
-        FUS, "    if out is not None and out.exists() and any(out.iterdir()):\n", "    if False:\n"),
+        FUS, "    if out is not None and out.is_dir() and any(out.iterdir()):\n", "    if False:\n"),
+    # C — dolu-dizin ön kontrolü `exists()`a döner: --out bir DOSYA ise iterdir() çöker (bug-gate bulgu 1)
+    "--mutasyon-out-dosya-onkontrol": (
+        FUS, "    if out is not None and out.is_dir() and any(out.iterdir()):\n",
+        "    if out is not None and out.exists() and any(out.iterdir()):\n"),
     # C — sıfır-fark anında kapsam beyanı basılmaz
     "--mutasyon-kapsam-yok": (
-        FUS, '    print("\\n" + kapsam_beyani(zip_kaynagi, eslik_durumu, yerel_kok is not None, deploy_notu))\n'
-             "    return rc\n",
-        "    return rc\n"),
+        FUS, '    print("\\n" + beyan(zip_kaynagi))\n    return rc\n', "    return rc\n"),
+    # C — zip-slip denetimi kaldırılır (bug-gate bulgu 1)
+    "--mutasyon-zip-slip-yok": (FUS, "        if kok not in p.resolve().parents:", "        if False:"),
+    # C — doğrulama yazımla iç içe (kısmi yazım: reddedilen girdiden ÖNCEKİLER diske düşer; bulgu 1)
+    "--mutasyon-yaz-once-dogrula-yok": (
+        FUS, "        hedefler.append((p, b))\n",
+        "        p.parent.mkdir(parents=True, exist_ok=True)\n        p.write_bytes(b)\n"),
+    # C — --out yazımı ÖLÇÜLEMEDİ'ye çevrilmez (Olculemedi çökme olur; bulgu 1)
+    "--mutasyon-out-try-yok": (
+        FUS, "        try:\n            yaz(kaynak, out)\n        except Olculemedi as e:\n"
+             '            return olculemedi(zip_kaynagi, f"--out: {e}")\n',
+        "        yaz(kaynak, out)\n"),
+    # C — indirme/çözme bloğu yalnız Olculemedi yakalar (OSError/AttributeError… çöker; bulgu 1)
+    "--mutasyon-indirme-hata-dar": (
+        FUS, "    except (ValueError, AttributeError, binascii.Error, zlib.error, OSError, zipfile.BadZipFile) as e:\n",
+        "    except zipfile.BadZipFile as e:\n"),
+    # C — zip_coz yalnız BadZipFile yakalar (bozuk deflate = zlib.error kendi mesajını kaybeder; bulgu 1)
+    "--mutasyon-zipcoz-dar": (
+        FUS, "    except (zipfile.BadZipFile, zlib.error, RuntimeError, NotImplementedError) as e:\n",
+        "    except zipfile.BadZipFile as e:\n"),
+    # C — yanıt `d` nesnesi denetimi kaldırılır (liste gövdesi AttributeError; bulgu 1)
+    "--mutasyon-yanit-bicim-yok": (
+        FUS, '    d = j.get("d") if isinstance(j, dict) else None\n', '    d = j.get("d", {})\n'),
+    # C — ZipArchive base64 hatası yerelde yakalanmaz (bulgu 1)
+    "--mutasyon-b64-yerel-yok": (
+        FUS, "    except (binascii.Error, ValueError, TypeError) as e:\n", "    except KeyError as e:\n"),
+    # C — .conn_adt sarmalayıcısı atlanır: read_conn'un sys.exit(1)'i rc 1 olur (bulgu 2)
+    "--mutasyon-conn-sarmalayici-yok": (FUS, "zip_indir(bsp, baglanti())", "zip_indir(bsp, read_conn())"),
+    # C — boş ADT_SAP_URL/USER denetimi kaldırılır (bulgu 2)
+    "--mutasyon-bos-url-kontrol-yok": (FUS, "    if not conn[0] or not conn[1]:\n", "    if False:\n"),
+    # B — manifest tip-duyarsız kıyas: true == 1 (bulgu 3)
+    "--mutasyon-manifest-tip": (
+        FUS, "    if json.dumps(c, sort_keys=True) == json.dumps(y, sort_keys=True):\n", "    if c == y:\n"),
+    # B — .properties katı çözme kaldırılır: farklı bozuk baytlar AYNI U+FFFD'ye iner (bulgu 4)
+    "--mutasyon-prop-kati-yok": (FUS, '    hata = "strict" if kati else "replace"\n', '    hata = "replace"\n'),
+    # C — istenip koşmayan adım "İSTENMEDİ" yazılır (bulgu 5)
+    "--mutasyon-kapsam-istendi-yok": (
+        FUS, '    return f"İSTENDİ — KOŞMADI ({sebep})" if istendi else "İSTENMEDİ"\n', '    return "İSTENMEDİ"\n'),
     # E — canlıda olup dist'te olmayan dosya rc'yi etkilemez (deploy listesi kör)
     "--mutasyon-deploy-listesi-kor": (FUS, "        if yalniz_c:\n            print(\"  ⛔ canlıda",
                                       "        if False:\n            print(\"  ⛔ canlıda"),
@@ -81,8 +120,7 @@ MUTASYONLAR = {
     "--mutasyon-tam-liste-yok": (FUS, "        if liste_farki and sinif != ESLIK_YOK:\n", "        if False:\n"),
     # D — eşlik YOK iken DURMAZ (--out yazılır)
     "--mutasyon-eslik-dur-yok": (
-        FUS, '        if sinif == ESLIK_YOK:\n            print("\\n" + kapsam_beyani(zip_kaynagi, eslik_durumu, False))\n',
-        '        if False:\n            print("\\n" + kapsam_beyani(zip_kaynagi, eslik_durumu, False))\n'),
+        FUS, '        if sinif == ESLIK_YOK:\n            print("     DUR:', '        if False:\n            print("     DUR:'),
 }
 
 
@@ -128,6 +166,7 @@ if Path(F.__file__).resolve().parent != SCRIPTS.resolve():
     _dur(f"yanlış modül yüklendi: {F.__file__} (beklenen {SCRIPTS})")
 
 SONUC: list[tuple[str, bool, str]] = []
+COKMELER: list[str] = []   # main() çökmesi ASLA geçer sayılmaz → Z0 vektörü (bug-gate 2026-09-26, bulgu 1)
 
 
 def kontrol(ad: str, ok: bool, detay: str = "") -> None:
@@ -141,8 +180,9 @@ def cagir(argv: list[str]) -> tuple:
             rc = F.main(argv)
     except SystemExit as e:
         rc = e.code
-    except Exception as e:  # çökme vektör sonucu olarak raporlanır
-        rc = f"COKTU {type(e).__name__}: {e}"
+    except Exception as e:  # çökme: rc sayı DEĞİL (hiçbir rc kıyası tutmaz) + Z0'da FAIL
+        COKMELER.append(f"{argv[:2]}… → {type(e).__name__}: {e}")
+        rc = f"CÖKME {type(e).__name__}"
     return rc, t.getvalue() + h.getvalue()
 
 
@@ -302,6 +342,17 @@ kontrol("B10 YALNIZ-CANLI / YALNIZ-YEREL", rl.get("lib/vendor.js") == F.YALNIZ_C
         and rl.get("test/x.js") == F.YALNIZ_YEREL, str(rl))
 kontrol("B11 ikili: satır sonu farkı normalize EDİLMEZ → GERCEK-FARK",
         F.dosya_kiyasla("img/logo.png", PNG, PNG.replace(b"\r\n", b"\n"))[0] == F.GERCEK)
+m_bool, m_int = json.loads(json.dumps(MANIFEST_YEREL)), json.loads(json.dumps(MANIFEST_YEREL))
+m_bool["sap.ui5"]["bayrak"], m_int["sap.ui5"]["bayrak"] = True, 1
+kontrol("B12 manifest tip farkı: canlı `1` ↔ yerel `true` → GERCEK-FARK (Python true==1 tuzağı)",
+        F.dosya_kiyasla("manifest.json", jb(m_int), jb(m_bool))[0] == F.GERCEK)
+kontrol("B13 .properties iki FARKLI bozuk bayt (yerel \\xfe · canlı \\xff) → GERCEK-FARK (U+FFFD'de birleşmez)",
+        F.dosya_kiyasla("i18n/i18n.properties", b"x=\xff\n", b"x=\xfe\n")[0] == F.GERCEK)
+p14 = F.dosya_kiyasla("i18n/i18n.properties", b"x=\xff\n", "x=\ufffd\n".encode("utf-8"))
+kontrol("B14 canlı geçersiz UTF-8 ↔ yerel harfiyen U+FFFD → GERCEK-FARK (canlıdaki kayıp BUILD sayılmaz)",
+        p14[0] == F.GERCEK and "canlı geçersiz" in p14[1], str(p14[:2]))
+kontrol("B15 FP çapası: canlı meşru `\\ufffd` KAÇIŞI ↔ yerel U+FFFD → BUILD-DONUSUMU",
+        F.dosya_kiyasla("i18n/i18n.properties", b"x=\\ufffd\n", "x=\ufffd\n".encode("utf-8"))[0] == F.BUILD)
 
 # ───────────────────────────── C — main() AĞSIZ ─────────────────────────────
 TEMIZ_ZIP = zip_yaz(canli_bsp(), KUM / "canli.zip")
@@ -328,13 +379,108 @@ kontrol("C4 --out: geri kurulan küme yazılır, metin baytlarında CR YOK, PNG 
 bozuk = KUM / "bozuk.zip"
 bozuk.write_bytes(b"PK-degil")
 rc, out = cagir(["--zip", str(bozuk), "--karsilastir", str(yerel)])
-kontrol("C5 bozuk zip → rc 2 + OLCULEMEDI (temiz sayılmaz)", rc == 2 and "[OLCULEMEDI]" in out, f"rc={rc} {out[:200]}")
+kontrol("C5 bozuk zip → rc 2 + OLCULEMEDI (temiz sayılmaz) + istenen --karsilastir 'İSTENDİ — KOŞMADI'",
+        rc == 2 and "[OLCULEMEDI]" in out and "karşılaştırma: İSTENDİ — KOŞMADI (ÖLÇÜLEMEDİ" in out,
+        f"rc={rc} {out[-700:]}")
 rc, out = cagir(["--zip", str(KUM / "yok.zip")])
 kontrol("C6 olmayan --zip → rc 2 + OLCULEMEDI (çökme değil)", rc == 2 and "[OLCULEMEDI]" in out, f"rc={rc} {out[:200]}")
-kacak = zip_yaz({"../kacak.txt": b"x", "manifest.json": b"{}"}, KUM / "kacak.zip")
-rc, out = cagir(["--zip", str(kacak), "--out", str(KUM / "kacak_hedef")])
-kontrol("C7 zip içi `../` yolu hedef dışına yazılmaz", not (KUM / "kacak.txt").exists() and rc != 0,
-        f"rc={rc} {out[:200]}")
+# Sıra bilinçli: a.txt ve manifest.json kaçak girdiden ÖNCE gelir ⇒ "önce yaz sonra doğrula" kısmi yazım bırakırdı.
+kacak = zip_yaz({"a.txt": b"x\n", "manifest.json": b"{}", "zz/../../kacak.txt": b"x"}, KUM / "kacak.zip")
+kacak_hedef = KUM / "kacak_hedef"
+rc, out = cagir(["--zip", str(kacak), "--out", str(kacak_hedef)])
+kontrol("C7 zip-slip: `zz/../../` → rc 2 + OLCULEMEDI + kapsam beyanı; hedef dışına VE hedefe HİÇBİR dosya yazılmaz",
+        rc == 2 and "[OLCULEMEDI]" in out and "KAPSAM BEYANI" in out and not (KUM / "kacak.txt").exists()
+        and not (kacak_hedef.exists() and any(kacak_hedef.rglob("*"))),
+        f"rc={rc} {sorted(kacak_hedef.rglob('*')) if kacak_hedef.exists() else '-'} {out[:300]}")
+out_dosya = KUM / "out_bir_dosya.txt"
+out_dosya.write_bytes(b"dokunma")
+rc, out = cagir(["--zip", str(TEMIZ_ZIP), "--out", str(out_dosya)])
+kontrol("C8 --out bir DOSYA → rc 2 + OLCULEMEDI (çökme değil), dosya değişmez",
+        rc == 2 and "[OLCULEMEDI]" in out and out_dosya.read_bytes() == b"dokunma", f"rc={rc} {out[:300]}")
+
+
+def deflate_boz(dosyalar: dict[str, bytes], yol: Path) -> Path:
+    """Sıkıştırılmış veriyi 0xFF ile ez ⇒ BTYPE=11 (ayrılmış) ⇒ z.read() zlib.error (CRC'ye varmadan)."""
+    zip_yaz(dosyalar, yol)
+    ham = bytearray(yol.read_bytes())
+    with zipfile.ZipFile(yol) as z:
+        for zi in z.infolist():
+            bas = zi.header_offset + 30 + len(zi.filename.encode()) + len(zi.extra)
+            ham[bas:bas + zi.compress_size] = b"\xff" * zi.compress_size
+    yol.write_bytes(bytes(ham))
+    return yol
+
+
+rc, out = cagir(["--zip", str(deflate_boz({"manifest.json": b"{}" * 50}, KUM / "zlib.zip"))])
+kontrol("C9 bozuk deflate (zlib.error) → rc 2 + 'zip çözülemedi' (çökme değil)",
+        rc == 2 and "zip çözülemedi" in out and "error" in out, f"rc={rc} {out[:300]}")
+
+# ── ağ katmanı SAHTE (urlopen + read_conn yamalı): SAP'ye/ağa dokunulmaz ──
+CONN = ("https://sahte.invalid", "<SAP_USER>", "x", "100")
+ISTEKLER: list[str] = []
+
+
+class _Yanit:
+    def __init__(self, govde: bytes):
+        self.govde = govde
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self) -> bytes:
+        return self.govde
+
+
+def sahte_ag(govde: bytes, *ek: str) -> tuple:
+    asil_url, asil_conn = F.urllib.request.urlopen, F.read_conn
+
+    def _ac(req, context=None, timeout=None):
+        ISTEKLER.append(req.get_method())
+        return _Yanit(govde)
+    F.urllib.request.urlopen, F.read_conn = _ac, (lambda: CONN)
+    try:
+        return cagir(["--bsp", "ZSD001_APP", *ek])
+    finally:
+        F.urllib.request.urlopen, F.read_conn = asil_url, asil_conn
+
+
+rc, out = sahte_ag(b"[1, 2]")
+kontrol("C10 yanıt JSON ama nesne değil (liste) → rc 2 + '`d` nesnesi yok' (AttributeError çökmesi değil)",
+        rc == 2 and "`d` nesnesi yok" in out, f"rc={rc} {out[:300]}")
+rc, out = sahte_ag(b'{"d": {"ZipArchive": "abc", "Name": "ZSD001_APP"}}')
+kontrol("C11 ZipArchive bozuk base64 → rc 2 + 'base64 çözülemedi'", rc == 2 and "base64 çözülemedi" in out,
+        f"rc={rc} {out[:300]}")
+import base64 as _b64  # noqa: E402
+iyi_govde = json.dumps({"d": {"ZipArchive": _b64.b64encode(TEMIZ_ZIP.read_bytes()).decode(), "Name": "ZSD001_APP",
+                              "Package": "ZSD001", "Description": "x"}}).encode()
+engel = KUM / "engel_dosya"
+engel.write_bytes(b"x")
+rc, out = sahte_ag(iyi_govde, "--zip-kaydet", str(engel / "alt" / "canli.zip"))
+kontrol("C12 --zip-kaydet yazılamıyor (üst yol bir dosya; OSError) → rc 2 + OLCULEMEDI (çökme değil)",
+        rc == 2 and "[OLCULEMEDI]" in out and "indirme/çözme" in out, f"rc={rc} {out[:300]}")
+rc, out = sahte_ag(iyi_govde, "--karsilastir", str(yerel))
+kontrol("C13 kontrol grubu: sahte ağ + geçerli yanıt → rc 0, GERCEK-FARK=0; ağa giden HER istek GET",
+        rc == 0 and "GERCEK-FARK=0" in out and ISTEKLER and set(ISTEKLER) == {"GET"}, f"rc={rc} {ISTEKLER} {out[-300:]}")
+
+# ── .conn_adt: gerçek giriş noktası (alt süreç) + boş alanlar (bulgu 2) ──
+bos_proje = KUM / "bos_proje"
+bos_proje.mkdir()
+p = subprocess.run([sys.executable, str(SCRIPTS / "fetch_ui_source.py"), "--bsp", "ZSD001_APP"],
+                   capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(bos_proje),
+                   env={**os.environ, "CLAUDE_PROJECT_DIR": str(bos_proje), "PYTHONIOENCODING": "utf-8"}, timeout=120)
+kontrol("C14 CLAUDE_PROJECT_DIR=.conn_adt'siz dizin (alt süreç) → rc 2 + OLCULEMEDI + kapsam beyanı (rc 1 değil)",
+        p.returncode == 2 and "[OLCULEMEDI]" in p.stderr and ".conn_adt okunamadı" in p.stderr
+        and "KAPSAM BEYANI" in p.stdout, f"rc={p.returncode} {p.stderr[-300:]}")
+(KUM / ".conn_adt").write_text("ADT_SAP_URL=\nADT_SAP_USER=\n", encoding="utf-8")
+try:
+    rc, out = cagir(["--bsp", "ZSD001_APP"])
+finally:
+    (KUM / ".conn_adt").unlink()
+kontrol("C15 .conn_adt'de URL/kullanıcı BOŞ → rc 2 + '.conn_adt … boş' (ağa çıkmadan)",
+        rc == 2 and "ADT_SAP_URL / ADT_SAP_USER boş" in out, f"rc={rc} {out[:300]}")
 
 # ───────────────── D — --eslik: gerçek alt süreç + SAHTE ui5 CLI (3. bağlam) ─────────────────
 SAHTE_PY = KUM / "sahte_ui5.py"
@@ -392,9 +538,15 @@ kontrol("D3 fark YALNIZ kaçışlı \\r\\n → ESLIK-SATIR-SONU (ayrı kova) rc 
         rc == 0 and "[ESLIK-SATIR-SONU]" in out and "[ESLIK-TAM]" not in out, f"rc={rc}\n{out[-500:]}")
 dist_kod = lf(canli_bsp(**{"Component-preload.js":
                            b'window.x=1;sap.ui.require.preload({\n"ns/app/view/Main.view.xml":\'<x/>\'\n});\n'}))
-rc, out = eslik(canli_bsp(), dist_kod, "d4", "--out", str(KUM / "d4_out"))
-kontrol("D4 preload JS kodu farklı → ESLIK-YOK rc 1, DUR (--out YAZILMAZ)",
-        rc == 1 and "[ESLIK-YOK]" in out and not (KUM / "d4_out").exists(), f"rc={rc}\n{out[-500:]}")
+rc, out = eslik(canli_bsp(), dist_kod, "d4", "--out", str(KUM / "d4_out"), "--karsilastir", str(yerel),
+                "--dist-karsilastir", str(yerel))
+kontrol("D4 preload JS kodu farklı → ESLIK-YOK rc 1, DUR (--out YAZILMAZ; DUR satırı --dist-karsilastir'ı da anar; "
+        "istenen üç adım kapsamda 'İSTENDİ — KOŞMADI')",
+        rc == 1 and "[ESLIK-YOK]" in out and not (KUM / "d4_out").exists()
+        and "ve --dist-karsilastir KOŞMADI" in out
+        and all(f"{e}: İSTENDİ — KOŞMADI (ESLIK-YOK → DUR)" in out for e in ("--out    ", "deploy listesi",
+                                                                            "karşılaştırma"))
+        and "=== KARŞILAŞTIR" not in out and "=== DEPLOY LİSTESİ" not in out, f"rc={rc}\n{out[-900:]}")
 dist_map = lf(canli_bsp(**{"controller/Main.controller.js.map": b'{"version":3,"sources":["Main-dbg.controller.js"],'
                                                                  b'"mappings":"AACA"}'}))
 rc, out = eslik(canli_bsp(), dist_map, "d5")
@@ -434,6 +586,8 @@ kontrol("E3 yeni + değişen dosya → YALNIZ-DIST / DEGISECEK listelenir, rc 0 
         f"rc={rc}\n{out[-400:]}")
 rc, out = cagir(["--zip", str(z), "--dist-karsilastir", str(KUM / "yok_dist")])
 kontrol("E4 dist dizini yok → rc 2 (kullanım; 'temiz' değil)", rc == 2, f"rc={rc}")
+
+kontrol("Z0 hiçbir main() çağrısı ÇÖKMEDİ (çökme geçer sayılmaz)", not COKMELER, "; ".join(COKMELER))
 
 # ───────────────────────────── özet ─────────────────────────────
 gecen = sum(ok for _, ok, _ in SONUC)
