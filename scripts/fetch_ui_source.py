@@ -47,9 +47,12 @@ NE YAPAR (yalnız GET — SAP'ye hiçbir şey yazmaz):
      `--damgala`             PULL-BEFORE-EDIT (ADR 0016, Q352-B) seans-tazelik damgası: `--karsilastir
                              <app>/webapp` TEMİZ çıkarsa o webapp'in dosyaları seans-taze damgalanır →
                              kapı (`hooks/_pbe_ui`) düzenlemeye izin verir. Damga YALNIZ: taze indirme
-                             (`--zip` → YOK) · rc 0 · kaynak haritası sapması yok · webapp proje içinde ve
-                             BSP'si app'in `ui5-deploy.yaml`'ıyla tutarlı. Bu kipte deploy `exclude`
-                             altındaki YALNIZ-YEREL dosyalar `DEPLOY-DISI` etiketlenir (canlıya hiç gitmez;
+                             (`--zip` → YOK) · rc 0 · kaynak haritası sapması yok · webapp kapının kapsamında
+                             (proje kökü DIŞINDAKİ `.wt` worktree'si dahil — anahtar mutlak, store proje
+                             kökününki; ABAP kapısıyla simetrik) ve BSP'si app'in `ui5-deploy.yaml`'ıyla
+                             tutarlı. Bu kipte YALNIZ `deploy-to-abap` görevinin `configuration.exclude`
+                             önekleri (HARF DUYARLI — deploy aracı `RegExp(regex,"g")`) altındaki
+                             YALNIZ-YEREL dosyalar `DEPLOY-DISI` etiketlenir (canlıya hiç gitmez;
                              rc'ye sayılmaz). rc 1/2'de ASLA damga yok. `--session` opsiyonel geçersiz kılma
                              (varsayılan: SessionStart marker'ı, `source_drift.seans_kimligi`).
      `--offline`             (yalnız `--damgala` ile) İNDİRMEDEN damgala — `sap_sync_pull --offline` ile
@@ -660,19 +663,19 @@ def main(argv: list[str] | None = None) -> int:
             print("[KULLANIM] --offline indirme yapmaz; --eslik/--out/--dist-karsilastir/--zip-kaydet ile birlikte "
                   "kullanılamaz", file=sys.stderr)
             return 2
+        # Proje kökü DIŞINDAKİ webapp (kanonik `.wt` worktree'si) da damgalanır — kapı onu kapsıyor
+        # (`uygulama_coz` mutlak yolda kök segmentini arar); anahtar `tazelik_anahtari`'nin mutlak dalı,
+        # store PROJE kökününki. Aksi hâlde kapı bloklar ama damga yolu olmaz = kalıcı kilit (bug gate).
         try:
-            yerel_kok.resolve().relative_to(REPO.resolve())
             pbe = ui_eklenti_modulu()
             cozum = pbe.uygulama_coz(yerel_kok / "_", REPO) if yerel_kok.name.lower() == pbe.WEBAPP else None
-        except ValueError:
-            cozum = None
         except Exception as e:   # noqa: BLE001 — eklenti yüklenemezse damga YOK (sahte-taze yok)
             print(f"[OLCULEMEDI] PULL-BEFORE-EDIT UI eklentisi yüklenemedi ({type(e).__name__}: {e}) — "
                   "damga YAZILMADI", file=sys.stderr)
             return 2
         if cozum is None:
-            print(f"[KULLANIM] --damgala yalnız proje ({REPO}) içindeki, kapının kapsadığı bir "
-                  f"`<app>/webapp` dizini için: {yerel_kok}", file=sys.stderr)
+            print(f"[KULLANIM] --damgala yalnız PULL-BEFORE-EDIT kapısının kapsadığı bir `<kök-segment>/…/<app>/webapp` "
+                  f"dizini için (ref_docs/docs/.tmp/node_modules … altı değil): {yerel_kok}", file=sys.stderr)
             return 2
         app = cozum[0]
         app_bsp = bsp_name(app)

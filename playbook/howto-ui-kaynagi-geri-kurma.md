@@ -110,21 +110,31 @@ Beklenen: `YALNIZ-CANLI=0 · değişecek=0 · yalnız-dist=0` ve `GERCEK-FARK=0`
 ## 2.1 PULL-BEFORE-EDIT kapısı — `webapp/` düzenlemesi bloklandıysa (Q352-B, ADR 0016)
 
 `<source_root>/…/<app>/webapp/**` altındaki bir dosyayı düzenlemek, o seansta canlıyla eşitliği
-ölçülüp **damgalanmadıysa** bloklanır (`scripts/hooks/_pbe_ui.py`; kapı `pull_before_edit`). Blok mesajı
-şu komutu verir (seans kimliği marker'dan çözülür, `--session` gerekmez):
+ölçülüp **damgalanmadıysa** bloklanır (`scripts/hooks/_pbe_ui.py`; kapı `pull_before_edit`). Proje kökü
+**dışındaki** webapp (kanonik `.wt` worktree'si) de kapsamdadır — ABAP kapısıyla simetrik; damga mutlak
+yol anahtarıyla proje kökünün store'una yazılır. Blok mesajı şu komutu verir — sonuna kapı **o seansın**
+`--session <id>`'sini ekler; komutu kopyalayıp **olduğu gibi** koş:
 ```bash
-python core/scripts/fetch_ui_source.py --app-dir "<ui>/<app>" --karsilastir "<ui>/<app>/webapp" --damgala
+python core/scripts/fetch_ui_source.py --app-dir "<ui>/<app>" --karsilastir "<ui>/<app>/webapp" --damgala --session <id>
 ```
+Elle (blok mesajı olmadan) koşarken `--session` verilmezse araç SessionStart marker'ına
+(`.claude/.current_session`) düşer; marker yoksa **damga yazılmaz** (rc 2, `--session` istenir) —
+marker başka bir oturumun kimliğini taşıyorsa damga o oturuma gider ve kapı seni yine bloklar, bu yüzden
+blok mesajındaki `--session`'lı komut tercih edilir.
 | Sonuç | Anlamı | Ne yapılır |
 |---|---|---|
 | rc 0 · `PBE damgası: YAZILDI — N dosya` | canlı = yerel (yalnız `AYNI` / `BUILD-DONUSUMU` / `DEPLOY-DISI`) | düzenle; damga **seans boyunca** geçerli (kendi deploy'undan sonra da) |
 | rc 1 · `YAPILMADI — … eşit değil` | canlıda yerelde olmayan iş var (`GERCEK-FARK` / `YALNIZ-CANLI`) ya da deploy edilmemiş yerel dosya | ③/④: diff'i kullanıcıya göster, **otoriteyi kullanıcı seçer**; canlı seçilirse `--zip-kaydet` → `--zip … --out <scratch>/webapp` → seçerek kopyala → komutu yeniden koş |
-| rc 2 | ÖLÇÜLEMEDİ / kullanım (`--zip` ile damga yok · başka app'in `--app-dir`'i · BSP uyuşmazlığı · proje dışı dizin · seans çözülemedi) | nedeni gider; **damga yazılmadı** |
+| rc 2 | ÖLÇÜLEMEDİ / kullanım (`--zip` ile damga yok · başka app'in `--app-dir`'i · BSP uyuşmazlığı · kapı kapsamı dışında dizin · seans çözülemedi) | nedeni gider; **damga yazılmadı** |
 
-- **Kapsam dışı:** app'in `ui5-deploy.yaml` deploy görevindeki `configuration.exclude` önekleri (ör.
-  `/test/`) — canlıya hiç gitmez; `--damgala` kipinde bu yollardaki yerel dosyalar `DEPLOY-DISI` etiketlenir
-  ve rc'ye sayılmaz. Builder `resources.excludes` **muafiyet değildir** (ölçüldü: `localService/` canlıda
-  VAR). Regex/satır-içi gibi anlaşılmayan exclude biçimi muafiyet VERMEZ (kapsam beyanında listelenir).
+- **Kapsam dışı:** YALNIZ app'in `ui5-deploy.yaml`'ındaki `deploy-to-abap` görevinin `configuration.exclude`
+  önekleri (ör. `/test/`) — canlıya hiç gitmez; `--damgala` kipinde bu yollardaki **yalnız-yerel** dosyalar
+  `DEPLOY-DISI` etiketlenir ve rc'ye sayılmaz (canlıda olup yerelde olmayan dosya `YALNIZ-CANLI` kalır).
+  Builder `resources.excludes`, başka görevlerin ve görev-düzeyi `exclude` **muafiyet değildir** (ölçüldü:
+  `localService/` canlıda VAR). Eşleşme **HARF DUYARLI**dır (deploy aracı her girdiyi `RegExp(regex, "g")`
+  ile, `i` bayrağı olmadan kıyaslar — `@sap/ux-ui5-tooling` 1.25.0 kodundan ölçüldü): `/test/` deseni
+  `Test/…`i muaf saymaz. `/test/**`, regex ve satır-içi liste gibi anlaşılmayan biçimler muafiyet VERMEZ
+  (kapsam beyanında listelenir).
 - **`--offline` kaçışı** (`sap_sync_pull --offline` ile aynı anlam): SAP erişilemiyorsa ya da yerel canlıdan
   **ileride**yse (commit'li ama henüz deploy edilmemiş iş) aynı komuta `--offline` ekle — indirmeden
   damgalar, `[OFFLINE]` uyarısı basar; canlıdaki belgelenmemiş değişikliği ezme riskini bilerek kabul edersin.
@@ -138,8 +148,10 @@ python core/scripts/fetch_ui_source.py --app-dir "<ui>/<app>" --karsilastir "<ui
   namespace'li BSP adı (`/X/…`) · `s4_public`/`btp_abap` · deploy'un canlıdan dosya SİLME
   davranışı · ADT filestore yolu (`/sap/bc/adt/filestore/ui5-bsp/…`; bir makinede zaman aşımı).
 - Canlı = indirilen zip anı; ICF servis katmanı ölçülmez.
-- PBE kapısı: deploy `exclude` girdisi yalnız webapp köküne göre **önek** yorumlanır; deploy aracının
-  iç içe yol (`view/test/…`) eşleşmesi ölçülmedi (daha dar muafiyet = daha çok kapı, güvenli yön).
+- PBE kapısı: deploy `exclude` girdisi yalnız webapp köküne göre, harf duyarlı **önek** yorumlanır.
+  Deploy aracı girdiyi çapasız regex olarak `/resources/<proje-adı>/<rel>` üzerinde arar ⇒ iç içe yolları
+  (`view/test/…`) da dışlar; kapının yorumu bunun **alt kümesidir** (daha dar muafiyet = daha çok kapı,
+  güvenli yön; sahte-muaf yok).
 
 ## İlgili
 - `scripts/fetch_ui_source.py` (docstring: kipler, çıkış kodları) · `scripts/deploy_ui.py` · `scripts/verify_ui_static_assets.py`

@@ -7,17 +7,22 @@ grubu: aynı canlı zip ↔ senkron-öncesi repo webapp'i → GERCEK-FARK=4 (vie
 Bu fixture o vakanın SENTETİK karşılığını (canlıda fazladan kolon) taşır.
 
 Eksenler:
-  A  `_pbe_ui.sinifla()` — kapsam: webapp/** · deploy `exclude` muafiyeti (tekil anahtar; builder
-     `excludes` DEĞİL) · anlaşılmayan desen muafiyet VERMEZ · kök-segment / hariç üst dizin ·
-     ui5-deploy.yaml yok → yer tutuculu dict (sessiz geçiş YOK)
+  A  `_pbe_ui.sinifla()` — kapsam: webapp/** · muafiyet YALNIZ `deploy-to-abap` görevinin
+     `configuration.exclude`'u (builder `excludes` / başka görev / görev-düzeyi `exclude` DEĞİL) ·
+     HARF DUYARLI önek (deploy aracı `RegExp(regex,"g")`, i bayrağı yok — ölçüldü) · `/x/**` ve
+     anlaşılmayan desen muafiyet VERMEZ · kök-segment / hariç üst dizin · proje kökü DIŞI webapp
+     (`.wt` worktree'si) kapsamda · ui5-deploy.yaml yok → yer tutuculu dict · `komut` saf komut
+     (`--session` yok, açıklama yok), açıklama + `--offline` kaçışı `not` anahtarında
   B  `fetch_ui_source --damgala` (in-process `main()`, indirme yamalı, damga API'si kayıt stub'ı):
      temiz → damga · fark / yalnız-canlı / harita sapması → damga YOK · `--zip` / yanlış app /
-     yanlış BSP / proje dışı → rc 2, damga YOK · `--offline` → indirmesiz damga + uyarı ·
+     yanlış BSP → rc 2, damga YOK · proje kökü DIŞI webapp → damga (mutlak anahtar) ·
+     YALNIZ-CANLI test/ DEPLOY-DISI SAYILMAZ · `--offline` → indirmesiz damga + uyarı ·
      seans çözülemedi → rc 2 · `--damgala` YOKKEN rc semantiği DEĞİŞMEZ · damga seans boyunca
      geçerli (sonraki düzenlemeler bloklanmaz)
   C  3. BAĞLAM — GERÇEK kapı alt süreci (`hooks/pull_before_edit.py`, stdin payload) + GERÇEK
      store (`source_drift.tazelik_damgala`): damgasız → exit 2 + komut · damgadan sonra → exit 0 ·
-     deploy-dışı dosya → exit 0 · başka seans → exit 2. Altyapı (Q352-A: eklenti kaydı + dosya-anahtarlı
+     deploy-dışı dosya → exit 0 · başka seans → exit 2 · kök DIŞI webapp: blok → damgala → serbest
+     (kalıcı kilit yok). Altyapı (Q352-A: eklenti kaydı + dosya-anahtarlı
      damga) bulunamazsa C0 FAIL (sessiz atlama yok).
 
 Koşum:     python tests/fixtures/pbe_ui/run.py
@@ -57,11 +62,29 @@ MUTASYONLAR = {
         '    """PULL-BEFORE-EDIT eklenti sözleşmesi (modül başlığı)."""\n    return None\n'),
     # A — deploy exclude muafiyeti yok (test/** kapıda kalır; damga kipinde YALNIZ-YEREL → rc 1)
     "--mutasyon-deploy-haric-yok": (PBE, "    return any(r.startswith(o) for o in onekler)\n", "    return False\n"),
-    # A — builder `excludes:` (çoğul) da deploy exclude sayılır (localService muaf olur — canlıda VAR)
-    "--mutasyon-excludes-cogul": (PBE, r'm = re.match(r"^\s*exclude:', r'm = re.match(r"^\s*excludes?:'),
+    # A — HER özel görevin `exclude`'u okunur (deploy-to-abap kapsamı kalkar)
+    "--mutasyon-gorev-adi-yok": (PBE, "            if m_oge.group(\"ad\") == DEPLOY_GOREVI:\n", "            if True:\n"),
+    # A — `configuration:` şartı kalkar (görev-düzeyi `exclude` da okunur)
+    "--mutasyon-conf-kapsami-yok": (
+        PBE, '        if conf_g is None:\n            if re.match(r"^configuration:\\s*(?:#.*)?$", govde):\n'
+             '                conf_g = g\n            continue\n', ""),
     # A — anlaşılmayan desen de önek sayılır (fail-closed kırılır)
-    "--mutasyon-anlasilmayan-muaf": (PBE, "                anlasilmayan.append(ham)\n",
-                                     "                onekler.append(ham.strip('/^$.*') + '/')\n"),
+    "--mutasyon-anlasilmayan-muaf": (PBE, "                    anlasilmayan.append(ham)\n",
+                                     "                    onekler.append(ham.strip('/^$.*') + '/')\n"),
+    # A — `/x/**` düz desen sayılır (aracın regex'inde geçersiz/farklı anlamlı)
+    "--mutasyon-yildiz-kabul": (PBE, '/?$")\nDEPLOY_GOREVI', '/?(?:\\*\\*)?$")\nDEPLOY_GOREVI'),
+    # A — harf DUYARSIZ kıyas (M6: `Test/` dosyası `/test/` ile sahte-muaf olur)
+    "--mutasyon-harf-duyarsiz": (PBE, '    r = rel.replace("\\\\", "/").lstrip("/")\n    return any(r.startswith(o) for o in onekler)\n',
+                                 '    r = rel.replace("\\\\", "/").lstrip("/").lower()\n'
+                                 '    return any(r.startswith(o.lower()) for o in onekler)\n'),
+    # A — önek küçük harfe indirgenir (`/Test/` deseni `Test/` dosyasını muaf SAYMAZ olur)
+    "--mutasyon-onek-kucuk": (PBE, '                    onekler.append(d.group("yol") + "/")\n',
+                              '                    onekler.append(d.group("yol").lower() + "/")\n'),
+    # A — kök DIŞI webapp (worktree) kapsam dışı sayılır (M14)
+    "--mutasyon-kok-disi-none": (PBE, "        ust = [s.lower() for s in app.parts]\n", "        return None\n"),
+    # A — komuta açıklama eklenir (kapının eklediği `--session` açıklamanın arkasına düşer)
+    "--mutasyon-komut-aciklamali": (PBE, "--karsilastir \"{a}/{WEBAPP}\" --damgala'\n",
+                                    "--karsilastir \"{a}/{WEBAPP}\" --damgala' + \"   (açıklama)\"\n"),
     # A — kök segment şartı kalkar (proje kaynak kökü dışındaki webapp da kapıya girer)
     "--mutasyon-kok-seg-yok": (PBE, "    if not (kok_seg & set(ust)) or (haric & set(ust)):\n",
                                "    if haric & set(ust):\n"),
@@ -86,8 +109,10 @@ MUTASYONLAR = {
     "--mutasyon-app-uyumsuz": (FUS, "        if a.app_dir and Path(a.app_dir).resolve() != app.resolve():\n", "        if False:\n"),
     # B — BSP uyuşmazlığı denetimi kalkar
     "--mutasyon-bsp-uyumsuz": (FUS, "        if a.bsp and app_bsp and a.bsp.upper() != app_bsp.upper():\n", "        if False:\n"),
-    # B — proje dışı webapp damgalanır
-    "--mutasyon-repo-disi": (FUS, "            yerel_kok.resolve().relative_to(REPO.resolve())\n", ""),
+    # B — kök DIŞI webapp reddi geri gelir (bug gate HIGH: kapı bloklar, damga yolu yok = kalıcı kilit)
+    "--mutasyon-kok-disi-red": (FUS, "            pbe = ui_eklenti_modulu()\n",
+                                "            yerel_kok.resolve().relative_to(REPO.resolve())\n"
+                                "            pbe = ui_eklenti_modulu()\n"),
     # B — `--offline` `--damgala`sız kabul edilir
     "--mutasyon-offline-tek": (FUS, "    if a.offline and not a.damgala:\n", "    if False:\n"),
     # B — çözülemeyen seans ('default') ile damga yazılır (kapı eşleştirmez → sessiz sahte-başarı)
@@ -95,6 +120,9 @@ MUTASYONLAR = {
     # B — DEPLOY-DISI etiketi YALNIZ-YEREL'e de basılır (deploy-dışı olmayan yerel dosya gizlenir)
     "--mutasyon-deploy-disi-genis": (FUS, "DEPLOY_DISI if s == YALNIZ_YEREL and pbe.deploy_haric_mi(r, onekler) else s",
                                      "DEPLOY_DISI if s == YALNIZ_YEREL else s"),
+    # B — DEPLOY-DISI etiketi YALNIZ-CANLI'ya da basılır (M1: canlıdaki test/ dosyası gizlenir)
+    "--mutasyon-deploy-disi-canli": (FUS, "DEPLOY_DISI if s == YALNIZ_YEREL and",
+                                     "DEPLOY_DISI if s in (YALNIZ_YEREL, YALNIZ_CANLI) and"),
 }
 
 
@@ -249,11 +277,13 @@ def s(p) -> object:
 
 
 r = s(APP1 / "webapp" / "view" / "List.view.xml")
-kontrol("A1 webapp dosyası → dict: nesne=BSP, tip=bsp, komut --app-dir/--karsilastir/--damgala, --session YOK",
+kontrol("A1 webapp dosyası → dict: nesne=BSP, tip=bsp, komut SAF (--app-dir/--karsilastir/--damgala ile BİTER, "
+        "--session YOK), `--offline` kaçışı `not`ta",
         isinstance(r, dict) and r.get("nesne") == "ZSD001_APP1" and r.get("tip") == "bsp"
         and "fetch_ui_source.py --app-dir \"SOURCE_CODES/SD/ZSD001_CLC/ui/app1\"" in r.get("komut", "")
         and "--karsilastir \"SOURCE_CODES/SD/ZSD001_CLC/ui/app1/webapp\" --damgala" in r.get("komut", "")
-        and "--session" not in r.get("komut", "") and "`--offline` ekle" in r.get("komut", ""), repr(r))
+        and "--session" not in r.get("komut", "") and r.get("komut", "").endswith("--damgala")
+        and "`--offline` ekle" in r.get("not", ""), repr(r))
 kontrol("A2 app kökündeki dosya (ui5.yaml / ui5-deploy.yaml) → None (webapp değil)",
         s(APP1 / "ui5.yaml") is None and s(APP1 / "ui5-deploy.yaml") is None)
 kontrol("A3 deploy `exclude: /test/` altı → None (canlıya hiç gitmez)",
@@ -268,9 +298,9 @@ kontrol("A6 hariç üst dizin (docs / node_modules) altındaki webapp → None",
         and s(APP1 / "node_modules" / "lib" / "webapp" / "a.js") is None)
 APP_YAMLSIZ = app_kur("app_yamlsiz", None, yerel_kaynak())
 r = s(APP_YAMLSIZ / "webapp" / "Component.js")
-kontrol("A7 ui5-deploy.yaml YOK → dict YİNE döner (sessiz geçiş yok), komut `--bsp <BSP_ADI>` + neden",
+kontrol("A7 ui5-deploy.yaml YOK → dict YİNE döner (sessiz geçiş yok), komut `--bsp <BSP_ADI>`, neden `not`ta",
         isinstance(r, dict) and r.get("nesne") == "<BSP_ADI>" and "--bsp <BSP_ADI>" in r.get("komut", "")
-        and "ui5-deploy.yaml yok" in r.get("komut", ""), repr(r))
+        and r.get("komut", "").endswith("--damgala") and "ui5-deploy.yaml yok" in r.get("not", ""), repr(r))
 APP_REGEX = app_kur("app_regex", "ZSD001_APP3", yerel_kaynak(),
                     yaml_bayt=deploy_yaml("ZSD001_APP3", "          - '^/test/.*$'\n"))
 r = s(APP_REGEX / "webapp" / "test" / "x.js")
@@ -285,6 +315,46 @@ r = s("SOURCE_CODES/SD/ZSD001_CLC/ui/app1/webapp/view/List.view.xml")
 kontrol("A10 göreli yol kök'e göre çözülür → dict", isinstance(r, dict) and r.get("nesne") == "ZSD001_APP1", repr(r))
 kontrol("A11 deploy_haric_desenleri gerçek biçim → ['test/', '.claude/'], anlaşılmayan yok",
         P.deploy_haric_desenleri(APP1) == (["test/", ".claude/"], []), repr(P.deploy_haric_desenleri(APP1)))
+# Bug gate LOW (M6) — deploy aracı HARF DUYARLI eşler: `Test/` dosyası `/test/` ile canlıdan DÜŞMEZ.
+_buyuk = APP1 / "webapp" / "Test" / "x.js"
+r = s(_buyuk)
+kontrol("A12 HARF DUYARLI: `/test/` deseni `Test/x.js`i MUAF SAYMAZ (dict) · deploy_haric_mi('Test/x.js',['test/'])=False",
+        isinstance(r, dict) and P.deploy_haric_mi("Test/x.js", ["test/"]) is False
+        and P.deploy_haric_mi("test/x.js", ["test/"]) is True, repr(r))
+APP_BUYUK = app_kur("app_buyuk", "ZSD001_APP5", yerel_kaynak(),
+                    yaml_bayt=deploy_yaml("ZSD001_APP5", "          - /Test/\n"))
+kontrol("A13 HARF DUYARLI (ters yön): `/Test/` deseni `Test/x.js`i muaf sayar (önek küçültülmez)",
+        s(APP_BUYUK / "webapp" / "Test" / "x.js") is None
+        and P.deploy_haric_desenleri(APP_BUYUK) == (["Test/"], []), repr(P.deploy_haric_desenleri(APP_BUYUK)))
+APP_YILDIZ = app_kur("app_yildiz", "ZSD001_APP6", yerel_kaynak(),
+                     yaml_bayt=deploy_yaml("ZSD001_APP6", "          - /test/**\n"))
+kontrol("A14 `/test/**` (aracın regex'inde geçersiz/farklı) → anlaşılmayan, muafiyet YOK",
+        isinstance(s(APP_YILDIZ / "webapp" / "test" / "x.js"), dict)
+        and P.deploy_haric_desenleri(APP_YILDIZ) == ([], ["/test/**"]), repr(P.deploy_haric_desenleri(APP_YILDIZ)))
+# Bug gate APPLY — YALNIZ deploy-to-abap görevinin configuration.exclude'u.
+_baska_gorev = (b"  customTasks:\n    - name: ui5-task-zipper\n      configuration:\n        exclude:\n"
+                b"          - /test/\n")
+APP_BASKA = app_kur("app_baska", "ZSD001_APP7", yerel_kaynak(),
+                    yaml_bayt=deploy_yaml("ZSD001_APP7", "          - /xyz/\n").replace(b"  customTasks:\n", _baska_gorev))
+kontrol("A15 BAŞKA özel görevin `configuration.exclude`'u okunmaz → test/ MUAF DEĞİL (dict)",
+        isinstance(s(APP_BASKA / "webapp" / "test" / "x.js"), dict)
+        and P.deploy_haric_desenleri(APP_BASKA) == (["xyz/"], []), repr(P.deploy_haric_desenleri(APP_BASKA)))
+APP_GOREVDUZEY = app_kur("app_gorevduzey", "ZSD001_APP8", yerel_kaynak(),
+                         yaml_bayt=deploy_yaml("ZSD001_APP8", "          - /xyz/\n").replace(
+                             b"      afterTask: generateCachebusterInfo\n",
+                             b"      afterTask: generateCachebusterInfo\n      exclude:\n        - /test/\n"))
+kontrol("A16 deploy-to-abap GÖREV-DÜZEYİ `exclude` (configuration dışında) okunmaz → test/ MUAF DEĞİL",
+        isinstance(s(APP_GOREVDUZEY / "webapp" / "test" / "x.js"), dict)
+        and P.deploy_haric_desenleri(APP_GOREVDUZEY) == (["xyz/"], []), repr(P.deploy_haric_desenleri(APP_GOREVDUZEY)))
+# Bug gate HIGH (M14) — proje kökü DIŞINDAKİ webapp (kanonik `.wt` worktree'si) kapıdadır.
+DIS = Path(tempfile.mkdtemp(prefix="pbe_ui_dis_"))
+APP_DIS = app_kur("appd", "ZSD001_APP1", yerel_kaynak(), kok=DIS / "SOURCE_CODES" / "SD" / "ZSD001_CLC" / "ui")
+r = s(APP_DIS / "webapp" / "view" / "List.view.xml")
+kontrol("A17 kök DIŞI webapp (kök segmentli) → dict (kapıda) · komut MUTLAK --app-dir",
+        isinstance(r, dict) and r.get("nesne") == "ZSD001_APP1"
+        and f'--app-dir "{APP_DIS.as_posix()}"' in r.get("komut", ""), repr(r))
+kontrol("A18 kök DIŞI, kök segmentsiz webapp → None",
+        s(DIS / "baska" / "ui" / "x" / "webapp" / "a.js") is None)
 
 # ───────────────────────── B — fetch_ui_source --damgala ─────────────────────────
 STORE: dict[str, str] = {}
@@ -419,12 +489,17 @@ kontrol("B7 --app-dir başka app, --karsilastir app1 → rc 2, damga YOK", rc ==
 rc, out = cagir(["--bsp", "ZSD001_APP2", "--karsilastir", W1, "--damgala"])
 kontrol("B8 --bsp app'in yaml BSP'sinden farklı → rc 2, damga YOK", rc == 2 and not STORE and "damga YAZILMAZ" in out,
         f"rc={rc}\n{out[-300:]}")
-DIS = Path(tempfile.mkdtemp(prefix="pbe_ui_dis_"))
-app_dis = app_kur("appd", "ZSD001_APP1", yerel_kaynak(), kok=DIS / "SOURCE_CODES" / "SD" / "ZSD001_CLC" / "ui")
-rc, out = cagir(["--bsp", "ZSD001_APP1", "--karsilastir", str(app_dis / "webapp"), "--damgala"])
-kontrol("B9 proje DIŞI (kök segmentli) webapp → rc 2, damga YOK", rc == 2 and not STORE and "proje" in out,
-        f"rc={rc} store={sorted(STORE)}\n{out[-300:]}")
-shutil.rmtree(DIS, ignore_errors=True)
+STORE.clear()
+rc, out = cagir(["--app-dir", str(APP_DIS), "--karsilastir", str(APP_DIS / "webapp"), "--damgala"])
+beklenen_dis = sorted(anahtar(APP_DIS / "webapp" / r) for r in yerel_kaynak())
+kontrol("B9 kök DIŞI webapp (worktree) → rc 0, 6 dosya MUTLAK anahtarla damgalı, kapı geçer (kalıcı kilit YOK)",
+        rc == 0 and damgali(APP_DIS) == beklenen_dis and all(k.startswith(DIS.resolve().as_posix().upper())
+                                                             for k in beklenen_dis)
+        and kapidan_gecer(APP_DIS / "webapp" / "view" / "List.view.xml"), f"rc={rc} store={sorted(STORE)}\n{out[-400:]}")
+STORE.clear()
+rc, out = cagir(["--app-dir", str(APP_DIS), "--karsilastir", str(APP_DIS / "webapp"), "--damgala", "--offline"])
+kontrol("B9b kök DIŞI webapp --offline → rc 0, damgalı", rc == 0 and damgali(APP_DIS) == beklenen_dis,
+        f"rc={rc}\n{out[-300:]}")
 
 INDIRME.clear()
 STORE.clear()
@@ -454,6 +529,17 @@ kontrol("B14 --damgala YOKKEN rc semantiği DEĞİŞMEZ: test/ YALNIZ-YEREL → 
         and "PBE damgası: İSTENMEDİ" in out, f"rc={rc}\n{out[-400:]}")
 rc, out = cagir(["--app-dir", str(APP1), "--damgala"])
 kontrol("B15 --damgala --karsilastir'sız → rc 2", rc == 2 and not STORE, f"rc={rc}")
+# Bug gate LOW (M1) — canlıda olup yerelde olmayan deploy-exclude yolu DEPLOY-DISI SAYILMAZ (canlıda VAR =
+# başka makinenin deploy'u; gizlenirse sahte-taze damga).
+canli_ayarla(canli_bsp(**{"test/Canli.js": crlf(b"x\n")}))
+STORE.clear()
+rc, out = cagir(["--app-dir", str(APP1), "--karsilastir", W1, "--damgala"])
+kontrol("B16 damga kipi: canlıda `test/Canli.js` (yerelde yok) → YALNIZ-CANLI kalır, rc 1, damga YOK",
+        rc == 1 and not STORE and "YALNIZ-CANLI    test/Canli.js" in out and "YALNIZ-CANLI=1" in out,
+        f"rc={rc} store={sorted(STORE)}\n{out[-600:]}")
+kontrol("B16b deploy_disi_etiketle saf: YALNIZ-CANLI satırı exclude altında olsa da değişmez",
+        F.deploy_disi_etiketle([("test/a.js", F.YALNIZ_CANLI, "", []), ("test/b.js", F.YALNIZ_YEREL, "", [])],
+                               ["test/"]) == [("test/a.js", F.YALNIZ_CANLI, "", []), ("test/b.js", F.DEPLOY_DISI, "", [])])
 
 for _k, _v in _asil_sd.items():   # C eksenine GERÇEK API ile geç
     if _v is None:
@@ -492,6 +578,14 @@ else:
             rc == 0 and kod == 0, f"rc={rc} exit={kod}\n{out[-300:]}\n{err[-300:]}")
     kod, err = kapi(hedef, seans="S-BASKA")
     kontrol("C4 başka seans → GERÇEK kapı yine exit 2 (damga seansa bağlı)", kod == 2, f"exit={kod}")
+    hedef_dis = APP_DIS / "webapp" / "view" / "List.view.xml"
+    kod1, err1 = kapi(hedef_dis, seans="S-DIS")
+    rc, out = cagir(["--app-dir", str(APP_DIS), "--karsilastir", str(APP_DIS / "webapp"), "--damgala",
+                     "--session", "S-DIS"])
+    kod2, err2 = kapi(hedef_dis, seans="S-DIS")
+    kontrol("C5 kök DIŞI webapp: GERÇEK kapı exit 2 → --damgala (gerçek store, mutlak anahtar) → GERÇEK kapı exit 0",
+            kod1 == 2 and "--damgala" in err1 and rc == 0 and kod2 == 0,
+            f"exit1={kod1} rc={rc} exit2={kod2}\n{err1[-300:]}\n{out[-300:]}\n{err2[-300:]}")
 
 kontrol("Z0 hiçbir çağrı ÇÖKMEDİ (çökme geçer sayılmaz)", not COKMELER, "; ".join(COKMELER))
 
@@ -504,4 +598,5 @@ for ad, ok, detay in SONUC:
         print("         " + detay.replace("[KULLANIM]", "(KULLANIM)").replace("\n", "\n         ")[:1500])
 print(f"\npbe_ui: {gecen}/{len(SONUC)} PASS" + (f" (MUTASYON {KIP})" if KIP else ""))
 shutil.rmtree(KUM, ignore_errors=True)
+shutil.rmtree(DIS, ignore_errors=True)
 sys.exit(0 if gecen == len(SONUC) else 1)
