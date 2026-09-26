@@ -54,6 +54,12 @@ Senaryolar (her biri rc + dosya BAYTLARI + damga sayısı + çağrı kaydıyla �
   T14 yalnız `@` özniteliği farklı → güncellenir · T15 okunan oturum dili kapsamda basılır
   L1 `[PULL]` başlığı gerçek pipe'lı alt süreçte İLK satır · L3 paket_dizini SON kök eşleşmesi
   L4 `--cwd` kabul edilmez (tek kök kaynağı)
+  --- 2. bug-gate turu (209bb95) ---
+  H12 `..` (docs/.. muaf segmenti · textpool/x/.. ebeveyn) kararı kandırmaz; E1 aynısını gerçek
+      kapıda ölçer (damgasız seans → exit 2; gerçek boş `docs`/`x` dizini — POSIX ENOENT notu)
+  M12b commit'li TEMİZ dosya → --force'suz rc 0 + damga (stub'ın kör bıraktığı yön)
+  T16 textpool git-kirli → --force · M26 mojibake deseni birim (Ö → U+2013) + yabancı FP yok
+  M27 yerel boş + canlı boş → EŞİT + damga
 
 Mutasyonlar (her biri korpusu KIRMIZI yapmalı; çapa TAM BİR KEZ eşleşmeli):
   MU1 paket koruması sökülür · MU2 ÖLÇÜLEMEDİ dalı damgalar (eşit-değilken damga) ·
@@ -285,6 +291,8 @@ def _saf(r) -> bool:
 
 
 PAHALI = ("L1", "M12")   # ≥0,4 sn/koşum: gerçek alt süreç (L1) · git init/commit (M12)
+# Pahalı blok → içinde ölçülen senaryo kimlikleri (M12 bloğu tek git deposu kurar).
+PAHALI_SENARYO = {"L1": ("L1",), "M12": ("M12", "M12b", "T16")}
 
 
 def senaryolar(M, H, pahali=PAHALI):
@@ -339,6 +347,16 @@ def senaryolar(M, H, pahali=PAHALI):
     import source_drift as _sd  # noqa: E402
     s["H11 muaf küme = source_drift (canlı + yedek)"] = (
         H._MUAF_KLASORLER == set(_sd._EXCLUDED_DIR_SEGMENTS) == set(H._MUAF_YEDEK))
+    # H12 (Q352 2. tur, kardeş sınıf): kapı HAM yol verir; `..` muaf segmenti/ebeveyn adı
+    # kararı kandırmamalı (ölçüldü: üç biçim de gerçek kapıda exit 0 = SAHTE-MUAF idi).
+    sep = os.sep
+    dd = str(k / "SOURCE_CODES" / "docs") + sep + ".." + sep + "SD" + sep + PAKET + sep
+    r1 = H.sinifla(dd + "messages-zsd001.csv", k)
+    r2 = H.sinifla(dd + "programs" + sep + "textpool" + sep + f"{PROG}.selections.txt", k)
+    r3 = H.sinifla(str(k / tp_dizin / "x") + sep + ".." + sep + f"{PROG}.symbols.txt", k)
+    s["H12 `..` sahte-muaf/ebeveyn kandırmaz"] = bool(
+        r1 and r1["nesne"] == "ZSD001" and r2 and r2["nesne"] == PROG
+        and r3 and r3["nesne"] == PROG and ".." not in r1["komut"])
 
     # ---------------- M: mesaj sınıfı ----------------
     def msag(ad, bayt, client, *ek, damga=None):
@@ -412,10 +430,18 @@ def senaryolar(M, H, pahali=PAHALI):
         M._git_kirli = _gercek_git_kirli
         kk = kum("m12")
         p = dosya(kk, msag_yol, CSV_ESIT.encode())
+        tpf = dosya(kk, f"{tp_dizin}/{PROG}.selections.txt", b"P_DATE  =Tarih\n")
         g = ["git", "-C", str(kk), "-c", "user.name=fixture", "-c", "user.email=fixture",
              "-c", "core.autocrlf=false"]
         git_ok = all(subprocess.run(x, capture_output=True).returncode == 0 for x in (
             ["git", "init", "-q", str(kk)], g + ["add", "-A"], g + ["commit", "-q", "-m", "t"]))
+        # M12b (2. tur MEDIUM): commit'li TEMİZ dosya → --force'suz rc 0 + damga. Stub
+        # `_git_kirli`yi yalnız False yönünde sabitlediği için "daima True" kusuru buradan görünür.
+        d0 = Damga()
+        rc0, _o = kos(M, ["msag", "--name", SINIF, "--file", str(p)],
+                      Sahte(msag=msag_xml(CANLI)), d0)
+        s["M12b git-temiz commit'li dosya → --force'suz rc 0 + damga"] = (
+            git_ok and rc0 == 0 and len(d0.cagri) == 1 and p.read_bytes() == CSV_ESIT.encode())
         p.write_bytes(CSV_ESIT.replace("sıfır", "SIFIR").encode())
         d1 = Damga()
         rc1, _o = kos(M, ["msag", "--name", SINIF, "--file", str(p)],
@@ -427,6 +453,18 @@ def senaryolar(M, H, pahali=PAHALI):
         s["M12 git-kirli → --force"] = (git_ok and rc1 == 2 and "SIFIR".encode() in b1
                                        and not d1.cagri and rc2 == 0
                                        and p.read_bytes() == CSV_ESIT.encode())
+        # T16 (2. tur öneri 4): textpool yolunun AYRI git-kirli koruması.
+        tpf.write_bytes(b"P_DATE  =TARIH\n")
+        d3 = Damga()
+        rc3, _o = kos(M, ["textpool", "--program", PROG, "--file", str(tpf)],
+                      Sahte(tp={"selections": "P_DATE  =Tarih"}), d3)
+        b3 = tpf.read_bytes()
+        d4 = Damga()
+        rc4, _o = kos(M, ["textpool", "--program", PROG, "--file", str(tpf), "--force"],
+                      Sahte(tp={"selections": "P_DATE  =Tarih"}), d4)
+        s["T16 textpool git-kirli → --force"] = (
+            git_ok and rc3 == 2 and b3 == b"P_DATE  =TARIH\n" and not d3.cagri and rc4 == 0
+            and tpf.read_bytes() == b"P_DATE  =Tarih\n")
         M._git_kirli = lambda _dosya: False
 
     canli13 = {f"00{i}": (f"Mesaj {i}", "false", "true" if i % 2 else "false") for i in range(6)}
@@ -503,13 +541,35 @@ def senaryolar(M, H, pahali=PAHALI):
     canli25 = dict(CANLI)
     canli25["004"] = ("Kullanıcı tara\u00fdndan iptal", "false", "false")
     canli25["005"] = ("\u00c3\u00bcr\u00c3\u00bcn bulunamad\u00c4\u00b1", "false", "false")
+    canli25["006"] = ("\u00c3\u2013zel alan", "false", "false")        # Ö → C3 96 → U+00C3 U+2013
     rc, out, b, d, c = msag("m25", CSV_ESIT.encode(), Sahte(msag=msag_xml(canli25)))
     canli25fp = dict(CANLI)
     canli25fp["004"] = ("\u00c2dem hâlâ Ümit'i Çığ İşi için bekliyor", "false", "false")
     rc2, out2, b2, d2, _c = msag("m25fp", CSV_ESIT.encode(), Sahte(msag=msag_xml(canli25fp)))
+    # Liste UYARI SATIRINDAN okunur: aynı liste `eklenen:` satırında da basılır (ölçüldü 2. tur:
+    # tüm-çıktı araması MU35'i sahte-geçirdi).
+    moj = [ln for ln in out.splitlines() if "mojibake" in ln]
     s["M25 mojibake uyarısı + meşru Türkçe FP yok"] = (
-        rc == 0 and "mojibake" in out and "'004', '005'" in out
+        rc == 0 and len(moj) == 1 and "['004', '005', '006']" in moj[0]
         and rc2 == 0 and "mojibake" not in out2)
+    # M26 (2. tur LOW): desen birim ölçümü — Türkçe harf bozulmaları (Ö → U+2013 dahil)
+    # yakalanır; yabancı dillerin meşru harfleri (bug-gate FP sondaları) yakalanMAZ.
+    poz = ["\u00c3\u2013zel", "\u00c3\u2014", "\u00c3\u0153", "\u00c5\u017e", "\u00c4\u0178",
+           "\u00c3\u2021", "\u00c4\u00b0", "tara\u00fdndan"]
+    neg = ["Gr\u00f6\u00dfe", "\u00dcbersicht", "h\u00e2l\u00e2 \u00c2dem", "\u00c4\u00d6\u00dc",
+           "\u00c5land", "S\u00e3o Paulo", "Çığ İşi Ümit"]
+    s["M26 mojibake deseni: Türkçe bozulmalar + yabancı FP yok"] = (
+        all(M._MOJIBAKE_RE.search(x) for x in poz)
+        and not any(M._MOJIBAKE_RE.search(x) for x in neg))
+    # M27 (2. tur öneri 5): yerel BOŞ + canlı BOŞ aynı msgno → bugünkü davranış EŞİT + damga
+    # (çatışma değil; atlanan da değil — satır yerelde zaten var).
+    yerel27 = CSV_ESIT + "004,,false\n"
+    canli27 = dict(CANLI)
+    canli27["004"] = ("", "false", "false")
+    rc, out, b, d, c = msag("m27", yerel27.encode(), Sahte(msag=msag_xml(canli27)))
+    s["M27 yerel boş + canlı boş → EŞİT + damga"] = (
+        rc == 0 and b == yerel27.encode() and len(d.cagri) == 1 and "EŞİT" in out
+        and "[ATLANDI]" not in out)
 
     # L3: yolda üstte aynı adlı `ERP/` dizini → SON kök segmenti.
     s["L3 paket_dizini SON kök eşleşmesi"] = M.paket_dizini(
@@ -700,9 +760,26 @@ def e2e(M) -> str:
     t2 = kapi_kos()
     ok = t1.returncode == 2 and "<PROGRAM_ADI> yerine" in t1.stderr \
         and _kapi_sozlesmesi(t1.stderr, t) and rct == 0 and t2.returncode == 0
-    return ("PASS (msag + textpool yer tutucu)" if ok else
-            f"FAIL textpool (blok rc={t1.returncode} pull rc={rct} sonra rc={t2.returncode}: "
-            f"{t1.stderr[-300:]!r})")
+    if not ok:
+        return (f"FAIL textpool (blok rc={t1.returncode} pull rc={rct} sonra rc={t2.returncode}: "
+                f"{t1.stderr[-300:]!r})")
+    # `..` ayağı (2. tur, kardeş sınıf): damgasız YENİ seansta `docs/..` ve `textpool/x/..`
+    # yolları gerçek kapıda BLOKLANMALI (düzeltme öncesi ölçüm: ikisi de exit 0). POSIX `docs/..`
+    # yolunu fiziksel çözer → `docs` ve `x` GERÇEK dizin olarak kurulur (yoksa ENOENT).
+    (kk / "SOURCE_CODES" / "docs").mkdir(parents=True, exist_ok=True)
+    xdir = kk / "SOURCE_CODES" / "SD" / BASKA_PAKET / "programs" / "textpool" / "x"
+    xdir.mkdir(parents=True, exist_ok=True)
+    sep = os.sep
+    dd_yollar = (str(kk / "SOURCE_CODES" / "docs") + sep + ".." + sep + "SD" + sep + PAKET
+                 + sep + "messages-zsd001.csv", str(xdir) + sep + ".." + sep + "selections.txt")
+    dd_rc = []
+    for yol in dd_yollar:
+        yuk = json.dumps({"tool_name": "Edit", "session_id": "SID-E2E-DD",
+                          "tool_input": {"file_path": yol}})
+        dd_rc.append(kapi_kos().returncode)
+    if dd_rc != [2, 2]:
+        return f"FAIL `..` ayağı (beklenen [2, 2], alınan {dd_rc})"
+    return "PASS (msag + textpool yer tutucu + `..` iki biçim)"
 
 
 MUTASYONLAR = [
@@ -783,6 +860,18 @@ MUTASYONLAR = [
      "    if satir_sonlu:", "    if False:"),
     ("MU32 [L5] okunan dil kapsam satırı düşer", PULL_PATH,
      "    print(f\"[KAPSAM] okunan dil (oturum): ", "    (f\"[KAPSAM] okunan dil (oturum): "),
+    ("MU34 [2.tur M] _git_kirli daima True", PULL_PATH,
+     "        return r.returncode == 0 and bool(r.stdout.strip())", "        return True"),
+    ("MU35 [2.tur L] mojibake deseni U+2013/U+2014 kaçırır (Ö)", PULL_PATH,
+     r'\u2013\u2014\u2018', r'\u2018'),
+    ("MU36 [2.tur öneri 4] textpool git-kirli koruması sökülür", PULL_PATH,
+     "        _norm, bicim = _dosya_oku(dosya)\n        if not dry_run and not force and _git_kirli(dosya):",
+     "        _norm, bicim = _dosya_oku(dosya)\n        if False:"),
+    ("MU37 [2.tur öneri 5] yerel-boş + canlı-boş çatışma sayılır", PULL_PATH,
+     '    catisan = [k for k in bos_metin if k in m["mesajlar"] and m["mesajlar"][k][0]]',
+     '    catisan = [k for k in bos_metin if k in m["mesajlar"]]'),
+    ("MU38 [2.tur kardeş] `..` normpath sökülür", HOOK_PATH,
+     "    p = Path(os.path.normpath(str(path)))", "    p = Path(path)"),
     ("MU33 [MX3] git-kirli koruması sökülür (msag)", PULL_PATH,
      "        norm, bicim = _dosya_oku(dosya)\n        if not dry_run and not force and _git_kirli(dosya):",
      "        norm, bicim = _dosya_oku(dosya)\n        if False:"),
@@ -798,10 +887,12 @@ HEDEF = {
     "MU18": ("M19",), "MU19": ("T14",), "MU20": ("M20",), "MU21": ("M23",), "MU22": ("M21",),
     "MU23": ("M22",), "MU24": ("H10",), "MU25": ("L3",), "MU26": ("L4",), "MU27": ("L1",),
     "MU28": ("M25",), "MU29": ("M25",), "MU30": ("H11",), "MU31": ("M24",), "MU32": ("T15",),
-    "MU33": ("M12",),
+    "MU33": ("M12",), "MU34": ("M12b",), "MU35": ("M25", "M26"), "MU36": ("T16",),
+    "MU37": ("M27",), "MU38": ("H12",),
 }
 # PAHALI senaryolar (bkz. PAHALI) yalnız TABANDA + onları HEDEFLEYEN mutasyonlarda koşulur.
-PAHALI_KIP = {p: tuple(mu for mu, h in HEDEF.items() if p in h) for p in PAHALI}
+PAHALI_KIP = {p: tuple(mu for mu, h in HEDEF.items() if set(h) & set(PAHALI_SENARYO[p]))
+              for p in PAHALI}
 
 
 def kos_hepsi(pull_degisim=None, hook_degisim=None, pahali=PAHALI):
@@ -822,7 +913,7 @@ def main() -> int:
         hata = [a for a, ok in taban.items() if not ok] + (["E1"] if e.startswith("FAIL") else [])
         print("\n--- MUTASYONLAR (her biri korpusu KIRMIZI yapmalı; HEDEF vektörleri ZORUNLU) ---")
         for p, kipler in PAHALI_KIP.items():
-            tam_ad = next((a for a in taban if a.split()[0] == p), p)
+            tam_ad = " · ".join(a for a in taban if a.split()[0] in PAHALI_SENARYO[p]) or p
             print(f"  [ATLA-MALIYET] {tam_ad} — yalnız TABAN + {', '.join(kipler) or '-'} "
                   f"kiplerinde koşulur (diğer mutasyonlarda ölçülmez)")
         kacan = []

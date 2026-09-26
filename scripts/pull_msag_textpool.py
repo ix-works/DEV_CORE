@@ -107,13 +107,13 @@ KAPSAM_TP = (
 )
 
 # Olası mojibake (UYARI, engel değil): UTF-8 baytlarının latin-1/cp1252 okunması → ikili dizi
-# (U+00C3 U+00BC, U+00C4 U+00B1, U+00C5 U+0178 …); cp1254 (Türkçe) baytlarının cp1252 okunması
+# (U+00C3 U+00BC, U+00C4 U+00B1, U+00C5 U+0178, Ö → U+00C3 U+2013 …); cp1254 (Türkçe) baytlarının cp1252 okunması
 # → U+00FD U+00FE U+00F0 U+00DD U+00DE U+00D0 (ı ş ğ İ Ş Ğ yerine). Çıplak U+00C2/U+00C3
 # ARANMAZ (U+00C2 Türkçede meşru: hâlâ). Kaynakta YALNIZ kaçış biçimi: literal karakter kodlama
 # değişiminde sessizce bozulur ve kendi mojibake taramalarımıza takılır.
 _MOJIBAKE_RE = re.compile(
     "[\u00c3\u00c4\u00c5][\u0080-\u00bf\u0152\u0153\u0160\u0161\u0178\u017d\u017e"
-    "\u2018-\u201e\u2020-\u2022\u2026\u2030\u2039\u203a\u20ac\u2122]"
+    "\u2013\u2014\u2018-\u201e\u2020-\u2022\u2026\u2030\u2039\u203a\u20ac\u2122]"
     "|[\u00fd\u00fe\u00f0\u00dd\u00de\u00d0]")
 
 

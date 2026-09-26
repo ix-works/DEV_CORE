@@ -36,11 +36,13 @@ KAPSAM (yalnız `<source_root>/…` altında; muaf klasörler çekirdekle AYNI):
 KAPSAM DIŞI (None döner): `*.textpool.txt` (tek dosyalı eski biçim — PUT gövdesi değil,
   yorum satırları taşır) · `*.README.md` · `ref_docs/` altındaki `messages.csv` (muaf klasör).
 
-Kapı asla çökmemeli: bu modülde yalnız standart kütüphane; beklenmeyen hata kapıda
-"tanınmadı" sayılır (çekirdek politikası).
+Kapı asla çökmemeli: standart kütüphane + (try/except içinde) `source_drift` (muaf klasör
+kümesi) ve `utils.project_config` (source_root adı); ikisi de yüklenemezse yerel yedeğe
+düşülür. Beklenmeyen hata kapıda "tanınmadı" sayılır (çekirdek politikası).
 """
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -48,7 +50,7 @@ from typing import Optional
 
 # Muaf klasör kümesi TEK kaynaktan: `source_drift._EXCLUDED_DIR_SEGMENTS` (çekirdek
 # sınıflandırmanın kullandığı küme; kapı source_drift'i zaten yükler). Yedek yalnız import
-# başarısızsa (kapı asla çökmemeli) — fixture yedeğin kaynakla EŞİT olduğunu ölçer (H10).
+# başarısızsa (kapı asla çökmemeli) — fixture yedeğin kaynakla EŞİT olduğunu ölçer (H11).
 _MUAF_YEDEK = {"ref_docs", "docs", ".tmp", "legacy", "_archive", "archive", "drafts"}
 try:
     _scripts = str(Path(__file__).resolve().parents[1])
@@ -110,7 +112,12 @@ def _tek_program(programs_dizini: Path) -> Optional[str]:
 
 
 def sinifla(path, root=None) -> Optional[dict]:
-    p = Path(path)
+    # Kapı eklentiye HAM yolu verir. Karar `..`'sız yoldan verilir (Q352 2. tur, ölçüldü:
+    # `SOURCE_CODES/docs/../SD/<PKG>/messages-*.csv` `docs` segmenti yüzünden SAHTE-MUAF,
+    # `textpool/x/../<P>.symbols.txt` ebeveyn adı `..` yüzünden tanınmıyordu → kapı exit 0).
+    # `normpath` — `resolve` DEĞİL: junction/symlink izlenmez, yalnız sözcüksel `..` çözülür
+    # (source_drift.pbe_siniflandir ve _pbe_ui ile aynı yöntem).
+    p = Path(os.path.normpath(str(path)))
     ad = p.name
     m = _MSAG_RE.match(ad)
     tp_adli = _TP_ADLI_RE.match(ad)
