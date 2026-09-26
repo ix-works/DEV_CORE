@@ -53,6 +53,9 @@ Kipler (her biri düzeltmenin bir ayağını geri alır → korpus KIRMIZI olmal
   Son dar tur (bug gate WARNING, 2026-09-26):
   --mutasyon-kardes-kok-auto  `--type auto` SINIF dalı alt-include'ları proje kökünde arar
   --mutasyon-kanonik-tip      eşanlamlı tip çevrimiçi çekmeye kanonik ada çevrilmeden gider
+  Kapanış turu (son kapı WARNING — test eksiği, 2026-09-26):
+  --mutasyon-kanonik-koruma-yok  `_kanonik_tip` baştaki `normalize_object_type` korumasını
+                                 kaybeder (çözülebilen `.abap` tipleri `class`a çevrilir)
 
 Koşum: python tests/fixtures/pbe_kapsam/run.py [--mutasyon-…]   (exit 0 = PASS)
 """
@@ -85,7 +88,8 @@ GECERLI_KIP = {"--mutasyon-ad-anahtari", "--mutasyon-include-muaf",
                "--mutasyon-force-tipi", "--mutasyon-offline-rc", "--mutasyon-drift-tablo",
                "--mutasyon-kardes-kok", "--mutasyon-noktanokta", "--mutasyon-session-ez",
                "--mutasyon-yer-tutucu", "--mutasyon-not-kirp", "--mutasyon-esanlam",
-               "--mutasyon-kardes-kok-auto", "--mutasyon-kanonik-tip"}
+               "--mutasyon-kardes-kok-auto", "--mutasyon-kanonik-tip",
+               "--mutasyon-kanonik-koruma-yok"}
 
 # kip -> [(kopyadaki dosya, eski metin, yeni metin)]  — eski metin kopyada TAM 1 kez geçmeli
 MUTASYONLAR = {
@@ -151,6 +155,14 @@ MUTASYONLAR = {
         "sap_sync_pull.py",
         "    t = _kanonik_tip(t)                    # eşanlamlı → çekme yolunun tanıdığı ad (son dar tur 2)\n",
         "")],
+    # `_kanonik_tip` başındaki koruma: çözülebilen ad (class/program/…) DOKUNULMAZ. Söküldüğünde
+    # `.abap` paylaşan her tip `_PBE_ACIK_TIP`'in ilk satırıyla (`.clas.abap` -> class) eşleşir.
+    "--mutasyon-kanonik-koruma-yok": [(
+        "sap_sync_pull.py",
+        "        from object_types import normalize_object_type\n"
+        "        normalize_object_type(t)\n"
+        "        return t\n",
+        "        pass\n")],
     "--mutasyon-noktanokta": [(
         "source_drift.py",
         "    p = Path(normpath(str(path)))\n    n = p.name.lower()\n",
@@ -893,6 +905,57 @@ def takip_turu(scripts: Path, kum: Path) -> None:
     kontrol("F9 son-tur-2: cevrimici `--type behaviordefinition|bdo --file .bdef` -> bdef ucundan "
             "cekilir + yazilir ('yeni obje olabilir' YOK)",
             all(v[0] == 0 and v[1] and v[2] for v in cevrim.values()), f"{cevrim}")
+    kanonik_tip_saf(scripts, proje)
+
+
+# F10 — `_kanonik_tip` SAF fonksiyon vektörü (kapanış turu). Ad kümesi KODDAN türetilir (elle
+# liste YOK): `_TYPE_TO_EXTENSIONS` anahtarları ∪ `OBJECT_TYPES` ∪ takma adlar (anahtar+hedef) ∪
+# sınıf alt-include adları (tür+takma) ∪ `auto`. Dosya sistemine dokunmaz (yalnız import + çağrı).
+_KANONIK_KOD = r'''
+import json, sys
+sys.path.insert(0, %r)
+import sap_sync_pull as S
+import object_types as O
+import source_drift as D
+kaynak = {
+    "_TYPE_TO_EXTENSIONS": set(D._TYPE_TO_EXTENSIONS),
+    "OBJECT_TYPES": set(O.OBJECT_TYPES),
+    "OBJECT_TYPE_ALIASES": set(O.OBJECT_TYPE_ALIASES) | set(O.OBJECT_TYPE_ALIASES.values()),
+    "CLASS_INCLUDE": set(O.CLASS_INCLUDE_TYPES) | set(O.CLASS_INCLUDE_ALIASES),
+    "auto": {"auto"},
+}
+adlar = sorted(set().union(*kaynak.values()))
+print(json.dumps({"say": {k: len(v) for k, v in kaynak.items()},
+                  "sonuc": {n: S._kanonik_tip(n) for n in adlar}}))
+'''
+# Beklenen tek istisna: `normalize_object_type`ın ÇÖZEMEDİĞİ, uzantı kümesi açık bir tiple aynı adlar.
+_KANONIK_ESANLAM = {"bdo": "bdef", "behaviordefinition": "bdef", "servicebinding": "srvb"}
+_KANONIK_ALT_SINIR = 40      # 2026-09-26 ölçümü 57 ad; altına düşerse türetme kırılmıştır
+
+
+def kanonik_tip_saf(scripts: Path, proje: Path) -> None:
+    r = subprocess.run([sys.executable, "-c", _KANONIK_KOD % str(scripts)], capture_output=True,
+                       env=_env(proje), cwd=str(proje), timeout=60)
+    try:
+        d = json.loads(r.stdout.decode("utf-8").strip().splitlines()[-1])
+    except Exception:
+        # yalnız SON stderr satırı: alıntılanan "Traceback" başlığı bataryada COKTU sanılmasın
+        son = [x for x in r.stderr.decode("utf-8", "replace").splitlines() if x.strip()][-1:]
+        d = {"say": {}, "sonuc": {}, "hata": "alt-surec: " + (son[0][-200:] if son else "<cikti yok>")}
+    sonuc, say = d.get("sonuc") or {}, d.get("say") or {}
+    beklenen = {n: _KANONIK_ESANLAM.get(n, n) for n in sonuc}
+    sapma = {n: v for n, v in sonuc.items() if v != beklenen[n]}
+    eksik_esanlam = sorted(set(_KANONIK_ESANLAM) - set(sonuc))
+    bos_kaynak = sorted(k for k, v in say.items() if not v) or ([] if say else ["<olculemedi>"])
+    print(f"  [KAPSAM] F10 _kanonik_tip: {len(sonuc)} ad denendi (kaynak basina: {say}; "
+          f"esanlam {sum(1 for n in sonuc if n in _KANONIK_ESANLAM)}, "
+          f"kimlik {sum(1 for n in sonuc if n not in _KANONIK_ESANLAM)}; "
+          f"alt sinir {_KANONIK_ALT_SINIR})")
+    kontrol("F10 kapanis: _kanonik_tip cozulebilen HER adi DOKUNMAZ + yalniz bdo/behaviordefinition"
+            "->bdef, servicebinding->srvb (ad kumesi koddan; bos/kucuk kume FAIL)",
+            len(sonuc) >= _KANONIK_ALT_SINIR and not bos_kaynak and not eksik_esanlam and not sapma,
+            f"ad={len(sonuc)} bos_kaynak={bos_kaynak} eksik_esanlam={eksik_esanlam} "
+            f"sapma={sapma} {d.get('hata', '')}")
 
 
 def ucuncu_baglam(scripts: Path, kum: Path) -> None:

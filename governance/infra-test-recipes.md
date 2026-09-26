@@ -286,6 +286,10 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
 #                  yer-tutucu 73 (E19) · not-kirp 73 (E20) · esanlam 72 (F7+F9)
 #   son dar tur:   kardes-kok-auto 73 (K3) · kanonik-tip 73 (F9)
 # harf-duyarlı TEMP (fsutil setCaseSensitiveInfo): 73/73 + `[ATLANDI] G3`
+#   ↑ yukarıdaki satırlar ÖNCEKİ TURUN ölçümüdür (74 vektör) — bu turda YENİDEN koşulmadı.
+# kapanış turu (2026-09-26, 75 vektör; F10 eklendi) — yalnız aşağıdakiler AYNI turda koşuldu:
+#   taban 75/75 · kanonik-koruma-yok 74 (F10) · kanonik-tip 74 (F9) · kardes-kok-auto 74 (K3)
+#   harf-duyarlı TEMP: 74/74 + `[ATLANDI] G3`
 # ⚠ vektör eklenince bu sayılar kayar — tabanı ve kip skorunu AYNI koşumdan yaz.
 ```
 - ⭐ **AYIRT EDİCİ ÇİFT (silinmez):** H3 *ana sınıf damgası `.ccimp`'i kapsamaz* + T7 *aynı adlı
@@ -320,13 +324,22 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
   çözer, dizin yoksa ENOENT → vektör ubuntu'da sessizce "yeni dosya" olurdu) · G2 `..`li
   `--file` kabul + damga kanonik anahtarda · G3 harf-farklı yol sözleşme çapası — **FS
   yoklamalı**: harf-duyarlı FS'te görünür `[ATLANDI] G3` (ölçüldü: `fsutil file
-  setCaseSensitiveInfo <dir> enable` + TEMP/TMP oraya → 71/71 + G3 ATLANDI; normal TEMP 72/72) ·
+  setCaseSensitiveInfo <dir> enable` + TEMP/TMP oraya → G3 ATLANDI; sayılar o turun vektör
+  sayısına bağlıdır — güncel skor yukarıdaki reçete bloğunda, bu satır tarihçedir: takip turu
+  (72 vektör) 71/71 + G3 ATLANDI · normal TEMP 72/72) ·
   E15/E18 eklenti komutunda farklı `--session` değişir +
   not / aynısı dokunulmaz · E19/E20 komutsuz eklenti yer tutucusuna `--session` yok, `not`
   kırpılır · F7/F8 `--file` eşanlamlıları (`behaviordefinition`/`bdo`) kabul, farklı tip red ·
   **son dar tur:** K3 `--type auto` SINIF dalı da alt-include'ları `--file` ağacında çeker (ana
   daldaki K1/K2 bu dalı KORUMUYORDU — `kardes_koku` auto dalından sökülünce 72/72 kalıyordu) ·
-  F9 F7'nin ÇEVRİMİÇİ karşılığı (sahte ADT): eşanlamlı ad kanonik `bdef` ucundan çekilir.
+  F9 F7'nin ÇEVRİMİÇİ karşılığı (sahte ADT): eşanlamlı ad kanonik `bdef` ucundan çekilir ·
+  **kapanış turu:** F10 `_kanonik_tip` SAF fonksiyon vektörü — ad kümesi KODDAN türetilir
+  (`_TYPE_TO_EXTENSIONS` ∪ `OBJECT_TYPES` ∪ takma adlar ∪ sınıf alt-include adları ∪ `auto`;
+  ölçüldü 54 ad, `[KAPSAM]` satırı basar); çözülebilen her ad DOKUNULMAZ, yalnız
+  `bdo`/`behaviordefinition`→`bdef`, `servicebinding`→`srvb`. Küme <40 ya da bir kaynak boşsa
+  FAIL (sessiz geçmez). Dosya sistemine dokunmaz (import + çağrı) ⇒ Linux CI'da da aynı koşar.
+  Neden: F9 yalnız eşanlamlıları ölçüyordu; koruma (`normalize_object_type`… `return t`)
+  sökülünce `program/include/prog/fugr/interface`→`class` oluyor, korpus 74/74 kalıyordu.
   ⛔ Kapı stderr'i Windows'ta CRLF'tir — satır-sınırlı iddia (`...\n`) kurarken `kapi()`
   çıktısı LF'ye indirgenir (ilk koşuda 4 sahte-kırmızı verdi).
   ⛔ `cikti_iddiasi_durustlugu` M2 (kablolama sökümü) çapası **regex**tir: eski düz-metin çapası
