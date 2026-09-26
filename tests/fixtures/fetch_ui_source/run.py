@@ -77,20 +77,38 @@ MUTASYONLAR = {
     "--mutasyon-kapsam-yok": (
         FUS, '    print("\\n" + beyan(zip_kaynagi))\n    return rc\n', "    return rc\n"),
     # C — zip-slip denetimi kaldırılır (bug-gate bulgu 1)
-    "--mutasyon-zip-slip-yok": (FUS, "        if kok not in p.resolve().parents:", "        if False:"),
-    # C — doğrulama yazımla iç içe (kısmi yazım: reddedilen girdiden ÖNCEKİLER diske düşer; bulgu 1)
-    "--mutasyon-yaz-once-dogrula-yok": (
-        FUS, "        hedefler.append((p, b))\n",
-        "        p.parent.mkdir(parents=True, exist_ok=True)\n        p.write_bytes(b)\n"),
+    "--mutasyon-zip-slip-yok": (FUS, "        if kok not in (hedef / rel).resolve().parents:", "        if False:"),
+    # C — atomik yazım kaldırılır: doğrudan hedefe yazılır (yazım ORTASI G/Ç hatası KISMİ ağaç bırakır; re-gate R2)
+    "--mutasyon-atomik-yok": (FUS, "            p = gecici / rel\n", "            p = hedef / rel\n"),
+    # C — ham zip'te harf-büyüklüğü çakışması denetimi kaldırılır (re-gate P-2)
+    "--mutasyon-harf-ham-yok": (
+        FUS, "    cakisma = harf_cakismasi(dosyalar)\n", "    cakisma = []\n"),
+    # C — geri kurma SONRASI (X-dbg.js → X.js) harf çakışması denetimi kaldırılır (re-gate P-2, ikinci katman)
+    "--mutasyon-harf-yaz-yok": (FUS, "    cakisma = harf_cakismasi(kaynak)\n", "    cakisma = []\n"),
+    # C — --karsilastir yerel dizin okuma hatası ÖLÇÜLEMEDİ'ye çevrilmez (re-gate P-1)
+    "--mutasyon-kars-oku-yok": (
+        FUS, "        try:\n            yerel_dosyalar = dizin_oku(yerel_kok)\n        except OSError as e:   # re-gate P-1\n",
+        "        if True:\n            yerel_dosyalar = dizin_oku(yerel_kok)\n        if False:\n"),
+    # E — --dist-karsilastir dizin okuma hatası ÖLÇÜLEMEDİ'ye çevrilmez (re-gate P-1)
+    "--mutasyon-dist-oku-yok": (
+        FUS, "        try:\n            dist_dosyalar = dizin_oku(dist_kok)\n        except OSError as e:   # re-gate P-1\n",
+        "        if True:\n            dist_dosyalar = dizin_oku(dist_kok)\n        if False:\n"),
+    # D — eşlik build dizini G/Ç hatası (dist okuma, package.json yazımı) yakalanmaz (re-gate P-1)
+    "--mutasyon-eslik-gc-yok": (
+        FUS, "    except OSError as e:   # re-gate P-1: package.json", "    except KeyError as e:   # re-gate P-1: package.json"),
+    # D — eşlik geçici dizini (mkdtemp) açılamazsa yakalanmaz (re-gate P-1)
+    "--mutasyon-eslik-mkdtemp-yok": (
+        FUS, "    except OSError as e:   # re-gate P-1: geçici build", "    except KeyError as e:   # re-gate P-1: geçici build"),
+    # C — dış except programlama hatasını (AttributeError) ortam sorunu gibi yutar (re-gate R3)
+    "--mutasyon-dis-except-genis": (
+        FUS, "    except (OSError, ValueError) as e:\n", "    except (OSError, ValueError, AttributeError) as e:\n"),
     # C — --out yazımı ÖLÇÜLEMEDİ'ye çevrilmez (Olculemedi çökme olur; bulgu 1)
     "--mutasyon-out-try-yok": (
         FUS, "        try:\n            yaz(kaynak, out)\n        except Olculemedi as e:\n"
              '            return olculemedi(zip_kaynagi, f"--out: {e}")\n',
         "        yaz(kaynak, out)\n"),
     # C — indirme/çözme bloğu yalnız Olculemedi yakalar (OSError/AttributeError… çöker; bulgu 1)
-    "--mutasyon-indirme-hata-dar": (
-        FUS, "    except (ValueError, AttributeError, binascii.Error, zlib.error, OSError, zipfile.BadZipFile) as e:\n",
-        "    except zipfile.BadZipFile as e:\n"),
+    "--mutasyon-indirme-hata-dar": (FUS, "    except (OSError, ValueError) as e:\n", "    except ValueError as e:\n"),
     # C — zip_coz yalnız BadZipFile yakalar (bozuk deflate = zlib.error kendi mesajını kaybeder; bulgu 1)
     "--mutasyon-zipcoz-dar": (
         FUS, "    except (zipfile.BadZipFile, zlib.error, RuntimeError, NotImplementedError) as e:\n",
@@ -107,7 +125,11 @@ MUTASYONLAR = {
     "--mutasyon-bos-url-kontrol-yok": (FUS, "    if not conn[0] or not conn[1]:\n", "    if False:\n"),
     # B — manifest tip-duyarsız kıyas: true == 1 (bulgu 3)
     "--mutasyon-manifest-tip": (
-        FUS, "    if json.dumps(c, sort_keys=True) == json.dumps(y, sort_keys=True):\n", "    if c == y:\n"),
+        FUS, "    if json.dumps(_json_norm(c), sort_keys=True) == json.dumps(_json_norm(y), sort_keys=True):\n",
+        "    if c == y:\n"),
+    # B — sayı normalizasyonu kaldırılır: canlı `1` ↔ yerel `1.0` sahte GERCEK-FARK (re-gate R1, bu turun regresyonu)
+    "--mutasyon-sayi-norm-yok": (
+        FUS, "    if isinstance(o, float) and o.is_integer():\n        return int(o)\n", ""),
     # B — .properties katı çözme kaldırılır: farklı bozuk baytlar AYNI U+FFFD'ye iner (bulgu 4)
     "--mutasyon-prop-kati-yok": (FUS, '    hata = "strict" if kati else "replace"\n', '    hata = "replace"\n'),
     # C — istenip koşmayan adım "İSTENMEDİ" yazılır (bulgu 5)
@@ -180,6 +202,8 @@ def cagir(argv: list[str]) -> tuple:
             rc = F.main(argv)
     except SystemExit as e:
         rc = e.code
+        if rc != 2:   # argparse kullanım hatası (2) dışındaki her SystemExit bir çökmedir (re-gate R4)
+            COKMELER.append(f"{argv[:2]}… → SystemExit({rc!r})")
     except Exception as e:  # çökme: rc sayı DEĞİL (hiçbir rc kıyası tutmaz) + Z0'da FAIL
         COKMELER.append(f"{argv[:2]}… → {type(e).__name__}: {e}")
         rc = f"CÖKME {type(e).__name__}"
@@ -346,6 +370,11 @@ m_bool, m_int = json.loads(json.dumps(MANIFEST_YEREL)), json.loads(json.dumps(MA
 m_bool["sap.ui5"]["bayrak"], m_int["sap.ui5"]["bayrak"] = True, 1
 kontrol("B12 manifest tip farkı: canlı `1` ↔ yerel `true` → GERCEK-FARK (Python true==1 tuzağı)",
         F.dosya_kiyasla("manifest.json", jb(m_int), jb(m_bool))[0] == F.GERCEK)
+m_bir = jb(m_int).replace(b'"bayrak": 1', b'"bayrak": 1.0').replace(b'"1.59.0"', b'"1.59.0", "sayi": 1e3')
+m_bin = jb(m_int).replace(b'"1.59.0"', b'"1.59.0", "sayi": 1000')
+kontrol("B12b FP çapası: sayı biçimi (canlı `1` ↔ yerel `1.0` · `1000` ↔ `1e3`) → BUILD-DONUSUMU (JS anlambilimi)",
+        b'"bayrak": 1.0' in m_bir and F.dosya_kiyasla("manifest.json", m_bin, m_bir)[0] == F.BUILD,
+        str(F.dosya_kiyasla("manifest.json", m_bin, m_bir)[:2]))
 kontrol("B13 .properties iki FARKLI bozuk bayt (yerel \\xfe · canlı \\xff) → GERCEK-FARK (U+FFFD'de birleşmez)",
         F.dosya_kiyasla("i18n/i18n.properties", b"x=\xff\n", b"x=\xfe\n")[0] == F.GERCEK)
 p14 = F.dosya_kiyasla("i18n/i18n.properties", b"x=\xff\n", "x=\ufffd\n".encode("utf-8"))
@@ -368,14 +397,21 @@ dolu = KUM / "dolu"
 dolu.mkdir()
 (dolu / "korunan.txt").write_bytes(b"dokunma")
 rc, out = cagir(["--zip", str(TEMIZ_ZIP), "--out", str(dolu)])
-kontrol("C3 dolu --out → rc 2, hiçbir şey yazılmaz",
-        rc == 2 and sorted(p.name for p in dolu.iterdir()) == ["korunan.txt"], f"rc={rc} {sorted(dolu.iterdir())}")
+kontrol("C3 dolu --out → rc 2 (ön kontrol mesajıyla), hiçbir şey yazılmaz",
+        rc == 2 and "--out dizini dolu" in out and sorted(p.name for p in dolu.iterdir()) == ["korunan.txt"],
+        f"rc={rc} {sorted(dolu.iterdir())}")
 hedef = KUM / "cikti" / "webapp"
 rc, out = cagir(["--zip", str(TEMIZ_ZIP), "--out", str(hedef)])
 yazilan = F.dizin_oku(hedef) if hedef.is_dir() else {}
-kontrol("C4 --out: geri kurulan küme yazılır, metin baytlarında CR YOK, PNG ham",
+kontrol("C4 --out: geri kurulan küme yazılır, metin baytlarında CR YOK, PNG ham, geçici dizin ARTIĞI YOK",
         rc == 0 and set(yazilan) == set(kaynak) and all(b"\r" not in yazilan[r] for r in yazilan if F.metin_mi(r))
-        and yazilan.get("img/logo.png") == PNG, f"rc={rc} {sorted(yazilan)}")
+        and yazilan.get("img/logo.png") == PNG and sorted(p.name for p in hedef.parent.iterdir()) == ["webapp"],
+        f"rc={rc} {sorted(yazilan)} {sorted(p.name for p in hedef.parent.iterdir()) if hedef.parent.exists() else '-'}")
+bos_hedef = KUM / "bos_hedef"
+bos_hedef.mkdir()
+rc, out = cagir(["--zip", str(TEMIZ_ZIP), "--out", str(bos_hedef)])
+kontrol("C4b var olan BOŞ --out dizini (atomik taşıma önce onu kaldırır) → rc 0, küme yazılır",
+        rc == 0 and bos_hedef.is_dir() and set(F.dizin_oku(bos_hedef)) == set(kaynak), f"rc={rc} {out[-300:]}")
 bozuk = KUM / "bozuk.zip"
 bozuk.write_bytes(b"PK-degil")
 rc, out = cagir(["--zip", str(bozuk), "--karsilastir", str(yerel)])
@@ -482,6 +518,67 @@ finally:
 kontrol("C15 .conn_adt'de URL/kullanıcı BOŞ → rc 2 + '.conn_adt … boş' (ağa çıkmadan)",
         rc == 2 and "ADT_SAP_URL / ADT_SAP_USER boş" in out, f"rc={rc} {out[:300]}")
 
+# ── re-gate R2: yazım ORTASINDA G/Ç hatası (dosya `b` ↔ dizin `b/`) → hedef KISMİ kalmaz ──
+catisma = zip_yaz({"a.txt": b"x\n", "b": b"dosya\n", "b/c.txt": b"y\n"}, KUM / "catisma.zip")
+catisma_hedef = KUM / "catisma_ust" / "webapp"
+rc, out = cagir(["--zip", str(catisma), "--out", str(catisma_hedef)])
+ust_icerik = sorted(p.name for p in catisma_hedef.parent.iterdir()) if catisma_hedef.parent.exists() else []
+kontrol("C16 yazım ortasında G/Ç hatası (`b` dosyası + `b/c.txt`) → rc 2 + 'DOKUNULMADI'; hedef YOK, geçici artık YOK",
+        rc == 2 and "[OLCULEMEDI]" in out and "DOKUNULMADI" in out and not catisma_hedef.exists() and ust_icerik == [],
+        f"rc={rc} üst={ust_icerik} {out[:300]}")
+
+# ── re-gate P-2: yalnız harf büyüklüğüyle ayrışan yollar ──
+rc, out = cagir(["--zip", str(zip_yaz(canli_bsp(**{"view/main.view.xml": crlf(VIEW)}), KUM / "harf.zip")),
+                 "--karsilastir", str(yerel)])
+kontrol("C17 zip'te `view/Main.view.xml` + `view/main.view.xml` → rc 2 + OLCULEMEDI (sessiz üzerine yazma yok)",
+        rc == 2 and "harf büyüklüğüyle" in out and "KAPSAM BEYANI" in out, f"rc={rc} {out[:300]}")
+harf_hedef = KUM / "harf_hedef"
+rc, out = cagir(["--zip", str(zip_yaz({"A-dbg.js": b"var a;\n", "a.js": b"var b;\n"},
+                                      KUM / "harf2.zip")), "--out", str(harf_hedef)])
+kontrol("C18 geri kurma SONRASI çakışma (`A-dbg.js`→`A.js` ↔ `a.js`; ham zip'te çift YOK) → rc 2, hiçbir şey yazılmaz",
+        rc == 2 and "geri kurulan kaynakta" in out and not harf_hedef.exists(), f"rc={rc} {out[:300]}")
+
+# ── re-gate P-1: yerel/dist/eşlik G/Ç hatası → ÖLÇÜLEMEDİ rc 2 + beyan (Traceback + rc 1 değil) ──
+
+
+def izin_yok(_kok):
+    raise PermissionError(13, "erişim reddedildi (sahte)", str(_kok))
+
+
+asil_dizin_oku = F.dizin_oku
+F.dizin_oku = izin_yok
+try:
+    rc, out = cagir(["--zip", str(TEMIZ_ZIP), "--karsilastir", str(yerel)])
+    rc2, out2 = cagir(["--zip", str(TEMIZ_ZIP), "--dist-karsilastir", str(yerel)])
+finally:
+    F.dizin_oku = asil_dizin_oku
+kontrol("C19 --karsilastir dizini okunamıyor (PermissionError) → rc 2 + OLCULEMEDI + kapsam beyanı",
+        rc == 2 and "--karsilastir dizini okunamadı" in out and "KAPSAM BEYANI" in out, f"rc={rc} {out[:300]}")
+kontrol("C20 --dist-karsilastir dizini okunamıyor → rc 2 + OLCULEMEDI + kapsam beyanı",
+        rc2 == 2 and "--dist-karsilastir dizini okunamadı" in out2 and "KAPSAM BEYANI" in out2, f"rc={rc2} {out2[:300]}")
+
+# ── re-gate R3: programlama hatası ortam sorunu gibi YUTULMAZ (çağrı doğrudan; COKMELER'e yazılmaz) ──
+asil_zip_coz = F.zip_coz
+
+
+def _bozuk_coz(_b):
+    raise AttributeError("sahte programlama hatası")
+
+
+F.zip_coz = _bozuk_coz
+try:
+    with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+        F.main(["--zip", str(TEMIZ_ZIP)])
+    yutuldu = "yutuldu (main döndü)"
+except AttributeError:
+    yutuldu = ""
+except BaseException as e:  # noqa: BLE001
+    yutuldu = f"beklenmeyen {type(e).__name__}"
+finally:
+    F.zip_coz = asil_zip_coz
+kontrol("C21 indirme bloğunda AttributeError → YAYILIR (ÖLÇÜLEMEDİ'ye çevrilmez; programlama hatası görünür kalır)",
+        yutuldu == "", yutuldu)
+
 # ───────────────── D — --eslik: gerçek alt süreç + SAHTE ui5 CLI (3. bağlam) ─────────────────
 SAHTE_PY = KUM / "sahte_ui5.py"
 SAHTE_PY.write_text(
@@ -563,6 +660,31 @@ z = zip_yaz(canli_bsp(), KUM / "d9.zip")
 rc, out = cagir(["--zip", str(z), "--eslik", "--ui5-cli", str(KUM / "yok" / "ui5")])
 kontrol("D9 ui5 CLI koşamıyor → ÖLÇÜLEMEDİ rc 2 (ESLIK hükmü basılmaz)",
         rc == 2 and "[OLCULEMEDI]" in out and "[ESLIK-" not in out, f"rc={rc} {out[:300]}")
+
+# re-gate P-1: eşlik build dizini G/Ç (dist okuma) ve geçici dizin açılamaması → ÖLÇÜLEMEDİ rc 2
+F.dizin_oku = izin_yok
+try:
+    rc, out = eslik(canli_bsp(), lf(canli_bsp()), "d10")
+finally:
+    F.dizin_oku = asil_dizin_oku
+kontrol("D10 eşlik: build dist'i okunamıyor (PermissionError) → rc 2 + 'build dizini G/Ç' + kapsam beyanı",
+        rc == 2 and "build dizini G/Ç" in out and "KAPSAM BEYANI" in out, f"rc={rc} {out[:300]}")
+asil_mkdtemp = F.tempfile.mkdtemp
+
+
+def _mkdtemp(*a, **k):
+    if k.get("prefix") == "fetch_ui_eslik_":
+        raise OSError(28, "aygıtta yer yok (sahte)")
+    return asil_mkdtemp(*a, **k)
+
+
+F.tempfile.mkdtemp = _mkdtemp
+try:
+    rc, out = eslik(canli_bsp(), lf(canli_bsp()), "d11")
+finally:
+    F.tempfile.mkdtemp = asil_mkdtemp
+kontrol("D11 eşlik: geçici build dizini açılamıyor → rc 2 + 'geçici build dizini açılamadı'",
+        rc == 2 and "geçici build dizini açılamadı" in out, f"rc={rc} {out[:300]}")
 
 # ─────────────── E — deploy listesi (--dist-karsilastir, §2.4 localService riski) ───────────────
 LS = {"localService/mainService/metadata.xml": crlf(b"<edmx/>\n")}

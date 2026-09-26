@@ -82,6 +82,7 @@ import difflib
 import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import ssl
@@ -222,6 +223,20 @@ def _yol_sil(obj, yol) -> None:
     del obj[yol[-1]]
 
 
+def _json_norm(o):
+    """JS sayı anlambilimi: tam-sayı değerli float → int (`1.0`, `1e3` = `1`, `1000`). bool AYRI kalır
+    (Python'da bool int'in alt sınıfıdır ama `true` hiçbir zaman `1`e eşit sayılmaz)."""
+    if isinstance(o, bool):
+        return o
+    if isinstance(o, float) and o.is_integer():
+        return int(o)
+    if isinstance(o, dict):
+        return {k: _json_norm(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_json_norm(v) for v in o]
+    return o
+
+
 def manifest_kiyasla(canli: bytes, yerel: bytes) -> tuple[str, list[str], str, str]:
     """→ (sınıf, ayrıştırılan build yolları, canlı metni, yerel metni) — metinler diff içindir.
 
@@ -237,8 +252,9 @@ def manifest_kiyasla(canli: bytes, yerel: bytes) -> tuple[str, list[str], str, s
         if canlida and not yerelde:
             _yol_sil(c, yol)
             ayiklanan.append("/".join(yol))
-    # Tip-duyarlı kıyas: Python `==` true==1 / false==0 sayar ⇒ gerçek fark BUILD görünürdü.
-    if json.dumps(c, sort_keys=True) == json.dumps(y, sort_keys=True):
+    # Tip-duyarlı kıyas: Python `==` true==1 / false==0 sayar ⇒ gerçek fark BUILD görünürdü. Sayılar
+    # JS anlambilimiyle (manifestEnhancer JSON.parse→stringify): 1 ≡ 1.0 ≡ 1e0 — `_json_norm`.
+    if json.dumps(_json_norm(c), sort_keys=True) == json.dumps(_json_norm(y), sort_keys=True):
         return BUILD, ayiklanan, "", ""
     return (GERCEK, ayiklanan, json.dumps(c, indent=2, ensure_ascii=False) + "\n",
             json.dumps(y, indent=2, ensure_ascii=False) + "\n")
@@ -324,11 +340,16 @@ def eslik_sinifi(build_preload: bytes, canli_preload: bytes) -> tuple[str, list[
 def zip_coz(zip_bayt: bytes) -> dict[str, bytes]:
     try:
         with zipfile.ZipFile(io.BytesIO(zip_bayt)) as z:
-            return {n.replace("\\", "/").lstrip("/"): z.read(n) for n in z.namelist() if not n.endswith("/")}
+            dosyalar = {n.replace("\\", "/").lstrip("/"): z.read(n) for n in z.namelist() if not n.endswith("/")}
     # z.read(): bozuk deflate → zlib.error · CRC → BadZipFile · şifreli → RuntimeError · desteksiz yöntem →
     # NotImplementedError. Hiçbiri çökme olmamalı: ÖLÇÜLEMEDİ (bug-gate 2026-09-26, bulgu 1).
     except (zipfile.BadZipFile, zlib.error, RuntimeError, NotImplementedError) as e:
         raise Olculemedi(f"zip çözülemedi ({len(zip_bayt)}B): {type(e).__name__}: {e}")
+    cakisma = harf_cakismasi(dosyalar)
+    if cakisma:   # re-gate P-2: sessiz üzerine yazma / tek yerel dosyayla iki kaynak eşlemesi olmasın
+        raise Olculemedi(f"zip'te yalnız harf büyüklüğüyle ayrışan girdiler: {cakisma[:3]} — büyük/küçük harf "
+                         "duyarsız dosya sisteminde tek dosyaya düşer")
+    return dosyalar
 
 
 def zip_indir(bsp: str, conn) -> tuple[bytes, dict]:
@@ -371,23 +392,54 @@ def dizin_oku(kok: Path) -> dict[str, bytes]:
     return {p.relative_to(kok).as_posix(): p.read_bytes() for p in sorted(kok.rglob("*")) if p.is_file()}
 
 
+def harf_cakismasi(adlar) -> list[tuple[str, str]]:
+    """Yalnız büyük/küçük harfle ayrışan yol çiftleri — Windows/macOS varsayılan dosya sisteminde TEK dosyaya
+    düşer (sessiz üzerine yazma). Karşılaştırmada da iki ayrı kaynak tek yerel dosyayla eşleşemez."""
+    gorulen: dict[str, str] = {}
+    cift = []
+    for a in sorted(adlar):
+        k = a.casefold()
+        if k in gorulen:
+            cift.append((gorulen[k], a))
+        else:
+            gorulen[k] = a
+    return cift
+
+
 def yaz(kaynak: dict[str, bytes], hedef: Path) -> None:
-    """Önce TÜM yollar doğrulanır, sonra yazılır — reddedilen bir girdi kısmi yazım bırakmaz."""
+    """ATOMİK: önce TÜM yollar doğrulanır, sonra kardeş geçici dizine yazılır, bitince hedefe taşınır.
+    Doğrulama reddi ya da yazım ORTASINDAKİ G/Ç hatası (dosya↔dizin çakışması, disk, izin, yol uzunluğu)
+    hedefte KISMİ ağaç bırakmaz (re-gate R2, 2026-09-26)."""
     if hedef.exists() and not hedef.is_dir():
         raise Olculemedi(f"hedef bir dizin değil: {hedef}")
+    hedef_vardi = hedef.is_dir()   # dolu hedef: main ön kontrolü reddeder; olsa da rmdir() düşer → dokunulmaz
+    cakisma = harf_cakismasi(kaynak)
+    if cakisma:
+        raise Olculemedi(f"geri kurulan kaynakta yalnız harf büyüklüğüyle ayrışan yollar: {cakisma[:3]} — "
+                         "büyük/küçük harf duyarsız dosya sisteminde üzerine yazılır; HİÇBİR dosya yazılmadı")
     kok = hedef.resolve()
-    hedefler = []
-    for rel, b in kaynak.items():
-        p = hedef / rel
-        if kok not in p.resolve().parents:   # zip içi `../` yolu hedef dışına yazamaz
+    for rel in kaynak:
+        if kok not in (hedef / rel).resolve().parents:   # zip içi `../` yolu hedef dışına yazamaz
             raise Olculemedi(f"zip girdisi hedef dizin dışını gösteriyor: {rel!r} — HİÇBİR dosya yazılmadı")
-        hedefler.append((p, b))
     try:
-        for p, b in hedefler:
+        hedef.parent.mkdir(parents=True, exist_ok=True)
+        gecici = Path(tempfile.mkdtemp(prefix=f".{hedef.name}.yaziliyor-", dir=hedef.parent))
+    except OSError as e:
+        raise Olculemedi(f"geçici yazım dizini açılamadı ({type(e).__name__}: {e})")
+    try:
+        for rel, b in kaynak.items():
+            p = gecici / rel
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(b)   # bayt kipi: metin zaten LF — platform satır sonu EKLENMEZ
+        if hedef_vardi:
+            hedef.rmdir()      # boş olduğu yukarıda doğrulandı; Windows'ta os.replace var olan dizine taşımaz
+        os.replace(gecici, hedef)
     except OSError as e:
-        raise Olculemedi(f"yazılamadı ({type(e).__name__}: {e})")
+        shutil.rmtree(gecici, ignore_errors=True)
+        if hedef_vardi and not hedef.exists():
+            hedef.mkdir()
+        kalan = f" · ⚠ geçici dizin SİLİNEMEDİ: {gecici}" if gecici.exists() else ""
+        raise Olculemedi(f"yazılamadı ({type(e).__name__}: {e}) — hedef DOKUNULMADI (atomik yazım){kalan}")
 
 
 def baglanti() -> tuple:
@@ -417,7 +469,10 @@ def eslik_olc(kaynak: dict[str, bytes], canli: dict[str, bytes], ui5_cli: str | 
     if not cli:
         raise Olculemedi("ui5 CLI bulunamadı (PATH'te `ui5` yok) → `--ui5-cli \"<ui>/node_modules/.bin/ui5\"` ver")
     app_id = _uygulama_kimligi(kaynak)
-    kum = Path(tempfile.mkdtemp(prefix="fetch_ui_eslik_"))
+    try:
+        kum = Path(tempfile.mkdtemp(prefix="fetch_ui_eslik_"))
+    except OSError as e:   # re-gate P-1: geçici build dizini açılamıyorsa çökme değil ÖLÇÜLEMEDİ
+        raise Olculemedi(f"eşlik: geçici build dizini açılamadı ({type(e).__name__}: {e})")
     try:
         yaz(kaynak, kum / "webapp")
         paket = re.sub(r"[^a-z0-9._-]", "-", app_id.lower()) or "app"
@@ -438,6 +493,8 @@ def eslik_olc(kaynak: dict[str, bytes], canli: dict[str, bytes], ui5_cli: str | 
         ozet = (len(canli.keys() & build.keys()) - len(farkli), len(canli), farkli,
                 sorted(canli.keys() - build.keys()), sorted(build.keys() - canli.keys()))
         return sinif, moduller, ozet
+    except OSError as e:   # re-gate P-1: package.json/ui5.yaml yazımı · dist okuma
+        raise Olculemedi(f"eşlik: build dizini G/Ç ({type(e).__name__}: {e})")
     finally:
         shutil.rmtree(kum, ignore_errors=True)
         if kum.exists():
@@ -554,8 +611,10 @@ def main(argv: list[str] | None = None) -> int:
         canli = zip_coz(zip_bayt)
     except Olculemedi as e:
         return olculemedi(zip_kaynagi, str(e))
-    # Yanıt/zip biçimi bozuk (dict olmayan JSON · base64 · CRC/deflate · dosya G/Ç): çökme DEĞİL, ÖLÇÜLEMEDİ.
-    except (ValueError, AttributeError, binascii.Error, zlib.error, OSError, zipfile.BadZipFile) as e:
+    # Ortam hatası (dosya G/Ç · geçersiz URL biçimi): çökme DEĞİL, ÖLÇÜLEMEDİ. Biçim hataları (JSON · base64 ·
+    # zip) zip_indir/zip_coz'da KENDİ mesajıyla Olculemedi olur; AttributeError/TypeError gibi programlama
+    # hataları burada BİLEREK yakalanmaz — ortam sorunu gibi görünmesin, traceback'le düşsün (re-gate R3).
+    except (OSError, ValueError) as e:
         return olculemedi(zip_kaynagi, f"indirme/çözme ({type(e).__name__}: {e})")
 
     kaynak, atilan = geri_kur(canli)
@@ -622,7 +681,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n=== YAZILDI: {len(kaynak)} dosya → {out} (metin LF, ikili ham) ===")
 
     if yerel_kok is not None:
-        satirlar = karsilastir(kaynak, dizin_oku(yerel_kok))
+        try:
+            yerel_dosyalar = dizin_oku(yerel_kok)
+        except OSError as e:   # re-gate P-1
+            return olculemedi(zip_kaynagi, f"--karsilastir dizini okunamadı ({type(e).__name__}: {e})")
+        satirlar = karsilastir(kaynak, yerel_dosyalar)
         print(f"\n=== KARŞILAŞTIR: canlı (geri kurulan) ↔ yerel {yerel_kok} ===")
         sayim: dict[str, int] = {}
         for rel, sinif, detay, fark in satirlar:
@@ -642,7 +705,11 @@ def main(argv: list[str] | None = None) -> int:
         durum["kars"] = KARSILASTIRMA_TANIMI
 
     if dist_kok is not None:
-        yalniz_c, yalniz_d, degisen, esit = liste_kiyasla(canli, dizin_oku(dist_kok))
+        try:
+            dist_dosyalar = dizin_oku(dist_kok)
+        except OSError as e:   # re-gate P-1
+            return olculemedi(zip_kaynagi, f"--dist-karsilastir dizini okunamadı ({type(e).__name__}: {e})")
+        yalniz_c, yalniz_d, degisen, esit = liste_kiyasla(canli, dist_dosyalar)
         print(f"\n=== DEPLOY LİSTESİ: canlı ham ({len(canli)}) ↔ dist {dist_kok} ===")
         for r in yalniz_c:
             print(f"  {YALNIZ_CANLI:<15} {r}  — dist'te YOK: deploy sonrası canlıda kalmayabilir")
