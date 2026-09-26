@@ -43,6 +43,17 @@ Senaryolar (her biri rc + dosya BAYTLARI + damga sayısı + çağrı kaydıyla �
   T10 tek satırlık dosya + canlı-yeni girdi → CRLF ile eklenir
   E1  (A kolu birleşince) kapı uçtan uca: blok → pull damgası → serbest. Kapıda `_EK_DENETCILER`
       yoksa ATLA (sayılmaz, çıktıda görünür).
+  --- bug-gate düzeltme turu (PR #308, 2026-09-26) ---
+  H10 adlı textpool Z/Y dışı ad → None · H11 muaf küme = source_drift (canlı + yedek eşit)
+  M17 karışık satır sonu + anlamca eşit → YAZILMAZ (dry-run da "EŞİT") · T13 aynısı textpool
+  M18 canlı boş metin (yerelde yok) → EKLENMEZ, [ATLANDI], damga; sonuç populate okuyucusundan
+      geçer · M19 canlı boş / yerel metinli → ÖLÇÜLEMEDİ
+  M20 selfexp sütunsuz CSV + canlı true → ÖLÇÜLEMEDİ (teşhis metniyle) · M21 canlı baş/son
+      boşluk → strip'li eşit · M22 yanıt sınıf adı ≠ istenen → ÖLÇÜLEMEDİ · M23 csv_modeli satır
+      içi CR (birim) · M24 canlı metinde satır sonu → ÖLÇÜLEMEDİ · M25 mojibake uyarısı + FP
+  T14 yalnız `@` özniteliği farklı → güncellenir · T15 okunan oturum dili kapsamda basılır
+  L1 `[PULL]` başlığı gerçek pipe'lı alt süreçte İLK satır · L3 paket_dizini SON kök eşleşmesi
+  L4 `--cwd` kabul edilmez (tek kök kaynağı)
 
 Mutasyonlar (her biri korpusu KIRMIZI yapmalı; çapa TAM BİR KEZ eşleşmeli):
   MU1 paket koruması sökülür · MU2 ÖLÇÜLEMEDİ dalı damgalar (eşit-değilken damga) ·
@@ -51,7 +62,14 @@ Mutasyonlar (her biri korpusu KIRMIZI yapmalı; çapa TAM BİR KEZ eşleşmeli):
   MU7 yer tutucular gerçek sayılır · MU8 yalnız-yerel textpool girdisi düşer ·
   MU9 ref_docs muafiyeti sökülür · MU10 çıplak ad çok programda ilkini seçer ·
   MU11 msag öz-denetimi etkisiz + sıra bozuk (öz-denetimsiz de test yakalar) ·
-  MU12 kimlik (ortak anahtar) denetimi sökülür
+  MU12 kimlik (ortak anahtar) denetimi sökülür · MU13-15 komut/not sözleşmesi ·
+  MU16-33 bug-gate bulgularının her biri KENDİ vektörüyle (liste MUTASYONLAR'da, etiket
+  `[M1]`/`[MX2]`/`[L3]`…). MU27 (L1) yalnız win32'de ölçülür — kusur yalnız orada var
+  (populate stdout'u yalnız win32'de yeniden sarar); başka platformda görünür ATLA basılır.
+  HEDEF: her mutasyonun düşürmesi ZORUNLU senaryolar; biri ayakta kalırsa HEDEF-KACTI = FAIL.
+  MALİYET: PAHALI senaryolar (L1 alt süreç, M12 git) yalnız TABAN + onları hedefleyen kipte
+  koşar; atlanan koşum `[ATLA-MALIYET]` satırıyla beyan edilir. `_git_kirli` M12 dışında
+  sabit False (kum git deposu değil → gerçeği de False döner; ölçülen maliyet ~2,6 sn/geçiş).
 
 Koşum: python tests/fixtures/pbe_msag_textpool/run.py   (exit 0 = PASS)
 """
@@ -128,7 +146,9 @@ class _Yanit:
 
 
 def msag_xml(mesajlar: dict, paket=PAKET, ad=SINIF, dil="TR", master="TR") -> str:
-    a = lambda s: _esc(s, {'"': "&quot;"})  # noqa: E731
+    # Öznitelikteki satır sonu karakter referansıyla (XML öznitelik normalizasyonu çıplak
+    # satır sonunu BOŞLUĞA çevirir — gerçek sunucu da referansla gönderir).
+    a = lambda s: _esc(s, {'"': "&quot;", "\n": "&#10;", "\r": "&#13;"})  # noqa: E731
     satir = "".join(
         f'<mc:messages mc:msgno="{n}" mc:msgtext="{a(t)}" mc:selfexplainatory="{s}" '
         f'mc:documented="{d}"/>' for n, (t, s, d) in sorted(mesajlar.items()))
@@ -239,6 +259,7 @@ def modul_yukle(ad: str, yol: Path, degisim=None):
         kaynak = kaynak.replace(eski, yeni)
     mod = types.ModuleType(ad)
     mod.__file__ = str(yol)
+    mod.__kaynak__ = kaynak                      # L1 alt süreci AYNI (mutasyonlu) metni koşar
     sys.modules[ad] = mod
     exec(compile(kaynak, str(yol), "exec"), mod.__dict__)  # noqa: S102
     return mod
@@ -263,8 +284,19 @@ def _saf(r) -> bool:
             and isinstance(n, str) and "--offline" in n and "--dry-run" in n)
 
 
-def senaryolar(M, H):
+PAHALI = ("L1", "M12")   # ≥0,4 sn/koşum: gerçek alt süreç (L1) · git init/commit (M12)
+
+
+def senaryolar(M, H, pahali=PAHALI):
+    """`pahali`: bu koşumda koşulacak PAHALI senaryo kimlikleri (taban: hepsi; mutasyon: yalnız
+    onu hedefleyenler — main() atlananı `[ATLA-MALIYET]` satırıyla beyan eder)."""
     s = {}
+    # MALİYET (ölçüldü 2026-09-26: git çağrısı ~65 ms × ~40 pull/koşum = geçiş başına ~2,6 sn):
+    # kum dizinleri git deposu DEĞİL → gerçek `_git_kirli` de `git status` rc≠0 ile False döner.
+    # Bu yüzden M12 DIŞINDA sonuç-eşdeğer sabitle değiştirilir; gerçek fonksiyon yalnız M12'de
+    # (gerçek git deposunda) ölçülür — git-kirli korumasının vektörü M12, mutasyonu MU33.
+    _gercek_git_kirli = M._git_kirli
+    M._git_kirli = lambda _dosya: False
     msag_yol = f"SOURCE_CODES/SD/{PAKET}/messages-zsd001.csv"
     tp_dizin = f"SOURCE_CODES/SD/{PAKET}/programs/textpool"
 
@@ -300,6 +332,13 @@ def senaryolar(M, H):
     s["H8 kaynak kökü dışı None"] = H.sinifla(dosya(k, "notlar/messages-zsd001.csv", b"x"), k) is None
     r = H.sinifla(dosya(k, f"ERP/SD/{BASKA_PAKET}/messages-zsd000.csv", b"x"), k)
     s["H9 3.BAGLAM ERP kökü"] = bool(r and r["nesne"] == "ZSD000")
+    # MX12: adlı textpool dosyasında program adı Z/Y değilse eklentinin işi değil.
+    s["H10 adlı textpool Z/Y dışı ad → None"] = H.sinifla(
+        dosya(k, f"{tp_dizin}/RSDEMO01.selections.txt", b"x"), k) is None
+    # Öneri (c): muaf küme TEK kaynaktan; yedek de kaynakla EŞİT kalmalı (sessiz ayrışma yok).
+    import source_drift as _sd  # noqa: E402
+    s["H11 muaf küme = source_drift (canlı + yedek)"] = (
+        H._MUAF_KLASORLER == set(_sd._EXCLUDED_DIR_SEGMENTS) == set(H._MUAF_YEDEK))
 
     # ---------------- M: mesaj sınıfı ----------------
     def msag(ad, bayt, client, *ek, damga=None):
@@ -369,28 +408,123 @@ def senaryolar(M, H):
     rc, out, b, d, c = msag("m11", CSV_ESIT.encode(), _Patlar(), "--offline")
     s["M11 offline"] = rc == 0 and len(d.cagri) == 1 and "[OFFLINE]" in out
 
-    kk = kum("m12")
-    p = dosya(kk, msag_yol, CSV_ESIT.encode())
-    g = ["git", "-C", str(kk), "-c", "user.name=fixture", "-c", "user.email=fixture",
-         "-c", "core.autocrlf=false"]
-    git_ok = all(subprocess.run(x, capture_output=True).returncode == 0 for x in (
-        ["git", "init", "-q", str(kk)], g + ["add", "-A"], g + ["commit", "-q", "-m", "t"]))
-    p.write_bytes(CSV_ESIT.replace("sıfır", "SIFIR").encode())
-    d1 = Damga()
-    rc1, _o = kos(M, ["msag", "--name", SINIF, "--file", str(p)], Sahte(msag=msag_xml(CANLI)), d1)
-    b1 = p.read_bytes()
-    d2 = Damga()
-    rc2, _o = kos(M, ["msag", "--name", SINIF, "--file", str(p), "--force"],
-                  Sahte(msag=msag_xml(CANLI)), d2)
-    s["M12 git-kirli → --force"] = (git_ok and rc1 == 2 and "SIFIR".encode() in b1
-                                   and not d1.cagri and rc2 == 0
-                                   and p.read_bytes() == CSV_ESIT.encode())
+    if "M12" in pahali:
+        M._git_kirli = _gercek_git_kirli
+        kk = kum("m12")
+        p = dosya(kk, msag_yol, CSV_ESIT.encode())
+        g = ["git", "-C", str(kk), "-c", "user.name=fixture", "-c", "user.email=fixture",
+             "-c", "core.autocrlf=false"]
+        git_ok = all(subprocess.run(x, capture_output=True).returncode == 0 for x in (
+            ["git", "init", "-q", str(kk)], g + ["add", "-A"], g + ["commit", "-q", "-m", "t"]))
+        p.write_bytes(CSV_ESIT.replace("sıfır", "SIFIR").encode())
+        d1 = Damga()
+        rc1, _o = kos(M, ["msag", "--name", SINIF, "--file", str(p)],
+                      Sahte(msag=msag_xml(CANLI)), d1)
+        b1 = p.read_bytes()
+        d2 = Damga()
+        rc2, _o = kos(M, ["msag", "--name", SINIF, "--file", str(p), "--force"],
+                      Sahte(msag=msag_xml(CANLI)), d2)
+        s["M12 git-kirli → --force"] = (git_ok and rc1 == 2 and "SIFIR".encode() in b1
+                                       and not d1.cagri and rc2 == 0
+                                       and p.read_bytes() == CSV_ESIT.encode())
+        M._git_kirli = lambda _dosya: False
 
     canli13 = {f"00{i}": (f"Mesaj {i}", "false", "true" if i % 2 else "false") for i in range(6)}
     yerel13 = 'msgno,msgtext,selfexplainatory\n005,"Mesaj 5",false\n'
     rc, out, b, d, c = msag("m13", yerel13.encode(), Sahte(msag=msag_xml(canli13)))
     s["M13 tek satırlı CSV + canlı 000-005"] = rc == 0 and b == (
         yerel13 + "".join(f'00{i},"Mesaj {i}",false\n' for i in range(5))).encode()
+
+    # --- bug-gate düzeltme turu (Q352, 2026-09-26) ---
+    # M17 (bug-gate M1): karışık satır sonu + anlamca EŞİT → dosya bayt-aynı, dry-run "EŞİT".
+    karisik = ('msgno,msgtext,selfexplainatory\r\n001,"Belge &1 bulunamadı",false\n'
+               '002,"Miktar sıfır olamaz",false\r\n003,"Alan ""&1"" zorunlu",true\n')
+    rc, out, b, d, c = msag("m17", karisik.encode(), Sahte(msag=msag_xml(CANLI)))
+    rc_d, out_d, b_d, d_d, _c = msag("m17d", karisik.encode(), Sahte(msag=msag_xml(CANLI)),
+                                     "--dry-run")
+    s["M17 karışık satır sonu + eşit → YAZILMAZ"] = (
+        rc == 0 and b == karisik.encode() and len(d.cagri) == 1 and "EŞİT" in out
+        and rc_d == 0 and b_d == karisik.encode() and "EŞİT" in out_d and "FARKLI" not in out_d)
+
+    # M18 (bug-gate M2): canlıda metni BOŞ mesaj, yerelde yok → EKLENMEZ, [ATLANDI], damga;
+    # sonuç dosyası GERÇEK populate okuyucusundan geçmeli (MesajSatiriEksikError YOK).
+    import populate_message_class as _pmc  # noqa: E402
+    canli18 = dict(CANLI)
+    canli18["004"] = ("", "true", "false")          # ölçülen canlı biçim: ('', 'true', 'false')
+    rc, out, b, d, c = msag("m18", CSV_ESIT.encode(), Sahte(msag=msag_xml(canli18)))
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            yuklenen = _pmc.load_messages_from_csv(_KUM_KOK / "m18" / msag_yol)
+        pop_ok = [m[0] for m in yuklenen] == ["001", "002", "003"]
+    except Exception:  # noqa: BLE001
+        pop_ok = False
+    s["M18 canlı boş metin (yerelde yok) → ATLANDI, populate geçer"] = (
+        rc == 0 and b == CSV_ESIT.encode() and len(d.cagri) == 1 and "[ATLANDI]" in out
+        and "004" in out and pop_ok)
+    # M19: canlıda boş, yerelde METİNLİ → push canlıdaki boşu ezer → ÖLÇÜLEMEDİ.
+    canli19 = dict(CANLI)
+    canli19["002"] = ("", "false", "false")
+    rc, out, b, d, c = msag("m19", CSV_ESIT.encode(), Sahte(msag=msag_xml(canli19)))
+    s["M19 canlı boş / yerel metinli → ÖLÇÜLEMEDİ"] = (rc == 2 and b == CSV_ESIT.encode()
+                                                      and not d.cagri)
+    # M20 (MX6): CSV'de selfexplainatory sütunu yok, canlıda true var → temsil edilemez.
+    ikili = 'msgno,msgtext\n001,"Belge &1 bulunamadı"\n002,"Miktar sıfır olamaz"\n'
+    rc, out, b, d, c = msag("m20", ikili.encode(), Sahte(msag=msag_xml(CANLI)))
+    # Öz-denetim de aynı sonucu (rc 2) verir → mutasyonu ayırt eden TEŞHİS metnidir: kullanıcıya
+    # "sütun yok" demek, "öz-denetim tutmadı" demekten farklı bir onarım söyler.
+    s["M20 selfexp sütunu yok + canlı true → ÖLÇÜLEMEDİ"] = (
+        rc == 2 and b == ikili.encode() and not d.cagri
+        and "selfexplainatory sütunu yok" in out)
+    # M21 (MX8): canlı metinde baş/son boşluk, yerel strip'li → anlamca EŞİT + uyarı.
+    canli21 = dict(CANLI)
+    canli21["002"] = ("  Miktar sıfır olamaz ", "false", "false")
+    rc, out, b, d, c = msag("m21", CSV_ESIT.encode(), Sahte(msag=msag_xml(canli21)))
+    s["M21 canlı baş/son boşluk → strip'li eşit + uyarı"] = (
+        rc == 0 and b == CSV_ESIT.encode() and len(d.cagri) == 1 and "baş/son boşluk" in out)
+    # M22 (MX9): yanıttaki sınıf adı istenen değil (paket aynı) → ÖLÇÜLEMEDİ.
+    rc, out, b, d, c = msag("m22", CSV_ESIT.encode(), Sahte(msag=msag_xml(CANLI, ad="ZSD000")))
+    s["M22 yanıt sınıf adı ≠ istenen → ÖLÇÜLEMEDİ"] = rc == 2 and not d.cagri
+    # M23 (MX7): csv modülü çapraz denetimi — el ayrıştırıcısıyla csv modülünün AYRIŞTIĞI tek
+    # ölçülen girdi sınıfı satır içi CR/LF'dir (fuzz: a , " boşluk NUL TAB → 0 ayrışma).
+    # Dosya yolunda satırlar zaten bölünür ⇒ bu savunma derinliği; birimde ölçülür.
+    try:
+        M.csv_modeli(["msgno,msgtext,selfexplainatory", "001,a\rb,false"])
+        s["M23 csv_modeli satır içi CR → ÖLÇÜLEMEDİ"] = False
+    except M.Olculemedi:
+        s["M23 csv_modeli satır içi CR → ÖLÇÜLEMEDİ"] = True
+    # M24: canlı metinde satır sonu → tek satırlık CSV taşıyamaz → ÖLÇÜLEMEDİ.
+    canli24 = dict(CANLI)
+    canli24["005"] = ("İki\nsatır", "false", "false")
+    rc, out, b, d, c = msag("m24", CSV_ESIT.encode(), Sahte(msag=msag_xml(canli24)))
+    s["M24 canlı metinde satır sonu → ÖLÇÜLEMEDİ"] = (rc == 2 and b == CSV_ESIT.encode()
+                                                     and not d.cagri)
+    # M25 (öneri a): olası mojibake UYARISI (ikili dizi / cp1254 tekli) + FP: meşru Türkçe
+    # (U+00C2, â, Ü, Ç, ı, İ, ş) uyarı ÜRETMEZ. Mojibake verisi YALNIZ kaçış biçiminde.
+    canli25 = dict(CANLI)
+    canli25["004"] = ("Kullanıcı tara\u00fdndan iptal", "false", "false")
+    canli25["005"] = ("\u00c3\u00bcr\u00c3\u00bcn bulunamad\u00c4\u00b1", "false", "false")
+    rc, out, b, d, c = msag("m25", CSV_ESIT.encode(), Sahte(msag=msag_xml(canli25)))
+    canli25fp = dict(CANLI)
+    canli25fp["004"] = ("\u00c2dem hâlâ Ümit'i Çığ İşi için bekliyor", "false", "false")
+    rc2, out2, b2, d2, _c = msag("m25fp", CSV_ESIT.encode(), Sahte(msag=msag_xml(canli25fp)))
+    s["M25 mojibake uyarısı + meşru Türkçe FP yok"] = (
+        rc == 0 and "mojibake" in out and "'004', '005'" in out
+        and rc2 == 0 and "mojibake" not in out2)
+
+    # L3: yolda üstte aynı adlı `ERP/` dizini → SON kök segmenti.
+    s["L3 paket_dizini SON kök eşleşmesi"] = M.paket_dizini(
+        _KUM_KOK / "ERP" / "Proj" / "SOURCE_CODES" / "SD" / PAKET / "messages-zsd001.csv") == PAKET
+    # L4: `--cwd` yok (tek kök kaynağı) — verilirse kullanım hatası, hiçbir şey okunmaz/damgalanmaz.
+    kk = kum("l4")
+    p = dosya(kk, msag_yol, CSV_ESIT.encode())
+    d = Damga()
+    with contextlib.redirect_stderr(io.StringIO()):
+        rc, _o = kos(M, ["msag", "--name", SINIF, "--file", str(p), "--cwd", str(kk)],
+                     Sahte(msag=msag_xml(CANLI)), d)
+    s["L4 --cwd kabul edilmez (kök ayrışması yok)"] = rc == 2 and not d.cagri
+    # L1: populate import'u başlık satırını YUTMAZ (gerçek pipe'lı alt süreç, --dry-run).
+    if "L1" in pahali:
+        s["L1 [PULL] başlığı pipe'ta ilk satır"] = _l1_baslik(M, kum("l1"), msag_yol)
 
     # ---------------- T: textpool ----------------
     def tp(ad, gorece, bayt, client, *ek, program=PROG):
@@ -453,7 +587,58 @@ def senaryolar(M, H):
                           Sahte(tp={"selections": "P_ESIK  =Eşik\r\n\r\nP_REFDT =Referans"}))
     s["T10 tek satır + eklenen CRLF"] = rc == 0 and b == \
         "P_REFDT =Referans\r\n\r\nP_ESIK  =Eşik".encode()
+    # T13 (bug-gate M1, textpool yüzü): karışık satır sonu + anlamca EŞİT → bayt-aynı.
+    tp_karisik = "S_KUNNR =Müşteri\r\n\r\nP_FILE  =Dosya\n\nP_DATE  =Tarih\r\n"
+    rc, out, b, d, c = tp("t13", f"{PROG}.selections.txt", tp_karisik.encode(),
+                          Sahte(tp={"selections": sel_canli}))
+    s["T13 textpool karışık satır sonu + eşit → YAZILMAZ"] = (
+        rc == 0 and b == tp_karisik.encode() and len(d.cagri) == 1 and "EŞİT" in out)
+    # T14 (MX2): YALNIZ `@` özniteliği değişmiş (metin aynı) → güncellenir (sahte-taze değil).
+    rc, out, b, d, c = tp("t14", f"{PROG}.symbols.txt", "@MaxLength:40\nB01=Abc\n".encode(),
+                          Sahte(tp={"symbols": "@MaxLength:50\r\nB01=Abc"}))
+    s["T14 yalnız @ özniteliği farklı → güncellenir"] = (
+        rc == 0 and b == "@MaxLength:50\nB01=Abc\n".encode() and "['B01']" in out)
+    # T15 (L5): okunan dil KAPSAM satırında koddan (istemcinin oturum dili) basılır.
+    rc, out, b, d, c = tp("t15", f"{PROG}.headings.txt", hd.encode(),
+                          Sahte(tp={"headings": hd}, dil="EN"))
+    s["T15 kapsam: okunan oturum dili basılır"] = (
+        rc == 0 and "okunan dil (oturum): EN" in out and "master dil DENETLENMEZ" in out)
+    M._git_kirli = _gercek_git_kirli                 # E1 ve sonraki kullanıcılar gerçeğini görür
     return s
+
+
+_L1_SURUCU = r'''
+import sys, types
+kaynak_yolu, gercek_yol, csv_yolu, xml = sys.argv[1:5]
+mod = types.ModuleType("pull_msag_textpool")
+mod.__file__ = gercek_yol
+sys.modules["pull_msag_textpool"] = mod
+exec(compile(open(kaynak_yolu, encoding="utf-8").read(), gercek_yol, "exec"), mod.__dict__)
+class Y:
+    status_code = 200
+    def __init__(self, t):
+        self.text, self.content = t, t.encode("utf-8")
+class C:
+    url, language, client = "https://sahte.invalid", "TR", "000"
+    def __init__(self):
+        self.session = types.SimpleNamespace(
+            get=lambda url, headers=None, params=None, **k: Y(xml))
+mod.DAMGA_ARACLARI = (lambda s: s or "X", lambda sid, p: "K")
+sys.exit(mod.main(["msag", "--name", "ZSD001", "--file", csv_yolu, "--dry-run"], client=C()))
+'''
+
+
+def _l1_baslik(M, kk: Path, msag_yol: str) -> bool:
+    """Bug-gate L1: `populate_message_class` import'u (win32) sys.stdout'u yeniden sarar; import
+    ÖNCESİ basılan `[PULL]` başlığı eski sarmalayıcının tamponunda kalıp pipe'ta kayboluyordu.
+    Ölçüm TAZE süreçte (populate henüz yüklenmemiş) + gerçek pipe'la yapılır; kaynak, harness'ın
+    yüklediği (mutasyonlu olabilir) metindir."""
+    p = dosya(kk, msag_yol, CSV_ESIT.encode())
+    kaynak = dosya(kk, "pull_kaynak.py", M.__kaynak__.encode("utf-8"))
+    r = subprocess.run([sys.executable, "-c", _L1_SURUCU, str(kaynak), str(PULL_PATH), str(p),
+                        msag_xml(CANLI)], capture_output=True, text=True, encoding="utf-8",
+                       errors="replace", timeout=120)
+    return r.returncode == 0 and r.stdout.lstrip().startswith(f"[PULL] MSAG {SINIF}")
 
 
 def _kapi_sozlesmesi(stderr: str, p) -> bool:
@@ -558,13 +743,71 @@ MUTASYONLAR = [
     ("MU11 msag öz-denetimi etkisiz + sıra bozuk", PULL_PATH,
      "        hatalar = msag_oz_denetim(yeni, rapor)\n",
      "        hatalar = []\n        yeni = [yeni[0]] + yeni[1:][::-1]\n"),
+    # --- bug-gate düzeltme turu (Q352, 2026-09-26): her bulgu kendi vektörüyle ---
+    ("MU16 [M1] anlamca-eşit yazma koruması sökülür", PULL_PATH,
+     "    if not anlamca_degisti or yeni == eski:", "    if yeni == eski:"),
+    ("MU17 [M2] canlı boş metin atlanmaz (NNN,, eklenir)", PULL_PATH,
+     "    for k in atlanan:\n        del c[k]", "    atlanan = []"),
+    ("MU18 [M2] boş-canlı/metinli-yerel çatışma denetimi sökülür", PULL_PATH,
+     "    if catisan:", "    if False:"),
+    ("MU19 [MX2] textpool @ öznitelikleri kıyaslanmaz", PULL_PATH,
+     "        d[o[1]] = (o[4], o[3])", "        d[o[1]] = ((), o[3])"),
+    ("MU20 [MX6] selfexp-sütunsuz + canlı true koruması sökülür", PULL_PATH,
+     'if m["ise"] is None and any(v[1] == "true" for v in canli.values()):', "if False:"),
+    ("MU21 [MX7] csv modülü çapraz denetimi sökülür", PULL_PATH,
+     "if [d for d, _ in alanlar] != next(csv.reader([s])):", "if False:"),
+    ("MU22 [MX8] canlı metin strip edilmez", PULL_PATH,
+     "c = {no: (v[0].strip(), _selfexp(v[1])) for no, v in canli.items()}",
+     "c = {no: (v[0], _selfexp(v[1])) for no, v in canli.items()}"),
+    ("MU23 [MX9] yanıttaki sınıf adı denetimi sökülür", PULL_PATH,
+     'if canli["name"].upper() != name:', "if False:"),
+    ("MU24 [MX12] adlı textpool Z/Y denetimi sökülür", HOOK_PATH,
+     "        if not _SAP_AD_RE.match(prog):\n            return None", "        pass"),
+    ("MU25 [L3] paket_dizini İLK kök eşleşmesini alır", PULL_PATH,
+     "    for i in range(len(parts) - 1, -1, -1):", "    for i in range(len(parts)):"),
+    ("MU26 [L4] --cwd seçeneği geri gelir", PULL_PATH,
+     '        p.add_argument("--dry-run", action="store_true",',
+     '        p.add_argument("--cwd", default="")\n'
+     '        p.add_argument("--dry-run", action="store_true",'),
+    ("MU27 [L1] import öncesi flush sökülür", PULL_PATH,
+     "        sys.stdout.flush()\n        import populate_message_class as pmc",
+     "        import populate_message_class as pmc", "win32"),
+    ("MU28 [öneri a] mojibake uyarısı susturulur", PULL_PATH,
+     'supheli = sorted(k for k, v in metinler.items() if _MOJIBAKE_RE.search(v or ""))',
+     "supheli = []"),
+    ("MU29 [öneri a] mojibake çıplak U+00C2/U+00E7 arar (FP)", PULL_PATH,
+     r'"|[\u00fd', r'"|[\u00c2\u00e7\u00fd'),
+    ("MU30 [öneri c] muaf yedek kümesi kayar", HOOK_PATH,
+     '"_archive", "archive", "drafts"}\ntry:', '"_archive", "archive"}\ntry:'),
+    ("MU31 canlı metinde satır sonu denetimi sökülür", PULL_PATH,
+     "    if satir_sonlu:", "    if False:"),
+    ("MU32 [L5] okunan dil kapsam satırı düşer", PULL_PATH,
+     "    print(f\"[KAPSAM] okunan dil (oturum): ", "    (f\"[KAPSAM] okunan dil (oturum): "),
+    ("MU33 [MX3] git-kirli koruması sökülür (msag)", PULL_PATH,
+     "        norm, bicim = _dosya_oku(dosya)\n        if not dry_run and not force and _git_kirli(dosya):",
+     "        norm, bicim = _dosya_oku(dosya)\n        if False:"),
 ]
 
+# Her mutasyonun DÜŞÜRMESİ ZORUNLU vektörleri (senaryo kimliği = adın ilk kelimesi). Mutasyon
+# başka senaryoları da düşürebilir; ama bunlardan biri ayakta kalırsa "HEDEF-KACTI" = FAIL.
+HEDEF = {
+    "MU1": ("M4", "T5"), "MU2": ("M4", "M5", "M14"), "MU3": ("T4",), "MU4": ("M2",),
+    "MU5": ("M2", "M13"), "MU6": ("M2",), "MU7": ("T1", "T11"), "MU8": ("T2",), "MU9": ("H3",),
+    "MU10": ("H6",), "MU11": ("M2", "M3"), "MU12": ("M14", "T7", "T11"), "MU13": ("H1", "H2"),
+    "MU14": ("H4", "H6"), "MU15": ("H6",), "MU16": ("M17", "T13"), "MU17": ("M18",),
+    "MU18": ("M19",), "MU19": ("T14",), "MU20": ("M20",), "MU21": ("M23",), "MU22": ("M21",),
+    "MU23": ("M22",), "MU24": ("H10",), "MU25": ("L3",), "MU26": ("L4",), "MU27": ("L1",),
+    "MU28": ("M25",), "MU29": ("M25",), "MU30": ("H11",), "MU31": ("M24",), "MU32": ("T15",),
+    "MU33": ("M12",),
+}
+# PAHALI senaryolar (bkz. PAHALI) yalnız TABANDA + onları HEDEFLEYEN mutasyonlarda koşulur.
+PAHALI_KIP = {p: tuple(mu for mu, h in HEDEF.items() if p in h) for p in PAHALI}
 
-def kos_hepsi(pull_degisim=None, hook_degisim=None):
+
+def kos_hepsi(pull_degisim=None, hook_degisim=None, pahali=PAHALI):
     H = modul_yukle("_pbe_msag_textpool", HOOK_PATH, hook_degisim)
     M = modul_yukle("pull_msag_textpool", PULL_PATH, pull_degisim)
-    return senaryolar(M, H), M
+    return senaryolar(M, H, pahali), M
 
 
 def main() -> int:
@@ -577,18 +820,34 @@ def main() -> int:
         e = e2e(M)
         print(f"  E1 kapı uçtan uca: {e}")
         hata = [a for a, ok in taban.items() if not ok] + (["E1"] if e.startswith("FAIL") else [])
-        print("\n--- MUTASYONLAR (her biri korpusu KIRMIZI yapmalı) ---")
+        print("\n--- MUTASYONLAR (her biri korpusu KIRMIZI yapmalı; HEDEF vektörleri ZORUNLU) ---")
+        for p, kipler in PAHALI_KIP.items():
+            tam_ad = next((a for a in taban if a.split()[0] == p), p)
+            print(f"  [ATLA-MALIYET] {tam_ad} — yalnız TABAN + {', '.join(kipler) or '-'} "
+                  f"kiplerinde koşulur (diğer mutasyonlarda ölçülmez)")
         kacan = []
-        for ad, yol, eski, yeni in MUTASYONLAR:
+        for ad, yol, eski, yeni, *kosul in MUTASYONLAR:
+            mu = ad.split()[0]
+            if kosul and kosul[0] == "win32" and sys.platform != "win32":
+                # Kusur yalnız win32'de VAR (populate yalnız orada stdout'u yeniden sarar) →
+                # başka platformda mutasyon ÖLÇÜLEMEZ; kaçan sayılmaz ama görünür basılır.
+                print(f"  ATLA   {ad}  ← yalnız win32'de ölçülür (platform {sys.platform})")
+                continue
+            pahali = tuple(p for p, kipler in PAHALI_KIP.items() if mu in kipler)
             if yol == HOOK_PATH:
-                sonuc, _ = kos_hepsi(hook_degisim=(eski, yeni))
+                sonuc, _ = kos_hepsi(hook_degisim=(eski, yeni), pahali=pahali)
             else:
-                sonuc, _ = kos_hepsi(pull_degisim=(eski, yeni))
+                sonuc, _ = kos_hepsi(pull_degisim=(eski, yeni), pahali=pahali)
             dusen = [a for a, ok in sonuc.items() if not ok and taban.get(a)]
-            print(f"  {'DUSTU' if dusen else 'KACTI'}  {ad}  ← {dusen[:3]}")
-            if not dusen:
+            idler = {a.split()[0] for a in dusen}
+            eksik = [h for h in HEDEF.get(mu, ()) if h not in idler]
+            if mu not in HEDEF:
+                eksik = ["<HEDEF tanımsız>"]
+            durum = "DUSTU" if dusen and not eksik else ("HEDEF-KACTI" if dusen else "KACTI")
+            print(f"  {durum}  {ad}  ← {sorted(idler)}" + (f"  eksik hedef {eksik}" if eksik else ""))
+            if durum != "DUSTU":
                 kacan.append(ad)
-        kos_hepsi()                                  # temiz modülleri geri yükle
+        kos_hepsi(pahali=())                         # temiz modülleri geri yükle
     finally:
         _sil(_KUM_KOK)
     if hata or kacan:

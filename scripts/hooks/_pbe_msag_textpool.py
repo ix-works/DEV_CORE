@@ -46,8 +46,18 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# Çekirdek sınıflandırmayla AYNI muaf klasör kümesi (source_drift._EXCLUDED_DIR_SEGMENTS).
-_MUAF_KLASORLER = {"ref_docs", "docs", ".tmp", "legacy", "_archive", "archive", "drafts"}
+# Muaf klasör kümesi TEK kaynaktan: `source_drift._EXCLUDED_DIR_SEGMENTS` (çekirdek
+# sınıflandırmanın kullandığı küme; kapı source_drift'i zaten yükler). Yedek yalnız import
+# başarısızsa (kapı asla çökmemeli) — fixture yedeğin kaynakla EŞİT olduğunu ölçer (H10).
+_MUAF_YEDEK = {"ref_docs", "docs", ".tmp", "legacy", "_archive", "archive", "drafts"}
+try:
+    _scripts = str(Path(__file__).resolve().parents[1])
+    if _scripts not in sys.path:
+        sys.path.append(_scripts)
+    from source_drift import _EXCLUDED_DIR_SEGMENTS as _SD_MUAF  # type: ignore
+    _MUAF_KLASORLER = {s.lower() for s in _SD_MUAF}
+except Exception:  # noqa: BLE001
+    _MUAF_KLASORLER = set(_MUAF_YEDEK)
 
 _MSAG_RE = re.compile(r"^messages(?:-(?P<ek>[^.\\/]+))?\.csv$", re.IGNORECASE)
 _TP_ALTLAR = ("selections", "symbols", "headings")

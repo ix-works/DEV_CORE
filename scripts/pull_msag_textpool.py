@@ -11,11 +11,15 @@ düzenlenmesini, bu seansta bu araçla çekilmiş olmalarına bağlar.
 KULLANIM
     python core/scripts/pull_msag_textpool.py msag     --name ZSD001     --file <messages-*.csv>
     python core/scripts/pull_msag_textpool.py textpool --program ZSD001_P_X --file <…/textpool/*.txt>
-      ortak: [--session <sid>] [--cwd <proje-kökü>] [--dry-run] [--force] [--offline]
+      ortak: [--session <sid>] [--dry-run] [--force] [--offline]
     `--session`: kapının blok mesajındaki komut bunu HOOK'un session_id'siyle zaten taşır
     (kapı ekler) — komutu olduğu gibi kopyala. Elle koşarken verilmezse
     `.claude/.current_session` marker'ına düşülür; aynı projede iki oturum açıksa marker
     ÖTEKİ oturumu gösterebilir → damga yanlış seansa gider, kapı bloklamaya devam eder.
+    Proje kökü TEK kaynaktan: `CLAUDE_PROJECT_DIR` → cwd (`.conn_adt`, `source_root` ve damga
+    store'u AYNI kökten). `--cwd` seçeneği bilerek YOK (Q352 bug-gate L4): yalnız `.conn_adt`'yi
+    taşıyordu, damga store'u ise başka köke düşüyordu (kapı bloklamaya devam ederdi);
+    kardeş `sap_sync_pull` da `--cwd` taşımaz.
 
 BİRLEŞTİRME KURALI (lider/kullanıcı kararı 2026-09-26 — iki tür için AYNI):
   · canlıda olup yerelde olmayan girdi → dosyanın SONUNA eklenir (başka makinede eklenen gelsin)
@@ -23,8 +27,16 @@ BİRLEŞTİRME KURALI (lider/kullanıcı kararı 2026-09-26 — iki tür için A
     sınıfında "CSV'de yok" ≠ "canlıdan silinmeli" — tam PUT gövdeden çıkarılanı SİLMEZ)
   · ikisinde de olan girdi → metin/bayrak canlıdan güncellenir, satır YERİNDE kalır
   · girdi SIRASI, ayraç/tırnak biçimi, kodlama (BOM dahil), satır sonu KORUNUR
-  · anlamca eşitse dosyaya HİÇ yazılmaz, yalnız damga atılır
+  · anlamca eşitse (güncellenen VE eklenen girdi yoksa) dosyaya HİÇ yazılmaz, yalnız damga
+    atılır — bayt farkı (ör. karışık satır sonu) tek başına yazma sebebi DEĞİLDİR
   · textpool: canlıdaki `=?...` / `=?` yer tutucuları (metinsiz seçim) YOK sayılır, yazılmaz
+  · msag: canlıda metni BOŞ mesaj CSV'ye EKLENMEZ (populate `MesajSatiriEksikError` ile tüm
+    dosyayı reddederdi) → `[ATLANDI]` raporlanır, damga atılır: populate yalnız CSV'deki
+    msgno'ları PUT eder, gövdede olmayan mesaj canlıda DOKUNULMADAN kalır (populate_message_class
+    başlığı "CSV'DEN ÇIKARMAK MESAJI SİLMEZ", ölçüldü 2026-09-24) ⇒ ezme riski yok.
+    Canlı teyit 2026-09-26 (salt-GET, T100'de metni boş Z mesajı): ADT `('', 'true', 'false')`
+    döner → EŞİT + [ATLANDI], sonuç CSV populate okuyucusundan hatasız geçer.
+    Aynı msgno yerelde METİNLİ ise → ÖLÇÜLEMEDİ (push canlıdaki boşu ezer; karar insanın).
 
 DAMGA: yalnız karşılaştırma TAM yapıldıysa (`source_drift.tazelik_damgala`, anahtar = DOSYA
 yolu). Okuma hatası · paket uyuşmazlığı · aktive edilmemiş canlı değişiklik · ayrıştırılamayan
@@ -64,8 +76,6 @@ for _akis in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-_MOD_REFS: list = []   # populate_message_class import'u stdout'u yeniden sarar → eskisini tut (GC)
-
 # Test/fixture enjeksiyonu: (seans_kimligi, tazelik_damgala) ikilisi. None → source_drift.
 DAMGA_ARACLARI = None
 
@@ -84,10 +94,36 @@ KAPSAM_MSAG = (
 )
 KAPSAM_TP = (
     "Bakılan: ADT GET …/textelements/programs/<p>/source/<alt> — çalışma (varsayılan) VE "
-    "?version=active sürümü (ikisi farklıysa ÖLÇÜLEMEDİ) · program packageRef",
+    "?version=active sürümü (ikisi farklıysa ÖLÇÜLEMEDİ) · program packageRef · girdi "
+    "anahtarı + değer + `@` öznitelik satırları",
+    "DİL: okuma OTURUM (login) dilinde; master dil DENETLENMEZ — msag'daki 'yanıt dili == "
+    "master' şartının textpool karşılığı yok (uç master dili bildirmez). push_textpool da "
+    "oturum dilinde yazar ⇒ ezme karşılaştırması aynı dilde tutarlıdır",
     "BAKILMAYAN: dosyada olmayan diğer alt kaynaklar (her dosya kendi alt kaynağıdır) · "
-    "program açıklaması (adtcore:description) · master dil DIŞI çeviriler",
+    "program açıklaması (adtcore:description) · oturum dili DIŞI çeviriler",
+    "KALAN RİSK: yanlış `--program` ile KISMİ ortak anahtar kimlik denetimini GEÇER (symbols "
+    "anahtarları B01/M01 programlar arasında sık çakışır) → yabancı girdiler birleştirilip "
+    "damgalanabilir; çıplak adlı dosyada programı doğrula",
 )
+
+# Olası mojibake (UYARI, engel değil): UTF-8 baytlarının latin-1/cp1252 okunması → ikili dizi
+# (U+00C3 U+00BC, U+00C4 U+00B1, U+00C5 U+0178 …); cp1254 (Türkçe) baytlarının cp1252 okunması
+# → U+00FD U+00FE U+00F0 U+00DD U+00DE U+00D0 (ı ş ğ İ Ş Ğ yerine). Çıplak U+00C2/U+00C3
+# ARANMAZ (U+00C2 Türkçede meşru: hâlâ). Kaynakta YALNIZ kaçış biçimi: literal karakter kodlama
+# değişiminde sessizce bozulur ve kendi mojibake taramalarımıza takılır.
+_MOJIBAKE_RE = re.compile(
+    "[\u00c3\u00c4\u00c5][\u0080-\u00bf\u0152\u0153\u0160\u0161\u0178\u017d\u017e"
+    "\u2018-\u201e\u2020-\u2022\u2026\u2030\u2039\u203a\u20ac\u2122]"
+    "|[\u00fd\u00fe\u00f0\u00dd\u00de\u00d0]")
+
+
+def _mojibake_uyar(metinler: dict) -> None:
+    """{anahtar: metin} → olası mojibake içerenleri UYARI olarak bas (canlıdaki bozukluk
+    dosyaya AYNEN taşınır — birleştirme kuralı; kullanıcı görsün)."""
+    supheli = sorted(k for k, v in metinler.items() if _MOJIBAKE_RE.search(v or ""))
+    if supheli:
+        print(f"  [UYARI] canlı metinde olası mojibake (kodlama bozukluğu SAP'de): {supheli} — "
+              f"dosyaya AYNEN taşındı; düzeltme canlıda yapılmalı")
 
 
 class Olculemedi(Exception):
@@ -155,11 +191,15 @@ def _kok_segmentleri() -> set:
 
 
 def paket_dizini(dosya: Path) -> Optional[str]:
-    """`<source_root>/<MOD>/<PKG>/…` düzeninde PKG adı; düzen dışıysa None."""
+    """`<source_root>/<MOD>/<PKG>/…` düzeninde PKG adı; düzen dışıysa None.
+
+    SON eşleşen kök segmenti alınır (Q352 bug-gate L3): yolda üstte `ERP/` gibi aynı adlı
+    bir dizin olabilir (`ERP/Proj/SOURCE_CODES/SD/<PKG>/…`); ilk eşleşme PKG yerine
+    `SOURCE_CODES`'u verir ve araç kalıcı ÖLÇÜLEMEDİ'ye düşerdi."""
     parts = list(Path(dosya).resolve().parts)
     kok = _kok_segmentleri()
-    for i, p in enumerate(parts):
-        if p.lower() in kok and len(parts) > i + 3:
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i].lower() in kok and len(parts) > i + 3:
             return parts[i + 2].upper()
     return None
 
@@ -212,10 +252,17 @@ def _damgala(session: str, dosya: Path) -> int:
     return 0
 
 
-def _sonuc_yaz(dosya: Path, eski: bytes, yeni: bytes, dry_run: bool) -> bool:
-    """Değiştiyse yazar (dry-run hariç). Döner: değişti mi."""
-    if yeni == eski:
-        print("[SONUÇ] EŞİT — dosyaya YAZILMADI.")
+def _sonuc_yaz(dosya: Path, eski: bytes, yeni: bytes, dry_run: bool,
+               anlamca_degisti: bool = True) -> bool:
+    """Değiştiyse yazar (dry-run hariç). Döner: değişti mi.
+
+    `anlamca_degisti=False` (güncellenen VE eklenen girdi yok) → bayt farkı ne olursa olsun
+    YAZILMAZ: birleştirme satırları aynen taşır, fark ancak yeniden birleştirmenin biçimidir
+    (karışık satır sonu → baskın ayraç). Yazmak onaylı 'eşitse yazma' + 'satır sonu korunur'
+    kurallarını çiğnerdi (Q352 bug-gate M1)."""
+    if not anlamca_degisti or yeni == eski:
+        ek = "" if yeni == eski else " (bayt farkı yalnız biçimde — dosya olduğu gibi korundu)"
+        print(f"[SONUÇ] EŞİT — dosyaya YAZILMADI.{ek}")
         return False
     if dry_run:
         print("[SONUÇ] FARKLI — --dry-run: dosyaya YAZILMADI.")
@@ -323,6 +370,22 @@ def msag_birlestir(satirlar: list, canli: dict) -> tuple[list, dict]:
                          "mesaj var — dosya bu bayrağı TEMSİL EDEMEZ")
     c = {no: (v[0].strip(), _selfexp(v[1])) for no, v in canli.items()}
     bosluk = sorted(no for no, v in canli.items() if v[0] != v[0].strip())
+    satir_sonlu = sorted(no for no, v in c.items() if "\r" in v[0] or "\n" in v[0])
+    if satir_sonlu:
+        raise Olculemedi(f"canlı metinde satır sonu var {satir_sonlu} — satır bazlı CSV bu "
+                         f"metni tek satırda taşıyamaz")
+    # Canlıda metni BOŞ mesaj (Q352 bug-gate M2; T100'de Z sınıflarında ölçüldü): CSV bunu
+    # temsil edemez (`NNN,,flag` → populate MesajSatiriEksikError ile TÜM dosyayı reddeder).
+    bos_metin = sorted(no for no, v in c.items() if not v[0])
+    catisan = [k for k in bos_metin if k in m["mesajlar"] and m["mesajlar"][k][0]]
+    if catisan:
+        raise Olculemedi(f"canlıda metni BOŞ mesaj(lar) {catisan} yerel CSV'de METİNLİ — CSV "
+                         f"boş metni taşıyamaz ve push yereldeki metinle canlıdaki boşu EZER; "
+                         f"hangisinin doğru olduğuna karar ver (canlıyı düzelt ya da yereli "
+                         f"bilerek koru: --offline)")
+    atlanan = [k for k in bos_metin if k not in m["mesajlar"]]
+    for k in atlanan:
+        del c[k]
     yeni = [satirlar[0]]
     guncel, yerel_yalniz = [], []
     for ham, bilgi in zip(satirlar[1:], m["satirlar"]):
@@ -352,7 +415,8 @@ def msag_birlestir(satirlar: list, canli: dict) -> tuple[list, dict]:
             alanlar[m["ise"]] = (c[k][1], False)
         yeni.append(",".join(_alan_yaz(d, t) for d, t in alanlar))
     return yeni, {"guncel": guncel, "eklenen": eklenen, "yerel_yalniz": yerel_yalniz,
-                  "yarim": m["yarim"], "bosluk": bosluk, "model": m, "canli_norm": c}
+                  "yarim": m["yarim"], "bosluk": bosluk, "model": m, "canli_norm": c,
+                  "atlanan": atlanan}
 
 
 def msag_oz_denetim(yeni: list, rapor: dict) -> list:
@@ -385,9 +449,10 @@ def msag_pull(client, name: str, dosya: Path, dry_run=False, force=False,
         if not dry_run and not force and _git_kirli(dosya):
             raise Olculemedi("dosyada commit'lenmemiş değişiklik var — pull onu EZEBİLİR. "
                              "Bilerek ezmek için --force (ya da önce --dry-run ile bak).")
-        _eski = sys.stdout
+        # populate import anında (win32) sys.stdout'u YENİ bir sarmalayıcıyla değiştirir →
+        # eskisinin tamponundaki `[PULL]` başlığı pipe'ta kaybolur (Q352 bug-gate L1) ⇒ önce boşalt.
+        sys.stdout.flush()
         import populate_message_class as pmc  # noqa: E402 — lazy: --offline SAP'siz koşar
-        _MOD_REFS.append(_eski)
         dil = getattr(client, "language", None) or ""
         try:
             durum, govde = pmc.sinif_oku(client, name, dil or None)
@@ -407,7 +472,7 @@ def msag_pull(client, name: str, dosya: Path, dry_run=False, force=False,
                              f"master dilde değil; oturumu master dilde aç")
         _paket_denetle(dosya, canli["package"])
         yeni, rapor = msag_birlestir(bicim["satirlar"], canli["messages"])
-        _kimlik_denetle(rapor["model"]["mesajlar"], canli["messages"], "msgno")
+        _kimlik_denetle(rapor["model"]["mesajlar"], rapor["canli_norm"], "msgno")
         hatalar = msag_oz_denetim(yeni, rapor)
         if hatalar:
             raise Olculemedi("birleştirme öz-denetimi TUTMADI:\n  - " + "\n  - ".join(hatalar))
@@ -429,10 +494,17 @@ def msag_pull(client, name: str, dosya: Path, dry_run=False, force=False,
     if rapor["bosluk"]:
         print(f"  [UYARI] canlı metinde baş/son boşluk: {rapor['bosluk']} — CSV yolu taşıyamaz "
               f"(populate strip eder); strip'li kıyaslandı")
+    if rapor["atlanan"]:
+        print(f"  [ATLANDI] canlıda metni BOŞ mesaj(lar) {rapor['atlanan']} CSV'ye EKLENMEDİ — "
+              f"CSV boş metni taşıyamaz (populate tüm dosyayı reddederdi). Push onlara "
+              f"dokunmaz (tam PUT gövdede olmayanı silmez) ⇒ damga engellenmez")
     if bicim["karisik"]:
         print("  [UYARI] dosyada karışık satır sonu — yazılırsa baskın biçim kullanılır")
+    degisen = rapor["guncel"] + rapor["eklenen"]
+    _mojibake_uyar({k: rapor["canli_norm"][k][0] for k in degisen})
     _kapsam_bas(KAPSAM_MSAG)
-    _sonuc_yaz(dosya, bicim["ham"], _dosya_bayt(yeni, bicim), dry_run)
+    _sonuc_yaz(dosya, bicim["ham"], _dosya_bayt(yeni, bicim), dry_run,
+               anlamca_degisti=bool(degisen))
     if dry_run:
         print("[DRY-RUN] damga ATILMADI.")
         return 0
@@ -624,10 +696,14 @@ def textpool_pull(client, program: str, dosya: Path, dry_run=False, force=False,
           f"{rapor['yerel_yalniz'] or '-'}")
     if bicim["karisik"]:
         print("  [UYARI] dosyada karışık satır sonu — yazılırsa baskın biçim kullanılır")
+    degisen = rapor["guncel"] + rapor["eklenen"]
+    _mojibake_uyar({k: rapor["canli"][k][1] for k in degisen})
     _kapsam_bas(KAPSAM_TP)
+    print(f"[KAPSAM] okunan dil (oturum): {getattr(client, 'language', None) or 'BELİRSİZ'}")
     if bicim["yeni_satir_yok"] and (rapor["eklenen"]):
         bicim = dict(bicim, ss="\r\n")               # tek satırlık dosya: ADT biçimi (CRLF)
-    _sonuc_yaz(dosya, bicim["ham"], _dosya_bayt(yeni, bicim), dry_run)
+    _sonuc_yaz(dosya, bicim["ham"], _dosya_bayt(yeni, bicim), dry_run,
+               anlamca_degisti=bool(degisen))
     if dry_run:
         print("[DRY-RUN] damga ATILMADI.")
         return 0
@@ -636,10 +712,8 @@ def textpool_pull(client, program: str, dosya: Path, dry_run=False, force=False,
 
 # ─────────────────────────────── giriş noktası ───────────────────────────────
 
-def _istemci(cwd: str):
-    from sap_adt_lib import SAPADTClient, set_explicit_working_dir  # noqa: E402
-    if cwd:
-        set_explicit_working_dir(cwd)
+def _istemci():
+    from sap_adt_lib import SAPADTClient  # noqa: E402 — kök: CLAUDE_PROJECT_DIR → cwd
     return SAPADTClient()
 
 
@@ -656,7 +730,6 @@ def main(argv=None, client=None) -> int:
                        help="seans kimliği (kapının verdiği komut hook session_id'sini "
                             "taşır); boşsa .claude/.current_session marker'ı — iki oturum "
                             "açıksa yanlış seans olabilir")
-        p.add_argument("--cwd", default="", help=".conn_adt'nin bulunduğu proje kökü")
         p.add_argument("--dry-run", action="store_true",
                        help="karşılaştır + raporla; YAZMA ve DAMGA yok")
         p.add_argument("--force", action="store_true",
@@ -687,7 +760,7 @@ def main(argv=None, client=None) -> int:
     dosya = dosya.resolve()
     if client is None:
         try:
-            client = _istemci(a.cwd)
+            client = _istemci()
         except Exception as e:  # noqa: BLE001
             print(f"[ÖLÇÜLEMEDİ] SAP istemcisi kurulamadı ({type(e).__name__}: {e}) — dosyaya "
                   f"DOKUNULMADI, damga YOK. SAP erişilemiyorsa: aynı komuta --offline ekle.")
