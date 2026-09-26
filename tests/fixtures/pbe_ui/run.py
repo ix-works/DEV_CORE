@@ -17,8 +17,14 @@ Eksenler:
      yolda (proje ağacındaki junction/symlink arkasındaki webapp kapıda kalır)
      ⚠ PLATFORM: harf ayağı yalnız HARF DUYARSIZ dosya sisteminde (Windows NTFS varsayılanı) anlamlıdır;
      koşum anında YOKLANIR — harf duyarlı FS'te (Linux CI, `fsutil … setCaseSensitiveInfo`) o ayaklar
-     görünür `[ATLA]` basar, `..` ayakları iki FS'te de koşar; `rel-normpath` kipi orada eşdeğer
-     mutanttır → KURULAMADI (beyan). Bağ kurulamazsa junction vektörleri de `[ATLA]`.
+     görünür `[ATLA]` basar, `..` ayakları iki FS'te de koşar; `rel-normpath` kipi orada HARF SINIFI
+     İÇİN eşdeğer mutanttır → KURULAMADI (beyan; webapp içinden `test/`'e bağ iki formu ayırabilir ama
+     o davranışın doğrusu ertelenen kalemdir — vektör kurulmadı). Harf ayakları İKİ özelliğe dayanır:
+     FS harf duyarsızlığı (yoklanır) + `resolve()`'un disk harf biçimini döndürmesi (Windows'ta ölçüldü;
+     yoklanMAZ — macOS APFS'te ÖLÇÜLMEDİ: orada ikinci özellik yoksa A12c KIRMIZI olur, bu bilinçli —
+     ATLA gerçek bir sahte-muafı gizlerdi). Bağ kurulamazsa junction vektörleri de `[ATLA]`.
+  Z1 koşum sonrası geçici dizinlerin HEPSİ silinir (salt-okunur öznitelik temizlenir, bağ ÖNCE sökülür;
+     erken çıkışta atexit) — silinemeyen görünür `[UYARI] temizlik` basar, Z1 FAIL.
   B  `fetch_ui_source --damgala` (in-process `main()`, indirme yamalı, damga API'si kayıt stub'ı):
      temiz → damga · fark / yalnız-canlı / harita sapması → damga YOK · `--zip` / yanlış app /
      yanlış BSP → rc 2, damga YOK · proje kökü DIŞI webapp → damga (mutlak anahtar) ·
@@ -39,10 +45,12 @@ MUTASYON:  --mutasyon-<ad>  (MUTASYONLAR; kaynağın BUGÜNKÜ kopyasına tek ya
 """
 from __future__ import annotations
 
+import atexit
 import io
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -126,6 +134,8 @@ MUTASYONLAR = {
     # A — KAPSAM kararı çözülmüş (bağı izleyen) yolda (3. tur MEDIUM: junction arkası sessizce dışarıda)
     # (`_cozulmus` ValueError/NUL kipi YOK: `rel` hesabının kendi `except ValueError`ı aynı hatayı
     #  yakalar ⇒ EŞDEĞER mutant, ölçüldü 2026-09-26 — A20 çökmezliği iki katmanla birlikte ölçer.)
+    # A — webapp içinden DIŞARI giden bağ dalı (`rel` fallback'i) None döner (fail-open, görünmez)
+    "--mutasyon-fallback-none": (PBE, "        rel = ps.relative_to(webapp).as_posix()\n", "        return None\n"),
     "--mutasyon-kapsam-cozulmus": (PBE, "    ps = _sade(p)\n", "    ps = _cozulmus(p)\n"),
     # B — damga çıktısı store/kök basmaz (cwd'ye düşen kökte yanıltıcı "damgalandı")
     "--mutasyon-damga-yeri-yok": (FUS, '    s = f"store={store} · anahtar kökü={REPO}"\n', '    return ""\n'),
@@ -163,6 +173,58 @@ if ARGS:
         sys.exit(2)
 
 KUM = Path(tempfile.mkdtemp(prefix="pbe_ui_"))
+# ── Temizlik (bug gate 4. tur): `rmtree(ignore_errors=True)` salt-okunur dizini (kaynaktan copystat ile
+#    gelen READONLY özniteliği) sessizce bırakıyordu — ölçüldü: her koşum %TEMP%'te boş `scripts/utils`'li
+#    bir `pbe_ui_*` kalıyordu. Bağlar ÖNCE sökülür (rmtree junction'a girip hedefi silmesin), sonra
+#    öznitelik temizlenerek silinir; erken çıkış (`_dur`, istisna) atexit'ten geçer; kalan görünür basılır.
+GECICI: list[Path] = [KUM]
+BAGLAR: list[Path] = []
+
+
+def _yikim_hatasi(islev, yol, exc, hatalar: list) -> None:
+    try:
+        os.chmod(yol, stat.S_IWRITE)
+        islev(yol)
+    except OSError as e:
+        hatalar.append(f"{yol}: {type(e).__name__}: {e}")
+
+
+def _sil(kok: Path) -> list[str]:
+    hatalar: list[str] = []
+    if not kok.exists():
+        return hatalar
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(kok, onexc=lambda f, y, e: _yikim_hatasi(f, y, e, hatalar))
+    else:
+        shutil.rmtree(kok, onerror=lambda f, y, e: _yikim_hatasi(f, y, e, hatalar))
+    if kok.exists() and not hatalar:
+        hatalar.append(f"{kok}: silme sonrası hâlâ VAR")
+    return hatalar
+
+
+_TEMIZLENDI: list[bool] = []
+
+
+def temizle() -> list[str]:
+    """İdempotent: bağları sök (hedefe girmeden), sonra geçici dizinleri sil. Kalanları döndür + BAS."""
+    if _TEMIZLENDI:
+        return []
+    _TEMIZLENDI.append(True)
+    for bag in BAGLAR:
+        try:
+            if os.path.lexists(bag):
+                os.rmdir(bag) if os.name == "nt" else os.unlink(bag)
+        except OSError:
+            pass
+    kalan: list[str] = []
+    for d in GECICI:
+        kalan.extend(_sil(d))
+    for k in kalan:
+        print(f"[UYARI] temizlik: {k}")
+    return kalan
+
+
+atexit.register(temizle)
 os.environ["CLAUDE_PROJECT_DIR"] = str(KUM)   # deploy_ui / source_drift / kapı kökü import anında okur
 os.environ.pop("IX_SOURCE_ROOT", None)
 (KUM / "project.yaml").write_bytes(b"source_root: SOURCE_CODES\n")
@@ -218,8 +280,9 @@ def _harf_duyarsiz_mi(dizin: Path) -> bool:
 HARF_DUYARSIZ = _harf_duyarsiz_mi(KUM)
 HARF_NEDENI = "harf duyarlı FS — `Test/` ile `test/` ayrı dizin; yazım biçimi sınıfı burada DOĞMAZ"
 if KIP == "--mutasyon-rel-normpath" and not HARF_DUYARSIZ:
-    _dur("rel-normpath: harf duyarlı FS'te EŞDEĞER mutant — normpath ile resolve `rel`i yalnız harf "
-         "biçiminde ayırır, bu FS'te harf sınıfı yok (ayırt edici vektör kurulamaz; beyan)")
+    _dur("rel-normpath: harf duyarlı FS'te HARF SINIFI İÇİN eşdeğer mutant — bu FS'te harf sınıfı yok. "
+         "normpath ile resolve `rel`i ayrıca webapp içinden `test/`'e giden bir bağda ayırabilir; o davranışın "
+         "doğrusu ertelenen kalem (deploy aracı bağı izliyor mu) — vektör kurulmadı (beyan)")
 
 
 def kontrol(ad: str, ok: bool, detay: str = "") -> None:
@@ -407,6 +470,7 @@ kontrol("A16 deploy-to-abap GÖREV-DÜZEYİ `exclude` (configuration dışında)
         and P.deploy_haric_desenleri(APP_GOREVDUZEY) == (["xyz/"], []), repr(P.deploy_haric_desenleri(APP_GOREVDUZEY)))
 # Bug gate HIGH (M14) — proje kökü DIŞINDAKİ webapp (kanonik `.wt` worktree'si) kapıdadır.
 DIS = Path(tempfile.mkdtemp(prefix="pbe_ui_dis_"))
+GECICI.append(DIS)
 APP_DIS = app_kur("appd", "ZSD001_APP1", yerel_kaynak(), kok=DIS / "SOURCE_CODES" / "SD" / "ZSD001_CLC" / "ui")
 r = s(APP_DIS / "webapp" / "view" / "List.view.xml")
 kontrol("A17 kök DIŞI webapp (kök segmentli) → dict (kapıda) · komut MUTLAK --app-dir",
@@ -448,9 +512,11 @@ def bag_sok(bag: Path) -> None:
 
 
 DISARI = Path(tempfile.mkdtemp(prefix="pbe_ui_disari_"))
+GECICI.append(DISARI)
 _hedef_app = app_kur("appj", "ZSD001_APPJ", YEREL_TESTLI, kok=DISARI / "ui")
 BAG = KUM / "SOURCE_CODES" / "SD" / "ZSD001_CLC" / "ui" / "appj"
 BAG_HATA = bag_kur(BAG, _hedef_app)
+BAGLAR.append(BAG)
 if BAG_HATA is None:
     r = s(BAG / "webapp" / "view" / "List.view.xml")
     kontrol("A19 junction/symlink ARKASINDAKİ webapp (hedef kök segmentsiz) → dict (kapıda; sessiz dışarı YOK)",
@@ -459,6 +525,22 @@ if BAG_HATA is None:
             s(BAG / "webapp" / "test" / "flpSandbox.html") is None)
 else:
     atla("A19/A19b junction arkası webapp", f"bağ kurulamadı ({BAG_HATA})")
+# Bug gate 4. tur (MEDIUM): webapp İÇİNDEN dışarıyı gösteren bağ (`webapp/lnkdis → app/shared`) — çözülmüş
+# dosya çözülmüş webapp'e göre ifade EDİLEMEZ ⇒ `rel` fallback dalı; kapıda kalmalı (fail-open görünmez).
+APP_LNK = app_kur("app_lnk", "ZSD001_APPL", yerel_kaynak())
+(APP_LNK / "shared").mkdir(parents=True, exist_ok=True)
+(APP_LNK / "shared" / "s.js").write_bytes(CTRL)
+LNK = APP_LNK / "webapp" / "lnkdis"
+LNK_HATA = bag_kur(LNK, APP_LNK / "shared")
+BAGLAR.append(LNK)
+if LNK_HATA is None:
+    r = s(LNK / "s.js")
+    _c = P.uygulama_coz(LNK / "s.js", KUM)
+    kontrol("A21 webapp içinden DIŞARI giden bağ (`webapp/lnkdis → app/shared`) → dict, rel='lnkdis/s.js' (fallback dalı)",
+            isinstance(r, dict) and r.get("nesne") == "ZSD001_APPL" and _c is not None and _c[1] == "lnkdis/s.js",
+            f"{r!r} coz={_c!r}")
+else:
+    atla("A21 webapp içi dışarı bağ", f"bağ kurulamadı ({LNK_HATA})")
 
 # ───────────────────────── B — fetch_ui_source --damgala ─────────────────────────
 STORE: dict[str, str] = {}
@@ -647,6 +729,7 @@ kontrol("B16b deploy_disi_etiketle saf: YALNIZ-CANLI satırı exclude altında o
 # Bug gate 2. tur (MEDIUM, kök çözüm ertelendi T-PBE-KOK-CWD): CLAUDE_PROJECT_DIR BOŞ + cwd ≠ proje →
 # araç cwd köküne damgalar; çıktı HANGİ store'a yazdığını + uyarıyı basmalı (yanıltıcı "damgalandı" yok).
 CWD_DIS = Path(tempfile.mkdtemp(prefix="pbe_ui_cwd_"))
+GECICI.append(CWD_DIS)
 app_cwd = app_kur("appc", "ZSD001_APP1", yerel_kaynak(), kok=CWD_DIS / "SOURCE_CODES" / "SD" / "ZSD001_CLC" / "ui")
 _env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
 _env["PYTHONIOENCODING"] = "utf-8"
@@ -667,7 +750,8 @@ _out = _r.stdout.decode("utf-8", "replace") + _r.stderr.decode("utf-8", "replace
 kontrol("B17b env boş ama cwd proje kökü (project.yaml) → rc 0, store satırı VAR, ⚠ uyarısı YOK",
         _r.returncode == 0 and f"store={_store}" in _out and "CLAUDE_PROJECT_DIR BOŞ" not in _out,
         f"rc={_r.returncode}\n{_out[-900:]}")
-shutil.rmtree(CWD_DIS, ignore_errors=True)
+for _k in _sil(CWD_DIS):
+    print(f"[UYARI] temizlik: {_k}")
 
 for _k, _v in _asil_sd.items():   # C eksenine GERÇEK API ile geç
     if _v is None:
@@ -732,8 +816,21 @@ else:
                 k_bag == 2 and "--damgala" in e_bag, f"exit={k_bag}\n{e_bag[-400:]}")
     else:
         atla("C7 gerçek kapı junction arkası", f"bağ kurulamadı ({BAG_HATA})")
+    if LNK_HATA is None:
+        k_l1, e_l1 = kapi(LNK / "s.js", seans="S-C8")
+        rc_l, out_l = cagir(["--app-dir", str(APP_LNK), "--karsilastir", str(APP_LNK / "webapp"), "--damgala",
+                             "--offline", "--session", "S-C8"])
+        k_l2, e_l2 = kapi(LNK / "s.js", seans="S-C8")
+        kontrol("C8 GERÇEK kapı: webapp içi dışarı bağ dosyası damgasız → exit 2 · `--offline` damgadan sonra → exit 0",
+                k_l1 == 2 and rc_l == 0 and k_l2 == 0, f"exit1={k_l1} rc={rc_l} exit2={k_l2}\n{e_l1[-300:]}\n{out_l[-300:]}")
+    else:
+        atla("C8 gerçek kapı webapp içi dışarı bağ", f"bağ kurulamadı ({LNK_HATA})")
 
 kontrol("Z0 hiçbir çağrı ÇÖKMEDİ (çökme geçer sayılmaz)", not COKMELER, "; ".join(COKMELER))
+
+_kalan = temizle()
+kontrol("Z1 koşum sonrası geçici dizinler (KUM + DIS + DISARI + CWD) SİLİNDİ, bağlar söküldü",
+        not _kalan and not any(d.exists() for d in GECICI), "; ".join(_kalan))
 
 # ───────────────────────────── özet ─────────────────────────────
 gecen = sum(ok for _, ok, _ in SONUC)
@@ -747,9 +844,4 @@ for ad, neden in ATLANAN:
 print(f"\nFS: {'harf DUYARSIZ' if HARF_DUYARSIZ else 'harf DUYARLI'} · bağ: {'kuruldu' if BAG_HATA is None else BAG_HATA}")
 print(f"\npbe_ui: {gecen}/{len(SONUC)} PASS" + (f" · {len(ATLANAN)} ATLA" if ATLANAN else "")
       + (f" (MUTASYON {KIP})" if KIP else ""))
-if BAG_HATA is None:
-    bag_sok(BAG)
-shutil.rmtree(DISARI, ignore_errors=True)
-shutil.rmtree(KUM, ignore_errors=True)
-shutil.rmtree(DIS, ignore_errors=True)
 sys.exit(0 if gecen == len(SONUC) else 1)

@@ -38,7 +38,7 @@ KAPSAM (karar Q352-B AR-1, lider onaylı):
     olarak muaf sayılır — bu, aracın dışladığı kümenin ALT kümesidir. Muafiyet kıyası ÇÖZÜLMÜŞ
     dosyanın çözülmüş webapp'e göre yolundadır (`..` çözülür, Windows'ta disk harf biçimi) — yazım
     biçimi karar vermez; bu şartla sahte-muaf yok (dosya henüz yoksa kapı zaten serbest bırakır;
-    webapp İÇİNDEN dışarı giden bağ ölçülmedi). `*`,
+    webapp içinden `test/`e giden bağ ölçülmedi). `*`,
     `[`, `(`, `^`, `$` … taşıyan ya da satır-içi liste biçimindeki girdi MUAFİYET VERMEZ
     (fail-closed) — dosya kapıda kalır.
   · `ui5-deploy.yaml` yok ya da BSP adı çözülemiyor → dict YİNE döner (sessiz geçiş YOK),
@@ -171,7 +171,8 @@ def uygulama_coz(path, root=None) -> Optional[tuple[Path, str]]:
         eder ⇒ yazıldığı biçimle kıyaslanan `rel` sahte-muaf üretirdi (`webapp/test/x.js` yazılır,
         diskte `Test/x.js` — araç onu DIŞLAMAZ). `resolve()` `..`'yı çözer ve Windows'ta var olan
         bileşenlerin DİSK harf biçimini döndürür (ölçüldü, Py 3.11). İki çözülmüş yol birbirine
-        göre ifade edilemezse (webapp içinden dışarı giden bağ) sadeleşmiş yola düşülür — ölçülmedi.
+        göre ifade edilemezse (webapp içinden dışarı giden bağ) sadeleşmiş yola düşülür — dosya kapıda
+        kalır (fixture A21/C8). webapp içinden `test/`'e giden bağ ÖLÇÜLMEDİ (deploy aracı bağı izliyor mu).
     """
     p = Path(path)
     if not p.is_absolute() and root is not None:
