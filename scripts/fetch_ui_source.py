@@ -48,9 +48,11 @@ NE YAPAR (yalnız GET — SAP'ye hiçbir şey yazmaz):
                              <app>/webapp` TEMİZ çıkarsa o webapp'in dosyaları seans-taze damgalanır →
                              kapı (`hooks/_pbe_ui`) düzenlemeye izin verir. Damga YALNIZ: taze indirme
                              (`--zip` → YOK) · rc 0 · kaynak haritası sapması yok · webapp kapının kapsamında
-                             (proje kökü DIŞINDAKİ `.wt` worktree'si dahil — anahtar mutlak, store proje
-                             kökününki; ABAP kapısıyla simetrik) ve BSP'si app'in `ui5-deploy.yaml`'ıyla
-                             tutarlı. Bu kipte YALNIZ `deploy-to-abap` görevinin `configuration.exclude`
+                             (proje kökü DIŞINDAKİ `.wt` worktree'si dahil — anahtar mutlak; ABAP kapısıyla
+                             simetrik) ve BSP'si app'in `ui5-deploy.yaml`'ıyla tutarlı. ⚠ Store + anahtar
+                             kökü `CLAUDE_PROJECT_DIR`'den, boşsa CWD'den çözülür (ABAP ile ortak;
+                             ertelendi T-PBE-KOK-CWD) ⇒ kapı damgayı YALNIZ araç proje kökünden (ya da
+                             `CLAUDE_PROJECT_DIR` ile) koşulduğunda görür; araç yazdığı store'u + kökü basar. Bu kipte YALNIZ `deploy-to-abap` görevinin `configuration.exclude`
                              önekleri (HARF DUYARLI — deploy aracı `RegExp(regex,"g")`) altındaki
                              YALNIZ-YEREL dosyalar `DEPLOY-DISI` etiketlenir (canlıya hiç gitmez;
                              rc'ye sayılmaz). rc 1/2'de ASLA damga yok. `--session` opsiyonel geçersiz kılma
@@ -373,6 +375,28 @@ def damga_engeli(satirlar: list, zip_taze: bool, sapma: list, rc: int) -> str | 
     if kalan:
         return f"{len(kalan)} dosya canlıyla eşit değil: {_kisalt(kalan)}"
     return None
+
+
+def damga_yeri() -> str:
+    """Damganın HANGİ store'a, hangi köke göre yazıldığı (bug gate 2. tur: cwd'ye düşen kök
+    yanıltıcı \"damgalandı\" üretiyordu — kapı başka store'a bakar). Kök çözümü değişmez."""
+    try:
+        import source_drift as sd
+        store = str(sd.FRESH_STORE)
+        sd_kok = Path(sd.ROOT)
+    except Exception as e:   # noqa: BLE001
+        return f"store=ÖLÇÜLEMEDİ ({type(e).__name__}) · anahtar kökü={REPO}"
+    s = f"store={store} · anahtar kökü={REPO}"
+    if not os.environ.get("CLAUDE_PROJECT_DIR"):
+        s += (f" · ⚠ CLAUDE_PROJECT_DIR BOŞ — kök ÇALIŞMA DİZİNİNDEN ({Path.cwd()}) çözüldü; kapı başka "
+              "kökte koşuyorsa bu damgayı GÖRMEZ (proje kökünden koş ya da CLAUDE_PROJECT_DIR=<proje> ver)")
+    try:
+        ayni = sd_kok.resolve() == Path(REPO).resolve()
+    except OSError:
+        ayni = False
+    if not ayni:
+        s += f" · ⚠ store kökü ({sd_kok}) ≠ anahtar kökü ({REPO})"
+    return s
 
 
 def damgala(webapp: Path, rels: list, session: str | None) -> tuple[list[str], str | None]:
@@ -728,8 +752,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[OLCULEMEDI] PBE damgası: {hata}", file=sys.stderr)
             print("\n" + beyan("— (--offline: indirme YOK)"))
             return 2
-        durum["damga"] = f"OFFLINE — {len(yazilan)} dosya, canlıyla KARŞILAŞTIRILMADAN"
-        print(f"[OFFLINE] {yerel_kok}: fetch YAPILMADI, {len(yazilan)} dosya seans-taze damgalandı. "
+        durum["damga"] = f"OFFLINE — {len(yazilan)} dosya, canlıyla KARŞILAŞTIRILMADAN · {damga_yeri()}"
+        print(f"[OFFLINE] {yerel_kok}: fetch YAPILMADI, {len(yazilan)} dosya seans-taze damgalandı "
+              f"({damga_yeri()}). "
               "DİKKAT: canlıdaki belgelenmemiş değişikliği (başka makinenin deploy'u) ezme riskini kabul ettin "
               "(sap_sync_pull --offline ile aynı anlam).")
         print("\n" + beyan("— (--offline: indirme YOK)"))
@@ -896,8 +921,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"\n[OLCULEMEDI] PBE damgası: {hata}", file=sys.stderr)
                 rc = 2
             else:
-                durum["damga"] = f"YAZILDI — {len(yazilan)} dosya (canlıyla eşit ölçülenler)"
-                print(f"\n=== PBE DAMGASI: {len(yazilan)} dosya seans-taze damgalandı ({yerel_kok}) ===")
+                durum["damga"] = f"YAZILDI — {len(yazilan)} dosya (canlıyla eşit ölçülenler) · {damga_yeri()}"
+                print(f"\n=== PBE DAMGASI: {len(yazilan)} dosya seans-taze damgalandı ({yerel_kok}) ===\n"
+                      f"  {damga_yeri()}")
 
     print("\n" + beyan(zip_kaynagi))
     return rc

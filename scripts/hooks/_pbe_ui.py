@@ -21,7 +21,9 @@ KAPSAM (karar Q352-B AR-1, lider onaylı):
   · Proje kökü DIŞINDAKİ webapp (ör. kanonik `.wt` worktree'si) da kapsamdadır — kök/hariç
     segmentleri mutlak yolun parçalarında aranır (çekirdek `pbe_siniflandir` kuralı); anahtar
     `tazelik_anahtari`'nin mutlak dalı (ABAP ile simetrik; `fetch_ui_source --damgala` aynı
-    anahtarla, proje kökünün store'una damgalar).
+    anahtarla damgalar). ⚠ Store + anahtar kökü `CLAUDE_PROJECT_DIR`'den, boşsa CWD'den çözülür
+    (ABAP ile ortak; kök çözüm ertelendi T-PBE-KOK-CWD) ⇒ araç proje kökünden (ya da
+    `CLAUDE_PROJECT_DIR` ile) koşulduğunda kapı damgayı görür; araç yazdığı store'u basar.
   · YALNIZ `deploy-to-abap` özel görevinin `configuration.exclude` listesindeki yollar → None:
     o dosyalar canlıya HİÇ gitmez (ölçüldü: canlı zip'te `test/` YOK, `localService/` VAR —
     builder `resources.excludes` etkin değil). Dosyadaki BAŞKA `exclude:` anahtarları okunmaz.
@@ -31,7 +33,9 @@ KAPSAM (karar Q352-B AR-1, lider onaylı):
     ⇒ her girdi bir REGEX'tir, `i` bayrağı YOK = HARF DUYARLI, çapasızdır (yolun herhangi bir
     yerinde eşleşir), yol `/resources/<proje-adı>/<rel>` biçimindedir. Burada yalnız düz
     segmentli girdiler (`/test/`, `test`, `/a/b/`) webapp köküne göre, HARF DUYARLI bir ÖNEK
-    olarak muaf sayılır — bu, aracın dışladığı kümenin ALT kümesidir (sahte-muaf YOK). `*`,
+    olarak muaf sayılır — bu, aracın dışladığı kümenin ALT kümesidir. Kıyas ÇÖZÜLMÜŞ yol
+    (`..` çözülür, Windows'ta disk harf biçimi) üzerindedir — yazım biçimi karar vermez; bu şartla
+    sahte-muaf yok (dosya henüz yoksa kapı zaten serbest bırakır, disk biçimi ölçülemez). `*`,
     `[`, `(`, `^`, `$` … taşıyan ya da satır-içi liste biçimindeki girdi MUAFİYET VERMEZ
     (fail-closed) — dosya kapıda kalır.
   · `ui5-deploy.yaml` yok ya da BSP adı çözülemiyor → dict YİNE döner (sessiz geçiş YOK),
@@ -137,18 +141,31 @@ def deploy_haric_mi(rel: str, onekler) -> bool:
     return any(r.startswith(o) for o in onekler)
 
 
+def _cozulmus(p: Path) -> Path:
+    try:
+        return p.resolve()
+    except (OSError, RuntimeError):
+        return p
+
+
 def uygulama_coz(path, root=None) -> Optional[tuple[Path, str]]:
     """Dosya → (app dizini, webapp'e göre posix rel) ya da None (UI webapp kapsamı değil)."""
     p = Path(path)
     if not p.is_absolute() and root is not None:
         p = Path(root) / p
+    # Karar ÇÖZÜLMÜŞ yol üzerinde verilir (bug gate 2. tur): Windows harf duyarsız ve `..` kabul
+    # eder ⇒ yazıldığı biçimle kıyaslanan `rel` sahte-muaf üretir (`webapp/test/x.js` yazılır, diskte
+    # `Test/x.js` — araç onu DIŞLAMAZ; `webapp/test/../view/a.xml` = `view/a.xml`). `resolve()` `..`'yı
+    # çözer ve Windows'ta var olan bileşenlerin DİSK harf biçimini döndürür (ölçüldü).
+    p = _cozulmus(p)
     webapp = next((a for a in p.parents if a.name.lower() == WEBAPP), None)
     if webapp is None:
         return None
     app = webapp.parent
     kok_seg, haric = _kapi_kumeleri()
     try:
-        ust = [s.lower() for s in app.resolve().relative_to(Path(root).resolve()).parts]             if root is not None else None
+        ust = ([s.lower() for s in app.relative_to(Path(root).resolve()).parts]
+               if root is not None else None)
     except (ValueError, OSError):
         ust = None
     if ust is None:
@@ -169,7 +186,8 @@ def _goreli(p: Path, root) -> str:
 
 
 def komut_uret(app: Path, root, bsp: str) -> str:
-    """Blok mesajındaki komut — YALNIZ çalıştırılabilir komut (proje kökünden koşulur).
+    """Blok mesajındaki komut — YALNIZ çalıştırılabilir komut (proje kökünden ya da
+    `CLAUDE_PROJECT_DIR` ile koşulur — aksi hâlde damga başka store'a gider).
 
     `--session` BURADA BASILMAZ: kapı kendi seans kimliğini ekler (çift olmasın); elle koşulursa
     araç SessionStart marker'ına düşer. Açıklama `not_uret()`te — komutun arkasına eklenmez ki
@@ -182,7 +200,9 @@ def komut_uret(app: Path, root, bsp: str) -> str:
 def not_uret(neden: str = "") -> str:
     """Blok mesajı açıklaması + `--offline` kaçışı (sözleşmede opsiyonel `"not"` anahtarı)."""
     return ((f"[{neden} — BSP adını ver; app henüz hiç deploy edilmediyse `--offline` ekle] " if neden else "")
-            + "Komut canlı ↔ yerel karşılaştırır, TEMİZSE webapp'i damgalar — dosyaya YAZMAZ. Fark çıkarsa: "
+            + "Komutu PROJE KÖKÜNDEN (ya da CLAUDE_PROJECT_DIR=<proje> ile) koş — başka dizinden koşulursa "
+            "damga başka store'a yazılır, kapı görmez (araç yazdığı store'u basar). "
+            "Komut canlı ↔ yerel karşılaştırır, TEMİZSE webapp'i damgalar — dosyaya YAZMAZ. Fark çıkarsa: "
             "playbook/howto-ui-kaynagi-geri-kurma.md §2.1. SAP erişilemiyorsa ya da yerel canlıdan İLERİDEYSE "
             "(commit'li, henüz deploy edilmemiş iş): aynı komuta `--offline` ekle — canlıdan ezme riskini "
             "bilerek kabul edersin.")

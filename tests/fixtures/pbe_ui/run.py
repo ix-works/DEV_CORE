@@ -12,7 +12,8 @@ Eksenler:
      HARF DUYARLI önek (deploy aracı `RegExp(regex,"g")`, i bayrağı yok — ölçüldü) · `/x/**` ve
      anlaşılmayan desen muafiyet VERMEZ · kök-segment / hariç üst dizin · proje kökü DIŞI webapp
      (`.wt` worktree'si) kapsamda · ui5-deploy.yaml yok → yer tutuculu dict · `komut` saf komut
-     (`--session` yok, açıklama yok), açıklama + `--offline` kaçışı `not` anahtarında
+     (`--session` yok, açıklama yok), açıklama + `--offline` kaçışı `not` anahtarında · karar ÇÖZÜLMÜŞ
+     yolda (Windows harf biçimi + `..` — yazım biçimi sahte-muaf üretmez)
   B  `fetch_ui_source --damgala` (in-process `main()`, indirme yamalı, damga API'si kayıt stub'ı):
      temiz → damga · fark / yalnız-canlı / harita sapması → damga YOK · `--zip` / yanlış app /
      yanlış BSP → rc 2, damga YOK · proje kökü DIŞI webapp → damga (mutlak anahtar) ·
@@ -22,7 +23,9 @@ Eksenler:
   C  3. BAĞLAM — GERÇEK kapı alt süreci (`hooks/pull_before_edit.py`, stdin payload) + GERÇEK
      store (`source_drift.tazelik_damgala`): damgasız → exit 2 + komut · damgadan sonra → exit 0 ·
      deploy-dışı dosya → exit 0 · başka seans → exit 2 · kök DIŞI webapp: blok → damgala → serbest
-     (kalıcı kilit yok). Altyapı (Q352-A: eklenti kaydı + dosya-anahtarlı
+     (kalıcı kilit yok) · kapı satırı `--damgala --session <id>` ile biter + `not` basılır · harf/`..`
+     yazımıyla sahte-muaf yok. Damga çıktısı yazdığı store'u + kökü basar (cwd'ye düşen kök görünür).
+     Altyapı (Q352-A: eklenti kaydı + dosya-anahtarlı
      damga) bulunamazsa C0 FAIL (sessiz atlama yok).
 
 Koşum:     python tests/fixtures/pbe_ui/run.py
@@ -109,6 +112,13 @@ MUTASYONLAR = {
     "--mutasyon-app-uyumsuz": (FUS, "        if a.app_dir and Path(a.app_dir).resolve() != app.resolve():\n", "        if False:\n"),
     # B — BSP uyuşmazlığı denetimi kalkar
     "--mutasyon-bsp-uyumsuz": (FUS, "        if a.bsp and app_bsp and a.bsp.upper() != app_bsp.upper():\n", "        if False:\n"),
+    # A — yol çözülmeden karar (bug gate 2. tur: harf + `..` yazımıyla sahte-muaf)
+    "--mutasyon-rel-cozulmemis": (PBE, "    p = _cozulmus(p)\n", ""),
+    # A — yalnız `..` normalize edilir, disk harf biçimi alınmaz (harf yazımıyla sahte-muaf)
+    "--mutasyon-rel-normpath": (PBE, "    p = _cozulmus(p)\n",
+                                "    import os.path as _op\n    p = Path(_op.normpath(p))\n"),
+    # B — damga çıktısı store/kök basmaz (cwd'ye düşen kökte yanıltıcı "damgalandı")
+    "--mutasyon-damga-yeri-yok": (FUS, '    s = f"store={store} · anahtar kökü={REPO}"\n', '    return ""\n'),
     # B — kök DIŞI webapp reddi geri gelir (bug gate HIGH: kapı bloklar, damga yolu yok = kalıcı kilit)
     "--mutasyon-kok-disi-red": (FUS, "            pbe = ui_eklenti_modulu()\n",
                                 "            yerel_kok.resolve().relative_to(REPO.resolve())\n"
@@ -316,11 +326,19 @@ kontrol("A10 göreli yol kök'e göre çözülür → dict", isinstance(r, dict)
 kontrol("A11 deploy_haric_desenleri gerçek biçim → ['test/', '.claude/'], anlaşılmayan yok",
         P.deploy_haric_desenleri(APP1) == (["test/", ".claude/"], []), repr(P.deploy_haric_desenleri(APP1)))
 # Bug gate LOW (M6) — deploy aracı HARF DUYARLI eşler: `Test/` dosyası `/test/` ile canlıdan DÜŞMEZ.
-_buyuk = APP1 / "webapp" / "Test" / "x.js"
-r = s(_buyuk)
-kontrol("A12 HARF DUYARLI: `/test/` deseni `Test/x.js`i MUAF SAYMAZ (dict) · deploy_haric_mi('Test/x.js',['test/'])=False",
-        isinstance(r, dict) and P.deploy_haric_mi("Test/x.js", ["test/"]) is False
-        and P.deploy_haric_mi("test/x.js", ["test/"]) is True, repr(r))
+# (Kapı düzeyi — diskte gerçekten `Test/` olan app — A12c'de; burada saf kıyas.)
+kontrol("A12 HARF DUYARLI saf kıyas: deploy_haric_mi('Test/x.js',['test/'])=False · ('test/x.js',['test/'])=True",
+        P.deploy_haric_mi("Test/x.js", ["test/"]) is False and P.deploy_haric_mi("test/x.js", ["test/"]) is True)
+# Bug gate 2. tur — karar ÇÖZÜLMÜŞ yolda: yazım biçimi (harf / `..`) muafiyeti belirlemez.
+APP_HARF = app_kur("app_harf", "ZSD001_APP9", dict(yerel_kaynak(), **{"Test/x.js": CTRL}))
+r = s(APP_HARF / "webapp" / "test" / "x.js")
+kontrol("A12c diskte `Test/x.js` (araç DIŞLAMAZ), yol `test/x.js` yazılır → dict (sahte-muaf YOK)",
+        isinstance(r, dict) and r.get("nesne") == "ZSD001_APP9", repr(r))
+r = s(APP1 / "webapp" / "test" / ".." / "view" / "List.view.xml")
+kontrol("A12d `webapp/test/../view/List.view.xml` → dict (= view/List.view.xml; `test/` öneki sahte-muaf DEĞİL)",
+        isinstance(r, dict) and r.get("nesne") == "ZSD001_APP1", repr(r))
+kontrol("A12e ters yön: diskte `test/flpSandbox.html` (DIŞLANIR), yol `Test/…` yazılır → None (damga döngüsü yok)",
+        s(APP1 / "webapp" / "Test" / "flpSandbox.html") is None)
 APP_BUYUK = app_kur("app_buyuk", "ZSD001_APP5", yerel_kaynak(),
                     yaml_bayt=deploy_yaml("ZSD001_APP5", "          - /Test/\n"))
 kontrol("A13 HARF DUYARLI (ters yön): `/Test/` deseni `Test/x.js`i muaf sayar (önek küçültülmez)",
@@ -352,7 +370,7 @@ APP_DIS = app_kur("appd", "ZSD001_APP1", yerel_kaynak(), kok=DIS / "SOURCE_CODES
 r = s(APP_DIS / "webapp" / "view" / "List.view.xml")
 kontrol("A17 kök DIŞI webapp (kök segmentli) → dict (kapıda) · komut MUTLAK --app-dir",
         isinstance(r, dict) and r.get("nesne") == "ZSD001_APP1"
-        and f'--app-dir "{APP_DIS.as_posix()}"' in r.get("komut", ""), repr(r))
+        and f'--app-dir "{APP_DIS.resolve().as_posix()}"' in r.get("komut", ""), repr(r))
 kontrol("A18 kök DIŞI, kök segmentsiz webapp → None",
         s(DIS / "baska" / "ui" / "x" / "webapp" / "a.js") is None)
 
@@ -540,6 +558,21 @@ kontrol("B16 damga kipi: canlıda `test/Canli.js` (yerelde yok) → YALNIZ-CANLI
 kontrol("B16b deploy_disi_etiketle saf: YALNIZ-CANLI satırı exclude altında olsa da değişmez",
         F.deploy_disi_etiketle([("test/a.js", F.YALNIZ_CANLI, "", []), ("test/b.js", F.YALNIZ_YEREL, "", [])],
                                ["test/"]) == [("test/a.js", F.YALNIZ_CANLI, "", []), ("test/b.js", F.DEPLOY_DISI, "", [])])
+# Bug gate 2. tur (MEDIUM, kök çözüm ertelendi T-PBE-KOK-CWD): CLAUDE_PROJECT_DIR BOŞ + cwd ≠ proje →
+# araç cwd köküne damgalar; çıktı HANGİ store'a yazdığını + uyarıyı basmalı (yanıltıcı "damgalandı" yok).
+CWD_DIS = Path(tempfile.mkdtemp(prefix="pbe_ui_cwd_"))
+app_cwd = app_kur("appc", "ZSD001_APP1", yerel_kaynak(), kok=CWD_DIS / "SOURCE_CODES" / "SD" / "ZSD001_CLC" / "ui")
+_env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
+_env["PYTHONIOENCODING"] = "utf-8"
+_r = subprocess.run([sys.executable, str(SCRIPTS / "fetch_ui_source.py"), "--app-dir", str(app_cwd),
+                     "--karsilastir", str(app_cwd / "webapp"), "--damgala", "--offline", "--session", "S-CWD"],
+                    cwd=str(CWD_DIS), env=_env, capture_output=True, timeout=120)
+_out = _r.stdout.decode("utf-8", "replace") + _r.stderr.decode("utf-8", "replace")
+_store = (CWD_DIS / ".claude" / ".session_fresh.json")
+kontrol("B17 CLAUDE_PROJECT_DIR boş, cwd≠proje → rc 0 ama çıktı store yolunu (cwd kökü) + BOŞ uyarısını basar",
+        _r.returncode == 0 and f"store={_store}" in _out and "CLAUDE_PROJECT_DIR BOŞ" in _out and _store.is_file(),
+        f"rc={_r.returncode}\n{_out[-900:]}")
+shutil.rmtree(CWD_DIS, ignore_errors=True)
 
 for _k, _v in _asil_sd.items():   # C eksenine GERÇEK API ile geç
     if _v is None:
@@ -567,8 +600,11 @@ else:
     SD.FRESH_STORE = KUM / ".claude" / ".session_fresh.json"
     hedef = APP1 / "webapp" / "view" / "List.view.xml"
     kod, err = kapi(hedef)
-    kontrol("C1 GERÇEK kapı, damgasız webapp dosyası → exit 2 + fetch_ui_source --damgala komutu",
-            kod == 2 and "fetch_ui_source.py --app-dir" in err and "--damgala" in err, f"exit={kod}\n{err[-500:]}")
+    _satir = next((x.strip() for x in err.splitlines() if "fetch_ui_source.py --app-dir" in x), "")
+    kontrol("C1 GERÇEK kapı, damgasız webapp dosyası → exit 2 · komut satırı `--damgala --session <id>` ile BİTER · "
+            "eklentinin `not`u basılır",
+            kod == 2 and _satir.endswith("--damgala --session S-KAPI") and "`--offline` ekle" in err
+            and "PROJE KÖKÜNDEN" in err, f"exit={kod} satir={_satir!r}\n{err[-700:]}")
     kod, err = kapi(APP1 / "webapp" / "test" / "flpSandbox.html")
     kontrol("C2 GERÇEK kapı, deploy-dışı test/ dosyası → exit 0", kod == 0, f"exit={kod}\n{err[-300:]}")
     canli_ayarla(canli_bsp())
@@ -586,6 +622,11 @@ else:
     kontrol("C5 kök DIŞI webapp: GERÇEK kapı exit 2 → --damgala (gerçek store, mutlak anahtar) → GERÇEK kapı exit 0",
             kod1 == 2 and "--damgala" in err1 and rc == 0 and kod2 == 0,
             f"exit1={kod1} rc={rc} exit2={kod2}\n{err1[-300:]}\n{out[-300:]}\n{err2[-300:]}")
+    k_harf, e_harf = kapi(APP_HARF / "webapp" / "test" / "x.js", seans="S-C6")
+    k_nokta, e_nokta = kapi(APP1 / "webapp" / "test" / ".." / "view" / "List.view.xml", seans="S-C6")
+    k_kont, _ = kapi(APP1 / "webapp" / "test" / "flpSandbox.html", seans="S-C6")
+    kontrol("C6 GERÇEK kapı: `test/x.js` (diskte Test/) → exit 2 · `test/../view/…` → exit 2 · kontrol test/ → exit 0",
+            k_harf == 2 and k_nokta == 2 and k_kont == 0, f"harf={k_harf} nokta={k_nokta} kontrol={k_kont}")
 
 kontrol("Z0 hiçbir çağrı ÇÖKMEDİ (çökme geçer sayılmaz)", not COKMELER, "; ".join(COKMELER))
 
