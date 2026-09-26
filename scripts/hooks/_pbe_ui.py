@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""pbe_ui.py — PULL-BEFORE-EDIT (ADR 0016) eklentisi: freestyle UI5 `webapp/` dosyaları (Q352-B).
+"""_pbe_ui.py — PULL-BEFORE-EDIT (ADR 0016) eklentisi: freestyle UI5 `webapp/` dosyaları (Q352-B).
 
 ⛔ NEDEN VAR (canlı vaka, 2026-09-26): başka bir makinede bir rapor uygulamasına kolon eklenip
    canlıya deploy edilmişti; repo habersizdi. Eski yerel kodla yapılacak bir sonraki deploy o

@@ -110,7 +110,7 @@ Beklenen: `YALNIZ-CANLI=0 · değişecek=0 · yalnız-dist=0` ve `GERCEK-FARK=0`
 ## 2.1 PULL-BEFORE-EDIT kapısı — `webapp/` düzenlemesi bloklandıysa (Q352-B, ADR 0016)
 
 `<source_root>/…/<app>/webapp/**` altındaki bir dosyayı düzenlemek, o seansta canlıyla eşitliği
-ölçülüp **damgalanmadıysa** bloklanır (`scripts/hooks/pbe_ui.py`; kapı `pull_before_edit`). Blok mesajı
+ölçülüp **damgalanmadıysa** bloklanır (`scripts/hooks/_pbe_ui.py`; kapı `pull_before_edit`). Blok mesajı
 şu komutu verir (seans kimliği marker'dan çözülür, `--session` gerekmez):
 ```bash
 python core/scripts/fetch_ui_source.py --app-dir "<ui>/<app>" --karsilastir "<ui>/<app>/webapp" --damgala

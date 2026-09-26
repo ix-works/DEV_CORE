@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""pbe_ui — PULL-BEFORE-EDIT (ADR 0016) UI eklentisi + `fetch_ui_source --damgala` (Q352-B).
+"""pbe_ui fixture — PULL-BEFORE-EDIT (ADR 0016) UI eklentisi + `fetch_ui_source --damgala` (Q352-B).
 
 Vaka (2026-09-26): başka makinede bir rapor uygulamasına kolon eklenip deploy edilmişti, repo
 habersizdi; eski yerel kodla yapılacak deploy kolonu canlıdan SESSİZCE silerdi. Canlı kontrol
@@ -7,7 +7,7 @@ grubu: aynı canlı zip ↔ senkron-öncesi repo webapp'i → GERCEK-FARK=4 (vie
 Bu fixture o vakanın SENTETİK karşılığını (canlıda fazladan kolon) taşır.
 
 Eksenler:
-  A  `pbe_ui.sinifla()` — kapsam: webapp/** · deploy `exclude` muafiyeti (tekil anahtar; builder
+  A  `_pbe_ui.sinifla()` — kapsam: webapp/** · deploy `exclude` muafiyeti (tekil anahtar; builder
      `excludes` DEĞİL) · anlaşılmayan desen muafiyet VERMEZ · kök-segment / hariç üst dizin ·
      ui5-deploy.yaml yok → yer tutuculu dict (sessiz geçiş YOK)
   B  `fetch_ui_source --damgala` (in-process `main()`, indirme yamalı, damga API'si kayıt stub'ı):
@@ -45,7 +45,7 @@ for _s in (sys.stdout, sys.stderr):
 
 KOK = Path(__file__).resolve().parents[3]
 FUS = "scripts/fetch_ui_source.py"
-PBE = "scripts/hooks/pbe_ui.py"
+PBE = "scripts/hooks/_pbe_ui.py"
 # object_types: A kolunun source_drift'i onu import eder (Q352) — kumda yoksa taban KURULAMADI olurdu.
 KOPYA = ("scripts/deploy_ui.py", "scripts/verify_ui_static_assets.py", "scripts/source_drift.py",
          "scripts/object_types.py", "scripts/hooks/pull_before_edit.py", PBE, FUS)
@@ -135,7 +135,7 @@ sys.path.insert(1, str(SCRIPTS / "hooks"))
 try:
     _o, _e = sys.stdout, sys.stderr
     import fetch_ui_source as F  # noqa: E402
-    import pbe_ui as P  # noqa: E402
+    import _pbe_ui as P  # noqa: E402
     import source_drift as SD  # noqa: E402
     sys.stdout, sys.stderr = _o, _e
 except Exception as exc:  # pragma: no cover
@@ -465,10 +465,10 @@ for _k, _v in _asil_sd.items():   # C eksenine GERÇEK API ile geç
 # ─────────────── C — 3. BAĞLAM: gerçek kapı alt süreci + gerçek store ───────────────
 KAPI = SCRIPTS / "hooks" / "pull_before_edit.py"
 a_kolu = (_asil_sd["tazelik_damgala"] is not None
-          and "_EK_DENETCILER" in KAPI.read_text(encoding="utf-8") and "pbe_ui" in KAPI.read_text(encoding="utf-8"))
+          and "_EK_DENETCILER" in KAPI.read_text(encoding="utf-8") and '"_pbe_ui"' in KAPI.read_text(encoding="utf-8"))
 if not a_kolu:
     # Q352-A dalda (86915ec) — altyapı kaybolursa bu SESSİZ atlama değil FAIL'dir (geçer sayılmaz).
-    kontrol("C0 gerçek kapı altyapısı (source_drift.tazelik_damgala + pull_before_edit._EK_DENETCILER/pbe_ui) VAR",
+    kontrol("C0 gerçek kapı altyapısı (source_drift.tazelik_damgala + pull_before_edit._EK_DENETCILER/_pbe_ui) VAR",
             False, "A kolu altyapısı bulunamadı — gerçek kapı/store uçtan uca koşmadı")
 else:
     def kapi(p: Path, seans: str = "S-KAPI") -> tuple[int, str]:

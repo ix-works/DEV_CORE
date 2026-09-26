@@ -46,7 +46,7 @@ NE YAPAR (yalnız GET — SAP'ye hiçbir şey yazmaz):
      `--zip <dosya>`         AĞ YOK: daha önce kaydedilmiş zip'i girdi olarak kullanır.
      `--damgala`             PULL-BEFORE-EDIT (ADR 0016, Q352-B) seans-tazelik damgası: `--karsilastir
                              <app>/webapp` TEMİZ çıkarsa o webapp'in dosyaları seans-taze damgalanır →
-                             kapı (`hooks/pbe_ui`) düzenlemeye izin verir. Damga YALNIZ: taze indirme
+                             kapı (`hooks/_pbe_ui`) düzenlemeye izin verir. Damga YALNIZ: taze indirme
                              (`--zip` → YOK) · rc 0 · kaynak haritası sapması yok · webapp proje içinde ve
                              BSP'si app'in `ui5-deploy.yaml`'ıyla tutarlı. Bu kipte deploy `exclude`
                              altındaki YALNIZ-YEREL dosyalar `DEPLOY-DISI` etiketlenir (canlıya hiç gitmez;
@@ -339,18 +339,18 @@ def liste_kiyasla(canli: dict[str, bytes], dist: dict[str, bytes]) -> tuple[list
             len(ortak) - len(degisen))
 
 
-def pbe_ui_modulu():
-    """PULL-BEFORE-EDIT UI eklentisi (`hooks/pbe_ui.py`) — kapsam + deploy-exclude TEK KAYNAĞI."""
+def ui_eklenti_modulu():
+    """PULL-BEFORE-EDIT UI eklentisi (`hooks/_pbe_ui.py`; `_` öneki = hook değil yardımcı modül, C-TPL-01) — kapsam + deploy-exclude TEK KAYNAĞI."""
     hooks = str(Path(__file__).resolve().parent / "hooks")
     if hooks not in sys.path:
         sys.path.append(hooks)
-    import pbe_ui
-    return pbe_ui
+    import _pbe_ui
+    return _pbe_ui
 
 
 def deploy_disi_etiketle(satirlar: list, onekler) -> list:
     """YALNIZ-YEREL + deploy `exclude` altında → DEPLOY-DISI (yalnız --damgala kipinde çağrılır)."""
-    pbe = pbe_ui_modulu()
+    pbe = ui_eklenti_modulu()
     return [(r, DEPLOY_DISI if s == YALNIZ_YEREL and pbe.deploy_haric_mi(r, onekler) else s, d, f)
             for r, s, d, f in satirlar]
 
@@ -662,7 +662,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         try:
             yerel_kok.resolve().relative_to(REPO.resolve())
-            pbe = pbe_ui_modulu()
+            pbe = ui_eklenti_modulu()
             cozum = pbe.uygulama_coz(yerel_kok / "_", REPO) if yerel_kok.name.lower() == pbe.WEBAPP else None
         except ValueError:
             cozum = None
@@ -716,7 +716,7 @@ def main(argv: list[str] | None = None) -> int:
             yerel_dosyalar = dizin_oku(yerel_kok)
         except OSError as e:
             return olculemedi("— (--offline: indirme YOK)", f"--karsilastir dizini okunamadı ({type(e).__name__}: {e})")
-        pbe = pbe_ui_modulu()
+        pbe = ui_eklenti_modulu()
         rels = [r for r in sorted(yerel_dosyalar) if not pbe.deploy_haric_mi(r, damga_onekler)]
         yazilan, hata = damgala(yerel_kok, rels, a.session)
         durum["kars"] = istek_durumu(True, "--offline: canlı İNDİRİLMEDİ, karşılaştırma YOK")
