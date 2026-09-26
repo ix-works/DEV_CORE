@@ -910,13 +910,15 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   `deploy_ui.py --verify-only` build yapar (dist yeniden üretilir) — aynı ui kökünde statik doğrulamayla EŞ ZAMANLI koşma.
 
 ## B18e — fetch_ui_source (Issue #304): BSP kaynağını geri kurma + eşlik + karşılaştırma + deploy listesi
-- `python tests/run_battery.py fetch_ui_source --kardes ui_dogrulama_satir_sonu_kacis` → taban 41/41 + 13 kip DÜŞER.
+- `python tests/run_battery.py fetch_ui_source --kardes ui_dogrulama_satir_sonu_kacis --precommit` → taban 54/54 + 26 kip DÜŞER.
 - **Değişmez:** geri kurma `-dbg` kuralı builder `debugFileRegex` son ekleriyle (uydurma yok) · metin LF, ikili HAM ·
   karşılaştırmada YALNIZ ölçülen iki build dönüşümü gevşer (`.properties` çözülmüş SATIR kıyası, manifest'in iki yolu
   yalnız yerelde yoksa) · eşlik = preload + preload-dışı tam liste + kaynak haritası sondası; biri tutmazsa DUR ·
   `--dist-karsilastir` `YALNIZ-CANLI` → rc 1 · rc 2 = ÖLÇÜLEMEDİ, asla temiz.
 - ⛔ SİLİNEMEZ: **B4** (yorum farkı gizlenmez) · **B6/B7/B7b** (manifest ölçülen-liste) · **A6/B11** (ikili normalize
-  edilmez) · **D5** (yalnız-preload körlüğü) · **D6** (harita sondası) · **E2** · **C1** (sıfır-fark KAPSAM BEYANI).
+  edilmez) · **D5** (yalnız-preload körlüğü) · **D6** (harita sondası) · **E2** · **C1** (sıfır-fark KAPSAM BEYANI) ·
+  **C7** (zip-slip → rc 2 + boş hedef) · **C8-C12** (bozuk girdi/G-Ç → rc 2, çökme değil) · **C14/C15** (`.conn_adt`
+  yok/boş → rc 2) · **B12-B15** (tip-duyarlı manifest, katı `.properties`) · **Z0** (çökme = FAIL).
 - D grubu gerçek alt süreçtir (sahte `ui5` CLI: Windows `.cmd`, POSIX `sh`) — CI'da (ubuntu) de koşar.
 - Canlı salt-okur tekrar: `CLAUDE_PROJECT_DIR=<proje> python core/scripts/fetch_ui_source.py --app-dir <ui>/<app>
   --karsilastir <ui>/<app>/webapp` → `GERCEK-FARK=0` beklenir (senkron app'te); eşlik için `--eslik --ui5-cli <ui5>`.
