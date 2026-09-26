@@ -75,7 +75,10 @@ kimliğini komutun SONUNA kendisi ekler (marker başka seansı gösterirken damg
 gidip kapı döngüye giriyordu — bug gate N1). Komutta FARKLI bir `--session X` varsa kapı onu
 kendi kimliğiyle DEĞİŞTİRİR + görünür not basar; aynı değer → dokunulmaz; komut hiç yoksa
 gösterilen yer tutucuya `--session` eklenmez. `not` (opsiyonel, str) iki uçtan kırpılıp blok
-mesajında komuttan sonra basılır; anahtar yoksa eski davranış. ⚠ Eklenti HAM yolu alır
+mesajında komuttan sonra basılır; anahtar yoksa eski davranış. ⛔ Eklenti `--session` BASMAZ;
+basarsa değeri **tırnaksız tek token** olmalı (kapı değiştirmeyi `--session X` / `--session=X`
+token'ı üzerinden yapar; tırnaklı `"a b"` değeri dengesiz tırnak bırakır — kod bunu çözmez,
+sözleşme yasaklar). ⚠ Eklenti HAM yolu alır
 (`..` normalize edilmemiş olabilir) — çekirdek sınıflandırma `os.path.normpath` uygular.
 Eklenti dosyası yok → sessiz · yüklenemez → `EKLENTI-YUKLENEMEDI` · `sinifla()` istisnası →
 `EKLENTI-HATA` (ikisi de exit 0; **`SystemExit` DAHİL** — yalnız `KeyboardInterrupt` yükselir;

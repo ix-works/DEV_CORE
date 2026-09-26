@@ -278,11 +278,15 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 ```bash
 python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_yarisi \
     bos_seans_markeri ddic_okuma_yolu class_include_push adt_uc_url_cozumu --precommit
-# pbe_kapsam taban 62/62 · ad-anahtari 57 · include-muaf 54 · abap-class 56 · tabl-yok 58 · eklenti-yok 52
-# bug gate #306: file-dogrulama-yok 57 · systemexit 60 · eklenti-session 61 · dirty-kok 61
-#                force-tipi 61 · offline-rc 61 · drift-tablo 60   (13/13 kip PASS, ~415 sn)
-# takip turu: taban 72/72 · kardes-kok · noktanokta · session-ez · yer-tutucu · not-kirp · esanlam
-#             (her biri YALNIZ kendi vektörünü düşürür — sayılar changelog Q352 (8)'de)
+# ölçüldü 2026-09-26 (son dar tur, 21/21 PASS, ~600 sn) — pbe_kapsam taban 74/74; mutasyonla skor:
+#   ad-anahtari 67 · include-muaf 64 · abap-class 67 · tabl-yok 70 · eklenti-yok 61
+#   bug gate #306: file-dogrulama-yok 68 · systemexit 72 · eklenti-session 73 · dirty-kok 73
+#                  force-tipi 73 · offline-rc 73 · drift-tablo 72
+#   takip turu:    kardes-kok 71 (K1+K2+K3) · noktanokta 72 (G1+G2) · session-ez 73 (E15)
+#                  yer-tutucu 73 (E19) · not-kirp 73 (E20) · esanlam 72 (F7+F9)
+#   son dar tur:   kardes-kok-auto 73 (K3) · kanonik-tip 73 (F9)
+# harf-duyarlı TEMP (fsutil setCaseSensitiveInfo): 73/73 + `[ATLANDI] G3`
+# ⚠ vektör eklenince bu sayılar kayar — tabanı ve kip skorunu AYNI koşumdan yaz.
 ```
 - ⭐ **AYIRT EDİCİ ÇİFT (silinmez):** H3 *ana sınıf damgası `.ccimp`'i kapsamaz* + T7 *aynı adlı
   CDS damgası BDEF'i kapsamaz* — ad-anahtarına dönüşü yakalayan bunlardır; P3 uçtan uca
@@ -319,7 +323,10 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
   setCaseSensitiveInfo <dir> enable` + TEMP/TMP oraya → 71/71 + G3 ATLANDI; normal TEMP 72/72) ·
   E15/E18 eklenti komutunda farklı `--session` değişir +
   not / aynısı dokunulmaz · E19/E20 komutsuz eklenti yer tutucusuna `--session` yok, `not`
-  kırpılır · F7/F8 `--file` eşanlamlıları (`behaviordefinition`/`bdo`) kabul, farklı tip red.
+  kırpılır · F7/F8 `--file` eşanlamlıları (`behaviordefinition`/`bdo`) kabul, farklı tip red ·
+  **son dar tur:** K3 `--type auto` SINIF dalı da alt-include'ları `--file` ağacında çeker (ana
+  daldaki K1/K2 bu dalı KORUMUYORDU — `kardes_koku` auto dalından sökülünce 72/72 kalıyordu) ·
+  F9 F7'nin ÇEVRİMİÇİ karşılığı (sahte ADT): eşanlamlı ad kanonik `bdef` ucundan çekilir.
   ⛔ Kapı stderr'i Windows'ta CRLF'tir — satır-sınırlı iddia (`...\n`) kurarken `kapi()`
   çıktısı LF'ye indirgenir (ilk koşuda 4 sahte-kırmızı verdi).
   ⛔ `cikti_iddiasi_durustlugu` M2 (kablolama sökümü) çapası **regex**tir: eski düz-metin çapası

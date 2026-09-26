@@ -50,6 +50,9 @@ Kipler (her biri düzeltmenin bir ayağını geri alır → korpus KIRMIZI olmal
   --mutasyon-yer-tutucu    komutsuz eklentinin yer tutucusuna --session eklenir
   --mutasyon-not-kirp      eklenti `not`u iki uçtan kırpılmaz
   --mutasyon-esanlam       --file tip eşanlamlıları (behaviordefinition/bdo) reddedilir
+  Son dar tur (bug gate WARNING, 2026-09-26):
+  --mutasyon-kardes-kok-auto  `--type auto` SINIF dalı alt-include'ları proje kökünde arar
+  --mutasyon-kanonik-tip      eşanlamlı tip çevrimiçi çekmeye kanonik ada çevrilmeden gider
 
 Koşum: python tests/fixtures/pbe_kapsam/run.py [--mutasyon-…]   (exit 0 = PASS)
 """
@@ -81,7 +84,8 @@ GECERLI_KIP = {"--mutasyon-ad-anahtari", "--mutasyon-include-muaf",
                "--mutasyon-systemexit", "--mutasyon-eklenti-session", "--mutasyon-dirty-kok",
                "--mutasyon-force-tipi", "--mutasyon-offline-rc", "--mutasyon-drift-tablo",
                "--mutasyon-kardes-kok", "--mutasyon-noktanokta", "--mutasyon-session-ez",
-               "--mutasyon-yer-tutucu", "--mutasyon-not-kirp", "--mutasyon-esanlam"}
+               "--mutasyon-yer-tutucu", "--mutasyon-not-kirp", "--mutasyon-esanlam",
+               "--mutasyon-kardes-kok-auto", "--mutasyon-kanonik-tip"}
 
 # kip -> [(kopyadaki dosya, eski metin, yeni metin)]  — eski metin kopyada TAM 1 kez geçmeli
 MUTASYONLAR = {
@@ -137,6 +141,16 @@ MUTASYONLAR = {
         "sap_sync_pull.py",
         "        includes = find_repo_class_includes(obj, erp_root)\n",
         "        includes = find_repo_class_includes(obj)\n")],
+    "--mutasyon-kardes-kok-auto": [(
+        "sap_sync_pull.py",
+        "            rc = max(rc, _sinif_includelari(obj, session, client.adt_client, args.force,\n"
+        "                                            kardes_koku))\n",
+        "            rc = max(rc, _sinif_includelari(obj, session, client.adt_client, args.force,\n"
+        "                                            None))\n")],
+    "--mutasyon-kanonik-tip": [(
+        "sap_sync_pull.py",
+        "    t = _kanonik_tip(t)                    # eşanlamlı → çekme yolunun tanıdığı ad (son dar tur 2)\n",
+        "")],
     "--mutasyon-noktanokta": [(
         "source_drift.py",
         "    p = Path(normpath(str(path)))\n    n = p.name.lower()\n",
@@ -795,6 +809,31 @@ def takip_turu(scripts: Path, kum: Path) -> None:
             (proje / C / "ZCL_SD001_X.ccimp.abap").read_bytes() == ana_ccimp and k_ana not in st,
             f"ana_damga={k_ana in st}")
 
+    # ── 1b (K3): AYNI sınıf, `--type auto` dalı (düz `.abap`; arama CLAS/OC döner) ───
+    W_ = "SOURCE_CODES/SD/ZSD001_CLC/auto/"
+    for kok, govde in ((proje, "* ANA impl\n"), (wt, "* wt impl\n")):
+        d = kok / W_
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "ZCL_SD001_W.abap").write_text("CLASS zcl_sd001_w DEFINITION.\n", encoding="utf-8")
+        (d / "ZCL_SD001_W.ccimp.abap").write_text(govde, encoding="utf-8")
+        for c in (["add", "-A"], ["commit", "-q", "-m", "auto sinif"]):
+            subprocess.run(["git", "-C", str(kok), *c], check=True, capture_output=True)
+    ana_w = (proje / W_ / "ZCL_SD001_W.ccimp.abap").read_bytes()
+    canli_w = {"/sap/bc/adt/oo/classes/zcl_sd001_w/source/main": "CLASS zcl_sd001_w DEFINITION. \"c\n",
+               "/sap/bc/adt/oo/classes/zcl_sd001_w/includes/implementations": "* CANLI W impl\n"}
+    ara = _arama_xml(("/sap/bc/adt/oo/classes/zcl_sd001_w", "CLAS/OC", "ZCL_SD001_W"))
+    rc, out = cekici_sahte(scripts, proje, ["ZCL_SD001_W", "--type", "auto", "--file",
+                                            str(wt / W_ / "ZCL_SD001_W.abap")], canli_w, ara)
+    st = store(proje).get("objects") or {}
+    k_wt, k_ana = _anahtar(scripts, proje, [wt / W_ / "ZCL_SD001_W.ccimp.abap",
+                                            proje / W_ / "ZCL_SD001_W.ccimp.abap"])
+    kontrol("K3 son-tur-1: `--type auto` SINIF dali da alt-include'lari --file agacinda ceker "
+            "(ANA agaca yazma/damga YOK)",
+            rc == 0 and (wt / W_ / "ZCL_SD001_W.ccimp.abap").read_text(encoding="utf-8") == "* CANLI W impl\n"
+            and k_wt in st and k_ana not in st
+            and (proje / W_ / "ZCL_SD001_W.ccimp.abap").read_bytes() == ana_w,
+            f"rc={rc} wt_damga={k_wt in st} ana_damga={k_ana in st} {out[-220:]!r}")
+
     # ── 2: `..` içeren yol + harf farkı (gerçek kapı alt süreci) ────────────────
     proje = proje_kur(kum / "proje6")
     dz = proje / "SOURCE_CODES" / "SD" / "ZSD001_CLC"
@@ -841,6 +880,19 @@ def takip_turu(scripts: Path, kum: Path) -> None:
             sonuc["bdef"] == 0 and sonuc["behaviordefinition"] == 0 and sonuc["bdo"] == 0, f"{sonuc}")
     kontrol("F8 takip-5 KONTROL: --file .bdef + srvd (farkli tip) -> hala [FAIL]",
             sonuc["srvd"] == 1, f"{sonuc}")
+    # F9 — F7'nin ÇEVRİMİÇİ karşılığı: eşanlamlı ad çekme yoluna KANONİK adla gider (sahte ADT).
+    canli_b = {"/sap/bc/adt/bo/behaviordefinitions/zsd001_i_x/source/main":
+               "managed implementation in class zbp; // canli\n"}
+    cevrim = {}
+    for tip in ("behaviordefinition", "bdo"):
+        subprocess.run(["git", "-C", str(proje), "checkout", "--", str(bdef)], capture_output=True)
+        rc, out = cekici_sahte(scripts, proje, ["ZSD001_I_X", "--type", tip, "--file", str(bdef)],
+                               canli_b)
+        cevrim[tip] = (rc, "[OK]" in out and "yeni obje" not in out,
+                       bdef.read_text(encoding="utf-8").endswith("// canli\n"), out[-160:])
+    kontrol("F9 son-tur-2: cevrimici `--type behaviordefinition|bdo --file .bdef` -> bdef ucundan "
+            "cekilir + yazilir ('yeni obje olabilir' YOK)",
+            all(v[0] == 0 and v[1] and v[2] for v in cevrim.values()), f"{cevrim}")
 
 
 def ucuncu_baglam(scripts: Path, kum: Path) -> None:

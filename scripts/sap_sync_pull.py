@@ -119,6 +119,35 @@ def _dosya_tutarsizligi(obj: str, t: str, repo_file) -> str:
     return ""
 
 
+def _kanonik_tip(t: str) -> str:
+    """Eşanlamlı tip adını ÇEKME yolunun tanıdığı kanonik ada çevir (doğrulamadan SONRA).
+
+    Son dar tur (bug gate WARNING, 2026-09-26): `behaviordefinition`/`bdo`/`servicebinding`
+    `_dosya_tutarsizligi`'ni geçiyor ama çevrimiçi yolda `sap_adt_lib._resolve_source_url` bu
+    adlarda None dönüyordu (`_DRIFT_FALLBACK_PATHS` yalnız `bdef/srvd/srvb` anahtarını tanır) →
+    yanıltıcı "[WARN] … yeni obje olabilir". Yalnız `normalize_object_type`ın ÇÖZEMEDİĞİ adlar
+    çevrilir: `_TYPE_TO_EXTENSIONS` uzantı kümesi aynı olan AÇIK tip (`source_drift._PBE_ACIK_TIP`)
+    kanonik addır (`.bdef` → `bdef`, `.srvb` → `srvb`). Çözülebilen ad (class/program/…) DOKUNULMAZ.
+    """
+    try:
+        from object_types import normalize_object_type
+        normalize_object_type(t)
+        return t
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from source_drift import _TYPE_TO_EXTENSIONS, _PBE_ACIK_TIP
+    except Exception:  # noqa: BLE001
+        return t
+    exts = _TYPE_TO_EXTENSIONS.get(t)
+    if not exts:
+        return t
+    for _ek, tip in _PBE_ACIK_TIP:
+        if _TYPE_TO_EXTENSIONS.get(tip) == exts:
+            return tip
+    return t
+
+
 def _damgala(session: str, repo_path) -> str:
     """YAZILAN/DOĞRULANAN dosyayı seans-taze damgala → anahtar (boşsa damgalanmadı).
 
@@ -311,6 +340,7 @@ def main() -> int:
         if hata:
             print(f"[FAIL] {obj} ({t}) {hata}")
             return 1
+    t = _kanonik_tip(t)                    # eşanlamlı → çekme yolunun tanıdığı ad (son dar tur 2)
 
     if args.offline:
         hedefler = _hedef_dosyalar(obj, t, repo_file)
