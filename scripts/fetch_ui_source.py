@@ -38,6 +38,10 @@ NE YAPAR (yalnız GET — SAP'ye hiçbir şey yazmaz):
                              ⚠ ① tek başına YETMEZ (ölçüldü): -dbg'deki yalnız-yorum farkı küçültmede
                              kaybolur, preload EŞİT çıkar — iz yalnız `.map`'te kalır (②). Transpile
                              edilmiş -dbg (TS) de eşit küçültülmüş kod üretebilir — iz `sources`ta (③).
+     `--dist-karsilastir <dist>` DEPLOY LİSTESİ: canlı ham dosya listesi ↔ deploy edilecek `dist/`
+                             (ad + içerik). `YALNIZ-CANLI` = canlıda olup deploy kümesinde olmayan dosya
+                             (ör. yanlış `excludes` ile düşen `localService/**`) → rc 1, kullanıcıya göster.
+                             Deploy SONRASI yeniden indirilen zip'le koşulunca tam-liste doğrulamasıdır.
      `--zip-kaydet <dosya>`  indirilen ham zip'i saklar (sonraki drift kıyası için anlık görüntü).
      `--zip <dosya>`         AĞ YOK: daha önce kaydedilmiş zip'i girdi olarak kullanır.
 
@@ -280,6 +284,18 @@ def karsilastir(kaynak: dict[str, bytes], yerel: dict[str, bytes]) -> list[tuple
     return satirlar
 
 
+def liste_kiyasla(canli: dict[str, bytes], dist: dict[str, bytes]) -> tuple[list, list, list, int]:
+    """Ham BSP (zip) ↔ deploy edilecek dist → (yalnız-canlı, yalnız-dist, içeriği değişen, eşit sayısı).
+
+    Deploy dist'i gönderir; yalnız-canlı = deploy SONRASI canlıda kalmayabilecek dosya (ör. yanlış
+    `excludes` ile dist'e girmeyen `localService/**`). Metin satır sonu normalize, ikili ham."""
+    ortak = canli.keys() & dist.keys()
+    degisen = sorted(r for r in ortak if not (
+        satir_sonu_normalize(canli[r]) == satir_sonu_normalize(dist[r]) if metin_mi(r) else canli[r] == dist[r]))
+    return (sorted(canli.keys() - dist.keys()), sorted(dist.keys() - canli.keys()), degisen,
+            len(ortak) - len(degisen))
+
+
 def eslik_sinifi(build_preload: bytes, canli_preload: bytes) -> tuple[str, list[str]]:
     """deploy_ui.preload_karsilastir sözlüğü → eşlik sınıfı."""
     sinif, moduller = preload_karsilastir(build_preload, canli_preload)
@@ -389,12 +405,14 @@ def _kisalt(adlar: list, n: int = 6) -> str:
     return ", ".join(adlar[:n]) + (f" (+{len(adlar) - n})" if len(adlar) > n else "")
 
 
-def kapsam_beyani(zip_kaynagi: str, eslik_durumu: str, karsilastirma: bool) -> str:
+def kapsam_beyani(zip_kaynagi: str, eslik_durumu: str, karsilastirma: bool,
+                  deploy_notu: str = "deploy listesi: İSTENMEDİ") -> str:
     return "\n".join([
         "KAPSAM BEYANI:",
         f"  bakılan  : {zip_kaynagi} · geri kurma = -dbg kuralı (ui5 builder debugFileRegex tersi)",
         f"             metin (LF) = {', '.join(sorted(TEXT_SUFFIXES))} · diğer uzantılar ham bayt",
         f"  eşlik    : {eslik_durumu}",
+        f"  {deploy_notu}",
         "  karşılaştırma: " + ("dosya listesi + içerik; build dönüşümü YALNIZ .properties \\uXXXX ve "
                                "manifest " + " · ".join("/".join(y) for y in MANIFEST_BUILD_YOLLARI)
                                if karsilastirma else "İSTENMEDİ"),
@@ -415,6 +433,8 @@ def main(argv: list[str] | None = None) -> int:
     kaynak_g.add_argument("--zip", help="AĞ YOK: önceden kaydedilmiş zip (--zip-kaydet çıktısı)")
     ap.add_argument("--out", help="geri kurulan webapp'in yazılacağı dizin (yok ya da BOŞ olmalı)")
     ap.add_argument("--karsilastir", help="yerel webapp dizini ile karşılaştır")
+    ap.add_argument("--dist-karsilastir",
+                    help="deploy edilecek dist dizininin DOSYA LİSTESİ ↔ canlı ham liste (deploy öncesi/sonrası)")
     ap.add_argument("--eslik", action="store_true", help="değiştirmeden ui5 build → zip preload ile kıyasla")
     ap.add_argument("--ui5-cli", help="ui5 CLI yolu (varsayılan: PATH'teki `ui5`)")
     ap.add_argument("--zip-kaydet", help="indirilen ham zip'i bu dosyaya yaz")
@@ -429,6 +449,10 @@ def main(argv: list[str] | None = None) -> int:
     yerel_kok = Path(a.karsilastir) if a.karsilastir else None
     if yerel_kok is not None and not yerel_kok.is_dir():
         print(f"[KULLANIM] --karsilastir dizini yok: {yerel_kok}", file=sys.stderr)
+        return 2
+    dist_kok = Path(a.dist_karsilastir) if a.dist_karsilastir else None
+    if dist_kok is not None and not dist_kok.is_dir():
+        print(f"[KULLANIM] --dist-karsilastir dizini yok: {dist_kok} (önce `npm run build`)", file=sys.stderr)
         return 2
 
     eslik_durumu = "İSTENMEDİ (--eslik yok) — geri kurmanın build-eşliği ÖLÇÜLMEDİ"
@@ -541,7 +565,26 @@ def main(argv: list[str] | None = None) -> int:
         if any(sayim.get(k) for k in (GERCEK, YALNIZ_CANLI, YALNIZ_YEREL)):
             rc = 1
 
-    print("\n" + kapsam_beyani(zip_kaynagi, eslik_durumu, yerel_kok is not None))
+    if dist_kok is not None:
+        yalniz_c, yalniz_d, degisen, esit = liste_kiyasla(canli, dizin_oku(dist_kok))
+        print(f"\n=== DEPLOY LİSTESİ: canlı ham ({len(canli)}) ↔ dist {dist_kok} ===")
+        for r in yalniz_c:
+            print(f"  {YALNIZ_CANLI:<15} {r}  — dist'te YOK: deploy sonrası canlıda kalmayabilir")
+        for r in yalniz_d:
+            print(f"  {'YALNIZ-DIST':<15} {r}  — canlıya YENİ girecek")
+        for r in degisen:
+            print(f"  {'DEGISECEK':<15} {r}")
+        print(f"  ÖZET: eşit={esit} · değişecek={len(degisen)} · yalnız-dist={len(yalniz_d)} · "
+              f"YALNIZ-CANLI={len(yalniz_c)}")
+        if yalniz_c:
+            print("  ⛔ canlıda olup deploy kümesinde olmayan dosya var — bilinçli silme mi, yanlış "
+                  "`excludes` mu? Kullanıcıya göster (standards/03 §2.4).")
+            rc = 1
+        deploy_notu = f"deploy listesi: canlı ham ↔ {dist_kok} (ad + içerik)"
+    else:
+        deploy_notu = "deploy listesi: İSTENMEDİ"
+
+    print("\n" + kapsam_beyani(zip_kaynagi, eslik_durumu, yerel_kok is not None, deploy_notu))
     return rc
 
 

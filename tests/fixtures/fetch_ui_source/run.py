@@ -71,8 +71,12 @@ MUTASYONLAR = {
         FUS, "    if out is not None and out.exists() and any(out.iterdir()):\n", "    if False:\n"),
     # C — sıfır-fark anında kapsam beyanı basılmaz
     "--mutasyon-kapsam-yok": (
-        FUS, '    print("\\n" + kapsam_beyani(zip_kaynagi, eslik_durumu, yerel_kok is not None))\n    return rc\n',
+        FUS, '    print("\\n" + kapsam_beyani(zip_kaynagi, eslik_durumu, yerel_kok is not None, deploy_notu))\n'
+             "    return rc\n",
         "    return rc\n"),
+    # E — canlıda olup dist'te olmayan dosya rc'yi etkilemez (deploy listesi kör)
+    "--mutasyon-deploy-listesi-kor": (FUS, "        if yalniz_c:\n            print(\"  ⛔ canlıda",
+                                      "        if False:\n            print(\"  ⛔ canlıda"),
     # D — preload dışı tam-liste hükmü kaldırılır (yalnız preload kıyası)
     "--mutasyon-tam-liste-yok": (FUS, "        if liste_farki and sinif != ESLIK_YOK:\n", "        if False:\n"),
     # D — eşlik YOK iken DURMAZ (--out yazılır)
@@ -407,6 +411,29 @@ z = zip_yaz(canli_bsp(), KUM / "d9.zip")
 rc, out = cagir(["--zip", str(z), "--eslik", "--ui5-cli", str(KUM / "yok" / "ui5")])
 kontrol("D9 ui5 CLI koşamıyor → ÖLÇÜLEMEDİ rc 2 (ESLIK hükmü basılmaz)",
         rc == 2 and "[OLCULEMEDI]" in out and "[ESLIK-" not in out, f"rc={rc} {out[:300]}")
+
+# ─────────────── E — deploy listesi (--dist-karsilastir, §2.4 localService riski) ───────────────
+LS = {"localService/mainService/metadata.xml": crlf(b"<edmx/>\n")}
+canli_ls = canli_bsp(**LS)
+z = zip_yaz(canli_ls, KUM / "e.zip")
+dist_tam = dizin_yaz(lf(canli_ls), KUM / "e1_dist")
+rc, out = cagir(["--zip", str(z), "--dist-karsilastir", str(dist_tam)])
+kontrol("E1 dist == canlı (yalnız satır sonu farkı) → rc 0, YALNIZ-CANLI=0, değişecek=0",
+        rc == 0 and "YALNIZ-CANLI=0" in out and "değişecek=0" in out and "deploy listesi: canlı ham" in out,
+        f"rc={rc}\n{out[-400:]}")
+dist_ex = dizin_yaz({k: v for k, v in lf(canli_ls).items() if not k.startswith("localService/")}, KUM / "e2_dist")
+rc, out = cagir(["--zip", str(z), "--dist-karsilastir", str(dist_ex)])
+kontrol("E2 dist'te localService YOK (excludes) → YALNIZ-CANLI listelenir, rc 1",
+        rc == 1 and "YALNIZ-CANLI    localService/mainService/metadata.xml" in out, f"rc={rc}\n{out[-400:]}")
+dist_yeni = lf(canli_ls)
+dist_yeni["view/Yeni.view.xml"] = b"<x/>\n"
+dist_yeni["view/Main.view.xml"] = VIEW.replace(b"Page", b"Panel")
+rc, out = cagir(["--zip", str(z), "--dist-karsilastir", str(dizin_yaz(dist_yeni, KUM / "e3_dist"))])
+kontrol("E3 yeni + değişen dosya → YALNIZ-DIST / DEGISECEK listelenir, rc 0 (engel değil)",
+        rc == 0 and "YALNIZ-DIST     view/Yeni.view.xml" in out and "DEGISECEK       view/Main.view.xml" in out,
+        f"rc={rc}\n{out[-400:]}")
+rc, out = cagir(["--zip", str(z), "--dist-karsilastir", str(KUM / "yok_dist")])
+kontrol("E4 dist dizini yok → rc 2 (kullanım; 'temiz' değil)", rc == 2, f"rc={rc}")
 
 # ───────────────────────────── özet ─────────────────────────────
 gecen = sum(ok for _, ok, _ in SONUC)
