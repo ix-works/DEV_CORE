@@ -9,18 +9,20 @@ PreToolUse hook'u, bayat bir objeyi düzenlemeden önce bunu çalıştırmayı �
 Kullanım:
     python scripts/sap_sync_pull.py ZSD001_I_BOOKING --type ddls --session <sid>
     python scripts/sap_sync_pull.py ZSD001_I_BOOKING --type ddls --session <sid> --offline
+    python scripts/sap_sync_pull.py ZCL_SD001_X --type implementations --file <yol>.ccimp.abap
+    python scripts/sap_sync_pull.py ZSD001_I_X_TOP --type auto --file <yol>.prog.abap
 
 --offline: SAP erişilemezken ÇEKMEDEN taze damgalar (escape; canlıdan ezme riskini bilerek kabul).
+
+Q352 (2026-09-26):
+  · Damga DOSYAYA yazılır (`source_drift.tazelik_anahtari`; kapı aynı fonksiyonla okur).
+  · `--type class` ana kaynağın yanında repo'daki alt-include'ları da KENDİ uçlarından çeker
+    ve her birini ayrı damgalar; tek include için `--type implementations|testclasses|...`.
+  · `--type auto`: tip canlı ADT aramasından (tam ad + dosya ailesi) çözülür; 0/>1 aday → DUR.
 """
 import argparse
-import contextlib
 import io
-import json
-import os
 import sys
-import tempfile
-import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 # Windows cp1252 konsolu Türkçe karakterde (ı/ş/ç) çöker → UTF-8'e zorla.
@@ -36,20 +38,10 @@ from utils.project_config import project_root  # noqa: E402
 
 # ADR 0020: junction'da __file__ DEV_CORE'a çözülür → tazelik damgası PROJE köküne yazılmalı
 ROOT = project_root()
-FRESH_STORE = ROOT / ".claude" / ".session_fresh.json"
-SESSION_MARKER = ROOT / ".claude" / ".current_session"
+# Q352: seans-tazelik store'unun YAZIMI (kilit + atomik) ve seans kimliği
+# çözümü `source_drift`e taşındı (public: `tazelik_damgala` / `seans_kimligi`) —
+# kapı ve diğer çekiciler aynı yolu kullanır. Burada yerel kopya YOK.
 
-
-def _resolve_session(explicit: str) -> str:
-    """--session verildiyse onu kullan; yoksa SessionStart'ın yazdığı marker'dan oku
-    (proaktif pull'da agent session_id bilmek zorunda kalmasın). Hiçbiri yoksa 'default'
-    (PreToolUse hook gerçek session_id ile eşleşmeyince yine bloklar → fail-safe)."""
-    if explicit:
-        return explicit
-    try:
-        return json.loads(SESSION_MARKER.read_text(encoding="utf-8")).get("session_id") or "default"
-    except Exception:
-        return "default"
 
 # ⚠ DDIC okuma-yolu TEK KAYNAKTAN gelir: `object_types.ddic_read_mode()`.
 # Burada YEREL BIR TIP KUMESI TUTMA. Eskiden bu dosya `atom.py`'dekinin ELLE
@@ -59,136 +51,278 @@ def _resolve_session(explicit: str) -> str:
 # DDL ayiklamasi YAPILMAZ: table/structure pull'u repo'daki DDL'i XML zarfiyla ezerdi.
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+def _dosya_coz(arg_file: str):
+    """`--file` → Path (göreliyse PROJE köküne göre). Verilmediyse None."""
+    if not arg_file:
+        return None
+    p = Path(arg_file)
+    return p if p.is_absolute() else (ROOT / p)
 
 
-# ⛔ 2026-08-28 (E-02): damga OKU-DEĞİŞTİR-YAZ dizisidir ve KİLİTSİZDİ. İki koşum
-# (paralel ajan / hook + elle pull / arka-plan tur) çakışınca ikisi de AYNI store'u
-# okur, her biri KENDİ objesini ekler ve son yazan diğerinin damgasını SİLER —
-# sessizce. Kayıp damga = "bu dosya çekildi" bilgisinin yok olması; `pull_before_edit`
-# (ADR 0016) o bilgiye bakarak karar verir. Ayrıca `write_text` ATOMİK DEĞİLDİR:
-# truncate+write arasında okuyan süreç YARIM JSON görür → tüketici `except: {}` dalına
-# düşer ve store'un TAMAMI kaybolur.
-#   Kayıp damganın yönü GÜVENLİDİR (hook "taze değil" der, kullanıcı tekrar çeker);
-#   tehlikeli yön SAHTE-TAZE damgadır. Aşağıdaki tasarım hiçbir dalda sahte-taze
-#   üretmez: kilit alınamazsa bile GÖRÜNÜR uyarı basar (sessiz düşüş YOK).
-_KILIT_ZAMAN_ASIMI_S = 10.0   # bu süre boyunca kilit alınamazsa: uyar + yine de yaz
-_KILIT_BAYAT_S = 30.0         # çökmüş süreçten kalan kilit: kır (kalıcı kilitlenme YOK)
-_KILIT_BEKLEME_S = 0.02
+def _dosya_tutarsizligi(obj: str, t: str, repo_file) -> str:
+    """`--file` obje adı ve `--type` ile tutarlı mı? Tutarlıysa "", değilse hata metni.
 
-
-def _kilit_yolu() -> Path:
-    return FRESH_STORE.with_name(FRESH_STORE.name + ".lock")
-
-
-@contextlib.contextmanager
-def _store_kilidi():
-    """Store'u OKU-DEĞİŞTİR-YAZ boyunca tek yazıcıya kilitle.
-
-    Döndürülen değer: kilit alındıysa None, alınamadıysa GÖRÜNÜR uyarı metni
-    (çağıran onu basar — "sessizce kaybettim" dalı YOK).
+    Bug gate M1 (2026-09-26): `--file` doğrulanmıyordu → `ZCL_BASKA --type class --file
+    ZCL_SD001_X.clas.abap` BAŞKA objenin kaynağını yazıp damgalıyor, `[OK]` diyordu.
+    ① Ad: dosya adının ilk noktaya kadarki gövdesi (BÜYÜK) == obje adı. Farklı ad taşıyan
+       meşru bir aile ÖLÇÜLMEDİ (tüketici korpusta `#` namespace dosyası 0; FM/include/
+       alt-include dosyaları da obje adını taşır) → gevşetme YOK.
+    ② Tip: dosya kapının sınıflandırmasıyla (`pbe_siniflandir`, TEK KAYNAK) uyuşmalı —
+       alt-include dosyası yalnız alt-include tipiyle ve AYNI türle; tipi dosyadan kesin
+       olan dosya yalnız o tiple; `auto` ailesindeki dosya `auto` ya da uzantısını kabul
+       eden açık bir tiple (`source_drift._TYPE_TO_EXTENSIONS`).
     """
-    kilit = _kilit_yolu()
-    kilit.parent.mkdir(parents=True, exist_ok=True)
-    basla = time.monotonic()
-    tutuyoruz, uyari = False, None
-    while True:
+    try:
+        from source_drift import pbe_siniflandir, _TYPE_TO_EXTENSIONS
+        from object_types import (is_class_include, normalize_class_include,
+                                  normalize_object_type)
+    except Exception as exc:  # noqa: BLE001
+        return f"--file doğrulanamadı ({exc}) — yazma/damga YOK"
+    def _n(x: str) -> str:
+        # `normalize_object_type` bdef/srvb ailesinde ValueError atar. Eşanlamlılık o zaman
+        # `_TYPE_TO_EXTENSIONS`ten TÜRETİLİR (uzantı kümesi aynı olan adlar tek tip:
+        # bdef = behaviordefinition = bdo · srvb = servicebinding). Yalnız normalize EDİLEMEYEN
+        # adlara uygulanır → `.abap` paylaşan class/program gibi farklı tipler birleşmez.
         try:
-            fd = os.open(str(kilit), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(fd, str(os.getpid()).encode("ascii"))
-            os.close(fd)
-            tutuyoruz = True
-            break
-        except (FileExistsError, PermissionError):
-            # ⚠ WINDOWS İKİZİ (ölçüldü 2026-08-28, 12 süreç × 30 damga): silinmesi
-            # BEKLEYEN (delete-pending) bir kilide `O_EXCL` ile açılınca Windows
-            # ERROR_ACCESS_DENIED verir → Python bunu **PermissionError** yapar,
-            # FileExistsError DEĞİL. Yalnız FileExistsError yakalayan bir kilit
-            # yüksek eşzamanlılıkta `_stamp`i ÇÖKERTİR (14 çocuk süreç çöktü,
-            # 360 damganın 66'sı bu yüzden hiç yazılamadı). "Meşgul" iki isimle gelir.
-            pass
-        try:
-            bayat = (time.time() - kilit.stat().st_mtime) > _KILIT_BAYAT_S
-        except OSError:
-            bayat = False        # kilit tam o anda kalktı → hemen yeniden dene
-        if bayat:
-            # Çökmüş/öldürülmüş süreçten kalan kilit ARACI KALICI OLARAK
-            # kilitlerdi (erişilemez-yeşil sınıfının kilit hâli) → kır.
-            with contextlib.suppress(OSError):
-                kilit.unlink()
+            return normalize_object_type(x)
+        except Exception:  # noqa: BLE001
+            ham = str(x).lower().strip()
+            exts = _TYPE_TO_EXTENSIONS.get(ham)
+            return "uzanti:" + ",".join(exts) if exts else ham
+
+    govde = repo_file.name.split(".", 1)[0].upper()
+    if govde != obj.upper():
+        return (f"--file '{repo_file.name}' obje adı '{govde}' taşıyor, istenen '{obj}' — "
+                f"başka objenin dosyası YAZILMAZ/DAMGALANMAZ")
+    s = pbe_siniflandir(repo_file)
+    if not s:
+        return (f"--file '{repo_file.name}' PULL-BEFORE-EDIT kapsamında bir kaynak dosyası "
+                f"değil (kaynak kökü/uzantı) — yazma/damga YOK")
+    include_istek = is_class_include(t)
+    if s["tur"] == "sinif_include" or include_istek:
+        if not (s["tur"] == "sinif_include" and include_istek
+                and normalize_class_include(t) == s["tip"]):
+            return (f"--file '{repo_file.name}' türü '{s['tip']}', istenen --type '{t}' — "
+                    f"sınıf alt-include'u yalnız KENDİ türüyle çekilir (ör. --type {s['tip']})")
+        return ""
+    if t == "auto":
+        return ""  # aile uyumu auto dalında ayrıca denetlenir (tipi kesin dosya → red)
+    if s["tip"] != "auto":
+        if _n(t) != _n(s["tip"]):
+            return (f"--file '{repo_file.name}' tipi '{s['tip']}', istenen --type '{t}' — "
+                    f"tutarsız (ör. --type {s['tip']})")
+        return ""
+    izinli = _TYPE_TO_EXTENSIONS.get(t) or _TYPE_TO_EXTENSIONS.get(_n(t)) or ()
+    if not repo_file.name.lower().endswith(tuple(izinli)):
+        return (f"--file '{repo_file.name}' uzantısı --type '{t}' ile uyuşmuyor "
+                f"(izinli: {', '.join(izinli) or '-'}) — `--type auto` kullan")
+    return ""
+
+
+def _kanonik_tip(t: str) -> str:
+    """Eşanlamlı tip adını ÇEKME yolunun tanıdığı kanonik ada çevir (doğrulamadan SONRA).
+
+    Son dar tur (bug gate WARNING, 2026-09-26): `behaviordefinition`/`bdo`/`servicebinding`
+    `_dosya_tutarsizligi`'ni geçiyor ama çevrimiçi yolda `sap_adt_lib._resolve_source_url` bu
+    adlarda None dönüyordu (`_DRIFT_FALLBACK_PATHS` yalnız `bdef/srvd/srvb` anahtarını tanır) →
+    yanıltıcı "[WARN] … yeni obje olabilir". Yalnız `normalize_object_type`ın ÇÖZEMEDİĞİ adlar
+    çevrilir: `_TYPE_TO_EXTENSIONS` uzantı kümesi aynı olan AÇIK tip (`source_drift._PBE_ACIK_TIP`)
+    kanonik addır (`.bdef` → `bdef`, `.srvb` → `srvb`). Çözülebilen ad (class/program/…) DOKUNULMAZ.
+    """
+    try:
+        from object_types import normalize_object_type
+        normalize_object_type(t)
+        return t
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from source_drift import _TYPE_TO_EXTENSIONS, _PBE_ACIK_TIP
+    except Exception:  # noqa: BLE001
+        return t
+    exts = _TYPE_TO_EXTENSIONS.get(t)
+    if not exts:
+        return t
+    for _ek, tip in _PBE_ACIK_TIP:
+        if _TYPE_TO_EXTENSIONS.get(tip) == exts:
+            return tip
+    return t
+
+
+def _damgala(session: str, repo_path) -> str:
+    """YAZILAN/DOĞRULANAN dosyayı seans-taze damgala → anahtar (boşsa damgalanmadı).
+
+    TEK KAYNAK: `source_drift.tazelik_damgala` (anahtar = `tazelik_anahtari`; kapı aynı
+    fonksiyonla okur). Yüklenemezse damga YAZILMAZ: yön güvenli (kapı 'taze değil' der).
+    """
+    try:
+        from source_drift import tazelik_damgala
+    except Exception as exc:  # noqa: BLE001
+        print(f"[WARN] tazelik damgası yüklenemedi ({exc}) — {repo_path} damgalanMADI "
+              f"(kapı bu dosyayı 'taze değil' sayar).")
+        return ""
+    return tazelik_damgala(session, repo_path, ROOT)
+
+
+def _sonuc(etiket: str, t: str, res: dict, session: str, komut_eki: str = "",
+           komut_tipi: str = "") -> int:
+    """Tek dosyanın çekme sonucunu bildir; yalnız GERÇEKTEN yazılan/eşit bulunan dosya damgalanır.
+
+    Döner: 0 = taze damgalandı · 1 = çekilmedi/korundu (damga YOK).
+    `komut_tipi`: önerilen tekrar komutunun `--type`i (verilmezse `t`). `--type auto` ile
+    çözülen tip (ör. `function`) doğrudan çekilebilir bir tip OLMAYABİLİR → auto dalı
+    tekrar komutunu yine `auto` ile basar (bug gate L1: "source URL türetilemedi" döngüsü).
+    """
+    yol = res.get("repo_path")
+    tekrar = (f"python core/scripts/sap_sync_pull.py {etiket} --type {komut_tipi or t}"
+              f"{komut_eki} --force")
+    if res.get("blocked_dirty"):
+        # FIX-B: yerelde commit'siz değişiklik var → pull EZMEDİ (WIP korundu). Taze
+        # DAMGALAMADIK ve exit 1 — manuel çağıran (gateway/ajan) net "korundu" sinyali alır.
+        # (Edit yolunu bloklamaz: pull_before_edit hook'u dirty dosyayı zaten MUAF tutar.)
+        print(f"[KORUMA] {etiket} ({t}) PULL ATLANDI — {res.get('reason')}")
+        print(f"  repo_path={yol}")
+        print(f"  → Yerel commit'siz emek EZİLMEDİ. Bilerek canlıya dönmek istiyorsan: {tekrar}")
+        return 1
+    if res.get("blocked_behind"):
+        # FIX-D: canlı içerik, dosyanın GECMIS bir commit'iyle birebir ayni -> pull
+        # "tazeleme" degil, kendi gecmisimize DONUS. Commit'li yerel is ezilirdi.
+        print(f"[KORUMA] {etiket} ({t}) PULL ATLANDI — {res.get('reason')}")
+        print(f"  repo_path={yol}")
+        print(f"  eslesen_gecmis_commit={res.get('behind_commit')}")
+        print(f"  → Once KONTROL ET: bu obje push edildi mi, AKTIVE edildi mi? "
+              f"(pull AKTIF surumu okur; inaktifte bekleyen yeni surumu gormez.)")
+        print(f"  → Bilerek canliya donmek istiyorsan: {tekrar}")
+        return 1
+    if res.get("blocked_shrink"):
+        # FIX-C: canlı AKTİF sürüm yerelden belirgin KÜÇÜK → pull EZMEDİ. "Yerel temiz =
+        # bayat" DEĞİLDİR: obje push edilmemiş ya da push edilip AKTİVE EDİLMEMİŞ olabilir
+        # (pull AKTİF okur). exit 1 → çağıran net "korundu" sinyali alır.
+        print(f"[KORUMA] {etiket} ({t}) PULL ATLANDI — {res.get('reason')}")
+        print(f"  repo_path={yol}")
+        print(f"  → Önce KONTROL ET: obje canlıda AKTİF mi? (push edilmiş ama aktive edilmemiş "
+              f"olabilir — o hâlde yerel doğru, pull YANLIŞ olurdu.)")
+        print(f"  → Yine de canlıya dönmek istiyorsan: {tekrar}")
+        return 1
+    if not res.get("written"):
+        print(f"[WARN] {etiket} ({t}) repo'ya YAZILMADI ({res.get('reason')}) — repo_path={yol}. "
+              f"Taze damgalanMADI (working-copy taze değil). Repo'da bu objenin source dosyası "
+              f"yoksa yeni obje olabilir (kapı zaten muaf) ya da --file/--type'ı kontrol et.")
+        return 1
+    if not _damgala(session, yol):
+        return 1
+    print(f"[OK] {etiket} ({t}) canlıdan çekildi → {yol} → DOSYA seans-taze damgalandı.")
+    return 0
+
+
+def _aday_sec(obj: str, aile: str, adt_client):
+    """`--type auto`: ADT quickSearch TAM-AD sonucu + dosya-ailesi süzgeci → (uri, adt_tipi, tip).
+
+    TAHMİN YOK: 0 aday ya da >1 aday → ValueError (mesaj adayları sayar). Aile tablosu
+    `object_types.AUTO_AILE_ADT_TIPLERI` (TEK KAYNAK, canlı ölçüm notu orada).
+    """
+    import xml.etree.ElementTree as ET
+    from object_types import AUTO_AILE_ADT_TIPLERI
+    izinli = AUTO_AILE_ADT_TIPLERI.get(aile or "")
+    if not izinli:
+        raise ValueError(f"bilinmeyen dosya ailesi: {aile!r}")
+    xml = adt_client.search_objects(obj, max_results=50)
+    ns = "{http://www.sap.com/adt/core}"
+    tum, aday = [], []
+    for el in ET.fromstring(xml).iter(ns + "objectReference"):
+        ad = (el.get(ns + "name") or "").upper()
+        if ad != obj:
             continue
-        if (time.monotonic() - basla) > _KILIT_ZAMAN_ASIMI_S:
-            uyari = ("[!] DAMGA KİLİDİ ALINAMADI (%.0fs) — başka bir pull koşuyor "
-                     "olabilir. Damga yine de yazılıyor; eşzamanlı bir damga "
-                     "KAYBOLABİLİR (yön güvenli: kayıp damga = 'taze değil'). "
-                     "Kilit: %s" % (_KILIT_ZAMAN_ASIMI_S, kilit))
-            break
-        time.sleep(_KILIT_BEKLEME_S)
+        typ, uri = el.get(ns + "type") or "", (el.get(ns + "uri") or "").split("#")[0]
+        tum.append(typ)
+        if typ in izinli and (uri, typ) not in [(u, t) for u, t, _ in aday]:
+            aday.append((uri, typ, izinli[typ]))
+    if len(aday) == 1:
+        return aday[0]
+    if not aday:
+        raise ValueError(
+            f"canlıda '{obj}' adıyla '{aile}' ailesinden obje YOK (tam-ad sonuçları: "
+            f"{tum or 'hiç'}). Yeni obje olabilir (kapı dosya yoksa zaten muaf); "
+            f"varsa tipi açıkça ver (--type program|include|class|table|...).")
+    raise ValueError(
+        f"'{obj}' için {len(aday)} aday var ({[t for _, t, _ in aday]}) — tahmin YOK. "
+        f"Tipi açıkça ver (--type ...).")
+
+
+def _auto_dosya(obj: str):
+    """--file verilmemiş `auto` çağrısı: repo'da bu adla TEK auto-aileli dosya varsa o."""
+    from source_drift import _pbe_adaylari
+    adaylar = [(f, s) for f, s in _pbe_adaylari(obj) if s["tip"] == "auto"]
+    if len(adaylar) == 1:
+        return adaylar[0]
+    raise ValueError(
+        f"'{obj}' için repo'da {len(adaylar)} aday dosya var "
+        f"({[f.name for f, _ in adaylar] or 'hiç'}) — hangisi? `--file <yol>` ver.")
+
+
+def _hedef_dosyalar(obj: str, t: str, repo_file):
+    """--offline için damgalanacak dosya(lar). Tahmin YOK: çözülemezse boş liste."""
+    if repo_file is not None:
+        return [repo_file] if repo_file.is_file() else []
     try:
-        yield uyari
-    finally:
-        if tutuyoruz:
-            with contextlib.suppress(OSError):
-                kilit.unlink()
-
-
-def _store_yaz(store: dict) -> None:
-    """ATOMİK yazım: geçici dosya + `os.replace` → okuyucu ya ESKİYİ ya YENİYİ görür.
-
-    (`write_text` truncate+write yapar; araya giren okuyucu YARIM JSON görür.)
-    """
-    FRESH_STORE.parent.mkdir(parents=True, exist_ok=True)
-    fd, gecici = tempfile.mkstemp(dir=str(FRESH_STORE.parent),
-                                  prefix=FRESH_STORE.name + ".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(json.dumps(store, ensure_ascii=False, indent=2))
-            fh.flush()
-            os.fsync(fh.fileno())
-        # ⚠ WINDOWS: hedefi O ANDA OKUYAN bir süreç varsa `os.replace` PermissionError
-        # verebilir (paylaşım kipinde FILE_SHARE_DELETE yok). Kısa yeniden-deneme;
-        # tükenirse istisna GÖRÜNÜR şekilde yükselir (sessiz kayıp YOK).
-        for _deneme in range(20):
-            try:
-                os.replace(gecici, FRESH_STORE)
-                break
-            except PermissionError:
-                time.sleep(0.02)
+        from object_types import is_class_include, normalize_class_include
+        from source_drift import find_repo_class_include_file, find_repo_source_file
+        if is_class_include(t):
+            f = find_repo_class_include_file(obj, normalize_class_include(t))
+        elif t == "auto":
+            f = _auto_dosya(obj)[0]
         else:
-            os.replace(gecici, FRESH_STORE)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(gecici)
-        raise
+            f = find_repo_source_file(obj, object_type=t)
+    except Exception:
+        return []
+    return [f] if f else []
 
 
-def _stamp(session_id: str, obj: str) -> None:
-    """Seans-tazelik store'una damgala. Store başka seanstansa SIFIRLA (seans-bazlı).
+def _sinif_includelari(obj: str, session: str, client, force: bool, erp_root=None) -> int:
+    """Sınıfın repo'da bulunan alt-include'larını KENDİ uçlarından çek + AYRI damgala.
 
-    OKUMA da YAZMA da kilidin İÇİNDE olmak zorundadır: okuyup kilit dışında yazmak
-    kayıp-güncellemeyi (lost update) çözmez.
+    Eskiden burada yalnız "ÇEKİLMEDİ" uyarısı vardı (çekme yolu kurulmamıştı; segment
+    adları o gün ölçülmemişti). Q283 (2026-09-13) dört segmenti ölçtü, Q352 (2026-09-26)
+    yeniden ölçtü → yol kuruldu. Her include bağımsızdır: biri korunur/404 verirse diğerleri
+    çekilir, korunan DAMGALANMAZ ve çıktı onu "ÇEKİLMEDİ" diye adlandırır.
+    `erp_root`: `--file` verildiyse O dosyanın kaynak kökü (`source_drift.pbe_kaynak_koku`) —
+    alt-include'lar ana kaynağın yazıldığı AĞAÇTA aranır (takip turu 1: proje kökünde
+    aranıyordu → `.wt` ana kaynağı + ANA ağacın include'ları yazılıyordu).
     """
-    with _store_kilidi() as kilit_uyarisi:
+    try:
+        import sap_adt_lib as L
+        from object_types import get_class_include_url
+        from source_drift import find_repo_class_includes
+        includes = find_repo_class_includes(obj, erp_root)
+    except Exception as exc:
+        print(f"[WARN] {obj}: alt-include listesi çıkarılamadı ({exc}) — alt-include'lar "
+              f"ÇEKİLMEDİ, damgalanMADI (kapı onları 'taze değil' sayar).")
+        return 1
+    rc = 0
+    for kind, f in includes:
         try:
-            store = json.loads(FRESH_STORE.read_text(encoding="utf-8"))
-        except Exception:
-            store = {}
-        if not isinstance(store, dict):   # bozuk/yabancı şekil (liste, dize) → sıfırdan
-            store = {}
-        if store.get("session_id") != session_id:
-            store = {"session_id": session_id, "objects": {}}
-        store.setdefault("objects", {})[obj.upper()] = _now_iso()
-        _store_yaz(store)
-    if kilit_uyarisi:
-        print(kilit_uyarisi)
+            res = L.sync_repo_from_live(
+                object_url=get_class_include_url(obj, kind), object_name=obj,
+                object_type="class", client=client, force=force, repo_file=f)
+        except Exception as exc:
+            res = {"written": False, "repo_path": str(f), "reason": f"çekilemedi ({exc})"}
+        if not res.get("repo_path"):
+            res["repo_path"] = str(f)
+        if _sonuc(f"{obj}", kind, res, session, f' --file "{f}"'):
+            print(f"  [!] ALT-INCLUDE ÇEKİLMEDİ: {f.name} — damgalanMADI.")
+            rc = 1
+    return rc
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Pull-before-edit: canlıyı çek + repo'ya yaz + taze damgala")
     ap.add_argument("name", help="SAP obje adı (Z*/Y*)")
     ap.add_argument("--type", default="ddls",
-                    help="Obje tipi (ddls/bdef/srvd/srvb/class/program/structure/table/...)")
+                    help="Obje tipi (ddls/bdef/srvd/srvb/class/program/include/structure/table/... ; "
+                         "sınıf alt-include'u: implementations|testclasses|definitions|macros "
+                         "(eşanlamlı ccimp|ccau|ccdef|ccmac); `auto` = tipi canlı ADT aramasıyla çöz)")
+    ap.add_argument("--file", default="",
+                    help="Repo dosyası (kapının verdiği yol). Damga BU dosyaya yazılır; "
+                         "verilmezse ad + tipten bulunur.")
     ap.add_argument("--session", default="",
                     help="Seans kimliği (hook'tan). Boşsa .claude/.current_session marker'ından okunur.")
     ap.add_argument("--offline", action="store_true",
@@ -197,13 +331,33 @@ def main() -> int:
                     help="Yereldeki commit'lenmemiş değişikliği EZ — bilerek canlı aktif sürüme dön (FIX-B escape).")
     args = ap.parse_args()
     obj = args.name.upper()
-    session = _resolve_session(args.session)
+    from source_drift import seans_kimligi
+    session = seans_kimligi(args.session)
+    t = args.type.lower().strip()
+    repo_file = _dosya_coz(args.file)
+    if repo_file is not None:
+        hata = _dosya_tutarsizligi(obj, t, repo_file)
+        if hata:
+            print(f"[FAIL] {obj} ({t}) {hata}")
+            return 1
+    t = _kanonik_tip(t)                    # eşanlamlı → çekme yolunun tanıdığı ad (son dar tur 2)
 
     if args.offline:
-        _stamp(session, obj)
-        print(f"[OFFLINE] {obj} fetch YAPILMADI, seans-taze damgalandı. "
-              f"DİKKAT: canlıdaki belgelenmemiş değişikliği ezme riskini kabul ettin.")
-        return 0
+        hedefler = _hedef_dosyalar(obj, t, repo_file)
+        if not hedefler:
+            print(f"[FAIL] {obj} ({t}) --offline: damgalanacak repo dosyası çözülemedi "
+                  f"(damga DOSYAYA yazılır). `--file <yol>` ver.")
+            return 1
+        rc = 0
+        for f in hedefler:
+            if _damgala(session, f):
+                print(f"[OFFLINE] {f} fetch YAPILMADI, seans-taze damgalandı. "
+                      f"DİKKAT: canlıdaki belgelenmemiş değişikliği ezme riskini kabul ettin.")
+            else:
+                # bug gate L2: damga yazılamadıysa başarı iddia EDİLMEZ (kapı hâlâ bloklar)
+                print(f"[FAIL] {f} --offline: damga YAZILAMADI — kapı bu dosyayı 'taze değil' sayar.")
+                rc = 1
+        return rc
 
     try:
         from sap_client import SAPClient
@@ -215,7 +369,70 @@ def main() -> int:
         print("SAP erişilemiyorsa: aynı komutu --offline ile çalıştırıp devam edebilirsin.")
         return 1
 
-    t = args.type.lower().strip()
+    dosya_eki = f' --file "{repo_file}"' if repo_file is not None else ""
+    kardes_koku = None                     # alt-include'lar --file'ın AĞACINDA (takip turu 1)
+    if repo_file is not None:
+        from source_drift import pbe_kaynak_koku
+        kardes_koku = pbe_kaynak_koku(repo_file)
+
+    # ── SINIF ALT-INCLUDE'u: kendi ucundan (`/oo/classes/<C>/includes/<segment>`) ──────
+    try:
+        from object_types import is_class_include, normalize_class_include, get_class_include_url
+        include_mi = is_class_include(t)
+    except Exception:
+        include_mi = False
+    if include_mi:
+        kind = normalize_class_include(t)
+        try:
+            from source_drift import find_repo_class_include_file
+            hedef = repo_file or find_repo_class_include_file(obj, kind)
+        except Exception as exc:
+            print(f"[FAIL] {obj} ({kind}) include dosyası aranamadı: {exc}")
+            return 1
+        if hedef is None:
+            print(f"[WARN] {obj} ({kind}) repo'da include dosyası yok — çekilmedi, damgalanMADI.")
+            return 1
+        try:
+            res = L.sync_repo_from_live(
+                object_url=get_class_include_url(obj, kind), object_name=obj,
+                object_type="class", client=client.adt_client, force=args.force, repo_file=hedef)
+        except Exception as exc:
+            print(f"[FAIL] {obj} ({kind}) canlıdan çekilemedi: {exc}")
+            return 1
+        return _sonuc(obj, kind, res, session, dosya_eki)
+
+    # ── TİPİ CANLIDAN ÇÖZ (`--type auto`) ──────────────────────────────────────────────
+    if t == "auto":
+        try:
+            if repo_file is not None:
+                from source_drift import pbe_siniflandir
+                s = pbe_siniflandir(repo_file) or {}
+                aile = s.get("aile")
+                if not aile:
+                    raise ValueError(f"{repo_file.name} `auto` ailesinden değil "
+                                     f"(tipi dosya adından kesin; açık --type ver)")
+            else:
+                repo_file, s = _auto_dosya(obj)
+                aile = s["aile"]
+                dosya_eki = f' --file "{repo_file}"'
+            uri, adt_tipi, cozulen = _aday_sec(obj, aile, client.adt_client)
+        except Exception as exc:
+            print(f"[FAIL] {obj} (auto) tip çözülemedi — pull ATLANDI, damgalanMADI: {exc}")
+            return 1
+        print(f"[TİP] {obj}: canlı ADT araması → {adt_tipi} ({cozulen}) · {uri}")
+        try:
+            res = L.sync_repo_from_live(object_url=uri, object_name=obj, object_type=cozulen,
+                                        client=client.adt_client, force=args.force,
+                                        repo_file=repo_file)
+        except Exception as exc:
+            print(f"[FAIL] {obj} ({cozulen}) canlıdan çekilemedi: {exc}")
+            return 1
+        rc = _sonuc(obj, cozulen, res, session, dosya_eki, komut_tipi="auto")
+        if cozulen == "class":
+            rc = max(rc, _sinif_includelari(obj, session, client.adt_client, args.force,
+                                            kardes_koku))
+        return rc
+
     try:
         from object_types import ddic_read_mode           # TEK KAYNAK (bkz. yukarıdaki not)
         ddic_mode, ddic_canon = ddic_read_mode(t)
@@ -224,12 +441,13 @@ def main() -> int:
               f"Sessizce yanlış uçtan okumaktansa DURUYORUZ; object_types.py'yi kontrol et.")
         return 1
 
+    ek = {"repo_file": repo_file} if repo_file is not None else {}
     try:
         if ddic_mode == "xml":
             # dataelement/domain/tabletype: `/source/main` YOK → obje XML'i okunur.
             # ⚠ Bu tiplerde repo dosyası da XML'dir; DDL ayıklaması SÖZ KONUSU DEĞİL.
             src = client.get_ddic_object(ddic_canon, obj)
-            res = write_repo_from_live(obj, src, object_type=ddic_canon, force=args.force)
+            res = write_repo_from_live(obj, src, object_type=ddic_canon, force=args.force, **ek)
         else:
             # source-based (cds/ddls/bdef/srvd/srvb/class/program/interface/dcl/ddlx)
             # **ve DDL-uçlu DDIC** (ddic_mode == "ddl": table/structure — `/source/main`
@@ -239,113 +457,30 @@ def main() -> int:
             # canlı AKTİF source çek + repo dosyasına yaz (CRLF-korur, tip-farkında).
             res = L.sync_repo_from_live(
                 object_url=None, object_name=obj, object_type=t,
-                client=client.adt_client, force=args.force
+                client=client.adt_client, force=args.force, **ek
             )
     except Exception as exc:
         print(f"[FAIL] {obj} ({t}) canlıdan çekilemedi: {exc}")
         print("SAP erişilemiyorsa: aynı komutu --offline ile çalıştırıp devam edebilirsin (ezme riskini kabul).")
         return 1
 
-    if res.get("blocked_dirty"):
-        # FIX-B: yerelde commit'siz değişiklik var → pull EZMEDİ (WIP korundu). Taze
-        # DAMGALAMADIK ve exit 1 — manuel çağıran (gateway/ajan) net "korundu" sinyali alır.
-        # (Edit yolunu bloklamaz: pull_before_edit hook'u dirty dosyayı zaten MUAF tutar.)
-        print(f"[KORUMA] {obj} ({t}) PULL ATLANDI — {res.get('reason')}")
-        print(f"  repo_path={res.get('repo_path')}")
-        print(f"  → Yerel commit'siz emek EZİLMEDİ. Bilerek canlıya dönmek istiyorsan: "
-              f"python scripts/sap_sync_pull.py {obj} --type {t} --force")
-        return 1
+    rc = _sonuc(obj, t, res, session, dosya_eki)
 
-    if res.get("blocked_behind"):
-        # FIX-D: canlı içerik, dosyanın GECMIS bir commit'iyle birebir ayni -> pull
-        # "tazeleme" degil, kendi gecmisimize DONUS. Commit'li yerel is ezilirdi.
-        print(f"[KORUMA] {obj} ({t}) PULL ATLANDI — {res.get('reason')}")
-        print(f"  repo_path={res.get('repo_path')}")
-        print(f"  eslesen_gecmis_commit={res.get('behind_commit')}")
-        print(f"  → Once KONTROL ET: bu obje push edildi mi, AKTIVE edildi mi? "
-              f"(pull AKTIF surumu okur; inaktifte bekleyen yeni surumu gormez.)")
-        print(f"  → Bilerek canliya donmek istiyorsan: "
-              f"python scripts/sap_sync_pull.py {obj} --type {t} --force")
-        return 1
-
-    if res.get("blocked_shrink"):
-        # FIX-C: canlı AKTİF sürüm yerelden belirgin KÜÇÜK → pull EZMEDİ. "Yerel temiz =
-        # bayat" DEĞİLDİR: obje push edilmemiş ya da push edilip AKTİVE EDİLMEMİŞ olabilir
-        # (pull AKTİF okur). exit 1 → çağıran net "korundu" sinyali alır.
-        print(f"[KORUMA] {obj} ({t}) PULL ATLANDI — {res.get('reason')}")
-        print(f"  repo_path={res.get('repo_path')}")
-        print(f"  → Önce KONTROL ET: obje canlıda AKTİF mi? (push edilmiş ama aktive edilmemiş "
-              f"olabilir — o hâlde yerel doğru, pull YANLIŞ olurdu.)")
-        print(f"  → Yine de canlıya dönmek istiyorsan: "
-              f"python scripts/sap_sync_pull.py {obj} --type {t} --force")
-        return 1
-
-    if not res.get("written"):
-        print(f"[WARN] repo'ya YAZILMADI ({res.get('reason')}) — repo_path={res.get('repo_path')}. "
-              f"Taze damgalanMADI (working-copy taze değil). Repo'da bu objenin source dosyası yoksa "
-              f"yeni obje olabilir (gate zaten muaf) ya da --file/--type'ı kontrol et.")
-        return 1
-
-    _stamp(session, obj)
-    print(f"[OK] {obj} ({t}) canlıdan çekildi → {res.get('repo_path')} → seans-taze damgalandı. "
-          f"Artık düzenleyebilirsin.")
-
-    # ⛔ SINIF ALT-INCLUDE'LARI ÇEKİLMEDİ — ve damga onları da KAPSIYOR görünüyor.
-    # Bu, "[OK] ... artık düzenleyebilirsin" cümlesinin SESSİZ yalanıydı: pull yalnız
-    # `/source/main`i (ana `.clas.abap`) okur; `.ccimp/.ccau/.ccdef/.ccmac` AYRI ADT
-    # uçlarındadır (`/includes/<segment>`) ve HİÇ okunmaz. Buna rağmen `_stamp` obje
-    # ADINA yazıldığı için pull-before-edit kapısı alt-include'u da TAZE sayar ⇒
-    # geliştirici BAYAT bir `.ccimp.abap`ı taze sanıp düzenler.
-    # ⚠ Çekme YOLU BU TURDA KURULMADI (bilinçli): `object_types.CLASS_INCLUDE_TYPES`
-    # segment adlarının 4'ünden 3'ü (`implementations`/`definitions`/`macros`)
-    # `'olculdu': False` — bu evde CANLI DOĞRULANMAMIŞ. Doğrulanmamış bir uçtan okuyup
-    # repo dosyasının üstüne yazmak, kapatmaya çalıştığımız sessiz-veri-bozan sınıfının
-    # ta kendisi olurdu. Ayrıca `source_drift.find_repo_source_file` alt-include'ları
-    # BİLEREK eler (sahte-drift koruması) — o korumayı gevşetmek ayrı bir karar.
-    # ⇒ Bugün yapılan: boşluğu GÖRÜNÜR kılmak. Sessiz kalmak seçenek değil.
-    _alt_include_uyar(obj, res.get("repo_path"))
-    return 0
-
-
-def _alt_include_uyar(obj: str, ana_yol) -> None:
-    """Repo'da bu sınıfa ait alt-include dosyası varsa: ÇEKİLMEDİĞİNİ açıkça söyle.
-
-    Uzanti listesi `source_drift._CLASS_SUBSOURCE_MARKERS`ten gelir — TEK KAYNAK.
-    (Bu dosyada daha önce 'elle kopyalanmış ikinci tip literali' kusuru yaşandı:
-    `_DDIC_XML_TYPES` vakası. İkinci kopya AÇMIYORUZ.)
-    """
-    if not ana_yol:
-        return
+    # ⛔ SINIF ALT-INCLUDE'LARI (Q352): eskiden burada yalnız "ÇEKİLMEDİ" uyarısı basılıyordu —
+    # pull `/source/main`i okur, `.ccimp/.ccau/.ccdef/.ccmac` AYRI ADT uçlarındadır ve damga
+    # obje ADINA yazıldığı için kapı onları da TAZE sayıyordu (bayat `.ccimp` sessizce
+    # düzenlenebiliyordu). Artık: (1) damga DOSYAYA yazılır → ana kaynağın damgası include'u
+    # KAPSAMAZ; (2) repo'daki her include kendi ucundan çekilip AYRI damgalanır. Çekilemeyen
+    # include "ÇEKİLMEDİ" diye adlandırılır ve damgalanmaz — çıktı yapılmayanı iddia etmez.
     try:
-        from pathlib import Path as _P
-        from source_drift import _CLASS_SUBSOURCE_MARKERS
-    except Exception as exc:
-        print(f"[WARN] alt-include kontrolu yapilamadi ({exc}) -- "
-              f"'.ccimp/.ccau' dosyalarini ELLE kontrol et.")
-        return
-
-    ana = _P(ana_yol)
-    taban = ana.name.split(".", 1)[0].lower()
-    bulunan = sorted(
-        p.name for p in ana.parent.glob("*")
-        if p.is_file()
-        and p.name.split(".", 1)[0].lower() == taban
-        and p.name.lower().endswith(tuple(_CLASS_SUBSOURCE_MARKERS))
-    )
-    if not bulunan:
-        return
-
-    print("")
-    print("  " + "=" * 72)
-    print(f"  [!] {len(bulunan)} ALT-INCLUDE CEKILMEDI -- seans damgasi onlari KAPSAMIYOR.")
-    print("  " + "=" * 72)
-    for ad in bulunan:
-        print(f"    - {ad}")
-    print("  Bu komut yalniz ana kaynagi (/source/main) ceker; alt-include'lar AYRI")
-    print("  ADT uclarindadir ve OKUNMADI. Damga obje ADINA yazildigi icin kapi")
-    print("  bunlari da 'taze' sayar -> BAYAT icerigi taze sanip duzenleyebilirsin.")
-    print("  Duzenlemeden ONCE icerigi canliyla karsilastir (adt_get + ilgili include).")
-    print("  " + "=" * 72)
+        from object_types import normalize_object_type
+        sinif_mi = normalize_object_type(t) == "class"
+    except Exception:
+        sinif_mi = False
+    if sinif_mi:
+        rc = max(rc, _sinif_includelari(obj, session, client.adt_client, args.force,
+                                        kardes_koku))
+    return rc
 
 
 if __name__ == "__main__":

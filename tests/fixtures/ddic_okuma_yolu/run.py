@@ -315,6 +315,10 @@ def _sync_pull_karari():
             return {"written": True, "repo_path": "x"}
 
         sd.write_repo_from_live = _w                         # type: ignore[attr-defined]
+        # Q352: seans kimligi + damga public API'si source_drift'e tasindi (sahte modul de
+        # tasimali; damga bu korpusun ekseni DEGIL -> "damgalanmadi" doner).
+        sd.seans_kimligi = lambda explicit="": explicit or "default"   # type: ignore[attr-defined]
+        sd.tazelik_damgala = lambda *a, **k: ""                        # type: ignore[attr-defined]
         sys.modules["sap_client"] = sc
         sys.modules["sap_adt_lib"] = lib
         sys.modules["source_drift"] = sd

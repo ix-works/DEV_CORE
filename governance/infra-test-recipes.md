@@ -261,6 +261,9 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   `try/finally` + `atexit` ile sarılı ve **koşum başında bayat artık süpürülür** (görünür
   uyarı: `BAYAT MUTANT ARTIGI SUPURULDU`). Sert ölüm (`taskkill /F`) `finally`yi de
   `atexit`i de koşturmaz ⇒ **asıl savunma başlangıç süpürgesidir**.
+  ⚠ Q352 (2026-09-26): yazım mekanizması `source_drift`e AYNEN taşındı (korpus HEDEF'i o
+  dosya; public `tazelik_damgala`); `sap_sync_pull` yerel kopya taşımaz (N6 çapası) →
+  **16 senaryo + 6 mutasyon**.
   Değişmezler: `_stamp` OKUMA+YAZMA'yı **tek kilidin içinde** yapar (yalnız yazımı kilitlemek
   kayıp-güncellemeyi ÇÖZMEZ — M2 sınır mutasyonu tam bunu sınar) · yazım `os.replace` ile
   **atomik** · kilit alınamazsa **görünür uyarı** (M4: sessizce yutulursa korpus kırmızı) ·
@@ -270,6 +273,81 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   (8×12) yalnız istatistiksel destektir, **tek kanıt sayılmaz**.
   ⛔ 3. bağlam (`pull_before_edit._is_fresh`) SİLİNMEZ: yazıcı ile okuyucu **ayrı modüldür**,
   biri değişirse eksen sessizce boşalır (HARİTA'da o dosya da bu korpusa bağlıdır).
+
+### B4-Q352 — kapsam (alt-include · auto tip · Z tablo) + DOSYA-anahtarlı damga + eklenti arayüzü (2026-09-26)
+```bash
+python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_yarisi \
+    bos_seans_markeri ddic_okuma_yolu class_include_push adt_uc_url_cozumu --precommit
+# ölçüldü 2026-09-26 (son dar tur, 21/21 PASS, ~600 sn) — pbe_kapsam taban 74/74; mutasyonla skor:
+#   ad-anahtari 67 · include-muaf 64 · abap-class 67 · tabl-yok 70 · eklenti-yok 61
+#   bug gate #306: file-dogrulama-yok 68 · systemexit 72 · eklenti-session 73 · dirty-kok 73
+#                  force-tipi 73 · offline-rc 73 · drift-tablo 72
+#   takip turu:    kardes-kok 71 (K1+K2+K3) · noktanokta 72 (G1+G2) · session-ez 73 (E15)
+#                  yer-tutucu 73 (E19) · not-kirp 73 (E20) · esanlam 72 (F7+F9)
+#   son dar tur:   kardes-kok-auto 73 (K3) · kanonik-tip 73 (F9)
+# harf-duyarlı TEMP (fsutil setCaseSensitiveInfo): 73/73 + `[ATLANDI] G3`
+#   ↑ yukarıdaki satırlar ÖNCEKİ TURUN ölçümüdür (74 vektör) — bu turda YENİDEN koşulmadı.
+# kapanış turu (2026-09-26, 75 vektör; F10 eklendi) — yalnız aşağıdakiler AYNI turda koşuldu:
+#   taban 75/75 · kanonik-koruma-yok 74 (F10) · kanonik-tip 74 (F9) · kardes-kok-auto 74 (K3)
+#   harf-duyarlı TEMP: 74/74 + `[ATLANDI] G3`
+# ⚠ vektör eklenince bu sayılar kayar — tabanı ve kip skorunu AYNI koşumdan yaz.
+```
+- ⭐ **AYIRT EDİCİ ÇİFT (silinmez):** H3 *ana sınıf damgası `.ccimp`'i kapsamaz* + T7 *aynı adlı
+  CDS damgası BDEF'i kapsamaz* — ad-anahtarına dönüşü yakalayan bunlardır; P3 uçtan uca
+  **yazanın anahtarı = okuyanın anahtarı** (ikisi de `source_drift.tazelik_anahtari`).
+- ⛔ `--type auto` **tahmin etmez:** P7 (>1 aday) ve P8 (yalnız önek eşleşmesi) DUR vektörleri
+  **yazma YOK + damga YOK** ölçer; yalnız rc'ye bakan kontrol sahte-yeşil verir.
+- ⛔ Mutasyon yaması **kaynak metne uymazsa** koşucu `[KURULAMADI]` + exit 3 verir (sahte-kırmızı
+  değil). Ölçülmüş tuzak: dosya-ailesi tablosunu sözdizimsel olarak bozan bir mutasyon *her*
+  vektörü düşürür (4/41 ölçüldü) — o ayırt edici DEĞİLDİR; mutasyon eski davranışı **yeniden kurmalıdır**
+  (eski `_infer_type`: `.prog.abap`→program, `.abap`→class).
+- **Eklenti sözleşmesi (E1-E12):** `scripts/hooks/<ad>.py::sinifla(path, root) -> Optional[dict]`
+  (`{"nesne","tip","komut"}`). Dosya yok → sessiz · yüklenemez → `EKLENTI-YUKLENEMEDI` + exit 0 ·
+  `sinifla()` istisnası → `EKLENTI-HATA: <ad>: <tip>` notu + geçiş (fail-open ama GÖRÜNÜR).
+  ⛔ Eklenti dosya adı `_` ile BAŞLAR (`scripts/hooks/_<ad>.py`): `_`siz ad C-TPL-01'de
+  kablosuz HOOK sayılır ve CI düşer (E12). Eklenti blok metni "çeker/yazar" DEMEZ (komut
+  yalnız karşılaştırıp damgalayabilir) — E2 ölçer, H1b çekirdek metnin korunduğunu ölçer. Yeni eklenti eklenince bu korpusun E
+  vektörleri **stub** ile sözleşmeyi ölçmeye devam eder; eklentinin KENDİ korpusu ayrıdır.
+- **Bug gate #306 vektörleri (her biri AYRI mutasyonla geri sokulur, hepsi düşer):**
+  F1-F5 `--file` ad/tip tutarsızlığı → `[FAIL]` + **yazma YOK + damga YOK** (F6 KONTROL: doğru
+  ad + uzantıyı kabul eden açık tip damgalanır — aşırı-red yok) · E16/E17 eklentide `SystemExit`
+  (import + çağrı dalı) → not + exit 0 · E13-E15 kapı `--session <hook-sid>` ekler, `not` basılır,
+  `not` yokken basılmaz, hazır `--session=` çiftlenmez · N2 kök DIŞI depoda (kanonik `.wt`)
+  git-dirty muafiyeti (temiz = BLOK kontrolü) · L1 auto+KORUMA tekrar komutu `--type auto` ·
+  L2 `--offline` damga yazılamazsa rc 1 · L3a/L3b `check_source_drift` her `SOURCE_EXTENSIONS`
+  uzantısına canlı tip + tablo ucu (sahte istemci). ⛔ L1 satır seçimi: `--force` kelimesi
+  KORUMA açıklama satırında da geçer → komut satırını `sap_sync_pull.py` + `--force` ile seç
+  (ilk denemede açıklama satırını seçip sahte-kırmızı verdi).
+- **Takip turu vektörleri (2026-09-26):** K1/K2 `--file` proje kökü DIŞI (`.wt`) ağaçta
+  alt-include'lar AYNI ağaçta çekilir, ANA ağacın include'una dokunulmaz · G1 `docs/..` +
+  `DOCS/..` yol BLOK (kontrol: `..`'suz = 2; `docs` GERÇEK boş dizin — POSIX `..`yi fiziksel
+  çözer, dizin yoksa ENOENT → vektör ubuntu'da sessizce "yeni dosya" olurdu) · G2 `..`li
+  `--file` kabul + damga kanonik anahtarda · G3 harf-farklı yol sözleşme çapası — **FS
+  yoklamalı**: harf-duyarlı FS'te görünür `[ATLANDI] G3` (ölçüldü: `fsutil file
+  setCaseSensitiveInfo <dir> enable` + TEMP/TMP oraya → G3 ATLANDI; sayılar o turun vektör
+  sayısına bağlıdır — güncel skor yukarıdaki reçete bloğunda, bu satır tarihçedir: takip turu
+  (72 vektör) 71/71 + G3 ATLANDI · normal TEMP 72/72) ·
+  E15/E18 eklenti komutunda farklı `--session` değişir +
+  not / aynısı dokunulmaz · E19/E20 komutsuz eklenti yer tutucusuna `--session` yok, `not`
+  kırpılır · F7/F8 `--file` eşanlamlıları (`behaviordefinition`/`bdo`) kabul, farklı tip red ·
+  **son dar tur:** K3 `--type auto` SINIF dalı da alt-include'ları `--file` ağacında çeker (ana
+  daldaki K1/K2 bu dalı KORUMUYORDU — `kardes_koku` auto dalından sökülünce 72/72 kalıyordu) ·
+  F9 F7'nin ÇEVRİMİÇİ karşılığı (sahte ADT): eşanlamlı ad kanonik `bdef` ucundan çekilir ·
+  **kapanış turu:** F10 `_kanonik_tip` SAF fonksiyon vektörü — ad kümesi KODDAN türetilir
+  (`_TYPE_TO_EXTENSIONS` ∪ `OBJECT_TYPES` ∪ takma adlar ∪ sınıf alt-include adları ∪ `auto`;
+  ölçüldü 54 ad, `[KAPSAM]` satırı basar); çözülebilen her ad DOKUNULMAZ, yalnız
+  `bdo`/`behaviordefinition`→`bdef`, `servicebinding`→`srvb`. Küme <40 ya da bir kaynak boşsa
+  FAIL (sessiz geçmez). Dosya sistemine dokunmaz (import + çağrı) ⇒ Linux CI'da da aynı koşar.
+  Neden: F9 yalnız eşanlamlıları ölçüyordu; koruma (`normalize_object_type`… `return t`)
+  sökülünce `program/include/prog/fugr/interface`→`class` oluyor, korpus 74/74 kalıyordu.
+  ⛔ Kapı stderr'i Windows'ta CRLF'tir — satır-sınırlı iddia (`...\n`) kurarken `kapi()`
+  çıktısı LF'ye indirgenir (ilk koşuda 4 sahte-kırmızı verdi).
+  ⛔ `cikti_iddiasi_durustlugu` M2 (kablolama sökümü) çapası **regex**tir: eski düz-metin çapası
+  main()'deki iki çağrıyı ortak son-ek sayesinde birlikte vuruyordu; çağrıya `kardes_koku`
+  eklenince girinti farkı son-eki bozdu, yalnız biri söküldü ve M2 **KAÇTI** (bataryada yakalandı).
+- **Canlı uç ölçümü (salt-GET) tekrar gerekirse:** `/oo/classes/<c>/includes/<segment>` (include
+  yoksa 404 — "segment yanlış" değil; uydurma segment 400) · include + `/source/main` = 404 ·
+  quickSearch `?operation=quickSearch&query=<AD>&maxResults=…` tam-ad + `adtcore:type`.
 
 ## B5 — skill_injector / worktype_hint / ITG-katmanları
 - ⭐ **BOŞ SEANS MARKERİ (2026-09-09, Q253).** `python tests/fixtures/bos_seans_markeri/run.py`

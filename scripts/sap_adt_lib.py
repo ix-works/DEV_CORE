@@ -7697,8 +7697,12 @@ def detect_source_drift(object_url, object_name, object_type, client=None):
     return result["is_drift"], result.get("repo_path"), result.get("diff_summary", "") or result.get("reason", "")
 
 
-def sync_repo_from_live(object_url, object_name, object_type, client=None, force=False):
+def sync_repo_from_live(object_url, object_name, object_type, client=None, force=False,
+                        repo_file=None):
     """Pull-before-edit REPO SYNC: canlı aktif source'u repo dosyasına yaz.
+
+    repo_file (Q352): hedef dosya açıkça biliniyorsa (kapının verdiği `--file`, sınıf
+    alt-include'u, `--type auto`) ad-eşlemesi yapılmaz; verilmezse eski davranış.
 
     Repo dosyası yoksa yazmaz (yol tahmini yapmaz; yeni obje normal akışla eklenir).
     force=False iken yereldeki commit'lenmemiş değişikliği EZMEZ (FIX-B; write_repo_from_live
@@ -7725,4 +7729,7 @@ def sync_repo_from_live(object_url, object_name, object_type, client=None, force
         return {"written": False, "repo_path": None,
                 "reason": f"canlı source çekilemedi ({exc}) — post-sync atlandı"}
 
+    if repo_file is not None:
+        return write_repo_from_live(object_name, live, object_type=object_type, force=force,
+                                    repo_file=repo_file)
     return write_repo_from_live(object_name, live, object_type=object_type, force=force)

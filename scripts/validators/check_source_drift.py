@@ -66,6 +66,12 @@ _EXT_TO_TYPES = {
     ".asdcls": ["accesscontrol"],
     ".ddlx": ["metadataextension"],
     ".asddlxs": ["metadataextension"],
+    # Q352 (bug gate L3, 2026-09-26): Z tablo DDL'i `source_drift.SOURCE_EXTENSIONS`e girdi;
+    # karşılığı YOKKEN bu dosyalar "canlıda olmayan/atlanan" diye YANLIŞ sayılıyordu.
+    # Uç canlıda ölçüldü (salt-GET): `/sap/bc/adt/ddic/tables/<t>/source/main` → 200.
+    # ⚠ SAP tablo DDL'inde `//` yorumu SAKLAMAZ → yorumlu yerel dosya DRIFT görünür (gerçek fark).
+    ".tabl.ddl": ["table"],
+    ".tabl": ["table"],
 }
 
 # srvd/srvb/bdef object_types.py'de merkezi değil → ADT REST path elle.
@@ -80,6 +86,7 @@ _TYPE_TO_ADT_PATH = {
     "functiongroup": "functions/groups",
     "accesscontrol": "acm/dcl/sources",
     "metadataextension": "ddic/ddlx/sources",
+    "table": "ddic/tables",
 }
 
 

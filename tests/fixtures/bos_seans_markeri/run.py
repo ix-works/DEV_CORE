@@ -26,7 +26,7 @@ SINIF (statik envanter, `.current_session` okuyan `scripts/hooks/*.py`):
                                uretmez, sinifin uyesi DEGIL (beyaz liste, S8'de civili)
    EVIN EMSALI (dokunulmadi, IC KONTROL GRUBU): `post_validate.py:306-311` ayni sinifi
    ZATEN cozmus (gun damgasi) ve gerekcesi kod icinde yazili; `sap_sync_pull.py:43-50`
-   cozulemeyen kimligi `"default"`e dusurur. Ikisi de "bos DEGIL, dejenere ANAHTAR" der.
+   (Q352'den beri `source_drift.seans_kimligi`) cozulemeyen kimligi `"default"`e dusurur. Ikisi de "bos DEGIL, dejenere ANAHTAR" der.
 
 SENARYOLAR
   S1  taban: temiz proje + SAP tool -> ITG ATESLER (kapi hic olmemisken calisiyor)
@@ -48,7 +48,8 @@ SENARYOLAR
       YAZAR olmali ya da bos-olmayan dejenere anahtar kuralini tasimali. Sinif
       sessizce yeniden BUYUYEMEZ.
   S14 KURAL-KAYNAGI TAZELIGI: fix'in gerekce olarak andigi iki emsal (post_validate
-      gun damgasi · sap_sync_pull "default") bugunku agacta HALA duruyor mu.
+      gun damgasi · seans kimligi "default" — Q352'den beri `source_drift.seans_kimligi`)
+      bugunku agacta HALA duruyor mu.
 
 KOSUM:
     python tests/fixtures/bos_seans_markeri/run.py
@@ -298,11 +299,14 @@ def senaryolar(itg: Path, worktype: Path, intake: Path, envanter_kok: Path) -> N
 
     # S14 — KURAL-KAYNAGI TAZELIGI: fix'in andigi iki emsal HALA duruyor mu
     pv = (HOOKS / "post_validate.py").read_text(encoding="utf-8")
-    sp = (REPO / "scripts" / "sap_sync_pull.py").read_text(encoding="utf-8")
+    # Q352 (2026-09-26): seans kimligi cozumu `sap_sync_pull._resolve_session`dan
+    # `source_drift.seans_kimligi`ne AYNEN tasindi (public; diger cekiciler de kullanir).
+    sp = (REPO / "scripts" / "source_drift.py").read_text(encoding="utf-8")
     emsal1 = 'datetime.date.today().isoformat()' in pv and '"gun-"' in pv
-    emsal2 = '"default"' in sp and "SESSION_MARKER" in sp
-    kayit("S14 emsal tazeligi: post_validate gun-damgasi + sap_sync_pull 'default'",
-          emsal1 and emsal2, f"post_validate={emsal1} sap_sync_pull={emsal2}")
+    emsal2 = ('"default"' in sp and "SESSION_MARKER" in sp
+              and "def seans_kimligi(" in sp)
+    kayit("S14 emsal tazeligi: post_validate gun-damgasi + source_drift.seans_kimligi 'default'",
+          emsal1 and emsal2, f"post_validate={emsal1} seans_kimligi={emsal2}")
 
 
 # `session_start.py` SINIFIN UYESI DEGIL: `.current_session`i O YAZAR ve bos kimlikte

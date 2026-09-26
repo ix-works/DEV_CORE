@@ -261,11 +261,20 @@ def normalize_object_type(object_type):
 #   KONTROL GRUBU (ayni tur, ayni siniflar): sinif metadata'sinin `includeType` listesinde
 #     OLMAYAN `testclasses` -> HTTP 404 · uydurma segment adi -> HTTP 400 (404 DEGIL) ⇒ 200
 #     her segmente donmuyor. Yeni segment eklersen ayni yontemle olc (tahmini "olculdu" yazma).
+#   Q352 (2026-09-26) salt-GET YENIDEN olculdu (`?version=active`, iki Z sinifi): implementations
+#     200 (repo dosyasiyla normalize-esit) · testclasses 200 (esit) · definitions 200 · macros 200 ·
+#     testclasses'i OLMAYAN sinifta 404 · uydurma segment 400 · include + `/source/main` 404.
+#
+# `abapgit_extension`: ayni include'un abapGit adlandirmasi (`.clas.locals_imp.abap` ...).
+# Repo dosya adindan include TURUNU cozen tek yer `class_include_kind_from_filename()`dir;
+# `source_drift._CLASS_SUBSOURCE_MARKERS` ve `pull_before_edit` bu tablodan TURETIR (Q352:
+# eskiden iki ayri literal vardi — biri buyuyunce digeri sessizce eksik kalirdi).
 CLASS_INCLUDE_TYPES = {
     'testclasses': {
         'segment': 'testclasses',
         'abap_include': 'CCAU',
         'file_extension': '.ccau.abap',
+        'abapgit_extension': '.clas.testclasses.abap',
         'description': 'Class test include (ABAP Unit)',
         'olculdu': True,
     },
@@ -273,6 +282,7 @@ CLASS_INCLUDE_TYPES = {
         'segment': 'implementations',
         'abap_include': 'CCIMP',
         'file_extension': '.ccimp.abap',
+        'abapgit_extension': '.clas.locals_imp.abap',
         'description': 'Class local implementations include',
         'olculdu': True,     # 2026-09-11 PUT 82411 B + 2026-09-13 GET 200 (Q283)
     },
@@ -280,6 +290,7 @@ CLASS_INCLUDE_TYPES = {
         'segment': 'definitions',
         'abap_include': 'CCDEF',
         'file_extension': '.ccdef.abap',
+        'abapgit_extension': '.clas.locals_def.abap',
         'description': 'Class local definitions include',
         'olculdu': True,     # 2026-09-13 GET 200, 165 B (Q283; yazma yolu olculmedi)
     },
@@ -287,10 +298,40 @@ CLASS_INCLUDE_TYPES = {
         'segment': 'macros',
         'abap_include': 'CCMAC',
         'file_extension': '.ccmac.abap',
+        'abapgit_extension': '.clas.macros.abap',
         'description': 'Class macros include',
         'olculdu': True,     # 2026-09-13 GET 200, 106 B (Q283; yazma yolu olculmedi)
     },
 }
+
+
+def class_include_markers() -> tuple:
+    """Repo'da sinif alt-include'u tasiyan TUM dosya son-ekleri (ADT + abapGit adlandirmasi).
+
+    Tablodan TURETILIR (ikinci literal YOK). Sira: tablo sirasi, her girdide ADT adi once.
+    """
+    out = []
+    for v in CLASS_INCLUDE_TYPES.values():
+        for anahtar in ('file_extension', 'abapgit_extension'):
+            ext = v.get(anahtar)
+            if ext and ext not in out:
+                out.append(ext)
+    return tuple(out)
+
+
+def class_include_kind_from_filename(file_name):
+    """Repo dosya adi bir sinif alt-include'u mu? -> kanonik tur ('implementations' ...) | None.
+
+    `ZCL_X.ccimp.abap` ve `ZCL_X.clas.locals_imp.abap` AYNI ture cozulur. Ana sinif
+    (`.clas.abap`) ve alt-include olmayan her ad None doner (ValueError FIRLATMAZ).
+    """
+    n = str(file_name or '').lower()
+    for tur, v in CLASS_INCLUDE_TYPES.items():
+        for anahtar in ('file_extension', 'abapgit_extension'):
+            ext = v.get(anahtar)
+            if ext and n.endswith(ext):
+                return tur
+    return None
 
 #: Evde kullanilan dosya-uzantisi adlari (.ccau.abap ...) kanonik ada esler.
 CLASS_INCLUDE_ALIASES = {
@@ -301,6 +342,30 @@ CLASS_INCLUDE_ALIASES = {
     'testclass': 'testclasses',
     'locals_imp': 'implementations',
     'locals_def': 'definitions',
+}
+
+
+# =============================================================================
+# ADT ARAMA TIPI -> cekme tipi (Q352, `sap_sync_pull --type auto`)
+# =============================================================================
+# `--type auto` tipi ADAN TAHMIN ETMEZ: ADT quickSearch'in TAM-AD sonucundaki `adtcore:type`
+# ve `adtcore:uri` kullanilir; uri OBJENIN KENDI ADRESIDIR (PROG/I -> programs/includes,
+# TABL/DS -> ddic/structures, FUGR/FF -> functions/groups/<FG>/fmodules/<FM>).
+# Canli olcum 2026-09-26 (DEV, salt-GET): program `.abap` -> PROG/P · include `.abap` ve
+# `.prog.abap` -> PROG/I · yapi `.ddls.asddls` -> TABL/DS (DDLS ucu 404, yapilar ucu 200) ·
+# tablo `.abap` -> TABL/DT · FM `.func.abap` -> FUGR/FF · ayni adli CDS -> DDLS/DF + BDEF/BDO +
+# STOB/DO (dosya AILESI suzgeci olmadan COK ADAYLI).
+# Aile = repo dosyasinin son eki (source_drift.pbe_siniflandir). Ailede OLMAYAN arama sonucu
+# aday SAYILMAZ; birden fazla aday ya da sifir aday -> TAHMIN YOK, acik hata.
+AUTO_AILE_ADT_TIPLERI = {
+    'abap': {
+        'CLAS/OC': 'class', 'PROG/P': 'program', 'PROG/I': 'include',
+        'INTF/OI': 'interface', 'FUGR/FF': 'function',
+        'TABL/DT': 'table', 'TABL/DS': 'structure',
+    },
+    'ddl': {
+        'DDLS/DF': 'ddls', 'TABL/DT': 'table', 'TABL/DS': 'structure',
+    },
 }
 
 
