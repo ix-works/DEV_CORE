@@ -1,12 +1,13 @@
 # core-ci — DEV_CORE required-check (B12).
 # Pre-commit gate'inin sunucu aynası: hook lokalde atlansa bile merge EDILEMEZ.
 # Required-check baglama (B14 push + ilk yesil kosudan SONRA):
-#   main-ruleset'e (id 18667766) "gates" job'u required_status_checks olarak eklenir + ruleset ENABLE edilir.
+#   main-ruleset'e (`main-pr-required`, id 18718333) "gates" job'u required_status_checks olarak eklenir + ruleset ENABLE edilir.
 #
 # ⛔ Q354 (2026-09-26) — IS YAPISI: `kapilar` (hizli adimlar) + `fixture` (suit N parcali
 # matris) paralel kosar; `gates` TOPLAYICIDIR. Zorunlu durum kontrolunun ADI `gates`
-# (ruleset `main-pr-required` required_status_checks + `scripts/merge_pr.py` `gates ==
-# SUCCESS`) ⇒ bu is adi DEGISTIRILMEZ. `gates` yalniz TUM bagimlilar `success` ise yesil:
+# (ruleset `main-pr-required` required_status_checks yalniz `gates` context'ini ister) ⇒
+# bu is adi DEGISTIRILMEZ. (`scripts/merge_pr.py` ise `gates`'e OZEL bakmaz: TUM
+# statusCheckRollup kontrollerini SUCCESS/NEUTRAL/SKIPPED ister — `fixture (i)` dahil.) `gates` yalniz TUM bagimlilar `success` ise yesil:
 # `failure` · `cancelled` · `skipped` → KIRMIZI (atlanan is yesil isik DEGILDIR).
 # Olculdu (main run 36257377466): is 318 sn, suit 302 sn (bolum 1+OZEL 132,5 · bolum 4
 # 168,0 · guard 1,5), geri kalan tum adimlar ~11 sn + kurulum ~4 sn.
