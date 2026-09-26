@@ -383,19 +383,14 @@ def damga_yeri() -> str:
     try:
         import source_drift as sd
         store = str(sd.FRESH_STORE)
-        sd_kok = Path(sd.ROOT)
     except Exception as e:   # noqa: BLE001
         return f"store=ÖLÇÜLEMEDİ ({type(e).__name__}) · anahtar kökü={REPO}"
     s = f"store={store} · anahtar kökü={REPO}"
-    if not os.environ.get("CLAUDE_PROJECT_DIR"):
-        s += (f" · ⚠ CLAUDE_PROJECT_DIR BOŞ — kök ÇALIŞMA DİZİNİNDEN ({Path.cwd()}) çözüldü; kapı başka "
-              "kökte koşuyorsa bu damgayı GÖRMEZ (proje kökünden koş ya da CLAUDE_PROJECT_DIR=<proje> ver)")
-    try:
-        ayni = sd_kok.resolve() == Path(REPO).resolve()
-    except OSError:
-        ayni = False
-    if not ayni:
-        s += f" · ⚠ store kökü ({sd_kok}) ≠ anahtar kökü ({REPO})"
+    # Uyarı YALNIZ kök şüpheliyse (3. tur): env boş ajan Bash'inde olağandır; proje kökünden koşulduğunda
+    # (kökte `project.yaml` var) tek satır bilgi yeter. Env boş VE kökte proje işareti yoksa ⚠.
+    if not os.environ.get("CLAUDE_PROJECT_DIR") and not (Path(REPO) / "project.yaml").is_file():
+        s += (f" · ⚠ CLAUDE_PROJECT_DIR BOŞ ve çalışma dizini ({Path.cwd()}) proje kökü DEĞİL (project.yaml yok) "
+              "— kapı başka kökte koşuyorsa bu damgayı GÖRMEZ (proje kökünden koş ya da CLAUDE_PROJECT_DIR=<proje> ver)")
     return s
 
 

@@ -18,8 +18,10 @@ KAPSAM (karar Q352-B AR-1, lider onaylı):
     çekirdek kapının kök segmentleri (proje `source_root` + geçiş-eski `erp`).
   · App'in KENDİSİ `_EXCLUDED_DIR_SEGMENTS` (ref_docs/docs/.tmp/legacy/archive/drafts) ya da
     `node_modules` altındaysa canlı uygulama değildir → None.
-  · Proje kökü DIŞINDAKİ webapp (ör. kanonik `.wt` worktree'si) da kapsamdadır — kök/hariç
-    segmentleri mutlak yolun parçalarında aranır (çekirdek `pbe_siniflandir` kuralı); anahtar
+  · Proje kökü DIŞINDAKİ webapp (ör. kanonik `.wt` worktree'si) ve proje ağacındaki bir
+    junction/symlink'in ARKASINDAKİ webapp da kapsamdadır — kapsam kararı `..`'sı sadeleşmiş ama
+    bağı İZLENMEMİŞ yolda verilir; kök/hariç segmentleri kök dışında mutlak yolun parçalarında
+    aranır (çekirdek `pbe_siniflandir` kuralı); anahtar
     `tazelik_anahtari`'nin mutlak dalı (ABAP ile simetrik; `fetch_ui_source --damgala` aynı
     anahtarla damgalar). ⚠ Store + anahtar kökü `CLAUDE_PROJECT_DIR`'den, boşsa CWD'den çözülür
     (ABAP ile ortak; kök çözüm ertelendi T-PBE-KOK-CWD) ⇒ araç proje kökünden (ya da
@@ -33,9 +35,10 @@ KAPSAM (karar Q352-B AR-1, lider onaylı):
     ⇒ her girdi bir REGEX'tir, `i` bayrağı YOK = HARF DUYARLI, çapasızdır (yolun herhangi bir
     yerinde eşleşir), yol `/resources/<proje-adı>/<rel>` biçimindedir. Burada yalnız düz
     segmentli girdiler (`/test/`, `test`, `/a/b/`) webapp köküne göre, HARF DUYARLI bir ÖNEK
-    olarak muaf sayılır — bu, aracın dışladığı kümenin ALT kümesidir. Kıyas ÇÖZÜLMÜŞ yol
-    (`..` çözülür, Windows'ta disk harf biçimi) üzerindedir — yazım biçimi karar vermez; bu şartla
-    sahte-muaf yok (dosya henüz yoksa kapı zaten serbest bırakır, disk biçimi ölçülemez). `*`,
+    olarak muaf sayılır — bu, aracın dışladığı kümenin ALT kümesidir. Muafiyet kıyası ÇÖZÜLMÜŞ
+    dosyanın çözülmüş webapp'e göre yolundadır (`..` çözülür, Windows'ta disk harf biçimi) — yazım
+    biçimi karar vermez; bu şartla sahte-muaf yok (dosya henüz yoksa kapı zaten serbest bırakır;
+    webapp İÇİNDEN dışarı giden bağ ölçülmedi). `*`,
     `[`, `(`, `^`, `$` … taşıyan ya da satır-içi liste biçimindeki girdi MUAFİYET VERMEZ
     (fail-closed) — dosya kapıda kalır.
   · `ui5-deploy.yaml` yok ya da BSP adı çözülemiyor → dict YİNE döner (sessiz geçiş YOK),
@@ -48,6 +51,7 @@ kapı, güvenli yön.
 """
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -144,27 +148,42 @@ def deploy_haric_mi(rel: str, onekler) -> bool:
 def _cozulmus(p: Path) -> Path:
     try:
         return p.resolve()
-    except (OSError, RuntimeError):
+    except (OSError, RuntimeError, ValueError):   # ValueError: yolda NUL vb. (eski davranış: yazıldığı gibi)
+        return p
+
+
+def _sade(p: Path) -> Path:
+    """`..`/`.` sadeleşir, bağ (junction/symlink) İZLENMEZ — çekirdek `pbe_siniflandir` ile aynı ilke."""
+    try:
+        return Path(os.path.normpath(p))
+    except (ValueError, TypeError):
         return p
 
 
 def uygulama_coz(path, root=None) -> Optional[tuple[Path, str]]:
-    """Dosya → (app dizini, webapp'e göre posix rel) ya da None (UI webapp kapsamı değil)."""
+    """Dosya → (app dizini, webapp'e göre posix rel) ya da None (UI webapp kapsamı değil).
+
+    İKİ AYRI YOL (bug gate 2.+3. tur):
+      · KAPSAM (webapp'in yeri, kök/hariç segment) → `_sade(p)`: `..` sadeleşir ama junction/symlink
+        İZLENMEZ. Çözülmüş yolla karar verilseydi proje ağacındaki bir junction'ın arkasındaki webapp
+        kök segmentini kaybedip SESSİZCE kapsam dışı kalırdı (3. tur MEDIUM, ölçüldü).
+      · MUAFİYET `rel`'i → çözülmüş dosya ↔ çözülmüş webapp: Windows harf duyarsız ve `..` kabul
+        eder ⇒ yazıldığı biçimle kıyaslanan `rel` sahte-muaf üretirdi (`webapp/test/x.js` yazılır,
+        diskte `Test/x.js` — araç onu DIŞLAMAZ). `resolve()` `..`'yı çözer ve Windows'ta var olan
+        bileşenlerin DİSK harf biçimini döndürür (ölçüldü, Py 3.11). İki çözülmüş yol birbirine
+        göre ifade edilemezse (webapp içinden dışarı giden bağ) sadeleşmiş yola düşülür — ölçülmedi.
+    """
     p = Path(path)
     if not p.is_absolute() and root is not None:
         p = Path(root) / p
-    # Karar ÇÖZÜLMÜŞ yol üzerinde verilir (bug gate 2. tur): Windows harf duyarsız ve `..` kabul
-    # eder ⇒ yazıldığı biçimle kıyaslanan `rel` sahte-muaf üretir (`webapp/test/x.js` yazılır, diskte
-    # `Test/x.js` — araç onu DIŞLAMAZ; `webapp/test/../view/a.xml` = `view/a.xml`). `resolve()` `..`'yı
-    # çözer ve Windows'ta var olan bileşenlerin DİSK harf biçimini döndürür (ölçüldü).
-    p = _cozulmus(p)
-    webapp = next((a for a in p.parents if a.name.lower() == WEBAPP), None)
+    ps = _sade(p)
+    webapp = next((a for a in ps.parents if a.name.lower() == WEBAPP), None)
     if webapp is None:
         return None
     app = webapp.parent
     kok_seg, haric = _kapi_kumeleri()
     try:
-        ust = ([s.lower() for s in app.relative_to(Path(root).resolve()).parts]
+        ust = ([s.lower() for s in app.relative_to(_sade(Path(root))).parts]
                if root is not None else None)
     except (ValueError, OSError):
         ust = None
@@ -175,7 +194,11 @@ def uygulama_coz(path, root=None) -> Optional[tuple[Path, str]]:
         ust = [s.lower() for s in app.parts]
     if not (kok_seg & set(ust)) or (haric & set(ust)):
         return None
-    return app, p.relative_to(webapp).as_posix()
+    try:
+        rel = _cozulmus(ps).relative_to(_cozulmus(webapp)).as_posix()
+    except ValueError:
+        rel = ps.relative_to(webapp).as_posix()
+    return app, rel
 
 
 def _goreli(p: Path, root) -> str:

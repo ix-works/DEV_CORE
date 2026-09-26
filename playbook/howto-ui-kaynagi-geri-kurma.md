@@ -111,11 +111,13 @@ Beklenen: `YALNIZ-CANLI=0 · değişecek=0 · yalnız-dist=0` ve `GERCEK-FARK=0`
 
 `<source_root>/…/<app>/webapp/**` altındaki bir dosyayı düzenlemek, o seansta canlıyla eşitliği
 ölçülüp **damgalanmadıysa** bloklanır (`scripts/hooks/_pbe_ui.py`; kapı `pull_before_edit`). Proje kökü
-**dışındaki** webapp (kanonik `.wt` worktree'si) de kapsamdadır — ABAP kapısıyla simetrik; damga mutlak
+**dışındaki** webapp (kanonik `.wt` worktree'si) ve proje ağacındaki bir junction/symlink'in **arkasındaki**
+webapp de kapsamdadır (kapsam kararı bağı izlemeyen, `..`'sı sadeleşmiş yolda) — ABAP kapısıyla simetrik; damga mutlak
 yol anahtarıyla yazılır. ⚠ Store ve anahtar kökü `CLAUDE_PROJECT_DIR`'den, boşsa **çalışma dizininden**
 çözülür (ABAP kapısıyla ortak sınır; ertelendi T-PBE-KOK-CWD) ⇒ damga kapının baktığı store'a YALNIZ komut
 **proje kökünden (ya da `CLAUDE_PROJECT_DIR=<proje>` ile)** koşulduğunda gider. Araç yazdığı store'u ve kökü
-basar (`store=… · anahtar kökü=…`; env boşsa `⚠ CLAUDE_PROJECT_DIR BOŞ` uyarısı) — "damgalandı" dediği hâlde
+basar (`store=… · anahtar kökü=…`; env boş VE çalışma dizini proje kökü değilse — `project.yaml` yok —
+`⚠ CLAUDE_PROJECT_DIR BOŞ` uyarısı) — "damgalandı" dediği hâlde
 kapı yine bloklıyorsa önce o satıra bak. Blok mesajı şu komutu verir — sonuna kapı **o seansın**
 `--session <id>`'sini ekler; komutu kopyalayıp proje kökünden **olduğu gibi** koş:
 ```bash
@@ -138,7 +140,8 @@ blok mesajındaki `--session`'lı komut tercih edilir.
   `localService/` canlıda VAR). Eşleşme **HARF DUYARLI**dır (deploy aracı her girdiyi `RegExp(regex, "g")`
   ile, `i` bayrağı olmadan kıyaslar — `@sap/ux-ui5-tooling` 1.25.0 kodundan ölçüldü): diskteki `Test/…`
   `/test/` ile muaf DEĞİLDİR. Kapı kararı **çözülmüş** yolda verir (`..` çözülür, Windows'ta diskteki harf
-  biçimi) — yolun nasıl yazıldığı (`test/x.js` / `test/../view/a.xml`) muafiyeti belirlemez. `/test/**`,
+  biçimi) — yolun nasıl yazıldığı (`test/x.js` / `test/../view/a.xml`) muafiyeti belirlemez (harf ayağı
+  yalnız harf duyarsız FS'te — Windows NTFS varsayılanı — doğar; Linux'ta `Test/` ile `test/` ayrı dizindir). `/test/**`,
   regex ve satır-içi liste gibi anlaşılmayan biçimler muafiyet VERMEZ (kapsam beyanında listelenir).
 - **`--offline` kaçışı** (`sap_sync_pull --offline` ile aynı anlam): SAP erişilemiyorsa ya da yerel canlıdan
   **ileride**yse (commit'li ama henüz deploy edilmemiş iş) aynı komuta `--offline` ekle — indirmeden
