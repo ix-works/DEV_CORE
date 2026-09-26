@@ -207,6 +207,20 @@ builder:
           - /test/
 ```
 
+> ⚠️ **Yukarıdaki `builder.resources.excludes` ETKİSİZDİR — `localService/**` canlıya GİDER** (ölçüldü
+> 2026-09-26, Issue #304; 3 tüketici BSP'nin 3'ünde canlıda `localService/**` var: 4 · 10 · 1 dosya).
+> Sebep: `npm run build` (ve `deploy_ui.py`'nin build adımı) `ui5 build --config=ui5.yaml` koşar; bu
+> dosyadaki `builder` bölümü o build'e **okunmaz**. `fiori deploy --config ui5-deploy.yaml` ise build
+> YAPMAZ, `dist/`'i gönderir (§2.4.1). `deploy-to-abap`'ın kendi `exclude:` listesinde `/localService/`
+> yoktur. Yani şablondaki satır bir niyet beyanıdır, davranış değil.
+> ⛔ **"Düzeltmek" için `ui5.yaml`'a excludes EKLEME** — canlıdaki dosya listesi sessizce değişir
+> (deploy'un canlıdan dosya SİLİP silmediği ölçülmedi).
+> **KURAL — deploy öncesi indirilen liste ile deploy edilecek liste karşılaştırılır:** build'den SONRA
+> `python core/scripts/fetch_ui_source.py --app-dir <ui>/<app> --dist-karsilastir <ui>/<app>/dist`
+> → `YALNIZ-CANLI` = canlıda olup yeni deploy kümesinde olmayan dosya: bilinçli silme değilse DUR,
+> kullanıcıya göster. Kaynağı yerelde olmayan / başka makinede revize edilmiş uygulama için tam akış:
+> [`playbook/howto-ui-kaynagi-geri-kurma.md`](../playbook/howto-ui-kaynagi-geri-kurma.md).
+
 > ⚠️ **Deploy hedef URL'i `.conn_adt`'deki `ADT_SAP_URL` ile BİREBİR olmalı** (`<DEV_HOST>:<PORT>`). Bir alias (kısa/alternatif DNS) local serve'de çalışsa da deploy SAP repository+transport'a yazar → her zaman `.conn_adt`'deki kanonik host'u kullan. (Vaka: bir app'in yaml'ı alias host ile gelmişti → `.conn_adt` ile hizalanınca deploy düzeldi.)
 
 ### 2.4.1 Deploy — KANONİK YOL: `scripts/deploy_ui.py` (ZORUNLU)

@@ -909,6 +909,18 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
   → eski 38/38 dosya "FARKLI" veren projede 0 FARKLI beklenir; `--subdir help` sonucu DEĞİŞMEMELİ.
   `deploy_ui.py --verify-only` build yapar (dist yeniden üretilir) — aynı ui kökünde statik doğrulamayla EŞ ZAMANLI koşma.
 
+## B18e — fetch_ui_source (Issue #304): BSP kaynağını geri kurma + eşlik + karşılaştırma + deploy listesi
+- `python tests/run_battery.py fetch_ui_source --kardes ui_dogrulama_satir_sonu_kacis` → taban 41/41 + 13 kip DÜŞER.
+- **Değişmez:** geri kurma `-dbg` kuralı builder `debugFileRegex` son ekleriyle (uydurma yok) · metin LF, ikili HAM ·
+  karşılaştırmada YALNIZ ölçülen iki build dönüşümü gevşer (`.properties` çözülmüş SATIR kıyası, manifest'in iki yolu
+  yalnız yerelde yoksa) · eşlik = preload + preload-dışı tam liste + kaynak haritası sondası; biri tutmazsa DUR ·
+  `--dist-karsilastir` `YALNIZ-CANLI` → rc 1 · rc 2 = ÖLÇÜLEMEDİ, asla temiz.
+- ⛔ SİLİNEMEZ: **B4** (yorum farkı gizlenmez) · **B6/B7/B7b** (manifest ölçülen-liste) · **A6/B11** (ikili normalize
+  edilmez) · **D5** (yalnız-preload körlüğü) · **D6** (harita sondası) · **E2** · **C1** (sıfır-fark KAPSAM BEYANI).
+- D grubu gerçek alt süreçtir (sahte `ui5` CLI: Windows `.cmd`, POSIX `sh`) — CI'da (ubuntu) de koşar.
+- Canlı salt-okur tekrar: `CLAUDE_PROJECT_DIR=<proje> python core/scripts/fetch_ui_source.py --app-dir <ui>/<app>
+  --karsilastir <ui>/<app>/webapp` → `GERCEK-FARK=0` beklenir (senkron app'te); eşlik için `--eslik --ui5-cli <ui5>`.
+
 ## B18c — transport listesi / kilit sondası / lock sentinel'i (sessiz olumsuzlama)
 - `python tests/fixtures/sessiz_olumsuzlama_2026_08_10/run.py` → 29/29 · MUTASYON
   `--mutasyon` (varsayılan `--ref 990f71b`) → **11/29**. 29/29 verirse test BOŞTUR.
