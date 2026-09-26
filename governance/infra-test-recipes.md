@@ -138,6 +138,33 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 - ⚠ Batarya **bir kapı değildir**: hiçbir kuralı zorlamaz, `run_all_validators`/pre-commit
   yerine geçmez. Çıktısının son satırı bunu her koşumda yazar.
 
+### B0-PARÇA — `--parca i/N` + `--parca-birlestir` (CI matrisi; Q354, 2026-09-26)
+> CI süiti `core-ci.yml` `fixture` matrisinde N parçaya böler; `gates` toplayıcısı TAMLIĞI
+> ölçer. Ölçüldü (main run 36257377466): süit 302 sn tek işte. Parça TAM SÜİTE DEĞİLDİR.
+```bash
+python tests/run_fixture_tests.py --parca 2/4 --listele                  # kuru koşum: birim listesi + yükler
+python tests/run_fixture_tests.py --parca 2/4 --parca-rapor .tmp/parca/parca-2.json
+python tests/run_fixture_tests.py --parca-birlestir 4 .tmp/parca          # tamlık (eksik/çift = FAIL)
+python tests/fixtures/parca_tamlik/run.py                                # korpus: 30/30
+```
+- **Birim kimlikleri:** `V:` validator · `O:` özel fixture · `R:` regresyon · `G` guard
+  korpusu · `H` harita-tamlık · `K:<koşucu>` bölüm-4 kip koşabilirliği. Evren KAYITTAN
+  türetilir — yeni OZEL_TESTLER satırı / yeni kipli koşucu otomatik bir parçaya girer.
+- **TAMLIK negatif testi** (yeşilin kör olmadığını böyle ölçersin): parça raporlarından
+  bir birimi sil → `--parca-birlestir` `TAMLIK: HİÇBİR parçada koşmayan 1 birim` + rc 1.
+  Rapor dosyası yoksa `RAPORU YOK` + rc 1. ⛔ `exit 0` tek başına kanıt değildir —
+  `birleşim N · eksik 0 · çift 0 · fazla 0` satırını oku.
+- **Ağırlık tazeleme** (yalnız DENGE; kapsamı etkilemez): CI `gates` işinin
+  `olculen-sureler` artifact'ini indir (`gh run download <run-id> --repo ix-works/DEV_CORE
+  -n olculen-sureler`) → içindeki `sureler` sözlüğünü `tests/fixture_sure_agirlik.json`
+  `sureler`ine koy → `--parca i/4 --listele` ile yükleri gör. Listede olmayan birim sınıf
+  varsayılanını alır (`SINIF_VARSAYILAN_SN`).
+- ⚠ **ATLA sayısı:** `TOPLAM: … PASS · K ATLA` fixture-İÇİ ölçülmemiş alt senaryolardır
+  (`N/M PASS · K ATLA` özet biçiminden; yoksa `[ATLA]`/`[ATLANDI]` satır işaretlerinden —
+  o fixture'lar ayrı satırda adıyla basılır). PASS sayısına katılmaz.
+- ⚠ Yerelde TAM süit hâlâ argümansız komuttur; parça modu ara adım aracı DEĞİLDİR
+  (ara adım = `--degisen` / batarya).
+
 ## B0b — NEGATİF TEST HARNESS'I (hook'a sentetik payload verirken)
 > Geçerlidir: `pre_tool_guard` · `pull_before_edit` · stdin'den JSON okuyan HER hook.
 - ⛔ **`exit 0` "serbest" DEMEK DEĞİLDİR.** Hook'lar bozuk/yabancı girdide de **0** döner

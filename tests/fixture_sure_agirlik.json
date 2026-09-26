@@ -1,0 +1,5 @@
+{
+ "_aciklama": "run_fixture_tests --parca dengeleme agirliklari (sn, ubuntu-latest CI). YALNIZ dengeyi etkiler, kapsami degil: tamlik --parca-birlestir ile evrenden olculur. Listede olmayan birim sinif varsayilanini alir (run_fixture_tests.SINIF_VARSAYILAN_SN). Tazeleme: CI 'gates' isinin 'olculen-sureler' artifact'i (recete: governance/infra-test-recipes.md B0-PARCA).",
+ "_kaynak": "henuz birim-basi olcum yok (Q354 Faz 1 ilk surum) - sinif varsayilanlari main CI run 36257377466'dan",
+ "sureler": {}
+}
