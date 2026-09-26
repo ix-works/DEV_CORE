@@ -1,7 +1,16 @@
 # core-ci — DEV_CORE required-check (B12).
 # Pre-commit gate'inin sunucu aynası: hook lokalde atlansa bile merge EDILEMEZ.
 # Required-check baglama (B14 push + ilk yesil kosudan SONRA):
-#   main-ruleset'e (id 18667766) "gates" job'u required_status_checks olarak eklenir + ruleset ENABLE edilir.
+#   main-ruleset'e (`main-pr-required`, id 18718333) "gates" job'u required_status_checks olarak eklenir + ruleset ENABLE edilir.
+#
+# ⛔ Q354 (2026-09-26) — IS YAPISI: `kapilar` (hizli adimlar) + `fixture` (suit N parcali
+# matris) paralel kosar; `gates` TOPLAYICIDIR. Zorunlu durum kontrolunun ADI `gates`
+# (ruleset `main-pr-required` required_status_checks yalniz `gates` context'ini ister) ⇒
+# bu is adi DEGISTIRILMEZ. (`scripts/merge_pr.py` ise `gates`'e OZEL bakmaz: TUM
+# statusCheckRollup kontrollerini SUCCESS/NEUTRAL/SKIPPED ister — `fixture (i)` dahil.) `gates` yalniz TUM bagimlilar `success` ise yesil:
+# `failure` · `cancelled` · `skipped` → KIRMIZI (atlanan is yesil isik DEGILDIR).
+# Olculdu (main run 36257377466): is 318 sn, suit 302 sn (bolum 1+OZEL 132,5 · bolum 4
+# 168,0 · guard 1,5), geri kalan tum adimlar ~11 sn + kurulum ~4 sn.
 name: core-ci
 
 on:
@@ -9,8 +18,14 @@ on:
   push:
     branches: [main]
 
+env:
+  # Parca sayisi — `fixture.strategy.matrix.parca` listesiyle AYNI olmali. Uyusmazlik
+  # FAIL-CLOSED'dir: eksik parca → toplayici "RAPORU YOK"; fazla parca → `--parca 5/4`
+  # exit 2. Gerekce (N=4): governance/infra-changelog.md Q354 satiri.
+  PARCA_SAYISI: 4
+
 jobs:
-  gates:
+  kapilar:
     runs-on: ubuntu-latest
     steps:
       # fetch-depth: 0 ZORUNLU (2026-08-29, kayit Q210 ileri-fix; CI run 33265820879).
@@ -29,6 +44,7 @@ jobs:
       # kez main'i kirdi); (b) squash-merge ile ERISILEMEZ kalan bir SHA burada da
       # bulunamaz -- fetch-depth 0 yalnizca REF'lerden erisilebilir gecmisi getirir.
       # Bugunku 5 pinli SHA'nin besi de main'in atasi oldugu olculdu.
+      # (Q354: ayni gerekce `fixture` parcalari icin de gecerli — orada da fetch-depth 0.)
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
@@ -108,14 +124,99 @@ jobs:
       # SONRA TAM konformans: template_project (public) clone edilip GERCEK guard'a karsi
       # kosulur → ③④ + KABLOLAMA + META-GATE (kanitsiz kural = FAIL) burada zorlanir.
       # Yalniz --self-test-only meta-gate'i gercek guard'a uygulamaz (notr stub'i okur).
-      # G1 (2026-07-31): HARD validator fixture korpusu — bad→FAIL, good→PASS.
-      # "Kontrol kostu != kontrol bakti" ailesine yapisal panzehir; ilk 10 validator.
-      - name: Validator fixture testleri (G1 negatif-test korpusu)
-        run: python tests/run_fixture_tests.py
-
       - name: template_project clone (tam konformans icin)
         run: git clone --depth 1 https://github.com/ix-works/template_project.git ../template_project
       - name: Guard konformans matrisi (self-test + TAM ucuncu-proje)
         run: |
           python scripts/tests/guard_conformance.py --self-test-only
           python scripts/tests/guard_conformance.py --project ../template_project
+
+  # G1 (2026-07-31): HARD validator fixture korpusu — bad→FAIL, good→PASS.
+  # "Kontrol kostu != kontrol bakti" ailesine yapisal panzehir.
+  # Q354: suit `--parca i/N` ile N parcaya bolunur (evren KAYITTAN, sure agirlikli
+  # deterministik bolme). Her parca TAM SUIT DEGILDIR; parcalarin KOSTUGU birimlerin
+  # birlesiminin evrenle birebir oldugunu `gates` toplayicisi olcer.
+  fixture:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false        # bir parca kirmiziysa digerleri de bitsin: tum kirmizilar tek turda gorunur
+      matrix:
+        parca: [1, 2, 3, 4]   # env.PARCA_SAYISI ile ayni
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0      # pinli-SHA mutasyon tabanlari (bkz. `kapilar` checkout yorumu)
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Bagimliliklar
+        run: pip install --quiet requests urllib3 python-dotenv
+
+      - name: Validator fixture testleri (parca ${{ matrix.parca }})
+        run: >-
+          python tests/run_fixture_tests.py
+          --parca ${{ matrix.parca }}/${{ env.PARCA_SAYISI }}
+          --parca-rapor .tmp/parca/parca-${{ matrix.parca }}.json
+
+      # Rapor YALNIZ fixture adlari + sureler + sayilar tasir (proje verisi YOK; repo PUBLIC).
+      # Parca cokup rapor yazamadiysa dosya yoktur → toplayici "RAPORU YOK" der (fail-closed).
+      - name: Parca raporu (toplayiciya)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parca-${{ matrix.parca }}
+          path: .tmp/parca/parca-${{ matrix.parca }}.json
+          if-no-files-found: ignore
+          retention-days: 3
+          overwrite: true
+
+  gates:
+    needs: [kapilar, fixture]
+    if: always()              # bagimli kirmizi/iptal/atlanmis olsa da KOSAR ve KIRMIZI doner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5   # evren bu commit'in KAYDINDAN yeniden turetilir
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Parca raporlarini topla
+        continue-on-error: true   # hic rapor yoksa bile tamlik adimi kosar ve FAIL der
+        uses: actions/download-artifact@v4
+        with:
+          pattern: parca-*
+          path: .tmp/parcalar
+          merge-multiple: true
+
+      # TAMLIK: parcalarin KOSTUGU birimlerin birlesimi == evren (eksik yok, cift yok,
+      # fazla yok) + plan sapmasi + planlanan!=kosulan + evren ozeti + parca rc.
+      - name: Parca tamligi (suit kapsami — eksik/cift = FAIL)
+        run: python tests/run_fixture_tests.py --parca-birlestir ${{ env.PARCA_SAYISI }} .tmp/parcalar
+
+      - name: Olculen sureler (agirlik dosyasi adayi)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: olculen-sureler
+          path: .tmp/parcalar/olculen-sureler.json
+          if-no-files-found: ignore
+          retention-days: 7
+          overwrite: true
+
+      # ⛔ Tek yesil kosul: TUM bagimlilar `success`. `skipped` da KIRMIZIDIR — atlanan
+      # bir is hicbir seyi olcmemistir.
+      - name: Bagimli islerin sonucu (yalniz success yesil)
+        if: always()
+        env:
+          KAPILAR: ${{ needs.kapilar.result }}
+          FIXTURE: ${{ needs.fixture.result }}
+        run: |
+          echo "kapilar=$KAPILAR fixture=$FIXTURE"
+          if [ "$KAPILAR" != "success" ] || [ "$FIXTURE" != "success" ]; then
+            echo "gates: KIRMIZI — yalniz tum bagimlilar success ise yesil (failure/cancelled/skipped = FAIL)"
+            exit 1
+          fi
+          echo "gates: bagimlilar success"
