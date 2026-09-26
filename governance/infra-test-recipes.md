@@ -278,7 +278,7 @@ görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçt
 ```bash
 python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_yarisi \
     bos_seans_markeri ddic_okuma_yolu class_include_push adt_uc_url_cozumu --precommit
-# pbe_kapsam taban 42/42 · ad-anahtari 37 · include-muaf 36 · abap-class 37 · tabl-yok 40 · eklenti-yok 37
+# pbe_kapsam taban 44/44 · ad-anahtari 39 · include-muaf 37 · abap-class 39 · tabl-yok 42 · eklenti-yok 39
 ```
 - ⭐ **AYIRT EDİCİ ÇİFT (silinmez):** H3 *ana sınıf damgası `.ccimp`'i kapsamaz* + T7 *aynı adlı
   CDS damgası BDEF'i kapsamaz* — ad-anahtarına dönüşü yakalayan bunlardır; P3 uçtan uca
@@ -289,9 +289,12 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
   değil). Ölçülmüş tuzak: dosya-ailesi tablosunu sözdizimsel olarak bozan bir mutasyon *her*
   vektörü düşürür (4/41 ölçüldü) — o ayırt edici DEĞİLDİR; mutasyon eski davranışı **yeniden kurmalıdır**
   (eski `_infer_type`: `.prog.abap`→program, `.abap`→class).
-- **Eklenti sözleşmesi (E1-E11):** `scripts/hooks/<ad>.py::sinifla(path, root) -> Optional[dict]`
+- **Eklenti sözleşmesi (E1-E12):** `scripts/hooks/<ad>.py::sinifla(path, root) -> Optional[dict]`
   (`{"nesne","tip","komut"}`). Dosya yok → sessiz · yüklenemez → `EKLENTI-YUKLENEMEDI` + exit 0 ·
-  `sinifla()` istisnası → `EKLENTI-HATA: <ad>: <tip>` notu + geçiş (fail-open ama GÖRÜNÜR). Yeni eklenti eklenince bu korpusun E
+  `sinifla()` istisnası → `EKLENTI-HATA: <ad>: <tip>` notu + geçiş (fail-open ama GÖRÜNÜR).
+  ⛔ Eklenti dosya adı `_` ile BAŞLAR (`scripts/hooks/_<ad>.py`): `_`siz ad C-TPL-01'de
+  kablosuz HOOK sayılır ve CI düşer (E12). Eklenti blok metni "çeker/yazar" DEMEZ (komut
+  yalnız karşılaştırıp damgalayabilir) — E2 ölçer, H1b çekirdek metnin korunduğunu ölçer. Yeni eklenti eklenince bu korpusun E
   vektörleri **stub** ile sözleşmeyi ölçmeye devam eder; eklentinin KENDİ korpusu ayrıdır.
 - **Canlı uç ölçümü (salt-GET) tekrar gerekirse:** `/oo/classes/<c>/includes/<segment>` (include
   yoksa 404 — "segment yanlış" değil; uydurma segment 400) · include + `/source/main` = 404 ·

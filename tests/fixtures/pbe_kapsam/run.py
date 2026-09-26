@@ -27,7 +27,7 @@ giriş noktasından (stdin JSON, alt süreç) koşar; damgayı yazan GERÇEK `sa
   P*  çekici: sınıf + alt-include'lar · auto çözümü (tek/çok/sıfır aday) · uçtan uca kapı
   X*  3. bağlam: farklı `source_root` adlı proje
   E*  EKLENTİ ARAYÜZÜ (Q352 dondurma): `_EK_DENETCILER` + `sinifla()` sözleşmesi (geçici
-      `pbe_ui` / `pbe_msag_textpool` STUB'ı) + public `tazelik_damgala` / `seans_kimligi`
+      `_pbe_ui` / `_pbe_msag_textpool` STUB'ı) + public `tazelik_damgala` / `seans_kimligi`
 
 Kipler (her biri düzeltmenin bir ayağını geri alır → korpus KIRMIZI olmalı):
   --mutasyon-ad-anahtari   tazelik anahtarı eski hâline (obje ADI) döner
@@ -286,6 +286,10 @@ def senaryolar(scripts: Path, kum: Path) -> None:
     rc, err = kapi(scripts, proje, ccimp)
     kontrol("H1 bayat .ccimp -> BLOK (exit 2) + kendi tipi + --file",
             rc == 2 and "--type implementations" in err and "--file" in err, f"rc={rc}")
+    # KONTROL (E2'nin ikizi): çekirdek dal "çeker/yazar" metnini VE --offline kaçışını KORUR
+    kontrol("H1b cekirdek dal blok metni: 'bu seansta SAP'den cekilMEDI' + 'dosyasina yazar' + --offline",
+            "bu seansta SAP'den çekilMEDİ" in err and "dosyasına yazar" in err
+            and "--offline" in err and "kapsam eklentisi" not in err, f"err={err[:160]!r}")
     rc, err = kapi(scripts, proje, agit)
     kontrol("H2 abapGit adli include (.clas.locals_imp) -> BLOK, ayni tur",
             rc == 2 and "--type implementations" in err, f"rc={rc}")
@@ -443,12 +447,15 @@ def eklenti_arayuzu(scripts: Path, kum: Path) -> None:
     kontrol("E1 eklenti YOK -> webapp dosyasi kapsam disi (exit 0, SESSIZ)",
             rc == 0 and err.strip() == "", f"rc={rc} err={err[:90]!r}")
 
-    (hooks / "pbe_ui.py").write_text(_STUB_UI, encoding="utf-8")
+    (hooks / "_pbe_ui.py").write_text(_STUB_UI, encoding="utf-8")
     rc, err = kapi(scripts, proje, js)
     kontrol("E2 eklenti dict -> BLOK + eklentinin KOMUTU + --offline sozu VERILMEZ",
             rc == 2 and "fetch_ui_source.py ZSD001_UI --karsilastir" in err
-            and "kapsam eklentisi: pbe_ui" in err and "--offline" not in err
-            and "sap_sync_pull" not in err, f"rc={rc} err={err[:160]!r}")
+            and "kapsam eklentisi: _pbe_ui" in err and "--offline" not in err
+            and "sap_sync_pull" not in err
+            # eklenti komutu dosyaya YAZMAYABİLİR -> "çeker/yazar" iddiası verilmez
+            and "dosyasına yazar" not in err and "SAP'den çekilMEDİ" not in err
+            and "seans-taze damgalanır" in err, f"rc={rc} err={err[:160]!r}")
     rc, err = kapi(scripts, proje, xml)
     kontrol("E3 eklenti None -> o dosya kapsam disi (SESSIZ)", rc == 0 and err.strip() == "",
             f"rc={rc}")
@@ -489,26 +496,37 @@ def eklenti_arayuzu(scripts: Path, kum: Path) -> None:
     subprocess.run(["git", "-C", str(proje), "checkout", "--", str(js)], capture_output=True)
 
     # E8 — VAR ama yüklenemeyen eklenti -> GÖRÜNÜR not + exit 0; önceki eklenti çalışmaya devam
-    (hooks / "pbe_msag_textpool.py").write_text(_STUB_BOZUK, encoding="utf-8")
+    (hooks / "_pbe_msag_textpool.py").write_text(_STUB_BOZUK, encoding="utf-8")
     rc, err = kapi(scripts, proje, xml)
     kontrol("E8 bozuk eklenti -> exit 0 + EKLENTI-YUKLENEMEDI notu (brick YOK)",
-            rc == 0 and "EKLENTI-YUKLENEMEDI: pbe_msag_textpool" in err, f"rc={rc} err={err[:120]!r}")
+            rc == 0 and "EKLENTI-YUKLENEMEDI: _pbe_msag_textpool" in err, f"rc={rc} err={err[:120]!r}")
     rc, err = kapi(scripts, proje, js)
     kontrol("E9 bozuk KARDES eklenti, calisan eklentinin blokunu dusurmez", rc == 2
             and "fetch_ui_source.py" in err, f"rc={rc}")
 
     # E10 — sinifla() hata atar -> fail-open ama GÖRÜNÜR (lider kararı 2026-09-26): not + exit 0
-    (hooks / "pbe_msag_textpool.py").write_text(_STUB_PATLAYAN, encoding="utf-8")
+    (hooks / "_pbe_msag_textpool.py").write_text(_STUB_PATLAYAN, encoding="utf-8")
     rc, err = kapi(scripts, proje, xml)
     kontrol("E10 sinifla() istisna -> exit 0 + EKLENTI-HATA notu (ad + istisna tipi; sessiz DEGIL)",
-            rc == 0 and "EKLENTI-HATA: pbe_msag_textpool: RuntimeError" in err,
+            rc == 0 and "EKLENTI-HATA: _pbe_msag_textpool: RuntimeError" in err,
             f"rc={rc} err={err[:120]!r}")
     rc, err = kapi(scripts, proje, js)
     kontrol("E11 patlayan KARDES eklenti, calisan eklentinin blokunu dusurmez", rc == 2
             and "fetch_ui_source.py" in err, f"rc={rc}")
 
+    # E12 — ad konvansiyonu (C-TPL-01): `hooks/*.py` içinde `_` ile BAŞLAMAYAN dosya kablolanması
+    # gereken HOOK sayılır (check_settings_template_sync). Eklenti hook DEĞİL, yardımcı modül ⇒
+    # kayıttaki HER ad `_` önekli olmalı (ölçülmüş vaka 2026-09-26: `pbe_ui.py` CI'da düştü).
+    import ast
+    kayit = None
+    for n in ast.walk(ast.parse((scripts / "hooks" / "pull_before_edit.py").read_text(encoding="utf-8"))):
+        if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "_EK_DENETCILER" for t in n.targets):
+            kayit = ast.literal_eval(n.value)
+    kontrol("E12 eklenti adlari `_` onekli (C-TPL-01: hook sayilmaz)",
+            bool(kayit) and all(a.startswith("_") for a in kayit), f"kayit={kayit}")
+
     # stub'ları kaldır (kum zaten silinir; sonraki senaryolar eklentisiz ortam varsayar)
-    for ad in ("pbe_ui.py", "pbe_msag_textpool.py"):
+    for ad in ("_pbe_ui.py", "_pbe_msag_textpool.py"):
         (hooks / ad).unlink(missing_ok=True)
 
 

@@ -72,7 +72,7 @@ except Exception as _exc:  # noqa: BLE001 — kapı asla çökmemeli
 
 
 # Eklenti modül adları (scripts/hooks/<ad>.py). Sıra = sorulma sırası; ilk dict dönen kazanır.
-_EK_DENETCILER = ("pbe_ui", "pbe_msag_textpool")
+_EK_DENETCILER = ("_pbe_ui", "_pbe_msag_textpool")
 
 
 def _ek_yukleme_notu(ad: str, exc: BaseException) -> None:
@@ -254,19 +254,25 @@ def main() -> int:
         # Eklentinin çekicisi `--offline` kaçışını desteklemeyebilir → sözünü veremeyiz.
         kacis = (f"(kapsam eklentisi: {s['eklenti']} · nesne {s.get('ad')} · tip "
                  f"{s.get('tip')}; SAP erişilemiyorsa çekicinin kendi kaçışına bak.)\n")
+        # Eklentinin komutu dosyaya YAZMAYABİLİR (ör. canlıyla karşılaştırıp damgalar) →
+        # "çeker/yazar" iddiası verilmez; yalnız sözleşme söylenir (damga = tazelik kanıtı).
+        baslik = "bu seansta canlıyla TAZE doğrulanMADI. Düzenlemeden ÖNCE:"
+        ne_olur = (f"(komutu koş → {p.name} seans-taze damgalanır (canlıyla eşitse); sonra "
+                   f"edit'i TEKRAR dene.)\n")
     else:
         kacis = ("SAP erişilemiyorsa: aynı komuta `--offline` ekle (fetch'siz taze damgalar; "
                  "canlıdan ezme riskini bilerek kabul edersin).\n")
+        baslik = "bu seansta SAP'den çekilMEDİ. Düzenlemeden ÖNCE güncel halini al:"
+        ne_olur = (f"(canlıyı çeker → {p.name} dosyasına yazar → DOSYAYI seans-taze damgalar; "
+                   f"sonra edit'i TEKRAR dene.)\n")
     if s.get("tip") == "auto":
         ek = ("(tip dosya adından KESİN çıkmıyor — `--type auto` canlı ADT aramasıyla çözer; "
               "0 ya da >1 aday çıkarsa DURUR, tahmin etmez.)\n")
     sys.stderr.write(
-        f"⛔ PULL-BEFORE-EDIT (PreToolUse guard, ADR 0016 revize): '{p.name}' bu seansta "
-        f"SAP'den çekilMEDİ. Düzenlemeden ÖNCE güncel halini al:\n"
+        f"⛔ PULL-BEFORE-EDIT (PreToolUse guard, ADR 0016 revize): '{p.name}' {baslik}\n"
         f"   {cmd}\n"
         f"{ek}"
-        f"(canlıyı çeker → {p.name} dosyasına yazar → DOSYAYI seans-taze damgalar; sonra "
-        f"edit'i TEKRAR dene.)\n"
+        f"{ne_olur}"
         f"AMAÇ: working-copy daima TAZE canlıdan türesin → push, canlıdaki belgelenmemiş "
         f"değişikliği ezmesin. Dosya başına seansta yalnız 1 kez.\n"
         f"{kacis}"
