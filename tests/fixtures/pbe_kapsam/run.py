@@ -930,9 +930,12 @@ print(json.dumps({"say": {k: len(v) for k, v in kaynak.items()},
 '''
 # Beklenen tek istisna: `normalize_object_type`ın ÇÖZEMEDİĞİ, uzantı kümesi açık bir tiple aynı adlar.
 _KANONIK_ESANLAM = {"bdo": "bdef", "behaviordefinition": "bdef", "servicebinding": "srvb"}
-_KANONIK_ALT_SINIR = 40      # 2026-09-26 ölçümü 57 ad; altına düşerse türetme kırılmıştır
+_KANONIK_ALT_SINIR = 40      # 2026-09-26 ölçümü 54 ad; altına düşerse türetme kırılmıştır
 
 
+# F10 SÖZLEŞMESİ (bilinçli): `_kanonik_tip` yalnız `normalize_object_type`'ın ÇÖZEMEDİĞİ eşanlamlıyı
+# çevirir; takma adlar dahil çözülebilen her ad (`prog`, `clas`, `ddls`…) AYNEN döner. İleride bir takma
+# ad bilinçli kanonikleştirilirse F10 kırmızı olur — bu sahte kırmızı değildir, sözleşme değişikliğidir.
 def kanonik_tip_saf(scripts: Path, proje: Path) -> None:
     r = subprocess.run([sys.executable, "-c", _KANONIK_KOD % str(scripts)], capture_output=True,
                        env=_env(proje), cwd=str(proje), timeout=60)
