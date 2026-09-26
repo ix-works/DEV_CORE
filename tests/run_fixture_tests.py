@@ -241,6 +241,10 @@ OZEL_TESTLER = [
     ("pbe_ui",
      "Q352-B: PULL-BEFORE-EDIT UI eklentisi (webapp/**, deploy exclude muafiyeti, fail-closed desen) + "
      "fetch_ui_source --damgala/--offline (damga yalniz taze+temiz; GERCEK kapi alt sureci + GERCEK store)"),
+    ("pbe_msag_textpool",
+     "Q352-C: PBE eklentisi msag CSV + textpool: salt-okur pull birlestirme (sira/tirnak/BOM/satir sonu KORUNUR, "
+     "yalniz-yerel dokunulmaz) + damga YALNIZ tam karsilastirmada (paket/ortak-anahtar/calisma!=active -> OLCULEMEDI) "
+     "+ gercek kapi uctan uca"),
     ("cds_curr_eksik_annotation",
      "DERINLIK: EKSIK @Semantics hic aranmiyordu (rc=0 bilgi tasimiyordu) + yesilin PAYDASI + WARNING siddeti"
      " + Q234/Q237: cok-satirli ifade ve `union` 2.+ dali YANLIS POZITIF uretiyordu"),
@@ -1074,6 +1078,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/hooks/pull_before_edit.py", ("O:pbe_ui",), "eklenti kaydı → gerçek alt süreç (C)"),
     ("scripts/source_drift.py", ("O:pbe_ui",), "tazelik_damgala/seans_kimligi gerçek store (C)"),
     ("scripts/deploy_ui.py", ("O:pbe_ui",), "bsp_name — pbe_ui BSP çözümü"),
+    ("scripts/pull_msag_textpool.py", ("O:pbe_msag_textpool",), "msag/textpool salt-okur çekici + damga sözleşmesi"),
+    ("scripts/hooks/_pbe_msag_textpool.py", ("O:pbe_msag_textpool",), "PBE eklentisi sinifla (msag/textpool)"),
+    ("scripts/populate_message_class.py", ("O:pbe_msag_textpool",), "pull `sinif_oku`/`sinif_xml_ayristir` tüketir"),
+    ("scripts/push_textpool.py", ("O:pbe_msag_textpool",), "pull `SUB_CTYPE` tüketir"),
+    ("scripts/hooks/pull_before_edit.py", ("O:pbe_msag_textpool",),
+     "E1: eklenti kaydı + komut/not sözleşmesi → gerçek alt süreç"),
+    ("scripts/source_drift.py", ("O:pbe_msag_textpool",),
+     "E1 tazelik_damgala/seans_kimligi gerçek store + H11 `_EXCLUDED_DIR_SEGMENTS` tek kaynak"),
     ("scripts/push_object.py",
      ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
       "O:push_onkontrol_olculemedi"),
