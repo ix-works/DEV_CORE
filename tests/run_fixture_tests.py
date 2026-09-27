@@ -32,7 +32,16 @@ Kullanim:
     python tests/run_fixture_tests.py                         # TAM suite (CI + lider)
     python tests/run_fixture_tests.py --degisen <dosya> ...    # ISE-OZEL secim (infra-expert)
     python tests/run_fixture_tests.py --degisen <dosya> --listele   # kuru kosum (ne kosardim)
+    python tests/run_fixture_tests.py --parca 2/4 [--parca-rapor <json>]   # CI PARCASI (Q354)
+    python tests/run_fixture_tests.py --parca 2/4 --listele          # parcanin birim listesi
+    python tests/run_fixture_tests.py --parca-birlestir 4 <dizin>    # CI toplayici: TAMLIK
 Cikis: 0 -- hepsi beklendigi gibi, 1 -- en az bir sapma.
+
+`--parca i/N` (Q354, 2026-09-26): evren KAYITTAN turetilir (VALIDATORS + OZEL_TESTLER +
+REGRESYON + guard + harita-tamlik + kipli kosucular), sure agirligiyla deterministik
+bolunur; parca TAM SUIT DEGILDIR. Tamligi `--parca-birlestir` olcer: parcalarin KOSTUGU
+birimlerin birlesimi evrenle BIREBIR (eksik yok, cift yok) degilse FAIL. Sozlesme:
+asagidaki PARCALAMA blogu.
 
 `--degisen` FAIL-CLOSED'dir: verilen dosyalardan BIRI bile haritada yoksa TAM suite
 kosar (gorunur satirla). Sozlesme + gerekce: asagidaki HARITA blogu.
@@ -42,8 +51,10 @@ from __future__ import annotations
 import os
 import re
 import hashlib
+import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 for _s in (sys.stdout, sys.stderr):
@@ -596,6 +607,12 @@ OZEL_TESTLER = [
      "200-disi/ag/XML-olmayan govde/ayristirilamayan surum baglantisi/taninmayan entry -> "
      "SAPADTError; KONTROL: baglanti yok + bos feed (onekli/oneksiz) mesru []. Gercek cagiran "
      "list_revisions.py ayri surecte (24 vektor + 20 mutasyon; eski kod 5/24 = yalniz kontrol grubu)"),
+    # 2026-09-26 (Q354 Faz 1): CI'da suit N parcaya bolunur; bir birimin HICBIR parcada
+    # kosmamasi sessiz olmasin diye toplayici tamlik denetimi.
+    ("parca_tamlik",
+     "Q354: --parca i/N deterministik bolme (evren KAYITTAN) + --parca-birlestir TAMLIK "
+     "(eksik/cift/fazla/plan-sapmasi/planlanan!=kosulan/evren-ozeti/rc) + ATLA ozet ayristirici; "
+     "bozuk bolme (birim dusuren/cogaltan parcala) FAIL'e cevrilir"),
 ]
 
 
@@ -639,6 +656,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "batarya aracı: kip keşfi + sonuç sınıflaması burada yaşar. ⛔ Bu araç KAPI DEĞİL; "
      "TAM süitin yerine GEÇMEZ — koşucunun kendisi (`run_fixture_tests.py`) değişmediği "
      "sürece kıyas tabanı TAM olmak zorunda değil, kendi korpusu yeter"),
+    # Q354 (2026-09-26): AYRI satır — üstteki koşucu satırının kümesi büyütülmedi
+    # (b0_secim F3 çapası: koşucu değişince karar TAM kalır; birleşim yine TAM'dır).
+    ("tests/run_fixture_tests.py", ("O:parca_tamlik",),
+     "--parca / --parca-birlestir / ATLA özet ayrıştırıcısı burada yaşar"),
+    ("tests/fixture_sure_agirlik.json", ("O:parca_tamlik",),
+     "parçalama ağırlıkları: yalnız DENGEYİ etkiler, kapsamı değil (tamlık evrenden ölçülür)"),
+    (".github/workflows/core-ci.yml", ("O:parca_tamlik",),
+     "matris parçaları + `gates` toplayıcısının `--parca-birlestir` çağrısı"),
     ("scripts/hooks/post_tool_failure.py",
      ("O:post_tool_failure_bash", "O:atc_p1_sonuc", "O:negatif_test_harness"),
      "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları) + "
@@ -1374,8 +1399,12 @@ def harita_tamlik() -> list[tuple[str, str, bool, str]]:
 KIP_ZAMAN_ASIMI = 300
 
 
-def kip_kosabilirligi() -> tuple[int, int, list[str]]:
-    """(geçen, toplam, hatalar) — her kipli koşucunun İLK kipi çökmeden koşuyor mu?"""
+def kip_kosabilirligi(secim_kosucu: set[str] | None = None) -> tuple[int, int, list[str]]:
+    """(geçen, toplam, hatalar) — her kipli koşucunun İLK kipi çökmeden koşuyor mu?
+
+    `secim_kosucu` (Q354 `--parca`): verilirse YALNIZ bu dizin adlı koşucular. `None` =
+    bugünkü davranış (hepsi).
+    """
     sys.path.insert(0, str(HERE))
     try:
         import run_battery as RB           # type: ignore  # noqa: N814
@@ -1385,12 +1414,16 @@ def kip_kosabilirligi() -> tuple[int, int, list[str]]:
     gecen = toplam = 0
     hatalar: list[str] = []
     for kosucu in sorted(FIXTURES.glob("*/run.py")):
+        if secim_kosucu is not None and kosucu.parent.name not in secim_kosucu:
+            continue
+        _t0 = time.perf_counter()
         try:
             kipler, _kaynak = RB.kipleri_kesfet(kosucu.read_text(encoding="utf-8",
                                                                  errors="replace"))
         except Exception as exc:           # pragma: no cover
             toplam += 1
             hatalar.append(f"{kosucu.parent.name}: keşif hatası {exc}")
+            _birim_kostu(f"K:{kosucu.parent.name}", _t0)
             continue
         if not kipler:
             continue                       # kipsiz koşucu bu bölümün konusu değil
@@ -1413,6 +1446,7 @@ def kip_kosabilirligi() -> tuple[int, int, list[str]]:
             hatalar.append(f"{kosucu.parent.name} {kip} → {etiket}(rc={kod}): {sebep}")
         else:
             gecen += 1
+        _birim_kostu(f"K:{kosucu.parent.name}", _t0)
     return gecen, toplam, hatalar
 
 
@@ -1680,12 +1714,15 @@ def regresyon_kos(secim: set[str] | None = None) -> tuple[int, int]:
         if secim is not None and f"R:{birim}" not in secim:
             print(f"  [ATLANDI — seçim modu] {baslik}")
             continue
+        _t0 = time.perf_counter()
         try:
             sonuclar = fn()
         except Exception as exc:  # noqa: BLE001
             print(f"  [DOĞRULANAMADI] {baslik}: {type(exc).__name__}: {exc}")
             toplam += 1
+            _birim_kostu(f"R:{birim}", _t0)
             continue
+        _birim_kostu(f"R:{birim}", _t0)
         for ad, ok, detay in sonuclar:
             toplam += 1
             gecen += 1 if ok else 0
@@ -1696,6 +1733,282 @@ def regresyon_kos(secim: set[str] | None = None) -> tuple[int, int]:
         # ve bu bloğun çıktısını yutabilir (yukarıdaki worklist_audit notu).
         sys.stdout.flush()
     return gecen, toplam
+
+
+# =============================================================================
+# PARÇALAMA — `--parca i/N` + `--parca-birlestir N <dizin>` (Q354 Faz 1, 2026-09-26)
+#
+# NEDEN: CI tek iş, süit sıralı ve CI süresinin ~%95'i (ölçüldü: main run 36257377466
+# → süit 302 sn / iş 318 sn). Süit N matris işine bölünür, `gates` toplayıcısı birleştirir.
+#
+# ⛔ EN ÖNEMLİ DEĞİŞMEZ — TAMLIK: bir birim HİÇBİR parçada koşmazsa bu SESSİZ olmamalı.
+#    Parçalar yeşil olsa bile (her biri yalnız KENDİ listesini koşar) eksik birim görünmez;
+#    bu yüzden toplayıcı `--parca-birlestir` parçaların KOŞTUĞU (planladığı değil) birim
+#    kümelerinin birleşimini KAYITTAN bağımsız türetilen evrenle kıyaslar: eksik · çift ·
+#    fazla · plan sapması · planlanan≠koşulan · evren özeti · parça rc → herhangi biri FAIL.
+#    Kıyas `parcala()`ya GÜVENMEZ: bölme kusurlu olsa bile (birim düşüren/çoğaltan)
+#    evren kıyası yakalar — `parca_tamlik` fixture'ı bunu bozuk bölmeyle ölçer.
+#
+# EVREN KAYITTAN türetilir (elle liste YOK): VALIDATORS + OZEL_TESTLER + REGRESYON + `G`
+# (guard korpusu) + `H` (harita-tamlık) + `K:<koşucu>` (bölüm 4, kipli koşucular — keşif
+# `kip_kosabilirligi` ile AYNI fonksiyon). Kayda satır ekleyen PR otomatik bir parçaya girer.
+#
+# DENGE sürelerle (LPT: ağır birim önce, en hafif parçaya): `fixture_sure_agirlik.json`
+# yalnız DENGEYİ etkiler, KAPSAMI DEĞİL — dosya bozuk/eksik olsa bile bölme deterministik
+# kalır (tüm parçalar aynı commit'te aynı dosyayı okur) ve tamlık evrenden ölçülür.
+# `--parca` verilmezse bu blok HİÇ çağrılmaz (bugünkü TAM koşum birebir).
+# =============================================================================
+AGIRLIK_DOSYASI = HERE / "fixture_sure_agirlik.json"
+# Sınıf varsayılanı (sn) — ÖLÇÜLDÜ, main CI run 36257377466 (ubuntu-latest, 3c4c2bb):
+#   bölüm 1+OZEL 132,5 sn / 141 birim ≈ 0,94 · bölüm 4 168,0 sn / 67 koşucu ≈ 2,5 ·
+#   bölüm 3 1,5 sn · bölüm 2 < 0,1 sn. O logda birim başına süre BASILMIYORDU; parça
+#   modu artık basar (`[SÜRE]` satırları + rapor JSON'u) → ağırlık dosyası oradan tazelenir.
+SINIF_VARSAYILAN_SN = {"V": 0.5, "O": 1.0, "R": 0.1, "G": 1.5, "H": 0.1, "K": 2.5}
+
+# Koşulan birim → süre (sn). Her kipte doldurulur (zararsız); yalnız parça raporu okur.
+_KOSULAN: dict[str, float] = {}
+
+
+def _birim_kostu(birim: str, t0: float) -> None:
+    _KOSULAN[birim] = round(time.perf_counter() - t0, 2)
+
+
+def _kipli_kosucular() -> list[str]:
+    """Bölüm 4'ün birimleri — `kip_kosabilirligi` ile AYNI keşif (keşif hatası da birimdir)."""
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    import run_battery as RB               # type: ignore  # noqa: N814
+    adlar: list[str] = []
+    for kosucu in sorted(FIXTURES.glob("*/run.py")):
+        try:
+            kipler, _ = RB.kipleri_kesfet(kosucu.read_text(encoding="utf-8", errors="replace"))
+        except Exception:                  # noqa: BLE001 — bölüm 4 bunu FAIL sayar; evrende kalmalı
+            kipler = ["<keşif-hatası>"]
+        if kipler:
+            adlar.append(kosucu.parent.name)
+    return adlar
+
+
+def parca_evreni() -> list[str]:
+    """TAM koşumun koştuğu birimlerin listesi — KAYITTAN (sıra: bölüm sırası)."""
+    evren = [f"V:{n}" for n in VALIDATORS]
+    evren += [f"O:{a}" for a, _ in OZEL_TESTLER]
+    evren += [f"R:{k}" for k, _, _ in REGRESYON]
+    evren += ["G", "H"]
+    evren += [f"K:{ad}" for ad in _kipli_kosucular()]
+    return evren
+
+
+def evren_ozeti(evren: list[str]) -> str:
+    return hashlib.sha1("\n".join(sorted(evren)).encode("utf-8")).hexdigest()[:16]
+
+
+def agirliklari_yukle(yol: Path | None = None) -> tuple[dict[str, float], str]:
+    """(birim→sn, kaynak açıklaması). Okunamazsa BOŞ + görünür açıklama (varsayılanlar)."""
+    yol = AGIRLIK_DOSYASI if yol is None else yol
+    try:
+        veri = json.loads(yol.read_text(encoding="utf-8"))
+        sureler = {str(k): float(v) for k, v in (veri.get("sureler") or {}).items()}
+        return sureler, f"{yol.name} ({len(sureler)} ölçülmüş birim; gerisi sınıf varsayılanı)"
+    except FileNotFoundError:
+        return {}, f"{yol.name} YOK → yalnız sınıf varsayılanları"
+    except Exception as exc:               # noqa: BLE001
+        return {}, f"{yol.name} OKUNAMADI ({type(exc).__name__}) → yalnız sınıf varsayılanları"
+
+
+def _agirlik_ms(birim: str, sureler: dict[str, float]) -> int:
+    sn = sureler.get(birim)
+    if sn is None or sn < 0:
+        sn = SINIF_VARSAYILAN_SN.get(birim.split(":", 1)[0], 1.0)
+    return max(1, int(round(sn * 1000)))    # tamsayı ms: yük toplamı platformdan bağımsız
+
+
+def parcala(evren: list[str], n: int,
+            sureler: dict[str, float]) -> tuple[list[set[str]], list[int]]:
+    """Deterministik LPT bölme → (parça kümeleri, parça yükü ms). Girdi SIRASINDAN bağımsız."""
+    if n < 1:
+        raise ValueError(f"parça sayısı >= 1 olmalı (alınan {n})")
+    goruldu: set[str] = set()
+    mukerrer = sorted({b for b in evren if b in goruldu or goruldu.add(b)})
+    if mukerrer:
+        raise ValueError(f"evrende MÜKERRER birim {mukerrer} — kayıt çift satır taşıyor")
+    parcalar: list[set[str]] = [set() for _ in range(n)]
+    yuk = [0] * n
+    for b in sorted(evren, key=lambda x: (-_agirlik_ms(x, sureler), x)):
+        j = min(range(n), key=lambda k: (yuk[k], k))
+        parcalar[j].add(b)
+        yuk[j] += _agirlik_ms(b, sureler)
+    return parcalar, yuk
+
+
+def parca_birlestir(n: int, dizin: Path) -> tuple[bool, list[str], list[str], dict[str, float]]:
+    """TOPLAYICI: (ok, bilgi satırları, hatalar, birleşik ölçülen süreler).
+
+    Rapor dosyaları: `<dizin>/**/parca-*.json` (`--parca-rapor` çıktısı).
+    """
+    hatalar: list[str] = []
+    bilgi: list[str] = []
+    evren = parca_evreni()
+    evren_k = set(evren)
+    sureler, _kaynak = agirliklari_yukle()
+    plan, _ = parcala(evren, n, sureler)
+    ozet = evren_ozeti(evren)
+
+    raporlar: dict[int, dict] = {}
+    dosyalar = sorted(dizin.rglob("parca-*.json")) if dizin.is_dir() else []
+    for p in dosyalar:
+        try:
+            r = json.loads(p.read_text(encoding="utf-8"))
+        except Exception as exc:           # noqa: BLE001
+            hatalar.append(f"{p.name}: rapor OKUNAMADI ({type(exc).__name__})")
+            continue
+        i = r.get("parca")
+        if not isinstance(i, int) or r.get("toplam_parca") != n or not 1 <= i <= n:
+            hatalar.append(f"{p.name}: parça kimliği {i}/{r.get('toplam_parca')} ≠ beklenen 1..{n}/{n}")
+            continue
+        if i in raporlar:
+            hatalar.append(f"parça {i}/{n} İKİ raporla geldi ({p.name})")
+            continue
+        raporlar[i] = r
+    for i in range(1, n + 1):
+        if i not in raporlar:
+            hatalar.append(f"parça {i}/{n} RAPORU YOK (iş koşmadı / çöktü / artifact yüklenmedi)")
+
+    sayac: dict[str, int] = {}
+    birlesik: dict[str, float] = {}
+    for i in sorted(raporlar):
+        r = raporlar[i]
+        kos = r.get("kosulan") or {}
+        planlanan = set(r.get("planlanan") or [])
+        if r.get("evren_ozeti") != ozet:
+            hatalar.append(f"parça {i}: evren özeti {r.get('evren_ozeti')} ≠ yerel {ozet} "
+                           f"(farklı commit/kayıtla koşmuş)")
+        if planlanan != plan[i - 1]:
+            hatalar.append(f"parça {i}: plan SAPMASI — rapor {len(planlanan)} birim, yerel plan "
+                           f"{len(plan[i - 1])} (farklı ağırlık/evrenle bölünmüş)")
+        eksik_i = sorted(planlanan - set(kos))
+        fazla_i = sorted(set(kos) - planlanan)
+        if eksik_i:
+            hatalar.append(f"parça {i}: planlanıp KOŞMAYAN {len(eksik_i)} birim: {eksik_i[:10]}")
+        if fazla_i:
+            hatalar.append(f"parça {i}: planda olmayıp koşan {len(fazla_i)} birim: {fazla_i[:10]}")
+        if r.get("rc") != 0:
+            hatalar.append(f"parça {i}: rc={r.get('rc')} (parçanın kendisi kırmızı)")
+        for b, s in kos.items():
+            sayac[b] = sayac.get(b, 0) + 1
+            if isinstance(s, (int, float)):
+                birlesik[b] = float(s)
+        olculen = sum(s for s in kos.values() if isinstance(s, (int, float)))
+        bilgi.append(f"parça {i}/{n}: {len(kos)} birim koştu · ölçülen {olculen:.1f} sn · "
+                     f"fixture-içi ATLA {r.get('fixture_ici_atla', '?')}")
+
+    birlesim = set(sayac)
+    eksik = sorted(evren_k - birlesim)
+    cift = sorted(b for b, c in sayac.items() if c > 1)
+    fazla = sorted(birlesim - evren_k)
+    if eksik:
+        hatalar.append(f"TAMLIK: HİÇBİR parçada koşmayan {len(eksik)} birim: {eksik[:20]}")
+    if cift:
+        hatalar.append(f"TAMLIK: BİRDEN ÇOK parçada koşan {len(cift)} birim: {cift[:20]}")
+    if fazla:
+        hatalar.append(f"TAMLIK: evrende OLMAYAN {len(fazla)} birim koştu: {fazla[:20]}")
+    bilgi.insert(0, f"evren {len(evren)} birim (özet {ozet}) · rapor {len(raporlar)}/{n} · "
+                    f"birleşim {len(birlesim)} · eksik {len(eksik)} · çift {len(cift)} · "
+                    f"fazla {len(fazla)}")
+    return not hatalar, bilgi, hatalar, birlesik
+
+
+def _parca_birlestir_kos(n: int, dizin: Path) -> int:
+    print(f"=== PARÇA TOPLAYICI — tamlık ({n} parça · {dizin.as_posix()}) ===")
+    try:
+        ok, bilgi, hatalar, birlesik = parca_birlestir(n, dizin)
+    except Exception as exc:               # noqa: BLE001 — ölçemedim ≠ temiz
+        print(f"[DOĞRULANAMADI] toplayıcı çöktü: {type(exc).__name__}: {exc}")
+        return 1
+    for s in bilgi:
+        print(f"  {s}")
+    for h in hatalar:
+        print(f"  [FAIL] {h}")
+    if birlesik:
+        en_uzun = sorted(birlesik.items(), key=lambda kv: (-kv[1], kv[0]))[:10]
+        print("  en uzun 10 birim: " + " · ".join(f"{b} {s:.1f}s" for b, s in en_uzun))
+        cikti = dizin / "olculen-sureler.json"
+        try:
+            cikti.write_text(json.dumps({"_kaynak": "parca-birlestir (CI parça raporları)",
+                                         "sureler": dict(sorted(birlesik.items()))},
+                                        ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+            print(f"  ölçülen süreler → {cikti.as_posix()} (ağırlık dosyası adayı)")
+        except OSError as exc:
+            print(f"  ⚠ ölçülen süreler yazılamadı: {exc}")
+    print("  KAPSAM BEYANI: tamlık BİRİM düzeyindedir (fixture/validator/koşucu). Bir "
+          "birimin İÇİNDEKİ alt senaryoların koşup koşmadığına BAKMAZ — o, birimin kendi "
+          "exit kodunun ve ATLA sayısının işidir.")
+    print(f"SONUÇ: {'PASS' if ok else 'FAIL'} — parça tamlığı")
+    return 0 if ok else 1
+
+
+_ATLA_OZET_RE = re.compile(r"(\d+)/(\d+)\s+(?:OK|PASS)\s*·\s*(\d+)\s+ATLA\b")
+_ATLA_ISARET_RE = re.compile(r"^\s*\[ATLA(?:NDI)?\]", re.MULTILINE)
+
+
+def ozet_ve_atla(cikti: str) -> tuple[str, int, str]:
+    """Özel fixture çıktısı → (tablo özeti, fixture-içi ATLA sayısı, sayım kaynağı).
+
+    Özet: bugünkü `^\\s*N/M OK` satırı (DEĞİŞMEDİ); yoksa `N/M PASS · K ATLA` parçası.
+    ATLA: son `N/M OK|PASS · K ATLA` satırının K'si ("ozet"); o biçim yoksa satır başı
+    `[ATLA]`/`[ATLANDI]` işaretlerinin sayısı ("isaret"); ikisi de yoksa 0 ("").
+    """
+    ozet = [s for s in cikti.splitlines() if re.match(r"^\s*\d+/\d+ OK", s)][-1:]
+    atla_satiri = [m for m in _ATLA_OZET_RE.finditer(cikti)][-1:]
+    ozet_metni = ozet[0].strip() if ozet else (atla_satiri[0].group(0) if atla_satiri else "")
+    if atla_satiri:
+        return ozet_metni, int(atla_satiri[0].group(3)), "ozet"
+    isaret = len(_ATLA_ISARET_RE.findall(cikti))
+    return ozet_metni, isaret, ("isaret" if isaret else "")
+
+
+def _parca_argumanlarini_ayir(argv: list[str]) -> tuple[list[str], dict]:
+    """`--parca*` bayraklarını ayır; kalanı `_argumanlari_coz`a gider (imzası DEĞİŞMEDİ)."""
+    kalan: list[str] = []
+    sec: dict = {"parca": None, "rapor": None, "birlestir": None}
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--parca", "--parca-rapor"):
+            if i + 1 >= len(argv):
+                print(f"[HATA] {a} bir değer ister\n{__doc__}")
+                raise SystemExit(2)
+            deger = argv[i + 1]
+            if a == "--parca":
+                m = re.fullmatch(r"(\d+)/(\d+)", deger)
+                if not m or not 1 <= int(m.group(1)) <= int(m.group(2)):
+                    print(f"[HATA] --parca biçimi i/N (1 <= i <= N) olmalı: {deger!r}")
+                    raise SystemExit(2)
+                sec["parca"] = (int(m.group(1)), int(m.group(2)))
+            else:
+                sec["rapor"] = Path(deger)
+            i += 2
+            continue
+        if a == "--parca-birlestir":
+            if i + 2 >= len(argv) or not argv[i + 1].isdigit() or int(argv[i + 1]) < 1:
+                print("[HATA] --parca-birlestir <N> <dizin> ister")
+                raise SystemExit(2)
+            sec["birlestir"] = (int(argv[i + 1]), Path(argv[i + 2]))
+            i += 3
+            continue
+        kalan.append(a)
+        i += 1
+    if sec["birlestir"] is not None and (kalan or sec["parca"] or sec["rapor"]):
+        print("[HATA] --parca-birlestir başka bayrakla birlikte kullanılmaz")
+        raise SystemExit(2)
+    if sec["rapor"] is not None and sec["parca"] is None:
+        print("[HATA] --parca-rapor yalnız --parca ile anlamlıdır")
+        raise SystemExit(2)
+    if sec["parca"] is not None and "--degisen" in kalan:
+        print("[HATA] --parca ile --degisen birlikte kullanılmaz (biri kapsam böler, "
+              "öbürü daraltır)")
+        raise SystemExit(2)
+    return kalan, sec
 
 
 def _argumanlari_coz(argv: list[str]) -> tuple[list[str] | None, bool]:
@@ -1814,10 +2127,53 @@ def main(argv: list[str] | None = None) -> int:
 
 def _main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:]) if argv is None else list(argv)
+    argv, parca_sec = _parca_argumanlarini_ayir(argv)
+    if parca_sec["birlestir"] is not None:
+        return _parca_birlestir_kos(*parca_sec["birlestir"])
+
+    # ── PARÇA MODU (Q354) — `None` ise aşağıdaki akış bugünküyle BİREBİR aynıdır ──
+    parca_plan: set[str] | None = None
+    parca_evren: list[str] = []
+    if parca_sec["parca"] is not None:
+        p_i, p_n = parca_sec["parca"]
+        parca_listele = "--listele" in argv
+        argv = [a for a in argv if a != "--listele"]
+        if argv:
+            print(f"[HATA] --parca ile bilinmeyen argüman: {argv}\n{__doc__}")
+            raise SystemExit(2)
+        try:
+            parca_evren = parca_evreni()
+            p_sureler, p_kaynak = agirliklari_yukle()
+            p_parcalar, p_yuk = parcala(parca_evren, p_n, p_sureler)
+        except Exception as exc:           # noqa: BLE001 — evren kurulamadıysa koşum YOK
+            print(f"[DOĞRULANAMADI] parça evreni kurulamadı: {type(exc).__name__}: {exc}")
+            return 1
+        parca_plan = p_parcalar[p_i - 1]
+        _KOSULAN.clear()                   # rapor YALNIZ bu koşumun birimlerini taşır
+        sinif_say: dict[str, int] = {}
+        for b in parca_evren:
+            sinif_say[b.split(":", 1)[0]] = sinif_say.get(b.split(":", 1)[0], 0) + 1
+        print(f"=== PARÇA {p_i}/{p_n} — TAM SÜİTE DEĞİL (tamlık: --parca-birlestir) ===")
+        print(f"  evren: {len(parca_evren)} birim ("
+              + " · ".join(f"{k} {v}" for k, v in sinif_say.items())
+              + f") · özet {evren_ozeti(parca_evren)}")
+        print(f"  ağırlık: {p_kaynak}")
+        print("  parça yükleri (tahmini sn): "
+              + " · ".join(f"{k + 1}:{y / 1000:.1f}" for k, y in enumerate(p_yuk)))
+        print(f"  BU PARÇA: {len(parca_plan)} birim")
+        for b in sorted(parca_plan, key=parca_evren.index):
+            print(f"    · {b}")
+        if parca_listele:
+            return 0
+        print()
+
     degisen, listele = _argumanlari_coz(argv)
 
     secim: set[str] | None = None
-    if degisen is not None:
+    if parca_plan is not None:
+        # V/O/R/G mevcut seçim süzgecinden geçer; H ve K aşağıda parça planından okunur.
+        secim = {b for b in parca_plan if b[:2] in ("V:", "O:", "R:") or b == "G"}
+    elif degisen is not None:
         secim, notlar = birimleri_sec(degisen)
         print("=== SEÇİM MODU (--degisen) — TAM SÜİTE DEĞİL ===")
         for n in notlar:
@@ -1845,6 +2201,8 @@ def _main(argv: list[str] | None = None) -> int:
         if secim is not None and f"V:{name}" not in secim:
             atlanan += 1
             continue
+        _t0 = time.perf_counter()
+        _birim_kostu(f"V:{name}", _t0)     # erken `continue` dalları da "koşuldu" sayılır
         script = VALIDATORS_DIR / f"{name}.py"
         bad_dir = FIXTURES / name / "bad"
         good_dir = FIXTURES / name / "good"
@@ -1889,11 +2247,16 @@ def _main(argv: list[str] | None = None) -> int:
             "PASS" if ok else "FAIL",
             detail,
         ))
+        _birim_kostu(f"V:{name}", _t0)
 
+    fx_atla = 0                            # fixture-içi ATLA (ölçülmedi) — özet satırında
+    fx_atla_isaret: list[str] = []         # sayıyı özet biçiminde basmayan, işaretli olanlar
     for ad, aciklama in OZEL_TESTLER:
         if secim is not None and f"O:{ad}" not in secim:
             atlanan += 1
             continue
+        _t0 = time.perf_counter()
+        _birim_kostu(f"O:{ad}", _t0)       # erken `continue` dalları da "koşuldu" sayılır
         script = FIXTURES / ad / "run.py"
         if not script.is_file():
             rows.append((ad, "n/a", "n/a", "DOĞRULANAMADI", f"özel fixture yok: {script}"))
@@ -1909,8 +2272,15 @@ def _main(argv: list[str] | None = None) -> int:
         all_ok = all_ok and ok
         if not ok:
             basarisiz_ciktilar.append((f"O:{ad}", out))
+        _birim_kostu(f"O:{ad}", _t0)
         # Ozel fixture P ve N senaryolarini KENDI icinde tasir → tek exit kodu raporlanir.
-        ozet = [s for s in out.splitlines() if re.match(r"^\s*\d+/\d+ OK", s)][-1:] or [""]
+        # Q354: `N/M PASS · K ATLA` bicimi de taninir (ATLA sayisi ozet satirina tasinir).
+        _ozet_metni, _atla, _atla_kaynak = ozet_ve_atla(out)
+        ozet = [_ozet_metni + (f" · {_atla} ATLA" if _atla and "ATLA" not in _ozet_metni
+                               else "")]
+        fx_atla += _atla
+        if _atla_kaynak == "isaret":
+            fx_atla_isaret.append(f"{ad}({_atla})")
         rows.append((
             ad,
             f"P+N içeride ({aciklama[:18]}…)",
@@ -1923,7 +2293,9 @@ def _main(argv: list[str] | None = None) -> int:
                         rows[-1][3], rows[-1][4])
 
     # ── HARİTA-TAMLIK (yalnız TAM koşumda; seçim modunda kıyas tabanı yok) ──
-    if secim is None:
+    # Parça modunda TAM evrenin bir birimidir (`H`): tam olarak BİR parçada koşar.
+    if secim is None or (parca_plan is not None and "H" in parca_plan):
+        _birim_kostu("H", time.perf_counter())
         for kisa, aciklama, ok, detay in harita_tamlik():
             all_ok = all_ok and ok
             rows.append((kisa, aciklama, "harita ↔ fixture listesi",
@@ -1979,7 +2351,9 @@ def _main(argv: list[str] | None = None) -> int:
             return 1
         print("\n" + "-" * 60)
         print("pre_tool_guard payload korpusu (blok + serbest)")
+        _t0 = time.perf_counter()
         g_gecen, g_toplam, g_hatalar = guard_kosum(sessiz=True)
+        _birim_kostu("G", _t0)
         for h in g_hatalar:
             print(f"  [FAIL] {h}")
         print(f"{g_gecen}/{g_toplam} PASS  (bölüm 3: guard payload)")
@@ -1989,10 +2363,13 @@ def _main(argv: list[str] | None = None) -> int:
     # ── BÖLÜM 4: kip koşabilirliği (yalnız TAM koşum; ~+78 sn — gerekçe fonksiyonda) ──
     k_gecen = k_toplam = 0
     k_hatalar: list = []
-    if secim is None:
+    if secim is None or parca_plan is not None:
+        # Parça modunda yalnız bu parçanın `K:<koşucu>` birimleri (boş küme = hiçbiri).
+        k_secim = (None if parca_plan is None
+                   else {b[2:] for b in parca_plan if b.startswith("K:")})
         print("\n" + "-" * 60)
         print("kip koşabilirliği (koşucu başına İLK kip; ölçüt: çökmeden koştu mu)")
-        k_gecen, k_toplam, k_hatalar = kip_kosabilirligi()
+        k_gecen, k_toplam, k_hatalar = kip_kosabilirligi(k_secim)
         for h in k_hatalar:
             print(f"  [FAIL] {h}")
         print(f"{k_gecen}/{k_toplam} PASS  (bölüm 4: kip koşabilirliği — korpus GÜCÜ "
@@ -2000,14 +2377,35 @@ def _main(argv: list[str] | None = None) -> int:
     else:
         print("\n[ATLANDI — seçim modu] bölüm 4: kip koşabilirliği")
 
+    # Q354: fixture-içi ATLA (ölçülmedi) özet satırında GÖRÜNÜR — PASS sayısına KATILMAZ.
     print(f"\nTOPLAM: {n_pass + r_gecen + g_gecen + k_gecen}"
-          f"/{len(rows) + r_toplam + g_toplam + k_toplam} PASS")
-    if secim is not None:
+          f"/{len(rows) + r_toplam + g_toplam + k_toplam} PASS · {fx_atla} ATLA "
+          f"(fixture-içi alt senaryo; ölçülmedi)")
+    if fx_atla_isaret:
+        print(f"  ⚠ ATLA sayısı `N/M PASS · K ATLA` özetinden değil satır işaretlerinden "
+              f"sayıldı: {', '.join(fx_atla_isaret)}")
+    rc_son = 0 if (all_ok and r_gecen == r_toplam and not g_hatalar
+                   and not k_hatalar) else 1
+    if parca_plan is not None:
+        print(f"⚠ PARÇA {p_i}/{p_n} ({len(_KOSULAN)}/{len(parca_plan)} birim koştu) — TAM "
+              f"SÜİTE SONUCU DEĞİLDİR; tamlık: --parca-birlestir {p_n} <rapor-dizini>")
+        for b, s in sorted(_KOSULAN.items(), key=lambda kv: (-kv[1], kv[0])):
+            print(f"  [SÜRE] {b} {s:.2f}")
+        if parca_sec["rapor"] is not None:
+            rapor = {"surum": 1, "parca": p_i, "toplam_parca": p_n,
+                     "evren_ozeti": evren_ozeti(parca_evren), "evren_boyu": len(parca_evren),
+                     "planlanan": sorted(parca_plan),
+                     "kosulan": dict(sorted(_KOSULAN.items())),
+                     "rc": rc_son, "fixture_ici_atla": fx_atla}
+            parca_sec["rapor"].parent.mkdir(parents=True, exist_ok=True)
+            parca_sec["rapor"].write_text(json.dumps(rapor, ensure_ascii=False, indent=1) + "\n",
+                                          encoding="utf-8")
+            print(f"  parça raporu → {parca_sec['rapor'].as_posix()}")
+    elif secim is not None:
         print(f"⚠ SEÇİLİ KOŞUM ({atlanan} fixture atlandı; bölüm-2/3 atlamaları yukarıda "
               f"satır satır) — TAM SÜİTE SONUCU DEĞİLDİR. "
               f"Merge öncesi: python tests/run_fixture_tests.py")
-    return 0 if (all_ok and r_gecen == r_toplam and not g_hatalar
-                 and not k_hatalar) else 1
+    return rc_son
 
 
 if __name__ == "__main__":
