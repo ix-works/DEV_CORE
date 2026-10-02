@@ -185,4 +185,44 @@ kurulmaz" kuralı: [`vscode-setup.md`](vscode-setup.md). Öneri listesi: `.vscod
 | ui5lint FE-gate | **secondsky/sap-skills** → `plugins/sapui5-linter` (⚠ ayrı repo DEĞİL — monorepo alt-klasörü; `secondsky/sapui5-linter` **404**, doğrulandı 2026-07-26) | resmi `@ui5/linter` FE reviewer zincirine WARNING-validator (abaplint'in FE simetriği) | — | ⚪ İZLE (deneme adayı) |
 | refactor-guardrail seti | matt1as clean-abap/refactor | davranış-koruma listesi (exception/SELECT-sırası/auth/COMMIT-sınırı/imza) + diff-first + tek-obje | — | ⚪ İZLE (ilk büyük refactor tetiği → playbook/howto-refactor-abap.md) |
 
+---
+
+## 7. İZLENEN DIŞ KAYNAKLAR — radar 2026-10-03 yeni keşif
+
+> **Ne:** Kataloğumuzda (§6) **henüz olmayan**, 2026-10-03 radar turunda GitHub aramasıyla bulunan
+> repolar. Hiçbiri **kurulmadı/aktive edilmedi** ⇒ §6 provenance'a girmez; alınırsa oraya taşınır.
+> Değerler `gh api` ile 2026-10-03'te ölçüldü (★ ve son push zamanla değişir). Yalnız ADOPT/pilot/İZLE
+> olanlar listelendi; ATLA gerekçeleri tur raporunda. ⚠ Bu turun en değerli SAP repolarından ikisi
+> §🔎 marianfoo kataloğunda **yoktu** ⇒ keşifte katalog + doğrudan GitHub araması birlikte kullanılır.
+
+| owner/repo | alan | bizim için ne var | son push | ★ | statü |
+|---|---|---|---|---|---|
+| williansaez/abap-adt-mcp | SAP ADT MCP | SQL satır reflow (255 kr sınırı), audit JSONL, `deniedTables`, hata nesnesi `kind/hint/nextTools`, `destructiveHint`, FIELD-NOTES | 2026-09-30 | 11 | **DESEN-ADOPT** (araç DEĞİL: transport yaratır, standart obje koruması yok) |
+| shrek-abaper/sap-engineering-skill | SAP skill | 9 boyutlu ABAP review, golden-set eval'li TR gate, `REF_ABAP_SECURITY.md` | 2026-09-28 | 41 | **DESEN-ADOPT** (BE güvenlik checklist'i) |
+| zernie/vigiles | CC harness testi | skill tetiklenme recall/precision (`measureTriggerRate`), guard felaket bataryası + yazım varyantı üreteci | 2026-10-01 | 15 | **ADOPT-ADAY (pilot)** |
+| kts982/sap-odata-explorer | SAP OData | salt-okur V2/V4 CLI + skill, `--json`, Fiori-readiness lint | 2026-10-01 | 7 | **ADAY (pilot; imzasız binary ⇒ intake gümrüğü)** |
+| UI5/plugins-coding-agents | UI5 resmî | kurulu `ui5` plugin'inin kaynağı; `ui5-modernization` (linter kör noktaları, table row-mode) | 2026-09-29 | 38 | İZLE (+ §1 `ui5` satırının kaynağı) |
+| nerdocs/pydifact | EDI | UNA/release-char destekli EDIFACT ayrıştırıcı — kendi ayrıştırıcıya bağımsız kontrol grubu | 2026-09-29 | 190 | İZLE → pilot |
+| PietroMezzaroba/sap-cpi-iflow | CPI | mapping kuyruk/bağlam modeli ("one queue per parent"), ≥2 ebeveynli test payload kuralı | 2026-09-12 | 1 | İZLE (referans) |
+| logalitech/logali-mcp-integration-suite | CPI MCP | tamamen salt-okur paket/iFlow/MPL | 2026-08-15 | 0 | İZLE (tenant API erişimi ön koşul) |
+| vadimklimov/cpi-mcp-server | CPI MCP | design-time listeleme/arama | 2026-06-30 | 26 | İZLE |
+| karthickshiva-png/sap-cpi-mcp-server | CPI MCP | Integration Suite yerel MCP Server artefaktı | 2026-09-11 | 5 | İZLE |
+| SAP-samples/integration-mcp-gateway | CPI resmî | MCP Gateway tutorial | 2026-09-27 | 1 | İZLE |
+| infinri/Writ | CC governance | onay bütünlüğü ADR'si (onay token'ı yalnız kullanıcı mesajından + "istendi mi" transkript teyidi) | 2026-09-30 | 206 | İZLE (desen; ADR 0019 şartları geçerli) |
+| tznthou/ccRecall | CC recall | trigram tokenizer (Türkçe ek A/B fikri) | 2026-09-22 | 1 | İZLE |
+| othmarodev/claude-lessons | CC ders yakalama | Stop-hook "rework" sinyali → inbox | 2026-06-21 | 1 | İZLE |
+| tillmeier/claude-code-guardrails | CC hook | brifi görmeyen reviewer, oturum başı HEAD tabanı | 2026-09-16 | 45 | İZLE |
+| mattschaller/agent-context-lint | CC lint | talimat dosyalarında ölü yol/komut | 2026-08-30 | 1 | İZLE |
+| gastownhall/beads | iş takibi | bağımlılık grafı + supersedes/duplicates | 2026-10-02 | 27594 | İZLE |
+| yurukusa/cc-safe-setup | CC hook | güvenlik hook'ları + sessiz hata yüzeyleme | 2026-09-25 | 7 | İZLE |
+| vercel-labs/agent-browser | tarayıcı | `snapshot --delta`, kalıcı ref, `--if-changed` | 2026-10-01 | 43460 | İZLE (iki araçla token ölçüm turu) |
+| ChromeDevTools/chrome-devtools-mcp | tarayıcı | perf izi, Lighthouse, CSS teşhisi | 2026-10-02 | 52889 | İZLE (tetik: perf/CSS sorunu) |
+| ui5-community/wdi5 | UI5 test | WebdriverIO + UI5 | 2026-09-11 | 120 | İZLE |
+| kennyhml/tree-sitter-abap (+ tree-sitter-acds) | arama | ABAP/CDS tree-sitter grammar (WIP) | 2026-09-24 | 16 | İZLE (ast-grep'e yüklenebilirlik ölçülmedi) |
+| DataZooDE/erpl-adt | SAP CLI | tek binary ADT CLI | 2026-09-29 | 21 | İZLE |
+| silvius1996/claude-sap-kit | SAP skill | rapor SUBMIT → ALV JSON, NAST PDF önizleme | 2026-09-29 | 17 | İZLE (desen) |
+| Gixsy95/abap_wiki | SAP bilgi | `[VERIFIED: path:N-M]` atıf biçimi + adversarial judge | 2026-09-21 | 48 | İZLE |
+| Freight-Art/abapsmith | SAP MCP | debugger, "nothing ran ≠ pass" | 2026-09-24 | 6 | İZLE (debugger 2. kaynak) |
+| oisee/vibing-steampunk | SAP MCP | DAP debugger (`vsp dap`), read sha256/if-none-match | 2026-10-02 | — | İZLE (debugger) |
+
 > **Template (T12):** Bu katalog + adoption metodolojisi **genericize edilip template repo'ya** taşınmalı (gelecek projeler küratörlü araç setini + "kıyasla, var/yok değil" yöntemini miras alsın). *(EMEKLİ — canlı-çekirdek mimarisinde [ADR 0020] port süreci YOK: katalog zaten core'da yaşar; genericize'ı pre-commit gate korur.)*
