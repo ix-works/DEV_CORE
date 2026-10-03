@@ -18,6 +18,8 @@ Typed tool layer over `scripts/sap_adt_lib.py` for SAP ABAP Development Tools (A
 | `adt_search_objects` | Query | İsim/açıklama ara |
 | `adt_transport_list` | Query | Transport içerik listele |
 | `adt_lock_check` | Query | Lock kontrolü |
+| `adt_dump_list` | Query | ST22 dump feed'i; araç-gürültüsü etiketi; başka client varsayılan gizli |
+| `adt_dump_read` | Query | Tek ST22 dump'ı: yapılandırılmış XML · `summary` · `formatted` (bayt tavanlı) |
 
 ## Server-Side Guardrails (ADR 0005, hardcoded)
 
@@ -30,6 +32,7 @@ Typed tool layer over `scripts/sap_adt_lib.py` for SAP ABAP Development Tools (A
 | Package create | Tool listesinde yok |
 | **Tier ≠ DEV / çözülemez** (ADR 0010) | Mutasyon reddedilir — `require_writable_tier`, **fail-closed** (11 tool) |
 | **Hassas veri, DEV dışı** (ADR 0011) | `require_data_access` — açık onay ister (`adt_table_read`, `adt_sql_query`) |
+| **ST22 dump: DEV dışı ya da BAŞKA client** (ADR 0011 + kullanıcı kararı 2026-10-03) | `acknowledge_risk=True` olmadan liste gizler / okuma reddeder (`adt_dump_list`, `adt_dump_read`) |
 
 Bypass yok. Değişiklik için `mcp_servers/sap_adt/guardrails.py` commit edilmeli.
 

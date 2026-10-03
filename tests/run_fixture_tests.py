@@ -416,6 +416,10 @@ OZEL_TESTLER = [
     ("sql_satir_kirma",
      "freestyle 255-satir siniri: uzun satir literal/yorum bolunmeden kirilir, >255 atom -> istek "
      "gitmez + 4 POST noktasi (AST sinif taramasi) + 400 govdesi kirpilmadan (sebep gorunur)"),
+    # 2026-10-03 (K4): ST22 dump govdesi okuma + arac gurultusu etiketi + baska client PII
+    ("dump_okuma",
+     "adt_dump_read/adt_dump_list: yapilandirilmis okuma, 404 != sessiz bos, formatted bayt "
+     "tavani, SUBPOOL∧ADT-SQL gurultu etiketi, baska/bilinmeyen client varsayilan gizli/okunmaz"),
     # 2026-09-03: ayni sinifin 7. uyesi, bu kez CLI tani aracinda (scripts/ altinda oldugu
     # icin 2026-08-01 ve 2026-08-19 supurgelerinin ikisi de atlamisti).
     ("doctor_baglanti_kaniti",
@@ -1223,7 +1227,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      ("O:dogrulama_kosamadi", "O:veri_yetki_guardlari", "O:sorgu_basarisizligi_gorunur",
       "O:atc_p1_sonuc", "O:unit_run_guard_riski", "O:grep_kapsam_gorunurlugu",
       "O:paket_aciklama_dogrulanmadi", "O:fm_okuma_where_used",
-      "O:sorgu_araclari_durustlugu"),
+      "O:sorgu_araclari_durustlugu", "O:dump_okuma"),
      "where_used/ATC + veri sorgusu + başarısızlık görünürlüğü + ⚠ `adt_atc_check` yanıt "
      "ŞEKLİ (priority_1_count · must_fix · policy) post_tool_failure ATC ekseninin "
      "GİRDİSİDİR: alan adı ya da politika metni değişirse eksen SESSİZCE boşalır"),
