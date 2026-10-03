@@ -36,7 +36,7 @@ Son-doğrulama: 2026-10-03 · Applies-to: `adt_sql_query` / ADT data-preview fre
 | Girdi | Sonuç |
 |---|---|
 | 213 kr tek satır | 200 |
-| 309 kr tek satır, yalnız AND | **400** `A Boolean expression was expected in "MTEX"` — `mtext` 251. karakterde başlıyor ⇒ kesim tam 255'te |
+| 309 kr tek satır, yalnız AND | **400** `A Boolean expression was expected in "MTEX"` — `mtext` 0-tabanlı indeks 251'de (252. karakter) başlıyor; hata yalnız ilk 4 harfi (`MTEX` = 252-255) gösteriyor ⇒ kesim tam 255'te (indeks tabanı hata metninden çıkarıldı, sorgu yeniden koşulmadı) |
 | aynı sorgu satırlara bölünmüş | 200 |
 | 288 kr tek satır, 14 `OR` | **400** `"O" is invalid here` — 255. karakter `OR`'un `O`'su |
 | 252 kr tek satır, **13 `OR`** | **200** ⇒ "5+ OR → 400" teşhisi çürüdü |
@@ -67,8 +67,13 @@ Geçmiş tarama (bir makinedeki transkriptler): >255 kr satırlı **229** çağr
   bütçeyi daraltır") ve 2026-09-16'daki *"`<` HTML-escape ediliyor → 'A Boolean expression was
   expected'"* teşhisi aynı sınırın imzasını taşıyor (252 kr'lik tek satırda `<>` 200 döndü; `<`
   tek başına ölçülmedi) — **yeniden ölçülmedi (DOĞRULANAMADI)**. Uzun sorguda gördüysen önce böl.
+- **AÇIK / ÖLÇÜLEMEDİ:** kısa `WHERE vbeln = 'X' AND vbtyp = 'E'` (2 terim) 400 verdi, `WHERE
+  vbtyp = 'E' AND vbeln > 'Y'` koştu (2026-09-06). Sorgu metni izlenemedi ⇒ kırpmayla açıklanıp
+  açıklanmadığı bilinmiyor; satır kısaysa sebep başkadır.
 
-**Why:** Yanlış teşhis yanlış çözüme götürdü — terim azaltıldı, sorgu parçalandı, doğru çalışan
+**Why:** Geçmiş taramadaki 7 sessiz kırpmanın **hiçbiri bir karara girmedi** — zarar sonuç
+düzeyinde değil, **mekanizma** düzeyindeydi: kırpma yanlış adlandırıldı ve o yanlış ad kalıcı
+kurallara yazıldı. Yanlış teşhis yanlış çözüme götürdü — terim azaltıldı, sorgu parçalandı, doğru çalışan
 anti-join "araç tuzağı" diye yasaklandı; en kötüsü, 255 aşımı `ok:true` döndüğünde **yanlış veri
 doğru sanıldı**. ABAP tarafındaki SELECT bu sınırdan etkilenmez; sınır yalnız ADT data-preview
 ucundadır. Bir 400'ü "tabloya erişemiyorum" ya da "JOIN çalışmıyor" diye raporlama — araç sınırını

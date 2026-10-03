@@ -144,17 +144,24 @@ satırlar eklenir. `--force` KULLANMA.
 bölümü). Merge-safe kopyalama var olan dosyayı atlar ⇒ `Atlandı : N (zaten mevcut, korundu)`
 ve `[OK] Her şey güncel` **"yerel kopya güncel" DEMEK DEĞİLDİR**. `--terfi-adaylari` da bunu
 ayırt edemez: adım 3'teki koşum manifest'e yeni sha yazdığı için eski kopya *"(a) yerelde
-düzenlenmiş"* kovasında görünür. Changelog'da **tohum gövdesi değişti** diye anılan her dosya için:
+düzenlenmiş"* kovasında görünür. Sınır yalnız changelog'da anılan dosyalarla sınırlı DEĞİLDİR —
+denetim **bütün tohum dosyalarını** tarar (`MEMORY.md` hariç: o kullanıcının indeksidir, silinmez):
 
 ```bash
-f=<dosya-adı>.md ; M=<bu makinenin memory dizini>
-for sha in $(git -C core log --format=%h -- "claude/memory-seed/$f"); do
-  git -C core show "$sha:claude/memory-seed/$f" | diff -q --strip-trailing-cr - "$M/$f" >/dev/null && echo "TOHUM $sha = yerel"
+C=core ; M=<bu makinenin memory dizini>
+for p in "$C"/claude/memory-seed/*.md; do f=${p##*/}; q=claude/memory-seed/$f
+  [ "$f" = MEMORY.md ] && continue; [ -f "$M/$f" ] || continue
+  git -C "$C" show "HEAD:$q" | diff -q --strip-trailing-cr - "$M/$f" >/dev/null && continue
+  hit=; for sha in $(git -C "$C" log --format=%h -- "$q"); do
+    git -C "$C" show "$sha:$q" | diff -q --strip-trailing-cr - "$M/$f" >/dev/null && { hit=$sha; break; }
+  done
+  [ -n "$hit" ] && echo "SIL+SEED ($hit) $f" || echo "ELLE $f"
 done
 ```
 
-Çıktı varsa yerel kopya dokunulmamış bir tohum sürümüdür → **o dosyayı** sil, `seed_memory.py`
-koş. Çıktı yoksa yerel kopya bu makinede düzenlenmiştir → ⛔ **SİLME**, tohumla elle birleştir.
+`SIL+SEED` = yerel kopya dokunulmamış eski bir tohum sürümüdür → **o dosyayı** sil; listedekiler
+bitince `seed_memory.py`'yi bir kez koş. `ELLE` = yerel kopya bu makinede düzenlenmiştir →
+⛔ **SİLME**, tohumla elle birleştir. Güncel olan ve yerelde bulunmayan dosya basılmaz.
 ⛔ Denetimsiz *"sil + yeniden koş"* talimatı verme: yerelde zenginleştirilmiş ders kaybolur.
 
 ⭐ **TERS YÖN (Q325):** yukarıdaki adım yalnız *tohum → makine* yönünü doğrular. Bu makinede

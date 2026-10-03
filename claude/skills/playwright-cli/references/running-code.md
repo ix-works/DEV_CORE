@@ -260,32 +260,60 @@ playwright-cli run-code "async page => {
 yazılmaz. Sır ortam değişkeninden gelir ve oturuma `open` anında verilir:
 
 ```bash
-# 1) Sır env'de (ör. PW_AUTH_USER / PW_AUTH_PASS) — komut metnine DEĞER yazılmaz.
-#    Yardımcı config + secrets dosyasını REPO DIŞINDA yazar ve değeri BASMAZ.
+# ⛔ 1) TEK Bash çağrısında koş: `$D` ve `trap` çağrılar arasında TAŞINMAZ. Adımları ayrı
+#    çağrılara bölersen sonraki çağrıda `$D` boş gelir, düz metin sır %TEMP%'te KALIR.
+#    Sır env'de (PW_AUTH_USER / PW_AUTH_PASS) — komut metnine DEĞER yazılmaz.
+(
+set -e
 D="$(mktemp -d)"
+trap 'rm -rf "$D"' EXIT
 python - "$D" <<'EOF'
 import base64, json, os, sys
 d = sys.argv[1]
 u, p = os.environ["PW_AUTH_USER"], os.environ["PW_AUTH_PASS"]
+
+def dotenv_deger(v):
+    # Tırnaksız dotenv değeri `#`'de kesilir ⇒ değeri İÇERMEDİĞİ bir tırnakla sar.
+    if "\n" in v or "\r" in v:
+        sys.exit("HATA: sır satır sonu içeriyor — dotenv'e yazılamaz")
+    for q in ("'", "`"):
+        if q not in v:
+            return q + v + q
+    if '"' not in v and "\\n" not in v and "\\r" not in v:   # "…" içinde \n \r çözülür
+        return '"' + v + '"'
+    sys.exit("HATA: sır üç tırnak türünü de içeriyor — dotenv'e güvenle yazılamaz")
+
 json.dump({"browser": {"contextOptions": {"httpCredentials": {"username": u, "password": p}}}},
           open(os.path.join(d, "cli.config.json"), "w", encoding="utf-8"))
 b64 = base64.b64encode(f"{u}:{p}".encode()).decode()
 open(os.path.join(d, "secrets.env"), "w", encoding="utf-8").write(
-    f"PW_AUTH_PASS={p}\nPW_AUTH_B64={b64}\n")
+    f"PW_AUTH_PASS={dotenv_deger(p)}\nPW_AUTH_B64={dotenv_deger(b64)}\n")
 EOF
-# 2) Oturumu bu config + secrets ile aç (ikisi de `open` anında okunur; sonradan verilen env etkisizdir)
+# config + secrets `open` anında belleğe okunur; alt kabuk bitince trap dosyaları siler
 PLAYWRIGHT_MCP_SECRETS_FILE="$D/secrets.env" playwright-cli -s=auth open --config="$D/cli.config.json" https://app.example.com/
-# 3) Form alanına sırrın ADINI ver — CLI değeri koyar; çıktıda `fill(process.env['PW_AUTH_PASS'])` görünür
+)
+# 2) SONRAKİ çağrılar (ayrı olabilir): form alanına sırrın ADINI ver — CLI değeri koyar;
+#    çıktıda `fill(process.env['PW_AUTH_PASS'])` görünür
 playwright-cli -s=auth fill e5 PW_AUTH_PASS
-# 4) Bitince kapat + dosyaları sil
 playwright-cli -s=auth close
-rm -rf "$D"
 ```
 
-Bu blok sahte bir Basic-auth sunucusuna karşı yazıldığı gibi koşuldu: config'siz oturum
-`ERR_INVALID_AUTH_CREDENTIALS`, bu oturum 200 (sayfa başlığı beklenen) · alan uzunluğu sahte
-parolanınkine eşit · çıktıda sır değeri **0** kez.
+**Ölçüldü (sahte Basic-auth sunucusu, sahte parola `ab#cd`):** blok tek çağrıda koştu → sayfa
+başlığı beklenen, çağrı bitince geçici dizinde `secrets.env` **0**. Dosyalar silindikten SONRA
+ayrı bir çağrıda `fill <ref> PW_AUTH_PASS` alanı sahte parolayla **birebir** doldurdu ve yeni bir
+auth'lu gezinti de geçti ⇒ CLI config + secrets'ı `open` anında belleğe alıyor. Çıktıda sır
+değeri **0** kez. Config'siz kontrol oturumu: `ERR_INVALID_AUTH_CREDENTIALS`.
+
+⚠ **dotenv değeri TIRNAKLA yazılır** — tırnaksız değer `#`'de kesilir (ölçüldü: tırnaksız
+`ab#cd` → alan `ab` ile doldu, echo'da yalnız `ab` maskelendi: `'<secret>PW_AUTH_PASS</secret>#cd'`).
+Yardımcı değeri İÇERMEDİĞİ tırnakla sarar (`'` → `` ` `` → `"`); `"…"` içinde `\n`/`\r` dizileri
+satır sonuna çevrildiği için o dal bu dizileri içeren değeri almaz. **Sınır:** değer üç tırnak
+türünü de içeriyorsa ya da satır sonu taşıyorsa yardımcı HATA verip çıkar (ölçüldü: rc=1,
+geçici dizin silindi) — o sır bu yolla verilemez. JSON config'deki `httpCredentials` bu
+kısıtlamadan etkilenmez (JSON kaçışı tam).
+
 Basic-auth için `httpCredentials` yeterli çıktı (tarayıcı 401 sorgusuna cevap verir).
-`contextOptions.extraHTTPHeaders` ile elle başlık kurma yolu **ölçülmedi** — gerekirse değer yine
-aynı yardımcıdan config'e yazılır, `run-code`'a değil; önce sahte değerle ölç. Sızma şüphesinde: çıktıyı redakte et, geçici
-dosyaları sil, kimlik bilgisini değiştirmeyi kullanıcıya öner.
+`browser.contextOptions.extraHTTPHeaders` ile elle başlık kurma yolu **ölçülmedi** — gerekirse
+değer yine aynı yardımcıdan config'e yazılır, `run-code`'a değil; önce sahte değerle ölç.
+Sızma şüphesinde: çıktıyı redakte et, geçici dosyaları sil, kimlik bilgisini değiştirmeyi
+kullanıcıya öner.
