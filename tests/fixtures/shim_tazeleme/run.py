@@ -59,7 +59,9 @@ CAPA_FARK = """    for satir in fark:
         print("  " + satir.rstrip("\\n"))"""
 CAPA_TERS = "    if proje_ozel:\n"
 # ⚠ RAPORLAMA sozlesmesinin capasi (asagidaki SINIR notuna bak).
-CAPA_DOGRULAMA = ('    say(OK, f"hook_shim.py TAZELENDİ — doğrulandı: '
+# 2026-10-03 (F12b): `shim_tazele` -> genel `kopya_tazele`; ad artik `{ad}` (hook_shim.py /
+# pre-commit). Ciktidaki metin hook_shim icin AYNI kaldi ("hook_shim.py TAZELENDİ — ...").
+CAPA_DOGRULAMA = ('    say(OK, f"{ad} TAZELENDİ — doğrulandı: '
                   'sonuç sha256 == şablon sha256 "')
 
 MUTLAR = {
@@ -76,7 +78,7 @@ MUTLAR = {
     "--mutasyon-ters-yon-kor": (CAPA_TERS, "    if False:  # MUTASYON\n"),
     # RAPORLAMA sokumu: sonuc sha'siz duyurulur -> V2b duser
     "--mutasyon-dogrulama-yok": (
-        CAPA_DOGRULAMA, '    say(OK, f"hook_shim.py TAZELENDİ. "'),
+        CAPA_DOGRULAMA, '    say(OK, f"{ad} TAZELENDİ. "'),
 }
 
 # ⚠⚠ OLCUM SINIRI — DURUSTLUK KAYDI (silme):

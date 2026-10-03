@@ -34,8 +34,10 @@ S4 vektörüyle ZATEN çivili bir sınıf).
 
 Tüketiciler: `scripts/hooks/session_start.py` · `scripts/ix_doctor.py`
 (ikisi hem `anlamli_imza`yı hem `d7_ciftleri`ni buradan okur — Q245②, 2026-09-13)
-· `scripts/team_setup.py` (yalnız `D7_CIFTLERI`in pre-commit YOK onarım metni —
-`hookspath_proje` uyarısı; eskiden `init_project --force` öneriyordu, Q303)
+· `scripts/team_setup.py` (`D7_CIFTLERI`in pre-commit YOK onarım metni —
+`hookspath_proje` uyarısı; eskiden `init_project --force` öneriyordu, Q303 · ve 2026-10-03
+F12a'dan beri `sablon_sapmasi`: `D7_CIFTLERI` + `anlamli_imza` + `ayrisma` — kurulum anında
+aynı hükmü verir, sapmayı bir sonraki oturuma bırakmaz)
 Korpus: tests/fixtures/d7_drift_imzasi/run.py
 """
 from __future__ import annotations
@@ -145,6 +147,59 @@ def anlamli_imza(p: Path) -> str:
         return hashlib.sha256(norm).hexdigest()[:16]
     except Exception:
         return OKUNAMADI
+
+
+def _ogeler(p: Path) -> list[str]:
+    """`anlamli_imza`nın NORMALİZE ettiği içeriğin öğe listesi (yön sayımı için).
+
+    JSON: `yorumsuz` sonrası yaprak YOLLARI (`permissions.allow[] = "Bash(x)"`); liste öğesi
+    bütün olarak tek öğedir (bir hook grubu = tek satır). Metin: CRLF→LF + dış boşluk
+    kırpılmış satırlar. ⛔ Sapma HÜKMÜ bu fonksiyondan VERİLMEZ — hüküm `anlamli_imza`dır;
+    bu yalnız "hangi yönde, kaç öğe" açıklamasıdır (iki eksen ayrı tutulur).
+    """
+    ham = p.read_bytes()
+    if p.suffix == ".json":
+        cikti: list[str] = []
+
+        def gez(n, yol: str) -> None:
+            # BOŞ KAP YAPRAKTIR (PR #321 inceleme, 2026-10-03): `{}`/`[]` eskiden HİÇ öğe
+            # üretmiyordu ⇒ fark yalnız boş kaptan geliyorsa çağıran "yalnız SIRA farklı"
+            # diyordu (ölçüldü: `env.ZZ_BOS={}` + `permissions.zz=[]`).
+            if isinstance(n, (dict, list)) and not n:
+                cikti.append(f"{yol} = " + ("{}" if isinstance(n, dict) else "[]"))
+            elif isinstance(n, dict):
+                for k in sorted(n):
+                    gez(n[k], f"{yol}.{k}" if yol else k)
+            elif isinstance(n, list):
+                for x in n:
+                    cikti.append(f"{yol}[] = "
+                                 + json.dumps(x, sort_keys=True, ensure_ascii=False))
+            else:
+                cikti.append(f"{yol} = " + json.dumps(n, ensure_ascii=False))
+
+        gez(yorumsuz(json.loads(ham.decode("utf-8"))), "")
+        return cikti
+    return ham.replace(b"\r\n", b"\n").strip().decode("utf-8", "replace").split("\n")
+
+
+# `_ogeler`in `permissions.allow` liste öğesi öneki — `team_setup.sablon_sapmasi` settings
+# INFO dalı YALNIZ bu önekli eklemeleri "meşru proje eki" sayar (biçim burada üretildiği
+# için önek de burada yaşar; tüketicide literal kopya YOK).
+ALLOW_ONEKI = "permissions.allow[] = "
+
+
+def ayrisma(yerel: Path, sablon: Path) -> tuple[list[str], list[str]] | None:
+    """-> (yalnız PROJEDE olan öğeler, yalnız ŞABLONDA olan öğeler); okunamazsa None.
+
+    Çokluküme farkıdır (sıra yok sayılır): imza farklı ama iki liste de boşsa fark yalnız
+    SIRA'dadır — çağıran bunu ayrıca söyler. Tüketici: `team_setup.sablon_sapmasi` (F12a).
+    """
+    from collections import Counter
+    try:
+        a, b = Counter(_ogeler(yerel)), Counter(_ogeler(sablon))
+    except Exception:
+        return None
+    return sorted((a - b).elements()), sorted((b - a).elements())
 
 
 if __name__ == "__main__":  # elle duman testi

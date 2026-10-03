@@ -477,6 +477,14 @@ OZEL_TESTLER = [
     ("shim_tazeleme",
      "team_setup --tazele-shim: varsayilan kosum EZMEZ (kontrol grubu) + bayrakli yol "
      "FARKI basar/yedek alir/SHA duyurur + proje SABLONDAN ILERIDE ise gurultulu uyari"),
+    # 2026-10-03 yeni-proje akisi paket 2 (F12a/b/c + F5): mevcut kopyalar kurulumda SESSIZCE
+    # "OK" geciyordu; pre-commit'in tazeleme yolu yoktu; CORE-INDEX her kosumda yalniz
+    # damga farki uretiyordu; alt surecler ortamdaki BASKA projenin CLAUDE_PROJECT_DIR'ini
+    # miras aliyordu (tohum yanlis hafizaya).
+    ("team_setup_sablon_sapmasi",
+     "team_setup sablon sapmasi (D7 imzasi, gozlem; settings yalniz-ek=INFO / eksik=WARN) + "
+     "--tazele-precommit (fark/yedek/sha/TERS YON) + CORE-INDEX icerik+core-commit ayniysa "
+     "YAZILMAZ (core-commit farkinda yazar) + alt surec CLAUDE_PROJECT_DIR sabit (gercek seed zinciri)"),
     # 2026-08-29 (kayit #66): KNA1 sahte-pozitifi. `include si_kna1 not null;` satirindaki
     # DDL kisit-eki INCLUDE_LINE'in kuyruk demirini kiriyordu => include HIC GORULMUYOR =>
     # `cozulemeyen`e de dusmuyor => 2026-07-30'un "cozulemezse DOGRULANAMADI" garantisi
@@ -786,7 +794,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # eslesmiyordu -> tazelik kapisi bu dosyada KORDU.
     ("scripts/team_setup.py", ("O:shim_tazeleme", "O:overlay_materyalize_atomik",
                               "O:worktree_yasam_dongusu", "O:team_setup_hook_kablolama",
-                              "O:core_fiziksel_kopya", "O:mcp_import_denetimi"),
+                              "O:core_fiziksel_kopya", "O:mcp_import_denetimi",
+                              "O:team_setup_sablon_sapmasi"),
      "shim tazeleme yolu + `dosya_tamamla` idempotansi burada yasar; varsayilanin "
      "degismedigi YALNIZ bu korpusta olculur. `junctions()` tip-basina yalitimi "
      "(Q30: tek tipteki istisna kurulumun kalan 5 adimini atliyordu) atomik korpusta. "
@@ -1023,7 +1032,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # Q212 (2026-09-09): D7 "sapma" tanımının tek kaynağı. İKİ tüketicisi var ve İKİSİ de
     # ölçülmeli — yalnız bir kapının korpusu seçilseydi ayrışma (bu turun teşhisi) yine
     # görünmezdi. `utils/infra_yuzeyi.py` (Q209) satırıyla AYNI sınıf.
-    ("scripts/utils/drift_imzasi.py", ("O:d7_drift_imzasi",),
+    ("scripts/utils/drift_imzasi.py", ("O:d7_drift_imzasi", "O:team_setup_sablon_sapmasi"),
      "D7 imzası + ÇİFT LİSTESİ (`D7_CIFTLERI`, Q245②) tek-kaynak: `session_start` (hook) + "
      "`ix_doctor` (CLI) aynı normalizasyonu ve aynı çiftleri okur; kopya-tanım drift'i, "
      "çift-başına onarım metni ve 'ÖLÇÜLEMEDİ != TEMİZ' sözleşmesi bu korpusta çapalı"),
@@ -1204,7 +1213,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/syntax_check.py", ("O:aktivasyon_govde_hukmu",),
      "syntax_check_via_activation'ın CLI girişi — hüküm kanonik aktivasyon gövdesinden (Q307)"),
     ("scripts/build_core_index.py",
-     ("O:core_index_kapsam", "O:core_index_siralama", "O:sap_gate_skip_sozlesmesi"),
+     ("O:core_index_kapsam", "O:core_index_siralama", "O:sap_gate_skip_sozlesmesi",
+      "O:team_setup_sablon_sapmasi"),
      "indeks kapsamı + SIRALAMA determinizmi (Q214: anahtarsız `sorted(Path)` "
      "platforma bağlıydı) + `--ci-check` (DG-03: CI backstop'u kendi ürettiğini "
      "doğruluyordu; artık damgadaki core-commit klonla AYNI ise ÖLÇER, değilse "

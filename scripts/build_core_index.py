@@ -331,6 +331,22 @@ def main() -> int:
         print(f"  [OK] CORE-INDEX güncel ({yeni.count(chr(10) + '- [`core/')} doküman)")
         return 0
 
+    # F12c (2026-10-03): İÇERİK AYNI ve damgadaki core-commit ŞİMDİKİ core HEAD'iyle aynıysa
+    # dosya YENİDEN YAZILMAZ. Eskiden her `team_setup` koşusu izlenen dosyada yalnız `uretim:`
+    # zaman damgası farkı (`git status` ` M`) üretiyordu. İki tüketicinin GİRDİSİ ölçüldü:
+    #   · `--check` (C-IDX-01) damga satırını `_DAMGA_RE` ile ATAR ⇒ damga girdisi DEĞİL.
+    #   · `--ci-check` damgadaki `core-commit`i klonlanan core HEAD'iyle kıyaslar ⇒ core-commit
+    #     GİRDİDİR. Bu yüzden core-commit değiştiyse (içerik aynı olsa bile) YAZILIR; yalnız
+    #     ZAMAN DAMGASI farkı atlanır. ⚠ Kıyas `--check` ile AYNI normalizasyon (CRLF→LF).
+    if HEDEF.is_file():
+        mevcut_ham = HEDEF.read_text(encoding="utf-8", errors="replace")
+        mevcut = _DAMGA_RE.sub("", mevcut_ham, count=1)
+        simdiki = _simdiki_core_commit()
+        if (mevcut.replace("\r\n", "\n") == yeni.replace("\r\n", "\n")
+                and simdiki is not None and _kayitli_core_commit() == simdiki):
+            print(f"[ OK ] değişmedi: {HEDEF}  ({yeni.count(chr(10) + '- [`core/')} doküman; "
+                  f"içerik + core-commit {simdiki} aynı — yeniden YAZILMADI)")
+            return 0
     HEDEF.parent.mkdir(parents=True, exist_ok=True)
     HEDEF.write_text(_damga() + yeni, encoding="utf-8", newline="\n")
     print(f"[ OK ] yazıldı: {HEDEF}  ({yeni.count(chr(10) + '- [`core/')} doküman)")

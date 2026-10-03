@@ -10,7 +10,9 @@ Yaptıkları:
   2. CORE reposunda `core.hooksPath scripts/git-hooks` (D19 — pre-commit gate'leri)
   3. PROJE'de 4 JUNCTION kur/doğrula (admin gerektirmez, mklink /J; D25: tek tek rapor):
        core / .claude\\agents / .claude\\skills / .claude\\commands
-  4. Eksik proje-lokal dosyaları template'ten tamamla (settings.json, hook_shim.py)
+  4. Eksik proje-lokal dosyaları template'ten tamamla (settings.json, hook_shim.py) +
+     MEVCUT kopyaların şablon sapmasını raporla (D7 imzası; gözlem, exit kodunu değiştirmez)
+  --tazele-shim / --tazele-precommit : sapmış kopyayı AÇIK onayla tazele (fark + yedek + sha)
   5. Claude Code plugin'leri (setup_plugins.py; non-fatal) + seed_memory (--no-seed ile atla)
   6. Smoke: statusline + MCP import
   --repair-junctions      : yalnız junction kur/onar + rapor (session_start'ın önerdiği komut)
@@ -196,8 +198,52 @@ def _sha(yol: Path) -> str:
     return hashlib.sha256(yol.read_bytes()).hexdigest()
 
 
+# Onaylı tazeleme yolu OLAN D7 çiftleri: proje-göreli kopya -> bayrak. Şablon yolu BURADA
+# YAZILMAZ — `utils.drift_imzasi.D7_CIFTLERI`den okunur (Q245② tek kaynak; d7_drift_imzasi
+# V27 tüketicide şablon yolu literalini yakalar — ölçüldü: ilk yazımda burada vardı, düştü).
+# ⛔ `.claude/settings.json` BİLİNÇLİ OLARAK YOK (2026-10-03, F12b): projeye özgü ek
+# `allow`/hook satırları meşrudur (ölçüldü: bir tüketicide şablonun sonuna eklenmiş 3 ek
+# allow) — tam-dosya tazeleme onları silerdi. settings için yalnız `sablon_sapmasi` raporu.
+TAZELENEBILIR = {
+    "scripts/hook_shim.py": "--tazele-shim",
+    "scripts/git-hooks/pre-commit": "--tazele-precommit",
+}
+
+
+def _d7_sablonu(rel_yerel: str) -> str | None:
+    """`D7_CIFTLERI`den core-göreli şablon yolu (tek kaynak); okunamazsa None + FAIL satırı.
+
+    ⛔ PR #321 inceleme (2026-10-03): import eskiden KORUMASIZDI — modül yüklenemezse
+    `--tazele-*` ham traceback ile çıkıyordu; kardeş `sablon_sapmasi` aynı durumda
+    "ÖLÇÜLEMEDİ" diyor. Artık aynı sözleşme: FAIL + ÖLÇÜLEMEDİ, hiçbir dosyaya YAZILMAZ.
+    """
+    try:
+        sys.path.insert(0, str(CORE_ROOT / "scripts"))
+        from utils.drift_imzasi import D7_CIFTLERI  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        say(FAIL, f"{rel_yerel}: şablon yolu ÖLÇÜLEMEDİ — utils.drift_imzasi yüklenemedi "
+                  f"({type(e).__name__}: {e}); tazeleme YAPILMADI, dosyaya DOKUNULMADI")
+        return None
+    for rel_y, rel_t, _ad, _yok, _sapma in D7_CIFTLERI:
+        if rel_y == rel_yerel:
+            return rel_t
+    say(FAIL, f"{rel_yerel}: D7_CIFTLERI'nde çift YOK (tek kaynak) — tazeleme ÖLÇÜLEMEDİ, "
+              f"dosyaya DOKUNULMADI")
+    return None
+
+
 def shim_tazele(proje: Path) -> bool:
-    """`scripts/hook_shim.py`'yi şablondan TAZELE — AÇIK ONAYLA (`--tazele-shim`).
+    """`--tazele-shim` — `kopya_tazele`nin hook_shim çifti (geriye uyum sarmalayıcısı)."""
+    return kopya_tazele(proje, "scripts/hook_shim.py")
+
+
+def kopya_tazele(proje: Path, rel_yerel: str) -> bool:
+    """Proje kopyasını şablondan TAZELE — AÇIK ONAYLA (`--tazele-shim` / `--tazele-precommit`).
+
+    2026-10-03 (F12b): eskiden yalnız `hook_shim.py` için vardı (`shim_tazele`); pre-commit
+    kopyası şablonun gerisinde kalınca onaylı bir tazeleme yolu YOKTU (D7 yalnız "sapmış"
+    diyordu, operatör elle kopyalıyordu). Aynı güvenlik semantiği `TAZELENEBILIR` çiftlerine
+    genelleştirildi; aşağıdaki gerekçe ve TERS YÖN uyarısı her çift için AYNEN geçerlidir.
 
     NİÇİN VAR (2026-08-22, kullanıcı kararı: "araç yazsın, rol değil"):
     prosedür *"META-İNFRA (hook_shim) = yalnız LİDER"* der; `infra_write_guard` ise
@@ -215,8 +261,12 @@ def shim_tazele(proje: Path) -> bool:
     proje-özel satırlar ADEDİYLE + gürültülü bir uyarıyla bildirilir. Aynı ders
     `claude_overlay` kapısında da kayıtlı (elle düzeltmeyi sessizce ezme).
     """
-    hedef = proje / "scripts" / "hook_shim.py"
-    kaynak = CORE_ROOT / "claude" / "hook_shim.template.py"
+    rel_sablon = _d7_sablonu(rel_yerel)
+    if rel_sablon is None:
+        return False
+    hedef = proje.joinpath(*rel_yerel.split("/"))
+    kaynak = CORE_ROOT.joinpath(*rel_sablon.split("/"))
+    ad = hedef.name
     if not kaynak.is_file():
         say(FAIL, f"şablon YOK: {kaynak} — tazeleme yapılamaz")
         return False
@@ -227,7 +277,7 @@ def shim_tazele(proje: Path) -> bool:
 
     onceki_sha, sablon_sha = _sha(hedef), _sha(kaynak)
     if onceki_sha == sablon_sha:
-        say(OK, f"hook_shim.py ZATEN şablonla aynı (sha256 {onceki_sha[:12]}) — "
+        say(OK, f"{ad} ZATEN şablonla aynı (sha256 {onceki_sha[:12]}) — "
                 f"tazeleme gereksiz, dosyaya DOKUNULMADI")
         return True
 
@@ -240,13 +290,16 @@ def shim_tazele(proje: Path) -> bool:
     proje_ozel = [l for l in fark if l.startswith("+") and not l.startswith("+++")]
     sablon_ozel = [l for l in fark if l.startswith("-") and not l.startswith("---")]
 
-    print(f"\n  --- hook_shim FARK RAPORU (tazelemeden ÖNCE) ---")
+    print(f"\n  --- {ad} FARK RAPORU (tazelemeden ÖNCE) ---")
     print(f"  şablon sha256 : {sablon_sha}")
     print(f"  proje   sha256: {onceki_sha}")
     for satir in fark:
         print("  " + satir.rstrip("\n"))
     print(f"  --- yalnız PROJEDE: {len(proje_ozel)} satır · "
           f"yalnız ŞABLONDA: {len(sablon_ozel)} satır ---")
+    if not fark:
+        say(INFO, f"{ad}: metin farkı YOK, yalnız BAYT farkı (satır sonu / BOM) — "
+                  f"tazeleme baytları şablonla eşitler")
     if proje_ozel:
         say(WARN, f"⚠ TERS YÖN: proje kopyası şablondan İLERİDE görünüyor "
                   f"({len(proje_ozel)} satır YALNIZ projede). Tazeleme bu satırları "
@@ -254,7 +307,9 @@ def shim_tazele(proje: Path) -> bool:
                   f"körlemesine tazeleme aktif korumayı SESSİZCE fail-open yapardı. "
                   f"Devam ediliyor (bayrak AÇIK onaydır) ama önce yedek alınır.")
 
-    yedek = hedef.with_suffix(f".py.yedek-{onceki_sha[:8]}")
+    # `with_name`: uzantısız `pre-commit` için de çalışır (hook_shim için ad AYNI kalır:
+    # `hook_shim.py.yedek-<sha8>`). git hooksPath yalnız `pre-commit` ADLI dosyayı koşar.
+    yedek = hedef.with_name(f"{hedef.name}.yedek-{onceki_sha[:8]}")
     shutil.copyfile(hedef, yedek)
     say(OK, f"yedek alındı: {yedek.name} (tazeleme GERİ ALINABİLİR)")
 
@@ -264,7 +319,7 @@ def shim_tazele(proje: Path) -> bool:
         say(FAIL, f"tazeleme DOĞRULANAMADI: sonuç sha256 {sonraki_sha[:12]} != "
                   f"şablon {sablon_sha[:12]}")
         return False
-    say(OK, f"hook_shim.py TAZELENDİ — doğrulandı: sonuç sha256 == şablon sha256 "
+    say(OK, f"{ad} TAZELENDİ — doğrulandı: sonuç sha256 == şablon sha256 "
             f"({sonraki_sha[:12]})")
     return True
 
@@ -316,6 +371,105 @@ def dosya_tamamla(proje: Path) -> None:
             # ÖLÇÜLEMEDİ ≠ TEMİZ: sessizce geçme, operatör bilsin.
             say(WARN, "active_package YAZILAMADI — project.yaml'da `active_package:` yok; "
                       "paket belirlenince elle yaz (.claude/active_package + project.yaml birlikte)")
+
+
+def sablon_sapmasi(proje: Path) -> int:
+    """F12a (2026-10-03): mevcut proje kopyaları şablondan SAPMIŞ mı — kurulum ANINDA söyle.
+
+    NEDEN: `dosya_tamamla` var olan dosyaya `[ OK ] mevcut` basıp geçiyordu; kum projede
+    `settings.json`'a çekirdekten kaldırılmış bir hook eklenince bile `team_setup TAMAM` +
+    exit 0 çıkıyordu, sapma ancak SONRAKİ oturumda `session_start` D7'de görünüyordu.
+
+    ⛔ YENİ KIYAS İCAT EDİLMEZ: çift listesi `D7_CIFTLERI`, hüküm `anlamli_imza` (D7'nin
+    TEK KAYNAĞI, `utils/drift_imzasi.py`). Yön/adet açıklaması `ayrisma`dan gelir.
+    ⛔ GÖZLEMDİR, GATE DEĞİL (ADR 0019): çıkış kodunu DEĞİŞTİRMEZ, hiçbir dosyaya YAZMAZ.
+    Dönüş = WARN sayısı (yalnız test/rapor için; `main` kullanmaz).
+
+    YÖN AYRIMI (lider kararı 2026-10-03 — uyarı körlüğü):
+      · `settings.json`: yalnız-ŞABLONDA öğe > 0 ⇒ WARN (proje GERİDE). Yalnız-PROJEDE öğelerin
+        TAMAMI `permissions.allow` eki ve şablonun her öğesi kapsanıyorsa ⇒ INFO (ölçüldü: bir
+        tüketicide 3 ek `allow` vardı — her koşumda WARN basmak gerçek sapmayı gömerdi).
+        Allow DIŞI her yalnız-projede öğe (`hooks.*` · `disableAllHooks` · `env.*` ·
+        `defaultMode` · `deny`/`ask`) ⇒ WARN, adediyle (PR #321 inceleme, 2026-10-03).
+        ⚠ Bu ayrım YALNIZ bu satır içindir; `session_start` D7 hükmü (her imza farkı =
+        SAPMIŞ) DEĞİŞMEDİ.
+      · `hook_shim.py` · `pre-commit`: HER fark WARN — proje İLERİDE de olabilir (TERS YÖN:
+        körlemesine tazeleme aktif korumayı sessizce fail-open yapar), önerilen komut fark
+        basan + yedek alan `--tazele-*` yoludur.
+    """
+    try:
+        sys.path.insert(0, str(CORE_ROOT / "scripts"))
+        from utils.drift_imzasi import (D7_CIFTLERI, anlamli_imza, ayrisma,  # type: ignore
+                                        OKUNAMADI, ALLOW_ONEKI)
+    except Exception as e:  # noqa: BLE001
+        say(WARN, f"şablon kıyası ÖLÇÜLEMEDİ — utils.drift_imzasi yüklenemedi "
+                  f"({type(e).__name__}: {e}); proje kopyalarının şablon sapması BU KOŞUMDA "
+                  f"bilinmiyor (temiz demek DEĞİL). session_start D7 oturum açılışında ölçer.")
+        return 1
+
+    def _ornek(liste: list[str]) -> str:
+        return " | ".join(s[:90] for s in liste[:3]) + (" | …" if len(liste) > 3 else "")
+
+    sayac = {"eş": 0, "ek": 0, "sapmış": 0, "yok": 0, "ölçülemedi": 0}
+    for rel_y, rel_t, ad, _yok, sapma_onarim in D7_CIFTLERI:
+        yerel = proje.joinpath(*rel_y.split("/"))
+        sablon = CORE_ROOT.joinpath(*rel_t.split("/"))
+        if not yerel.exists():
+            sayac["yok"] += 1          # YOK onarımı dosya_tamamla / hookspath_proje satırında
+            continue
+        if not sablon.is_file():
+            sayac["ölçülemedi"] += 1
+            say(WARN, f"{ad}: şablon YOK (core/{rel_t}) — sapma ÖLÇÜLEMEDİ (temiz demek DEĞİL)")
+            continue
+        y, t = anlamli_imza(yerel), anlamli_imza(sablon)
+        if OKUNAMADI in (y, t):
+            sayac["ölçülemedi"] += 1
+            say(WARN, f"{ad}: imza çıkarılamadı (bozuk/okunamaz) — sapma ÖLÇÜLEMEDİ")
+            continue
+        if y == t:
+            sayac["eş"] += 1
+            continue
+        ayr = ayrisma(yerel, sablon)
+        proje_ozel, sablon_ozel = ayr if ayr is not None else ([], [])
+        birim = "öğe" if yerel.suffix == ".json" else "satır"
+        yon = (f"yalnız PROJEDE {len(proje_ozel)} {birim} · yalnız ŞABLONDA "
+               f"{len(sablon_ozel)} {birim}" if ayr is not None else "yön ÖLÇÜLEMEDİ")
+        if ayr is not None and not proje_ozel and not sablon_ozel:
+            yon = "öğeler aynı, yalnız SIRA farklı"
+        if rel_y in TAZELENEBILIR:
+            komut = (f"önce farkı gör + yedekli tazele: python core/scripts/team_setup.py "
+                     f"{TAZELENEBILIR[rel_y]} (proje İLERİDE olabilir — fark raporunu oku)")
+        else:
+            komut = (f"{sapma_onarim} · fark: git diff --no-index core/{rel_t} {rel_y} "
+                     f"(otomatik tazeleme YOK — proje ekleri meşru)")
+        # INFO YALNIZ settings çiftinde ve yalnız-projede öğelerin TAMAMI `permissions.allow`
+        # EKİYSE (PR #321 inceleme, kullanıcı kararı 2026-10-03): `disableAllHooks`, `hooks.*`
+        # (ör. çekirdekten kaldırılmış bir hook'un geri eklenmesi), `env.*`, `defaultMode`,
+        # `deny`/`ask` davranış DEĞİŞTİRİR ⇒ WARN. İlk sürümde her yalnız-ek INFO'ydu.
+        allow_disi = [o for o in proje_ozel if not o.startswith(ALLOW_ONEKI)]
+        if (rel_y == ".claude/settings.json" and ayr is not None and proje_ozel
+                and not sablon_ozel and not allow_disi):
+            sayac["ek"] += 1
+            say(INFO, f"{ad}: {len(proje_ozel)} proje eki (yalnız permissions.allow), şablonun "
+                      f"tüm öğeleri kapsanıyor (D7 imzası {y} ≠ {t}; ekler: {_ornek(proje_ozel)})")
+            continue
+        if rel_y == ".claude/settings.json" and allow_disi:
+            yon += f" · yalnız-projede öğelerin {len(allow_disi)}'i permissions.allow DIŞI"
+        sayac["sapmış"] += 1
+        say(WARN, f"{ad} şablondan SAPMIŞ (D7 imzası {y} ≠ {t}; {yon}) — {komut}")
+        if sablon_ozel:
+            print(f"        yalnız şablonda: {_ornek(sablon_ozel)}")
+        if allow_disi and rel_y == ".claude/settings.json":
+            print(f"        allow DIŞI    : {_ornek(allow_disi)}")
+        elif proje_ozel:
+            print(f"        yalnız projede : {_ornek(proje_ozel)}")
+    # KAPSAM BEYANI (her koşumda — en kritik an sıfır-bulgu anıdır)
+    say(INFO, f"şablon kıyası (D7_CIFTLERI, {len(D7_CIFTLERI)} çift): "
+              f"{sayac['eş']} eş · {sayac['ek']} yalnız-proje-eki · {sayac['sapmış']} sapmış · "
+              f"{sayac['yok']} yok · {sayac['ölçülemedi']} ölçülemedi. BAKILMAYAN: "
+              f".claude/active_package (şablonsuz) · .claude/rules|agents (overlay kapısı) · "
+              f"CLAUDE.md yasak damgası (check_kesin_yasaklar)")
+    return sayac["sapmış"] + sayac["ölçülemedi"]
 
 
 def hookspath_core() -> None:
@@ -859,8 +1013,14 @@ def alt_arac(proje: Path, ad: str, non_fatal_msg: str) -> None:
     script = CORE_ROOT / "scripts" / ad
     if not script.exists():
         return
+    # F5 (2026-10-03): `CLAUDE_PROJECT_DIR` SABİTLENİR — alt araçlar proje kökünü env>cwd
+    # sırasıyla çözer (`seed_memory.PROJECT_ROOT`, `utils.project_config.project_root`).
+    # Ortamda BAŞKA bir projenin değeri varsa (kullanıcı kabuğu / hook bağlamı) `cwd=proje`
+    # yetmez: tohum BAŞKA projenin hafızasına giderdi. Ezmek doğru davranıştır; örnek
+    # `_core_index_yenile`. (Claude Code Bash aracı ortamında bu değişken YOK — ölçüldü.)
     r = subprocess.run([sys.executable, str(script)], capture_output=True,
-                       text=True, encoding="utf-8", errors="replace", cwd=proje)
+                       text=True, encoding="utf-8", errors="replace", cwd=proje,
+                       env=dict(os.environ, CLAUDE_PROJECT_DIR=str(proje)))
     say(OK if r.returncode == 0 else WARN,
         f"{ad} (exit {r.returncode}) {(r.stdout or '').strip().splitlines()[-1][:70] if (r.stdout or '').strip() else non_fatal_msg}")
 
@@ -877,7 +1037,8 @@ def smoke(proje: Path) -> bool:
     st = CORE_ROOT / "scripts" / "statusline.py"
     try:
         r = subprocess.run([sys.executable, str(st)], input="{}", capture_output=True,
-                           text=True, cwd=proje, timeout=30)
+                           text=True, cwd=proje, timeout=30,
+                           env=dict(os.environ, CLAUDE_PROJECT_DIR=str(proje)))  # F5
         say(OK if r.returncode == 0 else WARN, f"statusline smoke (exit {r.returncode})")
     except subprocess.TimeoutExpired:
         say(WARN, "statusline smoke timeout")
@@ -910,6 +1071,10 @@ def main() -> int:
                     help="scripts/hook_shim.py'yi sablondan TAZELE (ACIK onay). Once FARK "
                          "raporu + sha256 basar, yedek alir, sonra sha esitligini dogrular. "
                          "Bayraksiz kosumda hicbir dosya EZILMEZ (davranis degismez).")
+    ap.add_argument("--tazele-precommit", action="store_true",
+                    help="scripts/git-hooks/pre-commit'i sablondan TAZELE (ACIK onay) — "
+                         "--tazele-shim ile AYNI guvenlik: once FARK + yon sayimi, yedek, "
+                         "sha dogrulamasi. settings.json icin tazeleme YOK (proje ekleri mesru).")
     # PATH artik OPSIYONEL (2026-08-29): verilmezse icinde bulunulan worktree provizyonlanir.
     # `const` bilerek bos dizge DEGIL bir SENTINEL: `if a.provision_worktree:` truthiness
     # testi bos dizgeyi "verilmedi" sanardi (sessiz NO-OP). Kontrol `is not None` ile yapilir.
@@ -933,10 +1098,16 @@ def main() -> int:
     proje = Path(a.project).resolve()
     print(f"team_setup — core = {CORE_ROOT}\n            proje = {proje}\n")
 
-    if a.tazele_shim:
+    if a.tazele_shim or a.tazele_precommit:
         # AYRI ve ERKEN dal: tazeleme tek işi yapar, kurulumun geri kalanını koşturmaz
-        # (yan etki yüzeyi mümkün olduğunca dar).
-        return 0 if shim_tazele(proje) else 1
+        # (yan etki yüzeyi mümkün olduğunca dar). İki bayrak birlikte verilirse ikisi de
+        # denenir; biri başarısızsa exit 1.
+        ok = True
+        if a.tazele_shim:
+            ok = shim_tazele(proje) and ok
+        if a.tazele_precommit:
+            ok = kopya_tazele(proje, "scripts/git-hooks/pre-commit") and ok
+        return 0 if ok else 1
     if a.wt_yolu:
         print(wt_yolu(proje, a.wt_yolu)); return 0
     if a.wt_denetim:
@@ -989,6 +1160,8 @@ def main() -> int:
     dosya_tamamla(proje)
     hookspath_core()
     hookspath_proje(proje)
+    # F12a (2026-10-03): mevcut kopyalar sablondan sapmis mi — GOZLEM, cikis kodu DEGISMEZ.
+    sablon_sapmasi(proje)
     # 2026-07-10 template provası: CORE-INDEX yalnız `--repair-junctions` yolunda
     # üretiliyordu → her YENİ proje C-IDX-01 FAIL ile açılıyordu (ilk `run_all_validators`
     # kırmızı). Kurulumun bir parçası olmalı: junction Grep/Glob'a görünmez, indeks tek
