@@ -2855,3 +2855,29 @@ python tests/run_battery.py sql_satir_kirma --kardes sorgu_basarisizligi_gorunur
   `"O" is invalid here` · AÇIK → 200 · elle iki satır → 200 · 252 kr / 13 `OR` tek satır → 200.
 - **DOĞRULANAMADI:** çok baytlı karakterde sınırın bayt mı karakter mi olduğu; eski
   `E070×E071` JOIN / uzun `IN` 400 vakalarının bu sınırdan doğup doğmadığı (yalnız T000 serbestti).
+
+## B67 — ST22 dump okuma (`adt_dump_read`) + liste gürültü etiketi + başka-client guard'ı (`adt_dump_list`)
+
+```
+python tests/run_battery.py dump_okuma --kardes sorgu_basarisizligi_gorunur sorgu_araclari_durustlugu b0_secim --precommit
+```
+
+- `dump_okuma` **29/29**; 10 kip, her birinin düşmesi BEKLENEN küme `_BEKLENEN_DUSEN`'de pinli ve
+  EŞİTLİKLE kıyaslanır (CORE-07; çıkış 1 = beklenen · 2 = SAPMA · 3 = çapa ≠ 1 / derlenmedi).
+  Mutant = `query.py` kaynak METNİ gerçek `__file__` ile exec (dosyaya DOKUNULMAZ).
+- Kipler ↔ değişmez: `okuma-client-guard` (R6a/R7b/R7d) · `okuma-bilinmeyen-acik` (R7d:
+  tespit edilemeyen client fail-closed) · `liste-gizleme-yok` / `liste-bilinmeyen-acik` (L1/L4/L6)
+  · `gurultu-veya` (L3a–c: imza VE'dir) · `id-bosluk` (L1/L8: kimlik sabit genişlik) ·
+  `404-sessiz` (R4) · `formatted-tavansiz` (R10a) · `ozet-client-otorite` (R9) ·
+  `liste-ozet-otorite` (L1/L7).
+- ⛔ SİLİNMEZ FP çapaları: **L3b/L3c** (tek alan eşleşmesi gürültü değil) · **L2/R6b** (ack ile
+  başka client görünür) · **R1** (aynı client'ta tek GET, guard engellemez).
+- Veri JENERİK (kullanıcı `KULLANICI1`, sistem `XYZ`, host `sapapp01_XYZ_00`); kimlikler
+  `kimlik()` ile ölçülmüş sabit genişlikte (70) kurulur.
+- ⛔ Canlı yeniden ölçüm (yalnız GET): worktree `.conn_adt` yer tutucudur → proje kökünün
+  `.conn_adt`'i `CLAUDE_PROJECT_DIR` ile; `Q._get_client`'i `SimpleNamespace(adt_client=
+  sap_adt_lib.SAPADTClient())` ile değiştir (SAPClient bağ-durum dosyası yazar), cwd = scratch.
+  Kontrol grubu: aynı dump `acknowledge_risk` ile/ siz · bilinen-yok kimlik → 404.
+- Açıklama uzunluğu (kalıcı test DEĞİL — B64 notu): `server._register_all()` +
+  `mcp._tool_manager.list_tools()` → `adt_dump_read` 1.096 · `adt_dump_list` 1.432 (2026-10-03).
+- **DOĞRULANAMADI:** kimlik genişliği tek sistemde (100/100) ölçüldü; `/unformatted` ucu ölçülmedi.

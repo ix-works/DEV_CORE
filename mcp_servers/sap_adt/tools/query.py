@@ -833,9 +833,199 @@ def adt_sql_query(
 
 
 # =============================================================================
-# adt_dump_list  (ST22 ABAP short-dump feed — runtime hata teşhisi)
+# adt_dump_list + adt_dump_read  (ST22 ABAP short-dump — runtime hata teşhisi)
 # =============================================================================
+# Ayrıntı + canlı ölçümler: playbook/adt-mcp.md "`adt_dump_read` — ayrıntı".
 _ATOM_NS = "http://www.w3.org/2005/Atom"
+_DUMP_NS = "http://www.sap.com/adt/categories/dump"
+# Ölçüldü (2026-10-03, DEV): `Accept: application/xml` → 406; `*/*` bu tipi döndürür.
+_DUMP_ACCEPT = "application/vnd.sap.adt.runtime.dump.v1+xml"
+_DUMP_FORMATTED_TAVAN = 200_000      # /formatted 120-564 KB ölçüldü → token tuzağı
+_DUMP_FORMATTED_VARSAYILAN = 20_000
+
+# Bilinen ARAÇ GÜRÜLTÜSÜ — iki alanın VE'si (ölçüldü 2026-10-03, DEV feed'i 100 girdi: 36'sı
+# bu çift; iki değer feed'de yalnız birbirleriyle geçti). Dump LİSTEDEN ATILMAZ, etiketlenir.
+_ARAC_GURULTUSU = {
+    ("GENERATE_SUBPOOL_DIR_FULL", "CL_ADT_DP_OPEN_SQL_HANDLER====CP"):
+        ("ADT veri önizleme / SQL konsolu işleyicisinde geçici subroutine-pool sınırı "
+         "(bizde adt_sql_query) — uygulama kodunun hatası değil"),
+}
+
+# Ozet HTML'inin h4 bölüm kimlikleri → çıktı anahtarı (etiketler TR logon'da da İngilizce).
+_OZET_BOLUM = {"WHATHAPPENED": "what_happened", "ERROR": "error_analysis",
+               "TERMINATION": "where_terminated", "SOURCE": "source_extract"}
+
+
+def _arac_gurultusu(error_type, program):
+    """Bilinen araç-gürültüsü imzasıysa sebep metni, değilse None."""
+    return _ARAC_GURULTUSU.get((error_type or "", program or ""))
+
+
+def _dump_kimligi(dump) -> tuple:
+    """`dump_uri` / feed `id` / ham kimlik → (URL'e konacak kodlu kimlik, ham kimlik).
+
+    Kimlik çözülemezse ilk eleman None.
+    """
+    from urllib.parse import quote, unquote
+    s = str(dump or "").strip()
+    for ayrac in ("/runtime/dump/", "/runtime/dumps/"):
+        if ayrac in s:
+            s = s.split(ayrac, 1)[1]
+            break
+    s = s.split("#", 1)[0].split("?", 1)[0]
+    for son in ("/summary", "/formatted", "/unformatted"):
+        if s.endswith(son):
+            s = s[: -len(son)]
+    ham = unquote(s)
+    if not ham.strip() or "/" in ham:
+        return None, ham
+    return quote(ham, safe=""), ham
+
+
+def _id_client(ham: str):
+    """Ham kimlikten client — SABİT GENİŞLİK (ölçüldü 100/100, DEV: uzunluk 70, [58:61] client;
+    boşlukla bölmek 12 karakterlik kullanıcı adında kırılıyordu). Biçim tutmazsa None."""
+    if len(ham) == 70 and ham[:14].isdigit() and ham[58:61].isdigit():
+        return ham[58:61]
+    return None
+
+
+def _client_karari(dump_client, baglanti_client) -> str:
+    """"ayni" | "farkli" | "bilinmiyor" — biri yoksa BİLİNMİYOR (ayni sayılmaz)."""
+    if not dump_client or not baglanti_client:
+        return "bilinmiyor"
+    return "ayni" if str(dump_client).strip() == str(baglanti_client).strip() else "farkli"
+
+
+def _ozet_ayristir(html: str) -> dict:
+    """ST22 özet HTML'i → {header, what_happened, error_analysis, where_terminated,
+    source_extract, active_calls, other_sections}. Tanınmayan bölüm `other_sections`e düşer
+    (sessizce atılmaz)."""
+    from html.parser import HTMLParser
+
+    class _P(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.bolum = None
+            self.metin: dict = {}
+            self.satirlar: dict = {}
+            self._h4 = False
+            self._stil = False
+            self._atla = 0          # span.linenumber derinliği (kaynak satır no sütunu)
+            self._tr = None
+            self._hucre = None
+            self._href = None
+
+        def _yaz(self, s):
+            if self.bolum and not self._h4:
+                self.metin.setdefault(self.bolum, []).append(s)
+
+        def _tablo(self):
+            return self.bolum in ("HEADERX", "STACK")
+
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if self._atla:
+                self._atla += tag == "span"
+                return
+            sinif = a.get("class") or ""
+            if tag == "h4":
+                self.bolum, self._h4 = a.get("id") or "?", True
+            elif tag == "style":
+                self._stil = True
+            elif tag == "span" and "linenumber" in sinif:
+                self._atla = 1
+            elif tag == "br":
+                self._yaz("\n")
+            elif tag == "div" and "sourceline" in sinif:
+                self._yaz("\n" + ("> " if "highlight" in sinif else "  "))
+            elif self._tablo() and tag == "tr":
+                self._tr, self._href = [], None
+            elif self._tablo() and tag in ("td", "th"):
+                self._hucre = []
+            elif tag == "a" and self._tr is not None and self._href is None:
+                self._href = a.get("href")
+
+        def handle_endtag(self, tag):
+            if self._atla:
+                self._atla -= tag == "span"
+                return
+            if tag == "h4":
+                self._h4 = False
+            elif tag == "style":
+                self._stil = False
+            elif tag in ("td", "th") and self._hucre is not None and self._tr is not None:
+                self._tr.append(" ".join("".join(self._hucre).split()))
+                self._hucre = None
+            elif tag == "tr" and self._tr is not None:
+                if self._tr:
+                    self.satirlar.setdefault(self.bolum, []).append((self._tr, self._href))
+                self._tr = None
+
+        def handle_data(self, d):
+            if self._atla or self._stil or self._h4:
+                return
+            if self._hucre is not None:
+                self._hucre.append(d)
+            elif not self._tablo():
+                self._yaz(d)
+
+    p = _P()
+    p.feed(html or "")
+    p.close()
+
+    def _temiz(parcalar):
+        satir = [s.rstrip() for s in "".join(parcalar).replace("\xa0", " ").split("\n")]
+        return re.sub(r"\n{3,}", "\n\n", "\n".join(satir)).strip("\n")
+
+    out: dict = {"header": {}, "active_calls": [], "other_sections": {}}
+    for hucre, _ in p.satirlar.get("HEADERX", []):
+        if len(hucre) >= 2:
+            out["header"][hucre[0]] = hucre[1]
+    yigin = p.satirlar.get("STACK", [])
+    if yigin:
+        basliklar = [h.lower().rstrip(".") for h in yigin[0][0]]
+        for hucre, href in yigin[1:]:
+            d = dict(zip(basliklar, hucre))
+            d["uri"] = href
+            out["active_calls"].append(d)
+    for kimlik, parcalar in p.metin.items():
+        if kimlik in ("OVERVIEW", "HEADERX", "STACK"):
+            continue
+        anahtar = _OZET_BOLUM.get(kimlik)
+        if anahtar:
+            out[anahtar] = _temiz(parcalar)
+        elif _temiz(parcalar):
+            out["other_sections"][kimlik] = _temiz(parcalar)
+    return out
+
+
+def _sap_hata_ozeti(govde: str) -> str:
+    """`exc:exception` gövdesi → "tip: mesaj (T100 ID/NO)"; ayrıştırılamazsa ham baş."""
+    import xml.etree.ElementTree as ET
+    try:
+        k = ET.fromstring(govde)       # tam gövde — kırpılmış XML ayrıştırılamaz
+        tip = next((e.get("id") for e in k.iter() if e.tag.endswith("type")), None)
+        msg = next((e.text for e in k.iter() if e.tag.endswith("localizedMessage")), None)
+        ent = {e.get("key"): e.text for e in k.iter() if e.tag.endswith("entry")}
+        t100 = "%s/%s" % (ent.get("T100KEY-ID"), ent.get("T100KEY-NO")) if ent.get("T100KEY-ID") else ""
+        return " ".join(x for x in (tip and tip + ":", msg, t100 and "(%s)" % t100) if x)
+    except Exception:
+        return (govde or "")[:300]
+
+
+def _dump_get(adt, kodlu_id: str, son: str = "", accept: str = "*/*"):
+    return adt.session.get(adt.url + "/sap/bc/adt/runtime/dump/" + kodlu_id + son,
+                           headers={"Accept": accept}, verify=False, timeout=60)
+
+
+def _pii_tier_guard(acknowledge_risk: bool):
+    from mcp_servers.sap_adt._conn import get_active_tier
+    if get_active_tier() != "DEV" and not acknowledge_risk:
+        return {"ok": False, "error": "tier_pii_guard",
+                "message": ("ST22 dump'ı kullanıcı-adı/program/değişken değeri (KVKK — ADR 0011) "
+                            "taşır; DEV dışı tier'da acknowledge_risk=True gerekli.")}
+    return None
 
 
 @profil_tool()
@@ -845,28 +1035,33 @@ def adt_dump_list(limit: int = 20, from_ts: str | None = None, to_ts: str | None
 
     RAP/UI/classrun çalıştırmalarında runtime 500/kısa-dump kök-neden teşhisi (SAP GUI'siz).
     `GET /sap/bc/adt/runtime/dumps` (Accept `application/atom+xml;type=feed`) → Atom feed parse.
+    Tek dumpın içeriği: `adt_dump_read(dump=<dump_uri>)`.
 
-    ⚠ PII (ADR 0011): dump feed'i kullanıcı-adı + program (kişisel veri, KVKK) taşır → DEV dışı
-    tier'da `acknowledge_risk=True` ZORUNLU (adt_table_read/adt_sql_query ile tutarlı).
+    ⚠ PII (ADR 0011): kullanıcı-adı + program (KVKK) → DEV dışı tier'da `acknowledge_risk=True`.
+    ⚠ BAŞKA CLIENT (kullanıcı kararı 2026-10-03): feed aynı sistemin TÜM client'larını taşır.
+    Bağlantı client'ından farklı ya da client'ı tespit edilemeyen girdi VARSAYILAN GİZLENİR;
+    sayısı `gizlenen_baska_client` / `gizlenen_client_bilinmeyen`. Göstermek: acknowledge_risk=True.
+    `arac_gurultusu: true` = bilinen araç gürültüsü (ör. GENERATE_SUBPOOL_DIR_FULL ∧
+    CL_ADT_DP_OPEN_SQL_HANDLER) — listede KALIR, yalnız etiketlenir.
 
     Args:
-        limit: Döndürülecek maks dump (default 20; feed en yeni→eski).
+        limit: Döndürülecek maks dump (default 20; feed en yeni→eski; gizlenenler sayılmaz).
         from_ts / to_ts: Opsiyonel zaman penceresi (feed'in `from`/`to` param'ı; ör. '20260710154122').
-        acknowledge_risk: QA/PRD'de PII-kabulü (DEV'de gereksiz).
+        acknowledge_risk: QA/PRD'de PII-kabulü + başka client'ın girdilerini göster.
 
     Returns:
-        {ok, count, dumps: [{error_type, program, user, timestamp, title, id, dump_uri}], client_log}
-        `dump_uri` = tek dumpın ADT detay URI'si (sonra detay çekmek için).
+        {ok, count, dumps: [{error_type, program, user, timestamp, title, id, dump_uri, client,
+        arac_gurultusu, arac_gurultusu_sebep}], taranan, gizlenen_baska_client,
+        gizlenen_client_bilinmeyen, arac_gurultusu_sayisi, baglanti_client, notice?, client_log}
     """
     import xml.etree.ElementTree as ET
-    from mcp_servers.sap_adt._conn import get_active_tier
-    if get_active_tier() != "DEV" and not acknowledge_risk:
-        return {"ok": False, "error": "tier_pii_guard",
-                "message": ("ST22 dump feed'i kullanıcı-adı/program (KVKK — ADR 0011) taşır; "
-                            "DEV dışı tier'da acknowledge_risk=True gerekli.")}
+    red = _pii_tier_guard(acknowledge_risk)
+    if red:
+        return red
     client = _get_client()
     try:
         adt = getattr(client, "adt_client", None) or client
+        baglanti_client = getattr(adt, "client", None)
         params: dict = {}
         if from_ts:
             params["from"] = from_ts
@@ -881,9 +1076,12 @@ def adt_dump_list(limit: int = 20, from_ts: str | None = None, to_ts: str | None
                     "message": (r.text or "")[:400], "client_log": buf.getvalue().strip()}
         root = ET.fromstring(r.text)
         dumps = []
+        gizlenen = {"farkli": 0, "bilinmiyor": 0}
+        taranan = 0
         for e in root.findall("{%s}entry" % _ATOM_NS):
             if len(dumps) >= limit:
                 break
+            taranan += 1
             cats = e.findall("{%s}category" % _ATOM_NS)
 
             def _cat(lbl, _cats=cats):
@@ -896,21 +1094,174 @@ def adt_dump_list(limit: int = 20, from_ts: str | None = None, to_ts: str | None
             updated = e.find("{%s}updated" % _ATOM_NS)
             idel = e.find("{%s}id" % _ATOM_NS)
             title = e.find("{%s}title" % _ATOM_NS)
+            ozet = e.find("{%s}summary" % _ATOM_NS)
             dump_uri = None
             for lnk in e.findall("{%s}link" % _ATOM_NS):
                 if "/runtime/dump/" in (lnk.get("href") or ""):
                     dump_uri = lnk.get("href")
                     break
+            # client: girdinin KENDİ özet başlığı (otorite) → yoksa kimliğin sabit genişliği.
+            d_client = (_ozet_ayristir(ozet.text)["header"].get("Client")
+                        if ozet is not None and ozet.text else None)
+            if not d_client:
+                d_client = _id_client(_dump_kimligi(dump_uri or "")[1])
+            karar = _client_karari(d_client, baglanti_client)
+            if not acknowledge_risk and karar != "ayni":
+                gizlenen[karar] += 1
+                continue
+            hata, program = _cat("ABAP runtime error"), _cat("Terminated ABAP program")
+            sebep = _arac_gurultusu(hata, program)
             dumps.append({
-                "error_type": _cat("ABAP runtime error"),
-                "program": _cat("Terminated ABAP program"),
+                "error_type": hata,
+                "program": program,
                 "user": author.text if author is not None else None,
                 "timestamp": updated.text if updated is not None else None,
                 "title": title.text if title is not None else None,
                 "id": idel.text if idel is not None else None,
                 "dump_uri": dump_uri,
+                "client": d_client,
+                "arac_gurultusu": sebep is not None,
+                "arac_gurultusu_sebep": sebep,
             })
-        return {"ok": True, "count": len(dumps), "dumps": dumps, "client_log": buf.getvalue().strip()}
+        out = {"ok": True, "count": len(dumps), "dumps": dumps, "taranan": taranan,
+               "gizlenen_baska_client": gizlenen["farkli"],
+               "gizlenen_client_bilinmeyen": gizlenen["bilinmiyor"],
+               "arac_gurultusu_sayisi": sum(1 for d in dumps if d["arac_gurultusu"]),
+               "baglanti_client": baglanti_client, "client_log": buf.getvalue().strip()}
+        if gizlenen["farkli"] or gizlenen["bilinmiyor"]:
+            out["notice"] = (
+                "%d dump başka client'a, %d dump tespit edilemeyen client'a ait olduğu için "
+                "GİZLENDİ (PII — kullanıcı kararı 2026-10-03; 'dump yok' DEĞİL). Göstermek için "
+                "acknowledge_risk=True." % (gizlenen["farkli"], gizlenen["bilinmiyor"]))
+        return out
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
+@profil_tool()
+def adt_dump_read(dump: str, summary: bool = False, formatted: bool = False,
+                  max_bytes: int = _DUMP_FORMATTED_VARSAYILAN,
+                  acknowledge_risk: bool = False) -> dict:
+    """Tek ST22 dump'ını oku — READ-ONLY, yapılandırılmış.
+
+    `dump` = `adt_dump_list` çıktısındaki `dump_uri` ya da `id` (ham kimlik de olur).
+    Varsayılan: `GET /sap/bc/adt/runtime/dump/<id>` (~5 KB XML) → error_type, exception,
+    program, user, zaman, termination {uri, line}, client, arac_gurultusu.
+    summary=True: + `/summary` (~10 KB) düz metin: header, what_happened, error_analysis,
+    where_terminated, source_extract ('> ' = kesilen satır), active_calls [{no, event,
+    program, include, line, uri}].
+    formatted=True: + `/formatted` tam metin (120-560 KB — TOKEN TUZAĞI); `max_bytes`
+    (varsayılan 20000, tavan 200000) ile kesilir → truncated + formatted_total_bytes.
+
+    ⚠ PII (ADR 0011): kullanıcı adı + değişken değerleri → DEV dışı tier'da acknowledge_risk=True.
+    ⚠ BAŞKA CLIENT (kullanıcı kararı 2026-10-03): dump'ın client'ı bağlantınınkinden farklıysa
+    ya da tespit edilemezse acknowledge_risk=True olmadan OKUNMAZ (ok:false).
+    Bulunamayan kimlik → ok:false `dump_bulunamadi` (sessiz boş YOK).
+    Ayrıntı: playbook/adt-mcp.md "`adt_dump_read` — ayrıntı".
+    """
+    import xml.etree.ElementTree as ET
+    red = _pii_tier_guard(acknowledge_risk)
+    if red:
+        return red
+    kodlu, ham = _dump_kimligi(dump)
+    if not kodlu:
+        return {"ok": False, "error": "gecersiz_dump_kimligi",
+                "message": "dump kimliği çözülemedi: %r — adt_dump_list'in dump_uri'sini aynen ver."
+                           % (dump,)}
+    client = _get_client()
+    try:
+        adt = getattr(client, "adt_client", None) or client
+        baglanti_client = getattr(adt, "client", None)
+
+        def _bulunamadi(r):
+            return {"ok": False, "error": "dump_bulunamadi", "id": kodlu,
+                    "message": ("HTTP 404 — dump yok (ST22 saklama süresi dolmuş/silinmiş) ya da "
+                                "kimlik yanlış. SAP: %s" % _sap_hata_ozeti(r.text))}
+
+        with _capture() as buf:
+            d_client, kaynak, ozet_r = _id_client(ham), "id", None
+            if not d_client:
+                ozet_r = _dump_get(adt, kodlu, "/summary")
+                if ozet_r.status_code == 404:
+                    return _bulunamadi(ozet_r)
+                if ozet_r.status_code == 200:
+                    d_client = _ozet_ayristir(ozet_r.text)["header"].get("Client")
+                    kaynak = "summary"
+            karar = _client_karari(d_client, baglanti_client)
+            if karar != "ayni" and not acknowledge_risk:
+                return {"ok": False, "error": "baska_client_pii", "client": d_client,
+                        "baglanti_client": baglanti_client,
+                        "message": ("Dump'ın client'ı (%s) bağlantının client'ından (%s) farklı ya "
+                                    "da tespit edilemedi — PII (kullanıcı kararı 2026-10-03). "
+                                    "Okumak için acknowledge_risk=True." % (d_client, baglanti_client))}
+            r = _dump_get(adt, kodlu, "", _DUMP_ACCEPT)
+        if r.status_code == 404:
+            return _bulunamadi(r)
+        if r.status_code != 200:
+            return {"ok": False, "error": "http_%d" % r.status_code, "id": kodlu,
+                    "message": _sap_hata_ozeti(r.text), "client_log": buf.getvalue().strip()}
+        k = ET.fromstring(r.content)
+        termination = None
+        for lnk in k.iter("{%s}link" % _DUMP_NS):
+            if (lnk.get("relation") or "").endswith("/termination"):
+                m = re.search(r"#start=(\d+)", lnk.get("uri") or "")
+                termination = {"uri": lnk.get("uri"), "line": int(m.group(1)) if m else None}
+        out = {"ok": True, "id": kodlu, "error_type": k.get("error"),
+               "exception": k.get("exception") or None, "program": k.get("terminatedProgram"),
+               "user": k.get("author"), "title": k.get("title"),
+               "datetime_utc": k.get("datetime"), "system_date": k.get("systemDate"),
+               "system_time": k.get("systemTime"), "server_instance": k.get("serverInstance"),
+               "language": k.get("language"), "client": d_client, "client_kaynagi": kaynak,
+               "baglanti_client": baglanti_client, "termination": termination,
+               "bytes": {"xml": len(r.content)}}
+        sebep = _arac_gurultusu(out["error_type"], out["program"])
+        out["arac_gurultusu"], out["arac_gurultusu_sebep"] = sebep is not None, sebep
+        kapsam = ["xml"]
+        if summary:
+            with _capture() as buf2:
+                if ozet_r is None or ozet_r.status_code != 200:
+                    ozet_r = _dump_get(adt, kodlu, "/summary")
+            if ozet_r.status_code != 200:
+                out.update(ok=False, error="summary_okunamadi",
+                           message="/summary HTTP %d: %s" % (ozet_r.status_code,
+                                                            _sap_hata_ozeti(ozet_r.text)))
+            else:
+                ozet = _ozet_ayristir(ozet_r.text)
+                out["summary"], out["bytes"]["summary"] = ozet, len(ozet_r.content)
+                kapsam.append("summary")
+                o_client = ozet["header"].get("Client")
+                if o_client and o_client != d_client:
+                    out["client"], out["client_kaynagi"] = o_client, "summary"
+                    if _client_karari(o_client, baglanti_client) != "ayni" and not acknowledge_risk:
+                        return {"ok": False, "error": "baska_client_pii", "client": o_client,
+                                "baglanti_client": baglanti_client,
+                                "message": ("Özet başlığındaki client (%s) kimlikten çözülenden (%s) "
+                                            "farklı ve bağlantınınkiyle (%s) eşleşmiyor — PII. "
+                                            "acknowledge_risk=True ile oku."
+                                            % (o_client, d_client, baglanti_client))}
+            buf.write(buf2.getvalue())
+        if formatted:
+            tavan = max(1000, min(int(max_bytes or 0), _DUMP_FORMATTED_TAVAN))
+            with _capture() as buf3:
+                fr = _dump_get(adt, kodlu, "/formatted")
+            buf.write(buf3.getvalue())
+            if fr.status_code != 200:
+                out.update(ok=False, error="formatted_okunamadi",
+                           message="/formatted HTTP %d: %s" % (fr.status_code,
+                                                              _sap_hata_ozeti(fr.text)))
+            else:
+                import codecs
+                ham_b = fr.content
+                parca = ham_b[:tavan]
+                metin = codecs.getincrementaldecoder("utf-8")("replace").decode(parca, final=False)
+                out.update(formatted_text=metin, formatted_total_bytes=len(ham_b),
+                           formatted_returned_bytes=len(metin.encode("utf-8")),
+                           truncated=len(ham_b) > len(parca), max_bytes=tavan)
+                kapsam.append("formatted")
+        out["kapsam"] = "okunan: " + ", ".join(kapsam) + (
+            "" if formatted else " · formatted OKUNMADI (Selected Variables vb. yalnız orada)")
+        out["client_log"] = buf.getvalue().strip()
+        return out
     except Exception as exc:
         return _err_from_exc(exc)
 

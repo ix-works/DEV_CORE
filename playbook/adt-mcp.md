@@ -630,6 +630,61 @@ aranir; eslestirme URI-siniri + ad+tip ile (`sap_adt_lib.aktivasyon_worklist_kal
 `activationExecuted` + `type=E` parse eder; readback onlarda TEKRARLANMAZ.
 ````
 
+### `adt_dump_read` / `adt_dump_list` — ayrıntı (2026-10-03, K4)
+
+**Uçlar (canlı ölçüm, DEV, yalnız GET, 3 dump):**
+
+| Uç | Accept | Sonuç |
+|---|---|---|
+| `/sap/bc/adt/runtime/dump/<id>` | `application/vnd.sap.adt.runtime.dump.v1+xml` (ya da `*/*`) | 200 · 4.693–5.095 B yapılandırılmış XML |
+| aynı uç | `application/xml` | **406** — Accept vnd tipine sabitlendi |
+| `…/<id>/summary` | `*/*` | 200 `text/html` · 9.494–12.121 B |
+| `…/<id>/formatted` | `*/*` | 200 `text/plain` · 120.194–405.811 B (radar ölçümü 563.889 B) ⇒ token tuzağı |
+| bilinmeyen `<id>` | — | **404** `exc:exception` `notFound` (T100 `SY/530`) ⇒ `dump_bulunamadi` |
+
+- **XML'de olanlar:** `error`, `exception` (bazı dumplarda boş), `terminatedProgram`, `author`,
+  `title` (tam ad içerir — PII), `datetime` (UTC), `systemDate/Time`, `serverInstance`,
+  `language`, bağlantılar (termination: `…/source/main#start=<satır>`), bölüm listesi.
+  **XML'de OLMAYANLAR:** client, include, olay/metot, çağrı yığını ⇒ bunlar için `summary=True`.
+- **Özet etiketleri TR logon'da da İngilizce** (`What happened?` · `Error analysis` ·
+  `Information on where terminated` · `Source Code Extract` · `Active Calls/Events`).
+  Ayrıştırıcı h4 `id`'lerine (`WHATHAPPENED/ERROR/TERMINATION/SOURCE/STACK`) bağlıdır;
+  tanınmayan bölüm `other_sections`'a düşer (sessizce atılmaz). Kaynak alıntısında `> ` =
+  kesilen satır; satır no sütunu atılır (göreli numaradır).
+- **`formatted`:** `max_bytes` varsayılan 20.000, [1.000, 200.000] aralığına kıstırılır;
+  UTF-8 karakteri ortadan bölünmez; `truncated` + `formatted_total_bytes` döner.
+
+**Araç gürültüsü (liste etiketi):** son 100 dumpın **36'sı** `GENERATE_SUBPOOL_DIR_FULL` ∧
+`CL_ADT_DP_OPEN_SQL_HANDLER====CP` (ADT veri önizleme / SQL konsolu işleyicisi; bizde
+`adt_sql_query` çağrıları — tek-tek dump XML'i `exception=CX_SY_GENERATE_SUBPOOL_FULL`,
+termination `cl_adt_dp_open_sql_handler … #start=832`). İmza **iki alanın VE'sidir**: feed'de bu
+iki değer yalnız birbirleriyle geçti; tek alan eşleşmesi gürültü SAYILMAZ (fixture FP çapaları
+L3b/L3c). Dump listeden atılmaz, `arac_gurultusu: true` + sebep ile etiketlenir.
+⚠ Kalan yanlış-pozitif riski: başka bir kullanıcının Eclipse SQL konsolu da aynı dumpı üretir
+— o da uygulama hatası değildir, ama "bizim" değildir; etiket "uygulama kodu değil" der,
+"bizim oturumumuz" demez.
+
+**Başka client — kullanıcı kararı 2026-10-03:** DEV bağlantısının (client 100) feed'i aynı
+sistemin TÜM client'larını taşır — ölçüldü: 100 girdinin **49'u client 110**. ADR 0011 tier
+guard'ı bağlantının tier'ına baktığı için bunlar onaysız okunuyordu. Bugün:
+- `adt_dump_list`: bağlantı client'ından farklı **ya da client'ı tespit edilemeyen** girdi
+  varsayılan GİZLENİR; `gizlenen_baska_client` / `gizlenen_client_bilinmeyen` sayaçları +
+  `notice` (*"'dump yok' DEĞİL"*) döner. `acknowledge_risk=True` hepsini `client` alanıyla gösterir.
+  Tespit edilemeyen = **fail-closed** (PII yönü); "dump yok" yanılgısını sayaç + notice önler.
+  `limit` görünen girdiyi sayar; `taranan` = bakılan feed girdisi.
+- `adt_dump_read`: dump'ın client'ı farklıysa ya da tespit edilemezse `acknowledge_risk=True`
+  olmadan **dump gövdesi istenmez** (`baska_client_pii`).
+- **Client kaynağı:** liste → girdinin kendi özet HTML'indeki `Client` satırı (otorite), yoksa
+  kimlik. Okuma → kimlik (ağsız; XML'de client alanı YOK), çözülemezse `/summary` başlığı;
+  `summary=True` ile özet client'ı kimlikten farklı çıkarsa özet kazanır ve guard yeniden uygulanır.
+- **Kimliğin biçimi (ölçüldü 100/100, tek sistem):** uzunluk 70, sabit genişlikli —
+  14 zaman + 32 sunucu örneği + 12 kullanıcı + 3 client + 9. ⛔ Boşlukla bölmek 12 karakterlik
+  kullanıcı adında kırılıyordu (kullanıcı + client bitişik; 2/100 vaka) ⇒ konumla okunur;
+  biçim tutmazsa client `None` (tahmin edilmez).
+
+**DOĞRULANAMADI:** başka sürüm/sistemde kimlik genişliği · `from`/`to` param biçimi bu turda
+yeniden ölçülmedi · `/unformatted` ucu (bağlantıda var) ölçülmedi.
+
 ## Bilinen Sınırlar (v1)
 
 - `adt_lock_check` best-effort probe — bazı lock tipleri sadece write sırasında ortaya çıkar
