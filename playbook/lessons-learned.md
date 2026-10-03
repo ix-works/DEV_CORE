@@ -13,7 +13,7 @@ purpose: Tekrarlayan hata pattern'leri ve trigger phrases
 
 > **AMAÇ:** Claude (AI agent) yaptığı tekrar eden hataları **tanıma + önleme** mekanizması. Her oturum başında okunur, oturum sonunda güncellenir.
 
-> **OKUNMA SIKLIĞI:** Her SAP iş oturumu başında. AGENTS.md ve CLAUDE.md bu dosyaya referans verir.
+> **OKUNMA SIKLIĞI:** Her SAP iş oturumu başında. `CLAUDE.core.md` (§9 dosya indeksi) bu dosyaya referans verir.
 
 ---
 
@@ -101,7 +101,7 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 - **Trigger:** "Şu an çalıştı, playbook'a sonra yazarım"
 - **Kök sebep:** Forward bias + ergonomik kestirme
 - **Detection:** Gelecek session aynı problemle karşılaşınca, TempScripts'i bulamam veya hatırlamam
-- **Prevention:** AGENTS.md §4 zaten zorunlu kılıyor — başardıktan sonra playbook update
+- **Prevention:** `CLAUDE.core.md` §4 tetikleyici T6 zaten zorunlu kılıyor — başardıktan sonra playbook update
 - **Status:** ⚠️ İLGİLİ — disiplinim
 - **Vakalar:** Sprint 4 vaka çözümleri (auto-fallback pattern)
 
@@ -163,7 +163,7 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 - **⚠ EN ÖNEMLİ ALT-DERS — "kod-seviyesi koruma" ≠ "korunuyor":** İlk düzeltmede `_KABUK_TOOLLARI = ("Bash","PowerShell")` yazıldı, 29 senaryoluk test yeşil verdi, PR merge edildi. **Ama `settings.json` matcher'ı `Bash|mcp__sap-adt__.*` idi — hook PowerShell'de HİÇ tetiklenmiyordu.** Test guard'ı *doğrudan* çağırdığı için kablolamayı hiç sınamadı. Canlı A/B kanıtı: aynı komut Bash'te ⛔, PowerShell'de çalıştı. **Guard'ı doğrudan çağıran her test, sahte güvence üretme riski taşır** → ayrıca matcher'ı okuyan bir kablolama gate'i şart.
 - **Aynı denetimde çıkan kardeş bulgular:** (a) **Koşmayan test gate değildir** — test vardı, CI çağırmıyordu; sonra çağırdı ama `CLAUDE_PROJECT_DIR` olmadığı için FREEZE'in 5 senaryosunu **sessizce atlayıp** "TUTUYOR" yazıyordu → fixture ile bağımlılık kaldırıldı, atlananlar adıyla listelenir. (b) **Yapılandırma korumayı zayıflatmasın** — `_leak_desenleri()` "ilk bulunan kazanır"dı: blocklist tanımlayan proje jenerik desenleri kaybediyordu (*daha fazla yapılandırma = daha az koruma*); artık birleşim. (c) Aynı deseni iki dosyada "bilerek aynı" yorumuyla tutmak enforcement değildir → drift'i gate'le. (d) **Fiil kara-listesi hedefi sormaz:** freeze-guard `2>&1`'deki `>`'i yazma sanıp salt-okumayı bloklarken, `python -c "open(f,'w')"` / `tar -C` / `shutil.rmtree` ile gerçek yazmayı geçiriyordu → **hedef-tabanlı** analize geçildi (`_frozen_yazma_hedefi`). (e) `hook_shim` junction kırıkken `return 1` veriyordu; PreToolUse'da bloklayan kod **2** → guard en çok gerektiği anda (kurulum bozuk) sessizce yok oluyordu → fail-closed. **(f) Guard'ın kendi yardımcı çağrısı ortam-biçimine kördü (2026-07-30):** `_repo_public_mu()` hedef repoyu `cd` önekinden çıkarıp `subprocess(cwd=)` veriyordu; Bash tool'unda yazılan `cd /c/IX/<proje> && git commit …` **POSIX** yolu Windows'ta çözülemiyor → exception → `gorunurluk-sorulamadi(fail-closed)` → **PRIVATE repo public sayılıp meşru commit bloklanıyordu.** ⚠ Ders iki katmanlı: (i) fail-closed **yön olarak** doğruydu ama *yanlış-pozitif* üretti ve yanlış-pozitif bypass alışkanlığı doğurur — "güvenli yön" tek başına yeterli tasarım kriteri değil; (ii) guard bir dış araca (`gh`) delege ediyorsa **delege çağrısının girdisi de kural yüzeyidir**: `--repo` verilen yolda cwd önemsizken, commit yolunda cwd TEK belirleyiciydi. Fix: `_win_yol()` normalizasyonu + çözülemeyen `cd` → proje köküne düşme; test: `_win_yol` birim ekseni (ağsız, her ortamda) + uçtan-uca `gh repo view` ekseni (LIVE-gated, adıyla SKIP yazdırılır) — **mutasyon testiyle dişi kanıtlandı** (fix bozulunca test FAIL verdi).
 - **Genel ders:** Bir gate'in **neyi** taradığı kadar **nerede durduğu**, **hangi yüzeylere kablolandığı** ve **hedefe mi yoksa metne mi** baktığı da kuralın parçasıdır. Guard yazarken üç soru: bu deseni içeren zararsız bir *metin* var mı? Aynı işi yapan ikinci bir *araç* var mı? Bu kural gerçekten o araca **bağlı** mı?
-- **Status:** ✅ SOLVED — hedef-tabanlı freeze-guard + matcher + fail-closed shim + fixture'lı test + kablolama gate'i. Kanıt: 48 senaryoluk davranış korpusu (öncesi 17 bozuk → sonrası 0, **0 regresyon**), kablolama gate'i negatif testle doğrulandı.
+- **Status:** ✅ SOLVED — matcher + fail-closed shim + fixture'lı test + kablolama gate'i. ⚠ Çözümün o günkü parçası olan **hedef-tabanlı freeze-guard (R10, `_frozen_yazma_hedefi`) 2026-07-10'da KALDIRILDI** — dondurulmuş köke yazma yasağı sürüyor ama **disiplin + OS izni** ile, runtime guard ile DEĞİL ([`../governance/removed-controls.md`](../governance/removed-controls.md)). Kanıt (kaldırma öncesi, tarihsel): 48 senaryoluk davranış korpusu (öncesi 17 bozuk → sonrası 0, **0 regresyon**), kablolama gate'i negatif testle doğrulandı.
 - **Vakalar:** 2026-07-09 guard denetimi — 3 guard arka arkaya kendi commit'ini bloklad; toplu denetimde 4 kural daha aynı körlükteydi; `PowerShell` yüzeyi kodda "kapalı" sanılırken matcher'da hiç yoktu; freeze-guard salt-okumayı bloklayıp gerçek yazmayı geçiriyordu. · 2026-07-30 — POSIX `cd /c/...` öneki görünürlük sorgusunu fail-closed'a kaçırdı; private repoya meşru commit bloklandı (aynı mesaj `cd` öneksiz geçti → A/B kanıtı).
 
 ---
@@ -283,7 +283,7 @@ Tipik çift-yaşam yerleri: changelog tablo satırı ↔ altındaki açıklama b
    checklist (iş-türüne özel) / **hook** (proaktif/cross-cutting) / pre_tool_guard (blokla).
    Yeni iş-türü → `skill_injector._WORKTYPES`. "İş başlarken hatırlasaydım olmazdı" diyorsan
    playbook notu YETMEZ — doğru anda dayatan katmana ekle.
-6. Documentation güncelle (playbook + AGENTS.md + bu dosya)
+6. Documentation güncelle (playbook + ilgili `CLAUDE.core.md` §1.1 / `claude/rules/` maddesi + bu dosya)
 
 ### Oturum BİTİŞİ (büyük milestone sonrası)
 1. Yeni pattern keşfedildi mi → Bu dosyaya ekle

@@ -9,7 +9,7 @@ source: deep-research (4 paralel subagent, 2026-06-14) — Anthropic/Cognition/L
 # Agent Teams İşletim Modeli
 
 > **Amaç:** Çok-ajanlı (agent teams) çalışmayı patinaj yapmadan, kanıtlı desenlerle yürütmek.
-> Bu doküman BAĞLAYICI: lider (ana oturum) her takım kullanımında buna uyar. CLAUDE.md + AGENTS.md buraya pointer verir.
+> Bu doküman BAĞLAYICI: lider (ana oturum) her takım kullanımında buna uyar. `CLAUDE.core.md` §1.1 (SUBAGENT KARARI) buraya pointer verir (eski `AGENTS.md` 2026-08-01'de emekli — SUPERSEDED).
 > Dayanak araştırması: [[research/agent-teams-best-practices]] (özet bu dokümanda), kaynaklar §11.
 
 ## 1. NE ZAMAN takım? (ne zaman SOLO)

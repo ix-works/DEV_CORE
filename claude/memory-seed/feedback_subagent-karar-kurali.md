@@ -16,7 +16,7 @@ Subagent kararı 3 vaka:
 
 **Why:** Kullanıcı içgörüsü (2026-06-13): "tek ajan ≈ sen yap, neden ajana verip bekliyorsun? subagent çok kullanılınca mantıklı." Büyük oranda haklı — eksik nokta: tek subagent'ın context-izolasyon değeri (Explore/araştırma subagent'ları bunun için var). Tetikleyen hata: tooling-radar ilk run'ı 6 bağımsız kategoriyi **tek subagent**'a seri taradı (paralel olmalıydı) → kullanıcı yakaladı.
 
-**How to apply:** Bir işi subagent'a vermeden önce sor: (a) önemsiz mi → kendin yap; (b) bağımsız parçalara bölünür mü → bölünürse **paralel fan-out** (her parça ayrı Agent, tek mesajda concurrent), bölünmezse tek subagent. "Geniş süpürme / N-kategori / N-dosya audit / N-paket tarama" = neredeyse her zaman fan-out. Kural L1'de: AGENTS.md §2 "Subagent/Orkestrasyon Kararı". İlgili: [[feedback_done-tam-kapsam-dogrula]].
+**How to apply:** Bir işi subagent'a vermeden önce sor: (a) önemsiz mi → kendin yap; (b) bağımsız parçalara bölünür mü → bölünürse **paralel fan-out** (her parça ayrı Agent, tek mesajda concurrent), bölünmezse tek subagent. "Geniş süpürme / N-kategori / N-dosya audit / N-paket tarama" = neredeyse her zaman fan-out. Kural L1a'da: `CLAUDE.core.md` §1.1 "SUBAGENT KARARI" (eski yeri `AGENTS.md` §2, 2026-08-01'de emekli). İlgili: [[feedback_done-tam-kapsam-dogrula]].
 
 ---
 

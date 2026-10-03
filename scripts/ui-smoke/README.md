@@ -30,5 +30,5 @@ python scripts/ui-smoke/run_ui_smoke.py --base-url http://localhost:8097
   (2026-07-08 göçüşünde bu satır sessizce DEV_CORE'a bakar olmuştu → gate ölmüştü; CORE-01
   artık `<__file__-kök> / ".conn_adt"` yazımını bloklar.)
 
-## "Done" kriteri (G4, AGENTS.md §2)
+## "Done" kriteri (G4, `claude/rules/ui5-freestyle.md` §6)
 UI build "done" demeden önce bu gate PASS olmalı + G3 (`check_ui5_freestyle_traps.py`) PASS.

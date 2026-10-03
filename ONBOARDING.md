@@ -167,7 +167,8 @@ python core/scripts/ix_doctor.py            # proje kökünden; --layer N / --li
 `ix_doctor` = kurulumun uçtan-uca sağlık taraması (sap_doctor'un kardeşi: o "SAP bağlantısı
 sağlıklı mı"ya, bu "canlı-çekirdek kurulumu sağlıklı mı"ya bakar). **7 katman** — FS+bağımlılık
 (4 junction + plugin/CLI), git (baseline + stable), GitHub-enforce (ruleset/CI/sızıntı),
-Claude-katmanı (settings/shim drift + hook smoke + freeze-guard canlı test), MCP/SAP,
+Claude-katmanı (settings/shim drift + behavior-manifest + hook smoke; freeze-guard canlı testi
+R10 ile birlikte 2026-07-10'da KALDIRILDI — [`governance/removed-controls.md`](governance/removed-controls.md)), MCP/SAP,
 validator+performans, iş-akışı smoke — her kontrol kanıt-satırı basar; exit 0 = FAIL yok.
 Tamamlayıcı: `python core/scripts/validators/run_all_validators.py` (proje kökünden).
 
@@ -194,7 +195,7 @@ girmez (yalnız var-mı + sayım), `--anon` kullanıcı adı/host maskeler · ek
 
 ## 10. Çalışma düzeni — bilmen gereken minimum
 
-- **Git modeli (L1, [`AGENTS.md`](AGENTS.md) §1):** tek uzun-yaşayan branch = `main`;
+- **Git modeli (L1a, [`CLAUDE.core.md`](CLAUDE.core.md) §1.1 GIT):** tek uzun-yaşayan branch = `main`;
   `main` doğrudan-push'a KAPALI → her değişiklik **kısa-ömürlü branch + PR + CI** ile girer;
   merge sonrası branch silinir. Merge = lider/kullanıcı onayı; push öncesi HER ZAMAN
   kullanıcı onayı; `--force`/`--no-verify` yok. **FREEZE:** dondurulmuş arşiv köklerine
@@ -206,7 +207,7 @@ girmez (yalnız var-mı + sayım), `--anon` kullanıcı adı/host maskeler · ek
 - **Core pull:** makinede TEK yerden — `git -C core pull` — proje kökünden çalışır ve **sabit sürücü/klasör varsayımı taşımaz** (D24). ⚠ Dokümanda gördüğün `C:\IX\...` biçimi bir örnektir, kural değil; `session_start` "origin'in gerisindesin" uyarır).
 - **Çekirdekte bir şeyi değiştirmen gerekirse ve upstream'e yazma yetkin YOKSA:** DUR — önce kusurun kurulumda mı çekirdekte mi olduğunu ölç, sonra **yalnız Issue** aç (kanıt formatı zorunlu; fork + PR yolu yok — düzeltme fikri Issue'nun `ÖNERİ` bölümüne): [`playbook/howto-cekirdek-bulgu-bildirimi.md`](playbook/howto-cekirdek-bulgu-bildirimi.md) · [`MAINTENANCE.md`](MAINTENANCE.md) §6b. Lokal yama meşrudur ama **kendi dalında** ve görünür olmalı.
 - **⛔ KESİN YASAKLAR (ADR 0005)** her projenin kök `CLAUDE.md`'sine fiziksel damgalıdır;
-  SAP işlemleri playbook-önce disiplinine tabidir ([`AGENTS.md`](AGENTS.md) §6).
+  SAP işlemleri playbook-önce disiplinine tabidir ([`claude/rules/sap-source-protokolu.md`](claude/rules/sap-source-protokolu.md) §3-4 · [`playbook/`](playbook/)).
 
 ## 11. Hızlı kontrol listesi (yeni makine)
 

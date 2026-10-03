@@ -838,7 +838,11 @@ def npm_clis() -> None:
     clis = [
         ("playwright-cli", "@playwright/cli@latest", "token-verimli tarayıcı doğrulama (ADR 0017 ui-smoke)"),
         ("ast-grep", "@ast-grep/cli@latest", "yapısal kod arama/refactor (AST)"),
-        ("mmdc", "@mermaid-js/mermaid-cli@latest", "Mermaid → SVG/PNG (FS/TS/KD)"),
+        # mmdc PİNLİ (2026-10-03): `@latest` 12.0.0'a (major; mermaid 12 + node>=22.13) geçti,
+        # bizim render reçetemiz (doc_tools: -i -o -t -b -s + -p executablePath) yalnız 11
+        # hattında ölçüldü — 11.16.0 ↔ 11.17.0 aynı .mmd için bayt-eşit PNG. Bump = bilinçli
+        # karar. Aynı sürüm dizesi: doc_tools.py `render_mermaid` hata metni + ix_doctor.py 1d.
+        ("mmdc", "@mermaid-js/mermaid-cli@11.17.0", "Mermaid → SVG/PNG (FS/TS/KD)"),
         ("marp", "@marp-team/marp-cli@latest", "Markdown → slayt (PDF/PPTX)"),
     ]
     for binary, pkg, desc in clis:

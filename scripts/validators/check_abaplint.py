@@ -33,7 +33,7 @@ if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
 
 CONFIG = Path(__file__).resolve().parents[1] / 'abaplint' / 'abaplint.json'
 
-# Sürüm PİNLİ (2026-07-26; BUMP 2026-08-28: 2.120.5 → 2.120.38). Pin'siz `@abaplint/cli`
+# Sürüm PİNLİ (2026-07-26; BUMP 2026-08-28: 2.120.5 → 2.120.38; BUMP 2026-10-03: → 2.120.64). Pin'siz `@abaplint/cli`
 # her koşumda upstream latest'i çeker → lint davranışı bizden habersiz değişir (upstream'de
 # 2 haftada 43 commit) + tedarik-zinciri yüzeyi. Bump = BİLİNÇLİ karar: burayı güncelle,
 # bir class/program üzerinde koş, farkı gör.
@@ -45,8 +45,16 @@ CONFIG = Path(__file__).resolve().parents[1] / 'abaplint' / 'abaplint.json'
 # Bulgu kümesi (dosya, satır, kural, mesaj) BİREBİR AYNI — yeni yanlış-pozitif YOK, kaybolan
 # bulgu YOK, `IX-GATE-STATUS` satırı 147/147 dosyada basıldı. Çıktı biçimi de değişmedi
 # (`N issue(s) found, M file(s) analyzed`) ⇒ SUMMARY_RE/ISSUE_RE güncellemesi GEREKMEDİ.
+#
+# 2026-10-03 bump'ı (2.120.38 → 2.120.64) AYNI YÖNTEMLE ölçüldü — korpus büyüdü: 160 canlı
+# artefakt (74 `.clas.abap` + 86 `.prog.abap`; `.tmp/` karalama kopyaları hariç) + 2 kontrol:
+#   2.120.38 → 142 OK · 18 FINDING · 1 FAIL* · 1 SKIPPED · toplam 23 bulgu
+#   2.120.64 → 143 OK · 18 FINDING · 0 FAIL  · 1 SKIPPED · toplam 23 bulgu
+# (dosya, satır, kural, mesaj) dörtlüsü BİREBİR AYNI (23 = 23). *Tek fark dosyası paralel koşumda
+# node sürecinin çökmesiydi (rc 0xC0000409, boş çıktı → gate doğru biçimde FAIL measured=false);
+# aynı dosya tek başına iki sürümde 3'er kez koşuldu → 6/6 OK ⇒ sürüme bağlı değil.
 # Fetch edilemezse (offline/cache yok) aşağıdaki except → SKIP (reviewer kırılmaz, mevcut davranış).
-ABAPLINT_PIN = '@abaplint/cli@2.120.38'
+ABAPLINT_PIN = '@abaplint/cli@2.120.64'
 ISSUE_RE = re.compile(r'^(.*\.abap)\[(\d+),\s*(\d+)\]\s*-\s*(.+?)\s*\(([a-z_]+)\)\s*\[[EWI]\]\s*$')
 
 # ⛔ FAIL-OPEN KİLİDİ (2026-08-14) — "bulgu satırı görmedim" ≠ "temiz".

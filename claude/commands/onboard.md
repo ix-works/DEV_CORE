@@ -36,7 +36,7 @@ el kitabı: `core/ONBOARDING.md` — detay gereken her yerde oraya yönlendir.
 
 ## ADIM 5 — İş durumu + işletim modeli brief'i (kısa)
 - Aktif paketin son `SESSION_NOTES.md` girişini oku, 1-2 satırla aktar (aktif paket belirsizse kullanıcıya sor).
-- 5-6 satır özet: **ADR 0005 KESİN YASAKLAR** (kök `CLAUDE.md` başı) · **tek-yazıcı** (ADR 0018: SAP'ye yalnız `adt-gateway` yazar) · **pull-before-edit** (ADR 0016) · **reviewer pre-flight** (ADR 0006: `run_review.py`) · yeni bilgi nereye → `core/CLAUDE.core.md` §4 SORU 0. Detay: `core/ONBOARDING.md` + `CLAUDE.md` + `core/AGENTS.md`.
+- 5-6 satır özet: **ADR 0005 KESİN YASAKLAR** (kök `CLAUDE.md` başı) · **tek-yazıcı** (ADR 0018: SAP'ye yalnız `adt-gateway` yazar) · **pull-before-edit** (ADR 0016) · **reviewer pre-flight** (ADR 0006: `run_review.py`) · yeni bilgi nereye → `core/CLAUDE.core.md` §4 SORU 0. Detay: `core/ONBOARDING.md` + `CLAUDE.md` + `core/CLAUDE.core.md` §1.1 + `core/claude/rules/`.
 
 ## SONUÇ
 "✅ Ortamın repo sahibiyle paralel: kurallar/hook'lar/MCP/roller aktif, bağlantı doğrulandı." de. Eksik kalan (örn. `.conn_adt` doldurulmadı, MCP onaylanmadı, plugin kurulamadı) varsa AÇIKÇA listele.
