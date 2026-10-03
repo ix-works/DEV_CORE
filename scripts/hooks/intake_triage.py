@@ -219,6 +219,9 @@ def main() -> int:
     # eder) → yanlış-negatif riski yok. NOT: <system-reminder> DAHİL EDİLMEZ (her promptta olur).
     if any(mk in prompt for mk in _AUTO_EVENT_MARKERS):
         return 0
+    # BİLİNÇLİ KABUL: kullanıcı istemini bu öneklerden biriyle BAŞLATIRSA nudge atlanır
+    # (insan-origin 1870 promptta 0 vaka). Ağ: `itg_backstop` (PreToolUse) ilk SAP
+    # aracında ITG marker'ı yoksa protokolü yine enjekte eder.
     if prompt.lstrip().startswith(_AUTO_EVENT_ONEKLER):   # ajan/oturum mesajı (Q-ITG-PEER)
         return 0
 

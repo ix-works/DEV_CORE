@@ -57,6 +57,9 @@ SENARYOLAR (S1-S16)
   S22 taban ONCESI imzalar varsayilan tabanda SESSIZ (kalinti kurali imzalara da uyar)
   S22b AYNI dosya, taban geriye alininca iki imza da basilir (susturma degil KURAL)
   S17b ozet + IMZALAR satiri "DONGU?"/"IPTAL?" token'larini TASIMAZ
+  S23 ⭐ KARISIK DAMGA: ayni transkriptte Z'siz (tz'siz) + Z'li damgalar -> arac
+      COKMEZ (taban kiyasi + imza araligi TypeError'i), BITTI basar, ASILI? + IPTAL? yine
+      uretilir (bug-gate #313: tek transkript tum bekciyi olduruyordu)
 
 KOSUM:
     python tests/fixtures/agent_stall_watch/run.py
@@ -70,6 +73,9 @@ KOSUM:
     ... --mutasyon-iptal       (kesme kaydi hic algilanmaz      -> S20)
     ... --mutasyon-iptal-pencere (~600 sn penceresi kalkar     -> S21)
     ... --mutasyon-imza-taban  (imzalarin taban filtresi sokulur -> S22)
+    ... --mutasyon-tz          (tz'siz damga UTC'ye cevrilmez    -> S23/S23b)
+⛔ CORE-07: mutasyon kipinde dusen vektor kumesi BEKLENEN_DUSUS ile ESITLIKLE kiyaslanir
+   (eksik de fazla da sapma) -> sapma exit 2 (DOGRULANAMADI).
   (Sayilar OLCULDU, tahmin degil — `python tests/run_battery.py agent_stall_watch`.)
 Cikis: 0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (capa bayat / kontrol grubu bozuk)
 
@@ -103,7 +109,7 @@ ARAC = REPO / "scripts" / "agent_stall_watch.py"
 GECERLI_KIP = {"--mutasyon", "--mutasyon-eslestirme", "--mutasyon-taban",
                "--mutasyon-kapsam", "--mutasyon-dongu", "--mutasyon-dongu-seri",
                "--mutasyon-dongu-parca", "--mutasyon-iptal", "--mutasyon-iptal-pencere",
-               "--mutasyon-imza-taban"}
+               "--mutasyon-imza-taban", "--mutasyon-tz"}
 
 # Fix'in SOKUMU (mutasyon capalari): (kip) -> (eski metin, yeni metin)
 CAPA = {
@@ -137,6 +143,9 @@ CAPA = {
     "--mutasyon-imza-taban": (
         '                    self.taban is not None and o["ts"] < self.taban):\n',
         "                    False):  # MUTASYON: imza taban filtresi sokuldu\n"),
+    "--mutasyon-tz": (
+        "    return z if z.tzinfo is not None else z.replace(tzinfo=_dt.timezone.utc)\n",
+        "    return z  # MUTASYON: tz'siz damga oldugu gibi\n"),
 }
 # OLCULDU (2026-09-17, tahmin DEGIL — `python tests/run_battery.py agent_stall_watch`):
 # taban 27/27 · --mutasyon 26/27 · --mutasyon-eslestirme 24/27 ·
@@ -145,17 +154,21 @@ CAPA = {
 # taban 37/37 · --mutasyon-eslestirme +S18c (eslestirme olunce DONGU dosyasindaki donmus
 # Read cagrisi ASILI? olur) · --mutasyon-dongu S18+S22b · --mutasyon-iptal S20+S20b+S22b
 # · --mutasyon-iptal-pencere S21+S20b (pencere disi kesmeler de sayilir -> iptal=3)
+# · #313 duzeltme turu (S23/S23b + --mutasyon-tz, ESITLIK kiyasi): taban 39/39 ·
+#   --mutasyon-dongu ve --mutasyon-iptal ayrica S23b (karisik damga vektoru de
+#   DONGU?/IPTAL? bekler) — esitlik kiyasi bu fazlayi ilk kosumda yakaladi.
 BEKLENEN_DUSUS = {
     "--mutasyon": ("S2",),
     "--mutasyon-eslestirme": ("S3", "S5", "S11", "S18c"),
     "--mutasyon-taban": ("S4a",),
     "--mutasyon-kapsam": ("S6", "S6b", "S7", "S9", "S13", "S14"),
-    "--mutasyon-dongu": ("S18", "S22b"),
+    "--mutasyon-dongu": ("S18", "S22b", "S23b"),
     "--mutasyon-dongu-seri": ("S19",),
     "--mutasyon-dongu-parca": ("S18b",),
-    "--mutasyon-iptal": ("S20", "S20b", "S22b"),
+    "--mutasyon-iptal": ("S20", "S20b", "S22b", "S23b"),
     "--mutasyon-iptal-pencere": ("S21", "S20b"),
     "--mutasyon-imza-taban": ("S22",),
+    "--mutasyon-tz": ("S23", "S23b"),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -438,6 +451,29 @@ def senaryolar(arac: Path) -> None:
           bool(iptal_satirlari(out22b)) and bool(dongu_satirlari(out22b)),
           f"iptal={iptal_satirlari(out22b)} dongu={dongu_satirlari(out22b)}")
 
+    # ── S23: karisik damga (Z'siz + Z'li) — cokme yok ─────────────────────
+    def _ciplak(ts: str) -> str:            # tz'siz bicim: "Z" atilir
+        return ts[:-1] if ts.endswith("Z") else ts
+    kok14 = _tmp() / "projects"
+    transkript(kok14, "PROJE", "seans1", "karisik01",
+               [_kullanim("tu_t1", "Bash", _ciplak(iso(20, simdi))),          # ASILI yolu
+                _tur(_ciplak(iso(30, simdi)), "max_tokens", "msg_t1", [dusun]),  # DONGU yolu
+                _tur(iso(25, simdi), "max_tokens", "msg_t2", [dusun])],
+               meta={"agentType": "backend-expert", "description": "karisik damga"})
+    transkript(kok14, "PROJE", "seans1", "karisik02",
+               [_sonuc("tu_t9", _ciplak(iso_sn(650.0, simdi))),               # tz'siz
+                _kesme(iso_sn(49.986, simdi))],                               # Z'li, +600 sn
+               meta={"agentType": "frontend-expert", "description": "karisik iptal"})
+    rc23, out23 = kos(arac, ["--kok", str(kok14), "--baslangic", taban_uzak], simdi)
+    kayit("S23 karisik damga: arac COKMEZ, BITTI basar, exit 0",
+          rc23 == 0 and "[bekci] BITTI" in out23 and "Traceback" not in out23,
+          f"rc={rc23} cikti={out23[-300:]}")
+    kayit("S23b karisik damgada ASILI? + DONGU? + IPTAL? yine uretilir",
+          bool(asili_satirlari(out23)) and bool(dongu_satirlari(out23))
+          and bool(iptal_satirlari(out23)),
+          f"asili={asili_satirlari(out23)} dongu={dongu_satirlari(out23)} "
+          f"iptal={iptal_satirlari(out23)}")
+
     # ── S8/S9/S10: satir bolme ve bozuk satir ──────────────────────────────
     kok4 = _tmp() / "projects"
     gurultu = "kontrol \x0b \x0c \x1c \x1d \x1e \x85     karakterleri"
@@ -610,14 +646,22 @@ def main() -> int:
         print(f"  [{'PASS' if ok else 'FAIL'}] {ad}" + (f"   -> {not_}" if not_ and not ok else ""))
         if not ok:
             dusen += 1
-    if kip:
-        print(f"  (beklenen dususler: {', '.join(BEKLENEN_DUSUS[kip])})")
     # `N/M OK` satiri: TAM suit ozeti bu bicimi ayristirir (run_fixture_tests
     # `^\s*\d+/\d+ OK`), yoksa tablo hucresi BOS kalir ve skor gorunmez.
     print(f"{len(SONUC) - dusen}/{len(SONUC)} OK  (P+N iceride)")
     print(f"TOPLAM: {len(SONUC) - dusen} PASS / {dusen} FAIL")
     temizle()
-    return 1 if dusen else 0
+    if not kip:
+        return 1 if dusen else 0
+    # CORE-07: dusen kume BEKLENEN ile ESIT olmali (eksik de fazla da sapma).
+    dusen_kume = {ad.split(" ", 1)[0] for ad, ok, _ in SONUC if not ok}
+    beklenen = set(BEKLENEN_DUSUS[kip])
+    if dusen_kume != beklenen:
+        print(f"[DOGRULANAMADI] MUTASYON {kip}: dusen kume BEKLENENDEN FARKLI -> "
+              f"eksik={sorted(beklenen - dusen_kume)} fazla={sorted(dusen_kume - beklenen)}")
+        return 2
+    print(f"  (MUTASYON {kip}: beklenen kume {sorted(beklenen)} AYNEN dustu)")
+    return 1
 
 
 if __name__ == "__main__":

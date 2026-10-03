@@ -111,6 +111,9 @@ def main() -> int:
     # B5: otomatik-event → enjeksiyon yok (task-notification'da "SAP işi" yanlış-pozitifi)
     if any(mk in prompt for mk in _AUTO_EVENT_MARKERS):
         return 0
+    # BİLİNÇLİ KABUL: kullanıcı istemini bu öneklerden biriyle BAŞLATIRSA tarayıcı/yapısal
+    # nudge atlanır (insan-origin 1870 promptta 0 vaka). Bu notlar hatırlatmadır, kapı
+    # değil; ITG tarafının ağı `itg_backstop` (PreToolUse, ilk SAP aracı).
     if prompt.lstrip().startswith(_AUTO_EVENT_ONEKLER):   # ajan/oturum mesajı (Q-ITG-PEER)
         return 0
 

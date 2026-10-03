@@ -112,9 +112,13 @@ def _zaman(s: str | None) -> _dt.datetime | None:
     if not s or not isinstance(s, str):
         return None
     try:
-        return _dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+        z = _dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
     except Exception:
         return None
+    # ⛔ tz'siz damga UTC sayilir: tz'li ile tz'siz datetime KIYASLANAMAZ/CIKARILAMAZ
+    # (TypeError) -> karisik damgali TEK bir transkript tum bekciyi oldururdu (taban
+    # kiyasi `< self.taban` ve imza araligi `ts - onceki`). Bug-gate #313 bulgusu.
+    return z if z.tzinfo is not None else z.replace(tzinfo=_dt.timezone.utc)
 
 
 def ajan_adi(dosya: Path) -> str:

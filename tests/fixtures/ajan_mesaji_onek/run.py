@@ -18,6 +18,8 @@ UC EKSEN, HICBIRI DIGERINI KAPSAMAZ:
        degil -> atesler. "Icerikte ara" tasarimi bunu yutar; --mutasyon-onek-icerik
        tam bunu sinar.)
   K*  KARDES        : ayni sozlesme skill_injector'da (ayni UPS blogu, ayni yontem)
+  K0  KARDES ESITLIGI: iki hook'un `_AUTO_EVENT_ONEKLER` demeti AST ile okunur ve
+      BIREBIR esit olmali (biri degisip oteki unutulursa sessiz ayrisma)
 
 GERCEK GIRIS NOKTASI: her vektor `hook_shim.py` uzerinden kosulur (settings.template.json
 `python ${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py <hook>`). Gecici proje = shim'in
@@ -29,11 +31,16 @@ KOSUM:  python tests/fixtures/ajan_mesaji_onek/run.py
         ... --mutasyon-onek-yok-intake   (intake: onek suzgeci sokulur  -> P1/P2/P3 duser)
         ... --mutasyon-onek-yok-skill    (skill : onek suzgeci sokulur  -> K1/K2 duser)
         ... --mutasyon-onek-icerik       (intake: BASTA degil ICERIKTE  -> N2 duser)
-        ... --mutasyon-onek-gevsek       (intake: `from=` capasi atilir -> N3 duser)
-Cikis:  0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (capa tutmadi / mutant derlenmedi)
+        ... --mutasyon-onek-gevsek       (intake: `from=` capasi atilir -> N3 + K0 duser)
+        ... --mutasyon-onek-kardes-ayrik (skill demetine fazladan eleman -> YALNIZ K0 duser)
+Cikis:  0 hepsi beklendigi gibi · 1 mutasyon kipinde BEKLENEN kume dustu ·
+        2 DOGRULANAMADI (capa tutmadi / mutant derlenmedi / dusen kume != beklenen kume)
+⛔ CORE-07: mutasyon kipinde dusen vektor kumesi BEKLENEN_DUSUS ile ESITLIKLE kiyaslanir —
+   eksik (beklenen dusmedi) de fazla (baska vektor dustu) de sapmadir -> exit 2.
 """
 from __future__ import annotations
 
+import ast
 import json
 import os
 import py_compile
@@ -68,12 +75,16 @@ MUTLAR = {
         "    if any(o in prompt for o in _AUTO_EVENT_ONEKLER):  # MUTASYON\n"),
     "--mutasyon-onek-gevsek": ("intake_triage.py", '    "<agent-message from=",\n',
                                '    "<agent-message",  # MUTASYON\n'),
+    "--mutasyon-onek-kardes-ayrik": (
+        "skill_injector.py", '    "<agent-message from=",\n)\n',
+        '    "<agent-message from=",\n    "ZZZ_MUTASYON_ONEK",\n)\n'),
 }
 BEKLENEN_DUSUS = {
     "--mutasyon-onek-yok-intake": ("P1", "P2", "P3"),
     "--mutasyon-onek-yok-skill": ("K1", "K2"),
     "--mutasyon-onek-icerik": ("N2",),
-    "--mutasyon-onek-gevsek": ("N3",),
+    "--mutasyon-onek-gevsek": ("N3", "K0"),
+    "--mutasyon-onek-kardes-ayrik": ("K0",),
 }
 
 # Gercek korpus bicimleri (kimlik izleri placeholder).
@@ -111,6 +122,22 @@ def proje_kur(kok: Path, kip: str) -> Path:
         except py_compile.PyCompileError as e:
             raise SystemExit(f"[DOGRULANAMADI] mutant derlenmedi ({kip}): {e}")
     return p
+
+
+def onekler(dosya: Path):
+    """`_AUTO_EVENT_ONEKLER = (...)` demetini AST ile oku (yoksa None)."""
+    try:
+        agac = ast.parse(dosya.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    for d in agac.body:
+        if isinstance(d, ast.Assign) and any(
+                isinstance(h, ast.Name) and h.id == "_AUTO_EVENT_ONEKLER" for h in d.targets):
+            try:
+                return ast.literal_eval(d.value)
+            except Exception:
+                return None
+    return None
 
 
 def kos(proje: Path, hook: str, prompt: str) -> tuple[int, str, str]:
@@ -155,6 +182,11 @@ def main() -> int:
             sonuc.append((ad, rc == 0 and atesledi == atesmeli,
                           f"rc={rc} atesledi={atesledi} beklenen={atesmeli} err={err[-160:]!r}"))
 
+        # K0 — kardes esitligi (AST; KOSULAN kopya agac uzerinde — mutasyonu gorur)
+        hk = proje / "core" / "scripts" / "hooks"
+        o_i, o_s = onekler(hk / "intake_triage.py"), onekler(hk / "skill_injector.py")
+        sonuc.append(("K0 iki hook'un _AUTO_EVENT_ONEKLER demeti BIREBIR esit (AST)",
+                      bool(o_i) and o_i == o_s, f"intake={o_i!r} skill={o_s!r}"))
         # P — FP capasi: gercek korpus biciminde ajan mesaji -> SESSIZ
         vektor("P1 'Another Claude session' (teammate) -> ITG SESSIZ",
                "intake_triage", ANOTHER, ITG_MK, False)
@@ -193,11 +225,19 @@ def main() -> int:
     for ad, ok, not_ in sonuc:
         print(f"  [{'PASS' if ok else 'FAIL'}] {ad}" + ("" if ok else f"   -> {not_}"))
         dusen += 0 if ok else 1
-    if kip:
-        print(f"  (beklenen dususler: {', '.join(BEKLENEN_DUSUS[kip])})")
     print(f"{len(sonuc) - dusen}/{len(sonuc)} OK  (P+N+K iceride)")
     print(f"TOPLAM: {len(sonuc) - dusen} PASS / {dusen} FAIL")
-    return 1 if dusen else 0
+    if not kip:
+        return 1 if dusen else 0
+    # CORE-07: dusen kume BEKLENEN ile ESIT olmali (eksik de fazla da sapma).
+    dusen_kume = {ad.split(" ", 1)[0] for ad, ok, _ in sonuc if not ok}
+    beklenen = set(BEKLENEN_DUSUS[kip])
+    if dusen_kume != beklenen:
+        print(f"[DOGRULANAMADI] MUTASYON {kip}: dusen kume BEKLENENDEN FARKLI -> "
+              f"eksik={sorted(beklenen - dusen_kume)} fazla={sorted(dusen_kume - beklenen)}")
+        return 2
+    print(f"  (MUTASYON {kip}: beklenen kume {sorted(beklenen)} AYNEN dustu)")
+    return 1
 
 
 if __name__ == "__main__":
