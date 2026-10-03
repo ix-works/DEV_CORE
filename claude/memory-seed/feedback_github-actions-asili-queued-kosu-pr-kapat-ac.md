@@ -13,7 +13,7 @@ ve `updated_at` alanlarına bak. Değişmemişse **`gh pr close N --repo R && gh
 komutta** koş (PR kapalı kalmasın). Bu `pull_request: reopened` olayıyla taze bir koşu doğurur. Merge yine CI
 koşullu yapılır.
 
-**Why:** 2026-09-13, OzakTekstil PR #9. İki koşu 08:52Z/09:19Z'den gece yarısına kadar `queued`, 0 job'da kaldı.
+**Why:** 2026-09-13, bir tüketici projenin PR'ı. İki koşu 08:52Z/09:19Z'den gece yarısına kadar `queued`, 0 job'da kaldı.
 `gh run cancel` → *"Cannot cancel a workflow run that is completed"*, `gh run rerun` → *"This workflow is already
 running"*: GitHub tarafında çelişkili, asılı durum. Kullanıcı arayüzden "yeniden tetikledim" dedi ama API'de
 `run_attempt=1`, `updated_at` değişmemişti, yani tetik yansımamıştı. PR kapat/aç sonrası yeni koşu `34779596080`

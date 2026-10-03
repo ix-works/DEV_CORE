@@ -3004,7 +3004,7 @@ python tests/run_battery.py ix_doctor_repo_mode --kardes ix_doctor_memory_git bo
 ## B70 — Yeni-proje akışı paket 2: `team_setup` şablon sapması (F12a) · `--tazele-precommit` (F12b) · CORE-INDEX yazım atlama (F12c) · alt süreç `CLAUDE_PROJECT_DIR` (F5)
 
 ```
-python tests/fixtures/team_setup_sablon_sapmasi/run.py   # 28/28 (SAP/ağ yok, ~15 sn)
+python tests/fixtures/team_setup_sablon_sapmasi/run.py   # 33/33 (SAP/ağ yok, ~15 sn)
 python tests/run_battery.py team_setup_sablon_sapmasi --kardes shim_tazeleme team_setup_hook_kablolama d7_drift_imzasi b0_secim core_index_kapsam core_index_siralama sap_gate_skip_sozlesmesi mcp_import_denetimi worktree_yasam_dongusu overlay_materyalize_atomik core_fiziksel_kopya --precommit
 ```
 
