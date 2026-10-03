@@ -2979,3 +2979,24 @@ python tests/run_battery.py tohum_govde_guncelleme --kardes tohum_terfi_gorunurl
   Beklenen: `Güncellendi 4 · [UYARI] 1 elle birleştir`, terfi `(a)=1 (b)=0` (eski araç: `(a)=5`).
   ⛔ Gerçek memory dizinine `--target` VERME; kopyasını scratch'e al.
 - **DOĞRULANAMADI:** ikinci fiziksel makine; zehirlenmiş makinenin kurtarılması (kapsam dışı, howto §4).
+
+## B69 — Yeni-proje akışı paket 1: `bootstrap_package` modül klasörü (F1) · `init_project` ruleset check adları (F2) · `ix_doctor` K2 LITE remote yokluğu (F3) · K7a2 memory git gözlemi (F4)
+
+```
+python tests/fixtures/bootstrap_modul_klasoru/run.py   # 6/6 (SAP/ağ yok, ~1 sn)
+python tests/fixtures/guard_check_adlari/run.py        # 7/7
+python tests/fixtures/ix_doctor_repo_mode/run.py       # 16/16 (K3 R1–R10 + K2a–K2f)
+python tests/fixtures/ix_doctor_memory_git/run.py      # 5/5
+python tests/run_battery.py ix_doctor_repo_mode --kardes ix_doctor_memory_git bootstrap_modul_klasoru guard_check_adlari sablon_zorunlu_maddeler init_project_iskelet ix_doctor_kablolama ix_doctor_ps_politika b0_secim --precommit
+```
+
+- **Eski-kod karşıtlığı (git'e bağlı DEĞİL):** `git show <taban>:scripts/<dosya>` → scratch, sonra `--kaynak <dosya>`. Taban `fadf091` ile ölçülen: `bootstrap_modul_klasoru` **3/6** (M1–M3) · `guard_check_adlari` **2/7** (G1·G2·G3·G5·G6; fonksiyon yok) · `ix_doctor_repo_mode` **14/16** (yalnız K2a·K2b) · `ix_doctor_memory_git` **1/5** (N5 geçer).
+- ⛔ **`ix_doctor_repo_mode` K2c·K2d·K2e·K2f eski kodda da GEÇMELİ** (R4–R9 ile aynı ilke): F3 ⚠GEVŞETME'sinin yalnız `local`/`none` + remote YOK'a sınırlı olduğunun kanıtı. K2f (local + remote VAR → PASS, SKIP yok) "yalnız yokluk gevşedi" çivisidir.
+- ⛔ **`bootstrap_modul_klasoru` M4 SİLİNMEZ:** liste dışı ama VAR olan modül klasörü kabul edilmeli; `--mutasyon-mevcut-daralt` yalnız onu düşürür.
+- ⛔ **`ix_doctor_memory_git` K7a2 FAIL üretmez** (ADR 0019 — gözlem): `--mutasyon-git-fail` N2'yi düşürür. Satırı FAIL'e terfi ettirmek ayrı kullanıcı kararıdır.
+- **K2 harness'ı:** `_senaryo.py` 5. argüman `2` ⇒ `katman2()`. CORE_ROOT'a giden her `_git` ve core `_repo_git_kontrol` SAHTE, `git fetch` rc=1 (ağ yok, paylaşılan git dizininin `refs/remotes`'u değişmez); proje tarafı GERÇEK git. `GIT_CEILING_DIRECTORIES=<kum>` — git'siz `none` projesi üst dizinde repo bulmasın. Tüketici yalnız `proje:`/`beklenen` satırlarını okur (global git config satırları makineye bağlı).
+- **K7a2 yalıtımı:** `CLAUDE_CONFIG_DIR=<kum>` → `utils.claude_paths.auto_memory_dizini` kuma yönelir; fixture yolun kumda olduğunu doğrulamadan koşmaz (exit 2). Gerçek `~/.claude` okunmaz/yazılmaz. 7b `deploy_ui --help` sahte rc 0.
+- **G3 doküman ↔ kod eşliği:** `PROJECT_BOOTSTRAP.md`'deki `required_status_checks = [...]` satırı türetilen listeyle AYNI olmalı. Job eklenirse/yeniden adlandırılırsa önce workflow, sonra bu satır; G1'in `BEKLENEN`'i canlı ruleset ölçümüdür — değişince canlı ruleset'i de (salt-okur `gh api repos/<ORG>/<REPO>/rulesets/<id>`) yeniden ölç.
+- **3. bağlam (elle, gerçek CLI):** kısa `%TEMP%` yolu şart — uzun kum yolunda slug + memory yolu MAX_PATH'i aşar, `seed_memory` `FileNotFoundError` verir ve `git remote` rc 128 olur (K7a2 bunu `ÖLÇÜLEMEDİ` WARN'ı olarak gösterir; kusur değil ortam). Adımlar: `init_project <T>/LOC --repo-mode local` + `git init` → `bootstrap_package ZSD001_CLC --module SD` (`[ OK ] Modül klasörü yaratıldı`) → `seed_memory --target <CLAUDE_CONFIG_DIR>/projects/<slug>/memory` → `ix_doctor --layer 7` üç durumda. ⛔ `--layer 2`'yi gerçek CLI'den koşma: core reposunda `git fetch` yapar.
+- **HARİTA:** `bootstrap_package.py` ve `init_project.py`'nin `--degisen` seçimi bu turun yeni fixture'larını İÇERMEZ (b0_secim pinli sayıları yüzünden HARİTA'ya satır eklenmedi); bu dosyalara dokunan PR kardeşleri elle verir.
+- **Bug-gate #320 ekleri:** `bootstrap_modul_klasoru` **8/8** — M7 (kaynak kökü yok → rc 1, hiçbir şey yaratılmaz) + M7b (mesaj kökü söyler); `--mutasyon-kok-yarat` {M7, M7b}; taban `a025226` → **6/8**, `fadf091` → **4/8** (M7 orada GEÇER: eski kod kök yokken de exit 1'di). `guard_check_adlari` **10/10** — G8/G9 geçerli YAML'da kısmi sapma (satır sonu yorumu) → None/ÖLÇÜLEMEDİ, G10 KONTROL (yorumsuz tırnaklı ad türetilir; fail-closed aşırı değil); `--mutasyon-job-sapma-sessiz` {G8} · `--mutasyon-deger-sapma-sessiz` {G9}; taban `a025226` → **8/10**. ⛔ M7'yi gerçek CLI'de de ölç: boş dizini `cwd` ver, `CLAUDE_PROJECT_DIR`'i ortamdan SİL — göreli `--source-root` cwd'ye çözülür (a025226 burada `SOURCE_CODES/SD/ZSD001_CLC` açıyordu). Kum silme chmod'lu `_sil` ile; koşum öncesi/sonrası `%TEMP%/boot_modul_*` sayısı eşit olmalı.

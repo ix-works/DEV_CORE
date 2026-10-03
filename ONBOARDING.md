@@ -39,6 +39,7 @@
 | `.claude/settings.json` · `scripts/hook_shim.py` | proje | `team_setup.dosya_tamamla()` | `session_start` D7 drift | ❌ |
 | `.claude/active_package` | proje | `team_setup.dosya_tamamla()` → `project.yaml`'dan türetir | `parity_probe` → `aktif_paket_drift` | ❌ |
 | auto-memory (dersler) | kullanıcı profili `~/.claude/projects/<slug>/memory/` | `seed_memory.py` | `parity_probe` → `memory.ders_sayisi` | ❌ |
+| auto-memory **git'i** (private `<ORG>/<REPO>-memory` remote'u) | aynı dizin (`.git`) | **ELLE, bir kez** — repo açma KULLANICI adımı; komutlar [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) STEP 3 (e′). Tohum dizini git'siz doğurur; gün-sonu memory commit+push (`CLAUDE.core.md` §1.1) buna dayanır | `ix_doctor` K7 `memory git` satırı (WARN; push ölçülmez) | ❌ |
 | **Kullanıcı-düzeyi ayarlar** (`permissions`, `defaultMode`) | `~/.claude/settings.json` | **ELLE** — `claude/user-settings.template.json` ile birleştir | `parity_probe` → `mcp_ve_profil` | ❌ |
 | SAP bağlantısı `.conn_adt` | proje kökü | **KULLANICI** (şifreyi kendisi yazar — sohbete YAZILMAZ) | MCP `ping` · `ix_doctor` | ❌ |
 | CLI'lar: `claude` · `gh` · `node`/`npm` · `python` | makine | installer/winget (`winget install --id GitHub.cli -e`) | `ix_doctor` K1 1d (node/npm/claude; Windows'ta 1e PowerShell politikası) · K3 (gh) | ❌ |

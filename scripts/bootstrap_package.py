@@ -41,6 +41,11 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
+# Modül klasörü YOKKEN bootstrap'ın kendisinin yaratabileceği modüller (eskiden yalnız hata
+# metninde yaşayan liste). Var olan bir modül klasörü bu listeden BAĞIMSIZ kabul edilir.
+GECERLI_MODULLER = ("SD", "MM", "FI", "QM", "PM", "EWM", "CO")
+
+
 def get_git_user() -> str:
     try:
         r = subprocess.run(
@@ -133,11 +138,30 @@ def main() -> int:
     module_dir = erp_root / args.module
     pkg_dir = module_dir / pkg_full
 
-    # Modül klasörü mevcut mu? (SD, MM, FI, QM, PM, EWM, CO ve diğerleri)
-    if not module_dir.exists():
+    # Modül klasörü: VARSA (listede olsun olmasın) aynen kullanılır. YOKSA ve `--module`
+    # GECERLI_MODULLER'deyse burada YARATILIR ve bu söylenir; liste dışı bir ad için klasör
+    # YARATILMAZ (yazım hatası `sd`/`SDX` sessizce yeni bir modül ağacı açmasın).
+    # Neden (yeni-proje akışı denetimi 2026-10-03, F1): taze projede `SOURCE_CODES/` boştur;
+    # eski kod geçerli bir modülde bile exit 1 veriyordu ⇒ PROJECT_BOOTSTRAP STEP 6'yı izleyen
+    # ilk denemede takılıyordu (şablon README'si bunu "önce mkdir" uyarısıyla örtüyordu).
+    # ⛔ Kaynak kökü YARATILMAZ — yalnız modül klasörü. Kök yoksa çağrı büyük olasılıkla
+    # yanlış cwd'den (ör. core checkout'u, CLAUDE_PROJECT_DIR boş) yapılmıştır; burada iskelet
+    # açmak sessizce yanlış yere yazmak olurdu (bug-gate #320 MEDIUM). Kök `init_project`'in işidir.
+    if not erp_root.is_dir():
         print(
-            f"HATA: Modül klasörü {module_dir} yok. "
-            f"Geçerli modüller: SD, MM, FI, QM, PM, EWM, CO (veya manuel olarak yarat).",
+            f"HATA: Kaynak kökü {erp_root} yok — proje kökünden mi koşuyorsun? "
+            f"(CLAUDE_PROJECT_DIR / cwd'yi kontrol et; kök `init_project` ile yaratılır). "
+            f"Hiçbir şey YARATILMADI.",
+            file=sys.stderr,
+        )
+        return 1
+
+    modul_yarat = not module_dir.exists()
+    if modul_yarat and args.module not in GECERLI_MODULLER:
+        print(
+            f"HATA: Modül klasörü {module_dir} yok ve '{args.module}' geçerli modül listesinde "
+            f"değil ({', '.join(GECERLI_MODULLER)}) — klasör YARATILMADI. Ad doğruysa klasörü "
+            f"elle yarat, sonra yeniden koş.",
             file=sys.stderr,
         )
         return 1
@@ -149,6 +173,12 @@ def main() -> int:
     if not templates_dir.exists():
         print(f"HATA: {templates_dir} bulunamadı.", file=sys.stderr)
         return 1
+
+    # Yaratma, TÜM ön-kontroller geçtikten SONRA: şablon kökü yoksa boş modül klasörü kalmaz.
+    if modul_yarat:
+        module_dir.mkdir(parents=False)   # kök yukarıda doğrulandı; ebeveyn yaratılmaz
+        print(f"[ OK ] Modül klasörü yaratıldı: {module_dir}  "
+              f"('{args.module}' geçerli modül listesinde; önceden yoktu)")
 
     pkg_dir.mkdir(parents=True)
     print(f"OK — Yaratıldı: {pkg_dir}/")

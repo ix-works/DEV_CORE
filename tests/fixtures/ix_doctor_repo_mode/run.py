@@ -25,11 +25,22 @@ VEKTÖRLER (her biri ayrı alt-süreç; gh SAHTE, git GERÇEK):
   R9  full  + gh YOK        → bugünkü SKIP + WARN AYNEN
   R10 `LOCAL` (büyük harf)  → local sayılır (kırpma + küçük harf)
 
+K2 VEKTÖRLERİ (yeni-proje akışı F3, 2026-10-03 — `katman2()`; core tarafı SAHTE, proje git GERÇEK):
+  K2a local + remote yok    → "proje:" satırı SKIP (repo_mode=local), beklenen-org satırı SKIP, FAIL/WARN yok
+  K2b none  + git YOK       → K2a ile aynı sınıf (repo_mode=none; LITE/none git'siz doğar)
+  K2c full  + remote yok    → KONTROL: "proje: origin remote YOK" FAIL + org WARN (bugünkü AYNEN)
+  K2d anahtar YOK + remote yok → K2c ile BAYT-EŞ (fail-safe)
+  K2e tanınmayan 'lokal' + remote yok → K2c ile BAYT-EŞ
+  K2f local + remote VAR    → KONTROL: remote PASS + org PASS, SKIP YOK (yalnız YOKLUK gevşedi)
+
 MUTASYON (bugünkü kaynaktan; çapa tam 1 kez bulunmazsa exit 2):
   --mutasyon-hep-skip      LITE ayrımı kalkar, HER kipte SKIP   → R4..R7, R9 düşer (sınır çivisi)
   --mutasyon-sizinti-atla  LITE'ta 3c de atlanır                → R1 düşer
   --mutasyon-sessiz-gh     LITE'ta gh yokken WARN düşer         → R8 düşer
-TABAN (eski kod): --kaynak <ix_doctor.py>
+  --mutasyon-k2-hep-skip   K2'de LITE ayrımı kalkar (her kip)   → K2c, K2e düşer (sınır çivisi;
+                           K2d K2c'ye EŞİTLİK ölçer, mutantta ikisi birlikte kaydığı için geçer)
+  --mutasyon-k2-org-warn   K2 org satırı LITE'ta da WARN kalır  → K2a, K2b düşer
+TABAN (eski kod): --kaynak <ix_doctor.py>  (F3 öncesi: K2a, K2b düşer; K2c..K2f GEÇMELİ)
 
 ⛔ Ağ yok, SAP yok. Sandbox projeler temp'te; remote URL'leri yer-tutucudur.
 Çıkış: 0 beklendiği gibi · 1 sapma · 2 KURULAMADI
@@ -57,7 +68,8 @@ DOCTOR = REPO / "scripts" / "ix_doctor.py"
 SENARYO = HERE / "_senaryo.py"
 REMOTE = "https://github.com/ornek-org/ornek-repo.git"
 
-GECERLI_KIP = ("--mutasyon-hep-skip", "--mutasyon-sizinti-atla", "--mutasyon-sessiz-gh")
+GECERLI_KIP = ("--mutasyon-hep-skip", "--mutasyon-sizinti-atla", "--mutasyon-sessiz-gh",
+               "--mutasyon-k2-hep-skip", "--mutasyon-k2-org-warn")
 KIP: set[str] = set()
 TABAN: Path | None = None
 _a = sys.argv[1:]
@@ -102,6 +114,12 @@ def _kaynak_metni() -> str | None:
         m = _degistir(m, "        if lite:   # remote VAR: 3c (sızıntı) anlamlı ama ölçülemiyor → sessiz geçilmez\n"
                          "            return r + [",
                       "        if lite:\n            return r\n            return r + [", "sessiz-gh")
+    if "--mutasyon-k2-hep-skip" in KIP:
+        m = _degistir(m, '    lite_kip = mod if mod in _LITE_REPO_MODLARI else ""\n',
+                      '    lite_kip = mod or "full"\n', "k2-hep-skip")
+    if "--mutasyon-k2-org-warn" in KIP:
+        m = _degistir(m, "    elif lite_kip:\n        r.append((SKIP, f\"beklenen org türetilmedi",
+                      "    elif False:\n        r.append((SKIP, f\"beklenen org türetilmedi", "k2-org-warn")
     return m
 
 
@@ -109,25 +127,27 @@ def _git(p: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(p), *args], check=True, capture_output=True)
 
 
-def proje(kok: Path, ad: str, repo_mode: str | None, remote: bool) -> Path:
+def proje(kok: Path, ad: str, repo_mode: str | None, remote: bool, git: bool = True) -> Path:
     p = kok / ad
     p.mkdir(parents=True)
     satirlar = ["sap_profile: s4_private"]
     if repo_mode is not None:
         satirlar.append(f"repo_mode: {repo_mode}")
     (p / "project.yaml").write_text("\n".join(satirlar) + "\n", encoding="utf-8")
-    _git(p, "init", "-q")
+    if git:
+        _git(p, "init", "-q")
     if remote:
         _git(p, "remote", "add", "origin", REMOTE)
     return p
 
 
-def kos(p: Path, gh: str, kaynak: Path | None, tmp: Path) -> tuple[list, list]:
+def kos(p: Path, gh: str, kaynak: Path | None, tmp: Path, katman: str = "3") -> tuple[list, list]:
     log = tmp / f"_ghlog_{p.name}_{gh}.json"
     env = {k: v for k, v in os.environ.items() if not k.startswith("IX_")}
-    env.update(CLAUDE_PROJECT_DIR=str(p), PYTHONIOENCODING="utf-8")
+    # Tavan: git'siz kum projesi (K2b) üst dizinlerde bir repo bulup onun remote'unu okumasın.
+    env.update(CLAUDE_PROJECT_DIR=str(p), PYTHONIOENCODING="utf-8", GIT_CEILING_DIRECTORIES=str(tmp))
     r = subprocess.run([sys.executable, str(SENARYO), str(DOCTOR),
-                        str(kaynak) if kaynak else "-", gh, str(log)],
+                        str(kaynak) if kaynak else "-", gh, str(log), katman],
                        capture_output=True, text=True, encoding="utf-8", errors="replace",
                        env=env, cwd=str(p), timeout=120)
     try:
@@ -225,6 +245,40 @@ def main() -> int:
         s10, _ = k("r10_buyuk_harf", "LOCAL", True)
         kontrol("R10 'LOCAL' → local sayilir (kirpma + kucuk harf)",
                 taglar(s10)[:2] == ["SKIP", "SKIP"] and "repo_mode=local" in s10[0][1], f"sonuc={s10}")
+
+        # ── K2 (F3) — yalnız proje + beklenen-org satırları okunur ──────────────
+        def k2(ad, mod, remote, git=True):
+            s, _ = kos(proje(tmp, ad, mod, remote, git), "var", kaynak, tmp, katman="2")
+            return [[t, m] for t, m in s if m.startswith("proje:") or m.startswith("beklenen")]
+
+        for ad_, mod_, git_ in (("K2a local+remote yok", "local", True),
+                                ("K2b none+git YOK", "none", False)):
+            s = k2(ad_.split()[0].lower(), mod_, False, git_)
+            kontrol(f"{ad_}: proje + org satiri SKIP (repo_mode={mod_}), FAIL/WARN yok",
+                    taglar(s) == ["SKIP", "SKIP"] and all(f"repo_mode={mod_}" in m for _, m in s)
+                    and s[1][1].startswith("proje: origin remote denetimi atlandı"), f"sonuc={s}")
+
+        s2c = k2("k2c", "full", False)
+        kontrol("K2c full+remote yok (KONTROL): org WARN + 'proje: origin remote YOK' FAIL (bugunku AYNEN)",
+                taglar(s2c) == ["WARN", "FAIL"]
+                and s2c[0][1] == "beklenen org türetilemedi (proje remote'u yok + project.yaml github_org yok)"
+                and s2c[1][1].startswith("proje: origin remote YOK/çözülemedi"), f"sonuc={s2c}")
+
+        def _yolsuz(s):   # FAIL metni proje yolunu taşır → kıyas yol-bağımsız
+            return [[t, m.split(" (")[0]] for t, m in s]
+
+        s2d = k2("k2d", None, False)
+        kontrol("K2d anahtar YOK + remote yok: K2c ile ES (fail-safe)", _yolsuz(s2d) == _yolsuz(s2c),
+                f"sonuc={s2d}")
+        s2e = k2("k2e", "lokal", False)
+        kontrol("K2e taninmayan 'lokal' + remote yok: K2c ile ES", _yolsuz(s2e) == _yolsuz(s2c),
+                f"sonuc={s2e}")
+
+        s2f = k2("k2f", "local", True)
+        kontrol("K2f local+remote VAR (KONTROL): org PASS + 'proje: remote =' PASS, SKIP yok",
+                "SKIP" not in taglar(s2f) and s2f[:2] == [
+                    ["PASS", "beklenen GitHub org (remote-deseninden): ornek-org"],
+                    ["PASS", "proje: remote = ornek-org/ornek-repo"]], f"sonuc={s2f}")
     finally:
         _sil(tmp)
 
