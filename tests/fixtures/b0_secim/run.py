@@ -147,15 +147,17 @@ secim, _ = sec("scripts/sap_adt_lib.py")
 # sondasına delege eder) → 10'dan 13'e · 2026-09-13 Q304/Q305/Q306/Q310:
 # `sorgu_araclari_durustlugu` (kanonik `aktivasyon_worklist_ayristir` user/deleted/transport
 # alanları + iki worklist tüketicisi) → 13'ten 14'e · 2026-09-25 Issue #302: `revizyon_okuma`
-# (`get_object_revisions` + gerçek çağıran list_revisions) → 14'ten 15'e) HARİTA ile BU SATIR birlikte güncellenir. Sayıyı
+# (`get_object_revisions` + gerçek çağıran list_revisions) → 14'ten 15'e · 2026-10-03:
+# `sql_satir_kirma` (freestyle 255-satır sınırı `sql_satirlarini_kir`) → 15'ten 16'ya) HARİTA ile BU SATIR birlikte güncellenir. Sayıyı
 # gevşetmek (`>=`) çapayı öldürür — sessiz daraltma tam olarak burada görünür.
-kontrol("P3 çok-tüketicili kaynak → 15 korpusun hepsi",
-        secim is not None and len(secim) == 15
+kontrol("P3 çok-tüketicili kaynak → 16 korpusun hepsi",
+        secim is not None and len(secim) == 16
         and {"O:lock_modification_support", "O:conn_cift_anahtar",
              "O:retry_500_govde", "O:transport_gorev_istek_cevrimi",
              "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi",
              "O:aktivasyon_govde_hukmu", "O:aciklama_412_retry",
              "O:mcp_sahte_sonuc_uclusu", "O:sorgu_araclari_durustlugu",
+             "O:sql_satir_kirma",
              "O:revizyon_okuma"} <= secim,
         f"alınan={sorted(secim) if secim else secim}")
 

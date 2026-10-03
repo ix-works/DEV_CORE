@@ -121,6 +121,124 @@ class SAPTransportError(SAPADTError):
     pass
 
 
+# ── ADT datapreview/freestyle: SATIR BAŞINA 255 KARAKTER SINIRI ──────────────────────────
+# ÖLÇÜLDÜ (2026-10-03, DEV, yalnız T000 SELECT; kontrol gruplu): SAP freestyle ucu sorgu
+# metnini satır satır okur ve 255 karakterden uzun satırın devamını KESER. 309 karakterlik
+# tek satır → 400 `A Boolean expression was expected in "MTEX"` (kesim tam 255. karakterde,
+# `mtext` kelimesinin ortasında); aynı sorgu çok satırlı yazılınca 200; 213 karakter tek
+# satır 200. Hata mesajı kesilen kelimeyi gösterir — SEBEBİ değil. Eski "5'ten fazla OR /
+# WHERE terim sayısı → 400" teşhisi büyük olasılıkla bu sınırın yansımasıydı (uzun WHERE =
+# uzun satır). ⚠ Her 400 bu değildir: kısa ama 400 veren vakalar ayrı sebeplidir
+# (playbook/adt-mcp.md "adt_sql_query" bölümü).
+SQL_SATIR_SINIRI = 255
+
+
+class SQLSatirKirilamadi(SAPValidationError):
+    """255'ten uzun bir satır, literal/yorum bölünmeden kırılamıyor — sorgu GÖNDERİLMEDİ."""
+    pass
+
+
+def _sql_satir_parcalari(satir):
+    """Bir satırı (boşluk, atom) çiftlerine ayır; literal ve yorum TEK atomdur.
+
+    Atom = boşluk içermeyen ardışık metin; ama `'...'` (iç `''` kaçışlı), `` `...` `` (iç
+    ```` `` ```` kaçışlı) ve satır-sonu yorumu (literal dışındaki `"` → satır sonuna kadar)
+    içlerindeki boşlukla BÖLÜNMEZ. Kapanmamış literal satır sonuna kadar atom sayılır.
+    Doner: [(onceki_bosluk, atom), ...] + son kuyruk boşluğu (atılır).
+    """
+    parcalar = []
+    i, n = 0, len(satir)
+    while i < n:
+        j = i
+        while j < n and satir[j] in ' \t':
+            j += 1
+        bosluk = satir[i:j]
+        if j >= n:
+            break
+        k = j
+        while k < n and satir[k] not in ' \t':
+            c = satir[k]
+            if c == '"':                      # satır-sonu yorumu: geri kalanın tamamı tek atom
+                k = n
+                break
+            if c in ("'", '`'):
+                k += 1
+                while k < n:
+                    if satir[k] == c:
+                        if k + 1 < n and satir[k + 1] == c:   # '' / `` kaçışı
+                            k += 2
+                            continue
+                        k += 1
+                        break
+                    k += 1
+                continue
+            k += 1
+        parcalar.append((bosluk, satir[j:k]))
+        i = k
+    return parcalar
+
+
+def sql_satirlarini_kir(sorgu, sinir=SQL_SATIR_SINIRI):
+    """ADT freestyle'a gidecek sorguda `sinir`dan uzun HER satırı boşluk noktasından kır.
+
+    · Satır ≤ `sinir` ise DOKUNULMAZ; hiçbir satır uzun değilse girdi AYNEN döner (satır sonu
+      biçimi dahil — CRLF girdi kısaysa CRLF kalır).
+    · Kırma yalnız literal/backtick/yorum DIŞINDAKİ boşlukta olur; kırılan boşluk satır
+      sonuna dönüşür (SQL'de ikisi de ayırıcıdır — anlam değişmez). Eklenen satır sonu,
+      girdide ilk görülen satır sonudur (yoksa `\\n`).
+    · Tek bir atom (literal, yorum ya da boşluksuz ifade) tek başına `sinir`ı aşıyorsa kırma
+      YAPILMAZ: `SQLSatirKirilamadi` fırlar ve sorgu gönderilmez. (Literalin ortadan
+      bölünmesi değeri değiştirir; satırın gönderilmesi SAP'de kesilip başka bir hata
+      mesajıyla 400 döner — ikisi de sessiz yanlışa daha yakındır.)
+    · `*` ile başlayan tam-satır yorumu bölünemez (ikinci parça kod olurdu) → aynı hata.
+    · Uzunluk KARAKTER cinsindendir; ölçüm ASCII sorgularla yapıldı (çok baytlı karakterde
+      sınırın bayt mı karakter mi olduğu ÖLÇÜLMEDİ).
+    """
+    if not sorgu:
+        return sorgu
+    satirlar = re.split(r'(\r\n|\r|\n)', sorgu)
+    if all(len(s) <= sinir for s in satirlar[0::2]):
+        return sorgu
+    ayiricilar = satirlar[1::2]
+    yeni_ss = ayiricilar[0] if ayiricilar else '\n'
+    cikti = []
+    for idx, satir in enumerate(satirlar):
+        if idx % 2 == 1:                      # ayırıcı: aynen
+            cikti.append(satir)
+            continue
+        if len(satir) <= sinir:
+            cikti.append(satir)
+            continue
+        if satir.startswith('*'):
+            raise SQLSatirKirilamadi(
+                f"SQL satırı {len(satir)} karakter (sınır {sinir}) ve '*' tam-satır yorumu — "
+                f"bölünemez. Yorumu kısalt ya da sil. Sorgu GÖNDERİLMEDİ.")
+        parcalar = _sql_satir_parcalari(satir)
+        parcalar_kirik, cur = [], ''
+        for bosluk, atom in parcalar:
+            # İlk atom: satır başı girintisi korunur; sığmıyorsa girinti atılır.
+            aday = (cur + bosluk + atom) if cur else (bosluk + atom)
+            if not cur and len(aday) > sinir:
+                aday = atom
+            if len(aday) <= sinir:
+                cur = aday
+                continue
+            if len(atom) > sinir:
+                tur = ('literal' if atom[:1] in ("'", '`') else
+                       'yorum' if atom[:1] == '"' else 'boşluksuz ifade')
+                raise SQLSatirKirilamadi(
+                    f"SQL satırı kırılamadı: tek bir {tur} {len(atom)} karakter (satır sınırı "
+                    f"{sinir}; ADT freestyle uzun satırı keser). Başı: {atom[:60]!r}. "
+                    f"Literali kısalt/böl (LIKE, ayrı koşul) ya da ifadeye boşluk ekle. "
+                    f"Sorgu GÖNDERİLMEDİ.")
+            parcalar_kirik.append(cur)
+            cur = atom
+        if cur:
+            parcalar_kirik.append(cur)
+        cikti.append(yeni_ss.join(parcalar_kirik))
+    return ''.join(cikti)
+
+
 # ── ADT lock yanıtı: MODIFICATION_SUPPORT sözleşmesi (known-errors.md §12.7 + §12.7b) ──
 # Alan adı + sarmalayıcı yol CANLI ÖLÇÜLDÜ (2026-08-09, DDLS kilidi):
 #   asx:abap / asx:values / DATA / MODIFICATION_SUPPORT   (alan adları BÜYÜK HARF)
@@ -3965,7 +4083,7 @@ class SAPADTClient:
                 f"{self.url}/sap/bc/adt/datapreview/freestyle",
                 headers=headers,
                 params={'rowNumber': 50},
-                data=query.encode('utf-8'),
+                data=sql_satirlarini_kir(query).encode('utf-8'),   # 255 satır sınırı
                 timeout=self.timeout_default
             )
 
@@ -4955,7 +5073,9 @@ class SAPADTClient:
 
         from datetime import datetime
 
-        # Build SQL query (must be single line for ADT datapreview)
+        # Build SQL query. ⚠ "Tek satır ŞART" DEĞİL (eski yorum yanlıştı): freestyle ucu çok
+        # satırlı sorguyu kabul eder; sınır SATIR BAŞINA 255 karakterdir (SQL_SATIR_SINIRI,
+        # ölçüldü 2026-10-03) — gönderimde sql_satirlarini_kir uygulanır.
         user_filter = f"AND AS4USER = '{user.upper()}'" if user else f"AND AS4USER = '{self.user}'"
 
         # Status filter: D=Modifiable, R=Released, O=Released (with consolidation)
@@ -4973,7 +5093,7 @@ class SAPADTClient:
 
         status_clause = f"AND ({' OR '.join(status_conditions)})" if status_conditions else ""
 
-        # Query E070 table - single line for ADT datapreview
+        # Query E070 table (tek satır yazıldı; >255 olursa gönderimde kırılır)
         query = f"SELECT TRKORR, AS4USER, AS4TEXT, TRFUNCTION, TRSTATUS, STRKORR, AS4DATE, AS4TIME, TARSYSTEM FROM E070 WHERE MANDT = '{self.client}' {user_filter} {status_clause} ORDER BY AS4DATE DESC, AS4TIME DESC"
 
         # Execute SQL query
@@ -4994,7 +5114,7 @@ class SAPADTClient:
             url,
             headers=headers,
             params={'rowNumber': 100},
-            data=query,
+            data=sql_satirlarini_kir(query),   # 255 satır sınırı (ölçüldü 2026-10-03)
             timeout=self.timeout_default
         )
 
@@ -5234,6 +5354,10 @@ class SAPADTClient:
 
         IMPORTANT: Query should be plain SELECT without 'UP TO' clause.
         Use row_number parameter to limit results instead.
+
+        255 karakterden uzun satırlar gönderimden önce otomatik kırılır
+        (`sql_satirlarini_kir`); literal/yorum tek başına sınırı aşıyorsa
+        `SQLSatirKirilamadi` fırlar ve istek GİTMEZ.
         """
         # Use correct Accept header for freestyle data preview
         headers = self._get_headers('application/vnd.sap.adt.datapreview.table.v1+xml')
@@ -5242,6 +5366,9 @@ class SAPADTClient:
         # Send query as plain text (not XML!)
         # Remove 'UP TO X ROWS' if present - use rowNumber parameter instead
         clean_query = sql_query.strip()
+        # 255 karakter satır sınırı (ölçüldü 2026-10-03): uzun satır boşluktan kırılır;
+        # kırılamıyorsa SQLSatirKirilamadi (SAPADTError) — sorgu gönderilmez.
+        clean_query = sql_satirlarini_kir(clean_query)
 
         params = {'rowNumber': row_number}
         if decode:
@@ -5257,10 +5384,14 @@ class SAPADTClient:
         if response.status_code == 200:
             return response.text
         else:
+            # Gövde KIRPILMADAN taşınır (2026-10-03, ölçüldü): 255-satır vakasının 400 gövdesi
+            # 563 bayttı; [:500] XML'i bozuyordu → `sap_client.sap_hata_govdesi` <message>'ı
+            # ayrıştıramayıp ham ilk satırı döndürüyordu (sebep "O is invalid here" GÖRÜNMÜYORDU).
+            # Kısaltma tüketicide yapılır (`SAP_HATA_GOVDE_SINIRI`).
             raise SAPADTError(
                 f"Failed to run query",
                 status_code=response.status_code,
-                response_text=response.text[:500]
+                response_text=response.text
             )
 
     def delete_object(self, object_url, lock_handle, transport=None):

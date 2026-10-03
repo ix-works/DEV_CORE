@@ -45,7 +45,8 @@ if sys.platform == 'win32':
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 sys.path.insert(0, str(Path(__file__).parent))
-from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from sap_adt_lib import (set_explicit_working_dir, SAPADTClient,
+                         sql_satirlarini_kir, SQLSatirKirilamadi)
 from utils.project_config import cfg, project_root
 
 
@@ -82,6 +83,14 @@ def _query_sap(client, sql: str) -> List[str]:
         headers={'X-CSRF-Token':'Fetch'}, verify=False, timeout=10
     )
     csrf = fr.headers.get('X-CSRF-Token','')
+    # ADT freestyle satır başına 255 karakter keser (ölçüldü 2026-10-03) → uzun satır kırılır.
+    # Kırılamayan (tek atomu >255) sorgu eskiden de SAP'de düşüp [] dönerdi; sonuç AYNI kalır,
+    # yalnız sebebi görünür olur (non-200 → [] davranışı bu turda bilerek değiştirilmedi).
+    try:
+        sql = sql_satirlarini_kir(sql)
+    except SQLSatirKirilamadi as e:
+        print(f'[UYARI] {e}', file=sys.stderr)
+        return []
     sr = client.session.post(
         client.url + '/sap/bc/adt/datapreview/freestyle',
         params={'rowNumber':'1000'},

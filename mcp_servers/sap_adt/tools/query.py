@@ -173,39 +173,19 @@ def adt_transport_list(user: str | None = None) -> dict:
         user: SAP user name. Defaults to the .conn_adt user.
 
     ⛔⛔ `count: 0` **KANIT DEĞİLDİR** — `shape_recognized: true` OLSA BİLE.
-
-    ⚠ 2026-08-10 tarihli eski docstring, `shape_recognized` bayrağını sıfırın
-    DOĞRULUK kanıtı olarak sunuyordu. **BU REHBERLİK 2026-08-18'de ÖLÇÜLEREK
-    ÇÜRÜTÜLDÜ ve 2026-08-20'de bu metinden kaldırıldı.** (Çürütülen cümle burada
-    BİLEREK yeniden yazılmıyor: bir korpus çapası onun yokluğunu denetliyor ve
-    "tarihçe olarak alıntılamak" ile "hâlâ öğretmek" metin düzeyinde ayırt
-    edilemez — Parti-1'de aynı tuzağa bir kez düşüldü.) Çürüten ölçümler:
-      · 2026-08-18: `count:0` + `shape_recognized:true` iken `DS4K918705` VARdı
-        (E070: TRFUNCTION='S', TRSTATUS='D', AS4USER eşleşiyor).
-      · 2026-08-19: aynı bileşim, E070'te **iki** açık kayıt.
-      · 2026-08-19 (A-00): aynı bileşim, E070'te **dört** açık görev.
-    ⇒ `shape_recognized` YALNIZCA *"yanıtın BİÇİMİNİ ayrıştırabildim"* der; içeriğin
-    doğruluğu hakkında HİÇBİR ŞEY söylemez. İkisini karıştırmak, yanlış cevaba güven
-    damgası basmaktır.
-
-    ⛔ **NEDEN CİDDİ:** transport teyidi bir **ADR 0005-C kapısıdır**. Araç "TR yok"
-    derse doğal refleks **yeni TR açmaktır** — ki bu YASAKTIR. Yani bu sahte-negatif
-    doğrudan bir yasak ihlaline sürükleyebilir.
-
-    ✅ **DOĞRU YÖNTEM:** sıfır sonucu `E070` (+ içerik için `E071`) ile ÇAPRAZ KONTROL
-    et — `TRSTATUS`, `AS4USER`, `TRFUNCTION`, `STRKORR` alanlarına bak. ⚠ `E070×E071`
-    JOIN + `E07T` tek sorguda **400** döndürür; iki ayrı sorguya böl. ⚠ Ayrıca
-    `IN ('a','b')` listesi de 400 verebilir — `OR` zincirine çevir.
+    `shape_recognized` YALNIZCA yanıtın BİÇİMİNİ ayrıştırabildiğini söyler; üç ölçülmüş
+    vakada `count:0` + `shape_recognized:true` iken E070'te açık transport/görev VARDI.
+    ⛔ Transport teyidi bir ADR 0005-C kapısıdır: "TR yok" görüp YENİ TR AÇMA (yasak).
+    ✅ Sıfır sonucu `E070` (+ içerik için `E071`) ile ÇAPRAZ KONTROL et — `TRSTATUS`,
+    `AS4USER`, `TRFUNCTION`, `STRKORR`.
 
     Returns:
         {ok, count, transports: [...], accept_header, shape_recognized,
          zero_verified, zero_notice, client_log}
+        `zero_verified`: None → count > 0 · False → count == 0 ve bu araç sıfırı
+        KANITLAYAMAZ. ⛔ ASLA True olmaz (pozitif kontrol koşulmaz).
 
-        `zero_verified`: `None` → count > 0 (soru geçersiz) ·
-                         `False` → count == 0 ve **bu araç sıfırı KANITLAYAMAZ**.
-                         ⛔ Bu alan ASLA `True` olmaz: pozitif kontrolü (dolu döndüğü
-                         bilinen bir sorgu) bu tool koşmaz. Üç-değerli doğrulama
-                         sözleşmesinin kardeşi (`delete_verified`/`readback_verified`).
+    Ayrıntı: playbook/adt-mcp.md "`adt_transport_list` — ayrıntı".
     """
     client = _get_client()
     try:
@@ -748,101 +728,38 @@ def adt_sql_query(
     acknowledge_risk: bool = False,
     approval_text: str | None = None,
 ) -> dict:
-    """WHERE/JOIN/aggregate destekli serbest OpenSQL **SELECT** çalıştır — READ-ONLY.
+    """Serbest OpenSQL SELECT (WHERE/JOIN/GROUP BY/aggregate) — READ-ONLY, ADT freestyle.
 
-    `adt_table_read` yalnız `SELECT * FROM tablo` yapar (WHERE yok); bu tool ADT Data
-    Preview freestyle (`/datapreview/freestyle`) ile tam OpenSQL SELECT'i koşar:
-    WHERE, JOIN, GROUP BY, COUNT/SUM (başka kolonla birlikte aggregate'e ALIAS şart — madde 4).
-    INTO/UP TO **YAZMA** — SAP kendi ekler.
+    INTO / UP TO YAZMA (SAP ekler; sınır `row_limit`). Guard: yalnız SELECT/WITH, yazma/DDL
+    keyword'ü RED (ADR 0005-B) · QA/PRD hassas tabloda `acknowledge_risk=True` + onay (ADR 0011).
 
-    Guard'lar:
-      • **SELECT-only (ADR 0005-B):** SELECT/WITH ile başlamalı; yazma/DDL keyword'ü
-        (INSERT/UPDATE/DELETE/MODIFY/DROP/...) tespit edilirse REDDEDİLİR. (Data Preview
-        zaten server-side salt-okuma; bu tool-seviyesi ikinci katman.)
-      • **PII (ADR 0011):** FROM/JOIN tabloları çıkarılır; DEV serbest, QA/PRD'de hassas
-        tablo (KNA1/PA*/banka/TCKN...) için `acknowledge_risk=True` + onay kelimesi ZORUNLU.
-
-    ⚠ **HTTP 400 = "sorgu kabul edilmedi", "tablo erişilemez" DEĞİL** (ölçüldü 2026-08-17,
-    iki ajan bağımsız yaşadı). "400 ⇒ tabloya bakamıyorum" teşhisi bu araçta YANLIŞTIR ve
-    doğrudan *"bulunamadı ≠ yok"* ihlaline götürür. Ölçülmüş üç 400 sebebi:
-
-      1. **UZUN `WHERE`.** Uzun `IN (...)` listesi ya da **5'ten fazla `OR`** → 400.
-         Çözüm (iki ajan da böyle tamamladı): WHERE'i **5'erli parçalara böl**, sonuçları
-         çağıran tarafta birleştir. (Kardeş ölçüm, `adt_transport_list:138`: `E070×E071`
-         JOIN + `E07T` tek sorguda 400; `IN ('a','b')` listesi de 400 verebilir.)
-      2. **VAR OLMAYAN KOLON ADI TAHMİNİ.** `DD30L` sorgusu 400 döndü; sebep erişim değil,
-         **tahmin edilen kolon adıydı**. ⇒ Kolon adını TAHMİN ETME: önce `SELECT *` ile
-         (küçük `row_limit`) kolonları KEŞFET, sonra daralt.
-      3. **ABAP anahtar-kelime çakışması (bağlama göre).** `tadir`'da `object`, `seoclass`'ta
-         `state` kolonu 400 verdi; kolon çıkarılınca sorgu koştu. ⚠ **Genel bir yasak DEĞİL** —
-         aynı turda `E071` `object` kolonuyla sorgulanabildi ve bu modülün kendi
-         `adt_inactive_objects`'i bugün `SELECT obj_name, object, delflag FROM tadir` koşuyor.
-         **Kapsamı ÖLÇÜLMEDİ.** 400 alırsan şüpheli kolonu çıkarıp tekrar ölç.
-
-    ⚠ **SAP'NİN 400/500 GÖVDESİ ARTIK `sap_error` ALANINDA** (Q304, 2026-09-13). 2026-09-13
-    öncesi bu araç gövdeyi TAŞIMIYORDU (ölçüldü: `client_log` yalnız `[ERROR] SQL query error:
-    [400] Failed to run query`; *"…must have an alias name"* sebebi hiçbir alanda yoktu).
-    Şimdi `sap_client.run_sql_query` hata dalı `SAPADTError.response_text`'ten
-    `last_sql_error = {status_code, message, body_excerpt}` üretir; araç bunu `sap_error`
-    olarak döndürür ve `message`'a `SAP: <sebep>` ekler. Ölçülmüş gövde biçimleri: 400 → XML
-    `exc:exception/message` · aralıklı 500 → HTML `<title>` (*Application Server Error*).
-    `body_excerpt` ilk 500 bayttır. ⇒ 400'de refleks: önce `sap_error.message`'ı oku, aynı
-    sorguyu körlemesine TEKRARLAMA; aşağıdaki ölçülmüş biçimlerle **daralt** (tek değişken).
-
-    ⚠ **ÖLÇÜLMÜŞ BİÇİM SINIRLARI (Q274 — kayıt 2026-09-08; canlı yeniden ölçüm 2026-09-13,
-    DEV, yalnız SELECT; her satır en az 2 çağrı; sebep metinleri SAP gövdesinden):**
-
-      4. **Aggregate başka kolonla birlikteyse ALIAS ŞART.** `SELECT lgnum, COUNT(*) FROM likp
-         GROUP BY lgnum` → **400**, gövde *"all expressions in the projection list must have
-         an alias name"*. Aynısı `COUNT(*) AS cnt` ile → **200**. ⇒ Sebep `GROUP BY` DEĞİL,
-         alias'sız ifade; değer başına ayrı `COUNT` koşmaya gerek yok. Tek başına `COUNT(*)`
-         alias'lı da alias'sız da 200.
-      5. **Kolon-kolon karşılaştırmada sağ taraf `tablo~kolon` yazılır.** `WHERE vrkme <> meins`
-         (ve `= meins`) → **400**, gövde *"The variable "MEINS" must be escaped using "@""* —
-         çıplak ad host değişkeni sanılıyor. `WHERE vrkme <> lips~meins` ve
-         `WHERE lips~vrkme <> lips~meins` → **200**. Kolon-literal karşılaştırma zaten 200.
-      6. **Aralıklı 500, ardından "Session Timed Out" 400 — SORGUYA AİT DEĞİL.** Başka
-         çağrılarda 200 dönen sorgular (`SELECT land1 FROM t005`, `SELECT * FROM t320`) tek
-         seferlik **500** döndü (gövde SAP mesajı değil, HTML *"Application Server Error"*);
-         iki vakada da HEMEN SONRAKİ çağrı **400** + gövde *"400 Session Timed Out"* verdi,
-         bir sonraki normale döndü. ⇒ 500'den sonraki ilk 400'ü "sorgu reddedildi" diye okuma
-         (yukarıdaki *"400 = sorgu kabul edilmedi"* kuralının ölçülmüş istisnası); aynı sorguyu
-         BİR kez tekrarla.
-      7. **KIRPMA (Q304 ile GÖRÜNÜR).** `row_limit=10` ile `SELECT LAND1 FROM T005` →
-         `row_count:10`, SAP `totalRows` **249**. Araç artık `truncated` ve `total_rows` (SAP
-         `totalRows` aynen) döndürür. `truncated` KESİNDİR: araç SAP'den `row_limit + 1` satır
-         ister, fazlası gelirse `true` der ve sondayı atar. Eskiden elde yalnız
-         `row_count == row_limit` vardı ve bu bir TAHMİNDİ: tam `row_limit` kadar satırı olan
-         sonuç da aynı görünürdü. ⚠ `totalRows` sonuç satırı sayısı DEĞİLDİR: aggregate
-         sorguda alttaki satır sayısıdır (ölçüldü: `SELECT COUNT(*) AS cnt FROM t005` → 1 satır,
-         `totalRows` 249) ⇒ `truncated` ondan TÜRETİLMEZ. Sayı gerekiyorsa `row_limit`'i yükselt
-         ya da `SELECT COUNT(*) …` koş (kayıttaki vaka: `row_limit=300` → tam 300, gerçek 994).
-      8. **Namespace'li ad TIRNAKSIZ yazılır.** `FROM /scwm/aqua` ve `FROM /SCWM/AQUA` → 200;
-         `FROM "/SCWM/AQUA"` → **400** (gövde login dilinde: geçersiz sorgu dizilimi).
-
-      ⓘ **2026-09-08'de ölçülüp 2026-09-13'te TEKRARLANAMAYANLAR — kural DEĞİL:**
-      `COUNT(*) AS CNT` → 500 (bugün 6/6 çağrı 200) · belirli bir alanda `<>` → 400
-      (`I_EWM_HANDLINGUNITHDR` `handlingunitindicator <> 'A'` bugün 2/2 200; `=` ve `<>`
-      sayıları toplamla tutarlı) · `SELECT * FROM T320` → 400 (bugün 8/8 200; bir kez 500 =
-      madde 6) · "terim bütçesi" (7 alan + 1 WHERE → 400, 14 alan → 500) — bugün `lips`'ten
-      4/6/7/8/14 alan + 1 WHERE her biri 2/2 200. Kayıttaki vakaların madde 6'nın aralıklı
-      500/oturum ikilisi olup olmadığı **DOĞRULANMADI**.
+    ⚠ HTTP 400 = "sorgu kabul edilmedi", "tablo erişilemez" DEĞİL. SAP her satırı 255.
+    karakterde keser; araç uzun satırı otomatik kırar (eski "5'ten fazla OR → 400" teşhisi
+    bunun yansımasıydı). Her 400 bu değildir.
+    ⚠ **SAP'NİN 400/500 GÖVDESİ ARTIK `sap_error` ALANINDA** ⇒ önce onu oku, sorguyu
+    körlemesine TEKRARLAMA, daralt (tek değişken).
+    ⚠ **ÖLÇÜLMÜŞ BİÇİM SINIRLARI**:
+      • Kolon adını TAHMİN ETME: önce küçük `row_limit` ile `SELECT *`, sonra daralt.
+      • Aggregate başka kolonla → alias şart ("must have an alias name"): `COUNT(*) AS cnt`.
+      • Kolon-kolon karşılaştırmada sağ taraf `tablo~kolon` (`lips~meins`); çıplak ad
+        "must be escaped using @" verir.
+      • Namespace'li ad TIRNAKSIZ: `FROM /scwm/aqua`; `FROM "/SCWM/AQUA"` → 400.
+      • Aralıklı 500 ("Application Server Error") sonrası ilk 400 "Session Timed Out":
+        sorguya ait değil, BİR kez tekrarla.
+      • `truncated` KESİN; `total_rows` = SAP totalRows (aggregate'de alttaki satır
+        sayısı) — `row_count == row_limit` tahmini değil.
+      • Bazı kolonlar bağlama göre 400 (`tadir.object`, `seoclass.state`): çıkarıp ölç.
+    Ayrıntı: playbook/adt-mcp.md "`adt_sql_query` — ayrıntı".
 
     Args:
-        query: OpenSQL SELECT. Ör: "SELECT msgnr, text FROM t100 WHERE arbgb = 'ZSD001' AND sprsl = 'T'".
-        row_limit: Maks satır (default 100).
-        acknowledge_risk / approval_text: QA/PRD hassas-tablo için (ADR 0011).
+        query: OpenSQL SELECT · row_limit: maks satır (100) · acknowledge_risk /
+        approval_text: ADR 0011.
 
     Returns:
-        {ok, query, row_count, row_limit, total_rows, truncated, truncated_notice?, columns,
-         rows: [{KOLON: değer}, ...], executed?, client_log}
-        veya {ok: false, error, message, sap_error?} (SELECT-değil / yazma-keyword /
-        **sorgu KOŞMADI**; `sap_error` = {status_code, message, body_excerpt} — Q304)
-        veya guardrail_violation.
-        ⚠ `row_count: 0` YALNIZ `ok: true` iken "0 satır" demektir. Sorgu SAP'de düşerse
-        `ok: false` + `error: "sorgu_kosmadi"` döner (sebep `message`+`client_log`) — 0 satır
-        ile başarısızlık artık AYIRT EDİLEBİLİR (2026-08-19).
-        Satırları DAİMA `rows`'tan oku (kolon-adı→değer eşlemeli; hizalama-güvenli).
+        {ok, query, tables, executed, columns, row_count, row_limit, total_rows, truncated,
+         truncated_notice?, rows: [{KOLON: değer}], client_log} · hata: {ok: false, error,
+         message, sap_error?} | guardrail_violation. `row_count: 0` YALNIZ ok:true iken
+         "0 satır"dır. Satırları `rows`'tan oku.
     """
     q = (query or "").strip().rstrip(";").strip()
     low = q.lstrip("( \t\n").lower()
@@ -1045,40 +962,25 @@ def _tadir_kovalari(out: list) -> tuple:
 def adt_inactive_objects() -> dict:
     """Aktive-bekleyen (inactive) obje worklist'ini oku — READ-ONLY.
 
-    `scripts/worklist_audit.py`'nin MCP-native karşılığı. Gün-sonu/commit-öncesi "aktive
-    edilmemiş obje var mı" kontrolü tek çağrıya iner. `GET /sap/bc/adt/activation/inactiveobjects`.
+    `scripts/worklist_audit.py`'nin MCP karşılığı (GET /sap/bc/adt/activation/inactiveobjects).
 
-    ⚠ **SİLİNMİŞ OBJE TUZAĞI (2026-07-29, canlı vaka).** Bu uç nokta SİLİNMİŞ objeleri de
-    listeler ve kendi `ioc:deleted` alanı bunu ELE VERMEZ (ölçüm: TADIR `DELFLAG='X'` olan
-    iki sınıf için `ioc:deleted="false"` döndü — o alan *bekleyen taslağın* türünü anlatıyor,
-    objenin silinmiş olup olmadığını değil). Ham liste "2 obje aktive bekliyor" gibi okundu;
-    oysa objeler silinmişti (SE24/SE80'de yok, `adt_get` `exists:false`) ve geriye yalnız
-    bayat worklist kaydı kalmıştı. → Bu tool her girdiyi **TADIR DELFLAG** ile çapraz
-    kontrol eder; silinmişler `count`/`inactive_objects`'ten ÇIKARILIR, `stale_deleted`
-    altında ayrıca raporlanır. TADIR sorgusu koşamazsa SUSULMAZ: `tadir_deleted` null olur
-    + `warning` alanı döner.
-    ⚠ TADIR'daki `DELFLAG='X'` satırları **SİLİNMEZ** — silme işleminin transport'la
-    taşınması için gereklidir.
+    ⚠ Uç SİLİNMİŞ objeleri de listeler; kendi `ioc:deleted` alanı bunu ELE VERMEZ (bekleyen
+    taslağın türünü anlatır). Bu tool her girdiyi TADIR `DELFLAG` ile çapraz kontrol eder:
+    silinmişler `count`tan çıkarılıp `stale_deleted` altında raporlanır (TADIR'daki
+    `DELFLAG='X'` satırları SİLİNMEZ — silmenin transport'u için gerekli).
 
     Returns:
-        ÖLÇÜLDÜ (her girdi çapraz kontrol edildi):
-        {ok: true, count, count_verified: true, inactive_objects, stale_deleted_count,
-         stale_deleted, client_log}
-        count=0 → AKSİYON GEREKTİREN aktive-bekleyen obje yok (silinmişler + transport/
-        method-seviyesi girdiler elenir). Girdi: {name, type, uri, user, deleted, transport,
+        ÖLÇÜLDÜ: {ok: true, count, count_verified: true, inactive_objects,
+        stale_deleted_count, stale_deleted, client_log} — count=0 → aksiyon gerektiren
+        aktive-bekleyen obje yok. Girdi: {name, type, uri, user, deleted, transport,
         tadir_deleted}.
+        ÖLÇÜLEMEDİ (bir girdide `tadir_deleted: null`): {ok: false, error:
+        "tadir_kontrolu_belirsiz", count_verified: false, confirmed_live_count,
+        unverified_count, confirmed_live, unverified, stale_deleted*, tadir_check, warning,
+        message, client_log}. ⛔ Bu dalda `count`/`inactive_objects` HİÇ BASILMAZ; doğru
+        okuma: confirmed_live_count ≤ gerçek ≤ confirmed_live_count + unverified_count.
 
-        ÖLÇÜLEMEDİ (2026-09-09 / Q224 — en az bir girdide `tadir_deleted: null`):
-        {ok: false, error: "tadir_kontrolu_belirsiz", count_verified: false,
-         confirmed_live_count, unverified_count, confirmed_live, unverified,
-         stale_deleted*, tadir_check, warning, message, client_log}
-        ⛔ Bu dalda **`count` ve `inactive_objects` anahtarları HİÇ BASILMAZ.** Eskiden
-        `warning` basılıyor ama sayı DÜZELTİLMİYORDU: `tadir_deleted is not True` süzgeci
-        `null`ı (=ölçülemedi) `false` (=ölçüldü, silinmemiş) ile aynı kovaya atıyordu ⇒
-        `count` sahte-pozitif şişiyordu ve uyarıyı okumayan çağıran yanlış sayıyı "kanıt"
-        sanıyordu (fail-open). Doğru okuma: `confirmed_live_count` ≤ gerçek ≤
-        `confirmed_live_count + unverified_count`. Emsal: `adt_atc_check`
-        (`finding_count_unverified`) · `adt_lock_check` (`locked: null`).
+    Ayrıntı: playbook/adt-mcp.md "`adt_inactive_objects` — ayrıntı".
     """
     from sap_client import worklist_ana_objeleri  # type: ignore
     client = _get_client()
@@ -1556,65 +1458,32 @@ def adt_grep_source(
     max_objects: int = 80,
     ignore_case: bool = True,
 ) -> dict:
-    """Paket/obje kapsamında ABAP **KAYNAK-METİN** regex arama — READ-ONLY.
+    """Paket/obje kapsamında ABAP KAYNAK-METİN regex arama — READ-ONLY.
 
-    `adt_where_used` "beni kim referanslıyor" der; bu tool "bu metin/pattern nerede geçiyor"
-    der (tamamlayıcı). Kaynağı indirip satır-satır regex. Token-ekonomisi için `max_objects`
-    ve toplam 500 eşleşme sınırlı — sınıra ulaşılırsa `truncated_*` işaretlenir (sessiz-kesme yok).
+    `adt_where_used` "kim referanslıyor" der; bu tool "metin nerede geçiyor" der. Kaynağı
+    indirip satır satır regex; `max_objects` ve toplam 500 eşleşme sınırlı (`truncated_*`).
+
+    ⛔ "EŞLEŞME YOK" ≠ "OKUYAMADIM": `match_count: 0` tek başına KANIT DEĞİLDİR. Önce
+    `coverage_complete`'e bak; false ise kapsamdan düşen her obje `skipped_objects`
+    (`type_filtered` · `type_unsupported` · `max_objects` · `read_failed` · `not_readable` ·
+    `source_empty`) ya da içeriği eksik okunan `partial_objects` (`fugr_skeleton_only` — FM
+    gövdesi `L<FG>U01`'de TARANMADI · `class_includes_not_scanned`) altında sebebiyle döner.
+    `scope_verified` paket ucunun DOĞRULUĞUNU, `coverage_complete` taramanın TAMLIĞINI söyler.
+    ⚠ Varsayılan `object_types` FUGR içermez. Sınıfta CCIMP/CCDEF/CCMAC/CCAU include'ları da
+    taranır (include başına +1 GET; eşleşmede `include` alanı, `line` include içi satır).
 
     Args:
-        pattern: Python regex. package: paket adı (kapsam). objects: "NAME" veya "NAME:type"
-                 virgüllü liste (package'a alternatif; tip yazımı SERBEST — `FUGR`/`fugr`/
-                 `FuGr`/`functiongroup` aynı şeydir, `_grep_tip_normalize` ile `package=`
-                 dalının sözlüğüne çevrilir). object_types: paket-taramada tip filtresi
-                 (CLAS/PROG/INTF/DDLS/FUGR/BDEF). max_objects: taranacak maks obje. ignore_case.
-
-    ⛔ 2026-08-28 (C-04) — "EŞLEŞME YOK" ile "OKUYAMADIM" ayrı şeylerdir. Eskiden okunamayan
-    obje `if not src: continue` ile SESSİZCE düşüyordu: ne sayılıyor ne raporlanıyordu.
-    Çağıran `match_count: 0` görüp "bu pakette geçmiyor" diye KARAR veriyordu (ölçülmüş
-    vaka: kuyruk Q106 + `playbook/lessons-learned.md` PATTERN #19/#20). Artık kapsamdan
-    düşen her obje **makinece okunur** biçimde döner:
-      `skipped_objects[{object, type, reason, detail}]` — sebep sınıfları:
-        `type_filtered`    → `object_types` filtresi dışladı (ör. varsayılanda FUGR yok)
-        `type_unsupported` → grep'lenebilir tip değil (TABL/DTEL/DOMA/FUNC…)
-        `max_objects`      → `max_objects` sınırının dışında kaldı
-        `read_failed`      → `adt_get` hata döndü (HTTP/parse/timeout)
-        `not_readable`     → `adt_get` `exists:false` dedi (⚠ `func`/FUGR group-resolution
-                             kusuru dahil — playbook/adt-fugr-functions.md §4, §4.1)
-        `source_empty`     → 200 ama gövde BOŞ (ör. behavior pool `source/main`)
-      `partial_objects[{object, type, reason}]` — okundu ama İÇERİK EKSİK:
-        `fugr_skeleton_only` → FUGR'ın yalnız iskelet ana include'u; FM gövdesi
-                               `L<FG>U01`'de ve TARANMADI (playbook §4.1)
-        `class_includes_not_scanned` → sınıfın ana kaynağı tarandı ama alt-include'larından
-                               (CCIMP/CCDEF/CCMAC/CCAU) en az biri OKUNAMADI ya da include
-                               listesi (sınıf metadata'sı) alınamadı — `detail` hangisi/neden
-      `coverage_complete` → hiçbir obje düşmedi/eksilmedi mi? (`scope_verified`
-      paket ucunun DOĞRULUĞUNU, bu alan taramanın TAMLIĞINI söyler — ikisi ayrı eksendir)
-    Mevcut alanların hiçbiri kaldırılmadı/anlamı değiştirilmedi (tüketici sözleşmesi).
-
-    ⛔ 2026-09-04 (Q206/Q106①/Q226) — yukarıdaki muhasebe `package=` dalında koşuyordu,
-    `objects=` dalında KOŞMUYORDU: tip dizesi ham geçtiği için (`"…:FUGR"` → `"fugr"`)
-    iskelet muhafızı tutmuyor, `coverage_complete` **sahte-yeşil** yanıyordu. Artık iki dal
-    aynı sözlüğü konuşur (`_grep_tip_normalize`). ⚠ TÜKETİCİ NOTU: `objects=` dalında tip
-    eşanlamlısı verilen çağrılarda dönüş alanlarındaki `type` artık KANONİK addır
-    (`"…:INTF"` → `interface`, `"…:FUGR"` → `functiongroup`) — `package=` dalı zaten böyleydi.
-
-    ⛔ 2026-09-13 (Q282) — SINIF ALT-INCLUDE'LARI artık TARANIR. Eskiden sınıfta yalnız
-    ana kaynak (`source/main`) okunuyordu; behavior pool / local class gövdesi
-    `includes/implementations` (CCIMP) içindedir ⇒ `match_count: 0` + `coverage_complete:
-    true` = SAHTE NEGATİF (canlı vaka 2026-09-11). Okunacak include'lar sınıf metadata'sının
-    `class:include` listesinden gelir (listelenmeyen uç YOKLANMAZ). Metadata alınamazsa ya
-    da listelenen bir include okunamazsa obje `partial_objects`e
-    `class_includes_not_scanned` ile düşer — "tarandı" ile "taranmadı" karışmaz.
-    ⚠ Maliyet: include'lu her sınıf için listelenen include başına +1 GET.
-    Include'dan gelen eşleşme `include` alanı taşır (`"implementations"` vb.); `line`
-    o include İÇİNDEKİ satırdır. Ana kaynak eşleşmelerinin şekli DEĞİŞMEDİ.
+        pattern: Python regex. package: paket (kapsam). objects: "NAME" / "NAME:type" virgüllü
+        liste (tip yazımı serbest: FUGR/fugr/functiongroup). object_types: paket taramasında
+        tip filtresi (CLAS/PROG/INTF/DDLS/FUGR/BDEF). max_objects · ignore_case.
 
     Returns:
         {ok, pattern, scanned_objects, match_count, truncated_object_scope, truncated_matches,
-         scanned_class_include_count,
-         matches: [{object, type, line, text, include?}], scope_verified, coverage_complete,
-         skipped_count, skipped_objects, partial_count, partial_objects, client_log}
+         scanned_class_include_count, matches: [{object, type, line, text, include?}],
+         scope_verified, coverage_complete, skipped_count, skipped_objects, partial_count,
+         partial_objects, client_log}
+
+    Ayrıntı: playbook/adt-mcp.md "`adt_grep_source` — ayrıntı".
     """
     import re as _re
     from mcp_servers.sap_adt.tools.atom import adt_get

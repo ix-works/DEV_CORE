@@ -553,11 +553,22 @@ def main(modul_yolu: str | None = None, mutasyon: str | None = None) -> int:
             "GÖVDESİ ARTIK `sap_error` ALANINDA" in dok
             and "sebep orada yazılıdır" not in dok,
             "curuk=%s" % ("sebep orada yazılıdır" in dok))
-    i_tek = dok.find("TEKRARLANAMAYANLAR")
-    kontrol("D7 tekrarlanamayan iddialar KURAL degil, ayri basliğin ALTINDA",
-            i_tek > 0 and all(dok.find(x) > i_tek for x in
-                              ("COUNT(*) AS CNT", "terim bütçesi", "SELECT * FROM T320")),
-            "baslik_idx=%d" % i_tek)
+    # ⚠ 2026-10-03 (MCP aciklama butcesi, CC 2.1.280+ 2.048 kr'de KESER): tekrarlanamayan
+    # iddialar docstring'den playbook'a tasindi — zaten 2.048. karakterin OTESINDEYDILER
+    # (olculdu: eski aciklama 7.008 kr), yani ajan onlari hic gormuyordu. Degismez AYNI:
+    # KURAL olarak ogretilmezler (docstring'de YOK) + kayitlari ayri basligin ALTINDA durur.
+    pb = (REPO / "playbook" / "adt-mcp.md").read_text(encoding="utf-8")
+    i_bol = pb.find("### `adt_sql_query` — ayrıntı")
+    i_son = pb.find("\n### ", i_bol + 1)
+    bol = pb[i_bol:i_son if i_son > 0 else None] if i_bol >= 0 else ""
+    i_tek = bol.find("TEKRARLANAMAYANLAR")
+    _tek = ("COUNT(*) AS CNT", "terim bütçesi", "SELECT * FROM T320")
+    kontrol("D7 tekrarlanamayan iddialar docstring'de KURAL degil; playbook'ta ayri basligin ALTINDA",
+            i_tek > 0 and all(bol.find(x) > i_tek for x in _tek)
+            and not any(x in dok for x in _tek)
+            and "playbook/adt-mcp.md" in dok,
+            "bolum=%s baslik_idx=%d docstring_sizinti=%s"
+            % (i_bol >= 0, i_tek, [x for x in _tek if x in dok]))
 
     hata = 0
     for ad, ok, detay in SONUC:

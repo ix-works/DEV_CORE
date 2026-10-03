@@ -2543,6 +2543,7 @@ python tests/run_battery.py sorgu_basarisizligi_gorunur --kardes sablon_zorunlu_
 - ⛔ Canlı yeniden ölçüm (yalnız SELECT, DEV): proje kökünün `.conn_adt`'i `CLAUDE_PROJECT_DIR` ile verilir. Worktree kökündeki `.conn_adt` **yer tutucudur** (2026-09-13 ölçüldü); kopyalama.
 - ⛔ SAP'nin 400/500 sebep metni MCP aracında görünmez; araç yalnız `[ERROR] SQL query error: [kod] Failed to run query` satırını taşır. Gövde için `client.adt_client.run_query` çağrısının `SAPADTError.response_text` alanını oku.
 - ⚠ Bir 500'den hemen sonraki 400 "Session Timed Out" olabilir (2/2 vaka). Biçim hükmü vermeden aynı sorguyu bir kez tekrarla. Tekrarlanamayan kayıt iddiaları docstring'de `TEKRARLANAMAYANLAR` başlığının altında durur; D7 onları kural listesine taşımayı kırmızı yapar.
+- ⚠ **2026-10-03 (B64):** MCP açıklama bütçesi (CC 2.1.280+ 2.048 kr'de keser) yüzünden ayrıntı `playbook/adt-mcp.md` "`adt_sql_query` — ayrıntı" bölümüne taşındı. D1–D6 hâlâ docstring'de (kısa biçim); **D7 artık playbook bölümünü okur** + docstring'de o üç iddianın HİÇ geçmediğini ve playbook atfını ister. Mutasyon sayıları değişmedi (36/42 · 41/42).
 
 **(b) Q193② — şablon + üretici birlikte (`sablon_zorunlu_maddeler` A4–A8 · M4–M7)**
 - A6/A7 **gerçek** `bootstrap_package.main()`'i geçici ağaçta koşar (argparse; `--templates-root` ve `--source-root` mutlak) ve **gerçek** `check_package_naming.validate_package`'i boş `.clas.abap` dosyalarıyla çağırır. Taban **14 senaryo + 7 mutasyon**.
@@ -2816,3 +2817,34 @@ python tests/run_battery.py msag_mesaj_silme --kardes msgtext_uzunluk_guard --pr
   16'lı silmede bayt-aynı; 1'li silmede fark yalnız gövdeye eklenen DEĞİŞMEMİŞ kalan mesajlardı).
 - **DOĞRULANAMADI (bu reçetede):** canlı SAP yazması — korpus SAP'siz koşar; canlı kanıt
   `infra-changelog` kaydındaki tek-seferlik ölçümdür. Başka sürüm/profil ölçülmedi.
+
+## B64 — ADT freestyle 255-satır sınırı (`sql_satirlarini_kir`) + MCP açıklama bütçesi (<2.000 kr)
+
+```
+python tests/run_battery.py sql_satir_kirma --kardes sorgu_basarisizligi_gorunur transport_sifir_kaniti b0_secim --precommit
+```
+
+- `sql_satir_kirma` **15/15**; dört kip: `--mutasyon-kimlik` (kırma yok → 10 vektör düşer) ·
+  `--mutasyon-literal-kor` (literal tanıma kapalı → K4/K5/K6/R2/T2) · `--mutasyon-govde-kirp`
+  (`run_query` gövdeyi `[:500]` kırpar → yalnız R3) · `--mutasyon-kardes` (ghost-transport sondası
+  reflow'suz → yalnız S1). Mutantlar kaynak METNİNİN gerçek `__file__` ile exec edilmesidir; çapa
+  tam 1 kez eşleşmezse `[DOGRULANAMADI]` exit 3.
+- ⭐ **S1 sınıf vektörü** `scripts/` altında freestyle URL'ini KOD olarak taşıyıp POST eden her
+  fonksiyonu AST ile bulur (bugün 4) ve hepsinin `sql_satirlarini_kir` çağırmasını ister. GET ile
+  `sqlQuery` URL parametresi kullanan `get_table_contents` ayrı mekanizmadır, taranmaz. `attic/`
+  taranmaz (fosil).
+- ⭐ **R3 gerçek gövde biçimi:** 255 vakasının SAP 400 gövdesi 563 bayt; `[:500]` XML'i bozar ve
+  `sap_client.sap_hata_govdesi` sebep yerine ham XML başını döndürür. Vektör sahte gövdeyle SAP'siz
+  koşar.
+- **MCP açıklama uzunluğu** kalıcı test DEĞİLDİR (ADR 0019; kalıcılaştırma kararı kullanıcıda).
+  Elle ölçüm: `server._register_all()` + `mcp._tool_manager.list_tools()` → `len(t.description)`
+  (ham `__doc__`, girinti dahil; `ast.get_docstring` girintiyi silip ~%5 düşük ölçer).
+  `CLAUDE_PROJECT_DIR` geçerli `sap_profile`'lı bir projeyi göstermeli — yoksa fail-closed yalnız
+  `ping` görünür (ölçüm 1 tool der, sessizce).
+- ⛔ **Canlı ölçüm (yalnız T000 SELECT):** worktree `.conn_adt`'i DEV_CORE yer tutucusudur.
+  Proje kökünün `.conn_adt`'i `CLAUDE_PROJECT_DIR` ile verilir, `sap_adt_lib.SAPADTClient()`
+  doğrudan kurulur (`SAPClient()` proje köküne scratch dizini açar), cwd = scratch. Kontrol
+  grubu: aynı sorgu reflow KAPALI (`L.sql_satirlarini_kir = lambda s, *a, **k: s`) → 400
+  `"O" is invalid here` · AÇIK → 200 · elle iki satır → 200 · 252 kr / 13 `OR` tek satır → 200.
+- **DOĞRULANAMADI:** çok baytlı karakterde sınırın bayt mı karakter mi olduğu; eski
+  `E070×E071` JOIN / uzun `IN` 400 vakalarının bu sınırdan doğup doğmadığı (yalnız T000 serbestti).
