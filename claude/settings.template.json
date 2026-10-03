@@ -276,6 +276,7 @@
       "mcp__sap-adt__adt_enhancements",
       "mcp__sap-adt__adt_package_contents",
       "mcp__sap-adt__adt_dump_list",
+      "mcp__sap-adt__adt_dump_read",
       "mcp__sap-gui__sap_list_connections",
       "Bash(python core/scripts/validators/run_review.py:*)",
       "Bash(python core/scripts/validators/check_abaplint.py:*)",
