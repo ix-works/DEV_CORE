@@ -2951,3 +2951,31 @@ python tests/run_battery.py ajan_mesaji_onek --kardes recall_tekrar_bastirma
   ayrıntı `infra-changelog.md` K1 Test-senaryosu (8)). Fixture'da vektörü YOK, kod bilinçli değişmedi.
 - **ÖLÇÜLMEDİ:** interaktif oturumda compact anındaki hook sırası (yalnız print kipi + gerçek
   transkriptlerde dolaylı) · aynı oturumun eşzamanlı UPS çağrıları (harness prompt'ları sıralı işler).
+
+## B68 — `seed_memory` gövde güncellemesi: dokunulmamış kopya GÜNCELLENİR, düzenlenmiş DOKUNULMAZ, atlanana ESKİ sha (S1, 2026-10-03)
+
+```
+python tests/run_battery.py tohum_govde_guncelleme --kardes tohum_terfi_gorunurlugu seed_memory_hub_indeks proje_slug_tek_kaynak b0_secim parca_tamlik --precommit
+```
+
+- `tohum_govde_guncelleme` **31/31**; 10 kip, düşmesi BEKLENEN küme `_BEKLENEN_DUSEN`'de pinli ve
+  EŞİTLİKLE kıyaslanır (CORE-07; çıkış 0 taban · 1 beklenen düşüş · 2 SAPMA · 3 çapa ≠ 1 / derlenmedi).
+  Mutant = sandbox KOPYASI (geçici dizin); canlı dosyaya yazılmaz.
+- Kipler ↔ küme: `guncelleme-yok` {G1–G5, D2, T2} · `duzenleneni-ez` {E1–E3, Y1, C1–C3, T4, G2, D2, P1}
+  · `manifestsiz-ez` {M1–M3, X1, X2, G2, D2} · `ayni-yok` {A1, P1, G2, D2, R1, X2} ·
+  `manifest-hepsi-yeni` {E2, C1, M2, X2} (= eski kusurun 2. yarısı) · `atlanan-eski-sha-yok` {E2, Y2, C1, T4}
+  · `dry-yazar` {D1, T3} · `ok-yalan` {E4} · `satir-sonu-uyari` {C2} · `guncelleme-etiketsiz` {G5}.
+- **Sahne:** makine V1 tohumuyla kurulur (dosyalar bayt-bayt + manifest), sonra kullanıcı dokunuşları
+  (düzenlenmiş · tohumu ilerlemeyen düzenleme · iki CRLF kopya · manifestte olmayan kullanıcı dosyası),
+  sonra tohum V2. Bağlamlar: normal koşum · `--dry-run` · `--terfi-adaylari` önce/sonra · ikinci koşum ·
+  manifestsiz makine · güncel makine (pozitif kontrol) · `--force`.
+- ⛔ **SİLİNEMEZ:** **T1** (kontrol grubu: koşum ÖNCESİ (b) kovası dolu — yoksa T2 boş-yeşil olur) ·
+  **Y1** (tohum ilerlemediyse düzenlenmiş dosya uyarı ALMAZ — canlı kopyada terfi `(a)`=224 iken
+  uyarı 37; aradaki fark bu sessiz sınıftır) · **P1** (`[OK] Her şey güncel.` hâlâ söylenebiliyor) · **F1** (`--force` bilinçli ezme yolu).
+- **Kırmızı-önce:** `git show f81ff74:scripts/seed_memory.py > <scratch>/eski.py` →
+  `python tests/fixtures/tohum_govde_guncelleme/run.py --seed-kaynak <scratch>/eski.py` → **15/31**.
+- **3. bağlam (gerçek korpus, elle):** `git archive b612469 scripts claude/memory-seed` → o sürümün
+  aracıyla scratch makine kur → bir dosyaya yerel not ekle → HEAD aracıyla `--target <scratch>`.
+  Beklenen: `Güncellendi 4 · [UYARI] 1 elle birleştir`, terfi `(a)=1 (b)=0` (eski araç: `(a)=5`).
+  ⛔ Gerçek memory dizinine `--target` VERME; kopyasını scratch'e al.
+- **DOĞRULANAMADI:** ikinci fiziksel makine; zehirlenmiş makinenin kurtarılması (kapsam dışı, howto §4).
