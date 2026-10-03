@@ -51,6 +51,7 @@ Plugin çıktısı yasakla çelişirse: DUR → kullanıcıya sun (bkz. `sap-aba
 | **Bizde hangi iş** | Freestyle UI5 ekranları (voyage, container_report, sıradaki BOOKING UI). Control API'sini **tahmin etmeden** doğrulamak, lint ile best-practice kontrolü. ORDER'da yaşanan UI patinajını keser |
 | **Ne zaman tetiklenir** | UI5/manifest/controller/view yazarken `ui5-best-practices` skill'i; API/lint gerektiğinde MCP tool |
 | **Dikkat** | CAP entegrasyon bölümleri bizde geçersiz (ABAP RAP). Form kuralı (asla `SimpleForm`, hep `Form`+`ColumnLayout`) bizim `standards/03`'e uyumlu — uygula |
+| **Sürüm** | ⚠ **SABİTLENMEMİŞ** (ölçüldü 2026-10-03): plugin 0.1.8'in `.mcp.json`'ı `npx -y @ui5/mcp-server` — sürümsüz; npx önbelleğinde **0.3.1** (0.3.0 `roots` yol kısıtını kaldırdı = kırıcı değişiklik sessizce devreye girdi). Sabitleme yolu **ölçülmedi**: tanım plugin önbelleğinde (`~/.claude/plugins/cache/.../ui5/<sürüm>/.mcp.json`) yaşar, plugin güncellemesi üzerine yazar; proje `.mcp.json`'ında aynı adla gölgeleme davranışı DOĞRULANMADI ⇒ politika kararı kullanıcıda (radar 2026-10-03 bulgu 5). |
 
 ### `playwright` — tarayıcı otomasyonu / e2e doğrulama
 
