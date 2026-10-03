@@ -45,8 +45,8 @@ OTURUM-İÇİ TEKRAR BASTIRMA (K1, 2026-10-03; kullanıcı onaylı):
   compaction'da sıfırlanarak sayıldığında karakterlerin %41'i aynı pencerede tekrar; tek
   (oturum, ders) çifti 157 kez.
   · KAYIT: `.tmp/recall-shown/<session_id>.json` = {tp_ofs, gosterilen[id]} — anahtar
-    PAYLOAD'daki `session_id` (paralel oturumlar `.tmp`'yi paylaşır; `.claude/.current_session`
-    son açılan oturumu gösterir, bu yüzden KULLANILMAZ).
+    PAYLOAD'daki `session_id` (paralel oturumlar `.tmp`'yi paylaşır; `session_start`'ın yazdığı
+    proje-geneli oturum marker'ı SON AÇILAN oturumu gösterir, bu yüzden KULLANILMAZ).
   · NE BASTIRILIR: TOP_K BUGÜNKÜ GİBİ seçilir, SONRA bu pencerede gösterilmiş `id`'ler düşer.
     Alt sıradaki ders öne ÇIKARILMAZ (yalnız bastırma; yeni içerik yok). Hepsi düşerse çıktı yok.
   · PENCERE SINIRI = transkriptteki `{"type":"system","subtype":"compact_boundary"}` satırı.
