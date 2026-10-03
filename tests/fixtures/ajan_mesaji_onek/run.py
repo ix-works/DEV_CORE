@@ -33,7 +33,8 @@ KOSUM:  python tests/fixtures/ajan_mesaji_onek/run.py
         ... --mutasyon-onek-icerik       (intake: BASTA degil ICERIKTE  -> N2 duser)
         ... --mutasyon-onek-gevsek       (intake: `from=` capasi atilir -> N3 + K0 duser)
         ... --mutasyon-onek-kardes-ayrik (skill demetine fazladan eleman -> YALNIZ K0 duser)
-Cikis:  0 hepsi beklendigi gibi · 1 mutasyon kipinde BEKLENEN kume dustu ·
+Cikis:  0 hepsi beklendigi gibi ·
+        1 taban kipte SAPMA (FAIL) / mutasyon kipinde BEKLENEN kume dustu ·
         2 DOGRULANAMADI (capa tutmadi / mutant derlenmedi / dusen kume != beklenen kume)
 ⛔ CORE-07: mutasyon kipinde dusen vektor kumesi BEKLENEN_DUSUS ile ESITLIKLE kiyaslanir —
    eksik (beklenen dusmedi) de fazla (baska vektor dustu) de sapmadir -> exit 2.
