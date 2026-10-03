@@ -342,6 +342,9 @@ def main(kip: str | None, kaynak_yolu: Path | None) -> int:
              and m_a.get("feedback_ayni.md") == _sha(V2["feedback_ayni.md"]))
         ekle("N1 tohumda yeni ders eklenir ('Eklendi : 1')",
              "Eklendi : 1" in out and (a / "feedback_yeni.md").read_bytes() == V2["feedback_yeni.md"])
+        ekle("N2 eklenen dosyanin manifest kaydi = tohum sha (yoksa sonraki tohum ilerlemesi 'ayirt edilemez' kalir)",
+             m_a.get("feedback_yeni.md") == _sha(V2["feedback_yeni.md"]),
+             f"man={m_a.get('feedback_yeni.md')}")
         ekle("M1 manifestte OLMAYAN mevcut dosyaya DOKUNULMAZ",
              (a / "feedback_manifestsiz.md").read_bytes() == YEREL_MANIFESTSIZ)
         ekle("M2 manifestte olmayan atlanan dosya manifeste YAZILMAZ",

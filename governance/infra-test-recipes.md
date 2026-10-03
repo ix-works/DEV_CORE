@@ -2958,7 +2958,7 @@ python tests/run_battery.py ajan_mesaji_onek --kardes recall_tekrar_bastirma
 python tests/run_battery.py tohum_govde_guncelleme --kardes tohum_terfi_gorunurlugu seed_memory_hub_indeks proje_slug_tek_kaynak b0_secim parca_tamlik --precommit
 ```
 
-- `tohum_govde_guncelleme` **31/31**; 10 kip, düşmesi BEKLENEN küme `_BEKLENEN_DUSEN`'de pinli ve
+- `tohum_govde_guncelleme` **32/32**; 10 kip, düşmesi BEKLENEN küme `_BEKLENEN_DUSEN`'de pinli ve
   EŞİTLİKLE kıyaslanır (CORE-07; çıkış 0 taban · 1 beklenen düşüş · 2 SAPMA · 3 çapa ≠ 1 / derlenmedi).
   Mutant = sandbox KOPYASI (geçici dizin); canlı dosyaya yazılmaz.
 - Kipler ↔ küme: `guncelleme-yok` {G1–G5, D2, T2} · `duzenleneni-ez` {E1–E3, Y1, C1–C3, T4, G2, D2, P1}
@@ -2973,7 +2973,7 @@ python tests/run_battery.py tohum_govde_guncelleme --kardes tohum_terfi_gorunurl
   **Y1** (tohum ilerlemediyse düzenlenmiş dosya uyarı ALMAZ — canlı kopyada terfi `(a)`=224 iken
   uyarı 37; aradaki fark bu sessiz sınıftır) · **P1** (`[OK] Her şey güncel.` hâlâ söylenebiliyor) · **F1** (`--force` bilinçli ezme yolu).
 - **Kırmızı-önce:** `git show f81ff74:scripts/seed_memory.py > <scratch>/eski.py` →
-  `python tests/fixtures/tohum_govde_guncelleme/run.py --seed-kaynak <scratch>/eski.py` → **15/31**.
+  `python tests/fixtures/tohum_govde_guncelleme/run.py --seed-kaynak <scratch>/eski.py` → **16/32** (N2'yi eski kod da geçer: atlanana dahil her dosyaya tohum sha'sı yazıyordu).
 - **3. bağlam (gerçek korpus, elle):** `git archive b612469 scripts claude/memory-seed` → o sürümün
   aracıyla scratch makine kur → bir dosyaya yerel not ekle → HEAD aracıyla `--target <scratch>`.
   Beklenen: `Güncellendi 4 · [UYARI] 1 elle birleştir`, terfi `(a)=1 (b)=0` (eski araç: `(a)=5`).
