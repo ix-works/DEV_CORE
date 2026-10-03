@@ -453,6 +453,11 @@ OZEL_TESTLER = [
     ("recall_index_ozetsiz",
      "recall-index: ozetsiz satirlar frontmatter `description`ine duser (90->163) + "
      "satir-atlamali kirlenme kapandi + UYDURMA yasagi (kaynak yoksa kayit yok)"),
+    # 2026-10-03 (K1): JIT-recall ayni dersi ayni baglam penceresinde her prompt'ta yeniden
+    # basiyordu (radar: karakterlerin %41'i pencere-ici tekrar). Oturum kaydi + compact sifirlama.
+    ("recall_tekrar_bastirma",
+     "recall_inject: ayni pencerede tekrar bastirilir + compact_boundary (manual/auto) sonrasi "
+     "yeniden basilir + kacisli/ic ice sahte sinir sifirlamaz + fail-open + hook_shim"),
     # 2026-09-12 (Q289): seed_memory "indekste var" icin yalniz MEMORY.md `](x.md)` goruyordu;
     # hub'a tasinmis 45 satiri her kurulumda MEMORY.md'ye geri ekliyordu.
     ("seed_memory_hub_indeks",
@@ -1024,7 +1029,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/seed_memory.py", ("O:seed_memory_hub_indeks", "O:proje_slug_tek_kaynak"),
      "indekste-var = MEMORY.md + hub'lar (iki biçim) · yetim 'var' değil · dry-run yazmaz · "
      "slug tek-kaynak çağıranı"),
-    ("scripts/hooks/recall_inject.py", ("O:recall_index_ozetsiz",), "Q287 otomatik tazeleme: YOK/BAYAT → senkron üretim + kilit + status (T* vektörleri); joker satırı negatif_test_harness+hook_gate_coverage'ı ayrıca ekler"),
+    ("scripts/hooks/recall_inject.py", ("O:recall_index_ozetsiz", "O:recall_tekrar_bastirma"), "Q287 otomatik tazeleme: YOK/BAYAT → senkron üretim + kilit + status (T* vektörleri) · K1 oturum-içi tekrar bastırma (B* vektörleri); joker satırı negatif_test_harness+hook_gate_coverage'ı ayrıca ekler"),
     # itg_backstop.py HARITA'da HIC YOKTU (2026-09-09, Q253 turu — `sap_worktype_hint`
     # ile ayni sinif): degisikligi yalniz `scripts/hooks/*.py` jokerine dusuyordu, yani
     # ADR 0022 kapisinin KENDI davranisini olcen bir korpus secilemiyordu.

@@ -451,6 +451,7 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
     · T6 (hata → status HATA + stderr, stdout boş) · **T10 (stdout yalnız hook JSON'u)** · T8 (eşzamanlı).
   - Canlıda durum: `<proje>/.tmp/recall-index.status` (zaman · tetik · sonuç · kayıt · hub · yetim · ms · hata).
     `sonuc=HATA` ya da eski `zaman` = tazeleme çalışmıyor; indeks dosyasının VARLIĞI kanıt değildir.
+- ⭐ **OTURUM-İÇİ TEKRAR BASTIRMA (K1) + ajan-mesajı süzgeci → B66.**
 - ⭐ **SKORLAMA AYARI (Q290) — `ESIK`/tavan/ağırlığa dokunmadan önce oku:** korpus SAHNE 4 (G*).
   - ⛔ **Fixture yeşili ayarın doğru olduğunu GÖSTERMEZ** — ayar kararı yalnız **gerçek prompt örneklemi +
     kör etiket + ayrı bekletme örneklemi** ile verilir; ölçüm yöntemi ve eğri `infra-changelog.md` Q290'da.
@@ -2911,3 +2912,35 @@ python tests/run_battery.py dump_okuma --kardes sorgu_basarisizligi_gorunur sorg
 - Açıklama uzunluğu (kalıcı test DEĞİL — B64 notu): `server._register_all()` +
   `mcp._tool_manager.list_tools()` → `adt_dump_read` 1.096 · `adt_dump_list` 1.432 (2026-10-03).
 - **DOĞRULANAMADI:** kimlik genişliği tek sistemde (100/100) ölçüldü; `/unformatted` ucu ölçülmedi.
+
+## B66 — `recall_inject` oturum-içi tekrar bastırma (K1) + otomatik olay / ajan mesajı süzgeci (B7'nin komşusu)
+
+```
+python tests/run_battery.py recall_tekrar_bastirma --kardes recall_index_ozetsiz --precommit
+python tests/run_battery.py ajan_mesaji_onek --kardes recall_tekrar_bastirma
+```
+
+- `recall_tekrar_bastirma` **26/26**; 9 kip, düşen kümeler `BEKLENEN_DUSUS`'te pinli ve EŞİTLİKLE
+  kıyaslanır (CORE-07; kip → vektör listesi `infra-changelog.md` K1 satırında, burada tekrarlanmaz).
+  Çıkış: 1 = beklenen kümeyle düştü · 2 = sapma / çapa tutmadı / mutant derlenmedi / kontrol grubu
+  bozuk / korpus ÇÖKTÜ (çökme FAIL sayılmaz).
+- ⛔ **Ölçülen şey BASILAN DERS LİSTESİDİR (sıra dahil), exit kodu değil** — hook her dalda exit 0
+  döner; tekrar da kayıp ders de sessizdir.
+- ⛔ **Pencere sınırı transkriptten okunur, `session_start`'tan DEĞİL:** SessionStart(`compact`)
+  ateşlendiği AN sınır satırı transkriptte henüz yoktur (ölçüldü, `claude -p` 2.1.288, N=1).
+  Bu sırayı değiştiren bir Claude Code sürümü B5/B6'yı değil CANLI davranışı bozar — şüphede
+  probu tekrarla: scratch proje + payload döken UPS/SessionStart/PreCompact hook'ları, prompt →
+  `/compact` → prompt (`--resume <sid>`), her olayda transkriptteki sınır satırı sayısını yaz.
+- ⛔ **Sahte sınır üç katmanlıdır, her katman AYRI vektörle ölçülür:** B7 kaçışlı string (iki
+  katman da korur — tek başına hiçbir mutasyonu öldürmez) · B8 iç içe yapısal nesne (yalnız satır
+  doğrulaması) · B9 yarım son satır (yalnız tırnaklı desen).
+- **Gerçek giriş noktası:** B17 `claude/hook_shim.template.py` kopyası + `core/scripts/` kopyası
+  (junction YOK). İndeks doğrudan yazılır ve geleceğe damgalanır (tazeleme koşmaz);
+  `CLAUDE_CONFIG_DIR` geçici dizine yönlendirilir (gerçek memory okunmaz).
+- **Kardeş süzgeç (ajan_mesaji_onek):** K0 artık ÜÇ hook'un `_AUTO_EVENT_ONEKLER`'ini, K0b
+  `_AUTO_EVENT_MARKERS`'ını AST ile eşitler — demetlerden biri değişirse üçü birlikte değişir.
+- **Canlıda gözlem:** `<proje>/.tmp/recall-shown/<session_id>.json` (`tp`, `tp_ofs`,
+  `gosterilen`). Dosya yoksa ya da `gosterilen` her prompt'ta sıfırlanıyorsa bastırma fail-open
+  dalındadır (payload'da `session_id`/`transcript_path` yok ya da transkript okunamıyor).
+- **ÖLÇÜLMEDİ:** interaktif oturumda compact anındaki hook sırası (yalnız print kipi + gerçek
+  transkriptlerde dolaylı) · aynı oturumun eşzamanlı UPS çağrıları (harness prompt'ları sıralı işler).
