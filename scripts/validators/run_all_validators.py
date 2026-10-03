@@ -92,6 +92,10 @@ VALIDATORS = [
     ("FS gövdesi analiz-günlüğü sızıntısı (advisory/warn-first, DOC-FS-05/06a)", "check_fs_no_analysis_log.py", [], "project", None),
     ("Proje-kökü çözümlemesi (HARD, CORE-01/ADR 0020)", "check_project_root_resolution.py", [], "both", None),
     ("Kural↔gate coverage (HARD, ADR 0019)", "check_rule_gate_coverage.py", [], "both", None),
+    # Elle verilen kimlik (B-no · checklist ID · PATTERN # · ADR no) iki kez tanımlanınca
+    # atıf sessizce belirsizleşir: BE-58 · FE-36/FE-37/BE-63 (Q270) · B18d/B18e (2026-09-26).
+    # Ders yazılıydı, yine çakıştı ⇒ ADR 0019 beş şart + kullanıcı onayı 2026-10-03. CORE-08.
+    ("Kimlik tekilliği (HARD, CORE-08)", "check_id_uniqueness.py", [], "both", None),
     # Hook'lar ajana "OKU: <yol>" der; yol çözülmezse ZORUNLU protokol sessizce atlanır
     # (2026-07-09 denetimi: 32 talimat, 0 okuma). C-HOOK-01.
     ("Hook enjekte-yol çözümlemesi (HARD, C-HOOK-01)", "check_hook_injected_paths.py", [], "project", None),
