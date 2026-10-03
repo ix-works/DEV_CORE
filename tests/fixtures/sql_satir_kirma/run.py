@@ -23,12 +23,22 @@ gorunmuyordu).
   S1      SINIF: scripts/ altinda freestyle'a POST eden HER fonksiyon reflow'dan gecer (AST)
   T1      3. BAGLAM: sprint_gate_check._query_sap (ayri arac, ayri istemci yolu)
 
-Mutasyon kipleri (kaynak METNI degistirilip gercek __file__ ile exec edilir; capa tam
-1 kez eslesmezse [DOGRULANAMADI] exit 3):
-  --mutasyon-kimlik      reflow hic kirmaz              -> K3/K7/K9/R1 DUSMELI
-  --mutasyon-literal-kor literal tanima kapali           -> K4/K5/K6 DUSMELI
-  --mutasyon-govde-kirp  run_query govdeyi [:500] kirpar -> R3 DUSMELI
-  --mutasyon-kardes      ghost-transport sondasi reflow'suz -> S1 DUSMELI
+  K10     devam satiri sutun-1'de `*` ile BASLAMAZ (freestyle `*`'i tam-satir yorumu sayar;
+          bug-gate 2026-10-03 canli: `COUNT(` + LF + `* )` -> 400, ` * )` -> 200). K3'un
+          token esitligi bunu GOREMEZ (bosluk oneki token degistirmez).
+  K11     >255 kr `*` tam-satir yorum satiri -> SQLSatirKirilamadi (bolunemez)
+
+Mutasyon kipleri (kaynak METNI degistirilip gercek __file__ ile exec edilir):
+  --mutasyon-kimlik        reflow hic kirmaz
+  --mutasyon-literal-kor   literal tanima kapali
+  --mutasyon-govde-kirp    run_query govdeyi [:500] kirpar
+  --mutasyon-kardes        ghost-transport sondasi reflow'suz
+  --mutasyon-yildiz-onek   devam satirina `*` oneki konmaz
+  --mutasyon-yorum-satiri  `*` tam-satir yorum korumasi kapali
+CORE-07: her kipin DUSMESI BEKLENEN vektor kumesi `_BEKLENEN_DUSEN`'de PINLIDIR ve
+ESITLIKLE kiyaslanir. Cikis: 0 taban yesil · 1 mutasyon BEKLENEN kumeyle dustu ·
+2 SAPMA (mutasyonda dusen kume beklenenden farkli — fazlasi da eksigi de) ·
+3 DOGRULANAMADI (capa tam 1 kez eslesmedi YA DA mutant derlenmedi — "dustu" SAYILMAZ).
 
 Kosum: python tests/fixtures/sql_satir_kirma/run.py [--mutasyon-...]   (exit 0 = PASS)
 """
@@ -58,7 +68,19 @@ os.environ.setdefault("CLAUDE_PROJECT_DIR", str(REPO))
 LIB = REPO / "scripts" / "sap_adt_lib.py"
 
 _GECERLI_KIP = frozenset({"--mutasyon-kimlik", "--mutasyon-literal-kor",
-                          "--mutasyon-govde-kirp", "--mutasyon-kardes"})
+                          "--mutasyon-govde-kirp", "--mutasyon-kardes",
+                          "--mutasyon-yildiz-onek", "--mutasyon-yorum-satiri"})
+
+# CORE-07: kip -> dusmesi BEKLENEN vektor kimlikleri (ESITLIK; alt-kume degil).
+_BEKLENEN_DUSEN = {
+    "--mutasyon-kimlik": {"K3", "K4", "K5", "K6", "K7", "K9", "K10", "K11",
+                          "R1", "R2", "T1", "T2"},
+    "--mutasyon-literal-kor": {"K4", "K5", "K6", "R2", "T2"},
+    "--mutasyon-govde-kirp": {"R3"},
+    "--mutasyon-kardes": {"S1"},
+    "--mutasyon-yildiz-onek": {"K10"},
+    "--mutasyon-yorum-satiri": {"K11"},
+}
 
 # (eski, yeni) — CORE-07: eski TAM 1 kez eslesmeli.
 _MUT = {
@@ -78,6 +100,12 @@ _MUT = {
     "--mutasyon-kardes": (
         "data=sql_satirlarini_kir(query).encode('utf-8'),",
         "data=query.encode('utf-8'),"),
+    "--mutasyon-yildiz-onek": (
+        "    return (' ' + atom) if atom.startswith('*') else atom\n",
+        "    return atom\n"),
+    "--mutasyon-yorum-satiri": (
+        "        if satir.startswith('*'):\n",
+        "        if False:\n"),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -142,6 +170,13 @@ def main(kip: str | None) -> int:
             return 3
         kaynak = kaynak.replace(eski, yeni, 1)
         print("mutasyon:", kip)
+        # KURULAMADI != DUSTU: derlenmeyen mutant hicbir vektoru olcmez.
+        try:
+            compile(kaynak, str(LIB), "exec")
+        except SyntaxError as e:
+            sys.stderr.write("[DOGRULANAMADI] mutant DERLENMEDI (%s): %s -> hicbir sayi "
+                             "raporlanmadi.\n" % (kip, e))
+            return 3
     L = lib_yukle(kaynak)
     kir = L.sql_satirlarini_kir
     SINIR = L.SQL_SATIR_SINIRI
@@ -226,6 +261,31 @@ def main(kip: str | None) -> int:
                 "satirlar=%s" % [len(s) for s in r9])
     except Exception as e:  # noqa: BLE001
         kontrol("K9 girintili uzun satir", False, "istisna: %r" % e)
+
+    # K10: kirma tam `*`'dan once dusuyor (bug-gate'in canli vakasinin bicimi)
+    on = "SELECT mandt,"
+    on = on + " " * (SINIR - len(on) - len("COUNT(")) + "COUNT("
+    q10 = on + " * ) AS cnt FROM t000 GROUP BY mandt"
+    try:
+        r10 = kir(q10).splitlines()
+        kontrol("K10 devam satiri sutun-1'de `*` ile BASLAMAZ (tek bosluk oneki) + <=255 + token esit",
+                len(on) == SINIR and len(r10) >= 2
+                and not any(s.startswith("*") for s in r10)
+                and any(s.startswith(" * )") for s in r10[1:])
+                and all(len(s) <= SINIR for s in r10) and kir(q10).split() == q10.split(),
+                "girdi=%d satir_baslari=%r" % (len(q10), [s[:4] for s in r10]))
+    except Exception as e:  # noqa: BLE001
+        kontrol("K10 devam satiri `*` ile baslamaz", False, "istisna: %r" % e)
+
+    # K11: >255 kr `*` tam-satir yorumu -> bolunemez
+    q11 = "SELECT mandt FROM t000\n* " + "yorum " * 50 + "\nWHERE mandt = '000'"
+    try:
+        r11 = kir(q11)
+        kontrol("K11 >255 `*` tam-satir yorum -> SQLSatirKirilamadi", False,
+                "hata yok; satirlar=%s" % [len(s) for s in r11.splitlines()])
+    except L.SQLSatirKirilamadi as e:
+        kontrol("K11 >255 `*` tam-satir yorum -> SQLSatirKirilamadi ('tam-satır yorumu' der)",
+                "tam-satır yorumu" in str(e), str(e)[:70])
 
     # ── R: run_query entegrasyonu (sahte HTTP; SAP'ye HIC gidilmez) ──────────
     class _Yanit:
@@ -336,6 +396,16 @@ def main(kip: str | None) -> int:
         print("[%s] %-60s %s" % ("ok" if ok else "FAIL", ad, detay))
     print("%d/%d OK" % (len(SONUC) - hata, len(SONUC)))
     print("SONUC: %d/%d gecti" % (len(SONUC) - hata, len(SONUC)))
+    if kip:
+        dusen = {ad.split()[0] for ad, ok, _ in SONUC if not ok}
+        beklenen = _BEKLENEN_DUSEN[kip]
+        if dusen != beklenen:
+            print("[SAPMA] %s: beklenen=%s dusen=%s fazla=%s eksik=%s -> exit 2"
+                  % (kip, sorted(beklenen), sorted(dusen), sorted(dusen - beklenen),
+                     sorted(beklenen - dusen)))
+            return 2
+        print("[BEKLENEN] %s: dusen kume = beklenen %s" % (kip, sorted(beklenen)))
+        return 1
     return 1 if hata else 0
 
 

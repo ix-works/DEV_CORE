@@ -178,14 +178,28 @@ def _sql_satir_parcalari(satir):
     return parcalar
 
 
+def _sql_devam_satiri_basi(atom):
+    """Kırılan satırın devamı `*` ile başlayacaksa önüne TEK boşluk koy.
+
+    Freestyle ucu sütun-1 `*`'ı tam-satır yorumu sayar (ölçüldü 2026-10-03: `COUNT(` ⏎
+    `* )` → 400 "INTO is invalid here"; ` * )` → 200).
+    """
+    return (' ' + atom) if atom.startswith('*') else atom
+
+
 def sql_satirlarini_kir(sorgu, sinir=SQL_SATIR_SINIRI):
     """ADT freestyle'a gidecek sorguda `sinir`dan uzun HER satırı boşluk noktasından kır.
 
     · Satır ≤ `sinir` ise DOKUNULMAZ; hiçbir satır uzun değilse girdi AYNEN döner (satır sonu
       biçimi dahil — CRLF girdi kısaysa CRLF kalır).
     · Kırma yalnız literal/backtick/yorum DIŞINDAKİ boşlukta olur; kırılan boşluk satır
-      sonuna dönüşür (SQL'de ikisi de ayırıcıdır — anlam değişmez). Eklenen satır sonu,
-      girdide ilk görülen satır sonudur (yoksa `\\n`).
+      sonuna dönüşür (SQL'de ikisi de ayırıcıdır). Eklenen satır sonu, girdide ilk görülen
+      satır sonudur (yoksa `\\n`).
+    · ⚠ TEK İSTİSNA — sütun-1 `*`: freestyle ucu satır başındaki `*`'ı TAM-SATIR YORUMU
+      sayar (ölçüldü 2026-10-03, DEV T000: `COUNT(` ⏎ `* ) AS cnt …` → 400 "INTO is invalid
+      here"; aynı metin `*` önünde tek boşlukla → 200). Bu yüzden `*` ile başlayan her devam
+      satırına TEK BOŞLUK öneki eklenir (uzunluk hesabına dahil). Bu önek olmadan kırma
+      anlamı DEĞİŞTİRİRDİ; önekle anlam korunur.
     · Tek bir atom (literal, yorum ya da boşluksuz ifade) tek başına `sinir`ı aşıyorsa kırma
       YAPILMAZ: `SQLSatirKirilamadi` fırlar ve sorgu gönderilmez. (Literalin ortadan
       bölünmesi değeri değiştirir; satırın gönderilmesi SAP'de kesilip başka bir hata
@@ -219,11 +233,11 @@ def sql_satirlarini_kir(sorgu, sinir=SQL_SATIR_SINIRI):
             # İlk atom: satır başı girintisi korunur; sığmıyorsa girinti atılır.
             aday = (cur + bosluk + atom) if cur else (bosluk + atom)
             if not cur and len(aday) > sinir:
-                aday = atom
+                aday = _sql_devam_satiri_basi(atom)
             if len(aday) <= sinir:
                 cur = aday
                 continue
-            if len(atom) > sinir:
+            if len(_sql_devam_satiri_basi(atom)) > sinir:
                 tur = ('literal' if atom[:1] in ("'", '`') else
                        'yorum' if atom[:1] == '"' else 'boşluksuz ifade')
                 raise SQLSatirKirilamadi(
@@ -232,7 +246,7 @@ def sql_satirlarini_kir(sorgu, sinir=SQL_SATIR_SINIRI):
                     f"Literali kısalt/böl (LIKE, ayrı koşul) ya da ifadeye boşluk ekle. "
                     f"Sorgu GÖNDERİLMEDİ.")
             parcalar_kirik.append(cur)
-            cur = atom
+            cur = _sql_devam_satiri_basi(atom)
         if cur:
             parcalar_kirik.append(cur)
         cikti.append(yeni_ss.join(parcalar_kirik))

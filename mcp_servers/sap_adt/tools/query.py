@@ -734,8 +734,8 @@ def adt_sql_query(
     keyword'ü RED (ADR 0005-B) · QA/PRD hassas tabloda `acknowledge_risk=True` + onay (ADR 0011).
 
     ⚠ HTTP 400 = "sorgu kabul edilmedi", "tablo erişilemez" DEĞİL. SAP her satırı 255.
-    karakterde keser; araç uzun satırı otomatik kırar (eski "5'ten fazla OR → 400" teşhisi
-    bunun yansımasıydı). Her 400 bu değildir.
+    karakterde keser; araç uzun satırı kırar. "5'ten fazla OR → 400" teşhisi çürüdü (13 OR /
+    252 kr = 200); eski vakalar büyük olasılıkla bu sınırdandı. Her 400 bu değildir.
     ⚠ **SAP'NİN 400/500 GÖVDESİ ARTIK `sap_error` ALANINDA** ⇒ önce onu oku, sorguyu
     körlemesine TEKRARLAMA, daralt (tek değişken).
     ⚠ **ÖLÇÜLMÜŞ BİÇİM SINIRLARI**:

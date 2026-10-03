@@ -2824,11 +2824,16 @@ python tests/run_battery.py msag_mesaj_silme --kardes msgtext_uzunluk_guard --pr
 python tests/run_battery.py sql_satir_kirma --kardes sorgu_basarisizligi_gorunur transport_sifir_kaniti b0_secim --precommit
 ```
 
-- `sql_satir_kirma` **15/15**; dört kip: `--mutasyon-kimlik` (kırma yok → 10 vektör düşer) ·
-  `--mutasyon-literal-kor` (literal tanıma kapalı → K4/K5/K6/R2/T2) · `--mutasyon-govde-kirp`
-  (`run_query` gövdeyi `[:500]` kırpar → yalnız R3) · `--mutasyon-kardes` (ghost-transport sondası
-  reflow'suz → yalnız S1). Mutantlar kaynak METNİNİN gerçek `__file__` ile exec edilmesidir; çapa
-  tam 1 kez eşleşmezse `[DOGRULANAMADI]` exit 3.
+- `sql_satir_kirma` **17/17**; altı kip, her birinin düşmesi BEKLENEN küme `_BEKLENEN_DUSEN`'de
+  pinli ve EŞİTLİKLE kıyaslanır (CORE-07): `--mutasyon-kimlik` (12 vektör) ·
+  `--mutasyon-literal-kor` (K4/K5/K6/R2/T2) · `--mutasyon-govde-kirp` (R3) · `--mutasyon-kardes`
+  (S1) · `--mutasyon-yildiz-onek` (K10) · `--mutasyon-yorum-satiri` (K11). Çıkış: 1 = beklenen
+  kümeyle düştü · 2 = SAPMA (batarya bunu KURULAMADI/FAIL gösterir — `[SAPMA]` satırını oku) ·
+  3 = çapa tam 1 kez eşleşmedi ya da mutant DERLENMEDİ. Mutantlar kaynak METNİNİN gerçek
+  `__file__` ile exec edilmesidir.
+- ⭐ **K10 sütun-1 `*`:** freestyle satır başındaki `*`'ı tam-satır yorumu sayar (bug-gate canlı:
+  `COUNT(` ⏎ `* )` → 400 "INTO is invalid here"). K3'ün token eşitliği bu kusuru GÖREMEZ (boşluk
+  öneki token değiştirmez) — K10 ayrı vektördür, silinmez.
 - ⭐ **S1 sınıf vektörü** `scripts/` altında freestyle URL'ini KOD olarak taşıyıp POST eden her
   fonksiyonu AST ile bulur (bugün 4) ve hepsinin `sql_satirlarini_kir` çağırmasını ister. GET ile
   `sqlQuery` URL parametresi kullanan `get_table_contents` ayrı mekanizmadır, taranmaz. `attic/`

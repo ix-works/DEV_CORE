@@ -236,7 +236,7 @@ bitiyordu). Kesilen kısım modele **hiç ulaşmaz** — ⛔ uyarıların bir k�
 
 | Tool | Önce | Sonra |
 |---|---:|---:|
-| `adt_sql_query` | 7.008 | 1.945 |
+| `adt_sql_query` | 7.008 | 1.986 |
 | `adt_grep_source` | 4.323 | 1.648 |
 | `adt_inactive_objects` | 2.404 | 1.284 |
 | `adt_transport_list` | 2.388 | 1.120 |
@@ -259,11 +259,15 @@ kalır. Aşağıdaki "önceki tam açıklama" blokları 2026-10-03'e kadar MCP a
 | aynı sorgu elle iki satır (kontrol) | 200 |
 | 252 kr tek satır, **13 `OR`** terimi | 200 |
 | 260 kr'lik literal kendi satırında (kırma KAPALI) | **400** `Yalnızca bir SELECT deyimi geçerli.` |
+| 291 kr, kırma `COUNT(` ⏎ `* ) AS cnt …` (önek YOK) | **400** `"INTO" is invalid here (due to grammar).` |
+| aynısı, devam satırı ` * )` (tek boşluk önekli — araç bunu yapar) | 200 |
 
 ⇒ Freestyle ucu her satırı 255. karakterde KESER; hata mesajı kesimin düştüğü kelimeyi gösterir,
 sebebi göstermez. `sap_adt_lib.sql_satirlarini_kir` (`run_query` + freestyle'a POST eden üç kardeş:
 E070 fallback · ghost-transport sondası · `sprint_gate_check._query_sap`) uzun satırı literal
-(`'…'`, `` `…` ``) ve satır-sonu yorumu (`"`) DIŞINDAKİ boşluktan kırar; tek atom 255'i aşıyorsa
+(`'…'`, `` `…` ``) ve satır-sonu yorumu (`"`) DIŞINDAKİ boşluktan kırar; freestyle sütun-1 `*`'ı
+TAM-SATIR YORUMU saydığı için `*` ile başlayan devam satırına tek boşluk öneki koyar (uzunluğa
+dahil; >255 `*` yorum satırı bölünemez → aynı hata); tek atom 255'i aşıyorsa
 `SQLSatirKirilamadi` fırlar ve istek GİTMEZ (yukarıdaki son satır: o sorgu zaten 400'dü). Ayrıca
 `run_query` 400 gövdesini artık kırpmıyor — 255 vakasının gövdesi 563 bayttı, `[:500]` XML'i
 bozuyor ve `sap_error.message` sebep yerine ham XML başını gösteriyordu.
