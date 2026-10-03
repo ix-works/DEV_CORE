@@ -11,11 +11,14 @@ BE-58 (core #49) · FE-36/FE-37/BE-63 (Q270) · `infra-test-recipes.md` B18d/B18
   P2               B-no çifti (sentetik)
   P3 ⭐ AYIRT EDİCİ   checklist çifti İKİ AYRI dosyada (BE-58 vakasının biçimi)
   P4               checklist çifti aynı dosyada, biri `**FE-36**` biri düz `FE-36`
+  P4b              checklist çifti aynı dosyada, biri backtick'li `` `FE-1` `` biri düz
   P5               `PATTERN #` çifti
+  P5b              harf ekli `PATTERN #2a` çifti
   P6               ADR numara çifti (`0019-a.md` + `0019-b.md`)
   N1               temiz sentetik ağaç → rc 0 + KAPSAM BEYANI paydaları birebir
   N2 FP çapası     `### B0-SEÇİM` alt-etiketi `## B0`ın çifti DEĞİL
   N3 FP çapası     kod bloğu (``` ) içindeki `## B1` sayılmaz
+  N3b FP çapası    kod bloğu (~~~) içindeki `## B1` sayılmaz
   N4 FP çapası     `B18` · `B18b` · `B18d` AYRI kimlikler
   N5 FP çapası     metin içi atıf + ikinci kolondaki kimlik TANIM değil
   S1               aile kaynağı YOK → rc 2 + ÖLÇÜLEMEDİ (sessiz körleşme yok)
@@ -32,6 +35,10 @@ Mutasyon kipleri (validator kaynak METNİ değiştirilir, gerçek `__file__` ile
   --mutasyon-fence          kod bloğu atlama kapalı
   --mutasyon-olculemedi-yok boş aile ÖLÇÜLEMEDİ üretmez (sessiz 0)
   --mutasyon-kalin          `**…**` kalın işareti soyulmaz (kalın kimlik görünmez)
+  --mutasyon-tilde-fence    `_FENCE` yalnız ``` tanır (`~~~` bloğu taranır)
+  --mutasyon-backtick       ilk hücrede backtick soyulmaz (`` `FE-1` `` görünmez)
+  --mutasyon-pattern-harf   `PATTERN #<n>` harf ekini tanımaz (`#2a` görünmez)
+  (son üçü düzeltme turu 2026-10-03: bug-gate Ö1 — üç mutant 16 vektörde hayatta kalmıştı)
 CORE-07: her kipin DÜŞMESİ BEKLENEN vektör kümesi `_BEKLENEN_DUSEN`'de PİNLİDİR ve
 EŞİTLİKLE kıyaslanır. Çıkış: 0 taban yeşil · 1 mutasyon BEKLENEN kümeyle düştü ·
 2 SAPMA (düşen küme beklenenden farklı — fazlası da eksiği de) · 3 DOGRULANAMADI
@@ -66,24 +73,35 @@ TABAN_SHA = "c7d8b75b8b0b970f05d74ca1971106fe4590035f"
 
 _GECERLI_KIP = frozenset({"--mutasyon-capraz-dosya", "--mutasyon-alt-etiket",
                           "--mutasyon-harf-eki", "--mutasyon-fence",
-                          "--mutasyon-olculemedi-yok", "--mutasyon-kalin"})
+                          "--mutasyon-olculemedi-yok", "--mutasyon-kalin",
+                          "--mutasyon-tilde-fence", "--mutasyon-backtick",
+                          "--mutasyon-pattern-harf"})
 
 # Ölçülerek pinlendi (2026-10-03). Her küme NEDEN o vektörleri içerir:
 #  capraz-dosya  : yalnız dosyalar arası çift (P3) — aynı dosyadaki çift (P4) hâlâ yakalanır
 #  alt-etiket    : sentetik N2 + gerçek ağaçta B0/B4 alt-etiketleri çift olur (X1) + pinli
 #                  tabanda da (P1: küme {B18d,B18e}'den büyür)
 #  harf-eki      : N4 + gerçek ağaçta B18/B9… harfli aileler birleşir (X1, P1)
-#  fence         : yalnız sentetik N3 (gerçek ağacın kod bloklarında başlık-biçimli kimlik yok)
+#  fence         : yalnız sentetik N3 + N3b (gerçek ağacın kod bloklarında başlık-biçimli kimlik
+#                  yok). N3b düzeltme turunda eklendi: fence atlaması tümden kapanınca `~~~`
+#                  bloğu da taranır ⇒ küme {N3}'ten {N3, N3b}'ye büyüdü (ölçüldü, beklenen).
 #  olculemedi-yok: S1 · S2 · S3 (üçü de ÖLÇÜLEMEDİ satırını/rc 2'yi ister)
 #  kalin         : P4 (kalın FE-36 görünmez) + N1 (kalın kimlik paydadan düşer) + X1
-#                  (gerçek checklist'ler kalın kimlikli → payda <300)
+#                  (gerçek checklist'ler kalın kimlikli → payda <300). P4b kalın değil ⇒ düşmez.
+#  tilde-fence   : yalnız N3b (gerçek ağaçta `~~~` bloğu 0 — grep, 2026-10-03)
+#  backtick      : yalnız P4b (gerçek checklist'lerde backtick'li ilk-hücre kimliği 0 — grep)
+#  pattern-harf  : yalnız P5b (gerçek lessons-learned'da harfli PATTERN 0 — grep). Eki tanımayan
+#                  değil de eki atıp `#2`ye katan varyant da yalnız P5b'yi düşürür (ölçüldü, kip değil)
 _BEKLENEN_DUSEN = {
     "--mutasyon-capraz-dosya": {"P3"},
     "--mutasyon-alt-etiket": {"P1", "N2", "X1"},
     "--mutasyon-harf-eki": {"P1", "N4", "X1"},
-    "--mutasyon-fence": {"N3"},
+    "--mutasyon-fence": {"N3", "N3b"},
     "--mutasyon-olculemedi-yok": {"S1", "S2", "S3"},
     "--mutasyon-kalin": {"P4", "N1", "X1"},
+    "--mutasyon-tilde-fence": {"N3b"},
+    "--mutasyon-backtick": {"P4b"},
+    "--mutasyon-pattern-harf": {"P5b"},
 }
 
 _MUT = {
@@ -101,6 +119,12 @@ _MUT = {
         '            pass'),
     "--mutasyon-kalin": (
         '.strip().strip("*`").strip()', '.strip().strip("`").strip()'),
+    "--mutasyon-tilde-fence": (
+        '(```|~~~)")', '(```)")'),
+    "--mutasyon-backtick": (
+        '.strip().strip("*`").strip()', '.strip().strip("*").strip()'),
+    "--mutasyon-pattern-harf": (
+        r'PATTERN[ \t]*#(\d+[a-z]?)(?![\w-])', r'PATTERN[ \t]*#(\d+)(?![\w-])'),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -225,10 +249,28 @@ def senaryolar(G: types.ModuleType) -> None:
     kontrol("P4 checklist çifti aynı dosyada, kalın + düz → rc 1 + FE-1 listelenir",
             rc == 1 and len(fe1) == 1, f"rc={rc} · {fe1}")
 
+    # P4b: backtick'li kimlik (`` `FE-1` ``) düz `FE-1`in çiftidir — validator ilk hücrede
+    # "*" ile birlikte "`"yi de soyar (docstring "`**X**` = X"). Kalın işareti YOK ⇒ `kalin`
+    # mutantından bağımsız; yalnız backtick soymayı ölçer.
+    with agac({"playbook/checklists/b.md": TEMIZ["playbook/checklists/b.md"] + "| `FE-1` | çift |\n"}) as d:
+        rc, out = kos(G, d)
+    fe1 = [s for s in out.splitlines() if s.startswith("  - [checklist]") and "FE-1" in s]
+    kontrol("P4b checklist çifti aynı dosyada, backtick'li + düz → rc 1 + FE-1 listelenir",
+            rc == 1 and len(fe1) == 1, f"rc={rc} · {fe1}")
+
     with agac({"playbook/lessons-learned.md": TEMIZ["playbook/lessons-learned.md"]
                + "\n### PATTERN #2: ikinci\n"}) as d:
         rc, out = kos(G, d)
     kontrol("P5 PATTERN çifti → rc 1", rc == 1 and "[PATTERN] PATTERN #2:" in out, f"rc={rc}")
+
+    # P5b: harf ekli PATTERN çifti (`#2a` iki kez). Harf eki kimliğin parçasıdır: eki tanımayan
+    # desen `#2a`yı hiç görmez (çift kaçar), eki atan desen `#2`ye katar (yanlış kimlik basılır)
+    # — iki yönde de "PATTERN #2a:" satırı çıkmaz.
+    with agac({"playbook/lessons-learned.md": TEMIZ["playbook/lessons-learned.md"]
+               + "\n### PATTERN #2a: harfli\n\n### PATTERN #2a: harfli ikinci\n"}) as d:
+        rc, out = kos(G, d)
+    kontrol("P5b harfli PATTERN çifti (`#2a` ×2) → rc 1 + PATTERN #2a listelenir",
+            rc == 1 and "[PATTERN] PATTERN #2a:" in out, f"rc={rc}")
 
     with agac({"governance/decisions/0002-baska.md": "# ADR 0002 (çift)\n"}) as d:
         rc, out = kos(G, d)
@@ -250,6 +292,12 @@ def senaryolar(G: types.ModuleType) -> None:
                + "\n```markdown\n## B1 — örnek başlık\n```\n"}) as d:
         rc, out = kos(G, d)
     kontrol("N3 FP: kod bloğu içindeki `## B1` sayılmaz", rc == 0, f"rc={rc}")
+
+    # N3b: N3'ün `~~~` kardeşi (CommonMark tilde fence; validator `_FENCE` ikisini de tanır).
+    with agac({"governance/infra-test-recipes.md": TEMIZ["governance/infra-test-recipes.md"]
+               + "\n~~~markdown\n## B1 — örnek başlık\n~~~\n"}) as d:
+        rc, out = kos(G, d)
+    kontrol("N3b FP: `~~~` kod bloğu içindeki `## B1` sayılmaz", rc == 0, f"rc={rc}")
 
     with agac({"governance/infra-test-recipes.md": TEMIZ["governance/infra-test-recipes.md"]
                + "\n## B18 — a\n## B18b — b\n## B18d — d\n"}) as d:

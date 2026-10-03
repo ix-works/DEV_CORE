@@ -2860,17 +2860,20 @@ python tests/run_battery.py sql_satir_kirma --kardes sorgu_basarisizligi_gorunur
 
 ## B65 — `check_id_uniqueness` (CORE-08, HARD): kimlik TANIMI tekilliği (K2, 2026-10-03)
 - `python tests/run_battery.py id_tekilligi --kardes b0_secim run_all_ozet_kipi parca_tamlik core_index_kapsam --precommit`
-  → taban **16/16** + 6 kipin hepsi BEKLENEN kümeyle düşer. Kipler ve pinli küme (`_BEKLENEN_DUSEN`, CORE-07 eşitlik):
-  `capraz-dosya` {P3} · `alt-etiket` {P1, N2, X1} · `harf-eki` {P1, N4, X1} · `fence` {N3} ·
-  `olculemedi-yok` {S1, S2, S3} · `kalin` {N1, P4, X1}. Çıkış: 0 taban · 1 beklenen düşüş · 2 SAPMA · 3 DOĞRULANAMADI.
+  → taban **19/19** + 9 kipin hepsi BEKLENEN kümeyle düşer. Kipler ve pinli küme (`_BEKLENEN_DUSEN`, CORE-07 eşitlik):
+  `capraz-dosya` {P3} · `alt-etiket` {P1, N2, X1} · `harf-eki` {P1, N4, X1} · `fence` {N3, N3b} ·
+  `olculemedi-yok` {S1, S2, S3} · `kalin` {N1, P4, X1} · `tilde-fence` {N3b} · `backtick` {P4b} ·
+  `pattern-harf` {P5b}. Çıkış: 0 taban · 1 beklenen düşüş · 2 SAPMA · 3 DOĞRULANAMADI.
+  Son üç kip + N3b/P4b/P5b düzeltme turunda (2026-10-03, bug-gate Ö1) eklendi: `~~~` fence, ilk hücrede backtick
+  soyma ve `PATTERN` harf eki docstring'de iddia ediliyordu ama 16 vektörün hiçbiri ölçmüyordu (üç mutant da 16/16 yaşadı).
 - **Aileler (yalnız TANIM; atıf sayılmaz):** reçete başlığı `#… B<n>[a-z]` · `playbook/checklists/*.md` tablo
   ilk hücresi `<ÖNEK>-<n>[a-z]` (**dosyalar arası** tekillik; `**X**` = `X`) · `lessons-learned.md` `PATTERN #<n>` ·
   `governance/decisions/NNNN-*.md`. Kod bloğu içi atlanır. Çıktının KAPSAM BEYANI aile tablosundan basılır (dosya +
-  tanım + tekil sayısı + BAKILMAYAN satırı). 2026-10-03 paydası: B-no 77 · checklist 357 · PATTERN 36 · ADR 22.
+  tanım + tekil sayısı + BAKILMAYAN satırı). 2026-10-03 paydası: B-no 78 · checklist 357 · PATTERN 36 · ADR 22.
 - ⭐ **P1 GERÇEK ÇİFT:** pinli `c7d8b75` reçetesi → TAM {B18d :1001/:1110, B18e :1017/:1090}. `HEAD:` DEĞİL (zamana
   bağlı taban merge'de yok olur); sığ klonda `[ATLA]` yazar, sessiz geçmez.
 - ⛔ **SİLİNEMEZ FP çapaları:** **N2** (`### B0-SEÇİM` / `B4-Q352` TİRELE BİTİŞİK alt-etiket ayrı kimlik değil; kalkarsa
-  gerçek ağaç bugün 4 sahte çift verir) · **N3** (kod bloğu) · **N4** (`B18`/`B18b`/`B18d` ayrı) · **N5** (metin içi ve
+  gerçek ağaç bugün 4 sahte çift verir) · **N3/N3b** (kod bloğu ``` / `~~~`) · **N4** (`B18`/`B18b`/`B18d` ayrı) · **N5** (metin içi ve
   ikinci kolon atıfı tanım değil).
 - ⛔ **S1/S2 — ÖLÇÜLEMEDİ = rc 2:** aile kaynağı yoksa ya da 0 tanım verirse (biçim değişti) "çift yok" DENMEZ. **S3:**
   çift + ölçülemedi birlikte → rc 1, iki satır da basılır.
