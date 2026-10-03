@@ -298,9 +298,29 @@ def _bayatlari_sil(dizin: Path) -> None:
         pass
 
 
+_CTX_TAVAN = 900
+
+
+def _ctx_kur(secilen: list) -> str:
+    """additionalContext metni — TAVANDA kırpılmış SON hâli (basılan ve kayda esas olan TEK metin)."""
+    satirlar = [f"· {k['baslik']} — {k['oz'][:90]}  [{k['kaynak']}]" for _s, k in secilen]
+    ctx = ("[JIT-RECALL] Göreve-ilişkin OLASI dersler (indeks; gerekirse kaynağı oku, "
+           "alakasızsa yok say):\n" + "\n".join(satirlar))
+    return ctx[:_CTX_TAVAN]
+
+
+def _gorunen(secilen: list) -> list:
+    """Kırpılmış ctx'te BAŞLIĞI TAM görünen dersler. Kırpma 3. dersin başlığını yarıda kesebilir
+    ya da satırı tümden düşürebilir (bug-gate #316: 2.966 gerçek ekin 670'i 900'de kesik, 25'inde
+    son başlık yarıda) — görünmeyen ders "gösterildi" SAYILMAZ (B3b değişmezi)."""
+    ctx = _ctx_kur(secilen)
+    return [x for x in secilen if f"\n· {x[1]['baslik']} —" in ctx]
+
+
 def _tekrar_bastir(proj: Path, data: dict, adaylar: list) -> list:
     """K1: bu bağlam penceresinde ZATEN basılmış dersleri `adaylar`dan (TOP_K) düşürür.
-    Pencere kanıtlanamazsa `adaylar` AYNEN döner. HİÇBİR koşulda istisna fırlatmaz."""
+    Pencere kanıtlanamazsa `adaylar` AYNEN döner. HİÇBİR koşulda istisna fırlatmaz.
+    Kayda YALNIZ kırpılmış çıktıda başlığı tam görünen dersler yazılır (`_gorunen`)."""
     try:
         sid = _SID_RE.sub("", str(data.get("session_id") or ""))[:80]
         tp = data.get("transcript_path")
@@ -332,7 +352,7 @@ def _tekrar_bastir(proj: Path, data: dict, adaylar: list) -> list:
             gecici = dizin / (sid + ".json.tmp")
             gecici.write_text(json.dumps({
                 "tp": tp, "tp_ofs": ofs,
-                "gosterilen": sorted(gosterilen | {_ders_kimligi(k) for _s, k in basilacak})},
+                "gosterilen": sorted(gosterilen | {_ders_kimligi(k) for _s, k in _gorunen(basilacak)})},
                 ensure_ascii=False), encoding="utf-8")
             os.replace(str(gecici), str(yol))
         except Exception:
@@ -382,13 +402,9 @@ def main() -> int:
     secilen = _tekrar_bastir(proj, data if isinstance(data, dict) else {}, skorlu[:TOP_K])
     if not secilen:
         return 0                                # hepsi bu pencerede zaten basıldı
-    satirlar = [f"· {k['baslik']} — {k['oz'][:90]}  [{k['kaynak']}]"
-                for _s, k in secilen]
-    ctx = ("[JIT-RECALL] Göreve-ilişkin OLASI dersler (indeks; gerekirse kaynağı oku, "
-           "alakasızsa yok say):\n" + "\n".join(satirlar))
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "UserPromptSubmit",
-        "additionalContext": ctx[:900]}}, ensure_ascii=False))
+        "additionalContext": _ctx_kur(secilen)}}, ensure_ascii=False))
     return 0
 
 

@@ -2920,7 +2920,7 @@ python tests/run_battery.py recall_tekrar_bastirma --kardes recall_index_ozetsiz
 python tests/run_battery.py ajan_mesaji_onek --kardes recall_tekrar_bastirma
 ```
 
-- `recall_tekrar_bastirma` **26/26**; 9 kip, düşen kümeler `BEKLENEN_DUSUS`'te pinli ve EŞİTLİKLE
+- `recall_tekrar_bastirma` **29/29**; 10 kip, düşen kümeler `BEKLENEN_DUSUS`'te pinli ve EŞİTLİKLE
   kıyaslanır (CORE-07; kip → vektör listesi `infra-changelog.md` K1 satırında, burada tekrarlanmaz).
   Çıkış: 1 = beklenen kümeyle düştü · 2 = sapma / çapa tutmadı / mutant derlenmedi / kontrol grubu
   bozuk / korpus ÇÖKTÜ (çökme FAIL sayılmaz).
@@ -2931,6 +2931,10 @@ python tests/run_battery.py ajan_mesaji_onek --kardes recall_tekrar_bastirma
   Bu sırayı değiştiren bir Claude Code sürümü B5/B6'yı değil CANLI davranışı bozar — şüphede
   probu tekrarla: scratch proje + payload döken UPS/SessionStart/PreCompact hook'ları, prompt →
   `/compact` → prompt (`--resume <sid>`), her olayda transkriptteki sınır satırı sayısını yaz.
+- ⛔ **Kayıt = kırpılmış çıktıda BAŞLIĞI TAM görünen dersler** (#316): `ctx[:900]` 3. dersi yarıda
+  kesebilir ya da düşürebilir. B22/B22b bu sahneyi hesaplanmış başlık boylarıyla kurar ve kırpmanın
+  GERÇEKTEN oluştuğunu ön-koşul olarak ölçer — başlık metnini ya da çıktı tavanını değiştirirsen
+  boyları yeniden hesapla (ön-koşul FAIL'i sahte yeşili önler, onarım değildir).
 - ⛔ **Sahte sınır üç katmanlıdır, her katman AYRI vektörle ölçülür:** B7 kaçışlı string (iki
   katman da korur — tek başına hiçbir mutasyonu öldürmez) · B8 iç içe yapısal nesne (yalnız satır
   doğrulaması) · B9 yarım son satır (yalnız tırnaklı desen).
@@ -2942,5 +2946,8 @@ python tests/run_battery.py ajan_mesaji_onek --kardes recall_tekrar_bastirma
 - **Canlıda gözlem:** `<proje>/.tmp/recall-shown/<session_id>.json` (`tp`, `tp_ofs`,
   `gosterilen`). Dosya yoksa ya da `gosterilen` her prompt'ta sıfırlanıyorsa bastırma fail-open
   dalındadır (payload'da `session_id`/`transcript_path` yok ya da transkript okunamıyor).
+- **BİLİNEN SINIR (rewind/fork):** Esc-Esc düzenlemesi `compact_boundary` üretmez → terk edilen
+  dalda basılan ders yeni dalda bir sonraki compact'a kadar bastırılır (50 transkriptte 1 vaka;
+  ayrıntı `infra-changelog.md` K1 Test-senaryosu (8)). Fixture'da vektörü YOK, kod bilinçli değişmedi.
 - **ÖLÇÜLMEDİ:** interaktif oturumda compact anındaki hook sırası (yalnız print kipi + gerçek
   transkriptlerde dolaylı) · aynı oturumun eşzamanlı UPS çağrıları (harness prompt'ları sıralı işler).

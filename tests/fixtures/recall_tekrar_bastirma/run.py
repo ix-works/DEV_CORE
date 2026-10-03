@@ -43,6 +43,10 @@ VEKTORLER
       15'ten sonra compact -> (a) ayni pencerede tekrar = 0 (b) compact sonrasi her ders
       yeniden gorunur; karakter ozeti bilgi olarak basilir
   B21 3. BAGLAM: CRLF satir sonlu transkriptte compact_boundary yine sifirlar
+  B22 ⭐ ctx[:900] kirpmasi 3. dersin BASLIGINI yarida keser -> o ders "gosterildi" SAYILMAZ,
+      sonraki prompt'ta basilir (bug-gate #316; on-kosul: kirpma gercekten olustu)
+  B22b ayni, 3. ders satiri TUMDEN duser
+  B22c ayni sahnede TAM gorunen dersler yine bastirilir (duzeltme kaydi bosaltmaz)
 
 KOSUM:
     python tests/fixtures/recall_tekrar_bastirma/run.py [--mutasyon-<kip>]
@@ -105,6 +109,9 @@ CAPA = {
     "--mutasyon-budama-yok": (
         "            if yeni_dosya:\n                _bayatlari_sil(dizin)\n",
         "            if False:  # MUTASYON: budama sokuldu\n                _bayatlari_sil(dizin)\n"),
+    "--mutasyon-gorunur-yok": (
+        "{_ders_kimligi(k) for _s, k in _gorunen(basilacak)}",
+        "{_ders_kimligi(k) for _s, k in basilacak}"),
     "--mutasyon-yazma-fail-closed": (
         "            pass                                # yazılamadı",
         "            return []  # MUTASYON: yazma hatasi dersi yutar"),
@@ -113,7 +120,8 @@ CAPA = {
 # sid-ortak: B1/B13/B16 kayit DOSYA ADINI (= oturum anahtarini) olcer; B10b davranisi olcer.
 # one-cikar: mutant TUM adaylari "gosterildi" yazar -> B3 (one cikti) + B3b (basilmayan yutuldu).
 BEKLENEN_DUSUS = {
-    "--mutasyon-dedup-yok": {"B2", "B3", "B4", "B5b", "B7", "B8", "B9", "B10b", "B17b", "B19a"},
+    "--mutasyon-dedup-yok": {"B2", "B3", "B4", "B5b", "B7", "B8", "B9", "B10b", "B17b", "B19a",
+                             "B22c"},
     "--mutasyon-sifirlama-yok": {"B5", "B6", "B17c", "B19b", "B21"},
     "--mutasyon-satir-dogrulama-yok": {"B8"},
     "--mutasyon-tirnaksiz-desen": {"B9"},
@@ -122,6 +130,8 @@ BEKLENEN_DUSUS = {
     "--mutasyon-one-cikar": {"B3", "B3b"},
     "--mutasyon-budama-yok": {"B16"},
     "--mutasyon-yazma-fail-closed": {"B15"},
+    # #316 bug-gate: kirpilan ders kayda yazilirsa B22/B22b duser (eski kod da bu davranisti).
+    "--mutasyon-gorunur-yok": {"B22", "B22b"},
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -158,11 +168,19 @@ P2 = "bravo ekko foxt konusunda bir sey soracagim lutfen bak"
 P3 = "golf hotel indi julet konusunda bir sey soracagim lutfen bak"
 
 
-def proje_kur(kok: Path) -> Path:
+def _uzun(ad: str, tekrar: int, boy: int) -> dict:
+    """Basligi `boy` karakter olan kayit (kirpma sahnesi B22)."""
+    k = _k(ad, tekrar)
+    k["baslik"] = (ad + " " + "t" * boy)[:boy]
+    return k
+
+
+def proje_kur(kok: Path, kayitlar: list | None = None) -> Path:
     proj = kok / "proje"
     (proj / ".tmp").mkdir(parents=True, exist_ok=True)
     hp = proj / ".tmp" / "recall-index.json"
-    hp.write_text(json.dumps({"v": 1, "kayit": KAYITLAR}), encoding="utf-8")
+    hp.write_text(json.dumps({"v": 1, "kayit": KAYITLAR if kayitlar is None else kayitlar}),
+                  encoding="utf-8")
     ileri = time.time() + 30 * 86400       # gelecege damga -> tazeleme KOSMAZ, yalniz secim olculur
     os.utime(hp, (ileri, ileri))
     (kok / "cfg").mkdir(exist_ok=True)
@@ -438,6 +456,36 @@ def vektorler(hook: Path) -> None:
     rc, out, _ = hook_kos(hook, proj9, P1, "sid-9", tp9)
     ekle("B21", "CRLF transkriptte compact_boundary sifirlar", dersler(out) == ["alfa", "bravo", "carli"],
          f"d={dersler(out)}")
+
+    # B22 ctx[:900] KIRPMASI (bug-gate #316): kirpilip gorunmeyen ders "gosterildi" SAYILMAZ.
+    # Boylar hesapla secildi; on-kosul (kirpma GERCEKTEN oldu mu) ayrica olculur — olmadiysa
+    # vektor sahte-yesil olurdu.
+    for etiket, boy_ab, beklenen_parca in (("B22", 330, True), ("B22b", 368, False)):
+        kokk = _tmp()
+        projk = proje_kur(kokk, [_uzun("alfa", 7, boy_ab), _uzun("bravo", 6, boy_ab),
+                                 _uzun("carli", 5, 200)])
+        tpk = kokk / "sk.jsonl"
+        rc, out, _ = hook_kos(hook, projk, P0, "sid-k", tpk)
+        d = dersler(out)
+        try:
+            ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        except Exception:
+            ctx = ""
+        parca = ("\n· carli" in ctx) if beklenen_parca else ("carli" in ctx)
+        on_kosul = len(ctx) == 900 and d == ["alfa", "bravo"] and parca == beklenen_parca
+        tp_ekle(tpk, [_kullanici(P0)])
+        d2 = dersler(hook_kos(hook, projk, "carli konusunda ayrica bir sey soracagim lutfen bak",
+                              "sid-k", tpk)[1])
+        ad = ("3. dersin BASLIGI yarida kesildi -> sonraki prompt'ta carli basilir" if beklenen_parca
+              else "3. ders tumden dustu -> sonraki prompt'ta carli basilir")
+        ekle(etiket, ad, on_kosul and d2 == ["carli"],
+             f"on_kosul={on_kosul} (len={len(ctx)} d={d} parca={parca}) d2={d2}")
+        if not beklenen_parca:
+            tp_ekle(tpk, [_kullanici("x")])
+            d3 = dersler(hook_kos(hook, projk, "alfa bravo konusunda yine bir sey soracagim lutfen",
+                                  "sid-k", tpk)[1])
+            ekle("B22c", "kirpma sahnesinde TAM gorunen dersler (alfa,bravo) yine bastirilir",
+                 d3 == [], f"d3={d3}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
