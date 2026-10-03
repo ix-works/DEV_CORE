@@ -132,20 +132,25 @@ Birden çok proje aynı makinedeyse: `--root <kök>` hepsini listeler/damgalar.
 python core/scripts/seed_memory.py --dry-run
 ```
 
-**Beklenen:** `Eklendi : 0` (adım 3 tohumladı) + `Atlandı : N (zaten mevcut, korundu)`.
-`Eklendi` 0 değilse tohum adımı koşmamıştır → `python core/scripts/seed_memory.py` ile koş,
-sonra `--dry-run`'ı tekrarla.
+**Beklenen:** `Eklendi : 0` + `Güncellenecek : 0` (adım 3 tohumladı ve güncelledi) +
+`Atlandı : N (zaten mevcut, korundu)`. `Eklendi`/`Güncellenecek` 0 değilse tohum adımı koşmamıştır
+→ `python core/scripts/seed_memory.py` ile koş, sonra `--dry-run`'ı tekrarla.
 
-⚠ Tohum **merge-safe**: bu makinede yazılmış hiçbir ders ezilmez, `MEMORY.md`'ye yalnız **eksik**
-satırlar eklenir. `--force` KULLANMA.
+⚠ Tohum **merge-safe**: bu makinede yazılmış ya da düzenlenmiş hiçbir ders ezilmez, `MEMORY.md`'ye
+yalnız **eksik** satırlar eklenir. `--force` KULLANMA.
 
-⛔ **BİLİNEN SINIR — tohumda GÖVDESİ değişen dosya bu makineye ULAŞMAZ** (ölçüldü 2026-10-03;
-`seed_memory` düzeltilene dek geçerli, kayıt `governance/infra-changelog.md` → `claude/skills/playwright-cli … memory-seed`
-bölümü). Merge-safe kopyalama var olan dosyayı atlar ⇒ `Atlandı : N (zaten mevcut, korundu)`
-ve `[OK] Her şey güncel` **"yerel kopya güncel" DEMEK DEĞİLDİR**. `--terfi-adaylari` da bunu
-ayırt edemez: adım 3'teki koşum manifest'e yeni sha yazdığı için eski kopya *"(a) yerelde
-düzenlenmiş"* kovasında görünür. Sınır yalnız changelog'da anılan dosyalarla sınırlı DEĞİLDİR —
-denetim **bütün tohum dosyalarını** tarar (`MEMORY.md` hariç: o kullanıcının indeksidir, silinmez):
+**Gövde güncellemesi (core #318, 2026-10-03):** tohumda gövdesi değişen dosya, yerel kopya
+`.seed-manifest.json`'daki sha ile **bayt-bayt aynıysa** (bu makinede dokunulmamış) tohumun yeni
+hâliyle yazılır → özette `Güncellendi : N` + ad listesi. Yerel kopya düzenlenmişse ya da manifest
+kaydı yoksa dosyaya **dokunulmaz** ve son satır `[UYARI] N tohum dosyası elle birleştirme bekliyor`
+olur (team_setup çıktısında da bu satır görünür) — listedeki dosyayı tohumla **elle birleştir**;
+yerelde zenginleştirilmiş içerik varsa koru. `[UYARI]` varken çıktı *"her şey güncel"* DEMEZ.
+
+⛔ **TEK SEFERLİK KURTARMA — #318 ÖNCESİ tohumlanmış makine:** eski sürüm atlanan dosyaya da
+**yeni** sha'yı manifest'e yazıyordu ⇒ o makinede eski gövdeli kopya artık "dokunulmamış" olarak
+tanınmaz (araç onu düzenlenmiş/yerel-ileri sayar ve güncellemez; `seed_memory.py --help` SINIR
+notu). Bu makinede #318 sonrası **ilk** güncellemede aşağıdaki döngüyü bir kez koş — bütün tohum
+dosyalarını tarar (`MEMORY.md` hariç: o kullanıcının indeksidir, silinmez):
 
 ```bash
 C=core ; M=<bu makinenin memory dizini>
@@ -163,6 +168,8 @@ done
 bitince `seed_memory.py`'yi bir kez koş. `ELLE` = yerel kopya bu makinede düzenlenmiştir →
 ⛔ **SİLME**, tohumla elle birleştir. Güncel olan ve yerelde bulunmayan dosya basılmaz.
 ⛔ Denetimsiz *"sil + yeniden koş"* talimatı verme: yerelde zenginleştirilmiş ders kaybolur.
+Silinip yeniden tohumlanan dosyanın manifest kaydı tohum sha'sıyla yazılır ⇒ sonraki
+güncellemeler yine otomatik akar.
 
 ⭐ **TERS YÖN (Q325):** yukarıdaki adım yalnız *tohum → makine* yönünü doğrular. Bu makinede
 yazılmış bir dersin tohuma girip girmediğini `python core/scripts/seed_memory.py --terfi-adaylari`
