@@ -44,10 +44,14 @@ BILINEN SINIR (kaydin kendi kapsam-disi maddesi): turunu bitirmis ama ENGELLENMI
    tool_use yoktur. Onu brifingdeki "ENGELLENIRSEN DERHAL bildir" maddesi kapsar.
    Ayrica taban ONCESI asilmis bir ajan da yakalanmaz (bilincli tasarim).
 
-CIKTI — yalniz OLAY basar (STATUS seli yok, popup yok). Uc olay turu:
+CIKTI — yalniz OLAY basar (STATUS seli yok, popup yok). Bes olay turu:
    ASILI? <ajan> <arac> N dk -> SendMessage probe, cevap yoksa TaskStop
    COZULDU <ajan> <arac> (N dk sonra sonuc geldi)
+   DONGU? <ajan> N ardisik max_tokens turu (arada tool_use yok)      [2026-10-03]
+   IPTAL? <ajan> ~600 sn sonra 'interrupted' kaydi -> ajan oldu       [2026-10-03]
    OLCULEMEDI <sebep>
+   Son ikisi bekleyen tool_use OLMAYAN takilmalardir (ASILI? onlari yapisal olarak
+   goremez); gerekce + kaynak: `_imza_izle` ustundeki blok.
    Aksiyon olayin ICINDE yazilidir (aksiyon sahibi = lider; removed-controls satir
    25'in ucuncu yeniden-acma sarti).
 
@@ -125,13 +129,14 @@ def ajan_adi(dosya: Path) -> str:
         return dosya.stem
 
 
-def transkript_tara(dosya: Path) -> tuple[list[dict], list[str]]:
-    """Bir transkripti tara -> (bekleyen tool_use listesi, olculemedi sebepleri)."""
+def transkript_tara(dosya: Path) -> tuple[list[dict], list[str], list[dict]]:
+    """Bir transkripti tara -> (bekleyen tool_use, olculemedi sebepleri, imza olaylari)."""
     try:
         ham = dosya.read_text(encoding="utf-8", errors="replace")
     except Exception as e:  # okunamayan dosya SESSIZ GECILMEZ
-        return [], [f"okunamadi {dosya.name}: {type(e).__name__}"]
+        return [], [f"okunamadi {dosya.name}: {type(e).__name__}"], []
     sebepler: list[str] = []
+    imza: dict = {"seri": [], "olay": [], "onceki": None}
     # ⛔ splitlines() DEGIL (canli korpusta olculdu, 2026-09-17): JSONL kayitlari
     # YALNIZ "\n" ile ayrilir, ama str.splitlines() Unicode satir sinirlarini da
     # boler (\x0b \x0c \x1c \x1d \x1e \x85    ). Bir ajanin Bash komutu
@@ -157,6 +162,7 @@ def transkript_tara(dosya: Path) -> tuple[list[dict], list[str]]:
         if not isinstance(m, dict):
             continue
         icerik = m.get("content")
+        _imza_izle(d, m, icerik, imza)
         if not isinstance(icerik, list):
             continue
         for b in icerik:
@@ -195,25 +201,75 @@ def transkript_tara(dosya: Path) -> tuple[list[dict], list[str]]:
     if any(b["ts"] is None for b in bekleyen):
         sebepler.append(f"zaman-damgasi-yok {dosya.name}")
         bekleyen = [b for b in bekleyen if b["ts"] is not None]
-    return bekleyen, sebepler
+    return bekleyen, sebepler, [dict(o, dosya=dosya) for o in imza["olay"]]
+
+
+# ── IKI TAKILMA IMZASI (2026-10-03) — ikisi de ILERLEME olcer, sessizlik DEGIL ──
+# DONGU? : art arda >=2 assistant turu `stop_reason: max_tokens` ve aralarinda HIC
+#   tool_use yok (Claude Code issue #97647: ajan 4 tur x 64k dusunme tokeni yakti,
+#   38 dk dosya/metin uretmedi; akis canli oldugu icin ne harness'in watchdog'u ne
+#   ASILI? kurali gordu — bekleyen tool_use YOKTUR). Bu korpusta ornek YOK (881 alt-ajan
+#   transkriptinde 0 max_tokens turu, 2026-10-03) -> bicim issue'dan alindi.
+# IPTAL? : `[Request interrupted by user...]` metinli user kaydi, onceki user/assistant
+#   kaydindan IPTAL_ARALIK_SN icinde (issue #84346: 13/14 vakada 600,0-605,6 sn =
+#   harness'in ~600 sn watchdog'u; kullanici kesmesi rastgele aralik verir). Ajan
+#   OLMUSTUR ve rapor gelmeyecektir. Bu korpusta 5 kesme kaydi var, araliklari
+#   0-43 sn (lider TaskStop/ESC) -> hicbiri pencereye dusmez = negatif kontrol.
+DONGU_ESIK = 2
+IPTAL_ARALIK_SN = (595.0, 620.0)
+KESME_ONEKI = "[Request interrupted by user"
+
+
+def _imza_izle(d: dict, m: dict, icerik, imza: dict) -> None:
+    """Tek kaydi iki imza icin isler; durum `imza` sozlugunde (dosya basina)."""
+    ts = _zaman(d.get("timestamp"))
+    bloklar = icerik if isinstance(icerik, list) else (
+        [{"type": "text", "text": icerik}] if isinstance(icerik, str) else [])
+    if d.get("type") == "assistant":
+        if any(isinstance(b, dict) and b.get("type") == "tool_use" for b in bloklar) \
+                or m.get("stop_reason") in ("tool_use", "end_turn"):
+            imza["seri"] = []                       # ilerleme var -> seri kirilir
+        elif m.get("stop_reason") == "max_tokens" and ts is not None:
+            kimlik = m.get("id") or d.get("uuid")   # parcali kayit tek tur sayilir
+            if kimlik not in [k for k, _ in imza["seri"]]:
+                imza["seri"].append((kimlik, ts))
+            if len(imza["seri"]) >= DONGU_ESIK:
+                imza["olay"] = [o for o in imza["olay"]
+                                if o["id"] != "dongu:" + str(imza["seri"][0][0])]
+                imza["olay"].append({"tur": "DONGU", "id": "dongu:" + str(imza["seri"][0][0]),
+                                     "ts": ts, "n": len(imza["seri"])})
+    if d.get("type") == "user" and ts is not None:
+        kesme = any(isinstance(b, dict) and b.get("type") == "text"
+                    and str(b.get("text") or "").lstrip().startswith(KESME_ONEKI)
+                    for b in bloklar)
+        onceki = imza.get("onceki")
+        if kesme and onceki is not None:
+            aralik = (ts - onceki).total_seconds()
+            if IPTAL_ARALIK_SN[0] <= aralik <= IPTAL_ARALIK_SN[1]:
+                imza["olay"].append({"tur": "IPTAL", "id": "iptal:" + str(d.get("uuid")),
+                                     "ts": ts, "sn": aralik})
+    if d.get("type") in ("user", "assistant") and ts is not None:
+        imza["onceki"] = ts
 
 
 def yokla(kok: Path, proje: str | None,
-          seans: str | None) -> tuple[list[dict], list[str]]:
-    """Tek yoklama -> (bekleyen cagrilar, olculemedi sebepleri). Salt-okur."""
+          seans: str | None) -> tuple[list[dict], list[str], list[dict]]:
+    """Tek yoklama -> (bekleyen cagrilar, olculemedi sebepleri, imza olaylari). Salt-okur."""
     if not kok.exists():
-        return [], [f"kok-yok {kok}"]
+        return [], [f"kok-yok {kok}"], []
     desen = f"{proje or '*'}/{seans or '*'}/subagents/*.jsonl"
     dosyalar = sorted(kok.glob(desen))
     if not dosyalar:
-        return [], [f"kapsam-sifir {kok} ({desen}) - 0 transkript gorulebilir"]
+        return [], [f"kapsam-sifir {kok} ({desen}) - 0 transkript gorulebilir"], []
     bekleyen: list[dict] = []
     sebepler: list[str] = []
+    imzalar: list[dict] = []
     for f in dosyalar:
-        b, s = transkript_tara(f)
+        b, s, im = transkript_tara(f)
         bekleyen.extend(b)
         sebepler.extend(s)
-    return bekleyen, sebepler
+        imzalar.extend(im)
+    return bekleyen, sebepler, imzalar
 
 
 class Bekci:
@@ -225,8 +281,31 @@ class Bekci:
         self.taban = taban
         self.bildirilen: dict[tuple[str, str], dict] = {}
         self.bildirilen_sebep: set[str] = set()
-        self.sayac = {"asili": 0, "cozuldu": 0, "olculemedi": 0, "yoklama": 0}
+        self.bildirilen_imza: set[tuple[str, str]] = set()
+        self.sayac = {"asili": 0, "cozuldu": 0, "olculemedi": 0, "yoklama": 0,
+                      "dongu": 0, "iptal": 0}
         self.olculdu = False
+
+    def imza_olaylari(self, imzalar: list[dict]) -> list[str]:
+        """DONGU?/IPTAL? — taban sonrasi + bir kez (ayni seri/kayit tekrar basilmaz)."""
+        olaylar: list[str] = []
+        for o in sorted(imzalar, key=lambda x: x["ts"]):
+            anahtar = (str(o["dosya"]), o["id"])
+            if anahtar in self.bildirilen_imza or (
+                    self.taban is not None and o["ts"] < self.taban):
+                continue
+            self.bildirilen_imza.add(anahtar)
+            ad = ajan_adi(o["dosya"])
+            if o["tur"] == "DONGU":
+                self.sayac["dongu"] += 1
+                olaylar.append(f"DONGU? {ad} {o['n']} ardisik max_tokens turu, arada arac "
+                               f"cagrisi yok -> SendMessage probe, cevap yoksa TaskStop")
+            else:
+                self.sayac["iptal"] += 1
+                olaylar.append(f"IPTAL? {ad} {o['sn']:.0f} sn sonra 'interrupted' kaydi "
+                               f"(~600 sn harness watchdog) -> ajan OLDU, rapor gelmez: "
+                               f"SendMessage ile surdur ya da yeniden spawn")
+        return olaylar
 
     def tur(self, bekleyen: list[dict], sebepler: list[str],
             simdi: _dt.datetime) -> list[str]:
@@ -282,10 +361,13 @@ def korpus_olcumu(kok: Path) -> int:
         return 2
     son_tip: dict[str, int] = {"text": 0, "tool_result": 0, "tool_use": 0, "?": 0}
     eslesmemis = 0
+    imza_say = {"DONGU": 0, "IPTAL": 0}
     for f in dosyalar:
-        bekleyen, _ = transkript_tara(f)
+        bekleyen, _, imzalar = transkript_tara(f)
         if bekleyen:
             eslesmemis += 1
+        for o in imzalar:
+            imza_say[o["tur"]] += 1
         t = "?"
         try:
             for satir in f.read_text(encoding="utf-8", errors="replace").split("\n"):
@@ -311,6 +393,8 @@ def korpus_olcumu(kok: Path) -> int:
     for k in ("text", "tool_result", "tool_use", "?"):
         v = son_tip.get(k, 0)
         print(f"  son blok {k:12s}: {v} ({v * 100 / n:.1f}%)", flush=True)
+    print(f"  imza dongu (max_tokens seri) : {imza_say['DONGU']} · imza iptal (~600 sn "
+          f"kesme): {imza_say['IPTAL']}  (taban filtresiz, tum korpus)", flush=True)
     return 0
 
 
@@ -362,16 +446,22 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[bekci] KAPSAM kok={kok} · filtre=proje:{a.proje or '*'}/seans:{a.seans or '*'} · "
           f"esik={a.esik_dk:g} dk · aralik={a.aralik_sn:g} sn · sure={a.sure_dk:g} dk · "
           f"taban={taban.isoformat()}", flush=True)
-    print("[bekci] BAKMADIGI: taban ONCESI dogmus arac cagrilari (eski transkript "
+    # Olay token'lari ("DONGU?"/"IPTAL?") bu satirda GECMEZ (S17: grep uyari korlugu).
+    print(f"[bekci] IMZALAR: dongu = >={DONGU_ESIK} ardisik max_tokens turu, arada "
+          f"tool_use yok (#97647) · iptal = '{KESME_ONEKI}...' kaydi onceki kayittan "
+          f"{IPTAL_ARALIK_SN[0]:g}-{IPTAL_ARALIK_SN[1]:g} sn sonra (#84346)", flush=True)
+    print("[bekci] BAKMADIGI: taban ONCESI dogmus arac cagrilari/imzalar (eski transkript "
           "kalintilari) · turunu bitirmis ama ENGELLENMIS ajan (bekleyen tool_use yok) · "
-          "ana oturum (yalniz subagents/) · ajanin ICERIGI (yalniz ilerleme olculur)",
-          flush=True)
+          "ana oturum (yalniz subagents/) · ajanin ICERIGI (yalniz ilerleme olculur) · "
+          "TEK max_tokens turu · pencere DISI kesmeler (lider TaskStop/ESC) · harness'in "
+          "kaydetmedigi oldurmeler", flush=True)
 
     bekci = Bekci(esik_dk=a.esik_dk, taban=taban)
     bitis = time.monotonic() + a.sure_dk * 60.0
     while True:
-        bekleyen, sebepler = yokla(kok, a.proje, a.seans)
-        for olay in bekci.tur(bekleyen, sebepler, _simdi()):
+        bekleyen, sebepler, imzalar = yokla(kok, a.proje, a.seans)
+        for olay in (bekci.tur(bekleyen, sebepler, _simdi())
+                     + bekci.imza_olaylari(imzalar)):
             damga = _dt.datetime.now().strftime("%H:%M:%S")
             print(f"[{damga}] {olay}", flush=True)
         if a.tek_atim or time.monotonic() >= bitis:
@@ -384,7 +474,8 @@ def main(argv: list[str] | None = None) -> int:
     # bile) = uyari korlugu. Olculdu: fixture'in ilk surumu tam bu yuzden 4 sahte
     # sonuc uretti (2026-09-17).
     print(f"[bekci] BITTI - {s['yoklama']} yoklama · asili={s['asili']} · "
-          f"cozuldu={s['cozuldu']} · olculemedi={s['olculemedi']}", flush=True)
+          f"cozuldu={s['cozuldu']} · olculemedi={s['olculemedi']} · "
+          f"dongu={s['dongu']} · iptal={s['iptal']}", flush=True)
     return 0 if bekci.olculdu else 2
 
 

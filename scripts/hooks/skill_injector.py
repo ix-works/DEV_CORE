@@ -74,6 +74,15 @@ _AUTO_EVENT_MARKERS = (
     "[SYSTEM NOTIFICATION - NOT USER INPUT]",
 )
 
+# Q-ITG-PEER (2026-10-03): ajan/oturum mesajı teslim önekleri — BAŞTA aranır (içerikte
+# değil). Ölçüm + gerekçe: intake_triage.py `_AUTO_EVENT_ONEKLER` (kardeş; ikisi birlikte
+# değişir). Bu hook'ta ölçülen: tarayıcı notu 324 ateşlemenin en az 206'sı ve yapısal
+# arama notu 34'ün en az 23'ü "Another Claude session sent a message" promptundan.
+_AUTO_EVENT_ONEKLER = (
+    "Another Claude session sent a message",
+    "<agent-message from=",
+)
+
 
 def _parse_fail_notu() -> None:
     """Parse-fail dalinin SESSIZLIGINI kaldirir; exit 0 fail-safe'i AYNEN korunur.
@@ -101,6 +110,8 @@ def main() -> int:
 
     # B5: otomatik-event → enjeksiyon yok (task-notification'da "SAP işi" yanlış-pozitifi)
     if any(mk in prompt for mk in _AUTO_EVENT_MARKERS):
+        return 0
+    if prompt.lstrip().startswith(_AUTO_EVENT_ONEKLER):   # ajan/oturum mesajı (Q-ITG-PEER)
         return 0
 
     _folded = _fold(prompt)                       # diyakritik-bağımsız eşleşme

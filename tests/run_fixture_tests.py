@@ -438,6 +438,12 @@ OZEL_TESTLER = [
     ("intake_modul_carpismasi",
      "intake modul-ipucu: 'recete'/'kusur' metodoloji sozlugu carpismasi (FP 141->90, "
      "218->6 gercek korpusta) + POZITIF KONTROL (gercek PP/QM HALA yakalanir)"),
+    # 2026-10-03 (Q-ITG-PEER): ajan/oturum mesaji teslim onekleri ("Another Claude
+    # session sent a message" · "<agent-message from=") intake_triage + skill_injector'u
+    # yanlis atesliyordu (1450 ITG ateslemesinin 1186'si). hook_shim uzerinden kosulur.
+    ("ajan_mesaji_onek",
+     "UPS nudge hook'lari: ajan mesaji oneki BASTA -> sessiz; insan talebi/alintisi "
+     "HALA atesler (intake_triage + kardes skill_injector)"),
     # 2026-08-21: JIT-recall indeksi ozetsiz memory satirlarini GORMUYORDU (90/147) VE
     # ozetsiz satir bir SONRAKI satirin metnini `oz` diye yutuyordu (42/90 kirlenmisti).
     ("recall_index_ozetsiz",
@@ -1006,9 +1012,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "oturum kimligi cozulemedigi zaman dedup anahtarinin BOS yazilmasi = kalici "
      "susma; ITG kapisinin ates/sus ayrimi bu korpusta olculur"),
     ("scripts/hooks/intake_triage.py",
-     ("O:intake_modul_carpismasi", "O:negatif_test_harness", "O:bos_seans_markeri"),
+     ("O:intake_modul_carpismasi", "O:negatif_test_harness", "O:bos_seans_markeri",
+      "O:ajan_mesaji_onek"),
      "modül-ipucu regex'i ↔ metodoloji sözlüğü çarpışması (POZİTİF KONTROL zorunlu: "
-     "daraltma gerçek PP/QM talebini hâlâ yakalamalı) + parse-fail sözleşmesi"),
+     "daraltma gerçek PP/QM talebini hâlâ yakalamalı) + parse-fail sözleşmesi + "
+     "ajan mesajı öneki süzgeci (Q-ITG-PEER)"),
+    ("scripts/hooks/skill_injector.py", ("O:ajan_mesaji_onek",),
+     "ajan mesajı öneki süzgeci — intake_triage ile AYNI sözleşme (kardeş, Q-ITG-PEER)"),
     ("scripts/hooks/*.py", ("O:negatif_test_harness", "O:hook_gate_coverage"),
      "17 hook'un parse-fail sözleşmesi tek korpusta ölçülür + her hook `# ENFORCES:` "
      "beyanı taşımalı ve settings.template.json'a kablolu olmalı (ADR 0019 hook katmanı)"),
