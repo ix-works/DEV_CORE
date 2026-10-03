@@ -70,7 +70,7 @@ başlamadan önce aktif paketin son durumunu oku.
 
 | Konu | Dosya |
 |---|---|
-| AI davranışı (git, ADT işlem sırası, oturum protokolü) | `AGENTS.md` (L1) |
+| AI davranışı (git, ADT işlem sırası, oturum protokolü) | `CLAUDE.core.md` §1.1/§3 (L1a) + `claude/rules/sap-source-protokolu.md` (L1b) |
 | Naming standardı | `standards/01-naming.md` (L2) |
 | Klasik backend (SEGW/FE) kodlama | `standards/02-coding-backend.md` |
 | RAP kodlama (view entity/BDEF/servis/publish) | `standards/05-coding-rap.md` |
@@ -145,7 +145,7 @@ referanslarını oku — `tables.md` (kilit tablolar), `bapi.md` (released BAPI/
 ```
 Kapsam tek paket mi?  → evet: ERP/<MODULE>/<PKG>/.rules.md
                        → hayır ↓
-Tip ne?  AI davranışı → AGENTS.md · stabil standart → standards/
+Tip ne?  AI davranışı → CLAUDE.core.md §1.1 / claude/rules/ · stabil standart → standards/
          operasyonel "nasıl" → playbook/ · mimari karar → governance/decisions/
 ```
 

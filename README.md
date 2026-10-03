@@ -28,7 +28,8 @@ ix-works/<PROJECT_NAME> ─clone─► C:\IX\<PROJECT_NAME>\
 | Klasör | İçerik |
 |---|---|
 | `CLAUDE.core.md` | Çekirdek loader — yasaklar (ADR 0005), session protokolü, SORU 0, gate tablosu. Projelere import ile DEĞİL, `team_setup`'ın ürettiği fiziksel kopya `.claude/rules/00-claude-core.md` olarak girer (Q286) |
-| `AGENTS.md` | L1 — agent davranış kuralları (git, ADT işlem sırası, ADT-infra) |
+| `AGENTS.md` | **EMEKLİ (SUPERSEDED 2026-08-01, D1)** — otomatik yüklenmez; içeriği `CLAUDE.core.md` §1.1 + `claude/rules/` + `MAINTENANCE.md`'ye taşındı. Tarihçedir, güncel kural kaynağı DEĞİL |
+| `claude/rules/` | L1b — dosya-türüne bağlı agent davranışı (SAP kaynak protokolü, UI5, …; `paths:` ile tembel yüklenir) |
 | `standards/` | L2 — kurumsal standartlar (naming, backend, RAP, UI5, klasik dialog, FS/TS, forms…) |
 | `playbook/` | L3 — ADT pattern bankası, lessons-learned, checklists, kod template'leri |
 | `profiles/` | SAP profil yetenek matrisi (`ecc / s4_private / s4_public / btp_abap`) — içerik `applies_to:` etiketiyle profile bağlanır |
@@ -121,7 +122,7 @@ bilinçli istisnadır).
 
 ## Kilit dokümanlar
 
-[`CLAUDE.core.md`](CLAUDE.core.md) · [`AGENTS.md`](AGENTS.md) ·
+[`CLAUDE.core.md`](CLAUDE.core.md) · [`claude/rules/`](claude/rules/) ·
 [`ONBOARDING.md`](ONBOARDING.md) · [`MAINTENANCE.md`](MAINTENANCE.md) ·
 [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) ·
 [`governance/decisions/`](governance/decisions/) (mimari gerekçeler — ADR 0003 katmanlar,

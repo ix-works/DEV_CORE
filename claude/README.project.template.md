@@ -30,9 +30,9 @@ satır yoktur — `.gitignore`, pre-commit ve CI (`guard.yml`) bunu üç katmand
 | Katman | Nerede | Nasıl yüklenir |
 |---|---|---|
 | **Anayasa** (KESİN YASAKLAR) | kök `CLAUDE.md`, fiziksel damga | Her oturum; `/compact` sonrası diskten yeniden enjekte |
-| **L1a** her-oturum davranışı | `core/CLAUDE.core.md §1.1` | Her oturum (`@import`) |
+| **L1a** her-oturum davranışı | `core/CLAUDE.core.md §1.1` | Her oturum — fiziksel kopya `.claude/rules/00-claude-core.md` (Q286; `@import` DEĞİL — junction ardındaki import dış import sayılıp yüklenmiyordu) |
 | **L1b** dosya-türüne bağlı | `core/claude/rules/*.md` | **Eşleşen dosya okununca** (`paths:`) |
-| **L1c** derin referans | `core/AGENTS.md` | ⚠ **Otomatik YÜKLENMEZ** — açıkça okunmalı |
+| ~~**L1c**~~ | ~~`core/AGENTS.md`~~ — **SUPERSEDED (D1 2026-08-01)**: içerik §1.1 + `claude/rules/` + `MAINTENANCE.md`'ye taşındı; okumaya gerek yok | — |
 | **L2/L3** standart & playbook | `core/standards/`, `core/playbook/` | On-demand |
 | **L4** paket kuralı | `<source_root>/<MOD>/<PKG>/.rules.md` | On-demand |
 

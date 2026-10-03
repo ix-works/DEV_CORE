@@ -55,7 +55,7 @@ git clone https://github.com/<ORG>/XYZ.git C:\IX\XYZ
 workflow'u kurulup **AKTİF edilene dek** main'e doğrudan push mümkündür — bilinçli sıra:
 ruleset'i önce **DISABLED** durumda yarat → iskelet ilk push'u yap (STEP 6) → ruleset'i
 **ACTIVE** et. Aktifleşince main doğrudan-push'a kapanır; her sonraki değişiklik
-kısa-branch + PR + CI ile girer ([`AGENTS.md`](AGENTS.md) §1).
+kısa-branch + PR + CI ile girer ([`CLAUDE.core.md`](CLAUDE.core.md) §1.1 GIT).
 
 ## STEP 2 — `init_project.py` → iskeleti ÜRETİR (kopyalamaz)
 
@@ -190,7 +190,7 @@ main-pr-required (branch, ~DEFAULT_BRANCH):
 
 > **NOT:** `main-pr-required` ruleset'i **ACTIVE** edildikten sonra (STEP 1) main'e
 > doğrudan push KAPANIR → bu ilk push'tan sonraki her değişiklik kısa-ömürlü branch +
-> PR + CI ile girer ([`AGENTS.md`](AGENTS.md) §1). `repo_mode=local`'da push satırı,
+> PR + CI ile girer ([`CLAUDE.core.md`](CLAUDE.core.md) §1.1 GIT). `repo_mode=local`'da push satırı,
 > `repo_mode=none`'da tüm git satırları düşer (LITE akış).
 
 Uzak repoda metodolojiden TEK SATIR görünmez — sadece iskelet + proje içeriği.

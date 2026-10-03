@@ -22,6 +22,12 @@ OUT = Path(__file__).resolve().parents[1] / "governance" / "reference" / "releas
 # TADIR tipi -> JSON bölümü (validator 'tables'i tarar; gerisi referans/ileride)
 TYPE_SECTION = {"TABL": "tables", "CLAS": "classes", "FUGR": "functions",
                 "FUNC": "functions", "INTF": "interfaces"}
+# Bölüm SIRASI açık ve sabit: eskiden `set(TYPE_SECTION.values())` geziliyordu — dize hash'i
+# süreç başına rastgele olduğundan bölüm sırası her koşumda değişiyor, içerik AYNIYKEN dosyada
+# yüzlerce satırlık sahte diff üretiyordu (ölçüldü 2026-10-03: 3 koşu → 2 farklı sıra; içerik
+# farkı 0 iken diff 720 satır). Sıra, o tarihte repodaki dosyanınkiyle aynı tutuldu.
+SECTIONS = ("classes", "functions", "tables", "interfaces")
+assert set(SECTIONS) == set(TYPE_SECTION.values())
 RELEVANT_STATES = {"notToBeReleased", "deprecated", "released_with_restrictions"}
 
 def main():
@@ -36,7 +42,7 @@ def main():
         "note": "check_released_objects.py 'tables' kullanır. Çok-successor olabilir (MARA->I_Product+4). "
                 "Severity WARNING (ADR 0005-B READ yasak değil; Clean Core Level A tercihi).",
         "refresh": "python scripts/refresh_released_successors.py"}}
-    for sec in set(TYPE_SECTION.values()):
+    for sec in SECTIONS:
         out[sec] = {}
 
     n = 0
@@ -64,8 +70,16 @@ def main():
     # eskiden burada FileNotFoundError ile ölüyordu, harita hiç üretilmiyordu ve
     # check_released_objects.py boş harita ile SESSİZCE PASS veriyordu (fail-open).
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
-    counts = {s: len(out.get(s, {})) for s in set(TYPE_SECTION.values())}
+    # Bölüm İÇİ anahtarlar SIRALI: kaynak JSON'un kayıt sırası upstream sürümler arasında
+    # değişiyor (FPS02, 2026-09-28) ⇒ içerik aynıyken yine sahte diff (ölçüldü: 0 içerik
+    # farkı, 458 satır diff). Successor LİSTELERİNİN sırasına dokunulmaz (kaynak sırası korunur).
+    for sec in SECTIONS:
+        out[sec] = dict(sorted(out[sec].items()))
+    # newline="\n" ŞART: metin kipi Windows'ta her `\n`'i `\r\n` yapar; dosya
+    # `.gitattributes` `*.json text eol=lf` altında ⇒ her yenilemede tüm çalışma kopyası
+    # CRLF'e dönüyordu (ölçüldü 2026-10-03: 4702/4702 satır CRLF, harita içeriği aynıyken).
+    OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
+    counts = {s: len(out.get(s, {})) for s in SECTIONS}
     print(f"yazildi: {OUT}  | {n} obje | {counts}")
 
 if __name__ == "__main__":

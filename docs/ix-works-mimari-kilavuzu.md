@@ -243,7 +243,7 @@ olması genericize disiplinini zorunlu kılar (Bölüm 15.2).
 | Dosya | İçerik / işlev |
 |---|---|
 | `CLAUDE.core.md` | Çekirdek loader. Projede import EDİLMEZ; `team_setup` onu `.claude/rules/00-claude-core.md` fiziksel kopyası olarak üretir (Q286 — junction ardındaki `@core` import'u dış import sayılıp yüklenmiyordu). Katman özeti (L1a–L4), **§1.1 her-oturum davranış değişmezleri**, SAP profil modeli, oturum protokolü, T1–T11 + SORU 0, gate tablosu, dosya indeksi. |
-| `AGENTS.md` | **L1c — derin davranış referansı. OTOMATİK YÜKLENMEZ**; açıkça okunmalıdır. Git workflow detayı, ADT işlem sırası, obje→klasör eşlemesi, reviewer pre-flight ayrıntısı. |
+| `AGENTS.md` | **EMEKLİ — SUPERSEDED (D1 2026-08-01).** Eski L1c derin referansı; tekil içeriği taşındı: git → `CLAUDE.core.md` §1.1 · ADT işlem sırası, obje→klasör eşlemesi, reviewer pre-flight → `claude/rules/sap-source-protokolu.md` · ADT-altyapı kapsamı → `MAINTENANCE.md`. Kalan metin tarihçedir. |
 | `MAINTENANCE.md` | Canlı-çekirdek işletim el kitabı: PR/CI akışı, `stable` tag ile rollback, `project.yaml` anahtar kataloğu. |
 | `ONBOARDING.md` | Yeni/güncellenen geliştiriciyi ortamla senkron etme adımları. |
 | `PROJECT_BOOTSTRAP.md` | Yeni proje açılış prosedürü (STEP 0–6 + kabul kapısı). |
@@ -693,9 +693,9 @@ kaldırılması (teşvik edilir), zorlama yapmayan yardımcı araç.
 | Katman | Konu | Yer | **Nasıl yüklenir** |
 |---|---|---|---|
 | **Anayasa** | KESİN YASAKLAR (A/B/C/D) | kök `CLAUDE.md`, fiziksel damga | Her oturum; `/compact` sonrası diskten yeniden enjekte |
-| **L1a** | Her-oturum davranış değişmezleri | `CLAUDE.core.md §1.1` | Her oturum (`@import`) |
+| **L1a** | Her-oturum davranış değişmezleri | `CLAUDE.core.md §1.1` | Her oturum — fiziksel kopya `.claude/rules/00-claude-core.md` (Q286; `@import` DEĞİL) |
 | **L1b** | Dosya-türüne bağlı davranış | `claude/rules/*.md` | **Eşleşen dosya okununca** (`paths:`) |
-| **L1c** | Derin davranış referansı | `AGENTS.md` | ⚠ **Otomatik YÜKLENMEZ** |
+| ~~**L1c**~~ | ~~Derin davranış referansı~~ | ~~`AGENTS.md`~~ — **SUPERSEDED (D1 2026-08-01)**, içerik §1.1 + `claude/rules/` + `MAINTENANCE.md`'ye taşındı | — |
 | **L2** | Stabil kurumsal standartlar | `standards/` | On-demand |
 | **L3** | Operasyonel pattern | `playbook/` | On-demand |
 | **L4** | Paket-spesifik | `<source_root>/<MOD>/<PKG>/.rules.md` | On-demand |

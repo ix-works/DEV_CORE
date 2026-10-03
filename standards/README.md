@@ -49,4 +49,4 @@ status: active|deprecated
 
 - [`../playbook/`](../playbook/) — L3 operasyonel pattern bankası
 - [`../CLAUDE.core.md`](../CLAUDE.core.md) — Katman özetleri + session protokolü
-- [`../AGENTS.md`](../AGENTS.md) — L1 agent davranış kuralları
+- [`../claude/rules/`](../claude/rules/) — L1b dosya-türüne bağlı agent davranış kuralları (L1a: `CLAUDE.core.md` §1.1; eski `AGENTS.md` SUPERSEDED)
