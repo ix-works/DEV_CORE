@@ -139,6 +139,24 @@ sonra `--dry-run`'ı tekrarla.
 ⚠ Tohum **merge-safe**: bu makinede yazılmış hiçbir ders ezilmez, `MEMORY.md`'ye yalnız **eksik**
 satırlar eklenir. `--force` KULLANMA.
 
+⛔ **BİLİNEN SINIR — tohumda GÖVDESİ değişen dosya bu makineye ULAŞMAZ** (ölçüldü 2026-10-03;
+`seed_memory` düzeltilene dek geçerli, kayıt `governance/infra-changelog.md` → `claude/skills/playwright-cli … memory-seed`
+bölümü). Merge-safe kopyalama var olan dosyayı atlar ⇒ `Atlandı : N (zaten mevcut, korundu)`
+ve `[OK] Her şey güncel` **"yerel kopya güncel" DEMEK DEĞİLDİR**. `--terfi-adaylari` da bunu
+ayırt edemez: adım 3'teki koşum manifest'e yeni sha yazdığı için eski kopya *"(a) yerelde
+düzenlenmiş"* kovasında görünür. Changelog'da **tohum gövdesi değişti** diye anılan her dosya için:
+
+```bash
+f=<dosya-adı>.md ; M=<bu makinenin memory dizini>
+for sha in $(git -C core log --format=%h -- "claude/memory-seed/$f"); do
+  git -C core show "$sha:claude/memory-seed/$f" | diff -q --strip-trailing-cr - "$M/$f" >/dev/null && echo "TOHUM $sha = yerel"
+done
+```
+
+Çıktı varsa yerel kopya dokunulmamış bir tohum sürümüdür → **o dosyayı** sil, `seed_memory.py`
+koş. Çıktı yoksa yerel kopya bu makinede düzenlenmiştir → ⛔ **SİLME**, tohumla elle birleştir.
+⛔ Denetimsiz *"sil + yeniden koş"* talimatı verme: yerelde zenginleştirilmiş ders kaybolur.
+
 ⭐ **TERS YÖN (Q325):** yukarıdaki adım yalnız *tohum → makine* yönünü doğrular. Bu makinede
 yazılmış bir dersin tohuma girip girmediğini `python core/scripts/seed_memory.py --terfi-adaylari`
 söyler (SALT-OKUNUR; hiçbir şey yazmaz/kopyalamaz). Kararın kendisi ders yazılırken
