@@ -2824,10 +2824,12 @@ python tests/run_battery.py msag_mesaj_silme --kardes msgtext_uzunluk_guard --pr
 python tests/run_battery.py sql_satir_kirma --kardes sorgu_basarisizligi_gorunur transport_sifir_kaniti b0_secim --precommit
 ```
 
-- `sql_satir_kirma` **17/17**; altı kip, her birinin düşmesi BEKLENEN küme `_BEKLENEN_DUSEN`'de
-  pinli ve EŞİTLİKLE kıyaslanır (CORE-07): `--mutasyon-kimlik` (12 vektör) ·
+- `sql_satir_kirma` **19/19**; sekiz kip, her birinin düşmesi BEKLENEN küme `_BEKLENEN_DUSEN`'de
+  pinli ve EŞİTLİKLE kıyaslanır (CORE-07): `--mutasyon-kimlik` (14 vektör) ·
+  `--mutasyon-onek-ilk-atom` (K12) · `--mutasyon-onek-uzunluk` (K13) ·
   `--mutasyon-literal-kor` (K4/K5/K6/R2/T2) · `--mutasyon-govde-kirp` (R3) · `--mutasyon-kardes`
-  (S1) · `--mutasyon-yildiz-onek` (K10) · `--mutasyon-yorum-satiri` (K11). Çıkış: 1 = beklenen
+  (S1) · `--mutasyon-yildiz-onek` (K10/K12/K13 — yardımcı üç çağrı noktasının hepsini besler) ·
+  `--mutasyon-yorum-satiri` (K11). Çıkış: 1 = beklenen
   kümeyle düştü · 2 = SAPMA (batarya bunu KURULAMADI/FAIL gösterir — `[SAPMA]` satırını oku) ·
   3 = çapa tam 1 kez eşleşmedi ya da mutant DERLENMEDİ. Mutantlar kaynak METNİNİN gerçek
   `__file__` ile exec edilmesidir.

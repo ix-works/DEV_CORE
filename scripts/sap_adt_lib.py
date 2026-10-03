@@ -240,8 +240,11 @@ def sql_satirlarini_kir(sorgu, sinir=SQL_SATIR_SINIRI):
             if len(_sql_devam_satiri_basi(atom)) > sinir:
                 tur = ('literal' if atom[:1] in ("'", '`') else
                        'yorum' if atom[:1] == '"' else 'boşluksuz ifade')
+                onek = (f" (`*` ile başladığı için tek boşluk önekiyle "
+                        f"{len(_sql_devam_satiri_basi(atom))}; freestyle sütun-1 `*`'ı tam-satır "
+                        f"yorumu sayar)" if atom.startswith('*') else "")
                 raise SQLSatirKirilamadi(
-                    f"SQL satırı kırılamadı: tek bir {tur} {len(atom)} karakter (satır sınırı "
+                    f"SQL satırı kırılamadı: tek bir {tur} {len(atom)} karakter{onek} (satır sınırı "
                     f"{sinir}; ADT freestyle uzun satırı keser). Başı: {atom[:60]!r}. "
                     f"Literali kısalt/böl (LIKE, ayrı koşul) ya da ifadeye boşluk ekle. "
                     f"Sorgu GÖNDERİLMEDİ.")

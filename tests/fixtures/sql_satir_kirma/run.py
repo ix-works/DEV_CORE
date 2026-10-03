@@ -27,6 +27,8 @@ gorunmuyordu).
           bug-gate 2026-10-03 canli: `COUNT(` + LF + `* )` -> 400, ` * )` -> 200). K3'un
           token esitligi bunu GOREMEZ (bosluk oneki token degistirmez).
   K11     >255 kr `*` tam-satir yorum satiri -> SQLSatirKirilamadi (bolunemez)
+  K12     girintisi ATILAN ilk atom `*` ile basliyorsa o da onek alir (sutun-1 `*` yok)
+  K13     TAM 255 kr `*` atomu (onekle 256) -> SQLSatirKirilamadi + mesaj onekli boyu soyler
 
 Mutasyon kipleri (kaynak METNI degistirilip gercek __file__ ile exec edilir):
   --mutasyon-kimlik        reflow hic kirmaz
@@ -35,6 +37,8 @@ Mutasyon kipleri (kaynak METNI degistirilip gercek __file__ ile exec edilir):
   --mutasyon-kardes        ghost-transport sondasi reflow'suz
   --mutasyon-yildiz-onek   devam satirina `*` oneki konmaz
   --mutasyon-yorum-satiri  `*` tam-satir yorum korumasi kapali
+  --mutasyon-onek-ilk-atom girintisi atilan ilk atoma onek konmaz
+  --mutasyon-onek-uzunluk  uzunluk kontrolu onekli boyu degil ciplak atomu olcer
 CORE-07: her kipin DUSMESI BEKLENEN vektor kumesi `_BEKLENEN_DUSEN`'de PINLIDIR ve
 ESITLIKLE kiyaslanir. Cikis: 0 taban yesil · 1 mutasyon BEKLENEN kumeyle dustu ·
 2 SAPMA (mutasyonda dusen kume beklenenden farkli — fazlasi da eksigi de) ·
@@ -69,17 +73,23 @@ LIB = REPO / "scripts" / "sap_adt_lib.py"
 
 _GECERLI_KIP = frozenset({"--mutasyon-kimlik", "--mutasyon-literal-kor",
                           "--mutasyon-govde-kirp", "--mutasyon-kardes",
-                          "--mutasyon-yildiz-onek", "--mutasyon-yorum-satiri"})
+                          "--mutasyon-yildiz-onek", "--mutasyon-yorum-satiri",
+                          "--mutasyon-onek-ilk-atom", "--mutasyon-onek-uzunluk"})
 
 # CORE-07: kip -> dusmesi BEKLENEN vektor kimlikleri (ESITLIK; alt-kume degil).
+# `_sql_devam_satiri_basi` UC yerde cagrilir; her cagri noktasinin kendi kipi + vektoru var:
+#   devam satiri -> K10 (yildiz-onek tumunu birden kirar) · girinti atilan ilk atom -> K12
+#   (onek-ilk-atom) · uzunluk kontrolu -> K13 (onek-uzunluk).
 _BEKLENEN_DUSEN = {
-    "--mutasyon-kimlik": {"K3", "K4", "K5", "K6", "K7", "K9", "K10", "K11",
+    "--mutasyon-kimlik": {"K3", "K4", "K5", "K6", "K7", "K9", "K10", "K11", "K12", "K13",
                           "R1", "R2", "T1", "T2"},
     "--mutasyon-literal-kor": {"K4", "K5", "K6", "R2", "T2"},
     "--mutasyon-govde-kirp": {"R3"},
     "--mutasyon-kardes": {"S1"},
-    "--mutasyon-yildiz-onek": {"K10"},
+    "--mutasyon-yildiz-onek": {"K10", "K12", "K13"},
     "--mutasyon-yorum-satiri": {"K11"},
+    "--mutasyon-onek-ilk-atom": {"K12"},
+    "--mutasyon-onek-uzunluk": {"K13"},
 }
 
 # (eski, yeni) — CORE-07: eski TAM 1 kez eslesmeli.
@@ -106,6 +116,12 @@ _MUT = {
     "--mutasyon-yorum-satiri": (
         "        if satir.startswith('*'):\n",
         "        if False:\n"),
+    "--mutasyon-onek-ilk-atom": (
+        "                aday = _sql_devam_satiri_basi(atom)\n",
+        "                aday = atom\n"),
+    "--mutasyon-onek-uzunluk": (
+        "            if len(_sql_devam_satiri_basi(atom)) > sinir:\n",
+        "            if len(atom) > sinir:\n"),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -286,6 +302,34 @@ def main(kip: str | None) -> int:
     except L.SQLSatirKirilamadi as e:
         kontrol("K11 >255 `*` tam-satir yorum -> SQLSatirKirilamadi ('tam-satır yorumu' der)",
                 "tam-satır yorumu" in str(e), str(e)[:70])
+    except Exception as e:  # noqa: BLE001
+        kontrol("K11 >255 `*` tam-satir yorum -> SQLSatirKirilamadi", False, "istisna: %r" % e)
+
+    # K12: girintisi ATILAN ilk atom `*` ile basliyor -> o yol da onek almali
+    #      (cagri noktasi: `if not cur and len(aday) > sinir: aday = _sql_devam_satiri_basi(atom)`)
+    q12 = " " * 250 + "*abcdefgh FROM t000 WHERE mandt = '000' OR mandt = '001'"
+    try:
+        r12 = kir(q12).splitlines()
+        kontrol("K12 girintisi atilan ilk atom `*`: sutun-1 `*` YOK + <=255",
+                len(q12) > SINIR and not any(s.startswith("*") for s in r12)
+                and r12[0].startswith(" *abcdefgh") and all(len(s) <= SINIR for s in r12),
+                "girdi=%d satir_baslari=%r" % (len(q12), [s[:4] for s in r12]))
+    except Exception as e:  # noqa: BLE001
+        kontrol("K12 girintisi atilan ilk atom `*`", False, "istisna: %r" % e)
+
+    # K13: TAM 255 kr `*` atomu -> onekle 256 kr olur -> bolunemez
+    #      (cagri noktasi: `if len(_sql_devam_satiri_basi(atom)) > sinir:`)
+    a13 = "*" + "x" * (SINIR - 1)
+    q13 = "SELECT mandt FROM t000 WHERE mandt = " + a13
+    try:
+        r13 = kir(q13)
+        kontrol("K13 tam 255 kr `*` atomu -> SQLSatirKirilamadi", False,
+                "hata yok; satirlar=%s" % [len(s) for s in r13.splitlines()])
+    except L.SQLSatirKirilamadi as e:
+        kontrol("K13 tam 255 kr `*` atomu -> SQLSatirKirilamadi (mesaj onekli 256'yi soyler)",
+                len(a13) == SINIR and "önekiyle 256" in str(e), str(e)[:110])
+    except Exception as e:  # noqa: BLE001
+        kontrol("K13 tam 255 kr `*` atomu -> SQLSatirKirilamadi", False, "istisna: %r" % e)
 
     # ── R: run_query entegrasyonu (sahte HTTP; SAP'ye HIC gidilmez) ──────────
     class _Yanit:
