@@ -207,6 +207,19 @@ For structured output wrapping every reply as JSON, pass --json
 playwright-cli list --json
 ```
 
+## ⛔ Sırlar ve `run-code` (IX eki — `install --skills` bu bloğu ezer, yeniden ekle)
+
+`run-code` çalıştırdığı JS'i çıktıda **AYNEN geri basar** (`### Ran Playwright code`) —
+`--filename` ile dosyadan verilen kod da dahil. Koda gömülü parola/token/Basic-auth başlığı
+**transkripte düşer** (2026-08-06 vakası; 0.1.17'de yeniden ölçüldü). `run-code` içinde
+`process` YOKTUR ⇒ sırrı oradan env'den okuyamazsın.
+**Kural:** `run-code`'a (ve `fill`/`type`'a) sır DEĞERİ yazma. Sırrı env'den, repo dışına
+yazılan `--config` (`browser.contextOptions.httpCredentials`) + `PLAYWRIGHT_MCP_SECRETS_FILE` ile
+`open` anında ver (yazma + `open` + silme TEK Bash çağrısında —
+`$D`/`trap` çağrılar arasında taşınmaz); form alanına sırrın **ADINI** yaz (`fill e5 PW_AUTH_PASS`). Secrets'li
+oturumda çıktıdaki sır değeri `<secret>AD</secret>` diye maskelenir.
+Kanonik örnek: [references/running-code.md](references/running-code.md) → "Sırlar".
+
 ## Open parameters
 ```bash
 # Use specific browser when creating session

@@ -139,6 +139,31 @@ sonra `--dry-run`'ı tekrarla.
 ⚠ Tohum **merge-safe**: bu makinede yazılmış hiçbir ders ezilmez, `MEMORY.md`'ye yalnız **eksik**
 satırlar eklenir. `--force` KULLANMA.
 
+⛔ **BİLİNEN SINIR — tohumda GÖVDESİ değişen dosya bu makineye ULAŞMAZ** (ölçüldü 2026-10-03;
+`seed_memory` düzeltilene dek geçerli, kayıt `governance/infra-changelog.md` → `claude/skills/playwright-cli … memory-seed`
+bölümü). Merge-safe kopyalama var olan dosyayı atlar ⇒ `Atlandı : N (zaten mevcut, korundu)`
+ve `[OK] Her şey güncel` **"yerel kopya güncel" DEMEK DEĞİLDİR**. `--terfi-adaylari` da bunu
+ayırt edemez: adım 3'teki koşum manifest'e yeni sha yazdığı için eski kopya *"(a) yerelde
+düzenlenmiş"* kovasında görünür. Sınır yalnız changelog'da anılan dosyalarla sınırlı DEĞİLDİR —
+denetim **bütün tohum dosyalarını** tarar (`MEMORY.md` hariç: o kullanıcının indeksidir, silinmez):
+
+```bash
+C=core ; M=<bu makinenin memory dizini>
+for p in "$C"/claude/memory-seed/*.md; do f=${p##*/}; q=claude/memory-seed/$f
+  [ "$f" = MEMORY.md ] && continue; [ -f "$M/$f" ] || continue
+  git -C "$C" show "HEAD:$q" | diff -q --strip-trailing-cr - "$M/$f" >/dev/null && continue
+  hit=; for sha in $(git -C "$C" log --format=%h -- "$q"); do
+    git -C "$C" show "$sha:$q" | diff -q --strip-trailing-cr - "$M/$f" >/dev/null && { hit=$sha; break; }
+  done
+  [ -n "$hit" ] && echo "SIL+SEED ($hit) $f" || echo "ELLE $f"
+done
+```
+
+`SIL+SEED` = yerel kopya dokunulmamış eski bir tohum sürümüdür → **o dosyayı** sil; listedekiler
+bitince `seed_memory.py`'yi bir kez koş. `ELLE` = yerel kopya bu makinede düzenlenmiştir →
+⛔ **SİLME**, tohumla elle birleştir. Güncel olan ve yerelde bulunmayan dosya basılmaz.
+⛔ Denetimsiz *"sil + yeniden koş"* talimatı verme: yerelde zenginleştirilmiş ders kaybolur.
+
 ⭐ **TERS YÖN (Q325):** yukarıdaki adım yalnız *tohum → makine* yönünü doğrular. Bu makinede
 yazılmış bir dersin tohuma girip girmediğini `python core/scripts/seed_memory.py --terfi-adaylari`
 söyler (SALT-OKUNUR; hiçbir şey yazmaz/kopyalamaz). Kararın kendisi ders yazılırken

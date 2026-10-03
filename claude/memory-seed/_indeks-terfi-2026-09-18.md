@@ -66,7 +66,7 @@ metadata:
 ## SAP · ABAP · RAP
 
 - ⭐ [Adt preview bos char null render](feedback_adt-preview-bos-char-null-render.md) — ADT data-preview boş CHAR'ı `null` render eder — SQL NULL DEĞİL. Kanonik: core/playbook/adt-cds.md T13.
-- ⭐ [Adt sql query 400 sebebi where terim sayisi](feedback_adt-sql-query-400-sebebi-where-terim-sayisi.md) — ⛔ 2026-10-03: asıl sebep freestyle'ın SATIR BAŞINA 255 karakter sınırı (terim sayısı teşhisi çürüdü; araç artık uzun satırı kırar) · aşım 400 YA DA sessiz yanlış sonuç (`ok:true`)
+- ⭐ [Adt sql query 400 sebebi where terim sayisi](feedback_adt-sql-query-400-sebebi-where-terim-sayisi.md) — ⛔ 2026-10-03: tek satır >255 kr = 400 YA DA SESSİZ yanlış sonuç (`ok:true`) → böl (devam satırı sütun-1 `*` ile başlamaz); "WHERE terim sayısı" ve "anti-join sahte sonuç" teşhisleri ÇÜRÜDÜ (ikisi de kırpma); araç #312'den beri kendisi böler (MCP restart şart)
 - ⭐ [Check annotasyonu fail yonunu belirlemez](feedback_check-annotasyonu-fail-yonunu-belirlemez.md) — DCL `#CHECK` tek başına ne fail-open ne fail-closed demektir — yön TÜKETİCİNİN tasarımının özelliğidir; ayrıca DCL'in VAR olduğu ayrıca ölçülmelidir
 - ⭐ [Cok parametreli shlp ilk alan devralma](feedback_cok-parametreli-shlp-ilk-alan-devralma.md) — F4 devralma AD-BAZLIDIR ('ilk parametre gelir' YANLIŞ — ölçüldü+canlı test); asıl tuzak: düzeltme sonrası testin kapanışı yazılmayınca eski kusur aylarca 'açık' sanılır
 - ⭐ [Edid4 sdata lchr dtint2 ile okunur](feedback_edid4-sdata-lchr-dtint2-ile-okunur.md) — IDoc segment verisi (EDID4.SDATA, LCHR) adt_sql_query ile OKUNUR — koşul: uzunluk alanı DTINT2 ile BİRLİKTE ve AÇIK alan listesiyle; SELECT * ve tek başına sdata 400 verir (Z class gerekmez)

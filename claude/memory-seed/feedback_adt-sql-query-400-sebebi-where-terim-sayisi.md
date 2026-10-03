@@ -1,224 +1,124 @@
 ---
 name: feedback_adt-sql-query-400-sebebi-where-terim-sayisi
-description: "adt_sql_query 400'unun baskin sebebi WHERE terim sayisi DEGIL, freestyle ucunun SATIR BASINA 255 KARAKTER siniri (2026-10-03 kontrol gruplu olcum; arac artik uzun satiri kirar). DIKKAT: 255 asimi her zaman 400 VERMEZ - kesim gecerli sinira duserse kirpilmis sorgu SESSIZCE kosar (ok:true, YANLIS veri). Asagidaki terim/alan butcesi kayitlari bu sinir bilinmeden yazildi"
-metadata: 
+description: "adt_sql_query 400: kök sebep SATIR UZUNLUĞU — ADT freestyle tek satırı 255. karakterde keser; token ortası = 400, geçerli sınır = kırpılmış sorgu SESSİZCE koşar (ok:true, YANLIŞ veri). 'WHERE terim sayısı' ve 'anti-join sahte sonuç' teşhisleri ÇÜRÜDÜ (ikisi de kırpma). Çare: satırlara böl (devam satırı sütun-1 `*` ile başlamaz); core #312 araç kendisi böler (MCP restart şart)"
+metadata:
   node_type: memory
   type: feedback
-  originSessionId: f07a9d9a-ccde-437b-818a-48086e4c73a7
+  seed: evet
 ---
 
-## ⛔ 2026-10-03 (2. ölçüm) — 255 AŞIMI SESSİZ YANLIŞ SONUÇ DA ÜRETİR
+## ⭐ GÜNCEL KURAL (2026-10-03 — önce bunu oku)
 
-Kesim **token ortasına** düşerse 400 gelir; **geçerli bir sınıra** düşerse SAP kırpılmış sorguyu koşar
-ve `ok:true` döner — **hata yok, veri yanlış**. Kontrol grubu (DEV, `T000`, aynı mantıksal sorgu 273 kr,
-son koşul `AND mandt = '999'`): tek satır → `row_count:1` (**YANLIŞ**) · son koşuldan önce satır sonu →
-`row_count:0` (**DOĞRU**). Bir makinede geçmiş tarama: 229 aşımlı çağrının 222'si hata, **7'si `ok:true`
-kırpılmış** (JOIN koşulu · OR dalı · süzgeç · kolon düşmüş). Araç bu sürümden itibaren uzun satırı
-kırar; **eski sürümle koşan** bir MCP sunucusunda >255 kr satırlı sorgunun `ok:true`'su **kanıt değildir**
-— elle böl. Dış teyit: vibing-steampunk issue #239 + SAP Note 2807133 (`CL_ADT_DP_FREESTYLE_RES`
-gövdeyi CHAR255 satırlara çevirir).
-
-## ⛔ 2026-10-03 DÜZELTME — BU KAYDIN ANA TEŞHİSİ ÇÜRÜDÜ (önce bunu oku)
-
-ADT freestyle ucu (`/sap/bc/adt/datapreview/freestyle`) sorgu metnini **satır satır** okur ve
-**255 karakterden uzun satırın devamını keser**. Kontrol gruplu ölçüm (DEV, yalnız `T000` SELECT,
-son kodda iki kez):
-
-| Girdi | Sonuç |
-|---|---|
-| 288 kr **tek satır**, 14 `OR` terimi | **400** `"O" is invalid here (due to grammar).` — 255. karakter `OR`'un `O`'su |
-| aynı sorgu iki satıra bölünmüş | 200 |
-| 252 kr tek satır, **13 `OR`** terimi | **200** |
-| 291 kr, kırma `COUNT(` ⏎ `* )` | **400** `"INTO" is invalid here` — sütun-1 `*` = tam-satır yorumu |
-| aynısı ` * )` (tek boşluk önekli) | 200 |
-
-⇒ **"WHERE terim sayısı / alan bütçesi → 400" teşhisi çürüdü**: terim/alan eklemek satırı uzatır;
-uzun satır 255'te kesilir ve SAP kesimin düştüğü kelimeyi raporlar (sebebi değil). Aşağıdaki
-"7 koşul → 400", "7 alan + 1 WHERE → 400", "GROUP BY + JOIN bütçeyi daraltır" ölçümlerinin büyük
-olasılıkla bu sınırdan doğduğu düşünülür — **yeniden ölçülmedi (DOĞRULANAMADI)**. Aynı şekilde
-2026-09-16'daki *"`<` HTML-escape ediliyor → 'A Boolean expression was expected'"* teşhisi de
-bu sınırın imzasını taşıyor: 252 kr'lik tek satırda `mtext <> 'Z'` **200** döndü (`<` tek başına
-ölçülmedi).
-
-**Çekirdek değişikliği (core PR #312):** `sap_adt_lib.sql_satirlarini_kir` gönderimden önce her
-uzun satırı literal/yorum DIŞINDAKİ boşluktan kırar, `*` ile başlayan devam satırına tek boşluk
-öneki koyar; tek atom (literal/yorum) 255'i aşıyorsa istek GİTMEZ (`SQLSatirKirilamadi`). `run_query`
-400 gövdesini artık kırpmıyor → `sap_error.message` SAP'nin sebep metnini gösterir.
-
-**How to apply (güncel):** 400 alınca **önce `sap_error.message`'ı oku**. Terim sayısını azaltmak
-bir çözüm DEĞİL. Kısa (≤255) satırda gelen 400 başka sebeplidir — aşağıdaki ölçülmüş biçim
-sınırlarına bak (alias'sız aggregate, kolon-kolon karşılaştırma `tablo~kolon`, tırnaklı namespace,
-released CDS'in JOIN operandı olması, paralel gönderim, `SELECT *` tükenmesi). Açıklanmamış kısa
-vaka hâlâ açık: `WHERE vbeln = 'X' AND vbtyp = 'E'`.
+1. **Kök sebep satır uzunluğu.** ADT freestyle ucu (`/sap/bc/adt/datapreview/freestyle`) sorgu
+   metnini **satır satır** okur ve **255 karakterden uzun satırın devamını keser**; hata metni
+   kesimin düştüğü kelimeyi gösterir, sebebi değil. Dış teyit: vibing-steampunk issue #239 +
+   SAP Note 2807133 (`CL_ADT_DP_FREESTYLE_RES` gövdeyi CHAR255 satırlara çevirir).
+2. **255 aşımı 400 VERMEYEBİLİR.** Kesim **token ortasına** düşerse 400; **geçerli bir sınıra**
+   düşerse SAP kırpılmış sorguyu koşar ve `ok:true` döner — **hata yok, veri yanlış** (düşen
+   kuyruk: JOIN koşulu · OR dalı · süzgeç · `IS NULL` · kolon). Uzun satırlı bir sorgunun
+   `ok:true`'su tek başına **kanıt değildir**.
+3. **Çare: her satır <255 olacak biçimde böl.** ⛔ Devam satırını **sütun-1 `*`** ile başlatma —
+   freestyle onu **tam-satır yorumu** sayar (`"` de satır-sonu yorumudur): `COUNT(` ⏎ `* )` →
+   yanıltıcı 400 *"INTO is invalid here"*; aynı metin ` * )` (tek boşluk önekli) → 200.
+4. **Araç düzeltmesi (core PR #312):** `sap_adt_lib.sql_satirlarini_kir` gönderimden önce uzun
+   satırı literal/yorum DIŞINDAKİ boşluktan kırar, `*` ile başlayan devam satırına tek boşluk
+   öneki koyar; tek atom (literal/yorum) 255'i aşıyorsa istek GİTMEZ (`SQLSatirKirilamadi`).
+   ⚠ **MCP sunucusu yeniden başlatılmadan** eski kod koşmaya devam eder ⇒ #312 öncesi koşan
+   oturumda >255 kr satırlı sorguyu **elle böl**.
+5. **400 alınca önce `sap_error.message`'ı oku** (#312'den beri gövde kırpılmıyor). Terim/kolon
+   sayısını azaltmak bir çözüm DEĞİL. Kısa (≤255) satırda gelen 400 başka sebeplidir — aşağıdaki
+   "hâlâ geçerli" ölçümlere bak.
 
 Son-doğrulama: 2026-10-03 · Applies-to: `adt_sql_query` / ADT data-preview freestyle (her profil)
 
+## Kontrol gruplu ölçüm (2026-10-03, DEV, yalnız `T000`)
+
+| Girdi | Sonuç |
+|---|---|
+| 213 kr tek satır | 200 |
+| 309 kr tek satır, yalnız AND | **400** `A Boolean expression was expected in "MTEX"` — `mtext` 0-tabanlı indeks 251'de (252. karakter) başlıyor; hata yalnız ilk 4 harfi (`MTEX` = 252-255) gösteriyor ⇒ kesim tam 255'te (indeks tabanı hata metninden çıkarıldı, sorgu yeniden koşulmadı) |
+| aynı sorgu satırlara bölünmüş | 200 |
+| 288 kr tek satır, 14 `OR` | **400** `"O" is invalid here` — 255. karakter `OR`'un `O`'su |
+| 252 kr tek satır, **13 `OR`** | **200** ⇒ "5+ OR → 400" teşhisi çürüdü |
+| 273 kr tek satır, son koşul `AND mandt = '999'` | `ok:true`, `row_count:1` — **YANLIŞ** (son koşul düştü) |
+| aynı sorgu, son koşuldan önce satır sonu | `row_count:0` — **DOĞRU** |
+
+Geçmiş tarama (bir makinedeki transkriptler): >255 kr satırlı **229** çağrının 222'si hata,
+**7'si `ok:true` kırpılmış** sonuç döndürmüş.
+
+## ⛔ ÇÜRÜYEN TEŞHİSLER (bu kaydın eski gövdesi — kullanma)
+
+- **"400'ün sebebi WHERE terim sayısıdır" (2026-09-06) — ÇÜRÜDÜ.** Dayanak çift: "4 koşul koştu"
+  sorgusu **285 kr**'ydi (255'te geçerli sınırda kesildi → 3 koşulla SESSİZCE koştu); "7 koşul →
+  400" sorgusu **331 kr**'ydi (255'te `a|~kunnr` token ortasında kesildi). Ölçülen şey terim
+  sayısı değil satır uzunluğuydu.
+- **"`LEFT JOIN … IS NULL` anti-join freestyle'da sahte sonuç verir, sayım farkı kullan"
+  (2026-09-11) — YANLIŞ.** "Sahte yetim" listesinin sebebi: **282 kr**'lik tek satırda
+  `AND p~… IS NULL` kuyruğu 255'te düştü → sorgu "tüm alt kalemler"e dönüştü. Doğru biçimde
+  (bölünmüş) yeniden koşum 0 yetim verdi; pozitif kontrol (ON'a imkânsız koşul) anti-join'in
+  bütün satırları döndürdüğünü gösterdi ⇒ anti-join freestyle'da **doğru çalışır**, satırları
+  <255 tut. Sayım farkı geçerli ama zorunlu değil. (Kanonik CDS anti-join'i
+  `playbook/adt-cds.md`'dedir; bu düzeltme onunla tutarlıdır.)
+- **"Released CDS view'ı JOIN operandı yapınca 400" (2026-09-10) — büyük olasılıkla aynı kırpma,
+  DOĞRULANAMADI.** Dayanak üç sorgu 472/401/323 kr, üçü de 255'te token ortasında kesiliyor;
+  karşı kanıt aynı gün 255 kr'lik bir released view iki kez JOIN'li `ok:true`. Canlıda yeniden
+  üretilmedi ⇒ kural olarak KULLANMA; gerekirse satırlara bölüp yeniden ölç.
+- **"Bütçe" gözlemleri** (2026-09-07/08: "7 alan + 1 WHERE → 400", "`DISTINCT` / `GROUP BY` + JOIN
+  bütçeyi daraltır") ve 2026-09-16'daki *"`<` HTML-escape ediliyor → 'A Boolean expression was
+  expected'"* teşhisi aynı sınırın imzasını taşıyor (252 kr'lik tek satırda `<>` 200 döndü; `<`
+  tek başına ölçülmedi) — **yeniden ölçülmedi (DOĞRULANAMADI)**. Uzun sorguda gördüysen önce böl.
+- **AÇIK / ÖLÇÜLEMEDİ:** kısa `WHERE vbeln = 'X' AND vbtyp = 'E'` (2 terim) 400 verdi, `WHERE
+  vbtyp = 'E' AND vbeln > 'Y'` koştu (2026-09-06). Sorgu metni izlenemedi ⇒ kırpmayla açıklanıp
+  açıklanmadığı bilinmiyor; satır kısaysa sebep başkadır.
+
+**Why:** Geçmiş taramadaki 7 sessiz kırpmanın **hiçbiri bir karara girmedi** — zarar sonuç
+düzeyinde değil, **mekanizma** düzeyindeydi: kırpma yanlış adlandırıldı ve o yanlış ad kalıcı
+kurallara yazıldı. Yanlış teşhis yanlış çözüme götürdü — terim azaltıldı, sorgu parçalandı, doğru çalışan
+anti-join "araç tuzağı" diye yasaklandı; en kötüsü, 255 aşımı `ok:true` döndüğünde **yanlış veri
+doğru sanıldı**. ABAP tarafındaki SELECT bu sınırdan etkilenmez; sınır yalnız ADT data-preview
+ucundadır. Bir 400'ü "tabloya erişemiyorum" ya da "JOIN çalışmıyor" diye raporlama — araç sınırını
+raporla. İlgili: [[feedback_arac-basarisizligini-zararsiz-sayma]],
+[[feedback_curutme-de-bir-iddiadir-yerine-yazilan-sayi-olculur]].
+
 ---
 
-## ARŞİV — 2026-10-03 öncesi teşhis (çürüdü; ölçümler tarihsel kanıt olarak duruyor)
+## HÂLÂ GEÇERLİ ÖLÇÜMLER (kısa satırda; aynı sistem)
 
-`adt_sql_query` **400** dondugunde sebep **`WHERE` terim sayisidir** — kolon sayisi
-ya da JOIN karmasikligi DEGIL.
-
-Ayirt edici olcum (2026-09-06, <SISTEM>, `find_existing`'in JOIN'i):
-- 4 tablolu JOIN + **2 kosul** → kostu
-- 4 tablolu JOIN + **4 kosul** → kostu
-- 4 tablolu JOIN + **7 kosul** → **400**
-
-Karsi kanit (kolon sayisi degil): 8 kolonlu `SELECT vbeln, auart, vkorg, vtweg, spart,
-waerk, vsbed, abrvw FROM vbak WHERE vbeln = '...'` sorunsuz kostu.
-
-⚠ **ACIK / ACIKLANMADI:** `WHERE vbeln = 'X' AND vbtyp = 'E'` (yalnizca 2 terim) yine de
-400 verdi; `WHERE vbtyp = 'E' AND vbeln > 'Y'` kostu. Bu cift aciklanmadi — yani terim
-sayisi tek sebep olmayabilir, ama "geniş kolon listesi" ve "JOIN çok karmaşık"
-teshisleri OLCUMLE YANLIS cikti.
-
-**Why:** Yanlis teshis yanlis coz&uuml;me goturuyor — "JOIN cok karmasik" denip sorgu
-parcalaniyor ya da daha kotusu programin ABAP tarafindaki SELECT'i "riskli" sanilip
-gereksiz yere sadelestiriliyor. Oysa ABAP tarafindaki SELECT bu ARAC sinirindan
-etkilenmez; sinir yalnizca ADT Data Preview ucundadir.
-
-**How to apply:** 400 alinca once **WHERE terimlerini azalt** (parcalara bol, sonuclari
-cagiran tarafta birlestir), kolon listesini degil. Bir programin canli SELECT'ini
-dogrulayamiyorsan bunu *"JOIN calismiyor"* diye RAPORLAMA — **arac sinirini** raporla.
-Bir 400'u "tabloya erisemiyorum" diye okumak `bulunamadi != yok` ihlaline goturur.
-Ilgili: [[feedback_arac-basarisizligini-zararsiz-sayma]],
-[[feedback_curutme-de-bir-iddiadir-yerine-yazilan-sayi-olculur]],
-[[feedback_adt-include-objesi-prog-tipiyle-404-sahte-negatif]].
-
----
-
-## EK ÖLÇÜM 2026-09-07 (<PAKET-F> ADIM-2, aynı sistem)
-
-**Çalışan sürprizler — bunları "desteklenmiyor" sanıp deneme:**
-- ⭐ **`NOT EXISTS` alt sorgusu ÇALIŞIYOR** (400 vermiyor):
+**Çalışan sürprizler — "desteklenmiyor" sanıp deneme:**
+- ⭐ **`NOT EXISTS` alt sorgusu ÇALIŞIYOR** (2026-09-07):
   ```sql
   SELECT m~matnr FROM mara AS m WHERE m~matnr LIKE 'S%'
     AND NOT EXISTS ( SELECT * FROM mvke AS v WHERE v~matnr = m~matnr AND v~vkorg = '1400' )
   ```
-  "Şu tabloda olup bunda olmayanlar" sorusunu tek turda cevaplıyor — iki listeyi çekip
-  elde farkını almaya gerek yok.
+- ⭐ **Namespace'li tablo** `/SCWM/*` **tırnaksız, küçük harfle** yazılır —
+  `SELECT COUNT(*) FROM /scwm/aqua` çalışır (2026-09-08).
+- `GROUP BY … HAVING COUNT(*) > 1` (view entity üzerinde) koştu (2026-09-11).
 
-**400 veren, ama terim sayısıyla açıklanamayan yeni vakalar:**
-- `SELECT c~sndprn, s~stamid, s~stamno, COUNT(*) ... JOIN ... GROUP BY ...` → 400/500.
-  Aynı JOIN deseni önceki turlarda çalışmıştı. **WHERE tek terime düşürülünce** (`s~stamno='035'`)
-  koştu. ⇒ `GROUP BY` + JOIN kombinasyonu terim bütçesini daraltıyor.
-- `SELECT DISTINCT stapa1, stapa2, stapa3 FROM edids WHERE stamid='V4' AND stamno='035'` → 400;
-  **kolon 2'ye + WHERE 1 terime** düşürülünce koştu. ⇒ `DISTINCT` de bütçeyi daraltıyor.
-- ⛔ **Baştan joker `LIKE` 400 verdi:** `SELECT lifnr, knref, ablad, kunnr, vkorg, vtweg, spart
-  FROM t661w WHERE knref LIKE '%152%'` → 400 (**tek terim**). Aynı tablo `WHERE kunnr = '...'`
-  ile sorunsuz koştu. ⇒ Sağ-joker (`'S%'`) çalışıyor, **sol-joker (`'%...'`) çalışmıyor**.
-- ⚠ **400 her zaman YAPISAL DEĞİL:** `SELECT COUNT(*) FROM mara WHERE matnr LIKE 'S%'` bir
-  turda 400 verdi, **aynı sorgu tekrarında koştu**. Bir kez 400 alınca sorguyu yeniden
-  yazmadan **bir kez tekrar dene**; yoksa çalışan bir deseni yanlışlıkla "desteklenmiyor"
-  diye kaydedersin.
+**Kısa satırda 400/500 veren biçimler (ölçüldü):**
+- ⛔ **Baştan joker `LIKE`** (`WHERE knref LIKE '%152%'`, tek terim, kısa satır) → 400; sağ-joker
+  (`'S%'`) çalışıyor (2026-09-07).
+- `substring(...)` → 400 — dilimlemeyi okuduktan sonra Python'da yap.
+- **Birden çok ifade/aggregate içeren projeksiyonda HER ifadeye alias ver:** alias'sız
+  `SELECT COUNT(*), SUM( a ), … FROM <view>` → 400, ham metin *"…all expressions in the projection
+  list must have an alias name."*; `AS cnt/…` eklenince ilk denemede koştu (2026-09-11).
+- **Kolon-kolon karşılaştırma** (`WHERE vrkme <> meins`) → 400 (2026-09-08): dolaylı ölç (ilgili
+  çevrim kolonunu literal ile sına) ve raporda **dolaylı olduğunu yaz**.
+- ⛔ **`LIKE` bir `DATS` kolonunda** tip-uyumsuzluğu hatası verir — `NOT BETWEEN '19000101' AND
+  '99991231'` kullan (2026-09-16).
 
-**Desteklenmeyen (ölçüldü):** `substring(...)` → 400. `EDID4.SDATA` dilimlemesi araçta değil,
-**okuduktan sonra Python'da** yapılır (`DTINT2` ile birlikte çekilir).
+**Ölçüm aracının kendi yan etkisi:**
+- ⛔ **Art arda `SELECT *` geçici subroutine havuzunu tüketir** → 500; `adt_dump_list`'te
+  `GENERATE_SUBPOOL_DIR_FULL` (`CL_ADT_DP_OPEN_SQL_HANDLER` kaynaklı) görünür. Tehlikesi teşhisi
+  yanlış hedefe çevirmesi ("CDS view bozuk"). **`SELECT *` KULLANMA** — açık kolon listesi ver;
+  kolonları bilmiyorsan bir kez küçük `SELECT *` ile keşfet. 500 alınca **`adt_dump_list`'e BAK**:
+  dump aracın adına yazılıysa sebep tükenmedir — biçimi değiştirme, **bekle/seyrelt** (2026-09-16).
+  (Kısa `SELECT * FROM T320` de bir turda 400 verdi, `adt_table_read T320` koştu — 2026-09-08.)
+- ⚠ **400/500 her zaman yapısal değil:** aynı kısa sorgu bir turda 400, tekrarında koştu; paralel
+  gönderimde 400/500 görüldü, seri tekrarda koştu (2026-09-07/11). Bir kez 400 alınca sorguyu
+  yeniden yazmadan **bir kez seri tekrar dene**; "paralel = flaky" hükmünün sebebi DOĞRULANMADI.
 
----
+**Released view ↔ ham tablo kıyası** (yetki rejimi): released view'ın DCL'i (`#CHECK`) ham tabloda
+yoktur — ikisini aynı sayıyla bulmak tek kullanıcıyla "hiçbir kullanıcı için süzmez" sonucunu
+VERMEZ. İlgili: [[feedback_check-annotasyonu-fail-yonunu-belirlemez]].
 
-## EK ÖLÇÜM 2026-09-08 (EWM veri yüzeyi turu, aynı sistem — 126 çağrı)
-
-⭐ **BÜTÇE YALNIZ `WHERE` DEĞİL — SELECT ALAN SAYISI DA SAYILIYOR** (bu kaydın başlığını daraltır):
-**7 alan + 1 WHERE → 400** · **6 alan + 1 WHERE → 500** · **4 alan + 1 WHERE → OK**.
-Lider aynı gün bağımsız doğruladı: `lips`'ten 14 alan → 500, 8 alan → 400, **6 alan → OK**.
-⇒ Tek bir bütçe var; aşıldığında **400 de 500 de** gelebiliyor. "500 = başka bir sorun"
-diye ayırma.
-
-**Yeni ölçülen beş kısıt:**
-| Kısıt | Sonuç | Çalışan biçim |
-|---|---|---|
-| `COUNT(*) **AS** CNT` | **500** | çıplak `SELECT COUNT(*)` |
-| `GROUP BY` (JOIN'siz, sade) | **400** | değer başına ayrı `COUNT` |
-| **kolon-kolon** karşılaştırma (`WHERE vrkme <> meins`) | **400** | kolon-literal (`WHERE umvkz > 1`) |
-| bazı alanlarda `<>` (`handlingunitindicator <> 'A'`) | **400** | `= 'A'` ölçüp **çıkarma** yap |
-| `SELECT *` bazı tablolarda (`T320`) | **400** | `adt_table_read T320` → OK |
-
-⭐ **Namespace'li tablo:** `/SCWM/*` **tırnaksız, küçük harfle** yazılır —
-`SELECT COUNT(*) FROM /scwm/aqua` çalışır. (Tırnak/büyük harf gerekmiyor.)
-
-**How to apply (ek):** kolon-kolon karşılaştırması gerekiyorsa **dolaylı ölç** — ilgili
-çevrim/fark kolonunu literal ile sına (ör. `vrkme<>meins` yerine `umvkz>1 OR umvkn>1`) ve
-raporda **dolaylı olduğunu yaz**. `<>` reddedilirse `=` ile ölçüp toplamdan çıkar; sonucu
-"aritmetik fark" diye niteleyerek ver, doğrudan ölçüm gibi sunma.
-
-Kanonik ayrıntı: `governance/infra-findings.md` → **Q274**.
-
----
-
-## EK ÖLÇÜM 2026-09-10 (<PAKET-B> AG→WE/ZW türetme turu, aynı sistem)
-
-⭐ **YENİ, BÜTÇEDEN BAĞIMSIZ SEBEP: released CDS view'ını JOIN OPERANDI yapmak.**
-`i_custsalespartnerfunc_2`'yi JOIN'e koyan her sorgu **400** verdi — 3 tablolu da,
-**2 tablolu da**. Bu vaka bu kaydın diğer sebeplerinin HİÇBİRİYLE açıklanmıyor:
-- `WHERE`'de yalnız **2 terim** vardı (bütçe sorunu değil),
-- kolon adları **tahmin değildi** — *aynı adlarla tek-tablo sorgusu ÇALIŞTI*,
-- ABAP keyword çakışması yoktu.
-
-**Ayırt edici:** aynı released view **tek başına** (JOIN'siz) sorgulanınca sorunsuz koşuyor;
-yalnız JOIN operandı olunca 400. ⇒ Sınır "released CDS okunamıyor" DEĞİL, *"freestyle
-data-preview onu JOIN'de kabul etmiyor"*.
-
-**How to apply:** Released bir CDS'i JOIN'li ölçmen gerekiyorsa **eşdeğer semantiği ham
-tablolarla kur** (bu turda `knvp ⨝ zsd001_t_setype` koştu) ve raporda **ham tabloyla
-ölçtüğünü YAZ** — released view'ın DCL'i (`#CHECK`) ham tabloda yok, yani iki ölçüm
-farklı yetki rejiminde koşar; sayılar eşit çıksa bile bu **aynı ölçüm değildir**.
-⚠ Bu turda released↔ham satır sayıları eşit çıktı (WE 90 / ZW 18) ama **tek kullanıcıyla**
-(`<SAP_USER>`) — "hiçbir kullanıcı için süzmez" SONUCU ÇIKARILAMAZ. İlgili:
-[[feedback_check-annotasyonu-fail-yonunu-belirlemez]].
-
----
-
-## EK ÖLÇÜM 2026-09-11 (<PAKET-D> parti birleştirme doğrulaması, aynı sistem)
-
-⭐ **PARALEL GÖNDERİM 400/500 ÜRETİYOR — sorgu biçimi değil.** Gateway doğrulama SQL'lerini paralel attı:
-S0'ın ikinci sorgusu **500**, BE-1b **400** → aynı metinler **seri** tekrarda koştu. BE-3 brüt koşumu seri olarak
-500 → 400 → araya basit bir sorgu girince 3. denemede **71** (doğru sonuç).
-Ayrıca önceki kaydın aksine bu turda `GROUP BY … HAVING COUNT(*) > 1` (view entity üzerinde) **koştu**
-(0 satır; pozitif kontrol `>= 1` → 99 grup); bug-expert aynı biçime `zsd001_v_dlv` üzerinde 500 almıştı.
-Aynı günkü backend ölçümü: `zsd001_v_dlv` LEFT JOIN + `IS NULL` anti-join **sahte yetim** (50) listeledi →
-sayım farkı yöntemi (alt 59 − INNER JOIN 59) doğru sonucu verdi.
-
-**How to apply (ek):** doğrulama sorgularını **seri** koş. 400/500 alınca biçimi değiştirmeden önce
-seri ve araya basit sorgu koyarak tekrar dene; iki tekrarda da düşmezse bütçe/biçim sebebine bak.
-Anti-join için `LEFT JOIN … IS NULL` kullanma, **sayım farkı** kullan.
-
-⛔ **AYNI GÜN 2. ÖLÇÜM — "paralel = flaky" hükmü ZAYIFLADI, sebebi DOĞRULANMADI.** Lider brifine alias'sız
-`SELECT COUNT(*), SUM( a ), SUM( b ), SUM( c ) FROM zsd001_c_delivery_sum` yazdı → MCP'de 3×, ayrı süreçte 1× **400**,
-ham metin: *"If inline declarations or "NEW" with generic reference are used, all expressions in the projection
-list must have an alias name."* `AS cnt/qty/ntg/brg` eklenince iki kanalda da ilk denemede koştu.
-⇒ **Birden çok ifade/aggregate içeren projeksiyonda HER ifadeye alias ver** (09-08'deki "`COUNT(*) AS CNT` → 500"
-tek-ifade gözlemiyle çelişiyor; bugün aliased çoklu projeksiyon koştu). Aynı turda MCP'de tek başına
-`SUM( ItemNetWeight )` bir kez 500 bir kez 400, ayrı süreçte koştu ⇒ MCP oturumu da kaynak olabilir.
-**400 alınca ÖNCE hata GÖVDESİNİ oku** (sebep çoğu zaman metinde yazıyor) — sayı tahmini yapma.
-
----
-
-## EK ÖLÇÜM 2026-09-16 (<PAKET-A> [İşle] teşhis turu, aynı sistem)
-
-⛔ **YENİ SEBEP — `SELECT *`'IN TEKRARI SİSTEM KAYNAĞI TÜKETİYOR (aracın kendi yan etkisi).**
-`SELECT * FROM ZSD001_C_PORTAL_HEAD` **500** verdi. Sebep sorguda ya da view'da DEĞİLDİ:
-`adt_dump_list` **`GENERATE_SUBPOOL_DIR_FULL`** gösterdi — `CL_ADT_DP_OPEN_SQL_HANDLER`
-kaynaklı **3 dump**. Yani art arda `SELECT *` çağrıları **geçici subroutine havuzunu**
-tüketmiş; 500 o tükenmenin sonucu.
-
-⚠ **Bu tuzağın tehlikesi teşhisi YANLIŞ HEDEFE çevirmesi:** 500 gelince refleks olarak
-*"CDS view bozuk"* diye okundu ve az kalsın masum bir view suçlanacaktı. Gerçek fail
-**ölçüm aracının kendisiydi**.
-
-**How to apply (ek):** `adt_sql_query`'de **`SELECT *` KULLANMA** — açık kolon listesi ver
-(bütçe gereği zaten 4-6 alan). Kolonları bilmiyorsan **bir kez** küçük `SELECT *` ile keşfet,
-sonra açık listeye geç; keşfi tekrarlama. 500 alınca **`adt_dump_list`'e BAK** — dump
-sorgunun değil aracın adına yazılıysa sebep tükenmedir, sorgu değil: biçimi değiştirmek
-işe yaramaz, **bekle/seyrelt**. İlgili: [[feedback_arac-basarisizligini-zararsiz-sayma]].
-
-⭐ **`<` ve `>` KARAKTERLERİ HTML-ESCAPE EDİLİYOR.** `WHERE datum < '19000101'` →
-**HTTP 400** *"A Boolean expression was expected"*. Sebep sorgu mantığı değil, araç
-katmanının karşılaştırma operatörünü kaçırması. **Çalışan biçim: `BETWEEN` / `NOT BETWEEN`.**
-(Not: 09-08 ölçümünde `<>`'in bazı alanlarda 400 verdiği yazılıydı — bu onun *mekanizmasını*
-açıklıyor olabilir, ama bu tur `<>` için ayrıca DOĞRULANMADI.)
-
-⛔ **`LIKE` bir `DATS` kolonunda tip-uyumsuzluğu hatası verir** (`WHERE datum LIKE '%.%'`).
-DATS içinde çöp veri aramak için `LIKE` kullanılamaz — `NOT BETWEEN '19000101' AND '99991231'`
-ya da alanı `CHAR`'a çeviren bir view üzerinden git.
+Tüketici projede kanonik ayrıntı (varsa): `governance/infra-findings.md` → Q274.
