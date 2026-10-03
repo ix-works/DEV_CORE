@@ -1,11 +1,61 @@
 ---
 name: feedback_adt-sql-query-400-sebebi-where-terim-sayisi
-description: "adt_sql_query 400'unun sebebi kolon sayisi ya da JOIN karmasikligi degil, WHERE TERIM SAYISI (olculdu 2/4 kosul OK, 7 kosul 400)"
+description: "adt_sql_query 400'unun baskin sebebi WHERE terim sayisi DEGIL, freestyle ucunun SATIR BASINA 255 KARAKTER siniri (2026-10-03 kontrol gruplu olcum; arac artik uzun satiri kirar). DIKKAT: 255 asimi her zaman 400 VERMEZ - kesim gecerli sinira duserse kirpilmis sorgu SESSIZCE kosar (ok:true, YANLIS veri). Asagidaki terim/alan butcesi kayitlari bu sinir bilinmeden yazildi"
 metadata: 
   node_type: memory
   type: feedback
   originSessionId: f07a9d9a-ccde-437b-818a-48086e4c73a7
 ---
+
+## ⛔ 2026-10-03 (2. ölçüm) — 255 AŞIMI SESSİZ YANLIŞ SONUÇ DA ÜRETİR
+
+Kesim **token ortasına** düşerse 400 gelir; **geçerli bir sınıra** düşerse SAP kırpılmış sorguyu koşar
+ve `ok:true` döner — **hata yok, veri yanlış**. Kontrol grubu (DEV, `T000`, aynı mantıksal sorgu 273 kr,
+son koşul `AND mandt = '999'`): tek satır → `row_count:1` (**YANLIŞ**) · son koşuldan önce satır sonu →
+`row_count:0` (**DOĞRU**). Bir makinede geçmiş tarama: 229 aşımlı çağrının 222'si hata, **7'si `ok:true`
+kırpılmış** (JOIN koşulu · OR dalı · süzgeç · kolon düşmüş). Araç bu sürümden itibaren uzun satırı
+kırar; **eski sürümle koşan** bir MCP sunucusunda >255 kr satırlı sorgunun `ok:true`'su **kanıt değildir**
+— elle böl. Dış teyit: vibing-steampunk issue #239 + SAP Note 2807133 (`CL_ADT_DP_FREESTYLE_RES`
+gövdeyi CHAR255 satırlara çevirir).
+
+## ⛔ 2026-10-03 DÜZELTME — BU KAYDIN ANA TEŞHİSİ ÇÜRÜDÜ (önce bunu oku)
+
+ADT freestyle ucu (`/sap/bc/adt/datapreview/freestyle`) sorgu metnini **satır satır** okur ve
+**255 karakterden uzun satırın devamını keser**. Kontrol gruplu ölçüm (DEV, yalnız `T000` SELECT,
+son kodda iki kez):
+
+| Girdi | Sonuç |
+|---|---|
+| 288 kr **tek satır**, 14 `OR` terimi | **400** `"O" is invalid here (due to grammar).` — 255. karakter `OR`'un `O`'su |
+| aynı sorgu iki satıra bölünmüş | 200 |
+| 252 kr tek satır, **13 `OR`** terimi | **200** |
+| 291 kr, kırma `COUNT(` ⏎ `* )` | **400** `"INTO" is invalid here` — sütun-1 `*` = tam-satır yorumu |
+| aynısı ` * )` (tek boşluk önekli) | 200 |
+
+⇒ **"WHERE terim sayısı / alan bütçesi → 400" teşhisi çürüdü**: terim/alan eklemek satırı uzatır;
+uzun satır 255'te kesilir ve SAP kesimin düştüğü kelimeyi raporlar (sebebi değil). Aşağıdaki
+"7 koşul → 400", "7 alan + 1 WHERE → 400", "GROUP BY + JOIN bütçeyi daraltır" ölçümlerinin büyük
+olasılıkla bu sınırdan doğduğu düşünülür — **yeniden ölçülmedi (DOĞRULANAMADI)**. Aynı şekilde
+2026-09-16'daki *"`<` HTML-escape ediliyor → 'A Boolean expression was expected'"* teşhisi de
+bu sınırın imzasını taşıyor: 252 kr'lik tek satırda `mtext <> 'Z'` **200** döndü (`<` tek başına
+ölçülmedi).
+
+**Çekirdek değişikliği (core PR #312):** `sap_adt_lib.sql_satirlarini_kir` gönderimden önce her
+uzun satırı literal/yorum DIŞINDAKİ boşluktan kırar, `*` ile başlayan devam satırına tek boşluk
+öneki koyar; tek atom (literal/yorum) 255'i aşıyorsa istek GİTMEZ (`SQLSatirKirilamadi`). `run_query`
+400 gövdesini artık kırpmıyor → `sap_error.message` SAP'nin sebep metnini gösterir.
+
+**How to apply (güncel):** 400 alınca **önce `sap_error.message`'ı oku**. Terim sayısını azaltmak
+bir çözüm DEĞİL. Kısa (≤255) satırda gelen 400 başka sebeplidir — aşağıdaki ölçülmüş biçim
+sınırlarına bak (alias'sız aggregate, kolon-kolon karşılaştırma `tablo~kolon`, tırnaklı namespace,
+released CDS'in JOIN operandı olması, paralel gönderim, `SELECT *` tükenmesi). Açıklanmamış kısa
+vaka hâlâ açık: `WHERE vbeln = 'X' AND vbtyp = 'E'`.
+
+Son-doğrulama: 2026-10-03 · Applies-to: `adt_sql_query` / ADT data-preview freestyle (her profil)
+
+---
+
+## ARŞİV — 2026-10-03 öncesi teşhis (çürüdü; ölçümler tarihsel kanıt olarak duruyor)
 
 `adt_sql_query` **400** dondugunde sebep **`WHERE` terim sayisidir** — kolon sayisi
 ya da JOIN karmasikligi DEGIL.

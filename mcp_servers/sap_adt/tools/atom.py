@@ -1497,38 +1497,28 @@ def _activation_uri(name: str, object_type: str):
 def adt_activate(name: str, object_type: str = "class", also: list | None = None) -> dict:
     """Activate an SAP object — single, OR multiple objects ATOMICALLY (one /activation POST).
 
-    Atomik çoklu-obje aktivasyon (RAP zincirleri): birbirine bağımlı objeler (ör. interface
-    DDLS + onun BDEF'i + behavior class) AYNI istekte aktive edilmeli → `also` ile ek objeleri
-    ver, hepsi tek POST'ta aktive + doğrulanır (activationExecuted + type=E parse; sahte-OK
-    imkansız). bdef/srvd gibi activate_object'in desteklemediği tipler de bu yolda çalışır.
+    Birbirine bağımlı objeler (RAP zinciri: interface DDLS + BDEF + behavior class) AYNI
+    istekte aktive edilmeli → `also` ile ver; hepsi tek POST'ta aktive + doğrulanır
+    (activationExecuted + type=E parse). bdef/srvd gibi tipler de bu yolda çalışır.
 
     Args:
-        name: Birincil obje adı (Z*/Y*).
-        object_type: 'class', 'ddls', 'bdef', 'srvd', 'tabl', ...
-        also: Atomik co-activate ek objeler: [{"name": "...", "object_type": "..."}, ...].
-              None/boş → tek-obje aktivasyon (klasik yol).
+        name: Birincil obje (Z*/Y*). object_type: 'class', 'ddls', 'bdef', 'srvd', 'tabl', ...
+        also: [{"name": "...", "object_type": "..."}, ...]; None/boş → tek-obje (klasik yol).
 
     Returns:
         {ok, name, type, activated, errors?, warnings?, refs?, client_log}
 
-    ⛔ **KLASIK YOLDA `ok` = `activated`** (Q231-b, 2026-09-13). Eskiden `activated:false`
-    iken `ok:true` donuyordu (canlida olculdu). Artik `activated` True degilse `ok=false`,
-    `error="activation_failed"`. Alt katmanin hukmu TEK KAYNAKTAN gelir
-    (`sap_adt_lib.aktivasyon_govde_hukmu` + worklist sondasi — Q188).
+    ⛔ Klasik yolda `ok` = `activated` (değilse ok=false, error="activation_failed") ve obje
+    BAĞIMSIZ olarak worklist'te (`/activation/inactiveobjects`) aranır:
+      • `activation_verified: true` → listede YOK, doğrulandı.
+      • `activation_verified: false` → HÂLÂ listede ⇒ SAHTE-OK: ok=false, activated=false,
+        error="activation_not_executed", `still_inactive=[...]`.
+      • `activation_verified: null` → sonda koşamadı ⇒ KANITLANMADI (`warning`).
+      • `activated: false` → sonda yalnız bilgi taşır (`still_inactive`, `activation_probe`,
+        `probe_note`); ok false kalır.
+    `also=` ve `srvb` yolları readback'i tekrarlamaz (activate_and_verify zaten doğrular).
 
-    ⛔ **KLASIK YOLDA AKTIVASYON READBACK'i** (kayit #70, olculmus sahte-OK vakasi — `fugr`).
-    Obje **bagimsiz olarak** aktive-bekleyen worklist'inde (`/activation/inactiveobjects`)
-    aranir; eslestirme URI-siniri + ad+tip ile (`sap_adt_lib.aktivasyon_worklist_kalan`):
-      • `activated: true` + `activation_verified: true`  → obje listede YOK, dogrulandi.
-      • `activated: true` + `activation_verified: false` → obje HALA listede ⇒ **SAHTE-OK**:
-        `ok=false`, `activated=false`, `error="activation_not_executed"`, `still_inactive=[...]`.
-      • `activation_verified: null`  → sonda kosamadi ⇒ iddia **KANITLANMADI** (`warning`).
-        Bu "dogrulandi" DEGILDIR.
-      • `activated: false` → sonda YINE kosar ama YALNIZ BILGI tasir (`still_inactive`,
-        `activation_probe`); `ok` false KALIR. Liste temizse `probe_note`: obje aktivasyondan
-        ONCE listede degilse "temiz" ayirt edici DEGILDIR (on-snapshot alinmaz).
-    ⚠ `also=` (atomik cok-obje) ve `srvb` yollari zaten `activate_and_verify` ile
-    `activationExecuted` + `type=E` parse eder; readback onlarda TEKRARLANMAZ.
+    Ayrıntı: playbook/adt-mcp.md "`adt_activate` — ayrıntı".
     """
     try:
         require_writable_tier(get_active_tier(), what=f"{object_type} activate")
@@ -1769,41 +1759,25 @@ def adt_publish_service(name: str, version: str = "0001") -> dict:
 def adt_classrun(name: str) -> dict:
     """Bir IF_OO_ADT_CLASSRUN sınıfını çalıştır (ADT classrun, F9-run muadili).
 
-    ADT-only ABAP execute kanalı. RFC FM (RPY_DYNPRO_INSERT/RS_CUA_*) çağıran generator
-    sınıflarını çalıştırmak için (ekran/GUI status üretimi — C1). Kod ÇALIŞTIRIR (yazma
-    yapabilir) → ADR 0010 tier guard: yalnızca DEV.
+    Kod ÇALIŞTIRIR (yazma yapabilir) → ADR 0010 tier guard: yalnız DEV. RFC FM çağıran
+    generator sınıfları (ekran/GUI status üretimi — C1) için.
 
-    ⛔ **PUSH+ACTIVATE SONRASI ÇIKTI BAYAT OLABİLİR — TEK BAŞINA KANIT DEĞİLDİR.**
-    Ölçülmüş vaka (2026-08-19, `ZCL_SD000_GET_IDOCDATA`): sınıfa `c_docnum = '204075'`
-    sabiti eklenip push+activate edildi; `adt_classrun` **HTTP 200 + dolu, akla yatkın**
-    çıktı verdi — ama **eski kodun** çıktısı (sabit sanki BOŞ). **İkinci çağrı da aynı bayat
-    sonucu** verdi ⇒ tek seferlik aksaklık DEĞİL, tekrarlanabilir. Kaynak tarafı dört
-    bağımsız okumayla temiz ölçüldü (`source/main` default = `?version=active` =
-    `?version=inactive`, aynı sha, sabit VAR; `adt_inactive_objects` count 0).
-    **Kök sebep kaynakta değil, ÇALIŞTIRAN OTURUMDA:** MCP sunucusu tek uzun-ömürlü ABAP
-    oturumu kullanır (`sap-contextid` çerezi) ve **sınıf load'u o oturumda bayat kalır;
-    aktivasyon onu tazelemez.** Kanıt: TAZE oturumdan (yeni logon, kendi süreç,
-    `SAPClient().run_classrun(...)`) aynı sınıf DOĞRU çalıştı.
-    ⚠ Bu, *"araç başarısız"* değil **"araç başarılı görünerek yanlış söylüyor"** sınıfıdır —
-    `adt_transport_list` sahte-sıfırı ve `adt_post_shell` sahte-400'ü ile aynı raf.
-
-    ✅ **DOĞRU YÖNTEM (ikisinden BİRİ zorunlu):**
-      1. **Taze oturumda koştur** — `python -c "...; SAPClient().run_classrun('<AD>')"`
-         (ayrı süreç, yeni logon), **veya**
-      2. **Çıktıyı kaynakla ÇAPRAZ KONTROL et** — çıktıda yeni koda ÖZGÜ bir imza
-         (yeni başlık satırı, yeni sabitin değeri) görünüyor mu? Görünmüyorsa sonucu
-         "davranış yanlış" diye RAPORLAMA; önce bayatlığı ele.
-
-    ⚠ Bu tool bugün dönüşünde bayatlık ölçmez (`session_age`/`context_reused` alanı YOK —
-    oturum tazeleme/uyarı alanı infra kuyruğunda AÇIK kalemdir). Yani aşağıdaki `Returns`
-    sözleşmesinde **tazelik kanıtı yoktur**; kanıtı çağıran üretir.
+    ⛔ PUSH+ACTIVATE SONRASI ÇIKTI BAYAT OLABİLİR — `ok: true` TEK BAŞINA KANIT DEĞİLDİR.
+    MCP sunucusunun tek uzun-ömürlü ABAP oturumunda (`sap-contextid`) sınıf load'u bayat
+    kalır; aktivasyon onu tazelemez (ölçüldü 2026-08-19: HTTP 200 + akla yatkın ama ESKİ
+    kodun çıktısı, ikinci çağrıda da aynı). "Başarılı görünerek yanlış söyler" sınıfı.
+    ✅ İkisinden BİRİ zorunlu: (1) taze oturumda koştur —
+    `python -c "...; SAPClient().run_classrun('<AD>')"` (ayrı süreç, yeni logon) · (2)
+    çıktıda yeni koda ÖZGÜ bir imza ara; yoksa "davranış yanlış" diye raporlama, önce
+    bayatlığı ele. Dönüş tazelik ölçmez (`session_age` alanı YOK — açık infra kalemi).
 
     Args:
         name: Sınıf (Z*/Y*, if_oo_adt_classrun~main implement etmeli).
 
     Returns:
         {ok, class, status, output} — output = out->write konsol çıktısı.
-        ⚠ `ok: true` çıktının GÜNCEL olduğunu KANITLAMAZ (yukarıdaki bayatlık şerhi).
+
+    Ayrıntı: playbook/adt-mcp.md "`adt_classrun` — ayrıntı".
     """
     try:
         require_writable_tier(get_active_tier(), what="classrun execute")

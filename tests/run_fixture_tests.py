@@ -412,6 +412,10 @@ OZEL_TESTLER = [
      "retry adapter'i SAP'nin 500 GOVDESINI yutuyordu (429/502/503/504 tekrar KORUNDU)"),
     ("sorgu_basarisizligi_gorunur",
      "adt_sql_query/adt_table_read: alt katman None -> ok:false (ok:true + 0 satir = sahte yesil)"),
+    # 2026-10-03: ADT freestyle SATIR BASINA 255 karakter keser (olculdu, T000) -> otomatik kirma
+    ("sql_satir_kirma",
+     "freestyle 255-satir siniri: uzun satir literal/yorum bolunmeden kirilir, >255 atom -> istek "
+     "gitmez + 4 POST noktasi (AST sinif taramasi) + 400 govdesi kirpilmadan (sebep gorunur)"),
     # 2026-09-03: ayni sinifin 7. uyesi, bu kez CLI tani aracinda (scripts/ altinda oldugu
     # icin 2026-08-01 ve 2026-08-19 supurgelerinin ikisi de atlamisti).
     ("doctor_baglanti_kaniti",
@@ -1049,6 +1053,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "`_validate_cds_source` sözcük-dizisi kapısı · 2026-09-13 Q187/Q188/Q231: aktivasyon hükmünün "
      "TEK KAYNAĞI `aktivasyon_govde_hukmu` + worklist sondası + FUGR FF toplu istek · "
      "2026-09-25 Issue #302: `get_object_revisions` okuyamama ≠ sürüm yok)"),
+    # 2026-10-03: `adt_sql_query` ayrıntısı (tekrarlanamayan iddialar, D7) docstring'den buraya taşındı.
+    ("playbook/adt-mcp.md", ("O:sorgu_basarisizligi_gorunur",),
+     "§`adt_sql_query` — ayrıntı: D7 çapası (TEKRARLANAMAYANLAR başlığı) bu dosyada yaşar"),
+    # 2026-10-03: AYRI satır; birleşim büyüdü → `b0_secim` P3 pinli sayısı 15→16 BİRLİKTE güncellendi.
+    ("scripts/sap_adt_lib.py", ("O:sql_satir_kirma",),
+     "`sql_satirlarini_kir` (freestyle 255-satır sınırı) + `run_query` 400 gövdesi kırpılmadan"),
     # list_revisions.py HARITA'da HIC YOKTU (2026-09-25, Issue #302): tek tüketicisi olduğu
     # `get_object_revisions`'ın gerçek çağıranı olarak `revizyon_okuma` onu AYRI süreçte koşar.
     ("scripts/list_revisions.py", ("O:revizyon_okuma",),
