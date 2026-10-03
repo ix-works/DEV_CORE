@@ -210,14 +210,26 @@ TAZELENEBILIR = {
 }
 
 
-def _d7_sablonu(rel_yerel: str) -> str:
-    """`D7_CIFTLERI`den core-göreli şablon yolu (tek kaynak); çift yoksa GÜRÜLTÜLÜ dur."""
-    sys.path.insert(0, str(CORE_ROOT / "scripts"))
-    from utils.drift_imzasi import D7_CIFTLERI  # type: ignore
+def _d7_sablonu(rel_yerel: str) -> str | None:
+    """`D7_CIFTLERI`den core-göreli şablon yolu (tek kaynak); okunamazsa None + FAIL satırı.
+
+    ⛔ PR #321 inceleme (2026-10-03): import eskiden KORUMASIZDI — modül yüklenemezse
+    `--tazele-*` ham traceback ile çıkıyordu; kardeş `sablon_sapmasi` aynı durumda
+    "ÖLÇÜLEMEDİ" diyor. Artık aynı sözleşme: FAIL + ÖLÇÜLEMEDİ, hiçbir dosyaya YAZILMAZ.
+    """
+    try:
+        sys.path.insert(0, str(CORE_ROOT / "scripts"))
+        from utils.drift_imzasi import D7_CIFTLERI  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        say(FAIL, f"{rel_yerel}: şablon yolu ÖLÇÜLEMEDİ — utils.drift_imzasi yüklenemedi "
+                  f"({type(e).__name__}: {e}); tazeleme YAPILMADI, dosyaya DOKUNULMADI")
+        return None
     for rel_y, rel_t, _ad, _yok, _sapma in D7_CIFTLERI:
         if rel_y == rel_yerel:
             return rel_t
-    raise RuntimeError(f"D7_CIFTLERI'nde {rel_yerel} çifti yok (tek kaynak)")
+    say(FAIL, f"{rel_yerel}: D7_CIFTLERI'nde çift YOK (tek kaynak) — tazeleme ÖLÇÜLEMEDİ, "
+              f"dosyaya DOKUNULMADI")
+    return None
 
 
 def shim_tazele(proje: Path) -> bool:
@@ -250,6 +262,8 @@ def kopya_tazele(proje: Path, rel_yerel: str) -> bool:
     `claude_overlay` kapısında da kayıtlı (elle düzeltmeyi sessizce ezme).
     """
     rel_sablon = _d7_sablonu(rel_yerel)
+    if rel_sablon is None:
+        return False
     hedef = proje.joinpath(*rel_yerel.split("/"))
     kaynak = CORE_ROOT.joinpath(*rel_sablon.split("/"))
     ad = hedef.name
@@ -372,9 +386,11 @@ def sablon_sapmasi(proje: Path) -> int:
     Dönüş = WARN sayısı (yalnız test/rapor için; `main` kullanmaz).
 
     YÖN AYRIMI (lider kararı 2026-10-03 — uyarı körlüğü):
-      · `settings.json`: yalnız-ŞABLONDA öğe > 0 ⇒ WARN (proje GERİDE). Yalnız-PROJEDE ek
-        varsa ve şablonun her öğesi kapsanıyorsa ⇒ INFO (proje eki meşrudur; ölçüldü: bir
+      · `settings.json`: yalnız-ŞABLONDA öğe > 0 ⇒ WARN (proje GERİDE). Yalnız-PROJEDE öğelerin
+        TAMAMI `permissions.allow` eki ve şablonun her öğesi kapsanıyorsa ⇒ INFO (ölçüldü: bir
         tüketicide 3 ek `allow` vardı — her koşumda WARN basmak gerçek sapmayı gömerdi).
+        Allow DIŞI her yalnız-projede öğe (`hooks.*` · `disableAllHooks` · `env.*` ·
+        `defaultMode` · `deny`/`ask`) ⇒ WARN, adediyle (PR #321 inceleme, 2026-10-03).
         ⚠ Bu ayrım YALNIZ bu satır içindir; `session_start` D7 hükmü (her imza farkı =
         SAPMIŞ) DEĞİŞMEDİ.
       · `hook_shim.py` · `pre-commit`: HER fark WARN — proje İLERİDE de olabilir (TERS YÖN:
@@ -384,7 +400,7 @@ def sablon_sapmasi(proje: Path) -> int:
     try:
         sys.path.insert(0, str(CORE_ROOT / "scripts"))
         from utils.drift_imzasi import (D7_CIFTLERI, anlamli_imza, ayrisma,  # type: ignore
-                                        OKUNAMADI)
+                                        OKUNAMADI, ALLOW_ONEKI)
     except Exception as e:  # noqa: BLE001
         say(WARN, f"şablon kıyası ÖLÇÜLEMEDİ — utils.drift_imzasi yüklenemedi "
                   f"({type(e).__name__}: {e}); proje kopyalarının şablon sapması BU KOŞUMDA "
@@ -426,16 +442,26 @@ def sablon_sapmasi(proje: Path) -> int:
         else:
             komut = (f"{sapma_onarim} · fark: git diff --no-index core/{rel_t} {rel_y} "
                      f"(otomatik tazeleme YOK — proje ekleri meşru)")
-        if rel_y not in TAZELENEBILIR and ayr is not None and proje_ozel and not sablon_ozel:
+        # INFO YALNIZ settings çiftinde ve yalnız-projede öğelerin TAMAMI `permissions.allow`
+        # EKİYSE (PR #321 inceleme, kullanıcı kararı 2026-10-03): `disableAllHooks`, `hooks.*`
+        # (ör. çekirdekten kaldırılmış bir hook'un geri eklenmesi), `env.*`, `defaultMode`,
+        # `deny`/`ask` davranış DEĞİŞTİRİR ⇒ WARN. İlk sürümde her yalnız-ek INFO'ydu.
+        allow_disi = [o for o in proje_ozel if not o.startswith(ALLOW_ONEKI)]
+        if (rel_y == ".claude/settings.json" and ayr is not None and proje_ozel
+                and not sablon_ozel and not allow_disi):
             sayac["ek"] += 1
-            say(INFO, f"{ad}: {len(proje_ozel)} proje eki, şablonun tüm öğeleri kapsanıyor "
-                      f"(D7 imzası {y} ≠ {t}; ekler: {_ornek(proje_ozel)})")
+            say(INFO, f"{ad}: {len(proje_ozel)} proje eki (yalnız permissions.allow), şablonun "
+                      f"tüm öğeleri kapsanıyor (D7 imzası {y} ≠ {t}; ekler: {_ornek(proje_ozel)})")
             continue
+        if rel_y == ".claude/settings.json" and allow_disi:
+            yon += f" · yalnız-projede öğelerin {len(allow_disi)}'i permissions.allow DIŞI"
         sayac["sapmış"] += 1
         say(WARN, f"{ad} şablondan SAPMIŞ (D7 imzası {y} ≠ {t}; {yon}) — {komut}")
         if sablon_ozel:
             print(f"        yalnız şablonda: {_ornek(sablon_ozel)}")
-        if proje_ozel:
+        if allow_disi and rel_y == ".claude/settings.json":
+            print(f"        allow DIŞI    : {_ornek(allow_disi)}")
+        elif proje_ozel:
             print(f"        yalnız projede : {_ornek(proje_ozel)}")
     # KAPSAM BEYANI (her koşumda — en kritik an sıfır-bulgu anıdır)
     say(INFO, f"şablon kıyası (D7_CIFTLERI, {len(D7_CIFTLERI)} çift): "

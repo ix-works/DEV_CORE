@@ -28,7 +28,10 @@ dosyada (CORE_ROOT ayni cozulsun) ve finally'de SILINIR · kum silinmeden ONCE j
 
 KOSUM:  python tests/fixtures/team_setup_sablon_sapmasi/run.py
         ... --mutasyon-sapma-sessiz        (sablon_sapmasi cagrisi kalkar)      -> A2 A4 A5
-        ... --mutasyon-ek-warn             (settings eki WARN'a doner)           -> A3
+        ... --mutasyon-ek-warn             (settings allow eki WARN'a doner)     -> A3
+        ... --mutasyon-info-genis          (INFO allow-disi eklere acilir)       -> A3b A3c A3d
+        ... --mutasyon-bos-kap             (bos {}/[] yaprak uretmez)            -> A10
+        ... --mutasyon-import-korumasiz    (--tazele-* import'u korumasiz)       -> A11
         ... --mutasyon-eksik-info          (settings EKSIGI INFO'ya duser)       -> A2
         ... --mutasyon-precommit-yok       (--tazele-precommit hicbir sey yapmaz) -> B2
         ... --mutasyon-fark-sessiz         (fark govdesi basilmadan tazelenir)   -> B2b
@@ -70,19 +73,37 @@ SABLON_PC = REPO / "claude" / "git-hooks" / "pre-commit.template"
 # team_setup'in CORE-INDEX ureticisini cagirdigi satir — kopya team_setup'i kopya
 # ureticiye yoneltmek icin (mutasyon/taban kipleri). count != 1 => DOGRULANAMADI.
 CAPA_URETICI = 'uretici = CORE_ROOT / "scripts" / "build_core_index.py"'
+# settings INFO dalinin kosulu (PR #321 inceleme sonrasi bicim)
+CAPA_INFO = ('        if (rel_y == ".claude/settings.json" and ayr is not None and proje_ozel\n'
+             '                and not sablon_ozel and not allow_disi):\n')
+DZ = SCRIPTS / "utils" / "drift_imzasi.py"
+CAPA_ONEK = "CORE_ROOT = Path(__file__).resolve().parent.parent          # D24\n"
 
 # (dosya, eski, yeni, beklenen-dusen)
 MUTLAR = {
     "--mutasyon-sapma-sessiz": (
         "ts", "    sablon_sapmasi(proje)\n", "    pass  # MUTASYON\n", {"A2", "A4", "A5"}),
     "--mutasyon-ek-warn": (
-        "ts", "        if rel_y not in TAZELENEBILIR and ayr is not None and proje_ozel "
-              "and not sablon_ozel:\n",
-        "        if False:  # MUTASYON\n", {"A3"}),
+        "ts", CAPA_INFO, "        if False:  # MUTASYON\n", {"A3"}),
     "--mutasyon-eksik-info": (
-        "ts", "        if rel_y not in TAZELENEBILIR and ayr is not None and proje_ozel "
-              "and not sablon_ozel:\n",
-        "        if rel_y not in TAZELENEBILIR and ayr is not None:  # MUTASYON\n", {"A2"}),
+        "ts", CAPA_INFO,
+        "        if (rel_y == \".claude/settings.json\" and ayr is not None  # MUTASYON\n"
+        "                and not allow_disi):\n", {"A2"}),
+    # PR #321 inceleme: INFO dali allow-disi eklere de acilir (ilk surumun hatasi) -> A3b-d
+    "--mutasyon-info-genis": (
+        "ts", CAPA_INFO,
+        "        if (rel_y == \".claude/settings.json\" and ayr is not None and proje_ozel\n"
+        "                and not sablon_ozel):  # MUTASYON\n", {"A3b", "A3c", "A3d"}),
+    # bos kap yaprak uretmez -> A10 ("yalniz SIRA" yanlis mesaji geri gelir)
+    "--mutasyon-bos-kap": (
+        "dz", "            if isinstance(n, (dict, list)) and not n:\n",
+        "            if False:  # MUTASYON\n", {"A10"}),
+    # import korumasi kalkar -> A11 (ham traceback)
+    "--mutasyon-import-korumasiz": (
+        "ts", "    except Exception as e:  # noqa: BLE001\n"
+              "        say(FAIL, f\"{rel_yerel}: şablon yolu ÖLÇÜLEMEDİ",
+        "    except ImportError as e:  # MUTASYON  # noqa: BLE001\n"
+        "        raise\n        say(FAIL, f\"{rel_yerel}: şablon yolu ÖLÇÜLEMEDİ", {"A11"}),
     "--mutasyon-precommit-yok": (
         "ts", '            ok = kopya_tazele(proje, "scripts/git-hooks/pre-commit") and ok\n',
         "            pass  # MUTASYON\n", {"B2"}),
@@ -226,22 +247,54 @@ def a_blogu(ts: Path, tmp: Path) -> None:
             rc == 0 and len(w) == 1 and "yalnız ŞABLONDA 1 öğe" in w[0]
             and "team_setup TAMAM" in out, f"rc={rc} w={w}")
 
-    # A3 settings yalniz PROJE EKI (canli tuketici sekli: 3 ek allow + kaldirilmis hook eki)
+    # A3 settings yalniz permissions.allow EKI (canli tuketici sekli: 3 ek allow) -> INFO
+    # ⛔ PR #321 inceleme: ilk surum SessionEnd hook ekini de INFO diye CIVILIYORDU (yanlis).
+    uc_allow = ["Bash(python core/scripts/validators/zz_a.py:*)",
+                "Bash(python core/scripts/validators/zz_b.py:*)",
+                "Bash(python core/scripts/validators/zz_c.py:*)"]
+    session_end = [{"hooks": [{"type": "command",
+                               "command": "python scripts/hook_shim.py watchdog_stop"}]}]
     p = proje_kur(tmp, "a3")
-
-    def _ek(d):  # noqa: ANN001
-        d["permissions"]["allow"] += ["Bash(python core/scripts/validators/zz_a.py:*)",
-                                      "Bash(python core/scripts/validators/zz_b.py:*)",
-                                      "Bash(python core/scripts/validators/zz_c.py:*)"]
-        d["hooks"]["SessionEnd"] = [{"hooks": [{
-            "type": "command", "command": "python scripts/hook_shim.py watchdog_stop"}]}]
-    settings_yaz(p, _ek)
+    settings_yaz(p, lambda d: d["permissions"]["allow"].extend(uc_allow))
     rc, out = kos_ts(ts, p)
-    i = satirlar(out, "[INFO]", "settings.json: 4 proje eki")
-    kontrol("A3", "settings yalniz PROJE EKI -> WARN YOK, INFO '4 proje eki' (uyari korlugu yok)",
-            rc == 0 and not satirlar(out, "[WARN]", "settings.json") and len(i) == 1
-            and "SessionEnd" in i[0],
+    i = satirlar(out, "[INFO]", "settings.json: 3 proje eki")
+    kontrol("A3", "settings yalniz ALLOW EKI -> WARN YOK, INFO '3 proje eki' (uyari korlugu yok)",
+            rc == 0 and not satirlar(out, "[WARN]", "settings.json") and len(i) == 1,
             f"info={i} warn={satirlar(out, '[WARN]', 'settings.json')}")
+
+    def _warn_allow_disi(kimlik: str, ad_: str, degistir, n: int) -> None:  # noqa: ANN001
+        pp = proje_kur(tmp, kimlik.lower())
+        settings_yaz(pp, degistir)
+        _rc, o = kos_ts(ts, pp)
+        w_ = satirlar(o, "[WARN]", "settings.json şablondan SAPMIŞ")
+        kontrol(kimlik, ad_,
+                len(w_) == 1 and f"{n}'i permissions.allow DIŞI" in w_[0]
+                and not satirlar(o, "[INFO]", "settings.json:"),
+                f"warn={w_} info={satirlar(o, '[INFO]', 'settings.json:')}")
+
+    _warn_allow_disi("A3b", "settings `disableAllHooks` eki -> WARN (1 allow DISI), INFO DEGIL",
+                     lambda d: d.update({"disableAllHooks": True}), 1)
+    _warn_allow_disi("A3c", "settings `hooks.SessionEnd` eki (kaldirilmis hook) -> WARN, "
+                            "INFO DEGIL",
+                     lambda d: d["hooks"].update({"SessionEnd": session_end}), 1)
+
+    def _karisik(d):  # noqa: ANN001
+        d["permissions"]["allow"].extend(uc_allow)
+        d["hooks"]["SessionEnd"] = session_end
+    _warn_allow_disi("A3d", "settings allow + hooks KARISIK -> WARN (yalniz 1'i allow DISI)",
+                     _karisik, 1)
+
+    # A10 bos kap eki: yaprak sayilir, "yalniz SIRA" denmez
+    p = proje_kur(tmp, "a10")
+
+    def _bos(d):  # noqa: ANN001
+        d["env"]["ZZ_BOS"] = {}
+        d["permissions"]["zz"] = []
+    settings_yaz(p, _bos)
+    rc, out = kos_ts(ts, p)
+    w = satirlar(out, "[WARN]", "settings.json şablondan SAPMIŞ")
+    kontrol("A10", "bos kap eki ({} / []) -> 'yalniz PROJEDE 2 oge', 'yalniz SIRA' DEGIL",
+            len(w) == 1 and "yalnız PROJEDE 2 öğe" in w[0] and "SIRA" not in w[0], f"w={w}")
 
     # A4 hook_shim proje ILERIDE -> WARN + --tazele-shim onerisi
     p = proje_kur(tmp, "a4")
@@ -336,6 +389,29 @@ def b_blogu(ts: Path, tmp: Path) -> None:
             rc == 0 and "tazeleme gereksiz" in out
             and not list((p / "scripts" / "git-hooks").glob("pre-commit.yedek-*")),
             f"rc={rc} cikti={out[-300:]!r}")
+
+    # A11 (bayrak yolu) modul YUKLENEMEZ -> FAIL + OLCULEMEDI, traceback YOK, dosya
+    # DEGISMEZ. `sys.modules[...] = None` import'u ImportError'a cevirir.
+    p = proje_kur(tmp, "a11")
+    pc = p / "scripts" / "git-hooks" / "pre-commit"
+    pc.write_bytes(pc.read_bytes() + b"# sapma\n")
+    shim = p / "scripts" / "hook_shim.py"
+    shim.write_bytes(shim.read_bytes() + b"# sapma\n")
+    once_pc, once_sh = pc.read_bytes(), shim.read_bytes()
+    src = ("import sys, runpy\n"
+           "sys.modules['utils.drift_imzasi'] = None\n"
+           f"sys.argv = ['team_setup.py', '--project', r'{p}', '--tazele-shim', "
+           "'--tazele-precommit']\n"
+           f"runpy.run_path(r'{ts}', run_name='__main__')\n")
+    r = subprocess.run([sys.executable, "-c", src], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=300, env=env_temiz())
+    out = (r.stdout or "") + (r.stderr or "")
+    f = satirlar(out, "[FAIL]", "ÖLÇÜLEMEDİ")
+    kontrol("A11", "drift_imzasi YUKLENEMEZ -> --tazele-* FAIL 'ÖLÇÜLEMEDİ' x2, Traceback YOK, "
+                   "exit 1, iki dosya DEGISMEDI",
+            r.returncode == 1 and len(f) == 2 and "Traceback" not in out
+            and pc.read_bytes() == once_pc and shim.read_bytes() == once_sh,
+            f"rc={r.returncode} fail={f} cikti={out[-300:]!r}")
 
     p = tmp / "b5"
     (p / "scripts").mkdir(parents=True)
@@ -475,15 +551,34 @@ def main() -> int:
         ci_metin = ci_kaynak.read_bytes().decode("utf-8")
         if secili:
             dosya, eski, yeni, _b = MUTLAR[secili[0]]
-            hedef_metin = ts_metin if dosya == "ts" else ci_metin
+            if dosya == "dz":
+                hedef_metin = DZ.read_bytes().decode("utf-8")
+            else:
+                hedef_metin = ts_metin if dosya == "ts" else ci_metin
             if hedef_metin.count(eski) != 1:
                 print(f"[DOGRULANAMADI] mutasyon capasi {hedef_metin.count(eski)} kez bulundu "
                       f"({secili[0]}) -> mutasyon uygulanmadi; sonuc ANLAMSIZ olurdu.")
                 return 2
             if dosya == "ts":
                 ts_metin = ts_metin.replace(eski, yeni, 1)
-            else:
+            elif dosya == "ci":
                 ci_metin = ci_metin.replace(eski, yeni, 1)
+            else:
+                # drift_imzasi `utils` paketinden import edilir: kardes kopya yolu yok =>
+                # kopya team_setup'a mutant modulu `sys.modules`a ONCEDEN yukleyen on-ek
+                # eklenir (gercek kaynaga YAZILMAZ).
+                dz_mut = SCRIPTS / "utils" / "_zz_tsss_dz.py"
+                gecici.append(dz_mut)
+                dz_mut.write_bytes(hedef_metin.replace(eski, yeni, 1).encode("utf-8"))
+                if ts_metin.count(CAPA_ONEK) != 1:
+                    print("[DOGRULANAMADI] team_setup'ta CORE_ROOT capasi bulunamadi")
+                    return 2
+                ts_metin = ts_metin.replace(CAPA_ONEK, CAPA_ONEK + (
+                    "import importlib.util as _iu  # MUTASYON on-eki\n"
+                    "_sp = _iu.spec_from_file_location('utils.drift_imzasi', "
+                    "str(CORE_ROOT / 'scripts' / 'utils' / '_zz_tsss_dz.py'))\n"
+                    "_mm = _iu.module_from_spec(_sp); sys.modules['utils.drift_imzasi'] = _mm\n"
+                    "_sp.loader.exec_module(_mm)\n"), 1)
         if secili or ts_kaynak != TS or ci_kaynak != CI:
             # Kopya team_setup KOPYA ureticiyi cagirsin (C6 uctan uca ayni kaynagi olcsun).
             if ts_metin.count(CAPA_URETICI) != 1:

@@ -162,7 +162,12 @@ def _ogeler(p: Path) -> list[str]:
         cikti: list[str] = []
 
         def gez(n, yol: str) -> None:
-            if isinstance(n, dict):
+            # BOŞ KAP YAPRAKTIR (PR #321 inceleme, 2026-10-03): `{}`/`[]` eskiden HİÇ öğe
+            # üretmiyordu ⇒ fark yalnız boş kaptan geliyorsa çağıran "yalnız SIRA farklı"
+            # diyordu (ölçüldü: `env.ZZ_BOS={}` + `permissions.zz=[]`).
+            if isinstance(n, (dict, list)) and not n:
+                cikti.append(f"{yol} = " + ("{}" if isinstance(n, dict) else "[]"))
+            elif isinstance(n, dict):
                 for k in sorted(n):
                     gez(n[k], f"{yol}.{k}" if yol else k)
             elif isinstance(n, list):
@@ -175,6 +180,12 @@ def _ogeler(p: Path) -> list[str]:
         gez(yorumsuz(json.loads(ham.decode("utf-8"))), "")
         return cikti
     return ham.replace(b"\r\n", b"\n").strip().decode("utf-8", "replace").split("\n")
+
+
+# `_ogeler`in `permissions.allow` liste öğesi öneki — `team_setup.sablon_sapmasi` settings
+# INFO dalı YALNIZ bu önekli eklemeleri "meşru proje eki" sayar (biçim burada üretildiği
+# için önek de burada yaşar; tüketicide literal kopya YOK).
+ALLOW_ONEKI = "permissions.allow[] = "
 
 
 def ayrisma(yerel: Path, sablon: Path) -> tuple[list[str], list[str]] | None:
