@@ -20,9 +20,14 @@ VEKTÖRLER:
   G5  TÜRETME KANITI: kopya core'da job adı değişince çıktı değişir (sabit liste değil)
   G6  workflow okunamazsa None (çağıran ÖLÇÜLEMEDİ basar; sessiz yanlış ad yok)
   G7  repo_mode=local çıktısında ruleset satırı YOK (yalnız full'da basılır — kontrol)
+  G8  job satırında satır sonu yorumu (`  validators:  # yorum`) → None (bug-gate #320 LOW)
+  G9  tırnaklı ad + satır sonu yorumu (`name: "core-leak"  # yorum`) → None
+  G10 KONTROL yalnız tırnaklı ad (yorumsuz) → türetme aynen (fail-closed aşırı değil)
 
 MUTASYON (bellekte; çapa tam 1 kez bulunmazsa exit 2):
-  --mutasyon-onek-yok   `<çağıran> / ` öneki düşer   → G1, G2, G3, G5 düşer
+  --mutasyon-onek-yok            `<çağıran> / ` öneki düşer           → G1, G2, G3, G5, G10 düşer
+  --mutasyon-job-sapma-sessiz    tanınmayan job satırı atlanır        → G8 düşer
+  --mutasyon-deger-sapma-sessiz  ad/uses değer denetimi kalkar        → G9 düşer
 TABAN (eski kod): --kaynak <init_project.py>  → G1, G2, G3, G5, G6 düşer (fonksiyon yok /
   eski satır). Eski DOKÜMAN (PROJECT_BOOTSTRAP + CODEOWNERS.template) G3 + G4'te düşer.
 
@@ -56,7 +61,7 @@ CODEOWNERS = CORE / "claude" / "CODEOWNERS.template"
 BEKLENEN = ["guard / core-leak", "guard / validators", "guard / behavior-surface"]
 BAYAT = "[core-leak, behavior-surface]"
 
-GECERLI_KIP = ("--mutasyon-onek-yok",)
+GECERLI_KIP = ("--mutasyon-onek-yok", "--mutasyon-job-sapma-sessiz", "--mutasyon-deger-sapma-sessiz")
 KIP: set[str] = set()
 TABAN: Path | None = None
 _a = sys.argv[1:]
@@ -93,6 +98,13 @@ def kaynak_metni() -> str:
     if "--mutasyon-onek-yok" in KIP:
         m = _degistir(m, '    return [f"{onek} / {ad}" for ad in isler]\n',
                       "    return list(isler)\n", "onek-yok")
+    if "--mutasyon-job-sapma-sessiz" in KIP:
+        m = _degistir(m, "                return []                       # tanınmayan job satırı",
+                      "                continue                        # tanınmayan job satırı",
+                      "job-sapma-sessiz")
+    if "--mutasyon-deger-sapma-sessiz" in KIP:
+        m = _degistir(m, "            if not deger or not _YML_DEGER_RE.match(deger):\n",
+                      "            if not deger:\n", "deger-sapma-sessiz")
     return m
 
 
@@ -170,6 +182,25 @@ def main() -> int:
         rc7, cikti7 = cli(mod, tmp / "proje_local", "local")
         kontrol("G7 KONTROL repo_mode=local → ruleset satırı basılmaz",
                 rc7 == 0 and "required_status_checks" not in cikti7, f"rc={rc7}")
+
+        # ── Bug-gate #320 LOW: geçerli YAML'da KISMİ sapma sessiz yanlış ad üretmesin ──
+        asil = CAGRILAN.read_text(encoding="utf-8")
+
+        def sapma(ad: str, eski: str, yeni: str):
+            if asil.count(eski) != 1:
+                print(f"[DURDU] KURULAMADI: {ad} capasi {asil.count(eski)} kez: {eski!r}")
+                sys.exit(2)
+            return turet(mod, kopya_core(tmp / f"core_{ad}", asil.replace(eski, yeni)))
+
+        g8 = sapma("g8", "  validators:\n", "  validators:  # yorum\n")
+        kontrol("G8 job satırında satır sonu yorumu → None (ÖLÇÜLEMEDİ; job sessizce DÜŞMEZ)",
+                g8 is None, f"g8={g8}")
+        g9 = sapma("g9", "    name: core-leak\n", '    name: "core-leak"  # yorum\n')
+        kontrol("G9 tırnaklı ad + satır sonu yorumu → None (ÖLÇÜLEMEDİ; ad KİRLENMEZ)",
+                g9 is None, f"g9={g9}")
+        g10 = sapma("g10", "    name: core-leak\n", '    name: "core-leak"\n')
+        kontrol("G10 KONTROL yalnız tırnaklı ad (yorumsuz) → türetme aynen (fail-closed aşırı değil)",
+                g10 == BEKLENEN, f"g10={g10}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         if tmp.exists():

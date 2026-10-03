@@ -18,12 +18,17 @@ VEKTÖRLER (GERÇEK `main()` + argparse, geçici ağaçta; gerçek projeye yazma
   M4  KONTROL 'BC' liste dışı, klasör VAR → rc 0, paket yaratıldı, "yaratıldı" satırı YOK
   M5  KONTROL SD klasör VAR         → rc 0, "yaratıldı" satırı YOK
   M6  SD, klasör yok, şablon kökü YOK → rc 1, modül klasörü de YARATILMADI (yaratma en sonda)
+  M7  kaynak kökü (`<source_root>`) YOK → rc 1, HİÇBİR ŞEY yaratılmaz (bug-gate #320 MEDIUM:
+      yanlış cwd'den koşum kökü + iskeleti sessizce açıyordu; kök `init_project`'in işidir)
+  M7b aynı koşumda hata metni KÖKÜ söyler (modül klasörü değil)
 
 MUTASYON (bugünkü kaynaktan, bellekte; çapa tam 1 kez bulunmazsa exit 2):
   --mutasyon-liste-yok       liste denetimi kalkar (her ad yaratılır)   → M2, M3 düşer
   --mutasyon-mevcut-daralt   var olan klasörde de liste şartı           → M4 düşer
   --mutasyon-erken-yarat     modül klasörü şablon denetiminden ÖNCE     → M6 düşer
-TABAN (eski kod): --kaynak <bootstrap_package.py>  → M1, M2, M3 düşer; M4, M5, M6 geçer
+  --mutasyon-kok-yarat       kök denetimi kalkar + `parents=True`       → M7, M7b düşer
+TABAN (eski kod): --kaynak <bootstrap_package.py>  → fadf091: M1, M2, M3, M7b düşer (M7 GEÇER —
+  o kod kök yokken de exit 1'di, yalnız mesajı "modül klasörü yok"tu) · a025226: M7, M7b düşer
 
 Çıkış: 0 beklendiği gibi · 1 sapma · 2 KURULAMADI
 """
@@ -31,7 +36,9 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import shutil
+import stat
 import sys
 import tempfile
 import types
@@ -48,7 +55,8 @@ CORE = HERE.parents[2]
 BOOT = CORE / "scripts" / "bootstrap_package.py"
 TPL_DIR = CORE / "templates" / "new-package"
 
-GECERLI_KIP = ("--mutasyon-liste-yok", "--mutasyon-mevcut-daralt", "--mutasyon-erken-yarat")
+GECERLI_KIP = ("--mutasyon-liste-yok", "--mutasyon-mevcut-daralt", "--mutasyon-erken-yarat",
+               "--mutasyon-kok-yarat")
 KIP: set[str] = set()
 TABAN: Path | None = None
 _a = sys.argv[1:]
@@ -96,6 +104,10 @@ def kaynak_metni() -> str:
                       "        modul_yarat = False\n"
                       "    if pkg_dir.exists():\n        print(f\"HATA: {pkg_dir} zaten mevcut",
                       "erken-yarat")
+    if "--mutasyon-kok-yarat" in KIP:
+        m = _degistir(m, "    if not erp_root.is_dir():\n", "    if False:\n", "kok-yarat/denetim")
+        m = _degistir(m, "        module_dir.mkdir(parents=False)", "        module_dir.mkdir(parents=True)",
+                      "kok-yarat/parents")
     return m
 
 
@@ -107,13 +119,15 @@ def boot_yukle(src: str):
     return mod
 
 
-def kos(boot, kok: Path, modul: str, *, modul_var: bool, sablon_var: bool = True) -> dict:
+def kos(boot, kok: Path, modul: str, *, modul_var: bool, sablon_var: bool = True,
+        kok_var: bool = True) -> dict:
     kok.mkdir(parents=True)
     tdir = kok / "tpl"
     if sablon_var:
         shutil.copytree(TPL_DIR, tdir)
     kaynak = kok / "SRC"
-    kaynak.mkdir()
+    if kok_var:
+        kaynak.mkdir()
     if modul_var:
         (kaynak / modul).mkdir()
     argv = ["bootstrap_package.py", "ZSD001_CLC", "--title", "Fixture", "--module", modul,
@@ -128,7 +142,25 @@ def kos(boot, kok: Path, modul: str, *, modul_var: bool, sablon_var: bool = True
     return {"rc": rc, "out": out.getvalue(), "err": err.getvalue(),
             "modul": (kaynak / modul).is_dir(),
             "paket": (kaynak / modul / "ZSD001_CLC" / ".rules.md").is_file(),
-            "dizinler": sorted(p.name for p in kaynak.iterdir())}
+            "dizinler": sorted(p.name for p in kaynak.iterdir()) if kaynak.is_dir() else None,
+            "kok": kaynak.exists()}
+
+
+def _sil(d: Path) -> None:
+    """Salt-okur öznitelikli kopyayı da siler (`templates/new-package` + `ref_docs` `R`
+    özniteliği taşır, `copytree` onu kopyalar; çıplak `rmtree(ignore_errors)` WinError 5 ile
+    %TEMP%'te `boot_modul_*` bırakıyordu). Desen: `ix_doctor_memory_git._sil`."""
+    def _ac(func, path, _exc):  # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)  # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def main() -> int:
@@ -161,8 +193,14 @@ def main() -> int:
         kontrol("M6 SD + klasör yok + şablon kökü YOK → rc 1, modül klasörü YARATILMADI",
                 s["rc"] == 1 and s["dizinler"] == [],
                 f"rc={s['rc']} dizinler={s['dizinler']}")
+
+        s = kos(boot, tmp / "m7", "SD", modul_var=False, kok_var=False)
+        kontrol("M7 kaynak kökü YOK → rc 1, kök/modül/paket YARATILMADI",
+                s["rc"] == 1 and not s["kok"], f"rc={s['rc']} kok={s['kok']}")
+        kontrol("M7b kaynak kökü YOK → hata KÖKÜ söylüyor (modül değil) + 'YARATILMADI'",
+                "Kaynak kökü" in s["err"] and "YARATILMADI" in s["err"], f"err={s['err'][-160:]!r}")
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        _sil(tmp)
         if tmp.exists():
             print(f"[UYARI] kum silinemedi: {tmp}")
 

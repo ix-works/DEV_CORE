@@ -406,7 +406,8 @@ def katman2() -> list[Sonuc]:
         r.append((PASS, f"beklenen GitHub org (remote-deseninden): {beklenen_org}"))
     elif lite_kip:
         r.append((SKIP, f"beklenen org türetilmedi — repo_mode={lite_kip}: LITE kipte proje "
-                        f"remote'u beklenmez (core remote'u repo ADIYLA denetlenir)"))
+                        f"remote'u beklenmez (core remote'unun yalnız VARLIĞI denetlenir; "
+                        f"org/ad kıyası yapılmaz)"))
     else:
         r.append((WARN, "beklenen org türetilemedi (proje remote'u yok + project.yaml github_org yok)"))
 

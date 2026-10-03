@@ -22,6 +22,7 @@ Kullanım:  python <CORE>/scripts/init_project.py C:\\IX\\<PROJE> [--name <AD>] 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -234,7 +235,12 @@ def _yml_isleri(metin: str) -> list[tuple[str, str | None, str | None]]:
 
     Bilinçli olarak dar bir okuyucu (PyYAML bağımlılığı yok): yalnız bu repodaki iki
     workflow'un biçimini okur — `jobs:` 0. sütunda, job id 2 boşluk, `name:`/`uses:` 4 boşluk.
-    Biçim tutmazsa boş liste döner ⇒ çağıran "ÖLÇÜLEMEDİ" basar (sessiz yanlış ad YOK).
+    FAIL-CLOSED: `jobs:` altında 2 boşluklu satır çıplak `<id>:` DEĞİLSE (ör. satır sonu
+    yorumu `  validators:  # not`) ya da okunan `name:`/`uses:` değeri yorum/tırnak artığı
+    taşıyorsa BOŞ liste döner ⇒ çağıran "ÖLÇÜLEMEDİ" basar. Gerekçe (bug-gate #320 LOW): ilk
+    sürüm bu iki geçerli-YAML biçiminde job'u sessizce düşürüyor / adı kirletiyordu.
+    Kapsam: yalnız bu iki sapma sınıfı ölçüldü; YAML'ın başka biçimleri (akış `{}`, çok satırlı
+    skaler, çapa/alias) tanınmaz ve genelde yine boş liste ⇒ ÖLÇÜLEMEDİ ile sonuçlanır.
     """
     isler: list[list] = []
     icinde = False
@@ -246,16 +252,28 @@ def _yml_isleri(metin: str) -> list[tuple[str, str | None, str | None]]:
             continue
         if not icinde:
             continue
-        if satir.startswith("  ") and not satir.startswith("   ") and satir.rstrip().endswith(":"):
+        if satir.startswith("  ") and not satir.startswith("   "):
+            if not _JOB_ID_RE.match(satir.rstrip()):
+                return []                       # tanınmayan job satırı → ÖLÇÜLEMEDİ
             isler.append([satir.strip()[:-1], None, None])
         elif isler and satir.startswith("    ") and not satir.startswith("     "):
             anahtar, _, deger = satir.strip().partition(":")
-            deger = deger.strip().strip("'\"")
+            if anahtar not in ("name", "uses"):
+                continue
+            deger = deger.strip()
+            if len(deger) >= 2 and deger[0] == deger[-1] and deger[0] in "'\"":
+                deger = deger[1:-1]
+            if not deger or not _YML_DEGER_RE.match(deger):
+                return []                       # yorum/tırnak artığı → ÖLÇÜLEMEDİ
             if anahtar == "name" and isler[-1][1] is None:
                 isler[-1][1] = deger
             elif anahtar == "uses":
                 isler[-1][2] = deger
     return [tuple(i) for i in isler]  # type: ignore[misc]
+
+
+_JOB_ID_RE = re.compile(r"^  [A-Za-z_][A-Za-z0-9_-]*:$")
+_YML_DEGER_RE = re.compile(r"^[A-Za-z0-9_./@-]+$")   # job adı / `org/repo/.../x.yml@ref`
 
 
 def guard_status_check_adlari(core_root: Path = CORE_ROOT) -> list[str] | None:

@@ -144,6 +144,18 @@ def main() -> int:
     # Neden (yeni-proje akışı denetimi 2026-10-03, F1): taze projede `SOURCE_CODES/` boştur;
     # eski kod geçerli bir modülde bile exit 1 veriyordu ⇒ PROJECT_BOOTSTRAP STEP 6'yı izleyen
     # ilk denemede takılıyordu (şablon README'si bunu "önce mkdir" uyarısıyla örtüyordu).
+    # ⛔ Kaynak kökü YARATILMAZ — yalnız modül klasörü. Kök yoksa çağrı büyük olasılıkla
+    # yanlış cwd'den (ör. core checkout'u, CLAUDE_PROJECT_DIR boş) yapılmıştır; burada iskelet
+    # açmak sessizce yanlış yere yazmak olurdu (bug-gate #320 MEDIUM). Kök `init_project`'in işidir.
+    if not erp_root.is_dir():
+        print(
+            f"HATA: Kaynak kökü {erp_root} yok — proje kökünden mi koşuyorsun? "
+            f"(CLAUDE_PROJECT_DIR / cwd'yi kontrol et; kök `init_project` ile yaratılır). "
+            f"Hiçbir şey YARATILMADI.",
+            file=sys.stderr,
+        )
+        return 1
+
     modul_yarat = not module_dir.exists()
     if modul_yarat and args.module not in GECERLI_MODULLER:
         print(
@@ -164,7 +176,7 @@ def main() -> int:
 
     # Yaratma, TÜM ön-kontroller geçtikten SONRA: şablon kökü yoksa boş modül klasörü kalmaz.
     if modul_yarat:
-        module_dir.mkdir(parents=True)
+        module_dir.mkdir(parents=False)   # kök yukarıda doğrulandı; ebeveyn yaratılmaz
         print(f"[ OK ] Modül klasörü yaratıldı: {module_dir}  "
               f"('{args.module}' geçerli modül listesinde; önceden yoktu)")
 
