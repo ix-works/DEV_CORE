@@ -63,8 +63,21 @@ python core/scripts/team_setup.py
 Betik şu zinciri koşar (ölçüldü, `team_setup.py` main akışı):
 junction'lar + **overlay materyalizasyonu** (`.claude/rules/00-claude-core.md`, `agents`) →
 `.claude/settings.json` + `scripts/hook_shim.py` + **`.claude/active_package`** →
-git-hooksPath (core + proje) → **CORE-INDEX** yenileme → plugin kurulumu + npm CLI'ler →
-**memory tohumu** (`seed_memory.py`, merge-safe) → smoke testleri.
+git-hooksPath (core + proje) → **şablon sapması raporu** → **CORE-INDEX** yenileme → plugin
+kurulumu + npm CLI'ler → **memory tohumu** (`seed_memory.py`, merge-safe) → smoke testleri.
+
+- **Şablon sapması (2026-10-03):** `dosya_tamamla` var olan `settings.json` / `hook_shim.py` /
+  `pre-commit`'i **ezmez**; sapmışsa `[WARN] <dosya> şablondan SAPMIŞ (… yalnız PROJEDE N ·
+  yalnız ŞABLONDA M) — <komut>` basar (D7 imzası, exit kodu değişmez). `settings.json`'da
+  yalnız proje eki varsa `[INFO] N proje eki` (meşru). WARN görürsen: hook_shim →
+  `python core/scripts/team_setup.py --tazele-shim`, pre-commit → `--tazele-precommit`
+  (ikisi de önce farkı ve yönü basar, yedek alır; **TERS YÖN** satırı varsa proje İLERİDEDİR —
+  satırları okumadan onaylama). settings için otomatik tazeleme YOK: `git diff --no-index
+  core/claude/settings.template.json .claude/settings.json` ile elle birleştir. Satırın
+  sonundaki `şablon kıyası (…)` özeti neye BAKILMADIĞINI da yazar.
+- **CORE-INDEX:** içerik ve damgadaki `core-commit` aynıysa dosya yeniden yazılmaz
+  (`[ OK ] değişmedi`); core-commit değiştiyse yazılır — o fark PATTERN #28 ⑤'e göre
+  değerlendirilir.
 
 ### 3b. Overlay ezme kapısı (T2.5) — **koşullu**
 

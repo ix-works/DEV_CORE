@@ -233,8 +233,15 @@ Uzak repoda metodolojiden TEK SATIR görünmez — sadece iskelet + proje içeri
 - Her oturumun cwd'si kendi proje kökü → hook'lar `CLAUDE_PROJECT_DIR` ile KENDİ
   projesini, MCP KENDİ `.conn_adt`'sini görür. Çakışma yok.
 - Bir oturumda core'a yazılan ders diğer projede ANINDA görünür (aynı fiziksel dosya).
-  Başka makine/PR'dan gelen core değişikliği: makinede tek `git -C C:\IX\DEV_CORE pull`
-  → tüm projeler birden güncellenir (session_start "core origin'in gerisinde" uyarır).
+  Başka makine/PR'dan gelen core değişikliği: `git pull` yalnız **junction'la okunan**
+  yüzeyi (core dokümanları + script'leri) tüm projelere birden taşır (session_start "core
+  origin'in gerisinde" uyarır). ⚠ Projeye **fiziksel kopya** inen yüzey — `CORE-INDEX.md`,
+  `.claude/rules` · `agents` overlay'i, `settings.json`, `scripts/hook_shim.py`,
+  `scripts/git-hooks/pre-commit`, kök `CLAUDE.md` yasak damgası — pull ile **tazelenmez**.
+  Doğru yol proje başına prosedürdür: [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md)
+  (`/core-guncelle`). `team_setup` mevcut kopyaların şablondan sapmasını kurulum anında
+  `[WARN]` ile söyler (settings'te yalnız proje eki = `[INFO]`); hook_shim/pre-commit için
+  onaylı tazeleme `--tazele-shim` / `--tazele-precommit` (önce fark + yedek).
 
 ## Sorun giderme
 
