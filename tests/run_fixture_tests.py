@@ -594,6 +594,14 @@ OZEL_TESTLER = [
      "on-taramasi govde VE dosya adi (D5) + iki yonlu sapma ve CRLF-only GURULTU ayrimi "
      "(canli olcumde 26 hayali kalem) + KAPSAM BEYANI (+ yazma yetkisiz klonun Issue "
      "kanali, #286); 29 vektor + 5 mutasyon"),
+    # 2026-10-03 (S1): merge-safe kopya var olan HER dosyayi atliyordu (govde guncellemesi
+    # makineye ulasmiyordu) ve manifest atlanana yeni sha yaziyordu ((b) -> (a) kaymasi).
+    ("tohum_govde_guncelleme",
+     "seed_memory govde guncellemesi: dokunulmamis (yerel == manifest eski sha) + tohum "
+     "ilerlemis -> GUNCELLENIR · duzenlenmis/ayirt-edilemez -> dokunulmaz + 'elle birlestir' "
+     "(Her sey guncel DENMEZ) · atlanan dosyaya ESKI sha · dry-run yazmaz · CRLF ham sha + "
+     "bilgi satiri · terfi (b) kovasi kosumdan sonra dogru; 31 vektor + 10 mutasyon "
+     "(pinli kume, CORE-07); eski kod 15/31"),
     # 2026-09-18 (Q326/D7): desen 3. kez genisledi; 2 harfle sinirli desen 3-4 harfli
     # modul kodunu KACIRIYORDU (kontrol grubu: 2 harfli yakalaniyordu).
     ("z_obje_desen_kapsami",
@@ -1291,6 +1299,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # iki satir birbirini bastirmaz (tek-satir varsayimi sessiz daraltma kaynagidir).
     ("scripts/seed_memory.py", ("O:tohum_terfi_gorunurlugu",),
      "ters yon: `--terfi-adaylari` salt-okunurlugu + kova semantigi + sapma/gurultu ayrimi"),
+    ("scripts/seed_memory.py", ("O:tohum_govde_guncelleme",),
+     "S1: var olan dosyada karar (_mevcut_dosya_karari) + manifest eski sha korunur"),
     ("scripts/genericize_common.py", ("O:tohum_terfi_gorunurlugu", "O:z_obje_desen_kapsami"),
      "D7 desen kapsami + ORNEK_Z olcutu; ayrica terfi listeleyicisinin kimlik on-taramasi "
      "AYNI modulu cagirir (listeleyici kapidan dar olamaz)"),

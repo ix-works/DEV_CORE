@@ -11,8 +11,23 @@ yeni geliştirici, proje sahibinin çalışma disiplinini (feedback memory) devr
 KAPSAM: SADECE feedback (nasıl-çalışırsın) memory'leri tohumlanır. Projeye-özel work-state
 (project-type memory) tohuma DAHİL DEĞİLDİR (başka projeye yanıltıcı).
 
-MERGE-SAFE: Hedefte zaten var olan dosyayı EZMEZ (yerel daha taze olabilir). Yalnız eksik
-dosyaları ekler. --force ile üzerine yazılabilir.
+MERGE-SAFE: Hedefte zaten var olan dosyayı KULLANICI DÜZENLEMİŞSE EZMEZ (yerel daha taze
+olabilir). Eksik dosyaları ekler. --force ile her şeyin üzerine yazılabilir.
+
+GÖVDE GÜNCELLEMESİ (S1, 2026-10-03): eskiden var olan HER dosya atlanıyordu ⇒ tohumda gövdesi
+düzeltilen ders kurulu makineye HİÇ ulaşmıyordu, araç yine "[OK] Her şey güncel" diyordu; üstelik
+manifest atlanan dosyaya da tohumun YENİ sha'sını yazıp bayatlık izini siliyordu. Artık karar
+`_mevcut_dosya_karari` ile verilir (ham sha — `_yetimleri_bul` ile aynı "manifest sha = kullanıcı
+dokunmamış" deseni):
+  * yerel == manifest'teki ESKİ sha (dokunulmamış) ve tohum ilerlemiş → yeni hâl YAZILIR ("Güncellendi").
+  * yerel ≠ eski sha (düzenlenmiş) ve tohum ilerlemiş → DOKUNULMAZ, "elle birleştir" uyarısı;
+    "[OK] Her şey güncel" DENMEZ. Tohum ilerlememişse yapılacak bir şey yoktur → sessiz.
+  * manifest yok / dosya manifestte yok ve tohumdan farklı → ayırt edilemez, DOKUNULMAZ + uyarı.
+  * Manifest: yazılan/eklenen dosyaya yeni sha; atlanan dosyaya ESKİ sha (yoksa hiç yazılmaz) ⇒
+    `--terfi-adaylari` (a)/(b) kovaları doğru kalır.
+SINIR: kusurlu sürümle zaten tohumlanmış makinede (manifest yeni sha'yı taşır, dosya eski
+gövdede) eski gövdeli dosyalar "yerelde düzenlenmiş" sayılır ve bu araçla KURTARILAMAZ — yol
+`playbook/howto-cekirdek-guncelleme.md` §4'teki elle döngüdür.
 
 RENAME/SİLME İZİ (2026-07-10 template provası): script eskiden yalnız EKLİYORDU. Seed'de bir
 dosya yeniden adlandırılınca (ör. kimlik sızdıran ad temizlenince) daha önce tohumlanmış her
@@ -31,7 +46,7 @@ Proje-slug: repo kök yolundaki alfanümerik-olmayan her karakter '-' ile deği�
 (Claude Code konvansiyonu). Ör: C:\\IX\\<PROJECT_NAME> -> C--IX--PROJECT-NAME-
 
 Kullanım (repo kökünde):
-    python scripts/seed_memory.py            # eksikleri ekle + indeksi onar, raporla
+    python scripts/seed_memory.py            # eksikleri ekle + dokunulmamışları güncelle + indeksi onar
     python scripts/seed_memory.py --dry-run  # ne yapacağını göster, yazma
     python scripts/seed_memory.py --prune    # seed'den kalkmış, dokunulmamış dosyaları sil
     python scripts/seed_memory.py --force    # var olanları da seed'le ez (DİKKAT)
@@ -129,6 +144,31 @@ def _yetimleri_bul(target: Path, seed_adlari: set, manifest: dict) -> tuple[list
             continue
         (silinebilir if _sha(dst) == sha else dokunulmus).append(ad)
     return silinebilir, dokunulmus
+
+
+def _mevcut_dosya_karari(yerel_sha: str, tohum_sha: str, eski_sha: str | None) -> str:
+    """Hedefte ZATEN VAR olan tohum dosyası için karar (`--force` YOKKEN). Saf fonksiyon.
+
+    Dönüş: 'ayni' (yerel == tohum; yazılmaz) · 'ayirt-edilemez' (manifest kaydı yok VE
+    tohumdan farklı; dokunulmaz) · 'duzenlenmis' (yerel ≠ eski sha VE tohum ilerlemiş;
+    dokunulmaz + uyarı) · 'yerel-ileri' (yerel ≠ eski sha, tohum ilerlememiş; sessiz) ·
+    'guncelle' (yerel == eski sha, tohum ilerlemiş; yeni hâl yazılır).
+    Sha HAMDIR (`_yetimleri_bul` ile aynı): yalnız satır-sonu farkı da "düzenlenmiş" sayılır
+    — ezmemek yönünde yanılır; satır-sonu etiketi yalnız RAPORDA ayrılır (karar değil).
+    """
+    if yerel_sha == tohum_sha:
+        return "ayni"
+    if eski_sha is None:
+        return "ayirt-edilemez"
+    if yerel_sha != eski_sha:
+        return "duzenlenmis" if tohum_sha != eski_sha else "yerel-ileri"
+    return "guncelle"
+
+
+def _yalniz_satir_sonu(yerel: Path, tohum: Path) -> bool:
+    """İçerik CRLF↔LF normalize edilince tohumla AYNI mı (terfi raporunun gürültü deseni)."""
+    return (yerel.read_bytes().replace(b"\r\n", b"\n")
+            == tohum.read_bytes().replace(b"\r\n", b"\n"))
 
 
 def _index_onar(target: Path, seed_index: Path, seed_adlari: set,
@@ -315,8 +355,8 @@ def terfi_adaylari(target: Path) -> int:
             print(f"    · {ad}")
         print(f"  (b) tohum İLERLEMİŞ, yerel kopya ESKİ     : {len(b_gercek)}"
               f"   [+{len(b_gurultu)} yalnız satır-sonu farkı = gürültü]")
-        print("      ⚠ Normal tohumlama mevcut dosyayı EZMEZ (merge-safe) ⇒ bu sapma bugün "
-              "başka hiçbir yüzeyde GÖRÜNMEZ; `--force` bilinçli bir karardır.")
+        print("      ⚠ Normal tohumlama (b) dosyasını GÜNCELLER (yerel == manifest sha = "
+              "dokunulmamış, S1) ⇒ burada görünüyorsa tohumlama o günden beri koşmamıştır.")
         for ad in b_gercek:
             print(f"    · {ad}")
 
@@ -342,7 +382,11 @@ def terfi_adaylari(target: Path) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Repo memory tohumunu makineye seed et")
+    ap = argparse.ArgumentParser(
+        description="Repo memory tohumunu makineye seed et",
+        epilog="SINIR: kusurlu (S1 öncesi) sürümle tohumlanmış makinede eski gövdeli dosyalar "
+               "'yerelde düzenlenmiş' sayılır ve bu araçla kurtarılamaz — "
+               "playbook/howto-cekirdek-guncelleme.md §4 elle döngüsü.")
     ap.add_argument("--target", default=None, help="Hedef memory klasörü (vermezsen otomatik hesaplanır)")
     ap.add_argument("--dry-run", action="store_true", help="Yalnız raporla, yazma")
     ap.add_argument("--force", action="store_true", help="Var olan dosyaları da seed ile ez")
@@ -377,22 +421,47 @@ def main() -> int:
     print(f"[INFO] Proje kök: {PROJECT_ROOT}  (seed kaynağı core: {CORE_ROOT})")
     print(f"[INFO] Seed     : {SEED_DIR} ({len(seed_files)} feedback dosyası)")
     print(f"[INFO] Hedef    : {target}")
-    print(f"[INFO] Mod      : {'DRY-RUN' if args.dry_run else ('FORCE' if args.force else 'merge (eksikleri ekle)')}")
+    print(f"[INFO] Mod      : {'DRY-RUN' if args.dry_run else ('FORCE' if args.force else 'merge (eksikleri ekle + dokunulmamışları güncelle)')}")
 
     added, skipped, forced = [], [], []
+    guncellenen: list = []      # (ad, yalnız-satır-sonu?) dokunulmamış + tohum ilerlemiş → yazıldı
+    elle: list = []             # (ad, neden) tohum farklı AMA yerel düzenlenmiş/ayırt edilemez
+    satir_sonu: list = []       # yalnız CRLF↔LF farkı (içerik tohumla aynı) — bilgi, iş değil
+    # S1: manifest DÖNGÜDEN ÖNCE okunur — atlanan dosyanın ESKİ sha'sı korunacak
+    eski_manifest = _manifest_oku(target)
+    manifest_sha: dict = {}     # yazılacak manifest: ad → sha (atlanan+kayıtsız dosya YOK)
 
     if not args.dry_run:
         target.mkdir(parents=True, exist_ok=True)
 
     for f in seed_files:
         dst = target / f.name
+        tohum_sha = _sha(f)
         if dst.exists() and not args.force:
+            eski_sha = eski_manifest.get(f.name)
+            karar = _mevcut_dosya_karari(_sha(dst), tohum_sha, eski_sha)
+            if karar == "guncelle":
+                guncellenen.append((f.name, _yalniz_satir_sonu(dst, f)))
+                manifest_sha[f.name] = tohum_sha
+                if not args.dry_run:
+                    shutil.copy2(f, dst)
+                continue
             skipped.append(f.name)
+            if karar == "ayni":
+                manifest_sha[f.name] = tohum_sha
+            elif eski_sha is not None:
+                manifest_sha[f.name] = eski_sha
+            if karar in ("duzenlenmis", "ayirt-edilemez"):
+                if _yalniz_satir_sonu(dst, f):
+                    satir_sonu.append(f.name)
+                else:
+                    elle.append((f.name, karar))
             continue
         if dst.exists() and args.force:
             forced.append(f.name)
         else:
             added.append(f.name)
+        manifest_sha[f.name] = tohum_sha
         if not args.dry_run:
             shutil.copy2(f, dst)
 
@@ -407,7 +476,7 @@ def main() -> int:
 
     # --- seed'den kalkmış (yeniden adlandırılmış/silinmiş) tohum dosyaları ---
     seed_adlari = {f.name for f in seed_files}
-    manifest = _manifest_oku(target)
+    manifest = eski_manifest
     silinebilir, dokunulmus = _yetimleri_bul(target, seed_adlari, manifest)
     silinen: list = []
     if silinebilir:
@@ -421,16 +490,40 @@ def main() -> int:
     index_islem = _index_onar(target, seed_index, seed_adlari, silinen, args.dry_run)
 
     # --- manifest'i yaz (tohumlanan adlar → sha) ---
+    # S1: yazılan/eklenen/tohumla AYNI dosya → tohum sha'sı; atlanan dosya → ESKİ sha
+    # (manifestte yoksa HİÇ yazılmaz). Eskiden HER tohum dosyasına yeni sha yazılıyordu ⇒
+    # atlanan bayat dosya "(b) tohum ilerlemiş"ten "(a) yerelde düzenlenmiş"e kayıyordu.
     if not args.dry_run:
-        yeni_manifest = {f.name: _sha(f) for f in seed_files}
+        yeni_manifest = {ad: manifest_sha[ad] for ad in sorted(manifest_sha)}
         (target / MANIFEST_ADI).write_text(
             json.dumps(yeni_manifest, ensure_ascii=False, indent=1), encoding="utf-8")
 
     print("\n--- ÖZET ---")
     print(f"  Eklendi : {len(added)}")
+    # Canlı kopyada ölçüldü (2026-10-03): 26 güncellemenin 25'i YALNIZ satır-sonu farkıydı
+    # (tohumun satır sonu değişmiş, yerel dokunulmamış) — gövde düzeltmesiyle karışmasın diye
+    # ETİKETLENİR; karar değişmez (dosya tohumla bayt-bayt aynı olur, kayıp yok).
+    ss_sayi = sum(1 for _, ss in guncellenen if ss)
+    print(f"  {'Güncellenecek' if args.dry_run else 'Güncellendi'} : {len(guncellenen)}"
+          " (yerel kopya dokunulmamış, tohum ilerlemişti)"
+          + (f"   [{ss_sayi}'i yalnız satır-sonu farkı]" if ss_sayi else ""))
+    for ad, ss in guncellenen:
+        print(f"    · {ad}" + ("   (yalnız satır-sonu farkı)" if ss else ""))
     if forced:
         print(f"  Ezildi  : {len(forced)} (--force)")
     print(f"  Atlandı : {len(skipped)} (zaten mevcut, korundu)")
+    if elle:
+        print(f"  [UYARI] {len(elle)} dosyada tohum İLERLEDİ ama yerel kopyaya DOKUNULMADI "
+              "— elle birleştir:")
+        for ad, karar in elle:
+            neden = ("yerelde düzenlenmiş" if karar == "duzenlenmis"
+                     else "manifest kaydı yok → tohum mu kullanıcı mı ayırt edilemez")
+            print(f"    · {ad}   ({neden}) → elle birleştir")
+    if satir_sonu:
+        print(f"  [INFO] {len(satir_sonu)} dosya tohumdan yalnız satır-sonu (CRLF↔LF) farkıyla "
+              "ayrılıyor — içerik aynı, dokunulmadı:")
+        for ad in satir_sonu:
+            print(f"    · {ad}")
     print(f"  MEMORY.md index: {index_action}")
     for i in index_islem:
         print(f"    · {i}")
@@ -451,7 +544,10 @@ def main() -> int:
 
     if args.dry_run:
         print("\n  (DRY-RUN — hiçbir dosya yazılmadı)")
-    elif added or forced or silinen or index_islem:
+    elif elle:
+        print(f"\n[UYARI] {len(elle)} tohum dosyası elle birleştirme bekliyor (liste yukarıda) "
+              "— 'her şey güncel' DEĞİL.")
+    elif added or forced or guncellenen or silinen or index_islem:
         print("\n[OK] Feedback memory tohumlandı/onarıldı. Yeni Claude oturumunda kurallar yüklenir.")
     else:
         print("\n[OK] Her şey güncel.")
