@@ -44,12 +44,38 @@ SENARYOLAR (S1-S16)
       vektor bir OLCUMDEN dogdu: korpusun ilk surumu tam bu yuzden 4 sahte sonuc
       uretti (2026-09-17).
 
+  -- IKI TAKILMA IMZASI (2026-10-03) — bekleyen tool_use OLMAYAN takilmalar --
+  S18 ⭐ DONGU: 2 ardisik max_tokens turu, arada tool_use yok -> DONGU? (#97647 bicimi;
+      bu makinenin 881 alt-ajan transkriptinde ORNEK YOK -> bicim issue'dan alindi)
+  S18b FP: TEK max_tokens turu PARCALI 2 kayit (ayni message.id) -> SESSIZ
+  S18c imza ASILI? URETMEZ (iki kural ayri kanal)
+  S19 FP: max_tokens, tool_use, max_tokens -> SESSIZ (ilerleme seriyi kirar)
+  S20 ⭐ IPTAL: tool_result'tan 600,014 sn sonra "[Request interrupted by user for tool
+      use]" -> IPTAL? (#84346 bicimi; bu korpusta pencereye dusen vaka 0)
+  S21 FP: GERCEK KORPUS BICIMI — kesme tool_result'tan 0 sn / 43 sn sonra (lider
+      TaskStop/ESC) -> SESSIZ
+  S22 taban ONCESI imzalar varsayilan tabanda SESSIZ (kalinti kurali imzalara da uyar)
+  S22b AYNI dosya, taban geriye alininca iki imza da basilir (susturma degil KURAL)
+  S17b ozet + IMZALAR satiri "DONGU?"/"IPTAL?" token'larini TASIMAZ
+  S23 ⭐ KARISIK DAMGA: ayni transkriptte Z'siz (tz'siz) + Z'li damgalar -> arac
+      COKMEZ (taban kiyasi + imza araligi TypeError'i), BITTI basar, ASILI? + IPTAL? yine
+      uretilir (bug-gate #313: tek transkript tum bekciyi olduruyordu)
+
 KOSUM:
     python tests/fixtures/agent_stall_watch/run.py
     ... --mutasyon             (esik kontrolu sokulur          -> 26/27: S2)
     ... --mutasyon-eslestirme  (tool_result eslestirmesi no-op -> 24/27: S3/S5/S11)
     ... --mutasyon-taban       (taban filtresi sokulur         -> 26/27: S4a)
-    ... --mutasyon-kapsam      (OLCULEMEDI susturulur -> 21/27: S6/S6b/S7/S9/S13/S14)
+    ... --mutasyon-kapsam      (OLCULEMEDI susturulur -> S6/S6b/S7/S9/S13/S14)
+    ... --mutasyon-dongu       (DONGU esigi sokulur            -> S18)
+    ... --mutasyon-dongu-seri  (tool_use seriyi KIRMAZ          -> S19)
+    ... --mutasyon-dongu-parca (parcali kayit ayri tur sayilir  -> S18b)
+    ... --mutasyon-iptal       (kesme kaydi hic algilanmaz      -> S20)
+    ... --mutasyon-iptal-pencere (~600 sn penceresi kalkar     -> S21)
+    ... --mutasyon-imza-taban  (imzalarin taban filtresi sokulur -> S22)
+    ... --mutasyon-tz          (tz'siz damga UTC'ye cevrilmez    -> S23/S23b)
+⛔ CORE-07: mutasyon kipinde dusen vektor kumesi BEKLENEN_DUSUS ile ESITLIKLE kiyaslanir
+   (eksik de fazla da sapma) -> sapma exit 2 (DOGRULANAMADI).
   (Sayilar OLCULDU, tahmin degil — `python tests/run_battery.py agent_stall_watch`.)
 Cikis: 0 hepsi beklendigi gibi · 1 sapma · 2 DOGRULANAMADI (capa bayat / kontrol grubu bozuk)
 
@@ -81,7 +107,9 @@ REPO = HERE.parents[2]
 ARAC = REPO / "scripts" / "agent_stall_watch.py"
 
 GECERLI_KIP = {"--mutasyon", "--mutasyon-eslestirme", "--mutasyon-taban",
-               "--mutasyon-kapsam"}
+               "--mutasyon-kapsam", "--mutasyon-dongu", "--mutasyon-dongu-seri",
+               "--mutasyon-dongu-parca", "--mutasyon-iptal", "--mutasyon-iptal-pencere",
+               "--mutasyon-imza-taban", "--mutasyon-tz"}
 
 # Fix'in SOKUMU (mutasyon capalari): (kip) -> (eski metin, yeni metin)
 CAPA = {
@@ -97,15 +125,50 @@ CAPA = {
     "--mutasyon-kapsam": (
         '                olaylar.append(f"OLCULEMEDI {s}")\n',
         "                pass  # MUTASYON: kapsam beyani susturuldu\n"),
+    "--mutasyon-dongu": (
+        '            if len(imza["seri"]) >= DONGU_ESIK:\n',
+        "            if False:  # MUTASYON: DONGU esigi sokuldu\n"),
+    "--mutasyon-dongu-seri": (
+        '            imza["seri"] = []                       # ilerleme var -> seri kirilir\n',
+        "            pass  # MUTASYON: tool_use seriyi kirmiyor\n"),
+    "--mutasyon-dongu-parca": (
+        '            if kimlik not in [k for k, _ in imza["seri"]]:\n',
+        "            if True:  # MUTASYON: parcali kayit ayri tur\n"),
+    "--mutasyon-iptal": (
+        "        if kesme and onceki is not None:\n",
+        "        if False:  # MUTASYON: kesme algilanmiyor\n"),
+    "--mutasyon-iptal-pencere": (
+        "            if IPTAL_ARALIK_SN[0] <= aralik <= IPTAL_ARALIK_SN[1]:\n",
+        "            if True:  # MUTASYON: pencere kalkti\n"),
+    "--mutasyon-imza-taban": (
+        '                    self.taban is not None and o["ts"] < self.taban):\n',
+        "                    False):  # MUTASYON: imza taban filtresi sokuldu\n"),
+    "--mutasyon-tz": (
+        "    return z if z.tzinfo is not None else z.replace(tzinfo=_dt.timezone.utc)\n",
+        "    return z  # MUTASYON: tz'siz damga oldugu gibi\n"),
 }
 # OLCULDU (2026-09-17, tahmin DEGIL — `python tests/run_battery.py agent_stall_watch`):
 # taban 27/27 · --mutasyon 26/27 · --mutasyon-eslestirme 24/27 ·
 # --mutasyon-taban 26/27 · --mutasyon-kapsam 21/27
+# 2026-10-03 (iki imza eklendi, ayni komut; dusen vektorler .tmp/battery/ ham ciktisindan):
+# taban 37/37 · --mutasyon-eslestirme +S18c (eslestirme olunce DONGU dosyasindaki donmus
+# Read cagrisi ASILI? olur) · --mutasyon-dongu S18+S22b · --mutasyon-iptal S20+S20b+S22b
+# · --mutasyon-iptal-pencere S21+S20b (pencere disi kesmeler de sayilir -> iptal=3)
+# · #313 duzeltme turu (S23/S23b + --mutasyon-tz, ESITLIK kiyasi): taban 39/39 ·
+#   --mutasyon-dongu ve --mutasyon-iptal ayrica S23b (karisik damga vektoru de
+#   DONGU?/IPTAL? bekler) — esitlik kiyasi bu fazlayi ilk kosumda yakaladi.
 BEKLENEN_DUSUS = {
     "--mutasyon": ("S2",),
-    "--mutasyon-eslestirme": ("S3", "S5", "S11"),
+    "--mutasyon-eslestirme": ("S3", "S5", "S11", "S18c"),
     "--mutasyon-taban": ("S4a",),
     "--mutasyon-kapsam": ("S6", "S6b", "S7", "S9", "S13", "S14"),
+    "--mutasyon-dongu": ("S18", "S22b", "S23b"),
+    "--mutasyon-dongu-seri": ("S19",),
+    "--mutasyon-dongu-parca": ("S18b",),
+    "--mutasyon-iptal": ("S20", "S20b", "S22b", "S23b"),
+    "--mutasyon-iptal-pencere": ("S21", "S20b"),
+    "--mutasyon-imza-taban": ("S22",),
+    "--mutasyon-tz": ("S23", "S23b"),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -151,6 +214,32 @@ def _metin(ts: str, govde: str = "bitti") -> str:
     return json.dumps({"type": "assistant", "timestamp": ts,
                        "message": {"role": "assistant",
                                    "content": [{"type": "text", "text": govde}]}})
+
+
+def _tur(ts: str, stop: str | None, msg_id: str, bloklar: list[dict]) -> str:
+    """Assistant kaydi — stop_reason + message.id ile (DONGU imzasi)."""
+    return json.dumps({"type": "assistant", "timestamp": ts, "uuid": "u-" + msg_id + ts,
+                       "message": {"role": "assistant", "id": msg_id, "stop_reason": stop,
+                                   "content": bloklar}})
+
+
+def _kesme(ts: str, metin: str = "[Request interrupted by user for tool use]") -> str:
+    """User-rolunde kesme kaydi (#84346 / gercek korpus bicimi)."""
+    return json.dumps({"type": "user", "timestamp": ts, "uuid": "kesme-" + ts,
+                       "message": {"role": "user",
+                                   "content": [{"type": "text", "text": metin}]}})
+
+
+def iso_sn(sn_once: float, simdi: _dt.datetime) -> str:
+    return (simdi - _dt.timedelta(seconds=sn_once)).isoformat().replace("+00:00", "Z")
+
+
+def dongu_satirlari(cikti: str) -> list[str]:
+    return [s for s in cikti.splitlines() if "] DONGU?" in s]
+
+
+def iptal_satirlari(cikti: str) -> list[str]:
+    return [s for s in cikti.splitlines() if "] IPTAL?" in s]
 
 
 def transkript(kok: Path, proje: str, seans: str, ajan: str, satirlar: list[str],
@@ -284,6 +373,106 @@ def senaryolar(arac: Path) -> None:
           all(tok not in out7.split("BITTI", 1)[-1]
               for tok in ("ASILI?", "COZULDU", "OLCULEMEDI")),
           f"ozet: {out7.split('BITTI', 1)[-1][:120]}")
+
+    kayit("S17b ozet + IMZALAR satiri DONGU?/IPTAL? token'larini TASIMAZ",
+          "DONGU?" not in out7 and "IPTAL?" not in out7 and "[bekci] IMZALAR" in out7,
+          out7[-300:])
+
+    # ── S18-S22: iki takilma imzasi (bekleyen tool_use YOK) ────────────────
+    dusun = {"type": "thinking", "thinking": "..."}
+    kok11 = _tmp() / "projects"
+    transkript(kok11, "PROJE", "seans1", "dongu01",
+               [_kullanim("tu_d0", "Read", iso(40, simdi)), _sonuc("tu_d0", iso(40, simdi)),
+                _tur(iso(30, simdi), "max_tokens", "msg_d1", [dusun]),
+                _tur(iso(20, simdi), "max_tokens", "msg_d2", [dusun])],
+               meta={"agentType": "backend-expert", "description": "dusunme dongusu"})
+    transkript(kok11, "PROJE", "seans1", "parca01",
+               [_tur(iso(30, simdi), "max_tokens", "msg_p1", [dusun]),
+                _tur(iso(30, simdi), "max_tokens", "msg_p1", [{"type": "text", "text": "x"}])],
+               meta={"agentType": "bug-expert", "description": "parcali tek tur"})
+    transkript(kok11, "PROJE", "seans1", "kirilan01",
+               [_tur(iso(30, simdi), "max_tokens", "msg_k1", [dusun]),
+                _tur(iso(25, simdi), None, "msg_k2",
+                     [{"type": "tool_use", "id": "tu_k2", "name": "Bash", "input": {}}]),
+                _sonuc("tu_k2", iso(24, simdi)),
+                _tur(iso(20, simdi), "max_tokens", "msg_k3", [dusun])],
+               meta={"agentType": "adt-gateway", "description": "arada ilerleme"})
+    rc18, out18 = kos(arac, ["--kok", str(kok11), "--baslangic", taban_uzak], simdi)
+    d18 = dongu_satirlari(out18)
+    kayit("S18 2 ardisik max_tokens (arada tool_use yok) -> DONGU? (ad + sayi + aksiyon)",
+          any("backend-expert" in s and " 2 ardisik" in s and "TaskStop" in s for s in d18),
+          f"satirlar={d18}")
+    kayit("S18b TEK tur parcali 2 kayit (ayni message.id) -> SESSIZ",
+          not any("bug-expert" in s for s in d18), f"satirlar={d18}")
+    kayit("S19 max_tokens / tool_use / max_tokens -> SESSIZ (ilerleme seriyi kirar)",
+          not any("adt-gateway" in s for s in d18), f"satirlar={d18}")
+    kayit("S18c imza ASILI? URETMEZ (iki kural ayri kanal)",
+          not asili_satirlari(out18), f"asili={asili_satirlari(out18)}")
+
+    kok12 = _tmp() / "projects"
+    transkript(kok12, "PROJE", "seans1", "iptal01",
+               [_kullanim("tu_i1", "Bash", iso_sn(700, simdi)),
+                _sonuc("tu_i1", iso_sn(650.0, simdi)),
+                _kesme(iso_sn(49.986, simdi))],            # +600,014 sn (#84346 vakasi)
+               meta={"agentType": "frontend-expert", "description": "watchdog iptali"})
+    transkript(kok12, "PROJE", "seans1", "taskstop01",
+               [_kullanim("tu_i2", "Bash", iso_sn(300, simdi)),
+                _sonuc("tu_i2", iso_sn(200.0, simdi)),
+                _kesme(iso_sn(200.0, simdi))],             # +0 sn (gercek korpus bicimi)
+               meta={"agentType": "sap-research", "description": "lider TaskStop"})
+    transkript(kok12, "PROJE", "seans1", "esc01",
+               [_metin(iso_sn(300, simdi)),
+                _kesme(iso_sn(257.3, simdi), "[Request interrupted by user]")],   # +42,7 sn
+               meta={"agentType": "doc-expert", "description": "kullanici ESC"})
+    rc20, out20 = kos(arac, ["--kok", str(kok12), "--baslangic", taban_uzak], simdi)
+    i20 = iptal_satirlari(out20)
+    kayit("S20 tool_result'tan 600 sn sonra kesme -> IPTAL? (ad + sn + aksiyon)",
+          any("frontend-expert" in s and " 600 sn" in s and "yeniden spawn" in s for s in i20),
+          f"satirlar={i20}")
+    kayit("S21 pencere DISI kesmeler (0 sn TaskStop / 43 sn ESC) -> SESSIZ",
+          not any("sap-research" in s or "doc-expert" in s for s in i20), f"satirlar={i20}")
+    kayit("S20b ozet satiri imza sayacini tasir (iptal=1)",
+          "iptal=1" in out20.split("BITTI", 1)[-1], out20[-200:])
+
+    # S22: AYNI iki imza 3 saat once -> varsayilan taban (simdi - 5 dk) oncesinde kalir.
+    kok13 = _tmp() / "projects"
+    transkript(kok13, "PROJE", "seans1", "eskiimza01",
+               [_sonuc("tu_e0", iso_sn(3 * 3600 + 600.0, simdi)),
+                _kesme(iso_sn(3 * 3600, simdi)),                       # +600 sn ama ESKI
+                _tur(iso(170, simdi), "max_tokens", "msg_e1", [dusun]),
+                _tur(iso(160, simdi), "max_tokens", "msg_e2", [dusun])],
+               meta={"agentType": "infra-expert", "description": "eski imza kalintisi"})
+    rc22, out22 = kos(arac, ["--kok", str(kok13)], simdi)     # varsayilan taban (5 dk)
+    rc22b, out22b = kos(arac, ["--kok", str(kok13), "--baslangic", taban_uzak], simdi)
+    kayit("S22 taban ONCESI imzalar varsayilan tabanda SESSIZ",
+          not iptal_satirlari(out22) and not dongu_satirlari(out22),
+          f"iptal={iptal_satirlari(out22)} dongu={dongu_satirlari(out22)}")
+    kayit("S22b AYNI dosya, taban geriye alininca iki imza da basilir (kural olculuyor)",
+          bool(iptal_satirlari(out22b)) and bool(dongu_satirlari(out22b)),
+          f"iptal={iptal_satirlari(out22b)} dongu={dongu_satirlari(out22b)}")
+
+    # ── S23: karisik damga (Z'siz + Z'li) — cokme yok ─────────────────────
+    def _ciplak(ts: str) -> str:            # tz'siz bicim: "Z" atilir
+        return ts[:-1] if ts.endswith("Z") else ts
+    kok14 = _tmp() / "projects"
+    transkript(kok14, "PROJE", "seans1", "karisik01",
+               [_kullanim("tu_t1", "Bash", _ciplak(iso(20, simdi))),          # ASILI yolu
+                _tur(_ciplak(iso(30, simdi)), "max_tokens", "msg_t1", [dusun]),  # DONGU yolu
+                _tur(iso(25, simdi), "max_tokens", "msg_t2", [dusun])],
+               meta={"agentType": "backend-expert", "description": "karisik damga"})
+    transkript(kok14, "PROJE", "seans1", "karisik02",
+               [_sonuc("tu_t9", _ciplak(iso_sn(650.0, simdi))),               # tz'siz
+                _kesme(iso_sn(49.986, simdi))],                               # Z'li, +600 sn
+               meta={"agentType": "frontend-expert", "description": "karisik iptal"})
+    rc23, out23 = kos(arac, ["--kok", str(kok14), "--baslangic", taban_uzak], simdi)
+    kayit("S23 karisik damga: arac COKMEZ, BITTI basar, exit 0",
+          rc23 == 0 and "[bekci] BITTI" in out23 and "Traceback" not in out23,
+          f"rc={rc23} cikti={out23[-300:]}")
+    kayit("S23b karisik damgada ASILI? + DONGU? + IPTAL? yine uretilir",
+          bool(asili_satirlari(out23)) and bool(dongu_satirlari(out23))
+          and bool(iptal_satirlari(out23)),
+          f"asili={asili_satirlari(out23)} dongu={dongu_satirlari(out23)} "
+          f"iptal={iptal_satirlari(out23)}")
 
     # ── S8/S9/S10: satir bolme ve bozuk satir ──────────────────────────────
     kok4 = _tmp() / "projects"
@@ -457,14 +646,22 @@ def main() -> int:
         print(f"  [{'PASS' if ok else 'FAIL'}] {ad}" + (f"   -> {not_}" if not_ and not ok else ""))
         if not ok:
             dusen += 1
-    if kip:
-        print(f"  (beklenen dususler: {', '.join(BEKLENEN_DUSUS[kip])})")
     # `N/M OK` satiri: TAM suit ozeti bu bicimi ayristirir (run_fixture_tests
     # `^\s*\d+/\d+ OK`), yoksa tablo hucresi BOS kalir ve skor gorunmez.
     print(f"{len(SONUC) - dusen}/{len(SONUC)} OK  (P+N iceride)")
     print(f"TOPLAM: {len(SONUC) - dusen} PASS / {dusen} FAIL")
     temizle()
-    return 1 if dusen else 0
+    if not kip:
+        return 1 if dusen else 0
+    # CORE-07: dusen kume BEKLENEN ile ESIT olmali (eksik de fazla da sapma).
+    dusen_kume = {ad.split(" ", 1)[0] for ad, ok, _ in SONUC if not ok}
+    beklenen = set(BEKLENEN_DUSUS[kip])
+    if dusen_kume != beklenen:
+        print(f"[DOGRULANAMADI] MUTASYON {kip}: dusen kume BEKLENENDEN FARKLI -> "
+              f"eksik={sorted(beklenen - dusen_kume)} fazla={sorted(dusen_kume - beklenen)}")
+        return 2
+    print(f"  (MUTASYON {kip}: beklenen kume {sorted(beklenen)} AYNEN dustu)")
+    return 1
 
 
 if __name__ == "__main__":

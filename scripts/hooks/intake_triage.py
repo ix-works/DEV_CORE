@@ -44,6 +44,21 @@ _AUTO_EVENT_MARKERS = (
     "[SYSTEM NOTIFICATION - NOT USER INPUT]",
 )
 
+# Q-ITG-PEER (2026-10-03): AJAN/OTURUM MESAJI teslim önekleri — kullanıcı-turn'ü DEĞİL.
+# Ölçüldü (tüm proje ana-oturum transkriptleri, ITG eki parentUuid zinciriyle tetikleyen
+# prompta bağlandı): 1450 ITG ateşlemesinin 746'sı "Another Claude session sent a
+# message" ile, 440'ı "<agent-message from=" ile BAŞLAYAN promptlardan (origin.kind=peer).
+# Bu iki önek 1745 vakanın HEPSİNDE metnin BAŞINDA; insan-origin promptlarda (1384 user
+# + 486 queued) 0 eşleşme. ⇒ İÇERİKTE değil BAŞTA aranır: kullanıcı bir ajan mesajını
+# ALINTILAYIP geliştirme isterse ITG yine ateşler (yanlış-negatif üretilmez).
+# "<teammate-message" yalnız Another-satırının ALTINDA görüldü (başta 0) → ayrıca gerekmez;
+# "<cross-session-message" korpusta 0 → ÖLÇÜLMEDİĞİ için EKLENMEDİ.
+# KARDEŞ: skill_injector.py aynı tuple'ı taşır — biri değişirse öteki de değişir.
+_AUTO_EVENT_ONEKLER = (
+    "Another Claude session sent a message",
+    "<agent-message from=",
+)
+
 # Türkçe diyakritik-katlama (2026-07-10 health-check bulgusu): eski desen ş/ğ/ı/ç şartlıydı
 # → TR-klavyesiz kullanıcı "gelistir/degistir/duzelt" yazınca gate KAÇIRIYORdu. Artık prompt
 # ASCII'ye indirilip ASCII-desenle eşleşir; her iki yazım da yakalanır.
@@ -203,6 +218,11 @@ def main() -> int:
     # (health-check yanlış-pozitif bulgusu). Bu işaretleri kullanıcı YAZMAZ (harness enjekte
     # eder) → yanlış-negatif riski yok. NOT: <system-reminder> DAHİL EDİLMEZ (her promptta olur).
     if any(mk in prompt for mk in _AUTO_EVENT_MARKERS):
+        return 0
+    # BİLİNÇLİ KABUL: kullanıcı istemini bu öneklerden biriyle BAŞLATIRSA nudge atlanır
+    # (insan-origin 1870 promptta 0 vaka). Ağ: `itg_backstop` (PreToolUse) ilk SAP
+    # aracında ITG marker'ı yoksa protokolü yine enjekte eder.
+    if prompt.lstrip().startswith(_AUTO_EVENT_ONEKLER):   # ajan/oturum mesajı (Q-ITG-PEER)
         return 0
 
     _folded = _fold(prompt)                       # diyakritik-bağımsız eşleşme
