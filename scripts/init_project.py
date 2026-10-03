@@ -229,6 +229,61 @@ ATLA_NOTU = (
 )
 
 
+def _yml_isleri(metin: str) -> list[tuple[str, str | None, str | None]]:
+    """Workflow metnindeki `jobs:` bloğu → [(job id, name|None, uses|None)].
+
+    Bilinçli olarak dar bir okuyucu (PyYAML bağımlılığı yok): yalnız bu repodaki iki
+    workflow'un biçimini okur — `jobs:` 0. sütunda, job id 2 boşluk, `name:`/`uses:` 4 boşluk.
+    Biçim tutmazsa boş liste döner ⇒ çağıran "ÖLÇÜLEMEDİ" basar (sessiz yanlış ad YOK).
+    """
+    isler: list[list] = []
+    icinde = False
+    for satir in metin.splitlines():
+        if not satir.strip() or satir.lstrip().startswith("#"):
+            continue
+        if not satir.startswith(" "):
+            icinde = satir.rstrip() == "jobs:"
+            continue
+        if not icinde:
+            continue
+        if satir.startswith("  ") and not satir.startswith("   ") and satir.rstrip().endswith(":"):
+            isler.append([satir.strip()[:-1], None, None])
+        elif isler and satir.startswith("    ") and not satir.startswith("     "):
+            anahtar, _, deger = satir.strip().partition(":")
+            deger = deger.strip().strip("'\"")
+            if anahtar == "name" and isler[-1][1] is None:
+                isler[-1][1] = deger
+            elif anahtar == "uses":
+                isler[-1][2] = deger
+    return [tuple(i) for i in isler]  # type: ignore[misc]
+
+
+def guard_status_check_adlari(core_root: Path = CORE_ROOT) -> list[str] | None:
+    """Proje ruleset'inin `required_status_checks` bağlam adları — workflow'lardan TÜRETİLİR.
+
+    GitHub reusable workflow'da check bağlamını `<çağıran job adı> / <çağrılan job adı>`
+    diye adlandırır (ad yoksa job id). Çağıran: `claude/workflows/guard.template.yml`
+    (projeye `.github/workflows/guard.yml` olarak kopyalanır); çağrılan:
+    `.github/workflows/project-guard.yml`. Canlı bir proje ruleset'inde ölçüldü
+    (2026-10-03, salt-okur `gh api .../rulesets/<id>`): `guard / validators` ·
+    `guard / behavior-surface` · `guard / core-leak`.
+    Neden türetiliyor (yeni-proje akışı denetimi F2): eskiden adlar elle yazılıydı ve
+    `[core-leak, behavior-surface]` diyordu — biçim yanlış (öneksiz) + `validators` eksik.
+    Elle liste job eklenince yine bayatlar. Okunamazsa None (çağıran ÖLÇÜLEMEDİ der).
+    """
+    try:
+        cagiran = (core_root / "claude" / "workflows" / "guard.template.yml").read_text(encoding="utf-8")
+        cagrilan = (core_root / ".github" / "workflows" / "project-guard.yml").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    onek = next(((ad or jid) for jid, ad, uses in _yml_isleri(cagiran)
+                 if uses and "project-guard.yml" in uses), None)
+    isler = [(ad or jid) for jid, ad, _ in _yml_isleri(cagrilan)]
+    if not onek or not isler:
+        return None
+    return [f"{onek} / {ad}" for ad in isler]
+
+
 def uret(hedef: Path, icerik: str, force: bool) -> str:
     if hedef.exists() and not force:
         return f"{ATLA_ETIKETI} {hedef} (mevcut; dokunulmadı)"
@@ -322,7 +377,14 @@ def main() -> int:
         print("     (team'in repoya EN AZ `write` erişimi olmalı — GitHub şartı)")
         print("  5. STEP 6 ilk push'tan SONRA ruleset'i ACTIVE et:")
         print("       required_approving_review_count=1 + require_code_owner_review=true")
-        print("       + required_status_checks=[core-leak, behavior-surface]")
+        adlar = guard_status_check_adlari()
+        if adlar:
+            print(f"       + required_status_checks=[{', '.join(adlar)}]")
+            print("         (adlar guard.template.yml + project-guard.yml job'larından türetildi)")
+        else:
+            print("       + required_status_checks=ÖLÇÜLEMEDİ — core'daki workflow'lar okunamadı;"
+                  " adları '<çağıran job> / <job adı>' biçiminde"
+                  " .github/workflows/project-guard.yml'den elle yaz")
         print("       + bypass_actors=[{OrganizationAdmin, bypass_mode: pull_request}]")
         print("       (tek code-owner varsa bypass ŞART: kendi PR'ını onaylayamaz)")
     print("  6. Kabul gate'i (STEP 5) — ilk commit/push SONRASI koş "

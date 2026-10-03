@@ -7,7 +7,13 @@ Windows'ta `--jq` argümanındaki `|`'yi cmd.exe'ye yorumlatır (kırılgan). Bu
 `gh` çağrıları sahtelenir; `git remote get-url` GERÇEK `_run` ile koşar. Kaynak METNİ
 (gerçek/mutant/taban) GERÇEK `__file__` ile exec edilir ⇒ CORE_ROOT doğru, repo'ya yazım yok.
 
-Kullanım: CLAUDE_PROJECT_DIR=<proje> python _senaryo.py <ix_doctor.py> <kaynak|-> <gh:var|yok> <log>
+Kullanım: CLAUDE_PROJECT_DIR=<proje> python _senaryo.py <ix_doctor.py> <kaynak|-> <gh:var|yok> <log> [katman:3|2]
+
+Katman 2 (yeni-proje akışı F3, 2026-10-03): `katman2()` koşar. CORE_ROOT'a dokunan her şey
+SAHTEDİR (core `_repo_git_kontrol` tek PASS satırı, `_git(CORE_ROOT, …)` sahte) ve `git fetch`
+ağ yerine rc=1 döner ⇒ gerçek core reposunun ref'leri değişmez, ağ yok. Proje tarafı
+(`git remote get-url`, `rev-parse`, `status`) GERÇEK koşar. Tüketici yalnız `proje:` ve
+"beklenen org" satırlarına bakar (global git config satırları makineye bağlıdır).
 """
 from __future__ import annotations
 
@@ -46,6 +52,26 @@ def _sahte_run(args, *a, **k):  # noqa: ANN001
 g["_run"] = _sahte_run
 g["shutil"] = types.SimpleNamespace(which=lambda ad: (SAHTE if gh_durum == "var" else None)
                                     if ad == "gh" else None)
-sonuc = g["katman3"]()
+katman = sys.argv[5] if len(sys.argv) > 5 else "3"
+if katman == "2":
+    _gercek_git, _gercek_rgk = g["_git"], g["_repo_git_kontrol"]
+    _core = Path(g["CORE_ROOT"]).resolve()
+
+    def _sahte_git(repo, *args, **k):  # noqa: ANN001
+        if Path(repo).resolve() == _core:
+            return 0, "sahte-core"
+        if args and args[0] == "fetch":
+            return 1, "sahte: ag yok"
+        return _gercek_git(repo, *args, **k)
+
+    def _sahte_rgk(etiket, repo, *a, **k):  # noqa: ANN001
+        if etiket == "core":
+            return [("PASS", "core: SAHTE")]
+        return _gercek_rgk(etiket, repo, *a, **k)
+
+    g["_git"], g["_repo_git_kontrol"] = _sahte_git, _sahte_rgk
+    sonuc = g["katman2"]()
+else:
+    sonuc = g["katman3"]()
 log_yolu.write_text(json.dumps(cagrilar), encoding="utf-8")
 print(json.dumps([[t, m] for t, m in sonuc], ensure_ascii=False))

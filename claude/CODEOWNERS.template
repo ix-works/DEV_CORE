@@ -9,7 +9,8 @@
 #      TEAM kullan, kişi değil: bakımcı değişince bu dosyaya dokunulmaz. Team'in
 #      repoya EN AZ `write` erişimi olmalı — GitHub'ın CODEOWNERS şartı.
 #   2. Ruleset: `main-pr-required` → required_approving_review_count=1 +
-#      require_code_owner_review=true + required_status_checks=[guard işleri]
+#      require_code_owner_review=true + required_status_checks=[guard işleri, biçim
+#      "guard / <job adı>" — tam liste init_project çıktısında + PROJECT_BOOTSTRAP STEP 6]
 #   3. ⚠ TEK-KİŞİ KİLİDİ: tek code-owner varsa o kişi KENDİ PR'ını onaylayamaz
 #      (GitHub kuralı) → hiçbir PR merge edilemez. Çözüm:
 #      bypass_actors: [{ actor_type: OrganizationAdmin, bypass_mode: pull_request }]

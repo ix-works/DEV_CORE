@@ -342,10 +342,18 @@ def _ps_politika_kontrol(bulunan: dict[str, str], okuyucu=None) -> list[Sonuc]:
 # ---------------------------------------------------------------- katman 2
 
 def _repo_git_kontrol(etiket: str, repo: Path, beklenen_org: str,
-                     org_zorunlu: bool = True, beklenen_ad: str = "") -> list[Sonuc]:
+                     org_zorunlu: bool = True, beklenen_ad: str = "",
+                     lite_kip: str = "") -> list[Sonuc]:
     r: list[Sonuc] = []
     org, ad = _remote_org_repo(repo)
     if not org:
+        if lite_kip:
+            # Yeni-proje akışı denetimi F3 (2026-10-03): LITE kipte (repo_mode local|none)
+            # remote YOKLUĞU kurulum hatası değil, akışın kendisidir — K3'teki Q336 deseni.
+            # Remote VARSA aşağıdaki denetimler kipten bağımsız aynen koşar.
+            r.append((SKIP, f"{etiket}: origin remote denetimi atlandı — repo_mode={lite_kip}: "
+                            f"LITE kipte remote beklenmez (PROJECT_BOOTSTRAP LITE akışı STEP 1'i atlar)"))
+            return r
         r.append((FAIL, f"{etiket}: origin remote YOK/çözülemedi ({repo})"))
         return r
     if beklenen_org and org != beklenen_org:
@@ -387,14 +395,22 @@ def _repo_git_kontrol(etiket: str, repo: Path, beklenen_org: str,
 
 def katman2() -> list[Sonuc]:
     r: list[Sonuc] = []
+    # ⚠ GEVŞETME (F3, dar — K3 Q336 ile AYNI sınır `_LITE_REPO_MODLARI`): yalnız `local`/`none`
+    # kipinde ve yalnız proje remote'u YOKKEN iki satır FAIL/WARN yerine SKIP olur. Anahtar
+    # yok / `full` / tanınmayan değer ⇒ bugünkü davranış AYNEN (yazım hatası denetimi kapatmaz).
+    mod = _repo_modu()
+    lite_kip = mod if mod in _LITE_REPO_MODLARI else ""
     # Beklenen org: project.yaml `github_org` → yoksa PROJE remote'undan türet (hardcode YOK)
     beklenen_org = str(cfg("github_org") or "") or _remote_org_repo(PROJ)[0]
     if beklenen_org:
         r.append((PASS, f"beklenen GitHub org (remote-deseninden): {beklenen_org}"))
+    elif lite_kip:
+        r.append((SKIP, f"beklenen org türetilmedi — repo_mode={lite_kip}: LITE kipte proje "
+                        f"remote'u beklenmez (core remote'u repo ADIYLA denetlenir)"))
     else:
         r.append((WARN, "beklenen org türetilemedi (proje remote'u yok + project.yaml github_org yok)"))
 
-    r += _repo_git_kontrol("proje", PROJ, beklenen_org)
+    r += _repo_git_kontrol("proje", PROJ, beklenen_org, lite_kip=lite_kip)
     # ⛔ core, PROJE org'una BAĞLI DEĞİLDİR (2026-09-17, ölçülmüş tüketici vakası): çekirdeği
     # klonlayan kişi kendi org'unda proje açar; core remote'u upstream ya da onun fork'udur.
     # Eskiden bu ayrım yoktu → o kurulumda katman-2 kalıcı FAIL veriyordu ve GERÇEK fail'ler
@@ -878,6 +894,29 @@ def katman7() -> list[Sonuc]:
         r.append((WARN, f"MEMORY.md BOŞ: {mem} — tohumla: python core/scripts/seed_memory.py"))
     else:
         r.append((FAIL, f"memory YOK: {mem} — tohumla: python core/scripts/seed_memory.py"))
+
+    # 7a2 — memory git (yeni-proje akışı denetimi F4, 2026-10-03): CLAUDE.core §1.1 gün-sonu
+    # adımı memory'yi "kendi PRIVATE remote'lu git'inde" varsayar, ama tohum (seed_memory)
+    # dizini git'siz doğurur ⇒ yedeksiz tek kopya. ⛔ YALNIZ GÖZLEM: WARN, FAIL YOK —
+    # yeni bir gate ADR 0019 moratoryumuna tabidir. Kapsam: `.git` VARLIĞI + en az bir remote
+    # TANIMI; push'un yapılıp yapılmadığı ve remote'un private olduğu ÖLÇÜLMEZ.
+    mem_dir = mem.parent
+    kur = "kurulum: PROJECT_BOOTSTRAP STEP 3 (e′) memory git adımı"
+    if not mem_dir.is_dir():
+        r.append((SKIP, f"memory git denetimi atlandı — memory dizini yok ({mem_dir})"))
+    elif not (mem_dir / ".git").exists():
+        r.append((WARN, f"memory dizini git'siz: {mem_dir} — yedeksiz tek kopya "
+                        f"(CLAUDE.core §1.1 gün-sonu memory commit+push varsayar); {kur}"))
+    else:
+        rc, out = _git(mem_dir, "remote")
+        uzaklar = [s.strip() for s in out.splitlines() if s.strip()] if rc == 0 else []
+        if rc != 0:
+            r.append((WARN, f"memory git remote listesi ÖLÇÜLEMEDİ (git remote rc={rc}): {mem_dir}"))
+        elif not uzaklar:
+            r.append((WARN, f"memory git'i var ama remote YOK: {mem_dir} — push edilemez, yedeksiz; {kur}"))
+        else:
+            r.append((PASS, f"memory git + remote tanımlı ({', '.join(uzaklar)}) "
+                            f"[kapsam: push/görünürlük ölçülmedi]"))
 
     # 7b — deploy zinciri import-sağlığı (deploy YOK; yalnız --help exit 0)
     rc, out = _run([sys.executable, str(CORE_ROOT / "scripts" / "deploy_ui.py"), "--help"],

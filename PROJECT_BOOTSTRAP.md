@@ -112,6 +112,28 @@ olmalı); (e) `seed_memory` → core memory-seed'den projenin memory'sini tohuml
 (memory proje-YOL bazlıdır; yeni proje sıfır memory ile başlar — seed bu açığı kapatır);
 (f) smoke testler. Onarım: `--repair-junctions` · worktree: `--provision-worktree <yol>`.
 
+(e′) **Memory git'i — ELLE, bir kez** (`team_setup` yapmaz). Tohumlanan memory dizini
+**git'siz** doğar; [`CLAUDE.core.md`](CLAUDE.core.md) §1.1 gün-sonu adımı ise memory'nin
+**kendi PRIVATE remote'lu git'inde** olduğunu varsayar (push'suz memory = makine-lokal
+tek kopya, yedeksiz). Dizin: `~/.claude/projects/<slug>/memory` — `<slug>` proje kök
+yolunun harf/rakam dışı her karakteri `-` olmuş hâlidir (`C:\IX\template_project` →
+`C--IX-template-project`).
+
+```powershell
+# 1) KULLANICI adımı — private repo aç (ajan repo AÇMAZ):
+gh repo create <ORG>/<REPO>-memory --private
+# 2) dizinde git (.gitignore YOK — dizinin tamamı izlenir):
+$m = "$HOME\.claude\projects\<slug>\memory"
+git -C $m init -b main
+git -C $m config core.autocrlf false
+git -C $m add -A ; git -C $m commit -m "chore(memory): tohum"
+git -C $m remote add origin https://github.com/<ORG>/<REPO>-memory.git
+git -C $m push -u origin main
+```
+
+**Doğrulama:** `ix_doctor` K7 — `memory git + remote tanımlı` PASS. Git'siz/remote'suz ise
+**WARN** verir (gözlemdir, kabul gate'ini düşürmez; push'u ve görünürlüğü ölçmez).
+
 > **"Skill/script/agent klasörde nasıl oluşacak?" — OLUŞMAZ.** Junction sayesinde proje
 > içinden `core\scripts\...`, `.claude\skills\...` olarak GÖRÜNÜRLER; diskte tek kopya
 > vardır ve o kopya DEV_CORE'dur.
@@ -155,11 +177,16 @@ olmalı); (e) `seed_memory` → core memory-seed'den projenin memory'sini tohuml
 `.conn_adt` yoksa (iskelet/LITE proje) madde 2 SKIP edilir ve `ix_doctor` K5, K5a `.conn_adt YOK` satırıyla FAIL verir —
 bu beklenen davranıştır (madde 5'in tek gerekçeli istisnası), gerekçesi `CLAUDE.md`'ye yazılır. K5'in **diğer** satırları
 (MCP server dosya erişimi · MCP server import) bu istisnaya GİRMEZ: onlar FAIL ise kurulum sağlıksızdır.
+LITE projede (`repo_mode: local|none`) remote yokluğu FAIL **değildir**: K2 `proje: origin remote
+denetimi atlandı` ve K3 ruleset/CI satırları `repo_mode=<kip>` gerekçeli SKIP verir. `full` (ya da
+anahtar yok / tanınmayan değer) projede remote yokluğu K2'de hâlâ FAIL'dir.
 
 ## STEP 6 — İlk paket + ilk commit
 
 ```powershell
 python core/scripts/bootstrap_package.py <PKG_ADI> --module <MOD> --title "..."
+#   <source_root>/<MOD> yoksa script YARATIR ([ OK ] satırı) — yalnız SD/MM/FI/QM/PM/EWM/CO;
+#   liste dışı ad → hata, klasör yaratılmaz (ad doğruysa elle aç). Var olan klasör aynen kullanılır.
 #   --owner "Ad"        → gerçek ad (private repo). VARSAYILAN: <OWNER> placeholder.
 #   --owner-from-git    → git user.name (⚠ public repoda kimlik sızdırır)
 #   şablon kökü artık CORE'a göre çözülür (proje kökünden çalışır)
@@ -174,10 +201,16 @@ git push -u origin main   # yalnız repo_mode=full (ilk-push istisnası: STEP 1)
 main-pr-required (branch, ~DEFAULT_BRANCH):
   required_approving_review_count = 1
   require_code_owner_review       = true
-  required_status_checks          = [core-leak, behavior-surface]
+  required_status_checks          = [guard / core-leak, guard / validators, guard / behavior-surface]
   deletion + non_fast_forward     = engelli
   bypass_actors = [{ OrganizationAdmin, bypass_mode: pull_request }]
 ```
+
+> ⚠ **Check adı biçimi `<çağıran job> / <job adı>`dır** (proje `guard.yml` → core
+> `project-guard.yml` reusable workflow'u). Öneksiz ad (`core-leak`) hiçbir koşuyla
+> eşleşmez ⇒ PR "beklenen kontrol" diye takılır. Güncel liste `init_project` çıktısında
+> basılır — oradaki satır workflow dosyalarından **türetilir**; bu blokla farkı varsa
+> çıktı doğrudur.
 
 > ⚠ **TEK-KİŞİ KİLİDİ:** `require_code_owner_review` açıkken tek code-owner varsa, o kişi
 > **kendi PR'ını onaylayamaz** (GitHub kuralı) → hiçbir PR merge edilemez. `bypass_actors`

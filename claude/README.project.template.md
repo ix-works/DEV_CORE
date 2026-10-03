@@ -108,8 +108,7 @@ python C:\IX\DEV_CORE\scripts\team_setup.py --project C:\IX\XYZ
 #   CLAUDE.md     → proje kimliği bölümü
 python core/scripts/behavior_manifest.py generate
 
-# STEP 5 — ilk paket
-mkdir <source_root>\SD
+# STEP 5 — ilk paket (modül klasörü yoksa script yaratır: SD/MM/FI/QM/PM/EWM/CO)
 python core/scripts/bootstrap_package.py ZSD001_CLC --module SD --title "..." --owner "<OWNER>"
 
 # STEP 6 — ilk commit/push, SONRA kabul gate'i (ix_doctor commit+ruleset arar)
@@ -119,7 +118,10 @@ python core/scripts/ix_doctor.py
 
 `repo_mode=local` (yalnız git init) veya `none` (git'siz) seçilirse STEP 1 atlanır.
 
-⚠ **`bootstrap_package.py` modül klasörünü kendisi yaratmaz** — önce `<source_root>/<MOD>`.
+ℹ **`bootstrap_package.py` modül klasörü yoksa kendisi yaratır** (yalnız geçerli listedeki
+modüller: SD, MM, FI, QM, PM, EWM, CO — `[ OK ] Modül klasörü yaratıldı` satırı basar).
+Liste dışı ad için klasör yaratılmaz, hata verir; ad doğruysa `<source_root>/<MOD>`'u elle aç.
+Var olan modül klasörü listeden bağımsız kabul edilir.
 ⚠ **`--owner` verilmezse** script `git config user.name`'i dosyalara gömer → public repoda
 kimlik sızıntısı. Daima `--owner` ver.
 
