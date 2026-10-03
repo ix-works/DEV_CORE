@@ -255,9 +255,15 @@ kontrol("F3 koşucunun kendisi → TAM süite", secim is None, f"alınan={secim}
 
 # F4: indekslenen doküman alanı → yalnız CORE-INDEX korpusu (doküman değişikliği
 #     TAM süite tetiklerse mod işe yaramaz; hiçbir şey tetiklemezse indeks çürür).
-secim, _ = sec("governance/infra-test-recipes.md")
+#     ⚠ 2026-10-03 (K2): örnek `infra-test-recipes.md` idi; o dosya artık kimlik TANIMI
+#     taşıdığı için `id_tekilligi` korpusuna da bağlı ⇒ F4'ün örneği tanım taşımayan bir
+#     governance dokümanına alındı, eski dosyanın İKİ korpusa gittiği F4b'de pinlendi.
+secim, _ = sec("governance/removed-controls.md")
 kontrol("F4 governance dokümanı → yalnız O:core_index_kapsam",
         secim == {"O:core_index_kapsam"}, f"alınan={secim}")
+secim, _ = sec("governance/infra-test-recipes.md")
+kontrol("F4b kimlik tanımı taşıyan doküman → CORE-INDEX + id_tekilligi (birleşim, TAM değil)",
+        secim == {"O:core_index_kapsam", "O:id_tekilligi"}, f"alınan={secim}")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # KABLOLAMA — seçim gerçekten KOŞUMU değiştiriyor mu (kod ≠ kablolama)

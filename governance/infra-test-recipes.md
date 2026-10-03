@@ -82,12 +82,12 @@ python tests/run_fixture_tests.py                                            # T
   ⚠ `exit 0` burada da tek başına kanıt değildir — **KARAR satırını oku** (seçili koşum
   sonunda `⚠ SEÇİLİ KOŞUM … TAM SÜİTE SONUCU DEĞİLDİR` yazar; o satır varken "süite yeşil"
   denmez).
-- Korpus: `python tests/fixtures/b0_secim/run.py` → **20/20**. İki mutasyon (ikisi de
+- Korpus: `python tests/fixtures/b0_secim/run.py` → **21/21** (2026-10-03 K2: F4b eklendi). İki mutasyon (ikisi de
   koşulur, biri diğerini kapsamaz):
-  · `--mutasyon-failopen` (bilinmeyen dosya → sessiz daraltma) → **15/18**; düşen: N1 · N1b · N5.
-  · `--mutasyon-tamlik` (harita-tamlık kontrolü sökülü) → **16/18**; düşen: N2 · N3.
+  · `--mutasyon-failopen` (bilinmeyen dosya → sessiz daraltma) → **16/19**; düşen: N1 · N1b · N5.
+  · `--mutasyon-tamlik` (harita-tamlık kontrolü sökülü) → **17/19**; düşen: N2 · N3.
   **FP çapaları her iki mutasyonda da AYAKTA** (P1-P5 · N6 açık-boş bildirim · F1 argümansız
-  davranış · F2 sahte-alarm yok · F4 doküman dalı) ⇒ seçim aşırı-sıkılaşmadı. *(Mutasyon `git show <sha>` ile DEĞİL,
+  davranış · F2 sahte-alarm yok · F4/F4b doküman dalı) ⇒ seçim aşırı-sıkılaşmadı. *(Mutasyon `git show <sha>` ile DEĞİL,
   fixture içi enjeksiyonla yapılır: kod taban SHA'da hiç yoktu — hedef geçmiş bir commit değil,
   reddedilen tasarım kararı.)*
 
@@ -1087,7 +1087,8 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
   `workflows/_clean_recreate` · `workflows/_full_cycle_v2`). Fixture E1 vektörü bu kümeyi
   **beyan eder**; yeni bir yazma yolu eklenirse o satır düşer.
 
-## B18e — `_find_existing_transport` ("Bug 11 sessiz fallback")
+## B18g — `_find_existing_transport` ("Bug 11 sessiz fallback")
+> Kimlik 2026-10-03'e kadar **B18e** idi (fetch_ui_source B18e'siyle ÇİFT tanım; K2 `check_id_uniqueness`).
 - `python tests/fixtures/sessiz_olumsuzlama_2026_08_10/run.py` → 40/40 (F bölümü) ·
   MUTASYON → 16/40.
 - **Değişmez:** sorgu başarısız olduğunda **fallback KORUNUR ama SESSİZ DEĞİLDİR** —
@@ -1107,7 +1108,8 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
   değil. Triyaj ölçütü: *"cağıran meşru olumsuzdan ayırt edemiyor MU + bu olumsuz bir
   KARARI besliyor MU"*; ikisi birden yoksa dokunma.
 
-## B18d — sınıf alt-include'u push'u (ccau/ccimp/ccdef/ccmac)
+## B18h — sınıf alt-include'u push'u (ccau/ccimp/ccdef/ccmac)
+> Kimlik 2026-10-03'e kadar **B18d** idi (deploy_ui Q281/Q285 B18d'siyle ÇİFT tanım; K2 `check_id_uniqueness`).
 - `python tests/fixtures/class_include_push/run.py` → 15/15 · MUTASYON → **1/15**.
 - **Değişmez:** yaratım ve içerik AYRI ADIMLARDIR. include YOK → POST(iskelet)+PUT(gövde);
   include VAR → yalnız PUT (var olana POST **500**). **POST gövdeyi YOK SAYAR** (ölçüldü:
@@ -2855,6 +2857,30 @@ python tests/run_battery.py sql_satir_kirma --kardes sorgu_basarisizligi_gorunur
   `"O" is invalid here` · AÇIK → 200 · elle iki satır → 200 · 252 kr / 13 `OR` tek satır → 200.
 - **DOĞRULANAMADI:** çok baytlı karakterde sınırın bayt mı karakter mi olduğu; eski
   `E070×E071` JOIN / uzun `IN` 400 vakalarının bu sınırdan doğup doğmadığı (yalnız T000 serbestti).
+
+## B65 — `check_id_uniqueness` (CORE-08, HARD): kimlik TANIMI tekilliği (K2, 2026-10-03)
+- `python tests/run_battery.py id_tekilligi --kardes b0_secim run_all_ozet_kipi parca_tamlik core_index_kapsam --precommit`
+  → taban **16/16** + 6 kipin hepsi BEKLENEN kümeyle düşer. Kipler ve pinli küme (`_BEKLENEN_DUSEN`, CORE-07 eşitlik):
+  `capraz-dosya` {P3} · `alt-etiket` {P1, N2, X1} · `harf-eki` {P1, N4, X1} · `fence` {N3} ·
+  `olculemedi-yok` {S1, S2, S3} · `kalin` {N1, P4, X1}. Çıkış: 0 taban · 1 beklenen düşüş · 2 SAPMA · 3 DOĞRULANAMADI.
+- **Aileler (yalnız TANIM; atıf sayılmaz):** reçete başlığı `#… B<n>[a-z]` · `playbook/checklists/*.md` tablo
+  ilk hücresi `<ÖNEK>-<n>[a-z]` (**dosyalar arası** tekillik; `**X**` = `X`) · `lessons-learned.md` `PATTERN #<n>` ·
+  `governance/decisions/NNNN-*.md`. Kod bloğu içi atlanır. Çıktının KAPSAM BEYANI aile tablosundan basılır (dosya +
+  tanım + tekil sayısı + BAKILMAYAN satırı). 2026-10-03 paydası: B-no 77 · checklist 357 · PATTERN 36 · ADR 22.
+- ⭐ **P1 GERÇEK ÇİFT:** pinli `c7d8b75` reçetesi → TAM {B18d :1001/:1110, B18e :1017/:1090}. `HEAD:` DEĞİL (zamana
+  bağlı taban merge'de yok olur); sığ klonda `[ATLA]` yazar, sessiz geçmez.
+- ⛔ **SİLİNEMEZ FP çapaları:** **N2** (`### B0-SEÇİM` / `B4-Q352` TİRELE BİTİŞİK alt-etiket ayrı kimlik değil; kalkarsa
+  gerçek ağaç bugün 4 sahte çift verir) · **N3** (kod bloğu) · **N4** (`B18`/`B18b`/`B18d` ayrı) · **N5** (metin içi ve
+  ikinci kolon atıfı tanım değil).
+- ⛔ **S1/S2 — ÖLÇÜLEMEDİ = rc 2:** aile kaynağı yoksa ya da 0 tanım verirse (biçim değişti) "çift yok" DENMEZ. **S3:**
+  çift + ölçülemedi birlikte → rc 1, iki satır da basılır.
+- **Kablolama (gerçek giriş noktası):** `run_all_validators --quick` (CORE modu) → `[OK] Kimlik tekilliği`; pozitif
+  kontrol `IX_CORE_ROOT=<c7d8b75 reçeteli kopya ağaç>` ile aynı komut → `[FAIL] Kimlik tekilliği` + iki çift, başka FAIL yok.
+- **Bilinçli KAPSAM DIŞI:** `standards/**` tablo kimlikleri (FR-001..003 şablon örneği + izlenebilirlik matrisinde meşru
+  tekrar eder) · infra-changelog `## Q<n>` kayıt başlıkları (`Q352-A/B` alt-etiket) · test vektör kimlikleri (ör.
+  `agent_stall_watch` S16, ayrı PR) · proje repoları. İstisna sözdizimi YOK (bugün gerçek "devam başlığı" vakası 0).
+- **Çift bulunursa:** SONRAKİ tanım ailenin bir sonraki BOŞ kimliğini alır; eski kimlik başlığın altına şerh edilir; atıflar
+  bağlamdan ayrılıp güncellenir (core + tüketici projeler). Paralel PR'larda B-numarasını lider baştan ayırır.
 
 ## B67 — ST22 dump okuma (`adt_dump_read`) + liste gürültü etiketi + başka-client guard'ı (`adt_dump_list`)
 

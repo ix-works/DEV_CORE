@@ -627,6 +627,13 @@ OZEL_TESTLER = [
      "Q354: --parca i/N deterministik bolme (evren KAYITTAN) + --parca-birlestir TAMLIK "
      "(eksik/cift/fazla/plan-sapmasi/planlanan!=kosulan/evren-ozeti/rc) + ATLA ozet ayristirici; "
      "bozuk bolme (birim dusuren/cogaltan parcala) FAIL'e cevrilir"),
+    # 2026-10-03 (K2, CORE-08): elle verilen kimlik iki kez tanimlaninca atif sessizce
+    # belirsizlesir (BE-58 · Q270 FE-36/FE-37/BE-63 · B18d/B18e). HARD gate'in korpusu.
+    ("id_tekilligi",
+     "CORE-08 check_id_uniqueness: B-no / checklist ID (dosyalar arasi) / PATTERN # / ADR no "
+     "TANIM tekilligi; pinli c7d8b75'te gercek B18d+B18e cifti TAM yakalanir; alt-etiket "
+     "(`B0-SECIM`) · kod blogu · harf eki · metin ici atif FP capalari; bos aile -> rc 2 "
+     "OLCULEMEDI; argumansiz alt-surec gercek core'u tarar (16 vektor + 6 mutasyon)"),
 ]
 
 
@@ -727,6 +734,15 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # oteki sessizce kayar (yukaridaki `kaynak_tarama` ile ayni sinif bagimlilik).
     ("scripts/utils/kapsam.py", ("O:validator_kapsam_paydasi", "O:olcum_yoklugu_sozlesmesi"),
      "12 validator'un ORTAK payda sozlesmesi; SINIR: 0 dosya FAIL URETMEZ (X1/M3)"),
+    # K2 (2026-10-03): kimlik tekilligi. X1 vektoru GERCEK dokumanlari tarar (fix sonrasi
+    # agac temiz) ⇒ tanim tasiyan dosyalar da bu korpusa baglanir. Dokuman satirlari ust
+    # `playbook/**` · `governance/**` glob'larıyla BIRLESIR (yon daima genisletme).
+    ("scripts/validators/check_id_uniqueness.py", ("O:id_tekilligi",),
+     "CORE-08 dedektoru: aile tablosu + kok onceligi + OLCULEMEDI (rc 2) burada yasar"),
+    ("governance/infra-test-recipes.md", ("O:id_tekilligi",), "B-no tanimlari (X1)"),
+    ("playbook/checklists/*.md", ("O:id_tekilligi",), "checklist kimlik tanimlari (X1)"),
+    ("playbook/lessons-learned.md", ("O:id_tekilligi",), "PATTERN # tanimlari (X1)"),
+    ("governance/decisions/*.md", ("O:id_tekilligi",), "ADR numaralari (X1)"),
     ("scripts/validators/check_console_utf8.py", ("O:console_utf8_kok_izolasyonu",),
      "kok cozumlemesi (--kok > IX_CORE_ROOT > __file__); SINIR: varsayilan PROJE kokune KAYMAZ"),
     ("tests/fixtures/conn_yazici_encoding/run.py", ("O:conn_kum_sizintisi",),
