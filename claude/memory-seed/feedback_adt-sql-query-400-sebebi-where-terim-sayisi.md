@@ -1,11 +1,22 @@
 ---
 name: feedback_adt-sql-query-400-sebebi-where-terim-sayisi
-description: "adt_sql_query 400'unun baskin sebebi WHERE terim sayisi DEGIL, freestyle ucunun SATIR BASINA 255 KARAKTER siniri (2026-10-03 kontrol gruplu olcum; arac artik uzun satiri kirar). Asagidaki terim/alan butcesi kayitlari bu sinir bilinmeden yazildi"
+description: "adt_sql_query 400'unun baskin sebebi WHERE terim sayisi DEGIL, freestyle ucunun SATIR BASINA 255 KARAKTER siniri (2026-10-03 kontrol gruplu olcum; arac artik uzun satiri kirar). DIKKAT: 255 asimi her zaman 400 VERMEZ - kesim gecerli sinira duserse kirpilmis sorgu SESSIZCE kosar (ok:true, YANLIS veri). Asagidaki terim/alan butcesi kayitlari bu sinir bilinmeden yazildi"
 metadata: 
   node_type: memory
   type: feedback
   originSessionId: f07a9d9a-ccde-437b-818a-48086e4c73a7
 ---
+
+## ⛔ 2026-10-03 (2. ölçüm) — 255 AŞIMI SESSİZ YANLIŞ SONUÇ DA ÜRETİR
+
+Kesim **token ortasına** düşerse 400 gelir; **geçerli bir sınıra** düşerse SAP kırpılmış sorguyu koşar
+ve `ok:true` döner — **hata yok, veri yanlış**. Kontrol grubu (DEV, `T000`, aynı mantıksal sorgu 273 kr,
+son koşul `AND mandt = '999'`): tek satır → `row_count:1` (**YANLIŞ**) · son koşuldan önce satır sonu →
+`row_count:0` (**DOĞRU**). Bir makinede geçmiş tarama: 229 aşımlı çağrının 222'si hata, **7'si `ok:true`
+kırpılmış** (JOIN koşulu · OR dalı · süzgeç · kolon düşmüş). Araç bu sürümden itibaren uzun satırı
+kırar; **eski sürümle koşan** bir MCP sunucusunda >255 kr satırlı sorgunun `ok:true`'su **kanıt değildir**
+— elle böl. Dış teyit: vibing-steampunk issue #239 + SAP Note 2807133 (`CL_ADT_DP_FREESTYLE_RES`
+gövdeyi CHAR255 satırlara çevirir).
 
 ## ⛔ 2026-10-03 DÜZELTME — BU KAYDIN ANA TEŞHİSİ ÇÜRÜDÜ (önce bunu oku)
 
