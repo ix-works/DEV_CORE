@@ -2862,14 +2862,15 @@ python tests/run_battery.py sql_satir_kirma --kardes sorgu_basarisizligi_gorunur
 python tests/run_battery.py dump_okuma --kardes sorgu_basarisizligi_gorunur sorgu_araclari_durustlugu b0_secim --precommit
 ```
 
-- `dump_okuma` **29/29**; 10 kip, her birinin düşmesi BEKLENEN küme `_BEKLENEN_DUSEN`'de pinli ve
+- `dump_okuma` **31/31**; 12 kip, her birinin düşmesi BEKLENEN küme `_BEKLENEN_DUSEN`'de pinli ve
   EŞİTLİKLE kıyaslanır (CORE-07; çıkış 1 = beklenen · 2 = SAPMA · 3 = çapa ≠ 1 / derlenmedi).
   Mutant = `query.py` kaynak METNİ gerçek `__file__` ile exec (dosyaya DOKUNULMAZ).
 - Kipler ↔ değişmez: `okuma-client-guard` (R6a/R7b/R7d) · `okuma-bilinmeyen-acik` (R7d:
   tespit edilemeyen client fail-closed) · `liste-gizleme-yok` / `liste-bilinmeyen-acik` (L1/L4/L6)
-  · `gurultu-veya` (L3a–c: imza VE'dir) · `id-bosluk` (L1/L8: kimlik sabit genişlik) ·
+  · `gurultu-veya` (L3a–c: imza VE'dir) · `id-bosluk` (L1/L8/R7e: kimlik sabit genişlik) ·
   `404-sessiz` (R4) · `formatted-tavansiz` (R10a) · `ozet-client-otorite` (R9) ·
-  `liste-ozet-otorite` (L1/L7).
+  `liste-ozet-otorite` (L1/L7) · `id-uzunluk` (R7e: 71 uzunluk, `[58:61]` rakam → client
+  özetten; bug-gate #314 G mutantı) · `nokta-kimlik` (R12b: `.`/`..`/boş → reddedilir, HTTP yok).
 - ⛔ SİLİNMEZ FP çapaları: **L3b/L3c** (tek alan eşleşmesi gürültü değil) · **L2/R6b** (ack ile
   başka client görünür) · **R1** (aynı client'ta tek GET, guard engellemez).
 - Veri JENERİK (kullanıcı `KULLANICI1`, sistem `XYZ`, host `sapapp01_XYZ_00`); kimlikler

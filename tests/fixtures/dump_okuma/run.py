@@ -85,7 +85,8 @@ _GECERLI_KIP = frozenset({
     "--mutasyon-liste-gizleme-yok", "--mutasyon-liste-bilinmeyen-acik",
     "--mutasyon-gurultu-veya", "--mutasyon-id-bosluk", "--mutasyon-404-sessiz",
     "--mutasyon-formatted-tavansiz", "--mutasyon-ozet-client-otorite",
-    "--mutasyon-liste-ozet-otorite"})
+    "--mutasyon-liste-ozet-otorite", "--mutasyon-id-uzunluk",
+    "--mutasyon-nokta-kimlik"})
 
 # CORE-07: kip -> düşmesi BEKLENEN vektör kimlikleri (EŞİTLİK; alt-küme değil).
 _BEKLENEN_DUSEN = {
@@ -94,11 +95,13 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-liste-gizleme-yok": {"L1", "L4", "L6"},
     "--mutasyon-liste-bilinmeyen-acik": {"L1", "L4", "L6"},
     "--mutasyon-gurultu-veya": {"L3a", "L3b", "L3c"},
-    "--mutasyon-id-bosluk": {"L1", "L8"},
+    "--mutasyon-id-bosluk": {"L1", "L8", "R7e"},  # R7e: bosluk-bolme 71 uzunlukta da 110 okur
     "--mutasyon-404-sessiz": {"R4"},
     "--mutasyon-formatted-tavansiz": {"R10a"},
     "--mutasyon-ozet-client-otorite": {"R9"},
     "--mutasyon-liste-ozet-otorite": {"L1", "L7"},
+    "--mutasyon-id-uzunluk": {"R7e"},
+    "--mutasyon-nokta-kimlik": {"R12b"},
 }
 
 # (eski, yeni) — eski TAM 1 kez eşleşmeli.
@@ -138,6 +141,13 @@ _MUT = {
         "            d_client = (_ozet_ayristir(ozet.text)[\"header\"].get(\"Client\")\n"
         "                        if ozet is not None and ozet.text else None)\n",
         "            d_client = None\n"),
+    # bug-gate #314 (G): `len == 70` -> `>= 61` mutantı R7e eklenmeden YAŞIYORDU.
+    "--mutasyon-id-uzunluk": (
+        "    if len(ham) == 70 and ham[:14].isdigit() and ham[58:61].isdigit():\n",
+        "    if len(ham) >= 61 and ham[:14].isdigit() and ham[58:61].isdigit():\n"),
+    "--mutasyon-nokta-kimlik": (
+        "    if ham.strip() in (\".\", \"..\"):\n",
+        "    if False:\n"),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -451,6 +461,19 @@ def main(kip: str | None) -> int:
     kur(y4)
     kontrol("R7d client TESPIT EDILEMEDI (ozet 500) ack'siz -> fail-closed baska_client_pii",
             Q.adt_dump_read(dump=kisa).get("error") == "baska_client_pii")
+    # R7e (bug-gate #314 G): 71 uzunluk + [58:61] RAKAM -> bicim TUTMAZ, client kimlikten
+    # OKUNMAZ (110 sanilmaz) -> ozete dusulur (ozet 100 -> okunur).
+    uzun = kimlik("20260101130004", "KULLANICI2", "110") + "9"
+    y8 = dict(yollar)
+    y8[D(uzun)] = (200, dump_xml(uzun, "ITAB_DUPLICATE_KEY", ZPROG))
+    y8[D(uzun, "/summary")] = (200, ozet_html("100").encode("utf-8"))
+    s = kur(y8)
+    r7e = Q.adt_dump_read(dump=uzun)
+    kontrol("R7e 71 uzunluk ([58:61] rakam) -> id'den client YOK, ozetten 100 -> okunur",
+            len(uzun) == 71 and uzun[58:61] == "110" and r7e.get("ok")
+            and r7e.get("client") == "100" and r7e.get("client_kaynagi") == "summary"
+            and bool(s.cagrilar) and s.cagrilar[0][0] == D(uzun, "/summary"),
+            "%s" % {k: r7e.get(k) for k in ("ok", "error", "client", "client_kaynagi")})
     s = kur(yollar)
     r8 = Q.adt_dump_read(dump=h100, summary=True)
     oz = r8.get("summary") or {}
@@ -502,6 +525,13 @@ def main(kip: str | None) -> int:
     r12 = Q.adt_dump_read(dump="/sap/bc/adt/runtime/dumps")
     kontrol("R12 cozulemeyen kimlik -> gecersiz_dump_kimligi + HTTP YOK",
             r12.get("error") == "gecersiz_dump_kimligi" and s.cagrilar == [])
+    nokta = [".", "..", "%2E%2E", "adt://XYZ/sap/bc/adt/runtime/dump/..", "  ..  ", ""]
+    sonuc = []
+    for b in nokta:
+        s = kur(yollar)
+        sonuc.append((Q.adt_dump_read(dump=b).get("error"), len(s.cagrilar)))
+    kontrol("R12b '.' / '..' / bos kimlik -> gecersiz_dump_kimligi + HTTP YOK (yol bolutu DEGIL)",
+            all(e == "gecersiz_dump_kimligi" and n == 0 for e, n in sonuc), "%s" % sonuc)
     from sap_adt_lib import SAPADTError  # type: ignore
     kur(yollar, firlat=SAPADTError("baglanti koptu", status_code=503))
     r13 = Q.adt_dump_read(dump=h100)

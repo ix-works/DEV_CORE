@@ -864,7 +864,7 @@ def _arac_gurultusu(error_type, program):
 def _dump_kimligi(dump) -> tuple:
     """`dump_uri` / feed `id` / ham kimlik → (URL'e konacak kodlu kimlik, ham kimlik).
 
-    Kimlik çözülemezse ilk eleman None.
+    Kimlik çözülemezse (boş · `/` içerir · `.`/`..`) ilk eleman None.
     """
     from urllib.parse import quote, unquote
     s = str(dump or "").strip()
@@ -878,6 +878,9 @@ def _dump_kimligi(dump) -> tuple:
             s = s[: -len(son)]
     ham = unquote(s)
     if not ham.strip() or "/" in ham:
+        return None, ham
+    # `.`/`..` yol bölütü olarak çözülür (`/runtime/dump/..` → başka uç) ⇒ kimlik DEĞİL.
+    if ham.strip() in (".", ".."):
         return None, ham
     return quote(ham, safe=""), ham
 

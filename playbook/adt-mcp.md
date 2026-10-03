@@ -673,14 +673,17 @@ guard'ı bağlantının tier'ına baktığı için bunlar onaysız okunuyordu. B
   Tespit edilemeyen = **fail-closed** (PII yönü); "dump yok" yanılgısını sayaç + notice önler.
   `limit` görünen girdiyi sayar; `taranan` = bakılan feed girdisi.
 - `adt_dump_read`: dump'ın client'ı farklıysa ya da tespit edilemezse `acknowledge_risk=True`
-  olmadan **dump gövdesi istenmez** (`baska_client_pii`).
+  olmadan dump XML'i/`formatted` **istenmez** ve hiçbir içerik **döndürülmez**
+  (`baska_client_pii`). ⚠ Kimlikten client çözülemezse client tespiti için `/summary`
+  **istenir** (sunucuya gider) ama içeriği çağırana DÖNDÜRÜLMEZ.
 - **Client kaynağı:** liste → girdinin kendi özet HTML'indeki `Client` satırı (otorite), yoksa
   kimlik. Okuma → kimlik (ağsız; XML'de client alanı YOK), çözülemezse `/summary` başlığı;
   `summary=True` ile özet client'ı kimlikten farklı çıkarsa özet kazanır ve guard yeniden uygulanır.
 - **Kimliğin biçimi (ölçüldü 100/100, tek sistem):** uzunluk 70, sabit genişlikli —
   14 zaman + 32 sunucu örneği + 12 kullanıcı + 3 client + 9. ⛔ Boşlukla bölmek 12 karakterlik
   kullanıcı adında kırılıyordu (kullanıcı + client bitişik; 2/100 vaka) ⇒ konumla okunur;
-  biçim tutmazsa client `None` (tahmin edilmez).
+  biçim tutmazsa client `None` (tahmin edilmez; uzunluk ≠ 70 ise `[58:61]` rakam olsa bile).
+  `.` / `..` / boş kimlik `gecersiz_dump_kimligi` (yol bölütü olarak başka uca çözülür).
 
 **DOĞRULANAMADI:** başka sürüm/sistemde kimlik genişliği · `from`/`to` param biçimi bu turda
 yeniden ölçülmedi · `/unformatted` ucu (bağlantıda var) ölçülmedi.
