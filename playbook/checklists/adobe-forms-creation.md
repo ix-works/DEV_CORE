@@ -13,7 +13,7 @@ applies_to: [s4_private]
 
 | ID | Kontrol | Severity | Ref |
 |---|---|---|---|
-| AF-DIV-01 | **İş bölümü:** Layout (SFP Form Builder + Adobe Designer) + Interface = **OPERATÖR** (GUI). AI bunları YAPMAZ | BLOCKER | std 07 §1 |
+| AF-DIV-01 | **İş bölümü:** Layout (SFP Form Builder + Adobe Designer) + Interface = **OPERATÖR** (GUI). AI bunları YAPMAZ. **İstisna:** kullanıcının açıkça seçtiği **Yol D** (form objesi yok; AI XDP yazar — std 07 §1b) — bu satır SFP form objesi içindir | BLOCKER | std 07 §1 · §1b |
 | AF-DIV-02 | AI yapar: **driver program** (veri topla → form çağır → spool/PDF) + **interface'i SPEC olarak** ver (alanlar/tipler) — operatör SFP'de yaratır | BLOCKER | std 07 §1 |
 | AF-IF-01 | **Interface = sözleşme:** driver'ın geçtiği parametreler ↔ SFP interface **birebir** (ad/tip). Spec netleştirilmeden driver yazma | BLOCKER | std 07 §3 |
 | AF-DRV-01 | Driver `FP_*` API deseni: `FP_JOB_OPEN` → `FP_FUNCTION_MODULE_NAME` → call → `FP_JOB_CLOSE`; `ls_outputparams`/`ls_docparams` | WARNING | std 07 §2 |
@@ -21,3 +21,15 @@ applies_to: [s4_private]
 | AF-DRV-03 | PDF: `ls_formoutput-pdf` (XSTRING) → spool / e-posta eki / download (ihtiyaca göre) | WARNING | std 07 §3 |
 | AF-NAM-01 | Driver program `ZSD<pkg>_P_*`, klasik program ise include'lara böl (std 06 §1) | BLOCKER | std 01 / std 06 §1 |
 | AF-005 | Z driver (Z namespace); **standart output objesine dokunma**; NAST/NACE/ADS config = operatör/Basis | BLOCKER | ADR 0005 |
+
+**Yol D (XDP + `CL_FP_ADS_UTIL=>RENDER_PDF`) — ek satırlar** ([`../howto-pdf-ads-xdp.md`](../howto-pdf-ads-xdp.md)):
+
+| ID | Kontrol | Severity | Ref |
+|---|---|---|---|
+| AF-XDP-01 | Yol D kullanıcının **açık seçimi** (Designer bakımı olmayacağı söylendi); yasal çıktı DEĞİL | BLOCKER | std 07 §1b |
+| AF-XDP-02 | `.xdp` + örnek veri `.xml` repoda kaynak; ABAP'taki kopya **üretici script**le üretilir ve `--check` ile güncel (elle kopya YOK) | WARNING | howto §3.5 |
+| AF-XDP-03 | Her `lr-tb` satırında kolon toplamı kapsayıcıdan **≥ 1 mm küçük** (eşitse son kolon alt satıra kayar, sayfa sayısı artar) | BLOCKER | howto §3.1 |
+| AF-XDP-04 | Büyük harfli sabit etiketlerde yabancı sözcük `İ` taraması (`BOOKİNG` ✗) | WARNING | howto §3.2 |
+| AF-XDP-05 | `typeface="Arial"` + `embed_fonts = abap_true`; locale `tr_TR` | BLOCKER | howto §1, §3.4 |
+| AF-XDP-06 | Deneme koşusunda `ev_pages` beklenenle aynı **ve** PDF açılıp gözle okundu (bayt/sayfa yerleşim kusurunu söylemez) | BLOCKER | howto §3.6 |
+| AF-XDP-07 | Mail gönderen deneme koşusu **tek POST** (yeniden deneyen araç YOK); deneme sınıfı iş bitince silinir | WARNING | howto §4, §5 |

@@ -1046,3 +1046,22 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
   istek → `aUrlParams` devri taraması.
 - **Referans:** std/03 §18.5b · `howto-document-lock.md` §4 ⚠ 1-2 · ADR 0014 değişiklik notu · FE-43 (metadata
   ayağı — ayrı) · PATTERN #19 (kontrol grubu). prior-art: FE-43 bulundu (yalnız `metadataUrlParams`); `sap-client` ayağı yok.
+
+### PATTERN #41: **"Bu ortamda normal" hükmü hata METNİNİ okumadan verilirse kök sebep aylarca saklanır**
+
+- **Belirti:** Bir hata sürekli tekrar ediyor ve "test sisteminde X zaten çalışmaz" diye **beklenen** sayılıyor.
+  Hüküm bir kez verildikten sonra hiçbir yeni olay onu sorgulatmıyor; her yeni kayıt hükmü "doğruluyor".
+- **Ölçülmüş vaka (S/4 private, DEV, 2026-10-04):** SAPconnect gönderim kayıtlarında (SOES) aylardır yüzlerce
+  `XS 812` birikmişti; "test sisteminden dışarı mail çıkmaz, SOST'a düşmesi yeter" kuralı yazılmış ve memory'ye
+  bile kaydedilmişti. Hata satırının kendisi sebebi söylüyordu: `554 5.2.252 SendAsDenied; <teknik-adres>` —
+  kurumsal relay yalnız yetkili teknik adresten gönderime izin veriyordu, mail ise SAP kullanıcısının adıyla
+  gönderiliyordu. Kullanıcı kuralı öğrenip gönderen değişince aynı sistemden mail **dış posta kutusuna ulaştı**
+  (SOES `718 I` "Recipient OK"). Yan etki: "çıkmaz" varsayımıyla test maili gerçek alıcıya gidebilir hâle geldi.
+- **Ders (genelleme):** "ortamın doğası" bir **sebep** iddiasıdır, gözlem değil. Hükmü vermeden önce:
+  ① hata kaydının **tam metnini** oku (kod + serbest metin — çoğu kez sebebi söyler) ② **kontrol grubu**: aynı
+  ortamda başarılı olan tek bir örnek var mı (varsa hüküm yanlıştır) ③ hükmü yazarken dayandığı kanıtı da yaz
+  ("812 sayısı" kanıt değil, "812'nin metni" kanıttır). Bkz. PATTERN #19 (kontrol grubu).
+- **Tetik cümleleri:** "test sisteminde normal" · "DEV'de zaten çalışmaz" · "orada hep böyle".
+- **Gate?** ⛔ HAYIR (ADR 0019 — tek vaka; önce doküman: `howto-abap-email.md` §1 + §1.1 teslim teşhisi tablosu).
+- **Referans:** `howto-abap-email.md` §1, §1.1 · prior-art: yok (çekirdekte "ortam varsayımı" sınıfı yazılı değildi;
+  §1 "sabit kullanıcı gömme" kuralı aynı alanın ters yönüydü — teknik adres istisnası bu turda eklendi).
