@@ -29,7 +29,8 @@ ABAP program/JOB'undan **kurumsal HTML mail** (opsiyonel ek-dosya) göndermenin 
 > ⭐ **Gönderen adresi kodun değil sistemin/kurumun kuralıdır** (2026-10-04, canlı): SAPconnect'in teslim ettiği
 > kurumsal relay (ör. Microsoft 365 / Exchange Online) çoğu kez **yalnız yetkili bir teknik adresten** gönderime
 > izin verir ("Send As" kısıtı). SAP kullanıcısı gönderen yapılınca relay maili reddeder; SOES'te
-> `XS 812` + `554 5.2.252 SendAsDenied; <teknik-adres>` görünür. Ölçülen vakada **aylardır biriken yüzlerce 812**
+> `XS 812` + `554 5.2.252 SendAsDenied; <kimliği doğrulanan hesap> not allowed to send as <From>` görünür —
+> teşhiste asıl ipucu ikinci yarıdır (relay'in hangi hesapla bağlandığını ve hangi gönderene izin vermediğini söyler). Ölçülen vakada **aylardır biriken yüzlerce 812**
 > "test sisteminden mail çıkmaz" diye normal sayılmıştı; gönderen teknik adres yapılınca aynı sistemden
 > mail **dış posta kutusuna ulaştı** (bkz. lessons-learned PATTERN #41).
 > **Kural:** yeni mail işine başlarken gönderen politikasını kullanıcıya/Basis'e **sor** ve SOES geçmişinde
@@ -49,12 +50,12 @@ sender_address_type = 'B'.   " B = SAP internal user (sy-uname)
 - ⛔ **`type='U'` (SMTP) + değere SAP kullanıcı-adı** verme — tip/değer uyumsuz (canlı bug: `type='U'` ama değer
   bir SAP user-id idi → gönderen bozuk). SAP user → `'B'`; gerçek SMTP adresi → `'U'`.
 
-### 1.1 Teslim teşhisi — SOST / SOES (✅ canlı)
+### 1.1 Teslim teşhisi — SOST / SOES (718/812 satırları ✅ canlı)
 | SOES / SOST durumu | Anlamı |
 |---|---|
 | `XS 718` tip `I` "Recipient Is Valid. Delivery Attempted" (MSGV'de `250 2.1.5 Recipient OK`) | Relay kabul etti → dışarı çıktı |
 | `XS 812` + `554 5.2.252 SendAsDenied` | Gönderen adres relay'de yetkisiz (§1) |
-| `W` (bekliyor) | Gönderim işi (SCOT) henüz koşmadı; `set_send_immediately( abap_true )` kullanan kod beklemez |
+| `W` (bekliyor) | ⚠ ölçülmedi. Aylarca `W`'de kalan kayıt "henüz koşmadı" demek DEĞİLDİR — ayrı teşhis ister (SCOT gönderim işi, node/adres eşleşmesi) |
 - SOST'ta HTML eki açarken çıkan **SO596** ("güvenlik nedeniyle değiştirildi") yalnız SAP GUI görüntüleyicisinin
   `<style>`/SVG ayıklamasıdır — mail engeli DEĞİL.
 - ⛔ **"Test sisteminden mail çıkmaz" VARSAYMA.** Çıkabilir: test alıcılarını kontrol et (bakım tablolarında
@@ -180,7 +181,7 @@ CALL FUNCTION 'SO_DOCUMENT_SEND_API1'
 - ⚠ **`doc_size = xstrlen( )`** (gerçek bayt) ver → son SOLIX satırının padding'i trimlenir (yoksa ek sonunda çöp bayt).
 - ⛔ **`commit_work = abap_true`** yoksa "gönderildi görünür ama hiç çıkmaz" (en sık hata).
 
-## 7. Modern alternatif — `CL_BCS` (yeni işler için önerilir; ✅ canlı doğrulandı 2026-10-04, S/4 private 2025)
+## 7. Modern alternatif — `CL_BCS` (yeni işler için önerilir; kısmen ✅ canlı 2026-10-04, S/4 private 2025 — kapsam aşağıdaki listede)
 `SO_DOCUMENT_SEND_API1` çalışır/desteklenir ama **CL_BCS** (Business Communication Services, Basis 6.40+ / tüm S/4)
 SAP'nin modern-önerdiği yol. **Migration DEĞMEZ** (bug-free üretim koduna dokunma); **yeni işlerde + ek-dosyada** tercih et.
 Kazançlar: `packing_list` derdi YOK · `cx_bcs` tek `TRY` · `cl_bcs_convert=>string_to_soli()` **otomatik 255-böler** (§3.2'nin OO karşılığı).
@@ -203,13 +204,15 @@ ENDTRY.
 Canlı doğrulananlar: HTM gövde + `PDF` eki (`i_attachment_header = VALUE soli_tab( ( line = |&SO_FILENAME=<ad>.pdf| ) )`
 dosya adını verir) · `set_message_subject` · teknik adres gönderen · `cl_sapuser_bcs` alıcı (SAP gelen kutusu) +
 internet adresi alıcı · `set_send_immediately( abap_true )`. Tam ekli örnek: [`howto-pdf-ads-xdp.md`](howto-pdf-ads-xdp.md) §4.
+⚠ Ölçülmeyenler: örnekteki `XLS` eki ve `string_to_soli`'nin 255 bölmesi (bu turda yalnız HTM gövde + PDF eki koştu).
 
 ### 7.1 RAP içinden gönderim — COMMIT ayrı LUW'da (✅)
-RAP handler/saver içinde `COMMIT WORK` yasaktır (BE-26) ama CL_BCS COMMIT'siz göndermez. Çalışan desen:
-gönderimi **RFC-enabled** bir Z FM'e koy ve `CALL FUNCTION '<Z_FM>' DESTINATION 'NONE'` ile çağır — FM kendi
-LUW'unda `send( )` + `COMMIT WORK` yapar, sonucu (mesaj tablosu) döner. ⚠ FM RFC-enabled değilse çağrı
-çalışma zamanında düşer; `TABLES` parametresi tipliyse RFC-enable sonrası ortaya çıkan gizli hata için
-[`lessons-learned.md`](lessons-learned.md) PATTERN #33.
+RAP handler/saver içinde `COMMIT WORK` yasaktır (BE-26) ama CL_BCS COMMIT'siz göndermez. Kanonik desen zaten
+yazılı: [`adt-rap.md`](adt-rap.md) "✅ DOĞRU DESEN — commit gerektiren klasik BAPI'yi RAP'ten çağırma (AYRI LUW)"
+(RFC-enabled Z FM + `CALL FUNCTION '<Z_FM>' DESTINATION 'NONE'`; tuzakları orada). Mail için de aynısı geçerli:
+FM kendi LUW'unda `send( )` + `COMMIT WORK` yapar, sonucu (mesaj tablosu) döner.
+Ölçüm bağlamı: unmanaged, strict olmayan BDEF'te static action (interaction phase) içinden — ⚠ strict/managed
+saver bağlamında ölçülmedi. `TABLES` parametreli FM için ayrıca [`lessons-learned.md`](lessons-learned.md) PATTERN #33.
 
 > **Türkçe-en-güvenli ek** = `.xlsx` (abap2xlsx) veya BOM'lu binary — encoding dosyanın İÇİNDE, SAPconnect codepage'inden bağımsız (§3.5 riskini kesin çözer).
 

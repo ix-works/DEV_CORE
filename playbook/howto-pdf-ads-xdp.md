@@ -45,7 +45,7 @@ ADS yoksa bu yol da çalışmaz.
 
 ---
 
-## 1. API (✅)
+## 1. API (✅ başarılı yol canlı; hata yolu kaynak okuması)
 
 ```abap
 DATA ls_opt TYPE cl_fp_ads_util=>ty_gs_options_pdf.
@@ -61,19 +61,21 @@ TRY.
                                           ev_trace_string = lv_trace ). " ADS izi — hatada oku
   CATCH cx_fp_ads_util INTO DATA(lx).
     " ev_trace_string ve (varsa) hata PDF'i istisnadan ÖNCE dolar → hatada izi yaz/logla
+    " (⚠ canlı hata koşusu yapılmadı — CL_FP_ADS_UTIL kaynağında RAISE'den önce dolduğu okundu)
 ENDTRY.
 ```
 
-- String → UTF-8 xstring: `cl_web_http_utility=>encode_utf8( )` (ya da `cl_abap_conv_codepage=>create_out( )->convert( )`).
+- String → UTF-8 xstring: `cl_web_http_utility=>encode_utf8( )` (✅ kullanılan) — `cl_abap_conv_codepage=>create_out( )->convert( )` da olur (⚠ bu yolda denenmedi).
 - `ev_pages`'i **her koşuda logla/göster**: yerleşim kusurunun en ucuz sinyali beklenmeyen sayfa sayısıdır (§3.1).
-- Released durumu: sınıf ARS'de **released (C1)** listelenmişti (araştırma, 2026-10-04); hedef sistemde
-  `SEOCOMPO`/ADT ile metodun varlığını yeniden ölç.
+- Released durumu: sınıf ARS'de **released (C1)** listelenmişti (araştırma, 2026-10-04; ⚠ bu dosyada yeniden
+  ölçülmedi); hedef sistemde `SEOSUBCODF`/ADT ile metodun imzasını yeniden ölç.
 
 ---
 
-## 2. XDP'yi yazmak — iskelet (✅)
+## 2. XDP'yi yazmak — iskelet
 
-XFA 3.3 düz XML'dir. En küçük çalışan iskelet:
+XFA 3.3 düz XML'dir. Aşağıdaki iskelet canlıda render edilen tam şablondan **kısaltıldı** (öğe ve öznitelikler
+aynı; ⚠ bu kısa hâli ayrıca render edilmedi):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -111,11 +113,12 @@ XFA 3.3 düz XML'dir. En küçük çalışan iskelet:
 
 Veri: kök eleman adı XDP'nin kök subform adıyla aynı (`<data>…</data>`), altında `HDR`, `ITEMS/ROW` …
 
-**Bağlama kuralları (✅):**
+**Bağlama kuralları** (ilk üçü ✅ render'da gözlendi):
 - `$record.A.B` = veri kökünden mutlak yol · `$.A` = en yakın **bağlı** ata subform'un veri düğümüne göre.
 - `X[*]` + `<occur min="0" max="-1"/>` = tekrarlı subform (her veri örneği bir kopya).
 - **Adsız** subform ya da `<bind match="none"/>` veri bağlamını DEĞİŞTİRMEZ (görsel gruplama için güvenli).
-  **Adlı + bind'siz** subform ad eşlemesi yapar ⇒ bağlam kayabilir — adlı subform'a daima açık `bind` ver.
+  **Adlı + bind'siz** subform ad eşlemesi yapar ⇒ bağlam kayabilir — adlı subform'a daima açık `bind` ver
+  (⚠ XFA davranışına dayanan önlem; kaymanın kendisi gözlenmedi, şablon bu durumu baştan önledi).
 - Sabit metin `draw`, veriye bağlı metin `field`. Etiket + değer kutusu = `draw` + `field` içeren küçük adsız subform.
 - Barkod (✅ Code39, bu biçimle okundu):
   `<ui><barcode type="code3Of9" dataLength="10" moduleWidth="0.25mm" wideNarrowRatio="3.0" textLocation="none" checksum="none"/></ui>`
@@ -125,26 +128,31 @@ Veri: kök eleman adı XDP'nin kök subform adıyla aynı (`<data>…</data>`), 
 
 ## 3. TUZAKLAR (hepsi bu yolda yaşandı)
 
-### 3.1 ⛔ `lr-tb` satırında kolon genişlikleri kapsayıcıya EŞİT olursa son kolon alt satıra kayar
-Kolon toplamı tam olarak 192 mm, `contentArea` da 192 mm idi: son kolon (onay kutusu) **her satırda** alt
-satıra düştü, satır yüksekliği ikiye katlandı, belge 1 yerine **2 sayfa** oldu. Başlık satırı da aynı
-şekilde kaydı. Hata, uyarı ya da ADS iz satırı **yok** — tek sinyal `ev_pages`.
-**Kural:** `lr-tb` satırında kolon toplamını kapsayıcıdan **en az 1 mm küçük** tut (örn. 191/192). Birleşik
-etiket hücreleri (ara/genel toplam satırı) de aynı toplamı izler — orada da 1 mm bırak.
-✅ Doğrulandı: aynı belgede yalnız bir kolonu 1 mm daraltmak (toplam 191) satırları tek satıra indirdi, belge
-**1 sayfa** oldu (§7, v2). ⚠ Kaymanın eşik değeri (0,1 mm yeter mi) ölçülmedi — 1 mm güvenli tarafta.
+### 3.1 ⛔ Çok kolonlu tablo satırında (`lr-tb`) kolon toplamı kapsayıcıya eşitse son kolon alt satıra kayabilir
+Ölçülen vaka: **11 kolonlu** kalem tablosu satırında (ve 8 hücreli ara/genel toplam satırında) kolon toplamı tam
+192 mm, kapsayıcı da 192 mm idi: son kolon (onay kutusu) **her satırda** alt satıra düştü, satır yüksekliği
+ikiye katlandı, belge 1 yerine **2 sayfa** oldu; başlık satırı da kaydı. Hata, uyarı ya da ADS iz satırı **yok**
+— sinyal yalnız `ev_pages` ve gözle bakış.
+Aynı belgede toplamı yine tam 192 olan **2-4 elemanlı** satırlar (kart başlığı 60+132, altbilgi 125+67,
+3 parçalı başlık, 4×48 ızgara) **kaymadı**. ⇒ Mekanizma (eleman sayısıyla biriken yuvarlama mı, başka bir şey mi)
+ve eşik **ölçülmedi**.
+**Kural:** çok kolonlu tablo satırlarında kolon toplamını kapsayıcıdan **1 mm küçük** tut (örn. 191/192);
+birleşik etiketli toplam satırları da aynı toplamı izlesin. Kasıtlı sarılan ızgaralar (toplamı kapsayıcının
+katı olan kart dizileri) bu kuralın konusu değildir.
+✅ Doğrulandı: yalnız bir kolonu 1 mm daraltmak (toplam 191) satırları tek satıra indirdi, belge **1 sayfa**
+oldu (§7, v2).
 
 ### 3.2 ⛔ Büyük harfli sabit etiketlerde Türkçe `İ` — yabancı sözcükte YANLIŞ
 Etiketler büyük harfle yazılırken "Booking" → **"BOOKİNG"** oldu (Türkçe büyük harf dönüşümü). Türkçe
 sözcükte doğru olan (`SEVKİYAT`, `MÜŞTERİ`), yabancı sözcükte/kısaltmada yanlıştır (`BOOKING`, `INCOTERMS`, `BL NO`).
-**Kural:** büyük harfli etiketleri elle yaz ve yabancı sözcükleri ASCII `I` ile tara
-(`grep -o "<text>[^<]*[A-Z]İ[^<]*</text>"` ile listele, her birini oku).
+**Kural:** büyük harfli etiketleri elle yaz; `İ` geçen her etiketi listele ve tek tek oku
+(`grep -o "<text>[^<]*İ[^<]*</text>"` — sözcük başındaki `İ`'yi de yakalar: `İNCOTERMS` ✗).
 
 ### 3.3 Uzun metin alanı = `multiLine="1"` + `minH` (sabit `h` DEĞİL)
 Sabit `h` verilen alanda uzun metin **kesilir**; `minH` + `multiLine` satır yüksekliğini büyütür.
 Tablo satırlarında tüm hücrelere `minH` ver (biri büyürse satır büyür).
 
-### 3.4 Font: `typeface="Arial"` + `embed_fonts = abap_true` (✅)
+### 3.4 Font: `typeface="Arial"` + `embed_fonts = abap_true` + projenin yerel ayarı (✅ TR projede `tr_TR`)
 ADS'in sunucusunda Arial var; PDF'e ArialMT / Arial-BoldMT gömüldü, ş ğ ı İ Ş Ğ Ü Ö Ç doğru çıktı.
 Gömme kapalıysa görüntüleyicinin yedek fontu Türkçe glifleri bozabilir (⚠ kapalı hâl ölçülmedi).
 
