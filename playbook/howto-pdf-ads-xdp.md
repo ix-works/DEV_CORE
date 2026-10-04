@@ -131,7 +131,8 @@ satıra düştü, satır yüksekliği ikiye katlandı, belge 1 yerine **2 sayfa*
 şekilde kaydı. Hata, uyarı ya da ADS iz satırı **yok** — tek sinyal `ev_pages`.
 **Kural:** `lr-tb` satırında kolon toplamını kapsayıcıdan **en az 1 mm küçük** tut (örn. 191/192). Birleşik
 etiket hücreleri (ara/genel toplam satırı) de aynı toplamı izler — orada da 1 mm bırak.
-<!-- v2 doğrulaması: aşağıdaki §7 "Ölçüm geçmişi"ne bakın -->
+✅ Doğrulandı: aynı belgede yalnız bir kolonu 1 mm daraltmak (toplam 191) satırları tek satıra indirdi, belge
+**1 sayfa** oldu (§7, v2). ⚠ Kaymanın eşik değeri (0,1 mm yeter mi) ölçülmedi — 1 mm güvenli tarafta.
 
 ### 3.2 ⛔ Büyük harfli sabit etiketlerde Türkçe `İ` — yabancı sözcükte YANLIŞ
 Etiketler büyük harfle yazılırken "Booking" → **"BOOKİNG"** oldu (Türkçe büyük harf dönüşümü). Türkçe
@@ -158,8 +159,10 @@ küçük bir script onu ABAP metoduna (`rv_xml = rv_xml && \`…\` && nl.` satı
 (⚠ yalnız "sınıf metodu" ölçüldü).
 
 ### 3.6 Deneme koşusu: `IF_OO_ADT_CLASSRUN` + base64 çıktı
-ADT classrun ile koş; PDF'i base64'e çevirip sabit uzunluklu satırlarla yaz, yerelde çöz ve aç.
-`ev_pages`, PDF baytı ve ADS izinin başını da yaz. PDF'i görsel olarak **aç ve oku** — bayt/sayfa sayısı
+ADT classrun ile koş; PDF'i base64'e çevirip sabit uzunluklu satırlarla yaz (başlangıç/bitiş işaret satırları
+arasında), yerelde çöz ve aç. `ev_pages`, PDF baytı ve ADS izinin başını da yaz. Sayfa sayısını yerelde
+**bağımsız** say (`pypdf`): ADS sayfa nesnelerini sıkıştırılmış nesne akışına koyar ⇒ ham `/Type /Page`
+regex'i **0** verir (ölçüldü) — o sayı hüküm değildir. PDF'i görsel olarak **aç ve oku** — bayt/sayfa sayısı
 yerleşim kusurunu söylemez (§3.1'deki kusur ancak bakınca görüldü).
 
 ---
@@ -220,6 +223,8 @@ zaman aşımı olursa **tekrarlama**, önce SOST/SOOD'a bak.
 ## 7. Ölçüm geçmişi
 - 2026-10-04 v1: 87.732 bayt, **2 sayfa** (beklenen 1) — §3.1 kolon kayması + §3.2 "BOOKİNG"; ArialMT/Arial-BoldMT gömülü,
   Türkçe glifler + Code39 doğru; CL_BCS eki dış posta kutusuna ulaştı.
+- 2026-10-04 v2 (yalnız kolon toplamı 192→191 mm + etiket düzeltmeleri): 87.271 bayt, **1 sayfa** (`ev_pages` 1 ·
+  `pypdf` 1; kontrol grubu v1 aynı yöntemle 2), A4; ADS render 607 ms; mail SOST `718 I`, tek gönderi.
 
 ## İlgili
 - [`howto-abap-email.md`](howto-abap-email.md) — gönderen, alıcı, konu, gövde, ek tuzakları
