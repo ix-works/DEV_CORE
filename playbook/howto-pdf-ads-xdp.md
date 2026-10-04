@@ -21,6 +21,7 @@ status: active
 Kanıt düzeyi: aşağıdaki her "✅" maddesi **canlı ölçüldü** (S/4 private 2025, DEV, 2026-10-04): 1 sayfalık
 bir sevk belgesi (başlık ızgarası, Code39 barkod, tekrarlı kart, gruplu kalem tablosu + ara/genel toplam,
 stok blokları, altbilgi) render edildi, mail eki olarak dış posta kutusuna gönderildi ve açıldı.
+Çok belge → tek PDF (§2.1) ayrıca 5 belgeyle canlı render edilip gönderildi; neyin ölçüldüğü orada madde madde yazılı.
 "⚠ ölçülmedi" maddeleri öyle okunmalı.
 
 ---
@@ -124,6 +125,61 @@ Veri: kök eleman adı XDP'nin kök subform adıyla aynı (`<data>…</data>`), 
   `<ui><barcode type="code3Of9" dataLength="10" moduleWidth="0.25mm" wideNarrowRatio="3.0" textLocation="none" checksum="none"/></ui>`
   — numarayı barkodun altına ayrı bir `field` olarak yaz (`textLocation="none"`).
 
+### 2.1 Çok belge → TEK PDF: belge başına yeni sayfa + belge içi "Sayfa n / N" (✅ canlı)
+
+Birden çok belgeyi (ör. toplu sipariş) tek PDF'te göndermek için gövdeyi **tekrarlı bir belge subform'una** sar; veri
+`<data><DOC>…</DOC><DOC>…</DOC></data>`, belge içindeki bütün bağlar **göreli** (`$.HDR`, `$.ITEMS` …) olur.
+Aşağıdaki parçalar canlıda render edilen şablondan **genelleştirildi** (ad `DOC`, iç içerik kısaltıldı; ⚠ bu kısa hâli
+ayrıca render edilmedi — kırılım öğeleri ile sayfa no olayı/betiği ölçülen şablonla birebir aynı; alanın font/para biçimi kısaltıldı):
+
+```xml
+<subform name="DOC" layout="tb" w="192mm">
+ <occur min="1" max="-1"/>
+ <bind match="dataRef" ref="$record.DOC[*]"/>
+ <breakBefore targetType="auto"/>
+ <event activity="initialize">
+  <script contentType="application/x-javascript">if (this.index &gt; 0) { this.breakBefore.targetType = "pageArea"; }</script>
+ </event>
+ <subform name="HDR" layout="lr-tb" w="192mm"><bind match="dataRef" ref="$.HDR"/> … </subform>
+ …
+</subform>
+```
+
+- **Kırılım:** ilk belge kırılım almaz (baştaki boş sayfa yok), 2. ve sonrakiler yeni sayfadan başlar. Tek belgede çıktı
+  sarmalayıcı yokken olduğu gibi **görünür** (kullanıcı görsel kontrolü; bayt düzeyinde aynı değil).
+- **Belge içi sayfa no** — `pageArea` içindeki altbilgi alanı, `layout:ready` olayında belgenin başladığı sayfayı ve
+  kapladığı sayfa sayısını sorar; API hata verirse tüm dosya numarasına düşer:
+
+```xml
+<field name="SAYFA" x="9mm" y="289.5mm" w="192mm" h="4mm"><ui><textEdit/></ui><bind match="none"/>
+ <event activity="ready" ref="$layout">
+  <script contentType="application/x-javascript">
+var cur = xfa.layout.page(this);
+var txt = "Sayfa " + cur + " / " + xfa.layout.pageCount();
+try {
+var docs = xfa.resolveNodes("xfa.form.data.DOC[*]");
+for (var i = 0; i &lt; docs.length; i++) {
+var ilk = xfa.layout.page(docs.item(i));
+var n = xfa.layout.pageSpan(docs.item(i));
+if (cur &gt;= ilk &amp;&amp; cur &lt; ilk + n) { txt = "Sayfa " + (cur - ilk + 1) + " / " + n; break; }
+}
+} catch (e) { }
+this.rawValue = txt;
+  </script>
+ </event>
+</field>
+```
+
+- **Ölçüm (S/4 private 2025, 2026-10-04):** 5 belgelik tek PDF — ✅ her belge yeni sayfadan, baştaki boş sayfa yok
+  (kullanıcı görsel kontrolü) · ✅ numara belge içinde başlıyor (kullanıcı görsel kontrolü) · tek render, tek CL_BCS eki,
+  144.264 bayt (en büyük tek belgelik PDF 102.554) — boyut yalnız 5 belgede ölçüldü.
+  ⚠ **ÖLÇÜLMEDİ:** PDF'teki bir belgenin 1 sayfadan uzun olup olmadığı kayıtlı değil ⇒ belge içi `n / N`'de **N > 1 dalı**
+  ve tablo başlığının sonraki sayfada tekrarı (`<overflow leader="TH[0]"/>`) bu ölçümle doğrulanmadı.
+- **Ek not — çok ekli yol:** aynı mailde **N ayrı PDF eki** denemesi (her ek ayrı render) 2. `add_attachment`'ta ~130 sn sonra
+  `cx_bcs` *"An exception was raised"* ile düştü; teşhis EDİLMEDİ (tek vaka). Tek PDF'e geçişin asıl nedeni biçim kararıydı;
+  bu yol o kararla birlikte kalktı.
+- Hata semantiği kendiliğinden "hepsi ya da hiçbiri" olur (tek render).
+
 ---
 
 ## 3. TUZAKLAR (hepsi bu yolda yaşandı)
@@ -172,6 +228,19 @@ arasında), yerelde çöz ve aç. `ev_pages`, PDF baytı ve ADS izinin başını
 **bağımsız** say (`pypdf`): ADS sayfa nesnelerini sıkıştırılmış nesne akışına koyar ⇒ ham `/Type /Page`
 regex'i **0** verir (ölçüldü) — o sayı hüküm değildir. PDF'i görsel olarak **aç ve oku** — bayt/sayfa sayısı
 yerleşim kusurunu söylemez (§3.1'deki kusur ancak bakınca görüldü).
+
+### 3.7 `layout:ready` bir `activity` değeri DEĞİLDİR — `activity="ready" ref="$layout"` yaz
+
+XFA 3.3 `event/@activity` listesinde `layout:ready` yoktur (Designer o olayı `activity="ready" ref="$layout"` olarak yazar).
+✅ **Ölçüldü:** yanlış değerli (`activity="layout:ready"`) şablon ADS'te **hata vermeden render edildi**.
+✅ `activity="ready" ref="$layout"` biçimindeki betik canlıda koştu (§2.1). ⚠ **Ölçülmedi:** yanlış biçimde betiğin koşmadığı /
+alanın boş kaldığı — çıkarım XFA şemasından. Yani yanlış değer **sessizdir**: render hatası beklemeyin.
+
+### 3.8 Veri XML'ine giden numaralarda `ALPHA = OUT` sondaki boşluğu bırakır
+
+`|{ matnr ALPHA = OUT }|` alan genişliğini korur ⇒ değer `"ABC123 "` olarak XML'e gider (ölçüldü; ABAP Unit kıyası düştü).
+Kesin çare ``shift_right( val = |{ f ALPHA = OUT }| sub = ` ` )`` ya da `condense( )` — aynı tuzak mail konusu için
+[`howto-abap-email.md`](howto-abap-email.md)'de yazılı (prior-art; bu yolda yeniden yaşandı).
 
 ---
 
@@ -222,8 +291,9 @@ zaman aşımı olursa **tekrarlama**, önce SOST/SOOD'a bak.
 
 ## 6. ⚠ Ölçülmemiş / açık
 
-- Çok sayfalı akış: sayfa kırılımında tablo başlığının tekrarı (`overflowLeader`), "Sayfa n/N" — ölçülmedi.
-- Çok belgede süre/boyut (örn. 50 belge × PDF) — ölçülmedi.
+- Çok belgede belge içi "Sayfa n / N": belge içinde başlaması ✅ (§2.1); **N > 1 dalı ölçülmedi** (kayıtta çok sayfalı belge yok).
+- Tablo başlığının sonraki sayfada tekrarı (`overflow leader`) — ölçülmedi.
+- Çok belgede süre/boyut: yalnız 5 belge ölçüldü (§2.1); 50 belge — ölçülmedi.
 - `embed_fonts = abap_false` davranışı — ölçülmedi.
 - Yol A (programatik SFPF) — denenmedi.
 - s4_public / BTP ABAP'ta `CL_FP_ADS_UTIL` erişimi — ölçülmedi (bu yüzden `applies_to: [s4_private]`).
@@ -233,6 +303,9 @@ zaman aşımı olursa **tekrarlama**, önce SOST/SOOD'a bak.
   Türkçe glifler + Code39 doğru; CL_BCS eki dış posta kutusuna ulaştı.
 - 2026-10-04 v2 (yalnız kolon toplamı 192→191 mm + etiket düzeltmeleri): 87.271 bayt, **1 sayfa** (`ev_pages` 1 ·
   `pypdf` 1; kontrol grubu v1 aynı yöntemle 2), A4; ADS render 607 ms; mail SOST `718 I`, tek gönderi.
+- 2026-10-04 çok belge (§2.1): 5 belge → tek PDF 144.264 bayt, tek ek, SOES `718`; FM süresi (render + gönderim) 1.641 ms;
+  belge başına yeni sayfa + belge içinde başlayan sayfa no kullanıcı görsel kontrolüyle doğrulandı (N > 1 ve başlık tekrarı
+  ölçülmedi — §6).
 
 ## İlgili
 - [`howto-abap-email.md`](howto-abap-email.md) — gönderen, alıcı, konu, gövde, ek tuzakları
