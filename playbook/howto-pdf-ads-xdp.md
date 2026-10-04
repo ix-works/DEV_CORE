@@ -134,11 +134,11 @@ Veri: kök eleman adı XDP'nin kök subform adıyla aynı (`<data>…</data>`), 
 ikiye katlandı, belge 1 yerine **2 sayfa** oldu; başlık satırı da kaydı. Hata, uyarı ya da ADS iz satırı **yok**
 — sinyal yalnız `ev_pages` ve gözle bakış.
 Aynı belgede toplamı yine tam 192 olan **2-4 elemanlı** satırlar (kart başlığı 60+132, altbilgi 125+67,
-3 parçalı başlık, 4×48 ızgara) **kaymadı**. ⇒ Mekanizma (eleman sayısıyla biriken yuvarlama mı, başka bir şey mi)
+3 parçalı başlık, kart ızgarasının 4×48'lik ilk satırı) **kaymadı**. ⇒ Mekanizma (eleman sayısıyla biriken yuvarlama mı, başka bir şey mi)
 ve eşik **ölçülmedi**.
 **Kural:** çok kolonlu tablo satırlarında kolon toplamını kapsayıcıdan **1 mm küçük** tut (örn. 191/192);
-birleşik etiketli toplam satırları da aynı toplamı izlesin. Kasıtlı sarılan ızgaralar (toplamı kapsayıcının
-katı olan kart dizileri) bu kuralın konusu değildir.
+birleşik etiketli toplam satırları da aynı toplamı izlesin. Alt satıra kendiliğinden akması
+**amaçlanan** kart dizileri (son satırı yarım dolabilen ızgaralar) bu kuralın konusu değildir.
 ✅ Doğrulandı: yalnız bir kolonu 1 mm daraltmak (toplam 191) satırları tek satıra indirdi, belge **1 sayfa**
 oldu (§7, v2).
 

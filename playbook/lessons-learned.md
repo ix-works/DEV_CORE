@@ -1053,7 +1053,7 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
   Hüküm bir kez verildikten sonra hiçbir yeni olay onu sorgulatmıyor; her yeni kayıt hükmü "doğruluyor".
 - **Ölçülmüş vaka (S/4 private, DEV, 2026-10-04):** SAPconnect gönderim kayıtlarında (SOES) aylardır yüzlerce
   `XS 812` birikmişti; "test sisteminden dışarı mail çıkmaz, SOST'a düşmesi yeter" kuralı yazılmış ve memory'ye
-  bile kaydedilmişti. Hata satırının kendisi sebebi söylüyordu: `554 5.2.252 SendAsDenied; <teknik-adres>` —
+  bile kaydedilmişti. Hata satırının kendisi sebebi söylüyordu: `554 5.2.252 SendAsDenied; <teknik-adres> not allowed to send as <SAP-kullanıcısının-adresi>` —
   kurumsal relay yalnız yetkili teknik adresten gönderime izin veriyordu, mail ise SAP kullanıcısının adıyla
   gönderiliyordu. Kullanıcı kuralı öğrenip gönderen değişince aynı sistemden mail **dış posta kutusuna ulaştı**
   (SOES `718 I` "Recipient OK"). Yan etki: "çıkmaz" varsayımıyla test maili gerçek alıcıya gidebilir hâle geldi.

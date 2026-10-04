@@ -3,7 +3,7 @@ applies_to: [s4_private]
 ---
 # Checklist — Adobe Forms Çıktı (driver + interface spec) Oluşturma
 
-> **Puan-flight.** Adobe Form işine başlarken geçilir. Layout SAP-yazması DEĞİL (operatör/GUI işi)
+> **Puan-flight.** Adobe Form işine başlarken geçilir. SFP yolunda layout SAP-yazması DEĞİL (operatör/GUI işi)
 > → otomatik reviewer gate yok; bu checklist elle geçilir. AI **driver + interface spec** yapar.
 >
 > **Hangi tablo?** **SFP yolu** (form objesi var) → ilk tablo. **Yol D** (form objesi yok, AI XDP yazar — std 07 §1b)

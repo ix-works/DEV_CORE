@@ -184,7 +184,7 @@ CALL FUNCTION 'SO_DOCUMENT_SEND_API1'
 ## 7. Modern alternatif — `CL_BCS` (yeni işler için önerilir; kısmen ✅ canlı 2026-10-04, S/4 private 2025 — kapsam aşağıdaki listede)
 `SO_DOCUMENT_SEND_API1` çalışır/desteklenir ama **CL_BCS** (Business Communication Services, Basis 6.40+ / tüm S/4)
 SAP'nin modern-önerdiği yol. **Migration DEĞMEZ** (bug-free üretim koduna dokunma); **yeni işlerde + ek-dosyada** tercih et.
-Kazançlar: `packing_list` derdi YOK · `cx_bcs` tek `TRY` · `cl_bcs_convert=>string_to_soli()` **otomatik 255-böler** (§3.2'nin OO karşılığı).
+Kazançlar: `packing_list` derdi YOK · `cx_bcs` tek `TRY` · `cl_bcs_convert=>string_to_soli()` 255'lik satırlara böler (§3.2'nin OO karşılığı; ⚠ bölme ayrıca test edilmedi — uzun HTML gövde bu yoldan geçip doğru açıldı).
 ```abap
 TRY.
     DATA(lo_send) = cl_bcs=>create_persistent( ).
@@ -204,7 +204,7 @@ ENDTRY.
 Canlı doğrulananlar: HTM gövde + `PDF` eki (`i_attachment_header = VALUE soli_tab( ( line = |&SO_FILENAME=<ad>.pdf| ) )`
 dosya adını verir) · `set_message_subject` · teknik adres gönderen · `cl_sapuser_bcs` alıcı (SAP gelen kutusu) +
 internet adresi alıcı · `set_send_immediately( abap_true )`. Tam ekli örnek: [`howto-pdf-ads-xdp.md`](howto-pdf-ads-xdp.md) §4.
-⚠ Ölçülmeyenler: örnekteki `XLS` eki ve `string_to_soli`'nin 255 bölmesi (bu turda yalnız HTM gövde + PDF eki koştu).
+⚠ Ölçülmeyenler: örnekteki `XLS` eki (bu turda yalnız HTM gövde + PDF eki koştu).
 
 ### 7.1 RAP içinden gönderim — COMMIT ayrı LUW'da (✅)
 RAP handler/saver içinde `COMMIT WORK` yasaktır (BE-26) ama CL_BCS COMMIT'siz göndermez. Kanonik desen zaten
