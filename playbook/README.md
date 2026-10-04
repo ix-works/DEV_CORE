@@ -34,6 +34,7 @@ Bu klasör **L3 katman** dosyaları içerir: SAP ADT REST işlemleri için **den
 | Hata pattern kataloğu + trigger phrases | [`lessons-learned.md`](lessons-learned.md) | Cross-cutting |
 | **RAP** (view entity, BDEF, behavior, service def/binding, publish) | [`adt-rap.md`](adt-rap.md) | §32 — ⚠️ ilk kez (ORDER pilotu); kanıtlanmış/kanıtlanmamış ayrımlı |
 | **MCP tool kullanımı** (ADR 0007) | [`adt-mcp.md`](adt-mcp.md) | 11 typed tool — coordinator için |
+| **PDF üretimi (form objesi olmadan)** + mail eki | [`howto-pdf-ads-xdp.md`](howto-pdf-ads-xdp.md) · mail: [`howto-abap-email.md`](howto-abap-email.md) | AI'ın yazdığı XDP → `CL_FP_ADS_UTIL=>RENDER_PDF` → CL_BCS PDF eki; gönderen politikası, SOES teşhisi |
 | **Freestyle UI5 + OData V2** (tarayıcı tarafı) | [`ui-freestyle-odata-v2.md`](ui-freestyle-odata-v2.md) | ORDER UI patinaj tecrübesi + §0 PRE-FLIGHT + [checklist](checklists/ui-freestyle-creation.md) |
 | **UI uygulaması RAP backend** (CDS/BDEF/behavior/SRVD tecrübe merceği) | [`ui-backend-rap.md`](ui-backend-rap.md) | ORDER backend patinajı + §0 PRE-FLIGHT + [checklist](checklists/ui-backend-rap-creation.md); kanonik = `adt-rap.md` §32 |
 
