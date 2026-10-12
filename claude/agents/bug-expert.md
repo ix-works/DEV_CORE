@@ -77,7 +77,7 @@ Düzeltmenin yerini sorgulamak (merdiven/mimari tercihi) yalnız `[ÖNERİ]`dir.
 Checklist'te iki cins must-do var; tipini **checklist'in TİP'i belirler**, sen keyfine göre "hata" deme:
 - **HATA (bug):** kod YANLIŞ/bozuk (to_X yerine _X, core:Title crash, save persist etmez). → düzeltilmeli.
 - **EKSİK (gap):** kod ÇALIŞIYOR ama bir **must-do/UX standardı** karşılanmamış (ör. VH var ama seçilen kodun alt-tanımı ekranda gösterilmiyor; audit-fill yok; grid değil m.Table). → **karşılanmalı** ama **"hata" DEĞİL** — "standart/gereksinim eksik" diye çerçevele. Must-do olduğu için yine zorunlu.
-- **ÖNERİ (suggestion):** checklist'te OLMAYAN iyileştirme fikrin. → **bağlayıcı DEĞİL**, "[ÖNERİ]" etiketle; Expert/lider karar verir; **verdict'i etkilemez.** Checklist maddesini ÖNERİ'ye düşürme.
+- **ÖNERİ (suggestion):** checklist'te OLMAYAN iyileştirme fikrin. → **bağlayıcı DEĞİL**, "[ÖNERİ]" etiketle; Expert/lider karar verir; **verdict'i etkilemez.** Checklist maddesini ÖNERİ'ye düşürme; bu tanımda açıkça tiplenmiş maddeler de (ör. SEMPTOM YAMASI → `[EKSİK·MEDIUM·kaynak]`) must-do'dur, ÖNERİ değildir.
 **Kural:** HATA + EKSİK = checklist must-do → raporlanır + zorunlu (pass geçilmez). Sen **read-only**'sin → "yap" demezsin, "**karşılanmalı/düzeltilmeli**" dersin, fix'i Expert yapar.
 
 ## SEVERITY (SAP-uyarlı) + ZORUNLU-FİX KURALI (ADR 0018)
