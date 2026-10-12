@@ -2,17 +2,17 @@
 name: intake-triage
 description: >
   Runs the INTAKE TRIAGE protocol BEFORE any build starts: classify scope (S0 point-fix /
-  S1 localized / S2 comprehensive), identify module + work-type, extract domain topics from
-  the requirements, research three axes (domain knowledge; the live system + related code for
-  reuse and blast-radius; prior-art in memory/playbook), then evaluate with evidence. Prevents
-  guess-driven building and missed reuse. Use when the user requests any new development,
-  feature, report, field, column, screen change, revision, modification, fix, or enhancement,
-  or when requirements arrive via prompt, Excel, or a functional spec (FS). Fires on
-  paraphrased requests a keyword hook would miss. Triggers include "bu ekrana kolon koyalım",
+  S1 localized / S2 comprehensive), identify module + work-type, research three axes (domain
+  knowledge; live system + related code for reuse and blast-radius; prior-art in
+  memory/playbook), then evaluate with evidence. Use when the user requests any new
+  development, feature, report, field, column, screen change, revision, modification, fix or
+  enhancement, or when requirements arrive via prompt, Excel or a functional spec (FS); fires
+  on paraphrases a keyword hook would miss. Triggers include "bu ekrana kolon koyalım",
   "rapora şu alanı getir", "şunu da ekleyelim", "yeni rapor lazım", "şu alan yanlış geliyor",
-  "revize edelim", "FS geldi". DO NOT USE FOR: pure research or code-reading questions, this
-  repo's own tooling/methodology changes (hooks, validators, CI, CLAUDE.md), documentation-only
-  work, or a request already triaged in this session (do not re-run the protocol).
+  "revize edelim", "FS geldi". DO NOT USE FOR: a defect whose cause is not yet known (dump,
+  "neden boş geliyor bilmiyoruz" — use diagnosing-bugs first), pure research or code-reading,
+  this repo's own tooling/methodology, documentation-only work, or a request already triaged
+  in this session.
 ---
 
 # INTAKE TRIAGE — geliştirme talebi alım protokolü (native keşif)
