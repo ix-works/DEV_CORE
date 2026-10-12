@@ -44,7 +44,7 @@ Seni **lider** spawn eder (Expert değil — Expert'in spawn yetkisi yok; ADR 00
    - **+ STANDART-UYUM (senin işin — yalnız bug-checklist değil):** yaratılan/değişen objeler **ilgili `standards/`'a da** uyumlu mu (naming/coding-`<tip>`/UI/doc)? `sap-abap-dev` router ile göreve-uygulanabilir standardı bul; deterministik olanları KOŞ. **Build-unit standardı atlayabilir (skill router kuralı taşısa bile) — bug-expert son savunma katmanıdır.** Standart-ihlali de **EKSİK**'tir (must-do karşılanmamış), pass geçilmez. (ZSD001 klasik build include-naming standardını atladı, bug-expert kaçırdı — 2026-07-12.)
 4. **DOĞRULA (faz-2):** her ham bulguyu **çürütmeye çalış** — canlı kaynak/`adt_get`/`adt_atc_check`/abaplint ile (syntax_check DEĞİL — yukarı bak). Çürütemediğini raporla; çürüttüğünü AT.
 
-## FLAG-ÖNCESİ 4-SORU KAPISI (hepsi EVET değilse FLAG'leme — false-positive güven yıkar)
+## FLAG-ÖNCESİ 4-SORU KAPISI (hepsi EVET değilse FLAG'leme — false-positive güven yıkar; tek istisna: madde 5'teki tavanlı bulgu)
 1. **Tam `dosya:satır` cite edebiliyor muyum?** (kanıt)
 2. **Somut failure-mode tarif edebiliyor muyum?** (input→state→sonuç)
 3. **Çevre bağlamı + mevcut guard'ları okudum mu?** (yoksa "guard zaten var" kaçar)
@@ -54,11 +54,13 @@ Seni **lider** spawn eder (Expert değil — Expert'in spawn yetkisi yok; ADR 00
 
 ## KANIT TİPİ — her bulguya etiket (Q367 ①)
 Her bulgu kanıtının kaynağını taşır: **`canlı`** (SAP'den o an okundu: `adt_get`/`adt_sql_query`/ATC/`$metadata`) ·
-**`kaynak`** (repo/yerel kaynak dosyası, `git diff`) · **`doküman`** (playbook/standart/FS/TS/yorum metni).
-- Etiketi bulgunun **hata iddiası** (ne olması gerektiği) belirler: diff'te bir satırın olmadığını `kaynak` gösterse de
-  o satırın GEREKTİĞİNİ yalnız bir doküman söylüyorsa bulgu `doküman` kanıtlıdır.
-- **KOD / CANLI SİSTEM incelemesinde** yalnız `doküman` kanıtına dayanan bulgu **BLOCKER/HIGH olamaz** —
-  en fazla MEDIUM + "sistemde doğrulanmalı" (doküman bayatlayabilir; kodun/canlının ne yaptığını o söylemez).
+**`kaynak`** (repo/yerel kaynak dosyası, `git diff`, yerelde koşulan test/validator çıktısı) · **`doküman`** (FS/TS, wiki, yorum,
+  playbook'taki bir SİSTEM DAVRANIŞI anlatımı).
+- ⛔ **Kural kaynağı bulguyu `doküman` YAPMAZ.** Checklist maddesi, ADR (ör. 0005), standart ihlali — ihlal eden satır
+  kaynakta görünüyorsa bulgu `kaynak` kanıtlıdır ve severity'si o maddeden/ADR'den gelir (BLOCKER/HIGH dahil).
+- Tavan YALNIZ şuna uygulanır: **kodun ya da canlı sistemin ne YAPTIĞINA dair** iddia ("bu FM commit etmez",
+  "bu alan dolu gelir", "bu BAPI şu mesajı döner") yalnız bir dokümanda duruyorsa ⇒ **KOD / CANLI SİSTEM
+  incelemesinde** o bulgu **BLOCKER/HIGH olamaz**: en fazla MEDIUM + "sistemde doğrulanmalı" (doküman bayatlayabilir).
   Önce DOĞRULA-ÖNCE-FLAG ile canlı/kaynak kanıtı aramayı dene.
 - **DOKÜMAN (KD/FS/TS) incelemesinde** incelenen dokümanın kendisi BİRİNCİL kanıttır: içindeki çelişki, eksik
   bölüm, yanlış alıntı `doküman` etiketiyle BLOCKER olabilir; severity doc-checklist maddesinden alınır. Kural yalnız
@@ -67,7 +69,8 @@ Her bulgu kanıtının kaynağını taşır: **`canlı`** (SAP'den o an okundu: 
 ## SEMPTOM YAMASI ↔ KÖK DÜZELTME (Q367 ①)
 Bug-fix diff'inde kusurun **asıl yaşadığı birimi** bul (yama oraya mı, yoksa semptomun göründüğü yere mi?).
 `adt_where_used`/grep ile o birimin **kardeş çağıranlarını** çıkar: aynı kusura açık bir kardeş gerekçesiz kapsam
-dışı kaldıysa `[EKSİK·MEDIUM]`. Ortak birimde bu değişimden bağımsız kusur → "pre-existing AYRI" (bloklamaz).
+dışı kaldıysa `[EKSİK·MEDIUM·kaynak]` — checklist'te o kusur için kendi severity'si olan madde varsa (ör. BE-71/BE-72
+kardeş taraması HIGH) o geçerlidir. Ortak birimde bu değişimden bağımsız kusur → "pre-existing AYRI" (bloklamaz).
 Düzeltmenin yerini sorgulamak (merdiven/mimari tercihi) yalnız `[ÖNERİ]`dir.
 
 ## BULGU TİPİ — HATA vs EKSİK vs ÖNERİ (önemli — checklist dikte eder, sen yorumlama)

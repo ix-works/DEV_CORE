@@ -18,17 +18,21 @@ description: >
 > ⚠ **Compaction notu — öz:** ① Kırmızıya dönebilen bir **geri bildirim döngüsü** kurmadan
 > hipotez kurma. ② Hatayı **küçült**. ③ **3-5 çürütülebilir hipotez** + her birine çürütme
 > denemesi (tablo). ④ Her prob **tek değişken**. ⑤ Düzeltme hatanın **yaşadığı birimde**;
-> yeni test **yalnız kullanıcı onayıyla**. ⑥ Doğrulanan hipotezi kayda geçir.
+> yeni test **projenin test politikasına** göre. ⑥ Doğrulanan hipotezi kayda geçir.
 
-**Esin kaynağı:** `mattpocock/skills` → `diagnosing-bugs` (MIT lisanslı). Faz yapısı oradan
-alındı; metin bu çekirdeğin araçlarına, yasaklarına ve kanıt kurallarına göre yeniden yazıldı.
+**Kaynak ve lisans:** Bu dosya `mattpocock/skills` → `skills/engineering/diagnosing-bugs/SKILL.md`
+(commit `f3fc563`) metninin **Türkçe çeviri-uyarlamasıdır**: faz yapısı ve birçok madde oradan çevrildi,
+bu çekirdeğin araçlarına, yasaklarına ve kanıt kurallarına göre uyarlandı. Upstream MIT lisanslıdır,
+Copyright (c) 2026 Matt Pocock — lisans metninin tamamı [`LICENSE.upstream`](LICENSE.upstream),
+kaynak/gümrük kaydı [`KAYNAK.md`](KAYNAK.md).
 
 ## 0. ÖNCE-ARA ve gizlilik
 
 - **Bu hata daha önce yaşandı mı?** Hipotezden önce: memory (araç kök-fix kayıtları),
   `playbook/lessons-learned.md` + `playbook/known-errors.md`, ilgili paketin
   `SESSION_NOTES.md`'si. Tanıdık semptom bir sinyaldir; cevap yazılmış olabilir (KB-01).
-- **Gizli bilgi:** `.conn_adt` / `conn/*.env` **açılmaz, basılmaz, loglanmaz**. Komut ve
+- **Gizli bilgi:** `.conn_adt` / `conn/*.env` içeriği **basılmaz, loglanmaz, kopyalanmaz**; bağlantı
+  sorununun teşhisi için `python core/scripts/sap_doctor.py` kullanılır. Komut ve
   çıktı gösterirken parola/token/oturum çerezi yerine `<REDACTED>` yaz. Kimlik bilgisini
   ortam değişkeninden okuyan döngü kur. Maskelenmiş çıktı yetmiyorsa bunu söyle, kullanıcıya sor.
 - **Otorite kaynağını belirle:** DEV bir test sistemidir. Eski denemelerden kalan veri
@@ -45,10 +49,10 @@ bulursan sebebi de bulursun. Döngü yoksa koda bakarak teori kurmak boşa zaman
 |---|---|
 | ABAP dump | `adt_dump_list` → `adt_dump_read` (ST22): aynı dump'ı yeniden üreten çağrı |
 | Yanlış veri | `adt_sql_query` ile **kontrol grubu**: sorunlu kayıt + doğru çalışan kayıt yan yana |
-| Mevcut sınıf/FM davranışı | `adt_classrun` (mevcut bir `if_oo_adt_classrun` sınıfı) · **mevcut** testler için `adt_unit_run` |
+| Mevcut sınıf/FM davranışı | **mevcut** testler için `adt_unit_run` · `adt_classrun` (mevcut bir `if_oo_adt_classrun` sınıfı) **kod ÇALIŞTIRIR, yazma yapabilir** ⇒ yalnız **adt-gateway** koşar. Push/aktivasyon sonrası **eski kodun çıktısını** dönebilir: taze oturum + yeni koda özgü bir imza satırıyla doğrula |
 | OData / Gateway | Doğrudan HTTP isteği (`$metadata`, entity GET, `$batch`). Git Bash'te `MSYS_NO_PATHCONV=1`. Dar teşhis için `$skip` bisection + tek alan `$select` |
 | Freestyle UI5 | Playwright betiği = kapı (DOM / konsol / ağ üzerinde doğrulama). Chrome eklentisi = göz |
-| Çekirdek aracı (hook/validator/MCP betiği) | `python tests/run_battery.py <fixture>` · hook'a sentetik payload: `python core/scripts/hooks/<hook>.py < payload.json`. **exit 0 ≠ serbest**, stderr'e bak |
+| Çekirdek aracı (hook/validator/MCP betiği) | `python core/tests/run_battery.py <fixture>` · hook'a sentetik payload: `python core/scripts/hooks/<hook>.py < payload.json` (çekirdek reposunun kendisinde `core/` öneki yok). **exit 0 ≠ serbest**, stderr'e bak |
 | Yakalanmış iz | Gerçek istek/IDoc/dosya diske alınır, aynı kod yolundan yeniden oynatılır |
 | İki durum arası regresyon | Fark ekseni: eski/yeni sürüm, iki client, iki kullanıcı. Aynı girdi iki tarafta koşulup çıktı karşılaştırılır |
 
@@ -64,8 +68,9 @@ değil, **kullanıcının gördüğü semptom**) · daha deterministik mi (tarih
 Döngüyü çok kez koş, eşzamanlılığı artır, zaman penceresini daralt.
 
 **Döngü kurulamıyorsa DUR:** ne denendiğini listele. Kullanıcıdan erişim, maskelenmiş bir
-artefakt (log, IDoc numarası, ekran kaydı) ya da **iş gerçeğini** iste. Deneme sonucu ve
-alan doluluğu kullanıcıdadır; ölçmeye çalışma, sor.
+artefakt (log, IDoc numarası, ekran kaydı) ya da **iş gerçeğini** iste. Ayrım: **kullanıcının
+bildiği/yaptığı** (deneme sonucu, izlediği adımlar) → önce sor · **verinin/kodun davranışı** (alan
+dolu mu, kaç kayıt, hangi dal koşuyor) → ölç.
 
 **Faz 1 bitti mi?** Adını verebileceğin, **en az bir kez koştuğun** (komut + maskelenmiş
 çıktı) tek bir komut var ve bu komut:
@@ -119,8 +124,10 @@ değiştirince kötüleşir."* Tahmin yazılamıyorsa o bir sezgidir: keskinleş
 - **Düzeltme yeri:** semptomun göründüğü yer değil, **hatanın yaşadığı birim**. Aynı birimi
   çağıran **kardeş çağıranlar** taranır. Gerekçesiz dışarıda bırakılan kardeş, eksik düzeltmedir
   (bug-expert bunu `[EKSİK]` olarak işaretler).
-- ⛔ **Yeni ABAP Unit / karakterizasyon testi yazmadan önce kullanıcıdan AÇIK ONAY** alınır.
-  Varsayılan testsizdir. Çekirdek aracında kilit = fixture, akışı `playbook/howto-infra-fix-proseduru.md`.
+- Yeni test (ABAP Unit / karakterizasyon) **projenin test politikasına** göre yazılır; bazı projelerde
+  yeni test açık kullanıcı onayına bağlıdır — politikayı bilmiyorsan sor. Çekirdek aracında kilit = fixture,
+  akışı `playbook/howto-infra-fix-proseduru.md` (çekirdek aracı değişikliği önce uyarı + açık onay ister).
+- SAP kaynağını düzenlemeden önce PULL-BEFORE-EDIT (ADR 0016); esaslı düzeltmeden sonra taze bug-expert (BUG GATE).
 - Test yazılacaksa **doğru dikişte** yazılır, yani hatanın gerçek çağrı zincirini sürdüğü
   yerde. Daha sığ bir dikiş sahte güven verir. **Doğru dikiş yoksa bu da bir bulgudur**; kaydet.
 - Sıra: küçültülmüş tekrar → kırmızı → düzeltme → yeşil → **orijinal, küçültülmemiş** senaryo
@@ -132,7 +139,7 @@ değiştirince kötüleşir."* Tahmin yazılamıyorsa o bir sezgidir: keskinleş
 ## 6. Temizlik + kayıt
 
 - [ ] Orijinal tekrar artık hata üretmiyor (Faz 1 döngüsü yeniden koşuldu, çıktısı var)
-- [ ] Regresyon kilidi yeşil, **ya da** neden yok yazıldı (onay yok / doğru dikiş yok)
+- [ ] Regresyon kilidi yeşil, **ya da** neden yok yazıldı (test politikası/onay gereği yazılmadı · doğru dikiş yok)
 - [ ] Tüm `DEBUG-…` izleri kaldırıldı (etiketle arandı; SAP'deki iz gateway ile geri alındı)
 - [ ] Geçici prototip/test objeleri silindi ya da açıkça işaretlendi
 - [ ] **Doğrulanan hipotez** ve çürütülenler `SESSION_NOTES.md`'ye ve commit/PR mesajına yazıldı
