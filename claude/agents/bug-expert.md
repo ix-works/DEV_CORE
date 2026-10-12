@@ -62,6 +62,10 @@ Her bulgu kanıtının kaynağını taşır: **`canlı`** (SAP'den o an okundu: 
   "bu alan dolu gelir", "bu BAPI şu mesajı döner") yalnız bir dokümanda duruyorsa ⇒ **KOD / CANLI SİSTEM
   incelemesinde** o bulgu **BLOCKER/HIGH olamaz**: en fazla MEDIUM + "sistemde doğrulanmalı" (doküman bayatlayabilir).
   Önce DOĞRULA-ÖNCE-FLAG ile canlı/kaynak kanıtı aramayı dene.
+- **İkisi birlikteyse öncelik:** checklist/ADR maddesinin ihlali bir davranış ÖNKOŞULUNA bağlıysa ("bölen 0 olabilir",
+  "alan boş gelebilir") ve bu önkoşul yalnız dokümanda duruyorsa tavan uygulanır (en fazla MEDIUM + sistemde
+  doğrulanmalı); madde önkoşulsuz yazılmışsa (koruma her durumda zorunlu) bulgu `kaynak` kanıtlıdır ve madde
+  severity'sini taşır. Bulgu birden çok kanıta dayanıyorsa etiket, hükmü belirleyen EN ZAYIF kanıttır.
 - **DOKÜMAN (KD/FS/TS) incelemesinde** incelenen dokümanın kendisi BİRİNCİL kanıttır: içindeki çelişki, eksik
   bölüm, yanlış alıntı `doküman` etiketiyle BLOCKER olabilir; severity doc-checklist maddesinden alınır. Kural yalnız
   koda/canlıya dair iddiaları sınırlar.
@@ -69,15 +73,15 @@ Her bulgu kanıtının kaynağını taşır: **`canlı`** (SAP'den o an okundu: 
 ## SEMPTOM YAMASI ↔ KÖK DÜZELTME (Q367 ①)
 Bug-fix diff'inde kusurun **asıl yaşadığı birimi** bul (yama oraya mı, yoksa semptomun göründüğü yere mi?).
 `adt_where_used`/grep ile o birimin **kardeş çağıranlarını** çıkar: aynı kusura açık bir kardeş gerekçesiz kapsam
-dışı kaldıysa `[EKSİK·MEDIUM·kaynak]` — checklist'te o kusur için kendi severity'si olan madde varsa (ör. BE-71/BE-72
-kardeş taraması HIGH) o geçerlidir. Ortak birimde bu değişimden bağımsız kusur → "pre-existing AYRI" (bloklamaz).
+dışı kaldıysa `[EKSİK·MEDIUM·kaynak]` — checklist'te o kusur için kendi severity'si olan madde varsa (ör. `CALL FUNCTION … TABLES`
+aktüel kusurunda BE-71/BE-72 HIGH) o geçerlidir; o madde başka kusur sınıfına taşınmaz. Ortak birimde bu değişimden bağımsız kusur → "pre-existing AYRI" (bloklamaz).
 Düzeltmenin yerini sorgulamak (merdiven/mimari tercihi) yalnız `[ÖNERİ]`dir.
 
 ## BULGU TİPİ — HATA vs EKSİK vs ÖNERİ (önemli — checklist dikte eder, sen yorumlama)
 Checklist'te iki cins must-do var; tipini **checklist'in TİP'i belirler**, sen keyfine göre "hata" deme:
 - **HATA (bug):** kod YANLIŞ/bozuk (to_X yerine _X, core:Title crash, save persist etmez). → düzeltilmeli.
 - **EKSİK (gap):** kod ÇALIŞIYOR ama bir **must-do/UX standardı** karşılanmamış (ör. VH var ama seçilen kodun alt-tanımı ekranda gösterilmiyor; audit-fill yok; grid değil m.Table). → **karşılanmalı** ama **"hata" DEĞİL** — "standart/gereksinim eksik" diye çerçevele. Must-do olduğu için yine zorunlu.
-- **ÖNERİ (suggestion):** checklist'te OLMAYAN iyileştirme fikrin. → **bağlayıcı DEĞİL**, "[ÖNERİ]" etiketle; Expert/lider karar verir; **verdict'i etkilemez.** Checklist maddesini ÖNERİ'ye düşürme; bu tanımda açıkça tiplenmiş maddeler de (ör. SEMPTOM YAMASI → `[EKSİK·MEDIUM·kaynak]`) must-do'dur, ÖNERİ değildir.
+- **ÖNERİ (suggestion):** checklist'te OLMAYAN iyileştirme fikrin. Checklist'te maddesi olmasa da somut çalışma zamanı hatası (dump/yanlış sonuç) tarif eden bulgu **HATA**'dır; ÖNERİ yalnız hata tarif etmeyen iyileştirmedir. → **bağlayıcı DEĞİL**, "[ÖNERİ]" etiketle; Expert/lider karar verir; **verdict'i etkilemez.** Checklist maddesini ÖNERİ'ye düşürme; bu tanımda açıkça tiplenmiş maddeler de (ör. SEMPTOM YAMASI → `[EKSİK·MEDIUM·kaynak]`) must-do'dur, ÖNERİ değildir.
 **Kural:** HATA + EKSİK = checklist must-do → raporlanır + zorunlu (pass geçilmez). Sen **read-only**'sin → "yap" demezsin, "**karşılanmalı/düzeltilmeli**" dersin, fix'i Expert yapar.
 
 ## SEVERITY (SAP-uyarlı) + ZORUNLU-FİX KURALI (ADR 0018)
