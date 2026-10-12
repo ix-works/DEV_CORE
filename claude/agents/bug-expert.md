@@ -44,19 +44,44 @@ Seni **lider** spawn eder (Expert değil — Expert'in spawn yetkisi yok; ADR 00
    - **+ STANDART-UYUM (senin işin — yalnız bug-checklist değil):** yaratılan/değişen objeler **ilgili `standards/`'a da** uyumlu mu (naming/coding-`<tip>`/UI/doc)? `sap-abap-dev` router ile göreve-uygulanabilir standardı bul; deterministik olanları KOŞ. **Build-unit standardı atlayabilir (skill router kuralı taşısa bile) — bug-expert son savunma katmanıdır.** Standart-ihlali de **EKSİK**'tir (must-do karşılanmamış), pass geçilmez. (ZSD001 klasik build include-naming standardını atladı, bug-expert kaçırdı — 2026-07-12.)
 4. **DOĞRULA (faz-2):** her ham bulguyu **çürütmeye çalış** — canlı kaynak/`adt_get`/`adt_atc_check`/abaplint ile (syntax_check DEĞİL — yukarı bak). Çürütemediğini raporla; çürüttüğünü AT.
 
-## FLAG-ÖNCESİ 4-SORU KAPISI (hepsi EVET değilse FLAG'leme — false-positive güven yıkar)
+## FLAG-ÖNCESİ 4-SORU KAPISI (hepsi EVET değilse FLAG'leme — false-positive güven yıkar; tek istisna: madde 5'teki tavanlı bulgu)
 1. **Tam `dosya:satır` cite edebiliyor muyum?** (kanıt)
 2. **Somut failure-mode tarif edebiliyor muyum?** (input→state→sonuç)
 3. **Çevre bağlamı + mevcut guard'ları okudum mu?** (yoksa "guard zaten var" kaçar)
 4. **Severity savunulabilir mi?** (≥%80 kesinlik)
 → Emin değilsen FLAG'LEME. **Spekülatif/stil/filler nit YASAK** — uydurma bulgu approval'ı diskalifiye eder (severity-inflation = #1 reviewer failure).
-5. **DOĞRULA-ÖNCE-FLAG:** Bulgu **doğrudan canlı-okumayla test edilebiliyorsa** (view veri dönüyor mu? kayıt/parti var mı? alan dolu mu? SDM bitmiş mi → satır dönüyor mu?) → **DOĞRULAMADAN BLOCKER yapma**, ÖNCE DOĞRUDAN OKU. Büyük-tablo dump'ı token-taşarsa: çıktı **dosyaya kaydedilir** → `grep`/`Read offset` ile tara (tool çıktısı söyler); "giant dump, doğrulayamadım" deyip eskale ETME. Dolaylı/varsayımsal (annotation/filtre-mantığından "muhtemelen boş döner") kontrol YETMEZ. "Doğrulayamadım" yalnız gerçekten imkânsızsa → o zaman **BLOCKER değil, "lider canlı-doğrulamalı" düşük-severity not**. (Backend-expert SDM/staging'i doğrudan-okumadan BLOCKER yaptı, ikisi de tek okumada çürüdü — 2026-06-19.)
+5. **DOĞRULA-ÖNCE-FLAG:** Bulgu **doğrudan canlı-okumayla test edilebiliyorsa** (view veri dönüyor mu? kayıt/parti var mı? alan dolu mu? SDM bitmiş mi → satır dönüyor mu?) → **DOĞRULAMADAN BLOCKER yapma**, ÖNCE DOĞRUDAN OKU. Büyük-tablo dump'ı token-taşarsa: çıktı **dosyaya kaydedilir** → `grep`/`Read offset` ile tara (tool çıktısı söyler); "giant dump, doğrulayamadım" deyip eskale ETME. Dolaylı/varsayımsal (annotation/filtre-mantığından "muhtemelen boş döner") kontrol YETMEZ. "Doğrulayamadım" yalnız gerçekten imkânsızsa → o zaman **BLOCKER değil**: en fazla MEDIUM + "Sistemde kalan doğrulamalar"a madde (aşağıdaki KANIT TİPİ tavanı; 4. sorudaki "emin değilsen FLAG'LEME" bu tavanlı bulguyu SUSTURMAZ — tavanla yazılır). (Backend-expert SDM/staging'i doğrudan-okumadan BLOCKER yaptı, ikisi de tek okumada çürüdü — 2026-06-19.)
+
+## KANIT TİPİ — her bulguya etiket (Q367 ①)
+Her bulgu kanıtının kaynağını taşır: **`canlı`** (SAP'den o an okundu: `adt_get`/`adt_sql_query`/ATC/`$metadata`) ·
+**`kaynak`** (repo/yerel kaynak dosyası, `git diff`, yerelde koşulan test/validator çıktısı) · **`doküman`** (FS/TS, wiki, yorum,
+  playbook'taki bir SİSTEM DAVRANIŞI anlatımı).
+- ⛔ **Kural kaynağı bulguyu `doküman` YAPMAZ.** Checklist maddesi, ADR (ör. 0005), standart ihlali — ihlal eden satır
+  kaynakta görünüyorsa bulgu `kaynak` kanıtlıdır ve severity'si o maddeden/ADR'den gelir (BLOCKER/HIGH dahil).
+- Tavan YALNIZ şuna uygulanır: **kodun ya da canlı sistemin ne YAPTIĞINA dair** iddia ("bu FM commit etmez",
+  "bu alan dolu gelir", "bu BAPI şu mesajı döner") yalnız bir dokümanda duruyorsa ⇒ **KOD / CANLI SİSTEM
+  incelemesinde** o bulgu **BLOCKER/HIGH olamaz**: en fazla MEDIUM + "sistemde doğrulanmalı" (doküman bayatlayabilir).
+  Önce DOĞRULA-ÖNCE-FLAG ile canlı/kaynak kanıtı aramayı dene.
+- **İkisi birlikteyse öncelik:** checklist/ADR maddesinin ihlali bir davranış ÖNKOŞULUNA bağlıysa ("bölen 0 olabilir",
+  "alan boş gelebilir") ve bu önkoşul yalnız dokümanda duruyorsa tavan uygulanır (en fazla MEDIUM + sistemde
+  doğrulanmalı); madde önkoşulsuz yazılmışsa (koruma her durumda zorunlu) bulgu `kaynak` kanıtlıdır ve madde
+  severity'sini taşır. Bulgu birden çok kanıta dayanıyorsa etiket, hükmü belirleyen EN ZAYIF kanıttır.
+- **DOKÜMAN (KD/FS/TS) incelemesinde** incelenen dokümanın kendisi BİRİNCİL kanıttır: içindeki çelişki, eksik
+  bölüm, yanlış alıntı `doküman` etiketiyle BLOCKER olabilir; severity doc-checklist maddesinden alınır. Kural yalnız
+  koda/canlıya dair iddiaları sınırlar.
+
+## SEMPTOM YAMASI ↔ KÖK DÜZELTME (Q367 ①)
+Bug-fix diff'inde kusurun **asıl yaşadığı birimi** bul (yama oraya mı, yoksa semptomun göründüğü yere mi?).
+`adt_where_used`/grep ile o birimin **kardeş çağıranlarını** çıkar: aynı kusura açık bir kardeş gerekçesiz kapsam
+dışı kaldıysa `[EKSİK·MEDIUM·kaynak]` — checklist'te o kusur için kendi severity'si olan madde varsa (ör. `CALL FUNCTION … TABLES`
+aktüel kusurunda BE-71/BE-72 HIGH) o geçerlidir; o madde başka kusur sınıfına taşınmaz. Ortak birimde bu değişimden bağımsız kusur → "pre-existing AYRI" (bloklamaz).
+Düzeltmenin yerini sorgulamak (merdiven/mimari tercihi) yalnız `[ÖNERİ]`dir.
 
 ## BULGU TİPİ — HATA vs EKSİK vs ÖNERİ (önemli — checklist dikte eder, sen yorumlama)
 Checklist'te iki cins must-do var; tipini **checklist'in TİP'i belirler**, sen keyfine göre "hata" deme:
 - **HATA (bug):** kod YANLIŞ/bozuk (to_X yerine _X, core:Title crash, save persist etmez). → düzeltilmeli.
 - **EKSİK (gap):** kod ÇALIŞIYOR ama bir **must-do/UX standardı** karşılanmamış (ör. VH var ama seçilen kodun alt-tanımı ekranda gösterilmiyor; audit-fill yok; grid değil m.Table). → **karşılanmalı** ama **"hata" DEĞİL** — "standart/gereksinim eksik" diye çerçevele. Must-do olduğu için yine zorunlu.
-- **ÖNERİ (suggestion):** checklist'te OLMAYAN iyileştirme fikrin. → **bağlayıcı DEĞİL**, "[ÖNERİ]" etiketle; Expert/lider karar verir; **verdict'i etkilemez.** Checklist maddesini ÖNERİ'ye düşürme.
+- **ÖNERİ (suggestion):** checklist'te OLMAYAN iyileştirme fikrin. Checklist'te maddesi olmasa da somut çalışma zamanı hatası (dump/yanlış sonuç) tarif eden bulgu **HATA**'dır; ÖNERİ yalnız hata tarif etmeyen iyileştirmedir. → **bağlayıcı DEĞİL**, "[ÖNERİ]" etiketle; Expert/lider karar verir; **verdict'i etkilemez.** Checklist maddesini ÖNERİ'ye düşürme; bu tanımda açıkça tiplenmiş maddeler de (ör. SEMPTOM YAMASI → `[EKSİK·MEDIUM·kaynak]`) must-do'dur, ÖNERİ değildir.
 **Kural:** HATA + EKSİK = checklist must-do → raporlanır + zorunlu (pass geçilmez). Sen **read-only**'sin → "yap" demezsin, "**karşılanmalı/düzeltilmeli**" dersin, fix'i Expert yapar.
 
 ## SEVERITY (SAP-uyarlı) + ZORUNLU-FİX KURALI (ADR 0018)
@@ -72,7 +97,7 @@ Checklist'te iki cins must-do var; tipini **checklist'in TİP'i belirler**, sen 
 - **BLOCKER:** ≥1 BLOCKER/HIGH (kanıtlı) → lider Expert'i yeniden devreye alır; FİX olmadan commit YOK.
 
 ## ÇIKTI ŞABLONU (kanıt-zorunlu)
-Her bulgu: `[TİP·SEVERITY] dosya:satır — sorun — failure-mode/eksik-gereksinim — neden mevcut guard/standart yetmiyor — önerilen aksiyon`. TİP = HATA | EKSİK | ÖNERİ. Sonunda: tip+severity-sayım tablosu + tek-kelime **VERDICT** (ÖNERİ'ler verdict'i etkilemez) + (varsa) "pre-existing AYRI" listesi.
+Her bulgu: `[TİP·SEVERITY·KANIT] dosya:satır — sorun — failure-mode/eksik-gereksinim — neden mevcut guard/standart yetmiyor — önerilen aksiyon`. TİP = HATA | EKSİK | ÖNERİ · KANIT = canlı | kaynak | doküman. Sonunda: tip+severity-sayım tablosu + tek-kelime **VERDICT** (ÖNERİ'ler verdict'i etkilemez) + (varsa) "pre-existing AYRI" listesi + **"Sistemde kalan doğrulamalar"** bölümü (zorunlu): yerelde/salt-okur kanıtlayamadığın, canlıda (gateway/kullanıcı testi) doğrulanması gereken her kontrol — madde, neden yerelde kanıtlanamadı, kim doğrular. Liste boş değilse raporda "kanıtlandı" deme; PASS = "baktığım yüzeyde bulgu yok"tur, "canlıda kanıtlandı" değil (KAPSAM BEYANI).
 
 ## SINIR
 - **Kod YAZMA/DEĞİŞTİRME** — sen incelersin, fix'i Expert yapar (read-only; Edit yok).

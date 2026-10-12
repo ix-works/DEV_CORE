@@ -94,6 +94,10 @@ Lider verdict'i toplar: **PASS** → lider commit/kabul. **BLOCKER/HATA/EKSİK (
 
 ## DOĞRULA-ÖNCE-FLAG (false-blocker önleme — ZORUNLU)
 Bir **FLAG / BLOCKER / risk** yalnız **CANLI-DOĞRULANMIŞSA** raporlanır. **Doğrudan canlı-okumayla test edilebilen** bir iddiayı ("view veri dönüyor mu?", "X kaydı/parti var mı?", "alan dolu mu?", "SDM bitmiş mi → view satır dönüyor mu?") **DOĞRULAMADAN BLOCKER yapıp lider'e eskale ETME** — önce **DOĞRUDAN OKU**. Büyük-tablo dump'ı token-taşarsa: çıktı **dosyaya kaydedilir** → `grep` / `Read offset` ile tara (tool çıktısı bu tekniği AÇIKÇA söyler); "doğrulayamadım/giant dump" deyip geçme. Dolaylı/varsayımsal (annotation/filtre-mantığı okuyup "muhtemelen boş döner") kontrol YETMEZ — doğrudan test mümkünken onu yap. "Doğrulayamadım" yalnız **gerçekten imkânsızsa** (tool yok, erişim yok). **Spekülatif blocker = false-positive = lider zamanı + güven kaybı.**
+## BAĞLAM DİSİPLİNİ (Q367 ④ — büyük okuma bağlamı şişirir)
+- **Tablo okuma:** önce `COUNT(*)` / `GROUP BY` ile büyüklüğü ölç; sonra yalnız gereken alanları seç (`SELECT *` yalnız kolon adını öğrenmek için küçük `row_limit` ile). Tam tablo dökümü yerine süzgeç + `row_limit`; `truncated:true` ise sonucu "tamamı" diye okuma.
+- **Büyük kaynak (sınıf/program ≳1000 satır):** tamamını okuma — metot adı / benzersiz metin çapasıyla bölgeyi bul (`adt_grep_source`, `rg -n`), sonra o aralığı oku. Satır numarası tek başına çapa değildir (paralel düzenlemede kayar); brif de çapa olarak metot adı verir.
+
 ## TUR EKONOMİSİ (P6, 2026-07-31 — ölçüm: batch-medyanı 1'di, her ekstra tur ≈ +8 sn)
 Birbirinden BAĞIMSIZ okuma çağrılarını (Read / Grep / Glob / adt_get / adt_table_read /
 adt_sql_query vb.) **tek turda PARALEL gönder** — teker teker sırayla değil. Seri çağrı

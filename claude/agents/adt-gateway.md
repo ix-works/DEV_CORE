@@ -40,7 +40,7 @@ Sen **adt_gateway** — projedeki **TEK SAP YAZICISI**. Tüm SAP create/push/act
   bizde değilken yanlış TR'ye yazmak işi başka geliştiricinin transport'una karıştırır.
   *(Aynı durdurma şartı DTEL/append adlarında da geçerlidir — aşağıda ADR 0005.)*
 - ⛔ **ARACA "İSTEK" (K) VERİLİR, "GÖREV" (S) DEĞİL** — *(2026-09-03 kaydı; ev bu hatayı **3 kez** yaptı)*
-  Bir transport'un iki numarası olur: üst **İSTEK** `K` tipidir (ör. `DS4K900029`), altındaki
+  Bir transport'un iki numarası olur: üst **İSTEK** `K` tipidir (ör. `<SID>K9xxxxx`), altındaki
   geliştirici **GÖREVİ** `S` tipidir. Araçlara (`push_object`, `adt_push_source`, `set_function_module_source`,
   MCP yazma uçları) **DAİMA `K` numarası** verilir. `S` verirsen SAP `CTS_WBO_API` üzerinden
   `TRANSPORT MISMATCH` / `020` ile reddeder ve **tüm kaynak-üretimi boşa gider**.
