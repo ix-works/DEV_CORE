@@ -330,7 +330,11 @@ def main() -> int:
                  f"rc={rc} err={(err or '')[-200:]!r}")
 
         def cat_pr(alt: str, bayrak: str, govde: str) -> str:
-            return ("gh " + alt + " --repo org/public-core --title 'fix: x' " + bayrak
+            # `issue comment` `--title` ALMAZ (gh 2.96.0) — geçersiz bayrak GH-HEDEF'te
+            # "çözümlenemedi" bloğuna düşer (2026-10-14, bayrak tablosu); vektör gövde
+            # taramasını ölçer, bu yüzden yalnız geçerli bayrak taşır.
+            baslik = "" if alt.startswith("issue comment") else "--title 'fix: x' "
+            return ("gh " + alt + " --repo org/public-core " + baslik + bayrak
                     + ' "$(cat <<\'EOF\'\n' + govde + '\nEOF\n)"')
 
         blok("P11 F1 atif satiri + SONDA e-posta (son capa)", "Bash",

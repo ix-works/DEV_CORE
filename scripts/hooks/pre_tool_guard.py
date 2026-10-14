@@ -159,63 +159,228 @@ def _ui_app_subdir(path: str):
 _ATAMA = re.compile(r"^[A-Za-z_]\w*=")
 _SEG_AYRAC_KARAKTER = ";|&\n()"
 
+# ── KABUK LEHÇESİ (repo-maskeleme düzeltme turu, 2026-10-14) ─────────────────────────
+# VAKA (bug-gate, ölçüldü): tek tırnaklı metinde Bash'in `'\''` kaçışından (ve `$'…\'…'`
+# ANSI-C biçiminden) SONRAKİ içerik ayrı token'a düşüyordu ⇒ `git commit -m 'it'\''s <iz>'`
+# ve `gh pr create … -b 'main'\''e <iz>'` gövdesi TARANMADAN geçiyordu (main ve önceki tur
+# rc 0); aynı sebeple `--title 'PR'\''i duzelt' --repo org/x` GH-HEDEF'te FP blok oldu.
+# Üç lehçe: "eski" = bu turdan ÖNCEKİ model, birebir (sızıntı gate'leri onu BİRLEŞİMİN bir
+# kolu olarak koşar ⇒ yeni modelin çizdiği farklı sınır sessiz geçiş üretemez, PATTERN #12) ·
+# "bash" · "ps" (PowerShell). `main()` araç adına göre seçer; varsayılan "eski" (bu modülü
+# kullanan diğer kurallar ve doğrudan çağıran testler DEĞİŞMEZ).
+#   bash: tırnak dışı `\'` `\"` = harf (`\\` iki karakteriyle birim — Windows yolu `C:\\IX`
+#         eskisi gibi; `\;` gibi diğerleri DEĞİŞMEZ) · `$'…'` ANSI-C (`\'` tırnak) · çift
+#         tırnakta `\` yalnız `$ \` " \\` önünde kaçış (aksi hâlde harf: `"C:\IX"` korunur).
+#   ps:   backtick kaçışı (tırnak dışı + çift tırnak) · tek tırnakta `''`, çift tırnakta `""`
+#         = harf · `\` HİÇBİR yerde kaçış değil.
+_LEHCE = "eski"
+_ANSI_C = {"n": "\n", "t": "\t", "r": "\r", "'": "'", '"': '"', "\\": "\\"}
+_PS_KACIS = {"n": "\n", "t": "\t", "r": "\r"}
 
-def _kelimeler(s: str) -> list:
+# ── KABUĞUN ARGÜMAN SAYMADIĞI METİN (repo-maskeleme tur-4, 2026-10-14) ─────────────────
+# VAKA (bug-gate BLOCKER, lider bağımsız teyit, ölçüldü): bash/ps lehçesi tırnaksız yorumu,
+# `\<boşluk>` kaçışını ve yönlendirme işlenenini modellemiyordu ⇒ kabuğun gh'ye HİÇ
+# geçirmediği `-R<org>/<repo>` metni açık hedef sayılıyordu: `gh release delete v1 --yes
+# # -R<org>/<repo>` · `gh pr create -t x -b b <<< -R<org>/<repo>` · `-t \ -R<org>/<repo>`
+# (main rc 2 → önceki tur rc 0). Sızıntı yönünde aynı kör nokta: yorumdaki private `-R`
+# gerçek hedef sanılıyor, cwd adayı eklenmiyor, gövde taranmıyordu (main ve önceki tur rc 0).
+# Kabuk gerçekliği (ölçüldü: GNU bash 5.3.9 · Windows PowerShell 5.1, argv dökümüyle):
+#   yorum   : kelime BAŞINDA tırnaksız `#` satır sonuna kadar yorumdur (`a#b`, `'x'#y`, URL
+#             içi `#` yorum DEĞİL) · PS ayrıca kelime başında `<#…#>` blok yorum.
+#   bash    : tırnaksız `\X` X'i harf yapar — burada yalnız boşluk/sekme/`#`/`<`/`>` eklendi
+#             (diğerleri bilerek eski: Windows yolu `C:\IX`) · HER tırnaksız `<`/`>`
+#             yönlendirmedir, kelime ortasında da (`a>b` → argv `a`); hemen önündeki TÜMÜ
+#             RAKAM kelime fd numarasıdır (`2>x`, `x2>y` değil) · işlenen bir sonraki kelime.
+#   ps      : `\` kaçış değil · yönlendirme YALNIZ kelime başında (`-t a>f` → argv `a>f`):
+#             `>` `>>` `n>` `*>` · kelime başı `<` ayrıştırma hatasıdır (komut koşmaz).
+# İşlenensiz operatör (segment sonu: `2>&1` `&`'de, `<(…)` `(`'de bölünür) eskisi gibi
+# TOKEN kalır — bu turdan önceki davranış (FP üretmesin). Lehçe `eski` DEĞİŞMEZ.
+_YONL_BASH = re.compile(r"<<<|<<-|<<|<>|>>|<|>")
+_YONL_PS = re.compile(r"[0-9*]?>>?|<")
+_BASH_HARF_KACIS = "'\"\\ \t#<>"
+
+
+def _kelimeler(s: str, lehce: str = None) -> list:
     """Tırnak-duyarlı kelime bölme. `--m="a b"` → tek kelime (`--m=a b`).
 
     Bilerek `shlex` DEĞİL: `shlex(posix=True)` Windows yollarındaki ters-eğik çizgiyi
     kaçış sayıp yutar (`C:\\IX\\x` → `C:IXx`) ve dengesiz tırnakta ValueError atar —
     guard'ın girdisi keyfi/kirli metindir, ayrıştırıcı ASLA patlamamalı.
+    `lehce` verilmezse `_LEHCE` (bkz. KABUK LEHÇESİ). bash/ps lehçesinde yorum, yönlendirme
+    işleneni ve `\\<boşluk>` kabuğun yaptığı gibi ele alınır (bkz. yukarıdaki blok).
     """
+    lehce = lehce or _LEHCE
+    s = s or ""
+    yeni = lehce in ("bash", "ps")
     kelimeler, cur, tirnak_gordu = [], [], False
-    i, n = 0, len(s or "")
+    yonl = None                       # işleneni beklenen yönlendirme operatörü
+    i, n = 0, len(s)
+
+    def bitir() -> None:
+        nonlocal cur, tirnak_gordu, yonl
+        if cur or tirnak_gordu:
+            if yonl is not None:
+                yonl = None           # yönlendirme işleneni: argüman DEĞİL
+            else:
+                kelimeler.append("".join(cur))
+        cur, tirnak_gordu = [], False
+
+    def yonlendirme(metin: str) -> None:
+        nonlocal yonl
+        if yonl is not None:          # işlenensiz önceki operatör (kabukta sözdizimi hatası)
+            kelimeler.append(yonl)
+        yonl = metin
+
     while i < n:
         c = s[i]
-        if c in "'\"":
-            q = c
+        if yeni and not cur and not tirnak_gordu:
+            if c == "#":
+                break                 # yorum: segmentin kalanı argüman değil
+            if lehce == "ps" and s.startswith("<#", i):
+                j = s.find("#>", i + 2)
+                i = n if j < 0 else j + 2
+                continue
+            m = _YONL_PS.match(s, i) if lehce == "ps" else None
+            if m:
+                yonlendirme(m.group(0))
+                i = m.end()
+                continue
+        if lehce == "bash" and c in "<>":
+            m = _YONL_BASH.match(s, i)
+            k = "".join(cur)
+            if cur and not tirnak_gordu and k.isdigit():
+                metin = k + m.group(0)                # fd numarası operatöre aittir
+                cur = []
+            else:
+                bitir()
+                metin = m.group(0)
+            yonlendirme(metin)
+            i = m.end()
+            continue
+        if c.isspace():
+            bitir()
             i += 1
+            continue
+        if lehce == "bash" and c == "\\" and i + 1 < n and s[i + 1] in _BASH_HARF_KACIS:
+            cur.append(s[i:i + 2] if s[i + 1] == "\\" else s[i + 1])
+            i += 2
+            continue
+        if lehce == "bash" and c == "$" and i + 1 < n and s[i + 1] == "'":
+            i += 2
             tirnak_gordu = True
-            while i < n and s[i] != q:
-                if q == '"' and s[i] == "\\" and i + 1 < n:
-                    cur.append(s[i + 1])
+            while i < n and s[i] != "'":
+                if s[i] == "\\" and i + 1 < n:
+                    cur.append(_ANSI_C.get(s[i + 1], s[i:i + 2]))
                     i += 2
                     continue
                 cur.append(s[i])
                 i += 1
-            i += 1                      # kapanış tırnağı (yoksa dizge sonu)
-            continue
-        if c.isspace():
-            if cur or tirnak_gordu:
-                kelimeler.append("".join(cur))
-                cur, tirnak_gordu = [], False
             i += 1
+            continue
+        if lehce == "ps" and c == "`" and i + 1 < n:
+            cur.append(_PS_KACIS.get(s[i + 1], s[i + 1]))
+            i += 2
+            continue
+        if c in "'\"":
+            q = c
+            i += 1
+            tirnak_gordu = True
+            while i < n:
+                ch = s[i]
+                if lehce == "ps":
+                    if ch == q and i + 1 < n and s[i + 1] == q:
+                        cur.append(q)                 # '' / "" = harf
+                        i += 2
+                        continue
+                    if ch == q:
+                        break
+                    if q == '"' and ch == "`" and i + 1 < n:
+                        cur.append(_PS_KACIS.get(s[i + 1], s[i + 1]))
+                        i += 2
+                        continue
+                    cur.append(ch)
+                    i += 1
+                    continue
+                if ch == q:
+                    break
+                if q == '"' and ch == "\\" and i + 1 < n:
+                    if lehce == "bash" and s[i + 1] not in '$`"\\\n':
+                        cur.append(ch)                # bash: `"C:\IX"` ters çizgiyi KORUR
+                        i += 1
+                        continue
+                    cur.append(s[i + 1])
+                    i += 2
+                    continue
+                cur.append(ch)
+                i += 1
+            i += 1                      # kapanış tırnağı (yoksa dizge sonu)
             continue
         cur.append(c)
         i += 1
-    if cur or tirnak_gordu:
-        kelimeler.append("".join(cur))
+    bitir()
+    if yonl is not None:              # işlenensiz operatör: eskisi gibi token (FP üretmesin)
+        kelimeler.append(yonl)
     return kelimeler
 
 
-def _segmentler(s: str) -> list:
+def _segmentler(s: str, lehce: str = None) -> list:
     """Komutu tırnak-DIŞI ayraçlardan (`&& || ; | & \\n ( )`) segmentlere böler.
 
     Segment = "kendi hedefi/bağlamı olan tek komut". Ayraç kümesi bilerek kuralların
     komut-başı çapası `(?:^|[\\n;|&(])` ile AYNI: her segmentin başında `^` çapası
     tutar → mevcut desenler segment üzerinde DEĞİŞMEDEN çalışır (kapsam kaybı yok).
+    Lehçe `_kelimeler` ile AYNI kuralla (iki ayrıştırıcı sınırı farklı çizmesin).
     """
+    lehce = lehce or _LEHCE
     segler, buf = [], []
     i, n, q = 0, len(s or ""), ""
+    yeni, kb = lehce in ("bash", "ps"), True        # kb: kelime başı (tur-4 yorum modeli)
     while i < n:
         c = s[i]
+        # Tur-4: yorum içindeki tırnak/ayraç segment sınırı ÇİZMEZ (ölçüldü: `… # it's`
+        # satırındaki apostrof eskiden tırnak açıp SONRAKİ satırın hedefsiz gh'sini yutuyordu;
+        # bash o satırı ayrı komut olarak koşar). Yorum metni segmentte kalır; ayraç değildir.
+        if yeni and not q and kb and c == "#":
+            j = s.find("\n", i)
+            j = n if j < 0 else j
+            buf.append(s[i:j])
+            i = j
+            continue
+        if yeni and not q and kb and lehce == "ps" and s.startswith("<#", i):
+            j = s.find("#>", i + 2)
+            j = n if j < 0 else j + 2
+            buf.append(s[i:j])
+            i, kb = j, False
+            continue
+        kb = (not q) and (c.isspace() or c in _SEG_AYRAC_KARAKTER)
         if q:
             buf.append(c)
-            if c == q:
+            if lehce == "ps" and c == q and i + 1 < n and s[i + 1] == q:
+                buf.append(s[i + 1])          # '' / "" = harf, tırnak sürer
+                i += 2
+                continue
+            if c == q[-1]:
                 q = ""
-            elif q == '"' and c == "\\" and i + 1 < n:
+            elif lehce == "ps" and q == '"' and c == "`" and i + 1 < n:
+                buf.append(s[i + 1])
+                i += 1
+            elif lehce != "ps" and q in ('"', "$'") and c == "\\" and i + 1 < n:
                 buf.append(s[i + 1])
                 i += 1
             i += 1
+            continue
+        if lehce == "bash" and c == "\\" and i + 1 < n and s[i + 1] in _BASH_HARF_KACIS:
+            buf.append(s[i:i + 2])
+            i += 2
+            continue
+        if lehce == "bash" and c == "$" and i + 1 < n and s[i + 1] == "'":
+            q = "$'"
+            buf.append(s[i:i + 2])
+            i += 2
+            continue
+        if lehce == "ps" and c == "`" and i + 1 < n:
+            buf.append(s[i:i + 2])
+            i += 2
             continue
         if c in "'\"":
             q = c
@@ -381,6 +546,12 @@ _GH_A = re.compile(
     r"|ruleset\b"
     r"|label\s+(create|edit|delete|clone)"
     r")", re.IGNORECASE)
+# ⚠ `_GH_A_ACIK` / `_GH_B_ACIK` TEK BAŞINA HÜKÜM VERMEZ (repo-maskeleme turu, 2026-10-14):
+# ikisi segment METNİNDE arıyordu ⇒ başlık/gövde içindeki `--repo x` ya da `org/x` hedefsiz
+# mutasyonu "açık hedefli" sayıyordu (PATTERN #12: "komut" ile "komuttan bahis"). IGNORECASE
+# ayrıca `-r <reviewer>`'ı da `-R` sayıyordu. Hüküm pflag çözümlemesinden verilir
+# (`_gh_acik_bayrak` · `_gh_konumsal_hedef_var`); iki desen orada yalnız FREN olarak (VE ile)
+# kalır ⇒ sonuç main'in geçirdiği kümenin dışına çıkamaz (bitişik `-RX` dahil — GERİ ALINDI).
 _GH_A_ACIK = re.compile(r"(?<![\w-])(--repo[= ]\S+|-R[= ]\S+)", re.IGNORECASE)
 
 # GRUP B — hedefi KONUMSAL `<owner>/<name>` olarak alan `gh repo <alt>` komutları.
@@ -401,6 +572,390 @@ _GH_C_CWD = re.compile(r"\{(owner|repo)\}", re.IGNORECASE)
 
 _GH_MUTASYON = _GH_A  # geriye dönük ad
 
+# ── HEDEF YALNIZ GERÇEK TOKEN'DAN (repo-maskeleme turu, 2026-10-14) ─────────────────────
+# Eskiden `--repo`/`-R`/konumsal hedef segment METNİNDE aranıyordu: tırnaklı başlık/gövde
+# içinde geçen `--repo <ORG>/<PRIVATE>` gerçek `--repo <ORG>/<PUBLIC>`'i maskeliyor (sızıntı
+# gate'i private sanıp gövdeyi taramıyordu) ya da hedefsiz mutasyonu "açık hedefli"
+# sayıyordu (GH-HEDEF). Token'lar tırnak-duyarlı `_kelimeler`'den gelir; `gh` KOMUT
+# KONUMUNDA değilse (tırnak içi veri, `bash -c "…"`) `None` döner ve çağıran eski davranışa
+# kalır — o biçim bu turun kapsamı dışıdır (bkz. B82d açık sınır listesi).
+_GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)R(.*)$", re.DOTALL)
+_GH_KONUMSAL = re.compile(r"[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*")
+
+
+def _gh_komut_tokenlari(seg: str):
+    """`gh` komut konumundaysa ondan SONRAKİ token'lar; değilse None."""
+    t = _kelimeler(seg)
+    i = 0
+    while i < len(t) and _ATAMA.match(t[i]):
+        i += 1
+    if i >= len(t) or t[i].replace("\\", "/").rsplit("/", 1)[-1].lower() not in ("gh", "gh.exe"):
+        return None
+    return t[i + 1:]
+
+
+# ── gh BAYRAK TABLOSU (repo-maskeleme düzeltme turu, 2026-10-14) ─────────────────────
+# VAKA (bug-gate F1, ölçüldü): "açık hedef" hükmü her token'ı BAĞIMSIZ tarıyordu ⇒ önceki
+# bayrağın DEĞERİ olan tırnaklı token (`-t "--repo" -b b` · `--body "-Rorg/x"` ·
+# `--subject "-Rorg/x"` · `-c "--repo"`) açık hedef sayılıyor, hedefsiz mutasyon geçiyordu
+# (main rc 2 → önceki tur rc 0). pflag modeli: DEĞER ALAN bayrak bir sonraki token'ı
+# (`--` dahil her şeyi) TÜKETİR. Hangi bayrağın değer aldığını gh'nin KENDİ yardım çıktısı
+# söyler; tablo elle yazılmadı, ÜRETİLDİ:
+#   kaynak: gh version 2.96.0 (2026-07-02) · `gh help <grup> <alt>` FLAGS + INHERITED FLAGS
+#   (tip sütunu olan = değer alır; `--repo`/`--help` tabloda yok, ayrı ele alınır)
+#   üretim: `python tests/fixtures/guard_hedef_maskeleme/gh_bayrak_uret.py` (ağsız)
+#   reçete + tazelik: governance/infra-test-recipes.md B82e
+# Alan biçimi: `<kısa>:<uzun>` ya da yalnız `<uzun>` (boşlukla ayrılmış).
+# ⛔ BAYATLIK GEVŞETME ÜRETMEZ (lider koşulu): tabloda OLMAYAN alt-komut ya da tanınmayan
+# bayrak/harf ⇒ çözümleme `kesin=False` ⇒ GH-HEDEF "açık hedef DEĞİL" (blok) · sızıntı
+# gate'inde cwd aday kümesine KATILIR. Yeni gh sürümü bir bayrak eklerse sonuç en fazla FP'dir.
+_GH_BAYRAK_TABLOSU = {
+    ("pr", "create"): (
+        "a:assignee B:base b:body F:body-file H:head l:label m:milestone p:project "
+        "recover r:reviewer T:template t:title",
+        "d:draft dry-run e:editor f:fill fill-first fill-verbose no-maintainer-edit w:web",
+    ),
+    ("pr", "edit"): (
+        "add-assignee add-label add-project add-reviewer B:base b:body F:body-file "
+        "m:milestone remove-assignee remove-label remove-project remove-reviewer t:title",
+        "remove-milestone",
+    ),
+    ("pr", "comment"): (
+        "b:body F:body-file",
+        "create-if-none delete-last edit-last e:editor w:web yes",
+    ),
+    ("pr", "merge"): (
+        "A:author-email b:body F:body-file match-head-commit t:subject",
+        "admin auto d:delete-branch disable-auto m:merge r:rebase s:squash",
+    ),
+    ("pr", "close"): (
+        "c:comment",
+        "d:delete-branch",
+    ),
+    ("pr", "reopen"): (
+        "c:comment",
+        "",
+    ),
+    ("pr", "ready"): (
+        "",
+        "undo",
+    ),
+    ("pr", "review"): (
+        "b:body F:body-file",
+        "a:approve c:comment r:request-changes",
+    ),
+    ("issue", "create"): (
+        "a:assignee blocked-by blocking b:body F:body-file l:label m:milestone parent "
+        "p:project recover T:template t:title type",
+        "e:editor w:web",
+    ),
+    ("issue", "edit"): (
+        "add-assignee add-blocked-by add-blocking add-label add-project add-sub-issue "
+        "b:body F:body-file m:milestone parent remove-assignee remove-blocked-by "
+        "remove-blocking remove-label remove-project remove-sub-issue t:title type",
+        "remove-milestone remove-parent remove-type",
+    ),
+    ("issue", "comment"): (
+        "b:body F:body-file",
+        "create-if-none delete-last edit-last e:editor w:web yes",
+    ),
+    ("issue", "close"): (
+        "c:comment duplicate-of r:reason",
+        "",
+    ),
+    ("issue", "reopen"): (
+        "c:comment",
+        "",
+    ),
+    ("issue", "delete"): (
+        "",
+        "yes",
+    ),
+    ("release", "create"): (
+        "discussion-category n:notes F:notes-file notes-start-tag target t:title",
+        "d:draft fail-on-no-commits generate-notes latest notes-from-tag p:prerelease "
+        "verify-tag",
+    ),
+    ("release", "edit"): (
+        "discussion-category n:notes F:notes-file tag target t:title",
+        "draft latest prerelease verify-tag",
+    ),
+    ("release", "delete"): (
+        "",
+        "cleanup-tag y:yes",
+    ),
+    ("release", "upload"): (
+        "",
+        "clobber",
+    ),
+    ("secret", "set"): (
+        "a:app b:body e:env f:env-file o:org r:repos v:visibility",
+        "no-repos-selected no-store u:user",
+    ),
+    ("secret", "delete"): (
+        "a:app e:env o:org",
+        "u:user",
+    ),
+    ("variable", "set"): (
+        "b:body e:env f:env-file o:org r:repos v:visibility",
+        "",
+    ),
+    ("variable", "delete"): (
+        "e:env o:org",
+        "",
+    ),
+    ("workflow", "run"): (
+        "F:field f:raw-field r:ref",
+        "json",
+    ),
+    ("workflow", "enable"): (
+        "",
+        "",
+    ),
+    ("workflow", "disable"): (
+        "",
+        "",
+    ),
+    ("ruleset", "list"): (
+        "L:limit o:org",
+        "p:parents w:web",
+    ),
+    ("ruleset", "view"): (
+        "o:org",
+        "p:parents w:web",
+    ),
+    ("ruleset", "check"): (
+        "",
+        "default w:web",
+    ),
+    ("label", "create"): (
+        "c:color d:description",
+        "f:force",
+    ),
+    ("label", "edit"): (
+        "c:color d:description n:name",
+        "",
+    ),
+    ("label", "delete"): (
+        "",
+        "yes",
+    ),
+    ("label", "clone"): (
+        "",
+        "f:force",
+    ),
+    ("repo", "create"): (
+        "d:description g:gitignore h:homepage l:license r:remote s:source t:team "
+        "p:template",
+        "add-readme c:clone disable-issues disable-wiki include-all-branches internal "
+        "private public push",
+    ),
+    ("repo", "edit"): (
+        "add-topic default-branch d:description h:homepage remove-topic "
+        "squash-merge-commit-message visibility",
+        "accept-visibility-change-consequences allow-forking allow-update-branch "
+        "delete-branch-on-merge enable-advanced-security enable-auto-merge "
+        "enable-discussions enable-issues enable-merge-commit enable-projects "
+        "enable-rebase-merge enable-secret-scanning "
+        "enable-secret-scanning-push-protection enable-squash-merge enable-wiki template",
+    ),
+    ("repo", "rename"): (
+        "",
+        "y:yes",
+    ),
+    ("repo", "delete"): (
+        "",
+        "yes",
+    ),
+    ("repo", "archive"): (
+        "",
+        "y:yes",
+    ),
+    ("repo", "deploy-key add"): (
+        "t:title",
+        "w:allow-write",
+    ),
+    ("repo", "deploy-key delete"): (
+        "",
+        "",
+    ),
+}
+
+
+def _gh_tablo_ac(alan: str) -> tuple:
+    uzun, kisa = set(), {}
+    for parca in alan.split():
+        k, _, u = parca.rpartition(":")
+        uzun.add(u)
+        if k:
+            kisa[k] = u
+    return uzun, kisa
+
+
+_GH_BAYRAK = {anahtar: _gh_tablo_ac(d) + _gh_tablo_ac(b)
+              for anahtar, (d, b) in _GH_BAYRAK_TABLOSU.items()}
+
+
+def _gh_bayrak_cozumle(seg: str):
+    """`gh` segmentinin pflag çözümlemesi; `gh` komut konumunda değilse None.
+
+    Dönüş: {"kesin", "repolar": [(değer, biçim)], "degerler": {uzun: [..]}, "konumsal"}.
+    Biçim: uzun (`--repo X`) · esit (`--repo=X`) · kisa (`-R X` / `-R=X`) · bitisik (`-RX`)
+    · kume (`-dR X` / `-dRX`). `kesin` = alt-komut tabloda VE her bayrak/harf tanındı VE
+    değer alan her bayrağın değeri var."""
+    t = _gh_komut_tokenlari(seg)
+    if t is None:
+        return None
+    giris, bas = None, min(len(t), 2)
+    if len(t) >= 2:
+        g, a = t[0].lower(), t[1].lower()
+        if g == "repo" and a == "deploy-key" and len(t) >= 3:
+            giris, bas = _GH_BAYRAK.get(("repo", "deploy-key " + t[2].lower())), 3
+        else:
+            giris = _GH_BAYRAK.get((g, a))
+    kesin = giris is not None
+    taninmayan = [] if kesin else ["alt-komut `" + " ".join(t[:bas]) + "`"]
+    du, dk, bu, bk = giris or (set(), {}, set(), {})
+    repolar, degerler, konumsal = [], {}, []
+    i = bas
+    while i < len(t):
+        tok = t[i]
+        if tok == "--":
+            konumsal += t[i + 1:]
+            break
+        if tok.startswith("--") and len(tok) > 2:
+            ad, esit, deger = tok[2:].partition("=")
+            if ad == "repo" or ad in du:
+                if esit:
+                    v = deger
+                elif i + 1 < len(t):
+                    v = t[i + 1]
+                    i += 1
+                else:
+                    v, kesin = None, False
+                    taninmayan.append(f"`{tok}` (değersiz)")
+                if v is not None:
+                    if ad == "repo":
+                        repolar.append((v, "esit" if esit else "uzun"))
+                    else:
+                        degerler.setdefault(ad, []).append(v)
+            elif not (ad in bu or ad == "help"):
+                kesin = False                 # tanınmayan uzun bayrak
+                taninmayan.append(f"`--{ad}`")
+        elif tok.startswith("-") and len(tok) > 1:
+            harfler = tok[1:]
+            for k, ch in enumerate(harfler):
+                if ch == "R" or ch in dk:
+                    kalan = harfler[k + 1:]
+                    esit = kalan.startswith("=")
+                    kalan = kalan[1:] if esit else kalan
+                    if kalan:
+                        v = kalan
+                    elif i + 1 < len(t):
+                        v = t[i + 1]
+                        i += 1
+                    else:
+                        v, kesin = None, False
+                        taninmayan.append(f"`{tok}` (değersiz)")
+                    if v is not None:
+                        if ch == "R":
+                            bicim = "kume" if k else ("kisa" if (esit or not kalan) else "bitisik")
+                            repolar.append((v, bicim))
+                        else:
+                            degerler.setdefault(dk[ch], []).append(v)
+                    break
+                if ch not in bk:
+                    kesin = False             # tanınmayan kısa harf
+                    taninmayan.append(f"`-{ch}` (`{tok}` içinde)")
+                    break
+        else:
+            konumsal.append(tok)
+        i += 1
+    return {"kesin": kesin, "repolar": repolar, "degerler": degerler, "konumsal": konumsal,
+            "taninmayan": taninmayan}
+
+
+def _gh_acik_bayrak(seg: str) -> bool:
+    """GH-HEDEF "açık hedef" hükmü: pflag çözümlemesinde GERÇEK `--repo`/`-R` değeri var mı.
+
+    Üç koşul birden: ① çözümleme `kesin` (bayatlık ⇒ blok) ② değer boşluksuz ve biçim
+    `kume` ya da `bitisik` DEĞİL (`-dR` · `-RX` main gibi blok) ③ main'in metin deseni
+    (`_GH_A_ACIK`) de tutuyor. ③ VE ile bağlandığı için geçen küme main'in geçirdiği kümenin
+    ALT kümesidir (main'e göre gevşeme yapısal olarak 0). `gh` komut konumunda değilse eski
+    desen.
+    ⛔ BİTİŞİK `-R<değer>` AÇIK HEDEF DEĞİLDİR — GERİ ALINDI (kullanıcı zarar-kesme kararı
+    2026-10-14). 1.–4. turda onaylı gevşemeydi; her turda kabuğun/gh'nin o token'ı `-R`
+    olarak YORUMLAMADIĞI yeni bir biçim çıktı (main rc 2 → tur rc 0, bug-gate ölçtü):
+    bash'te Python'un boşluk saydığı ama bash'in saymadığı karakter (NBSP, CR, VT, FF,
+    U+2000…: `-b y<NBSP>-Rorg/x` tek argümandır) · PowerShell 5.1'de CR deyim sonu, akıllı
+    tırnak (`“…”`) tırnak · PowerShell 5.1 boş argümanı DÜŞÜRÜR (`-b "" -Rorg/x` → argv
+    `-b -Rorg/x`: `-R…` gövde değeri olur, hedef cwd). Sızıntı gate'lerinde bitişik değer
+    ADAY olarak kalır (`_gh_hedef_adaylari`: fazla aday yalnız daha çok tarama)."""
+    c = _gh_bayrak_cozumle(seg)
+    if c is None:
+        return bool(_GH_A_ACIK.search(seg or ""))
+    gercek = [v for v, b in c["repolar"]
+              if b not in ("kume", "bitisik") and v and not any(x.isspace() for x in v)]
+    return bool(c["kesin"] and gercek and _GH_A_ACIK.search(seg))
+
+
+def _gh_repo_degerleri(seg: str, kesin: bool = False) -> list:
+    """`gh` segmentindeki `--repo X` · `--repo=X` · `-R X` · `-RX` · `-R=X` DEĞERLERİ.
+
+    Her token konumu BAĞIMSIZ taranır — bilerek değer TÜKETMEZ: sızıntı gate'inin FAZLA
+    aday kümesidir (`-t -R <public>` gibi bir dizide gerçek hedef olmayan `-R`yi de aday
+    sayar ⇒ yalnız DAHA ÇOK tarama; bayat bayrak tablosuna karşı sigorta). Kümelenmiş
+    `-dR X` de sayılır.
+    ⛔ HÜKÜM İÇİN KULLANILMAZ: GH-HEDEF "açık hedef" kararı `_gh_acik_bayrak`'tadır (pflag
+    çözümlemesi) — bağımsız tarama orada, bayrak DEĞERİ olan `"--repo"` metnini hedef sayıp
+    GEVŞETME üretiyordu (bug-gate F1, 2026-10-14). `kesin=True` kipi geriye dönük durur.
+    """
+    t = _gh_komut_tokenlari(seg)
+    if t is None:
+        if kesin:
+            m = _GH_A_ACIK.search(seg or "")
+            return [m.group(1)] if m else []
+        return []
+    out = []
+    for k, tok in enumerate(t):
+        if kesin and any(c.isspace() for c in tok):
+            continue
+        sonraki = t[k + 1] if k + 1 < len(t) else None
+        if tok == "--repo":
+            if sonraki is not None:
+                out.append(sonraki)
+        elif tok.startswith("--repo="):
+            out.append(tok[len("--repo="):])
+        elif not tok.startswith("--"):
+            m = _GH_KISA_REPO.match(tok)
+            if not m or (kesin and m.group(1)):
+                continue
+            kalan = m.group(2)[1:] if m.group(2).startswith("=") else m.group(2)
+            if kalan:
+                out.append(kalan)
+            elif sonraki is not None:
+                out.append(sonraki)
+    return [v for v in out if v.strip()] if kesin else out
+
+
+def _gh_konumsal_hedef_var(seg: str) -> bool:
+    """`gh repo <alt> <ORG>/<REPO>` — konumsal hedef BÜTÜN bir KONUMSAL token olarak var mı.
+
+    Eskiden `_GH_B_ACIK` `<alt>`tan sonraki METİNDE aranıyordu ⇒ `--description "bkz
+    org/x"` hedef sayılıyordu. Token tam olarak `<owner>/<name>` biçiminde olmalı (URL ve
+    doldurulmamış `<ORG>/…` yer tutucusu tam eşleşmez — eski desenin iki dışlaması korunur)
+    ve bir bayrağın DEĞERİ olmamalı (`--description org/x` hedef DEĞİL — pflag tablosu,
+    2026-10-14). `_gh_acik_bayrak` ile aynı iki fren: çözümleme `kesin` olmalı ve main'in
+    metin deseni de tutmalı. `gh` komut konumunda değilse eski metin deseni korunur."""
+    t = _gh_komut_tokenlari(seg)
+    b = _GH_B.search(seg or "")
+    eski = bool(b and _GH_B_ACIK.search((seg or "")[b.end():]))
+    if t is None or len(t) < 2 or t[0].lower() != "repo":
+        return eski
+    c = _gh_bayrak_cozumle(seg)
+    return bool(eski and c and c["kesin"]
+                and any(_GH_KONUMSAL.fullmatch(tok) for tok in c["konumsal"]))
+
 
 
 def _gh_hedef_belirsiz(komut: str) -> str:
@@ -414,7 +969,10 @@ def _gh_hedef_belirsiz(komut: str) -> str:
     Yeni davranış eskisinin ÜST KÜMESİDİR: aynı segmentte hedef varsa yine geçer;
     hiçbir yerde yoksa yine bloklanır — yalnız "başka segmentten ödünç hedef" kapanır.
     """
-    for seg in _segmentler(komut):
+    # Segment kümesi = eski model ∪ lehçe modeli (2026-10-14): lehçe sınırı farklı çizerse
+    # (ör. `\'`) main'in gördüğü bir mutasyon segmenti kaybolmasın — hüküm ikisinde de
+    # lehçe token'larıyla verilir.
+    for seg in dict.fromkeys(_segmentler(komut, "eski") + _segmentler(komut)):
         neden = _gh_hedef_belirsiz_segment(seg)
         if neden:
             return neden
@@ -428,12 +986,19 @@ def _gh_hedef_belirsiz_segment(komut: str) -> str:
     `gh api user` / `graphql` / `rate_limit` ve PROJECT_BOOTSTRAP STEP 1 kırılıyordu
     (2026-07-10 regresyon testi).
     """
-    if _GH_A.search(komut) and not _GH_A_ACIK.search(komut):
+    acik_bayrak = _gh_acik_bayrak(komut)
+    if _GH_A.search(komut) and not acik_bayrak:
+        c = _gh_bayrak_cozumle(komut)
+        if c and c["repolar"] and not c["kesin"]:
+            # `--repo` VAR ama komutun bayrakları çözülemedi — "--repo ver" demek yanıltır.
+            return ("hedef repo ÇÖZÜMLENEMEDİ — tanınmayan " + ", ".join(c["taninmayan"][:3])
+                    + ": hangi token'ın bayrak DEĞERİ olduğu bilinmeden `--repo`nun gerçek "
+                    "hedef olduğu söylenemez (fail-closed). Bayrağı düzelt; gh yeni bir bayrak "
+                    "eklediyse tabloyu yeniden üret (infra-test-recipes B82e).")
         return ("hedef repo BELİRSİZ — `gh` repoyu cwd'den çıkarır ve `core/` bir junction'dır; "
                 "yanlış repoya yazma/yayın GERİ ALINAMAZ. `--repo <ORG>/<REPO>` AÇIKÇA ver.")
     if _GH_B.search(komut):
-        kuyruk = komut[_GH_B.search(komut).end():]  # type: ignore[union-attr]
-        if not (_GH_B_ACIK.search(kuyruk) or _GH_A_ACIK.search(komut)):
+        if not (_gh_konumsal_hedef_var(komut) or acik_bayrak):
             return ("hedef repo BELİRSİZ — `gh repo <alt>` argümansız kaldığında cwd'ye düşer. "
                     "Hedefi konumsal ver: `gh repo <alt> <ORG>/<REPO>`.")
     if _GH_C.search(komut) and _GH_C_CWD.search(komut):
@@ -615,14 +1180,26 @@ def _yayinlanan_metin(komut: str, ham: str, govdeler: list = ()) -> tuple:
             komut))
         return acik + "\n" + _heredoc_govdeleri(ham), ""
 
+    # BİRLEŞİM (bug-gate kol b, 2026-10-14): regex değerleri METNİN İLK eşleşmesidir ve tek
+    # tırnakta apostrofta KESİLİR (`-b 'main'\''e <iz>'` → `main`; `--title 'bkz --body x'
+    # --body '<iz>'` → `x'`) ⇒ gövde TARANMIYORDU. Lehçe kolunda pflag çözümlemesinin
+    # GERÇEK değerleri de eklenir (eski kol AYNEN: Windows yolunu bozan eski çift-tırnak
+    # kaçışı yeni dosya okuma hatası üretmesin). Fazla değer = yalnız daha çok tarama.
+    regex_degerleri = [_arg_deger_kisa(komut, "title"), _arg_deger_kisa(komut, "body"),
+                       _arg_deger_kisa(komut, "notes")]
+    bf = _ARG_BODYFILE.search(komut)
+    yollar = [bf.group(1) or bf.group(2) or bf.group(3)] if bf else []
+    c = _gh_bayrak_cozumle(komut) if _LEHCE != "eski" else None
+    if c:
+        for ad in ("title", "body", "notes"):
+            regex_degerleri += c["degerler"].get(ad, [])
+        for ad in ("body-file", "notes-file"):
+            yollar += c["degerler"].get(ad, [])
     parcalar, hata = _ikame_degerlerini_coz(
-        [v for v in (_arg_deger_kisa(komut, "title"), _arg_deger_kisa(komut, "body"),
-                     _arg_deger_kisa(komut, "notes")) if v], list(govdeler), komut)
+        [v for v in dict.fromkeys(regex_degerleri) if v], list(govdeler), komut)
     if hata:
         return "", hata
-    bf = _ARG_BODYFILE.search(komut)
-    if bf:
-        yol = bf.group(1) or bf.group(2) or bf.group(3)
+    for yol in dict.fromkeys(yollar):
         if yol in ("-", "/dev/stdin"):
             govde = _heredoc_govdeleri(ham)
             if not govde.strip():
@@ -636,6 +1213,28 @@ def _yayinlanan_metin(komut: str, ham: str, govdeler: list = ()) -> tuple:
                 return "", (f"--body-file okunamadi ({yol}). FAIL-CLOSED: okunur yap "
                             "veya --body kullan.")
     return "\n".join(p for p in parcalar if p), ""
+
+
+def _lehce_ile(lehce: str, fn, *args):
+    """`fn`'i verilen kabuk lehçesiyle koşar (`_LEHCE` geri yüklenir)."""
+    global _LEHCE
+    onceki = _LEHCE
+    _LEHCE = lehce
+    try:
+        return fn(*args)
+    finally:
+        _LEHCE = onceki
+
+
+def _iki_lehce(lehce: str, fn, *args) -> str:
+    """Sızıntı gate'i BİRLEŞİMİ: önce eski model (önceki davranış birebir ⇒ main'e göre
+    gevşeme yapısal olarak 0), sonra aracın lehçesi (`'\''` · `$'…'` · backtick). İlk
+    bulgu döner."""
+    for l in dict.fromkeys(("eski", lehce)):
+        sorun = _lehce_ile(l, fn, *args)
+        if sorun:
+            return sorun
+    return ""
 
 
 # `gh api` değer ALAN bayrakları (uç token'ı bunların değerinden ayırt edilsin).
@@ -680,27 +1279,175 @@ def _gh_api_ucu(seg: str) -> str:
     return ""
 
 
-def _repo_public_mu(hay: str) -> tuple:
-    """Görünürlük CANLI sorulur (gh repo view). Kararsızsa FAIL-CLOSED (public say)."""
-    import subprocess
-    m = _ARG_REPO.search(hay)
-    argv = ["gh", "repo", "view", "--json", "isPrivate,nameWithOwner"]
-    cwd = None
+def _hay_hedefi(hay: str) -> tuple:
+    """`hay`'in TEK sorgu hedefi: ("repo", X) ya da ("cwd", yol). İlk `--repo`, yoksa ilk
+    `cd`, yoksa proje kökü. ⚠ Bu bir KARAR değildir — metindeki ilk eşleşmeyi alır; karar
+    `_hedef_public_mu`'dadır (aday birleşimi). Yalnız tek-aday sorgusu + tekilleştirme anahtarı."""
+    m = _ARG_REPO.search(hay or "")
     if m:
-        argv.insert(3, m.group(1))
-    else:
-        c = _CD_PREFIX.search(hay)
-        cwd = _win_yol(c.group(1)) if c else str(_PROJ_ROOT)
+        return "repo", m.group(1)
+    c = _CD_PREFIX.search(hay or "")
+    cwd = _win_yol(c.group(1)) if c else str(_PROJ_ROOT)
+    # ⛔ İSTİSNA = FAIL-CLOSED (bug-gate F3, 2026-10-14): `is_dir()` yalnız "yok" hatalarını
+    # yutar; erişim/aygıt hatası (`C:/Windows/System32/config/SAM` → WinError 5 ·
+    # `//./PhysicalDrive0` → WinError 31) İSTİSNA atıyordu. `main` yakalamaz, `hook_shim`
+    # yalnız SystemExit yakalar ⇒ çökme = guard'ın TÜM kuralları atlanır (fail-open; main'de
+    # de `cd //./PhysicalDrive0` çöküyordu). Çözülemeyen aday PUBLIC sayılır.
+    try:
         if not Path(cwd).is_dir():          # çözülemeyen cd → proje köküne düş
             cwd = str(_PROJ_ROOT)           #   (yoksa cwd hatası fail-closed'a kaçar)
+    except (OSError, ValueError):
+        return "cozulemedi", cwd
+    return "cwd", cwd
+
+
+def _repo_public_mu(hay: str) -> tuple:
+    """TEK aday için görünürlük CANLI sorulur (gh repo view). Kararsızsa FAIL-CLOSED
+    (public say). ⛔ Hedef KARARI için doğrudan çağırma: `hay`'deki ilk `--repo`/`cd`
+    metin içinden gelebilir (maskeleme) — `_hedef_public_mu` kullan."""
+    import subprocess
+    anahtar = _hay_hedefi(hay)
+    if anahtar in _GORUNURLUK:
+        return _GORUNURLUK[anahtar]
+    tur, deger = anahtar
+    if tur == "cozulemedi":
+        return True, "hedef-cozulemedi(fail-closed)"
+    argv = ["gh", "repo", "view", "--json", "isPrivate,nameWithOwner"]
+    cwd = None
+    if tur == "repo":
+        argv.insert(3, deger)
+    else:
+        cwd = deger
     try:
         r = subprocess.run(argv, capture_output=True, text=True, timeout=15, cwd=cwd, shell=False)
         if r.returncode != 0:
             return True, "gorunurluk-sorulamadi(fail-closed)"
         d = json.loads(r.stdout)
-        return (not d.get("isPrivate", True)), d.get("nameWithOwner", "?")
+        sonuc = ((not d.get("isPrivate", True)), d.get("nameWithOwner", "?"))
     except Exception:
         return True, "gorunurluk-sorulamadi(fail-closed)"
+    _GORUNURLUK[anahtar] = sonuc
+    return sonuc
+
+
+# Tek `main()` çağrısı içinde (sorgu anahtarı → sonuç). İki lehçe kolu aynı hedefi yeniden
+# sormasın; yalnız BAŞARILI sorgu saklanır (fail-closed sonuç her seferinde yeniden denenir).
+# `main()` başında boşaltılır (fixture'lar tek süreçte çok vaka koşar).
+_GORUNURLUK: dict = {}
+
+
+# ── ADAY BİRLEŞİMİ (repo-maskeleme turu, 2026-10-14) ───────────────────────────────────
+# VAKA (ölçüldü, ağsız + canlı CLI): yayın/commit segmentinin hedefi `hay` METNİNDEKİ ilk
+# `--repo` / ilk `cd` / ilk `git -C`'den çözülüyordu. Tırnaklı başlık/gövde/mesaj içindeki
+# `--repo <ORG>/<PRIVATE>` (ya da `cd <private-yol>`, ya da çok satırlı mesajda
+# `\ngit -C <private-yol>`) gerçek PUBLIC hedefi maskeliyor, gövde TARANMADAN geçiyordu
+# (rc 0). Ayrıca gh'nin kısa bayrağı `-R` hiç tanınmıyordu: `gh pr create -R <public>`
+# private proje kökünden cwd'ye düşüp aynı şekilde geçiyordu.
+_HEDEF_ADAY_TAVANI = 5
+
+
+def _hedef_public_mu(eski_hay: str, adaylar: list) -> tuple:
+    """Sızıntı gate'lerinin hedef KARARI. Aday kümesi = ESKİ tek-aday (`eski_hay`: main'in
+    birebir sorgusu, metnin ilk `--repo`/`cd`'si) ∪ GERÇEK token adayları (`adaylar`: her
+    biri `--repo X` · `cd <yol>` · "" = proje kökü). BİRİ public ise public.
+
+    Eski aday neden tutuluyor: (1) main'e göre gevşeme YAPISAL olarak 0 — main'in public
+    dediği her girdide aynı sorgu aynen sorulur; (2) PATTERN #12 — yeni token görüşü
+    kelime/segment sınırını eskisinden farklı çizerse sonuç en fazla DAHA ÇOK taramadır,
+    sessiz geçiş olamaz. Bedel (bilinçli, lider kararı 2026-10-14): metinde public geçen
+    private hedefli yayının/commit'in mevcut FP'si aynen KALIR (daraltma = gevşetme).
+    Maliyet: anahtar (`_hay_hedefi`) başına TEKİL `gh repo view`, ilk public'te durur;
+    tekil aday sayısı `_HEDEF_ADAY_TAVANI`'nı aşarsa sorgusuz FAIL-CLOSED."""
+    sorgular, gorulen = [], set()
+    for h in [eski_hay] + list(adaylar):
+        anahtar = _hay_hedefi(h)
+        if anahtar in gorulen:
+            continue
+        gorulen.add(anahtar)
+        sorgular.append(h)
+    if len(sorgular) > _HEDEF_ADAY_TAVANI:
+        return True, "hedef-aday-tavani-asildi(fail-closed)"
+    ilk_repo = ""
+    for h in sorgular:
+        public, repo = _repo_public_mu(h)
+        if public:
+            return True, repo
+        ilk_repo = ilk_repo or repo
+    return False, ilk_repo or "?"
+
+
+def _baglam_cwd_hay(segler: list, idx: int) -> str:
+    """Gerçek kabuk bağlamının cwd adayı: <idx>'ten önceki SON `cd` segmentinin YOL
+    token'ı (`cd <yol>`); bağlam yoksa "" (= proje kökü). `_kabuk_baglami`'nın token hâli."""
+    onceki = [s for s in segler[:idx] if re.match(r"^\s*cd\s+", s)]
+    if not onceki:
+        return ""
+    t = _kelimeler(onceki[-1])
+    return f"cd {t[1]}" if len(t) > 1 else ""
+
+
+def _gh_hedef_adaylari(segler: list, idx: int, seg: str, api_repo: str = "") -> list:
+    """`gh` yayın segmentinin hedef adayları: FAZLA bağımsız tarama (`_gh_repo_degerleri`)
+    ∪ pflag çözümlemesinin gerçek `--repo`/`-R` değerleri (+ `gh api` yol hedefi).
+
+    Gerçek cwd (gh `--repo`suz cwd'ye düşer) KESİN bir gerçek hedef yoksa EKLENİR (bug-gate
+    P1, 2026-10-14): eskiden aday listesinde herhangi bir `--repo` metni varsa cwd hiç
+    sorulmuyordu ⇒ kök public iken `-t "--repo=org/private" -b '<iz>'` (değer, hedef değil)
+    gövdeyi taramadan geçiyordu (main ve önceki tur rc 0). Çözümleme `kesin` değilse (bayat
+    tablo) de cwd eklenir — bayatlık en fazla fazla taramadır."""
+    c = _gh_bayrak_cozumle(seg)
+    gercek = [v for v, _ in c["repolar"]] if c else []
+    repolar = _gh_repo_degerleri(seg) + gercek + ([api_repo] if api_repo else [])
+    adaylar = [f"--repo {r}" for r in dict.fromkeys(repolar)]
+    if not (api_repo or (c and c["kesin"] and gercek)):
+        adaylar.append(_baglam_cwd_hay(segler, idx))
+    return adaylar
+
+
+_GIT_HEDEF_UST = frozenset({"-C", "--git-dir", "--work-tree"})
+_GIT_HEDEF_ORTAM = frozenset({"GIT_DIR", "GIT_WORK_TREE"})
+
+
+def _mutlak_yol_mu(y: str) -> bool:
+    return bool(os.path.isabs(y) or _POSIX_SURUCU.match(y) or re.match(r"^[A-Za-z]:[\\/]", y))
+
+
+def _git_hedef_adaylari(segler: list, idx: int, seg: str) -> list:
+    """`git commit` segmentinin GERÇEK depo adayları: komut konumundaki `git`in üst
+    seçenekleri `-C` · `--git-dir` · `--work-tree` (+ `GIT_DIR=`/`GIT_WORK_TREE=` önekleri);
+    yoksa gerçek bağlam cwd'si. Göreli yol bağlam `cd`sine göre çözülür. `.git` ile biten
+    git-dir'in üst dizini sorulur (gh depo kökünden görünürlük okur)."""
+    t = _kelimeler(seg)
+    yollar, i = [], 0
+    while i < len(t) and _ATAMA.match(t[i]):
+        ad, _, deger = t[i].partition("=")
+        if ad in _GIT_HEDEF_ORTAM and deger:
+            yollar.append(deger)
+        i += 1
+    if i < len(t) and t[i].replace("\\", "/").rsplit("/", 1)[-1].lower() in ("git", "git.exe"):
+        i += 1
+        while i < len(t) and t[i].startswith("-"):
+            ad, esit, deger = t[i].partition("=")
+            if ad in _GIT_HEDEF_UST:
+                if esit:
+                    yollar.append(deger)
+                elif i + 1 < len(t):
+                    yollar.append(t[i + 1])
+                    i += 1
+            elif t[i] in _GIT_UST_DEGERLI:
+                i += 1
+            i += 1
+    baglam = _baglam_cwd_hay(segler, idx)
+    if not yollar:
+        return [baglam]
+    taban = baglam[3:] if baglam else ""
+    out = []
+    for y in yollar:
+        y = re.sub(r"[\\/]\.git[\\/]?$", "", y) or y
+        if taban and not _mutlak_yol_mu(y):
+            y = taban.rstrip("/\\") + "/" + y
+        out.append(f"cd {y}")
+    return out
 
 
 def _gh_pr_public_leak(komut: str, ham: str) -> str:
@@ -732,7 +1479,9 @@ def _gh_pr_public_leak(komut: str, ham: str) -> str:
         api_repo = _gh_api_hedef_repo(seg)
         if api_repo:
             hay = f"--repo {api_repo}\n" + hay
-        public, repo = _repo_public_mu(hay)
+        # Repo-maskeleme (2026-10-14): `hay` yalnız ESKİ aday; karar gerçek token
+        # adaylarıyla birleşimden (`_hedef_public_mu`).
+        public, repo = _hedef_public_mu(hay, _gh_hedef_adaylari(segler, i, seg, api_repo))
         if not public:
             continue
         metin, hata = _yayinlanan_metin(seg, ham, govdeler)
@@ -853,7 +1602,10 @@ def _git_commit_public_leak(komut: str, ham: str) -> str:
         gc = _GIT_C_PATH.search(seg)
         if gc:
             hay = f"cd {gc.group(1) or gc.group(2) or gc.group(3)}\n" + hay
-        public, repo = _repo_public_mu(hay)
+        # Repo-maskeleme (2026-10-14): `_GIT_C_PATH` ve `_repo_public_mu` METİNDE arar
+        # (mesajdaki `--repo x` / `cd x` / `\ngit -C x` hedef olurdu) ⇒ `hay` yalnız ESKİ
+        # aday; gerçek adaylar komut konumundaki `git`in üst seçeneklerinden.
+        public, repo = _hedef_public_mu(hay, _git_hedef_adaylari(segler, i, seg))
         if not public:
             continue
         metin, hata = _git_commit_mesaji(seg, ham, govdeler)
@@ -1108,7 +1860,9 @@ def main() -> int:
             return 2
 
     if tool_name in _KABUK_TOOLLARI:
-        belirsiz = _gh_hedef_belirsiz(komut)
+        lehce = "ps" if tool_name == "PowerShell" else "bash"
+        _GORUNURLUK.clear()
+        belirsiz = _lehce_ile(lehce, _gh_hedef_belirsiz, komut)
         if belirsiz:
             sys.stderr.write(
                 f"⛔ GH HEDEF BELİRSİZ: {belirsiz}\n"
@@ -1117,7 +1871,7 @@ def main() -> int:
                 "Okuma komutları (list/view/status) serbesttir. İŞLEM REDDEDİLDİ.\n")
             return 2
 
-        sorun = _gh_pr_public_leak(komut, ham)
+        sorun = _iki_lehce(lehce, _gh_pr_public_leak, komut, ham)
         if sorun:
             sys.stderr.write(
                 f"⛔ PUBLIC-PR SIZINTI GATE: {sorun}\n"
@@ -1126,7 +1880,7 @@ def main() -> int:
                 "DEĞİLDİR. İŞLEM REDDEDİLDİ. Çözüm: gövdeyi genericize et, tekrar dene.\n")
             return 2
 
-        sorun = _git_commit_public_leak(komut, ham)
+        sorun = _iki_lehce(lehce, _git_commit_public_leak, komut, ham)
         if sorun:
             sys.stderr.write(
                 f"⛔ COMMIT-MESAJI SIZINTI GATE: {sorun}\n"
