@@ -28,13 +28,16 @@ Bu klasör **L3 katman** dosyaları içerir: SAP ADT REST işlemleri için **den
 | **ABAP Class** (create, OSQLC, push+activate flow) | [`adt-classes.md`](adt-classes.md) | §19, §20, §26 |
 | **ABAP Report (PROG/P)** | [`adt-programs.md`](adt-programs.md) | §21 |
 | **Function Group + Function Module** (create/imza/RFC) + **Klasik Dynpro ekranı & GUI status ÜRETİMİ** | [`adt-fugr-functions.md`](adt-fugr-functions.md) | FG/FM tam pattern + §6 `ZSD000_FM_SCREEN_GEN` (RPY_DYNPRO_INSERT + RS_CUA, SOAP-RFC) — **yeni klasik ALV/Dynpro programında ÖNER** |
-| ABAP coding patterns (Range, FAE, İç tablo, Kur dönüşümü) | [`coding-patterns.md`](coding-patterns.md) | §22-§25 |
+| ABAP coding patterns (Range, FAE, İç tablo, Kur dönüşümü, harici HTTP UTF-8 gövde, Türkçe harf/mesaj değişkeni/regex sınırları) | [`coding-patterns.md`](coding-patterns.md) | §22-§27 |
 | OData services (Pricing simulation, Function Import, UpdateSO, BAPIRET2) | [`odata-services.md`](odata-services.md) | §27-§30 |
 | Bilinen hatalar ve çözümlü durumlar | [`known-errors.md`](known-errors.md) | §31 |
 | Hata pattern kataloğu + trigger phrases | [`lessons-learned.md`](lessons-learned.md) | Cross-cutting |
 | **RAP** (view entity, BDEF, behavior, service def/binding, publish) | [`adt-rap.md`](adt-rap.md) | §32 — ⚠️ ilk kez (ORDER pilotu); kanıtlanmış/kanıtlanmamış ayrımlı |
 | **MCP tool kullanımı** (ADR 0007) | [`adt-mcp.md`](adt-mcp.md) | 11 typed tool — coordinator için |
 | **PDF üretimi (form objesi olmadan)** + mail eki | [`howto-pdf-ads-xdp.md`](howto-pdf-ads-xdp.md) · mail: [`howto-abap-email.md`](howto-abap-email.md) | AI'ın yazdığı XDP → `CL_FP_ADS_UTIL=>RENDER_PDF` → CL_BCS PDF eki; gönderen politikası, SOES teşhisi |
+| **ATC bulgusu düzeltme kalıpları** (iç içe okuma/FAE önce · muafiyet · Pretty Print) | [`howto-atc-duzeltme-kaliplari.md`](howto-atc-duzeltme-kaliplari.md) | kalıp + gerekli bağlam + düşük güven işaretleri; gate değil |
+| **Toplu yapay zekâ yargısı** (kuyruk-dikiş sözleşmesi) | [`howto-kuyruk-dikis-sozlesmesi.md`](howto-kuyruk-dikis-sozlesmesi.md) | yargı dosyada · doğrulama kodda · bozuk girdi durdurur · cevapsız boş · yeniden koşum korur |
+| **ECC → S/4 yeniden yazım** (legacy kaynak ≠ hedef tasarım) | [`howto-ecc-s4-yeniden-yazim.md`](howto-ecc-s4-yeniden-yazim.md) | alınır/alınmaz ayrımı · DOC-TS-06 |
 | **Freestyle UI5 + OData V2** (tarayıcı tarafı) | [`ui-freestyle-odata-v2.md`](ui-freestyle-odata-v2.md) | ORDER UI patinaj tecrübesi + §0 PRE-FLIGHT + [checklist](checklists/ui-freestyle-creation.md) |
 | **UI uygulaması RAP backend** (CDS/BDEF/behavior/SRVD tecrübe merceği) | [`ui-backend-rap.md`](ui-backend-rap.md) | ORDER backend patinajı + §0 PRE-FLIGHT + [checklist](checklists/ui-backend-rap-creation.md); kanonik = `adt-rap.md` §32 |
 

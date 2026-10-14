@@ -58,6 +58,24 @@ Sadece doc bypass edilebilir (`LESSONS_LEARNED #4`). Her kural ikinci katmanla d
 2. Tipi ne? Davranış → L1; Standart → L2; Pattern → L3
 3. Mimari karar mı? → `governance/decisions/`
 
+### Ek (2026-10-12) — Yeni skill ya da ajan ne zaman açılır
+
+Yeni bir bilgi parçası ya da iş türü **yeni bir skill veya ajan tanımı** gerektiriyor gibi
+göründüğünde, ancak aşağıdaki **üç testin ÜÇÜ DE** sağlanıyorsa açılır; biri bile sağlanmıyorsa
+**açılmaz** ve bilgi mevcut katmana yazılır (L2 `standards/` · L3 `playbook/` · ya da ilgili
+mevcut skill'in `references/` dosyası):
+
+1. **Kendi yürütme yüzeyi:** kendine ait betik, araç zinciri ya da pipeline'ı var — yalnız
+   metin değil (salt bilgi bir sayfadır, skill değil).
+2. **Ayrı risk / politika kimliği:** mevcut bir skill/ajanın izin, yazma yolu veya güvenlik
+   sınırlarından **farklı** bir sınır gerektiriyor (ör. salt-okur ↔ SAP'ye yazan).
+3. **Ayrı sahip / yaşam döngüsü:** bakımı, sürümü ya da kapanışı mevcut olanlardan bağımsız yürüyor.
+
+**Neden:** her yeni skill/ajan tanımı bağlam bütçesi, yönlendirme belirsizliği (hangisi
+tetiklenecek?) ve bakım maliyeti üretir; L1–L4 katmanları bilgiyi zaten taşıyabilir.
+Test dış bir pazardaki fikirden **uyarlandı ve sıkılaştırıldı**. Gate değildir — öneri/inceleme sırasında
+uygulanan yazılı ölçüttür (ADR 0019).
+
 ## Gerekçe
 
 - **Tek doğruluk kaynağı her bilgi parçası için** — drift'i önler

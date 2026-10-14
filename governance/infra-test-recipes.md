@@ -3084,6 +3084,25 @@ python tests/run_battery.py oturum_izi_ve_ddl_accept --kardes adlandirma_uyarisi
 - **Ölçülmeyen:** uzun oturumda yeni objede 400'ün kendisi (canlı SAP gerektirir) — `ADT_SESSION_TRACE=1` ile yakalanan iz bu hipotezin ilk kanıt aracıdır; `new_session()` davranışı DEĞİŞMEDİ.
 - **Adlandırma uyarısı GATE DEĞİL:** `naming_warning` alanı eklenir, `ok` değişmez (M4 bunu çiviler). FP ölçümü 2026-10-12: bir tüketici korpusunda 184 adda uyarı 0 (tablo 18 · yapı 15 · veri öğesi 93 · alan 58); TT korpusta yok ⇒ ölçülmedi; recall korpusta ihlal olmadığı için ölçülemedi.
 
+## B78 — Doküman içerik paketi (dış repo turu Part C): std 11/12 · L1b abap-clean-code · FS/entegrasyon şablonları · ATC/kuyruk-dikiş/ECC sayfaları · PATTERN #42
+
+Doküman değişikliği — fixture yok. Koşum repo kökünden (worktree kökü):
+
+```
+python scripts/validators/check_instruction_budget.py --root .     # önce/sonra WARN sayısı aynı (yalnız CLAUDE.core çiftinden); yeni L1b dosyası ≤200 satır
+python scripts/validators/check_id_uniqueness.py                   # DOC-FS-08 · DOC-TS-07/08 · DOC-CR-04..06 · BE-82/83 · C-RAP-BD-06 · DOC-TS-06 · PATTERN #42 tekil
+python scripts/validators/check_rule_gate_coverage.py              # yeni checklist satırları var olmayan check_*.py adı taşımıyor
+python scripts/validators/run_all_validators.py --quick
+python tests/run_battery.py id_tekilligi fs_docstd itg_alan_dolulugu --precommit   # çapası bu dosyalara dokunan fixture'lar
+```
+
+- **Çapa grep'leri (her biri ≥1):** `PATTERN #42` + tetik satırı (lessons-learned) · `403 kimlik hatası DEĞİLDİR` (PATTERN #24) · `Küme sorgusu reçetesi` (howto-belge-canli-teyit-turu) · `Yeni skill ya da ajan ne zaman açılır` (ADR 0003) · `10.2 İş İstisnaları` + `10.3 Paralel İşleme` + `9.2a` (std 04) · `KDS-5` (kuyruk-dikiş) · `## 27. Türkçe metin` (coding-patterns) · `### 12.10 Git Bash yol dönüşümü` (known-errors).
+- **Kimlik taraması (public çekirdek):** değişen/yeni dosyalarda tüketici proje adı, SID, host, kullanıcı, transport = 0. SID için sözcük sınırlı arama playbook/standards/decisions altında 0 dönmeli.
+- **Satır sonu:** değişen mevcut dosyalar CRLF kalmalı (karışık 0); yeni dosyalar LF (index normalize eder).
+- **FS özet sınırı yeniden ölçümü:** şablonu her bölümü dolu bir örnekle `python scripts/build_doc_pdf.py <md> <html>` + `node scripts/html_to_pdf.js <html> <pdf>` → sayfa sayısı ≤ 2 (2026-10-12: boş 1 · dolu 2). Biçim (CSS) değişirse sınır yeniden ölçülür.
+- **PATTERN #42 probu** (Claude Code sürümü değişince): scratch'te üç klasör (exec · kabuk · olmayan yorumlayıcı), her birinde yalnız tek `PreToolUse` prob hook'u (işaret dosyası + `exit 2`); `claude -p "<echo iste>" --max-turns 3 --allowedTools "Bash(echo:*)" --debug-file <log>`; hüküm debug satırı + işaret dosyası + araç çıktısı birlikte. Beklenen (2.1.296): A/B engeller, C koşar.
+- **Yayılım:** yeni `claude/rules/abap-clean-code.md` projelere `claude_overlay` fiziksel kopyasıyla iner (`/core-guncelle`); davranış-yüzeyi ⇒ merge sonrası `behavior_manifest.py generate` (lider). Yeni playbook/standards/şablon dosyaları tüketici `CORE-INDEX.md`'yi bayatlatır (`build_core_index.py` yeniden koşulur).
+
 ## B79 — `ix_doctor` K1 1f (Claude Code sürümü ↔ ölçülmüş taban) + 1g (hook yorumlayıcısı gerçekten başlıyor mu) — Q365①
 
 ```

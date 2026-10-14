@@ -17,7 +17,7 @@ superseded-by: —
 ## Bağlam
 
 ADR 0005 *neyi* (Z/Y, standart obje, transport) yazabileceğimizi sınırlıyordu ama
-*hangi sisteme* yazılabileceğini değil. Tek sistem (DS4/DEV) varken bile, transport ile
+*hangi sisteme* yazılabileceğini değil. Tek sistem (<SYS>/DEV) varken bile, transport ile
 QA/PRD'ye geçiş başlayınca **yanlış sisteme yazma** riski doğar (yanlışlıkla QA/PRD
 bağlantısı aktifken `domain_create`/`push`/`activate`). Bu canlıda istenmeyen değişiklik =
 ciddi olay.

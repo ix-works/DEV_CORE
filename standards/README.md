@@ -20,6 +20,8 @@ Bu klasör **L2 katman** dosyaları içerir: stabil, değişme sıklığı düş
 | [`04-documentation-fs-ts.md`](04-documentation-fs-ts.md) | both | FS ve TS şablonları, versiyon kontrolü, onay süreci |
 | [`05-coding-rap.md`](05-coding-rap.md) | backend | **RAP track:** view entity katmanlama, BDEF (managed/unmanaged), service definition/binding/publish, ADR 0005 RAP yüzeyi (02'nin alternatifi, all-or-nothing) |
 | [`10-standart-veriye-yazma-api-secimi.md`](10-standart-veriye-yazma-api-secimi.md) | backend | **Standart nesneye yazma — API seçimi:** bağlam/commit kuralı → released RAP BO (EML, canlı teyitli) → released BAPI → OData → RFC FM → BDC → manuel; profil ayarı; TS gerekçe tablosu (ADR 0005 B ayrıntısı) |
+| [`11-clean-abap-ve-oo-alt-kumesi.md`](11-clean-abap-ve-oo-alt-kumesi.md) | backend | **Clean ABAP + OO tasarım alt kümesi** (SAP/styleguides, CC BY 3.0 — uyarlanmış): yalnız yeni/değişen satıra; çelişkide std 02/05/06 + ADR 0012 üstün; ayıklanan 5 nokta. L1b işaretçi: `claude/rules/abap-clean-code.md` |
+| [`12-clean-core-seviye-referansi.md`](12-clean-core-seviye-referansi.md) | backend | **`cleancore_policy` × seviye A–D × teknik** referans tablosu (yeni kural koymaz; profil matrisi + std 01 §1 + std 10'u hizalar; ölçülmeyen hücre `ölçülmedi`) |
 
 ## Ne Zaman Buraya Yazılır?
 

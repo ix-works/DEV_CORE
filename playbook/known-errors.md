@@ -289,3 +289,43 @@ listesine düşürür ⇒ açıklama değişikliği kozmetik değildir: aktivasy
 ⚠ Sınır: ölçüm tek tip (DDLS); başka tiplerde inaktife düşme ÖLÇÜLMEDİ. Sunucunun ETag'iyle retry
 `If-Match`'in kayıp-güncelleme korumasını atlar ⇒ script retry'ı yalnız envelope ilk okumadan beri
 bayt bayt aynıysa yapar.
+
+**↑ §12.7c eki (2026-10-12) — sıra değişti; handle her sistemde yanmıyor:** `set_object_source` artık `corrNr` query'sini ÖNCE dener; header-only 3. sıraya indi (yedek). Ölçülen (on-prem, tek sınıf, ham LOCK→PUT→UNLOCK): yalnız header → 409 (geçerli istekle bile), yalnız `corrNr` → 200; aynı handle'da header-409'dan sonra `corrNr` → 200 (handle YANMADI). Yukarıdaki vakada handle yanmıştı (423) ⇒ yanma sisteme/duruma bağlıdır; iki durumda da çalışan biçim `corrNr`'dır. Kanıt: `tests/fixtures/transport_yaklasim_sirasi`.
+
+### 12.8 "Hayalet" transport — kimsenin açmadığı `Generated Request for Change Recording` (bilinen hata; 2026-10-12)
+
+**Belirti:** Kullanıcının hiç açmadığı, açıklaması *"Generated Request for Change Recording"* olan bir
+(çoğunlukla boş ya da tek kayıtlı) K tipi istek görünür; ardından aynı objede push `409` / kilit
+çakışması verir ya da obje iki ayrı isteğe dağılır.
+
+**Bilinen üç tetikleyici:**
+
+| # | Tetikleyici | Kaynak / kanıt düzeyi | Önlem |
+|---|---|---|---|
+| 1 | Obje **istek numarası (corrNr) verilmeden** kilitlenir → CTS kilidi kendi ürettiği isteğe kaydeder; sonraki yazma gerçek istekle `409` alır | `scripts/sap_adt_lib.py` `lock_object` iş akışı koruması (istek yoksa kilitlemeden durur) — kod içi kayıt; bu turda canlı tekrar ÜRETİLMEDİ | İstek numarası kilitten ÖNCE çözülür ve kilide verilir (araç zaten zorlar) |
+| 2 | Sınıf havuzunun **bir include'u** (ör. yeni metot tanımı) hiçbir isteğe sahip değilken aktivasyon onu kaydeder → include başına ayrı K+S isteği | aynı dosya `register_object_in_transport` belge yorumu — kod içi kayıt; canlı tekrar ÜRETİLMEDİ | Objeyi önce kullanıcının isteğine `R3TR` girdisi olarak kaydet (araç yapar). ⛔ Bu adımı kaldırma — §12.7 son paragrafı |
+| 3 | **Released (standart) bir objenin** değişikliği kayda alınmak istenir | dış kaynak bildirimi — **DOĞRULANMADI** | Standart objeye dokunmak zaten yasaktır (ADR 0005-A); belirti görülürse önce hangi objenin kayda girdiğine bak |
+
+**Temizlik kimin işi:** hayalet isteği silmek/serbest bırakmak bir **sistem durumu değişikliğidir** —
+AI yapmaz (ADR 0005-C); hangi isteğin oluştuğu `E070`/`E071` okumasıyla bulunur ve kullanıcıya listelenir
+(`sap_adt_lib.find_ghost_transports` 409 sonrası son kısa süre içinde açılmış boş istekleri listeler).
+⚠ `adt_transport_list`'in sıfırı tek başına kanıt değildir (`howto-belge-canli-teyit-turu.md` C-5).
+
+### 12.9 `400 "Session Timed Out"` — dialog bağlamı DIŞINDA bir yan neden: kısa döküm (2026-10-12)
+
+§12.6'daki satır (classrun dialog bağlamı isteyen FM'i koşamaz) ve `adt-mcp.md`'deki "aralıklı 500
+sonrası 400" vakası **ölçülmüş** iki nedendir. Dış bir kaynak üçüncü bir neden bildiriyor: classrun
+içinde oluşan bir **kısa döküm** (ST22) istemciye yalnız `400 Session Timed Out` olarak dönebilir.
+**Teşhis sırası:** aynı denemeyi tekrarlamadan önce döküm listesine bak (`adt_dump_list` → `adt_dump_read`;
+ayrıntı `adt-mcp.md`). Döküm varsa kök neden odur. **DOĞRULANMADI** — bu evde bu yolla üretilmedi;
+yalnız teşhis sırası önerisidir (döküm yoksa §12.6 nedenleri geçerli).
+
+### 12.10 Git Bash yol dönüşümü bozuk ADT URI üretir → sunucuda kısa döküm (2026-10-12)
+
+Git Bash'te `/sap/bc/adt/...` ile başlayan bir argüman Windows yoluna çevrilir (`C:/Program Files/Git/sap/...`).
+Bu bozuk URI ile gönderilen bir sözdizimi denetimi (checkrun) isteği istemcide yalnız hata olarak görünmez:
+sunucuda **`STRING_OFFSET_TOO_LARGE`** kısa dökümü üretir (2026-10-12, S/4 on-premise geliştirme sisteminde ölçüldü).
+**Önlem:** URI argümanı veren komutlarda `MSYS_NO_PATHCONV=1`; araç URI'yi kendisi kuruyorsa gerekmez.
+Beklenmedik döküm görülünce önce isteğin URI'sini oku (`adt_dump_read`).
+prior-art: bulundu — `claude/memory-seed/feedback_git-bash-sap-uri-yol-donusumu-msys-no-pathconv.md`
+(istemci tarafı `InvalidURL`; sunucu dökümü bu kayıtla eklendi).

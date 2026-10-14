@@ -92,6 +92,23 @@ Her çıkan konu için, **hedefli ve ucuz** (kapsam-orantılı derinlik):
 Domain + canlı-sistem + prior-art birlikte → aksiyonu belirle: reuse mı yeni mi ·
 mevcutla tutarlılık · uygulanacak geçmiş-ders · blast-radius/risk. Kanıtsız ilerleme YOK.
 
+**Çözüm merdiveni (kod yazmadan önce, sırayla — ilk "evet"te dur):**
+1. **Gerçekten gerekli mi?** İhtiyaç mevcut bir ekran/raporla zaten karşılanıyor olabilir.
+2. **Standart karşılıyor mu?** Standart işlem/uyarlama, anahtar kullanıcı genişletmesi ya da released
+   genişletme noktası. ⚠ Standart objeye alan/append **ADR 0005-A'ya tabidir** — ad AI tarafından
+   önerilmez, kullanıcı belirler.
+3. **Mevcut Z obje yeniden kullanılabilir mi?** (adım 4-b'nin çıktısı.)
+4. **Platform bildirimiyle çözülür mü?** Kod yerine bildirim: RAP `numbering: managed`,
+   `lock master` / `etag master` (`standards/05` §5). Yönetim (audit) alanları: `standards/05` §9A
+   idempotent `setAdmin` determination (ZORUNLU; `ui-backend-rap.md` §F). Bundan bağımsız olarak ETag
+   alanında `@Semantics.systemDateTime.lastChangedAt: true` `standards/05` §5 gereği ZORUNLUDUR.
+5. **Released API** (std 10 sırası) → ancak sonra **en küçük kod**.
+
+**Asla "sadeleştirilmez"** (kısayol gerekçesi olamaz): yetki kontrolü · hata yönetimi ve kullanıcı
+mesajı · naming / transport / Clean Core kuralları · kullanıcının açıkça istediği davranış. Bilinçli
+alınan bir kısayol varsa **teslim notunda** adıyla yazılır. Legacy yeniden yazımında ek sorular:
+[`howto-ecc-s4-yeniden-yazim.md`](howto-ecc-s4-yeniden-yazim.md).
+
 ### 6. KAPSAM-ORANTILI SORU + AKSİYON
 - **S0:** soru yok — makul-default'la yap, tek satır "şöyle anladım, yapıyorum".
 - **S1:** yalnız kritik/belirsiz noktayı sor (belirsizlik-kalibreli — makul-default'ta varsay-bildir).

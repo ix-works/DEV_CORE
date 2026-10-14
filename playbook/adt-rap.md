@@ -574,6 +574,10 @@ hâlâ statik = bilinen sınırlama; `.rules.md`'den okuma ADR 0003 Adım-6
 - Aktivasyon dependency sırası: interface view → projection → BDEF → behavior class → SD → SB → publish. Her adım `version="active"` doğrulanır.
 - Transport: kullanıcının verdiği aktif TR; **yenisi yaratılmaz** (ADR 0005 C).
 - TADIR/rename riski (§30.9): view entity'de sqlViewName olmadığı için klasik orphan sorunu yok; ama yanlış isimle aktive edilen DDLS yine workbench DELETE + TR release ister.
+- **Draft tablosu (yalnız draft'lı senaryo — varsayılan draft'sız, std 05 §5):** draft DB tablosu elle
+  yazılır; yönetim alanları için tablo tanımına `include sych_bdl_draft_admin_inc;` eklenir, ad std 05 §4
+  draft satırına uyar (`A` … `_D`). ⚠ Dış kaynak bu reçeteyi Public Cloud'da ölçmüş; **bizim profilde
+  (on-prem / private) DOĞRULANMADI** — draft'lı ilk işte aktivasyon + readback ile teyit et (2026-10-12).
 
 ### 32.8 Script ↔ Playbook
 

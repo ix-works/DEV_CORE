@@ -50,6 +50,7 @@ Aşağıdaki ifadeler kullanıcıdan geldiğinde **IMMEDIATELY DURAKLA**, meta-p
 | "mesaj sil" · "atıl mesaj" · "SE91'den sil" · "PUT silmiyor" | Mesaj sınıfından mesaj silme — tam PUT gövdeden çıkarılanı SİLMEZ | **PATTERN #38** → `adt-message-class.md` §27.5 (`populate_message_class.py --delete`) |
 | "açılışta ayar uyarısı" · "permission rule … :* that is not at the end" · "uyarı yine geldi" | Ayar düzeltmesi ölçülmeden "kapandı" sayıldı | **PATTERN #39** → gerçek Claude Code probu (önce/sonra stderr) |
 | "iki client açıkken yanlış veri" · "tek sekmede sorun yok" · "başka client'ın verisi geldi" · "kilit bırakılmıyor / 5 dk bekledi" | Elle kurulan istek çerçevenin eklediği parametreyi (sap-client) taşımıyor; sayfadan ayrılırken senkron XHR gitmiyor | **PATTERN #40** → ayırıcı veriyle iki bağlam ölçümü · std/03 §18.5b · FE-48/FE-49 |
+| "guard bloklamadı ama araç koştu" · "hook çalışmadı" · "python bulunamadı" · "hook komutu değişti" | Hook süreci başlayamadı ya da komut biçimi tanınmadı — hook motoru bunu engel değil sessiz geçiş sayar | **PATTERN #42** → üç kollu prob (exec · kabuk · başlayamayan yorumlayıcı) |
 
 **Tepki protokolü:**
 1. Forward progress STOP — devam etme
@@ -594,6 +595,11 @@ depo-yeri F4'ü sondası)*
 - **Kural:** Kimlik-bilgisi dosyası değiştikten sonraki İLK başarısızlıkta parolayı değil
   **sürecin tazeliğini** şüphelen. Retry'dan önce restart. Ve kimlik hatalarında **retry
   bütçesi tut** (kilit eşiği gerçek bir kaynaktır; körlemesine deneme onu harcar).
+- **403 kimlik hatası DEĞİLDİR (ek 2026-10-12):** ADT'de 403 tipik olarak kilit çakışması
+  ("currently editing"), yetki eksiği ya da CSRF token reddidir — yanlış parola değil. 403'ü kimlik
+  retry bütçesine **sayma**, parolayı yeniden deneyerek çözmeye çalışma; önce yanıt gövdesini oku.
+  Dış bir referans projede 403'ün kimlik hatası sayılmasıyla aracın kendi oturumunu düşürdüğü
+  bildiriliyor (dış kaynak; bizde ölçülmedi — DOĞRULANMADI).
 - **Genelleme:** Aynı sınıf her uzun-ömürlü süreç için geçerlidir (MCP server, daemon, dil
   sunucusu, çalışan container). *Config değişikliği ≠ davranış değişikliği* — süreç yeniden
   okuyana kadar eski dünyada yaşar.
@@ -1065,3 +1071,34 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
 - **Gate?** ⛔ HAYIR (ADR 0019 — tek vaka; önce doküman: `howto-abap-email.md` §1 + §1.1 teslim teşhisi tablosu).
 - **Referans:** `howto-abap-email.md` §1, §1.1 · prior-art: yok (çekirdekte "ortam varsayımı" sınıfı yazılı değildi;
   §1 "sabit kullanıcı gömme" kuralı aynı alanın ters yönüydü — teknik adres istisnası bu turda eklendi).
+
+### PATTERN #42: **Başlayamayan hook ENGEL DEĞİLDİR — yorumlayıcı/komut bulunamazsa araç sessizce koşar (fail-open)**
+
+- **Belirti:** `PreToolUse` guard'ı bloklaması gereken bir komutu bloklamıyor; hata mesajı yok, araç normal
+  koşuyor. Hook kaydı (debug günlüğü) bakılmadan "guard çalışıyor" sanılmaya devam ediliyor.
+- **Ölçülmüş vaka (2026-10-12, Claude Code 2.1.296, Windows, varsayılan hook kabuğu Git Bash):** scratch
+  klasörde, işaret dosyası yazıp stderr basan ve `exit 2` dönen tek bir `PreToolUse` hook'u üç biçimde kuruldu;
+  `claude -p … --max-turns 3 --allowedTools "Bash(echo:*)" --debug-file …` ile bir `echo` çağrısı istendi:
+  | Kol | Hook biçimi | Sonuç |
+  |---|---|---|
+  | A | exec: `"command": "python", "args": ["<betik>", …]` | hook koştu, `exit 2` → araç **ENGELLENDİ** |
+  | B | kabuk: `"command": "python \"<betik>\" …"` (Git Bash üzerinden) | hook koştu, `exit 2` → araç **ENGELLENDİ** |
+  | C | exec, var olmayan yorumlayıcı (`"command": "<olmayan-ad>"`) | hook **başlayamadı** → araç **KOŞTU** (işaret dosyası yazıldı) |
+  ⇒ İki biçim de bu sürümde çalışır; asıl risk **hook sürecinin hiç başlayamaması**dır ve bu durum engel
+  değil, **sessiz geçiş** olarak işlenir.
+- **Ölçülmeyenler (DOĞRULANMADI):** ① dış bir referans projenin bildirdiği "hook PowerShell kabuğunda
+  koşarsa `exit 2` → `1` olur" iddiası — varsayılan kabuk Git Bash olduğu için bu makinede kurulamadı;
+  ② exec biçimindeki `args` alanını tanımayan eski Claude Code sürümü (o sürümde `command` tek başına koşup
+  betiği hiç çağırmayabilir) — tek sürüm kurulu olduğu için **asgari sürüm sınırı ölçülemedi**, bu yüzden
+  kurulum belgesine sürüm satırı yazılmadı.
+- **Kural:** hook komutunu (yorumlayıcı adı, `args`, kabuk) değiştiren her değişiklik **A/C kontrol grubuyla**
+  ölçülür: bilinen-bloklayan payload engellenmeli (pozitif) **ve** yorumlayıcı bozulduğunda ne olduğu
+  bilinmeli. `python <guard> < payload.json` ile elle çağırmak **kablolamayı** kanıtlamaz (CLAUDE.core §4 ②).
+- **Prob reçetesi:** PATTERN #39'daki scratch kurulumu + `settings.json`'a yalnız tek prob hook'u; hook
+  betiği işaret dosyası yazar ve `exit 2` döner; her kol ayrı klasörde, `--debug-file` ile koşulur; hüküm
+  debug günlüğündeki hook satırı + işaret dosyası + aracın çıktısı **birlikte** okunarak verilir.
+- **Gate?** ⛔ HAYIR (ADR 0019) — davranış Claude Code ikilisinin içindedir ve sürümle değişebilir; reçete
+  + `ix_doctor` K1 1g yorumlayıcı kontrolü (aynı turda ayrı bir PR ile eklenir) doğru katmandır.
+- **Referans:** PATTERN #39 (gerçek Claude Code probu) · PATTERN #19 (kontrol grubu) ·
+  `claude/settings.template.json` (hook'lar exec biçiminde). prior-art: yok (çekirdekte hook başlatma
+  hatasının sonucunu ölçen kayıt bulunamadı; dış bir referans projenin exec biçimi gerekçesi fikir kaynağıdır).

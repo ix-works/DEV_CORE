@@ -455,6 +455,30 @@ Her rapor için:
 | ERR-002 | Geçersiz sipariş | "Sipariş bulunamadı: &1" | Sipariş numarasını kontrol edin |
 | ERR-003 | Onay süresi geçmiş | "Onay süresi dolmuştur" | Yeni onay talebi oluşturun |
 
+**10.2 İş İstisnaları** *(2026-10-12 — uygulanmıyorsa "Yok — gerekçe" yazılır, bölüm silinmez)*
+
+Teknik hata değil, **iş kuralının normal akışı dışında kalan durumlar**: süreç ne yapar, kim karar verir,
+işlem durur mu / kısmen mi devam eder / ertelenir mi.
+
+| # | İstisna durumu (iş dili) | Beklenen sistem davranışı | Karar veren / sonraki adım |
+|---|---|---|---|
+| EXC-001 | Ana veri eksik (ör. müşteri için gerekli eşleme tanımlı değil) | Kalem işlenmez, diğer kalemler devam eder; eksik kalem listelenir | Ana veri sorumlusu tamamlar, işlem yeniden çalıştırılır |
+| EXC-002 | Belge başka bir işlemde değişmiş | İşlem durur, kullanıcı bilgilendirilir | Kullanıcı belgeyi yeniden açar |
+
+> FS yalnız **iş davranışını** tanımlar. Mesaj numarası, mesaj sınıfı ve metin kalıbı FS'te
+> kurgulanmaz — mesaj envanteri TS **BÖLÜM 10.1**'de tasarlanır.
+
+**10.3 Paralel İşleme ve Eşzamanlılık** *(uygulanmıyorsa "Yok — gerekçe" yazılır)*
+
+Aynı veri üzerinde **aynı anda** birden fazla işlem olabiliyorsa beklenen iş davranışı kullanıcı gözüyle yazılır:
+
+- İki kullanıcı aynı belgeyi aynı anda işlemeye çalışırsa ne olur (ikincisi bekler mi, uyarı mı alır, salt-okur mu açar)?
+- Toplu iş (arka plan) çalışırken aynı kayıt çevrim içi değiştirilirse hangisi önceliklidir?
+- İşlem yarıda kalıp **yeniden çalıştırılırsa** aynı kayıt ikinci kez yaratılmamalı mı (tekrar çalıştırma güvenliği)?
+- Kısmi başarıda (100 kalemin 97'si işlendi) sonuç nasıl raporlanır, kalanlar nasıl yeniden işlenir?
+
+> Kilit nesnesi, kilit modu ve teknik çözüm TS'te (BÖLÜM 5/6) kararlaştırılır; FS beklenen davranışı tanımlar.
+
 ---
 
 ### BÖLÜM 11: TEST GEREKSİNİMLERİ
@@ -1551,6 +1575,15 @@ TS-[MODÜL]-[SIRA]_[PROGRAM_ADI]_v[VERSİYON].docx
 
 Örnek: TS-SD-001_ZSD_ONAY_v1.0.docx
 ```
+
+## 9.2a Hazır doküman şablonları (2026-10-12)
+
+| Şablon | Ne zaman | Dosya |
+|---|---|---|
+| FS özeti (yönetici/iş birimi için kısa özet; tam FS'in yerine geçmez) | FS mutabakata sunulurken | [`claude/templates/fs-ozet.md`](../claude/templates/fs-ozet.md) |
+| Entegrasyon sayfası (EDI/CPI ve benzeri mesaj tabanlı arayüzler) | Bir mesaj akışı tasarlanırken ya da teşhis edilirken | [`claude/templates/integration-sheet.md`](../claude/templates/integration-sheet.md) |
+
+Şablonlar `.md` olarak yazılır, teslimde `.pdf`'e çevrilir; `.html` ara çıktısı repoda tutulmaz.
 
 ## 9.3 Döküman Statü Akışı
 

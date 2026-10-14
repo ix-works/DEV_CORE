@@ -252,4 +252,74 @@ ENDIF.
 
 ---
 
+## 26. Harici HTTP/REST istemcisi — istek gövdesi UTF-8 BAYT olarak gönderilir (2026-10-12)
 
+> **Kapsam:** ABAP'tan **sistem dışı** bir REST uca (`cl_http_client` / `if_web_http_client`) JSON/XML
+> gövde gönderen kod. SAP-içi OData çağrısı bu bölümün konusu değildir — onun kanonik yolu `adt-rap.md` §34.
+
+**Kural:** gövde metin olarak `set_cdata` ile değil, açıkça UTF-8'e çevrilip **bayt** olarak
+(`set_data`) verilir ve `Content-Type` başlığı `charset=utf-8` taşır:
+
+```abap
+DATA(lv_xbody) = cl_abap_codepage=>convert_to( source = lv_json codepage = `UTF-8` ).
+lo_request->set_data( lv_xbody ).
+lo_request->set_header_field( i_name = 'Content-Type' i_value = 'application/json; charset=utf-8' ).
+```
+
+**Neden:** metin gövdede dönüşüm sistemin/bağlantının kod sayfasına bırakılır; Türkçe karakterler
+(`ş ğ ı İ ç ö ü`) karşı tarafta bozuk ya da `?` olarak görünebilir ve hata vermez.
+**Kanıt düzeyi:** dış kaynak bildirimi (2026-10-12) — bu evde harici REST çağrısında bozulma **ölçülmedi**
+(**DOĞRULANMADI**). İlk harici REST işinde bir Türkçe karakterli gövdeyle karşı tarafta okunarak teyit et.
+Komşu: `howto-abap-email.md` (mail gövdesinde aynı dönüşüm ailesi).
+
+---
+
+## 27. Türkçe metin, mesaj değişkeni ve büyük dizgede regex — ÖLÇÜLMÜŞ sınırlar (2026-10-12)
+
+> **Kanıt düzeyi:** S/4HANA on-premise, geliştirme sistemi, classrun, taze süreç; 2026-10-12'de ölçüldü.
+> Başka sürüm/profilde yeniden ölçülmeden genellenmez.
+
+### 27.1 `to_upper` / `to_lower` / `TRANSLATE` Türkçe harf kuralına UYMAZ
+
+| girdi | `to_upper` | `to_lower` | `TRANSLATE … TO UPPER CASE` | `TRANSLATE … TO LOWER CASE` |
+|---|---|---|---|---|
+| `i` | `I` | `i` | `I` | `i` |
+| `ı` | `I` | `ı` | `I` | `ı` |
+| `İ` | `İ` | `i` | `İ` | `i` |
+| `I` | `I` | `i` | `I` | `i` |
+
+- Sonuç oturum dili Türkçeyken, `SET LOCALE LANGUAGE 'E'` sonrasında ve Türkçeye dönüşte **birebir aynı**
+  ⇒ dönüşüm metin ortamı diline **bağlı değil**; `to_upper` ile `TRANSLATE` aynı sonucu verir.
+- **Pratik sonuç:** Türkçe metni büyük harfe çevirip karşılaştırmak `istanbul` ↔ `İSTANBUL` eşleşmesini
+  **kaçırır** (`i`→`I` olur, `İ` olduğu gibi kalır). Büyük/küçük harf duyarsız karşılaştırma gerekiyorsa iki
+  tarafı aynı fonksiyonla çevirmek yetmez; `İ/I/ı/i` dörtlüsü ayrıca normalize edilir (ör. dördünü tek bir
+  temsilciye eşleyen `TRANSLATE … USING`). Yukarıdaki dönüşüm tablosu classrun ölçümüyle doğrulandı
+  (2026-10-12); önerilen normalizasyon eşlemesi ise **ölçülmedi** — kullanmadan önce aynı yolla doğrula.
+- ⚠ `SET LOCALE LANGUAGE` `sy-langu`'yu da değiştirir — denemeden sonra geri al.
+- Kardeş (OData/UI tarafı harf sınıfı): `standards/03` ve FE kontrol listesindeki Türkçe arama notları.
+
+### 27.2 `CONV syst_msgv( … )` uzun metni SESSİZCE keser
+
+`CONV syst_msgv( lx->get_text( ) )` — 119 karakterlik istisna metni **50 karaktere** kesildi; istisna
+yok, uyarı yok. Mesaj değişkenine (`&1..&4`) uzun metin taşınacaksa ya parçalara bölünür (`msgv1..msgv4`)
+ya da metin başka bir kanalla (uygulama günlüğü, uzun metin) taşınır. Kesildiği varsayılarak ekranda
+yarım cümle kalmaması için mesaj envanterinde (std 04 TS 10.1) yer tutucunun en çok 50 karakter taşıdığı yazılır.
+
+### 27.3 `FIND REGEX … SUBMATCHES` büyük dizgede — sınır BOYUTA değil DESENE bağlı
+
+20 055 ve 40 043 karakterlik JSON, aranan alan dizgenin **sonunda**, 5 desen:
+
+| Desen | POSIX (`FIND REGEX`) | PCRE (`FIND PCRE`) |
+|---|---|---|
+| `"alan":"([^"]*)"` | 40k geçti | 40k geçti |
+| `.*"alan":"([^"]*)"` | 40k geçti | 40k geçti |
+| `^\{.*"alan":"(.*)"\}$` | 40k geçti | 40k geçti |
+| `(?:.\|\n)*"alan":"([^"]*)"` | 40k geçti | 20k geçti · **40k `CX_SY_REGEX_TOO_COMPLEX`** |
+| `\{.*?…` (tembel niceleyici; desenin tamamı bu sayfaya aktarılmadı) | **`CX_SY_INVALID_REGEX`** (POSIX'te tembel niceleyici yok) | geçti (hangi boyut(lar)da — bildirilmedi, DOĞRULANAMADI) |
+
+- Dış bir kaynağın bildirdiği sabit "32 KB sınırı" bu 5 desende **doğrulanmadı**; sorun çıkaran,
+  alternasyonlu tüm-dizge niceleyicisidir. Yalnız bu 5 desen ölçüldü — başka desenler için hüküm yoktur.
+- `FIND REGEX` (POSIX) aktivasyonda uyarı verir: *"The regex standard POSIX is deprecated"* ⇒ yeni kodda PCRE.
+- Büyük dizgede tek alan aranıyorsa en basit bağlamlı desen (`"alan":"([^"]*)"`) yeğlenir; JSON
+  ayrıştırması gerekiyorsa regex yerine JSON ayrıştırıcısı (`/ui2/cl_json` ya da sürümün released ayrıştırıcısı —
+  released durumu **DOĞRULANMADI**) düşünülür.

@@ -44,7 +44,7 @@ applies_to: [s4_private]
 
 | ID | Kontrol | Severity | Kural |
 |---|---|---|---|
-| **C-RAP-AE-01** | `as select from` YOK + `define [root] abstract entity` VAR → **abstract reçetesi** mi seçildi (view-entity araçları DEĞİL)? **MUST** olan sıra **ÜÇ** adımdır: ① POST shell → ⛔ **② FILL — `adt_push_source`/`push_object(object_type="ddls", source_file=…)` ile kaynağı DİSKTEN doldur (ZORUNLU, atlanamaz)** → ③ aktivasyon + aktif-source'ta `abstract entity` **ve** `version=active` **ve** yerel↔canlı **sha256 eşitliği** doğrula. ⚠ Adım ② atlanırsa POST **201 CREATED** döner ama source **0 karakter** kalır ve aktivasyon `SDDL_PARSER_MSG 013` ile düşer — **`201` kanıt değildir** (ölçüm: DS4/S4-2025, 2026-08-22, adım-1 tek başına **0/11**, adım-2 ile **11/11**). `create_cds_view`/`populate_cds_views` KULLANMA. | BLOCKER | `adt-cds.md` §"ABSTRACT ENTITY" (rev. 2026-08-22) + [[feedback_playbook-once-oku]] + [[feedback_inline-post-empty-source-trap]] |
+| **C-RAP-AE-01** | `as select from` YOK + `define [root] abstract entity` VAR → **abstract reçetesi** mi seçildi (view-entity araçları DEĞİL)? **MUST** olan sıra **ÜÇ** adımdır: ① POST shell → ⛔ **② FILL — `adt_push_source`/`push_object(object_type="ddls", source_file=…)` ile kaynağı DİSKTEN doldur (ZORUNLU, atlanamaz)** → ③ aktivasyon + aktif-source'ta `abstract entity` **ve** `version=active` **ve** yerel↔canlı **sha256 eşitliği** doğrula. ⚠ Adım ② atlanırsa POST **201 CREATED** döner ama source **0 karakter** kalır ve aktivasyon `SDDL_PARSER_MSG 013` ile düşer — **`201` kanıt değildir** (ölçüm: <SYS>/S4-2025, 2026-08-22, adım-1 tek başına **0/11**, adım-2 ile **11/11**). `create_cds_view`/`populate_cds_views` KULLANMA. | BLOCKER | `adt-cds.md` §"ABSTRACT ENTITY" (rev. 2026-08-22) + [[feedback_playbook-once-oku]] + [[feedback_inline-post-empty-source-trap]] |
 | **C-RAP-AE-02** | Param entity'de `@EndUserText.label` TR + alan tipleri DTEL/built-in doğrulanmış (tahmin yok)? | BLOCKER | ⛔ ADR 0005 D |
 
 ## Checklist — BDEF (rap_bdef_creation)
@@ -56,6 +56,7 @@ applies_to: [s4_private]
 | **C-RAP-BD-03** | Numbering NR objesi **kullanıcı kaynaklı** (AI NR yaratmıyor)? | BLOCKER | ⛔ ADR 0005 C |
 | **C-RAP-BD-04** | EML std tabloya yazmıyor; tek MODIFY bloğu, %cid unique, COMMIT ENTITIES yok? | BLOCKER | Playbook §29 |
 | **C-RAP-BD-05** | **MUST** — `validation`/`determination ... on save` tetikleyicisinde `update` varsa `create` de VAR mı? Tek başına `{ ... update; }` aktivasyon FAIL eder: "The trigger update is only allowed in combination with create here." Repo-geneli desen istisnasız `{ create; update; }` (ORDER/BOOKING/SEVKEMRI). `delete;` ve `create;` tek-başına serbest. (Statik regex: `on save {` bloğunda `update` var + `create` yok → BLOCKER.) | BLOCKER | RAP semantik · ZSD001_I_SE_A 2026-06-19 |
+| **C-RAP-BD-06** | BDEF `authorization master ( instance )` diyorsa behavior pool'da **`get_instance_authorizations`** handler'ı VAR mı? `( global )` ise karşılığı `get_global_authorizations`'tır — biri diğerinin yerine geçmez. Dış kaynak bildirimi: handler eksikken değişiklik isteğinde `CX_SADL_DUMP_APPL_MODEL_ERROR` kısa dökümü. ⚠ **DOĞRULANMADI** (bu evde yalnız `( global )` kullanıldı; `( instance )` dökümü bizim sistemde üretilmedi) | HIGH | RAP authorization · dış kaynak (2026-10-12) |
 
 ## Checklist — Service Binding + Publish (rap_service_binding)
 
