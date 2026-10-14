@@ -40,6 +40,13 @@ DÜZELTME TURU (bug-gate 2026-10-14) — ek bölümler
      hedefin (`"--repo" org/x` · PS ``--re`po`` · PS ``-R`org/x``) freni açmaz (main BLOK).
   Kablolama kipleri (`--mutasyon-commit-kablosuz` / `--mutasyon-pr-kablosuz`) main()
      üzerinden koşan vektörlerin dispatcher bağını ölçer (kaynak-regex testinin karşılığı).
+  Y  (tur-4) kabuğun gh'ye argüman olarak GEÇİRMEDİĞİ metin (kelime başı `#` yorum, PS
+     `<#…#>`, yönlendirme işleneni `<<<` `<` `>` `2>`, bash `\\<boşluk>` kaçışı) açık hedef ve
+     sızıntı adayı üretmez; bitişik `-R<değer>` muafiyeti token'ın KENDİ ham yazımına bağlı.
+     Y27–Y32 KATMAN vektörleri (sızıntı gate'i doğrudan; main() ucunda GH-HEDEF önce bloklar, Y33).
+  YK (tur-4 kontrol) yaygın yönlendirme (`2>&1` `> out` `2>$null` `*>$null` heredoc), tırnak
+     içi `#`/`>`, URL `#`, `a#b`, PS kelime ortası `>` ve onaylı bitişik biçim FP üretmez.
+     Kabuk gerçekliği bash 5.3 + Windows PowerShell 5.1 argv dökümüyle ölçüldü (B82e tur-4).
 
 BÖLÜMLER
   M  maskeleme/tanınmayan gerçek hedef: BLOKLANIR + gövde TARANDI (sentinel bulgusu)
@@ -79,7 +86,8 @@ SCRIPTS = REPO / "scripts"
 
 # kip -> (eski, yeni) — YALNIZ kumdaki guard kopyasına uygulanır. Yorum = düşmesi gereken.
 MUTLAR = {
-    # Karar yeniden YALNIZ eski (metin) adaydan => tüm M vektörleri KAÇAR.
+    # Karar yeniden YALNIZ eski (metin) adaydan => tüm M vektörleri KAÇAR (+ T1, P1L, M6;
+    # tur-4: Y27–Y32 — eski aday metindeki private `--repo`).
     "--mutasyon-eski-tek-aday": (
         "    for h in [eski_hay] + list(adaylar):\n",
         "    for h in [eski_hay]:\n"),
@@ -97,7 +105,8 @@ MUTLAR = {
         '_GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)R(.*)$", re.DOTALL)',
         '_GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)\\x00R(.*)$", re.DOTALL)'),
     # pflag çözümleyicisi `-R`yi tanımaz (bilinmeyen harf ⇒ kesin=False) => H5/H6/B8 BLOK olur;
-    # `-R` hedefli M1e/M2b/M4*/K11 de imza değiştirir (GH-HEDEF önce bloklar).
+    # `-R` hedefli M1e/M2b/M4*/K11 de imza değiştirir (GH-HEDEF önce bloklar). Tur-4: YK11–YK13,
+    # YK20, YK25 (onaylı/kısa biçim + yönlendirme kontrolleri) BLOK olur.
     "--mutasyon-cozumleyici-r-yok": (
         '                if ch == "R" or ch in dk:\n',
         '                if ch in dk:\n'),
@@ -108,7 +117,8 @@ MUTLAR = {
     # Aday tavanı etkisiz => T1 (6 private aday) GEÇER.
     "--mutasyon-tavan-yok": ("_HEDEF_ADAY_TAVANI = 5", "_HEDEF_ADAY_TAVANI = 99"),
     # GH-HEDEF yeniden METİNDEN (eski `_GH_A_ACIK`) => H1, H2, H4, H7b, H9, H13, H16, H17, F1h,
-    # P1, U1, U2 GEÇER; H5, B8, M4b BLOK.
+    # P1, U1, U2 GEÇER; H5, B8, M4b BLOK. Tur-4: Y22/Y23/Y33 GEÇER (yorumdaki `--repo`/`-R` metni)
+    # · YK11–YK13, YK25 BLOK.
     "--mutasyon-ghhedef-metin": (
         "    acik_bayrak = _gh_acik_bayrak(komut)\n",
         "    acik_bayrak = bool(_GH_A_ACIK.search(komut))\n"),
@@ -123,35 +133,39 @@ MUTLAR = {
     "--mutasyon-ghhedef-buyuk-kucuk": (
         '                if ch == "R" or ch in dk:\n',
         '                ch = "R" if ch == "r" else ch\n                if ch == "R" or ch in dk:\n'),
-    # Konumsal hedef yeniden METİNDEN => H3 · B4 (`--description org/x` değerdir) GEÇER.
+    # Konumsal hedef yeniden METİNDEN => H3 · B4 (`--description org/x` değerdir) · Y24/Y25
+    # (yorum / `<<<` işleneni) GEÇER.
     "--mutasyon-ghhedef-konumsal-metin": (
         '    return bool(eski and c and c["kesin"]\n'
         '                and any(_GH_KONUMSAL.fullmatch(tok) for tok in c["konumsal"]))\n',
         "    return eski\n"),
     # F1: açık hedef yeniden BAĞIMSIZ token taramasından (değer tüketmez) => F1c · F1d · F1h · P1
-    # GEÇER (biçim `bitisik` etiketlenir: bitişik freni tek başına F1c/F1d'yi tutamaz).
+    # GEÇER (biçim `bitisik` etiketlenir: bitişik freni tek başına F1c/F1d'yi tutamaz). Tur-4
+    # ölçümü: bitişik freni artık çözümleyicide (ham yazım) olduğu için mutant onu da atlar ⇒
+    # F1a–F1h, P1, B3, B5–B7, Y9, Y15–Y21 düşer.
     "--mutasyon-ghhedef-bagimsiz-tarama": (
         '    gercek = [(v, b) for v, b in c["repolar"]\n'
         '              if b != "kume" and v and not any(x.isspace() for x in v)]\n',
         '    gercek = [(v, "bitisik") for v in _gh_repo_degerleri(seg, kesin=True)]\n'),
     # main'in metin deseni freni yok => B3 (PowerShell ``--re`po``, metinde görünmeyen hedef) ·
-    # B5 · B6 · B7 GEÇER.
+    # B5 · B6 · B7 · Y15–Y21 GEÇER.
     "--mutasyon-ghhedef-eski-desen-yok": (
         '    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) or bitisik))\n',
         '    return bool(c["kesin"] and gercek)\n'),
     # Tur-3: bitişik muafiyeti yeniden METİN deseninden (gerçek token'a bağlı değil) =>
-    # B5 (`"--repo" org/x -t '-Rx'`) · B6 (PS ``--re`po`` + başlıkta `-Rfoo`) · B7 (PS ``-R`org/x``) GEÇER.
+    # B5 (`"--repo" org/x -t '-Rx'`) · B6 (PS ``--re`po`` + başlıkta `-Rfoo`) · B7 (PS ``-R`org/x``)
+    # · Y15–Y21 (tur-4 tuzak + O3) GEÇER.
     "--mutasyon-bitisik-metin-freni": (
         '    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) or bitisik))\n',
         '    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) '
         'or _GH_BITISIK_R.search(seg)))\n'),
     # KABLOLAMA (tur-3): dispatcher sızıntı fonksiyonunu çağırmaz => tüm CM vektörleri (M2, M2c,
-    # M3*, M5*, K3, K6, K8, K14, Q1, Q4, Q5, F3, F3c) KAÇAR. Kaynak-regex testinin davranışsal karşılığı.
+    # M3*, M5*, K3, K6, K8, K14, Q1, Q4, Q5, F3, F3c, YK23) KAÇAR. Kaynak-regex testinin davranışsal karşılığı.
     "--mutasyon-commit-kablosuz": (
         "        sorun = _iki_lehce(lehce, _git_commit_public_leak, komut, ham)\n",
         "        sorun = _iki_lehce(lehce, lambda *a: '', komut, ham)\n"),
     # KABLOLAMA (tur-3): PUBLIC-PR gate'i çağrılmaz => main() üzerinden koşan PR vektörleri
-    # (M1*, Q2, Q3, Q6, Q7, Q10–Q14, M6 …) KAÇAR; P1L (gate doğrudan) DÜŞMEZ (beklenen).
+    # (M1*, Q2, Q3, Q6, Q7, Q10–Q14, M6, YK22 …) KAÇAR; P1L ve Y27–Y32 (gate doğrudan) DÜŞMEZ (beklenen).
     "--mutasyon-pr-kablosuz": (
         "        sorun = _iki_lehce(lehce, _gh_pr_public_leak, komut, ham)\n",
         "        sorun = _iki_lehce(lehce, lambda *a: '', komut, ham)\n"),
@@ -170,15 +184,56 @@ MUTLAR = {
     "--mutasyon-yayin-token-yok": (
         '    c = _gh_bayrak_cozumle(komut) if _LEHCE != "eski" else None\n',
         "    c = None\n"),
-    # Lehçe kolu yok (yalnız eski model) => Q1, Q2, Q3, Q4, Q6, Q10–Q13 KAÇAR.
+    # Lehçe kolu yok (yalnız eski model) => Q1, Q2, Q3, Q4, Q6, Q10–Q13, Y27–Y32 KAÇAR.
     "--mutasyon-iki-lehce-yok": (
         '    for l in dict.fromkeys(("eski", lehce)):\n',
         '    for l in ("eski",):\n'),
-    # Bash tırnak dışı `\'` kaçışı yok (kelime bölücü) => Q1, Q2, Q3 KAÇAR; F2a/F2b/F2d FP döner.
+    # Bash tırnak dışı `\'` kaçışı yok (kelime bölücü) => Q1, Q2, Q3 KAÇAR; F2a/F2b/F2d FP döner;
+    # tur-4: `\<boşluk>` da kaçış değil olur => Y3, Y5, Y29.
     "--mutasyon-bash-kacis-yok": (
-        '        if lehce == "bash" and c == "\\\\" and i + 1 < n and s[i + 1] in "\'\\"\\\\":\n'
+        '        if lehce == "bash" and c == "\\\\" and i + 1 < n and s[i + 1] in _BASH_HARF_KACIS:\n'
         '            cur.append(',
         '        if False:\n            cur.append('),
+    # ── tur-4 kipleri: kabuğun argüman saymadığı metin ──────────────────────────────────
+    # Tırnaksız kelime başı `#` yorum sayılmaz => Y1 Y4 Y6 Y15 Y22–Y24 Y27 Y28 Y31–Y33 düşer.
+    "--mutasyon-yorum-yok": (
+        '            if c == "#":\n                break',
+        '            if False:\n                break'),
+    # PowerShell `<#…#>` blok yorumu yok => YK25 (blok yorumdan sonraki gerçek argüman kaybolur:
+    # FP). Y10 DÜŞMEZ: `<` kelime başı işleç + `#` satır yorumu onu ikinci katmanda korur.
+    "--mutasyon-ps-blok-yorum-yok": (
+        '            if lehce == "ps" and s.startswith("<#", i):\n                j = s.find("#>", i + 2)\n'
+        '                i = n if j < 0 else j + 2',
+        '            if False:\n                j = s.find("#>", i + 2)\n'
+        '                i = n if j < 0 else j + 2'),
+    # Bash `\<boşluk>` kaçışı yok (kelimeyi böler) => Y3 Y5 Y29.
+    "--mutasyon-kacisli-bosluk-yok": (
+        "_BASH_HARF_KACIS = \"'\\\"\\\\ \\t#<>\"",
+        "_BASH_HARF_KACIS = \"'\\\"\\\\#<>\""),
+    # Bash yönlendirme işleneni argüman sayılır => Y2 Y7 Y8 Y9 Y17 Y25 Y30.
+    "--mutasyon-bash-yonlendirme-yok": (
+        '        if lehce == "bash" and c in "<>":\n',
+        '        if False:\n'),
+    # Bash fd öneki (`2>`) kelime sayılır => Y9 (`-t 2` değer alır, `-Rorg/x` hedef olur).
+    "--mutasyon-fd-yok": (
+        "            if cur and not tirnak_gordu and k.isdigit():\n",
+        "            if False:\n"),
+    # PowerShell kelime başı yönlendirme yok => Y11 Y12.
+    "--mutasyon-ps-yonlendirme-yok": (
+        '            m = _YONL_PS.match(s, i) if lehce == "ps" else None\n',
+        "            m = None\n"),
+    # Segmentleyici yorumu bilmez (yorumdaki apostrof tırnak açar) => Y26.
+    "--mutasyon-segment-yorum-yok": (
+        '        if yeni and not q and kb and c == "#":\n',
+        '        if False:\n'),
+    # Bitişik muafiyetinin metin şartı segmentin TAMAMINDA aranır (önceki tur) => Y15 Y16 Y17.
+    "--mutasyon-bitisik-segment-metni": (
+        '                                    ("-R" + v) in th[i][1] and _GH_BITISIK_DEGER.fullmatch(v)):\n',
+        '                                    ("-R" + v) in seg and _GH_BITISIK_DEGER.fullmatch(v)):\n'),
+    # Bitişik değerde karakter sınıfı yok => Y18 Y19.
+    "--mutasyon-bitisik-deger-serbest": (
+        '_GH_BITISIK_DEGER = re.compile(r"[\\w.:/-]+")',
+        '_GH_BITISIK_DEGER = re.compile(r".+")'),
     # ANSI-C `$'…'` yok => Q4 KAÇAR; F2c FP döner.
     "--mutasyon-ansi-c-yok": (
         '        if lehce == "bash" and c == "$" and i + 1 < n and s[i + 1] == "\'":\n'
@@ -188,7 +243,9 @@ MUTLAR = {
     "--mutasyon-ps-tirnak-ici-backtick-yok": (
         '                    if q == \'"\' and ch == "`" and i + 1 < n:\n',
         '                    if False:\n'),
-    # PowerShell tırnak dışı backtick kaçışı yok => Q13 KAÇAR; B7 geçer (``-R`org/x`` → `-Rorg/x`).
+    # PowerShell tırnak dışı backtick kaçışı yok => Q13 KAÇAR. Tur-4: B7 artık DÜŞMEZ — token
+    # ``-R`org/x`` kalır, değer sınıfı (`_GH_BITISIK_DEGER`) backtick'i reddeder (B7'yi
+    # `--mutasyon-bitisik-metin-freni` ölçer).
     "--mutasyon-ps-tirnak-disi-backtick-yok": (
         '        if lehce == "ps" and c == "`" and i + 1 < n:\n            cur.append(',
         '        if False:\n            cur.append('),
@@ -394,6 +451,111 @@ VEKTORLER = [
      "gh pr create -t t -b b \"-Rorg/x\"", 0),
     ("M6 -t -R <public> --repo <private> (fazla aday: bayat tabloya sigorta)", "priv", "Bash",
      f"gh pr create -t -R org/public-core -b '{S}' --repo org/private-proj", PR),
+    # ── Y (tur-4): kabuğun gh'ye ARGÜMAN olarak geçirmediği metin hedef/aday üretmez ──────
+    # (yorum · yönlendirme işleneni · `\<boşluk>`). Ölçülen main (f762cf6) / önceki tur (0324d2b):
+    # Y1–Y19 main BLOK / önceki tur GEÇER (Bulgu-1 · tuzak) · Y20/Y21 (O3) ikisinde de BLOK ·
+    # Y22–Y26 main GEÇER / önceki tur GEÇER (G10 · çok satır) · Y27–Y32 sızıntı gate'i ikisinde de
+    # TARAMIYORDU (Bulgu-2) · Y33 ikisinde de rc 0. YK: YK11–YK13/YK25 main BLOK (onaylı bitişik
+    # gevşeme), kalan YK üçünde de aynı sonuç.
+    ("Y1 bash yorum # -Rorg/x (release delete)", "priv", "Bash",
+     "gh release delete v1 --yes # -Rorg/x", GH),
+    ("Y2 bash <<< -Rorg/x (here-string isleneni)", "priv", "Bash",
+     "gh pr create -t x -b b <<< -Rorg/x", GH),
+    ("Y3 bash -t \\<bosluk>-Rorg/x (kacisli bosluk degerin parcasi)", "priv", "Bash",
+     f"gh pr create -t {BS} -Rorg/x -b b", GH),
+    ("Y4 3.BAGLAM PowerShell yorum # -Rorg/x", "priv", "PowerShell",
+     "gh pr create -t x -b b # -Rorg/x", GH),
+    ("Y5 bash -H\\<bosluk>-Rorg/x (head degeri)", "priv", "Bash",
+     f"gh pr create -H{BS} -Rorg/x -t x -b b", GH),
+    ("Y6 bash issue close yorum", "priv", "Bash", "gh issue close 5 # -Rorg/x", GH),
+    ("Y7 bash < -Rorg/x", "priv", "Bash", "gh pr create -t x -b b < -Rorg/x", GH),
+    ("Y8 bash > -Rorg/x", "priv", "Bash", "gh pr create -t x -b b > -Rorg/x", GH),
+    ("Y9 bash fd: -t 2>x -Rorg/x (-t degeri -Rorg/x olur)", "priv", "Bash",
+     "gh pr create -t 2>x -Rorg/x -b b", GH),
+    ("Y10 3.BAGLAM PowerShell blok yorum <# -Rorg/x #>", "priv", "PowerShell",
+     "gh pr create -t x -b b <# -Rorg/x #>", GH),
+    ("Y11 3.BAGLAM PowerShell > -Rorg/x", "priv", "PowerShell",
+     "gh pr create -t x -b b > -Rorg/x", GH),
+    ("Y12 3.BAGLAM PowerShell 2> -Rorg/x", "priv", "PowerShell",
+     "gh pr create -t x -b b 2> -Rorg/x", GH),
+    ("Y15 tuzak: -R''org/x + yorumda -Rorg/x", "priv", "Bash",
+     "gh pr create -R''org/x -t x -b b # -Rorg/x", GH),
+    ("Y16 tuzak: -R''org/x + baslikta ' -Rorg/x'", "priv", "Bash",
+     "gh pr create -R''org/x -t ' -Rorg/x' -b b", GH),
+    ("Y17 tuzak: -R\"org/x\" + <<< -Rorg/x", "priv", "Bash",
+     "gh pr create -R\"org/x\" -t x -b b <<< -Rorg/x", GH),
+    ("Y18 -R\\org/x (deger duz degil; main BLOK)", "priv", "Bash",
+     f"gh pr create -R{BS}org/x -t x -b b", GH),
+    ("Y19 -R$REPO (ikame; main BLOK)", "priv", "Bash", "gh pr create -R$REPO -t x -b b", GH),
+    ("Y20 O3 bash -R''org/x (metin sarti, B7 esdegeri)", "priv", "Bash",
+     "gh pr create -R''org/x -t t -b b", GH),
+    ("Y21 O3 bash -R\"org/x\"", "priv", "Bash", "gh pr create -R\"org/x\" -t t -b b", GH),
+    ("Y22 G10 yorumda --repo org/x (main GECIRIYORDU)", "priv", "Bash",
+     "gh release delete v1 --yes # --repo org/x", GH),
+    ("Y23 G10 pr create yorumda --repo", "priv", "Bash", "gh pr create -t x -b b # --repo org/x", GH),
+    ("Y24 G10 repo delete yorumda konumsal org/x", "priv", "Bash", "gh repo delete --yes # org/x", GH),
+    ("Y25 G10 repo edit <<< org/x (isleneni konumsal degil)", "priv", "Bash",
+     "gh repo edit -d x <<< org/x", GH),
+    ("Y26 cok satir: yorumdaki apostrof sonraki satirin gh'sini yutmaz", "priv", "Bash",
+     "gh pr create --repo org/x -t x -b b # it's\ngh pr create -t y -b \"c'\"", GH),
+    ("Y27 KATMAN Bulgu-2 yorumda -R<private>, kok public", "pub", "Bash:pr-gate",
+     f"gh pr create -t x -b '{S} bkz --repo org/private-proj' # -Rorg/private-proj", PR),
+    ("Y28 KATMAN Bulgu-2 yorumda --repo <private>", "pub", "Bash:pr-gate",
+     f"gh pr create -t x -b '{S} bkz --repo org/private-proj' # --repo org/private-proj", PR),
+    ("Y29 KATMAN Bulgu-2 \\<bosluk>-R<private>", "pub", "Bash:pr-gate",
+     f"gh pr create -t {BS} -Rorg/private-proj -b '{S} bkz --repo org/private-proj'", PR),
+    ("Y30 KATMAN Bulgu-2 <<< -R<private>", "pub", "Bash:pr-gate",
+     f"gh pr create -t x -b '{S} bkz --repo org/private-proj' <<< -Rorg/private-proj", PR),
+    ("Y31 KATMAN 3.BAGLAM PowerShell Bulgu-2 yorum", "pub", "PowerShell:pr-gate",
+     f"gh pr create -t x -b '{S} bkz --repo org/private-proj' # -Rorg/private-proj", PR),
+    ("Y32 KATMAN Bulgu-2 issue comment yorum", "pub", "Bash:pr-gate",
+     f"gh issue comment 5 -b '{S} --repo org/private-proj' # -Rorg/private-proj", PR),
+    ("Y33 Bulgu-2 main() ucu: GH-HEDEF bloklar", "pub", "Bash",
+     f"gh pr create -t x -b '{S} bkz --repo org/private-proj' # -Rorg/private-proj", GH),
+    # ── YK (tur-4 kontrol): yaygın yönlendirme / tırnak içi `#` / onaylı biçim — FP YOK ──
+    ("YK1 --repo + 2>&1", "priv", "Bash", "gh pr create --repo org/x -t x -b b 2>&1", 0),
+    ("YK2 --repo + > out.txt", "priv", "Bash", "gh pr create --repo org/x -t x -b b > out.txt", 0),
+    ("YK3 --repo + 2>/dev/null | tee", "priv", "Bash",
+     "gh pr create --repo org/x -t x -b b 2>/dev/null | tee log", 0),
+    ("YK4 3.BAGLAM PowerShell --repo + 2>$null", "priv", "PowerShell",
+     "gh pr create --repo org/x -t x -b b 2>$null", 0),
+    ("YK5 3.BAGLAM PowerShell --repo + *>$null", "priv", "PowerShell",
+     "gh pr create --repo org/x -t x -b b *>$null", 0),
+    ("YK6 --body-file - + heredoc", "priv", "Bash",
+     "gh pr create --repo org/x -t x --body-file - <<'B'\nhi\nB", 0),
+    ("YK7 tirnak ici # (baslik/govde)", "priv", "Bash",
+     "gh pr create --repo org/x -t 'Fix #12' -b \"issue #5\"", 0),
+    ("YK8 3.BAGLAM PowerShell tirnak ici #", "priv", "PowerShell",
+     "gh pr create --repo org/x -t 'Fix #12' -b \"issue #5\"", 0),
+    ("YK9 URL ici #", "priv", "Bash",
+     "gh pr create --repo org/x -t x -b https://github.com/org/x/pull/1#issuecomment-1", 0),
+    ("YK10 tirnak ici > (--title \"a > b\")", "priv", "Bash",
+     "gh pr create --repo org/x --title \"a > b\" -b b", 0),
+    ("YK11 onayli bitisik + 2>&1", "priv", "Bash", "gh pr create -Rorg/x -t x -b b 2>&1", 0),
+    ("YK12 onayli bitisik + > out + yorum", "priv", "Bash",
+     "gh pr create -Rorg/x -t x -b b > out.txt # not", 0),
+    ("YK13 3.BAGLAM PowerShell onayli bitisik + 2>$null + blok yorum", "priv", "PowerShell",
+     "gh pr create -Rorg/x -t x -b b 2>$null <# not #>", 0),
+    ("YK25 3.BAGLAM PowerShell blok yorumdan SONRAKI arguman gercektir", "priv", "PowerShell",
+     "gh pr create -t x <# not #> -b b -Rorg/x", 0),
+    ("YK14 repo delete konumsal + 2>&1", "priv", "Bash", "gh repo delete --yes org/x 2>&1", 0),
+    ("YK15 repo edit konumsal + > /dev/null", "priv", "Bash",
+     "gh repo edit org/x --description d > /dev/null", 0),
+    ("YK16 tirnaksiz a#b (yorum degil)", "priv", "Bash", "gh pr create --repo org/x -t a#b -b b", 0),
+    ("YK17 \\# kacisi (yorum degil)", "priv", "Bash", f"gh pr create --repo org/x -t x -b {BS}#5", 0),
+    ("YK18 cok satir yorumdaki apostrof + okuma komutu", "priv", "Bash",
+     "gh pr create --repo org/x -t x -b b # it's ok\ngh pr list", 0),
+    ("YK19 3.BAGLAM PowerShell kelime ortasi > yonlendirme DEGIL", "priv", "PowerShell",
+     "gh pr create --repo org/x -t a>b -b b", 0),
+    ("YK20 -R org/x + 2>err (kisa bicim)", "priv", "Bash", "gh pr create -R org/x -t x -b b 2>err.txt", 0),
+    ("YK21 notes tirnak ici '> #' + 1>/dev/null", "priv", "Bash",
+     "gh release create v1 --repo org/x --notes 'a > b # c' 1>/dev/null", 0),
+    ("YK22 sizinti: public hedef + 2>&1 => govde TARANIR", "pub", "Bash",
+     f"gh pr create --repo org/public-core -t x -b '{S}' 2>&1", PR),
+    ("YK23 sizinti: commit + > /dev/null 2>&1 => mesaj TARANIR", "pub", "Bash",
+     f"git commit -m '{S}' > /dev/null 2>&1", CM),
+    ("YK24 sizinti: commit mesajinda tirnak ici # (kok private)", "priv", "Bash",
+     f"git commit -m 'Fix #12 {S}' 2>&1", 0),
 ]
 
 _SURUCU = r'''
@@ -424,9 +586,10 @@ for v in json.load(open(vek_yolu, encoding="utf-8")):
     sys.stderr, sys.stdin = e, io.StringIO(json.dumps(
         {"tool_name": v["tool"], "tool_input": {"command": v["komut"]}}))
     try:
-        if v["tool"] == "Bash:pr-gate":       # KATMAN vektoru: yalniz sizinti gate'i
+        if v["tool"].endswith(":pr-gate"):    # KATMAN vektoru: yalniz sizinti gate'i
             m._GORUNURLUK.clear()
-            sorun = m._iki_lehce("bash", m._gh_pr_public_leak, v["komut"], v["komut"])
+            lehce = "ps" if v["tool"].startswith("PowerShell") else "bash"
+            sorun = m._iki_lehce(lehce, m._gh_pr_public_leak, v["komut"], v["komut"])
             e.write(("PUBLIC-PR SIZINTI GATE: " + sorun) if sorun else "")
             rc = 2 if sorun else 0
         else:

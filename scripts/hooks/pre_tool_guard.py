@@ -177,6 +177,28 @@ _LEHCE = "eski"
 _ANSI_C = {"n": "\n", "t": "\t", "r": "\r", "'": "'", '"': '"', "\\": "\\"}
 _PS_KACIS = {"n": "\n", "t": "\t", "r": "\r"}
 
+# ── KABUĞUN ARGÜMAN SAYMADIĞI METİN (repo-maskeleme tur-4, 2026-10-14) ─────────────────
+# VAKA (bug-gate BLOCKER, lider bağımsız teyit, ölçüldü): bash/ps lehçesi tırnaksız yorumu,
+# `\<boşluk>` kaçışını ve yönlendirme işlenenini modellemiyordu ⇒ kabuğun gh'ye HİÇ
+# geçirmediği `-R<org>/<repo>` metni açık hedef sayılıyordu: `gh release delete v1 --yes
+# # -R<org>/<repo>` · `gh pr create -t x -b b <<< -R<org>/<repo>` · `-t \ -R<org>/<repo>`
+# (main rc 2 → önceki tur rc 0). Sızıntı yönünde aynı kör nokta: yorumdaki private `-R`
+# gerçek hedef sanılıyor, cwd adayı eklenmiyor, gövde taranmıyordu (main ve önceki tur rc 0).
+# Kabuk gerçekliği (ölçüldü: GNU bash 5.3.9 · Windows PowerShell 5.1, argv dökümüyle):
+#   yorum   : kelime BAŞINDA tırnaksız `#` satır sonuna kadar yorumdur (`a#b`, `'x'#y`, URL
+#             içi `#` yorum DEĞİL) · PS ayrıca kelime başında `<#…#>` blok yorum.
+#   bash    : tırnaksız `\X` X'i harf yapar — burada yalnız boşluk/sekme/`#`/`<`/`>` eklendi
+#             (diğerleri bilerek eski: Windows yolu `C:\IX`) · HER tırnaksız `<`/`>`
+#             yönlendirmedir, kelime ortasında da (`a>b` → argv `a`); hemen önündeki TÜMÜ
+#             RAKAM kelime fd numarasıdır (`2>x`, `x2>y` değil) · işlenen bir sonraki kelime.
+#   ps      : `\` kaçış değil · yönlendirme YALNIZ kelime başında (`-t a>f` → argv `a>f`):
+#             `>` `>>` `n>` `*>` · kelime başı `<` ayrıştırma hatasıdır (komut koşmaz).
+# İşlenensiz operatör (segment sonu: `2>&1` `&`'de, `<(…)` `(`'de bölünür) eskisi gibi
+# TOKEN kalır — bu turdan önceki davranış (FP üretmesin). Lehçe `eski` DEĞİŞMEZ.
+_YONL_BASH = re.compile(r"<<<|<<-|<<|<>|>>|<|>")
+_YONL_PS = re.compile(r"[0-9*]?>>?|<")
+_BASH_HARF_KACIS = "'\"\\ \t#<>"
+
 
 def _kelimeler(s: str, lehce: str = None) -> list:
     """Tırnak-duyarlı kelime bölme. `--m="a b"` → tek kelime (`--m=a b`).
@@ -186,12 +208,70 @@ def _kelimeler(s: str, lehce: str = None) -> list:
     guard'ın girdisi keyfi/kirli metindir, ayrıştırıcı ASLA patlamamalı.
     `lehce` verilmezse `_LEHCE` (bkz. KABUK LEHÇESİ).
     """
+    return [k for k, _ in _kelimeler_ham(s, lehce)]
+
+
+def _kelimeler_ham(s: str, lehce: str = None) -> list:
+    """`_kelimeler` + her kelimenin komut metnindeki HAM yazımı: [(kelime, ham)].
+
+    Ham yazım, bir muafiyeti metne değil onu DOĞURAN token'ın kendi kaynağına bağlamak
+    içindir (bitişik `-R<değer>` freni, tur-4). bash/ps lehçesinde yorum, yönlendirme
+    işleneni ve `\\<boşluk>` kabuğun yaptığı gibi ele alınır (bkz. yukarıdaki blok)."""
     lehce = lehce or _LEHCE
-    kelimeler, cur, tirnak_gordu = [], [], False
-    i, n = 0, len(s or "")
+    s = s or ""
+    yeni = lehce in ("bash", "ps")
+    kelimeler, cur, tirnak_gordu, bas = [], [], False, None
+    yonl = None                       # işleneni beklenen yönlendirme: (metin, başlangıç)
+    i, n = 0, len(s)
+
+    def bitir(son: int) -> None:
+        nonlocal cur, tirnak_gordu, bas, yonl
+        if cur or tirnak_gordu:
+            if yonl is not None:
+                yonl = None           # yönlendirme işleneni: argüman DEĞİL
+            else:
+                kelimeler.append(("".join(cur), s[bas:son]))
+        cur, tirnak_gordu, bas = [], False, None
+
+    def yonlendirme(metin: str, bas_: int) -> None:
+        nonlocal yonl
+        if yonl is not None:          # işlenensiz önceki operatör (kabukta sözdizimi hatası)
+            kelimeler.append((yonl[0], yonl[0]))
+        yonl = (metin, bas_)
+
     while i < n:
         c = s[i]
-        if lehce == "bash" and c == "\\" and i + 1 < n and s[i + 1] in "'\"\\":
+        if yeni and not cur and not tirnak_gordu:
+            if c == "#":
+                break                 # yorum: segmentin kalanı argüman değil
+            if lehce == "ps" and s.startswith("<#", i):
+                j = s.find("#>", i + 2)
+                i = n if j < 0 else j + 2
+                continue
+            m = _YONL_PS.match(s, i) if lehce == "ps" else None
+            if m:
+                yonlendirme(m.group(0), i)
+                i = m.end()
+                continue
+        if lehce == "bash" and c in "<>":
+            m = _YONL_BASH.match(s, i)
+            k = "".join(cur)
+            if cur and not tirnak_gordu and k.isdigit():
+                metin, bas_ = k + m.group(0), bas     # fd numarası operatöre aittir
+                cur, bas = [], None
+            else:
+                bitir(i)
+                metin, bas_ = m.group(0), i
+            yonlendirme(metin, bas_)
+            i = m.end()
+            continue
+        if c.isspace():
+            bitir(i)
+            i += 1
+            continue
+        if bas is None:
+            bas = i
+        if lehce == "bash" and c == "\\" and i + 1 < n and s[i + 1] in _BASH_HARF_KACIS:
             cur.append(s[i:i + 2] if s[i + 1] == "\\" else s[i + 1])
             i += 2
             continue
@@ -245,16 +325,11 @@ def _kelimeler(s: str, lehce: str = None) -> list:
                 i += 1
             i += 1                      # kapanış tırnağı (yoksa dizge sonu)
             continue
-        if c.isspace():
-            if cur or tirnak_gordu:
-                kelimeler.append("".join(cur))
-                cur, tirnak_gordu = [], False
-            i += 1
-            continue
         cur.append(c)
         i += 1
-    if cur or tirnak_gordu:
-        kelimeler.append("".join(cur))
+    bitir(min(i, n))
+    if yonl is not None:              # işlenensiz operatör: eskisi gibi token (FP üretmesin)
+        kelimeler.append((yonl[0], yonl[0]))
     return kelimeler
 
 
@@ -269,8 +344,25 @@ def _segmentler(s: str, lehce: str = None) -> list:
     lehce = lehce or _LEHCE
     segler, buf = [], []
     i, n, q = 0, len(s or ""), ""
+    yeni, kb = lehce in ("bash", "ps"), True        # kb: kelime başı (tur-4 yorum modeli)
     while i < n:
         c = s[i]
+        # Tur-4: yorum içindeki tırnak/ayraç segment sınırı ÇİZMEZ (ölçüldü: `… # it's`
+        # satırındaki apostrof eskiden tırnak açıp SONRAKİ satırın hedefsiz gh'sini yutuyordu;
+        # bash o satırı ayrı komut olarak koşar). Yorum metni segmentte kalır; ayraç değildir.
+        if yeni and not q and kb and c == "#":
+            j = s.find("\n", i)
+            j = n if j < 0 else j
+            buf.append(s[i:j])
+            i = j
+            continue
+        if yeni and not q and kb and lehce == "ps" and s.startswith("<#", i):
+            j = s.find("#>", i + 2)
+            j = n if j < 0 else j + 2
+            buf.append(s[i:j])
+            i, kb = j, False
+            continue
+        kb = (not q) and (c.isspace() or c in _SEG_AYRAC_KARAKTER)
         if q:
             buf.append(c)
             if lehce == "ps" and c == q and i + 1 < n and s[i + 1] == q:
@@ -287,7 +379,7 @@ def _segmentler(s: str, lehce: str = None) -> list:
                 i += 1
             i += 1
             continue
-        if lehce == "bash" and c == "\\" and i + 1 < n and s[i + 1] in "'\"\\":
+        if lehce == "bash" and c == "\\" and i + 1 < n and s[i + 1] in _BASH_HARF_KACIS:
             buf.append(s[i:i + 2])
             i += 2
             continue
@@ -501,15 +593,17 @@ _GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)R(.*)$", re.DOTALL)
 _GH_KONUMSAL = re.compile(r"[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*")
 
 
-def _gh_komut_tokenlari(seg: str):
-    """`gh` komut konumundaysa ondan SONRAKİ token'lar; değilse None."""
-    t = _kelimeler(seg)
+def _gh_komut_tokenlari(seg: str, ham: bool = False):
+    """`gh` komut konumundaysa ondan SONRAKİ token'lar; değilse None.
+    `ham=True`: [(token, ham yazım)] (bkz. `_kelimeler_ham`)."""
+    th = _kelimeler_ham(seg)
+    t = [k for k, _ in th]
     i = 0
     while i < len(t) and _ATAMA.match(t[i]):
         i += 1
     if i >= len(t) or t[i].replace("\\", "/").rsplit("/", 1)[-1].lower() not in ("gh", "gh.exe"):
         return None
-    return t[i + 1:]
+    return th[i + 1:] if ham else t[i + 1:]
 
 
 # ── gh BAYRAK TABLOSU (repo-maskeleme düzeltme turu, 2026-10-14) ─────────────────────
@@ -713,6 +807,7 @@ def _gh_tablo_ac(alan: str) -> tuple:
 _GH_BAYRAK = {anahtar: _gh_tablo_ac(d) + _gh_tablo_ac(b)
               for anahtar, (d, b) in _GH_BAYRAK_TABLOSU.items()}
 _GH_BITISIK_R = re.compile(r"(?<![\w-])-R[^\s=]")
+_GH_BITISIK_DEGER = re.compile(r"[\w.:/-]+")
 
 
 def _gh_bayrak_cozumle(seg: str):
@@ -722,9 +817,10 @@ def _gh_bayrak_cozumle(seg: str):
     Biçim: uzun (`--repo X`) · esit (`--repo=X`) · kisa (`-R X` / `-R=X`) · bitisik (`-RX`)
     · kume (`-dR X` / `-dRX`). `kesin` = alt-komut tabloda VE her bayrak/harf tanındı VE
     değer alan her bayrağın değeri var."""
-    t = _gh_komut_tokenlari(seg)
-    if t is None:
+    th = _gh_komut_tokenlari(seg, ham=True)
+    if th is None:
         return None
+    t = [k for k, _ in th]
     giris, bas = None, min(len(t), 2)
     if len(t) >= 2:
         g, a = t[0].lower(), t[1].lower()
@@ -779,6 +875,12 @@ def _gh_bayrak_cozumle(seg: str):
                     if v is not None:
                         if ch == "R":
                             bicim = "kume" if k else ("kisa" if (esit or not kalan) else "bitisik")
+                            # Tur-4: onaylı bitişik biçim token'ın KENDİ ham yazımında birebir
+                            # `-R<değer>` olmalı (segmentin başka yerindeki yorum/işlenen/başlık
+                            # metni sayılmaz) ve değer düz `[\w.:/-]` (kaçış/ikame/tırnak yok).
+                            if bicim == "bitisik" and not (
+                                    ("-R" + v) in th[i][1] and _GH_BITISIK_DEGER.fullmatch(v)):
+                                bicim = "bitisik-dolayli"
                             repolar.append((v, bicim))
                         else:
                             degerler.setdefault(dk[ch], []).append(v)
@@ -806,14 +908,18 @@ def _gh_acik_bayrak(seg: str) -> bool:
     ⛔ Bitişik muafiyeti METİN deseniyle (`-R[^\\s=]` herhangi bir yerde) VERİLMEZ (tur-3
     düzeltmesi, ölçüldü): gerçek hedef `"--repo" org/x` iken başlıktaki `-t '-Rx'` metni
     freni açıyordu ⇒ main'in blokladığı biçim onaysız geçiyordu. Muafiyet, muafiyeti
-    DOĞURAN token'a bağlıdır."""
+    DOĞURAN token'a bağlıdır.
+    ⛔ Tur-4: "metinde birebir" = token'ın KENDİ ham yazımında (biçim `bitisik`, bkz.
+    `_gh_bayrak_cozumle`); segmentin herhangi bir yeri DEĞİL — `-R''org/x … # -Rorg/x`
+    (yorum) · `-R"org/x" … <<< -Rorg/x` (işlenen) · `-t ' -Rorg/x'` (başlık) metni freni
+    açıyordu (main rc 2 → önceki tur rc 0, ölçüldü). Kabuğun gh'ye geçirmediği metin
+    (yorum, yönlendirme işleneni) token bile değildir (`_kelimeler_ham`)."""
     c = _gh_bayrak_cozumle(seg)
     if c is None:
         return bool(_GH_A_ACIK.search(seg or ""))
     gercek = [(v, b) for v, b in c["repolar"]
               if b != "kume" and v and not any(x.isspace() for x in v)]
-    bitisik = any(b == "bitisik" and _GH_BITISIK_R.search("-R" + v) and ("-R" + v) in seg
-                  for v, b in gercek)
+    bitisik = any(b == "bitisik" and _GH_BITISIK_R.search("-R" + v) for v, b in gercek)
     return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) or bitisik))
 
 
