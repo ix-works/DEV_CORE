@@ -22,8 +22,9 @@ DÜZELTME (ölçülen değişmezler)
   · GH-HEDEF: açık hedef yalnız pflag çözümlemesinin GERÇEK `--repo`/`-R` değerinden
     (değer alan bayrak bir sonraki token'ı tüketir — `-t "--repo"` başlıktır); küme yok,
     boşluklu değer hedef değil, `-r` reviewer; çözümleme kesin değilse (tabloda olmayan
-    alt-komut / tanınmayan bayrak) blok; main'in metin deseni de tutmalı. ⚠GEVŞETME
-    (kullanıcı onaylı 2026-10-14): `-Rorg/x` bitişik biçim açık hedeftir (H5).
+    alt-komut / tanınmayan bayrak) blok; main'in metin deseni de tutmalı. Bitişik `-Rorg/x`
+    açık hedef DEĞİL (1.–4. turdaki onaylı gevşeme GERİ ALINDI, kullanıcı zarar-kesme kararı
+    2026-10-14 — GA bölümü); sızıntı gate'inde bitişik değer ADAY olarak kalır (M4g).
 
 DÜZELTME TURU (bug-gate 2026-10-14) — ek bölümler
   Q  kabuk lehçesi: Bash `'\''` · `$'…'` · PowerShell backtick/`''` kaçışından SONRAKİ
@@ -35,18 +36,23 @@ DÜZELTME TURU (bug-gate 2026-10-14) — ek bölümler
   P  kesin gerçek hedef yoksa cwd aday kümesine girer (P1L: KATMAN vektörü — GH-HEDEF önce
      blokladığı için sızıntı gate'i doğrudan çağrılır; savunma derinliği katman başına).
   U  bayrak tablosu bayatlığı gevşetme üretmez (tabloda olmayan alt-komut / bayrak = blok).
-  B5–B8 (tur-3) bitişik muafiyeti, muafiyeti DOĞURAN gerçek `-R<değer>` token'ına ve metinde
-     birebir `-R<değer>` yazımına bağlıdır — başlıktaki `-Rx` metni başka biçimli gerçek
-     hedefin (`"--repo" org/x` · PS ``--re`po`` · PS ``-R`org/x``) freni açmaz (main BLOK).
+  B5–B8 (tur-3) başlıktaki `-Rx` metni başka biçimli gerçek hedefin (`"--repo" org/x` · PS
+     ``--re`po`` · PS ``-R`org/x``) freni açmaz (main BLOK); tur-5'ten beri B8 de BLOK.
   Kablolama kipleri (`--mutasyon-commit-kablosuz` / `--mutasyon-pr-kablosuz`) main()
      üzerinden koşan vektörlerin dispatcher bağını ölçer (kaynak-regex testinin karşılığı).
   Y  (tur-4) kabuğun gh'ye argüman olarak GEÇİRMEDİĞİ metin (kelime başı `#` yorum, PS
      `<#…#>`, yönlendirme işleneni `<<<` `<` `>` `2>`, bash `\\<boşluk>` kaçışı) açık hedef ve
-     sızıntı adayı üretmez; bitişik `-R<değer>` muafiyeti token'ın KENDİ ham yazımına bağlı.
+     sızıntı adayı üretmez.
      Y27–Y32 KATMAN vektörleri (sızıntı gate'i doğrudan; main() ucunda GH-HEDEF önce bloklar, Y33).
   YK (tur-4 kontrol) yaygın yönlendirme (`2>&1` `> out` `2>$null` `*>$null` heredoc), tırnak
-     içi `#`/`>`, URL `#`, `a#b`, PS kelime ortası `>` ve onaylı bitişik biçim FP üretmez.
+     içi `#`/`>`, URL `#`, `a#b`, PS kelime ortası `>` FP üretmez (YK11–YK13/YK25 tur-5'ten beri
+     BLOK: bitişik biçim; blok-yorum FP kontrolü YK26'ya taşındı).
      Kabuk gerçekliği bash 5.3 + Windows PowerShell 5.1 argv dökümüyle ölçüldü (B82e tur-4).
+  GA (tur-5, GERİ ALMA) bug-gate BLOCKER vektörleri: kabuğun/gh'nin `-R` olarak YORUMLAMADIĞI
+     bitişik token — bash'te Python'un boşluk saydığı 16 karakter (NBSP, CR, VT, FF, U+2000…),
+     PS CR, PS akıllı tırnak, PS 5.1 boş argüman düşürme (`-b ""`/`''`/`--body ""`). Hepsi BLOK
+     (main gibi). GA-S1/GA-S2: bitişik tek gerçek hedef + başlıkta metin hedefi ⇒ BLOK (main
+     GEÇİRİYORDU — sıkılaşma; bitişik filtresi katmanının KENDİ vektörü).
 
 BÖLÜMLER
   M  maskeleme/tanınmayan gerçek hedef: BLOKLANIR + gövde TARANDI (sentinel bulgusu)
@@ -87,7 +93,8 @@ SCRIPTS = REPO / "scripts"
 # kip -> (eski, yeni) — YALNIZ kumdaki guard kopyasına uygulanır. Yorum = düşmesi gereken.
 MUTLAR = {
     # Karar yeniden YALNIZ eski (metin) adaydan => tüm M vektörleri KAÇAR (+ T1, P1L, M6;
-    # tur-4: Y27–Y32 — eski aday metindeki private `--repo`).
+    # tur-4: Y27–Y32 — eski aday metindeki private `--repo`). Tur-5: M4b artık GH-HEDEF'te
+    # bloklanır (düşmez); bitişik adayı KATMAN vektörü M4g ölçer.
     "--mutasyon-eski-tek-aday": (
         "    for h in [eski_hay] + list(adaylar):\n",
         "    for h in [eski_hay]:\n"),
@@ -95,7 +102,7 @@ MUTLAR = {
     "--mutasyon-eski-aday-yok": (
         "    for h in [eski_hay] + list(adaylar):\n",
         "    for h in list(adaylar):\n"),
-    # gh gerçek bayrak adayı yok (yalnız api yolu) => M1*, M2b, M4*.
+    # gh gerçek bayrak adayı yok (yalnız api yolu) => M1*, M2b, M4/M4c–M4g (M4b hariç), T1, M6.
     "--mutasyon-gh-bayrak-adayi-yok": (
         "    repolar = _gh_repo_degerleri(seg) + gercek + ([api_repo] if api_repo else [])\n",
         "    repolar = [api_repo] if api_repo else []\n"),
@@ -104,9 +111,9 @@ MUTLAR = {
     "--mutasyon-kisa-r-yok": (
         '_GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)R(.*)$", re.DOTALL)',
         '_GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)\\x00R(.*)$", re.DOTALL)'),
-    # pflag çözümleyicisi `-R`yi tanımaz (bilinmeyen harf ⇒ kesin=False) => H5/H6/B8 BLOK olur;
-    # `-R` hedefli M1e/M2b/M4*/K11 de imza değiştirir (GH-HEDEF önce bloklar). Tur-4: YK11–YK13,
-    # YK20, YK25 (onaylı/kısa biçim + yönlendirme kontrolleri) BLOK olur.
+    # pflag çözümleyicisi `-R`yi tanımaz (bilinmeyen harf ⇒ kesin=False) => H6 · YK20 (kısa biçim
+    # kontrolleri) BLOK olur; `-R` hedefli M1e/M2b/M4/M4c–M4e/K11 imza değiştirir (GH-HEDEF önce
+    # bloklar) · GA-K2 (`-R org/x` kontrolü). Tur-5: H5/B8/YK11–YK13/YK25 artık her durumda BLOK.
     "--mutasyon-cozumleyici-r-yok": (
         '                if ch == "R" or ch in dk:\n',
         '                if ch in dk:\n'),
@@ -117,16 +124,18 @@ MUTLAR = {
     # Aday tavanı etkisiz => T1 (6 private aday) GEÇER.
     "--mutasyon-tavan-yok": ("_HEDEF_ADAY_TAVANI = 5", "_HEDEF_ADAY_TAVANI = 99"),
     # GH-HEDEF yeniden METİNDEN (eski `_GH_A_ACIK`) => H1, H2, H4, H7b, H9, H13, H16, H17, F1h,
-    # P1, U1, U2 GEÇER; H5, B8, M4b BLOK. Tur-4: Y22/Y23/Y33 GEÇER (yorumdaki `--repo`/`-R` metni)
-    # · YK11–YK13, YK25 BLOK.
+    # P1, U1, U2 GEÇER. Tur-4: Y22/Y23/Y33 GEÇER (yorumdaki `--repo`/`-R` metni). Tur-5: H17b,
+    # Y9b, Y11b, Y12b, GA-S1, GA-S2 GEÇER (metin deseni tutar); bitişik vektörler main gibi BLOK
+    # kalır (main de bloklar — bu kip onları ÖLÇMEZ, `--mutasyon-bitisik-geri-ac` ölçer).
     "--mutasyon-ghhedef-metin": (
         "    acik_bayrak = _gh_acik_bayrak(komut)\n",
         "    acik_bayrak = bool(_GH_A_ACIK.search(komut))\n"),
     # Küme biçimi açık hedef sayılır => H7b GEÇER (H7'yi metin-deseni freni de tutar —
     # iki katman, katman başına ayrı vektör: H7b'de metin deseni başlıktaki `-R y`'den tutar).
     "--mutasyon-ghhedef-kume": (
-        'if b != "kume" and v and', 'if v and'),
-    # Boşluklu değer hedef sayılır => H17 (konumsal `"-R org/x"`) GEÇER.
+        'if b not in ("kume", "bitisik") and v and', 'if b not in ("bitisik",) and v and'),
+    # Boşluklu değer hedef sayılır => H17b (`"--repo=org/x y"`) GEÇER. Tur-5: H17 DÜŞMEZ —
+    # `"-R org/x"` bitişik biçim de olduğu için bitişik filtresi ikinci katmanda tutar.
     "--mutasyon-ghhedef-bosluk": (
         " and not any(x.isspace() for x in v)]\n", "]\n"),
     # `-r` (reviewer) `-R` sayılır => H4 GEÇER.
@@ -139,33 +148,41 @@ MUTLAR = {
         '    return bool(eski and c and c["kesin"]\n'
         '                and any(_GH_KONUMSAL.fullmatch(tok) for tok in c["konumsal"]))\n',
         "    return eski\n"),
-    # F1: açık hedef yeniden BAĞIMSIZ token taramasından (değer tüketmez) => F1c · F1d · F1h · P1
-    # GEÇER (biçim `bitisik` etiketlenir: bitişik freni tek başına F1c/F1d'yi tutamaz). Tur-4
-    # ölçümü: bitişik freni artık çözümleyicide (ham yazım) olduğu için mutant onu da atlar ⇒
-    # F1a–F1h, P1, B3, B5–B7, Y9, Y15–Y21 düşer.
+    # F1: açık hedef yeniden BAĞIMSIZ token taramasından (değer tüketmez, biçim filtresi yok) =>
+    # F1h · P1 · Y9b · GA-S1 · GA-S2 GEÇER. F1a–F1g, B3, B5–B7 DÜŞMEZ (çift katman: metin freni
+    # `_GH_A_ACIK` ya da bitişik biçimin kesin kipte de taranması onları tutar).
     "--mutasyon-ghhedef-bagimsiz-tarama": (
-        '    gercek = [(v, b) for v, b in c["repolar"]\n'
-        '              if b != "kume" and v and not any(x.isspace() for x in v)]\n',
-        '    gercek = [(v, "bitisik") for v in _gh_repo_degerleri(seg, kesin=True)]\n'),
+        '    gercek = [v for v, b in c["repolar"]\n'
+        '              if b not in ("kume", "bitisik") and v and not any(x.isspace() for x in v)]\n',
+        '    gercek = _gh_repo_degerleri(seg, kesin=True)\n'),
     # main'in metin deseni freni yok => B3 (PowerShell ``--re`po``, metinde görünmeyen hedef) ·
-    # B5 · B6 · B7 · Y15–Y21 GEÇER.
+    # B5 · B6 GEÇER. Tur-5: B7 ve Y15–Y21 DÜŞMEZ (bitişik filtresi ikinci katman).
     "--mutasyon-ghhedef-eski-desen-yok": (
-        '    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) or bitisik))\n',
+        '    return bool(c["kesin"] and gercek and _GH_A_ACIK.search(seg))\n',
         '    return bool(c["kesin"] and gercek)\n'),
-    # Tur-3: bitişik muafiyeti yeniden METİN deseninden (gerçek token'a bağlı değil) =>
-    # B5 (`"--repo" org/x -t '-Rx'`) · B6 (PS ``--re`po`` + başlıkta `-Rfoo`) · B7 (PS ``-R`org/x``)
-    # · Y15–Y21 (tur-4 tuzak + O3) GEÇER.
-    "--mutasyon-bitisik-metin-freni": (
-        '    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) or bitisik))\n',
-        '    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) '
-        'or _GH_BITISIK_R.search(seg)))\n'),
+    # ── tur-5 (GERİ ALMA) kipleri ─────────────────────────────────────────────────────
+    # Bitişik muafiyeti GERİ GELİR (tur-4'ün ham-yazım freni de olmadan: biçim `bitisik` +
+    # metin freni yerine VEYA) => M4b H5 B7 B8 Y15–Y21 YK11–YK13 YK25 · GA-B (16 karakterin
+    # 16'sı) GA-B2–GA-B5 · GA-P1–GA-P6 GA-P8 GA-P9 · GA-E1–GA-E4 · GA-S1 GA-S2 GEÇER (49).
+    # GA-P7 DÜŞMEZ: `'y -Rorg/x’` lehçe modelinde tırnaklı (boşluklu) tek değer kalır.
+    "--mutasyon-bitisik-geri-ac": (
+        '              if b not in ("kume", "bitisik") and v and not any(x.isspace() for x in v)]\n'
+        '    return bool(c["kesin"] and gercek and _GH_A_ACIK.search(seg))\n',
+        '              if b != "kume" and v and not any(x.isspace() for x in v)]\n'
+        '    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg)\n'
+        '                or any(b == "bitisik" for _, b in c["repolar"])))\n'),
+    # Yalnız bitişik FİLTRESİ katmanı yok (metin freni durur) => GA-S1 · GA-S2 GEÇER (tek gerçek
+    # hedef bitişik + başlıkta metin hedefi). Diğer bitişik vektörleri metin freni tutar.
+    "--mutasyon-bitisik-filtre-yok": (
+        'if b not in ("kume", "bitisik") and v and', 'if b != "kume" and v and'),
     # KABLOLAMA (tur-3): dispatcher sızıntı fonksiyonunu çağırmaz => tüm CM vektörleri (M2, M2c,
     # M3*, M5*, K3, K6, K8, K14, Q1, Q4, Q5, F3, F3c, YK23) KAÇAR. Kaynak-regex testinin davranışsal karşılığı.
     "--mutasyon-commit-kablosuz": (
         "        sorun = _iki_lehce(lehce, _git_commit_public_leak, komut, ham)\n",
         "        sorun = _iki_lehce(lehce, lambda *a: '', komut, ham)\n"),
     # KABLOLAMA (tur-3): PUBLIC-PR gate'i çağrılmaz => main() üzerinden koşan PR vektörleri
-    # (M1*, Q2, Q3, Q6, Q7, Q10–Q14, M6, YK22 …) KAÇAR; P1L ve Y27–Y32 (gate doğrudan) DÜŞMEZ (beklenen).
+    # (M1*, Q2, Q3, Q6, Q7, Q10–Q14, M6, YK22 …) KAÇAR; P1L, M4g ve Y27–Y32 (gate doğrudan)
+    # DÜŞMEZ (beklenen).
     "--mutasyon-pr-kablosuz": (
         "        sorun = _iki_lehce(lehce, _gh_pr_public_leak, komut, ham)\n",
         "        sorun = _iki_lehce(lehce, lambda *a: '', komut, ham)\n"),
@@ -189,36 +206,38 @@ MUTLAR = {
         '    for l in dict.fromkeys(("eski", lehce)):\n',
         '    for l in ("eski",):\n'),
     # Bash tırnak dışı `\'` kaçışı yok (kelime bölücü) => Q1, Q2, Q3 KAÇAR; F2a/F2b/F2d FP döner;
-    # tur-4: `\<boşluk>` da kaçış değil olur => Y3, Y5, Y29.
+    # tur-4: `\<boşluk>` da kaçış değil olur => Y29 (tur-5: Y3/Y5 bitişik — artık düşmez).
     "--mutasyon-bash-kacis-yok": (
         '        if lehce == "bash" and c == "\\\\" and i + 1 < n and s[i + 1] in _BASH_HARF_KACIS:\n'
         '            cur.append(',
         '        if False:\n            cur.append('),
     # ── tur-4 kipleri: kabuğun argüman saymadığı metin ──────────────────────────────────
-    # Tırnaksız kelime başı `#` yorum sayılmaz => Y1 Y4 Y6 Y15 Y22–Y24 Y27 Y28 Y31–Y33 düşer.
+    # Tırnaksız kelime başı `#` yorum sayılmaz => Y22–Y24 Y27 Y28 Y31 Y32 düşer (tur-5: Y1 Y4 Y6
+    # Y15 Y33 yorumdaki bitişik `-R` — bitişik artık hiçbir yerde açık hedef değil, düşmez).
     "--mutasyon-yorum-yok": (
         '            if c == "#":\n                break',
         '            if False:\n                break'),
-    # PowerShell `<#…#>` blok yorumu yok => YK25 (blok yorumdan sonraki gerçek argüman kaybolur:
+    # PowerShell `<#…#>` blok yorumu yok => YK26 (blok yorumdan sonraki gerçek `--repo` kaybolur:
     # FP). Y10 DÜŞMEZ: `<` kelime başı işleç + `#` satır yorumu onu ikinci katmanda korur.
     "--mutasyon-ps-blok-yorum-yok": (
         '            if lehce == "ps" and s.startswith("<#", i):\n                j = s.find("#>", i + 2)\n'
         '                i = n if j < 0 else j + 2',
         '            if False:\n                j = s.find("#>", i + 2)\n'
         '                i = n if j < 0 else j + 2'),
-    # Bash `\<boşluk>` kaçışı yok (kelimeyi böler) => Y3 Y5 Y29.
+    # Bash `\<boşluk>` kaçışı yok (kelimeyi böler) => Y29 (tur-5: Y3/Y5 bitişik — düşmez).
     "--mutasyon-kacisli-bosluk-yok": (
         "_BASH_HARF_KACIS = \"'\\\"\\\\ \\t#<>\"",
         "_BASH_HARF_KACIS = \"'\\\"\\\\#<>\""),
-    # Bash yönlendirme işleneni argüman sayılır => Y2 Y7 Y8 Y9 Y17 Y25 Y30.
+    # Bash yönlendirme işleneni argüman sayılır => Y9b Y25 Y30 (tur-5: Y2 Y7 Y8 Y9 Y17 bitişik —
+    # düşmez).
     "--mutasyon-bash-yonlendirme-yok": (
         '        if lehce == "bash" and c in "<>":\n',
         '        if False:\n'),
-    # Bash fd öneki (`2>`) kelime sayılır => Y9 (`-t 2` değer alır, `-Rorg/x` hedef olur).
+    # Bash fd öneki (`2>`) kelime sayılır => Y9b (`-t 2` değer alır, `--repo org/x` hedef olur).
     "--mutasyon-fd-yok": (
         "            if cur and not tirnak_gordu and k.isdigit():\n",
         "            if False:\n"),
-    # PowerShell kelime başı yönlendirme yok => Y11 Y12.
+    # PowerShell kelime başı yönlendirme yok => Y11b Y12b (tur-5: Y11/Y12 bitişik — düşmez).
     "--mutasyon-ps-yonlendirme-yok": (
         '            m = _YONL_PS.match(s, i) if lehce == "ps" else None\n',
         "            m = None\n"),
@@ -226,14 +245,6 @@ MUTLAR = {
     "--mutasyon-segment-yorum-yok": (
         '        if yeni and not q and kb and c == "#":\n',
         '        if False:\n'),
-    # Bitişik muafiyetinin metin şartı segmentin TAMAMINDA aranır (önceki tur) => Y15 Y16 Y17.
-    "--mutasyon-bitisik-segment-metni": (
-        '                                    ("-R" + v) in th[i][1] and _GH_BITISIK_DEGER.fullmatch(v)):\n',
-        '                                    ("-R" + v) in seg and _GH_BITISIK_DEGER.fullmatch(v)):\n'),
-    # Bitişik değerde karakter sınıfı yok => Y18 Y19.
-    "--mutasyon-bitisik-deger-serbest": (
-        '_GH_BITISIK_DEGER = re.compile(r"[\\w.:/-]+")',
-        '_GH_BITISIK_DEGER = re.compile(r".+")'),
     # ANSI-C `$'…'` yok => Q4 KAÇAR; F2c FP döner.
     "--mutasyon-ansi-c-yok": (
         '        if lehce == "bash" and c == "$" and i + 1 < n and s[i + 1] == "\'":\n'
@@ -243,9 +254,8 @@ MUTLAR = {
     "--mutasyon-ps-tirnak-ici-backtick-yok": (
         '                    if q == \'"\' and ch == "`" and i + 1 < n:\n',
         '                    if False:\n'),
-    # PowerShell tırnak dışı backtick kaçışı yok => Q13 KAÇAR. Tur-4: B7 artık DÜŞMEZ — token
-    # ``-R`org/x`` kalır, değer sınıfı (`_GH_BITISIK_DEGER`) backtick'i reddeder (B7'yi
-    # `--mutasyon-bitisik-metin-freni` ölçer).
+    # PowerShell tırnak dışı backtick kaçışı yok => Q13 KAÇAR. B7 DÜŞMEZ: ``-R`org/x`` hangi
+    # biçimde çözülürse çözülsün bitişik biçim açık hedef değildir (tur-5).
     "--mutasyon-ps-tirnak-disi-backtick-yok": (
         '        if lehce == "ps" and c == "`" and i + 1 < n:\n            cur.append(',
         '        if False:\n            cur.append('),
@@ -303,7 +313,9 @@ VEKTORLER = [
      f"git commit -m 'bkz --repo org/private-proj {S}'", CM),
     ("M4 -R public, proje koku private", "priv", "Bash",
      f"gh pr create -R org/public-core -t t -b '{S}'", PR),
-    ("M4b -Rorg/public bitisik", "priv", "Bash",
+    ("M4b -Rorg/public bitisik: main() ucunda GH-HEDEF bloklar (tur-5 GERI ALINDI)", "priv", "Bash",
+     f"gh pr create -Rorg/public-core -t t -b '{S}'", GH),
+    ("M4g KATMAN bitisik -Rorg/public sizinti ADAYI kalir (gate dogrudan)", "priv", "Bash:pr-gate",
      f"gh pr create -Rorg/public-core -t t -b '{S}'", PR),
     ("M4c -R=org/public", "priv", "Bash", f"gh pr create -R=org/public-core -t t -b '{S}'", PR),
     ("M4d issue comment -R public", "priv", "Bash",
@@ -353,7 +365,8 @@ VEKTORLER = [
     ("H2 pr merge subject'te -R", "priv", "Bash", "gh pr merge 5 --squash --subject 'x -R org/x'", GH),
     ("H3 repo edit description'da org/x", "priv", "Bash", "gh repo edit --description 'bkz org/x'", GH),
     ("H4 -r reviewer (buyuk/kucuk harf)", "priv", "Bash", "gh pr create -r someone -t t -b b", GH),
-    ("H5 -Rorg/x bitisik (GEVSETME: FP kalkar)", "priv", "Bash", "gh pr create -Rorg/x -t t -b b", 0),
+    ("H5 -Rorg/x bitisik (tur-5 GERI ALINDI: main gibi BLOK)", "priv", "Bash",
+     "gh pr create -Rorg/x -t t -b b", GH),
     ("H6 -R=org/x", "priv", "Bash", "gh pr create -R=org/x -t t -b b", 0),
     ("H7 -dR kume (eskisi gibi BLOK)", "priv", "Bash", "gh pr create -dR org/x -t t -b b", GH),
     ("H7b -dR kume + baslikta '-R y' (metin freni tutar, kume filtresi bloklar)", "priv", "Bash",
@@ -372,6 +385,10 @@ VEKTORLER = [
      'gh pr merge 5 --squash --subject "-R org/x"', GH),
     ("H17 konumsal \"-R org/x\" (bosluklu deger, main GECIRIYORDU)", "priv", "Bash",
      'gh pr merge 5 --squash "-R org/x"', GH),
+    # Tur-5: H17 artık bitişik filtresine de takılır (çift katman) ⇒ boşluk filtresinin KENDİ
+    # vektörü: bitişik olmayan tek token `"--repo=org/x y"` (metin deseni `--repo=org/x`'ten tutar).
+    ("H17b tek token \"--repo=org/x y\" (bosluklu deger; main GECIRIYORDU)", "priv", "Bash",
+     'gh pr merge 5 --squash "--repo=org/x y"', GH),
     # ── Q: kabuk lehçesi (bug-gate 2026-10-14, iki kol) ─────────────────────
     ("Q1 kol a: commit -m 'it'\\''s <iz>'", "pub", "Bash", f"git commit -m 'it{KQ}s {S}'", CM),
     ("Q2 kol b: -b 'it'\\''s <iz>'", "priv", "Bash",
@@ -447,16 +464,16 @@ VEKTORLER = [
      f"gh pr create --re{BT}po org/x -t '-Rfoo' -b b", GH),
     ("B7 3.BAGLAM PowerShell -R`org/x (metinde -Rorg/x yok; main BLOK)", "priv", "PowerShell",
      f"gh pr create -R{BT}org/x -t t -b b", GH),
-    ("B8 \"-Rorg/x\" tek token (onayli bitisik bicim, kontrol)", "priv", "Bash",
-     "gh pr create -t t -b b \"-Rorg/x\"", 0),
+    ("B8 \"-Rorg/x\" tek token (tur-5: bitisik main gibi BLOK)", "priv", "Bash",
+     "gh pr create -t t -b b \"-Rorg/x\"", GH),
     ("M6 -t -R <public> --repo <private> (fazla aday: bayat tabloya sigorta)", "priv", "Bash",
      f"gh pr create -t -R org/public-core -b '{S}' --repo org/private-proj", PR),
     # ── Y (tur-4): kabuğun gh'ye ARGÜMAN olarak geçirmediği metin hedef/aday üretmez ──────
     # (yorum · yönlendirme işleneni · `\<boşluk>`). Ölçülen main (f762cf6) / önceki tur (0324d2b):
     # Y1–Y19 main BLOK / önceki tur GEÇER (Bulgu-1 · tuzak) · Y20/Y21 (O3) ikisinde de BLOK ·
     # Y22–Y26 main GEÇER / önceki tur GEÇER (G10 · çok satır) · Y27–Y32 sızıntı gate'i ikisinde de
-    # TARAMIYORDU (Bulgu-2) · Y33 ikisinde de rc 0. YK: YK11–YK13/YK25 main BLOK (onaylı bitişik
-    # gevşeme), kalan YK üçünde de aynı sonuç.
+    # TARAMIYORDU (Bulgu-2) · Y33 ikisinde de rc 0. YK: YK11–YK13/YK25 main BLOK (tur-4'te onaylı
+    # bitişik gevşemeyle geçiyordu; tur-5'te GERİ ALINDI, yeniden BLOK), kalan YK üçünde de aynı.
     ("Y1 bash yorum # -Rorg/x (release delete)", "priv", "Bash",
      "gh release delete v1 --yes # -Rorg/x", GH),
     ("Y2 bash <<< -Rorg/x (here-string isleneni)", "priv", "Bash",
@@ -472,12 +489,22 @@ VEKTORLER = [
     ("Y8 bash > -Rorg/x", "priv", "Bash", "gh pr create -t x -b b > -Rorg/x", GH),
     ("Y9 bash fd: -t 2>x -Rorg/x (-t degeri -Rorg/x olur)", "priv", "Bash",
      "gh pr create -t 2>x -Rorg/x -b b", GH),
+    # Tur-5: bitişik artık hiçbir biçimde açık hedef değil ⇒ fd modelinin kendi vektörü `--repo`
+    # ile (`-t`'nin değeri `--repo` olur, `org/x` konumsal; main metinden GEÇİRİYORDU).
+    ("Y9b bash fd: -t 2>x --repo org/x (-t degeri --repo olur)", "priv", "Bash",
+     "gh pr create -t 2>x --repo org/x -b b", GH),
     ("Y10 3.BAGLAM PowerShell blok yorum <# -Rorg/x #>", "priv", "PowerShell",
      "gh pr create -t x -b b <# -Rorg/x #>", GH),
     ("Y11 3.BAGLAM PowerShell > -Rorg/x", "priv", "PowerShell",
      "gh pr create -t x -b b > -Rorg/x", GH),
     ("Y12 3.BAGLAM PowerShell 2> -Rorg/x", "priv", "PowerShell",
      "gh pr create -t x -b b 2> -Rorg/x", GH),
+    # Tur-5: PS yönlendirme modelinin kendi vektörleri `--repo` ile (işlenen `--repo`, `org/x`
+    # konumsal kalır; main metinden GEÇİRİYORDU).
+    ("Y11b 3.BAGLAM PowerShell > --repo org/x", "priv", "PowerShell",
+     "gh pr create -t x -b b > --repo org/x", GH),
+    ("Y12b 3.BAGLAM PowerShell 2> --repo org/x", "priv", "PowerShell",
+     "gh pr create -t x -b b 2> --repo org/x", GH),
     ("Y15 tuzak: -R''org/x + yorumda -Rorg/x", "priv", "Bash",
      "gh pr create -R''org/x -t x -b b # -Rorg/x", GH),
     ("Y16 tuzak: -R''org/x + baslikta ' -Rorg/x'", "priv", "Bash",
@@ -512,7 +539,7 @@ VEKTORLER = [
      f"gh issue comment 5 -b '{S} --repo org/private-proj' # -Rorg/private-proj", PR),
     ("Y33 Bulgu-2 main() ucu: GH-HEDEF bloklar", "pub", "Bash",
      f"gh pr create -t x -b '{S} bkz --repo org/private-proj' # -Rorg/private-proj", GH),
-    # ── YK (tur-4 kontrol): yaygın yönlendirme / tırnak içi `#` / onaylı biçim — FP YOK ──
+    # ── YK (tur-4 kontrol): yaygın yönlendirme / tırnak içi `#` — FP YOK (bitişik: BLOK) ──
     ("YK1 --repo + 2>&1", "priv", "Bash", "gh pr create --repo org/x -t x -b b 2>&1", 0),
     ("YK2 --repo + > out.txt", "priv", "Bash", "gh pr create --repo org/x -t x -b b > out.txt", 0),
     ("YK3 --repo + 2>/dev/null | tee", "priv", "Bash",
@@ -531,13 +558,15 @@ VEKTORLER = [
      "gh pr create --repo org/x -t x -b https://github.com/org/x/pull/1#issuecomment-1", 0),
     ("YK10 tirnak ici > (--title \"a > b\")", "priv", "Bash",
      "gh pr create --repo org/x --title \"a > b\" -b b", 0),
-    ("YK11 onayli bitisik + 2>&1", "priv", "Bash", "gh pr create -Rorg/x -t x -b b 2>&1", 0),
-    ("YK12 onayli bitisik + > out + yorum", "priv", "Bash",
-     "gh pr create -Rorg/x -t x -b b > out.txt # not", 0),
-    ("YK13 3.BAGLAM PowerShell onayli bitisik + 2>$null + blok yorum", "priv", "PowerShell",
-     "gh pr create -Rorg/x -t x -b b 2>$null <# not #>", 0),
-    ("YK25 3.BAGLAM PowerShell blok yorumdan SONRAKI arguman gercektir", "priv", "PowerShell",
-     "gh pr create -t x <# not #> -b b -Rorg/x", 0),
+    ("YK11 bitisik + 2>&1 (tur-5: BLOK)", "priv", "Bash", "gh pr create -Rorg/x -t x -b b 2>&1", GH),
+    ("YK12 bitisik + > out + yorum (tur-5: BLOK)", "priv", "Bash",
+     "gh pr create -Rorg/x -t x -b b > out.txt # not", GH),
+    ("YK13 3.BAGLAM PowerShell bitisik + 2>$null + blok yorum (tur-5: BLOK)", "priv", "PowerShell",
+     "gh pr create -Rorg/x -t x -b b 2>$null <# not #>", GH),
+    ("YK25 3.BAGLAM PowerShell blok yorum sonrasi bitisik (tur-5: BLOK)", "priv", "PowerShell",
+     "gh pr create -t x <# not #> -b b -Rorg/x", GH),
+    ("YK26 3.BAGLAM PowerShell blok yorumdan SONRAKI --repo gercektir", "priv", "PowerShell",
+     "gh pr create -t x <# not #> -b b --repo org/x", 0),
     ("YK14 repo delete konumsal + 2>&1", "priv", "Bash", "gh repo delete --yes org/x 2>&1", 0),
     ("YK15 repo edit konumsal + > /dev/null", "priv", "Bash",
      "gh repo edit org/x --description d > /dev/null", 0),
@@ -556,6 +585,66 @@ VEKTORLER = [
      f"git commit -m '{S}' > /dev/null 2>&1", CM),
     ("YK24 sizinti: commit mesajinda tirnak ici # (kok private)", "priv", "Bash",
      f"git commit -m 'Fix #12 {S}' 2>&1", 0),
+]
+
+# ── GA (tur-5, GERİ ALMA): bug-gate 4. tur BLOCKER vektörleri ────────────────────────────
+# Kaynak: bug-gate korpusu (vek_t4b · canlı PE sondası), hedef `org/x`'e genelleştirildi.
+# Ölçülen main (f762cf6) rc 2 / tur-4 (8d99edf) rc 0. Karakterler `\u` kaçışıyla üretilir
+# (kaynakta görünmez karakter yok).
+# (1) bash: Python `str.isspace()` boşluk sayar, bash kelime ayırıcı saymaz ⇒ `y<X>-Rorg/x`
+#     bash'te TEK argümandır (gövde değeri), hedef cwd. 16 karakter:
+_GA_BOSLUK = [("NBSP", "\u00a0"), ("CR", "\r"), ("VT", "\x0b"), ("FF", "\x0c"),
+              ("x1c", "\x1c"), ("x1f", "\x1f"), ("NEL", "\x85"), ("u1680", "\u1680"),
+              ("u2000", "\u2000"), ("u2007", "\u2007"), ("u200a", "\u200a"),
+              ("u2028", "\u2028"), ("u2029", "\u2029"), ("u202f", "\u202f"),
+              ("u205f", "\u205f"), ("u3000", "\u3000")]
+VEKTORLER += [(f"GA-B {ad} bash -b y<{ad}>-Rorg/x (tek arguman)", "priv", "Bash",
+               f"gh pr merge 5 --squash -b y{ch}-Rorg/x", GH) for ad, ch in _GA_BOSLUK]
+VEKTORLER += [
+    ("GA-B2 NBSP pr create", "priv", "Bash", "gh pr create -t x -b y\u00a0-Rorg/x", GH),
+    ("GA-B3 NBSP release delete --cleanup-tag", "priv", "Bash",
+     "gh release delete v1 --yes --cleanup-tag\u00a0-Rorg/x", GH),
+    ("GA-B4 NBSP issue close -c", "priv", "Bash", "gh issue close 5 -c y\u00a0-Rorg/x", GH),
+    ("GA-B5 CR issue close -c", "priv", "Bash", "gh issue close 5 -c y\r-Rorg/x", GH),
+    # (2) PowerShell 5.1: CR deyim sonu (`-Rorg/x` ayrı deyim) · akıllı tırnak tırnaktır.
+    ("GA-P1 3.BAGLAM PowerShell CR", "priv", "PowerShell", "gh pr merge 5 --squash -b y\r-Rorg/x", GH),
+    ("GA-P2 3.BAGLAM PowerShell CR issue close", "priv", "PowerShell",
+     "gh issue close 5 -c y\r-Rorg/x", GH),
+    ("GA-P3 3.BAGLAM PowerShell NBSP", "priv", "PowerShell",
+     "gh pr merge 5 --squash -b y\u00a0-Rorg/x", GH),
+    ("GA-P4 3.BAGLAM PowerShell akilli cift tirnak", "priv", "PowerShell",
+     "gh pr merge 5 --squash -b \u201cy -Rorg/x \u201d", GH),
+    ("GA-P5 3.BAGLAM PowerShell akilli tek tirnak", "priv", "PowerShell",
+     "gh pr merge 5 --squash -b \u2018y -Rorg/x \u2019", GH),
+    ("GA-P6 3.BAGLAM PowerShell karisik tirnak (akilli ac, duz kapa)", "priv", "PowerShell",
+     "gh pr merge 5 --squash -b \u2018y -Rorg/x'", GH),
+    ("GA-P7 3.BAGLAM PowerShell karisik tirnak (duz ac, akilli kapa)", "priv", "PowerShell",
+     "gh pr merge 5 --squash -b 'y -Rorg/x\u2019", GH),
+    ("GA-P8 3.BAGLAM PowerShell alt-9 tirnak", "priv", "PowerShell",
+     "gh pr merge 5 --squash -b \u201ey -Rorg/x \u201c", GH),
+    ("GA-P9 3.BAGLAM PowerShell akilli tirnak issue close", "priv", "PowerShell",
+     "gh issue close 5 -c \u201cy -Rorg/x \u201d", GH),
+    # (3) PowerShell 5.1 boş argümanı DÜŞÜRÜR: `-b "" -Rorg/x` → argv `[-b][-Rorg/x]`
+    #     (ölçüldü, argv dökümü) ⇒ `-R…` gövde değeri, hedef cwd.
+    ("GA-E1 3.BAGLAM PowerShell -b \"\" bitisik", "priv", "PowerShell",
+     'gh pr merge 5 --squash -b "" -Rorg/x', GH),
+    ("GA-E2 3.BAGLAM PowerShell --body \"\" bitisik", "priv", "PowerShell",
+     'gh pr edit 5 --body "" -Rorg/x', GH),
+    ("GA-E3 3.BAGLAM PowerShell -c '' bitisik", "priv", "PowerShell",
+     "gh issue close 5 -c '' -Rorg/x", GH),
+    ("GA-E4 3.BAGLAM PowerShell --notes \"\" bitisik", "priv", "PowerShell",
+     'gh release edit v1 --notes "" -Rorg/x', GH),
+    # Bitişik filtresi katmanı: tek gerçek hedef bitişik + başlıkta main'in metin deseni
+    # (main GEÇİRİYORDU, metin hedefi) ⇒ BLOK (sıkılaşma).
+    ("GA-S1 bitisik + baslikta '-R y' metni (main GECIRIYORDU)", "priv", "Bash",
+     "gh pr create -Rorg/x -t '-R y' -b b", GH),
+    ("GA-S2 3.BAGLAM PowerShell bitisik + baslikta '--repo y' metni", "priv", "PowerShell",
+     "gh pr create -Rorg/x -t 'bkz --repo y' -b b", GH),
+    # Kontrol: bitişik geri alındıktan sonra açık biçimler AYNEN geçer (FP yok).
+    ("GA-K1 --repo org/x (kontrol)", "priv", "Bash", "gh pr merge 5 --squash -b y --repo org/x", 0),
+    ("GA-K2 -R org/x (kontrol)", "priv", "Bash", "gh pr merge 5 --squash -b y -R org/x", 0),
+    ("GA-K3 3.BAGLAM PowerShell --repo=org/x (kontrol)", "priv", "PowerShell",
+     "gh pr merge 5 --squash -b y --repo=org/x", 0),
 ]
 
 _SURUCU = r'''

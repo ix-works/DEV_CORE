@@ -659,7 +659,7 @@ OZEL_TESTLER = [
      "git -C/--git-dir/--work-tree/GIT_DIR, son gercek cd), biri public ise public; aday "
      "tavani fail-closed; GH-HEDEF acik hedef yalniz pflag cozumlemesinin gercek --repo/-R "
      "degerinden (gh bayrak tablosu; bayat tablo/taninmayan bayrak = blok); kabuk lehcesi "
-     "Bash '\\'' / $'...' / PowerShell backtick kacisi taranir (103 vektor + 27 mutasyon; bitisik -R muafiyeti gercek token+metinde birebir -R<deger>)"),
+     "Bash '\\'' / $'...' / PowerShell backtick kacisi taranir (203 vektor + 35 mutasyon; bitisik -R<deger> GH-HEDEF'te acik hedef DEGIL — tur-5 GERI ALINDI, sizinti adayi kalir)"),
     # 2026-09-17 (Q322): alt-ajan takilma bekcisi — GOZLEMCI, kapi DEGIL.
     ("agent_stall_watch",
      "agent_stall_watch: sinyal ILERLEMEDIR (eslesmemis tool_use + yas), canlilik degil; "

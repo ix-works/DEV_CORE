@@ -206,38 +206,30 @@ def _kelimeler(s: str, lehce: str = None) -> list:
     Bilerek `shlex` DEĞİL: `shlex(posix=True)` Windows yollarındaki ters-eğik çizgiyi
     kaçış sayıp yutar (`C:\\IX\\x` → `C:IXx`) ve dengesiz tırnakta ValueError atar —
     guard'ın girdisi keyfi/kirli metindir, ayrıştırıcı ASLA patlamamalı.
-    `lehce` verilmezse `_LEHCE` (bkz. KABUK LEHÇESİ).
+    `lehce` verilmezse `_LEHCE` (bkz. KABUK LEHÇESİ). bash/ps lehçesinde yorum, yönlendirme
+    işleneni ve `\\<boşluk>` kabuğun yaptığı gibi ele alınır (bkz. yukarıdaki blok).
     """
-    return [k for k, _ in _kelimeler_ham(s, lehce)]
-
-
-def _kelimeler_ham(s: str, lehce: str = None) -> list:
-    """`_kelimeler` + her kelimenin komut metnindeki HAM yazımı: [(kelime, ham)].
-
-    Ham yazım, bir muafiyeti metne değil onu DOĞURAN token'ın kendi kaynağına bağlamak
-    içindir (bitişik `-R<değer>` freni, tur-4). bash/ps lehçesinde yorum, yönlendirme
-    işleneni ve `\\<boşluk>` kabuğun yaptığı gibi ele alınır (bkz. yukarıdaki blok)."""
     lehce = lehce or _LEHCE
     s = s or ""
     yeni = lehce in ("bash", "ps")
-    kelimeler, cur, tirnak_gordu, bas = [], [], False, None
-    yonl = None                       # işleneni beklenen yönlendirme: (metin, başlangıç)
+    kelimeler, cur, tirnak_gordu = [], [], False
+    yonl = None                       # işleneni beklenen yönlendirme operatörü
     i, n = 0, len(s)
 
-    def bitir(son: int) -> None:
-        nonlocal cur, tirnak_gordu, bas, yonl
+    def bitir() -> None:
+        nonlocal cur, tirnak_gordu, yonl
         if cur or tirnak_gordu:
             if yonl is not None:
                 yonl = None           # yönlendirme işleneni: argüman DEĞİL
             else:
-                kelimeler.append(("".join(cur), s[bas:son]))
-        cur, tirnak_gordu, bas = [], False, None
+                kelimeler.append("".join(cur))
+        cur, tirnak_gordu = [], False
 
-    def yonlendirme(metin: str, bas_: int) -> None:
+    def yonlendirme(metin: str) -> None:
         nonlocal yonl
         if yonl is not None:          # işlenensiz önceki operatör (kabukta sözdizimi hatası)
-            kelimeler.append((yonl[0], yonl[0]))
-        yonl = (metin, bas_)
+            kelimeler.append(yonl)
+        yonl = metin
 
     while i < n:
         c = s[i]
@@ -250,27 +242,25 @@ def _kelimeler_ham(s: str, lehce: str = None) -> list:
                 continue
             m = _YONL_PS.match(s, i) if lehce == "ps" else None
             if m:
-                yonlendirme(m.group(0), i)
+                yonlendirme(m.group(0))
                 i = m.end()
                 continue
         if lehce == "bash" and c in "<>":
             m = _YONL_BASH.match(s, i)
             k = "".join(cur)
             if cur and not tirnak_gordu and k.isdigit():
-                metin, bas_ = k + m.group(0), bas     # fd numarası operatöre aittir
-                cur, bas = [], None
+                metin = k + m.group(0)                # fd numarası operatöre aittir
+                cur = []
             else:
-                bitir(i)
-                metin, bas_ = m.group(0), i
-            yonlendirme(metin, bas_)
+                bitir()
+                metin = m.group(0)
+            yonlendirme(metin)
             i = m.end()
             continue
         if c.isspace():
-            bitir(i)
+            bitir()
             i += 1
             continue
-        if bas is None:
-            bas = i
         if lehce == "bash" and c == "\\" and i + 1 < n and s[i + 1] in _BASH_HARF_KACIS:
             cur.append(s[i:i + 2] if s[i + 1] == "\\" else s[i + 1])
             i += 2
@@ -327,9 +317,9 @@ def _kelimeler_ham(s: str, lehce: str = None) -> list:
             continue
         cur.append(c)
         i += 1
-    bitir(min(i, n))
+    bitir()
     if yonl is not None:              # işlenensiz operatör: eskisi gibi token (FP üretmesin)
-        kelimeler.append((yonl[0], yonl[0]))
+        kelimeler.append(yonl)
     return kelimeler
 
 
@@ -561,7 +551,7 @@ _GH_A = re.compile(
 # mutasyonu "açık hedefli" sayıyordu (PATTERN #12: "komut" ile "komuttan bahis"). IGNORECASE
 # ayrıca `-r <reviewer>`'ı da `-R` sayıyordu. Hüküm pflag çözümlemesinden verilir
 # (`_gh_acik_bayrak` · `_gh_konumsal_hedef_var`); iki desen orada yalnız FREN olarak (VE ile)
-# kalır ⇒ sonuç main'in geçirdiği kümenin dışına çıkamaz (onaylı bitişik `-RX` hariç).
+# kalır ⇒ sonuç main'in geçirdiği kümenin dışına çıkamaz (bitişik `-RX` dahil — GERİ ALINDI).
 _GH_A_ACIK = re.compile(r"(?<![\w-])(--repo[= ]\S+|-R[= ]\S+)", re.IGNORECASE)
 
 # GRUP B — hedefi KONUMSAL `<owner>/<name>` olarak alan `gh repo <alt>` komutları.
@@ -593,17 +583,15 @@ _GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)R(.*)$", re.DOTALL)
 _GH_KONUMSAL = re.compile(r"[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*")
 
 
-def _gh_komut_tokenlari(seg: str, ham: bool = False):
-    """`gh` komut konumundaysa ondan SONRAKİ token'lar; değilse None.
-    `ham=True`: [(token, ham yazım)] (bkz. `_kelimeler_ham`)."""
-    th = _kelimeler_ham(seg)
-    t = [k for k, _ in th]
+def _gh_komut_tokenlari(seg: str):
+    """`gh` komut konumundaysa ondan SONRAKİ token'lar; değilse None."""
+    t = _kelimeler(seg)
     i = 0
     while i < len(t) and _ATAMA.match(t[i]):
         i += 1
     if i >= len(t) or t[i].replace("\\", "/").rsplit("/", 1)[-1].lower() not in ("gh", "gh.exe"):
         return None
-    return th[i + 1:] if ham else t[i + 1:]
+    return t[i + 1:]
 
 
 # ── gh BAYRAK TABLOSU (repo-maskeleme düzeltme turu, 2026-10-14) ─────────────────────
@@ -806,8 +794,6 @@ def _gh_tablo_ac(alan: str) -> tuple:
 
 _GH_BAYRAK = {anahtar: _gh_tablo_ac(d) + _gh_tablo_ac(b)
               for anahtar, (d, b) in _GH_BAYRAK_TABLOSU.items()}
-_GH_BITISIK_R = re.compile(r"(?<![\w-])-R[^\s=]")
-_GH_BITISIK_DEGER = re.compile(r"[\w.:/-]+")
 
 
 def _gh_bayrak_cozumle(seg: str):
@@ -817,10 +803,9 @@ def _gh_bayrak_cozumle(seg: str):
     Biçim: uzun (`--repo X`) · esit (`--repo=X`) · kisa (`-R X` / `-R=X`) · bitisik (`-RX`)
     · kume (`-dR X` / `-dRX`). `kesin` = alt-komut tabloda VE her bayrak/harf tanındı VE
     değer alan her bayrağın değeri var."""
-    th = _gh_komut_tokenlari(seg, ham=True)
-    if th is None:
+    t = _gh_komut_tokenlari(seg)
+    if t is None:
         return None
-    t = [k for k, _ in th]
     giris, bas = None, min(len(t), 2)
     if len(t) >= 2:
         g, a = t[0].lower(), t[1].lower()
@@ -875,12 +860,6 @@ def _gh_bayrak_cozumle(seg: str):
                     if v is not None:
                         if ch == "R":
                             bicim = "kume" if k else ("kisa" if (esit or not kalan) else "bitisik")
-                            # Tur-4: onaylı bitişik biçim token'ın KENDİ ham yazımında birebir
-                            # `-R<değer>` olmalı (segmentin başka yerindeki yorum/işlenen/başlık
-                            # metni sayılmaz) ve değer düz `[\w.:/-]` (kaçış/ikame/tırnak yok).
-                            if bicim == "bitisik" and not (
-                                    ("-R" + v) in th[i][1] and _GH_BITISIK_DEGER.fullmatch(v)):
-                                bicim = "bitisik-dolayli"
                             repolar.append((v, bicim))
                         else:
                             degerler.setdefault(dk[ch], []).append(v)
@@ -900,27 +879,24 @@ def _gh_acik_bayrak(seg: str) -> bool:
     """GH-HEDEF "açık hedef" hükmü: pflag çözümlemesinde GERÇEK `--repo`/`-R` değeri var mı.
 
     Üç koşul birden: ① çözümleme `kesin` (bayatlık ⇒ blok) ② değer boşluksuz ve biçim
-    `kume` DEĞİL (`-dR` eskisi gibi blok) ③ main'in metin deseni (`_GH_A_ACIK`) de tutuyor
-    YA DA GERÇEK bir `-R` token'ı bitişik biçimde VE metinde birebir `-R<değer>` olarak
-    yazılı (kullanıcı onaylı TEK gevşeme, 2026-10-14). ③ main'e göre gevşemeyi YAPISAL
-    olarak o tek biçime sınırlar (PowerShell ``--re`po`` / ``-R`org/x`` gibi metinde
-    görünmeyen bir hedef eskisi gibi bloklanır). `gh` komut konumunda değilse eski desen.
-    ⛔ Bitişik muafiyeti METİN deseniyle (`-R[^\\s=]` herhangi bir yerde) VERİLMEZ (tur-3
-    düzeltmesi, ölçüldü): gerçek hedef `"--repo" org/x` iken başlıktaki `-t '-Rx'` metni
-    freni açıyordu ⇒ main'in blokladığı biçim onaysız geçiyordu. Muafiyet, muafiyeti
-    DOĞURAN token'a bağlıdır.
-    ⛔ Tur-4: "metinde birebir" = token'ın KENDİ ham yazımında (biçim `bitisik`, bkz.
-    `_gh_bayrak_cozumle`); segmentin herhangi bir yeri DEĞİL — `-R''org/x … # -Rorg/x`
-    (yorum) · `-R"org/x" … <<< -Rorg/x` (işlenen) · `-t ' -Rorg/x'` (başlık) metni freni
-    açıyordu (main rc 2 → önceki tur rc 0, ölçüldü). Kabuğun gh'ye geçirmediği metin
-    (yorum, yönlendirme işleneni) token bile değildir (`_kelimeler_ham`)."""
+    `kume` ya da `bitisik` DEĞİL (`-dR` · `-RX` main gibi blok) ③ main'in metin deseni
+    (`_GH_A_ACIK`) de tutuyor. ③ VE ile bağlandığı için geçen küme main'in geçirdiği kümenin
+    ALT kümesidir (main'e göre gevşeme yapısal olarak 0). `gh` komut konumunda değilse eski
+    desen.
+    ⛔ BİTİŞİK `-R<değer>` AÇIK HEDEF DEĞİLDİR — GERİ ALINDI (kullanıcı zarar-kesme kararı
+    2026-10-14). 1.–4. turda onaylı gevşemeydi; her turda kabuğun/gh'nin o token'ı `-R`
+    olarak YORUMLAMADIĞI yeni bir biçim çıktı (main rc 2 → tur rc 0, bug-gate ölçtü):
+    bash'te Python'un boşluk saydığı ama bash'in saymadığı karakter (NBSP, CR, VT, FF,
+    U+2000…: `-b y<NBSP>-Rorg/x` tek argümandır) · PowerShell 5.1'de CR deyim sonu, akıllı
+    tırnak (`“…”`) tırnak · PowerShell 5.1 boş argümanı DÜŞÜRÜR (`-b "" -Rorg/x` → argv
+    `-b -Rorg/x`: `-R…` gövde değeri olur, hedef cwd). Sızıntı gate'lerinde bitişik değer
+    ADAY olarak kalır (`_gh_hedef_adaylari`: fazla aday yalnız daha çok tarama)."""
     c = _gh_bayrak_cozumle(seg)
     if c is None:
         return bool(_GH_A_ACIK.search(seg or ""))
-    gercek = [(v, b) for v, b in c["repolar"]
-              if b != "kume" and v and not any(x.isspace() for x in v)]
-    bitisik = any(b == "bitisik" and _GH_BITISIK_R.search("-R" + v) for v, b in gercek)
-    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) or bitisik))
+    gercek = [v for v, b in c["repolar"]
+              if b not in ("kume", "bitisik") and v and not any(x.isspace() for x in v)]
+    return bool(c["kesin"] and gercek and _GH_A_ACIK.search(seg))
 
 
 def _gh_repo_degerleri(seg: str, kesin: bool = False) -> list:
