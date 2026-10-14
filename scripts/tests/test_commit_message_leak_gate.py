@@ -211,22 +211,62 @@ def test_stdin_cozulemezse_FAIL_CLOSED():
         _geri_al()
 
 
+# Ajan imza satirlari — adres PARCADAN kurulur (bu dosya e-posta desenine taranir).
+_ATIF = "Co-Authored-By: Claude Opus 5.5 (1M context) <" + "noreply" + "@" + "anthropic.com>"
+_OTURUM = "Claude-Session: https://claude.ai/code/session_01AbCdEf"
+_URETICI = "\U0001F916 Generated with [Claude Code](https://claude.com/claude-code)"
+
+
 def test_GIT_IMZA_SATIRLARI_ayiklanir():
-    """`Co-Authored-By:` / `Claude-Session:` her commit'te ZORUNLU boilerplate.
+    """Ajanin UC imza satiri (atif · oturum · uretici) her ajan commit'inde ZORUNLU.
 
     Bu gate ilk yazildiginda tam da bunu bloklamisti (kendi commit'imi durdurdu):
     trailer'daki adres 'kimlik izi' kategorisine takiliyordu. Boyle bir gate TUM
     core commit'lerini bloklar -> kapatilir -> koruma sifirlanir.
     **Gurultu yapan gate, olmayan gate'ten kotudur.**
-    (Trailer'lar SATIR olarak duser; icerigi onemli degil, o yuzden burada
-    ornek adres YAZMAYA gerek yok — core'a kimlik izi yazilamaz zaten.)
+
+    bug-gate F3 (2026-10-14): atif satiri BOSALTILMAZ — yalniz uretici adresi silinir, ad
+    bolumu TARANIR (ad bolumune yazilan obje/paket adi eskiden taramadan geciyordu).
     """
-    metin = "fix(tooling): readback esitligi\n\nCo-Authored-By: Bot\nClaude-Session: <url>\nson satir"
+    metin = f"fix(tooling): readback esitligi\n\n{_ATIF}\n{_OTURUM}\n{_URETICI}\nson satir"
     sonuc = G._git_imza_satirlari_ayikla(metin)
-    assert "Co-Authored-By" not in sonuc, "Co-Authored-By imza satiri ayiklanmadi"
-    assert "Claude-Session" not in sonuc, "Claude-Session imza satiri ayiklanmadi"
+    assert "noreply" not in sonuc, "ajan atif satirinin uretici adresi maskelenmedi"
+    assert "Co-Authored-By: Claude Opus 5.5 (1M context)" in sonuc, \
+        "atif satirinin AD bolumu de silindi — ad bolumu TARANMALI (F3)"
+    assert "Claude-Session" not in sonuc, "ajan oturum satiri ayiklanmadi"
+    assert "Generated with" not in sonuc, "ajan uretici satiri ayiklanmadi"
     assert "readback esitligi" in sonuc and "son satir" in sonuc, \
         "imza ayiklama mesajin GERCEK icerigini de sildi"
+    assert sonuc.count("\n") == metin.count("\n"), "satir sayisi korunmadi"
+
+
+def test_BASKA_trailer_AYIKLANMAZ():
+    """2026-10-12 daraltmasi: ajan DISI trailer'lar (baska adres/ad) TARANIR.
+
+    Eskiden `Co-Authored-By|Claude-Session|Signed-off-by|Reviewed-by|Cc` anahtarli her
+    satir adresten bagimsiz dusuyordu => baska bir kisinin e-postasi sessizce geciyordu.
+    """
+    for satir in ("Signed-off-by: Biri <adres>", "Reviewed-by: Biri <adres>",
+                  "Cc: Biri <adres>", "Co-authored-by: Biri <adres>",
+                  "Co-Authored-By: Claude <adres>",                  # ad ayni, adres BASKA
+                  "Claude-Session: https://claude.ai/code/x?u=adres",  # oturum disi govde
+                  "\U0001F916 Generated with [Claude Code](adres)"):
+        sonuc = G._git_imza_satirlari_ayikla(f"baslik\n\n{satir}")
+        assert satir in sonuc, f"ajan DISI trailer ayiklandi (sizinti kor noktasi): {satir!r}"
+
+
+def test_BASKA_trailer_SIZINTISI_BLOKLANIR_uctan_uca():
+    """Pozitif vektor: trailer'daki bulgu (sentinel) public repoda BLOKLANIR."""
+    _kur(True)
+    try:
+        cmd = "cd /c/core && git commit -q -F - <<'EOF'"
+        for satir in (f"Signed-off-by: Biri <{_SENTINEL}>", f"Cc: {_SENTINEL}",
+                      f"Co-authored-by: Biri <{_SENTINEL}>"):
+            ham = cmd + f"\nfix(tooling): {_TEMIZ}\n\n{_ATIF}\n{satir}\nEOF"
+            assert G._git_commit_public_leak(cmd, ham) != "", \
+                f"trailer'daki bulgu YAKALANMADI: {satir!r}"
+    finally:
+        _geri_al()
 
 
 def test_git_imza_satirlari_ayiklama_DAR_tutulmus():
@@ -242,10 +282,91 @@ def test_IMZALI_commit_BLOKLANMAZ_uctan_uca():
     _kur(True)
     try:
         cmd = "cd /c/core && git commit -q -F - <<'EOF'"
-        ham = (cmd + f"\nfix(tooling): {_TEMIZ}\n\nCo-Authored-By: Bot\n"
-               "Claude-Session: <url>\nEOF")
+        ham = (cmd + f"\nfix(tooling): {_TEMIZ}\n\n{_ATIF}\n{_OTURUM}\nEOF")
         assert G._git_commit_public_leak(cmd, ham) == "", \
             "imzali temiz commit bloklandi"
+    finally:
+        _geri_al()
+
+
+def _cat(govde: str, ac: str = "<<'EOF'", kapa: str = "EOF") -> str:
+    return '"$(cat ' + ac + "\n" + govde + "\n" + kapa + '\n)"'
+
+
+def test_CAT_HEREDOC_m_YAKALANIR():
+    """bug-gate P-1 (2026-10-14): Claude Code'un VARSAYILAN commit bicimi
+    `-m "$(cat <<'EOF' … EOF)"` taranmiyordu — deger kirpilmis komuttan okunuyordu.
+    Dispatcher gibi cagrilir: komut = `_komut_govdesi(ham)` (kirpilmis), ham = ham metin."""
+    _kur(True)
+    try:
+        for ham in (f"cd /c/core && git commit -m {_cat('fix: x ' + _SENTINEL)}",
+                    f"cd /c/core && git commit -m {_cat('fix: x ' + _SENTINEL, ac='<<EOF')}",
+                    f"cd /c/core && git commit -m {_cat(_SENTINEL, ac=chr(60)*2 + chr(34) + 'M' + chr(34), kapa='M')}",
+                    f"cd /c/core && git commit -m {_cat(_SENTINEL, ac='<<-EOF', kapa=chr(9) + 'EOF')}",
+                    f"cd /c/core && git commit --message={_cat(_SENTINEL)}",
+                    f"cd /c/core && git commit -m 'baslik' -m {_cat('govde ' + _SENTINEL)}",
+                    f"cd /c/core && git commit -m $(cat <<'EOF'\n{_SENTINEL}\nEOF\n)"):
+            assert G._git_commit_public_leak(G._komut_govdesi(ham), ham) != "", \
+                f"$(cat) heredoc mesajindaki bulgu YAKALANMADI: {ham!r}"
+    finally:
+        _geri_al()
+
+
+def test_CAT_HEREDOC_mesru_GECER():
+    """Kontrol: bu repoda HER GUN kullanilan bicim (ajan atif + oturum) gecmeli."""
+    _kur(True)
+    try:
+        ham = (f"cd /c/core && git commit -m "
+               f"{_cat('fix(tooling): ' + _TEMIZ + chr(10) + chr(10) + _ATIF + chr(10) + _OTURUM)}")
+        assert G._git_commit_public_leak(G._komut_govdesi(ham), ham) == "", \
+            "mesru $(cat) commit'i bloklandi"
+    finally:
+        _geri_al()
+
+
+def test_CAT_HEREDOC_cozulemez_FAIL_CLOSED():
+    """Saf `cat` olmayan ikame (govde bilinemez) sessizce GECMEZ."""
+    _kur(True)
+    try:
+        for ham in ("cd /c/core && git commit -m \"$(sed s/a/b/ <<'EOF'\ntemiz\nEOF\n)\"",
+                    "cd /c/core && git commit -m \"$(cat <<'EOF' | tr a b\ntemiz\nEOF\n)\"",
+                    "cd /c/core && git commit -m $(sed s/a/b/ <<'EOF'\ntemiz\nEOF\n)"):
+            sonuc = G._git_commit_public_leak(G._komut_govdesi(ham), ham)
+            assert "FAIL-CLOSED" in sonuc, f"cozulemeyen ikame gecti (fail-open!): {ham!r}"
+    finally:
+        _geri_al()
+
+
+def test_PR_CAT_HEREDOC_govde_YAKALANIR():
+    """P-1 kardesi: `gh pr create --body "$(cat <<'EOF' … EOF)"` PUBLIC-PR gate'inde de
+    taranmiyordu. Ayni yayin yolundaki diger alt komutlar da (issue/release) kapsanir."""
+    _kur(True)
+    try:
+        for on in ("gh pr create --repo org/CORE --title x --body",
+                   "gh pr comment 1 --repo org/CORE -b",
+                   "gh issue create --repo org/CORE -t x --body",
+                   "gh release create v1 --repo org/CORE --notes",
+                   "gh pr edit 1 --repo org/CORE --title"):
+            ham = f"{on} {_cat('## Ozet' + chr(10) + _SENTINEL)}"
+            assert G._gh_pr_public_leak(G._komut_govdesi(ham), ham) != "", \
+                f"$(cat) yayin govdesindeki bulgu YAKALANMADI: {on}"
+        ham = f"gh pr create --repo org/CORE --title x --body {_cat('## Ozet' + chr(10) + _TEMIZ)}"
+        assert G._gh_pr_public_leak(G._komut_govdesi(ham), ham) == "", "temiz $(cat) PR bloklandi"
+        ham = "gh pr create --repo org/CORE --title x --body \"$(sed s/a/b/ <<'EOF'\nx\nEOF\n)\""
+        assert "FAIL-CLOSED" in G._gh_pr_public_leak(G._komut_govdesi(ham), ham), \
+            "cozulemeyen PR govdesi ikamesi gecti (fail-open!)"
+    finally:
+        _geri_al()
+
+
+def test_ATIF_AD_BOLUMU_TARANIR():
+    """bug-gate F3 (2026-10-14): atif satirinin ad bolumune yazilan iz muafiyete saklanamaz."""
+    _kur(True)
+    try:
+        cmd = "cd /c/core && git commit -q -F - <<'EOF'"
+        atif = "Co-Authored-By: Claude " + _SENTINEL + " <" + "noreply" + "@" + "anthropic.com>"
+        ham = cmd + f"\nfix(tooling): {_TEMIZ}\n\n{atif}\nEOF"
+        assert G._git_commit_public_leak(cmd, ham) != "", "atif ad bolumundeki bulgu GECTI"
     finally:
         _geri_al()
 

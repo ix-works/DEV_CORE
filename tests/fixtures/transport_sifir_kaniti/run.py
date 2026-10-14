@@ -151,7 +151,7 @@ def senaryolar(src: str) -> list[tuple[str, bool, str]]:
          "E070" in n and "KANIT DEGILDIR" in n, "notice=%r" % n[:90])
 
     # --- S3: FP capasi (AYRI vektor) — dolu sonucta soru GECERSIZ ----------
-    r2 = cagir([{"number": "DS4K900029", "description": "x", "status": "D"}])
+    r2 = cagir([{"number": "AB1K900101", "description": "x", "status": "D"}])
     ekle("S3 FP capasi: count>0 -> zero_verified None + notice YOK",
          r2.get("count") == 1 and r2.get("zero_verified") is None
          and "zero_notice" not in r2,

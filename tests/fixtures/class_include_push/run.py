@@ -216,7 +216,7 @@ def push(oturum, kaynak=GERCEK_KAYNAK, kind="ccau", cls="ZCL_ORNEK"):
     try:
         with redirect_stdout(tampon):
             return "ok", c.push_class_include(cls, kind, kaynak,
-                                              lock_handle="H1", transport="DS4K900029"), oturum
+                                              lock_handle="H1", transport="AB1K900101"), oturum
     except AttributeError as exc:                 # metot HİÇ YOK (mutasyon) → FAIL, çökme DEĞİL
         return "yetenek_yok", exc, oturum
     except Exception as exc:                      # noqa: BLE001

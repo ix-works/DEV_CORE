@@ -223,6 +223,39 @@ def vek_uctan_uca(m, proje: Path) -> None:
           "ctx " not in satir3 and "412k" not in satir3, satir3)
 
 
+# ---------------------------------------------------------------------------
+# T — TRANSPORT segmenti SID'den BAGIMSIZ (2026-10-12, sizinti turu)
+# Desen eskiden TEK bir tuketici sistemin SID'ine sabitti => baska SID'li projede segment
+# HIC cizilmiyordu (olculdu). Ornek numaralar PARCADAN kurulur: bu dosya da genericize
+# taramasindan gecer ve duz yazilmis numara `--all`'da uyari uretirdi.
+# ---------------------------------------------------------------------------
+def _tr(sid: str, no: str) -> str:
+    return sid + "K" + no
+
+
+def vek_transport(m) -> None:
+    with tempfile.TemporaryDirectory() as t:
+        p = Path(t) / "SESSION_NOTES.md"
+
+        def bul(satir: str):
+            p.write_text("# notlar\n" + satir + "\n", encoding="utf-8")
+            return m.parse_session_notes(p)[3]
+
+        for ad, satir, beklenen in (
+            ("T1 eski tek-SID bicimi hala bulunur (regresyon)",
+             "Transport: " + _tr("D" + "S4", "900029"), _tr("D" + "S4", "900029")),
+            ("T2 BASKA SID'li numara bulunur (asil duzeltme)",
+             "Transport: " + _tr("QA2", "912345"), _tr("QA2", "912345")),
+            ("T3 7 haneli govde -> YOK (FP capasi)", "x " + _tr("QA2", "9123456"), None),
+            ("T4 tanimlayiciya bitisik -> YOK (FP capasi)", "foo" + _tr("QA2", "912345"), None),
+            ("T5 kucuk harf -> YOK (duz yazidan yanlis alim yok)",
+             "x " + _tr("qa2", "912345").replace("K", "k"), None),
+            ("T6 `<SID>K9xxxxx` yer tutucusu -> YOK", "Transport: <SID>K9xxxxx", None),
+        ):
+            got = bul(satir)
+            sonuc(ad, got == beklenen, None if got == beklenen else ("BULDU" if got else "YOK"))
+
+
 def tur(mutasyon=None) -> None:
     m = modul(mutasyon)
     vek_esik(m)
@@ -230,6 +263,7 @@ def tur(mutasyon=None) -> None:
     vek_bicim(m)
     vek_segment(m)
     vek_regresyon(m)
+    vek_transport(m)
     with tempfile.TemporaryDirectory() as t:
         vek_uctan_uca(m, sentetik_proje(Path(t)))
 
@@ -263,6 +297,12 @@ MUTASYONLAR = [
      ("        parts.append(_ctx_segment(pct, tok))", "        parts.append(_ctx_segment(pct))")),
     ("M9 REGRESYON capasi: yuzde kirmizi esigi 75 -> 70",
      ("    color = _C_RED if pct >= 75 else", "    color = _C_RED if pct >= 70 else")),
+    ("M10 transport deseni tek SID'e GERI sabitlenir (T2 dusmeli)",
+     (r'TRANSPORT_RX = re.compile(r"\b([A-Z][A-Z0-9]{2}K\d{6})\b")',
+      r'TRANSPORT_RX = re.compile(r"\b(' + "D" + "S4" + r'K\d{6})\b")')),
+    ("M11 transport deseninin sinirlari kaldirilir (T3/T4 FP capalari dusmeli)",
+     (r'TRANSPORT_RX = re.compile(r"\b([A-Z][A-Z0-9]{2}K\d{6})\b")',
+      r'TRANSPORT_RX = re.compile(r"([A-Z][A-Z0-9]{2}K\d{6})")')),
 ]
 
 

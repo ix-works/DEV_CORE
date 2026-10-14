@@ -153,7 +153,7 @@ TM_NS = "http://www.sap.com/cts/adt/tm"
 def tm_feed(sayi: int) -> str:
     """Kanonik CTS feed'i (ayrıştırıcının ÇİVİLENDİĞİ şekil)."""
     satirlar = "".join(
-        f'<tm:request tm:number="DS4K90{1000 + i}" tm:desc="Is {i}" tm:status="D"/>'
+        f'<tm:request tm:number="AB1K90{1000 + i}" tm:desc="Is {i}" tm:status="D"/>'
         for i in range(sayi))
     return f'<?xml version="1.0"?><tm:root xmlns:tm="{TM_NS}">{satirlar}</tm:root>'
 
@@ -162,7 +162,7 @@ def tm_feed_varyant(sayi: int) -> str:
     """AYNI VERİ, BAŞKA ŞEKİL — fallback Accept header'ın döndürebileceği hâl:
     namespace YOK, attribute'lar nitelenmemiş. Eski ayrıştırıcı burada SESSİZ 0 verir."""
     satirlar = "".join(
-        f'<request number="DS4K90{1000 + i}" desc="Is {i}" status="D"/>' for i in range(sayi))
+        f'<request number="AB1K90{1000 + i}" desc="Is {i}" status="D"/>' for i in range(sayi))
     return (f'<?xml version="1.0"?><root xmlns:tm="{TM_NS}">'
             f'<workbench>{satirlar}</workbench></root>')
 
@@ -216,7 +216,7 @@ if ARG.mutasyon:
 sonuc, deger, _ = transport_cagir(xml=tm_feed(4))
 kontrol("A1 KONTROL: kanonik tm feed'inde 4 transport → 4 ayrıştırılır (davranış korundu)",
         sonuc == "ok" and isinstance(deger, list) and len(deger) == 4
-        and deger[0]["number"] == "DS4K901000" and deger[0]["status"] == "D",
+        and deger[0]["number"] == "AB1K901000" and deger[0]["status"] == "D",
         f"sonuç={sonuc} değer={str(deger)[:200]}")
 
 # A2 AYIRT EDİCİ — şekil körlüğü (fallback Accept header sınıfı)
@@ -354,7 +354,7 @@ def lock_cagir(statuler):
     try:
         with redirect_stdout(tampon):
             return "ok", c.lock_object("/sap/bc/adt/oo/classes/zcl_ornek",
-                                       transport="DS4K900029"), c
+                                       transport="AB1K900101"), c
     except L.SAPLockError as exc:
         return "hata", exc, c
     except Exception as exc:                                    # noqa: BLE001
@@ -488,7 +488,7 @@ def dp_govde(sutunlar: dict) -> str:
 
 
 def transport_bul(xml=None, patlat=None, kullanici="TESTUSER",
-                  istenen="DS4K900029", obje="ZSD001_CL_ORNEK"):
+                  istenen="AB1K900101", obje="ZSD001_CL_ORNEK"):
     """(donen, durum, stdout) — `_find_existing_transport` gerçek metot olarak koşar."""
     c = object.__new__(SC.SAPClient)
     c.debug_enabled = False
@@ -515,7 +515,7 @@ def transport_bul(xml=None, patlat=None, kullanici="TESTUSER",
 donen, durum, cikti = transport_bul(patlat=RuntimeError("HTTP 500 E071 erisilemez"))
 kontrol("F1 AYIRT EDİCİ: sorgu HATA verince artık GÖRÜNÜR uyarı basılıyor "
         "(eskiden debug kapalıyken TEK SATIR bile yoktu)",
-        donen == "DS4K900029" and "[WARN]" in cikti and "SORGULANAMADI" in cikti,
+        donen == "AB1K900101" and "[WARN]" in cikti and "SORGULANAMADI" in cikti,
         f"dönen={donen!r} çıktı={cikti.strip()[:200]!r}")
 
 kontrol("F1b AYIRT EDİCİ: uyarı 'DOĞRULAMA DEĞİL, VARSAYIMDIR' diyor + sebebi taşıyor",
@@ -528,14 +528,14 @@ kontrol("F1c DURUM KAYDI: sonuç makine-okunur (`error:RuntimeError`)",
 # F2 FP ÇAPASI — ⚠ EN ÖNEMLİSİ: FALLBACK KALDIRILMADI (yazma yolu kapanmadı)
 kontrol("F2 FP ÇAPASI: hata hâlinde HÂLÂ requested_transport dönüyor — push DURMUYOR "
         "(E071'siz sistemlerde fallback yük taşır; 'raise' YANLIŞ fix olurdu)",
-        donen == "DS4K900029",
+        donen == "AB1K900101",
         f"dönen={donen!r} [bu vektör kalkarsa E071 erişimi olmayan sistemlerde her push kırılır]")
 
 # F3 AYIRT EDİCİ — şekil körlüğü (:332 · sessiz VE yanıltıcı → DÜZELTİLDİ)
 donen, durum, cikti = transport_bul(xml="<html><body>500 Internal Server Error</body></html>")
 kontrol("F3 AYIRT EDİCİ: `dp:columns` YOK (tanınmayan gövde) → görünür uyarı + "
         "'kayıt yok SONUCU DEĞİL' der",
-        donen == "DS4K900029" and durum == "shape_unrecognized"
+        donen == "AB1K900101" and durum == "shape_unrecognized"
         and "OKUYAMAMA" in cikti,
         f"dönen={donen!r} durum={durum!r} çıktı={cikti.strip()[:200]!r}")
 
@@ -549,32 +549,32 @@ kontrol("F3 AYIRT EDİCİ: `dp:columns` YOK (tanınmayan gövde) → görünür 
 donen, durum, cikti = transport_bul(xml=dp_govde({"TRKORR": []}))
 kontrol("F4 FP ÇAPASI (:343 DOKUNULMADI): sütun VAR + satır YOK = yeni obje → istenen "
         "transport döner, uyarı BASILMAZ (davranış iki sürümde AYNI)",
-        donen == "DS4K900029" and "[WARN]" not in cikti,
+        donen == "AB1K900101" and "[WARN]" not in cikti,
         f"dönen={donen!r} çıktı={cikti.strip()[:160]!r}")
 
 donen2, durum2, cikti2 = transport_bul(xml=dp_govde({
-    "TRKORR": ["DS4K900777"], "STRKORR": [""], "AS4USER": ["OTHERUSER"],
+    "TRKORR": ["AB1K900777"], "STRKORR": [""], "AS4USER": ["OTHERUSER"],
     "PGMID": ["R3TR"], "OBJECT": ["CLAS"]}))
 kontrol("F5 FP ÇAPASI (:368 DOKUNULMADI): adaylar BAŞKA kullanıcının → istenen transport "
         "korunur, uyarı BASILMAZ (transport gaspı YASAK — bilinçli politika)",
-        donen2 == "DS4K900029" and "[WARN]" not in cikti2,
+        donen2 == "AB1K900101" and "[WARN]" not in cikti2,
         f"dönen={donen2!r} çıktı={cikti2.strip()[:160]!r}")
 
 donen3, durum3, cikti3 = transport_bul(xml=dp_govde({
-    "TRKORR": ["DS4K900555"], "STRKORR": [""], "AS4USER": ["TESTUSER"],
+    "TRKORR": ["AB1K900555"], "STRKORR": [""], "AS4USER": ["TESTUSER"],
     "PGMID": ["R3TR"], "OBJECT": ["CLAS"]}))
 kontrol("F6 FP ÇAPASI: obje kendi BAŞKA transport'una kayıtlı → o transport'a geçilir + "
         "eski [INFO] mesajı AYNEN korunur (başarı yolu bit düzeyinde aynı)",
-        donen3 == "DS4K900555" and "already recorded in transport" in cikti3
+        donen3 == "AB1K900555" and "already recorded in transport" in cikti3
         and "[WARN]" not in cikti3,
         f"dönen={donen3!r} çıktı={cikti3.strip()[:160]!r}")
 
 donen4, durum4, cikti4 = transport_bul(xml=dp_govde({
-    "TRKORR": ["DS4K900029"], "STRKORR": [""], "AS4USER": ["TESTUSER"],
+    "TRKORR": ["AB1K900101"], "STRKORR": [""], "AS4USER": ["TESTUSER"],
     "PGMID": ["R3TR"], "OBJECT": ["CLAS"]}))
 kontrol("F7 FP ÇAPASI: istenen transport zaten sahibi → sessiz kalır "
         "(gereksiz gürültü YOK — alarm-yorgunluğu freni)",
-        donen4 == "DS4K900029" and "[WARN]" not in cikti4
+        donen4 == "AB1K900101" and "[WARN]" not in cikti4
         and "already recorded" not in cikti4,
         f"dönen={donen4!r} çıktı={cikti4.strip()[:160]!r}")
 

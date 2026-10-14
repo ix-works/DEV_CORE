@@ -3140,3 +3140,109 @@ python tests/run_battery.py team_setup_gitignore_blok --kardes gitignore_tam_sat
 - **3. tur sayıları (2026-10-14):** 44/44; 20 kip DÜŞER; önceki kod 2a906af 37/44; gate'in `.tmp` mutantları (eski kaynak kopyası, `--kaynak`) 34–37/44.
 - **Gerçek proje kabulü (lider tekrar edebilir, YAZMADAN):** tüketici `.gitignore` + `project.yaml`'ını geçici bir `git init --template=` dizinine KOPYALA (global config yalıtılmış); yol korpusu = sabit sır yolları + projenin bugün IGNORE ettiği dosyalar (`git -C <proje> ls-files -o -i --exclude-standard`, salt-okur) + izli dosyalar (`git -C <proje> ls-files`); `team_setup.gitignore_senkron(<kopya>)` → açılan 0 · proje bölümü bayt-eş · ikinci koşum bayt-eş. Tüketici projeye yazma — blok ona bir sonraki `team_setup` koşusunda ulaşır.
 - **Windows işi (Q370①):** `gh workflow run core-ci.yml --repo <ORG>/<REPO> --ref <dal>` → `windows` işinin süresi + sonucu; aynı koşuda `kapilar`/`fixture`/`gates` da koşar (Linux kıyası). PR koşusunda `windows` = `skipped` olmalı ve `gates` yalnız `kapilar`+`fixture`'a bağlı kalmalı (YAML ayrıştırmasıyla doğrula). Yerel temsilî ölçüm: `python tests/run_fixture_tests.py --parca 1/4 --parca-rapor .tmp/p1.json` → birim süreleri `fixture_sure_agirlik.json` (ubuntu) ile kıyaslanır.
+
+## B81 — genericize uyarı desenleri (tenant host · transport no, WARN-FIRST) + `core_precommit --ref` / `--msg` (Q361 ② + Q365⑤, 2026-10-12)
+
+```
+python tests/fixtures/genericize_tenant_transport/run.py      # 63/63 (SAP/ağ yok, ~15 sn)
+python tests/run_battery.py genericize_tenant_transport --kardes statusline_token_esikleri b0_secim z_obje_desen_kapsami genericize_muafiyet_satir_bazli worktree_blocklist tembel_desen sir_gate changelog_gate changelog_amend tohum_terfi_gorunurlugu tohum_govde_guncelleme olcum_yoklugu_sozlesmesi --precommit
+python scripts/tests/test_commit_message_leak_gate.py         # 19/19 (B82a ile 17'den) — bloklayıcı yol değişmedi
+python scripts/tests/test_pre_tool_guard.py ; python scripts/tests/guard_conformance.py
+```
+
+- **13 kip, 13'ü DÜŞMELİ** (+ `--mutasyon-atif-muafiyeti-yok` → M7/M8 · `--mutasyon-atif-genis` → M9: muafiyet adrese bağlı kalmalı): `--mutasyon-sid-allowlist-bos` (N7/N8 + K1) · `--mutasyon-bolge-muafiyeti-yok` (N3) · `--mutasyon-host-bas-sinir` (N4: `.` önekli sonek listesi) · `--mutasyon-host-bas-acili` (A10/A11: `<`/`{` geri-bakışa geri eklenirse sarmal içindeki somut host susar) · `--mutasyon-uyari-kablosuz` (W/R/M/C) · `--mutasyon-bloklayici` (uyarı `hatalar`a girer ⇒ W1/W3/C1 rc≠0) · `--mutasyon-token-basilir` (R4/M3) · `--mutasyon-msg-yorum` (`#` muafiyeti GERİ gelir ⇒ M2 `--msg` + R7 `--ref`) · `--mutasyon-atif-orta-genis` (M10) · `--mutasyon-bos-mesaj-temiz` (M11a–c) · `--mutasyon-mod-dislama-yok` (U1–U4). Çapa `count != 1` ⇒ exit 2 (KURULAMADI, kaçtı değil).
+- ⛔ **`#` satırı TARANIR (bug-gate 2026-10-12):** ÖLÇÜLDÜ — `-m` / `-F <dosya>` / `-F -` ile yazılan mesajda `#` satırı kayıtlı mesajda kalır ve `commit-msg` hook'u görür (varsayılan cleanup editörsüz `whitespace`). Git sürümü değişince ölçümü geçici bir repoda tekrarla (R7 bunu `git log -1 --format=%B` ile her koşumda yeniden doğrular: `kayitli#=True`). Muafiyeti geri getirmek = M2 + R7'yi bilinçli çevirmek.
+- **statusline transport (T1–T6, `statusline_token_esikleri`):** desen SID'den bağımsızdır; T1 eski tek-SID biçimi regresyon çapası, T3/T4/T5/T6 FP çapaları. `--mutasyon` turunda M10 (tek SID'e geri sabitle → T2) + M11 (sınırsız → T3/T4) düşmeli. Örnek numaralar fixture'da PARÇADAN kurulur.
+- ⛔ **S1–S2 SİLİNMEZ:** `sizintilari_bul` yeni desenleri İÇERMEZ. Bu, warn-first sözleşmesinin kendisidir — o fonksiyonu `pre_tool_guard` (yazım anı + commit mesajı + `gh` yayın) ve `seed_memory` de çağırır; desen oraya girerse ölçülmemiş FP üç kapıda birden BLOKLAR. Terfi = ayrı, kullanıcı onaylı karar (ADR 0019) + bu iki vektörün bilinçli çevrilmesi.
+- ⛔ **Token basılmaz (W2 · R4 · M3):** uyarı çıkış kodunu değiştirmediği için iz düzeltilmeden kalabilir; `--all` CI'da her PR'da koşar ve günlük PUBLIC'tir ⇒ token basmak kapıyı sızıntı kanalına çevirirdi (muaf satırın `MUAF` satırıyla aynı gerekçe).
+- **Allowlist ölçütü (K1–K2):** `ORNEK_SID` / `ORNEK_TENANT`'a bir değer eklemek o değer için uyarıyı KALICI susturur ⇒ gerçek bir sisteme ait olmadığı ölçülmeden eklenmez (`ORNEK_Z` ile aynı ölçüt). Bugünkü üyeler takipli korpusta yer tutucu olarak ölçülenlerdir; SAP demo SID'i olabilecek bir değer DOĞRULANAMADIĞI için alınmadı (uyarı olarak kalır).
+- **Üç giriş noktası AYRI ölçülür:** staged (W1–W5) · `--all` (W6) · `--ref` (R1–R7: ağaç + commit mesajı) · `--msg` (M1–M11: dosya + stdin + boş girdi = rc 2 ÖLÇÜLEMEDİ) · gerçek `git commit` + `core.hooksPath` shim (C1–C2) · modlar birbirini dışlar (U1–U4: ikisi birlikte = `[KULLANIM]` rc 2, tarama yok). Bir yolun gördüğü desen diğerinin gördüğü anlamına gelmez.
+- **Commit mesajı muafiyeti (`_ATIF_SATIRI`):** yalnız ajan atıf trailer'ı (ad Claude + üreticinin noreply adresi) tarama dışıdır; ölçüldü: muafiyetsiz `--ref <taban>` bu satırları `kimlik izi` sayıyordu (her ajan commit'inde var ⇒ uyarı körlüğü). Başka ad/adres taşıyan trailer TARANIR (M8/M9) — GitHub'ın squash'ta eklediği insan co-author trailer'ı bu yüzden bulgu olarak kalır.
+- **Kapsam beyanı:** `[UYARI-DESENLERI] … N (tür sayıları)` HER koşumda basılır, `0 (bulgu yok)` dahil (W0/R5/M5 kontrol grupları bunu çiviler).
+- ⚠ `scripts/git-hooks/pre-commit` HARİTA'da BİLEREK yok: satır eklemek o dosyayı fail-closed TAM'dan bu tek korpusa daraltırdı.
+- **Korpus taraması (tekrarlanabilir ölçüm):** `python scripts/git-hooks/core_precommit.py --all` (repo kökünde) → `[UYARI-DESENLERI]` satırı. 2026-10-12 tabanı: 15 satır, hepsi `transport no` (Part A / lider dosyaları + sahipsiz bir örnek betik); bu dosyalar düzeltildikçe sayı düşer — sayıyı vektöre PİNLEME (bayatlar).
+
+## B82 — Kimlik kalıntısı ölçümü: parola · tenant host · transport no (Q361 ①, 2026-10-12)
+
+- **Ölçüm DEĞERİ YAZMADAN yapılır:** değer taban commit'ten (`git show <taban>:<dosya>`) bir betikle okunur, `git grep -F -c --untracked -e <değer> -- . ':!core' ':!.claude'` ile sayılır, ekrana yalnız `dosya:adet` basılır. Değeri komut satırına, reçeteye, rapora, commit mesajına YAZMA (yayın cache'lenir).
+- **Varyantlar ayrıca sayılır:** tenant'ın kısa ilk etiketi · transport gövdesi (`K` + 6 rakam, SID'siz) · küçük harf. Gövde başka bir fixture'da SAHTE SID ile geçebilir — bu değer değildir, SID'e bak.
+- **Kardeş:** aynı proje SID'iyle kurulmuş başka numaralar + f-string üreticileri (`<SID>K90{…}`) — SID tek başına kimlik izidir; numara değişse de sınıf aynıdır.
+- **Fixture çevrimi:** bayt düzeyinde değiştir (satır sonu korunur), sonra `run_battery.py <fixture>` (taban + mutasyon). Mutasyon skorunun DEĞİŞMEDİĞİNİ ve düşen vektör kümesinin aynı kaldığını eski dosyanın `_run_taban.py` kardeş kopyasıyla kıyasla, kopyayı SİL.
+- **Kabul:** üç değer için `git grep -F` = 0 (sahibi başka olan dosyalar hariç, raporda adıyla). Public geçmiş YENİDEN YAZILMAZ (kullanıcı kararı) — raporda not.
+
+### B82a — `pre_tool_guard` commit-mesajı imza ayıklamasının DARLIĞI + tek kaynak (Part E kardeşi, 2026-10-12)
+
+```
+python tests/fixtures/git_imza_ayiklama_dar/run.py            # 19/19 (ağsız, ~6 sn)
+python tests/run_battery.py git_imza_ayiklama_dar --kardes genericize_tenant_transport tembel_desen negatif_test_harness z_obje_desen_kapsami genericize_muafiyet_satir_bazli worktree_blocklist b0_secim --precommit
+python tests/run_guard_fixture_tests.py                        # G 56/56
+python scripts/tests/test_commit_message_leak_gate.py ; python scripts/tests/guard_conformance.py
+```
+
+- **Muaf olan YALNIZ ajanın üç satırı** (`genericize_common.AJAN_IMZA_SATIRI`): atıf trailer'ı · alfasayısal oturum kimlikli `Claude-Session` · sabit bağlantılı üretici satırı. Başka adres/ad taşıyan her trailer TARANIR (P1–P9). Tek kaynak: `core_precommit._ATIF_SATIRI` aynı çekirdeğin alias'ıdır, o uçta oturum/üretici satırı muaf DEĞİLDİR (muafiyet kümesini genişletmek = ayrı karar).
+- **5 kip, 5'i DÜŞMELİ:** `--mutasyon-eski-desen` (eski geniş desen birebir → P1–P10) · `--mutasyon-muafiyet-yok` (→ N1–N3, N5, N6) · `--mutasyon-oturum-genis` (P7) · `--mutasyon-uretici-genis` (P8) · `--mutasyon-kopya-desen` (K2b). Çapa `count != 1` ⇒ exit 2.
+- ⛔ **K1 SİLİNMEZ:** N vektörlerinin muafiyete BAĞLI olduğunun kanıtıdır (atıf satırı gerçek tarayıcıya tek başına `kimlik izi` olarak takılır). K1 düşerse N'ler bomboş yeşildir.
+- **3. bağlam:** PowerShell yüzeyi + `-F <dosya>` / `--file=` + CRLF satır sonlu mesaj dosyası (P10/N5/N6) — satır satır eşleme `\r`'yi `\s*$` ile yutar.
+- **Gerçek CLI negatif testi** (görünürlük canlı; payload'ı e-postayı PARÇADAN kuran bir betikle scratch'e yaz — core ağacına yazma, yazım-anı guard'ı reddeder): `python scripts/hooks/pre_tool_guard.py < payload.json` → ajan-dışı trailer rc 2 + `COMMIT-MESAJI SIZINTI GATE` · yalnız ajan satırları rc 0 · pozitif kontrol `git commit -F -` (heredoc'suz, fail-closed) rc 2. rc 0'da stderr'de `GIRDI-PARSE-EDILEMEDI` aranır (B0b).
+- **Eski kod kıyası:** `git show <taban>:scripts/hooks/pre_tool_guard.py` → scratch `scripts/hooks/` (yanına GÜNCEL `genericize_common.py`) → `run_guard_fixture_tests.py --guard <kopya>` yalnız yeni blok vakasında, `guard_conformance.py --guard <kopya>` yalnız yeni bloklamali vakasında FAIL vermeli.
+- **Korpus ölçümü (tekrarlanabilir):** `git log --all --format=%B` → `co-authored-by: claude` satırlarında dar desene uymayan sayısı (2026-10-12: 630'da 0). Sayıyı vektöre pinleme.
+
+### B82b — yayın metninde `$(cat <<X … X)` çözümü + atıf adres maskesi + son çapalar (bug-gate turu 2, 2026-10-14)
+
+```
+python tests/run_battery.py git_imza_ayiklama_dar --kardes genericize_tenant_transport negatif_test_harness --precommit   # 38/38, 10 kip
+python tests/run_battery.py genericize_tenant_transport --kardes git_imza_ayiklama_dar tembel_desen worktree_blocklist z_obje_desen_kapsami genericize_muafiyet_satir_bazli b0_secim --precommit   # 65/65, 15 kip
+python tests/run_guard_fixture_tests.py                        # G 61/61
+python scripts/tests/test_commit_message_leak_gate.py ; python scripts/tests/guard_conformance.py   # 24/24 · 73
+```
+
+- ⛔ **`komut`'a DOKUNMA:** `_komut_govdesi` komut-niyeti kurallarının girdisidir (heredoc gövdesi veri sayılır, komut değil). Yalnız iki yayın gate'i (commit mesajı · PUBLIC-PR) `_ikame_cozumlu_komut(ham)`'dan kendi komutunu türetir. Blast-radius ölçütü: `komut` tüketen 6 kural (0005-C · GH-HEDEF · inline aktivasyon · fiori deploy · npm install ×2) değişikliğe girmez.
+- **`$(cat)` vektörü İMZA + `kimlik izi` + `FAIL-CLOSED` yok ölçer (`blok_tarandi`):** çözülemeyen ikame aynı imzayla FAIL-CLOSED blokladığı için yalnız imza bakan vektör gövdenin TARANDIĞINI ölçmez. İlk koşumda `--mutasyon-kirpik-komut` P14–P17'yi bu yüzden düşürmedi (yalnız N7 düştü).
+- **Kip → düşen:** `--mutasyon-son-capa-yok` (gc `AJAN_IMZA_SATIRI` sonu) → P11/P12 · `--mutasyon-atif-bosalt` (ptg) → P13 · `--mutasyon-kirpik-komut` → P14–P16, P17b, P17c, N7 · `--mutasyon-pr-kirpik-komut` → P18–P20, N8 · `--mutasyon-cozulemez-gecer` → F1–F3. P17 (`<<-` + TAB kapanış) kirpik mutantında da geçer: `_HEREDOC` o biçimi hiç kırpmaz, ham metin taranır (beklenen).
+- **Eşdeğer mutant (vektör UYDURMA):** `ATIF_SATIRI` son çapası (`\s*$`) F3 maskelemesinden sonra güvenlik açısından eşdeğerdir, çünkü satırın geri kalanı taranır. Guard tarafı tam eşdeğer: elle kurulan mutant kopyada `git_imza_ayiklama_dar` 38/38 kaldı. `core_precommit` tarafında yalnız KAPSAM sayacı fark eder: `--mutasyon-atif-son-capa-yok` → M12 (`adresi maskelenen 0`).
+- **Komşu çapa bayatlığı (F3'ün yan etkisi, ölçüldü):** atıf dalı satırı boşaltmayı bırakınca `--mutasyon-msg-yorum` (`… or _ATIF_SATIRI.match(s)`) sessizce KAÇTI, çünkü `#` satırı yine taranıyordu. Çare: muafiyet ayrı bir boşaltma dalı olarak geri konur. `--mutasyon-atif-orta-genis` çapası `_ATIF_ADRES` ayrılınca KURULAMADI (0 kez bulundu). Atıf desenine dokunan her değişiklikten sonra iki fixture'ın TÜM kiplerini koş.
+- **Gerçek CLI** (B0b; payload'ı e-postayı PARÇADAN kuran bir betikle `.tmp/`'ye yaz): `$(cat)` + ajan dışı trailer / düz e-posta / atıf ad bölümünde obje adı → rc 2 · meşru `$(cat)` commit ve meşru `--body "$(cat)"` PR → rc 0 · `$(sed …)` → rc 2 FAIL-CLOSED · `-F -` heredoc'suz → rc 2 (bilinen blok). Her rc 0'da stderr'de `GIRDI-PARSE-EDILEMEDI` ara. Private repoda `$(cat)` + e-posta rc 0 olmalı.
+- **FP korpusu:** `git log --all --format=%B%x01` → mesajı ÖNCE `%x01`'den böl, sonra satırla. Satır satır bölünürse son satır `\x01` taşır ve `\s*$` çapasına uymaz, sonuç sahte "ajan satırı takıldı" olur (ölçüldü). Ajan satırlarında maskeli hâlde takılan 0 olmalı. Mesaj düzeyinde eski ve yeni blok kümesi aynı olmalı (2026-10-14: iki repoda 0 yeni aday).
+- **Açık sınır (kapsam dışı, bilinçli):** `-m "$(cat dosya)"`, `-m "$(git log …)"` gibi heredoc'suz ikameler hâlâ değer metni olarak taranır; çıktıları ölçülmez. Çıplak `$` yalnız tırnaksız biçimde fail-closed olur.
+
+### B82c — ilk sınırlayıcıda biten `$(cat)` gövdesi + literal işaret kaçışı + `gh api` yol hedefi (bug-gate turu 3, 2026-10-14)
+
+```
+python tests/run_battery.py git_imza_ayiklama_dar              # 49/49, 15 kip
+python tests/run_battery.py genericize_tenant_transport        # 65/65, 15 kip
+python tests/run_guard_fixture_tests.py                        # G 73/73
+python tests/run_guard_fixture_tests.py --guard <taban-kopya>  # yalnız 10 yeni ayırt edici vaka FAIL
+python scripts/tests/test_commit_message_leak_gate.py ; python scripts/tests/guard_conformance.py
+```
+
+- ⛔ **İkinci normalizasyon segment sınırını `_komut_govdesi`'nden FARKLI çizmez:** `_CAT_HEREDOC` gövdesi temperlidir (`(?:(?!^…\3$).)*?`). Bash heredoc'u İLK sınırlayıcı satırında bitirir; o satırdan sonra `)` gelmezse aralık eşleşmez ve olağan kırpma yoluna kalır. Her desen değişikliğinde "ilk `EOF` sonrası `echo)`" vektörü (P22–P25 · G R1/R2/R3/N11) koşulur. `--mutasyon-cat-heredoc-genis` tam bu dördünü düşürmeli.
+- **Literal işaret kaçışı:** `_ikame_cozumlu_komut` ham metindeki `<HEREDOC-STRIPPED>` / `<HERESTRING-STRIPPED>` literalini normalizasyondan ÖNCE `\x00CATLIT<n>\x00`'a alır, `_ikame_degerlerini_coz` kararı verdikten sonra geri koyar. "İşaret ham değerde de var mı" kıyası SEÇİLMEDİ: değer listeleri hizalanamaz ve küme kıyası, başka bir değerdeki literal işaretle gerçek ikameyi maskeler. Bunu F5 ölçer (`$(sed)` + başka `-m`'de literal → FAIL-CLOSED kalmalı).
+- **Çıplak `$`:** yalnız segment tırnaksız `$` ile bitiyorsa ikamedir (`_CIPLAK_DOLAR_SONU = \$\s*$`). `$`'dan önce boşluk ya da `=` aranmaz, bitişik `-m$(…)` de dahildir (turu 4 G4-1 düzeltmesi; bu turun deseni bitişik biçimi kaçırıyordu, bkz. B82d). `-m '$'` serbesttir (N12), tırnaksız `-m $(git log …)` FAIL-CLOSED kalır (F4). İki yönü iki kip ölçer: `--mutasyon-ciplak-dolar-genis` → N12 · `--mutasyon-ciplak-dolar-dar` → F4.
+- **`gh api` hedefi YOLDAN:** `_gh_api_hedef_repo` uç token'ını (değer alan bayraklar atlanarak) okur. `repos/<ORG>/<REPO>` varsa görünürlük o repoya sorulur (`--repo` öneki), yol yoksa ya da `{owner}` yer tutuculuysa eski davranış korunur (GH-HEDEF bloklar). Kardeş: `_gh_api_yayin_mi` bayrak-önce biçimini (`gh api -X POST repos/…/issues`) yayın sayar.
+- ⚠ **G korpusunda `gh api` vakası `esleme` ile ÖLÇÜLMEZ:** o mock hay METNİNDE "public" arar ve yoldaki repo adını kendisi okur (sahte-yeşil: HEAD guard'ında N19 `esleme` ile rc 2, gerçekte rc 0). `gh-sahte` kipi `_repo_public_mu`'yu gerçek bırakır, yalnız `gh repo view` alt sürecini taklit eder (repo argümanı yoksa private).
+- **Kip → düşen (yeni):** `--mutasyon-cat-heredoc-genis` → P22–P25 · `--mutasyon-gh-api-yer-tutucu-acilmaz` → P21 · `--mutasyon-literal-kacis-yok` → N10, N11, P26 · `--mutasyon-ciplak-dolar-genis` → N12 · `--mutasyon-ciplak-dolar-dar` → F4 · `--mutasyon-cozulemez-gecer` → F1–F5. Eski kiplerin kümeleri genişler: `--mutasyon-kirpik-komut` + P25/N10/P26 · `--mutasyon-pr-kirpik-komut` + N11 (literal kaçış o yolda yaşar).
+- **Gerçek CLI:** R1–R3/N11 rc 2 · N19/N20 (`cd`/`--repo` yok) rc 2 · `gh api` private yol rc 0 · `cd <public> && gh api repos/<private>/…` rc 0 (yol kazanır, lider onaylı daraltma) · `{owner}` rc 2 GH-HEDEF · FP14/R8/R6 rc 0 · `$(sed)`/`$(cat|tr)`/tırnaksız `$(` rc 2 FAIL-CLOSED.
+- **Açık sınır (kapsam dışı):** `gh api graphql -f query='mutation{…}'` yayın sayılmaz (uç `graphql`, repo yolu yok). Bash `-F /c/…` POSIX yolu FAIL-CLOSED kalır (`-F` yolu `_win_yol`'dan geçmez).
+
+### B82d — bitişik `-m$(` FAIL-CLOSED (bug-gate turu 4, 2026-10-14) · geri alınan iki yol · önceden var olan açıklar
+
+```
+python tests/run_battery.py git_imza_ayiklama_dar              # 57/57, 16 kip
+python tests/run_battery.py genericize_tenant_transport        # 65/65, 15 kip
+python tests/run_guard_fixture_tests.py                        # G 73/73
+python scripts/tests/test_commit_message_leak_gate.py ; python scripts/tests/test_pre_tool_guard.py ; python scripts/tests/guard_conformance.py
+```
+
+- ⛔ **Muafiyet daraltmasında bitişik biçim de ölçülür:** `-m '$'` FP'sini kapatan desen önce `$`'dan önce boşluk/`=` istiyordu. Bu yüzden `-m$(…)` · `-am$(…)` · `-qam$(…)` · PowerShell `-m$(Get-Content …)` · `-m$((…))` FAIL-CLOSED'u atlıyordu. Eski genişliği sabitleyen vektör (F4) yalnız boşluklu biçimi taşıyordu. Vektörler: F6–F11 FAIL-CLOSED (sebep "komut ikamesi" metniyle doğrulanır, salt imza yetmez) · N13 `-m"$"` · N14 `-am'$'` geçer. Kipler: `--mutasyon-ciplak-dolar-bitisik` (eski desen) → F6–F11 · `--mutasyon-ciplak-dolar-dar` → F4 + F6–F11 · `--mutasyon-ciplak-dolar-genis` → N12–N14 · `--mutasyon-cozulemez-gecer` → F1–F11.
+- **SINIR — Bash lehçesi (yer gerçeği, GNU bash 5.3.9(1)-release, Git Bash):** `$(` içinde sınırlayıcıyla BAŞLAYIP aynı satırda daha sonra `)` taşıyan satır da heredoc'u bitirir; satırın kalanı kabuk olarak koşar (uyarı basılır, komut koşar). Biten biçimler: `EOF)` · `EOF )` · `EOF\t)` · `EOFX)` · `EOF x)` · `<<-` + `\tEOF)`. Bitmeyenler: `)`'sız satır, boşluk girintili `  EOF)`, `$(` DIŞINDAKİ `EOF)`. ⚠ Guard bu lehçeyi **bilmez**: `_CAT_HEREDOC` ve `_HEREDOC` gövdesi yalnız `^EOF$` satırında durur (aşağıdaki geri alınan yol 1). Bu lehçeye dokunan her desen değişikliğinde probu yeniden koş: `.sh` dosyasına `x="$(cat <<'EOF'` / `ok` / `EOF)"` / `echo ORTA` yaz; `ORTA` basılıyorsa satır sınırlayıcıdır.
+- **Denenen, geri alınan yol 1 (G4-2 → son gate G6-1, HIGH):** yayın yoluna `_KOMSUB_HEREDOC` ön geçişi eklendi (`_komut_govdesi(s, komsub=True)`, yalnız `_ikame_cozumlu_komut`'tan) ve `_CAT_HEREDOC`'a ikinci kapanış biçimi verildi. Ön geçiş yer tutucuyu koyarken başlık grubunu (`$(tr … <<'EOF'`) metinde bıraktı. Ardından `_HEREDOC` aynı başlığı yeniden eşledi ve bir SONRAKİ `^EOF$` satırına kadar yuttu. Gate ölçümü: `$(tr …)` / `$(sed …)` ikamesi + PR iz + sonda ikinci heredoc biçimindeki 5 vektörde (L1/L2/L3/L4/L6) main / `1f2860a` / `b37751f` rc 2, `3220955` rc 0. Bash gizlenen komutu koşturur. ⛔ Ders: bir normalizasyona eklenen ön geçiş, ardından gelen geçişin GİRDİSİNİ değiştirir. İki geçişin bileşimi ayrıca ölçülmeden güvenli sayılmaz.
+- **Denenen, geri alınan yol 2 (G4-3 → son gate G6-2, LOW):** `_GH_ADLARI` + `_GH_API_DALI` regex'i, `_yayinlanan_metin`'in api dalını seçmek için. Regex komut KONUMUNA bakmıyordu: başlıkta ya da notta `gh.exe api` metni geçince api dalı seçildi ve `--body-file` / `--notes-file` okunmadı. Gate ölçümü: B1 (`gh pr create --title 'gh.exe api …' --body-file <iz>`) ve B4 (`gh release create --notes 'bkz gh.exe api' --notes-file <iz>`) main / `1f2860a` / `b37751f` rc 2, `3220955` rc 0.
+- **Geri almanın kapanış ölçütü** (gate'in iki harness'ı yeni guard kopyasıyla; parse-fail 0, istisna 0): bg6 (25 vektör) — L1/L2/L3/L4/L6 ve B1/B4 rc 2 · `b37751f`'e göre fark 0 · `1f2860a`'ya göre gevşeme yalnız C1/C2 (onaylı a) · main'e göre gevşeme 0. bg4 (63 vektör) — `b37751f`'e göre gevşeme 0 · `1f2860a`'ya göre gevşeme yalnız A5/A5b/L9 (onaylı a) + K1o/K1o2/K1d/K1e (onaylı b) · main'e göre gevşeme yalnız K1o/K1o2/K1d/K1e (onaylı b).
+- **Önceden var olan açıklar** (main / `1f2860a` / `b37751f` üçünde de rc 0; bu turda kapatılmadı, kapanış listesinde):
+  - `$(…<<EOF…EOF)` lehçesi: `$(` içinde `EOF)` satırı heredoc'u bitirir, guard gövdeyi sonraki `^EOF$` satırına uzatır ve aradaki segmenti taramaz (bg4 H4b · bg6 L7, L7c, L8).
+  - `gh.exe api` gövdesi: api dalı yalnız `gh\s+api` ile seçilir ⇒ `/usr/bin/gh.exe api repos/<public>/issues -f body=<iz>` gövdesi okunmaz (bg4 K2k).
+  - L5: `<<-` + TAB'lı kapanış ve aynı adlı ikinci heredoc (`$(tr a b <<-EOF … \tEOF\n)` + PR iz + `cat <<EOF … EOF`).
+  - B5: `gh.exe pr create --repo <public> --body <iz>` yayın komutu olarak tanınmıyor.
+  - B6: `gh api repos/<public>/issues -F body=@<dosya>` dosya gövdesi okunmuyor.
+  - C4: `git commit -m "$(cat <dosya>)"` (tırnaklı, heredoc'suz ikame) dosya içeriği okunmuyor.
+- **Açık sınır (kapsam dışı, kapanışta lidere sunulan liste aynen):** `-m x$(…)` · tırnaksız backtick · `$VAR`/`${VAR}` · `-b$(…)` bitişik (`_arg_deger_kisa` boşluk ister) · `--input` · graphql · `command gh` · `-i` kümeli `gh api`.

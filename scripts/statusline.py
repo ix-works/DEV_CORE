@@ -43,7 +43,10 @@ SAP_HOST_FALLBACK = "<SYSTEM_ID>"
 SAP_PORT_FALLBACK = 8000
 
 SPRINT_RX = re.compile(r"Sprint\s+(\d+\w?)(?:\s+ilerleme)?\s+(\d+)\s*/\s*(\d+)", re.IGNORECASE)
-TRANSPORT_RX = re.compile(r"\b(DS4K\d{6})\b")
+# SID'den BAĞIMSIZ: <SID>K<6 rakam>, SID 3 karakter, ilki harf (genericize_common.TRANSPORT_PAT
+# ile aynı biçim; burada büyük harf zorunlu — SESSION_NOTES'taki düz yazıdan yanlış alım olmasın).
+# Eskiden tek bir tüketici sistemin SID'ine sabitti ⇒ başka SID'li projede segment HİÇ çizilmiyordu.
+TRANSPORT_RX = re.compile(r"\b([A-Z][A-Z0-9]{2}K\d{6})\b")
 
 
 def read_stdin_json():

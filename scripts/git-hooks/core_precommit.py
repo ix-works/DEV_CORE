@@ -27,6 +27,21 @@
 Yalnız staged içerik taranır (git show :path) — working-tree kirliliği gate'i etkilemez.
 CI modu: `--all` ile TÜM tracked dosyalar taranır (core-ci.yml full-tree gate'i).
 Çıkış: ihlal varsa 1 (commit/CI bloklanır), yoksa 0.
+
+WARN-FIRST katman (Q361 + Q365⑤, 2026-10-12 — ADR 0019; terfi AYRI karar):
+· Yapısal UYARI desenleri (`genericize_common.uyari_sizintilari`: bulut tenant host'u ·
+  transport numarası) staged ve `--all` modunda satır satır taranır; bulgu `UYARI` olarak
+  basılır, ÇIKIŞ KODUNU DEĞİŞTİRMEZ. Token BASILMAZ (CI günlüğü public; bloklamayan bir
+  bulgunun izi her koşumda log'a yeniden yazılırdı) — yalnız `yol:satır (tür)`.
+· `--ref <ref>`: o ref'in AĞACI (`git ls-tree`) + o commit'in MESAJI taranır (sızıntı +
+  uyarı desenleri + sır dosyası adı). Bulgu UYARI'dır; çıkış 0 (çözülemeyen ref → 2).
+· `--msg <dosya|->`: commit mesajı taranır (ajan atıf trailer'ında yalnız üreticinin
+  adresi maskelenir, satırın geri kalanı taranır — `_ATIF_SATIRI` gerekçesi; `#`
+  satırları TARANIR, `mesaj_satirlari` gerekçesi).
+  Bulgu UYARI'dır; çıkış 0 (okunamayan dosya / boş mesaj → 2 + ÖLÇÜLEMEDİ).
+· Bu iki modda da token BASILMAZ; isim listesi yoksa satır ÖLÇÜLEMEDİ notu basılır.
+· `--all` · `--ref` · `--msg` birbirini DIŞLAR: ikisi birlikte verilirse kullanım hatası
+  (rc 2) — eskiden biri sessizce kazanıyor, öbürü hiç koşmuyordu.
 """
 import os
 import re
@@ -36,12 +51,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from genericize_common import (  # noqa: E402  (sys.path bootstrap'tan SONRA)
-    blocklist_var_mi, id_pattern, sizintilari_bul,
+    ATIF_ADRES_PAT, ATIF_SATIRI, blocklist_var_mi, id_pattern, sizintilari_bul,
+    uyari_sizintilari,
 )
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stdin, "reconfigure"):
+    sys.stdin.reconfigure(encoding="utf-8", errors="replace")   # `--msg -` (Q365⑤)
 
 # Tek kaynak: scripts/genericize_common.py (D9). İsim listesi env + <git-dir> +
 # <proje>/.claude birleşimi; yapısal desenler (makine-yolu, e-posta, Z-obje, SAP
@@ -248,11 +266,11 @@ def staged_files(all_tracked: bool = False) -> list[str]:
     return [p for p in out.split("\0") if p]
 
 
-def staged_content(path: str) -> str | None:
-    """Staged (index) içerik; binary ise None."""
+def staged_content(path: str, ref: str | None = None) -> str | None:
+    """Staged (index) içerik — `ref` verilirse o ref'teki içerik; binary ise None."""
     if Path(path).suffix.lower() in BINARY_EXT:
         return None
-    r = subprocess.run(["git", "show", ":" + path], capture_output=True)
+    r = subprocess.run(["git", "show", (ref or "") + ":" + path], capture_output=True)
     if r.returncode != 0:
         return None
     raw = r.stdout
@@ -271,11 +289,17 @@ def profile_enum(repo: Path) -> set[str]:
 
 def yeni_sayac() -> dict:
     """KAPSAM BEYANI sayaçları — `muaf` kovası `temiz` kovasına KARIŞMAZ (CORE-06)."""
-    return {"dosya": 0, "ikili": 0, "muaf": 0, "gerekcesiz": 0, "muaf_satir": []}
+    return {"dosya": 0, "ikili": 0, "muaf": 0, "gerekcesiz": 0, "muaf_satir": [],
+            "uyari": []}
+
+
+def _tok(tok: str, token_bas: bool) -> str:
+    """Bloklamayan modlarda (`--ref`/`--msg`) token yerine tür yazılır (public günlük)."""
+    return f"'{tok}' " if token_bas else ""
 
 
 def check_generic(path: str, text: str, hatalar: list[str],
-                  sayac: dict | None = None) -> None:
+                  sayac: dict | None = None, token_bas: bool = True) -> None:
     """Sızıntı taraması — Q329'dan beri SATIR SATIR (muafiyet satır bazlı olduğu için).
 
     ⚠ `str.splitlines()` KULLANILMAZ: o, Unicode satır sınırlarında da (U+0B, U+1C,
@@ -292,8 +316,11 @@ def check_generic(path: str, text: str, hatalar: list[str],
     # ⛔ MUAFİYET DIŞI: dosya adına işaretçi konamaz, dolayısıyla bu dal susturulamaz.
     for tok, ad in sizintilari_bul(path, ID_PAT):
         hatalar.append(
-            f"GENERICIZE-LEAK  {path}  (DOSYA ADI) '{tok}' ({ad}) — core'a proje/müşteri "
-            f"izi giremez; dosyayı yeniden adlandır.")
+            f"GENERICIZE-LEAK  {path}  (DOSYA ADI) {_tok(tok, token_bas)}({ad}) — core'a "
+            f"proje/müşteri izi giremez; dosyayı yeniden adlandır.")
+    if sayac is not None:
+        for _, ad in uyari_sizintilari(path):
+            sayac["uyari"].append((path, "DOSYA ADI", ad))
 
     izinli = ALLOWED_TOKENS.get(path, [])
     for no, ham in enumerate(text.split("\n"), 1):
@@ -301,10 +328,13 @@ def check_generic(path: str, text: str, hatalar: list[str],
         for tok in izinli:
             satir = satir.replace(tok, "")
         bulgular = sizintilari_bul(satir, ID_PAT)
-        if not bulgular:
+        # WARN-FIRST (Q361): uyarı desenleri ayrı kovada — `hatalar`a GİRMEZ (çıkış kodu sabit).
+        uyarilar = uyari_sizintilari(satir)
+        if not bulgular and not uyarilar:
             continue
         m = MUAF_RE.search(satir)
         if m and gerekce_gecerli(m.group(1)):
+            bulgular = bulgular + uyarilar     # muaf satır uyarıyı da susturur (aynı sözleşme)
             if sayac is not None:
                 sayac["muaf"] += len(bulgular)
                 # ⚠ TOKEN BASILMAZ, yalnız TÜRÜ: bu satır her YEŞİL koşumda da basılır ve
@@ -313,6 +343,11 @@ def check_generic(path: str, text: str, hatalar: list[str],
                 sayac["muaf_satir"].append(
                     (path, no, sorted({ad for _, ad in bulgular}),
                      m.group(1).strip().strip(_GEREKCE_KIRP).strip()))
+            continue
+        if sayac is not None:
+            for _, ad in uyarilar:
+                sayac["uyari"].append((path, no, ad))
+        if not bulgular:
             continue
         ek = ""
         if m:
@@ -324,8 +359,9 @@ def check_generic(path: str, text: str, hatalar: list[str],
                   f"bir pragmadır; bu kapı onu kabul etmez.")
         for tok, ad in bulgular:
             hatalar.append(
-                f"GENERICIZE-LEAK  {path}:{no}  '{tok}' ({ad}) — core'a proje/müşteri izi "
-                f"giremez; placeholder'la (<SYSTEM_ID>, <SAP_USER>, ZSD001 ...)" + ek)
+                f"GENERICIZE-LEAK  {path}:{no}  {_tok(tok, token_bas)}({ad}) — core'a "
+                f"proje/müşteri izi giremez; placeholder'la (<SYSTEM_ID>, <SAP_USER>, "
+                f"ZSD001 ...)" + ek)
 
 
 def kapsam_beyani(sayac: dict) -> None:
@@ -347,6 +383,21 @@ def kapsam_beyani(sayac: dict) -> None:
               f"adı DA taranmadı (bugünkü sınır; 'temiz' demek değildir)")
     for path, no, turler, gerekce in sayac["muaf_satir"]:
         print(f"         MUAF  {path}:{no}  ({', '.join(turler)}) ← {gerekce}")
+    uyari_beyani(sayac["uyari"])
+
+
+def uyari_beyani(uyarilar: list[tuple]) -> None:
+    """WARN-FIRST kova (Q361) — HER koşumda sayısı basılır; 0 da yazılır (KAPSAM BEYANI).
+    Token BASILMAZ: yalnız `yol:satır (tür)`. Çıkış kodunu DEĞİŞTİRMEZ."""
+    turler: dict[str, int] = {}
+    for _, _, ad in uyarilar:
+        turler[ad] = turler.get(ad, 0) + 1
+    dokum = " · ".join(f"{ad} {n}" for ad, n in sorted(turler.items())) or "bulgu yok"
+    print(f"[UYARI-DESENLERI] tenant host · transport no (warn-first, ADR 0019 — çıkış kodunu "
+          f"DEĞİŞTİRMEZ): {len(uyarilar)} ({dokum})")
+    for path, no, ad in uyarilar:
+        print(f"         UYARI  {path}:{no}  ({ad}) — yer tutucuya çevir (<tenant>, "
+              f"<TRANSPORT>; fixture'da sahte SID)")
 
 
 def check_links(path: str, text: str, repo: Path, hatalar: list[str]) -> None:
@@ -383,8 +434,142 @@ def check_applies_to(path: str, text: str, enum: set[str], hatalar: list[str]) -
                 f"typo = sessiz profil-kaybı (D21)")
 
 
+def _bayrak_degeri(bayrak: str) -> str | None:
+    """`--bayrak <değer>` ya da `--bayrak=<değer>`; değer yoksa None."""
+    for i, a in enumerate(sys.argv[1:], 1):
+        if a == bayrak:
+            return sys.argv[i + 1] if i + 1 < len(sys.argv) else None
+        if a.startswith(bayrak + "="):
+            return a.split("=", 1)[1]
+    return None
+
+
+def _liste_notu(repo: Path) -> None:
+    if not blocklist_var_mi(proje_koku=repo):
+        print("         ÖLÇÜLEMEDİ: kimlik isim listesi yüklenemedi — müşteri/sistem/kişi "
+              "ADLARI taranmadı (yalnız yapısal + uyarı desenleri)")
+
+
+def _uyari_bas(mod: str, hatalar: list[str], uyarilar: list[tuple]) -> None:
+    """`--ref`/`--msg` ortak çıktısı. WARN-FIRST: bloklayıcı sınıftaki bulgular da burada
+    UYARI'dır (bu modlar bugün hiçbir şeyi bloklamaz); hiçbirinde token basılmaz."""
+    print(f"[{mod}] sızıntı-sınıfı bulgu {len(hatalar)} (warn-first — çıkış kodu 0)")
+    for h in hatalar:
+        print("  UYARI  " + h.split("\n", 1)[0])
+    uyari_beyani(uyarilar)
+
+
+# Commit mesajında tarama DIŞI satırlar. ÖLÇÜLDÜ (2026-10-12, `--ref` tabanda): ajan atıf
+# trailer'ı (`Co-Authored-By: Claude …` + üreticinin noreply adresi) e-posta yapısal desenine
+# uyar ve HER ajan commit'inde bulunur ⇒ muafiyetsiz `--msg` her mesajda sahte bulgu
+# üretirdi (uyarı körlüğü). Muafiyet YALNIZ bu biçime işler; başka adres/ad taşıyan
+# trailer TARANIR (o satırlar gerçek kimlik izi olabilir). Atlanan satır sayısı basılır.
+# Ad ile adres ARASI `@` taşıyamaz: `Claude <başka-adres> <noreply…>` biçimi aksi hâlde
+# ikinci bir e-postayı muafiyetin içine saklardı (bug-gate 2026-10-12, M10).
+# TEK KAYNAK: desen `genericize_common.ATIF_SATIRI` (2026-10-12) — `pre_tool_guard`'ın
+# commit-mesajı gate'i AYNI çekirdeği kullanır; burada yalnız atıf trailer'ı muaftır
+# (guard'ın ek iki satırı — oturum / üretici — bu uçta taranmaya devam eder).
+# ⛔ Satır BOŞALTILMAZ, yalnız adresi maskelenir (bug-gate F3, 2026-10-14): ad bölümüne
+# yazılan bir obje/paket adı aksi hâlde taramadan geçerdi (`genericize_common` ⛔ notu).
+_ATIF_SATIRI = ATIF_SATIRI
+
+
+def mesaj_satirlari(metin: str) -> tuple[str, int]:
+    """Taranacak mesaj metni (satır numarası korunur) + adresi maskelenen satır sayısı.
+
+    `#` satırları TARANIR (bug-gate 2026-10-12). ÖLÇÜLDÜ (git 2.54, `commit.cleanup`
+    ayarsız): `-m`, `-F <dosya>` ve `-F -` ile yazılan mesajda `#` satırı KAYITLI mesajda
+    KALIR (varsayılan cleanup editörsüz `whitespace`'tir, yorum silmez) ve `commit-msg`
+    hook'u da onu görür. `--ref`'in okuduğu kayıtlı mesajda zaten git yorumu yoktur ⇒ `#`
+    ile başlayan her satır yayına giden metindir. Editörle yazılan mesajda git'in kendi
+    yardım yorumları taranır (FP riski, sızıntı riskinden ucuz). Muaf tek parça: atıf
+    trailer'ındaki üretici adresi (ad bölümü taranır)."""
+    out, atlanan = [], 0
+    for s in metin.split("\n"):
+        if _ATIF_SATIRI.match(s):
+            out.append(ATIF_ADRES_PAT.sub("", s, count=1))
+            atlanan += 1
+        else:
+            out.append(s)
+    return "\n".join(out), atlanan
+
+
+def msg_modu(kaynak: str, repo: Path) -> int:
+    """Q365⑤ — commit mesajı taraması (`commit-msg` hook'unun ileride çağıracağı uç)."""
+    try:
+        if kaynak == "-":
+            metin = sys.stdin.read()
+        else:
+            metin = Path(kaynak).read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        print(f"[MSG] ÖLÇÜLEMEDİ: mesaj okunamadı ({e.__class__.__name__}) — tarama YAPILMADI")
+        return 2
+    if not metin.strip():
+        # Boş girdi "temiz" DEĞİLDİR: yanlış dosya / boş boru da buraya düşer (ölçülemedi ≠ temiz).
+        print("[MSG] boş mesaj — ÖLÇÜLEMEDİ: taranacak metin yok (yanlış dosya ya da boş "
+              "stdin olabilir) — tarama YAPILMADI")
+        return 2
+    taranan, atlanan = mesaj_satirlari(metin)
+    hatalar: list[str] = []
+    sayac = yeni_sayac()
+    check_generic("<commit-mesajı>", taranan, hatalar, sayac, token_bas=False)
+    print(f"[KAPSAM] --msg: {len(metin.split(chr(10)))} satır · adresi maskelenen {atlanan} "
+          f"(yalnız ajan atıf trailer'ının üretici adresi; satırın geri kalanı ve `#` "
+          f"satırları TARANIR)")
+    _uyari_bas("MSG", hatalar, sayac["uyari"])
+    _liste_notu(repo)
+    return 0
+
+
+def ref_modu(ref: str, repo: Path) -> int:
+    """Q365⑤ — belirli bir ref'in AĞACI + commit MESAJI (yayına giden şeyin kendisi)."""
+    r = subprocess.run(["git", "rev-parse", "--verify", "--quiet", ref + "^{commit}"],
+                       capture_output=True, text=True)
+    sha = r.stdout.strip()
+    if r.returncode != 0 or not sha:
+        print(f"[REF] ÖLÇÜLEMEDİ: '{ref}' bir commit'e çözülmedi — tarama YAPILMADI")
+        return 2
+    hatalar: list[str] = []
+    sayac = yeni_sayac()
+    dosyalar = [p for p in _git("ls-tree", "-r", "-z", "--name-only", sha).split("\0") if p]
+    check_sir(dosyalar, hatalar)
+    for path in dosyalar:
+        text = staged_content(path, ref=sha)
+        if text is None:
+            sayac["ikili"] += 1
+            continue
+        sayac["dosya"] += 1
+        check_generic(path, text, hatalar, sayac, token_bas=False)
+    mesaj, atlanan = mesaj_satirlari(_git("log", "-1", "--format=%B", sha))
+    check_generic("<commit-mesajı>", mesaj, hatalar, sayac, token_bas=False)
+    print(f"[KAPSAM] --ref {sha[:12]}: {sayac['dosya']} dosya + commit mesajı "
+          f"(adresi maskelenen {atlanan} satır: yalnız ajan atıf trailer'ı) · "
+          f"muaf-satır {sayac['muaf']} · ikili/okunamayan {sayac['ikili']} (ÖLÇÜLEMEDİ)")
+    _uyari_bas("REF", hatalar, sayac["uyari"])
+    _liste_notu(repo)
+    return 0
+
+
 def main() -> int:
     all_tracked = "--all" in sys.argv
+    modlar = [m for m in ("--all", "--ref", "--msg")
+              if m in sys.argv or any(a.startswith(m + "=") for a in sys.argv)]
+    if len(modlar) > 1:
+        print(f"[KULLANIM] {' + '.join(modlar)} birlikte verilemez — bu modlar birbirini "
+              f"dışlar (biri sessizce kazanır, öbürü HİÇ koşmazdı). Tek mod seç.")
+        return 2
+    if "--msg" in sys.argv or any(a.startswith("--msg=") for a in sys.argv):
+        kaynak = _bayrak_degeri("--msg")
+        if not kaynak:
+            print("[KULLANIM] --msg <dosya|->")
+            return 2
+        return msg_modu(kaynak, Path(_git("rev-parse", "--show-toplevel").strip() or "."))
+    if "--ref" in sys.argv or any(a.startswith("--ref=") for a in sys.argv):
+        ref = _bayrak_degeri("--ref")
+        if not ref:
+            print("[KULLANIM] --ref <ref>")
+            return 2
+        return ref_modu(ref, Path(_git("rev-parse", "--show-toplevel").strip() or "."))
     repo = Path(_git("rev-parse", "--show-toplevel").strip() or ".")
     enum = profile_enum(repo)
 

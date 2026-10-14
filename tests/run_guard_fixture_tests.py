@@ -17,7 +17,7 @@ ZORLAMALAR (mevcut harness'lerin dersleri):
     ateslemis olabilir ve "korunuyoruz" sanilir.
   * DETERMINIZM: guard sizinti gate'lerinde repo gorunurlugunu CANLI sorar
     (`gh repo view`) ve gercek desen sozlugunu kullanir. Fixture'lar bunlari
-    `gorunurluk` (public|private|canli) ve `tarayici` (sentinel|gercek) ile SABITLER
+    `gorunurluk` (public|private|esleme|gh-sahte|canli) ve `tarayici` (sentinel|gercek) ile SABITLER
     -> ag yok, kimlik izi yok, her makinede ayni sonuc.
   * SESSIZ ATLAMA YOK: bir vaka kosulamazsa FAIL sayilir (yesil isik degil).
 
@@ -71,6 +71,23 @@ elif gorunurluk == "esleme":
     # public). Boylece "once PRIVATE okuma, sonra PUBLIC yayin" agsiz kurulabilir.
     m._repo_public_mu = lambda hay: ((True, "org/public-core") if "public" in (hay or "").lower()
                                      else (False, "org/private-proj"))
+elif gorunurluk == "gh-sahte":
+    # K1 (2026-10-14): `esleme` hay METNİNE bakar ⇒ `gh api repos/org/public-core/…` yolu
+    # hay'de durduğu için hedefi "kendisi okur" ve guard'ın yolu okuyup okumadığını
+    # ÖLÇEMEZ (sahte-yeşil; HEAD guard'ında N19 `esleme` ile rc 2, gerçekte rc 0 idi).
+    # Bu kipte `_repo_public_mu` GERÇEK kalır; yalnız `gh repo view` alt süreci taklit
+    # edilir: repo ARGÜMANI "public" içeriyorsa public, argüman yoksa (cwd = proje kökü
+    # taklidi) PRIVATE. Diğer alt süreçler (git rev-parse …) gerçek çalışır.
+    import subprocess as _sp, types as _ty
+    _gercek_run = _sp.run
+    def _sahte_run(argv, *a, **k):
+        if isinstance(argv, (list, tuple)) and list(argv[:3]) == ["gh", "repo", "view"]:
+            hedef = str(argv[3]) if len(argv) > 3 and not str(argv[3]).startswith("-") else ""
+            pub = "public" in hedef.lower()
+            return _ty.SimpleNamespace(returncode=0, stderr="", stdout=json.dumps(
+                {"isPrivate": not pub, "nameWithOwner": hedef or "org/private-proj"}))
+        return _gercek_run(argv, *a, **k)
+    _sp.run = _sahte_run
 if tarayici == "sentinel":
     m.sizintilari_bul = lambda metin, desen: (
         [(sentinel, "yapay-kategori")] if sentinel in (metin or "") else [])

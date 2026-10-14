@@ -46,7 +46,7 @@ def create_auth_provider(auth_type: str = 'basic', **kwargs) -> IAuthProvider:
         provider = create_auth_provider(
             'basic',
             username='DEVELOPER',
-            password='developer4',
+            password='<sifre>',
             client='000'
         )
 
@@ -67,7 +67,7 @@ def create_auth_provider(auth_type: str = 'basic', **kwargs) -> IAuthProvider:
         # SAML SSO auth
         provider = create_auth_provider(
             'saml',
-            base_url='https://my415633.s4hana.cloud.sap',
+            base_url='https://<tenant>.s4hana.cloud.sap',
             username='user@example.com',
             password='password'
         )
