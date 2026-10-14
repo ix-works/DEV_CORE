@@ -10,7 +10,9 @@ basar; katman durumu = kontrollerin en kötüsü (FAIL > WARN > PASS).
 Katmanlar (GECIS-EXEC-CHECKLIST BLOK F / F2.1–F2.7):
   1. FS+BAĞIMLILIK : 4 junction → gerçek core'a çözülüyor · managed-policy ·
                      plugin envanteri (setup_plugins --list) · CLI mevcudiyeti ·
-                     (Windows) PowerShell politikası × npm .ps1 shim'i (Q339)
+                     (Windows) PowerShell politikası × npm .ps1 shim'i (Q339) ·
+                     Claude Code sürümü ↔ ölçülmüş taban · hook yorumlayıcısı
+                     gerçekten başlıyor mu (Q365①; ikisi de WARN-only)
   2. GIT           : remote org tutarlı · main==origin/main · stable tag ·
                      hooksPath · global baseline · working-tree temizliği
   3. GITHUB-ENFORCE: ruleset ACTIVE · CI yeşil · repo tree'de core-sızıntısı yok
@@ -250,6 +252,186 @@ def katman1() -> list[Sonuc]:
 
     # 1e — PowerShell yürütme politikası × npm `.ps1` shim'i (Q339; YALNIZ Windows)
     r += _ps_politika_kontrol(bulunan)
+    # 1f — Claude Code sürümü ↔ ölçülmüş taban (Q365①; WARN-only ölçüm, gate DEĞİL)
+    r += _claude_surum_kontrol(bulunan.get("claude"))
+    # 1g — hook yorumlayıcısı GERÇEKTEN başlıyor mu (Q365①; sys.executable'dan BAĞIMSIZ)
+    r += _yorumlayici_kontrol()
+    return r
+
+
+# ---------------------------------------------------------------- 1f / 1g (Q365①)
+# NEDEN VAR (dış repo karşılaştırması 2026-10-12): 1d yalnız `claude`'un PATH'te VARLIĞINI
+# söyler; çekirdeğin dayandığı yükleme mekanizmasının hangi sürümde ÖLÇÜLDÜĞÜNÜ söylemez.
+# 4d hook smoke'u ise hook'u `sys.executable` ile koşar — Claude Code ise settings'teki
+# `"command": "python"`ı KENDİ PATH çözümüyle başlatır. İkisi ayrışabilir: Windows'ta
+# `WindowsApps\python.exe` Microsoft Store YÖNLENDİRİCİSİDİR (ölçüldü: `-c` ile rc=49,
+# "Python was not found") ⇒ PATH'te önde olursa HİÇBİR hook başlamaz, `pre_tool_guard`
+# bloklamaz (sessiz fail-open) ve 4d yine PASS der.
+# ⛔ İKİSİ DE FAIL ÜRETMEZ (ADR 0019: ölçüm aracı, yeni gate değil) — WARN ile başlar.
+# ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: ayrıştırılamayan sürüm / okunamayan settings PASS DEMEZ.
+#
+# TABAN = "ÖLÇÜLMÜŞ" taban, "desteklenen asgari" DEĞİL: çekirdek talimatının fiziksel kopya
+# ile yüklenmesi (Q286, `.claude/rules/00-claude-core.md`) Claude Code 2.1.269'da ölçüldü
+# (infra-changelog Q286 satırı). Daha eski sürümde bu mekanizma ÖLÇÜLMEDİ — bozuk olduğu
+# KANITLANMADI. Taban yalnız yeni bir ölçümle yükseltilir/düşürülür (kaynağıyla birlikte).
+CLAUDE_OLCULMUS_TABAN = (2, 1, 269)
+_CC_SURUM_KAPSAM = ("kapsam: `claude --version` çıktısı, ix_doctor sürecinin PATH'iyle; "
+                    "taban ÖLÇÜLMÜŞ sürümdür, uyumluluk sınırı değil; FAIL üretmez")
+# Bilinen biçimler (ölçüldü: "2.1.296 (Claude Code)"). Başka biçim TAHMİN EDİLMEZ — eşleşmeyen
+# çıktı ÖLÇÜLEMEDİ olur (sahte FAIL/PASS yok). Satır içinde rastgele sayı (node uyarısı,
+# yol) YAKALANMASIN diye ikinci desen tam satırdır.
+_CC_SURUM_DESENLERI = (
+    re.compile(r"(?<![\w.])v?(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.]+)?\s+\(Claude Code\)"),
+    re.compile(r"^\s*v?(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.]+)?\s*$"),
+)
+
+
+def _claude_surum_ayristir(cikti: str) -> tuple[int, int, int] | None:
+    """`claude --version` çıktısından (major, minor, patch); tanınmazsa None."""
+    for satir in (cikti or "").splitlines():
+        for desen in _CC_SURUM_DESENLERI:
+            m = desen.search(satir)
+            if m:
+                return int(m.group(1)), int(m.group(2)), int(m.group(3))
+    return None
+
+
+def _claude_surum_kontrol(claude_yol: str | None) -> list[Sonuc]:
+    taban = ".".join(map(str, CLAUDE_OLCULMUS_TABAN))
+    if not claude_yol:
+        return [(SKIP, "Claude Code sürümü ölçülmedi — `claude` PATH'te yok (1d satırına bak)")]
+    rc, out = _run([claude_yol, "--version"], timeout=30)
+    surum = _claude_surum_ayristir(out) if rc == 0 else None
+    if surum is None:
+        ilk = next((s.strip() for s in out.splitlines() if s.strip()), "çıktı yok")
+        return [(WARN, f"Claude Code sürümü ÖLÇÜLEMEDİ (`claude --version` rc={rc}: "
+                       f"{ilk[:80]!r}) — tanınan biçim yok; sürüm BİLİNMİYOR (temiz demek "
+                       f"DEĞİL) [{_CC_SURUM_KAPSAM}]")]
+    s = ".".join(map(str, surum))
+    if surum < CLAUDE_OLCULMUS_TABAN:
+        return [(WARN, f"Claude Code {s} < ölçülmüş taban {taban} — çekirdek yükleme "
+                       f"mekanizması (Q286) bu sürümde ÖLÇÜLMEDİ; güncelle: `claude update` "
+                       f"[{_CC_SURUM_KAPSAM}]")]
+    return [(PASS, f"Claude Code {s} ≥ ölçülmüş taban {taban} [{_CC_SURUM_KAPSAM}]")]
+
+
+_YORUMLAYICI_ISARET = "IX-YORUMLAYICI-OK"
+_YORUMLAYICI_KAPSAM = ("kapsam: settings'teki hook/statusLine komutları, ix_doctor sürecinin "
+                       "PATH'iyle çözüldü — Claude Code'un hook ortamının PATH'i ÖLÇÜLMEDİ; "
+                       "FAIL üretmez")
+# `${X}` · `$X` · `%X%` — genişletilmemiş değişken (Claude Code genişletir; biz taklit etmeyiz)
+_YORUMLAYICI_DEGISKEN = re.compile(r"\$\{[^}]*\}|\$[A-Za-z_]\w*|%[A-Za-z_]\w*%")
+# python ailesi: python · python3 · python3.11 · pythonw · py · pyw · *python* (+ .exe/.cmd/.bat)
+_YORUMLAYICI_PY_AILE = re.compile(r"(?:[\w.-]*python[\w.-]*?|pyw?)(?:\.(?:exe|cmd|bat))?", re.I)
+
+
+def _min_py() -> tuple[int, int] | None:
+    """Python tabanı TEK KAYNAKTAN: `team_setup.MIN_PY` (AST; import yan etkisi yok)."""
+    import ast
+    try:
+        agac = ast.parse((CORE_ROOT / "scripts" / "team_setup.py").read_text(encoding="utf-8"))
+        for d in agac.body:
+            if (isinstance(d, ast.Assign) and any(isinstance(h, ast.Name) and h.id == "MIN_PY"
+                                                  for h in d.targets)):
+                v = ast.literal_eval(d.value)
+                return int(v[0]), int(v[1])
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def _hook_komutlari(ayar: Path) -> dict[str, int]:
+    """settings.json'daki hook + statusLine komutlarının YORUMLAYICI adı → adet.
+
+    exec biçimi (`args` VAR): `command` alanının kendisi. Kabuk biçimi: ilk sözcük.
+    Okuma/ayrıştırma hatası YUKARI çıkar (çağıran ÖLÇÜLEMEDİ'ye çevirir)."""
+    veri = json.loads(ayar.read_text(encoding="utf-8"))
+    sayac: dict[str, int] = {}
+
+    def _ekle(kanca: dict) -> None:
+        kom = str(kanca.get("command") or "").strip()
+        if not kom:
+            return
+        if "args" in kanca:
+            ad = kom
+        else:
+            m = re.match(r'\s*"([^"]+)"|\s*(\S+)', kom)
+            ad = (m.group(1) or m.group(2)) if m else kom
+        sayac[ad] = sayac.get(ad, 0) + 1
+
+    for bloklar in (veri.get("hooks") or {}).values():
+        for blok in bloklar or []:
+            for kanca in blok.get("hooks") or []:
+                if isinstance(kanca, dict):
+                    _ekle(kanca)
+    if isinstance(veri.get("statusLine"), dict):
+        _ekle(veri["statusLine"])
+    return sayac
+
+
+def _yorumlayici_kontrol(ayar: Path | None = None) -> list[Sonuc]:
+    """1g satırları. Her farklı yorumlayıcı için: PATH çözümü + `-c` probu + sürüm."""
+    ayar = ayar or (PROJ / ".claude" / "settings.json")
+    kaynak = ".claude/settings.json"
+    if not ayar.is_file():
+        ayar, kaynak = CORE_ROOT / "claude" / "settings.template.json", "settings ŞABLONU (proje kopyası yok)"
+    try:
+        komutlar = _hook_komutlari(ayar)
+    except Exception as e:  # noqa: BLE001
+        return [(WARN, f"hook yorumlayıcısı ÖLÇÜLEMEDİ — {kaynak} okunamadı "
+                       f"({type(e).__name__}: {e}) [{_YORUMLAYICI_KAPSAM}]")]
+    if not komutlar:
+        return [(WARN, f"hook yorumlayıcısı ÖLÇÜLEMEDİ — {kaynak} içinde hook komutu yok "
+                       f"[{_YORUMLAYICI_KAPSAM}]")]
+    taban = _min_py()
+    r: list[Sonuc] = []
+    for ad, adet in sorted(komutlar.items()):
+        # ÖLÇÜLEMEDİ (SKIP) iki durum — WARN değil, çünkü ölçülen bir kusur YOK (bug-gate ÖNERİ):
+        # ① genişletilmemiş değişkenli yol: Claude Code'un genişletmesi taklit EDİLMEZ (tahmin olur)
+        if _YORUMLAYICI_DEGISKEN.search(ad):
+            r.append((SKIP, f"hook yorumlayıcısı `{ad}` ÖLÇÜLEMEDİ — yol genişletilmemiş değişken "
+                            f"içeriyor ({adet} komut); ix_doctor kabuk/harness genişletmesini taklit "
+                            f"ETMEZ — temiz demek DEĞİL [{_YORUMLAYICI_KAPSAM}]"))
+            continue
+        yol = ad if ("/" in ad or "\\" in ad) else shutil.which(ad)
+        if not yol:
+            r.append((WARN, f"hook yorumlayıcısı `{ad}` PATH'te YOK — {kaynak} içindeki {adet} "
+                            f"komut HİÇ başlamaz (pre_tool_guard bloklamaz = sessiz fail-open) "
+                            f"[{_YORUMLAYICI_KAPSAM}]"))
+            continue
+        # ② python ailesi DIŞI (node/bash/pwsh…): `-c` sürüm probu uygulanamaz → BAŞLAMIYOR demek
+        #    sahte WARN olurdu. PATH çözümü yukarıda ÖLÇÜLDÜ (o WARN gerçektir); başlama ölçülmez.
+        if not _YORUMLAYICI_PY_AILE.fullmatch(re.split(r"[\\/]", ad)[-1]):
+            r.append((SKIP, f"hook yorumlayıcısı `{ad}` → {yol} ÖLÇÜLEMEDİ — python ailesi DEĞİL; "
+                            f"`-c` sürüm probu uygulanamaz ({adet} komut) — temiz demek DEĞİL "
+                            f"[{_YORUMLAYICI_KAPSAM}]"))
+            continue
+        rc, out = _run([yol, "-c", f"import sys; print('{_YORUMLAYICI_ISARET}', "
+                                   f"*sys.version_info[:3])"], timeout=30)
+        m = re.search(rf"^{_YORUMLAYICI_ISARET} (\d+) (\d+) (\d+)\s*$", out, re.M)
+        if rc != 0 or not m:
+            son = next((s.strip() for s in reversed(out.splitlines()) if s.strip()), "çıktı yok")
+            ipucu = (" — Microsoft Store YÖNLENDİRİCİSİ (WindowsApps): gerçek Python'u PATH'te "
+                     "öne al ya da Ayarlar > Uygulama yürütme diğer adları'ndan kapat"
+                     if "windowsapps" in yol.lower() else "")
+            r.append((WARN, f"hook yorumlayıcısı `{ad}` → {yol} BAŞLAMIYOR (rc={rc}: {son[:90]!r})"
+                            f"{ipucu} — {adet} komut çalışmaz (pre_tool_guard bloklamaz = sessiz "
+                            f"fail-open) [{_YORUMLAYICI_KAPSAM}]"))
+            continue
+        surum = tuple(int(x) for x in m.groups())
+        s = ".".join(map(str, surum))
+        farkli = ("" if os.path.normcase(os.path.realpath(yol)) ==
+                  os.path.normcase(os.path.realpath(sys.executable))
+                  else f" (ix_doctor'un kendi yorumlayıcısından FARKLI: {sys.executable})")
+        if taban is None:
+            r.append((WARN, f"hook yorumlayıcısı `{ad}` → {yol} çalışıyor (Python {s}) ama taban "
+                            f"ÖLÇÜLEMEDİ (team_setup.MIN_PY okunamadı){farkli} [{_YORUMLAYICI_KAPSAM}]"))
+        elif surum[:2] < taban:
+            r.append((WARN, f"hook yorumlayıcısı `{ad}` → {yol} Python {s} < team_setup.MIN_PY "
+                            f"{taban[0]}.{taban[1]}{farkli} [{_YORUMLAYICI_KAPSAM}]"))
+        else:
+            r.append((PASS, f"hook yorumlayıcısı `{ad}` → {yol} çalışıyor (Python {s} ≥ "
+                            f"{taban[0]}.{taban[1]}; {adet} komut){farkli} [{_YORUMLAYICI_KAPSAM}]"))
     return r
 
 

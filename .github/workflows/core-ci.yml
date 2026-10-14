@@ -17,6 +17,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Q370① (2026-10-12): YALNIZ `windows` olcum isini elle kosturmak icin. Bu tetikle
+  # `kapilar`/`fixture`/`gates` de kosar (degismediler) — ayni kosuda Linux ↔ Windows sure
+  # kiyasi verir. PR/push'ta `windows` isi `skipped` olur; ruleset yalniz `gates`'i ister.
+  workflow_dispatch:
 
 env:
   # Parca sayisi — `fixture.strategy.matrix.parca` listesiyle AYNI olmali. Uyusmazlik
@@ -171,6 +175,42 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
           overwrite: true
+
+  # Q370① (2026-10-12) — WINDOWS AYAGI: OLCUM ISI, ZORUNLU DURUM KONTROLU DEGIL.
+  # Neden: gelistirme makineleri Windows, CI yalniz ubuntu; cp1252 konsol cokmesi ve
+  # tek-segment yol vakalari YALNIZ Windows'ta gorunur (infra-test-recipes; dis repoda da
+  # uc kusur yalniz Windows'ta gorunmus). Once sure olculur, sonra karar (Q370 ⚠RISK ①).
+  # ⛔ `gates.needs`'e EKLENMEZ ve ruleset required-check'e BAGLANMAZ — baglanirsa her
+  #    merge'i bloklar / CI suresini uzatir. Karar SURE OLCUMUNDEN SONRA, ayri onayla.
+  # ⛔ `parca-*` artifact'i YUKLEMEZ: `gates` toplayicisi `pattern: parca-*` ile indirir;
+  #    ayni adla yukleme dispatch kosusunda tamlik hesabini bozardi. Suit `--parca`SIZ, TAM kosar.
+  # ⛔ PYTHONUTF8 / PYTHONIOENCODING AYARLANMAZ — olculecek sinif tam olarak varsayilan
+  #    konsol kod sayfasidir; ayarlamak kusuru gizler.
+  windows:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      # Gelistirici makinesinin git tabani (ix_doctor K2 global baseline): runner varsayilani
+      # autocrlf=true'dur ve bayt-capali korpusu SAHTE kirardi (olcum yerel ortami yansitmali).
+      - name: Git tabani (ix_doctor K2 ile ayni)
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0      # pinli-SHA mutasyon tabanlari (bkz. `kapilar` checkout yorumu)
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Bagimliliklar
+        run: pip install --quiet requests urllib3 python-dotenv
+
+      - name: Validator fixture testleri (TAM suit, Windows — olcum)
+        run: python tests/run_fixture_tests.py
 
   gates:
     needs: [kapilar, fixture]

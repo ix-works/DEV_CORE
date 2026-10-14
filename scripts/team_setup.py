@@ -12,6 +12,8 @@ Yaptıkları:
        core / .claude\\agents / .claude\\skills / .claude\\commands
   4. Eksik proje-lokal dosyaları template'ten tamamla (settings.json, hook_shim.py) +
      MEVCUT kopyaların şablon sapmasını raporla (D7 imzası; gözlem, exit kodunu değiştirmez)
+     + `.gitignore` YÖNETİLEN BLOK: şablonda olup projede olmayan satırları dosyanın BAŞINDAKİ
+       işaretli bloğa yazar; proje satırları bayt-eş ve bloktan sonra (Q365④; `--no-gitignore`)
   --tazele-shim / --tazele-precommit : sapmış kopyayı AÇIK onayla tazele (fark + yedek + sha)
   5. Claude Code plugin'leri (setup_plugins.py; non-fatal) + seed_memory (--no-seed ile atla)
   6. Smoke: statusline + MCP import
@@ -371,6 +373,215 @@ def dosya_tamamla(proje: Path) -> None:
             # ÖLÇÜLEMEDİ ≠ TEMİZ: sessizce geçme, operatör bilsin.
             say(WARN, "active_package YAZILAMADI — project.yaml'da `active_package:` yok; "
                       "paket belirlenince elle yaz (.claude/active_package + project.yaml birlikte)")
+
+
+# ── .gitignore YÖNETİLEN BLOK (Q365④, 2026-10-12) ───────────────────────────────────
+# NEDEN VAR (ölçüldü 2026-10-12, iki tüketici proje): `.gitignore` `init_project` tarafından
+# BİR KEZ yazılır ve sonra bayatlar. Q241 (2026-09-02) şablonu `conn/` altını topyekûn kilitledi
+# (`conn/*` + açık negasyonlar); Q241'den ÖNCE kurulmuş iki projede `git check-ignore --no-index`
+# `conn/.gmail_app_password` · `conn/mail_list.txt` · `conn/<SYS>.conn_adt` için rc=1 verdi —
+# yani sır dosyaları commit'e AÇIK. Kökte sır içeren arşiv vakasını kapatan `/*.zip` de yoktu.
+# `check_core_not_committed` yalnız `.conn_adt`/core kilidine bakar, `conn/*`ye bakmaz.
+# ⛔ BLOK DOSYANIN BAŞINDADIR; projenin kendi satırları bloktan SONRA, sırası ve baytı DEĞİŞMEDEN
+#    durur — hiçbir proje satırı yeniden yazılmaz/taşınmaz. Gerekçe gitignore kuralıdır (aynı
+#    dosyada SON eşleşen satır kazanır): (1) bir yolu herhangi bir proje satırı eşliyorsa ve yolun
+#    üst dizini blok tarafından dışlanmıyorsa karar proje bölümündedir ⇒ öncekiyle aynı (üst dizin
+#    dışlanırsa SINIR ②: yol IGNORE olur); (2) hiçbir proje satırı eşlemiyorsa karar bloktan gelir
+#    ⇒ yol yalnız IGNORE'a geçebilir; (3) blok bir dizini dışlarsa altı gizlenir ⇒ yine yalnız
+#    sıkılaştırma. Blok projenin gizlediği hiçbir yolu AÇAMAZ — iddia ölçüme değil KURALA dayanır.
+#    (PR #326 iki bug-gate turu: önceki tasarım bloğu SONA koyup etkiyi geçici bir repoda temsil
+#    yollarıyla ÖLÇÜYOR, gerekirse proje negasyonunu bloğun sonuna yeniden yazıyordu; iki tur üst
+#    üste sessiz gevşetme bulundu — negasyonu taşımak projenin sonraki satırlarının gizlediği yolu
+#    açıyordu, temsil yolu kendi desenine üye değildi, ölçüm global git config'ine bağlıydı.
+#    Kök neden karmaşaydı; ölçüm düzeneği bütünüyle KALDIRILDI.)
+# ⛔ ÇERÇEVE (SINIR d · KAPSAM ③): yukarıdaki değişmez projenin KENDİ satırlarına (blok çıkarılmış dosya)
+#    göre tanımlıdır, dosyanın O ANKİ hâline göre DEĞİL. Eski blok başta değilse (ortada/sonda —
+#    önceki tasarımın çıktısı ya da kullanıcı bloğun ÜSTÜNE yazmış) bloğun ÜSTÜNDEKİ bir proje
+#    negasyonu (`!conn/x.env`) bugün blokça ezilir; blok başa taşınınca proje satırı sonra gelir ve
+#    KAZANIR ⇒ yol açılır. Aynı şekilde şablondan çıkarılan bir satır, yalnız eski bloğun gizlediği
+#    (hiçbir proje satırının eşlemediği) yolu açar. Davranış BİLEREK değişmez: ikisinde de kararı
+#    projenin kendi açık satırı (ya da satır yokluğu) verir. Görünürlük: izlenmeyen dosya ise
+#    "GÖRÜNÜR" WARN'ı eski blok VARSA bu nedeni de söyler. Fixture: S3 · S4.
+# ⛔ Gövde = şablonun etkin satırları (şablon sırasıyla) − projede BİREBİR bulunanlar (satır sonu
+#    hariç tam metin). Birebir aynı desen proje bölümünde zaten SONRA geldiği için çıkarılması
+#    hiçbir yolun kararını değiştirmez. Gövde boşsa blok yazılmaz (varsa kaldırılır).
+# ⛔ UTF-8 BOM dosyanın başında KALIR, blok onun arkasına yazılır — git BOM'u yalnız dosya başında
+#    atlar; ortaya düşen BOM projenin ilk satırını başka bir desene çevirir (ölçüldü).
+# ⛔ Satır sonu korunur (CRLF/LF; `read_text`+`write_text` YOK — bayt düzeyinde).
+# ⛔ Şablonun TEK KAYNAĞI `init_project.GITIGNORE` (AST ile okunur, import yan etkisi yok —
+#    `utils.mcp_import_denetimi`nin `MCP_JSON` emsali). Kopya liste AÇILMAZ.
+GI_BAS = "# >>> IX-CORE GITIGNORE BLOK (team_setup yonetir; elle duzenleme — kaynak: core/scripts/init_project.py GITIGNORE) >>>"
+GI_SON = "# <<< IX-CORE GITIGNORE BLOK <<<"
+# KAPSAM BEYANI — her koşumda basılır (en kritik an "değişiklik yok" anıdır).
+GI_KAPSAM = (".gitignore blok KAPSAMI — GARANTİ (kurala dayalı, ölçüm değil): blok dosyanın BAŞINDA, "
+             "proje satırları bayt-eş ve sonra ⇒ bir proje satırının eşlediği yolun kararı, üst "
+             "dizini blok tarafından dışlanmadıkça değişmez; blok projenin KENDİ satırlarının gizlediği "
+             "yolu AÇAMAZ, yalnız sıkılaştırır; proje negasyonu sır yolunu açıyorsa blok onu kapatmaz. "
+             "ÖLÇÜLMEYEN/SINIR: ① bloktaki "
+             "şablon negasyonu (`!conn/README.md` …) `.git/info/exclude` ya da global `core.excludesFile` "
+             "ile gizlenen yolu açabilir (yalnız MEVCUT izlenmeyen dosyalar yazım öncesi/sonrası "
+             "ölçülür) ② projenin `!x` satırı bloğun dışladığı bir dizinin altındaysa git onu yeniden "
+             "dahil EDEMEZ (yol IGNORE olur) ③ garanti dosyanın O ANKİ hâline göre DEĞİL: eski blok "
+             "başta değilse ÜSTÜNDEKİ proje negasyonu blok başa taşınınca kazanır ve yolu açar; şablondan "
+             "çıkarılan satır yalnız eski bloğun gizlediği yolu açar (projenin kendi kararı)")
+
+
+def gitignore_sablonu() -> str | None:
+    """`init_project.GITIGNORE` metni (AST, import yok); okunamazsa None."""
+    import ast
+    try:
+        agac = ast.parse((CORE_ROOT / "scripts" / "init_project.py").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return None
+    for d in agac.body:
+        if (isinstance(d, ast.Assign) and any(isinstance(h, ast.Name) and h.id == "GITIGNORE"
+                                              for h in d.targets)
+                and isinstance(d.value, ast.Constant) and isinstance(d.value.value, str)):
+            return d.value.value
+    return None
+
+
+def gitignore_blok_hesapla(mevcut: str, sablon: str,
+                           source_root: str | None) -> tuple[str | None, list[str], str]:
+    """(yeni metin | None, bloktaki satırlar, not). Projeye YAZMAZ.
+
+    yeni metin None ⇒ yazılacak bir şey yok (güncel) YA DA blok işaretleri bozuk (not'ta
+    `BOZUK`; çağıran WARN'a çevirir). Proje satırları = işaretler arası HARİÇ her satır,
+    bayt-eş ve aynı sırada bloğun ARKASINA konur."""
+    bom = "\ufeff" if mevcut.startswith("\ufeff") else ""
+    satirlar = mevcut[len(bom):].splitlines(keepends=True)
+    eol = "\r\n" if "\r\n" in mevcut else "\n"
+    bas = [i for i, s in enumerate(satirlar) if s.rstrip("\r\n") == GI_BAS]
+    son = [i for i, s in enumerate(satirlar) if s.rstrip("\r\n") == GI_SON]
+    if (len(bas), len(son)) not in ((0, 0), (1, 1)) or (bas and son[0] < bas[0]):
+        return None, [], (f"blok işaretleri BOZUK (başlangıç {len(bas)} · bitiş {len(son)}) — "
+                          f"hiçbir şey yazılmadı; işaret satırlarını elle düzelt")
+    proje = satirlar if not bas else satirlar[:bas[0]] + satirlar[son[0] + 1:]
+    var = {s.rstrip("\r\n") for s in proje}
+    blok: list[str] = []
+    notlar: list[str] = []
+    for ham in sablon.splitlines():
+        if not ham.strip() or ham.startswith("#"):
+            continue
+        if "{source_root}" in ham:
+            if not source_root:
+                notlar.append(f"`{ham}` atlandı (project.yaml source_root yok)")
+                continue
+            ham = ham.replace("{source_root}", source_root)
+        if ham not in var:
+            blok.append(ham)
+    govde = "".join(s + eol for s in (GI_BAS, *blok, GI_SON)) if blok else ""
+    yeni = bom + govde + "".join(proje)
+    return (None if yeni == mevcut else yeni), blok, "; ".join(notlar)
+
+
+def _gorunen_izlenmeyenler(proje: Path) -> set[str] | None:
+    try:
+        r = subprocess.run(["git", "-C", str(proje), "ls-files", "-o", "--exclude-standard", "-z"],
+                           capture_output=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        return None
+    return {p.decode("utf-8", "replace") for p in r.stdout.split(b"\0") if p}
+
+
+def gitignore_senkron(proje: Path) -> bool:
+    """Proje `.gitignore`'unun BAŞINDAKİ yönetilen bloğu şablonla hizala. Dönüş: yazıldı mı.
+
+    GÖZLEM + SIKILAŞTIRMA: çıkış kodunu DEĞİŞTİRMEZ; okunamayan/bozuk durumda YAZMAZ (WARN);
+    yazılamayan dosyada (OSError) WARN + geçici dosya silinir + False — istisna dışarı yayılmaz.
+    Her koşumda KAPSAM satırını basar (ne garanti edilir, ne ölçülmez)."""
+    try:
+        return _gitignore_senkron(proje)
+    finally:
+        say(INFO, GI_KAPSAM)
+
+
+def _gitignore_senkron(proje: Path) -> bool:
+    gi = proje / ".gitignore"
+    git_var = (proje / ".git").exists()
+    if not gi.exists() and not git_var:
+        say(INFO, ".gitignore yönetilen blok atlandı — proje git reposu değil ve .gitignore yok")
+        return False
+    sablon = gitignore_sablonu()
+    if sablon is None:
+        say(WARN, ".gitignore yönetilen blok ÖLÇÜLEMEDİ — init_project.GITIGNORE okunamadı "
+                  "(temiz demek DEĞİL)")
+        return False
+    try:
+        ham = gi.read_bytes() if gi.exists() else b""
+        mevcut = ham.decode("utf-8")
+    except Exception as e:  # noqa: BLE001
+        say(WARN, f".gitignore okunamadı ({type(e).__name__}) — yönetilen blok YAZILMADI")
+        return False
+    sr = None
+    try:
+        sys.path.insert(0, str(CORE_ROOT / "scripts"))
+        from utils.project_config import _yaml_lite  # type: ignore
+        py = proje / "project.yaml"
+        if py.exists():
+            sr = str(_yaml_lite(str(py)).get("source_root") or "").strip() or None
+    except Exception:  # noqa: BLE001
+        sr = None
+    yeni, blok, notlar = gitignore_blok_hesapla(mevcut, sablon, sr)
+    eski_blok = any(s.rstrip("\r") == GI_BAS for s in mevcut.lstrip("﻿").split("\n"))
+    ek = f" ({notlar})" if notlar else ""
+    if yeni is None:
+        if "BOZUK" in notlar:
+            say(WARN, f".gitignore yönetilen blok: {notlar}")
+        elif blok:
+            say(OK, f".gitignore yönetilen blok güncel — blokta {len(blok)} satır, değişiklik yok{ek}")
+        else:
+            say(OK, f".gitignore şablonla hizalı — eksik satır yok{ek}")
+        return False
+    once = _gorunen_izlenmeyenler(proje) if git_var else None
+    # YAZMA YOLU KORUNUR (PR #326 bug-gate 3. tur): salt-okunur `.gitignore` (Windows: os.replace
+    # PermissionError) ya da yazılamayan dizin `main`'i çökertip sonraki kablolama adımlarını
+    # (hookspath · sablon_sapmasi · CORE-INDEX) düşürüyordu ve `.gitignore.ix-tmp` arkada kalıyordu.
+    # os.replace atomiktir ⇒ hata yolunda `.gitignore` DEĞİŞMEMİŞTİR; geçici dosya silinir.
+    gecici = gi.with_name(".gitignore.ix-tmp")
+    try:
+        gecici.write_bytes(yeni.encode("utf-8"))
+        os.replace(gecici, gi)
+    except OSError as e:
+        kalan = ""
+        try:
+            gecici.unlink(missing_ok=True)
+        except OSError:
+            kalan = f" · geçici dosya SİLİNEMEDİ: {gecici}"
+        say(WARN, f".gitignore YAZILAMADI ({type(e).__name__}: {e}) — yönetilen blok UYGULANMADI, "
+                  f"dosya değişmedi{kalan}; izni düzelt ya da `--no-gitignore`")
+        return False
+    say(OK, f".gitignore yönetilen blok dosyanın BAŞINA yazıldı — {len(blok)} satır (proje satırları "
+            f"bayt-eş, sırası değişmedi): "
+            + (" · ".join(blok) if blok else "(blok kaldırıldı — projede tüm şablon satırları var)") + ek)
+    sonra = _gorunen_izlenmeyenler(proje) if git_var else None
+    if git_var and (once is None or sonra is None):
+        say(WARN, "izlenmeyen dosya görünürlüğü ÖLÇÜLEMEDİ (`git ls-files -o` koşmadı) — "
+                  "yeni gizlenen/açılan dosya listesi YOK, temiz demek DEĞİL")
+    elif once is not None and sonra is not None:
+        gizlenen, acilan = sorted(once - sonra), sorted(sonra - once)
+        if gizlenen:
+            say(WARN, f"blok sonrası artık IGNORE edilen izlenmeyen dosya ({len(gizlenen)}): "
+                      + ", ".join(gizlenen[:5]) + (" …" if len(gizlenen) > 5 else "")
+                      + " — commit'lenmesi gerekiyorsa `git add -f`")
+        if acilan:
+            # Olası nedenler (SINIR ① ve d); hangisi olduğu ÖLÇÜLMEZ (ölçüm düzeneği yok) —
+            # ama (d) yalnız dosyada ESKİ blok varken mümkündür, o yüzden metin ona göre kurulur.
+            # (d)'nin iki alt nedeni BAĞIMSIZDIR: (1a) yalnız eski blok başta DEĞİLKEN doğar,
+            # (1b) blok başta dururken de doğar ⇒ metin (1b)'yi (1a)'nın öncülüne BAĞLAMAZ.
+            neden = ("bloktaki şablon negasyonu `.git/info/exclude` ya da global excludesFile "
+                     "(daha düşük öncelikli kaynak) ile gizlenen yolu açtı")
+            if eski_blok:
+                neden = ("olası nedenler — (1a) eski blok dosyanın başında DEĞİLSE: üstündeki "
+                         "proje negasyonu (`!x`) artık blokça ezilmiyor (SINIR d) · (1b) eski "
+                         "blokta olup şablondan çıkarılan satırın gizlediği yol artık gizlenmiyor "
+                         "(projenin kendi kararı, SINIR d) · (2) " + neden)
+            say(WARN, f"blok sonrası GÖRÜNÜR olan izlenmeyen dosya ({len(acilan)}): "
+                      + ", ".join(acilan[:5]) + (" …" if len(acilan) > 5 else "")
+                      + f" — {neden}; commit'lenmemesi gerekiyorsa incele")
+    return True
 
 
 def sablon_sapmasi(proje: Path) -> int:
@@ -1093,6 +1304,10 @@ def main() -> int:
     ap.add_argument("--no-seed", action="store_true")
     ap.add_argument("--no-plugins", action="store_true")
     ap.add_argument("--no-smoke", action="store_true")
+    ap.add_argument("--no-gitignore", action="store_true",
+                    help=".gitignore yonetilen blok senkronunu atla (Q365④; varsayilan: eksik "
+                         "sablon satirlarini dosyanin BASINDAKI isaretli bloga yazar, proje "
+                         "satirlarina dokunmaz)")
     a = ap.parse_args()
 
     proje = Path(a.project).resolve()
@@ -1158,6 +1373,15 @@ def main() -> int:
                   "(overlay onay kapısı da bu sonucu verir: --overlay-onayli ile koş). "
                   "Kablolama adımları YİNE DE koşuluyor; kurulum BAŞARISIZ sayılır.")
     dosya_tamamla(proje)
+    # Q365④: .gitignore yönetilen blok — eksik şablon satırlarını başa yazar, ortada/sonda duran
+    # eski bloğu BAŞA TAŞIR, gövdesi boşalan bloğu KALDIRIR; proje satırlarına dokunmaz. Gözlemdir:
+    # çıkış kodunu değiştirmez ve beklenmeyen bir hata sonraki kablolama adımlarını DÜŞÜRMEZ.
+    if not a.no_gitignore:
+        try:
+            gitignore_senkron(proje)
+        except Exception as e:  # noqa: BLE001 — gözlem adımı; SystemExit/KeyboardInterrupt geçer
+            say(WARN, f".gitignore yönetilen blok beklenmeyen hatayla DURDU ({type(e).__name__}: {e}) "
+                      "— .gitignore durumu ÖLÇÜLEMEDİ (temiz demek DEĞİL); kurulum devam ediyor")
     hookspath_core()
     hookspath_proje(proje)
     # F12a (2026-10-03): mevcut kopyalar sablondan sapmis mi — GOZLEM, cikis kodu DEGISMEZ.
