@@ -657,7 +657,9 @@ OZEL_TESTLER = [
      "pre_tool_guard hedef repo METINDEN cozulmez: sizinti gate'lerinde aday kumesi = eski "
      "ilk-eslesme (main'e gore gevseme 0) + gercek token (--repo/-R/-RX/-dR, gh api yolu, "
      "git -C/--git-dir/--work-tree/GIT_DIR, son gercek cd), biri public ise public; aday "
-     "tavani fail-closed; GH-HEDEF acik hedef yalniz gercek token'dan (60 vektor + 11 mutasyon)"),
+     "tavani fail-closed; GH-HEDEF acik hedef yalniz pflag cozumlemesinin gercek --repo/-R "
+     "degerinden (gh bayrak tablosu; bayat tablo/taninmayan bayrak = blok); kabuk lehcesi "
+     "Bash '\\'' / $'...' / PowerShell backtick kacisi taranir (103 vektor + 27 mutasyon; bitisik -R muafiyeti gercek token+metinde birebir -R<deger>)"),
     # 2026-09-17 (Q322): alt-ajan takilma bekcisi — GOZLEMCI, kapi DEGIL.
     ("agent_stall_watch",
      "agent_stall_watch: sinyal ILERLEMEDIR (eslesmemis tool_use + yas), canlilik degil; "

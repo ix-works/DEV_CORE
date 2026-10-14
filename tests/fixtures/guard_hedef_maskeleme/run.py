@@ -19,9 +19,27 @@ DÜZELTME (ölçülen değişmezler)
   · Eski aday TUTULUR ⇒ main'e göre gevşeme yapısal olarak 0; mevcut FP'ler (metinde public
     geçen private hedef) aynen kalır — K11/K13/K14 bunu çiviler (lider kararı).
   · Tekil aday > 5 ⇒ sorgusuz FAIL-CLOSED (T1).
-  · GH-HEDEF: açık hedef yalnız gerçek token'dan; küme yok, boşluklu token bayrak değil,
-    büyük/küçük harf duyarlı. ⚠GEVŞETME (bayraklı, kullanıcıya sunulur): `-Rorg/x`
-    bitişik biçim artık açık hedeftir (H5 — eskiden FP blok).
+  · GH-HEDEF: açık hedef yalnız pflag çözümlemesinin GERÇEK `--repo`/`-R` değerinden
+    (değer alan bayrak bir sonraki token'ı tüketir — `-t "--repo"` başlıktır); küme yok,
+    boşluklu değer hedef değil, `-r` reviewer; çözümleme kesin değilse (tabloda olmayan
+    alt-komut / tanınmayan bayrak) blok; main'in metin deseni de tutmalı. ⚠GEVŞETME
+    (kullanıcı onaylı 2026-10-14): `-Rorg/x` bitişik biçim açık hedeftir (H5).
+
+DÜZELTME TURU (bug-gate 2026-10-14) — ek bölümler
+  Q  kabuk lehçesi: Bash `'\''` · `$'…'` · PowerShell backtick/`''` kaçışından SONRAKİ
+     içerik commit mesajında (kol a) ve PR/release metninde (kol b) TARANIR; metnin ilk
+     eşleşmesi (`--title 'bkz --body x'`) gerçek değeri maskelemez.
+  F  F1 bayrak DEĞERİ olan `"--repo"`/`"-Rorg/x"` açık hedef DEĞİL · F2 kaçışlı başlık
+     FP üretmez (Windows yolu eskisi gibi) · F3 yol çözümleme istisnası çökme değil
+     fail-closed.
+  P  kesin gerçek hedef yoksa cwd aday kümesine girer (P1L: KATMAN vektörü — GH-HEDEF önce
+     blokladığı için sızıntı gate'i doğrudan çağrılır; savunma derinliği katman başına).
+  U  bayrak tablosu bayatlığı gevşetme üretmez (tabloda olmayan alt-komut / bayrak = blok).
+  B5–B8 (tur-3) bitişik muafiyeti, muafiyeti DOĞURAN gerçek `-R<değer>` token'ına ve metinde
+     birebir `-R<değer>` yazımına bağlıdır — başlıktaki `-Rx` metni başka biçimli gerçek
+     hedefin (`"--repo" org/x` · PS ``--re`po`` · PS ``-R`org/x``) freni açmaz (main BLOK).
+  Kablolama kipleri (`--mutasyon-commit-kablosuz` / `--mutasyon-pr-kablosuz`) main()
+     üzerinden koşan vektörlerin dispatcher bağını ölçer (kaynak-regex testinin karşılığı).
 
 BÖLÜMLER
   M  maskeleme/tanınmayan gerçek hedef: BLOKLANIR + gövde TARANDI (sentinel bulgusu)
@@ -71,40 +89,118 @@ MUTLAR = {
         "    for h in list(adaylar):\n"),
     # gh gerçek bayrak adayı yok (yalnız api yolu) => M1*, M2b, M4*.
     "--mutasyon-gh-bayrak-adayi-yok": (
-        "    repolar = _gh_repo_degerleri(seg) + ([api_repo] if api_repo else [])\n",
+        "    repolar = _gh_repo_degerleri(seg) + gercek + ([api_repo] if api_repo else [])\n",
         "    repolar = [api_repo] if api_repo else []\n"),
-    # `-R` hiç tanınmaz (eski `_ARG_REPO` körlüğü) => M1e, M2b, M4, M4b-M4e; H5/H6 BLOK olur.
+    # FAZLA (bağımsız) taramada `-R` tanınmaz => M6 (`-t -R <public>`: bayat tabloya karşı
+    # sigorta — çözümleyici `-R`yi başlık değeri sayar, fazla tarama yine aday sayar).
     "--mutasyon-kisa-r-yok": (
         '_GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)R(.*)$", re.DOTALL)',
         '_GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)\\x00R(.*)$", re.DOTALL)'),
-    # git üst seçenek/ortam adayı yok => M5, M5b, M5c, M5d.
+    # pflag çözümleyicisi `-R`yi tanımaz (bilinmeyen harf ⇒ kesin=False) => H5/H6/B8 BLOK olur;
+    # `-R` hedefli M1e/M2b/M4*/K11 de imza değiştirir (GH-HEDEF önce bloklar).
+    "--mutasyon-cozumleyici-r-yok": (
+        '                if ch == "R" or ch in dk:\n',
+        '                if ch in dk:\n'),
+    # git üst seçenek/ortam adayı yok => M5, M5b, M5c, M5d, K7.
     "--mutasyon-git-hedef-yok": (
         "    baglam = _baglam_cwd_hay(segler, idx)\n    if not yollar:\n",
         "    baglam = _baglam_cwd_hay(segler, idx)\n    yollar = []\n    if not yollar:\n"),
     # Aday tavanı etkisiz => T1 (6 private aday) GEÇER.
     "--mutasyon-tavan-yok": ("_HEDEF_ADAY_TAVANI = 5", "_HEDEF_ADAY_TAVANI = 99"),
-    # GH-HEDEF yeniden METİNDEN (eski `_GH_A_ACIK`) => H1, H2, H4, H9, H13, H16 GEÇER; H5 BLOK.
+    # GH-HEDEF yeniden METİNDEN (eski `_GH_A_ACIK`) => H1, H2, H4, H7b, H9, H13, H16, H17, F1h,
+    # P1, U1, U2 GEÇER; H5, B8, M4b BLOK.
     "--mutasyon-ghhedef-metin": (
-        "    acik_bayrak = bool(_gh_repo_degerleri(komut, kesin=True))\n",
+        "    acik_bayrak = _gh_acik_bayrak(komut)\n",
         "    acik_bayrak = bool(_GH_A_ACIK.search(komut))\n"),
-    # Kesin kipte küme kabul edilir => H7 (-dR) · H8 (-tRelease = başlık) GEÇER.
+    # Küme biçimi açık hedef sayılır => H7b GEÇER (H7'yi metin-deseni freni de tutar —
+    # iki katman, katman başına ayrı vektör: H7b'de metin deseni başlıktaki `-R y`'den tutar).
     "--mutasyon-ghhedef-kume": (
-        "            if not m or (kesin and m.group(1)):\n",
-        "            if not m:\n"),
-    # Boşluklu (tırnaklı metin) token bayrak sayılır => H16 (`--subject "-R org/x"`) GEÇER.
+        'if b != "kume" and v and', 'if v and'),
+    # Boşluklu değer hedef sayılır => H17 (konumsal `"-R org/x"`) GEÇER.
     "--mutasyon-ghhedef-bosluk": (
-        "        if kesin and any(c.isspace() for c in tok):\n            continue\n", ""),
+        " and not any(x.isspace() for x in v)]\n", "]\n"),
     # `-r` (reviewer) `-R` sayılır => H4 GEÇER.
     "--mutasyon-ghhedef-buyuk-kucuk": (
-        '_GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)R(.*)$", re.DOTALL)',
-        '_GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)R(.*)$", re.DOTALL | re.IGNORECASE)'),
-    # Konumsal hedef yeniden METİNDEN => H3 (`--description 'bkz org/x'`) GEÇER.
+        '                if ch == "R" or ch in dk:\n',
+        '                ch = "R" if ch == "r" else ch\n                if ch == "R" or ch in dk:\n'),
+    # Konumsal hedef yeniden METİNDEN => H3 · B4 (`--description org/x` değerdir) GEÇER.
     "--mutasyon-ghhedef-konumsal-metin": (
-        "    return any(_GH_KONUMSAL.fullmatch(tok) for tok in t[2:])\n",
-        "    return bool(_GH_B_ACIK.search(seg[_GH_B.search(seg).end():]))\n"),
+        '    return bool(eski and c and c["kesin"]\n'
+        '                and any(_GH_KONUMSAL.fullmatch(tok) for tok in c["konumsal"]))\n',
+        "    return eski\n"),
+    # F1: açık hedef yeniden BAĞIMSIZ token taramasından (değer tüketmez) => F1c · F1d · F1h · P1
+    # GEÇER (biçim `bitisik` etiketlenir: bitişik freni tek başına F1c/F1d'yi tutamaz).
+    "--mutasyon-ghhedef-bagimsiz-tarama": (
+        '    gercek = [(v, b) for v, b in c["repolar"]\n'
+        '              if b != "kume" and v and not any(x.isspace() for x in v)]\n',
+        '    gercek = [(v, "bitisik") for v in _gh_repo_degerleri(seg, kesin=True)]\n'),
+    # main'in metin deseni freni yok => B3 (PowerShell ``--re`po``, metinde görünmeyen hedef) ·
+    # B5 · B6 · B7 GEÇER.
+    "--mutasyon-ghhedef-eski-desen-yok": (
+        '    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) or bitisik))\n',
+        '    return bool(c["kesin"] and gercek)\n'),
+    # Tur-3: bitişik muafiyeti yeniden METİN deseninden (gerçek token'a bağlı değil) =>
+    # B5 (`"--repo" org/x -t '-Rx'`) · B6 (PS ``--re`po`` + başlıkta `-Rfoo`) · B7 (PS ``-R`org/x``) GEÇER.
+    "--mutasyon-bitisik-metin-freni": (
+        '    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) or bitisik))\n',
+        '    return bool(c["kesin"] and gercek and (_GH_A_ACIK.search(seg) '
+        'or _GH_BITISIK_R.search(seg)))\n'),
+    # KABLOLAMA (tur-3): dispatcher sızıntı fonksiyonunu çağırmaz => tüm CM vektörleri (M2, M2c,
+    # M3*, M5*, K3, K6, K8, K14, Q1, Q4, Q5, F3, F3c) KAÇAR. Kaynak-regex testinin davranışsal karşılığı.
+    "--mutasyon-commit-kablosuz": (
+        "        sorun = _iki_lehce(lehce, _git_commit_public_leak, komut, ham)\n",
+        "        sorun = _iki_lehce(lehce, lambda *a: '', komut, ham)\n"),
+    # KABLOLAMA (tur-3): PUBLIC-PR gate'i çağrılmaz => main() üzerinden koşan PR vektörleri
+    # (M1*, Q2, Q3, Q6, Q7, Q10–Q14, M6 …) KAÇAR; P1L (gate doğrudan) DÜŞMEZ (beklenen).
+    "--mutasyon-pr-kablosuz": (
+        "        sorun = _iki_lehce(lehce, _gh_pr_public_leak, komut, ham)\n",
+        "        sorun = _iki_lehce(lehce, lambda *a: '', komut, ham)\n"),
+    # Tabloda olmayan alt-komut kesin sayılır (bayatlık gevşetir) => U1 GEÇER.
+    "--mutasyon-tablo-disi-kesin": (
+        "    kesin = giris is not None\n", "    kesin = True\n"),
+    # Tanınmayan uzun bayrak kesin sayılır => U2 GEÇER.
+    "--mutasyon-bilinmeyen-bayrak-kesin": (
+        "                kesin = False                 # tanınmayan uzun bayrak\n",
+        "                pass\n"),
+    # P1: metinde `--repo` varsa cwd sorulmaz (eski kural) => P1L KAÇAR.
+    "--mutasyon-p1-cwd-yok": (
+        '    if not (api_repo or (c and c["kesin"] and gercek)):\n',
+        "    if not repolar:\n"),
+    # Kol b: yayın metni yalnız regex (ilk eşleşme, apostrofta kesilen) => Q2, Q3, Q6, Q10–Q13 KAÇAR.
+    "--mutasyon-yayin-token-yok": (
+        '    c = _gh_bayrak_cozumle(komut) if _LEHCE != "eski" else None\n',
+        "    c = None\n"),
+    # Lehçe kolu yok (yalnız eski model) => Q1, Q2, Q3, Q4, Q6, Q10–Q13 KAÇAR.
+    "--mutasyon-iki-lehce-yok": (
+        '    for l in dict.fromkeys(("eski", lehce)):\n',
+        '    for l in ("eski",):\n'),
+    # Bash tırnak dışı `\'` kaçışı yok (kelime bölücü) => Q1, Q2, Q3 KAÇAR; F2a/F2b/F2d FP döner.
+    "--mutasyon-bash-kacis-yok": (
+        '        if lehce == "bash" and c == "\\\\" and i + 1 < n and s[i + 1] in "\'\\"\\\\":\n'
+        '            cur.append(',
+        '        if False:\n            cur.append('),
+    # ANSI-C `$'…'` yok => Q4 KAÇAR; F2c FP döner.
+    "--mutasyon-ansi-c-yok": (
+        '        if lehce == "bash" and c == "$" and i + 1 < n and s[i + 1] == "\'":\n'
+        '            i += 2\n',
+        '        if False:\n            i += 2\n'),
+    # PowerShell çift tırnak içi backtick kaçışı yok => Q6 KAÇAR; F2e FP döner.
+    "--mutasyon-ps-tirnak-ici-backtick-yok": (
+        '                    if q == \'"\' and ch == "`" and i + 1 < n:\n',
+        '                    if False:\n'),
+    # PowerShell tırnak dışı backtick kaçışı yok => Q13 KAÇAR; B7 geçer (``-R`org/x`` → `-Rorg/x`).
+    "--mutasyon-ps-tirnak-disi-backtick-yok": (
+        '        if lehce == "ps" and c == "`" and i + 1 < n:\n            cur.append(',
+        '        if False:\n            cur.append('),
+    # F3: yol çözümleme istisnası yakalanmaz => F3, F3c ÇÖKER (fail-open).
+    "--mutasyon-yol-istisnasi-yakalanmaz": (
+        "    except (OSError, ValueError):\n        return \"cozulemedi\", cwd\n",
+        "    except KeyError:\n        return \"cozulemedi\", cwd\n"),
 }
 
 S = "SIZINTI" + "-SENTINEL"
+BS, BT = chr(92), chr(96)
+KQ = "'" + BS + "''"          # Bash `'\''`
 PR, CM, GH = "PUBLIC-PR SIZINTI GATE", "COMMIT-MESAJI SIZINTI GATE", "GH HEDEF BELİRSİZ"
 
 # (ad, proje: "pub"|"priv", tool, komut, beklenen: imza | 0)
@@ -203,6 +299,8 @@ VEKTORLER = [
     ("H5 -Rorg/x bitisik (GEVSETME: FP kalkar)", "priv", "Bash", "gh pr create -Rorg/x -t t -b b", 0),
     ("H6 -R=org/x", "priv", "Bash", "gh pr create -R=org/x -t t -b b", 0),
     ("H7 -dR kume (eskisi gibi BLOK)", "priv", "Bash", "gh pr create -dR org/x -t t -b b", GH),
+    ("H7b -dR kume + baslikta '-R y' (metin freni tutar, kume filtresi bloklar)", "priv", "Bash",
+     "gh pr create -dR org/x -t '-R y' -b b", GH),
     ("H8 -tRelease = baslik, hedef DEGIL", "priv", "Bash", "gh pr create -tRelease -b b", GH),
     ("H9 body'de tirnakli --repo", "priv", "Bash", 'gh pr comment 5 --body "--repo org/x"', GH),
     ("H10 commit mesajinda gh satiri + --repo (eskisi gibi GECER)", "priv", "Bash",
@@ -215,6 +313,87 @@ VEKTORLER = [
     ("H15 --repo gercek + baslikta -R metni", "priv", "Bash", "gh pr create --repo org/x -t 'bkz -R org/y' -b b", 0),
     ("H16 subject tamamen '-R org/x' (bosluklu token)", "priv", "Bash",
      'gh pr merge 5 --squash --subject "-R org/x"', GH),
+    ("H17 konumsal \"-R org/x\" (bosluklu deger, main GECIRIYORDU)", "priv", "Bash",
+     'gh pr merge 5 --squash "-R org/x"', GH),
+    # ── Q: kabuk lehçesi (bug-gate 2026-10-14, iki kol) ─────────────────────
+    ("Q1 kol a: commit -m 'it'\\''s <iz>'", "pub", "Bash", f"git commit -m 'it{KQ}s {S}'", CM),
+    ("Q2 kol b: -b 'it'\\''s <iz>'", "priv", "Bash",
+     f"gh pr create --repo org/public-core -t t -b 'it{KQ}s {S}'", PR),
+    ("Q3 kol b: --body 'main'\\''e <iz>'", "priv", "Bash",
+     f"gh pr create --repo org/public-core --title t --body 'main{KQ}e {S}'", PR),
+    ("Q4 ANSI-C -m $'it\\'s <iz>'", "pub", "Bash", f"git commit -m $'it{BS}'s {S}'", CM),
+    ("Q5 3.BAGLAM PowerShell 'it''s' (kontrol: eskisi gibi)", "pub", "PowerShell",
+     f"git commit -m 'it''s {S}'", CM),
+    ("Q6 3.BAGLAM PowerShell cift tirnak icinde backtick", "priv", "PowerShell",
+     f'gh pr create --repo org/public-core -t t -b "a {BT}" {S}"', PR),
+    ("Q7 Bash cift tirnak \\\" (kontrol: eskisi gibi)", "priv", "Bash",
+     f'gh pr create --repo org/public-core -t t -b "x {BS}" {S}"', PR),
+    ("Q10 ilk eslesme: --title 'bkz --body x' --body <iz>", "priv", "Bash",
+     f"gh pr create --repo org/public-core --title 'bkz --body x' --body '{S}'", PR),
+    ("Q11 ilk eslesme: --title \"bkz -b x\" -b <iz>", "priv", "Bash",
+     f'gh pr create --repo org/public-core --title "bkz -b x" -b "{S}"', PR),
+    ("Q12 ilk eslesme: release --notes", "priv", "Bash",
+     f"gh release create v1 --repo org/public-core --title 'bkz --notes x' --notes '{S}'", PR),
+    ("Q13 3.BAGLAM PowerShell tirnak disi backtick-bosluk", "priv", "PowerShell",
+     f"gh pr create --repo org/public-core -t t -b x{BT} {S}", PR),
+    ("Q14 --body-file iki kez (ikisi de stdin)", "priv", "Bash",
+     f"gh pr create --repo org/public-core -t t --body-file - --body-file - <<'B'\n{S}\nB", PR),
+    # ── F1: bayrak DEĞERİ açık hedef değil ─────────────────────────────────
+    ("F1a -t \"--repo\"", "priv", "Bash", 'gh pr create -t "--repo" -b b', GH),
+    ("F1b -t '-R'", "priv", "Bash", "gh pr create -t '-R' -b b", GH),
+    ("F1c comment --body \"-Rorg/x\"", "priv", "Bash", 'gh pr comment 5 --body "-Rorg/x"', GH),
+    ("F1d merge --subject \"-Rorg/x\"", "priv", "Bash",
+     'gh pr merge 5 --squash --subject "-Rorg/x"', GH),
+    ("F1e close -c \"--repo\" --delete-branch", "priv", "Bash",
+     'gh pr close 5 -c "--repo" --delete-branch', GH),
+    ("F1f release -n \"-R\"", "priv", "Bash", 'gh release create v1 -n "-R" -t t', GH),
+    ("F1g comment --body '--repo' --edit-last", "priv", "Bash",
+     "gh pr comment 5 --body '--repo' --edit-last", GH),
+    ("F1h -t --repo org/x (deger --repo'yu yutar; main GECIRIYORDU)", "priv", "Bash",
+     "gh pr create -t --repo org/x -b b", GH),
+    # ── F2: kaçışlı başlık FP üretmez ──────────────────────────────────────
+    ("F2a --title 'PR'\\''i duzelt' --repo", "priv", "Bash",
+     f"gh pr create --title 'PR{KQ}i duzelt' --repo org/x --body x", 0),
+    ("F2b -t 'main'\\''e gore' --repo sonda", "priv", "Bash",
+     f"gh pr create -t 'main{KQ}e gore' -b b --repo org/x", 0),
+    ("F2c -t $'it\\'s' --repo", "priv", "Bash", f"gh pr create -t $'it{BS}'s' -b b --repo org/x", 0),
+    ("F2d repo edit --description 'main'\\''e' org/x", "priv", "Bash",
+     f"gh repo edit --description 'main{KQ}e' org/x", 0),
+    ("F2e 3.BAGLAM PowerShell -t \"a `\" b\" --repo", "priv", "PowerShell",
+     f'gh pr create -t "a {BT}" b" -b b --repo org/x', 0),
+    ("F2f 3.BAGLAM PowerShell 'it''s' --repo", "priv", "PowerShell",
+     "gh pr create -t 'it''s' -b b --repo org/x", 0),
+    ("F2g Windows yolu --body-file C:\\IX\\… (eskisi gibi)", "priv", "Bash",
+     f"gh pr create -t t --body-file C:{BS}IX{BS}yok.md --repo org/x", 0),
+    # ── P1 · F3 · U · B ───────────────────────────────────────────────────
+    ("P1 kok public, -t \"--repo=org/private\" (GH-HEDEF katmani)", "pub", "Bash",
+     f"gh pr create -t \"--repo=org/private-proj\" -b '{S}'", GH),
+    ("P1L KATMAN: sizinti gate'i dogrudan — kesin hedef yok => cwd aday", "pub", "Bash:pr-gate",
+     f"gh pr create -t \"--repo=org/private-proj\" -b '{S}'", PR),
+    ("F3 GIT_DIR=<KILITLI> (is_dir istisnasi) ; cd public && commit", "priv", "Bash",
+     f"GIT_DIR=<KILITLI> git commit -m x ; cd <PUB> && git commit -m '{S}'", CM),
+    ("F3c cd <KILITLI> && commit => hedef cozulemedi FAIL-CLOSED public", "priv", "Bash",
+     f"cd <KILITLI> && git commit -m '{S}'", CM),
+    ("U1 tabloda olmayan alt-komut (bayatlik gevsetmez)", "priv", "Bash",
+     "gh ruleset delete 123 --repo org/x", GH),
+    ("U2 tanınmayan bayrak (bayatlik gevsetmez)", "priv", "Bash",
+     "gh pr create --yeni-bayrak v --repo org/x -t t -b b", GH),
+    ("U3 bilinen bayraklar (kontrol)", "priv", "Bash", "gh pr create --repo org/x -t t -b b --draft", 0),
+    ("B3 3.BAGLAM PowerShell --re`po (metinde gorunmeyen hedef: eskisi gibi BLOK)", "priv",
+     "PowerShell", f"gh pr create --re{BT}po org/x -t t -b b", GH),
+    ("B4 repo edit --description org/x (deger, hedef DEGIL)", "priv", "Bash",
+     "gh repo edit --description org/x", GH),
+    # ── tur-3: bitişik muafiyeti muafiyeti DOĞURAN token'a bağlı (main BLOK, metin freni geçirirdi)
+    ("B5 \"--repo\" org/x + baslikta '-Rx' (main BLOK; onaysiz gevseme olmaz)", "priv", "Bash",
+     "gh pr create \"--repo\" org/x -t '-Rx' -b b", GH),
+    ("B6 3.BAGLAM PowerShell --re`po org/x + baslikta '-Rfoo' (main BLOK)", "priv", "PowerShell",
+     f"gh pr create --re{BT}po org/x -t '-Rfoo' -b b", GH),
+    ("B7 3.BAGLAM PowerShell -R`org/x (metinde -Rorg/x yok; main BLOK)", "priv", "PowerShell",
+     f"gh pr create -R{BT}org/x -t t -b b", GH),
+    ("B8 \"-Rorg/x\" tek token (onayli bitisik bicim, kontrol)", "priv", "Bash",
+     "gh pr create -t t -b b \"-Rorg/x\"", 0),
+    ("M6 -t -R <public> --repo <private> (fazla aday: bayat tabloya sigorta)", "priv", "Bash",
+     f"gh pr create -t -R org/public-core -b '{S}' --repo org/private-proj", PR),
 ]
 
 _SURUCU = r'''
@@ -245,7 +424,13 @@ for v in json.load(open(vek_yolu, encoding="utf-8")):
     sys.stderr, sys.stdin = e, io.StringIO(json.dumps(
         {"tool_name": v["tool"], "tool_input": {"command": v["komut"]}}))
     try:
-        rc = m.main()
+        if v["tool"] == "Bash:pr-gate":       # KATMAN vektoru: yalniz sizinti gate'i
+            m._GORUNURLUK.clear()
+            sorun = m._iki_lehce("bash", m._gh_pr_public_leak, v["komut"], v["komut"])
+            e.write(("PUBLIC-PR SIZINTI GATE: " + sorun) if sorun else "")
+            rc = 2 if sorun else 0
+        else:
+            rc = m.main()
     except BaseException as x:
         rc = "COKTU:" + repr(x)[:80]
     finally:
@@ -308,7 +493,24 @@ def main() -> int:
         pub, priv = root / "public-core", root / "private-proj"
         for d in (pub, priv):
             d.mkdir(parents=True)
-        yer = {"<PUB>": pub.as_posix(), "<PRIV>": priv.as_posix(), "<ROOT>": root.as_posix()}
+        # F3: `Path.is_dir()` yalnız "yok" hatalarını yutar. Windows: sistem kilitli dosya;
+        # POSIX: erişimi kapalı dizinin altı (root değilken EACCES). Ön-sınama: istisna
+        # GERÇEKTEN atılmıyorsa F3 vektörleri ölçmez ⇒ DOĞRULANAMADI (sessiz yeşil yok).
+        if os.name == "nt":
+            kilitli = "C:/Windows/System32/config/SAM"
+        else:
+            kd = tmp / "kilitli"
+            (kd / "alt").mkdir(parents=True)
+            os.chmod(kd, 0)
+            kilitli = (kd / "alt").as_posix()
+        try:
+            Path(kilitli).is_dir()
+            print(f"[DOGRULANAMADI] is_dir istisna atmadi ({kilitli}) -> F3 vektorleri olcmez")
+            return 2
+        except (OSError, ValueError):
+            pass
+        yer = {"<PUB>": pub.as_posix(), "<PRIV>": priv.as_posix(), "<ROOT>": root.as_posix(),
+               "<KILITLI>": kilitli}
 
         def coz(s: str) -> str:
             for k, v in yer.items():
@@ -351,6 +553,8 @@ def main() -> int:
             sonuc.append((f"{ad} -> {beklenti}", ok,
                           f"rc={rc} cagri={c['cagri']} err={err[-160:]!r}"))
     finally:
+        if (tmp / "kilitli").exists():
+            os.chmod(tmp / "kilitli", stat.S_IRWXU)
         _sil(tmp)
 
     gecen = sum(1 for _, ok, _ in sonuc if ok)

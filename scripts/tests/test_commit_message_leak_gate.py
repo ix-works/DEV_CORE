@@ -386,13 +386,82 @@ def test_GERCEK_desenle_taraniyor():
 
 
 def test_DISPATCHER_A_BAGLI():
-    """KABLOLAMA: dispatcher'da CAGRILIYOR ve `return 2` ile BLOKLUYOR."""
+    """KABLOLAMA: dispatcher'da CAGRILIYOR ve `return 2` ile BLOKLUYOR.
+
+    Iki katman (2026-10-14, repo-maskeleme turu): kaynak deseni yalniz bir refaktorde
+    sessizce kirilir ya da sessizce gecer — dispatcher `_git_commit_public_leak`'i artik
+    `_iki_lehce(lehce, _git_commit_public_leak, komut, ham)` ile (eski model + kabuk
+    lehcesi) cagirir. Bu yuzden (a) kaynak iki cagri bicimini de kabul eder ama `if sorun:`
+    → blok mesaji → `return 2` sarti AYNEN kalir; (b) DAVRANISSAL vektor `main()`'i gercek
+    payload'la kosar ve blogun BU fonksiyondan geldigini casus + karsi-olgu ile kanitlar.
+    """
     src = (_SCRIPTS / "hooks" / "pre_tool_guard.py").read_text(encoding="utf-8")
-    m = re.search(r"sorun\s*=\s*_git_commit_public_leak\(komut,\s*ham\)\s*\n"
+    m = re.search(r"sorun\s*=\s*(?:_git_commit_public_leak\(komut,\s*ham\)"
+                  r"|_iki_lehce\(\s*lehce,\s*_git_commit_public_leak,\s*komut,\s*ham\))\s*\n"
                   r"\s*if sorun:(.*?)return 2", src, re.S)
     assert m, "_git_commit_public_leak dispatcher'da cagrilmiyor ya da `return 2` ile bloklamiyor"
     assert "COMMIT-MESAJI SIZINTI GATE" in m.group(1), \
         "blok mesaji yok — kullanici neden durduruldugunu anlayamaz"
+    _dispatcher_davranissal(
+        "_git_commit_public_leak", "COMMIT-MESAJI SIZINTI GATE",
+        # eski model kolu · lehce kolu (Bash `'\''` sonrasi yalniz lehce kolunda gorunur)
+        [f"cd /c/core && git commit -m 'fix: {_SENTINEL}'",
+         "cd /c/core && git commit -m 'it'" + "\\" + "''s " + _SENTINEL + "'"],
+        f"cd /c/core && git commit -m '{_TEMIZ}'")
+
+
+def test_PR_DISPATCHER_A_BAGLI():
+    """Kardes kablolama: PUBLIC-PR gate'i de `_iki_lehce` ile cagrilir — davranissal kanit."""
+    _dispatcher_davranissal(
+        "_gh_pr_public_leak", "PUBLIC-PR SIZINTI GATE",
+        [f"gh pr create --repo org/CORE --title t --body '{_SENTINEL}'",
+         "gh pr create --repo org/CORE -t t -b 'it'" + "\\" + "''s " + _SENTINEL + "'"],
+        f"gh pr create --repo org/CORE --title t --body '{_TEMIZ}'")
+
+
+def _dispatcher_davranissal(fn_adi: str, imza: str, blok_komutlari: list, temiz: str):
+    """`main()` uctan uca: (1) bulgulu komut rc 2 + imza + casus fonksiyon CAGRILDI;
+    (2) KARSI-OLGU: ayni komutta fonksiyon "" donerse rc 0 (blok baska kuraldan gelmiyor);
+    (3) temiz komut rc 0. Ag yok: gorunurluk + tarayici `_kur` ile sabit."""
+    import io
+    import json
+
+    def kos(komut: str):
+        e = io.StringIO()
+        ge, gi = sys.stderr, sys.stdin
+        sys.stderr = e
+        sys.stdin = io.StringIO(json.dumps({"tool_name": "Bash",
+                                            "tool_input": {"command": komut}}))
+        try:
+            rc = G.main()
+        finally:
+            sys.stderr, sys.stdin = ge, gi
+        return rc, e.getvalue()
+
+    gercek = getattr(G, fn_adi)
+    _kur(True)
+    try:
+        for komut in blok_komutlari:
+            cagri = []
+
+            def casus(*a, _g=gercek, _c=cagri):
+                _c.append(a)
+                return _g(*a)
+            setattr(G, fn_adi, casus)
+            rc, err = kos(komut)
+            assert rc == 2 and imza in err, \
+                f"{fn_adi}: main() bloklamadi ya da imza yok (rc={rc}): {komut!r} {err[-160:]!r}"
+            assert cagri, f"{fn_adi}: dispatcher fonksiyonu HIC cagirmadi: {komut!r}"
+            setattr(G, fn_adi, lambda *a: "")
+            rc, err = kos(komut)
+            assert rc == 0 and imza not in err, \
+                f"{fn_adi}: karsi-olgu — fonksiyon susunca blok kalkmadi (rc={rc}): {komut!r}"
+        setattr(G, fn_adi, gercek)
+        rc, err = kos(temiz)
+        assert rc == 0, f"{fn_adi}: temiz komut bloklandi (rc={rc}): {err[-160:]!r}"
+    finally:
+        setattr(G, fn_adi, gercek)
+        _geri_al()
 
 
 def main() -> int:
