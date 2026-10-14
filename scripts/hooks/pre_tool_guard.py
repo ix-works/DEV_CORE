@@ -325,7 +325,9 @@ def _git_commit_arg_dizileri(komut: str) -> list:
 # modülü kullanır. Eskiden iki guard iki AYRI dosyadan besleniyordu (biri
 # `<proje>/.claude/...`, diğeri `<git-dir>/...`) → biri güncellenip diğeri unutulabiliyordu.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from genericize_common import sizintilari_bul, tembel_id_pattern  # noqa: E402
+from genericize_common import (  # noqa: E402
+    AJAN_IMZA_SATIRI, ATIF_ADRES_PAT, ATIF_SATIRI, sizintilari_bul, tembel_id_pattern,
+)
 
 # TEMBEL (2026-08-13, süre-vergisi): eskiden burada `id_pattern(...)` DOĞRUDAN çağrılıyordu
 # → modül her yüklendiğinde `git rev-parse` subprocess'i (ölçüldü: ~100 ms) koşuyordu, yani
@@ -453,6 +455,104 @@ def _heredoc_govdeleri(s: str) -> str:
     return "\n".join(m.group(4) for m in _HEREDOC.finditer(s))
 
 
+# ── KOMUT İKAMESİ İÇİNDEKİ HEREDOC (bug-gate P-1, 2026-10-14) ──────────────────────────
+# Claude Code'un VARSAYILAN commit ve PR biçimi:  -m "$(cat <<'EOF' … EOF\n)"  /
+# --body "$(cat <<'EOF' … EOF\n)". `_komut_govdesi` heredoc gövdesini `<HEREDOC-STRIPPED>`
+# ile değiştirir (komut-niyeti kuralları için DOĞRU — gövde veri, komut değil) ama yayın
+# metnini o kırpılmış komuttan okuyan iki gate gövdeyi HİÇ görmüyordu: değer
+# `$(cat <<'EOF' <HEREDOC-STRIPPED>\n)` kalıyordu. ÖLÇÜLDÜ: gövdede e-posta / ajan-dışı
+# trailer → rc 0; aynı içerik `-F - <<'EOF'` / `--body-file -` biçiminde rc 2.
+# Çare YALNIZ iki yayın gate'inde: ham metindeki SAF `$(cat <<[-]X … X)` aralıkları önce
+# sayılı yer tutucuya çevrilir, SONRA `_komut_govdesi` uygulanır; değerdeki yer tutucu ham
+# gövdeyle çözülür. `komut` (diğer kuralların girdisi) DEĞİŞMEZ.
+# Sınırlayıcı tırnaklı/tırnaksız; `<<-` biçiminde kapanış satırı TAB ile girintili olabilir
+# (bash'in kuralı; `_HEREDOC` bu biçimi hiç tanımıyordu). Kapanış satırı bash'teki gibi
+# YALNIZ sınırlayıcıdır.
+# ⛔ GÖVDE İLK SINIRLAYICI SATIRINI GEÇEMEZ (bug-gate turu 3, 2026-10-14 — ölçülmüş
+# GEVŞETME kapandı): gövde eskiden tembel `(.*?)` + DOTALL idi. İlk `EOF` satırından sonra
+# `)` gelmezse (`$(cat <<'EOF'\nok\nEOF\necho)`) eşleşme bir SONRAKİ `EOF\n)`'e kadar
+# uzuyordu; bash ise heredoc'u İLK `EOF` satırında bitirir. Aradaki `cd` / `git commit` /
+# `gh pr create` segmentleri yer tutucunun içinde kalıyor ve TARANMIYORDU (canlı CLI: rc 0,
+# taban rc 2). Temperlenmiş gövde (`(?:(?!^…\3$).)*?`) ilk kapanış satırında durur; o
+# satırdan sonra `)` yoksa bu aralık hiç eşleşmez ve `_komut_govdesi`'nin olağan yoluna
+# kalır (heredoc kırpılır, sonraki segmentler TARANIR). İkinci normalizasyonun kuralı:
+# segment sınırını `_komut_govdesi`'nden FARKLI çizmemek (lessons-learned PATTERN #12).
+_CAT_HEREDOC = re.compile(
+    r"\$\(\s*cat\s+<<(-)?\s*(['\"]?)(\w+)\2[ \t]*\n"
+    r"((?:(?!^(?(1)\t*)\3$).)*?)^(?(1)\t*)\3$\s*\)",
+    re.MULTILINE | re.DOTALL)
+_CAT_YER = "\x00CATHD{}\x00"
+_CAT_YER_RX = re.compile(r"\x00CATHD(\d+)\x00")
+_KIRPIK_ISARET = ("<HEREDOC-STRIPPED>", "<HERESTRING-STRIPPED>")
+# LİTERAL İŞARET KAÇIŞI (bug-gate turu 3 G2, 2026-10-14): kullanıcının KENDİ yazdığı
+# `<HEREDOC-STRIPPED>` dizgesi (guard'ı anlatan commit/PR metni) normalizasyonun ürettiği
+# işaretle ayırt edilemiyordu ⇒ tırnaklı değer FAIL-CLOSED bloklanıyordu (PATTERN #12
+# dogfood'u). Ham metindeki literal işaret normalizasyondan ÖNCE \x00 yer tutucuya alınır;
+# değerde kalan GERÇEK işaret yalnız `_komut_govdesi`'nin kırpmasından gelebilir. Karar
+# verildikten sonra literal geri konur (taranan metin kullanıcının yazdığıdır).
+# Seçilmeyen alternatif — "işaret ham değerde de var mı" kıyası: ham ile normalize komutun
+# değer listeleri hizalanamaz (stdin heredoc'u ham'da ayrı segmentler üretir) ve küme
+# kıyası, aynı komutta BAŞKA bir değerdeki literal işaretle gerçek bir ikameyi maskeler.
+_LIT_YER = "\x00CATLIT{}\x00"
+_LIT_YER_RX = re.compile(r"\x00CATLIT(\d)\x00")
+# Çıplak `$` değeri yalnız tırnaksız `$(` ikamesinin `(`'te bölünmesinden doğar ⇒ segment
+# tırnaksız bir `$` ile BİTER. `-m '$'` (kullanıcının yazdığı tek karakter) tırnakla biter.
+# ⛔ ÖNKOŞUL YOK (bug-gate turu 4 G4-1, 2026-10-14 — ölçülmüş GEVŞETME kapandı): desen
+# eskiden `(?:^|[\s=])\$` idi ⇒ BİTİŞİK kısa bayrakta (`-m$(…)` · `-am$(…)` · `-qam$(…)` ·
+# PowerShell `-m$(Get-Content …)` · `-m$((…))`) segment `m$` ile bitiyor, koşul tutmuyor ve
+# FAIL-CLOSED atlanıyordu (gerçek CLI: public hedefte rc 0, `1f2860a` rc 2). Tırnaklı
+# `'$'` / `"$"` / `-m"$"` zaten tırnakla biter — onaylı daraltma bu desensiz de korunur.
+_CIPLAK_DOLAR_SONU = re.compile(r"\$\s*$")
+
+
+def _literal_kac(s: str) -> str:
+    for i, isaret in enumerate(_KIRPIK_ISARET):
+        s = s.replace(isaret, _LIT_YER.format(i))
+    return s
+
+
+def _literal_geri(s: str) -> str:
+    return _LIT_YER_RX.sub(lambda m: _KIRPIK_ISARET[int(m.group(1))], s or "")
+
+
+def _ikame_cozumlu_komut(ham: str) -> tuple:
+    """(yayın-gate komutu, cat-heredoc gövdeleri). Komut = `_komut_govdesi` ile AYNI
+    normalizasyon; tek fark saf `$(cat <<X … X)` aralıklarının sayılı yer tutucu olması."""
+    govdeler: list = []
+
+    def _yer(govde: str) -> str:
+        govdeler.append(_literal_geri(govde))
+        return _CAT_YER.format(len(govdeler) - 1)
+
+    s = _CAT_HEREDOC.sub(lambda m: _yer(m.group(4)), _literal_kac(ham or ""))
+    # PowerShell here-string (`-m @'…'@`) aynı sınıf: kırpılırsa değer `<HERESTRING-STRIPPED>`
+    # kalır. Gövdesi doğrudan okunur (yer tutucu) — fail-closed'a düşürüp meşru PowerShell
+    # commit'ini bloklamamak için.
+    s = _PS_HERESTRING.sub(lambda m: _yer(m.group(0)[2:-2]), s)
+    return _komut_govdesi(s), govdeler
+
+
+def _ikame_degerlerini_coz(degerler: list, govdeler: list, seg: str = None) -> tuple:
+    """Bayrak değerlerindeki cat-heredoc yer tutucusunu ham gövdeyle değiştirir.
+    Dönüş: (değerler, hata). ÇÖZÜLEMEYEN biçim FAIL-CLOSED:
+      · değerde kırpılmış heredoc/here-string işareti kaldıysa (saf `cat` olmayan ikame:
+        `$(sed … <<X)`, `$(cat <<X | …)`) gövde bilinemez — kullanıcının yazdığı literal
+        işaret `_ikame_cozumlu_komut`'ta kaçırılmıştır, burada işaret SAYILMAZ;
+      · değer çıplak `$` ise VE segment tırnaksız `$` ile bitiyorsa tırnaksız `$( … )`
+        ikamesi segmentlere bölünmüştür (`seg` verilmezse eski geniş kural: her `$`)."""
+    ciplak_ikame = seg is None or bool(_CIPLAK_DOLAR_SONU.search(seg))
+    cozulen = []
+    for v in degerler:
+        if any(i in v for i in _KIRPIK_ISARET) or (v.strip() == "$" and ciplak_ikame):
+            return [], ("deger bir komut ikamesi ve govdesi cozulemedi (yalniz "
+                        "`\"$(cat <<'X' … X)\"` bicimi okunur). FAIL-CLOSED: bu bicimi, "
+                        "heredoc'lu stdin'i ya da dosyayi kullan.")
+        cozulen.append(_literal_geri(_CAT_YER_RX.sub(
+            lambda m: govdeler[int(m.group(1))] if int(m.group(1)) < len(govdeler) else "",
+            v)))
+    return cozulen, ""
+
+
 _KABUK_TOOLLARI = ("Bash", "PowerShell")
 _ARG_REPO = re.compile(r"--repo[= ]+([^\s'\"]+)")
 _ARG_BODYFILE = re.compile(
@@ -501,17 +601,25 @@ def _arg_deger_kisa(s: str, ad: str) -> str:
     return m.group(1) or m.group(2) or m.group(3) or ""
 
 
-def _yayinlanan_metin(komut: str, ham: str) -> tuple:
+def _yayinlanan_metin(komut: str, ham: str, govdeler: list = ()) -> tuple:
     """--title/--body/--notes (+ kısa bayraklar) + --body-file/--notes-file İÇERİĞİ.
     `--body-file -` (stdin) heredoc'tan çözülür (eski sürüm fail-closed ediyordu →
     meşru PR durdu, 2026-07-09). `gh api` için gövde çıkarılamaz → TÜM komut taranır
-    (fail-closed). Dönüş: (metin, hata)."""
+    (fail-closed). `govdeler`: `_ikame_cozumlu_komut`'un cat-heredoc gövdeleri — değerdeki
+    yer tutucu bunlarla çözülür (P-1 kardeşi, 2026-10-14). Dönüş: (metin, hata)."""
     if re.search(r"(?<!\w)gh\s+api\b", komut, re.IGNORECASE):
-        return komut + "\n" + _heredoc_govdeleri(ham), ""
+        # Komutun tamamı taranır: yer tutucu da gövdesiyle açılır (`<<-` gövdesi `_HEREDOC`
+        # kümesinde yoktur — açılmasaydı eskiden taranan ham metin görünmez olurdu).
+        acik = _literal_geri(_CAT_YER_RX.sub(
+            lambda m: govdeler[int(m.group(1))] if int(m.group(1)) < len(govdeler) else "",
+            komut))
+        return acik + "\n" + _heredoc_govdeleri(ham), ""
 
-    parcalar = [_arg_deger_kisa(komut, "title"),
-                _arg_deger_kisa(komut, "body"),
-                _arg_deger_kisa(komut, "notes")]
+    parcalar, hata = _ikame_degerlerini_coz(
+        [v for v in (_arg_deger_kisa(komut, "title"), _arg_deger_kisa(komut, "body"),
+                     _arg_deger_kisa(komut, "notes")) if v], list(govdeler), komut)
+    if hata:
+        return "", hata
     bf = _ARG_BODYFILE.search(komut)
     if bf:
         yol = bf.group(1) or bf.group(2) or bf.group(3)
@@ -528,6 +636,48 @@ def _yayinlanan_metin(komut: str, ham: str) -> tuple:
                 return "", (f"--body-file okunamadi ({yol}). FAIL-CLOSED: okunur yap "
                             "veya --body kullan.")
     return "\n".join(p for p in parcalar if p), ""
+
+
+# `gh api` değer ALAN bayrakları (uç token'ı bunların değerinden ayırt edilsin).
+_GH_API_DEGERLI = frozenset({"-X", "--method", "-f", "--raw-field", "-F", "--field", "-H",
+                             "--header", "--input", "-q", "--jq", "-t", "--template",
+                             "--hostname", "--cache", "-p", "--preview"})
+_GH_API_REPO_YOLU = re.compile(
+    r"^(?:https?://[^/\s]+)?/?repos/([A-Za-z0-9][\w.-]*)/([A-Za-z0-9][\w.-]*)(?:[/?#]|$)",
+    re.IGNORECASE)
+
+
+def _gh_api_hedef_repo(seg: str) -> str:
+    """`gh api <uç>` segmentinde uç yolundaki `<ORG>/<REPO>` ("" = yol yok / yer tutucu)."""
+    m = _GH_API_REPO_YOLU.match(_gh_api_ucu(seg))
+    return f"{m.group(1)}/{m.group(2)}" if m else ""
+
+
+def _gh_api_yayin_mi(seg: str) -> bool:
+    """K1 kardeşi (2026-10-14): `_GH_PUBLIC_YAYIN` `gh api` ucunu YALNIZ `api`den hemen
+    sonraki token'da arar ⇒ `gh api -X POST repos/<o>/<r>/pulls -f body=…` (bayrak önce)
+    yayın sayılmıyor, gövde TARANMIYORDU (taban da rc 0). Uç token'ı bayraklar atlanarak
+    bulunur; yayın sınıfı aynı (`pulls|issues|releases`)."""
+    return bool(re.search(r"(?:pulls|issues|releases)", _gh_api_ucu(seg), re.IGNORECASE))
+
+
+def _gh_api_ucu(seg: str) -> str:
+    """`gh api` segmentinin UÇ token'ı (değer alan bayraklar atlanır; yoksa "")."""
+    t = _kelimeler(seg)
+    i = 0
+    while i < len(t) and _ATAMA.match(t[i]):
+        i += 1
+    if (i + 1 >= len(t) or t[i].replace("\\", "/").rsplit("/", 1)[-1].lower()
+            not in ("gh", "gh.exe") or t[i + 1].lower() != "api"):
+        return ""
+    i += 2
+    while i < len(t):
+        k = t[i]
+        if k.startswith("-") and k != "-":
+            i += 2 if (k in _GH_API_DEGERLI) else 1
+            continue
+        return k
+    return ""
 
 
 def _repo_public_mu(hay: str) -> tuple:
@@ -562,15 +712,30 @@ def _gh_pr_public_leak(komut: str, ham: str) -> str:
         gh pr view 1 --repo <PRIVATE> && gh pr create --repo <PUBLIC> -b '<iz>'
     Canli olcum (2026-08-01, gercek iki repo): blok=False — SIZDI. Artik her yayin
     segmenti KENDI hedefiyle degerlendirilir.
+
+    Segmentler kırpılmış `komut`tan DEĞİL, `_ikame_cozumlu_komut(ham)`dan alınır
+    (bug-gate P-1 kardeşi, 2026-10-14): `--body "$(cat <<'EOF' … EOF)"` gövdesi kırpılmış
+    komutta yoktu ⇒ PR/issue/release gövdesi taranmadan yayınlanıyordu.
     """
-    segler = _segmentler(komut)
+    yayin_komutu, govdeler = _ikame_cozumlu_komut(ham) if ham else (komut, [])
+    segler = _segmentler(yayin_komutu)
     for i, seg in enumerate(segler):
-        if not _GH_PUBLIC_YAYIN.search(seg):
+        if not (_GH_PUBLIC_YAYIN.search(seg) or _gh_api_yayin_mi(seg)):
             continue
-        public, repo = _repo_public_mu(_kabuk_baglami(segler, i) + seg)
+        hay = _kabuk_baglami(segler, i) + seg
+        # K1 (bug-gate turu 3, 2026-10-14): `gh api` hedefi cwd'den DEĞİL uç yolundan gelir.
+        # Eskiden `cd`/`--repo` yoksa görünürlük proje kökünden soruluyordu ⇒ private proje
+        # içinden `gh api repos/<public>/…/pulls -f body=…` gövdesi TARANMADAN geçiyordu.
+        # Yol `repos/<ORG>/<REPO>` taşıyorsa o repo sorulur (`--repo` öneki `_ARG_REPO`'nun
+        # İLK eşleşmesidir); yol yoksa / `{owner}` yer tutuculuysa eski davranış (o durumu
+        # GH-HEDEF kuralı ayrıca bloklar).
+        api_repo = _gh_api_hedef_repo(seg)
+        if api_repo:
+            hay = f"--repo {api_repo}\n" + hay
+        public, repo = _repo_public_mu(hay)
         if not public:
             continue
-        metin, hata = _yayinlanan_metin(seg, ham)
+        metin, hata = _yayinlanan_metin(seg, ham, govdeler)
         if hata:
             return f"public repo '{repo}' — {hata}"
         bulgular = [f"{ad}: '{tok}'" for tok, ad in sizintilari_bul(metin, _CORE_LEAK)][:6]
@@ -599,26 +764,37 @@ _GIT_C_PATH = re.compile(r"(?:^|[\n;|&(])\s*git\s+-C\s+(?:'([^']+)'|\"([^\"]+)\"
 _GIT_M = re.compile(r"(?<![\w-])(?:-m|--message)[= ]+(?:'([^']*)'|\"((?:[^\"\\]|\\.)*)\"|(\S+))")
 
 
-# GIT IMZA (trailer) SATIRLARI taramadan cikarilir — YANLIS-POZITIF onlemi.
-# `Co-Authored-By: ... <noreply@...>` ve `Claude-Session: <url>` her commit'te
-# ZORUNLU boilerplate'tir (arac sozlesmesi). Bunlar "kimlik izi" kategorisine
-# takilirsa gate TUM core commit'lerini bloklar -> kapatilir -> koruma sifirlanir.
-# Gurultu yapan bir gate, olmayan bir gate'ten kotudur.
-# ⚠ Dar tutuldu: yalniz SATIR BASINDAKI bilinen trailer anahtarlari. Mesajin
-# govdesinde gecen bir e-posta/kimlik yine YAKALANIR.
-_GIT_IMZA_SATIRI = re.compile(
-    r"^[ \t]*(?:Co-Authored-By|Claude-Session|Signed-off-by|Reviewed-by|Cc)[ \t]*:.*$"
-    r"|^[ \t]*🤖[ \t]*Generated with .*$",
-    re.IGNORECASE | re.MULTILINE)
+# AJAN IMZA SATIRLARI taramadan cikarilir — YANLIS-POZITIF onlemi.
+# Ajan atif trailer'i (`Co-Authored-By: Claude … <ureticinin noreply adresi>`) her ajan
+# commit'inde ZORUNLU boilerplate'tir ve e-posta yapisal desenine UYAR; muafiyetsiz gate
+# TUM core commit'lerini bloklar -> kapatilir -> koruma sifirlanir.
+# ⛔ DARALTILDI (2026-10-12, Part E kardesi): eskiden `Co-Authored-By|Claude-Session|
+# Signed-off-by|Reviewed-by|Cc` anahtarli HER satir adresten bagimsiz dusuyordu ⇒ baska
+# bir kisinin e-postasini tasiyan trailer taramadan SESSIZCE geciyordu. Artik yalniz ajanin
+# kendi uc satiri (atif · oturum · uretici) muaftir; baska adres/ad tasiyan her trailer
+# TARANIR. Desen TEK KAYNAKTA: `genericize_common.AJAN_IMZA_SATIRI` (core_precommit'in
+# `_ATIF_SATIRI`'yla ayni cekirdek). Satir satir uygulanir; satir numarasi korunur.
+# ⛔ ATIF SATIRI BOSALTILMAZ (bug-gate F3, 2026-10-14): ad bolumu `@` disinda her seyi
+# tasiyabilir; satiri bosaltmak oraya yazilan obje/paket adini taramadan geciriyordu.
+# Yalniz uretici adresi silinir, satirin geri kalani TARANIR.
+def _git_imza_satiri(s: str) -> str:
+    """Tek satir: atif satirinda YALNIZ uretici adresi silinir · oturum/uretici satiri bosalir."""
+    if ATIF_SATIRI.match(s):
+        return ATIF_ADRES_PAT.sub("", s, count=1)
+    return "" if AJAN_IMZA_SATIRI.match(s) else s
 
 
 def _git_imza_satirlari_ayikla(metin: str) -> str:
-    """Standart git trailer satirlarini duser (yalniz satir-basi anahtarlar)."""
-    return _GIT_IMZA_SATIRI.sub("", metin or "")
+    """Ajan imza satirlarini notrler (atif: adres · oturum/uretici: satir); geri kalan TARANIR."""
+    return "\n".join(_git_imza_satiri(s) for s in (metin or "").split("\n"))
 
 
-def _git_commit_mesaji(komut: str, ham: str) -> tuple:
+def _git_commit_mesaji(komut: str, ham: str, govdeler: list = ()) -> tuple:
     """`git commit` mesajini cikarir. Donus: (metin, hata); cozulemezse FAIL-CLOSED.
+
+    `-m "$(cat <<'EOF' … EOF)"` (Claude Code'un varsayilan bicimi): deger yer tutucu
+    tasir, `govdeler`den (ham metin) cozulur; saf `cat` olmayan ikame FAIL-CLOSED
+    (`_ikame_degerlerini_coz`, bug-gate P-1 2026-10-14).
 
     TOKEN-TABANLI (2026-08-01, AV-16/17): tum bayrak bicimleri TEK dilbilgisinden
     cozulur — `-m X` · `-mX` · `-am X` (KUMELENMIS) · `-qam X` · `--message X` ·
@@ -638,6 +814,9 @@ def _git_commit_mesaji(komut: str, ham: str) -> tuple:
         bf = _ARG_BODYFILE.search(komut)
         if bf:
             dosyalar.append(bf.group(1) or bf.group(2) or bf.group(3))
+    parcalar, hata = _ikame_degerlerini_coz(parcalar, list(govdeler), komut)
+    if hata:
+        return "", "-m " + hata
     for yol in dosyalar:
         if yol in ("-", "/dev/stdin"):
             govde = _heredoc_govdeleri(ham)
@@ -658,8 +837,12 @@ def _git_commit_public_leak(komut: str, ham: str) -> str:
     """SEGMENT BASINA degerlendirilir (2026-08-01): `cd A && git commit …` zincirinde
     gorunurluk o segmentin BAGLAMIYLA sorulur; birden fazla commit varsa HER BIRI taranir.
     Eskiden komutun tamami tek parca sayiliyordu → zincirdeki ilk `--repo`/`cd`
-    yanlis repoyu gosterebiliyordu (AV-18 ile ayni sinif)."""
-    segler = _segmentler(komut)
+    yanlis repoyu gosterebiliyordu (AV-18 ile ayni sinif).
+
+    Segmentler kirpilmis `komut`tan DEGIL, `_ikame_cozumlu_komut(ham)`dan alinir (bug-gate
+    P-1, 2026-10-14): `-m "$(cat <<'EOF' … EOF)"` mesaji kirpilmis komutta yoktu."""
+    commit_komutu, govdeler = _ikame_cozumlu_komut(ham) if ham else (komut, [])
+    segler = _segmentler(commit_komutu)
     for i, seg in enumerate(segler):
         diziler = _git_commit_arg_dizileri(seg)
         if not (diziler or _GIT_COMMIT.search(seg)):
@@ -673,7 +856,7 @@ def _git_commit_public_leak(komut: str, ham: str) -> str:
         public, repo = _repo_public_mu(hay)
         if not public:
             continue
-        metin, hata = _git_commit_mesaji(seg, ham)
+        metin, hata = _git_commit_mesaji(seg, ham, govdeler)
         if hata:
             return f"public repo '{repo}' — {hata}"
         if not metin.strip():

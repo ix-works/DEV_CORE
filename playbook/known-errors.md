@@ -81,7 +81,7 @@ push edilir** (bu yüzden "araç bozuk" sanılır).
 
 **Kök sebep:** Objeyi, **kayıtlı olmadığı** bir transport (`corrNr`) ile değiştirmeye çalışmak.
 SAP bu durumda kilidi VERİR ama PUT'u reddeder; `423` bunun türevidir. Sık senaryo: elde bir
-**görev (S)** numarası vardır (`DS4K9xxxxx`), ama obje **üst istek (K)** altında ya da **başka
+**görev (S)** numarası vardır (`<SID>K9xxxxx`), ama obje **üst istek (K)** altında ya da **başka
 bir görevde** kayıtlıdır.
 
 > ⛔ **DÜZELTME 2026-08-10 — bu paragraf eskiden şunu diyordu:** *"SAP … `MODIFICATION_SUPPORT=NoModification`

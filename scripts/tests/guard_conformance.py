@@ -80,6 +80,8 @@ T_FM = "TRINT_RELEASE" + "_REQUEST"
 T_FM2 = "TR_RELEASE" + "_REQUEST"
 T_MAIL = "kisi" + "@" + "gercek" + "firma" + ".com.tr"      # jenerik e-posta deseni
 T_MAIL_OK = "kullanici" + "@" + "example.com"                # RFC 2606 → muaf
+# Ajan atıf trailer'ı (tek muaf trailer biçimi — genericize_common.ATIF_SATIRI); adres parçadan.
+T_ATIF = "Co-Authored-By: Claude Opus 5.5 (1M context) <" + "noreply" + "@" + "anthropic.com>"
 # Sentetik ZSD paket adı — parça parça (literal hâli bu dosyada geçerse core_precommit
 # ZSD_PAT'e takılır; gerçek paket DEĞİL, yalnız PUBLIC-PR ③ vakasını tetikler).
 T_PKG = "ZSD" + "0" + "42"
@@ -194,6 +196,11 @@ def _kurallar(proj: Path) -> list:
                 Vaka("Bash", {"command": "gh pr create --repo ix-works/DEV_CORE "
                                          "--title 'x' --body-file -"},
                      "gövde stdin'den okunamıyor → fail-closed", kosul="gh_stdin"),
+                Vaka("Bash", {"command": "gh pr create --repo ix-works/DEV_CORE --title 'x' "
+                                         "--body \"$(cat <<'EOF'\n## Ozet\n%s paketi\nEOF\n)\""
+                                         % T_PKG},
+                     "--body \"$(cat <<'EOF' …)\" gövdesi TARANIR (bug-gate P-1 kardeşi)",
+                     kosul="gh_var"),
             ],
             gecmeli=[
                 Vaka("Bash", {"command": "gh pr create --repo ix-works/DEV_CORE --title "
@@ -227,6 +234,17 @@ def _kurallar(proj: Path) -> list:
                      "İKİNCİ -m gövdesi de taranmalı", kosul="gh_var"),
                 Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit -F -"},
                      "-F - (stdin) çözülemiyor → fail-closed", kosul="gh_var"),
+                Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit -q -F - <<'M'\n"
+                                         "fix(tooling): readback esitligi\n\n"
+                                         "%s\nSigned-off-by: Biri <%s>\nM" % (T_ATIF, T_MAIL)},
+                     "ajan DIŞI trailer'daki adres TARANIR (2026-10-12 daraltması)",
+                     kosul="gh_var"),
+                Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit -m \"$(cat <<'EOF'\n"
+                                         "fix(tooling): readback esitligi\n\n"
+                                         "%s\nSigned-off-by: Biri <%s>\nEOF\n)\""
+                                         % (T_ATIF, T_MAIL)},
+                     "-m \"$(cat <<'EOF' …)\" (Claude Code varsayılanı) TARANIR (bug-gate P-1)",
+                     kosul="gh_var"),
             ],
             gecmeli=[
                 Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit "
@@ -238,8 +256,13 @@ def _kurallar(proj: Path) -> list:
                      "commit DEĞİL — `git log` bu gate'e girmez"),
                 Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit -q -F - <<'M'\n"
                                          "fix(tooling): readback esitligi\n\n"
-                                         "Co-Authored-By: Bot <%s>\nM" % T_MAIL},
-                     "git imza satırları AYIKLANIR — yoksa gate HER core commit'ini bloklar",
+                                         "%s\nM" % T_ATIF},
+                     "ajan atıf trailer'ı AYIKLANIR — yoksa gate HER core commit'ini bloklar",
+                     kosul="gh_var"),
+                Vaka("Bash", {"command": "cd /c/IX/DEV_CORE && git commit -m \"$(cat <<'EOF'\n"
+                                         "fix(tooling): readback esitligi\n\n%s\nEOF\n)\""
+                                         % T_ATIF},
+                     "meşru -m \"$(cat …)\" + ajan atıf satırı GEÇER (her gün kullanılan biçim)",
                      kosul="gh_var"),
             ],
         ),

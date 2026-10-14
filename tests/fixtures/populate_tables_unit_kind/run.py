@@ -330,7 +330,7 @@ def senaryolar(pt) -> list[tuple[str, bool, str]]:
         """GET'i URL'e gore YONLENDIRIR: varlik-GET ile kaynak-GET AYRI yanit alir.
         (Tek yanit verilirse 500 vektoru varlik-GET'i de dusurur ve akis CREATE
         dalina sapar -> harness hatasi, kod hatasi degil. Olculdu 2026-08-29.)"""
-        def __init__(s, exists_resp, src_resp=None, corrnr="DS4K900029"):
+        def __init__(s, exists_resp, src_resp=None, corrnr="AB1K900101"):
             s._e, s._s = exists_resp, (src_resp if src_resp is not None else exists_resp)
             s.put_params = None
             s._corrnr = corrnr
@@ -348,7 +348,7 @@ def senaryolar(pt) -> list[tuple[str, bool, str]]:
             return _Resp(200, "")
 
     class _Client:
-        def __init__(s, exists_resp, src_resp=None, corrnr="DS4K900029"):
+        def __init__(s, exists_resp, src_resp=None, corrnr="AB1K900101"):
             s.url = "https://x"
             s.session = _Sess(exists_resp, src_resp, corrnr)
 
@@ -404,11 +404,11 @@ def senaryolar(pt) -> list[tuple[str, bool, str]]:
     # Kontrol gruplu canli olcum (2026-08-19): S-tipi GOREV verilince 9/9 tablo
     # `CTS_WBO_API 020` (409); K-tipi ISTEK verilince 9/9 pushed. SAP'nin lock
     # yanitindaki CORRNR otoritedir -> PUT onunla gitmeli.
-    c = _Client(_Resp(404, ""), corrnr="DS4K900029")
+    c = _Client(_Resp(404, ""), corrnr="AB1K900101")
     sonuc, out = _cagir(c)
     pp = c.session.put_params or {}
     r.append(("S14 #32(a): PUT corrNr, lock yanitindaki CORRNR ile gider",
-              pp.get("corrNr") == "DS4K900029",
+              pp.get("corrNr") == "AB1K900101",
               "PUT corrNr=%r (istenen TR001)" % pp.get("corrNr")))
 
     # --- S15: FP capasi — CORRNR DONMEZSE istenen transport korunur -------

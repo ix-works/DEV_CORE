@@ -551,7 +551,7 @@ DOĞRULUK kanıtı olarak sunuyordu. **BU REHBERLİK 2026-08-18'de ÖLÇÜLEREK
 BİLEREK yeniden yazılmıyor: bir korpus çapası onun yokluğunu denetliyor ve
 "tarihçe olarak alıntılamak" ile "hâlâ öğretmek" metin düzeyinde ayırt
 edilemez — Parti-1'de aynı tuzağa bir kez düşüldü.) Çürüten ölçümler:
-  · 2026-08-18: `count:0` + `shape_recognized:true` iken `NPLK900005` VARdı
+  · 2026-08-18: `count:0` + `shape_recognized:true` iken `<TRANSPORT>` (görev) VARdı
     (E070: TRFUNCTION='S', TRSTATUS='D', AS4USER eşleşiyor).
   · 2026-08-19: aynı bileşim, E070'te **iki** açık kayıt.
   · 2026-08-19 (A-00): aynı bileşim, E070'te **dört** açık görev.

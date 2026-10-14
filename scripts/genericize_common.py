@@ -296,6 +296,72 @@ def sap_user_sizintilari(metin: str) -> list[str]:
     return bulunan
 
 
+# ------------------------------------------------ UYARI desenleri (warn-first)
+# Q361 (2026-10-12): public çekirdekte iki kimlik izi türü HİÇBİR katmanca görülmüyordu —
+# bir bulut tenant host'u (auth docstring'i) ve bir tüketici projenin transport numarası
+# (ajan tanımı + 4 fixture). İkisi de İSİM değil BİÇİM taşır ⇒ isim listesi (proje başına,
+# çekirdek onu bilmez) yakalayamaz; yapısal desen gerekir. Fikir bir dış çekirdekten alındı,
+# kod KOPYALANMADI.
+#
+# ⚠ WARN-FIRST (ADR 0019 moratoryumu): bu desenler `sizintilari_bul`'a GİRMEZ — o fonksiyon
+# commit'i BLOKLAYAN yoldur ve `pre_tool_guard` + `seed_memory` de onu çağırır. Yeni desen
+# FP'si ölçülmeden bloklayıcı yapılmaz; terfi AYRI ve bilinçli karardır. Tek tüketici
+# `core_precommit` (staged · `--all` · `--ref` · `--msg`): bulgu basılır, çıkış kodu değişmez.
+#
+# KORPUS ÖLÇÜMÜ (2026-10-12, çekirdek ağacının takipli dosyaları): transport biçimli 19
+# farklı dizge — fixture/örneklerde SAHTE SID'ler (aşağıdaki ORNEK_SID) + gerçek görünen
+# SID'ler (bulgu; ilgili dosyalarda ayrı işte genericize edilir). Host biçimli dizgeler:
+# yer tutucu ilk etiket (`abc123`), yalın bölge alanı (`eu10.hana…`) ve `.` önekli sonek
+# listeleri — hiçbiri tenant DEĞİL ⇒ aşağıdaki muafiyetler bu ölçülen kümeden türetildi.
+
+# SAP transport numarası: <SID>K<6 rakam>; SID 3 karakter, ilki harf.
+TRANSPORT_PAT = re.compile(r"(?<![A-Za-z0-9])([A-Z][A-Z0-9]{2})K(\d{6})(?![A-Za-z0-9])",
+                           re.IGNORECASE)
+# Fixture/doküman yer tutucusu olduğu ÖLÇÜLEN SID'ler. Buraya SID eklemek o SID için uyarıyı
+# KALICI susturur ⇒ gerçek bir sisteme ait olmadığı ölçülmeden eklenmez (ORNEK_Z ile aynı ölçüt).
+ORNEK_SID = frozenset({"SAH", "AB1"})
+_YER_TUTUCU_SID = re.compile(r"X{3}", re.IGNORECASE)
+
+# Bulut tenant host'u: <ilk-etiket>[.<ara etiketler>].<SAP bulut soneki>
+TENANT_HOST_PAT = re.compile(
+    r"(?<![A-Za-z0-9._-])"                   # host'un BAŞI (ad karakteri / nokta / tireden sonra değil)
+    # `<` ve `{` BİLEREK sınıfta YOK (bug-gate 2026-10-12): `<host>` / `{host}` sarmalı içindeki
+    # somut host da uyarı vermeli. `<tenant>.…` yer tutucusu yine sessizdir — onu `>` keser.
+    r"([A-Za-z0-9][A-Za-z0-9-]*)"            # ilk etiket = tenant / alt hesap
+    r"(?:\.[A-Za-z0-9-]+)*?"                 # ara etiketler (bölge, abap, authentication …)
+    r"\.(?:s4hana\.cloud\.sap|s4hana\.ondemand\.com|hana\.ondemand\.com"
+    r"|accounts\.ondemand\.com|accounts\.cloud\.sap)"
+    r"(?![A-Za-z0-9-])",
+    re.IGNORECASE)
+# İlk etiket bir BÖLGE/landscape kodu ise host tenant değil, yalın bölge alanıdır (eu10, us10…).
+_BOLGE_ETIKETI = re.compile(r"[a-z]{2}\d{1,3}(?:-\d{1,3})?", re.IGNORECASE)
+# Ölçülen yer tutucu ilk etiketler (+ yalnız-x). `<tenant>` biçimi desene zaten uymaz.
+ORNEK_TENANT = frozenset({"abc123"})
+_YER_TUTUCU_ETIKET = re.compile(r"x{3,}", re.IGNORECASE)
+
+
+def transport_sizintilari(metin: str) -> list[str]:
+    """Allowlist dışı SID taşıyan transport numaraları (warn-first)."""
+    return [m.group(0) for m in TRANSPORT_PAT.finditer(metin)
+            if m.group(1).upper() not in ORNEK_SID
+            and not _YER_TUTUCU_SID.fullmatch(m.group(1))]
+
+
+def tenant_host_sizintilari(metin: str) -> list[str]:
+    """Somut (yer tutucu / bölge olmayan) ilk etiketli SAP bulut host'ları (warn-first)."""
+    return [m.group(0) for m in TENANT_HOST_PAT.finditer(metin)
+            if m.group(1).lower() not in ORNEK_TENANT
+            and not _BOLGE_ETIKETI.fullmatch(m.group(1))
+            and not _YER_TUTUCU_ETIKET.fullmatch(m.group(1))]
+
+
+def uyari_sizintilari(metin: str) -> list[tuple[str, str]]:
+    """WARN-FIRST bulgular — (token, tür). Çağıran TOKEN'I BASMAMALIDIR (CI günlüğü public;
+    uyarı commit'i bloklamadığı için iz her koşumda yeniden yazılırdı)."""
+    return ([(t, "tenant host") for t in tenant_host_sizintilari(metin)]
+            + [(t, "transport no") for t in transport_sizintilari(metin)])
+
+
 def sizintilari_bul(metin: str, idp: re.Pattern) -> list[tuple[str, str]]:
     """(token, tür) listesi. Çağıran `idp`'yi `id_pattern()` ile üretir."""
     bulgular: list[tuple[str, str]] = []
@@ -307,3 +373,40 @@ def sizintilari_bul(metin: str, idp: re.Pattern) -> list[tuple[str, str]]:
     for t in sap_user_sizintilari(metin):
         bulgular.append((t, "SAP kullanıcı adı"))
     return bulgular
+
+
+# ------------------------------------------------ commit mesajı: ajan atıf satırları
+# TEK KAYNAK (D9 kardeşi, 2026-10-12): commit mesajı taramasında tarama DIŞI tutulan
+# satırlar. İki tüketici: `core_precommit` (`--ref`/`--msg`, yalnız `ATIF_SATIRI`) ve
+# `pre_tool_guard` (commit-mesajı gate'i, `AJAN_IMZA_SATIRI`). Eskiden guard kendi
+# desenini taşıyordu ve `Co-Authored-By|Claude-Session|Signed-off-by|Reviewed-by|Cc`
+# anahtarlı HER satırı adresten bağımsız düşürüyordu ⇒ başka bir kişinin e-postasını
+# taşıyan trailer sızıntı taramasından SESSİZCE geçiyordu.
+# Muafiyet YALNIZ ajanın kendi yazdığı üç biçime işler; ölçüldü (takipli tarihçe, 630
+# Claude co-author satırı + 323 oturum satırı): dar biçime uymayan 0.
+#  · atıf trailer'ı: ad Claude + üreticinin noreply adresi; ad–adres arası `@` taşıyamaz
+#    (aradaki ikinci e-posta muafiyete saklanamaz — bug-gate 2026-10-12, M10).
+#    Bu satır e-posta yapısal desenine UYAR ⇒ muafiyetsiz her ajan commit'i bloklanırdı.
+#    Muafiyet YALNIZ ADRESTİR (aşağıdaki ⛔ notu): ad bölümü taranır.
+#  · oturum satırı: yalnız alfasayısal oturum kimlikli claude.ai bağlantısı.
+#  · üretici satırı: yalnız sabit Claude Code bağlantısı.
+#    (son ikisi bugün tarayıcıya takılmıyor — ölçüldü; dar tutuldukları için iz saklayamazlar)
+# Satır satır uygulanır (`re.match`, MULTILINE değil): `\s` satır sonunu yiyip komşu
+# satırı birleştiremez.
+# ⛔ ATIF SATIRI BOŞALTILMAZ, YALNIZ ADRESİ MASKELENİR (bug-gate F3, 2026-10-14): ad bölümü
+# (`Claude\b[^<@\n]*`) `@` dışında her şeyi taşıyabilir ⇒ satırı tümden boşaltmak oraya
+# yazılan bir Z-obje / paket adını taramadan geçiriyordu. İki tüketici de satırı
+# `ATIF_SATIRI` ile TANIR, `ATIF_ADRES_PAT` ile yalnız üreticinin adresini siler; satırın
+# geri kalanı TARANIR. ÖLÇÜLDÜ (takipli tarihçe, iki repo, 2110 atıf satırı, 7 farklı ad
+# biçimi — model adı + bağlam): maskeli satırın tarayıcıya takıldığı 0.
+_ATIF_ADRES = r"<noreply@anthropic\.com>"
+_ATIF_GOVDE = r"Co-Authored-By:\s*Claude\b[^<@\n]*" + _ATIF_ADRES
+ATIF_SATIRI = re.compile(r"^\s*" + _ATIF_GOVDE + r"\s*$", re.IGNORECASE)
+ATIF_ADRES_PAT = re.compile(_ATIF_ADRES, re.IGNORECASE)
+AJAN_IMZA_SATIRI = re.compile(
+    r"^\s*(?:" + _ATIF_GOVDE
+    + r"|Claude-Session:[ \t]*https://claude\.ai/code/session_[A-Za-z0-9]+"
+    + r"|\U0001F916[ \t]*Generated with \[Claude Code\]"
+      r"\(https://claude\.(?:com/claude-code|ai/code)\)"
+    + r")\s*$",
+    re.IGNORECASE)

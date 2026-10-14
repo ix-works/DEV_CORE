@@ -634,6 +634,23 @@ OZEL_TESTLER = [
      "taramasi (D5) muafiyet DISI, muaf sayisi HER kosumda basilir (KAPSAM BEYANI) ve "
      "muaf token CI gunlugune BASILMAZ; ters yon tarihi `SCAN_EXEMPT` kopyasiyla olculur "
      "(24 vektor + 4 mutasyon)"),
+    # 2026-10-12 (Q361 + Q365⑤): tenant host + transport no BICIMI hicbir katmanca
+    # gorulmuyordu; desenler WARN-FIRST, --ref/--msg yeni giris noktalari.
+    ("genericize_tenant_transport",
+     "genericize uyari desenleri (tenant host · transport no) WARN-FIRST: pozitif + "
+     "negatif (yer tutucu/bolge/sahte SID) vektorler, bloklayici yol degismez, token "
+     "basilmaz; kablolama staged · --all · --ref · --msg · gercek git commit (hook shim) "
+     "AYRI olculur; --msg ajan atif trailer muafiyeti dar, atif satirinda yalniz adres "
+     "maskelenir (65 vektor + 15 mutasyon)"),
+    # 2026-10-12 (Part E kardesi): pre_tool_guard commit-mesaji gate'i trailer anahtarli
+    # her satiri adresten bagimsiz dusuruyordu => baska kisinin e-postasi sessizce geciyordu.
+    ("git_imza_ayiklama_dar",
+     "pre_tool_guard commit-mesaji imza ayiklamasi DAR: yalniz ajan atif/oturum/uretici "
+     "satiri muaf, baska adresli Signed-off-by/Reviewed-by/Cc/Co-authored-by GERCEK "
+     "tarayiciyla bloklanir; muaf satirin tarayiciya takildigi kontrol grubu + tek kaynak "
+     "(genericize_common) AST capasi + PowerShell/-F/CRLF 3. baglam; bug-gate 2026-10-14: "
+     "son capalar, atif ad bolumu taranir (adres maskelenir), -m/--body \"$(cat <<'EOF' …)\" "
+     "ham metinden cozulur, cozulemeyen ikame fail-closed (38 vektor + 10 mutasyon)"),
     # 2026-09-17 (Q322): alt-ajan takilma bekcisi — GOZLEMCI, kapi DEGIL.
     ("agent_stall_watch",
      "agent_stall_watch: sinyal ILERLEMEDIR (eslesmemis tool_use + yas), canlilik degil; "
@@ -1416,6 +1433,21 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "profil_tool kaydi + _app'te tanimli araclar siniflandirma taramasinda"),
     ("mcp_servers/sap_adt/data_guard.py", ("O:ad_kabul_tam_dize",),
      "RED tarafi desenleri bilincli DEGISMEDI — degisirse ad_kabul R bolumu yeniden olcer"),
+    # ── Q361 + Q365⑤ (2026-10-12): uyari desenleri + --ref/--msg ────────────
+    ("scripts/genericize_common.py", ("O:genericize_tenant_transport",),
+     "warn-first tenant host / transport no desenleri + ORNEK_SID/ORNEK_TENANT olcutu"),
+    ("scripts/git-hooks/core_precommit.py", ("O:genericize_tenant_transport",),
+     "uyari kovasinin kablolamasi (staged/--all) + --ref/--msg modlari + token basmama"),
+    # ── Part E kardesi (2026-10-12): ajan imza satiri muafiyeti TEK KAYNAK ──────
+    ("scripts/hooks/pre_tool_guard.py", ("O:git_imza_ayiklama_dar",),
+     "commit-mesaji gate'inin imza ayiklamasi: yalniz ajan satirlari muaf; commit + PR "
+     "yayin metninin `$(cat <<X … X)` cozumu (bug-gate P-1, 2026-10-14)"),
+    ("scripts/genericize_common.py", ("O:git_imza_ayiklama_dar",),
+     "ATIF_SATIRI / AJAN_IMZA_SATIRI tek kaynagi (guard + core_precommit)"),
+    ("scripts/git-hooks/core_precommit.py", ("O:git_imza_ayiklama_dar",),
+     "`_ATIF_SATIRI` alias'i tek kaynaktan (K2b AST capasi)"),
+    # ⚠ `scripts/git-hooks/pre-commit` BILEREK satirsiz: satir eklemek onu fail-closed
+    # TAM suitten tek korpusa DARALTIRDI (C bolumu shim'i kullanir ama tek tuketici degil).
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla

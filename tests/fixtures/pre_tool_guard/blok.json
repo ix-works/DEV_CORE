@@ -225,5 +225,113 @@
     "gorunurluk": "public",
     "tarayici": "sentinel",
     "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "Part E kardesi: ajan DISI trailer'daki e-posta TARANIR (Signed-off-by)",
+    "vaka": "2026-10-12 — imza ayiklayici trailer anahtarini adresten bagimsiz dusuruyordu",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -q -F - <<'EOF'\nfix(tooling): jenerik\n\nSigned-off-by: Biri <<EPOSTA>>\nEOF"},
+    "gorunurluk": "public",
+    "tarayici": "gercek",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate P-1: -m \"$(cat <<'EOF' … EOF)\" (Claude Code varsayilan bicimi) TARANIR",
+    "vaka": "2026-10-14 — mesaj kirpilmis komuttan okunuyordu, ayni icerik -F - ile bloklaniyordu",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -m \"$(cat <<'EOF'\nfix(tooling): jenerik\n\nSigned-off-by: Biri <<EPOSTA>>\nEOF\n)\""},
+    "gorunurluk": "public",
+    "tarayici": "gercek",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate P-1 kardesi: gh pr create --body \"$(cat <<'EOF' … EOF)\" TARANIR",
+    "vaka": "2026-10-14 — PR govdesi kirpilmis komuttan okunuyordu (--body-file - bloklaniyordu)",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh pr create --repo org/core --title 'fix: x' --body \"$(cat <<'EOF'\n## Ozet\n<SENTINEL>\nEOF\n)\""},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "PUBLIC-PR SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate P-1: cozulemeyen ikame -m \"$(sed … <<EOF)\" FAIL-CLOSED",
+    "vaka": "2026-10-14 — saf cat olmayan ikamede govde bilinemez",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/core && git commit -m \"$(sed s/a/b/ <<'EOF'\ntemiz\nEOF\n)\""},
+    "gorunurluk": "public",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate 3 G1 (R1): private $(cat) EOF-echo, sonra public -m iz, sonra $(cat) — ara segment YUTULMAZ",
+    "vaka": "2026-10-14 — _CAT_HEREDOC govdesi ilk EOF'u asip sonraki EOF\\n)'e uzuyordu (olculmus GEVSETME, ara durumda rc 0)",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/proje && git commit -m \"$(cat <<'EOF'\nok\nEOF\necho)\" && cd /c/public-core && git commit -m 'fix <SENTINEL>' && git commit --amend -m \"$(cat <<'EOF'\nx\nEOF\n)\""},
+    "gorunurluk": "esleme",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate 3 G1 (R2): public echo $(cat) EOF-echo, -m iz, git log $(cat)",
+    "vaka": "2026-10-14 — ayni sinif, ilk ikame commit degil",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/public-core && echo \"$(cat <<'EOF'\nok\nEOF\necho)\" && git commit -m 'fix <SENTINEL>' && git log -1 --format=\"$(cat <<'EOF'\n%B\nEOF\n)\""},
+    "gorunurluk": "esleme",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate 3 G1 (R3): echo $(cat) EOF-echo, gh pr create --body iz, $(cat)",
+    "vaka": "2026-10-14 — ayni sinif PUBLIC-PR gate'inde",
+    "tool_name": "Bash",
+    "tool_input": {"command": "echo \"$(cat <<'EOF'\nok\nEOF\necho)\" && gh pr create --repo org/public-core --title x --body 'ozet <SENTINEL>' && echo \"$(cat <<'EOF'\ny\nEOF\n)\""},
+    "gorunurluk": "esleme",
+    "tarayici": "sentinel",
+    "beklenen_imza": "PUBLIC-PR SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate 3 G1 (N11): private $(cat) EOF-echo, sonra public $(cat) iz",
+    "vaka": "2026-10-14 — P-1 sinifi, tabanda da acikti",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cd /c/proje && git commit -m \"$(cat <<'EOF'\nok\nEOF\necho)\" && cd /c/public-core && git commit -m \"$(cat <<'EOF'\nfix <SENTINEL>\nEOF\n)\""},
+    "gorunurluk": "esleme",
+    "tarayici": "sentinel",
+    "beklenen_imza": "COMMIT-MESAJI SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate 3 K1 (N19): cd/--repo YOK, gh api repos/<public>/pulls -f body=$(cat) — hedef YOLDAN okunur",
+    "vaka": "2026-10-14 — gorunurluk proje kokunden soruluyordu (private) ⇒ govde taranmiyordu; `esleme` mock'u bunu MASKELER, `gh-sahte` olcer",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh api repos/org/public-core/pulls -f title=x -f body=\"$(cat <<'EOF'\n<SENTINEL>\nEOF\n)\""},
+    "gorunurluk": "gh-sahte",
+    "tarayici": "sentinel",
+    "beklenen_imza": "PUBLIC-PR SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate 3 K1 (N20): gh api repos/<public>/pulls -f body=$(cat <<-EOF … TAB EOF)",
+    "vaka": "2026-10-14 — ayni sinif, <<- + TAB kapanis",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh api repos/org/public-core/pulls -f body=\"$(cat <<-EOF\n\t<SENTINEL>\n\tEOF\n)\""},
+    "gorunurluk": "gh-sahte",
+    "tarayici": "sentinel",
+    "beklenen_imza": "PUBLIC-PR SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate 3 K1 kardesi: gh api -X POST <uc> (bayrak ucun ONUNDE) yayin sayilir",
+    "vaka": "2026-10-14 — _GH_PUBLIC_YAYIN ucu yalniz `api`den hemen sonraki token'da ariyordu; taban da rc 0",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh api -X POST repos/org/public-core/issues -f title=x -f body='<SENTINEL>'"},
+    "gorunurluk": "gh-sahte",
+    "tarayici": "sentinel",
+    "beklenen_imza": "PUBLIC-PR SIZINTI GATE"
+  },
+  {
+    "ad": "bug-gate 3 K1 siniri: gh api repos/{owner}/{repo}/pulls — yol okunmaz, GH-HEDEF bloklar",
+    "vaka": "2026-10-14 — yer tutuculu yolda eski davranis korunur; hedef cwd'den cozulecegi icin GH-HEDEF kurali",
+    "tool_name": "Bash",
+    "tool_input": {"command": "gh api repos/{owner}/{repo}/pulls -f title=x -f body=temiz"},
+    "gorunurluk": "gh-sahte",
+    "tarayici": "sentinel",
+    "beklenen_imza": "GH HEDEF BEL"
   }
 ]

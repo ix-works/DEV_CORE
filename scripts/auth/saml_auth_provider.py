@@ -39,7 +39,7 @@ class SAMLAuthProvider(IAuthProvider):
         Initialize SAML Auth provider.
 
         Args:
-            base_url: SAP system base URL (e.g., https://my415633.s4hana.cloud.sap)
+            base_url: SAP system base URL (e.g., https://<tenant>.s4hana.cloud.sap)
             username: SAP username (email for cloud systems)
             password: SAP password
             cookies_file: Optional path to persist cookies (JSON format)

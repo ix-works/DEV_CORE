@@ -70,7 +70,7 @@
   "tarayici": "sentinel"
  },
  {
-  "ad": "FP: git imza satirlari (Co-Authored-By) AYIKLANIR",
+  "ad": "FP: izsiz trailer (Co-Authored-By: Bot, adressiz) taranir ve temiz gecer",
   "vaka": "2026-07-28 — gate ilk yazildiginda kendi commit'ini blokladi",
   "tool_name": "Bash",
   "tool_input": {
@@ -284,5 +284,65 @@
    "tool_name": "Bash",
    "tool_input": []
   }
+ },
+ {
+  "ad": "FP: bug-gate P-1 — temiz -m \"$(cat <<'EOF' … EOF)\" + oturum satiri GECER",
+  "vaka": "2026-10-14 — bu repoda her gun kullanilan bicim; cozumleme FP uretmemeli",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "cd /c/core && git commit -m \"$(cat <<'EOF'\nfix(tooling): jenerik\n\nClaude-Session: https://claude.ai/code/session_01AbCd\nEOF\n)\""
+  },
+  "gorunurluk": "public",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP: bug-gate P-1 kardesi — temiz PR --body \"$(cat …)\" + uretici satiri GECER",
+  "vaka": "2026-10-14 — Claude Code'un varsayilan PR bicimi",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "gh pr create --repo org/core --title 'fix: x' --body \"$(cat <<'EOF'\n## Ozet\njenerik\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\nEOF\n)\""
+  },
+  "gorunurluk": "public",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP: bug-gate 3 G2 (FP14) — -m tek tirnakli deger guard'i ANLATAN literal isaret tasir",
+  "vaka": "2026-10-14 — PATTERN #12 dogfood: kullanicinin yazdigi `<HEREDOC-STRIPPED>` ikame isareti sanilip FAIL-CLOSED ediliyordu (taban rc 0)",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "cd /c/core && git commit -m 'fix(guard): <HEREDOC-STRIPPED> isareti'"
+  },
+  "gorunurluk": "public",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP: bug-gate 3 G2 (R8) — PR --body tek tirnakli literal isaret",
+  "vaka": "2026-10-14 — ayni sinif PUBLIC-PR gate'inde",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "gh pr create --repo org/core --title x --body 'deger <HEREDOC-STRIPPED> kalir'"
+  },
+  "gorunurluk": "public",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP: bug-gate 3 G2 (R6) — -m '$' (tirnakli tek karakter) ikame DEGILDIR",
+  "vaka": "2026-10-14 — ciplak `$` yalniz segment tirnaksiz `$` ile bitince ikamedir",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "cd /c/core && git commit -m '$'"
+  },
+  "gorunurluk": "public",
+  "tarayici": "gercek"
+ },
+ {
+  "ad": "FP: bug-gate 3 K1 — gh api repos/<private>/pulls govdesi (hedef private) GECER",
+  "vaka": "2026-10-14 — hedef yoldan okununca private uc serbest kalmali",
+  "tool_name": "Bash",
+  "tool_input": {
+   "command": "gh api repos/org/private-proj/pulls -f title=x -f body=\"$(cat <<'EOF'\n<SENTINEL>\nEOF\n)\""
+  },
+  "gorunurluk": "gh-sahte",
+  "tarayici": "sentinel"
  }
 ]
