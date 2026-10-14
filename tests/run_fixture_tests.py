@@ -664,6 +664,43 @@ OZEL_TESTLER = [
      "TANIM tekilligi; pinli c7d8b75'te gercek B18d+B18e cifti TAM yakalanir; alt-etiket "
      "(`B0-SECIM`) · kod blogu · harf eki · metin ici atif FP capalari; bos aile -> rc 2 "
      "OLCULEMEDI; argumansiz alt-surec gercek core'u tarar (16 vektor + 6 mutasyon)"),
+    # 2026-10-12 (dis repo turu Part A, Q359/Q358/Q362): kilit birakma durustlugu.
+    ("kilit_birakma_durustlugu",
+     "Q359/Q358: unlock_object tum stratejiler basarisizsa False doner; yazma sonucu "
+     "DEGISMEZ, lock_released=False + KONTROL ET uyarisi (SM12 silme onerisi yok, retry yok); "
+     "sap_client 9 cagri tek yardimcidan; populate_cds_views UNLOCK != 2xx gorunur (taban 6b6c11d kontrol)"),
+    ("istek_sahibi_metni",
+     "Q362: IS_LINK_UP='' hata metni istek K + sahibi (E070.AS4USER) / 'sahip okunamadi'; "
+     "'own transport' iddiasi yok; ayni istisna sinifi + akis; sap_client Bug 11 WARN sahibi adlandirir"),
+    ("transport_yaklasim_sirasi",
+     "set_object_source PUT transport sirasi PARAM-ONCE (corrNr -> ikisi -> header -> transportsuz); "
+     "olculen sistemde bosa 409 yok, header yedegi duruyor (taban 6b6c11d kontrol)"),
+    ("fugr_faz2_ioc_sondasi",
+     "FUGR toplu aktivasyonunda 2. faz ioc = hukum DEGIL -> bagimsiz worklist sondasi "
+     "(temiz/kalan/kurulamaz); FUGR disi birebir eski (taban 6b6c11d sahte-negatif kontrol)"),
+    ("ad_kabul_tam_dize",
+     "Q363②: izin-listesi ad desenleri `\\Z` (sondaki satir sonu kabul edilmez); RED tarafi "
+     "desenler DEGISMEDI (sondaki LF guvenli tarafta kalir) — taban 6b6c11d kontrol"),
+    ("hata_sebebi_ve_maskeleme",
+     "Q363③ + SAP sebebi: _err_from_exc kisa sap_reason (T100/localizedMessage) + parola/"
+     "kullanici/Authorization maskesi; govdesiz/bozuk govde -> eski metin BIRE BIR; ASCII-disi "
+     "parola karakter/konum sizdirmaz (taban kontrol)"),
+    ("checkrun_sozdizimi",
+     "Q360: salt-okur checkrun (lib check_run + ayristirici) temiz/hatali/OLCULEMEDI + KAPSAM; "
+     "notProcessed/baska reporter/hedef raporlanmadi = OLCULEMEDI; adt_syntax_check checkrun "
+     "baglamasi (geri alinabilir sabit); genericlesmis canli ornekler"),
+    ("mcp_salt_okur_araclar",
+     "Q363①: adt_get_method / adt_revisions / adt_pretty_print salt-okur + KAPSAM; govdede "
+     "yazma/kilit cagrisi yok (AST); profil_tool kaydi (alt-surec tools/list)"),
+    ("mcp_arac_sinifi",
+     "Q369④: her MCP araci ya require_writable_tier ya SALT_OKUR_ARACLAR (siniflanmamis/bayat = "
+     "FAIL); QA tier'da TUM yazma araclari ADR_0010_TIER + istemciye ulasmaz, DEV kontrol"),
+    ("oturum_izi_ve_ddl_accept",
+     "Q364②: ADT_SESSION_TRACE (varsayilan kapali, maskeli) + lock/PUT/unlock TEK oturum "
+     "(new_session sokma mutasyonu FAIL); Q364①: tablo/yapi DDL GET Accept text/plain kilidi"),
+    ("adlandirma_uyarisi",
+     "Q369⑤: DDIC yaratiminda standards/01 §4.4.5 onek UYARISI (yalniz uyari, ok degismez); "
+     "adt_post_shell davranis + 3 composite AST; --korpus ile yerel FP olcumu"),
 ]
 
 
@@ -1327,6 +1364,58 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "AYNI modulu cagirir (listeleyici kapidan dar olamaz)"),
     ("scripts/git-hooks/core_precommit.py", ("O:z_obje_desen_kapsami",),
      "D7'nin KABLOLAMA ucu: desen gercek staged commit yolunda olculur"),
+
+    # ── 2026-10-12 dis repo turu Part A (Q359/Q358/Q362): AYRI satirlar; sap_adt_lib.py
+    # birlesimi buyudu → `b0_secim` P3 pinli sayisi 16→20 BIRLIKTE guncellendi.
+    ("scripts/sap_adt_lib.py", ("O:kilit_birakma_durustlugu", "O:istek_sahibi_metni",
+                                "O:transport_yaklasim_sirasi", "O:fugr_faz2_ioc_sondasi"),
+     "Q359 unlock_object False sozlesmesi + kilit_birakilamadi_uyarisi · Q362 _istek_sahibi_metni · "
+     "transport_approaches param-once sirasi · FUGR 2. faz ioc -> worklist sondasi"),
+    ("scripts/sap_client.py", ("O:kilit_birakma_durustlugu", "O:istek_sahibi_metni"),
+     "_kilit_birak 9 cagri (lock_released=False, retry yok) + Bug 11 WARN istek sahibi"),
+    ("scripts/populate_cds_views.py", ("O:kilit_birakma_durustlugu",),
+     "Q358: adim-5 UNLOCK yaniti 2xx degilse gorunur uyari + ozet satiri (akis/rc degismez)"),
+    ("scripts/push_textpool.py", ("O:kilit_birakma_durustlugu",),
+     "unlock False → [UNLOCK] FAILED + ortak uyari (AST: donus degeri atilmaz)"),
+    ("scripts/sap_set_object_description.py", ("O:kilit_birakma_durustlugu",),
+     "_lock_put_unlock finally: unlock False → ortak uyari"),
+    ("mcp_servers/sap_adt/tools/atom.py", ("O:kilit_birakma_durustlugu",),
+     "adt_push_source lock_released=False + lock_notice (ok degismez)"),
+    # 2026-10-14 bug-gate: E2/E3 SM12 metin taramasi + F5 davranis vektoru bu iki dosyayi da okur
+    ("scripts/push_object.py", ("O:kilit_birakma_durustlugu",),
+     "409 SAPLockError [MANUAL FIX]: SM12 KONTROL ET, silme onerisi YOK (ADR 0005-C)"),
+    ("scripts/hooks/post_tool_failure.py", ("O:kilit_birakma_durustlugu",),
+     "REMINDER madde 4: SM12 satiri KONTROL fiili tasir (E3), silme onerisi yok (E2)"),
+    # 2026-10-14 re-gate L1: mcp_salt_okur_araclar V-bolumu bu iki dosyanin GERCEK okuma yolunu
+    # kosar (V1a atom._read_source_object · V2a SAPClient.pretty_print; M9 atom.py'yi bozar)
+    ("mcp_servers/sap_adt/tools/atom.py", ("O:mcp_salt_okur_araclar",),
+     "V1a: adt_get_method GERCEK _read_source_object GET'inde `version` YOK · M9 version=active"),
+    ("scripts/sap_client.py", ("O:mcp_salt_okur_araclar",),
+     "V2a: adt_pretty_print GERCEK SAPClient.pretty_print -> get_object_source `version` vermez"),
+    # ── 2026-10-12 Part A ikinci dalga (Q363②③ · Q360 · Q363① · Q369④⑤ · Q364): AYRI
+    # satirlar; sap_adt_lib.py birlesimi 20→24 → `b0_secim` P3 BIRLIKTE guncellendi.
+    ("scripts/sap_adt_lib.py", ("O:ad_kabul_tam_dize", "O:hata_sebebi_ve_maskeleme",
+                                "O:checkrun_sozdizimi", "O:oturum_izi_ve_ddl_accept"),
+     "validate_* `\\Z` · kimlik_maskele/sap_hata_sebebi/auth fallback · check_run/checkrun_ayristir · "
+     "ADT_SESSION_TRACE kancasi (_build_session)"),
+    ("mcp_servers/sap_adt/guardrails.py", ("O:ad_kabul_tam_dize", "O:mcp_arac_sinifi",
+                                           "O:mcp_salt_okur_araclar", "O:adlandirma_uyarisi"),
+     "_CUSTOMER_PREFIX/_LOCK_PREFIX `\\Z` · SALT_OKUR_ARACLAR · adlandirma_uyarisi"),
+    ("mcp_servers/sap_adt/tools/query.py", ("O:ad_kabul_tam_dize", "O:checkrun_sozdizimi",
+                                            "O:mcp_salt_okur_araclar", "O:mcp_arac_sinifi"),
+     "_TABLO_ADI/_KOLON_ADI `\\Z` · adt_syntax_check checkrun · 3 salt-okur arac · tier kapilari"),
+    ("mcp_servers/sap_adt/tools/atom.py", ("O:hata_sebebi_ve_maskeleme", "O:mcp_arac_sinifi",
+                                           "O:adlandirma_uyarisi", "O:oturum_izi_ve_ddl_accept"),
+     "_err_from_exc sap_reason+maske · yazma araclari tier kapisi · adt_post_shell naming_warning · "
+     "_read_source_object Accept text/plain"),
+    ("mcp_servers/sap_adt/tools/composite.py", ("O:mcp_arac_sinifi", "O:adlandirma_uyarisi"),
+     "DDIC composite araclari tier kapisi + naming_warning"),
+    ("mcp_servers/sap_adt/server.py", ("O:mcp_arac_sinifi",),
+     "server'da tanimli araclar da siniflandirma taramasina girer"),
+    ("mcp_servers/sap_adt/_app.py", ("O:mcp_arac_sinifi", "O:mcp_salt_okur_araclar"),
+     "profil_tool kaydi + _app'te tanimli araclar siniflandirma taramasinda"),
+    ("mcp_servers/sap_adt/data_guard.py", ("O:ad_kabul_tam_dize",),
+     "RED tarafi desenleri bilincli DEGISMEDI — degisirse ad_kabul R bolumu yeniden olcer"),
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla

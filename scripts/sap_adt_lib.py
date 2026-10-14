@@ -121,6 +121,23 @@ class SAPTransportError(SAPADTError):
     pass
 
 
+# ── Q359 (2026-10-12): kilit BIRAKILAMADI uyarısı — TEK KAYNAK ────────────────────────────
+# `unlock_object` artık tüm stratejiler düşünce `False` döner. Her çağıran AYNI metni basar
+# (çağıran başına ayrı metin = ayrışan ikinci gerçek). ⛔ Metin SM12'de kilidi SİLMEYİ /
+# BIRAKMAYI ÖNERMEZ: enqueue kilidi silmek ajanın işi değildir (ADR 0005-C) — yalnız
+# "kontrol et" der; karar kullanıcıdadır. Akış kesilmez, yeniden deneme yapılmaz.
+KILIT_BIRAKILAMADI_IMZA = "[WARN] KILIT BIRAKILAMADI"
+
+
+def kilit_birakilamadi_uyarisi(obje: str = '') -> str:
+    """`unlock_object` False döndüğünde basılacak tek satırlık uyarı (yazma sonucu DEĞİŞMEZ)."""
+    ad = obje or '<OBJE>'
+    return (f"      {KILIT_BIRAKILAMADI_IMZA}: {ad} — tum unlock stratejileri basarisiz; "
+            f"kilit acik kalmis olabilir (lock_released=False). Yazma sonucu DEGISMEDI. "
+            f"SM12'de bu objenin kilidini KONTROL ET; silme/birakma karari kullanicidadir "
+            f"(ADR 0005-C). Bir sonraki push 409/423 verirse sebep bu olabilir.")
+
+
 # ── ADT datapreview/freestyle: SATIR BAŞINA 255 KARAKTER SINIRI ──────────────────────────
 # ÖLÇÜLDÜ (2026-10-03, DEV, yalnız T000 SELECT; kontrol gruplu): SAP freestyle ucu sorgu
 # metnini satır satır okur ve 255 karakterden uzun satırın devamını KESER. 309 karakterlik
@@ -283,6 +300,200 @@ LOCK_MODIFICATION_SUPPORT_FIELD = 'MODIFICATION_SUPPORT'
 LOCK_NO_MODIFICATION = 'nomodification'   # casefold edilmiş karşılaştırma değeri
 
 
+OTURUM_IZI_ONEKI = '[ADT-OTURUM]'
+_OTURUM_CEREZ_RE = re.compile(r'^(SAP_SESSIONID|sap-contextid|MYSAPSSO2)', re.IGNORECASE)
+
+
+def _oturum_izi_ozeti(cerez_basligi):
+    """`Cookie:` başlığı → 'ad=sha8,…' (yalnız oturum çerezleri; ham değer DÖNMEZ)."""
+    import hashlib
+    parca = []
+    for kv in (cerez_basligi or '').split(';'):
+        ad, _, deger = kv.strip().partition('=')
+        if ad and _OTURUM_CEREZ_RE.match(ad):
+            parca.append('%s=%s' % (ad, hashlib.sha256(deger.encode('utf-8', 'replace')).hexdigest()[:8]))
+    return ','.join(sorted(parca)) or '-'
+
+
+def _oturum_izi_kancasi(nesil):
+    """`ADT_SESSION_TRACE` yanıt kancası (Q364②). Kanca hatası isteği ASLA bozmaz."""
+    def _kanca(yanit, *a, **k):
+        try:
+            istek = yanit.request
+            yol = (istek.path_url or '').split('?', 1)[0]
+            set_adlari = sorted({c.name for c in yanit.cookies if _OTURUM_CEREZ_RE.match(c.name)})
+            print('%s nesil=%d %s %s -> %s istek-cerez=%s yanit-set=%s' % (
+                OTURUM_IZI_ONEKI, nesil, istek.method, yol, yanit.status_code,
+                _oturum_izi_ozeti(istek.headers.get('Cookie')), ','.join(set_adlari) or '-'),
+                file=sys.stderr)
+        except Exception:
+            pass
+        return yanit
+    return _kanca
+
+
+_KIMLIK_AUTH_RE = re.compile(r'(Authorization\s*[:=]\s*["\']?)(Basic|Bearer)\s+[A-Za-z0-9+/=._~-]+',
+                             re.IGNORECASE)
+_KIMLIK_PAROLA_ALAN_RE = re.compile(r'((?:sap-|ADT_SAP_)?password\s*[=:]\s*)[^\s&"\'<]+', re.IGNORECASE)
+SAP_SEBEP_SINIRI = 300
+
+
+def kimlik_maskele(metin, parola=None, kullanici=None):
+    """Hata/teşhis metninden kimlik bilgisini GİZLE (Q363③, 2026-10-12). İstisna atmaz.
+
+    Gizlenen: verilen PAROLA değerinin kendisi (≥3 karakter; daha kısası her eşleşmeyi
+    bozacağı için atlanır) · `Authorization: Basic|Bearer <...>` · `password=` / `sap-password=` /
+    `ADT_SAP_PASSWORD=` alan değerleri · (verildiyse) KULLANICI adı (harf-durumundan bağımsız,
+    yalnız BAĞIMSIZ kelime olarak — başka bir adın/kelimenin parçasıysa dokunulmaz).
+    Metinde bunların hiçbiri yoksa metin BAYT BAYT aynı döner.
+    """
+    if not metin:
+        return metin
+    t = str(metin)
+    try:
+        if parola and len(str(parola)) >= 3:
+            t = t.replace(str(parola), '<PAROLA>')
+        t = _KIMLIK_AUTH_RE.sub(lambda m: m.group(1) + m.group(2) + ' <GIZLENDI>', t)
+        t = _KIMLIK_PAROLA_ALAN_RE.sub(lambda m: m.group(1) + '<GIZLENDI>', t)
+        if kullanici and len(str(kullanici)) >= 2:
+            # Kelime sınırı: `_` ve harf/rakam kelime İÇİ sayılır (`\w`) ⇒ `DEV` kullanıcısı
+            # `ZCL_DEV_TOOL` / `DEVELOPMENT` içinde MASKELENMEZ (tanı alanı bozulmaz, RİSK ③).
+            t = re.sub(r'(?<!\w)' + re.escape(str(kullanici)) + r'(?!\w)', '<KULLANICI>', t,
+                       flags=re.IGNORECASE)
+    except Exception:  # noqa: BLE001 — maskeleme hatası metni AÇIĞA çıkarmaz
+        return '<MASKELENEMEDI>'
+    return t
+
+
+def sap_hata_sebebi(govde):
+    """SAP ADT hata gövdesinden KISA sebep: {'metin', 't100', 'tip'} | None. Ağ yok, istisna atmaz.
+
+    Okunan biçim: `exc:exception` XML — `localizedMessage` (yoksa `message`) + `T100KEY-ID/NO`
+    + `type id`. Gövde YOK / XML değil / bozuk / sebep düğümü yok ⇒ None (çağıran eski metni
+    AYNEN kullanır — tahminle sebep uydurulmaz). Metin `SAP_SEBEP_SINIRI` karaktere kısaltılır.
+    """
+    if not govde:
+        return None
+    try:
+        kok = ET.fromstring(str(govde))
+    except Exception:  # noqa: BLE001 — bozuk/HTML gövde: sebep YOK
+        return None
+    yerel = mesaj = tip = None
+    girdiler = {}
+    for el in kok.iter():
+        ad = el.tag.split('}')[-1]
+        if ad == 'localizedMessage' and (el.text or '').strip() and yerel is None:
+            yerel = el.text.strip()
+        elif ad == 'message' and (el.text or '').strip() and mesaj is None:
+            mesaj = el.text.strip()
+        elif ad == 'type' and el.get('id') and tip is None:
+            tip = el.get('id')
+        elif ad == 'entry' and el.get('key'):
+            girdiler[el.get('key')] = (el.text or '').strip()
+    metin = yerel or mesaj
+    if not metin:
+        return None
+    metin = ' '.join(metin.split())
+    if len(metin) > SAP_SEBEP_SINIRI:
+        metin = metin[:SAP_SEBEP_SINIRI - 1] + '…'
+    t100 = None
+    if girdiler.get('T100KEY-ID'):
+        t100 = '%s/%s' % (girdiler.get('T100KEY-ID'), girdiler.get('T100KEY-NO') or '?')
+    return {'metin': metin, 't100': t100, 'tip': tip}
+
+
+# ── Q360 (2026-10-12): SALT-OKUR sözdizimi denetimi — ADT checkrun ─────────────────────
+# Canlı ölçüm (DEV, 4 tip: sınıf · FM · tablo · CDS, ayrı Z deneme objeleri):
+#   · `version="inactive"` aktivasyon ön denetimiyle AYNI kök hatayı verir (metin + satır/kolon).
+#   · `version="active"` hatalı İNAKTİF sürümü GÖRMEZ (0 mesaj) ⇒ varsayılan inactive.
+#   · Yan etkisiz: temiz-ama-farklı inaktif sürüm checkrun sonrası aktive OLMADI (readback).
+#   · ⛔ İnaktif sürümü OLMAYAN tabloda `status="notProcessed"` + 0 mesaj ⇒ bu "temiz" DEĞİLDİR.
+CHECKRUN_UC = '/sap/bc/adt/checkruns'
+CHECKRUN_REPORTER = 'abapCheckRun'
+CHECKRUN_NS = 'http://www.sap.com/adt/checkrun'
+CHECKRUN_BILINEN_TIPLER = {'E': 'hata', 'W': 'uyari', 'I': 'bilgi'}
+CHECKRUN_KAPSAM_METNI = (
+    "Yalniz ADT checkrun sozdizimi denetimi (reporter=abapCheckRun) — ATC, ABAP Unit, "
+    "aktivasyon bagimliliklari (co-activation) ve yetki denetimi DEGIL. Denetlenen surum "
+    "`version` alaninda; 'inactive' diskte bekleyen surumu, 'active' calisan surumu denetler.")
+
+
+def checkrun_govdesi(object_uri, version='inactive'):
+    """checkrun istek gövdesi (canlıda ölçülen biçim). `object_uri` objenin KÖK URI'si."""
+    uri = (object_uri or '').split('?')[0]
+    if uri.endswith('/source/main'):
+        uri = uri[:-len('/source/main')]
+    return ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<chkrun:checkObjectList xmlns:chkrun="%s" xmlns:adtcore="http://www.sap.com/adt/core">'
+            '<chkrun:checkObject adtcore:uri="%s" chkrun:version="%s"/></chkrun:checkObjectList>'
+            % (CHECKRUN_NS, html.escape(uri, quote=True), html.escape(version, quote=True)))
+
+
+def _checkrun_konum(uri):
+    """`...#start=21,25` → (21, 25); bulunamazsa (None, None)."""
+    m = re.search(r'#start=(\d+),(\d+)', uri or '')
+    return (int(m.group(1)), int(m.group(2))) if m else (None, None)
+
+
+def checkrun_ayristir(govde, beklenen_uri=None, version='inactive'):
+    """checkrun yanıtı → TEK hüküm sözlüğü. Ağ yok, istisna atmaz.
+
+    hukum: 'temiz' | 'hatali' | 'OLCULEMEDI'. Belirsiz her durum (boş/bozuk gövde, rapor yok,
+    reporter farklı, beklenen obje raporlanmadı, status≠processed, tanınmayan mesaj tipi)
+    'OLCULEMEDI'dir — ASLA 'temiz' değildir. `kapsam` her dönüşte basılır (KAPSAM BEYANI).
+    """
+    sonuc = {'hukum': 'OLCULEMEDI', 'sebep': '', 'hatalar': [], 'uyarilar': [],
+             'status': None, 'status_text': None,
+             'kapsam': {'version': version, 'reporter': CHECKRUN_REPORTER,
+                        'bakilan': CHECKRUN_KAPSAM_METNI}}
+    if not govde or not str(govde).strip():
+        sonuc['sebep'] = 'bos_govde'
+        return sonuc
+    try:
+        kok = ET.fromstring(str(govde))
+    except Exception as exc:  # noqa: BLE001
+        sonuc['sebep'] = 'bozuk_xml:%s' % type(exc).__name__
+        return sonuc
+    ns = '{%s}' % CHECKRUN_NS
+    raporlar = [r for r in kok.iter(ns + 'checkReport')]
+    if not raporlar:
+        sonuc['sebep'] = 'rapor_yok'
+        return sonuc
+    bizim = [r for r in raporlar if r.get(ns + 'reporter') == CHECKRUN_REPORTER]
+    if not bizim:
+        sonuc['sebep'] = 'reporter_yok:%s' % ','.join(sorted({r.get(ns + 'reporter') or '?' for r in raporlar}))
+        return sonuc
+    if beklenen_uri:
+        hedef = beklenen_uri.split('?')[0].replace('/source/main', '').rstrip('/').lower()
+        bizim = [r for r in bizim
+                 if (r.get(ns + 'triggeringUri') or '').rstrip('/').lower() == hedef] or []
+        if not bizim:
+            sonuc['sebep'] = 'obje_raporlanmadi'
+            return sonuc
+    for r in bizim:
+        durum = r.get(ns + 'status')
+        sonuc['status'], sonuc['status_text'] = durum, r.get(ns + 'statusText')
+        if durum != 'processed':
+            sonuc['sebep'] = 'status=%s: %s' % (durum, r.get(ns + 'statusText') or '')
+            return sonuc
+        for m in r.iter(ns + 'checkMessage'):
+            tip = (m.get(ns + 'type') or '').upper()
+            satir, kolon = _checkrun_konum(m.get(ns + 'uri'))
+            t100 = m.find(ns + 't100Key')
+            kayit = {'type': tip, 'message': m.get(ns + 'shortText') or '',
+                     'line': satir, 'column': kolon, 'href': m.get(ns + 'uri') or '',
+                     't100': ('%s/%s' % (t100.get(ns + 'msgid'), t100.get(ns + 'msgno'))
+                              if t100 is not None else None)}
+            if tip not in CHECKRUN_BILINEN_TIPLER:
+                sonuc['sebep'] = 'taninmayan_mesaj_tipi:%s' % (tip or '<bos>')
+                sonuc['hatalar'], sonuc['uyarilar'] = [], []
+                return sonuc
+            (sonuc['hatalar'] if tip == 'E' else sonuc['uyarilar']).append(kayit)
+    sonuc['hukum'] = 'hatali' if sonuc['hatalar'] else 'temiz'
+    sonuc['sebep'] = 'processed'
+    return sonuc
+
+
 def parse_sap_error(response):
     """
     Parse SAP ADT error response and return appropriate exception.
@@ -423,7 +634,8 @@ def validate_object_name(name, object_type='class'):
 
     # Check for valid characters (alphanumeric and underscore)
 
-    if not re.match(r'^[A-Z][A-Z0-9_]*$', name_upper):
+    # `\Z` (`$` DEĞİL): `$` sondaki tek `\n`'i kabul eder (Q363②, 2026-10-12).
+    if not re.match(r'^[A-Z][A-Z0-9_]*\Z', name_upper):
         raise SAPValidationError(
             f"Object name '{name}' must start with a letter and contain only "
             "letters, numbers, and underscores"
@@ -469,7 +681,7 @@ def validate_package_name(package):
 
     # Check for valid characters
 
-    if not re.match(r'^[A-Z$][A-Z0-9_$]*$', package_upper):
+    if not re.match(r'^[A-Z$][A-Z0-9_$]*\Z', package_upper):   # `\Z`: Q363②
         raise SAPValidationError(
             f"Package name '{package}' contains invalid characters"
         )
@@ -1311,6 +1523,9 @@ class SAPADTClient:
         # S-type task number (CORRNR) should be passed to set_object_source().
         self._last_lock_effective_transport = None
 
+        # Q362: CORRNR uyuşmazlığında okunan istek sahibi (E070.AS4USER); None = okunamadı.
+        self._last_lock_istek_sahibi = None
+
     def _detect_system_type(self) -> str:
         """Detect if this is a SAP BTP Cloud or On-Premise system"""
         if not self.url:
@@ -1394,6 +1609,17 @@ class SAPADTClient:
                 'sap-language': self.language,
                 'x-sap-adt-sessiontype': 'stateful',
             })
+        # Q364② (2026-10-12) — OTURUM İZİ, YALNIZ ÖLÇÜM, varsayılan KAPALI.
+        # Hipotez: uzun süreçte yeni objede 400 → oturum (`sap-contextid`) bayatlığı. Önce
+        # ÖLÇÜLÜR; `new_session()` davranışına DOKUNULMAZ (kilit/CSRF oturuma bağlı: kilit →
+        # PUT → bırakma ortasında oturum yenilenirse kilit sahipsiz kalır).
+        # `ADT_SESSION_TRACE=1` → her yanıtta stderr'e TEK satır: oturum NESLİ (her
+        # `_build_session` +1) · metot · yol (sorgu dizesi ATILIR: kilit tutamacı/transport
+        # taşır) · durum · oturum çerezleri **yalnız sha256 ilk 8** (ham değer ASLA basılmaz).
+        # Kapalıyken kanca HİÇ eklenmez ⇒ davranış bayt-bayt eskisi.
+        self._oturum_nesli = getattr(self, '_oturum_nesli', 0) + 1
+        if os.getenv('ADT_SESSION_TRACE', '').strip().lower() in ('1', 'true', 'yes', 'on'):
+            sess.hooks['response'].append(_oturum_izi_kancasi(self._oturum_nesli))
         return sess
 
     def new_session(self) -> None:
@@ -1561,7 +1787,16 @@ class SAPADTClient:
 
         # Fallback to basic auth
         auth_string = f"{self.user}:{self.password}"
-        auth_bytes = auth_string.encode('ascii')
+        try:
+            auth_bytes = auth_string.encode('ascii')
+        except UnicodeEncodeError:
+            # Q363③ (2026-10-12, ölçüldü): ham UnicodeEncodeError metni parolanın bir KARAKTERİNİ
+            # ve KONUMUNU, `.object`'i ise "kullanıcı:parola"nın TAMAMINI taşıyordu; MCP bunu
+            # `message` olarak döndürüyordu. Gönderilen kodlama DEĞİŞMEDİ (ascii) — yalnız hata
+            # metni kimliksiz kuruldu ve zincir (`from None`) koparıldı.
+            raise SAPAuthenticationError(
+                "Temel kimlik basligi kurulamadi: parola (ya da kullanici) ASCII disi karakter "
+                "iceriyor — karakter ve konumu GIZLENDI.") from None
         base64_auth = base64.b64encode(auth_bytes).decode('ascii')
         return {'Authorization': f'Basic {base64_auth}'}
 
@@ -2461,7 +2696,7 @@ class SAPADTClient:
         İç fetch yalnız geriye-dönük uyumluluk için duruyor.
 
         Note: Automatically retries with different transport parameter approaches.
-        Different SAP versions may require corrNr as query param or X-sap-adt-transport header.
+        Sıra: `corrNr` query param ÖNCE (ölçülen çalışan biçim), header yalnız geride yedek.
         Also handles implicit locking when explicit lock endpoints are not available.
 
         IMPORTANT: SAP requires If-Match header with ETag for PUT operations on classes.
@@ -2529,10 +2764,18 @@ class SAPADTClient:
 
         # Define different transport approaches to try
         # Format: (use_header, use_param, description)
+        # SIRA = PARAM-ÖNCE (2026-10-12). Eskiden yaklaşım-1 "yalnız header"dı; bu sıranın
+        # yazılı bir gerekçesi bulunamadı (ilk içe aktarımdan beri; changelog/removed-controls/
+        # lessons-learned'de kayıt yok). Ölçülen: on-prem bir sistemde, tek sınıf, ham
+        # LOCK→PUT→UNLOCK — yalnız header (geçerli istekle bile) → 409, yalnız `corrNr` → 200;
+        # aynı handle'da header-409 sonrası `corrNr` → 200 (o sistemde handle yanmadı).
+        # known-errors §12.7c'deki vaka ise yaklaşım-1'in handle'ı YAKTIĞINI (sonraki 3'ü 423)
+        # gösterdi. Her iki durumda da çalışan biçim `corrNr` query'si ⇒ ilk o denenir; header
+        # yalnız param'ın REDDEDİLDİĞİ sistem için geride yedek kalır.
         transport_approaches = [
-            (True, False, 'X-sap-adt-transport header only'),
             (False, True, 'corrNr query parameter only'),
             (True, True, 'both header and parameter'),
+            (True, False, 'X-sap-adt-transport header only'),
             (False, False, 'no transport (object may not need it)'),
         ]
 
@@ -2879,6 +3122,37 @@ class SAPADTClient:
             f"CLAS'ta sağlıklı objede de 'NoModification' döner (§12.7b)."
         )
 
+    def _istek_sahibi_metni(self, trkorr):
+        """Q362 (2026-10-12): istek sahibini (E070.AS4USER) oku → metin parçası.
+
+        Döner: ``"sahibi <KULLANICI>"`` ya da ``"sahip okunamadı: <sebep>"``.
+        ⛔ ASLA istisna fırlatmaz — çağıran bir HATA dalıdır (SAPLockError'ı fırlatmak
+        üzeredir); sahip sorgusu düşerse (500/ağ/bozuk XML) o dalın kendisi bozulmamalı.
+        Salt-okur tek SELECT; çağıran kilidi bu çağrıdan ÖNCE bırakır. Okunan değer
+        `self._last_lock_istek_sahibi`'ye yazılır (None = okunamadı) — `sap_client`
+        Bug-11 uyarısı sahibi buradan adlandırır.
+        """
+        self._last_lock_istek_sahibi = None
+        try:
+            t = str(trkorr or '').strip().upper()
+            if not re.fullmatch(r'[A-Z0-9]{10}', t):
+                return "sahip okunamadı: istek numarası biçimi tanınmadı"
+            xml = self.run_query(f"SELECT AS4USER FROM E070 WHERE TRKORR = '{t}'", row_number=1)
+            ns = '{http://www.sap.com/adt/dataPreview}'
+            root = ET.fromstring(xml)
+            for col in root.iter(f'{ns}columns'):
+                meta = col.find(f'{ns}metadata')
+                if meta is None or (meta.get(f'{ns}name') or '').upper() != 'AS4USER':
+                    continue
+                for d in col.iter(f'{ns}data'):
+                    deger = (d.text or '').strip()
+                    if deger:
+                        self._last_lock_istek_sahibi = deger
+                        return f"sahibi {deger}"
+            return "sahip okunamadı: E070 yanıtında AS4USER yok"
+        except Exception as e:
+            return f"sahip okunamadı: {type(e).__name__}"
+
     def _release_lock_after_failure(self, object_url, lock_handle, ok_message):
         """Hemen ardından raise edeceğimiz kilidi bırak (stale enqueue bırakma).
 
@@ -2888,10 +3162,14 @@ class SAPADTClient:
         try:
             actual_handle = lock_handle or 'IMPLICIT_LOCK'
             if actual_handle and actual_handle != 'IMPLICIT_LOCK':
-                self.unlock_object(object_url, actual_handle)
-                print(ok_message)
+                # Q359: dönüş OKUNUR — eskiden `False`'ta da `ok_message` ("Lock released")
+                # basılıyordu (dönüş hep True'ydu, okunması gerekmiyordu).
+                if self.unlock_object(object_url, actual_handle) is False:
+                    print(kilit_birakilamadi_uyarisi(self._object_name_from_url(object_url)))
+                else:
+                    print(ok_message)
         except Exception:
-            print(f"[WARNING] Could not release lock — use SM12 to clear it manually.")
+            print(kilit_birakilamadi_uyarisi(self._object_name_from_url(object_url)))
 
     def _verify_and_return_lock(self, response, object_url, transport, label='', access_mode='MODIFY'):
         """Extract lock handle + CORRNR + IS_LINK_UP from a successful (200) lock response.
@@ -2911,7 +3189,7 @@ class SAPADTClient:
           - Gövde parse edilemezse → GÖRÜNÜR uyarı ("doğrulanmadı" ≠ "temiz"), yine blok yok.
 
         CORRNR semantics (confirmed from SAP source: CL_ADT_CTS_MANAGEMENT.get_transport_info):
-          - SAP always returns the K-type WORKBENCH REQUEST number (e.g. FIDK901507)
+          - SAP always returns the K-type WORKBENCH REQUEST number (e.g. NPLK900001)
           - NOT the S-type child task (SAP handles that internally)
           - In the normal case CORRNR == the transport we requested
 
@@ -2932,7 +3210,8 @@ class SAPADTClient:
 
         If CORRNR != transport:
           - IS_LINK_UP='X' → FOREIGN transport (another developer's) → fail fast
-          - IS_LINK_UP=empty → different transport of the same user (stale E071) → fail fast
+          - IS_LINK_UP=empty → the current user has a TASK under that request; the
+            request ITSELF may belong to someone else (Q362) → fail fast, owner named
 
         Returns:
             lock_handle string, or 'IMPLICIT_LOCK' when SAP omits it.
@@ -2965,14 +3244,17 @@ class SAPADTClient:
                 # IS_LINK_UP='X': object is in a FOREIGN transport — another developer's.
                 # Source: CL_ADT_CTS_MANAGEMENT.is_obj_recorded_in_foreign_req() returns
                 # abap_true when current user has NO task in the transport holding the lock.
+                sahip_metni = self._istek_sahibi_metni(corrnr_actual)
                 raise SAPLockError(
-                    f"Object is recorded in FOREIGN transport {corrnr_actual} (IS_LINK_UP=X).\n\n"
+                    f"Object is recorded in FOREIGN transport {corrnr_actual} (IS_LINK_UP=X).\n"
+                    f"Istek {corrnr_actual} ({sahip_metni}).\n\n"
                     f"This transport belongs to another developer — pushing to it would\n"
                     f"inject your changes without the owner's knowledge.\n\n"
                     f"Fix:\n"
                     f"  1. SE01/SE09 → open transport {corrnr_actual} → remove object entry\n"
                     f"     (only if authorised — coordinate with the transport owner)\n"
-                    f"  2. SM12 → release enqueue lock for this object if any\n"
+                    f"  2. SM12'de bu objenin kilidini KONTROL ET (silme/birakma karari\n"
+                    f"     kullanicidadir — ADR 0005-C; ajan kilit silmez)\n"
                     f"  3. Retry the push with transport {transport}\n\n"
                     f"[ACTION REQUIRED] STOP. Do NOT retry automatically. Report to user.",
                     status_code=409,
@@ -2982,16 +3264,28 @@ class SAPADTClient:
                 # IS_LINK_UP=empty: object is in a DIFFERENT transport of the same user.
                 # (Stale E071 entry from an older workbench request, or user has
                 #  multiple active transports for the same package/layer.)
+                # ⛔ Q362 (2026-10-12): eski metin "The object is in your own transport <K>"
+                # diyordu. IS_LINK_UP=boş'un anlamı "o istek altında SENİN GÖREVİN var"dır —
+                # isteğin KENDİSİ başkasına ait olabilir (dış kaynakta ölçülmüş vaka: istek
+                # başkasının, görev bizimdi). Sahip artık ADIYLA söylenir; okunamazsa
+                # "sahip okunamadı" der ve dal AYNEN çalışır (aynı istisna sınıfı/kodu).
+                # Fix metninden SM12 kilit bırakma önerisi ÇIKARILDI (ADR 0005-C).
+                sahip_metni = self._istek_sahibi_metni(corrnr_actual)
                 raise SAPLockError(
                     f"SAP assigned transport {corrnr_actual} but {transport} was requested.\n\n"
+                    f"Istek {corrnr_actual} ({sahip_metni}), altinda gorevin var (IS_LINK_UP bos).\n"
+                    f"Bu 'senin istegin' demek DEGILDIR — istegin sahibi baskasi olabilir.\n"
                     f"A stale E071 entry or transport layer mismatch caused SAP to override\n"
-                    f"the corrNr hint. The object is in your own transport {corrnr_actual}.\n\n"
+                    f"the corrNr hint.\n\n"
                     f"Fix:\n"
                     f"  1. SE01/SE09 → open transport {corrnr_actual} → move/delete object entry\n"
-                    f"  2. SM12 → release enqueue lock for this object\n"
+                    f"     (istek baskasinin ise sahibiyle koordine et)\n"
+                    f"  2. SM12'de bu objenin kilidini KONTROL ET (silme/birakma karari\n"
+                    f"     kullanicidadir — ADR 0005-C; ajan kilit silmez)\n"
                     f"  3. Retry the push with transport {transport}\n\n"
-                    f"  Or: use transport {corrnr_actual} instead of {transport}.\n"
-                    f"  Diagnostic: SELECT STRKORR FROM E070 WHERE TRKORR = '{corrnr_actual}'\n"
+                    f"  Or: use transport {corrnr_actual} instead of {transport}"
+                    f" (yalniz istek sahibi uygunsa).\n"
+                    f"  Diagnostic: SELECT STRKORR, AS4USER FROM E070 WHERE TRKORR = '{corrnr_actual}'\n"
                     f"  (STRKORR shows parent K-type request if {corrnr_actual} is a task)",
                     status_code=409,
                     response_text=response.text[:500]
@@ -3344,7 +3638,7 @@ class SAPADTClient:
                             f"Options:\n"
                             f"  1. Wait for them to finish editing\n"
                             f"  2. Ask {lock_owner} to close their SAP session\n"
-                            f"  3. Use SM12 to release lock 'EADT_LOCK' (if you have authorization)\n\n"
+                            f"  3. SM12'de 'EADT_LOCK' kilidini KONTROL ET (silme/birakma karari kullanicidadir, ADR 0005-C)\n\n"
                             f"Object: {object_url.split('/')[-1]}",
                             lock_owner=lock_owner,
                             status_code=403,
@@ -3373,7 +3667,7 @@ class SAPADTClient:
                         f"(target was {transport or 'not specified'}).\n\n"
                         f"This usually means a previous push locked the object under a different transport.\n\n"
                         f"Fix:\n"
-                        f"  1. Go to SM12 -> delete the enqueue lock for this object\n"
+                        f"  1. SM12 -> bu objenin enqueue kilidini KONTROL ET (silme karari kullanicidadir, ADR 0005-C)\n"
                         f"  2. Go to SE01/SE09 -> find transport {conflict_transport or conflict_transport} -> move object to {transport or 'your target transport'}\n"
                         f"  3. Retry the push"
                     )
@@ -3454,7 +3748,10 @@ class SAPADTClient:
             lock_handle: Lock handle from lock_object()
 
         Returns:
-            True if unlocked successfully or no lock was held
+            True if unlocked successfully or no lock was held.
+            False if EVERY unlock strategy failed (Q359) — the lock may still be held.
+            Never raises for an unlock failure; callers keep their result and only
+            report `lock_released=False` (see `kilit_birakilamadi_uyarisi`).
         """
         # Skip if locks not supported on this system or implicit lock
         if lock_handle in ['NO_LOCK_SUPPORT', 'IMPLICIT_LOCK', None, '']:
@@ -3534,11 +3831,17 @@ class SAPADTClient:
                     self._debug(f"[DEBUG] unlock_object - {description} exception: {str(e)[:100]}")
                 continue
 
-        # All unlock attempts failed, but don't raise exception
-        # Locks timeout automatically, so this is not critical
+        # ⛔ Q359 (2026-10-12): TÜM stratejiler düştü ⇒ kilit BIRAKILMADI. Eskiden burada
+        # `return True` vardı ("kilit zaman aşımıyla düşer, kritik değil"): çağıran "bırakıldı"
+        # ile "bırakılamadı"yı AYIRT EDEMİYORDU; sızan kilit sonraki push'ta 409/423 ya da
+        # hayalet görev kaydı olarak, alakasız bir hata gibi geri dönüyordu.
+        # Sözleşme: istisna YOK (akış kesilmez) — yalnız dönüş `False`. Çağıran push
+        # sonucunu BAŞARILI bırakır, `lock_released=False` + uyarı yazar; YENİDEN DENEMEZ.
+        # Uyarı SM12'de kilit SİLMEYİ önermez (ADR 0005-C) — yalnız "kontrol et" der.
+        # Korpus: tests/fixtures/kilit_birakma_durustlugu
         if self.debug_enabled:
-            self._debug("[DEBUG] unlock_object - all strategies failed, lock will timeout automatically")
-        return True
+            self._debug("[DEBUG] unlock_object - all strategies failed, lock NOT released")
+        return False
 
     def is_object_locked(self, object_url):
         """
@@ -3851,7 +4154,11 @@ class SAPADTClient:
         if not lock_handle:
             return True
         try:
-            self.unlock_object(object_url, lock_handle)
+            # Q359: `unlock_object` False dönebilir (tüm stratejiler düştü) — eskiden
+            # dönüş okunmadan True veriliyordu.
+            if self.unlock_object(object_url, lock_handle) is False:
+                print(kilit_birakilamadi_uyarisi(self._object_name_from_url(object_url)))
+                return False
             return True
         except Exception:
             return False
@@ -3946,7 +4253,7 @@ class SAPADTClient:
                 pass
             return {
                 'valid': False,
-                'errors': [{'message': f'Object locked by {lock_user}. Release lock in SM12 or close other sessions.'}],
+                'errors': [{'message': f'Object locked by {lock_user}. SM12 kilidini KONTROL ET (silme karari kullanicidadir) ya da diger oturumlari kapat.'}],
                 'warnings': [],
                 'locked': True,
                 'lock_user': lock_user,
@@ -4043,7 +4350,10 @@ class SAPADTClient:
             # so no CTS entry is triggered even without corrNr.
             lock_handle = self.lock_object(object_url, transport=transport, allow_no_transport=True)
             if lock_handle and lock_handle not in ['NO_LOCK_SUPPORT', 'IMPLICIT_LOCK']:
-                self.unlock_object(object_url, lock_handle)
+                # Q359: bu döngü KENDİ aldığı kilidi bırakamazsa temizlik değil yeni sızıntıdır.
+                if self.unlock_object(object_url, lock_handle) is False:
+                    print(kilit_birakilamadi_uyarisi(self._object_name_from_url(object_url)))
+                    return False
                 if self.debug_enabled:
                     self._debug("[DEBUG] clear_enqueue_lock - lock→unlock cycle succeeded")
                 return True
@@ -4482,6 +4792,22 @@ class SAPADTClient:
                         f"ioc_refs={len(p2['ioc_refs'])}, errors={len(p2['errors'])}")
 
         # If phase 2 still returned ioc:inactiveObjects, activation is incomplete
+        # ⚠ FUGR İSTİSNASI (2026-10-12, canlı ölçüm: bir fonksiyon grubu): 2. faz yine
+        # `ioc:inactiveObjects` (yalnız FUGR/F, grup adı iki kez) döndü; oysa obje `version=active`
+        # ve aktive-bekleyen worklist BOŞTU ⇒ bu gövde FUGR'da hüküm TAŞIMIYOR. Hüküm Q187
+        # tasarımındaki gibi BAĞIMSIZ worklist sondasına bırakılır (sonda kurulamazsa
+        # DOĞRULANAMADI — başarı DEĞİL). FUGR dışı tipler BİREBİR eskisi gibi (ölçülmedi).
+        if p2['ioc_refs'] and fugr_bilgi is not None:
+            remaining = [n for _, _, n in p2['ioc_refs']]
+            p2['success'] = False
+            p2['aktivasyon_hukmu'] = None
+            p2['hukum_sebep'] = 'fugr_faz2_ioc_yeniden: ' + ', '.join(remaining)
+            p2['warnings'].append({
+                'type': 'W',
+                'message': ('FUGR toplu aktivasyonu yine ioc:inactiveObjects dondu (%s) — govde '
+                            'hukum tasimiyor, karar bagimsiz worklist sondasinda' % ', '.join(remaining)),
+                'object': object_name, 'line': '0', 'href': ''})
+            return p2
         if p2['ioc_refs']:
             remaining = [n for _, _, n in p2['ioc_refs']]
             p2['success'] = False
@@ -4524,10 +4850,10 @@ class SAPADTClient:
                                      f'Enqueue lock cleared but activation still failed (HTTP {retry.status_code}).')
                     else:
                         error_msg = (f'Object locked by {lock_user} (same user). '
-                                     f'Failed to clear enqueue lock. Use SM12 to release lock "EADT_LOCK".')
+                                     f'Failed to clear enqueue lock. SM12\'de "EADT_LOCK" kilidini KONTROL ET (silme karari kullanicidadir).')
                 else:
                     error_msg = (f'Object locked by {lock_user}. '
-                                 f'Please close other SAP sessions or use SM12 to release lock "EADT_LOCK".')
+                                 f'Please close other SAP sessions; SM12\'de "EADT_LOCK" kilidini KONTROL ET (silme karari kullanicidadir).')
         except Exception:
             pass
         return {
@@ -4629,7 +4955,7 @@ class SAPADTClient:
 
         Args:
             object_name: ABAP object name (e.g., 'ZSD000_CL_MM_TOOLS')
-            transport: K-type workbench transport (e.g., 'IEDK936301')
+            transport: K-type workbench transport (e.g., 'NPLK900004')
             object_type: Normalized object type ('class'/'clas'/'interface'/
                          'intf'/'program'/'prog'/'functiongroup'/'fugr')
 
@@ -5702,7 +6028,7 @@ class SAPADTClient:
 
         # Check for invalid characters
 
-        if not re.match(r'^[A-Z][A-Z0-9_]*$', name):
+        if not re.match(r'^[A-Z][A-Z0-9_]*\Z', name):   # `\Z`: Q363②
             raise SAPValidationError(
                 f"{object_type} name must start with letter and contain only A-Z, 0-9, underscore: {name}",
                 field='name',
@@ -6136,10 +6462,14 @@ class SAPADTClient:
                 timeout=self.timeout_default,
             )
         finally:
+            kilit_birakildi = False
             try:
-                self.unlock_object(src_url, lock_handle)
+                # Q359: dönüş okunur; False → uyarı + sonuçta lock_released=False.
+                kilit_birakildi = self.unlock_object(src_url, lock_handle) is not False
             except Exception:
-                pass
+                kilit_birakildi = False
+            if not kilit_birakildi:
+                print(kilit_birakilamadi_uyarisi(name))
 
         if put_resp.status_code not in [200, 201]:
             raise SAPADTError(
@@ -6153,7 +6483,8 @@ class SAPADTClient:
         return {
             'success': True,
             'object_url': object_url,
-            'message': f'Structure {name} created + source deterministik PUT ile yazıldı'
+            'message': f'Structure {name} created + source deterministik PUT ile yazıldı',
+            'lock_released': kilit_birakildi,   # Q359: False = kilit açık kalmış olabilir
         }
 
     def create_table(self, name, description, package_name, fields=None,
@@ -6662,7 +6993,7 @@ constants:
   zai_status_active type zai_status_type value 'A',
   zai_status_inactive type zai_status_type value 'I'.
 '''
-            create_type_group('ZSD000_TYPES', types_consts, 'ZSD000 Type Definitions', 'ZSD000', 'FIDK901433')
+            create_type_group('ZSD000_TYPES', types_consts, 'ZSD000 Type Definitions', 'ZSD000', 'NPLK900002')
         """
         if not transport:
             raise ValueError("Transport request is required for type group creation")
@@ -7178,6 +7509,41 @@ constants:
 
         return response.text
 
+    def check_run(self, object_url, version='inactive'):
+        """SALT-OKUR sözdizimi denetimi — `POST /sap/bc/adt/checkruns?reporters=abapCheckRun` (Q360).
+
+        Aktivasyon ucuna GİTMEZ (kilit/transport/aktivasyon YOK). Varsayılan `inactive`:
+        diskte bekleyen sürümü denetler (canlı ölçüm: `active` hatalı inaktif sürümü görmez).
+        Doner: `checkrun_ayristir` sözlüğü (+ `http_status`). Ağ hatası / 2xx dışı yanıt ⇒
+        `hukum='OLCULEMEDI'` (istisna FIRLATMAZ; "temiz" de DEMEZ).
+        """
+        if version not in ('inactive', 'active'):
+            raise SAPValidationError("check_run version 'inactive' ya da 'active' olmali: %r" % (version,))
+        govde = checkrun_govdesi(object_url, version)
+        headers = self._get_headers('application/vnd.sap.adt.checkmessages+xml',
+                                    'application/vnd.sap.adt.checkobjects+xml')
+        try:
+            r = self._request_with_csrf_retry(
+                'post', f"{self.url}{CHECKRUN_UC}",
+                headers=headers,
+                data=govde.encode('utf-8'),
+                params={'reporters': CHECKRUN_REPORTER},
+            )
+        except Exception as exc:  # noqa: BLE001 — ölçülemedi, "temiz" değil
+            sonuc = checkrun_ayristir('', object_url, version)
+            sonuc['sebep'] = 'istisna:%s' % type(exc).__name__
+            sonuc['http_status'] = None
+            return sonuc
+        kod = getattr(r, 'status_code', None)
+        if kod != 200:
+            sonuc = checkrun_ayristir('', object_url, version)
+            sonuc['sebep'] = 'http_%s' % kod
+            sonuc['http_status'] = kod
+            return sonuc
+        sonuc = checkrun_ayristir(r.text, object_url, version)
+        sonuc['http_status'] = kod
+        return sonuc
+
     def run_atc_check(self, object_url, variant='DEFAULT', max_verdicts=100):
         """Run ATC (ABAP Test Cockpit) check - 3-step workflow
 
@@ -7662,8 +8028,11 @@ constants:
                     )
             finally:
                 try:
-                    self.unlock_object(object_url, lock_handle)
+                    # Q359: dönüş okunur (False = tüm stratejiler düştü) — akış değişmez.
+                    if self.unlock_object(object_url, lock_handle) is False:
+                        print(kilit_birakilamadi_uyarisi(name))
                 except Exception as e:
+                    print(kilit_birakilamadi_uyarisi(name))
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] BDEF unlock note: {e}")
 

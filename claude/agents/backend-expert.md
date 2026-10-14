@@ -53,6 +53,8 @@ Bir SAP source objesini DEĞİŞTİRMEK üzere çalışmaya başlarken, **derin 
   (`"Activation was cancelled"`) — yani gerçek semantiği *"hatasızsa aktive et"*. Salt-okunur
   sanıp çağırmak **single-writer ilkesini deler** (SAP'ye yazmış olursun). Yerel doğrulaman
   **abaplint**'tir; canlı syntax kararı **gateway'in** işidir.
+  ⚠ 2026-10-14 (Q360): aracın varsayılan kanalı artık salt-okur `checkruns`; yukarıdaki ölçüm eski
+  aktivasyon yoluna aittir. Araç **senin listende hâlâ YOK** — listeye açılması ayrı bir karardır, kural aynen geçerli.
 - ⚠ `adt_get` **ağ hatasını `exists:false`'a çevirebiliyor** (ölçüldü: DNS kesintisinde canlıda VAR
   olan sınıf için `ok:true, exists:false` + client_log'da NameResolutionError). `exists:false`
   gördüğünde `client_log`'a BAK — "obje yok" sonucunu ağ hatasından ayırt et.

@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun"><chkrun:checkReport chkrun:reporter="abapCheckRun" chkrun:triggeringUri="/sap/bc/adt/ddic/tables/zsd001_t_ornek" chkrun:status="notProcessed" chkrun:statusText="Error while importing object ZSD001_T_ORNEK from the database"/></chkrun:checkRunReports>

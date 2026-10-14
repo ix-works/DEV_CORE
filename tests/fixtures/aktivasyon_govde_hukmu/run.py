@@ -959,6 +959,7 @@ def main() -> int:
     try:
         SC = _sessiz_import("sap_client")
         Q = _sessiz_import("mcp_servers.sap_adt.tools.query")
+        Q._SOZDIZIMI_KAYNAGI = "aktivasyon"  # 2026-10-12 Q360: bu korpus ESKI (aktivasyon) yolun sozlesmesini olcer; checkrun yolu -> checkrun_sozdizimi
         CONN = _sessiz_import("mcp_servers.sap_adt._conn")
         SCK = _sessiz_import("syntax_check")
         bolum_j(L, SC, Q, CONN, SCK)

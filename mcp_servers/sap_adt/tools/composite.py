@@ -43,6 +43,7 @@ from mcp_servers.sap_adt.guardrails import (
     require_transport,
     require_writable_tier,
 )
+from mcp_servers.sap_adt.guardrails import adlandirma_uyarisi  # Q369⑤ yalnız uyarı
 from mcp_servers.sap_adt._conn import get_active_tier
 
 
@@ -324,6 +325,10 @@ def adt_domain_create(
     }
     if warn:
         out["reviewer"] = warn["reviewer"]
+    # Q369⑤: yalnız UYARI — yaratım akışını ve `ok`u DEĞİŞTİRMEZ.
+    ad_uyari = adlandirma_uyarisi(name, "domain")
+    if ad_uyari:
+        out["naming_warning"] = ad_uyari
     return out
 
 
@@ -434,6 +439,10 @@ def adt_dtel_create(
     }
     if warn:
         out["reviewer"] = warn["reviewer"]
+    # Q369⑤: yalnız UYARI — yaratım akışını ve `ok`u DEĞİŞTİRMEZ.
+    ad_uyari = adlandirma_uyarisi(name, "dataelement")
+    if ad_uyari:
+        out["naming_warning"] = ad_uyari
     return out
 
 
@@ -574,4 +583,8 @@ def adt_struct_create(
         out["post_check_notice"] = _post_check_notice(notice_ozet, islem="yaratma")
     if warn:
         out["reviewer"] = warn["reviewer"]
+    # Q369⑤: yalnız UYARI — yaratım akışını ve `ok`u DEĞİŞTİRMEZ.
+    ad_uyari = adlandirma_uyarisi(name, "structure")
+    if ad_uyari:
+        out["naming_warning"] = ad_uyari
     return out

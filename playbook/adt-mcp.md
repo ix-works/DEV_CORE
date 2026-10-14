@@ -183,6 +183,16 @@ Katmanlar overlapping değil tamamlayıcı — biri kaçırırsa diğeri yakalar
 
 ### `adt_syntax_check` **SALT-OKUNUR DEĞİLDİR** (ölçüm 2026-07-31)
 
+> **GÜNCELLEME 2026-10-12 (Q360) — varsayılan yol artık SALT-OKUR checkrun.** `adt_syntax_check`
+> `POST /sap/bc/adt/checkruns?reporters=abapCheckRun` (`version=inactive`) ile denetler; aşağıdaki
+> aktivasyon semantiği yalnız **geri dönüş kipinde** (`query._SOZDIZIMI_KAYNAGI = "aktivasyon"`)
+> geçerlidir. Canlı ölçüm: `inactive` sürüm aktivasyon ön-denetimiyle aynı kök hatayı verdi
+> (sınıf · tablo · FM · CDS), yan etki yok; `active` sürüm bekleyen hatalı sürümü GÖRMEZ.
+> Hüküm üç değerlidir: `valid:true` · `valid:false` · **`valid:null` = ÖLÇÜLEMEDİ** (ör. tabloda
+> `notProcessed` — inaktif sürüm yok demektir, "temiz" DEĞİL). Tier/namespace kapısı **korundu**;
+> araç tek-yazıcı allowlist'indeki yerini korur (yeniden sınıflama ajan tanımı kararıdır, burada
+> yapılmaz). Push ön-kontrolü (`sap_client`) DEĞİŞMEDİ. Korpus: `tests/fixtures/checkrun_sozdizimi`.
+
 Adı "check" olmasına rağmen bu tool bir **aktivasyon** ucuna gider:
 
 ```
@@ -225,6 +235,30 @@ Ayrı bir "zararsız ön-derleyici turu" **kurmaya gerek YOK** — push bunu iç
 
 ⇒ Doğru sıra: **push → (hata varsa dur, düzelt) → `adt_activate` → readback**. Araya elle bir
 syntax-check turu eklemek hem gereksiz hem — yukarıdaki semantiği yüzünden — **yan etkilidir**.
+
+## 2026-10-12 eklemeleri — salt-okur araçlar · SAP sebebi · oturum izi · adlandırma uyarısı
+
+- **Salt-okur araçlar (Q363①):** `adt_get_method(class_name, method_name)` (ana kaynaktan
+  `METHOD..ENDMETHOD` metinsel çıkarım; yerel include'lar ARANMAZ ⇒ `found:false` "metot yok"
+  demek değildir; birden çok blok ⇒ `belirsiz`) · `adt_revisions(name, object_type, limit)` (`count`
+  daima tamamı, `truncated`) · `adt_pretty_print(name, object_type)` (biçimlenmiş metni DÖNDÜRÜR,
+  `written:false`; kalıcı kılmak ayrı push). Üçü de `scope` (KAPSAM BEYANI) taşır.
+  ⚠ `adt_get_method` ve `adt_pretty_print` kaynağı `version` parametresiz okur ⇒ **en güncel
+  sürüm**: bekleyen inaktif sürüm varsa O okunur/biçimlenir, aktif sürüm DEĞİL.
+- **Araç sınıfı (Q369④):** her MCP aracı ya `require_writable_tier` çağırır ya
+  `guardrails.SALT_OKUR_ARACLAR`'dadır. Yeni araç ekleyen birini seçer; `tests/fixtures/mcp_arac_sinifi`
+  sınıflanmamış aracı FAIL eder. Liste `tools/list`'ten gizleme YAPMAZ.
+- **SAP sebebi (`sap_reason`):** araç hatası ayrıştırılabilen bir SAP gövdesi taşıyorsa yanıta
+  `sap_reason: {metin, t100, tip}` (≤300 kr) eklenir; parola / kullanıcı / `Authorization` değeri
+  maskelenir. Gövdesiz/bozuk gövdede alan YOKTUR ve `message` eskisiyle aynıdır.
+- **Oturum izi (Q364②):** `ADT_SESSION_TRACE=1` → her ADT yanıtında stderr'e tek satır
+  `[ADT-OTURUM] nesil=N METOT /yol -> durum istek-cerez=<ad=sha8> yanit-set=<adlar>`. Ham çerez,
+  kilit tutamacı ve transport GÖRÜNMEZ. "Uzun oturumda yeni objede 400" görülürse önce izi topla;
+  `new_session()` kilitli akışın ortasında ÇAĞRILMAZ (kilit/CSRF oturuma bağlıdır).
+- **Adlandırma uyarısı (Q369⑤):** DDIC yaratma araçları (`adt_post_shell` tablo/yapı/veri öğesi/
+  alan/tablo tipi · `adt_domain_create` · `adt_dtel_create` · `adt_struct_create`) ad
+  `standards/01-naming.md` §4.4.5 önekini (`_T_`/`_A_` · `_S_` · `_E_` · `_D_` · `_TT_`) taşımıyorsa
+  `naming_warning` döndürür. **Yalnız uyarı** — `ok` değişmez, yaratım engellenmez.
 
 ## Tool ayrıntı ekleri — MCP açıklama bütçesi (2026-10-03)
 
@@ -517,7 +551,7 @@ DOĞRULUK kanıtı olarak sunuyordu. **BU REHBERLİK 2026-08-18'de ÖLÇÜLEREK
 BİLEREK yeniden yazılmıyor: bir korpus çapası onun yokluğunu denetliyor ve
 "tarihçe olarak alıntılamak" ile "hâlâ öğretmek" metin düzeyinde ayırt
 edilemez — Parti-1'de aynı tuzağa bir kez düşüldü.) Çürüten ölçümler:
-  · 2026-08-18: `count:0` + `shape_recognized:true` iken `DS4K918705` VARdı
+  · 2026-08-18: `count:0` + `shape_recognized:true` iken `NPLK900005` VARdı
     (E070: TRFUNCTION='S', TRSTATUS='D', AS4USER eşleşiyor).
   · 2026-08-19: aynı bileşim, E070'te **iki** açık kayıt.
   · 2026-08-19 (A-00): aynı bileşim, E070'te **dört** açık görev.

@@ -35,11 +35,13 @@ class GuardrailViolation(Exception):
 
 
 # Customer namespace: Z or Y prefix
-_CUSTOMER_PREFIX = re.compile(r"^[ZY][A-Z0-9_]*$", re.IGNORECASE)
+# `\Z` (`$` DEĞİL): Python `$` sondaki TEK `\n`'in önünde de eşleşir ⇒ "ZFOO\n" kabul
+# ediliyordu (Q363②, 2026-10-12). Kabul listesi tam-dize olmalı.
+_CUSTOMER_PREFIX = re.compile(r"^[ZY][A-Z0-9_]*\Z", re.IGNORECASE)
 # Lock objeleri (ENQU) ZORUNLU E-prefix alır (E + customer namespace, örn. EZSD000_X) —
 # bu da MEŞRU customer-namespace'tir, standart obje DEĞİL (SAP konvansiyonu, ADR 0005-A istisnası).
 _LOCK_TYPES = {"enqu", "lock", "lockobject", "lockobjects"}
-_LOCK_PREFIX = re.compile(r"^E[ZY][A-Z0-9_]*$", re.IGNORECASE)
+_LOCK_PREFIX = re.compile(r"^E[ZY][A-Z0-9_]*\Z", re.IGNORECASE)
 
 
 def _is_customer_namespace(name: str, object_type: str | None = None) -> bool:
@@ -144,3 +146,92 @@ def require_writable_tier(tier: str | None, *, what: str = "mutasyon") -> None:
             f"scripts/switch_tier.py DEV ile geçiş yap veya .conn_adt tier'ını doğrula.",
             tier=t,
         )
+
+
+# ── Q369④ (2026-10-12): MCP araç SINIFLANDIRMASI — tamlık sözleşmesi ─────────────────────
+# Her MCP aracı ya YAZMA-KORUMALIDIR (gövdesi `require_writable_tier` çağırır — AST ile
+# ölçülür) ya da AŞAĞIDAKİ açık salt-okur listesindedir. İkisinde de olmayan araç
+# SINIFLANDIRILMAMIŞTIR → `tests/fixtures/mcp_arac_sinifi` FAIL verir. Yeni araç ekleyen
+# bu listeye (gerekçesiyle) ekler ya da tier kapısını koyar; ikisi birden de olabilir
+# (ör. `adt_syntax_check`: bugün salt-okur checkrun, kapı bilinçli olarak korundu).
+# ⛔ Bu liste `tools/list` gizlemesi YAPMAZ (tier'a göre gizleme bilinçli olarak YOK).
+SALT_OKUR_ARACLAR = frozenset({
+    "ping",                     # bağlantı yoklaması
+    "adt_get",                  # GET (kaynak/metadata)
+    "adt_msgclass_read",        # GET
+    "adt_search_objects",       # GET arama
+    "adt_transport_list",       # GET liste
+    "adt_where_used",           # usageReferences sorgusu (araç docstring: SAP'ye YAZMAZ)
+    "adt_atc_check",            # ATC koşusu: kaynak değişmez (sunucu yan kaydı ÖLÇÜLMEDİ)
+    "adt_package_contents",     # GET
+    "adt_table_read",           # datapreview (SELECT) — veri guard'ı ayrı
+    "adt_sql_query",            # datapreview (SELECT) — veri guard'ı ayrı
+    "adt_dump_list",            # GET
+    "adt_dump_read",            # GET
+    "adt_inactive_objects",     # GET worklist
+    "adt_enhancements",         # GET
+    "adt_enhancement_read",     # GET
+    "adt_enhancement_options",  # GET
+    "adt_feature_probe",        # GET
+    "adt_grep_source",          # GET
+    "adt_impact_analysis",      # GET
+    "adt_lock_check",           # kilit DURUMU sorgusu (is_object_locked)
+    "adt_get_method",           # Q363① GET + metinsel çıkarım
+    "adt_revisions",            # Q363① GET versions feed
+    "adt_pretty_print",         # Q363① biçimleme servisi (canlı ölçüm: obje değişmedi)
+})
+
+
+# =============================================================================
+# Q369⑤ (2026-10-12) — YARATMA ANI ADLANDIRMA UYARISI (yalnız UYARI; GATE DEĞİL)
+# Kaynak: `standards/01-naming.md` §4.4.5 Data Dictionary tablosu — nesne öneki adın
+# BAŞ ve SON parçası dışında bir `_<ÖNEK>_` parçası olarak geçer (`ZSD001_T_DESC`,
+# `ZFI001_CLC_V_SIZE`). Yalnız DDIC'in beş tipi kapsanır; diğer tiplerin adlandırması
+# paket `.rules.md` regex'leriyle (`check_package_naming`) dosya düzeyinde ölçülür.
+# FP ölçümü (2026-10-12, bir tüketici projenin kaynak korpusu, salt-okur; yeniden üretim:
+# `tests/fixtures/adlandirma_uyarisi/run.py --korpus <SOURCE_ROOT>`): 184 mevcut DDIC adında
+# (tablo 18 · yapı 15 · veri öğesi 93 · alan 58) uyarı 0. Sınırlar: korpus aynı standartla
+# üretilmiştir (seçim yanlılığı) · tablo tipi korpusta dosya olarak YOK ⇒ TT ölçülmedi ·
+# gerçek ihlal yakalama oranı (recall) korpusta ihlal olmadığı için ÖLÇÜLEMEDİ (fixture
+# vektörleriyle sınanır).
+# Kapsam dışı (None döner, uyarı YOK): ad alanlı (`/NS/`) adlar · `ZZ`/`YY` ile başlayan
+# append yapıları · tanınmayan tip.
+# =============================================================================
+_ADLANDIRMA_ONEKLERI = {
+    "table": ("T", "A"),
+    "structure": ("S",),
+    "dataelement": ("E",),
+    "domain": ("D",),
+    "tabletype": ("TT",),
+}
+_ADLANDIRMA_ESANLAM = {
+    "tabl": "table", "dtel": "dataelement", "doma": "domain", "ttyp": "tabletype",
+    "data_element": "dataelement", "table_type": "tabletype", "stru": "structure",
+}
+_ADLANDIRMA_ORNEK = {
+    "table": "ZSD001_T_<AD>", "structure": "ZSD001_S_<AD>", "dataelement": "ZSD001_E_<AD>",
+    "domain": "ZSD001_D_<AD>", "tabletype": "ZSD001_TT_<AD>",
+}
+
+
+def adlandirma_uyarisi(name: str, object_type: str) -> str | None:
+    """DDIC yaratımında ad standarda uymuyorsa UYARI metni; uyuyorsa/kapsam dışıysa None.
+
+    ⛔ Hiçbir durumda istisna atmaz ve yaratımı ENGELLEMEZ (Q369⑤: yalnız uyarı).
+    """
+    try:
+        tip = (object_type or "").strip().lower()
+        tip = _ADLANDIRMA_ESANLAM.get(tip, tip)
+        izinli = _ADLANDIRMA_ONEKLERI.get(tip)
+        ad = (name or "").strip().upper()
+        if not izinli or not ad or "/" in ad or ad[:2] in ("ZZ", "YY") or ad[0] not in "ZY":
+            return None
+        parcalar = ad.split("_")
+        if set(parcalar[1:-1]) & set(izinli):
+            return None
+        return ("ADLANDIRMA UYARISI (yalnız uyarı — yaratım ENGELLENMEDİ): '%s' (%s) "
+                "standards/01-naming §4.4.5 nesne önekini taşımıyor: beklenen %s (örnek %s). "
+                "Ad paket .rules.md'sinde bilinçli bir istisnaysa yok say."
+                % (ad, tip, " ya da ".join("_%s_" % p for p in izinli), _ADLANDIRMA_ORNEK[tip]))
+    except Exception:
+        return None
