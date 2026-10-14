@@ -391,18 +391,46 @@ class SAPClient:
                 print(f"      [FALLBACK] [FAIL] {method_name}: {str(fb_err)[:200]}")
                 if 'transport' in str(fb_err).lower() or 'CORRNR' in str(fb_err):
                     print(f"      [FALLBACK] [STOP] Ghost transport risk detected — aborting fallback")
-                    print(f"      [FALLBACK] Use SE01/SM12 to clean up, then retry.")
+                    # ADR 0005-C: kilit/transport temizliği ÖNERİLMEZ, yalnız kontrol.
+                    print(f"      [FALLBACK] SE01/SE09 ve SM12'de durumu KONTROL ET; temizlik karari kullanicidadir.")
                     break  # Abort entire fallback on transport mismatch
             finally:
                 if fallback_lock and fallback_lock != 'NO_LOCK_SUPPORT':
                     try:
-                        self.adt_client.unlock_object(object_url, fallback_lock)
-                        fallback_lock = None
-                        print(f"      [FALLBACK] Unlocked.")
+                        if self._kilit_birak(object_url, fallback_lock):
+                            print(f"      [FALLBACK] Unlocked.")
+                        fallback_lock = None   # Q359: False'ta da yeniden deneme YOK
                     except Exception:
-                        print(f"      [FALLBACK] [WARNING] Unlock failed — use SM12 to release manually")
+                        # Q359/ADR 0005-C: eskiden "use SM12 to release manually" (kilit silme
+                        # önerisi) — artık yalnız "kontrol et" (tek kaynak uyarı).
+                        from sap_adt_lib import kilit_birakilamadi_uyarisi
+                        print(kilit_birakilamadi_uyarisi(method_name))
 
         return any_success
+
+    def _kilit_birak(self, object_url: str, lock_handle: str,
+                     result: Optional[Dict[str, Any]] = None) -> bool:
+        """Q359 (2026-10-12): `unlock_object` + DÖNÜŞÜ OKU — tek kaynak, 9 çağrı yeri.
+
+        `unlock_object` artık tüm stratejiler düşünce `False` döner (eskiden hep True).
+        False → tek satır uyarı (`sap_adt_lib.kilit_birakilamadi_uyarisi`) + verilmişse
+        `result['lock_released'] = False`. Yazma sonucu (`success`) DEĞİŞMEZ, akış KESİLMEZ,
+        YENİDEN DENEME YAPILMAZ (çift kilit / 423 riski). İstisna çağırana AYNEN yükselir —
+        her çağıranın mevcut `except` dalı korunur.
+        """
+        ok = self.adt_client.unlock_object(object_url, lock_handle)
+        if ok is False:
+            from sap_adt_lib import kilit_birakilamadi_uyarisi
+            obje = ''
+            try:
+                obje = self.adt_client._object_name_from_url(object_url)
+            except Exception:
+                pass
+            print(kilit_birakilamadi_uyarisi(obje))
+            if isinstance(result, dict):
+                result['lock_released'] = False
+            return False
+        return True
 
     def _find_existing_transport(self, object_name: str, object_type_str: str, requested_transport: str) -> str:
         """Query E071+E070 to find the K-type workbench request already owning this object.
@@ -702,7 +730,7 @@ class SAPClient:
 
             if lock_handle and lock_handle != 'NO_LOCK_SUPPORT':
                 try:
-                    self.adt_client.unlock_object(object_url, lock_handle)
+                    self._kilit_birak(object_url, lock_handle, result)   # Q359
                     lock_handle = None
                 except Exception as unlock_err:
                     print(f"      [WARNING] Pre-activation unlock failed: {str(unlock_err)[:100]}")
@@ -724,9 +752,9 @@ class SAPClient:
             result['error_type'] = type(e).__name__
             if lock_handle and lock_handle not in ('NO_LOCK_SUPPORT', 'IMPLICIT_LOCK', None, ''):
                 try:
-                    self.adt_client.unlock_object(object_url, lock_handle)
+                    self._kilit_birak(object_url, lock_handle, result)   # Q359
                 except Exception:
-                    pass
+                    result['lock_released'] = False
             return result
 
     def push_object(self, object_name: str, object_type: str = 'class', transport: Optional[str] = None, source_file: Optional[str] = None) -> Dict[str, Any]:
@@ -891,8 +919,17 @@ class SAPClient:
                     # vakada sessizce kurtarıldı, ancak kurtarmasız bir yolda (populate_
                     # tables, sonra `.ccau`) ortaya çıktı — teşhis o güne kadar gecikti.
                     # "Araç kendiliğinden çalıştı" GİRDİNİN DOĞRU OLDUĞUNU KANITLAMAZ.
+                    # Q362 (2026-10-12): "aynı kullanıcı" İSTEĞİN sahibi demek DEĞİLDİR —
+                    # IS_LINK_UP boş = o istek altında GÖREVİN var; istek başkasınınki
+                    # olabilir. Sahip lib'in okuduğu E070.AS4USER'dan adlandırılır.
+                    _sahip = getattr(self.adt_client, '_last_lock_istek_sahibi', None)
+                    _sahip_metni = f"sahibi {_sahip}" if _sahip else "sahip okunamadı"
                     print(f"      [WARN] İSTENEN TRANSPORT KABUL EDİLMEDİ: {transport} "
-                          f"— SAP {corrnr_retry} atadı (aynı kullanıcı, CORRNR uyuşmazlığı).")
+                          f"— SAP {corrnr_retry} atadı (istek {corrnr_retry}: {_sahip_metni}; "
+                          f"altında GÖREVİN var, CORRNR uyuşmazlığı).")
+                    if _sahip and str(_sahip).upper() != str(getattr(self.adt_client, 'user', '') or '').upper():
+                        print(f"      [WARN] DİKKAT: istek {corrnr_retry} BAŞKA kullanıcıya ait "
+                              f"({_sahip}) — değişikliğin onun isteğine iner.")
                     print(f"      [WARN] Kurtarma yapılıyor (Bug 11 auto-retry) — bu bir "
                           f"DÜZELTMEDİR, girdinin doğru olduğunun kanıtı DEĞİLDİR.")
                     print(f"      [WARN] Muhtemel sebep: araca GÖREV (S) numarası verildi; "
@@ -941,8 +978,8 @@ class SAPClient:
                 # comments"). Burada unlock → her retry TAZE lock alır. (ZSD001 C4 patinajı.)
                 if lock_handle and lock_handle not in ('NO_LOCK_SUPPORT', 'IMPLICIT_LOCK', None, ''):
                     try:
-                        self.adt_client.unlock_object(object_url, lock_handle)
-                        print(f"      [INFO] Push başarısız — lock serbest bırakıldı (stale-lock guard)")
+                        if self._kilit_birak(object_url, lock_handle, result):   # Q359
+                            print(f"      [INFO] Push başarısız — lock serbest bırakıldı (stale-lock guard)")
                     except Exception as _unlock_err:
                         print(f"      [WARNING] Başarısızlık-sonrası unlock da başarısız: {str(_unlock_err)[:80]}")
                 if lock_handle == 'NO_LOCK_SUPPORT' and ('423' in error_text or 'lockHandle' in error_text):
@@ -965,9 +1002,9 @@ class SAPClient:
 
             if lock_handle and lock_handle != 'NO_LOCK_SUPPORT':
                 try:
-                    self.adt_client.unlock_object(object_url, lock_handle)
-                    lock_handle = None
-                    print(f"      [INFO] Unlocked for activation")
+                    if self._kilit_birak(object_url, lock_handle, result):   # Q359
+                        print(f"      [INFO] Unlocked for activation")
+                    lock_handle = None   # False'ta da finally'de YENİDEN DENENMEZ
                 except Exception as unlock_err:
                     print(f"      [WARNING] Pre-activation unlock failed: {str(unlock_err)[:100]}")
 
@@ -1139,7 +1176,7 @@ class SAPClient:
                                     try:
                                         self.adt_client.set_object_source(source_url, source_code, fb_lock2,
                                                                           fb_eff2, etag=pre_lock_etag)
-                                        self.adt_client.unlock_object(object_url, fb_lock2)
+                                        self._kilit_birak(object_url, fb_lock2, result)   # Q359
                                         fb_lock2 = None
                                         act_b5 = self.adt_client.activate_object(object_name, object_url)
                                         if isinstance(act_b5, dict) and act_b5.get('success'):
@@ -1151,9 +1188,9 @@ class SAPClient:
                                     finally:
                                         if fb_lock2 and fb_lock2 != 'NO_LOCK_SUPPORT':
                                             try:
-                                                self.adt_client.unlock_object(object_url, fb_lock2)
+                                                self._kilit_birak(object_url, fb_lock2, result)   # Q359
                                             except Exception:
-                                                pass
+                                                result['lock_released'] = False
                                 except Exception as b5_err:
                                     print(f"      [FALLBACK B.5] Error: {str(b5_err)[:150]}")
 
@@ -1239,7 +1276,8 @@ class SAPClient:
                 print(f"\n[INFO] This appears to be a stale lock from your own session.")
                 print(f"[INFO] Source was uploaded successfully.")
                 print(f"[INFO] To activate: Use SAP GUI (SE24/SE80) or transaction SE80")
-                print(f"[INFO] You can also use SM12 to release the enqueue lock if needed")
+                # ADR 0005-C: kilit silme/bırakma ÖNERİLMEZ (eskiden "use SM12 to release").
+                print(f"[INFO] SM12'de bu objenin kilidini KONTROL ET; silme/birakma karari kullanicidadir")
 
             return result
 
@@ -1253,8 +1291,10 @@ class SAPClient:
                             print(f"\n[CLEANUP] Unlocking object...")
                         else:
                             print(f"          [RETRY] Retrying unlock...")
-                        self.adt_client.unlock_object(object_url, lock_handle)
-                        print(f"          [OK] Object unlocked")
+                        # Q359: False (tüm stratejiler düştü) → uyarı + lock_released=False,
+                        # YENİDEN DENEME YOK (`break`). İstisna dalının 2-deneme davranışı AYNEN.
+                        if self._kilit_birak(object_url, lock_handle, result):
+                            print(f"          [OK] Object unlocked")
                         break
                     except Exception as e:
                         if attempt == 0:
@@ -1262,7 +1302,9 @@ class SAPClient:
                         else:
                             result['lock_released'] = False
                             print(f"          [WARNING] Unlock failed after 2 attempts: {str(e)[:100]}")
-                            print(f"          [WARNING] Lock may remain - use SM12 to release if needed")
+                            # ADR 0005-C: eskiden "use SM12 to release" (kilit bırakma önerisi).
+                            from sap_adt_lib import kilit_birakilamadi_uyarisi
+                            print(kilit_birakilamadi_uyarisi(object_name))
 
     def create_object(self, object_type: str, name: str, package: str,
                      description: str, transport: Optional[str] = None) -> Optional[str]:
@@ -1410,8 +1452,9 @@ class SAPClient:
                 try:
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] delete_object - unlocking object")
-                    self.adt_client.unlock_object(object_url, lock_handle)
-                    print("     Object unlocked")
+                    # Q359: False → tek kaynak uyarı; silme sonucu (dönüş) DEĞİŞMEZ.
+                    if self._kilit_birak(object_url, lock_handle):
+                        print("     Object unlocked")
                 except Exception as e:
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] delete_object - unlock failed: {str(e)}")
@@ -2389,12 +2432,12 @@ class SAPClient:
             client.create_structure('ZSD000_S_TEST', [
                 {'name': 'FIELD1', 'type': 'char10'},
                 {'name': 'FIELD2', 'type': 'numc8'}
-            ], 'Test structure', 'ZSD000', transport='FIDK901433')
+            ], 'Test structure', 'ZSD000', transport='NPLK900002')
 
             # Structure with data elements
             client.create_structure('ZSD000_S_STATUS', [
                 {'name': 'STATUS', 'type': 'ZSD000_E_STATUS', 'description': 'Status indicator'}
-            ], 'Status info', 'ZSD000', transport='FIDK901433')
+            ], 'Status info', 'ZSD000', transport='NPLK900002')
         """
         print(f"\n{'=' * 70}")
         print(f"  Creating Structure: {name}")
@@ -2478,12 +2521,12 @@ class SAPClient:
                                ],
                                delivery_class='A',
                                data_maintenance='ALLOWED',
-                               transport='FIDK901433')
+                               transport='NPLK900002')
 
             # Table referencing existing structure (recommended)
             client.create_table('ZSD000_T_CONFIG', 'Configuration data', 'ZSD000',
                                ref_structure='ZSD000_S_CUSTOMER',
-                               transport='FIDK901433')
+                               transport='NPLK900002')
         """
         print(f"\n{'=' * 70}")
         print(f"  Creating Table: {name}")
@@ -2635,7 +2678,7 @@ class SAPClient:
 
         Example:
             client.create_table_type('ZSD000_TT_IDS', 'ZSD000_E_TEST_ID',
-                                    'Table of IDs', 'ZSD000', transport='IEDK934921')
+                                    'Table of IDs', 'ZSD000', transport='NPLK900003')
         """
         print(f"\n{'=' * 70}")
         print(f"  Creating Table Type: {name}")
@@ -2718,7 +2761,7 @@ class SAPClient:
             True if successful, False otherwise
 
         Example:
-            client.create_message_class('ZSD000_MSG', 'ZSD000 Messages', 'ZSD000', transport='IEDK934921')
+            client.create_message_class('ZSD000_MSG', 'ZSD000 Messages', 'ZSD000', transport='NPLK900003')
         """
         print(f"\n{'=' * 70}")
         print(f"  Creating Message Class: {name}")
@@ -2799,7 +2842,7 @@ class SAPClient:
             client.create_lock_object('EZSD000_CUST', 'ZSD000_T_CUSTOMER',
                                      'Customer lock', 'ZSD000',
                                      lock_fields=['CUSTOMER_ID'],
-                                     transport='IEDK934921')
+                                     transport='NPLK900003')
         """
         print(f"\n{'=' * 70}")
         print(f"  Creating Lock Object: {name}")
@@ -3663,7 +3706,7 @@ if __name__ == '__main__':
     # client.download_object('ZSD000_CL_AI_CLIENT', 'class')
 
     # Push object
-    # client.push_object('ZSD000_CL_AI_CLIENT', 'class', 'IEDK934921')
+    # client.push_object('ZSD000_CL_AI_CLIENT', 'class', 'NPLK900003')
 
     # Search
     # results = client.search_objects('ZSD000*', max_results=50)
@@ -3672,7 +3715,7 @@ if __name__ == '__main__':
     # objects = client.list_package_contents('ZSD000')
 
     # Create object
-    # client.create_object('class', 'ZCL_TEST', 'ZSD000', 'Test class', 'IEDK934921')
+    # client.create_object('class', 'ZCL_TEST', 'ZSD000', 'Test class', 'NPLK900003')
 
     # Syntax check
     # client.syntax_check('ZSD000_CL_AI_CLIENT', 'class')

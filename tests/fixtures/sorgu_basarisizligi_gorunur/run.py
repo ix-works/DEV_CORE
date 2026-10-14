@@ -302,6 +302,7 @@ def main(modul_yolu: str | None = None, mutasyon: str | None = None) -> int:
         sys.stderr.write("OLCULEMEDI: modul yok: %s\n" % modul_yolu)
         return 2
     Q = modul_yukle(Path(modul_yolu) if modul_yolu else None)
+    Q._SOZDIZIMI_KAYNAGI = "aktivasyon"  # 2026-10-12 Q360: bu korpus ESKI (aktivasyon) yolun sozlesmesini olcer; checkrun yolu -> checkrun_sozdizimi
     CONN.get_active_tier = lambda: "DEV"          # type: ignore[assignment]
     print("modul:", getattr(Q, "__file__", "?"))
     if mutasyon in _DOK_MUT:

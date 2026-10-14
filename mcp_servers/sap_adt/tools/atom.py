@@ -37,6 +37,7 @@ from mcp_servers.sap_adt.guardrails import (
     require_transport,
     require_writable_tier,
 )
+from mcp_servers.sap_adt.guardrails import adlandirma_uyarisi  # Q369⑤ yalnız uyarı
 from mcp_servers.sap_adt._conn import get_active_tier
 
 # Lazy import — SAPClient pulls auth + .conn_adt; defer until first call.
@@ -442,6 +443,44 @@ def _record_active_binding(client) -> None:
         pass
 
 
+def _kimlik_degerleri():
+    """Maskelenecek (parola, kullanıcı): önbellekteki istemciden, yoksa ortamdan. İstisna atmaz.
+
+    Yeni bağlantı KURMAZ (hata yolunda SAP'ye gidilmez)."""
+    try:
+        adt = getattr(_client, "adt_client", None) if _client is not None else None
+        if adt is not None:
+            return getattr(adt, "password", None), getattr(adt, "user", None)
+        import os
+        return os.environ.get("ADT_SAP_PASSWORD"), os.environ.get("ADT_SAP_USER")
+    except Exception:  # noqa: BLE001
+        return None, None
+
+
+def _kimlik_maskele_guvenli(metin, parola):
+    try:
+        from sap_adt_lib import kimlik_maskele  # type: ignore
+        return kimlik_maskele(metin, parola=parola)
+    except Exception:  # noqa: BLE001 — yardımcı yoksa metin AYNEN (eski davranış)
+        return metin
+
+
+def _sap_sebebi_guvenli(govde, parola, kullanici):
+    """Gövdeden kısa SAP sebebi (kimlik maskeli) ya da None. İstisna atmaz."""
+    if not govde:
+        return None
+    try:
+        from sap_adt_lib import kimlik_maskele, sap_hata_sebebi  # type: ignore
+        s = sap_hata_sebebi(govde)
+        if not s:
+            return None
+        s = dict(s)
+        s["metin"] = kimlik_maskele(s["metin"], parola=parola, kullanici=kullanici)
+        return s
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _err_from_exc(exc: Exception) -> dict:
     """Map SAPADTError subclasses (and generic Exception) to structured response."""
     from sap_adt_lib import (  # type: ignore
@@ -472,11 +511,18 @@ def _err_from_exc(exc: Exception) -> dict:
         code = "sap_error"
     else:
         code = "unexpected"
+    parola, kullanici = _kimlik_degerleri()
     out = {
         "ok": False,
         "error": code,
-        "message": str(exc),
+        # Q363③: yalnız PAROLA/kimlik başlığı gizlenir; metinde yoksa mesaj BAYT BAYT aynı.
+        "message": _kimlik_maskele_guvenli(str(exc), parola),
     }
+    # SAP'nin KENDİ sebebi (2026-10-12): `__str__` yalnız "[kod] mesaj" basar, gövdedeki
+    # T100/localizedMessage kayboluyordu. Gövde yok/bozuksa alan HİÇ eklenmez (eski çıktı aynen).
+    sebep = _sap_sebebi_guvenli(getattr(exc, "response_text", None), parola, kullanici)
+    if sebep:
+        out["sap_reason"] = sebep
     if isinstance(exc, SAPLockError) and getattr(exc, "lock_owner", None):
         out["lock_owner"] = exc.lock_owner
     if isinstance(exc, SAPActivationError) and getattr(exc, "errors", None):
@@ -1098,7 +1144,7 @@ def adt_post_shell(
             # `create_object` basarida obje URL'ini (str) doner. Eskiden yalniz
             # `result if isinstance(result, dict)` yaziliydi -> str URL her zaman None'a
             # dusuyordu ve docstring'in vaat ettigi `object_url` HIC dolmuyordu.
-            return {
+            sonuc = {
                 "ok": True,
                 "name": name,
                 "type": object_type,
@@ -1106,6 +1152,11 @@ def adt_post_shell(
                 "result": result if isinstance(result, dict) else None,
                 "client_log": log_text,
             }
+            # Q369⑤: DDIC tiplerinde yalnız UYARI (yaratım zaten oldu; `ok` DEĞİŞMEZ).
+            ad_uyari = adlandirma_uyarisi(name, object_type)
+            if ad_uyari:
+                sonuc["naming_warning"] = ad_uyari
+            return sonuc
 
         # ── BASARISIZ GORUNEN DONUS: "olmadi" mi, "oldu ama hata raporlandi" mi? ──
         # (kayitlar #20 + #49 — retry tuzagi; gerekce icin yukaridaki blok notuna bak)
@@ -1248,6 +1299,17 @@ def adt_push_source(
                     "adt_get(version=active) ile elle teyit et. "
                     + str(result.get("readback_reason", "")).strip()
                 ).strip()
+
+        # ⛔ Q359 (2026-10-12): kilit BIRAKILAMADI → `ok` DEĞİŞMEZ (yazma sonucu başarılı kalır),
+        # yalnız üst seviyede görünür olur (readback_notice deseni). Uyarı SM12'de kilidi
+        # SİLMEYİ önermez (ADR 0005-C) — yalnız "kontrol et" der.
+        if isinstance(result, dict) and result.get("lock_released") is False:
+            resp["lock_released"] = False
+            resp["lock_notice"] = (
+                "KILIT BIRAKILAMADI — tum unlock stratejileri basarisiz; kilit acik kalmis "
+                "olabilir. Yazma sonucu DEGISMEDI. SM12'de objenin kilidini KONTROL ET; "
+                "silme/birakma karari kullanicidadir (ADR 0005-C). Sonraki push 409/423 "
+                "verirse sebep bu olabilir.")
 
         # Aktivasyon-oncesi canli syntax-check (push_object icinde) basarisizsa yuzeye cikar:
         # push upload etti ama AKTIVE ETMEDI -> ok=False + hatalar (gateway net gorsun, nested kalmasin).

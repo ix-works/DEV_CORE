@@ -424,7 +424,7 @@ def _gecerlilik(res) -> tuple:
     if res.get("valid"):
         return True, None
     if res.get("locked"):
-        return None, ("obje KİLİTLİ (%s) — sözdizimi HİÇ kontrol edilmedi; SM12/SE11 ile çöz"
+        return None, ("obje KİLİTLİ (%s) — sözdizimi HİÇ kontrol edilmedi; SM12/SE11'de KONTROL ET (silme kararı kullanıcıda)"
                       % (res.get("lock_user") or "sahibi bildirilmedi"))
     if res.get("error") and not res.get("errors"):
         return None, "alt katman istisna yakaladı: %s" % str(res.get("error"))[:160]
@@ -435,36 +435,59 @@ def _gecerlilik(res) -> tuple:
     return False, None
 
 
+# Q360 (2026-10-12): `adt_syntax_check`'in kaynağı TEK sabitte. "checkrun" = SALT-OKUR
+# `POST /sap/bc/adt/checkruns` (lib `check_run`, varsayılan `version=inactive`). Geri dönüş:
+# bu sabiti "aktivasyon" yap → eski (temiz sürümü AKTİVE EDEN) yol birebir döner. `sap_client`
+# push ön-kontrolü bu sabitten ETKİLENMEZ (o hâlâ aktivasyon yolunu kullanır — kayıt önlemi).
+_SOZDIZIMI_KAYNAGI = "checkrun"
+
+
+def _sozdizimi_checkrun(client, name: str, object_type: str) -> dict:
+    """checkrun yolunun MCP dönüşü — `adt_syntax_check` ile AYNI anahtarlar + kaynak/kapsam."""
+    from object_types import get_object_url  # type: ignore
+    url = get_object_url(name, object_type)
+    with _capture() as buf:
+        res = client.adt_client.check_run(url, version="inactive")
+    hukum = res.get("hukum") if isinstance(res, dict) else None
+    ortak = {"name": name, "type": object_type, "source": "checkrun",
+             "scope": (res or {}).get("kapsam") if isinstance(res, dict) else None,
+             "errors": (res or {}).get("hatalar", []) if isinstance(res, dict) else [],
+             "warnings": (res or {}).get("uyarilar", []) if isinstance(res, dict) else [],
+             "client_log": buf.getvalue().strip()}
+    if hukum in ("temiz", "hatali"):
+        return {"ok": True, "valid": hukum == "temiz", **ortak}
+    sebep = (res or {}).get("sebep") if isinstance(res, dict) else "alt katman sozluk donmedi"
+    return {"ok": False, "error": "sozdizimi_belirsiz", "valid": None,
+            "valid_reason": "checkrun OLCULEMEDI (%s)" % sebep,
+            "message": ("Sözdizimi ÖLÇÜLEMEDİ (checkrun: %s). Bu sonuç 'sözdizimi TEMİZ' de "
+                        "'HATALI' da DEĞİLDİR — ör. inaktif sürümü olmayan objede SAP "
+                        "`notProcessed` döner." % sebep),
+            **ortak}
+
+
 @profil_tool()
 def adt_syntax_check(name: str, object_type: str = "class") -> dict:
-    """⚠️ YAN ETKİLİ — SALT-OKUMA DEĞİL: temiz bekleyen sürümü AKTİVE EDER. Yazma sayılır.
+    """Sözdizimi denetimi — varsayılan SALT-OKUR checkrun; geri dönüş kipi YAN ETKİLİDİR (aktive eder).
 
-    Gerçek semantik: "temizse aktive et". Alt katman (`sap_adt_lib.
-    syntax_check_via_activation`) ölçtü (2026-07-31): `preauditRequested=true` SAP
-    tarafından ONURLANDIRILMIYOR — bekleyen INACTIVE sürüm temiz derleniyorsa bu çağrı
-    onu AKTİVE EDER (`adt_inactive_objects` 1 → 0 gözlendi). Hatalıysa aktivasyon iptal
-    edilir ve hatalar döner.
+    Varsayılan (Q360, `_SOZDIZIMI_KAYNAGI="checkrun"`): `POST /sap/bc/adt/checkruns`,
+    `version="inactive"` (bekleyen sürüm) — kilit/aktivasyon/transport YOK. Canlı ölçüm
+    (4 tip): aktivasyon ön denetimiyle aynı kök hata + satır/kolon; temiz sürüm aktive
+    OLMADI. Dönüşte `source` + `scope` (KAPSAM BEYANI). İnaktif sürümü olmayan obje
+    `notProcessed` döner ⇒ `valid: null` (temiz DEĞİL). Tier + namespace kapıları korundu.
 
-    ⚠ 2026-08-01'e kadar bu docstring "read-only" diyordu; alt katman "treat as WRITE"
-    diyordu. Doküman-yalanı yüzünden tool MUTASYON YAPAN TEK GUARD'SIZ araçtı: tier
-    guard'ı da namespace guard'ı da YOKTU → PRD tier'ında ve standart obje üzerinde
-    çağrılabiliyordu. Artık `require_writable_tier` + `require_customer_namespace`
-    diğer mutasyon tool'larıyla (create/push/activate/delete) AYNI kapıdan geçer.
-
-    Kullanım: push-before-activate akışında aktivasyon hatasını (ADR 0006/T10) önceden
-    yakalar — ama bilinçli geciktirilen bir aktivasyonu (co-activation sırası, def/impl
-    include çiftleri) SIRA BOZARAK öne alabilir. Tek-yazıcı (gateway) disiplinine tabidir.
+    Geri dönüş kipi ("aktivasyon"): "temizse AKTİVE ET" (`preauditRequested` onurlandırılmaz,
+    ölçüldü 2026-07-31) — bilinçli geciktirilen aktivasyonu sıra bozarak öne alabilir;
+    tek-yazıcı (gateway) disiplinine tabidir. Tarihçe: playbook/adt-mcp.md.
 
     Args:
         name: Obje adı (Z*/Y*; standart obje REDDEDİLİR — ADR 0005-A).
         object_type: ADT tipi ('class', 'ddls', 'prog', ...).
 
     Returns:
-        {ok, name, type, valid, errors: [...], warnings: [...], client_log}
+        {ok, name, type, valid, errors: [...], warnings: [...], source?, scope?, client_log}
         veya guardrail_violation (PRD/QA tier ya da standart obje)
         veya {ok: false, error: "sozdizimi_belirsiz", valid: null, valid_reason, message}
-        — kontrol KOŞMADIYSA (2026-09-09 / Q205; eskiden ölçülemeyen her durum `valid:false`
-        oluyordu = *"kod hatalı"* sanılan sahte-negatif).
+        — kontrol KOŞMADIYSA / ölçülemediyse (Q205).
         ⚠ `valid: false` YALNIZ `ok: true` iken "sözdizimi hatalı" demektir. `valid: null`
         **"bakamadım"**tır — kodu düzeltmeye oturmadan önce `valid_reason`'ı oku.
     """
@@ -472,7 +495,8 @@ def adt_syntax_check(name: str, object_type: str = "class") -> dict:
     from mcp_servers.sap_adt.guardrails import (
         GuardrailViolation, require_customer_namespace, require_writable_tier,
     )
-    ne = f"{object_type} syntax_check (temiz bekleyen sürümü AKTİVE EDER)"
+    ne = (f"{object_type} syntax_check (checkrun, salt-okur)" if _SOZDIZIMI_KAYNAGI == "checkrun"
+          else f"{object_type} syntax_check (temiz bekleyen sürümü AKTİVE EDER)")
     try:
         require_customer_namespace(name, what=ne, object_type=object_type)
         require_writable_tier(get_active_tier(), what=ne)
@@ -480,6 +504,11 @@ def adt_syntax_check(name: str, object_type: str = "class") -> dict:
         return gv.as_dict()
 
     client = _get_client()
+    if _SOZDIZIMI_KAYNAGI == "checkrun":
+        try:
+            return _sozdizimi_checkrun(client, name, object_type)
+        except Exception as exc:
+            return _err_from_exc(exc)
     try:
         with _capture() as buf:
             res = client.syntax_check(name, object_type=object_type)
@@ -589,8 +618,9 @@ def adt_package_contents(package: str) -> dict:
 # adt_table_read  (gap-analysis #10 + #2 PII guard, ADR 0011)
 # =============================================================================
 # Tek tanımlayıcı (namespace'li ad dahil: /SCWM/AQUA). Boşluk/parantez/nokta YOK.
-_TABLO_ADI = re.compile(r"^[A-Za-z_/][A-Za-z0-9_/]*$")
-_KOLON_ADI = re.compile(r"^[A-Za-z_][A-Za-z0-9_~/]*$")
+# `\Z` (`$` DEĞİL): `$` sondaki tek `\n`'i kabul eder (Q363②, 2026-10-12).
+_TABLO_ADI = re.compile(r"^[A-Za-z_/][A-Za-z0-9_/]*\Z")
+_KOLON_ADI = re.compile(r"^[A-Za-z_][A-Za-z0-9_~/]*\Z")
 
 
 @profil_tool()
@@ -2301,8 +2331,8 @@ def adt_lock_check(name: str, object_type: str = "class") -> dict:
                         "kurulumda yok"
                         + (f"; sonda sonucu: {sebep}" if sebep else "")
                         + "). Bu sonuç 'kilitli DEĞİL' ANLAMINA GELMEZ — "
-                        "yazma denemesi 409/enqueue hatası verebilir. SM12/SE11 ile "
-                        "doğrula."),
+                        "yazma denemesi 409/enqueue hatası verebilir. "
+                        "SM12/SE11 ile doğrula."),
             "client_log": log,
         }
     return {
@@ -2311,3 +2341,164 @@ def adt_lock_check(name: str, object_type: str = "class") -> dict:
         "lock_owner": bilgi.get("lock_owner"),
         "client_log": log,
     }
+
+
+# =============================================================================
+# Q363① (2026-10-12): üç SALT-OKUR araç — adt_get_method · adt_revisions · adt_pretty_print
+# Üçü de SAP'ye YAZMAZ (kilit/PUT/aktivasyon/transport YOK) ⇒ tier kapısı YOK; adları
+# `guardrails.SALT_OKUR_ARACLAR` listesindedir (Q369④ tamlık testi: `mcp_arac_sinifi`).
+# Her dönüş `scope` (KAPSAM BEYANI) taşır: NEYE bakıldığı ve neye BAKILMADIĞI.
+# =============================================================================
+
+_METOT_BAS = re.compile(r"^\s*METHOD\s+([A-Za-z0-9_/~]+)(?=[\s.]|$)", re.IGNORECASE)
+_METOT_SON = re.compile(r"^\s*ENDMETHOD\s*\.", re.IGNORECASE)
+# Yorum ayıklayıcı YOK (bilinçli): iki desen de satır başına `^\s*` ile çapalıdır ⇒ sütun-1
+# `*` yorumu ve `"` satır-içi yorumu yapısal olarak eşleşemez. Ayrı bir ayıklayıcı eşdeğer-mutant
+# (ölü kod) çıktı — mutasyonu bu çapaya kuruludur (`mcp_salt_okur_araclar` M1).
+# Okunan SÜRÜM (B-2, 2026-10-14): kaynak GET'i `version` parametresi TAŞIMAZ
+# (`atom._read_source_object` · `SAPClient.pretty_print` → `get_object_source(version=None)`)
+# ⇒ SAP EN GÜNCEL sürümü döndürür: bekleyen inaktif sürüm varsa O (lib `get_object_source`
+# docstring'i; canlı ölçüm `playbook/lessons-learned.md` #16 kardeş vaka: parametresiz GET
+# inaktif 10.659 bayt ↔ `version=active` 192 bayt). Davranış bilerek DEĞİŞTİRİLMEDİ (yeni
+# canlı ölçüm ister); metin davranışı söyler. Bağ `mcp_salt_okur_araclar` V1/V2 ile çivili:
+# GET'e `version` eklenirse vektör düşer ve bu metin de güncellenmek zorunda kalır.
+_SURUM_NOTU = ("EN GUNCEL surum (`version` parametresiz GET): bekleyen inaktif surum varsa "
+               "O okunur, aktif surum DEGIL")
+_METOT_KAPSAM = (
+    "Sinifin ANA kaynagi (`source/main`, " + _SURUM_NOTU + ") METINSEL taranir: `METHOD <ad>.` .. "
+    "`ENDMETHOD.`. Yerel siniflar / test include'lari (ccimp/ccau/ccdef) ve makrolar "
+    "ARANMAZ ⇒ found:false 'metot yok' demek DEGILDIR.")
+
+
+def _metot_cikar(kaynak: str, metot: str) -> list:
+    """`METHOD <metot>.` .. `ENDMETHOD.` blokları → [(bas, son, metin)] (1-tabanlı satır).
+
+    Kapanmamış blok `son=None` ile döner (çağıran ÖLÇÜLEMEDİ der). Satır bölme yalnız `\\n`
+    (str.splitlines Unicode ayırıcılarda da böler).
+    """
+    hedef = (metot or "").strip().upper()
+    satirlar = [s[:-1] if s.endswith("\r") else s for s in (kaynak or "").split("\n")]
+    bulunan, i = [], 0
+    while i < len(satirlar):
+        m = _METOT_BAS.match(satirlar[i])
+        if m and m.group(1).upper() == hedef:
+            j = next((k for k in range(i + 1, len(satirlar))
+                      if _METOT_SON.match(satirlar[k])), None)
+            if j is None:
+                bulunan.append((i + 1, None, "\n".join(satirlar[i:])))
+                break
+            bulunan.append((i + 1, j + 1, "\n".join(satirlar[i:j + 1])))
+            i = j
+        i += 1
+    return bulunan
+
+
+@profil_tool()
+def adt_get_method(class_name: str, method_name: str) -> dict:
+    """Bir sınıf metodunun gövdesini oku — SALT-OKUR (sınıfın ana kaynağından metinsel çıkarım).
+
+    Args:
+        class_name: Sınıf adı (standart sınıf da okunabilir — okuma serbest).
+        method_name: Metot adı (arayüz metodu `zif_x~m` biçimiyle).
+
+    Returns:
+        {ok, class, method, found, start_line?, end_line?, source?, scope, client_log}
+        `found: false` + `scope` = aranan yüzeyde YOK (yerel include'lar aranmadı).
+        Birden çok eşleşme ya da kapanmamış blok ⇒ ok:false (`belirsiz` / `kapanmamis`).
+    """
+    from mcp_servers.sap_adt.tools.atom import _read_source_object
+    oku = _read_source_object(class_name, "oo/classes", "class")
+    if not oku.get("ok") or not oku.get("exists"):
+        return {**oku, "class": class_name.upper(), "method": method_name, "scope": _METOT_KAPSAM}
+    bloklar = _metot_cikar(oku.get("source") or "", method_name)
+    ortak = {"class": class_name.upper(), "method": method_name.upper(), "scope": _METOT_KAPSAM,
+             "client_log": oku.get("client_log", "")}
+    if not bloklar:
+        return {"ok": True, "found": False, **ortak}
+    if len(bloklar) > 1:
+        return {"ok": False, "error": "belirsiz", "found": None,
+                "matches": [{"start_line": b, "end_line": s} for b, s, _ in bloklar],
+                "message": ("Ana kaynakta %d ayrı `METHOD %s.` bloğu var (yerel sınıf?) — hangisi "
+                            "olduğu ad ile AYIRT EDİLEMEZ." % (len(bloklar), method_name.upper())),
+                **ortak}
+    bas, son, metin = bloklar[0]
+    if son is None:
+        return {"ok": False, "error": "kapanmamis", "found": None, "start_line": bas,
+                "message": "`METHOD` bulundu ama `ENDMETHOD.` bulunamadı — gövde ÖLÇÜLEMEDİ.",
+                **ortak}
+    return {"ok": True, "found": True, "start_line": bas, "end_line": son, "source": metin, **ortak}
+
+
+_REVIZYON_KAPSAM = (
+    "Obje yapisindaki ADT `versions` baglantisi (sinifta ana include `includes/main/versions`) "
+    "okunur. Sinifin yerel include'larinin ayri surum gecmisi LISTELENMEZ. Bos liste = feed'de "
+    "girdi yok; okunamayan durum HATA doner (ok:false), 'surum yok' DEGIL.")
+
+
+@profil_tool()
+def adt_revisions(name: str, object_type: str = "class", limit: int = 20) -> dict:
+    """Objenin sürüm (revizyon) geçmişi — SALT-OKUR.
+
+    Alt katman `sap_adt_lib.get_object_revisions` (Issue #302: okunamadı ≠ sürüm yok).
+
+    Args:
+        name: Obje adı.
+        object_type: ADT tipi ('class', 'prog', 'intf', 'ddls', 'table', ...).
+        limit: Döndürülecek en fazla girdi (varsayılan 20; `count` daima TAMAMIDIR).
+
+    Returns:
+        {ok, name, type, count, revisions: [{uri, date, author, version, versionTitle}],
+         truncated, scope} | {ok:false, error, message} (bulunamadı → error 'not_found').
+    """
+    from object_types import get_object_url  # type: ignore
+    client = _get_client()
+    try:
+        url = get_object_url(name, object_type)
+        with _capture() as buf:
+            revs = client.adt_client.get_object_revisions(url)
+        revs = list(revs or [])
+        n = max(0, int(limit))
+        return {"ok": True, "name": name.upper(), "type": object_type, "count": len(revs),
+                "revisions": revs[:n], "truncated": len(revs) > n, "scope": _REVIZYON_KAPSAM,
+                "client_log": buf.getvalue().strip()}
+    except Exception as exc:
+        return _err_from_exc(exc)
+
+
+_BICIM_KAPSAM = (
+    "Objenin kaynagi okunur (" + _SURUM_NOTU + "), "
+    "`POST /sap/bc/adt/abapsource/prettyprinter` ile bicimlenir, "
+    "metin DONDURULUR. SAP'ye YAZILMAZ (kilit/PUT/aktivasyon/transport YOK); kalici kilmak icin "
+    "ayri push adimi gerekir. Bicim ayarlari SAP kullanicisinin Pretty Printer ayarlaridir.")
+
+
+@profil_tool()
+def adt_pretty_print(name: str, object_type: str = "class") -> dict:
+    """ABAP kaynağını SAP Pretty Printer ile biçimlenmiş olarak DÖNDÜR — SALT-OKUR.
+
+    Salt-okur iddiası canlı ölçümle doğrulandı (2026-10-12, sınıf + FM, tek koşum: aktif/inaktif
+    kaynak md5'i ve aktive-bekleyen listesi önce = sonra; biçimleyici gerçekten çalıştı).
+    Kilit/transport davranışı ÖLÇÜLMEDİ. Uç gövdesine obje referansı konmaz (yalnız metin gider).
+
+    Args:
+        name: Obje adı.
+        object_type: ADT tipi ('class', 'prog', 'intf', ...).
+
+    Returns:
+        {ok, name, type, formatted_source, written: false, scope, client_log}
+        | {ok:false, error:'pretty_print_failed', message, client_log}
+    """
+    client = _get_client()
+    try:
+        with _capture() as buf:
+            bicimli = client.pretty_print(name, object_type)
+        if bicimli is None:
+            return {"ok": False, "error": "pretty_print_failed", "name": name.upper(),
+                    "type": object_type, "written": False, "scope": _BICIM_KAPSAM,
+                    "message": "Biçimlenmiş kaynak ALINAMADI (ayrıntı client_log'da). Obje DEĞİŞMEDİ.",
+                    "client_log": buf.getvalue().strip()}
+        return {"ok": True, "name": name.upper(), "type": object_type,
+                "formatted_source": bicimli, "written": False, "scope": _BICIM_KAPSAM,
+                "client_log": buf.getvalue().strip()}
+    except Exception as exc:
+        return _err_from_exc(exc)

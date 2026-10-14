@@ -3018,6 +3018,72 @@ python tests/run_battery.py team_setup_sablon_sapmasi --kardes shim_tazeleme tea
 - **PR #321 inceleme eki:** korpus **33/33**, **12 kip**. ⛔ **A3 ↔ A3b/A3c/A3d SİLİNMEZ:** settings INFO YALNIZ saf `permissions.allow` ekidir; `disableAllHooks` / `hooks.*` / karışık ek WARN (`--mutasyon-info-genis`). A10 boş `{}`/`[]` yaprak (`--mutasyon-bos-kap`; mutant `utils/_zz_tsss_dz.py` kopya team_setup'ın CORE_ROOT satırına eklenen ön-ekle `sys.modules`a yüklenir). A11 `sys.modules['utils.drift_imzasi']=None` → `--tazele-shim --tazele-precommit` FAIL×2 + traceback yok + dosyalar aynı (`--mutasyon-import-korumasiz`). 1d8c895 kodu (team_setup + build_core_index + drift_imzasi üçü birden geri alınıp) → **28/33**, düşen yalnız A3b·A3c·A3d·A10·A11. Eski kodda drift_imzasi'yi ölçmek için dosyayı geçici olarak `git show <taban>:` ile değiştir ve koşum sonunda GERİ YÜKLE (`--ts`/`--ci` drift_imzasi'yi kapsamaz).
 - **HARİTA:** `team_setup.py` · `build_core_index.py` · `utils/drift_imzasi.py` satırlarına `O:team_setup_sablon_sapmasi` eklendi; `b0_secim` P1/P2/P4 kümeleri ve V12 `TOPLAM: 4/4` pini BİRLİKTE güncellendi.
 
+## B71 — ADT motoru: kilit bırakma dürüstlüğü (Q359/Q358) · istek sahibi metni (Q362) · transport yaklaşım sırası · FUGR 2. faz ioc sondası (2026-10-12)
+
+```
+python tests/fixtures/kilit_birakma_durustlugu/run.py     # 31/31  (yerel sahte HTTP 127.0.0.1; SAP yok)
+python tests/fixtures/istek_sahibi_metni/run.py           # 12/12
+python tests/fixtures/transport_yaklasim_sirasi/run.py    # 5/5
+python tests/fixtures/fugr_faz2_ioc_sondasi/run.py        # 6/6
+python tests/run_battery.py kilit_birakma_durustlugu --kardes istek_sahibi_metni transport_yaklasim_sirasi fugr_faz2_ioc_sondasi lock_modification_support aciklama_412_retry aktivasyon_govde_hukmu b0_secim --zaman-asimi 900
+```
+
+⚠ `--zaman-asimi 900` ŞART (2026-10-14): kilit `--mutasyon` 19 alt-koşudur (kum tabanı + 18 mutant, her biri tam fixture) ve yerelde ~5,5 dk sürer; bataryanın varsayılan 300 sn sınırında `[ZAMAN-ASIMI]` verir (ölçüldü). CI yalnız tabanı koşar (`run_fixture_tests` 300 sn), mutasyonu koşmaz.
+
+- **Mutasyonlar:** kilit 18/18 (M1–M11 + K1–K4b + K6 + K7; 2026-10-14) · istek 7/7 (M6 + M7 2026-10-14) · transport 3/3 · fugr 3/3 (`--mutasyon`). Kilit M1 = `unlock_object` son satırı `return True`'ya geri (RİSK-c); M3 yükleme-istisnası yolunu B7 vektörü yakalar.
+- **2026-10-14 bug-gate eki (F bölümü + E2/E3):** ⛔ **M8–M11 SİLİNMEZ** — eski 23 vektör bu dört mutantın hepsini 23/23 yeşil geçiriyordu. F1/F2 `push_textpool.main` (sahte ADT, `--no-activate`) · F3/F4 `sap_set_object_description._lock_put_unlock` · F5 `push_object.main` 409 `SAPLockError` `[MANUAL FIX]`. E2'nin taranan kümesi koddan türetilir: `scripts/`+`mcp_servers/` altında "SM12" geçen her .py ∪ URETIM; listedeki dosya yoksa FAIL. Detay satırı `dosya=N satir=M` basar, sıfır bulgu "bakılmadı" anlamına gelmez. E3 pozitif değişmezdir: SM12 geçen her yorum-dışı satır bir KONTROL fiili taşır (`kontrol|check|bak|doğrula`). Yeni SM12 metni yazan bu fiillerden birini kullanmalı, aksi hâlde E3 FAIL. `_ONERI_RE`'ye ÇIPLAK `clear` EKLENMEZ: lib'deki "Failed to clear enqueue lock" bir durum bildirimidir, eklenirse FP olur.
+- **2026-10-14 re-gate Ö1 — eşanlamlı silme fiili:** eski desen, silme fiili ile KONTROL fiili aynı satırdayken ikisini birden kaçırıyordu (E2 öneri görmez, E3 fiil görür). Ek kollar: `(?<!to )clear (the )?(enqueue )?lock` (geri-bakış "Failed to clear …" yazımını dışarıda tutar) · `SM12\s*(→|->)\s*(clear|unlock|remove|drop)` · `kilid[iı] (kaldır|kaldir|temizle)` · kardeş `kilid[iı]n[iı] (sil|bırak|birak|kaldır|kaldir|temizle)` (üretim iyelik ekiyle yazar: "bu objenin kilidini …"; "kilidini sil" eski `kilidi sil` kolundan da kaçıyordu). ⛔ ÇIPLAK `unlock` EKLENMEZ: `push_textpool` "[UNLOCK] FAILED" bir durum satırıdır ve F1 tüm logu bu desenle tarar. **E4** desen birimidir: pozitifler K1–K3 + K6 dizeleri, negatifler üretimin GERÇEK yazımı ("Failed to clear enqueue lock. SM12'de … KONTROL ET" · "[UNLOCK] FAILED" · "bu objenin kilidini KONTROL ET; silme/birakma karari"). Mutasyon kayıtlarında 5. eleman = düşmesi İLAN EDİLEN vektörler; `rc≠0` olsa bile ilan edilen vektör düşmezse sonuç `YANLIS VEKTOR` olur (başka bir vektörün düşmesi kanıt sayılmaz — kırmızı-first koşusunda eski desen E4'ü düşürdüğü için her K mutantı `rc=1` verdi; ayrım yalnız bu beyanla görüldü: eski desenle 6/6 `YANLIS VEKTOR`). Koşucu mutasyondan önce **kum tabanını** koşar; kırmızıysa `KURULAMADI` der ve durur. ⛔ K1–K4b + K6 + K7 SİLİNMEZ. **Kardeş kopya:** `istek_sahibi_metni/run.py` aynı `_ONERI_RE`'yi KOPYA taşır (eskiden dar desendi; Fix metnini tüm gövdesiyle tarayan I2/I5 için gerekli). E5 (kilit) ve S1 (istek) iki deseni AST ile birebir kıyaslar — çift taraflıdır, çünkü `run_fixture_tests --degisen` bir fixture dizinini yalnız KENDİ birimine eşler (o dizin için HARITA satırı okunmaz, ölçüldü) ⇒ hangi kopya düzenlenirse kendi koşusunda kayma görünür. K7 (kilit) ve M7 (istek) kopyayı daraltan mutantlardır; kopyalar birlikte değişir. İki koşucu da mutasyondan önce kum tabanını koşar ve kumdaki kardeş dosyayı kopyalar (yoksa E5/S1 her mutantta düşer, sonuç sahte-YAKALANDI olur). `istek_sahibi_metni` M6 = FOREIGN Fix metninde "then clear the enqueue lock" SM12'siz sonraki satırda (I5 düşer; eski dar desen bu metinde 0 isabet).
+- ⚠ **SINIR — E2/E3 SATIR bazlıdır (iki yönde):**
+  ① **Kaçırma (Ö1 K5, ölçüldü 2026-10-14):** silme fiili SM12'yi anan satırda değil de bir SONRAKİ satırdaysa (çok satırlı dize, örn. `"… SM12'de kilidi KONTROL ET "` + `"sonra kilidi kaldır …"`) E2 o satırı hiç taramaz. Yalnız metni TÜM çıktısıyla okuyan bir davranış vektörü yakalar: `push_object` (F5 tüm log) → K4 YAKALANDI · lib `kilit_birakilamadi_uyarisi` (A8/B2 tüm uyarı) → K4b YAKALANDI · `hooks/post_tool_failure.py` REMINDER metni için böyle bir vektör YOK → K5 mutantı 30/30 KAÇTI. Lib Q362 istek-sahibi Fix metinlerini `istek_sahibi_metni` I2/I5 tüm gövdesiyle tarar (M6 orada YAKALANDI). Sınır, metnini tüm çıktısıyla okuyan davranış vektörü olmayan diğer SM12 dizeleri için de geçerlidir (örn. `query.py` `adt_lock_check` notu: SM12 geçen fixture yalnız bu ikisidir, ölçüldü). Desenle kapatılamaz (sorun desen değil tarama kapsamıdır); yeni bir SM12 metni yazan, silme önerisi olmadığını o dosyanın davranış vektörüyle ya da gözle doğrular.
+  ② **Yanlış pozitif:** E3 fiili yalnız SM12 ile AYNI satırda arar. Çok satırlı bir dizede fiil sonraki satıra düşerse E3 "fiilsiz" der. 2026-10-14 bug-gate'te `query.py` `adt_lock_check` dizesi ("… SM12/SE11 ile " + "doğrula.") yalnız bu yüzden "… " + "SM12/SE11 ile doğrula." diye yeniden kırıldı; metin anlamca doğruydu. Bu durumda dizeyi SM12 ile fiil aynı satırda kalacak şekilde böl, kodu değil.
+  ③ **Alt dizi eşleşmesi:** `_KONTROL_RE` (`kontrol|check|\bbak\b|do[gğ]rula`) kelime sınırı aramaz (yalnız `bak` sınırlı) ⇒ "check" alt dizisi "checkrun" / "unchecked" içinde de geçer (ölçüldü: ikisi de True). SM12 satırında yalnız "checkrun" geçen yönsüz bir metin E3'ten geçer. Desen bilinçli olarak değiştirilmedi (re-gate Ö2: yalnız doküman).
+- **Taban kontrolü:** transport ve FUGR fixture'ları taban `6b6c11d` sürümünü `git show` ile gerçek `__file__` altında exec eder (`KILIT_FIXTURE_GIT_KOK` ortam değişkeni kumdan git'e erişim verir; CI `fetch-depth: 0`). Taban sürüm transport'ta header-önce sırayı, FUGR'da sahte-negatifi GÖSTERMELİ — göstermiyorsa kontrol grubu çürümüştür.
+- ⚠ **FUGR 2. faz gövde biçimi DOĞRULANAMADI:** vektör, canlıda yakalanan 1. faz ioc gövdesinin genericleştirilmiş kopyasından (`canli/faz1_ioc.xml`) kurulur; 2. faz biçimi canlıda yeniden üretilemedi. Hüküm yalnız FUGR'da worklist sondasına devredilir (fail-closed: sonda kurulamazsa `success=False`).
+- **Kapsam dışı (bilinçli):** `sap_client.py` 9 çağrı tek `_kilit_birak` yardımcısından geçer — SM12 silme önerisi ve retry YOK; `populate_cds_views` UNLOCK ≠ 2xx yalnız görünür uyarı, akış/rc değişmez.
+
+## B72 — Ad kabul desenleri `\Z` (Q363②) · MCP hata gövdesinde SAP sebebi + kimlik maskesi (Q363③) (2026-10-12)
+
+```
+python tests/fixtures/ad_kabul_tam_dize/run.py           # 12/12
+python tests/fixtures/hata_sebebi_ve_maskeleme/run.py    # 17/17 · --mutasyon 8/8
+python tests/run_battery.py ad_kabul_tam_dize --kardes hata_sebebi_ve_maskeleme veri_yetki_guardlari sorgu_basarisizligi_gorunur mcp_sahte_sonuc_uclusu dogrulama_kosamadi
+```
+
+- **İzin-listesi ↔ red-listesi ayrımı:** yalnız KABUL eden desenler (`validate_object_name` · `validate_package_name` · `SAPADTClient._validate_object_name` · guardrails `_CUSTOMER_PREFIX`/`_LOCK_PREFIX` · query `_TABLO_ADI`/`_KOLON_ADI`) `$` → `\Z`. RED tarafı (`_SENSITIVE_TABLE`, `table_candidates`, `_SAP_AD_RE`) DEĞİŞMEDİ — orada `$` sondaki LF'i de yakalar, yani güvenli tarafta; `\Z` gevşetme olurdu. R bölümü bunu kilitler.
+- **Taban kontrolü (K1):** taban `6b6c11d` desenleri `"ZSD001_X\n"` kabul ETMELİ (kusurun ölçüldüğü an).
+- **Maske:** `kimlik_maskele` parola değeri (≥3 kr), `Authorization Basic|Bearer`, `password=`/`sap-password=`/`ADT_SAP_PASSWORD=` değerleri ve verilen kullanıcı adını (harf-duyarsız, **yalnız bağımsız kelime olarak**: `_` ve harf/rakam kelime içi — 2026-10-14, M6/M7 vektörleri + M8 mutasyonu; `ZCL_DEV_TOOL`/`DEVELOPMENT` içindeki `DEV` korunur) gizler. U5 taban kontrolü: eski fallback ASCII-dışı parolada karakter+konum sızdırıyordu (ve `.object` tam `kullanıcı:parola` taşıyordu).
+- **Bayt-bayt eşlik (S5):** gövdesiz / bozuk / HTML gövdeli 5 istisnada `_err_from_exc` çıktısı tabanla AYNI — `sap_reason` yalnız ayrıştırılabilen gövdede eklenir.
+
+## B73 — Salt-okur checkrun (Q360) · üç salt-okur MCP aracı (Q363①) · araç sınıflandırma tamlığı (Q369④) (2026-10-12)
+
+```
+python tests/fixtures/checkrun_sozdizimi/run.py      # 24/24 · --mutasyon 8/8 (genericleştirilmiş canlı örnekler canli/)
+python tests/fixtures/mcp_salt_okur_araclar/run.py   # 27/27 · --mutasyon 9/9
+python tests/fixtures/mcp_arac_sinifi/run.py         # 8/8
+python tests/run_battery.py mcp_arac_sinifi --kardes checkrun_sozdizimi mcp_salt_okur_araclar veri_yetki_guardlari aktivasyon_govde_hukmu sorgu_basarisizligi_gorunur unit_run_guard_riski mcp_profil_aktivasyon_offline revizyon_okuma tier_fail_closed
+```
+
+- **Checkrun hükmü üç değerli:** `temiz` · `hatali` · `OLCULEMEDI`. ÖLÇÜLEMEDİ: boş/bozuk gövde · rapor yok · başka reporter · hedef obje raporlanmamış · `status != processed` (tablo `notProcessed` = sahte-yeşil adayı) · bilinmeyen mesaj tipi · istisna · HTTP ≠ 200. Mutasyon M7 (HTML 500 gövdesi) yalnız hükme değil `sebep == http_500`'e de bakılarak yakalanır.
+- **MCP bağlaması geri alınabilir:** `query._SOZDIZIMI_KAYNAGI = "checkrun"`; `"aktivasyon"` eski (yan etkili) yolu açar. Eski yolu test eden 3 komşu fixture bu sabiti `"aktivasyon"`a pinler (`sorgu_basarisizligi_gorunur` · `aktivasyon_govde_hukmu` · `veri_yetki_guardlari`). Tier/namespace kapıları korundu.
+- **Sınıflandırma:** AST, `mcp_servers/sap_adt/**` içindeki her `@profil_tool`/`@mcp.tool` fonksiyonunu tarar: ya gövdede `require_writable_tier` ya `guardrails.SALT_OKUR_ARACLAR`. Davranış ayağı QA tier'da TÜM yazma araçlarını sahte argümanla çağırır (ADR_0010_TIER + istemciye ulaşmaz); DEV kontrol grubu (≥5 araç sahte istemciye ulaşır). ⚠ `get_active_tier` atom/composite'te modül düzeyinde AD olarak import edilir — harness her bağı ayrı yamar (yalnız `_conn`u yamamak sahte sızıntı üretir).
+- **Yeni araç ekleyen:** sınıflamazsa T1 FAIL — beklenen davranıştır, listeyi gerekçesiyle güncelle.
+- **Salt-okur iddiası:** `adt_pretty_print` canlıda ölçüldü (2026-10-12, sınıf + FM, tek koşum: kaynak md5 + aktive-bekleyen listesi önce = sonra); kilit/transport ÖLÇÜLMEDİ.
+- **Okunan SÜRÜM (2026-10-14 bug-gate B-2):** `adt_get_method` ve `adt_pretty_print` kaynağı `version` parametresiz okur, yani en güncel sürüm gelir (bekleyen inaktif sürüm varsa o). Scope metni bunu `query._SURUM_NOTU` ile söyler. V1a/V2a GERÇEK isteği yakalar (`_read_source_object` session.get url+params · `SAPClient.pretty_print` → `get_object_source` kwargs) ve `version` olmadığını doğrular. V1b/V2b metni bu isteğe bağlar. M7/M8 eski "aktif" metne, M9 GET'e `version=active` ekler; üçü de düşmelidir. Okuma davranışı değişirse metin de değişmek zorundadır. **Seçim bağı (2026-10-14 re-gate L1):** V1a/V2a/M9 `mcp_servers/sap_adt/tools/atom.py` ve `scripts/sap_client.py`'yi okuduğu için ikisi de HARITA'da `O:mcp_salt_okur_araclar`'a bağlıdır (`--degisen … --listele` ile görünür: sap_client 17 birim, atom 20 birim). Bu iki dosyayı okuyan yeni bir vektör eklersen bağı da kur.
+- **check_run hedef bağlaması (2026-10-14):** B7 başka bir objeyi denetler ama SINIF'ın raporunu döner ⇒ `OLCULEMEDI/obje_raporlanmadi`. M8 (`checkrun_ayristir(r.text, None, …)`) bu vektörle düşer. B3'ün gövdesi zaten hedefi raporladığı için B3 bu mutantı göremezdi.
+
+## B74 — Oturum izi `ADT_SESSION_TRACE` (Q364②) · tablo DDL GET biçim kilidi (Q364①) · DDIC yaratma adlandırma uyarısı (Q369⑤) (2026-10-12)
+
+```
+python tests/fixtures/oturum_izi_ve_ddl_accept/run.py   # 16/16 (yerel sahte HTTP; GERÇEK lock→PUT→unlock)
+python tests/fixtures/adlandirma_uyarisi/run.py          # 10/10
+python tests/fixtures/adlandirma_uyarisi/run.py --korpus <SOURCE_ROOT>   # yerel FP ölçümü (salt-okur; CI'da koşmaz)
+python tests/run_battery.py oturum_izi_ve_ddl_accept --kardes adlandirma_uyarisi kilit_birakma_durustlugu ddic_okuma_yolu mcp_arac_sinifi
+```
+
+- ⛔ **M1 SİLİNMEZ (RİSK ②):** kilit ile PUT arasına `new_session()` sokan mutasyon O1'i düşürmeli — kilit/CSRF oturuma bağlıdır. İz varsayılan KAPALI (O3: kanca HİÇ eklenmez); açıkken ham çerez / kilit tutamacı / transport iz satırında GÖRÜNMEZ (yalnız sha256 ilk 8, sorgu dizesi atılır).
+- **Ölçülmeyen:** uzun oturumda yeni objede 400'ün kendisi (canlı SAP gerektirir) — `ADT_SESSION_TRACE=1` ile yakalanan iz bu hipotezin ilk kanıt aracıdır; `new_session()` davranışı DEĞİŞMEDİ.
+- **Adlandırma uyarısı GATE DEĞİL:** `naming_warning` alanı eklenir, `ok` değişmez (M4 bunu çiviler). FP ölçümü 2026-10-12: bir tüketici korpusunda 184 adda uyarı 0 (tablo 18 · yapı 15 · veri öğesi 93 · alan 58); TT korpusta yok ⇒ ölçülmedi; recall korpusta ihlal olmadığı için ölçülemedi.
+
 ## B79 — `ix_doctor` K1 1f (Claude Code sürümü ↔ ölçülmüş taban) + 1g (hook yorumlayıcısı gerçekten başlıyor mu) — Q365①
 
 ```

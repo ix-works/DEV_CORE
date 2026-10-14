@@ -114,7 +114,11 @@ def _lock_put_unlock(adt, url, full, ctype, data, etag, transport):
         return pr.status_code, (pr.text or ""), eff_transport
     finally:
         try:
-            adt.unlock_object(url, lock_handle)
+            # Q359: `unlock_object` tüm stratejiler düşünce False döner — sonuç (http_kodu)
+            # DEĞİŞMEZ, yeniden deneme YOK; yalnız tek kaynak uyarı (SM12 KONTROL, silme değil).
+            if adt.unlock_object(url, lock_handle) is False:
+                from sap_adt_lib import kilit_birakilamadi_uyarisi
+                print(kilit_birakilamadi_uyarisi(url.rstrip("/").rsplit("/", 1)[-1].upper()))
         except Exception as exc:
             print(f"[WARN] unlock: {exc}")
 

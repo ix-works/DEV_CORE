@@ -294,8 +294,11 @@ def main():
                 print("[ACTION REQUIRED] ASK the user which transport to use. Wait for their answer.")
                 print("[ACTION REQUIRED] NEVER pick a transport yourself.")
                 print("")
-                print("[MANUAL FIX] If object is stuck:")
-                print("  1. SM12 -> delete enqueue lock for this object")
+                # ADR 0005-C (Q362 kardeşi): enqueue kilidi SİLMEK ajanın işi değildir —
+                # metin yalnız "KONTROL ET" der, silme kararı kullanıcıdadır.
+                print("[MANUAL FIX] If object is stuck (user decides; agent does NOT act):")
+                print("  1. SM12 -> CHECK the enqueue lock for this object "
+                      "(KONTROL ET; silme karari kullanicida, ADR 0005-C)")
                 print("  2. SE01/SE09 -> move object from conflicting transport to the correct one")
                 print("  3. Retry push only after user confirms which transport to use")
                 print("=" * 60)

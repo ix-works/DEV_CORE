@@ -86,6 +86,9 @@ try:
     from sap_client import SAPClient
 except Exception as exc:                                     # pragma: no cover
     raise SystemExit(f"[fixture-hatasi] modul yuklenemedi (sessiz gecme YOK): {exc}")
+# 2026-10-12 Q360: C bolumu ESKI (aktivasyon) yolun guard sozlesmesini olcer; checkrun yolu ->
+# `checkrun_sozdizimi` fixture'i (guard'lar iki kipte de AYNI kapidan gecer).
+Q._SOZDIZIMI_KAYNAGI = "aktivasyon"
 
 SONUC: list[tuple[str, bool, str]] = []
 

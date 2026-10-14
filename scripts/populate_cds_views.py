@@ -329,6 +329,10 @@ SONUC_ATLANDI     = 'atlandi'       # zaten vardı, YAZILMADI — başarı DEĞ�
 SONUC_HATA        = 'hata'          # denendi, olmadı
 SONUC_DRY_RUN     = 'dry_run'       # yalnız önizleme; canlıya hiç gidilmedi
 
+# Q358: UNLOCK yanıtı 200/204 olmayan objeler (koşum boyunca birikir, özet satırında basılır).
+# Satır sonucunu ve çıkış kodunu DEĞİŞTİRMEZ — yalnız görünürlük.
+KILIDI_ACIK_KALMIS_OLABILIR: list = []
+
 
 # ─── `--force-recreate` ÖNERİSİ DAİMA TEK OBJEYE DARALTILIR (Q315) ────────────
 # `--force-recreate` koşumun TAMAMINA uygulanan global bir bayraktır (argparse
@@ -477,15 +481,28 @@ def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
             return SONUC_HATA
     finally:
         # Step 5: UNLOCK
+        # ⛔ Q358 (2026-10-12): yanıt eskiden `except: pass` ile YUTULUYORDU ve kodu hiç
+        # okunmuyordu ⇒ "kilit bırakıldı mı" ölçülemiyordu (bir gateway turu bunu ancak
+        # aracı dışarıdan sarmalayıp HTTP kodlarını loglayarak gördü). Artık 200/204 DIŞI
+        # her kod ve her istisna GÖRÜNÜR uyarıdır (tek kaynak metin, sap_adt_lib). AKIŞ
+        # DEĞİŞMEZ: satır sonucu (SONUC_*) ve çıkış kodu aynen kalır — yalnız kapanış özetine
+        # "kilidi açık kalmış olabilir" listesi eklenir. Korpus: tests/fixtures/kilit_birakma_durustlugu
+        _unlock_kod = None
         try:
-            client.session.post(
+            _ur = client.session.post(
                 client.url + obj_url,
                 params={'_action':'UNLOCK', 'lockHandle':handle},
                 headers={'X-CSRF-Token':csrf, 'X-sap-adt-sessiontype':'stateful'},
                 verify=False, timeout=10
             )
-        except Exception:
-            pass
+            _unlock_kod = getattr(_ur, 'status_code', None)
+        except Exception as _ue:
+            _unlock_kod = f'istisna:{type(_ue).__name__}'
+        if _unlock_kod not in (200, 204):
+            from sap_adt_lib import kilit_birakilamadi_uyarisi
+            print(f'  [WARN] {name} UNLOCK yanıtı: {_unlock_kod}')
+            print(kilit_birakilamadi_uyarisi(name))
+            KILIDI_ACIK_KALMIS_OLABILIR.append(name)
 
 
 def main():
@@ -698,6 +715,11 @@ def main():
     if dry:
         ozet += f', {dry} dry-run'
     print(ozet + ' ===')
+    if KILIDI_ACIK_KALMIS_OLABILIR:
+        # Q358: çıkış kodu DEĞİŞMEZ (lider kararı 2026-10-12: akış aynı, yalnız görünürlük).
+        print(f'[WARN] UNLOCK DOĞRULANAMADI ({len(KILIDI_ACIK_KALMIS_OLABILIR)}): '
+              f'{", ".join(KILIDI_ACIK_KALMIS_OLABILIR)} — kilit açık kalmış olabilir; '
+              f'SM12\'de KONTROL ET (silme/bırakma kararı kullanıcıda, ADR 0005-C).')
 
     if atlandi:
         print(f'[ATLANDI] {atlandi} CDS zaten vardı ve DOKUNULMADI: '

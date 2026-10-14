@@ -159,10 +159,10 @@ def main() -> int:
 
     # textelements PUT endpoint'i lockHandle'ı ZORUNLU ister (SADT_RESOURCE 017).
     # NO_LOCK_SUPPORT/implicit TOLERE EDİLMEZ — sessizce lockHandle'sız PUT atmak 400 yer.
-    # Genelde gerçek-handle gelmemesi = stale enqueue (EU 510 same-user) → SM12'de temizle.
+    # Genelde gerçek-handle gelmemesi = stale enqueue (EU 510 same-user) → SM12'de KONTROL (silme kullanıcıda).
     if not lock_handle or lock_handle in ("NO_LOCK_SUPPORT", "IMPLICIT_LOCK"):
         print(f"[BLOCK] Gerçek lock handle alınamadı (={lock_handle}). textelements PUT için ZORUNLU.")
-        print(f"        Olası sebep: {prog} üzerinde stale enqueue (EU 510). SM12'de kilidi sil, tekrar dene.")
+        print(f"        Olası sebep: {prog} üzerinde stale enqueue (EU 510). SM12'de kilidi KONTROL ET (silme karari kullanicidadir, ADR 0005-C), sonra tekrar dene.")
         return 5
 
     try:
@@ -201,7 +201,14 @@ def main() -> int:
         #    /programs olduğu için etkilenmiyordu; PROG/PX aynı textelements resource → çakışıyordu).
         try:
             ok_unlock = adt.unlock_object(te_url, lock_handle)
-            print(f"[UNLOCK] {'done' if ok_unlock else 'FAILED — SM12 kontrol et'}")
+            # Q359: dönüş artık GERÇEKTEN False olabilir (eskiden hep True → bu dal ölüydü).
+            # Akış/çıkış kodu DEĞİŞMEZ; yalnız tek kaynak uyarı basılır.
+            if ok_unlock is False:
+                from sap_adt_lib import kilit_birakilamadi_uyarisi
+                print(f"[UNLOCK] FAILED")
+                print(kilit_birakilamadi_uyarisi(prog))
+            else:
+                print(f"[UNLOCK] done")
         except Exception as exc:
             print(f"[UNLOCK] FAILED ({exc}) — SM12'de {prog} kilidini kontrol et")
 

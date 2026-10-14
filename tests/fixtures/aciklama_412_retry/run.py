@@ -75,7 +75,9 @@ MUTASYONLAR = [
      "        adt.session.get(full, headers={\"Accept\": \"application/*\"}, "
      "timeout=adt.timeout_default)\n        headers = adt._get_headers(ctype, ctype)\n"),
     ("M9 lock döngüsünde UNLOCK atlandı",
-     "            adt.unlock_object(url, lock_handle)", "            pass"),
+     # Q359 (2026-10-12): çağrı dönüşü okur hâle geldi — çapa yeni satıra taşındı,
+     # mutasyonun anlamı AYNI (UNLOCK çağrısı hiç yapılmaz).
+     "            if adt.unlock_object(url, lock_handle) is False:", "            if False:"),
     ("M10 --force-put yok sayıldı (aynı metin daima NOOP)",
      "        if not args.force_put:", "        if True:"),
     ("M11 URI eşleşmesi sınırsız önek (komşu obje eşleşir)",
