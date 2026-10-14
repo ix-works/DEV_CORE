@@ -185,6 +185,15 @@ OZEL_TESTLER = [
     ("ix_doctor_ps_politika",
      "Q339 (Issue #278): K1 1e PowerShell yurutme politikasi KAYIT DEFTERINDEN (alt surec YOK — "
      "surec kapsamli Bypass yanlis PASS verir) × npm .ps1 shim'i → WARN; okunamazsa OLCULEMEDI"),
+    ("ix_doctor_surum_yorumlayici",
+     "Q365①: K1 1f Claude Code surumu ↔ OLCULMUS taban (bilinen/bozuk dizgi → sahte FAIL yok, "
+     "taninmayan = OLCULEMEDI) + 1g hook yorumlayicisi settings'teki komutun PATH COZUMUYLE "
+     "(sys.executable DEGIL) `-c` probu — Store yonlendiricisi/PATH'te yok/eski surum → WARN"),
+    ("team_setup_gitignore_blok",
+     "Q365④: .gitignore YONETILEN BLOK dosyanin BASINDA, proje satirlari bayt-es ve SONRA "
+     "(son eslesen kazanir ⇒ projenin gizledigi yol ACILMAZ; gercek check-ignore, global config "
+     "yalitilmis), BOM/CRLF korunur, idempotent, bozuk isarette yazmaz, KAPSAM satiri her "
+     "kosumda, yeni gizlenen/acilan izlenmeyen dosya GORUNUR; sablon tek kaynak init_project.GITIGNORE"),
     ("session_start_origin_geriligi",
      "Q337 (Issue #276): core gerilik sayisi onbellekten degil HER cagrida yerel rev-list; "
      "pull sonrasi olmayan gerilik bildirilmez; fetch throttle (saatte 1) KORUNDU"),
@@ -795,7 +804,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/team_setup.py", ("O:shim_tazeleme", "O:overlay_materyalize_atomik",
                               "O:worktree_yasam_dongusu", "O:team_setup_hook_kablolama",
                               "O:core_fiziksel_kopya", "O:mcp_import_denetimi",
-                              "O:team_setup_sablon_sapmasi"),
+                              "O:team_setup_sablon_sapmasi", "O:team_setup_gitignore_blok"),
      "shim tazeleme yolu + `dosya_tamamla` idempotansi burada yasar; varsayilanin "
      "degismedigi YALNIZ bu korpusta olculur. `junctions()` tip-basina yalitimi "
      "(Q30: tek tipteki istisna kurulumun kalan 5 adimini atliyordu) atomik korpusta. "
@@ -806,7 +815,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # "bugun kossa GECEN bir proje uretir mi?" sorusunu yalniz elle template-provasi
     # yanitliyordu (ve iki tur ust uste kacirildi: C-HOOK-01 FAIL'i + dar sir kilidi).
     ("scripts/init_project.py", ("O:init_project_iskelet", "O:gitignore_tam_satir",
-                                 "O:precommit_kopya_surum_esligi", "O:mcp_import_denetimi"),
+                                 "O:precommit_kopya_surum_esligi", "O:mcp_import_denetimi",
+                                 "O:team_setup_gitignore_blok"),
      "uretilen iskeletin KAPIDAN gecmesi (C-HOOK-01 kuyruk tohumu) + `.gitignore` sablonunun "
      "sir kilidi/FP dengesi burada yasar; kanonik kilit satirlarinin TAM-SATIR okunmasi "
      "komsu korpusta (gitignore_tam_satir KANONIK bloguyla ayni sablonu tarif eder). "
@@ -847,11 +857,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "FP tuzakları (düz cast · `case` yüklemi · birim alanı) korpusla ölçüldü; kapsam daraltması burada yaşar"),
     ("scripts/ix_doctor.py", ("O:ix_doctor_kablolama", "O:d7_drift_imzasi", "O:core_fiziksel_kopya",
                               "O:mcp_import_denetimi", "O:ix_doctor_repo_mode",
-                              "O:ix_doctor_ps_politika"),
+                              "O:ix_doctor_ps_politika", "O:ix_doctor_surum_yorumlayici"),
      "korunan tool kümesi pre_tool_guard AST'inden TÜRETİLİR (elle kopya bayatladı: 6 vs 16) "
      "+ türetme kırılırsa PASS DEĞİL 'ÖLÇÜLEMEDİ'; D7 kolunun ölçütü ise `session_start` ile "
      "ORTAK tanımdan gelir (Q212 — kopya-tanım ayrışması bu korpusta çapalı); K5 import satırı "
-     "(Q335) · K3 repo_mode LITE SKIP sınırı (Q336) · K1 1e PowerShell politikası (Q339)"),
+     "(Q335) · K3 repo_mode LITE SKIP sınırı (Q336) · K1 1e PowerShell politikası (Q339) · "
+     "K1 1f/1g Claude Code sürümü + hook yorumlayıcısı (Q365①)"),
     ("scripts/utils/mcp_import_denetimi.py", ("O:mcp_import_denetimi",),
      "MCP import denetiminin TEK KAYNAĞI (team_setup smoke + ix_doctor K5 ortak; Q335); ortamı "
      "`.mcp.json` sap-adt env'inden, yoksa `init_project.py::MCP_JSON`'dan türetir"),
