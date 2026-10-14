@@ -381,6 +381,11 @@ _GH_A = re.compile(
     r"|ruleset\b"
     r"|label\s+(create|edit|delete|clone)"
     r")", re.IGNORECASE)
+# ⚠ `_GH_A_ACIK` / `_GH_B_ACIK` ARTIK HÜKÜM VERMEZ (repo-maskeleme turu, 2026-10-14):
+# ikisi segment METNİNDE arıyordu ⇒ başlık/gövde içindeki `--repo x` ya da `org/x` hedefsiz
+# mutasyonu "açık hedefli" sayıyordu (PATTERN #12: "komut" ile "komuttan bahis"). IGNORECASE
+# ayrıca `-r <reviewer>`'ı da `-R` sayıyordu. Hüküm `_gh_repo_degerleri(…, kesin=True)` ve
+# `_gh_konumsal_hedef_var` token'larından verilir; desenler geriye dönük ad olarak durur.
 _GH_A_ACIK = re.compile(r"(?<![\w-])(--repo[= ]\S+|-R[= ]\S+)", re.IGNORECASE)
 
 # GRUP B — hedefi KONUMSAL `<owner>/<name>` olarak alan `gh repo <alt>` komutları.
@@ -400,6 +405,84 @@ _GH_C = re.compile(_KOMUT_BASI + r"api\b", re.IGNORECASE)
 _GH_C_CWD = re.compile(r"\{(owner|repo)\}", re.IGNORECASE)
 
 _GH_MUTASYON = _GH_A  # geriye dönük ad
+
+# ── HEDEF YALNIZ GERÇEK TOKEN'DAN (repo-maskeleme turu, 2026-10-14) ─────────────────────
+# Eskiden `--repo`/`-R`/konumsal hedef segment METNİNDE aranıyordu: tırnaklı başlık/gövde
+# içinde geçen `--repo <ORG>/<PRIVATE>` gerçek `--repo <ORG>/<PUBLIC>`'i maskeliyor (sızıntı
+# gate'i private sanıp gövdeyi taramıyordu) ya da hedefsiz mutasyonu "açık hedefli"
+# sayıyordu (GH-HEDEF). Token'lar tırnak-duyarlı `_kelimeler`'den gelir; `gh` KOMUT
+# KONUMUNDA değilse (tırnak içi veri, `bash -c "…"`) `None` döner ve çağıran eski davranışa
+# kalır — o biçim bu turun kapsamı dışıdır (bkz. B82d açık sınır listesi).
+_GH_KISA_REPO = re.compile(r"^-([A-Za-z]*)R(.*)$", re.DOTALL)
+_GH_KONUMSAL = re.compile(r"[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*")
+
+
+def _gh_komut_tokenlari(seg: str):
+    """`gh` komut konumundaysa ondan SONRAKİ token'lar; değilse None."""
+    t = _kelimeler(seg)
+    i = 0
+    while i < len(t) and _ATAMA.match(t[i]):
+        i += 1
+    if i >= len(t) or t[i].replace("\\", "/").rsplit("/", 1)[-1].lower() not in ("gh", "gh.exe"):
+        return None
+    return t[i + 1:]
+
+
+def _gh_repo_degerleri(seg: str, kesin: bool = False) -> list:
+    """`gh` segmentindeki `--repo X` · `--repo=X` · `-R X` · `-RX` · `-R=X` DEĞERLERİ.
+
+    Her token konumu BAĞIMSIZ taranır (değer tüketen bir ayrıştırıcı, `--title -R`
+    gibi bir dizide gerçek `--repo`yu "değer" sanıp yutabilirdi). İki kip:
+      · `kesin=False` (sızıntı gate'i ADAY kümesi): kümelenmiş `-dR X` de sayılır; fazla
+        aday yalnız DAHA ÇOK tarama demektir (fail-closed yön).
+      · `kesin=True` (GH-HEDEF "açık hedef" hükmü — burada fazla aday GEVŞETMEdir):
+        yalnız `--repo`/`--repo=`/`-R`/`-R<değer>`; küme YOK (`-tRelease` = başlık
+        "Release" olur, pflag); boşluk taşıyan token (tırnaklı metin) bayrak SAYILMAZ;
+        büyük/küçük harf duyarlı (`-r` = reviewer). `gh` komut konumunda değilse eski
+        metin deseni (`_GH_A_ACIK`) korunur.
+    """
+    t = _gh_komut_tokenlari(seg)
+    if t is None:
+        if kesin:
+            m = _GH_A_ACIK.search(seg or "")
+            return [m.group(1)] if m else []
+        return []
+    out = []
+    for k, tok in enumerate(t):
+        if kesin and any(c.isspace() for c in tok):
+            continue
+        sonraki = t[k + 1] if k + 1 < len(t) else None
+        if tok == "--repo":
+            if sonraki is not None:
+                out.append(sonraki)
+        elif tok.startswith("--repo="):
+            out.append(tok[len("--repo="):])
+        elif not tok.startswith("--"):
+            m = _GH_KISA_REPO.match(tok)
+            if not m or (kesin and m.group(1)):
+                continue
+            kalan = m.group(2)[1:] if m.group(2).startswith("=") else m.group(2)
+            if kalan:
+                out.append(kalan)
+            elif sonraki is not None:
+                out.append(sonraki)
+    return [v for v in out if v.strip()] if kesin else out
+
+
+def _gh_konumsal_hedef_var(seg: str) -> bool:
+    """`gh repo <alt> <ORG>/<REPO>` — konumsal hedef BÜTÜN bir token olarak var mı.
+
+    Eskiden `_GH_B_ACIK` `<alt>`tan sonraki METİNDE aranıyordu ⇒ `--description "bkz
+    org/x"` hedef sayılıyordu. Token tam olarak `<owner>/<name>` biçiminde olmalı (URL ve
+    doldurulmamış `<ORG>/…` yer tutucusu tam eşleşmez — eski desenin iki dışlaması korunur).
+    Bilinen SINIR: değeri tam `org/x` olan bir bayrak (`--description org/x`) hâlâ hedef
+    sayılır — değer alan bayrak kümesi modellenmez (eskisiyle aynı, gevşeme değil).
+    `gh` komut konumunda değilse eski metin deseni korunur."""
+    t = _gh_komut_tokenlari(seg)
+    if t is None or len(t) < 2 or t[0].lower() != "repo":
+        b = _GH_B.search(seg or "")
+        return bool(b and _GH_B_ACIK.search((seg or "")[b.end():]))
+    return any(_GH_KONUMSAL.fullmatch(tok) for tok in t[2:])
 
 
 
@@ -428,12 +511,12 @@ def _gh_hedef_belirsiz_segment(komut: str) -> str:
     `gh api user` / `graphql` / `rate_limit` ve PROJECT_BOOTSTRAP STEP 1 kırılıyordu
     (2026-07-10 regresyon testi).
     """
-    if _GH_A.search(komut) and not _GH_A_ACIK.search(komut):
+    acik_bayrak = bool(_gh_repo_degerleri(komut, kesin=True))
+    if _GH_A.search(komut) and not acik_bayrak:
         return ("hedef repo BELİRSİZ — `gh` repoyu cwd'den çıkarır ve `core/` bir junction'dır; "
                 "yanlış repoya yazma/yayın GERİ ALINAMAZ. `--repo <ORG>/<REPO>` AÇIKÇA ver.")
     if _GH_B.search(komut):
-        kuyruk = komut[_GH_B.search(komut).end():]  # type: ignore[union-attr]
-        if not (_GH_B_ACIK.search(kuyruk) or _GH_A_ACIK.search(komut)):
+        if not (_gh_konumsal_hedef_var(komut) or acik_bayrak):
             return ("hedef repo BELİRSİZ — `gh repo <alt>` argümansız kaldığında cwd'ye düşer. "
                     "Hedefi konumsal ver: `gh repo <alt> <ORG>/<REPO>`.")
     if _GH_C.search(komut) and _GH_C_CWD.search(komut):
@@ -680,19 +763,32 @@ def _gh_api_ucu(seg: str) -> str:
     return ""
 
 
+def _hay_hedefi(hay: str) -> tuple:
+    """`hay`'in TEK sorgu hedefi: ("repo", X) ya da ("cwd", yol). İlk `--repo`, yoksa ilk
+    `cd`, yoksa proje kökü. ⚠ Bu bir KARAR değildir — metindeki ilk eşleşmeyi alır; karar
+    `_hedef_public_mu`'dadır (aday birleşimi). Yalnız tek-aday sorgusu + tekilleştirme anahtarı."""
+    m = _ARG_REPO.search(hay or "")
+    if m:
+        return "repo", m.group(1)
+    c = _CD_PREFIX.search(hay or "")
+    cwd = _win_yol(c.group(1)) if c else str(_PROJ_ROOT)
+    if not Path(cwd).is_dir():              # çözülemeyen cd → proje köküne düş
+        cwd = str(_PROJ_ROOT)               #   (yoksa cwd hatası fail-closed'a kaçar)
+    return "cwd", cwd
+
+
 def _repo_public_mu(hay: str) -> tuple:
-    """Görünürlük CANLI sorulur (gh repo view). Kararsızsa FAIL-CLOSED (public say)."""
+    """TEK aday için görünürlük CANLI sorulur (gh repo view). Kararsızsa FAIL-CLOSED
+    (public say). ⛔ Hedef KARARI için doğrudan çağırma: `hay`'deki ilk `--repo`/`cd`
+    metin içinden gelebilir (maskeleme) — `_hedef_public_mu` kullan."""
     import subprocess
-    m = _ARG_REPO.search(hay)
+    tur, deger = _hay_hedefi(hay)
     argv = ["gh", "repo", "view", "--json", "isPrivate,nameWithOwner"]
     cwd = None
-    if m:
-        argv.insert(3, m.group(1))
+    if tur == "repo":
+        argv.insert(3, deger)
     else:
-        c = _CD_PREFIX.search(hay)
-        cwd = _win_yol(c.group(1)) if c else str(_PROJ_ROOT)
-        if not Path(cwd).is_dir():          # çözülemeyen cd → proje köküne düş
-            cwd = str(_PROJ_ROOT)           #   (yoksa cwd hatası fail-closed'a kaçar)
+        cwd = deger
     try:
         r = subprocess.run(argv, capture_output=True, text=True, timeout=15, cwd=cwd, shell=False)
         if r.returncode != 0:
@@ -701,6 +797,111 @@ def _repo_public_mu(hay: str) -> tuple:
         return (not d.get("isPrivate", True)), d.get("nameWithOwner", "?")
     except Exception:
         return True, "gorunurluk-sorulamadi(fail-closed)"
+
+
+# ── ADAY BİRLEŞİMİ (repo-maskeleme turu, 2026-10-14) ───────────────────────────────────
+# VAKA (ölçüldü, ağsız + canlı CLI): yayın/commit segmentinin hedefi `hay` METNİNDEKİ ilk
+# `--repo` / ilk `cd` / ilk `git -C`'den çözülüyordu. Tırnaklı başlık/gövde/mesaj içindeki
+# `--repo <ORG>/<PRIVATE>` (ya da `cd <private-yol>`, ya da çok satırlı mesajda
+# `\ngit -C <private-yol>`) gerçek PUBLIC hedefi maskeliyor, gövde TARANMADAN geçiyordu
+# (rc 0). Ayrıca gh'nin kısa bayrağı `-R` hiç tanınmıyordu: `gh pr create -R <public>`
+# private proje kökünden cwd'ye düşüp aynı şekilde geçiyordu.
+_HEDEF_ADAY_TAVANI = 5
+
+
+def _hedef_public_mu(eski_hay: str, adaylar: list) -> tuple:
+    """Sızıntı gate'lerinin hedef KARARI. Aday kümesi = ESKİ tek-aday (`eski_hay`: main'in
+    birebir sorgusu, metnin ilk `--repo`/`cd`'si) ∪ GERÇEK token adayları (`adaylar`: her
+    biri `--repo X` · `cd <yol>` · "" = proje kökü). BİRİ public ise public.
+
+    Eski aday neden tutuluyor: (1) main'e göre gevşeme YAPISAL olarak 0 — main'in public
+    dediği her girdide aynı sorgu aynen sorulur; (2) PATTERN #12 — yeni token görüşü
+    kelime/segment sınırını eskisinden farklı çizerse sonuç en fazla DAHA ÇOK taramadır,
+    sessiz geçiş olamaz. Bedel (bilinçli, lider kararı 2026-10-14): metinde public geçen
+    private hedefli yayının/commit'in mevcut FP'si aynen KALIR (daraltma = gevşetme).
+    Maliyet: anahtar (`_hay_hedefi`) başına TEKİL `gh repo view`, ilk public'te durur;
+    tekil aday sayısı `_HEDEF_ADAY_TAVANI`'nı aşarsa sorgusuz FAIL-CLOSED."""
+    sorgular, gorulen = [], set()
+    for h in [eski_hay] + list(adaylar):
+        anahtar = _hay_hedefi(h)
+        if anahtar in gorulen:
+            continue
+        gorulen.add(anahtar)
+        sorgular.append(h)
+    if len(sorgular) > _HEDEF_ADAY_TAVANI:
+        return True, "hedef-aday-tavani-asildi(fail-closed)"
+    ilk_repo = ""
+    for h in sorgular:
+        public, repo = _repo_public_mu(h)
+        if public:
+            return True, repo
+        ilk_repo = ilk_repo or repo
+    return False, ilk_repo or "?"
+
+
+def _baglam_cwd_hay(segler: list, idx: int) -> str:
+    """Gerçek kabuk bağlamının cwd adayı: <idx>'ten önceki SON `cd` segmentinin YOL
+    token'ı (`cd <yol>`); bağlam yoksa "" (= proje kökü). `_kabuk_baglami`'nın token hâli."""
+    onceki = [s for s in segler[:idx] if re.match(r"^\s*cd\s+", s)]
+    if not onceki:
+        return ""
+    t = _kelimeler(onceki[-1])
+    return f"cd {t[1]}" if len(t) > 1 else ""
+
+
+def _gh_hedef_adaylari(segler: list, idx: int, seg: str, api_repo: str = "") -> list:
+    """`gh` yayın segmentinin GERÇEK hedef adayları: her `--repo`/`-R` değeri (+ `gh api`
+    yol hedefi); hiçbiri yoksa gerçek bağlam cwd'si (gh `--repo`suz cwd'ye düşer)."""
+    repolar = _gh_repo_degerleri(seg) + ([api_repo] if api_repo else [])
+    if repolar:
+        return [f"--repo {r}" for r in repolar]
+    return [_baglam_cwd_hay(segler, idx)]
+
+
+_GIT_HEDEF_UST = frozenset({"-C", "--git-dir", "--work-tree"})
+_GIT_HEDEF_ORTAM = frozenset({"GIT_DIR", "GIT_WORK_TREE"})
+
+
+def _mutlak_yol_mu(y: str) -> bool:
+    return bool(os.path.isabs(y) or _POSIX_SURUCU.match(y) or re.match(r"^[A-Za-z]:[\\/]", y))
+
+
+def _git_hedef_adaylari(segler: list, idx: int, seg: str) -> list:
+    """`git commit` segmentinin GERÇEK depo adayları: komut konumundaki `git`in üst
+    seçenekleri `-C` · `--git-dir` · `--work-tree` (+ `GIT_DIR=`/`GIT_WORK_TREE=` önekleri);
+    yoksa gerçek bağlam cwd'si. Göreli yol bağlam `cd`sine göre çözülür. `.git` ile biten
+    git-dir'in üst dizini sorulur (gh depo kökünden görünürlük okur)."""
+    t = _kelimeler(seg)
+    yollar, i = [], 0
+    while i < len(t) and _ATAMA.match(t[i]):
+        ad, _, deger = t[i].partition("=")
+        if ad in _GIT_HEDEF_ORTAM and deger:
+            yollar.append(deger)
+        i += 1
+    if i < len(t) and t[i].replace("\\", "/").rsplit("/", 1)[-1].lower() in ("git", "git.exe"):
+        i += 1
+        while i < len(t) and t[i].startswith("-"):
+            ad, esit, deger = t[i].partition("=")
+            if ad in _GIT_HEDEF_UST:
+                if esit:
+                    yollar.append(deger)
+                elif i + 1 < len(t):
+                    yollar.append(t[i + 1])
+                    i += 1
+            elif t[i] in _GIT_UST_DEGERLI:
+                i += 1
+            i += 1
+    baglam = _baglam_cwd_hay(segler, idx)
+    if not yollar:
+        return [baglam]
+    taban = baglam[3:] if baglam else ""
+    out = []
+    for y in yollar:
+        y = re.sub(r"[\\/]\.git[\\/]?$", "", y) or y
+        if taban and not _mutlak_yol_mu(y):
+            y = taban.rstrip("/\\") + "/" + y
+        out.append(f"cd {y}")
+    return out
 
 
 def _gh_pr_public_leak(komut: str, ham: str) -> str:
@@ -732,7 +933,9 @@ def _gh_pr_public_leak(komut: str, ham: str) -> str:
         api_repo = _gh_api_hedef_repo(seg)
         if api_repo:
             hay = f"--repo {api_repo}\n" + hay
-        public, repo = _repo_public_mu(hay)
+        # Repo-maskeleme (2026-10-14): `hay` yalnız ESKİ aday; karar gerçek token
+        # adaylarıyla birleşimden (`_hedef_public_mu`).
+        public, repo = _hedef_public_mu(hay, _gh_hedef_adaylari(segler, i, seg, api_repo))
         if not public:
             continue
         metin, hata = _yayinlanan_metin(seg, ham, govdeler)
@@ -853,7 +1056,10 @@ def _git_commit_public_leak(komut: str, ham: str) -> str:
         gc = _GIT_C_PATH.search(seg)
         if gc:
             hay = f"cd {gc.group(1) or gc.group(2) or gc.group(3)}\n" + hay
-        public, repo = _repo_public_mu(hay)
+        # Repo-maskeleme (2026-10-14): `_GIT_C_PATH` ve `_repo_public_mu` METİNDE arar
+        # (mesajdaki `--repo x` / `cd x` / `\ngit -C x` hedef olurdu) ⇒ `hay` yalnız ESKİ
+        # aday; gerçek adaylar komut konumundaki `git`in üst seçeneklerinden.
+        public, repo = _hedef_public_mu(hay, _git_hedef_adaylari(segler, i, seg))
         if not public:
             continue
         metin, hata = _git_commit_mesaji(seg, ham, govdeler)
