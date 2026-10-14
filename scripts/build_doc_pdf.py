@@ -6,6 +6,10 @@ için. ZSD001'e özgü FIG/portal placeholder mantığı YOK (o build_kd_pdf.py'
   node scripts/html_to_pdf.js <html> <pdf>
 
 Kullanım: python scripts/build_doc_pdf.py <girdi.md> <cikti.html> ["Doküman Başlığı"]
+          [--prefix <ad>] [--pdf [--sayfa-no] [--yer-imi]]
+  --sayfa-no / --yer-imi (Q366, OPT-IN): html_to_pdf.js'e aynen geçirilir — "Sayfa X / Y"
+  altbilgisi + başlıklardan PDF yer imi. Bayraksız PDF eskisiyle aynıdır (eski dokümanın
+  yeniden üretiminde kullanma: md5 değişir, check_doc_artifact_md5 işaretler).
 """
 import os
 import re
@@ -113,8 +117,13 @@ def build(md_path, html_path, title=None, diagram_prefix=None):
     print("OK | <img>:", body.count("<img"), "| <figure>:", body.count("<figure>"))
 
 
-def to_pdf(html_path, pdf_path=None):
+PDF_BAYRAKLARI = ("--sayfa-no", "--yer-imi")   # html_to_pdf.js ile AYNI küme (opt-in, Q366)
+
+
+def to_pdf(html_path, pdf_path=None, bayraklar=()):
     """HTML → PDF (node scripts/html_to_pdf.js).
+
+    `bayraklar`: PDF_BAYRAKLARI alt kümesi; boşsa komut satırı ESKİSİYLE AYNIDIR.
 
     ⛔ MUTLAK YOL GÖMÜLMEZ. `html_to_pdf.js` bu script'in KOMŞUSUDUR; yolu `__file__`den
     türetilir. (Gerekçe: paket-başına kopyalanan eski üreticiler `BASE = r'<eski-kök>'`
@@ -126,9 +135,17 @@ def to_pdf(html_path, pdf_path=None):
     if not os.path.exists(pdfjs):
         raise SystemExit("html_to_pdf.js bulunamadı: %s" % pdfjs)
     pdf_path = pdf_path or (html_path[:-5] + ".pdf" if html_path.endswith(".html") else html_path + ".pdf")
-    r = subprocess.run(["node", pdfjs, os.path.abspath(html_path), os.path.abspath(pdf_path)],
-                       capture_output=True, text=True)
+    bilinmeyen = [b for b in bayraklar if b not in PDF_BAYRAKLARI]
+    if bilinmeyen:
+        raise SystemExit("bilinmeyen PDF bayrağı: %s" % bilinmeyen)
+    r = subprocess.run(["node", pdfjs, os.path.abspath(html_path), os.path.abspath(pdf_path)]
+                       + list(bayraklar),
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     print(r.stdout.strip() or r.stderr.strip())
+    if r.stdout.strip() and r.stderr.strip():
+        # rc 0'da da stderr'e UYARI düşer (html_to_pdf `--yer-imi` üretim sonrası denetimi);
+        # eski `stdout or stderr` biçimi onu YUTUYORDU (bug-gate turu 2026-10-12).
+        print(r.stderr.strip())
     if r.returncode != 0:
         raise SystemExit("PDF FAIL: " + r.stderr)
     return pdf_path
@@ -138,10 +155,13 @@ if __name__ == "__main__":
     argv = sys.argv[1:]
     want_pdf = "--pdf" in argv
     prefix, args, i = None, [], 0
+    pdf_bayrak = []
     while i < len(argv):
         a = argv[i]
         if a == "--pdf":
             i += 1
+        elif a in PDF_BAYRAKLARI:
+            pdf_bayrak.append(a); i += 1
         elif a.startswith("--prefix="):
             prefix = a.split("=", 1)[1]; i += 1
         elif a == "--prefix" and i + 1 < len(argv):
@@ -150,10 +170,13 @@ if __name__ == "__main__":
             args.append(a); i += 1
     if len(args) < 2:
         print("kullanım: python scripts/build_doc_pdf.py <girdi.md> <cikti.html> "
-              "[başlık] [--prefix <ad>] [--pdf]")
+              "[başlık] [--prefix <ad>] [--pdf [--sayfa-no] [--yer-imi]]")
         print("  --prefix: mermaid PNG ön-eki. VERİLMEZSE çıktı dosya adından türetilir")
         print("            (aynı klasördeki iki dokümanın diyagramları çakışmaz).")
         sys.exit(2)
+    if pdf_bayrak and not want_pdf:
+        print("HATA: %s yalnız --pdf ile anlamlıdır" % " ".join(pdf_bayrak))
+        sys.exit(2)
     build(args[0], args[1], args[2] if len(args) > 2 else None, diagram_prefix=prefix)
     if want_pdf:
-        to_pdf(args[1])
+        to_pdf(args[1], bayraklar=tuple(pdf_bayrak))
