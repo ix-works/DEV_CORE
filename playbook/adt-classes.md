@@ -382,6 +382,27 @@ hata yalnız canlı PUT'ta çıkar.
 📌 İlgili: `claude/memory-seed/feedback_detached-leading-abapdoc-class-push-400.md` (yetim-yorum
 teşhisi) · BE-10b.
 
+### 24.11 Push'tan ÖNCE okunacak iki sözdizimi sınırı (doküman — araç/gate YOK; 2026-10-12)
+
+Push'tan önce kaynağı **okuyarak** kontrol et; ikisi de yerel kapılarda değil, SAP'nin sözdizimi
+denetiminde/kaydetmede çıkar:
+
+1. **`INTO CORRESPONDING FIELDS OF` + satır içi bildirim birlikte YAZILMAZ** —
+   `SELECT … INTO CORRESPONDING FIELDS OF TABLE @DATA(lt_x)` geçersizdir: satır içi bildirimde hedef tip
+   SELECT listesinden **türetilir**, `CORRESPONDING` ise **var olan** bir hedefin bileşenlerine ad eşlemesi
+   ister — ikisi aynı hedefte anlamsızdır. Ya `INTO TABLE @DATA(lt_x)` (tip SELECT listesinden) ya da
+   önceden tanımlı hedef + `INTO CORRESPONDING FIELDS OF TABLE @lt_x`.
+2. **ABAP tanımlayıcı en çok 30 karakter** — sınıf, arayüz, metot, değişken, tip, yapı bileşeni adları.
+   Ad alanlı (`/NS/…`) adlarda sayım **ad alanı dahil toplamdır** (≤30): sınıf adı alanı 30 karakterlik
+   tiptir ve ad alanı adın içinde saklanır (ölçüldü 2026-10-12: `DD03L` SEOCLASS-CLSNAME uzunluğu 30; `/` ile başlayan
+   sınıflar arasında en uzun ad 30 karakter, ad alanı dahil). Uzun ad genelde ek ve
+   ön-ek birleşiminde taşar (`lt_` + açıklayıcı ad + `_tab`); adı kısalt, anlamı yorumda değil adda tut.
+
+⚠ **Kanıt düzeyi:** iki kural da dış bir çekirdeğin push-öncesi tarama fikrinden alındı ve ABAP dil
+kuralı olarak bilinir. Madde 2'nin sınıf adı ayağı DDIC'te ölçüldü (yukarıda); madde 1 ve madde 2'nin
+diğer tanımlayıcı türleri bu evde **canlı aktivasyonla ayrıca ölçülmedi** (DOĞRULANMADI). Tarama betiği
+alınmadı (ADR 0019 — önce doküman; yukarıdaki "Ön-kapı adayı" notuyla aynı merdiven).
+
 ---
 
 ## 20. ABAP Class — Inline Data / OSQLC Tip Çakışması

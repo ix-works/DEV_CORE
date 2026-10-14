@@ -30,6 +30,36 @@ denen eşik **zaten geçilmişti**. Hiçbiri belgeyi okuyarak görülemezdi.
 | C-4 | **Paket / inaktif** | Objeler doğru pakette mi; **sessiz inaktif** obje var mı | `adt_package_contents` + inactive-worklist. ⛔ "aktif" metadata'sı ≠ **kodun** aktif |
 | C-5 | **Transport** | Açık TR var mı, hangi objeleri taşıyor | ⛔ **`adt_transport_list` SAHTE-SIFIR döndürebilir** — `count: 0` + `shape_recognized: true` iken bile sistemde açık transport bulunduğu **ölçüldü (2026-08-19)**. Transport **`E070` / `E071`'den** okunur; `adt_transport_list`'in sıfırı tek başına kanıt DEĞİLDİR *(kısmi kök-fix 2026-08-10 `infra-changelog`'ta; bu tarihten sonraki nüks bu satırın gerekçesi — **bu turda bağımsız repro edilmedi**, lider ölçümüdür)* |
 
+## Küme sorgusu reçetesi (C-1 / C-2'yi toplu ölçmek için)
+
+Belge onlarca tablo-alanı / FM / obje adı taşıyorsa ad ad arama yerine **küme sorgusu**: belgedeki
+adları gruplara ayır, her grup için **tek** salt-okur sorgu koş, dönen kümeyi belgedeki kümeyle
+**küme farkı** olarak karşılaştır. Bir TS için tipik olarak 6-7 sorgu yeter.
+
+| Grup | Kaynak (salt-okur) | Sorgu biçimi |
+|---|---|---|
+| Tablo/yapı alanları | `DD03L` (aktif sürüm `AS4LOCAL = 'A'`) | `WHERE tabname IN ('…','…') AND fieldname IN ('…','…')` → (tablo, alan) çiftlerini al |
+| Tablo/yapı varlığı | `DD02L` | `WHERE tabname IN (…)` |
+| FM varlığı | `TFDIR` | `WHERE funcname IN (…)` |
+| FM parametreleri | FM parametre tablosu (ör. `FUPARAREF`) | `WHERE funcname IN (…)` — alan adlarını önce tek satır okuyarak doğrula (**DOĞRULANMADI**) |
+| Repository objeleri | `TADIR` | `WHERE object = '…' AND obj_name IN (…)` |
+
+**Beklenti yönü belgeden okunur — iki yön AYRI raporlanır:**
+- Belgenin **tükettiği** (okuduğu/çağırdığı) her ad canlıda **VAR olmalı** ⇒ belge kümesi − sorgu kümesi = **boş** olmalı; boş değilse her eleman bir bulgu.
+- Belgenin **üreteceği** her Z adı canlıda **YOK olmalı** ⇒ sorgu kümesi ∩ üretilecek küme = **boş** olmalı; değilse ad çakışması (C-1).
+
+**Tuzaklar:**
+- ⛔ **POZİTİF KONTROL:** her sorgunun `IN` listesine var olduğunu bildiğin bir ad koy; dönmüyorsa sorgu
+  çalışmamıştır, sıfır sonuç **"yok" değildir** (C-1 ile aynı ilke).
+- ⛔ **Uzun `IN` listesi tek satıra yazılmaz:** serbest SQL ucunun satır uzunluğu sınırı var
+  (`adt-mcp.md` "`adt_sql_query` — ayrıntı") — listeyi satırlara böl ya da sorguyu ikiye ayır.
+- `DD03L` yapı içindeki `.INCLUDE`/`.APPEND` satırlarını da döndürür; alan ararken bunları ayır.
+- Standart CDS üzerinden okuma DCL yüzünden **sessizce 0** dönebilir (`adt-cds.md` CDS-DCL-01) — DDIC
+  tabloları bu reçetenin doğru yüzeyidir.
+
+> prior-art: yok — bu sayfada yalnız ad ad arama (C-1) vardı; reçete dış bir referans projedeki toplu
+> teyit fikrinden uyarlandı (2026-10-12).
+
 ## Rapor biçimi (belgeye EK olarak işlenir)
 
 | İddia (belge §) | Ölçüm yöntemi | Sonuç | Belge etkisi |

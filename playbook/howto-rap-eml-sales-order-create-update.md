@@ -165,6 +165,10 @@ ENDMETHOD.
 ```
 Uyarı: `io_msg->m_severity` DOĞRUDAN erişilir (`io_msg->if_abap_behv_message~m_severity` YANLIŞ →
 "class does not contain interface" aktivasyon hatası).
+⚠ `m_severity` bir **ENUM** tipidir — `'E'` gibi karakter literaliyle karşılaştırılamaz; sabitle
+(`if_abap_behv_message=>severity-error`) ya da `CONV`/`CASE` ile ele alınır. Mesaj kimliği için
+yukarıdaki gibi `CAST if_t100_message( … )->t100key`. **DOĞRULANMADI** (dış kaynak bildirimi, 2026-10-12;
+bu evde karşılaştırma hatası canlı üretilmedi — yazmadan önce aktivasyonla teyit et).
 ⛔ **Eski not GERİ ALINDI (2026-07-31):** *"classrun sınıfını taze isimle yarat — sil-yarat aynı
 isim binding'i bozuyor"* **YANLIŞTI** (denendi, çözmedi, çöp obje bıraktı). `"does not implement
 ...~main"` mesajı **doğrudur**: ya sınıf **aktive edilmemiştir** ya da çağıran süreç **bayat
