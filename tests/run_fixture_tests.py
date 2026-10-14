@@ -718,6 +718,22 @@ OZEL_TESTLER = [
     ("adlandirma_uyarisi",
      "Q369⑤: DDIC yaratiminda standards/01 §4.4.5 onek UYARISI (yalniz uyari, ok degismez); "
      "adt_post_shell davranis + 3 composite AST; --korpus ile yerel FP olcumu"),
+    # 2026-10-12 (Q366 / Q371): dis repo turu Part B. P*/O* vektorleri node+playwright+msedge+
+    # markdown+PyMuPDF / openpyxl ister; yoksa ATLANDI basar (CI bu paketleri KURMAZ).
+    ("pdf_sayfa_no_yer_imi",
+     "Q366 html_to_pdf --sayfa-no/--yer-imi: bayraksiz == taban (sayfa+metin), her sayfada "
+     "'Sayfa i / N', yer imi = baslik sayisi, satira kayan baslikta bosluk, @page{margin:0} -> exit 2 "
+     "(16 vektor + 5 mutasyon; bagimlilik yoksa P* ATLANDI)"),
+    ("atc_toplu_ayiklama",
+     "Q371-1 ATC toplu: satir kaymasinda parmak izi AYNI, kume = GUID + mesaj sekli, obje = bulgu "
+     "konumu, tavan esitligi KESILMIS OLABILIR (cikis 4), ortam zaman asimi ezilmez, canli bicim "
+     "(;start= / SINIF=>METOT) (27 vektor + 7 mutasyon)"),
+    ("xlsx_yardimci",
+     "Q371-2 xlsx: goreli iliski hedefi (kok/workbook/sayfa ../), External dokunulmaz, bastaki sifir "
+     "round-trip, SAYI hucre raporlanir, anahtarli kiyas (9 vektor + 3 mutasyon; openpyxl yoksa O* ATLANDI)"),
+    ("parity_probe_diff",
+     "Q371-5 parity_probe --diff: _zaman yok sayilir, OLCULEMEDI fark/temiz degil (cikis 3), "
+     "skaler liste kume farki, gercek iki kosum (10 vektor + 2 mutasyon)"),
 ]
 
 
@@ -1448,6 +1464,19 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "`_ATIF_SATIRI` alias'i tek kaynaktan (K2b AST capasi)"),
     # ⚠ `scripts/git-hooks/pre-commit` BILEREK satirsiz: satir eklemek onu fail-closed
     # TAM suitten tek korpusa DARALTIRDI (C bolumu shim'i kullanir ama tek tuketici degil).
+    # ── Q366 / Q371 (2026-10-12): dis repo turu Part B yeni araclar ──────────
+    ("scripts/html_to_pdf.js", ("O:pdf_sayfa_no_yer_imi",),
+     "opt-in --sayfa-no/--yer-imi; bayraksiz secenek literali tabanla AYNI (S1/P1)"),
+    ("scripts/build_doc_pdf.py", ("O:pdf_sayfa_no_yer_imi",),
+     "PDF bayraklarini html_to_pdf.js'e gecirir; bayraksiz komut ESKISI (S4)"),
+    ("scripts/atc_toplu_ayikla.py", ("O:atc_toplu_ayiklama",),
+     "ATC toplu ayiklama: satirsiz parmak izi + GUID'li kume + tavan/kesilme + zaman asimi"),
+    ("scripts/run_atc_check.py", ("O:atc_toplu_ayiklama",),
+     "atc_bulgulari() yeniden kullanim girisi (R1: max_verdicts lib'e AYNEN)"),
+    ("scripts/xlsx_yardimci.py", ("O:xlsx_yardimci",),
+     "metin-guvenli xlsx + goreli iliski hedefi (cl_fdt_xl CORE005 on kosulu)"),
+    ("scripts/parity_probe.py", ("O:parity_probe_diff",),
+     "--diff: _zaman yok sayilir, OLCULEMEDI ayri, skaler liste kume farki"),
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla

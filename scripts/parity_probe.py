@@ -14,14 +14,32 @@ KULLANIM (proje kokunde, ornegin C:\\IX\\<PROJE>):
     python parity_probe.py                 # tam olcum (ix_doctor + validators dahil)
     python parity_probe.py --no-doctor     # ix_doctor'u atla (hizli, agsiz)
     python parity_probe.py --anon          # kullanici adi/host maskele
+    python parity_probe.py --diff ONCE.json SONRA.json   # iki raporu KARSILASTIR (olcum yapmaz)
 Cikti: parity-<host>-<YYYYMMDD-HHMM>.json (proje kokune) + ekrana ozet.
+
+--diff (2026-10-12, Q371-5): iki rapor (ayni makinede ONCE/SONRA ya da iki makine) alan alan
+kiyaslanir; HICBIR olcum kosmaz, ag/SAP yok. `_zaman` yok sayilir. Skaler listeler TAM degerle
+COKLU-KUME farki (`+N [...]  -M [...]`, yalniz sira farki = ayni) olarak, sozluk listeleri
+sira-indeksiyle duzlestirilerek kiyaslanir. "OLCULEMEDI" degeri
+FARK sayilmaz ve TEMIZ de sayilmaz — ayri listelenir. Cikis: 0 fark yok · 1 fark var ·
+2 girdi okunamadi / parity raporu degil · 3 fark yok AMA olculemeyen alan var.
 """
 from __future__ import annotations
 import argparse, hashlib, json, os, platform, re, socket, subprocess, sys, tempfile
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-SURUM = "parity_probe/1.2"
+SURUM = "parity_probe/1.3"
+
+# --diff: her karsilastirmada (ayni olsa bile) basilan alanlar — playbook "cekirdek guncelleme"
+# adim 8'in kullaniciya verilmesini istedigi olcumler + harness/core kimligi.
+ONE_CIKAN = (
+    "harness.claude_version", "core.head", "core.origin_main_gerisinde",
+    "claude_katmani.core_kopyasi_sha16", "memory.ders_dosyasi_sayisi",
+    "mcp_ve_profil.aktif_paket_drift", "kosumlar.ix_doctor.ozet.fail", "kosumlar.ix_doctor.ozet.warn",
+)
+DIFF_YOK_SAY = {"_zaman"}
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -61,13 +79,137 @@ def hook_envanteri(settings: dict):
     return sorted(out)
 
 
+def _olculemedi_mi(v) -> bool:
+    if isinstance(v, str):
+        return v.upper().startswith("OLCULEMEDI")
+    if isinstance(v, list):
+        return any(_olculemedi_mi(x) for x in v)
+    return False
+
+
+def duzlestir(d, on="") -> dict:
+    """Ic ice sozlugu `a.b.c` anahtarlarina indirir. Skaler liste DEGER kalir (kume farki icin);
+    sozluk iceren liste `a[0].b` diye acilir."""
+    out = {}
+    if isinstance(d, dict):
+        for k, v in d.items():
+            out.update(duzlestir(v, "%s.%s" % (on, k) if on else str(k)))
+    elif isinstance(d, list) and any(isinstance(x, (dict, list)) for x in d):
+        out[on + ".#adet"] = len(d)
+        for i, x in enumerate(d):
+            out.update(duzlestir(x, "%s[%d]" % (on, i)))
+    else:
+        out[on] = d
+    return out
+
+
+def _kisa(v, n=110) -> str:
+    """YALNIZ ekrana basmak icin kisaltir. ⛔ Karsilastirmada KULLANILMAZ: ilk n-1 karakteri ayni,
+    sonu farkli iki deger kisaltilinca esit gorunur (bug-gate 2026-10-12: `... FAIL=0` ↔ `... FAIL=3`
+    "fark yok" diyordu)."""
+    s = json.dumps(v, ensure_ascii=False)
+    return s if len(s) <= n else s[:n - 1] + "…"
+
+
+def _kanonik(v) -> str:
+    """Karsilastirma anahtari: TAM deger, anahtar sirasindan bagimsiz (kisaltma YOK)."""
+    return json.dumps(v, ensure_ascii=False, sort_keys=True)
+
+
+def _liste_farki(x: list, y: list):
+    """Skaler liste COKLU-KUME farki (tam degerle). Doner: (eklenen, cikan) — her eleman
+    sayisi kadar tekrarlanir; ['ab','ab','c'] -> ['ab','c','c'] icin eklenen ['c'], cikan ['ab']."""
+    cx, cy = Counter(map(_kanonik, x)), Counter(map(_kanonik, y))
+    ac = lambda c: [json.loads(k) for k in sorted(c.elements())]
+    return ac(cy - cx), ac(cx - cy)
+
+
+def fark(once: dict, sonra: dict) -> dict:
+    a, b = duzlestir(once), duzlestir(sonra)
+    for k in DIFF_YOK_SAY:
+        a.pop(k, None)
+        b.pop(k, None)
+    out = {"farkli": [], "yalniz_once": sorted(set(a) - set(b)), "yalniz_sonra": sorted(set(b) - set(a)),
+           "olculemedi": [], "ayni": 0}
+    for k in sorted(set(a) & set(b)):
+        x, y = a[k], b[k]
+        if _olculemedi_mi(x) or _olculemedi_mi(y):
+            out["olculemedi"].append((k, x, y))
+        elif x == y:
+            out["ayni"] += 1
+        elif isinstance(x, list) and isinstance(y, list):
+            eklenen, cikan = _liste_farki(x, y)
+            if not eklenen and not cikan:
+                out["ayni"] += 1      # skaler liste: yalniz SIRA farki fark DEGIL (coklu-kume esit)
+            else:
+                out["farkli"].append((k, x, y, eklenen, cikan))
+        else:
+            out["farkli"].append((k, x, y, None, None))
+    return out
+
+
+def fark_modu(yol_once: str, yol_sonra: str) -> int:
+    raporlar = []
+    for y in (yol_once, yol_sonra):
+        try:
+            r = json.loads(Path(y).read_text(encoding="utf-8"))
+        except Exception as e:
+            print("[KULLANIM] okunamadi: %s (%s: %s)" % (y, type(e).__name__, e))
+            return 2
+        if not isinstance(r, dict) or not str(r.get("_surum", "")).startswith("parity_probe/"):
+            print("[KULLANIM] %s bir parity_probe raporu degil (_surum yok)" % y)
+            return 2
+        raporlar.append(r)
+    o, s = raporlar
+    d = fark(o, s)
+    p = print
+    p("=" * 74)
+    p("PARITY DIFF  ONCE=%s (%s, %s)" % (yol_once, o.get("_surum"), o.get("_zaman")))
+    p("             SONRA=%s (%s, %s)" % (yol_sonra, s.get("_surum"), s.get("_zaman")))
+    if o.get("_surum") != s.get("_surum"):
+        p("  ⚠ SURUM FARKLI — bir taraftaki yeni/eksik alanlar surum farkindan gelebilir")
+    p("=" * 74)
+    da, db = duzlestir(o), duzlestir(s)
+    p("ONE CIKAN:")
+    for k in ONE_CIKAN:
+        x, y = da.get(k, "<yok>"), db.get(k, "<yok>")
+        p("  %-4s %-40s %s -> %s" % ("=" if x == y else "FARK", k, _kisa(x, 40), _kisa(y, 40)))
+    p("FARKLAR:")
+    for k, x, y, ek, cik in d["farkli"]:
+        if ek is not None:
+            ge, gc = _kisa(ek, 60), _kisa(cik, 60)
+            if ge == gc:   # kisaltilmis hali ayni gorunuyor — farki gizlememek icin TAM bas
+                ge, gc = _kisa(ek, 10 ** 9), _kisa(cik, 10 ** 9)
+            p("  [FARK] %s  +%d %s  -%d %s" % (k, len(ek), ge, len(cik), gc))
+        else:
+            p("  [FARK] %s: %s -> %s" % (k, _kisa(x, 50), _kisa(y, 50)))
+    for k in d["yalniz_once"]:
+        p("  [YALNIZ-ONCE] %s = %s" % (k, _kisa(da[k], 60)))
+    for k in d["yalniz_sonra"]:
+        p("  [YALNIZ-SONRA] %s = %s" % (k, _kisa(db[k], 60)))
+    for k, x, y in d["olculemedi"]:
+        p("  [OLCULEMEDI] %s: %s | %s" % (k, _kisa(x, 50), _kisa(y, 50)))
+    nfark = len(d["farkli"]) + len(d["yalniz_once"]) + len(d["yalniz_sonra"])
+    p("KAPSAM: %d alan ayni · %d farkli · %d yalniz-once · %d yalniz-sonra · %d OLCULEMEDI "
+      "(fark da temiz de DEGIL) · yok sayilan: %s"
+      % (d["ayni"], len(d["farkli"]), len(d["yalniz_once"]), len(d["yalniz_sonra"]),
+         len(d["olculemedi"]), ",".join(sorted(DIFF_YOK_SAY))))
+    if nfark:
+        return 1
+    return 3 if d["olculemedi"] else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Claude ortami eslik olcumu (salt-okunur)")
     ap.add_argument("--no-doctor", action="store_true", help="ix_doctor + validators kosumunu atla")
     ap.add_argument("--anon", action="store_true", help="kullanici adi / host maskele")
     ap.add_argument("--proje", default=".", help="proje koku (default: cwd)")
     ap.add_argument("--out", default=None, help="rapor dosyasi yolu (default: sistem temp)")
+    ap.add_argument("--diff", nargs=2, metavar=("ONCE", "SONRA"),
+                    help="iki parity raporunu karsilastir (olcum yapmaz)")
     a = ap.parse_args()
+    if a.diff:
+        return fark_modu(*a.diff)
 
     if a.proje != ".":
         PROJ = Path(a.proje).resolve()

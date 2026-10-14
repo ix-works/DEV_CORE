@@ -27,6 +27,23 @@ from sap_adt_lib import set_explicit_working_dir
 from sap_client import SAPClient
 
 
+def atc_bulgulari(object_name, object_type='class', variant='DEFAULT',
+                  max_verdicts=100, client=None):
+    """Tek hedefin (obje/paket) ATC ham sonucu — yeniden kullanım girişi (Q371①, 2026-10-12).
+
+    `SAPClient.run_atc_check` ile AYNI yol (get_object_url + lib 3 adımlı worklist akışı),
+    iki farkla: ① `max_verdicts` AÇIK geçirilir (SAPClient sarmalayıcısı geçirmez ⇒ lib
+    varsayılanı 100'de paket sonucu SESSİZCE kesilebilir) ② hata YUTULMAZ (sarmalayıcı
+    istisnayı `None`a çevirir; toplu araç hangi hedefin neden koşamadığını raporlamalı).
+    Döner: {'findings': [...], ('worklist_parse_fallback': True)}. `main()` bunu KULLANMAZ —
+    tek-obje CLI davranışı değişmedi.
+    """
+    from object_types import get_object_url
+    client = client or SAPClient()
+    url = get_object_url(object_name, object_type)
+    return client.adt_client.run_atc_check(url, variant=variant, max_verdicts=max_verdicts)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Run ATC (ABAP Test Cockpit) code quality checks'
