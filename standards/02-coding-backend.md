@@ -559,6 +559,45 @@ sebep **hiç görünmez** — `previous` zincirini yazan bir hata işleyici yoks
 tarar: `TABLES` aktüelleri ↔ çevreleyen metot imzası). Kardeş maddeler farklı katmandır:
 **BE-30** formal param yönü · **BE-69** `TABLES` parametresinin tipi.
 
+### ⛔ Sorted/hashed tablo satırı `CHANGING` parametresine VERİLMEZ (MUST)
+
+> **Kural:** Sorted ya da hashed tablonun satırını gösteren field-symbol'ü bir metodun
+> `CHANGING` parametresine **bağlama.** Birincil anahtar alanları salt-okunurdur ⇒ satır
+> *kısmen korumalıdır* ve bağlama anında program düşer — metot anahtara hiç yazmasa bile.
+
+```abap
+" mt_item TYPE HASHED TABLE OF ty_out WITH UNIQUE KEY vbeln posnr
+
+" ⛔ YANLIŞ — ilk çalıştırmada MOVE_TO_LIT_NOTALLOWED_NODATA; statik hiçbir katman görmez
+LOOP AT mt_item ASSIGNING FIELD-SYMBOL(<ls_item>).
+  calc_quantities( CHANGING cs_out = <ls_item> ).
+ENDLOOP.
+
+" ✅ DOĞRU — kopya üzerinde çalış, anahtarla geri yaz
+DATA ls_item TYPE ty_out.
+LOOP AT mt_item INTO ls_item.
+  calc_quantities( CHANGING cs_out = ls_item ).
+  MODIFY TABLE mt_item FROM ls_item.   " metot anahtar alanı değiştirmemeli
+ENDLOOP.
+```
+
+**Belirti (ölçüldü 2026-10-16):** `MOVE_TO_LIT_NOTALLOWED_NODATA` / `CX_SY_DYN_CALL_ILLEGAL_TYPE`
+— *"Field \"<LS_ITEM>-KUNNR\" … is at least partly protected against changes"*. Mesajdaki alan
+anahtar alan olmayabilir (yapının ilk alanı görünür).
+
+⛔ **Neden tehlikeli:** sözdizimi doğru ⇒ `adt_syntax_check`, **aktivasyon**, abaplint ve ATC
+**hepsi geçer**. Ölçülen vakada iki bağımsız inceleme riski görüp *"anahtar alana yazılmıyor"*
+diye geçti — bu çıkarım bu kalıpta **kanıt değildir**.
+
+**Ek kurallar:**
+- `<fs> = ls_item.` ile bütün satırı field-symbol'e geri atamak da anahtar alana yazar ⇒ aynı döküm.
+- `ASSIGN itab[ … ] TO <fs>` ile alınan satıra **anahtar-dışı** alanlara doğrudan atama ve
+  `IMPORTING` parametresine verme serbesttir.
+- Kardeş tarama zorunlu: aynı döngüde ardışık birkaç `CHANGING` çağrısı olur.
+
+**Denetim:** `bug-checklist-backend.md` → **BE-84** (deterministik gate YOK). Komşu: **BE-71**
+(salt-okunur aktüel → FM `TABLES`).
+
 ### Error Handling — Gateway Exception Hierarchy
 
 > **Kural:** Doğru exception tipini seç. Birden fazla hata mesajı varsa `message_container` kullan.
