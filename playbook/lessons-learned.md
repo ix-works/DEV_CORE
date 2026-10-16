@@ -1107,3 +1107,23 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
 - **Referans:** PATTERN #39 (gerçek Claude Code probu) · PATTERN #19 (kontrol grubu) ·
   `claude/settings.template.json` (hook'lar exec biçiminde). prior-art: yok (çekirdekte hook başlatma
   hatasının sonucunu ölçen kayıt bulunamadı; dış bir referans projenin exec biçimi gerekçesi fikir kaynağıdır).
+
+### PATTERN #43: **Kanonik şablondaki EKSİK, kopyalandığı her uygulamaya taşınır — ve kullanıcı girdisini SESSİZCE yok sayan filtre en pahalı biçimidir**
+
+- **Vaka (2026-10-16, S/4 private proje, freestyle UI5 rapor seçim ekranları):** kullanıcı Satış Org.'a `1500` yazıp
+  Enter'a bastı, değer token olmadı. Ölçüm iki yüz gösterdi: zorunlu alanda *"zorunlu alan"* uyarısı (görünür) ·
+  zorunlu olmayan Müşteri alanında yazılı değer **`$filter`'a hiç girmedi**, rapor süzgeçsiz geniş sonuç döndü (sessiz).
+  Kök neden: `MultiInput`'ta `addValidator` yok + liste işleyicisi yalnız `getTokens()` okuyor.
+- **Sınıf:** standart *"kanonik referans: kopyala"* diyordu ve kanonik app'te validator yoktu ⇒ kardeş taramasında
+  aynı şablondan türeyen **8 app'in 8'inde** eksik; yalnız sonradan sıfırdan yazılan ve bug-gate turlarından geçen
+  app'lerde vardı. Standarttaki desen maddeleri (çoklu değer, harf-duyarsız arama, joker) *aranan* şeyleri listeliyordu,
+  *kullanıcının en sık yaptığı şeyi* (değeri elle yazmak) listelemiyordu.
+- **Ders:** (1) Bir standart "şunu kopyala" diyorsa, kopyalanan şeyin eksiği standardın eksiğidir — düzeltme
+  kanonik metne de işlenir, yoksa sonraki kopya kusuru geri getirir (PATTERN #40 ile aynı yayılım). (2) Kullanıcı
+  girdisini görmezden gelen bir filtre hata vermez, **daha fazla** veri döndürür — "çalışıyor" gibi görünür. Filtre
+  ekranında her girdi yolu (VH seçimi · yazma · yapıştırma · koşul sekmesi) **ağ izindeki `$filter`** ile ölçülür.
+- **Gate?** ⛔ Şimdilik HAYIR (ADR 0019 şart 4 — önce doküman: std/03 §10.0.1 *Yazılı metin → token*, FE-50,
+  `ui-freestyle-odata-v2.md` §C C6). Doküman yetmezse aday: `check_filter_search_pattern.py`'a "`MultiInput` var,
+  `addValidator` yok" kuralı.
+- **Referans:** std/03 §10.0.1 · FE-32 · FE-50 · PATTERN #19 (kontrol grubu: VH'den seçilen aynı değer) · PATTERN #40.
+  prior-art: yok (core `addValidator|untokenized` araması 2026-10-16 = 0).
