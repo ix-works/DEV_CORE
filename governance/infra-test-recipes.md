@@ -3456,3 +3456,20 @@ python tests/fixtures/guard_hedef_maskeleme/gh_bayrak_uret.py > tablo.txt   # ta
   "repo DIŞI" sayılır ve sahte FAIL/TAM kararı üretir (ölçüldü: başka cwd 12/21, kökten 21/21).
   `--degisen` listesine `tests/run_fixture_tests.py` koyma: koşucunun kendisi TAM süite eşlenir
   (yerelde tam süit YOK — B0).
+
+## B84 — ortak checklist programı `checklist_check.py` + map + run_review class_push BE-10b BLOCKER (2026-10-18)
+
+```
+python tests/fixtures/checklist_check/run.py                   # 175/175 (ağsız)
+python tests/run_battery.py checklist_check                    # taban + 9 mutasyon kipi, pinli _BEKLENEN_DUSEN
+python scripts/validators/checklist_check.py --harita-denetim  # run_all'da da koşar
+python tests/fixtures/b0_secim/run.py                          # HARİTA satırı değişince pin birlikte güncellenir
+```
+
+- **K0 map'ten türer:** her A maddesi ≥1 pozitif + ≥1 negatif vektör taşır; A maddesine kontrol eklenip vektör eklenmezse K0 düşer. Checklist'e madde eklenip map'e satır eklenmezse `--harita-denetim` FAIL.
+- **BE-10b konumları ayrı ölçülür:** ölçülmüş (T1/T2) ve ölçülmemiş (T3–T5) ikisi de FAIL; ayrım yalnız mesaj etiketindedir (T8). `--mutasyon-etiket` yalnız T8'i düşürür — T3–T5 demeti değişmez.
+- **Verify-report vektörleri (V):** tam → 0 · satır yok / ELLE / A-FAIL↔PASS çelişkisi / kanıtsız ÇÜRÜTÜLDÜ / hükümsüz kelime (BULGU, N/A, BLOCKER) / yalnız `FAIL→F1` → 1 · okunamayan rapor → 2. Kanıtlı ÇÜRÜTÜLDÜ → 0 + kalibrasyon adayı listesi.
+- **Gerçek CLI (R4/R5):** adı `.clas.abap` olmayan kirli sınıf `run_review` class_push'ta BLOCKER + "[ölçülmüş konum]" · temiz sınıf PASS. `--ana-sinif` olmadan BE-10b o dosyada sessizce UYGULANMAZ olurdu.
+- **Tohumlanmış hata paketi (S):** geçici git deposu, iki commit; 7 bilinen hata 7/7 FAIL exit 1; önceden var olan ihlal diff kipinde WARN "(önceden var)", `--files` kipinde FAIL.
+- **Korpus kalibrasyonu tekrarlanabilir ama sayı PİNLENMEZ:** bir tüketici projenin kaynak kökünde `--files` ile koşulur; yeni yanlış pozitif sınıfı bulunursa vektöre çevrilir, kalan gerçek ihlaller kapsam dışıdır (rapora tek satır).
+- **`--reach` run_all'da DEĞİL:** ajan tanımlarındaki `yazan_kanali` satırlarına bağlıdır; ajan tanımı değişikliği merge edildikten sonra elle koşulur.

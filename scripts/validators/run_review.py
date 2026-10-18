@@ -219,6 +219,12 @@ TASK_VALIDATORS = {
          'Clean Core: ABAP SELECT FROM non-released std tablo → released CDS successor öner'),
         ('check_abaplint.py', 'WARNING',
          'abaplint (tuned): yapısal/mantık+hijyen (parser/unreachable/identical/empty/tab) — class/program'),
+        # BE-10b (2026-10-18, kullanıcı onaylı tek yeni blok — ADR 0019 şart 5): metot gövdesi ve
+        # DEFINITION dışındaki yorum bandı → push 400 OO_SOURCE_BASED 012 (satır no YOK). Kural core'da
+        # 2026-07-31'den beri yazılıydı, yalnız inceleyenin listesindeydi → 4 kez kaçtı. Ortak checklist
+        # programı yalnız `--ids BE-10b` ile koşar (özel argümanlar aşağıda `extra_args` dalında).
+        ('checklist_check.py', 'BLOCKER',
+         'BE-10b: source-based class\'ta metotlar arası / IMPLEMENTATION başı-sonu yorum bandı → push 400 OO_SOURCE_BASED 012 (abaplint+syntax YAKALAMAZ)'),
         # ⛔ KATEGORİ B (std tablo direkt I/U/D) MCP server-side guardrail + manual review.
         # Otoriter syntax = adt_syntax_check (SAP inactive); abaplint = offline pre-push + clean-code.
     ],
@@ -459,6 +465,14 @@ def main() -> int:
         # Repo-geneli tarayıcılar (kendileri <source_root>/** os.walk eder) pozisyonel artifact KABUL ETMEZ
         # → artifact=None geç (yoksa "unrecognized arguments" → sahte BLOCKER).
         review_artifact = None if script_name in REPO_WIDE_SCANNERS else args.artifact
+        # Ortak checklist programı pozisyonel artifact ALMAZ (§2a arayüzü): dosya `--files` ile,
+        # kapsam `--ids` ile verilir; `--ana-sinif` = yerel kopya `.clas.abap` adını taşımasa da
+        # sınıf ana kaynağıdır (aksi hâlde BE-10b sessizce UYGULANMAZ olurdu).
+        if script_name == 'checklist_check.py':
+            _art = Path(args.artifact).resolve()
+            review_artifact = None
+            extra_args = ['--repo', str(_art.parent), '--files', str(_art), '--kind', 'backend',
+                          '--ids', 'BE-10b', '--ana-sinif']
         rc, out, err = run_validator(script_path, review_artifact, extra_args)
         # IX-GATE-STATUS tüketimi (kayıt #5③) — YALNIZ `rc == 0` dalında sorulur.
         # Gerekçe (kapsam niteleyicisi): `rc != 0` zaten GÜRÜLTÜLÜ bir sonuçtur (FAIL,

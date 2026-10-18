@@ -127,6 +127,10 @@ VALIDATORS = [
     # ⚠ Ad "freshness" İÇERMEZ: --quick o deseni atlar, bu gate pre-commit'te KOŞMALI.
     ("FM imzası ↔ kılavuz senkron (warn-first, CLC-SCR7)", "check_fm_signature_doc_sync.py",
      [], "project", None),
+    # Checklist ↔ map ↔ kontrol fonksiyonu bütünlüğü: checklist'e madde eklenip map'e girmezse ortak
+    # checklist programı o maddeyi SESSİZCE hiç sormaz; A sınıfı kontrolsüz madde sahte güvencedir
+    # (2026-10-18). Yalnız core dosyalarını okur, SAP/ağ yok. `--reach` BURADA DEĞİL (ajan tanımına bağlı).
+    ("Checklist map bütünlüğü (HARD, checklist-map)", "checklist_check.py", ["--harita-denetim"], "both", None),
     ("Playbook freshness (uyarı)", "check_playbook_freshness.py", [], "both", None),
 ]
 

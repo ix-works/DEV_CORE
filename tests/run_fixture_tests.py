@@ -750,6 +750,10 @@ OZEL_TESTLER = [
     ("parity_probe_diff",
      "Q371-5 parity_probe --diff: _zaman yok sayilir, OLCULEMEDI fark/temiz degil (cikis 3), "
      "skaler liste kume farki, gercek iki kosum (10 vektor + 2 mutasyon)"),
+    ("checklist_check",
+     "ortak checklist programi: her A maddesine pozitif+negatif (K0 map'ten turetir), BE-10b "
+     "olculmus/olculmemis konumlar, tohum paketi (7 hata), --verify-report, exit 0/1/2, "
+     "--harita-denetim, --reach, run_review class_push zinciri (175 vektor + 9 mutasyon)"),
 ]
 
 
@@ -857,6 +861,33 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "CORE-08 dedektoru: aile tablosu + kok onceligi + OLCULEMEDI (rc 2) burada yasar"),
     ("governance/infra-test-recipes.md", ("O:id_tekilligi",), "B-no tanimlari (X1)"),
     ("playbook/checklists/*.md", ("O:id_tekilligi",), "checklist kimlik tanimlari (X1)"),
+    # Ortak checklist programi (2026-10-18): map + checklist kimlikleri (--harita-denetim H1) +
+    # program YENIDEN YAZMADAN cagirdigi validator ic adlari (`_T1_PATTERNS`, `scan_text` …) —
+    # bunlardan biri yeniden adlandirilirsa kontrol COKER → ÖLÇÜLEMEDİ (sessiz PASS degil) ama
+    # A vektoru duser; bu satirlar o kirilmayi DEGISEN-kipinde de gorunur kilar.
+    ("scripts/validators/checklist_check.py", ("O:checklist_check",),
+     "madde kontrolleri + degerlendirme + --verify-report + exit sozlesmesi"),
+    ("playbook/checklists/checklist-map.yaml", ("O:checklist_check",), "madde -> kontrol eslemesi"),
+    ("playbook/checklists/*.md", ("O:checklist_check",), "checklist kimlikleri (H1: map <-> checklist)"),
+    ("scripts/utils/kaynak_tarama.py", ("O:checklist_check",), "js_kod / abap_kod / AMDP araliklari"),
+    ("scripts/build_doc_pdf.py", ("O:checklist_check",), "slug_tr (DOC-KD-16 md capasi)"),
+    ("governance/reference/released_successors.json", ("O:checklist_check",), "BE-03 halef haritasi"),
+    ("scripts/validators/check_released_objects.py", ("O:checklist_check",), "BE-03"),
+    ("scripts/validators/check_decimal_write_to.py", ("O:checklist_check",), "BE-04"),
+    ("scripts/validators/check_method_param_type_c.py", ("O:checklist_check",), "BE-10a"),
+    ("scripts/validators/check_audit_fields_autofill.py", ("O:checklist_check",), "BE-11"),
+    ("scripts/validators/check_rap_byassoc_keys_only.py", ("O:checklist_check",), "BE-20 ipucu"),
+    ("scripts/validators/check_no_rap_commit.py", ("O:checklist_check",), "BE-26"),
+    ("scripts/validators/check_amdp_comment_apostrophe.py", ("O:checklist_check",), "BE-28 (c)"),
+    ("scripts/validators/check_package_naming.py", ("O:checklist_check",), "BE-49"),
+    ("scripts/validators/check_cds_srvd_comment_syntax.py", ("O:checklist_check",), "BE-61"),
+    ("scripts/validators/check_bdef_backtick.py", ("O:checklist_check",), "BE-62"),
+    ("scripts/validators/check_ui5_freestyle_traps.py", ("O:checklist_check",), "FE-01 / FE-07 / FE-33"),
+    ("scripts/validators/check_list_view_grid.py", ("O:checklist_check",), "FE-13"),
+    ("scripts/validators/check_filter_search_pattern.py", ("O:checklist_check",), "FE-32"),
+    ("scripts/validators/check_kd_no_raw_mermaid.py", ("O:checklist_check",), "DOC-KD-15"),
+    ("scripts/validators/check_docu_itf_line_width.py", ("O:checklist_check",), "DOC-KD-13"),
+    ("scripts/validators/check_fs_no_analysis_log.py", ("O:checklist_check",), "DOC-FS-05 / FS-06a"),
     ("playbook/lessons-learned.md", ("O:id_tekilligi",), "PATTERN # tanimlari (X1)"),
     ("governance/decisions/*.md", ("O:id_tekilligi",), "ADR numaralari (X1)"),
     ("scripts/validators/check_console_utf8.py", ("O:console_utf8_kok_izolasyonu",),
@@ -1110,7 +1141,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "B3-01: BEŞ ayrı ölçmeyen exit-0 yolu"),
     ("scripts/validators/run_review.py",
      ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam", "O:sap_gate_skip_sozlesmesi",
-      "O:reviewer_uzun_yol_ipucu"),
+      "O:reviewer_uzun_yol_ipucu", "O:checklist_check"),
      "SKIP sözleşmesi + push-tipi/reviewer haritası; ayrıca `gate_durum_beyani` "
      "TÜKETİCİ ucu üretici tarafından sap_gate_skip_sozlesmesi V7 ile çağrılır"),
 
