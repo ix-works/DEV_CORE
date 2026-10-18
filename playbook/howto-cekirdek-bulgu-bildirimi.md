@@ -33,6 +33,8 @@ python core/scripts/parity_probe.py --out .tmp/parity.json   # sahibin makinesiy
 ```
 
 - `ix_doctor` FAIL veriyorsa **önce onu kapat** — çekirdek eksik kurulumda zaten doğru çalışmaz.
+  Hangi satırın onarılacağı, hangisinin kullanıcıya kaldığı, hangisinin bildirim olduğu:
+  [`howto-cekirdek-guncelleme.md`](howto-cekirdek-guncelleme.md) §6a.
 - `parity_probe` çıktısı sahibinkiyle karşılaştırılabilir; fark **senin kurulumundaysa** bu bir
   bildirim değil, bir kurulum adımıdır (`ONBOARDING.md` §0 ve §9.1).
 - ⛔ **"Bende çalışmıyor" tek başına bulgu değildir.** Bulgu = *"şu mekanizma şu girdiyle şu

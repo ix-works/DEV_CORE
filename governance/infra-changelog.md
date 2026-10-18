@@ -14,6 +14,11 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## playbook/howto-cekirdek-guncelleme.md (§6a) · claude/commands/core-guncelle.md (adım 7) · ONBOARDING.md (§2A-9 + §9) — `ix_doctor` bulgularının üç sınıfı (2026-10-18; lider, kullanıcı kararı) — ⚠GEVŞETME YOK
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-10-18 | **Howto §6a (YENİ):** `ix_doctor`'un her FAIL/WARN satırı üç sınıftan birine konur — ① ONAR (yalnız bu projenin kurulumunu/çekirdek klonunun yerel ayarını değiştiren onarım komutu: `team_setup` · `seed_memory` · `build_core_index` · `git -C core config`; koş, yeniden ölç) · ② KULLANICI (şifre · yetki/hesap · yazılım kurulumu · makine geneli/yönetici ayarı · yarım iş olabilecek durum) · ③ ÇEKİRDEK HATASI (çekirdek dosyasına dokunma; bulgu-bildirimi biçiminde Issue taslağı, public yayın ⇒ açık onayla). Emin değilsen ②. Proje-içi dosya kusuru ③ değildir. §8 raporu sınıf + sonuç taşır. **Komut adım 7** + **ONBOARDING §2A-9 ve §9** §6a'ya bağlandı. | Kullanıcı sorusu: "ix_doctor bir sorun görünce düzeltiyor mu, kullanıcıyı mı yönlendiriyor, Issue mu açıyor?" Ölçüldü: `ix_doctor` salt-okur (yazma/Issue çağrısı yok; argümanlar yalnız `--layer`/`--live-sap`/`--json`), çoğu satırda `onarım:`/`düzelt:` ipucu basar; prosedür yalnız "FAIL yok" bekliyordu, FAIL çıkınca ne yapılacağı ve çekirdek hatasının bildirim kılavuzuna nasıl bağlanacağı yazılı değildi. | Sınıflar `ix_doctor`'daki FAIL/WARN mesajlarının tamamı tek tek okunarak kuruldu (`grep -n "(FAIL,\|(WARN," scripts/ix_doctor.py`). Davranış kodu değişmedi. Bir tüketici makinede uçtan uca ÖLÇÜLMEDİ. | — (doküman) | — |
+
 ## README.md (kurulum prompt'u) · ONBOARDING.md (§2A + §11) · claude/commands/onboard.md — Claude ile ilk kurulum (2026-10-18; lider, kullanıcı kararı) — ⚠GEVŞETME YOK
 | tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
 |---|---|---|---|---|---|

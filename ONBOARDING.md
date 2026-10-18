@@ -137,6 +137,8 @@ Alan şablonu: [`claude/conn_adt.template`](claude/conn_adt.template) (tek siste
    STEP 3 (e′) komutları. Kullanıcı istemezse atla ve raporda yaz (hafıza yalnız bu makinede kalır).
 9. **Doğrula:** her projede, kendi kökünde `CLAUDE_PROJECT_DIR` o projeye ayarlı:
    `python core/scripts/ix_doctor.py` (FAIL yok) + `python core/scripts/validators/run_all_validators.py --quick`.
+   Her FAIL/WARN satırı [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md)
+   §6a'ya göre sınıflanır: ① ONAR (yerel onarım komutu) · ② KULLANICI · ③ ÇEKİRDEK HATASI (Issue taslağı, onayla).
 10. **Rapor + yeniden açma:** proje başına tablo (`team_setup TAMAM` · `ix_doctor` FAIL/WARN ·
     `.conn_adt` var mı · hafıza git'i) + atlanan adımlar ve nedenleri + `ÖLÇÜLEMEDİ: <sebep>`
     maddeleri (ölçülemedi ≠ temiz). Son cümle: *"Claude Code'u proje klasöründe açın
@@ -222,6 +224,9 @@ Claude-katmanı (settings/shim drift + behavior-manifest + hook smoke; freeze-gu
 R10 ile birlikte 2026-07-10'da KALDIRILDI — [`governance/removed-controls.md`](governance/removed-controls.md)), MCP/SAP,
 validator+performans, iş-akışı smoke — her kontrol kanıt-satırı basar; exit 0 = FAIL yok.
 Tamamlayıcı: `python core/scripts/validators/run_all_validators.py` (proje kökünden).
+`ix_doctor` **salt-okurdur**: düzeltmez, Issue açmaz — çoğu satırda bir `onarım:` ipucu basar.
+Bulunan her satırla ne yapılacağı (Claude onarır · kullanıcı yapar · çekirdek sahibine bildirilir):
+[`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md) §6a.
 
 ### 9.1 İki makine arasında EŞLİK ölçümü: `parity_probe`
 
