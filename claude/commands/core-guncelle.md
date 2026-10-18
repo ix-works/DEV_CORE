@@ -22,7 +22,12 @@ değil, yürütme sırasıdır; çakışmada **howto kazanır** (tek kaynak ilke
    `team_setup` + damga kontrolü + `ix_doctor` (her biri KENDİ kökünde, `CLAUDE_PROJECT_DIR` o projeye
    ayarlı); seçilmeyen proje raporda `atlandı (kullanıcı seçimi)`.
 6. **Makine-lokal yüzeyler (§5):** kullanıcı-düzeyi izin tabanı (elle birleştir) · `gh` · git global taban.
-7. **Doğrula (§6):** `run_all_validators` + `ix_doctor` — FAIL yok.
+7. **Doğrula (§6):** `run_all_validators` + `ix_doctor` — FAIL yok. `ix_doctor` hiçbir şeyi
+   kendisi düzeltmez: her FAIL/WARN satırını **§6a**'ya göre sınıfla (bu adım diğer projelerin
+   `ix_doctor` çıktısı için de geçerli) — ① **ONAR**: yerel onarım komutunu koş, yeniden ölç ·
+   ② **KULLANICI**: şifre/yetki/kurulum/makine geneli ayar/yarım iş, ne gerektiğini söyle ·
+   ③ **ÇEKİRDEK HATASI**: çekirdek dosyasına dokunma, Issue taslağı hazırla, yalnız **onayla** aç.
+   Emin değilsen ②.
 8. **Ölç ve raporla (§8):** parity ÖNCE/SONRA farkı + proje başına tablo + atlananlar/ölçülemeyenler.
    Son cümle: *"Claude Code'u kapatıp açın; yeni oturumun ilk mesajında `✓ Yükleme: … core=YÜKLENDİ`
    görünmeli (diğer projelerde de ilk açılışta)."*

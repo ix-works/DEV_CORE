@@ -170,7 +170,7 @@ Seçilen her proje `<P>` için (her biri kendi kökünde):
 ```bash
 (cd "<P>" && CLAUDE_PROJECT_DIR="<P>" python core/scripts/team_setup.py)        # 3b/3c kuralları aynen
 (cd "<P>" && python core/scripts/sync_yasaklar.py --check)                      # 3d
-(cd "<P>" && CLAUDE_PROJECT_DIR="<P>" python core/scripts/ix_doctor.py)         # FAIL yok mu
+(cd "<P>" && CLAUDE_PROJECT_DIR="<P>" python core/scripts/ix_doctor.py)         # FAIL yok mu — bulgular §6a
 ```
 
 ⚠ Araçlar proje kökünü önce `CLAUDE_PROJECT_DIR`'den okur: değişkeni o projeye ayarlamazsan
@@ -299,6 +299,25 @@ python core/scripts/ix_doctor.py
 **Beklenen:** validator'da **FAIL yok** (WARN/BİLGİ olabilir) · `ix_doctor` FAIL yok.
 CORE-INDEX FAIL verirse: `python core/scripts/build_core_index.py`.
 
+### 6a. `ix_doctor` bir şey bulursa — her satırı ÜÇ sınıftan birine koy
+
+`ix_doctor` **salt-okurdur**: hiçbir şeyi düzeltmez, Issue açmaz; her kontrol için PASS/WARN/FAIL
+ve çoğunda bir `onarım:` / `düzelt:` ipucu basar. Ne yapılacağına **bu adımı yürüten** karar
+verir. FAIL'ler **ve** WARN'lar tek tek, sırayla şu üç sınıftan birine konur:
+
+| Sınıf | Ölçüt | Ne yapılır |
+|---|---|---|
+| **① ONAR** (Claude yapar) | Satır bir onarım komutu veriyor **ve** komut yalnız bu projenin kurulumunu ya da çekirdek klonunun yerel ayarını değiştiriyor: `team_setup` (`--repair-junctions` dahil) · `seed_memory` · `build_core_index` · `git -C core config …` | Komutu koş → `ix_doctor`'u (gerekirse `--layer N`) yeniden koş → satırın PASS olduğunu göster. Hâlâ FAIL ise ③'e geç. |
+| **② KULLANICI** (Claude yapamaz ya da yapmamalı) | Kimlik/şifre (`.conn_adt`) · yetki ya da hesap (`gh auth`, repo/ruleset/CI sahipliği, hafıza yedeği için repo açmak) · yazılım kurulumu (CLI, Claude Code sürümü, plugin) · makine geneli ya da yönetici ayarı (managed-policy, PowerShell politikası, git **global** ayarları) · yarım iş olabilecek durum (çalışma ağacı kirli, `main ≠ origin/main`) | Ne gerektiğini tek satırla söyle, satırdaki ipucunu ver, kullanıcının yapmasını bekle; sonra yeniden ölç. Şifre ya da anahtarı Claude yazmaz. |
+| **③ ÇEKİRDEK HATASI** (sahibine bildirilir) | Kurulum doğru olduğu hâlde çekirdeğin kendi dosyası ya da aracı yanlış davranıyor: ① uygulandığı hâlde süren FAIL · hook smoke / guard kablolaması FAIL'i · yolu çekirdeğe çözülen bir dosyada frontmatter uyarısı · `katman çalıştırılamadı` (aracın kendisi çöktü) | Çekirdek dosyasına yerelde **DOKUNMA** (junction'dır, her projeyi etkiler, sonraki güncellemede çakışır). [`howto-cekirdek-bulgu-bildirimi.md`](howto-cekirdek-bulgu-bildirimi.md) §1–§2 biçiminde Issue **taslağı** hazırla, kullanıcıya göster; Issue public yayındır ⇒ **açık onayla** açılır. Çekirdek sahibinin makinesindeysen Issue yerine çekirdekte normal infra düzeltme süreci işler. |
+
+- **Emin değilsen ②'ye koy ve sor** — yanlış sınıf ①'de geri alınamaz bir değişiklik, ③'te gereksiz
+  bir Issue üretir. ③'ten önce bildirim kılavuzunun §1'ini uygula: bildirimlerin çoğu aslında kurulum eksiğidir.
+- Projenin **kendi** dosyasında (`claude-local/`, proje içi tanım dosyası) bulunan kusur ③ değildir:
+  `ix_doctor`'un önerdiği düzeltmeyi kullanıcıya göster, onayla uygula.
+- §8 raporunda her FAIL/WARN satırı sınıfıyla ve sonucuyla yazılır (`① onarıldı → PASS` ·
+  `② kullanıcıya bırakıldı: <ne>` · `③ Issue taslağı: açıldı #N | kullanıcı açmadı`).
+
 📌 Proje ile çekirdek **farklı GitHub org'undaysa** (tüketici/fork topolojisi) katman-2'de
 beklenen satır `[PASS] core: remote = <org>/<repo> (proje org'undan farklı — upstream/fork
 topolojisi …)`. **WARN** çıkıyorsa repo adı tutmuyor demektir → yanlış çekirdek klonlanmış
@@ -323,7 +342,7 @@ python core/scripts/parity_probe.py --out .tmp/parity-SONRA.json
 `aktif_paket_drift` · kullanıcı-ayarlarında `permissions` doluluğu · `ix_doctor` FAIL sayısı.
 
 **Proje başına tablo (§3e):** proje · `team_setup TAMAM` mı · yasak damgası `[EŞ]` mi ·
-`ix_doctor` FAIL/WARN sayısı · atlandıysa nedeni.
+`ix_doctor` FAIL/WARN sayısı ve §6a sınıflarına dağılımı · atlandıysa nedeni.
 
 Rapora ayrıca: ① adım 3b'de **ezilen** bir elle-düzeltme oldu mu ② atlanan adım ve **nedeni**
 ③ yol üstünde görülüp **düzeltilmeyen** kusurlar ④ ⛔ ölçemediğin her maddeyi
