@@ -14,6 +14,13 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## claude/agents/*.md — `description:` geçerli YAML (2026-10-18; lider, kullanıcı onayı) — ⚠GEVŞETME YOK
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-10-18 | `backend-expert` · `frontend-expert` · `infra-expert` · `sap-feature` `description:` satırındaki tek `: ` (iki nokta + boşluk) ` — ` ile değiştirildi; başka bayt değişmedi. Operating-model §6'ya ajan frontmatter notu. | Bir tüketici projede taze oturumda 7 proje ajanından yalnız **3**'ü (`adt-gateway`, `bug-expert`, `sap-research`) Agent aracında listeleniyordu. Tırnaksız düz YAML değerinde `: ` geçersizdir; Claude Code dosya **LF** iken bunu tolere ediyor, **CRLF** iken ajanı SESSİZCE atlıyor. Windows checkout'unda (`* text=auto`, `core.autocrlf=false`) çalışma kopyası CRLF. İlk hipotez (junction) yanlıştı: aynı CRLF dosyalar gerçek klasörde de 3/7. | `claude -p` probe (Agent aracı listesi), proje `.claude/agents`: CRLF + eski açıklama **3/7** (junction ve gerçek klasör ayrı ayrı) · LF + eski açıklama **7/7** · CRLF + düzeltilmiş açıklama **7/7** (kontrol grubu). `yaml.safe_load` frontmatter: main 3/7 OK (düşen 4 = probe'da düşen 4, `ScannerError`), dal 7/7 OK. | — (yeni gate açılmadı, ADR 0019; operating-model §6 notu hatırlatıcıdır) | — |
+
+Test-senaryosu: ajan tanımının frontmatter'ına dokunan her değişiklikten sonra `python -c "import yaml"` ile frontmatter'ı katı ayrıştır ve taze oturumda `claude -p "Agent aracındaki subagent_type adlarını yaz" --max-turns 1` ile tüm proje ajanlarının listelendiğini ölç (seans içi değişiklik aynı seansta ölçülemez).
+
 ## playbook/howto-infra-fix-proseduru.md (B0 notları) · claude/agents/infra-expert.md (TEST KADANSI) · governance/infra-test-recipes.md (B0-SEÇİM bayat ölçüm notu) (2026-10-18; lider, kullanıcı onaylı) — ⚠GEVŞETME YOK (yerel ara koşum azalır; tam güvence CI'da aynen) · ⚠DEĞİŞİKLİK: 20+ birimlik seçimde yerel `--degisen` koşulmaz
 | tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
 |---|---|---|---|---|---|
