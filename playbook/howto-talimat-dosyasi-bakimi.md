@@ -9,6 +9,9 @@ applies_to: [all]
 > **Neden var (2026-08-12):** her oturum yüklenen talimat yüzeyi ölçüldü — bir rules dosyasında
 > %55 blok-tekrarı, indeks dosyasında %26 durum-sızması birikmişti; kimse tek tek dosyayı
 > bütün olarak görmediği için 3 ayrı oturumun eklemeleri sessizce üst üste binmişti.
+> **Kural metninin kendisi** nasıl yazılır (dört alan, kapsam koşulu, üç test):
+> [`standards/13-kural-yazim-standardi.md`](../standards/13-kural-yazim-standardi.md) — bu howto
+> dosyayı yönetir, std 13 içindeki her kuralı.
 
 ## SINIR — bu dosyalarda NE YAPILMAZ (önce oku)
 
@@ -29,12 +32,17 @@ applies_to: [all]
            Sapma varsa BİRLEŞİM metni çıkar. Hangi bölüm kanonik kalacak işaretle.
 ③ UYGULA → worktree'de (repo dosyaları) ya da memory-git BRANCH'inde (auto-memory).
            Canlı `~/.claude/...`'a doğrudan yazma — memory işi: branch → diff → LİDER merge.
-④ KANITLA→ zorunlu dörtlü:
+           Yeni ya da metni değişen HER kural `standards/13-kural-yazim-standardi.md`'ye uyar:
+           NE · NEDEN · NE ZAMAN · NEREDE + olumsuz iddiada kapsam koşulu. Birleştirmede
+           dört alandan biri düşerse birleşim metni eksiktir (S4 ile aynı ilke).
+④ KANITLA→ zorunlu dörtlü (a-d) + kural metni değiştiyse (e):
            (a) bayt/satır DELTA raporu (önce→sonra),
            (b) birleşim-hash kanıtı (birleşen bölümlerin içerik kaybı yok),
            (c) run_all_validators yeşil (özellikle C-MEM-01 · check_kesin_yasaklar),
            (d) ERTESİ OTURUM: InstructionsLoaded log'unda dosyanın yüklendiği satır
-               (kayıpsız logger 2026-08-12'den beri güvenilir) — bu kanıt lider'de kalır.
+               (kayıpsız logger 2026-08-12'den beri güvenilir) — bu kanıt lider'de kalır,
+           (e) kural metni değiştiyse std 13 §4 üç testinin sonucu: netlik (NETLİK satırı) ·
+               ulaşım (`checklist_check.py --reach` ya da yükleme zinciri) · çelişki (`rg` taraması).
 ⑤ KAYDET → infra-changelog satırı (B11 talimat-dosyalarını da kapsar, 2026-08-12'den beri).
 ```
 

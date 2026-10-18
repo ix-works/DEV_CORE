@@ -125,6 +125,8 @@ Etiket|değer hizası için **2-kolon `<table>`** + **sabit etiket-kolon genişl
 - ⚠ Türkçe **Ş/İ** konu alanında codepage riski taşıyabilir → kritik değilse konuyu **ASCII** tut; tam Türkçe'yi gövdeye bırak.
 - ⚠ **Sabit-genişlik alan + `ALPHA = OUT` tuzağı:** CHAR16 (belge no vb.) alanlarda `|{ f ALPHA = OUT }|`
   alan genişliğini koruyup **trailing-space** üretir → konuda boşluk + 50-aşım + kırpma. `condense( |{ f ALPHA = OUT }| )` ile temizle.
+  Kural e-postaya özgü DEĞİLDİR — `ALPHA = OUT` sonucunu birleştiren/karşılaştıran her ifadede geçerlidir:
+  kanonik metin `checklists/bug-checklist-backend.md` **BE-86** (mail dışı bir motorda kaçtığı ölçüldü, 2026-09-30).
 
 ## 5. EK-DOSYA (attachment) — kısa gövde + dosya
 **Ne zaman:** **8+ kolonlu / geniş tablo** çoğu inbox'ta gövdede taşar (§3 tuzakları da) → **kısa HTML gövde +

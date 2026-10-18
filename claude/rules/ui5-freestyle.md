@@ -27,10 +27,18 @@ Gate: `check_filter_search_pattern.py`.
 ## 4. LOKAL ÇALIŞTIRMA
 App dizininde `npm install` **YASAK** → paketin `ui/` workspace'inden `npm run start-noflp`.
 `FIORI_TOOLS_*` `.conn_adt`'den okunur. Israrlı logon popup + `lrep 401` → **hesap kilidi** (SU01).
+**Tarayıcı turu KİMLİKLİ sunucuda** (`FIORI_TOOLS_USER/PASSWORD` + `npx fiori run`): kimliksiz sunucuda
+ekran `busy`'de asılı kalır ve ürün kusuru gibi görünür → BLOCKER yazmadan önce proxy `$metadata` 401 ↔
+doğrudan SAP + kimlik 200 testi (std/03 §2.4.3).
+**Kalan ekranı SAYMA, ÜRET:** `manifest.json`'daki her route target için `view/<ad>.view.xml` diskte var
+mı — yoksa o rota çalışma zamanında patlar (std/03 §3.2).
 
 ## 5. DEPLOY
 Kanonik: `core/scripts/deploy_ui.py` (build + deploy + canlı hash). Yalın `fiori deploy` bayat
 `dist/` gönderir → guard bloklar. **Lokal test onayı olmadan deploy YOK.**
+`deploy_ui` yalnız `Component-preload.js`'i kanıtlar; statik varlıklar (`webapp/help/**` kılavuz
+HTML/PNG) için `verify_ui_static_assets.py` — HTML'de md5 değil **içerik sondası** (SAP `<head>`e
+meta enjekte eder; std/03 §2.4.2).
 
 📖 Derin referans: `core/standards/03-coding-ui-fiori.md` · `core/playbook/ui-freestyle-odata-v2.md`
 

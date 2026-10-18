@@ -342,7 +342,8 @@ kovalama (çok-app-server asimetrisi, CSRF, bare-header, taze isim).
 `T100KEY OO_SOURCE_BASED-012`. **Satır numarası YOKTUR** — hata hangi yorumun suçlu olduğunu
 söylemez, yalnız "bir yerde var" der.
 
-**KURAL — belirleyici olan KONUM'dur, bitişiklik değil.** Ölçülen dört konum:
+**KURAL — belirleyici olan KONUM'dur, bitişiklik değil.** Ölçülen beş konum (dördü 2026-07-31, `ENDCLASS.`
+sonrası 2026-06-15) + ölçülmemiş iki konum:
 
 | Yorumun konumu | Sonuç |
 |---|---|
@@ -350,10 +351,13 @@ söylemez, yalnız "bir yerde var" der.
 | Metot **GÖVDESİ** içi (`METHOD x.` satırının ALTI; `TRY.` öncesi dahil) | ✅ **SERBEST** — PUT **200** |
 | `CLASS … IMPLEMENTATION.` ↔ ilk `METHOD` arası | ⛔ **400** |
 | `ENDMETHOD.` ↔ sonraki `METHOD` arası | ⛔ **400** |
+| IMPLEMENTATION'ı kapatan `ENDCLASS.` sonrası | ⛔ **400** — 2026-06-15 vakası (yetim yorumlar silinince push geçti; tohum `feedback_detached-leading-abapdoc-class-push-400`) |
+| Son `ENDMETHOD.` ↔ IMPLEMENTATION'ın `ENDCLASS.`'ı | ⚠ **ÖLÇÜLMEDİ** — mekanizma aynı (yorum bir kod öğesine bağlanamıyor) ⇒ yorum KOYMA (BE-10b) |
+| DEFINITION'ın `ENDCLASS.`'ı ↔ `CLASS … IMPLEMENTATION.` | ⚠ **ÖLÇÜLMEDİ** — aynı gerekçe ⇒ yorum KOYMA (BE-10b) |
 
-⛔ **BİTİŞİKLEME ÇÖZMEZ.** Yorum bandı ile sonraki `METHOD` satırı arasındaki boş satırı silmek
+⛔ **IMPLEMENTATION bölümünde BİTİŞİKLEME ÇÖZMEZ.** Yorum bandı ile sonraki `METHOD` satırı arasındaki boş satırı silmek
 sonucu **değiştirmez** — aradaki boşluk değil, bandın IMPLEMENTATION gövdesindeki **yeri** kırar.
-"Bitişikle" reçetesi bu ölçümle çürümüştür (bkz. `checklists/bug-checklist-backend.md` BE-10b).
+"Bitişikle" reçetesi IMPLEMENTATION bölümü için bu ölçümle çürümüştür (bkz. `checklists/bug-checklist-backend.md` BE-10b).
 
 ✅ **DOĞRU REÇETE — iki seçenek:**
 1. Bandı **SİL** (metot/alan silinince ortada kalan not = en sık sebep), **veya**
@@ -375,9 +379,9 @@ Bu, "hangi satır" bilgisi vermeyen her `400`/save-scan reddinde uygulanabilir; 
 **⚠ YEREL GATE'LERİN HİÇBİRİ YAKALAMIYOR (ölçüldü 2026-07-31):** `run_review.py` **PASS** ·
 abaplint **temiz** → SAP **400**. Yani "reviewer geçti" bu tuzağa karşı hiçbir şey söylemez;
 hata yalnız canlı PUT'ta çıkar.
-> **Ön-kapı adayı (henüz YOK — gate değil):** `ENDMETHOD.`/`IMPLEMENTATION.` ↔ yorum ↔ `METHOD`
-> üçlüsünü push'tan ÖNCE tarayan deterministik bir script yazılabilir. ADR 0019 gate-moratoryumu
-> gereği **önce bu doküman + BE-10b denenir**; yetmediği ölçülürse açık onayla gate'lenir.
+> **Ön-kapı (2026-10-18, kullanıcı onaylı — ADR 0019 şart 5):** doküman + BE-10b dört olayda yetmedi;
+> `scripts/validators/checklist_check.py --ids BE-10b` beş konumu push'tan ÖNCE tarar ve run_review
+> `class_push` bunu BLOCKER koşar (ana sınıf kaynağı; `ccimp`/`ccau` include'ları taranmaz → elle).
 
 📌 İlgili: `claude/memory-seed/feedback_detached-leading-abapdoc-class-push-400.md` (yetim-yorum
 teşhisi) · BE-10b.
@@ -563,7 +567,11 @@ python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --name
 ## `run_pretty_printer.py` — SAP Pretty Printer çıktısını ALIR (sunucuya YAZMAZ)
 
 > **Ne zaman:** bir ABAP kaynağının SAP'nin kendi Pretty Printer'ına göre nasıl görünmesi
-> gerektiğini görmek için. Zorunlu adım DEĞİL.
+> gerektiğini görmek için. **Bu ARACI koşmak zorunlu değildir** (yalnız canlı `source/main`'i okur);
+> **biçimlemenin kendisi zorunludur:** teslimden (push / bug-gate) önce bu turda değişen her metot ve
+> include, aşağıdaki durumsuz uçla (`pretty_print(None, <kaynak>)`) biçimlenmiş hâliyle aynı olmalı —
+> `checklists/bug-checklist-backend.md` **BE-88**. Gerekçe: ATC bulgusunu sonradan kovalamak birim başına
+> tur açar (aşağıdaki "ATC 'Incorrect Pretty Print state'" mekanizması).
 
 ```bash
 python core/scripts/run_pretty_printer.py --object-name ZCL_SD001_ORDER --object-type class --cwd <proje-kökü>

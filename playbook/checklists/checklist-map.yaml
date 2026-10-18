@@ -569,7 +569,6 @@ maddeler:
     kontrol: be85_empty_key_sort
     seviye: uyari
     yazan_kanali: claude/agents/backend-expert.md
-    ayrildi: true
     not: "aynı dosyada `WITH EMPTY KEY` bildirilen tablo/tip"
   - id: BE-86
     sinif: A
@@ -577,7 +576,6 @@ maddeler:
     kontrol: be86_alpha_out
     seviye: bilgi
     yazan_kanali: claude/agents/backend-expert.md
-    ayrildi: true
     not: alan tipi bilinmediğinden WARN
   - id: BE-87
     sinif: A
@@ -585,7 +583,6 @@ maddeler:
     kontrol: be87_abapdoc_konum
     seviye: uyari
     yazan_kanali: claude/agents/backend-expert.md
-    ayrildi: true
     not: "ölçülmüş biçim: `\"!` bloğu iki noktalı zincir bildiriminden hemen önce → FAIL; ardından bildirim gelmeyen `\"!` → WARN"
   - id: BE-88
     sinif: B
@@ -593,7 +590,6 @@ maddeler:
     kontrol: be88_pretty_print
     seviye: uyari
     yazan_kanali: claude/agents/backend-expert.md
-    ayrildi: true
     not: "SAP pretty printer ucu (durumsuz, yazmaz); kullanıcının ADT ayarı ↔ ATC varyantı farkı olabilir"
   - id: FE-01
     sinif: A
@@ -910,14 +906,12 @@ maddeler:
     kontrol: fe51_selectall
     seviye: uyari
     yazan_kanali: claude/agents/frontend-expert.md
-    ayrildi: true
   - id: FE-52
     sinif: B
     uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
     kontrol: null
     seviye: uyari
     yazan_kanali: claude/agents/frontend-expert.md
-    ayrildi: true
     not: "canlı yanıt şekli (Edm.Decimal boş → \"0.000\") ölçümü"
   - id: DOC-KD-01
     sinif: C

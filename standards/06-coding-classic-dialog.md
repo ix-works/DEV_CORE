@@ -179,4 +179,4 @@ elle `MATCHCODE` DDIC attachment'ın önüne geçer — yeni ekranda `MATCHCODE`
 - ALV (klasik): **ADR 0012 template-first** → `playbook/templates/classic-alv-list.prog.abap` (örnek `ZSD000_P_ALV_TEMP1`). Ekran/status üretimi: `playbook/adt-fugr-functions.md` §6. Adobe çıktı: `standards/07-output-forms.md`
 - Datafield diyalog: `playbook/templates/classic-dynpro-dialog.prog.abap` · `playbook/howto-classic-dynpro-datafield-screens.md`
 - İskelet üretimi: `scripts/scaffold_classic_program.py` · RAP karşılaştırma: `standards/05`
-- Modül semantiği: `governance/modules/<MOD>/`
+- Modül semantiği: `playbook/modules/referans/<mod>/`

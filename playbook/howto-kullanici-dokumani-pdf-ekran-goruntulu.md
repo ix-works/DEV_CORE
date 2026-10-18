@@ -17,7 +17,13 @@ status: active
 **Temiz markdown kaynağı → python-markdown → HTML+CSS → Chromium/Playwright `page.pdf`.**
 (Araştırma 2026-06-11: WeasyPrint alternatif ama Windows'ta Pango/Cairo kurulum derdi; pandoc kurulu değil. Chromium `page.pdf` modern CSS + resim için en pürüzsüz, zaten Playwright MCP'de mevcut.)
 
-Üreteç hazır: **`scripts/build_kd_pdf.py`** (KD için; başka doküman için kopyala-uyarla). Çıktı: `docs/<DOC>.html` + `<DOC>.pdf`.
+Üreteç hazır — **kopyalama, çağır:** **`scripts/build_doc_pdf.py`** (her KD/FS/TS için genel derleyici;
+`![](screenshots/..)` görselleri + ```` ```mermaid ```` blokları):
+`python core/scripts/build_doc_pdf.py <girdi.md> <cikti.html> ["Doküman Başlığı"] --pdf` (isteğe bağlı
+`--sayfa-no` / `--yer-imi`; ayrıntı dosyanın docstring'inde). Çıktı: `docs/<DOC>.html` + `<DOC>.pdf`.
+`scripts/build_kd_pdf.py` yalnız FIG/portal yer tutuculu eski KD düzeni içindir.
+⛔ Doküman başına üreteç kopyası açma: kopya düzeltmeleri almaz ve her biri ayrı bakım yüküdür
+(bir projede doküman başına kopyalanmış 55 üreteç ölçüldü, 2026-10-18; çalışanlar toplanmaz, yenisi açılmaz).
 
 ---
 
@@ -50,7 +56,7 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
 ## B — PDF'i KUR (`scripts/build_kd_pdf.py` deseni)
 
 1. **Markdown KAYNAĞINI temizle** (en kritik adım):
-   - **Placeholder'lar ``` kod-bloğu içindeyse**, fence **BLOĞUNUN TAMAMINI** resimle değiştir — fence İÇİNE `![](..)` koyma, **markdown kod-bloğunda resmi parse ETMEZ** (metin kalır). Regex: ```` ```…[PLACEHOLDER]…``` ```` → `![cap](src)`.
+   - **Placeholder'lar ``` kod-bloğu içindeyse**, fence **BLOĞUNUN TAMAMINI** resimle değiştir — fence İÇİNE `![](..)` koyma, **markdown kod-bloğunda resmi parse ETMEZ** (metin kalır). Regex: içinde `[PLACEHOLDER]` geçen fence bloğunun tamamı → `![cap](src)`.
    - **Ham `<figure>` HTML KULLANMA**: `md_in_html` bozar (sadece sonuncu sağ kalır). Yerine **markdown resmi** `![cap](src)` + ardından `*cap*`; HTML üretimi SONRASI `<p><img></p>\s*<p><em>cap</em></p>` → `<figure><figcaption>` regex ile sar.
 2. **`markdown.markdown(...)` — `toc` eklentisi ZORUNLU, TR-farkındalı slug ile:**
    ```python

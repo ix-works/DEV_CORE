@@ -11,7 +11,9 @@ metadata:
 1. **UI5 flexibility (LREP):** `/sap/bc/lrep/flex/settings` + `/data`. `manifest flexEnabled:false` 1.120'de TAM durdurmaz.
 2. **TablePersonalizer variant servisi `ZSD000_UI_VARIANT_O2`:** `new ODataModel(VAR_SERVICE_URL)` instantiation'ı metadata çekip 401 atıyor (bu serviste sistem 401 dönüyor — yayında değil/yetki yok → zaten her zaman localStorage fallback).
 
-**Why:** `fiori run` run-time proxy auth'u **tarayıcı popup'ı** (keychain "No credential found"). `FIORI_TOOLS_USER/PASSWORD` env yalnız **deploy** içindir (standards/03 §2.4.1), run-proxy'de çalışmaz. Mockserver sadece app OData'sını mock'lar; lrep/variant canlıya gider.
+**Why:** `fiori run` run-time proxy auth'u **tarayıcı popup'ı** (keychain "No credential found"). `FIORI_TOOLS_USER/PASSWORD` env yalnız **deploy** içindir (standards/03 §2.4.1), run-proxy'de çalışmaz *(bu iddia ÇÜRÜDÜ — aşağıdaki şerh)*. Mockserver sadece app OData'sını mock'lar; lrep/variant canlıya gider.
+
+> ⚠ **ŞERH (2026-10-18):** kimlikli `npx fiori run` ile (aynı kabukta `FIORI_TOOLS_USER` / `FIORI_TOOLS_PASSWORD` verilerek) proxy `$metadata` **200** ölçüldü (2026-09-05, s4_private 2025, bir tüketici projede) → bkz. `standards/03` §2.4.3; bu notun *"env yalnız deploy içindir, run-proxy'de çalışmaz"* iddiası o ölçümle çürüdü. Şerhin kapsamı yalnız bu iddiadır: notun diğer iddiaları (LREP flexibility + variant servisi kaynaklı popup, hesap kilidi) bu ölçümle sınanmadı.
 
 **How to apply:** Grid UI'ı backend'siz lokal çalıştırmak için: (1) `index.html` bootstrap'a **`data-sap-ui-flexibility-services="[]"`** (lrep çağrısı sıfırlanır). (2) Bu app'in TablePersonalizer.js kopyasında **`LOCAL_VARIANTS_ONLY=true`** → `_varModel()` throw → localStorage-only (canlı ODataModel kurulmaz, popup yok). (3) `start-mock`'u **`index.html`** açacak şekilde ayarla (FLP/flp.html ekstra flex çağrısı yapar). (4) Doğrulama: server log'unda `lrep|VARIANT|401` = 0. Tarayıcıda Ctrl+Shift+R (cached JS temizle). İlişkili: [[feedback_powershell-utf8-bom-trap]], standards/03 §2.4.1.
 

@@ -77,6 +77,6 @@ CALL FUNCTION 'FP_JOB_CLOSE'.
 - ADR 0005: Z driver program (Z namespace), std output objesine dokunma; NAST config operatör.
 
 ## 4. İlgili
-- Driver iş mantığı: `standards/06-coding-classic-dialog.md` · Output config: `governance/modules/<MOD>/spro.md` (NACE/NAST)
+- Driver iş mantığı: `standards/06-coding-classic-dialog.md` · Output config: `playbook/modules/referans/<mod>/spro.md` (NACE/NAST)
 - Statutory TR: gap-analysis #10 (BOOKING/ORDER sprint'inde)
 - Form objesi olmadan PDF (Yol D): [`../playbook/howto-pdf-ads-xdp.md`](../playbook/howto-pdf-ads-xdp.md)
