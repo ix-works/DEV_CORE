@@ -6,8 +6,12 @@ Kullanım:
     python scripts/validators/check_package_rules_present.py --source-root ERP
 
 Exit kodu:
-    0 — Tüm paketlerin .rules.md'si mevcut
+    0 — Tüm paketlerin .rules.md'si mevcut · ya da `[SKIP] KAPSAM SIFIR` (kök var, paket yok)
     1 — Eksik paket var (liste stderr'de)
+    2 — ÖLÇÜLEMEDİ: kaynak kökü HİÇ yok (yanlış `source_root`/cwd; "0 paket" DEĞİL)
+
+`find_packages` paket keşfinin TEK kaynağıdır: `check_package_rules_naming_standard` onu
+import eder (iki seviye `<source_root>/<MODÜL>/<PAKET>/`; kopya YOK).
 
 LESSONS_LEARNED #4 (Doc ≠ Enforcement) — kural varlığı kod ile zorunlu.
 """
@@ -55,10 +59,17 @@ def main() -> int:
 
     _p = Path(args.source_root)
     erp_root = _p if _p.is_absolute() else (project_root() / _p)
+    if not erp_root.is_dir():
+        # Kök HİÇ yok = yanlış `source_root`/cwd; "0 paket" ile aynı çıkışa düşmez (2026-10-18).
+        # `init_project` kökü `.gitkeep` ile yaratır ⇒ gerçek tüketicide bu dal erişilmez.
+        print(f"[ÖLÇÜLEMEDİ] kaynak kökü yok: {erp_root} (yanlış `source_root` ya da çalışma "
+              f"dizini — .rules.md varlığı ölçülemedi, 'temiz' DEĞİL)", file=sys.stderr)
+        return 2
     packages = find_packages(erp_root)
 
     if not packages:
-        print(f"UYARI: {erp_root}/ altında paket bulunamadı", file=sys.stderr)
+        print(f"[SKIP] KAPSAM SIFIR — {erp_root} altında paket yok; .rules.md varlığı "
+              f"ÖLÇÜLMEDİ ('temiz' DEĞİL).")
         return 0
 
     missing = [pkg for pkg in packages if not (pkg / ".rules.md").exists()]

@@ -106,24 +106,9 @@ def _live_matches_older_commit(path: Path, live_body: bytes, max_commits: int = 
 # Çift uzantılar (.ddls.asddls) suffix-zinciri ile değil, basename eşlemesiyle
 # yakalanır (aşağıda find_repo_source_file). .md companion dosyaları (ör.
 # *.srvb.md) KASITLI dışarıda — onlar source değil dokümantasyon.
-SOURCE_EXTENSIONS = (
-    ".srvd",          # service definition
-    ".srvb",          # service binding (source taşımaz ama tutarlılık için)
-    ".bdef",          # behavior definition
-    ".cds",           # CDS view (proje konvansiyonu)
-    ".ddls",          # CDS DDL source
-    ".asddls",        # CDS DDL source (SAP native ext)
-    ".abap",          # class/program/include/fugr
-    ".dcl",           # access control
-    ".asdcls",        # access control (SAP native ext)
-    ".ddlx",          # metadata extension
-    ".asddlxs",       # metadata extension (SAP native ext)
-    # Q352 (2026-09-26): Z tablo DDL'i bu evde `.tabl.ddl` / `.tabl` adlariyla durur
-    # (tuketici repo sayimi 12 + 1). Listede YOKKEN `sap_sync_pull --type table` dosyayi
-    # BULAMIYOR, "damgalanmadi" deyip cikiyordu; kapi da bu dosyalari hic gormuyordu.
-    ".tabl.ddl",      # tablo DDL (proje konvansiyonu)
-    ".tabl",          # tablo DDL (proje konvansiyonu, kisa ad)
-)
+# 2026-10-18: liste TEK KAYNAĞA taşındı (`utils/sap_kaynak_uzantilari.py`); sıra (tiebreak
+# önceliği) ve içerik AYNEN korundu. `init_project` `.gitattributes` LF bloğunu aynı listeden üretir.
+from utils.sap_kaynak_uzantilari import SAP_KAYNAK_UZANTILARI as SOURCE_EXTENSIONS  # noqa: E402
 
 # .md/.txt gibi dosyalar source değil — find sırasında elenir.
 _NON_SOURCE_SUFFIXES = (".md", ".txt", ".json", ".xml")

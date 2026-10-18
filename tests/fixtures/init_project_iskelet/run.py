@@ -57,11 +57,15 @@ MUTASYON: --mutasyon                → ① sökülür (kuyruk tohumu üretilmez
           --mutasyon-force-onerisi  → ③a eski `[ATLA] … (mevcut; --force ile ez)` satırı geri gelir
           --mutasyon-not-yok        → ③b koşum sonu [ATLA] notu basılmaz
           --mutasyon-eol            → ④ `.gitattributes` SAP kaynak LF bloğu sökülür
+          --mutasyon-eol-dar        → ④ blok ilk sürümün ELLE yazılmış 4 uzantısına döner
 
-  ④ SAP KAYNAK SATIR SONU (2026-10-18) — şablon `.gitattributes` `*.abap/*.cds/*.bdef/*.srvd`
-     için `eol=lf` taşır (SAP satır sonunu LF saklar; karışık CRLF/LF md5 kıyasında sahte
-     uyuşmazlık üretir — bir projede ölçüldü). ÖLÇÜT ETKİDİR, metin değil: `git check-attr eol`
-     (E1) · FP çapası: blok `.md`'ye taşmaz (E2) · 3. bağlamda da aynı etki (E3).
+  ④ SAP KAYNAK SATIR SONU (2026-10-18) — şablon `.gitattributes` core'un SAP kaynağı saydığı
+     HER uzantı için `eol=lf` taşır; liste TEK KAYNAKTAN üretilir (`utils/sap_kaynak_uzantilari`,
+     `source_drift.SOURCE_EXTENSIONS` aynı tuple). SAP satır sonunu LF saklar; karışık CRLF/LF
+     md5 kıyasında sahte uyuşmazlık üretir — bir projede ölçüldü. ÖLÇÜT ETKİDİR, metin değil:
+     `git check-attr eol` (E1: tek kaynaktaki HER uzantı) · FP çapası: blok `.md`'ye taşmaz
+     (E2) · 3. bağlamda da aynı etki (E3) · E4: `object_types` dosya uzantılarının (XML
+     dışı) hepsi de `lf` — iki listenin hizası ölçülür, elle kopya yok.
 ÇIKIŞ KODU SÖZLEŞMESİ (kardeş korpuslarla aynı): normal 0=hepsi geçti · 1=düşen var ·
   2=alet geçersiz (yama tutmadı / iki kip birden). Mutasyon kipinde 0 "düşen yok" DEMEK
   DEĞİLDİR — kararı `N/M OK` satırından oku.
@@ -93,9 +97,10 @@ MUT_GEVSEK = "--mutasyon-gevsek" in sys.argv
 MUT_FORCE = "--mutasyon-force-onerisi" in sys.argv
 MUT_NOT = "--mutasyon-not-yok" in sys.argv
 MUT_EOL = "--mutasyon-eol" in sys.argv
-if sum((MUT, MUT_GEVSEK, MUT_FORCE, MUT_NOT, MUT_EOL)) > 1:
+MUT_EOL_DAR = "--mutasyon-eol-dar" in sys.argv
+if sum((MUT, MUT_GEVSEK, MUT_FORCE, MUT_NOT, MUT_EOL, MUT_EOL_DAR)) > 1:
     print("HATA: iki mutasyon kipi birlikte verilemez"); raise SystemExit(2)
-HERHANGI_MUT = MUT or MUT_GEVSEK or MUT_FORCE or MUT_NOT or MUT_EOL
+HERHANGI_MUT = MUT or MUT_GEVSEK or MUT_FORCE or MUT_NOT or MUT_EOL or MUT_EOL_DAR
 
 SONUC: list[tuple[bool, str]] = []
 
@@ -135,9 +140,36 @@ FORMAT_CAGRISI = "GITIGNORE.format(source_root=a.source_root)"
 # ③ Q314 çapaları (ESKİ satır = 18bbe78'deki literal)
 ATLA_SATIRI_YENI = 'f"{ATLA_ETIKETI} {hedef} (mevcut; dokunulmadı)"'
 ATLA_SATIRI_ESKI = 'f"[ATLA] {hedef} (mevcut; --force ile ez)"'
-# ④ SAP kaynak LF bloğu (sökülecek çapa: uzantı satırları)
-EOL_BLOGU = "*.abap text eol=lf\n*.cds text eol=lf\n*.bdef text eol=lf\n*.srvd text eol=lf\n"
-SAP_UZANTI = ("a.abap", "b.cds", "c.bdef", "d.srvd")
+# ④ SAP kaynak LF bloğu (sökülecek çapa: tek kaynaktan üreten ifade)
+EOL_BLOGU = '''""" + "".join(f"*{u} text eol=lf\\n" for u in SAP_KAYNAK_UZANTILARI)'''
+# Çapa satır başındaki kapanış `"""` ile başlar ⇒ eski 4 satır ondan ÖNCE, string içine girer.
+EOL_DAR = "".join(f"*{u} text eol=lf\n" for u in (".abap", ".cds", ".bdef", ".srvd")) + '"""'
+
+
+def _modul(yol: Path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("_fx_" + yol.stem, yol)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+# Beklenen uzantılar GERÇEK tek kaynaktan okunur (fixture'da ikinci liste YOK).
+SAP_UZANTILARI = tuple(_modul(KOK / "scripts" / "utils" / "sap_kaynak_uzantilari.py")
+                       .SAP_KAYNAK_UZANTILARI)
+SAP_UZANTI = tuple(f"ornek{i}{u}" for i, u in enumerate(SAP_UZANTILARI))
+
+
+def object_types_uzantilari() -> tuple:
+    """`object_types` dosya uzantıları (XML/boş hariç): ana tablo + sınıf alt-include'ları."""
+    ot = _modul(KOK / "scripts" / "object_types.py")
+    out = []
+    for v in list(ot.OBJECT_TYPES.values()) + list(ot.CLASS_INCLUDE_TYPES.values()):
+        for k in ("file_extension", "abapgit_extension"):
+            e = v.get(k)
+            if e and not e.endswith(".xml") and e not in out:
+                out.append(e)
+    return tuple(out)
 NOT_BASKISI = ('    if any(s.startswith(ATLA_ETIKETI) for s in sonuc):\n'
                '        print("\\n" + ATLA_NOTU)\n')
 
@@ -164,7 +196,9 @@ def kaynak_uret() -> str:
     if MUT_NOT:
         metin = _sok(metin, NOT_BASKISI, "", "[ATLA] koşum sonu notu (Q314)")
     if MUT_EOL:
-        metin = _sok(metin, EOL_BLOGU, "", ".gitattributes SAP kaynak LF bloğu")
+        metin = _sok(metin, EOL_BLOGU, '"""', ".gitattributes SAP kaynak LF bloğu")
+    if MUT_EOL_DAR:
+        metin = _sok(metin, EOL_BLOGU, EOL_DAR, ".gitattributes SAP LF bloğu (dar, elle 4 uzantı)")
     return metin
 
 
@@ -386,9 +420,18 @@ def main() -> int:
         # ── ④ SAP KAYNAK SATIR SONU (etki: git check-attr) ──────────────────────
         git_init(proje)
         e1 = eol_attr(proje, *SAP_UZANTI)
-        kontrol(len(e1) == 4 and all(v == "lf" for v in e1.values()),
-                "E1 `.gitattributes` SAP kaynakları eol=lf (abap/cds/bdef/srvd)",
-                ", ".join(f"{k}={v}" for k, v in e1.items()) or "check-attr çıktısı YOK")
+        e1_kotu = {k: v for k, v in e1.items() if v != "lf"}
+        kontrol(len(SAP_UZANTI) >= 4 and len(e1) == len(SAP_UZANTI) and not e1_kotu,
+                f"E1 `.gitattributes` tek kaynaktaki {len(SAP_UZANTI)} SAP uzantısının HEPSİ eol=lf",
+                ", ".join(f"{k}={v}" for k, v in (e1_kotu or e1).items()) or "check-attr çıktısı YOK")
+        ot_uz = object_types_uzantilari()
+        ot_ornek = tuple(f"ot{i}{u}" for i, u in enumerate(ot_uz))
+        e4 = eol_attr(proje, *ot_ornek)
+        e4_kotu = {k: v for k, v in e4.items() if v != "lf"}
+        kontrol(len(ot_uz) >= 5 and len(e4) == len(ot_ornek) and not e4_kotu,
+                f"E4 `object_types` kaynak uzantılarının ({len(ot_uz)}, XML hariç) HEPSİ eol=lf "
+                "(iki listenin hizası)",
+                ", ".join(f"{k}={v}" for k, v in (e4_kotu or e4).items()) or "check-attr çıktısı YOK")
         e2 = eol_attr(proje, "docs/x.md", "notlar.txt")
         kontrol(len(e2) == 2 and all(v == "unspecified" for v in e2.values()),
                 "E2 FP blok .md/.txt'ye TAŞMAZ (eol unspecified)",

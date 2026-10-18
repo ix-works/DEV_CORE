@@ -42,6 +42,9 @@ tüketici projenin dosya düzenine kablolu bir core kapısı (ters yön sızınt
 beyan eder (`MAINTENANCE.md` §6 kataloğu):
     fm_doc_sync_sources: ["screen_gen:<MOD>/<PKG>/functions/<FM>.func.abap"]
 (`<kayıt-id>:<source_root-göreli yol>`; env override `IX_FM_DOC_SYNC_SOURCES`, virgülle).
+  · BOŞ env (`IX_FM_DOC_SYNC_SOURCES=""`) "yok" sayılır — yaml beyanını EZMEZ (önceden ezip
+    yanlış gerekçeli `[SKIP]` üretiyordu). Çıktı beyanın KAYNAĞINI yazar (env / project.yaml).
+  · Aynı kayıt-id iki kez verilirse ÖLÇÜLEMEDİ (exit 2) — önceden sonuncusu sessizce kazanıyordu.
 
 `--strict` BİLEREK NO-OP'tur: `run_all_validators --strict` bayrağını TÜM validator'lara
 iletir; bu gate'i oradan hard'a terfi ettirmek terfi kararını kazara bir çağıranın eline
@@ -53,12 +56,13 @@ Kullanım:
     python scripts/validators/check_fm_signature_doc_sync.py [--bulguda-exit1] [--selftest]
                                                              [--kayit <id>] [--core <yol>]
 Kablolama: run_all_validators (PROJE modu; CORE modunda SKIP — proje kaynağı gerekir).
-Kalıcı korpus: tests/fixtures/fm_imza_doc_sync (15 vektör, 7 mutasyon).
+Kalıcı korpus: tests/fixtures/fm_imza_doc_sync (18 vektör, 9 mutasyon).
 """
 # ENFORCES: CLC-SCR7
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -87,6 +91,7 @@ class Kayit:
 
 
 CONFIG_ANAHTARI = "fm_doc_sync_sources"
+ENV_ANAHTARI = "IX_" + CONFIG_ANAHTARI.upper()      # `utils.project_config.cfg` ile aynı ad kuralı
 
 KAYITLAR = [
     Kayit(
@@ -159,12 +164,22 @@ def belge_parametreleri(metin: str, fm: str) -> set:
     return set(_TOKEN.findall(metin[i + len(bas_etiket):j]))
 
 
-def beyanlar() -> dict:
-    """`fm_doc_sync_sources` → {kayıt-id: source_root-göreli yol}. Bozuk giriş Olculemedi."""
-    from utils.project_config import cfg  # noqa: E402  (proje tarafı = kanonik API)
-    ham = cfg(CONFIG_ANAHTARI)
+def beyanlar() -> tuple:
+    """(`{kayıt-id: source_root-göreli yol}`, beyan-kaynağı | None). Bozuk giriş Olculemedi.
+
+    Öncelik `cfg` ile aynıdır (env → project.yaml) TEK farkla: BOŞ env "yok" sayılır.
+    `cfg` boş env'i değer kabul eder ve yaml'a hiç bakmaz ⇒ beyanlı proje yanlış gerekçeli
+    `[SKIP]` alırdı. `cfg`'nin kendisi değiştirilmedi (tüm anahtarların ortak davranışı).
+    """
+    from utils.project_config import _yaml_lite, project_root  # noqa: E402  (proje tarafı)
+    env = os.environ.get(ENV_ANAHTARI)
+    if env is not None and env.strip():
+        ham, kaynak = env, f"env {ENV_ANAHTARI}"
+    else:
+        ham = _yaml_lite(str(project_root() / "project.yaml")).get(CONFIG_ANAHTARI)
+        kaynak = "project.yaml"
     if ham in (None, "", []):
-        return {}
+        return {}, None
     girdiler = ham.split(",") if isinstance(ham, str) else list(ham)
     out = {}
     for g in (x.strip() for x in girdiler):
@@ -172,9 +187,13 @@ def beyanlar() -> dict:
             continue
         kid, ayrac, yol = g.partition(":")
         if not ayrac or not kid.strip() or not yol.strip():
-            raise Olculemedi(f"`{CONFIG_ANAHTARI}` girişi `<kayıt-id>:<yol>` biçiminde DEĞİL: {g!r}")
+            raise Olculemedi(f"`{CONFIG_ANAHTARI}` girişi `<kayıt-id>:<yol>` biçiminde DEĞİL: {g!r} "
+                             f"(kaynak: {kaynak})")
+        if kid.strip() in out:
+            raise Olculemedi(f"`{CONFIG_ANAHTARI}` aynı kayıt-id'yi iki kez beyan ediyor: "
+                             f"{kid.strip()} (kaynak: {kaynak}) — hangisinin ölçüleceği belirsiz")
         out[kid.strip()] = yol.strip()
-    return out
+    return out, (kaynak if out else None)
 
 
 def kaynak_yolu(rel: str) -> Path:
@@ -182,13 +201,16 @@ def kaynak_yolu(rel: str) -> Path:
     return source_dir() / rel
 
 
-def kayit_kos(kayit: Kayit, core: Path, beyan: dict) -> tuple:
+def kayit_kos(kayit: Kayit, core: Path, beyan: dict, kaynak: str | None = None) -> tuple:
     """(durum, satirlar) döner. durum ∈ {TEMİZ, BULGU, ATLANDI, ÖLÇÜLEMEDİ}."""
     out = []
     if kayit.id not in beyan:
+        nerede = (f"{kaynak} beyanında bu kayıt yok" if kaynak else
+                  f"beyan yok: env `{ENV_ANAHTARI}` boş/tanımsız · `project.yaml` "
+                  f"`{CONFIG_ANAHTARI}` yok")
         return ("ATLANDI", [f"  [SKIP] ATLANDI({kayit.id}): {kayit.fm} kaynağı bu projede beyan "
-                            f"edilmemiş (`project.yaml` `{CONFIG_ANAHTARI}`) — imza↔kılavuz "
-                            f"senkronu ÖLÇÜLMEDİ. Proje bu üreteci sağlıyorsa yolu beyan et."])
+                            f"edilmemiş ({nerede}) — imza↔kılavuz senkronu ÖLÇÜLMEDİ. Proje bu "
+                            f"üreteci sağlıyorsa yolu beyan et."])
     src = kaynak_yolu(beyan[kayit.id])
     if not src.is_file():
         return ("ÖLÇÜLEMEDİ", [f"  ÖLÇÜLEMEDİ({kayit.id}): `{CONFIG_ANAHTARI}` beyan ettiği "
@@ -290,7 +312,7 @@ def main() -> int:
         return 2
 
     try:
-        beyan = beyanlar()
+        beyan, beyan_kaynagi = beyanlar()
     except Olculemedi as e:
         print(f"ÖLÇÜLEMEDİ: {e}", file=sys.stderr)
         return 2
@@ -302,7 +324,7 @@ def main() -> int:
 
     bulgulu, olculemedi, atlanan, satirlar = [], [], [], []
     for k in kayitlar:
-        durum, cikti = kayit_kos(k, core, beyan)
+        durum, cikti = kayit_kos(k, core, beyan, beyan_kaynagi)
         satirlar += cikti
         if durum == "BULGU":
             bulgulu.append(k.id)
@@ -328,7 +350,8 @@ def main() -> int:
         print(f"[SKIP] {len(kayitlar)} kaydın hiçbiri bu projede beyan edilmemiş — "
               f"KAPSAM SIFIR (ÖLÇÜLMEDİ, 'temiz' DEĞİL).")
         return 0
-    print(f"[OK] {len(kayitlar) - len(atlanan)} kayıt: imza ↔ kılavuz senkron"
+    print(f"[OK] {len(kayitlar) - len(atlanan)} kayıt: imza ↔ kılavuz senkron "
+          f"(beyan: {beyan_kaynagi})"
           + (f" · {len(atlanan)} kayıt beyan edilmemiş (ÖLÇÜLMEDİ)." if atlanan else "."))
     return 0
 
