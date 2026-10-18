@@ -14,6 +14,11 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## playbook/howto-cekirdek-guncelleme.md (§3 CORE-INDEX + §3e + §8) · playbook/lessons-learned.md (PATTERN #28 ⑤) · claude/memory-seed/feedback_core-index-dala-bagli.md (madde 5)
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-10-18 | Güncelleme turunda yazılan CORE-INDEX **commit edilir** (yalnız damga farkı olsa bile); §3e'de her seçilen projede o projenin PR'ıyla, onay sorusu bunu kapsar; §8 proje satırına CORE-INDEX commit sütunu. PATTERN #28 ⑤ ve tohum dersi madde 5 "commit etme"den "core-commit değiştiyse commit et"e çevrildi. | Tüketici makinede iki `/core-guncelle` koşusu: diğer üç projede önceki turun CORE-INDEX'i commit'siz kalmıştı (damga + içerik farkı) ⇒ ağaçlar kirli, §2/§3e "kirli → DUR" ve `ix_doctor` uyarısı. Ajan aynı turda kendi projesinde yalnız damga farkını PR'la commit etti — ⑤ ile çelişti. F12c (2026-10-03) `--ci-check`'in damgadaki core-commit'i girdi olarak kullandığını ölçmüştü, ⑤ güncellenmemişti. | Doküman değişikliği; kod davranışı değişmedi. `project-guard.yml` adım `build_core_index.py --ci-check` ve `_ci_check()` (damga core-commit ≠ klon HEAD ⇒ `SKIPPED measured=false`) okunarak doğrulandı. | — | (bu PR) |
+
 ## playbook/howto-cekirdek-guncelleme.md (§2 + §3e) · claude/commands/core-guncelle.md (adım 2 + 5) · claude/memory-seed (1 ders terfisi) — proje reposu çekirdekle aynı turda çekilir (2026-10-18; lider, kullanıcı kararı "gün sonu") — ⚠GEVŞETME YOK
 | tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
 |---|---|---|---|---|---|

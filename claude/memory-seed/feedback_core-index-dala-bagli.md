@@ -34,8 +34,12 @@ yolu bulsun) tersine döner: yanlış yol verir.
    dalı) — kişisel PR dalından DEĞİL.
 4. Core'daki işini PR'a taşıdıktan sonra **junction'ı eski dalına geri al**; feature dalında
    gereğinden uzun oturma.
-5. Fark yalnız `uretim:`/`core-commit:` yorum satırıysa **commit etme** — o satır tazelik
-   kıyasında yok sayılır, commit'lemek gürültüdür.
+5. Fark yalnız damga satırıysa: `core-commit:` **değiştiyse** (core `main`'de — çekirdek
+   güncellemesi) **commit ET**. Proje CI'ındaki `build_core_index --ci-check` tazeliği ancak
+   damgadaki core-commit klonlanan `main` HEAD'ine eşitken ölçer; commit'siz damga C-IDX-01'i
+   `SKIPPED` bırakır ve proje ağacını kirli tutar (sonraki güncellemede "kirli → DUR").
+   `core-commit:` aynı, yalnız `uretim:` zamanı farklıysa zaten fark oluşmaz (dosya yeniden
+   yazılmaz). *(2026-10-18 düzeltmesi — eski hâli "commit etme" diyordu.)*
 
 ⚠ Aynı sınıf worktree'de de geçerli: `_worktrees/` altında core'un ikinci bir çalışma ağacı
 varsa, hangisinin junction'a bağlı olduğunu **varsayma, ölç**.
@@ -43,5 +47,5 @@ varsa, hangisinin junction'a bağlı olduğunu **varsayma, ölç**.
 İlişkili: [[feedback_sonucu-olc-uygulamayi-degil]] (ilk görüntüye değil sonuca bak) ·
 [[feedback_dogrulama-sezgileri-dort-kural]] (bulunamadı ≠ yok).
 
-Son-doğrulama: 2026-08-09 (core'a known-errors §12.7 eklenince yaşandı)
+Son-doğrulama: 2026-10-18 (5. madde düzeltildi — CI `--ci-check` damgayı girdi olarak kullanır; ilk vaka 2026-08-09)
 Applies-to: `core/` junction'lı TÜM projeler · CORE-INDEX / üretilmiş her indeks-benzeri artefakt
