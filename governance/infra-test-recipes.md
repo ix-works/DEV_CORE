@@ -3526,3 +3526,18 @@ python tests/fixtures/b0_secim/run.py                           # repo kökünde
 - **Mutasyon kipi düşmesi gereken vektörü İLAN eder:** yalnız rc ≠ 0 yakalama sayılmaz; ilan edilen vektör düşmezse `ILAN EDILEN VEKTOR DUSMEDI`. Adapter'da durum tekrarını üç katman birlikte kapatır (status=0 · boş `status_forcelist` · POST'suz `allowed_methods`) — tek katmanı açan mutasyon KAÇAR (ölçüldü); MU7 üçünü birden keser.
 - **Taban beklentisi:** 998e739'a karşı 14 vektör düşer; düşmeyen 6'sı kontrol (V1 · V3 · V11 · K1 · K2 · M2) — eski kod da bayat-imza ve bağlantı reddinde tekrar ediyordu, bu davranış korunmuştur.
 - **Sınır (ÖLÇÜLMEDİ):** canlı SAP'de koşulmadı; 4xx'te SAP'nin handler'a girmediği ölçülmedi (işaret muhafazakâr True); `_request_with_csrf_retry`'ın 403 + CSRF reddinde ikinci POST'u bu turun kapsamı değil (CSRF reddi handler öncesidir varsayımı canlıda ölçülmedi).
+
+## B86 — `adtcore:responsible` yer tutucusu + öznitelik kaçışı (Issue #339, 2026-10-18)
+
+```
+python tests/fixtures/responsible_kacis/run.py                        # 24/24 (ağsız; .conn_adt OKUNMAZ, sahte bağlantı dosyalı geçici dizin)
+python tests/run_battery.py responsible_kacis --kardes msag_mesaj_silme msgtext_uzunluk_guard b0_secim
+python tests/fixtures/responsible_kacis/run.py --eski-kod 998e739     # NEGATİF: eski kodda 4/4 ParseError (git ister)
+```
+
+- **Ölçüm yüzeyi:** üç script GERÇEK `main()` üzerinden `--dry-run` ile koşar. İstemci `SAPADTClient.__new__` ile kurulur; `session`'a dokunmak AssertionError verir. Gövde `build_xml` sarmalanarak yakalanır, çünkü önizleme 1200/1500 karakterde kesilir ve kesik gövde ayrıştırılamaz. Lib vektörleri gerçek `create_object` / `create_dataelement`'i koşar; `session.post` gövdeyi kaydeder, `_get_headers` / `_retry_request` / `_get_domain_typeinfo` / `fetch_csrf_token` örnek düzeyinde sahtedir.
+- **Vektörler (önek → ilan):** V1 argümansız → bağlantı kullanıcısı · V2 `A&B<x>"y` birebir · V3 kullanıcı None/boşluk → exit 2, gövde yok · V4 tırnaklı açıklama birebir (DTEL/DOMA kardeşi) · V5 silme gövdesi çift kaçış yok · L1–L5 lib. Değer brif örneğine (`A&B<x>`) `"` eklenmiştir; `attr_escape` ile çıplak `xml_escape` arasındaki fark YALNIZ tırnakla görünür.
+- **20 mutasyon kipi, her biri düşecek vektörü İLAN eder.** İlan edilen düşmezse exit 3 (KAÇTI), çapa tek eşleşmezse exit 2. Kip → ilan: `pmc/dtel/doma-kacis` V2 · `dtel/doma-aciklama` V4 · `*-varsayilan` V1 · `*-dur` V3 · `coz-sessiz` V3-pmc · `pmc-cift-kacis` V5 · `lib-obje-sorumlu/aciklama` L2 · `lib-obje-dur` L3 · `lib-dtel-sorumlu/aciklama` + `lib-etiket` L4 · `lib-dtel-dur` L5.
+- **`xml_kacis` mutasyonu `sys.modules['utils.xml_kacis']` enjeksiyonuyla** yapılır. Script'ler ve lib'in tembel import'u mutasyonlu modülü bağlar, koşum sonunda kayıt silinir. msag M7/M16 da aynı yolla (`load(kacis_mut=…)`) yeni modülü bozar.
+- **`--eski-kod` kip DEĞİLDİR (GECERLI_KIP dışında):** `git show` ister. Sığ klonda `[DOGRULANAMADI]` exit 2 verir; `kip_kosabilirligi` yalnız ilk mutasyon kipini koştuğu için CI'ı etkilemez. Taban öz-denetimi: ref'te `sorumlu_coz` geçiyorsa taban geçersizdir (exit 2).
+- **ÖLÇÜLMEDİ:** SAP'nin argümansız (eski) gövdeye yanıtı (400 mü, literal kayıt mı?) canlı yazım gerektirir. Lib'de "kullanıcı çözülemedi" dalı yalnız sahte istemciyle ölçüldü; bağlantı doğrulamasından geçmiş gerçek istemcide bu dala ulaşılıp ulaşılmadığı ölçülmedi.

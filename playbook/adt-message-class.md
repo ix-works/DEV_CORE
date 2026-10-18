@@ -51,9 +51,12 @@ python scripts/populate_message_class.py `
   --package ZSD000_CLC `
   --transport <TRANSPORT> `
   --description "Sevkemri Mesaj Sinifi" `
-  --responsible <SAP_USER> `
   --messages-csv ERP/SD/ZSD001_CLC/messages.csv `
   --cwd <PROJECT_ROOT>
+
+# --responsible <SAP_USER> opsiyonel: verilmezse bağlantı kullanıcısı (.conn_adt ADT_SAP_USER)
+# yazılır; o da boşsa araç YAZMADAN exit 2 ile durur (Issue #339 — eskiden varsayılan
+# `<SAP_USER>` yer tutucusuydu ve kaçışsız yazıldığı için gövde geçersiz XML oluyordu).
 
 # Sadece mevcut durumu listelemek için:
 python scripts/populate_message_class.py --name ZSD001 ... --verify-only

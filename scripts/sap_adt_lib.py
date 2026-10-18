@@ -5131,11 +5131,22 @@ class SAPADTClient:
         """
 
 
+        # adtcore:responsible + description öznitelik değeridir → `attr_escape` (Issue #339).
+        # Çözülemeyen sorumlu ağ çağrısından ÖNCE durdurulur: eskiden `None` f-string'e
+        # `"None"` diye yazılıyordu (sessiz yer tutucu).
+        from utils.xml_kacis import attr_escape, sorumlu_coz  # lazy: object_types deseni
+        sorumlu = sorumlu_coz(responsible, self)
+        if sorumlu is None:
+            raise SAPValidationError(
+                'adtcore:responsible cozulemedi: responsible verilmedi ve baglanti '
+                'kullanicisi (ADT_SAP_USER) bos', field='responsible')
+        responsible_xml = attr_escape(sorumlu)
+        description_xml = attr_escape(description or '')
+
         # Ensure we have CSRF token
         if not self.csrf_token:
             self.fetch_csrf_token()
 
-        responsible_xml = responsible or self.user
         name_upper = name.upper()
         package_upper = package_name.upper()
 
@@ -5195,7 +5206,7 @@ class SAPADTClient:
                 creation_body = f'''<?xml version="1.0" encoding="UTF-8"?>
 <{xml_element}:abapProgram xmlns:{xml_element}="{namespace}"
                       xmlns:adtcore="http://www.sap.com/adt/core"
-                      adtcore:description="{description}"
+                      adtcore:description="{description_xml}"
                       adtcore:name="{name_upper}"
                       adtcore:responsible="{responsible_xml}"
                       adtcore:masterLanguage="{self.language}">
@@ -5206,7 +5217,7 @@ class SAPADTClient:
 <{xml_element}:abapInclude xmlns:{xml_element}="{namespace}"
                       xmlns:adtcore="http://www.sap.com/adt/core"
                       adtcore:type="{obj_type}"
-                      adtcore:description="{description}"
+                      adtcore:description="{description_xml}"
                       adtcore:name="{name_upper}"
                       adtcore:responsible="{responsible_xml}"
                       adtcore:masterLanguage="{self.language}">
@@ -5218,7 +5229,7 @@ class SAPADTClient:
 <{xml_element}:abapInterface xmlns:{xml_element}="{namespace}"
                             xmlns:adtcore="http://www.sap.com/adt/core"
                             adtcore:type="{obj_type}"
-                            adtcore:description="{description}"
+                            adtcore:description="{description_xml}"
                             adtcore:name="{name_upper}"
                             adtcore:responsible="{responsible_xml}"
                             adtcore:masterLanguage="{self.language}">
@@ -5230,7 +5241,7 @@ class SAPADTClient:
 <{xml_element}:abapClass xmlns:{xml_element}="{namespace}"
                             xmlns:adtcore="http://www.sap.com/adt/core"
                             adtcore:type="{obj_type}"
-                            adtcore:description="{description}"
+                            adtcore:description="{description_xml}"
                             adtcore:name="{name_upper}"
                             adtcore:responsible="{responsible_xml}"
                             adtcore:masterLanguage="{self.language}">
@@ -5935,6 +5946,16 @@ class SAPADTClient:
         Returns:
             dict with success status and object URL
         """
+        # Öznitelikler `attr_escape`, eleman metinleri `xml_escape` (Issue #339): `&`/`<`/`"`
+        # içeren açıklama ya da etiket gövdeyi iyi biçimli olmaktan çıkarıyordu.
+        from xml.sax.saxutils import escape as _xe
+        from utils.xml_kacis import attr_escape, sorumlu_coz  # lazy: object_types deseni
+        sorumlu = sorumlu_coz(None, self)
+        if sorumlu is None:
+            raise SAPValidationError(
+                'adtcore:responsible cozulemedi: baglanti kullanicisi (ADT_SAP_USER) bos',
+                field='responsible')
+
         # Ensure we have CSRF token
         if not self.csrf_token:
             self.fetch_csrf_token()
@@ -5956,12 +5977,12 @@ class SAPADTClient:
         # Doğru kök: blue:wbobj + nested dtel:dataElement; TÜM zorunlu adtcore
         # attribute'lar (responsible/abapLanguageVersion/language) dolu olmalı.
         dtel_xml = f'''<?xml version="1.0" encoding="utf-8"?>
-<blue:wbobj adtcore:responsible="{self.user}"
+<blue:wbobj adtcore:responsible="{attr_escape(sorumlu)}"
             adtcore:masterLanguage="{self.language}"
             adtcore:abapLanguageVersion="standard"
             adtcore:name="{name.upper()}"
             adtcore:type="DTEL/DE"
-            adtcore:description="{description}"
+            adtcore:description="{attr_escape(description)}"
             adtcore:language="{self.language}"
             xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel"
             xmlns:adtcore="http://www.sap.com/adt/core">
@@ -5974,16 +5995,16 @@ class SAPADTClient:
     <dtel:dataType>{dom_datatype}</dtel:dataType>
     <dtel:dataTypeLength>{dom_length}</dtel:dataTypeLength>
     <dtel:dataTypeDecimals>{dom_decimals}</dtel:dataTypeDecimals>
-    <dtel:shortFieldLabel>{short_label}</dtel:shortFieldLabel>
+    <dtel:shortFieldLabel>{_xe(short_label)}</dtel:shortFieldLabel>
     <dtel:shortFieldLength>{len(short_label)}</dtel:shortFieldLength>
     <dtel:shortFieldMaxLength>10</dtel:shortFieldMaxLength>
-    <dtel:mediumFieldLabel>{medium_label}</dtel:mediumFieldLabel>
+    <dtel:mediumFieldLabel>{_xe(medium_label)}</dtel:mediumFieldLabel>
     <dtel:mediumFieldLength>{len(medium_label)}</dtel:mediumFieldLength>
     <dtel:mediumFieldMaxLength>20</dtel:mediumFieldMaxLength>
-    <dtel:longFieldLabel>{long_label}</dtel:longFieldLabel>
+    <dtel:longFieldLabel>{_xe(long_label)}</dtel:longFieldLabel>
     <dtel:longFieldLength>{len(long_label)}</dtel:longFieldLength>
     <dtel:longFieldMaxLength>40</dtel:longFieldMaxLength>
-    <dtel:headingFieldLabel>{heading_label}</dtel:headingFieldLabel>
+    <dtel:headingFieldLabel>{_xe(heading_label)}</dtel:headingFieldLabel>
     <dtel:headingFieldLength>{len(heading_label)}</dtel:headingFieldLength>
     <dtel:headingFieldMaxLength>55</dtel:headingFieldMaxLength>
     <dtel:searchHelp/>

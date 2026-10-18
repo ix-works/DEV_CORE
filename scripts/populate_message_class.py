@@ -33,9 +33,10 @@ Kullanım:
         --package ZSD000_CLC \\
         --transport <TRANSPORT> \\
         --description "Sevkemri Mesaj Sinifi" \\
-        --responsible <SAP_USER> \\
         --messages-csv messages.csv \\
         --cwd <PROJECT_ROOT>
+    (--responsible <SAP_USER> opsiyonel: verilmezse baglanti kullanicisi yazilir;
+     o da cozulemezse exit 2 — yer tutucu yazilmaz.)
 
     messages.csv format (UTF-8, ilk satır header):
         msgno,msgtext,selfexplainatory
@@ -75,13 +76,16 @@ import tempfile
 import urllib3
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from xml.sax.saxutils import escape as xml_escape
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+# Öznitelik kaçışı + responsible çözümü TEK KAYNAK (Issue #339). Eklenti yolu sys.path'in
+# BAŞINA girmeden ÖNCE import edilir: aynı adlı bir `utils` paketi gölgelemesin.
+from utils.xml_kacis import attr_escape, sorumlu_coz, SORUMLU_YOK_MESAJI  # noqa: E402
 
 # sap_adt_lib path
 _PLUGIN_PATH = r'C:\Users\<USER>\.config\opencode\ntt-marketplace\plugins\abaper\skills\sap-adt\scripts'
@@ -201,21 +205,9 @@ def load_messages_from_csv(csv_path: Path) -> list:
     return messages
 
 
-# `"` + satır/sekme karakterleri: XML öznitelik değeri NORMALLEŞTİRMESİ çıplak TAB/LF/CR'yi
-# boşluğa çevirir ⇒ kaçışlanmazsa gönderilen metin canlıdakinden FARKLI okunur (öz-denetim
-# yanıltıcı "öznitelik farkı" ile dururdu).
-_ATTR_KACIS = {'"': '&quot;', '\t': '&#9;', '\n': '&#10;', '\r': '&#13;'}
-
-
-def attr_escape(metin: str) -> str:
-    """XML ÖZNİTELİK değeri kaçışı: `& < >` + ÇİFT TIRNAK.
-
-    ⛔ Çıplak `xml_escape()` `"` işaretini KAÇIRMAZ (ölçüldü 2026-09-24:
-    `escape('a"b')` -> `'a"b'`). Öznitelikler çift tırnakla yazıldığı için tırnaklı
-    bir mesaj metni gövdeyi BOZUYORDU. Silme kipi canlı metni olduğu gibi geri
-    gönderir ⇒ tırnaklı tek bir canlı mesaj bütün silmeyi düşürürdü.
-    """
-    return xml_escape(metin, _ATTR_KACIS)
+# `attr_escape` (öznitelik kaçışı: `& < > "` + TAB/LF/CR) artık `utils/xml_kacis.py`'de
+# TEK KAYNAK (Issue #339 — kardeş araçlar da kullanır); yukarıda import edilir, bu modülün
+# adıyla da erişilebilir kalır.
 
 
 def build_xml(name: str, description: str, package: str, responsible: str,
@@ -240,7 +232,7 @@ def build_xml(name: str, description: str, package: str, responsible: str,
     msgs_xml = '\n'.join(satirlar)
 
     return f'''<?xml version="1.0" encoding="utf-8"?>
-<mc:messageClass adtcore:responsible="{responsible}"
+<mc:messageClass adtcore:responsible="{attr_escape(responsible)}"
                  adtcore:masterLanguage="{language}"
                  adtcore:name="{name}"
                  adtcore:type="MSAG/N"
@@ -533,10 +525,10 @@ def silme_planla(canli: dict, silinecek: list, oturum_dili: str) -> list:
 
 def silme_govdesi(canli: dict, silinecek: list, kalan: list) -> str:
     """Canlı başlık + kalan mesajlar (CANLI öznitelikleriyle) + deletedmessages."""
-    # `responsible` build_xml'de KAÇIŞSIZ yazılır (CSV kipi davranışı — varsayılan yer
-    # tutucusu değişmesin diye); canlıdan gelen değer burada kaçışlanır.
+    # `responsible` HAM verilir: build_xml her kipte `attr_escape` uygular (Issue #339).
+    # Burada da kaçışlamak çift kaçış olurdu (`&lt;` -> `&amp;lt;`).
     return build_xml(canli['name'], canli['description'], canli['package'],
-                     attr_escape(canli['responsible']), kalan,
+                     canli['responsible'], kalan,
                      language=canli['masterLanguage'], deleted=silinecek)
 
 
@@ -765,8 +757,9 @@ def main():
                         help='Transport request (e.g. <TRANSPORT>)')
     parser.add_argument('--description',
                         help='Class description')
-    parser.add_argument('--responsible', default='<SAP_USER>',
-                        help='Responsible user (default: <SAP_USER>)')
+    parser.add_argument('--responsible', default=None,
+                        help='Responsible user (varsayilan: baglanti kullanicisi; '
+                             'cozulemezse exit 2)')
     parser.add_argument('--messages-csv',
                         help='CSV file: msgno,msgtext,selfexplainatory')
     parser.add_argument('--cwd',
@@ -826,6 +819,13 @@ def main():
         print('[FAIL] CSV boş')
         return 1
 
+    # Ag cagrisindan ve yazmadan ONCE: verilmezse baglanti kullanicisi; o da bossa DUR
+    # (sessiz yer tutucu yok — Issue #339).
+    responsible = sorumlu_coz(args.responsible, client)
+    if responsible is None:
+        print(SORUMLU_YOK_MESAJI)
+        return 2
+
     # PRE-state
     if not args.dry_run:
         before = verify(client, args.name)
@@ -844,7 +844,7 @@ def main():
         name=args.name,
         description=args.description,
         package=args.package,
-        responsible=args.responsible,
+        responsible=responsible,
         transport=args.transport,
         messages=messages,
         dry_run=args.dry_run,
