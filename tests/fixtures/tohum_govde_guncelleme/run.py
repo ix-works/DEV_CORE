@@ -24,6 +24,13 @@ KULLANICI KARARI (civilenen sozlesme)
      (ezmeme yonunde yanilir); icerik tohumla ayniysa uyari DEGIL bilgi satiri.
   D  `--dry-run` hicbir sey yazmaz ama "Guncellenecek" listesini basar.
   T  `--terfi-adaylari` kovasi kosumdan sonra dogru kalir (kusurun regresyonu).
+  B  (#322, 2026-10-18) `--birlestirildi <dosya>`: elle birlestirilmis kopya (tohumun tamami +
+     yerel ek) icin "elle birlestir" uyarisi KAPANIR — manifest tohumun guncel sha'si, sonraki
+     kosum sessiz; tohum yeniden ilerlerse uyari GERI gelir. Frontmatter'a harness alani
+     (`originSessionId`/`modified`) eklenmis kopyada da calisir (bayt-esitlik aranmaz). Gecersiz
+     ad (yol · tohumda yok · yerelde yok · dokunulmamis) ve `--force`/`--terfi-adaylari` ile
+     birlikte kullanim -> exit 2 + HICBIR sey yazilmaz. `--prune`/`--dry-run` ile serbest.
+     Manifestsiz makinede yetim karari degismez (karar AYRI sozlukten).
 
 KOSUM:  python tests/fixtures/tohum_govde_guncelleme/run.py [--mutasyon-<kip>]
         [--seed-kaynak <dosya>]   (eski surumu olcmek icin: `git show <sha>:scripts/seed_memory.py`)
@@ -97,25 +104,77 @@ _MUT = {
     "--mutasyon-satir-sonu-uyari": (
         "                if _yalniz_satir_sonu(dst, f):\n",
         "                if False:\n"),
+    # ── #322 `--birlestirildi` ──
+    # isaret karara hic yansimaz (kusur geri gelir: uyari kapanmaz)
+    "--mutasyon-isaret-yok": (
+        "    karar_manifest.update(isaretli)\n",
+        "    pass\n"),
+    # isaret ESKI manifeste yazilir -> manifestsiz makinede yetim karari kayar
+    "--mutasyon-isaret-eski-manifeste": (
+        "    karar_manifest = dict(eski_manifest)\n    karar_manifest.update(isaretli)\n",
+        "    eski_manifest.update(isaretli)\n    karar_manifest = eski_manifest\n"),
+    # dokunulmamis dosya da isaretlenir -> otomatik guncelleme sessizce bastirilir
+    "--mutasyon-dokunulmamis-isaretlenir": (
+        '_mevcut_dosya_karari(_sha(dst), tohum_sha, eski_manifest.get(ad)) == "guncelle":',
+        '_mevcut_dosya_karari(_sha(dst), tohum_sha, eski_manifest.get(ad)) == "-":'),
+    # yol denetimi kalkar (savunma derinligi katmani; tohum-uyelik katmani yine reddeder)
+    "--mutasyon-yol-kabul": (
+        "        if not _ad_gecerli_mi(ad):\n",
+        "        if False:\n"),
+    # yerel kopya denetimi kalkar
+    "--mutasyon-yerelde-yok-kabul": (
+        "        if not dst.is_file():\n            hatalar.append(",
+        "        if False:\n            hatalar.append("),
+    # --force ile birlikte serbest kalir (yerel birlestirme EZILIR)
+    "--mutasyon-force-serbest": (
+        "    if args.birlestirildi and args.force:\n",
+        "    if False:\n"),
+    # --terfi-adaylari ile birlikte serbest kalir (isaret sessizce yok sayilir)
+    "--mutasyon-terfi-serbest": (
+        "    if args.birlestirildi and args.terfi_adaylari:\n",
+        "    if False:\n"),
+    # uyari satiri cikis komutunu ONERMEZ
+    "--mutasyon-ipucu-yok": (
+        'f"python core/scripts/seed_memory.py --birlestirildi {ad}{tgt}")',
+        '"")'),
 }
 _GECERLI_KIP = set(_MUT)
 
 # CORE-07: her kipin DUSMESI BEKLENEN vektor kumesi PINLIDIR, esitlikle kiyaslanir.
 _BEKLENEN_DUSEN: dict[str, set[str]] = {
-    "--mutasyon-guncelleme-yok": {"G1", "G2", "G3", "G4", "G5", "D2", "T2"},
+    # #322: B9 da duser — dokunulmamis dosyanin karari artik "guncelle" degil, isaret kabul edilir
+    "--mutasyon-guncelleme-yok": {"G1", "G2", "G3", "G4", "G5", "D2", "T2", "B9"},
     # yerel-ileri + iki CRLF kopya da ezilir -> Guncellendi sayisi (G2/D2) ve pozitif kontrol (P1)
     # kayar; E4 DUSMEZ: manifestsiz dosya hala uyari uretir (son satir yine [UYARI]).
-    "--mutasyon-duzenleneni-ez": {"E1", "E2", "E3", "Y1", "C1", "C2", "C3", "T4", "G2", "D2", "P1"},
-    "--mutasyon-manifestsiz-ez": {"M1", "M2", "M3", "X1", "X2", "G2", "D2"},
+    # #322: birlestirilmis kopya da EZILIR (B1/B1h/B4/B10 uyari yok) ve isaret "dokunulmamis"
+    # sanilip reddedilir (B2/B13/B14). B3 DUSMEZ: B1 kosumu dosyayi zaten V2'ye ezdi -> sessiz.
+    "--mutasyon-duzenleneni-ez": {"E1", "E2", "E3", "Y1", "C1", "C2", "C3", "T4", "G2", "D2", "P1",
+                                  "B1", "B1h", "B2", "B4", "B10", "B13", "B14"},
+    # #322: manifestsiz makinede ayirt-edilemez kopya "dokunulmamis" sanilir -> isaret reddedilir
+    "--mutasyon-manifestsiz-ez": {"M1", "M2", "M3", "X1", "X2", "G2", "D2", "B15"},
     # ayni dosya manifestliyse "guncelle"ye, manifestsizse "ayirt-edilemez"e duser
-    "--mutasyon-ayni-yok": {"A1", "P1", "G2", "D2", "R1", "X2"},
+    # #322: guncel makinede "Her şey güncel" yerine "tohumlandı" (B3/B5/B10)
+    "--mutasyon-ayni-yok": {"A1", "P1", "G2", "D2", "R1", "X2", "B3", "B5", "B10"},
     # Y2 DUSMEZ: yerel-ileri'de tohum ilerlemedi, yeni sha == eski sha
-    "--mutasyon-manifest-hepsi-yeni": {"E2", "C1", "M2", "X2"},
-    "--mutasyon-atlanan-eski-sha-yok": {"E2", "Y2", "C1", "T4"},
+    # #322: kusurun TERS yuzu — bayraksiz da uyari kapanir (B1/B1h) ve geri gelen uyaridan
+    # sonra manifest V3'e kayar (B4)
+    "--mutasyon-manifest-hepsi-yeni": {"E2", "C1", "M2", "X2", "B1", "B1h", "B4"},
+    # #322: isaretli dosyanin sha'si da yazilmaz -> sonraki kosum yine uyarir
+    "--mutasyon-atlanan-eski-sha-yok": {"E2", "Y2", "C1", "T4",
+                                        "B1", "B2", "B3", "B4", "B10", "B14", "B15"},
     "--mutasyon-dry-yazar": {"D1", "T3"},
-    "--mutasyon-ok-yalan": {"E4"},
+    "--mutasyon-ok-yalan": {"E4", "B1", "B4", "B10"},
     "--mutasyon-satir-sonu-uyari": {"C2"},
     "--mutasyon-guncelleme-etiketsiz": {"G5"},
+    # ── #322 kipleri ──
+    "--mutasyon-isaret-yok": {"B2", "B3", "B4", "B10", "B14", "B15"},
+    "--mutasyon-isaret-eski-manifeste": {"B15"},
+    "--mutasyon-dokunulmamis-isaretlenir": {"B9"},
+    "--mutasyon-yol-kabul": {"B6"},
+    "--mutasyon-yerelde-yok-kabul": {"B8"},
+    "--mutasyon-force-serbest": {"B11"},
+    "--mutasyon-terfi-serbest": {"B12"},
+    "--mutasyon-ipucu-yok": {"B1h"},
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -184,6 +243,14 @@ V2.update({
 YEREL_DUZENLI = _ders("duzenlenmis", "ESKI GOVDE + YEREL EKLEME")
 YEREL_ILERI = _ders("yerel-ileri", "SABIT GOVDE + YEREL NOT")
 YEREL_MANIFESTSIZ = _ders("manifestsiz", "KULLANICININ KENDI DOSYASI")
+# #322: tohumun (V2) TAMAMI + korunan yerel ek = elle birlestirilmis kopya
+YEREL_BIRLESIK = V2["feedback_duzenlenmis.md"] + b"\n- yerel ek (elle birlestirme sonrasi)\n"
+# ayni birlestirme + harness'in frontmatter'a ekledigi alanlar (bayt-esitlik imkansiz)
+YEREL_BIRLESIK_FM = YEREL_BIRLESIK.replace(
+    b"---\nname:", b"---\noriginSessionId: 00000000-test\nmodified: 2026-10-18T00:00:00Z\nname:", 1)
+# tohum V2'den sonra BIR KEZ DAHA ilerler (yalniz duzenlenmis dersin govdesi)
+V3 = dict(V2)
+V3["feedback_duzenlenmis.md"] = _ders("duzenlenmis", "V3 GOVDE (ikinci duzeltme)")
 
 
 def _index(adlar) -> bytes:
@@ -423,6 +490,133 @@ def main(kip: str | None, kaynak_yolu: Path | None) -> int:
              (f_ / "feedback_duzenlenmis.md").read_bytes() == V2["feedback_duzenlenmis.md"]
              and _man(f_).get("feedback_duzenlenmis.md") == _sha(V2["feedback_duzenlenmis.md"]),
              f"rc={rc}")
+
+        # ══ B: #322 `--birlestirildi` — ELLE BIRLESTIRME SONRASI CIKIS ══════════════════
+        # Sahne (Issue #322 receti): makine GUNCEL tohumla (V2) kurulu; duzenlenmis dersin
+        # manifest kaydi V1'de (tohum o gunden beri ilerledi), yerel kopya V2'nin TAMAMI + ek.
+        DUZ = "feedback_duzenlenmis.md"
+        sha_v1, sha_v2 = _sha(V1[DUZ]), _sha(V2[DUZ])
+
+        def b_makine(ad: str, yerel: bytes, manifest: bool = True) -> Path:
+            d = tmp / ad
+            _makine(d, V2, manifest=manifest)
+            (d / DUZ).write_bytes(yerel)
+            if manifest:
+                m = _man(d)
+                m[DUZ] = sha_v1
+                (d / ".seed-manifest.json").write_text(json.dumps(m, indent=1),
+                                                       encoding="utf-8", newline="\n")
+            return d
+
+        def son_satir(o: str) -> str:
+            s = [x for x in o.strip().split("\n") if x.strip()]
+            return s[-1] if s else ""
+
+        def duz_uyari(o: str) -> list[str]:
+            return [s for s in o.split("\n") if DUZ in s and "elle birleştir" in s]
+
+        b = b_makine("b1", YEREL_BIRLESIK)
+        rc1, o1 = kos(b)
+        rc2, o2 = kos(b)
+        ekle("B1 sorunlu kol (kontrol): bayraksiz iki kosumda da [UYARI] + manifest V1'de kalir",
+             rc1 == rc2 == 0 and son_satir(o1).startswith("[UYARI]")
+             and son_satir(o2).startswith("[UYARI]") and duz_uyari(o2)
+             and _man(b).get(DUZ) == sha_v1, f"son={son_satir(o2)!r} man={_man(b).get(DUZ)}")
+        ekle("B1h uyari satiri cikis komutunu ONERIR (--birlestirildi <ad> --target <hedef>)",
+             any(f"--birlestirildi {DUZ}" in s and "--target" in s for s in duz_uyari(o2)),
+             f"uyari={duz_uyari(o2)}")
+        rc, ob = kos(b, "--birlestirildi", DUZ)
+        ekle("B2 --birlestirildi: manifest = tohumun GUNCEL sha'si, yerel kopyaya DOKUNULMAZ",
+             rc == 0 and _man(b).get(DUZ) == sha_v2 and (b / DUZ).read_bytes() == YEREL_BIRLESIK
+             and "İşaretlendi : 1" in ob and "[UYARI]" not in ob,
+             f"rc={rc} man={_man(b).get(DUZ)} out={ob[-400:]!r}")
+        rc, o3 = kos(b)
+        ekle("B3 sonraki kosum SESSIZ: '[OK] Her şey güncel.' + manifest tohum sha'sinda kalir",
+             rc == 0 and son_satir(o3) == "[OK] Her şey güncel." and "[UYARI]" not in o3
+             and _man(b).get(DUZ) == sha_v2, f"son={son_satir(o3)!r} man={_man(b).get(DUZ)}")
+        _tohum_yaz(seed, V3)
+        try:
+            rc, o4 = kos(b)
+            ekle("B4 tohum YENIDEN ilerler -> uyari GERI gelir, dosyaya dokunulmaz, manifest V2'de",
+                 rc == 0 and son_satir(o4).startswith("[UYARI]") and duz_uyari(o4)
+                 and (b / DUZ).read_bytes() == YEREL_BIRLESIK and _man(b).get(DUZ) == sha_v2,
+                 f"son={son_satir(o4)!r} man={_man(b).get(DUZ)}")
+        finally:
+            _tohum_yaz(seed, V2)
+
+        k = b_makine("b5", V2[DUZ])
+        rc1, o1 = kos(k)
+        rc2, o2 = kos(k)
+        ekle("B5 kontrol kolu (bayt-ayni, bayraksiz): iki kosumda da '[OK] Her şey güncel.' + "
+             "manifest tohum sha", rc1 == rc2 == 0 and son_satir(o1) == "[OK] Her şey güncel."
+             and son_satir(o2) == "[OK] Her şey güncel." and _man(k).get(DUZ) == sha_v2,
+             f"son1={son_satir(o1)!r} son2={son_satir(o2)!r}")
+
+        # ── gecersiz kullanim: exit 2 + hedef agaci DEGISMEZ + dogru gerekce ──
+        def red(d: Path, beklenen: str, *bayrak: str) -> tuple[bool, str]:
+            once = _agac(d)
+            rc, o = kos(d, *bayrak)
+            return (rc == 2 and beklenen in o and once == _agac(d)
+                    and "Traceback" not in o), f"rc={rc} out={o[-300:]!r}"
+
+        g = b_makine("b6", YEREL_BIRLESIK)
+        sonuc = [red(g, "yol değil", "--birlestirildi", x)
+                 for x in ("../" + DUZ, "alt/" + DUZ, str(g / DUZ), "C:" + DUZ)]
+        ekle("B6 yol gecisi reddi (`..`, ayirici, mutlak, surucu) -> exit 2 + 'yol değil'",
+             all(ok for ok, _ in sonuc), " | ".join(dt for ok, dt in sonuc if not ok))
+        sonuc = [red(g, "tohumda yok", "--birlestirildi", x) for x in ("feedback_yok.md", "MEMORY.md")]
+        ekle("B7 tohumda olmayan ad (MEMORY.md dahil) -> exit 2 + 'tohumda yok'",
+             all(ok for ok, _ in sonuc), " | ".join(dt for ok, dt in sonuc if not ok))
+        (g / "feedback_ayni.md").unlink()
+        ok, dt = red(g, "hedefte yok", "--birlestirildi", "feedback_ayni.md")
+        ekle("B8 yerelde olmayan dosya -> exit 2 + 'hedefte yok'", ok, dt)
+        u = b_makine("b9", V1[DUZ])          # dokunulmamis: yerel == manifest (V1) sha
+        ok, dt = red(u, "DOKUNULMAMIŞ", "--birlestirildi", DUZ)
+        ekle("B9 dokunulmamis dosya isaretlenemez (otomatik guncellemeyi bastirirdi) -> exit 2",
+             ok and (u / DUZ).read_bytes() == V1[DUZ], dt)
+
+        fm = b_makine("b10", YEREL_BIRLESIK_FM)
+        rc1, o1 = kos(fm)
+        rc2, o2 = kos(fm, "--birlestirildi", DUZ)
+        rc3, o3 = kos(fm)
+        ekle("B10 frontmatter'a originSessionId/modified eklenmis kopya: once [UYARI], "
+             "isaret sonrasi SESSIZ + kapsama BILGI satiri",
+             YEREL_BIRLESIK_FM != YEREL_BIRLESIK and son_satir(o1).startswith("[UYARI]")
+             and rc2 == 0 and "(tohumun tüm satırları yerel kopyada)" in o2
+             and rc3 == 0 and son_satir(o3) == "[OK] Her şey güncel."
+             and _man(fm).get(DUZ) == sha_v2, f"son1={son_satir(o1)!r} son3={son_satir(o3)!r}")
+
+        e = b_makine("b11", YEREL_BIRLESIK)
+        ok, dt = red(e, "--force birlikte verilemez", "--birlestirildi", DUZ, "--force")
+        ekle("B11 --force ile birlikte -> exit 2, yerel birlestirme EZILMEZ", ok, dt)
+        ok, dt = red(e, "--terfi-adaylari birlikte verilemez", "--birlestirildi", DUZ,
+                     "--terfi-adaylari")
+        ekle("B12 --terfi-adaylari ile birlikte -> exit 2 (salt-okunur yol yazmaz)", ok, dt)
+        once = _agac(e)
+        rc, od = kos(e, "--dry-run", "--birlestirildi", DUZ)
+        ekle("B13 --dry-run ile birlikte: agac DEGISMEZ + 'İşaretlenecek : 1'",
+             rc == 0 and once == _agac(e) and "İşaretlenecek : 1" in od, f"rc={rc}")
+
+        pr = b_makine("b14", YEREL_BIRLESIK)
+        yetim = _ders("eski-yetim", "TOHUMDAN KALKMIS")
+        (pr / "feedback_eski-yetim.md").write_bytes(yetim)
+        m = _man(pr)
+        m["feedback_eski-yetim.md"] = _sha(yetim)
+        (pr / ".seed-manifest.json").write_text(json.dumps(m, indent=1), encoding="utf-8",
+                                                newline="\n")
+        rc, op = kos(pr, "--prune", "--birlestirildi", DUZ)
+        ekle("B14 --prune ile birlikte: ikisi de uygulanir (yetim budanir + isaret yazilir)",
+             rc == 0 and not (pr / "feedback_eski-yetim.md").exists() and "Budandı : 1" in op
+             and _man(pr).get(DUZ) == sha_v2 and "[UYARI]" not in op, f"rc={rc} out={op[-300:]!r}")
+
+        ms = b_makine("b15", YEREL_BIRLESIK, manifest=False)
+        (ms / "feedback_eski-yetim.md").write_bytes(yetim)        # manifestsiz: tohum mu? bilinmez
+        rc, om = kos(ms, "--birlestirildi", DUZ)
+        ekle("B15 manifestsiz makine: ayirt-edilemez kopya isaretlenir AMA yetim karari degismez "
+             "('manifest yok' gerekcesi + dosya SILINMEZ)",
+             rc == 0 and _man(ms).get(DUZ) == sha_v2 and not duz_uyari(om)
+             and "feedback_eski-yetim.md" in om and "manifest yok (bu proje manifest" in om
+             and (ms / "feedback_eski-yetim.md").exists(), f"rc={rc} out={om[-500:]!r}")
     finally:
         _sil(tmp)
 

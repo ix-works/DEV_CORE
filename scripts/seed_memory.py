@@ -29,6 +29,24 @@ SINIR: kusurlu sürümle zaten tohumlanmış makinede (manifest yeni sha'yı ta�
 gövdede) eski gövdeli dosyalar "yerelde düzenlenmiş" sayılır ve bu araçla KURTARILAMAZ — yol
 `playbook/howto-cekirdek-guncelleme.md` §4'teki elle döngüdür.
 
+ELLE BİRLEŞTİRME SONRASI ÇIKIŞ — `--birlestirildi <dosya>` (core #322, 2026-10-18): "elle
+birleştir" uyarısı, dosya elle birleştirildikten sonra da KAPANMIYORDU — birleştirilmiş kopya
+(tohumun tamamı + korunan yerel ek) tohumla bayt-bayt eşit olmadıkça karar her koşumda yine
+`duzenlenmis` çıkar, atlanan dosyaya ESKİ sha yazılır ⇒ "birleştirildi" durumuna geçişin yolu
+yoktu. Üstelik Claude Code hafıza dosyalarının frontmatter'ına kendiliğinden alan
+(`originSessionId`, `modified`) ekleyebildiği için bayt-eşitlik pratikte de kurulamaz.
+  * Bayrak AÇIK bir kullanıcı beyanıdır: verilen dosya için karar, manifest'te tohumun GÜNCEL
+    sha'sı varmış gibi verilir ve manifest'e o sha yazılır ⇒ karar `yerel-ileri` (sessiz).
+    Tohum yeniden ilerlerse uyarı doğru şekilde geri gelir.
+  * Otomatik "yerel ⊇ tohum" sezgisi BİLEREK yok: kasıtlı silinen/yeniden sıralanan satır onu
+    yanıltır (Issue #322 önerisi). Satır kapsaması yalnız BİLGİ satırı olarak basılır, karar değil.
+  * Reddedilen (exit 2, hiçbir şey yazılmaz): yol (`/`, `\\`, `:`, `..`, mutlak) · tohumda
+    olmayan ad · hedefte olmayan dosya · bu makinede dokunulmamış dosya (araç onu kendisi
+    günceller; işaret güncellemeyi sessizce bastırırdı) · `--force` ile birlikte (ezme ile
+    "yerel birleştirmemi koru" çelişir) · `--terfi-adaylari` ile birlikte (salt-okunur yol).
+    `--prune` ve `--dry-run` ile birlikte serbesttir (dry-run hiçbir şey yazmaz).
+  * Karar için AYRI sözlük kullanılır; yetim/prune mantığının okuduğu eski manifest değişmez.
+
 RENAME/SİLME İZİ (2026-07-10 template provası): script eskiden yalnız EKLİYORDU. Seed'de bir
 dosya yeniden adlandırılınca (ör. kimlik sızdıran ad temizlenince) daha önce tohumlanmış her
 projede ESKİ dosya + BAYAT indeks satırı kalıyordu; kimse görmüyordu. Artık:
@@ -52,6 +70,7 @@ Kullanım (repo kökünde):
     python scripts/seed_memory.py --force    # var olanları da seed'le ez (DİKKAT)
     python scripts/seed_memory.py --target <yol>  # hedef memory klasörünü elle ver
     python scripts/seed_memory.py --terfi-adaylari  # SALT-OKUNUR: ters yönü (yerel → tohum) listele
+    python scripts/seed_memory.py --birlestirildi feedback_x.md  # elle birleştirdim: uyarıyı kapat
 
 TERS YÖN / TERFİ GÖRÜNÜRLÜĞÜ (Q325, 2026-09-18): yukarıdaki akışın tamamı tohum → makine
 yönündedir. Bu makinede yazılan metodoloji-nitelikli bir dersin tohuma girip girmediğini
@@ -163,6 +182,47 @@ def _mevcut_dosya_karari(yerel_sha: str, tohum_sha: str, eski_sha: str | None) -
     if yerel_sha != eski_sha:
         return "duzenlenmis" if tohum_sha != eski_sha else "yerel-ileri"
     return "guncelle"
+
+
+def _ad_gecerli_mi(ad: str) -> bool:
+    """`--birlestirildi` YALNIZ çıplak dosya adı alır — yol geçişi (`..`, ayırıcı, sürücü, mutlak) YOK."""
+    return (bool(ad) and ad not in (".", "..") and not any(c in ad for c in "/\\:")
+            and not os.path.isabs(ad) and Path(ad).name == ad)
+
+
+def _birlestirildi_dogrula(adlar: list, seed_adlari: set, target: Path,
+                           eski_manifest: dict) -> tuple[dict, list]:
+    """(işaretli: ad → tohumun güncel sha'sı, hatalar). Hata varsa çağıran HİÇBİR ŞEY yazmaz."""
+    isaretli: dict = {}
+    hatalar: list = []
+    for ad in adlar:
+        if not _ad_gecerli_mi(ad):
+            hatalar.append(f"'{ad}' yol değil, çıplak dosya ADI olmalı (ör. feedback_x.md)")
+            continue
+        if ad not in seed_adlari:
+            hatalar.append(f"'{ad}' tohumda yok — yalnız tohumdaki feedback_*.md / _indeks-*.md "
+                           "işaretlenebilir")
+            continue
+        dst = target / ad
+        if not dst.is_file():
+            hatalar.append(f"'{ad}' hedefte yok ({target}) — işaretlenecek yerel kopya yok")
+            continue
+        tohum_sha = _sha(SEED_DIR / ad)
+        if _mevcut_dosya_karari(_sha(dst), tohum_sha, eski_manifest.get(ad)) == "guncelle":
+            hatalar.append(f"'{ad}' bu makinede DOKUNULMAMIŞ (yerel == manifest sha) — araç onu "
+                           "kendisi günceller; işaret bu güncellemeyi sessizce bastırırdı")
+            continue
+        isaretli[ad] = tohum_sha
+    return isaretli, hatalar
+
+
+def _eksik_tohum_satiri(yerel: Path, tohum: Path) -> int:
+    """BİLGİ (karar DEĞİL): tohumun boş olmayan satırlarından kaçı yerel kopyada yok."""
+    def _satirlar(p: Path) -> list:
+        return [s.strip() for s in p.read_text(encoding="utf-8", errors="replace")
+                .replace("\r\n", "\n").split("\n") if s.strip()]
+    yerel_kume = set(_satirlar(yerel))
+    return sum(1 for s in _satirlar(tohum) if s not in yerel_kume)
 
 
 def _yalniz_satir_sonu(yerel: Path, tohum: Path) -> bool:
@@ -395,11 +455,26 @@ def main() -> int:
     ap.add_argument("--terfi-adaylari", action="store_true",
                     help="SALT-OKUNUR: yerelde olup tohumda olmayan dersleri `metadata.seed:` "
                          "kovalarıyla + kimlik ön-taramasıyla listele (hiçbir şey yazmaz)")
+    ap.add_argument("--birlestirildi", action="append", default=[], metavar="DOSYA",
+                    help="Bu tohum dosyasını tohumla ELLE birleştirdim: manifest'e tohumun güncel "
+                         "sha'sını yaz ⇒ 'elle birleştir' uyarısı tohum yeniden ilerleyene dek "
+                         "kapanır. Çıplak dosya adı; birden çok kez verilebilir.")
     args = ap.parse_args()
 
     if not SEED_DIR.exists():
         print(f"[FAIL] Seed klasörü yok: {SEED_DIR}", file=sys.stderr)
         return 1
+
+    # #322: çelişik/salt-okunur birleşimler HER YAZMADAN ÖNCE reddedilir (exit 2).
+    if args.birlestirildi and args.terfi_adaylari:
+        print("[HATA] --birlestirildi ile --terfi-adaylari birlikte verilemez: --terfi-adaylari "
+              "SALT-OKUNURDUR, manifest yazmaz. Önce birini koş.", file=sys.stderr)
+        return 2
+    if args.birlestirildi and args.force:
+        print("[HATA] --birlestirildi ile --force birlikte verilemez: --force yerel kopyayı "
+              "tohumla EZER, --birlestirildi yerel birleştirmeyi KORUR. Hangisini istediğini "
+              "seç.", file=sys.stderr)
+        return 2
 
     # ⚠ Bu dal HER YAZMA ADIMINDAN ÖNCE döner: aşağıdaki `target.mkdir(...)` bile
     # koşmaz. Listeleyicinin salt-okunurluğu SÖZDE değil, AKIŞTA garanti edilir.
@@ -431,6 +506,21 @@ def main() -> int:
     eski_manifest = _manifest_oku(target)
     manifest_sha: dict = {}     # yazılacak manifest: ad → sha (atlanan+kayıtsız dosya YOK)
 
+    # #322: `--birlestirildi` — doğrulama mkdir'den ve her yazmadan ÖNCE; hata = exit 2.
+    isaretli: dict = {}
+    if args.birlestirildi:
+        isaretli, hatalar = _birlestirildi_dogrula(
+            args.birlestirildi, {f.name for f in seed_files}, target, eski_manifest)
+        if hatalar:
+            for h in hatalar:
+                print(f"[HATA] --birlestirildi: {h}", file=sys.stderr)
+            print("[HATA] Hiçbir dosya yazılmadı (manifest dahil).", file=sys.stderr)
+            return 2
+    # Karar bu sözlükten okunur; `eski_manifest` DEĞİŞMEZ (yetim/prune aynı sözlüğü okur —
+    # manifestsiz makinede tek işaret onu "manifestli" sanıp yetim kararını kaydırırdı).
+    karar_manifest = dict(eski_manifest)
+    karar_manifest.update(isaretli)
+
     if not args.dry_run:
         target.mkdir(parents=True, exist_ok=True)
 
@@ -438,7 +528,7 @@ def main() -> int:
         dst = target / f.name
         tohum_sha = _sha(f)
         if dst.exists() and not args.force:
-            eski_sha = eski_manifest.get(f.name)
+            eski_sha = karar_manifest.get(f.name)
             karar = _mevcut_dosya_karari(_sha(dst), tohum_sha, eski_sha)
             if karar == "guncelle":
                 guncellenen.append((f.name, _yalniz_satir_sonu(dst, f)))
@@ -512,13 +602,24 @@ def main() -> int:
     if forced:
         print(f"  Ezildi  : {len(forced)} (--force)")
     print(f"  Atlandı : {len(skipped)} (zaten mevcut, korundu)")
+    if isaretli:
+        print(f"  {'İşaretlenecek' if args.dry_run else 'İşaretlendi'} : {len(isaretli)} "
+              "(--birlestirildi; manifest = tohumun güncel sha'sı → tohum yeniden ilerleyene "
+              "dek uyarı yok)")
+        for ad in sorted(isaretli):
+            eksik = _eksik_tohum_satiri(target / ad, SEED_DIR / ad)
+            print(f"    · {ad}" + (f"   [BİLGİ] tohumun {eksik} satırı yerel kopyada yok — "
+                                   "birleştirme eksik olabilir (karar değil)" if eksik else
+                                   "   (tohumun tüm satırları yerel kopyada)"))
     if elle:
+        tgt = f' --target "{target}"' if args.target else ""
         print(f"  [UYARI] {len(elle)} dosyada tohum İLERLEDİ ama yerel kopyaya DOKUNULMADI "
               "— elle birleştir:")
         for ad, karar in elle:
             neden = ("yerelde düzenlenmiş" if karar == "duzenlenmis"
                      else "manifest kaydı yok → tohum mu kullanıcı mı ayırt edilemez")
-            print(f"    · {ad}   ({neden}) → elle birleştir")
+            print(f"    · {ad}   ({neden}) → elle birleştir, sonra uyarıyı kapat: "
+                  f"python core/scripts/seed_memory.py --birlestirildi {ad}{tgt}")
     if satir_sonu:
         print(f"  [INFO] {len(satir_sonu)} dosya tohumdan yalnız satır-sonu (CRLF↔LF) farkıyla "
               "ayrılıyor — içerik aynı, dokunulmadı:")
@@ -546,8 +647,8 @@ def main() -> int:
         print("\n  (DRY-RUN — hiçbir dosya yazılmadı)")
     elif elle:
         print(f"\n[UYARI] {len(elle)} tohum dosyası elle birleştirme bekliyor (liste yukarıda) "
-              "— 'her şey güncel' DEĞİL.")
-    elif added or forced or guncellenen or silinen or index_islem:
+              "— 'her şey güncel' DEĞİL. Birleştirince: --birlestirildi <dosya>")
+    elif added or forced or guncellenen or silinen or index_islem or isaretli:
         print("\n[OK] Feedback memory tohumlandı/onarıldı. Yeni Claude oturumunda kurallar yüklenir.")
     else:
         print("\n[OK] Her şey güncel.")
