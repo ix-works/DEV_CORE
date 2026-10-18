@@ -12,14 +12,15 @@ değil, yürütme sırasıdır; çakışmada **howto kazanır** (tek kaynak ilke
 
 1. **Howto'yu oku → başlangıcı ölç (§1):** `parity_probe` ÖNCE · `git -C core status --short`
    boş mu · dal `main` mi. Kirliyse DUR.
-2. **Çek (§2):** `git -C core pull`.
+2. **Çek (§2):** `git -C core pull` **+ proje reposu** (`git pull --ff-only`; ağaç kirli ya da dal
+   `main` değilse DUR, sor) — yalnız çekirdeği çekmek yasak damgasını kanonikten ayırır.
 3. ⭐ **Howto'yu YENİDEN OKU** — pull prosedürün kendisini güncellemiş olabilir; kalan adımları
    yeni kopyadan yürüt (bu komut dosyası da değişmiş olabilir; yeni hâli sonraki oturumda yüklenir).
 4. **Bu proje (§3–§4):** `team_setup` → son satır `team_setup TAMAM` · 3b overlay kapısı ·
    3c MCP smoke · 3d yasak damgası · tohum doğrulaması.
 5. **Diğer projeler (§3e):** bu çekirdeği kullanan projeleri bul, listeyi göster ve **tek soruyla
    onay al** (hepsi / bazıları / hiçbiri) — bu akıştaki tek beklenen soru budur. Seçilen her projede
-   `team_setup` + damga kontrolü + `ix_doctor` (her biri KENDİ kökünde, `CLAUDE_PROJECT_DIR` o projeye
+   proje reposunu çek (§2 kuralı) + `team_setup` + damga kontrolü + `ix_doctor` (her biri KENDİ kökünde, `CLAUDE_PROJECT_DIR` o projeye
    ayarlı); seçilmeyen proje raporda `atlandı (kullanıcı seçimi)`.
 6. **Makine-lokal yüzeyler (§5):** kullanıcı-düzeyi izin tabanı (elle birleştir) · `gh` · git global taban.
 7. **Doğrula (§6):** `run_all_validators` + `ix_doctor` — FAIL yok. `ix_doctor` hiçbir şeyi

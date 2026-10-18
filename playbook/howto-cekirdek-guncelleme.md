@@ -59,6 +59,21 @@ git -C core log --oneline -3
 📌 Makinede **tek** fiziksel çekirdek vardır (ADR 0020): bu pull o makinedeki **tüm** projeleri
 birden etkiler. Başka projede yarım iş varsa kullanıcıya söyle.
 
+⛔ **Proje reposunu da AYNI TURDA çek** (proje kökünden):
+
+```bash
+git status --short                  # BOŞ olmalı
+git branch --show-current           # main olmalı
+git pull --ff-only
+```
+
+Ağaç kirliyse ya da dal `main` değilse **DUR**, kullanıcıya sor (orada yarım iş olabilir).
+Neden: proje kök `CLAUDE.md`'sindeki yasak damgası ve projeye ait kurulum dosyaları çekirdekle
+birlikte değişebilir. Yalnız çekirdek çekilirse damga kanonikle eşleşmez ve `pre_tool_guard`
+SAP-yazma araçlarını **fail-closed bloklar** (vaka 2026-09-25: kanonik damga değişti, proje
+repoları ayrı PR'larla güncellendi; çekirdeği tek başına çeken makinede `check_kesin_yasaklar`
+FAIL verirdi). §3e'deki her proje için aynı üç komut o projenin kökünde koşulur.
+
 ## 3. Kurulumu tazele — `team_setup.py`
 
 ```bash
@@ -168,6 +183,7 @@ raporunda `atlandı (kullanıcı seçimi)` olarak yazılır. Liste boşsa soru s
 Seçilen her proje `<P>` için (her biri kendi kökünde):
 
 ```bash
+(cd "<P>" && git status --short && git branch --show-current && git pull --ff-only)  # §2 kuralı: kirli/main değil → DUR
 (cd "<P>" && CLAUDE_PROJECT_DIR="<P>" python core/scripts/team_setup.py)        # 3b/3c kuralları aynen
 (cd "<P>" && python core/scripts/sync_yasaklar.py --check)                      # 3d
 (cd "<P>" && CLAUDE_PROJECT_DIR="<P>" python core/scripts/ix_doctor.py)         # FAIL yok mu — bulgular §6a
