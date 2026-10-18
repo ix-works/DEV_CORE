@@ -63,7 +63,7 @@ python scripts/inspector.py --self-test             # canary    [✓]
   `file=_GERCEK_ERR` sökülürse aynı komut **0 karakter**.
 
 ### B0-SEÇİM — `--degisen` (ara adımlar; 2026-08-13)
-> Ölçüldü: TAM koşum **169,7 sn / 113 vektör**. Tek-validator değişikliği için seçili
+> Ölçüldü (2026-08-13 — ⚠ BAYAT: korpus büyüdü; 2026-10-18'de 30 birimlik SEÇİM 368 vektör / ≥20 dk sürdü, 20+ birimde yerel koşma kuralı: `playbook/howto-infra-fix-proseduru.md` B0 notları): TAM koşum **169,7 sn / 113 vektör**. Tek-validator değişikliği için seçili
 > koşum **0,4 sn**; `claude_overlay` **4,6 sn**; `pre_tool_guard` **32,4 sn** (55-payload
 > korpusu dâhil). Kimin-ne-zaman koştuğu: `playbook/howto-infra-fix-proseduru.md` ADIM-3 B0.
 ```bash

@@ -14,6 +14,11 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## playbook/howto-infra-fix-proseduru.md (B0 notları) · claude/agents/infra-expert.md (TEST KADANSI) · governance/infra-test-recipes.md (B0-SEÇİM bayat ölçüm notu) (2026-10-18; lider, kullanıcı onaylı) — ⚠GEVŞETME YOK (yerel ara koşum azalır; tam güvence CI'da aynen) · ⚠DEĞİŞİKLİK: 20+ birimlik seçimde yerel `--degisen` koşulmaz
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-10-18 | **① 20+ birim kuralı:** kuru koşumun `⇒ KARAR:` satırı 20 birimden fazla seçiyorsa yerel `--degisen` koşulmaz → doğrudan KOD DONDU; birimleri CI koşar, CI kırmızıysa yerel teşhis meşru. **② Görünürlük:** uzun yerel koşu `\| tail`/`\| head` borusuna bağlanmaz, çıktı dosyaya yazılır. **③** Reçetedeki 169,7 sn tam koşum ölçümü BAYAT olarak işaretlendi. Kanonik yer howto B0; ajan tanımında kısa hâl + işaretçi. | Issue #339 turu: `sap_adt_lib` + 4 dosya → 30 birim / 368 vektör, yerelde ≥20 dk; `\| tail -25` yüzünden çıktı dosyası 20 dk 0 bayt göründü, ajan da lider de "takıldı" sandı (koşu exit 0, 368/368). Aynı birimleri PR açılınca CI zaten koşuyordu. | Doküman/tanım değişikliği; davranış kodu değişmedi. Kuru koşum ölçümü: `run_fixture_tests.py --degisen scripts/sap_adt_lib.py scripts/utils/xml_kacis.py scripts/populate_domains.py scripts/populate_dataelements.py scripts/populate_message_class.py --listele` → `⇒ KARAR: 30 birim`. Etkisi bir sonraki geniş dokunuşlu infra turunda ölçülecek. | — | — |
+
 ## claude/agents/*.md — `tools:` satırına `SendMessage` (2026-10-18; lider, kullanıcı kararı) — ⚠GEVŞETME YOK
 | tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
 |---|---|---|---|---|---|
