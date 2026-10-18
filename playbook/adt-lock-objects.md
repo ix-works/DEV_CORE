@@ -88,7 +88,7 @@ Bu tip kodu activation body'sinde, GET response'ta, vb. her yerde kullanılır. 
 ```
 
 **✅ DURUM — `sap_client.create_lock_object()` CANLI DOĞRULANDI (2026-06-18, EZSD000_ZZTST throwaway yarat→sil):**
-Eski "backslash bug" iddiası KESİN ÇÜRÜTÜLDÜ — create CSRF sonrası **HTTP 200 yazıyor**, `masterLanguage=TR` (ADR 0005-D ✓), forward-slash doğru. AMA **"tam çalışır" DEĞİL** — iki KALICI nüans (geçici hata değil):
+Eski "backslash bug" iddiası **`create_lock_object()` yaratma yolunda** ÇÜRÜTÜLDÜ (2026-06-18 ölçümü; aktivasyon ve FM üretimi bu ölçümün dışında — aşağıdaki iki nüans) — create CSRF sonrası **HTTP 200 yazıyor**, `masterLanguage=TR` (ADR 0005-D ✓), forward-slash doğru. AMA **"tam çalışır" DEĞİL** — iki KALICI nüans (geçici hata değil):
 1. **Lib AKTİVE ETMEZ** → create sonrası obje canlıda `version="inactive"`, `<enqu:lockModules/>` **BOŞ** (ENQUEUE_/DEQUEUE_ FM'leri üretilmemiş). Çağıran taraf create'ten sonra **AYRI activate + FM-generate** yapmalı; yoksa kilit FM'leri yok = kullanılamaz.
 2. **`lock_fields` = STRING-ARRAY** `["LOCK_OBJECT","LOCK_KEY"]` (lib `field.upper()` çağırır), dict `[{"name":...}]` **DEĞİL** → dict verirsen `'dict' object has no attribute 'upper'`.
 Tuzaklar: bayat `.csrf_token.json` → 403 (sil/force-refresh). MCP `adt_delete enqu` lock-objesini **E-prefix yüzünden** ADR 0005-A false-positive ile reddeder (lock objeleri zorunlu E-prefix, Z/Y değil) → silme ADT REST `GET-seed CSRF → LOCK → DELETE` ile.

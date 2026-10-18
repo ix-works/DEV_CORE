@@ -563,7 +563,11 @@ python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --name
 ## `run_pretty_printer.py` — SAP Pretty Printer çıktısını ALIR (sunucuya YAZMAZ)
 
 > **Ne zaman:** bir ABAP kaynağının SAP'nin kendi Pretty Printer'ına göre nasıl görünmesi
-> gerektiğini görmek için. Zorunlu adım DEĞİL.
+> gerektiğini görmek için. **Bu ARACI koşmak zorunlu değildir** (yalnız canlı `source/main`'i okur);
+> **biçimlemenin kendisi zorunludur:** teslimden (push / bug-gate) önce bu turda değişen her metot ve
+> include, aşağıdaki durumsuz uçla (`pretty_print(None, <kaynak>)`) biçimlenmiş hâliyle aynı olmalı —
+> `checklists/bug-checklist-backend.md` **BE-88**. Gerekçe: ATC bulgusunu sonradan kovalamak birim başına
+> tur açar (aşağıdaki "ATC 'Incorrect Pretty Print state'" mekanizması).
 
 ```bash
 python core/scripts/run_pretty_printer.py --object-name ZCL_SD001_ORDER --object-type class --cwd <proje-kökü>

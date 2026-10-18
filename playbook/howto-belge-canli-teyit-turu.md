@@ -11,6 +11,10 @@ applies_to: [all]
 >
 > **Kim:** taze/bağımsız bir göz (yazar kendi iddiasını teyit edemez — doc-gate bağımsızlık
 > kuralının aynısı). **Ne zaman:** TS mutabakatından SONRA, build kapısından ÖNCE.
+> **İstisna — C-1 daha ERKEN de ateşler:** FS (ya da intake) bir **işlem kodu, uygulama/BSP adı ya da
+> Z obje adı SEÇTİĞİ anda** o adın canlıda boş olduğu C-1 yöntemiyle (pozitif kontrol dahil) ölçülür;
+> sonuç FS'e yazılır. Neden: bir projede FS'te seçilen işlem kodu DEV'de başka bir uygulamaya aitti;
+> TS'e kadar beklenince doküman kapısı BLOCKER verdi ve ad tüm belgelerde değişti (2026-10).
 > **Çıktı:** ölçüm tablosu + çürüyen her iddia için belge düzeltmesi + **İKİNCİ KAPI**
 > (`checklists/doc-checklist.md` §İKİNCİ KAPI — düzeltme kendi kapısını da koşar).
 

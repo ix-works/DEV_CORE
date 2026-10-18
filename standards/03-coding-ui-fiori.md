@@ -257,6 +257,20 @@ uyarır (deploy `dist`'i gönderir). Çıkış: 0 = hepsi aynı · 1 = fark/eksi
 > hiçbiri bayat değildi; blok ayıklanınca fark **0/12**. Script bunu zaten ayıklar.
 > 📌 Teşhis ipucu: **dokunulmamış** bir app de kırmızıysa kusur ölçümdedir, deploy'da değil.
 
+##### 2.4.3 Tarayıcı turu — KİMLİKLİ lokal sunucuda
+
+**NE:** Uygulamanın tarayıcı turu (her rota açılır, konsol okunur — deploy öncesi ya da sonrası) kimlik
+verilmiş lokal sunucuda koşulur: `FIORI_TOOLS_USER` / `FIORI_TOOLS_PASSWORD` ortam değişkenleri
+(değer `.conn_adt`'den okunur, ekrana/loga yazılmaz) + `npx fiori run --config ui5.yaml --port <p>`.
+Her rota tam yeniden yüklemeyle açılır (`?sap-ui-xx-viewCache=false` + cache-buster).
+**NEDEN:** kimliksiz lokal sunucunun proxy'si SAP'ye kimlik göndermez ⇒ OData istekleri 401 alır ve
+ekran `busy` göstergesinde **asılı kalır** — bu bir ürün kusuru gibi görünür. Bir projede (2026-09-05)
+bu yüzden neredeyse YANLIŞ BLOCKER yazılıyordu.
+**Ayırt edici test (bir ekran `busy`'de kaldığında, BLOCKER yazmadan ÖNCE):** proxy üzerinden `$metadata`
+→ **401** ve doğrudan SAP'ye kimlikle aynı `$metadata` → **200** ise sorun kimlik artefaktıdır, ürün
+değil — sunucuyu kimlikle yeniden başlat. Turun ön koşul kanıtı: proxy `$metadata` → 200.
+**NE ZAMAN:** tarayıcı turunu başlatırken ve asılı kalan bir ekran için hüküm vermeden önce.
+
 ---
 
 #### Altında yatan manuel yöntem (yalnız `deploy_ui.py` çalışmazsa acil geri-dönüş; guard'a takılır)
@@ -466,6 +480,7 @@ olmadan global `sap.ui.model.json.JSONModel` kullanımı = async/strict'te fırl
 | `type: "View"` | Routing config'e ekle |
 | `path` + `viewPath` | İkisi de yazılmalı |
 | Her target'a `"id"` | `"id": "List"` gibi ayrıca belirtilmeli |
+| Her target'ın view dosyası DİSKTE | `targets.<t>.name` → `webapp/view/<name>.view.xml` (adda nokta = alt klasör) **var olmalı**; yoksa uygulama o rotada çalışma zamanında patlar. **Kalan ekranı SAYMA, ÜRET:** "kaç ekran kaldı" sorusunun cevabı çapadaki sayıdan değil, `manifest.json` target'ları ↔ `view/*.view.xml` disk kıyasından üretilir (bir projede çapa "başlanmadı" diyordu, disk kıyası çürüttü — 2026-09-05). **Ateşler:** rota/target eklerken ve kalan UI işini raporlarken |
 
 ---
 

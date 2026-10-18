@@ -3,7 +3,7 @@ applies_to: [s4_private]
 layer: L2
 scope: project-wide
 type: index
-last-updated: 2026-05-14
+last-updated: 2026-10-18
 ---
 
 # Standards — Kurumsal & Proje Standartları
@@ -19,9 +19,14 @@ Bu klasör **L2 katman** dosyaları içerir: stabil, değişme sıklığı düş
 | [`03-coding-ui-fiori.md`](03-coding-ui-fiori.md) | ui | Fiori UI5 proje yapısı, manifest, controller, OData binding, CSS, deploy (ui5-deploy.yaml) |
 | [`04-documentation-fs-ts.md`](04-documentation-fs-ts.md) | both | FS ve TS şablonları, versiyon kontrolü, onay süreci |
 | [`05-coding-rap.md`](05-coding-rap.md) | backend | **RAP track:** view entity katmanlama, BDEF (managed/unmanaged), service definition/binding/publish, ADR 0005 RAP yüzeyi (02'nin alternatifi, all-or-nothing) |
+| [`06-coding-classic-dialog.md`](06-coding-classic-dialog.md) | backend | **Klasik dialog ABAP:** report / module pool / Dynpro / ALV kodlama standardı (kanonik ALV şablonu ADR 0012) |
+| [`07-output-forms.md`](07-output-forms.md) | backend | **Çıktı / form:** Adobe Forms (+ SmartForms / SAPscript) seçimi ve üretimi |
+| [`08-classic-gui-f1-help.md`](08-classic-gui-f1-help.md) | backend | **Klasik GUI F1 / SE61 kullanıcı dokümanı:** fihrist + link'li sayfa modeli, ITF biçim kuralları (satır ≤ 72 ham karakter), üretim yolu |
+| [`09-packing-instruction-consumption.md`](09-packing-instruction-consumption.md) | backend | **Ambalajlama talimatı tüketimi** (packing instruction okuma standardı) |
 | [`10-standart-veriye-yazma-api-secimi.md`](10-standart-veriye-yazma-api-secimi.md) | backend | **Standart nesneye yazma — API seçimi:** bağlam/commit kuralı → released RAP BO (EML, canlı teyitli) → released BAPI → OData → RFC FM → BDC → manuel; profil ayarı; TS gerekçe tablosu (ADR 0005 B ayrıntısı) |
 | [`11-clean-abap-ve-oo-alt-kumesi.md`](11-clean-abap-ve-oo-alt-kumesi.md) | backend | **Clean ABAP + OO tasarım alt kümesi** (SAP/styleguides, CC BY 3.0 — uyarlanmış): yalnız yeni/değişen satıra; çelişkide std 02/05/06 + ADR 0012 üstün; ayıklanan 5 nokta. L1b işaretçi: `claude/rules/abap-clean-code.md` |
 | [`12-clean-core-seviye-referansi.md`](12-clean-core-seviye-referansi.md) | backend | **`cleancore_policy` × seviye A–D × teknik** referans tablosu (yeni kural koymaz; profil matrisi + std 01 §1 + std 10'u hizalar; ölçülmeyen hücre `ölçülmedi`) |
+| [`13-kural-yazim-standardi.md`](13-kural-yazim-standardi.md) | both | **Kural yazım standardı:** her kural NE / NEDEN / NE ZAMAN / NEREDE taşır; olumsuz iddia kapsam koşuluyla; birleşmeden önce netlik · ulaşım · çelişki testi (ADR 0019 §5A'yı tamamlar) |
 
 ## Ne Zaman Buraya Yazılır?
 

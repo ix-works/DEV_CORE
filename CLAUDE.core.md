@@ -95,6 +95,11 @@
   *(Vaka 2026-07-28: `checkout main && pull` bir `&&` zincirinin erken kırılan adımıydı, sessizce hiç
   koşmadı; sonraki branch eski noktadan açıldı. Başlangıcı komutta vermek bu sınıfı tümden kapatır —
   senkron adımının koşup koşmadığına bağımlı olmaz.)*
+  **Commit'e yalnız kendi dosyalarını ADIYLA ekle** (`git add <yol> <yol>`); paylaşılan ağaçta
+  `git add -A` / `git add .` YOK (tek istisna: yeni projenin ilk iskelet commit'i, `PROJECT_BOOTSTRAP`) —
+  başka oturumun/ajanın commit'lenmemiş işini süpürür. Ateşler: her
+  `git add` öncesi; önce `git status --short` ile listeye bak. *(Vaka 2026-08-20: iki `git add -A`
+  kapıdan geçmemiş ~3.900 satırı commit'e taşıdı; geri alındı.)*
   ⚠️ Worktree yalnız provizyonlu açılır: `team_setup.py --provision-worktree` (junction + `.conn_adt` provizyonu şart — D16; çıplak `git worktree add` guardrail'siz kalır).
 - **⛔ WORKTREE YAŞAM DÖNGÜSÜ — kanonik yol + kim açar + gün-sonu denetimi (2026-08-29, kayıt #80):**
   1. **KANONİK YOL (yol icat etme):** `<proje.parent>/.wt/<proje-adı>/<dal-etiketi>`.
@@ -181,6 +186,10 @@
      uygulanmaması. Ortada bırakılan her uyarı **her oturumda geri gelir** ve her seferinde
      yeniden teşhis edilir.)* Vaka: bir logger kusuru 3 ayrı turda yeniden teşhis edildi;
      4.'sünde "zararsız" kararının **ölçümü yanlıştı** ve kusur 6 hafta yaşadı.
+     **Kapanış kaydı = ölçüm çıktısı satırı** (komut + sonuç, ör. `validator … → 0 bulgu`,
+     readback md5 eşit); **PR numarası / "merge edildi" tek başına kanıt değildir** — PR kalemin
+     hangi eksenini kapattığını söylemez. Ateşler: bir kalemi KAPANDI işaretlerken.
+     *(Denetim 2026-10-18: kapanış disiplini ihlali 6 kez sayıldı.)*
   2. **Açık madde TEK yerde yaşar.** Aynı madde iki yerde açık yaşarsa biri kapanınca
      diğeri bayatlar ve **açılışta geri gelir**. Tip başına kanonik yer:
 
@@ -270,7 +279,7 @@
 - **⛔ ÖNCE-ARA (KB-01 · MUST) — sıra: ① ARA → ② ÖLÇ → ③ DARALT → ④ YAZ.** Tam metin: **§4**.
   **TETİKLEYİCİ EYLEM-BAZLIDIR** (yalnız "araç bozuk" demek DEĞİL): *bir kayıt/kural/ders yazacaksan ·
   bir SINIF iddiası kuracaksan ("X şöyle davranır") · bir register'a madde açacaksan · "bu bozuk /
-  desteklenmiyor / yapılamaz" diyeceksen* → **önce ARA** (repo + core `path=core/` + memory +
+  desteklenmiyor / yapılamaz" diyeceksen · aynı hata/araç mesajıyla İKİNCİ denemeye geçeceksen* → **önce ARA** (repo + core `path=core/` + memory +
   SESSION_NOTES + ilgili register): zaten yazılı mı · daha önce çalışıyor muydu (regresyon mu, ilk
   temas mı) · komşu obje-tipi için yazılmış mı. Sonucu kaydın içine yaz: `prior-art: bulundu <ref>` / `yok`.
   📌 Tanıdık semptom sezgi değil **sinyaldir**; cevap zaten yazılmış olabilir.
@@ -360,13 +369,18 @@ Bu format atlanırsa kullanıcı loader'ın yüklenmediğini varsayar → T4.
 ### ⛔ ÖNCE-ARA (KB-01 · MUST · zorlama: post_validate nudge + reviewer; GATE YOK)
 
 > **SORU 0'dan ÖNCE gelir.** SORU 0 *"nereye yazayım"* diye sorar — *"zaten yazılı mı"* diye
-> **sormaz**. Kayıt açmadan/kural yazmadan önce sıra ŞUDUR (adım atlanmaz, sıra değişmez):
+> **sormaz**. Kayıt açmadan/kural yazmadan önce — ve **aynı hata/araç mesajıyla ikinci denemeye
+> geçmeden önce** (vaka 2026-08-14: bir araç sorunu ~2 saat / 12 denemeyle kovalandı, cevap playbook'ta
+> yazılıydı) — sıra ŞUDUR (adım atlanmaz, sıra değişmez):
 
 ```
 ① ARA    → repo + core (path=core/!) + memory + SESSION_NOTES + ilgili register.
            Üç soruyu CEVAPLA: (a) bu zaten yazılı mı? (b) daha önce ÇALIŞIYOR muydu
            — yani regresyon mu, ilk temas mı? (c) komşu bir obje tipi/bağlam için
            yazılmış mı (aynı ders orada kanamış olabilir)?
+           Türkçe karakterli desende `rg` ya da Python kullan ve harf varyantlarını
+           (ı/i · ş/s · ğ/g · ü/u · ö/o · ç/c · İ) ayrıca ara — ASCII'leştirilmiş desen
+           Türkçe metinde SAHTE SIFIR verir (3 kez ölçüldü).
 ② ÖLÇ    → kontrol grubu: sorunlu vaka + ÇALIŞTIĞI BİLİNEN vaka (PATTERN #19).
            Tek yönlü 5 başarısız deneme hipotezi test etmez, yalnız güveni şişirir.
            ⛔ ÖLÇÜMÜ **GERÇEK GİRİŞ NOKTASINDAN** YAP — script'i elle çağırmak

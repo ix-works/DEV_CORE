@@ -51,6 +51,21 @@ Görev DEVAM eder. Workaround gerekiyorsa bypass DEĞİL (skip_reviewer vb. YASA
 alternatif yoksa kullanıcıya eskalasyon. Kuyruk-eskalasyonu: content-health-radar turu açık
 kayıtları tarar (süresiz-açık kayıt = karantina-çürümesi; flaky-quarantine literatürü).
 
+**Kuyruk NEREDE yaşar — ve neden çekirdekte DEĞİL:**
+- **Çekirdek sahibinin makinesi:** kuyruk, sahibin **private** proje reposundaki
+  `governance/infra-findings.md`'dir; infra-expert'in kalıcı hafızası da o projenin
+  `.claude/agent-memory/infra-expert/` dizinindedir.
+- **Tüketici klonlar** (çekirdeğe yazma yetkisi olmayan kurulumlar): bulgu kendi kuyruklarına
+  yazılabilir, ama çekirdeği ilgilendiren bulgu çekirdeğe **yalnız GitHub Issue ile** bildirilir
+  (`playbook/howto-cekirdek-bulgu-bildirimi.md`); sahip onu `MAINTENANCE.md` §6c protokolüyle
+  değerlendirir. Fork-PR yolu yoktur.
+- **Gerekçe:** çekirdek deposu **PUBLIC**'tir. Kuyruk kayıtları görev bağlamı taşır — proje, paket,
+  sistem ve müşteri izi — ve bunlar genericize edilmeden yazılır (yazım anında hız esastır).
+  Kuyruğu çekirdeğe taşımak bu izleri yayınlamak olurdu (ölçüldü 2026-10-18: bir projenin
+  kuyruğunda kimlik izi taşıyan **320 satır**). Bu yüzden kuyruk, onun durum şeması ve
+  infra-expert hafızası çekirdeğe **taşınmaz**. Çekirdeğe giden, düzeltmenin kendisidir: genericize
+  edilmiş kod, doküman ve `governance/infra-changelog.md` satırı.
+
 ### ⛔ KUYRUĞA GİRİŞ EŞİĞİ (2026-08-22 — kullanıcı kararı, MUST)
 
 > **Kuyruk, fark edilen her şeyin günlüğü DEĞİLDİR; yapılmaya değer işlerin listesidir.**

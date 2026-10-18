@@ -27,6 +27,13 @@
 - Kullan: <öncelikli araçlar/dosyalar>; `path=core/` kuralı: kökten Grep core'u GÖRMEZ (D29).
 - OKU (işe başlamadan): <ilgili playbook/checklist yolları — yalnız gerekli olanlar>
 - Efor ölçeği: basit iş ≈ 3-10 araç çağrısı; kapsamlı iş için alt-hedeflere böl.
+- **Büyük build dispatch'i PARTİLERE bölünür — her parti KENDİ kapısından geçer** (bug-gate / doc-gate),
+  sonraki parti öncekinin kapısı temizlenince gider. **Bölme ölçütü:** obje sınırı ya da bağımsız
+  doğrulanabilir birim (ör. ① BDEF ② davranış sınıfları ③ ATC borcu) — her partinin kendi kabul
+  ölçütü olur. **Ateşler:** brif birden çok bağımsız obje grubunu tek "build et" görevinde topluyorsa.
+  *(Vaka, bir projede 2026-08-21: tek parti gönderilen 4.171 satırlık build 6 kapı turu aldı, bulgu eğrisi
+  14 → 11 → 4 → 1 → 2 → 0, üç kapı BLOCKER; düzeltme partileri de 13-14 bulguluktu.)* Sayısal satır
+  eşiği **yazılmaz**: tek veri noktası bir eşik vermez — ölçüt partinin kendi kapısından geçebilmesidir.
 - **CORE/worktree'ye yazan roller:** kimlik izini (müşteri adı · sistem-ID · gerçek repo adı ·
   SAP kullanıcı adı) **BAŞTAN placeholder yaz** (`<PROJECT_NAME>`, `<SYS>`, `<SAP_USER>`, ZSD001).
   GENERICIZE-LEAK guard'ı içeriği **üretim BİTTİKTEN sonra** değerlendirir → bedeli düzeltme
@@ -124,9 +131,17 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
 - **Çok-repolu işte worktree'yi LİDER açar** ve adresini brife YAZAR:
   `git worktree add -b wip/<konu> <dizin> origin/<dal>` → ajan `git push origin HEAD:<PR-dalı>`.
   ⚠ Aynı dal canlı ağaçta checkout ise git ikinci worktree'ye izin vermez.
-- **İstediğin her DOSYA eyleminin (`Write`/`Edit`) ajanın `tools:` listesinde olduğunu ÖLÇ**
-  (salt-okur role rapor DOSYASI yazdırmak = §3 nüks sınıfı). ⚠ `SendMessage` bu kuralın
-  **dışındadır** — `tools:` satırı belirleyici değil; §8'deki yedeği koy.
+- **Brifte istediğin her EYLEMİ (dosya yazma · mesaj · worktree'de çalışma) ajanın ÇALIŞMA ZAMANI
+  yüzeyinde sına — `tools:` beyanı ölçüm değildir.** Beyan yalnız bir ön elemedir: `Write`/`Edit`
+  beyanda **yoksa** çalışma zamanında da yoktur (§3: 17 yazma denemesi / 17 hata) ⇒ salt-okur role
+  rapor DOSYASI yazdırma. Beyanda **varsa** da varlık kanıtlanmış sayılmaz (`SendMessage` aynı gün
+  bir rolde vardı, öbüründe yoktu — §8). **Nasıl sınanır:** brif, istenen eylemlerin ajanın **ilk
+  adımlarında** küçük ölçekte denenmesini ister (ilk ara rapor = mesaj kanalı · worktree'ye ilk yazım
+  = yazma yüzeyi + doğru adres) ve hata metninin aynen raporlanmasını; yedek yollar §8 + bu §9 maddesi.
+  **Ateşler:** yazma, mesaj ya da başka ağaçta çalışma isteyen her brifi yazarken.
+- ⛔ **`infra-expert` spawn'ına `name` verme** — `infra_write_guard` kimliği `agent_type`'tan okur
+  ve o alan spawn adıdır; ad verilirse muafiyet düşer, infra yazımı exit 2 ile bloklanır (ayrıntı +
+  ölçülmüş vaka 2026-08-21: §4).
 - ⓘ Bu maddenin varlığını `brifing-lint` denetler — ama yalnız **başka bir ağaca yazma işi
   veren** briflerde (ölçüm: 587 gerçek brif · dar eksen %18,4'ünü kapsıyor, ham "madde var mı"
   kontrolü %86,7 ateşleyip uyarı körlüğü üretirdi).
