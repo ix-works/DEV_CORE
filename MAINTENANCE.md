@@ -99,6 +99,7 @@ Okuma tek-noktası: `scripts/utils/project_config.py` (`cfg(key)`; env override:
 | `default_ui_root` | deploy_ui varsayılan UI kökü | `SOURCE_CODES/SD/ZSD001_CLC/ui` |
 | `doctor_probe_object` | sap_doctor canlı-okuma probu | `ZSD001_I_ORDER` |
 | `kd_docs_dir` / `kd_help_dir` | KD/PDF üretim yolları | — |
+| `fm_doc_sync_sources` | Projenin SAĞLADIĞI paylaşılan ABAP üreteçlerinin kaynak yolu — `check_fm_signature_doc_sync` imzayı core kılavuzundaki `<!-- FM-IMZA -->` bloğuyla karşılaştırır. Giriş `<kayıt-id>:<source_root-göreli yol>` (kayıt-id'ler kapının `KAYITLAR` listesinde). **Yoksa** kapı görünür `[SKIP] … ÖLÇÜLMEDİ` basar (exit 0); beyan var dosya yoksa ÖLÇÜLEMEDİ (exit 2) | `["screen_gen:SD/ZSD000_CLC/functions/ZSD000_FM_SCREEN_GEN.func.abap"]` |
 | `mail_attachments` | send_mail ekleri | — |
 
 Dosya-tabanlı olanlar: `.claude/watchdog_probes` ("path|desen" satırları — agent_watchdog),

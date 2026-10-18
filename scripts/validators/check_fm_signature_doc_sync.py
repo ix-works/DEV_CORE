@@ -31,8 +31,22 @@ NASIL (exact-logic; sezgisel eşleştirme YOK):
   TEMİZ        → exit 0, tek satır özet
   BULGU        → exit 0 + WARN (warn-first, ADR 0019 §54) · `--bulguda-exit1` ile exit 1
   ÖLÇÜLEMEDİ   → exit 2  (belge yok · imza bloğu yok · imza ayrıştırılamadı/çapa düştü)
-  ATLANDI      → exit 0 + AÇIK sebep (kayıttaki ABAP kaynağı BU projede yok — kayıt
-                 başka bir projeye ait; sessiz "OK" basılmaz, sebep yazılır)
+  ATLANDI      → exit 0 + `[SKIP] … ÖLÇÜLMEDİ` satırı (proje bu üreteci SAĞLAMIYOR: kaynak
+                 yolu `project.yaml` `fm_doc_sync_sources`'ta beyan edilmemiş — sessiz "OK"
+                 basılmaz; `run_all --ozet` bu satırı da gösterir)
+  Beyan VAR ama dosya YOK → ÖLÇÜLEMEDİ (exit 2): bağ kopuk, "üreteç yok" ile aynı şey değil.
+
+KAYNAK YOLU YAPILANDIRMADIR, KOD DEĞİL (2026-10-18): üreteç FM'in ABAP kaynağı PROJENİN
+reposunda yaşar (core yalnız kılavuzu taşır). Yol önceden burada sabit yazılıydı — bir
+tüketici projenin dosya düzenine kablolu bir core kapısı (ters yön sızıntı). Artık proje
+beyan eder (`MAINTENANCE.md` §6 kataloğu):
+    fm_doc_sync_sources: ["screen_gen:<MOD>/<PKG>/functions/<FM>.func.abap"]
+(`<kayıt-id>:<source_root-göreli yol>`; env override `IX_FM_DOC_SYNC_SOURCES`, virgülle).
+  · GEÇERLİ GİRİŞ TAŞIMAYAN env (`""`, `","`, `" , "`) "yok" sayılır — yaml beyanını EZMEZ;
+    karar env AYRIŞTIRILDIKTAN sonra verilir (önceden `strip()` kararı ayrıştırmadan önceydi ve
+    `","` yaml'ı ezip yanlış gerekçeli `[SKIP]` üretiyordu). Çıktı beyanın KAYNAĞINI yazar
+    (env / project.yaml); beyan yoksa `[SKIP]` gerekçesi GERÇEKTEN bakılan kaynakları sayar.
+  · Aynı kayıt-id iki kez verilirse ÖLÇÜLEMEDİ (exit 2) — önceden sonuncusu sessizce kazanıyordu.
 
 `--strict` BİLEREK NO-OP'tur: `run_all_validators --strict` bayrağını TÜM validator'lara
 iletir; bu gate'i oradan hard'a terfi ettirmek terfi kararını kazara bir çağıranın eline
@@ -44,12 +58,13 @@ Kullanım:
     python scripts/validators/check_fm_signature_doc_sync.py [--bulguda-exit1] [--selftest]
                                                              [--kayit <id>] [--core <yol>]
 Kablolama: run_all_validators (PROJE modu; CORE modunda SKIP — proje kaynağı gerekir).
-Kalıcı korpus: tests/fixtures/fm_imza_doc_sync (10 vektör, 4 mutasyon).
+Kalıcı korpus: tests/fixtures/fm_imza_doc_sync (20 vektör, 11 mutasyon).
 """
 # ENFORCES: CLC-SCR7
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -69,19 +84,21 @@ CORE_ROOT = Path(__file__).resolve().parents[2]
 class Kayit:
     """Bir paylaşılan üreteç: ABAP kaynağı ↔ onu belgeleyen kılavuz(lar)."""
 
-    def __init__(self, kid: str, fm: str, kaynak: str, belgeler: tuple, capa: str):
-        self.id = kid            # kısa ad (--kayit ile seçilir)
+    def __init__(self, kid: str, fm: str, belgeler: tuple, capa: str):
+        self.id = kid            # kısa ad (--kayit ile seçilir) = config anahtarındaki kayıt-id
         self.fm = fm             # FM adı (imza bloğu etiketi de budur)
-        self.kaynak = kaynak     # source_dir()-GÖRELİ yol (K12: SOURCE_CODES adı sabit değil)
         self.belgeler = belgeler  # CORE-göreli belge yolları; her biri FM-IMZA bloğu TAŞIMALI
         self.capa = capa         # imza ayrıştırması bu parametreyi bulmazsa ÖLÇÜLEMEDİ
+        # ⛔ Kaynak yolu burada YOK: proje beyan eder (`fm_doc_sync_sources`), bkz. docstring.
 
+
+CONFIG_ANAHTARI = "fm_doc_sync_sources"
+ENV_ANAHTARI = "IX_" + CONFIG_ANAHTARI.upper()      # `utils.project_config.cfg` ile aynı ad kuralı
 
 KAYITLAR = [
     Kayit(
         kid="screen_gen",
-        fm="ZSD000_FM_SCREEN_GEN",
-        kaynak="SD/ZSD000_CLC/functions/ZSD000_FM_SCREEN_GEN.func.abap",
+        fm="ZSD000_FM_SCREEN_GEN",   # core'un ortak-paket demo ad alanı (ZSD000 istisnası)
         belgeler=(
             "playbook/howto-dynpro-gui-status-generation.md",   # adım-adım kullanım kılavuzu
             "playbook/adt-fugr-functions.md",                   # §6 derin iç-mekanik referansı
@@ -149,17 +166,79 @@ def belge_parametreleri(metin: str, fm: str) -> set:
     return set(_TOKEN.findall(metin[i + len(bas_etiket):j]))
 
 
-def kaynak_yolu(kayit: Kayit) -> Path:
+def beyanlar() -> tuple:
+    """(`{kayıt-id: yol}`, beyan-kaynağı | None, bakılan-kaynaklar). Bozuk giriş Olculemedi.
+
+    Öncelik `cfg` ile aynıdır (env → project.yaml) TEK farkla: GEÇERLİ GİRİŞ TAŞIMAYAN env
+    "yok" sayılır. Karar env AYRIŞTIRILDIKTAN SONRA verilir: `""`, `","`, `" , "` gibi
+    yalnız boşluk/ayraç taşıyan env yaml beyanını EZMEZ (önceden `strip()` kararı ayrıştırmadan
+    önceydi ⇒ `","` yaml'ı ezip yanlış gerekçeli `[SKIP]` üretiyordu). `cfg` boş env'i değer
+    kabul eder ve yaml'a hiç bakmaz; `cfg`'nin kendisi değiştirilmedi (ortak davranış).
+    Üçüncü eleman, beyan bulunamadığında `[SKIP]` gerekçesinin GERÇEKTEN bakılan kaynakları
+    söylemesi içindir.
+    """
+    from utils.project_config import _yaml_lite, project_root  # noqa: E402  (proje tarafı)
+    bakilan: list[str] = []
+    env = os.environ.get(ENV_ANAHTARI)
+    if env is not None:
+        kaynak = f"env {ENV_ANAHTARI}"
+        out = _beyan_ayristir(env, kaynak)
+        if out:
+            return out, kaynak, bakilan
+        bakilan.append(f"env `{ENV_ANAHTARI}` tanımlı ama geçerli giriş yok (değer: {env!r})")
+    else:
+        bakilan.append(f"env `{ENV_ANAHTARI}` tanımsız")
+    ham = _yaml_lite(str(project_root() / "project.yaml")).get(CONFIG_ANAHTARI)
+    out = _beyan_ayristir(ham, "project.yaml")
+    if out:
+        return out, "project.yaml", bakilan
+    bakilan.append(f"`project.yaml` `{CONFIG_ANAHTARI}` yok/boş")
+    return {}, None, bakilan
+
+
+def _beyan_ayristir(ham, kaynak: str) -> dict:
+    """Ham beyan (env dizesi ya da yaml listesi) → `{kayıt-id: yol}`. Boş girişler atlanır;
+    hiç geçerli giriş yoksa `{}`. Bozuk giriş / çift kayıt-id Olculemedi."""
+    if ham in (None, "", []):
+        return {}
+    girdiler = ham.split(",") if isinstance(ham, str) else list(ham)
+    out: dict = {}
+    for g in (x.strip() for x in girdiler):
+        if not g:
+            continue
+        kid, ayrac, yol = g.partition(":")
+        if not ayrac or not kid.strip() or not yol.strip():
+            raise Olculemedi(f"`{CONFIG_ANAHTARI}` girişi `<kayıt-id>:<yol>` biçiminde DEĞİL: {g!r} "
+                             f"(kaynak: {kaynak})")
+        if kid.strip() in out:
+            raise Olculemedi(f"`{CONFIG_ANAHTARI}` aynı kayıt-id'yi iki kez beyan ediyor: "
+                             f"{kid.strip()} (kaynak: {kaynak}) — hangisinin ölçüleceği belirsiz")
+        out[kid.strip()] = yol.strip()
+    return out
+
+
+def kaynak_yolu(rel: str) -> Path:
     from utils.project_config import source_dir  # noqa: E402  (proje tarafı = kanonik API)
-    return source_dir() / kayit.kaynak
+    return source_dir() / rel
 
 
-def kayit_kos(kayit: Kayit, core: Path) -> tuple:
-    """(durum, satirlar) döner. durum ∈ {TEMİZ, BULGU, ATLANDI, ÖLÇÜLEMEDİ}."""
+def kayit_kos(kayit: Kayit, core: Path, beyan: dict, kaynak: str | None = None,
+              bakilan: list | None = None) -> tuple:
+    """(durum, satirlar) döner. durum ∈ {TEMİZ, BULGU, ATLANDI, ÖLÇÜLEMEDİ}.
+
+    `bakilan`: `beyanlar()`ın gerçekten baktığı kaynaklar — beyan yoksa gerekçe bunları
+    yazar (sabit "env boş/tanımsız" metni, env tanımlı-ama-geçersizken YANLIŞTI)."""
     out = []
-    src = kaynak_yolu(kayit)
+    if kayit.id not in beyan:
+        nerede = (f"{kaynak} beyanında bu kayıt yok" if kaynak else
+                  "beyan yok: " + " · ".join(bakilan or ["bakılan kaynak bildirilmedi"]))
+        return ("ATLANDI", [f"  [SKIP] ATLANDI({kayit.id}): {kayit.fm} kaynağı bu projede beyan "
+                            f"edilmemiş ({nerede}) — imza↔kılavuz senkronu ÖLÇÜLMEDİ. Proje bu "
+                            f"üreteci sağlıyorsa yolu beyan et."])
+    src = kaynak_yolu(beyan[kayit.id])
     if not src.is_file():
-        return ("ATLANDI", [f"  ATLANDI({kayit.id}): ABAP kaynağı bu projede YOK → {src}"])
+        return ("ÖLÇÜLEMEDİ", [f"  ÖLÇÜLEMEDİ({kayit.id}): `{CONFIG_ANAHTARI}` beyan ettiği "
+                               f"kaynak YOK → {src} (beyan bayat ya da yol yanlış)"])
     try:
         imza = imza_parametreleri(src.read_text(encoding="utf-8", errors="replace"), kayit.fm)
         # ÇAPA: ayrıştırma sessizce yarım kalırsa (biçim değişimi) sonuç 'temiz' görünürdü.
@@ -256,14 +335,27 @@ def main() -> int:
               f"(mevcut: {', '.join(k.id for k in KAYITLAR)})", file=sys.stderr)
         return 2
 
-    bulgulu, olculemedi, satirlar = [], [], []
+    try:
+        beyan, beyan_kaynagi, bakilan = beyanlar()
+    except Olculemedi as e:
+        print(f"ÖLÇÜLEMEDİ: {e}", file=sys.stderr)
+        return 2
+    bilinmeyen = sorted(set(beyan) - {k.id for k in KAYITLAR})
+    if bilinmeyen:
+        print(f"ÖLÇÜLEMEDİ: `{CONFIG_ANAHTARI}` bilinmeyen kayıt-id taşıyor: {', '.join(bilinmeyen)} "
+              f"(mevcut: {', '.join(k.id for k in KAYITLAR)})", file=sys.stderr)
+        return 2
+
+    bulgulu, olculemedi, atlanan, satirlar = [], [], [], []
     for k in kayitlar:
-        durum, cikti = kayit_kos(k, core)
+        durum, cikti = kayit_kos(k, core, beyan, beyan_kaynagi, bakilan)
         satirlar += cikti
         if durum == "BULGU":
             bulgulu.append(k.id)
         elif durum == "ÖLÇÜLEMEDİ":
             olculemedi.append(k.id)
+        elif durum == "ATLANDI":
+            atlanan.append(k.id)
 
     for s in satirlar:
         print(s)
@@ -277,7 +369,14 @@ def main() -> int:
               f"  Kılavuzun `<!-- FM-IMZA: ... -->` bloğunu KAYNAKTAN güncelle "
               f"(bayat kılavuz sessizce yanlış çağrı ürettirir).", file=sys.stderr)
         return 1 if a.bulguda_exit1 else 0
-    print(f"[OK] {len(kayitlar)} kayıt: imza ↔ kılavuz senkron.")
+    if len(atlanan) == len(kayitlar):
+        # Hiçbir kayıt ölçülmedi → "[OK] senkron" basmak sahte-yeşil olurdu.
+        print(f"[SKIP] {len(kayitlar)} kaydın hiçbiri bu projede beyan edilmemiş — "
+              f"KAPSAM SIFIR (ÖLÇÜLMEDİ, 'temiz' DEĞİL).")
+        return 0
+    print(f"[OK] {len(kayitlar) - len(atlanan)} kayıt: imza ↔ kılavuz senkron "
+          f"(beyan: {beyan_kaynagi})"
+          + (f" · {len(atlanan)} kayıt beyan edilmemiş (ÖLÇÜLMEDİ)." if atlanan else "."))
     return 0
 
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """init_project_iskelet — jeneratörden çıkan iskelet KAPIDAN geçiyor mu + sır kilidi TOPYEKÛN mü?
 
-ÜÇ DEĞİŞMEZ, DÖRT MUTASYON (her değişmez kendi mutasyonuyla sınanır; tek mutasyon yarısını sınamaz):
+DÖRT DEĞİŞMEZ, ALTI MUTASYON (her değişmez kendi mutasyonuyla sınanır; tek mutasyon yarısını sınamaz):
 
   ① KUYRUK TOHUMU (Q213) — `hooks/post_validate.py` stderr nudge'ında
      `governance/infra-findings.md` yolunu ajana ENJEKTE eder; `check_hook_injected_paths`
@@ -56,9 +56,23 @@ MUTASYON: --mutasyon                → ① sökülür (kuyruk tohumu üretilmez
                                       desenleri yok, `.format` kablolaması geri alınır)
           --mutasyon-force-onerisi  → ③a eski `[ATLA] … (mevcut; --force ile ez)` satırı geri gelir
           --mutasyon-not-yok        → ③b koşum sonu [ATLA] notu basılmaz
-ÇIKIŞ KODU SÖZLEŞMESİ (kardeş korpuslarla aynı): normal 0=hepsi geçti · 1=düşen var ·
-  2=alet geçersiz (yama tutmadı / iki kip birden). Mutasyon kipinde 0 "düşen yok" DEMEK
-  DEĞİLDİR — kararı `N/M OK` satırından oku.
+          --mutasyon-eol            → ④ `.gitattributes` SAP kaynak LF bloğu sökülür
+          --mutasyon-eol-dar        → ④ blok ilk sürümün ELLE yazılmış 4 uzantısına döner
+
+  ④ SAP KAYNAK SATIR SONU (2026-10-18) — şablon `.gitattributes` core'un SAP kaynağı saydığı
+     HER uzantı için `eol=lf` taşır; liste TEK KAYNAKTAN üretilir (`utils/sap_kaynak_uzantilari`,
+     `source_drift.SOURCE_EXTENSIONS` aynı tuple). SAP satır sonunu LF saklar; karışık CRLF/LF
+     md5 kıyasında sahte uyuşmazlık üretir — bir projede ölçüldü. ÖLÇÜT ETKİDİR, metin değil:
+     `git check-attr eol` (E1: tek kaynaktaki HER uzantı) · FP çapası: blok `.md`'ye taşmaz
+     (E2) · 3. bağlamda da aynı etki (E3) · E4: `object_types` dosya uzantılarının (XML
+     dışı) hepsi de `lf` — iki listenin hizası ölçülür, elle kopya yok.
+ÇIKIŞ KODU SÖZLEŞMESİ (CORE-07; kanonik desen `checklist_check`, 2026-10-18 delta kapısı turu):
+  normal 0=hepsi geçti · 1=düşen var. Mutasyon kipinde 1 = düşen küme `_BEKLENEN_DUSEN`'deki
+  pinli kümeye EŞİT (yalnız "en az biri düştü" DEĞİL) · 2 = SAPMA (düşen ≠ beklenen) ya da
+  alet geçersiz (iki kip birden / bilinmeyen kip) · 3 = DOGRULANAMADI (söküm çapası TAM 1 kez
+  eşleşmedi ya da mutant DERLENMEDİ — "düştü" SAYILMAZ, hiçbir sayı basılmaz). Önceden çapa
+  için yalnız `in` bakılıyordu (çoklu eşleşmede ilk yer sessizce sökülürdü), mutant
+  derlenmiyordu ve bilinmeyen `--mutasyon-x` sessizce TABANI koşuyordu.
 """
 from __future__ import annotations
 
@@ -82,13 +96,32 @@ GERCEK = KOK / "scripts" / "init_project.py"
 CHIP = KOK / "scripts" / "validators" / "check_hook_injected_paths.py"
 SIZINTI = KOK / "scripts" / "validators" / "check_core_not_committed.py"
 
+# CORE-07: her kipin DÜŞMESİ BEKLENEN vektör kümesi (ölçüldü 2026-10-18; EŞİTLİKLE kıyaslanır).
+# Küme değişirse ÖLÇÜLEN yeni küme yazılır — "en az biri düştü" kabul DEĞİLDİR.
+_BEKLENEN_DUSEN = {
+    "--mutasyon": {"P1", "P1b", "P1c", "P1d", "P2", "U1"},
+    "--mutasyon-gevsek": {"P4", "P5", "P6", "P7", "U2"},
+    "--mutasyon-force-onerisi": {"A2", "U5a"},
+    "--mutasyon-not-yok": {"A3", "U5b"},
+    "--mutasyon-eol": {"E1", "E3", "E4"},
+    "--mutasyon-eol-dar": {"E1", "E4"},
+}
+for _a in sys.argv[1:]:
+    if _a.startswith("--mutasyon") and _a not in _BEKLENEN_DUSEN:
+        print(f"[KULLANIM] bilinmeyen mutasyon kipi: {_a} — gecerli: "
+              f"{', '.join(sorted(_BEKLENEN_DUSEN))}")
+        raise SystemExit(2)
+
 MUT = "--mutasyon" in sys.argv
 MUT_GEVSEK = "--mutasyon-gevsek" in sys.argv
 MUT_FORCE = "--mutasyon-force-onerisi" in sys.argv
 MUT_NOT = "--mutasyon-not-yok" in sys.argv
-if sum((MUT, MUT_GEVSEK, MUT_FORCE, MUT_NOT)) > 1:
+MUT_EOL = "--mutasyon-eol" in sys.argv
+MUT_EOL_DAR = "--mutasyon-eol-dar" in sys.argv
+if sum((MUT, MUT_GEVSEK, MUT_FORCE, MUT_NOT, MUT_EOL, MUT_EOL_DAR)) > 1:
     print("HATA: iki mutasyon kipi birlikte verilemez"); raise SystemExit(2)
-HERHANGI_MUT = MUT or MUT_GEVSEK or MUT_FORCE or MUT_NOT
+HERHANGI_MUT = MUT or MUT_GEVSEK or MUT_FORCE or MUT_NOT or MUT_EOL or MUT_EOL_DAR
+KIP = next((a for a in sys.argv[1:] if a in _BEKLENEN_DUSEN), None)
 
 SONUC: list[tuple[bool, str]] = []
 
@@ -128,15 +161,47 @@ FORMAT_CAGRISI = "GITIGNORE.format(source_root=a.source_root)"
 # ③ Q314 çapaları (ESKİ satır = 18bbe78'deki literal)
 ATLA_SATIRI_YENI = 'f"{ATLA_ETIKETI} {hedef} (mevcut; dokunulmadı)"'
 ATLA_SATIRI_ESKI = 'f"[ATLA] {hedef} (mevcut; --force ile ez)"'
+# ④ SAP kaynak LF bloğu (sökülecek çapa: tek kaynaktan üreten ifade)
+EOL_BLOGU = '''""" + "".join(f"*{u} text eol=lf\\n" for u in SAP_KAYNAK_UZANTILARI)'''
+# Çapa satır başındaki kapanış `"""` ile başlar ⇒ eski 4 satır ondan ÖNCE, string içine girer.
+EOL_DAR = "".join(f"*{u} text eol=lf\n" for u in (".abap", ".cds", ".bdef", ".srvd")) + '"""'
+
+
+def _modul(yol: Path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("_fx_" + yol.stem, yol)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+# Beklenen uzantılar GERÇEK tek kaynaktan okunur (fixture'da ikinci liste YOK).
+SAP_UZANTILARI = tuple(_modul(KOK / "scripts" / "utils" / "sap_kaynak_uzantilari.py")
+                       .SAP_KAYNAK_UZANTILARI)
+SAP_UZANTI = tuple(f"ornek{i}{u}" for i, u in enumerate(SAP_UZANTILARI))
+
+
+def object_types_uzantilari() -> tuple:
+    """`object_types` dosya uzantıları (XML/boş hariç): ana tablo + sınıf alt-include'ları."""
+    ot = _modul(KOK / "scripts" / "object_types.py")
+    out = []
+    for v in list(ot.OBJECT_TYPES.values()) + list(ot.CLASS_INCLUDE_TYPES.values()):
+        for k in ("file_extension", "abapgit_extension"):
+            e = v.get(k)
+            if e and not e.endswith(".xml") and e not in out:
+                out.append(e)
+    return tuple(out)
 NOT_BASKISI = ('    if any(s.startswith(ATLA_ETIKETI) for s in sonuc):\n'
                '        print("\\n" + ATLA_NOTU)\n')
 
 
 def _sok(metin: str, capa: str, yeni: str, etiket: str) -> str:
-    if capa not in metin:
-        print(f"HATA: YAMA TUTMADI — '{etiket}' çapası scripts/init_project.py'de YOK. "
-              "Fix elden geçirilmiş olabilir; çapayı güncelle. Hiçbir sayı basılmadı.")
-        raise SystemExit(2)
+    n = metin.count(capa)
+    if n != 1:
+        print(f"[DOGRULANAMADI] YAMA TUTMADI — '{etiket}' çapası scripts/init_project.py'de "
+              f"{n} kez geçiyor (TAM 1 olmalı; 0 = fix elden geçmiş, >1 = ilk eşleşme sessizce "
+              "yanlış yeri sökerdi). Çapayı güncelle/genişlet. Hiçbir sayı basılmadı.")
+        raise SystemExit(3)
     return metin.replace(capa, yeni, 1)
 
 
@@ -153,6 +218,17 @@ def kaynak_uret() -> str:
         metin = _sok(metin, ATLA_SATIRI_YENI, ATLA_SATIRI_ESKI, "[ATLA] satırı (Q314)")
     if MUT_NOT:
         metin = _sok(metin, NOT_BASKISI, "", "[ATLA] koşum sonu notu (Q314)")
+    if MUT_EOL:
+        metin = _sok(metin, EOL_BLOGU, '"""', ".gitattributes SAP kaynak LF bloğu")
+    if MUT_EOL_DAR:
+        metin = _sok(metin, EOL_BLOGU, EOL_DAR, ".gitattributes SAP LF bloğu (dar, elle 4 uzantı)")
+    if HERHANGI_MUT:
+        try:
+            compile(metin, str(GERCEK), "exec")
+        except SyntaxError as e:
+            print(f"[DOGRULANAMADI] mutant DERLENMEDİ ({KIP}): {e} — her vektörü düşüren bozuk "
+                  "kaynak 'yakalandı' SAYILMAZ. Hiçbir sayı basılmadı.")
+            raise SystemExit(3)
     return metin
 
 
@@ -219,6 +295,18 @@ def ignore_mu(p: Path, rel: str) -> bool:
     r = subprocess.run(["git", "-C", str(p), "check-ignore", "-q", rel],
                        capture_output=True, text=True)
     return r.returncode == 0
+
+
+def eol_attr(p: Path, *rel: str) -> dict:
+    """`git check-attr eol` ETKİSİ: {yol: değer} (lf / unspecified / ...)."""
+    r = subprocess.run(["git", "-C", str(p), "check-attr", "eol", "--", *rel],
+                       capture_output=True, text=True)
+    out = {}
+    for s in (r.stdout or "").splitlines():
+        yol, _, deger = s.rpartition(": eol: ")
+        if yol:
+            out[yol] = deger.strip()
+    return out
 
 
 def md5(p: Path) -> str:
@@ -359,6 +447,26 @@ def main() -> int:
                     ("/core/", ".claude/agents/", ".conn_adt", ".csrf_token.json")),
                 "N7 kanonik kilit satırları TAM SATIR olarak duruyor")
 
+        # ── ④ SAP KAYNAK SATIR SONU (etki: git check-attr) ──────────────────────
+        git_init(proje)
+        e1 = eol_attr(proje, *SAP_UZANTI)
+        e1_kotu = {k: v for k, v in e1.items() if v != "lf"}
+        kontrol(len(SAP_UZANTI) >= 4 and len(e1) == len(SAP_UZANTI) and not e1_kotu,
+                f"E1 `.gitattributes` tek kaynaktaki {len(SAP_UZANTI)} SAP uzantısının HEPSİ eol=lf",
+                ", ".join(f"{k}={v}" for k, v in (e1_kotu or e1).items()) or "check-attr çıktısı YOK")
+        ot_uz = object_types_uzantilari()
+        ot_ornek = tuple(f"ot{i}{u}" for i, u in enumerate(ot_uz))
+        e4 = eol_attr(proje, *ot_ornek)
+        e4_kotu = {k: v for k, v in e4.items() if v != "lf"}
+        kontrol(len(ot_uz) >= 5 and len(e4) == len(ot_ornek) and not e4_kotu,
+                f"E4 `object_types` kaynak uzantılarının ({len(ot_uz)}, XML hariç) HEPSİ eol=lf "
+                "(iki listenin hizası)",
+                ", ".join(f"{k}={v}" for k, v in (e4_kotu or e4).items()) or "check-attr çıktısı YOK")
+        e2 = eol_attr(proje, "docs/x.md", "notlar.txt")
+        kontrol(len(e2) == 2 and all(v == "unspecified" for v in e2.values()),
+                "E2 FP blok .md/.txt'ye TAŞMAZ (eol unspecified)",
+                ", ".join(f"{k}={v}" for k, v in e2.items()) or "check-attr çıktısı YOK")
+
         # ── ÜÇÜNCÜ BAĞLAM: görev-dışı şekil (--repo-mode none + farklı kaynak-kök) ─
         proje3 = kum / "proje_lite"
         ek3 = ("--repo-mode", "none", "--source-root", "ABAP_SRC")
@@ -372,6 +480,11 @@ def main() -> int:
                 "U3 3.BAĞLAM varsayılan kaynak-kök adı SIZMIYOR")
         kontrol("{source_root}" not in gi3 and "{source_root}" not in gi_metin,
                 "U4 KABLOLAMA doldurulmamış placeholder KALMADI (.format çağrıldı)")
+        git_init(proje3)
+        e3 = eol_attr(proje3, "ABAP_SRC/MM/ZMM001/x.abap", "ABAP_SRC/MM/ZMM001/y.cds")
+        kontrol(len(e3) == 2 and all(v == "lf" for v in e3.values()),
+                "E3 3.BAĞLAM (--repo-mode none + ABAP_SRC) SAP kaynakları yine eol=lf",
+                ", ".join(f"{k}={v}" for k, v in e3.items()) or "check-attr çıktısı YOK")
 
         # U5 — kaydın ölçüldüğü biçim: LITE proje + tek eksik dosya (pre-commit) → yeniden koşum.
         (proje3 / "scripts" / "git-hooks" / "pre-commit").unlink()
@@ -390,6 +503,15 @@ def main() -> int:
             print(("  [OK]   " if ok else "  [FAIL] ") + ad)
         print(f"\n{gecen}/{len(SONUC)} OK"
               + ("  (MUTASYON KİPİ — düşmesi BEKLENEN vektörler var)" if HERHANGI_MUT else ""))
+        if KIP:
+            dusen = {ad.split()[0] for ok, ad in SONUC if not ok}
+            beklenen = _BEKLENEN_DUSEN[KIP]
+            if dusen != beklenen:
+                print(f"[SAPMA] {KIP}: beklenen={sorted(beklenen)} düşen={sorted(dusen)} "
+                      f"fazla={sorted(dusen - beklenen)} eksik={sorted(beklenen - dusen)} → exit 2")
+                return 2
+            print(f"[BEKLENEN] {KIP}: düşen küme = beklenen {sorted(beklenen)}")
+            return 1
         return 0 if gecen == len(SONUC) else 1
     finally:
         _sil(kum)

@@ -82,16 +82,31 @@ Tool çağrısı SAP'a gitmeden önce reject edilebilir:
 5. adt_get tekrar → verify
 ```
 
-### Pattern 3 — Struct yarat (Sprint 6 — REVİZE EDİLDİ 2026-05-14)
+### Pattern 3 — Struct yarat (REVİZE EDİLDİ 2026-05-14 · 1. adım 2026-10-18)
+
+> ⚠ **ÖLÇÜLEMEDİ (2026-10-18):** adım 5-6'nın (shell + `adt_push_source(object_type='structure')`)
+> bugün hâlâ gerekli/çalışan yol olduğu yeniden ölçülmedi. Çelişen iki kayıt var:
+> (a) `scripts/sap_adt_lib.py` `create_structure` 2026-07-13'ten beri create-POST'tan sonra
+> deterministik ham PUT yapıyor (placeholder kökü orada kapatıldı; canlı negatif test ertelenmişti);
+> (b) [`adt-tables-structures.md`](adt-tables-structures.md) §12.1 ① (2026-07-31 canlı) `push_object`
+> structure dalının sessiz false-OK verdiğini ölçtü. Uygulamadan önce §12.1'i oku ve sonucu
+> **içerikten** doğrula (adım 7 — "activated" mesajına güvenme): **uygulayan, aktivasyondan
+> sonra `adt_get` readback ile doğrular** (alan listesi yerel DDL ile aynı mı; placeholder
+> `component_to_be_changed` kalmış mı) — hangi yolu seçerse seçsin.
 
 `adt_struct_create` SAP'de **placeholder bırakıyor** (`component_to_be_changed:abap.string(0)`).
 Tool create+activate OK döndürür ama field'lar yazılmaz. Doğru pattern: shell olarak yarat,
 sonra **`adt_push_source(object_type='structure')`** ile full DDL push.
 
 ```
-1. sprint6_adapt_struct.py ile lokal .ddls.asddls üret
-2. Manuel düzeltmeler: non-ZSD001 Z ref'leri (<LEGACY_SOURCE> zsd_007_t_*, zsd_007_sh_*,
-   zsd_d_* → bizim karşılıkları veya SAP standart), /sapapo/* → uygun Z DTEL
+1. Lokal yapı kaynağını YAZ: <source_root>/<MOD>/<PKG>/structures/<NAME>.ddls.asddls
+   (TD spec / tasarımdan; reviewer'ın ve adım 7'nin GİRDİSİ budur). Gövdeye `//` yorumu
+   KOYMA (push 400 — adt-tables-structures.md §12.1 ③).
+   ⚠ 2026-10-18: eski 1. adımın aracı (legacy kaynaktan otomatik uyarlama script'i) emekli
+   edildi — core'da karşılığı YOK; kaynak elle yazılır.
+2. Kaynak başka bir sistemden uyarlanıyorsa: yabancı Z referanslarını (tablo/arama yardımı/
+   domain) hedef sistemdeki karşılığa ya da SAP standardına çevir; hedefte olmayan namespace
+   (ör. /sapapo/*) → uygun Z DTEL. Her adı hedef sistemde canlı doğrula (tahmin YASAK).
 3. run_review.py --task struct_creation → PASS bekle
 4. SAP DTEL audit: kullanılan tüm Z DTEL'lerin domain'i (BU_PARTNER, KNOTN, LIFNR,
    VERSART vs.) FK hedef tablo alanıyla uyumlu mu kontrol et

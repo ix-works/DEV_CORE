@@ -269,10 +269,12 @@ The project team uploads data into the SAP system using data migration tools suc
 > `governance/`, 2026-08-29). Başka bir projede yerleşik farklı bir desen varsa bu satır
 > yeniden **ölçülerek** tartışılır — tahminle değiştirilmez.
 >
-> **Kablolama (üçü atomiktir):** bu satır · paket şablonu
-> `templates/new-package/.rules.md.tmpl` · proje kapısı (proje-lokal
-> `scripts/validators-local/check_package_rules_naming_standard.py` gömülü `KANONIK`
-> haritası). Üçü birlikte taşınmazsa kapı `HARITA-SAPMASI` bulgusu üretir.
+> **Kablolama (ikisi atomiktir):** bu satır · paket şablonu
+> `templates/new-package/.rules.md.tmpl`. Şablon ↔ bu tablo eşliğini
+> `tests/fixtures/sablon_zorunlu_maddeler` ölçer. Paketlerin `.rules.md` naming tablolarını
+> şablona karşı core kapısı `scripts/validators/check_package_rules_naming_standard.py`
+> ölçer (warn-first, `run_all_validators`); haritayı **şablondan okur**, kendi kopyasını
+> tutmaz (2026-10-18'e kadar proje-lokal bir kapı gömülü kopya taşıyordu ve o kopya bayatlamıştı).
 
 #### 4.4.6 Public Cloud Objects
 

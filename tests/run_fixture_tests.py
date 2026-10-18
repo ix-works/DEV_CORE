@@ -415,7 +415,14 @@ OZEL_TESTLER = [
     # YAKALAMA (EKSIK/HAYALET/OLCULEMEDI) ve SESSIZLIK (blok DISI API token'lari, markdown
     # bicim varyantlari, farkli imza sekilleri). "Bakamadim" ile "temiz" AYRI exit'e duser.
     ("fm_imza_doc_sync",
-     "CLC-SCR7: FM imzasi <-> kilavuz senkronu; 3 durum ayrimi + FP capalari (11 vektor)"),
+     "CLC-SCR7: FM imzasi <-> kilavuz senkronu; 3 durum ayrimi + FP capalari + "
+     "`fm_doc_sync_sources` beyani (bos env / yalniz ayrac env / cift kayit-id; CORE-07 beklenen-kume) (20 vektor, 11 mutasyon)"),
+    # 2026-10-18: proje-lokal naming kapisi core'a tasindi; gomulu harita yerine sablon okunur.
+    ("rules_naming_standard",
+     "C-RULES-NAME-01: paket .rules.md naming tablosu <-> sablon (tek kaynak); bootstrap "
+     "ciktisi + eski sablon ciktisi + ALT KUME/PKG_NOZ FP capalari + KAPSAM SIFIR + tip "
+     "anahtari bicimden bagimsiz + OLCULMEDI beyani + kok yok exit 2 + iki seviye paket "
+     "kesfi + kardes rules_present + rules.md-siz paket dizini; CORE-07 beklenen-kume (20 vektor, 12 mutasyon)"),
     # 2026-08-19 ADT teshis gorunurlugu (iki kalem, tek tema: SAP'nin SEBEBI cagirana ulasmali)
     ("retry_500_govde",
      "retry adapter'i SAP'nin 500 GOVDESINI yutuyordu (429/502/503/504 tekrar KORUNDU)"),
@@ -962,6 +969,24 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "kılavuzun FM-IMZA bloğu gate'in girdisidir; blok bozulursa gate ÖLÇÜLEMEDİ vermeli"),
     ("playbook/adt-fugr-functions.md", ("O:fm_imza_doc_sync",),
      "§6 imza bloğu aynı gate'in ikinci belgesidir"),
+    ("scripts/validators/check_package_rules_naming_standard.py", ("O:rules_naming_standard",),
+     "naming tablosu ↔ şablon: yakalama + ALT KÜME/PKG_NOZ sessizliği + KAPSAM SIFIR/ÖLÇÜLEMEDİ"),
+    # 2026-10-18: paket keşfi (`find_packages`) naming kapısıyla ORTAK; kardeşin kök-yok /
+    # 0-paket / eksik-.rules.md dalları aynı korpusun V17–V19'unda.
+    ("scripts/validators/check_package_rules_present.py", ("O:rules_naming_standard",),
+     "`find_packages` naming kapısının paket keşfidir + kardeş kök-yok/KAPSAM SIFIR dalları"),
+    # 2026-10-18: SAP kaynak uzantıları TEK KAYNAK (source_drift.SOURCE_EXTENSIONS bu tuple'dır;
+    # init_project `.gitattributes` LF bloğunu bundan üretir; izole core iskeletleri utils'i kopyalar).
+    ("scripts/utils/sap_kaynak_uzantilari.py",
+     ("O:init_project_iskelet", "O:pbe_kapsam", "O:pbe_ui", "O:precommit_kopya_surum_esligi"),
+     "SAP kaynak uzantıları tek kaynak: `.gitattributes` LF etkisi (E1/E4) + drift kapısı "
+     "uzantı→tip tamlığı (pbe_kapsam L3a) + izole iskeletlerde import"),
+    # AYRI satırlar (mevcut şablon/bootstrap satırlarının kümesi büyütülmedi): kapı haritayı
+    # şablondan OKUR ve yer tutucuları bootstrap'in kendi fonksiyonlarıyla çözer.
+    ("templates/new-package/.rules.md.tmpl", ("O:rules_naming_standard",),
+     "naming kapısının kanonik kaynağı bu şablonun naming tablosudur"),
+    ("scripts/bootstrap_package.py", ("O:rules_naming_standard",),
+     "naming kapısı `pkg_noz_turet`/`substitute`'u buradan import eder"),
     ("scripts/doc_equivalence_check.py", ("O:fs_docstd",),
      "DOC-FS-07 denklik ölçümü: kayıplı/kayıpsız çift + TR harf katlaması FP çapası"),
 

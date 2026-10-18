@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils import yasaklar_stamp  # KESİN YASAKLAR fiziksel damga (junction-bağımsız)
+from utils.sap_kaynak_uzantilari import SAP_KAYNAK_UZANTILARI  # `.gitattributes` LF bloğu (tek kaynak)
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     try:
@@ -164,7 +165,12 @@ GITATTRIBUTES = """\
 *.gif binary
 *.pdf binary
 *.zip binary
-"""
+
+# SAP kaynaklari: SAP satir sonunu LF saklar; calisma kopyasi da LF olmali. Karisik CRLF/LF
+# md5 karsilastirmasinda (ADT readback <-> disk) sahte uyusmazlik uretir (bir projede
+# olculdu, 2026-09-13). Yalniz yeni projeye yazilir; mevcut projelere UYGULANMAZ.
+# Uzanti listesi core'un SAP kaynagi saydigi TEK listeden uretilir (utils/sap_kaynak_uzantilari).
+""" + "".join(f"*{u} text eol=lf\n" for u in SAP_KAYNAK_UZANTILARI)
 
 MCP_JSON = """\
 {

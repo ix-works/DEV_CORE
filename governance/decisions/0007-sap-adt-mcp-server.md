@@ -179,7 +179,7 @@ Coordinator script ile mi MCP ile mi çalışacağına kararı:
 ## Sprint 6 Pilot
 
 Kalan 10 struct yaratımı MCP ile:
-1. `sprint6_adapt_struct.py` ile lokal `.ddls.asddls` üret (<LEGACY_SOURCE> source → Z prefix adapt)
+1. `sprint6_adapt_struct.py` ile lokal `.ddls.asddls` üret (<LEGACY_SOURCE> source → Z prefix adapt) *(script 2026-10-18 emekli; güncel yol: `playbook/adt-mcp.md` Pattern 3)*
 2. `run_review.py` → PASS
 3. `adt_struct_create(...)` → composite, atomic
 4. Verify

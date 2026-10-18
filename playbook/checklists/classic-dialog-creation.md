@@ -38,7 +38,7 @@ applies_to: [s4_private]
 | CLC-SCR3 | Split = tek CC + `cl_gui_splitter_container` (kodda), 2 container DEĞİL | WARNING | §6.1.2 |
 | CLC-SCR4 | Toolbar/menü temiz: `men`/`mtx`/`but` REFRESH; **`act` KORU** (yoksa `00256` geçersiz fonksiyon) | WARNING | §6.1.2 |
 | CLC-SCR6 | **DONÖR AÇIKÇA verildi** (`IV_SRC_PROG`/`IV_SRC_STATUS`) ve `EV_MESSAGE`'da `nav_remap=ON(F3/Sh+F3/F12->BACK/EXIT/CANCEL)` GÖRÜLDÜ. `nav_remap=OFF` → çağrı yanlış, ekran KULLANILMADAN düzeltilir (varsayılan minimal donör `&F2..&F5` üretir; `WHEN 'BACK'` bekleyen PAI yakalamaz) | BLOCKER | howto-dynpro §2.1 |
-| CLC-SCR7 | Üreteç kılavuzundaki `<!-- FM-IMZA -->` bloğu FM kaynağıyla SENKRON (parametre eklendi/kaldırıldıysa kılavuz aynı turda güncellendi) | WARNING | `check_fm_signature_doc_sync.py` (warn-first) |
+| CLC-SCR7 | Üreteç kılavuzundaki `<!-- FM-IMZA -->` bloğu FM kaynağıyla SENKRON (parametre eklendi/kaldırıldıysa kılavuz aynı turda güncellendi) | WARNING | `check_fm_signature_doc_sync.py` (warn-first) — kapı, üretecin kaynak yolunun `project.yaml` `fm_doc_sync_sources` satırında beyan edilmesini ister; beyan yoksa `[SKIP]` basar (ölçülmedi) |
 | CLC-SCR5 | BACK/EXIT/CANCEL + ESC çalışır (normal type + `user_command`; ESC=F12=CANCEL). RS_CUA_WRITE sonrası **GENERATE** şart (yoksa `00264`). **Navigasyon hedefi:** BACK/CANCEL → seçim ekranı (`LEAVE TO SCREEN 0`), EXIT → `LEAVE PROGRAM`; BACK'te `LEAVE PROGRAM` = ana-menüye atlama = BLOCKER | BLOCKER | §6.1.2 / §4 |
 
 ## Faz 4 — Metin + ADR 0005
