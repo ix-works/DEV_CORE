@@ -336,9 +336,43 @@ def _kural_desenleri(core: Path) -> dict[str, list[str]]:
         m = FRONTMATTER.match(_oku(f))
         if not m:
             continue
-        mm = re.search(r"^\s*paths\s*:\s*(.+)$", m.group(1), re.MULTILINE)
-        if mm:
-            out[f.name] = [x.strip() for x in mm.group(1).split(",") if x.strip()]
+        desen = _paths_degeri(m.group(1))
+        if desen:
+            out[f.name] = desen
+    return out
+
+
+def _tirnak_soy(x: str) -> str:
+    x = x.strip()
+    if len(x) >= 2 and x[0] == x[-1] and x[0] in "\"'":
+        x = x[1:-1]
+    return x.strip()
+
+
+def _paths_degeri(fm: str) -> list[str]:
+    """`paths:` değeri → desen listesi. Üç biçim (2026-10-18): tırnaksız virgüllü tek satır
+    (eski çekirdek biçimi) · TIRNAKLI virgüllü tek satır (bugünkü çekirdek biçimi —
+    `frontmatter_lint`: tırnaksız `*` geçersiz YAML, CRLF'te `paths` düşer) · YAML listesi
+    (`paths:` + `  - "x"` satırları). Tırnak SOYULUR: soyulmasaydı ilk/son desen tırnak
+    karakteri taşır ve A3 eşlemesi SESSİZCE hiçbir dosyayı eşlemezdi (kural ölü görünmezdi)."""
+    mm = re.search(r"^[ \t]*paths[ \t]*:[ \t]*(.*)$", fm, re.MULTILINE)
+    if not mm:
+        return []
+    tek = mm.group(1).strip()
+    if tek:
+        if tek.startswith("[") and tek.endswith("]"):
+            tek = tek[1:-1]
+        return [d for d in (_tirnak_soy(x) for x in _tirnak_soy(tek).split(",")) if d]
+    out = []
+    for satir in fm[mm.end():].split("\n")[1:]:
+        lm = re.match(r"^[ \t]+-[ \t]+(.*)$", satir)
+        if not lm:
+            if satir.strip() == "" or satir.lstrip().startswith("#"):
+                continue
+            break
+        d = _tirnak_soy(lm.group(1))
+        if d:
+            out.append(d)
     return out
 
 

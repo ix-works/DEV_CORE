@@ -19,11 +19,16 @@ her-oturum gerekli olan → `CLAUDE.core.md §1.1`; **iş-anına özgü olan →
 
 ```yaml
 ---
-paths: **/*.abap, **/*.ddls
+paths: "**/*.abap, **/*.ddls"
 ---
 ```
 
 Değer hem virgüllü tek satır hem YAML listesi olabilir; ikisi de kabul edilir.
+**Değer çift tırnaklı yazılır:** tırnaksız `*` ile başlayan değer geçersiz YAML'dır (alias). Claude Code
+bunu LF dosyada yedek ayrıştırıcıyla kurtarır, CRLF dosyada kurtaramaz: `paths` düşer ve kural
+koşulsuz (`session_start`) yüklenir. Ölçüldü 2026-10-18, Claude Code 2.1.302, `claude -p` +
+InstructionsLoaded logu: tırnaklı LF/CRLF → `path_glob_match` · tırnaksız LF → `path_glob_match` ·
+tırnaksız CRLF → `session_start`. Kapı: `core_precommit` 6. kontrol (`scripts/utils/frontmatter_lint.py`).
 Eşleştirme **gitignore semantiğiyle**, proje köküne göreli yol üzerinde yapılır.
 
 `paths:` **olmayan** kural koşulsuz yüklenir (her oturum, `CLAUDE.md` gibi) — bunu bilerek yap.

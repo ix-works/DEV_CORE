@@ -19,7 +19,9 @@ Katmanlar (GECIS-EXEC-CHECKLIST BLOK F / F2.1–F2.7):
                      (gh CLI yoksa katman SKIP+WARN; project.yaml `repo_mode` local|none
                      ise ruleset+CI SKIP — Q336)
   4. CLAUDE        : settings/shim template-drift (D7) · SHIM_SURUM · behavior-
-                     manifest ↔ ağaç (F2) · hook smoke (örnek-stdin)
+                     manifest ↔ ağaç (F2) · hook smoke (örnek-stdin) · tanım dosyası
+                     frontmatter'ı geçerli YAML mı (4g; `utils/frontmatter_lint`, WARN-only,
+                     otomatik düzeltme YOK — bulgu ÇEKİRDEK/PROJE kaynağıyla ayrılır)
                      (freeze-guard canlı testi 2026-07-10'da R10 ile birlikte KALDIRILDI — bkz. 4e)
   5. MCP/SAP       : .conn_adt var+placeholder'sız · MCP server dosyaları
                      junction'dan erişilebilir · MCP server IMPORT edilebilir (Q335;
@@ -862,6 +864,121 @@ def katman4() -> list[Sonuc]:
     #      bloklanan komut PowerShell'den GEÇİYORDU (canlı A/B ile kanıtlandı). Guard'ı
     #      doğrudan çağıran testler yeşildi. "Kod-seviyesi koruma" ≠ "korunuyor".
     r.extend(_kablolama_kontrol())
+
+    # 4g — TANIM DOSYASI FRONTMATTER'I (2026-10-18, çekirdek PR #347 vakası): tırnaksız
+    #      `description:` içindeki `: ` Claude Code'da LF'te tolere edildi, CRLF checkout'ta
+    #      4 ajanı SESSİZCE düşürdü. Kapının çekirdek tarafı `core_precommit` 6. kontrol;
+    #      bu kol KURULU makinede (proje + claude-local) aynı modülle ölçer.
+    r.extend(_frontmatter_kontrol())
+    return r
+
+
+_CORE_KOPYA_DAMGA = re.compile(r"<!-- CORE-URETILDI: [^>]*?kaynak (core/\S+) -->")
+
+
+def _frontmatter_kaynagi(f: Path, metin: str) -> tuple[bool, str]:
+    """(çekirdek_mi, etiket). Çekirdek = yolu core köküne çözülen dosya (junction) YA DA
+    `team_setup`'ın damgaladığı çekirdek kopyası (`.claude/rules/*` gibi fiziksel kopyalar
+    proje içinde yaşar ama kaynağı çekirdektir; projede düzeltmek bir sonraki tazelemede
+    ezilir ve çekirdek hatasını gizler)."""
+    try:
+        gercek = f.resolve()
+    except OSError:
+        gercek = f
+    # İki kök: bu betiğin çekirdeği + projenin `core` bağının hedefi (betik bir worktree'den
+    # koşulduğunda ikisi ayrışır; projedeki junction'lar ikincisine çözülür).
+    kokler = {CORE_ROOT.resolve()}
+    try:
+        if (PROJ / "core").exists():
+            kokler.add((PROJ / "core").resolve())
+    except OSError:
+        pass
+    for core in kokler:
+        if gercek == core or core in gercek.parents:
+            return True, f"ÇEKİRDEK dosyası (core/{gercek.relative_to(core).as_posix()})"
+    m = _CORE_KOPYA_DAMGA.search(metin)
+    if m:
+        return True, f"ÇEKİRDEK kopyası (team_setup üretti; kaynak {m.group(1)})"
+    return False, "PROJE dosyası"
+
+
+def _frontmatter_kontrol() -> list[Sonuc]:
+    """4g — `.claude/{agents,commands,skills,rules}` + `claude-local/<tür>` frontmatter'ı.
+
+    ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: ortak modül yüklenemezse FAIL (neden yazılı); okunamayan dosya WARN.
+    UYARI sınıfı (`*`/`&` ile başlayan tırnaksız değer — çekirdeğin eski `paths:` biçimi;
+    güncellenmemiş kopyalarda/proje kurallarında kalabilir) WARN DEĞİL, özet satırında sayılıp
+    basılır (lider kararı 2026-10-18): aksi hâlde HER kurulu makinede
+    K4 kalıcı sarıya boyanır ve uyarı körlüğü üretir (bu dosyadaki önek-dalı notuyla aynı ilke).
+    """
+    try:
+        from utils import frontmatter_lint as FM  # noqa: E402
+    except Exception as e:  # noqa: BLE001
+        return [(FAIL, f"frontmatter denetimi ÖLÇÜLEMEDİ — ortak modül yüklenemedi "
+                       f"({type(e).__name__}: {e}); tanım dosyaları BU KOŞUMDA ölçülmedi "
+                       f"(TEMİZ demek DEĞİL)")]
+    r: list[Sonuc] = []
+    sayac: dict[str, int] = {}
+    bilgi: list[str] = []
+    n_engel = 0
+    for kok_ad in ("claude-local", ".claude"):
+        for tur in FM.TURLER:
+            d = PROJ / kok_ad / tur
+            if not d.is_dir():
+                continue
+            for f in sorted(d.rglob("*.md")):
+                rel = f.relative_to(d)
+                tt = FM.tanim_turu(f"{tur}/{rel.as_posix()}")
+                if tt is None:
+                    continue
+                gosterim = f"{kok_ad}/{tur}/{rel.as_posix()}"
+                try:
+                    with open(f, encoding="utf-8", errors="replace", newline="") as fh:
+                        metin = fh.read()
+                except OSError as e:
+                    r.append((WARN, f"frontmatter: {gosterim} okunamadı ({type(e).__name__}) — "
+                                    f"ÖLÇÜLEMEDİ"))
+                    continue
+                if kok_ad == ".claude":
+                    # overlay kopyası = claude-local kaynağının damgasız kopyası → bulgu bir kez
+                    kaynak = PROJ / "claude-local" / tur / rel
+                    try:
+                        if kaynak.is_file() and kaynak.read_bytes() == f.read_bytes():
+                            continue
+                    except OSError:
+                        pass
+                sayac[tt[0]] = sayac.get(tt[0], 0) + 1
+                cekirdek, etiket = _frontmatter_kaynagi(f, metin)
+                for b in FM.bulgular(metin, tt[1]):
+                    if b.seviye != FM.ENGEL:
+                        bilgi.append(f"{gosterim}:{b.satir}")
+                        continue
+                    n_engel += 1
+                    if cekirdek:
+                        yol = (f"{etiket} — DOKUNMA: düzeltmesi çekirdekte yapılır; çekirdek "
+                               f"hatası olarak bildir (core/playbook/howto-cekirdek-bulgu-bildirimi.md)")
+                    else:
+                        yol = (f"{etiket} — öneri: `{b.oneri}` (kullanıcıya göster, onayla "
+                               f"uygula; otomatik düzeltme YOK)")
+                    r.append((WARN, f"frontmatter GEÇERSİZ — {gosterim}:{b.satir} — {b.sorun} "
+                                    f"({FM.satir_sonu_notu(metin)}) · {yol}"))
+    toplam = sum(sayac.values())
+    dokum = " · ".join(f"{t} {sayac.get(t, 0)}" for t in FM.TURLER)
+    bilgi_notu = (f" · bilinen biçim (UYARI sınıfı, WARN değil — `*`/`&` ile başlayan tırnaksız "
+                  f"değer; LF'te yükleniyor, CRLF'te kural KOŞULSUZ yüklenir — tırnakla) "
+                  f"{len(bilgi)}: "
+                  + ", ".join(bilgi[:6]) + (" …" if len(bilgi) > 6 else "")) if bilgi else ""
+    kapsam = (f"[KAPSAM: .claude/<tür> + claude-local/<tür>; kullanıcı düzeyi ~/.claude BAKILMADI · "
+              f"düzey 2: {FM.duzey2_durumu()} · {FM.KAPSAM_BEYANI}]")
+    if toplam == 0:
+        r.append((SKIP, f"frontmatter: taranacak tanım dosyası YOK (yüzey boş — 'geçerli' "
+                        f"demek değildir) {kapsam}"))
+    elif n_engel:
+        r.append((WARN, f"frontmatter: {toplam} tanım dosyasında {n_engel} GEÇERSİZ satır "
+                        f"({dokum}){bilgi_notu} {kapsam}"))
+    else:
+        r.append((PASS, f"frontmatter: {toplam} tanım dosyası geçerli ({dokum}){bilgi_notu} "
+                        f"{kapsam}"))
     return r
 
 
@@ -1126,7 +1243,7 @@ KATMANLAR: list[tuple[int, str]] = [
     (1, "FS + BAĞIMLILIK (junction/policy/plugin/CLI)"),
     (2, "GIT (remote/main/stable/hooksPath/baseline/tree)"),
     (3, "GITHUB ENFORCE (ruleset/CI/sızıntı)"),
-    (4, "CLAUDE KATMANI (drift/manifest/hook-smoke)"),
+    (4, "CLAUDE KATMANI (drift/manifest/hook-smoke/frontmatter)"),
     (5, "MCP / SAP (.conn_adt/junction-erişim/import/canlı-probe)"),
     (6, "VALIDATORS + PERF (run_all + session_start süresi)"),
     (7, "İŞ-AKIŞI SMOKE (memory/deploy-zinciri/.rules.md)"),

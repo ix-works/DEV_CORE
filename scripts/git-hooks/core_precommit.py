@@ -23,6 +23,15 @@
    infra-expert'in F0 (geçmiş-okuma) adımını sessizce körleştirir. Kaçış:
    `IX_NO_CHANGELOG=1` (gerekçe commit mesajına). Yalnız pre-commit modunda koşar
    (`--all`/CI'da anlamsız: tüm ağaç "staged" görünür).
+6) FRONTMATTER (2026-10-18, PR #347 vakası): `claude/{agents,commands,skills,rules}/`
+   altındaki tanım dosyalarının YAML frontmatter'ı GEÇERLİ olmalı. Tek kaynak:
+   `scripts/utils/frontmatter_lint.py` (ix_doctor K4 aynı modülü okur). ENGEL sınıfı
+   (`: ` · ` #` · `#` ile başlayan değer · kapanmayan tırnak · frontmatter yok/kapanmıyor
+   · değerde `---` · ayrışmayan YAML) commit'i bloklar; UYARI sınıfı (`*`/`&` ile başlayan
+   tırnaksız değer — eski `paths:` biçimi, lider kararı B) yalnız basılır. Staged ve
+   `--all`/CI modunda koşar. Vaka: tırnaksız `description:` içindeki `: ` LF'te tolere
+   edildi, CRLF checkout'ta 4 ajanı SESSİZCE düşürdü; Linux CI'da (LF) hiçbir katman
+   görmedi. Düzey 2 (PyYAML) CI'da kurulu değildir ⇒ KAPSAM satırı ÖLÇÜLEMEDİ der.
 
 Yalnız staged içerik taranır (git show :path) — working-tree kirliliği gate'i etkilemez.
 CI modu: `--all` ile TÜM tracked dosyalar taranır (core-ci.yml full-tree gate'i).
@@ -54,6 +63,12 @@ from genericize_common import (  # noqa: E402  (sys.path bootstrap'tan SONRA)
     ATIF_ADRES_PAT, ATIF_SATIRI, blocklist_var_mi, id_pattern, sizintilari_bul,
     uyari_sizintilari,
 )
+try:  # 6. kontrol — tek kaynak. Yüklenemezse ÇÖKME YOK, tanım dosyasında fail-closed (aşağıda).
+    from utils import frontmatter_lint as FM  # noqa: E402
+    _FM_HATA = ""
+except Exception as _fm_exc:  # noqa: BLE001
+    FM = None  # type: ignore[assignment]
+    _FM_HATA = f"{type(_fm_exc).__name__}: {_fm_exc}"
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -434,6 +449,53 @@ def check_applies_to(path: str, text: str, enum: set[str], hatalar: list[str]) -
                 f"typo = sessiz profil-kaybı (D21)")
 
 
+# 6) FRONTMATTER — yalnız çekirdeğin KENDİ tanım dizinleri (`claude/<tür>/`). Önek kısıtı
+# bilinçli: fixture'lar, şablonlar ve memory-seed bu kapının konusu değildir (fixture'lar
+# kasıtlı bozuk tanım taşıyabilir). Kural ve sınıflar `frontmatter_lint` docstring'inde.
+# Modül yüklenemezse (ör. kapıyı `utils/`suz kopyalayan kum) kapı ÇÖKMEZ ama tanım dosyası
+# görürse FAIL-CLOSED'dur: ölçülemeyen tanım TEMİZ sayılmaz. Tür listesi modülden gelir;
+# yedek demet yalnız modül yokken öneki bilmek içindir.
+FM_TURLER = FM.TURLER if FM is not None else ("agents", "commands", "skills", "rules")
+FM_ONEK = tuple(f"claude/{t}/" for t in FM_TURLER)
+
+
+def check_frontmatter(path: str, text: str, hatalar: list[str], fm: dict) -> None:
+    if not path.startswith(FM_ONEK):
+        return
+    if FM is None:
+        if path.endswith(".md"):
+            hatalar.append(f"FRONTMATTER-OLCULEMEDI  {path}  — scripts/utils/frontmatter_lint.py "
+                           f"yüklenemedi ({_FM_HATA}); tanım dosyası ölçülmeden geçmez")
+        return
+    tur = FM.tanim_turu(path)
+    if tur is None:
+        return
+    fm["dosya"][tur[0]] = fm["dosya"].get(tur[0], 0) + 1
+    for b in FM.bulgular(text, tur[1]):
+        oneri = b.oneri if len(b.oneri) <= 120 else b.oneri[:117] + "…"
+        satir = f"{path}:{b.satir}  — {b.sorun} · öneri: {oneri}"
+        if b.seviye == FM.ENGEL:
+            hatalar.append("FRONTMATTER-GECERSIZ  " + satir)
+        else:
+            fm["uyari"].append("FRONTMATTER-UYARI  " + satir)
+
+
+def frontmatter_beyani(fm: dict, hatalar: list[str]) -> None:
+    """HER koşumda basılır — sıfır tanım dosyasında da (KAPSAM BEYANI, CLAUDE.core §7)."""
+    if FM is None:
+        print(f"[KAPSAM] frontmatter: ÖLÇÜLEMEDİ — scripts/utils/frontmatter_lint.py yüklenemedi "
+              f"({_FM_HATA}); `claude/<tür>/` altındaki tanım dosyası varsa commit BLOKLANIR")
+        return
+    dokum = " · ".join(f"{t} {fm['dosya'].get(t, 0)}" for t in FM.TURLER)
+    n_engel = sum(1 for h in hatalar if h.startswith("FRONTMATTER-GECERSIZ"))
+    print(f"[KAPSAM] frontmatter: {sum(fm['dosya'].values())} tanım dosyası ({dokum}; yalnız "
+          f"`claude/<tür>/`) · ENGEL {n_engel} · UYARI {len(fm['uyari'])} (çıkış kodunu "
+          f"DEĞİŞTİRMEZ) · düzey 2: {FM.duzey2_durumu()}")
+    print(f"         {FM.KAPSAM_BEYANI}")
+    for u in fm["uyari"]:
+        print("         " + u)
+
+
 def _bayrak_degeri(bayrak: str) -> str | None:
     """`--bayrak <değer>` ya da `--bayrak=<değer>`; değer yoksa None."""
     for i, a in enumerate(sys.argv[1:], 1):
@@ -607,6 +669,7 @@ def main() -> int:
     check_sir(dosyalar, hatalar)
 
     sayac = yeni_sayac()
+    fm: dict = {"dosya": {}, "uyari": []}
     for path in dosyalar:
         text = staged_content(path)
         if text is None:
@@ -618,9 +681,11 @@ def main() -> int:
             check_links(path, text, repo, hatalar)
             if path.startswith(("standards/", "playbook/")):
                 check_applies_to(path, text, enum, hatalar)
+            check_frontmatter(path, text, hatalar, fm)
 
     # KAPSAM BEYANI — bulgu olsun olmasın, HER koşumda (en kritik an sıfır-bulgu anıdır).
     kapsam_beyani(sayac)
+    frontmatter_beyani(fm, hatalar)
 
     if hatalar:
         print("⛔ pre-commit GATE (B11) — commit BLOKLANDI:\n")

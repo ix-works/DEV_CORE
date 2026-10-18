@@ -778,6 +778,13 @@ OZEL_TESTLER = [
      "kacissiz yaziliyordu (argumansiz = iyi bicimli olmayan XML) -> baglanti kullanicisi + "
      "exit 2 + attr_escape; kardes: DTEL/DOMA description + sap_adt_lib create_object/"
      "create_dataelement (24 vektor + 20 mutasyon; --eski-kod <ref> negatif kosu)"),
+    # 2026-10-18 (PR #347 vakasi): tirnaksiz `description:` icindeki `: ` CRLF checkout'ta 4 ajani
+    # SESSIZCE dusurdu; Linux CI (LF) gormedi.
+    ("frontmatter_lint",
+     "tanim dosyasi frontmatter kapisi: tek kaynak modul (ENGEL/UYARI, duzey 1 bagimliliksiz + "
+     "PyYAML) x {LF,CRLF} x {yaml,noyaml} + PyYAML esligi + gercek agac + tarihi a5e3c4a^ + "
+     "core_precommit gercek giris (staged/--all, eski kapi 3d22d7b GECIRIRDI) + ix_doctor 4g "
+     "(CEKIRDEK/kopya/PROJE ayrimi, katman4 kablolamasi); 6 mutasyon"),
 ]
 
 
@@ -1601,6 +1608,18 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/sap_adt_lib.py", ("O:responsible_kacis",),
      "create_object responsible/description + create_dataelement responsible/description/"
      "etiket kacisi; cozulemeyen sorumlu SAPValidationError (ag cagrisindan once)"),
+    # 2026-10-18 frontmatter kapisi — AYRI satirlar (mevcut satirlarin kumeleri buyutulmedi).
+    ("scripts/utils/frontmatter_lint.py", ("O:frontmatter_lint",),
+     "tanim dosyasi frontmatter siniflari (tek kaynak; core_precommit 6. kontrol + ix_doctor 4g)"),
+    ("scripts/git-hooks/core_precommit.py", ("O:frontmatter_lint",),
+     "6. kontrol: `claude/<tur>/` oneki + ENGEL->exit 1 / UYARI basilir + KAPSAM satiri"),
+    ("scripts/ix_doctor.py", ("O:frontmatter_lint",),
+     "4g `_frontmatter_kontrol` + katman4 kablolamasi"),
+    ("claude/agents/*.md", ("O:frontmatter_lint",), "R1 gercek agac: tanim frontmatter'i gecerli"),
+    ("claude/commands/*.md", ("O:frontmatter_lint",), "R1 gercek agac"),
+    ("claude/skills/*/SKILL.md", ("O:frontmatter_lint",), "R1 gercek agac"),
+    ("claude/rules/*.md", ("O:frontmatter_lint", "O:core_fiziksel_kopya"),
+     "R1 gercek agac (UYARI 0: paths tirnakli) + inspector A3 paths ayristirmasi"),
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla

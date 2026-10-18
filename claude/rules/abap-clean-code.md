@@ -1,5 +1,5 @@
 ---
-paths: **/*.abap
+paths: "**/*.abap"
 ---
 
 # ABAP stil alt kümesi — kısa işaretçi (L1b; `.abap` okununca yüklenir)
