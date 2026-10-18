@@ -19,7 +19,8 @@ status: active
 > çelişiyordu. Aşağıdaki §5 vakaları ölçülmüştür.
 > **Ne zaman:** yeni kural yazarken **ve** mevcut bir kuralın metnine dokunurken. Dokunulmayan eski
 > kurallar toplu yeniden yazılmaz (bürokrasi üretme); dokunulan kural bu standarda çekilir.
-> **Kim uygular:** kuralı yazan (lider, infra-expert, kuralı öneren uzman) — testleri de **yazan** koşar.
+> **Kim uygular:** kuralı yazan (lider, infra-expert, kuralı öneren uzman) dört alanı yazar, ulaşım ve
+> çelişki testini koşar, netlik testinin senaryolarını hazırlar; netlik testinin taze okurunu **lider** koşar (§4.1).
 
 ## 1. DÖRT ZORUNLU ALAN
 
@@ -47,7 +48,7 @@ profil/sürüm · obje tipi · uç/araç · bağlam · ölçüm tarihi. Ölçül
 **"ÖLÇÜLMEDİ"** diye yazılır.
 
 - ✅ *"Bitişikleme reçetesi source-based class'ın IMPLEMENTATION bölümünde çözmez (s4_private 2025,
-  2026-07-31 ölçümü); DEFINITION bölümünde yorum zaten serbesttir."*
+  2026-07-31 ölçümü); DEFINITION bölümünde yorum push açısından serbesttir."*
 - ⛔ *"Bitişikleme reçetesi ÇÜRÜDÜ."* — okuyucu bunu her bağlama genelleştirir.
 
 Neden: koşulsuz çürütme notu, **hâlâ geçerli olduğu yerde de** uygulanmaz ve yanlış yöntem seçtirir
@@ -75,13 +76,12 @@ o konuda çalışan ajan howto'yu açmaz).
 yaşar (çoğunlukla checklist satırı). Öbür kanala, ateşleme anını ve ID'yi taşıyan **tek cümle** yazılır;
 ayrıntı kopyalanmaz. Tek cümle bayatlarsa kanonik satır yine doğrudur.
 
-## 4. ÜÇ TEST — kural birleşmeden önce, yazan koşar
+## 4. ÜÇ TEST — kural birleşmeden önce (ulaşım + çelişki: yazan · netlik: yazan hazırlar, lider koşar)
 
-### 4.1 Netlik testi
+### 4.1 Netlik testi — yazan hazırlar, lider koşar
+Taze okuru her durumda lider koşar; kuralı yazan senaryoları ve beklenen cevabı testten ÖNCE hazırlar.
 1. **Taze okuyucu:** kuralın yazarı olmayan, bağlam verilmemiş bir ajan (kuralı uygulayacak rolün türü).
-   **Yazanın ajan yaratma aracı yoksa** (ör. infra-expert; `tools:` satırında `Agent` yok): yazan senaryoları
-   ve beklenen sonuçları (madde 2-3) yazıp PR gövdesine/changelog'a koyar. Taze okuyucuyu **lider** koşar ve
-   `NETLİK` satırını o doldurur. Bu durumda "yazan koşar" ifadesi, testi hazırlamak anlamına gelir.
+   Lider koşar ve `NETLİK` satırını doldurur; yazan madde 2-3'ü PR gövdesine/changelog'a koyar.
 2. **2-3 gerçekçi senaryo**, en az biri **istisna ya da sınır vakası** (kuralın uygulanmadığı yer).
    Senaryo kuralın metnini tekrarlamaz; durumu anlatır (*"şu metodu ekliyorsun, başına şu notu koymak istiyorsun"*).
 3. Her senaryonun **beklenen** uygulaması testten **önce** yazılır.
@@ -103,7 +103,9 @@ ayrıntı kopyalanmaz. Tek cümle bayatlarsa kanonik satır yine doğrudur.
 - Kuralın anahtar terimlerini **ve eşanlamlılarını** tara:
   `rg -n -i "<terim>|<eşanlamlı>" standards playbook claude CLAUDE.core.md scripts`.
 - Türkçe karakterli terimde **harf varyantlarını** ayrıca ara (`ı/i`, `ş/s`, `ğ/g`, `ü/u`, `ö/o`, `ç/c`, büyük
-  `İ`) — ASCII'leştirilmiş desen Türkçe metinde **sahte sıfır** verir; aramayı `rg` ya da Python ile yap.
+  `İ`) — desen ile metnin alfabesi uyuşmazsa **sahte sıfır** çıkar, iki yönde de (ASCII desen ↔ Türkçe metin ·
+  Türkçe desen ↔ ASCII'leştirilmiş metin); aramayı `rg` ya da Python ile yap. Üretilen HTML'de entity
+  kodlaması (`&#304;`) ayrı bir sınıftır: çözülmüş metinde ara.
 - Aynı konuyu farklı söyleyen her metin: ya hizala ya da **gerekçeli istisna** olarak iki tarafa yaz.
   Sayısal sınırlar (uzunluk, eşik) en sık çelişen sınıftır — kod/validator'daki değeri de tara.
 
@@ -118,7 +120,7 @@ ayrıntı kopyalanmaz. Tek cümle bayatlarsa kanonik satır yine doğrudur.
 | V5 | NE (muğlak) | *"formatter veya eşdeğeri"* — eşdeğer diye seçilen tip Türkçe yerel ayarda `"14.000"` → 14000, `"0.000"` → boş | Düzeltmenin kendi kapısı BLOCKER |
 | V6 | Kapsam koşulu | Kapsamsız bir *"X ÇÜRÜDÜ"* başlığı iki rol tarafından genellendi; aynı sayfada koşul yazılıydı | Yanlış kanal seçildi, bir tur kayboldu (2026-07-31) |
 | V7 | Çelişki | Yeni paket şablonundaki obje öneki adlandırma standardıyla farklıydı | 3 kez elle düzeltildi |
-| V8 | NE ZAMAN | Liderin ÖNCE-ARA tetik listesinde *"aynı hatayla ikinci denemeye geçerken"* yoktu | Bir araç sorunu ~2 saat / 12 denemeyle kovalandı; cevap yazılıydı |
+| V8 | NE ZAMAN | Liderin ÖNCE-ARA tetik listesinde *"başarısız bir denemeden sonra aynı amaçla yeniden denerken"* yoktu | Bir araç sorunu ~2 saat / 12 denemeyle kovalandı; cevap yazılıydı |
 
 Kural netliği örneklemi (aynı tur): incelenen kuralların çoğu **kısmen net** çıktı; en sık düşen iki
 alan **NEREDE** ve **NE ZAMAN**.

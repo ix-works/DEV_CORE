@@ -151,7 +151,7 @@
   + ⭐ **Ertelenmiş-iş süpürmesi (kullanıcı kuralı 2026-09-25):** `governance/deferred-triggers.md`
   bir **iş listesidir** ⇒ gün-sonunda güncellenen dosyalar arasındadır. O gün dokunulan paket/konunun
   kalemleri taranır: bugün **kapanan · iptal kararı verilen · başka bir işe/maddeye katılan** her
-  kalem **kaynağıyla** (PR/commit · karar cümlesi · katıldığı iş) işaretlenip `governance/archive/`
+  kalem **kaynağıyla** (PR/commit + ölçüm satırı — iş kapanışında · karar cümlesi — iptalde · katıldığı iş — katılmada) işaretlenip `governance/archive/`
   altındaki deferred arşivine **taşınır** — canlı dosyada yalnız açık kalem kalır; bugün doğan
   ertelenmiş iş aynı anda eklenir. *(Vaka 2026-09-25: kalemler başka maddeyle yapılmış ya da
   vazgeçilmiş göründüğü hâlde "açık" duruyordu, kapananlar gövdeleriyle kaldığı için dosya 7.937
@@ -186,9 +186,11 @@
      uygulanmaması. Ortada bırakılan her uyarı **her oturumda geri gelir** ve her seferinde
      yeniden teşhis edilir.)* Vaka: bir logger kusuru 3 ayrı turda yeniden teşhis edildi;
      4.'sünde "zararsız" kararının **ölçümü yanlıştı** ve kusur 6 hafta yaşadı.
-     **Kapanış kaydı = ölçüm çıktısı satırı** (komut + sonuç, ör. `validator … → 0 bulgu`,
-     readback md5 eşit); **PR numarası / "merge edildi" tek başına kanıt değildir** — PR kalemin
-     hangi eksenini kapattığını söylemez. Ateşler: bir kalemi KAPANDI işaretlerken.
+     **İş yapılarak kapanan kalemde kapanış kaydı = ölçüm çıktısı satırı** (komut + sonuç, ör.
+     `validator … → 0 bulgu`, readback md5 eşit); **PR numarası / "merge edildi" tek başına kanıt
+     değildir** — PR kalemin hangi eksenini kapattığını söylemez. İptal kararıyla ya da başka bir işe
+     katılarak kapanan kalem ölçüm istemez; kaynağı karar cümlesi / katıldığı iştir.
+     Ateşler: iş yapılarak kapanan bir kalemi KAPANDI işaretlerken.
      *(Denetim 2026-10-18: kapanış disiplini ihlali 6 kez sayıldı.)*
   2. **Açık madde TEK yerde yaşar.** Aynı madde iki yerde açık yaşarsa biri kapanınca
      diğeri bayatlar ve **açılışta geri gelir**. Tip başına kanonik yer:
@@ -279,7 +281,7 @@
 - **⛔ ÖNCE-ARA (KB-01 · MUST) — sıra: ① ARA → ② ÖLÇ → ③ DARALT → ④ YAZ.** Tam metin: **§4**.
   **TETİKLEYİCİ EYLEM-BAZLIDIR** (yalnız "araç bozuk" demek DEĞİL): *bir kayıt/kural/ders yazacaksan ·
   bir SINIF iddiası kuracaksan ("X şöyle davranır") · bir register'a madde açacaksan · "bu bozuk /
-  desteklenmiyor / yapılamaz" diyeceksen · aynı hata/araç mesajıyla İKİNCİ denemeye geçeceksen* → **önce ARA** (repo + core `path=core/` + memory +
+  desteklenmiyor / yapılamaz" diyeceksen · bir araç/işlem başarısız olduktan sonra aynı amaçla yeniden deneyeceksen (hata mesajı aynı da olsa farklı da)* → **önce ARA** (repo + core `path=core/` + memory +
   SESSION_NOTES + ilgili register): zaten yazılı mı · daha önce çalışıyor muydu (regresyon mu, ilk
   temas mı) · komşu obje-tipi için yazılmış mı. Sonucu kaydın içine yaz: `prior-art: bulundu <ref>` / `yok`.
   📌 Tanıdık semptom sezgi değil **sinyaldir**; cevap zaten yazılmış olabilir.
@@ -369,8 +371,8 @@ Bu format atlanırsa kullanıcı loader'ın yüklenmediğini varsayar → T4.
 ### ⛔ ÖNCE-ARA (KB-01 · MUST · zorlama: post_validate nudge + reviewer; GATE YOK)
 
 > **SORU 0'dan ÖNCE gelir.** SORU 0 *"nereye yazayım"* diye sorar — *"zaten yazılı mı"* diye
-> **sormaz**. Kayıt açmadan/kural yazmadan önce — ve **aynı hata/araç mesajıyla ikinci denemeye
-> geçmeden önce** (vaka 2026-08-14: bir araç sorunu ~2 saat / 12 denemeyle kovalandı, cevap playbook'ta
+> **sormaz**. Kayıt açmadan/kural yazmadan önce — ve **bir araç/işlem başarısız olduktan sonra aynı
+> amaçla yeniden denemeden önce** (hata mesajı aynı da olsa farklı da; vaka 2026-08-14: bir araç sorunu ~2 saat / 12 denemeyle kovalandı, cevap playbook'ta
 > yazılıydı) — sıra ŞUDUR (adım atlanmaz, sıra değişmez):
 
 ```
@@ -379,8 +381,10 @@ Bu format atlanırsa kullanıcı loader'ın yüklenmediğini varsayar → T4.
            — yani regresyon mu, ilk temas mı? (c) komşu bir obje tipi/bağlam için
            yazılmış mı (aynı ders orada kanamış olabilir)?
            Türkçe karakterli desende `rg` ya da Python kullan ve harf varyantlarını
-           (ı/i · ş/s · ğ/g · ü/u · ö/o · ç/c · İ) ayrıca ara — ASCII'leştirilmiş desen
-           Türkçe metinde SAHTE SIFIR verir (3 kez ölçüldü).
+           (ı/i · ş/s · ğ/g · ü/u · ö/o · ç/c · İ) ayrıca ara — desen ile metnin
+           alfabesi uyuşmazsa SAHTE SIFIR çıkar, iki yönde de (ASCII desen ↔ Türkçe
+           metin · Türkçe desen ↔ ASCII'leştirilmiş metin; 2 vaka). Üretilen HTML'de
+           entity kodlaması (&#304;) ayrı bir sınıftır: çözülmüş metinde ara.
 ② ÖLÇ    → kontrol grubu: sorunlu vaka + ÇALIŞTIĞI BİLİNEN vaka (PATTERN #19).
            Tek yönlü 5 başarısız deneme hipotezi test etmez, yalnız güveni şişirir.
            ⛔ ÖLÇÜMÜ **GERÇEK GİRİŞ NOKTASINDAN** YAP — script'i elle çağırmak
@@ -417,6 +421,10 @@ SORU 1: Tek paket mi, tüm proje mi?  → tek paket = L4
 SORU 2: Tipi? davranış=AGENTS · standart=standards · nasıl-yaparım=playbook · karar=decisions
 SORU 3 (L3): dar obje-tipi → playbook/adt-<tip>.md · cross-cutting → lessons-learned.md
 ```
+
+**Kural/talimat yazarken ya da değiştirirken** (checklist maddesi · ajan tanımı · §1.1 değişmezi ·
+`claude/rules/` · MUST/YASAK cümlesi) → [`standards/13-kural-yazim-standardi.md`](standards/13-kural-yazim-standardi.md)
+(std 13: dört alan NE · NEDEN · NE ZAMAN · NEREDE + kapsam koşulu + netlik/ulaşım/çelişki testi).
 
 ## 5. MEMORY KURALLARI
 

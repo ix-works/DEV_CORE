@@ -239,7 +239,7 @@ alanın boş kaldığı — çıkarım XFA şemasından. Yani yanlış değer **
 ### 3.8 Veri XML'ine giden numaralarda `ALPHA = OUT` sondaki boşluğu bırakır
 
 `|{ matnr ALPHA = OUT }|` alan genişliğini korur ⇒ değer `"ABC123 "` olarak XML'e gider (ölçüldü; ABAP Unit kıyası düştü).
-Kesin çare ``shift_right( val = |{ f ALPHA = OUT }| sub = ` ` )`` ya da `condense( )` — aynı tuzak mail konusu için
+Kesin çare ``shift_right( val = |{ f ALPHA = OUT }| sub = ` ` )`` ya da `condense( )` (kanonik: BE-86) — aynı tuzak mail konusu için
 [`howto-abap-email.md`](howto-abap-email.md)'de yazılı (prior-art; bu yolda yeniden yaşandı).
 
 ---

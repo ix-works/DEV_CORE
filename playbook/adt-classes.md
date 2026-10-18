@@ -342,7 +342,8 @@ kovalama (çok-app-server asimetrisi, CSRF, bare-header, taze isim).
 `T100KEY OO_SOURCE_BASED-012`. **Satır numarası YOKTUR** — hata hangi yorumun suçlu olduğunu
 söylemez, yalnız "bir yerde var" der.
 
-**KURAL — belirleyici olan KONUM'dur, bitişiklik değil.** Ölçülen dört konum:
+**KURAL — belirleyici olan KONUM'dur, bitişiklik değil.** Ölçülen beş konum (dördü 2026-07-31, `ENDCLASS.`
+sonrası 2026-06-15) + ölçülmemiş iki konum:
 
 | Yorumun konumu | Sonuç |
 |---|---|
@@ -350,10 +351,13 @@ söylemez, yalnız "bir yerde var" der.
 | Metot **GÖVDESİ** içi (`METHOD x.` satırının ALTI; `TRY.` öncesi dahil) | ✅ **SERBEST** — PUT **200** |
 | `CLASS … IMPLEMENTATION.` ↔ ilk `METHOD` arası | ⛔ **400** |
 | `ENDMETHOD.` ↔ sonraki `METHOD` arası | ⛔ **400** |
+| IMPLEMENTATION'ı kapatan `ENDCLASS.` sonrası | ⛔ **400** — 2026-06-15 vakası (yetim yorumlar silinince push geçti; tohum `feedback_detached-leading-abapdoc-class-push-400`) |
+| Son `ENDMETHOD.` ↔ IMPLEMENTATION'ın `ENDCLASS.`'ı | ⚠ **ÖLÇÜLMEDİ** — mekanizma aynı (yorum bir kod öğesine bağlanamıyor) ⇒ yorum KOYMA (BE-10b) |
+| DEFINITION'ın `ENDCLASS.`'ı ↔ `CLASS … IMPLEMENTATION.` | ⚠ **ÖLÇÜLMEDİ** — aynı gerekçe ⇒ yorum KOYMA (BE-10b) |
 
-⛔ **BİTİŞİKLEME ÇÖZMEZ.** Yorum bandı ile sonraki `METHOD` satırı arasındaki boş satırı silmek
+⛔ **IMPLEMENTATION bölümünde BİTİŞİKLEME ÇÖZMEZ.** Yorum bandı ile sonraki `METHOD` satırı arasındaki boş satırı silmek
 sonucu **değiştirmez** — aradaki boşluk değil, bandın IMPLEMENTATION gövdesindeki **yeri** kırar.
-"Bitişikle" reçetesi bu ölçümle çürümüştür (bkz. `checklists/bug-checklist-backend.md` BE-10b).
+"Bitişikle" reçetesi IMPLEMENTATION bölümü için bu ölçümle çürümüştür (bkz. `checklists/bug-checklist-backend.md` BE-10b).
 
 ✅ **DOĞRU REÇETE — iki seçenek:**
 1. Bandı **SİL** (metot/alan silinince ortada kalan not = en sık sebep), **veya**
