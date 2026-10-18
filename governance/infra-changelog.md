@@ -14,6 +14,11 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## README.md (kurulum prompt'u) · ONBOARDING.md (§2A + §11) · claude/commands/onboard.md — Claude ile ilk kurulum (2026-10-18; lider, kullanıcı kararı) — ⚠GEVŞETME YOK
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-10-18 | **① README** en üstte kopyala-yapıştır kurulum prompt'u (hedef klasör + proje repoları; DEV_CORE'u klonla → ONBOARDING §2A'yı sırayla uygula) + güncelleme için `/core-guncelle` işaretçisi; `/onboard` cümlesi düzeltildi (team_setup'tan önce görünmez). **② ONBOARDING §2A (YENİ):** ajanın yürüteceği 10 adım, `KULLANICI` işaretli adımlar (ön koşul kurulumu · özel repo erişimi · izin birleştirme onayı · `.conn_adt` · hafıza repo'su), proje başına rapor. **③ §11:** eski "@import onayı VER" maddesi → `core=YÜKLENDİ` satırı; hafıza git'i maddesi eklendi. **④ /onboard** açıklaması "ilk kurulum sonrası"; güncelleme için `/core-guncelle`. | Kullanıcılar "repoyu şu klasöre indir/kur" diyordu; ajan doküman yerine kendi yolunu izliyordu. README'de talimatı işaret eden bir prompt yoktu. `/onboard` `.claude/commands` bağından gelir (git'e girmez, `team_setup` kurar) ⇒ taze klonda ilk adım olamaz, bu hiçbir yerde yazmıyordu. §11'deki @import maddesi §7 ile çelişiyordu (Q286'da kaldırıldı). | Atıf yapılan dosya/bölümlerin varlığı ölçüldü (`sap_doctor.py`, `conn_adt.template`, `user-settings.template.json`, PROJECT_BOOTSTRAP STEP 3 e′, howto §3b/§3c/§3e/§5a). Bir tüketici projede `.gitignore` `.claude/commands/` satırı ölçüldü. Uçtan uca yeni makine kurulumu ÖLÇÜLMEDİ. | — (doküman) | — |
+
 ## claude/commands/core-guncelle.md · playbook/howto-cekirdek-guncelleme.md (§3e) · README.md · CLAUDE.core.md · scripts/hooks/session_start.py — `/core-guncelle` tek giriş noktası (2026-10-18; lider, kullanıcı kararı) — ⚠GEVŞETME YOK
 | tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
 |---|---|---|---|---|---|

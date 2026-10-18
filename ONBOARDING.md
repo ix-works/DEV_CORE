@@ -2,9 +2,11 @@
 
 > **Kime:** Canlı-çekirdek (DEV_CORE) düzenine ilk kez katılan geliştirici — veya mevcut
 > geliştiricinin YENİ makinesi. **Ne:** Kurulumdan ilk güvenli oturuma kadar insan-okur
-> rehber. **Otomasyon ikizi:** proje içinde `/onboard` komutu (`claude/commands/onboard.md`)
-> adımların çoğunu senin yerine yürütür — bu doküman "neden"i ve elle-yapılacakları anlatır;
-> ikisi birbirini tamamlar, çelişmez.
+> rehber. **Claude ile kurulum:** [`README.md`](README.md)'deki kurulum prompt'u Claude'a
+> **§2A**'yı yürüttürür — kullanıcı yalnız o prompt'u verir. **`/onboard` komutu**
+> (`claude/commands/onboard.md`) bir projede ancak `team_setup` koştuktan sonra görünür
+> (`.claude/commands` bağı git'e girmez, onu `team_setup` kurar) ⇒ ilk adım olamaz; kurulum
+> sonrası kontrol + iş özeti içindir. **Güncelleme** ayrı yoldur: `/core-guncelle`.
 >
 > İlişkili: [`README.md`](README.md) (mimari özet) · [`MAINTENANCE.md`](MAINTENANCE.md)
 > (core işletimi) · [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) (YENİ proje açılışı —
@@ -92,6 +94,54 @@ Sonra **kişisel** dosyanı yarat: proje kökünde `.conn_adt` (SAP host/client/
 kullanıcın — gitignore'da, repoya gitmez; şablon: proje `conn/` klasörü). Şifreyi Claude
 sohbetine YAZMA — dosyayı kendin düzenle.
 Alan şablonu: [`claude/conn_adt.template`](claude/conn_adt.template) (tek sistem; çoklu-tier: proje `conn/*.env` — ADR 0010).
+
+## 2A. Claude ile kurulum — README prompt'unun yürüttüğü adımlar
+
+> **Kim okur:** README'deki kurulum prompt'unu alan Claude. Adımlar **SIRAYLA** yürür. Bir
+> adımın **Doğrulama**'sı beklenen çıktıyı vermiyorsa **DUR**, çıktıyı kullanıcıya olduğu gibi
+> göster. **`KULLANICI`** işaretli adımları sen yapmazsın: ne gerektiğini söyle ve bekle.
+> ⛔ Şifre/token sohbete yazılmaz ve sorulmaz · ⛔ SAP'ye hiçbir şey yazılmaz · ⛔ `--force` yok ·
+> ⛔ junction'a özyinelemeli silme yok (§4).
+
+**Girdi** (prompt'tan): hedef klasör `<H>` · proje repoları (0..n) ya da `yeni proje: <AD>`.
+
+1. **Ön koşulları ölç (§0):** `python --version` (≥3.10) · `git --version` · `node --version` ·
+   `claude --version` · `gh --version` + `gh auth status` · Windows'ta `Get-ExecutionPolicy -List`.
+   Eksikleri listele, kurulum komutunu öner — kurulumu **`KULLANICI`** yapar ya da onaylar
+   (yönetici yetkisi isteyebilir). Python/git/Node/claude eksikse **DUR**. `gh` kurulamıyorsa DUR
+   sayılmaz: PR/CI ayağı ve `ix_doctor` katman-3 eksik kalır, raporda nedeniyle yaz.
+2. **git global taban (§0):** `core.autocrlf false` · `core.longpaths true` ·
+   `init.defaultBranch main`. Mevcut değer farklıysa değiştirmeden önce kullanıcıya göster.
+3. **Çekirdek:** `<H>/DEV_CORE` yoksa `git clone https://github.com/ix-works/DEV_CORE.git <H>/DEV_CORE`
+   (prompt bunu zaten yapmış olabilir; varsa dokunma). Doğrulama: `git -C <H>/DEV_CORE branch
+   --show-current` = `main`. ⚠ `<H>` OneDrive/senkron kapsamında olmamalı (§5) — öyleyse DUR, sor.
+4. **Projeler:**
+   - **Var olan proje:** `git clone <URL> <H>/<PROJE>`. Özel repo `gh auth` ister; erişim yoksa
+     yetkiyi **`KULLANICI`** ister.
+   - **Yeni proje:** [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) STEP 0–6'yı yürüt (STEP 0
+     kararları **`KULLANICI`**'nındır), sonra buradan adım 6'ya dön.
+   - **Proje yok:** adım 5, 7, 8'i atla; raporda yaz.
+5. **Her projede kurulum:** proje kökünde `python <H>/DEV_CORE/scripts/team_setup.py`.
+   Doğrulama: son satır `team_setup TAMAM`. `FARK VAR` ya da MCP import smoke FAIL görürsen
+   [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md) §3b/§3c aynen
+   geçerlidir. Birden çok projede her biri **kendi kökünde** ve `CLAUDE_PROJECT_DIR` o projeye
+   ayarlı koşar (howto §3e).
+6. **Kullanıcı-düzeyi ayarlar (§0):** `core/claude/user-settings.template.json` ↔
+   `~/.claude/settings.json` farkını göster; birleştirmeyi **`KULLANICI`** onaylar (mevcut anahtar
+   silinmez). ⛔ İzin listesi taramayla üretilmez — howto §5a uyarısı aynen geçerli.
+7. **SAP bağlantısı — `KULLANICI`:** her proje kökünde `.conn_adt`; şablon
+   `core/claude/conn_adt.template` (çoklu sistem: ADR 0010). Kullanıcı kendi kimliğiyle doldurur.
+   Dosya varsa doğrulama: `python core/scripts/sap_doctor.py`.
+8. **Hafıza git'i — `KULLANICI` + sen:** her projenin hafıza klasörü için özel repoyu
+   (`<ORG>/<PROJE>-memory`) **kullanıcı** açar; sonra [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md)
+   STEP 3 (e′) komutları. Kullanıcı istemezse atla ve raporda yaz (hafıza yalnız bu makinede kalır).
+9. **Doğrula:** her projede, kendi kökünde `CLAUDE_PROJECT_DIR` o projeye ayarlı:
+   `python core/scripts/ix_doctor.py` (FAIL yok) + `python core/scripts/validators/run_all_validators.py --quick`.
+10. **Rapor + yeniden açma:** proje başına tablo (`team_setup TAMAM` · `ix_doctor` FAIL/WARN ·
+    `.conn_adt` var mı · hafıza git'i) + atlanan adımlar ve nedenleri + `ÖLÇÜLEMEDİ: <sebep>`
+    maddeleri (ölçülemedi ≠ temiz). Son cümle: *"Claude Code'u proje klasöründe açın
+    (`cd <H>\<PROJE>` → `claude`). İlk mesajda `✓ Yükleme: … core=YÜKLENDİ` görünmeli; sonra
+    `/onboard` yazarak kontrol + iş özeti alın. MCP `sap-adt` onayı sorulursa onaylayın."*
 
 ## 3. Çalışma kökü modeli + FREEZE
 
@@ -216,11 +266,12 @@ girmez (yalnız var-mı + sayım), `--anon` kullanıcı adı/host maskeler · ek
 - [ ] `C:\IX\DEV_CORE` clone (bir kez) + proje clone
 - [ ] `team_setup.py` → 4 junction + bağımlılıklar + seed OK
 - [ ] `.conn_adt` KENDİ kimliğinle (şifre sohbete yazılmaz)
-- [ ] İlk oturum: @import onayı VER (Decline KALICI — §7) + MCP `sap-adt` onayı
+- [ ] İlk oturum: `✓ Yükleme: … core=YÜKLENDİ` satırı geliyor (§7; @import onayı YOK — Q286) + MCP `sap-adt` onayı
 - [ ] Ekran-teyidi formatı geliyor mu (gelmiyorsa §7 + `--repair-junctions`)
 - [ ] `~/.claude/settings.json` ← `claude/user-settings.template.json` ile **elle birleştirildi** (§0)
 - [ ] `.claude/active_package` var (yoksa `team_setup` yeniden koş) — §0a
 - [ ] memory tohumu: `python core/scripts/seed_memory.py --dry-run` → eklenecek 0 ya da bilinçli
+- [ ] hafıza git'i: özel `<ORG>/<PROJE>-memory` remote'u bağlı (§0a; [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) STEP 3 e′) — ya da bilinçli atlandı
 - [ ] `python core/scripts/ix_doctor.py` → FAIL yok
 - [ ] (ikinci makine varsa) `python core/scripts/parity_probe.py` → iki raporu karşılaştır (§9.1)
 - [ ] OneDrive/sync kapsamında `C:\IX` YOK (§5)

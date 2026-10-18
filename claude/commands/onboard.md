@@ -1,8 +1,11 @@
 ---
-description: Yeni/güncellenen geliştiriciyi bu repo'nun Claude ortamına paralel hale getirir (pull + setup + doğrula + brief)
+description: İlk kurulum sonrası (team_setup koşmuş projede) ortamı repo sahibiyle paralel hale getirir ve doğrular (setup + doğrula + brief) — GÜNCELLEME için /core-guncelle
 ---
 
 Sen bu geliştiricinin Claude ortamını repo sahibiyle **birebir paralel** hale getiriyorsun.
+⛔ **Bu komut çekirdek GÜNCELLEMESİ değildir** — kullanıcı güncelleme istiyorsa `/core-guncelle`
+çalıştır (aynı makinedeki diğer projeler + doğrulama orada). Sıfırdan kurulumun tamamı
+`core/ONBOARDING.md` §2A'dadır (README'deki kurulum prompt'u); bu komut onun sonundaki kontrol + brief adımıdır.
 Metodoloji **`core/` junction'ındadır** (canlı çekirdek — ADR 0020): script/validator/hook/MCP
 tek fiziksel kopyadan gelir, komutlar `python core/scripts/...` ile çağrılır. Adımları SIRAYLA
 yürüt; her adımı kısa raporla; başarısızsa DUR → sebep + çözüm önerisi. "Neden"leri anlatan
