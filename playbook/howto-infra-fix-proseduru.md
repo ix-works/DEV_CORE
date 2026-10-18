@@ -132,6 +132,16 @@ infra-expert bunu bir seansta 2× koşuyordu; CI de, lider de aynı süiteyi TAM
 - Seçili koşumun çıktısı kendini TAM sanmaz: sonunda `⚠ SEÇİLİ KOŞUM … TAM SÜİTE SONUCU
   DEĞİLDİR` satırı basar. Raporuna bu koşumu **tam süite kanıtı gibi yazma.**
 - Ne koşulacağını önce **kuru-koşumla** gör: `--degisen <dosya> --listele`.
+- ⛔ **Kuru koşumun `⇒ KARAR:` satırı 20 birimden fazla seçiyorsa yerel `--degisen` KOŞULMAZ** →
+  doğrudan "KOD DONDU". Aynı birimleri CI, lider draft PR'ı açınca zaten koşar; yerel koşu
+  CI'ın tekrarıdır ve ajanı bekletir. CI kırmızı dönerse yerel koşum teşhis için meşrudur.
+  Ateşler: geniş dokunuşta kuru koşumu okuduğun an. *(Ölçüm 2026-10-18: `sap_adt_lib` + 4 dosya
+  → 30 birim / 368 vektör, yerelde ≥20 dk; aynı turda #325'in 35 birimlik koşusu da yerelde koştu.)*
+- ⛔ **Uzun yerel koşuyu (`--degisen`, `run_battery`, mutasyon kipi) `| tail` / `| head` borusuna
+  BAĞLAMA** → çıktıyı dosyaya yönlendir (`> .tmp/<ad>.txt 2>&1`), ilerlemeyi dosyanın büyümesinden
+  izle. Boru çıktıyı süreç bitene kadar tamponlar: dosya 0 bayt görünür, takılma ile ilerleme
+  ayırt edilemez. *(Vaka 2026-10-18: 368/368 geçen koşu 20 dk boyunca 0 bayt göründü; ajan
+  süreç listesine bakana dek, lider de "takıldı" diye yanlış teşhis koydu.)*
 - Harita `tests/run_fixture_tests.py` içindeki `HARITA` sabitidir. **Yeni fixture yazınca
   oraya satır ekle** — eklemezsen TAM koşum `HARİTA-TAMLIK/kapsam` vektöründe FAIL verir
   (kendi korpusu: `tests/fixtures/b0_secim/`).
