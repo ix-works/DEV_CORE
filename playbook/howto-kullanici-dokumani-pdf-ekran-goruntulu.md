@@ -21,7 +21,10 @@ status: active
 `![](screenshots/..)` görselleri + ```` ```mermaid ```` blokları):
 `python core/scripts/build_doc_pdf.py <girdi.md> <cikti.html> ["Doküman Başlığı"] --pdf` (isteğe bağlı
 `--sayfa-no` / `--yer-imi`; ayrıntı dosyanın docstring'inde). Çıktı: `docs/<DOC>.html` + `<DOC>.pdf`.
-`scripts/build_kd_pdf.py` yalnız FIG/portal yer tutuculu eski KD düzeni içindir.
+`scripts/build_kd_pdf.py` yalnız FIG/portal yer tutuculu eski KD düzeni içindir:
+`python core/scripts/build_kd_pdf.py <girdi.md> <cikti.html> [--baslik "…"] [--md-yerinde-yaz]
+[--kirp-kaynak <dizin>] [--yardim-dizini <dizin>]`. Yazma hedefleri yalnız argümanlardan gelir;
+`--help` hiçbir dosyaya dokunmaz, eksik/yanlış argüman exit 2 verir (ayrıntı: dosyanın docstring'i).
 ⛔ Doküman başına üreteç kopyası açma: kopya düzeltmeleri almaz ve her biri ayrı bakım yüküdür
 (bir projede doküman başına kopyalanmış 55 üreteç ölçüldü, 2026-10-18; çalışanlar toplanmaz, yenisi açılmaz).
 
@@ -170,8 +173,8 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
   etiketlenir. Bakiye/fiyat function-import → mock'ta boş → enjekte. `node scripts/capture_kd_screens.js http://localhost:PORT`.
 - **`scripts/html_to_pdf.js`** — `build_kd_pdf.py` HTML çıktısını Edge `page.pdf` ile A4 PDF'e çevirir
   (`file://` node-playwright'ta çalışır; MCP'de bloklu). `node scripts/html_to_pdf.js in.html out.pdf`.
-- **Tam zincir:** mock başlat → `capture_kd_screens.js` → KD markdown'ı güncelle → `build_kd_pdf.py`
-  (mermaid render + HTML) → `html_to_pdf.js` (PDF). State enjekte ederken **sayıları tutarlı tut**
+- **Tam zincir:** mock başlat → `capture_kd_screens.js` → KD markdown'ı güncelle → `build_kd_pdf.py <md> <html>`
+  (mermaid render + HTML; yeni doküman için `build_doc_pdf.py`) → `html_to_pdf.js` (PDF). State enjekte ederken **sayıları tutarlı tut**
   (footer formatter'ı: `pakOnly=qty×pakFactor`, `pakSum=totalPackages` → toplam = Σ uyumlu olmalı).
 
 ### D.1 Mermaid — diyagram-as-code (FS/TS/KD görselleri)

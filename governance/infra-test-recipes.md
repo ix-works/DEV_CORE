@@ -3478,3 +3478,17 @@ python tests/fixtures/b0_secim/run.py                          # HARİTA satır�
 - **Düzeltme turu (2026-10-18, bug-gate WARNING'leri):** her düzeltmenin P vektörü + onu geri alan pinli kip vardır (kip → düşen): `tum-dosya` S9 · `cokme-pass` X10 X11 · `cokme-blok` X10 · `dosya-yok` X7 · `ids` X8 · `izlenmeyen` S6 S7 · `tab` S10 S11 · `fe13-satir1` S8 S8n · `be01-satir1` S8b · `hukum-tum-hucre` V10 V11 · `celiski-pass` V13–V15 · `bagsiz` V16 · `ana-haric-yok` R7 · `ana-capasiz` R6 · `friends` T11 · `deferred` T11 T14 · `pragma` T10 · `bom` T12 · `yapi-satiri` T15 S1 S4 · `birlestirme-yok` T10 T13 · `be50-clear` BE-50/N-clear N-atama · `be50-kosullu` BE-50/P-kosullu · `kardes-disk` S12. Eski kiplerin genişleyen kümeleri: `degisen` +S8n · `blok` +S6 S9 R6 · `girintili` +T10 T11 T13 T14.
 - **"Yeni vektör eski kodda düşer" kanıtı tekrarlanabilir:** fixture modülünü yükle, `PROG.read_bytes` yerine `git show <taban>:scripts/validators/checklist_check.py` içeriğini ver (gerçek `__file__` korunur), `main(None)` koş → 1801135'e karşı 183/212 (28 yeni vektör + genişletilen X6 düşer; düşmeyen 9'u kontrol/mutasyon vektörü).
 - **Platform sınırı:** `_git_yolu`'nun C-tırnak dalı (`"`, `\`, TAB içeren dosya adı) Windows'ta dosya olarak kurulamaz → yalnız birim vektörü (S11) ölçer; gerçek depo vektörü yalnız boşluklu yolu (S10) kapsar.
+
+## B85 — `build_kd_pdf.py` argüman sözleşmesi + davranış eşdeğerliği (2026-10-18)
+
+```
+python tests/fixtures/build_kd_pdf_arguman/run.py        # 16/16 (markdown+PIL yoksa 13/13 + G1/E ATLANDI)
+python tests/run_battery.py build_kd_pdf_arguman         # taban + 6 mutasyon kipi (7/7)
+python tests/fixtures/b0_secim/run.py                    # HARİTA satırı eklendi — REPO KÖKÜNDEN koş (cwd'ye bağlı)
+```
+
+- **"Dokunulmadı" ölçütü:** her vektör taze sahte proje ağacında koşar (`project.yaml` kd_docs_dir/kd_help_dir dolu, help/ VAR, kökte ham kd-01-liste.png VAR → eski kodun yazacağı her şey hazır). Ağaçtaki her dosyanın (boyut, mtime_ns, sha256) + dizin kümesi önce == sonra.
+- **Kip → düşen:** `sessiz-yardim` Y1 · `girdi-kontrol` H3 (+D1) · `erken-import` D1 (bağımlılıksız ortamda tüm kullanım vektörleri) · `yerinde-varsayilan` G1 E2 · `baslik-yok-sayilir` E1 E2 · `eski-kod` S1 H* Y* B* I1 D1 G1 E2 (E1 geçer = kontrol grubu).
+- **Eski kod tabanı** `git show 998e739:scripts/build_kd_pdf.py` (CI fetch-depth 0). Eski başlık ve eski md/html adları taban kaynağından/çıktısından ÇALIŞMA ANINDA okunur; fixture'a tüketici proje adı yazılmaz. Taban okunamazsa `eski-kod` kipi `[KURULAMADI]` exit 3 (KAÇTI değildir).
+- **Bağımlılık sınırı:** CI markdown/PIL kurmaz → G1/E1/E2 CI'da ATLANDI (PASS sayılmaz); yerelde ölçülür. CI taklidi: `python -m venv --without-pip <dizin>` ile o yorumlayıcıdan koş. Bu ortamda `eski-kod` kipi vektörleri yazmayla değil PIL import çöküşüyle (rc 1) düşürür — düşüş gerçek ama sebep farklıdır.
+- **KAPSAM DIŞI:** PDF adımı (`html_to_pdf.js`) ve mermaid render (`mmdc`) — girdi md'de mermaid bloğu yok.

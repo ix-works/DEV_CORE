@@ -755,6 +755,13 @@ OZEL_TESTLER = [
      "olculmus/olculmemis konumlar, tohum paketi (7 hata), --verify-report, exit 0/1/2, "
      "--harita-denetim, --reach, run_review class_push zinciri, diff kipi duzeltme turu, BE-50 SELECT/AT/ic-DATA, BE-16 alt sureci (sahte ADT ucu), bos --ids "
      "(223 vektor + 39 mutasyon)"),
+    # 2026-10-18 (B85): build_kd_pdf arguman sozlesmesi. G/E vektorleri markdown+PIL ister
+    # (CI KURMAZ -> ATLANDI); kullanim sozlesmesi vektorleri bagimliliksiz kosar.
+    ("build_kd_pdf_arguman",
+     "B85 build_kd_pdf: --help/-h exit 0 + hicbir dosya degismez, argumansiz/olmayan girdi/cikti/"
+     "kirp/yardim dizini/bilinmeyen-kisaltilmis bayrak exit 2 + degisiklik yok, import yan etkisiz, "
+     "bagimliliksiz kullanim yolu, sabit KD adi yok, eski kodla HTML/md/help/PNG bayt-esdegerligi "
+     "(16 vektor + 6 mutasyon; taban 998e739)"),
 ]
 
 
@@ -1548,6 +1555,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "metin-guvenli xlsx + goreli iliski hedefi (cl_fdt_xl CORE005 on kosulu)"),
     ("scripts/parity_probe.py", ("O:parity_probe_diff",),
      "--diff: _zaman yok sayilir, OLCULEMEDI ayri, skaler liste kume farki"),
+    # ── B85 (2026-10-18): build_kd_pdf arguman sozlesmesi ───────────────────
+    ("scripts/build_kd_pdf.py", ("O:build_kd_pdf_arguman",),
+     "argparse + yazmadan once denetim (exit 2) + agir import ayristirmadan sonra + acik yazma hedefleri"),
+    ("scripts/build_doc_pdf.py", ("O:build_kd_pdf_arguman",),
+     "build_kd_pdf slug_tr'yi import eder; G1/E1 HTML id'leri buna bagli (birlesim genisler)"),
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla
