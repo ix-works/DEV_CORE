@@ -116,7 +116,7 @@ client.session.post(client.url + '/sap/bc/adt/activation',
 
 | Attribute | Değer | Eksikse |
 |---|---|---|
-| `adtcore:responsible` | Kullanıcı adı (ör. `<SAP_USER>`) | Labels kayıt OLMAZ |
+| `adtcore:responsible` | Kullanıcı adı (ör. `<SAP_USER>`). `populate_domains` / `populate_dataelements` / `sap_adt_lib` verilmezse bağlantı kullanıcısını yazar, değeri `utils/xml_kacis.attr_escape` ile kaçışlar (Issue #339) | Labels kayıt OLMAZ |
 | `adtcore:abapLanguageVersion` | `standard` | Labels kayıt OLMAZ |
 | `adtcore:language` | `TR` (master language ile aynı) | Labels kayıt OLMAZ |
 
@@ -441,6 +441,8 @@ r = client.session.get(
 
 **Production tool:** `scripts/populate_dataelements.py` (Playbook §14.2 pattern'i + bu kural).
 CSV'de `type_kind=domain` ve `type_name=DATS/INT2/...` koy, scripti çalıştır.
+`--responsible` opsiyoneldir (`populate_domains.py` için de): verilmezse bağlantı kullanıcısı
+yazılır, o da boşsa araç YAZMADAN exit 2 ile durur — yer tutucu yazılmaz (Issue #339).
 
 ---
 

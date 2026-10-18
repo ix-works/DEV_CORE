@@ -771,6 +771,13 @@ OZEL_TESTLER = [
      "5xx/okuma zaman asimi/kopan baglanti -> 1 POST + islenmis_olabilir + uyari; gevsek "
      "'does not implement' alt metni reset/ok/teshis tetiklemez; KONTROL: oturum geneli Retry "
      "(classrun disi yol 504 -> 4 POST) degismedi; MCP adt_classrun (20 vektor + 13 mutasyon; eski kod 6/20)"),
+
+    # Issue #339 (2026-10-18): responsible yer tutucusu + oznitelik kacisi (B86).
+    ("responsible_kacis",
+     "Issue #339: populate_* --responsible varsayilani '<SAP_USER>' yer tutucusuydu ve "
+     "kacissiz yaziliyordu (argumansiz = iyi bicimli olmayan XML) -> baglanti kullanicisi + "
+     "exit 2 + attr_escape; kardes: DTEL/DOMA description + sap_adt_lib create_object/"
+     "create_dataelement (24 vektor + 20 mutasyon; --eski-kod <ref> negatif kosu)"),
 ]
 
 
@@ -1577,6 +1584,23 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "argparse + yazmadan once denetim (exit 2) + agir import ayristirmadan sonra + acik yazma hedefleri"),
     ("scripts/build_doc_pdf.py", ("O:build_kd_pdf_arguman",),
      "build_kd_pdf slug_tr'yi import eder; G1/E1 HTML id'leri buna bagli (birlesim genisler)"),
+
+    # ── Issue #339 (2026-10-18, B86): AYRI satirlar; sap_adt_lib.py birlesimi 24→25 →
+    # `b0_secim` P3 pinli sayisi BIRLIKTE guncellendi.
+    ("scripts/utils/xml_kacis.py",
+     ("O:responsible_kacis", "O:msag_mesaj_silme", "O:msgtext_uzunluk_guard"),
+     "attr_escape + sorumlu_coz TEK KAYNAK; msag M7/M16 capalari burada, msgtext PMC "
+     "import'u uzerinden yukler"),
+    ("scripts/populate_message_class.py", ("O:responsible_kacis",),
+     "--responsible None -> baglanti kullanicisi / exit 2 + build_xml attr_escape + silme "
+     "govdesi HAM responsible (cift kacis yok)"),
+    ("scripts/populate_domains.py", ("O:responsible_kacis",),
+     "--responsible None -> baglanti kullanicisi / exit 2 + responsible/description attr_escape"),
+    ("scripts/populate_dataelements.py", ("O:responsible_kacis",),
+     "--responsible None -> baglanti kullanicisi / exit 2 + responsible/description attr_escape"),
+    ("scripts/sap_adt_lib.py", ("O:responsible_kacis",),
+     "create_object responsible/description + create_dataelement responsible/description/"
+     "etiket kacisi; cozulemeyen sorumlu SAPValidationError (ag cagrisindan once)"),
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla

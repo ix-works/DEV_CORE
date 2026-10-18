@@ -150,6 +150,9 @@ def main_calistir(mod, csv_path: Path) -> tuple[int, str]:
         "--package", "ZSD001_CLC",
         "--transport", "<TRANSPORT>",
         "--description", "Test",
+        # Issue #339: --responsible artik varsayilan yer tutucu tasimaz; verilmezse
+        # baglanti kullanicisi okunur (sahte istemciye DOKUNMAK = bu korpusta FAIL).
+        "--responsible", "TESTUSER",
         "--messages-csv", str(csv_path),
         "--dry-run",
     ]

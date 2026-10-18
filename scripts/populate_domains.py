@@ -9,9 +9,10 @@ Kullanım:
     python populate_domains.py \\
         --package ZSD001_CLC \\
         --transport <TRANSPORT> \\
-        --responsible <SAP_USER> \\
         --csv <source_root>/ZSD001_CLC/domains.csv \\
         --cwd <PROJECT_ROOT>
+    (--responsible <SAP_USER> opsiyonel: verilmezse baglanti kullanicisi yazilir;
+     o da cozulemezse exit 2 — yer tutucu yazilmaz.)
 
 CSV format (UTF-8, header'lı):
     ZORUNLU 5 kolon: name,datatype,length,decimals,description
@@ -50,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
 from utils.ddic_aktivasyon import aktivasyon_notu   # "yaratildi != aktif" kapanis notu (tek kaynak)
+from utils.xml_kacis import attr_escape, sorumlu_coz, SORUMLU_YOK_MESAJI  # oznitelik kacisi + responsible (Issue #339, tek kaynak)
 
 
 def parse_fixed_values(fv_str: str) -> list:
@@ -220,12 +222,12 @@ def build_xml(name: str, description: str, package: str, responsible: str,
         fix_values_xml = '<doma:fixValues/>'
 
     return f'''<?xml version="1.0" encoding="UTF-8"?>
-<doma:domain adtcore:responsible="{responsible}"
+<doma:domain adtcore:responsible="{attr_escape(responsible)}"
              adtcore:masterLanguage="TR"
              adtcore:abapLanguageVersion="standard"
              adtcore:name="{name}"
              adtcore:type="DOMA/DD"
-             adtcore:description="{xml_escape(description)}"
+             adtcore:description="{attr_escape(description)}"
              adtcore:language="TR"
              xmlns:doma="http://www.sap.com/dictionary/domain"
              xmlns:adtcore="http://www.sap.com/adt/core">
@@ -338,7 +340,9 @@ def main():
     )
     parser.add_argument('--package', required=True, help='Package name (e.g. ZSD001_CLC)')
     parser.add_argument('--transport', required=True, help='Transport (e.g. <TRANSPORT>)')
-    parser.add_argument('--responsible', default='<SAP_USER>', help='Responsible user')
+    parser.add_argument('--responsible', default=None,
+                        help='Responsible user (varsayilan: baglanti kullanicisi; '
+                             'cozulemezse exit 2)')
     parser.add_argument('--csv', required=True, help='CSV file path')
     parser.add_argument('--cwd', help='Working dir with .conn_adt')
     parser.add_argument('--dry-run', action='store_true',
@@ -368,6 +372,13 @@ def main():
 
     client = SAPADTClient()
 
+    # Yazmadan ONCE: --responsible verilmezse baglanti kullanicisi; o da bossa DUR
+    # (sessiz yer tutucu yok — Issue #339).
+    responsible = sorumlu_coz(args.responsible, client)
+    if responsible is None:
+        print(SORUMLU_YOK_MESAJI)
+        return 2
+
     csrf = ''
     if not args.dry_run:
         client._invalidate_csrf_cache()
@@ -390,7 +401,7 @@ def main():
         success = create_one(
             client=client, csrf=csrf,
             name=row['name'], description=row['description'],
-            package=args.package, responsible=args.responsible,
+            package=args.package, responsible=responsible,
             transport=args.transport,
             datatype=row['datatype'], length=row['length'], decimals=row['decimals'],
             fixed_values=row['fixed_values'],

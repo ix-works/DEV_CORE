@@ -80,6 +80,8 @@ HERE = Path(__file__).resolve().parent
 CORE = HERE.parents[2]
 SCRIPTS = CORE / "scripts"
 PMC_PATH = SCRIPTS / "populate_message_class.py"
+# Issue #339: `attr_escape` + `_ATTR_KACIS` bu ortak modüle taşındı; M7/M16 çapaları orada.
+KACIS_PATH = SCRIPTS / "utils" / "xml_kacis.py"
 
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
@@ -264,11 +266,26 @@ class _SahteClient:
         self.temizlik += 1
 
 
-def load(mut=None):
-    """Kaynagi TAZE namespace'e yukler; mutasyon KAYNAK METNINE uygulanir (gercek __file__)."""
+def load(mut=None, kacis_mut=None):
+    """Kaynagi TAZE namespace'e yukler; mutasyon KAYNAK METNINE uygulanir (gercek __file__).
+
+    `kacis_mut`: `utils/xml_kacis.py` metnine uygulanir; mutasyonlu modul PMC exec'i
+    SURESINCE `sys.modules['utils.xml_kacis']`e konur (PMC `from utils.xml_kacis import`
+    ile onu baglar), sonra eski hali geri yuklenir — komsu senaryolar etkilenmez.
+    """
     src = PMC_PATH.read_text(encoding="utf-8")
     if mut:
         src = mut(src)
+    import utils  # noqa: F401 — ust paket yuklu olmali (sys.modules enjeksiyonu icin)
+    _ANAHTAR = "utils.xml_kacis"
+    _yok = object()
+    _eski_kacis = sys.modules.get(_ANAHTAR, _yok)
+    if kacis_mut:
+        _km = types.ModuleType(_ANAHTAR)
+        _km.__file__ = str(KACIS_PATH)
+        _ksrc = kacis_mut(KACIS_PATH.read_text(encoding="utf-8"))
+        exec(compile(_ksrc, str(KACIS_PATH), "exec"), _km.__dict__)
+        sys.modules[_ANAHTAR] = _km
     saved_out, saved_err = sys.stdout, sys.stderr
     cop_out = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
     cop_err = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
@@ -280,6 +297,11 @@ def load(mut=None):
     finally:
         sys.stdout, sys.stderr = saved_out, saved_err
         _mod_refs.append((cop_out, cop_err))
+        if kacis_mut:
+            if _eski_kacis is _yok:
+                sys.modules.pop(_ANAHTAR, None)
+            else:
+                sys.modules[_ANAHTAR] = _eski_kacis
     return mod
 
 
@@ -576,7 +598,7 @@ MUTASYONLAR = [
      "    hatalar = []\n"),
     ("M7 oznitelik kacisi (tirnak + TAB/LF/CR) tumden geri alinir",
      "    return xml_escape(metin, _ATTR_KACIS)\n",
-     "    return xml_escape(metin)\n"),
+     "    return xml_escape(metin)\n", "kacis"),
     ("M8 documented sabit 'false'a doner",
      "        d = m[3] if len(m) > 3 else 'false'\n",
      "        d = 'false'\n"),
@@ -603,7 +625,7 @@ MUTASYONLAR = [
      "            pass\n"),
     ("M16 yalniz TAB/LF/CR kacisi geri alinir (tirnak kalir)",
      "_ATTR_KACIS = {'\"': '&quot;', '\\t': '&#9;', '\\n': '&#10;', '\\r': '&#13;'}\n",
-     "_ATTR_KACIS = {'\"': '&quot;'}\n"),
+     "_ATTR_KACIS = {'\"': '&quot;'}\n", "kacis"),
 ]
 
 
@@ -628,16 +650,20 @@ def _main(tmp: Path) -> int:
     print("  -> %d/%d senaryo PASS" % (len(sonuc) - len(kirik), len(sonuc)))
 
     print("\n--- MUTASYONLAR (her biri korpusu KIRMIZI yapmali) ---")
-    ham = PMC_PATH.read_text(encoding="utf-8")
+    hamlar = {"pmc": PMC_PATH.read_text(encoding="utf-8"),
+              "kacis": KACIS_PATH.read_text(encoding="utf-8")}
     mut_kirik, capa_kirik = [], []
-    for ad, eski, yeni in MUTASYONLAR:
-        n = ham.count(eski)
+    for ad, eski, yeni, *hedef in MUTASYONLAR:
+        hedef = hedef[0] if hedef else "pmc"
+        n = hamlar[hedef].count(eski)
         if n != 1:
             print("  [DOGRULANAMADI] %s — capa %d kez eslesti (1 olmali)" % (ad, n))
             capa_kirik.append(ad)
             continue
         try:
-            m_res = senaryolar(load(mut=lambda s, e=eski, y=yeni: s.replace(e, y, 1)), tmp)
+            _f = lambda s, e=eski, y=yeni: s.replace(e, y, 1)   # noqa: E731
+            m_res = senaryolar(load(**({"kacis_mut": _f} if hedef == "kacis" else {"mut": _f})),
+                               tmp)
             kacan = [a for a, ok, _ in m_res if not ok]
         except BaseException as e:   # cokme != FAIL: ayirt edilebilir kalsin
             kacan = ["COKTU: %s" % type(e).__name__]
