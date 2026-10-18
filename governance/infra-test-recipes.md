@@ -3460,8 +3460,8 @@ python tests/fixtures/guard_hedef_maskeleme/gh_bayrak_uret.py > tablo.txt   # ta
 ## B84 — ortak checklist programı `checklist_check.py` + map + run_review class_push BE-10b BLOCKER (2026-10-18)
 
 ```
-python tests/fixtures/checklist_check/run.py                   # 175/175 (ağsız)
-python tests/run_battery.py checklist_check                    # taban + 9 mutasyon kipi, pinli _BEKLENEN_DUSEN
+python tests/fixtures/checklist_check/run.py                   # 212/212 (ağsız; git gerekir, yoksa D/S ATLA)
+python tests/run_battery.py checklist_check                    # taban + 32 mutasyon kipi (33/33), pinli _BEKLENEN_DUSEN
 python scripts/validators/checklist_check.py --harita-denetim  # run_all'da da koşar
 python tests/fixtures/b0_secim/run.py                          # HARİTA satırı değişince pin birlikte güncellenir
 ```
@@ -3473,3 +3473,6 @@ python tests/fixtures/b0_secim/run.py                          # HARİTA satır�
 - **Tohumlanmış hata paketi (S):** geçici git deposu, iki commit; 7 bilinen hata 7/7 FAIL exit 1; önceden var olan ihlal diff kipinde WARN "(önceden var)", `--files` kipinde FAIL.
 - **Korpus kalibrasyonu tekrarlanabilir ama sayı PİNLENMEZ:** bir tüketici projenin kaynak kökünde `--files` ile koşulur; yeni yanlış pozitif sınıfı bulunursa vektöre çevrilir, kalan gerçek ihlaller kapsam dışıdır (rapora tek satır).
 - **`--reach` run_all'da DEĞİL:** ajan tanımlarındaki `yazan_kanali` satırlarına bağlıdır; ajan tanımı değişikliği merge edildikten sonra elle koşulur.
+- **Düzeltme turu (2026-10-18, bug-gate WARNING'leri):** her düzeltmenin P vektörü + onu geri alan pinli kip vardır (kip → düşen): `tum-dosya` S9 · `cokme-pass` X10 X11 · `cokme-blok` X10 · `dosya-yok` X7 · `ids` X8 · `izlenmeyen` S6 S7 · `tab` S10 S11 · `fe13-satir1` S8 S8n · `be01-satir1` S8b · `hukum-tum-hucre` V10 V11 · `celiski-pass` V13–V15 · `bagsiz` V16 · `ana-haric-yok` R7 · `ana-capasiz` R6 · `friends` T11 · `deferred` T11 T14 · `pragma` T10 · `bom` T12 · `yapi-satiri` T15 S1 S4 · `birlestirme-yok` T10 T13 · `be50-clear` BE-50/N-clear N-atama · `be50-kosullu` BE-50/P-kosullu · `kardes-disk` S12. Eski kiplerin genişleyen kümeleri: `degisen` +S8n · `blok` +S6 S9 R6 · `girintili` +T10 T11 T13 T14.
+- **"Yeni vektör eski kodda düşer" kanıtı tekrarlanabilir:** fixture modülünü yükle, `PROG.read_bytes` yerine `git show <taban>:scripts/validators/checklist_check.py` içeriğini ver (gerçek `__file__` korunur), `main(None)` koş → 1801135'e karşı 183/212 (28 yeni vektör + genişletilen X6 düşer; düşmeyen 9'u kontrol/mutasyon vektörü).
+- **Platform sınırı:** `_git_yolu`'nun C-tırnak dalı (`"`, `\`, TAB içeren dosya adı) Windows'ta dosya olarak kurulamaz → yalnız birim vektörü (S11) ölçer; gerçek depo vektörü yalnız boşluklu yolu (S10) kapsar.

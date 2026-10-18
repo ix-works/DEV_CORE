@@ -753,7 +753,7 @@ OZEL_TESTLER = [
     ("checklist_check",
      "ortak checklist programi: her A maddesine pozitif+negatif (K0 map'ten turetir), BE-10b "
      "olculmus/olculmemis konumlar, tohum paketi (7 hata), --verify-report, exit 0/1/2, "
-     "--harita-denetim, --reach, run_review class_push zinciri (175 vektor + 9 mutasyon)"),
+     "--harita-denetim, --reach, run_review class_push zinciri, diff kipi duzeltme turu (212 vektor + 32 mutasyon)"),
 ]
 
 
@@ -888,6 +888,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/validators/check_kd_no_raw_mermaid.py", ("O:checklist_check",), "DOC-KD-15"),
     ("scripts/validators/check_docu_itf_line_width.py", ("O:checklist_check",), "DOC-KD-13"),
     ("scripts/validators/check_fs_no_analysis_log.py", ("O:checklist_check",), "DOC-FS-05 / FS-06a"),
+    ("scripts/validators/check_table_field_drop.py", ("O:checklist_check",),
+     "BE-16 (subprocess; `measured=false` / rc sozlesmesi)"),
     ("playbook/lessons-learned.md", ("O:id_tekilligi",), "PATTERN # tanimlari (X1)"),
     ("governance/decisions/*.md", ("O:id_tekilligi",), "ADR numaralari (X1)"),
     ("scripts/validators/check_console_utf8.py", ("O:console_utf8_kok_izolasyonu",),

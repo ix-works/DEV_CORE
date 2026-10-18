@@ -17,7 +17,14 @@ Ne ölçülür (vektör aileleri):
   X  exit kodları: kullanım 2 · bozuk/eksik map 2 · beklenmeyen istisna 2 · --help hüküm satırı.
   H  `--harita-denetim`: gerçek map OK · bilinmeyen alan · kontrolsüz A · blok yalnız BE-10b.
   R  `--reach` (geçici map) PASS/FAIL · mini YAML == PyYAML (yoksa ATLA) ·
-     run_review class_push zinciri: kirli sınıf BLOCKER, temiz PASS (gerçek CLI).
+     run_review class_push zinciri: kirli sınıf BLOCKER, temiz PASS (gerçek CLI) ·
+     `--ana-sinif` çapalı include dışlaması (R6 ana sınıf girer, R7 include girmez).
+  D  (düzeltme turu 2026-10-18) diff kipi: izlenmeyen dosya (S6/S7) · FE-13/BE-01 gerçek satır /
+     dosya düzeyi (S8/S8n/S8b) · `tum_dosya` (S9) · boşluklu yol TAB'ı (S10/S11) · kardeşler sağ
+     ağaçtan (S12/S12n). V10-V16: hüküm yalnız hüküm sütunundan · A-FAIL'i UYGULANMAZ/ÖLÇÜLEMEDİ/WARN
+     ile yumuşatmak ÇELİŞKİ · çıplak FAIL bağsız. X7-X11: olmayan dosya / bilinmeyen `--ids` exit 2 ·
+     madde kontrolü çökmesi (blok → exit 2, değil → ÖLÇÜLEMEDİ + beyan). T10-T16: pragma · LOCAL FRIENDS
+     · BOM · bölünmüş deyim · DEFERRED · bozuk şablon satırı · gövdedeki çok satırlı deyim.
 
 Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile exec edilir):
   --mutasyon-literal      ABAP literal içi boşluğa çevrilmez (literaldeki SQL kod sanılır)
@@ -29,6 +36,30 @@ Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile e
   --mutasyon-verify-elle  rapordaki ELLE satırı eksiklik sayılmaz
   --mutasyon-kanitsiz     rapordaki kanıtsız satır eksiklik sayılmaz
   --mutasyon-cokme        beklenmeyen istisna exit 1 döner (2 değil)
+  Düzeltme turu (bug-gate 2026-10-18; her biri bir düzeltmeyi GERİ alır):
+  --mutasyon-tum-dosya    `tum_dosya` yok sayılır (BE-10b değişmeyen satırda WARN'a iner)
+  --mutasyon-cokme-pass   madde kontrolü çökmesi PASS sayılır
+  --mutasyon-cokme-blok   blok maddenin çökmesi exit 2 vermez
+  --mutasyon-dosya-yok    `--files`'ta olmayan dosya kullanım hatası değil
+  --mutasyon-ids          bilinmeyen `--ids` kimliği kullanım hatası değil
+  --mutasyon-izlenmeyen   tek ref kipinde izlenmeyen dosyalar alınmaz
+  --mutasyon-tab          boşluklu yolda `+++` satırının TAB eki sökülmez
+  --mutasyon-fe13-satir1  FE-13 satırı yine 1'e sabit
+  --mutasyon-be01-satir1  BE-01 ad bulgusu yine 1. satıra bağlı
+  --mutasyon-hukum-tum-hucre  verify-report hükmü kanıt dahil tüm hücrelerden okunur
+  --mutasyon-celiski-pass ÇELİŞKİ yalnız rapor PASS'te (UYGULANMAZ/ÖLÇÜLEMEDİ/WARN kaçar)
+  --mutasyon-bagsiz       çıplak FAIL kabul edilir
+  --mutasyon-ana-haric-yok    `--ana-sinif` include'ları da ana sınıf sayar
+  --mutasyon-ana-capasiz  `--ana-sinif` dışlama regex'i yine çapasız
+  --mutasyon-friends      `DEFINITION LOCAL FRIENDS` blok sanılır
+  --mutasyon-deferred     DEFERRED/LOAD/LOCAL FRIENDS istisnası tümden kalkar
+  --mutasyon-pragma       baştaki pragma deyimden sökülmez
+  --mutasyon-bom          BE-10b'de BOM sökülmez
+  --mutasyon-yapi-satiri  noktasız (bozuk literal) deyim yapı satırıyla kapanmaz
+  --mutasyon-birlestirme-yok  çok satırlı deyim birleştirilmez (satır tabanlı)
+  --mutasyon-be50-clear   BE-50 VALUE'da okumadan önce CLEAR/atama dikkate alınmaz
+  --mutasyon-be50-kosullu BE-50 IF içindeki CLEAR da sıfırlama sayılır
+  --mutasyon-kardes-disk  iki uçlu aralıkta kardeşler yine çalışma ağacından okunur
 CORE-07: her kipin DÜŞMESİ BEKLENEN vektör kümesi `_BEKLENEN_DUSEN`'de PİNLİDİR ve EŞİTLİKLE
 kıyaslanır. Çıkış: 0 taban yeşil · 1 mutasyon BEKLENEN kümeyle düştü · 2 SAPMA · 3
 DOGRULANAMADI (çapa tam 1 kez eşleşmedi ya da mutant derlenmedi — "düştü" SAYILMAZ).
@@ -61,7 +92,15 @@ MAP = REPO / "playbook" / "checklists" / "checklist-map.yaml"
 
 _GECERLI_KIP = frozenset({"--mutasyon-literal", "--mutasyon-degisen", "--mutasyon-blok",
                           "--mutasyon-c-hukum", "--mutasyon-etiket", "--mutasyon-girintili",
-                          "--mutasyon-verify-elle", "--mutasyon-kanitsiz", "--mutasyon-cokme"})
+                          "--mutasyon-verify-elle", "--mutasyon-kanitsiz", "--mutasyon-cokme",
+                          "--mutasyon-tum-dosya", "--mutasyon-cokme-pass", "--mutasyon-cokme-blok",
+                          "--mutasyon-dosya-yok", "--mutasyon-ids", "--mutasyon-izlenmeyen", "--mutasyon-tab",
+                          "--mutasyon-fe13-satir1", "--mutasyon-be01-satir1", "--mutasyon-hukum-tum-hucre",
+                          "--mutasyon-celiski-pass", "--mutasyon-bagsiz", "--mutasyon-ana-haric-yok",
+                          "--mutasyon-ana-capasiz", "--mutasyon-friends", "--mutasyon-deferred",
+                          "--mutasyon-pragma", "--mutasyon-bom", "--mutasyon-yapi-satiri",
+                          "--mutasyon-birlestirme-yok", "--mutasyon-be50-clear", "--mutasyon-be50-kosullu",
+                          "--mutasyon-kardes-disk"})
 
 _MUT = {
     "--mutasyon-literal": (
@@ -88,11 +127,81 @@ _MUT = {
         "        if all(x == \"ELLE\" for x in hk):",
         "        if False:"),
     "--mutasyon-kanitsiz": (
-        "        if not any(_kanit_mi(x) for x in h):",
+        "        if not any(_kanit_mi(x) for x in diger):",
         "        if False:"),
     "--mutasyon-cokme": (
         "        print(f\"[PROGRAM KOŞMADI] {type(e).__name__}: {e}\")\n        return 2",
         "        print(f\"[PROGRAM KOŞMADI] {type(e).__name__}: {e}\")\n        return 1"),
+    # ── düzeltme turu (bug-gate 2026-10-18) ──
+    "--mutasyon-tum-dosya": (
+        'if dur == "FAIL" and not tum and d.degisen',
+        'if dur == "FAIL" and d.degisen'),
+    "--mutasyon-cokme-pass": (
+        '            cokme += 1\n            durumlar.append("ÖLÇÜLEMEDİ")',
+        '            cokme += 1\n            durumlar.append("PASS")'),
+    "--mutasyon-cokme-blok": (
+        '    if cokme_blok:\n',
+        '    if False:\n'),
+    "--mutasyon-dosya-yok": (
+        '    if args.files and hatalar:\n        raise KullanimHatasi',
+        '    if False:\n        raise KullanimHatasi'),
+    "--mutasyon-ids": (
+        '        if bilinmeyen:\n            raise KullanimHatasi',
+        '        if False:\n            raise KullanimHatasi'),
+    "--mutasyon-izlenmeyen": (
+        '    if not sag:\n        gorulen = set(adlar)',
+        '    if False:\n        gorulen = set(adlar)'),
+    "--mutasyon-tab": (
+        '    if s.endswith("\\t"):\n        s = s[:-1]',
+        '    if False:\n        s = s[:-1]'),
+    "--mutasyon-fe13-satir1": (
+        '    no = x.count("\\n", 0, mt.start()) + 1 if mt else None',
+        '    no = 1'),
+    "--mutasyon-be01-satir1": (
+        '        out.append(F(None, f"dosya standart',
+        '        out.append(F(1, f"dosya standart'),
+    "--mutasyon-hukum-tum-hucre": (
+        '        hk = _hukum_tokenlari(hukum)\n',
+        '        hk = [t for x in [hukum, *diger] for t in _hukum_tokenlari(x)]\n'),
+    "--mutasyon-celiski-pass": (
+        'and "FAIL" not in hk:\n            celiski.append',
+        'and "PASS" in hk and "FAIL" not in hk:\n            celiski.append'),
+    "--mutasyon-bagsiz": (
+        '        if "FAIL" in hk and not _FAIL_BAGLI.search(hukum):',
+        '        if False:'),
+    "--mutasyon-ana-haric-yok": (
+        'if not _ANA_SINIF_INCLUDE.search(ad) and',
+        'if not False and'),
+    "--mutasyon-ana-capasiz": (
+        'if not _ANA_SINIF_INCLUDE.search(ad) and',
+        'if not re.search(r"\\.(ccimp|ccau|ccdef|ccmac)\\.abap$|locals_(imp|def)|testclasses|macros", ad) and'),
+    "--mutasyon-friends": (
+        '(?:LOAD|DEFERRED|LOCAL\\s+FRIENDS)',
+        '(?:LOAD|DEFERRED)'),
+    "--mutasyon-deferred": (
+        '        elif _DEF_BAS.match(kod) and not _DEF_DEFERRED.match(kod):',
+        '        elif _DEF_BAS.match(kod):'),
+    "--mutasyon-pragma": (
+        '    return _PRAGMA_ONEK.sub("", " ".join(kl.split()))',
+        '    return " ".join(kl.split())'),
+    "--mutasyon-bom": (
+        '    metin = metin[1:] if metin.startswith(',
+        '    metin = metin or metin[1:] if metin.startswith('),
+    "--mutasyon-yapi-satiri": (
+        '        if (bekleyen is not None and _YAPI_SATIRI.match(kl.lstrip())',
+        '        if (False and _YAPI_SATIRI.match(kl.lstrip())'),
+    "--mutasyon-birlestirme-yok": (
+        '            bekleyen = kalan if bekleyen is None else bekleyen + " " + kalan',
+        '            deyim(kalan)'),
+    "--mutasyon-be50-clear": (
+        '            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad):',
+        '            if True:'),
+    "--mutasyon-be50-kosullu": (
+        '            if not acar and derin == 0:',
+        '            if not acar:'),
+    "--mutasyon-kardes-disk": (
+        '        if self.ref:\n            try:',
+        '        if False:\n            try:'),
 }
 
 # Ölçülerek pinlendi (2026-10-18). Her küme NEDEN o vektörleri içerir:
@@ -107,16 +216,50 @@ _MUT = {
 #  kanitsiz     : V6 · V8 (kanıtsız satırlar geçer)
 #  cokme        : X5 (enjekte istisna) + X3 (normal kipte ayrıştırılamayan map ValueError'ı da
 #                  aynı genel yakalayıcıdan geçer — ölçüldü, beklenen)
+# Düzeltme turu (bug-gate 2026-10-18) — mevcut kiplerde ölçülen GENİŞLEME ve nedeni:
+#  degisen      : + S8n (önceden var m.Table indirimsiz FAIL olur)
+#  blok         : + S6 · S9 · R6 (yeni vektörler blok BE-10b'nin exit 1'ini de doğrular)
+#  girintili    : + T10 · T11 · T13 · T14 (yeni T vektörleri girintili `"` yorum kullanır)
+# Yeni kipler: düşen küme = o düzeltmenin P vektörü (+ aynı çıkışı ölçen komşu):
+#  tum-dosya S9 · cokme-pass X10 X11 · cokme-blok X10 · dosya-yok X7 · ids X8 · izlenmeyen S6 S7 (girdi 0
+#  dosya) · tab S10 S11 · fe13-satir1 S8 S8n (eski tablo da 1. satıra iner) · be01-satir1 S8b ·
+#  hukum-tum-hucre V10 V11 · celiski-pass V13 V14 V15 · bagsiz V16 · ana-haric-yok R7 · ana-capasiz R6 ·
+#  friends T11 · deferred T11 T14 (LOCAL FRIENDS aynı istisna regex'inde) · pragma T10 · bom T12 ·
+#  yapi-satiri T15 S1 S4 (tohum sınıfında BE-47'li bozuk şablon satırı var) · birlestirme-yok T10 T13 ·
+#  be50-clear BE-50/N-clear BE-50/N-atama · be50-kosullu BE-50/P-kosullu · kardes-disk S12
 _BEKLENEN_DUSEN = {
     "--mutasyon-literal": {"BE-31/N-lit", "BE-01/N-lit"},
-    "--mutasyon-degisen": {"S2"},
-    "--mutasyon-blok": {"S1", "S4"},
+    "--mutasyon-degisen": {"S2", "S8n"},
+    "--mutasyon-blok": {"S1", "S4", "S6", "S9", "R6"},
     "--mutasyon-c-hukum": {"C1", "C2"},
     "--mutasyon-etiket": {"T8"},
-    "--mutasyon-girintili": {"T6"},
+    "--mutasyon-girintili": {"T6", "T10", "T11", "T13", "T14"},
     "--mutasyon-verify-elle": {"V3"},
     "--mutasyon-kanitsiz": {"V6", "V8"},
     "--mutasyon-cokme": {"X3", "X5"},
+    "--mutasyon-tum-dosya": {"S9"},
+    "--mutasyon-cokme-pass": {"X10", "X11"},
+    "--mutasyon-cokme-blok": {"X10"},
+    "--mutasyon-dosya-yok": {"X7"},
+    "--mutasyon-ids": {"X8"},
+    "--mutasyon-izlenmeyen": {"S6", "S7"},
+    "--mutasyon-tab": {"S10", "S11"},
+    "--mutasyon-fe13-satir1": {"S8", "S8n"},
+    "--mutasyon-be01-satir1": {"S8b"},
+    "--mutasyon-hukum-tum-hucre": {"V10", "V11"},
+    "--mutasyon-celiski-pass": {"V13", "V14", "V15"},
+    "--mutasyon-bagsiz": {"V16"},
+    "--mutasyon-ana-haric-yok": {"R7"},
+    "--mutasyon-ana-capasiz": {"R6"},
+    "--mutasyon-friends": {"T11"},
+    "--mutasyon-deferred": {"T11", "T14"},
+    "--mutasyon-pragma": {"T10"},
+    "--mutasyon-bom": {"T12"},
+    "--mutasyon-yapi-satiri": {"T15", "S1", "S4"},
+    "--mutasyon-birlestirme-yok": {"T10", "T13"},
+    "--mutasyon-be50-clear": {"BE-50/N-clear", "BE-50/N-atama"},
+    "--mutasyon-be50-kosullu": {"BE-50/P-kosullu"},
+    "--mutasyon-kardes-disk": {"S12"},
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -138,10 +281,15 @@ def yukle(kaynak: str) -> types.ModuleType:
 
 
 def kos(G, argv: list[str]) -> tuple[int, str]:
-    tampon = io.StringIO()
-    with contextlib.redirect_stdout(tampon), contextlib.redirect_stderr(io.StringIO()):
+    rc, out, _err = kos3(G, argv)
+    return rc, out
+
+
+def kos3(G, argv: list[str]) -> tuple[int, str, str]:
+    tampon, hata = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(tampon), contextlib.redirect_stderr(hata):
         rc = G.main(argv)
-    return rc, tampon.getvalue()
+    return rc, tampon.getvalue(), hata.getvalue()
 
 
 def tablo(cikti: str) -> dict[str, str]:
@@ -230,6 +378,20 @@ VEKTORLER = [
                           "q/programs/zab_i_main_f01.prog.abap": "FORM x.\nENDFORM.\n"}, "q/programs/zab_i_main_f01.prog.abap", {"PASS"}),
     ("BE-50/P", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      DATA lv_n TYPE i VALUE 0.\n      lv_n = lv_n + 1.\n    ENDLOOP.\n"}, CLS, {"WARN"}),
     ("BE-50/N", "BE-50", {CLS: "    DATA lv_n TYPE i VALUE 0.\n    LOOP AT lt INTO ls.\n      lv_n = lv_n + 1.\n    ENDLOOP.\n"}, CLS, {"PASS"}),
+    # BE-50 korpus FP'si (2026-10-18): VALUE'lu bayrak aynı turda okunmadan ÖNCE zincirli CLEAR ile sıfırlanıyor → PASS
+    ("BE-50/N-clear", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      DATA lv_a TYPE abap_bool VALUE abap_false.\n"
+                                     "      DATA lv_b TYPE abap_bool VALUE abap_false.\n      CLEAR: lv_a, lv_b.\n"
+                                     "      IF ls-k = 1.\n        lv_a = abap_true.\n      ENDIF.\n      lv_c = lv_a.\n    ENDLOOP.\n"},
+     CLS, {"PASS"}),
+    ("BE-50/N-atama", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      DATA lv_a TYPE i VALUE 0.\n      lv_a = ls-k.\n"
+                                     "      lv_c = lv_a.\n    ENDLOOP.\n"}, CLS, {"PASS"}),
+    # okuma CLEAR'dan ÖNCE · CLEAR yalnız IF içinde (her turda koşmaz) → WARN kalır
+    ("BE-50/P-oku", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      DATA lv_a TYPE abap_bool VALUE abap_false.\n"
+                                   "      IF lv_a = abap_true.\n        lv_c = 1.\n      ENDIF.\n      CLEAR lv_a.\n    ENDLOOP.\n"},
+     CLS, {"WARN"}),
+    ("BE-50/P-kosullu", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      DATA lv_a TYPE abap_bool VALUE abap_false.\n"
+                                       "      IF ls-k = 1.\n        CLEAR lv_a.\n      ENDIF.\n      lv_c = lv_a.\n    ENDLOOP.\n"},
+     CLS, {"WARN"}),
     ("BE-51/P", "BE-51", {CLS: "  METHOD m.\n    lv_x = 1.\n    DATA lv_x TYPE i.\n  ENDMETHOD.\n"}, CLS, {"FAIL"}),
     ("BE-51/N", "BE-51", {CLS: "  METHOD m.\n    DATA lv_x TYPE i.\n    lv_x = 1.\n  ENDMETHOD.\n"}, CLS, {"PASS"}),
     ("BE-55/P", "BE-55", {CLS: "    METHODS m IMPORTING it_x TYPE STANDARD TABLE OF i.\n"}, CLS, {"FAIL"}),
@@ -419,6 +581,43 @@ def t_vektorleri(G) -> None:
     yildiz = SINIF_ARA.replace("{ARA}", "   * sütun 1 değil\n")
     kume = bant(yildiz)
     kontrol("T9 `*` yalnız 1. sütunda yorum: girintili `*` bant sayılmaz", kume == [], repr(kume))
+    # ── F13 (bug-gate 2026-10-18): satır tabanlı makinenin kaçırdığı biçimler — hepsi YANLIŞ-NEGATİFTİ
+    kume = bant(SINIF_ARA.replace("{ARA}", "  \" pragma öncesi yorum\n  ##NEEDED\n"))
+    kontrol("T10 yorum + tek başına `##NEEDED` satırı + METHOD → pragma deyimin parçası, ② ölçülmüş",
+            [(b[0], b[3]) for b in kume] == [(9, OL)], repr(kume))
+    friends = ("CLASS zcl_t DEFINITION PUBLIC.\n  PUBLIC SECTION.\n    METHODS m1.\n    METHODS m2.\nENDCLASS.\n"
+               "CLASS zcl_t DEFINITION LOCAL FRIENDS ltc_test.\nCLASS zcl_t IMPLEMENTATION.\n  \" baş\n  METHOD m1.\n"
+               "  ENDMETHOD.\n  \" ara\n  METHOD m2.\n  ENDMETHOD.\nENDCLASS.\n")
+    kume = bant(friends)
+    kontrol("T11 `DEFINITION LOCAL FRIENDS` tek deyim (blok değil) → ① ② yakalanır",
+            [(b[0], b[3]) for b in kume] == [(8, OL), (11, OL)], repr(kume))
+    bom = chr(0xFEFF) + ("CLASS zcl_t DEFINITION PUBLIC.\r\n  PUBLIC SECTION.\r\nENDCLASS.\r\n\" araya\r\n"
+                         "CLASS zcl_t IMPLEMENTATION.\r\n  METHOD m1.\r\n  ENDMETHOD.\r\nENDCLASS.\r\n")
+    kume = bant(bom)
+    kontrol("T12 BOM'lu + CRLF dosyada ⑤ (DEFINITION ↔ IMPLEMENTATION) yakalanır",
+            [(b[0], b[3]) for b in kume] == [(4, OLM)], repr(kume))
+    bolunmus = ("CLASS zcl_t DEFINITION PUBLIC.\n  PUBLIC SECTION.\n    METHODS m1.\n    METHODS m2.\nENDCLASS.\n"
+                "CLASS zcl_t\n  IMPLEMENTATION.\n  \" baş\n  METHOD m1.\n  ENDMETHOD.\n  \" ara\n  METHOD\n    m2.\n"
+                "  ENDMETHOD.\nENDCLASS.\n")
+    kume = bant(bolunmus)
+    kontrol("T13 iki satıra bölünmüş `CLASS zcl_t` / `IMPLEMENTATION.` ve `METHOD` / `m2.` → ① ②",
+            [(b[0], b[3]) for b in kume] == [(8, OL), (11, OL)], repr(kume))
+    ertelenmis = ("CLASS zcl_t DEFINITION PUBLIC.\n  PUBLIC SECTION.\n    METHODS m1.\n    METHODS m2.\nENDCLASS.\n"
+                  "CLASS lcl_yrd DEFINITION DEFERRED.\nCLASS zcl_t IMPLEMENTATION.\n  METHOD m1.\n  ENDMETHOD.\n"
+                  "  \" ara\n  METHOD m2.\n  ENDMETHOD.\nENDCLASS.\n")
+    kume = bant(ertelenmis)
+    kontrol("T14 `DEFINITION DEFERRED` blok açmaz (ara bölgede) → IMPLEMENTATION'daki ② yakalanır",
+            [(b[0], b[3]) for b in kume] == [(10, OL)], repr(kume))
+    bozuk = ("CLASS zcl_t DEFINITION PUBLIC.\n  PUBLIC SECTION.\n    METHODS m1.\n    METHODS m2.\nENDCLASS.\n"
+             "CLASS zcl_t IMPLEMENTATION.\n  METHOD m1.\n    lv = |{ lv_a }|{ lv_b }|.\n  ENDMETHOD.\n* ara\n"
+             "  METHOD m2.\n  ENDMETHOD.\nENDCLASS.\n")
+    kume = bant(bozuk)
+    kontrol("T15 bozuk şablon satırı (`}|{`, noktayı literal yutar) sonrası yapı satırı yeni deyim → ② yine yakalanır",
+            [(b[0], b[3]) for b in kume] == [(10, OL)], repr(kume))
+    gomulu = ("CLASS zcl_t DEFINITION PUBLIC.\n  PUBLIC SECTION.\n    METHODS m1.\nENDCLASS.\nCLASS zcl_t IMPLEMENTATION.\n"
+              "  METHOD m1.\n    lv = 1 +\n* gövdede çok satırlı ifadenin içi\n      2.\n  ENDMETHOD.\nENDCLASS.\n")
+    kume = bant(gomulu)
+    kontrol("T16 NEGATİF: metot gövdesindeki çok satırlı deyimin içindeki yorum bant DEĞİL", kume == [], repr(kume))
 
 
 # ═══════════════════════════════════════════════════════════════ C / B ══
@@ -498,6 +697,97 @@ def s_vektorleri(G, tmp: Path) -> None:
             G.HUKUM_SATIRI in out and "### KAPSAM BEYANI" in out and "ÇÜRÜTÜLDÜ" in G.HUKUM_SATIRI, out[:200])
 
 
+# ════════════════════════════════════════ D: diff kipi düzeltme turu (2026-10-18) ══
+KIRLI_ARA = SINIF_ARA.replace("{ARA}", "* metotlar arası\n")
+
+
+def _depo(tmp: Path, ad: str) -> Path | None:
+    kok = tmp / ad
+    kok.mkdir()
+    try:
+        _git(kok, "init", "-q")
+    except Exception as e:
+        ATLA.append((ad, f"git yok ({type(e).__name__})"))
+        return None
+    return kok
+
+
+def _commit(kok: Path, dosyalar: dict[str, str], mesaj: str) -> None:
+    dosyalari_yaz(kok, dosyalar)
+    _git(kok, "add", "-A")
+    _git(kok, "commit", "-q", "-m", mesaj)
+
+
+def d_vektorleri(G, tmp: Path) -> None:
+    # S6/S7 (F2): tek ref = ref ↔ çalışma ağacı → İZLENMEYEN yeni dosya girer, gitignore'lu girmez
+    kok = _depo(tmp, "izlenmeyen")
+    if kok:
+        _commit(kok, {".gitignore": "yoksay/\n", "x.txt": "a\n"}, "taban")
+        dosyalari_yaz(kok, {"p/classes/zcl_t.clas.abap": KIRLI_ARA, "yoksay/classes/zcl_y.clas.abap": KIRLI_ARA})
+        rc, out = kos(G, ["--repo", str(kok), "--diff", "HEAD", "--kind", "backend", "--ids", "BE-10b"])
+        t = tablo(out)
+        kontrol("S6 `--diff HEAD`: izlenmeyen kirli sınıf girer → BE-10b FAIL (BLOK) exit 1 + beyan 'izlenmeyen yeni dosya 1'",
+                rc == 1 and t.get("BE-10b", "").startswith("FAIL (BLOK)") and "izlenmeyen yeni dosya 1" in out,
+                f"rc={rc} {t.get('BE-10b', 'YOK')[:80]}")
+        kontrol("S7 NEGATİF: gitignore'lu izlenmeyen dosya girmez (girdi 1 dosya)",
+                "· 1 dosya ·" in out and "yoksay/" not in t.get("BE-10b", ""), out[:200])
+    # S8/S9/S10 (F6 · F8 tum_dosya · F10): iki commit'lik depo
+    kok = _depo(tmp, "diffdepo")
+    if kok:
+        v0 = XMLNS + "  <Text text=\"a\"/>\n</mvc:View>\n"
+        v1 = XMLNS + "  <Text text=\"a\"/>\n  <Table>\n    <columns>\n      <Column/>\n    </columns>\n  </Table>\n</mvc:View>\n"
+        eski_tablo = XMLNS + "  <Table>\n    <columns>\n      <Column/>\n    </columns>\n  </Table>\n  <Text text=\"a\"/>\n</mvc:View>\n"
+        std0 = "  METHOD m.\n    lv = 1.\n  ENDMETHOD.\n"
+        bosluk0 = "  METHOD m.\n    lv = 1.\n  ENDMETHOD.\n"
+        _commit(kok, {"a/webapp/view/List.view.xml": v0, "a/webapp/view/OldList.view.xml": eski_tablo,
+                      "p/classes/cl_gui_std.clas.abap": std0, "p/classes/zcl_t.clas.abap": KIRLI_ARA,
+                      "a b/classes/zcl_b.clas.abap": bosluk0}, "taban")
+        _commit(kok, {"a/webapp/view/List.view.xml": v1,
+                      "a/webapp/view/OldList.view.xml": eski_tablo.replace("text=\"a\"", "text=\"b\""),
+                      "p/classes/cl_gui_std.clas.abap": std0.replace("lv = 1", "lv = 2"),
+                      "p/classes/zcl_t.clas.abap": KIRLI_ARA.replace("gövde yorumu serbest", "gövde yorumu değişti"),
+                      "a b/classes/zcl_b.clas.abap": bosluk0.replace("lv = 1.", "lv = |{ a }|{ b }|.")}, "degisim")
+        rc, out = kos(G, ["--repo", str(kok), "--diff", "HEAD~1..HEAD", "--kind", "frontend", "--ids", "FE-13"])
+        parcalar = tablo(out).get("FE-13", "").split(" · ")
+        yeni_t = next((x for x in parcalar if "a/webapp/view/List.view.xml:" in x), "YOK")
+        eski_t = next((x for x in parcalar if "a/webapp/view/OldList.view.xml:" in x), "YOK")
+        kontrol("S8 FE-13 (F6): diff'te YENİ eklenen m.Table gerçek satırında FAIL bulgusu (`List.view.xml:3`, '(önceden var)' değil)",
+                tablo(out).get("FE-13", "").startswith("FAIL") and "List.view.xml:3 " in yeni_t and "önceden var" not in yeni_t,
+                f"{yeni_t[:140]!r}")
+        kontrol("S8n NEGATİF (F6): önceden var olan m.Table (yalnız başka satır değişti) → '(önceden var)' WARN'a iner",
+                "OldList.view.xml:2 " in eski_t and "önceden var" in eski_t, f"{eski_t[:160]!r}")
+        rc, out = kos(G, ["--repo", str(kok), "--diff", "HEAD~1..HEAD", "--kind", "backend", "--ids", "BE-01,BE-10b,BE-47"])
+        t = tablo(out)
+        kontrol("S8b BE-01 (F6): standart adlı dosyaya diff'te dokunmak → dosya düzeyi FAIL (1. satır değişmese de)",
+                t.get("BE-01", "").startswith("FAIL") and "cl_gui_std.clas.abap dosya standart" in t.get("BE-01", "")
+                and "önceden var" not in t.get("BE-01", ""), t.get("BE-01", "YOK")[:160])
+        kontrol("S9 tum_dosya (F8): BE-10b bandı DEĞİŞMEYEN satırda, dosya başka yerden değişti → yine FAIL (BLOK)",
+                t.get("BE-10b", "").startswith("FAIL (BLOK)") and "önceden var" not in t.get("BE-10b", ""),
+                t.get("BE-10b", "YOK")[:160])
+        kontrol("S10 boşluklu yol (F10): `+++ b/a b/…\\t` TAB'ı sökülür → yeni BE-47 FAIL (WARN'a inmez)",
+                t.get("BE-47", "").startswith("FAIL") and "a b/classes/zcl_b.clas.abap:2" in t.get("BE-47", ""),
+                t.get("BE-47", "YOK")[:160])
+    gy = getattr(G, "_git_yolu", None)      # eski koda karşı koşulabilsin (yoksa vektör düşer, fixture çökmez)
+    kontrol("S11 `_git_yolu`: TAB eki + C-tırnaklı yol (`\"b/a\\\"b.abap\"`) düz yola çevrilir",
+            gy is not None and gy("b/a b/x.abap\t") == "b/a b/x.abap" and gy('"b/a\\"b\\\\c.abap"') == 'b/a"b\\c.abap'
+            and gy("b/x.abap") == "b/x.abap",
+            "yok" if gy is None else f"{gy('b/a b/x.abap' + chr(9))!r} {gy(chr(34) + 'b/a' + chr(92) + chr(34) + 'b' + chr(34))!r}")
+    # S12 (F15c): iki uçlu aralıkta kardeşler SAĞ ucun ağacından okunur, çalışma ağacından değil
+    kok = _depo(tmp, "kardes")
+    if kok:
+        i18n = {"a/webapp/i18n/i18n.properties": "a=A\n", "a/webapp/i18n/i18n_tr.properties": "a=A\n"}
+        _commit(kok, {**i18n, VIEW: XMLNS + "</mvc:View>\n"}, "taban")
+        _commit(kok, {VIEW: XMLNS + "  <Text text=\"{i18n>yeni}\"/>\n</mvc:View>\n"}, "anahtar eksik")
+        dosyalari_yaz(kok, {k: v + "yeni=Y\n" for k, v in i18n.items()})       # ağaçta var, HEAD'de YOK
+        rc, out = kos(G, ["--repo", str(kok), "--diff", "HEAD~1..HEAD", "--kind", "frontend", "--ids", "FE-11"])
+        t = tablo(out)
+        kontrol("S12 `--diff A..B`: i18n anahtarı B'de yok, çalışma ağacında var → FE-11 FAIL (kardeş B ağacından)",
+                t.get("FE-11", "").startswith("FAIL") and "`yeni` tanımsız" in t.get("FE-11", ""), t.get("FE-11", "YOK")[:160])
+        rc, out = kos(G, ["--repo", str(kok), "--diff", "HEAD~1", "--kind", "frontend", "--ids", "FE-11"])
+        kontrol("S12n NEGATİF: tek ref `HEAD~1` (çalışma ağacına karşı) — kardeş ağaçtan, `yeni` tanımlı → FE-11 PASS",
+                tablo(out).get("FE-11", "").startswith("PASS"), tablo(out).get("FE-11", "YOK")[:160])
+
+
 # ═══════════════════════════════════════════════════════ V: --verify-report ══
 def v_vektorleri(G, tmp: Path) -> None:
     kok = tmp / "verify"
@@ -505,9 +795,9 @@ def v_vektorleri(G, tmp: Path) -> None:
     taban = ["--repo", str(kok), "--files", CLS, "--kind", "backend", "--ids", "BE-47,BE-35"]
     bas = "| ID | Sınıf | Sonuç | Kanıt |\n|---|---|---|---|\n"
 
-    def dene(ad, govde, beklenen_rc, isaret, aciklama):
+    def dene(ad, govde, beklenen_rc, isaret, aciklama, baslik=None):
         r = kok / f"{ad}.md"
-        r.write_bytes((bas + govde).encode("utf-8"))
+        r.write_bytes(((baslik or bas) + govde).encode("utf-8"))
         rc, out = kos(G, taban + ["--verify-report", str(r)])
         ok = rc == beklenen_rc and all(x in out for x in isaret)
         kontrol(f"{ad} {aciklama}", ok, f"rc={rc} beklenen={beklenen_rc} · {out[out.find('### --verify'):][:260]!r}")
@@ -524,6 +814,25 @@ def v_vektorleri(G, tmp: Path) -> None:
     dene("V6", "| BE-47 | A | ÇÜRÜTÜLDÜ | |\n" + tam35, 1, ["- kanıtsız: 1 → BE-47"], "kanıtsız ÇÜRÜTÜLDÜ reddedilir")
     dene("V7", "| BE-47 | A | BULGU | satır 1 |\n" + tam35, 1, ["- hükümsüz: 1 → BE-47"], "sözlük dışı kelime → hükümsüz")
     dene("V8", "| BE-47 | A | FAIL→F1 | |\n" + tam35, 1, ["- kanıtsız: 1 → BE-47"], "yalnız `FAIL→F1` kanıt sayılmaz")
+    # F4: hüküm YALNIZ hüküm sütunundan — kanıttaki "FAIL"/"pass" kelimesi hüküm değildir
+    dene("V10", "| BE-47 | A | PASS | program FAIL dedi ama bence sorun yok |\n" + tam35, 1, ["- ÇELİŞKİ: 1 → BE-47"],
+         "hüküm PASS, kanıtta 'FAIL' kelimesi → ÇELİŞKİ (kanıt hüküm sayılmaz)")
+    dene("V11", tam47 + "| BE-35 | A | Tamam | elle değil, pass koşulu sağlandı |\n", 1, ["- hükümsüz: 1 → BE-35"],
+         "hüküm 'Tamam', kanıtta 'pass'/'elle' → hükümsüz")
+    dene("V12", "| BE-47 | FAIL->F1 | A | satır 1 şablonda kaçışsız |\n| BE-35 | PASS | A | char40 güvenli aralıkta |\n", 0,
+         ["- satır yok: 0", "- hükümsüz: 0", "- bağsız FAIL: 0", "- ÇELİŞKİ: 0"],
+         "başlıkta sütun sırası farklı (| ID | Hüküm | Sınıf | Kanıt |) → hüküm sütunu ADINDAN bulunur; `FAIL->F1` ASCII bağ",
+         baslik="| ID | Hüküm | Sınıf | Kanıt |\n|---|---|---|---|\n")
+    # F11: A-FAIL'i ÇÜRÜTÜLDÜ dışında yumuşatmak = ÇELİŞKİ
+    dene("V13", "| BE-47 | A | UYGULANMAZ | bu dosya kapsam dışı sayıldı |\n" + tam35, 1, ["- ÇELİŞKİ: 1 → BE-47 (rapor: UYGULANMAZ)"],
+         "program A-FAIL, rapor UYGULANMAZ → ÇELİŞKİ")
+    dene("V14", "| BE-47 | A | ÖLÇÜLEMEDİ | sap yok dedim |\n" + tam35, 1, ["- ÇELİŞKİ: 1 → BE-47 (rapor: ÖLÇÜLEMEDİ)"],
+         "program A-FAIL, rapor ÖLÇÜLEMEDİ → ÇELİŞKİ")
+    dene("V15", "| BE-47 | A | WARN | önemsiz gördüm |\n" + tam35, 1, ["- ÇELİŞKİ: 1 → BE-47 (rapor: WARN)"],
+         "program A-FAIL, rapor WARN → ÇELİŞKİ")
+    # F15b: çıplak FAIL geçersiz — sözleşme FAIL→F<n>
+    dene("V16", "| BE-47 | A | FAIL | satır 1 şablonda kaçışsız |\n" + tam35, 1, ["- bağsız FAIL: 1 → BE-47", "RAPOR EKSİK: bağsız FAIL"],
+         "çıplak FAIL (bulguya bağsız) → 'bağsız FAIL' eksikliği")
     rc, out = kos(G, taban + ["--verify-report", str(kok / "yok-rapor.md")])
     kontrol("V9 okunamayan rapor → exit 2 [PROGRAM KOŞMADI] (eksiklik DEĞİL)",
             rc == 2 and "[PROGRAM KOŞMADI]" in out, f"rc={rc} {out[-160:]!r}")
@@ -557,8 +866,45 @@ def x_vektorleri(G, tmp: Path) -> None:
     tampon = io.StringIO()
     with contextlib.redirect_stdout(tampon):
         rc = G.main(["--help"])
-    kontrol("X6 --help hüküm sözlüğünü basar, exit 0", rc == 0 and "FAIL→F<n>" in tampon.getvalue()
-            and "ÇÜRÜTÜLDÜ" in tampon.getvalue(), f"rc={rc}")
+    yardim = " ".join(tampon.getvalue().split())
+    kontrol("X6 --help hüküm sözlüğünü + tek itiraz yolu kuralını basar, exit 0", rc == 0 and "FAIL→F<n>" in yardim
+            and "ÇÜRÜTÜLDÜ" in yardim and "ÇELİŞKİ" in yardim and "bağsız FAIL" in yardim, f"rc={rc}")
+    # F1: kullanım hatası sessiz "Uygulanan 0 / exit 0" DEĞİL
+    rc, out, err = kos3(G, ["--repo", str(tmp / "x"), "--files", "p/classes/yok.clas.abap"])
+    kontrol("X7 `--files` olmayan dosya → exit 2 `KULLANIM HATASI: dosya yok` (tablo basılmaz)",
+            rc == 2 and "KULLANIM HATASI: dosya yok" in err and "kapsama tablosu" not in out, f"rc={rc} {err[:120]!r}")
+    rc, out, err = kos3(G, ["--repo", str(tmp / "x"), "--files", CLS, "--ids", "BE-10B"])
+    kontrol("X8 `--ids BE-10B` (büyük/küçük harf yanlış) → exit 2 bilinmeyen kimlik",
+            rc == 2 and "bilinmeyen kimlik: BE-10B" in err, f"rc={rc} {err[:120]!r}")
+    rc, out, err = kos3(G, ["--repo", str(tmp / "x"), "--files", CLS, "--ids", "BE-10b", "--kind", "frontend"])
+    kontrol("X9 `--ids BE-10b --kind frontend` → exit 2 (kimlik kind kapsamında değil)",
+            rc == 2 and "kapsamında değil" in err, f"rc={rc} {err[:120]!r}")
+    rc, out, err = kos3(G, ["--repo", str(tmp / "x"), "--files", CLS, "--ids", "BE-10b"])
+    kontrol("X9n NEGATİF: geçerli `--ids BE-10b` + var olan dosya → kullanım hatası YOK (exit 0)",
+            rc == 0 and "KULLANIM HATASI" not in err and "### KAPSAM BEYANI" in out, f"rc={rc} {err[:120]!r}")
+    # F3: madde kontrolü çökmesi — blok maddede exit 2, değilse ÖLÇÜLEMEDİ + beyan sayımı
+    dosyalari_yaz(tmp / "x", {CLS: "    lv = |{ a }|{ b }|.\n"})
+
+    def cokertici(d, c):
+        raise KeyError("enjekte")
+    for ad, kontrol_adi, mid, beklenen_rc in (("X10", "be10b_yorum_bandi", "BE-10b", 2), ("X11", "be47_template_pipe", "BE-47", 0)):
+        asil = G.KONTROLLER[kontrol_adi]
+        G.KONTROLLER[kontrol_adi] = cokertici
+        try:
+            rc, out = kos(G, ["--repo", str(tmp / "x"), "--files", CLS, "--ids", mid])
+        finally:
+            G.KONTROLLER[kontrol_adi] = asil
+        satir = tablo(out).get(mid, "YOK")
+        ok = rc == beklenen_rc and satir.startswith("ÖLÇÜLEMEDİ") and "kontrol çöktü (KeyError" in satir \
+            and f"- Kontrol çöktü: 1 dosya ({mid} → ÖLÇÜLEMEDİ" in out
+        if beklenen_rc == 2:
+            ok = ok and f"[PROGRAM KOŞMADI] blok madde kontrolü çöktü: {mid}" in out
+        else:
+            ok = ok and "[PROGRAM KOŞMADI]" not in out
+        kontrol(f"{ad} {mid} kontrolü çöker → ÖLÇÜLEMEDİ + 'Kontrol çöktü: 1' + exit {beklenen_rc}"
+                + (" [PROGRAM KOŞMADI] (blok madde)" if beklenen_rc == 2 else " (blok değil)"), ok, f"rc={rc} {satir[:90]!r}")
+    rc, out = kos(G, ["--repo", str(tmp / "x"), "--files", CLS, "--ids", "BE-47"])
+    kontrol("X11n NEGATİF: çökme yokken beyan 'Kontrol çöktü: 0 dosya'", "- Kontrol çöktü: 0 dosya" in out, out[-300:])
 
 
 # ═══════════════════════════════════════════════════════ H: --harita-denetim ══
@@ -605,6 +951,26 @@ def r_vektorleri(G, tmp: Path) -> None:
         fark = [a.get("id") for a, b in zip(resmi or [], mini) if a != b]
         kontrol("R3 mini YAML ayrıştırıcı == yaml.safe_load (gerçek map)",
                 resmi == mini, f"len {len(resmi or [])}/{len(mini)} fark={fark[:5]}")
+    # R6/R7 (F12 · M7): `--ana-sinif` include dışlaması ADIN SONUNA çapalı
+    ana = tmp / "ana"
+    dosyalari_yaz(ana, {"zcl_sd_macros.abap": KIRLI_ARA, "zcl_testclasses_util.abap": KIRLI_ARA,
+                        "zcl_x.clas.macros.abap": KIRLI_ARA, "zcl_x.ccimp.abap": KIRLI_ARA,
+                        "zcl_x.clas.locals_imp.abap": KIRLI_ARA})
+    ok, detay = True, []
+    for ad in ("zcl_sd_macros.abap", "zcl_testclasses_util.abap"):
+        rc, out = kos(G, ["--repo", str(ana), "--files", ad, "--ids", "BE-10b", "--ana-sinif"])
+        s = tablo(out).get("BE-10b", "YOK")
+        ok = ok and rc == 1 and s.startswith("FAIL (BLOK)")
+        detay.append(f"{ad}: rc={rc} {s[:30]}")
+    kontrol("R6 `--ana-sinif`: adında macros/testclasses GEÇEN ana sınıf (`zcl_sd_macros.abap`) dışlanmaz → BE-10b FAIL",
+            ok, " · ".join(detay))
+    ok, detay = True, []
+    for ad in ("zcl_x.clas.macros.abap", "zcl_x.ccimp.abap", "zcl_x.clas.locals_imp.abap"):
+        rc, out = kos(G, ["--repo", str(ana), "--files", ad, "--ids", "BE-10b", "--ana-sinif"])
+        ok = ok and rc == 0 and "BE-10b" not in tablo(out) and "sınıf ANA kaynağı sayıldı" not in out
+        detay.append(f"{ad}: rc={rc} {tablo(out).get('BE-10b', '-')[:30]}")
+    kontrol("R7 `--ana-sinif`: include dosyaları (`.clas.macros` · `.ccimp` · `.clas.locals_imp`) BE-10b'ye girmez",
+            ok, " · ".join(detay))
     kirli = tmp / "rr" / "ZCL_RR.abap"
     temiz = tmp / "rr" / "zcl_rr2.clas.abap"
     dosyalari_yaz(tmp / "rr", {"ZCL_RR.abap": SINIF_ARA.replace("{ARA}", "* bant\n").replace("zcl_t", "zcl_rr"),
@@ -647,6 +1013,7 @@ def main(kip: str | None) -> int:
         t_vektorleri(G)
         cb_vektorleri(G, harita, tmp)
         s_vektorleri(G, tmp)
+        d_vektorleri(G, tmp)
         v_vektorleri(G, tmp)
         x_vektorleri(G, tmp)
         h_vektorleri(G, tmp)

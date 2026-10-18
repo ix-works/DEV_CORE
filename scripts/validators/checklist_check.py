@@ -32,9 +32,16 @@ Diff kipinde kontrol bulguları DEĞİŞEN satırlara göre ayrılır: değişme
 FAIL değil WARN'dır ("önceden var"). İstisna: map'te `tum_dosya: true` olan maddeler
 (BE-10b: SAP bütün kaynağı PUT eder → dosyanın neresinde olursa olsun 400).
 
+Diff kipinde tek ref (`--diff HEAD`) = ref ↔ çalışma ağacı; izlenmeyen (gitignore'lu olmayan) yeni
+dosyalar da girer, bütün satırları "değişmiş" sayılır. İki uçlu aralıkta (`A..B`, `A...B`) girdi ve
+çapraz-dosya kardeşleri (BDEF, i18n, uygulama JS'i …) SAĞ ucun ağacından okunur, çalışma ağacından DEĞİL.
+
 Exit: 0 = engelleyici FAIL yok · 1 = `seviye: blok` maddede FAIL ya da `--verify-report` eksikliği
-(satır yok / hükümsüz / kanıtsız / ELLE / ÇELİŞKİ — kategori adı stdout'ta) · 2 = kullanım hatası
-ya da program KOŞMADI (`[PROGRAM KOŞMADI] <tip>: <mesaj>`: okunamayan map/rapor, beklenmeyen istisna).
+(satır yok / hükümsüz / bağsız FAIL / kanıtsız / ELLE / ÇELİŞKİ — kategori adı stdout'ta) · 2 = kullanım
+hatası (`KULLANIM HATASI: …` stderr: `--files`'ta olmayan dosya, bilinmeyen ya da `--kind` dışı `--ids`
+kimliği …) ya da program KOŞMADI (`[PROGRAM KOŞMADI] <tip>: <mesaj>`: okunamayan map/rapor, beklenmeyen
+istisna, `seviye: blok` maddenin kontrolünün ÇÖKMESİ). Blok OLMAYAN maddede kontrol çökerse o madde
+ÖLÇÜLEMEDİ olur ve KAPSAM BEYANI "kontrol çöktü: N" yazar (sessiz PASS yok).
 Ayrı kipler kendi hükmünü aynı kodla verir: `--reach` ulaşmayan · `--harita-denetim` tutarsızlık → 1.
 Hüküm sözlüğü tek yerde: `HUKUMLER` (aşağıda; `--help` ve tablo başlığı onu basar).
 """
@@ -211,26 +218,50 @@ class Baglam:
     _sap_hata: str | None = None
     notlar: list[str] = field(default_factory=list)
     onbellek: dict = field(default_factory=dict)
+    ref: str | None = None           # iki uçlu diff aralığının SAĞ ucu: kardeşler bu ağaçtan okunur
+
+    def agac_dosyalari(self, kok: str, desen: str, haric: set[str]) -> list[Dosya]:
+        """`kok` altındaki `desen`'e uyan dosyalar (girdi kümesinde olmayanlar). `ref` doluysa o
+        commit'in AĞACINDAN (`ls-tree` + tek `cat-file --batch`), değilse diskten (budayarak).
+        Gerekçe: `--diff A..B` kipinde girdi B'den okunurken kardeşler çalışma ağacından okunuyordu →
+        B'de eksik i18n anahtarı ağaçta eklenmişse FE-11 sahte PASS (ölçüldü 2026-10-18)."""
+        out: list[Dosya] = []
+        if self.ref:
+            try:
+                adlar = [a for a in _git(self.repo, "ls-tree", "-r", "--name-only", "-z", self.ref, "--",
+                                         kok + "/").split("\0") if a]
+            except RuntimeError:
+                return out
+            adlar = [a for a in adlar if a not in haric and glob_eslesir(a, [desen])]
+            icerik = _cat_file(self.repo, [f"{self.ref}:{a}" for a in adlar])
+            for a in adlar:
+                m = icerik.get(f"{self.ref}:{a}")
+                if m is not None:
+                    out.append(Dosya(a, m))
+            return out
+        disk = self.repo / kok
+        if not disk.is_dir():
+            return out
+        for p in _dosyalar_budayarak(disk):
+            rel = p.relative_to(self.repo).as_posix()
+            if rel in haric or not glob_eslesir(rel, [desen]):
+                continue
+            try:
+                out.append(Dosya(rel, p.read_text(encoding="utf-8", errors="replace"), yol=p))
+            except OSError:
+                pass
+        return out
 
     def kardes(self, d: Dosya, desen: str) -> list[Dosya]:
         """Aynı paket kökündeki (ilk `classes|cds|programs|functions|ui` üstü) dosyalar.
-        Önce girdi kümesinden, yoksa diskten okunur (çapraz-dosya kontrolleri için; önbellekli)."""
+        Önce girdi kümesinden, yoksa paket ağacından okunur (`agac_dosyalari`; önbellekli)."""
         kok = paket_koku(d.rel)
         anahtar = ("kardes", kok, desen)
         if anahtar in self.onbellek:
             return self.onbellek[anahtar]
         sonuc = [x for x in self.dosyalar if paket_koku(x.rel) == kok and glob_eslesir(x.rel, [desen])]
-        gorulen = {x.rel for x in sonuc}
-        disk = self.repo / kok if kok else None
-        if disk and disk.is_dir():
-            for p in _dosyalar_budayarak(disk):
-                rel = p.relative_to(self.repo).as_posix()
-                if rel in gorulen or not glob_eslesir(rel, [desen]):
-                    continue
-                try:
-                    sonuc.append(Dosya(rel, p.read_text(encoding="utf-8", errors="replace"), yol=p))
-                except OSError:
-                    pass
+        if kok:
+            sonuc += self.agac_dosyalari(kok, desen, {x.rel for x in sonuc})
         self.onbellek[anahtar] = sonuc
         return sonuc
 
@@ -333,6 +364,8 @@ class Abap:
     """Dosya düzeyinde ABAP görünümü: satır kodu, ifadeler, bloklar (önbellekli)."""
 
     def __init__(self, metin: str):
+        if metin.startswith("\ufeff"):          # UTF-8 BOM: ilk deyim `^\s*DATA` vb. desenlerden kaçmasın
+            metin = metin[1:]
         self.ham = metin.splitlines()
         self.norm = [abap_norm(s) for s in self.ham]
         self.kod = [k for k, _, _ in self.norm]          # literal içerikli kod
@@ -488,7 +521,11 @@ def k_be01(d: Dosya, c: Baglam):
     ad = d.rel.rsplit("/", 1)[-1]
     m = _NESNE_DOSYA.match(ad)
     if m and not re.match(r"^(?:[ZY/]|L[ZY]|SAPL[ZY]|SAPM[ZY])", m.group(1), re.I):
-        out.append(F(1, f"dosya standart (Z/Y olmayan) bir nesneyi temsil ediyor: `{m.group(1)}` (ADR 0005-A)"))
+        # Satır None = DOSYA-DÜZEYİ bulgu: ihlal adın kendisidir, bir satır değil → diff kipinde dosyaya dokunan her
+        # değişiklik ADR 0005-A ihlalidir, "(önceden var)" WARN'ına İNMEZ. Eskiden `F(1, …)` idi: 1. satır
+        # değişmeyince yeni ihlal WARN'a iniyordu (2026-10-18). Maddeyi `tum_dosya` yapmak DB-yazım bulgularının
+        # (gerçek satırlı) önceden-var indirimini de kapatırdı → bulgu başına seçildi.
+        out.append(F(None, f"dosya standart (Z/Y olmayan) bir nesneyi temsil ediyor: `{m.group(1)}` (ADR 0005-A, dosya düzeyi)"))
     if not d.rel.lower().endswith(".abap"):
         return out
     a = abap(d)
@@ -556,12 +593,19 @@ def k_be10a(d, c):
     return [F(no, f"metot imzasında `TYPE c LENGTH n`: {s[:90]}") for no, s in mod.scan_text(d.metin)]
 
 
-_IMPL_BAS = re.compile(r"^\s*CLASS\s+[\w/]+\s+IMPLEMENTATION\s*\.", re.I)
-_DEF_BAS = re.compile(r"^\s*CLASS\s+[\w/]+\s+DEFINITION\b", re.I)
-_DEF_DEFERRED = re.compile(r"^\s*CLASS\s+[\w/]+\s+DEFINITION\s+(?:LOAD|DEFERRED)\b", re.I)
-_METHOD_BAS = re.compile(r"^\s*METHOD\s+[\w/~]+", re.I)
-_ENDMETHOD = re.compile(r"^\s*ENDMETHOD\s*\.", re.I)
-_ENDCLASS = re.compile(r"^\s*ENDCLASS\s*\.", re.I)
+# Deyim desenleri: ÇOK SATIRLI deyim tek satıra indirgenmiş (boşluk tekilleştirilmiş, baştaki pragma
+# sökülmüş) metne uygulanır — bkz. `_deyim_metni`.
+_IMPL_BAS = re.compile(r"^CLASS\s+[\w/]+\s+IMPLEMENTATION\s*\.", re.I)
+_DEF_BAS = re.compile(r"^CLASS\s+[\w/]+\s+DEFINITION\b", re.I)
+# Blok AÇMAYAN tek-deyimlik DEFINITION biçimleri: `DEFERRED` / `LOAD` / `LOCAL FRIENDS` — sonlarında
+# `ENDCLASS.` yoktur. `LOCAL FRIENDS` birim testli her sınıfta vardır; blok sanılınca IMPLEMENTATION'ın
+# tamamı "tanım" sayılıp ① ② kaçıyordu (ölçüldü 2026-10-18).
+_DEF_DEFERRED = re.compile(r"^CLASS\s+[\w/]+\s+DEFINITION\s+(?:LOAD|DEFERRED|LOCAL\s+FRIENDS)\b", re.I)
+_METHOD_BAS = re.compile(r"^METHOD\s+[\w/~]+", re.I)
+_ENDMETHOD = re.compile(r"^ENDMETHOD\s*\.", re.I)
+_ENDCLASS = re.compile(r"^ENDCLASS\s*\.", re.I)
+_PRAGMA_ONEK = re.compile(r"^(?:##\w+(?:\[[^\]]*\])*\s*)+")
+_YAPI_SATIRI = re.compile(r"^(?:##\w+(?:\[[^\]]*\])*\s*)*(?:METHOD\s|ENDMETHOD\b|CLASS\s|ENDCLASS\b)", re.I)
 
 # Konum etiketleri: OLCULMUS = push 400 OO_SOURCE_BASED 012 canlı ölçüldü (adt-classes §24.10);
 # OLCULMEMIS = kural "güvenli taraf: koyma" der, ön tarama SAYAR ama kesinlik aynı DEĞİLDİR.
@@ -571,6 +615,12 @@ OLCULMUS, OLCULMEMIS = "ölçülmüş", "ölçülmemiş"
 def _yorum_satiri(ham: str) -> bool:
     """`"` satır başı boşluk atlandıktan sonra gelirse yorum; `*` YALNIZ 1. sütunda yorum."""
     return ham.startswith("*") or ham.lstrip().startswith('"')
+
+
+def _deyim_metni(kl: str) -> str:
+    """Literalsiz deyim metni → tek satır, boşluk tekil, baştaki pragma(lar) sökülmüş.
+    Pragma deyimin PARÇASIDIR (`##NEEDED` + alt satırda `METHOD b.` = tek `METHOD` deyimi)."""
+    return _PRAGMA_ONEK.sub("", " ".join(kl.split()))
 
 
 def yorum_bantlari(metin: str) -> list[tuple[int, int, str, str]]:
@@ -585,7 +635,19 @@ def yorum_bantlari(metin: str) -> list[tuple[int, int, str, str]]:
       ⑤ DEFINITION'ın `ENDCLASS.`'ı ↔ `CLASS … IMPLEMENTATION.` (ölçülmemiş)
     Serbest: DEFINITION bölümü · metot gövdesi · dosyanın ilk CLASS deyiminden önceki başlık.
     Boş satır ilgisizdir (bant sınırları yorum satırlarıyla verilir).
+
+    DEYİM TABANLIDIR (2026-10-18; önceki sürüm satır tabanlıydı): sınıflandırma birleştirilmiş deyim
+    metni üzerinde yapılır → iki satıra bölünmüş `CLASS zcl_x` / `IMPLEMENTATION.`, baştaki pragma satırı
+    (`##NEEDED` + `METHOD b.`) ve tek-deyimlik `DEFINITION LOCAL FRIENDS` doğru tanınır. Baştaki UTF-8
+    BOM sökülür (satır numarası değişmez). Deyim içine gömülü yorum bant sayılmaz.
+    ⚠ DAYANIKLILIK: yapı anahtarıyla (`METHOD ` · `ENDMETHOD` · `CLASS ` · `ENDCLASS`) BAŞLAYAN satır, önceki
+    deyim noktasıyla kapanmamış olsa da YENİ deyim başlatır. Gerekçe (ölçüldü): kaçışsız `}|{` gibi bozuk bir
+    şablon satırı noktayı literal içinde yutar; saf deyim birleştirme o noktadan sonraki bütün yapıyı tek
+    deyim sanıp bandı KAÇIRIYORDU (tam da BE-47'li kirli kaynakta).
     """
+    metin = metin[1:] if metin.startswith("\ufeff") else metin
+    ham_satirlar = metin.splitlines()
+
     bantlar: list[tuple[int, int, str, str]] = []
     durum = "bas"     # bas · def · ara(⑤) · bekle(①②③) · govde · sonra(④)
     capa = ""
@@ -596,41 +658,35 @@ def yorum_bantlari(metin: str) -> list[tuple[int, int, str, str]]:
             bantlar.append((yorumlar[0], yorumlar[-1], konum, kesinlik))
         yorumlar.clear()
 
-    for no, ham in enumerate(metin.splitlines(), 1):
-        kod = abap_norm(ham)[1]
+    def deyim(kod: str):
+        """Tamamlanmış (ya da yapı satırıyla kapatılmış) deyim → durum geçişi."""
+        nonlocal durum, capa
+        kod = _deyim_metni(kod)
         if durum == "govde":
             if _ENDMETHOD.match(kod):
                 durum, capa = "bekle", "ENDMETHOD."
-            continue
+            return
         if durum == "def":
             if _ENDCLASS.match(kod):
                 durum = "ara"
-            continue
-        if not ham.strip():
-            continue
-        if _yorum_satiri(ham):
-            if durum in ("ara", "bekle", "sonra"):
-                yorumlar.append(no)
-            continue
-        # yorum olmayan, boş olmayan satır
+            return
         if durum == "bekle":
             if _METHOD_BAS.match(kod):
                 kapat(f"`{capa}` ↔ `METHOD`", OLCULMUS)
                 durum = "govde"
-                continue
+                return
             if _ENDCLASS.match(kod):
                 kapat("son `ENDMETHOD.` ↔ `ENDCLASS.`" if capa == "ENDMETHOD." else
                       "`CLASS … IMPLEMENTATION.` ↔ `ENDCLASS.`", OLCULMEMIS)
                 durum = "sonra"
-                continue
-            yorumlar.clear()     # METHOD/ENDCLASS dışı deyim (ör. pragma) — bant kesilir
-            continue
-        if durum == "ara":
-            if _IMPL_BAS.match(kod):
-                kapat("DEFINITION `ENDCLASS.` ↔ `CLASS … IMPLEMENTATION.`", OLCULMEMIS)
-                durum, capa = "bekle", "CLASS … IMPLEMENTATION."
-                continue
-        if durum == "sonra" and re.match(r"^\s*CLASS\b", kod, re.I):
+                return
+            yorumlar.clear()     # METHOD/ENDCLASS dışı deyim — bant kesilir
+            return
+        if durum == "ara" and _IMPL_BAS.match(kod):
+            kapat("DEFINITION `ENDCLASS.` ↔ `CLASS … IMPLEMENTATION.`", OLCULMEMIS)
+            durum, capa = "bekle", "CLASS … IMPLEMENTATION."
+            return
+        if durum == "sonra" and re.match(r"^CLASS\b", kod, re.I):
             kapat("IMPLEMENTATION `ENDCLASS.` sonrası", OLCULMEMIS)
         # ortak: CLASS deyimleri
         if _IMPL_BAS.match(kod):
@@ -640,7 +696,38 @@ def yorum_bantlari(metin: str) -> list[tuple[int, int, str, str]]:
             yorumlar.clear()
             durum = "def"
         elif durum == "ara":
-            yorumlar.clear()     # ara bölgede başka deyim (ör. LOCAL FRIENDS) — bant kesilir
+            yorumlar.clear()     # ara bölgede başka deyim — bant kesilir
+
+    bekleyen: str | None = None      # noktası henüz gelmemiş deyim metni
+    for no, ham in enumerate(ham_satirlar, 1):
+        kl = abap_norm(ham)[1]
+        if not kl.strip():
+            if not ham.strip():
+                continue
+            if bekleyen is not None and not _PRAGMA_ONEK.fullmatch(bekleyen.strip() + " "):
+                continue          # çok satırlı deyimin içine gömülü yorum — bant değil
+            if _yorum_satiri(ham):
+                if durum in ("ara", "bekle", "sonra"):
+                    yorumlar.append(no)
+            else:
+                deyim("")         # deyim olmayan, yorum olmayan satır (ör. girintili `*`) → bant kesilir
+            continue
+        if (bekleyen is not None and _YAPI_SATIRI.match(kl.lstrip())
+                and not _PRAGMA_ONEK.fullmatch(bekleyen.strip() + " ")):
+            deyim(bekleyen)       # noktasız kalmış deyim (bozuk literal) yapı satırıyla kapanır
+            bekleyen = None
+        parca: list[str] = []
+        for j, ch in enumerate(kl):
+            parca.append(ch)
+            if ch == "." and (j + 1 == len(kl) or kl[j + 1] in " \t"):
+                metin_ = "".join(parca)
+                deyim(metin_ if bekleyen is None else bekleyen + " " + metin_)
+                bekleyen, parca = None, []
+        kalan = "".join(parca)
+        if kalan.strip():
+            bekleyen = kalan if bekleyen is None else bekleyen + " " + kalan
+    if bekleyen is not None:
+        deyim(bekleyen)
     if durum == "sonra":
         kapat("IMPLEMENTATION `ENDCLASS.` sonrası", OLCULMEMIS)
     return bantlar
@@ -984,6 +1071,39 @@ def k_be49(d, c):
     return [F(None, v) for v in mod.validate_classic_include_naming(pkg) if ad in v.upper()]
 
 
+def _be50_okumadan_once_sifirlanir(sonraki: list, ad: str) -> bool:
+    """`DATA ad … VALUE` sonrası AYNI döngü gövdesinde, `ad` ilk kez OKUNMADAN önce `CLEAR`/`FREE`/`REFRESH`
+    (zincirli `CLEAR: a, ad, b` dahil) ya da `ad`'ı okumayan atama (`ad = <ad geçmeyen ifade>`) var mı.
+    Var → her tur sıfırlanıyor, uyarı yanlış-pozitif (korpusta ölçüldü 2026-10-18: VALUE'lu bayraklar
+    hemen ardından `CLEAR:` ile sıfırlanıyordu). `ad = ad + 1` sıfırlama DEĞİLDİR (önce okur).
+    Sıfırlama YALNIZ gövdenin üst düzeyinde sayılır: IF/CASE/DO/WHILE/TRY/iç LOOP içindeki CLEAR her turda
+    koşmayabilir (yanlış-negatif üretmemek için). Okuma her derinlikte okumadır; tarama bu döngünün
+    `ENDLOOP`'unda biter."""
+    rx = re.compile(rf"(?<![\w\-~>]){re.escape(ad)}\b", re.I)
+    derin = 0
+    for _b, _s, _l, kl in sonraki:
+        k = kl.strip()
+        if _LOOP_KAPA.match(k) and derin == 0:
+            return False
+        if re.match(r"^(ENDLOOP|ENDIF|ENDCASE|ENDDO|ENDWHILE|ENDTRY)\b", k, re.I):
+            derin = max(0, derin - 1)
+            continue
+        acar = bool(_LOOP_AC.match(k) or re.match(r"^(IF|CASE|DO|WHILE|TRY)\b", k, re.I))
+        if rx.search(k):
+            if not acar and derin == 0:
+                if re.match(r"^(CLEAR|FREE|REFRESH)\b", k, re.I):
+                    return True
+                ma = re.match(rf"^{re.escape(ad)}\s*=(?!=)(.*)$", k, re.I | re.S)
+                if ma and not rx.search(ma.group(1)):
+                    return True
+            if not re.match(r"^(CLEAR|FREE|REFRESH)\b", k, re.I) and not (
+                    re.match(rf"^{re.escape(ad)}\s*=(?!=)", k, re.I) and not rx.search(k.split("=", 1)[1])):
+                return False         # ilk OKUMA (ya da kendini okuyan atama) sıfırlamadan önce geldi
+        if acar:
+            derin += 1
+    return False
+
+
 @kontrol("be50_loop_data")
 def k_be50(d, c):
     a = abap(d)
@@ -1006,7 +1126,8 @@ def k_be50(d, c):
             continue
         ad, kalan = m.group(1), m.group(2)
         if re.search(r"\bVALUE\b", kalan, re.I) and not re.search(r"\bVALUE\s*#", kalan, re.I):
-            out.append(W(bas, f"LOOP içinde `DATA {ad} … VALUE` — VALUE yalnız bir kez atanır, her turda sıfırlanmaz → CLEAR"))
+            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad):
+                out.append(W(bas, f"LOOP içinde `DATA {ad} … VALUE` — VALUE yalnız bir kez atanır, her turda sıfırlanmaz → CLEAR"))
             continue
         if re.search(r"\bTABLE\b", kalan, re.I):
             # sonraki ifadelerde (aynı döngüde) APPEND … TO ad var, öncesinde CLEAR yok mu
@@ -1482,8 +1603,16 @@ def k_fe13(d, c):
     ad = d.rel.rsplit("/", 1)[-1]
     if not mod.is_list_view(ad, d.metin):
         return U("liste/rapor adlı view değil")
-    return [F(1, f"liste view'ı sap.m.Table ({n} kolon) — sap.ui.table + TablePersonalizer (ADR 0008)")
-            for _no, n in mod.scan_view(ad, d.metin)]
+    bulgu = mod.scan_view(ad, d.metin)
+    if not bulgu:
+        return []
+    # Validator satır vermez (`(1, n)`); gerçek satır = yorumsuz metinde ilk m.Table açılışı. Sabit 1 diff kipinde
+    # YENİ eklenen tabloyu "(değişmeyen satır — önceden var)" WARN'ına indiriyordu (ölçüldü 2026-10-18).
+    x = _xml_kod(d)
+    mt = mod._M_TABLE.search(x)
+    no = x.count("\n", 0, mt.start()) + 1 if mt else None
+    return [F(no, f"liste view'ı sap.m.Table ({n} kolon) — sap.ui.table + TablePersonalizer (ADR 0008)")
+            for _no, n in bulgu]
 
 
 @kontrol("fe32_filter")
@@ -1509,15 +1638,8 @@ def _app_dosyalari(d: Dosya, c: Baglam, desen: str) -> list[Dosya]:
     if anahtar in c.onbellek:
         return c.onbellek[anahtar]
     sonuc = {x.rel: x for x in c.dosyalar if x.rel.startswith(kok + "/") and glob_eslesir(x.rel, [desen])}
-    disk = c.repo / kok
-    if disk.is_dir():
-        for p in _dosyalar_budayarak(disk):
-            rel = p.relative_to(c.repo).as_posix()
-            if rel not in sonuc and glob_eslesir(rel, [desen]):
-                try:
-                    sonuc[rel] = Dosya(rel, p.read_text(encoding="utf-8", errors="replace"), yol=p)
-                except OSError:
-                    pass
+    for x in c.agac_dosyalari(kok, desen, set(sonuc)):
+        sonuc[x.rel] = x
     c.onbellek[anahtar] = list(sonuc.values())
     return c.onbellek[anahtar]
 
@@ -1978,7 +2100,24 @@ def _cat_file(repo: Path, nesneler: list[str]) -> dict[str, str | None]:
     return out
 
 
-def girdileri_topla(repo: Path, dosyalar: list[str] | None, aralik: str | None) -> tuple[list[Dosya], list[str]]:
+def _git_yolu(ham: str) -> str:
+    """Diff başlığındaki yol → düz yol. İki tuzak (ölçüldü 2026-10-18):
+    ① boşluklu yolda git `+++ b/a b/x.abap` satırının SONUNA TAB ekler → anahtar `--name-only`
+       çıktısıyla uyuşmaz, dosyanın bütün A-FAIL'leri sessizce "(önceden var)" WARN'ına iner;
+    ② `"`, `\\`, TAB, satır sonu içeren yol `core.quotepath=off`'ta bile C-tırnaklı gelir (`"b/a\\"b"`)."""
+    s = ham.rstrip("\r\n")
+    if s.endswith("\t"):
+        s = s[:-1]
+    if len(s) >= 2 and s[0] == s[-1] == '"':
+        import codecs
+        s = codecs.escape_decode(s[1:-1].encode("utf-8"))[0].decode("utf-8", "replace")
+    return s
+
+
+def girdileri_topla(repo: Path, dosyalar: list[str] | None,
+                    aralik: str | None) -> tuple[list[Dosya], list[str], int, str | None]:
+    """→ (dosyalar, hatalar, izlenmeyen_dosya_sayısı, sağ_ref). `sağ_ref` yalnız iki uçlu aralıkta doludur
+    (kardeş dosyalar o ağaçtan okunur); tek ref ve `--files` kipinde None (çalışma ağacı)."""
     hatalar = []
     out: list[Dosya] = []
     if dosyalar:
@@ -1993,17 +2132,25 @@ def girdileri_topla(repo: Path, dosyalar: list[str] | None, aralik: str | None) 
                 hatalar.append(f"dosya yok: {f}")
                 continue
             out.append(Dosya(rel, p.read_text(encoding="utf-8", errors="replace"), yol=p))
-        return out, hatalar
+        return out, hatalar, 0, None
     sol, sag = _aralik(repo, aralik)
     uclar = [sol, *([sag] if sag else [])]
-    adlar = [a for a in _git(repo, "diff", "--no-renames", "--diff-filter=d", "--name-only", *uclar, "--").splitlines()
+    adlar = [a for a in _git(repo, "diff", "--no-renames", "--diff-filter=d", "--name-only", "-z", *uclar, "--").split("\0")
              if a.strip()]
+    # Tek ref = ref ↔ çalışma ağacı: `git diff` İZLENMEYEN dosyayı hiç görmez → yeni yazılmış (henüz
+    # `git add` edilmemiş) kirli sınıf "0 dosya" ile geçerdi (ölçüldü 2026-10-18). Bütün dosya yeni sayılır.
+    izlenmeyen: list[str] = []
+    if not sag:
+        gorulen = set(adlar)
+        izlenmeyen = [a for a in _git(repo, "ls-files", "--others", "--exclude-standard", "--full-name", "-z",
+                                      "--", ":/").split("\0") if a.strip() and a not in gorulen]
     # değişen satırlar: TEK `-U0` diff'i, dosya başlıklarına göre bölünür
     degisen: dict[str, set[int]] = {}
     akim = None
     for satir in _git(repo, "diff", "--no-renames", "--diff-filter=d", "-U0", "--no-color", *uclar, "--").splitlines():
         if satir.startswith("+++ "):
-            akim = satir[6:] if satir.startswith("+++ b/") else None
+            yol = _git_yolu(satir[4:])
+            akim = yol[2:] if yol.startswith("b/") else None
             if akim is not None:
                 degisen.setdefault(akim, set())
             continue
@@ -2024,7 +2171,15 @@ def girdileri_topla(repo: Path, dosyalar: list[str] | None, aralik: str | None) 
             continue
         out.append(Dosya(rel, metin, eski_kaynak=(lambda r=rel: _cat_file(repo, [f"{sol}:{r}"]).get(f"{sol}:{r}")),
                          degisen=degisen.get(rel, set()), yol=yol))
-    return out, hatalar
+    for rel in izlenmeyen:
+        yol = repo / rel
+        try:
+            metin = yol.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            hatalar.append(f"okunamadı: {rel}")
+            continue
+        out.append(Dosya(rel, metin, eski_kaynak=None, degisen=None, yol=yol))   # None = bütün satırlar yeni
+    return out, hatalar, len(izlenmeyen), sag
 
 
 # ═════════════════════════════════════════════════════════════════ değerlendirme ══
@@ -2034,6 +2189,7 @@ class Satir:
     sonuc: str
     kanit: str
     blok_fail: bool = False
+    cokme: int = 0          # kontrolü ÇÖKEN dosya sayısı (blok maddede → exit 2; değilse ÖLÇÜLEMEDİ + beyan)
 
 
 def _birlestir(durumlar: list[str]) -> str:
@@ -2060,10 +2216,14 @@ def degerlendir(madde: dict, dosyalar: list[Dosya], c: Baglam) -> Satir:
         return Satir(madde, "ELLE", f"kontrol `{k}` programda YOK (map ↔ kod tutarsız)")
     durumlar, kanitlar = [], []
     tum = bool(madde.get("tum_dosya"))
+    cokme = 0
     for d in dosyalar:
         try:
             bulgular = fn(d, c)
         except Exception as e:
+            # Çökme "temiz" DEĞİLDİR: ÖLÇÜLEMEDİ + sayaç. Blok maddede çağıran (calistir) exit 2 verir —
+            # aksi hâlde run_review BE-10b çöktüğünde exit 0 → PASS görürdü (ölçüldü 2026-10-18).
+            cokme += 1
             durumlar.append("ÖLÇÜLEMEDİ")
             kanitlar.append(f"{d.rel}: kontrol çöktü ({type(e).__name__}: {str(e)[:60]})")
             continue
@@ -2091,7 +2251,7 @@ def degerlendir(madde: dict, dosyalar: list[Dosya], c: Baglam) -> Satir:
         if sinif == "C":
             kanit = ("ipucu (hüküm değil): " + kanit) if kanitlar else "yargı (ipucu taraması aday bulmadı)"
     blok = sonuc == "FAIL" and madde.get("seviye") == "blok"
-    return Satir(madde, sonuc, kanit, blok)
+    return Satir(madde, sonuc, kanit, blok, cokme)
 
 
 def _not(madde: dict) -> str:
@@ -2102,27 +2262,43 @@ def _md(s: str) -> str:
     return s.replace("|", "\\|").replace("\n", " ")
 
 
+_ANA_SINIF_INCLUDE = re.compile(r"\.(?:ccimp|ccau|ccdef|ccmac|locals_imp|locals_def|testclasses|macros)(?:\.abap)?$", re.I)
+
+
 def calistir(args) -> int:
     t0 = time.perf_counter()
     repo = Path(args.repo).resolve()
     harita = harita_oku(Path(args.harita) if args.harita else MAP_YOLU)
-    dosyalar, hatalar = girdileri_topla(repo, args.files, args.diff)
+    onekler = KIND_ONEK[args.kind]
+    ids = {x.strip() for x in args.ids.split(",") if x.strip()} if args.ids else None
+    if ids:
+        # Kimlik BÜYÜK/KÜÇÜK HARFE DUYARLIDIR (BE-10b ≠ BE-10B): bilinmeyen kimlik sessizce "Uygulanan 0"
+        # üretirdi — run_review'da yazım hatası BE-10b kapısını exit 0 ile kapatmak demekti.
+        bilinen = {m.get("id") for m in harita}
+        bilinmeyen = sorted(ids - bilinen)
+        if bilinmeyen:
+            raise KullanimHatasi(f"--ids bilinmeyen kimlik: {', '.join(bilinmeyen)} (büyük/küçük harfe duyarlı; map'te yok)")
+        kind_disi = sorted(i for i in ids if not i.startswith(onekler))
+        if kind_disi:
+            raise KullanimHatasi(f"--ids {', '.join(kind_disi)} `--kind {args.kind}` kapsamında değil (önek {'/'.join(onekler)})")
+    dosyalar, hatalar, izlenmeyen, sag_ref = girdileri_topla(repo, args.files, args.diff)
+    if args.files and hatalar:
+        raise KullanimHatasi("; ".join(hatalar))
     for h in hatalar:
         print(f"UYARI: {h}", file=sys.stderr)
     ana_notlar: list[str] = []   # stdout'a (KAPSAM BEYANI) — stderr'e DEĞİL: run_review PASS+stderr'i "bulgu" sayar
     if args.ana_sinif:
         # Çağıran (run_review class_push) dosyanın sınıf ANA kaynağı olduğunu biliyor; yerel kopya
         # `.clas.abap` adını taşımayabilir (ör. `ZCL_X.abap`) → BE-10b sessizce UYGULANMAZ olurdu.
-        # Include'lar (.ccimp/.ccau/.ccdef/.ccmac, locals_*, testclasses) bilerek HARİÇ.
+        # Include'lar (.ccimp/.ccau/.ccdef/.ccmac, locals_*, testclasses, macros) bilerek HARİÇ —
+        # yalnız ADIN SONUNDA nokta ayracıyla (`_ANA_SINIF_INCLUDE`): çapasız desen `zcl_sd_macros.abap`
+        # ve `zcl_testclasses_util.abap` gibi ANA sınıfları da dışlıyordu (ölçüldü 2026-10-18).
         for d in dosyalar:
             ad = d.rel.rsplit("/", 1)[-1].lower()
-            if not re.search(r"\.(ccimp|ccau|ccdef|ccmac)\.abap$|locals_(imp|def)|testclasses|macros", ad) \
-                    and not ad.endswith(".clas.abap"):
+            if not _ANA_SINIF_INCLUDE.search(ad) and not ad.endswith(".clas.abap"):
                 d.eslesme_adi = d.rel + ".clas.abap"
                 ana_notlar.append(d.rel)
-    onekler = KIND_ONEK[args.kind]
-    ids = {x.strip() for x in args.ids.split(",")} if args.ids else None
-    c = Baglam(repo, dosyalar, sap=args.sap, sap_kok=Path(args.sap_kok) if args.sap_kok else None)
+    c = Baglam(repo, dosyalar, sap=args.sap, sap_kok=Path(args.sap_kok) if args.sap_kok else None, ref=sag_ref)
 
     satirlar: list[Satir] = []
     uygulanmaz_madde = 0
@@ -2153,10 +2329,24 @@ def calistir(args) -> int:
     sayim = {r: sum(1 for s in satirlar if s.sonuc == r) for r in SONUCLAR}
     kontrolsuz_a = [s.madde["id"] for s in satirlar if s.madde.get("sinif") == "A" and not s.madde.get("kontrol")]
     blok = [s for s in satirlar if s.blok_fail]
+    cokenler = [s for s in satirlar if s.cokme]
+    cokme_blok = [s for s in cokenler if s.madde.get("seviye") == "blok"]
     sure = time.perf_counter() - t0
     print("\n### KAPSAM BEYANI")
     print(f"- Uygulanan madde: {len(satirlar)} · " + " · ".join(f"{k} {v}" for k, v in sayim.items()))
     print(f"- Bu girdiye UYGULANMAYAN madde (glob eşleşmedi, tabloda yok): {uygulanmaz_madde}")
+    print(f"- Kontrol çöktü: {sum(s.cokme for s in cokenler)} dosya"
+          + (f" ({', '.join(s.madde['id'] for s in cokenler)} → ÖLÇÜLEMEDİ, 'temiz' DEĞİL)" if cokenler else ""))
+    if args.diff:
+        if sag_ref:
+            print(f"- Girdi ve çapraz-dosya kardeşleri (BDEF, i18n, uygulama JS'i …) `{sag_ref}` ağacından okundu "
+                  "(çalışma ağacından DEĞİL). Disk yolu isteyen kontroller (BE-16, BE-28 (c), DOC-KD-11) bu kipte "
+                  "ÖLÇÜLEMEDİ; BE-49 paket `programs/` dizinini diskten okur.")
+        else:
+            print(f"- Tek ref kipi (ref ↔ çalışma ağacı): izlenmeyen yeni dosya {izlenmeyen} (bütün satırları yeni "
+                  "sayıldı; gitignore'lu dosyalar hariç).")
+    if hatalar:
+        print(f"- Okunamayan dosya ({len(hatalar)}): {'; '.join(hatalar[:5])} — ÖLÇÜLMEDİ.")
     print(f"- Hiçbir maddenin globuna girmeyen dosya ({len(eslesmeyen)}): "
           + (", ".join(eslesmeyen[:10]) + (" …" if len(eslesmeyen) > 10 else "") if eslesmeyen else "yok"))
     print(f"- ELLE = program hüküm VERMEDİ (C yargı / kontrolsüz madde) → inceleyen doldurur. "
@@ -2181,6 +2371,11 @@ def calistir(args) -> int:
     rc = 1 if blok else 0
     if args.verify_report:
         rc = max(rc, rapor_dogrula(Path(args.verify_report), satirlar))
+    if cokme_blok:
+        # Blok maddenin kontrolü ÇÖKTÜ: madde ölçülmedi — exit 0/1 "temiz/ihlal" anlamına gelirdi, ikisi de değil.
+        print("\n[PROGRAM KOŞMADI] blok madde kontrolü çöktü: "
+              + "; ".join(f"{s.madde['id']} ({s.kanit[:120]})" for s in cokme_blok))
+        rc = 2
     return rc
 
 
@@ -2190,9 +2385,18 @@ def calistir(args) -> int:
 # (kanıt sütunu boşsa `kanıtsız`) · `ÇÜRÜTÜLDÜ`: program A-FAIL dedi, inceleyen yanlış-pozitif olduğunu
 # KANITLADI (kanıt şart; çelişki sayılmaz; korpus kalibrasyon adayı olarak ayrı listelenir).
 # Eşanlamlı kabul edilen tek yazımlar: WARNING (=WARN) · OLCULEMEDI · CURUTULDU (ASCII). Başka kelime
-# (BULGU, ilgisiz, BLOCKER, N/A …) hüküm DEĞİLDİR → satır `hükümsüz` sayılır.
+# (BULGU, ilgisiz, BLOCKER, N/A, Tamam …) hüküm DEĞİLDİR → satır `hükümsüz` sayılır.
+# Hüküm YALNIZ hüküm sütunundan okunur (başlıkta `Sonuç`/`Hüküm`; başlık yoksa 3. sütun) — kanıt metnindeki
+# "pass"/"FAIL" kelimesi hüküm DEĞİLDİR (2026-10-18: kanıtta "program FAIL dedi ama…" yazan PASS satırı
+# çelişkiden kaçıyordu). Çıplak `FAIL` geçersizdir: sözleşme `FAIL→F<n>` (bulguya bağ) → `bağsız FAIL`.
+# ⛔ İTİRAZ YOLU TEKTİR: program A-FAIL dediyse rapor ya `FAIL→F<n>` ya da kanıtlı `ÇÜRÜTÜLDÜ` yazar;
+# PASS · WARN · UYGULANMAZ · ÖLÇÜLEMEDİ = ÇELİŞKİ (FAIL'i kanıtsız yumuşatmak).
 HUKUMLER = ("PASS", "FAIL→F<n>", "WARN", "UYGULANMAZ+gerekçe", "ÖLÇÜLEMEDİ", "ELLE", "ÇÜRÜTÜLDÜ")
-HUKUM_SATIRI = "Geçerli hükümler: " + " · ".join(HUKUMLER)
+CELISKI_KURALI = ("program A-FAIL dediyse rapor hükmü yalnız FAIL→F<n> ya da kanıtlı ÇÜRÜTÜLDÜ olabilir "
+                  "(PASS/WARN/UYGULANMAZ/ÖLÇÜLEMEDİ = ÇELİŞKİ)")
+HUKUM_SATIRI = "Geçerli hükümler: " + " · ".join(HUKUMLER) + " — " + CELISKI_KURALI
+_HUKUM_SUTUNU = re.compile(r"^\W*(sonu[çc]|h[üu]k[üu]m|verdict)\W*$", re.I)
+_FAIL_BAGLI = re.compile(r"\bFAIL\s*(?:→|->)\s*F\d+\b", re.I)
 _HUKUM = re.compile(r"(?<![\w])(PASS|FAIL|WARN|WARNING|UYGULANMAZ|ÖLÇÜLEMED[İIi]|OLCULEMEDI|ELLE|ÇÜRÜTÜLDÜ|CURUTULDU)(?![\w])", re.I)
 _HUKUM_NORM = {"WARNING": "WARN", "OLCULEMEDI": "ÖLÇÜLEMEDİ", "CURUTULDU": "ÇÜRÜTÜLDÜ"}
 
@@ -2221,50 +2425,61 @@ def rapor_dogrula(rapor: Path, satirlar: list[Satir]) -> int:
     except OSError as e:
         # okunamayan rapor bir EKSİKLİK değil, programın koşamamasıdır → exit 2
         raise ProgramKosmadi(f"--verify-report raporu okunamadı: {e}") from e
-    hucreler: dict[str, list[list[str]]] = {}
+    hucreler: dict[str, list[tuple[str, list[str]]]] = {}   # id → [(hüküm hücresi, öbür hücreler)]
+    huk_idx = 2                                   # başlıksız tablo: | ID | Sınıf | Hüküm | Kanıt |
     for s in metin.splitlines():
         if not s.strip().startswith("|"):
             continue
         h = [x.strip() for x in re.split(r"(?<!\\)\|", s.strip().strip("|"))]   # `\|` hücre içi kaçış
+        if h and re.fullmatch(r"\W*ID\W*", h[0], re.I):
+            # başlık satırı: hüküm sütununu ADINDAN bul (kanıt sütunundaki kelime hüküm sayılmasın)
+            huk_idx = next((i for i, x in enumerate(h) if _HUKUM_SUTUNU.match(x)), 2)
+            continue
         m = re.fullmatch(r"\**`?((?:BE|FE|DOC)-[0-9A-Za-z-]+)`?\**", h[0]) if h else None
         if m:
-            hucreler.setdefault(m.group(1), []).append(h[1:])
-    eksik, hukumsuz, kanitsiz, elle, celiski, curutulen = [], [], [], [], [], []
+            hukum = h[huk_idx] if huk_idx < len(h) else ""
+            hucreler.setdefault(m.group(1), []).append(
+                (hukum, [x for i, x in enumerate(h) if i not in (0, huk_idx)]))
+    eksik, hukumsuz, kanitsiz, elle, celiski, curutulen, bagsiz = [], [], [], [], [], [], []
     for s in satirlar:
         mid = s.madde["id"]
         rows = hucreler.get(mid)
         if not rows:
             eksik.append(mid)
             continue
-        h = rows[-1]
-        hk = [t for x in h for t in _hukum_tokenlari(x)]
+        hukum, diger = rows[-1]
+        hk = _hukum_tokenlari(hukum)
         if not hk:
             hukumsuz.append(mid)
             continue
         if all(x == "ELLE" for x in hk):
             elle.append(mid)
             continue
-        if not any(_kanit_mi(x) for x in h):
+        if not any(_kanit_mi(x) for x in diger):
             kanitsiz.append(mid)
             continue
         if "ÇÜRÜTÜLDÜ" in hk:
             # yanlış-pozitif kanıtlandı → çelişki DEĞİL; kalibrasyon adayı
             curutulen.append(f"{mid} (program: {s.sonuc})")
             continue
-        if s.sonuc == "FAIL" and s.madde.get("sinif") == "A" and "PASS" in hk and "FAIL" not in hk:
-            celiski.append(mid)
+        if "FAIL" in hk and not _FAIL_BAGLI.search(hukum):
+            bagsiz.append(mid)
+            continue
+        if s.sonuc == "FAIL" and s.madde.get("sinif") == "A" and "FAIL" not in hk:
+            celiski.append(f"{mid} (rapor: {'/'.join(dict.fromkeys(hk))})")
+    kategoriler = (("satır yok", eksik), ("hükümsüz", hukumsuz), ("bağsız FAIL", bagsiz), ("kanıtsız", kanitsiz),
+                   ("ELLE", elle), ("ÇELİŞKİ", celiski))
     print("\n### --verify-report")
     print(f"- Rapor: {rapor.name} · beklenen madde {len(satirlar)} · {HUKUM_SATIRI}")
-    for ad, liste in (("satır yok", eksik), ("hükümsüz", hukumsuz), ("kanıtsız", kanitsiz),
-                      ("ELLE", elle), ("ÇELİŞKİ", celiski)):
+    for ad, liste in kategoriler:
         print(f"- {ad}: {len(liste)}" + (f" → {', '.join(liste)}" if liste else ""))
-    print("  (ELLE = yargı doldurulmamış · ÇELİŞKİ = program A-FAIL, rapor PASS)")
+    print("  (hüküm YALNIZ hüküm sütunundan okunur · bağsız FAIL = `FAIL→F<n>` yerine çıplak FAIL · ELLE = yargı "
+          "doldurulmamış · ÇELİŞKİ = program A-FAIL, rapor PASS/WARN/UYGULANMAZ/ÖLÇÜLEMEDİ — itiraz yolu ÇÜRÜTÜLDÜ+kanıt)")
     if curutulen:
         print(f"\n#### ÇÜRÜTÜLDÜ — korpus kalibrasyon adayı ({len(curutulen)}; eksiklik DEĞİL)")
         for x in curutulen:
             print(f"- {x}")
-    eksiklik = [ad for ad, liste in (("satır yok", eksik), ("hükümsüz", hukumsuz), ("kanıtsız", kanitsiz),
-                                     ("ELLE", elle), ("ÇELİŞKİ", celiski)) if liste]
+    eksiklik = [ad for ad, liste in kategoriler if liste]
     if eksiklik:
         print(f"\n⛔ RAPOR EKSİK: {' · '.join(eksiklik)}")
     return 1 if eksiklik else 0
@@ -2385,6 +2600,11 @@ class ProgramKosmadi(Exception):
     """Programın koşamadığı (girdi/ortam) durum → exit 2; eksiklik/FAIL ile karışmaz."""
 
 
+class KullanimHatasi(Exception):
+    """Çağıranın verdiği girdi tutarsız (olmayan dosya, bilinmeyen kimlik …) → exit 2 + `KULLANIM HATASI:`.
+    Sessizce "0 dosya / Uygulanan 0" basıp exit 0 dönmek, kontrolü HİÇ koşmamışken temiz demekti."""
+
+
 def main(argv=None) -> int:
     try:
         return _main(argv)
@@ -2400,7 +2620,8 @@ def _main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Ortak checklist kontrol programı (BE/FE/DOC)",
         epilog=HUKUM_SATIRI + ". Exit: 0 = engelleyici FAIL yok · 1 = blok FAIL ya da --verify-report "
-               "eksikliği (satır yok/hükümsüz/kanıtsız/ELLE/ÇELİŞKİ) · 2 = kullanım hatası ya da program koşmadı.")
+               "eksikliği (satır yok/hükümsüz/bağsız FAIL/kanıtsız/ELLE/ÇELİŞKİ) · 2 = kullanım hatası (olmayan "
+               "dosya, bilinmeyen --ids) ya da program koşmadı (blok madde kontrolü çöktü dahil).")
     ap.add_argument("--repo", help="incelenen reponun mutlak yolu (proje kökü)")
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--diff", help="git aralığı (ör. origin/main...HEAD, HEAD~1..HEAD, HEAD)")
@@ -2434,7 +2655,7 @@ def _main(argv=None) -> int:
         return 2
     try:
         return calistir(args)
-    except RuntimeError as e:
+    except (RuntimeError, KullanimHatasi) as e:
         print(f"KULLANIM HATASI: {e}", file=sys.stderr)
         return 2
 
