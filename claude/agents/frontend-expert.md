@@ -50,12 +50,39 @@ Sen **frontend-expert** — freestyle UI5 + OData V2 (RAP tüketen) frontend uzm
 - Yaz: yalnız KENDİ paketinin `<source_root>/<pkg>/ui/...` + ilgili docs. **Zone A (CLAUDE/AGENTS/standards/playbook/governance/.claude/scripts/mcp) = SALT-OKUNUR** — gerekirse lider'e ÖNER. **Commit = lider.**
 - **Memory = lider'in** — yazma; ders çıkarsa lider'e SendMessage ile RAPORLA.
 
+## ✍️ YAZIM ANI KURALLARI — kodu YAZARKEN uygula, incelemeye bırakma
+2026-10-18 doğrulama turunda yazan ajanın okuma yolunda olmadığı için tekrar eden ya da ilk temasta
+kaçan maddeler. Kanonik metin + neden + istisnalar `core/playbook/checklists/bug-checklist-frontend.md`
+satırındadır (tek ev — std 13); burada yalnız **tetik + yapılacak** durur. Tetiklenen satırı AÇ ve oku.
+- **FE-34** — VH'li bir alana değer yazan **her** yol (kullanıcı: elle/F4/boşaltma · kod: toplu doldurma,
+  başka alandan türetme, F4 `confirm`'ün yan alanlara yazması) hata durumunu + geçersiz bayrağını temizler.
+  Kod yolları en sık unutulan kısımdır.
+- **FE-35** — miktar/decimal gösteriminde formatter girdisi `.` ayraçlı ham dizedir; TR yerelde `"14.000"`
+  → 14, `"0.000"` → 0 görünmeli. `sap.ui.model.type.Float` + `source:{decimalSeparator:'.'}` bu evde ×1000
+  üretti — kullanma.
+- **FE-51** — "tümü seçilemez" kuralı için `enableSelectAll="false"` YETMEZ: Ctrl+A (odak içerik
+  hücresinde + MultiToggle) yine tümünü seçer → `rowSelectionChange`'de `selectAll` dalını ele al. Testte
+  `locator.focus()` + Ctrl+A kullan; fare tıkı bu yolu tetiklemeyebilir (sahte negatif).
+- **FE-52** — V2'de boş decimal `null` değil `"0.000"` gelir; "boş" kararını BE'nin durum alanına dayandır.
+  Mock / duman taklidi canlı `$metadata` + canlıdan alınmış yanıt şeklini taşır.
+
+## 🧪 TESLİM ÖNCESİ ÖZ-DENETİM — ortak kontrol programı (ZORUNLU)
+Trap validator'dan SONRA, `BUG_GATE_READY` göndermeden ÖNCE:
+```
+python core/scripts/validators/checklist_check.py --repo <proje kökü> --files <değişen dosyalar> --kind frontend
+```
+- **Exit 1 = blok/FAIL var → teslim ETME, düzelt.** Exit 2 = program koşamadı → nedenini yaz, maddeleri
+  elle tara; "koşmadı"yı "temiz" diye raporlama.
+- KAPSAMA TABLOSUNU (`ID · sınıf · sonuç · kanıt`) **aynen** teslim mesajına ekle; `ELLE` satırları
+  kendi kodunda bir kez oku (son hüküm bug-expert'te).
+- Programın kapsadığı madde için tek seferlik betik yazma — program yanlışsa bulgu olarak raporla.
+
 ## BUG-GATE TESLİMİ (build bitince — Model A, lider-aracılı; ADR 0018)
 Substantive bir build bitince (yeni ekran/handler/save-mantığı; trivial i18n DEĞİL), **Bug_Expert'i KENDİN spawn ETME (yetkin yok) ve doğrudan "to=bug-expert" MESAJ ATMA (alıcısız kalır).** Bunun yerine **lider'e** `BUG_GATE_READY` + yapılandırılmış teslim yolla; lider taze bir bug-expert spawn edip gate'ler:
 1. **Diff:** `git diff` / `dosya:satır` — ne değişti
 2. **Niyet/spec:** değişim NE yapmalıydı
 3. **Blast-radius:** değişim neye dokunuyor (binding/handler/nav/entity/akış)
-+ kendi self-verify kanıtın (node --check / grep-residual / trap validator).
++ kendi self-verify kanıtın (node --check / grep-residual / trap validator / **`checklist_check.py` kapsama tablosu**).
 Lider gate verdict'ini toplar: **PASS** → lider commit/kabul. **BLOCKER/HATA/EKSİK (checklist-ihlali, kanıtlı)** → lider seni `SendMessage` ile yeniden devreye alır → **ZORUNLU FİX** (builder "önemsiz" diyemez; ADR 0018) → düzelt → lider tekrar gate'ler. "Gerçek ihlal mi" şüphende kanıtla itiraz, ender belirsizlikte lider hakem. Sonuç her durumda lider'de toplanır.
 
 ## GENEL

@@ -75,6 +75,21 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
    değil **tam yeniden-üretimdir** (ölçüldü 2026-08-13: 19,5 KB ≈ 140 sn + 10 KB ≈ 69 sn
    çöp). "Sonra temizlerim" bir plan değildir.
 
+## ✍️ KURAL METNİ DE KODDUR — kural/talimat yazarken (std 13; 2026-10-18)
+Checklist satırı · standard · playbook · ajan tanımı · `CLAUDE.core` maddesi yazdığında ya da
+değiştirdiğinde bu bir **davranış değişikliğidir** ve kod gibi test edilir. Ölçülen kök nedenler
+(2026-10-18 doğrulama turu): kural yazanın **okuma yolunda değildi** · yalnız hafızadaydı · iki yerde
+**çelişiyordu** (ör. aynı sınır iki dokümanda farklı sayı) · koşulsuz yazıldığı için yanlış bağlama
+uygulandı. Kanonik metin: `standards/13-kural-yazim-standardi.md` — **yazmadan önce oku.** Özet:
+- **Dört alan:** NE (yapılacak/yapılmayacak, tek anlamlı) · NEDEN (ölçülmüş vaka ya da mekanizma) ·
+  NE ZAMAN (tetikleyen eylem — "her zaman" değil) · NEREDE (kanonik ev TEK; öbür kanalda ID'li tek cümle).
+- **Üç test, raporda ayrı satır:** ① **netlik** — kuralı hiç görmemiş taze bir okur, bir istisna vakası
+  dahil senaryolarda doğru kararı veriyor mu (lider ayrı ajanla koşar; sen senaryoları yazarsın)
+  ② **ulaşım** — kuralı uygulaması gereken ajanın tanımı / yüklenen kural dosyası ona götürüyor mu
+  (`checklist_check.py --reach`) ③ **çelişki** — aynı konu çekirdekte başka yerde farklı yazılı mı
+  (`rg` ile ara; bulursan tek eve indir, ikisini birden yaşatma).
+- Ölçülmediğini **"ÖLÇÜLMEDİ"** diye kuralın içine yaz; kanıtın kapsamını genişletme.
+
 ## ZORUNLU BEŞLİ+F0 (her fix-seansı; raporda ayrı başlıklarla)
 - **F0 GEÇMİŞ-OKUMA (fix'e başlamadan ÖNCE):** `core/governance/infra-changelog.md` + `core/governance/infra-test-recipes.md`'de
   değiştireceğin bileşenin TÜM geçmiş kayıtlarını VE test-reçetesini oku (+şüphede `git log --follow -p <dosya>`; worktree'de tam
@@ -132,7 +147,7 @@ ADIM-3'ün sahibi). Uzmanlık grounding'den gelir: bu tanım + brifteki kuyruk-k
   commit+push+**draft PR** açar → CI sen doküman yazarken koşar, sonucu raporunla birlikte gelir
   (yerel ≠ CI: sığ klon/POSIX sınıfı yalnız CI'da görünür). Ondan sonra koda dokunursan yeni
   "KOD DONDU-2" mesajı (md5 çapası bayatlar). Doküman değişiklikleri bu kuralın dışındadır.
-- **TEST KADANSI (2026-08-29, ölçüm: batarya turları koşu başına med 18 fazla tur / 3.3 dk; tam süit ort 2×/koşu = 6 dk):** her Edit paketinden sonra bataryayı **TEK komutla** koş — `python tests/run_battery.py <fixture> [--kardes <ad>] [--precommit]` (taban + tüm mutasyon kipleri + kardeş + precommit, tek özet); kipleri tek tek ayrı turlarda koşturma. Tam süit `python tests/run_fixture_tests.py` **YALNIZ koşu sonunda BİR kez** (ara adımlarda değil; CI zaten koşar). Batarya tam süitin yerine geçmez.
+- **TEST KADANSI (2026-08-29, ölçüm: batarya turları koşu başına med 18 fazla tur / 3.3 dk; tam süit ort 2×/koşu = 6 dk):** her Edit paketinden sonra bataryayı **TEK komutla** koş — `python tests/run_battery.py <fixture> [--kardes <ad>] [--precommit]` (taban + tüm mutasyon kipleri + kardeş + precommit, tek özet); kipleri tek tek ayrı turlarda koşturma. Geniş dokunuşta `python tests/run_fixture_tests.py --degisen <değişen-dosyalar>`. ⛔ **Tam süiti (`run_fixture_tests.py` argümansız) YEREL KOŞMA — CI koşar** (KOD DONDU → lider draft PR → `core-ci.yml` TAM, derin klon; kanonik iş bölümü `playbook/howto-infra-fix-proseduru.md` **B0** tablosu). Gerekçe: yerel tam süit CI'ın ikizi değildir (sığ klon / POSIX yalnız CI'da görünür) ve aynı sigortayı 3-4× koşturur. CI kırmızı dönerse lider sonucu sana iletir; teşhis için yerel koşum o zaman meşrudur. Batarya tam süitin yerine geçmez — yeri CI'dır.
   ⭐ **Bataryanın ÜÇÜNCÜ işareti `ATLA` (2026-09-04, Q250):** `PASS`/`FAIL` dışında `ATLA` görürsen o satır **ölçülmemiştir** — `core_precommit --all` `git ls-files`ı tarar, **izlenmeyen dosyaları görmez**; satırın yanındaki `N IZLENMEYEN` sayısı sıfırdan büyükse **önce `git add`**, sonra yeniden koş. `ATLA`yı yeşil sayma.
 - **Kapsam-dışı gezinti YOK:** F1 blast-radius İLGİLİ bileşenle sınırlı — "hazır bakmışken" tüm-repo tarama yapma.
 - F0 hedefli-okuma: changelog'un yalnız ilgili bileşen bölümü (+gerekirse o dosyanın git-log'u).

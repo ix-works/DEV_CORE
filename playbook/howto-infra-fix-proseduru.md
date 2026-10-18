@@ -150,7 +150,7 @@ ajan CANLI çekirdeğe asla yazmaz (junction-anında-yayılım riski fiziksel ol
 - **F3 Üç-bağlam testi:** bilinen-bozuk→FAIL + bilinen-temiz→PASS + **görev-DIŞI üçüncü vaka** —
   fixture'lar `tests/fixtures/`e KALICI eklenir (G1 korpusu).
   › **Kadans:** her Edit paketinden sonra `python tests/run_battery.py <fixture> [--kardes …]`
-  (taban + tüm mutasyon kipleri TEK komutta), **tam süit yalnız koşunun SONUNDA 1×**. Batarya
+  (taban + tüm mutasyon kipleri TEK komutta), **tam süit yerelde koşulmaz — CI koşar** (B0 tablosu). Batarya
   bir ARAÇTIR, kapı değil: F3'ün üç bağlam şartını **azaltmaz**, onları koşar
   (reçete: `governance/infra-test-recipes.md` §B0-BATARYA).
 - **F4 Gevşetme-cetveli:** kapsam/eşik DARALIYORSA raporda **⚠GEVŞETME bayrağı** zorunlu +

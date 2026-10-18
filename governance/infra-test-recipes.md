@@ -104,8 +104,9 @@ python tests/run_battery.py <fixture> --precommit                # + core_precom
 python tests/run_battery.py <fixture> --liste                    # yalnız keşif (hiçbir şey koşulmaz)
 ```
 **DÜZEN (kadans):** her **Edit paketinden sonra** `run_battery <dokunduğun fixture>` ·
-`--degisen` seçili süiti komşu korpuslar için · **tam süit (`run_fixture_tests.py`) yalnız
-koşunun SONUNDA 1×** (ara adımlarda değil; CI zaten TAM koşar). ⛔ **Batarya tam süitin
+`--degisen` seçili süiti komşu korpuslar için · **tam süit (`run_fixture_tests.py`) yerelde
+KOŞULMAZ — CI koşar** (KOD DONDU → lider draft PR; iş bölümü `playbook/howto-infra-fix-proseduru.md`
+B0 tablosu; yerel koşum yalnız CI kırmızıyken teşhis için). ⛔ **Batarya tam süitin
 yerine GEÇMEZ ve F3'ü GEVŞETMEZ:** üç-bağlam şartı (bilinen-bozuk→FAIL · bilinen-temiz→PASS ·
 görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçtır, *azaltan* değil.
 - **Kip keşfi üç katmanlı** (`--help`e güvenmez): ① kaynaktaki kip-kümesi literali (ad-bağımsız;
