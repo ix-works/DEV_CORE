@@ -10,6 +10,8 @@ Ne ölçülür (vektör aileleri):
      ölçülmemiş (son ENDMETHOD ↔ ENDCLASS · ENDCLASS sonrası · DEFINITION ↔ IMPLEMENTATION)
      etiketleri + serbest bölgeler (DEFINITION, metot gövdesi, dosya başı) + girintili `"`.
   C  C sınıfı ipucu tarayıcısı aday bulsa da hüküm ELLE · B sınıfı `--sap` yoksa ÖLÇÜLEMEDİ.
+     B4-B7 BE-16: `check_table_field_drop` GERÇEK alt süreçle — measured=false → ÖLÇÜLEMEDİ ·
+     rc 0 → PASS · rc 1 (DROP) → FAIL; SAP yerine 127.0.0.1 sahte ADT ucu (istek listesi = kanıt).
   S  tohumlanmış hata paketi (geçici git deposu, iki commit, 7 bilinen hata + 1 önceden var)
      → diff kipinde 7'si FAIL, önceden var olan WARN, exit 1; `--files` kipinde önceden var FAIL.
   V  `--verify-report`: tam rapor · satır yok · ELLE · ÇELİŞKİ · ÇÜRÜTÜLDÜ (kanıtlı kabul,
@@ -60,6 +62,14 @@ Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile e
   --mutasyon-be50-clear   BE-50 VALUE'da okumadan önce CLEAR/atama dikkate alınmaz
   --mutasyon-be50-kosullu BE-50 IF içindeki CLEAR da sıfırlama sayılır
   --mutasyon-kardes-disk  iki uçlu aralıkta kardeşler yine çalışma ağacından okunur
+  B2/B3/Ö1 turu (bug-gate 2026-10-18; her biri bir düzeltmeyi GERİ alır):
+  --mutasyon-be50-select  BE-50 `SELECT … ENDSELECT` döngüsü blok sayılmaz
+  --mutasyon-be50-select-tumu  her `SELECT` (SINGLE/INTO TABLE/COUNT/SELECT-OPTIONS dahil) blok açar
+  --mutasyon-be50-at      BE-50 `AT NEW|FIRST|LAST|END OF … ENDAT` blok sayılmaz
+  --mutasyon-be50-ic-data BE-50 tarama derinliği DATA'nın konumundan 0 başlar (IF içindeki DATA)
+  --mutasyon-be16-measured  BE-16 alt sürecin `measured=false` beyanı yok sayılır (temiz sanılır)
+  --mutasyon-be16-rc      BE-16 alt sürecin rc ≠ 0'ı yok sayılır
+  --mutasyon-ids-bos      boş `--ids` listesi (`","`) kullanım hatası değil (filtre kalkar)
 CORE-07: her kipin DÜŞMESİ BEKLENEN vektör kümesi `_BEKLENEN_DUSEN`'de PİNLİDİR ve EŞİTLİKLE
 kıyaslanır. Çıkış: 0 taban yeşil · 1 mutasyon BEKLENEN kümeyle düştü · 2 SAPMA · 3
 DOGRULANAMADI (çapa tam 1 kez eşleşmedi ya da mutant derlenmedi — "düştü" SAYILMAZ).
@@ -100,7 +110,9 @@ _GECERLI_KIP = frozenset({"--mutasyon-literal", "--mutasyon-degisen", "--mutasyo
                           "--mutasyon-ana-capasiz", "--mutasyon-friends", "--mutasyon-deferred",
                           "--mutasyon-pragma", "--mutasyon-bom", "--mutasyon-yapi-satiri",
                           "--mutasyon-birlestirme-yok", "--mutasyon-be50-clear", "--mutasyon-be50-kosullu",
-                          "--mutasyon-kardes-disk"})
+                          "--mutasyon-kardes-disk", "--mutasyon-be50-select", "--mutasyon-be50-select-tumu",
+                          "--mutasyon-be50-at", "--mutasyon-be50-ic-data", "--mutasyon-be16-measured",
+                          "--mutasyon-be16-rc", "--mutasyon-ids-bos"})
 
 _MUT = {
     "--mutasyon-literal": (
@@ -194,7 +206,7 @@ _MUT = {
         '            bekleyen = kalan if bekleyen is None else bekleyen + " " + kalan',
         '            deyim(kalan)'),
     "--mutasyon-be50-clear": (
-        '            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad):',
+        '            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad, baslangic):',
         '            if True:'),
     "--mutasyon-be50-kosullu": (
         '            if not acar and derin == 0:',
@@ -202,6 +214,28 @@ _MUT = {
     "--mutasyon-kardes-disk": (
         '        if self.ref:\n            try:',
         '        if False:\n            try:'),
+    # ── B2/B3/Ö1 turu (bug-gate 2026-10-18) ──
+    "--mutasyon-be50-select": (
+        '                or _BE50_AT_GRUP.match(k) or _select_dongu_acar(k))',
+        '                or _BE50_AT_GRUP.match(k))'),
+    "--mutasyon-be50-select-tumu": (
+        'def _select_dongu_acar(kl: str) -> bool:\n',
+        'def _select_dongu_acar(kl: str) -> bool:\n    return bool(re.match(r"^\\s*SELECT\\b", kl, re.I))\n'),
+    "--mutasyon-be50-at": (
+        '                or _BE50_AT_GRUP.match(k) or _select_dongu_acar(k))',
+        '                or _select_dongu_acar(k))'),
+    "--mutasyon-be50-ic-data": (
+        '            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad, baslangic):',
+        '            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad, 0):'),
+    "--mutasyon-be16-measured": (
+        '    if "measured=false" in (r.stdout or ""):',
+        '    if False:'),
+    "--mutasyon-be16-rc": (
+        '    if r.returncode == 0:\n        return []',
+        '    if True:\n        return []'),
+    "--mutasyon-ids-bos": (
+        '    if ids is not None and not ids:',
+        '    if False:'),
 }
 
 # Ölçülerek pinlendi (2026-10-18). Her küme NEDEN o vektörleri içerir:
@@ -227,6 +261,15 @@ _MUT = {
 #  friends T11 · deferred T11 T14 (LOCAL FRIENDS aynı istisna regex'inde) · pragma T10 · bom T12 ·
 #  yapi-satiri T15 S1 S4 (tohum sınıfında BE-47'li bozuk şablon satırı var) · birlestirme-yok T10 T13 ·
 #  be50-clear BE-50/N-clear BE-50/N-atama · be50-kosullu BE-50/P-kosullu · kardes-disk S12
+# B2/B3/Ö1 turu (bug-gate 2026-10-18) — ölçülen GENİŞLEME ve nedeni:
+#  be50-clear   : + BE-50/N-select · N-at · N-icdata (üçü de üst düzey CLEAR'la PASS; mutasyon her
+#                  VALUE'yu uyarır → üç negatif de WARN olur)
+#  be50-kosullu : + BE-50/P-select · P-at · P-icdata (üçü de CLEAR'ı derinlik>0'da tutar; mutasyon
+#                  derinliği yok sayar → CLEAR sıfırlama sayılır, PASS'a düşer)
+# Yeni kipler (her biri tek düzeltmeyi geri alır; düşen küme o düzeltmenin vektörü):
+#  be50-select P-select · be50-select-tumu N-select (vektör döngü AÇMAYAN üç biçimi taşır: SINGLE ·
+#  INTO TABLE · COUNT(*)) · be50-at P-at · be50-ic-data P-icdata · be16-measured B4 ·
+#  be16-rc B6 · ids-bos X8b
 _BEKLENEN_DUSEN = {
     "--mutasyon-literal": {"BE-31/N-lit", "BE-01/N-lit"},
     "--mutasyon-degisen": {"S2", "S8n"},
@@ -257,9 +300,16 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-bom": {"T12"},
     "--mutasyon-yapi-satiri": {"T15", "S1", "S4"},
     "--mutasyon-birlestirme-yok": {"T10", "T13"},
-    "--mutasyon-be50-clear": {"BE-50/N-clear", "BE-50/N-atama"},
-    "--mutasyon-be50-kosullu": {"BE-50/P-kosullu"},
+    "--mutasyon-be50-clear": {"BE-50/N-clear", "BE-50/N-atama", "BE-50/N-select", "BE-50/N-at", "BE-50/N-icdata"},
+    "--mutasyon-be50-kosullu": {"BE-50/P-kosullu", "BE-50/P-select", "BE-50/P-at", "BE-50/P-icdata"},
     "--mutasyon-kardes-disk": {"S12"},
+    "--mutasyon-be50-select": {"BE-50/P-select"},
+    "--mutasyon-be50-select-tumu": {"BE-50/N-select"},
+    "--mutasyon-be50-at": {"BE-50/P-at"},
+    "--mutasyon-be50-ic-data": {"BE-50/P-icdata"},
+    "--mutasyon-be16-measured": {"B4"},
+    "--mutasyon-be16-rc": {"B6"},
+    "--mutasyon-ids-bos": {"X8b"},
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -392,6 +442,26 @@ VEKTORLER = [
     ("BE-50/P-kosullu", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      DATA lv_a TYPE abap_bool VALUE abap_false.\n"
                                        "      IF ls-k = 1.\n        CLEAR lv_a.\n      ENDIF.\n      lv_c = lv_a.\n    ENDLOOP.\n"},
      CLS, {"WARN"}),
+    # B2 (bug-gate 2026-10-18) — üç YANLIŞ-NEGATİF ekseni; hepsi eski kodda PASS veriyordu:
+    # SELECT … ENDSELECT döngüsü (yalnız döngü açan biçim) · AT NEW … ENDAT · DATA bir IF'in içinde
+    ("BE-50/P-select", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      DATA lv_a TYPE i VALUE 0.\n"
+                                      "      SELECT f FROM t WHERE k = @ls-k INTO @DATA(ls_t).\n        CLEAR lv_a.\n"
+                                      "      ENDSELECT.\n      lv_c = lv_a.\n    ENDLOOP.\n"}, CLS, {"WARN"}),
+    ("BE-50/P-at", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      DATA lv_a TYPE i VALUE 0.\n      AT NEW k.\n"
+                                  "        CLEAR lv_a.\n      ENDAT.\n      lv_c = lv_a.\n    ENDLOOP.\n"}, CLS, {"WARN"}),
+    ("BE-50/P-icdata", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      IF ls-k = 1.\n        DATA lv_a TYPE i VALUE 0.\n"
+                                      "        CLEAR lv_a.\n      ENDIF.\n      lv_c = lv_a.\n    ENDLOOP.\n"}, CLS, {"WARN"}),
+    # NEGATİF: döngü AÇMAYAN SELECT'ler (SINGLE · INTO TABLE · toplama-yalnız) derinlik artırmaz;
+    # ENDAT bloğu kapatır; IF'teki DATA'dan sonra ENDIF dışında üst düzey CLEAR → PASS
+    ("BE-50/N-select", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      DATA lv_a TYPE i VALUE 0.\n"
+                                      "      SELECT SINGLE f FROM t WHERE k = @ls-k INTO @DATA(lv_f).\n"
+                                      "      SELECT f FROM t WHERE k = @ls-k INTO TABLE @DATA(lt_f).\n"
+                                      "      SELECT COUNT(*) FROM t WHERE k = @ls-k INTO @DATA(lv_n).\n"
+                                      "      CLEAR lv_a.\n      lv_c = lv_a.\n    ENDLOOP.\n"}, CLS, {"PASS"}),
+    ("BE-50/N-at", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      DATA lv_a TYPE i VALUE 0.\n      AT FIRST.\n"
+                                  "        lv_d = 1.\n      ENDAT.\n      CLEAR lv_a.\n      lv_c = lv_a.\n    ENDLOOP.\n"}, CLS, {"PASS"}),
+    ("BE-50/N-icdata", "BE-50", {CLS: "    LOOP AT lt INTO ls.\n      IF ls-k = 1.\n        DATA lv_a TYPE i VALUE 0.\n"
+                                      "      ENDIF.\n      CLEAR lv_a.\n      lv_c = lv_a.\n    ENDLOOP.\n"}, CLS, {"PASS"}),
     ("BE-51/P", "BE-51", {CLS: "  METHOD m.\n    lv_x = 1.\n    DATA lv_x TYPE i.\n  ENDMETHOD.\n"}, CLS, {"FAIL"}),
     ("BE-51/N", "BE-51", {CLS: "  METHOD m.\n    DATA lv_x TYPE i.\n    lv_x = 1.\n  ENDMETHOD.\n"}, CLS, {"PASS"}),
     ("BE-55/P", "BE-55", {CLS: "    METHODS m IMPORTING it_x TYPE STANDARD TABLE OF i.\n"}, CLS, {"FAIL"}),
@@ -632,6 +702,108 @@ def cb_vektorleri(G, harita: dict, tmp: Path) -> None:
     kontrol("B2 BE-88 `--sap` var, `.conn_adt` yok → ÖLÇÜLEMEDİ (temiz DEĞİL)", s is not None and s.sonuc == "ÖLÇÜLEMEDİ", d)
     s, d = degerlendir(G, harita, tmp / "b3", {CLS: "    lv = 1.\n"}, CLS, "BE-80")
     kontrol("B3 kontrolsüz B maddesi → ELLE", s is not None and s.sonuc == "ELLE", d)
+    be16_vektorleri(G, harita, tmp)
+
+
+# ═══════════════════════════════════════════ B: BE-16 (check_table_field_drop alt süreci) ══
+TABL = "p/tables/zt_fx.tabl.ddl"
+TABL_YEREL = ("@EndUserText.label : 'Fixture tablosu'\ndefine table zt_fx {\n  key client : abap.clnt not null;\n"
+              "  key belge  : zfx_d_belge not null;\n  miktar     : zfx_d_miktar;\n  yeni_alan  : zfx_d_yeni;\n}\n")
+TABL_CANLI_EKLEYICI = ("define table zt_fx {\n  key client : abap.clnt not null;\n  key belge  : zfx_d_belge not null;\n"
+                       "  miktar     : zfx_d_miktar;\n}\n")
+TABL_CANLI_DROP = ("define table zt_fx {\n  key client : abap.clnt not null;\n  key belge  : zfx_d_belge not null;\n"
+                   "  miktar     : zfx_d_miktar;\n  silinen    : zfx_d_silinen;\n}\n")
+# Ortam: alt süreç ADT_* değişkenlerini ortamdan okur (load_dotenv ortamı EZMEZ) → üst ortamda canlı
+# sistem değerleri olsa bile vektör sahte sunucuya gider. BTP/IAS/SAML/vekil anahtarları silinir.
+_BE16_SIL = ("ADT_BTP_SERVICE_KEY_PATH", "ADT_BTP_AUTH_TYPE", "ADT_IAS_TOKEN_URL", "ADT_IAS_CLIENT_ID",
+             "ADT_IAS_CLIENT_SECRET", "ADT_SAML_COOKIES_FILE", "HTTP_PROXY", "HTTPS_PROXY", "http_proxy",
+             "https_proxy", "ALL_PROXY", "all_proxy",
+             # `.conn_adt` arama adayları (sap_adt_lib.find_conn_file): yalnız CLAUDE_PROJECT_DIR (=kum) + cwd (=kum) kalsın
+             "CLAUDE_CWD", "INIT_CWD", "COPILOT_CWD", "PWD")
+
+
+@contextlib.contextmanager
+def _sahte_adt(canli: dict[str, str], cwd: Path):
+    """127.0.0.1'de sahte ADT ucu: yalnız `/sap/bc/adt/ddic/tables/<ad>/source/main` GET'ine `canli[ad]`
+    döner, gerisi 404. Alınan istekler (yöntem, yol, Host) listelenir — CANLI SAP'ye istek gitmediğinin
+    kanıtı bu listedir. cwd geçici dizine alınır: `validate_sap_config` şablon `.conn_adt`'yi cwd'ye yazar."""
+    import http.server
+    import threading
+    istekler: list[tuple[str, str, str]] = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            istekler.append(("GET", self.path, self.headers.get("Host", "")))
+            m = re.match(r"^/sap/bc/adt/ddic/tables/([a-z0-9_]+)/source/main(?:\?|$)", self.path)
+            govde = canli.get(m.group(1)) if m else None
+            if govde is None:
+                self.send_response(404)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            b = govde.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+
+        def log_message(self, *_a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th.start()
+    eski_env, eski_cwd = dict(os.environ), os.getcwd()
+    try:
+        for k in _BE16_SIL:
+            os.environ.pop(k, None)
+        os.environ.update({"ADT_SAP_URL": f"http://127.0.0.1:{srv.server_address[1]}", "ADT_SAP_USER": "fixture",
+                           "ADT_SAP_PASSWORD": "fixture", "ADT_SAP_CLIENT": "100", "ADT_SAP_LANGUAGE": "EN",
+                           "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"})
+        os.chdir(cwd)
+        yield istekler
+    finally:
+        os.chdir(eski_cwd)
+        os.environ.clear()
+        os.environ.update(eski_env)
+        srv.shutdown()
+        srv.server_close()
+
+
+def be16_vektorleri(G, harita: dict, tmp: Path) -> None:
+    """BE-16 kontrolü `check_table_field_drop.py`'yi ALT SÜREÇ olarak koşar; sözleşme: stdout'ta
+    `measured=false` → ÖLÇÜLEMEDİ · rc 0 → PASS · rc ≠ 0 → FAIL (son satır kanıt). Üç yön de gerçek
+    alt süreçle ölçülür; SAP yerine sahte ADT ucu."""
+    # B4: alanlar include'dan gelir → yerel alan çıkarılamaz → measured=false (SAP'ye HİÇ gidilmez)
+    kok = tmp / "b4"
+    kok.mkdir()
+    with _sahte_adt({}, kok) as ist:
+        s, d = degerlendir(G, harita, kok, {TABL: "define table zt_fx {\n  include zfx_s_govde;\n}\n"}, TABL,
+                           "BE-16", sap=True)
+    kontrol("B4 BE-16 yerel alan çıkarılamadı (yalnız include) → measured=false → ÖLÇÜLEMEDİ, sunucuya 0 istek",
+            s is not None and s.sonuc == "ÖLÇÜLEMEDİ" and "measured=false" in s.kanit and not ist, f"{d} istek={ist}")
+    # B5: canlıda olmayan alan eklenmiş (ekleyici ALTER) → rc 0 → PASS
+    kok = tmp / "b5"
+    kok.mkdir()
+    with _sahte_adt({"zt_fx": TABL_CANLI_EKLEYICI}, kok) as ist5:
+        s, d = degerlendir(G, harita, kok, {TABL: TABL_YEREL}, TABL, "BE-16", sap=True)
+    kontrol("B5 BE-16 NEGATİF: ekleyici ALTER (canlı ⊂ yerel) → rc 0 → PASS",
+            s is not None and s.sonuc == "PASS" and len(ist5) == 1, f"{d} istek={ist5}")
+    # B6: canlıdaki `silinen` alanı yerelde yok → DROP → alt süreç rc 1 → FAIL
+    kok = tmp / "b6"
+    kok.mkdir()
+    with _sahte_adt({"zt_fx": TABL_CANLI_DROP}, kok) as ist6:
+        s, d = degerlendir(G, harita, kok, {TABL: TABL_YEREL}, TABL, "BE-16", sap=True)
+    kontrol("B6 BE-16 POZİTİF: canlıdaki alan yerelde yok (DROP) → alt süreç rc 1 → FAIL",
+            s is not None and s.sonuc == "FAIL" and "check_table_field_drop rc=1" in s.kanit and len(ist6) == 1,
+            f"{d} istek={ist6}")
+    hepsi = ist5 + ist6
+    kontrol("B7 BE-16 istekleri YALNIZ sahte uca gitti (127.0.0.1, beklenen tablo yolu) — canlı SAP'ye istek yok",
+            len(hepsi) == 2 and all(h.startswith("127.0.0.1:") and y.startswith("/sap/bc/adt/ddic/tables/zt_fx/source/main")
+                                    for _m, y, h in hepsi)
+            and not any((tmp / b / ".conn_adt").exists() for b in ("b4", "b5", "b6")),
+            f"istekler={hepsi}")
 
 
 # ═══════════════════════════════════════════════════════════ S: tohum paketi ══
@@ -876,6 +1048,11 @@ def x_vektorleri(G, tmp: Path) -> None:
     rc, out, err = kos3(G, ["--repo", str(tmp / "x"), "--files", CLS, "--ids", "BE-10B"])
     kontrol("X8 `--ids BE-10B` (büyük/küçük harf yanlış) → exit 2 bilinmeyen kimlik",
             rc == 2 and "bilinmeyen kimlik: BE-10B" in err, f"rc={rc} {err[:120]!r}")
+    # Ö1 (bug-gate 2026-10-18): verilmiş ama BOŞ liste filtreyi kaldırıp TÜM maddeleri koşturuyordu
+    sonuclar = [kos3(G, ["--repo", str(tmp / "x"), "--files", CLS, "--ids", v]) for v in (",", " , ", "")]
+    kontrol("X8b `--ids \",\"` / `\" , \"` / `\"\"` (boş liste) → exit 2 `boş kimlik listesi` (tablo basılmaz)",
+            all(rc == 2 and "boş kimlik listesi" in err and "kapsama tablosu" not in out for rc, out, err in sonuclar),
+            repr([(rc, err[:80]) for rc, _o, err in sonuclar]))
     rc, out, err = kos3(G, ["--repo", str(tmp / "x"), "--files", CLS, "--ids", "BE-10b", "--kind", "frontend"])
     kontrol("X9 `--ids BE-10b --kind frontend` → exit 2 (kimlik kind kapsamında değil)",
             rc == 2 and "kapsamında değil" in err, f"rc={rc} {err[:120]!r}")

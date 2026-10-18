@@ -39,7 +39,7 @@ dosyalar da girer, bütün satırları "değişmiş" sayılır. İki uçlu aral�
 Exit: 0 = engelleyici FAIL yok · 1 = `seviye: blok` maddede FAIL ya da `--verify-report` eksikliği
 (satır yok / hükümsüz / bağsız FAIL / kanıtsız / ELLE / ÇELİŞKİ — kategori adı stdout'ta) · 2 = kullanım
 hatası (`KULLANIM HATASI: …` stderr: `--files`'ta olmayan dosya, bilinmeyen ya da `--kind` dışı `--ids`
-kimliği …) ya da program KOŞMADI (`[PROGRAM KOŞMADI] <tip>: <mesaj>`: okunamayan map/rapor, beklenmeyen
+kimliği, boş `--ids` listesi (`","`) …) ya da program KOŞMADI (`[PROGRAM KOŞMADI] <tip>: <mesaj>`: okunamayan map/rapor, beklenmeyen
 istisna, `seviye: blok` maddenin kontrolünün ÇÖKMESİ). Blok OLMAYAN maddede kontrol çökerse o madde
 ÖLÇÜLEMEDİ olur ve KAPSAM BEYANI "kontrol çöktü: N" yazar (sessiz PASS yok).
 Ayrı kipler kendi hükmünü aynı kodla verir: `--reach` ulaşmayan · `--harita-denetim` tutarsızlık → 1.
@@ -1071,24 +1071,58 @@ def k_be49(d, c):
     return [F(None, v) for v in mod.validate_classic_include_naming(pkg) if ad in v.upper()]
 
 
-def _be50_okumadan_once_sifirlanir(sonraki: list, ad: str) -> bool:
+_BE50_AT_GRUP = re.compile(r"^AT\s+(?:FIRST|LAST|NEW|END\s+OF)\b", re.I)   # grup seviyesi; AT SELECTION-SCREEN değil
+_BE50_KAPA = re.compile(r"^(ENDLOOP|ENDIF|ENDCASE|ENDDO|ENDWHILE|ENDTRY|ENDAT|ENDSELECT)\b", re.I)
+_BE50_TOPLAMA = re.compile(r"\b(?:COUNT|MAX|MIN|SUM|AVG)\s*\((?:[^()]|\([^()]*\))*\)(?:\s+AS\s+\w+)?", re.I)
+
+
+def _select_dongu_acar(kl: str) -> bool:
+    """Deyim bir `SELECT … ENDSELECT` DÖNGÜSÜ açıyor mu (yalnız açanlar derinlik artırır).
+    Açmayanlar: `SELECT SINGLE` · `INTO|APPENDING [CORRESPONDING FIELDS OF] TABLE` (PACKAGE SIZE'sız) ·
+    yalnız toplama fonksiyonlu liste (`COUNT(*)`/`MAX( f )`…) GROUP BY'sız · `SELECT-OPTIONS` (bildirim).
+    Korpusta ölçüldü (2026-10-18, 871 SELECT deyimi): 19 ENDSELECT'in hepsi SINGLE/TABLE olmayan bir
+    açıcıyla eşleşti; ENDSELECT'siz kalan öteki biçimlerin hepsi toplama-yalnız ya da `SELECT-OPTIONS`.
+    `INTO TABLE … PACKAGE SIZE` döngü açar (ABAP anahtar sözcük belgesi) — korpusta ÖRNEĞİ YOK."""
+    k = " ".join(kl.split())
+    if not re.match(r"^SELECT\b(?!-)", k, re.I) or re.match(r"^SELECT\s+SINGLE\b", k, re.I):
+        return False
+    if re.search(r"\b(?:INTO|APPENDING)\s+(?:CORRESPONDING\s+FIELDS\s+OF\s+)?TABLE\b", k, re.I):
+        return bool(re.search(r"\bPACKAGE\s+SIZE\b", k, re.I))
+    if re.search(r"\bGROUP\s+BY\b", k, re.I):
+        return True
+    m = (re.search(r"\bFIELDS\s+(.*?)(?:\s+(?:WHERE|GROUP|HAVING|ORDER|INTO|APPENDING|UP|UNION)\b|$)", k, re.I)
+         if re.match(r"^SELECT\s+FROM\b", k, re.I)
+         else re.match(r"^SELECT\s+(?:DISTINCT\s+)?(.*?)\s+(?:FROM|INTO)\b", k, re.I))
+    if m and _BE50_TOPLAMA.search(m.group(1)) and not re.sub(r"[\s,]", "", _BE50_TOPLAMA.sub("", m.group(1))):
+        return False
+    return True
+
+
+def _be50_blok_acar(k: str) -> bool:
+    return bool(_LOOP_AC.match(k) or re.match(r"^(IF|CASE|DO|WHILE|TRY)\b", k, re.I)
+                or _BE50_AT_GRUP.match(k) or _select_dongu_acar(k))
+
+
+def _be50_okumadan_once_sifirlanir(sonraki: list, ad: str, baslangic: int = 0) -> bool:
     """`DATA ad … VALUE` sonrası AYNI döngü gövdesinde, `ad` ilk kez OKUNMADAN önce `CLEAR`/`FREE`/`REFRESH`
     (zincirli `CLEAR: a, ad, b` dahil) ya da `ad`'ı okumayan atama (`ad = <ad geçmeyen ifade>`) var mı.
     Var → her tur sıfırlanıyor, uyarı yanlış-pozitif (korpusta ölçüldü 2026-10-18: VALUE'lu bayraklar
     hemen ardından `CLEAR:` ile sıfırlanıyordu). `ad = ad + 1` sıfırlama DEĞİLDİR (önce okur).
-    Sıfırlama YALNIZ gövdenin üst düzeyinde sayılır: IF/CASE/DO/WHILE/TRY/iç LOOP içindeki CLEAR her turda
-    koşmayabilir (yanlış-negatif üretmemek için). Okuma her derinlikte okumadır; tarama bu döngünün
+    Sıfırlama YALNIZ döngü gövdesinin üst düzeyinde sayılır: IF/CASE/DO/WHILE/TRY/iç LOOP/`AT FIRST|LAST|
+    NEW|END OF … ENDAT`/`SELECT … ENDSELECT` içindeki CLEAR her turda koşmayabilir (yanlış-negatif
+    üretmemek için). `baslangic` = DATA ile en içteki LOOP arasında açık blok sayısı: DATA bir IF'in
+    içindeyse aynı IF'teki CLEAR da koşulludur. Okuma her derinlikte okumadır; tarama bu döngünün
     `ENDLOOP`'unda biter."""
     rx = re.compile(rf"(?<![\w\-~>]){re.escape(ad)}\b", re.I)
-    derin = 0
+    derin = baslangic
     for _b, _s, _l, kl in sonraki:
         k = kl.strip()
         if _LOOP_KAPA.match(k) and derin == 0:
             return False
-        if re.match(r"^(ENDLOOP|ENDIF|ENDCASE|ENDDO|ENDWHILE|ENDTRY)\b", k, re.I):
+        if _BE50_KAPA.match(k):
             derin = max(0, derin - 1)
             continue
-        acar = bool(_LOOP_AC.match(k) or re.match(r"^(IF|CASE|DO|WHILE|TRY)\b", k, re.I))
+        acar = _be50_blok_acar(k)
         if rx.search(k):
             if not acar and derin == 0:
                 if re.match(r"^(CLEAR|FREE|REFRESH)\b", k, re.I):
@@ -1126,7 +1160,14 @@ def k_be50(d, c):
             continue
         ad, kalan = m.group(1), m.group(2)
         if re.search(r"\bVALUE\b", kalan, re.I) and not re.search(r"\bVALUE\s*#", kalan, re.I):
-            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad):
+            baslangic = 0           # DATA ile en içteki LOOP arasında açık kalan blok sayısı
+            for _b0, _s0, _l0, kl0 in ifs[yigin[-1] + 1:idx]:
+                k0 = kl0.strip()
+                if _BE50_KAPA.match(k0):
+                    baslangic = max(0, baslangic - 1)
+                elif _be50_blok_acar(k0):
+                    baslangic += 1
+            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad, baslangic):
                 out.append(W(bas, f"LOOP içinde `DATA {ad} … VALUE` — VALUE yalnız bir kez atanır, her turda sıfırlanmaz → CLEAR"))
             continue
         if re.search(r"\bTABLE\b", kalan, re.I):
@@ -2270,7 +2311,11 @@ def calistir(args) -> int:
     repo = Path(args.repo).resolve()
     harita = harita_oku(Path(args.harita) if args.harita else MAP_YOLU)
     onekler = KIND_ONEK[args.kind]
-    ids = {x.strip() for x in args.ids.split(",") if x.strip()} if args.ids else None
+    ids = {x.strip() for x in args.ids.split(",") if x.strip()} if args.ids is not None else None
+    if ids is not None and not ids:
+        # `--ids ","` / `--ids ""` / yalnız boşluk: boş küme filtreyi KALDIRIRDI → tüm maddeler koşardı
+        # (dar kapsam isteyen çağıran sessizce geniş kapsam alır). Verilmiş ama boş = kullanım hatası.
+        raise KullanimHatasi(f"--ids boş kimlik listesi ({args.ids!r}) — en az bir madde kimliği ver ya da --ids'i kaldır")
     if ids:
         # Kimlik BÜYÜK/KÜÇÜK HARFE DUYARLIDIR (BE-10b ≠ BE-10B): bilinmeyen kimlik sessizce "Uygulanan 0"
         # üretirdi — run_review'da yazım hatası BE-10b kapısını exit 0 ile kapatmak demekti.
