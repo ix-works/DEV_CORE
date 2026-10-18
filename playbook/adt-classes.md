@@ -379,9 +379,9 @@ Bu, "hangi satır" bilgisi vermeyen her `400`/save-scan reddinde uygulanabilir; 
 **⚠ YEREL GATE'LERİN HİÇBİRİ YAKALAMIYOR (ölçüldü 2026-07-31):** `run_review.py` **PASS** ·
 abaplint **temiz** → SAP **400**. Yani "reviewer geçti" bu tuzağa karşı hiçbir şey söylemez;
 hata yalnız canlı PUT'ta çıkar.
-> **Ön-kapı adayı (henüz YOK — gate değil):** `ENDMETHOD.`/`IMPLEMENTATION.` ↔ yorum ↔ `METHOD`
-> üçlüsünü push'tan ÖNCE tarayan deterministik bir script yazılabilir. ADR 0019 gate-moratoryumu
-> gereği **önce bu doküman + BE-10b denenir**; yetmediği ölçülürse açık onayla gate'lenir.
+> **Ön-kapı (2026-10-18, kullanıcı onaylı — ADR 0019 şart 5):** doküman + BE-10b dört olayda yetmedi;
+> `scripts/validators/checklist_check.py --ids BE-10b` beş konumu push'tan ÖNCE tarar ve run_review
+> `class_push` bunu BLOCKER koşar (ana sınıf kaynağı; `ccimp`/`ccau` include'ları taranmaz → elle).
 
 📌 İlgili: `claude/memory-seed/feedback_detached-leading-abapdoc-class-push-400.md` (yetim-yorum
 teşhisi) · BE-10b.
