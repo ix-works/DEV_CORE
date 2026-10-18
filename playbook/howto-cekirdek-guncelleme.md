@@ -11,6 +11,11 @@ applies_to: [all]
 > **İlk kurulum değil, GÜNCELLEME prosedürüdür.** İlk kez kurulan bir makine için
 > [`../ONBOARDING.md`](../ONBOARDING.md) ve `/onboard` komutu geçerlidir; bu dosya onun
 > **güncelleme** yoludur ve aynı `team_setup` zincirini kullanır.
+>
+> ⭐ **Tek giriş noktası `/core-guncelle`'dir ve ek talimat gerektirmez** — bu dosyanın tamamını
+> (bu makinedeki diğer projeler dahil, §3e) sonuna kadar yürütür. ⭐ **Adım 2'deki `pull`'dan
+> SONRA bu dosyayı YENİDEN OKU:** pull prosedürün kendisini de güncelleyebilir; kalan adımları
+> eski kopyadan yürütme.
 
 ## 0. Sınırlar
 
@@ -137,7 +142,42 @@ python core/scripts/sync_yasaklar.py             # [SAPMA] ise damgala
 ```
 
 Kök `CLAUDE.md` davranış yüzeyidir ⇒ değişiklik **PR ile** girer (doğrudan main'e değil).
-Birden çok proje aynı makinedeyse: `--root <kök>` hepsini listeler/damgalar.
+Birden çok proje aynı makinedeyse komutu **her proje kökünde ayrı** koş (§3e).
+⛔ `--root <üst klasör>` KULLANMA: tarama çekirdeğin test fixture'larını ve `.wt` kopyalarını da
+"proje" sayar ve damgalama kipinde onlara YAZAR (ölçüldü 2026-10-18: üst klasörde `--check`
+gerçek projelerin yanında 10+ fixture/worktree yolu listeledi).
+
+### 3e. Aynı makinedeki DİĞER projeler — **zorunlu** (2026-10-18)
+
+Makinede tek çekirdek vardır; pull hepsini etkiler. `session_start` her projede yalnız çekirdek
+kural kopyasını (`00-claude-core.md`) kendiliğinden tazeler — `agents`/`settings`/`hook_shim`
+sapması, memory tohumu (her projenin hafıza klasörü ayrıdır) ve yasak damgası **yalnız
+`team_setup`'ın koştuğu projede** hizalanır. Bu çekirdeği kullanan projeleri bul (proje kökünden):
+
+```bash
+python -c "import pathlib;c=pathlib.Path('core').resolve();[print(p) for p in sorted(c.parent.iterdir()) if (p/'project.yaml').is_file() and (p/'core').exists() and (p/'core').resolve()==c]"
+```
+
+Ölçüt: çekirdeğin üst klasöründeki, `project.yaml` taşıyan ve `core` bağı **bu** çekirdeğe
+çözülen klasörler. Başka yerde duran proje bu listeye girmez — varsa kullanıcı söyler.
+⛔ **ONAY — tek soru, tek sefer:** listeyi kullanıcıya göster ve hangilerinde kurulum yapılacağını
+SOR (çoklu seçim: hepsi / bazıları / hiçbiri; AskUserQuestion varsa onunla). Diğer projeler başka
+müşterinin işi olabilir ya da o an başka bir oturumda açık olabilir; `team_setup` oranın ayar
+dosyalarını ve hafızasını değiştirir. Onaysız hiçbir projeye dokunulmaz; seçilmeyen proje §8
+raporunda `atlandı (kullanıcı seçimi)` olarak yazılır. Liste boşsa soru sorulmaz.
+Seçilen her proje `<P>` için (her biri kendi kökünde):
+
+```bash
+(cd "<P>" && CLAUDE_PROJECT_DIR="<P>" python core/scripts/team_setup.py)        # 3b/3c kuralları aynen
+(cd "<P>" && python core/scripts/sync_yasaklar.py --check)                      # 3d
+(cd "<P>" && CLAUDE_PROJECT_DIR="<P>" python core/scripts/ix_doctor.py)         # FAIL yok mu
+```
+
+⚠ Araçlar proje kökünü önce `CLAUDE_PROJECT_DIR`'den okur: değişkeni o projeye ayarlamazsan
+**içinde bulunduğun projeyi** ölçer/kurarsın. ⚠ Projenin çalışma ağacı kirliyse (`git -C "<P>"
+status --short`) `team_setup`'tan önce kullanıcıya söyle — orada yarım iş olabilir. Overlay
+kapısı (3b) her projede ayrı ateşleyebilir; fark raporu o proje için gösterilir. Sonuç §8
+raporunda **proje başına bir satır** olur.
 
 ## 4. Memory tohumunu doğrula
 
@@ -278,8 +318,12 @@ yapılanlar açık oturumda görünmez.
 python core/scripts/parity_probe.py --out .tmp/parity-SONRA.json
 ```
 
-`ONCE` ↔ `SONRA` karşılaştır; kullanıcıya en az şunları ver: `memory.ders_sayisi` ·
+`ONCE` ↔ `SONRA` karşılaştır (`python core/scripts/parity_probe.py --diff .tmp/parity-ONCE.json
+.tmp/parity-SONRA.json`); kullanıcıya en az şunları ver: `memory.ders_sayisi` ·
 `aktif_paket_drift` · kullanıcı-ayarlarında `permissions` doluluğu · `ix_doctor` FAIL sayısı.
+
+**Proje başına tablo (§3e):** proje · `team_setup TAMAM` mı · yasak damgası `[EŞ]` mi ·
+`ix_doctor` FAIL/WARN sayısı · atlandıysa nedeni.
 
 Rapora ayrıca: ① adım 3b'de **ezilen** bir elle-düzeltme oldu mu ② atlanan adım ve **nedeni**
 ③ yol üstünde görülüp **düzeltilmeyen** kusurlar ④ ⛔ ölçemediğin her maddeyi

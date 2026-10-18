@@ -143,6 +143,10 @@
      Denetim temiz değilse `--zorla` olmadan dokunmaz; `git worktree remove` dört vakada da
      `Permission denied` verip **metadata'yı silip dizini bıraktığı** için her adım
      tekrar-denemelidir.
+- **ÇEKİRDEK GÜNCELLEMESİ = `/core-guncelle`:** kullanıcı *"core / DEV_CORE güncelle"* derse ya da
+  `session_start` *"origin'in gerisinde"* derse → `/core-guncelle` (kanonik:
+  [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md)). Yalnız `git pull`
+  YETMEZ — `team_setup`, aynı makinedeki diğer projeler, doğrulama ve oturumu yeniden açma o prosedürdedir.
 - Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU** +
   **auto-memory git'i commit+push** (memory dizini kendi PRIVATE remote'lu git'indedir —
   2026-08-12: makine-lokal tek kopya riski ölçülerek kapatıldı; push'suz memory = yedeksiz)
@@ -548,6 +552,7 @@ analizi + canlı-test → PR.
 | Profil yetenek matrisi | [`profiles/`](profiles/) |
 | Mimari kararlar (ADR) | [`governance/decisions/`](governance/decisions/) |
 | **Yeni proje açılışı** | [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) *(E3'te gözden geçirilir)* |
+| **Çekirdek güncellemesi** (`/core-guncelle`) | [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md) |
 | **Canlı-çekirdek işletimi** (PR/CI/stable/rollback) | [`MAINTENANCE.md`](MAINTENANCE.md) |
 | **Sistem-denetimi runbook'u** (dönemsel derin tur; kullanıcı bu dosyayı vererek ister) | [`playbook/howto-sistem-denetimi.md`](playbook/howto-sistem-denetimi.md) |
 | Agent teams işletim modeli | [`governance/agent-teams-operating-model.md`](governance/agent-teams-operating-model.md) |
