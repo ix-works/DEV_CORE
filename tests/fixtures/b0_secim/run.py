@@ -155,10 +155,10 @@ secim, _ = sec("scripts/sap_adt_lib.py")
 # alanları + iki worklist tüketicisi) → 13'ten 14'e · 2026-09-25 Issue #302: `revizyon_okuma`
 # (`get_object_revisions` + gerçek çağıran list_revisions) → 14'ten 15'e · 2026-10-03:
 # `sql_satir_kirma` (freestyle 255-satır sınırı `sql_satirlarini_kir`) → 15'ten 16'ya ·
-# 2026-10-12 dış repo turu Part A: `kilit_birakma_durustlugu` + `istek_sahibi_metni` + `transport_yaklasim_sirasi` + `fugr_faz2_ioc_sondasi` → 16'dan 20'ye · aynı tur ikinci dalga: `ad_kabul_tam_dize` + `hata_sebebi_ve_maskeleme` + `checkrun_sozdizimi` + `oturum_izi_ve_ddl_accept` → 20'den 24'e) HARİTA ile BU SATIR birlikte güncellenir. Sayıyı
+# 2026-10-12 dış repo turu Part A: `kilit_birakma_durustlugu` + `istek_sahibi_metni` + `transport_yaklasim_sirasi` + `fugr_faz2_ioc_sondasi` → 16'dan 20'ye · aynı tur ikinci dalga: `ad_kabul_tam_dize` + `hata_sebebi_ve_maskeleme` + `checkrun_sozdizimi` + `oturum_izi_ve_ddl_accept` → 20'den 24'e · 2026-10-18 Issue #325: `classrun_tek_post` (`tek_post_onekini_bagla`) → 24'ten 25'e) HARİTA ile BU SATIR birlikte güncellenir. Sayıyı
 # gevşetmek (`>=`) çapayı öldürür — sessiz daraltma tam olarak burada görünür.
-kontrol("P3 çok-tüketicili kaynak → 24 korpusun hepsi",
-        secim is not None and len(secim) == 24
+kontrol("P3 çok-tüketicili kaynak → 25 korpusun hepsi",
+        secim is not None and len(secim) == 25
         and {"O:lock_modification_support", "O:conn_cift_anahtar",
              "O:retry_500_govde", "O:transport_gorev_istek_cevrimi",
              "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi",
@@ -169,7 +169,8 @@ kontrol("P3 çok-tüketicili kaynak → 24 korpusun hepsi",
              "O:kilit_birakma_durustlugu", "O:istek_sahibi_metni",
              "O:transport_yaklasim_sirasi", "O:fugr_faz2_ioc_sondasi",
              "O:ad_kabul_tam_dize", "O:hata_sebebi_ve_maskeleme",
-             "O:checkrun_sozdizimi", "O:oturum_izi_ve_ddl_accept"} <= secim,
+             "O:checkrun_sozdizimi", "O:oturum_izi_ve_ddl_accept",
+             "O:classrun_tek_post"} <= secim,
         f"alınan={sorted(secim) if secim else secim}")
 
 # P4: mutlak yol + ters-bölü (Windows'ta ajanın vereceği gerçek biçim) aynı sonucu verir.

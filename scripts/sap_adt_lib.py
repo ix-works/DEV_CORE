@@ -1622,6 +1622,51 @@ class SAPADTClient:
             sess.hooks['response'].append(_oturum_izi_kancasi(self._oturum_nesli))
         return sess
 
+    def tek_post_onekini_bagla(self, onek: str) -> None:
+        """`onek` ile başlayan istekleri TEK-POST adapter'ına bağla (yalnız bağlantı kurulamazsa tekrar).
+
+        NİÇİN (DEV_CORE Issue #325, 2026-10-18 ölçümü): `_build_session`'ın oturum geneli
+        Retry'ı POST dahil 429/502/503/504'te **ve okuma zaman aşımında** isteği yeniden
+        gönderir. Yan etkili bir çağrıda (ör. mail gönderen classrun) bu, işi birden çok kez
+        koşturur: sahte sunucuda 502/503/504/okuma zaman aşımı → sunucuya **4 POST** ulaştı.
+        Oturum geneli listeye DOKUNULMAZ (GET/PUT çağrıları geçici hatada onu istiyor); yan
+        etkili uç kendi önekini buraya bağlar.
+
+        Tekrar YALNIZ urllib3'ün "sunucu isteği ALMADI" sınıfında yapılır
+        (`Retry._is_connection_error` = `ConnectTimeoutError` ve alt sınıfı
+        `NewConnectionError`). Okuma hatası (`read=False` → özgün istisna çağırana gider),
+        durum kodu (`status_forcelist` boş, `Retry-After` dikkate alınmaz) ve diğer hatalar
+        (`other=0`) tekrar ETTİRMEZ. ⛔ `allowed_methods`'u boş küme yapma: urllib3 boş kümeyi
+        "her metot" sayar.
+
+        İdempotent: önek zaten bu tür bir adapter'a bağlıysa dokunmaz. `new_session()` yeni
+        bir oturum kurar ⇒ çağıran, reset sonrasında bu metodu YENİDEN çağırmalıdır.
+        """
+        sess = self.session
+        if getattr(sess.get_adapter(onek), '_tek_post', False):
+            return
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry as _Retry
+
+        _adapter = HTTPAdapter(
+            pool_connections=1,
+            pool_maxsize=2,
+            max_retries=_Retry(
+                total=3,
+                connect=3,
+                read=False,
+                status=0,
+                other=0,
+                redirect=0,
+                status_forcelist=(),
+                respect_retry_after_header=False,
+                raise_on_status=False,
+                backoff_factor=0.3,
+            ),
+        )
+        _adapter._tek_post = True
+        sess.mount(onek, _adapter)
+
     def new_session(self) -> None:
         """HTTP oturumunu SIFIRLA → yeni cookie kavanozu = **yeni ABAP oturumu**.
 
