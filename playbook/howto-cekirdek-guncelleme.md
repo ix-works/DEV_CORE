@@ -96,8 +96,14 @@ kurulumu + npm CLI'ler → **memory tohumu** (`seed_memory.py`, merge-safe) → 
   core/claude/settings.template.json .claude/settings.json` ile elle birleştir. Satırın
   sonundaki `şablon kıyası (…)` özeti neye BAKILMADIĞINI da yazar.
 - **CORE-INDEX:** içerik ve damgadaki `core-commit` aynıysa dosya yeniden yazılmaz
-  (`[ OK ] değişmedi`); core-commit değiştiyse yazılır — o fark PATTERN #28 ⑤'e göre
-  değerlendirilir.
+  (`[ OK ] değişmedi`); core-commit değiştiyse yazılır. Güncelleme turunda core-commit **her
+  zaman** değişir ⇒ dosya yazılır ve **proje PR'ıyla commit edilir — fark yalnız damga satırı
+  olsa bile** (PATTERN #28 ⑤). Gerekçe: proje CI'ındaki `build_core_index --ci-check` tazeliği
+  ancak damgadaki core-commit klonlanan `main` HEAD'ine eşitken ölçer, değilse C-IDX-01
+  `SKIPPED` kalır. Commit edilmeyen damga ayrıca proje ağacını kirli bırakır: sonraki turda §2
+  "kirli → DUR" ve `ix_doctor` "çalışma ağacı kirli" uyarısı bundan doğar (ölçüldü 2026-10-18:
+  aynı makinede üç projede önceki turun indeksi commit'siz kalmıştı). İstisna: core `main`'de
+  değilken üretilen indeks commit edilmez (PATTERN #28 ①–④).
 
 ### 3b. Overlay ezme kapısı (T2.5) — **koşullu**
 
@@ -194,6 +200,10 @@ Seçilen her proje `<P>` için (her biri kendi kökünde):
 status --short`) `team_setup`'tan önce kullanıcıya söyle — orada yarım iş olabilir. Overlay
 kapısı (3b) her projede ayrı ateşleyebilir; fark raporu o proje için gösterilir. Sonuç §8
 raporunda **proje başına bir satır** olur.
+`team_setup` o projenin `governance/CORE-INDEX.md`'sini yazdıysa o da **o projenin PR'ıyla**
+commit edilir (§3'teki CORE-INDEX maddesi). Bunu onay sorusunun içinde söyle — tek soru,
+kurulumla birlikte bu commit'i de kapsar. Projede commit yapılamıyorsa (yetki yok, dal
+korumalı, kullanıcı istemedi) §8 satırına `CORE-INDEX commit edilmedi: <sebep>` yaz.
 
 ## 4. Memory tohumunu doğrula
 
@@ -358,7 +368,8 @@ python core/scripts/parity_probe.py --out .tmp/parity-SONRA.json
 `aktif_paket_drift` · kullanıcı-ayarlarında `permissions` doluluğu · `ix_doctor` FAIL sayısı.
 
 **Proje başına tablo (§3e):** proje · `team_setup TAMAM` mı · yasak damgası `[EŞ]` mi ·
-`ix_doctor` FAIL/WARN sayısı ve §6a sınıflarına dağılımı · atlandıysa nedeni.
+`ix_doctor` FAIL/WARN sayısı ve §6a sınıflarına dağılımı · CORE-INDEX commit'i (PR no ya da
+`commit edilmedi: <sebep>`) · atlandıysa nedeni.
 
 Rapora ayrıca: ① adım 3b'de **ezilen** bir elle-düzeltme oldu mu ② atlanan adım ve **nedeni**
 ③ yol üstünde görülüp **düzeltilmeyen** kusurlar ④ ⛔ ölçemediğin her maddeyi

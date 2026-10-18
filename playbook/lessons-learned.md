@@ -675,7 +675,12 @@ Forward progress doğal refleks, ama **verification refleksini geliştirmek** si
 - **DOĞRU SIRA:** ① `git -C <CORE> branch --show-current` — beklediğin dal mı? ② yeniden üret,
   **farkı OKU**; sayı düştüyse **DUR** ③ **hangi dosya** düştü, **neden** yok — ölç
   ④ indeks **paylaşılan gerçeği** temsil eden daldan üretilir (`main`), kişisel PR dalından değil
-  ⑤ fark yalnız `uretim:`/`core-commit:` yorum satırıysa **commit etme** (tazelik kıyasında yok sayılır).
+  ⑤ fark yalnız damga satırıysa: `core-commit:` **değiştiyse** (core `main`'de, çekirdek güncellemesi)
+  **commit ET** — proje CI'ındaki `--ci-check` tazeliği ancak damga = klonlanan `main` HEAD iken ölçer,
+  commit'siz damga C-IDX-01'i `SKIPPED` bırakır ve ağacı kirli tutar (sonraki güncellemede §2 "kirli → DUR").
+  `core-commit:` aynı, yalnız `uretim:` zamanı farklıysa fark oluşmaz (F12c: dosya yeniden yazılmaz).
+  *(2026-10-18 düzeltmesi: eski metin "commit etme" diyordu — F12c `core-commit`'in CI girdisi olduğunu
+  ölçmüştü ama bu madde güncellenmemişti; aynı makinede üç projede indeks commit'siz kaldı.)*
 - **Meşru düşüş de olur:** doküman gerçekten merge edilmemiş bir daldaysa, `main`'e göre üretilen
   indeks **doğruyu** söyler — ajan o dokümanı fiilen bulamaz. O hâlde düşüşü **gerekçesiyle** commit'le.
 - Aynı sınıf `_worktrees/` için de geçerli: hangi çalışma ağacının junction'a bağlı olduğunu

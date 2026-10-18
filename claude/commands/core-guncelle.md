@@ -21,7 +21,8 @@ değil, yürütme sırasıdır; çakışmada **howto kazanır** (tek kaynak ilke
 5. **Diğer projeler (§3e):** bu çekirdeği kullanan projeleri bul, listeyi göster ve **tek soruyla
    onay al** (hepsi / bazıları / hiçbiri) — bu akıştaki tek beklenen soru budur. Seçilen her projede
    proje reposunu çek (§2 kuralı) + `team_setup` + damga kontrolü + `ix_doctor` (her biri KENDİ kökünde, `CLAUDE_PROJECT_DIR` o projeye
-   ayarlı); seçilmeyen proje raporda `atlandı (kullanıcı seçimi)`.
+   ayarlı); `team_setup`'ın yazdığı CORE-INDEX o projenin PR'ıyla commit edilir (soru bunu da söyler);
+   seçilmeyen proje raporda `atlandı (kullanıcı seçimi)`.
 6. **Makine-lokal yüzeyler (§5):** kullanıcı-düzeyi izin tabanı (elle birleştir) · `gh` · git global taban.
 7. **Doğrula (§6):** `run_all_validators` + `ix_doctor` — FAIL yok. `ix_doctor` hiçbir şeyi
    kendisi düzeltmez: her FAIL/WARN satırını **§6a**'ya göre sınıfla (bu adım diğer projelerin
