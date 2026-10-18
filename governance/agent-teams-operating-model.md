@@ -273,6 +273,12 @@ frontmatter'ında/spawn-parametresinde BEYAN edilir; hook/guard ile HARD-enforce
 kaliteyi sessizce düşürür, ihtiyaç anında override edilemez). İhlal sinyali değil,
 tercih sinyalidir.
 
+**Ajan tanımı frontmatter'ı GEÇERLİ YAML olmalı (ÖLÇÜLDÜ 2026-10-18):** tırnaksız `description:`
+değerinde `: ` (iki nokta + boşluk) geçmez — gerekiyorsa ` — ` yaz ya da değeri tırnakla. Claude Code
+geçersiz frontmatter'ı dosya LF iken tolere ediyor, **CRLF iken ajanı hata vermeden listeden düşürüyor**;
+Windows checkout'u çalışma kopyasını CRLF yapar. Doğrulama: frontmatter'ı `yaml.safe_load` ile ayrıştır
++ taze oturumda Agent aracı listesini oku (`infra-changelog` aynı tarihli kayıt).
+
 **Docs-expert rol değerlendirmesi (D34g):** FS/TS/KD üretimi bugün feature-expert +
 bug-expert(doc-checklist) hattında. Ayrı bir docs-expert rolü ANCAK şu tetikle açılır:
 bir sprint içinde ≥3 bağımsız doküman-turu VE doc-bug-gate'te tekrar-eden format
