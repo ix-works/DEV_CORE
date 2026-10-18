@@ -81,13 +81,20 @@ değiştirdiğinde bu bir **davranış değişikliğidir** ve kod gibi test edil
 (2026-10-18 doğrulama turu): kural yazanın **okuma yolunda değildi** · yalnız hafızadaydı · iki yerde
 **çelişiyordu** (ör. aynı sınır iki dokümanda farklı sayı) · koşulsuz yazıldığı için yanlış bağlama
 uygulandı. Kanonik metin: `standards/13-kural-yazim-standardi.md` — **yazmadan önce oku.** Özet:
-- **Dört alan:** NE (yapılacak/yapılmayacak, tek anlamlı) · NEDEN (ölçülmüş vaka ya da mekanizma) ·
+- **Dört alan:** NE (yapılacak/yapılmayacak, tek anlamlı) · NEDEN (mekanizma + ölçülmüş vaka) ·
   NE ZAMAN (tetikleyen eylem — "her zaman" değil) · NEREDE (kanonik ev TEK; öbür kanalda ID'li tek cümle).
-- **Üç test, raporda ayrı satır:** ① **netlik** — kuralı hiç görmemiş taze bir okur, bir istisna vakası
-  dahil senaryolarda doğru kararı veriyor mu (lider ayrı ajanla koşar; sen senaryoları yazarsın)
-  ② **ulaşım** — kuralı uygulaması gereken ajanın tanımı / yüklenen kural dosyası ona götürüyor mu
-  (`checklist_check.py --reach`) ③ **çelişki** — aynı konu çekirdekte başka yerde farklı yazılı mı
-  (`rg` ile ara; bulursan tek eve indir, ikisini birden yaşatma).
+- **Üç test, raporda ayrı satır:**
+  ① **Netlik:** kuralı hiç görmemiş taze bir okur, bir istisna vakası dahil senaryolarda doğru kararı
+  veriyor mu? Taze okuru lider koşar. Sen her kural için 2-3 senaryo ve **beklenen cevabı testten ÖNCE**
+  yazarsın; beklenen cevap okura verilmez. Lider sonucu `NETLİK: <ID> · S1 UYUŞTU|AYRIŞTI …` satırıyla
+  PR'a kaydeder.
+  ② **Ulaşım:** kuralı uygulaması gereken ajanın tanımı ya da yüklenen kural dosyası ona götürüyor mu?
+  Checklist maddesi için `checklist_check.py --reach`. Map dışındaki kuralda (rules / standards /
+  `CLAUDE.core`) yükleme zincirini `rg` ile göster: hangi dosya her oturum ya da tetikle yükleniyor,
+  oradan bu kurala atıf var mı.
+  ③ **Çelişki:** aynı konu çekirdekte başka yerde farklı yazılı mı? `rg` ile eşanlamlılar ve TR harf
+  varyantlarıyla ara (ör. "tam süit" + "tam korpus" + "tam koşum"). Bulursan tek eve indir, ikisini
+  birden yaşatma; tarama komutunu ve çıktısını rapora yaz.
 - Ölçülmediğini **"ÖLÇÜLMEDİ"** diye kuralın içine yaz; kanıtın kapsamını genişletme.
 
 ## ZORUNLU BEŞLİ+F0 (her fix-seansı; raporda ayrı başlıklarla)

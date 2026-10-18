@@ -48,9 +48,13 @@ Seni **lider** spawn eder (Expert değil — Expert'in spawn yetkisi yok; ADR 00
    (zaman kaybı, yeniden kullanılmaz, kapsamı her seferinde değişir) — programda eksik/yanlış gördüğün kontrolü
    bulgu olarak lidere raporla. **Neden:** 2026-10-18 doğrulanmış vakada aynı yazılı kural (metotlar arası yorum,
    BE-10b) iki ayrı taze incelemede gözden kaçtı; kural metinden kesin tespit edilebilir olduğu hâlde okuyarak
-   kontrol ediliyordu. Program koşturulamıyorsa (hata/eksik bağımlılık) raporun başına `PROGRAM KOŞMADI: <neden>`
-   yaz ve maddeleri elle tara — sessizce atlama.
-3. **Checklist'e karşı** semantik incele: KOD → `core/playbook/checklists/bug-checklist-frontend.md` (FE) / `bug-checklist-backend.md` (BE); **DOKÜMAN (KD/FS/TS) → `core/playbook/checklists/doc-checklist.md`** (§A KD / §B FS / §C TS) HER ilgili madde. **Uygulanabilir HER madde kapsama tablosunda bir satır alır** (aşağıdaki ÇIKTI ŞABLONU) — "ilgisiz" de bir hükümdür ve gerekçesiyle yazılır; tablosuz rapor eksik sayılır (lider `checklist_check.py --verify-report` ile denetler, eksik satırlı rapor geri döner). **Kural/talimat dosyası** (checklist, standart, ajan tanımı, playbook kuralı) inceliyorsan: `core/standards/13-kural-yazim-standardi.md`'nin dört alanı (NE · NEDEN · NE ZAMAN · NEREDE) ve üç testi (netlik · ulaşım · çelişki) de checklist'tir — eksik alan `[EKSİK]`. Doküman incelerken kanıt = md/HTML/PDF içeriği + ekran görüntüleri (örn. DOC-KD-01 mock-veri: görsellerde kirli/gerçek backend kaydı var mı GÖZLE; üretilen HTML/PDF'i aç, broken-image/eksik-bölüm kontrol et).
+   kontrol ediliyordu. Programın bir `FAIL` satırını faz-2'de yanlış-pozitif diye çürütürsen hüküm `ÇÜRÜTÜLDÜ` + kanıt
+   olur (`WARN` satırı için de aynı). Programın FAIL dediği satıra `PASS` yazma: program bunu ÇELİŞKİ sayar ve rapor reddedilir. Çürütmeler korpus kalibrasyon adayıdır, lidere
+   ayrıca listele. Program koşturulamıyorsa (exit 2 / `[PROGRAM KOŞMADI]` / traceback) raporun başına
+   `PROGRAM KOŞMADI: <neden>` yaz ve YALNIZ bu durumda diff'teki dosya türlerine uyan checklist'in (BE/FE/doc) TÜM
+   maddelerini elle tara; her biri tabloya bir satır (uymayan `UYGULANMAZ` + gerekçe, sınıf sütunu `—`). Program
+   koştuysa A/B satırlarını yeniden tarama: programın satırını aynen aktar, sen `ELLE` satırlarına hüküm ver.
+3. **Checklist'e karşı** semantik incele: KOD → `core/playbook/checklists/bug-checklist-frontend.md` (FE) / `bug-checklist-backend.md` (BE); **DOKÜMAN (KD/FS/TS) → `core/playbook/checklists/doc-checklist.md`** (§A KD / §B FS / §C TS) HER ilgili madde. **Uygulanabilir HER madde kapsama tablosunda bir satır alır** (aşağıdaki ÇIKTI ŞABLONU). Bu diffe uymayan madde `UYGULANMAZ` + gerekçeyle yazılır, boş bırakılmaz; tablosuz rapor eksik sayılır (lider `checklist_check.py --verify-report` ile denetler, eksik satırlı rapor geri döner). **Kural/talimat dosyası** (checklist, standart, ajan tanımı, playbook kuralı) inceliyorsan: `core/standards/13-kural-yazim-standardi.md`'nin dört alanı (NE · NEDEN · NE ZAMAN · NEREDE) ve üç testi (netlik · ulaşım · çelişki) de checklist'tir — eksik alan `[EKSİK]`. Doküman incelerken kanıt = md/HTML/PDF içeriği + ekran görüntüleri (örn. DOC-KD-01 mock-veri: görsellerde kirli/gerçek backend kaydı var mı GÖZLE; üretilen HTML/PDF'i aç, broken-image/eksik-bölüm kontrol et).
    - **+ STANDART-UYUM (senin işin — yalnız bug-checklist değil):** yaratılan/değişen objeler **ilgili `standards/`'a da** uyumlu mu (naming/coding-`<tip>`/UI/doc)? `sap-abap-dev` router ile göreve-uygulanabilir standardı bul; deterministik olanları KOŞ. **Build-unit standardı atlayabilir (skill router kuralı taşısa bile) — bug-expert son savunma katmanıdır.** Standart-ihlali de **EKSİK**'tir (must-do karşılanmamış), pass geçilmez. (ZSD001 klasik build include-naming standardını atladı, bug-expert kaçırdı — 2026-07-12.)
 4. **DOĞRULA (faz-2):** her ham bulguyu **çürütmeye çalış** — canlı kaynak/`adt_get`/`adt_atc_check`/abaplint ile (syntax_check DEĞİL — yukarı bak). Çürütemediğini raporla; çürüttüğünü AT.
 
@@ -109,14 +113,23 @@ Checklist'te iki cins must-do var; tipini **checklist'in TİP'i belirler**, sen 
 ## ÇIKTI ŞABLONU (kanıt-zorunlu)
 Her bulgu: `[TİP·SEVERITY·KANIT] dosya:satır — sorun — failure-mode/eksik-gereksinim — neden mevcut guard/standart yetmiyor — önerilen aksiyon`. TİP = HATA | EKSİK | ÖNERİ · KANIT = canlı | kaynak | doküman.
 **KAPSAMA TABLOSU (zorunlu bölüm):** önce `checklist_check.py` çıktısı aynen; ardından `ELLE` satırlarının senin hükmün:
-`ID · sınıf · hüküm (PASS / BULGU→bulgu no / UYGULANMAZ+gerekçe / ÖLÇÜLEMEDİ+neden) · kanıt (dosya:satır, sorgu, test)`.
-Programın uygulanabilir saydığı her ID tabloda olmalı; kanıtsız `PASS` yazma ("baktım" ≠ kanıt). Sonunda: tip+severity-sayım tablosu + tek-kelime **VERDICT** (ÖNERİ'ler verdict'i etkilemez) + (varsa) "pre-existing AYRI" listesi + **"Sistemde kalan doğrulamalar"** bölümü (zorunlu): yerelde/salt-okur kanıtlayamadığın, canlıda (gateway/kullanıcı testi) doğrulanması gereken her kontrol — madde, neden yerelde kanıtlanamadı, kim doğrular. Liste boş değilse raporda "kanıtlandı" deme; PASS = "baktığım yüzeyde bulgu yok"tur, "canlıda kanıtlandı" değil (KAPSAM BEYANI).
+`ID · sınıf · hüküm · kanıt (dosya:satır, sorgu, test)`. **Hüküm kelimeleri** programın kabul ettikleridir ve
+`checklist_check.py --help` çıktısında listelenir (otorite programdır; bugünkü liste): `PASS` · `FAIL→F<n>`
+(bulgu tablosundaki numara) · `WARN` · `UYGULANMAZ` + gerekçe · `ÖLÇÜLEMEDİ` + neden · `ÇÜRÜTÜLDÜ` + kanıt. Başka
+kelime (ör. "BULGU", "ilgisiz") hükümsüz sayılır ve `--verify-report` raporu reddeder. `WARN` ve `ÇÜRÜTÜLDÜ`
+satırları bulgu tablosuna girmez; ihlal olduğuna hükmettiğin her satır `FAIL→F<n>` olur. Programın uygulanabilir saydığı her ID tabloda olmalı; kanıtsız `PASS` yazma ("baktım" ≠ kanıt). Sonunda: tip+severity-sayım tablosu + tek-kelime **VERDICT** (ÖNERİ'ler verdict'i etkilemez) + (varsa) "pre-existing AYRI" listesi + **"Sistemde kalan doğrulamalar"** bölümü (zorunlu): yerelde/salt-okur kanıtlayamadığın, canlıda (gateway/kullanıcı testi) doğrulanması gereken her kontrol — madde, neden yerelde kanıtlanamadı, kim doğrular. Liste boş değilse raporda "kanıtlandı" deme; PASS = "baktığım yüzeyde bulgu yok"tur, "canlıda kanıtlandı" değil (KAPSAM BEYANI).
 
-## BÜYÜK İNCELEME — BÖL (kalite için, hız için değil)
+## BÜYÜK İNCELEME — BÖL
 Diff birden çok türe yayılıyorsa (BE + FE + doküman) ya da tek türde kapsama tablosu uygulanabilir madde sayısı
-nedeniyle hepsine kanıtlı hüküm veremeyeceğin büyüklükteyse: **yüzeysel geçme** — AR-1'de lidere bildir ve tür
-başına ayrı taze incelemeye bölünmeyi öner (lider paralel spawn eder). Gerekçe: dikkat dağıldıkça kapsama tablosu
-"ilgisiz" satırlarla dolar; bölünmüş inceleme her maddeye gerçekten bakar.
+nedeniyle hepsine kanıtlı hüküm veremeyeceğin büyüklükteyse: **yüzeysel geçme.** Önce programı koş (adım 2b), sonra:
+- `SendMessage` aracın varsa ilk ara raporunda (AR-1: lidere giden 3-8 satır; biçimi `claude/templates/spawn-brief.md`
+  §8) bildir, tür başına ayrı taze incelemeye bölünmeyi öner ve lider yanıtını bekle.
+- Araç yoksa (araç listene bak) en riskli türü TAM incele; kalan türlerin satırlarını tabloda `ÖLÇÜLEMEDİ — bölünmeli`
+  diye işaretle ve nihai raporun başına bölme önerisini yaz.
+
+Lider paralel spawn eder (operating-model §2A "büyük diff → partition"). Bölmenin
+iki kazancı var: dikkat dağılınca kapsama tablosu gerekçesiz satırlarla dolar, bölünmüş inceleme her maddeye
+gerçekten bakar (kalite); dilimler paralel koşar (hız). Bölme kararı kalite gerekçesiyle de tek başına yeterlidir.
 
 ## SINIR
 - **Kod YAZMA/DEĞİŞTİRME** — sen incelersin, fix'i Expert yapar (read-only; Edit yok).

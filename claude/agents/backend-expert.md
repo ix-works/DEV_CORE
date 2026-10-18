@@ -82,30 +82,48 @@ Exit **0** = temiz **veya SKIP** · **1** = en az 1 bulgu. **Temiz değilse tesl
 ## ✍️ YAZIM ANI KURALLARI — kodu YAZARKEN uygula, incelemeye bırakma
 Bu maddeler 2026-10-18 doğrulama turunda **yazan ajanın okuma yolunda olmadığı için** tekrar eden
 kaçaklardır (kural checklist'te yazılıydı, yazarken okunmadı → inceleme kapısı yakaladı → yeniden iş).
-Kanonik metin + neden + istisnalar `core/playbook/checklists/bug-checklist-backend.md`'deki satırdadır
-(tek ev — std 13); burada yalnız **tetik + yapılacak** durur. Satırı tetiklenen her maddede AÇ ve oku.
-- **BE-10b** — `.clas.abap` IMPLEMENTATION'da yorumu metot DIŞINA koyma (metot silerken üstündeki not
-  dahil); not `METHOD x.` satırının altına. Push 400 `OO_SOURCE_BASED-012` verir, satır numarası vermez.
-- **BE-80** — satır tipi NUMC olan tabloya `VALUE #( ( '…' ) )` ya da NUMC parametreye literal/`space`
-  geçerken `CONV #( … )` yaz — komşu metot doğru desende olsa bile, her yeni metotta.
-- **BE-85** — `WITH EMPTY KEY` tabloda `SORT` / `DELETE ADJACENT DUPLICATES` ölçütü AÇIK (`BY …` /
-  `COMPARING …` / `table_line`).
-- **BE-86** — CHAR alanını `|{ f ALPHA = OUT }|` ile dizeye çevirip birleştirir/karşılaştırırsan
-  `condense( )` içine al (sonda boşluk kalır).
-- **BE-87** — `"!` ABAP Doc'u iki noktalı `TYPES:`/`DATA:`/`CONSTANTS:` zincirinin önüne koyma; orada
-  düz `"` yorum.
-- **BE-88** — teslimden önceki SON adım: bu turda değişen her metot/include Pretty Printer çıktısıyla
-  aynı mı (durumsuz `pretty_print`; yalnız değişen birimler — reçete checklist satırında).
+Her satır std 13 §1 biçimindedir: *<eylem> yaparken <kural> — çünkü <mekanizma> (<ID>)*. İstisnalar,
+ölçüm kapsamı ve doğru desen `core/playbook/checklists/bug-checklist-backend.md`'deki satırdadır (tek ev).
+Tetiklenen satırı AÇ ve oku.
+- `.clas.abap` IMPLEMENTATION bölümüne yorum yazarken ya da bir metodu silerken yorumu metotların
+  dışında bırakma: notu ya sil (silinen metodun notuysa) ya da bir metodun `METHOD x.` satırının altına al — çünkü SAP metot dışındaki yorumu bir kod
+  öğesine bağlayamaz ve push satır numarası vermeden 400 `OO_SOURCE_BASED-012` döner (BE-10b).
+- Satır tipi NUMC olan tabloya `VALUE #( ( '…' ) )` ya da NUMC parametreye literal/`space` yazdığın her
+  yerde `CONV #( … )` kullan (komşu metot doğru desende olsa bile) — çünkü uyumsuzluk yalnız
+  aktivasyonda patlar, statik kapıların hepsi geçer (BE-80).
+- `WITH EMPTY KEY` tabloya `SORT` / `DELETE ADJACENT DUPLICATES` yazarken ölçütü açık ver (`BY …` /
+  `COMPARING …` / `table_line`) — çünkü ölçütsüz biçim birincil anahtara dayanır, bu tabloda anahtar
+  boştur ve deyimin fiilî etkisi ölçülmedi (BE-85).
+- CHAR alanını `|{ f ALPHA = OUT }|` ile dizeye çevirip birleştirirken, karşılaştırırken ya da anahtar
+  yaparken `condense( )` içine al — çünkü `ALPHA = OUT` baştaki sıfırları atar ama genişliği korur,
+  sonda boşluk kalır (BE-86).
+- Sınıf/arayüz tanımında `"!` ABAP Doc yazarken onu iki noktalı `TYPES:`/`DATA:`/`CONSTANTS:` zincirinin
+  ya da `BEGIN OF`'un önüne koyma, orada düz `"` kullan — çünkü ATC o konumu "wrong position" (P2) diye
+  işaretler (BE-87).
+- Teslimden önceki son adımda bu turda değişen her metodu/include'u durumsuz `pretty_print` çıktısıyla
+  karşılaştır (`SAPClient().adt_client.pretty_print(None, <kaynak>)` — kilit/PUT yok; yalnız değişen
+  birimler) — çünkü ATC `CI_PRETTY_PRINT` birim başına yalnız ilk farkı
+  bildirir ve sonradan kovalamak ATC + push döngüsüdür (BE-88).
 
 ## 🧪 TESLİM ÖNCESİ ÖZ-DENETİM — ortak kontrol programı (ZORUNLU)
-abaplint'ten SONRA, `BUG_GATE_READY` göndermeden ÖNCE:
+abaplint'ten SONRA, `BUG_GATE_READY` göndermeden ÖNCE. Değişiklik commit'liyse `--diff <aralık>` kullan
+(bug-expert de onu koşar → iki tablo aynı satır için aynı sonucu verir); commit'siz yerel değişiklikte
+`--files <değişen dosyalar>` (bu kipte önceden var olan ihlaller de FAIL sayılır).
 ```
-python core/scripts/validators/checklist_check.py --repo <proje kökü> --files <değişen dosyalar> --kind backend
+python core/scripts/validators/checklist_check.py --repo <proje kökü> --diff <aralık> --kind backend
 ```
-- **Exit 1 = blok/FAIL var → teslim ETME, düzelt.** Exit 2 = program koşamadı → nedenini yaz, maddeleri
-  elle tara; "koşmadı"yı "temiz" diye raporlama.
-- Programın KAPSAMA TABLOSUNU (`ID · sınıf · sonuç · kanıt`) **aynen** teslim mesajına ekle. `ELLE`
-  satırlar bug-expert'in yargısına kalır; sen yine de kendi kodunu o maddelere göre bir kez oku.
+- **Aralık:** dalın `main`'den ayrıldığı noktadan bugüne: `--diff $(git merge-base origin/main HEAD)..HEAD`.
+- **Exit 1** = engelleyici (`seviye: blok`) FAIL var → teslim ETME, düzelt.
+- **Exit 0 temiz demek değildir.** Tablodaki her `FAIL`/`WARN` satırı ya düzeltilir ya da teslim mesajında
+  gerekçelenir. Gerekçe YALNIZ iki durumda geçerlidir: ① program yanılıyor (kanıtla — yanlış-pozitif) ②
+  ihlal senin değişikliğinden önce de vardı (kapsam dışı; düzeltme, "önceden var" diye yaz). Senin
+  yazdığın satırdaki gerçek ihlal — YAZIM ANI maddeleri dahil — düzeltilir, gerekçeyle geçilmez.
+- **Program koşmadı** = exit 2 ya da `[PROGRAM KOŞMADI]` satırı ya da **traceback** (exit kodu ne olursa
+  olsun; tablo basılmadıysa program koşmamıştır). Nedenini yaz, yukarıdaki YAZIM ANI maddelerini ve
+  checklist'in uygulanabilir maddelerini elle tara; "koşmadı"yı "temiz" diye raporlama.
+- Programın KAPSAMA TABLOSUNU (`ID · sınıf · sonuç · kanıt`) **aynen** teslim mesajına ekle. Sonucu `ELLE`
+  olan satır, programın metinden kesin ölçemediği, yargı isteyen maddedir; son hüküm bug-expert'tedir. Sen
+  yine de kendi kodunu o maddelere göre bir kez oku; ihlal bulursan düzelt.
 - Programın kapsadığı bir madde için **kendi tek seferlik betiğini yazma** — program yanlışsa bunu
   bulgu olarak raporla (program düzeltilir, betik çoğalmaz).
 

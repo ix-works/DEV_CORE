@@ -1,6 +1,6 @@
 ---
 name: feedback_paralel-infra-pr-ortak-dosya-rebase-sonrasi-tam-suit
-description: "Paralel infra ajanları aynı core dosyalarına dokunuyorsa: kardeş PR merge olunca tam süit REBASE'Lİ HEAD'de koşar (KOD DONDU → HAZIR-REBASE → lider rebase → ajan süit); reçete/B-numarasını baştan ayır"
+description: "Paralel infra ajanları aynı core dosyalarına dokunuyorsa: kardeş PR merge olunca tam süit REBASE'Lİ HEAD'de koşar (KOD DONDU → HAZIR-REBASE → lider rebase → CI tam süit); reçete/B-numarasını baştan ayır"
 metadata: 
   node_type: memory
   type: feedback
@@ -12,7 +12,7 @@ metadata:
 **Çalışan akış:**
 1. Ajan KOD DONDU + changelog/reçete stage eder, tam süiti **KOŞMAZ**, `HAZIR-REBASE` der ve durur (worktree'de git yazma yok).
 2. Lider commit + `git rebase origin/main` (changelog üst satır çakışması: iki bölüm korunur, en yeni üstte) + push + draft PR.
-3. Ajan tam süiti **rebase'li HEAD**'de koşar; ortak dosya md5'lerinin değiştiğini, diğerlerinin KOD DONDU ile eşit olduğunu raporlar.
+3. Tam süiti **rebase'li HEAD**'de CI koşar (push → draft PR → `core-ci.yml`; yerelde koşulmaz — core `playbook/howto-infra-fix-proseduru.md` B0, 2026-10-03 düzeltmesi). Ajan ortak dosya md5'lerinin değiştiğini, diğerlerinin KOD DONDU ile eşit olduğunu raporlar.
 4. Sıradaki PR, önceki merge olduktan sonra **tek sefer** rebase edilir (erken rebase = aynı çakışmayı iki kez çözmek).
 
 **Reçete numarası:** paralel ajanlar aynı dosyaya `B5x` açar → spawn'da ya da ilk merge'de numara aralığını ajana SÖYLE (bu turda B51/B52/B53 çakışması mesajla önlendi).
