@@ -10,7 +10,7 @@
 python scripts/validators/run_all_validators.py     # CORE modu (CI ile aynı)
 python -m compileall -q scripts mcp_servers
 python scripts/git-hooks/core_precommit.py --all
-python tests/run_fixture_tests.py                   # TAM korpus — sayaca değil SATIRLARA bak
+python tests/run_fixture_tests.py --degisen <dosyalar>   # SEÇİLİ korpus (yerel); TAM korpusu CI koşar — sayaca değil SATIRLARA bak
 python scripts/inspector.py --self-test             # canary    [✓]
 ```
 - ⚠ **`--all` INDEX'i tarar, çalışma ağacını DEĞİL** (`git ls-files` + `git show :<yol>`) →
@@ -24,7 +24,7 @@ python scripts/inspector.py --self-test             # canary    [✓]
   "core bozuk" diye okunur. (Ölçüldü 2026-08-13: proje kökünden `--all` → 25.960 ihlal ·
   core kökünden aynı komut, aynı an → **exit 0**. Ayırt edici: ihlal satırları core'da **var
   olmayan** dosya yollarını gösteriyordu.) Staged-mod (`--all`siz) cwd'den etkilenmez.
-- **Verim:** tam korpus yalnız SON durumda **1×** koşulur; ara adımlarda yalnız dokunduğun fixture.
+- **Verim:** tam korpus **yerelde koşulmaz — CI koşar** (`core-ci.yml`, derin klon; kanonik iş bölümü `playbook/howto-infra-fix-proseduru.md` B0 tablosu). Ara adımlarda yalnız dokunduğun fixture/batarya; geniş dokunuşta `--degisen`. CI kırmızı dönerse yerel tam koşum teşhis için meşrudur.
 - ⭐ **BÖLÜM 4 — KİP KOŞABİLİRLİĞİ (2026-08-29, kayıt Q210):** TAM süit artık her kipli
   koşucunun **İLK** mutasyon kipini de koşar ve yalnız **"çöktü mü / kipi reddetti mi /
   kurulamadan durdu mu"** sorusunu sorar. Kapsam DAR ve bilinçlidir:
@@ -104,8 +104,9 @@ python tests/run_battery.py <fixture> --precommit                # + core_precom
 python tests/run_battery.py <fixture> --liste                    # yalnız keşif (hiçbir şey koşulmaz)
 ```
 **DÜZEN (kadans):** her **Edit paketinden sonra** `run_battery <dokunduğun fixture>` ·
-`--degisen` seçili süiti komşu korpuslar için · **tam süit (`run_fixture_tests.py`) yalnız
-koşunun SONUNDA 1×** (ara adımlarda değil; CI zaten TAM koşar). ⛔ **Batarya tam süitin
+`--degisen` seçili süiti komşu korpuslar için · **tam süit (`run_fixture_tests.py`) yerelde
+KOŞULMAZ — CI koşar** (KOD DONDU → lider draft PR; iş bölümü `playbook/howto-infra-fix-proseduru.md`
+B0 tablosu; yerel koşum yalnız CI kırmızıyken teşhis için). ⛔ **Batarya tam süitin
 yerine GEÇMEZ ve F3'ü GEVŞETMEZ:** üç-bağlam şartı (bilinen-bozuk→FAIL · bilinen-temiz→PASS ·
 görev-DIŞI üçüncü bağlam) aynen durur — batarya onları *koşan* araçtır, *azaltan* değil.
 - **Kip keşfi üç katmanlı** (`--help`e güvenmez): ① kaynaktaki kip-kümesi literali (ad-bağımsız;
@@ -162,7 +163,8 @@ python tests/fixtures/parca_tamlik/run.py                                # korpu
 - ⚠ **ATLA sayısı:** `TOPLAM: … PASS · K ATLA` fixture-İÇİ ölçülmemiş alt senaryolardır
   (`N/M PASS · K ATLA` özet biçiminden; yoksa `[ATLA]`/`[ATLANDI]` satır işaretlerinden —
   o fixture'lar ayrı satırda adıyla basılır). PASS sayısına katılmaz.
-- ⚠ Yerelde TAM süit hâlâ argümansız komuttur; parça modu ara adım aracı DEĞİLDİR
+- ⚠ TAM süitin komutu argümansız `run_fixture_tests.py`'dir ve olağan akışta CI koşar (B0 tablosu);
+  yerel tam koşum yalnız CI kırmızıyken teşhis içindir. Parça modu ara adım aracı DEĞİLDİR
   (ara adım = `--degisen` / batarya).
 
 ## B0b — NEGATİF TEST HARNESS'I (hook'a sentetik payload verirken)

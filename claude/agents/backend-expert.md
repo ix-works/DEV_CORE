@@ -79,12 +79,60 @@ Exit **0** = temiz **veya SKIP** · **1** = en az 1 bulgu. **Temiz değilse tesl
   ilgisiz" deme.
 - abaplint **tamamen yereldir** — SAP'ye bağlanmaz, VPN kopukken de çalışır. Sürüm pinli.
 
+## ✍️ YAZIM ANI KURALLARI — kodu YAZARKEN uygula, incelemeye bırakma
+Bu maddeler 2026-10-18 doğrulama turunda **yazan ajanın okuma yolunda olmadığı için** tekrar eden
+kaçaklardır (kural checklist'te yazılıydı, yazarken okunmadı → inceleme kapısı yakaladı → yeniden iş).
+Her satır std 13 §1 biçimindedir: *<eylem> yaparken <kural> — çünkü <mekanizma> (<ID>)*. İstisnalar,
+ölçüm kapsamı ve doğru desen `core/playbook/checklists/bug-checklist-backend.md`'deki satırdadır (tek ev).
+Tetiklenen satırı AÇ ve oku.
+- `.clas.abap` IMPLEMENTATION bölümüne yorum yazarken ya da bir metodu silerken yorumu metotların
+  dışında bırakma: notu ya sil (silinen metodun notuysa) ya da bir metodun `METHOD x.` satırının altına al — çünkü SAP metot dışındaki yorumu bir kod
+  öğesine bağlayamaz ve push satır numarası vermeden 400 `OO_SOURCE_BASED-012` döner (BE-10b).
+- Satır tipi NUMC olan tabloya `VALUE #( ( '…' ) )` ya da NUMC parametreye literal/`space` yazdığın her
+  yerde `CONV #( … )` kullan (komşu metot doğru desende olsa bile) — çünkü uyumsuzluk yalnız
+  aktivasyonda patlar, statik kapıların hepsi geçer (BE-80).
+- `WITH EMPTY KEY` tabloya `SORT` / `DELETE ADJACENT DUPLICATES` yazarken ölçütü açık ver (`BY …` /
+  `COMPARING …` / `table_line`) — çünkü ölçütsüz biçim birincil anahtara dayanır, bu tabloda anahtar
+  boştur ve deyimin fiilî etkisi ölçülmedi (BE-85).
+- CHAR alanını `|{ f ALPHA = OUT }|` ile dizeye çevirip birleştirirken, karşılaştırırken ya da anahtar
+  yaparken `condense( )` içine al — çünkü `ALPHA = OUT` baştaki sıfırları atar ama genişliği korur,
+  sonda boşluk kalır (BE-86).
+- Sınıf/arayüz tanımında `"!` ABAP Doc yazarken onu iki noktalı `TYPES:`/`DATA:`/`CONSTANTS:` zincirinin
+  ya da `BEGIN OF`'un önüne koyma, orada düz `"` kullan — çünkü ATC o konumu "wrong position" (P2) diye
+  işaretler (BE-87).
+- Teslimden önceki son adımda bu turda değişen her metodu/include'u durumsuz `pretty_print` çıktısıyla
+  karşılaştır (`SAPClient().adt_client.pretty_print(None, <kaynak>)` — kilit/PUT yok; yalnız değişen
+  birimler) — çünkü ATC `CI_PRETTY_PRINT` birim başına yalnız ilk farkı
+  bildirir ve sonradan kovalamak ATC + push döngüsüdür (BE-88).
+
+## 🧪 TESLİM ÖNCESİ ÖZ-DENETİM — ortak kontrol programı (ZORUNLU)
+abaplint'ten SONRA, `BUG_GATE_READY` göndermeden ÖNCE. Değişiklik commit'liyse `--diff <aralık>` kullan
+(bug-expert de onu koşar → iki tablo aynı satır için aynı sonucu verir); commit'siz yerel değişiklikte
+`--files <değişen dosyalar>` (bu kipte önceden var olan ihlaller de FAIL sayılır).
+```
+python core/scripts/validators/checklist_check.py --repo <proje kökü> --diff <aralık> --kind backend
+```
+- **Aralık:** dalın `main`'den ayrıldığı noktadan bugüne: `--diff $(git merge-base origin/main HEAD)..HEAD`.
+- **Exit 1** = engelleyici (`seviye: blok`) FAIL var → teslim ETME, düzelt.
+- **Exit 0 temiz demek değildir.** Tablodaki her `FAIL`/`WARN` satırı ya düzeltilir ya da teslim mesajında
+  gerekçelenir. Gerekçe YALNIZ iki durumda geçerlidir: ① program yanılıyor (kanıtla — yanlış-pozitif) ②
+  ihlal senin değişikliğinden önce de vardı (kapsam dışı; düzeltme, "önceden var" diye yaz). Senin
+  yazdığın satırdaki gerçek ihlal — YAZIM ANI maddeleri dahil — düzeltilir, gerekçeyle geçilmez.
+- **Program koşmadı** = exit 2 ya da `[PROGRAM KOŞMADI]` satırı ya da **traceback** (exit kodu ne olursa
+  olsun; tablo basılmadıysa program koşmamıştır). Nedenini yaz, yukarıdaki YAZIM ANI maddelerini ve
+  checklist'in uygulanabilir maddelerini elle tara; "koşmadı"yı "temiz" diye raporlama.
+- Programın KAPSAMA TABLOSUNU (`ID · sınıf · sonuç · kanıt`) **aynen** teslim mesajına ekle. Sonucu `ELLE`
+  olan satır, programın metinden kesin ölçemediği, yargı isteyen maddedir; son hüküm bug-expert'tedir. Sen
+  yine de kendi kodunu o maddelere göre bir kez oku; ihlal bulursan düzelt.
+- Programın kapsadığı bir madde için **kendi tek seferlik betiğini yazma** — program yanlışsa bunu
+  bulgu olarak raporla (program düzeltilir, betik çoğalmaz).
+
 ## BUG-GATE TESLİMİ (build/tasarım bitince — Model A, lider-aracılı; ADR 0018)
 Substantive iş bitince (CDS/BDEF/behavior/class mantığı; trivial değil), **Bug_Expert'i KENDİN spawn ETME (yetkin yok) ve doğrudan "to=bug-expert" MESAJ ATMA (alıcısız kalır).** Lider'e `BUG_GATE_READY` + yapılandırılmış teslim yolla; lider taze bug-expert spawn edip gate'ler:
 1. **Diff:** `git diff` / `dosya:satır` (yerel kaynak) — ne değişti
 2. **Niyet/spec:** ne yapmalıydı
 3. **Blast-radius:** neye dokunuyor (where-used: çağıran CDS/class/BDEF; released-ref; tablo alan; lock/etag)
-+ kendi self-verify kanıtın (**abaplint** / `adt_atc_check` / `adt_where_used`).
++ kendi self-verify kanıtın (**abaplint** / **`checklist_check.py` kapsama tablosu** / `adt_atc_check` / `adt_where_used`).
 ⛔ `adt_syntax_check` **kullanma** — **senin tool listende YOK** (bilinçli olarak verilmedi) ve
 salt-okunur DEĞİL (yukarı bak). ⚠ Düzeltme 2026-08-01: tool sistemden *kaldırılmadı*, hâlâ CANLI ve
 yalnız **adt-gateway**'e açık; "kaldırıldı" demek yanlış beyandı (bug avı W2, doküman↔gerçeklik ayrışması).

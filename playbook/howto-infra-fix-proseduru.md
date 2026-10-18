@@ -106,7 +106,7 @@ mevcut süitenin içinde bir vektör; ihlali zaten çıktıda görünür).
 yalnız SON durumda 1× koşulur" verim notunu zaten taşıyordu; bu blok onun **kimin-ne-zaman**
 tarafını netleştirir ve aleti (`--degisen`) ekler. Çoğaltma değil, aynı kaydın devamı.
 › ⚠ Bu bir **YER DEĞİŞTİRMEDİR, gevşetme değil**: hiçbir kontrol kaldırılmadı; ara-adım
-mükerrerliği indi, sigorta (lider TAM + CI TAM) yerinde. Ayrıntılı analiz: `infra-changelog`
+mükerrerliği indi, sigorta yerinde (bugünkü iş bölümü: TAM korpusu CI koşar, lider CI `gates` kanıtına bakar — B0 tablosu). Ayrıntılı analiz: `infra-changelog`
 2026-08-13 satırı.
 Süite 12 → 113 vektöre büyüdü: **TAM koşum 169,7 sn** (ölçüm 2026-08-13; sayılar bayatlar —
 kanonik yer `governance/infra-test-recipes.md` §B0-SEÇİM, burada yalnız gerekçe). Eski pratikte
@@ -150,7 +150,7 @@ ajan CANLI çekirdeğe asla yazmaz (junction-anında-yayılım riski fiziksel ol
 - **F3 Üç-bağlam testi:** bilinen-bozuk→FAIL + bilinen-temiz→PASS + **görev-DIŞI üçüncü vaka** —
   fixture'lar `tests/fixtures/`e KALICI eklenir (G1 korpusu).
   › **Kadans:** her Edit paketinden sonra `python tests/run_battery.py <fixture> [--kardes …]`
-  (taban + tüm mutasyon kipleri TEK komutta), **tam süit yalnız koşunun SONUNDA 1×**. Batarya
+  (taban + tüm mutasyon kipleri TEK komutta), **tam süit yerelde koşulmaz — CI koşar** (B0 tablosu). Batarya
   bir ARAÇTIR, kapı değil: F3'ün üç bağlam şartını **azaltmaz**, onları koşar
   (reçete: `governance/infra-test-recipes.md` §B0-BATARYA).
 - **F4 Gevşetme-cetveli:** kapsam/eşik DARALIYORSA raporda **⚠GEVŞETME bayrağı** zorunlu +
