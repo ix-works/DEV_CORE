@@ -27,6 +27,18 @@ purpose: Klasik Dynpro ekranı + GUI status'un ortak üreteç FM ile (SOAP-RFC, 
 > senkron). Bu dosyadaki `FM:<satır>` çapaları o sürüme aittir; satır numaraları kayabilir, yanına
 > yazılan **grep çapası** kaymaz. §2'deki imza bloğu `check_fm_signature_doc_sync` gate'i ile
 > kaynağa karşı OTOMATİK denetlenir (§13.2).
+>
+> ⚠ **Üreteç PROJE TARAFINDAN SAĞLANIR — core'da FM kaynağı YOKTUR.** Core yalnız bu kılavuzu
+> ve kurulum aracını taşır; FM'in ABAP kaynağı projenin ortak paketinde (`<source_root>/<MOD>/
+> ZSD000_CLC/functions/`) ve projenin SAP sisteminde yaşar. **Ne zaman:** klasik programa ekran/
+> status gerektiğinde, üreteci ÇAĞIRMADAN ÖNCE. **Ne yap:** ① FM'in o sistemde var ve
+> RFC-enabled olduğunu canlıda doğrula (ADT'den FM oku; "bu projede de vardır" VARSAYMA).
+> ② **Yoksa DUR → kullanıcıya iki yolu sun:** (a) proje ortak paketinin kaynağı repodaysa
+> `python core/scripts/deploy_common_package.py --dry-run` → onaylı transport ile kurulum, sonra
+> SE37'de "Remote-Enabled Module" (manuel tek adım, `adt-fugr-functions.md` §3); (b) kaynak da
+> yoksa ekran + GUI status operatör tarafından SE51/SE41'de elle oluşturulur. ③ Proje üreteci
+> sağlıyorsa kaynak yolunu `project.yaml` `fm_doc_sync_sources`'ta beyan eder
+> (`MAINTENANCE.md` §6); beyan yoksa imza↔kılavuz kapısı o projede görünür `[SKIP]` basar.
 
 ---
 

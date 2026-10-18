@@ -416,6 +416,10 @@ OZEL_TESTLER = [
     # bicim varyantlari, farkli imza sekilleri). "Bakamadim" ile "temiz" AYRI exit'e duser.
     ("fm_imza_doc_sync",
      "CLC-SCR7: FM imzasi <-> kilavuz senkronu; 3 durum ayrimi + FP capalari (11 vektor)"),
+    # 2026-10-18: proje-lokal naming kapisi core'a tasindi; gomulu harita yerine sablon okunur.
+    ("rules_naming_standard",
+     "C-RULES-NAME-01: paket .rules.md naming tablosu <-> sablon (tek kaynak); bootstrap "
+     "ciktisi + eski sablon ciktisi + ALT KUME/PKG_NOZ FP capalari + KAPSAM SIFIR (11 vektor)"),
     # 2026-08-19 ADT teshis gorunurlugu (iki kalem, tek tema: SAP'nin SEBEBI cagirana ulasmali)
     ("retry_500_govde",
      "retry adapter'i SAP'nin 500 GOVDESINI yutuyordu (429/502/503/504 tekrar KORUNDU)"),
@@ -962,6 +966,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "kılavuzun FM-IMZA bloğu gate'in girdisidir; blok bozulursa gate ÖLÇÜLEMEDİ vermeli"),
     ("playbook/adt-fugr-functions.md", ("O:fm_imza_doc_sync",),
      "§6 imza bloğu aynı gate'in ikinci belgesidir"),
+    ("scripts/validators/check_package_rules_naming_standard.py", ("O:rules_naming_standard",),
+     "naming tablosu ↔ şablon: yakalama + ALT KÜME/PKG_NOZ sessizliği + KAPSAM SIFIR/ÖLÇÜLEMEDİ"),
+    # AYRI satırlar (mevcut şablon/bootstrap satırlarının kümesi büyütülmedi): kapı haritayı
+    # şablondan OKUR ve yer tutucuları bootstrap'in kendi fonksiyonlarıyla çözer.
+    ("templates/new-package/.rules.md.tmpl", ("O:rules_naming_standard",),
+     "naming kapısının kanonik kaynağı bu şablonun naming tablosudur"),
+    ("scripts/bootstrap_package.py", ("O:rules_naming_standard",),
+     "naming kapısı `pkg_noz_turet`/`substitute`'u buradan import eder"),
     ("scripts/doc_equivalence_check.py", ("O:fs_docstd",),
      "DOC-FS-07 denklik ölçümü: kayıplı/kayıpsız çift + TR harf katlaması FP çapası"),
 

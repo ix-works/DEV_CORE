@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""fm_imza_doc_sync — check_fm_signature_doc_sync.py KALICI KORPUSU (11 vektör, 5 mutasyon).
+"""fm_imza_doc_sync — check_fm_signature_doc_sync.py KALICI KORPUSU (15 vektör, 7 mutasyon).
 
 Neden bu korpus: gate'in iddiası iki YÖNLÜDÜR ve ikisi de kanıtlanmalı —
   (a) YAKALAMA : imza ↔ kılavuz sapması (EKSİK/HAYALET) ve ÖLÇÜLEMEDİ durumları,
@@ -15,9 +15,9 @@ MUTASYON: gate kaynağının bir kopyası üzerinde TAM-EŞLEŞMELİ metin cerra
 (çapa metni bulunamazsa koşucu DURUR — sessiz no-op mutasyon = sahte YEŞİL).
 
 Kullanım:
-    python tests/fixtures/fm_imza_doc_sync/run.py            # 11 vektör
+    python tests/fixtures/fm_imza_doc_sync/run.py            # 15 vektör
     python tests/fixtures/fm_imza_doc_sync/run.py --mutasyon-capa   (…-eksik/-hayalet/
-                                                  -failopen/-blok)
+                                                  -failopen/-blok/-sabityol/-skipok)
 ⛔ KİP BİÇİMİ 2026-08-29'da DEĞİŞTİ (kayıt Q210) — ESKİ `--mutasyon <ad>` (iki argüman)
    KALDIRILDI. Gerekçe ÖLÇÜM: `tests/run_battery.py` kipleri kaynaktan keşfeder ve
    TEK-ARGÜMAN biçimini tanır; bu koşucu tek `"--mutasyon"` sabiti taşıdığı için batarya
@@ -145,15 +145,27 @@ REL_KAYNAK = "SD/ZSD000_CLC/functions/ZSD000_FM_SCREEN_GEN.func.abap"
 REL_BELGE = ("playbook/howto-dynpro-gui-status-generation.md", "playbook/adt-fugr-functions.md")
 
 
-def sandbox(tmp: Path, abap: str | None, belgeler: dict) -> tuple:
+# Kaynak yolu 2026-10-18'den beri PROJE beyanıdır (`fm_doc_sync_sources`); varsayılan
+# sandbox beyanı TAŞIR. Seçenekler (vektörün 8. alanı, isteğe bağlı):
+#   beyan : project.yaml'a eklenecek HAM metin (None → anahtar HİÇ yazılmaz)
+#   sroot : source_root adı · rel : kaynağın source_root-göreli yolu
+VARSAYILAN = {"beyan": f'fm_doc_sync_sources: ["screen_gen:{REL_KAYNAK}"]',
+              "sroot": "SOURCE_CODES", "rel": REL_KAYNAK}
+
+
+def sandbox(tmp: Path, abap: str | None, belgeler: dict, sec: dict | None = None) -> tuple:
     """(proje_koku, core_koku) kurar. abap=None → kaynak dosyası HİÇ yaratılmaz."""
+    o = dict(VARSAYILAN, **(sec or {}))
     proje = tmp / "proje"
     core = tmp / "core"
-    (proje / "SOURCE_CODES" / "SD" / "ZSD000_CLC" / "functions").mkdir(parents=True)
-    (proje / "project.yaml").write_text("sap_profile: s4_private\nsource_root: SOURCE_CODES\n",
-                                        encoding="utf-8")
+    kaynak = proje / o["sroot"] / o["rel"]
+    kaynak.parent.mkdir(parents=True)
+    yaml = f"sap_profile: s4_private\nsource_root: {o['sroot']}\n"
+    if o["beyan"] is not None:
+        yaml += o["beyan"] + "\n"
+    (proje / "project.yaml").write_text(yaml, encoding="utf-8")
     if abap is not None:
-        (proje / "SOURCE_CODES" / REL_KAYNAK).write_text(abap, encoding="utf-8")
+        kaynak.write_text(abap, encoding="utf-8")
     for rel, icerik in belgeler.items():
         p = core / rel
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -163,6 +175,8 @@ def sandbox(tmp: Path, abap: str | None, belgeler: dict) -> tuple:
 
 def kos(gate: Path, proje: Path, core: Path, ek: list) -> tuple:
     env = dict(os.environ, CLAUDE_PROJECT_DIR=str(proje), PYTHONIOENCODING="utf-8")
+    for k in ("IX_SOURCE_ROOT", "IX_FM_DOC_SYNC_SOURCES"):
+        env.pop(k, None)              # çevre config'ini miras alma (yokluk vektörü dersi)
     yollar = [str(CORE / "scripts")]
     if os.environ.get("PYTHONPATH"):
         yollar.append(os.environ["PYTHONPATH"])
@@ -187,8 +201,9 @@ VEKTORLER = [
      S1, {REL_BELGE[0]: BLG_BLOKSUZ, REL_BELGE[1]: BLG_TAM}, [], 2, ["ÖLÇÜLEMEDİ", "imza bloğu YOK"], ["[OK]"]),
     ("V6 BELGE DOSYASI YOK → ÖLÇÜLEMEDİ (exit 2)",
      S1, {REL_BELGE[1]: BLG_TAM}, [], 2, ["ÖLÇÜLEMEDİ", "belge YOK"], ["[OK]"]),
-    ("V7 ABAP KAYNAĞI YOK → ATLANDI + sebep (exit 0; başka projede kayıt yok)",
-     None, {REL_BELGE[0]: BLG_TAM, REL_BELGE[1]: BLG_TAM}, [], 0, ["ATLANDI", "bu projede YOK"], ["EKSİK"]),
+    ("V7 BEYAN VAR, ABAP KAYNAĞI YOK → ÖLÇÜLEMEDİ (exit 2; bağ kopuk, 'üreteç yok' DEĞİL)",
+     None, {REL_BELGE[0]: BLG_TAM, REL_BELGE[1]: BLG_TAM}, [], 2,
+     ["ÖLÇÜLEMEDİ", "beyan ettiği kaynak YOK"], ["EKSİK", "[OK]"]),
     ("V8 ÇAPA DÜŞTÜ (IV_PROGRAM yok) → ÖLÇÜLEMEDİ, sahte-temiz DEĞİL",
      S3, {REL_BELGE[0]: BLG_TAM, REL_BELGE[1]: BLG_TAM}, [], 2, ["ÖLÇÜLEMEDİ", "çapa"], ["[OK]"]),
     ("V9 FP ÇAPASI — blok DIŞI API token'ları (IS_LAYOUT/IT_OUTTAB) HAYALET sayılmaz",
@@ -197,6 +212,22 @@ VEKTORLER = [
      S1, {REL_BELGE[0]: BLG_TAM_BICIM, REL_BELGE[1]: BLG_TAM}, [], 0, ["[OK]"], ["EKSİK"]),
     ("V11 ÜÇÜNCÜ BAĞLAM — REFERENCE/CHANGING/yorumlu/karışık-harf imza doğru ayrıştırılır",
      S2, {REL_BELGE[0]: BLG_S2, REL_BELGE[1]: BLG_S2}, [], 0, ["[OK]"], ["EKSİK", "HAYALET"]),
+    # ── 2026-10-18: kaynak yolu PROJE beyanı (ters yön kablolama kaldırıldı) ──
+    ("V12 BEYAN YOK → görünür [SKIP] ATLANDI + KAPSAM SIFIR, exit 0, '[OK]' YOK",
+     S1, {REL_BELGE[0]: BLG_TAM, REL_BELGE[1]: BLG_TAM}, [], 0,
+     ["[SKIP] ATLANDI", "ÖLÇÜLMEDİ", "KAPSAM SIFIR"], ["[OK]", "EKSİK"], {"beyan": None}),
+    ("V13 BOZUK BEYAN (`:` yok) → ÖLÇÜLEMEDİ exit 2",
+     S1, {REL_BELGE[0]: BLG_TAM, REL_BELGE[1]: BLG_TAM}, [], 2,
+     ["ÖLÇÜLEMEDİ", "biçiminde DEĞİL"], ["[OK]"],
+     {"beyan": f'fm_doc_sync_sources: ["{REL_KAYNAK}"]'}),
+    ("V14 BİLİNMEYEN KAYIT-ID → ÖLÇÜLEMEDİ exit 2 (yazım hatası sessiz SKIP olmasın)",
+     S1, {REL_BELGE[0]: BLG_TAM, REL_BELGE[1]: BLG_TAM}, [], 2,
+     ["ÖLÇÜLEMEDİ", "bilinmeyen kayıt-id", "scren_gen"], ["[OK]"],
+     {"beyan": f'fm_doc_sync_sources: ["scren_gen:{REL_KAYNAK}"]'}),
+    ("V15 ÜÇÜNCÜ BAĞLAM — başka source_root + başka modül/paket yolu, blok-liste beyanı → ölçülür",
+     S1, {REL_BELGE[0]: BLG_TAM, REL_BELGE[1]: BLG_TAM}, [], 0, ["[OK] 1 kayıt"], ["[SKIP]", "EKSİK"],
+     {"sroot": "ABAP_SRC", "rel": "MM/ZMM001_CLC/functions/ZMM001_FM_EKRAN.func.abap",
+      "beyan": "fm_doc_sync_sources:\n  - screen_gen:MM/ZMM001_CLC/functions/ZMM001_FM_EKRAN.func.abap"}),
 ]
 
 # çapa-metni → değişim (TAM eşleşme; bulunamazsa koşucu DURUR)
@@ -212,6 +243,11 @@ MUTASYONLAR = {
                  "        return set(_TOKEN.findall(metin))"),
     "blok": ("    return set(_TOKEN.findall(metin[i + len(bas_etiket):j]))",
              "    return set(_TOKEN.findall(metin))"),
+    # 2026-10-18: sabit yola dönüş (eski ters-yön kablolama) V15'te yakalanmalı
+    "sabityol": ("    src = kaynak_yolu(beyan[kayit.id])",
+                 '    src = kaynak_yolu("SD/ZSD000_CLC/functions/ZSD000_FM_SCREEN_GEN.func.abap")'),
+    # hiçbir kayıt ölçülmediğinde "[OK] senkron" basmak sahte-yeşil — V12'de yakalanmalı
+    "skipok": ("    if len(atlanan) == len(kayitlar):", "    if False:"),
 }
 
 
@@ -220,7 +256,8 @@ MUTASYONLAR = {
 # bu yüzden kipler AYRICA tam biçimleriyle burada BEYAN edilir. İkisi ayrışmasın diye
 # `_kip_capasi()` eşliği koşum başında ölçer (bayatlarsa görünür duruş, sessiz değil).
 GECERLI_KIP = {"--mutasyon-capa", "--mutasyon-eksik", "--mutasyon-hayalet",
-               "--mutasyon-failopen", "--mutasyon-blok"}
+               "--mutasyon-failopen", "--mutasyon-blok", "--mutasyon-sabityol",
+               "--mutasyon-skipok"}
 
 
 def _kip_capasi() -> None:
@@ -266,11 +303,11 @@ def main() -> int:
         return 3
 
     gecen, dusen = 0, []
-    for ad, abap, belgeler, ek, beklenen, olmali, olmamali in VEKTORLER:
+    for ad, abap, belgeler, ek, beklenen, olmali, olmamali, *sec in VEKTORLER:
         tmp = Path(tempfile.mkdtemp(prefix="fmimza_"))
         try:
             gate = mutasyonlu_gate(tmp, mut) if mut else GATE
-            proje, core = sandbox(tmp, abap, belgeler)
+            proje, core = sandbox(tmp, abap, belgeler, sec[0] if sec else None)
             rc, cikti = kos(gate, proje, core, ek)
             sorun = []
             if rc != beklenen:

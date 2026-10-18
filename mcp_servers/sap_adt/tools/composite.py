@@ -462,9 +462,11 @@ def adt_struct_create(
     """Create + activate + verify a DDIC structure (INTTAB) atomically.
 
     Reviewer (ADR 0006): if artifact_path given, run_review.py struct_creation runs;
-    BLOCKER rejects (must fix and retry). Strongly recommended for Sprint 6 flow:
-    coordinator generates a local .asddls via sprint6_adapt_struct.py, then passes
-    that path here so the reviewer can validate DTEL activity and annotations.
+    BLOCKER rejects (must fix and retry). The local structure source
+    (<source_root>/<MOD>/<PKG>/structures/<NAME>.ddls.asddls) is authored by hand from
+    the spec — the old legacy-adaptation script was retired 2026-10-18. Note: the MCP-internal
+    reviewer may time out; playbook/adt-mcp.md Pattern 3 runs run_review.py standalone
+    and calls this tool WITHOUT artifact_path.
 
     Args:
         name: Structure name (Z*/Y*).

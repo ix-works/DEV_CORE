@@ -55,6 +55,11 @@ VALIDATORS = [
     ("Core-sızıntı kilidi (R1/2.7)", "check_core_not_committed.py", [], "project", None),
     ("Paket .rules.md varlık", "check_package_rules_present.py", [], "project", None),
     ("Paket naming regex", "check_package_naming.py", [], "project", None),
+    # `.rules.md` naming TABLOSU ↔ paket şablonu (kanonik tek kaynak). Önce bir projede
+    # validators-local'de gömülü haritayla yaşıyordu; harita bayatladı (2026-10-18 core'a
+    # taşındı). warn-first; 0 paketli projede görünür [SKIP]. C-RULES-NAME-01.
+    ("Paket .rules.md naming ↔ standart (warn-first, C-RULES-NAME-01)",
+     "check_package_rules_naming_standard.py", [], "project", None),
     ("Obje paket sınırı", "check_object_in_correct_pkg.py", [], "project", None),
     ("Script playbook referansı", "check_scripts_documented.py", [], "both", None),
     ("Freestyle UI5 tuzaklar (T1 V2-nav hard)", "check_ui5_freestyle_traps.py", [], "project", None),

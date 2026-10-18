@@ -164,6 +164,14 @@ GITATTRIBUTES = """\
 *.gif binary
 *.pdf binary
 *.zip binary
+
+# SAP kaynaklari: SAP satir sonunu LF saklar; calisma kopyasi da LF olmali. Karisik CRLF/LF
+# md5 karsilastirmasinda (ADT readback <-> disk) sahte uyusmazlik uretir (bir projede
+# olculdu, 2026-09-13). Yalniz yeni projeye yazilir; mevcut projelere UYGULANMAZ.
+*.abap text eol=lf
+*.cds text eol=lf
+*.bdef text eol=lf
+*.srvd text eol=lf
 """
 
 MCP_JSON = """\

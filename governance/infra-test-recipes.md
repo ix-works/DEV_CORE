@@ -3372,3 +3372,28 @@ python tests/fixtures/guard_hedef_maskeleme/gh_bayrak_uret.py > tablo.txt   # ta
 - **Kip → düşen (5. tur, 35 kip, ölçülen; ham liste `.tmp/battery/guard_hedef_maskeleme-mutasyon-*.txt` `[FAIL]` satırları):** `bitisik-geri-ac` → M4b H5 B7 B8 Y15–Y21 YK11–YK13 YK25 GA-B(×16) GA-B2–B5 GA-P1–P6 GA-P8 GA-P9 GA-E1–E4 GA-S1 GA-S2 (49; GA-P7 düşmez — `'y -Rorg/x’` lehçe modelinde boşluklu tırnaklı değer kalır) · `bitisik-filtre-yok` → GA-S1 GA-S2 · `ghhedef-eski-desen-yok` → B3 B5 B6 · `ghhedef-bagimsiz-tarama` → F1h P1 Y9b GA-S1 GA-S2 · `ghhedef-metin` → H1 H2 H4 H7b H9 H13 H16 H17 H17b F1h P1 U1 U2 Y9b Y11b Y12b Y22 Y23 Y33 GA-S1 GA-S2 · `ghhedef-bosluk` → H17b · `ghhedef-kume` → H7b · `ghhedef-buyuk-kucuk` → H4 · `ghhedef-konumsal-metin` → H3 B4 Y24 Y25 · `cozumleyici-r-yok` → M1e M2b M4 M4c M4d M4e K11 H6 YK20 GA-K2 · `yorum-yok` → Y22–Y24 Y27 Y28 Y31 Y32 · `bash-yonlendirme-yok` → Y9b Y25 Y30 · `fd-yok` → Y9b · `ps-yonlendirme-yok` → Y11b Y12b · `ps-blok-yorum-yok` → YK26 · `kacisli-bosluk-yok` → Y29 · `bash-kacis-yok` → Q1 Q2 Q3 F2a F2b F2d Y29 · `segment-yorum-yok` → Y26 · `eski-tek-aday` → bütün M (M4b hariç, M4g dahil) + T1 P1L M6 Y27–Y32 · `gh-bayrak-adayi-yok` → M1* M2b M4 M4c–M4g T1 M6 · `pr-kablosuz` → M1* M2b M4 M4c–M4f K1 K9 K11 K13 T1 Q2 Q3 Q6 Q7 Q10–Q14 M6 YK22 · `commit-kablosuz` → M2 M2c M3* M5* K3 K6 K8 K14 Q1 Q4 Q5 F3 F3c YK23 · `iki-lehce-yok` → Q1–Q4 Q6 Q10–Q13 Y27–Y32 · kalan kipler 4. turla aynı (`ansi-c-yok` Q4 F2c · `ps-tirnak-ici-backtick-yok` Q6 F2e · `ps-tirnak-disi-backtick-yok` Q13 · `yayin-token-yok` Q2 Q3 Q6 Q10–Q13 · `tablo-disi-kesin` U1 · `bilinmeyen-bayrak-kesin` U2 · `p1-cwd-yok` P1L · `yol-istisnasi-yakalanmaz` F3 F3c · `tavan-yok` T1 · `kisa-r-yok` M6 · `git-hedef-yok` M5–M5d K7 · `eski-aday-yok` K11 K13 K14).
 - **main'e göre gevşeme (5. tur, tekrarlanabilir):** üçlü kıyas main (`git show <taban>:scripts/hooks/pre_tool_guard.py` + güncel `genericize_common.py`) / önceki tur / yeni — üçü AYNI cwd ve ortamla, in-process (`gh repo view` taklit, sentinel tarayıcı). Korpus 465 vaka: fixture 203 + bug-gate 4. tur korpusları 257 + PowerShell boş argüman sondası 5. Sonuç: GEVŞEME GH-HEDEF 0 · sızıntı 0 · diğer 0; önceki tur → yeni 141 sıkılaşmanın 141'i bitişik `-R` taşır. KATMAN (`:pr-gate`) vektörleri main'de `main()` dışından çağrılamaz (`_iki_lehce` yok, sürücü çöker) ⇒ main tarafı `_gh_pr_public_leak(_komut_govdesi(k), k)` ile doğrudan ölçülür: 8 vektörde main TEMİZ → yeni TARANDI. Geniş korpus (yukarıdaki yöntem): sızıntı 202 vaka gevşeme 0 · GH-HEDEF 204 gh'li komut 190 aynı / 14 fark, 14'ü main GEÇER → yeni BLOK.
 - **Açık sınır (önceden var, main'de de; bu turun kapsamı dışında, lidere bildirildi):** PowerShell 5.1 boş argüman düşürmesi bitişik olmayan biçimleri de etkiler — argv dökümü: `-b "" --repo=org/x` → `[-b][--repo=org/x]` · `-b "" --repo org/x` → `[-b][--repo][org/x]` · `-b '' -R org/x` → `[-b][-R][org/x]`. gh hedefi cwd'den çözer, `--repo=…` gövde değeri olur. main ve yeni ikisi de GEÇİRİR (5/5 vektör, `pr merge` / `pr create` / `issue close`). Bitişik geri alma bunu kapatmaz; ayrı kalemdir.
+
+## B-TUR2-C2 — naming kapısı core'da (şablon tek kaynak) · FM imza kapısı `fm_doc_sync_sources` · init_project SAP LF bloğu (2026-10-18)
+- **Naming kapısı:** `python tests/fixtures/rules_naming_standard/run.py` → **11/11**, exit 0.
+  Batarya: `python tests/run_battery.py rules_naming_standard` → 7/7. Mutasyon pinleri (ölçüldü):
+
+  | kip | sonuç | düşen |
+  |---|---|---|
+  | `--mutasyon-altkume` | 5/11 | V1 V2 V4 V6 V10 V11 |
+  | `--mutasyon-pkgnoz` | 8/11 | V3 V5 V11 |
+  | `--mutasyon-kapsamsifir` | 10/11 | V8 |
+  | `--mutasyon-sablonfailopen` | 10/11 | V9 |
+  | `--mutasyon-istisna` | 10/11 | V7 |
+  | `--mutasyon-gomulu` | 10/11 | V10 (tek kaynak değişmezi) |
+
+  ⚠ Kapı şablonu `__file__`'dan bulur: her vektör kapıyı ve şablonu SAHTE core ağacına kopyalar
+  (mutasyon gerçek kaynağa yazılmaz). V3/V4/V10 GERÇEK `bootstrap_package.py`'yi alt süreçte koşar.
+- **FM imza kapısı:** `python tests/fixtures/fm_imza_doc_sync/run.py` → **15/15** (eski 11 + V12–V15;
+  V7 yeniden tanımlandı: beyan var + kaynak yok = ÖLÇÜLEMEDİ exit 2). Pinler: `capa` V8 · `eksik`
+  V1+V2 · `hayalet` V4 · `failopen` V5 · `blok` V9 · **`sabityol` V15** · **`skipok` V12**.
+  Elle kontrol: `CLAUDE_PROJECT_DIR=<proje> python scripts/validators/check_fm_signature_doc_sync.py`
+  → beyansız `[SKIP] … KAPSAM SIFIR`; `IX_FM_DOC_SYNC_SOURCES="screen_gen:<yol>"` ile ölçüm.
+- **init_project:** `python tests/fixtures/init_project_iskelet/run.py` → **33/33**; `--mutasyon-eol`
+  → 31/33 (E1 + E3). Ölçüt `git check-attr eol` etkisidir, şablon metni değil.
+- ⚠ `b0_secim` ve `--degisen` seçimini REPO KÖKÜ cwd'siyle koş — başka cwd'den göreli yollar
+  "repo DIŞI" sayılır ve sahte FAIL/TAM kararı üretir (ölçüldü: başka cwd 12/21, kökten 21/21).

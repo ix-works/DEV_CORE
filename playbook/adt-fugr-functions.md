@@ -321,6 +321,13 @@ taramaya **alır**, ama getirdiği kaynak iskelettir. Paket taramasında `scanne
 ## 6. ÖRNEK: C1 — Dynpro + GUI status üreten RFC sarıcı FM (TAM DOĞRULANDI 2026-06-03)
 
 > 📘 **Adım-adım kullanım kılavuzu:** [`howto-dynpro-gui-status-generation.md`](howto-dynpro-gui-status-generation.md). Bu bölüm derin iç-mekanik referansıdır.
+>
+> ⚠ **Bu FM PROJE TARAFINDAN SAĞLANAN bir ekran-üreteci FM'dir — core FM kaynağını taşımaz.**
+> Kullanmadan önce o sistemde var ve RFC-enabled olduğunu canlıda doğrula; yoksa DUR →
+> kullanıcıya sun: proje ortak paketi kaynağı repodaysa `scripts/deploy_common_package.py` ile
+> kurulum (+ §3 RFC-enable), değilse ekran/status operatörce SE51/SE41'de. Kaynak yolu
+> `project.yaml` `fm_doc_sync_sources` ile beyan edilir (imza↔kılavuz kapısının girdisi);
+> ayrıntı: kılavuzun baş notu.
 
 `ZSD000_FM_SCREEN_GEN` (RFC) tek çağrıda hedef programa **(1) boş Dynpro (screen)** + **(2) GUI status + titlebar** üretir; `/sap/bc/soap/rfc` (dialog context) üzerinden çağrılır. Sonuç: `screen rc=2 (zaten var); status(STAT0100+TIT0100) rc=0` → `ZSD000_P_ALV_TEMP1` syntax valid + **aktif**.
 

@@ -109,7 +109,7 @@ annotation/syntax pattern tahmin edilmez.
 | **UI app BSP'ye DEPLOY** (`npm run deploy`) | **`standards/03-coding-ui-fiori.md` §2.4.1** — NON-İNTERAKTİF: `.conn_adt` kimlik→`FIORI_TOOLS_USER/PASSWORD` env + **`--yes`** (prompt atla); CLI --username/--password=401; `tr -d '\r'`; mutlak `--prefix`. **"deploy edemem" DEME** (env boş = keychain/inline çözülür). Per-app `ui/<app>/RUN.md` deploy bölümü |
 | Value-help / master | ADR 0009 (ortak `ZSD000_I_*` reuse) — kullanıcıya local mi ortak mı sor |
 | Yeni program (her tür) | spec-mutabakat gate: `program_to_spec.py` taslak → düzelt → mutabakat → build |
-| Modül semantiği (tablo/BAPI/exit/SPRO) | `governance/modules/<MOD>/` (bkz. Tier 2) |
+| Modül semantiği (tablo/BAPI/exit/SPRO) | `playbook/modules/referans/<mod>/` (bkz. Tier 2) |
 | Bağlantı/tier şüphesi | `python scripts/sap_doctor.py` |
 | **Eldeki araç/MCP/skill bir ihtiyacı çözmüyor → YENİ araç aranacak** | **İLK** `governance/tooling-plugins.md` §🔎 → küratörlü katalog [`marianfoo/sap-ai-mcp-servers`](https://github.com/marianfoo/sap-ai-mcp-servers) (resmi/topluluk, güncel). Sıfırdan internet taraması yerine önce buraya bak |
 | **Released-object / "std tablo yerine ne?" (Clean Core)** | `python scripts/validators/check_released_objects.py <artifact>` veya reviewer (cds/rap/class_push zincirinde WARNING) — MARA→I_Product successor (otoriter, `governance/reference/released_successors.json`). ⚠️ **WARNING'i SESSİZ GEÇME** (ATC no-suppress gibi): ya released'a çevir ya gerekçeni kullanıcıya bildir. Tüm-tip API için native ATC "Usage of APIs" |
@@ -122,10 +122,12 @@ Objeler `<source_root>/<MODULE>/<PACKAGE>/` (değeri `project.yaml` → `source_
 (`ZSD*` → SD). İndirilen objeyi paket adıyla eşleşen alt klasöre kaydet
 (`cds/`, `classes/`, `functions/`, `structures/`, `tables/`).
 
-**Modül-bilgi katmanı (gap-analysis #14):** O modülde çalışırken `governance/modules/<MOD>/`
+**Modül-bilgi katmanı (gap-analysis #14):** O modülde çalışırken `playbook/modules/referans/<mod>/`
 referanslarını oku — `tables.md` (kilit tablolar), `bapi.md` (released BAPI/FM),
 `enhancements.md` (BAdI/exit/BTE), `spro.md` (customizing), `tcodes.md`, `workflows.md`.
-Şu an mevcut: **SD** (`governance/modules/SD/`). Yeni modül başlarken o klasör **artımlı** yazılır.
+Şu an mevcut: **SD** (`playbook/modules/referans/sd/`). Yeni modül başlarken o klasör **artımlı**
+yazılır. (Referans = hipotez; adı koda yazmadan önce canlıda teyit et. Intake kural-paketi ayrı dosyadır:
+`playbook/modules/<mod>.md`.)
 
 ### Tier 3 — İŞ / PAKET (paket-spesifik, L4)
 
