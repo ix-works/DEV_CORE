@@ -151,6 +151,9 @@
 ### 2026-09-18 tohum terfisi (konu başlıklı)
 - **54 ders:** [tam indeks](_indeks-terfi-2026-09-18.md) — kanıt/ölçüm 9 · ajan 5 · karar 6 · infra-gate 10 · araç 4 · SAP/ABAP/RAP 13 · UI 3 · doküman 4
 
+### 2026-10-18 tohum terfisi (konu başlıklı)
+- **41 ders:** [tam indeks](_indeks-terfi-2026-10-18.md) — SAP 16 · UI 11 · Doküman 4 · Araç 4 · Ajan 3 · Karar 3
+
 ### Araç kök-fix tarihçesi (regresyon sözlüğü)
 - **10 kayıt:** [tam indeks](_indeks-arac-kok-fixleri.md) — *"bu bug daha önce oldu mu"* sorusunun yeri; güncel kural DEĞİL
 
