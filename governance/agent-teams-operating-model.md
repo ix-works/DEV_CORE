@@ -277,7 +277,8 @@ tercih sinyalidir.
 değerinde `: ` (iki nokta + boşluk) geçmez — gerekiyorsa ` — ` yaz ya da değeri tırnakla. Claude Code
 geçersiz frontmatter'ı dosya LF iken tolere ediyor, **CRLF iken ajanı hata vermeden listeden düşürüyor**;
 Windows checkout'u çalışma kopyasını CRLF yapar. Doğrulama: frontmatter'ı `yaml.safe_load` ile ayrıştır
-+ taze oturumda Agent aracı listesini oku (`infra-changelog` aynı tarihli kayıt).
++ taze oturumda Agent aracı listesini oku (`infra-changelog` aynı tarihli kayıt). Kapı: `core_precommit`
+6. kontrol + `ix_doctor` 4g (ortak modül `scripts/utils/frontmatter_lint.py`).
 
 **Docs-expert rol değerlendirmesi (D34g):** FS/TS/KD üretimi bugün feature-expert +
 bug-expert(doc-checklist) hattında. Ayrı bir docs-expert rolü ANCAK şu tetikle açılır:

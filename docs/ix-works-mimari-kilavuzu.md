@@ -718,9 +718,12 @@ olabilir; eşleştirme gitignore semantiğiyle, proje köküne göreli yol üzer
 
 ```yaml
 ---
-paths: **/*.abap, **/*.ddls
+paths: "**/*.abap, **/*.ddls"
 ---
 ```
+
+Değer çift tırnaklı yazılır: tırnaksız `*` geçersiz YAML'dır ve CRLF dosyada `paths` düşer, kural
+koşulsuz yüklenir (ölçüm: [`claude-rules-nasil-yazilir.md`](claude-rules-nasil-yazilir.md)).
 
 ⚠ **2026-07-10'a kadar burada bunun TERSİ yazıyordu** (issue #17204'e dayanarak). Claude Code
 2.1.206 frontmatter'da yalnız `paths` okur (`SQh()` parser'ı). Yanlış anahtar kuralı öldürmez —

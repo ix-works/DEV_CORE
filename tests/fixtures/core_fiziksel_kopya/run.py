@@ -630,6 +630,22 @@ def insp(k: Kum, s13: Path) -> None:
     r = k.sur(k.kod, "a3", ip, ci, json.dumps(["C:/x/y.abap"]), "yeni")
     kontrol(r.get("b") == [], "V27b (N) ayni oturumda tetik gorulduyse A3 SESSIZ", str(r)[:300])
 
+    # V27c-f (2026-10-18, frontmatter_lint): `paths:` degeri cekirdekte TIRNAKLI yazilir; tirnak
+    # soyulmazsa desen `"**/*.abap` olur, hicbir dosya eslesmez ve A3 SESSIZCE susar. Dort bicim
+    # (tirnaksiz kontrol grubu dahil) ayni bulguyu vermeli; eski kod V27d/e/f'de bulgusuz kalir.
+    log_yaz(ip, [ls("yeni", "session_start", "/p/CLAUDE.md")])
+    for etiket, deger in (("V27c tirnaksiz (kontrol grubu)", "paths: **/*.abap, **/*.ddls"),
+                          ("V27d cift tirnakli (abap-clean-code bicimi)", 'paths: "**/*.abap"'),
+                          ("V27e tek tirnakli", "paths: '**/*.abap'"),
+                          ("V27f YAML listesi", 'paths:\n  - "**/*.ddls"\n  - "**/*.abap"')):
+        cq = hafif_core(k.tmp, "c_q" + etiket[3])
+        yaz(cq / "claude" / "rules" / "abap-kural.md", f"---\n{deger}\n---\n\nABAP-KURAL\n")
+        r = k.sur(k.kod, "a3", ip, cq, json.dumps(["C:/x/y.abap"]), "yeni")
+        b = r.get("b")
+        kontrol(isinstance(b, list) and len(b) == 1 and b[0][0] == "A3",
+                f"{etiket}: paths desenleri ayrisir, eslesen okuma + tetik yok -> A3 bulgusu",
+                str(r)[:300])
+
     r = k.sur(k.kod, "b5", s13, k.tam)
     b = r.get("b")
     kontrol(isinstance(b, list) and not any("00-claude-core" in m for _, _, m in b),
