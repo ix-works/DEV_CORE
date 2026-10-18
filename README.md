@@ -4,6 +4,26 @@
 > SAP-AI geliştirme metodolojisi: standartlar, playbook, script/validator/hook takımı,
 > MCP server, agent tanımları ve skill'ler — **tek kaynak-gerçek, kopya YOK**.
 
+## 🚀 Kurulum ve güncelleme — Claude Code'a bu prompt'u verin
+
+**Yeni makine / ilk kurulum.** Claude Code'u kurulumu yapacağınız klasörde açın (ör. `C:\IX`),
+köşeli parantezleri doldurun ve aşağıdaki metni **olduğu gibi** yapıştırın:
+
+```text
+DEV_CORE kurulumunu yap.
+Hedef klasör: [C:\IX]
+Proje repoları: [https://github.com/<ORG>/<PROJE>.git — birden çok olabilir · yeni proje açacaksam "yeni proje: <AD>" · yoksa "yok"]
+
+1) https://github.com/ix-works/DEV_CORE.git reposunu <hedef klasör>\DEV_CORE altına klonla
+   (klasör zaten varsa klonlama, dokunma).
+2) <hedef klasör>\DEV_CORE\ONBOARDING.md dosyasındaki "2A. Claude ile kurulum" bölümünü oku ve
+   adımlarını SIRAYLA uygula. Dosyada olmayan adım ekleme, kendi bildiğin bir kurulum yolu izleme.
+3) Yalnız o bölümün KULLANICI diye işaretlediği adımlarda bana sor; sonunda bölümün istediği raporu ver.
+```
+
+**Kurulu makinede güncelleme.** Herhangi bir proje klasöründe Claude Code'u açıp yalnız
+`/core-guncelle` yazın — ayrıntı aşağıda, [Güncelleme](#güncelleme-kurulu-makine--core-guncelle).
+
 ## Mimari (ADR 0020 — canlı çekirdek + junction)
 
 ```
@@ -62,7 +82,9 @@ Envanter ve "hangi iş → hangi araç": [`governance/tooling-plugins.md`](gover
 core'daki `claude/skills/playwright-cli` skill'i — token-verimli, ~4x) ; yedek `playwright`
 Claude-plugin'i (MCP — ad-hoc debug). UI-doğrulama akışı: [`governance/tooling-plugins.md`](governance/tooling-plugins.md).
 
-Adım adım ilk kurulum (Claude Code içinden `/onboard`): [`ONBOARDING.md`](ONBOARDING.md).
+Adım adım ilk kurulum: yukarıdaki prompt (Claude yürütür) ya da elle [`ONBOARDING.md`](ONBOARDING.md) §2.
+`/onboard` komutu bir projede ancak `team_setup` koştuktan sonra görünür (`.claude/commands` bağını
+o kurar); kurulum sonrası kontrol + iş özeti içindir.
 Yeni PROJE açılışı: [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) (STEP 0–6 + kabul gate'i).
 Kurulum doğrulama: `python core/scripts/ix_doctor.py` (proje kökünde; 7-katman sağlık taraması).
 
