@@ -373,7 +373,8 @@ Bu format atlanırsa kullanıcı loader'ın yüklenmediğini varsayar → T4.
 > **SORU 0'dan ÖNCE gelir.** SORU 0 *"nereye yazayım"* diye sorar — *"zaten yazılı mı"* diye
 > **sormaz**. Kayıt açmadan/kural yazmadan önce — ve **bir araç/işlem başarısız olduktan sonra aynı
 > amaçla yeniden denemeden önce** (hata mesajı aynı da olsa farklı da; vaka 2026-08-14: bir araç sorunu ~2 saat / 12 denemeyle kovalandı, cevap playbook'ta
-> yazılıydı) — sıra ŞUDUR (adım atlanmaz, sıra değişmez):
+> yazılıydı; yeniden denemede zorunlu olan **① ARA**'dır — her yeni denemeden önce, son hata mesajıyla; ②–④ yalnız
+> bir kayıt/kural yazılacaksa) — sıra ŞUDUR (adım atlanmaz, sıra değişmez):
 
 ```
 ① ARA    → repo + core (path=core/!) + memory + SESSION_NOTES + ilgili register.
