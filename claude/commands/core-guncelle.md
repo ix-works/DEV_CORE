@@ -1,16 +1,28 @@
 ---
-description: Çekirdeği güncelle ve kurulumu hizala (pull + team_setup + makine-lokal yüzeyler + doğrula + ölç)
+description: Çekirdeği güncelle ve bu makinedeki tüm projeleri hizala — ek talimat gerektirmez (pull + team_setup + diğer projeler + makine-lokal yüzeyler + doğrula + ölç)
 ---
 
-Kullanıcı çekirdeği (`core/` junction'ı = canlı DEV_CORE) güncellemeni istedi.
+Kullanıcı çekirdeği (`core/` = bu makinedeki tek DEV_CORE klonu) güncellemeni istedi.
+**Bu komut tek başına yeterlidir: kullanıcıdan ek talimat BEKLEME.** Aşağıdaki akışı sonuna
+kadar yürüt; yalnız prosedürün "DUR" dediği yerde dur, çıktıyı göster ve sor.
 
-**Kanonik prosedür: `core/playbook/howto-cekirdek-guncelleme.md` — ÖNCE ONU OKU, adımları
-oradan yürüt.** Bu komut dosyası o prosedürün kopyası değildir; kısa hatırlatıcısıdır ve
-çakışma halinde **howto kazanır** (tek kaynak ilkesi).
+**Kanonik prosedür: `core/playbook/howto-cekirdek-guncelleme.md`.** Bu komut onun kopyası
+değil, yürütme sırasıdır; çakışmada **howto kazanır** (tek kaynak ilkesi).
 
-Sıra: ① durum ölç + `git -C core status` temiz mi ② `git -C core pull` ③ `team_setup.py`
-④ tohum doğrula ⑤ makine-lokal yüzeyler (kullanıcı ayarları · `gh` · git global taban)
-⑥ validator + `ix_doctor` ⑦ oturumu kapat-aç ⑧ ölç ve raporla.
+1. **Howto'yu oku → başlangıcı ölç (§1):** `parity_probe` ÖNCE · `git -C core status --short`
+   boş mu · dal `main` mi. Kirliyse DUR.
+2. **Çek (§2):** `git -C core pull`.
+3. ⭐ **Howto'yu YENİDEN OKU** — pull prosedürün kendisini güncellemiş olabilir; kalan adımları
+   yeni kopyadan yürüt (bu komut dosyası da değişmiş olabilir; yeni hâli sonraki oturumda yüklenir).
+4. **Bu proje (§3–§4):** `team_setup` → son satır `team_setup TAMAM` · 3b overlay kapısı ·
+   3c MCP smoke · 3d yasak damgası · tohum doğrulaması.
+5. **Diğer projeler (§3e):** bu çekirdeği kullanan projeleri bul, listeyi göster, her birinde
+   `team_setup` + damga kontrolü + `ix_doctor` (her biri KENDİ kökünde, `CLAUDE_PROJECT_DIR` o projeye ayarlı).
+6. **Makine-lokal yüzeyler (§5):** kullanıcı-düzeyi izin tabanı (elle birleştir) · `gh` · git global taban.
+7. **Doğrula (§6):** `run_all_validators` + `ix_doctor` — FAIL yok.
+8. **Ölç ve raporla (§8):** parity ÖNCE/SONRA farkı + proje başına tablo + atlananlar/ölçülemeyenler.
+   Son cümle: *"Claude Code'u kapatıp açın; yeni oturumun ilk mesajında `✓ Yükleme: … core=YÜKLENDİ`
+   görünmeli (diğer projelerde de ilk açılışta)."*
 
 Bu turda kolayca kaçırılan üç şey:
 

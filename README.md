@@ -62,8 +62,36 @@ Envanter ve "hangi iş → hangi araç": [`governance/tooling-plugins.md`](gover
 core'daki `claude/skills/playwright-cli` skill'i — token-verimli, ~4x) ; yedek `playwright`
 Claude-plugin'i (MCP — ad-hoc debug). UI-doğrulama akışı: [`governance/tooling-plugins.md`](governance/tooling-plugins.md).
 
+Adım adım ilk kurulum (Claude Code içinden `/onboard`): [`ONBOARDING.md`](ONBOARDING.md).
 Yeni PROJE açılışı: [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) (STEP 0–6 + kabul gate'i).
-Kurulum doğrulama: `python scripts/ix_doctor.py` (7-katman sağlık taraması).
+Kurulum doğrulama: `python core/scripts/ix_doctor.py` (proje kökünde; 7-katman sağlık taraması).
+
+## Güncelleme (kurulu makine) — `/core-guncelle`
+
+Çekirdek kurulu bir makinede güncelleme **tek komuttur.** Herhangi bir proje klasöründe Claude
+Code'u açıp yaz:
+
+```
+/core-guncelle
+```
+
+Ek talimat gerekmez. Komut [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md)
+prosedürünü uçtan uca yürütür: çekirdeği çeker, bu projede ve **aynı makinedeki diğer projelerde**
+`team_setup` koşar (junction · kural/ajan kopyaları · ayarlar · memory tohumu), makineye özel
+ayarları hizalar, `run_all_validators` + `ix_doctor` ile doğrular ve önce/sonra ölçümünü
+(`parity_probe`) proje başına raporlar.
+
+- ⛔ **Yalnız `git pull` YETMEZ** — pull dosyaları getirir; kurulumu hizalamaz, doğrulamaz.
+- Bitince **Claude Code'u kapatıp açın.** Yeni oturumun ilk mesajında
+  `✓ Yükleme: … core=YÜKLENDİ` satırı görünmelidir.
+- **Komut listede yoksa** (çekirdek bu komuttan eski): proje kökünde `git -C core pull` →
+  Claude Code'u kapat-aç → `/core-guncelle`.
+- **Sonradan kontrol:** proje kökünde `python core/scripts/ix_doctor.py` — FAIL yoksa kurulum
+  yapısal olarak sağlamdır (çıktı neye bakmadığını da yazar; Claude'un hangi ajan/kuralı fiilen
+  yüklediğini ölçmez). İki makineyi karşılaştırmak: iki tarafta `python core/scripts/parity_probe.py --anon`,
+  sonra `--diff A.json B.json`.
+- Çekirdekte kusur bulursan ve yazma yetkin yoksa: Issue —
+  [`playbook/howto-cekirdek-bulgu-bildirimi.md`](playbook/howto-cekirdek-bulgu-bildirimi.md).
 
 ## Çalışma kuralları (özet — detay: [`MAINTENANCE.md`](MAINTENANCE.md))
 
@@ -123,7 +151,8 @@ bilinçli istisnadır).
 ## Kilit dokümanlar
 
 [`CLAUDE.core.md`](CLAUDE.core.md) · [`claude/rules/`](claude/rules/) ·
-[`ONBOARDING.md`](ONBOARDING.md) · [`MAINTENANCE.md`](MAINTENANCE.md) ·
+[`ONBOARDING.md`](ONBOARDING.md) · [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md) (`/core-guncelle`) ·
+[`MAINTENANCE.md`](MAINTENANCE.md) ·
 [`PROJECT_BOOTSTRAP.md`](PROJECT_BOOTSTRAP.md) ·
 [`governance/decisions/`](governance/decisions/) (mimari gerekçeler — ADR 0003 katmanlar,
 0005 yasaklar, 0006 reviewer, 0007 MCP, 0020 bu mimari)

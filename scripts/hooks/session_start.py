@@ -480,7 +480,8 @@ def _origin_kontrol() -> list[str]:
             pass
     behind = _core_geri_sayisi()
     if behind > 0:
-        out.append(f"DEV_CORE origin'in {behind} commit GERISINDE — `git -C core pull` onerilir")
+        out.append(f"DEV_CORE origin'in {behind} commit GERISINDE — `/core-guncelle` calistir "
+                   "(yalniz `git pull` YETMEZ: kurulum + diger projeler + dogrulama adimlari var)")
     return out
 
 
