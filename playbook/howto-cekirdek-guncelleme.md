@@ -160,7 +160,12 @@ python -c "import pathlib;c=pathlib.Path('core').resolve();[print(p) for p in so
 
 Ölçüt: çekirdeğin üst klasöründeki, `project.yaml` taşıyan ve `core` bağı **bu** çekirdeğe
 çözülen klasörler. Başka yerde duran proje bu listeye girmez — varsa kullanıcı söyler.
-Listeyi kullanıcıya göster; içinde bulunmadığın her proje `<P>` için (her biri kendi kökünde):
+⛔ **ONAY — tek soru, tek sefer:** listeyi kullanıcıya göster ve hangilerinde kurulum yapılacağını
+SOR (çoklu seçim: hepsi / bazıları / hiçbiri; AskUserQuestion varsa onunla). Diğer projeler başka
+müşterinin işi olabilir ya da o an başka bir oturumda açık olabilir; `team_setup` oranın ayar
+dosyalarını ve hafızasını değiştirir. Onaysız hiçbir projeye dokunulmaz; seçilmeyen proje §8
+raporunda `atlandı (kullanıcı seçimi)` olarak yazılır. Liste boşsa soru sorulmaz.
+Seçilen her proje `<P>` için (her biri kendi kökünde):
 
 ```bash
 (cd "<P>" && CLAUDE_PROJECT_DIR="<P>" python core/scripts/team_setup.py)        # 3b/3c kuralları aynen

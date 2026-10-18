@@ -4,7 +4,8 @@ description: Çekirdeği güncelle ve bu makinedeki tüm projeleri hizala — ek
 
 Kullanıcı çekirdeği (`core/` = bu makinedeki tek DEV_CORE klonu) güncellemeni istedi.
 **Bu komut tek başına yeterlidir: kullanıcıdan ek talimat BEKLEME.** Aşağıdaki akışı sonuna
-kadar yürüt; yalnız prosedürün "DUR" dediği yerde dur, çıktıyı göster ve sor.
+kadar yürüt; yalnız adım 5'teki proje onayında ve prosedürün "DUR" dediği yerde dur, çıktıyı
+göster ve sor.
 
 **Kanonik prosedür: `core/playbook/howto-cekirdek-guncelleme.md`.** Bu komut onun kopyası
 değil, yürütme sırasıdır; çakışmada **howto kazanır** (tek kaynak ilkesi).
@@ -16,8 +17,10 @@ değil, yürütme sırasıdır; çakışmada **howto kazanır** (tek kaynak ilke
    yeni kopyadan yürüt (bu komut dosyası da değişmiş olabilir; yeni hâli sonraki oturumda yüklenir).
 4. **Bu proje (§3–§4):** `team_setup` → son satır `team_setup TAMAM` · 3b overlay kapısı ·
    3c MCP smoke · 3d yasak damgası · tohum doğrulaması.
-5. **Diğer projeler (§3e):** bu çekirdeği kullanan projeleri bul, listeyi göster, her birinde
-   `team_setup` + damga kontrolü + `ix_doctor` (her biri KENDİ kökünde, `CLAUDE_PROJECT_DIR` o projeye ayarlı).
+5. **Diğer projeler (§3e):** bu çekirdeği kullanan projeleri bul, listeyi göster ve **tek soruyla
+   onay al** (hepsi / bazıları / hiçbiri) — bu akıştaki tek beklenen soru budur. Seçilen her projede
+   `team_setup` + damga kontrolü + `ix_doctor` (her biri KENDİ kökünde, `CLAUDE_PROJECT_DIR` o projeye
+   ayarlı); seçilmeyen proje raporda `atlandı (kullanıcı seçimi)`.
 6. **Makine-lokal yüzeyler (§5):** kullanıcı-düzeyi izin tabanı (elle birleştir) · `gh` · git global taban.
 7. **Doğrula (§6):** `run_all_validators` + `ix_doctor` — FAIL yok.
 8. **Ölç ve raporla (§8):** parity ÖNCE/SONRA farkı + proje başına tablo + atlananlar/ölçülemeyenler.
