@@ -3508,3 +3508,21 @@ python tests/run_battery.py tohum_govde_guncelleme --kardes tohum_terfi_gorunurl
 - **Kırmızı-önce:** `git show 998e739:scripts/seed_memory.py > <scratch>/eski.py` → `python tests/fixtures/tohum_govde_guncelleme/run.py --seed-kaynak <scratch>/eski.py` → **34/48** (B1 + B5 eski kodda da geçer — kontrol vektörleri).
 - **3. bağlam (gerçek tohum, elle):** scratch `--target`'a HEAD tohumuyla kur → bir dersin manifest kaydını `"0"*40` yap + frontmatter'a `originSessionId`/`modified` satırı ekle (checkout CRLF ise CRLF ile — `text=auto`) + yerel not → koş (`[UYARI]`) → `--birlestirildi <ad>` (manifest = tohum sha, `(tohumun tüm satırları yerel kopyada)`) → koş (`[OK] Her şey güncel.`); `--terfi-adaylari` (a) önce/sonra aynı. ⛔ Gerçek memory dizinine `--target` VERME.
 - **DOĞRULANAMADI:** ikinci fiziksel makine; `team_setup` özet satırında komut ipucu (alt_arac son satırı 70 karaktere keser — kapsam dışı).
+
+## B87 — `run_classrun` tek POST: yan etkili classrun sunucuya bir kez ulaşır (DEV_CORE Issue #325, 2026-10-18)
+
+```
+python tests/fixtures/classrun_tek_post/run.py                  # 20/20 (SAP'siz; 127.0.0.1 sahte sunucu, ~12 sn)
+python tests/fixtures/classrun_tek_post/run.py --mutasyon       # 13/13 + KUM TABANI 20/20 (~3,5 dk)
+python tests/fixtures/classrun_tek_post/run.py --taban 998e739  # rc 0 = eski kod düşer (6/20)
+python tests/fixtures/retry_500_govde/run.py                    # kardeş: oturum geneli 429/502/503/504 tekrarı KORUNDU
+python tests/fixtures/b0_secim/run.py                           # repo kökünden; P3 pin 25
+```
+
+- **Ölçülen tek değişken sunucuya ULAŞAN POST sayısıdır** (sahte sunucu yol başına sayar). İstemci `SAPADTClient.__new__` ile kurulur; auth/CSRF yardımcıları sabittir, `.conn_adt` okunmaz. Gerçek `_build_session` · `new_session` · `_request_with_csrf_retry` · `tek_post_onekini_bagla` · `run_classrun` · MCP `adt_classrun` koşar.
+- **Vektör → beklenen:** V1 200 → 1 · V2 200 + sınıfın kendi çıktısında gevşek `does not implement` → 1, `ok` True · V3 200 + tam imza, sonra 200 → 2 (reset gerçekten olur: `_oturum_nesli` 2) · V4 tam imza iki kez → 2, teşhis 1 kez, `islenmis_olabilir` False · V5–V8 500/502/503/504 → 1, durum kodu korunur, belirsiz · V9 503 + `Retry-After` → 1 · V10 okuma zaman aşımı → 1 · V13 istek alındı, yanıt yazılmadan bağlantı kapandı → 1 · V14 500 + gevşek metin → teşhis koşmaz · V15 tam imza, sonra 504 → 2 (reset sonrası da tek-post).
+- **Bağlantı reddi (B bölümü):** urllib3 `HTTPConnection._new_conn` sahte `NewConnectionError` atar — istek sunucuya hiç gitmez. V11 3 red + 1 açık → sunucuya 1 POST, `ok` True (tekrar MEŞRU, 4 bağlantı denemesi) · V12 hep red → 0 POST, `islenmis_olabilir` False, uyarı yok.
+- **Kontrol grubu (K):** aynı oturumda classrun dışı yol `/sap/bc/adt/activation` 504 → HÂLÂ 4 POST (sayacın tekrarı görebildiğinin kalibrasyonu) · oturum geneli `status_forcelist` (429,502,503,504) + POST değişmedi · classrun öneki ayrı adapter'da.
+- **Mutasyon kipi düşmesi gereken vektörü İLAN eder:** yalnız rc ≠ 0 yakalama sayılmaz; ilan edilen vektör düşmezse `ILAN EDILEN VEKTOR DUSMEDI`. Adapter'da durum tekrarını üç katman birlikte kapatır (status=0 · boş `status_forcelist` · POST'suz `allowed_methods`) — tek katmanı açan mutasyon KAÇAR (ölçüldü); MU7 üçünü birden keser.
+- **Taban beklentisi:** 998e739'a karşı 14 vektör düşer; düşmeyen 6'sı kontrol (V1 · V3 · V11 · K1 · K2 · M2) — eski kod da bayat-imza ve bağlantı reddinde tekrar ediyordu, bu davranış korunmuştur.
+- **Sınır (ÖLÇÜLMEDİ):** canlı SAP'de koşulmadı; 4xx'te SAP'nin handler'a girmediği ölçülmedi (işaret muhafazakâr True); `_request_with_csrf_retry`'ın 403 + CSRF reddinde ikinci POST'u bu turun kapsamı değil (CSRF reddi handler öncesidir varsayımı canlıda ölçülmedi).

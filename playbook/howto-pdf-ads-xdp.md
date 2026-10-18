@@ -271,6 +271,10 @@ Gönderen politikası, SOES ile teslim teşhisi ve RAP'tan gönderimdeki LUW kur
 ⛔ **Mail gönderen classrun'u yeniden deneyen bir araçla koşma.** Bazı ADT istemcileri 200 dışı yanıtta
 POST'u tekrarlar ⇒ mail iki kez gider. Mail gönderen deneme koşusunu **tek POST** atan küçük bir script ile koş;
 zaman aşımı olursa **tekrarlama**, önce SOST/SOOD'a bak.
+Çekirdeğin `SAPClient.run_classrun` / MCP `adt_classrun` aracı 2026-10-18'den beri bu sözleşmeye
+uyar (Issue #325; fixture `tests/fixtures/classrun_tek_post`): POST'u yalnız bağlantı kurulamadığında ya da
+200 + tam `does not implement if_oo_adt_classrun~main` imzasında (bayat oturum) tekrarlar. Sonuç
+`islenmis_olabilir: True` ise araç tekrarlamamıştır; yeniden koşturmadan önce yine SOST/SOOD'a bak.
 
 ⛔ Deneme sınıfında `COMMIT WORK` varsa projenin RAP-commit kapısı satır içi muafiyet ister
 (`"#NO_RAP_COMMIT_CHECK <gerekçe>` — BE-26); classrun RAP bağlamı değildir.

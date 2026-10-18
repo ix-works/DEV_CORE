@@ -207,6 +207,46 @@ def kaynak_kimligi_bas(kimlik: Dict[str, Any], girinti: str = '      ') -> None:
               f"  (satır sonu çevrimi CRLF->LF)")
 
 
+# classrun'un "bayat oturum" yanıtının TAM imzası (SAP metni: "Class does not implement
+# if_oo_adt_classrun~main!"). Yalnız bu imza "sınıf hiç koşmadı" demektir. ⛔ Gevşek
+# 'does not implement' alt metnine geri dönme: sınıfın KENDİ konsol çıktısında bu ifade
+# geçebilir ("ZCL_Y does not implement ZIF_Z") → başarılı, yan etkili bir koşu ikinci kez
+# koşturulur ve `ok: False` döner (Issue #325, sahte sunucuda ölçüldü).
+CLASSRUN_BAYAT_IMZA = 'does not implement if_oo_adt_classrun~main'
+
+
+def classrun_istek_gitmedi(exc: BaseException) -> bool:
+    """İstisna, isteğin sunucuya HİÇ ulaşmadığını KESİN gösteriyor mu?
+
+    True yalnız bağlantı kurulamadığında: urllib3 `ConnectTimeoutError` (alt sınıfı
+    `NewConnectionError` dahil — urllib3'ün kendi tanımıyla "sunucu isteği almadı").
+    Okuma zaman aşımı, bağlantının yanıt beklerken kopması, SSL ve tanınmayan her
+    istisna False döner: istek sunucuda İŞLENMİŞ olabilir (muhafazakâr yön).
+    """
+    try:
+        import requests
+        from urllib3.exceptions import ConnectTimeoutError, MaxRetryError
+    except Exception:
+        return False
+    if isinstance(exc, requests.exceptions.ConnectTimeout):
+        return True
+    if not isinstance(exc, requests.exceptions.ConnectionError):
+        return False
+    if isinstance(exc, (requests.exceptions.SSLError, requests.exceptions.ProxyError)):
+        return False
+    cur: Any = exc
+    for _ in range(6):
+        if isinstance(cur, ConnectTimeoutError):
+            return True
+        if isinstance(cur, MaxRetryError):
+            cur = cur.reason
+        elif getattr(cur, 'args', None) and isinstance(cur.args[0], BaseException):
+            cur = cur.args[0]
+        else:
+            return False
+    return False
+
+
 class SAPClient:
     """High-level SAP ABAP Development Client"""
 
@@ -1836,6 +1876,15 @@ class SAPClient:
 
         Returns:
             {ok, class, output, status} — output = console (out->write) çıktısı.
+            Başarısız sonuçta ayrıca `islenmis_olabilir` (bool) + True ise `uyari`.
+
+        ⛔ TEK POST (DEV_CORE Issue #325, 2026-10-18): classrun YAN ETKİLİDİR (mail gönderen,
+        veri yazan sınıf). POST sunucuya YALNIZ ilk denemenin hiç işlenmediği KESİN olduğunda
+        tekrar gider: (a) bağlantı kurulamadı (tek-post adapter'ı, `tek_post_onekini_bagla`)
+        (b) 200 + tam imza `CLASSRUN_BAYAT_IMZA` (bayat oturum → reset → bir kez daha; 2026-07-31
+        ölçümü). 5xx, ağ geçidi hatası, okuma zaman aşımı, yanıt beklerken kopan bağlantı
+        tekrar ETTİRMEZ → `islenmis_olabilir: True` + uyarı: tekrar koşturmadan önce yan
+        etkiyi (gönderilen mail, yazılan kayıt) kontrol et.
         """
         url = f"{self.adt_client.url}/sap/bc/adt/oo/classrun/{class_name.lower()}"
         # Standart ADT header'ları ŞART (Authorization + sap-client + stateful
@@ -1843,10 +1892,33 @@ class SAPClient:
         # atlatır → soğuk session'da SAP sınıf bağlamını bulamayıp sahte
         # "does not implement if_oo_adt_classrun~main" döndürebilir. Accept override.
         base_headers = self.adt_client._get_headers(accept_type='text/plain')
+        # Bir POST sunucuda işlenmiş olabilir mi? Yalnız "kesin işlenmedi" kanıtı False tutar.
+        durum = {'islenmis_olabilir': False}
 
         def _post(headers):
-            return self.adt_client._request_with_csrf_retry(
+            # Oturum geneli Retry (429/502/503/504 + okuma zaman aşımı, POST dahil) bu
+            # öneki GÖRMESİN — her POST'tan önce (new_session sonrası dahil) bağla.
+            self.adt_client.tek_post_onekini_bagla(url)
+            durum['ucusta'] = True
+            yanit = self.adt_client._request_with_csrf_retry(
                 'post', url, headers=dict(headers))
+            durum['ucusta'] = False
+            if not (yanit.status_code == 200
+                    and CLASSRUN_BAYAT_IMZA in (yanit.text or '').lower()):
+                durum['islenmis_olabilir'] = True
+            return yanit
+
+        def _uyarili(sonuc):
+            if not sonuc.get('ok'):
+                sonuc['islenmis_olabilir'] = durum['islenmis_olabilir']
+                if durum['islenmis_olabilir']:
+                    sonuc['uyari'] = (
+                        f"{class_name}: classrun sonucu BELIRSIZ — istek sunucuda ISLENMIS "
+                        f"olabilir (durum {sonuc.get('status')}). Arac POST'u TEKRARLAMADI. "
+                        f"Tekrar kosturmadan once yan etkiyi (gonderilen mail, yazilan kayit) "
+                        f"kontrol et.")
+                    print(f"[UYARI] {sonuc['uyari']}")
+            return sonuc
 
         try:
             r = _post(base_headers)
@@ -1860,7 +1932,10 @@ class SAPClient:
             #    kalır. Çare RESET: yeni session = yeni sap-contextid = güncel load.
             #    Kanıt: taze süreçte aynı çağrı ANINDA çalıştı (tam konsol çıktısıyla).
             #    Aynı desen jfilak/sapcli d223ed3c: activate() -> new_session() -> execute().
-            if r.status_code != 200 or 'does not implement' in body.lower():
+            # ⛔ Koşul DAR (Issue #325): yalnız 200 + TAM imza. "200 dışı her yanıt"
+            #    (500 = sınıf koşup dump vermiş olabilir) ya da gövdenin herhangi bir
+            #    yerinde gevşek alt metin, yan etkili bir koşuyu İKİNCİ kez koşturuyordu.
+            if r.status_code == 200 and CLASSRUN_BAYAT_IMZA in body.lower():
                 self.adt_client.new_session()
                 # Header'lar eski session'dan türetilmişti (auth + CSRF) → yeniden al.
                 base_headers = self.adt_client._get_headers(accept_type='text/plain')
@@ -1871,7 +1946,7 @@ class SAPClient:
                 body = r.content.decode('utf-8')
             except Exception:
                 body = r.text or ''
-            ok = r.status_code == 200 and 'does not implement' not in body.lower()
+            ok = r.status_code == 200 and CLASSRUN_BAYAT_IMZA not in body.lower()
 
             # TEŞHİS (2026-07-31 kök-fix ile YENİDEN YAZILDI).
             # Buraya yalnız session-RESET'li retry de başarısız olunca gelinir.
@@ -1885,12 +1960,12 @@ class SAPClient:
             #   1. Sınıf AKTİVE EDİLMEMİŞ → aktif sürüm boş kabuk → mesaj DOĞRU.
             #   2. Bayat oturum (başka süreçte aktive edildi) → yukarıdaki reset çözer.
             #   3. Sınıf gerçekten arayüzü implemente etmiyor.
-            if not ok and 'does not implement' in body.lower():
+            if not ok and CLASSRUN_BAYAT_IMZA in body.lower():
                 diag = self._diagnose_classrun_binding(class_name)
                 if not diag.get('structurally_valid'):
                     # AKTİF sürümde arayüz yok → mesaj DOĞRU, tooling sorunu DEĞİL.
                     nbytes = diag.get('active_source_bytes')
-                    return {
+                    return _uyarili({
                         'ok': False,
                         'class': class_name,
                         'status': r.status_code,
@@ -1917,10 +1992,10 @@ class SAPClient:
                             f"yine de gorursen fetch_csrf_token(force_refresh=True) ile "
                             f"session'i isit ve TEKRAR DENE (ucuz kontrol)."
                         ),
-                    }
+                    })
                 # Aktif sürümde arayüz VAR ama reset'li retry de başarısız →
                 # gerçekten beklenmedik. Körlemesine reçete verme, ölçümü ilet.
-                return {
+                return _uyarili({
                     'ok': False,
                     'class': class_name,
                     'status': r.status_code,
@@ -1934,15 +2009,19 @@ class SAPClient:
                         f"SEOMETAREL'de VERSION=1 satiri var mi, `adt_inactive_objects` "
                         f"ne diyor, ayni cagri TAZE BIR SURECTE calisiyor mu."
                     ),
-                }
-            return {
+                })
+            return _uyarili({
                 'ok': ok,
                 'class': class_name,
                 'status': r.status_code,
                 'output': body,
-            }
+            })
         except Exception as e:
-            return {'ok': False, 'class': class_name, 'error': str(e)}
+            # Uçuştaki bir POST istisnayla bittiyse: yalnız "bağlantı kurulamadı" kesin
+            # işlenmedi demektir; okuma zaman aşımı / yanıt beklerken kopma İŞLENMİŞ olabilir.
+            if durum.get('ucusta') and not classrun_istek_gitmedi(e):
+                durum['islenmis_olabilir'] = True
+            return _uyarili({'ok': False, 'class': class_name, 'error': str(e)})
 
     def _diagnose_classrun_binding(self, class_name: str) -> Dict[str, Any]:
         """classrun 'does not implement' teşhisi.

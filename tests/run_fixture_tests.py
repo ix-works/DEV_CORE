@@ -763,6 +763,14 @@ OZEL_TESTLER = [
      "kirp/yardim dizini/bilinmeyen-kisaltilmis bayrak exit 2 + degisiklik yok, import yan etkisiz, "
      "bagimliliksiz kullanim yolu, sabit KD adi yok, eski kodla HTML/md/help/PNG bayt-esdegerligi "
      "(16 vektor + 6 mutasyon; taban 998e739)"),
+
+    # 2026-10-18 (DEV_CORE Issue #325): yan etkili classrun 500'de 2, 502/503/504 + okuma
+    # zaman asiminda 4 kez sunucuya ulasiyordu (mail iki kez gider).
+    ("classrun_tek_post",
+     "run_classrun TEK POST: tekrar yalniz baglanti kurulamadi + 200/TAM imza (bayat oturum); "
+     "5xx/okuma zaman asimi/kopan baglanti -> 1 POST + islenmis_olabilir + uyari; gevsek "
+     "'does not implement' alt metni reset/ok/teshis tetiklemez; KONTROL: oturum geneli Retry "
+     "(classrun disi yol 504 -> 4 POST) degismedi; MCP adt_classrun (20 vektor + 13 mutasyon; eski kod 6/20)"),
 ]
 
 
@@ -1268,6 +1276,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # 2026-10-03: AYRI satır; birleşim büyüdü → `b0_secim` P3 pinli sayısı 15→16 BİRLİKTE güncellendi.
     ("scripts/sap_adt_lib.py", ("O:sql_satir_kirma",),
      "`sql_satirlarini_kir` (freestyle 255-satır sınırı) + `run_query` 400 gövdesi kırpılmadan"),
+    # 2026-10-18 (Issue #325): AYRI satırlar; sap_adt_lib birleşimi büyüdü → `b0_secim` P3
+    # pinli sayısı 24→25 BİRLİKTE güncellendi.
+    ("scripts/sap_adt_lib.py", ("O:classrun_tek_post",),
+     "`tek_post_onekini_bagla` (connect-only Retry adapter'ı) + oturum geneli Retry KONTROL"),
+    ("scripts/sap_client.py", ("O:classrun_tek_post",),
+     "`run_classrun` tek POST + `CLASSRUN_BAYAT_IMZA` + `classrun_istek_gitmedi`"),
+    ("mcp_servers/sap_adt/tools/atom.py", ("O:classrun_tek_post",),
+     "`adt_classrun` → `run_classrun` (MCP giriş noktası; uyarı client_log'a taşınır)"),
     # list_revisions.py HARITA'da HIC YOKTU (2026-09-25, Issue #302): tek tüketicisi olduğu
     # `get_object_revisions`'ın gerçek çağıranı olarak `revizyon_okuma` onu AYRI süreçte koşar.
     ("scripts/list_revisions.py", ("O:revizyon_okuma",),
