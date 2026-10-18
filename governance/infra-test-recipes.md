@@ -1250,7 +1250,7 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   Mutasyon **TAM-EŞLEŞMELİ** metin cerrahisidir; çapa 1 kez geçmiyorsa ya da mutant
   derlenmiyorsa koşucu **exit 3 ile DURUR** (sessiz no-op ya da her vektörü düşüren bozuk
   kaynak = sahte "yakalandı"). Beklenen kümeyle düşüş **exit 1**, SAPMA **exit 2**.
-  Geçersiz/eski kip → `[KULLANIM]` + **exit 1**.
+  Geçersiz/eski kip → `[KULLANIM]` + **exit 2** (init ile aynı; 1 yalnız "beklenen kümeyle düştü" demektir).
 - **DURUM AYRIMI korpusun çekirdeğidir** ("bakamadım" ≠ "temiz"): V5 blok yok → **exit 2** ·
   V6 belge dosyası yok → **exit 2** · V7 beyan VAR ama ABAP kaynağı yok → **exit 2**
   (`beyan ettiği kaynak YOK`; bağ kopuk, "üreteç yok" ile aynı şey değil) · V8 imza ayrıştırma

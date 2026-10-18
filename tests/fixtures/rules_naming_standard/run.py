@@ -28,7 +28,7 @@ Ayrıca kapının KANONİK KAYNAĞI tektir (şablon): gömülü bir kopyaya dön
     "en az bir vektör düştü mü" bakılıyordu ⇒ sözdizimi bozuk mutant "yakalandı" sayılıyordu.
   ÇIKIŞ: 0 taban yeşil · 1 taban düşen VAR ya da mutasyon BEKLENEN kümeyle düştü ·
   2 SAPMA (düşen ≠ beklenen) / kip beyanı ayrıştı · 3 DOGRULANAMADI (çapa ≠1 kez ·
-  mutant derlenmedi · kurulum yapılamadı — "düştü" SAYILMAZ).
+  mutant derlenmedi · kurulum yapılamadı — "düştü" SAYILMAZ) · [KULLANIM] geçersiz kip → 2.
 
 Şablon çıktısı GERÇEK üreticiden alınır: V3/V4 `scripts/bootstrap_package.py`'yi alt süreçte
 koşar (V4'te şablonun eski `_DE_`/`_DOM_` satırlı bir kopyasıyla) — elle yazılmış bir taklit
@@ -464,7 +464,7 @@ def main() -> int:
         if a not in GECERLI_KIP:
             print(f"[KULLANIM] gecersiz mutasyon kipi: {a} — gecerli: "
                   f"{', '.join(sorted(GECERLI_KIP))}", file=sys.stderr)
-            return 1
+            return 2
         mut = a[len("--mutasyon-"):]
     for f in (GATE, PRESENT, RUN_ALL, SABLON, BOOT):
         if not f.is_file():

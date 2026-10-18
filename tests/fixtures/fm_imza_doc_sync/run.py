@@ -19,7 +19,7 @@ EŞİTLİKLE kıyaslanır. Önceden yalnız "en az bir vektör düştü mü" bak
 bozuk bir mutant (her vektörü düşürür) "yakalandı" sayılıyordu.
 ÇIKIŞ: 0 taban yeşil · 1 taban düşen VAR ya da mutasyon BEKLENEN kümeyle düştü ·
 2 SAPMA (düşen küme ≠ beklenen) / kip beyanı ayrıştı · 3 DOGRULANAMADI (çapa ≠1 kez ·
-mutant derlenmedi — "düştü" SAYILMAZ).
+mutant derlenmedi — "düştü" SAYILMAZ) · [KULLANIM] geçersiz/eski kip → 2.
 
 Kullanım:
     python tests/fixtures/fm_imza_doc_sync/run.py            # 20 vektör
@@ -31,7 +31,7 @@ Kullanım:
    TEK-ARGÜMAN biçimini tanır; bu koşucu tek `"--mutasyon"` sabiti taşıdığı için batarya
    onu DEĞERSİZ çağırıyor, `sys.argv[i+1]` **IndexError** ile Traceback üretiyordu
    (ölçüldü: 34 koşucu / 108 kip taramasında ÇÖKEN 3 kipten biri). Süit yalnız TABANI
-   koştuğu için bunu hiçbir kapı görmüyordu. Eski biçim artık `[KULLANIM]` + exit 1 verir
+   koştuğu için bunu hiçbir kapı görmüyordu. Eski biçim artık `[KULLANIM]` + exit 2 verir
    (görünür RED; sessiz çökme DEĞİL).
 ⚠ Core AĞACININ DIŞINDA (staging) koşuluyorsa `utils.project_config` bulunabilmesi için
   PYTHONPATH=<gerçek core>/scripts verilmelidir; core içinde koşarken gerekmez.
@@ -380,7 +380,7 @@ def main() -> int:
                   f"{', '.join(sorted(GECERLI_KIP))}. "
                   "ESKI bicim `--mutasyon <ad>` KALDIRILDI (tek argüman kullanın).",
                   file=sys.stderr)
-            return 1
+            return 2
         mut = a[len("--mutasyon-"):]
     if not GATE.is_file():
         print(f"[DUR] gate bulunamadı: {GATE}", file=sys.stderr)
