@@ -1223,29 +1223,34 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
 > → **güncel sözleşme: B83** (kaynak yolu `fm_doc_sync_sources` beyanı, boş env, çift kayıt-id).
 > Bu bölüm korpusun çekirdek değişmezlerini taşır; sayılar B83 ile aynıdır.
 
-- **Tek komut:** `python tests/fixtures/fm_imza_doc_sync/run.py` → **18/18**. Her vektör kendi
+- **Tek komut:** `python tests/fixtures/fm_imza_doc_sync/run.py` → **20/20**. Her vektör kendi
   sandbox'ını kurar (sahte proje kökü: `project.yaml` + `fm_doc_sync_sources` beyanı +
   `<source_root>/…/*.func.abap`; sahte core kökü: `playbook/*.md`) ve `finally` ile siler.
   Gate GERÇEK dosyasından koşar.
-- **DOKUZ MUTASYON — hiçbiri diğerini kapsamaz** (biri tam puan verirse korpus o değişmez için
-  BOŞTUR). ⚠ **KİP BİÇİMİ 2026-08-29'da DEĞİŞTİ (kayıt Q210):** eski `--mutasyon <ad>` (iki
+- **ON BİR MUTASYON — hiçbiri diğerini kapsamaz** (biri tam puan verirse korpus o değişmez için
+  BOŞTUR; CORE-07: düşen küme `_BEKLENEN_DUSEN` pinine EŞİT olmalı, değilse exit 2). ⚠ **KİP BİÇİMİ 2026-08-29'da DEĞİŞTİ (kayıt Q210):** eski `--mutasyon <ad>` (iki
   argüman) **KALDIRILDI** — batarya keşfi tek-argüman biçimini tanır. Ölçülen pinler
-  (2026-10-18, taban 18/18; `python tests/run_battery.py fm_imza_doc_sync` → 10/10 PASS):
+  (2026-10-18 delta kapısı turu, taban 20/20; `python tests/run_battery.py fm_imza_doc_sync` →
+  12/12 PASS):
 
   | kip | sonuç | düşen vektör(ler) |
   |---|---|---|
-  | `--mutasyon-capa` | 17/18 | V8 |
-  | `--mutasyon-eksik` | 16/18 | V1 + V2 |
-  | `--mutasyon-hayalet` | 17/18 | V4 |
-  | `--mutasyon-failopen` | 17/18 | V5 |
-  | `--mutasyon-blok` | 17/18 | V9 |
-  | `--mutasyon-sabityol` | 17/18 | V15 |
-  | `--mutasyon-skipok` | 17/18 | V12 |
-  | `--mutasyon-bosenv` | 17/18 | V16 |
-  | `--mutasyon-ciftid` | 17/18 | V18 |
+  | `--mutasyon-capa` | 19/20 | V8 |
+  | `--mutasyon-eksik` | 18/20 | V1 + V2 |
+  | `--mutasyon-hayalet` | 19/20 | V4 |
+  | `--mutasyon-failopen` | 19/20 | V5 |
+  | `--mutasyon-blok` | 19/20 | V9 |
+  | `--mutasyon-sabityol` | 19/20 | V15 |
+  | `--mutasyon-skipok` | 18/20 | V12 + V20 |
+  | `--mutasyon-bosenv` | 17/20 | V16 + V19 + V20 |
+  | `--mutasyon-ciftid` | 19/20 | V18 |
+  | `--mutasyon-ayracenv` | 18/20 | V19 + V20 |
+  | `--mutasyon-gerekce` | 18/20 | V12 + V20 |
 
-  Mutasyon **TAM-EŞLEŞMELİ** metin cerrahisidir; çapa 1 kez geçmiyorsa koşucu **exit 3 ile
-  DURUR** (sessiz no-op mutasyon = sahte YEŞİL). Geçersiz/eski kip → `[KULLANIM]` + **exit 1**.
+  Mutasyon **TAM-EŞLEŞMELİ** metin cerrahisidir; çapa 1 kez geçmiyorsa ya da mutant
+  derlenmiyorsa koşucu **exit 3 ile DURUR** (sessiz no-op ya da her vektörü düşüren bozuk
+  kaynak = sahte "yakalandı"). Beklenen kümeyle düşüş **exit 1**, SAPMA **exit 2**.
+  Geçersiz/eski kip → `[KULLANIM]` + **exit 1**.
 - **DURUM AYRIMI korpusun çekirdeğidir** ("bakamadım" ≠ "temiz"): V5 blok yok → **exit 2** ·
   V6 belge dosyası yok → **exit 2** · V7 beyan VAR ama ABAP kaynağı yok → **exit 2**
   (`beyan ettiği kaynak YOK`; bağ kopuk, "üreteç yok" ile aynı şey değil) · V8 imza ayrıştırma
@@ -1258,7 +1263,9 @@ python tests/fixtures/workflow_tetik_dupe/run.py          # 9/9 beklenir
   sayılır · **V11 ÜÇÜNCÜ BAĞLAM** farklı imza ŞEKLİ (`REFERENCE(...)` + `CHANGING` + imza içi
   yorum + karışık harf) · **V15 ÜÇÜNCÜ BAĞLAM** başka `source_root` + başka modül/paket yolu +
   blok-liste beyanı · **V16** boş env (`IX_FM_DOC_SYNC_SOURCES=""`) yaml beyanını EZMEZ ·
-  **V17** dolu env yaml'ı ezer (kontrol) — çıktı beyanın kaynağını (`env …` / `project.yaml`) yazar.
+  **V17** dolu env yaml'ı ezer (kontrol) — çıktı beyanın kaynağını (`env …` / `project.yaml`) yazar ·
+  **V19** yalnız ayraç env (`","`) yaml beyanını EZMEZ ("boş" kararı ayrıştırmadan SONRA) ·
+  **V20** ayraç/boşluk env + yaml yok → `[SKIP]` gerekçesi gerçekten bakılan iki kaynağı söyler.
 - **Warn-first sözleşmesi:** `--strict` **NO-OP** (`run_all_validators --strict` bayrağı tüm
   validator'lara iletilir; terfi ADR 0019 §54 gereği ayrı karar). Bulguda exit 1 isteyen
   tüketici `--bulguda-exit1` verir (V2 bunu ölçer).
@@ -3383,22 +3390,40 @@ python tests/fixtures/guard_hedef_maskeleme/gh_bayrak_uret.py > tablo.txt   # ta
 - **Açık sınır (önceden var, main'de de; bu turun kapsamı dışında, lidere bildirildi):** PowerShell 5.1 boş argüman düşürmesi bitişik olmayan biçimleri de etkiler — argv dökümü: `-b "" --repo=org/x` → `[-b][--repo=org/x]` · `-b "" --repo org/x` → `[-b][--repo][org/x]` · `-b '' -R org/x` → `[-b][-R][org/x]`. gh hedefi cwd'den çözer, `--repo=…` gövde değeri olur. main ve yeni ikisi de GEÇİRİR (5/5 vektör, `pr merge` / `pr create` / `issue close`). Bitişik geri alma bunu kapatmaz; ayrı kalemdir.
 
 ## B83 — naming kapısı core'da (şablon tek kaynak) · FM imza kapısı `fm_doc_sync_sources` · init_project SAP LF bloğu (2026-10-18; bug-gate düzeltme turu aynı gün)
-- **Naming kapısı:** `python tests/fixtures/rules_naming_standard/run.py` → **19/19**, exit 0.
-  Batarya: `python tests/run_battery.py rules_naming_standard` → 12/12. Mutasyon pinleri (ölçüldü):
+- ⭐ **CORE-07 (delta kapısı turu, 2026-10-18) — üç koşucu için ortak sözleşme**
+  (`rules_naming_standard` · `fm_imza_doc_sync` · `init_project_iskelet`): mutasyon çapası TAM
+  1 kez eşleşir · mutant `compile` ile derlenir · her kipin düşmesi beklenen vektör kümesi
+  koşucudaki `_BEKLENEN_DUSEN`'de pinlidir ve EŞİTLİKLE kıyaslanır. Mutasyon kipinde **exit 1 =
+  beklenen kümeyle düştü** (batarya `DUSTU`) · **2 = SAPMA** (düşen ≠ beklenen; batarya
+  `KURULAMADI` = FAIL, süit BÖLÜM 4 ilk kipte de yakalar) · **3 = DOGRULANAMADI** (çapa ≠1 /
+  mutant derlenmedi — sayı basılmaz). Aşağıdaki tablolar bu pinlerin ÖLÇÜLMÜŞ hâlidir; küme
+  değişirse ölçülen yeni küme hem koşucuya hem buraya yazılır. Negatif kontrol (koşucu
+  kaynağı bellekte yamalanır): `if not kok.is_dir(:` gibi derlenmeyen mutant → 3 · başka kipin
+  mutasyonunu taşıyan (yanlış vektör düşüren) kip → 2 · birden çok eşleşen çapa → 3.
+- **Naming kapısı:** `python tests/fixtures/rules_naming_standard/run.py` → **20/20**, exit 0.
+  Batarya: `python tests/run_battery.py rules_naming_standard` → 13/13. Mutasyon pinleri (ölçüldü):
 
   | kip | sonuç | düşen |
   |---|---|---|
-  | `--mutasyon-altkume` | 12/19 | V1 V2 V4 V6 V10 V11 V12 |
-  | `--mutasyon-pkgnoz` | 16/19 | V3 V5 V11 |
-  | `--mutasyon-kapsamsifir` | 18/19 | V8 |
-  | `--mutasyon-sablonfailopen` | 18/19 | V9 |
-  | `--mutasyon-istisna` | 17/19 | V7 V13 |
-  | `--mutasyon-gomulu` | 18/19 | V10 (tek kaynak değişmezi) |
-  | `--mutasyon-tipnorm` | 17/19 | V12 V13 (tip anahtarı harf/biçimden bağımsız) |
-  | `--mutasyon-olculmedi` | 18/19 | V14 (`ÖLÇÜLMEDİ: N paket` satırı) |
-  | `--mutasyon-kokyok` | 18/19 | V15 (kök yok → exit 2) |
-  | `--mutasyon-rglob` | 18/19 | V16 (iki seviye paket keşfi) |
-  | `--mutasyon-presentkokyok` | 18/19 | V17 (KARDEŞ `check_package_rules_present` kök yok) |
+  | `--mutasyon-altkume` | 13/20 | V1 V2 V4 V6 V10 V11 V12 |
+  | `--mutasyon-pkgnoz` | 17/20 | V3 V5 V11 |
+  | `--mutasyon-kapsamsifir` | 19/20 | V8 |
+  | `--mutasyon-sablonfailopen` | 19/20 | V9 |
+  | `--mutasyon-istisna` | 18/20 | V7 V13 |
+  | `--mutasyon-gomulu` | 19/20 | V10 (tek kaynak değişmezi) |
+  | `--mutasyon-tipnorm` | 18/20 | V12 V13 (tip anahtarı harf/biçimden bağımsız) |
+  | `--mutasyon-olculmedi` | 19/20 | V14 (`ÖLÇÜLMEDİ: N paket` satırı) |
+  | `--mutasyon-kokyok` | 19/20 | V15 (kök yok → exit 2) |
+  | `--mutasyon-rglob` | 19/20 | V16 (iki seviye paket keşfi) |
+  | `--mutasyon-presentkokyok` | 19/20 | V17 (KARDEŞ `check_package_rules_present` kök yok) |
+  | `--mutasyon-rulesvar` | 19/20 | V20 (`.rules.md`'siz paket dizini naming kapısında taranmaz) |
+
+  V20'de mutasyon kapıyı alt süreçte ÇÖKERTİR (var olmayan `.rules.md` okunur); koşucu bunu
+  `[ALT-SÜREÇ KAPI ÇÖKTÜ] <son satır>` diye özetler — ham iz basılsaydı batarya satırı koşucu
+  çökmesi (`COKTU`) sanırdı (ölçüldü: ilk koşumda COKTU, özetten sonra DUSTU).
+  Temizlik `_sil` ile (chmod + yeniden dene): `templates/new-package/ref_docs` Windows'ta R
+  özniteliği taşır ve V4'ün kopyası `rmtree(ignore_errors=True)` ile her koşumda
+  `%TEMP%\rulesnaming_*` bırakıyordu. Kontrol: koşum öncesi/sonrası `rulesnaming_*` sayısı eşit.
 
   ⚠ Kapı şablonu `__file__`'dan bulur ve paket keşfini kardeş `check_package_rules_present`
   dosyasından import eder: her vektör kapıyı + kardeşi + şablonu SAHTE core ağacına kopyalar
@@ -3406,16 +3431,23 @@ python tests/fixtures/guard_hedef_maskeleme/gh_bayrak_uret.py > tablo.txt   # ta
   V14 `ÖLÇÜLMEDİ` satırının `run_all --ozet`te görünürlüğünü GERÇEK
   `run_all_validators._gorunur_zorunlu_mu` ile ölçer.
   Ters yön (yeni korpus → eski kod kopyası, harness: modül özniteliği eski kopyaya çevrilir):
-  11/19 — V12–V18 eski kodda düşer, V19 (kontrol) eski kodda da geçer, V3 yalnız mesaj biçimi.
-- **FM imza kapısı:** `python tests/fixtures/fm_imza_doc_sync/run.py` → **18/18** (V7 yeniden
+  11/19 — V12–V18 eski kodda düşer, V19 (kontrol) eski kodda da geçer, V3 yalnız mesaj biçimi
+  (bug-gate turu ölçümü; V20 sonradan eklendi ve yalnız korpus kapsamıdır — kapı kodu değişmedi).
+- **FM imza kapısı:** `python tests/fixtures/fm_imza_doc_sync/run.py` → **20/20** (V7 yeniden
   tanımlandı: beyan var + kaynak yok = ÖLÇÜLEMEDİ exit 2; V12–V15 beyan; V16–V18 boş env /
-  dolu env kaynağı / çift kayıt-id). Pinler: `capa` V8 · `eksik` V1+V2 · `hayalet` V4 ·
-  `failopen` V5 · `blok` V9 · `sabityol` V15 · `skipok` V12 · **`bosenv` V16** · **`ciftid` V18**.
-  Ters yön: eski kodda 15/18 (V16 V17 V18 düşer). Ayrıntı: B9c.
+  dolu env kaynağı / çift kayıt-id; **V19–V20 yalnız ayraç/boşluk env** — delta kapısı turu).
+  Pinler: `capa` V8 · `eksik` V1+V2 · `hayalet` V4 · `failopen` V5 · `blok` V9 · `sabityol` V15 ·
+  `skipok` V12+V20 · `bosenv` V16+V19+V20 · `ciftid` V18 · **`ayracenv` V19+V20** (eski kodun
+  `strip()`-önce kararı birebir) · **`gerekce` V12+V20** ([SKIP] gerekçesi eski sabit metne döner).
+  Ters yön: bug-gate turu kodunda 17/20 (V12 V19 V20 düşer; ölçüm: yeni korpus + HEAD 611facf
+  kapı kopyası). Ayrıntı: B9c.
   Elle kontrol: `CLAUDE_PROJECT_DIR=<proje> python scripts/validators/check_fm_signature_doc_sync.py`
   → beyansız `[SKIP] … KAPSAM SIFIR`; `IX_FM_DOC_SYNC_SOURCES="screen_gen:<yol>"` ile ölçüm
   (boş env `""` yaml beyanını ezmez).
-- **init_project:** `python tests/fixtures/init_project_iskelet/run.py` → **34/34**. `.gitattributes`
+- **init_project:** `python tests/fixtures/init_project_iskelet/run.py` → **34/34**. Kip pinleri
+  (CORE-07, ölçüldü; batarya 7/7): `--mutasyon` P1 P1b P1c P1d P2 U1 · `--mutasyon-gevsek` P4 P5 P6
+  P7 U2 · `--mutasyon-force-onerisi` A2 U5a · `--mutasyon-not-yok` A3 U5b · `--mutasyon-eol` E1 E3
+  E4 · `--mutasyon-eol-dar` E1 E4. Bilinmeyen kip → `[KULLANIM]` exit 2. `.gitattributes`
   LF bloğu `utils/sap_kaynak_uzantilari.SAP_KAYNAK_UZANTILARI`'dan üretilir (`source_drift.SOURCE_EXTENSIONS`
   aynı tuple). E1 tek kaynaktaki HER uzantı (13) `lf` · E4 `object_types` dosya uzantıları (17, XML
   hariç) `lf`. `--mutasyon-eol` → 31/34 (E1 E3 E4) · `--mutasyon-eol-dar` (ilk sürümün elle 4

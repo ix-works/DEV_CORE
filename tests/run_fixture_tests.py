@@ -416,13 +416,13 @@ OZEL_TESTLER = [
     # bicim varyantlari, farkli imza sekilleri). "Bakamadim" ile "temiz" AYRI exit'e duser.
     ("fm_imza_doc_sync",
      "CLC-SCR7: FM imzasi <-> kilavuz senkronu; 3 durum ayrimi + FP capalari + "
-     "`fm_doc_sync_sources` beyani (bos env / cift kayit-id) (18 vektor, 9 mutasyon)"),
+     "`fm_doc_sync_sources` beyani (bos env / yalniz ayrac env / cift kayit-id; CORE-07 beklenen-kume) (20 vektor, 11 mutasyon)"),
     # 2026-10-18: proje-lokal naming kapisi core'a tasindi; gomulu harita yerine sablon okunur.
     ("rules_naming_standard",
      "C-RULES-NAME-01: paket .rules.md naming tablosu <-> sablon (tek kaynak); bootstrap "
      "ciktisi + eski sablon ciktisi + ALT KUME/PKG_NOZ FP capalari + KAPSAM SIFIR + tip "
      "anahtari bicimden bagimsiz + OLCULMEDI beyani + kok yok exit 2 + iki seviye paket "
-     "kesfi + kardes rules_present (19 vektor, 11 mutasyon)"),
+     "kesfi + kardes rules_present + rules.md-siz paket dizini; CORE-07 beklenen-kume (20 vektor, 12 mutasyon)"),
     # 2026-08-19 ADT teshis gorunurlugu (iki kalem, tek tema: SAP'nin SEBEBI cagirana ulasmali)
     ("retry_500_govde",
      "retry adapter'i SAP'nin 500 GOVDESINI yutuyordu (429/502/503/504 tekrar KORUNDU)"),

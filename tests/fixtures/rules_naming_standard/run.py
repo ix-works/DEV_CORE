@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""rules_naming_standard — check_package_rules_naming_standard.py KALICI KORPUSU (19 vektör, 11 mutasyon).
+"""rules_naming_standard — check_package_rules_naming_standard.py KALICI KORPUSU (20 vektör, 12 mutasyon).
 
 Kapının iddiası İKİ YÖNLÜDÜR ve ikisi de kanıtlanır:
   (a) YAKALAMA : paket `.rules.md` naming tablosunda kanonik kümede olmayan DTEL/Domain öneki
@@ -19,6 +19,17 @@ Ayrıca kapının KANONİK KAYNAĞI tektir (şablon): gömülü bir kopyaya dön
   · V17–V19 KARDEŞ `check_package_rules_present` aynı ayrımı yapar (kök yok 2 · 0 paket
     [SKIP] 0 · eksik `.rules.md` 1 = değişmeyen davranışın kontrol grubu).
 
+2026-10-18 delta kapısı turu:
+  · V20 `.rules.md`'siz paket dizini NAMING kapısına karşı (V19 yalnız kardeşe koşuyordu):
+    `paket_rules_dosyalari`'ndaki varlık süzgeci kalkarsa kapı var olmayan dosyayı okur
+    (`--mutasyon-rulesvar`). Önceden süzgeç silinince korpus 19/19 yeşil kalıyordu.
+  · CORE-07: mutant DERLENMELİ (`compile`), çapa TAM 1 kez, her kipin DÜŞMESİ BEKLENEN
+    vektör kümesi `_BEKLENEN_DUSEN`'de pinli ve EŞİTLİKLE kıyaslanır. Önceden yalnız
+    "en az bir vektör düştü mü" bakılıyordu ⇒ sözdizimi bozuk mutant "yakalandı" sayılıyordu.
+  ÇIKIŞ: 0 taban yeşil · 1 taban düşen VAR ya da mutasyon BEKLENEN kümeyle düştü ·
+  2 SAPMA (düşen ≠ beklenen) / kip beyanı ayrıştı · 3 DOGRULANAMADI (çapa ≠1 kez ·
+  mutant derlenmedi · kurulum yapılamadı — "düştü" SAYILMAZ).
+
 Şablon çıktısı GERÇEK üreticiden alınır: V3/V4 `scripts/bootstrap_package.py`'yi alt süreçte
 koşar (V4'te şablonun eski `_DE_`/`_DOM_` satırlı bir kopyasıyla) — elle yazılmış bir taklit
 değil, üreticinin ürettiği `.rules.md` ölçülür.
@@ -32,12 +43,13 @@ Kullanım:
     python tests/fixtures/rules_naming_standard/run.py
     python tests/fixtures/rules_naming_standard/run.py --mutasyon-altkume   (…-pkgnoz /
           -kapsamsifir / -sablonfailopen / -istisna / -gomulu / -tipnorm / -olculmedi /
-          -kokyok / -rglob / -presentkokyok)
+          -kokyok / -rglob / -presentkokyok / -rulesvar)
 """
 from __future__ import annotations
 
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -58,6 +70,7 @@ RUN_ALL = CORE / "scripts" / "validators" / "run_all_validators.py"
 SABLON = CORE / "templates" / "new-package" / ".rules.md.tmpl"
 TPL_DIR = CORE / "templates" / "new-package"
 BOOT = CORE / "scripts" / "bootstrap_package.py"
+COKME_IZI = "Traceback (most recent call last)"   # run_battery.COKME_IZI ile aynı dize
 
 DE_DOGRU = "| Data Element | `{PKG}_E_*` | `^{PKG}_E_[A-Z0-9_]+$` |"
 DOM_DOGRU = "| Domain | `{PKG}_D_*` | `^{PKG}_D_[A-Z0-9_]+$` |"
@@ -98,6 +111,25 @@ def sandbox(tmp: Path, kaynaklar: tuple, source_root: str = "SOURCE_CODES") -> t
     (core / "templates" / "new-package").mkdir(parents=True)
     shutil.copyfile(SABLON, core / "templates" / "new-package" / ".rules.md.tmpl")
     return proje, core
+
+
+def _sil(d: Path) -> None:
+    """Salt-okur öznitelikli dizin `ignore_errors` ile SESSİZCE kalır: V4 şablon dizinini
+    kopyalar ve `templates/new-package/ref_docs` Windows'ta R özniteliği taşır ⇒ her koşum
+    `%TEMP%\\rulesnaming_*` bırakıyordu (ölçüldü 2026-10-18: 105 artık dizin). Desen
+    `init_project_iskelet._sil`."""
+    def _ac(func, path, _exc):                       # noqa: ANN001
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    kw = {"onexc": _ac} if sys.version_info >= (3, 12) else {"onerror": _ac}
+    try:
+        shutil.rmtree(d, **kw)                       # type: ignore[arg-type]
+    except Exception:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def env_for(proje: Path) -> dict:
@@ -235,6 +267,13 @@ def k_present_paket_eksik(proje, core, tmp):
     return []
 
 
+def k_naming_paket_eksik(proje, core, tmp):
+    # V19'un ağacı NAMING kapısına: `.rules.md`'li paket + `.rules.md`'siz paket dizini.
+    yaz(proje, "SOURCE_CODES/SD/ZSD001_CLC/.rules.md", rules("ZSD001", "ZSD001_E_*", "ZSD001_D_*"))
+    (proje / "SOURCE_CODES" / "MM" / "ZMM001").mkdir(parents=True)
+    return []
+
+
 def k_tek_kaynak(proje, core, tmp):
     # Kapı şablonu OKUYORSA şablon değişince hüküm de değişir: Domain `{PKG}_DOM_*` yapılmış
     # bir şablona karşı, bootstrap'in (gerçek şablonla) ürettiği `_D_` satırı SAPMA olur.
@@ -304,6 +343,11 @@ VEKTORLER = [
     ("V19 KARDEŞ rules_present KONTROL — `.rules.md`'siz paket → exit 1 (davranış DEĞİŞMEDİ)",
      k_present_paket_eksik, "SOURCE_CODES", 1, ["HATA", "ZMM001"], ["[SKIP]"],
      {"hedef": "present"}),
+    # ── 2026-10-18 delta kapısı turu (Y3) ──
+    ("V20 NAMING — `.rules.md`'siz paket dizini taranmaz (varlık süzgeci), yalnız `.rules.md`'li ölçülür",
+     k_naming_paket_eksik, "SOURCE_CODES", 0,
+     ["1 paket `.rules.md`", "[OK] 1 paket · 2 satır ölçüldü"],
+     ["ZMM001", "Traceback", "PREFIX-SAPMASI", "ÖLÇÜLMEDİ:"]),
 ]
 
 # çapa-metni → değişim (TAM eşleşme; bulunamazsa koşucu DURUR)
@@ -331,13 +375,33 @@ MUTASYONLAR = {
               '    dosyalar = sorted(kok.rglob(".rules.md"))'),
     # F7 KARDEŞ: rules_present kök yok dalı kalkar → V17 (naming kapısının kendi dalı ayrı)
     "presentkokyok": ("    if not erp_root.is_dir():\n", "    if False:\n", "present"),
+    # Y3: paket keşfinde `.rules.md` varlık süzgeci kalkar → V20
+    "rulesvar": ('    return [p / ".rules.md" for p in find_packages(kok) if (p / ".rules.md").is_file()]',
+                 '    return [p / ".rules.md" for p in find_packages(kok)]'),
+}
+
+# CORE-07: her kipin DÜŞMESİ BEKLENEN vektör kümesi (ölçüldü 2026-10-18; EŞİTLİKLE kıyaslanır).
+# Küme değişirse ÖLÇÜLEN yeni küme yazılır — "en az biri düştü" kabul DEĞİLDİR.
+_BEKLENEN_DUSEN = {
+    "altkume": {"V1", "V2", "V4", "V6", "V10", "V11", "V12"},
+    "pkgnoz": {"V3", "V5", "V11"},
+    "kapsamsifir": {"V8"},
+    "sablonfailopen": {"V9"},
+    "istisna": {"V7", "V13"},
+    "gomulu": {"V10"},
+    "tipnorm": {"V12", "V13"},
+    "olculmedi": {"V14"},
+    "kokyok": {"V15"},
+    "rglob": {"V16"},
+    "presentkokyok": {"V17"},
+    "rulesvar": {"V20"},
 }
 
 # Batarya keşfinin BEYAN katmanı bu literali okur; `_kip_capasi()` eşliği ölçer.
 GECERLI_KIP = {"--mutasyon-altkume", "--mutasyon-pkgnoz", "--mutasyon-kapsamsifir",
                "--mutasyon-sablonfailopen", "--mutasyon-istisna", "--mutasyon-gomulu",
                "--mutasyon-tipnorm", "--mutasyon-olculmedi", "--mutasyon-kokyok",
-               "--mutasyon-rglob", "--mutasyon-presentkokyok"}
+               "--mutasyon-rglob", "--mutasyon-presentkokyok", "--mutasyon-rulesvar"}
 
 
 def _kip_capasi() -> None:
@@ -346,6 +410,11 @@ def _kip_capasi() -> None:
         print(f"[DURDU] kip beyanı ile MUTASYONLAR ayrıştı: yalnız-beyanda="
               f"{sorted(GECERLI_KIP - beklenen)} yalnız-sözlükte={sorted(beklenen - GECERLI_KIP)}",
               file=sys.stderr)
+        sys.exit(2)
+    if set(_BEKLENEN_DUSEN) != set(MUTASYONLAR):
+        print(f"[DURDU] _BEKLENEN_DUSEN ile MUTASYONLAR ayrıştı: yalnız-beklenende="
+              f"{sorted(set(_BEKLENEN_DUSEN) - set(MUTASYONLAR))} yalnız-sözlükte="
+              f"{sorted(set(MUTASYONLAR) - set(_BEKLENEN_DUSEN))}", file=sys.stderr)
         sys.exit(2)
 
 
@@ -357,11 +426,17 @@ def gate_kaynagi(ad: str | None) -> tuple:
         capa, yeni, *hedef = MUTASYONLAR[ad]
         h = hedef[0] if hedef else "gate"
         if kaynak[h].count(capa) != 1:
-            print(f"[DUR] mutasyon '{ad}' çapası {h} kaynağında {kaynak[h].count(capa)} kez "
-                  f"geçiyor (1 olmalı) — sessiz no-op mutasyon sahte YEŞİL üretirdi.",
-                  file=sys.stderr)
+            print(f"[DOGRULANAMADI] mutasyon '{ad}' çapası {h} kaynağında "
+                  f"{kaynak[h].count(capa)} kez geçiyor (1 olmalı) — sessiz no-op mutasyon "
+                  f"sahte YEŞİL üretirdi.", file=sys.stderr)
             sys.exit(3)
-        kaynak[h] = kaynak[h].replace(capa, yeni)
+        kaynak[h] = kaynak[h].replace(capa, yeni, 1)
+        try:
+            compile(kaynak[h], str(GATE if h == "gate" else PRESENT), "exec")
+        except SyntaxError as e:
+            print(f"[DOGRULANAMADI] mutant '{ad}' ({h}) DERLENMEDİ ({e}) — her vektörü düşüren "
+                  f"bozuk kaynak 'yakalandı' SAYILMAZ; hiçbir sayı raporlanmadı.", file=sys.stderr)
+            sys.exit(3)
     return kaynak["gate"], kaynak["present"]
 
 
@@ -420,21 +495,35 @@ def main() -> int:
                 if not satirlar or not all(ozet_gorunur_mu(s) for s in satirlar):
                     sorun.append(f"`run_all --ozet` süzgecinde GÖRÜNMEZ: {t!r}")
             if sorun:
-                dusen.append((ad, "; ".join(sorun), cikti.strip()[:400]))
+                ozet = cikti.strip()[:400]
+                if COKME_IZI in cikti:
+                    # Alt süreçteki KAPI çöktü (ör. V20 `--mutasyon-rulesvar`: var olmayan
+                    # `.rules.md` okunur). Bu vektörün düşmesidir, KOŞUCUNUN çökmesi değil —
+                    # ham iz basılırsa `run_battery` satırı koşucu çökmesi (COKTU) sanır.
+                    ozet = "[ALT-SÜREÇ KAPI ÇÖKTÜ] " + cikti.strip().splitlines()[-1][:300]
+                dusen.append((ad, "; ".join(sorun), ozet))
             else:
                 gecen += 1
         finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+            _sil(tmp)
 
     print(f"rules_naming_standard — {gecen}/{len(VEKTORLER)}" + (f" [mutasyon: {mut}]" if mut else ""))
     for ad, sorun, cikti in dusen:
         print(f"  DÜŞTÜ: {ad}\n         {sorun}\n         çıktı: {cikti}")
     if mut:
+        # CORE-07: düşen küme BEKLENEN kümeye EŞİT olmalı ("en az biri düştü" yetmez).
+        dusen_k = {ad.split()[0] for ad, _s, _c in dusen}
+        beklenen_k = _BEKLENEN_DUSEN[mut]
         if not dusen:
             print("  [KORPUS ZAYIF] mutasyona rağmen tam puan — bu değişmez sınanmıyor!",
                   file=sys.stderr)
-            return 1
-        return 0
+        if dusen_k != beklenen_k:
+            print(f"  [SAPMA] {mut}: beklenen={sorted(beklenen_k)} düşen={sorted(dusen_k)} "
+                  f"fazla={sorted(dusen_k - beklenen_k)} eksik={sorted(beklenen_k - dusen_k)} "
+                  f"→ exit 2")
+            return 2
+        print(f"  [BEKLENEN] {mut}: düşen küme = beklenen {sorted(beklenen_k)}")
+        return 1
     return 0 if not dusen else 1
 
 

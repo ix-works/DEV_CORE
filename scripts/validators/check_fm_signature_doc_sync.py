@@ -42,8 +42,10 @@ tüketici projenin dosya düzenine kablolu bir core kapısı (ters yön sızınt
 beyan eder (`MAINTENANCE.md` §6 kataloğu):
     fm_doc_sync_sources: ["screen_gen:<MOD>/<PKG>/functions/<FM>.func.abap"]
 (`<kayıt-id>:<source_root-göreli yol>`; env override `IX_FM_DOC_SYNC_SOURCES`, virgülle).
-  · BOŞ env (`IX_FM_DOC_SYNC_SOURCES=""`) "yok" sayılır — yaml beyanını EZMEZ (önceden ezip
-    yanlış gerekçeli `[SKIP]` üretiyordu). Çıktı beyanın KAYNAĞINI yazar (env / project.yaml).
+  · GEÇERLİ GİRİŞ TAŞIMAYAN env (`""`, `","`, `" , "`) "yok" sayılır — yaml beyanını EZMEZ;
+    karar env AYRIŞTIRILDIKTAN sonra verilir (önceden `strip()` kararı ayrıştırmadan önceydi ve
+    `","` yaml'ı ezip yanlış gerekçeli `[SKIP]` üretiyordu). Çıktı beyanın KAYNAĞINI yazar
+    (env / project.yaml); beyan yoksa `[SKIP]` gerekçesi GERÇEKTEN bakılan kaynakları sayar.
   · Aynı kayıt-id iki kez verilirse ÖLÇÜLEMEDİ (exit 2) — önceden sonuncusu sessizce kazanıyordu.
 
 `--strict` BİLEREK NO-OP'tur: `run_all_validators --strict` bayrağını TÜM validator'lara
@@ -56,7 +58,7 @@ Kullanım:
     python scripts/validators/check_fm_signature_doc_sync.py [--bulguda-exit1] [--selftest]
                                                              [--kayit <id>] [--core <yol>]
 Kablolama: run_all_validators (PROJE modu; CORE modunda SKIP — proje kaynağı gerekir).
-Kalıcı korpus: tests/fixtures/fm_imza_doc_sync (18 vektör, 9 mutasyon).
+Kalıcı korpus: tests/fixtures/fm_imza_doc_sync (20 vektör, 11 mutasyon).
 """
 # ENFORCES: CLC-SCR7
 from __future__ import annotations
@@ -165,23 +167,42 @@ def belge_parametreleri(metin: str, fm: str) -> set:
 
 
 def beyanlar() -> tuple:
-    """(`{kayıt-id: source_root-göreli yol}`, beyan-kaynağı | None). Bozuk giriş Olculemedi.
+    """(`{kayıt-id: yol}`, beyan-kaynağı | None, bakılan-kaynaklar). Bozuk giriş Olculemedi.
 
-    Öncelik `cfg` ile aynıdır (env → project.yaml) TEK farkla: BOŞ env "yok" sayılır.
-    `cfg` boş env'i değer kabul eder ve yaml'a hiç bakmaz ⇒ beyanlı proje yanlış gerekçeli
-    `[SKIP]` alırdı. `cfg`'nin kendisi değiştirilmedi (tüm anahtarların ortak davranışı).
+    Öncelik `cfg` ile aynıdır (env → project.yaml) TEK farkla: GEÇERLİ GİRİŞ TAŞIMAYAN env
+    "yok" sayılır. Karar env AYRIŞTIRILDIKTAN SONRA verilir: `""`, `","`, `" , "` gibi
+    yalnız boşluk/ayraç taşıyan env yaml beyanını EZMEZ (önceden `strip()` kararı ayrıştırmadan
+    önceydi ⇒ `","` yaml'ı ezip yanlış gerekçeli `[SKIP]` üretiyordu). `cfg` boş env'i değer
+    kabul eder ve yaml'a hiç bakmaz; `cfg`'nin kendisi değiştirilmedi (ortak davranış).
+    Üçüncü eleman, beyan bulunamadığında `[SKIP]` gerekçesinin GERÇEKTEN bakılan kaynakları
+    söylemesi içindir.
     """
     from utils.project_config import _yaml_lite, project_root  # noqa: E402  (proje tarafı)
+    bakilan: list[str] = []
     env = os.environ.get(ENV_ANAHTARI)
-    if env is not None and env.strip():
-        ham, kaynak = env, f"env {ENV_ANAHTARI}"
+    if env is not None:
+        kaynak = f"env {ENV_ANAHTARI}"
+        out = _beyan_ayristir(env, kaynak)
+        if out:
+            return out, kaynak, bakilan
+        bakilan.append(f"env `{ENV_ANAHTARI}` tanımlı ama geçerli giriş yok (değer: {env!r})")
     else:
-        ham = _yaml_lite(str(project_root() / "project.yaml")).get(CONFIG_ANAHTARI)
-        kaynak = "project.yaml"
+        bakilan.append(f"env `{ENV_ANAHTARI}` tanımsız")
+    ham = _yaml_lite(str(project_root() / "project.yaml")).get(CONFIG_ANAHTARI)
+    out = _beyan_ayristir(ham, "project.yaml")
+    if out:
+        return out, "project.yaml", bakilan
+    bakilan.append(f"`project.yaml` `{CONFIG_ANAHTARI}` yok/boş")
+    return {}, None, bakilan
+
+
+def _beyan_ayristir(ham, kaynak: str) -> dict:
+    """Ham beyan (env dizesi ya da yaml listesi) → `{kayıt-id: yol}`. Boş girişler atlanır;
+    hiç geçerli giriş yoksa `{}`. Bozuk giriş / çift kayıt-id Olculemedi."""
     if ham in (None, "", []):
-        return {}, None
+        return {}
     girdiler = ham.split(",") if isinstance(ham, str) else list(ham)
-    out = {}
+    out: dict = {}
     for g in (x.strip() for x in girdiler):
         if not g:
             continue
@@ -193,7 +214,7 @@ def beyanlar() -> tuple:
             raise Olculemedi(f"`{CONFIG_ANAHTARI}` aynı kayıt-id'yi iki kez beyan ediyor: "
                              f"{kid.strip()} (kaynak: {kaynak}) — hangisinin ölçüleceği belirsiz")
         out[kid.strip()] = yol.strip()
-    return out, (kaynak if out else None)
+    return out
 
 
 def kaynak_yolu(rel: str) -> Path:
@@ -201,13 +222,16 @@ def kaynak_yolu(rel: str) -> Path:
     return source_dir() / rel
 
 
-def kayit_kos(kayit: Kayit, core: Path, beyan: dict, kaynak: str | None = None) -> tuple:
-    """(durum, satirlar) döner. durum ∈ {TEMİZ, BULGU, ATLANDI, ÖLÇÜLEMEDİ}."""
+def kayit_kos(kayit: Kayit, core: Path, beyan: dict, kaynak: str | None = None,
+              bakilan: list | None = None) -> tuple:
+    """(durum, satirlar) döner. durum ∈ {TEMİZ, BULGU, ATLANDI, ÖLÇÜLEMEDİ}.
+
+    `bakilan`: `beyanlar()`ın gerçekten baktığı kaynaklar — beyan yoksa gerekçe bunları
+    yazar (sabit "env boş/tanımsız" metni, env tanımlı-ama-geçersizken YANLIŞTI)."""
     out = []
     if kayit.id not in beyan:
         nerede = (f"{kaynak} beyanında bu kayıt yok" if kaynak else
-                  f"beyan yok: env `{ENV_ANAHTARI}` boş/tanımsız · `project.yaml` "
-                  f"`{CONFIG_ANAHTARI}` yok")
+                  "beyan yok: " + " · ".join(bakilan or ["bakılan kaynak bildirilmedi"]))
         return ("ATLANDI", [f"  [SKIP] ATLANDI({kayit.id}): {kayit.fm} kaynağı bu projede beyan "
                             f"edilmemiş ({nerede}) — imza↔kılavuz senkronu ÖLÇÜLMEDİ. Proje bu "
                             f"üreteci sağlıyorsa yolu beyan et."])
@@ -312,7 +336,7 @@ def main() -> int:
         return 2
 
     try:
-        beyan, beyan_kaynagi = beyanlar()
+        beyan, beyan_kaynagi, bakilan = beyanlar()
     except Olculemedi as e:
         print(f"ÖLÇÜLEMEDİ: {e}", file=sys.stderr)
         return 2
@@ -324,7 +348,7 @@ def main() -> int:
 
     bulgulu, olculemedi, atlanan, satirlar = [], [], [], []
     for k in kayitlar:
-        durum, cikti = kayit_kos(k, core, beyan, beyan_kaynagi)
+        durum, cikti = kayit_kos(k, core, beyan, beyan_kaynagi, bakilan)
         satirlar += cikti
         if durum == "BULGU":
             bulgulu.append(k.id)
