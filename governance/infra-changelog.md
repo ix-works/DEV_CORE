@@ -14,6 +14,13 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## claude/agents/*.md — `tools:` satırına `SendMessage` (2026-10-18; lider, kullanıcı kararı) — ⚠GEVŞETME YOK
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-10-18 | `adt-gateway` · `backend-expert` · `bug-expert` · `frontend-expert` · `sap-feature` · `sap-research` `tools:` satırının sonuna `SendMessage` eklendi (infra-expert #207 ile aynı biçim). `infra-expert` tanımındaki "KANAL DOĞRULANMADI (Q186)" şerhi ölçümle güncellendi; hata hâlinde yedek yol (`### AR-n` blokları nihai rapor başında) korundu. | Aynı turda adsız arka-plan spawn: `tools:`'unda `SendMessage` olan 4 `infra-expert` ara raporlarını gönderebildi; beyanı olmayan `bug-expert` "aracım yok" dedi, `frontend-expert` 48 dk boyunca hiç ara rapor göndermedi ⇒ brif şablonunun §8 ara-rapor sözleşmesi bu rollerde yapısal olarak uygulanamıyordu. | Kontrol grubu ölçümü yukarıda (beyanlı rol = gönderdi · beyansız rol = yok). Değişiklik sonrası etki bir sonraki spawn'da ölçülür (ilk FE/BE/bug-expert ara raporu = kanıt). Davranış kodu yok. | — (ajan tanımı; fixture yok) | — |
+
+Test-senaryosu: değişiklikten sonra spawn edilen ilk `bug-expert` / `frontend-expert` brifinde AR-1 iste; `SendMessage` başarıyla gelirse kanal açık, "No such tool" hatası gelirse bu kayıt yeniden açılır (beyan yetmedi — spawn kipi değişkeni).
+
 ## scripts/build_kd_pdf.py — argüman sözleşmesi + proje adı temizliği (B85, 2026-10-18; infra-expert) — ⚠DEĞİŞİKLİK (üç sessiz yazma hedefi açık bayrağa bağlandı; GEVŞETME YOK)
 | tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
 |---|---|---|---|---|---|
