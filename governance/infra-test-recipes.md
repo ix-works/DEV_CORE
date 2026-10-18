@@ -3492,3 +3492,19 @@ python tests/fixtures/b0_secim/run.py                    # HARİTA satırı ekle
 - **Eski kod tabanı** `git show 998e739:scripts/build_kd_pdf.py` (CI fetch-depth 0). Eski başlık ve eski md/html adları taban kaynağından/çıktısından ÇALIŞMA ANINDA okunur; fixture'a tüketici proje adı yazılmaz. Taban okunamazsa `eski-kod` kipi `[KURULAMADI]` exit 3 (KAÇTI değildir).
 - **Bağımlılık sınırı:** CI markdown/PIL kurmaz → G1/E1/E2 CI'da ATLANDI (PASS sayılmaz); yerelde ölçülür. CI taklidi: `python -m venv --without-pip <dizin>` ile o yorumlayıcıdan koş. Bu ortamda `eski-kod` kipi vektörleri yazmayla değil PIL import çöküşüyle (rc 1) düşürür — düşüş gerçek ama sebep farklıdır.
 - **KAPSAM DIŞI:** PDF adımı (`html_to_pdf.js`) ve mermaid render (`mmdc`) — girdi md'de mermaid bloğu yok.
+
+## B88 — `seed_memory --birlestirildi`: elle birleştirme sonrası uyarı KAPANIR, tohum ilerleyince GERİ gelir (#322, 2026-10-18)
+
+```
+python tests/run_battery.py tohum_govde_guncelleme --kardes tohum_terfi_gorunurlugu seed_memory_hub_indeks proje_slug_tek_kaynak b0_secim parca_tamlik --precommit
+```
+
+- `tohum_govde_guncelleme` **48/48** (B68'in 32'si + #322'nin 16'sı); **18 kip**, düşmesi BEKLENEN küme `_BEKLENEN_DUSEN`'de pinli (CORE-07).
+- **Sahne (Issue #322 reçeti, sentetik):** makine GÜNCEL tohumla (V2) kurulu; `feedback_duzenlenmis.md`'nin manifest kaydı V1'de (tohum o günden beri ilerledi), yerel kopya V2'nin TAMAMI + yerel ek.
+- Vektör ↔ brif: 1 sorunlu kol **B1** (bayraksız iki koşum `[UYARI]` + manifest V1'de) · ipucu **B1h** · 2 işaret **B2** · 3 sonraki koşum **B3** · 4 tohum yeniden ilerler (V3) **B4** · 5 kontrol kolu (bayt-aynı) **B5** · 6 geçersiz ad **B6** (yol: `..`, ayırıcı, mutlak, sürücü) / **B7** (tohumda yok, `MEMORY.md` dahil) / **B8** (yerelde yok) / **B9** (dokunulmamış) · 7 frontmatter'a `originSessionId`/`modified` eklenmiş kopya **B10** · etkileşim **B11** `--force` · **B12** `--terfi-adaylari` · **B13** `--dry-run` · **B14** `--prune` · manifestsiz makine **B15**.
+- Yeni kipler ↔ küme: `isaret-yok` {B2, B3, B4, B10, B14, B15} · `isaret-eski-manifeste` {B15} · `dokunulmamis-isaretlenir` {B9} · `yol-kabul` {B6} · `yerelde-yok-kabul` {B8} · `force-serbest` {B11} · `terfi-serbest` {B12} · `ipucu-yok` {B1h}. Eski kiplerin kümeleri yeni vektörlerle genişledi; gerekçeleri `_BEKLENEN_DUSEN` yorumlarında.
+- ⛔ **SİLİNEMEZ:** **B1** (sorunlu kolun kontrol grubu — bayraksız uyarı SÜRMELİ; yoksa B3 boş-yeşil olur) · **B4** (susturulan uyarı tohum ilerleyince geri gelir — bayrağın gevşetme olmadığının kanıtı) · **B9** (işaret dokunulmamış dosyanın otomatik güncellemesini bastıramaz) · **B15** (karar sözlüğü yetim/prune sözlüğünden AYRI).
+- **Geçersiz kullanım vektörleri gerekçe METNİNİ de ölçer:** eski kod `--birlestirildi`'yi argparse ile reddeder (yine exit 2) ⇒ yalnız `rc == 2` kıyası eski koda karşı sahte-yeşil olurdu. `yol-kabul` kipi de tohum-üyelik katmanı yine reddettiği için yalnız gerekçe metninden düşer (savunma derinliği: katman başına ayrı vektör).
+- **Kırmızı-önce:** `git show 998e739:scripts/seed_memory.py > <scratch>/eski.py` → `python tests/fixtures/tohum_govde_guncelleme/run.py --seed-kaynak <scratch>/eski.py` → **34/48** (B1 + B5 eski kodda da geçer — kontrol vektörleri).
+- **3. bağlam (gerçek tohum, elle):** scratch `--target`'a HEAD tohumuyla kur → bir dersin manifest kaydını `"0"*40` yap + frontmatter'a `originSessionId`/`modified` satırı ekle (checkout CRLF ise CRLF ile — `text=auto`) + yerel not → koş (`[UYARI]`) → `--birlestirildi <ad>` (manifest = tohum sha, `(tohumun tüm satırları yerel kopyada)`) → koş (`[OK] Her şey güncel.`); `--terfi-adaylari` (a) önce/sonra aynı. ⛔ Gerçek memory dizinine `--target` VERME.
+- **DOĞRULANAMADI:** ikinci fiziksel makine; `team_setup` özet satırında komut ipucu (alt_arac son satırı 70 karaktere keser — kapsam dışı).

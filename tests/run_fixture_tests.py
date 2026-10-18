@@ -624,8 +624,9 @@ OZEL_TESTLER = [
      "seed_memory govde guncellemesi: dokunulmamis (yerel == manifest eski sha) + tohum "
      "ilerlemis -> GUNCELLENIR · duzenlenmis/ayirt-edilemez -> dokunulmaz + 'elle birlestir' "
      "(Her sey guncel DENMEZ) · atlanan dosyaya ESKI sha · dry-run yazmaz · CRLF ham sha + "
-     "bilgi satiri · terfi (b) kovasi kosumdan sonra dogru; 31 vektor + 10 mutasyon "
-     "(pinli kume, CORE-07); eski kod 15/31"),
+     "bilgi satiri · terfi (b) kovasi kosumdan sonra dogru · #322 `--birlestirildi` elle "
+     "birlestirme sonrasi uyariyi kapatir (tohum ilerleyince geri gelir; gecersiz ad/--force/"
+     "--terfi-adaylari exit 2); 48 vektor + 18 mutasyon (pinli kume, CORE-07); HEAD-oncesi kod 34/48"),
     # 2026-09-18 (Q326/D7): desen 3. kez genisledi; 2 harfle sinirli desen 3-4 harfli
     # modul kodunu KACIRIYORDU (kontrol grubu: 2 harfli yakalaniyordu).
     ("z_obje_desen_kapsami",

@@ -159,6 +159,21 @@ kaydı yoksa dosyaya **dokunulmaz** ve son satır `[UYARI] N tohum dosyası elle
 olur (team_setup çıktısında da bu satır görünür) — listedeki dosyayı tohumla **elle birleştir**;
 yerelde zenginleştirilmiş içerik varsa koru. `[UYARI]` varken çıktı *"her şey güncel"* DEMEZ.
 
+**Birleştirdikten sonra uyarıyı kapat (core #322):** birleştirilmiş kopya tohumla bayt-bayt eşit
+olmadıkça araç onu her koşumda yine "düzenlenmiş" sayar — Claude Code'un frontmatter'a kendiliğinden
+eklediği alanlar (`originSessionId`, `modified`) yüzünden eşitlik pratikte de kurulamaz. Birleştirme
+bittiğinde dosya başına bir kez:
+
+```bash
+python core/scripts/seed_memory.py --birlestirildi <dosya>   # birden çok: bayrağı tekrarla
+```
+
+Araç manifest'e o dosya için tohumun güncel sha'sını yazar → sonraki koşumlar sessiz; tohum o
+dosyada **yeniden** ilerlerse uyarı geri gelir (yine birleştir, yine işaretle). Bayrak bir
+**beyandır**, birleştirmeyi denetlemez — çıktıdaki `[BİLGİ] tohumun N satırı yerel kopyada yok`
+satırı yalnız ipucudur. Dokunulmamış dosya işaretlenemez (araç onu kendisi günceller), `--force`
+ve `--terfi-adaylari` ile birlikte verilemez (exit 2).
+
 ⛔ **TEK SEFERLİK KURTARMA — #318 ÖNCESİ tohumlanmış makine:** eski sürüm atlanan dosyaya da
 **yeni** sha'yı manifest'e yazıyordu ⇒ o makinede eski gövdeli kopya artık "dokunulmamış" olarak
 tanınmaz (araç onu düzenlenmiş/yerel-ileri sayar ve güncellemez; `seed_memory.py --help` SINIR
@@ -179,7 +194,8 @@ done
 
 `SIL+SEED` = yerel kopya dokunulmamış eski bir tohum sürümüdür → **o dosyayı** sil; listedekiler
 bitince `seed_memory.py`'yi bir kez koş. `ELLE` = yerel kopya bu makinede düzenlenmiştir →
-⛔ **SİLME**, tohumla elle birleştir. Güncel olan ve yerelde bulunmayan dosya basılmaz.
+⛔ **SİLME**, tohumla elle birleştir, sonra `--birlestirildi <dosya>` (yukarıda). Güncel olan ve
+yerelde bulunmayan dosya basılmaz.
 ⛔ Denetimsiz *"sil + yeniden koş"* talimatı verme: yerelde zenginleştirilmiş ders kaybolur.
 Silinip yeniden tohumlanan dosyanın manifest kaydı tohum sha'sıyla yazılır ⇒ sonraki
 güncellemeler yine otomatik akar.
