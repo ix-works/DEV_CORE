@@ -49,11 +49,11 @@ Seni **lider** spawn eder (Expert değil — Expert'in spawn yetkisi yok; ADR 00
    bulgu olarak lidere raporla. **Neden:** 2026-10-18 doğrulanmış vakada aynı yazılı kural (metotlar arası yorum,
    BE-10b) iki ayrı taze incelemede gözden kaçtı; kural metinden kesin tespit edilebilir olduğu hâlde okuyarak
    kontrol ediliyordu. Programın bir `FAIL` satırını faz-2'de yanlış-pozitif diye çürütürsen hüküm `ÇÜRÜTÜLDÜ` + kanıt
-   olur (`WARN` satırı için de aynı). Programın FAIL dediği satıra `PASS` yazma: program bunu ÇELİŞKİ sayar ve rapor reddedilir. Çürütmeler korpus kalibrasyon adayıdır, lidere
+   olur (`WARN` satırı için de aynı). Programın A-sınıfı `FAIL` dediği satıra yalnız `FAIL→F<n>` ya da kanıtlı `ÇÜRÜTÜLDÜ` yazılır; `PASS`/`WARN`/`UYGULANMAZ`/`ÖLÇÜLEMEDİ` yazarsan program bunu ÇELİŞKİ sayar ve rapor reddedilir. Çürütmeler korpus kalibrasyon adayıdır, lidere
    ayrıca listele. Program koşturulamıyorsa (exit 2 / `[PROGRAM KOŞMADI]` / traceback) raporun başına
    `PROGRAM KOŞMADI: <neden>` yaz ve YALNIZ bu durumda diff'teki dosya türlerine uyan checklist'in (BE/FE/doc) TÜM
    maddelerini elle tara; her biri tabloya bir satır (uymayan `UYGULANMAZ` + gerekçe, sınıf sütunu `—`). Program
-   koştuysa A/B satırlarını yeniden tarama: programın satırını aynen aktar, sen `ELLE` satırlarına hüküm ver.
+   koştuysa A/B satırlarını yeniden tarama: programın satırını aynen aktar, sen `ELLE` satırlarına hüküm ver. Programın `FAIL` dediği her satır için de kendi hüküm tablona aynı ID ile bir satır EKLE (`FAIL→F<n>` ya da `ÇÜRÜTÜLDÜ` + kanıt). Program tablosundaki `FAIL (BLOK)` çıplak FAIL'dir, hangi bulguya bağlandığını göstermez. `--verify-report` aynı ID'nin SON satırını okur; ek satır yoksa rapor `bağsız FAIL` diye reddedilir (ölçüldü 2026-10-18).
 3. **Checklist'e karşı** semantik incele: KOD → `core/playbook/checklists/bug-checklist-frontend.md` (FE) / `bug-checklist-backend.md` (BE); **DOKÜMAN (KD/FS/TS) → `core/playbook/checklists/doc-checklist.md`** (§A KD / §B FS / §C TS) HER ilgili madde. **Uygulanabilir HER madde kapsama tablosunda bir satır alır** (aşağıdaki ÇIKTI ŞABLONU). Bu diffe uymayan madde `UYGULANMAZ` + gerekçeyle yazılır, boş bırakılmaz; tablosuz rapor eksik sayılır (lider `checklist_check.py --verify-report` ile denetler, eksik satırlı rapor geri döner). **Kural/talimat dosyası** (checklist, standart, ajan tanımı, playbook kuralı) inceliyorsan: `core/standards/13-kural-yazim-standardi.md`'nin dört alanı (NE · NEDEN · NE ZAMAN · NEREDE) ve üç testi (netlik · ulaşım · çelişki) de checklist'tir — eksik alan `[EKSİK]`. Doküman incelerken kanıt = md/HTML/PDF içeriği + ekran görüntüleri (örn. DOC-KD-01 mock-veri: görsellerde kirli/gerçek backend kaydı var mı GÖZLE; üretilen HTML/PDF'i aç, broken-image/eksik-bölüm kontrol et).
    - **+ STANDART-UYUM (senin işin — yalnız bug-checklist değil):** yaratılan/değişen objeler **ilgili `standards/`'a da** uyumlu mu (naming/coding-`<tip>`/UI/doc)? `sap-abap-dev` router ile göreve-uygulanabilir standardı bul; deterministik olanları KOŞ. **Build-unit standardı atlayabilir (skill router kuralı taşısa bile) — bug-expert son savunma katmanıdır.** Standart-ihlali de **EKSİK**'tir (must-do karşılanmamış), pass geçilmez. (ZSD001 klasik build include-naming standardını atladı, bug-expert kaçırdı — 2026-07-12.)
 4. **DOĞRULA (faz-2):** her ham bulguyu **çürütmeye çalış** — canlı kaynak/`adt_get`/`adt_atc_check`/abaplint ile (syntax_check DEĞİL — yukarı bak). Çürütemediğini raporla; çürüttüğünü AT.
@@ -112,7 +112,7 @@ Checklist'te iki cins must-do var; tipini **checklist'in TİP'i belirler**, sen 
 
 ## ÇIKTI ŞABLONU (kanıt-zorunlu)
 Her bulgu: `[TİP·SEVERITY·KANIT] dosya:satır — sorun — failure-mode/eksik-gereksinim — neden mevcut guard/standart yetmiyor — önerilen aksiyon`. TİP = HATA | EKSİK | ÖNERİ · KANIT = canlı | kaynak | doküman.
-**KAPSAMA TABLOSU (zorunlu bölüm):** önce `checklist_check.py` çıktısı aynen; ardından `ELLE` satırlarının senin hükmün:
+**KAPSAMA TABLOSU (zorunlu bölüm):** önce `checklist_check.py` çıktısı aynen; ardından `ELLE` satırlarının ve programın `FAIL` satırlarının senin hükmün (bu tablo program tablosundan SONRA gelir, aynı ID'nin son satırı geçerlidir):
 `ID · sınıf · hüküm · kanıt (dosya:satır, sorgu, test)`. **Hüküm kelimeleri** programın kabul ettikleridir ve
 `checklist_check.py --help` çıktısında listelenir (otorite programdır; bugünkü liste): `PASS` · `FAIL→F<n>`
 (bulgu tablosundaki numara) · `WARN` · `UYGULANMAZ` + gerekçe · `ÖLÇÜLEMEDİ` + neden · `ÇÜRÜTÜLDÜ` + kanıt. Başka
