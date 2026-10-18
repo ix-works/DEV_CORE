@@ -1,0 +1,1162 @@
+# checklist-map.yaml — checklist maddesi → kontrol eşlemesi (checklist_check.py okur)
+#
+# Her madde: id · sinif (A = kaynak metinden kesin tespit · B = SAP/çalışma zamanı sorgusu · C = yalnız yargı)
+# · uygulanir (glob; `/` içermeyen desen dosya ADINA, içeren desen repo-göreli yola eşlenir)
+# · kontrol (checklist_check.py'deki fonksiyon kimliği; C'de yalnız `ip_` önekli İPUCU tarayıcısı — hüküm vermez)
+# · seviye (blok = FAIL'de exit 1; ADR 0019 gereği YALNIZ BE-10b · uyari · bilgi)
+# · yazan_kanali (kuralı kodu YAZAN ajanın okuduğu core-göreli dosya; `--reach` denetler)
+# Ek alanlar: not (gerekçe/kısmi kapsam) · ayrildi (checklist metni henüz yazılmamış ayrılmış kimlik)
+# · tum_dosya (diff kipinde değişmeyen satırdaki bulgu da FAIL kalır) · capa (yazan_kanali'nda ID yerine aranacak metin)
+#
+# Seviye ilkesi: checklist HIGH/BLOCKER → uyari; MEDIUM/LOW/WARNING → bilgi. Bloklamak bu dosyanın değil
+# ADR 0019 onayının işidir. Tutarlılık: `python scripts/validators/checklist_check.py --harita-denetim`.
+#
+# ⚠ Bu dosya PyYAML OLMADAN okunur (CI kurmaz): yalnız blok-liste + `anahtar: değer` + akış listesi
+# `[a, "b"]` + çift tırnaklı dize. Çok satırlı değer, çapa/takma ad, iç içe eşleme KULLANMA.
+
+maddeler:
+  - id: BE-01
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be01_std_obje_yazim
+    seviye: uyari
+    yazan_kanali: null
+    not: Z/Y dışı nesne dosyası + standart tabloya kesin DB yazımı (UPDATE…SET / DELETE FROM / INSERT INTO…VALUES) FAIL; MODIFY/INSERT/DELETE … FROM tablo-mu-itab-mı belirsiz → WARN. ADT ile standart obje yaratma bu programın yüzeyi değil (MCP guardrail)
+  - id: BE-02
+    sinif: C
+    uygulanir: ["*.abap", "*.cds", "*.ddl", "*.asddls", "*.ddls", "*.bdef", "*.asbdef", "*.srvd", "*.srvdsrv", "*.dcl", "*.tabl.ddl", "*.tabl.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-03
+    sinif: A
+    uygulanir: ["*.abap", "*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: be03_released
+    seviye: uyari
+    yazan_kanali: null
+    not: check_released_objects haritası; WARN (yönlendirir)
+  - id: BE-04
+    sinif: A
+    uygulanir: ["*.clas.abap", "*.intf.abap"]
+    kontrol: be04_decimal_write
+    seviye: uyari
+    yazan_kanali: null
+    not: yalnız API gövdesi işaretli dosya (check_decimal_write_to kapsamı)
+  - id: BE-05
+    sinif: A
+    uygulanir: ["*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: be05_ns_dtel_tirnak
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-06
+    sinif: B
+    uygulanir: ["*.bdef", "*.asbdef"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: aktivasyon (adt_activate) gerekir
+  - id: BE-07
+    sinif: B
+    uygulanir: ["*.cds", "*.ddl", "*.asddls", "*.ddls", "*.bdef", "*.asbdef"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: yaratım sonrası readback (adt_get) gerekir
+  - id: BE-08
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-09
+    sinif: C
+    uygulanir: ["*.abap", "*.cds", "*.ddl", "*.asddls", "*.ddls", "*.bdef", "*.asbdef"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-10a
+    sinif: A
+    uygulanir: ["*.clas.abap", "*.intf.abap"]
+    kontrol: be10a_type_c
+    seviye: uyari
+    yazan_kanali: null
+    not: "yalnız `TYPE c LENGTH n`; CURR DTEL / RANGE OF ZZ1_* ayakları DDIC bilgisi ister (ELLE değil, kapsam dışı — adt_syntax_check)"
+  - id: BE-10b
+    sinif: A
+    uygulanir: ["*.clas.abap"]
+    kontrol: be10b_yorum_bandi
+    seviye: blok
+    yazan_kanali: claude/agents/backend-expert.md
+    tum_dosya: true
+    not: "yalnız ana sınıf dosyası; .ccimp/.ccau kapsam dışı (bir projede 9 yanlış-pozitif ölçüldü, 2026-10-18)"
+  - id: BE-11
+    sinif: A
+    uygulanir: ["*.bdef", "*.asbdef"]
+    kontrol: be11_audit
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-12
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be12_loop_select
+    seviye: uyari
+    yazan_kanali: null
+    not: "statik ayak (LOOP AT…ENDLOOP içinde SELECT; `#EC CI_SEL_NESTED` muaf, `FROM @itab` hariç); öbür P1'ler ATC ister → kalan ELLE"
+  - id: BE-13
+    sinif: C
+    uygulanir: ["*.tabl.ddl", "*.tabl.xml", "*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-14
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-15
+    sinif: B
+    uygulanir: ["*.abap", "*.cds", "*.ddl", "*.asddls", "*.ddls", "*.bdef", "*.asbdef", "*.srvd", "*.srvdsrv", "*.dcl"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: yazma sonrası canlı readback (atom.py readback-gate)
+  - id: BE-16
+    sinif: B
+    uygulanir: ["*.tabl.ddl", "*.tabl.xml"]
+    kontrol: be16_alan_drop
+    seviye: uyari
+    yazan_kanali: null
+    not: check_table_field_drop canlı kaynakla kıyaslar
+  - id: BE-17
+    sinif: C
+    uygulanir: ["*.abap", "*.cds", "*.ddl", "*.asddls", "*.ddls", "*.bdef", "*.asbdef"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-18
+    sinif: C
+    uygulanir: ["*.abap", "*.cds", "*.ddl", "*.asddls", "*.ddls", "*.bdef", "*.asbdef"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-19
+    sinif: C
+    uygulanir: ["*.abap", "*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: ip_be19_bp_ad
+    seviye: uyari
+    yazan_kanali: null
+    not: "ipucu: BPNAME/but000/bu_partner geçen satırlar; partner alanı mı yargı"
+  - id: BE-20
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: ip_be20_byassoc
+    seviye: uyari
+    yazan_kanali: null
+    not: "ipucu: check_rap_byassoc_keys_only adayları; non-key alan okunuyor mu yargı"
+  - id: BE-21
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: aktivasyon-only (adt_syntax_check / bactivate)
+  - id: BE-22
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: aktivasyon-only (adt_syntax_check / bactivate)
+  - id: BE-23
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: aktivasyon-only (adt_syntax_check / bactivate)
+  - id: BE-24
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: aktivasyon-only (adt_syntax_check / bactivate)
+  - id: BE-25
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: aktivasyon-only (adt_syntax_check / bactivate)
+  - id: BE-26
+    sinif: A
+    uygulanir: ["*.clas.abap", "*.ccimp.abap", "*.ccau.abap", "*.clas.locals_imp.abap"]
+    kontrol: be26_rap_commit
+    seviye: uyari
+    yazan_kanali: null
+    not: "check_no_rap_commit desenleri; `#NO_RAP_COMMIT_CHECK` kaçışı korunur"
+  - id: BE-27
+    sinif: B
+    uygulanir: ["*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: proven-precedent ya da bactivate
+  - id: BE-28
+    sinif: A
+    uygulanir: ["*.clas.abap", "*.ccimp.abap"]
+    kontrol: be28_amdp
+    seviye: uyari
+    yazan_kanali: null
+    not: "(b) ASCII-7 + (c) `--` yorumunda apostrof ölçülür; (a) client seti ve (d) namespaced tablo ELLE"
+  - id: BE-29
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: hedef tablonun non-key alan TİPLERİ DDIC bilgisi ister
+  - id: BE-30
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be30_alv_changing
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-31
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be31_kna1_lfa1
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-32
+    sinif: C
+    uygulanir: ["*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: ip_be32_cds_agg_unit
+    seviye: uyari
+    yazan_kanali: null
+    not: "ipucu: alan tipi addan tahmin edilir (UNIT/CUKY kesin değil) → yargı + adt_syntax_check"
+  - id: BE-33
+    sinif: A
+    uygulanir: ["*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: be33_union_ignoreprop
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-34
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be34_bape_vbak_zz1
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-35
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be35_char_tip
+    seviye: bilgi
+    yazan_kanali: null
+    not: "checklist'in kendi tanımı gereği WARN (tip varlığı DDIC'te teyit)"
+  - id: BE-36
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be36_substring_ifade
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-37
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be37_eew_klasik
+    seviye: uyari
+    yazan_kanali: null
+    not: "BAPE_SDSALESDOC + valuepart → FAIL; CL_CFD_BAPI_MAPPING → PASS; ikisi de yoksa ELLE. Runtime readback ayağı ELLE değil, B (canlı)"
+  - id: BE-38
+    sinif: A
+    uygulanir: ["*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: be38_klasik_view
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-39
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: include version=active readback
+  - id: BE-40
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be40_tabfn_client
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-41
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be41_perform_ifade
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-42
+    sinif: B
+    uygulanir: ["*.cds", "*.ddl", "*.asddls", "*.ddls", "*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: canlı OData curl
+  - id: BE-43
+    sinif: B
+    uygulanir: ["*.abap", "*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: konfigürasyon tablosu canlı okunur
+  - id: BE-44
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-45
+    sinif: B
+    uygulanir: ["*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-46
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: "A olabilirdi: ana programın fixed-point/strict bağlamı include metninde YOK → yargı"
+  - id: BE-47
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be47_template_pipe
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-48
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be48_param_sirasi
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-49
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be49_include_ad
+    seviye: uyari
+    yazan_kanali: null
+    not: "check_package_naming.validate_classic_include_naming (C-INC-NAME-01); yeni obje adının genel naming uyumu ELLE değil, check_package_naming"
+  - id: BE-50
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be50_loop_data
+    seviye: uyari
+    yazan_kanali: null
+    not: "desen: LOOP içi `DATA … VALUE` ya da CLEAR'sız APPEND hedefi tablo → WARN"
+  - id: BE-51
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be51_once_kullanim
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-52
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-53
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-54
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-55
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be55_inline_tablo_param
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-56
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: text-pool ayrı objedir; push_textpool readback
+  - id: BE-57
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be57_returning_key
+    seviye: uyari
+    yazan_kanali: null
+    not: yalnız aynı dosyada tanımlı tablo tipi değerlendirilir
+  - id: BE-58
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be58_secim_ekrani_ad
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-59
+    sinif: A
+    uygulanir: ["*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: be59_concat_bosluk
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-60
+    sinif: A
+    uygulanir: ["*.clas.abap", "*.ccimp.abap", "*.ccau.abap", "*.clas.locals_imp.abap"]
+    kontrol: be60_delete_val_read
+    seviye: uyari
+    yazan_kanali: null
+    not: "paketteki BDEF'ten delete-tetikli validation adları okunur"
+  - id: BE-61
+    sinif: A
+    uygulanir: ["*.cds", "*.ddl", "*.asddls", "*.ddls", "*.srvd", "*.srvdsrv"]
+    kontrol: be61_cds_srvd_yorum
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-62
+    sinif: A
+    uygulanir: ["*.bdef", "*.asbdef"]
+    kontrol: be62_bdef_backtick
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-63
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be63_alv_row_index
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-64
+    sinif: C
+    uygulanir: ["**/*"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-65
+    sinif: C
+    uygulanir: ["**/*"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-66
+    sinif: C
+    uygulanir: ["**/*"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-67
+    sinif: B
+    uygulanir: ["*.abap", "*.cds", "*.ddl", "*.asddls", "*.ddls", "*.srvd", "*.srvdsrv"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-68
+    sinif: B
+    uygulanir: ["*.abap", "*.cds", "*.ddl", "*.asddls", "*.ddls"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-69
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: TABLES tipinin tablo tipi olduğu DDIC bilgisi ister
+  - id: BE-70
+    sinif: C
+    uygulanir: ["**/*"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-71
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be71_tables_importing
+    seviye: uyari
+    yazan_kanali: null
+    not: yalnız çevreleyen metodun IMPORTING parametresi aynı dosyada bildirilmişse
+  - id: BE-72
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-73
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-74
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-75
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-76
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be76_wait_rap
+    seviye: uyari
+    yazan_kanali: null
+    not: RAP davranış sınıfında FAIL; bağlam belirsizse WARN
+  - id: BE-77
+    sinif: C
+    uygulanir: ["**/*"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-78
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-79
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-80
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: claude/agents/backend-expert.md
+    not: satır tipinin NUMC olduğu DDIC bilgisi ister
+  - id: BE-81
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be81_pcre_bosluk
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-82
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: BE-83
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-84
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: BE-85
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be85_empty_key_sort
+    seviye: uyari
+    yazan_kanali: claude/agents/backend-expert.md
+    ayrildi: true
+    not: "aynı dosyada `WITH EMPTY KEY` bildirilen tablo/tip"
+  - id: BE-86
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be86_alpha_out
+    seviye: bilgi
+    yazan_kanali: claude/agents/backend-expert.md
+    ayrildi: true
+    not: alan tipi bilinmediğinden WARN
+  - id: BE-87
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: be87_abapdoc_konum
+    seviye: uyari
+    yazan_kanali: claude/agents/backend-expert.md
+    ayrildi: true
+    not: "ölçülmüş biçim: `\"!` bloğu iki noktalı zincir bildiriminden hemen önce → FAIL; ardından bildirim gelmeyen `\"!` → WARN"
+  - id: BE-88
+    sinif: B
+    uygulanir: ["*.abap"]
+    kontrol: be88_pretty_print
+    seviye: uyari
+    yazan_kanali: claude/agents/backend-expert.md
+    ayrildi: true
+    not: "SAP pretty printer ucu (durumsuz, yazmaz); kullanıcının ADT ayarı ↔ ATC varyantı farkı olabilir"
+  - id: FE-01
+    sinif: A
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: fe01_v2_nav
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-02
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-03
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-04
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-05
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-06
+    sinif: A
+    uygulanir: ["**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: fe06_core_title
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-07
+    sinif: C
+    uygulanir: ["**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: ip_fe07_type_number
+    seviye: bilgi
+    yazan_kanali: null
+    not: "ipucu: filtre-sayaç istisnası yargı"
+  - id: FE-08
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-36
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-37
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-38
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: ip_fe38_promise_all
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-09
+    sinif: B
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: readonly alan bilgisi canlı $metadata ister
+  - id: FE-10
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-11
+    sinif: A
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: fe11_i18n
+    seviye: bilgi
+    yazan_kanali: null
+  - id: FE-12
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-13
+    sinif: A
+    uygulanir: ["**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: fe13_grid
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-14
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-15
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-16
+    sinif: B
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-17
+    sinif: B
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-18
+    sinif: C
+    uygulanir: ["**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-19
+    sinif: C
+    uygulanir: ["**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: FE-20
+    sinif: B
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: canlı $metadata
+  - id: FE-21
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-22
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-23
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: FE-24
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: ip_fe24_toast_nav
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-26
+    sinif: A
+    uygulanir: ["**/webapp/manifest.json"]
+    kontrol: fe26_settings_data
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-27
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-28
+    sinif: B
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: canlı $metadata Edm tipleri
+  - id: FE-25
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-29
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-30
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: ip_fe30_client_prop
+    seviye: bilgi
+    yazan_kanali: null
+  - id: FE-31
+    sinif: B
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: SRVD expose + canlı $metadata
+  - id: FE-32
+    sinif: A
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: fe32_filter
+    seviye: uyari
+    yazan_kanali: null
+    not: "(a) caseSensitive:false FAIL; (b) filtre view'ında MultiInput yokluğu WARN; (c)-(e) ELLE; (f) FE-50"
+  - id: FE-34
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: claude/agents/frontend-expert.md
+  - id: FE-33
+    sinif: A
+    uygulanir: ["**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: fe33_form_container
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-35
+    sinif: A
+    uygulanir: ["**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: fe35_qty_formatter
+    seviye: bilgi
+    yazan_kanali: claude/agents/frontend-expert.md
+    not: "alan adı listesi checklist'in kendisinden (Qty/Miktar/Bakiye/Remaining/Delivered)"
+  - id: FE-39
+    sinif: C
+    uygulanir: ["**/*"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-40
+    sinif: C
+    uygulanir: ["**/*"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: FE-41
+    sinif: C
+    uygulanir: ["**/*"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: FE-42
+    sinif: A
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: fe42_callfunction_yuk
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-43
+    sinif: A
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: fe43_metadataurlparams
+    seviye: bilgi
+    yazan_kanali: null
+  - id: FE-44
+    sinif: C
+    uygulanir: ["**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: ip_fe44_file_size
+    seviye: bilgi
+    yazan_kanali: null
+  - id: FE-45
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-46
+    sinif: A
+    uygulanir: ["**/webapp/index.html"]
+    kontrol: fe46_cdn_bootstrap
+    seviye: bilgi
+    yazan_kanali: null
+  - id: FE-47
+    sinif: A
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: fe47_urlparam_null
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-48
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: ip_fe48_client_param
+    seviye: uyari
+    yazan_kanali: null
+  - id: FE-49
+    sinif: A
+    uygulanir: ["**/webapp/**/*.js"]
+    kontrol: fe49_sync_xhr
+    seviye: uyari
+    yazan_kanali: null
+    not: unload dinleyicili dosyada FAIL; değilse WARN (çağıranı izle)
+  - id: FE-50
+    sinif: A
+    uygulanir: ["**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: fe50_multiinput_validator
+    seviye: uyari
+    yazan_kanali: null
+    not: "(a) addValidator varlığı uygulama JS'inde; (b)-(f) ELLE"
+  - id: FE-51
+    sinif: A
+    uygulanir: ["**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: fe51_selectall
+    seviye: uyari
+    yazan_kanali: claude/agents/frontend-expert.md
+    ayrildi: true
+  - id: FE-52
+    sinif: B
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: claude/agents/frontend-expert.md
+    ayrildi: true
+    not: "canlı yanıt şekli (Edm.Decimal boş → \"0.000\") ölçümü"
+  - id: DOC-KD-01
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-02
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-03
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-04
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-05
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-06
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-07
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-08
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-09
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-10
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-11
+    sinif: A
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
+    kontrol: doc_kd11_gorsel
+    seviye: uyari
+    yazan_kanali: null
+    not: göreli görsel yolları diskte var mı; PDF üretimi + uygulama içi yardım ELLE
+  - id: DOC-KD-12
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm", "*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-13
+    sinif: A
+    uygulanir: ["*.abap"]
+    kontrol: doc_kd13_itf
+    seviye: uyari
+    yazan_kanali: null
+    not: "DOCU runner .abap'ında iv_line ≤72 + tag satırda kapanır (check_docu_itf_line_width); U1/UTF-8 ayakları ELLE değil, kapsam dışı"
+  - id: DOC-KD-14
+    sinif: B
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm", "*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-KD-15
+    sinif: A
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm", "**/webapp/**/help/*.html"]
+    kontrol: doc_kd15_mermaid
+    seviye: uyari
+    yazan_kanali: null
+    not: "html'de ham mermaid FAIL; md'de fence WARN (build PNG'ye çeviriyorsa meşru)"
+  - id: DOC-KD-16
+    sinif: A
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm", "**/webapp/**/help/*.html"]
+    kontrol: doc_kd16_capa
+    seviye: uyari
+    yazan_kanali: null
+    not: "html: href# ⊆ id ∪ a-name; md: ](#x) ⊆ başlık slug'ı (build_doc_pdf.slug_tr). PDF link sayısı ELLE değil, kapsam dışı"
+  - id: DOC-FS-01
+    sinif: C
+    uygulanir: ["**/FS-*.md", "**/EK-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-FS-02
+    sinif: C
+    uygulanir: ["**/FS-*.md", "**/EK-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-FS-03
+    sinif: C
+    uygulanir: ["**/FS-*.md", "**/EK-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-FS-04
+    sinif: C
+    uygulanir: ["**/FS-*.md", "**/EK-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-FS-05
+    sinif: A
+    uygulanir: ["**/FS-*.md", "**/EK-*.md", "**/TS-*.md"]
+    kontrol: doc_fs05_gunluk
+    seviye: uyari
+    yazan_kanali: null
+    not: "check_fs_no_analysis_log kalıp sayımı (WARN, warn-first); üslup yargısı ELLE"
+  - id: DOC-FS-06a
+    sinif: A
+    uygulanir: ["**/FS-*.md", "**/EK-*.md"]
+    kontrol: doc_fs06a_surum_satiri
+    seviye: bilgi
+    yazan_kanali: null
+  - id: DOC-FS-06b
+    sinif: C
+    uygulanir: ["**/FS-*.md", "**/EK-*.md"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: DOC-FS-07
+    sinif: A
+    uygulanir: ["**/FS-*.md", "**/EK-*.md"]
+    kontrol: doc_fs07_veri_kaybi
+    seviye: uyari
+    yazan_kanali: null
+    not: "yalnız --diff kipi: kimlik kümesi eski ⊆ yeni ∪ EK; cümle denkliği ELLE"
+  - id: DOC-FS-08
+    sinif: C
+    uygulanir: ["**/FS-*.md", "**/EK-*.md"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: DOC-TS-01
+    sinif: C
+    uygulanir: ["**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-TS-02
+    sinif: C
+    uygulanir: ["**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-TS-03
+    sinif: B
+    uygulanir: ["**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-TS-04
+    sinif: C
+    uygulanir: ["**/TS-*.md"]
+    kontrol: null
+    seviye: bilgi
+    yazan_kanali: null
+  - id: DOC-TS-05
+    sinif: A
+    uygulanir: ["**/TS-*.md"]
+    kontrol: doc_ts05_mesaj
+    seviye: uyari
+    yazan_kanali: null
+    not: "mesaj tablosunda çıplak `&` + >73 karakter; envanter tamlığı ELLE"
+  - id: DOC-TS-06
+    sinif: C
+    uygulanir: ["**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-TS-07
+    sinif: C
+    uygulanir: ["**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-TS-08
+    sinif: C
+    uygulanir: ["**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-CR-01
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm", "**/FS-*.md", "**/EK-*.md", "**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-CR-02
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm", "**/FS-*.md", "**/EK-*.md", "**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-CR-03
+    sinif: B
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm", "**/FS-*.md", "**/EK-*.md", "**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-CR-04
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm", "**/FS-*.md", "**/EK-*.md", "**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-CR-05
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm", "**/FS-*.md", "**/EK-*.md", "**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+  - id: DOC-CR-06
+    sinif: C
+    uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm", "**/FS-*.md", "**/EK-*.md", "**/TS-*.md"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null

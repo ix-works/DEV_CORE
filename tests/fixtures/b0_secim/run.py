@@ -119,23 +119,27 @@ kontrol("P1 bilinen dosya → yalnız ilgili fixture'lar (indeks kapsamı + sır
                   "O:sap_gate_skip_sozlesmesi", "O:team_setup_sablon_sapmasi"},
         f"alınan={secim}")
 
+# ⚠ SAYI HARİTAYA PİNLİ: 2026-10-18 ortak checklist programı bu validator'ın iç adını
+#   (`tara`) çağırıyor → `O:checklist_check` eklendi (2 → 3). HARİTA ile birlikte güncellenir.
 secim, _ = sec("scripts/validators/check_bdef_backtick.py")
-kontrol("P1b bölüm-1 validator → kendi bad/good çifti + K1 payda korpusu",
-        secim == {"V:check_bdef_backtick", "O:validator_kapsam_paydasi"},
+kontrol("P1b bölüm-1 validator → kendi bad/good çifti + K1 payda korpusu + checklist programı",
+        secim == {"V:check_bdef_backtick", "O:validator_kapsam_paydasi", "O:checklist_check"},
         f"alınan={secim}")
 
 # P2: BİRLEŞİM — iki dosya verildiğinde kümeler toplanır (biri diğerini yutmaz).
 # ⚠ SAYI HARİTAYA PİNLİ (P3 ile aynı sözleşme): `check_ui5_freestyle_traps` korpusu
 #   2026-08-28'de 4'ten 5'e çıktı (`O:ui5_blok_yorumu` — B2-06 blok-yorumu FP'si).
 #   Sayıyı gevşetmek (`>=` / alt-küme) çapayı öldürür; HARİTA ile BU SATIR birlikte
-#   güncellenir.
+#   güncellenir. 2026-10-18: ortak checklist programı `_T1_PATTERNS`/`_T4_*` kullanıyor →
+#   `O:checklist_check` (8 → 9).
 secim, _ = sec("scripts/build_core_index.py",
                "scripts/validators/check_ui5_freestyle_traps.py")
-kontrol("P2 çok dosya → BİRLEŞİM (8 birim)",
+kontrol("P2 çok dosya → BİRLEŞİM (9 birim)",
         secim == {"O:core_index_kapsam", "O:core_index_siralama",
                   "O:sap_gate_skip_sozlesmesi", "O:team_setup_sablon_sapmasi",
                   "O:ui5_t1_tirnak_sinifi", "O:ui5_blok_yorumu",
-                  "V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi"},
+                  "V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi",
+                  "O:checklist_check"},
         f"alınan={secim}")
 
 # P3: bir dosya birden çok fixture'ı besliyorsa hepsi seçilir (tek-fixture varsayımı
