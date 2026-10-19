@@ -79,7 +79,13 @@ MUTLAR = {
     "--mutasyon-sid-allowlist-bos": (
         "gc", 'ORNEK_SID = frozenset({"SAH", "AB1"})', "ORNEK_SID = frozenset()"),
     "--mutasyon-bolge-muafiyeti-yok": (
-        "gc", "and not _BOLGE_ETIKETI.fullmatch(m.group(1))", ""),
+        "gc", "and not (_BOLGE_ETIKETI.fullmatch(m.group(1)) and not m.group(2))", ""),
+    # Issue #357 (2026-10-19): muafiyet ara etiketi YOK SAYARSA (eski kod) bolge bicimli ilk
+    # etiketli tenant host sessizlesir (A12-A14 birim + M14 `--msg` ayri surec).
+    # Mutant = 254134f'teki filtre.
+    "--mutasyon-ara-etiket-kosulu-yok": (
+        "gc", "and not (_BOLGE_ETIKETI.fullmatch(m.group(1)) and not m.group(2))",
+        "and not _BOLGE_ETIKETI.fullmatch(m.group(1))"),
     "--mutasyon-host-bas-sinir": (
         "gc", 'r"(?<![A-Za-z0-9._-])"', 'r""'),
     # bug-gate 2026-10-12: `<` / `{` geri-bakis sinifina GERI eklenirse sarmal icindeki
@@ -242,6 +248,16 @@ def main() -> int:
         ekle("A11 `{…}` sarmali icindeki somut host YAKALANIR",
              turler('{"host": "x", "u": {' + T_IAS + '}}') == ["tenant host"],
              f"{turler('{' + T_IAS + '}')}")
+        # Issue #357 (2026-10-19): ilk etiket BOLGE BICIMLI ama ara etiket VAR => tenant.
+        # Eski kod (bolge muafiyeti ara etikete bakmiyordu) uc vektorde de sessizdi.
+        for ad_, host_ in (("A12 bolge bicimli tenant + authentication ara etiketi",
+                            _h("ab12", "authentication", "eu10", BTP)),
+                           ("A13 bolge bicimli tenant + abap ara etiketi",
+                            _h("de1", "abap", "eu10", BTP)),
+                           ("A14 tireli bolge bicimli tenant + tek ara etiket",
+                            _h("us10-001", "abap", BTP))):
+            ekle(ad_ + " YAKALANIR", turler("https://" + host_ + "/x") == ["tenant host"],
+                 f"{turler('https://' + host_)}")
 
         # ── N: NEGATIF (mesru metin) ──────────────────────────────────────────
         negatif = {
@@ -260,6 +276,9 @@ def main() -> int:
             "N13 tanimlayiciya bitisik": "foo" + TR_GERCEK,
             "N14 yalniz-x tenant": _h("xxxx", BULUT),
             "N15 Z-obje adi bu desenlere DUSMEZ": "ZSD001_CL_ORNEK",
+            # Issue #357: ara etiketsiz bolge alani muaf KALIR (tireli bicim + baska sonek).
+            "N16 tireli yalin bolge alani": "https://" + _h("us10-001", BTP) + "/",
+            "N17 yalin bolge alani (public cloud soneki)": _h("eu10", BULUT),
         }
         for ad, metin in negatif.items():
             ekle(ad + " SESSIZ", U(metin) == [], f"bulunan={turler(metin)}")
@@ -449,6 +468,13 @@ def main() -> int:
              rz == 0 and "<commit-mesajı>:3  (Z-obje adı)" in outz
              and "adresi maskelenen 1" in outz and "(kimlik izi)" not in outz
              and Z_SIZINTI not in outz, f"rc={rz} cikti={outz[-500:]!r}")
+        # Issue #357 3. BAGLAM: birim cagrisi disinda AYRI surec + commit mesaji giris noktasi.
+        # Bolge bicimli ilk etiketli tenant (ara etiketli) mesajda da uyari verir, token basilmaz.
+        t_bolge = _h("ab12", "authentication", "eu10", BTP)
+        rq, outq = kos("--msg", "-", girdi="baslik\n\nidp https://" + t_bolge + "/oauth\n")
+        ekle("M14 --msg: bolge bicimli tenant (ara etiketli) UYARI verir, rc 0, token yok",
+             rq == 0 and "UYARI  <commit-mesajı>:3  (tenant host)" in outq
+             and t_bolge not in outq and "ab12" not in outq, f"rc={rq} cikti={outq[-400:]!r}")
         # Bos girdi "temiz" DEGILDIR (yanlis dosya / bos boru) — olculemedi ayri raporlanir.
         for ad_, girdi_ in (("M11a bos stdin", ""), ("M11b yalniz bosluk", "\n  \n\n")):
             re_, oute = kos("--msg", "-", girdi=girdi_)
