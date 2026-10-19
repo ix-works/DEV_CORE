@@ -23,6 +23,7 @@ purpose: SD kilit tabloları (standart SAP referansı — okuma/farkındalık)
 | VBFA | Doküman akışı (document flow) |
 | VBUK / VBUP | Durum başlık/kalem (S/4'te VBAK/VBAP'a gömülü — teyit et) |
 | KONV / PRCD_ELEMENTS | Fiyatlandırma koşulları (S/4 = PRCD_ELEMENTS) |
+| IBINOWN → IBIN → IBINVALUES → IBSYMBOL | Kalem varyant konfigürasyonu değerleri (`VBAP-CUOBJ`'dan; INOB DEĞİL; ATINN IBSYMBOL'de) — zincir: [`../../../howto-lovc-belge-konfigurasyonu-okuma-yazma.md`](../../../howto-lovc-belge-konfigurasyonu-okuma-yazma.md) §1.2 |
 
 ## Teslimat (Delivery)
 | Tablo | İçerik |

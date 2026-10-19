@@ -80,6 +80,11 @@ purpose: ITG modül kural-paketi (SD) — tetik-haritası + kontrol + soru + der
 - **MEVCUT-SİSTEMDE-BAK:** reusable partner-block-check (I_Customer/I_CustomerSalesArea/I_BusinessPartner) varsa reuse; ham tablo YASAK.
 - **TUZAK:** **KNVV blokları division-keyli** → çağıran spart'ı beslemezse AUFSD/LIFSD SESSİZCE atlanır (division=vbak.spart ZORUNLU) · [[bug-checklist-backend]] BE-19 (BU_PARTNER≠KUNNR CVI → generic BP-name join boş/yanlış; KUNNR→I_Customer).
 
+### T-SD-8 · "karakteristik değeri / konfigürasyon / varyant" → VARYANT KONFİGÜRASYONU
+- **ARAŞTIR:** motor tipi önce (`CUCO-PROC_MODE` boş = klasik, `A` = AVC); belge değeri okuma zinciri, released durumu, değer değiştirme yolu: [`../howto-lovc-belge-konfigurasyonu-okuma-yazma.md`](../howto-lovc-belge-konfigurasyonu-okuma-yazma.md).
+- **MEVCUT-SİSTEMDE-BAK:** model hangi client'ta kurulu (geliştirme client'ında iskelet olabilir); profile bağlı Z varyant fonksiyonları (kullanıcıya bağlı sonuç); mevcut `VC_I_GET_CONFIGURATION` kullanan programlar.
+- **TUZAK:** belge değerlerini okuyan released CDS YOK · `…Basic` view'lar released DEĞİL · BAPI ile değişiklikte POSEX boş/eşleşmez = SESSİZ ATLAMA, yalnız değişeni göndermek diğerlerini siler, türetilmişi göndermek dondurur · iç numaralar (ATINN/CUOBJ) client'a özel. Kalemi konfigürasyonuyla devretme ayrı konu: [`../howto-sd-karakteristik-hizli-giris.md`](../howto-sd-karakteristik-hizli-giris.md).
+
 ---
 
 ## SORULACAK (belirsizse DUR — belirsizlik-kalibreli; makul-default'ta varsay-bildir)
