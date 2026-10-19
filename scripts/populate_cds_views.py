@@ -123,7 +123,7 @@ def _derive_prefixes(package=None):
 # `transient view entity` bu desende YOK (Q277 kapısı tanır) — bilinçli, ayrı kalem.
 RAP_BASLIK_DESENI   = r"\bdefine\s+(?:root\s+)?(?:view|abstract)\s+entity"
 RAP_VIEW_ENTITY_RE  = re.compile(RAP_BASLIK_DESENI + r"\b", re.IGNORECASE)
-# Modül-bağımsız RAP view entity adı (NTTDATA: Z<MOD><nnn>_<I|C|R|E>_*;
+# Modül-bağımsız RAP view entity adı (01-naming: Z<MOD><nnn>_<I|C|R|E>_*;
 # MOD = SD/MM/FI/CO/PP/QM/PM/EWM... 2-4 harf). Paket-doğru olma kontrolü
 # check_package_naming.py'de (.rules.md regex'i); burası RAP-naming sanity
 # (ZSD'ye hardcoded DEĞİL — başka modülde de çalışır).

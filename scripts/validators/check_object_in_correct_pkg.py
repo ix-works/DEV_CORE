@@ -29,7 +29,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-# Paket bazlı istisnalar (NTTDATA-onaylı veya legacy)
+# Paket bazlı istisnalar (adlandırma rehberince onaylı veya legacy)
 # B10/K12: paket-istisnalari PROJE-CONFIG'ten. project.yaml:
 #   package_exceptions: ["ZSD001_CLC:^ZCL_SD001_", "ZSD001_CLC:^ZIF_SD001_"]
 from utils.project_config import cfg as _cfg
