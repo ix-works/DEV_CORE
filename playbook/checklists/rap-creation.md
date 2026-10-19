@@ -15,7 +15,7 @@ applies_to: [s4_private]
 
 | ID | Kontrol | Validator | Severity | Kural |
 |---|---|---|---|---|
-| **C-RAP-NAME-01** | Ad NTTDATA RAP prefix'inde mi? (I_/C_/R_/E_ view; SD `UI`/`API`; SB `_O2`/`_O4`; sınıf `ZCL_SD001_`) | `check_package_naming.py` | BLOCKER | `01-naming.md` §4.2/§4.4.1 |
+| **C-RAP-NAME-01** | Ad adlandırma rehberinin RAP önekinde mi? (I_/C_/R_/E_ view; SD `UI`/`API`; SB `_O2`/`_O4`; sınıf `ZCL_SD001_`) | `check_package_naming.py` | BLOCKER | `01-naming.md` §4.2/§4.4.1 |
 | **C-RAP-NAME-02** | BDEF adı root view entity adıyla **aynı** mı? | manual | BLOCKER | SAP zorunlu |
 | **C-RAP-PKG-01** | Obje ZSD001_CLC paketinde mi (cross-pkg sızıntı yok)? | `check_object_in_correct_pkg.py` | BLOCKER | ADR 0003 |
 | **C-RAP-TR-01** | Transport kullanıcının verdiği aktif TR mi? Yeni TR/paket YOK? | manual | BLOCKER | ⛔ ADR 0005 C |

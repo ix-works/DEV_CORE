@@ -14,6 +14,11 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## scripts/create_rap_service.py · scripts/populate_cds_views.py · scripts/validators/check_object_in_correct_pkg.py (yalnız yorum) · playbook/checklists/rap-creation.md · standards/05-coding-rap.md · claude/skills/sap-abap-dev/references/clean-core-replacements.md — Issue #356 + #358 (2026-10-19; lider, kullanıcı onayı MAINTENANCE §6c) — ⚠GEVŞETME YOK
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-10-19 | Üç script'te yalnız YORUM metni: kurum adı yerine kurumdan bağımsız ifade (kod/davranış değişmedi). C-RAP-NAME-01 madde metni ve 05-coding-rap gövde atıfları aynı biçimde; kaynak atfı satırları (`01-naming.md` frontmatter/başlık, `05` `source:`, README, ADR'ler) bilinçli korundu. Ayrıca clean-core eşlemesinde ALV satırları std 06 §3'e bağlandı + SALV'nin de released olmadığı notu | #358: çekirdekten madde başlığı kopyalayan bir tüketici aracı kurum adını kendi deposuna taşıdı · #356: eşleme tablosu koşulsuz SALV önerirken std 06 §3 senaryoya göre GRID diyordu; ARS'te dört ALV sınıfı için kayıt yok (kontrol: I_PRODUCT, CL_ABAP_CONTEXT_INFO RELEASED C1) | `git grep -n -i -E "ntt ?data"` → kalan 16 satır yalnız kaynak atfı + ADR tarihçesi (öncesi 24); script'lerde `git diff` yalnız `#` satırları; genericize-scan 6 dosya bulgu 0 | — (yorum/metin; davranış testi yok) | bu PR |
+
 ## playbook/howto-cekirdek-guncelleme.md (§3 CORE-INDEX + §3e + §8) · playbook/lessons-learned.md (PATTERN #28 ⑤) · claude/memory-seed/feedback_core-index-dala-bagli.md (madde 5)
 | tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
 |---|---|---|---|---|---|

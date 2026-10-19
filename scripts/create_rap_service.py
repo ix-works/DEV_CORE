@@ -37,7 +37,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 PKG = "ZSD001_CLC"                      # default; main() --package ile override
 SRVD_NAME = "ZSD001_UI_ORDER"          # Service Definition
-SRVB_NAME = "ZSD001_UI_ORDER_O2"       # Service Binding (V2, NTTDATA _O2)
+SRVB_NAME = "ZSD001_UI_ORDER_O2"       # Service Binding (V2, rehber _O2 soneki)
 EXPOSE_CDS = "ZSD001_C_ORDER"          # projection
 SRVD_LABEL = "Sefer servisi"
 SRVB_LABEL = ""                        # SRVB (servis bağlama) description; --srvb-label ile

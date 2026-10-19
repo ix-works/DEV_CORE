@@ -21,7 +21,7 @@ source: NTTDATA/TR ABAP Naming Guideline v1.0 (konsolide) + ADR 0005/0006 + ZSD0
 
 ## 1. ROLE & SCOPE
 
-SAP S/4HANA 2025 on-premise, Clean Core **Level A** (RAP) hedefi. Bu standart: RAP obje modeli, katmanlama, naming (NTTDATA konsolide), BDEF kuralları, servis publish, ve **ADR 0005 yasaklarının RAP'a özel yüzeyi**.
+SAP S/4HANA 2025 on-premise, Clean Core **Level A** (RAP) hedefi. Bu standart: RAP obje modeli, katmanlama, naming (adlandırma rehberi konsolide — `01-naming.md`), BDEF kuralları, servis publish, ve **ADR 0005 yasaklarının RAP'a özel yüzeyi**.
 
 ---
 
@@ -53,9 +53,9 @@ Service Binding  (UI/API, _O2/_O4)        ← publish (AI-otonom olmalı; operat
 
 ---
 
-## 4. NAMING (NTTDATA konsolide — `01-naming.md` otorite)
+## 4. NAMING (konsolide — `01-naming.md` otorite)
 
-RAP naming **icat edilmez**; `01-naming.md` (NTTDATA Guideline) §4.2/§4.4.1/§4.4.3/§4.4.5 otoritedir. RAP'a indirgenmiş net tablo (`<PKG#>` = paket no, ör. `SD001`):
+RAP naming **icat edilmez**; `01-naming.md` (adlandırma rehberi) §4.2/§4.4.1/§4.4.3/§4.4.5 otoritedir. RAP'a indirgenmiş net tablo (`<PKG#>` = paket no, ör. `SD001`):
 
 | RAP Objesi | Prefix | ZSD001 Örnek | Kaynak |
 |---|---|---|---|
@@ -208,7 +208,7 @@ Bug-checklist: `BE-19`. (Tarihsel `ZSD000_I_BPNAME` 2026-06-17 silindi.)
 
 ## 10. İLGİLİ
 
-- [`01-naming.md`](01-naming.md) — NTTDATA naming otorite (RAP naming buradan türer)
+- [`01-naming.md`](01-naming.md) — adlandırma otoritesi (RAP naming buradan türer)
 - [`02-coding-backend.md`](02-coding-backend.md) — klasik track (SEGW/FE) — RAP'ın alternatifi
 - [`../playbook/adt-rap.md`](../playbook/adt-rap.md) — L3 RAP ADT REST pattern bankası
 - [`../playbook/checklists/rap-creation.md`](../playbook/checklists/rap-creation.md) — reviewer checklist
