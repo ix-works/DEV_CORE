@@ -42,3 +42,17 @@ purpose: SD SPRO / customizing referansı (doküman tipleri, kopya kontrol, tesl
 |---|---|
 | NACE | Output determination |
 | SAP Document Compliance | Yerel yasal belgeler (ör. Türkiye e-İrsaliye / e-Fatura) |
+
+
+## Varyant konfigürasyonu — aynı belgede kalemi konfigürasyonuyla devretme (Mill hızlı giriş)
+
+> VA21/VA22'de kalemi karakteristik değerleriyle aynı belgedeki başka kaleme devretme
+> (`VBAP-MILL_SE_GPOSN` "Genel kalem"). **VTAA DEĞİLDİR.** IMG düğümü "Satış belgelerinde karakteristik değerlerin hızlı girişi"nin
+> 5 aktivitesi, kullanım, doğrulama, sorun giderme: [`../../../howto-sd-karakteristik-hizli-giris.md`](../../../howto-sd-karakteristik-hizli-giris.md).
+
+| IMG / TX | Alan | Değer |
+|---|---|---|
+| `ISMP/SAPMP/SD_TVAK1` | TVAK `/SAPMP/CEACT` | X (zorunlu) |
+| ⭐ VOV8 | TVAK `UEVOR` "Genel bakış ekranı işlev kodu" | `MILL_SE_UE` (zorunlu — yoksa CEACT=X iken de alan AÇILMAZ) |
+| `ISMP/SAPMP/SD_TVAK1` | TVAK `/SAPMP/PDACT` | X (mevcut kaleme "Aktarım" için) |
+| `ISMP/SAPMP/V_VBMUEH` · `ISMP/SAPMP/SD_MUEBS` · param `VAM` | /SAPMP/VBMUEH · VBMUE/VBMUEZ | isteğe bağlı değer sütunları |
