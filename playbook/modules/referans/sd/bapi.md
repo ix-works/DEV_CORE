@@ -22,6 +22,12 @@ purpose: SD BAPI / RFC FM referansı (standart belge yazma yolları)
 | BAPI_SALESORDER_SIMULATE | SO simülasyon (fiyat/ATP) |
 | BAPI_TRANSACTION_COMMIT / _ROLLBACK | LUW kapanışı |
 
+## Teklif + varyant konfigürasyonu (klasik LO-VC)
+| BAPI | İş |
+|---|---|
+| BAPI_QUOTATION_CREATEFROMDATA2 | Teklif yarat (FG SAPL2031) |
+| BAPI_CUSTOMERQUOTATION_CHANGE | Teklif değiştir; CFGS_* ile konfigürasyon değeri — motoru koşturur. ⚠ POSEX boş/eşleşmez = SESSİZ ATLAMA, tam kullanıcı kümesi, türetilmişi gönderme: [`../../../howto-lovc-belge-konfigurasyonu-okuma-yazma.md`](../../../howto-lovc-belge-konfigurasyonu-okuma-yazma.md) §4 |
+
 ## Teslimat
 | BAPI / FM | İş |
 |---|---|
