@@ -313,6 +313,10 @@ def sap_user_sizintilari(metin: str) -> list[str]:
 # SID'ler (bulgu; ilgili dosyalarda ayrı işte genericize edilir). Host biçimli dizgeler:
 # yer tutucu ilk etiket (`abc123`), yalın bölge alanı (`eu10.hana…`) ve `.` önekli sonek
 # listeleri — hiçbiri tenant DEĞİL ⇒ aşağıdaki muafiyetler bu ölçülen kümeden türetildi.
+# YENİDEN ÖLÇÜM (Issue #357, 2026-10-19, takipli 1011 dosya): bölge muafiyeti ara etikete
+# bağlandıktan sonra eşleşen dizgeler (span) eskisiyle 1011/1011 dosyada AYNI, uyarı farkı 0
+# (yeni 0 · kaybolan 0). ⚠ Korpusta ham host eşleşmesi yalnız 4 — FP tabanı İNCE; ara etiketli
+# + bölge biçimli ilk etiketli SAP-genel bir uç (tenant olmayan) bilinmiyor ama ÖLÇÜLMEDİ.
 
 # SAP transport numarası: <SID>K<6 rakam>; SID 3 karakter, ilki harf.
 TRANSPORT_PAT = re.compile(r"(?<![A-Za-z0-9])([A-Z][A-Z0-9]{2})K(\d{6})(?![A-Za-z0-9])",
@@ -328,12 +332,19 @@ TENANT_HOST_PAT = re.compile(
     # `<` ve `{` BİLEREK sınıfta YOK (bug-gate 2026-10-12): `<host>` / `{host}` sarmalı içindeki
     # somut host da uyarı vermeli. `<tenant>.…` yer tutucusu yine sessizdir — onu `>` keser.
     r"([A-Za-z0-9][A-Za-z0-9-]*)"            # ilk etiket = tenant / alt hesap
-    r"(?:\.[A-Za-z0-9-]+)*?"                 # ara etiketler (bölge, abap, authentication …)
+    # Ara etiketler (bölge, abap, authentication …) YAKALANIR (Issue #357, 2026-10-19): bölge
+    # muafiyeti yalnız ara etiket YOKKEN geçerlidir ve bunu filtre group(2)'den okur. Yalnız
+    # yakalayıcı grup eklendi; tembel `*?` aynen ⇒ eşleşen dizgeler eskisiyle birebir aynıdır.
+    r"((?:\.[A-Za-z0-9-]+)*?)"
     r"\.(?:s4hana\.cloud\.sap|s4hana\.ondemand\.com|hana\.ondemand\.com"
     r"|accounts\.ondemand\.com|accounts\.cloud\.sap)"
     r"(?![A-Za-z0-9-])",
     re.IGNORECASE)
-# İlk etiket bir BÖLGE/landscape kodu ise host tenant değil, yalın bölge alanıdır (eu10, us10…).
+# İlk etiket bir BÖLGE/landscape kodu VE ardından ara etiket YOKSA host tenant değil, yalın
+# bölge alanıdır (eu10.<sonek>, us10.<sonek>…). Ara etiket varsa (`<x>.authentication.eu10.…`,
+# `<x>.abap.eu10.…`) ilk etiket bölge BİÇİMLİ olsa da bir alt hesap / tenant adıdır ⇒ uyarı.
+# Issue #357 (2026-10-19): muafiyet eskiden ara etikete bakmıyordu; `ab12`/`de1` gibi bölge
+# biçimli tenant adları sessizce geçiyordu.
 _BOLGE_ETIKETI = re.compile(r"[a-z]{2}\d{1,3}(?:-\d{1,3})?", re.IGNORECASE)
 # Ölçülen yer tutucu ilk etiketler (+ yalnız-x). `<tenant>` biçimi desene zaten uymaz.
 ORNEK_TENANT = frozenset({"abc123"})
@@ -351,7 +362,7 @@ def tenant_host_sizintilari(metin: str) -> list[str]:
     """Somut (yer tutucu / bölge olmayan) ilk etiketli SAP bulut host'ları (warn-first)."""
     return [m.group(0) for m in TENANT_HOST_PAT.finditer(metin)
             if m.group(1).lower() not in ORNEK_TENANT
-            and not _BOLGE_ETIKETI.fullmatch(m.group(1))
+            and not (_BOLGE_ETIKETI.fullmatch(m.group(1)) and not m.group(2))
             and not _YER_TUTUCU_ETIKET.fullmatch(m.group(1))]
 
 
