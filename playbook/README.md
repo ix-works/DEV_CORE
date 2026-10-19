@@ -38,6 +38,7 @@ Bu klasör **L3 katman** dosyaları içerir: SAP ADT REST işlemleri için **den
 | **ATC bulgusu düzeltme kalıpları** (iç içe okuma/FAE önce · muafiyet · Pretty Print) | [`howto-atc-duzeltme-kaliplari.md`](howto-atc-duzeltme-kaliplari.md) | kalıp + gerekli bağlam + düşük güven işaretleri; gate değil |
 | **Toplu yapay zekâ yargısı** (kuyruk-dikiş sözleşmesi) | [`howto-kuyruk-dikis-sozlesmesi.md`](howto-kuyruk-dikis-sozlesmesi.md) | yargı dosyada · doğrulama kodda · bozuk girdi durdurur · cevapsız boş · yeniden koşum korur |
 | **ECC → S/4 yeniden yazım** (legacy kaynak ≠ hedef tasarım) | [`howto-ecc-s4-yeniden-yazim.md`](howto-ecc-s4-yeniden-yazim.md) | alınır/alınmaz ayrımı · DOC-TS-06 |
+| **SD: karakteristik değerlerin hızlı girişi** (Mill; VA21/VA22 genel/yerel kalem — kalemi konfigürasyonuyla aynı belgede devretme) | [`howto-sd-karakteristik-hizli-giris.md`](howto-sd-karakteristik-hizli-giris.md) | IMG düğümündeki 5 aktivite ne yapar/neden · ⭐ VOV8 `UEVOR=MILL_SE_UE` zorunlu · kullanım · doğrulama · sorun giderme |
 | **Freestyle UI5 + OData V2** (tarayıcı tarafı) | [`ui-freestyle-odata-v2.md`](ui-freestyle-odata-v2.md) | ORDER UI patinaj tecrübesi + §0 PRE-FLIGHT + [checklist](checklists/ui-freestyle-creation.md) |
 | **UI uygulaması RAP backend** (CDS/BDEF/behavior/SRVD tecrübe merceği) | [`ui-backend-rap.md`](ui-backend-rap.md) | ORDER backend patinajı + §0 PRE-FLIGHT + [checklist](checklists/ui-backend-rap-creation.md); kanonik = `adt-rap.md` §32 |
 
