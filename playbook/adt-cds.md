@@ -611,6 +611,16 @@ Bir `define view entity ... union all ...` yazarken SAP 3 kuralı tek tek dayat�
 - **Kök neden:** CDS `CASE WHEN`'de karşılaştırmanın SOL tarafındaki aritmetik ifadeyi **parantezle gruplamayı kabul etmiyor**. `when ( a - b ) <= 0` → red; `when a - b <= 0` → OK.
 - **FIX:** dış parantezleri kaldır, aritmetiği parantezsiz yaz (aynı dosyadaki ham aritmetik alanın — ör. OpenQty `cast(qty) - coalesce(...)` — deseniyle birebir). İç cast'ler (semantic-strip) kalır, yalnız gruplama-pareni gider.
 - **DERS (kritik):** `adt_syntax_check` bu hatayı YAKALAMAZ (pre-push/canlı kaynağı okur, yeni computed alan henüz orada yok) → **aktivasyon = tek güvenilir syntax gate** (bug-gate read-only de yakalayamaz; gateway aktivasyonu güvenlik ağı). "syntax_check geçti" ≠ "aktive olur". Bkz. memory `feedback_abaplint-parser-error-gercek-olabilir` ikizi.
+- **⚠ KAPSAM:** "`when a - b <= 0` → OK" bulgusu **view entity**'de (`define view entity`) ölçüldü. **DDIC-based view'da** (`define view` + `@AbapCatalog.sqlViewName`) WHEN koşulunda aritmetik parantezsiz de GEÇMEZ → **T7-b**.
+
+### T7-b — DDIC-based view'da `CASE WHEN` koşulunda aritmetik HİÇ geçmez → farkı alt katmanda düz alan üret (2026-10-21)
+- **Belirti:** `case when division( <a> ) - division( <b> ) > 0 then … end` → checkrun (kaynak push edildikten sonra, aktivasyondan önce) `E · SDDL_PARSER_MSG/015 · Unexpected word "-"`; konum = WHEN içindeki ilk aritmetik operatör. Obje yaratılır ve kaynak yüklenir, ama inaktif kalır.
+- **Kapsam (ölçülen):** DDIC-based view, S/4 private 2025. Yalnız `division() - division()` biçimi denendi. Diğer WHEN-aritmetiği biçimleri (`cast() + cast() - alan <= 0` vb.) DENENMEDİ; aynı sınıf varsayılarak önceden kaldırıldı. View entity'de durum farklıdır (T7).
+- **ÇALIŞAN (aynı turda aktive oldu):**
+  1. Farkı bir **alt katmanda seçim listesinde** düz `abap.dec` alan olarak üret. DDIC-based'te seçim listesinde `division( .. ) - division( .. )` ve `division( .. ) - coalesce( cast( .. ), cast( 0 as abap.dec( 15, 3 ) ) )` aktive oldu (DDLS/349 "CAST … identical type" uyarısı, hata değil).
+  2. Üst katmanda WHEN koşulunu yalnız `alan op literal` / `alan op alan` yaz. İki farklı kaynaktan alan-alan karşılaştırma, parantezli AND grubu ve OR'lu WHEN de geçti.
+- **Önleme:** DDIC-based view'da WHEN koşuluna fonksiyon ya da aritmetik koyma. Ara değeri baştan bir alt katmana böl. Emsal ararken `define view entity` örneğini (T7) DDIC-based için kanıt sayma; emsalin view tipine bak.
+- **Yan bulgu:** `sum( case when … then <QUAN alan> else 0 end )` → DDLS/741 "Literal handled without decimal places" uyarısı. Sonuç alanı DD03L'de QUAN 15,3 kaldı (ölçüldü); ondalık kaybı yok.
 
 ### T8 — JOIN ON karşılaştırmasında `cast()`/FUNCTION güvenilmez (COMP_LEFT yasak) → PRE-CAST KÖPRÜ-VIEW kullan (2026-06-24, ZSD001_I_NAVLUN_REPORT vfkp⨝vtts numc-mismatch)
 - **Belirti:** İki farklı uzunluktaki numerik key'i join etmek için ON şartında cast kullanılınca aktivasyon FAIL: `Expression type FUNCTION not allowed in expression context COMPARISON, clause type COMP_LEFT`. Örn (RED): `and cast(Stage.tsnum as abap.numc(6)) = Cost.repos`.
