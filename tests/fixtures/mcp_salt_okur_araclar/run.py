@@ -159,6 +159,174 @@ def bolum_g(Q, A):
     ekle("G10 sinif YOK -> alt katman sonucu AYNEN (+scope), found uydurulmaz",
          r.get("exists") is False and "found" not in r and r.get("scope"), r)
 
+    # ── DEV_CORE Issue #362 (2026-10-27): blok SINIRI — tek satır · satır ortası · belirsiz ──
+    # Eski kod (367eda1) tek satırda `[(1, 4, 'METHOD a. x = 1. ENDMETHOD.|METHOD b.|…')]`
+    # döndürüyordu: SONRAKİ metodun gövdesi `found:true` ile. Sınır artık ilk deyimdir.
+    tek = "METHOD a. x = 1. ENDMETHOD.\nMETHOD b.\n  y = 2.\nENDMETHOD."
+    b = cik(tek, "a")
+    ekle("G11 ⭐ tek satirlik METHOD a. .. ENDMETHOD. -> blok YALNIZ o satir",
+         b == [(1, 1, "METHOD a. x = 1. ENDMETHOD.")], b)
+    b = cik(tek, "b")
+    ekle("G11b tek satirdan sonraki cok satirli metot dogru bulunur", b and b[0][:2] == (2, 4), b)
+    b = cik("METHOD a. ENDMETHOD.\nMETHOD b.\nENDMETHOD.", "a")
+    ekle("G12 bos tek satir `METHOD a. ENDMETHOD.` -> (1,1)", b == [(1, 1, "METHOD a. ENDMETHOD.")], b)
+    b = cik("METHOD b.\n  y = 2.\nENDMETHOD.\n  METHOD a. ENDMETHOD.", "a")
+    ekle("G13 tek satir SON metot -> (4,4) (kapanmamis DEGIL)",
+         b == [(4, 4, "  METHOD a. ENDMETHOD.")], b)
+    b = cik("METHOD a.\n  x = 1.\nENDMETHOD.\nMETHOD b.\nENDMETHOD.", "a")
+    ekle("G14 cok satirli kontrol -> (1,3)", b and b[0][:2] == (1, 3) and len(b) == 1, b)
+    b = cik("METHOD a.\n  x = 1. ENDMETHOD.\nMETHOD b.\n  y = 2.\nENDMETHOD.", "a")
+    ekle("G15 ⭐ satir ORTASINDAKI `ENDMETHOD.` bitistir -> (1,2), b'nin govdesi YOK",
+         b and b[0][:2] == (1, 2) and "METHOD b" not in b[0][2], b)
+    b = cik("METHOD a. ENDMETHOD. METHOD b. ENDMETHOD.", "a")
+    ekle("G16 ayni satirda METHOD/ENDMETHOD karisik -> SINIR_BELIRSIZ",
+         len(b) == 1 and b[0][1] == Q._SINIR_BELIRSIZ, b)
+    b = cik("METHOD a.\n  x = 1.\nMETHOD b.\n  y = 2.\nENDMETHOD.", "a")
+    ekle("G17 ENDMETHOD'dan once METHOD -> SINIR_BELIRSIZ (eskisi (1,5) yanlis govde)",
+         len(b) == 1 and b[0][1] == Q._SINIR_BELIRSIZ, b)
+    b = cik("METHOD a.\n  lv = 'x. ENDMETHOD.'.\n  lv2 = |y. ENDMETHOD.|.\n"
+            "  lv3 = `z. ENDMETHOD.`.\nENDMETHOD.", "a")
+    ekle("G18 tek satirlik literal icindeki ENDMETHOD bitis SAYILMAZ (' ` |)",
+         b and b[0][:2] == (1, 5), b)
+    b = cik("METHOD a.\n* x. ENDMETHOD.\n  WRITE 1.\nENDMETHOD.", "a")
+    ekle("G19 sutun-1 `*` yorumundaki `. ENDMETHOD.` bitis SAYILMAZ", b and b[0][:2] == (1, 4), b)
+    b = cik("METHOD a.\n  WRITE 1. \" bitti. ENDMETHOD. degil\n  WRITE 2.\nENDMETHOD.", "a")
+    ekle("G20 `\"` satir-ici yorumdaki `. ENDMETHOD.` bitis SAYILMAZ", b and b[0][:2] == (1, 4), b)
+    r = mcp(tek, "a")
+    ekle("G21 ⭐ MCP tek satir -> found + start=end=1 + govde YALNIZ a",
+         r.get("ok") is True and r.get("found") is True and r.get("start_line") == 1
+         and r.get("end_line") == 1 and r.get("source") == "METHOD a. x = 1. ENDMETHOD.", r)
+    r = mcp("METHOD a. ENDMETHOD. METHOD b. ENDMETHOD.", "a")
+    ekle("G22 ⭐ MCP sinir belirsiz -> ok False + sinir_belirsiz + govde DONMEZ",
+         r.get("ok") is False and r.get("error") == "sinir_belirsiz" and r.get("found") is None
+         and "source" not in r, r)
+    ekle("G23 KAPSAM metni tek satir + sinir_belirsiz + cok satirli sablon SINIRINI soyler",
+         all(s in Q._METOT_KAPSAM for s in ("tek satirlik", "sinir_belirsiz", "cok satirli string")),
+         Q._METOT_KAPSAM)
+
+    # ── bug-gate #378 düzeltme turu (2026-10-27) ──
+    # F1: `|…|` şablonunda `\` kaçışı atlanmazsa `\|` şablonu erken "kapatır", içindeki
+    # ENDMETHOD bitiş sanılır → kesik gövde (eski regex burada doğruydu: (1,4)).
+    b = cik(ESKI_PIPE, "a")
+    ekle("G24 ⭐ `|x\\|. ENDMETHOD. |` sablon kacisi -> bitis SABLON ICINDE DEGIL (1,4)",
+         b and b[0][:2] == (1, 4) and len(b) == 1, b)
+    # F3: deyim başındaki `method` TANIMLAYICISI METHOD deyimi değildir (eski kod doğruydu).
+    for ad, kaynak, beklenen in (
+            ("G25 `method = 'GET'.` atamasi", "METHOD a.\n  method = 'GET'.\n  x = 1.\nENDMETHOD.", (1, 4)),
+            ("G26 cok satirli cagrida `method = …` parametresi",
+             "METHOD a.\n  lo->call(\n    method = if_http_request=>co_request_method_post ).\nENDMETHOD.",
+             (1, 4)),
+            ("G27 `x = 1.method = 2.` (bosluksuz nokta)", "METHOD a.\n  x = 1.method = 2.\nENDMETHOD.", (1, 3)),
+            ("G28 AMDP `select t.method from …`",
+             "METHOD a BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT.\n"
+             "  select t.method from ztab as t;\nENDMETHOD.", (1, 3)),
+            ("G29 `endmethod = 1.` tanimlayicisi bitis DEGIL",
+             "METHOD a.\n  endmethod = 1.\n  x = 2.\nENDMETHOD.", (1, 4))):
+        b = cik(kaynak, "a")
+        ekle(ad + " -> deyim SAYILMAZ %s" % (beklenen,), b and b[0][:2] == beklenen and len(b) == 1, b)
+    b = cik("METHOD a.\n  x = 1.\nMETHOD b BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT.\n"
+            "ENDMETHOD.", "a")
+    ekle("G30 daraltma AMDP `METHOD b BY …` deyimini KORUR -> SINIR_BELIRSIZ",
+         len(b) == 1 and b[0][1] == Q._SINIR_BELIRSIZ, b)
+    # bug-gate 206a1c1 F5: adı satır sonunda biten başlık (`METHOD b` ⏎ `BY DATABASE …`) da deyimdir
+    b = cik(AMDP_ARA, "a")
+    ekle("G31 ⭐ araya giren `METHOD b` + alt satirda `BY DATABASE` -> SINIR_BELIRSIZ",
+         len(b) == 1 and b[0][1] == Q._SINIR_BELIRSIZ, b)
+    b = cik(AMDP_HEDEF_COK, "a")
+    ekle("G32 cok satirli AMDP baslikli HEDEF -> (1,7) (SELECT listesinde tek `method,` FP degil)",
+         b and b[0][:2] == (1, 7) and len(b) == 1, b)
+    b = cik("METHOD a BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n"
+            "  select 1 from t; ENDMETHOD.\nMETHOD b\n"
+            "  BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n  select 2 from t;\nENDMETHOD.", "a")
+    ekle("G34 AMDP `… from t; ENDMETHOD.` + bolunmus baslikli b -> SINIR_BELIRSIZ (a+b govdesi DONMEZ)",
+         len(b) == 1 and b[0][1] == Q._SINIR_BELIRSIZ, b)
+    r = mcp(AMDP_HEDEF_COK, "a")
+    ekle("G33 okuma yolu AMDP'yi DONDURMEYE devam eder (found + govde)",
+         r.get("ok") is True and r.get("found") is True and r.get("end_line") == 7, r)
+
+
+# bug-gate 206a1c1 F5 / kapsam kararı vektörleri (AMDP başlığı satır sonunda bölünür)
+AMDP_ARA = ("METHOD a.\n  x = 1.\nMETHOD b\n  BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n"
+            "  select 1 from dummy;\nENDMETHOD.")
+AMDP_HEDEF_COK = ("METHOD a\n  BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT\n  USING t.\n"
+                  "  lt = select t.method,\n    method,\n    x from t;\nENDMETHOD.")
+
+
+# `\|` ABAP şablon kaçışı (tek ters eğik çizgi; chr(92) — Bash/heredoc kaçış kaybına bağışık)
+ESKI_PIPE = ("METHOD a.\n  r = |x" + chr(92) + "|. ENDMETHOD. |.\n  z = 2.\nENDMETHOD.\n"
+             "METHOD b.\nENDMETHOD.")
+
+
+def bolum_f(SC):
+    """`sap_client._push_method_includes` YAZMA yolu (Issue #362 kardeşi): belirsiz sınırda
+    kilit ALINMAZ, PUT YAPILMAZ; tek satırlık metotta PUT edilen gövde YALNIZ o metottur."""
+    class _Adt:
+        _last_lock_effective_transport = None
+
+        def __init__(self):
+            self.kilit, self.put = [], []
+
+        def lock_object(self, url, transport=None):
+            self.kilit.append(url)
+            return "KILIT-1"
+
+        def set_include_source(self, url, govde, kilit, transport):
+            self.put.append((url, govde))
+
+        def unlock_object(self, url, kilit):
+            return True
+
+    def kos(kaynak, metotlar):
+        ist = object.__new__(SC.SAPClient)
+        ist.adt_client = _Adt()
+        ist.debug_enabled = False
+        r, exc = _sessiz(ist._push_method_includes, "/sap/bc/adt/oo/classes/zsd001_cl_ornek",
+                         "ZSD001_CL_ORNEK", kaynak, metotlar, "<TRANSPORT>")
+        return (r if exc is None else repr(exc)), ist.adt_client
+
+    tek = "METHOD a. x = 1. ENDMETHOD.\nMETHOD b.\n  y = 2.\nENDMETHOD."
+    r, adt = kos(tek, ["A"])
+    ekle("F1 ⭐ tek satirlik metot -> 1 PUT, govde YALNIZ a (b'nin govdesi YAZILMAZ)",
+         r is True and len(adt.put) == 1 and adt.put[0][1] == "METHOD a. x = 1. ENDMETHOD.\n"
+         and adt.put[0][0].endswith("/includes/implementations/A"), (r, adt.put))
+    r, adt = kos("METHOD a. ENDMETHOD. METHOD b. ENDMETHOD.", ["A"])
+    ekle("F2 ⭐ ayni satirda karisik sinir -> kilit 0 + PUT 0 + False",
+         r is False and not adt.kilit and not adt.put, (r, adt.kilit, adt.put))
+    r, adt = kos("METHOD a.\n  x = 1.\nMETHOD b.\n  y = 2.\nENDMETHOD.", ["A"])
+    ekle("F3 ⭐ ENDMETHOD'dan once METHOD -> kilit 0 + PUT 0 (eskisi a+b'yi PUT ediyordu)",
+         r is False and not adt.kilit and not adt.put, (r, adt.kilit, adt.put))
+    r, adt = kos("METHOD a.\n  x = 1.\nENDMETHOD.\nMETHOD b.\nENDMETHOD.", ["A", "B"])
+    ekle("F4 cok satirli kontrol -> iki PUT, govdeler dogru (FP capasi)",
+         r is True and [p[1] for p in adt.put] == ["METHOD a.\n  x = 1.\nENDMETHOD.\n",
+                                                   "METHOD b.\nENDMETHOD.\n"], (r, adt.put))
+    r, adt = kos("METHOD a.\n  x = 1.\n", ["A"])
+    ekle("F5 kapanmamis blok -> kilit 0 + PUT 0", r is False and not adt.kilit and not adt.put,
+         (r, adt.kilit, adt.put))
+    r, adt = kos(ESKI_PIPE, ["A"])
+    beklenen = "\n".join(ESKI_PIPE.split("\n")[:4]) + "\n"
+    ekle("F6 ⭐ sablon kacisli metot -> PUT edilen govde TAM blok (kesik govde YAZILMAZ)",
+         r is True and len(adt.put) == 1 and adt.put[0][1] == beklenen, (r, adt.put))
+    # bug-gate 206a1c1 F5 — ölçülen arıza: a+b a'nın include'una PUT ediliyordu
+    r, adt = kos("METHOD a.\n  x = 1.\nENDMETHOD ##NEEDED.\nMETHOD b\n"
+                 "  BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n"
+                 "  select 1 from t;\nENDMETHOD.", ["A"])
+    ekle("F7 ⭐ `METHOD b` ⏎ `BY DATABASE` araya girer -> kilit 0 + PUT 0 (a+b YAZILMAZ)",
+         r is False and not adt.kilit and not adt.put, (r, adt.kilit, adt.put))
+    r, adt = kos("METHOD a.\n  x = 1.\nENDMETHOD ##NEEDED.\nMETHOD b.\n  y = 2.\nENDMETHOD.", ["A"])
+    ekle("F7b kontrol: araya `METHOD b.` -> kilit 0 + PUT 0",
+         r is False and not adt.kilit and not adt.put, (r, adt.kilit, adt.put))
+    # Lider kapsam kararı: AMDP başlıklı blok YAZMA yolunda PUT EDİLMEZ (main davranışı korunur)
+    r, adt = kos("METHOD a BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n"
+                 "  select 1 from t;\nENDMETHOD.", ["A"])
+    ekle("F8 ⭐ AMDP hedef metot (tek satir baslik) -> kilit 0 + PUT 0 + False",
+         r is False and not adt.kilit and not adt.put, (r, adt.kilit, adt.put))
+    r, adt = kos(AMDP_HEDEF_COK, ["A"])
+    ekle("F8b AMDP hedef metot (baslik satirlara bolunmus) -> kilit 0 + PUT 0",
+         r is False and not adt.kilit and not adt.put, (r, adt.kilit, adt.put))
+    r, adt = kos("METHOD a.\n  lv = 'BY DATABASE'.\nENDMETHOD.", ["A"])
+    ekle("F8c FP capasi: govdede 'BY DATABASE' metni olan ABAP metodu -> 1 PUT",
+         r is True and len(adt.put) == 1, (r, adt.put))
+
 
 def bolum_r(Q, L):
     class _Adt:
@@ -350,7 +518,7 @@ def main() -> int:
     SC = _imp("sap_client")
     eski = (A._read_source_object, Q._get_client)
     for fn, a in ((bolum_g, (Q, A)), (bolum_r, (Q, L)), (bolum_p, (Q,)),
-                  (bolum_v, (Q, A, SC, eski[0])), (bolum_y, ()), (bolum_k, ())):
+                  (bolum_v, (Q, A, SC, eski[0])), (bolum_f, (SC,)), (bolum_y, ()), (bolum_k, ())):
         try:
             fn(*a)
         except Exception as exc:                       # çökme != FAIL: ölçülür
@@ -364,12 +532,49 @@ def main() -> int:
     return 0 if n == len(S) else 1
 
 
+# 5. eleman (varsa) = düşmesi BEKLENEN vektör önekleri; rc != 0 tek başına yakalama kanıtı DEĞİL.
+_BLOK = "scripts/utils/abap_metot_blok.py"
 MUTASYONLAR = [
-    ("M1 METHOD deseni satir basina capali degil (yorum satiri sayilir)", "mcp_servers/sap_adt/tools/query.py",
-     '_METOT_BAS = re.compile(r"^\\s*METHOD', '_METOT_BAS = re.compile(r"^.*?METHOD'),
-    ("M6 ENDMETHOD deseni capasiz (satir-ici yorumdaki ENDMETHOD blogu erken kapatir)",
+    # Issue #362 (2026-10-27): M1/M6 çapası query.py'den ortak modüle taşındı (sınır tek kaynakta).
+    ("M1 METHOD deseni satir basina capali degil (yorum satiri sayilir)", _BLOK,
+     'METOT_BAS = re.compile(r"^\\s*METHOD', 'METOT_BAS = re.compile(r"^.*?METHOD', ("G1 ",)),
+    ("M6 `\"` satir-ici yorum kesilmez (yorumdaki ENDMETHOD blogu erken kapatir)", _BLOK,
+     "        if c == '\"':\n            break\n", "        if False:\n            break\n",
+     ("G20",)),
+    ("M10 tek satirlik blok dali kapali (eski davranisa yakin)", _BLOK,
+     '            if ek == ["ENDMETHOD"]:\n', "            if False:\n",
+     ("G11 ", "G12", "G13", "G21", "F1 ")),
+    ("M11 deyim yalniz satir basinda (satir ortasi ENDMETHOD kacirilir)", _BLOK,
+     '_DEYIM = re.compile(r"(?:^|\\.)\\s*', '_DEYIM = re.compile(r"^\\s*', ("G11 ", "G15")),
+    ("M12 tek satirlik literal ayiklanmaz", _BLOK,
+     "        if c in \"'`|\":\n", "        if False:\n", ("G18",)),
+    ("M13 sutun-1 `*` yorumu ayiklanmaz", _BLOK,
+     '    if satir.startswith("*"):\n        return ""\n', '    if False:\n        return ""\n',
+     ("G19",)),
+    ("M14 sap_client fallback sinir-belirsiz atlamasi kalkar (yanlis blok PUT edilir)",
+     "scripts/sap_client.py",
+     "            if _son is None or _son == SINIR_BELIRSIZ:\n", "            if False:\n",
+     ("F2 ", "F3 ", "F5 ")),
+    ("M15 adt_get_method sinir_belirsiz dali kalkar (found:true + yanlis govde)",
      "mcp_servers/sap_adt/tools/query.py",
-     '_METOT_SON = re.compile(r"^\\s*ENDMETHOD', '_METOT_SON = re.compile(r"^.*?ENDMETHOD'),
+     "    if belirsiz is not None:\n", "    if False:\n", ("G22",)),
+    # bug-gate #378 düzeltme turu (2026-10-27): F1 kaçış · F3 deyim biçimi (iki katman ayrı)
+    ("M16 `|` sablonunda `\\` kacisi atlanmaz (F1 geri)", _BLOK,
+     '                j += 2 if (c == "|" and satir[j] == "' + chr(92) * 2 + '") else 1\n',
+     "                j += 1\n", ("G24", "F6 ")),
+    ("M17 METHOD deyim bicimi daraltmasi geri (`method = …` deyim sayilir)", _BLOK,
+     r'|(METHOD)(?=\s+[A-Za-z0-9_/~]+\s*(?:\.|\s+BY\b|$)))"', r'|(METHOD)(?=[\s.]|$))"',
+     ("G25", "G26", "G27", "G28")),
+    ("M18 ENDMETHOD deyim bicimi daraltmasi geri (`endmethod = 1.` bitis sayilir)", _BLOK,
+     r'(?:(ENDMETHOD)(?=\s*\.)"', r'(?:(ENDMETHOD)(?=[\s.]|$)"', ("G29",)),
+    # bug-gate 206a1c1: F5 `|$` · lider kapsam kararı AMDP PUT yok (iki ayrı katman, iki mutasyon)
+    ("M19 METHOD lookahead `|$` kalkar (satir sonunda biten baslik deyim sayilmaz)", _BLOK,
+     r'(?:\.|\s+BY\b|$)))"', r'(?:\.|\s+BY\b)))"', ("G31", "G34", "F7 ")),
+    ("M20 sap_client AMDP atlamasi kalkar (AMDP blok PUT edilir)", "scripts/sap_client.py",
+     "            if amdp_baslik_mi(method_block):\n", "            if False:\n", ("F8 ", "F8b")),
+    ("M21 AMDP basligi yalniz ilk satirda aranir (bolunmus baslik kacar)", _BLOK,
+     '    return bool(_AMDP_BASLIK.search(kod.split(".", 1)[0]))\n',
+     '    return bool(_AMDP_BASLIK.search((blok or "").split(chr(10), 1)[0]))\n', ("F8b",)),
     ("M2 coklu blok ilki secilir (belirsizlik gizlenir)", "mcp_servers/sap_adt/tools/query.py",
      "    if len(bloklar) > 1:\n        return {\"ok\": False, \"error\": \"belirsiz\"",
      "    if False:\n        return {\"ok\": False, \"error\": \"belirsiz\""),
@@ -405,7 +610,19 @@ def _mutasyon() -> int:
         hedef = kok / "tests" / "fixtures" / BURASI.name
         hedef.mkdir(parents=True)
         shutil.copy2(Path(__file__), hedef / "run.py")
-        for ad, yol, eski, yeni in MUTASYONLAR:
+
+        def _kos():
+            return subprocess.run([sys.executable, str(hedef / "run.py")], capture_output=True,
+                                  text=True, encoding="utf-8", errors="replace", timeout=300, cwd=str(kok))
+        # KUM TABANI: mutasyonsuz kopya tam yeşil olmalı (yoksa hiçbir "yakalandı" anlamlı değil)
+        r = _kos()
+        m = re.search(r"^(\d+)/(\d+) OK$", r.stdout, re.M)
+        print(f"--> [KUM TABANI] rc={r.returncode} {m.group(0) if m else '-'}")
+        if r.returncode or not m:
+            print("[KURULAMADI] kum tabani yesil degil:\n" + r.stdout[-800:] + r.stderr[-400:])
+            return 3
+        for ad, yol, eski, yeni, *bek in MUTASYONLAR:
+            beklenen = bek[0] if bek else ()
             dosya = kok / yol
             asil = dosya.read_bytes().decode("utf-8")
             if asil.count(eski) != 1:
@@ -414,12 +631,16 @@ def _mutasyon() -> int:
                 continue
             dosya.write_bytes(asil.replace(eski, yeni, 1).encode("utf-8"))
             try:
-                r = subprocess.run([sys.executable, str(hedef / "run.py")], capture_output=True,
-                                   text=True, encoding="utf-8", errors="replace", timeout=300, cwd=str(kok))
+                r = _kos()
             finally:
                 dosya.write_bytes(asil.encode("utf-8"))
             m = re.search(r"^(\d+)/(\d+) OK$", r.stdout, re.M)
-            durum = "COKTU" if not m else ("YAKALANDI" if r.returncode else "KACTI")
+            dusen = [x.strip()[len("[FAIL] "):] for x in r.stdout.splitlines()
+                     if x.strip().startswith("[FAIL]")]
+            eksik = [b for b in beklenen if not any(d.startswith(b) for d in dusen)]
+            durum = ("COKTU" if not m else
+                     ("YAKALANDI" if r.returncode and not eksik else
+                      (f"KACTI(beklenen dusmedi: {eksik})" if r.returncode else "KACTI")))
             if durum != "YAKALANDI":
                 kotu.append(ad)
             print(f"--> [{ad}] rc={r.returncode} {m.group(0) if m else '-'} -> {durum}")

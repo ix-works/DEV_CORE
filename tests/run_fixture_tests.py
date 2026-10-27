@@ -1531,6 +1531,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "V1a: adt_get_method GERCEK _read_source_object GET'inde `version` YOK · M9 version=active"),
     ("scripts/sap_client.py", ("O:mcp_salt_okur_araclar",),
      "V2a: adt_pretty_print GERCEK SAPClient.pretty_print -> get_object_source `version` vermez"),
+    # 2026-10-27 DEV_CORE Issue #362: METHOD..ENDMETHOD blok siniri TEK KAYNAK; iki tuketici
+    # (query.adt_get_method G11-G23 · sap_client._push_method_includes F1-F5 YAZMA yolu)
+    ("scripts/utils/abap_metot_blok.py", ("O:mcp_salt_okur_araclar",),
+     "metot blok siniri: tek satir / satir ortasi ENDMETHOD / sinir_belirsiz; M1 M6 M10-M13"),
     # ── 2026-10-12 Part A ikinci dalga (Q363②③ · Q360 · Q363① · Q369④⑤ · Q364): AYRI
     # satirlar; sap_adt_lib.py birlesimi 20→24 → `b0_secim` P3 BIRLIKTE guncellendi.
     ("scripts/sap_adt_lib.py", ("O:ad_kabul_tam_dize", "O:hata_sebebi_ve_maskeleme",

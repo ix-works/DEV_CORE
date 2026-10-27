@@ -1,4 +1,4 @@
-"""
+r"""
 check_amdp_comment_apostrophe.py — AMDP SQLScript `--` yorumunda apostrof (') YASAK.
 
 # ENFORCES: BE-28  (alt-madde c; ADR 0019 coverage binding)

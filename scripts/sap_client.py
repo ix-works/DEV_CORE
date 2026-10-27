@@ -387,23 +387,38 @@ class SAPClient:
         Returns:
             True if at least one method include was successfully updated
         """
-        import re as _re
+        # Blok sınırı TEK KAYNAKTAN (DEV_CORE Issue #362, 2026-10-27). Eski satır-başı çapalı
+        # regex tek satırlık `METHOD a. … ENDMETHOD.` ve satır ortasındaki `ENDMETHOD.`
+        # bitişini kaçırıp SONRAKİ metodun gövdesini de içeren bloğu bu include'a PUT
+        # ediyordu (yazma yolu). Sınır belirlenemezse (kapanmamış / METHOD-ENDMETHOD
+        # karışık) blok YAZILMAZ: kilit alınmaz, PUT yapılmaz, metot atlanır.
+        # Davranış korunan eksen: birden çok eşleşmede İLK blok kullanılır (eskisi gibi).
+        # ⛔ AMDP (`METHOD … BY DATABASE …`) blok PUT EDİLMEZ (lider kapsam kararı, bug-gate
+        # 206a1c1): eski regex (`METHOD <ad>\s*\.`) AMDP başlığını tanımadığı için bu metotlarda
+        # PUT hiç yoktu ve metot include ucunun AMDP gövdesini kabul edip etmediği canlıda
+        # ÖLÇÜLMEDİ ⇒ main davranışı korunur. Okuma yolu (`adt_get_method`) AMDP'yi döndürür.
+        from utils.abap_metot_blok import SINIR_BELIRSIZ, amdp_baslik_mi, metot_bloklari
         any_success = False
 
         for method_name in method_names:
             print(f"\n      [FALLBACK] Method include fallback for: {method_name}")
 
             # Extract the METHOD...ENDMETHOD block from merged source
-            method_pattern = _re.compile(
-                rf'(^\s*METHOD\s+{_re.escape(method_name)}\s*\..*?^\s*ENDMETHOD\s*\.)',
-                _re.IGNORECASE | _re.DOTALL | _re.MULTILINE
-            )
-            method_match = method_pattern.search(source_code)
-            if not method_match:
+            bloklar = metot_bloklari(source_code, method_name)
+            if not bloklar:
                 print(f"      [FALLBACK] METHOD {method_name} not found in source — skipping")
                 continue
+            _bas, _son, method_block = bloklar[0]
+            if _son is None or _son == SINIR_BELIRSIZ:
+                neden = "kapanmamis" if _son is None else SINIR_BELIRSIZ
+                print(f"      [FALLBACK] [SKIP] METHOD {method_name} (satir {_bas}) blok siniri "
+                      f"belirlenemedi ({neden}) — PUT YAPILMADI, govde OLCULEMEDI")
+                continue
+            if amdp_baslik_mi(method_block):
+                print(f"      [FALLBACK] [SKIP] METHOD {method_name} AMDP (BY DATABASE) — fallback "
+                      f"kapsam disi, PUT YAPILMADI")
+                continue
 
-            method_block = method_match.group(1)
             if not method_block.endswith('\n'):
                 method_block += '\n'
             print(f"      [FALLBACK] Extracted {len(method_block)} chars")
