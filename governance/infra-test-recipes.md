@@ -3450,10 +3450,10 @@ python tests/fixtures/guard_hedef_maskeleme/gh_bayrak_uret.py > tablo.txt   # ta
   Elle kontrol: `CLAUDE_PROJECT_DIR=<proje> python scripts/validators/check_fm_signature_doc_sync.py`
   → beyansız `[SKIP] … KAPSAM SIFIR`; `IX_FM_DOC_SYNC_SOURCES="screen_gen:<yol>"` ile ölçüm
   (boş env `""` yaml beyanını ezmez).
-- **init_project:** `python tests/fixtures/init_project_iskelet/run.py` → **34/34**. Kip pinleri
-  (CORE-07, ölçüldü; batarya 7/7): `--mutasyon` P1 P1b P1c P1d P2 U1 · `--mutasyon-gevsek` P4 P5 P6
+- **init_project:** `python tests/fixtures/init_project_iskelet/run.py` → **38/38** (2026-10-27; önce 34/34). Kip pinleri
+  (CORE-07, ölçüldü; batarya 9/9 kip satırı): `--mutasyon` P1 P1b P1c P1d P2 U1 · `--mutasyon-gevsek` P4 P5 P6
   P7 U2 · `--mutasyon-force-onerisi` A2 U5a · `--mutasyon-not-yok` A3 U5b · `--mutasyon-eol` E1 E3
-  E4 · `--mutasyon-eol-dar` E1 E4. Bilinmeyen kip → `[KULLANIM]` exit 2. `.gitattributes`
+  E4 · `--mutasyon-eol-dar` E1 E4 · `--mutasyon-pin-yok` S1 S2 S2b S3 · `--mutasyon-pin-gevsek` S2 (⑤ sap-gui pinli kurulum ipucu; sürüm fixture'a yazılmaz, çapa `SAPGUI_PIP_PIN` satırı). Bilinmeyen kip → `[KULLANIM]` exit 2. `.gitattributes`
   LF bloğu `utils/sap_kaynak_uzantilari.SAP_KAYNAK_UZANTILARI`'dan üretilir (`source_drift.SOURCE_EXTENSIONS`
   aynı tuple). E1 tek kaynaktaki HER uzantı (13) `lf` · E4 `object_types` dosya uzantıları (17, XML
   hariç) `lf`. `--mutasyon-eol` → 31/34 (E1 E3 E4) · `--mutasyon-eol-dar` (ilk sürümün elle 4

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """init_project_iskelet — jeneratörden çıkan iskelet KAPIDAN geçiyor mu + sır kilidi TOPYEKÛN mü?
 
-DÖRT DEĞİŞMEZ, ALTI MUTASYON (her değişmez kendi mutasyonuyla sınanır; tek mutasyon yarısını sınamaz):
+BEŞ DEĞİŞMEZ, SEKİZ MUTASYON (her değişmez kendi mutasyonuyla sınanır; tek mutasyon yarısını sınamaz):
 
   ① KUYRUK TOHUMU (Q213) — `hooks/post_validate.py` stderr nudge'ında
      `governance/infra-findings.md` yolunu ajana ENJEKTE eder; `check_hook_injected_paths`
@@ -58,6 +58,8 @@ MUTASYON: --mutasyon                → ① sökülür (kuyruk tohumu üretilmez
           --mutasyon-not-yok        → ③b koşum sonu [ATLA] notu basılmaz
           --mutasyon-eol            → ④ `.gitattributes` SAP kaynak LF bloğu sökülür
           --mutasyon-eol-dar        → ④ blok ilk sürümün ELLE yazılmış 4 uzantısına döner
+          --mutasyon-pin-yok        → ⑤a pinli kurulum satırları (dry-run + gerçek) basılmaz
+          --mutasyon-pin-gevsek     → ⑤b `SAPGUI_PIP_PIN` sürümsüz (`==<sürüm>` sökülür)
 
   ④ SAP KAYNAK SATIR SONU (2026-10-18) — şablon `.gitattributes` core'un SAP kaynağı saydığı
      HER uzantı için `eol=lf` taşır; liste TEK KAYNAKTAN üretilir (`utils/sap_kaynak_uzantilari`,
@@ -66,6 +68,19 @@ MUTASYON: --mutasyon                → ① sökülür (kuyruk tohumu üretilmez
      `git check-attr eol` (E1: tek kaynaktaki HER uzantı) · FP çapası: blok `.md`'ye taşmaz
      (E2) · 3. bağlamda da aynı etki (E3) · E4: `object_types` dosya uzantılarının (XML
      dışı) hepsi de `lf` — iki listenin hizası ölçülür, elle kopya yok.
+
+  ⑤ SAP-GUI KURULUM İPUCU PİNLİ (2026-10-27) — SONRAKİ ADIMLAR, sap-gui MCP'nin harici pip
+     paketi için `pip install --dry-run <pin>` ve ardından `pip install <pin>` basar; dize
+     `SAPGUI_PIP_PIN`'dir. Neden pinli: pin'siz kurulum fastmcp'yi yeni bir yamaya çekiyordu,
+     pinli kurulum `mcp`yi yerinde bıraktı (sap-adt `mcp<2` ister; ölçüm init_project.py
+     yorumunda + infra-changelog). ÖLÇÜT ÇIKTIDIR: S1 iki satır da basılıyor, dry-run ÖNCE,
+     paket kümeleri EŞİT · S2 her paket `ad==sürüm` (sürüm boş değil), küme mcp-sap-gui +
+     fastmcp + fastmcp-slim'i içeriyor, `mcp` paketinin KENDİSİ listede YOK (pinlemek
+     sap-adt'nin `mcp`sini oynatırdı) · S2b ÖLÇÜT öz-testi: dry-run satırına `mcp==…`
+     enjekte edilen çıktı S2'den geçmez (`mcp` yasağının mutasyonu budur) · S3 3. bağlamda
+     da (repo-mode none) basılıyor.
+     Sürüm numarası fixture'a YAZILMAZ: sürüm yükseltmesi bu fixture'ı kırmamalı; çapa
+     `SAPGUI_PIP_PIN = "…"` satırı kaynaktan okunur.
 ÇIKIŞ KODU SÖZLEŞMESİ (CORE-07; kanonik desen `checklist_check`, 2026-10-18 delta kapısı turu):
   normal 0=hepsi geçti · 1=düşen var. Mutasyon kipinde 1 = düşen küme `_BEKLENEN_DUSEN`'deki
   pinli kümeye EŞİT (yalnız "en az biri düştü" DEĞİL) · 2 = SAPMA (düşen ≠ beklenen) ya da
@@ -78,6 +93,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -105,6 +121,8 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-not-yok": {"A3", "U5b"},
     "--mutasyon-eol": {"E1", "E3", "E4"},
     "--mutasyon-eol-dar": {"E1", "E4"},
+    "--mutasyon-pin-yok": {"S1", "S2", "S2b", "S3"},   # ölçüldü 2026-10-27 (S2b: enjekte edecek satır yok)
+    "--mutasyon-pin-gevsek": {"S2"},              # ölçüldü 2026-10-27
 }
 for _a in sys.argv[1:]:
     if _a.startswith("--mutasyon") and _a not in _BEKLENEN_DUSEN:
@@ -118,9 +136,13 @@ MUT_FORCE = "--mutasyon-force-onerisi" in sys.argv
 MUT_NOT = "--mutasyon-not-yok" in sys.argv
 MUT_EOL = "--mutasyon-eol" in sys.argv
 MUT_EOL_DAR = "--mutasyon-eol-dar" in sys.argv
-if sum((MUT, MUT_GEVSEK, MUT_FORCE, MUT_NOT, MUT_EOL, MUT_EOL_DAR)) > 1:
+MUT_PIN_YOK = "--mutasyon-pin-yok" in sys.argv
+MUT_PIN_GEVSEK = "--mutasyon-pin-gevsek" in sys.argv
+if sum((MUT, MUT_GEVSEK, MUT_FORCE, MUT_NOT, MUT_EOL, MUT_EOL_DAR,
+        MUT_PIN_YOK, MUT_PIN_GEVSEK)) > 1:
     print("HATA: iki mutasyon kipi birlikte verilemez"); raise SystemExit(2)
-HERHANGI_MUT = MUT or MUT_GEVSEK or MUT_FORCE or MUT_NOT or MUT_EOL or MUT_EOL_DAR
+HERHANGI_MUT = (MUT or MUT_GEVSEK or MUT_FORCE or MUT_NOT or MUT_EOL or MUT_EOL_DAR
+                or MUT_PIN_YOK or MUT_PIN_GEVSEK)
 KIP = next((a for a in sys.argv[1:] if a in _BEKLENEN_DUSEN), None)
 
 SONUC: list[tuple[bool, str]] = []
@@ -193,6 +215,26 @@ def object_types_uzantilari() -> tuple:
     return tuple(out)
 NOT_BASKISI = ('    if any(s.startswith(ATLA_ETIKETI) for s in sonuc):\n'
                '        print("\\n" + ATLA_NOTU)\n')
+# ⑤ sap-gui pinli kurulum ipucu (sökülecek çapa: iki baskı satırı · pin sabitinin satırı)
+PIN_BASKISI = ('    print(f"         pip install --dry-run {SAPGUI_PIP_PIN}")\n'
+               '    print(f"         pip install {SAPGUI_PIP_PIN}")\n')
+_PIN_SATIR_RE = re.compile(r'^SAPGUI_PIP_PIN = "([^"\n]*)"$', re.M)
+
+
+def pin_gevset(metin: str) -> str:
+    """`SAPGUI_PIP_PIN` satırındaki her `==<sürüm>`ü sök (sürüm fixture'a yazılmaz)."""
+    m = _PIN_SATIR_RE.findall(metin)
+    if len(m) != 1:
+        print(f"[DOGRULANAMADI] YAMA TUTMADI — 'SAPGUI_PIP_PIN' satırı scripts/init_project.py'de "
+              f"{len(m)} kez geçiyor (TAM 1 olmalı). Hiçbir sayı basılmadı.")
+        raise SystemExit(3)
+    eski = f'SAPGUI_PIP_PIN = "{m[0]}"'
+    yeni = f'SAPGUI_PIP_PIN = "{" ".join(t.split("==")[0] for t in m[0].split())}"'
+    if yeni == eski:
+        print("[DOGRULANAMADI] YAMA TUTMADI — SAPGUI_PIP_PIN'de `==` yok (zaten pinsiz). "
+              "Hiçbir sayı basılmadı.")
+        raise SystemExit(3)
+    return _sok(metin, eski, yeni, "SAPGUI_PIP_PIN sürüm pin'i")
 
 
 def _sok(metin: str, capa: str, yeni: str, etiket: str) -> str:
@@ -222,6 +264,10 @@ def kaynak_uret() -> str:
         metin = _sok(metin, EOL_BLOGU, '"""', ".gitattributes SAP kaynak LF bloğu")
     if MUT_EOL_DAR:
         metin = _sok(metin, EOL_BLOGU, EOL_DAR, ".gitattributes SAP LF bloğu (dar, elle 4 uzantı)")
+    if MUT_PIN_YOK:
+        metin = _sok(metin, PIN_BASKISI, "", "sap-gui pinli kurulum satırları")
+    if MUT_PIN_GEVSEK:
+        metin = pin_gevset(metin)
     if HERHANGI_MUT:
         try:
             compile(metin, str(GERCEK), "exec")
@@ -331,6 +377,41 @@ def ok_dosyalari(cikti: str) -> list[str]:
     return [s for s in cikti.splitlines() if s.startswith("[ OK ]") and "(klasör)" not in s]
 
 
+# ── ⑤ ÇIKTI ÖLÇÜTLERİ ────────────────────────────────────────────────────────
+_DRY = "pip install --dry-run "
+_GERCEK = "pip install "
+
+
+def pin_satirlari(cikti: str) -> tuple[list[tuple[int, list[str]]], list[tuple[int, list[str]]]]:
+    """(dry-run satırları, gerçek kurulum satırları) — her biri (satır no, paket listesi)."""
+    dry, gercek = [], []
+    for i, s in enumerate(cikti.splitlines()):
+        t = s.strip()
+        if t.startswith(_DRY):
+            dry.append((i, t[len(_DRY):].split()))
+        elif t.startswith(_GERCEK):
+            gercek.append((i, t[len(_GERCEK):].split()))
+    return dry, gercek
+
+
+def s1_basildi(cikti: str) -> tuple[bool, str]:
+    dry, gercek = pin_satirlari(cikti)
+    ok = (len(dry) == 1 and len(gercek) == 1 and dry[0][1]
+          and dry[0][0] < gercek[0][0] and set(dry[0][1]) == set(gercek[0][1]))
+    return bool(ok), f"dry-run={len(dry)} gerçek={len(gercek)}" + (
+        f" dry={dry[0][1]} gerçek={gercek[0][1]}" if dry and gercek else "")
+
+
+def s2_pinli(cikti: str) -> tuple[bool, str]:
+    dry, gercek = pin_satirlari(cikti)
+    paketler = [p for _, ps in dry + gercek for p in ps]
+    pinsiz = [p for p in paketler if "==" not in p or not p.split("==", 1)[1]]
+    adlar = {p.split("==", 1)[0].lower() for p in paketler}
+    ok = (bool(paketler) and not pinsiz
+          and {"mcp-sap-gui", "fastmcp", "fastmcp-slim"} <= adlar and "mcp" not in adlar)
+    return ok, f"paket={len(paketler)} pinsiz={pinsiz} adlar={sorted(adlar)}"
+
+
 def main() -> int:
     kum = Path(tempfile.mkdtemp(prefix="initproj_"))
     try:
@@ -395,6 +476,19 @@ def main() -> int:
                 f"not={not_sayisi(cikti2)}")
         kontrol(not_sayisi(cikti) == 0,
                 "A4 FP ilk koşumda [ATLA] yok → not da YOK", f"not={not_sayisi(cikti)}")
+
+        # ── ⑤ SAP-GUI PİNLİ KURULUM İPUCU (ilk koşumun çıktısı, full) ────────────
+        ok_s1, det_s1 = s1_basildi(cikti)
+        kontrol(ok_s1, "S1 sap-gui kurulum ipucu: dry-run + gerçek satır basıldı, dry-run ÖNCE, "
+                "paket kümeleri EŞİT", det_s1)
+        ok_s2, det_s2 = s2_pinli(cikti)
+        kontrol(ok_s2, "S2 her paket `ad==sürüm`; mcp-sap-gui + fastmcp + fastmcp-slim VAR, "
+                "`mcp` paketinin kendisi YOK", det_s2)
+        # S2b — ölçütün `mcp` yasağı GERÇEKTEN ısırıyor mu: aynı çıktıya pinli `mcp` eklenir.
+        sentetik = cikti.replace(_DRY, _DRY + "mcp==9.9.9 ")
+        kontrol(sentetik != cikti and not s2_pinli(sentetik)[0],
+                "S2b ÖLÇÜT pin listesine `mcp==…` eklenmiş çıktı S2'den GEÇMEZ",
+                f"enjekte={'evet' if sentetik != cikti else 'TUTMADI'}")
 
         # A5 — notun söylediği yol GERÇEKTEN işler: dosyayı taşı + AYNI argümanla yeniden koş.
         ozel = "PROJE-OZEL-SATIR-Q314"
@@ -480,6 +574,9 @@ def main() -> int:
                 "U3 3.BAĞLAM varsayılan kaynak-kök adı SIZMIYOR")
         kontrol("{source_root}" not in gi3 and "{source_root}" not in gi_metin,
                 "U4 KABLOLAMA doldurulmamış placeholder KALMADI (.format çağrıldı)")
+        ok_s3, det_s3 = s1_basildi(cikti3)
+        kontrol(ok_s3, "S3 3.BAĞLAM (--repo-mode none) sap-gui pinli kurulum ipucu yine basılıyor",
+                det_s3)
         git_init(proje3)
         e3 = eol_attr(proje3, "ABAP_SRC/MM/ZMM001/x.abap", "ABAP_SRC/MM/ZMM001/y.cds")
         kontrol(len(e3) == 2 and all(v == "lf" for v in e3.values()),
