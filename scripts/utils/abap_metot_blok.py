@@ -23,7 +23,9 @@ SÖZLEŞME — `metot_bloklari(kaynak, metot)` → `[(bas, son, metin)]`, 1-taba
       - hiç deyim yoksa → `son = None` (kapanmamış) ve tarama durur
   · deyim = satır başında ya da `.`'dan sonra gelen anahtar kelime, deyim BİÇİMİNDE
     (`ENDMETHOD.` · `METHOD <ad>.` · `METHOD <ad> BY …` · satır sonunda biten `METHOD <ad>`;
-    `method = …` tanımlayıcıdır; `ENDMETHOD ##PRAGMA.` TANINMAZ — güvenli yön), ancak
+    `method = …` tanımlayıcıdır; `ENDMETHOD ##PRAGMA.` TANINMAZ — sonraki METHOD başlığı
+    pragma taşımadıkça güvenli yön; başlık da pragmalıysa (`METHOD b ##P.`) a+b birleşik
+    blok döner — main'den beri var, ÖLÇÜLMEDİ: derleyicinin bu başlığı kabul edip etmediği), ancak
     KOD kısmında: sütun-1 `*` yorumu, `"` satır-içi yorumu ve tek satırlık literaller (`'…'`,
     `` `…` ``, `|…|` — şablonda `\\` kaçışı atlanır) ayıklanır (`kod_kismi`).
   ⚠ SINIR (ÖLÇÜLMEDİ, bilinçli): ÇOK SATIRLI string şablonunun (`|…` satır sonunda kapanmayan)
