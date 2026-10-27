@@ -306,8 +306,8 @@ kanıtlanmış, yan etkisiz bir sınıf) ilk yarım saatte "araç sağlam, sorun
 > bambaşka bir cümledir.
 > ⚠ Kontrol grubu seçerken **yan etkiye bak**: bu vakada `SEOMETAREL VERSION=1` olan 13 aday
 > sınıfın **hepsi** yazma yapıyordu (12'si DOKU üretiyor, biri `DELETE`+`COMMIT`). Adı masum
-> diye varsayma — gövdesini oku. Yan etkisiz aday yoksa `$TMP`'de `out->write('OK')` kadar
-> basit birini yarat, aktive et, koş, sil.
+> diye varsayma — gövdesini oku. Yan etkisiz aday yoksa `out->write('OK')` kadar basit
+> birini yaratmak kesin cevap verir — ⚠ **`$TMP` lab yolu araçlarla bugün KOŞULAMAZ** (ölçüldü 2026-10-27, kod): MCP yaratma araçları paket `$TMP` olsa da transport ister (`guardrails.require_transport` paket bağlamı taşımaz) ve `lock_object` transport'suz kilidi reddeder (`[TRANSPORT REQUIRED]`). Geçici objeyi gerçek bir transport'a yazmak transport'ta **E071 artığı** bırakır ⇒ bu yol **kullanıcıya sorulur** (paket + transport + silme sorumluluğu); kendiliğinden açılmaz.
 
 **② TANIDIK SEMPTOMDA ÖNCE HAFIZAYI ARA — cevap zaten vardı.**
 Bu sonuca **2026-06-30'da da varılmış** ve aynı gün düzeltilmişti: *"BOZUK YANLIŞTI — kod
