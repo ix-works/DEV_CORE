@@ -21,6 +21,10 @@ playwright-cli run-code --filename=./my-script.js
 The code must be a single function expression, it is wrapped in `(...)` and evaluated.
 import/export/require syntax is not supported.
 
+The code runs in an isolated context, not in a full Node.js environment. `require`, `process` and Node modules are not
+available. Timers (`setTimeout`, `setInterval`), `fetch`, `URL`, `Buffer`, `crypto`, `AbortController`, `TextEncoder`
+and `TextDecoder` are available.
+
 ## Geolocation
 
 ```bash
@@ -218,12 +222,12 @@ playwright-cli run-code "async page => {
 
 ```bash
 # Login and save state
-# ⛔ 'secret' here is a placeholder — a real password written like this is echoed into the
-#    transcript. Use the "Sırlar" section below instead.
 playwright-cli run-code "async page => {
   await page.goto('https://example.com/login');
   await page.getByRole('textbox', { name: 'Email' }).fill('user@example.com');
   await page.getByRole('textbox', { name: 'Password' }).fill('secret');
+# ⛔ 'secret' here is a placeholder — a real password written like this is echoed into the
+#    transcript. Use the "Sırlar" section below instead.
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.waitForURL('**/dashboard');
   await page.context().storageState({ path: 'auth.json' });
@@ -247,6 +251,10 @@ playwright-cli run-code "async page => {
 > `install --skills` bu bölümü ezer; skill güncellenince yeniden ekle.
 
 **Ölçüldü (playwright-cli 0.1.17, 2026-10-03, yalnız sahte değerlerle):**
+
+> **0.1.22'de yeniden ölçüldü (2026-10-27, sahte değer):** `run-code` kodu `### Ran Playwright code`
+> bloğunda yine **aynen** basıyor (sahte değer çıktıda 1 kez) · `typeof process` = `"undefined"` ·
+> başarısız `run-code` artık **rc=1** döner (0.1.18+). Upstream de artık `process` yok diyor (running-code.md başı).
 
 | Durum | Sonuç |
 |---|---|
