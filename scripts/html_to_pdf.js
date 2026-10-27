@@ -10,7 +10,13 @@
  * ⛔ ALTBİLGİ GÖVDEYİ DARALTMAZ: altbilgi MEVCUT alt boşluğa yerleşir, margin değiştirilmez
  *    ⇒ sayfa sayısı ve tablo bölünmesi bayraklı/bayraksız AYNI kalır. Bunun bedeli: alt
  *    boşluk altbilgiye yetmiyorsa altbilgi kırpılır/görünmez — o yüzden ETKİN alt boşluk
- *    belgeden ÖLÇÜLÜR (sabit varsayılmaz) ve yetmiyorsa SESSİZ değil exit 2.
+ *    belgeden ÖLÇÜLÜR (sabit varsayılmaz) ve yetmiyorsa SESSİZ değil exit 2. Gereken boşluk =
+ *    altbilginin sayfa altından uzaklığı (ALTBILGI_ALT_IC_MM, ölçülmüş sabit) + altbilgi yüksekliği
+ *    (AYRI sayfada ölçülür, belge CSS'i dokunamaz) + pay (Issue #360). PDF yazmadan çıkılırken hedefte
+ *    önceki bir PDF varsa stderr'e UYARI basılır (dosya silinmez). Uyarının KAPSAMADIĞI çıkışlar
+ *    (uyarısız; hedef dosya olduğu gibi kalır): `[KULLANIM]` exit 2 (bilinmeyen bayrak / yanlış argüman
+ *    sayısı; OUT henüz çözülmemiştir) ve modül düzeyindeki `require(resolvePlaywrightCore())` hatası
+ *    (playwright-core yok → Node'un kendi hatası, `catch` dalına girilmez).
  *    Ölçülen tuzaklar (bu evde iki kez):
  *    · CSS `@page { margin: … }` page.pdf'e verilen JS margin'i SESSİZCE ezer
  *      (build_doc_pdf/build_kd_pdf CSS'i `@page` margin TAŞIR ⇒ etkin boşluk CSS'inkidir).
@@ -64,12 +70,49 @@ const ALTBILGI_HTML =
 // Altbilgi ile gövde arasında en az bu kadar boşluk kalmalı (mm) — altbilgi gövde metnine
 // yapışmasın. Altbilginin KENDİ yüksekliği ölçülür; bu yalnız ek nefes payıdır.
 const ALTBILGI_PAY_MM = 2;
+// Altbilgi satır kutusunun ALT kenarı ile sayfanın alt kenarı arasındaki mesafe (mm). GEREKEN alt
+// boşluk = ALTBILGI_ALT_IC_MM + altbilgi yüksekliği + ALTBILGI_PAY_MM (Issue #360, 2026-10-19).
+// Neden: Chromium footerTemplate'i alt boşluğun BOYUNDAN BAĞIMSIZ, sayfa altından sabit bir yükseklikte
+// çizer. Eski eşik (altbilgi + pay) bu mesafeyi saymıyordu ⇒ 6–11 mm alt boşlukta rc 0 ama "Sayfa X / Y"
+// gövdenin son satırına biniyordu (ölçüldü: 6 ve 9 mm'de metin kutuları kesişiyor, 11 mm'de aralık < 2 mm).
+// ÖLÇÜM TARİFİ (sabit değişirse yeniden koş): `@page{margin:10mm 10mm <N>mm 10mm}` + `html,body{height:100%}`
+// + gövde flex `justify-content:flex-end` (son satır dipte) → `--sayfa-no` PDF'i → PyMuPDF
+// `search_for("Sayfa 1 / 1")` metin kutusunun sayfa altına uzaklığı:
+//   · N = 6 / 18 / 30 mm, 8 pt  → kutu alt 5.34 mm, üst 9.09 mm (N'den BAĞIMSIZ)
+//   · 4 / 16 / 24 pt (N 18/18/40) → alt 5.16 / 5.16 / 5.24 mm · line-height:3 → alt 7.72 mm
+//     (satır kutusu 8.47 mm, metin ortalı ⇒ kutunun alt kenarı ≈ 5.36 mm)
+//   ⇒ satır kutusunun alt kenarı ≈ 5.2–5.4 mm'de sabit; üstü = 5.3 + kutu yüksekliği (8 pt'de 5.3 + 4.0 =
+//     9.3 mm ≥ ölçülen metin üstü 9.09 mm — muhafazakâr yön).
+// ⚠ ÖLÇÜLEN ORTAM: Windows 11 + msedge 155.0.4283.62 + playwright-core 1.62.0-alpha. Linux / Chrome /
+//   başka Chromium sürümünde değer ÖLÇÜLMEDİ (CI tarayıcı kurmaz; fixture P*-satırları orada ATLANDI).
+const ALTBILGI_ALT_IC_MM = 5.3;
 
 // Viewport'a bağlı medya özellikleri (min-/max-/device-/aralık sözdizimi dahil — alt dizge eşleşir).
 const VIEWPORT_OZELLIK_RE = /(?:width|height|aspect-ratio|orientation|resolution|pixel-ratio)/i;
 
-/** Belgenin ETKİN alt boşluğunu (mm) ve altbilginin yüksekliğini (mm) ölçer.
+/** Belgenin ETKİN alt boşluğunu (mm) ölçer (altbilginin yüksekliği AYRI sayfada: `altbilgiOlc`).
  *  Kaynak: belgedeki `@page` kuralı (varsa JS margin'i ezer) — yoksa JS margin'i.
+ *  ⛔ UZUNLUK ÖLÇÜMÜ BELGE CSS'İNDEN YALITILIR (Issue #360 kardeşi, 2026-10-19, ÖLÇÜLDÜ): `@page`
+ *  margin değeri eskiden `document.body`'ye eklenen bir div'in yüksekliğiyle mm'ye çevriliyordu ⇒ belge
+ *  CSS'i o div'e de uyuyordu: `div{padding:20px !important}` 5 mm'yi 15.6 mm, `body{zoom:3}` 5 mm'yi
+ *  15 mm yapıyordu (baskıda ikisi de 5 mm — sessiz geçiş yönü), `2em` gövde yazı boyutuna göre
+ *  çözülüyordu (`body{font-size:30px}` → 15.9 mm; baskıda 8.5 mm). Baskı ÖLÇÜMÜ (taban betik, dipteki
+ *  satır): `@page` uzunluğu KÖK elemana göre çözülür — `em`/`rem` = html yazı boyutu, `html{zoom}`
+ *  margin'i ölçekler (20 mm × 0.5 → 9.7), `body{zoom}` ölçeklemez. Şimdi ölçüm elemanı KÖKÜN (html)
+ *  çocuğu olan bir gölge kökte: `:host{all:initial !important; font:inherit !important}` + iç div
+ *  `all:initial` + `font:inherit` (iki katmanda da), yükseklik satır içi `!important` ⇒ belge kuralları
+ *  dokunamaz (gölge-içi `!important` belge `!important`'ını yener), kökün yazı tipi ve zoom'u geçer.
+ *  ⛔ `font:inherit`, `font-size:inherit` DEĞİL (bug-gate 2026-10-27, ÖLÇÜLDÜ): yalnız yazı boyutu miras
+ *  alınırsa satır yüksekliği ve yazı ailesi başlangıç değerine döner ⇒ `lh`/`ex`/`ch` yanlış ölçülür.
+ *  `html{line-height:0.5}` + `3lh` → 14.3 mm sanıp rc 0, baskıda 6.0 mm, altbilgi son satıra -4.2 mm
+ *  biner (sessiz). Ters yön, yani sahte DURDU: `html{line-height:3}` + `3lh` 14.3/37.8 mm,
+ *  Courier + `8ch` 16.9/20.1 mm, Impact + `6ex` 11.4/16.1 mm.
+ *  Belge zoom'u gölge köke SIZMAZ (`html > *{zoom:3 !important}` + 6 mm → 6.0 mm, baskı 5.8; ölçüldü).
+ *  `%` eski davranışla AYNI (host = 100vh ⇒ ekran viewport yüksekliğinin yüzdesi; baskıdaki anlamı
+ *  modellenmez). `html{transform}` gibi baskı yerleşimini bozan belgeler modellenmez. CSP'li belge
+ *  (`style-src` gölge kökteki `<style>`'ı engeller) yalıtımı DÜŞÜRÜR, modellenmez (bug-gate
+ *  2026-10-27, ÖLÇÜLDÜ: `style-src 'sha256-…'` + `html > *{zoom:3 !important}` + 6 mm → 18.0 mm, rc 0;
+ *  eski araç da aynı — regresyon değil; çekirdek üreteçlerinin HTML'i CSP taşımaz).
  *  Koşullu gruplar (bug-gate 2026-10-12, ÖLÇÜLDÜ): bu betik `emulateMedia("screen")` ile basar ⇒
  *  `@media print { @page {…} }` UYGULANMAZ (JS margin geçerli kalır), `@media screen|all { @page {…} }`
  *  UYGULANIR. Medya TÜRÜ (stil sayfası/`@media`/`@import`) `matchMedia` (emüle ekran) ile, `@supports`
@@ -119,16 +162,22 @@ const VIEWPORT_OZELLIK_RE = /(?:width|height|aspect-ratio|orientation|resolution
  *  ② `@page` içi `@bottom-*` kenar kutuları ve özgüllük/!important çakışması modellenmez (düz
  *  `@page` kurallarında belge sırasındaki SON değer alınır). */
 async function altBoslukOlc(page, jsAltMm) {
-  return await page.evaluate(([jsAlt, html, reKaynak]) => {
+  return await page.evaluate(([jsAlt, reKaynak]) => {
     const viewportRe = new RegExp(reKaynak, "i");
     const pxToMm = px => px * 25.4 / 96;
     const uzunlukMm = deger => {
-      const d = document.createElement("div");
-      d.style.cssText = "position:absolute;visibility:hidden;height:" + deger;
-      document.body.appendChild(d);
-      const h = d.getBoundingClientRect().height;
-      d.remove();
-      return pxToMm(h);
+      const h = document.createElement("ix-uzunluk-olcum");
+      const s = h.attachShadow({ mode: "closed" });
+      s.innerHTML = "<style>:host{all:initial !important;font:inherit !important;display:block !important;" +
+        "position:absolute !important;visibility:hidden !important;left:0 !important;top:0 !important;" +
+        "width:0 !important;height:100vh !important}" +
+        "div{all:initial !important;display:block !important;font:inherit !important}</style><div></div>";
+      const d = s.querySelector("div");
+      d.style.setProperty("height", deger, "important");   // satır içi: değer metni HTML'e gömülmez
+      document.documentElement.appendChild(h);
+      const v = d.getBoundingClientRect().height;
+      h.remove();
+      return pxToMm(v);
     };
     let sorgu = 0, viewportSay = 0;
     const okunamayan = [];   // cssRules'ı okunamayan stil sayfası / @import kaynakları (çapraz köken)
@@ -188,16 +237,43 @@ async function altBoslukOlc(page, jsAltMm) {
     for (const s of sozde) {
       if (s.mm < etkin) { etkin = s.mm; kaynak = "css-" + s.iz; }
     }
+    return { etkinMm: etkin, kaynak, medya: { sorgu, viewport: viewportSay }, okunamayan,
+             adopted: adopted.length };
+  }, [jsAltMm, VIEWPORT_OZELLIK_RE.source]);
+}
+
+/** Altbilgi şablonunun yüksekliği (mm) — verilen sayfanın gövdesinde, A4 genişliğinde ölçülür.
+ *  ⛔ ÇAĞIRAN AYRI, BOŞ bir sayfa verir (Issue #360, 2026-10-19, ÖLÇÜLDÜ): Chromium altbilgiyi belgeden
+ *  AYRI bir bağlamda çizer — belge CSS'i ona ulaşmaz (PDF'te altbilgi metin kutusu her durumda 3.75 mm).
+ *  Eski sürüm ölçümü belgenin kendi gövdesinde yapıyordu ⇒ `div{padding:20px !important}` 25.1 mm,
+ *  `*{font-size:40pt !important;line-height:3 !important}` 42.3 mm (sahte DURDU), `*{font-size:2pt
+ *  !important;line-height:0.2 !important}` 0.1 mm, `html{zoom:0.2}` 0.8 mm (sessiz geçiş yönü).
+ *  Issue'nun önerdiği gölge kök + `:host{all:initial !important}` de ÖLÇÜLDÜ ve YETMEDİ: ataların
+ *  `zoom`'u (`html{zoom:0.2}` → 0.79 mm) ve `display:none`'ı (`*{display:none !important}` → 0) gölge
+ *  kökü de etkiler. Ayrı sayfada (aynı tarayıcı ⇒ aynı fontlar) tüm bu vakalarda 3.97 mm. */
+async function altbilgiOlc(sayfa) {
+  return await sayfa.evaluate(html => {
     const k = document.createElement("div");
-    k.style.cssText = "position:absolute;visibility:hidden;left:0;top:0;width:180mm";
+    k.style.cssText = "position:absolute;visibility:hidden;left:0;top:0;width:210mm";
     k.innerHTML = html;
     document.body.appendChild(k);
-    const altbilgi = pxToMm(k.getBoundingClientRect().height);
+    const h = k.getBoundingClientRect().height * 25.4 / 96;
     k.remove();
-    return { etkinMm: etkin, kaynak, altbilgiMm: altbilgi, medya: { sorgu, viewport: viewportSay }, okunamayan,
-             adopted: adopted.length };
-  }, [jsAltMm, ALTBILGI_HTML, VIEWPORT_OZELLIK_RE.source]);
+    return h;
+  }, ALTBILGI_HTML);
 }
+
+/** Bu koşu PDF YAZMADAN çıkarken (DURDU exit 2 · hata exit 1) hedefte ÖNCEKİ bir dosya duruyorsa
+ *  stderr'e uyarır (Issue #360, 2026-10-19). Dosya SİLİNMEZ (kullanıcının önceki çıktısıdır); ama
+ *  uyarısız bırakılırsa "PDF orada" görüntüsü bu koşunun çıktısı sanılır (ölçüldü: `@page` alt 4 mm +
+ *  hedefte eski d.pdf → rc 2, d.pdf "eski" içerikle kaldı, tek satır uyarı yoktu). */
+function eskiPdfUyar() {
+  if (fs.existsSync(OUT)) {
+    console.error("⚠ UYARI: hedefte ONCEKI bir PDF duruyor ve bu kosu onu YAZMADI: " + OUT +
+                  " — o dosya bu kosunun ciktisi DEGILDIR (silinmedi).");
+  }
+}
+let PDF_YAZILDI = false;
 
 /** Üretilen PDF'teki yer imi (outline) sayısı — `Outlines` sözlüğünün `/Count`'u (ham bayttan).
  *  Döner: sayı · Outlines yok ve sıkıştırılmış nesne akışı da yok → 0 · ölçülemedi → null
@@ -271,12 +347,17 @@ async function basliklariHazirla(page) {
   const opts = { path: OUT, format: "A4", printBackground: true, margin: { top: "14mm", bottom: "16mm", left: "12mm", right: "12mm" } };
   if (BAYRAK.has("--sayfa-no")) {
     const o = await altBoslukOlc(p, 16);
-    const gerek = o.altbilgiMm + ALTBILGI_PAY_MM;
+    const pa = await p.context().newPage();   // AYRI, boş sayfa: belge CSS'i altbilgi ölçümüne ulaşmaz
+    await pa.setContent('<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>');
+    o.altbilgiMm = await altbilgiOlc(pa);
+    await pa.close();
+    const gerek = ALTBILGI_ALT_IC_MM + o.altbilgiMm + ALTBILGI_PAY_MM;
     const okn = o.okunamayan.length;
     // KAPSAM BEYANI: "(muhafazakar)" yalnız viewport sorgusu VARKEN ve okunamayan grup YOKKEN basılır
     // (0 sorguda muhafazakârlık yoktur; okunamayan grup varken ölçüm muhafazakâr değil EKSİKTİR).
     console.log("ALTBILGI: etkin alt bosluk " + o.etkinMm.toFixed(1) + "mm (" + o.kaynak +
-                "), altbilgi " + o.altbilgiMm.toFixed(1) + "mm + pay " + ALTBILGI_PAY_MM + "mm" +
+                "), gereken " + gerek.toFixed(1) + "mm = alt kenar " + ALTBILGI_ALT_IC_MM + "mm + altbilgi " +
+                o.altbilgiMm.toFixed(1) + "mm (ayri sayfada) + pay " + ALTBILGI_PAY_MM + "mm" +
                 " | medya " + o.medya.sorgu + " sorgu, " + o.medya.viewport + " viewport'a bagli" +
                 (o.medya.viewport > 0 && okn === 0 ? " (muhafazakar)" : "") +
                 " | okunamayan stil sayfasi/import " + okn +
@@ -287,6 +368,7 @@ async function basliklariHazirla(page) {
                     o.okunamayan.slice(0, 3).join(", ") + (okn > 3 ? ", …" : "") + "), @page margin'i OLCULEMEDI " +
                     "(muhafazakar: okunamayan sayfa baskida @page margin'ini degistirebilir, altbilgi KIRPILABILIRDI). " +
                     "Stili <style> icine gom ya da bayraksiz uret.");
+      eskiPdfUyar();
       process.exit(2);
     }
     if (!(o.etkinMm >= gerek)) {
@@ -295,8 +377,11 @@ async function basliklariHazirla(page) {
       const vp = o.kaynak.includes("~(") ? " Kaynak VIEWPORT'A BAGLI medya sorgusu (muhafazakar): baskida uygulanip " +
                  "uygulanmadigi ekran viewport'undan bilinemez, en kucuk deger alindi." : "";
       console.error("[DURDU] --sayfa-no: etkin alt bosluk " + o.etkinMm.toFixed(1) + "mm < gereken " +
-                    gerek.toFixed(1) + "mm (" + o.kaynak + ")." + vp + " Altbilgi KIRPILIRDI; govdeyi daraltmamak icin " +
+                    gerek.toFixed(1) + "mm (" + o.kaynak + "; alt kenar " + ALTBILGI_ALT_IC_MM + " + altbilgi " +
+                    o.altbilgiMm.toFixed(1) + " + pay " + ALTBILGI_PAY_MM + ")." + vp +
+                    " Altbilgi govdenin son satirina BINERDI ya da KIRPILIRDI; govdeyi daraltmamak icin " +
                     "margin degistirilmez. Belgenin @page margin-bottom degerini buyut ya da bayraksiz uret.");
+      eskiPdfUyar();
       process.exit(2);
     }
     opts.displayHeaderFooter = true;
@@ -313,6 +398,7 @@ async function basliklariHazirla(page) {
     opts.tagged = true;
   }
   await p.pdf(opts);
+  PDF_YAZILDI = true;
   await b.close();
   if (yerImi) {
     // Üretim SONRASI denetim (bug-gate 2026-10-12 önerisi): "outline: true" vermek yer imi
@@ -332,4 +418,4 @@ async function basliklariHazirla(page) {
     }
   }
   console.log("PDF OK:", OUT);
-})().catch(e => { console.error("ERR", e); process.exit(1); });
+})().catch(e => { console.error("ERR", e); if (!PDF_YAZILDI) eskiPdfUyar(); process.exit(1); });

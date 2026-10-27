@@ -76,6 +76,25 @@ SENARYOLAR
   P4b üretim SONRASI yer imi sayımı (PDF `Outlines /Count`) = PyMuPDF toc = başlık sayısı, uyarı yok
   P9  NEGATİF: outline üretmeyen kopya + --yer-imi → "YER-IMI PDF: 0" + "⚠ UYARI … YER IMI YOK"
                                                                             [--mutasyon-yer-imi-denetim]
+  Issue #360 (2026-10-19) — "yer gerçeği" = aynı HTML'in eşik kontrolü SÖKÜLMÜŞ kopyayla (`js_esiksiz`)
+  basılan PDF'inde "SON SATIR" (dipte) ile "Sayfa 1 / 1" metin kutuları arası dikey aralık (mm; < 0 = biner)
+  P11a-d EŞİK: `@page` alt 6/9/11 mm → exit 2 (yer gerçeği: 6/9'da biner, 11'de aralık < pay 2 mm) ·
+      12 mm → exit 0 + aracın PDF'inde aralık ≥ 2 mm
+      [--mutasyon-alt-ic: P11a-d + 6–9 mm'lik P12c/P13a/P13b/P13d (eşik 6.0 mm'ye iner) — ölçüldü]
+  P12a-d ALTBİLGİ ÖLÇÜM YALITIMI: `div{padding}` · `div{font-size:40pt;line-height:3}` (eski: sahte DURDU)
+      · `html{zoom:0.5}` → exit 0 + beyan "altbilgi 4.0mm"-civarı · `div{font-size:2pt;line-height:0.2}` +
+      9 mm → exit 2 (eski: 0.1 mm sanıp sessiz geçiş; yer gerçeği aralık < 2)   [--mutasyon-altbilgi-yalitim]
+  P13a-d UZUNLUK ÖLÇÜM YALITIMI (kardeş): `body{zoom:3}`+6 mm · `2em`+`body{font-size:30px}` ·
+      `div{padding}`+6 mm → exit 2 + etkin = baskıdaki değer (yer gerçeği: biner) [--mutasyon-uzunluk-yalitim]
+      · kontrol `2em`+`html{font-size:30px}` → 15.9 mm, exit 0 (em KÖKE göre)   [--mutasyon-uzunluk-kok-font]
+      P13e GEVŞETME FP-kanıtı: `2em` + html 30px / body 10px → 15.9 mm, exit 0 (eski: 5.3 mm sahte DURDU)
+                                                                              [--mutasyon-uzunluk-yalitim]
+      P13f `3lh` + `html{line-height:0.5}` → etkin 6.3 mm (KÖKÜN satır yüksekliği), exit 2 (yer gerçeği:
+      BİNER; `font-size:inherit`-yalnız sürüm 14.3 mm sanıp sessiz geçiyordu)
+          [--mutasyon-uzunluk-satir-yuksekligi (iç div katmanı) · --mutasyon-uzunluk-kok-font (:host; P13c+P13f)]
+  P14a-d ESKİ PDF: DURDU (yetersiz · okunamayan) + hedefte önceki PDF → exit 2 + stderr "ONCEKI bir PDF",
+      dosya DEĞİŞMEDEN kalır · kontrol c: hedef yokken uyarı YOK · kontrol d: hedefte önceki PDF +
+      koşu BAŞARILI → uyarı YOK, dosya YENİLENDİ                                [--mutasyon-eski-pdf: P14a-b]
   B1  3. BAĞLAM: build_doc_pdf.py CLI uçtan uca `--pdf --sayfa-no --yer-imi` (gerçek giriş noktası)
 P*/B* node + playwright-core + msedge + markdown + PyMuPDF ister; biri yoksa ATLANDI basılır
 (CI bu bağımlılıkları kurmaz — ölçülmemiş satır PASS sayılmaz, payda ayrı yazılır).
@@ -117,7 +136,9 @@ GECERLI_KIP = {"--mutasyon-bayraksiz", "--mutasyon-govde", "--mutasyon-bosluk", 
                "--mutasyon-yayilim-media", "--mutasyon-yayilim-supports", "--mutasyon-yayilim-layer",
                "--mutasyon-yayilim-import", "--mutasyon-okunamayan-sayfa", "--mutasyon-okunamayan-import",
                "--mutasyon-okunamayan-durdu", "--mutasyon-muhafazakar-etiket", "--mutasyon-baski-sayfa-okunur",
-               "--mutasyon-baski-import-okunur", "--mutasyon-alternatif-atla", "--mutasyon-adopted"}
+               "--mutasyon-baski-import-okunur", "--mutasyon-alternatif-atla", "--mutasyon-adopted",
+               "--mutasyon-alt-ic", "--mutasyon-altbilgi-yalitim", "--mutasyon-uzunluk-yalitim",
+               "--mutasyon-uzunluk-kok-font", "--mutasyon-uzunluk-satir-yuksekligi", "--mutasyon-eski-pdf"}
 _kip = [a for a in sys.argv[1:] if a.startswith("--")]
 for a in _kip:
     if a not in GECERLI_KIP:
@@ -183,6 +204,26 @@ MUTASYON = {
     "--mutasyon-sozde": ('if (s.mm < etkin) {', 'if (false) {'),
     # üretim sonrası yer imi denetimini söker → P9 düşmeli
     "--mutasyon-yer-imi-denetim": ('if (n === 0 && yerImi.toplam > 0) {', 'if (false) {'),
+    # Issue #360 — eşik altbilginin alt kenara uzaklığını saymaz (eski davranış) → P11a-c düşmeli
+    "--mutasyon-alt-ic": ("    const gerek = ALTBILGI_ALT_IC_MM + o.altbilgiMm + ALTBILGI_PAY_MM;",
+                          "    const gerek = o.altbilgiMm + ALTBILGI_PAY_MM;"),
+    # altbilgi belgenin KENDİ sayfasında ölçülür (eski davranış: belge CSS'i ölçüme uyar) → P12a-d düşmeli
+    "--mutasyon-altbilgi-yalitim": ("    o.altbilgiMm = await altbilgiOlc(pa);", "    o.altbilgiMm = await altbilgiOlc(p);"),
+    # @page uzunluğu eski yoldan (document.body'deki düz div) ölçülür → P13a/b/d düşmeli
+    "--mutasyon-uzunluk-yalitim": ("    const uzunlukMm = deger => {\n",
+                                   "    const uzunlukMm = deger => {\n"
+                                   "      { const d0 = document.createElement(\"div\");"
+                                   " d0.style.cssText = \"position:absolute;visibility:hidden;height:\" + deger;"
+                                   " document.body.appendChild(d0); const h0 = d0.getBoundingClientRect().height;"
+                                   " d0.remove(); return pxToMm(h0); }\n"),
+    # gölge kök (:host katmanı) kökün yazı tipini miras almaz (em = 16px, line-height normal) → P13c + P13f düşmeli
+    "--mutasyon-uzunluk-kok-font": (":host{all:initial !important;font:inherit !important;",
+                                    ":host{all:initial !important;"),
+    # iç div katmanı yalnız yazı boyutunu miras alır (bug-gate 2026-10-27 öncesi sürüm) → P13f düşmeli
+    "--mutasyon-uzunluk-satir-yuksekligi": ("div{all:initial !important;display:block !important;font:inherit !important}",
+                                            "div{all:initial !important;display:block !important;font-size:inherit !important}"),
+    # PDF yazmadan çıkarken hedefteki önceki dosya için uyarmaz (eski davranış) → P14a-b düşmeli
+    "--mutasyon-eski-pdf": ("  if (fs.existsSync(OUT)) {", "  if (false) {"),
 }
 # build_doc_pdf.py'ye uygulanan mutasyonlar (S-bölümü, bağımlılıksız)
 MUTASYON_BUILD = {
@@ -388,6 +429,8 @@ P_ADLAR = ["P1", "P2", "P3", "P4", "P4b", "P5", "P6", "P7", "P7b", "P7c", "P7d",
            "P7g-sayfa", "P7g-media", "P7g-supports", "P7g-layer", "P7g-import",
            "P7h1", "P7h2", "P7h3", "P7h4", "P7h5", "P7k1", "P7k2", "P7k3", "P7k4",
            "P7c-link", "P7c-import", "P7k5", "P7f-alt", "P7j", "P10",
+           "P11a", "P11b", "P11c", "P11d", "P12a", "P12b", "P12c", "P12d",
+           "P13a", "P13b", "P13c", "P13d", "P13e", "P13f", "P14a", "P14b", "P14c", "P14d",
            "P8", "P9", "B1"]
 if eksik:
     for a in P_ADLAR:
@@ -622,6 +665,138 @@ else:
             and "1 viewport'a bagli |" in s1 and "(muhafazakar)" not in s1
             and "1 viewport'a bagli (muhafazakar) | okunamayan stil sayfasi/import 0" in s2,
             f"viewport0={s0!r} okunamayan={s1!r} viewport1={s2!r}")
+    # P11-P14 — Issue #360. Yer gerçeği: eşik kontrolü SÖKÜLMÜŞ kopya (mutasyondan bağımsız: yeni_txt'ten)
+    # aynı HTML'i altbilgiyle basar; dipteki "SON SATIR" ile "Sayfa 1 / 1" metin kutuları arası aralık ölçülür.
+    ESIK_CAPA = "    if (!(o.etkinMm >= gerek)) {"
+    if yeni_txt.count(ESIK_CAPA) != 1:
+        print(f"[DURDU] yer gerçeği çapası bulunamadı/çoğul: {ESIK_CAPA!r}")
+        sys.exit(3)
+    js_esiksiz = kum / "html_to_pdf_esiksiz.js"
+    js_esiksiz.write_text(yeni_txt.replace(ESIK_CAPA, "    if (false) {"), encoding="utf-8")
+    MMK = 25.4 / 72
+    PAY_MM = 2.0
+
+    def aralik(pdf):
+        """(dipteki satır ↔ altbilgi aralığı mm, altbilgi metin kutusu yüksekliği mm) — bulunamazsa None."""
+        try:
+            pg = fitz.open(pdf)[0]
+        except Exception:
+            return None, None
+        # "Sayfa 1 /" öneki: `html{line-height:0.5}` (P13f) glif taşmasıyla 2 sayfa basar (ölçüldü) — y aynı
+        a, b_ = pg.search_for("SON SATIR"), pg.search_for("Sayfa 1 /")
+        if not a or not b_:
+            return None, None
+        return round((b_[0].y0 - a[0].y1) * MMK, 2), round((b_[0].y1 - b_[0].y0) * MMK, 2)
+
+    def alt_dene(ad, alt, ek_css, head_ek="", onceki=False):
+        hh = kum / (ad + ".html")
+        hh.write_text('<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"><style>@page{margin:10mm 10mm '
+                      + alt + ' 10mm} html,body{margin:0;height:100%} body{display:flex;flex-direction:column;'
+                      'justify-content:flex-end} ' + ek_css + '</style>' + head_ek + '</head><body>'
+                      '<p style="margin:0">SON SATIR</p></body></html>', encoding="utf-8")
+        pp = kum / (ad + ".pdf")
+        ESKI = b"%PDF-eski-icerik-ix360"
+        if onceki:
+            pp.write_bytes(ESKI)
+        rr, oo = kos(["node", str(js), str(hh), str(pp), "--sayfa-no"])
+        degismedi = pp.exists() and pp.read_bytes() == ESKI
+        arac_ar = aralik(pp) if (rr == 0 and pp.exists()) else (None, None)
+        pg_ = kum / (ad + "_yg.pdf")
+        rg, _ = kos(["node", str(js_esiksiz), str(hh), str(pg_), "--sayfa-no"])
+        yg_ar = aralik(pg_) if rg == 0 else (None, None)
+        return {"rc": rr, "o": oo, "var": pp.exists(), "degismedi": degismedi, "arac": arac_ar, "yg": yg_ar}
+
+    def etkin(o):
+        m = re.search(r"etkin alt bosluk ([\d.]+)mm", o)
+        return float(m.group(1)) if m else None
+
+    def altbilgi(o):
+        m = re.search(r"altbilgi ([\d.]+)mm \(ayri sayfada\)", o)
+        return float(m.group(1)) if m else None
+
+    LINK0 = '<link rel="stylesheet" href="sifir.css">'
+    A_VEKTOR = {
+        "e6": ("6mm", ""), "e9": ("9mm", ""), "e11": ("11mm", ""), "e12": ("12mm", ""),
+        "i_padding": ("20mm", "div{padding:20px !important}"),
+        "i_font": ("20mm", "div{font-size:40pt !important;line-height:3 !important}"),
+        "i_kucuk": ("9mm", "div{font-size:2pt !important;line-height:0.2 !important}"),
+        "i_zoom": ("30mm", "html{zoom:0.5}"),
+        "u_bodyzoom": ("6mm", "body{zoom:3}"), "u_em": ("2em", "body{font-size:30px}"),
+        "u_em_kok": ("2em", "html{font-size:30px}"), "u_padding": ("6mm", "div{padding:20px !important}"),
+        "u_em_govde_kucuk": ("2em", "html{font-size:30px} body{font-size:10px}"),
+        "u_lh": ("3lh", "html{line-height:0.5}"),
+        "d_yetersiz": ("4mm", "", "", True), "d_okunamayan": ("20mm", "", LINK0, True),
+        "d_kontrol": ("4mm", "", "", False), "d_basarili": ("12mm", "", "", True),
+    }
+    with ThreadPoolExecutor(max_workers=4) as _ex:
+        AS = dict(zip(A_VEKTOR, _ex.map(lambda a: alt_dene(a, *A_VEKTOR[a]), A_VEKTOR)))
+
+    def ozet(v):
+        return f"rc={v['rc']} var={v['var']} arac={v['arac']} yer_gercegi={v['yg']} {beyan(v['o'])[:150]!r}"
+
+    def biner(v):        # yer gerçeği: altbilgi gövdenin son satırına biner
+        return v["yg"][0] is not None and v["yg"][0] < 0
+
+    def durdu(v):
+        return v["rc"] == 2 and "[DURDU]" in v["o"] and not v["var"]
+    for i, (ad, mm) in enumerate((("e6", 6), ("e9", 9)), 0):
+        v = AS[ad]
+        kontrol(f"P11{'ab'[i]} EŞİK @page alt {mm} mm (yer gerçeği: altbilgi son satıra BİNER) → exit 2 DURDU",
+                durdu(v) and biner(v), ozet(v))
+    v = AS["e11"]
+    kontrol("P11c EŞİK @page alt 11 mm (yer gerçeği: aralık 0..pay 2 mm) → exit 2 DURDU",
+            durdu(v) and v["yg"][0] is not None and 0 <= v["yg"][0] < PAY_MM, ozet(v))
+    v = AS["e12"]
+    kontrol("P11d EŞİK @page alt 12 mm → exit 0, aracın PDF'inde aralık ≥ pay 2 mm, 'gereken 11.3mm'",
+            v["rc"] == 0 and v["var"] and v["arac"][0] is not None and v["arac"][0] >= PAY_MM
+            and "gereken 11.3mm = alt kenar 5.3mm" in v["o"], ozet(v))
+    for harf, ad in (("a", "i_padding"), ("b", "i_font"), ("d", "i_zoom")):
+        v = AS[ad]
+        ab = altbilgi(v["o"])
+        kontrol(f"P12{harf} YALITIM {A_VEKTOR[ad][1]!r} → exit 0, beyan altbilgi 3.5–4.5 mm, PDF'te altbilgi "
+                f"kutusu 3–4.5 mm ve aralık ≥ pay",
+                v["rc"] == 0 and v["var"] and ab is not None and 3.5 <= ab <= 4.5
+                and v["arac"][1] is not None and 3.0 <= v["arac"][1] <= 4.5 and v["arac"][0] >= PAY_MM,
+                f"altbilgi={ab} " + ozet(v))
+    v = AS["i_kucuk"]
+    kontrol("P12c YALITIM (ters yön) div{font-size:2pt;line-height:0.2} + 9 mm → exit 2 DURDU, beyan altbilgi "
+            "3.5–4.5 mm (yer gerçeği: aralık < pay)",
+            durdu(v) and 3.5 <= (altbilgi(v["o"]) or 0) <= 4.5 and v["yg"][0] is not None and v["yg"][0] < PAY_MM,
+            f"altbilgi={altbilgi(v['o'])} " + ozet(v))
+    for harf, ad, beklenen in (("a", "u_bodyzoom", 6.0), ("b", "u_em", 8.5), ("d", "u_padding", 6.0)):
+        v = AS[ad]
+        kontrol(f"P13{harf} UZUNLUK YALITIMI @page {A_VEKTOR[ad][0]} + {A_VEKTOR[ad][1]!r} → etkin {beklenen} mm "
+                f"(baskıdaki değer), exit 2 (yer gerçeği: BİNER)",
+                durdu(v) and etkin(v["o"]) == beklenen and biner(v), f"etkin={etkin(v['o'])} " + ozet(v))
+    v = AS["u_em_kok"]
+    kontrol("P13c kontrol @page 2em + html{font-size:30px} → etkin 15.9 mm (em KÖKE göre), exit 0, aralık ≥ pay",
+            v["rc"] == 0 and v["var"] and etkin(v["o"]) == 15.9 and v["arac"][0] is not None
+            and v["arac"][0] >= PAY_MM, f"etkin={etkin(v['o'])} " + ozet(v))
+    v = AS["u_em_govde_kucuk"]
+    kontrol("P13e GEVŞETME FP-kanıtı @page 2em + html 30px / body 10px → etkin 15.9 mm, exit 0, aralık ≥ pay "
+            "(eski araç gövdeye göre 5.3 mm sanıp sahte DURDU veriyordu)",
+            v["rc"] == 0 and v["var"] and etkin(v["o"]) == 15.9 and v["arac"][0] is not None
+            and v["arac"][0] >= PAY_MM, f"etkin={etkin(v['o'])} " + ozet(v))
+    v = AS["u_lh"]
+    kontrol("P13f UZUNLUK YALITIMI @page 3lh + html{line-height:0.5} → etkin 6.3 mm (KÖKÜN satır yüksekliği), "
+            "exit 2 (yer gerçeği: BİNER; font-size-yalnız miras 14.3 mm sanıp sessiz geçiyordu)",
+            durdu(v) and etkin(v["o"]) == 6.3 and biner(v), f"etkin={etkin(v['o'])} " + ozet(v))
+    for harf, ad, iz in (("a", "d_yetersiz", "etkin alt bosluk"), ("b", "d_okunamayan", "stil sayfasi okunamadi")):
+        v = AS[ad]
+        kontrol(f"P14{harf} ESKİ PDF: DURDU ({iz}) + hedefte önceki PDF → exit 2, stderr 'ONCEKI bir PDF', "
+                f"dosya DEĞİŞMEDİ (silinmedi)",
+                v["rc"] == 2 and iz in v["o"] and "ONCEKI bir PDF" in v["o"] and v["degismedi"],
+                f"degismedi={v['degismedi']} rc={v['rc']} {v['o'][-260:]!r}")
+    v = AS["d_kontrol"]
+    kontrol("P14c kontrol: DURDU + hedef YOK → uyarı basılmaz, PDF yazılmaz",
+            v["rc"] == 2 and "ONCEKI" not in v["o"] and not v["var"], f"rc={v['rc']} {v['o'][-200:]!r}")
+    v = AS["d_basarili"]
+    kontrol("P14d kontrol: hedefte önceki PDF + koşu BAŞARILI → exit 0, uyarı YOK, dosya YENİLENDİ "
+            "(gerçek PDF, altbilgi aralığı ≥ pay)",
+            v["rc"] == 0 and "ONCEKI" not in v["o"] and "UYARI" not in v["o"] and v["var"] and not v["degismedi"]
+            and v["arac"][0] is not None and v["arac"][0] >= PAY_MM,
+            f"degismedi={v['degismedi']} " + ozet(v))
+
     # P9 — yer imi denetimi NEGATİF: outline üretmeyen bir kopyada uyarı basılmalı
     js_nout = kum / "html_to_pdf_outline_yok.js"
     if src.count("opts.outline = true;") != 1:
