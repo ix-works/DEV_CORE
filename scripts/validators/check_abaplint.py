@@ -33,7 +33,7 @@ if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
 
 CONFIG = Path(__file__).resolve().parents[1] / 'abaplint' / 'abaplint.json'
 
-# Sürüm PİNLİ (2026-07-26; BUMP 2026-08-28: 2.120.5 → 2.120.38; BUMP 2026-10-03: → 2.120.64). Pin'siz `@abaplint/cli`
+# Sürüm PİNLİ (2026-07-26; BUMP 2026-08-28: 2.120.5 → 2.120.38; BUMP 2026-10-03: → 2.120.64; BUMP 2026-10-27: → 2.120.89). Pin'siz `@abaplint/cli`
 # her koşumda upstream latest'i çeker → lint davranışı bizden habersiz değişir (upstream'de
 # 2 haftada 43 commit) + tedarik-zinciri yüzeyi. Bump = BİLİNÇLİ karar: burayı güncelle,
 # bir class/program üzerinde koş, farkı gör.
@@ -53,8 +53,16 @@ CONFIG = Path(__file__).resolve().parents[1] / 'abaplint' / 'abaplint.json'
 # (dosya, satır, kural, mesaj) dörtlüsü BİREBİR AYNI (23 = 23). *Tek fark dosyası paralel koşumda
 # node sürecinin çökmesiydi (rc 0xC0000409, boş çıktı → gate doğru biçimde FAIL measured=false);
 # aynı dosya tek başına iki sürümde 3'er kez koşuldu → 6/6 OK ⇒ sürüme bağlı değil.
+# 2026-10-27 bump'ı (2.120.64 → 2.120.89) AYNI YÖNTEMLE — 193 canlı artefakt (88 `.clas.abap` +
+# 105 `.prog.abap`; `.tmp/` hariç) + 2 kontrol = 195, iki sürüm paralel (dosya başına sıralı):
+#   2.120.64 → 172 OK · 22 FINDING · 1 FAIL* · toplam 28 bulgu
+#   2.120.89 → 173 OK · 22 FINDING · 0 FAIL  · toplam 28 bulgu
+# (dosya, satır, kural, mesaj) dörtlüsü BİREBİR AYNI (28 = 28). *FAIL = `measured=false` (paralel
+# koşumda geçici); aynı dosya tek başına iki sürümde → OK/OK ⇒ sürüme bağlı değil.
+# ⚠ 2.120.84 BDEF parser'ı (`bdef_parser_error`) getirdi ama bu gate yalnız `.clas.abap`/`.prog.abap`
+# alır ⇒ `.bdef` hâlâ KAPSAM DIŞI; bump bunu DEĞİŞTİRMEZ (ayrı karar).
 # Fetch edilemezse (offline/cache yok) aşağıdaki except → SKIP (reviewer kırılmaz, mevcut davranış).
-ABAPLINT_PIN = '@abaplint/cli@2.120.64'
+ABAPLINT_PIN = '@abaplint/cli@2.120.89'
 ISSUE_RE = re.compile(r'^(.*\.abap)\[(\d+),\s*(\d+)\]\s*-\s*(.+?)\s*\(([a-z_]+)\)\s*\[[EWI]\]\s*$')
 
 # ⛔ FAIL-OPEN KİLİDİ (2026-08-14) — "bulgu satırı görmedim" ≠ "temiz".
