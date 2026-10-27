@@ -273,7 +273,8 @@ söyler (SALT-OKUNUR; hiçbir şey yazmaz/kopyalamaz). Kararın kendisi ders yaz
 
 ## 5. Makine-lokal yüzeyler — `team_setup` bunları YAPMAZ
 
-Bu üçü klonla gelmez ve betik üretmez; ilk kurulumda bir kez, sonra değiştikçe yapılır.
+Bunlar klonla gelmez ve betik üretmez; ilk kurulumda bir kez, sonra değiştikçe yapılır
+(5d her güncellemede karşılaştırılır).
 Tam liste: [`../ONBOARDING.md`](../ONBOARDING.md) **§0a KURULUM KAPSAMI**.
 
 **5a. Kullanıcı-düzeyi ayarlar (ELLE):** `claude/user-settings.template.json` içindeki
@@ -314,6 +315,30 @@ git config --global core.autocrlf false
 git config --global core.longpaths true
 git config --global init.defaultBranch main
 ```
+
+**5d. Sürümü takip edilen araçlar — `team_setup` YÜKSELTMEZ** (2026-10-27)
+
+`team_setup` npm CLI'larını **yalnız kurulu değilse** kurar (`npm_clis`: `shutil.which` varsa
+geçer); sap-gui MCP paketini **hiç** kurmaz. Çekirdek bir aracın sürümünü değiştirdiğinde
+(skill yeni sürümden alındı · pin değişti) mevcut makine **eski sürümde kalır**. Sonuç sessiz bir
+uyumsuzluktur: skill yeni davranışı anlatır, CLI eski davranır. Her güncellemede bu tabloyu
+makineyle karşılaştır:
+
+| Araç | Çekirdeğin beklediği (kaynak) | Kontrol | Eskiyse |
+|---|---|---|---|
+| `playwright-cli` | **0.1.22** — `claude/skills/playwright-cli` bu sürümden alındı | `playwright-cli --version` | `npm i -g @playwright/cli@0.1.22` |
+| `mcp-sap-gui` | **0.5.2 + `fastmcp` 3.4.7** — `scripts/init_project.py` `SAPGUI_PIP_PIN` | `python -m pip show mcp-sap-gui fastmcp` | ① `python -m pip install --dry-run mcp-sap-gui==0.5.2 fastmcp==3.4.7 fastmcp-slim==3.4.7` → `Would install` listesinde `mcp` paketi **varsa DUR** (sap-adt `mcp<2` ister) ② yoksa aynı komut `--dry-run`'sız ③ Claude Code'da `/mcp` ile yeniden bağlan |
+| `mmdc` | **11.17.0** — `scripts/team_setup.py` `npm_clis` | `mmdc --version` | `npm i -g @mermaid-js/mermaid-cli@11.17.0` |
+| `@abaplint/cli` | `scripts/validators/check_abaplint.py` `ABAPLINT_PIN` | — | eylem yok: `npx` pinli sürümü kendisi çeker |
+
+⚠ **sap-gui 0.5.2:** `sap_screenshot(save_path=…)` yol kısıtı olmadan yeni `.png` yazar ve
+`--read-only` bunu engellemez ⇒ `save_path` yalnız proje `.tmp/` ya da scratch altına verilir
+(ayrıntı: [`../governance/tooling-plugins.md`](../governance/tooling-plugins.md) "sap-gui MCP").
+📌 **Bu tablo, bir aracın beklenen sürümünü değiştiren PR'ın AYNI PR'ında güncellenir** — yoksa
+tüketici makineler sessizce geride kalır. *(Vaka 2026-10-27: skill 0.1.22'ye taşındı ve sap-gui
+0.5.2'ye çıktı; ikisi de `/core-guncelle` ile tüketiciye ULAŞMIYORDU — `team_setup` kurulu
+CLI'yı yükseltmez, sap-gui'ye hiç dokunmaz.)* Raporda (§8) her satır `güncel` · `yükseltildi` ·
+`atlandı: <sebep>` olarak yazılır.
 
 ## 6. Doğrula
 
