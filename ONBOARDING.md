@@ -46,6 +46,8 @@
 | SAP bağlantısı `.conn_adt` | proje kökü | **KULLANICI** (şifreyi kendisi yazar — sohbete YAZILMAZ) | MCP `ping` · `ix_doctor` | ❌ |
 | CLI'lar: `claude` · `gh` · `node`/`npm` · `python` | makine | installer/winget (`winget install --id GitHub.cli -e`) | `ix_doctor` K1 1d (node/npm/claude; Windows'ta 1e PowerShell politikası) · K3 (gh) | ❌ |
 | Claude Code plugin seti (ui5 · playwright-MCP · pyright-lsp …) | makine | `team_setup` → `setup_plugins.py` | [`governance/tooling-plugins.md`](governance/tooling-plugins.md) | ❌ |
+| npm CLI'ları (`playwright-cli` · `ast-grep` · `mmdc` · `marp`) | makine | `team_setup` → `npm_clis` — **yalnız yoksa kurar, YÜKSELTMEZ** | beklenen sürümler: [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md) **§5d** | ❌ |
+| sap-gui MCP pip paketi (`mcp-sap-gui` + `fastmcp`) | makine (paylaşılan Python) | **ELLE** — pinli komut `scripts/init_project.py` `SAPGUI_PIP_PIN` (önce `--dry-run`: `mcp` yerinde kalmalı) | `python -m pip show mcp-sap-gui` · howto **§5d** | ❌ |
 | git **global** baseline (`autocrlf`/`longpaths`/`defaultBranch`) | makine | elle `git config --global` | `ix_doctor` K2 · `parity_probe` → `yol_hijyeni` | ❌ |
 | `.playwright*/` çıktı klasörleri (erişilebilirlik dökümü, log) | proje | **aracın kendisi**, ilk koşumda | gitignore'ludur; **prosedür gerekmez** — gereken *araç* zaten plugin setinde | ❌ (gerekmez) |
 

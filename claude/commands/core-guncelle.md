@@ -23,7 +23,9 @@ değil, yürütme sırasıdır; çakışmada **howto kazanır** (tek kaynak ilke
    proje reposunu çek (§2 kuralı) + `team_setup` + damga kontrolü + `ix_doctor` (her biri KENDİ kökünde, `CLAUDE_PROJECT_DIR` o projeye
    ayarlı); `team_setup`'ın yazdığı CORE-INDEX o projenin PR'ıyla commit edilir (soru bunu da söyler);
    seçilmeyen proje raporda `atlandı (kullanıcı seçimi)`.
-6. **Makine-lokal yüzeyler (§5):** kullanıcı-düzeyi izin tabanı (elle birleştir) · `gh` · git global taban.
+6. **Makine-lokal yüzeyler (§5):** kullanıcı-düzeyi izin tabanı (elle birleştir) · `gh` · git global taban ·
+   **sürümü takip edilen araçlar (§5d)** — `team_setup` kurulu aracı YÜKSELTMEZ: `playwright-cli` · `mcp-sap-gui`
+   · `mmdc` sürümünü tabloyla karşılaştır, eskiyse oradaki komutla yükselt (sap-gui'de önce dry-run).
 7. **Doğrula (§6):** `run_all_validators` + `ix_doctor` — FAIL yok. `ix_doctor` hiçbir şeyi
    kendisi düzeltmez: her FAIL/WARN satırını **§6a**'ya göre sınıfla (bu adım diğer projelerin
    `ix_doctor` çıktısı için de geçerli) — ① **ONAR**: yerel onarım komutunu koş, yeniden ölç ·
