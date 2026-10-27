@@ -197,6 +197,15 @@ MCP_JSON = """\
 }
 """
 
+# sap-gui MCP harici pip paketidir; SONRAKİ ADIMLAR'daki kurulum ipucu bu dizeyi basar.
+# Neden pinli (2026-10-27, bir tüketici makinede ölçüldü): pin'siz
+# `pip install --dry-run mcp-sap-gui==0.5.2` fastmcp'yi 3.4.11'e çekiyordu (araya giren
+# yamalar incelenmedi); pinli dry-run yalnız fastmcp/fastmcp-slim 3.4.7 + mcp-sap-gui 0.5.2
+# kurdu, `mcp` yerinde kaldı (sap-adt `mcp<2` ister). Ölçüm: governance/infra-changelog.md
+# "scripts/init_project.py — sap-gui sürüm pin'i" bölümü; bileşen kaydı:
+# governance/tooling-plugins.md "sap-gui MCP" satırı. Sürümü değiştiren dry-run'ı yeniden ölçer.
+SAPGUI_PIP_PIN = "mcp-sap-gui==0.5.2 fastmcp==3.4.7 fastmcp-slim==3.4.7"
+
 PROJECT_YAML = """\
 # project.yaml — proje kimliği (PROJECT_BOOTSTRAP STEP 0 kararları;
 # profil alanları: core/profiles/ + CLAUDE.core.md §2)
@@ -392,8 +401,13 @@ def main() -> int:
               " kalıcılaştırma kullanıcı takdirinde")
     print(f"  1. python {CORE_ROOT / 'scripts' / 'team_setup.py'} --project {proje}   (junction'lar + seed)")
     print("  2. .conn_adt + project.yaml __DOLDUR__ alanları  (STEP 4)")
+    # Pinli kurulum ipucu — neden pinli: SAPGUI_PIP_PIN'in yorumu.
     print("     (sap-gui MCP harici pip paketidir: `pip show mcp-sap-gui` boşsa kur;"
           " kurulmadan /mcp'de sap-gui bağlanamaz — sap-adt etkilenmez)")
+    print("       kurulum PİNLİ — önce dry-run; `Would install` listesinde `mcp` paketi"
+          " VARSA kurma (sap-adt `mcp<2` ister, yerinde kalmalı):")
+    print(f"         pip install --dry-run {SAPGUI_PIP_PIN}")
+    print(f"         pip install {SAPGUI_PIP_PIN}")
     print(f"  3. python {CORE_ROOT / 'scripts' / 'behavior_manifest.py'} generate"
           "   (davranış baseline; yoksa ix_doctor K4 FAIL)")
     if a.repo_mode == "full":
