@@ -228,6 +228,28 @@ def bolum_g(Q, A):
             "ENDMETHOD.", "a")
     ekle("G30 daraltma AMDP `METHOD b BY …` deyimini KORUR -> SINIR_BELIRSIZ",
          len(b) == 1 and b[0][1] == Q._SINIR_BELIRSIZ, b)
+    # bug-gate 206a1c1 F5: adı satır sonunda biten başlık (`METHOD b` ⏎ `BY DATABASE …`) da deyimdir
+    b = cik(AMDP_ARA, "a")
+    ekle("G31 ⭐ araya giren `METHOD b` + alt satirda `BY DATABASE` -> SINIR_BELIRSIZ",
+         len(b) == 1 and b[0][1] == Q._SINIR_BELIRSIZ, b)
+    b = cik(AMDP_HEDEF_COK, "a")
+    ekle("G32 cok satirli AMDP baslikli HEDEF -> (1,7) (SELECT listesinde tek `method,` FP degil)",
+         b and b[0][:2] == (1, 7) and len(b) == 1, b)
+    b = cik("METHOD a BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n"
+            "  select 1 from t; ENDMETHOD.\nMETHOD b\n"
+            "  BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n  select 2 from t;\nENDMETHOD.", "a")
+    ekle("G34 AMDP `… from t; ENDMETHOD.` + bolunmus baslikli b -> SINIR_BELIRSIZ (a+b govdesi DONMEZ)",
+         len(b) == 1 and b[0][1] == Q._SINIR_BELIRSIZ, b)
+    r = mcp(AMDP_HEDEF_COK, "a")
+    ekle("G33 okuma yolu AMDP'yi DONDURMEYE devam eder (found + govde)",
+         r.get("ok") is True and r.get("found") is True and r.get("end_line") == 7, r)
+
+
+# bug-gate 206a1c1 F5 / kapsam kararı vektörleri (AMDP başlığı satır sonunda bölünür)
+AMDP_ARA = ("METHOD a.\n  x = 1.\nMETHOD b\n  BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n"
+            "  select 1 from dummy;\nENDMETHOD.")
+AMDP_HEDEF_COK = ("METHOD a\n  BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT\n  USING t.\n"
+                  "  lt = select t.method,\n    method,\n    x from t;\nENDMETHOD.")
 
 
 # `\|` ABAP şablon kaçışı (tek ters eğik çizgi; chr(92) — Bash/heredoc kaçış kaybına bağışık)
@@ -284,6 +306,26 @@ def bolum_f(SC):
     beklenen = "\n".join(ESKI_PIPE.split("\n")[:4]) + "\n"
     ekle("F6 ⭐ sablon kacisli metot -> PUT edilen govde TAM blok (kesik govde YAZILMAZ)",
          r is True and len(adt.put) == 1 and adt.put[0][1] == beklenen, (r, adt.put))
+    # bug-gate 206a1c1 F5 — ölçülen arıza: a+b a'nın include'una PUT ediliyordu
+    r, adt = kos("METHOD a.\n  x = 1.\nENDMETHOD ##NEEDED.\nMETHOD b\n"
+                 "  BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n"
+                 "  select 1 from t;\nENDMETHOD.", ["A"])
+    ekle("F7 ⭐ `METHOD b` ⏎ `BY DATABASE` araya girer -> kilit 0 + PUT 0 (a+b YAZILMAZ)",
+         r is False and not adt.kilit and not adt.put, (r, adt.kilit, adt.put))
+    r, adt = kos("METHOD a.\n  x = 1.\nENDMETHOD ##NEEDED.\nMETHOD b.\n  y = 2.\nENDMETHOD.", ["A"])
+    ekle("F7b kontrol: araya `METHOD b.` -> kilit 0 + PUT 0",
+         r is False and not adt.kilit and not adt.put, (r, adt.kilit, adt.put))
+    # Lider kapsam kararı: AMDP başlıklı blok YAZMA yolunda PUT EDİLMEZ (main davranışı korunur)
+    r, adt = kos("METHOD a BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n"
+                 "  select 1 from t;\nENDMETHOD.", ["A"])
+    ekle("F8 ⭐ AMDP hedef metot (tek satir baslik) -> kilit 0 + PUT 0 + False",
+         r is False and not adt.kilit and not adt.put, (r, adt.kilit, adt.put))
+    r, adt = kos(AMDP_HEDEF_COK, ["A"])
+    ekle("F8b AMDP hedef metot (baslik satirlara bolunmus) -> kilit 0 + PUT 0",
+         r is False and not adt.kilit and not adt.put, (r, adt.kilit, adt.put))
+    r, adt = kos("METHOD a.\n  lv = 'BY DATABASE'.\nENDMETHOD.", ["A"])
+    ekle("F8c FP capasi: govdede 'BY DATABASE' metni olan ABAP metodu -> 1 PUT",
+         r is True and len(adt.put) == 1, (r, adt.put))
 
 
 def bolum_r(Q, L):
@@ -521,10 +563,18 @@ MUTASYONLAR = [
      '                j += 2 if (c == "|" and satir[j] == "' + chr(92) * 2 + '") else 1\n',
      "                j += 1\n", ("G24", "F6 ")),
     ("M17 METHOD deyim bicimi daraltmasi geri (`method = …` deyim sayilir)", _BLOK,
-     r'|(METHOD)(?=\s+[A-Za-z0-9_/~]+\s*(?:\.|\s+BY\b)))"', r'|(METHOD)(?=[\s.]|$))"',
+     r'|(METHOD)(?=\s+[A-Za-z0-9_/~]+\s*(?:\.|\s+BY\b|$)))"', r'|(METHOD)(?=[\s.]|$))"',
      ("G25", "G26", "G27", "G28")),
     ("M18 ENDMETHOD deyim bicimi daraltmasi geri (`endmethod = 1.` bitis sayilir)", _BLOK,
      r'(?:(ENDMETHOD)(?=\s*\.)"', r'(?:(ENDMETHOD)(?=[\s.]|$)"', ("G29",)),
+    # bug-gate 206a1c1: F5 `|$` · lider kapsam kararı AMDP PUT yok (iki ayrı katman, iki mutasyon)
+    ("M19 METHOD lookahead `|$` kalkar (satir sonunda biten baslik deyim sayilmaz)", _BLOK,
+     r'(?:\.|\s+BY\b|$)))"', r'(?:\.|\s+BY\b)))"', ("G31", "G34", "F7 ")),
+    ("M20 sap_client AMDP atlamasi kalkar (AMDP blok PUT edilir)", "scripts/sap_client.py",
+     "            if amdp_baslik_mi(method_block):\n", "            if False:\n", ("F8 ", "F8b")),
+    ("M21 AMDP basligi yalniz ilk satirda aranir (bolunmus baslik kacar)", _BLOK,
+     '    return bool(_AMDP_BASLIK.search(kod.split(".", 1)[0]))\n',
+     '    return bool(_AMDP_BASLIK.search((blok or "").split(chr(10), 1)[0]))\n', ("F8b",)),
     ("M2 coklu blok ilki secilir (belirsizlik gizlenir)", "mcp_servers/sap_adt/tools/query.py",
      "    if len(bloklar) > 1:\n        return {\"ok\": False, \"error\": \"belirsiz\"",
      "    if False:\n        return {\"ok\": False, \"error\": \"belirsiz\""),

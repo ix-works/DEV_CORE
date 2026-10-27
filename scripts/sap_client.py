@@ -393,7 +393,11 @@ class SAPClient:
         # ediyordu (yazma yolu). Sınır belirlenemezse (kapanmamış / METHOD-ENDMETHOD
         # karışık) blok YAZILMAZ: kilit alınmaz, PUT yapılmaz, metot atlanır.
         # Davranış korunan eksen: birden çok eşleşmede İLK blok kullanılır (eskisi gibi).
-        from utils.abap_metot_blok import SINIR_BELIRSIZ, metot_bloklari
+        # ⛔ AMDP (`METHOD … BY DATABASE …`) blok PUT EDİLMEZ (lider kapsam kararı, bug-gate
+        # 206a1c1): eski regex (`METHOD <ad>\s*\.`) AMDP başlığını tanımadığı için bu metotlarda
+        # PUT hiç yoktu ve metot include ucunun AMDP gövdesini kabul edip etmediği canlıda
+        # ÖLÇÜLMEDİ ⇒ main davranışı korunur. Okuma yolu (`adt_get_method`) AMDP'yi döndürür.
+        from utils.abap_metot_blok import SINIR_BELIRSIZ, amdp_baslik_mi, metot_bloklari
         any_success = False
 
         for method_name in method_names:
@@ -409,6 +413,10 @@ class SAPClient:
                 neden = "kapanmamis" if _son is None else SINIR_BELIRSIZ
                 print(f"      [FALLBACK] [SKIP] METHOD {method_name} (satir {_bas}) blok siniri "
                       f"belirlenemedi ({neden}) — PUT YAPILMADI, govde OLCULEMEDI")
+                continue
+            if amdp_baslik_mi(method_block):
+                print(f"      [FALLBACK] [SKIP] METHOD {method_name} AMDP (BY DATABASE) — fallback "
+                      f"kapsam disi, PUT YAPILMADI")
                 continue
 
             if not method_block.endswith('\n'):

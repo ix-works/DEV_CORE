@@ -5,7 +5,8 @@
 Tüketiciler (ikisi de aynı sınır kararını kullanır; ayrı desen YENİDEN TÜRETİLMEZ):
   · `mcp_servers/sap_adt/tools/query.py` `_metot_cikar` → `adt_get_method` (salt-okur)
   · `scripts/sap_client.py` `_push_method_includes` → metot include FALLBACK'i (YAZMA yolu:
-    bulunan blok SAP'ye PUT edilir ⇒ yanlış sınır = yanlış kaynağın yazılması)
+    bulunan blok SAP'ye PUT edilir ⇒ yanlış sınır = yanlış kaynağın yazılması; AMDP başlıklı
+    blok orada `amdp_baslik_mi` ile ATLANIR — okuma yolu AMDP'yi döndürür)
 
 NEDEN (2026-10-27 ölçümü): iki tüketici de bitişi SATIR BAŞINA çapalı `ENDMETHOD.` ile
 arıyordu. Tek satırlık `METHOD a. x = 1. ENDMETHOD.` ya da satır ortasındaki
@@ -21,7 +22,8 @@ SÖZLEŞME — `metot_bloklari(kaynak, metot)` → `[(bas, son, metin)]`, 1-taba
         → `son = SINIR_BELIRSIZ` (çağıran ÖLÇÜLEMEDİ der; YANLIŞ GÖVDE DÖNMEZ) ve tarama durur
       - hiç deyim yoksa → `son = None` (kapanmamış) ve tarama durur
   · deyim = satır başında ya da `.`'dan sonra gelen anahtar kelime, deyim BİÇİMİNDE
-    (`ENDMETHOD.` · `METHOD <ad>.` · `METHOD <ad> BY …`; `method = …` tanımlayıcıdır), ancak
+    (`ENDMETHOD.` · `METHOD <ad>.` · `METHOD <ad> BY …` · satır sonunda biten `METHOD <ad>`;
+    `method = …` tanımlayıcıdır; `ENDMETHOD ##PRAGMA.` TANINMAZ — güvenli yön), ancak
     KOD kısmında: sütun-1 `*` yorumu, `"` satır-içi yorumu ve tek satırlık literaller (`'…'`,
     `` `…` ``, `|…|` — şablonda `\\` kaçışı atlanır) ayıklanır (`kod_kismi`).
   ⚠ SINIR (ÖLÇÜLMEDİ, bilinçli): ÇOK SATIRLI string şablonunun (`|…` satır sonunda kapanmayan)
@@ -38,8 +40,22 @@ METOT_BAS = re.compile(r"^\s*METHOD\s+([A-Za-z0-9_/~]+)(?=[\s.]|$)", re.IGNORECA
 # `<ad>` + (`.` | ` BY …` AMDP). Böylece `method = 'GET'.` · çok satırlı çağrıdaki
 # `method = …` · `x = 1.method = 2.` · AMDP `select t.method from …` deyim SAYILMAZ.
 _DEYIM = re.compile(r"(?:^|\.)\s*(?:(ENDMETHOD)(?=\s*\.)"
-                    r"|(METHOD)(?=\s+[A-Za-z0-9_/~]+\s*(?:\.|\s+BY\b)))", re.IGNORECASE)
+                    r"|(METHOD)(?=\s+[A-Za-z0-9_/~]+\s*(?:\.|\s+BY\b|$)))", re.IGNORECASE)
+# ⚠ `|$` (bug-gate 206a1c1 F5): adı satır sonunda biten başlık (`METHOD b` ⏎ `BY DATABASE …`)
+# da deyimdir; yoksa araya giren böyle bir METHOD görülmez, blok sonraki metodun ENDMETHOD'una
+# kadar uzar ve fallback a+b'yi a'nın include'una PUT eder (ölçüldü).
 SINIR_BELIRSIZ = "sinir_belirsiz"
+_AMDP_BASLIK = re.compile(r"\bBY\s+DATABASE\b", re.IGNORECASE)
+
+
+def amdp_baslik_mi(blok: str) -> bool:
+    """Bloğun METHOD başlık deyimi (ilk `.`'ya kadar, KOD kısmı) `BY DATABASE` taşıyor mu?
+
+    Başlık birden çok satıra yayılabilir (`METHOD b` ⏎ `BY DATABASE PROCEDURE … USING t.`).
+    Tüketici: `sap_client._push_method_includes` — AMDP bloğu YAZMA yolunda PUT edilmez.
+    """
+    kod = " ".join(kod_kismi(s) for s in (blok or "").split("\n"))
+    return bool(_AMDP_BASLIK.search(kod.split(".", 1)[0]))
 
 
 def kod_kismi(satir: str) -> str:
