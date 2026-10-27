@@ -277,6 +277,10 @@ syntax-check turu eklemek hem gereksiz hem — yukarıdaki semantiği yüzünden
 
 ## Tool ayrıntı ekleri — MCP açıklama bütçesi (2026-10-03)
 
+> **Şerh (radar 2026-10-27, CC CHANGELOG):** sınır artık ön-yüklemede **4.096** (2.1.296), tool search ile
+> yüklenen açıklamada **16.384** karakter (2.1.295). Aşağıdaki kısaltma yine geçerli tasarım kararıdır
+> (kısa açıklama = daha az bağlam), ama *"2.048'de kesilir"* bugünkü sürüm için bayattır.
+
 Claude Code 2.1.280+ MCP tool açıklamasını `CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH` = **2.048
 karakterde keser** (bu oturumda canlı görüldü: `adt_sql_query` açıklaması `… [truncated]` ile
 bitiyordu). Kesilen kısım modele **hiç ulaşmaz** — ⛔ uyarıların bir kısmı tam orada duruyordu.
