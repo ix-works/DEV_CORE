@@ -3076,7 +3076,7 @@ python tests/run_battery.py ad_kabul_tam_dize --kardes hata_sebebi_ve_maskeleme 
 
 ```
 python tests/fixtures/checkrun_sozdizimi/run.py      # 24/24 · --mutasyon 8/8 (genericleştirilmiş canlı örnekler canli/)
-python tests/fixtures/mcp_salt_okur_araclar/run.py   # 27/27 · --mutasyon 9/9
+python tests/fixtures/mcp_salt_okur_araclar/run.py   # 46/46 · --mutasyon 15/15 + KUM TABANI 46/46 (2026-10-27, Issue #362)
 python tests/fixtures/mcp_arac_sinifi/run.py         # 8/8
 python tests/run_battery.py mcp_arac_sinifi --kardes checkrun_sozdizimi mcp_salt_okur_araclar veri_yetki_guardlari aktivasyon_govde_hukmu sorgu_basarisizligi_gorunur unit_run_guard_riski mcp_profil_aktivasyon_offline revizyon_okuma tier_fail_closed
 ```
@@ -3087,6 +3087,7 @@ python tests/run_battery.py mcp_arac_sinifi --kardes checkrun_sozdizimi mcp_salt
 - **Yeni araç ekleyen:** sınıflamazsa T1 FAIL — beklenen davranıştır, listeyi gerekçesiyle güncelle.
 - **Salt-okur iddiası:** `adt_pretty_print` canlıda ölçüldü (2026-10-12, sınıf + FM, tek koşum: kaynak md5 + aktive-bekleyen listesi önce = sonra); kilit/transport ÖLÇÜLMEDİ.
 - **Okunan SÜRÜM (2026-10-14 bug-gate B-2):** `adt_get_method` ve `adt_pretty_print` kaynağı `version` parametresiz okur, yani en güncel sürüm gelir (bekleyen inaktif sürüm varsa o). Scope metni bunu `query._SURUM_NOTU` ile söyler. V1a/V2a GERÇEK isteği yakalar (`_read_source_object` session.get url+params · `SAPClient.pretty_print` → `get_object_source` kwargs) ve `version` olmadığını doğrular. V1b/V2b metni bu isteğe bağlar. M7/M8 eski "aktif" metne, M9 GET'e `version=active` ekler; üçü de düşmelidir. Okuma davranışı değişirse metin de değişmek zorundadır. **Seçim bağı (2026-10-14 re-gate L1):** V1a/V2a/M9 `mcp_servers/sap_adt/tools/atom.py` ve `scripts/sap_client.py`'yi okuduğu için ikisi de HARITA'da `O:mcp_salt_okur_araclar`'a bağlıdır (`--degisen … --listele` ile görünür: sap_client 17 birim, atom 20 birim). Bu iki dosyayı okuyan yeni bir vektör eklersen bağı da kur.
+- **Metot blok SINIRI (2026-10-27, DEV_CORE Issue #362):** sınır kararı tek kaynakta, `scripts/utils/abap_metot_blok.py`; iki tüketicisi var: `adt_get_method` ve `sap_client._push_method_includes` (YAZMA yolu). Bitiş, `METHOD`'dan sonraki ilk METHOD/ENDMETHOD deyimidir; tek satırlık blok ve satır ortasındaki `ENDMETHOD.` bu kurala dahildir. Karışık ya da araya METHOD giren durum `sinir_belirsiz` verir. Vektörler: G11–G23 (`_metot_cikar` + MCP) ve F1–F5 (fallback; belirsiz sınırda kilit 0 + PUT 0). Mutasyonlar `--mutasyon` kipinde düşmesi BEKLENEN vektörü ilan eder (M1 M6 M10–M15) ve önce kum tabanını koşar. ⛔ M1/M6 çapası artık `query.py` değil ortak modüldür; modülü değiştiren çapayı da günceller (CORE-07: çapa tam 1 kez). Bilinçli sınır (ÖLÇÜLMEDİ): çok satırlı `|…|` şablonunun devam satırları kod sayılır.
 - **check_run hedef bağlaması (2026-10-14):** B7 başka bir objeyi denetler ama SINIF'ın raporunu döner ⇒ `OLCULEMEDI/obje_raporlanmadi`. M8 (`checkrun_ayristir(r.text, None, …)`) bu vektörle düşer. B3'ün gövdesi zaten hedefi raporladığı için B3 bu mutantı göremezdi.
 
 ## B74 — Oturum izi `ADT_SESSION_TRACE` (Q364②) · tablo DDL GET biçim kilidi (Q364①) · DDIC yaratma adlandırma uyarısı (Q369⑤) (2026-10-12)
@@ -3519,7 +3520,7 @@ python tests/run_battery.py tohum_govde_guncelleme --kardes tohum_terfi_gorunurl
 python tests/fixtures/classrun_tek_post/run.py                  # 20/20 (SAP'siz; 127.0.0.1 sahte sunucu, ~12 sn)
 python tests/fixtures/classrun_tek_post/run.py --mutasyon       # 13/13 + KUM TABANI 20/20 (~3,5 dk)
 python tests/fixtures/classrun_tek_post/run.py --taban 998e739  # rc 0 = eski kod düşer (6/20)
-python tests/fixtures/retry_500_govde/run.py                    # kardeş: oturum geneli 429/502/503/504 tekrarı KORUNDU
+python tests/fixtures/retry_500_govde/run.py                    # kardeş: oturum geneli 429/502/503/504 tekrarı KORUNDU (20/20 · --mutasyon 2/2 = uygulama katmanı _retry_request, Issue #363 2026-10-27)
 python tests/fixtures/b0_secim/run.py                           # repo kökünden; P3 pin 25
 ```
 
