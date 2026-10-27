@@ -35,8 +35,14 @@ KULLANIM
   de SAP'nin gövdesi çağırana ULAŞMIYORDU. Vektörler istek fonksiyonunu ve `time.sleep`'i
   sahte çağrılarla ölçer (ağ yok); FP çapaları: 503→201 hâlâ tekrar edilip başarır (C3),
   CSRF dalı hâlâ taze token alır (C7), 408 hâlâ tekrar edilir (C8).
+  ⚠ KAPSAM (bug-gate #378 F2): C2/C6 ("kalıcı 503/502'de son yanıt gövdesiyle döner") YALNIZ
+  izole uygulama katmanının sözleşmesidir. GERÇEK oturumda 502/503/504 önce bağdaştırıcıda
+  (`status_forcelist`) tekrarlanır ve `requests.exceptions.RetryError` ile biter (4 istek,
+  gövde düşer — fix öncesi de böyleydi) ⇒ gerçek oturumda 503 gövdesi çağırana ULAŞMAZ.
+  Gerçek oturumda gövdenin ulaştığı durum 500'dür (D1). D1/D2 iki katmanı birlikte koşar;
+  D2 bugünkü 503 davranışını BELGELER (düzeltme değil).
   MUTASYON (`--mutasyon`): kum kopyasında iki geri-alma — R1 son-deneme koşulu eski hâline
-  (`attempt >= self.max_retries`) → C2/C7 düşmeli · R2 500 tekrar kümesine geri → C1 düşmeli.
+  (`attempt >= self.max_retries`) → C2/C7 düşmeli · R2 500 tekrar kümesine geri → C1/D1 düşmeli.
   Her mutasyonun düşmesi BEKLENEN vektörü ilan edilir; kum tabanı (mutasyonsuz kopya) önce
   koşulur ve tam yeşil olmalıdır.
 
@@ -200,6 +206,45 @@ def uygulama_katmani(mod, ekle) -> None:
         mod.time = eski_time
 
 
+def birlesik(mod, sess, kok: str, ekle) -> None:
+    """D1/D2 — iki katman BİRLİKTE: istek `_build_session` oturumundan (gerçek bağdaştırıcı)
+    yerel sahte sunucuya gider, `_retry_request` onu sarar.
+
+    D1: 500 → toplam 1 istek, gövde çağırana ulaşır (iki katman da 500'ü tekrarlamaz).
+    D2 — MEVCUT DAVRANIŞI BELGELER (düzeltme DEĞİL): kalıcı 503'te bağdaştırıcı 4 istek atıp
+    `requests.exceptions.RetryError` fırlatır; `_retry_request` onu yakalamaz ⇒ 503 gövdesi
+    gerçek oturumda çağırana ULAŞMAZ (fix öncesi de böyleydi). C2/C6 bu yüzden YALNIZ uygulama
+    katmanının sözleşmesidir. 503 gövdesini ulaştırmak ayrı bir karardır; o yapılırsa D2
+    bilerek güncellenir.
+    """
+    import requests
+    c = mod.SAPADTClient.__new__(mod.SAPADTClient)
+    c.max_retries, c.retry_delay = 3, 0.01
+    c.retry_on_timeout = c.retry_on_csrf_fail = c.retry_on_5xx = True
+    c.url = kok
+    c.fetch_csrf_token = lambda force_refresh=False: None
+    _Kolu.sayac.clear()
+    try:
+        r = c._retry_request(lambda: sess.get(kok + "/govde500", timeout=10), "fixture")
+        nk = r.status_code, IMZA in (r.text or "")
+    except Exception as exc:
+        nk = type(exc).__name__, False
+    ekle("D1 birlesik 500 -> toplam TEK istek + govde cagirana ulasir",
+         _Kolu.sayac.get("/govde500") == 1 and nk == (500, True),
+         "istek=%s sonuc=%s" % (_Kolu.sayac.get("/govde500"), nk))
+    _Kolu.sayac.clear()
+    try:
+        r = c._retry_request(lambda: sess.get(kok + "/gecici503", timeout=10), "fixture")
+        nk = "yanit %s" % r.status_code
+    except requests.exceptions.RetryError:
+        nk = "RetryError"
+    except Exception as exc:
+        nk = type(exc).__name__
+    ekle("D2 [MEVCUT DAVRANIS] birlesik kalici 503 -> bagdastirici 4 istek + RetryError (govde ULASMAZ)",
+         _Kolu.sayac.get("/gecici503") == 4 and nk == "RetryError",
+         "istek=%s sonuc=%s" % (_Kolu.sayac.get("/gecici503"), nk))
+
+
 def main(modul_yolu: str | None = None, taban_denetimi: bool = True) -> int:
     yol = Path(modul_yolu) if modul_yolu else (REPO / "scripts" / "sap_adt_lib.py")
     if not yol.is_file():
@@ -274,6 +319,12 @@ def main(modul_yolu: str | None = None, taban_denetimi: bool = True) -> int:
             uygulama_katmani(mod, ekle)
         except Exception as exc:                      # çökme != FAIL: ölçülür
             ekle("[BOLUM COKTU] uygulama_katmani", False, "%s: %s" % (type(exc).__name__, exc))
+
+        # ── (4) BİRLEŞİK: GERÇEK oturum (bağdaştırıcı) + `_retry_request` (bug-gate #378 F2) ──
+        try:
+            birlesik(mod, sess, kok, ekle)
+        except Exception as exc:                      # çökme != FAIL: ölçülür
+            ekle("[BOLUM COKTU] birlesik", False, "%s: %s" % (type(exc).__name__, exc))
     finally:
         srv.shutdown()
 
@@ -294,7 +345,7 @@ MUTASYONLAR = [
      "        if attempt >= self.max_retries:\n", ("C2 ", "C2b", "C7 ")),
     ("R2 500 uygulama katmaninda yine tekrar edilir",
      "        if status >= 500 and status != 500:\n",
-     "        if status >= 500:\n", ("C1 ",)),
+     "        if status >= 500:\n", ("C1 ", "D1 ")),
 ]
 
 

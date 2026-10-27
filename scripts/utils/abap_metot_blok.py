@@ -20,9 +20,10 @@ SÖZLEŞME — `metot_bloklari(kaynak, metot)` → `[(bas, son, metin)]`, 1-taba
       - araya `METHOD` girerse ya da bitiş satırında METHOD/ENDMETHOD karışırsa
         → `son = SINIR_BELIRSIZ` (çağıran ÖLÇÜLEMEDİ der; YANLIŞ GÖVDE DÖNMEZ) ve tarama durur
       - hiç deyim yoksa → `son = None` (kapanmamış) ve tarama durur
-  · deyim = satır başında ya da `.`'dan sonra gelen anahtar kelime, ancak KOD kısmında:
-    sütun-1 `*` yorumu, `"` satır-içi yorumu ve tek satırlık literaller (`'…'`, `` `…` ``,
-    `|…|`) ayıklanır (`kod_kismi`).
+  · deyim = satır başında ya da `.`'dan sonra gelen anahtar kelime, deyim BİÇİMİNDE
+    (`ENDMETHOD.` · `METHOD <ad>.` · `METHOD <ad> BY …`; `method = …` tanımlayıcıdır), ancak
+    KOD kısmında: sütun-1 `*` yorumu, `"` satır-içi yorumu ve tek satırlık literaller (`'…'`,
+    `` `…` ``, `|…|` — şablonda `\\` kaçışı atlanır) ayıklanır (`kod_kismi`).
   ⚠ SINIR (ÖLÇÜLMEDİ, bilinçli): ÇOK SATIRLI string şablonunun (`|…` satır sonunda kapanmayan)
     devam satırları KOD sayılır — orada satıra düşen `ENDMETHOD.` bitiş sanılabilir.
     Tüketicilerin KAPSAM metni bunu söyler.
@@ -33,7 +34,11 @@ import re
 
 METOT_BAS = re.compile(r"^\s*METHOD\s+([A-Za-z0-9_/~]+)(?=[\s.]|$)", re.IGNORECASE)
 # Deyim başı: satır başı ya da `.` sonrası. `METHODS`/`CLASS-METHODS`/`ls-method` eşleşmez.
-_DEYIM = re.compile(r"(?:^|\.)\s*(ENDMETHOD|METHOD)(?=[\s.]|$)", re.IGNORECASE)
+# Deyim BİÇİMİ de istenir (bug-gate #378 F3): `ENDMETHOD` ardından `.`; `METHOD` ardından
+# `<ad>` + (`.` | ` BY …` AMDP). Böylece `method = 'GET'.` · çok satırlı çağrıdaki
+# `method = …` · `x = 1.method = 2.` · AMDP `select t.method from …` deyim SAYILMAZ.
+_DEYIM = re.compile(r"(?:^|\.)\s*(?:(ENDMETHOD)(?=\s*\.)"
+                    r"|(METHOD)(?=\s+[A-Za-z0-9_/~]+\s*(?:\.|\s+BY\b)))", re.IGNORECASE)
 SINIR_BELIRSIZ = "sinir_belirsiz"
 
 
@@ -50,8 +55,13 @@ def kod_kismi(satir: str) -> str:
         if c == '"':
             break
         if c in "'`|":
-            j = satir.find(c, i + 1)
-            if j < 0:
+            j = i + 1
+            while j < n and satir[j] != c:
+                # `|…|` şablonunda `\` sonraki karakteri kaçışlar (`\|` `\\` `\{` `\}`); atlanmazsa
+                # `|x\|. ENDMETHOD. |` içindeki ENDMETHOD bitiş sanılır (bug-gate #378 F1, YAZMA yolu).
+                # `'…'`/`` `…` `` içinde kaçış iki katlı ayraçtır (`''`): iki ardışık literal gibi işler.
+                j += 2 if (c == "|" and satir[j] == "\\") else 1
+            if j >= n:
                 break
             parca.append(" ")
             i = j + 1
@@ -63,7 +73,7 @@ def kod_kismi(satir: str) -> str:
 
 def deyimler(satir: str) -> list:
     """Satırdaki METHOD/ENDMETHOD deyimleri, sırayla: ['METHOD', 'ENDMETHOD', …]."""
-    return [m.group(1).upper() for m in _DEYIM.finditer(kod_kismi(satir))]
+    return [(m.group(1) or m.group(2)).upper() for m in _DEYIM.finditer(kod_kismi(satir))]
 
 
 def metot_bloklari(kaynak: str, metot: str) -> list:
@@ -77,7 +87,9 @@ def metot_bloklari(kaynak: str, metot: str) -> list:
     while i < len(satirlar):
         m = METOT_BAS.match(satirlar[i])
         if m and m.group(1).upper() == hedef:
-            ek = deyimler(satirlar[i])[1:]
+            ek = deyimler(satirlar[i])
+            if ek[:1] == ["METHOD"]:      # başlangıç deyiminin kendisi (`.`'sı alt satırdaysa yok)
+                ek = ek[1:]
             if ek == ["ENDMETHOD"]:
                 bulunan.append((i + 1, i + 1, satirlar[i]))
                 i += 1

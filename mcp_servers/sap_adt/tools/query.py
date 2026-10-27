@@ -2398,7 +2398,9 @@ def adt_get_method(class_name: str, method_name: str) -> dict:
     Returns:
         {ok, class, method, found, start_line?, end_line?, source?, scope, client_log}
         `found: false` + `scope` = aranan yüzeyde YOK (yerel include'lar aranmadı).
-        Birden çok eşleşme ya da kapanmamış blok ⇒ ok:false (`belirsiz` / `kapanmamis`).
+        Birden çok eşleşme, kapanmamış blok ya da belirlenemeyen bitiş ⇒ ok:false
+        (`belirsiz` / `kapanmamis` / `sinir_belirsiz`: araya METHOD girdi ya da aynı satırda
+        METHOD/ENDMETHOD karışık — gövde DÖNMEZ).
     """
     from mcp_servers.sap_adt.tools.atom import _read_source_object
     oku = _read_source_object(class_name, "oo/classes", "class")

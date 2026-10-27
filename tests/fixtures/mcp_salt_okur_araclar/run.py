@@ -204,6 +204,36 @@ def bolum_g(Q, A):
          all(s in Q._METOT_KAPSAM for s in ("tek satirlik", "sinir_belirsiz", "cok satirli string")),
          Q._METOT_KAPSAM)
 
+    # ── bug-gate #378 düzeltme turu (2026-10-27) ──
+    # F1: `|…|` şablonunda `\` kaçışı atlanmazsa `\|` şablonu erken "kapatır", içindeki
+    # ENDMETHOD bitiş sanılır → kesik gövde (eski regex burada doğruydu: (1,4)).
+    b = cik(ESKI_PIPE, "a")
+    ekle("G24 ⭐ `|x\\|. ENDMETHOD. |` sablon kacisi -> bitis SABLON ICINDE DEGIL (1,4)",
+         b and b[0][:2] == (1, 4) and len(b) == 1, b)
+    # F3: deyim başındaki `method` TANIMLAYICISI METHOD deyimi değildir (eski kod doğruydu).
+    for ad, kaynak, beklenen in (
+            ("G25 `method = 'GET'.` atamasi", "METHOD a.\n  method = 'GET'.\n  x = 1.\nENDMETHOD.", (1, 4)),
+            ("G26 cok satirli cagrida `method = …` parametresi",
+             "METHOD a.\n  lo->call(\n    method = if_http_request=>co_request_method_post ).\nENDMETHOD.",
+             (1, 4)),
+            ("G27 `x = 1.method = 2.` (bosluksuz nokta)", "METHOD a.\n  x = 1.method = 2.\nENDMETHOD.", (1, 3)),
+            ("G28 AMDP `select t.method from …`",
+             "METHOD a BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT.\n"
+             "  select t.method from ztab as t;\nENDMETHOD.", (1, 3)),
+            ("G29 `endmethod = 1.` tanimlayicisi bitis DEGIL",
+             "METHOD a.\n  endmethod = 1.\n  x = 2.\nENDMETHOD.", (1, 4))):
+        b = cik(kaynak, "a")
+        ekle(ad + " -> deyim SAYILMAZ %s" % (beklenen,), b and b[0][:2] == beklenen and len(b) == 1, b)
+    b = cik("METHOD a.\n  x = 1.\nMETHOD b BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT.\n"
+            "ENDMETHOD.", "a")
+    ekle("G30 daraltma AMDP `METHOD b BY …` deyimini KORUR -> SINIR_BELIRSIZ",
+         len(b) == 1 and b[0][1] == Q._SINIR_BELIRSIZ, b)
+
+
+# `\|` ABAP şablon kaçışı (tek ters eğik çizgi; chr(92) — Bash/heredoc kaçış kaybına bağışık)
+ESKI_PIPE = ("METHOD a.\n  r = |x" + chr(92) + "|. ENDMETHOD. |.\n  z = 2.\nENDMETHOD.\n"
+             "METHOD b.\nENDMETHOD.")
+
 
 def bolum_f(SC):
     """`sap_client._push_method_includes` YAZMA yolu (Issue #362 kardeşi): belirsiz sınırda
@@ -250,6 +280,10 @@ def bolum_f(SC):
     r, adt = kos("METHOD a.\n  x = 1.\n", ["A"])
     ekle("F5 kapanmamis blok -> kilit 0 + PUT 0", r is False and not adt.kilit and not adt.put,
          (r, adt.kilit, adt.put))
+    r, adt = kos(ESKI_PIPE, ["A"])
+    beklenen = "\n".join(ESKI_PIPE.split("\n")[:4]) + "\n"
+    ekle("F6 ⭐ sablon kacisli metot -> PUT edilen govde TAM blok (kesik govde YAZILMAZ)",
+         r is True and len(adt.put) == 1 and adt.put[0][1] == beklenen, (r, adt.put))
 
 
 def bolum_r(Q, L):
@@ -482,6 +516,15 @@ MUTASYONLAR = [
     ("M15 adt_get_method sinir_belirsiz dali kalkar (found:true + yanlis govde)",
      "mcp_servers/sap_adt/tools/query.py",
      "    if belirsiz is not None:\n", "    if False:\n", ("G22",)),
+    # bug-gate #378 düzeltme turu (2026-10-27): F1 kaçış · F3 deyim biçimi (iki katman ayrı)
+    ("M16 `|` sablonunda `\\` kacisi atlanmaz (F1 geri)", _BLOK,
+     '                j += 2 if (c == "|" and satir[j] == "' + chr(92) * 2 + '") else 1\n',
+     "                j += 1\n", ("G24", "F6 ")),
+    ("M17 METHOD deyim bicimi daraltmasi geri (`method = …` deyim sayilir)", _BLOK,
+     r'|(METHOD)(?=\s+[A-Za-z0-9_/~]+\s*(?:\.|\s+BY\b)))"', r'|(METHOD)(?=[\s.]|$))"',
+     ("G25", "G26", "G27", "G28")),
+    ("M18 ENDMETHOD deyim bicimi daraltmasi geri (`endmethod = 1.` bitis sayilir)", _BLOK,
+     r'(?:(ENDMETHOD)(?=\s*\.)"', r'(?:(ENDMETHOD)(?=[\s.]|$)"', ("G29",)),
     ("M2 coklu blok ilki secilir (belirsizlik gizlenir)", "mcp_servers/sap_adt/tools/query.py",
      "    if len(bloklar) > 1:\n        return {\"ok\": False, \"error\": \"belirsiz\"",
      "    if False:\n        return {\"ok\": False, \"error\": \"belirsiz\""),
