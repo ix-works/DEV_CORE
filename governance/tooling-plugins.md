@@ -196,6 +196,9 @@ kurulmaz" kuralı: [`vscode-setup.md`](vscode-setup.md). Öneri listesi: `.vscod
 > olanlar listelendi; ATLA gerekçeleri tur raporunda. ⚠ Bu turun en değerli SAP repolarından ikisi
 > §🔎 marianfoo kataloğunda **yoktu** ⇒ keşifte katalog + doğrudan GitHub araması birlikte kullanılır.
 
+> **Radar 2026-10-27:** bu tabloya **yeni repo eklenmedi** (yeni yüksek-değer dış kaynak çıkmadı; ayrıntı ve
+> İZLE/ATLA gerekçeleri `tooling-radar.md` Bulgu Log 2026-10-27 satırında). Tablo değerleri hâlâ 2026-10-03 ölçümüdür.
+
 | owner/repo | alan | bizim için ne var | son push | ★ | statü |
 |---|---|---|---|---|---|
 | williansaez/abap-adt-mcp | SAP ADT MCP | SQL satır reflow (255 kr sınırı), audit JSONL, `deniedTables`, hata nesnesi `kind/hint/nextTools`, `destructiveHint`, FIELD-NOTES | 2026-09-30 | 11 | **DESEN-ADOPT** (araç DEĞİL: transport yaratır, standart obje koruması yok) |
