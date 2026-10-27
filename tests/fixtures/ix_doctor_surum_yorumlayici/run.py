@@ -22,7 +22,7 @@ VEKTÖRLER
   Y5 eski sürüm (işaret 3.8) → WARN · Y6 bozuk settings → WARN ÖLÇÜLEMEDİ
   Y7 taban TEK KAYNAK: `_min_py()` == team_setup.py `MIN_PY` (bağımsız regex okuması)
   Y8 python ailesi DIŞI (sahte `nodejs_sahte`, çalışır) → SKIP ÖLÇÜLEMEDİ (sahte WARN değil)
-  Y9 `${HOME}/bin/python` · Y10 `%PYDIR%\python.exe` (genişletilmemiş) → SKIP ÖLÇÜLEMEDİ
+  Y9 `${HOME}/bin/python` · Y10 `%PYDIR%\\python.exe` (genişletilmemiş) → SKIP ÖLÇÜLEMEDİ
   Z  hiçbir vektörde FAIL etiketi yok
   W1 KABLOLAMA: `katman1()` 1f + 1g satırlarını üretir
   C3 GERÇEK platform (3. bağlam): şablon settings + gerçek PATH → `python` satırı PASS;
@@ -271,9 +271,9 @@ def main() -> int:
         tum.append(y9)
         kontrol("Y9 `${HOME}/bin/python` → SKIP ÖLÇÜLEMEDİ (genislemis gibi davranilmaz)",
                 tag(y9) == ["SKIP"] and "genişletilmemiş" in y9[0][1], f"{y9}")
-        y10 = yor(_ayar(cfg, "y10.json", "%PYDIR%\python.exe")) if yor else None
+        y10 = yor(_ayar(cfg, "y10.json", "%PYDIR%\\python.exe")) if yor else None
         tum.append(y10)
-        kontrol("Y10 `%PYDIR%\python.exe` → SKIP ÖLÇÜLEMEDİ",
+        kontrol("Y10 `%PYDIR%\\python.exe` → SKIP ÖLÇÜLEMEDİ",
                 tag(y10) == ["SKIP"] and "genişletilmemiş" in y10[0][1], f"{y10}")
         kontrol("Z hicbir vektorde FAIL etiketi yok",
                 all(r is not None and "FAIL" not in tag(r) for r in tum), "")

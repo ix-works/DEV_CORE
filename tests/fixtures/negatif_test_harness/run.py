@@ -6,7 +6,7 @@
 fail-safe davranır. 2026-08-13'e kadar bu dal **SESSİZDİ** ⇒ *"guard bu payload'ı GEÇİRDİ"*
 ile *"guard payload'ı HİÇ OKUYAMADI"* aynı çıktıyı üretiyordu ve ikincisi düzenli olarak
 "guard bypass edildi" diye raporlanıyordu. Tetikleyici tuzak: elle yazılan `\\` kabuğa tek
-`\` olarak ulaşır → JSON'da geçersiz escape → parse-fail → 0.
+`\\` olarak ulaşır → JSON'da geçersiz escape → parse-fail → 0.
 
 **Kök-fix:** `exit 0` **KORUNUR** (fail-safe bilinçli: bozuk/yabancı girdi hiçbir aracı
 bloklamamalı); yalnız sessizlik kalkar — stderr'e `GIRDI-PARSE-EDILEMEDI` notu basılır.

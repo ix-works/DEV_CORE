@@ -2350,11 +2350,15 @@ def adt_lock_check(name: str, object_type: str = "class") -> dict:
 # Her dönüş `scope` (KAPSAM BEYANI) taşır: NEYE bakıldığı ve neye BAKILMADIĞI.
 # =============================================================================
 
-_METOT_BAS = re.compile(r"^\s*METHOD\s+([A-Za-z0-9_/~]+)(?=[\s.]|$)", re.IGNORECASE)
-_METOT_SON = re.compile(r"^\s*ENDMETHOD\s*\.", re.IGNORECASE)
-# Yorum ayıklayıcı YOK (bilinçli): iki desen de satır başına `^\s*` ile çapalıdır ⇒ sütun-1
-# `*` yorumu ve `"` satır-içi yorumu yapısal olarak eşleşemez. Ayrı bir ayıklayıcı eşdeğer-mutant
-# (ölü kod) çıktı — mutasyonu bu çapaya kuruludur (`mcp_salt_okur_araclar` M1).
+# Blok SINIRI tek kaynaktan (DEV_CORE Issue #362, 2026-10-27): `scripts/utils/abap_metot_blok.py`
+# (`sap_client._push_method_includes` YAZMA yolu da aynı kararı kullanır). Eski satır-başı çapalı
+# `ENDMETHOD` deseni tek satırlık `METHOD a. … ENDMETHOD.` ve satır ortasındaki `ENDMETHOD.`
+# bitişini kaçırıp SONRAKİ metodun gövdesini `found:true` ile dönüyordu. Yorum/literal ayıklayıcı
+# artık ÖLÜ KOD DEĞİL (satır-içi deyim taraması onu kullanır); mutasyonları
+# `mcp_salt_okur_araclar` M1/M6/M10-M13 o modüle çapalıdır. `scripts` dizini `_app` importuyla
+# `sys.path`'e girer (`from object_types import …` ile aynı yol).
+from utils.abap_metot_blok import SINIR_BELIRSIZ as _SINIR_BELIRSIZ  # noqa: E402
+from utils.abap_metot_blok import metot_bloklari as _metot_bloklari  # noqa: E402
 # Okunan SÜRÜM (B-2, 2026-10-14): kaynak GET'i `version` parametresi TAŞIMAZ
 # (`atom._read_source_object` · `SAPClient.pretty_print` → `get_object_source(version=None)`)
 # ⇒ SAP EN GÜNCEL sürümü döndürür: bekleyen inaktif sürüm varsa O (lib `get_object_source`
@@ -2367,30 +2371,20 @@ _SURUM_NOTU = ("EN GUNCEL surum (`version` parametresiz GET): bekleyen inaktif s
 _METOT_KAPSAM = (
     "Sinifin ANA kaynagi (`source/main`, " + _SURUM_NOTU + ") METINSEL taranir: `METHOD <ad>.` .. "
     "`ENDMETHOD.`. Yerel siniflar / test include'lari (ccimp/ccau/ccdef) ve makrolar "
-    "ARANMAZ ⇒ found:false 'metot yok' demek DEGILDIR.")
+    "ARANMAZ ⇒ found:false 'metot yok' demek DEGILDIR. Bitis = METHOD'dan sonraki ilk "
+    "METHOD/ENDMETHOD deyimi (tek satirlik `METHOD a. ... ENDMETHOD.` dahil; yorum ve tek "
+    "satirlik literal ayiklanir); araya METHOD girerse ya da ayni satirda karisirsa "
+    "ok:false `sinir_belirsiz`. SINIR (OLCULMEDI): cok satirli string sablonunun (`|...|`) "
+    "devam satirlari KOD sayilir; orada satir basina dusen ENDMETHOD bitis sanilabilir.")
 
 
 def _metot_cikar(kaynak: str, metot: str) -> list:
     """`METHOD <metot>.` .. `ENDMETHOD.` blokları → [(bas, son, metin)] (1-tabanlı satır).
 
-    Kapanmamış blok `son=None` ile döner (çağıran ÖLÇÜLEMEDİ der). Satır bölme yalnız `\\n`
-    (str.splitlines Unicode ayırıcılarda da böler).
+    Sınır kararı `utils.abap_metot_blok.metot_bloklari`'nda (tek kaynak). `son=None` =
+    kapanmamış · `son=_SINIR_BELIRSIZ` = sınır belirlenemedi (ikisinde de çağıran ÖLÇÜLEMEDİ der).
     """
-    hedef = (metot or "").strip().upper()
-    satirlar = [s[:-1] if s.endswith("\r") else s for s in (kaynak or "").split("\n")]
-    bulunan, i = [], 0
-    while i < len(satirlar):
-        m = _METOT_BAS.match(satirlar[i])
-        if m and m.group(1).upper() == hedef:
-            j = next((k for k in range(i + 1, len(satirlar))
-                      if _METOT_SON.match(satirlar[k])), None)
-            if j is None:
-                bulunan.append((i + 1, None, "\n".join(satirlar[i:])))
-                break
-            bulunan.append((i + 1, j + 1, "\n".join(satirlar[i:j + 1])))
-            i = j
-        i += 1
-    return bulunan
+    return _metot_bloklari(kaynak, metot)
 
 
 @profil_tool()
@@ -2415,6 +2409,13 @@ def adt_get_method(class_name: str, method_name: str) -> dict:
              "client_log": oku.get("client_log", "")}
     if not bloklar:
         return {"ok": True, "found": False, **ortak}
+    belirsiz = next((b for b in bloklar if b[1] == _SINIR_BELIRSIZ), None)
+    if belirsiz is not None:
+        return {"ok": False, "error": "sinir_belirsiz", "found": None, "start_line": belirsiz[0],
+                "message": ("`METHOD %s` bulundu ama bitişi belirlenemedi (araya METHOD girdi ya "
+                            "da aynı satırda METHOD/ENDMETHOD karışık) — gövde ÖLÇÜLEMEDİ."
+                            % method_name.upper()),
+                **ortak}
     if len(bloklar) > 1:
         return {"ok": False, "error": "belirsiz", "found": None,
                 "matches": [{"start_line": b, "end_line": s} for b, s, _ in bloklar],

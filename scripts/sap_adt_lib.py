@@ -2023,7 +2023,13 @@ class SAPADTClient:
         Returns:
             tuple: (should_retry: bool, reason: str)
         """
-        if attempt >= self.max_retries:
+        # ⛔ SON DENEME = TEKRAR YOK (DEV_CORE Issue #363, 2026-10-27). `attempt` 0-tabanlıdır ve
+        # `_retry_request` `range(self.max_retries)` döner ⇒ son deneme `max_retries - 1`.
+        # Eski koşul `attempt >= self.max_retries` HİÇ doğru olmuyordu: son denemede de
+        # bekleyip `continue` ediliyor, döngü bitince yanıt ATILIP "Request failed after 3
+        # retries: Unknown error" fırlatılıyordu ⇒ SAP'nin gövdesi çağırana ULAŞMIYORDU.
+        # Şimdi son yanıt (gövdesiyle) çağırana döner; çağıranlar 2xx dışını zaten yanıttan işler.
+        if attempt >= self.max_retries - 1:
             return False, "Max retries exceeded"
 
         status = response.status_code
@@ -2038,8 +2044,12 @@ class SAPADTClient:
             if self.retry_on_csrf_fail:
                 return True, f"CSRF token expired (attempt {attempt + 1})"
 
-        # 5xx server errors - retry with backoff
-        if status >= 500:
+        # 5xx server errors - retry with backoff — 500 HARİÇ (Issue #363). Gerekçe aynı dosyada
+        # `_build_session` `status_forcelist` yorumunda (2026-08-19): SAP'nin 500'ü genelde
+        # kalıcı bir reddin gövdesidir (ör. `CTS_WBO_API 019`); tekrar denemek çözmez, yalnız
+        # teşhisi geciktirir/siler. Bağdaştırıcı düzeltilmişti, bu uygulama katmanı kalmıştı.
+        # 502/503/504 (+408 ve CSRF dalı yukarıda) tekrar edilir; 501/505+ bilinçli dokunulmadı.
+        if status >= 500 and status != 500:
             if self.retry_on_5xx:
                 return True, f"Server error {status} (attempt {attempt + 1})"
 
