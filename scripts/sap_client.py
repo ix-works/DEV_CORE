@@ -3017,7 +3017,10 @@ class SAPClient:
             max_rows: Maximum rows to return (default 100)
 
         Returns:
-            Dict with 'columns', 'data', 'total_rows', 'execution_time' or None on error
+            Dict with 'columns', 'data', 'total_rows', 'execution_time', 'execution_time_ms'
+            or None on error. ⚠ BİRİM MİLİSANİYE: SAP `dp:queryExecutionTime` alanı ms taşır
+            (canlı ölçüm 2026-10-29: değer 24.407 iken isteğin duvar saati 0.224 s — saniye
+            olamaz). `execution_time` geriye uyumluluk için AYNI değerle (ms) korunur.
 
         Example:
             result = client.run_sql_query("SELECT MATNR, MAKTX FROM MARA")
@@ -3037,9 +3040,12 @@ class SAPClient:
             total_rows = root.find('.//dp:totalRows', ns)
             exec_time = root.find('.//dp:queryExecutionTime', ns)
 
+            # Birim ms (docstring); eski anahtar geriye uyumluluk için, `_ms` adı birimi taşır.
+            exec_ms = float(exec_time.text) if exec_time is not None else 0
             result = {
                 'total_rows': int(total_rows.text) if total_rows is not None else 0,
-                'execution_time': float(exec_time.text) if exec_time is not None else 0,
+                'execution_time': exec_ms,
+                'execution_time_ms': exec_ms,
                 'columns': [],
                 'data': []
             }

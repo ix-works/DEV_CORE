@@ -332,6 +332,105 @@ def _oturum_izi_kancasi(nesil):
     return _kanca
 
 
+# T-ADT-OTURUM-LOGOFF (2026-10-29) — SAHİPSİZ OTURUM KAPATMA (best-effort).
+# Sorun: istemci stateful ADT oturumu (`x-sap-adt-sessiontype: stateful`) açar ama hiçbir yerde
+# kapatmaz; süreç bitince ya da `new_session()` eski kavanozu atınca SAP tarafında oturum
+# zaman aşımına kadar yaşar (uzun ömürlü MCP sürecinin oturumu süreç başından beri açık kalır).
+# ⛔ DARALTMA: bu, sahipsiz oturum BİRİKİMİNİ keser; bir DEV'de görülen "400 Session not found"
+#    vakasının kök nedeni DOĞRULANMADI — kapatmanın o vakayı çözdüğü İDDİA EDİLMEZ.
+# YÖNTEM (canlı ölçüldü 2026-10-29, on-prem S/4 DEV, salt-okur GET; ölçüt = eski çerezlerle jar
+# DIŞINDAN yeniden oynatılan istek eski bağlamı buluyor mu):
+#   · kontrol (kapatma yok)                  → yeniden oynatma 200, yeni `sap-contextid` SET YOK
+#   · `GET /sap/public/bc/icf/logoff`         → 200, `SAP_SESSIONID_*` silinir; oynatma 400 "Session Timed Out"
+#   · aynı çerezle `x-sap-adt-sessiontype: stateless` → `sap-contextid` silinir; oynatma 400
+#   · `?sap-sessioncmd=close`                 → ETKİSİZ (oynatma 200) — KULLANILMAZ
+# ⇒ Basic/JWT: ICF logoff (güvenlik oturumu + bağlamı birlikte biter); başarısızsa bağlam düşürme.
+# ⇒ SAML: güvenlik oturumu çerez DOSYASINDAN gelir ve süreçler arasında PAYLAŞILIR — ICF logoff
+#    öbür süreçlerin oturumunu da öldürür ⇒ YALNIZ bu sürecin stateful bağlamı düşürülür.
+# Ağ adımı TEK deneme (`max_retries=0`, kısa zaman aşımı): süreç çıkışını bekletmez. Hata
+# yutulur, stderr'e tek satır; çerez/parola/token değeri ASLA basılmaz.
+ICF_LOGOFF_YOLU = '/sap/public/bc/icf/logoff'
+OTURUM_BAGLAM_DUSURME_YOLU = '/sap/bc/adt/compatibility/graph'
+OTURUM_KAPATMA_ZAMAN_ASIMI = (3, 5)
+_KAPATMA_GEREKEN_CEREZ_RE = re.compile(r'^(SAP_SESSIONID|sap-contextid)', re.IGNORECASE)
+
+
+def _oturumu_kapat(sess, url, saml, neden):
+    """`sess`'in SAP oturumunu kapat (best-effort). Dönüş: kısa durum etiketi (test/iz için).
+
+    Etiketler: `oturum-yok` (kavanozda oturum çerezi yok → AĞ ÇAĞRISI YAPILMAZ) ·
+    `icf-logoff` · `baglam-dusuruldu` · `basarisiz:<sebep>`. İstisna FIRLATMAZ.
+    """
+    try:
+        if sess is None or not url:
+            return 'oturum-yok'
+        try:
+            adlar = {c.name for c in sess.cookies}
+        except Exception:   # çerez kavanozu olmayan (sahte/yerine konmuş) oturum: kapatılacak şey yok
+            return 'oturum-yok'
+        if not any(_KAPATMA_GEREKEN_CEREZ_RE.match(a) for a in adlar):
+            return 'oturum-yok'
+        baglam_var = any(a.lower().startswith('sap-contextid') for a in adlar)
+        from requests.adapters import HTTPAdapter
+        from requests.hooks import dispatch_hook
+        adapter = HTTPAdapter(max_retries=0)
+
+        def _gonder(yol, ek_baslik):
+            istek = sess.prepare_request(requests.Request('GET', url.rstrip('/') + yol,
+                                                          headers=ek_baslik))
+            yanit = adapter.send(istek, timeout=OTURUM_KAPATMA_ZAMAN_ASIMI, verify=sess.verify)
+            try:
+                dispatch_hook('response', sess.hooks, yanit)   # ADT_SESSION_TRACE açıksa iz düşer
+            except Exception:
+                pass
+            return yanit
+
+        sonuc = None
+        try:
+            if not saml:
+                y = _gonder(ICF_LOGOFF_YOLU, {'Accept': '*/*'})
+                if 200 <= y.status_code < 400:
+                    sonuc = 'icf-logoff'
+                else:
+                    sonuc = 'basarisiz:icf-logoff-%d' % y.status_code
+            if sonuc != 'icf-logoff' and baglam_var:
+                y = _gonder(OTURUM_BAGLAM_DUSURME_YOLU, {'Accept': 'application/xml',
+                                                         'x-sap-adt-sessiontype': 'stateless'})
+                if 200 <= y.status_code < 400:
+                    sonuc = 'baglam-dusuruldu'
+                else:
+                    sonuc = 'basarisiz:baglam-%d' % y.status_code
+            elif sonuc is None:
+                sonuc = 'oturum-yok'
+        finally:
+            try:
+                adapter.close()
+            except Exception:
+                pass
+    except Exception as hata:   # ağ hatası / zaman aşımı / kapanmış yorumlayıcı
+        sonuc = 'basarisiz:%s' % type(hata).__name__
+    if sonuc.startswith('basarisiz'):
+        try:
+            print('%s oturum kapatilamadi (%s): %s — SAP tarafinda zaman asimina kadar yasar'
+                  % (OTURUM_IZI_ONEKI, neden, sonuc.split(':', 1)[1]), file=sys.stderr)
+        except Exception:
+            pass
+    return sonuc
+
+
+def _sonlandirici_kapat(kutu):
+    """`weakref.finalize` geri çağrısı — istemci toplanınca YA DA yorumlayıcı çıkarken bir kez koşar."""
+    sess = kutu.get('sess')
+    kutu['sess'] = None
+    if sess is None:
+        return
+    kutu['son'] = _oturumu_kapat(sess, kutu.get('url'), kutu.get('saml'), 'surec-sonu')
+    try:
+        sess.close()
+    except Exception:
+        pass
+
+
 _KIMLIK_AUTH_RE = re.compile(r'(Authorization\s*[:=]\s*["\']?)(Basic|Bearer)\s+[A-Za-z0-9+/=._~-]+',
                              re.IGNORECASE)
 _KIMLIK_PAROLA_ALAN_RE = re.compile(r'((?:sap-|ADT_SAP_)?password\s*[=:]\s*)[^\s&"\'<]+', re.IGNORECASE)
@@ -1495,6 +1594,18 @@ class SAPADTClient:
         if self._auth_provider and self._auth_provider.auth_type == 'saml':
             self._apply_saml_cookies()
 
+        # T-ADT-OTURUM-LOGOFF: istemci toplanınca ya da süreç çıkarken (weakref.finalize →
+        # atexit=True) GÜNCEL oturum best-effort kapatılır. Kutu `self`e değil oturuma bakar
+        # (sonlandırıcı istemciyi canlı tutmamalı); `new_session()` kutudaki oturumu değiştirir.
+        # ⚠ Süreç zorla öldürülürse (TerminateProcess / SIGKILL) hiçbir Python kodu koşmaz.
+        import weakref
+        self._oturum_kutusu = {
+            'sess': self.session, 'url': self.url,
+            'saml': bool(self._auth_provider
+                         and getattr(self._auth_provider, 'auth_type', '') == 'saml'),
+        }
+        self._oturum_sonlandirici = weakref.finalize(self, _sonlandirici_kapat, self._oturum_kutusu)
+
         # Configurable timeouts (seconds) - override via environment variables
         self.timeout_short = int(os.getenv('ADT_TIMEOUT_SHORT', '30'))
         self.timeout_default = int(os.getenv('ADT_TIMEOUT_DEFAULT', '60'))
@@ -1691,6 +1802,9 @@ class SAPADTClient:
         self.session = self._build_session()
         if self._auth_provider and getattr(self._auth_provider, 'auth_type', '') == 'saml':
             self._apply_saml_cookies()
+        kutu = getattr(self, '_oturum_kutusu', None)
+        if kutu is not None:
+            kutu['sess'] = self.session
         # CSRF token oturuma bağlıdır → yeni oturumda geçersiz. Disk cache'i de
         # düşür, yoksa bayat token'la 403 alıp gereksiz retry turu döneriz.
         self.csrf_token = None
@@ -1699,6 +1813,13 @@ class SAPADTClient:
         except Exception:
             pass
         if old is not None:
+            # T-ADT-OTURUM-LOGOFF: atılan kavanozun SAP oturumu kapatılır (best-effort; hata
+            # yutulur). Eskiden yalnız yerel bağlantı havuzu kapanıyor, SAP oturumu zaman
+            # aşımına kadar sahipsiz kalıyordu. Kilit o bağlamdaysa onu da bırakır — bağlam
+            # zaten bu satırdan sonra kullanılamaz (B74 RİSK ②: kilit→PUT arasına reset sokulmaz).
+            saml = bool(kutu.get('saml')) if kutu is not None else bool(
+                self._auth_provider and getattr(self._auth_provider, 'auth_type', '') == 'saml')
+            _oturumu_kapat(old, self.url, saml, 'new_session')
             try:
                 old.close()
             except Exception:
