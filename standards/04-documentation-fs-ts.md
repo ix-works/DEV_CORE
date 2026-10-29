@@ -557,6 +557,8 @@ Aynı veri üzerinde **aynı anda** birden fazla işlem olabiliyorsa beklenen i�
 > soracağı **her soruyu şimdi cevapla.** Bölüm yapısını (3.2) doldurmak yetmez — developer
 > tahmine düşerse yanlış/uzun/gitgelli build olur.
 
+**SIRA (yeni geliştirme — build ajanını spawn etmeden önce sorulur):** FS onayı → **TS** → build → bug-gate → SAP yazımı. Build brifi TS'i **girdi** olarak taşır (yol + sürüm); TS yoksa ya da FS'in son sürümüne hizalı değilse önce TS turu. **TS'i kodlayan ajan yazmaz** — taze bağlamlı ayrı ajan FS + değişiklik öncesi kod + canlı sistemden yazar (kodlayanın TS'i tasarımı değil yazdığı kodu belgeler). "Doküman donmuş kod ister" kuralı yalnız build SONRASI belge turları (KD, görsel, PDF, TS hizalaması) içindir; tasarım TS'ini ertelemez. *(Vaka 2026-10-28: brife "kod donduktan sonra TS hizalaması" yazıldı, build TS'siz koştu. Ders: `claude/memory-seed/feedback_yeni-gelistirmede-ts-builddan-once-yazilir.md`.)*
+
 **İki değişmez ilke (ihlal = eksik TS):**
 
 **İLKE-3 — FS = KAYNAK OTORİTE.** TS'in **birincil görevi FS'teki HER maddeye (FR/KR) teknik
