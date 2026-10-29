@@ -83,9 +83,12 @@ def format_json(result, selected_columns=None):
     for row in data:
         rows.append({columns[i]: row[i] for i in range(len(columns))})
 
+    # SAP dp:queryExecutionTime MILISANIYEDIR (olculdu 2026-10-29: deger 24.407, duvar saati
+    # 0.224 s). `execution_time` anahtari geriye uyumluluk icin ayni degerle (ms) kalir.
     output = {
         'total_rows': result['total_rows'],
         'execution_time': result['execution_time'],
+        'execution_time_ms': result['execution_time'],
         'columns': columns,
         'data': rows
     }
@@ -164,7 +167,8 @@ def main():
     if args.format == 'table':
         print(f"\nQuery executed successfully")
         print(f"Total rows: {result['total_rows']}")
-        print(f"Execution time: {result['execution_time']:.3f}s")
+        # Birim ms (SAP sunucu tarafi sorgu suresi; ag/istemci suresi DAHIL DEGIL).
+        print(f"Execution time: {result['execution_time']:.3f} ms (SAP server-side)")
         print(f"Returned: {len(result['data'])} rows\n")
 
     if not result['columns']:

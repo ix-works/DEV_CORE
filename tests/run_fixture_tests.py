@@ -785,6 +785,15 @@ OZEL_TESTLER = [
      "PyYAML) x {LF,CRLF} x {yaml,noyaml} + PyYAML esligi + gercek agac + tarihi a5e3c4a^ + "
      "core_precommit gercek giris (staged/--all, eski kapi 3d22d7b GECIRIRDI) + ix_doctor 4g "
      "(CEKIRDEK/kopya/PROJE ayrimi, katman4 kablolamasi); 6 mutasyon"),
+    # 2026-10-29 T-ADT-OTURUM-LOGOFF: stateful ADT oturumu hic kapatilmiyordu.
+    ("adt_oturum_kapatma",
+     "new_session/toplama/atexit'te best-effort oturum kapatma (ICF logoff; 404'te stateless "
+     "baglam dusurme; SAML'de yalniz baglam) + oturumsuz istemcide 0 ag cagrisi + erisilemezde "
+     "istisnasiz tek stderr satiri + gercek run_sql_query.py alt sureci; 6 mutasyon"),
+    # 2026-10-29: run_sql_query sure etiketi saniye diyordu, SAP dp:queryExecutionTime ms.
+    ("sql_sure_birimi",
+     "Execution time ms etiketi (gercek run_sql_query.py alt sureci) + execution_time_ms + eski "
+     "execution_time anahtari geriye uyumlu + alan yoksa 0; 3 mutasyon"),
 ]
 
 
@@ -1624,6 +1633,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("claude/skills/*/SKILL.md", ("O:frontmatter_lint",), "R1 gercek agac"),
     ("claude/rules/*.md", ("O:frontmatter_lint", "O:core_fiziksel_kopya"),
      "R1 gercek agac (UYARI 0: paths tirnakli) + inspector A3 paths ayristirmasi"),
+    # 2026-10-29 T-ADT-OTURUM-LOGOFF — AYRI satirlar; sap_adt_lib birlesimi 26→27 ⇒
+    # `b0_secim` P3 pinli sayisi BIRLIKTE guncellendi.
+    ("scripts/sap_adt_lib.py", ("O:adt_oturum_kapatma",),
+     "`_oturumu_kapat` / `_sonlandirici_kapat` / `new_session` eski oturum kapatma / weakref.finalize"),
+    ("scripts/run_sql_query.py", ("O:adt_oturum_kapatma", "O:sql_sure_birimi"),
+     "gercek giris noktasi: cikista oturum kapatma + Execution time ms etiketi / JSON anahtarlari"),
+    ("scripts/sap_client.py", ("O:sql_sure_birimi",),
+     "`run_sql_query` execution_time_ms + geriye uyumlu execution_time (ms)"),
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla

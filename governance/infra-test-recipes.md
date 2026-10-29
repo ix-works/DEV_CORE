@@ -3546,3 +3546,26 @@ python tests/fixtures/responsible_kacis/run.py --eski-kod 998e739     # NEGATİF
 - **`xml_kacis` mutasyonu `sys.modules['utils.xml_kacis']` enjeksiyonuyla** yapılır. Script'ler ve lib'in tembel import'u mutasyonlu modülü bağlar, koşum sonunda kayıt silinir. msag M7/M16 da aynı yolla (`load(kacis_mut=…)`) yeni modülü bozar.
 - **`--eski-kod` kip DEĞİLDİR (GECERLI_KIP dışında):** `git show` ister. Sığ klonda `[DOGRULANAMADI]` exit 2 verir; `kip_kosabilirligi` yalnız ilk mutasyon kipini koştuğu için CI'ı etkilemez. Taban öz-denetimi: ref'te `sorumlu_coz` geçiyorsa taban geçersizdir (exit 2).
 - **ÖLÇÜLMEDİ:** SAP'nin argümansız (eski) gövdeye yanıtı (400 mü, literal kayıt mı?) canlı yazım gerektirir. Lib'de "kullanıcı çözülemedi" dalı yalnız sahte istemciyle ölçüldü; bağlantı doğrulamasından geçmiş gerçek istemcide bu dala ulaşılıp ulaşılmadığı ölçülmedi.
+
+## B89 — ADT oturum kapatma: `new_session` · toplama · atexit (T-ADT-OTURUM-LOGOFF, 2026-10-29)
+
+```
+python tests/fixtures/adt_oturum_kapatma/run.py     # 13/13 (yerel sahte SAP; GERÇEK lib + run_sql_query.py alt süreci)
+python tests/run_battery.py adt_oturum_kapatma --kardes oturum_izi_ve_ddl_accept classrun_tek_post b0_secim --precommit
+```
+
+- **Ölçüt canlı probla AYNI:** eski çerezlerle jar DIŞINDAN yeniden oynatılan istek 400 mü. Sahte sunucu SAP'nin ölçülen davranışını modeller (çerezsiz stateful → yeni bağlam + güvenlik oturumu · `icf/logoff` → ikisi kapanır · `stateless` başlık → bağlam kapanır · kapalı bağlam → 400). K0 kontrol kolu (kapatma yok → 200) ölçütün ayırt edici olduğunu gösterir; K3k kontrol kolu (sonlandırıcı `detach`) atexit vektörünün gerçekten süreç çıkışını ölçtüğünü gösterir.
+- **6 mutasyon kipi, her biri düşecek vektörü İLAN eder** (kum `scripts/` kopyası; gerçek kaynak değişmez): `new-session-kapatmaz` K1 · `sonlandirici-yok` K2+K3 · `saml-ayrimi-yok` K7 · `geri-dusus-yok` K5 · `istisna-yutulmaz` K6 · `oturumsuz-ag` K4. Exit: 1 = ilan edilen düştü (DUSTU) · 0 = hiçbir şey düşmedi (KAÇTI) · 2 = yanlış vektör düştü (SAPMA) · 3 = çapa bulunamadı (KURULAMADI).
+- ⛔ **K4 SİLİNMEZ:** oturum çerezi olmayan istemci kapanırken sunucuya 0 istek gider. Bu kısa devre kalkarsa her çevrimdışı fixture'ın `SAPADTClient()`'ı süreç çıkışında ağ çağrısı yapar (sahte uç kapanmışsa stderr satırı + gecikme).
+- ⛔ **K7 SİLİNMEZ:** SAML'de ICF logoff paylaşılan güvenlik oturumunu (çerez dosyası) öldürür ⇒ aynı makinedeki öbür süreçler oturumsuz kalır.
+- **ÖLÇÜLMEDİ:** canlı SAP (changelog ölçüm satırı, elle) · süreç zorla öldürülünce (TerminateProcess/SIGKILL) hiçbir şey koşmaz · MCP stdio sunucusu istemci kapanışında normal çıkıyor mu.
+
+## B90 — `run_sql_query` süre birimi ms + geriye uyumlu anahtar (2026-10-29)
+
+```
+python tests/fixtures/sql_sure_birimi/run.py        # 4/4 (S2-S4 gerçek run_sql_query.py alt süreci, sahte SAP)
+python tests/run_battery.py sql_sure_birimi --kardes sorgu_araclari_durustlugu sorgu_basarisizligi_gorunur --precommit
+```
+
+- 3 mutasyon kipi (ilan: `saniye-etiketi` S2 · `ms-anahtari-yok` S1 · `json-eski-anahtar-yok` S3). ⛔ **S3 SİLİNMEZ:** eski `execution_time` anahtarı JSON tüketicileri için korunur; kaldırmak kırıcı değişikliktir.
+- Birimin ms olduğunun kanıtı canlı ölçümdür (changelog satırı: değer 24.407 / duvar 0.224 s); fixture etiketi ve anahtarları kilitler, birimi ÖLÇMEZ.
