@@ -114,7 +114,8 @@ OZEL_TESTLER = [
      "worktree yasam dongusu: kanonik kok (D24) + gun-sonu denetimi (ICERIK karsilastirmasi; "
      "`git cherry` yalniz ek sinyal, `--is-ancestor` DEGIL — Issue #280) + silme sirasi "
      "junction-ONCE + ReadOnly oznitelikli agac silme (Issue #284) + statusline budamasi "
-     "+ hook yol oneki"),
+     "+ hook yol oneki + Q334 provizyon urunleri denetim 3. adimda haric (gercek is hala yakalanir) "
+     "+ Q349 --wt-ac tabani tam ref (45 vektor + 29 mutasyon)"),
     ("worktree_blocklist", "kimlik blocklist'i worktree'de de bulunmali (commit-blogu)"),
     ("negatif_test_harness", "hook parse-fail gorunurlugu: exit 0 KORUNUR + stderr'de not (bozuk girdi ARTIK ayirt edilebilir)"),
     ("tembel_desen", "sizinti deseni TEMBEL kurulur: hiz kazanci korumayi OLU'ye cevirmiyor"),
@@ -196,7 +197,8 @@ OZEL_TESTLER = [
      "kosumda, yeni gizlenen/acilan izlenmeyen dosya GORUNUR; sablon tek kaynak init_project.GITIGNORE"),
     ("session_start_origin_geriligi",
      "Q337 (Issue #276): core gerilik sayisi onbellekten degil HER cagrida yerel rev-list; "
-     "pull sonrasi olmayan gerilik bildirilmez; fetch throttle (saatte 1) KORUNDU"),
+     "pull sonrasi olmayan gerilik bildirilmez; fetch throttle (saatte 1) KORUNDU; "
+     "Q349 `origin/main` ADLI tag sayimi golgelemez (S9)"),
     ("team_setup_hook_kablolama",
      "E-05: overlay ONAY kapisi (normal T2.5 fark-onayi) git-hook kablolamasini DURDURMAMALI "
      "— eskiden erken `return 1` yuzunden yeni klonda `core.hooksPath` set edilmiyor "
@@ -349,7 +351,8 @@ OZEL_TESTLER = [
     ("proje_koku_varyantlari", "__file__-koku: glob/joinpath/str-concat/transitive kaciyordu (V5)"),
     ("ui5_t1_tirnak_sinifi", "UI5 T1: template-literal `_X` tirnak sinifindan kaciyordu (V6)"),
     # 2026-08-01 amend-FP (kullanici-onayli GEVSETME — kiyas birimi commit -> dal):
-    ("changelog_amend", "INFRA-CHANGELOG gate: amend/cok-commit dalinda FP; taze dalda birebir-eski"),
+    ("changelog_amend", "INFRA-CHANGELOG gate: amend/cok-commit dalinda FP; taze dalda birebir-eski; "
+                        "Q349 `origin/main` ADLI tag tabani kaydirip sessiz GECIS uretmez (T1)"),
     # 2026-08-09 DDIC okuma-yolu (table/structure `/source/main` VAR; diger uc tipte YOK):
     ("ddic_okuma_yolu", "adt_get + sap_sync_pull: DDIC tipi basina dogru uc (XML vs DDL)"),
     # 2026-08-09 lock yaniti: NoModification -> acik hata; BOS/eksik/taninmayan -> AYNEN eski:
@@ -757,7 +760,7 @@ OZEL_TESTLER = [
      "round-trip, SAYI hucre raporlanir, anahtarli kiyas (9 vektor + 3 mutasyon; openpyxl yoksa O* ATLANDI)"),
     ("parity_probe_diff",
      "Q371-5 parity_probe --diff: _zaman yok sayilir, OLCULEMEDI fark/temiz degil (cikis 3), "
-     "skaler liste kume farki, gercek iki kosum (10 vektor + 2 mutasyon)"),
+     "skaler liste kume farki, gercek iki kosum + Q349 tag golgesi B2 (14 vektor + 5 mutasyon)"),
     ("checklist_check",
      "ortak checklist programi: her A maddesine pozitif+negatif (K0 map'ten turetir), BE-10b "
      "olculmus/olculmemis konumlar, tohum paketi (7 hata), --verify-report, exit 0/1/2, "

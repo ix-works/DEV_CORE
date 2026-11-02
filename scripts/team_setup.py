@@ -737,11 +737,18 @@ def hookspath_proje(proje: Path) -> None:
     say(OK if r.returncode == 0 else FAIL, f"proje core.hooksPath=scripts/git-hooks ({proje})")
 
 
+# Provizyonun ana projeden worktree'ye TASIDIGI dosyalar/dizinler — TEK KAYNAK: hem
+# `provision_worktree` (uretir) hem `_provizyon_siniflayici` (`--wt-denetim` ③'te tanir)
+# bunu okur (Q334). Listeye eklenen yol denetimde de OTOMATIK taninir.
+PROVIZYON_DOSYALARI = (".conn_adt", ".claude/settings.local.json")
+PROVIZYON_DIZINLERI = ("conn",)
+
+
 def provision_worktree(worktree: Path, proje: Path) -> bool:
     """D16: worktree'de junction'lar + git'in getirmediği runtime dosyaları."""
     say(INFO, f"worktree provizyonu: {worktree} (ana proje: {proje})")
     ok = junctions(worktree)
-    for rel in (".conn_adt", ".claude/settings.local.json"):
+    for rel in PROVIZYON_DOSYALARI:
         src, dst = proje / rel, worktree / rel
         if not src.exists():
             say(WARN, f"kaynakta yok, atlandı: {rel}")
@@ -756,10 +763,11 @@ def provision_worktree(worktree: Path, proje: Path) -> bool:
         except OSError:
             shutil.copyfile(src, dst)
             say(OK, f"kopya (hardlink olmadı): {rel}")
-    src_conn, dst_conn = proje / "conn", worktree / "conn"
-    if src_conn.is_dir() and not dst_conn.exists():
-        shutil.copytree(src_conn, dst_conn)
-        say(OK, "conn/ kopyalandı")
+    for rel in PROVIZYON_DIZINLERI:
+        src_d, dst_d = proje / rel, worktree / rel
+        if src_d.is_dir() and not dst_d.exists():
+            shutil.copytree(src_d, dst_d)
+            say(OK, f"{rel}/ kopyalandı")
     return ok
 
 
@@ -957,6 +965,110 @@ def _dal_hukmu_bas(proje: Path, dal: str) -> int:
     return 1
 
 
+# Hook'larin worktree'de oturum acilinca yazdigi CALISMA ZAMANI isaretleri — provizyon
+# urunu DEGIL ama ozgun is de DEGIL (DEV_CORE `.gitignore`: "calisma zamani artefakti,
+# commit edilmez"; yazan: `hooks/intake_triage.py` + `hooks/itg_backstop.py`). Q334 olcumu:
+# iki gercek worktree'de ③b'nin tek provizyon-disi hasat adayi buydu.
+CALISMA_ZAMANI_DURUMU = (".claude/.itg_shown.json",)
+
+
+def _provizyon_siniflayici(yol: Path, proje: Path):
+    """Q334: `--wt-ac`'in KENDI urettigi yollari taniyan yuklem -> `f(rel) -> sinif | None`.
+
+    NEDEN: DEV_CORE worktree'sinde ③ provizyon urunlerini (junction icerikleri, `rules`
+    overlay kopyasi, `.conn_adt` hardlink'i) "izlenmeyen / hasat adayi" sayiyordu ⇒ her
+    kapatma `--zorla` istiyordu (olculdu 2026-09-18 · 09-25 · 11-02: 28-33 kaydin TAMAMI
+    provizyon). `--zorla` aliskanligi GERCEK hasat adayini da gomer.
+    ⛔ Liste ELLE YAZILMAZ — provizyonu YAPAN koddan turetilir ve her sinif ICERIKLE kanitlanir:
+      · bag     : `junctions()` ile ayni kume (`core` + `.claude/<ov.TIPLER>`); yol GERCEKTEN
+                  junction/symlink VE hedefi `junction_kur`un kuracagi hedef (`CORE_ROOT[/claude/<tip>]`)
+                  ise altindaki her sey. Gercek klasor ya da baska hedef => taninmaz (raporlanir).
+      · overlay : gercek dizin olan tip (`rules` zorunlu overlay) icin
+                  `claude_overlay.el_degmemis_core_kopyalari` — manifestte, `kaynak=core` ve diskte
+                  `uretilen_hash` ile BAYT-ES olanlar (+ gecerli manifest). Elle degismis kopya
+                  ya da fazladan dosya taninmaz.
+      · kopya   : `PROVIZYON_DOSYALARI` / `PROVIZYON_DIZINLERI` — ana projedeki kaynakla BAYT-ES
+                  ise. Elle degismis `.conn_adt` taninmaz => hasat adayi olarak KALIR.
+      · calisma-zamani : `CALISMA_ZAMANI_DURUMU` (yukarida; yol esitligi).
+    Bu bir HARIC TUTMA'dir, silme degil; cagiran yalniz `??`/`!!` kayitlarina uygular
+    (degismis IZLENEN dosya ` M` asla taninmaz).
+    """
+    tanimli: dict[str, str] = {}      # tam yol -> sinif
+    bag_onekleri: dict[str, str] = {}
+    try:
+        if str(CORE_ROOT / "scripts") not in sys.path:
+            sys.path.insert(0, str(CORE_ROOT / "scripts"))
+        from utils import claude_overlay as ov  # type: ignore
+        tipler = tuple(ov.TIPLER)
+    except Exception:  # noqa: BLE001 — overlay modulu yoksa YALNIZ o sinif taninmaz (muhafazakar)
+        ov, tipler = None, ()
+    adaylar = [("core", CORE_ROOT)] + [(f".claude/{t}", CORE_ROOT / "claude" / t) for t in tipler]
+    for rel, hedef in adaylar:
+        p = yol.joinpath(*rel.split("/"))
+        h = junction_hedefi(p)
+        if h is not None:
+            try:
+                if h.resolve() == hedef.resolve():
+                    bag_onekleri[rel] = "bag"
+            except OSError:
+                pass
+        elif ov is not None and p.is_dir():
+            for ad in (ov.el_degmemis_core_kopyalari(p) or ()):
+                tanimli[f"{rel}/{ad}"] = "overlay"
+
+    def _es(a: Path, b: Path) -> bool:
+        try:
+            return a.is_file() and b.is_file() and a.read_bytes() == b.read_bytes()
+        except OSError:
+            return False
+
+    for rel in PROVIZYON_DOSYALARI:
+        if _es(yol.joinpath(*rel.split("/")), proje.joinpath(*rel.split("/"))):
+            tanimli[rel] = "kopya"
+    for rel in PROVIZYON_DIZINLERI:
+        kok = yol / rel
+        if not kok.is_dir() or junction_hedefi(kok) is not None:
+            continue
+        for dp, dn, fn in os.walk(kok):
+            dn[:] = [d for d in dn if junction_hedefi(Path(dp) / d) is None]
+            for ad in fn:
+                f = Path(dp) / ad
+                r = f.relative_to(yol).as_posix()
+                if _es(f, proje / r):
+                    tanimli[r] = "kopya"
+    for rel in CALISMA_ZAMANI_DURUMU:
+        tanimli[rel] = "calisma-zamani"
+
+    def _dosya(rel: str) -> str | None:
+        for on, sinif in bag_onekleri.items():
+            if rel == on or rel.startswith(on + "/"):
+                return sinif
+        return tanimli.get(rel)
+
+    def sinifla(rel: str) -> str | None:
+        rel = rel.strip().strip('"').rstrip("/")
+        s = _dosya(rel)
+        if s is not None:
+            return s
+        d = yol.joinpath(*rel.split("/"))
+        # Dizin kaydi (`!! conn/` gibi daraltilmis): ICINDEKI HER dosya taninirsa taninir.
+        # Ic bag / bos dizin / tek taninmayan dosya => None (muhafazakar).
+        if not d.is_dir() or junction_hedefi(d) is not None:
+            return None
+        siniflar: set[str] = set()
+        for dp, dn, fn in os.walk(d):
+            if any(junction_hedefi(Path(dp) / x) is not None for x in dn):
+                return None
+            for ad in fn:
+                s = _dosya((Path(dp) / ad).relative_to(yol).as_posix())
+                if s is None:
+                    return None
+                siniflar.add(s)
+        return "+".join(sorted(siniflar)) if siniflar else None
+
+    return sinifla
+
+
 def wt_denetim(proje: Path) -> int:
     """GUN-SONU WORKTREE SUPURGESI (`CLAUDE.core.md §1.1` gun-sonu adimi).
 
@@ -1003,8 +1115,26 @@ def wt_denetim(proje: Path) -> int:
         # 122 kaydin **104'u** (%85) yok-sayilan `.tmp/` scratch ve `__pycache__` idi
         # => uyari korlugu. Bu yuzden: izlenen/izlenmeyen degisiklik FAIL uretir,
         # yok-sayilanlar SCRATCH ELENDIKTEN sonra ayrica HASAT ADAYI olarak raporlanir.
-        st = _git(yol, "status", "--short", "--ignored", "--untracked-files=all")
+        st = _git(yol, "-c", "core.quotePath=false", "status", "--short", "--ignored", "--untracked-files=all")
         satir3 = [s for s in (st.stdout or "").splitlines() if s.strip()]
+        # Q334: `--wt-ac`'in KENDI provizyon urunleri (yalniz `??`/`!!` kayitlari) haric —
+        # tanima kurali provizyonu yapan koddan + icerik esitliginden (`_provizyon_siniflayici`).
+        sinifla = _provizyon_siniflayici(yol, proje)
+        provizyon: dict[str, int] = {}
+        kalan3 = []
+        for s in satir3:
+            sinif = sinifla(s[3:]) if s[:2] in ("??", "!!") else None
+            if sinif is None:
+                kalan3.append(s)
+            else:
+                provizyon[sinif] = provizyon.get(sinif, 0) + 1
+        satir3 = kalan3
+        say(INFO, f"③ {yol.name}: provizyon urunu {sum(provizyon.values())} kayit HARIC "
+                  f"({', '.join(f'{k} {v}' for k, v in sorted(provizyon.items())) or '-'}) — "
+                  f"taninan: bag (core/.claude/<tip>, beklenen hedefe) · overlay (manifestle "
+                  f"bayt-es) · kopya ({'/'.join(PROVIZYON_DOSYALARI + PROVIZYON_DIZINLERI)}, "
+                  f"ana projeyle bayt-es) · {'/'.join(CALISMA_ZAMANI_DURUMU)}; "
+                  f"degismis izlenen dosya ve icerigi farkli kopya HARIC TUTULMAZ")
         izlenen = [s for s in satir3 if not s.startswith("!!")]
         yoksayilan = [s for s in satir3 if s.startswith("!!")]
         hasat = [s for s in yoksayilan
@@ -1178,8 +1308,13 @@ def wt_kapat(proje: Path, hedef: str, zorla: bool = False) -> bool:
     return True
 
 
-def wt_ac(proje: Path, dal: str, taban: str = "origin/main") -> bool:
-    """Kanonik yolda worktree AC + provizyonla. Cagiran PATH vermez — yol turetilir."""
+def wt_ac(proje: Path, dal: str, taban: str = "refs/remotes/origin/main") -> bool:
+    """Kanonik yolda worktree AC + provizyonla. Cagiran PATH vermez — yol turetilir.
+
+    Q349: taban TAM ref adiyla. `origin/main` ADLI bir tag varsa kisa ad belirsizlesir
+    (olculdu 2026-11-02, git 2.54: `worktree add ... origin/main` → `fatal: ambiguous
+    object name`, exit 255; tam ref ile upstream izleme `refs/heads/main` aynen kurulur).
+    """
     yol = wt_yolu(proje, dal)
     if yol.exists():
         say(FAIL, f"zaten var: {yol}"); return False

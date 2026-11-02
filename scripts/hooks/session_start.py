@@ -425,9 +425,11 @@ def _manifest_kontrol() -> list[str]:
 
 
 def _core_geri_sayisi() -> int:
-    """`HEAD..origin/main` commit sayısı — YEREL ref'lerden, AĞSIZ (ucuz; her çağrıda)."""
+    """`HEAD..origin/main` commit sayısı — YEREL ref'lerden, AĞSIZ (ucuz; her çağrıda).
+    Q349: TAM ref — `origin/main` ADLI tag kısa adı gölgeler, gerilik sessizce 0 görünür."""
     try:
-        r = subprocess.run(["git", "-C", str(CORE), "rev-list", "--count", "HEAD..origin/main"],
+        r = subprocess.run(["git", "-C", str(CORE), "rev-list", "--count",
+                            "HEAD..refs/remotes/origin/main"],
                            capture_output=True, text=True, timeout=5)
         return int((r.stdout or "0").strip() or 0) if r.returncode == 0 else 0
     except Exception:

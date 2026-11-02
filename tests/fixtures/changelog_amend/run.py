@@ -20,6 +20,9 @@ SENARYOLAR (sentetik git deposu; gerçek repolara DOKUNULMAZ):
   P2 ÇOK-COMMIT: c1 changelog, c2'de yeni kod staged            → GEÇER (eski sürümde BLOK)
   S1 GEVŞEME-SINIRI: taze dal (HEAD==origin/main), kod, chlog yok → BLOK (gevşeme dal-içi)
   S2 FAIL-CLOSED: origin/main ref'i YOK, amend senaryosu        → BLOK (çözülemedi = katı yol)
+  T1 Q349: `origin/main` ADLI tag ESKİ commit'te, main changelog'u kendisi değiştirdi, taze
+     dalda kod staged + changelog yok → BLOK (kısa ad tag'e çözülseydi sessiz GEÇİŞ)
+MUTASYON: `--mutasyon-kisa-ad` (taban yeniden kısa `origin/main`) → yalnız T1 düşer.
 """
 from __future__ import annotations
 
@@ -42,11 +45,29 @@ REPO = Path(__file__).resolve().parents[3]
 if not (REPO / "scripts").is_dir():
     raise SystemExit(f"[fixture-hatasi] repo koku yanlis cozuldu: {REPO}")
 
-spec = importlib.util.spec_from_file_location(
-    "cpc_fx", REPO / "scripts" / "git-hooks" / "core_precommit.py")
+CPC = REPO / "scripts" / "git-hooks" / "core_precommit.py"
+# Q349 mutasyonu: tabanı yeniden KISA `origin/main`e bağla → yalnız T1 düşmeli.
+# Kaynak BELLEKTE değiştirilir; gerçek dosyaya YAZILMAZ. Çapa tam 1 kez değilse exit 2.
+MUT_KISA = ('_git("merge-base", "HEAD", "refs/remotes/origin/main")',
+            '_git("merge-base", "HEAD", "origin/main")')
+_argv = sys.argv[1:]
+if any(a != "--mutasyon-kisa-ad" for a in _argv):
+    print(f"[DURDU] bilinmeyen arguman: {_argv} — gecerli: --mutasyon-kisa-ad")
+    sys.exit(2)
+MUTASYON = "--mutasyon-kisa-ad" in _argv
+
+spec = importlib.util.spec_from_file_location("cpc_fx", CPC)
 cpc = importlib.util.module_from_spec(spec)                 # type: ignore[arg-type]
 sys.modules["cpc_fx"] = cpc
-spec.loader.exec_module(cpc)                                # type: ignore[union-attr]
+if MUTASYON:
+    _src = CPC.read_text(encoding="utf-8")
+    if _src.count(MUT_KISA[0]) != 1:
+        print(f"[DURDU] KURULAMADI: mutasyon capasi {_src.count(MUT_KISA[0])} kez bulundu")
+        sys.exit(2)
+    exec(compile(_src.replace(MUT_KISA[0], MUT_KISA[1]), str(CPC), "exec"),  # noqa: S102
+         cpc.__dict__)
+else:
+    spec.loader.exec_module(cpc)                            # type: ignore[union-attr]
 
 INFRA = "scripts/validators/check_sentetik.py"
 CHLOG = cpc.CHANGELOG_PATH
@@ -153,6 +174,26 @@ def _main(tmp: Path) -> int:
     b = _gate_bloklar_mi(d2)
     sonuc.append(("S2 FAIL-CLOSED: origin/main yok, amend senaryosu -> BLOK",
                   b is True, f"blok={b}"))
+
+    # ── T1: Q349 — `origin/main` ADLI tag ESKİ commit'te; main changelog'u KENDİSİ değiştirdi
+    # Taze dal (HEAD == refs/remotes/origin/main), kod staged, changelog yok → BLOK olmalı.
+    # Kısa ad tag'e çözülürse taban geriye kayar, main'in kendi changelog satırı "dalda
+    # değişti" sayılır → sessiz GEÇİŞ (fail-open).
+    d3 = _depo_kur(tmp / "t1", origin_ref=False)
+    ilk = _kos("git", "rev-parse", "HEAD", cwd=d3).stdout.strip()
+    (d3 / CHLOG).write_text("# changelog\n| main'in kendi satiri |\n", encoding="utf-8")
+    _kos("git", "add", CHLOG, cwd=d3)
+    _kos("git", "commit", "-qm", "main changelog", cwd=d3)
+    m2 = _kos("git", "rev-parse", "HEAD", cwd=d3).stdout.strip()
+    _kos("git", "update-ref", "refs/remotes/origin/main", m2, cwd=d3)
+    _kos("git", "tag", "origin/main", ilk, cwd=d3)
+    kisa = _kos("git", "rev-parse", "origin/main", cwd=d3).stdout.strip()
+    golge = kisa == ilk != m2
+    (d3 / INFRA).write_text("print('t1')\n", encoding="utf-8")
+    _kos("git", "add", INFRA, cwd=d3)
+    b = _gate_bloklar_mi(d3)
+    sonuc.append(("T1 Q349: `origin/main` ADLI tag eski commit'te, taze dal, changelog yok -> BLOK",
+                  golge and b is True, f"golge={golge} blok={b}"))
 
     gecen = sum(1 for _, ok, _ in sonuc if ok)
     for ad, ok, detay in sonuc:

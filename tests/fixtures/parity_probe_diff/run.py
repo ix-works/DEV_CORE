@@ -23,12 +23,15 @@ SENARYOLAR
                                                                             [--mutasyon-coklu]
   B1  3. BAĞLAM — gerçek giriş noktası: aynı sahte proje için `--no-doctor` iki koşum, sonra
       `--diff` alt süreçte → [FARK] yok, çıkış 0 ya da 3 (ortamda ölçülemeyen alan olabilir)
+  B2  Q349: `origin/main` ADLI tag core HEAD'inde, uzak ref 2 ileride → `origin_main_gerisinde`
+      yine "2" (süreç içi `main()`; her kipte koşar)                        [--mutasyon-kisa-ad]
 
 Koşum:  python tests/fixtures/parity_probe_diff/run.py [--mutasyon-<kip>]
 """
 import copy
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -55,6 +58,8 @@ MUTASYON = {
     # çoklu-kümeyi kümeye indirger → D11 düşmeli
     "--mutasyon-coklu": ('    cx, cy = Counter(map(_kanonik, x)), Counter(map(_kanonik, y))\n',
                          '    cx, cy = Counter(set(map(_kanonik, x))), Counter(set(map(_kanonik, y)))\n'),
+    # Q349: gerilik yeniden KISA `origin/main` ile sayılır → yalnız B2 düşmeli
+    "--mutasyon-kisa-ad": ('"HEAD..refs/remotes/origin/main")', '"HEAD..origin/main")'),
 }
 GECERLI_KIP = set(MUTASYON)
 _kip = [a for a in sys.argv[1:] if a.startswith("--")]
@@ -199,6 +204,59 @@ else:
     kontrol("B1 gerçek iki koşum + --diff alt süreç: [FARK] yok, çıkış 0/3",
             outs == [0, 0] and r.returncode in (0, 3) and "[FARK]" not in o and "KAPSAM:" in o,
             f"olcum={outs} diff rc={r.returncode} {o[-300:]!r}")
+
+# B2 — Q349 (her kipte; ölçüm süreç İÇİ, mutasyonlu kaynak da ölçülür): `origin/main` ADLI
+# tag core HEAD'inde, gerçek uzak ref 2 ileride → `core.origin_main_gerisinde` yine "2".
+# Kısa ad tag'e çözülseydi sessizce "0" olurdu. Kurulumun gölgelediği ayrıca ölçülür.
+def _g(d, *x):
+    return subprocess.run(["git", "-C", str(d), *x], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace").stdout.strip()
+
+
+org = TMP / "q349_origin.git"
+_g(TMP, "init", "-q", "--bare", "-b", "main", str(org))
+yaz_d = TMP / "q349_yazar"
+_g(TMP, "init", "-q", "-b", "main", str(yaz_d))
+_g(yaz_d, "config", "user.email", "fixture")
+_g(yaz_d, "config", "user.name", "fixture")
+for i in range(3):
+    (yaz_d / f"c{i}.txt").write_text(f"{i}\n", encoding="utf-8")
+    _g(yaz_d, "add", "-A")
+    _g(yaz_d, "commit", "-q", "-m", f"c{i}")
+_g(yaz_d, "remote", "add", "origin", str(org))
+_g(yaz_d, "push", "-q", "origin", "main")
+klon = TMP / "q349_core"
+_g(TMP, "clone", "-q", str(org), str(klon))
+_g(klon, "reset", "-q", "--hard", "HEAD~2")
+_g(klon, "tag", "origin/main", "HEAD")
+golge = _g(klon, "rev-parse", "origin/main") == _g(klon, "rev-parse", "HEAD") != \
+    _g(klon, "rev-parse", "refs/remotes/origin/main")
+p2 = TMP / "q349_proje"
+p2.mkdir()
+bag = p2 / "core"
+if sys.platform == "win32":
+    import _winapi  # type: ignore
+    _winapi.CreateJunction(str(klon), str(bag))
+else:
+    bag.symlink_to(klon, target_is_directory=True)
+out2 = TMP / "q349.json"
+_argv_eski = sys.argv
+sys.argv = ["parity_probe", "--no-doctor", "--anon", "--proje", str(p2), "--out", str(out2)]
+try:
+    with redirect_stdout(io.StringIO()):
+        rc2 = P.main()
+finally:
+    sys.argv = _argv_eski
+    try:
+        os.rmdir(bag) if sys.platform == "win32" else bag.unlink()   # bağ önce (hedefe girilmez)
+    except OSError:
+        pass
+try:
+    geri = json.loads(out2.read_text(encoding="utf-8"))["core"]["origin_main_gerisinde"]
+except Exception as e:  # noqa: BLE001
+    geri = f"OKUNAMADI {type(e).__name__}"
+kontrol("B2 Q349 `origin/main` ADLI tag core HEAD'inde → origin_main_gerisinde yine '2'",
+        golge and rc2 == 0 and geri == "2", f"golge={golge} rc={rc2} gerisinde={geri!r}")
 
 print(f"parity_probe_diff{(' ' + KIP) if KIP else ''}")
 for ad, ok, detay in SONUC:

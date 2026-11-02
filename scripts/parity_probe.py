@@ -352,7 +352,8 @@ def main() -> int:
         "head": g("log", "--oneline", "-1"),
         "remote": g("config", "--get", "remote.origin.url"),
         "kirli_satir": len([x for x in g("status", "--short").splitlines() if x.strip()]),
-        "origin_main_gerisinde": g("rev-list", "--count", "HEAD..origin/main"),
+        # Q349: TAM ref — `origin/main` ADLI tag kısa adı gölgeler (sayı sessizce kayar)
+        "origin_main_gerisinde": g("rev-list", "--count", "HEAD..refs/remotes/origin/main"),
         "son_fetch": None,
         "hooksPath": g("config", "--get", "core.hooksPath"),
         "CLAUDE_core_md_var": (CORE / "CLAUDE.core.md").exists(),

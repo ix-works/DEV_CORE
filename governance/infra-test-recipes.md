@@ -3601,3 +3601,19 @@ python tests/run_battery.py revizyon_okuma --kardes changelog_gate --precommit
 - Mutasyonların hedefi İLAN edilir (`MUT_HEDEF`): MG1→H3,P3 · MG2→H5,P4 · MG3→H4b · MG4→H6 · MG5→H7 · MG6/MG7→H2,P1 · MG8→H1b · MG9→H6 · MP1/MP2/MP3→P3,P4 · ML3→L4 · ML4→L5. İlan edilen vektör düşmezse `HEDEF-KACTI` = FAIL (başka bir vektörün kırılması yetmez).
 - P-vektörleri GERÇEK çağıranı (`sap_client.push_object`) süreç içinde koşar: kilit sorgusu `SAPLockError(409)` fırlatır, `find_ghost_transports` gerçek gövdeyle sahte POST oturumuna gider. "Push hata akışı değişmedi" ölçütü: P3/P4 `result` çekirdeği (success · error · error_type · source_uploaded · activated · lock_released) P2'ninkiyle BİREBİR aynı.
 - KAPSAM BEYANI: freestyle yanıt biçimi canlıda ÖLÇÜLMEDİ (POST); biçim kanıtı kardeş ayrıştırıcı `sap_client._find_existing_transport`. `list_revisions` `view`/`viewd` eşlemesi fixture'da ÖLÇÜLMEZ (karar bekliyor). Canlı tablo ucu dayanağı PR #303 ölçümüdür; bu turda ağ yoktu (`NameResolutionError`).
+
+## B92 — `--wt-denetim` ③ provizyon ürünleri hariç (Q334) · `origin/main` tam ref (Q349) (2026-11-02)
+
+```
+git add <kendi dosyaların>      # core_precommit --all INDEX'i tarar
+python tests/run_battery.py worktree_yasam_dongusu --kardes changelog_gate changelog_amend session_start_origin_geriligi parity_probe_diff --kardes-tam --precommit
+python tests/fixtures/worktree_yasam_dongusu/run.py              # 45/45 (V13-V13h Q334 · V14 Q349)
+python tests/fixtures/worktree_yasam_dongusu/run.py --mutasyon   # 29/29 (M24-M28 Q334 · M29 Q349)
+```
+
+- Q334 ürünleri GERÇEK `provision_worktree` üretir (V13; `CORE_ROOT` kumdaki sahte core'a çevrilir, gerçek core'a bağ KURULMAZ). Kontrol grubu satırın içinde: INFO satırında bag/overlay/kopya/çalışma-zamanı sınıflarının HEPSİ >0 görünmeli — görünmezse vektör boş ölçer.
+- ⛔ Negatif kollar SİLİNMEZ (V13b-V13h): provizyon dışı dosya · elle değişmiş `.conn_adt` · `conn/` içinde değişmiş dosya · elle değişmiş rules kopyası · beklenmeyen hedefe bag · gitignore'lu ajan hafızası · izlenen ` M`. Bunlar "her şeyi hariç tut" diyen bir denetimi yakalayan tek çapadır (M25-M28).
+- M24 (hariç tutma tümden kalkar) 7 vektörü düşürür: V13 + sayı çapalı negatifler (her negatif worktree'de provizyon ürünleri de sayılır) — beklenen.
+- Q349 her yerde ayrı mutasyon (kısa ada dönüş) yalnız kendi vektörünü düşürür: `changelog_amend --mutasyon-kisa-ad` → T1 · `session_start_origin_geriligi --mutasyon-kisa-ad` → S9 · `parity_probe_diff --mutasyon-kisa-ad` → B2 · M29 → V14. Her vektör kurulumun kısa adı GERÇEKTEN gölgelediğini (`golge=True`) ayrıca ölçer.
+- Canlı doğrulama (salt-okur, isteğe bağlı): yeni `team_setup.py` kaynağını `__file__` = canlı `scripts/team_setup.py` ile exec edip `wt_denetim(<DEV_CORE>)` → her provizyonlu worktree'de INFO "provizyon urunu N kayit HARIC" + ③b hasat 0 (provizyon dışı iş yoksa).
+- ⚠ Windows'ta ölçüldü (junction). POSIX symlink kolu CI'da koşar.
