@@ -24,6 +24,9 @@ capabilities:
 release_overrides:
   # anahtar = S/4 release; yalnız FARKLAR yazılır
   "1909": { abap_cloud: none, rap: available }     # Embedded Steampunk yok; RAP erken sürüm
+  #        ↑ 1909 (SAP_BASIS 754): `view entity … as select from` YOK (projeksiyon view entity kabul;
+  #          I-katmanı klasik sqlViewName + preserveKey) ve
+  #          BDEF strict modu YOK — ölçüldü, DEV_CORE Issue #384. 2020–2023 ÖLÇÜLMEDİ.
   "2020": { abap_cloud: none }
   "2021": { abap_cloud: none }
   "2022": {}                                        # Embedded Steampunk başlangıcı

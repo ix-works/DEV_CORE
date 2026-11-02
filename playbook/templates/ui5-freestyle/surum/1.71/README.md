@@ -72,6 +72,8 @@ geçirir; bu karakterleri içermeyen girdide fark yoktur. O hat için ne yapıla
 
 ## Backend notu
 
-Varyant servisi referansı (`backend-referans/`) RAP + CDS view entity ister — S/4HANA backend.
+Varyant servisi referansı (`backend-referans/`) RAP + CDS view entity + BDEF `strict ( 2 )` ister — S/4HANA
+backend, **ama S/4HANA 1909'da (`SAP_BASIS 754` · `SAP_UI 754` → UI5 1.71.5) olduğu gibi derlenmez** (iki sözdizimi
+vekil objelerde reddedildi, DEV_CORE Issue #384). Sürüm tablosu ve 1909 uyarlaması: `backend-referans/README.md` §Backend sürüm sınırı.
 1.71 UI'ı ECC üzerinde koşuyorsa varyant servisi başka yolla (ör. SEGW) kurulmalıdır; bu yol
 şablonda **DOĞRULANMADI**. Servis yoksa `TablePersonalizer` açılışta uyarı yazar ve yerel saklamaya düşer.
