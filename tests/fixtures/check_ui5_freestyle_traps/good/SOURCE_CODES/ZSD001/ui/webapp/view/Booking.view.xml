@@ -1,0 +1,19 @@
+<mvc:View controllerName="zsd001.controller.Booking"
+    xmlns:mvc="sap.ui.core.mvc" xmlns="sap.m"
+    xmlns:f="sap.ui.layout.form">
+    <Page title="Booking">
+        <content>
+            <!-- Q386: yorumdaki <f:fields> metni T4 SAYILMAZ (form-disi VBox asagida gecerli) -->
+            <VBox>
+                <f:Form editable="true">
+                    <f:layout><f:ColumnLayout/></f:layout>
+                    <f:formContainers><f:FormContainer><f:formElements>
+                        <f:FormElement label="Container">
+                            <f:fields><Input value="{ContainerNo}"/></f:fields>
+                        </f:FormElement>
+                    </f:formElements></f:FormContainer></f:formContainers>
+                </f:Form>
+            </VBox>
+        </content>
+    </Page>
+</mvc:View>

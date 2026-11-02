@@ -26,8 +26,13 @@ Kapsam: <source_root>/**/ui/**/webapp altındaki *.xml (view/fragment) + *.js (c
 dist, test elenir. JS'te yorumlar (satır + ÇOK-SATIRLI `/* */`) taramadan düşer — 2026-08-28
 (B2-06) öncesi yalnız `//` ve hizalı `*` satırları atlanıyordu, yıldızsız blok yorumunun
 içindeki ölü kod T1 ERROR (build DURDURAN yanlış-pozitif) üretiyordu.
-⚠ XML dalı (T2/T3) bu turda DEĞİŞMEDİ: `<!-- -->` yorum-durumu hâlâ ham satır bazlıdır
-(ölçüldü, ayrı kalem olarak raporlandı — T2/T3 WARN'dır, build durdurmaz).
+XML'de `<!-- -->` yorumları T2/T3/T4 taramasından ÖNCE maskelenir (`_xml_yorum_maskele`,
+2026-11-02 Q386): yorumdaki `<f:fields>` metni bir sonraki GERÇEK `</f:fields>`'e kadar
+eşleşip aradaki form-dışı `VBox`/`HBox`/`Panel`'i T4 ERROR sayıyordu (build DURDURAN
+yanlış-pozitif); T2/T3 aynı sınıftan WARN üretiyordu. Maske satır sonlarını KORUR ⇒
+satır numaraları ham dosyayla aynıdır; ekrana basılan metin yine HAM satırdır.
+Sınır (bilerek): kapanmamış `<!--` maskelenmez (taranmaya devam eder, fail-closed yön).
+Aynı maskeleme `checklist_check._xml_kod` (FE-07/FE-33) ile birebir aynıdır.
 
 Kullanım:
     python scripts/validators/check_ui5_freestyle_traps.py
@@ -95,6 +100,14 @@ _T3_PATTERN = re.compile(r'<core:Title\b')
 _T4_FIELDS_RE = re.compile(r'<(?:\w+:)?fields\b[^>]*>(.*?)</(?:\w+:)?fields\s*>', re.DOTALL)
 _T4_CONTAINER_RE = re.compile(r'<(?:\w+:)?(HBox|VBox|FlexBox|Panel)\b')
 
+# --- XML yorum maskesi (Q386, 2026-11-02): T2/T3/T4 yalnız yorum DIŞINI görür. Yorumun
+#     satır sonu dışındaki her karakteri boşluk olur → satır sayısı ve ofsetler değişmez.
+_XML_YORUM_RE = re.compile(r'<!--.*?-->', re.DOTALL)
+
+
+def _xml_yorum_maskele(metin: str) -> str:
+    return _XML_YORUM_RE.sub(lambda m: re.sub(r'[^\n]', ' ', m.group(0)), metin)
+
 
 def _iter_ui_files():
     if not ERP.exists():
@@ -131,6 +144,9 @@ def _scan():
         # artık dosya genelinde tutuluyor; satır numaraları ham dosyayla AYNI kalır
         # ve ekrana basılan metin yine HAM satırdır (bağlam kaybolmasın).
         js_kodlar = dict(js_kod("\n".join(lines))) if is_js else {}
+        # Q386: XML yorumları maskeli içerik — satır sayısı `lines` ile AYNI.
+        xml_icerik = _xml_yorum_maskele("\n".join(lines)) if is_xml else ""
+        xml_satirlar = xml_icerik.split("\n") if is_xml else []
         for i, ln in enumerate(lines, 1):
             stripped = ln.strip()
             if is_js:
@@ -140,14 +156,15 @@ def _scan():
                 if any(p.search(kod) for p in _T1_PATTERNS):
                     findings.append(("ERROR", "T1 V2-nav `_X` (→ to_X)", f, i, stripped[:120]))
             if is_xml:
-                if _T2_PATTERN.search(ln):
+                kod = xml_satirlar[i - 1]
+                if _T2_PATTERN.search(kod):
                     # WARN: filtre "kaç kayıt" sayaç input'u meşru istisna; grid/miktar input'u DEĞİL.
                     findings.append(("WARN", "T2 type=Number (grid/miktar ise → type=Text)", f, i, stripped[:120]))
-                if _T3_PATTERN.search(ln):
+                if _T3_PATTERN.search(kod):
                     findings.append(("WARN", "T3 core:Title (VBox/HBox/CSSGrid child ise crash → sap.m.Title)", f, i, stripped[:120]))
         # T4 (multiline): <f:fields> içi layout-container → Form/ColumnLayout render-crash (FE-33)
         if is_xml:
-            content = "\n".join(lines)
+            content = xml_icerik
             for m in _T4_FIELDS_RE.finditer(content):
                 cm = _T4_CONTAINER_RE.search(m.group(1))
                 if cm:
@@ -168,7 +185,7 @@ def main() -> int:
     warns = [x for x in findings if x[0] == "WARN"]
 
     if not findings:
-        print("Freestyle UI5 tuzak kontrolü: temiz (T1/T2/T3 yok)." + KAPSAM.ek())
+        print("Freestyle UI5 tuzak kontrolü: temiz (T1/T2/T3/T4 yok)." + KAPSAM.ek())
         return 0
 
     for sev, trap, f, ln, text in findings:

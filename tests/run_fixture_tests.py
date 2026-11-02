@@ -542,6 +542,10 @@ OZEL_TESTLER = [
      "check_ui5_freestyle_traps: `startswith('*')` yalniz hizali JSDoc'u atliyordu -> "
      "yildizsiz blok yorumu T1 ERROR (build DURDURAN yanlis-pozitif, B2-06); "
      "`_T1_PATTERNS` DEGISMEDI (S1)"),
+    ("ui5_xml_yorumu",
+     "check_ui5_freestyle_traps: XML `<!-- -->` yorumu T2/T3/T4 taramasindan ONCE satir "
+     "korunarak maskelenir (Q386; yorumdaki `<f:fields>` T4 ERROR yanlis-pozitifi); "
+     "K*/E* gercek ihlal + satir no, U1 kapanmamis yorum SINIRI, 3. baglam fragment+CRLF"),
     ("imza_cok_satirli_type_c",
      "check_method_param_type_c: `TYPE c` \\n `LENGTH 100` sarili imza kaciyordu (B2-11) — "
      "gate'in var olus sebebi olan satirsiz-400 senaryosunun ta kendisi; N1 = nokta ile "
@@ -999,9 +1003,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/validators/check_list_view_grid.py", ("V:check_list_view_grid", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_ui5_freestyle_traps.py",
      ("V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi", "O:ui5_t1_tirnak_sinifi",
-      "O:ui5_blok_yorumu"),
+      "O:ui5_blok_yorumu", "O:ui5_xml_yorumu"),
      "G1 çifti + T1 tırnak-sınıfı korpusu + blok-yorumu FP korpusu (üçü de AYNI T1 "
-     "desenlerini ölçer: desen/tarama-katmanı ayrımı ancak birlikte kanıtlanır)"),
+     "desenlerini ölçer: desen/tarama-katmanı ayrımı ancak birlikte kanıtlanır) + XML "
+     "yorum maskesi korpusu (T2/T3/T4, Q386)"),
     ("scripts/validators/check_filter_search_pattern.py",
      ("V:check_filter_search_pattern", "O:validator_kapsam_paydasi",
       "O:filtre_yorum_ve_tirnak"),
@@ -1648,7 +1653,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/sap_client.py", ("O:sql_sure_birimi",),
      "`run_sql_query` execution_time_ms + geriye uyumlu execution_time (ms)"),
     # 2026-11-02 Issue #381. Validator satirlarina BILEREK eklenmedi: b0_secim P2 birlesim
-    # sayisi check_ui5_freestyle_traps icin pinli (9) — baglanti istenirse ikisi birlikte guncellenir.
+    # sayisi check_ui5_freestyle_traps icin pinli (10; Q386 ile 9->10) — baglanti istenirse ikisi birlikte guncellenir.
     ("playbook/templates/ui5-freestyle/**", ("O:ui5_freestyle_sablon",),
      "freestyle UI5 sablonu: ortak govde + surum parcalari + backend referansi"),
 ]

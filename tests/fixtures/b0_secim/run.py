@@ -131,13 +131,14 @@ kontrol("P1b bölüm-1 validator → kendi bad/good çifti + K1 payda korpusu + 
 #   2026-08-28'de 4'ten 5'e çıktı (`O:ui5_blok_yorumu` — B2-06 blok-yorumu FP'si).
 #   Sayıyı gevşetmek (`>=` / alt-küme) çapayı öldürür; HARİTA ile BU SATIR birlikte
 #   güncellenir. 2026-10-18: ortak checklist programı `_T1_PATTERNS`/`_T4_*` kullanıyor →
-#   `O:checklist_check` (8 → 9).
+#   `O:checklist_check` (8 → 9). 2026-11-02 (Q386): XML yorum maskesi korpusu
+#   `O:ui5_xml_yorumu` (9 → 10).
 secim, _ = sec("scripts/build_core_index.py",
                "scripts/validators/check_ui5_freestyle_traps.py")
-kontrol("P2 çok dosya → BİRLEŞİM (9 birim)",
+kontrol("P2 çok dosya → BİRLEŞİM (10 birim)",
         secim == {"O:core_index_kapsam", "O:core_index_siralama",
                   "O:sap_gate_skip_sozlesmesi", "O:team_setup_sablon_sapmasi",
-                  "O:ui5_t1_tirnak_sinifi", "O:ui5_blok_yorumu",
+                  "O:ui5_t1_tirnak_sinifi", "O:ui5_blok_yorumu", "O:ui5_xml_yorumu",
                   "V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi",
                   "O:checklist_check"},
         f"alınan={secim}")
