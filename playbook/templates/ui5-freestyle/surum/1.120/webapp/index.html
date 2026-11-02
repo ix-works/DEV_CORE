@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><UYGULAMA_BASLIGI></title>
+  <style>
+    html, body, body > div, #container, #container-uiarea { height: 100%; }
+  </style>
+  <!--
+    SÜRÜM PARÇASI (1.120 hattı, UI5 >= 1.120): bootstrap öznitelik adları SÜRÜME BAĞLIDIR. Bu sürüm çok kelimeli
+    adları (resource-roots, on-init, compat-version, frame-options) camelize eder (1.120.52 ui5loader-autoconfig).
+    1.71 bunu YAPMAZ — kardeş dosya surum/1.71/webapp/index.html tek kelime küçük harf yazar.
+    std/03 §2.5: UI5 backend'in KENDİ kopyasından, kök-göreli yolla yüklenir (CDN pin'i YOK; patch'ler takvimle silinir).
+    data-sap-ui-theme: README §3'teki ölçüm kuralıyla seçilir (sap_horizon YA DA sap_fiori_3) — <TEMA> yer tutucusu.
+    data-sap-ui-libs YOK (kütüphaneler manifest'te).
+  -->
+  <script
+    id="sap-ui-bootstrap"
+    src="/sap/public/bc/ui5_ui5/resources/sap-ui-core.js"
+    data-sap-ui-theme="<TEMA>"
+    data-sap-ui-language="tr"
+    data-sap-ui-resource-roots='{ "com.example.alan.uygulama": "./" }'
+    data-sap-ui-on-init="module:sap/ui/core/ComponentSupport"
+    data-sap-ui-compat-version="edge"
+    data-sap-ui-async="true"
+    data-sap-ui-frame-options="trusted"
+  ></script>
+</head>
+<body class="sapUiBody sapUiSizeCompact" id="content">
+  <div
+    data-sap-ui-component
+    data-name="com.example.alan.uygulama"
+    data-id="container"
+    data-settings='{"id" : "com.example.alan.uygulama"}'
+    data-handle-validation="true"
+  ></div>
+</body>
+</html>

@@ -1,0 +1,2 @@
+/* Uygulamaya özel stil. Sınıf adlarına uygulama öneki ver (ör. .zsd001...) — tema değişkenleriyle çakışmasın.
+   Şablon kendi sınıfını TANIMLAMAZ: kullanılmayan sınıf bırakmak, kopyada ölü kural üretir. */

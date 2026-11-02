@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><UYGULAMA_BASLIGI></title>
+  <style>
+    html, body, body > div, #container, #container-uiarea { height: 100%; }
+  </style>
+  <!--
+    SÜRÜM PARÇASI (1.71 hattı): bootstrap öznitelik adları TEK KELİME KÜÇÜK HARF yazılır (oninit, resourceroots,
+    compatversion, frameoptions). 1.71.85 tire→camel dönüşümü kapalıdır (jquery.sap.global-dbg.js: yalnız
+    toLowerCase) ve ayar anahtarı küçük harfle aranır (sap/ui/core/Configuration-dbg.js) ⇒ "resource-roots" /
+    "on-init" 1.71'de TANINMAZ, uygulama açılmaz. Biçim 1.71.85 demokit cart index.html'iyle aynıdır.
+    std/03 §2.5: UI5 backend'in KENDİ kopyasından, kök-göreli yolla yüklenir (CDN pin'i YOK; patch'ler takvimle silinir).
+    data-sap-ui-theme: README §3'teki ölçüm kuralıyla seçilir (sap_horizon YA DA sap_fiori_3) — <TEMA> yer tutucusu.
+    data-sap-ui-libs YOK (kütüphaneler manifest'te).
+  -->
+  <script
+    id="sap-ui-bootstrap"
+    src="/sap/public/bc/ui5_ui5/resources/sap-ui-core.js"
+    data-sap-ui-theme="<TEMA>"
+    data-sap-ui-language="tr"
+    data-sap-ui-resourceroots='{ "com.example.alan.uygulama": "./" }'
+    data-sap-ui-oninit="module:sap/ui/core/ComponentSupport"
+    data-sap-ui-compatversion="edge"
+    data-sap-ui-async="true"
+    data-sap-ui-frameoptions="trusted"
+  ></script>
+</head>
+<body class="sapUiBody sapUiSizeCompact" id="content">
+  <div
+    data-sap-ui-component
+    data-name="com.example.alan.uygulama"
+    data-id="container"
+    data-settings='{"id" : "com.example.alan.uygulama"}'
+    data-handle-validation="true"
+  ></div>
+</body>
+</html>

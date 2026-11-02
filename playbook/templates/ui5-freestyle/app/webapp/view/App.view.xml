@@ -1,0 +1,7 @@
+<mvc:View
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+  displayBlock="true"
+  controllerName="com.example.alan.uygulama.controller.App">
+  <App id="app" busy="{ui>/busy}" busyIndicatorDelay="0"/>
+</mvc:View>
