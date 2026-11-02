@@ -141,7 +141,7 @@ def main() -> int:
             if rc < 0:
                 kontrol(False, ad, cikti)
                 continue
-            # ⚠ Çapa `[İHLAL]`dir, "T1" DEĞİL: temiz çıktı da "T1/T2/T3 yok" der →
+            # ⚠ Çapa `[İHLAL]`dir, "T1" DEĞİL: temiz çıktı da "T1/T2/T3/T4 yok" der →
             #   dize araması sahte-KIRMIZI verirdi (ölçüldü, ilk yazımda düştü).
             ok = (rc == 1 and "[İHLAL]" in cikti and "T1 V2-nav" in cikti) if fail_bekleniyor \
                 else (rc == 0 and "[İHLAL]" not in cikti)

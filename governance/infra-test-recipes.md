@@ -1956,7 +1956,7 @@ B2_GATE_KOK=/tmp/eski/scripts/validators python tests/fixtures/<ad>/run.py
   `.srvd` 15 FP nedeniyle EKLENMEMİŞTİ. Genişletme kanıtla yapılır, refleksle değil.
 
 ### ⚠ Bilinen SINIRLAR (bu turda KAPATILMADI — "ölçüldü ama dokunulmadı")
-1. `check_ui5_freestyle_traps` **XML dalı** (T2/T3) hâlâ ham satır bazlıdır: `<!-- -->`
+1. → **KAPANDI 2026-11-02 B91 (Q386)** — XML yorum maskesi T2/T3/T4'te. *(Eski metin:)* `check_ui5_freestyle_traps` **XML dalı** (T2/T3) hâlâ ham satır bazlıdır: `<!-- -->`
    içindeki `type="Number"` / `<core:Title` WARN üretir. WARN build durdurmaz ⇒ öncelik
    düşük, ama sınıf aynıdır.
 2. `check_filter_search_pattern` `_CASE_SENS` alt-dizge eşleşir: `notCaseSensitive: false`
@@ -3569,3 +3569,22 @@ python tests/run_battery.py sql_sure_birimi --kardes sorgu_araclari_durustlugu s
 
 - 3 mutasyon kipi (ilan: `saniye-etiketi` S2 · `ms-anahtari-yok` S1 · `json-eski-anahtar-yok` S3). ⛔ **S3 SİLİNMEZ:** eski `execution_time` anahtarı JSON tüketicileri için korunur; kaldırmak kırıcı değişikliktir.
 - Birimin ms olduğunun kanıtı canlı ölçümdür (changelog satırı: değer 24.407 / duvar 0.224 s); fixture etiketi ve anahtarları kilitler, birimi ÖLÇMEZ.
+
+## B91 — `check_ui5_freestyle_traps` XML yorum maskesi (T2/T3/T4) + bug-checklist tablo bütünlüğü (Q386 + Q347, 2026-11-02)
+
+```
+python tests/fixtures/ui5_xml_yorumu/run.py                          # 16/16 (gerçek giriş noktası, alt süreç)
+python tests/fixtures/ui5_xml_yorumu/run.py --mutasyon-maske-yok     # rc 1 = yalnız ilan edilen küme düştü
+python tests/run_battery.py ui5_xml_yorumu --kardes changelog_gate ui5_blok_yorumu ui5_t1_tirnak_sinifi --precommit
+python scripts/validators/checklist_check.py --repo . --reach            # tablo değişikliğinde önce/sonra AYNI çıktı
+python scripts/validators/checklist_check.py --repo . --harita-denetim   # map/BE/FE/DOC sayıları AYNI
+```
+
+- **Senaryolar:** N0 yorumsuz FP çapası · N4a Q386 kontrol grubu girdisi (yorumda `<f:fields>` + form-dışı `VBox`) · N4b yorumdaki ölü `<f:fields><HBox>` örneği · N2a/N2b yorumdaki `type="Number"` (tek satır / çok-satırlı yorumun orta satırı) · N3 yorumdaki `<core:Title` · K4/K2/K3 gerçek ihlaller · K4b çok-satırlı yorumdan SONRA gerçek ihlal, satır no doğru · E1 yorumla aynı satırda yorum kapandıktan sonra gerçek T2 · E3 yorumda `<f:fields>` + ardından gerçek ihlal → tek ERROR · U1 kapanmamış `<!--` maskelenmez (fail-closed sınır) · S1 temiz çıktı `T1/T2/T3/T4 yok` · **3. bağlam** N4c/K4c fragment dosyası + `form:` öneki + CRLF (bayt olarak yazılır).
+- **Mutasyon `--mutasyon-maske-yok`:** gerçek `main()` bir sarmalayıcıdan koşulur, `_xml_yorum_maskele` kimlik fonksiyonuyla değiştirilir. Önce aynı sarmalayıcı YAMASIZ koşulur (kum tabanı tam yeşil değilse rc 3). İlan edilen düşüş: {N2a, N2b, N3, N4a, N4b, N4c} → rc 1; başka küme → rc 2 (SAPMA); yama noktası yoksa rc 3.
+- **Kontrol grubu (eski kod, aynı girdi):** `UI5_GATE_KOK=<b5b8040 validators kopyası>` → 9/16 (ilan edilen altı vektör + S1 FAIL). bölüm-1 V-çifti: `good/` view'ı eski kodda rc 1, yeni kodda rc 0.
+- ⛔ **K*/E*/U1 SİLİNMEZ:** FP düzeltilirken gerçek pozitifin kaybolmadığını ve maskenin yorumun dışına taşmadığını yalnız onlar gösterir. U1 bilinçli sınırdır; maskeyi kapanmamış yoruma genişletmek dosyanın gerisini kör eder.
+- ⚠ **Bilinen sınır (bug-gate 2026-11-02, LOW):** maske CDATA tanımaz — `<![CDATA[ … <!-- … ]]>` ardından gerçek ihlal ve dosyada sonra gelen gerçek bir `-->` varsa aradaki ihlal maskelenir (yanlış NEGATİF; eski kod yakalıyordu). Aynı davranış `checklist_check._xml_kod`'da önceden vardı (ortak regex). UI5 view'da CDATA içinde `<!--` nadir ⇒ düzeltilmedi; düzeltilirse iki otoritede birlikte.
+- **Üçüncü otorite:** `checklist_check._xml_kod` (FE-07/FE-33) aynı maskeyi kullanır. İkisinden biri değişirse öbürü de aynı girdiyle ölçülür (aynı dosyada farklı hüküm = Q386'nın ikinci yüzü).
+- **Q347 ölçüm reçetesi (render):** markdown-it `commonmark` + `table` ile her checklist'te ① tablo sayısı ② tablo İÇİNDEKİ `| FE-nn |`/`| BE-nn |` satır sayısı = dosyadaki ham ID satırı sayısı ③ başlık satırı olmayan `|` bloğu = 0. Notlar (`>`) tablonun İÇİNE konmaz; tablo bölgesinde boş satır tabloyu böler.
+- **ÖLÇÜLMEDİ:** canlı UI korpusunda yeni maskenin T2/T3 WARN sayısını ne kadar düşürdüğü (bu tur yalnız fixture).
