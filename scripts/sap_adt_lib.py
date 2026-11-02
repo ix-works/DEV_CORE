@@ -4556,7 +4556,14 @@ class SAPADTClient:
             lookback_seconds: How far back in seconds to look (default: 60)
 
         Returns:
-            list of transport numbers (strings), empty list if none found or query fails
+            list of transport numbers (strings). Empty list ONLY for a valid
+            datapreview response with no matching rows.
+
+        Raises:
+            SAPADTError: the list could NOT be read (non-200, network error,
+                body that is not XML, no column metadata, no TRKORR column).
+                "Could not read" is never reported as "no ghosts" (Q350; same
+                contract as get_object_revisions, Issue #302).
         """
         from datetime import datetime, timedelta
 
@@ -4575,6 +4582,8 @@ class SAPADTClient:
             f"AND AS4TIME >= '{time_str}'"
         )
 
+        endpoint = '/sap/bc/adt/datapreview/freestyle'
+        okunamadi = "Ghost transport list could not be read (E070 query)"
         try:
             if not self.csrf_token:
                 self.fetch_csrf_token()
@@ -4583,43 +4592,63 @@ class SAPADTClient:
             headers['Content-Type'] = 'text/plain'
 
             response = self.session.post(
-                f"{self.url}/sap/bc/adt/datapreview/freestyle",
+                f"{self.url}{endpoint}",
                 headers=headers,
                 params={'rowNumber': 50},
                 data=sql_satirlarini_kir(query).encode('utf-8'),   # 255 satır sınırı
                 timeout=self.timeout_default
             )
+        except SAPADTError:
+            raise
+        except requests.exceptions.RequestException as e:
+            raise SAPADTError(f"{okunamadi}: {type(e).__name__}: {e}", endpoint=endpoint)
 
-            if response.status_code != 200:
-                return []
+        if response.status_code != 200:
+            raise SAPADTError(okunamadi, status_code=response.status_code,
+                              response_text=(response.text or '')[:500], endpoint=endpoint)
 
+        try:
             root = ET.fromstring(response.text)
-            ns = {'dp': 'http://www.sap.com/adt/dataPreview'}
-            columns = root.findall('.//dp:columns', ns)
-            if not columns:
+        except ET.ParseError as e:
+            raise SAPADTError(f"{okunamadi}: response is not XML ({e})",
+                              status_code=response.status_code,
+                              response_text=(response.text or '')[:500], endpoint=endpoint)
+        ns = {'dp': 'http://www.sap.com/adt/dataPreview'}
+        columns = root.findall('.//dp:columns', ns)
+        if not columns:
+            # 0 satırlı yanıtın kolonsuz gelip gelmediği canlıda ÖLÇÜLMEDİ ⇒ açıkça
+            # `totalRows` = 0 diyen gövde meşru boştur; kolonsuz VE sayısız gövde
+            # "boş sonuç" değil, tanınmayan yanıttır.
+            toplam = root.find('.//dp:totalRows', ns)
+            if toplam is not None and (toplam.text or '').strip() == '0':
                 return []
+            raise SAPADTError(f"{okunamadi}: no column metadata in response",
+                              status_code=response.status_code,
+                              response_text=(response.text or '')[:500], endpoint=endpoint)
 
-            col_map = {}
-            for col in columns:
-                meta = col.find('dp:metadata', ns)
-                if meta is not None:
-                    name = meta.get('{http://www.sap.com/adt/dataPreview}name', '')
-                    col_map[name] = col
+        col_map = {}
+        for col in columns:
+            meta = col.find('dp:metadata', ns)
+            if meta is not None:
+                name = meta.get('{http://www.sap.com/adt/dataPreview}name', '')
+                col_map[name] = col
 
-            trkorr_col = col_map.get('TRKORR')
-            if trkorr_col is None:
-                return []
+        trkorr_col = col_map.get('TRKORR')
+        if trkorr_col is None:
+            raise SAPADTError(f"{okunamadi}: TRKORR column missing in response",
+                              status_code=response.status_code,
+                              response_text=(response.text or '')[:500], endpoint=endpoint)
 
-            ghosts = []
-            for cell in trkorr_col.findall('dp:data', ns):
-                val = cell.get('{http://www.sap.com/adt/dataPreview}value', '').strip()
-                if val:
-                    ghosts.append(val)
+        # Değer `<dataSet><data>X</data></dataSet>` ELEMAN METNİNDEDİR — kardeş
+        # ayrıştırıcılarla aynı biçim (sap_client `_find_existing_transport`). Eski kod
+        # doğrudan-çocuk `data` + `value` özniteliği okuyup dolu yanıtta da [] dönüyordu.
+        ghosts = []
+        for cell in trkorr_col.findall('.//dp:data', ns):
+            val = (cell.text or '').strip()
+            if val:
+                ghosts.append(val)
 
-            return ghosts
-
-        except Exception:
-            return []
+        return ghosts
 
     def _parse_activation_response(self, response, object_name):
         """Parse a chkl: or ioc: activation response and return a result dict.

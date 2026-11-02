@@ -60,8 +60,12 @@ def main():
                 'program': '/sap/bc/adt/programs/programs',
                 'prog': '/sap/bc/adt/programs/programs',
                 'report': '/sap/bc/adt/programs/programs',
-                'table': '/sap/bc/adt/ddic/ddl/sources',
-                'tabl': '/sap/bc/adt/ddic/ddl/sources',
+                # Q351: tablo DDIC tablo ucundadır (object_types 'table' url_path ile aynı);
+                # eski ddl/sources eşlemesi 404 → hata veriyordu.
+                'table': '/sap/bc/adt/ddic/tables',
+                'tabl': '/sap/bc/adt/ddic/tables',
+                # ⚠ 'view'/'viewd' hedef tipi (DDLS · DDLX · klasik görünüm) karara bağlı
+                # değil — tahminle değiştirilmedi (Q351, lider kararı bekliyor).
                 'view': '/sap/bc/adt/ddic/ddlx/sources',
                 'viewd': '/sap/bc/adt/ddic/ddlx/sources',
             }
