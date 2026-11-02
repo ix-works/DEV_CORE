@@ -28,9 +28,12 @@ VEKTÖRLER
   S6  BOZUK önbellek → süresi dolmuş sayılır (çökmeden) → sayım doğru
   S7  her koşumda exit 0 + geçerli JSON (oturum açılışı BOZULMAZ)
   S8  3. BAĞLAM: origin'siz core deposu → satır YOK, exit 0
+  S9  Q349: `origin/main` ADLI tag HEAD'de, gerçek uzak ref 1 ileride → yine "1 commit"
+      (kısa ad tag'e çözülseydi gerilik sessizce 0 olurdu; kurulumun gölgelediği ölçülür)
 MUTASYON (bugünkü kaynaktan; çapa tam 1 kez bulunmazsa exit 2):
   --mutasyon-onbellek-sayi  sayı önbellekteki `behind`'den okunur → S1 · S2 düşer
   --mutasyon-her-fetch      throttle kalkar (her çağrıda fetch)   → S4 düşer
+  --mutasyon-kisa-ad        `HEAD..origin/main` kısa ada döner    → yalnız S9 düşer
 TABAN (eski kod): --kaynak <session_start.py>
 
 Çıkış: 0 beklendiği gibi · 1 sapma · 2 KURULAMADI
@@ -59,7 +62,7 @@ REPO = HERE.parents[2]
 HOOK = REPO / "scripts" / "hooks" / "session_start.py"
 GERI_RE = re.compile(r"DEV_CORE origin'in (\d+) commit GERISINDE")
 
-GECERLI_KIP = ("--mutasyon-onbellek-sayi", "--mutasyon-her-fetch")
+GECERLI_KIP = ("--mutasyon-onbellek-sayi", "--mutasyon-her-fetch", "--mutasyon-kisa-ad")
 KIP: set[str] = set()
 TABAN: Path | None = None
 _a = sys.argv[1:]
@@ -106,6 +109,8 @@ def _kaynak() -> str | None:
                       "        behind = _core_geri_sayisi()\n", "onbellek-sayi")
     if "--mutasyon-her-fetch" in KIP:
         m = _degistir(m, "    if simdi - son_fetch > 3600:  # saatte 1\n", "    if True:\n", "her-fetch")
+    if "--mutasyon-kisa-ad" in KIP:
+        m = _degistir(m, '"HEAD..refs/remotes/origin/main"]', '"HEAD..origin/main"]', "kisa-ad")
     return m
 
 
@@ -292,6 +297,18 @@ def main() -> int:
         kayit(rc, ctx, n)
         kontrol("S6 BOZUK onbellek → cokmeden suresi dolmus sayilir, sayim dogru ('1 commit')",
                 n == 1, f"bildirilen={n} rc={rc}")
+
+        # S9 — Q349: `origin/main` ADLI tag HEAD'de; gercek uzak ref 1 ileride
+        _git(core, "tag", "origin/main", "HEAD")
+        kisa = _git(core, "rev-parse", "origin/main", check=False)
+        golge = kisa == _git(core, "rev-parse", "HEAD") != _git(core, "rev-parse",
+                                                                 "refs/remotes/origin/main")
+        onbellek(p, {"ts": time.time()})
+        rc, ctx, n = kos(hook, p)
+        kayit(rc, ctx, n)
+        _git(core, "tag", "-d", "origin/main")
+        kontrol("S9 Q349 `origin/main` ADLI tag HEAD'de (kisa ad golgeli) → yine '1 commit'",
+                golge and n == 1, f"golge={golge} bildirilen={n} rc={rc}")
 
         # S8 — 3. bağlam: origin'siz core
         yalin = tmp / "originsiz_core"

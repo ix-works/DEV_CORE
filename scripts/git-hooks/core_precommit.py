@@ -204,8 +204,11 @@ def _changelog_dalda_degisti() -> bool:
     Sınır: TAZE dalda (merge-base == HEAD == origin/main) davranış ESKİSİYLE
     BİREBİR — gevşeme yalnız dal-içi. origin/main çözülemezse fail-closed
     (False döner → eski katı yol).
+    Q349: TAM ref (`refs/remotes/origin/main`) — `origin/main` ADLI bir tag kısa adı
+    gölgeler; tag daha eski bir commit'teyse taban geriye kayar ve main'in kendi
+    changelog değişikliği "dalda değişti" sayılır (sessiz GEÇİŞ; changelog_amend T1).
     """
-    base = _git("merge-base", "HEAD", "origin/main").strip()
+    base = _git("merge-base", "HEAD", "refs/remotes/origin/main").strip()
     if not base:
         return False
     out = _git("diff", "--cached", "--name-only", base, "--", CHANGELOG_PATH)

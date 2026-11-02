@@ -22,6 +22,10 @@ PR #300 bug-gate (2026-09-25): F1 tag+dal ayni ad (V10h; M17) · F2 `--no-rename
   da kosar (V12/V12b; M18/M19) · F5 ALARM'a "yerel main bayat olabilir" notu (V10j; M20).
 PR #300 bug-gate 2 B1 (2026-09-25): `main` tarafi `refs/heads/main` — `main` ADLI tag
   dal ucunda (V10k/V10l; M21 merge-base · M22 ikinci diff · M23 ek sinyal cherry).
+Q334 (2026-11-02): ③ `--wt-ac`'in KENDI provizyon urunlerini (bag · rules overlay · kopya ·
+  calisma-zamani isareti) haric tutar; urunler GERCEK `provision_worktree` ile kumdaki sahte
+  core'a uretilir (V13), gercek pozitifler hala yakalanir (V13b–V13h; M24–M28).
+Q349 (2026-11-02): `--wt-ac` tabani `refs/remotes/origin/main` — `origin/main` ADLI tag (V14; M29).
 
 UC BAGLAM (F3):
   (1) bilinen-BOZUK  : fix sokulmus kod (mutasyon dali)
@@ -377,6 +381,217 @@ def v12_kirli_her_kolda(ts, kok: Path) -> None:
         git(proje, "worktree", "remove", "--force", str(w))
 
 
+def _sahte_core(kok: Path) -> Path:
+    """Provizyonun HEDEFI: gercek core'a DOKUNMADAN `junctions()`in kuracagi agac
+    (`claude/{agents,skills,commands,rules}` + `CLAUDE.core.md`); git deposu (DEV_CORE gibi
+    `?? core/` tek kayit gorunsun)."""
+    sc = kok / "SAHTE_CORE"
+    for t in ("agents", "skills", "commands", "rules"):
+        (sc / "claude" / t).mkdir(parents=True)
+        (sc / "claude" / t / f"{t}-ornek.md").write_text(
+            f"---\nname: {t}-ornek\ndescription: ornek\n---\n{t}\n", encoding="utf-8")
+    (sc / "CLAUDE.core.md").write_text("# sahte cekirdek\n", encoding="utf-8")
+    git(sc, "init", "-q", "-b", "main")
+    git(sc, "config", "user.email", "fixture")
+    git(sc, "config", "user.name", "fixture")
+    git(sc, "add", "-A")
+    git(sc, "commit", "-q", "-m", "sahte core")
+    return sc
+
+
+def _baglari_kaldir(ts, w: Path) -> None:
+    """Kum temizligi: BAG ONCE (hedefe girilmez) — wt_kapat'in sirasiyla ayni."""
+    for rel in ("core", ".claude/agents", ".claude/skills", ".claude/commands", ".claude/rules"):
+        b = w / rel
+        if ts.junction_hedefi(b) is not None:
+            try:
+                ts._bag_kaldir(b)
+            except OSError:
+                pass
+
+
+def v13_provizyon_gurultusu(ts, kok: Path) -> None:
+    """Q334: `--wt-ac`'in KENDI provizyon urunleri ③'te izlenmeyen/hasat adayi SAYILMAZ;
+    provizyon yolunda ama icerigi FARKLI dosya ve provizyon disi is HALA yakalanir.
+
+    GERCEK GIRIS NOKTASI: urunler `ts.provision_worktree`in kendisiyle uretilir (CORE_ROOT
+    kumdaki sahte core'a cevrilir — gercek core'a bag kurulmaz). Kontrol grubu satirda:
+    provizyon INFO satiri haric tutulan kayit sayisini >0 gostermeli (yoksa vektor bos olcer).
+    """
+    sc = _sahte_core(kok)
+    # `utils.claude_overlay` GERCEK kaynaktan yuklenir (sahte core'da scripts/ yok)
+    if str(KOK / "scripts") not in sys.path:
+        sys.path.insert(0, str(KOK / "scripts"))
+    eski_core = ts.CORE_ROOT
+    ts.CORE_ROOT = sc
+    proje = kok / "PVPROJ"
+    proje.mkdir()
+    (proje / "a.txt").write_text("a\n", encoding="utf-8")
+    # DEV_CORE `.gitignore`'unun ilgili satirlari (+ conn/ daraltilmis dizin kaydi icin)
+    (proje / ".gitignore").write_text(
+        ".conn_adt\nconn/\n.claude/agent-memory/\n.claude/.itg_shown.json\n", encoding="utf-8")
+    git(proje, "init", "-q", "-b", "main")
+    git(proje, "config", "user.email", "fixture")
+    git(proje, "config", "user.name", "fixture")
+    git(proje, "add", "-A")
+    git(proje, "commit", "-q", "-m", "taban")
+    (proje / ".conn_adt").write_text("SAP_HOST=<PLACEHOLDER>\n", encoding="utf-8")
+    (proje / "conn").mkdir()
+    (proje / "conn" / "dev.conn").write_text("tier=dev\n", encoding="utf-8")
+
+    def ac(ad: str) -> Path:
+        w = ts.wt_yolu(proje, ad)
+        w.parent.mkdir(parents=True, exist_ok=True)
+        git(proje, "worktree", "add", "-q", "-b", ad, str(w), "main")
+        with contextlib.redirect_stdout(io.StringIO()):
+            ts.provision_worktree(w, proje)
+        # hook'un oturum acilisinda yazdigi calisma-zamani isareti (provizyon disi, ozgun is degil)
+        (w / ".claude" / ".itg_shown.json").write_text('{"sid": "x"}', encoding="utf-8")
+        return w
+
+    acilan: list[Path] = []
+    try:
+        temiz = ac("pv-temiz")
+        acilan.append(temiz)
+        tampon = io.StringIO()
+        with contextlib.redirect_stdout(tampon):
+            rc = ts.wt_denetim(proje)
+        cikti = tampon.getvalue()
+
+        def uc(ad, metin):
+            return next((s for s in metin.splitlines()
+                         if "izlenen/izlenmeyen" in s and f"③ {ad}:" in s), "")
+
+        def pv(ad, metin):
+            return next((s for s in metin.splitlines()
+                         if "provizyon urunu" in s and f"③ {ad}:" in s), "")
+        haric = pv("pv-temiz", cikti)
+        kontrol_grubu = ("bag " in haric and "overlay " in haric and "kopya " in haric
+                         and "calisma-zamani " in haric)
+        sonuc("V13 provizyonlu worktree: ③ izlenen/izlenmeyen 0 + HASAT 0 + denetim TEMIZ (rc 0)",
+              kontrol_grubu and rc == 0 and "izlenen/izlenmeyen 0 kayit" in uc("pv-temiz", cikti)
+              and "0'i HASAT ADAYI" in uc("pv-temiz", cikti),
+              f"rc={rc} · {uc('pv-temiz', cikti).strip()} · {haric.strip()[:160]}")
+
+        # --- NEGATIF kollar: gercek is / icerigi farkli kopya HALA yakalanmali ---
+        oz = ac("pv-ozgun")
+        acilan.append(oz)
+        (oz / "yeni_is.py").write_text("print('commit edilmemis')\n", encoding="utf-8")
+        cn = ac("pv-conn")
+        acilan.append(cn)
+        (cn / ".conn_adt").unlink()              # hardlink'i kir: ELLE degismis kopya
+        (cn / ".conn_adt").write_text("SAP_HOST=<BASKA>\n", encoding="utf-8")
+        cd = ac("pv-conndir")
+        acilan.append(cd)
+        (cd / "conn" / "dev.conn").write_text("tier=dev\nelle=1\n", encoding="utf-8")
+        rl = ac("pv-rules")
+        acilan.append(rl)
+        with open(rl / ".claude" / "rules" / "00-claude-core.md", "a", encoding="utf-8") as f:
+            f.write("ELLE EKLENEN SATIR\n")
+        bh = ac("pv-baghedef")
+        acilan.append(bh)
+        baska = kok / "BASKA_SKILLS"
+        baska.mkdir()
+        (baska / "yabanci.md").write_text("yabanci\n", encoding="utf-8")
+        ts._bag_kaldir(bh / ".claude" / "skills")
+        with contextlib.redirect_stdout(io.StringIO()):
+            ts.junction_kur(bh / ".claude" / "skills", baska)
+        mm = ac("pv-memory")
+        acilan.append(mm)
+        (mm / ".claude" / "agent-memory" / "infra-expert").mkdir(parents=True)
+        (mm / ".claude" / "agent-memory" / "infra-expert" / "MEMORY.md").write_text(
+            "hasat edilmemis ders\n", encoding="utf-8")
+        tampon = io.StringIO()
+        with contextlib.redirect_stdout(tampon):
+            rc2 = ts.wt_denetim(proje)
+        c2 = tampon.getvalue()
+        hasat = [s for s in c2.splitlines() if "③b" in s]
+        sonuc("V13b provizyon DISI izlenmeyen dosya -> ③ FAIL (izlenmeyen 1)",
+              "izlenen/izlenmeyen 1 kayit" in uc("pv-ozgun", c2) and rc2 == 1,
+              uc("pv-ozgun", c2).strip())
+        sonuc("V13c ELLE degismis `.conn_adt` (ana projeden FARKLI) -> HASAT ADAYI 1",
+              "1'i HASAT ADAYI" in uc("pv-conn", c2) and any("pv-conn" in s for s in hasat),
+              uc("pv-conn", c2).strip())
+        sonuc("V13d `conn/` icinde degismis dosya (daraltilmis dizin kaydi) -> HASAT ADAYI 1",
+              "1'i HASAT ADAYI" in uc("pv-conndir", c2), uc("pv-conndir", c2).strip())
+        sonuc("V13e elle degismis `rules` overlay kopyasi -> ③ FAIL (izlenmeyen 1)",
+              "izlenen/izlenmeyen 1 kayit" in uc("pv-rules", c2), uc("pv-rules", c2).strip())
+        sonuc("V13f BEKLENMEYEN hedefe giden `.claude/skills` bagi -> ③ FAIL (izlenmeyen 1)",
+              "izlenen/izlenmeyen 1 kayit" in uc("pv-baghedef", c2),
+              uc("pv-baghedef", c2).strip())
+        sonuc("V13g gitignore'lu ajan hafizasi (gercek is) -> HASAT ADAYI 1",
+              "1'i HASAT ADAYI" in uc("pv-memory", c2), uc("pv-memory", c2).strip())
+    finally:
+        for w in acilan:
+            _baglari_kaldir(ts, w)
+            git(proje, "worktree", "remove", "--force", str(w))
+        ts.CORE_ROOT = eski_core
+
+
+def v13h_izlenen_degisiklik(ts, kok: Path) -> None:
+    """Q334 sinir: haric tutma YALNIZ `??`/`!!` kayitlarina uygulanir. Provizyon/calisma-zamani
+    yoluyla AYNI adli ama IZLENEN bir dosyanin degisikligi (` M`) HALA FAIL."""
+    proje = kok / "IZPROJ"
+    (proje / ".claude").mkdir(parents=True)
+    (proje / ".claude" / ".itg_shown.json").write_text("{}\n", encoding="utf-8")
+    git(proje, "init", "-q", "-b", "main")
+    git(proje, "config", "user.email", "fixture")
+    git(proje, "config", "user.name", "fixture")
+    git(proje, "add", "-A")
+    git(proje, "commit", "-q", "-m", "taban")
+    w = ts.wt_yolu(proje, "iz-degisti")
+    w.parent.mkdir(parents=True, exist_ok=True)
+    git(proje, "worktree", "add", "-q", "-b", "iz-degisti", str(w), "main")
+    (w / ".claude" / ".itg_shown.json").write_text('{"degisti": 1}\n', encoding="utf-8")
+    cikti = denetim_kos(ts, proje)
+    sat = next((s for s in cikti.splitlines()
+                if "izlenen/izlenmeyen" in s and "③ iz-degisti:" in s), "")
+    sonuc("V13h IZLENEN dosyanin degisikligi (` M`, calisma-zamani yolunda) -> ③ FAIL 1",
+          "izlenen/izlenmeyen 1 kayit" in sat, sat.strip())
+    git(proje, "worktree", "remove", "--force", str(w))
+
+
+def v14_wt_ac_tag_golgesi(ts, kok: Path) -> None:
+    """Q349: `origin/main` ADLI tag varken `--wt-ac` yine GERCEK uzak ref'ten dal acar.
+
+    Eski kod kisa adla `worktree add` cagiriyordu → `fatal: ambiguous object name` (olculdu
+    git 2.54, exit 255). Provizyon bu vektorde ATLANIR (gercek core'a bag kurulmasin).
+    """
+    org = kok / "WAORIGIN.git"
+    git(kok, "init", "-q", "--bare", "-b", "main", str(org))
+    proje = kok / "WAPROJ"
+    proje.mkdir()
+    git(proje, "init", "-q", "-b", "main")
+    git(proje, "config", "user.email", "fixture")
+    git(proje, "config", "user.name", "fixture")
+    for i in range(2):
+        (proje / f"c{i}.txt").write_text(f"{i}\n", encoding="utf-8")
+        git(proje, "add", "-A")
+        git(proje, "commit", "-q", "-m", f"c{i}")
+    git(proje, "remote", "add", "origin", str(org))
+    git(proje, "push", "-q", "origin", "main")
+    ilk = git(proje, "rev-parse", "HEAD~1").stdout.strip()
+    uzak = git(proje, "rev-parse", "refs/remotes/origin/main").stdout.strip()
+    git(proje, "tag", "origin/main", ilk)
+    golge = git(proje, "rev-parse", "origin/main").stdout.strip() == ilk != uzak
+    eski_pv = ts.provision_worktree
+    ts.provision_worktree = lambda w, p: True
+    try:
+        tampon = io.StringIO()
+        with contextlib.redirect_stdout(tampon):
+            ok = ts.wt_ac(proje, "infra/wa-dal")
+    finally:
+        ts.provision_worktree = eski_pv
+    uc = git(proje, "rev-parse", "refs/heads/infra/wa-dal").stdout.strip()
+    sonuc("V14 Q349 `origin/main` ADLI tag varken --wt-ac GERCEK uzak ref'ten acar",
+          golge and ok and uc == uzak,
+          f"golge={golge} ok={ok} dal_ucu={uc[:8]} uzak={uzak[:8]} "
+          f"{tampon.getvalue().strip().splitlines()[-1][:160] if tampon.getvalue().strip() else ''}")
+    w = ts.wt_yolu(proje, "infra/wa-dal")
+    if w.exists():
+        git(proje, "worktree", "remove", "--force", str(w))
+
+
 def _salt_okunur_yap(d: Path) -> None:
     os.chmod(d, stat.S_IREAD if os.name == "nt" else (stat.S_IREAD | stat.S_IEXEC))
 
@@ -605,6 +820,12 @@ def tur(ts_mut=None, sl_mut=None, ss_mut=None, sadece=None) -> None:
             v10k_main_adli_tag(ts, kok)
         if sadece in (None, "kirli3"):
             v12_kirli_her_kolda(ts, kok)
+        if sadece in (None, "provizyon"):
+            v13_provizyon_gurultusu(ts, kok)
+        if sadece in (None, "provizyon_iz"):
+            v13h_izlenen_degisiklik(ts, kok)
+        if sadece in (None, "wtac"):
+            v14_wt_ac_tag_golgesi(ts, kok)
         if sadece in (None, "silme"):
             v11_salt_okunur_silme(ts, kok)
         if sadece in (None, "statusline"):
@@ -690,6 +911,23 @@ MUTASYONLAR = [
      ('"-z", "refs/heads/main", ref, "--")', '"-z", "main", ref, "--")'), "maintag"),
     ("M23 B1 ek sinyal cherry `refs/heads/main` -> kisa `main`", "team_setup",
      ('"cherry", "-v", "refs/heads/main",', '"cherry", "-v", "main",'), "maintag"),
+    # --- Q334: provizyon urunleri ③'te haric; gercek pozitif hala yakalanir ---
+    ("M24 Q334 haric tutma kalkar (eski davranis: provizyon = izlenmeyen)", "team_setup",
+     ('            sinif = sinifla(s[3:]) if s[:2] in ("??", "!!") else None',
+      "            sinif = None"), "provizyon"),
+    ("M25 Q334 kopya sinifi ICERIK esitligine bakmaz (yalniz varlik)", "team_setup",
+     ("            return a.is_file() and b.is_file() and a.read_bytes() == b.read_bytes()",
+      "            return a.is_file()"), "provizyon"),
+    ("M26 Q334 bag sinifi HEDEFE bakmaz (her bag taninir)", "team_setup",
+     ("                if h.resolve() == hedef.resolve():",
+      "                if True:"), "provizyon"),
+    ("M27 Q334 overlay sinifi manifest/hash kanitina bakmaz (dizindeki her dosya)", "team_setup",
+     ("            for ad in (ov.el_degmemis_core_kopyalari(p) or ()):",
+      "            for ad in [f.name for f in p.iterdir()]:"), "provizyon"),
+    ("M28 Q334 haric tutma IZLENEN degisiklige de uygulanir (` M`)", "team_setup",
+     ('if s[:2] in ("??", "!!") else None', "if True else None"), "provizyon_iz"),
+    ("M29 Q349 --wt-ac tabani kisa `origin/main`e doner", "team_setup",
+     ('taban: str = "refs/remotes/origin/main"', 'taban: str = "origin/main"'), "wtac"),
 ]
 
 

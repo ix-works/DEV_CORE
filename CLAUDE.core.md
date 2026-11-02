@@ -127,7 +127,8 @@
      listeler; `--no-renames` yoksa yeniden adlandırmada eski yol düşer, `refs/heads/` iki tarafta
      da yoksa aynı adlı tag dalı ya da `main`'i gölgeler); `git cherry -v`
      yalnız **ek sinyal** ⓒ `git status --short --ignored
-     --untracked-files=all` (izlenen = FAIL · gitignore'lu **scratch-dışı** = hasat adayı)
+     --untracked-files=all` (izlenen = FAIL · gitignore'lu **scratch-dışı** = hasat adayı; `--wt-ac`'in kendi
+     provizyonu — doğru hedefli bağ · manifest-eş overlay · ana projeyle bayt-eş kopya — hariç, değişmiş kopya hariç DEĞİL)
      ⓓ yetimlerde `git hash-object` → `git cat-file -e` + `gitdir`siz bayat metadata.
      ⛔ **`--is-ancestor` KULLANILMAZ** — squash-merge'de yanıltır (ölçüldü: 5 dalın 5'i
      "merge edilmemiş" göründü). ⛔ **`git cherry` hüküm DEĞİLDİR** — çok commit'li dal
