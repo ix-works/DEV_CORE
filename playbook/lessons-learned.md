@@ -1054,7 +1054,7 @@ Fixture/talimat-bakımı işi yapan herkes için (akış: [`howto-talimat-dosyas
   tetiğinde `sendBeacon` dahil hiçbir yöntem ulaşmadı ⇒ kapsam beyanına "ölçülemedi" yaz, yöntem hükmüne
   katma (varsayılan `page.close()` unload işleyicilerini hiç koşmaz — `runBeforeUnload:true` ver; o da kapanmayı
   BEKLEMEZ ⇒ hipotez, ölçülmedi: bağlam/sunucu hemen kapanıyorsa 0/3'ün sebebi bu olabilir — kapatmadan sonra bekle).
-- **Kardeş taraması:** tek util çoğu kez birebir kopyalarla N app'te yaşar — `new ODataModel(`,
+- **Kardeş taraması:** tek util çoğu kez kopyalarla N app'te yaşar (kopyalar birebir aynı OLMAYABİLİR — std/03 §18.5b; her kopya ayrı okunur) — `new ODataModel(`,
   `XMLHttpRequest`, `fetch(`, `sServiceUrl +` tüm paketlerde taranır; düzeltme kanonik şablona da işlenir
   (yoksa sonraki kopya kusuru geri getirir — bu vakada kanonik util ve std/03 örneği kusurluydu).
 - **Gate?** ⛔ Şimdilik HAYIR (ADR 0019 şart 4 — önce doküman: std/03 §18.5b, FE-48/FE-49,

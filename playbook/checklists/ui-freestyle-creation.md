@@ -18,7 +18,7 @@ applies_to: [s4_private]
 
 | ID | Kontrol | Severity | Ref |
 |---|---|---|---|
-| UI-BOOT-01 | `index.html` UI5 sürümü **pinli** + `data-sap-ui-language="tr"` | BLOCKER | §A1 |
+| UI-BOOT-01 | `index.html` UI5'i **backend'in kendi kopyasından** yükler (`/sap/public/bc/ui5_ui5/resources/sap-ui-core.js`; CDN pin'i ve sürümsüz göreli yol YASAK) + `data-sap-ui-language="tr"` · `manifest.json` `minUI5Version` = backend'in `sap-ui-version.json` → `version` değeri (örnekten kopyalanmış sabit değer DEĞİL) · tema backend'den ölçüldü (Horizon varsa `sap_horizon`, yoksa `sap_fiori_3`) · kullanılan her sürüme bağlı kontrolün `@since`'ı ≤ backend sürümü (eşikler: std/03 §2.6 tablosu). NEDEN: sabit sürüm/tema eski backend'de yanlış; CDN patch'leri takvimle silinir. NE ZAMAN: app iskeleti kurarken ve başka sürümlü backend'e taşırken | BLOCKER | §A1 · std/03 §2.5 + §2.6 · FE-53 |
 | UI-BOOT-02 | manifest 3 model: `i18n` + `""` (V2: TwoWay, useBatch:false, Inline) + `ui` (JSON `{busy,filter:{}}`); Component.js deps tam | BLOCKER | §A2 |
 | UI-BOOT-03 | i18n TR-first; tüm label/buton/mesaj key'leri TR (tahmin değil) | BLOCKER | ADR 0005 D |
 | UI-BOOT-04 | Paket `ui/` = npm WORKSPACE kökü (`workspaces:["*"]` + ortak devDeps hoist, ilk app'ten itibaren çoklu-varsay); yeni app **ince** package.json: name + scripts + `devDependencies`'te `ui5*.yaml`'ın kullandığı tooling paketlerinin **ADLARI** (`@sap/ux-ui5-tooling`, `@sap-ux/ui5-middleware-fe-mockserver`; sürümler kökte hoist — UI5 CLI 4 custom middleware'i app'in kendi package.json'undan çözer, adlar yoksa `start-*` açılmaz; CLI 3 ölçülmedi); `npm install` **`ui/` KÖKÜNDE** (app dizininde DEĞİL); per-app `package-lock.json` YOK | WARNING | std/03 §2.0 |
@@ -57,7 +57,7 @@ applies_to: [s4_private]
 |---|---|---|---|
 | UI-VH-01 | Value-help confirm'de değer **kontrole DİREKT** yazılıyor (setValue+setDescription), sadece binding'e güvenilmiyor | BLOCKER | §C1 |
 | UI-VH-02 | Value-helped alanlarda kod+ad: `<X>Name` CDS projeksiyonda expose + `description` bind | WARNING | §C2 |
-| UI-PERSO-01 | **Liste ekranı = ZORUNLU ALV standardı (ADR 0008):** kanonik `TablePersonalizer.js` kopyalandı → kolon-başlığı sort/filtre + aktif filtre çubuğu + **Kolonlar göster/gizle** + Excel (kapsam sorulu). `P13nDialog`/`TablePersoController` KULLANILMADI. Sıfırdan filtre/sort/export YAZILMADI | BLOCKER | §E · ADR 0008 |
+| UI-PERSO-01 | **Liste ekranı = ZORUNLU ALV standardı (ADR 0008):** kanonik `TablePersonalizer.js` çekirdek şablonundan (`playbook/templates/ui5-freestyle/`) kopyalandı — proje-içi eski kopyadan DEĞİL → kolon-başlığı sort/filtre + aktif filtre çubuğu + **Kolonlar göster/gizle** + Excel (kapsam sorulu). `P13nDialog`/`TablePersoController` KULLANILMADI. Sıfırdan filtre/sort/export YAZILMADI | BLOCKER | §E · ADR 0008 |
 
 ## Faz 6 — Kapanış
 

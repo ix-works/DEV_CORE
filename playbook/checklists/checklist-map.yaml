@@ -913,6 +913,13 @@ maddeler:
     seviye: uyari
     yazan_kanali: claude/agents/frontend-expert.md
     not: "canlı yanıt şekli (Edm.Decimal boş → \"0.000\") ölçümü"
+  - id: FE-53
+    sinif: B
+    uygulanir: ["**/manifest.json", "**/webapp/index.html", "**/ui5*.yaml", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml", "**/webapp/**/*.js"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: "backend ölçümü gerekir (sap-ui-version.json + tema md5); yazım kanalı UI-BOOT-01 (ui-freestyle-creation) — frontend-expert tanımına ekleme meta-infra, lider kararı"
   - id: DOC-KD-01
     sinif: C
     uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]
