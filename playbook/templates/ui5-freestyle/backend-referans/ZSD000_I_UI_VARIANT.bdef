@@ -1,0 +1,30 @@
+managed implementation in class zcl_sd000_ui_variant unique;
+strict ( 2 );
+
+define behavior for ZSD000_I_UI_VARIANT alias Variant
+persistent table zsd000_t_uivar
+lock master
+authorization master ( global )
+{
+  create;
+  update;
+  delete;
+
+  field ( numbering : managed, readonly ) VariantUuid;
+  field ( readonly ) Username, CreatedBy, CreatedAt, ChangedAt;
+
+  determination setAdmin on save { create; update; }
+
+  mapping for zsd000_t_uivar
+  {
+    VariantUuid = variant_uuid;
+    Username    = username;
+    ReportId    = report;
+    VariantName = variant_name;
+    IsDefault   = is_default;
+    Config      = config;
+    CreatedBy   = created_by;
+    CreatedAt   = created_at;
+    ChangedAt   = changed_at;
+  }
+}

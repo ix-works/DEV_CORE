@@ -1,0 +1,93 @@
+{
+  "_version": "<MANIFEST_SURUMU>",
+  "sap.app": {
+    "id": "com.example.alan.uygulama",
+    "type": "application",
+    "i18n": "i18n/i18n.properties",
+    "applicationVersion": { "version": "0.0.1" },
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}",
+    "resources": "resources.json",
+    "dataSources": {
+      "mainService": {
+        "uri": "/sap/opu/odata/sap/<SERVIS_ADI>/",
+        "type": "OData",
+        "settings": {
+          "localUri": "localService/mainService/metadata.xml",
+          "odataVersion": "2.0"
+        }
+      }
+    }
+  },
+  "sap.ui": {
+    "technology": "UI5",
+    "fullWidth": true,
+    "deviceTypes": { "desktop": true, "tablet": true, "phone": false }
+  },
+  "sap.ui5": {
+    "flexEnabled": true,
+    "dependencies": {
+      "minUI5Version": "<BACKEND_UI5_SURUMU>",
+      "libs": {
+        "sap.m": {},
+        "sap.ui.core": {},
+        "sap.ui.comp": {},
+        "sap.ui.layout": {},
+        "sap.ui.table": {},
+        "sap.ui.export": {}
+      }
+    },
+    "contentDensities": { "compact": true, "cozy": false },
+    "resources": {
+      "css": [{ "uri": "css/style.css" }]
+    },
+    "models": {
+      "i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "settings": {
+          "bundleName": "com.example.alan.uygulama.i18n.i18n",
+          "supportedLocales": ["", "tr"],
+          "fallbackLocale": ""
+        }
+      },
+      "": {
+        "dataSource": "mainService",
+        "preload": true,
+        "settings": {
+          "defaultBindingMode": "TwoWay",
+          "defaultCountMode": "Inline",
+          "useBatch": false
+        }
+      }
+    },
+    "routing": {
+      "config": {
+        "routerClass": "sap.m.routing.Router",
+        "type": "View",
+        "viewType": "XML",
+        "path": "com.example.alan.uygulama.view",
+        "viewPath": "com.example.alan.uygulama.view",
+        "controlId": "app",
+        "controlAggregation": "pages",
+        "transition": "show",
+        "async": true
+      },
+      "routes": [
+        { "name": "filter", "pattern": "", "target": "filter" },
+        { "name": "list", "pattern": "list", "target": "list" },
+        { "name": "change", "pattern": "change/{key}", "target": "change" }
+      ],
+      "targets": {
+        "filter": { "id": "Filter", "name": "Filter", "viewLevel": 1 },
+        "list": { "id": "List", "name": "List", "viewLevel": 2 },
+        "change": { "id": "Change", "name": "Change", "viewLevel": 3 }
+      }
+    },
+    "rootView": {
+      "viewName": "com.example.alan.uygulama.view.App",
+      "type": "XML",
+      "id": "App",
+      "async": true
+    }
+  }
+}

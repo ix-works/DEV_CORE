@@ -1,0 +1,67 @@
+<mvc:View
+  controllerName="com.example.alan.uygulama.controller.Filter"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+  xmlns:core="sap.ui.core"
+  xmlns:f="sap.ui.layout.form">
+  <Page id="filterPage" title="{i18n>filter.title}" class="sapUiResponsiveContentPadding">
+    <content>
+      <!-- Seçim ekranı = SELECT-OPTIONS pariteli (std/03 §10.0.1, FE-32):
+           her alan MultiInput + ValueHelpDialog (değer tablosu + "Koşulları tanımla");
+           tek-değer Input + valueHelpRequest KULLANILMAZ (check_filter_search_pattern WARNING).
+           Form = sap.ui.layout.form.Form + ColumnLayout; FormElement alanlarında layout-container (HBox/VBox) YOK (FE-33).
+           Bu yorumda form alanı etiketi AÇIK yazılmaz: check_ui5_freestyle_traps T4 XML yorumunu ayıklamaz. -->
+      <Panel headerText="{i18n>filter.criteria}" class="sapUiResponsiveMargin" width="auto">
+        <f:Form id="filterForm" editable="true">
+          <f:layout>
+            <f:ColumnLayout columnsM="1" columnsL="2" columnsXL="2"/>
+          </f:layout>
+          <f:formContainers>
+            <f:FormContainer>
+              <f:formElements>
+                <f:FormElement label="{i18n>fld.salesOrg}">
+                  <f:fields>
+                    <MultiInput id="fSalesOrg" width="100%"
+                                showValueHelp="true" valueHelpRequest=".onVH"
+                                tokenUpdate=".onTokenUpdate" liveChange=".onTokenTextLive"/>
+                  </f:fields>
+                </f:FormElement>
+                <f:FormElement label="{i18n>fld.customer}">
+                  <f:fields>
+                    <MultiInput id="fCustomer" width="100%"
+                                showValueHelp="true" valueHelpRequest=".onVH"
+                                tokenUpdate=".onTokenUpdate" liveChange=".onTokenTextLive"/>
+                  </f:fields>
+                </f:FormElement>
+              </f:formElements>
+            </f:FormContainer>
+            <f:FormContainer>
+              <f:formElements>
+                <f:FormElement label="{i18n>fld.material}">
+                  <f:fields>
+                    <MultiInput id="fMaterial" width="100%"
+                                showValueHelp="true" valueHelpRequest=".onVH"
+                                tokenUpdate=".onTokenUpdate" liveChange=".onTokenTextLive"/>
+                  </f:fields>
+                </f:FormElement>
+                <f:FormElement label="{i18n>fld.date}">
+                  <f:fields>
+                    <DateRangeSelection id="fDate" width="100%" displayFormat="dd.MM.yyyy"
+                                        change=".onDateChange"/>
+                  </f:fields>
+                </f:FormElement>
+              </f:formElements>
+            </f:FormContainer>
+          </f:formContainers>
+        </f:Form>
+      </Panel>
+    </content>
+    <footer>
+      <OverflowToolbar>
+        <ToolbarSpacer/>
+        <Button text="{i18n>btn.clear}" press=".onClear"/>
+        <Button type="Emphasized" text="{i18n>btn.list}" press=".onList"/>
+      </OverflowToolbar>
+    </footer>
+  </Page>
+</mvc:View>

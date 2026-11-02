@@ -1,0 +1,26 @@
+# Deploy YALNIZ kanonik yoldan: python core/scripts/deploy_ui.py (std/03 §2.4.1) — yalın `fiori deploy` YASAK.
+# Hedef URL .conn_adt'deki ADT_SAP_URL ile BİREBİR olmalı (std/03 §2.4).
+specVersion: "4.0"
+metadata:
+  name: com.example.alan.uygulama
+type: application
+builder:
+  resources:
+    excludes:
+      - /test/**
+      - /localService/**
+  customTasks:
+    - name: deploy-to-abap
+      afterTask: generateCachebusterInfo
+      configuration:
+        ignoreCertErrors: true
+        target:
+          url: https://<DEV_HOST>:<PORT>
+          client: "<CLIENT>"
+        app:
+          name: <BSP_ADI>
+          description: <UYGULAMA_ACIKLAMASI>
+          package: <SAP_PAKET>
+          transport: <TRANSPORT_NO>
+        exclude:
+          - /test/

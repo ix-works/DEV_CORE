@@ -1,0 +1,73 @@
+<mvc:View
+  controllerName="com.example.alan.uygulama.controller.List"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+  xmlns:core="sap.ui.core"
+  xmlns:table="sap.ui.table"
+  core:require="{ Decimal: 'sap/ui/model/odata/type/Decimal', DateTime: 'sap/ui/model/odata/type/DateTime' }">
+  <Page id="listPage" title="{i18n>list.title}" showNavButton="true" navButtonPress=".onNavBack">
+    <content>
+      <!-- Liste = GRID sap.ui.table.Table (std/03 §10.0, ADR 0008; check_list_view_grid).
+           Sort/filtre grid'in NATIVE kolon menüsünden (sortProperty/filterProperty).
+           SÜRÜME BAĞLI iki parça BURADA YAZILMAZ — controller onInit'te surum/<v>/webapp/util/SurumParca.js uygular:
+             · satır modu  : 1.120 → rowMode + sap.ui.table.rowmodes.Auto · 1.71 → visibleRowCountMode="Auto"
+             · boş durum   : 1.120 → sap.m.IllustratedMessage + CTA · 1.71 → noData = Text + CTA Button
+           Kayıt sayısı başlığı tablonun olayından değil satır BINDING'inin dataReceived olayından güncellenir
+           (List.controller _onMatched) — tablonun public satır-güncelleme olayı 1.86'dan beri var, 1.71'de yok. -->
+      <table:Table id="listTable"
+                   selectionMode="None"
+                   enableColumnReordering="true"
+                   enableColumnFreeze="true"
+                   threshold="200"
+                   ariaLabelledBy="listTitle">
+        <table:extension>
+          <OverflowToolbar>
+            <Title id="listTitle" text="{ui>/listTitle}" level="H2"/>
+            <ToolbarSpacer/>
+            <Button icon="sap-icon://action-settings" text="{i18n>btn.cols}" press=".onColumns"/>
+            <Button icon="sap-icon://excel-attachment" text="{i18n>btn.excel}" press=".onExportExcel"/>
+            <Button icon="sap-icon://refresh" tooltip="{i18n>btn.refresh}" press=".onRefresh"/>
+          </OverflowToolbar>
+        </table:extension>
+        <table:columns>
+          <!-- Kolon id'leri util/TablePersonalizer `colId` ile eşleşir (List.controller COLUMNS). Anahtar alanlar başta. -->
+          <table:Column id="cSalesOrder" width="8rem" sortProperty="SalesOrder" filterProperty="SalesOrder">
+            <Label text="{i18n>fld.salesOrder}"/>
+            <table:template>
+              <Link text="{SalesOrder}" press=".onOpen" wrapping="false"/>
+            </table:template>
+          </table:Column>
+          <table:Column id="cSalesOrg" width="8rem" sortProperty="SalesOrganization" filterProperty="SalesOrganization">
+            <Label text="{i18n>fld.salesOrg}"/>
+            <table:template><Text text="{SalesOrganization}" wrapping="false"/></table:template>
+          </table:Column>
+          <table:Column id="cCustomer" width="8rem" sortProperty="Customer" filterProperty="Customer">
+            <Label text="{i18n>fld.customer}"/>
+            <table:template><Text text="{Customer}" wrapping="false"/></table:template>
+          </table:Column>
+          <table:Column id="cCustomerName" width="16rem" sortProperty="CustomerName" filterProperty="CustomerName">
+            <Label text="{i18n>fld.customerName}"/>
+            <table:template><Text text="{CustomerName}" wrapping="false"/></table:template>
+          </table:Column>
+          <table:Column id="cMaterial" width="10rem" sortProperty="Material" filterProperty="Material">
+            <Label text="{i18n>fld.material}"/>
+            <table:template><Text text="{Material}" wrapping="false"/></table:template>
+          </table:Column>
+          <table:Column id="cDocumentDate" width="7rem" sortProperty="DocumentDate" filterProperty="DocumentDate">
+            <Label text="{i18n>fld.date}"/>
+            <table:template>
+              <Text wrapping="false"
+                    text="{ path: 'DocumentDate', type: 'DateTime', constraints: { displayFormat: 'Date' } }"/>
+            </table:template>
+          </table:Column>
+          <table:Column id="cNetAmount" width="8rem" hAlign="End" sortProperty="NetAmount" filterProperty="NetAmount">
+            <Label text="{i18n>fld.netAmount}"/>
+            <table:template>
+              <Text wrapping="false" text="{ path: 'NetAmount', type: 'Decimal' }"/>
+            </table:template>
+          </table:Column>
+        </table:columns>
+      </table:Table>
+    </content>
+  </Page>
+</mvc:View>

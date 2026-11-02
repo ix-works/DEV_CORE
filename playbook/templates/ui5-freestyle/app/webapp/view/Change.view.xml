@@ -1,0 +1,59 @@
+<mvc:View
+  controllerName="com.example.alan.uygulama.controller.Change"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+  xmlns:f="sap.ui.layout.form">
+  <Page id="changePage" title="{i18n>change.title}" showNavButton="true" navButtonPress=".onNavBack">
+    <content>
+      <!-- Kaydetme deseni örneği: tüm alanlar JSON tamponu "v"ye bağlı (V2 nav-binding DEĞİL, playbook §B3).
+           Alanlar UYGULAMAYA ÖZELDİR — buradakiler yalnız örnektir. Sayısal düzenlenebilir alan type="Text" (std/03 §17). -->
+      <f:Form id="headerForm" editable="true">
+        <f:layout>
+          <f:ColumnLayout columnsM="1" columnsL="2" columnsXL="2"/>
+        </f:layout>
+        <f:formContainers>
+          <f:FormContainer>
+            <f:formElements>
+              <f:FormElement label="{i18n>fld.description}">
+                <f:fields>
+                  <Input id="inpDescription" value="{v>/h/Description}" editable="{v>/edit}"/>
+                </f:fields>
+              </f:FormElement>
+            </f:formElements>
+          </f:FormContainer>
+        </f:formContainers>
+      </f:Form>
+      <Table id="itemTable" items="{v>/d}" mode="Delete" delete=".onDeleteItem"
+             class="sapUiResponsiveMargin" width="auto">
+        <headerToolbar>
+          <OverflowToolbar>
+            <Title text="{i18n>change.items}" level="H2"/>
+            <ToolbarSpacer/>
+            <Button icon="sap-icon://add" text="{i18n>btn.addItem}" press=".onAddItem"/>
+          </OverflowToolbar>
+        </headerToolbar>
+        <columns>
+          <Column><Text text="{i18n>fld.itemNo}"/></Column>
+          <Column><Text text="{i18n>fld.material}"/></Column>
+          <Column hAlign="End"><Text text="{i18n>fld.quantity}"/></Column>
+        </columns>
+        <items>
+          <ColumnListItem>
+            <cells>
+              <Text text="{v>ItemNo}"/>
+              <Input value="{v>Material}"/>
+              <Input value="{v>Quantity}" type="Text" textAlign="End"/>
+            </cells>
+          </ColumnListItem>
+        </items>
+      </Table>
+    </content>
+    <footer>
+      <OverflowToolbar>
+        <ToolbarSpacer/>
+        <Button type="Emphasized" text="{i18n>btn.save}" press=".onSave"/>
+        <Button text="{i18n>btn.cancel}" press=".onCancel"/>
+      </OverflowToolbar>
+    </footer>
+  </Page>
+</mvc:View>

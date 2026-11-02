@@ -794,6 +794,12 @@ OZEL_TESTLER = [
     ("sql_sure_birimi",
      "Execution time ms etiketi (gercek run_sql_query.py alt sureci) + execution_time_ms + eski "
      "execution_time anahtari geriye uyumlu + alan yoksa 0; 3 mutasyon"),
+    # 2026-11-02 Issue #381: freestyle UI5 kopyalama sablonu (app/ ortak govde + surum/<v>/ parcasi).
+    ("ui5_freestyle_sablon",
+     "sablon iki surum parcasiyla sentetik projeye kopyalanir: 3 UI validator exit 0 + kapsam N == "
+     "kopyadaki dosya sayisi; ortak govdede surume bagli API yok; parca imzasi; manifest/view/"
+     "controller/define/i18n tamligi; Excel dataSource {dataUrl} nesnesi; kolon filtresi tarih strictParsing + "
+     "sayi getFloatInstance, ham metin filtre degeri yok; kopyaya sokulan kusuru 3 validator yakalar; 14 mutasyon"),
 ]
 
 
@@ -1641,6 +1647,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "gercek giris noktasi: cikista oturum kapatma + Execution time ms etiketi / JSON anahtarlari"),
     ("scripts/sap_client.py", ("O:sql_sure_birimi",),
      "`run_sql_query` execution_time_ms + geriye uyumlu execution_time (ms)"),
+    # 2026-11-02 Issue #381. Validator satirlarina BILEREK eklenmedi: b0_secim P2 birlesim
+    # sayisi check_ui5_freestyle_traps icin pinli (9) — baglanti istenirse ikisi birlikte guncellenir.
+    ("playbook/templates/ui5-freestyle/**", ("O:ui5_freestyle_sablon",),
+     "freestyle UI5 sablonu: ortak govde + surum parcalari + backend referansi"),
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla

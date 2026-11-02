@@ -1,0 +1,34 @@
+# Yerel çalıştırma (fiori run). Bootstrap index.html'de BACKEND yolundan yapılır
+# (/sap/public/bc/ui5_ui5/resources/...) ⇒ aşağıdaki /sap proxy'si UI5 kaynağını da backend'den getirir.
+# Kimlik: FIORI_TOOLS_USER / FIORI_TOOLS_PASSWORD ortam değişkenleri (değer yazılmaz).
+specVersion: "4.0"
+metadata:
+  name: com.example.alan.uygulama
+type: application
+server:
+  customMiddleware:
+    - name: fiori-tools-proxy
+      afterMiddleware: compression
+      configuration:
+        ignoreCertErrors: true
+        ui5:
+          path:
+            - /resources
+            - /test-resources
+          url: https://ui5.sap.com
+        backend:
+          - path: /sap
+            url: https://<DEV_HOST>:<PORT>
+            client: "<CLIENT>"
+            authenticationType: basic
+    - name: fiori-tools-appreload
+      afterMiddleware: compression
+      configuration:
+        port: 35729
+        path: webapp
+        delay: 300
+    - name: fiori-tools-preview
+      afterMiddleware: fiori-tools-appreload
+      configuration:
+        flp:
+          theme: <TEMA>
