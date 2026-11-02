@@ -4,9 +4,9 @@ layer: L2
 scope: project-wide
 applies-to: ui
 version: 1.0
-last-updated: 2026-07-31
+last-updated: 2026-11-02
 status: active
-reference-app: ERP/SD/ZSD001_CLC/ui/order_app/
+reference-app: playbook/templates/ui5-freestyle/
 ---
 
 # SAP Fiori UI5 Geliştirme Kuralları
@@ -14,7 +14,11 @@ reference-app: ERP/SD/ZSD001_CLC/ui/order_app/
 
 > Bu doküman, `order_app` uygulamasının SAP'ye başarıyla deploy edilmesinden çıkarılan dersleri
 > ve bundan sonra yapılacak tüm Fiori geliştirmeleri için geçerli olan kuralları içermektedir.
-> Temel referans: `order_app/` klasörü (çalışan, deploy edilebilen uygulama).
+> **Kopyalanacak kanonik kaynak = çekirdekteki şablon:**
+> [`../playbook/templates/ui5-freestyle/`](../playbook/templates/ui5-freestyle/README.md)
+> (ortak gövde `app/` + sürüme bağlı parçalar `surum/1.120/` · `surum/1.71/`; §15). Eski
+> sürümlerde burada geçen proje-içi `order_app/` / `<source_root>/SD/ZSD001_CLC/ui/...` yolları
+> çekirdekte çözülmez — kopya kaynağı olarak kullanılmaz.
 >
 > **⚠️ Freestyle + OData V2 (RAP tüketen) uygulama yapıyorsan** (ORDER/ORDER
 > tipi): koda başlamadan **önce** L3 operasyonel tecrübe + PRE-FLIGHT'ı oku:
@@ -77,7 +81,7 @@ zsd001.somanagement                ❌  (SAP'ye deploy edilemez)
 Bu ID şu yerlerde tutarlı olmalıdır:
 - `manifest.json` → `sap.app.id`
 - `Component.js` → `UIComponent.extend("com.example.sd.xxx.Component")`
-- `index.html` → `data-sap-ui-resource-roots` + `data-name`
+- `index.html` → `data-sap-ui-resource-roots` (1.71 hattında `data-sap-ui-resourceroots` — §2.6) + `data-name`
 - `ui5.yaml` → `metadata.name`
 - Tüm controller/view dosyalarındaki `controllerName` ve `extend` çağrıları
 - `i18n` model `bundleName`
@@ -175,7 +179,7 @@ server:
       afterMiddleware: fiori-tools-appreload
       configuration:
         flp:
-          theme: sap_horizon
+          theme: sap_horizon   # backend'de Horizon yoksa sap_fiori_3 — ölçüm §2.6
 ```
 
 ### 2.4 ui5-deploy.yaml — SAP Deploy Konfigürasyonu
@@ -313,10 +317,11 @@ değil — sunucuyu kimlikle yeniden başlat. Turun ön koşul kanıtı: proxy `
 
 `index.html` bootstrap'ı UI5'i **backend'in kendi UI5 kopyasından**, kök-göreli yolla yükler.
 Böylece sürüm **daima backend ile birebir aynıdır** (FLP'nin kullandığı kopya) ve dış CDN'in
-yaşam döngüsüne bağımlı kalınmaz. `manifest.json` `minUI5Version` backend sürümüyle aynı olmalı.
+yaşam döngüsüne bağımlı kalınmaz. `manifest.json` `minUI5Version` backend sürümüyle aynı olmalı
+— değer ve tema backend'den **ölçülür**, bu dokümandaki örnekten alınmaz (§2.6).
 
 ```html
-<!-- DOĞRU -->
+<!-- DOĞRU (tema: backend'de Horizon yoksa sap_fiori_3 — §2.6) -->
 <script id="sap-ui-bootstrap"
   src="/sap/public/bc/ui5_ui5/resources/sap-ui-core.js"
   data-sap-ui-theme="sap_horizon"
@@ -330,9 +335,13 @@ yaşam döngüsüne bağımlı kalınmaz. `manifest.json` `minUI5Version` backen
 - **Lokal `fiori run`:** `ui5.yaml`'daki `backend: - path: /sap` proxy'si bu yolu backend'e taşır
   (§2.3) — ek ayar gerekmez. `/test-resources` backend'de yoktur (404); `test/flpSandbox.html`
   gibi sandbox sayfaları CDN'de kalabilir (canlıya gitmez).
-- **Doğrulama:** konsolda `sap.ui.version` = backend sürümü ve
+- **Doğrulama:** konsolda `sap.ui.version` = backend kopyasının core sürümü (CDN değil) ve
   `…/resources/sap/ui/core/cldr/<dil>.json` **200** olmalı; tarih ayı proje dilinde basılmalı
-  (örn. TR: "23 Eyl 2026").
+  (örn. TR: "23 Eyl 2026"). ⚠ `sap.ui.version` (core kütüphanesinin sürümü) ile dağıtımın
+  `sap-ui-version.json` → `version` değeri **aynı sayı olmayabilir** (ölçüldü, ui5.sap.com 1.120.52:
+  dağıtım `1.120.52`, `sap.ui.core`/`sap.m`/`sap.ui.table` `1.120.50`). `minUI5Version`'ın kanonik
+  kaynağı **`sap-ui-version.json` → `version`**'dır (§2.6); `sap.ui.version` yalnız "UI5 backend'den mi
+  geliyor" sorusunu cevaplar.
 
 **Vaka 1 (2026-05-15):** sürümsüz bootstrap + `tr` locale →
 `TypeError: this.oLocaleData.getDatePlaceholder is not a function`
@@ -351,9 +360,99 @@ Ayrıca `Component.js`'te `sap/ui/model/json/JSONModel` **define bağımlılığ
 olmadan global `sap.ui.model.json.JSONModel` kullanımı = async/strict'te fırlatır
 → her zaman `sap.ui.define([...])` ile require et.
 
+## 2.6 UI5 sürümü + tema BACKEND'DEN ölçülür · sürüme bağlı kontroller (ZORUNLU)
+
+**NE:**
+1. `manifest.json` → `sap.ui5.dependencies.minUI5Version` = backend'in UI5 sürümü. Kaynağı tek:
+   `GET /sap/public/bc/ui5_ui5/resources/sap-ui-version.json` → JSON'daki `version` değeri.
+   Bu dokümandaki `1.120.23` gibi sürüm numaraları **örnek değerdir, kural değildir**.
+2. Tema: `…/resources/sap/ui/core/themes/sap_horizon/library.css` **200 VE içeriği
+   `…/themes/base/library.css` ile AYNI DEĞİL** (md5 farklı) ise `sap_horizon`; değilse `sap_fiori_3`.
+   ⛔ **Yalnız HTTP 200'e bakma:** bazı UI5 sürümlerinin kaynak sunucusu olmayan temayı `base`'e
+   düşürüp **200** döner (ölçüldü, ui5.sap.com 2026-11-02: **1.71.85**'te `sap_horizon/library.css` 200
+   ama md5'i `base/library.css` ile aynı; var olmayan uydurma bir tema adı da aynı sonucu verdi).
+   **1.120.52**'de davranış farklı: olmayan tema **404**, `sap_horizon` ≠ `base` (kontrol grubu).
+   Seçim ölçütü iki davranışta da aynı sonucu verir. Backend ICF'nin `/sap/public/bc/ui5_ui5/` altında aynı
+   düşüşü yaptığı **DOĞRULANAMADI** (CDN'de ölçüldü) — bu yüzden ölçüt içerik kıyasıdır. Ölçülen tema adı, adın geçtiği **her yere aynı** yazılır:
+   `index.html` `data-sap-ui-theme` (§2.5/§5) · tema adı geçen her `ui5*.yaml` (`ui5.yaml` · `ui5-local.yaml` · `ui5-mock.yaml`) `fiori-tools-preview` → `flp.theme` (§2.3) ·
+   tema adı geçen test/sandbox sayfaları. Bu dokümandaki `sap_horizon` örnekleri ve Horizon
+   maddeleri (§18.15 · §18.18 THEMING · L.7 md. 9) **Horizon'lu backend** içindir; Horizon'suz backend'de
+   aynı madde `sap_fiori_3` ile uygulanır (ilke — tema değişkeni, hardcoded renk yok — aynen geçerli).
+3. Aşağıdaki tablodaki bir kontrolü yalnız backend sürümü **≥ `@since`** ise kullan; altındaysa
+   "eski sürümde" sütunundaki karşılığı kullan. **İlke değişmez, yalnız kontrol adı sürüme bağlanır.**
+   `@since` sütunu **"ölçüldü: … ✗ · … ✓"** diyorsa eşik tam bilinmiyor demektir: karar yalnız adı geçen
+   ölçülmüş sürümlerde kesindir; **1.120 altındaki her backend'de "eski sürümde" sütunu uygulanır** — o biçim
+   ölçülen tüm sürümlerde (1.71.85 · 1.84.62 · 1.96.51 · 1.108.57 · 1.114.10 · 1.120.52) çalışır (güvenli varsayılan).
+   ⚠ Davranış cümleleri **ölçüldüğü sürüme** aittir: "1.71.85'te yok sayılır" ≠ "1.120 altında yok sayılır".
+   Ara sürüm kaynakları CDN'de durur (`ui5.sap.com/<sürüm>/resources/…-dbg.js`); 1.119.x CDN'de 404.
+   Bu dokümandaki **"1.71 hattı"** = backend < 1.120 (şablonun `surum/1.71/` parçası) · **"1.120 hattı"** =
+   backend ≥ 1.120 (`surum/1.120/` parçası).
+
+```
+# Ölçüm (tarayıcı ya da curl; lokal `fiori run`'da aynı yol proxy ile backend'e gider — §2.3)
+curl -s  "https://<DEV_HOST>.example.com.tr:44300/sap/public/bc/ui5_ui5/resources/sap-ui-version.json"
+#   → {"name": ..., "version": "<X.Y.Z>", ...}            ⇒ minUI5Version = "<X.Y.Z>"
+R="https://<DEV_HOST>.example.com.tr:44300/sap/public/bc/ui5_ui5/resources/sap/ui/core/themes"
+curl -s -o /dev/null -w "%{http_code}\n" "$R/sap_horizon/library.css"      # HTTP kodu
+curl -s "$R/sap_horizon/library.css" | md5sum
+curl -s "$R/base/library.css"        | md5sum
+#   → 200 VE iki md5 FARKLI ⇒ sap_horizon · aksi hâlde (200 değil YA DA md5 aynı) ⇒ sap_fiori_3
+```
+
+**Sürüme bağlı kontroller** (`@since` değerleri UI5 1.120.52 `-dbg.js` modül başlıklarından okundu;
+ui5.sap.com 2026-11-02: `sap/m/IllustratedMessage.js` ve `sap/ui/table/rowmodes/Auto.js` 1.71.85'te
+**404**, 1.120.52'de 200):
+
+| Kontrol / API | `@since` | Backend `< @since` ise (eski sürümde) | Bu standartta geçtiği yer |
+|---|---|---|---|
+| `sap.m.IllustratedMessage` (boş durum) | 1.98 | **Grid** (`sap.ui.table.Table`): `noData` aggregation'ı (1.71'de var, `multiple:false` ⇒ TEK kontrol) içinde `VBox` { `Text` + CTA `Button` }. **`sap.m.Table`/`List`** < 1.101: `noData` aggregation'ı YOK (yalnız `noDataText`) ⇒ tablonun yanında, görünürlüğü "satır yok"a bağlı `VBox` { `Text` + CTA `Button` }; **1.98–1.100** arasında bu dış kontrol `IllustratedMessage` olur (`noData`'ya konamaz, görünürlüğü yine "satır yok"a bağlı). **CTA'lı boş durum ilkesi (L.4) aynen zorunlu**; yalnız "Veri yok" metni yine YANLIŞ | §18.3 · §18.9-3 · §18.17 · §18.18 · L.4 |
+| `sap.m.ListBase` `noData` aggregation'ı (`sap.m.Table`/`List`) | 1.101 | `noDataText` (yalnız metin) + yukarıdaki dış `VBox` | L.4 |
+| `sap.ui.table.rowmodes.Auto` (tabloda `rowMode`) | 1.119 | `visibleRowCountMode="Auto"` + `minAutoRowCount` (1.119'dan beri deprecated ⇒ ≥1.119 backend'de KULLANILMAZ; ≥1.119'da en az satır = `rowmodes.Auto` `minRowCount`) | §16 · playbook §E GRID KURULUM |
+| `sap.m.Avatar` | 1.73 | `sap.f.Avatar` (1.71.85'te mevcut) ya da başlıkta ikon (`sap-icon://…`) | §18.12 · §18.18 |
+| `sap.ui.core.IAsyncContentCreation` (Component arayüzü) | 1.89 | Arayüz bildirilmez; manifest `rootView.async:true` + `routing.config.async:true` (§3.1'de zaten var) — davranış eşdeğerliği **ÖLÇÜLMEDİ** | §4 · §14 |
+| `sap.m.VariantManagement` | 1.103 | Standart bu kontrolü kullanmaz — varyant = util'in DB-backed varyantı (§16) | — |
+| `index.html` bootstrap öznitelik adı biçimi (`data-sap-ui-on-init` · `-resource-roots` · `-compat-version` · `-frame-options`) | ölçüldü: 1.71.85 · 1.84.62 · 1.96.51 · 1.108.57 · 1.114.10 ✗ · 1.120.52 ✓ (eşik 1.115–1.120 arası, ölçülmedi; 1.119 yalnız bulut) | **TEK KELİME KÜÇÜK HARF:** `data-sap-ui-oninit` · `-resourceroots` · `-compatversion` · `-frameoptions`. 1.71.85 tire→camel dönüşümünü yapmaz (`jquery.sap.global-dbg.js` "deactivated conversion" — yalnız `toLowerCase`) ve ayarı küçük harfli anahtarla arar (`sap/ui/core/Configuration-dbg.js`) ⇒ 1.71.85–1.114.10'da kebab adlar **sessizce yok sayılır** (1.108.57 ve 1.114.10'da aynı mantık `sap/ui/core/_ConfigurationProvider-dbg.js`'te; `ui5loader-autoconfig`'teki `camelize` 1.114.10'da yalnız loader ayarlarına hizmet eder, `onInit`'e değil; tek istisna `theme-roots`, özel işlenir — `jquery.sap.global-dbg.js`), `ComponentSupport` hiç çalışmaz (beyaz ekran). Aynı mekanizma **her** çok kelimeli bootstrap özniteliğine uygulanır (ör. `data-sap-ui-flexibility-services` → `data-sap-ui-flexibilityservices`). 1.120.52 iki biçimi de tanır (`ui5loader-autoconfig-dbg.js`: `camelize` + küçük-harf takma ad) | §1 · §5 · playbook §0 md. 9 |
+| `manifest.json` `sap.app.i18n` **nesne** biçimi (`bundleUrl` · `supportedLocales` · `fallbackLocale`) | ölçüldü: 1.71.85 ✗ · 1.84.62 · 1.96.51 · 1.108.57 · 1.114.10 · 1.120.52 ✓ (eşik 1.72–1.84 arası, ölçülmedi) | **String** biçim: `"i18n": "i18n/i18n.properties"`. 1.71.85 değeri doğrudan `new URI(...)`'ya verir (`sap/ui/core/Manifest-dbg.js` `_loadI18n`) — nesne desteklenmez; 1.120.52 `typeof vI18n === "object"` dalıyla ikisini de destekler. ⚠ `supportedLocales`/`fallbackLocale` 1.71.85'te **hiçbir yerde** okunmaz (1.84.62'den itibaren ölçülen her sürümde okunur) (`sap/ui/model/resource/ResourceModel-dbg.js` ve `sap/base/i18n/ResourceBundle-dbg.js`'te büyük/küçük harf DUYARLI aramada 0 geçiş — duyarsız aramada çıkan `aSupportedLocales`/`nextFallbackLocale` iç değişkenlerdir; 1.120.52'de var) ⇒ 1.71.85'te `models.i18n.settings`'e taşımak da etkisizdir — locale kısıtı yoktur, dil dosyası yükleme sırası çalışma zamanına kalır | §3.1 · §3.2 · §7.5 |
+| `sap.ui.table.Table` `rowsUpdated` olayı | 1.86 | Olay 1.71.85'te YOK (yalnız iç `_rowsUpdated`) — iki sürümde var olan bir **binding** olayı kullanılır (şablon `app/` gövdesi: `bindRows` `events.dataReceived`) | playbook §E (grid binding satırı) |
+| `sap.ui.table.Column` `sortOrder` = `None` (`sap.ui.core.SortOrder`) | 1.120 | 1.71.85'te tip `sap.ui.table.SortOrder` = yalnız `Ascending`/`Descending`, **varsayılan `Ascending`** ⇒ `getSortOrder() === "None"` hiç doğru olmaz ve sıralanmamış sütun "artan" görünür. "Bu sütun sıralı mı" = 1.71 hattında `Column#getSorted()` · 1.120 hattında `getSortOrder() !== "None"` (1.120'de `Column#sorted` deprecated) — şablonun sürüm parçası `SurumParca.siraliMi`. ⛔ `Table#getSortedColumns()` TEK BAŞINA yetmez: kendi JSDoc'u yalnız `sort()`/menüyle yapılan sıralamayı döndürdüğünü, kolona doğrudan (ör. XML'de) verilen sıralamayı **yansıtmadığını** söyler (1.71.85: `setSorted`/`setSortOrder` · 1.120.52: `setSortOrder`). Eşik: `Column.sortOrder` tipi 1.120'de `sap.ui.core.SortOrder`'a geçti (1.120.52 `Column-dbg.js` `sorted` "@deprecated As of version 1.120"); 1.119 yalnız bulut sürümüdür (`ui5.sap.com/versionoverview.json` → `frontendserver: "Cloud only"`), çalışma zamanı ÖLÇÜLEMEDİ (CDN 404) | §16 md. 1 |
+| `sap.ui.comp.valuehelpdialog.ValueHelpDialog` | 1.24 | (iki hedef sürümde de var) | §10.0.1 |
+| `sap.ui.export.Spreadsheet` | 1.50 | (iki hedef sürümde de var) | §16 md. 4 |
+| `sap.ui.export.Spreadsheet` `dataSource` = `ListBinding` (grid'in `rows` binding'i doğrudan) | ölçüldü: 1.71.85 ✗ · 1.120.52 ✓ | Sınıf iki sürümde var ama 1.71.85 `dataSource`'ta yalnız string · dizi · `{dataUrl}` nesnesi kabul eder (`sap/ui/export/Spreadsheet-dbg.js` "Data source" bloğu — ListBinding dalı YOK) ⇒ binding verilmesi **desteklenmez** (çalışma zamanındaki sonucu — boş dosya mı hata mı — ÖLÇÜLMEDİ). İki sürümde geçerli biçim: `{ type: "odata", dataUrl: oBinding.getDownloadUrl(...), serviceUrl, count, useBatch: false, headers }` (`getDownloadUrl` iki sürümde `ODataListBinding`'de var). 1.120.52 ListBinding'i `getDownloadUrl` üzerinden kendisi çevirir — şablonun ortak gövdesi iki sürümde çalışan nesne biçimini kullanır | §16 md. 4 |
+
+Hazır sürüm parçaları şablondadır: `playbook/templates/ui5-freestyle/surum/1.120/` ·
+`surum/1.71/` (ortak gövde `app/` yalnız iki sürümde de var olan API'leri kullanır).
+Tabloda olmayan bir kontrolü eklerken `@since`'ını `ui5-mcp-server` `get_api_reference` ile doğrula.
+
+- **Manifest `_version` ayrı bir eksendir:** `_version` descriptor **şema** sürümüdür, UI5 çalışma
+  zamanı sürümü değildir; `minUI5Version` ile karıştırılmaz. §3.2 "`_version` 1.60 altı kullanma"
+  kuralının eski (ör. 1.71) backend'deki karşılığı bu turda **ÖLÇÜLMEDİ** — eski backend için şablonun
+  `surum/1.71/` README'sindeki değer esastır.
+- **Lokal proxy notu (DOĞRULANMADI):** `ui5.yaml` `fiori-tools-proxy` `ui5:` bölümünde sürüm verilmezse
+  yerel `/resources` isteklerinin `minUI5Version` sürümüne gittiği açık kaynak eşinin README'sinde
+  yazılı; bu çekirdekte ölçülmedi. Bootstrap `/sap/public/bc/ui5_ui5/…` yolunu kullandığı için (§2.5)
+  backend kopyası bundan etkilenmez.
+
+**NEDEN:** §2.5 "minUI5Version backend sürümüyle aynı" derken manifest şablonu, §3.2 tablosu ve §14
+checklist'i sabit `1.120.23` yazıyordu (iç çelişki; 2026-11-02 ölçümü). Hiçbir validator
+`minUI5Version`'ı denetlemez ⇒ sabit değer sessizce kopyalanır. Çekirdeği farklı UI5 sürümlü
+backend'lerde kullanan tüketiciler var: bir tüketici 1.71 backend'de Horizon temasının olmadığını
+bildirdi (`sap_fiori_3` var) — **çekirdek sahibinin sisteminde ÖLÇÜLMEDİ**. `@since`'ı backend
+sürümünden büyük bir kontrolün modülü o backend'de yoktur.
+**NE ZAMAN:** yeni app iskeleti kurarken (`manifest.json` · `index.html` · `ui5.yaml` yazılırken) ·
+bir app'i başka UI5 sürümlü backend'e taşırken · tablodaki bir kontrolü view'a eklerken.
+**NEREDE:** kanonik metin bu bölüm; `playbook/checklists/ui-freestyle-creation.md` UI-BOOT-01 ve §14
+checklist'i buraya atıf verir. ⚠ 1.71 sütunu (boş durum `VBox` { `Text` + `Button` } karşılıkları, `visibleRowCountMode`)
+1.71 çalışma zamanında bu turda **ÖLÇÜLMEDİ** — şablonun `surum/1.71/` parçası tüketici ölçümüyle doğrulanır.
+
 ## 3. MANIFEST.JSON STANDARTLARI
 
 ### 3.1 Tam Şablon
+
+> `<BACKEND_UI5_SURUMU>` = backend'in `sap-ui-version.json` → `version` değeri (ölçüm komutu §2.6;
+> örnek değer: `1.120.23`). Yer tutucu bilerek geçersizdir — kopyalanıp ölçülmeden bırakılırsa görünür.
+> ⛔ `sap.app.i18n` **nesne** biçimi (aşağıdaki örnek) **1.120 hattı** içindir; 1.71 backend'de nesne
+> desteklenmez ⇒ string biçim `"i18n": "i18n/i18n.properties"` (§2.6). Şablonun ortak gövdesi
+> (`playbook/templates/ui5-freestyle/app/`) iki sürümde de çalışan string biçimi kullanır.
 
 ```json
 {
@@ -401,7 +500,7 @@ olmadan global `sap.ui.model.json.JSONModel` kullanımı = async/strict'te fırl
   "sap.ui5": {
     "flexEnabled": true,
     "dependencies": {
-      "minUI5Version": "1.120.23",
+      "minUI5Version": "<BACKEND_UI5_SURUMU>",
       "libs": {
         "sap.m":          {},
         "sap.ui.core":    {},
@@ -471,10 +570,10 @@ olmadan global `sap.ui.model.json.JSONModel` kullanımı = async/strict'te fırl
 | `_version: "1.60.0"` | **1.60 altı kullanma** (1.59 ve öncesi dahil) |
 | `resources: "resources.json"` | SAP deploy için zorunlu |
 | `flexEnabled: true` | UI adaptation için zorunlu |
-| `minUI5Version: "1.120.23"` | Proje standart versiyonu |
+| `minUI5Version` = backend sürümü | Backend'in `sap-ui-version.json` → `version` değeri (ölçüm §2.6; örnek `"1.120.23"`). Sabit/örnekten kopyalanmış değer YANLIŞ |
 | `fullWidth: true` | Fiori launchpad'de tam genişlik |
-| `fallbackLocale: ""` | Boş string → default `.properties` dosyası (i18n.properties) |
-| `supportedLocales: ["", "tr"]` | İngilizce default + Türkçe |
+| `fallbackLocale: ""` | Boş string → default `.properties` dosyası (i18n.properties). **1.120 hattı** — 1.71 hattında `sap.app.i18n` string yazıldığı için bu ayar orada yoktur (1.71.85 zaten okumaz; §2.6) |
+| `supportedLocales: ["", "tr"]` | İngilizce default + Türkçe. **1.120 hattı** — 1.71 hattında `sap.app.i18n` string yazıldığı için bu ayar orada yoktur (1.71.85 zaten okumaz; §2.6) |
 | `controlId: "app"` | App.view.xml'deki `<App id="app"/>` ile eşleşmeli |
 | `useBatch: false` | OData V2 SEGW servisleri için. ⚠ **İSTİSNA:** dosya/base64/uzun metin taşıyan bir **function import** varsa o çağrı `$batch` ister — manifest DEĞİŞMEZ, ikinci model açılır (§18.5a) |
 | Annotation dataSource | Annotation model olmasa bile `localUri` ile tanımla |
@@ -517,13 +616,19 @@ sap.ui.define([
 
 **Kurallar:**
 - Arrow function `(...) =>` kullanılabilir (ES6 modern stil)
-- `sap.ui.core.IAsyncContentCreation` interface'i **zorunlu**
+- `sap.ui.core.IAsyncContentCreation` interface'i **zorunlu** (arayüz UI5 1.89'dan beri vardır;
+  daha eski backend'de karşılığı §2.6 tablosunda)
 - ODataModel'i Component.js'te import etme — manifest yönetir
 - `init()` kısa metot yazımı tercih edilir
 
 ---
 
 ## 5. INDEX.HTML STANDARDI
+
+> `data-sap-ui-theme`: backend'de Horizon varsa `sap_horizon`, yoksa `sap_fiori_3` (ölçüm §2.6).
+> ⛔ **Öznitelik adı biçimi SÜRÜME BAĞLIDIR (§2.6):** aşağıdaki örnek **1.120 hattının** kebab biçimidir.
+> 1.71 backend'de bu adlar sessizce yok sayılır ⇒ tek kelime küçük harf yazılır (`oninit`, `resourceroots`,
+> `compatversion`, `frameoptions`) — hazır dosya: `playbook/templates/ui5-freestyle/surum/1.71/webapp/index.html`.
 
 ```html
 <!DOCTYPE html>
@@ -568,7 +673,7 @@ sap.ui.define([
 | Kural | Açıklama |
 |-------|----------|
 | `data-sap-ui-libs` YASAK | Kütüphaneler manifest'te tanımlanır, index.html'de belirtme |
-| `data-sap-ui-on-init` | camelCase — `data-sap-ui-oninit` değil |
+| `data-sap-ui-on-init` | Biçim backend UI5 sürümüne bağlı (§2.6): 1.120 hattında kebab (`on-init`; 1.120.52 küçük harfi de tanır) · 1.71 hattında `data-sap-ui-oninit` (1.71.85–1.114.10'da kebab sessizce yok sayılır — ölçüldü; küçük harf ölçülen tüm sürümlerde çalışır) |
 | `sapUiSizeCompact` | Body class'a ekle — controller'da ayrıca set etme |
 | `data-handle-validation="true"` | Validation framework desteği için ekle |
 | `height: 100%` | CSS ile `html, body, body > div, #container, #container-uiarea` |
@@ -652,7 +757,7 @@ onCustomerChange: function () {
 
 - `i18n/i18n.properties` → **İngilizce** (default fallback)
 - `i18n/i18n_tr.properties` → **Türkçe**
-- manifest'te: `"supportedLocales": ["", "tr"]`, `"fallbackLocale": ""`
+- manifest'te: `"supportedLocales": ["", "tr"]`, `"fallbackLocale": ""` — **1.120 hattı**; 1.71 hattında `sap.app.i18n` string biçim yazılır, bu iki ayar orada yoktur. `models.i18n.settings`'e yazılırsa 1.71.85'te etkisiz, 1.84.62+'da okunur (zararsız — §2.6)
 - ⚠️ **Etiket/metin değişiminde HER İKİ dosya güncellenir.** App `language=tr` çalışınca UI5 `i18n_tr.properties`'i yükler ve `i18n.properties`'i **override eder** → yalnız birini değiştirmek TR'de eski metni bırakır. (`grep <key> i18n*.properties` → bulunan tümünü güncelle; sonra **hard refresh / Ctrl+F5** — i18n bundle cache'lenir.) Memory: `feedback_i18n-tr-her-iki-dosya`.
 
 ### 7.6 Kaydetme / Aksiyon Geribildirimi (ZORUNLU)
@@ -738,7 +843,7 @@ Tarayıcıdan veya Postman ile alınıp kaydedilir.
 ALV-tarzı liste/rapor ekranları **`sap.ui.table.Table` (grid)** ile yapılır (masaüstü, çok-kolon,
 native sort/filter, sanal scroll, kolon resize/sürükle/dondur). `sap.m.Table` yalnız
 **mobil-öncelikli/hücre-zengin** ekranlar için istisna. Reusable util (`TablePersonalizer.js`
-grid sürümü), kanonik şablon app, backend deseni (wrapper view entity + DCL + SRVD/SRVB) ve tam
+grid sürümü), kanonik şablon (`playbook/templates/ui5-freestyle/`), backend deseni (wrapper view entity + DCL + SRVD/SRVB) ve tam
 kurulum reçetesi: **detay §16** (tekrarı önlemek için bu doküman içinde tek yerde tutulur).
 
 ### 10.0.1 Filtre / arama ekranı = SELECT-OPTIONS + harf-duyarsız "içeren" (STANDART, FE-32)
@@ -758,7 +863,7 @@ Rapor/liste **seçim (filtre) ekranı** ABAP SELECT-OPTIONS pariteli olmalı —
   5. **Listele/Ara kapısı:** herhangi bir `MultiInput`'ta `getValue()` boş değilse (token'a dönüşmemiş metin) çağrı YAPILMAZ, alan adını söyleyen hata verilir. Sessiz yok sayma yasaktır.
   6. **VH "Tamam":** alanda kalmış yazılı metin kaybolmaz — geçerliyse token'a dönüşür, tekrarsa eklenmez (tekrar karşılaştırması büyük harfe çevrilmiş değerle; yazılı değeri silmez).
   - **Ölçüm:** kaynak okuması yetmez — yaz + Enter → token sayısı, ardından Listele'nin ağ izindeki `$filter`'ında değer VAR MI (kod ≠ kablolama).
-- **Kanonik referans (kopyala): `ERP/SD/ZSD001_CLC/ui/sales_order_report/`** — `Filter.view` (MultiInput+VHD), `Filter.controller` (`_openVH`/`_applyVHSearch`/`_syncTokens`/`_parseSearchTerm`), `TablePersonalizer` (`_onColumnFilter`). ⚠ **Bu kanonik kopyada validator YOKTU (2026-10-16 ölçüldü)** — ondan türeyen kopyalar aynı kusuru taşıdı. Kopyalarken yukarıdaki *Yazılı metin → token* maddesini ekle; kopyanda `addValidator` + Listele kapısı yoksa eksik say. Teknik + tuzaklar: [`playbook/ui-freestyle-odata-v2.md` §C](../playbook/ui-freestyle-odata-v2.md).
+- **Kanonik kaynak (kopyala): çekirdek şablonu [`playbook/templates/ui5-freestyle/`](../playbook/templates/ui5-freestyle/README.md)** — desen bileşenleri: filtre view'ı (MultiInput+VHD), VH yardımcıları (`_openVH`/`_applyVHSearch`/`_syncTokens`/`_parseSearchTerm`), util kolon filtresi (`_onColumnFilter`). ⚠ **Eskiden kanonik sayılan proje-içi kopyada validator YOKTU (2026-10-16 ölçüldü)** — ondan türeyen kopyalar aynı kusuru taşıdı; çekirdek şablonu bu boşluğu kapatmak üzere *Yazılı metin → token* maddesiyle üretildi (Issue #381). Kural kopya kaynağından bağımsızdır: kopyanda `addValidator` + Listele kapısı yoksa eksik say. Teknik + tuzaklar: [`playbook/ui-freestyle-odata-v2.md` §C](../playbook/ui-freestyle-odata-v2.md).
 
 ### 10.1 `sap.ui.layout.Splitter` Namespace Kullanımı
 
@@ -959,10 +1064,12 @@ Yeni bir Fiori uygulaması oluşturulduğunda kontrol edilecekler:
 - [ ] `ui5-deploy.yaml` → `deploy-to-abap` task + doğru BSP adı/paket/transport
 - [ ] `manifest.json` → `_version: "1.60.0"`, `resources.json`, `flexEnabled: true`
 - [ ] `manifest.json` → annotation dataSource + `localUri`
-- [ ] `manifest.json` → `minUI5Version: "1.120.23"`
+- [ ] `manifest.json` → `minUI5Version` = backend'in `sap-ui-version.json` → `version` değeri (ölçüldü, §2.6)
+- [ ] Tema (`index.html` + tema adı geçen her `ui5*.yaml`) backend'den ölçüldü: Horizon varsa `sap_horizon`, yoksa `sap_fiori_3` (§2.6)
+- [ ] Sürüme bağlı kontroller (§2.6 tablosu) backend sürümüne uygun — ör. `IllustratedMessage` yalnız ≥1.98
 - [ ] `manifest.json` → routing `type: "View"` + her target'ta `id`
 - [ ] `manifest.json` → `controlId: "app"` (appContainer değil)
-- [ ] `Component.js` → `IAsyncContentCreation` interface
+- [ ] `Component.js` → `IAsyncContentCreation` interface (UI5 ≥1.89; altı §2.6)
 - [ ] `index.html` → `sapUiSizeCompact` body'de, `data-sap-ui-libs` YOK
 - [ ] `index.html` → `data-handle-validation="true"`
 - [ ] `App.view.xml` → `<App id="app"/>`
@@ -977,18 +1084,23 @@ Yeni bir Fiori uygulaması oluşturulduğunda kontrol edilecekler:
 
 ## 15. REFERANS UYGULAMA
 
-Tüm bu kuralların çalışan örneği:
+Kopyalanacak kanonik kaynak **çekirdekteki şablondur**:
 
 ```
-<PROJECT_ROOT>\order_app\
+playbook/templates/ui5-freestyle/        (giriş: README.md)
+  app/                                   ortak gövde — iki hedef sürümde de var olan API'ler
+  surum/1.120/  ·  surum/1.71/           sürüme bağlı parçalar (§2.6 tablosu)
 ```
 
-Yeni bir uygulama yaratırken bu klasörü şablon olarak kullan:
-1. `order_app/` klasörünü kopyala
-2. Tüm dosyalarda `com.example.sd.orderapp` → yeni ID ile değiştir
-3. `webapp/` içeriğini sıfırla, sadece altyapı dosyalarını (manifest, Component, index, model) tut
+Yeni bir uygulama yaratırken (adımların ayrıntısı şablonun `README.md`'sindedir):
+1. Backend UI5 sürümünü ve temasını ölç (§2.6) → hangi `surum/<X>/` parçasının kullanılacağına karar ver
+2. `app/` ortak gövdesini + seçilen sürüm parçasını paketin `ui/<app_adi>/` klasörüne kopyala
+3. Tüm dosyalarda şablon namespace'i (`com.example.<alan>.<app>`) → yeni ID ile değiştir; `minUI5Version` ve tema = ölçülen değerler
 4. `ui5-deploy.yaml`'da BSP adı, paket ve transport'u güncelle
 5. `localService/` için yeni servisin metadata'sını al
+
+Bir projenin kendi `order_app/` benzeri uygulaması **yerel örnek** olabilir; kopya kaynağı olarak
+çekirdek şablonunun yerine geçmez (proje kopyaları zamanla birbirinden ayrışır — ölçüm playbook §E).
 
 ---
 
@@ -1023,12 +1135,14 @@ Her liste ekranı (grid; m.Table yalnız mobil-istisna) şunları **zorunlu** sa
    (Görünür / Tüm kolonlar). `manifest` libs → `sap.ui.export`.
 5. State **localStorage** kalıcı; selection/scr1 filtreleriyle **AND**.
 
-**Kanonik implementasyon (kopyala-uyarla) — GRID sürümü (§10.0):**
-`ERP/SD/ZSD001_CLC/ui/delivery_report/webapp/util/TablePersonalizer.js` (grid
-reusable util — `new TablePersonalizer({table, persoKey, columns:[{key,path,colId,
-text,type}], bundle, baseFilters})`; DB-backed varyant `ZSD000_UI_VARIANT_O2`) +
-`List.controller.js` `onColumns`/`onExportExcel` + i18n key seti (`op.*`, `flt.*`,
-`exp.*`, `btn.cols`, `btn.excel`). (Voyage util = eski m.Table sürümü; yeni iş grid'i kopyalar.)
+**Kanonik implementasyon (kopyala-uyarla) — GRID sürümü (§10.0):** çekirdek şablonu
+[`playbook/templates/ui5-freestyle/`](../playbook/templates/ui5-freestyle/README.md) — grid
+reusable util `app/webapp/util/TablePersonalizer.js` (kurucu deseni `new TablePersonalizer({table, persoKey,
+columns:[{key,path,colId,text,type}], bundle, baseFilters})`; DB-backed varyant servisi
+`ZSD000_UI_VARIANT_O2` örneği) + liste controller'ında `onColumns`/`onExportExcel` bağlantısı +
+i18n key seti (`op.*`, `flt.*`, `exp.*`, `btn.cols`, `btn.excel`). Satır modu sürüme bağlıdır
+(`rowMode` 1.120 hattı · `visibleRowCountMode` 1.71 hattı — §2.6; `rowmodes.Auto` `@since` 1.119 ama 1.119 yalnız bulut sürümüdür). Proje-içi eski util kopyaları (m.Table
+sürümü dahil) kopya kaynağı DEĞİLDİR.
 
 **Yeni uygulamada:** liste ekranı iskeleti kurulurken bu util kopyalanır,
 kolon meta'sı (key/path/colId/text/type) uygulamaya göre doldurulur,
@@ -1223,7 +1337,9 @@ OData EntitySet used: [Name]
     </f:header>
 
     <f:content>
-      <!-- Empty state — always implement -->
+      <!-- Empty state — always implement. IllustratedMessage ≥1.98; altında: grid'de
+           noData içinde VBox{Text + CTA Button}, m.Table/List <1.101'de tablonun yanında
+           görünürlüğü bağlı VBox{Text + CTA Button} (§2.6, L.4) -->
       <IllustratedMessage id="emptyState" visible="false"
                           illustrationType="sapIllus-EmptyList"
                           title="{i18n>noDataTitle}"
@@ -1479,8 +1595,9 @@ dağıtılmış BSP'de `Component-preload.js`'i `page.route` ile engelleyip yere
 ederek aynı ölçüm koşulabilir.
 
 **Kardeş taraması ZORUNLU:** `new ODataModel(`, `new XMLHttpRequest`, `fetch(` ve `sServiceUrl +` geçen
-**her** satır — bir paketteki tek util çoğu kez birebir kopyalarla birden çok app'te yaşar (ölçülen vakada 14
-kopya). Kontrol maddesi: `bug-checklist-frontend.md` **FE-48**. Sayfa kapanırken gönderilen istek (belge kilidi
+**her** satır — bir paketteki tek util çoğu kez kopyalarla birden çok app'te yaşar (ölçülen vakada 14
+kopya) ve kopyalar **birebir aynı olmayabilir** (başka bir ölçümde 18 kopyanın uzunluğu 278–844 satır
+arasında değişiyordu, 2026-11-02) ⇒ her kopyayı ayrı tara, birinde gördüğünü öbürlerine genelleme. Kontrol maddesi: `bug-checklist-frontend.md` **FE-48**. Sayfa kapanırken gönderilen istek (belge kilidi
 bırakma) ayrıca **FE-49**'a tabidir (ölçüm yalnız Chromium 153, navigasyon; sekme kapatma ayırt edilemedi; Firefox / Safari / FLP ölçülmedi).
 
 ### 18.5 $batch Request Handling
@@ -1741,7 +1858,10 @@ sap.ui.define([
 ```
 1. DENSITY:       Compact mode for desktop enterprise apps (cozy for mobile)
 2. FEEDBACK:      Every user action must have immediate visual feedback (busy indicator, toast)
-3. EMPTY STATE:   Always implement IllustratedMessage for empty tables/lists
+3. EMPTY STATE:   Always implement a CTA empty state for empty tables/lists —
+                  IllustratedMessage (UI5 >=1.98; m.Table/List 1.98-1.100: beside the table, visibility-bound);
+                  below 1.98: grid noData > VBox(Text + CTA Button), m.Table/List: visibility-bound
+                  VBox(Text + CTA Button) beside the table (§2.6)
 4. ERROR STATE:   Always show meaningful error messages — never raw technical errors
 5. NAVIGATION:    Breadcrumbs on Object Page, back button always functional
 6. LOADING:       Table-level busy indicator, not page-level (avoid full-screen blocking)
@@ -2113,6 +2233,8 @@ onSaveSuccess: function() {
 ### 18.15 G. Theming & Visual Polish — SAP Horizon
 
 > **Kural:** SAP Horizon (Morning/Evening) tema desteği = modern ve profesyonel görünüm. Asla hardcoded renk kullanma, her zaman CSS variable kullan.
+> **Tema backend'e bağlıdır (§2.6):** Horizon'suz backend'de (ölçüt §2.6: `sap_horizon/library.css`
+> 200 değil YA DA içeriği `base/library.css` ile aynı) tema `sap_fiori_3`'tür; tema değişkeni kuralı aynen geçerlidir.
 
 ```css
 /* custom.css — SAP Theming Variables ile özelleştirme */
@@ -2284,7 +2406,8 @@ onSelectionChange: function(oEvent) {
 <Label text="{i18n>colCompany}" labelFor="inputCompany" required="true"/>
 <Input id="inputCompany" value="{CompanyCode}"/>
 
-<!-- Tablo boş durum — screen reader için -->
+<!-- Tablo boş durum — screen reader için (IllustratedMessage ≥1.98; altında kullanılan
+     VBox{Text + Button} karşılığı da aynı ARIA kuralına tabidir — §2.6) -->
 <IllustratedMessage illustrationType="sapIllus-EmptyList"
                     title="{i18n>noDataTitle}"
                     description="{i18n>noDataDesc}"
@@ -2337,7 +2460,8 @@ onExit: function() {
 ║  FEEDBACK & INTERACTION                                         ║
 ║  □ Her buton tıklamada busy feedback var mı?                    ║
 ║  □ §7.6: save/action sonrası MessageBox.success gösteriliyor mu? (MessageToast+navTo YASAK) ║
-║  □ Boş tablo durumunda IllustratedMessage var mı?               ║
+║  □ Boş tablo durumunda CTA'lı boş durum var mı?                 ║
+║    (IllustratedMessage ≥1.98 · altında VBox{Text+Button} §2.6)  ║
 ║  □ Validation hataları MessagePopover ile gösteriliyor mu?      ║
 ║  □ Unsaved changes uyarısı var mı? (navigation guard)           ║
 ║                                                                 ║
@@ -2350,6 +2474,7 @@ onExit: function() {
 ║  □ Hardcoded renk (hex/rgb) var mı? → OLMAMALI                 ║
 ║  □ var(--sapXxx) kullanılıyor mu? → OLMALI                     ║
 ║  □ Morning/Evening Horizon'da test edildi mi?                   ║
+║    (Horizon'suz backend: sap_fiori_3 ile — tema ölçümü §2.6)    ║
 ║                                                                 ║
 ║  ACCESSIBILITY                                                  ║
 ║  □ Tüm buton/ikon'larda tooltip var mı?                        ║
@@ -2486,11 +2611,20 @@ formatter: {
 ```
 
 **L.4 Empty State — CTA (Call-to-Action) ile Yönlendirici Boş Durum:**
+
+> **İlke (sürümden bağımsız, zorunlu):** boş durum = açıklama + **CTA** (oluştur / filtreyi temizle).
+> **Kontrol sürüme bağlı (§2.6):** UI5 ≥1.98 → `sap.m.IllustratedMessage` (aşağıdaki örnek);
+> altında → **grid** (`sap.ui.table.Table`): `noData` aggregation'ı (tek kontrol alır) içinde
+> `VBox` { `Text` + CTA `Button` }; **`sap.m.Table`/`List` < 1.101**: `noData` aggregation'ı yok
+> (yalnız `noDataText`) ⇒ tablonun yanında, görünürlüğü "satır yok"a bağlı `VBox` { `Text` + CTA
+> `Button` } — **1.98–1.100** arasında bu dış kontrol `IllustratedMessage` olur (`noData`'ya konamaz, görünürlüğü yine bağlı) (hazır parça: `playbook/templates/ui5-freestyle/surum/1.71/`). Yalnız "Veri yok" metni
+> her sürümde YANLIŞ.
+
 ```xml
 <!-- ❌ YANLIŞ: Sadece "Veri yok" yazan boş tablo -->
 <Table noDataText="No data"/>
 
-<!-- ✅ DOĞRU: İllüstrasyon + açıklama + CTA butonu -->
+<!-- ✅ DOĞRU (UI5 ≥1.98): İllüstrasyon + açıklama + CTA butonu -->
 <IllustratedMessage id="emptyState"
                     illustrationType="sapIllus-EmptyList"
                     title="{i18n>noDataTitle}"
@@ -2626,7 +2760,7 @@ formatter: {
 ║     → Variant management power user'lar için aktif              ║
 ║                                                                 ║
 ║  9. DEFAULT browser/UI5 stillerini kullanma                      ║
-║     → SAP Horizon temasını kullan                               ║
+║     → SAP Horizon temasını kullan (yoksa sap_fiori_3 — §2.6)    ║
 ║     → Custom CSS → sadece var(--sapXxx) ile                     ║
 ║                                                                 ║
 ║ 10. Confirmation OLMADAN silme/iptal işlemi yapma                ║
@@ -2638,4 +2772,4 @@ formatter: {
 
 ---
 
-*Son güncelleme: 2026-07-31 — §18 eklendi (02'den taşınan genel UI tasarım desenleri, D2 dedup) + §10.0/§14 iç-tekrar tekilleştirmesi*
+*Son güncelleme: 2026-11-02 — §2.6 (UI5 sürümü + tema backend'den ölçülür, sürüme bağlı kontroller tablosu) + kanonik kopya kaynağı çekirdek şablonu `playbook/templates/ui5-freestyle/` (Issue #381). Önceki: 2026-07-31 — §18 eklendi (02'den taşınan genel UI tasarım desenleri, D2 dedup) + §10.0/§14 iç-tekrar tekilleştirmesi*

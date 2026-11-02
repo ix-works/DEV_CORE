@@ -16,5 +16,5 @@ Rapor/liste **filtre + value-help + grid sütun-başlığı araması** için PRO
 - **⛔ `caseSensitive:false` ASLA kullanma** → UI5 V2 `$filter`'a `toupper()`/`tolower()` enjekte eder; SAP Gateway /IWBEP bu fonksiyonları DESTEKLEMEZ → **HTTP 400** "Function toupper/tolower is not supported" (SAP Note 1797736) → arama hiç sonuç döndürmez (canlı kanıt 2026-06-24, GÜLAK vakası). `new Filter(path, FilterOperator.Contains, q)` (caseSensitive parametresi VERME) → düz `substringof` zaten harf-duyarsız (DB collation; `gül`→`GÜLAK` 200).
 - Wildcard ortak `_parseSearchTerm`: `*x*`/`x`→Contains · `x*`→StartsWith · `*x`→EndsWith (startswith/endswith /IWBEP'te DESTEKLENİR — toupper'ın aksine; canlı probe). Literal asterisk aranmaz.
 - Kod/serbest-metin alanı düz-token default `Contains` (`defaultOp`); grid sütun filtresi `TablePersonalizer._onColumnFilter` (preventDefault + string=düz Contains).
-- **Kanonik referans (kopyala): `ERP/SD/ZSD001_CLC/ui/sales_order_report/`.**
+- **Kanonik referans (kopyala): çekirdek şablonu `playbook/templates/ui5-freestyle/`** (2026-11-02, Issue #381 — eski proje-içi yol çekirdekte çözülmüyordu).
 - Bağlı: [[feedback_grid-liste-standardi]] · [[feedback_liste-ekrani-alv-standardi]] · [[feedback_freestyle-ui-preflight]] · [[feedback_kural-gate-lenmeli-yoksa-anlamsiz]]

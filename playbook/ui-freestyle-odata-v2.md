@@ -35,7 +35,8 @@ Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağ
 
 1. **Bootstrap (kopyala, doğrulanmış):** `index.html` UI5 **backend'in kendi kopyasından**
    (`/sap/public/bc/ui5_ui5/resources/sap-ui-core.js` — standards/03 §2.5; CDN pin'i YASAK) +
-   `data-sap-ui-language="tr"`. `manifest.json` modelleri: `i18n` +
+   `data-sap-ui-language="tr"`. `minUI5Version` + tema backend'den **ölçülür**
+   (`sap-ui-version.json` · Horizon yoksa `sap_fiori_3` — standards/03 §2.6). `manifest.json` modelleri: `i18n` +
    `""` (OData V2: `defaultBindingMode:TwoWay`, `useBatch:false`,
    `defaultCountMode:Inline`) + `ui` (JSON: `{busy,filter:{}}`).
    Component.js'te kullanılan her model `sap.ui.define` deps'inde.
@@ -51,8 +52,8 @@ Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağ
 5. Value-help için **generic helper** (C1/C3): model + kontrolü DİREKT yaz;
    `<X>Name` alanını CDS projeksiyonda expose et, `description` bind et.
 6. **Liste ekranı = ZORUNLU ALV-paritesi standardı (ADR 0008, §E):**
-   kullanıcı istemese bile `TablePersonalizer.js` (kanonik util)
-   **kopyalanır** — kolon-başlığı sort/filtre + aktif filtre çubuğu +
+   kullanıcı istemese bile `TablePersonalizer.js` (kanonik util — çekirdek şablonu
+   `playbook/templates/ui5-freestyle/`) **kopyalanır** — kolon-başlığı sort/filtre + aktif filtre çubuğu +
    **Kolonlar göster/gizle** + Excel (kapsam sorulu). Sıfırdan
    filtre/sort/export YAZMA. Kolonlara sabit `id` (colId↔meta).
 7. Benign konsol gürültüsünü (§A3) **kovalama** — saat kaybı.
@@ -65,7 +66,7 @@ Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağ
    host'u grep'le doğrula.
 9. **Lokal user&pass popup → iki tuzağı AYIR (sonsuz döngü ≠ hesap kilidi):**
    (a) Popup döngüsü + log'da `lrep`/`flex/data` çağrısı varsa → `index.html`
-   bootstrap'a `data-sap-ui-flexibility-services="[]"` + `npm run start-noflp`
+   bootstrap'a `data-sap-ui-flexibility-services="[]"` (1.71 hattında `data-sap-ui-flexibilityservices` — 1.71.85–1.114.10'da kebab yok sayılır, std/03 §2.6) + `npm run start-noflp`
    (FLP `flp.html` değil, `index.html` aç). (b) Popup ISRARLA geliyor ama log'da
    yalnız app `$metadata` 401'i varsa → büyük ihtimalle **SAP kullanıcısı kilitli**;
    **deneme yapma** (kiliti uzatır), MCP `adt_get` ile aynı kullanıcı 401 mı diye
@@ -95,7 +96,7 @@ Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağ
 
 | # | Semptom | Kök neden | Çözüm | Kapsam |
 |---|---|---|---|---|
-| A1 | Beyaz ekran, `getDatePlaceholder is not a function` | `index.html` UI5 sürümü pinli değil (CDN latest kırıyor) | UI5 sürümünü pinle + `data-sap-ui-language="tr"` | all (std `03-coding-ui-fiori.md` §2.5) |
+| A1 | Beyaz ekran, `getDatePlaceholder is not a function` | `index.html` UI5'i sürümsüz/CDN'den yüklüyor (core ↔ locale-data sürüm farkı; CDN patch'leri takvimle silinir) | UI5'i **backend'in kendi kopyasından** yükle (`/sap/public/bc/ui5_ui5/resources/sap-ui-core.js`; CDN pin'i YASAK) + `data-sap-ui-language="tr"`; `minUI5Version` + tema backend'den ölçülür (std/03 §2.6) | all (std `03-coding-ui-fiori.md` §2.5) |
 | A2 | Model `undefined`, binding çalışmıyor | Component.js'te model require edilmemiş / manifest model eksik | manifest 3 model (i18n/""/ui); Component deps tam | all |
 | A3 | Konsolda `Component-preload.js 404`, `favicon 404`, `fallbackLocale 'en' not in supported locales`, "Defining object type 'Object' deprecated" | Dev modda (build yok) **normal**; locale uyarısı benign | **Kovalama.** Hata değil. Sadece gerçek `Error`/kırmızı stack'e bak | all |
 
@@ -145,7 +146,7 @@ Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağ
 | C2 | Value-help'li alanda kod görünüyor, ad yok | Entity'de ad alanı yok | CDS projeksiyonda assoc ile `<X>Name` expose; UI `description="{…Name}"`; confirm'de adı anında bas (assoc read-only, refresh'e kadar boş kalır) | all (+backend) |
 | C3 | Tek `_openVH` hem header hem satır için | header = absolute path (context yok), satır = relative + row context | `oInput.getBindingContext("v")` var mı ile ayır; `model.setProperty(path,val,rowCtxOrUndefined)` | pattern |
 | C4 | F4 seçimi **yanlış alana** yazılıyor (aynı tipte 2+ alanda; örn. Firma/Hat ikisi de BP) | Tek handler birden çok alana hizmet ederken yazma hedefini **sabit** veriyor (örn. hep `/h/Partner`) → hangi alandan açılırsa açılsın aynı yere gider, diğeri boş kalır | Hedefi **çağıran input'un value binding path'inden türet**: `oEvent.getSource().getBinding("value").getPath()` → path'e göre dallan (`/LinePartner$/.test(p) ? "/h/LinePartner" : "/h/Partner"`). Asla sabit verme. Yakalama: her F4'ten sonra **kendi** alanı doluyor mu kontrol et (ORDER Hat→Firma kayması, Playwright ile yakalandı 2026-06-02, commit `b7a395f3`) | pattern |
-| C5 | **Rapor filtre ekranı = SELECT-OPTIONS** (çoklu-değer + aralık), tek-değer Input değil; **harf-duyarsız "içeren" arama 400 / hiç sonuç yok** | `caseSensitive:false` → UI5 V2 `$filter`'a `toupper()`/`tolower()` enjekte eder; SAP Gateway (/IWBEP) bunları **DESTEKLEMEZ** → HTTP 400 "Function toupper/tolower is not supported" (SAP Note 1797736) → VH/grid araması hiç sonuç döndürmez | (1) Filtre alanı = `sap.m.MultiInput` + `sap.ui.comp` `ValueHelpDialog` (değer-tablosu + ranges sekmesi). (2) VH araması/grid filtresi/düz-token = `new Filter(field, FilterOperator.Contains, q)` — **caseSensitive parametresi VERME** → düz `substringof` zaten harf-duyarsız (DB collation; canlı: `gül`→`GÜLAK` 200). (3) Wildcard ortak `_parseSearchTerm`: `x*`→StartsWith · `*x`→EndsWith · `*x*`/`x`→Contains (startswith/endswith /IWBEP'te DESTEKLENİR). (4) Grid: `TablePersonalizer._onColumnFilter` native filtreyi `preventDefault` + string kolonda düz Contains (caseSensitive YOK). (5) Kod/serbest-metin alanı düz-token default `Contains` (`defaultOp`). **Kanonik: `ZSD001 <report>_app` — kopyala.** Gate: `check_filter_search_pattern.py` (FE-32) | all (rapor/liste) |
+| C5 | **Rapor filtre ekranı = SELECT-OPTIONS** (çoklu-değer + aralık), tek-değer Input değil; **harf-duyarsız "içeren" arama 400 / hiç sonuç yok** | `caseSensitive:false` → UI5 V2 `$filter`'a `toupper()`/`tolower()` enjekte eder; SAP Gateway (/IWBEP) bunları **DESTEKLEMEZ** → HTTP 400 "Function toupper/tolower is not supported" (SAP Note 1797736) → VH/grid araması hiç sonuç döndürmez | (1) Filtre alanı = `sap.m.MultiInput` + `sap.ui.comp` `ValueHelpDialog` (değer-tablosu + ranges sekmesi). (2) VH araması/grid filtresi/düz-token = `new Filter(field, FilterOperator.Contains, q)` — **caseSensitive parametresi VERME** → düz `substringof` zaten harf-duyarsız (DB collation; canlı: `gül`→`GÜLAK` 200). (3) Wildcard ortak `_parseSearchTerm`: `x*`→StartsWith · `*x`→EndsWith · `*x*`/`x`→Contains (startswith/endswith /IWBEP'te DESTEKLENİR). (4) Grid: `TablePersonalizer._onColumnFilter` native filtreyi `preventDefault` + string kolonda düz Contains (caseSensitive YOK). (5) Kod/serbest-metin alanı düz-token default `Contains` (`defaultOp`). **Kanonik: çekirdek şablonu [`templates/ui5-freestyle/`](templates/ui5-freestyle/README.md) — kopyala.** Gate: `check_filter_search_pattern.py` (FE-32) | all (rapor/liste) |
 | C6 | **Filtre alanına yazılan değer (`1500` + Enter) token OLMUYOR**; zorunlu alanda "zorunlu alan" uyarısı, zorunlu olmayanda **değer sessizce yok sayılıp süzgeçsiz rapor** | `MultiInput`'ta `addValidator` yok; Listele işleyicisi yalnız `getTokens()` okuyor, alanda kalan metni görmüyor | (1) Her `MultiInput`'a `addValidator`: metni VH token'ıyla aynı anlamda token'a çevir (düz/joker/`defaultOp`); yazılı `!=x`/`<x`/`>x`/`=x` düz token yapma → VH "Koşulları tanımla"ya yönlendir. (2) Kod alanında (domain `LOWERCASE` boş) yazılanı **ve** VH range `value1/value2`'yi büyük harfe çevir. (3) `$metadata` `MaxLength` aşımı → token yok + toast. (4) Listele/Ara: herhangi bir alanda `getValue()` doluysa çağrı yok + alan adlı hata. (5) VH "Tamam" sonrası kalan geçerli metni token'a çevir, tekrarı ekleme (büyük harfli karşılaştırma). Ölç: yaz+Enter → token sayısı + Listele ağ izinde `$filter`. Std/03 §10.0.1 · FE-50 | all (rapor/liste) |
 
 ---
@@ -165,9 +166,15 @@ Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağ
 > (masaüstü, çok-kolon, **yatay scroll** + **sanal scroll** + kolon resize/reorder/freeze +
 > native sort/filter). Mobil-öncelikli veya hücre-zengin/değişken-yükseklik ekranlar için
 > `sap.m.Table` (responsive) **istisna** (§E-LEGACY). Kanıt: birden çok rapor app'i (ZSD001 örneği).
-> **Kanonik reusable util:** `ERP/SD/ZSD001_CLC/ui/<report>_app/webapp/util/TablePersonalizer.js`
-> (grid sürümü; tüm app'lerde birebir, sadece namespace farkı). **Kanonik şablon app (kopyala-uyarla):**
-> `ERP/SD/ZSD001_CLC/ui/<report>_app/` — yeni rapor = bunu kopyala + kolon/filtre/servis değiştir, sıfırdan yazma.
+> **Kanonik kaynak (kopyala-uyarla) = çekirdek şablonu
+> [`templates/ui5-freestyle/`](templates/ui5-freestyle/README.md)** — grid reusable util
+> `TablePersonalizer.js` + şablon app (ortak gövde `app/` + sürüm parçası `surum/1.120/` ya da
+> `surum/1.71/`, seçim std/03 §2.6). Yeni rapor = şablonu kopyala + kolon/filtre/servis değiştir, sıfırdan yazma.
+> ⚠ **Proje-içi util kopyaları birebir AYNI DEĞİLDİR:** bir tüketici projede 18 `TablePersonalizer.js`
+> kopyasının uzunluğu **278 ile 844 satır** arasında değişiyordu (2026-11-02 ölçümü; 18 md5'in hepsi
+> farklıydı, ama md5 farkı namespace'ten de doğabileceği için çürüten kanıt **satır aralığıdır**) — eski
+> "tüm app'lerde birebir, sadece namespace farkı" cümlesi yanlıştı. Kopya kaynağı proje-içi bir app DEĞİL, şablondur;
+> mevcut kopyaya düzeltme taşırken her kopyayı ayrı tara.
 >
 > ⚠ **Kopyalamadan önce (2026-09-25):** util'in varyant modeli (`_varModel` → `new ODataModel(VAR_SERVICE_URL)`)
 > ana modelin `sap-client`'ını taşımalı — eski kopyalar taşımıyordu (std/03 **§18.5b**, FE-48). Kopyaladığın
@@ -176,12 +183,12 @@ Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağ
 
 **GRID KURULUM (5 parça):**
 1. **manifest** libs: `sap.ui.table` + `sap.ui.export`. View `xmlns:table="sap.ui.table"`.
-2. **table:Table**: `visibleRowCountMode="Auto"` (`minAutoRowCount` ~10), `selectionMode="None"` (saf liste) / `"Single"` (master-detail), `enableColumnReordering` + `enableColumnFreeze`, `threshold="200"` (OData lazy), `rows="{/Entity}"`. Toolbar → **`table:extension`** (OverflowToolbar: başlık + Kolonlar + Excel + Yenile).
+2. **table:Table**: satır modu **sürüme bağlı** (std/03 §2.6) — 1.120 hattı (UI5 ≥1.120; `rowmodes.Auto` `@since` 1.119 ama 1.119 yalnız bulut): `rowMode` + `sap.ui.table.rowmodes.Auto` (en az satır = `minRowCount` ~10); altında `visibleRowCountMode="Auto"` (1.119'dan beri deprecated) + `minAutoRowCount` ~10, `selectionMode="None"` (saf liste) / `"Single"` (master-detail), `enableColumnReordering` + `enableColumnFreeze`, `threshold="200"` (OData lazy), `rows="{/Entity}"`. Toolbar → **`table:extension`** (OverflowToolbar: başlık + Kolonlar + Excel + Yenile).
 3. **table:Column** (her biri): `width` tip-bazlı (date 7rem · time 6rem · amount/qty 8rem `hAlign="End"` · kısa kod 8rem · ad/uzun/concat 16rem · default 10rem) + `sortProperty` + `filterProperty` + `<Label text="{i18n>..}"/>` + `<table:template><Text wrapping="false"/>`. **Key alanlar başta.**
 4. **Sort/filter = grid NATIVE kolon menüsü** (`sortProperty`/`filterProperty` ile otomatik gelir). m.Table'daki custom `columnmenu.Menu` + `infoToolbar` GEREK YOK. Native kolon filtresi + Filter-ekranı base filtresi otomatik AND'lenir (binding `.filter(aFilters, "Application")`).
 5. **Kolon göster/gizle + VARYANT + Excel = TablePersonalizer** (aşağıda).
 
-**Binding:** `oTable.getBinding("rows")` (m.Table'da `"items"` idi); `onUpdateFinished`→`rowsUpdated` event, sayı `getLength()`. master-detail (voyage): `selectionMode="Single"` + key kolonda `Link press` veya satır `rowActionTemplate type=Navigation` → `navTo` detail.
+**Binding:** `oTable.getBinding("rows")` (m.Table'da `"items"` idi); `onUpdateFinished`→`rowsUpdated` event (⚠ `@since` 1.86 — 1.71 backend'de yok, std/03 §2.6), sayı `getLength()`. master-detail (voyage): `selectionMode="Single"` + key kolonda `Link press` veya satır `rowActionTemplate type=Navigation` → `navTo` detail.
 
 **TablePersonalizer (grid sürümü):**
 - "Kolonlar" → geniş ortalanmış `sap.m.Dialog` (arama + Tümünü Seç/Kaldır + scroll; kolon isimleri TAM).
@@ -193,7 +200,7 @@ Yeni freestyle UI iskeletini kurarken, kod yazmadan önce bunları **karara bağ
 - **Backend (salt-okunur rapor RAP'i):** wrapper view entity (`as select from <klasik DDL>`, key + `@AccessControl #CHECK`) + DCL (`V_VBAK_VKO`/VKORG/ACTVT=03) + SRVD (`expose` main + ortak `ZSD000_I_*VH`) + SRVB (OData V2) publish. **EXCRT/kur conversion-exit alanları → `cast(.. as abap.dec(9,5))`** (yoksa OData publish ERROR "Do not use conversion exit"). Recete: bu dosya + `playbook/ui-backend-rap.md`.
 
 ## §E-LEGACY m.Table (mobil/hücre-zengin istisna)
-ALV-grid gerekmeyen, mobil-responsive veya hücre-zengin (wrap, değişken yükseklik) ekranlarda `sap.m.Table` + (eski) `columnmenu.Menu` per-kolon sort/filtre + `infoToolbar` aktif-filtre çubuğu. Yatay scroll/sanal scroll YOK; kolon native menüsü yerine custom. DENENMİŞ-BAŞARISIZ (her ikisinde): `sap.m.P13nDialog`/`P13nFilterPanel` (model-sync kopuk → KULLANMA); `sap.m.TablePersoController` (native Promise `t.done` route çöker). reusable util **kopyalanır**, sıfırdan yazılmaz.
+ALV-grid gerekmeyen, mobil-responsive veya hücre-zengin (wrap, değişken yükseklik) ekranlarda `sap.m.Table` + (eski) `columnmenu.Menu` per-kolon sort/filtre + `infoToolbar` aktif-filtre çubuğu. Yatay scroll/sanal scroll YOK; kolon native menüsü yerine custom. DENENMİŞ-BAŞARISIZ (her ikisinde): `sap.m.P13nDialog`/`P13nFilterPanel` (model-sync kopuk → KULLANMA); `sap.m.TablePersoController` (native Promise `t.done` route çöker). **Util kaynağı:** çekirdek şablonunda m.Table util'i YOKTUR (şablon grid sürümünü taşır); m.Table istisnasında da util **sıfırdan YAZILMAZ** (std/03 §16 · UI-PERSO-01) — kopya kaynağı yoksa **DUR → kullanıcıya sor**; proje-içi eski util kopyası kopya kaynağı DEĞİLDİR (std/03 §16 ile aynı kural).
 
 ---
 

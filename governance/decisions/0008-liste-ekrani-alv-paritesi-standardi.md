@@ -19,6 +19,16 @@
 > Güncel kural: **standards/03 §10.0** + playbook/ui-freestyle-odata-v2.md §E.
 > Aşağıdaki m.Table gövdesini mobil-istisna referansı olarak okuyun.
 
+> ## ⚠️ ŞERH 2026-11-02 (Issue #381) — kanonik kopya YOLU değişti (karar değişmedi)
+>
+> Bu ADR'de ve yukarıdaki revize bandında geçen proje-içi kanonik yollar
+> (`ERP/SD/ZSD001_CLC/ui/...` · delivery_report / sales_order_report / voyage) çekirdekte
+> **çözülmez**. Kopyalanacak kanonik kaynak artık çekirdek şablonudur:
+> [`../../playbook/templates/ui5-freestyle/`](../../playbook/templates/ui5-freestyle/README.md)
+> (grid util + şablon app; sürüme bağlı parçalar standards/03 §2.6). Proje-içi util kopyaları
+> birebir aynı değildir (bir tüketici projede 18 kopyanın uzunluğu 278–844 satır — 2026-11-02 ölçümü).
+> Kararın kendisi (her liste ekranı ALV-paritesi, AI istemeden uygular) **aynen geçerlidir.**
+
 ## Bağlam
 
 <PROJECT_NAME> freestyle SAPUI5 (OData V2 / RAP) uygulamalarında liste
@@ -53,6 +63,7 @@ olarak içerir. AI bunu **kullanıcı ayrıca istemese bile** otomatik uygular:
 
 **Kanonik implementasyon (referans, kopyalanır):**
 `ERP/SD/ZSD001_CLC/ui/voyage/webapp/util/TablePersonalizer.js`
+*(tarihsel yol — 2026-11-02 şerhi: güncel kopya kaynağı `playbook/templates/ui5-freestyle/`)*
 + `List.controller.js` (onColumns/onExportExcel wiring) + gerekli i18n
 keyleri (`op.*`, `flt.*`, `exp.*`, `btn.cols/btn.excel`).
 

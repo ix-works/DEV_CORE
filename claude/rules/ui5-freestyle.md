@@ -10,7 +10,10 @@ Gate: `check_ui5_freestyle_traps.py`.
 
 ## 1. LİSTE = GRID (ADR 0008)
 Liste/rapor ekranı **`sap.ui.table.Table`** (`sap.m.Table` değil). Native sort/filter menüsü +
-DB varyant + kolon göster/gizle + Excel. Kanonik şablonu KOPYALA, sıfırdan yazma.
+DB varyant + kolon göster/gizle + Excel. Kanonik şablonu KOPYALA, sıfırdan yazma —
+kaynak: `core/playbook/templates/ui5-freestyle/` (proje-içi eski app/util kopyası DEĞİL).
+UI5 sürümü (`minUI5Version`) + tema backend'den ölçülür; sürüme bağlı kontroller (boş durum,
+satır modu…) o sürüme göre seçilir — eşikler tek yerde: `core/standards/03-coding-ui-fiori.md` §2.6.
 Gate: `check_list_view_grid.py`.
 
 ## 2. FİLTRE DESENİ (FE-32)

@@ -45,6 +45,7 @@ status: active
 }
 ```
 `fallbackLocale: ""` boş string — varsayılan `.properties` dosyasını kullanır.
+⚠ Bu nesne biçimi 1.71.85'te desteklenmez (`Manifest-dbg.js` değeri `new URI(...)`'ya verir; 1.84.62'den itibaren ölçülen sürümlerde destekli) ve `supportedLocales`/`fallbackLocale` 1.71.85'te model ayarında da okunmaz — sürüm tablosu std/03 §2.6.
 
 ### 12.5 syntax_check.py Yanlış Hata Raporu
 
