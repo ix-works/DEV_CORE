@@ -1317,15 +1317,23 @@ class SAPClient:
             print(f"\n[ERROR] {error_str}")
 
             if isinstance(e, SAPLockError) and getattr(e, 'status_code', None) == 409:
+                # Q350: okunamayan liste "hayalet yok" ile aynı görünmez; push'un kendi
+                # hata akışı (result + aşağıdaki stale-lock ipucu) DEĞİŞMEZ.
                 try:
-                    ghosts = self.adt_client.find_ghost_transports()
+                    try:
+                        ghosts = self.adt_client.find_ghost_transports()
+                    except Exception as ghost_err:
+                        ghosts = None
+                        print(f"\n[WARNING] Ghost transport list could not be read "
+                              f"({type(ghost_err).__name__}: {str(ghost_err)[:150]})")
+                        print(f"[HINT] hayalet transport listesi okunamadı — SE10'da elle bakın")
                     if ghosts:
                         print(f"\n[WARNING] The following ghost transports were likely created by this failed push:")
                         for t in ghosts:
                             print(f"  {t} — delete in SE10")
                         print(f"[HINT] Open SE10, select each transport above and delete it")
                 except Exception:
-                    pass
+                    pass   # uyarı basımı push'un hata akışını bozamaz
 
             if 'NTT_ABAP3' in error_str or 'zaten' in error_str or 'already editing' in error_str:
                 print(f"\n[INFO] This appears to be a stale lock from your own session.")

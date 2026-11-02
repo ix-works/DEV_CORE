@@ -3588,3 +3588,16 @@ python scripts/validators/checklist_check.py --repo . --harita-denetim   # map/B
 - **Üçüncü otorite:** `checklist_check._xml_kod` (FE-07/FE-33) aynı maskeyi kullanır. İkisinden biri değişirse öbürü de aynı girdiyle ölçülür (aynı dosyada farklı hüküm = Q386'nın ikinci yüzü).
 - **Q347 ölçüm reçetesi (render):** markdown-it `commonmark` + `table` ile her checklist'te ① tablo sayısı ② tablo İÇİNDEKİ `| FE-nn |`/`| BE-nn |` satır sayısı = dosyadaki ham ID satırı sayısı ③ başlık satırı olmayan `|` bloğu = 0. Notlar (`>`) tablonun İÇİNE konmaz; tablo bölgesinde boş satır tabloyu böler.
 - **ÖLÇÜLMEDİ:** canlı UI korpusunda yeni maskenin T2/T3 WARN sayısını ne kadar düşürdüğü (bu tur yalnız fixture).
+
+## B93 — `find_ghost_transports` okuyamama ≠ hayalet yok + push 409 uyarısı + `list_revisions` tablo ucu (2026-11-02, Q350/Q351)
+
+```
+python tests/fixtures/revizyon_okuma/run.py        # PASS — 41 vektor + 34 mutasyon (SAP'siz, sahte oturum)
+python tests/run_battery.py revizyon_okuma --kardes changelog_gate --precommit
+```
+
+- Eski kod karşıtlığı (üç dosya birlikte): `git show <taban>:scripts/{sap_adt_lib,list_revisions,sap_client}.py` kum dizinine → `run.py --kaynak <kum>/sap_adt_lib.py --lr-kaynak <kum>/list_revisions.py --sc-kaynak <kum>/sap_client.py`. Taban `b5b8040` → **28/41**; kırmızı YALNIZ H2·H3·H4·H4b·H5·H6·H6b·H7·P1·P3·P4·L4·L5.
+- ⛔ **KONTROL grubu silinmez:** H1 (kolonlu boş dataSet) · H1b (kolonsuz `totalRows`=0) · P2 (409 + geçerli boş yanıt: ne liste ne "okunamadı") · P5 (409 dışı kilit hatası: sorgu hiç yapılmaz). Meşru boşu istisnaya çeviren bir değişiklik bunları kırar.
+- Mutasyonların hedefi İLAN edilir (`MUT_HEDEF`): MG1→H3,P3 · MG2→H5,P4 · MG3→H4b · MG4→H6 · MG5→H7 · MG6/MG7→H2,P1 · MG8→H1b · MG9→H6 · MP1/MP2/MP3→P3,P4 · ML3→L4 · ML4→L5. İlan edilen vektör düşmezse `HEDEF-KACTI` = FAIL (başka bir vektörün kırılması yetmez).
+- P-vektörleri GERÇEK çağıranı (`sap_client.push_object`) süreç içinde koşar: kilit sorgusu `SAPLockError(409)` fırlatır, `find_ghost_transports` gerçek gövdeyle sahte POST oturumuna gider. "Push hata akışı değişmedi" ölçütü: P3/P4 `result` çekirdeği (success · error · error_type · source_uploaded · activated · lock_released) P2'ninkiyle BİREBİR aynı.
+- KAPSAM BEYANI: freestyle yanıt biçimi canlıda ÖLÇÜLMEDİ (POST); biçim kanıtı kardeş ayrıştırıcı `sap_client._find_existing_transport`. `list_revisions` `view`/`viewd` eşlemesi fixture'da ÖLÇÜLMEZ (karar bekliyor). Canlı tablo ucu dayanağı PR #303 ölçümüdür; bu turda ağ yoktu (`NameResolutionError`).

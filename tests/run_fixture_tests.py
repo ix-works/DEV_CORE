@@ -688,7 +688,10 @@ OZEL_TESTLER = [
      "sinifta includes/main/versions; 404 -> NotFound, "
      "200-disi/ag/XML-olmayan govde/ayristirilamayan surum baglantisi/taninmayan entry -> "
      "SAPADTError; KONTROL: baglanti yok + bos feed (onekli/oneksiz) mesru []. Gercek cagiran "
-     "list_revisions.py ayri surecte (24 vektor + 20 mutasyon; eski kod 5/24 = yalniz kontrol grubu)"),
+     "list_revisions.py ayri surecte; Q350 find_ghost_transports okuyamama -> SAPADTError, [] yalniz "
+     "gecerli bos (kolonlu bos dataSet / kolonsuz totalRows=0), deger <data> metninden + gercek cagiran "
+     "push_object 409 dali 'okunamadi' satiri, push sonucu degismez; Q351 list_revisions table/tabl -> "
+     "ddic/tables (41 vektor + 34 mutasyon, ilan edilen hedef vektor; taban b5b8040 28/41)"),
     # 2026-09-26 (Q354 Faz 1): CI'da suit N parcaya bolunur; bir birimin HICBIR parcada
     # kosmamasi sessiz olmasin diye toplayici tamlik denetimi.
     ("parca_tamlik",
@@ -1320,6 +1323,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "`adt_classrun` → `run_classrun` (MCP giriş noktası; uyarı client_log'a taşınır)"),
     # list_revisions.py HARITA'da HIC YOKTU (2026-09-25, Issue #302): tek tüketicisi olduğu
     # `get_object_revisions`'ın gerçek çağıranı olarak `revizyon_okuma` onu AYRI süreçte koşar.
+    # 2026-11-02 Q350: push_object 409 dalinin hayalet-listesi okuyamama uyarisi `revizyon_okuma`
+    # P-vektorlerinde surec ici kosar (b0_secim'de sap_client sayisi pinli DEGIL — olculdu).
+    ("scripts/sap_client.py", ("O:revizyon_okuma",),
+     "push_object 409 SAPLockError dali: find_ghost_transports okunamazsa 'okunamadi — SE10' satiri"),
     ("scripts/list_revisions.py", ("O:revizyon_okuma",),
      "get_object_revisions'ın tek CLI çağıranı: istisna → [FAIL] rc 1, meşru boş → [INFO] rc 0, "
      "ayırıcı satırında literal `\\n` yok"),
