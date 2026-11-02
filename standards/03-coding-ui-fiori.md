@@ -373,7 +373,8 @@ olmadan global `sap.ui.model.json.JSONModel` kullanımı = async/strict'te fırl
    ama md5'i `base/library.css` ile aynı; var olmayan uydurma bir tema adı da aynı sonucu verdi).
    **1.120.52**'de davranış farklı: olmayan tema **404**, `sap_horizon` ≠ `base` (kontrol grubu).
    Seçim ölçütü iki davranışta da aynı sonucu verir. Backend ICF'nin `/sap/public/bc/ui5_ui5/` altında aynı
-   düşüşü yaptığı **DOĞRULANAMADI** (CDN'de ölçüldü) — bu yüzden ölçüt içerik kıyasıdır. Ölçülen tema adı, adın geçtiği **her yere aynı** yazılır:
+   düşüşü yaptığı **UI5 1.71.5 backend'inde ölçüldü** (DEV_CORE Issue #384: `sap_horizon` md5 = `base` md5,
+   `sap_fiori_3` farklı); diğer backend sürümleri ÖLÇÜLMEDİ — bu yüzden ölçüt içerik kıyasıdır. Ölçülen tema adı, adın geçtiği **her yere aynı** yazılır:
    `index.html` `data-sap-ui-theme` (§2.5/§5) · tema adı geçen her `ui5*.yaml` (`ui5.yaml` · `ui5-local.yaml` · `ui5-mock.yaml`) `fiori-tools-preview` → `flp.theme` (§2.3) ·
    tema adı geçen test/sandbox sayfaları. Bu dokümandaki `sap_horizon` örnekleri ve Horizon
    maddeleri (§18.15 · §18.18 THEMING · L.7 md. 9) **Horizon'lu backend** içindir; Horizon'suz backend'de

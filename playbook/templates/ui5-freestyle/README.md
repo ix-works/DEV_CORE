@@ -58,7 +58,7 @@ Issue aç — `playbook/howto-cekirdek-bulgu-bildirimi.md`):
 | 1.72–1.119 arası backend'de 1.71 parçası (bant tanımı: < 1.120 → 1.71 · ≥ 1.120 → 1.120) | parçanın dayandığı sekiz davranış 1.84.62 · 1.96.51 · 1.108.57 · 1.114.10 (CDN yolu; çalışma zamanı `sap.ui.version` 1.84.59 · 1.96.49 · 1.108.55 · 1.114.13 bildirir)'da CDN kaynağı + tarayıcıda ölçüldü: 1.84.62 · 1.96.51 · 1.114.10'da sekizi, 1.108.57'de yedisi 1.71.85 ile AYNI; **validator metni 1.108.57'de KAÇIŞLI** (1.71 parçası çözmez → `{`·`}` içeren yazılı değer token'a kaçışlı geçer). Bu dört sürüm dışındaki ara sürümler ve uygulamanın bütün olarak açılması ÖLÇÜLMEDİ | `surum/1.71/README.md` §Ara sürümler |
 | 1.71 için manifest `_version` | `1.12.0` — 1.71.85 demokit örnekleriyle aynı; çalışma zamanı okumuyor (ölçüldü) | `surum/1.71/README.md` |
 | 1.120 altı backend'de manifest `_version` | ÖLÇÜLMEDİ | `surum/1.120/README.md` |
-| Backend ICF'nin olmayan temayı `base`'e düşürmesi | DOĞRULANAMADI (yalnız CDN) | §3 — kural iki davranışı da kapsar |
+| Backend ICF'nin olmayan temayı `base`'e düşürmesi | 1.71.5 backend ICF'de ölçüldü: CDN 1.71.85 ile aynı davranış (diğer backend sürümleri ÖLÇÜLMEDİ) | §3 |
 | Varyant servisinin SRVD/SRVB adları + yayınlama | DOĞRULANMADI | `backend-referans/README.md` |
 | ECC / SEGW ile varyant servisi | DOĞRULANMADI | `backend-referans/README.md` |
 | View özniteliklerinin 1.71'de özellik düzeyinde varlığı | yalnız modül düzeyi ölçüldü (istisna: §4'te adı geçen olay/özellikler tek tek ölçüldü) | §4 |
@@ -109,7 +109,9 @@ Değiştirme sonrası kontrol: kopyada `<[A-Z_]+>` ve `com.example` araması **0
 
 Neden yalnız "200" yetmez (ölçüldü 2026-11-02, CDN): 1.71.85'te `sap_horizon/library.css` **200** döner ama
 md5'i `base/library.css` ile **aynıdır** (tema yok, temel stile düşüyor); 1.120.52'de farklıdır.
-Backend ICF'nin aynı davranışı gösterip göstermediği **DOĞRULANAMADI** — kural iki durumu da kapsar.
+Backend ICF'de de aynı davranış ölçüldü (UI5 1.71.5, DEV_CORE Issue #384): `sap_horizon/library.css` 200 ve
+md5'i `base/library.css` ile **aynı**, `sap_fiori_3/library.css` farklı ⇒ kural `sap_fiori_3` verir. Diğer
+backend sürümleri ÖLÇÜLMEDİ — kural iki durumu da kapsar.
 
 ## 4. Sürüm yüzeyi — hangi API nerede (kanıt)
 
