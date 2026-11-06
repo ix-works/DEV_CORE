@@ -173,6 +173,9 @@ ENDFUNCTION.
 
 - `activate_object(FM.upper(), '.../fmodules/<fm>')` — ayrı çağrı (CSRF-retry'li).
 - ⚠️ **Aktivasyonu lock-session'ının CSRF token'ıyla yapma** → `403`. Fresh token gerekir; `activate_object()` bunu halleder. Manuel endpoint: `POST /sap/bc/adt/activation?method=activate&preauditRequested=true`, body `adtcore:objectReferences` (type=`FUNC/FF`).
+- 📏 **Readback kıyası (2026-11-06, s4_private, tek ölçüm):** SAP satır-içi imzadan (`IMPORTING … .`) sonra
+  **2 boş satır** ekler (yerel 17 satır → canlı 19). `rstrip` md5'i bu yüzden FARKLI çıkar; içerik farkı
+  yoktur. FM readback'inde boş satırları atarak kıyasla.
 
 ### Kanonik kod (helper ile)
 
@@ -188,11 +191,33 @@ res = c.set_function_module_source('ZXXX_FM_FOO', 'ZXXX_FG_FOO', src, transport=
 
 ---
 
+## 2d. Güncelleme modülü (`IN UPDATE TASK`, V1 "Start immediately") — ÇALIŞAN YÖNTEM (2026-11-06)
+
+`CALL FUNCTION … IN UPDATE TASK` ile çağrılan FM'in işleme tipi **güncelleme modülü** olmak zorundadır
+(değilse çalışma zamanında kısa döküm). Create XML'inde verilemez (§3, §5); **post-create metadata PUT** ile verilir.
+
+1. Stateful oturum (`X-sap-adt-sessiontype: stateful`) + taze CSRF.
+2. `GET /sap/bc/adt/functions/groups/<fg>/fmodules/<fm>`, Accept `application/vnd.sap.adt.functions.fmodules.v3+xml`.
+3. Gövdede `fmodule:processingType="normal"` → `fmodule:processingType="update" fmodule:updateTaskKind="startImmediate"`
+   (değerleri sistemde zaten güncelleme modülü olan bir **emsal FM'in** metadata GET'inden al — tahmin etme).
+4. `POST …/fmodules/<fm>?_action=LOCK&accessMode=MODIFY`, header `X-sap-adt-corrNr=<K-istek>` → `LOCK_HANDLE` + `CORRNR`.
+5. `PUT …/fmodules/<fm>?lockHandle=<h>&corrNr=<LOCK yanıtındaki CORRNR>`, Content-Type **ve** Accept `…fmodules.v3+xml`,
+   gövde = değiştirilmiş **TAM** metadata → `200`, boş gövde.
+6. UNLOCK → aktivasyon (§2c).
+
+- ✅ **Kanıt = `TFDIR`, metadata değil:** aktivasyondan sonra `TFDIR-UTASK='1'` (FMODE boş) — emsal FM ile aynı.
+  ⚠ PUT sonrası / aktivasyon öncesi `UTASK` hâlâ **boştur**: TFDIR'i aktivasyon yazar. Ölçümü aktivasyondan sonra yap.
+- **KAPSAM:** tek ölçüm (s4_private, 2026-11-06), tek deneme. Aynı PUT'un RFC (`processingType` remoteEnabled/rfc)
+  için çalışıp çalışmadığı **ÖLÇÜLMEDİ** — §3'teki "TEST EDİLMEDİ" maddesi açık kalır (ama bu yöntem en güçlü aday).
+- prior-art: §3 "TEST EDİLMEDİ — post-create metadata PUT" maddesi (bu bölüm onun güncelleme-modülü kolu için cevabıdır).
+
+---
+
 ## 3. RFC-enable (Remote-Enabled Module)
 
 - ⛔ **ADT create attribute'tan YAPILMIYOR:** create XML'e `fmodule:processingType="remoteEnabled"` → `400 ExceptionInvalidData "Unexpected Case in Branch"`.
 - ✅ **Bilinen çalışan yol:** SE37'de "Remote-Enabled Module" radyo (bir kerelik manuel tek-tık). Sonra metadata GET `processingType="rfc"` gösterir.
-- ❓ **TEST EDİLMEDİ:** post-create **metadata PUT** ile (`...fmodules.v3+xml`, `processingType="remoteEnabled"`, lock'lu) RFC-enable yapılabilir mi — denenmedi (C1'de source-push önce patladığı için sıraya gelmedi). Gerekirse dene; çalışırsa buraya ÇALIŞAN olarak taşı, manuel adımı kaldır.
+- ❓ **TEST EDİLMEDİ (RFC için):** — güncelleme modülü için aynı yol ÇALIŞTI, bkz. §2d — post-create **metadata PUT** ile (`...fmodules.v3+xml`, `processingType="remoteEnabled"`, lock'lu) RFC-enable yapılabilir mi — denenmedi (C1'de source-push önce patladığı için sıraya gelmedi). Gerekirse dene; çalışırsa buraya ÇALIŞAN olarak taşı, manuel adımı kaldır.
 
 ### 3.1 🔴 SOAP-RFC **STATELESS**'tır — `COMMIT` isteyen BAPI zinciri BU KANALDAN KOŞMAZ (2026-07-31)
 

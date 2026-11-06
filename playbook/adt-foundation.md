@@ -261,6 +261,18 @@ gateway'in "include doğası, beklenen, zararsız" diye GEÇİŞTİRMESİ YANLI�
 - Alternatif: tek-obje yolu (`also` olmadan, include URI) bağlam programını çözmez → kullanma.
 - Acil durumda kullanıcı SE80/ADT GUI'den bağlam programını aktive edebilir (kanıtlı çözüm).
 
+**KARŞI GÖZLEM — ENHO üzerinden bağlı include (2026-11-06, tek ölçüm):** Standart bir user-exit
+include'una (MV45AFZZ) **doğrudan değil**, bir enhancement implementation içinden
+(`INCLUDE <z_include> IF FOUND.`) bağlanan Z include, **kendi URI'siyle tek başına** aktive edildi:
+`activationExecuted=true` + `generationExecuted=true`, E/A 0; standart program (SAPMV45A) aktivasyonu
+GEREKMEDİ ve yapılmadı. Ardından ana program için salt-okur `checkruns` (version=active) temiz.
+⇒ Yukarıdaki "bağlam programı üzerinden aktive et" kuralı **doğrudan INCLUDE edilen** exit include'u
+için ölçülmüştür; ENHO yolunda önce include URI'sini dene, hata alırsan yukarıdaki yola geç.
+⚠ **Ölçüm tuzağı:** inaktif sürümü olmayan ana program için `checkruns` `version=inactive` →
+`"REPORT/PROGRAM statement is missing"` (1,0) döner — bu **artefakttır**, sözdizimi hatası değil;
+kararı aktivasyonun kendi kontrolüne ve `version=active` checkrun'a bırak.
+prior-art: bu bölüm (2026-06-22 dersi) — çelişki değil, bağlanma biçimine göre daraltma.
+
 **`contextRef` NASIL KURULUR (yaratma XML'i ile DEĞİL) — 2026-07-31:** Include ↔ ana program
 bağı, include'un **yaratma gövdesinde taşınmaz**; **ana programdaki `INCLUDE <ad>.` deyiminden**
 doğar ve **aktivasyonda** kurulur. Kanıt: `create_object`'in `PROG/I` dalı yaratma XML'ine
