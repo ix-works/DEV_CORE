@@ -771,7 +771,9 @@ OZEL_TESTLER = [
     ("pdf_yerlesim",
      "Issue #389 html_to_pdf: '#'li klasor dogru PDF (pathToFileURL), dizin listesi -> exit 2 PDF FAIL, "
      "basliksiz gorsel/genis pre/tablo ici kod/uzun sozcuk sayfaya sigar (govde 10,5 pt), siganda "
-     "tabanla ayni, duzeltilemeyen tasma -> PDF UYARILI; build_kd_pdf 3. baglam (18 vektor + 11 mutasyon)"),
+     "tabanla ayni, duzeltilemeyen tasma -> PDF UYARILI; build_kd_pdf 3. baglam; bug-gate F1/F3/F4: "
+     "sigan tablo (ikon/hucre pre) + orani bozuk sigan gorsel tabanla ayni, w/h'li genis gorselde oran "
+     "korunur, tasan tablonun hucre ici pre/gorseli kademeyle sarilir, \\\\localhost UNC (27 vektor + 20 mutasyon)"),
     # 2026-10-18 (B85): build_kd_pdf arguman sozlesmesi. G/E vektorleri markdown+PIL ister
     # (CI KURMAZ -> ATLANDI); kullanim sozlesmesi vektorleri bagimliliksiz kosar.
     ("build_kd_pdf_arguman",

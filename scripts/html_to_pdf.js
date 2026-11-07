@@ -9,7 +9,8 @@
  *   `MSYS_NO_PATHCONV=1` koy (PowerShell/cmd'de gerekmez). Kod bunu düzeltmez — argüman süreçten önce bozulur.
  *
  * OPT-IN BAYRAKLAR (Q366, 2026-10-12) — bayraksız page.pdf SEÇENEKLERİ eskisiyle aynıdır; Issue #389'dan
- * beri bayraktan bağımsız YERLEŞİM düzeltmesi uygulanır (aşağıdaki blok — taşmayan belgede çıktı aynı):
+ * beri bayraktan bağımsız YERLEŞİM düzeltmesi uygulanır (aşağıdaki blok; yalnız taşan/kırpık öğeye ve
+ * taşan tabloya dokunur — neyin ölçüldüğü ve sınırı orada):
  *   --sayfa-no  her sayfanın alt boşluğuna "Sayfa X / Y" (yalnız METİN; footerTemplate).
  *   --yer-imi   başlık hiyerarşisinden (h1..h6) PDF yer imleri (Playwright `outline`).
  *
@@ -33,9 +34,17 @@
 /*
  * YERLEŞİM DÜZELTMESİ (DEV_CORE Issue #389, 2026-11-07) — HER koşumda, bayraktan bağımsız.
  * ⚠ Q366'nın "bayraksız çıktı eskisiyle aynı" kuralı DARALDI (kullanıcı onayı): page.pdf SEÇENEK
- *   NESNESİ hâlâ eskisiyle BİREBİR (S1); ama belge, basılmadan önce yalnız-PDF CSS'i alır. Taşan
- *   öğesi OLMAYAN belgede çıktı aynıdır (pdf_sayfa_no_yer_imi P1/P3 taban kıyası bunu ölçer);
- *   taşan öğesi olan belgede çıktı bilinçli olarak DEĞİŞİR.
+ *   NESNESİ hâlâ eskisiyle BİREBİR (S1); ama belge, basılmadan önce yalnız-PDF CSS'i alır. Bu CSS'in
+ *   `body` dışındaki HER kuralı `data-ix-pdf-sar` işaretli öğeye/tabloya bağlıdır (pdf_yerlesim S2) ve
+ *   işaret yalnız baskı genişliğinde TAŞAN (görsel, `pre` içeriği, tablo) ya da KIRPIK (`pre`) öğeye
+ *   konur ⇒ taşan/kırpık öğesi olmayan belgede işaret 0, geriye `body{overflow-wrap:break-word}` kalır.
+ *   ÖLÇÜLEN (taban kıyası, sayfa sayfa metin + görsel kutusu): sığan tablo (pdf_yerlesim Y5k ikon/uzun
+ *   metin Y9, hücre içi `pre` Y10) · öznitelik oranı bozuk sığan görsel Y11 · pdf_sayfa_no_yer_imi P1/P3.
+ *   ÖLÇÜLMEDİ/SINIR: kendi dar kutusundan taşan ama sayfaya taşmayan bölünmeyen sözcük `break-word` ile
+ *   kırılır (sayfadan taşan öğe yoktur ama yerleşim değişir). Taşan öğesi olan belgede çıktı bilinçli
+ *   olarak DEĞİŞİR (kullanıcı onayı) — ama yalnız işaretli öğede; aynı belgedeki sığan tablo değişmez.
+ *   Önceki metin (2458c17) "taşan öğesi OLMAYAN belgede çıktı aynıdır" diyordu; global `img`/`pre`
+ *   kuralı sığan tablonun sütunlarını değiştirdiği için yanlıştı (bug-gate F1).
  * Ölçülen kusurlar (f646f36): ① yol `"file:///" + IN` ile kuruluyordu ⇒ klasör adındaki `#` URL
  *   parçası sayılıp yolu kesiyordu; Edge kesik yolun DİZİN LİSTESİNİ basıyordu ve araç `PDF OK`
  *   diyordu (sessiz). Şimdi `url.pathToFileURL` + açılan sayfa dizin listesiyse exit 2.
@@ -47,9 +56,15 @@
  * ⛔ CSS YERİ = BURASI, üreticinin CSS'i DEĞİL: `emulateMedia("screen")` ⇒ `@media print` kuralı
  *   PDF'e HİÇ ulaşmaz; üretici CSS'ine düz kural yazmak ekran HTML'ini (uygulama içi yardım) da
  *   değiştirirdi. Burada `addStyleTag` iki üreticiyi + diskteki ESKİ HTML'leri tek yerde kapsar.
- * ⛔ Tabloya `overflow-wrap:anywhere` GLOBAL VERİLMEZ: `anywhere` min-content genişliğini küçültür ⇒
- *   SIĞAN (genişliği 100 %) tabloların sütun dağılımını da değiştirirdi. Yalnız baskı genişliğinde
- *   TAŞAN tabloya işaret konur: 1. kademe hücre içi `code`, hâlâ taşıyorsa 2. kademe tüm hücre.
+ * ⛔ `img`/`pre`/tablo kuralı GLOBAL VERİLMEZ (bug-gate F1, ÖLÇÜLDÜ): `overflow-wrap:anywhere`,
+ *   `white-space:pre-wrap` ve yüzdeli `max-width` hücrenin min-content'ini küçültür ⇒ SIĞAN (100 %'lük)
+ *   tabloların sütun dağılımını da değiştirir (ikon 195 → 43,6 pt; hücredeki `pre` "SELEC|T *" diye
+ *   bölündü). `height:auto` global verilse öznitelik oranı bilinçli farklı sığan görseli de düzeltirdi.
+ *   Bu yüzden: tablo hücresi DIŞINDA taşan görsel / taşan ya da kırpık `pre` öğe bazında işaretlenir;
+ *   hücre içindekiler yalnız TAŞAN tablonun kademesiyle sarılır — 1. kademe hücre içi `code` + `pre`,
+ *   hâlâ taşıyorsa 2. kademe hücre içi `img` (`max-width` + `height:auto`), hâlâ taşıyorsa 3. kademe tüm
+ *   hücre. Görselde `height:auto` ŞART: yalnız `max-width` + `width`/`height` öznitelikleri en-boy oranını
+ *   bozar (1200×300 → 516×225, oran 4,0 → 2,29; F3).
  *   `body{overflow-wrap:break-word}` min-content'i DEĞİŞTİRMEZ (CSS Text 3) ⇒ global verilebilir.
  */
 const path = require("path");
@@ -377,18 +392,35 @@ async function dizinListesiMi(page) {
   }));
 }
 
+/** Girdi yolunun `file:` URL'i (Issue #389 ①). `url.pathToFileURL`: `#`, `%`, `?`, boşluk ve Türkçe harf
+ *  kodlanır (eski elle birleştirme `#`'tan sonrasını URL parçası sayıyordu).
+ *  ⛔ `\\localhost\…` UNC (bug-gate F4, ÖLÇÜLDÜ node 24): `pathToFileURL` `file://localhost/…` kurar, WHATWG
+ *  ayrıştırıcısı `file:` şemasında `localhost` host'unu BOŞALTIR ⇒ `file:///C$/…` (paylaşım adı yerel yol
+ *  sanılır, `ERR_FILE_NOT_FOUND`; f646f36'nın elle birleştirmesi bu yolu açıyordu ⇒ regresyon). Çare yalnız
+ *  bu host'a dardır: `localhost` → `127.0.0.1` (aynı makine, SMB; host korunur). `\\?\UNC\localhost\…`
+ *  aynı sınıftır. Başka host (`\\srv\…`, `\\127.0.0.1\…`, `\\localhost.\…`) ve yerel yol DEĞİŞMEZ. */
+const LOCALHOST_UNC_RE = /^(\\\\(?:\?\\UNC\\)?)localhost(?=\\)/i;
+function dosyaUrl(yol) {
+  return url.pathToFileURL(yol.replace(LOCALHOST_UNC_RE, (m, onek) => onek + "127.0.0.1")).href;
+}
+
 // Yalnız PDF'e giden CSS (ekran HTML'i değişmez). Belge, daha yüksek özgüllüklü kendi kuralıyla ezebilir
-// (ör. `pre.x{white-space:pre}`); ezilen öğe aşağıdaki YERLESIM ölçümünde kalan taşma olarak sayılır.
+// (ör. satır içi `style="white-space:pre"`); ezilen öğe aşağıdaki YERLESIM ölçümünde kalan taşma olarak sayılır.
+// `body` dışındaki her seçici `data-ix-pdf-sar` işaretine bağlıdır: işareti `yerlesimOlc` yalnız taşan/kırpık
+// öğeye ve taşan tabloya koyar (seçici listesi satır satır: mutasyon çapaları tek eşleşmeli).
 const PDF_CSS =
-  "img{max-width:100%}" +
-  "pre{white-space:pre-wrap;overflow-wrap:anywhere}" +
+  "img[data-ix-pdf-sar]," +
+  "table:is([data-ix-pdf-sar=\"2\"],[data-ix-pdf-sar=\"3\"]) :is(td,th) img{max-width:100%;height:auto}" +
+  "pre[data-ix-pdf-sar]," +
+  "table[data-ix-pdf-sar] :is(td,th) pre{white-space:pre-wrap;overflow-wrap:anywhere}" +
   "body{overflow-wrap:break-word}" +
   "table[data-ix-pdf-sar] :is(td,th) code{overflow-wrap:anywhere}" +
-  "table[data-ix-pdf-sar=\"2\"] :is(td,th){overflow-wrap:anywhere}";
+  "table[data-ix-pdf-sar=\"3\"] :is(td,th){overflow-wrap:anywhere}";
 const SAYFA_GENISLIK_MM = 210;   // format "A4" (preferCSSPageSize verilmez ⇒ CSS `size` geçersiz)
 
-/** Baskı genişliğinde taşan / kırpık öğeleri sayar; `duzelt` ise taşan tablolara kademeli sarma
- *  işareti koyar. Baskı genişliği = A4 − yan boşluk; yan boşluk = JS margin ile belgedeki HER `@page`
+/** Baskı genişliğinde taşan / kırpık öğeleri sayar; `duzelt` ise önce tablo hücresi dışındaki taşan
+ *  görsele / taşan ya da kırpık `pre`'ye öğe işareti, sonra taşan tablolara kademeli (1 kod+pre · 2 görsel
+ *  · 3 tüm hücre) sarma işareti koyar (`data-ix-pdf-sar`; PDF_CSS yalnız işaretliye uygulanır). Baskı genişliği = A4 − yan boşluk; yan boşluk = JS margin ile belgedeki HER `@page`
  *  kuralının (koşullu gruplar dahil, koşulu DEĞERLENDİRİLMEDEN) sol+sağ toplamının EN BÜYÜĞÜ
  *  (muhafazakâr: dar genişlik ⇒ fazla işaret/uyarı, sessiz taşma değil). Mutlak olmayan birim
  *  (`em`/`%`) ve okunamayan stil sayfası ölçülmez, sayısı beyanda yazılır. Ölçüm kökün genişliği
@@ -446,13 +478,30 @@ async function yerlesimOlc(page, duzelt) {
     };
     const kirpiklar = () => ogeler().filter(e => getComputedStyle(e).overflowX !== "visible" &&
                                                  e.scrollWidth > e.clientWidth + 1);
-    let kademe1 = 0, kademe2 = 0;
+    // Öğe işareti (tablo hücresi DIŞI): sayfadan taşan görsel · içeriği sayfadan taşan ya da kırpık `pre`.
+    // Hücre içindekiler işaretlenmez — onlar taşan tablonun kademesine girer (sığan tablo değişmesin).
+    const icerikSag = e => { const r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect().right; };
+    const kirpik = e => getComputedStyle(e).overflowX !== "visible" && e.scrollWidth > e.clientWidth + 1;
+    let isGorsel = 0, isPre = 0;
+    if (duz) {
+      const L = sinir();
+      const adaylar = Array.from(document.querySelectorAll("img,pre")).filter(e => !e.closest("td,th"));
+      for (const e of adaylar) {
+        const gorsel = e.tagName === "IMG";
+        const tasar = (gorsel ? e.getBoundingClientRect().right : icerikSag(e)) > L && !kirpanAta(e);
+        if (tasar || (!gorsel && kirpik(e))) { e.setAttribute("data-ix-pdf-sar", "1"); if (gorsel) isGorsel++; else isPre++; }
+      }
+    }
+    let kademe1 = 0, kademe2 = 0, kademe3 = 0;
     if (duz) {
       for (const t of document.querySelectorAll("table")) {
         if (t.getBoundingClientRect().right > sinir()) { t.setAttribute("data-ix-pdf-sar", "1"); kademe1++; }
       }
       for (const t of document.querySelectorAll('table[data-ix-pdf-sar="1"]')) {
         if (t.getBoundingClientRect().right > sinir()) { t.setAttribute("data-ix-pdf-sar", "2"); kademe2++; }
+      }
+      for (const t of document.querySelectorAll('table[data-ix-pdf-sar="2"]')) {
+        if (t.getBoundingClientRect().right > sinir()) { t.setAttribute("data-ix-pdf-sar", "3"); kademe3++; }
       }
     }
     const say = arr => {
@@ -462,15 +511,14 @@ async function yerlesimOlc(page, duzelt) {
     };
     const ta = tasanlar(), ki = kirpiklar();
     kok.style.width = eskiKokGenislik;
-    return { genislikMm, yanKaynak, birimsiz, okunamaz, kademe1, kademe2,
+    return { genislikMm, yanKaynak, birimsiz, okunamaz, isGorsel, isPre, kademe1, kademe2, kademe3,
              tasanN: ta.length, tasan: say(ta), kirpikN: ki.length, kirpik: say(ki) };
   }, [SAYFA_GENISLIK_MM, 12, 12, !!duzelt]);
 }
 
 (async () => {
-  // ⛔ `url.pathToFileURL`: `#`, `%`, `?`, boşluk ve Türkçe harf kodlanır (Issue #389 ①; eski elle
-  //    birleştirme `#`'tan sonrasını URL parçası sayıyordu).
-  const fileUrl = url.pathToFileURL(IN).href;
+  // ⛔ `dosyaUrl` (pathToFileURL + localhost UNC düzeltmesi; Issue #389 ①, F4).
+  const fileUrl = dosyaUrl(IN);
   const b = await chromium.launch({ channel: "msedge", headless: true, args: ["--no-sandbox"] });
   const p = await (await b.newContext()).newPage();
   await p.goto(fileUrl, { waitUntil: "networkidle", timeout: 60000 });
@@ -492,8 +540,8 @@ async function yerlesimOlc(page, duzelt) {
   const y = await yerlesimOlc(p, true);
   console.log("YERLESIM: baski genisligi " + y.genislikMm.toFixed(1) + "mm (" + y.yanKaynak + ")" +
               " | duzeltme oncesi tasan " + yOnce.tasanN + ", kirpik " + yOnce.kirpikN +
-              " | PDF-CSS: img max-width, pre sarma, uzun sozcuk sarma | tasan tablo sarildi: kod " +
-              y.kademe1 + ", tum hucre " + y.kademe2 +
+              " | PDF-CSS isaretli oge: tasan gorsel " + y.isGorsel + ", tasan/kirpik pre " + y.isPre +
+              " | tasan tablo sarildi: kod/pre " + y.kademe1 + ", gorsel " + y.kademe2 + ", tum hucre " + y.kademe3 +
               " | kalan tasan " + y.tasanN + (y.tasanN ? " (" + y.tasan + ")" : "") +
               ", kirpik " + y.kirpikN + (y.kirpikN ? " (" + y.kirpik + ")" : "") +
               " | olculmeyen @page yan boslugu " + y.birimsiz + ", okunamayan stil sayfasi " + y.okunamaz +
@@ -504,7 +552,8 @@ async function yerlesimOlc(page, duzelt) {
                   "mm) asiyor — Chromium BUTUN belgeyi kucultebilir; " + y.kirpikN +
                   " oge kirpik (icerigi PDF'te kesilir). Belge kendi CSS'iyle duzeltmeyi eziyor olabilir.");
   }
-  // ⛔ Bayraksız seçenek nesnesi ESKİSİYLE BİREBİR (Q366 zorunlu önlemi: varsayılan çıktı değişmez).
+  // ⛔ Bayraksız seçenek nesnesi ESKİSİYLE BİREBİR (Q366 zorunlu önlemi). Çıktının kendisi #389'dan beri
+  //    yalnız taşan/kırpık öğeli belgede değişir (YERLEŞİM bloğu); önceki metin "varsayılan çıktı değişmez" diyordu.
   const opts = { path: OUT, format: "A4", printBackground: true, margin: { top: "14mm", bottom: "16mm", left: "12mm", right: "12mm" } };
   if (BAYRAK.has("--sayfa-no")) {
     const o = await altBoslukOlc(p, 16);

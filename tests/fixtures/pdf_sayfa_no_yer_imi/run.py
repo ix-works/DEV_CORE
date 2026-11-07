@@ -3,7 +3,9 @@
 """pdf_sayfa_no_yer_imi — `html_to_pdf.js` / `build_doc_pdf.py` OPT-IN "Sayfa X / Y" altbilgisi
 + başlıklardan yer imi (Q366, 2026-10-12).
 
-KABUL ÖLÇÜTÜ (kaydın ⚠ RİSK bloğu): bayraksız üretim eskisiyle AYNI (sayfa sayısı + içerik);
+KABUL ÖLÇÜTÜ (kaydın ⚠ RİSK bloğu): bayraksız üretim eskisiyle AYNI (sayfa sayısı + içerik) —
+bu fixture'ın örnek belgesi için (taşan/kırpık öğesi yok). Issue #389'dan beri taşan/kırpık öğeli
+belgede bayraksız çıktı da bilinçli DEĞİŞİR; o eksen `pdf_yerlesim`'dedir (önceki metin koşulsuzdu);
 bayraklı üretimde her sayfada "Sayfa X / Y", yer imi sayısı = başlık sayısı, Türkçe doğru.
 
 TABAN = `_taban_html_to_pdf.js` (değişiklik ÖNCESİ sürümün birebir kopyası; pinli SHA'ya

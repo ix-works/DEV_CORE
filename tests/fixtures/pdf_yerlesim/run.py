@@ -82,14 +82,35 @@ JS = SCRIPTS / "html_to_pdf.js"
 TABAN_JS = Path(__file__).resolve().parent / "_taban_html_to_pdf.js"
 
 MUTASYON = {
-    "--mutasyon-url": ("  const fileUrl = url.pathToFileURL(IN).href;",
+    "--mutasyon-url": ("  const fileUrl = dosyaUrl(IN);",
                        '  const fileUrl = "file:///" + IN.split(path.sep).join("/");'),
+    # localhost UNC düzeltmesini söker (2458c17 davranışı) → U1 (+ Y15 koşulabiliyorsa)
+    "--mutasyon-unc": ('yol.replace(LOCALHOST_UNC_RE, (m, onek) => onek + "127.0.0.1")', "yol"),
     "--mutasyon-dizin": ("  if (dz.liste) {", "  if (false) {"),
-    "--mutasyon-img": ('  "img{max-width:100%}" +', '  "" +'),
-    "--mutasyon-pre": ('  "pre{white-space:pre-wrap;overflow-wrap:anywhere}" +', '  "" +'),
+    # tablo dışı taşan görsel kuralı yok → Y3 + Y8 + Y12
+    "--mutasyon-img": ('  "img[data-ix-pdf-sar]," +', '  "" +'),
+    # 2458c17'nin GLOBAL img kuralı (+height:auto) → sığan tablo (Y9) + oranı bozuk sığan görsel (Y11) + S2
+    "--mutasyon-img-global": ('  "img[data-ix-pdf-sar]," +', '  "img," +'),
+    # height:auto yok (F3) → w/h öznitelikli geniş görselin oranı bozulur: Y12 + Y14
+    "--mutasyon-img-oran": ("img{max-width:100%;height:auto}", "img{max-width:100%}"),
+    # tablo dışı taşan/kırpık pre kuralı yok → Y4 (+ pre taşıyan Y1/Y1k/Y8/Y16)
+    "--mutasyon-pre": ('  "pre[data-ix-pdf-sar]," +', '  "" +'),
+    # 2458c17'nin GLOBAL pre kuralı → sığan tablo hücresindeki pre (Y10) + S2
+    "--mutasyon-pre-global": ('  "pre[data-ix-pdf-sar]," +', '  "pre," +'),
+    # öğe işareti hiç konmaz → tablo dışı görsel/pre düzeltmesi düşer
+    "--mutasyon-isaret": ("        if (tasar || (!gorsel && kirpik(e))) {", "        if (false) {"),
+    # yalnız kırpık (sayfaya taşmayan) pre işaretlenmez → Y16
+    "--mutasyon-pre-kirpik": ("if (tasar || (!gorsel && kirpik(e))) {", "if (tasar) {"),
+    # hücre içi görsel/pre de öğe bazında işaretlenir (kademe atlanır) → Y13 + Y14 beyanı
+    "--mutasyon-isaret-hucre": ('.filter(e => !e.closest("td,th"));', ".filter(e => true);"),
     "--mutasyon-govde": ('  "body{overflow-wrap:break-word}" +', '  "" +'),
     "--mutasyon-tablo-kod": ('  "table[data-ix-pdf-sar] :is(td,th) code{overflow-wrap:anywhere}" +', '  "" +'),
-    "--mutasyon-tablo-hucre": (r'  "table[data-ix-pdf-sar=\"2\"] :is(td,th){overflow-wrap:anywhere}";', '  "";'),
+    # taşan tablonun 1. kademesinde hücre içi pre sarılmaz → Y13
+    "--mutasyon-tablo-pre": ('"table[data-ix-pdf-sar] :is(td,th) pre{', '"pre[data-ix-pdf-sar]{'),
+    # taşan tablonun 2. kademesinde hücre içi görsel sığdırılmaz → Y14
+    "--mutasyon-tablo-gorsel": (r'"table:is([data-ix-pdf-sar=\"2\"],[data-ix-pdf-sar=\"3\"]) :is(td,th) img{',
+                                '"img[data-ix-pdf-sar]{'),
+    "--mutasyon-tablo-hucre": (r'  "table[data-ix-pdf-sar=\"3\"] :is(td,th){overflow-wrap:anywhere}";', '  "";'),
     # işaretli tablo yerine HER tablo hücresindeki koda anywhere (reddedilen tasarım) → Y5k + S2
     "--mutasyon-tablo-global": ('  "table[data-ix-pdf-sar] :is(td,th) code{overflow-wrap:anywhere}" +',
                                 '  ":is(td,th) code{overflow-wrap:anywhere}" +'),
@@ -134,19 +155,72 @@ if KIP:
 taban_src = TABAN_JS.read_text(encoding="utf-8")
 
 # ── S: statik (bağımlılıksız) ────────────────────────────────────────────────
-kontrol("S1 url.pathToFileURL var, \"file:///\" + IN atamasi yok",
-        "url.pathToFileURL(IN)" in src and not re.search(r'=\s*"file:///"\s*\+', src))
+kontrol("S1 fileUrl = dosyaUrl(IN) (url.pathToFileURL), \"file:///\" + IN atamasi yok",
+        "const fileUrl = dosyaUrl(IN);" in src and "url.pathToFileURL(" in src
+        and not re.search(r'=\s*"file:///"\s*\+', src))
 _css = re.search(r"const PDF_CSS =(.*?);\n", src, re.S)
 _css_t = _css.group(1) if _css else ""
 _css_metin = "".join(re.findall(r'"((?:[^"\\]|\\.)*)"', _css_t)).replace('\\"', '"')
 _kural = re.findall(r"([^{}]+)\{([^}]*)\}", _css_metin)
-_isaretsiz = [sec for sec, gov in _kural
-              if "anywhere" in gov and re.search(r"\b(td|th|code|table)\b", sec) and "data-ix-pdf-sar" not in sec]
-kontrol("S2 PDF_CSS'te işaretsiz tablo hücresi/kod anywhere YOK (yalnız data-ix-pdf-sar'lı tablo)",
-        bool(_kural) and not _isaretsiz, f"kural={len(_kural)} isaretsiz={_isaretsiz}")
+
+
+def _secici_bol(liste):
+    """Seçici listesini parantez DIŞINDAKİ virgülden böler (`:is(td,th)` tek parça kalır)."""
+    parca, d, cur = [], 0, ""
+    for ch in liste:
+        d += (ch == "(") - (ch == ")")
+        if ch == "," and d == 0:
+            parca.append(cur.strip())
+            cur = ""
+        else:
+            cur += ch
+    return parca + [cur.strip()]
+
+
+_secici = [s for sec, _ in _kural for s in _secici_bol(sec)]
+_isaretsiz = [s for s in _secici if s != "body" and "data-ix-pdf-sar" not in s]
+# F1 (bug-gate): global img/pre/tablo kuralı SIĞAN tabloyu değiştirir ⇒ body dışı HER seçici işarete bağlı
+kontrol("S2 PDF_CSS'te body dışı her seçici data-ix-pdf-sar işaretine bağlı (global img/pre/tablo kuralı YOK)",
+        bool(_kural) and not _isaretsiz, f"secici={len(_secici)} isaretsiz={_isaretsiz}")
 OPTS_RE = re.compile(r'\{ path: OUT, format: "A4", printBackground: true, margin: \{[^}]*\} \}')
 kontrol("S3 page.pdf seçenek literali tabanla AYNI (Q366)",
         len(OPTS_RE.findall(src)) == 1 and OPTS_RE.findall(src) == OPTS_RE.findall(taban_src))
+
+# ── U1: `dosyaUrl` birim (F4) — kaynaktan çıkarılan fonksiyon node'da koşulur (tarayıcısız) ──
+# Windows yol anlamı gerekir (pathToFileURL platforma bağlı) ⇒ win32 dışında ATLANDI.
+UNC_VAKA = [   # (girdi, beklenen href)
+    ("\\\\localhost\\C$\\a #1\\b.html", "file://127.0.0.1/C$/a%20%231/b.html"),
+    ("\\\\LocalHost\\paylasim\\b.html", "file://127.0.0.1/paylasim/b.html"),
+    ("\\\\?\\UNC\\localhost\\C$\\b.html", "file://127.0.0.1/C$/b.html"),
+    ("\\\\127.0.0.1\\C$\\a\\b.html", "file://127.0.0.1/C$/a/b.html"),      # kontrol: değişmez
+    ("\\\\srv\\paylasim\\b.html", "file://srv/paylasim/b.html"),           # kontrol: başka host
+    ("\\\\localhostx\\s\\b.html", "file://localhostx/s/b.html"),           # kontrol: önek değil host
+    ("\\\\?\\C:\\x\\b.html", "file:///C:/x/b.html"),                        # kontrol: uzun yerel yol
+    ("C:\\x\\#NS#ZSD001\\b.html", "file:///C:/x/%23NS%23ZSD001/b.html"),    # kontrol: '#'
+]
+_fn = re.search(r"^const LOCALHOST_UNC_RE = .*?^}\n", src, re.S | re.M)
+if sys.platform != "win32" or not shutil.which("node"):
+    atla("U1", "Windows + node gerekir (pathToFileURL Windows yol anlamı)")
+elif not _fn:
+    kontrol("U1 dosyaUrl kaynakta bulundu", False, "LOCALHOST_UNC_RE/dosyaUrl tanımı yok")
+else:
+    _u = Path(tempfile.mkdtemp(prefix="i389u_")) / "u.js"
+    _u.write_text('const url = require("url");\n' + _fn.group(0) +
+                  "const V = JSON.parse(process.argv[2]);\n"
+                  "console.log(JSON.stringify(V.map(v => dosyaUrl(v))));\n", encoding="utf-8")
+    import json as _json
+    _r = subprocess.run(["node", str(_u), _json.dumps([v for v, _ in UNC_VAKA])],
+                        capture_output=True, text=True, encoding="utf-8", timeout=60)
+    try:
+        _cik = _json.loads(_r.stdout)
+    except ValueError:
+        _cik = None
+    _fark = [(v, b, c) for (v, b), c in zip(UNC_VAKA, _cik or [])] if _cik else []
+    _fark = [x for x in _fark if x[1] != x[2]]
+    kontrol("U1 dosyaUrl: \\\\localhost UNC → 127.0.0.1 host; başka host/yerel yol değişmez (8 vaka)",
+            _r.returncode == 0 and _cik is not None and len(_cik) == len(UNC_VAKA) and not _fark,
+            f"rc={_r.returncode} fark={_fark} {(_r.stderr or '')[:200]!r}")
+    shutil.rmtree(_u.parent, ignore_errors=True)
 
 
 def bagimlilik():
@@ -181,6 +255,8 @@ PRE_SATIR = "".join(chr(ord("A") + (i % 26)) for i in range(190))          # 190
 TABLO_KOD = "ZSD001_CL_ORNEK=>" + "UZUN_METOT_ADI_" * 7                      # 122 karakter
 SOZCUK = "uzunsozcuk" * 15                                                    # 150 harf, boşluksuz
 DIZI = "https://ornek.invalid/" + "yol" * 66                                  # 220 karakter
+TABLO_PRE = "SELECT * FROM ZSD001_T_ORNEK WHERE X = 1"                          # sığan hücre pre'si (CE5)
+PRE_KISA = "".join(chr(ord("a") + (i % 26)) for i in range(80))                # 300 px kutuda kırpık, sayfaya sığar
 
 
 def govde(*ek):
@@ -208,7 +284,21 @@ BELGELER = {
     "Y7": ("y7", govde('<div style="width:2000px;height:20px;background:#ccc">GENIS-KUTU</div>'), None),
     "Y7b": ("y7b", govde('<div style="width:695px;height:20px;background:#ccc">ORTA-KUTU</div>'), None),
     "Y7c": ("y7c", govde('<pre style="white-space:pre;overflow-x:auto">%s</pre>' % PRE_SATIR), None),
+    # ── bug-gate F1/F3 (2026-11-07): sığan tabloya / sığan görsele DOKUNULMAZ; taşan tablonun hücre içi
+    #    görsel/pre'si kademeyle sarılır; w/h öznitelikli geniş görselin oranı korunur ──
+    "Y9": ("y9", govde("| Simge | Açıklama | Not |\n|---|---|---|\n| ![i](screenshots/ikon.png) | %s | %s |"
+                       % (PARAGRAF[:300], PARAGRAF[:300])), "ikon"),
+    "Y10": ("y10", govde("<table><tr><td><pre>%s</pre></td><td>%s %s</td></tr></table>" % (TABLO_PRE, PARAGRAF, PARAGRAF)),
+            None),
+    "Y11": ("y11", govde('<p><img src="screenshots/ikon.png" width="260" height="240"></p>'), "ikon"),
+    "Y12": ("y12", govde('<p><img src="screenshots/genis12.png" width="1200" height="300"></p>'), "genis12"),
+    "Y13": ("y13", govde("<table><tr><td><pre>%s</pre></td><td>kısa açıklama</td></tr></table>" % PRE_SATIR), None),
+    "Y14": ("y14", govde('<table><tr><td><img src="screenshots/genis12.png" width="1200" height="300"></td>'
+                         "<td>kısa açıklama</td></tr></table>"), "genis12"),
+    "Y16": ("y16", govde('<div style="width:300px"><pre>%s</pre></div>' % PRE_KISA), None),
 }
+GORSEL = {"genis": [("genis.png", 2400, 160)], "ikon": [("ikon.png", 260, 120)],
+          "genis12": [("genis12.png", 1200, 300)]}
 BASLIK = {"Y1": "/NS/ZSD001 Deneme", "Y1k": "/NS/ZSD001 Deneme", "Y2k": "Index of C:\\gercek\\belge\\"}
 
 
@@ -229,6 +319,22 @@ def gorsel_x1(pdf):
     return max([im["bbox"][2] for pg in d for im in pg.get_image_info()] or [0]), d[0].rect.width
 
 
+def gorsel_kutulari(pdf, w, h):
+    """Özgün boyutu w×h olan görselin PDF'teki kutuları (gölge/zemin bitmap'leri boyutundan ayrılır)."""
+    import fitz
+    d = fitz.open(pdf)
+    k = []
+    for pg in d:
+        for im in pg.get_images(full=True):
+            if im[2] == w and im[3] == h:
+                k += [tuple(round(v, 1) for v in r) for r in pg.get_image_rects(im[0])]
+    return k, d[0].rect.width
+
+
+def oran(kutu):
+    return (kutu[2] - kutu[0]) / (kutu[3] - kutu[1]) if kutu[3] > kutu[1] else None
+
+
 def metin(pdf, bosluksuz=True):
     import fitz
     t = "".join(pg.get_text() for pg in fitz.open(pdf))
@@ -246,7 +352,8 @@ def meta(pdf):
     return d.page_count, (d.metadata or {}).get("title")
 
 
-KADEME_RE = r"kod (\d+), tum hucre (\d+)"
+KADEME_RE = r"kod/pre (\d+), gorsel (\d+), tum hucre (\d+)"
+ISARET_RE = r"tasan gorsel (\d+), tasan/kirpik pre (\d+)"
 
 
 def beyan(cikti, desen):
@@ -254,7 +361,8 @@ def beyan(cikti, desen):
     return m.groups() if m else None
 
 
-Y_ADLAR = ["Y1", "Y1k", "Y2", "Y2k", "Y3", "Y3k", "Y4", "Y5", "Y5b", "Y5k", "Y6", "Y7", "Y7b", "Y7c", "Y8"]
+Y_ADLAR = ["Y1", "Y1k", "Y2", "Y2k", "Y3", "Y3k", "Y4", "Y5", "Y5b", "Y5k", "Y6", "Y7", "Y7b", "Y7c", "Y8",
+           "Y9", "Y10", "Y11", "Y12", "Y13", "Y14", "Y15", "Y16"]
 eksik = bagimlilik()
 if eksik:
     for a in Y_ADLAR:
@@ -274,8 +382,8 @@ else:
     for ad, (alt, md, ek) in BELGELER.items():
         d = kum / alt
         (d / "screenshots").mkdir(parents=True, exist_ok=True)
-        if ek == "genis":
-            png(d / "screenshots" / "genis.png", 2400, 160)
+        for _ad, _w, _h in GORSEL.get(ek, []):
+            png(d / "screenshots" / _ad, _w, _h)
         (d / "belge.md").write_text(md, encoding="utf-8")
         html[ad] = d / "belge.html"
         if ad in ("Y1", "Y1k"):
@@ -308,6 +416,13 @@ else:
         isler.append((ad, taban_js, h, h.with_name(h.stem + ".taban.pdf")))
     isler.append(("Y2", yeni_js, kum / "y3", kum / "dizin.yeni.pdf"))
     isler.append(("Y2", taban_js, kum / "y3", kum / "dizin.taban.pdf"))
+    # Y15 (F4): aynı belge `\\localhost\<sürücü>$\…` yönetim paylaşımından. Paylaşım erişilemiyorsa ATLANDI.
+    _y4 = str(html["Y4"].resolve())
+    unc15 = ("\\\\localhost\\" + _y4[0] + "$" + _y4[2:]) if sys.platform == "win32" and _y4[1:2] == ":" else None
+    unc15_var = bool(unc15) and Path(unc15).exists()
+    if unc15_var:
+        isler.append(("Y15", yeni_js, unc15, kum / "unc.yeni.pdf"))
+        isler.append(("Y15", taban_js, unc15, kum / "unc.taban.pdf"))
     with concurrent.futures.ThreadPoolExecutor(4) as ex:
         S = dict(ex.map(uret, isler))
     # Y1/Y1k gerçek giriş noktası (build_doc_pdf.py --pdf → komşu html_to_pdf.js); taban ayrıca
@@ -356,9 +471,11 @@ else:
     r, o, e = S[("Y3", yeni_js)]
     s, x1 = sigar(P("Y3", "yeni"))
     pt_t = punto(P("Y3", "taban"))
-    kontrol("Y3 başlıksız geniş görsel → sığar + gövde 10,5; yer gerçeği taban küçültür",
-            r == 0 and "PDF OK" in o and s and punto(P("Y3", "yeni")) == 10.5 and pt_t is not None and pt_t < 10.5,
-            f"rc={r} x1={x1} punto={punto(P('Y3', 'yeni'))} taban_punto={pt_t} {(o + e)[-200:]!r}")
+    kontrol("Y3 başlıksız geniş görsel → işaret 'tasan gorsel 1', sığar + gövde 10,5; yer gerçeği taban küçültür",
+            r == 0 and "PDF OK" in o and s and punto(P("Y3", "yeni")) == 10.5 and pt_t is not None and pt_t < 10.5
+            and beyan(o, ISARET_RE) == ("1", "0"),
+            f"rc={r} x1={x1} punto={punto(P('Y3', 'yeni'))} taban_punto={pt_t} isaret={beyan(o, ISARET_RE)} "
+            f"{(o + e)[-200:]!r}")
     r, o, e = S[("Y3k", yeni_js)]
     kontrol("Y3k kontrol: başlıklı görsel → yeni ve taban sığar, 10,5",
             r == 0 and "PDF OK" in o and sigar(P("Y3k", "yeni"))[0] and sigar(P("Y3k", "taban"))[0]
@@ -368,26 +485,28 @@ else:
 
     # ── Y4 ──
     r, o, e = S[("Y4", yeni_js)]
-    kontrol("Y4 190 karakterlik pre → karakterler TAM, kırpık 0; yer gerçeği taban eksik",
+    kontrol("Y4 190 karakterlik pre → işaret 'pre 1', karakterler TAM, kırpık 0; yer gerçeği taban eksik",
             r == 0 and "PDF OK" in o and PRE_SATIR in metin(P("Y4", "yeni")) and PRE_SATIR not in metin(P("Y4", "taban"))
-            and beyan(o, r"kalan tasan 0, kirpik 0") is not None, f"rc={r} {(o + e)[-260:]!r}")
+            and beyan(o, r"kalan tasan 0, kirpik 0") is not None and beyan(o, ISARET_RE) == ("0", "1"),
+            f"rc={r} {(o + e)[-260:]!r}")
 
     # ── Y5 / Y5b / Y5k ──
     r, o, e = S[("Y5", yeni_js)]
     pt_t = punto(P("Y5", "taban"))
-    kontrol("Y5 tablo hücresinde uzun satır içi kod → 1. kademe (kod 1, tum hucre 0), 10,5, kod tam; taban küçültür",
-            r == 0 and "PDF OK" in o and beyan(o, KADEME_RE) == ("1", "0")
+    kontrol("Y5 tablo hücresinde uzun satır içi kod → 1. kademe (kod/pre 1, gorsel 0, tum hucre 0), 10,5, kod tam; "
+            "taban küçültür",
+            r == 0 and "PDF OK" in o and beyan(o, KADEME_RE) == ("1", "0", "0")
             and punto(P("Y5", "yeni")) == 10.5 and TABLO_KOD in metin(P("Y5", "yeni")) and pt_t is not None and pt_t < 10.5,
             f"rc={r} beyan={beyan(o, KADEME_RE)} punto={punto(P('Y5', 'yeni'))} taban={pt_t} {(o + e)[-200:]!r}")
     r, o, e = S[("Y5b", yeni_js)]
     pt_t = punto(P("Y5b", "taban"))
-    kontrol("Y5b hücrede boşluksuz uzun sözcük → 2. kademe (tum hucre 1), 10,5; taban küçültür",
-            r == 0 and "PDF OK" in o and beyan(o, KADEME_RE) == ("1", "1")
+    kontrol("Y5b hücrede boşluksuz uzun sözcük → 3. kademe (1, 1, tum hucre 1), 10,5; taban küçültür",
+            r == 0 and "PDF OK" in o and beyan(o, KADEME_RE) == ("1", "1", "1")
             and punto(P("Y5b", "yeni")) == 10.5 and pt_t is not None and pt_t < 10.5,
             f"rc={r} beyan={beyan(o, KADEME_RE)} punto={punto(P('Y5b', 'yeni'))} taban={pt_t}")
     r, o, e = S[("Y5k", yeni_js)]
     kontrol("Y5k kontrol: SIĞAN tablo → kod 0 + sayfa sayfa metin TABANLA AYNI",
-            r == 0 and "PDF OK" in o and beyan(o, KADEME_RE) == ("0", "0")
+            r == 0 and "PDF OK" in o and beyan(o, KADEME_RE) == ("0", "0", "0")
             and sayfa_metinleri(P("Y5k", "yeni")) == sayfa_metinleri(P("Y5k", "taban")),
             f"rc={r} beyan={beyan(o, KADEME_RE)} esit="
             f"{sayfa_metinleri(P('Y5k', 'yeni')) == sayfa_metinleri(P('Y5k', 'taban'))}")
@@ -422,6 +541,73 @@ else:
             r == 0 and "PDF OK" in o and s and punto(P("Y8", "yeni")) == 10.5 and PRE_SATIR in metin(P("Y8", "yeni"))
             and pt_t is not None and pt_t < 10.5,
             f"rc={r} x1={x1} punto={punto(P('Y8', 'yeni'))} taban={pt_t} {(o + e)[-200:]!r}")
+
+    # ── Y9 / Y10 / Y11: KONTROL — taşan öğe YOK ⇒ tabanla aynı (bug-gate F1 CE1/CE5, F3 yan etkisi) ──
+    def ayni(ad, w=None, h=None):
+        k_y = gorsel_kutulari(P(ad, "yeni"), w, h)[0] if w else None
+        k_t = gorsel_kutulari(P(ad, "taban"), w, h)[0] if w else None
+        return (sayfa_metinleri(P(ad, "yeni")) == sayfa_metinleri(P(ad, "taban")) and k_y == k_t), k_y, k_t
+
+    r, o, e = S[("Y9", yeni_js)]
+    es, ky, kt = ayni("Y9", 260, 120)
+    kontrol("Y9 kontrol: SIĞAN tabloda 260 px ikon + uzun metin → işaret 0, görsel kutusu + sayfa metni TABANLA AYNI",
+            r == 0 and "PDF OK" in o and es and bool(ky) and beyan(o, ISARET_RE) == ("0", "0")
+            and beyan(o, KADEME_RE) == ("0", "0", "0"), f"rc={r} kutu yeni={ky} taban={kt} esit={es}")
+    r, o, e = S[("Y10", yeni_js)]
+    es = ayni("Y10")[0]
+    kontrol("Y10 kontrol: SIĞAN tablo hücresinde kısa pre → işaret 0, sayfa metni TABANLA AYNI",
+            r == 0 and "PDF OK" in o and es and TABLO_PRE in metin(P("Y10", "yeni"), False)
+            and beyan(o, ISARET_RE) == ("0", "0") and beyan(o, KADEME_RE) == ("0", "0", "0"),
+            f"rc={r} esit={es} {(o + e)[-200:]!r}")
+    r, o, e = S[("Y11", yeni_js)]
+    es, ky, kt = ayni("Y11", 260, 120)
+    # öznitelik oranı (260×240) özgün orandan (260×120) BİLEREK farklı: tabanda kutu ≈ 195×180 pt
+    yg = bool(kt) and oran(kt[0]) is not None and abs(oran(kt[0]) - 260 / 240) < 0.05
+    kontrol("Y11 kontrol: sığan, öznitelik oranı bozuk görsel → kutu TABANLA AYNI (global height:auto onu değiştirirdi)",
+            r == 0 and "PDF OK" in o and es and yg and beyan(o, ISARET_RE) == ("0", "0"),
+            f"rc={r} kutu yeni={ky} taban={kt} yer_gercegi={yg}")
+
+    # ── Y12: F3 — w/h öznitelikli geniş görsel (1200×300) → sığar + oran 4,0 korunur ──
+    r, o, e = S[("Y12", yeni_js)]
+    ky, gen = gorsel_kutulari(P("Y12", "yeni"), 1200, 300)
+    kt = gorsel_kutulari(P("Y12", "taban"), 1200, 300)[0]
+    yg = bool(kt) and kt[0][2] > gen
+    ok = (r == 0 and "PDF OK" in o and len(ky) == 1 and ky[0][2] <= gen and abs(oran(ky[0]) - 4.0) < 0.05
+          and beyan(o, ISARET_RE) == ("1", "0"))
+    kontrol("Y12 w/h öznitelikli 1200×300 görsel → sığar, en-boy oranı 4,0 korunur; yer gerçeği taban sayfa dışı",
+            ok and yg, f"rc={r} kutu yeni={ky} oran={oran(ky[0]) if ky else None} taban={kt} sayfa={gen}")
+
+    # ── Y13 / Y14: taşan tablonun hücre içi pre (1. kademe) / görsel (2. kademe) ──
+    r, o, e = S[("Y13", yeni_js)]
+    pt_t = punto(P("Y13", "taban"))
+    kontrol("Y13 tablo hücresinde 190 karakterlik pre → 1. kademe (1, 0, 0), pre tam, 10,5; taban küçültür",
+            r == 0 and "PDF OK" in o and beyan(o, KADEME_RE) == ("1", "0", "0") and PRE_SATIR in metin(P("Y13", "yeni"))
+            and punto(P("Y13", "yeni")) == 10.5 and pt_t is not None and pt_t < 10.5,
+            f"rc={r} beyan={beyan(o, KADEME_RE)} punto={punto(P('Y13', 'yeni'))} taban={pt_t} {(o + e)[-200:]!r}")
+    r, o, e = S[("Y14", yeni_js)]
+    pt_t = punto(P("Y14", "taban"))
+    ky, gen = gorsel_kutulari(P("Y14", "yeni"), 1200, 300)
+    kontrol("Y14 tablo hücresinde 1200×300 görsel → 2. kademe (1, 1, 0), görsel sığar + oran 4,0, 10,5; taban küçültür",
+            r == 0 and "PDF OK" in o and beyan(o, KADEME_RE) == ("1", "1", "0") and len(ky) == 1 and ky[0][2] <= gen
+            and abs(oran(ky[0]) - 4.0) < 0.05 and punto(P("Y14", "yeni")) == 10.5 and pt_t is not None and pt_t < 10.5,
+            f"rc={r} beyan={beyan(o, KADEME_RE)} kutu={ky} punto={punto(P('Y14', 'yeni'))} taban={pt_t}")
+
+    # ── Y15: F4 — `\\localhost\…` UNC uçtan uca (yönetim paylaşımı erişilebiliyorsa) ──
+    if not unc15_var:
+        atla("Y15", f"\\\\localhost yönetim paylaşımı erişilemedi ({unc15!r}); birim kanıt U1")
+    else:
+        (r, o, e), (rt, ot, et) = S[("Y15", yeni_js)], S[("Y15", taban_js)]
+        isr = (kum / "unc.yeni.pdf").exists() and PRE_SATIR in metin(kum / "unc.yeni.pdf")
+        kontrol("Y15 \\\\localhost UNC girdi → rc 0, PDF OK, belge basıldı; kontrol: taban da basar (regresyon sınıfı)",
+                r == 0 and "PDF OK" in o and isr and rt == 0 and (kum / "unc.taban.pdf").exists(),
+                f"rc={r} taban_rc={rt} isaret={isr} {(o + e)[-240:]!r}")
+
+    # ── Y16: yalnız KIRPIK pre (300 px kutuda overflow-x:auto, sayfaya sığar) → işaret + tam metin ──
+    r, o, e = S[("Y16", yeni_js)]
+    kontrol("Y16 kırpık (sayfaya taşmayan) pre → işaret 'pre 1', 80 karakter TAM, kırpık 0; yer gerçeği taban eksik",
+            r == 0 and "PDF OK" in o and PRE_KISA in metin(P("Y16", "yeni")) and PRE_KISA not in metin(P("Y16", "taban"))
+            and beyan(o, ISARET_RE) == ("0", "1") and beyan(o, r"duzeltme oncesi tasan 0, kirpik 1") is not None,
+            f"rc={r} isaret={beyan(o, ISARET_RE)} {(o + e)[-260:]!r}")
     shutil.rmtree(kum, ignore_errors=True)
 
 print(f"pdf_yerlesim{(' ' + KIP) if KIP else ''}")

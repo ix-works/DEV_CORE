@@ -173,9 +173,12 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
   etiketlenir. Bakiye/fiyat function-import → mock'ta boş → enjekte. `node scripts/capture_kd_screens.js http://localhost:PORT`.
 - **`scripts/html_to_pdf.js`** — `build_kd_pdf.py` HTML çıktısını Edge `page.pdf` ile A4 PDF'e çevirir
   (`file://` node-playwright'ta çalışır; MCP'de bloklu). `node scripts/html_to_pdf.js in.html out.pdf`.
-  - **Yerleşim (Issue #389, 2026-11-07):** basmadan önce yalnız-PDF CSS ekler (her `img` en çok
-    sayfa genişliği · `pre` sarılır · uzun sözcük sarılır · baskı genişliğinde TAŞAN tablo kademeli
-    sarılır: önce hücre içi `code`, gerekirse tüm hücre). Sebep: Chromium sayfadan taşan TEK bir öğe
+  - **Yerleşim (Issue #389, 2026-11-07):** basmadan önce yalnız-PDF CSS ekler ve onu YALNIZ baskı
+    genişliğinde taşan/kırpık öğeye uygular: tablo dışında sayfadan taşan görsel sayfaya sığdırılır
+    (en-boy oranı korunur) · taşan ya da kırpık `pre` sarılır · uzun sözcük sarılır · TAŞAN tablo
+    kademeli sarılır (1: hücre içi `code` + `pre` · 2: hücre içi görsel · 3: tüm hücre). Sığan tabloya
+    ve sığan görsele dokunulmaz (global `img`/`pre` kuralı sığan tablonun sütunlarını değiştiriyordu —
+    ölçüldü, kaldırıldı). Sebep: Chromium sayfadan taşan TEK bir öğe
     görünce **bütün belgeyi küçültür** (ölçüldü: gövde 10,5 → 7,0 pt) ve `pre` sağdan kırpılır.
     Her koşumda `YERLESIM:` satırı basılır (baskı genişliği · düzeltme öncesi/sonrası taşan ve kırpık
     öğe sayısı). Düzeltilemeyen taşma kalırsa PDF yine yazılır ama son satır **`PDF UYARILI`**
@@ -184,6 +187,7 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
     medyasıyla basar (`@media print` PDF'e ulaşmaz) ve üretici HTML'i ekranda da yayınlanır.
   - **Klasör adında `#`/`%`/boşluk:** yol `url.pathToFileURL` ile kodlanır. Açılan sayfa bir dizin
     listesiyse (eski kusur: `#` URL parçası sayılıp üst klasörün listesi basılıyordu) `[DURDU] PDF FAIL`, exit 2.
+    `\\localhost\…` UNC yolu `\\127.0.0.1\…` olarak açılır (URL ayrıştırıcısı `localhost` host'unu siler).
   - ⚠ **Git Bash'te `/` ile başlayan argüman** (ör. başlık `"/NS/ZSD001 Deneme"`) MSYS tarafından
     yol sanılıp `C:/Program Files/Git/NS/ZSD001 Deneme`'ye çevrilir (ölçüldü) — betik bunu göremez.
     Çağrının önüne `MSYS_NO_PATHCONV=1` koy: `MSYS_NO_PATHCONV=1 python scripts/build_doc_pdf.py
