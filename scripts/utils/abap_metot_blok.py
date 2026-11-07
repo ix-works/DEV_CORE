@@ -18,7 +18,9 @@ SÖZLEŞME — `metot_bloklari(kaynak, metot)` → `[(bas, son, metin)]`, 1-taba
   · bitiş = başlangıçtan sonraki İLK `METHOD`/`ENDMETHOD` DEYİMİ (satırın neresinde olursa):
       - aynı satırda yalnız bir `ENDMETHOD` → tek satırlık blok (`son == bas`)
       - sonraki satırlarda ilk deyim tek başına `ENDMETHOD` → blok o satırda biter
-      - araya `METHOD` girerse ya da bitiş satırında METHOD/ENDMETHOD karışırsa
+      - araya `METHOD` girerse, bitiş satırında METHOD/ENDMETHOD karışırsa ya da bitiş
+        satırında `ENDMETHOD.`'dan SONRA KOD kalırsa (`ENDMETHOD. ENDCLASS.` · `ENDMETHOD. x = 1.`;
+        Issue #379 — satır bloğa girince blok dışı kod da yazılırdı; `" yorum`/boşluk serbest)
         → `son = SINIR_BELIRSIZ` (çağıran ÖLÇÜLEMEDİ der; YANLIŞ GÖVDE DÖNMEZ) ve tarama durur
       - hiç deyim yoksa → `son = None` (kapanmamış) ve tarama durur
   · deyim = satır başında ya da `.`'dan sonra gelen anahtar kelime, deyim BİÇİMİNDE
@@ -94,6 +96,25 @@ def deyimler(satir: str) -> list:
     return [(m.group(1) or m.group(2)).upper() for m in _DEYIM.finditer(kod_kismi(satir))]
 
 
+def _bitis_sonrasi_kod(satir: str) -> bool:
+    """Bitiş satırında `ENDMETHOD.` deyiminden SONRA KOD kalıyor mu? (DEV_CORE Issue #379)
+
+    `ENDMETHOD. ENDCLASS.` · `ENDMETHOD. x = 1.` → True: satır bloğa girerse blok dışı kod
+    (yazma yolunda metot include'una) taşınır. `ENDMETHOD. " yorum` ve yalnız boşluk → False.
+    Ayrıştırma `kod_kismi` iledir (yorum/tek satırlık literal ayıklanmış; yeni ayrıştırıcı YOK).
+    Satırda birden çok ENDMETHOD varsa SONUNCUSU esas alınır (çağıranlar tek-ENDMETHOD satırı verir).
+    """
+    kod = kod_kismi(satir)
+    son = None
+    for m in _DEYIM.finditer(kod):
+        if m.group(1):
+            son = m
+    if son is None:
+        return False
+    kalan = re.sub(r"^\s*\.", "", kod[son.end():], count=1)
+    return bool(kalan.strip())
+
+
 def metot_bloklari(kaynak: str, metot: str) -> list:
     """`METHOD <metot>.` .. `ENDMETHOD.` blokları → [(bas, son, metin)] (sözleşme: modül başı).
 
@@ -109,6 +130,9 @@ def metot_bloklari(kaynak: str, metot: str) -> list:
             if ek[:1] == ["METHOD"]:      # başlangıç deyiminin kendisi (`.`'sı alt satırdaysa yok)
                 ek = ek[1:]
             if ek == ["ENDMETHOD"]:
+                if _bitis_sonrasi_kod(satirlar[i]):     # Issue #379: `… ENDMETHOD. ENDCLASS.`
+                    bulunan.append((i + 1, SINIR_BELIRSIZ, satirlar[i]))
+                    break
                 bulunan.append((i + 1, i + 1, satirlar[i]))
                 i += 1
                 continue
@@ -119,7 +143,8 @@ def metot_bloklari(kaynak: str, metot: str) -> list:
             for k in range(i + 1, len(satirlar)):
                 d = deyimler(satirlar[k])
                 if d:
-                    son, bitis = (k + 1 if d == ["ENDMETHOD"] else SINIR_BELIRSIZ), k
+                    son, bitis = (k + 1 if d == ["ENDMETHOD"] and not _bitis_sonrasi_kod(satirlar[k])
+                                  else SINIR_BELIRSIZ), k
                     break
             if son is None:
                 bulunan.append((i + 1, None, "\n".join(satirlar[i:])))

@@ -2373,7 +2373,8 @@ _METOT_KAPSAM = (
     "`ENDMETHOD.`. Yerel siniflar / test include'lari (ccimp/ccau/ccdef) ve makrolar "
     "ARANMAZ ⇒ found:false 'metot yok' demek DEGILDIR. Bitis = METHOD'dan sonraki ilk "
     "METHOD/ENDMETHOD deyimi (tek satirlik `METHOD a. ... ENDMETHOD.` dahil; yorum ve tek "
-    "satirlik literal ayiklanir); araya METHOD girerse ya da ayni satirda karisirsa "
+    "satirlik literal ayiklanir); araya METHOD girerse, ayni satirda karisirsa ya da bitis "
+    "satirinda `ENDMETHOD.`'dan sonra kod kalirsa (`ENDMETHOD. ENDCLASS.`; yorum serbest) "
     "ok:false `sinir_belirsiz`. SINIR (OLCULMEDI): cok satirli string sablonunun (`|...|`) "
     "devam satirlari KOD sayilir; orada satir basina dusen ENDMETHOD bitis sanilabilir.")
 
@@ -2399,8 +2400,8 @@ def adt_get_method(class_name: str, method_name: str) -> dict:
         {ok, class, method, found, start_line?, end_line?, source?, scope, client_log}
         `found: false` + `scope` = aranan yüzeyde YOK (yerel include'lar aranmadı).
         Birden çok eşleşme, kapanmamış blok ya da belirlenemeyen bitiş ⇒ ok:false
-        (`belirsiz` / `kapanmamis` / `sinir_belirsiz`: araya METHOD girdi ya da aynı satırda
-        METHOD/ENDMETHOD karışık — gövde DÖNMEZ).
+        (`belirsiz` / `kapanmamis` / `sinir_belirsiz`: araya METHOD girdi, aynı satırda
+        METHOD/ENDMETHOD karışık ya da `ENDMETHOD.`'dan sonra aynı satırda kod var — gövde DÖNMEZ).
     """
     from mcp_servers.sap_adt.tools.atom import _read_source_object
     oku = _read_source_object(class_name, "oo/classes", "class")
@@ -2414,8 +2415,9 @@ def adt_get_method(class_name: str, method_name: str) -> dict:
     belirsiz = next((b for b in bloklar if b[1] == _SINIR_BELIRSIZ), None)
     if belirsiz is not None:
         return {"ok": False, "error": "sinir_belirsiz", "found": None, "start_line": belirsiz[0],
-                "message": ("`METHOD %s` bulundu ama bitişi belirlenemedi (araya METHOD girdi ya "
-                            "da aynı satırda METHOD/ENDMETHOD karışık) — gövde ÖLÇÜLEMEDİ."
+                "message": ("`METHOD %s` bulundu ama bitişi belirlenemedi (araya METHOD girdi, "
+                            "aynı satırda METHOD/ENDMETHOD karışık ya da `ENDMETHOD.`'dan sonra "
+                            "aynı satırda kod var) — gövde ÖLÇÜLEMEDİ."
                             % method_name.upper()),
                 **ortak}
     if len(bloklar) > 1:
