@@ -453,6 +453,13 @@ def is_class_include_url(object_url) -> bool:
 #        `include:contextRef type="FUGR/I" uri=/sap/bc/adt/functions/groups/<fg>/source/main`
 #   ⇒ OKUMA iki yoldan da calisir; YAZMA (kilit) yalniz FUGR/I yolundan. contextRef, `include`
 #     tipiyle gelen bir FUGR include'unu kilitten ONCE ayirt etmenin DETERMINISTIK sinyalidir.
+# ⛔ CANLI OLCUM 2026-11-08 (DEV, salt-GET negatif kontrol, adt-gateway): SAP URL GRUBUNU GERI
+#   YANSITIR, 200 DONER — `functions/groups/<g>/includes/<incl>` dort grubun dordunde 200 verdi
+#   (baska var olan Z grup · var olmayan grup · onek kuralini gecen var olmayan kisaltma · dogru
+#   grup) ve `containerRef` adi/uri'si HER SEFERINDE URL'deki grubun aynisiydi. Tek fark
+#   `packageName` (var olmayan grupta alan yok). ⇒ FUGR/I `containerRef`'i GRUP KANITI DEGILDIR.
+#   Grup kaniti = `programs/includes/<incl>` `include:contextRef` (type FUGR/I, name SAPL<GRUP>):
+#   bu URL grup TASIMAZ, SAP yansitacak bir sey bulamaz (`fugr_include_grup_kaniti`).
 # Grup adi include adindan TURETILMEZ (L<FG>F01 desenine guvenmek tahmindir): acik parametre.
 FUGR_INCLUDE_TYPES = {'fugr_include', 'fugr-include', 'fugr/i'}
 FUGR_INCLUDE_ADT_TYPE = 'FUGR/I'
@@ -508,8 +515,49 @@ def include_fugr_baglami(metadata_xml):
     return None
 
 
+def _adtcore_reflar(xml_text, etiket):
+    """`<*:etiket>` dugumlerinin HEPSI -> list | None (govde okunamazsa None)."""
+    import xml.etree.ElementTree as ET
+    try:
+        kok = ET.fromstring(xml_text or '')
+    except Exception:  # noqa: BLE001 — okunamayan govde: sinyal YOK
+        return None
+    ns = '{http://www.sap.com/adt/core}'
+    return [{'uri': el.get(ns + 'uri') or '', 'type': (el.get(ns + 'type') or '').upper(),
+             'name': (el.get(ns + 'name') or '').upper()}
+            for el in kok.iter() if el.tag.split('}')[-1] == etiket]
+
+
+def fugr_include_grup_kaniti(progs_metadata_xml, group):
+    """`programs/includes/<incl>` metadata'si include'un `group`'a ait oldugunu KANITLIYOR mu?
+
+    -> (ok: bool, sebep: str). Kanit: bir `include:contextRef` type `FUGR/I` VE name ==
+    `SAPL<GRUP>` (grubun ana programi). Govde okunamazsa / contextRef yoksa / tip ya da ad
+    farkliysa -> False (fail-closed). ⛔ FUGR/I ucunun `containerRef`'i KANIT DEGILDIR: SAP URL
+    grubunu geri yansitir (2026-11-08 canli olculdu — yukaridaki blok).
+    """
+    g = (group or '').strip().upper()
+    if not g:
+        return False, "grup bos"
+    reflar = _adtcore_reflar(progs_metadata_xml, 'contextRef')
+    if reflar is None:
+        return False, "programs/includes metadatasi okunamadi"
+    if not reflar:
+        return False, "include:contextRef yok (FUGR include'u degil ya da govde eksik)"
+    beklenen = 'SAPL' + g
+    for ref in reflar:
+        if ref['type'] == 'FUGR/I' and ref['name'] == beklenen:
+            return True, f"contextRef FUGR/I {beklenen}"
+    gorulen = ', '.join(f"{r['type'] or '?'} {r['name'] or '?'}" for r in reflar)
+    return False, f"contextRef {gorulen} != FUGR/I {beklenen}"
+
+
 def fugr_include_konteyneri(metadata_xml):
-    """FUGR/I metadata'sindaki `adtcore:containerRef` (FUGR/F) grup adi | None."""
+    """FUGR/I metadata'sindaki `adtcore:containerRef` (FUGR/F) grup adi | None.
+
+    ⛔ GRUP KANITI OLARAK KULLANMA: SAP bu alani istek URL'indeki gruptan doldurur (2026-11-08
+    canli olculdu). Kanit `fugr_include_grup_kaniti`'dir; bu yalniz bilgi/teshis icindir.
+    """
     ref = _adtcore_ref(metadata_xml, 'containerRef')
     if not ref or ref['type'] != 'FUGR/F':
         return None

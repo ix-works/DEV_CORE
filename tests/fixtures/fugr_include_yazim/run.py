@@ -24,6 +24,9 @@ EKSENLER / VEKTÖRLER
      `L<GRUP>` öneki); aktivasyon worklist sondası FUGR/I hedefiyle; içerik readback'i bu tipte koşar.
      Bug-gate F1: öneki geçen YANLIŞ grup containerRef ile reddedilir (E9), push kaydı grubu (E8),
      `also` + FUGR/I fail-closed (E10).
+  ⛔ 2026-11-08 CANLI: SAP FUGR/I ucunda URL grubunu `containerRef`e YANSITIR (200, var olmayan
+     grupta da) ⇒ grup kaniti `programs/includes` contextRef FUGR/I SAPL<GRUP> (A8). Sahte oturum
+     yansitmayi modeller (A9); onek kuralini gecen var olmayan grup C13/E11/L3. L = adt_lock_check.
 
 SAP: HİÇBİR istek gerçek sisteme gitmez — sahte oturumlar; CLAUDE_PROJECT_DIR + cwd geçici kum.
 
@@ -69,6 +72,11 @@ FUGR_URL = "/sap/bc/adt/functions/groups/zsd001_fg/includes/lzsd001_fgf01"
 PROG_URL = "/sap/bc/adt/programs/includes/lzsd001_fgf01"
 # `L<GRUP>` onek kuralini group='ZSD001' ile de gecen YANLIS grup ucu (bug-gate F1)
 YANLIS_URL = "/sap/bc/adt/functions/groups/zsd001/includes/lzsd001_fgf01"
+# CANLI MODEL (2026-11-08, adt-gateway salt-GET negatif kontrol): SAP FUGR/I ucunda URL'deki
+# grubu `containerRef`e GERI YANSITIR ve 200 doner — var olan baska grupta da, var olmayan
+# grupta da. Tek fark `packageName` (var olmayan grupta yok). Sahte oturum bunu modeller.
+VAR_GRUPLAR = {"ZSD001_FG", "ZSD001"}          # ZSD001 = "baska var olan Z grup" yer tutucusu
+KISA_GRUP = "ZSD001_F"                          # onek kuralini gecer, grup YOK (`<GRUP>_T` tipi)
 TR = "<TR_ISTEK>"
 KAYNAK = "*----- olay include'u\nFORM f_ornek.\n  CLEAR sy-subrc.\nENDFORM.\n"
 
@@ -147,6 +155,21 @@ def bolum_a(OT):
          OT.fugr_include_konteyneri(_oku("fugr_include_meta.xml")))
     ekle("A7 KONTROL include tipi URL'i DEGISMEDI (programs/includes)",
          OT.get_object_url("ZSD001_INCL", "include") == "/sap/bc/adt/programs/includes/zsd001_incl")
+    k = OT.fugr_include_grup_kaniti
+    pm = _oku("progs_include_meta.xml")
+    sonuc = {"dogru": k(pm, GRUP)[0], "normalize": k(pm, "  zsd001_fg ")[0],
+             "baska-grup": k(pm, "ZSD001")[0], "kisa": k(pm, KISA_GRUP)[0],
+             "fugr-f": k(_progs_meta(tip="FUGR/F"), GRUP)[0],
+             "prog-p": k(_progs_meta("ZSD001_PROG", "PROG/P"), GRUP)[0],
+             "bozuk": k("<html>", GRUP)[0], "bos-grup": k(pm, "")[0]}
+    ekle("A8 ⭐ fugr_include_grup_kaniti: YALNIZ contextRef FUGR/I SAPL<GRUP> kanittir",
+         sonuc == {"dogru": True, "normalize": True, "baska-grup": False, "kisa": False,
+                   "fugr-f": False, "prog-p": False, "bozuk": False, "bos-grup": False}, sonuc)
+    yans = _yansiyan_meta(KISA_GRUP, var=False)
+    ekle("A9 MODEL (canli 2026-11-08): FUGR/I containerRef URL grubunu yansitir -> eski kanit "
+         "var olmayan grubu da 'dogrular'",
+         OT.fugr_include_konteyneri(yans) == KISA_GRUP and "packageName" not in yans
+         and "packageName" in _yansiyan_meta("ZSD001"), yans[:120])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -233,7 +256,26 @@ class _MetaOturum:
                 if isinstance(yan, Exception):
                     raise yan
                 return _Y(*yan)
+        m = re.search(r"/functions/groups/([^/]+)/includes/[^/?]+$", url)
+        if m:   # SAP davranisi (2026-11-08 olculdu): URL grubunu yansit, 200
+            return _Y(200, _yansiyan_meta(m.group(1), m.group(1).upper() in VAR_GRUPLAR))
         return _Y(404, "")
+
+
+def _yansiyan_meta(grup, var=True):
+    """FUGR/I metadata'si — containerRef URL'deki gruptan doldurulur (SAP yansitmasi)."""
+    t = _oku("fugr_include_meta.xml").replace("functions/groups/zsd001_fg",
+                                               "functions/groups/" + grup.lower())
+    t = t.replace('adtcore:name="ZSD001_FG"', f'adtcore:name="{grup.upper()}"')
+    if not var:
+        t = t.replace(' adtcore:packageName="ZSD001_PKG"', "")
+    return t
+
+
+def _progs_meta(ana_program="SAPLZSD001_FG", tip="FUGR/I"):
+    return _oku("progs_include_meta.xml").replace(
+        'adtcore:type="FUGR/I" adtcore:name="SAPLZSD001_FG"',
+        f'adtcore:type="{tip}" adtcore:name="{ana_program}"')
 
 
 class _SahteAdt:
@@ -248,13 +290,18 @@ class _SahteAdt:
         self.kilit_hata = kilit_hata
         self._last_lock_effective_transport = None
         self._last_lock_is_link_up = ''
+        self.kilit_sondalari: list = []
+        self.kilit_bilgi = None
 
     def fetch_source_etag(self, url):
         self.olaylar.append(("etag", url))
         return "E1"
 
     def is_object_locked(self, url):
-        return None
+        self.kilit_sondalari.append(url)
+        if self.kilit_bilgi is None:
+            self._last_lock_check_reason = "http_404"   # canli olcum 2026-11-08: /adt/locks 404
+        return self.kilit_bilgi
 
     def get_transport_info(self, url):
         return "No transport info available"
@@ -306,7 +353,8 @@ def _tipler(adt, tip):
 
 
 def bolum_c(SC):
-    meta_ok = {FUGR_URL: (200, _oku("fugr_include_meta.xml"))}
+    meta_ok = {FUGR_URL: (200, _oku("fugr_include_meta.xml")),
+               PROG_URL: (200, _oku("progs_include_meta.xml"))}
     adt = _SahteAdt(meta_ok)
     r, exc = _sessiz(_sapclient(SC, adt).push_fugr_include, INCL, GRUP, TR, _kaynak_dosyasi())
     r = r or {}
@@ -323,19 +371,19 @@ def bolum_c(SC):
     ekle("C1b readback rstrip: SAP kapanis satir sonu fark sayilmaz + readback_md5 dolu",
          r.get("readback_ok") is True and len(r.get("readback_md5") or "") == 32, r.get("readback_md5"))
 
-    diger = _oku("fugr_include_meta.xml").replace('adtcore:name="ZSD001_FG"',
-                                                  'adtcore:name="ZSD001_DIGER"')
-    adt = _SahteAdt({FUGR_URL: (200, diger)})
+    # Gercekci model: FUGR/I ucu grubu YANSITIR (200); kanit programs/includes contextRef'i
+    adt = _SahteAdt({PROG_URL: (200, _progs_meta("SAPLZSD001_DIGER"))})
     r, _ = _sessiz(_sapclient(SC, adt).push_fugr_include, INCL, GRUP, TR, _kaynak_dosyasi())
     r = r or {}
-    ekle("C2 ⭐ containerRef != --group -> YAZILMADI (kilit/PUT YOK), SAPValidationError",
+    ekle("C2 ⭐ contextRef SAPL<baska grup> (FUGR/I ucu --group'u yansitsa da) -> YAZILMADI "
+         "(kilit/PUT YOK), SAPValidationError",
          r.get("success") is False and r.get("error_type") == "SAPValidationError"
          and not _tipler(adt, "lock") and not _tipler(adt, "put"),
          f"r={r.get('error_type')} olaylar={adt.olaylar}")
-    adt = _SahteAdt({FUGR_URL: (404, "")})
+    adt = _SahteAdt({PROG_URL: (404, "")})
     r, _ = _sessiz(_sapclient(SC, adt).push_fugr_include, INCL, GRUP, TR, _kaynak_dosyasi())
     r = r or {}
-    ekle("C3 metadata 404 (yanlis grup/yok) -> fail-closed, kilit YOK",
+    ekle("C3 programs/includes metadata 404 (FUGR/I ucu 200 yansitsa da) -> fail-closed, kilit YOK",
          r.get("success") is False and r.get("error_type") == "SAPValidationError"
          and not _tipler(adt, "lock"), f"r={r.get('error')} olaylar={adt.olaylar}")
     adt = _SahteAdt(meta_ok, aktif="baska kaynak")
@@ -399,10 +447,9 @@ def bolum_c(SC):
          r2.get("success") is False and r2.get("error_type") == "GuardrailViolation"
          and not adt.session.getler and not adt.olaylar,
          f"r={r2.get('error_type')} get={adt.session.getler}")
-    # SAP grup segmentine hosgorulu olabilir: yanlis grup URL'i de ayni include'un metadatasini
-    # (containerRef = gercek grup) donduruyor gibi kurulur -> KANIT containerRef'tir, 200 degil.
-    adt = _SahteAdt({FUGR_URL: (200, _oku("fugr_include_meta.xml")),
-                     YANLIS_URL: (200, _oku("fugr_include_meta.xml"))})
+    # ⛔ Eski kurulum "yanlis grup ucu 200 + GERCEK grup containerRef" varsayiyordu — YANLISTI
+    # (2026-11-08 canli: SAP URL grubunu yansitir). Artik model yansitir; kanit contextRef'tir.
+    adt = _SahteAdt(meta_ok)       # YANLIS_URL: SAP yansitmasi (200 + containerRef ZSD001)
     c = _sapclient(SC, adt)
     yanlis, _ = _sessiz(c.activate_object, INCL, "fugr_include", "ZSD001")
     yanlis_akt = _tipler(adt, "activate")
@@ -412,6 +459,14 @@ def bolum_c(SC):
          yanlis is False and yanlis_akt == [] and dogru is True
          and _tipler(adt, "activate") == [("activate", INCL, FUGR_URL)],
          f"yanlis={yanlis} dogru={dogru} olaylar={adt.olaylar}")
+    adt = _SahteAdt(meta_ok)
+    r, _ = _sessiz(_sapclient(SC, adt).push_fugr_include, INCL, KISA_GRUP, TR, _kaynak_dosyasi())
+    r = r or {}
+    ekle("C13 ⭐ onek kuralini gecen VAR OLMAYAN grup (SAP 200 + yansitma) -> YAZILMADI: "
+         "ETag/kilit/PUT YOK",
+         r.get("success") is False and r.get("error_type") == "SAPValidationError"
+         and not adt.olaylar and any(u.endswith(PROG_URL) for u in adt.session.getler),
+         f"r={r.get('error_type')}:{(r.get('error') or '')[:90]} olaylar={adt.olaylar}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -498,6 +553,7 @@ def bolum_e(SC):
     from mcp_servers.sap_adt.tools import atom
     atom.get_active_tier = lambda: "DEV"                   # type: ignore[assignment]
     meta = {FUGR_URL: (200, _oku("fugr_include_meta.xml")),
+            PROG_URL: (200, _oku("progs_include_meta.xml")),
             "/sap/bc/adt/activation/inactiveobjects": (200, WL_BOS)}
     adt = _SahteAdt(meta)
     istemci = _sapclient(SC, adt)
@@ -546,7 +602,7 @@ def bolum_e(SC):
          f"{atom._activation_uri(INCL, 'fugr/i')} {atom._activation_uri(INCL, 'fugr-include', GRUP)}")
 
     # E8..E10 — bug-gate (6a8e0c6) F1: grup KANITI aktivasyondan once; also + FUGR/I red
-    adt.session.meta[YANLIS_URL] = (200, _oku("fugr_include_meta.xml"))   # SAP hosgorusu
+    # YANLIS_URL icin acik kayit YOK: sahte oturum SAP gibi grubu YANSITIR (2026-11-08 olculdu)
     anahtar = (INCL, atom._type_key("fugr_include"))
     eski_kayit = atom._LAST_PUSHED.get(anahtar)
     atom._LAST_PUSHED[anahtar] = {"grup": "ZSD001_DIGER"}
@@ -564,7 +620,7 @@ def bolum_e(SC):
          "fugr_group_unverified, aktivasyon POST YOK",
          r.get("ok") is False and r.get("error") == "fugr_group_unverified"
          and not [o for o in adt.olaylar[n0:] if o[0] == "activate"]
-         and any(u.endswith(YANLIS_URL) for u in adt.session.getler[g0:]),
+         and any(u.endswith(PROG_URL) for u in adt.session.getler[g0:]),
          f"r={str(r)[:200]} exc={exc!r} olaylar={adt.olaylar[n0:]}")
     if eski_kayit is not None:
         atom._LAST_PUSHED[anahtar] = eski_kayit
@@ -579,6 +635,49 @@ def bolum_e(SC):
          and rb.get("error") == "fugr_include_also_unsupported"
          and len(adt.olaylar) == n0 and len(adt.session.getler) == g0,
          f"ra={str(ra)[:120]} rb={str(rb)[:120]}")
+    n0 = len(adt.olaylar)
+    kayit = atom._LAST_PUSHED.pop(anahtar, None)     # push kaydi farki (E8) ayri olculur
+    r, exc = _sessiz(atom.adt_activate, INCL, "fugr_include", group=KISA_GRUP)
+    r = r or {}
+    if kayit is not None:
+        atom._LAST_PUSHED[anahtar] = kayit
+    ekle("E11 ⭐ adt_activate: onek kuralini gecen VAR OLMAYAN grup (SAP 200 + yansitma) -> "
+         "fugr_group_unverified, aktivasyon POST YOK",
+         r.get("ok") is False and r.get("error") == "fugr_group_unverified"
+         and not [o for o in adt.olaylar[n0:] if o[0] == "activate"], f"r={str(r)[:200]} exc={exc!r}")
+
+    # L — adt_lock_check (salt-okur): FUGR/I + group
+    from mcp_servers.sap_adt.tools import query
+    adt.kilit_bilgi = {"locked": False, "lock_owner": None}
+    k0, g0 = len(adt.kilit_sondalari), len(adt.session.getler)
+    r, exc = _sessiz(query.adt_lock_check, INCL, "fugr_include", group=GRUP)
+    r = r or {}
+    ekle("L1 ⭐ adt_lock_check(fugr_include, group) -> grup kaniti + sonda FUGR/I URL'iyle",
+         r.get("ok") is True and r.get("locked") is False
+         and adt.kilit_sondalari[k0:] == [FUGR_URL]
+         and any(u.endswith(PROG_URL) for u in adt.session.getler[g0:]),
+         f"r={str(r)[:160]} sonda={adt.kilit_sondalari[k0:]} exc={exc!r}")
+    k0, g0 = len(adt.kilit_sondalari), len(adt.session.getler)
+    r, _ = _sessiz(query.adt_lock_check, INCL, "fugr_include")
+    r = r or {}
+    ekle("L2 adt_lock_check(fugr_include) grupsuz -> group_required, SAP istegi YOK",
+         r.get("error") == "group_required" and r.get("locked") is None
+         and len(adt.kilit_sondalari) == k0 and len(adt.session.getler) == g0, f"r={r}")
+    k0 = len(adt.kilit_sondalari)
+    r, _ = _sessiz(query.adt_lock_check, INCL, "fugr_include", group=KISA_GRUP)
+    r = r or {}
+    ekle("L3 ⭐ adt_lock_check: var olmayan onekli grup -> fugr_group_unverified, kilit ucu SORULMAZ",
+         r.get("error") == "fugr_group_unverified" and r.get("locked") is None
+         and len(adt.kilit_sondalari) == k0, f"r={str(r)[:200]}")
+    adt.kilit_bilgi = None
+    r, _ = _sessiz(query.adt_lock_check, INCL, "fugr_include", group=GRUP)
+    r = r or {}
+    r2, _ = _sessiz(query.adt_lock_check, "ZCL_SD001_ORNEK", "class", group=GRUP)
+    r2 = r2 or {}
+    ekle("L4 KONTROL /adt/locks 404 (canli olcum) -> kilit_belirsiz locked None (hayir DEGIL); "
+         "group + class -> group_not_applicable",
+         r.get("error") == "kilit_belirsiz" and r.get("locked") is None and r.get("reason") == "http_404"
+         and r2.get("error") == "group_not_applicable", f"r={str(r)[:160]} r2={str(r2)[:120]}")
 
 
 def main() -> int:
@@ -612,16 +711,50 @@ MUTASYONLAR = {
                        '    return (f"/sap/bc/adt/functions/groups/{quote(g.lower(), safe=\'\')}"\n'
                        '            f"/includes/{quote(i.lower(), safe=\'\')}")\n',
                        '    return f"/sap/bc/adt/programs/includes/{quote(i.lower(), safe=\'\')}"\n',
-                       # E9 URL'i de olcer (yanlis grup ucuna GET). C2/C3 DUSMEZ (olculdu): yanlis URL'de metadata 404 -> fail-closed yine yazmaz
-                       {"A1", "C1", "C1b", "C4", "C9", "C12", "E1", "E3", "E4", "E7", "E9"}),
+                       # 2026-11-08: kanit programs/includes'tan alindigi icin yanlis FUGR/I URL'i
+                       # sahte oturumda yazimi DURDURMAZ (C1b/C4/C9/E4/E9 gecer, olculdu);
+                       # yakalayan URL'i olcen vektorlerdir (A1 C1 C12 E1 E3 E7 L1).
+                       {"A1", "C1", "C12", "E1", "E3", "E7", "L1"}),
     # Paylasilan grup kaniti (push + SAPClient.activate_object + MCP): varsayilan fail-closed
     "--mutasyon-grup-dogrulama": ("scripts/sap_client.py",
-                                  "        sonuc: Dict[str, Any] = {'ok': False, 'group': g,",
-                                  "        sonuc: Dict[str, Any] = {'ok': True, 'group': g,",
-                                  {"C2", "C3", "C12", "E9"}),
+                                  "            sonuc['ok'], sonuc['sebep'] = bool(ok), sebep\n",
+                                  "            sonuc['ok'], sonuc['sebep'] = True, sebep\n",
+                                  {"C2", "C12", "C13", "E9", "E11", "L3"}),
+    "--mutasyon-varsayilan-kapali": ("scripts/sap_client.py",
+                                     "        sonuc: Dict[str, Any] = {'ok': False, 'group': g,",
+                                     "        sonuc: Dict[str, Any] = {'ok': True, 'group': g,",
+                                     {"C3"}),
+    # 2026-11-08 canli: eski kanit (FUGR/I containerRef) URL grubunu yansitir -> KENDINI DOGRULAR
+    "--mutasyon-kanit-kaynagi": ("scripts/sap_client.py",
+                                 "        kod, govde, hata = self._metadata_getir(sonuc['kanit_url'])\n"
+                                 "        ok, sebep = fugr_include_grup_kaniti(govde, g) if kod == 200 else (False, '')\n",
+                                 "        kod, govde, hata = self._metadata_getir(sonuc['object_url'])\n"
+                                 "        ok, sebep = ((fugr_include_konteyneri(govde) == g), 'containerRef') if kod == 200 else (False, '')\n",
+                                 {"C2", "C3", "C12", "C13", "E9", "E11", "L1", "L3"}),
+    "--mutasyon-kanit-ad": ("scripts/object_types.py",
+                            "        if ref['type'] == 'FUGR/I' and ref['name'] == beklenen:\n",
+                            "        if ref['type'] == 'FUGR/I' and ref['name'].startswith('SAPL'):\n",
+                            {"A8", "C2", "C12", "C13", "E9", "E11", "L3"}),
+    "--mutasyon-kanit-tip": ("scripts/object_types.py",
+                             "        if ref['type'] == 'FUGR/I' and ref['name'] == beklenen:\n",
+                             "        if ref['type'].startswith('FUGR') and ref['name'] == beklenen:\n",
+                             {"A8"}),
+    "--mutasyon-kilit-grup-kaniti": ("mcp_servers/sap_adt/tools/query.py",
+                                     "        if not dogrulama.get(\"ok\"):\n",
+                                     "        if False:\n",
+                                     {"L3"}),
+    "--mutasyon-kilit-url": ("mcp_servers/sap_adt/tools/query.py",
+                             "bilgi = adt.is_object_locked(dogrulama[\"object_url\"])",
+                             "bilgi = adt.is_object_locked(dogrulama[\"kanit_url\"])",
+                             {"L1"}),
+    "--mutasyon-kilit-grup-zorunlu": ("mcp_servers/sap_adt/tools/query.py",
+                                      "    if fugr_inc and not (group or \"\").strip():\n",
+                                      "    if False:\n",
+                                      {"L2"}),
+    # Ö3: push sonucundaki grup normalize (kanit tarafi kendi icinde strip eder — A8)
     "--mutasyon-grup-strip": ("scripts/sap_client.py",
-                              "        g = (group or '').strip().upper()\n",
-                              "        g = (group or '').upper()\n",
+                              "            'group': (group or '').strip().upper(), 'include'",
+                              "            'group': (group or '').upper(), 'include'",
                               {"C9"}),
     "--mutasyon-cli-ad-alani": ("scripts/sap_client.py",
                                 "        if ad_hatasi:\n",
@@ -634,7 +767,7 @@ MUTASYONLAR = {
     "--mutasyon-mcp-grup-kaniti": ("mcp_servers/sap_adt/tools/atom.py",
                                    "        if not dogrulama.get(\"ok\"):\n",
                                    "        if False:\n",
-                                   {"E9"}),
+                                   {"E9", "E11"}),
     "--mutasyon-mcp-push-kaydi": ("mcp_servers/sap_adt/tools/atom.py",
                                   "        if rec.get(\"grup\") and str(rec[\"grup\"]).strip().upper() != g_norm:\n",
                                   "        if False:\n",
@@ -693,7 +826,10 @@ KIPLER = ["--mutasyon-yol", "--mutasyon-grup-dogrulama", "--mutasyon-include-red
           "--mutasyon-cli-grup", "--mutasyon-mcp-push-yolu", "--mutasyon-mcp-grup-zorunlu",
           "--mutasyon-mcp-aktivasyon-yolu", "--mutasyon-mcp-readback",
           "--mutasyon-grup-strip", "--mutasyon-cli-ad-alani", "--mutasyon-istemci-akt-kaniti",
-          "--mutasyon-mcp-grup-kaniti", "--mutasyon-mcp-push-kaydi", "--mutasyon-mcp-also-red"]
+          "--mutasyon-mcp-grup-kaniti", "--mutasyon-mcp-push-kaydi", "--mutasyon-mcp-also-red",
+          "--mutasyon-varsayilan-kapali", "--mutasyon-kanit-kaynagi", "--mutasyon-kanit-ad",
+          "--mutasyon-kanit-tip", "--mutasyon-kilit-grup-kaniti", "--mutasyon-kilit-url",
+          "--mutasyon-kilit-grup-zorunlu"]
 
 
 def _mutasyon(kip) -> int:

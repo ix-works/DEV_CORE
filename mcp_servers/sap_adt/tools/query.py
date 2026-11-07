@@ -2250,7 +2250,7 @@ def adt_unit_run(name: str, object_type: str = "class",
 # =============================================================================
 
 @profil_tool()
-def adt_lock_check(name: str, object_type: str = "class") -> dict:
+def adt_lock_check(name: str, object_type: str = "class", group: str | None = None) -> dict:
     """Bir SAP objesinin kilitli olup olmadığını sorgula — salt-okuma (GET /adt/locks).
 
     ⚠ ESKİ SÜRÜM KİLİT TESPİTİ YAPAMIYORDU (2026-08-01 KAYIT-K3): strateji
@@ -2268,14 +2268,66 @@ def adt_lock_check(name: str, object_type: str = "class") -> dict:
 
     Args:
         name: Obje adı.
-        object_type: ADT tipi ('class', 'doma', 'dtel', 'tabl', 'ddls', ...).
+        object_type: ADT tipi ('class', 'doma', 'dtel', 'tabl', 'ddls', ..., 'fugr_include').
+        group: Q383 — YALNIZ object_type='fugr_include' (eşanlamlı 'fugr-include'/'fugr/i') için
+            ZORUNLU fonksiyon grubu; yoksa `group_required`, başka tipte → `group_not_applicable`.
+            Sonda FUGR/I URL'iyle koşar; ÖNCE grup kanıtı (`programs/includes` contextRef
+            FUGR/I SAPL<GRUP>) alınır — tutmazsa `fugr_group_unverified`, kilit ucu SORULMAZ.
 
     Returns:
         {ok, name, type, locked: bool|null, lock_owner?, exists: bool, client_log}
         `locked: null` = ÇÖZÜLEMEDİ (kanıt yok). Bu bir "hayır" değildir.
     """
     from mcp_servers.sap_adt.tools.atom import _miss_or_unreachable  # tek-kaynak sınıflandırıcı
+    from mcp_servers.sap_adt.tools.atom import _fugr_include_mi
+    fugr_inc = _fugr_include_mi(object_type)
+    if not fugr_inc and (group or "").strip():
+        return {"ok": False, "error": "group_not_applicable", "name": name, "type": object_type,
+                "locked": None, "message": "group parametresi yalnız object_type='fugr_include' "
+                                           f"ile kullanılır (verilen tip: {object_type})."}
+    if fugr_inc and not (group or "").strip():
+        return {"ok": False, "error": "group_required", "name": name, "type": object_type,
+                "locked": None, "message": "object_type='fugr_include' için group (fonksiyon "
+                                           "grubu) ZORUNLU — grup include adından türetilmez."}
     client = _get_client()
+
+    # ── Q383: FUGR/I — varlık + grup KANITI (salt-okur), sonda FUGR/I URL'iyle ────────────
+    # Bu araç SALT-OKURDUR: kilit ALMAZ/BIRAKMAZ; sonda aynı `is_object_locked` (GET /adt/locks).
+    if fugr_inc:
+        try:
+            with _capture() as buf:
+                dogrulama = client.fugr_include_grubunu_dogrula(name, group)
+            log = buf.getvalue().strip()
+        except Exception as exc:  # noqa: BLE001 — ölçülemedi = fail-closed
+            dogrulama, log = {"ok": False, "sebep": f"{type(exc).__name__}: {str(exc)[:120]}"}, ""
+        if not dogrulama.get("ok"):
+            return {"ok": False, "error": "fugr_group_unverified", "name": name,
+                    "type": object_type, "locked": None,
+                    "message": f"FUGR include grup doğrulaması BAŞARISIZ ({dogrulama.get('sebep')}); "
+                               f"istenen grup {(group or '').strip().upper()}. Kilit ucu SORULMADI "
+                               f"— 'kilitli değil' ANLAMINA GELMEZ.",
+                    "client_log": log}
+        adt = getattr(client, "adt_client", None)
+        bilgi = None
+        try:
+            if adt is not None and hasattr(adt, "is_object_locked"):
+                with _capture() as buf2:
+                    bilgi = adt.is_object_locked(dogrulama["object_url"])
+                log = (log + "\n" + buf2.getvalue().strip()).strip()
+        except Exception as exc:  # noqa: BLE001
+            log = (log + f"\n[ERROR] kilit sondası: {exc}").strip()
+        if not isinstance(bilgi, dict):
+            sebep = getattr(adt, "_last_lock_check_reason", None)
+            return {"ok": False, "error": "kilit_belirsiz", "name": name, "type": object_type,
+                    "exists": True, "locked": None, "reason": sebep,
+                    "message": ("Kilit durumu ÇÖZÜLEMEDİ (FUGR/I URL'iyle GET /sap/bc/adt/locks"
+                                + (f"; sonda sonucu: {sebep}" if sebep else "")
+                                + "). Bu sonuç 'kilitli DEĞİL' ANLAMINA GELMEZ — SM12 ile doğrula."),
+                    "client_log": log}
+        return {"ok": True, "name": name, "type": object_type, "exists": True,
+                "locked": bool(bilgi.get("locked")), "lock_owner": bilgi.get("lock_owner"),
+                "client_log": log}
+
     try:
         from sap_adt_lib import SAPLockError, SAPObjectNotFoundError  # type: ignore
     except ImportError:

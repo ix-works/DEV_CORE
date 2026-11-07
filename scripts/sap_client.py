@@ -826,31 +826,34 @@ class SAPClient:
     def fugr_include_grubunu_dogrula(self, include_name: str, group: str) -> Dict[str, Any]:
         """FUGR/I include'u gercekten `group`'a mi ait? (salt-okur metadata GET; Q383).
 
-        Kanit = `functions/groups/<fg>/includes/<incl>` 200 + `adtcore:containerRef` (FUGR/F)
-        adi == grup. Ad oneki (`L<GRUP>`) kanit DEGILDIR: `LZSD001_FGF01` hem `ZSD001_FG` hem
-        `ZSD001` icin onek kuralini gecer. Uyusmazlik / olculemezlik -> ok False (fail-closed);
-        cagiran YAZMAZ ve AKTIVE ETMEZ (yanlis grubun iki fazli aktivasyonu baska grubun
-        inaktif objelerini toplar — bug-gate F1).
-        Returns: {ok, group, konteyner, sebep, object_url}
+        Kanit = `programs/includes/<incl>` 200 + `include:contextRef` type FUGR/I, name
+        SAPL<GRUP> (`object_types.fugr_include_grup_kaniti`). Bu URL grup TASIMAZ.
+        ⛔ `functions/groups/<g>/includes/<incl>` `containerRef`'i KANIT DEGILDIR: SAP URL grubunu
+        geri yansitir, 200 doner — 2026-11-08 olculdu (dort grubun dordu, var olmayan grup dahil).
+        Ad oneki (`L<GRUP>`) de kanit degildir: `LZSD001_FGF01` hem `ZSD001_FG` hem `ZSD001` hem
+        `ZSD001_F` icin onek kuralini gecer. Uyusmazlik / olculemezlik -> ok False (fail-closed);
+        cagiran YAZMAZ, KILITLEMEZ ve AKTIVE ETMEZ (yanlis grubun iki fazli aktivasyonu baska
+        grubun inaktif objelerini toplar — bug-gate F1).
+        Returns: {ok, group, sebep, object_url (FUGR/I), kanit_url (programs/includes)}
         """
-        from object_types import get_fugr_include_url, fugr_include_konteyneri
+        from object_types import (get_fugr_include_url, get_object_url, fugr_include_grup_kaniti,
+                                  fugr_include_konteyneri)  # noqa: F401 — konteyneri: yalniz teshis
         g = (group or '').strip().upper()
-        sonuc: Dict[str, Any] = {'ok': False, 'group': g, 'konteyner': None,
-                                 'sebep': '', 'object_url': ''}
+        sonuc: Dict[str, Any] = {'ok': False, 'group': g, 'sebep': '', 'object_url': '',
+                                 'kanit_url': ''}
         try:
             sonuc['object_url'] = get_fugr_include_url(g, include_name)
+            sonuc['kanit_url'] = get_object_url((include_name or '').strip(), 'include')
         except ValueError as e:
             sonuc['sebep'] = str(e)
             return sonuc
-        kod, govde, hata = self._metadata_getir(sonuc['object_url'])
-        konteyner = fugr_include_konteyneri(govde) if kod == 200 else None
-        sonuc['konteyner'] = konteyner
+        # KANIT KAYNAGI — programs/includes contextRef (FUGR/I containerRef DEGIL, 2026-11-08)
+        kod, govde, hata = self._metadata_getir(sonuc['kanit_url'])
+        ok, sebep = fugr_include_grup_kaniti(govde, g) if kod == 200 else (False, '')
         if kod != 200:
-            sonuc['sebep'] = f"metadata GET -> {kod if kod is not None else hata}"
-        elif konteyner != g:
-            sonuc['sebep'] = f"containerRef={konteyner or '(yok/okunamadi)'}"
+            sonuc['sebep'] = f"programs/includes metadata GET -> {kod if kod is not None else hata}"
         else:
-            sonuc['ok'] = True
+            sonuc['ok'], sonuc['sebep'] = bool(ok), sebep
         return sonuc
 
     def push_fugr_include(self, include_name: str, group: str,
@@ -918,7 +921,6 @@ class SAPClient:
 
         # 0 — grup dogrulamasi (yazmadan ONCE; salt-okur)
         dogrulama = self.fugr_include_grubunu_dogrula(include_name, group)
-        konteyner = dogrulama['konteyner']
         if not dogrulama['ok']:
             sebep = dogrulama['sebep']
             result['error'] = (f"FUGR include grup dogrulamasi BASARISIZ ({sebep}); istenen grup "
@@ -926,7 +928,7 @@ class SAPClient:
             result['error_type'] = 'SAPValidationError'
             print(f"\n[ERROR] {result['error']}")
             return result
-        print(f"      [OK] containerRef FUGR/F = {konteyner}")
+        print(f"      [OK] grup kaniti: {dogrulama['sebep']}")
 
         lock_handle = None
         try:

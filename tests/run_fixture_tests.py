@@ -1573,6 +1573,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "Q383 --type fugr-include --group (exit 2 sozlesmesi + dagitim)"),
     ("mcp_servers/sap_adt/tools/atom.py", ("O:fugr_include_yazim",),
      "Q383③ adt_push_source/adt_activate group + _activation_uri + _content_readback FUGR/I"),
+    ("mcp_servers/sap_adt/tools/query.py", ("O:fugr_include_yazim",),
+     "Q383 adt_lock_check fugr_include + group (contextRef grup kaniti, salt-okur sonda)"),
     ("scripts/sap_client.py", ("O:kilit_birakma_durustlugu", "O:istek_sahibi_metni"),
      "_kilit_birak 9 cagri (lock_released=False, retry yok) + Bug 11 WARN istek sahibi"),
     ("scripts/populate_cds_views.py", ("O:kilit_birakma_durustlugu",),
