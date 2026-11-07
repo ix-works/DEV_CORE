@@ -217,6 +217,16 @@ def normalize_object_type(object_type):
     if obj_type in OBJECT_TYPES:
         return obj_type
 
+    # Fonksiyon grubu include'u mu? (Q383) — URL'i GRUBU icerir, grup adi include adindan
+    # TURETILEMEZ ⇒ tek-parametreli get_object_url() onu uretemez (FM ile ayni gerekce).
+    if obj_type in FUGR_INCLUDE_TYPES:
+        raise ValueError(
+            f"'{object_type}' bir FONKSIYON GRUBU INCLUDE'udur (FUGR/I). get_object_url() onu "
+            f"uretemez: URL grubu icerir (/functions/groups/<FG>/includes/<INCL>) ve grup adi "
+            f"include adindan TURETILEMEZ. Kullan: get_fugr_include_url(<FG>, <INCL>) / "
+            f"SAPClient.push_fugr_include() / push_object.py --type fugr-include --group <FG>."
+        )
+
     # Sinif ALT-INCLUDE'u mu? (ccau/ccimp/...) — bunlar bagimsiz obje DEGILDIR, bu
     # yuzden OBJECT_TYPES'a KOYULMAZ (URL'leri ana sinifin adini gerektirir; tek
     # parametreli get_object_url() onlari uretemez). Ayri bir yol vardir; hata
@@ -426,6 +436,84 @@ def is_class_include_url(object_url) -> bool:
     if parcalar[-4].lower() != 'classes' or parcalar[-5].lower() != 'oo':
         return False
     return parcalar[-1].lower() in {v['segment'] for v in CLASS_INCLUDE_TYPES.values()}
+
+
+# =============================================================================
+# FONKSIYON GRUBU INCLUDE'U (FUGR/I) — TEK KAYNAK (Q383, 2026-11-07)
+# =============================================================================
+# NEDEN AYRI: SE54 TMG olay include'u gibi `L<FG>F01` include'lari FUGR/I tipidir. `include`
+# tipi (PROG/I) daima `programs/includes` yoluna gider; o yoldan KILIT R3TR PROG ister ve SAP
+# `403 TK/103 "Nesne adi icin sozdizim olanaksiz"` dondurur. Dogru uc grubu icerir:
+#   /sap/bc/adt/functions/groups/<fg>/includes/<incl>[/source/main]
+# CANLI OLCUM 2026-11-07 (DEV, salt-GET, bir TMG olay include'u):
+#   functions/groups/<fg>/includes/<incl>              -> 200 `adtcore:type="FUGR/I"`,
+#        `adtcore:containerRef type="FUGR/F" name=<FG>`, ETag var
+#   .../source/main                                     -> 200 text/plain
+#   programs/includes/<incl>                            -> 200 `PROG/I`, ama
+#        `include:contextRef type="FUGR/I" uri=/sap/bc/adt/functions/groups/<fg>/source/main`
+#   ⇒ OKUMA iki yoldan da calisir; YAZMA (kilit) yalniz FUGR/I yolundan. contextRef, `include`
+#     tipiyle gelen bir FUGR include'unu kilitten ONCE ayirt etmenin DETERMINISTIK sinyalidir.
+# Grup adi include adindan TURETILMEZ (L<FG>F01 desenine guvenmek tahmindir): acik parametre.
+FUGR_INCLUDE_TYPES = {'fugr_include', 'fugr-include', 'fugr/i'}
+FUGR_INCLUDE_ADT_TYPE = 'FUGR/I'
+
+
+def is_fugr_include_type(object_type) -> bool:
+    """Tip bir fonksiyon grubu include'u mu (`fugr_include`/`fugr-include`/`fugr/i`)?"""
+    return (str(object_type or '').lower().strip()) in FUGR_INCLUDE_TYPES
+
+
+def get_fugr_include_url(group, include_name) -> str:
+    """FUGR/I objesinin ADT URL'i. Grup ZORUNLU (bos -> ValueError; tahmin yok)."""
+    from urllib.parse import quote
+    g = (group or '').strip()
+    i = (include_name or '').strip()
+    if not g:
+        raise ValueError("Fonksiyon grubu include'u icin grup adi ZORUNLU (--group / group=). "
+                         "Grup include adindan turetilmez.")
+    if not i:
+        raise ValueError("Include adi bos olamaz")
+    return (f"/sap/bc/adt/functions/groups/{quote(g.lower(), safe='')}"
+            f"/includes/{quote(i.lower(), safe='')}")
+
+
+def _adtcore_ref(xml_text, etiket):
+    """Metadata XML'inde `<*:etiket adtcore:uri/type/name>` ilk dugumu -> dict | None."""
+    import xml.etree.ElementTree as ET
+    try:
+        kok = ET.fromstring(xml_text or '')
+    except Exception:  # noqa: BLE001 — okunamayan govde: sinyal YOK
+        return None
+    ns = '{http://www.sap.com/adt/core}'
+    for el in kok.iter():
+        if el.tag.split('}')[-1] == etiket:
+            return {'uri': el.get(ns + 'uri') or '', 'type': (el.get(ns + 'type') or '').upper(),
+                    'name': el.get(ns + 'name') or ''}
+    return None
+
+
+def include_fugr_baglami(metadata_xml):
+    """`programs/includes/<incl>` metadata'si bir FUGR include'una mi ait? -> grup adi | None.
+
+    Sinyal SAP'nin kendi `include:contextRef`'idir (type FUGR/*, uri .../functions/groups/<fg>/...);
+    ad deseni KULLANILMAZ. Govde okunamazsa / contextRef yoksa / FUGR degilse None.
+    """
+    ref = _adtcore_ref(metadata_xml, 'contextRef')
+    if not ref or not ref['type'].startswith('FUGR'):
+        return None
+    parcalar = [p for p in ref['uri'].split('?')[0].split('/') if p]
+    for i, p in enumerate(parcalar[:-1]):
+        if p.lower() == 'groups' and i > 0 and parcalar[i - 1].lower() == 'functions':
+            return parcalar[i + 1].upper()
+    return None
+
+
+def fugr_include_konteyneri(metadata_xml):
+    """FUGR/I metadata'sindaki `adtcore:containerRef` (FUGR/F) grup adi | None."""
+    ref = _adtcore_ref(metadata_xml, 'containerRef')
+    if not ref or ref['type'] != 'FUGR/F':
+        return None
+    return ref['name'].upper() or None
 
 
 def ensure_source_url(object_url) -> str:

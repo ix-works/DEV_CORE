@@ -722,6 +722,10 @@ OZEL_TESTLER = [
     ("fugr_faz2_ioc_sondasi",
      "FUGR toplu aktivasyonunda 2. faz ioc = hukum DEGIL -> bagimsiz worklist sondasi "
      "(temiz/kalan/kurulamaz); FUGR disi birebir eski (taban 6b6c11d sahte-negatif kontrol)"),
+    ("fugr_include_yazim",
+     "Q383: FUGR/I include yazma+aktivasyon (push_fugr_include, grup ZORUNLU + containerRef "
+     "dogrulamasi; include+FUGR contextRef kilitten once red) + lock_object ozeti T100 tasir, "
+     "yetki onerisi kosullu, CSRF yenilemesi olculur + MCP group parametresi (12 mutasyon kipi)"),
     ("ad_kabul_tam_dize",
      "Q363②: izin-listesi ad desenleri `\\Z` (sondaki satir sonu kabul edilmez); RED tarafi "
      "desenler DEGISMEDI (sondaki LF guvenli tarafta kalir) — taban 6b6c11d kontrol"),
@@ -1558,6 +1562,17 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
                                 "O:transport_yaklasim_sirasi", "O:fugr_faz2_ioc_sondasi"),
      "Q359 unlock_object False sozlesmesi + kilit_birakilamadi_uyarisi · Q362 _istek_sahibi_metni · "
      "transport_approaches param-once sirasi · FUGR 2. faz ioc -> worklist sondasi"),
+    # ── 2026-11-07 Q383: FUGR/I include yazim zinciri (5 kaynak + reviewer haritasi) ──
+    ("scripts/sap_adt_lib.py", ("O:fugr_include_yazim",),
+     "Q383② lock_object ozeti T100 tasir (kilit_deneme_ozeti / kilit_403_onerisi) + CSRF dali"),
+    ("scripts/sap_client.py", ("O:fugr_include_yazim",),
+     "Q383① push_fugr_include + include/FUGR contextRef reddi + activate_object(group)"),
+    ("scripts/object_types.py", ("O:fugr_include_yazim",),
+     "Q383 FUGR_INCLUDE_TYPES / get_fugr_include_url / contextRef-containerRef ayristirma"),
+    ("scripts/push_object.py", ("O:fugr_include_yazim",),
+     "Q383 --type fugr-include --group (exit 2 sozlesmesi + dagitim)"),
+    ("mcp_servers/sap_adt/tools/atom.py", ("O:fugr_include_yazim",),
+     "Q383③ adt_push_source/adt_activate group + _activation_uri + _content_readback FUGR/I"),
     ("scripts/sap_client.py", ("O:kilit_birakma_durustlugu", "O:istek_sahibi_metni"),
      "_kilit_birak 9 cagri (lock_released=False, retry yok) + Bug 11 WARN istek sahibi"),
     ("scripts/populate_cds_views.py", ("O:kilit_birakma_durustlugu",),

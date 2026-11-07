@@ -813,6 +813,152 @@ class SAPClient:
                     result['lock_released'] = False
             return result
 
+    def _metadata_getir(self, object_url: str):
+        """Obje metadata'sini salt-okur GET ile al -> (status_code|None, govde, hata_metni)."""
+        try:
+            r = self.adt_client.session.get(
+                f"{self.adt_client.url}{object_url}", headers={'Accept': 'application/*'},
+                verify=False, timeout=getattr(self.adt_client, 'timeout_short', 30))
+            return getattr(r, 'status_code', None), (getattr(r, 'text', '') or ''), ''
+        except Exception as exc:  # noqa: BLE001 — olculemedi, cagiran karar verir
+            return None, '', f"{type(exc).__name__}: {str(exc)[:120]}"
+
+    def push_fugr_include(self, include_name: str, group: str,
+                          transport: Optional[str] = None,
+                          source_file: Optional[str] = None) -> Dict[str, Any]:
+        """Fonksiyon grubu include'unu (FUGR/I, ör. SE54 TMG olay include'u) push et (Q383).
+
+        Akis (2026-10-30 canli elle recetesinin kodlanmis hali):
+          0. metadata GET `functions/groups/<fg>/includes/<incl>` → 200 + `containerRef`
+             (FUGR/F) == `group` olmali; degilse YAZMADAN dur (fail-closed — grup tahmin edilmez)
+          1. ETag (kilitten ONCE) → 2. `lock_object(FUGR/I URL, transport)` → 3. `set_object_source`
+          4. `unlock` → 5. `activate_object(<INCL>, FUGR/I URL)` (FUGR iki fazli yol, Q231-a)
+          6. aktif readback: `version=active` kaynak, iki taraf `rstrip` + satir sonu LF → esit
+        ⛔ Bu yol `_find_existing_transport` (E071) ve R3TR on-kaydini KOSMAZ: ikisi FUGR/I icin
+        OLCULMEDI; transport'un otoritesi kilit yanitindaki CORRNR'dir (`_verify_and_return_lock`).
+        `source_file` ZORUNLU: repoda FUGR include'u icin tek bir dosya adi konvansiyonu yok
+        (olculdu: `<FG>.fugr.<incl>.abap` ve `functions/<INCL>.prog.abap` ikisi de var).
+
+        Returns: push_object ile ayni sozlesme + `group`, `object_url`, `readback_md5`.
+        """
+        from object_types import get_fugr_include_url, fugr_include_konteyneri
+
+        result: Dict[str, Any] = {
+            'success': False, 'error': '', 'error_type': '',
+            'source_uploaded': False, 'activated': False, 'lock_released': True,
+            'group': (group or '').upper(), 'include': (include_name or '').upper(),
+        }
+        try:
+            object_url = get_fugr_include_url(group, include_name)
+        except ValueError as e:
+            result['error'], result['error_type'] = str(e), 'ValueError'
+            return result
+        result['object_url'] = object_url
+        source_url = object_url + '/source/main'
+        include_name = include_name.upper()
+
+        if not source_file:
+            result['error'] = ("source_file ZORUNLU (FUGR include'u icin yerel dosya adi "
+                               "konvansiyonu yok; --source-file ver)")
+            result['error_type'] = 'ValueError'
+            return result
+        local_file = Path(source_file)
+        if not local_file.exists():
+            result['error'] = f"Local file not found: {local_file}"
+            result['error_type'] = 'FileNotFoundError'
+            result['source_path'] = str(local_file)
+            print(f"\n[ERROR] Local file not found: {local_file}")
+            return result
+        source_code = local_file.read_text(encoding='utf-8')
+        result.update(kaynak_kimligi(local_file, source_code))
+
+        print(f"\n{'=' * 70}")
+        print(f"  Pushing function group include (FUGR/I): {include_name} (grup {result['group']})")
+        print(f"{'=' * 70}")
+        print(f"\n[1/5] Reading local file...\n      {local_file}\n"
+              f"      Size: {len(source_code)} characters")
+        kaynak_kimligi_bas(result)
+
+        # 0 — grup dogrulamasi (yazmadan ONCE; salt-okur)
+        kod, govde, hata = self._metadata_getir(object_url)
+        konteyner = fugr_include_konteyneri(govde) if kod == 200 else None
+        if kod != 200 or konteyner != result['group']:
+            sebep = (f"metadata GET -> {kod if kod is not None else hata}" if kod != 200
+                     else f"containerRef={konteyner or '(yok/okunamadi)'}")
+            result['error'] = (f"FUGR include grup dogrulamasi BASARISIZ ({sebep}); istenen grup "
+                               f"{result['group']}. YAZILMADI. Grubu SE80/SE37'den teyit et.")
+            result['error_type'] = 'SAPValidationError'
+            print(f"\n[ERROR] {result['error']}")
+            return result
+        print(f"      [OK] containerRef FUGR/F = {konteyner}")
+
+        lock_handle = None
+        try:
+            pre_lock_etag = self.adt_client.fetch_source_etag(source_url)
+            print(f"\n[2/5] Locking include (FUGR/I)...")
+            print(f"      corrNr (lock'a verilen transport): "
+                  f"{transport or '[YOK — hayalet transport riski]'}")
+            lock_handle = self.adt_client.lock_object(object_url, transport=transport)
+            effective_transport = (
+                getattr(self.adt_client, '_last_lock_effective_transport', None) or transport)
+
+            print(f"\n[3/5] Uploading source code...")
+            self.adt_client.set_object_source(source_url, source_code, lock_handle,
+                                              effective_transport, etag=pre_lock_etag)
+            result['source_uploaded'] = True
+            print(f"      [OK] Source uploaded")
+
+            if lock_handle and lock_handle != 'NO_LOCK_SUPPORT':
+                try:
+                    self._kilit_birak(object_url, lock_handle, result)   # Q359
+                    lock_handle = None
+                except Exception as unlock_err:
+                    print(f"      [WARNING] Pre-activation unlock failed: {str(unlock_err)[:100]}")
+
+            print(f"\n[4/5] Activating include {include_name}...")
+            act = self.adt_client.activate_object(include_name, object_url)
+            result['activation'] = act if isinstance(act, dict) else {'success': bool(act)}
+            result['activated'] = isinstance(act, dict) and act.get('success') is True
+            if not result['activated']:
+                result['error'] = f"Activation failed: {str(act)[:400]}"
+                result['error_type'] = 'SAPActivationError'
+                return result
+
+            print(f"\n[5/5] Active readback (rstrip)...")
+            try:
+                canli = self.adt_client.get_object_source(object_url, return_etag=False,
+                                                          version='active')
+                y = source_code.replace('\r\n', '\n').replace('\r', '\n').rstrip()
+                c = (canli or '').replace('\r\n', '\n').replace('\r', '\n').rstrip()
+                import hashlib as _h
+                result['readback_md5'] = _h.md5(c.encode('utf-8')).hexdigest()
+                result['readback_ok'] = (y == c)
+                if result['readback_ok']:
+                    print(f"      [OK] Active source verified - md5 {result['readback_md5']}")
+                else:
+                    result['readback_mismatch'] = {'uploaded_chars': len(y), 'active_chars': len(c)}
+                    print(f"      [FAIL] READBACK UYUSMAZLIGI — yuklenen {len(y)} ch · aktif {len(c)} ch")
+            except Exception as verify_err:
+                result['readback_ok'] = None
+                result['readback_reason'] = (f"post-activation readback KOSAMADI: "
+                                             f"{type(verify_err).__name__}: {str(verify_err)[:160]}")
+                print(f"      [INFO] readback_ok=None — 'yazim dogrulandi' SANMA")
+
+            result['success'] = bool(result['source_uploaded'] and result['activated']
+                                     and result.get('readback_ok') is not False)
+            return result
+        except Exception as e:
+            result['error'] = str(e)
+            result['error_type'] = type(e).__name__
+            print(f"\n[ERROR] {result['error'][:600]}")
+            return result
+        finally:
+            if lock_handle and lock_handle not in ('NO_LOCK_SUPPORT', 'IMPLICIT_LOCK', None, ''):
+                try:
+                    self._kilit_birak(object_url, lock_handle, result)   # Q359
+                except Exception:
+                    result['lock_released'] = False
+
     def push_object(self, object_name: str, object_type: str = 'class', transport: Optional[str] = None, source_file: Optional[str] = None) -> Dict[str, Any]:
         """
         Push local object changes to SAP (complete workflow: lock -> upload -> activate -> unlock)
@@ -889,6 +1035,41 @@ class SAPClient:
         print(f"      {local_file}")
         print(f"      Size: {len(source_code)} characters")
         kaynak_kimligi_bas(result)
+
+        # ⛔ Q383① (2026-11-07): `include` (PROG/I) tipiyle gelen bir FONKSIYON GRUBU include'u
+        # `programs/includes` yolundan kilitlenemez (SAP: 403 TK/103). Ayirt edici sinyal SAP'nin
+        # kendi metadata'sidir (`include:contextRef type=FUGR/*`) — ad deseni DEGIL. Kilitten
+        # (ve transport/R3TR adimlarindan) ONCE reddedilir; otomatik yonlendirme YOK: grup acik
+        # parametredir. GET olculemezse eski akis surer (kilit hatasi artik TK/103'u gosterir).
+        try:
+            from object_types import normalize_object_type as _nt, include_fugr_baglami
+            _kanonik = _nt(object_type)
+        except Exception:  # noqa: BLE001
+            _kanonik = None
+        if _kanonik == 'include':
+            _kod, _govde, _hata = self._metadata_getir(object_url)
+            _grup = include_fugr_baglami(_govde) if _kod == 200 else None
+            # Kapsam OLCULEN sinifa daraltildi: SAP'nin grup-uretimli `L...` include'u. Standart
+            # bir cikis grubundaki musteri include'u (CMOD `ZX...`) da contextRef FUGR tasir;
+            # onun `programs/includes` kilidi OLCULMEDI ⇒ eski akis korunur (regresyon yok).
+            if _grup and not object_name.upper().startswith('L'):
+                print(f"      [INFO] Include FUGR baglamli ({_grup}) ama 'L' onekli degil "
+                      f"(ör. CMOD ZX include'u) — PROG/I yolu korunuyor; kilit OLCULMEDI")
+                _grup = None
+            if _grup:
+                result['error'] = (
+                    f"{object_name.upper()} bir FONKSIYON GRUBU include'udur (SAP contextRef: "
+                    f"FUGR/I, grup {_grup}) — `include` (PROG/I) yolundan YAZILAMAZ (kilit 403 "
+                    f"TK/103). Kullan: push_object.py --type fugr-include --group {_grup} "
+                    f"--source-file <dosya> (MCP: object_type='fugr_include', group='{_grup}'). "
+                    f"Grubu teyit et; arac kendiliginden yonlendirmez.")
+                result['error_type'] = 'FugrIncludeTypeError'
+                result['fugr_group'] = _grup
+                print(f"\n[ERROR] {result['error']}")
+                return result
+            if _kod != 200:
+                print(f"      [INFO] FUGR-include on-kontrolu OLCULEMEDI "
+                      f"(metadata GET -> {_kod if _kod is not None else _hata}); eski akisla devam")
 
         # Resolve transport BEFORE locking so corrNr is passed during lock.
         # Without corrNr, SAP CTS auto-creates a ghost transport during lock,
@@ -2085,19 +2266,28 @@ class SAPClient:
         except Exception as e:
             return {'structurally_valid': False, 'error': str(e)}
 
-    def activate_object(self, object_name: str, object_type: str = 'class') -> bool:
+    def activate_object(self, object_name: str, object_type: str = 'class',
+                        group: Optional[str] = None) -> bool:
         """
         Activate ABAP object (retry after failed push)
 
         Args:
             object_name: Name of the object
             object_type: Type of object
+            group: Q383 — yalniz `fugr_include` (FUGR/I) icin ZORUNLU fonksiyon grubu;
+                yoksa ValueError (sessiz yanlis URI uretilmez).
 
         Returns:
             True if successful, False otherwise
         """
-        object_url = get_object_url(object_name, object_type)
-        type_desc = get_type_description(object_type)
+        from object_types import is_fugr_include_type, get_fugr_include_url
+        if is_fugr_include_type(object_type):
+            object_url = get_fugr_include_url(group, object_name)   # grup yoksa ValueError
+            type_desc = 'Function Group Include (FUGR/I)'
+            object_name = object_name.upper()
+        else:
+            object_url = get_object_url(object_name, object_type)
+            type_desc = get_type_description(object_type)
 
         print(f"\nActivating {type_desc}: {object_name}")
 

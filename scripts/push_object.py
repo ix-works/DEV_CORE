@@ -25,7 +25,7 @@ sys.path.insert(0, str(script_dir))
 
 from sap_adt_lib import set_explicit_working_dir
 from sap_client import SAPClient
-from object_types import is_class_include
+from object_types import is_class_include, is_fugr_include_type
 
 # ── #30③ (2026-08-29) — REDDEDİLEN TİP İÇİN YÖNLENDİRME ──────────────────────
 # ⛔ `--type` choices GEVŞETİLMEDİ ve gevşetilmemeli. DDIC tiplerinin listede
@@ -182,9 +182,18 @@ def main():
                                # operator ham HTTP atmak zorunda kaliyor ve POST/PUT
                                # asimetrisine (KUSUR-5/6) carpiyordu.
                                'testclasses', 'ccau', 'implementations', 'ccimp',
-                               'definitions', 'ccdef', 'macros', 'ccmac'],
+                               'definitions', 'ccdef', 'macros', 'ccmac',
+                               # Q383 (2026-11-07): fonksiyon grubu include'u (FUGR/I, ör. SE54
+                               # TMG olay include'u). `include` (PROG/I) yolu bunu KILITLEYEMEZ
+                               # (403 TK/103); grup adi --group ile ACIK verilir.
+                               'fugr-include', 'fugr_include'],
                        help='Object type (default: class). ccau/ccimp/ccdef/ccmac = '
-                            'sinif alt-include (--name ANA SINIF adidir)')
+                            'sinif alt-include (--name ANA SINIF adidir). fugr-include = '
+                            'fonksiyon grubu include-u (--name INCLUDE adi, --group ZORUNLU, '
+                            '--source-file ZORUNLU)')
+    parser.add_argument('--group',
+                       help='Fonksiyon grubu (yalniz --type fugr-include; include adindan '
+                            'TURETILMEZ)')
     parser.add_argument('--transport',
                        help='Transport request number (e.g., TRXXXXXX)')
     parser.add_argument('--source-file',
@@ -194,6 +203,18 @@ def main():
 
     if args.cwd:
         set_explicit_working_dir(args.cwd)
+
+    # Q383: grup YALNIZ fugr-include'da anlamlidir; eksik/yersiz grup argparse diliyle reddedilir
+    # (exit 2) — sessizce yok sayilip `programs/includes` yoluna dusulmez.
+    if is_fugr_include_type(args.type):
+        if not args.group:
+            parser.error("--type fugr-include icin --group <FG> ZORUNLU (grup include adindan "
+                         "turetilmez)")
+        if not args.source_file:
+            parser.error("--type fugr-include icin --source-file ZORUNLU (FUGR include'u icin "
+                         "yerel dosya adi konvansiyonu yok)")
+    elif args.group:
+        parser.error("--group yalniz --type fugr-include ile kullanilir")
 
     if not args.transport:
         print("[FAIL] --transport is required.")
@@ -206,7 +227,14 @@ def main():
         # Sinif alt-include'u (ccau/ccimp/...) AYRI bir yoldur: bagimsiz obje degildir,
         # URL'i ana sinifin adini gerektirir ve yazimi POST-then-PUT sirasi ister
         # (playbook/adt-classes.md 24.8). --name burada ANA SINIF adidir.
-        if is_class_include(args.type):
+        if is_fugr_include_type(args.type):
+            result = client.push_fugr_include(
+                include_name=args.name,
+                group=args.group,
+                transport=args.transport,
+                source_file=args.source_file
+            )
+        elif is_class_include(args.type):
             result = client.push_class_include(
                 class_name=args.name,
                 include_kind=args.type,

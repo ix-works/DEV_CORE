@@ -1,0 +1,640 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""fugr_include_yazim fixture — Q383: fonksiyon grubu include'u (FUGR/I) yazma + aktivasyon.
+
+NEDEN VAR (2026-11-07)
+  SE54 TMG olay include'u (`L<FG>F01`) çekirdek araçlarıyla YAZILAMIYORDU: `include` tipi daima
+  `programs/includes` (PROG/I) yoluna gidiyor, kilit R3TR PROG istiyor ve SAP `403 TK/103 "Nesne
+  adı için sözdizim olanaksız"` dönüyordu. Kilit hatasının özeti T100'ü ATIYOR, çare olarak
+  koşulsuz "yetki (S_DEVELOP)" öneriyordu. MCP `adt_activate` FUGR/I tipini tanımıyordu.
+  Çalışan elle reçete (2026-10-30, canlı): kilit(FUGR/I URL) → PUT → unlock →
+  activate_object(include URL) → aktif readback rstrip-eşit.
+
+EKSENLER / VEKTÖRLER
+  A  object_types: FUGR/I URL'i, grup ZORUNLU, generic URL fail-closed, contextRef/containerRef
+     ayrıştırma (canlı biçim `canli/` — 2026-11-07 salt-GET, genericize).
+  B  lock_object ②: CSRF yenileme GERÇEKTEN koşar → ikinci 403 TK/103 özete girer; yetki önerisi
+     yalnız yetki mesajında; okunamayan gövde ÖLÇÜLEMEDİ der; 404×3 KONTROL (NO_LOCK_SUPPORT).
+  C  SAPClient ①: push_fugr_include kilit/PUT/aktivasyon/readback HEP FUGR/I ucundan; grup
+     uyuşmazlığı / metadata 404 → YAZMADAN dur; `include` + FUGR contextRef → kilitten önce red;
+     KONTROL: düz include + L-öneksiz (CMOD tipi) include eski yol.
+  D  CLI push_object.py: --group/--source-file zorunluluğu (exit 2) + dağıtım.
+  E  MCP atom ③: adt_push_source/adt_activate `group`; group_required; guardrail (grup Z/Y +
+     `L<GRUP>` öneki); aktivasyon worklist sondası FUGR/I hedefiyle; içerik readback'i bu tipte koşar.
+
+SAP: HİÇBİR istek gerçek sisteme gitmez — sahte oturumlar; CLAUDE_PROJECT_DIR + cwd geçici kum.
+
+KULLANIM
+  python tests/fixtures/fugr_include_yazim/run.py                     # taban (exit 0)
+  python tests/fixtures/fugr_include_yazim/run.py --mutasyon-<ad>     # tek mutasyon (KIPLER)
+  Mutasyon çıkışı (run_battery karar tablosu): ilan edilen küme TAM düştü → 1 · sapma → 2 ·
+  çapa ≠ 1 kez / mutant derlenmedi → 3.
+"""
+from __future__ import annotations
+
+import io
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import types
+from pathlib import Path
+
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+BURASI = Path(__file__).resolve().parent
+REPO = BURASI.parents[2]
+if not (REPO / "scripts").is_dir() or not (REPO / "mcp_servers").is_dir():
+    raise SystemExit(f"[fixture-hatasi] repo koku yanlis cozuldu: {REPO}")
+CANLI = BURASI / "canli"
+_KUM = tempfile.mkdtemp(prefix="fugr_inc_")
+os.environ["CLAUDE_PROJECT_DIR"] = _KUM
+for _v in ("CLAUDE_CWD", "INIT_CWD", "COPILOT_CWD"):
+    os.environ.pop(_v, None)
+for _p in (REPO / "scripts" / "utils", REPO / "scripts", REPO):
+    sys.path.insert(0, str(_p))
+
+GRUP = "ZSD001_FG"
+INCL = "LZSD001_FGF01"
+FUGR_URL = "/sap/bc/adt/functions/groups/zsd001_fg/includes/lzsd001_fgf01"
+PROG_URL = "/sap/bc/adt/programs/includes/lzsd001_fgf01"
+TR = "<TR_ISTEK>"
+KAYNAK = "*----- olay include'u\nFORM f_ornek.\n  CLEAR sy-subrc.\nENDFORM.\n"
+
+S: list = []
+_TUT: list = []
+
+
+def ekle(ad, kosul, detay=""):
+    S.append((ad, bool(kosul), str(detay)[:300]))
+
+
+def _sessiz(fn, *a, **k):
+    eski = (sys.stdout, sys.stderr)
+    atik = io.TextIOWrapper(io.BytesIO(), encoding="utf-8", errors="replace")
+    sys.stdout = sys.stderr = atik
+    try:
+        try:
+            return fn(*a, **k), None
+        except Exception as exc:                      # noqa: BLE001 — istisna ÖLÇÜLÜR
+            return None, exc
+    finally:
+        _TUT.append(atik)
+        sys.stdout, sys.stderr = eski
+
+
+def _oku(ad):
+    return (CANLI / ad).read_text(encoding="utf-8")
+
+
+def _exc_govde(msgid, msgno, metin, v1=""):
+    return ('<?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/'
+            'abapxml/types/communicationframework"><namespace id="com.sap.adt"/>'
+            '<type id="ExceptionResourceNoAccess"/><message lang="TR">%s</message>'
+            '<localizedMessage lang="TR">%s</localizedMessage><properties>'
+            '<entry key="T100KEY-ID">%s</entry><entry key="T100KEY-NO">%s</entry>'
+            '<entry key="T100KEY-V1">%s</entry></properties></exc:exception>'
+            % (metin, metin, msgid, msgno, v1))
+
+
+TK103 = _exc_govde("TK", "103", "Nesne adı için sözdizim olanaksız", INCL)
+YETKI = _exc_govde("S#", "021", "You are not authorized to edit objects of this type")
+WL_BOS = ('<?xml version="1.0" encoding="utf-8"?><ioc:inactiveObjects '
+          'xmlns:ioc="http://www.sap.com/abapxml/inactiveCtsObjects"/>')
+
+
+class _Y:
+    def __init__(self, kod, text=""):
+        self.status_code, self.text, self.headers, self.cookies = kod, text, {}, {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# A — object_types
+# ─────────────────────────────────────────────────────────────────────────────
+def bolum_a(OT):
+    ekle("A1 ⭐ get_fugr_include_url -> functions/groups/<fg>/includes/<incl>",
+         OT.get_fugr_include_url(GRUP, INCL) == FUGR_URL, OT.get_fugr_include_url(GRUP, INCL))
+    r, exc = _sessiz(OT.get_fugr_include_url, "", INCL)
+    ekle("A2 grup bos -> ValueError (tahmin yok)", isinstance(exc, ValueError), repr(exc))
+    r, exc = _sessiz(OT.get_object_url, INCL, "fugr-include")
+    ekle("A3 get_object_url(fugr-include) FAIL-CLOSED + kanonik yolu soyler",
+         isinstance(exc, ValueError) and "get_fugr_include_url" in str(exc), repr(exc)[:200])
+    ekle("A4 ⭐ include_fugr_baglami(canli programs/includes meta) -> grup",
+         OT.include_fugr_baglami(_oku("progs_include_meta.xml")) == GRUP,
+         OT.include_fugr_baglami(_oku("progs_include_meta.xml")))
+    duz = _oku("progs_include_meta.xml").replace(
+        'adtcore:uri="/sap/bc/adt/functions/groups/zsd001_fg/source/main" adtcore:type="FUGR/I" '
+        'adtcore:name="SAPLZSD001_FG"',
+        'adtcore:uri="/sap/bc/adt/programs/programs/zsd001_prog" adtcore:type="PROG/P" '
+        'adtcore:name="ZSD001_PROG"')
+    ekle("A5 KONTROL duz program include'u (contextRef PROG/P) -> None",
+         duz != _oku("progs_include_meta.xml") and OT.include_fugr_baglami(duz) is None,
+         OT.include_fugr_baglami(duz))
+    ekle("A6 fugr_include_konteyneri(canli FUGR/I meta) -> grup; bozuk govde -> None",
+         OT.fugr_include_konteyneri(_oku("fugr_include_meta.xml")) == GRUP
+         and OT.fugr_include_konteyneri("<html>") is None,
+         OT.fugr_include_konteyneri(_oku("fugr_include_meta.xml")))
+    ekle("A7 KONTROL include tipi URL'i DEGISMEDI (programs/includes)",
+         OT.get_object_url("ZSD001_INCL", "include") == "/sap/bc/adt/programs/includes/zsd001_incl")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B — lock_object hata ozeti (②)
+# ─────────────────────────────────────────────────────────────────────────────
+class _KilitOturum:
+    def __init__(self, yanitlar):
+        self.yanitlar = list(yanitlar)
+        self.postlar: list = []
+
+    def post(self, url, headers=None, data=None, params=None, timeout=None, **kw):
+        self.postlar.append(url)
+        kod, govde = self.yanitlar.pop(0) if self.yanitlar else (599, "")
+        return _Y(kod, govde)
+
+
+def _kilit_istemci(L, yanitlar):
+    c = L.SAPADTClient.__new__(L.SAPADTClient)
+    c.debug_enabled = False
+    c.url = "http://sahte.invalid"
+    c.user = "SAP_USER_A"
+    c.csrf_token = "T0"
+    c.timeout_short = 5
+    c.session = _KilitOturum(yanitlar)
+    c._update_cookies = lambda *a, **k: None
+    c._get_headers = lambda *a, **k: {"X-CSRF-Token": c.csrf_token}
+    c.yenileme = []
+
+    def _fetch(force_refresh=False):
+        c.yenileme.append(force_refresh)
+        c.csrf_token = "T%d" % len(c.yenileme)
+        return c.csrf_token
+    c.fetch_csrf_token = _fetch
+    return c
+
+
+def _kilitle(L, yanitlar):
+    c = _kilit_istemci(L, yanitlar)
+    r, exc = _sessiz(c.lock_object, PROG_URL, transport=TR)
+    return c, r, exc
+
+
+def bolum_b(L):
+    c, r, exc = _kilitle(L, [(403, "CSRF token validation failed"), (403, TK103),
+                             (403, TK103), (403, TK103)])
+    m = str(exc or "")
+    # Ozet satiri AYRICA olculur: oneri satiri da T100'u anar; yalniz tum metne bakmak
+    # ozetin sebebi dusurmesini GORMEZ (mutasyon --mutasyon-t100 bunu olcer).
+    ozet = next((x for x in m.splitlines() if x.startswith("Deneme sonuçları:")), "")
+    ekle("B1 ⭐ 403 TK/103 -> ozet SATIRI T100+metni tasir, yetki (S_DEVELOP) ONERILMEZ, "
+         "fugr-include ipucu",
+         isinstance(exc, L.SAPLockError) and "TK/103: Nesne adı için sözdizim olanaksız" in ozet
+         and "S_DEVELOP" not in m and "fugr-include" in m, m[:300])
+    ekle("B1c ⭐ CSRF yenilemesi GERCEKTEN kostu (force_refresh) ve yenileme SONRASI 403 TK/103 ozette",
+         c.yenileme == [True] and "(CSRF yenileme sonrası) -> 403 [TK/103" in m,
+         f"yenileme={c.yenileme} postlar={len(c.session.postlar)} m={m[:200]}")
+    c, r, exc = _kilitle(L, [(403, YETKI)] * 3)
+    m = str(exc or "")
+    ekle("B2 KONTROL gercek yetki mesaji -> S_DEVELOP onerisi KALIR",
+         isinstance(exc, L.SAPLockError) and "S_DEVELOP" in m and "S#/021" in m, m[:240])
+    c, r, exc = _kilitle(L, [(403, "<html><title>Forbidden</title></html>")] * 3)
+    m = str(exc or "")
+    ekle("B3 okunamayan 403 govdesi -> sebep ÖLÇÜLEMEDİ, yetki VARSAYILMAZ",
+         isinstance(exc, L.SAPLockError) and "ÖLÇÜLEMEDİ" in m and "S_DEVELOP" not in m
+         and "-> 403" in m, m[:240])
+    c, r, exc = _kilitle(L, [(404, "")] * 3)
+    ekle("B4 KONTROL 404x3 -> NO_LOCK_SUPPORT (davranis AYNEN)",
+         r == "NO_LOCK_SUPPORT" and exc is None, f"r={r} exc={exc!r}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C — SAPClient push zinciri (①)
+# ─────────────────────────────────────────────────────────────────────────────
+class _MetaOturum:
+    def __init__(self, meta):
+        self.meta = meta          # {url-sonu: (kod, govde) | istisna}
+        self.getler: list = []
+
+    def get(self, url, headers=None, params=None, verify=None, timeout=None, **kw):
+        self.getler.append(url)
+        for uc, yan in self.meta.items():
+            if url.endswith(uc):
+                if isinstance(yan, Exception):
+                    raise yan
+                return _Y(*yan)
+        return _Y(404, "")
+
+
+class _SahteAdt:
+    def __init__(self, meta, aktif=None, akt_basari=True, kilit_hata=None):
+        self.url = "http://sahte.invalid"
+        self.user = "SAP_USER_A"
+        self.timeout_short = 5
+        self.session = _MetaOturum(meta)
+        self.olaylar: list = []
+        self.aktif = aktif
+        self.akt_basari = akt_basari
+        self.kilit_hata = kilit_hata
+        self._last_lock_effective_transport = None
+        self._last_lock_is_link_up = ''
+
+    def fetch_source_etag(self, url):
+        self.olaylar.append(("etag", url))
+        return "E1"
+
+    def is_object_locked(self, url):
+        return None
+
+    def get_transport_info(self, url):
+        return "No transport info available"
+
+    def lock_object(self, url, transport=None, **kw):
+        self.olaylar.append(("lock", url, transport))
+        if self.kilit_hata:
+            raise self.kilit_hata
+        self._last_lock_effective_transport = transport
+        return "LH1"
+
+    def set_object_source(self, url, src, lock_handle, transport=None, etag=None, **kw):
+        self.olaylar.append(("put", url, lock_handle, transport))
+        self.yuklenen = src
+
+    def unlock_object(self, url, lock_handle):
+        self.olaylar.append(("unlock", url))
+        return True
+
+    def activate_object(self, name, url):
+        self.olaylar.append(("activate", name, url))
+        return {"success": self.akt_basari, "errors": [], "warnings": []}
+
+    def get_object_source(self, url, return_etag=False, version=None):
+        self.olaylar.append(("readback", url, version))
+        return (self.aktif if self.aktif is not None else getattr(self, "yuklenen", "")) + "\n"
+
+    def _object_name_from_url(self, url):
+        return url.rsplit("/", 1)[-1]
+
+
+def _sapclient(SC, adt):
+    c = SC.SAPClient.__new__(SC.SAPClient)
+    c.adt_client = adt
+    c.debug_enabled = False
+    c.debug_log_path = None
+    c.local_base = Path(_KUM) / "src"
+    return c
+
+
+def _kaynak_dosyasi(icerik=KAYNAK, ad="incl.abap"):
+    p = Path(_KUM) / ad
+    p.write_text(icerik, encoding="utf-8", newline="")
+    return str(p)
+
+
+def _tipler(adt, tip):
+    return [o for o in adt.olaylar if o[0] == tip]
+
+
+def bolum_c(SC):
+    meta_ok = {FUGR_URL: (200, _oku("fugr_include_meta.xml"))}
+    adt = _SahteAdt(meta_ok)
+    r, exc = _sessiz(_sapclient(SC, adt).push_fugr_include, INCL, GRUP, TR, _kaynak_dosyasi())
+    r = r or {}
+    sira = [o[0] for o in adt.olaylar]
+    ekle("C1 ⭐ push_fugr_include: kilit/PUT/unlock/aktivasyon/readback HEP FUGR/I ucundan",
+         r.get("success") is True and r.get("readback_ok") is True
+         and _tipler(adt, "lock") == [("lock", FUGR_URL, TR)]
+         and bool(_tipler(adt, "put")) and _tipler(adt, "put")[0][1] == FUGR_URL + "/source/main"
+         and _tipler(adt, "activate") == [("activate", INCL, FUGR_URL)]
+         and "unlock" in sira and "activate" in sira and sira.index("unlock") < sira.index("activate")
+         and bool(_tipler(adt, "readback")) and _tipler(adt, "readback")[0][2] == "active"
+         and not any(PROG_URL in str(o) for o in adt.olaylar),
+         f"r={ {k: r.get(k) for k in ('success', 'readback_ok', 'error')} } olaylar={adt.olaylar} exc={exc!r}")
+    ekle("C1b readback rstrip: SAP kapanis satir sonu fark sayilmaz + readback_md5 dolu",
+         r.get("readback_ok") is True and len(r.get("readback_md5") or "") == 32, r.get("readback_md5"))
+
+    diger = _oku("fugr_include_meta.xml").replace('adtcore:name="ZSD001_FG"',
+                                                  'adtcore:name="ZSD001_DIGER"')
+    adt = _SahteAdt({FUGR_URL: (200, diger)})
+    r, _ = _sessiz(_sapclient(SC, adt).push_fugr_include, INCL, GRUP, TR, _kaynak_dosyasi())
+    r = r or {}
+    ekle("C2 ⭐ containerRef != --group -> YAZILMADI (kilit/PUT YOK), SAPValidationError",
+         r.get("success") is False and r.get("error_type") == "SAPValidationError"
+         and not _tipler(adt, "lock") and not _tipler(adt, "put"),
+         f"r={r.get('error_type')} olaylar={adt.olaylar}")
+    adt = _SahteAdt({FUGR_URL: (404, "")})
+    r, _ = _sessiz(_sapclient(SC, adt).push_fugr_include, INCL, GRUP, TR, _kaynak_dosyasi())
+    r = r or {}
+    ekle("C3 metadata 404 (yanlis grup/yok) -> fail-closed, kilit YOK",
+         r.get("success") is False and r.get("error_type") == "SAPValidationError"
+         and not _tipler(adt, "lock"), f"r={r.get('error')} olaylar={adt.olaylar}")
+    adt = _SahteAdt(meta_ok, aktif="baska kaynak")
+    r, _ = _sessiz(_sapclient(SC, adt).push_fugr_include, INCL, GRUP, TR, _kaynak_dosyasi())
+    r = r or {}
+    ekle("C4 aktif readback FARKLI -> success False + readback_ok False",
+         r.get("success") is False and r.get("readback_ok") is False, f"r={r}")
+
+    # C5..C8 — `include` tipiyle gelen FUGR include'u
+    meta_prog = {PROG_URL: (200, _oku("progs_include_meta.xml"))}
+    adt = _SahteAdt(meta_prog)
+    r, _ = _sessiz(_sapclient(SC, adt).push_object, INCL, "include", None, _kaynak_dosyasi())
+    r = r or {}
+    ekle("C5 ⭐ --type include + SAP contextRef FUGR/I -> kilitten ONCE red + dogru komut onerisi",
+         r.get("error_type") == "FugrIncludeTypeError" and not _tipler(adt, "lock")
+         and f"--type fugr-include --group {GRUP}" in (r.get("error") or ""),
+         f"r={r.get('error_type')} olaylar={adt.olaylar}")
+    duz = _oku("progs_include_meta.xml").replace("functions/groups/zsd001_fg/source/main",
+                                                 "programs/programs/zsd001_prog").replace(
+        'adtcore:type="FUGR/I"', 'adtcore:type="PROG/P"')
+    adt = _SahteAdt({PROG_URL: (200, duz)}, kilit_hata=RuntimeError("SAHTE_DUR"))
+    r, _ = _sessiz(_sapclient(SC, adt).push_object, INCL, "include", None, _kaynak_dosyasi())
+    r = r or {}
+    ekle("C6 KONTROL duz program include'u -> ESKI yol (programs/includes kilidi denenir)",
+         bool(_tipler(adt, "lock")) and _tipler(adt, "lock")[0][1] == PROG_URL
+         and r.get("error_type") != "FugrIncludeTypeError", f"olaylar={adt.olaylar}")
+    ex_ad = "ZSD001_EXITU01"
+    ex_url = "/sap/bc/adt/programs/includes/zsd001_exitu01"
+    ex_meta = _oku("progs_include_meta.xml").replace(INCL, ex_ad)
+    adt = _SahteAdt({ex_url: (200, ex_meta)}, kilit_hata=RuntimeError("SAHTE_DUR"))
+    r, _ = _sessiz(_sapclient(SC, adt).push_object, ex_ad, "include", None, _kaynak_dosyasi())
+    r = r or {}
+    ekle("C7 KONTROL L-oneksiz include (CMOD tipi, contextRef FUGR) -> ESKI yol korunur",
+         bool(_tipler(adt, "lock")) and _tipler(adt, "lock")[0][1] == ex_url
+         and r.get("error_type") != "FugrIncludeTypeError", f"olaylar={adt.olaylar}")
+    adt = _SahteAdt({PROG_URL: ConnectionError("ag yok")}, kilit_hata=RuntimeError("SAHTE_DUR"))
+    r, _ = _sessiz(_sapclient(SC, adt).push_object, INCL, "include", None, _kaynak_dosyasi())
+    ekle("C8 metadata GET istisnasi -> on-kontrol OLCULEMEDI, eski akis (kilit denenir)",
+         bool(_tipler(adt, "lock")), f"olaylar={adt.olaylar}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# D — CLI push_object.py
+# ─────────────────────────────────────────────────────────────────────────────
+_DAGITIM = r'''
+import sys, types, runpy
+m = types.ModuleType("sap_client")
+class SAPClient:
+    def push_fugr_include(self, **k):
+        print("CAGRI:push_fugr_include:%s:%s" % (k.get("group"), k.get("include_name")))
+        return {"success": True}
+    def push_object(self, **k):
+        print("CAGRI:push_object:%s" % k.get("object_type"))
+        return {"success": True}
+    def push_class_include(self, **k):
+        print("CAGRI:push_class_include")
+        return {"success": True}
+m.SAPClient = SAPClient
+sys.modules["sap_client"] = m
+sys.argv = [r"@PO@"] + @ARGV@
+runpy.run_path(r"@PO@", run_name="__main__")
+'''
+
+
+def _cli(argv, dagitim=False):
+    po = str(REPO / "scripts" / "push_object.py")
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", CLAUDE_PROJECT_DIR=_KUM)
+    if dagitim:
+        kod = _DAGITIM.replace("@PO@", po).replace("@ARGV@", repr(argv))
+        komut = [sys.executable, "-c", kod]
+    else:
+        komut = [sys.executable, po] + argv
+    p = subprocess.run(komut, cwd=_KUM, env=env, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=120)
+    return p.returncode, (p.stdout or "") + (p.stderr or "")
+
+
+def bolum_d():
+    src = _kaynak_dosyasi()
+    rc, o = _cli(["--name", INCL, "--type", "fugr-include", "--transport", TR, "--source-file", src])
+    ekle("D1 ⭐ fugr-include + --group YOK -> exit 2 (sessiz programs/includes DUSUSU YOK)",
+         rc == 2 and "--group <FG> ZORUNLU" in o, f"rc={rc} {o[-200:]}")
+    rc, o = _cli(["--name", "ZSD001_INCL", "--type", "include", "--group", GRUP, "--transport", TR])
+    ekle("D2 --group + --type include -> exit 2 (yersiz grup)",
+         rc == 2 and "yalniz --type fugr-include" in o, f"rc={rc} {o[-200:]}")
+    rc, o = _cli(["--name", INCL, "--type", "fugr-include", "--group", GRUP, "--transport", TR])
+    ekle("D3 fugr-include + --source-file YOK -> exit 2", rc == 2 and "--source-file ZORUNLU" in o,
+         f"rc={rc} {o[-200:]}")
+    rc, o = _cli(["--name", INCL, "--type", "fugr-include", "--group", GRUP, "--transport", TR,
+                  "--source-file", src], dagitim=True)
+    ekle("D4 ⭐ dagitim: --type fugr-include -> SAPClient.push_fugr_include(group=...)",
+         rc == 0 and f"CAGRI:push_fugr_include:{GRUP}:{INCL}" in o, f"rc={rc} {o[-300:]}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# E — MCP atom (③)
+# ─────────────────────────────────────────────────────────────────────────────
+def _mcp_kopru():
+    try:  # pragma: no cover - ortam kosullu
+        import mcp.server.fastmcp  # type: ignore  # noqa: F401
+    except Exception:
+        _mcp, _srv, _fast = (types.ModuleType("mcp"), types.ModuleType("mcp.server"),
+                             types.ModuleType("mcp.server.fastmcp"))
+
+        class _FastMCP:
+            def __init__(self, *a, **k):
+                pass
+
+            def tool(self, *a, **k):
+                return lambda fn: fn
+        _fast.FastMCP = _FastMCP                                 # type: ignore[attr-defined]
+        _srv.fastmcp = _fast                                     # type: ignore[attr-defined]
+        _mcp.server = _srv                                       # type: ignore[attr-defined]
+        sys.modules.setdefault("mcp", _mcp)
+        sys.modules.setdefault("mcp.server", _srv)
+        sys.modules.setdefault("mcp.server.fastmcp", _fast)
+    import logging
+    logging.disable(logging.CRITICAL)
+
+
+def bolum_e(SC):
+    _mcp_kopru()
+    from mcp_servers.sap_adt.tools import atom
+    atom.get_active_tier = lambda: "DEV"                   # type: ignore[assignment]
+    meta = {FUGR_URL: (200, _oku("fugr_include_meta.xml")),
+            "/sap/bc/adt/activation/inactiveobjects": (200, WL_BOS)}
+    adt = _SahteAdt(meta)
+    istemci = _sapclient(SC, adt)
+    atom._get_client = lambda: istemci                     # type: ignore[assignment]
+
+    r, exc = _sessiz(atom.adt_push_source, INCL, "fugr_include", KAYNAK, transport=TR,
+                     skip_reviewer=True, group=GRUP)
+    r = r or {}
+    ekle("E1 ⭐ adt_push_source(fugr_include, group) -> push_fugr_include yolu, ok True",
+         r.get("ok") is True and (r.get("result") or {}).get("object_url") == FUGR_URL
+         and _tipler(adt, "lock") == [("lock", FUGR_URL, TR)],
+         f"ok={r.get('ok')} err={r.get('error') or (r.get('result') or {}).get('error')} exc={exc!r}")
+    n_once = len(adt.olaylar)
+    r, _ = _sessiz(atom.adt_activate, INCL, "fugr_include")
+    r = r or {}
+    ekle("E2 ⭐ adt_activate(fugr_include) grupsuz -> group_required, SAP cagrisi YOK",
+         r.get("ok") is False and r.get("error") == "group_required" and len(adt.olaylar) == n_once,
+         f"r={r}")
+    r, exc = _sessiz(atom.adt_activate, INCL, "fugr_include", group=GRUP)
+    r = r or {}
+    akt = [o for o in adt.olaylar[n_once:] if o[0] == "activate"]
+    ekle("E3 ⭐ adt_activate(fugr_include, group) -> FUGR/I ucu aktive + worklist sondasi dogruladi",
+         r.get("ok") is True and akt == [("activate", INCL, FUGR_URL)]
+         and r.get("activation_verified") is True,
+         f"ok={r.get('ok')} akt={akt} verified={r.get('activation_verified')} "
+         f"err={r.get('error')} exc={exc!r}")
+    ekle("E4 ⭐ icerik readback FUGR/I'da da KOSTU (adt_push_source kaydi + grup) -> esitlik",
+         r.get("content_verified") is True and r.get("content_probe") == "esitlik",
+         f"content_verified={r.get('content_verified')} probe={r.get('content_probe')} "
+         f"reason={r.get('content_reason')}")
+    r, _ = _sessiz(atom.adt_activate, "ZCL_SD001_ORNEK", "class", group=GRUP)
+    r = r or {}
+    ekle("E5 KONTROL group + class -> group_not_applicable", r.get("error") == "group_not_applicable", r)
+    r, _ = _sessiz(atom.adt_push_source, "LZSD001_BASKAF01", "fugr_include", KAYNAK,
+                   transport=TR, skip_reviewer=True, group=GRUP)
+    r = r or {}
+    r2, _ = _sessiz(atom.adt_activate, "LSD001F01", "fugr_include", group="SD001")
+    r2 = r2 or {}
+    ekle("E6 guardrail: include 'L<GRUP>' onekli degil / grup Z-Y degil -> ADR_0005_A, yazma YOK",
+         r.get("ok") is False and "ADR_0005_A" in str(r) and r2.get("ok") is False
+         and "ADR_0005_A" in str(r2), f"r={str(r)[:160]} r2={str(r2)[:160]}")
+    ekle("E7 _activation_uri: grupsuz None, gruplu FUGR/I URL'i; KONTROL class AYNEN",
+         atom._activation_uri(INCL, "fugr/i") is None
+         and atom._activation_uri(INCL, "fugr-include", GRUP) == FUGR_URL
+         and atom._activation_uri("ZCL_X", "class") == "/sap/bc/adt/oo/classes/zcl_x",
+         f"{atom._activation_uri(INCL, 'fugr/i')} {atom._activation_uri(INCL, 'fugr-include', GRUP)}")
+
+
+def main() -> int:
+    import importlib
+    mods = {}
+    for ad in ("object_types", "sap_adt_lib", "sap_client"):
+        m, exc = _sessiz(importlib.import_module, ad)
+        if m is None:
+            print(f"[fixture-hatasi] {ad} import edilemedi: {exc!r}")
+            return 3
+        mods[ad] = m
+    for fn, arg in ((bolum_a, mods["object_types"]), (bolum_b, mods["sap_adt_lib"]),
+                    (bolum_c, mods["sap_client"]), (bolum_d, None), (bolum_e, mods["sap_client"])):
+        try:
+            fn(arg) if arg is not None else fn()
+        except Exception as exc:                       # noqa: BLE001 — bolum cokmesi FAIL'dir
+            ekle(f"{fn.__name__} COKTU", False, f"{type(exc).__name__}: {exc}")
+    for ad, ok, d in S:
+        print(f"  [{'PASS' if ok else 'FAIL'}] {ad}" + ("" if ok else f"\n         -> {d}"))
+    n = sum(1 for _, ok, _ in S if ok)
+    print(f"\n{n}/{len(S)} OK")
+    shutil.rmtree(_KUM, ignore_errors=True)
+    return 0 if n == len(S) else 1
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MUTASYON — her kip TEK bir degismezi geri alir; dusmesi ILAN EDILEN kume TAM olmalidir.
+# ─────────────────────────────────────────────────────────────────────────────
+MUTASYONLAR = {
+    "--mutasyon-yol": ("scripts/object_types.py",
+                       '    return (f"/sap/bc/adt/functions/groups/{quote(g.lower(), safe=\'\')}"\n'
+                       '            f"/includes/{quote(i.lower(), safe=\'\')}")\n',
+                       '    return f"/sap/bc/adt/programs/includes/{quote(i.lower(), safe=\'\')}"\n',
+                       # C2/C3 DUSMEZ (olculdu): yanlis URL'de metadata 404 -> fail-closed yine yazmaz
+                       {"A1", "C1", "C1b", "C4", "E1", "E3", "E4", "E7"}),
+    "--mutasyon-grup-dogrulama": ("scripts/sap_client.py",
+                                  "        if kod != 200 or konteyner != result['group']:\n",
+                                  "        if False:\n",
+                                  {"C2", "C3"}),
+    "--mutasyon-include-red": ("scripts/sap_client.py",
+                               "            _grup = include_fugr_baglami(_govde) if _kod == 200 else None\n",
+                               "            _grup = None\n",
+                               {"C5"}),
+    "--mutasyon-l-onek": ("scripts/sap_client.py",
+                          "            if _grup and not object_name.upper().startswith('L'):\n",
+                          "            if False:\n",
+                          {"C7"}),
+    "--mutasyon-t100": ("scripts/sap_adt_lib.py",
+                        "        if sebep:\n            etiket = ",
+                        "        if False:\n            etiket = ",
+                        {"B1", "B1c", "B2"}),
+    "--mutasyon-yetki-kosulsuz": ("scripts/sap_adt_lib.py",
+                                  "    if any(_KILIT_YETKI_RE.search(sb.get('metin') or '') for sb in metinler):\n",
+                                  "    if True:\n",
+                                  {"B1", "B3"}),
+    "--mutasyon-csrf": ("scripts/sap_adt_lib.py",
+                        "                elif response.status_code == 403 and 'CSRF' in response.text:\n"
+                        "                    if self.debug_enabled:\n"
+                        "                        self._debug(f\"[DEBUG] lock_object attempt {attempt_num} - CSRF error",
+                        "                elif False:\n"
+                        "                    if self.debug_enabled:\n"
+                        "                        self._debug(f\"[DEBUG] lock_object attempt {attempt_num} - CSRF error",
+                        {"B1c"}),
+    "--mutasyon-cli-grup": ("scripts/push_object.py",
+                            "        if not args.group:\n",
+                            "        if False:\n",
+                            {"D1"}),
+    "--mutasyon-mcp-push-yolu": ("mcp_servers/sap_adt/tools/atom.py",
+                                 "            if fugr_inc:\n                # Q383: FUGR/I yolu",
+                                 "            if False:\n                # Q383: FUGR/I yolu",
+                                 {"E1", "E4"}),
+    "--mutasyon-mcp-grup-zorunlu": ("mcp_servers/sap_adt/tools/atom.py",
+                                    "    if not g:\n        raise ValueError(\"object_type='fugr_include' için group",
+                                    "    if False:\n        raise ValueError(\"object_type='fugr_include' için group",
+                                    {"E2"}),
+    "--mutasyon-mcp-aktivasyon-yolu": ("mcp_servers/sap_adt/tools/atom.py",
+                                       "                activated = client.activate_object(name, object_type=object_type, group=group)\n",
+                                       "                activated = client.activate_object(name, object_type=object_type)\n",
+                                       {"E3", "E4"}),
+    "--mutasyon-mcp-readback": ("mcp_servers/sap_adt/tools/atom.py",
+                                "    fugr_inc = _fugr_include_mi(t)   # Q383",
+                                "    fugr_inc = False   # Q383",
+                                {"E4"}),
+}
+KIPLER = ["--mutasyon-yol", "--mutasyon-grup-dogrulama", "--mutasyon-include-red",
+          "--mutasyon-l-onek", "--mutasyon-t100", "--mutasyon-yetki-kosulsuz", "--mutasyon-csrf",
+          "--mutasyon-cli-grup", "--mutasyon-mcp-push-yolu", "--mutasyon-mcp-grup-zorunlu",
+          "--mutasyon-mcp-aktivasyon-yolu", "--mutasyon-mcp-readback"]
+
+
+def _mutasyon(kip) -> int:
+    yol, eski, yeni, beklenen = MUTASYONLAR[kip]
+    kok = Path(tempfile.mkdtemp(prefix="fugr_inc_kum_"))
+    try:
+        for alt in ("scripts", "mcp_servers"):
+            shutil.copytree(REPO / alt, kok / alt,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "node_modules"))
+        hedef = kok / "tests" / "fixtures" / BURASI.name
+        shutil.copytree(BURASI, hedef, ignore=shutil.ignore_patterns("__pycache__"))
+        dosya = kok / yol
+        asil = dosya.read_bytes().decode("utf-8")
+        if asil.count(eski) != 1:
+            print(f"[KURULAMADI] {kip} -> capa {asil.count(eski)} kez ({yol})")
+            return 3
+        mutant = asil.replace(eski, yeni, 1)
+        try:
+            compile(mutant, str(dosya), "exec")
+        except SyntaxError as exc:
+            print(f"[KURULAMADI] {kip} -> mutant derlenmedi: {exc}")
+            return 3
+        dosya.write_bytes(mutant.encode("utf-8"))
+        r = subprocess.run([sys.executable, str(hedef / "run.py")], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=600, cwd=str(kok))
+        m = re.search(r"^(\d+)/(\d+) OK$", r.stdout, re.M)
+        if not m:
+            son = [x for x in (r.stdout + r.stderr).splitlines() if x.strip()][-1:] or ["-"]
+            print(f"[ALT-SUREC SAYI VERMEDI] {kip} rc={r.returncode} son={son[0][:160]}")
+            return 3
+        dusen = {x.split()[1] for x in r.stdout.splitlines() if x.strip().startswith("[FAIL]")}
+        print(f"{kip}: {m.group(0)} · dusen={sorted(dusen)} · ilan={sorted(beklenen)}")
+        if dusen == beklenen:
+            print("MUTASYON DUSTU (ilan edilen kume TAM)")
+            return 1
+        print(f"[SAPMA] fazla={sorted(dusen - beklenen)} eksik={sorted(beklenen - dusen)}")
+        return 2
+    finally:
+        shutil.rmtree(kok, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    _kipler = [a for a in sys.argv[1:] if a.startswith("--")]
+    if _kipler:
+        if len(_kipler) != 1 or _kipler[0] not in MUTASYONLAR:
+            print(f"[KULLANIM] gecerli kipler: {KIPLER}")
+            sys.exit(2)
+        sys.exit(_mutasyon(_kipler[0]))
+    sys.exit(main())
