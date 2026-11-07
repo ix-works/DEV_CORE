@@ -11,8 +11,9 @@ NEDEN VAR (2026-11-07)
   activate_object(include URL) → aktif readback rstrip-eşit.
 
 EKSENLER / VEKTÖRLER
-  A  object_types: FUGR/I URL'i, grup ZORUNLU, generic URL fail-closed, contextRef/containerRef
-     ayrıştırma (canlı biçim `canli/` — 2026-11-07 salt-GET, genericize).
+  A  object_types: FUGR/I URL'i, grup ZORUNLU, generic URL fail-closed, contextRef ayrıştırma +
+     grup kanıtı (A8 · tekil bağlam A10); containerRef YALNIZ teşhis (A6/A9 — kanıt değil)
+     (canlı biçim `canli/` — 2026-11-07 salt-GET, genericize).
   B  lock_object ②: CSRF yenileme GERÇEKTEN koşar → ikinci 403 TK/103 özete girer; yetki önerisi
      yalnız yetki mesajında; okunamayan gövde ÖLÇÜLEMEDİ der; 404×3 KONTROL (NO_LOCK_SUPPORT).
   C  SAPClient ①: push_fugr_include kilit/PUT/aktivasyon/readback HEP FUGR/I ucundan; grup
@@ -22,7 +23,8 @@ EKSENLER / VEKTÖRLER
   D  CLI push_object.py: --group/--source-file zorunluluğu (exit 2) + dağıtım.
   E  MCP atom ③: adt_push_source/adt_activate `group`; group_required; guardrail (grup Z/Y +
      `L<GRUP>` öneki); aktivasyon worklist sondası FUGR/I hedefiyle; içerik readback'i bu tipte koşar.
-     Bug-gate F1: öneki geçen YANLIŞ grup containerRef ile reddedilir (E9), push kaydı grubu (E8),
+     Bug-gate F1: öneki geçen YANLIŞ grup contextRef kanıtıyla reddedilir (E9; önceki metin
+     containerRef diyordu, YANLIŞTI: SAP URL grubunu yansıtır, ölçüm 2026-11-08), push kaydı grubu (E8),
      `also` + FUGR/I fail-closed (E10).
   ⛔ 2026-11-08 CANLI: SAP FUGR/I ucunda URL grubunu `containerRef`e YANSITIR (200, var olmayan
      grupta da) ⇒ grup kaniti `programs/includes` contextRef FUGR/I SAPL<GRUP> (A8). Sahte oturum
@@ -170,6 +172,16 @@ def bolum_a(OT):
          "var olmayan grubu da 'dogrular'",
          OT.fugr_include_konteyneri(yans) == KISA_GRUP and "packageName" not in yans
          and "packageName" in _yansiyan_meta("ZSD001"), yans[:120])
+    sayac2 = pm.replace('include:contextRefCount="1"', 'include:contextRefCount="2"')
+    ikinci = ('<include:contextRef adtcore:uri="/sap/bc/adt/functions/groups/zsd001_diger/source/main" '
+              'adtcore:type="FUGR/I" adtcore:name="SAPLZSD001_DIGER"/></include:abapInclude>')
+    coklu = pm.replace('</include:abapInclude>', ikinci)
+    tekil = {"canli-sayac-1": k(pm, GRUP)[0], "sayac-2": k(sayac2, GRUP)[0],
+             "coklu-fugr": k(coklu, GRUP)[0]}
+    ekle("A10 ⭐ tekil baglam: contextRefCount>1 ya da birden cok FARKLI FUGR/I contextRef -> "
+         "fail-closed; KONTROL canli contextRefCount=1 -> True",
+         'contextRefCount="1"' in pm and sayac2 != pm and coklu != pm
+         and tekil == {"canli-sayac-1": True, "sayac-2": False, "coklu-fugr": False}, tekil)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -454,7 +466,7 @@ def bolum_c(SC):
     yanlis, _ = _sessiz(c.activate_object, INCL, "fugr_include", "ZSD001")
     yanlis_akt = _tipler(adt, "activate")
     dogru, _ = _sessiz(c.activate_object, INCL, "fugr_include", GRUP)
-    ekle("C12 ⭐ SAPClient.activate_object: containerRef != group -> False + aktivasyon POST YOK; "
+    ekle("C12 ⭐ SAPClient.activate_object: contextRef SAPL<grup> tutmuyor -> False + aktivasyon POST YOK; "
          "KONTROL dogru grup aktive",
          yanlis is False and yanlis_akt == [] and dogru is True
          and _tipler(adt, "activate") == [("activate", INCL, FUGR_URL)],
@@ -616,7 +628,7 @@ def bolum_e(SC):
     n0, g0 = len(adt.olaylar), len(adt.session.getler)
     r, exc = _sessiz(atom.adt_activate, INCL, "fugr_include", group="ZSD001")
     r = r or {}
-    ekle("E9 ⭐ adt_activate: onek kuralini gecen YANLIS grup (containerRef != group) -> "
+    ekle("E9 ⭐ adt_activate: onek kuralini gecen YANLIS grup (contextRef SAPL<grup> tutmuyor) -> "
          "fugr_group_unverified, aktivasyon POST YOK",
          r.get("ok") is False and r.get("error") == "fugr_group_unverified"
          and not [o for o in adt.olaylar[n0:] if o[0] == "activate"]
@@ -729,12 +741,20 @@ MUTASYONLAR = {
                                  "        kod, govde, hata = self._metadata_getir(sonuc['kanit_url'])\n"
                                  "        ok, sebep = fugr_include_grup_kaniti(govde, g) if kod == 200 else (False, '')\n",
                                  "        kod, govde, hata = self._metadata_getir(sonuc['object_url'])\n"
-                                 "        ok, sebep = ((fugr_include_konteyneri(govde) == g), 'containerRef') if kod == 200 else (False, '')\n",
+                                 "        ok, sebep = ((__import__('object_types').fugr_include_konteyneri(govde) == g), 'containerRef') if kod == 200 else (False, '')\n",
                                  {"C2", "C3", "C12", "C13", "E9", "E11", "L1", "L3"}),
     "--mutasyon-kanit-ad": ("scripts/object_types.py",
                             "        if ref['type'] == 'FUGR/I' and ref['name'] == beklenen:\n",
                             "        if ref['type'] == 'FUGR/I' and ref['name'].startswith('SAPL'):\n",
                             {"A8", "C2", "C12", "C13", "E9", "E11", "L3"}),
+    "--mutasyon-kanit-sayac": ("scripts/object_types.py",
+                               "    if sayac is not None and sayac.strip() != '1':\n",
+                               "    if False:\n",
+                               {"A10"}),
+    "--mutasyon-kanit-coklu": ("scripts/object_types.py",
+                               "    if len(fugr_baglamlari) > 1:\n",
+                               "    if False:\n",
+                               {"A10"}),
     "--mutasyon-kanit-tip": ("scripts/object_types.py",
                              "        if ref['type'] == 'FUGR/I' and ref['name'] == beklenen:\n",
                              "        if ref['type'].startswith('FUGR') and ref['name'] == beklenen:\n",
@@ -829,7 +849,7 @@ KIPLER = ["--mutasyon-yol", "--mutasyon-grup-dogrulama", "--mutasyon-include-red
           "--mutasyon-mcp-grup-kaniti", "--mutasyon-mcp-push-kaydi", "--mutasyon-mcp-also-red",
           "--mutasyon-varsayilan-kapali", "--mutasyon-kanit-kaynagi", "--mutasyon-kanit-ad",
           "--mutasyon-kanit-tip", "--mutasyon-kilit-grup-kaniti", "--mutasyon-kilit-url",
-          "--mutasyon-kilit-grup-zorunlu"]
+          "--mutasyon-kilit-grup-zorunlu", "--mutasyon-kanit-sayac", "--mutasyon-kanit-coklu"]
 
 
 def _mutasyon(kip) -> int:

@@ -1653,8 +1653,9 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
             bu tip için ölçülmedi) — include'u tekil çağır.
         group: Q383 — YALNIZ object_type='fugr_include' (fonksiyon grubu include'u, FUGR/I)
             için ZORUNLU fonksiyon grubu; yoksa `group_required` (sessiz yanlış URI DEĞİL).
-            Aktivasyondan ÖNCE metadata `containerRef` == group doğrulanır (uyuşmazlık /
-            ölçülemezlik → `fugr_group_unverified`, oturumdaki push kaydının grubu farklıysa
+            Aktivasyondan ÖNCE grup KANITI: `programs/includes/<incl>` `include:contextRef`
+            tipi FUGR/I ve adı SAPL<GRUP> olmalı (⚠ önceki metin containerRef diyordu, YANLIŞTI: SAP URL grubunu yansıtır, ölçüm 2026-11-08).
+            Uyuşmazlık / ölçülemezlik → `fugr_group_unverified`, oturumdaki push kaydının grubu farklıysa
             `fugr_group_mismatch`; ikisinde de SAP'ye aktivasyon isteği YOK).
             Aktivasyon include'un kendi ucundan (FUGR iki fazlı yol) yapılır; worklist sondası
             ve `adt_push_source(group=...)` kaydı varsa içerik readback'i bu tipte de koşar.

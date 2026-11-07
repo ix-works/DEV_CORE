@@ -528,12 +528,29 @@ def _adtcore_reflar(xml_text, etiket):
             for el in kok.iter() if el.tag.split('}')[-1] == etiket]
 
 
+def _kok_oznitelik(xml_text, yerel_ad):
+    """Kok dugumun `*:yerel_ad` ozniteligi (ad alanindan bagimsiz) -> str | None."""
+    import xml.etree.ElementTree as ET
+    try:
+        kok = ET.fromstring(xml_text or '')
+    except Exception:  # noqa: BLE001
+        return None
+    for anahtar, deger in kok.attrib.items():
+        if anahtar.split('}')[-1] == yerel_ad:
+            return deger
+    return None
+
+
 def fugr_include_grup_kaniti(progs_metadata_xml, group):
     """`programs/includes/<incl>` metadata'si include'un `group`'a ait oldugunu KANITLIYOR mu?
 
-    -> (ok: bool, sebep: str). Kanit: bir `include:contextRef` type `FUGR/I` VE name ==
+    -> (ok: bool, sebep: str). Kanit: TEK bir `include:contextRef` type `FUGR/I` VE name ==
     `SAPL<GRUP>` (grubun ana programi). Govde okunamazsa / contextRef yoksa / tip ya da ad
-    farkliysa -> False (fail-closed). ⛔ FUGR/I ucunun `containerRef`'i KANIT DEGILDIR: SAP URL
+    farkliysa / `include:contextRefCount` > 1 ya da birden cok FARKLI FUGR/I contextRef varsa
+    -> False (fail-closed; coklu baglamda "hangisi" sorusu tahmin olur).
+    CANLI OLCUM 2026-11-08 (DEV salt-GET, bir TMG olay include'u): `contextRefCount="1"`, tek
+    contextRef FUGR/I SAPL<GRUP>; dogru grup + bosluklu/kucuk harfli dogru grup -> True; baska
+    var olan Z grup, var olmayan grup, onek kuralini gecen var olmayan grup -> False. ⛔ FUGR/I ucunun `containerRef`'i KANIT DEGILDIR: SAP URL
     grubunu geri yansitir (2026-11-08 canli olculdu — yukaridaki blok).
     """
     g = (group or '').strip().upper()
@@ -544,6 +561,13 @@ def fugr_include_grup_kaniti(progs_metadata_xml, group):
         return False, "programs/includes metadatasi okunamadi"
     if not reflar:
         return False, "include:contextRef yok (FUGR include'u degil ya da govde eksik)"
+    sayac = _kok_oznitelik(progs_metadata_xml, 'contextRefCount')
+    if sayac is not None and sayac.strip() != '1':
+        return False, f"include:contextRefCount={sayac} (tekil baglam degil — fail-closed)"
+    fugr_baglamlari = {r['name'] for r in reflar if r['type'] == 'FUGR/I'}
+    if len(fugr_baglamlari) > 1:
+        return False, (f"birden cok FUGR/I contextRef {sorted(fugr_baglamlari)} "
+                       f"(tekil baglam degil — fail-closed)")
     beklenen = 'SAPL' + g
     for ref in reflar:
         if ref['type'] == 'FUGR/I' and ref['name'] == beklenen:
@@ -569,7 +593,8 @@ def fugr_include_ad_alani_hatasi(group, include_name):
 
     MCP `_fugr_include_guardrail` ile AYNI kural (CLI `push_fugr_include` yolu bunu kullanir).
     Grup include adindan TURETILMEZ; yalniz verilen grupla tutarlilik olculur. Grup/include
-    eslesmesinin KANITI bu degil, metadata `containerRef`'idir (bu yalniz ad alani on-elemesi).
+    eslesmesinin KANITI bu degil, `fugr_include_grup_kaniti`'dir (`programs/includes` contextRef
+    FUGR/I SAPL<GRUP>); bu yalniz ad alani on-elemesi. ⚠ onceki metin containerRef diyordu, YANLISTI: SAP URL grubunu yansitir, olcum 2026-11-08.
     """
     import re as _re
     g = (group or '').strip().upper()

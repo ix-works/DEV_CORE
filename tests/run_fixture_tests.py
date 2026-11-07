@@ -723,9 +723,11 @@ OZEL_TESTLER = [
      "FUGR toplu aktivasyonunda 2. faz ioc = hukum DEGIL -> bagimsiz worklist sondasi "
      "(temiz/kalan/kurulamaz); FUGR disi birebir eski (taban 6b6c11d sahte-negatif kontrol)"),
     ("fugr_include_yazim",
-     "Q383: FUGR/I include yazma+aktivasyon (push_fugr_include, grup ZORUNLU + containerRef "
-     "dogrulamasi; include+FUGR contextRef kilitten once red) + lock_object ozeti T100 tasir, "
-     "yetki onerisi kosullu, CSRF yenilemesi olculur + MCP group parametresi (12 mutasyon kipi)"),
+     "Q383: FUGR/I include yazma+aktivasyon (push_fugr_include, grup ZORUNLU + grup kaniti "
+     "programs/includes contextRef FUGR/I SAPL<GRUP>, tekil baglam — FUGR/I containerRef KANIT "
+     "DEGIL, SAP URL grubunu yansitir 2026-11-08; include+FUGR contextRef kilitten once red) + "
+     "lock_object ozeti T100 tasir, yetki onerisi kosullu, CSRF yenilemesi olculur + MCP group "
+     "parametresi + adt_lock_check fugr_include (27 mutasyon kipi)"),
     ("ad_kabul_tam_dize",
      "Q363②: izin-listesi ad desenleri `\\Z` (sondaki satir sonu kabul edilmez); RED tarafi "
      "desenler DEGISMEDI (sondaki LF guvenli tarafta kalir) — taban 6b6c11d kontrol"),
@@ -1568,7 +1570,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/sap_client.py", ("O:fugr_include_yazim",),
      "Q383① push_fugr_include + include/FUGR contextRef reddi + activate_object(group)"),
     ("scripts/object_types.py", ("O:fugr_include_yazim",),
-     "Q383 FUGR_INCLUDE_TYPES / get_fugr_include_url / contextRef-containerRef ayristirma"),
+     "Q383 FUGR_INCLUDE_TYPES / get_fugr_include_url / contextRef grup kaniti (containerRef yalniz teshis)"),
     ("scripts/push_object.py", ("O:fugr_include_yazim",),
      "Q383 --type fugr-include --group (exit 2 sozlesmesi + dagitim)"),
     ("mcp_servers/sap_adt/tools/atom.py", ("O:fugr_include_yazim",),

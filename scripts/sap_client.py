@@ -836,8 +836,7 @@ class SAPClient:
         grubun inaktif objelerini toplar — bug-gate F1).
         Returns: {ok, group, sebep, object_url (FUGR/I), kanit_url (programs/includes)}
         """
-        from object_types import (get_fugr_include_url, get_object_url, fugr_include_grup_kaniti,
-                                  fugr_include_konteyneri)  # noqa: F401 — konteyneri: yalniz teshis
+        from object_types import get_fugr_include_url, get_object_url, fugr_include_grup_kaniti
         g = (group or '').strip().upper()
         sonuc: Dict[str, Any] = {'ok': False, 'group': g, 'sebep': '', 'object_url': '',
                                  'kanit_url': ''}
@@ -862,8 +861,9 @@ class SAPClient:
         """Fonksiyon grubu include'unu (FUGR/I, ör. SE54 TMG olay include'u) push et (Q383).
 
         Akis (2026-10-30 canli elle recetesinin kodlanmis hali):
-          0. metadata GET `functions/groups/<fg>/includes/<incl>` → 200 + `containerRef`
-             (FUGR/F) == `group` olmali; degilse YAZMADAN dur (fail-closed — grup tahmin edilmez)
+          0. grup KANITI (`fugr_include_grubunu_dogrula`): `programs/includes/<incl>` 200 +
+             `include:contextRef` FUGR/I SAPL<GRUP>; degilse YAZMADAN dur (fail-closed — grup
+             tahmin edilmez). ⚠ onceki metin containerRef diyordu, YANLISTI: SAP URL grubunu yansitir, olcum 2026-11-08.
           1. ETag (kilitten ONCE) → 2. `lock_object(FUGR/I URL, transport)` → 3. `set_object_source`
           4. `unlock` → 5. `activate_object(<INCL>, FUGR/I URL)` (FUGR iki fazli yol, Q231-a)
           6. aktif readback: `version=active` kaynak, iki taraf `rstrip` + satir sonu LF → esit
@@ -2323,8 +2323,9 @@ class SAPClient:
             object_url = get_fugr_include_url(group, object_name)   # grup yoksa ValueError
             type_desc = 'Function Group Include (FUGR/I)'
             object_name = object_name.upper()
-            # Q383 bug-gate F1: grup KANITI aktivasyondan ONCE (containerRef == group); yanlis
-            # grubun iki fazli aktivasyonu baska grubun inaktiflerini toplar -> fail-closed.
+            # Q383 bug-gate F1: grup KANITI aktivasyondan ONCE (programs/includes contextRef
+            # FUGR/I SAPL<GRUP>; ⚠ onceki metin containerRef diyordu, YANLISTI: SAP URL grubunu yansitir, olcum 2026-11-08);
+            # yanlis grubun iki fazli aktivasyonu baska grubun inaktiflerini toplar -> fail-closed.
             dogrulama = self.fugr_include_grubunu_dogrula(object_name, group)
             if not dogrulama['ok']:
                 print(f"\n[ERROR] FUGR include grup dogrulamasi BASARISIZ ({dogrulama['sebep']}); "
