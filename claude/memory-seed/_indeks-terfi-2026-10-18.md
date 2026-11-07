@@ -54,7 +54,7 @@ metadata:
 - ⭐ [Doc builder diagram png render gurultusu geri al](feedback_doc-builder-diagram-png-render-gurultusu-geri-al.md) — KD builder `diagram-01.png`'yi her koşuda yeniden render eder — mermaid kaynağı aynıyken PNG piksel gürültüsüyle 'değişmiş' görünür; kaynak aynıysa build sonrası git checkout
 - ⭐ [Html yorumu icinde mermaid ok yorumu erken kapatir](feedback_html-yorumu-icinde-mermaid-ok-yorumu-erken-kapatir.md) — ⛔ HTML yorumu (<!-- -->) içine konan mermaid kaynağı `-->` oku yüzünden yorumu ERKEN kapatır — kaynak KD html/pdf'e görünür metin olarak sızar; check_kd_no_raw_mermaid görmez
 - ⭐ [Kd mock yanit sekli gercek be yi izlemeli](feedback_kd-mock-yanit-sekli-gercek-be-yi-izlemeli.md) — KD ekran görüntüsü mock'u yalnız TEMİZ veri değil, BE'nin gerçek yanıt ŞEKLİNİ izlemeli — sabit başarı, eksik T100, ham değer yorumu, atlanan çok satırlı sonuç, BE'nin hiç üretmediği satır = BLOCKER
-- ⭐ [Pdftotext enc utf8 olmadan turkce bozuk](feedback_pdftotext-enc-utf8-olmadan-turkce-bozuk.md) — pdftotext `-enc UTF-8` verilmezse Türkçe harfler � çıkar — PDF bozuk SANILIR; ayrıca html_to_pdf.js yalnız '/' içeren yolları kabul eder
+- ⭐ [Pdftotext enc utf8 olmadan turkce bozuk](feedback_pdftotext-enc-utf8-olmadan-turkce-bozuk.md) — pdftotext `-enc UTF-8` verilmezse Türkçe harfler � çıkar — PDF bozuk SANILIR; ayrıca html_to_pdf.js göreli yolu sürecin cwd'sine göre çözer ('/' şart değil)
 
 ## Araç · git · platform
 
