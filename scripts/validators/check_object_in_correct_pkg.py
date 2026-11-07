@@ -66,8 +66,40 @@ def get_pkg_prefix(pkg_name: str) -> str:
     return pkg_name.replace("_CLC", "")
 
 
-def matches_package(filename: str, pkg_prefix: str, pkg_name: str) -> bool:
-    """Dosya adı paket prefix'iyle veya istisna pattern'iyle eşleşiyor mu?"""
+# NAMESPACE'Lİ PAKET (DEV_CORE Issue #391, 2026-11-07). abapGit gösteriminde `/NSPC/` → `#NSPC#`;
+# namespace'li nesne adı paket kısa adıyla BAŞLAMAZ (`#NSPC#CL_SD001_X` ∈ `#NSPC#SD001`), ad alanı
+# öneki önce gelir ⇒ önek kuralı her nesneyi "sızıntı" sayıyordu. Kabul YALNIZ iki şart birlikte
+# sağlanınca: ① nesne paketle AYNI namespace önekini taşır ② paketin `.rules.md` Naming tablosundaki
+# regex'lerden birine uyar. Ad kuralı burada YAZILMAZ — `check_package_naming.parse_rules_md`
+# yeniden kullanılır (tek kaynak). `.rules.md` yok / tablo boş / regex derlenmiyor ⇒ kabul YOK
+# (fail-closed, bugünkü davranış). Z paketlerinde bu dal hiç çalışmaz (davranış DEĞİŞMEDİ).
+_NS_RE = re.compile(r"^#[A-Z0-9_]+#")
+
+
+def paket_namespace(pkg_name: str) -> str | None:
+    """`#NSPC#SD001` → `#NSPC#`; namespace'siz paket → None."""
+    m = _NS_RE.match(pkg_name.upper())
+    return m.group(0) if m else None
+
+
+def namespace_kurallari(pkg_dir: Path) -> list[str]:
+    """Namespace'li paketin `.rules.md` Naming regex'leri (yoksa boş liste)."""
+    if paket_namespace(pkg_dir.name) is None:
+        return []
+    _here = str(Path(__file__).resolve().parent)
+    if _here not in sys.path:
+        sys.path.insert(0, _here)
+    from check_package_naming import parse_rules_md  # noqa: E402 (tek kaynak; kopyalanmaz)
+    return [rx for _, rx in parse_rules_md(pkg_dir / ".rules.md")]
+
+
+def matches_package(filename: str, pkg_prefix: str, pkg_name: str,
+                    ns_kurallari: list[str] | None = None) -> bool:
+    """Dosya adı paket prefix'iyle veya istisna pattern'iyle eşleşiyor mu?
+
+    `ns_kurallari`: namespace'li paketin `.rules.md` Naming regex'leri
+    (`namespace_kurallari`); verilmezse namespace dalı kapalıdır.
+    """
     base = filename.split(".")[0].upper()
     if base.startswith(pkg_prefix.upper() + "_") or base == pkg_prefix.upper():
         return True
@@ -76,6 +108,16 @@ def matches_package(filename: str, pkg_prefix: str, pkg_name: str) -> bool:
     for pattern in PACKAGE_EXCEPTIONS.get(pkg_name, []):
         if re.match(pattern, base):
             return True
+
+    # Namespace'li paket: aynı namespace öneki + `.rules.md` Naming regex'i (ikisi birlikte)
+    ns = paket_namespace(pkg_name)
+    if ns and ns_kurallari and base.startswith(ns):
+        for rx in ns_kurallari:
+            try:
+                if re.match(rx, base):
+                    return True
+            except re.error:
+                continue        # derlenmeyen regex kabul ÜRETMEZ (fail-closed)
 
     return False
 
@@ -104,8 +146,16 @@ def main() -> int:
             if pkg.is_dir() and not pkg.name.startswith("."):
                 packages.append((module_dir.name, pkg))
 
+    ns_paket = 0           # namespace'li paket sayısı
+    ns_kurallsiz: list[str] = []   # namespace'li ama `.rules.md` Naming regex'i yok
+    ns_kabul = 0           # yalnız namespace dalıyla kabul edilen dosya
     for module_name, pkg in packages:
         pkg_prefix = get_pkg_prefix(pkg.name)
+        ns_kur = namespace_kurallari(pkg)
+        if paket_namespace(pkg.name):
+            ns_paket += 1
+            if not ns_kur:
+                ns_kurallsiz.append(f"{module_name}/{pkg.name}")
 
         for folder_name in CHECK_FOLDERS:
             folder = pkg / folder_name
@@ -122,19 +172,33 @@ def main() -> int:
                 if f.name.endswith(".ddls.asddls"):
                     pass
 
-                if not matches_package(f.name, pkg_prefix, pkg.name):
+                if not matches_package(f.name, pkg_prefix, pkg.name, ns_kur):
+                    ek = ""
+                    if paket_namespace(pkg.name):
+                        ek = (" · namespace'li paket: `.rules.md` Naming regex'i YOK — namespace "
+                              "kabulü uygulanmadı" if not ns_kur else
+                              " · namespace'li paket: aynı namespace öneki + `.rules.md` Naming "
+                              "regex'i birlikte sağlanmadı")
                     violations.append(
                         f"{module_name}/{pkg.name}/{folder_name}/{f.name}: "
-                        f"paket prefix'i '{pkg_prefix}' veya istisna pattern'iyle eşleşmiyor"
+                        f"paket prefix'i '{pkg_prefix}' veya istisna pattern'iyle eşleşmiyor{ek}"
                     )
+                elif ns_kur and not matches_package(f.name, pkg_prefix, pkg.name):
+                    ns_kabul += 1
+
+    # KAPSAM BEYANI — namespace yolu her koşumda görünür (sıfır-bulgu anı dahil)
+    kapsam = (f"namespace'li paket: {ns_paket} (`.rules.md` Naming regex'iyle kabul edilen dosya: "
+              f"{ns_kabul}; regex'siz paket: {len(ns_kurallsiz)}"
+              + (f" → {', '.join(ns_kurallsiz)}" if ns_kurallsiz else "") + ")")
 
     if violations:
         print("HATA — Cross-package sızıntı:", file=sys.stderr)
         for v in violations:
             print(f"  {v}", file=sys.stderr)
+        print(f"  KAPSAM: {kapsam}", file=sys.stderr)
         return 1
 
-    print(f"OK — {len(packages)} paketteki obje dosyaları doğru paket altında.")
+    print(f"OK — {len(packages)} paketteki obje dosyaları doğru paket altında. KAPSAM: {kapsam}")
     return 0
 
 
