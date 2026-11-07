@@ -19,7 +19,10 @@ VEKTÖRLER
       `- "ZSD001_CLC:^ZCL_SD001_"   # açıklama` · Y5 tırnaksız `#` keser · Y6 kelime içi kesme
       işareti tırnak sayılmaz · Y7 kapanmamış tırnak → eski kesim · Y10 Z satır içi · Y12 tüm dosya
       · Y15 iki kelime içi kesme işareti arasında `#` (`Paket'in # Ali'nin`) · Y16 değer ortasında
-      `-'` (`a-'b#c'`) · Y17 akış listesi DIŞINDA `,'` (`a,'b # c'`) — üçü de eski kesimle AYNI sonuç.
+      `-'` (`a-'b#c'`) · Y17 akış listesi DIŞINDA `,'` (`a,'b # c'`) · Y18 ikinci `: ` ayraç DEĞİL
+      (`k: a: 'b#c'`) · Y19 boşluksuz `:` ayraç DEĞİL (`k:'x#y'`) · Y20 satır ortasında `- ` blok öğesi
+      DEĞİL (`t: a - 'b#c'`) · Y21 değer ortasında `[` akış listesi DEĞİL (`k: a['#b']`) · Y22 kapanan
+      tırnaktan sonra yeni tırnak açılmaz (`k: 'a' 'b#c'`) — Y15–Y22 eski kesimle (`f646f36`) AYNI sonuç.
   A*  KABLOLAMA (gerçek giriş noktası, alt süreç): `.rules.md`'siz namespace paketi, istisna
       `project.yaml`'dan — A1 satır içi, A2 blok. (b) olmadan istisna bozulur → ihlal.
   N*  (a) kabul: N1 `.rules.md`'li namespace paketi doğru ad · N2 3. bağlam (başka modül, küçük harfli
@@ -39,10 +42,15 @@ MUTASYON (önce aynı sarmalayıcı YAMASIZ koşulur — kum tabanı tam yeşil 
   --mutasyon-yorum-kesimi      `_yorumu_ayikla(ham)` → eski `ham.split("#", 1)[0]`
                                İLAN: {Y1, Y2, Y3, Y8, Y9, Y11, Y13, Y14, A1, A2}
   --mutasyon-tirnak-kapisi-yok her `'`/`"` tırnak açar (değer başı şartı yok)
-                               İLAN: {Y15, Y16, Y17}
+                               İLAN: {Y15, Y16, Y17, Y18, Y19, Y20, Y21, Y22}
   --mutasyon-kacis-yok         çift tırnakta `\\` kaçış dalı kapalı          İLAN: {Y14}
   --mutasyon-virgul-akis-disi  `,` akış listesi DIŞINDA da değer başı sayılır   İLAN: {Y17}
-  --mutasyon-tire-her-yerde    `-` satır başı dışında da blok öğesi sayılır    İLAN: {Y16}
+  --mutasyon-tire-her-yerde    `-` satır başı dışında da blok öğesi sayılır    İLAN: {Y16, Y20}
+  --mutasyon-ayrac-tekil-degil `: ` ayracı satırda her seferinde değer başı açar İLAN: {Y18}
+  --mutasyon-ayrac-bosluk-yok  `:` ardından boşluk şartı kalkar               İLAN: {Y19}
+  --mutasyon-satir-basi-kalici `satir_basi = False` hiç çalışmaz               İLAN: {Y20}
+  --mutasyon-koseli-her-yerde  `[` değer başı olmasa da akış listesi açar      İLAN: {Y21}
+  --mutasyon-kapanis-bekle-acik tek tırnak kapanınca değer başı beklentisi sürer İLAN: {Y22}
   --mutasyon-ns-kapali         `ns_kur = namespace_kurallari(pkg)` → `[]`       İLAN: {N1, N2, N3, S1}
   --mutasyon-ns-onek-yok       `matches_package` içindeki `and base.startswith(ns)` silinir
                                İLAN: {R1}
@@ -52,7 +60,8 @@ MUTASYON (önce aynı sarmalayıcı YAMASIZ koşulur — kum tabanı tam yeşil 
 Kontrol grubu: `I391_SCRIPTS_KOK=<scripts dizini>` ile başka bir sürüm koşulabilir (düzeltme öncesi
   kod `f646f36`: Y1 Y2 Y3 Y8 Y9 Y11 Y13 Y14 A1 A2 N1 N2 N3 S1 R3 FAIL — 14/29; R3 eski kodda da
   rc 1 verir ama namespace mesajı yoktur. İlk düzeltme `4029212` (tırnak "önceki boşluk dışı karakter
-  `:` `-` `[` `,`" kuralıyla açılıyordu): Y16 Y17 FAIL — 27/29. İkisi 2026-11-07 ölçüldü). Kontrol grubu kurulurken `utils/` ve `validators/` aynı
+  `:` `-` `[` `,`" kuralıyla açılıyordu): Y16 Y17 Y18 Y19 Y20 Y21 FAIL. Sayılar koşumda basılır;
+  2026-11-07 ölçümleri changelog'dadır). Kontrol grubu kurulurken `utils/` ve `validators/` aynı
   sürümden kopyalanır.
 """
 from __future__ import annotations
@@ -83,7 +92,7 @@ MUTASYONLAR: dict[str, tuple[set[str], list[tuple[str, str, str]]]] = {
         {"Y1", "Y2", "Y3", "Y8", "Y9", "Y11", "Y13", "Y14", "A1", "A2"},
         [(PC_REL, "s = _yorumu_ayikla(ham).rstrip()", 's = ham.split("#", 1)[0].rstrip()')]),
     "--mutasyon-tirnak-kapisi-yok": (
-        {"Y15", "Y16", "Y17"},
+        {"Y15", "Y16", "Y17", "Y18", "Y19", "Y20", "Y21", "Y22"},
         [(PC_REL, "if bekle and c in (\"'\", '\"'):", "if c in (\"'\", '\"'):")]),
     "--mutasyon-kacis-yok": (
         {"Y14"},
@@ -92,9 +101,26 @@ MUTASYONLAR: dict[str, tuple[set[str], list[tuple[str, str, str]]]] = {
         {"Y17"},
         [(PC_REL, 'elif c == "," and derinlik > 0:', 'elif c == ",":')]),
     "--mutasyon-tire-her-yerde": (
-        {"Y16"},
+        {"Y16", "Y20"},
         [(PC_REL, 'elif c == "-" and satir_basi and (sonraki == "" or sonraki.isspace()):',
           'elif c == "-":')]),
+    "--mutasyon-ayrac-tekil-degil": (
+        {"Y18"},
+        [(PC_REL, "and not ayrac_goruldu and (sonraki", "and (sonraki")]),
+    "--mutasyon-ayrac-bosluk-yok": (
+        {"Y19"},
+        [(PC_REL, 'not ayrac_goruldu and (sonraki == "" or sonraki.isspace()):',
+          "not ayrac_goruldu:")]),
+    "--mutasyon-satir-basi-kalici": (
+        {"Y20"},
+        [(PC_REL, "satir_basi = False", "pass")]),
+    "--mutasyon-koseli-her-yerde": (
+        {"Y21"},
+        [(PC_REL, 'elif c == "[" and bekle:', 'elif c == "[":')]),
+    "--mutasyon-kapanis-bekle-acik": (
+        {"Y22"},
+        [(PC_REL, "else:\n" + " " * 20 + "tirnak, bekle = None, False",
+          "else:\n" + " " * 20 + "tirnak = None")]),
     "--mutasyon-ns-kapali": (
         {"N1", "N2", "N3", "S1"},
         [(GATE_REL, "ns_kur = namespace_kurallari(pkg)", "ns_kur = []")]),
@@ -191,6 +217,11 @@ YAML_VEKTOR = [
      "KONTROL iki kelime içi kesme işareti arasında `#` yorumdur"),
     ("Y16", True, "t: a-'b#c'\n", "t", "a-'b", "KONTROL değer ortasında `-'` tırnak açmaz"),
     ("Y17", True, "t: a,'b # c'\n", "t", "a,'b", "KONTROL akış listesi dışında `,'` tırnak açmaz"),
+    ("Y18", True, "k: a: 'b#c'\n", "k", "a: 'b", "KONTROL ikinci `: ` ayraç değil"),
+    ("Y19", True, "k:'x#y'\n", "k", "x", "KONTROL boşluksuz `:` ayraç değil"),
+    ("Y20", True, "t: a - 'b#c'\n", "t", "a - 'b", "KONTROL satır ortasında `- ` blok öğesi değil"),
+    ("Y21", True, "k: a['#b']\n", "k", "a[", "KONTROL değer ortasında `[` akış listesi değil"),
+    ("Y22", True, "k: 'a' 'b#c'\n", "k", "a' 'b", "KONTROL kapanan tırnaktan sonra yeni tırnak açılmaz"),
 ]
 
 Y12_ICERIK = ("# baslik yorumu\n"
