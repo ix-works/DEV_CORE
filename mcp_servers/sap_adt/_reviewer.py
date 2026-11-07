@@ -76,6 +76,9 @@ OBJECT_TYPE_TO_TASK = {
     "ddlx": None, "metadataextension": None,  # MDE zinciri yok
     "domain": None, "dataelement": None,      # doma/dtel eşanlamlıları
     "include": None, "prog/i": None,          # klasik include (ana programla gelir)
+    # Q383 (2026-11-07): fonksiyon grubu include'u (FUGR/I) — `include`/`fugr` ile aynı karar:
+    # run_review'da include/FUGR push zinciri YOK (TASK_VALIDATORS'ta prog/fugr görevi yok).
+    "fugr_include": None, "fugr-include": None, "fugr/i": None,
     "srvb": None, "servicebinding": None,     # publish yolu ayrı
     "tabletype": None,
     # 2026-08-29 (kayıt #70): `fugr`/`functiongroup` `_ACTIVATION_URI_SEG`'e eklendi

@@ -501,6 +501,50 @@ def sap_hata_sebebi(govde):
     return {'metin': metin, 't100': t100, 'tip': tip}
 
 
+# ── Q383② (2026-11-07): KİLİT HATA ÖZETİ SAP SEBEBİNİ TAŞIR ────────────────────────────
+# `lock_object` tüm stratejileri düşünce özet eskiden `strateji -> 403` idi; gövdedeki T100
+# mesajı ATILIYOR, çare olarak koşulsuz "yetki (S_DEVELOP)" öneriliyordu. Ölçülen vaka: FUGR
+# include'u `programs/includes` (R3TR PROG) yolundan kilitlemek → `403 TK/103 "Nesne adı için
+# sözdizim olanaksız"` — yetkiden söz etmiyor, yanlış obje tipi/URL. Yetki önerisi artık yalnız SAP
+# metni gerçekten yetkiden söz ediyorsa basılır; sebep okunamadıysa ÖLÇÜLEMEDİ yazılır.
+_KILIT_YETKI_RE = re.compile(r'yetki|authori[sz]|berechtig|autoris|no authority|not authorized',
+                             re.IGNORECASE)
+
+
+def kilit_deneme_ozeti(sebepler):
+    """[(strateji, statü, sap_hata_sebebi|None)] -> `strateji -> 403 [TK/103: metin]; ...`."""
+    parcalar = []
+    for ad, statu, sebep in sebepler or []:
+        satir = f"{ad} -> {statu}"
+        if sebep:
+            etiket = sebep.get('t100') or sebep.get('tip') or 'SAP'
+            satir += f" [{etiket}: {sebep.get('metin')}]"
+        parcalar.append(satir)
+    return "; ".join(parcalar)
+
+
+def kilit_403_onerisi(sebepler):
+    """403 denemelerinin SAP sebebine göre öneri satırı (yetki yalnız metin yetki diyorsa)."""
+    y403 = [(ad, sb) for ad, st, sb in (sebepler or []) if st == 403]
+    if not y403:
+        return "Yanıt 403 değil: yukarıdaki SAP mesajlarını oku."
+    metinler = [sb for _, sb in y403 if sb]
+    if any(_KILIT_YETKI_RE.search(sb.get('metin') or '') for sb in metinler):
+        return ("SAP 403 mesajı YETKİDEN söz ediyor: yetki (S_DEVELOP) ve transport "
+                "sahipliğini kontrol et")
+    if metinler:
+        satir = ("SAP 403 mesajı yetkiden söz etmiyor (yetki deseni eşleşmedi: " + "; ".join(
+            f"{sb.get('t100') or sb.get('tip') or 'SAP'}: {sb.get('metin')}" for sb in metinler[:2])
+            + ") — mesajın kendisini izle; yetki ne doğrulandı ne dışlandı, varsayma")
+        if any((sb.get('t100') or '').upper() == 'TK/103' for sb in metinler):
+            satir += ("\n     TK/103 = obje adı bu tip/URL için geçersiz: ör. fonksiyon grubu "
+                      "include'u (FUGR/I) `programs/includes` yolundan kilitlenemez — "
+                      "push_object.py --name <INCL> --type fugr-include --group <FG> --source-file <dosya>")
+        return satir
+    return ("403 gövdesi okunabilir bir SAP mesajı taşımıyordu — sebep ÖLÇÜLEMEDİ; yetki "
+            "VARSAYMA, ham yanıtı ADT_SAP_DEBUG=1 ile al")
+
+
 # ── Q360 (2026-10-12): SALT-OKUR sözdizimi denetimi — ADT checkrun ─────────────────────
 # Canlı ölçüm (DEV, 4 tip: sınıf · FM · tablo · CDS, ayrı Z deneme objeleri):
 #   · `version="inactive"` aktivasyon ön denetimiyle AYNI kök hatayı verir (metin + satır/kolon).
@@ -3580,6 +3624,18 @@ class SAPADTClient:
         # Öğe biçimi: (strateji_adı, sonuç) — sonuç int HTTP statüsü ya da 'exc:<Ad>'.
         self._last_lock_attempts = []
         deneme_sonuclari = self._last_lock_attempts
+        # Q383② (2026-11-07): her non-404 denemenin SAP SEBEBİ (T100 + metin) de toplanır.
+        # Eskiden yalnız statü tutuluyordu ⇒ sondaki özet `strateji -> 403` diyor, gövdedeki
+        # T100 mesajını (ölçülen vaka: FUGR include'u `programs/includes` yolundan kilitlemek
+        # → `TK/103 "Nesne adı için sözdizim olanaksız"`) ATIYOR ve koşulsuz "yetki (S_DEVELOP)"
+        # öneriyordu — teşhis yanlış yöne gidiyordu. Öğe: (strateji, statü, sap_hata_sebebi|None).
+        # `deneme_sonuclari` 2'li biçimini KORUR (404-ayrımı ona dayanır).
+        self._last_lock_sebepler = []
+        kilit_sebepleri = self._last_lock_sebepler
+
+        def _deneme_kaydet(ad, statu, govde=None):
+            deneme_sonuclari.append((ad, statu))
+            kilit_sebepleri.append((ad, statu, sap_hata_sebebi(govde) if govde else None))
 
         # Try each lock strategy
         for attempt_num, (endpoint, use_query_param, description) in enumerate(lock_strategies, 1):
@@ -3642,7 +3698,7 @@ class SAPADTClient:
 
                 # 404 - This endpoint doesn't exist, try next strategy
                 elif response.status_code == 404:
-                    deneme_sonuclari.append((description, 404))
+                    _deneme_kaydet(description, 404)
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] lock_object attempt {attempt_num} - endpoint not found (404), trying next strategy")
                     continue
@@ -3696,14 +3752,14 @@ class SAPADTClient:
 
                             return self._verify_and_return_lock(response, object_url, transport, label=f'strategy {attempt_num} after CSRF refresh', access_mode=access_mode)
                         else:
-                            deneme_sonuclari.append(
-                                (f"{description} (CSRF yenileme sonrası)", response.status_code))
+                            _deneme_kaydet(f"{description} (CSRF yenileme sonrası)",
+                                           response.status_code, response.text or '')
                             if self.debug_enabled:
                                 self._debug(f"[DEBUG] lock_object attempt {attempt_num} - retry after CSRF refresh failed with status {response.status_code}")
                             continue
                     except Exception as retry_ex:
-                        deneme_sonuclari.append(
-                            (f"{description} (CSRF yenileme sonrası)", f"exc:{type(retry_ex).__name__}"))
+                        _deneme_kaydet(f"{description} (CSRF yenileme sonrası)",
+                                       f"exc:{type(retry_ex).__name__}")
                         if self.debug_enabled:
                             self._debug(f"[DEBUG] lock_object attempt {attempt_num} - CSRF refresh retry failed: {str(retry_ex)[:50]}")
                         continue
@@ -3798,7 +3854,7 @@ class SAPADTClient:
                         # çağıran ikisini ayırt edemiyordu. Artık sebep ayrıca kaydedilir
                         # (2026-08-10): teşhis "lock endpoint yok" sanılıp yanlış yere
                         # gitmesin diye.
-                        deneme_sonuclari.append((description, 403))
+                        _deneme_kaydet(description, 403, response_text)
                         self._last_lock_no_support_reason = 'STALE_SAME_USER'
                         print("      [INFO] Kendi bayat enqueue kilidin var, unlock denemesi tutmadı — "
                               "kilitsiz devam ediliyor (SAP aynı kullanıcının edit'ine izin verir).")
@@ -3821,8 +3877,9 @@ class SAPADTClient:
                             response_text=response_text[:500]
                         )
 
-                    # Other 403 - authorization issue, try next strategy
-                    deneme_sonuclari.append((description, 403))
+                    # Other 403 — sebep GÖVDEDEDİR (yetki olmayabilir: TK/103 vakası, Q383②);
+                    # bir sonraki stratejiyi dene.
+                    _deneme_kaydet(description, 403, response_text)
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] lock_object attempt {attempt_num} - 403 authorization issue, trying next strategy")
                     continue
@@ -3851,7 +3908,7 @@ class SAPADTClient:
 
                 # Other errors - try next strategy
                 else:
-                    deneme_sonuclari.append((description, response.status_code))
+                    _deneme_kaydet(description, response.status_code, response.text or '')
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] lock_object attempt {attempt_num} - failed with status {response.status_code}")
                     # Try next strategy
@@ -3860,7 +3917,7 @@ class SAPADTClient:
             except SAPLockError:
                 raise
             except Exception as e:
-                deneme_sonuclari.append((description, f"exc:{type(e).__name__}"))
+                _deneme_kaydet(description, f"exc:{type(e).__name__}")
                 if self.debug_enabled:
                     self._debug(f"[DEBUG] lock_object attempt {attempt_num} - exception: {str(e)[:100]}")
                 # Check if this is our custom lock conflict exception
@@ -3889,7 +3946,7 @@ class SAPADTClient:
             self._debug("[DEBUG] lock_object - All REST lock strategies failed")
 
         yalniz_404 = bool(deneme_sonuclari) and all(s == 404 for _, s in deneme_sonuclari)
-        ozet = "; ".join(f"{ad} -> {s}" for ad, s in deneme_sonuclari) or "(hiç deneme kaydedilmedi)"
+        ozet = kilit_deneme_ozeti(kilit_sebepleri) or "(hiç deneme kaydedilmedi)"
 
         if yalniz_404:
             self._last_lock_no_support_reason = 'ENDPOINT_ABSENT_404'
@@ -3906,7 +3963,7 @@ class SAPADTClient:
             "Kilitsiz PUT denemek objeyi yanlış transport'a yazabilir ya da 423 ile döner.\n\n"
             "Yapılacak:\n"
             "  1. SM12 -> objede bekleyen enqueue kilidi var mı bak\n"
-            "  2. Yanıt 403 ise: yetki (S_DEVELOP) ve transport sahipliğini kontrol et\n"
+            f"  2. {kilit_403_onerisi(kilit_sebepleri)}\n"
             "  3. Yanıt 500 ise: uç geçici arızalı olabilir, tekrar dene; sürerse operatöre bildir\n\n"
             "[ACTION REQUIRED] Otomatik tekrar deneme YAPMA. Durumu kullanıcıya raporla.",
             response_text=ozet[:500]

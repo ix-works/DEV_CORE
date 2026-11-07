@@ -394,8 +394,10 @@ def bolum_b(L, SC):
                         ham.append(f"{fn.name}:{n.lineno}")
                     if n.func.attr == "_kilit_birak":
                         sarmalayici += 1
-    ekle("B6 sap_client: ham unlock cagrisi 0, _kilit_birak cagrisi 9",
-         not ham and sarmalayici == 9, f"ham={ham} sarmalayici={sarmalayici}")
+    # Q383 (2026-11-07): `push_fugr_include` 2 yeni cagri yeri ekledi (aktivasyon-oncesi +
+    # finally) — ikisi de sarmalayicidan gecer; sayi 9 -> 11.
+    ekle("B6 sap_client: ham unlock cagrisi 0, _kilit_birak cagrisi 11",
+         not ham and sarmalayici == 11, f"ham={ham} sarmalayici={sarmalayici}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
