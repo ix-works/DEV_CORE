@@ -8,8 +8,16 @@ için. ZSD001'e özgü FIG/portal placeholder mantığı YOK (o build_kd_pdf.py'
 Kullanım: python scripts/build_doc_pdf.py <girdi.md> <cikti.html> ["Doküman Başlığı"]
           [--prefix <ad>] [--pdf [--sayfa-no] [--yer-imi]]
   --sayfa-no / --yer-imi (Q366, OPT-IN): html_to_pdf.js'e aynen geçirilir — "Sayfa X / Y"
-  altbilgisi + başlıklardan PDF yer imi. Bayraksız PDF eskisiyle aynıdır (eski dokümanın
-  yeniden üretiminde kullanma: md5 değişir, check_doc_artifact_md5 işaretler).
+  altbilgisi + başlıklardan PDF yer imi. Bayrakları eski dokümanın yeniden üretiminde kullanma
+  (md5 değişir, check_doc_artifact_md5 işaretler). Bayraksız PDF'te page.pdf SEÇENEKLERİ eskisiyle
+  aynıdır; içerik ise Issue #389'dan beri yalnız taşan/kırpık öğesi olmayan belgede aynıdır (ölçülen
+  vektörler ve sınırı html_to_pdf.js YERLEŞİM bloğunda) — taşan görsel/`pre`/tablo içeren belgede
+  yerleşim düzeltmesi çıktıyı bilinçli değiştirir. Önceki metin "Bayraksız PDF eskisiyle aynıdır" diyordu; #389 ile daraldı.
+
+PDF YERLEŞİMİ (Issue #389): görsel/`pre`/tablo taşmasının PDF düzeltmesi `html_to_pdf.js`'tedir
+(yalnız-PDF CSS) — aşağıdaki CSS ekran HTML'i içindir; PDF için buraya kural EKLEME.
+⚠ Git Bash'te `/` ile başlayan başlık ("/NS/ZSD001 …") yol sanılıp dönüştürülür
+("C:/Program Files/Git/NS/…"): komutun önüne `MSYS_NO_PATHCONV=1` koy.
 """
 import os
 import re

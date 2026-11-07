@@ -766,6 +766,14 @@ OZEL_TESTLER = [
      "olculmus/olculmemis konumlar, tohum paketi (7 hata), --verify-report, exit 0/1/2, "
      "--harita-denetim, --reach, run_review class_push zinciri, diff kipi duzeltme turu, BE-50 SELECT/AT/ic-DATA, BE-16 alt sureci (sahte ADT ucu), bos --ids "
      "(223 vektor + 39 mutasyon)"),
+    # 2026-11-07 (DEV_CORE Issue #389): html_to_pdf yol kodlamasi + dizin listesi + yalniz-PDF
+    # yerlesim. Y* vektorleri node+playwright+msedge+markdown+PIL+PyMuPDF ister (CI KURMAZ -> ATLANDI).
+    ("pdf_yerlesim",
+     "Issue #389 html_to_pdf: '#'li klasor dogru PDF (pathToFileURL), dizin listesi -> exit 2 PDF FAIL, "
+     "basliksiz gorsel/genis pre/tablo ici kod/uzun sozcuk sayfaya sigar (govde 10,5 pt), siganda "
+     "tabanla ayni, duzeltilemeyen tasma -> PDF UYARILI; build_kd_pdf 3. baglam; bug-gate F1/F3/F4: "
+     "sigan tablo (ikon/hucre pre) + orani bozuk sigan gorsel tabanla ayni, w/h'li genis gorselde oran "
+     "korunur, tasan tablonun hucre ici pre/gorseli kademeyle sarilir, \\\\localhost UNC (27 vektor + 20 mutasyon)"),
     # 2026-10-18 (B85): build_kd_pdf arguman sozlesmesi. G/E vektorleri markdown+PIL ister
     # (CI KURMAZ -> ATLANDI); kullanim sozlesmesi vektorleri bagimliliksiz kosar.
     ("build_kd_pdf_arguman",
@@ -1635,6 +1643,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "argparse + yazmadan once denetim (exit 2) + agir import ayristirmadan sonra + acik yazma hedefleri"),
     ("scripts/build_doc_pdf.py", ("O:build_kd_pdf_arguman",),
      "build_kd_pdf slug_tr'yi import eder; G1/E1 HTML id'leri buna bagli (birlesim genisler)"),
+    # ── Issue #389 (2026-11-07): yalniz-PDF yerlesim + yol kodlamasi ───────
+    ("scripts/html_to_pdf.js", ("O:pdf_yerlesim",),
+     "pathToFileURL + dizin listesi dedektoru + PDF_CSS + tasan tablo kademesi + YERLESIM beyani/uyarisi"),
+    ("scripts/build_doc_pdf.py", ("O:pdf_yerlesim",),
+     "Y1 gercek giris noktasi (--pdf -> komsu html_to_pdf.js); docstring PDF yerlesim/MSYS notu"),
+    ("scripts/build_kd_pdf.py", ("O:pdf_yerlesim",),
+     "Y8 3. baglam: eski KD CSS'iyle uretilen HTML'in PDF'i sigar"),
 
     # ── Issue #339 (2026-10-18, B86): AYRI satirlar; sap_adt_lib.py birlesimi 24→25 →
     # `b0_secim` P3 pinli sayisi BIRLIKTE guncellendi.
