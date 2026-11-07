@@ -810,6 +810,12 @@ OZEL_TESTLER = [
      "kopyadaki dosya sayisi; ortak govdede surume bagli API yok; parca imzasi; manifest/view/"
      "controller/define/i18n tamligi; Excel dataSource {dataUrl} nesnesi; kolon filtresi tarih strictParsing + "
      "sayi getFloatInstance, ham metin filtre degeri yok; kopyaya sokulan kusuru 3 validator yakalar; 14 mutasyon"),
+    # 2026-11-07 Issue #391: namespace'li paket — yaml-lite tirnakli `#` + paket siniri .rules.md kabulu.
+    ("issue391_ns_yaml_yorum",
+     "project_config `#` yalniz tirnak DISINDA yorum (satir ici/blok repro, satir sonu yorumu, "
+     "BOM+CRLF; tirnaksiz `#` ve kelime ici kesme isareti eski gibi) + check_object_in_correct_pkg "
+     "namespace'li pakette ayni namespace oneki + .rules.md Naming regex'i ile kabul (yanlis "
+     "namespace / tabloya uymayan ad / .rules.md yok / Z paketi red; kucuk harfli paket klasoru; durum makinesi kurallari Y15-Y22); 13 mutasyon"),
 ]
 
 
@@ -1182,9 +1188,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/validators/check_project_root_resolution.py",
      ("O:proje_koku_varyantlari", "O:conn_adt_proje_koku"),
      "V5 yazım-varyantları + CORE-01 dedektörünün ikinci yüzü"),
-    ("scripts/validators/check_package_naming.py", ("O:paket_uzanti_kapsami",), "V2 korpusu"),
+    ("scripts/validators/check_package_naming.py",
+     ("O:paket_uzanti_kapsami", "O:issue391_ns_yaml_yorum"),
+     "V2 korpusu + `parse_rules_md`'nin ikinci tüketicisi (namespace kabulü, Issue #391)"),
     ("scripts/validators/check_object_in_correct_pkg.py",
-     ("O:paket_uzanti_kapsami",), "V2 korpusu (ikinci gate)"),
+     ("O:paket_uzanti_kapsami", "O:issue391_ns_yaml_yorum"),
+     "V2 korpusu (ikinci gate) + namespace'li paket kabulü (Issue #391)"),
     ("scripts/validators/check_core_not_committed.py",
      ("O:gitignore_tam_satir",), "V4 korpusu"),
     ("scripts/validators/check_itg_signoff.py", ("O:itg_alan_dolulugu",), "V3 korpusu"),
@@ -1292,8 +1301,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "onay kapısının team_setup kablolamasını düşürMEmesi (E-05)"),
     ("scripts/utils/claude_paths.py", ("O:proje_slug_tek_kaynak",), "slug tek-kaynak korpusu"),
     ("scripts/utils/project_config.py",
-     ("R:AV-02", "O:workflow_tetik_dupe"),
-     "BOM'lu yaml parse + workflow fixture'ının yaml-lite çözümleyicisi"),
+     ("R:AV-02", "O:workflow_tetik_dupe", "O:issue391_ns_yaml_yorum"),
+     "BOM'lu yaml parse + workflow fixture'ının yaml-lite çözümleyicisi + tırnaklı `#` "
+     "yorum ayıklama (Issue #391)"),
     ("mcp_servers/sap_adt/_profile.py", ("R:AV-02",), "AV-02 kablolama ucu (tool yüzeyi)"),
 
     # ── SAP araç zinciri ────────────────────────────────────────────────────

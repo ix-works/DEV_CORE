@@ -22,10 +22,74 @@ def project_root() -> Path:
     return Path(env) if env else Path.cwd()
 
 
+def _yorumu_ayikla(satir: str) -> str:
+    """Satırdan `#` yorumunu ayıklar — `#` YALNIZ TIRNAK DIŞINDA yorum başlatır.
+
+    Neden (DEV_CORE Issue #391, 2026-11-07): eski `satir.split("#", 1)[0]` tırnağa
+    bakmıyordu ⇒ namespace'li paket istisnası `["#NSPC#SD001:^#NSPC#CL_SD001_"]`
+    `'['`'e, blok öğesi `- '#NSPC#SD001:…'` boş dizgiye iniyordu (sessiz veri kaybı).
+    Kurallar (ölçülen tüketici biçimleri korunur):
+      · Tırnak yalnız bir DEĞER/ÖĞE BAŞINDA açılır: satır başı (girinti sonrası) · satırın
+        İLK `anahtar: ` ayracı sonrası · satır başındaki blok öğesi `- ` sonrası · akış
+        listesinde `[` ya da `,` sonrası. Değerin ortasındaki kesme işareti (`Paket'in`,
+        `a-'b`, akış listesi DIŞINDA `a,'b`) tırnak DEĞİLDİR ⇒ tırnaksız değerde bugünkü
+        kesim aynen kalır (`a#b` → `a`).
+      · Tek tırnakta `''`, çift tırnakta `\\x` kaçışı atlanır.
+      · Tırnak kapandıktan sonraki `   # açıklama` yine yorumdur.
+      · Kapanmamış tırnak ⇒ ESKİ kesime düşülür (belirsiz girdi; bugünkü davranış).
+    """
+    tirnak: str | None = None
+    bekle = True            # bir DEĞER/ÖĞE başı bekleniyor (satır başı)
+    satir_basi = True       # henüz boşluk-dışı karakter görülmedi (blok öğesi yalnız burada)
+    ayrac_goruldu = False   # satırın ilk `anahtar: ` ayracı görüldü mü
+    derinlik = 0            # `[ ]` akış listesi derinliği
+    i, n = 0, len(satir)
+    while i < n:
+        c = satir[i]
+        sonraki = satir[i + 1] if i + 1 < n else ""
+        if tirnak is None:
+            if c == "#":
+                return satir[:i]
+            if c.isspace():
+                i += 1
+                continue
+            if bekle and c in ("'", '"'):
+                tirnak = c
+            elif c == "-" and satir_basi and (sonraki == "" or sonraki.isspace()):
+                bekle = True                        # blok öğesi `- `
+            elif c == ":" and derinlik == 0 and not ayrac_goruldu and (sonraki == "" or sonraki.isspace()):
+                ayrac_goruldu, bekle = True, True   # `anahtar: `
+            elif c == "[" and bekle:
+                derinlik, bekle = derinlik + 1, True
+            elif c == "," and derinlik > 0:
+                bekle = True                        # akış listesi ayırıcısı
+            elif c == "]" and derinlik > 0:
+                derinlik, bekle = derinlik - 1, False
+            else:
+                bekle = False
+            satir_basi = False
+        elif tirnak == "'":
+            if c == "'":
+                if sonraki == "'":
+                    i += 1                          # '' kaçışı
+                else:
+                    tirnak, bekle = None, False
+        else:  # çift tırnak
+            if c == "\\":
+                i += 1                              # kaçışlı karakteri atla
+            elif c == '"':
+                tirnak, bekle = None, False
+        i += 1
+    if tirnak is not None:
+        return satir.split("#", 1)[0]
+    return satir
+
+
 @lru_cache(maxsize=4)
 def _yaml_lite(yol: str) -> dict:
     """project.yaml lite-parser: `key: value` skalerleri + inline `[a, b]` +
-    takip eden `- x` blok listeleri. Yorum (#) ve boş satır atlanır."""
+    takip eden `- x` blok listeleri. Yorum (#, yalnız tırnak DIŞINDA —
+    `_yorumu_ayikla`) ve boş satır atlanır."""
     p = Path(yol)
     out: dict = {}
     if not p.exists():
@@ -40,7 +104,7 @@ def _yaml_lite(yol: str) -> dict:
         # PowerShell ile yazılan dosyaya BOM eklenir (memory: powershell-utf8-bom-trap).
         # `utf-8-sig` BOM'suz dosyada `utf-8` ile BAYT-EŞ davranır (regresyon riski yok).
         for ham in p.read_text(encoding="utf-8-sig", errors="ignore").splitlines():
-            s = ham.split("#", 1)[0].rstrip()
+            s = _yorumu_ayikla(ham).rstrip()
             if not s.strip():
                 continue
             if aktif_liste and s.strip().startswith("- "):
