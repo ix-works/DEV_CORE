@@ -255,8 +255,9 @@ syntax-check turu eklemek hem gereksiz hem — yukarıdaki semantiği yüzünden
 
 - **Salt-okur araçlar (Q363①):** `adt_get_method(class_name, method_name)` (ana kaynaktan
   `METHOD..ENDMETHOD` metinsel çıkarım; yerel include'lar ARANMAZ ⇒ `found:false` "metot yok"
-  demek değildir; birden çok blok ⇒ `belirsiz`; bitiş belirlenemezse — araya METHOD girdi ya da
-  aynı satırda METHOD/ENDMETHOD karışık — `sinir_belirsiz`, gövde dönmez; tek satırlık
+  demek değildir; birden çok blok ⇒ `belirsiz`; bitiş belirlenemezse — araya METHOD girdi,
+  aynı satırda METHOD/ENDMETHOD karışık ya da `ENDMETHOD.`'dan sonra aynı satırda kod var
+  (`ENDMETHOD. ENDCLASS.`; `" yorum` serbest, Issue #379) — `sinir_belirsiz`, gövde dönmez; tek satırlık
   `METHOD a. … ENDMETHOD.` desteklenir; sınır kararı `scripts/utils/abap_metot_blok.py`,
   DEV_CORE Issue #362) · `adt_revisions(name, object_type, limit)` (`count`
   daima tamamı, `truncated`) · `adt_pretty_print(name, object_type)` (biçimlenmiş metni DÖNDÜRÜR,

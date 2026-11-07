@@ -391,7 +391,8 @@ class SAPClient:
         # regex tek satırlık `METHOD a. … ENDMETHOD.` ve satır ortasındaki `ENDMETHOD.`
         # bitişini kaçırıp SONRAKİ metodun gövdesini de içeren bloğu bu include'a PUT
         # ediyordu (yazma yolu). Sınır belirlenemezse (kapanmamış / METHOD-ENDMETHOD
-        # karışık) blok YAZILMAZ: kilit alınmaz, PUT yapılmaz, metot atlanır.
+        # karışık / `ENDMETHOD. ENDCLASS.` gibi bitişten sonra aynı satırda kod — Issue #379)
+        # blok YAZILMAZ: kilit alınmaz, PUT yapılmaz, metot atlanır.
         # Davranış korunan eksen: birden çok eşleşmede İLK blok kullanılır (eskisi gibi).
         # ⛔ AMDP (`METHOD … BY DATABASE …`) blok PUT EDİLMEZ (lider kapsam kararı, bug-gate
         # 206a1c1): eski regex (`METHOD <ad>\s*\.`) AMDP başlığını tanımadığı için bu metotlarda

@@ -244,6 +244,62 @@ def bolum_g(Q, A):
     ekle("G33 okuma yolu AMDP'yi DONDURMEYE devam eder (found + govde)",
          r.get("ok") is True and r.get("found") is True and r.get("end_line") == 7, r)
 
+    # ── DEV_CORE Issue #379 (2026-11-07): bitiş satırında `ENDMETHOD.`'dan SONRA kod ──
+    # f646f36: A → (2,4,'…ENDMETHOD. ENDCLASS.') · B → (2,2,'…ENDMETHOD. ENDCLASS.') · Y aynı
+    # sınıf; okuma found:true + blok dışı kod, yazma PUT 1 (ölçüldü). Artık SINIR_BELIRSIZ.
+    for ad, kaynak in (("G35 ⭐ cok satir `ENDMETHOD. ENDCLASS.`", I379_A),
+                       ("G36 ⭐ tek satir `METHOD foo. x = 1. ENDMETHOD. ENDCLASS.`", I379_B),
+                       ("G37 ⭐ `ENDMETHOD. y = 2.` (bitis sonrasi atama)", I379_Y)):
+        b = cik(kaynak, "foo")
+        ekle(ad + " -> SINIR_BELIRSIZ", len(b) == 1 and b[0][:2] == (2, Q._SINIR_BELIRSIZ), b)
+    b = cik(I379_YORUM, "foo")
+    ekle("G38 FP capasi: `ENDMETHOD. \" yorum` -> (2,4) sinirli, yorum govdede",
+         b == [(2, 4, "  METHOD foo.\n    x = 1.\n  ENDMETHOD. \" yorum")], b)
+    b = cik(I379_K, "foo")
+    ekle("G39 ⭐ kontrol: `ENDCLASS.` ayri satir -> (2,4) aynen",
+         b == [(2, 4, "  METHOD foo.\n    x = 1.\n  ENDMETHOD.")], b)
+    for ad, kaynak, beklenen in (
+            ("G40 `ENDMETHOD.` + yalniz bosluk", "METHOD foo.\n  x = 1.\n  ENDMETHOD.   \t\nENDCLASS.",
+             (1, 3)),
+            ("G40b tek satir + `\" yorum`", "  METHOD foo. x = 1. ENDMETHOD. \" ENDCLASS. yorumda\nENDCLASS.",
+             (1, 1)),
+            ("G40c tek satir + yalniz bosluk", "METHOD foo. ENDMETHOD.  \nENDCLASS.", (1, 1)),
+            ("G40d `ENDMETHOD .` (nokta oncesi bosluk) + yorum", "METHOD foo.\nENDMETHOD . \" x. y.\n",
+             (1, 2))):
+        b = cik(kaynak, "foo")
+        ekle(ad + " -> sinirli %s" % (beklenen,), len(b) == 1 and b[0][:2] == beklenen, b)
+    for ad, kaynak in (("G41 bitis sonrasi literalli deyim `ENDMETHOD. WRITE 'a. b'.`",
+                        "METHOD foo.\n  ENDMETHOD. WRITE 'a. b'.\n"),
+                       ("G41b `ENDMETHOD. ENDCLASS. \" yorum` (kod + yorum)",
+                        "METHOD foo.\n  ENDMETHOD. ENDCLASS. \" yorum\n")):
+        b = cik(kaynak, "foo")
+        ekle(ad + " -> SINIR_BELIRSIZ", len(b) == 1 and b[0][1] == Q._SINIR_BELIRSIZ, b)
+    for ad, kaynak in (("G42 ⭐ MCP cok satir A", I379_A), ("G43 ⭐ MCP tek satir B", I379_B)):
+        r = mcp(kaynak, "foo")
+        ekle(ad + " -> ok False + sinir_belirsiz + govde DONMEZ + mesaj nedeni soyler",
+             r.get("ok") is False and r.get("error") == "sinir_belirsiz" and r.get("found") is None
+             and "source" not in r and "sonra" in (r.get("message") or ""), r)
+    r = mcp(I379_K, "foo")
+    ekle("G44 MCP kontrol K -> found + end_line 4", r.get("ok") is True and r.get("found") is True
+         and r.get("end_line") == 4 and r.get("source") == "  METHOD foo.\n    x = 1.\n  ENDMETHOD.", r)
+    # 3. bağlam: CRLF + küçük harf + arayüz metodu adı (`zif~m`)
+    b = cik("class lcl implementation.\r\n  method zif_sd001_ornek~yap.\r\n    x = 1.\r\n"
+            "  endmethod. endclass.\r\n", "zif_sd001_ornek~yap")
+    ekle("G46 CRLF + kucuk harf `endmethod. endclass.` + `zif~m` -> SINIR_BELIRSIZ",
+         len(b) == 1 and b[0][:2] == (2, Q._SINIR_BELIRSIZ), b)
+    b = cik(I379_K.replace("\n", "\r\n").lower(), "FOO")
+    ekle("G46b CRLF + kucuk harf kontrol K -> (2,4) sinirli", len(b) == 1 and b[0][:2] == (2, 4), b)
+    ekle("G45 KAPSAM metni bitis-sonrasi-kod nedenini soyler",
+         "`ENDMETHOD.`'dan sonra kod kalirsa" in Q._METOT_KAPSAM, Q._METOT_KAPSAM)
+
+
+# DEV_CORE Issue #379 vektörleri (brif §4; jenerik yerel sınıf `lcl`)
+I379_A = "CLASS lcl IMPLEMENTATION.\n  METHOD foo.\n    x = 1.\n  ENDMETHOD. ENDCLASS.\n"
+I379_B = "CLASS lcl IMPLEMENTATION.\n  METHOD foo. x = 1. ENDMETHOD. ENDCLASS.\n"
+I379_Y = "CLASS lcl IMPLEMENTATION.\n  METHOD foo.\n    x = 1.\n  ENDMETHOD. y = 2.\nENDCLASS.\n"
+I379_YORUM = "CLASS lcl IMPLEMENTATION.\n  METHOD foo.\n    x = 1.\n  ENDMETHOD. \" yorum\nENDCLASS.\n"
+I379_K = "CLASS lcl IMPLEMENTATION.\n  METHOD foo.\n    x = 1.\n  ENDMETHOD.\nENDCLASS.\n"
+
 
 # bug-gate 206a1c1 F5 / kapsam kararı vektörleri (AMDP başlığı satır sonunda bölünür)
 AMDP_ARA = ("METHOD a.\n  x = 1.\nMETHOD b\n  BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT USING t.\n"
@@ -326,6 +382,20 @@ def bolum_f(SC):
     r, adt = kos("METHOD a.\n  lv = 'BY DATABASE'.\nENDMETHOD.", ["A"])
     ekle("F8c FP capasi: govdede 'BY DATABASE' metni olan ABAP metodu -> 1 PUT",
          r is True and len(adt.put) == 1, (r, adt.put))
+    # DEV_CORE Issue #379: f646f36'da A/B/Y kilit 1 + PUT 1 (`…ENDMETHOD. ENDCLASS.\n` include'a)
+    for ad, kaynak in (("F9 ⭐ cok satir `ENDMETHOD. ENDCLASS.`", I379_A),
+                       ("F9b ⭐ tek satir `… ENDMETHOD. ENDCLASS.`", I379_B),
+                       ("F9c `ENDMETHOD. y = 2.`", I379_Y)):
+        r, adt = kos(kaynak, ["FOO"])
+        ekle(ad + " -> kilit 0 + PUT 0 + False", r is False and not adt.kilit and not adt.put,
+             (r, adt.kilit, adt.put))
+    r, adt = kos(I379_YORUM, ["FOO"])
+    ekle("F10 FP capasi: `ENDMETHOD. \" yorum` -> 1 PUT, govde yorumlu tam blok",
+         r is True and adt.put == [("/sap/bc/adt/oo/classes/zsd001_cl_ornek/includes/implementations/FOO",
+                                    "  METHOD foo.\n    x = 1.\n  ENDMETHOD. \" yorum\n")], (r, adt.put))
+    r, adt = kos(I379_K, ["FOO"])
+    ekle("F10b ⭐ kontrol K -> 1 PUT, govde `ENDMETHOD.`'da biter (ENDCLASS YOK)",
+         r is True and [p[1] for p in adt.put] == ["  METHOD foo.\n    x = 1.\n  ENDMETHOD.\n"], (r, adt.put))
 
 
 def bolum_r(Q, L):
@@ -575,6 +645,22 @@ MUTASYONLAR = [
     ("M21 AMDP basligi yalniz ilk satirda aranir (bolunmus baslik kacar)", _BLOK,
      '    return bool(_AMDP_BASLIK.search(kod.split(".", 1)[0]))\n',
      '    return bool(_AMDP_BASLIK.search((blok or "").split(chr(10), 1)[0]))\n', ("F8b",)),
+    # DEV_CORE Issue #379: yardımcı + İKİ çağrı yeri ayrı katman ⇒ ayrı mutasyon; FP yönü de ölçülür
+    ("M22 bitis-sonrasi-kod daima False (eski davranis: ENDCLASS bloga girer)", _BLOK,
+     "    return bool(kalan.strip())\n", "    return False\n",
+     ("G35", "G36", "G37", "G41 ", "G41b", "G42", "G43", "G46 ", "F9 ", "F9b", "F9c")),
+    ("M23 yalniz tek satir dalinda bitis-sonrasi-kod kontrolu kalkar", _BLOK,
+     "                if _bitis_sonrasi_kod(satirlar[i]):     # Issue #379",
+     "                if False:     # Issue #379", ("G36", "G43", "F9b")),
+    ("M24 yalniz cok satir dalinda bitis-sonrasi-kod kontrolu kalkar", _BLOK,
+     'd == ["ENDMETHOD"] and not _bitis_sonrasi_kod(satirlar[k])', 'd == ["ENDMETHOD"]',
+     ("G35", "G37", "G41 ", "G41b", "G42", "G46 ", "F9 ", "F9c")),
+    ("M25 bitis-sonrasi-kod daima True (yorum/bosluk da belirsiz: FP yonu)", _BLOK,
+     "    return bool(kalan.strip())\n", "    return True\n",
+     ("G38", "G39", "G40 ", "G40b", "G40c", "G40d", "G44", "F10 ", "F10b")),
+    ("M26 bitisteki `.` atlanmaz (her `ENDMETHOD.` belirsiz olur)", _BLOK,
+     '    kalan = re.sub(r"^\\s*\\.", "", kod[son.end():], count=1)\n',
+     "    kalan = kod[son.end():]\n", ("G39", "G40 ", "G40c", "F10b")),
     ("M2 coklu blok ilki secilir (belirsizlik gizlenir)", "mcp_servers/sap_adt/tools/query.py",
      "    if len(bloklar) > 1:\n        return {\"ok\": False, \"error\": \"belirsiz\"",
      "    if False:\n        return {\"ok\": False, \"error\": \"belirsiz\""),
