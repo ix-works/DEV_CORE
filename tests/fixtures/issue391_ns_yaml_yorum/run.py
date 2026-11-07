@@ -15,31 +15,45 @@ DEV_CORE Issue #391 (2026-11-07). İKİ AYRI EKSEN, iki ayrı kök:
 VEKTÖRLER
   Y*  `_yaml_lite` doğrudan (süreç içi). Y1/Y2 Issue repro'su (satır içi + blok), Y3 tırnak sonrası
       satır sonu yorumu, Y8 tek tırnak `''` kaçışı, Y9 tırnaklı skaler, Y11 3. bağlam BOM+CRLF,
-      Y13 iki tırnaklı öğe. KONTROL (eski kodda da yeşil, değişmemeli): Y4 tüketici biçimi
+      Y13 iki tırnaklı öğe, Y14 çift tırnakta kaçışlı tırnak (`"x\\" # y"`). KONTROL (eski kodda da yeşil, değişmemeli): Y4 tüketici biçimi
       `- "ZSD001_CLC:^ZCL_SD001_"   # açıklama` · Y5 tırnaksız `#` keser · Y6 kelime içi kesme
-      işareti tırnak sayılmaz · Y7 kapanmamış tırnak → eski kesim · Y10 Z satır içi · Y12 tüm dosya.
+      işareti tırnak sayılmaz · Y7 kapanmamış tırnak → eski kesim · Y10 Z satır içi · Y12 tüm dosya
+      · Y15 iki kelime içi kesme işareti arasında `#` (`Paket'in # Ali'nin`) · Y16 değer ortasında
+      `-'` (`a-'b#c'`) · Y17 akış listesi DIŞINDA `,'` (`a,'b # c'`) — üçü de eski kesimle AYNI sonuç.
   A*  KABLOLAMA (gerçek giriş noktası, alt süreç): `.rules.md`'siz namespace paketi, istisna
       `project.yaml`'dan — A1 satır içi, A2 blok. (b) olmadan istisna bozulur → ihlal.
   N*  (a) kabul: N1 `.rules.md`'li namespace paketi doğru ad · N2 3. bağlam (başka modül, küçük harfli
-      abapGit dosya adı, `cds/` altında `.ddls.asddls`) · S1 KAPSAM satırı namespace yolunu anar.
+      abapGit dosya adı, `cds/` altında `.ddls.asddls`) · N3 küçük harfli PAKET KLASÖRÜ `#nspc#sd001`
+      · S1 KAPSAM satırı namespace yolunu anar. ⚠ N2 yalnız BU kapı için geçerlidir: bu kapı adı
+      `.upper()` ile regex'e uygular, `check_package_naming` olduğu gibi — küçük harfli abapGit adı +
+      büyük harfli regex'te naming kapısı reddeder (bu fixture onu ölçmez).
   R*  (a) red (fail-closed): R1 yanlış namespace — `.rules.md` regex'i namespace'e GEVŞEK yazılmış
       olsa bile önek şartı reddeder · R2 tabloya uymayan ad · R3 `.rules.md` yok (mesaj bunu söyler)
       · R4 Z paketi istisnasız `ZCL_SD001_X` (`.rules.md` regex'i uysa bile — Z davranışı DEĞİŞMEDİ)
       · R5 derlenmeyen regex çökme üretmez, kabul üretmez. K1 Z kontrol grubu `ZSD001_X` kabul.
 
 Koşum:     python tests/fixtures/issue391_ns_yaml_yorum/run.py
-MUTASYON (önce aynı sarmalayıcı YAMASIZ koşulur — kum tabanı tam yeşil olmalı):
-  --mutasyon-yorum-kesimi  `_yorumu_ayikla` → eski `split("#", 1)[0]`
-                           İLAN: {Y1, Y2, Y3, Y8, Y9, Y11, Y13, A1, A2}
-  --mutasyon-ns-kapali     `namespace_kurallari` → [] (namespace dalı kapalı)
-                           İLAN: {N1, N2, S1}
-  --mutasyon-ns-onek-yok   `matches_package` içindeki `and base.startswith(ns)` şartı silinir
-                           İLAN: {R1}
+MUTASYON (önce aynı sarmalayıcı YAMASIZ koşulur — kum tabanı tam yeşil olmalı). Her kip kaynak
+  METNİNE tekil bir ikame uygular (çapa tam 1 kez bulunmazsa exit 3); süreç içi Y* vektörleri ve
+  alt süreç kapısı AYNI ikameli kaynağı yükler.
+  --mutasyon-yorum-kesimi      `_yorumu_ayikla(ham)` → eski `ham.split("#", 1)[0]`
+                               İLAN: {Y1, Y2, Y3, Y8, Y9, Y11, Y13, Y14, A1, A2}
+  --mutasyon-tirnak-kapisi-yok her `'`/`"` tırnak açar (değer başı şartı yok)
+                               İLAN: {Y15, Y16, Y17}
+  --mutasyon-kacis-yok         çift tırnakta `\\` kaçış dalı kapalı          İLAN: {Y14}
+  --mutasyon-virgul-akis-disi  `,` akış listesi DIŞINDA da değer başı sayılır   İLAN: {Y17}
+  --mutasyon-tire-her-yerde    `-` satır başı dışında da blok öğesi sayılır    İLAN: {Y16}
+  --mutasyon-ns-kapali         `ns_kur = namespace_kurallari(pkg)` → `[]`       İLAN: {N1, N2, N3, S1}
+  --mutasyon-ns-onek-yok       `matches_package` içindeki `and base.startswith(ns)` silinir
+                               İLAN: {R1}
+  --mutasyon-ns-buyuk-harf-yok `paket_namespace` içinde `.upper()` kaldırılır   İLAN: {N3}
   Çıkış: 0 taban yeşil · 1 taban kırmızı YA DA yalnız ilan edilen küme düştü · 2 SAPMA ya da
   geçersiz kip · 3 kurulamadı (yama noktası yok / kum tabanı kırmızı).
 Kontrol grubu: `I391_SCRIPTS_KOK=<scripts dizini>` ile başka bir sürüm koşulabilir (düzeltme öncesi
-  kod `f646f36`: Y1 Y2 Y3 Y8 Y9 Y11 Y13 A1 A2 N1 N2 S1 R3 FAIL — 11/24, 2026-11-07 ölçüldü;
-  R3 eski kodda da rc 1 verir ama namespace mesajı yoktur).
+  kod `f646f36`: Y1 Y2 Y3 Y8 Y9 Y11 Y13 Y14 A1 A2 N1 N2 N3 S1 R3 FAIL — 14/29; R3 eski kodda da
+  rc 1 verir ama namespace mesajı yoktur. İlk düzeltme `4029212` (tırnak "önceki boşluk dışı karakter
+  `:` `-` `[` `,`" kuralıyla açılıyordu): Y16 Y17 FAIL — 27/29. İkisi 2026-11-07 ölçüldü). Kontrol grubu kurulurken `utils/` ve `validators/` aynı
+  sürümden kopyalanır.
 """
 from __future__ import annotations
 
@@ -60,44 +74,75 @@ KOK = Path(__file__).resolve().parents[3]
 SCRIPTS = Path(os.environ.get("I391_SCRIPTS_KOK") or (KOK / "scripts"))
 GATE = SCRIPTS / "validators" / "check_object_in_correct_pkg.py"
 
-GECERLI_KIP = {"--mutasyon-yorum-kesimi", "--mutasyon-ns-kapali", "--mutasyon-ns-onek-yok"}
-KIP_KISA = {"--mutasyon-yorum-kesimi": "yorum", "--mutasyon-ns-kapali": "ns",
-            "--mutasyon-ns-onek-yok": "onek"}
-BEKLENEN_DUSEN = {
-    "yorum": {"Y1", "Y2", "Y3", "Y8", "Y9", "Y11", "Y13", "A1", "A2"},
-    "ns": {"N1", "N2", "S1"},
-    "onek": {"R1"},
+PC_REL = "utils/project_config.py"
+GATE_REL = "validators/check_object_in_correct_pkg.py"
+
+# kip → (ilan edilen düşen küme, [(göreli dosya, eski metin, yeni metin), ...])
+MUTASYONLAR: dict[str, tuple[set[str], list[tuple[str, str, str]]]] = {
+    "--mutasyon-yorum-kesimi": (
+        {"Y1", "Y2", "Y3", "Y8", "Y9", "Y11", "Y13", "Y14", "A1", "A2"},
+        [(PC_REL, "s = _yorumu_ayikla(ham).rstrip()", 's = ham.split("#", 1)[0].rstrip()')]),
+    "--mutasyon-tirnak-kapisi-yok": (
+        {"Y15", "Y16", "Y17"},
+        [(PC_REL, "if bekle and c in (\"'\", '\"'):", "if c in (\"'\", '\"'):")]),
+    "--mutasyon-kacis-yok": (
+        {"Y14"},
+        [(PC_REL, 'if c == "' + chr(92) * 2 + '":', "if False:")]),
+    "--mutasyon-virgul-akis-disi": (
+        {"Y17"},
+        [(PC_REL, 'elif c == "," and derinlik > 0:', 'elif c == ",":')]),
+    "--mutasyon-tire-her-yerde": (
+        {"Y16"},
+        [(PC_REL, 'elif c == "-" and satir_basi and (sonraki == "" or sonraki.isspace()):',
+          'elif c == "-":')]),
+    "--mutasyon-ns-kapali": (
+        {"N1", "N2", "N3", "S1"},
+        [(GATE_REL, "ns_kur = namespace_kurallari(pkg)", "ns_kur = []")]),
+    "--mutasyon-ns-onek-yok": (
+        {"R1"},
+        [(GATE_REL, " and base.startswith(ns):", ":")]),
+    "--mutasyon-ns-buyuk-harf-yok": (
+        {"N3"},
+        [(GATE_REL, "_NS_RE.match(pkg_name.upper())", "_NS_RE.match(pkg_name)")]),
 }
+GECERLI_KIP = set(MUTASYONLAR)
+
+
+class Kurulamadi(Exception):
+    pass
+
+
+def ikameli_kaynak(rel: str, ikameler: list[tuple[str, str, str]]) -> str:
+    """`SCRIPTS/rel` kaynağı + bu dosyaya düşen ikameler (her çapa TAM 1 kez)."""
+    metin = (SCRIPTS / rel).read_text(encoding="utf-8")
+    for dosya, eski, yeni in ikameler:
+        if dosya != rel:
+            continue
+        n = metin.count(eski)
+        if n != 1:
+            raise Kurulamadi(f"çapa {rel} içinde {n} kez (1 olmalı): {eski!r}")
+        metin = metin.replace(eski, yeni)
+    return metin
+
 
 SARMALAYICI = r'''
-import os, sys, types
-scripts, kip = sys.argv[1], sys.argv[2]
+import json, os, sys, types
+scripts, ikame_yolu = sys.argv[1], sys.argv[2]
+with open(ikame_yolu, encoding="utf-8") as fh:
+    kaynaklar = json.load(fh)          # {göreli dosya: ikameli kaynak}
 sys.path.insert(0, scripts)
 sys.path.insert(0, os.path.join(scripts, "validators"))
-import utils.project_config as pc
-if kip == "yorum":
-    if not callable(getattr(pc, "_yorumu_ayikla", None)):
-        print("[KURULAMADI] _yorumu_ayikla yok (yama noktasi yok)")
-        sys.exit(3)
-    pc._yorumu_ayikla = lambda s: s.split("#", 1)[0]
-    pc._yaml_lite.cache_clear()
+import utils                            # gerçek paket; alt modül ikameli kaynaktan kurulur
+pc_yol = os.path.join(scripts, "utils", "project_config.py")
+pc = types.ModuleType("utils.project_config")
+pc.__file__ = pc_yol
+sys.modules["utils.project_config"] = pc
+utils.project_config = pc
+exec(compile(kaynaklar["utils/project_config.py"], pc_yol, "exec"), pc.__dict__)
 gate = os.path.join(scripts, "validators", "check_object_in_correct_pkg.py")
-with open(gate, encoding="utf-8") as fh:
-    kaynak = fh.read()
-if kip == "onek":
-    capa = " and base.startswith(ns):"
-    if kaynak.count(capa) != 1:
-        print("[KURULAMADI] onek capasi bulunamadi/tekil degil: %d" % kaynak.count(capa))
-        sys.exit(3)
-    kaynak = kaynak.replace(capa, ":")
 mod = types.ModuleType("check_object_in_correct_pkg")
 mod.__file__ = gate
-exec(compile(kaynak, gate, "exec"), mod.__dict__)
-if kip == "ns":
-    if not callable(getattr(mod, "namespace_kurallari", None)):
-        print("[KURULAMADI] namespace_kurallari yok (yama noktasi yok)")
-        sys.exit(3)
-    mod.namespace_kurallari = lambda p: []
+exec(compile(kaynaklar["validators/check_object_in_correct_pkg.py"], gate, "exec"), mod.__dict__)
 sys.argv = [gate]
 sys.exit(mod.main())
 '''
@@ -141,6 +186,11 @@ YAML_VEKTOR = [
      "package_exceptions", ["ZSD001:^ZCL_SD001_"], "KONTROL Z satır içi"),
     ("Y13", False, "package_exceptions: [\"#AAA#X:^#AAA#CL_\", '#BBB#Y:^#BBB#CL_']  # iki\n",
      "package_exceptions", ["#AAA#X:^#AAA#CL_", "#BBB#Y:^#BBB#CL_"], "iki tırnaklı öğe"),
+    ("Y14", False, 'a: "x\\" # y" # z\n', "a", 'x\\" # y', "çift tırnakta kaçışlı tırnak + `#`"),
+    ("Y15", True, "baslik: Paket'in # Ali'nin\n", "baslik", "Paket'in",
+     "KONTROL iki kelime içi kesme işareti arasında `#` yorumdur"),
+    ("Y16", True, "t: a-'b#c'\n", "t", "a-'b", "KONTROL değer ortasında `-'` tırnak açmaz"),
+    ("Y17", True, "t: a,'b # c'\n", "t", "a,'b", "KONTROL akış listesi dışında `,'` tırnak açmaz"),
 ]
 
 Y12_ICERIK = ("# baslik yorumu\n"
@@ -154,20 +204,24 @@ Y12_BEKLENEN = {"sap_profile": "s4_private", "release": "2025", "source_root": "
                 "include_naming_exempt": ["ZSD001_I_A_T01"]}
 
 
-def _pc(kip: str | None):
+def _pc(ikameler: list[tuple[str, str, str]] | None):
+    """None → gerçek import (taban). Liste → ikameli kaynaktan taze modül (kum/mutasyon)."""
     if str(SCRIPTS) not in sys.path:
         sys.path.insert(0, str(SCRIPTS))
-    from utils import project_config as pc  # type: ignore
+    if ikameler is None:
+        from utils import project_config as pc  # type: ignore
+        return pc
+    import types
+    pc = types.ModuleType("i391_pc")
+    pc.__file__ = str(SCRIPTS / PC_REL)
+    exec(compile(ikameli_kaynak(PC_REL, ikameler), pc.__file__, "exec"), pc.__dict__)
     return pc
 
 
-def yaml_tur(tmp: Path, kip: str | None) -> dict[str, tuple[bool, str, str]]:
-    pc = _pc(kip)
-    asil = getattr(pc, "_yorumu_ayikla", None)
+def yaml_tur(tmp: Path, ikameler: list[tuple[str, str, str]] | None) -> dict[str, tuple[bool, str, str]]:
+    pc = _pc(ikameler)
     sonuc: dict[str, tuple[bool, str, str]] = {}
     try:
-        if kip == "yorum":
-            pc._yorumu_ayikla = lambda s: s.split("#", 1)[0]
         for vid, _k, icerik, anahtar, beklenen, aciklama in YAML_VEKTOR:
             p = tmp / f"{vid}.yaml"
             p.write_bytes(icerik.encode("utf-8"))
@@ -189,8 +243,6 @@ def yaml_tur(tmp: Path, kip: str | None) -> dict[str, tuple[bool, str, str]]:
         sonuc["Y12"] = (d == Y12_BEKLENEN, "Y12 KONTROL tüm dosya (yorum satırı + satır sonu yorumu)",
                         f"alındı={d!r}")
     finally:
-        if asil is not None:
-            pc._yorumu_ayikla = asil
         pc._yaml_lite.cache_clear()
     return sonuc
 
@@ -218,20 +270,21 @@ def _rules(pkg: str, ns: str, kisa: str) -> str:
     return RULES_NS.format(pkg=pkg, ns=ns, kisa=kisa)
 
 
-def _kos(proje: Path, sarm: Path | None, kip: str) -> tuple[int, str]:
+def _kos(proje: Path, sarm: Path | None, ikame_yolu: Path | None) -> tuple[int, str]:
     env = {k: v for k, v in os.environ.items() if not k.startswith("IX_")}
     env["CLAUDE_PROJECT_DIR"] = str(proje)
     env["PYTHONIOENCODING"] = "utf-8"
     if sarm is None:
         argv = [sys.executable, str(GATE)]
     else:
-        argv = [sys.executable, str(sarm), str(SCRIPTS), kip]
+        argv = [sys.executable, str(sarm), str(SCRIPTS), str(ikame_yolu)]
     r = subprocess.run(argv, cwd=str(proje), env=env, capture_output=True,
                        text=True, encoding="utf-8", errors="replace", timeout=120)
     return r.returncode, (r.stdout or "") + (r.stderr or "")
 
 
-def kapi_tur(tmp: Path, sarm: Path | None, kip: str) -> dict[str, tuple[bool, str, str]]:
+def kapi_tur(tmp: Path, sarm: Path | None, kip: str,
+             ikame_yolu: Path | None) -> dict[str, tuple[bool, str, str]]:
     sonuc: dict[str, tuple[bool, str, str]] = {}
     ns_sinif = {"classes/#NSPC#CL_SD001_X.clas.abap": "x\n"}
     ns_pkg = "#NSPC#SD001"
@@ -252,6 +305,8 @@ def kapi_tur(tmp: Path, sarm: Path | None, kip: str) -> dict[str, tuple[bool, st
            {"classes/#nspc#cl_mm001_y.clas.abap": "x\n",
             "cds/#NSPC#I_MM001_Z.ddls.asddls": "x\n"},
            _rules("#NSPC#MM001", "#NSPC#", "MM001"))], "", 0, None),
+        ("N3", "küçük harfli PAKET KLASÖRÜ #nspc#sd001 + büyük harfli regex → kabul",
+         [("SD", "#nspc#sd001", ns_sinif, rules_ns)], "", 0, None),
         ("S1", "KAPSAM satırı namespace yolunu anar (kabul edilen dosya: 1)",
          [("SD", ns_pkg, ns_sinif, rules_ns)], "", 0,
          "namespace'li paket: 1 (`.rules.md` Naming regex'iyle kabul edilen dosya: 1"),
@@ -276,15 +331,22 @@ def kapi_tur(tmp: Path, sarm: Path | None, kip: str) -> dict[str, tuple[bool, st
     ]
     for vid, aciklama, paketler, yaml_ek, b_rc, metin in vakalar:
         proje = _proje(tmp / f"{kip}_{vid}", paketler, yaml_ek)
-        rc, cikti = _kos(proje, sarm, kip)
+        rc, cikti = _kos(proje, sarm, ikame_yolu)
         ok = rc == b_rc and "Traceback" not in cikti and (metin is None or metin in cikti)
         sonuc[vid] = (ok, f"{vid} {aciklama}", f"rc={rc} (beklenen {b_rc}) :: {cikti.strip()[:300]}")
     return sonuc
 
 
-def tur_kos(tmp: Path, sarm: Path | None, kip: str) -> dict[str, tuple[bool, str, str]]:
-    sonuc = yaml_tur(tmp, kip if sarm is not None else None)
-    sonuc.update(kapi_tur(tmp, sarm, kip))
+def tur_kos(tmp: Path, sarm: Path | None, etiket: str,
+            ikameler: list[tuple[str, str, str]] | None) -> dict[str, tuple[bool, str, str]]:
+    ikame_yolu = None
+    if sarm is not None:
+        import json
+        ikame_yolu = tmp / f"ikame_{etiket}.json"
+        ikame_yolu.write_text(json.dumps({r: ikameli_kaynak(r, ikameler or [])
+                                          for r in (PC_REL, GATE_REL)}), encoding="utf-8")
+    sonuc = yaml_tur(tmp, ikameler if sarm is not None else None)
+    sonuc.update(kapi_tur(tmp, sarm, etiket, ikame_yolu))
     return sonuc
 
 
@@ -308,30 +370,34 @@ def main(argv: list[str]) -> int:
     tmp = Path(tempfile.mkdtemp(prefix="i391_"))
     try:
         if kip is None:
-            sonuc = tur_kos(tmp, None, "gercek")
+            sonuc = tur_kos(tmp, None, "gercek", None)
             gecen = yazdir("taban (gercek giris noktasi)", sonuc)
             print(f"\nissue391_ns_yaml_yorum: {gecen}/{len(sonuc)}")
             return 0 if gecen == len(sonuc) else 1
 
-        kisa = KIP_KISA[kip]
+        beklenen, ikameler = MUTASYONLAR[kip]
         sarm = tmp / "sarmalayici.py"
         sarm.write_text(SARMALAYICI, encoding="utf-8")
-        kum = tur_kos(tmp, sarm, "yok")
+        try:
+            kum = tur_kos(tmp, sarm, "kum", [])
+        except Kurulamadi as e:
+            print(f"[KURULAMADI] {e}")
+            return 3
         k_gecen = yazdir("kum tabani (sarmalayici, YAMASIZ)", kum)
         if k_gecen != len(kum):
             print(f"\n[KURULAMADI] kum tabani yesil degil ({k_gecen}/{len(kum)}) — "
                   "mutasyon olcumu gecersiz")
             return 3
-        mut = tur_kos(tmp, sarm, kisa)
+        try:
+            mut = tur_kos(tmp, sarm, "mut", ikameler)
+        except Kurulamadi as e:
+            print(f"[KURULAMADI] {e}")
+            return 3
         m_gecen = yazdir(f"mutasyon {kip}", mut)
         dusen = {k for k, (ok, _, _) in mut.items() if not ok}
-        beklenen = BEKLENEN_DUSEN[kisa]
         print(f"\nissue391_ns_yaml_yorum: {m_gecen}/{len(mut)}")
         print(f"ILAN EDILEN: {sorted(beklenen)}")
         print(f"DUSEN:       {sorted(dusen)}")
-        if any("[KURULAMADI]" in d for _, _, d in mut.values()):
-            print("[KURULAMADI] sarmalayici yama noktasini bulamadi")
-            return 3
         if dusen == beklenen:
             print("DUSTU — yalniz ilan edilen vektorler dustu")
             return 1

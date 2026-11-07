@@ -815,7 +815,7 @@ OZEL_TESTLER = [
      "project_config `#` yalniz tirnak DISINDA yorum (satir ici/blok repro, satir sonu yorumu, "
      "BOM+CRLF; tirnaksiz `#` ve kelime ici kesme isareti eski gibi) + check_object_in_correct_pkg "
      "namespace'li pakette ayni namespace oneki + .rules.md Naming regex'i ile kabul (yanlis "
-     "namespace / tabloya uymayan ad / .rules.md yok / Z paketi red); 3 mutasyon"),
+     "namespace / tabloya uymayan ad / .rules.md yok / Z paketi red; kucuk harfli paket klasoru); 8 mutasyon"),
 ]
 
 
