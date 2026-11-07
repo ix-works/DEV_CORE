@@ -1649,9 +1649,13 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
     Args:
         name: Birincil obje (Z*/Y*). object_type: 'class', 'ddls', 'bdef', 'srvd', 'tabl', ...
         also: [{"name": "...", "object_type": "..."}, ...]; None/boş → tek-obje (klasik yol).
-            FUGR/I öğesi `"group"` anahtarı taşır.
+            FUGR/I `also` içinde DESTEKLENMEZ (`fugr_include_also_unsupported`; atomik yol
+            bu tip için ölçülmedi) — include'u tekil çağır.
         group: Q383 — YALNIZ object_type='fugr_include' (fonksiyon grubu include'u, FUGR/I)
             için ZORUNLU fonksiyon grubu; yoksa `group_required` (sessiz yanlış URI DEĞİL).
+            Aktivasyondan ÖNCE metadata `containerRef` == group doğrulanır (uyuşmazlık /
+            ölçülemezlik → `fugr_group_unverified`, oturumdaki push kaydının grubu farklıysa
+            `fugr_group_mismatch`; ikisinde de SAP'ye aktivasyon isteği YOK).
             Aktivasyon include'un kendi ucundan (FUGR iki fazlı yol) yapılır; worklist sondası
             ve `adt_push_source(group=...)` kaydı varsa içerik readback'i bu tipte de koşar.
 
@@ -1685,7 +1689,36 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
         return {"ok": False, "error": "group_required" if "ZORUNLU" in str(ve) else
                 "group_not_applicable", "message": str(ve)}
 
+    # Q383 bug-gate F1: `also` + fugr_include atomik yolu canlıda ÖLÇÜLMEDİ (activate_and_verify
+    # objectReference'ı tipsiz gönderir; grup doğrulaması o yolda yok) ⇒ ölçülene kadar FAIL-CLOSED.
+    if also and any(_fugr_include_mi(t) for t in
+                    [object_type] + [o.get("object_type", "") for o in also]):
+        return {"ok": False, "error": "fugr_include_also_unsupported",
+                "message": "object_type='fugr_include' çoklu (also=) aktivasyonda desteklenmiyor "
+                           "(atomik yol FUGR/I için ölçülmedi). Include'u TEKİL çağır: "
+                           "adt_activate(name=<INCL>, object_type='fugr_include', group=<FG>); "
+                           "diğer objeleri ayrı çağrıda aktive et. SAP'ye istek atılmadı."}
+
     client = _get_client()
+
+    # Q383 bug-gate F1: FUGR/I tekil yolda grup KANITI aktivasyondan ÖNCE (ad öneki kanıt değil —
+    # `LZSD001_FGF01` group='ZSD001' ile de öneki geçer; yanlış grubun iki fazlı aktivasyonu BAŞKA
+    # grubun F/FF inaktiflerini toplar). Uyuşmazlık/ölçülemezlik → SAP'ye aktivasyon isteği YOK.
+    if _fugr_include_mi(object_type):
+        g_norm = (group or "").strip().upper()
+        rec = _LAST_PUSHED.get((name.upper(), _type_key(object_type))) or {}
+        if rec.get("grup") and str(rec["grup"]).strip().upper() != g_norm:
+            return {"ok": False, "error": "fugr_group_mismatch", "activated": False,
+                    "message": f"Bu oturumda {name.upper()} grup {str(rec['grup']).upper()} ile push "
+                               f"edildi; aktivasyon grubu {g_norm}. Aktive EDİLMEDİ."}
+        try:
+            dogrulama = client.fugr_include_grubunu_dogrula(name, g_norm)
+        except Exception as exc:  # noqa: BLE001 — ölçülemedi = fail-closed
+            dogrulama = {"ok": False, "sebep": f"{type(exc).__name__}: {str(exc)[:120]}"}
+        if not dogrulama.get("ok"):
+            return {"ok": False, "error": "fugr_group_unverified", "activated": False,
+                    "message": f"FUGR include grup doğrulaması BAŞARISIZ ({dogrulama.get('sebep')}); "
+                               f"istenen grup {g_norm}. Aktive EDİLMEDİ (SAP'ye aktivasyon isteği yok)."}
 
     # --- ATOMİK ÇOKLU-OBJE AKTİVASYON (also verildiyse) ---
     if also:

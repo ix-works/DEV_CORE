@@ -823,6 +823,36 @@ class SAPClient:
         except Exception as exc:  # noqa: BLE001 — olculemedi, cagiran karar verir
             return None, '', f"{type(exc).__name__}: {str(exc)[:120]}"
 
+    def fugr_include_grubunu_dogrula(self, include_name: str, group: str) -> Dict[str, Any]:
+        """FUGR/I include'u gercekten `group`'a mi ait? (salt-okur metadata GET; Q383).
+
+        Kanit = `functions/groups/<fg>/includes/<incl>` 200 + `adtcore:containerRef` (FUGR/F)
+        adi == grup. Ad oneki (`L<GRUP>`) kanit DEGILDIR: `LZSD001_FGF01` hem `ZSD001_FG` hem
+        `ZSD001` icin onek kuralini gecer. Uyusmazlik / olculemezlik -> ok False (fail-closed);
+        cagiran YAZMAZ ve AKTIVE ETMEZ (yanlis grubun iki fazli aktivasyonu baska grubun
+        inaktif objelerini toplar — bug-gate F1).
+        Returns: {ok, group, konteyner, sebep, object_url}
+        """
+        from object_types import get_fugr_include_url, fugr_include_konteyneri
+        g = (group or '').strip().upper()
+        sonuc: Dict[str, Any] = {'ok': False, 'group': g, 'konteyner': None,
+                                 'sebep': '', 'object_url': ''}
+        try:
+            sonuc['object_url'] = get_fugr_include_url(g, include_name)
+        except ValueError as e:
+            sonuc['sebep'] = str(e)
+            return sonuc
+        kod, govde, hata = self._metadata_getir(sonuc['object_url'])
+        konteyner = fugr_include_konteyneri(govde) if kod == 200 else None
+        sonuc['konteyner'] = konteyner
+        if kod != 200:
+            sonuc['sebep'] = f"metadata GET -> {kod if kod is not None else hata}"
+        elif konteyner != g:
+            sonuc['sebep'] = f"containerRef={konteyner or '(yok/okunamadi)'}"
+        else:
+            sonuc['ok'] = True
+        return sonuc
+
     def push_fugr_include(self, include_name: str, group: str,
                           transport: Optional[str] = None,
                           source_file: Optional[str] = None) -> Dict[str, Any]:
@@ -841,17 +871,24 @@ class SAPClient:
 
         Returns: push_object ile ayni sozlesme + `group`, `object_url`, `readback_md5`.
         """
-        from object_types import get_fugr_include_url, fugr_include_konteyneri
+        from object_types import get_fugr_include_url, fugr_include_ad_alani_hatasi
 
         result: Dict[str, Any] = {
             'success': False, 'error': '', 'error_type': '',
             'source_uploaded': False, 'activated': False, 'lock_released': True,
-            'group': (group or '').upper(), 'include': (include_name or '').upper(),
+            'group': (group or '').strip().upper(), 'include': (include_name or '').strip().upper(),
         }
         try:
             object_url = get_fugr_include_url(group, include_name)
         except ValueError as e:
             result['error'], result['error_type'] = str(e), 'ValueError'
+            return result
+        # ADR 0005-A (MCP guardrail'iyle ayni kural): grup Z/Y + include `L<GRUP>` onekli.
+        # Yalniz bu yol — diger tiplerin CLI davranisi DEGISMEDI.
+        ad_hatasi = fugr_include_ad_alani_hatasi(group, include_name)
+        if ad_hatasi:
+            result['error'], result['error_type'] = ad_hatasi + ". YAZILMADI.", 'GuardrailViolation'
+            print(f"\n[ERROR] {result['error']}")
             return result
         result['object_url'] = object_url
         source_url = object_url + '/source/main'
@@ -880,11 +917,10 @@ class SAPClient:
         kaynak_kimligi_bas(result)
 
         # 0 — grup dogrulamasi (yazmadan ONCE; salt-okur)
-        kod, govde, hata = self._metadata_getir(object_url)
-        konteyner = fugr_include_konteyneri(govde) if kod == 200 else None
-        if kod != 200 or konteyner != result['group']:
-            sebep = (f"metadata GET -> {kod if kod is not None else hata}" if kod != 200
-                     else f"containerRef={konteyner or '(yok/okunamadi)'}")
+        dogrulama = self.fugr_include_grubunu_dogrula(include_name, group)
+        konteyner = dogrulama['konteyner']
+        if not dogrulama['ok']:
+            sebep = dogrulama['sebep']
             result['error'] = (f"FUGR include grup dogrulamasi BASARISIZ ({sebep}); istenen grup "
                                f"{result['group']}. YAZILMADI. Grubu SE80/SE37'den teyit et.")
             result['error_type'] = 'SAPValidationError'
@@ -1060,7 +1096,7 @@ class SAPClient:
                 result['error'] = (
                     f"{object_name.upper()} bir FONKSIYON GRUBU include'udur (SAP contextRef: "
                     f"FUGR/I, grup {_grup}) — `include` (PROG/I) yolundan YAZILAMAZ (kilit 403 "
-                    f"TK/103). Kullan: push_object.py --type fugr-include --group {_grup} "
+                    f"TK/103). Kullan: push_object.py --name {object_name.upper()} --type fugr-include --group {_grup} "
                     f"--source-file <dosya> (MCP: object_type='fugr_include', group='{_grup}'). "
                     f"Grubu teyit et; arac kendiliginden yonlendirmez.")
                 result['error_type'] = 'FugrIncludeTypeError'
@@ -2285,6 +2321,13 @@ class SAPClient:
             object_url = get_fugr_include_url(group, object_name)   # grup yoksa ValueError
             type_desc = 'Function Group Include (FUGR/I)'
             object_name = object_name.upper()
+            # Q383 bug-gate F1: grup KANITI aktivasyondan ONCE (containerRef == group); yanlis
+            # grubun iki fazli aktivasyonu baska grubun inaktiflerini toplar -> fail-closed.
+            dogrulama = self.fugr_include_grubunu_dogrula(object_name, group)
+            if not dogrulama['ok']:
+                print(f"\n[ERROR] FUGR include grup dogrulamasi BASARISIZ ({dogrulama['sebep']}); "
+                      f"istenen grup {dogrulama['group']}. AKTIVE EDILMEDI.")
+                return False
         else:
             object_url = get_object_url(object_name, object_type)
             type_desc = get_type_description(object_type)

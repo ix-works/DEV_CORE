@@ -17,10 +17,13 @@ EKSENLER / VEKTÖRLER
      yalnız yetki mesajında; okunamayan gövde ÖLÇÜLEMEDİ der; 404×3 KONTROL (NO_LOCK_SUPPORT).
   C  SAPClient ①: push_fugr_include kilit/PUT/aktivasyon/readback HEP FUGR/I ucundan; grup
      uyuşmazlığı / metadata 404 → YAZMADAN dur; `include` + FUGR contextRef → kilitten önce red;
-     KONTROL: düz include + L-öneksiz (CMOD tipi) include eski yol.
+     KONTROL: düz include + L-öneksiz (CMOD tipi) include eski yol. Bug-gate (6a8e0c6): grup
+     normalize (C9) · CLI ad alanı ADR 0005-A (C10/C11) · SAPClient.activate_object grup kanıtı (C12).
   D  CLI push_object.py: --group/--source-file zorunluluğu (exit 2) + dağıtım.
   E  MCP atom ③: adt_push_source/adt_activate `group`; group_required; guardrail (grup Z/Y +
      `L<GRUP>` öneki); aktivasyon worklist sondası FUGR/I hedefiyle; içerik readback'i bu tipte koşar.
+     Bug-gate F1: öneki geçen YANLIŞ grup containerRef ile reddedilir (E9), push kaydı grubu (E8),
+     `also` + FUGR/I fail-closed (E10).
 
 SAP: HİÇBİR istek gerçek sisteme gitmez — sahte oturumlar; CLAUDE_PROJECT_DIR + cwd geçici kum.
 
@@ -64,6 +67,8 @@ GRUP = "ZSD001_FG"
 INCL = "LZSD001_FGF01"
 FUGR_URL = "/sap/bc/adt/functions/groups/zsd001_fg/includes/lzsd001_fgf01"
 PROG_URL = "/sap/bc/adt/programs/includes/lzsd001_fgf01"
+# `L<GRUP>` onek kuralini group='ZSD001' ile de gecen YANLIS grup ucu (bug-gate F1)
+YANLIS_URL = "/sap/bc/adt/functions/groups/zsd001/includes/lzsd001_fgf01"
 TR = "<TR_ISTEK>"
 KAYNAK = "*----- olay include'u\nFORM f_ornek.\n  CLEAR sy-subrc.\nENDFORM.\n"
 
@@ -194,7 +199,8 @@ def bolum_b(L):
     ekle("B1 ⭐ 403 TK/103 -> ozet SATIRI T100+metni tasir, yetki (S_DEVELOP) ONERILMEZ, "
          "fugr-include ipucu",
          isinstance(exc, L.SAPLockError) and "TK/103: Nesne adı için sözdizim olanaksız" in ozet
-         and "S_DEVELOP" not in m and "fugr-include" in m, m[:300])
+         and "S_DEVELOP" not in m and "fugr-include" in m
+         and "yetkiden söz etmiyor (yetki deseni eşleşmedi" in m, m[:300])
     ekle("B1c ⭐ CSRF yenilemesi GERCEKTEN kostu (force_refresh) ve yenileme SONRASI 403 TK/103 ozette",
          c.yenileme == [True] and "(CSRF yenileme sonrası) -> 403 [TK/103" in m,
          f"yenileme={c.yenileme} postlar={len(c.session.postlar)} m={m[:200]}")
@@ -370,6 +376,43 @@ def bolum_c(SC):
     ekle("C8 metadata GET istisnasi -> on-kontrol OLCULEMEDI, eski akis (kilit denenir)",
          bool(_tipler(adt, "lock")), f"olaylar={adt.olaylar}")
 
+    # C9..C12 — bug-gate (6a8e0c6) bulgulari
+    adt = _SahteAdt(meta_ok)
+    r, exc = _sessiz(_sapclient(SC, adt).push_fugr_include, INCL, "  " + GRUP.lower() + " ", TR,
+                     _kaynak_dosyasi())
+    r = r or {}
+    ekle("C9 Ö3 bosluklu/kucuk harfli grup normalize edilir -> yaniltici ValidationError YOK",
+         r.get("success") is True and r.get("group") == GRUP,
+         f"r={ {k: r.get(k) for k in ('success', 'group', 'error')} } exc={exc!r}")
+    adt = _SahteAdt(meta_ok)
+    r1, _ = _sessiz(_sapclient(SC, adt).push_fugr_include, "LSD001F01", "SD001", TR, _kaynak_dosyasi())
+    r1 = r1 or {}
+    ekle("C10 ⭐ CLI yolu ADR 0005-A: grup Z/Y degil -> GuardrailViolation, GET/kilit/PUT YOK",
+         r1.get("success") is False and r1.get("error_type") == "GuardrailViolation"
+         and not adt.session.getler and not adt.olaylar,
+         f"r={r1.get('error_type')} get={adt.session.getler}")
+    adt = _SahteAdt(meta_ok)
+    r2, _ = _sessiz(_sapclient(SC, adt).push_fugr_include, "LZSD001_BASKAF01", GRUP, TR,
+                    _kaynak_dosyasi())
+    r2 = r2 or {}
+    ekle("C11 CLI yolu: include 'L<GRUP>' onekli degil -> GuardrailViolation, GET/kilit YOK",
+         r2.get("success") is False and r2.get("error_type") == "GuardrailViolation"
+         and not adt.session.getler and not adt.olaylar,
+         f"r={r2.get('error_type')} get={adt.session.getler}")
+    # SAP grup segmentine hosgorulu olabilir: yanlis grup URL'i de ayni include'un metadatasini
+    # (containerRef = gercek grup) donduruyor gibi kurulur -> KANIT containerRef'tir, 200 degil.
+    adt = _SahteAdt({FUGR_URL: (200, _oku("fugr_include_meta.xml")),
+                     YANLIS_URL: (200, _oku("fugr_include_meta.xml"))})
+    c = _sapclient(SC, adt)
+    yanlis, _ = _sessiz(c.activate_object, INCL, "fugr_include", "ZSD001")
+    yanlis_akt = _tipler(adt, "activate")
+    dogru, _ = _sessiz(c.activate_object, INCL, "fugr_include", GRUP)
+    ekle("C12 ⭐ SAPClient.activate_object: containerRef != group -> False + aktivasyon POST YOK; "
+         "KONTROL dogru grup aktive",
+         yanlis is False and yanlis_akt == [] and dogru is True
+         and _tipler(adt, "activate") == [("activate", INCL, FUGR_URL)],
+         f"yanlis={yanlis} dogru={dogru} olaylar={adt.olaylar}")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # D — CLI push_object.py
@@ -502,6 +545,41 @@ def bolum_e(SC):
          and atom._activation_uri("ZCL_X", "class") == "/sap/bc/adt/oo/classes/zcl_x",
          f"{atom._activation_uri(INCL, 'fugr/i')} {atom._activation_uri(INCL, 'fugr-include', GRUP)}")
 
+    # E8..E10 — bug-gate (6a8e0c6) F1: grup KANITI aktivasyondan once; also + FUGR/I red
+    adt.session.meta[YANLIS_URL] = (200, _oku("fugr_include_meta.xml"))   # SAP hosgorusu
+    anahtar = (INCL, atom._type_key("fugr_include"))
+    eski_kayit = atom._LAST_PUSHED.get(anahtar)
+    atom._LAST_PUSHED[anahtar] = {"grup": "ZSD001_DIGER"}
+    n0 = len(adt.olaylar)
+    r, exc = _sessiz(atom.adt_activate, INCL, "fugr_include", group=GRUP)
+    r = r or {}
+    ekle("E8 push kaydinin grubu farkli -> fugr_group_mismatch, aktivasyon YOK",
+         r.get("ok") is False and r.get("error") == "fugr_group_mismatch"
+         and not [o for o in adt.olaylar[n0:] if o[0] == "activate"], f"r={r} exc={exc!r}")
+    atom._LAST_PUSHED.pop(anahtar, None)
+    n0, g0 = len(adt.olaylar), len(adt.session.getler)
+    r, exc = _sessiz(atom.adt_activate, INCL, "fugr_include", group="ZSD001")
+    r = r or {}
+    ekle("E9 ⭐ adt_activate: onek kuralini gecen YANLIS grup (containerRef != group) -> "
+         "fugr_group_unverified, aktivasyon POST YOK",
+         r.get("ok") is False and r.get("error") == "fugr_group_unverified"
+         and not [o for o in adt.olaylar[n0:] if o[0] == "activate"]
+         and any(u.endswith(YANLIS_URL) for u in adt.session.getler[g0:]),
+         f"r={str(r)[:200]} exc={exc!r} olaylar={adt.olaylar[n0:]}")
+    if eski_kayit is not None:
+        atom._LAST_PUSHED[anahtar] = eski_kayit
+    n0, g0 = len(adt.olaylar), len(adt.session.getler)
+    ra, _ = _sessiz(atom.adt_activate, "ZCL_SD001_ORNEK", "class",
+                    also=[{"name": INCL, "object_type": "fugr_include", "group": GRUP}])
+    rb, _ = _sessiz(atom.adt_activate, INCL, "fugr_include",
+                    also=[{"name": "ZCL_SD001_ORNEK", "object_type": "class"}], group=GRUP)
+    ra, rb = ra or {}, rb or {}
+    ekle("E10 also + fugr_include (oge ya da birincil) -> fugr_include_also_unsupported, SAP istegi YOK",
+         ra.get("error") == "fugr_include_also_unsupported"
+         and rb.get("error") == "fugr_include_also_unsupported"
+         and len(adt.olaylar) == n0 and len(adt.session.getler) == g0,
+         f"ra={str(ra)[:120]} rb={str(rb)[:120]}")
+
 
 def main() -> int:
     import importlib
@@ -534,12 +612,37 @@ MUTASYONLAR = {
                        '    return (f"/sap/bc/adt/functions/groups/{quote(g.lower(), safe=\'\')}"\n'
                        '            f"/includes/{quote(i.lower(), safe=\'\')}")\n',
                        '    return f"/sap/bc/adt/programs/includes/{quote(i.lower(), safe=\'\')}"\n',
-                       # C2/C3 DUSMEZ (olculdu): yanlis URL'de metadata 404 -> fail-closed yine yazmaz
-                       {"A1", "C1", "C1b", "C4", "E1", "E3", "E4", "E7"}),
+                       # E9 URL'i de olcer (yanlis grup ucuna GET). C2/C3 DUSMEZ (olculdu): yanlis URL'de metadata 404 -> fail-closed yine yazmaz
+                       {"A1", "C1", "C1b", "C4", "C9", "C12", "E1", "E3", "E4", "E7", "E9"}),
+    # Paylasilan grup kaniti (push + SAPClient.activate_object + MCP): varsayilan fail-closed
     "--mutasyon-grup-dogrulama": ("scripts/sap_client.py",
-                                  "        if kod != 200 or konteyner != result['group']:\n",
+                                  "        sonuc: Dict[str, Any] = {'ok': False, 'group': g,",
+                                  "        sonuc: Dict[str, Any] = {'ok': True, 'group': g,",
+                                  {"C2", "C3", "C12", "E9"}),
+    "--mutasyon-grup-strip": ("scripts/sap_client.py",
+                              "        g = (group or '').strip().upper()\n",
+                              "        g = (group or '').upper()\n",
+                              {"C9"}),
+    "--mutasyon-cli-ad-alani": ("scripts/sap_client.py",
+                                "        if ad_hatasi:\n",
+                                "        if False:\n",
+                                {"C10", "C11"}),
+    "--mutasyon-istemci-akt-kaniti": ("scripts/sap_client.py",
+                                      "            if not dogrulama['ok']:\n",
+                                      "            if False:\n",
+                                      {"C12"}),
+    "--mutasyon-mcp-grup-kaniti": ("mcp_servers/sap_adt/tools/atom.py",
+                                   "        if not dogrulama.get(\"ok\"):\n",
+                                   "        if False:\n",
+                                   {"E9"}),
+    "--mutasyon-mcp-push-kaydi": ("mcp_servers/sap_adt/tools/atom.py",
+                                  "        if rec.get(\"grup\") and str(rec[\"grup\"]).strip().upper() != g_norm:\n",
                                   "        if False:\n",
-                                  {"C2", "C3"}),
+                                  {"E8"}),
+    "--mutasyon-mcp-also-red": ("mcp_servers/sap_adt/tools/atom.py",
+                                "    if also and any(_fugr_include_mi(t) for t in\n",
+                                "    if False and any(_fugr_include_mi(t) for t in\n",
+                                {"E10"}),
     "--mutasyon-include-red": ("scripts/sap_client.py",
                                "            _grup = include_fugr_baglami(_govde) if _kod == 200 else None\n",
                                "            _grup = None\n",
@@ -588,7 +691,9 @@ MUTASYONLAR = {
 KIPLER = ["--mutasyon-yol", "--mutasyon-grup-dogrulama", "--mutasyon-include-red",
           "--mutasyon-l-onek", "--mutasyon-t100", "--mutasyon-yetki-kosulsuz", "--mutasyon-csrf",
           "--mutasyon-cli-grup", "--mutasyon-mcp-push-yolu", "--mutasyon-mcp-grup-zorunlu",
-          "--mutasyon-mcp-aktivasyon-yolu", "--mutasyon-mcp-readback"]
+          "--mutasyon-mcp-aktivasyon-yolu", "--mutasyon-mcp-readback",
+          "--mutasyon-grup-strip", "--mutasyon-cli-ad-alani", "--mutasyon-istemci-akt-kaniti",
+          "--mutasyon-mcp-grup-kaniti", "--mutasyon-mcp-push-kaydi", "--mutasyon-mcp-also-red"]
 
 
 def _mutasyon(kip) -> int:

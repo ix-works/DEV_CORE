@@ -516,6 +516,27 @@ def fugr_include_konteyneri(metadata_xml):
     return ref['name'].upper() or None
 
 
+def fugr_include_ad_alani_hatasi(group, include_name):
+    """ADR 0005-A, FUGR/I: grup Z/Y olmali VE include `L<GRUP>` onekli olmali -> hata metni | None.
+
+    MCP `_fugr_include_guardrail` ile AYNI kural (CLI `push_fugr_include` yolu bunu kullanir).
+    Grup include adindan TURETILMEZ; yalniz verilen grupla tutarlilik olculur. Grup/include
+    eslesmesinin KANITI bu degil, metadata `containerRef`'idir (bu yalniz ad alani on-elemesi).
+    """
+    import re as _re
+    g = (group or '').strip().upper()
+    i = (include_name or '').strip().upper()
+    if not g:
+        return "fonksiyon grubu adi bos olamaz"
+    if not _re.match(r"^[ZY][A-Z0-9_]*\Z", g):
+        return (f"Standart obje degistirme yasak (ADR 0005-A) — fonksiyon grubu '{g}' Z/Y ile "
+                f"baslamali (customer namespace)")
+    if not i.startswith("L" + g):
+        return (f"FUGR include '{i}' verilen grubun include oneki 'L{g}' ile baslamiyor — "
+                f"grup/include eslesmesi dogrulanamadi (ADR 0005-A)")
+    return None
+
+
 def ensure_source_url(object_url) -> str:
     """Kaynak ucunu garanti et: gerekiyorsa sonuna `/source/main` EKLE.
 

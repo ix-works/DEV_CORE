@@ -505,7 +505,7 @@ def sap_hata_sebebi(govde):
 # `lock_object` tüm stratejileri düşünce özet eskiden `strateji -> 403` idi; gövdedeki T100
 # mesajı ATILIYOR, çare olarak koşulsuz "yetki (S_DEVELOP)" öneriliyordu. Ölçülen vaka: FUGR
 # include'u `programs/includes` (R3TR PROG) yolundan kilitlemek → `403 TK/103 "Nesne adı için
-# sözdizim olanaksız"` — yetki DEĞİL, yanlış obje tipi/URL. Yetki önerisi artık yalnız SAP
+# sözdizim olanaksız"` — yetkiden söz etmiyor, yanlış obje tipi/URL. Yetki önerisi artık yalnız SAP
 # metni gerçekten yetkiden söz ediyorsa basılır; sebep okunamadıysa ÖLÇÜLEMEDİ yazılır.
 _KILIT_YETKI_RE = re.compile(r'yetki|authori[sz]|berechtig|autoris|no authority|not authorized',
                              re.IGNORECASE)
@@ -533,13 +533,13 @@ def kilit_403_onerisi(sebepler):
         return ("SAP 403 mesajı YETKİDEN söz ediyor: yetki (S_DEVELOP) ve transport "
                 "sahipliğini kontrol et")
     if metinler:
-        satir = ("SAP 403 mesajı yetki DEĞİL (" + "; ".join(
+        satir = ("SAP 403 mesajı yetkiden söz etmiyor (yetki deseni eşleşmedi: " + "; ".join(
             f"{sb.get('t100') or sb.get('tip') or 'SAP'}: {sb.get('metin')}" for sb in metinler[:2])
-            + ") — mesajın kendisini izle, yetki varsayma")
+            + ") — mesajın kendisini izle; yetki ne doğrulandı ne dışlandı, varsayma")
         if any((sb.get('t100') or '').upper() == 'TK/103' for sb in metinler):
             satir += ("\n     TK/103 = obje adı bu tip/URL için geçersiz: ör. fonksiyon grubu "
                       "include'u (FUGR/I) `programs/includes` yolundan kilitlenemez — "
-                      "push_object.py --type fugr-include --group <FG>")
+                      "push_object.py --name <INCL> --type fugr-include --group <FG> --source-file <dosya>")
         return satir
     return ("403 gövdesi okunabilir bir SAP mesajı taşımıyordu — sebep ÖLÇÜLEMEDİ; yetki "
             "VARSAYMA, ham yanıtı ADT_SAP_DEBUG=1 ile al")
