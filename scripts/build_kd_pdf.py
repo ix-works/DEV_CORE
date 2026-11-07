@@ -34,6 +34,10 @@ Kritik: markdown KAYNAGI temiz olmali. Orijinal placeholder'lar ``` kod-blogu
 ICINDEYDI (markdown ![](..) orada parse etmez) -> fence BLOGUNUN TAMAMINI resimle
 degistiririz (icine degil). Dairesel callout numaralari (Secenek B) sadelestirilir.
 PDF ayri adim: node scripts/html_to_pdf.js <cikti.html> <cikti.pdf>
+PDF YERLESIMI (Issue #389): gorsel/`pre`/tablo tasmasinin PDF duzeltmesi html_to_pdf.js'tedir
+(yalniz-PDF CSS); asagidaki CSS ekran/uygulama-ici yardim HTML'i icindir, PDF icin buraya kural
+EKLEME (HTML'i degistirir; build_kd_pdf_arguman E1 esdegerligi de bozulur).
+Git Bash: `/` ile baslayan --baslik ("/NS/ZSD001 ...") yol sanilip donusturulur -> `MSYS_NO_PATHCONV=1`.
 """
 import os
 import re

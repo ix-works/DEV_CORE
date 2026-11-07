@@ -3617,3 +3617,19 @@ python tests/fixtures/worktree_yasam_dongusu/run.py --mutasyon   # 29/29 (M24-M2
 - Q349 her yerde ayrı mutasyon (kısa ada dönüş) yalnız kendi vektörünü düşürür: `changelog_amend --mutasyon-kisa-ad` → T1 · `session_start_origin_geriligi --mutasyon-kisa-ad` → S9 · `parity_probe_diff --mutasyon-kisa-ad` → B2 · M29 → V14. Her vektör kurulumun kısa adı GERÇEKTEN gölgelediğini (`golge=True`) ayrıca ölçer.
 - Canlı doğrulama (salt-okur, isteğe bağlı): yeni `team_setup.py` kaynağını `__file__` = canlı `scripts/team_setup.py` ile exec edip `wt_denetim(<DEV_CORE>)` → her provizyonlu worktree'de INFO "provizyon urunu N kayit HARIC" + ③b hasat 0 (provizyon dışı iş yoksa).
 - ⚠ Windows'ta ölçüldü (junction). POSIX symlink kolu CI'da koşar.
+
+## B94 — `html_to_pdf.js` yol kodlaması + dizin listesi + yalnız-PDF yerleşim (DEV_CORE Issue #389, 2026-11-07)
+
+```
+python tests/fixtures/pdf_yerlesim/run.py                 # 18/18 (~2 dk; node + playwright + msedge + markdown + PIL + PyMuPDF)
+python tests/run_battery.py pdf_yerlesim --kardes pdf_sayfa_no_yer_imi build_kd_pdf_arguman b0_secim --precommit
+```
+
+- **Kontrol grubu = `_taban_html_to_pdf.js`** (f646f36 sürümünün birebir kopyası; `git show` sığ klonda yok). Her kusur vektörü önce TABANDA kusurun gerçekten oluştuğunu ölçer (yer gerçeği): `#`'lı klasörde taban PDF'i gövde işaretini taşımaz ve başlığı `Index of` · dizin girdisinde taban rc 0 · geniş görsel / tablo içi kod / uzun sözcük / 695 px `div` / KD üreticisi vektörlerinde taban gövde puntosu < 10,5 · `pre` satırı tabanda eksik. Tutmazsa vektör FAIL (Chromium davranışı değişmiştir; aracın çıktısı tek başına kanıt değil).
+- **Gerçek giriş noktası:** `build_doc_pdf.py`, `build_kd_pdf.py`, `doc_tools.py` + (mutasyonlu olabilen) `html_to_pdf.js` kum `scripts/` dizinine kopyalanır; Y1 `build_doc_pdf.py --pdf` ile komşu js'i kullanır. Y8 eski KD üreticisinin (ayrı CSS) HTML'idir = 3. bağlam.
+- **Kip → düşen:** `url` Y1 + S1 · `dizin` Y2 · `img` Y3 + Y8 · `pre` Y4 + Y8 · `govde` Y6 · `tablo-kod` Y5 (2. kademe devreye girer ⇒ "kod 1, tum hucre 0" bozulur) · `tablo-hucre` Y5b · `tablo-global` Y5k + S2 (reddedilen tasarım: sığan tablonun metni tabandan ayrılır) · `uyari` Y7 · `genislik` Y7b · `kirpik` Y7c.
+- ⛔ **Görsel sığma ölçütü = görsel SAYFA içinde + gövde 10,5 pt; sağ boşluk ölçüt DEĞİL:** PyMuPDF `get_image_info` Skia'nın `box-shadow` bitmap'ini de döndürür; o, görselin ~9 pt dışına taşar (ölçüldü: görsel x1 555,0 · gölge 565,2 · sayfa 595,9) ⇒ "sağ boşluk içinde" ölçütü sahte FAIL verir.
+- ⛔ **Baskı genişliği:** üretici CSS'indeki `@page` 14 mm yan boşluk JS margin'ini (12 mm) ezer ⇒ 182 mm ≈ 688 px (JS margin'le hesap 703 px verir — Y7b'nin 695 px kutusu tam bu aralıktadır ve taban gerçekten küçültür).
+- **Bağımlılık yoksa** Y* `[ATLANDI]` basar (CI kurmuyor); S1-S3 her yerde koşar.
+- **Kardeş `pdf_sayfa_no_yer_imi`:** taban koşumu P1/P3 (bayraksız/bayraklı ↔ taban metin + blok y) yeşil kalmalıdır — o fixture'ın örnek belgesinde taşan öğe yoktur ⇒ yerleşim CSS'i çıktıyı değiştirmez. 31 mutasyon çapasının yeni kaynakta TEK geçtiği statik sayımla doğrulanır (kipleri ~95 dk; bu turda koşulmadı).
+- **KAPSAM DIŞI:** shadow root / iframe içi taşma, sola taşma, koşullu `@page` seçiminin modellenmesi (en büyük yan boşluk alınır), mutlak olmayan birimli `@page` yan boşluğu (sayılır, ölçülmez), mermaid render.

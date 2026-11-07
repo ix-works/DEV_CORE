@@ -10,6 +10,11 @@ Kullanım: python scripts/build_doc_pdf.py <girdi.md> <cikti.html> ["Doküman Ba
   --sayfa-no / --yer-imi (Q366, OPT-IN): html_to_pdf.js'e aynen geçirilir — "Sayfa X / Y"
   altbilgisi + başlıklardan PDF yer imi. Bayraksız PDF eskisiyle aynıdır (eski dokümanın
   yeniden üretiminde kullanma: md5 değişir, check_doc_artifact_md5 işaretler).
+
+PDF YERLEŞİMİ (Issue #389): görsel/`pre`/tablo taşmasının PDF düzeltmesi `html_to_pdf.js`'tedir
+(yalnız-PDF CSS) — aşağıdaki CSS ekran HTML'i içindir; PDF için buraya kural EKLEME.
+⚠ Git Bash'te `/` ile başlayan başlık ("/NS/ZSD001 …") yol sanılıp dönüştürülür
+("C:/Program Files/Git/NS/…"): komutun önüne `MSYS_NO_PATHCONV=1` koy.
 """
 import os
 import re

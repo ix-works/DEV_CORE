@@ -2,8 +2,14 @@
  *   node scripts/html_to_pdf.js <input.html> <output.pdf> [--sayfa-no] [--yer-imi]
  * KD/FS/TS markdown→HTML (build_kd_pdf.py / build_doc_pdf.py) çıktısını şık A4 PDF'e çevirir.
  *
- * OPT-IN BAYRAKLAR (Q366, 2026-10-12) — bayraksız çıktı ESKİSİYLE AYNIDIR (aynı page.pdf
- * seçenekleri; eski dokümanın yeniden üretimi md5 dışında değişmez):
+ * ÇIKIŞ: 0 PDF yazıldı (`PDF OK` yalnız yerleşim temizken; kalan taşma/kırpıkta `PDF UYARILI` + stderr
+ *   `⚠ UYARI YERLESIM`) · 1 hata (ERR) · 2 [KULLANIM] / [DURDU] (dizin listesi açıldı · --sayfa-no eşiği).
+ * ⚠ Git Bash (MSYS): `/` ile başlayan ARGÜMAN (ör. üreticinin başlığı "/NS/ZSD001 …") Windows yolu
+ *   sanılıp dönüştürülür ("C:/Program Files/Git/NS/ZSD001 …"; ölçüldü). Çağrının önüne
+ *   `MSYS_NO_PATHCONV=1` koy (PowerShell/cmd'de gerekmez). Kod bunu düzeltmez — argüman süreçten önce bozulur.
+ *
+ * OPT-IN BAYRAKLAR (Q366, 2026-10-12) — bayraksız page.pdf SEÇENEKLERİ eskisiyle aynıdır; Issue #389'dan
+ * beri bayraktan bağımsız YERLEŞİM düzeltmesi uygulanır (aşağıdaki blok — taşmayan belgede çıktı aynı):
  *   --sayfa-no  her sayfanın alt boşluğuna "Sayfa X / Y" (yalnız METİN; footerTemplate).
  *   --yer-imi   başlık hiyerarşisinden (h1..h6) PDF yer imleri (Playwright `outline`).
  *
@@ -24,9 +30,32 @@
  *    · footerTemplate kendi yazı boyutunu açıkça ister (varsayılan neredeyse görünmez).
  *    · `<thead>` tekrarı bu yolda çalışmaz — altbilgi için kullanılmadı.
  */
+/*
+ * YERLEŞİM DÜZELTMESİ (DEV_CORE Issue #389, 2026-11-07) — HER koşumda, bayraktan bağımsız.
+ * ⚠ Q366'nın "bayraksız çıktı eskisiyle aynı" kuralı DARALDI (kullanıcı onayı): page.pdf SEÇENEK
+ *   NESNESİ hâlâ eskisiyle BİREBİR (S1); ama belge, basılmadan önce yalnız-PDF CSS'i alır. Taşan
+ *   öğesi OLMAYAN belgede çıktı aynıdır (pdf_sayfa_no_yer_imi P1/P3 taban kıyası bunu ölçer);
+ *   taşan öğesi olan belgede çıktı bilinçli olarak DEĞİŞİR.
+ * Ölçülen kusurlar (f646f36): ① yol `"file:///" + IN` ile kuruluyordu ⇒ klasör adındaki `#` URL
+ *   parçası sayılıp yolu kesiyordu; Edge kesik yolun DİZİN LİSTESİNİ basıyordu ve araç `PDF OK`
+ *   diyordu (sessiz). Şimdi `url.pathToFileURL` + açılan sayfa dizin listesiyse exit 2.
+ *   ② `max-width` yalnız `figure img`'deydi: başlık satırı olmayan görsel taşıyordu. ③ geniş `pre`
+ *   (`white-space:pre`) kırpılıyordu (190 karakterin 105'i basıldı). ④ tablo hücresindeki bölünmeyen
+ *   satır içi kod tabloyu sayfadan taşırıyordu. Chromium baskıda sayfadan taşan içerik görünce
+ *   BÜTÜN belgeyi küçültür (ölçüldü: gövde 10,5 pt → 7,0 pt; bir tüketici korpusunda 75 PDF'in
+ *   43'ünde en sık punto < 9,5).
+ * ⛔ CSS YERİ = BURASI, üreticinin CSS'i DEĞİL: `emulateMedia("screen")` ⇒ `@media print` kuralı
+ *   PDF'e HİÇ ulaşmaz; üretici CSS'ine düz kural yazmak ekran HTML'ini (uygulama içi yardım) da
+ *   değiştirirdi. Burada `addStyleTag` iki üreticiyi + diskteki ESKİ HTML'leri tek yerde kapsar.
+ * ⛔ Tabloya `overflow-wrap:anywhere` GLOBAL VERİLMEZ: `anywhere` min-content genişliğini küçültür ⇒
+ *   SIĞAN (genişliği 100 %) tabloların sütun dağılımını da değiştirirdi. Yalnız baskı genişliğinde
+ *   TAŞAN tabloya işaret konur: 1. kademe hücre içi `code`, hâlâ taşıyorsa 2. kademe tüm hücre.
+ *   `body{overflow-wrap:break-word}` min-content'i DEĞİŞTİRMEZ (CSS Text 3) ⇒ global verilebilir.
+ */
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const url = require("url");
 // playwright-core yolunu DİNAMİK çöz (hardcode/username-placeholder YOK).
 // Global npm kurulumundaki @playwright/cli altındaki playwright-core'u ara; bulunamazsa
 // normal modül çözümüne düş (yerel node_modules / NODE_PATH).
@@ -337,12 +366,144 @@ async function basliklariHazirla(page) {
   });
 }
 
+/** Açılan sayfa Chromium'un DİZİN LİSTESİ mi (Issue #389 ①). Ölçüldü (Edge 155): liste sayfası
+ *  `#parentDirLinkBox` + `#tbody` + global `addRow()` taşır; başlık "Index of …" (yerele bağlı olabilir ⇒
+ *  başlık TEK BAŞINA ölçüt değil: "Index of" başlıklı gerçek belge listelenmez). */
+async function dizinListesiMi(page) {
+  return await page.evaluate(() => ({
+    liste: !!document.getElementById("parentDirLinkBox") && !!document.getElementById("tbody") &&
+           typeof window.addRow === "function",
+    baslik: document.title,
+  }));
+}
+
+// Yalnız PDF'e giden CSS (ekran HTML'i değişmez). Belge, daha yüksek özgüllüklü kendi kuralıyla ezebilir
+// (ör. `pre.x{white-space:pre}`); ezilen öğe aşağıdaki YERLESIM ölçümünde kalan taşma olarak sayılır.
+const PDF_CSS =
+  "img{max-width:100%}" +
+  "pre{white-space:pre-wrap;overflow-wrap:anywhere}" +
+  "body{overflow-wrap:break-word}" +
+  "table[data-ix-pdf-sar] :is(td,th) code{overflow-wrap:anywhere}" +
+  "table[data-ix-pdf-sar=\"2\"] :is(td,th){overflow-wrap:anywhere}";
+const SAYFA_GENISLIK_MM = 210;   // format "A4" (preferCSSPageSize verilmez ⇒ CSS `size` geçersiz)
+
+/** Baskı genişliğinde taşan / kırpık öğeleri sayar; `duzelt` ise taşan tablolara kademeli sarma
+ *  işareti koyar. Baskı genişliği = A4 − yan boşluk; yan boşluk = JS margin ile belgedeki HER `@page`
+ *  kuralının (koşullu gruplar dahil, koşulu DEĞERLENDİRİLMEDEN) sol+sağ toplamının EN BÜYÜĞÜ
+ *  (muhafazakâr: dar genişlik ⇒ fazla işaret/uyarı, sessiz taşma değil). Mutlak olmayan birim
+ *  (`em`/`%`) ve okunamayan stil sayfası ölçülmez, sayısı beyanda yazılır. Ölçüm kökün genişliği
+ *  geçici olarak baskı genişliğine çekilerek yapılır (`basliklariHazirla` ile aynı yöntem), sonra
+ *  geri alınır. Taşan = sağ kenarı sınırı aşan, kırpan atası olmayan EN DIŞTAKİ öğe (Chromium
+ *  bunu görünce belgeyi küçültür); kırpık = `overflow-x` görünür değilken içeriği sığmayan öğe
+ *  (baskıda içerik kesilir). TARANMAYAN: shadow root, iframe, sola taşma. */
+async function yerlesimOlc(page, duzelt) {
+  return await page.evaluate(([sayfaMm, jsSol, jsSag, duz]) => {
+    const BIRIM = { mm: 1, cm: 10, in: 25.4, pt: 25.4 / 72, pc: 25.4 / 6, px: 25.4 / 96, q: 0.25 };
+    const mmYap = v => {
+      const m = /^\s*(-?[\d.]+)\s*(mm|cm|in|pt|pc|px|q)\s*$/i.exec(v || "");
+      return m ? parseFloat(m[1]) * BIRIM[m[2].toLowerCase()] : null;
+    };
+    let yan = jsSol + jsSag, yanKaynak = "js-margin", birimsiz = 0, okunamaz = 0;
+    const sayfaKurallari = kurallar => {
+      for (const r of Array.from(kurallar || [])) {
+        if (r.type === 6 /* PAGE_RULE */ && r.style) {
+          const sl = r.style.getPropertyValue("margin-left"), sg = r.style.getPropertyValue("margin-right");
+          if (!sl && !sg) continue;
+          const a = sl ? mmYap(sl) : jsSol, c = sg ? mmYap(sg) : jsSag;
+          if (a === null || c === null) { birimsiz++; continue; }
+          if (a + c > yan) { yan = a + c; yanKaynak = "css-@page" + (r.selectorText ? " " + r.selectorText : ""); }
+        } else if (r.type === 3 /* IMPORT_RULE */) {
+          try { sayfaKurallari(r.styleSheet && r.styleSheet.cssRules); } catch (e) { okunamaz++; }
+        } else if (r.cssRules) {
+          sayfaKurallari(r.cssRules);
+        }
+      }
+    };
+    for (const ss of Array.from(document.styleSheets).concat(Array.from(document.adoptedStyleSheets || []))) {
+      try { sayfaKurallari(ss.cssRules); } catch (e) { okunamaz++; }
+    }
+    const genislikMm = sayfaMm - yan;
+    const W = genislikMm * 96 / 25.4;
+    const kok = document.documentElement, eskiKokGenislik = kok.style.width;
+    kok.style.width = W + "px";
+    const sinir = () => kok.getBoundingClientRect().left + W + 1;
+    const kirpanAta = e => {
+      for (let a = e.parentElement; a && a !== kok; a = a.parentElement) {
+        if (getComputedStyle(a).overflowX !== "visible") return true;
+      }
+      return false;
+    };
+    const ogeler = () => Array.from(document.body ? document.body.querySelectorAll("*") : []);
+    const tasanlar = () => {
+      const L = sinir();
+      return ogeler().filter(e => {
+        const R = e.getBoundingClientRect();
+        if (!(R.right > L) || (R.width === 0 && R.height === 0)) return false;
+        const ust = e.parentElement;
+        if (ust && ust !== document.body && ust.getBoundingClientRect().right > L) return false;   // en dıştaki
+        return !kirpanAta(e);
+      });
+    };
+    const kirpiklar = () => ogeler().filter(e => getComputedStyle(e).overflowX !== "visible" &&
+                                                 e.scrollWidth > e.clientWidth + 1);
+    let kademe1 = 0, kademe2 = 0;
+    if (duz) {
+      for (const t of document.querySelectorAll("table")) {
+        if (t.getBoundingClientRect().right > sinir()) { t.setAttribute("data-ix-pdf-sar", "1"); kademe1++; }
+      }
+      for (const t of document.querySelectorAll('table[data-ix-pdf-sar="1"]')) {
+        if (t.getBoundingClientRect().right > sinir()) { t.setAttribute("data-ix-pdf-sar", "2"); kademe2++; }
+      }
+    }
+    const say = arr => {
+      const m = {};
+      for (const e of arr) { const k = e.tagName.toLowerCase(); m[k] = (m[k] || 0) + 1; }
+      return Object.keys(m).sort().map(k => k + " " + m[k]).join(", ");
+    };
+    const ta = tasanlar(), ki = kirpiklar();
+    kok.style.width = eskiKokGenislik;
+    return { genislikMm, yanKaynak, birimsiz, okunamaz, kademe1, kademe2,
+             tasanN: ta.length, tasan: say(ta), kirpikN: ki.length, kirpik: say(ki) };
+  }, [SAYFA_GENISLIK_MM, 12, 12, !!duzelt]);
+}
+
 (async () => {
-  const fileUrl = "file:///" + IN.split(path.sep).join("/");
+  // ⛔ `url.pathToFileURL`: `#`, `%`, `?`, boşluk ve Türkçe harf kodlanır (Issue #389 ①; eski elle
+  //    birleştirme `#`'tan sonrasını URL parçası sayıyordu).
+  const fileUrl = url.pathToFileURL(IN).href;
   const b = await chromium.launch({ channel: "msedge", headless: true, args: ["--no-sandbox"] });
   const p = await (await b.newContext()).newPage();
   await p.goto(fileUrl, { waitUntil: "networkidle", timeout: 60000 });
   await p.emulateMedia({ media: "screen" });
+  const dz = await dizinListesiMi(p);
+  if (dz.liste) {
+    const acilan = p.url();
+    await b.close();
+    console.error("[DURDU] PDF FAIL: acilan sayfa bir DIZIN LISTESI (baslik: " + JSON.stringify(dz.baslik) +
+                  "), belge degil — girdi yolu bir dizin mi ya da yol URL'e cevrilirken kesildi mi? " +
+                  "Girdi: " + IN + " · acilan: " + acilan);
+    eskiPdfUyar();
+    process.exit(2);
+  }
+  // YERLEŞİM (Issue #389 ②③④): önce ölç, yalnız-PDF CSS'i ekle, taşan tabloları işaretle, yeniden ölç.
+  // --sayfa-no / --yer-imi ölçümlerinden ÖNCE: onlar SON yerleşimi ölçmeli.
+  const yOnce = await yerlesimOlc(p, false);
+  await p.addStyleTag({ content: PDF_CSS });
+  const y = await yerlesimOlc(p, true);
+  console.log("YERLESIM: baski genisligi " + y.genislikMm.toFixed(1) + "mm (" + y.yanKaynak + ")" +
+              " | duzeltme oncesi tasan " + yOnce.tasanN + ", kirpik " + yOnce.kirpikN +
+              " | PDF-CSS: img max-width, pre sarma, uzun sozcuk sarma | tasan tablo sarildi: kod " +
+              y.kademe1 + ", tum hucre " + y.kademe2 +
+              " | kalan tasan " + y.tasanN + (y.tasanN ? " (" + y.tasan + ")" : "") +
+              ", kirpik " + y.kirpikN + (y.kirpikN ? " (" + y.kirpik + ")" : "") +
+              " | olculmeyen @page yan boslugu " + y.birimsiz + ", okunamayan stil sayfasi " + y.okunamaz +
+              " | shadow root/iframe TARANMADI");
+  const yerlesimUyari = y.tasanN + y.kirpikN;
+  if (yerlesimUyari > 0) {
+    console.error("⚠ UYARI YERLESIM: " + y.tasanN + " oge baski genisligini (" + y.genislikMm.toFixed(1) +
+                  "mm) asiyor — Chromium BUTUN belgeyi kucultebilir; " + y.kirpikN +
+                  " oge kirpik (icerigi PDF'te kesilir). Belge kendi CSS'iyle duzeltmeyi eziyor olabilir.");
+  }
   // ⛔ Bayraksız seçenek nesnesi ESKİSİYLE BİREBİR (Q366 zorunlu önlemi: varsayılan çıktı değişmez).
   const opts = { path: OUT, format: "A4", printBackground: true, margin: { top: "14mm", bottom: "16mm", left: "12mm", right: "12mm" } };
   if (BAYRAK.has("--sayfa-no")) {
@@ -417,5 +578,7 @@ async function basliklariHazirla(page) {
       }
     }
   }
-  console.log("PDF OK:", OUT);
+  // `PDF OK` YALNIZ yerleşim temizken (Issue #389): kalan taşma/kırpıkta PDF yazılır ama OK denmez.
+  if (yerlesimUyari > 0) console.log("PDF UYARILI (" + yerlesimUyari + " yerlesim uyarisi, stderr):", OUT);
+  else console.log("PDF OK:", OUT);
 })().catch(e => { console.error("ERR", e); if (!PDF_YAZILDI) eskiPdfUyar(); process.exit(1); });

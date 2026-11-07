@@ -173,6 +173,21 @@ Gerçek (test-ortamı) veri yerine **zengin-mock**: anlamlı örnek isimler (ÖR
   etiketlenir. Bakiye/fiyat function-import → mock'ta boş → enjekte. `node scripts/capture_kd_screens.js http://localhost:PORT`.
 - **`scripts/html_to_pdf.js`** — `build_kd_pdf.py` HTML çıktısını Edge `page.pdf` ile A4 PDF'e çevirir
   (`file://` node-playwright'ta çalışır; MCP'de bloklu). `node scripts/html_to_pdf.js in.html out.pdf`.
+  - **Yerleşim (Issue #389, 2026-11-07):** basmadan önce yalnız-PDF CSS ekler (her `img` en çok
+    sayfa genişliği · `pre` sarılır · uzun sözcük sarılır · baskı genişliğinde TAŞAN tablo kademeli
+    sarılır: önce hücre içi `code`, gerekirse tüm hücre). Sebep: Chromium sayfadan taşan TEK bir öğe
+    görünce **bütün belgeyi küçültür** (ölçüldü: gövde 10,5 → 7,0 pt) ve `pre` sağdan kırpılır.
+    Her koşumda `YERLESIM:` satırı basılır (baskı genişliği · düzeltme öncesi/sonrası taşan ve kırpık
+    öğe sayısı). Düzeltilemeyen taşma kalırsa PDF yine yazılır ama son satır **`PDF UYARILI`**
+    olur + stderr `⚠ UYARI YERLESIM` (rc 0) — `PDF OK` yalnız temiz yerleşimde basılır.
+    Bu kuralları üretici CSS'ine (`build_doc_pdf.py` / `build_kd_pdf.py`) YAZMA: betik ekran
+    medyasıyla basar (`@media print` PDF'e ulaşmaz) ve üretici HTML'i ekranda da yayınlanır.
+  - **Klasör adında `#`/`%`/boşluk:** yol `url.pathToFileURL` ile kodlanır. Açılan sayfa bir dizin
+    listesiyse (eski kusur: `#` URL parçası sayılıp üst klasörün listesi basılıyordu) `[DURDU] PDF FAIL`, exit 2.
+  - ⚠ **Git Bash'te `/` ile başlayan argüman** (ör. başlık `"/NS/ZSD001 Deneme"`) MSYS tarafından
+    yol sanılıp `C:/Program Files/Git/NS/ZSD001 Deneme`'ye çevrilir (ölçüldü) — betik bunu göremez.
+    Çağrının önüne `MSYS_NO_PATHCONV=1` koy: `MSYS_NO_PATHCONV=1 python scripts/build_doc_pdf.py
+    <md> <html> "/NS/ZSD001 Deneme" --pdf`. PowerShell/cmd'de gerekmez.
 - **Tam zincir:** mock başlat → `capture_kd_screens.js` → KD markdown'ı güncelle → `build_kd_pdf.py <md> <html>`
   (mermaid render + HTML; yeni doküman için `build_doc_pdf.py`) → `html_to_pdf.js` (PDF). State enjekte ederken **sayıları tutarlı tut**
   (footer formatter'ı: `pakOnly=qty×pakFactor`, `pakSum=totalPackages` → toplam = Σ uyumlu olmalı).
