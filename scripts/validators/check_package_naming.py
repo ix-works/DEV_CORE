@@ -119,7 +119,9 @@ def validate_classic_include_naming(pkg_dir: Path) -> list[str]:
 # şablonuna "Service Definition" satırı eklenmesi (proje/şablon tarafı). O yapılmadan
 # buraya `*.srvd` EKLEME — PATTERN#14: taban ölçülmeden gate sertleştirilmez.
 FOLDER_FILE_GLOBS = {
-    "cds": ["*.cds", "*.bdef", "*.dcl"],  # .md spec'leri muaf; .srvd için yukarıdaki nota bak
+    # #402 EK-2 kardeşi: `*.asbdef` = abapGit BDEF (`X.bdef.asbdef`); ad "ilk noktaya kadar"
+    # normalizasyonuyla `.bdef` ile AYNI ada iner (aşağıda) ⇒ yeni FP sınıfı açmaz.
+    "cds": ["*.cds", "*.bdef", "*.asbdef", "*.dcl"],  # .md spec'leri muaf; .srvd için yukarıdaki nota bak
     "classes": ["*.abap"],
     "programs": ["*.abap"],
     "structures": ["*.ddls.asddls", "*.abap"],

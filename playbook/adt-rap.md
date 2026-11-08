@@ -514,7 +514,12 @@ tooling blind spot; çözüm script-fallback.
 yakalanır → `check_rap_readonly_consumption.py` eklendi (rap_cds_creation
 chain): (a) `define view entity` (projection değil) gövdesinde join'de
 `ZSD\d{3}_C_` adı = BLOCKER; (b) dosya adı `ZSD\d{3}_C_*` + içerik `as
-projection on` + aynı isimde BDEF yok = BLOCKER.
+projection on` + aynı isimde BDEF yok = BLOCKER. BDEF araması düz `*.bdef`
+ile abapGit `*.bdef.asbdef` dosyalarının İKİSİNE de bakar (#402 EK-2: yalnız
+`*.bdef` aranırken abapGit yerleşimindeki her `_C_` projeksiyonu sahte BLOCKER
+alıyordu). `define view entity` bulunup entity adı çözülemezse (ör.
+namespace'li ad) sonuç "kapsam dışı" DEĞİL **ÖLÇÜLEMEDİ**dir
+(`IX-GATE-STATUS … measured=false`; run_review bunu SKIP = BLOCKER sayar).
 
 ### 32.6l SRVB+publish TAM OTONOM — Eclipse gap KAPANDI (T1/T2 — 2026-05-19, R2)
 

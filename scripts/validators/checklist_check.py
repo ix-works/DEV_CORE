@@ -80,6 +80,9 @@ CHECKLISTLER = {
 }
 sys.path.insert(0, str(SCRIPTS))
 from utils.kaynak_tarama import js_kod  # noqa: E402
+# Nesne adı yakalama + müşteri kararı TEK kaynaktan (DEV_CORE #402 K1, ADR 0005-A A-EK)
+from utils.ad_politikasi import (  # noqa: E402
+    AD_ADAYI, ad_coz, dosya_adindan_ad, musteri_adi_mi)
 
 SONUCLAR = ("PASS", "FAIL", "WARN", "UYGULANMAZ", "ÖLÇÜLEMEDİ", "ELLE")
 KIND_ONEK = {"backend": ("BE",), "frontend": ("FE",), "doc": ("DOC",),
@@ -491,17 +494,33 @@ def E(satir, mesaj) -> Bulgu:
 
 
 # ─────────────────────────────────────────────────────────────────── BACKEND (A) ──
-_NESNE_DOSYA = re.compile(r"^([A-Za-z0-9_/]+?)\.(clas|prog|func|intf|fugr|ccimp|ccau|ccdef|ccmac)\b", re.I)
+# Dosya adının nesne-adı parçası: düz (`zcl_x`), abapGit namespace'li (`#nspc#cl_x`), URL-kodlu
+# (`%23nspc%23cl_x`) ya da AFF (`(nspc)cl_x`) — çözümleme `ad_politikasi.dosya_adindan_ad` (#402).
+_NESNE_DOSYA = re.compile(r"^([^.]+?)\.(clas|prog|func|intf|fugr|ccimp|ccau|ccdef|ccmac)\b", re.I)
 _DB_YAZ_KESIN = [
-    (re.compile(r"\bUPDATE\s+([\w/]+)\s+SET\b", re.I), "UPDATE … SET"),
-    (re.compile(r"\bDELETE\s+FROM\s+([\w/]+)\b", re.I), "DELETE FROM"),
-    (re.compile(r"\bINSERT\s+INTO\s+([\w/]+)\s+VALUES\b", re.I), "INSERT INTO … VALUES"),
+    (re.compile(r"\bUPDATE\s+(" + AD_ADAYI + r")\s+SET\b", re.I), "UPDATE … SET"),
+    (re.compile(r"\bDELETE\s+FROM\s+(" + AD_ADAYI + r")(?![A-Za-z0-9_/])", re.I), "DELETE FROM"),
+    (re.compile(r"\bINSERT\s+INTO\s+(" + AD_ADAYI + r")\s+VALUES\b", re.I), "INSERT INTO … VALUES"),
 ]
 _DB_YAZ_BELIRSIZ = [
-    (re.compile(r"\bMODIFY\s+([\w/]+)\s+FROM\s+(TABLE\s+)?[@\w<]", re.I), "MODIFY … FROM"),
-    (re.compile(r"\bINSERT\s+([\w/]+)\s+FROM\s+(TABLE\s+)?[@\w<]", re.I), "INSERT … FROM"),
-    (re.compile(r"\bDELETE\s+([\w/]+)\s+FROM\s+(TABLE\s+)?[@\w<]", re.I), "DELETE … FROM"),
+    (re.compile(r"\bMODIFY\s+(" + AD_ADAYI + r")\s+FROM\s+(TABLE\s+)?[@\w<]", re.I), "MODIFY … FROM"),
+    (re.compile(r"\bINSERT\s+(" + AD_ADAYI + r")\s+FROM\s+(TABLE\s+)?[@\w<]", re.I), "INSERT … FROM"),
+    (re.compile(r"\bDELETE\s+(" + AD_ADAYI + r")\s+FROM\s+(TABLE\s+)?[@\w<]", re.I), "DELETE … FROM"),
 ]
+# FUGR'nin türetilmiş programları: include `L<grup>…`, ana program `SAPL<grup>`, modül havuzu
+# `SAPM<ad>`; namespace'li biçim `/<NS>/L…`, `/<NS>/SAPL…` zaten namespace ile BAŞLAR.
+_TURETILMIS_ONEK = re.compile(r"^(?:SAPL|SAPM|L)(?=[ZY])", re.I)
+
+
+def _musteri_nesne_adi(ad: str) -> bool:
+    """ADR 0005-A: dosyanın temsil ettiği nesne müşteri ad alanında mı? (`musteri_adi_mi` +
+    FUGR türetilmiş önekleri). Eski `^(?:[ZY/]|L[ZY]|SAPL[ZY]|SAPM[ZY])` HER `/` adını müşteri
+    sayıyordu (bildirilmemiş `/SCWM/…` dosyası sessiz geçiyordu) ve abapGit `#ns#` adını hiç
+    eşleştirmiyordu (#402)."""
+    if musteri_adi_mi(ad):
+        return True
+    m = _TURETILMIS_ONEK.match(ad)
+    return bool(m) and musteri_adi_mi(ad[m.end():])
 _YEREL_AD = re.compile(r"^(?:[lgmcirevp][a-z]?_|[a-z]{1,3}_)", re.I)
 
 
@@ -520,7 +539,12 @@ def k_be01(d: Dosya, c: Baglam):
     out = []
     ad = d.rel.rsplit("/", 1)[-1]
     m = _NESNE_DOSYA.match(ad)
-    if m and not re.match(r"^(?:[ZY/]|L[ZY]|SAPL[ZY]|SAPM[ZY])", m.group(1), re.I):
+    nesne = dosya_adindan_ad(m.group(1)) if m else ""
+    if m and not ad_coz(nesne)[0]:
+        # #402: dosya adı nesne adına çözülemedi (ör. `#ab#x` = 2 karakterli namespace) — standart
+        # mı müşteri mi bilinemez; "temiz" de denmez.
+        out.append(Bulgu("ÖLÇÜLEMEDİ", None, f"dosya adının nesne kısmı ad gramerine uymuyor: `{m.group(1)}`"))
+    elif m and not _musteri_nesne_adi(nesne):
         # Satır None = DOSYA-DÜZEYİ bulgu: ihlal adın kendisidir, bir satır değil → diff kipinde dosyaya dokunan her
         # değişiklik ADR 0005-A ihlalidir, "(önceden var)" WARN'ına İNMEZ. Eskiden `F(1, …)` idi: 1. satır
         # değişmeyince yeni ihlal WARN'a iniyordu (2026-10-18). Maddeyi `tum_dosya` yapmak DB-yazım bulgularının
@@ -532,8 +556,11 @@ def k_be01(d: Dosya, c: Baglam):
     yerel = _yerel_tanimli(a)
 
     def _std(tab: str) -> bool:
+        # Müşteri kararı `musteri_adi_mi` (#402): eski `startswith(("z","y"))` kayıtlı namespace'li
+        # müşteri tablosunu (`/nspc/t01`) STANDART sayıyordu (FP). ⚠ GEVŞETME (A-EK): kayıtlı
+        # namespace'e yazım artık bulgu DEĞİL; bildirilmemiş namespace (`/scwm/…`) standart kalır.
         t = tab.lower()
-        return not (t.startswith(("z", "y", "<", "@")) or _YEREL_AD.match(t) or t in yerel
+        return not (musteri_adi_mi(tab) or t.startswith(("<", "@")) or _YEREL_AD.match(t) or t in yerel
                     or t in ("table", "lines", "adjacent", "from", "into", "value"))
 
     for bas, _son, _l, kl in a.ifadeler():
@@ -579,11 +606,14 @@ def k_be04(d, c):
 @kontrol("be05_ns_dtel_tirnak")
 def k_be05(d, c):
     out = []
-    rx = re.compile(r"\bas\s+'(/\w+/\w+)'", re.I)
+    # #402: ad yakalama `AD_ADAYI` (gevşek) — eski `/\w+/\w+` ile aynı aile; şekli bozuk ad da
+    # tırnaklıysa aynı kusurdur (tırnak sorunu adın geçerliliğinden bağımsız).
+    rx = re.compile(r"\bas\s+'(" + AD_ADAYI + r")'", re.I)
     for no, s in enumerate(d.satirlar, 1):
         kod = s.split("//", 1)[0]
         for m in rx.finditer(kod):
-            out.append(F(no, f"namespaced DTEL tek tırnakta: `'{m.group(1)}'` → tırnaksız küçük harf yaz"))
+            if m.group(1).startswith("/") and m.group(1).count("/") >= 2:
+                out.append(F(no, f"namespaced DTEL tek tırnakta: `'{m.group(1)}'` → tırnaksız küçük harf yaz"))
     return out
 
 
@@ -1004,7 +1034,7 @@ def k_be38(d, c):
 
 @kontrol("be40_tabfn_client")
 def k_be40(d, c):
-    rx = re.compile(r"\b(?:FROM|JOIN)\s+([\w/]+)\s*\(\s*p_client\s*=", re.I)
+    rx = re.compile(r"\b(?:FROM|JOIN)\s+(" + AD_ADAYI + r")\s*\(\s*p_client\s*=", re.I)  # ad: #402
     out = []
     for bas, _s, _l, kl in abap(d).ifadeler():
         for m in rx.finditer(kl):
@@ -1257,6 +1287,7 @@ def k_be57(d, c):
             tipler[m.group(1).lower()] = bool(re.search(r"\bKEY\b", m.group(2), re.I))
     out = []
     for bas, _s, _l, kl in a.ifadeler():
+        # ad-grameri: RETURNING tipi yalnız YEREL `TYPES` haritasıyla (be57 `tipler`) kıyaslanır; DDIC adı haritada yoktur ⇒ dokunulmaz
         for m in re.finditer(r"\bRETURNING\s+VALUE\s*\(\s*\w+\s*\)\s+TYPE\s+(\w+)", kl, re.I):
             t = m.group(1).lower()
             if tipler.get(t) is False:
@@ -1300,7 +1331,7 @@ def _bdef_silme_validasyonlari(bdefler: list) -> dict[str, set[str]]:
         metin = re.sub(r"//[^\n]*|/\*.*?\*/", "", bd.metin, flags=re.S)
         parcalar = re.split(r"(?=\bdefine\s+behavior\s+for\b)", metin, flags=re.I)
         for p in parcalar:
-            mh = re.match(r"\s*define\s+behavior\s+for\s+([\w/]+)(?:\s+alias\s+(\w+))?", p, re.I)
+            mh = re.match(r"\s*define\s+behavior\s+for\s+(" + AD_ADAYI + r")(?:\s+alias\s+(\w+))?", p, re.I)
             if not mh:
                 continue
             adlar = {x.lower() for x in mh.groups() if x}
@@ -1323,7 +1354,9 @@ def k_be60(d, c):
     a = abap(d)
     yontem: dict[str, tuple[str, str]] = {}
     for _b, _s, _l, kl in a.ifadeler():
-        for mm in re.finditer(r"\b(?:METHODS\s*:?\s*|,\s*)(\w+)\s+FOR\s+VALIDATE\s+ON\s+SAVE\b[^,.]*?\bFOR\s+(\w+)~(\w+)", kl, re.I):
+        # entity: alias YA DA tam (namespace'li olabilen) ad — yakalama `AD_ADAYI` (#402)
+        for mm in re.finditer(r"\b(?:METHODS\s*:?\s*|,\s*)(\w+)\s+FOR\s+VALIDATE\s+ON\s+SAVE\b[^,.]*?\bFOR\s+("
+                              + AD_ADAYI + r")~(\w+)", kl, re.I):
             yontem[mm.group(1).lower()] = (mm.group(2).lower(), mm.group(3).lower())
     out = []
     for b, s, ad in a.bloklar("METHOD", "ENDMETHOD"):
@@ -1334,7 +1367,7 @@ def k_be60(d, c):
         for bas, _son, _l, kl in a.ifadeler():
             if not (b < bas < s) or not re.match(r"^\s*READ\s+ENTIT(?:Y|IES)\b", kl, re.I):
                 continue
-            okunan = {x.lower() for x in re.findall(r"\bENTITY\s+(\w+)", kl, re.I)}
+            okunan = {x.lower() for x in re.findall(r"\bENTITY\s+(" + AD_ADAYI + r")", kl, re.I)}
             if not okunan:
                 out.append(W(bas, f"delete tetikli validation `{ent_val[1]}` içinde READ — okunan entity belirlenemedi"))
             elif okunan & hedef:
@@ -1428,6 +1461,7 @@ def k_be85(d, c):
         for m in re.finditer(r"(?:^\s*(?:TYPES|DATA|CLASS-DATA)\s*:?\s*|,\s*)(\w+)\s+TYPE\s+(?:STANDARD\s+)?TABLE\s+OF\s+[^,]*?\bWITH\s+EMPTY\s+KEY\b", kl, re.I):
             (bos_tip if re.match(r"^\s*TYPES\b", kl, re.I) else bos_tab).add(m.group(1).lower())
     for _b, _s, _l, kl in a.ifadeler():
+        # ad-grameri: yerel değişken + tip adı yalnız YEREL `bos_tip` kümesiyle kıyaslanır (DDIC/namespace adı o kümede olamaz)
         for m in re.finditer(r"(?:^\s*(?:DATA|CLASS-DATA)\s*:?\s*|,\s*)(\w+)\s+TYPE\s+(\w+)\s*(?:[,.]|$)", kl, re.I):
             if m.group(2).lower() in bos_tip:
                 bos_tab.add(m.group(1).lower())
@@ -1439,6 +1473,7 @@ def k_be85(d, c):
         m = re.match(r"^\s*SORT\s+([\w\-]+)\s*(.*)$", kl, re.I | re.S)
         if m and m.group(1).lower().split("-")[-1] in bos_tab and not re.search(r"\bBY\b", m.group(2), re.I):
             out.append(F(bas, f"EMPTY KEY tablo `{m.group(1)}` BY'sız SORT → sessizce sıralanmaz"))
+        # ad-grameri: DELETE ADJACENT DUPLICATES hedefi iç tablodur (yerel değişken), DB nesnesi değil
         m = re.match(r"^\s*DELETE\s+ADJACENT\s+DUPLICATES\s+FROM\s+([\w\-]+)\s*(.*)$", kl, re.I | re.S)
         if m and m.group(1).lower().split("-")[-1] in bos_tab and not re.search(r"\bCOMPARING\b", m.group(2), re.I):
             out.append(F(bas, f"EMPTY KEY tablo `{m.group(1)}` COMPARING'siz DELETE ADJACENT DUPLICATES → hiçbir şey silinmez"))

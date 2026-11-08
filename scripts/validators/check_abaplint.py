@@ -27,6 +27,9 @@ verdict verebiliyordu (bkz SUMMARY_RE bloğu). `exit 0` + "SKIP" metni = ölçü
 import argparse, json, re, subprocess, sys, tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from utils.ad_politikasi import AD_ADAYI, ad_coz  # noqa: E402 — TEK ad grameri (#402 K1)
+
 if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
@@ -110,15 +113,24 @@ def durum_beyani(status: str, measured: bool, reason: str) -> None:
           f'measured={"true" if measured else "false"} reason={reason}')
 
 
+def _lint_dosya_adi(aday: str, yedek: str) -> str:
+    """Geçici lint dosyasının ad parçası. Ad yakalama `ad_politikasi` gramerinden (#402 K1);
+    namespace'li / şekli bozuk ad için YEDEK ad kullanılır — dosya adında `/` olamaz ve yazma
+    yönü (`dosya_adi`, abapGit `#ns#`) #397 Parti 2b'nindir. Lint içeriği addan bağımsızdır
+    (ölçüldü 2026-11-08: NS'li `.clas.abap` yedek adla lint'lendi, bozuk içerik 2 bulgu verdi)."""
+    ad = ad_coz(aday)[0]
+    return ad.lower() if ad and not ad.startswith('/') else yedek
+
+
 def detect(name: str, text: str):
     """(suffix, objname) veya (None, None) -> desteklenmiyor."""
     low = name.lower()
-    if low.endswith('.clas.abap') or re.search(r'\bclass\s+\w+\s+definition', text, re.I):
-        m = re.search(r'\bclass\s+(\w+)\s+definition', text, re.I)
-        return '.clas.abap', (m.group(1).lower() if m else 'zcl_lint_probe')
-    if low.endswith('.prog.abap') or re.search(r'^\s*report\s+\w+', text, re.I | re.M):
-        m = re.search(r'^\s*report\s+(\w+)', text, re.I | re.M)
-        return '.prog.abap', (m.group(1).lower() if m else 'zlint_probe')
+    m = re.search(r'\bclass\s+(' + AD_ADAYI + r')\s+definition', text, re.I)
+    if low.endswith('.clas.abap') or m:
+        return '.clas.abap', (_lint_dosya_adi(m.group(1), 'zcl_lint_probe') if m else 'zcl_lint_probe')
+    m = re.search(r'^\s*report\s+(' + AD_ADAYI + r')', text, re.I | re.M)
+    if low.endswith('.prog.abap') or m:
+        return '.prog.abap', (_lint_dosya_adi(m.group(1), 'zlint_probe') if m else 'zlint_probe')
     return None, None
 
 

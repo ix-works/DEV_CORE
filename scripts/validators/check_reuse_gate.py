@@ -20,6 +20,10 @@ Kullanım:
     python scripts/validators/check_reuse_gate.py <artifact_path>
 
 Exit: 0 temiz / 0 (WARNING stdout) — bu validator BLOCKER üretmez.
+      0 + `IX-GATE-STATUS … measured=false reason=ad-cozulemedi` — `define view entity`
+      VAR ama entity adı katı ad gramerine uymadı (DEV_CORE #402 K2; ör. `/AB/X`, `/NSPC X`):
+      ÖLÇÜLEMEDİ, "kapsam dışı" DEĞİL. run_review bu satırı SKIP (WARNING şiddetiyle) sayar.
+      Namespace'li ad (`/NSPC/…`) `ad_politikasi` gramerince AYRIŞTIRILIR ve denetlenir (#402 K1).
 """
 # ENFORCES: DE-REUSE-02  (ADR 0019 coverage binding)
 import argparse
@@ -30,14 +34,22 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[1]))
 from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+from utils.ad_politikasi import AD_ADAYI, ad_coz  # noqa: E402  — tek ad grameri (#402)
+_pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parent))
+from _gate_status import gate_status  # noqa: E402  — IX-GATE-STATUS üretici ucu (#402 K2)
 
 if sys.platform == 'win32':
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
+# Ad yakalama `ad_politikasi.AD_ADAYI` (gevşek: `/` ile başlayan her belirteç) + `ad_coz` (katı
+# gramer) — validator kendi ad desenini YAZMAZ (#402; geri dönüş koruması validator_ad_grameri).
 ENTITY_RE = re.compile(
-    r'\bdefine\s+(?:root\s+)?view\s+entity\s+(\w+)', re.IGNORECASE)
+    r'\bdefine\s+(?:root\s+)?view\s+entity\s+(' + AD_ADAYI + r')', re.IGNORECASE)
+# Tür anahtar sözcüğü (adsız): ENTITY_RE eşleşmeyip bu eşleşirse ad ÇÖZÜLEMEMİŞTİR (#402 K2).
+ENTITY_KW_RE = re.compile(r'\bdefine\s+(?:root\s+)?view\s+entity\b', re.IGNORECASE)
+_GATE = Path(__file__).stem
 # Ortak generic master objeler (ADR 0009 — local kopya yaratma, expose+assoc kullan)
 GENERIC_MASTERS = (
     'ZSD000_I_BPNAME', 'ZSD000_I_VKORGVH', 'ZSD000_I_SHIPTYPEVH',
@@ -68,7 +80,9 @@ def _inventory(repo: Path, exclude: Path) -> dict[str, Path]:
             except OSError:
                 continue
             for m in ENTITY_RE.finditer(txt):
-                inv.setdefault(m.group(1).upper(), f)
+                ad, _neden = ad_coz(m.group(1))
+                if ad:      # şekli bozuk ad envantere girmez (yeni nesnenin adı ayrıca denetlenir)
+                    inv.setdefault(ad.upper(), f)
     return inv
 
 
@@ -86,10 +100,20 @@ def main() -> int:
 
     text = path.read_text(encoding='utf-8', errors='replace')
     m = ENTITY_RE.search(text)
-    if not m:
+    ad, _neden = ad_coz(m.group(1)) if m else ('', None)
+    if not ad:
+        if ENTITY_KW_RE.search(text):
+            # DEV_CORE #402 (K2): tür anahtar sözcüğü VAR ama ad çözülemedi (ör. namespace'li
+            # `/NSPC/...` — `\w` `/` eşlemez). Eski hâl "view entity değil, kapsam dışı"
+            # diyordu: kontrol koşmadığı hâlde sonuç temiz görünüyordu. ÖLÇÜLEMEDİ = rc 0 +
+            # `measured=false` (`_gate_status` sözleşmesi; tüketici run_review SKIP sayar).
+            print(f'ÖLÇÜLEMEDİ — {path.name} `define view entity` içeriyor ama entity adı '
+                  f'çözülemedi → reuse-gate KOŞMADI; "temiz" anlamına GELMEZ.')
+            gate_status(_GATE, 'SKIPPED', False, 'ad-cozulemedi')
+            return 0
         print(f'OK — {path.name} view entity değil, reuse-gate kapsamı dışı')
         return 0
-    new_name = m.group(1).upper()
+    new_name = ad.upper()
 
     repo = _repo_root(path)
     inv = _inventory(repo, exclude=path)

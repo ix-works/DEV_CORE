@@ -44,8 +44,14 @@ if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
 # repo kökü: scripts/validators/ -> ../../
 DATA_PATH = Path(__file__).resolve().parents[2] / 'governance' / 'reference' / 'released_successors.json'
 
-# FROM / JOIN <name> — CDS ve ABAP SQL (case-insensitive)
-REF_RE = re.compile(r'\b(?:from|join)\s+([a-zA-Z_]\w*)', re.IGNORECASE)
+# FROM / JOIN <name> — CDS ve ABAP SQL (case-insensitive). Ad yakalama `ad_politikasi`
+# gramerinden (#402 K1): eski `[a-zA-Z_]\w*` namespace'li adı (`/SCWM/…`) hiç yakalamıyordu.
+# Şekli bozuk `/…` belirteci ÖLÇÜLEMEDİ DEĞİLDİR: harita anahtarlarının hepsi katı gramere uyan
+# standart adlardır (ölçüldü 2026-11-08: 261 anahtar, 0 namespace'li) ⇒ bozuk ad haritada
+# OLAMAZ, "eşleşme yok" hükmü doğrudur.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from utils.ad_politikasi import AD_ADAYI  # noqa: E402 — TEK ad grameri
+REF_RE = re.compile(r'\b(?:from|join)\s+(' + AD_ADAYI + r')', re.IGNORECASE)
 
 
 def load_map() -> dict:

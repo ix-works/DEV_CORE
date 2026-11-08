@@ -121,9 +121,12 @@ kontrol("P1 bilinen dosya → yalnız ilgili fixture'lar (indeks kapsamı + sır
 
 # ⚠ SAYI HARİTAYA PİNLİ: 2026-10-18 ortak checklist programı bu validator'ın iç adını
 #   (`tara`) çağırıyor → `O:checklist_check` eklendi (2 → 3). HARİTA ile birlikte güncellenir.
+#   2026-11-08 DEV_CORE #402: `validator_ad_deseni` (B1 `*.asbdef` yürüyüş/süzgeç) + her validator'ı
+#   AST'le tarayan `validator_ad_grameri` (`scripts/validators/*.py` satırı) → 3 → 5.
 secim, _ = sec("scripts/validators/check_bdef_backtick.py")
 kontrol("P1b bölüm-1 validator → kendi bad/good çifti + K1 payda korpusu + checklist programı",
-        secim == {"V:check_bdef_backtick", "O:validator_kapsam_paydasi", "O:checklist_check"},
+        secim == {"V:check_bdef_backtick", "O:validator_kapsam_paydasi", "O:checklist_check",
+                  "O:validator_ad_deseni", "O:validator_ad_grameri"},
         f"alınan={secim}")
 
 # P2: BİRLEŞİM — iki dosya verildiğinde kümeler toplanır (biri diğerini yutmaz).
@@ -132,15 +135,16 @@ kontrol("P1b bölüm-1 validator → kendi bad/good çifti + K1 payda korpusu + 
 #   Sayıyı gevşetmek (`>=` / alt-küme) çapayı öldürür; HARİTA ile BU SATIR birlikte
 #   güncellenir. 2026-10-18: ortak checklist programı `_T1_PATTERNS`/`_T4_*` kullanıyor →
 #   `O:checklist_check` (8 → 9). 2026-11-02 (Q386): XML yorum maskesi korpusu
-#   `O:ui5_xml_yorumu` (9 → 10).
+#   `O:ui5_xml_yorumu` (9 → 10). 2026-11-08 (#402): her validator `O:validator_ad_grameri`
+#   AST korumasına girer (10 → 11).
 secim, _ = sec("scripts/build_core_index.py",
                "scripts/validators/check_ui5_freestyle_traps.py")
-kontrol("P2 çok dosya → BİRLEŞİM (10 birim)",
+kontrol("P2 çok dosya → BİRLEŞİM (11 birim)",
         secim == {"O:core_index_kapsam", "O:core_index_siralama",
                   "O:sap_gate_skip_sozlesmesi", "O:team_setup_sablon_sapmasi",
                   "O:ui5_t1_tirnak_sinifi", "O:ui5_blok_yorumu", "O:ui5_xml_yorumu",
                   "V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi",
-                  "O:checklist_check"},
+                  "O:checklist_check", "O:validator_ad_grameri"},
         f"alınan={secim}")
 
 # P3: bir dosya birden çok fixture'ı besliyorsa hepsi seçilir (tek-fixture varsayımı

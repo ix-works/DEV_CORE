@@ -73,7 +73,11 @@ def get_pkg_prefix(pkg_name: str) -> str:
 # regex'lerden birine uyar. Ad kuralı burada YAZILMAZ — `check_package_naming.parse_rules_md`
 # yeniden kullanılır (tek kaynak). `.rules.md` yok / tablo boş / regex derlenmiyor ⇒ kabul YOK
 # (fail-closed, bugünkü davranış). Z paketlerinde bu dal hiç çalışmaz (davranış DEĞİŞMEDİ).
-_NS_RE = re.compile(r"^#[A-Z0-9_]+#")
+# Namespace gövdesi TEK gramerden (`ad_politikasi.NS_GOVDE`, 3-8 karakter — DEV_CORE #402). Eski
+# `[A-Z0-9_]+` uzunluk sınırsızdı; gramer dışı `#AB#X` paketi artık namespace'li SAYILMAZ ⇒
+# namespace kabul dalına girmez, önek kuralına düşer (fail-closed yön, ⚠ SIKILAŞTIRMA).
+from utils.ad_politikasi import NS_GOVDE  # noqa: E402
+_NS_RE = re.compile(r"^#" + NS_GOVDE + r"#")
 
 
 def paket_namespace(pkg_name: str) -> str | None:
