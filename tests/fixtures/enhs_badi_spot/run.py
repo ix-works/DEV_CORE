@@ -705,8 +705,13 @@ def bolum_t(L, P):
          and s.unlock_var(), (exc, w))
     s = Sunucu({SPOT: _belge()})
     w, exc, _ = _sessiz(_istemci(L, s).write_enhancement_spot, SPOT, _model(L, _belge()), TR, taban=None)
-    ekle("L9 lib taban verilmedi -> hata taban_yok, SIFIR istek",
-         exc is None and w and str(w.get("hata")).startswith("taban_yok") and not s.istekler, (exc, w))
+    s2 = Sunucu({SPOT: _belge()})  # sekli eksik taban ('spot' anahtari yok): kilitten sonra KeyError sizmamali
+    w2, exc2, _ = _sessiz(_istemci(L, s2).write_enhancement_spot, SPOT, _model(L, _belge()), TR,
+                          taban={"tanimlar": []})
+    ekle("L9 lib taban verilmedi ya da sekli eksik -> hata taban_yok, SIFIR istek",
+         exc is None and w and str(w.get("hata")).startswith("taban_yok") and not s.istekler
+         and exc2 is None and w2 and str(w2.get("hata")).startswith("taban_yok") and not s2.istekler,
+         (exc, w, exc2, w2))
     # --cwd: ad denetimi hedef projenin customer_namespaces'ini okur (sira)
     b = tempfile.mkdtemp(prefix="enhs_badi_b_")
     Path(b, ".conn_adt").write_bytes(b"ADT_SAP_URL=https://sahte-b.invalid\nADT_SAP_CLIENT=000\n")
@@ -861,7 +866,7 @@ MUTASYONLAR = {
     "--mutasyon-put-istisna-genis": (
         _LIB, "            except Exception as exc:  # noqa: BLE001 — PUT istisnasi raporlanir, sizmaz\n",
         "            except requests.RequestException as exc:\n", {"L8"}),
-    "--mutasyon-taban-zorunlu": (_LIB, "        if not isinstance(taban, dict) or 'tanimlar' not in taban:\n",
+    "--mutasyon-taban-zorunlu": (_LIB, "        if not isinstance(taban, dict) or 'tanimlar' not in taban or 'spot' not in taban:\n",
                                  "        if False:\n", {"L9"}),
     "--mutasyon-cwd-sirasi": (_CLI, "    if a.cwd:\n        # Ad denetimi hedef projenin",
                               "    if False:\n        # Ad denetimi hedef projenin", {"CW1", "CW2"}),

@@ -8607,7 +8607,7 @@ constants:
         if not transport:
             sonuc['hata'] = 'transport_yok'
             return sonuc
-        if not isinstance(taban, dict) or 'tanimlar' not in taban:
+        if not isinstance(taban, dict) or 'tanimlar' not in taban or 'spot' not in taban:
             sonuc['hata'] = 'taban_yok: cagiranin okudugu belge modeli zorunlu'
             return sonuc
         hatalar = enhs_ad_denetimi(spot, [t.get('name') for t in model.get('tanimlar') or []],

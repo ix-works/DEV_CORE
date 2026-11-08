@@ -1867,7 +1867,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # sayisi check_ui5_freestyle_traps icin pinli (10; Q386 ile 9->10) — baglanti istenirse ikisi birlikte guncellenir.
     ("playbook/templates/ui5-freestyle/**", ("O:ui5_freestyle_sablon",),
      "freestyle UI5 sablonu: ortak govde + surum parcalari + backend referansi"),
-    # 2026-11-08 DEV_CORE #413 — AYRI satirlar; sap_adt_lib birlesimi 29→30 ⇒ `b0_secim` P3
+    # 2026-11-08 DEV_CORE #413 — AYRI satirlar; sap_adt_lib birlesimi 32→33 (main #412 sonrasi) ⇒ `b0_secim` P3
     # pinli sayisi BIRLIKTE guncellendi.
     ("scripts/sap_adt_lib.py", ("O:enhs_badi_spot",),
      "enhs_* yardimcilari + get/create/write/activate_enhancement_spot + activate_object object_type"),
