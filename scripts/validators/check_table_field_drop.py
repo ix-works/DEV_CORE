@@ -37,6 +37,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _gate_status import gate_status, sap_baglanti_yok  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from utils.ad_politikasi import AD_ADAYI, ad_coz  # noqa: E402 — TEK ad grameri (#402 K1)
 
 _GATE = Path(__file__).stem
 
@@ -46,19 +48,30 @@ if sys.platform == 'win32':
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 # 'key fieldname : dtel ...;' veya 'fieldname : dtel ...;'
+# Tablo/alan/DTEL adları `ad_politikasi` gramerinden (#402 K1). Eski `[a-z][a-z0-9_]*` iki kör
+# nokta üretiyordu: ① namespace'li tablo "define table yok, kapsam dışı" (measured=TRUE!) ·
+# ② namespace'li ALAN (`/nspc/fld : …`) haritaya girmiyordu ⇒ canlıdaki o alanın DROP'u GÖRÜNMEZDİ.
 FIELD_RE = re.compile(
-    r'^\s*(?:key\s+)?([a-z][a-z0-9_]*)\s*:\s*([a-z][a-z0-9_/]*)',
+    r'^\s*(?:key\s+)?(' + AD_ADAYI + r')\s*:\s*(' + AD_ADAYI + r')',
     re.IGNORECASE | re.MULTILINE)
-TABLE_NAME_RE = re.compile(r'define\s+table\s+([a-z][a-z0-9_]*)', re.IGNORECASE)
+# `define table function` bir DDLS'tir (TABL değil) — `function` tablo adı sanılmasın (kardeş:
+# check_sap_active_version 2026-07-30 vakası).
+TABLE_NAME_RE = re.compile(r'define\s+table\s+(?!function\b)(' + AD_ADAYI + r')', re.IGNORECASE)
+TABLE_KW_RE = re.compile(r'define\s+table\s+(?!function\b)', re.IGNORECASE)
 # Alan satırı OLMAYAN anahtar kelimeler (yanlış yakalamayı önle)
 _NON_FIELD = {'define', 'table', 'with', 'include'}
 
 
+def cozulemeyen_alanlar(text: str) -> list[str]:
+    """Alan konumunda olup katı ad gramerine UYMAYAN adlar (`/ab/x : …`)."""
+    return [fld for fld, _ in FIELD_RE.findall(text) if not ad_coz(fld)[0]]
+
+
 def parse_fields(text: str) -> dict:
-    """source metninden {field_lower: dtel_lower} haritası."""
+    """source metninden {field_lower: dtel_lower} haritası (gramere uymayan alan hariç)."""
     out = {}
     for fld, dtel in FIELD_RE.findall(text):
-        if fld.lower() in _NON_FIELD:
+        if fld.lower() in _NON_FIELD or not ad_coz(fld)[0]:
             continue
         out[fld.lower()] = dtel.lower()
     return out
@@ -81,11 +94,24 @@ def main() -> int:
 
     new_text = path.read_text(encoding='utf-8', errors='replace')
     m = TABLE_NAME_RE.search(new_text)
-    if not m:
+    table = ad_coz(m.group(1))[0] if m else ''
+    if not table and TABLE_KW_RE.search(new_text):
+        # #402 K2: `define table` VAR ama ad katı gramere uymadı (ör. `/AB/T`) ⇒ ÖLÇÜLEMEDİ.
+        # Eski hâl "kapsam dışı" + measured=TRUE idi: DROP-guard koşmadan "ölçtüm, temiz".
+        print(f'ÖLÇÜLEMEDİ — {path.name} `define table` içeriyor ama tablo adı çözülemedi '
+              f'→ DROP-guard KOŞMADI')
+        gate_status(_GATE, 'SKIPPED', False, 'ad-cozulemedi')
+        return 0
+    if not table:
         print(f'OK — {path.name} bir DDIC tablo tanımı değil (define table yok), kapsam dışı')
         gate_status(_GATE, 'OK', True, 'kapsam-disi-tablo-degil')
         return 0
-    table = m.group(1)
+    bozuk = cozulemeyen_alanlar(new_text)
+    if bozuk:
+        print(f'ÖLÇÜLEMEDİ — {path.name}: alan adı çözülemedi {bozuk[:5]} → DROP kıyası eksik '
+              f'olurdu, KOŞMADI')
+        gate_status(_GATE, 'SKIPPED', False, 'ad-cozulemedi')
+        return 0
     new_fields = parse_fields(new_text)
     if not new_fields:
         print(f'OK — {path.name} alan çıkarılamadı, kapsam dışı')
@@ -121,6 +147,11 @@ def main() -> int:
         gate_status(_GATE, 'SKIPPED', False, f'sap-get-http-{r.status_code}')
         return 0
 
+    if cozulemeyen_alanlar(r.text):
+        print(f'UYARI: canlı {table.upper()} source\'unda alan adı çözülemedi '
+              f'{cozulemeyen_alanlar(r.text)[:5]} → DROP kıyası eksik olurdu, atlandı', file=sys.stderr)
+        gate_status(_GATE, 'SKIPPED', False, 'ad-cozulemedi')
+        return 0
     live_fields = parse_fields(r.text)
     if not live_fields:
         print(f'UYARI: canlı {table.upper()} source\'undan alan çıkarılamadı, atlandı',

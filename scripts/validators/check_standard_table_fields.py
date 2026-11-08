@@ -26,6 +26,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _gate_status import gate_status, sap_baglanti_yok  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from utils.ad_politikasi import AD_ADAYI, ad_coz, musteri_karari  # noqa: E402 — TEK ad grameri (#402 K1)
 
 _GATE = Path(__file__).stem
 
@@ -35,8 +37,12 @@ if sys.platform == 'win32':
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 # Z olmayan tabloları yakalayan regex (CDS'te `tablename.fieldname` pattern'i)
+# Tablo ve alan adları `ad_politikasi` gramerinden (#402 K1): eski `[a-z][a-z0-9_]{0,15}` /
+# `[a-z][a-z0-9_]+` namespace'li tabloyu (`/scwm/ordim_o.lgnum`) ve alanı (`mara./abc/fld`) hiç
+# yakalamıyordu. Eski desenin dışladığı iki şekil aşağıda AÇIKÇA süzülür (`_` başlangıçlı
+# association · rakamla başlayan belirteç) — davranış değişmez.
 TABLE_FIELD_PATTERN = re.compile(
-    r'\b([a-z][a-z0-9_]{0,15})\.([a-z][a-z0-9_]+)\b',
+    r'(?<![A-Za-z0-9_/$])(' + AD_ADAYI + r')\.(' + AD_ADAYI + r')(?![A-Za-z0-9_/])',
     re.IGNORECASE
 )
 
@@ -45,7 +51,7 @@ TABLE_FIELD_PATTERN = re.compile(
 # sanıp gerçek tabloyu (VFKP) kontrol etmiyordu → ZSD001_I_FREIGHT_COST'ta false-positive
 # BLOCKER. Artık alias gerçek tabloya çözülür; namespaced (/ITTR/) tablo da desteklenir.
 ALIAS_PATTERN = re.compile(
-    r'\b(?:from|join)\s+(/?[a-z][a-z0-9_/]*)\s+as\s+([a-z][a-z0-9_]*)',
+    r'\b(?:from|join)\s+(' + AD_ADAYI + r')\s+as\s+([a-z][a-z0-9_]*)',   # alias = yerel ad
     re.IGNORECASE
 )
 
@@ -54,7 +60,7 @@ SKIP_TABLE_PREFIXES = ('z', '$session', 'reqd_', 'confd_', 'projection', 'abap')
 
 
 FIELD_LINE = re.compile(
-    r'^\s*(?:key\s+)?([a-z][a-z0-9_]*)\s*:\s*[a-z][a-z0-9_]*', re.MULTILINE | re.IGNORECASE)
+    r'^\s*(?:key\s+)?(' + AD_ADAYI + r')\s*:\s*' + AD_ADAYI, re.MULTILINE | re.IGNORECASE)
 
 # INCLUDE ÜÇ biçimde gelir (canlı ölçüm 2026-07-30 + 2026-08-29):
 #   `include emara`                          ← çıplak (noktalı virgül bile olmayabilir)
@@ -90,7 +96,7 @@ FIELD_LINE = re.compile(
 #   ek-metnini genel tutar (başka ek gelirse de yakalanır) ama iddia yalnız `not null`
 #   için ölçülmüştür — "her DDL eki desteklenir" DENMEZ.
 INCLUDE_LINE = re.compile(
-    r'^\s*(?:[a-z][a-z0-9_]*\s*:\s*)?include\s+(/?[a-z][a-z0-9_/]{2,})'
+    r'^\s*(?:[a-z][a-z0-9_]*\s*:\s*)?include\s+((?=[a-z/][a-z0-9_/]{2})' + AD_ADAYI + r')'
     r'(?:\s*;?\s*$'                          # (a) ek YOK: `include emara` / `include x;`
     r'|(?:\s+[a-z][a-z0-9_]*)+\s*;\s*$)',    # (b) DDL kısıt-eki VAR → `;` ZORUNLU
     re.MULTILINE | re.IGNORECASE)
@@ -182,12 +188,27 @@ def main() -> int:
 
     # Z olmayanları filtrele
     candidates = {}  # table → set of fields
+    # #402: namespace'li / şekli bozuk ad SESSİZCE atlanmaz — ölçülmeyen adlar sayılır ve
+    # sonuç "doğrulandı" yerine ÖLÇÜLEMEDİ olur (run_review şiddeti WARNING).
+    olculemeyen: dict[str, str] = {}
     for table, field in pairs:
         tbl = alias_map.get(table.lower(), table.lower())  # alias → gerçek tablo
+        # Eski `[a-z]…` deseninin dışladığı şekiller: association (`_x.alan`) ve rakamla başlayan
+        # belirteç (`1.5`) tablo değildir.
+        if tbl[:1] == '_' or tbl[:1].isdigit():
+            continue
+        if not ad_coz(tbl)[0] or not ad_coz(field)[0]:
+            if tbl.startswith('/') or field.startswith('/'):
+                olculemeyen[f'{tbl}.{field}'] = 'ad-cozulemedi'
+            continue
         if tbl.startswith(SKIP_TABLE_PREFIXES):
             continue
-        # Namespaced add-on tablosu (/ITTR/ vb.) — ADT source endpoint güvenilir değil, skip
+        # Namespace'li tablo: müşterinin (kayıtlı namespace) ise Z gibi atlanır. Değilse (SAP /
+        # add-on, ör. /SCWM/) ADT source ucunun güvenilirliği ÖLÇÜLMEDİ (eski not: "güvenilir
+        # değil") ⇒ sorgulanmaz ama SESSİZ "OK" da verilmez: ÖLÇÜLEMEDİ.
         if tbl.startswith('/'):
+            if musteri_karari(tbl) != 'musteri':
+                olculemeyen[f'{tbl}.{field}'] = 'namespace-kayitsiz'
             continue
         # Çözülemeyen kısa token (1-2 char alias) — skip
         if len(tbl) <= 2:
@@ -200,7 +221,13 @@ def main() -> int:
             continue
         candidates.setdefault(tbl, set()).add(field.lower())
 
+    if olculemeyen:
+        print(f'[ÖLÇÜLEMEDİ] {len(olculemeyen)} referans denetlenmedi: '
+              + ', '.join(f'{k} ({v})' for k, v in sorted(olculemeyen.items())[:8]))
     if not candidates:
+        if olculemeyen:
+            gate_status(_GATE, 'SKIPPED', False, sorted(olculemeyen.values())[0])
+            return 0
         print(f'OK — {path.name} standart tablo referansı yok')
         gate_status(_GATE, 'OK', True, 'kapsam-disi-std-tablo-yok')
         return 0
@@ -256,6 +283,9 @@ def main() -> int:
         # BİLEREK measured=true bırakıldı — o dal zaten stdout'a [DOĞRULANAMADI] basıyor
         # ve sıklığı canlı SAP olmadan ÖLÇÜLEMEDİ. Kanıtsız sıkılaştırma yapılmadı;
         # ayrı kalem olarak raporlandı (B3-01 AÇIK-NOKTA).
+        if olculemeyen:     # #402: namespace'li / bozuk ad hiç SORGULANMADI (include eksiğinden ayrı)
+            gate_status(_GATE, 'SKIPPED', False, sorted(olculemeyen.values())[0])
+            return 0
         gate_status(_GATE, 'OK', True, 'dogrulandi')
         return 0
 

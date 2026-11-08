@@ -535,7 +535,7 @@ MUTASYONLAR: dict[str, tuple[Path, str, str, tuple[str, ...]]] = {
         ("R7", "R7c", "Y3", "Y3k")),
     "--mutasyon-bos-parca": (
         VAL_REL,
-        "                    if not _TANIMLAYICI_RE.fullmatch(ref_tablo) or not _TANIMLAYICI_RE.fullmatch(ref_field):\n",
+        "                    if not ad_gecerli_mi(ref_tablo) or not ad_gecerli_mi(ref_field):\n",
         "                    if False:\n",
         ("Q1", "Y2")),
     "--mutasyon-blok-yorum": (

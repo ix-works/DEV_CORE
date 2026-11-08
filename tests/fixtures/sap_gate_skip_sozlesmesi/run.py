@@ -300,7 +300,7 @@ def sandbox(tmp: Path, validator: str, taban: bool = False,
             # sorulur (404 => sahte BLOCKER) ya da `HATA: --name ... gerekli` rc=1.
             s = hedef.read_text(encoding="utf-8")
             yeni = s.replace(
-                "        if not name and (not n2 or not _MUSTERI_AD_RE.match(n2)):\n",
+                "        if not name and karar != 'musteri':\n",
                 "        if False:  # MUTASYON: ad-guvenilirlik dali sokuldu\n")
             _yama_tuttu(s, yeni, "ad-guvenilmez", hedef)
             hedef.write_text(yeni, encoding="utf-8", newline="")
@@ -314,13 +314,13 @@ def sandbox(tmp: Path, validator: str, taban: bool = False,
                 "        out.append('' if (s.startswith('//') or s.startswith('--')) else line)\n",
                 "        out.append(line)\n")
             yeni = yeni.replace(
-                "        if not name and (not n2 or not _MUSTERI_AD_RE.match(n2)):\n",
+                "        if not name and karar != 'musteri':\n",
                 "        if False:  # MUTASYON: ad-guvenilirlik dali sokuldu\n")
             _yama_tuttu(s, yeni, "q240-taban", hedef)
             # Uc yamanin UCU DE tutmali: biri sessizce NO-OP'a donerse "kirmizi ayak"
             # aslinda yarim olur ve dusen vektor sayisi YANLIS okunur.
             for _capa in ("_BLOK_YORUM_RE.sub", "s.startswith('//')",
-                          "_MUSTERI_AD_RE.match"):
+                          "karar != 'musteri'"):
                 if _capa in yeni:
                     raise SystemExit(
                         f"YAMA TUTMADI: --mutasyon-q240-taban sonrasi `{_capa}` HALA "

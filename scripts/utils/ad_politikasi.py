@@ -22,8 +22,8 @@ KARAR (`musteri_adi_mi`)
 
 YAPILANDIRMA (`namespace_yapilandirmasi`) — FAIL-CLOSED
   · anahtar yok / boş liste / project.yaml okunamıyor ⇒ () ⇒ bugünkü Z/Y davranışı BİREBİR.
-  · değer liste değil · bir öğe ASCII `^/[A-Z0-9_]{1,8}/\\Z` değil (eğik çizgiler dahil ≤10;
-    `/_/` gibi harfsiz/rakamsız öğe de RED) · anahtar project.yaml'da BİRDEN ÇOK kez yazılı
+  · değer liste değil · bir öğe ASCII `^/[A-Z0-9_]{3,8}/\\Z` değil (eğik çizgiler dahil 5-10;
+    `/___/` gibi harfsiz/rakamsız öğe de RED; #402 öncesi `{1,8}` idi) · anahtar project.yaml'da BİRDEN ÇOK kez yazılı
     ⇒ HATA listesi döner ve TÜM liste devre dışı kalır (kısmen geçerli liste yarı açık
     kapı demektir). Hata sessiz düşmez: `red_gerekcesi` metnine girer.
   · HANGİ project.yaml (bug-gate F2, 2026-11-08): sürecin ÇÖZDÜĞÜ `.conn_adt`'nin dizinindeki.
@@ -86,8 +86,14 @@ ANAHTAR = "customer_namespaces"
 
 _ZY = re.compile(r"^[ZY][A-Z0-9_]*\Z", re.IGNORECASE)
 _KILIT_ZY = re.compile(r"^E[ZY][A-Z0-9_]*\Z", re.IGNORECASE)
-_NS_BICIM = re.compile(r"^/(?=[A-Z0-9_]*[A-Z0-9])[A-Z0-9_]{1,8}/\Z")  # `/_/` RED: en az bir harf/rakam
-_AD_NS = re.compile(r"^(/[A-Za-z0-9_]{1,8}/)")
+# Namespace gövdesi — TEK sabit (DEV_CORE #402): yapılandırma (`_NS_BICIM`), ad içinden ayırma
+# (`_AD_NS`) ve metinden yakalama (`AD_DESENI`) hepsi buradan türer. İç kısım 3-8 karakter: SAP
+# (namespace `/` dahil 5-10) · abaplint `{3,8}` · DEV `TRNSPACE` ölçümü 2026-11-08 (1-2 karakterli 0
+# satır). ⚠ SIKILAŞTIRMA (#402): önceki `{1,8}` 2 karakterli `/AB/`'yi kabul ediyordu; artık
+# `customer_namespaces` öğesi olarak GEÇERSİZ ⇒ tüm liste kapalı + görünür hata (mevcut fail-closed).
+NS_GOVDE = r"[A-Za-z0-9_]{3,8}"
+_NS_BICIM = re.compile(r"^/(?=[A-Z0-9_]*[A-Z0-9])" + NS_GOVDE + r"/\Z")  # `/___/` RED: en az bir harf/rakam
+_AD_NS = re.compile(r"^(/" + NS_GOVDE + r"/)")
 KILIT_TIPLERI = frozenset({"enqu", "lock", "lockobject", "lockobjects"})
 
 
@@ -181,7 +187,7 @@ def namespace_yapilandirmasi(root=None) -> tuple[tuple[str, ...], list[str]]:
         s = str(oge).upper()
         if not str(oge).isascii() or not _NS_BICIM.match(s):
             hatalar.append(f"{ANAHTAR} öğesi geçersiz: {oge!r} (beklenen biçim /<NS>/, "
-                           f"A-Z 0-9 _, en çok 8 karakter)")
+                           f"A-Z 0-9 _, 3-8 karakter)")
         elif s not in gecerli:
             gecerli.append(s)
     if hatalar:
@@ -234,6 +240,74 @@ def red_gerekcesi(ad: str, *, root=None) -> str:
         return (f" · namespace {ns} projede {ANAHTAR} ile müşteri namespace'i olarak "
                 f"bildirilmemiş (SAP namespace'leri standarttır)")
     return f" · {ns} kayıtlı, ama namespace'ten sonraki ad geçersiz (A-Z 0-9 _, boş olamaz)"
+
+
+# ── KAYNAK METİNDE AD YAKALAMA — TEK AD GRAMERİ (DEV_CORE #402) ──────────────────────────────
+# NEDEN: validator'lar nesne adını kaynak metinden kendi desenleriyle (`(\w+)`, `[a-z][a-z0-9_]*`,
+# `Z[A-Z]{2,4}\d{3}_C_\w+` …) yakalıyordu. `\w` `/` eşlemediği için namespace'li ad
+# (`/NSPC/SD001_I_X`) hiç yakalanmıyor, kontrol KOŞMADAN "kapsam dışı / OK" dönüyordu (#402).
+# Gramer burada TEK yerde yaşar; validator kendi ad desenini YAZMAZ (geri dönüş koruması:
+# `tests/fixtures/validator_ad_grameri`).
+#
+# İKİ KATMAN (abapGit `zcl_abapgit_sap_namespace` + abaplint `allowed_object_naming` deseni):
+#  · `AD_ADAYI`  — GEVŞEK yakalama: `/` ile başlayan HER belirteci tutar ki şekli bozuk
+#                  namespace denemesi sessizce düşmesin (abapGit: başı `/` olup eşleşmeyen ad = HATA).
+#  · `AD_DESENI` — KATI geçerlilik: `(?:/<3-8>/)?<gövde>`, A-Z 0-9 _ (ASCII). Dayanak: abaplint
+#                  `{3,8}` · SAP OSPO "3 to 8" · DEV `TRNSPACE` ölçümü (2026-11-08): iç kısmı 1-2
+#                  karakterli namespace 0 satır.
+#  `ad_coz(aday)` ikisini birleştirir: katıya uyan ad döner, uymayan → ('', 'ad-cozulemedi')
+#  ⇒ çağıran IX-GATE-STATUS `measured=false reason=ad-cozulemedi` basar (ÖLÇÜLEMEDİ, "OK" DEĞİL).
+#  Yakalama ≠ karar: "müşterinin mi" kararı `musteri_karari` / `musteri_adi_mi`'dedir.
+#  Namespace gövdesi `NS_GOVDE` yapılandırma katmanıyla ORTAKTIR (tek gramer).
+AD_DESENI = r"(?a:(?:/" + NS_GOVDE + r"/)?[A-Za-z0-9_]+)"
+_AD_DURAK = r"\s{}\[\]();,.:'\"<>=|`\-"
+AD_ADAYI = r"(?a:/[^" + _AD_DURAK + r"]*|[A-Za-z0-9_]+)"
+_AD_TAM = re.compile(r"\A" + AD_DESENI + r"\Z", re.IGNORECASE)
+_AD_SINIR_ONCE = r"(?<![A-Za-z0-9_/])"
+_AD_SINIR_SONRA = r"(?![A-Za-z0-9_/])"
+
+
+def ad_gecerli_mi(ad) -> bool:
+    """Ad katı gramere TAM uyuyor mu (`/NSPC/X` · `ZSD001_X`; `/AB/X` · `/NSPC/` · `` → False)."""
+    return bool(ad) and _AD_TAM.match(str(ad)) is not None
+
+
+def ad_coz(aday) -> tuple[str, str | None]:
+    """(ad, None) ya da ('', 'ad-cozulemedi'). Harf DEĞİŞTİRİLMEZ (çağıran karar verir)."""
+    a = "" if aday is None else str(aday)
+    return (a, None) if ad_gecerli_mi(a) else ("", "ad-cozulemedi")
+
+
+def ad_gecis_deseni(ad: str) -> str:
+    """Metinde `ad`ın TAM geçişini arayan desen. `\\b` namespace'li adda `/` önünde tutmaz;
+    sınır `[A-Za-z0-9_/]` dışıdır (`ZSD001_X` `ZSD001_X_Y` içinde bulunmaz)."""
+    return _AD_SINIR_ONCE + re.escape(ad) + _AD_SINIR_SONRA
+
+
+def musteri_karari(ad, object_type: str | None = None, *, namespaces=None, root=None) -> str:
+    """'musteri' · 'standart' · 'namespace-kayitsiz' · 'ad-cozulemedi'.
+
+    'namespace-kayitsiz' = ad katı gramere uyan namespace'li ad ama namespace projede
+    `customer_namespaces` ile bildirilmemiş (ya da yapılandırma hatalı ⇒ liste kapalı):
+    müşterinin bildirmediği kendi namespace'i mi, SAP'nin mi — buradan BİLİNEMEZ.
+    """
+    a = "" if ad is None else str(ad)
+    if not ad_gecerli_mi(a):
+        return "ad-cozulemedi"
+    if musteri_adi_mi(a, object_type, namespaces=namespaces, root=root):
+        return "musteri"
+    return "namespace-kayitsiz" if a.startswith("/") else "standart"
+
+
+def dosya_adindan_ad(parca) -> str:
+    """Yerel dosya adının nesne-adı parçası → SAP adı (OKUMA yönü; #397 Parti 2b'nin yazma yarısı
+    `dosya_adi` burada YOK). abapGit `#ns#x` · URL-kodlu `%23ns%23x` · AFF `(ns)x` → `/NS/X`;
+    namespace'siz ad büyük harfe çevrilir. Biçim doğrulaması YAPMAZ (`ad_coz`'a ver)."""
+    s = _unquote(str(parca or ""))
+    m = re.match(r"^#([^#]*)#(.*)\Z", s, re.S) or re.match(r"^\(([^()]*)\)(.*)\Z", s, re.S)
+    if m:
+        s = "/" + m.group(1) + "/" + m.group(2)
+    return s.upper()
 
 
 def fugr_include_oneki(grup: str) -> str:

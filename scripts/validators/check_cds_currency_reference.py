@@ -39,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from utils.ddic_semantics import (  # noqa: E402
     CURR_DTELS, QUAN_DTELS, CUKY_DTELS,
 )
+from utils.ad_politikasi import AD_ADAYI, AD_DESENI, ad_gecerli_mi  # noqa: E402 — TEK ad grameri (#402)
 
 
 def yorumu_kirp(line: str) -> str:
@@ -158,19 +159,11 @@ def parse_source(text: str, src_type: str) -> dict:
     fields = []  # [(line_no, name, dtel, annotations_before)]
     pending_annotations = []
 
-    if src_type == 'cds':
-        # CDS: 'alias_or_field : type' veya 'sourcefield as alias'
-        field_pattern = re.compile(
-            r'^\s*(?:key\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\s+as\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[,]?\s*$'
-            r'|^\s*(?:key\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*[,]?\s*$',
-            re.MULTILINE
-        )
-    else:  # table
-        # Table: 'field_name : dtel;'
-        field_pattern = re.compile(
-            r'^\s*(?:key\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:not\s+null)?\s*;\s*$',
-            re.MULTILINE
-        )
+    # Table: 'field_name : dtel;' — alan ve DTEL adı `ad_politikasi` gramerinden (#402 K1: eski
+    # `[a-zA-Z_][a-zA-Z0-9_]*` namespace'li alanı / DTEL'i (`/nspc/rate : netwr;`) hiç kaydetmiyordu
+    # ⇒ o alanın annotation denetimi sessizce düşüyordu). Şekli bozuk ad `cozulemeyen_alanlar`'da.
+    # (CDS yolunda alan çıkarılmaz — eski CDS deseni ÖLÜ KODDU: döngü yalnız tabloyu işler.)
+    field_pattern = _TABLO_ALAN_RE
 
     annotation_pattern = re.compile(r'^\s*@(\S+)\s*:\s*(.+?)\s*$')
 
@@ -185,6 +178,8 @@ def parse_source(text: str, src_type: str) -> dict:
 
         if src_type == 'table':
             field_m = field_pattern.match(line)
+            if field_m and not (ad_gecerli_mi(field_m.group(1)) and ad_gecerli_mi(field_m.group(2))):
+                field_m = None      # şekli bozuk ad: kaydedilmez, `cozulemeyen_alanlar` ölçer
             if field_m:
                 fields.append({
                     'line': i,
@@ -200,13 +195,27 @@ def parse_source(text: str, src_type: str) -> dict:
     return fields
 
 
+# Nesne / alan adları `ad_politikasi` gramerinden (DEV_CORE #402 K1) — bu dosya kendi ad desenini
+# YAZMAZ. Qualified başvurunun parçaları `ad_gecerli_mi` ile doğrulanır (boş dize geçersiz ⇒
+# eski `not ref_tablo` denetimini de kapsar; Y2 `'tablo..alan'`).
 _KAYNAK_ADI_RE = re.compile(
-    r'^\s*define\s+(table|structure|type)\s+([A-Za-z_/][A-Za-z0-9_/]*)', re.IGNORECASE)
-# Qualified başvurunun parçaları için tanımlayıcı (`_KAYNAK_ADI_RE` ad kümesiyle aynı; boş dize
-# eşleşmez ⇒ eski `not ref_tablo` denetimini de kapsar). Harf duyarsız: harf normalizasyonu ayrı değişmezdir.
-_TANIMLAYICI_RE = re.compile(r'[a-z_/][a-z0-9_/]*', re.IGNORECASE)
+    r'^\s*define\s+(table|structure|type)\s+(' + AD_ADAYI + r')', re.IGNORECASE)
 _YERLESIK_CUKY_RE = re.compile(
-    r'^\s*(?:key\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*:\s*abap\.cuky\b', re.IGNORECASE)
+    r'^\s*(?:key\s+)?(' + AD_ADAYI + r')\s*:\s*abap\.cuky\b', re.IGNORECASE)
+_TABLO_ALAN_RE = re.compile(
+    r'^\s*(?:key\s+)?(' + AD_ADAYI + r')\s*:\s*(' + AD_ADAYI + r')\s*(?:not\s+null)?\s*;\s*$',
+    re.MULTILINE)
+
+
+def cozulemeyen_alanlar(text: str) -> list[str]:
+    """Tablo/yapı alan konumunda katı gramere UYMAYAN adlar (`/ab/x : netwr;`) — bunlar
+    kaydedilmediği için denetim eksik kalırdı ⇒ çağıran ÖLÇÜLEMEDİ (exit 2) verir."""
+    out = []
+    for s in blok_yorumu_maskele(text).splitlines():
+        m = _TABLO_ALAN_RE.match(yorumu_kirp(s))
+        if m:
+            out += [x for x in m.groups() if not ad_gecerli_mi(x)]
+    return out
 
 
 def blok_yorumu_maskele(text: str) -> str:
@@ -266,7 +275,8 @@ def kaynak_kimligi(text: str) -> tuple[str | None, str | None]:
         m = _KAYNAK_ADI_RE.match(yorumu_kirp(raw_line))
         if m:
             tur = 'table' if m.group(1).lower() == 'table' else 'structure'
-            return tur, m.group(2).lower()
+            # Şekli bozuk ad ⇒ ad None (tablo kısmı karşılaştırılmaz, alan bu kaynakta aranır)
+            return tur, (m.group(2).lower() if ad_gecerli_mi(m.group(2)) else None)
     return None, None
 
 
@@ -341,7 +351,7 @@ def check_table(text: str) -> list[dict]:
     satirlar = [yorumu_kirp(s) for s in blok_yorumu_maskele(text).splitlines()]
     for i, s in enumerate(satirlar):
         m = _YERLESIK_CUKY_RE.match(s)
-        if m:
+        if m and ad_gecerli_mi(m.group(1)):
             ad = m.group(1).lower()
             kayit = {'name': ad, 'dtel': 'abap.cuky', 'line': i + 1,
                      'annotations': _ustteki_annotasyonlar(satirlar, i)}
@@ -383,9 +393,9 @@ def check_table(text: str) -> list[dict]:
                     ref_field = ref_field.strip().lower()
                     # DEV_CORE #402 Y2: `'tablo..waers'` → rpartition tablo kısmını `'tablo.'`
                     # verir ve "başka tablo" INFO'suyla denetimden kaçardı (ölçüldü f15becb,
-                    # rc 0). Her iki parça TANIMLAYICI olmalı (`_KAYNAK_ADI_RE` ad sözlüğü);
+                    # rc 0). Her iki parça katı ad gramerine uymalı (`ad_politikasi.ad_gecerli_mi`);
                     # değilse boş parçayla AYNI hüküm: qualified değil (C-TBL-CUR-03).
-                    if not _TANIMLAYICI_RE.fullmatch(ref_tablo) or not _TANIMLAYICI_RE.fullmatch(ref_field):
+                    if not ad_gecerli_mi(ref_tablo) or not ad_gecerli_mi(ref_field):
                         # Boş tablo ya da alan kısmı (`'.yok'`, `'tab.'`): qualified DEĞİL
                         # (bug-gate F3 — eskiden boş ad "başka tablo" sayılıp atlanıyordu).
                         violations.append({
@@ -505,7 +515,9 @@ _CAST_QUAN = re.compile(r"abap\.quan\s*\(", re.I)
 # `x as Y` · `tbl.x as Y` · `cast( … ) as Y` — son `as <alias>` ayrımı
 _ELEMAN = re.compile(r"^\s*(?:key\s+)?(?P<ifade>.+?)\s+as\s+(?P<alias>\w+)\s*,?\s*$", re.I)
 # Yalnız SADE alan referansı (ifade DEĞİL): sözlük eşlemesi yalnız burada güvenli
-_SADE_ALAN = re.compile(r"^(?:(\w+)\.)?(\w+)$")
+# Kaynak (tablo/alias) ve alan adı `ad_politikasi` gramerinden (#402 K1): eski `(\w+)\.` namespace'li
+# kaynağı (`/nspc/t.netwr as X`) "sade alan değil" sayıp sözlük eşlemesini sessizce atlıyordu.
+_SADE_ALAN = re.compile(r"^(?:(" + AD_DESENI + r")\.)?(" + AD_DESENI + r")$")
 # Eleman OLMAYAN ama `as` içerebilen yapısal satırlar — bunlar bekleyen annotation
 # bloğunu SIFIRLAMAZ (ör. `as select from`, association tanımları)
 _YAPISAL = ("{", "}", "define", "as select", "association", "left outer",
@@ -828,6 +840,14 @@ def main() -> int:
         src_type = tespit
 
     if src_type == 'table':
+        bozuk = cozulemeyen_alanlar(text)
+        if bozuk:
+            # #402 K2: alan/DTEL konumunda katı ad gramerine uymayan ad (`/ab/x`) — o alan
+            # kaydedilmez, denetim eksik kalırdı ⇒ "temiz" değil ÖLÇÜLEMEDİ (exit 2 sözleşmesi).
+            print(f'ÖLÇÜLEMEDİ: {path.name} alan/DTEL adı çözülemedi {bozuk[:5]} — CURR/QUAN '
+                  f'denetimi eksik kalırdı, KOŞMADI (ad grameri: scripts/utils/ad_politikasi.py).',
+                  file=sys.stderr)
+            return 2
         violations = check_table(text)
     else:
         violations = check_cds(text)
