@@ -649,7 +649,9 @@ def main(argv: list[str] | None = None) -> int:
           "ici ayiricilar (kaba bolme) · settings.local.json ve kullanici seviyesi ask "
           "kurallari · TaskStop sonrasi reddin kaynagi (kullanici reddiyle ayni kayit) · "
           "sira: yalniz ayni message.id'deki onceki kardes sayilir (kardes sonucu kayitta "
-          "yoksa gorulmez) · 180 sn otomatik arka plana alma (surume bagli): uzun timeout'lu "
+          "yoksa gorulmez) · paralel (salt-okur) kardes: onceki kardes kosarken sonrakinin "
+          "sirada oldugu varsayilir; paralel kosan kardes onay bekliyorsa onceki bitene kadar "
+          "gorulmez · 180 sn otomatik arka plana alma (surume bagli): uzun timeout'lu "
           "komutun onay beklemesi limit + 1 dk dolana kadar gorulmez · BASH_DEFAULT_TIMEOUT_MS / "
           "BASH_MAX_TIMEOUT_MS ortam degiskenleri okunmaz (varsayilan limit sabit 2 dk)",
           flush=True)

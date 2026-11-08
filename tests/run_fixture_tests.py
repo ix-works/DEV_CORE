@@ -688,7 +688,7 @@ OZEL_TESTLER = [
      "tekrarlamaz (grep uyari korlugu); 2026-11-08 izin kanali: on plan Bash/PS yas >= "
      "limit + 1 dk -> IZIN-BEKLIYOR, >= mudahale esigi -> MUDAHALE-ZAMANI, ask kurali "
      "eslesmesi, cagri basina bir kez; ayni message.id'de sirada bekleyen cagri izin "
-     "sayilmaz (bug-gate #403) — 63 vektor + 23 mutasyon"),
+     "sayilmaz, onceki kardes bekliyorsa o cagri izin alir (bug-gate #403) — 65 vektor + 24 mutasyon"),
     # 2026-11-08: izin/onay olaylari gun-sonu gozlemi — GOZLEMCI, kapi DEGIL.
     ("izin_bekleme_taramasi",
      "izin_bekleme_taramasi: oturum kayitlarindan onay olaylari IKI KATMANLA (metin imzasi + "
@@ -696,7 +696,7 @@ OZEL_TESTLER = [
      "Bash/PS bosluk > komut limiti + 1 dk; sahte olay (is_error yok / arac kostu / api-request-blob "
      "kopyasi / OS Permission denied / komut zaman asimi) · sessiz kacis (SINIFLANMADI dusurulmez) · "
      "sessiz temiz (kok-yok/kapsam-sifir -> OLCULEMEDI + exit 2) civilenir; sira beklemesi onceki "
-     "kardesin sonucundan, config kabulu GEC-OTOKABUL (bug-gate #403) — 52 vektor + 23 mutasyon"),
+     "kardesin sonucundan, config kabulu GEC-OTOKABUL, user_permanent GEC-ONAY kalir (bug-gate #403) — 53 vektor + 24 mutasyon"),
     # 2026-09-25 (DEV_CORE Issue #302): get_object_revisions sinif/include/arayuzde surum
     # gecmisini okuyamiyor (obje GET 406, atom: onekli GORELI baglanti) ve her hatayi [] yapiyordu.
     ("revizyon_okuma",

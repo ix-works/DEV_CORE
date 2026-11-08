@@ -85,6 +85,9 @@ SENARYOLAR (S1-S16)
   S35c 1. kardes 4 dk once bitti, 2. cagri hala sonucsuz -> IZIN-BEKLIYOR VAR (4 dk; kuyruk
       kurali gercek bekleyisi gizlemez — kontrol grubu; tek uzun cagri kontrolu = S24)
   S35d farkli message.id'deki onceki sonucsuz cagri kuyruk SAYILMAZ -> IZIN VAR
+  S36 ⭐ KORUMA YONU (bug-gate-2 #403 F1a): ayni mesajda 1. Bash 5 dk sonucsuz (onay bekliyor),
+      2. Bash sirada -> 1. cagri IZIN-BEKLIYOR ALIR (kuyruk yalniz ONCEKI kardeslerden kurulur)
+  S36b ayni dosyada 2. cagri SESSIZ + dosyada en az bir olay var (bos-temiz korumasi)
 
 KOSUM:
     python tests/fixtures/agent_stall_watch/run.py
@@ -101,7 +104,7 @@ KOSUM:
     ... --mutasyon-tz          (tz'siz damga UTC'ye cevrilmez    -> S23/S23b)
     ... --mutasyon-izin / -izin-limit / -izin-arkaplan / -izin-arac / -izin-tekil /
         -mudahale / -ask / -ask-olculemedi / -izin-taban / -izin-kuyruk /
-        -izin-kuyruk-yas / -izin-kuyruk-mesaj   (kume: BEKLENEN_DUSUS)
+        -izin-kuyruk-yas / -izin-kuyruk-mesaj / -izin-kuyruk-yon   (kume: BEKLENEN_DUSUS)
 ⛔ CORE-07: mutasyon kipinde dusen vektor kumesi BEKLENEN_DUSUS ile ESITLIKLE kiyaslanir
    (eksik de fazla da sapma) -> sapma exit 2 (DOGRULANAMADI).
   (Sayilar OLCULDU, tahmin degil — `python tests/run_battery.py agent_stall_watch`.)
@@ -140,7 +143,7 @@ GECERLI_KIP = {"--mutasyon", "--mutasyon-eslestirme", "--mutasyon-taban",
                "--mutasyon-imza-taban", "--mutasyon-tz", "--mutasyon-izin",
                "--mutasyon-izin-limit", "--mutasyon-izin-arkaplan", "--mutasyon-izin-arac",
                "--mutasyon-izin-kuyruk", "--mutasyon-izin-kuyruk-yas",
-               "--mutasyon-izin-kuyruk-mesaj",
+               "--mutasyon-izin-kuyruk-mesaj", "--mutasyon-izin-kuyruk-yon",
                "--mutasyon-izin-tekil", "--mutasyon-mudahale", "--mutasyon-ask",
                "--mutasyon-ask-olculemedi", "--mutasyon-izin-taban"}
 
@@ -222,6 +225,10 @@ CAPA = {
     "--mutasyon-izin-kuyruk-mesaj": (
         '                    mid = m.get("id") if isinstance(m.get("id"), str) else None\n',
         '                    mid = "TEK"  # MUTASYON: message.id yok sayilir (dosya tek mesaj)\n'),
+    # bug-gate-2 #403 F1a: kuyruk SONRAKI kardesleri de sayar (bug-gate mutantinin birebiri).
+    "--mutasyon-izin-kuyruk-yon": (
+        "    onceki = sira[:sira.index(kimlik)] if kimlik in sira else []\n",
+        "    onceki = [k for k in sira if k != kimlik]  # MUTASYON: sonraki kardesler de sayilir\n"),
 }
 # OLCULDU (2026-09-17, tahmin DEGIL — `python tests/run_battery.py agent_stall_watch`):
 # taban 27/27 · --mutasyon 26/27 · --mutasyon-eslestirme 24/27 ·
@@ -248,7 +255,7 @@ BEKLENEN_DUSUS = {
     # 2026-11-08 izin kanali — kume olcumden ONCE ilan edildi (gerekce: hangi vektor o
     # degismezi ayni kosumda okuyor).
     "--mutasyon-izin": ("S24", "S26b", "S27", "S28b", "S29a", "S29b", "S29c", "S30",
-                        "S30b", "S32", "S32b", "S34", "S35c", "S35d"),
+                        "S30b", "S32", "S32b", "S34", "S35c", "S35d", "S36", "S36b"),
     "--mutasyon-izin-limit": ("S26",),
     "--mutasyon-izin-arkaplan": ("S25",),
     "--mutasyon-izin-arac": ("S31",),
@@ -258,9 +265,12 @@ BEKLENEN_DUSUS = {
     "--mutasyon-ask-olculemedi": ("S30", "S30b"),
     "--mutasyon-izin-taban": ("S34",),
     # 2026-11-08 kuyruk (bug-gate #403 F1) — kume olcumden ONCE ilan edildi.
-    "--mutasyon-izin-kuyruk": ("S35",),
+    "--mutasyon-izin-kuyruk": ("S35", "S36b"),
     "--mutasyon-izin-kuyruk-yas": ("S35b",),
     "--mutasyon-izin-kuyruk-mesaj": ("S35d",),
+    # bug-gate-2 #403 F1a (koruma yonu) — kume olcumden ONCE ilan edildi.
+    # S36b da duser: bos-temiz korumasi (`bool(iz36)`) — 1. cagri susunca dosyada hic olay kalmaz.
+    "--mutasyon-izin-kuyruk-yon": ("S36", "S36b"),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -439,6 +449,26 @@ def kuyruk_senaryolari(arac: Path, simdi: _dt.datetime, taban_uzak: str, ayar: P
           any("| rm -rf /tmp/x/S35c " in x for x in iz), f"izin={iz}")
     kayit("S35d farkli message.id kuyruk sayilmaz -> IZIN-BEKLIYOR",
           any("rm -rf /tmp/x/S35d" in x for x in iz), f"izin={iz}")
+    # S36 (bug-gate-2 #403 F1a): KORUMA YONU — kuyruk yalniz ONCEKI kardeslerden kurulur.
+    # 1. cagri 5 dk sonucsuz (onay bekliyor), 2. cagri ONUN ARKASINDA sirada. Sonraki kardesi de
+    # sayan bir kural 1. cagriyi "sirada" sanip gercek onay beklemesini SUSTURUR (S35 bunu
+    # gormez: oradaki 1. kardes timeout=600000 ile esigin altinda kalir).
+    kok36 = _tmp() / "projects"
+    transkript(kok36, "PROJE", "s9", "k05", [
+        _kullanim_m("k05a", "Bash", {"command": "rm -rf /tmp/x/S36-ilk"}, iso_sn(300, simdi),
+                    "msg_k05"),
+        _kullanim_m("k05b", "Bash", {"command": "ls /tmp/x/S36-sirada"}, iso_sn(299, simdi),
+                    "msg_k05")],
+        meta={"agentType": "kuyruk-ilk", "description": "ilk cagri bekliyor"})
+    rc36, out36 = kos(arac, ["--kok", str(kok36), "--baslangic", taban_uzak, "--ayar", str(ayar)],
+                      simdi)
+    iz36 = izin_satirlari(out36)
+    kayit("S36 ayni mesajda 1. cagri 5 dk sonucsuz -> 1. cagri IZIN-BEKLIYOR alir",
+          rc36 == 0 and any(" 5 dk | rm -rf /tmp/x/S36-ilk |" in x for x in iz36),
+          f"rc={rc36} izin={iz36}")
+    kayit("S36b ayni mesajda 1. cagrinin arkasindaki 2. cagri SESSIZ (sirada)",
+          rc36 == 0 and bool(iz36) and not any("S36-sirada" in x for x in iz36),
+          f"rc={rc36} izin={iz36}")
 
 
 def izin_senaryolari(arac: Path, simdi: _dt.datetime, taban_uzak: str) -> None:

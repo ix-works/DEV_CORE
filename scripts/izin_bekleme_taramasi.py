@@ -22,6 +22,11 @@ KATEGORILER (ilk eslesen kazanir; ayrinti `KATEGORI_ACIKLAMA`):
    HOOK-BLOKU           PreToolUse hook'u blokladi (bekleme DEGIL; ayri sayilir)
    ONAYLANDI            pencere acildi, kullanici ONAYLADI (permissionDecision.source=user_temporary)
    SINIFLANMADI         izin isareti tasiyan ama hicbir imzaya uymayan hata (sessizce DUSURULMEZ)
+   GEC-ONAY             on plan Bash/PowerShell limit + 1 dk'dan uzun bekleyip KOSTU; karar kullanicidan
+                        (user_temporary / user_permanent) ya da kayitta karar alani yok (asagida)
+   GEC-OTOKABUL         ayni sure olcutu, ama karar config/siniflandirici/hook — kullanici penceresi yok
+   ⚠ Iki GEC kategorisi "ilk eslesen" sirasina GIRMEZ: yalniz ret kategorisi yokken (sonuc yok,
+   ONAYLANDI ya da SINIFLANMADI) sure olcutuyle atanir; ret kategorisini EZMEZ.
 
 IKI KATMAN (kayit bicimi resmi bir sozlesme DEGIL — biri degisirse oteki tutsun diye):
    1. METIN IMZASI   — `tool_result` metninde ayirt edici ifade (gevsek ama ayirt edici).
@@ -526,6 +531,11 @@ def main(argv: list[str] | None = None) -> int:
         "damga farki; aracin kosum suresini de icerir; sira beklemesi kuyruk_sn'de ayri durur",
         "sira yalniz ayni message.id'deki ONCEKI kardesin kayitli sonucuyla olculur; kardesin "
         "sonucu kayitta yoksa (oturum kesildi) sira beklemesi gorulmez",
+        "paralel (salt-okur) kardes: arac ayni mesajdaki kardeslerin SERI kostugunu varsayar; "
+        "paralel kosan kardeste bekleme yine onceki kardesin sonucundan baslatilir, yani "
+        "gercek bekleme kisalir ve esigin altinda kalabilir (2026-11-08, gelistirildigi makine: "
+        "190 paralel kardes cagrisi — 168 karar config, 22 karar alani yok, kullanici kararli 0; "
+        "kacan vaka gorulmedi, kanit kapsami bu korpus)",
         "gec_otokabul: karar kullanicidan gelmedi (config/siniflandirici/hook); beklemenin "
         "kaynagi (siniflandirici gecikmesi mi, gorulmeyen sira mi) ayirt edilmez",
         "komut limiti input.timeout ya da sabit 2 dk; BASH_DEFAULT_TIMEOUT_MS / BASH_MAX_TIMEOUT_MS "

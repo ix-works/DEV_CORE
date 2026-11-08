@@ -62,6 +62,8 @@ VEKTORLER (kok A = ana senaryo, kok B = UCUNCU BAGLAM: baska sekil)
   V35c FARKLI message.id: ayni zamanlama sira SAYILMAZ -> GEC-ONAY bekleme_sn=218, kuyruk_sn=0
   V36 tek cagri 400 sn, karar accept/config/classifier -> GEC-OTOKABUL (GEC-ONAY DEGIL)
   V36b tek cagri 400 sn, permissionDecision YOK -> GEC-ONAY kalir (alansiz vaka ayirt edilemez)
+  V37 ⭐ KORUMA YONU (bug-gate-2 #403 F1b): tek cagri 400 sn, karar accept/user_permanent -> GEC-ONAY
+      (kalici kullanici onayi da kullanici kararidir; GEC-OTOKABUL'a kaymaz)
 
 KOSUM:
     python tests/fixtures/izin_bekleme_taramasi/run.py
@@ -104,7 +106,8 @@ GECERLI_KIP = {"--mutasyon-zaman-imza", "--mutasyon-zaman-alan", "--mutasyon-kul
                "--mutasyon-pencere", "--mutasyon-mtime", "--mutasyon-kapsam",
                "--mutasyon-satir", "--mutasyon-tz", "--mutasyon-gec-onay",
                "--mutasyon-gec-limit", "--mutasyon-gec-arkaplan", "--mutasyon-gec-ret",
-               "--mutasyon-kuyruk", "--mutasyon-kuyruk-mesaj", "--mutasyon-otokabul"}
+               "--mutasyon-kuyruk", "--mutasyon-kuyruk-mesaj", "--mutasyon-otokabul",
+               "--mutasyon-kullanici-kaynak"}
 
 ASLA = 're.compile(r"(?!x)x")'
 CAPA = {
@@ -178,6 +181,10 @@ CAPA = {
     "--mutasyon-otokabul": (
         "            and pd.get(\"source\") not in KULLANICI_KAYNAKLARI:\n",
         "            and False:  # MUTASYON\n"),
+    # bug-gate-2 #403 F1b: kalici kullanici onayi kullanici kaynagi sayilmaz (bug-gate mutantinin birebiri).
+    "--mutasyon-kullanici-kaynak": (
+        'KULLANICI_KAYNAKLARI = ("user_temporary", "user_permanent")\n',
+        'KULLANICI_KAYNAKLARI = ("user_temporary",)  # MUTASYON\n'),
 }
 # Dusmesi ILAN edilen kume (olcumden ONCE gerekceyle yazildi; gerekce satir sonunda).
 # ILK KOSUM (2026-11-08) ilan edilenden FAZLA dusurdu ve fazlalarin hepsi ayni mekanizmanin
@@ -202,7 +209,7 @@ BEKLENEN_DUSUS = {
     "--mutasyon-satir": ("V23", "V25"),
     "--mutasyon-tz": ("V22", "V23", "V24", "V25", "V32b"),  # kok B kosumu coker
     # V35b/V35c/V36/V36b: kok E'nin GEC olaylari ayni gec_onay_mi esigini okur (ayni mekanizma).
-    "--mutasyon-gec-onay": ("V17", "V35b", "V35c", "V36", "V36b"),
+    "--mutasyon-gec-onay": ("V17", "V35b", "V35c", "V36", "V36b", "V37"),
     "--mutasyon-gec-limit": ("V17b",),
     "--mutasyon-gec-arkaplan": ("V17c",),
     "--mutasyon-gec-ret": ("V17e",),
@@ -210,6 +217,8 @@ BEKLENEN_DUSUS = {
     "--mutasyon-kuyruk": ("V35", "V35b"),       # sira beklemesi cagriya yazilir
     "--mutasyon-kuyruk-mesaj": ("V35c",),       # farkli mesajlar tek sira sayilir
     "--mutasyon-otokabul": ("V36",),            # config kabulu GEC-ONAY'a duser
+    # bug-gate-2 #403 F1b (koruma yonu) — kume olcumden ONCE ilan edildi.
+    "--mutasyon-kullanici-kaynak": ("V37",),   # user_permanent GEC-OTOKABUL'a kayar
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -398,6 +407,10 @@ def kok_e(kok: Path) -> None:
     yaz(d / "agent-e4.jsonl",
         cift("e38", "Bash", {"command": "make V36-oto"}, 400, "ok", hata=False, karar=sinif)
         + cift("e39", "Bash", {"command": "make V36b-alansiz"}, 400, "ok", hata=False))
+    # V37 (bug-gate-2 #403 F1b): KORUMA YONU — kalici kullanici onayi da kullanici kararidir.
+    yaz(d / "agent-e5.jsonl",
+        cift("e40", "Bash", {"command": "rm -rf /tmp/x/V37-kalici"}, 400, "", hata=False,
+             karar={"decision": "accept", "source": "user_permanent"}))
 
 
 def kos(arac: Path, ek: list[str]) -> tuple[int, str]:
@@ -566,6 +579,10 @@ def senaryolar(arac: Path) -> None:
           o.get("kategori") == "GEC-OTOKABUL" and "config" in o.get("detay", ""), str(o))
     o = tek(de, "V36b")
     kayit("V36b karar alani yok -> GEC-ONAY kalir", o.get("kategori") == "GEC-ONAY", str(o))
+    o = tek(de, "V37-kalici")
+    kayit("V37 user_permanent karari GEC-ONAY (GEC-OTOKABUL degil)",
+          o.get("kategori") == "GEC-ONAY" and o.get("bekleme_sn") == 400
+          and "user_permanent" in o.get("detay", ""), str(o))
 
     # ── kok B: ucuncu baglam ────────────────────────────────────────────────
     kb = _tmp() / "projects"

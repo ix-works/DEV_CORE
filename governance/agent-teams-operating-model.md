@@ -213,10 +213,11 @@ transkriptten görür ve belirli bir süre sonra müdahale eder.
 - **SİNYAL (tahmin değil):** ön plandaki Bash/PowerShell komutu kendi zaman aşımından uzun koşamaz. Sonucu
   max(*zaman aşımı + 1 dk*, `--izin-esik-dk` [3]) içinde gelmemişse komut başlamamıştır ⇒ onay
   penceresindedir. `agent_stall_watch.py` bunu `IZIN-BEKLIYOR` olarak basar. Aynı mesajdaki önceki komut hâlâ
-  koşuyorsa çağrı sırada bekliyordur ve sayılmaz; önceki komut bittiyse yaş onun sonucundan başlar. Diğer araçlar için genel `ASILI`
+  koşuyorsa çağrı sırada bekliyordur ve sayılmaz (seri koşan kardeşler için doğru; paralel koşan salt-okur
+  kardeşte onay beklemesi önceki bitene kadar görülmez); önceki komut bittiyse yaş onun sonucundan başlar. Diğer araçlar için genel `ASILI`
   sinyali (12 dk) geçerlidir.
 - **MÜDAHALE SIRASI:** ① `IZIN-BEKLIYOR` → kullanıcıya `PushNotification` (ajan + komut özü); dönerse kendisi
-  onaylar. ② `MUDAHALE-ZAMANI` (varsayılan 10 dk, `--mudahale-dk`) → hâlâ sonuç yoksa `TaskStop <ajan>` →
+  onaylar. ② `MUDAHALE-ZAMANI` (max(`--mudahale-dk` [10 dk], izin eşiği)) → hâlâ sonuç yoksa `TaskStop <ajan>` →
   `SendMessage` ile devam ettir: komut iptal, tekrarlanmayacak, güvenli biçim şu. ③ Adım gerçekten kullanıcı
   onayı istiyorsa açık kalem yazılır, diğer iş sürer.
 - **ÖLÇÜLDÜ (kontrollü deney 2026-11-08):** `TaskStop` bekleyen çağrıya ret sonucu yazar ve komut koşmaz
@@ -256,8 +257,8 @@ Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
    - ⛔ **Çıplak sessizlik süresi sinyal DEĞİLDİR** (ölçüldü, 865 transkript: %95,7 `text` ile biter, %2,2 eşleşmemiş `tool_use`, %2,3 `tool_result`) — sessizlik "bitti" ile "asıldı"yı ayırt edemez.
    - **Eşik 12 dk** (Bash p99 ≈ 2 dk · SAP araçları max 2,1 dk · Bash timeout tavanı 10 dk). **Taban filtresi:** yalnız bekçinin penceresinde doğmuş çağrılar — korpustaki ~19 kalıcı kalıntı (öldürülmüş ajan) aksi hâlde her yoklamada yeniden ateşler = uyarı körlüğü.
    - **Çıktı yalnız OLAY:** `ASILI? <ajan> <araç> N dk → SendMessage probe, cevap yoksa TaskStop` · `ÇÖZÜLDÜ …` · `DONGU? …` · `IPTAL? …` · `ÖLÇÜLEMEDİ <sebep>` · ve izin kanalı (2026-11-08, §4D):
-     · `IZIN-BEKLIYOR <ajan> N dk | <komut özü> | ask=<kural|yok|OLCULEMEDI(..)> -> kullaniciya bildir` — ön plan Bash/PowerShell, sonucu max(komut limiti + 1 dk, `--izin-esik-dk` [3]) içinde gelmemiş (komut kendi limitinden uzun koşamaz ⇒ başlamamıştır). `ask=` projenin `permissions.ask` kuralı (`--ayar`, varsayılan `<proje>/.claude/settings.json`).
-     · `MUDAHALE-ZAMANI <ajan> N dk | … -> TaskStop + SendMessage` — yaş ≥ `--mudahale-dk` [10]. İkisi de çağrı başına bir kez; arka plan komutu ve diğer araçlar bu kanala girmez (onlarda `ASILI?` 12 dk geçerli). Aksiyon satırın içinde yazılıdır; **aksiyon sahibi lider**dir. Kök yok / 0 transkript ⇒ sessiz "temiz" YOK: `ÖLÇÜLEMEDİ` + exit 2 (core §7 KAPSAM BEYANI).
+     · `IZIN-BEKLIYOR <ajan> N dk | <komut özü> | ask=<kural|yok|OLCULEMEDI(..)> -> kullaniciya bildir` — ön plan Bash/PowerShell, sonucu max(komut limiti + 1 dk, `--izin-esik-dk` [3]) içinde gelmemiş (komut kendi limitinden uzun koşamaz ⇒ başlamamıştır). **Sıra istisnası:** aynı assistant mesajındaki (`message.id`) önceki kardeş komut hâlâ sonuçsuzsa çağrı sırada bekliyordur, olay üretmez; önceki kardeşler bittiyse yaş en geç kardeş sonucundan başlar (bekçi kardeşlerin seri koştuğunu varsayar; paralel koşan salt-okur kardeşte onay beklemesi önceki bitene kadar görülmez). `ask=` projenin `permissions.ask` kuralı (`--ayar`, varsayılan `<proje>/.claude/settings.json`).
+     · `MUDAHALE-ZAMANI <ajan> N dk | … -> TaskStop + SendMessage` — yaş (aynı sıra kuralıyla) ≥ max(`--mudahale-dk` [10], izin eşiği); uzun `timeout`'lu komutta izin eşiği 10 dk'yı aşar ve müdahale onunla birlikte gelir. İkisi de çağrı başına bir kez; arka plan komutu ve diğer araçlar bu kanala girmez (onlarda `ASILI?` 12 dk geçerli). Aksiyon satırın içinde yazılıdır; **aksiyon sahibi lider**dir. Kök yok / 0 transkript ⇒ sessiz "temiz" YOK: `ÖLÇÜLEMEDİ` + exit 2 (core §7 KAPSAM BEYANI).
    - **İki takılma İMZASI (2026-10-03) — bekleyen `tool_use` OLMAYAN takılmalar** (`ASILI?` bunları yapısal olarak göremez):
      · `DONGU? <ajan> N ardışık max_tokens turu` — ≥2 ardışık assistant turu `stop_reason: max_tokens`, aralarında hiç `tool_use` yok (Claude Code issue **#97647**: ajan 4 tur × 64k düşünme tokeni yaktı, 38 dk dosya/metin yok; akış canlı olduğu için harness watchdog'u da susmuştu). Aksiyon: `SendMessage` probe, cevap yoksa `TaskStop`.
      · `IPTAL? <ajan> N sn sonra 'interrupted' kaydı` — `[Request interrupted by user…]` kaydı önceki kayıttan **595–620 sn** sonra (issue **#84346**: harness'in ~600 sn watchdog'u kesmeyi kullanıcı kesmesi gibi yazar). Ajan **ölmüştür**, rapor gelmez → `SendMessage` ile sürdür ya da yeniden spawn.

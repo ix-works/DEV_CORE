@@ -275,8 +275,9 @@
 - **⛔ ONAY BEKLEYEN AJANA MÜDAHALE (lider, 2026-11-08):** alt ajan spawn edilince takılma bekçisi
   (`agent_stall_watch.py`, `Monitor`) başlatılır. `IZIN-BEKLIYOR` olayı = ön plandaki Bash/PS çağrısı max(kendi
   zaman aşımı + 1 dk, 3 dk) boyunca sonuçsuz kaldı ⇒ komut başlamamış, onay penceresinde (aynı mesajda
-  önceki komut koşarken bekleyen çağrı sırada sayılır, olay üretmez). Sıra: ① kullanıcıya
-  `PushNotification` (ajan + komut özü) ② `MUDAHALE-ZAMANI` (varsayılan 10 dk, `--mudahale-dk`) gelince hâlâ
+  seri koşan önceki komut koşarken bekleyen çağrı sırada sayılır, olay üretmez; yaş önceki komutun
+  sonucundan başlar). Sıra: ① kullanıcıya
+  `PushNotification` (ajan + komut özü) ② `MUDAHALE-ZAMANI` (max(10 dk, izin eşiği), `--mudahale-dk`) gelince hâlâ
   sonuç yoksa `TaskStop <ajan>` → bekleyen çağrı ret olarak düşer, komut KOŞMAZ → `SendMessage` ile ajanı
   devam ettir: *"o komut iptal, tekrarlama; şu biçimi kullan"* (üzerine yaz · sabit tam yol · tek dizin) ③ adım
   gerçekten kullanıcı onayı istiyorsa açık kalem yaz, diğer işe geç. ⛔ Lider kullanıcı yerine ONAYLAMAZ, izin
