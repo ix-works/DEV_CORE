@@ -883,7 +883,8 @@ OZEL_TESTLER = [
      "aktivasyon hukmu worklist ENHS/XS (surum alani tuzagi, DOGRULANAMADI basari degil); kacis + UTF-8; "
      "modellenmeyen alan -> yazma yok; readback kiyasi; coklu tanim + govde sirasi (canli once, hepsi "
      "yeni -> sira_tuzagi) + spec; surumsuz GET aktiflik hukmu; coklu-kullanim ters esleme; usages "
-     "kiyas disi; 32 mutasyon"),
+     "kiyas disi; kilit alti yeniden okuma (TOCTOU) + taban kiyasi; onlyConstantFilterValues; --cwd "
+     "sirasi; 43 mutasyon"),
 ]
 
 

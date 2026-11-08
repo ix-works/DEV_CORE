@@ -4,12 +4,14 @@
 
 AKIS (her yazma): ad denetimi (ADR 0005-A) -> GET -> [404 ise bos kabuk POST] -> GET belgesini
 modele ayristir -> YALNIZ verilen alanlari degistir -> TAM belge PUT (kilit -> PUT -> unlock)
--> aktive et (hukum: activationExecuted + worklist sondasi; `adtcore:version` DEGIL) ->
+-> aktive et (hukum: aktivasyon `success` + worklist sondasi + surumsuz GET; `?version=active`
+DEGIL) ->
 readback kiyasi (gonderilen <-> okunan).
 
 ⛔ PUT TAM BELGEDIR: gonderilmeyen filtre/tanim sunucuda SILINIR (olculdu). Bu yuzden belge
    daima GET'ten kurulur; kaldirma YALNIZ acik bayrakla (--remove-*) yapilir. GET belgesi
-   aracin modellemedigi bir alan tasiyorsa yazma YAPILMAZ (alan sessizce silinirdi).
+   aracin modellemedigi bir alan tasiyorsa yazma YAPILMAZ (alan sessizce silinirdi). Lib
+   kilit ALTINDA yeniden okur: araya giren modellenmeyen alan ya da degisiklik varsa yazmaz.
 ⛔ SIRA: arabirim + fallback/ornek siniflar ONCE aktif olmali; BAdI'ye atif yapan siniflar
    (implementasyon / cagiran) spot aktive edildikten SONRA. Recete:
    playbook/adt-enhancement-spot-badi.md. MCP yuzeyi YOK — bu CLI kullanilir.
@@ -31,7 +33,7 @@ yalniz --remove-badi. Govde sirasi: canlida olan tanimlar once, yeniler sonda (S
 tuzagi — `sap_adt_lib.enhs_govde_sirasi`). `--coklu-kullanim evet` => singleUse="false" (TERS).
 
 Cikis: 0 tamam · 1 akis hatasi (HTTP / kilit / aktivasyon / readback) · 2 kullanim ya da
-koruma reddi (SAP'ye istek gitmeden).
+koruma reddi (yazma istegi gitmeden). `--dry-run` --transport istemez (yazma yok).
 """
 import argparse
 import json
@@ -103,6 +105,9 @@ def calistir(argv, client=None, root=None):
     """CLI govdesi (fixture'lar istemciyi enjekte eder). Doner: cikis kodu."""
     a = _parser().parse_args(argv)
     spot = a.spot.strip().upper()
+    if a.cwd:
+        # Ad denetimi hedef projenin `customer_namespaces`'ini okur ⇒ ONCE baglam.
+        L.set_explicit_working_dir(a.cwd)
     yazma = not a.show
     if a.spec and (a.badi or _degisiklik_bayragi_var(a)):
         print('[FAIL] --spec tek basina verilir (--badi / alan bayraklariyla birlikte DEGIL)')
@@ -117,7 +122,7 @@ def calistir(argv, client=None, root=None):
     if a.show and (_degisiklik_bayragi_var(a) or a.badi or spec is not None):
         print('[FAIL] --show yalniz okur; degisiklik bayragiyla birlikte verilemez')
         return 2
-    if yazma and not a.transport:
+    if yazma and not a.dry_run and not a.transport:
         print('[FAIL] --transport zorunlu (yazma). list_transports.py --modifiable-only ile '
               'kullaniciya SOR; numara uydurma / hafizadan kullanma.')
         return 2
@@ -138,8 +143,6 @@ def calistir(argv, client=None, root=None):
         return 2
 
     if client is None:
-        if a.cwd:
-            L.set_explicit_working_dir(a.cwd)
         client = L.SAPADTClient()
 
     r = client.get_enhancement_spot(spot)
@@ -155,7 +158,11 @@ def calistir(argv, client=None, root=None):
             print('[DRY-RUN] spot yok; bos kabuk yaratilacakti:')
             print(L.enhs_bos_kabuk_govdesi(spot, a.description, a.package, client.language))
             return 0
-        y = client.create_enhancement_spot(spot, a.description, a.package, a.transport, root=root)
+        try:
+            y = client.create_enhancement_spot(spot, a.description, a.package, a.transport, root=root)
+        except L.SAPValidationError as exc:
+            print('[FAIL] spot yaratma reddedildi: %s' % exc)
+            return 2
         if not y['ok']:
             print('[FAIL] spot yaratilamadi: HTTP %s %s' % (y['status'], y['text'][:300]))
             return 1
@@ -176,6 +183,17 @@ def calistir(argv, client=None, root=None):
     if a.show:
         print(json.dumps(model, ensure_ascii=False, indent=1))
         return 0
+    if not yaratildi:
+        # Var olan spot'ta aciklama/paket bu aracla DEGISTIRILMEZ (OLCULMEDI) — sessizce
+        # yok sayilmaz.
+        if a.description is not None and a.description != model['spot'].get('description'):
+            print('[FAIL] --description var olan spot\'ta uygulanmaz (aciklama degisikligi OLCULMEDI); '
+                  'okunan: %r' % model['spot'].get('description'))
+            return 2
+        if a.package and a.package.upper() != (model['spot'].get('package') or '').upper():
+            print('[FAIL] --package var olan spot\'ta uygulanmaz (paket degisikligi bu aracin isi degil); '
+                  'okunan: %r' % model['spot'].get('package'))
+            return 2
     if model['modellenmeyen']:
         print('[FAIL] belge aracin modellemedigi alan(lar) tasiyor; TAM-belge PUT bunlari '
               'SILERDI — yazma YOK: %s' % ', '.join(model['modellenmeyen']))
@@ -204,7 +222,7 @@ def calistir(argv, client=None, root=None):
         print(govde)
         return 0
     if yapilan:
-        w = client.write_enhancement_spot(spot, yeni, a.transport, root=root)
+        w = client.write_enhancement_spot(spot, yeni, a.transport, taban=model, root=root)
         if w['lock_released'] is False:
             print(L.kilit_birakilamadi_uyarisi(spot))
         if not w['ok']:

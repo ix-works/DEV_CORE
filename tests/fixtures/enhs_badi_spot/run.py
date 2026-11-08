@@ -39,6 +39,13 @@ VEKTORLER (SAP YOK: gercek `SAPADTClient` + oturuma takilan SAHTE HTTP adaptoru;
      `enhs:usages` doldurur: PUT'ta yok, kiyas disi
   A6 activationExecuted=true + worklist bos AMA surumsuz GET inactive -> AKTIF DEGIL
      (`?version=active` yanki yapar) · A7 surumsuz GET okunamadi -> DOGRULANAMADI · F2 bos filtre adi
+  T  duzeltme turu 1 (bagimsiz kontrol): L5 okuma ile kilit arasinda modellenmeyen alan -> kilit
+     alti GET yakalar · L6 araya giren degisiklik -> taban_degisti · L7 lib: canli belgede
+     modellenmeyen -> kilit yok · L8 RequestException disi PUT istisnasi sizmaz · L9 taban
+     zorunlu · CW1/CW2 --cwd projesinin customer_namespaces'i ad denetiminden ONCE · CW3 yaratma
+     SAPValidationError -> cikis 2 · D1 --dry-run transport'suz yalniz GET · D2/D3 var olan
+     spot'ta --description farkliysa red · N1 onlyConstantFilterValues="true" korunur · N2 baska
+     deger bicimi modellenmeyen
   Sahte surum modeli (olculen, 758 + 816): `?version=active` daima "active"; `?version=inactive`
   bekleyen yoksa "active"; yalniz SURUMSUZ GET gercek durumu verir.
 
@@ -207,7 +214,7 @@ class Sunucu:
                      "put_istisna": False, "akt_govde": AKT_TAM, "wl_spot": False,
                      "wl_durum": 200, "readback_bozucu": None, "ek_kok": "",
                      "akt_aktiflestirir": True, "bekleyen_baslangic": False, "surumsuz_durum": 200,
-                     "usages": False}
+                     "usages": False, "kilit_aninda": None}
         self.ayar.update(ayar)
         self.bekleyen = {k: self.ayar["bekleyen_baslangic"] for k in self.spotlar}
         self.istekler: list = []
@@ -242,6 +249,10 @@ class Sunucu:
         elif q.get("_action") == ["LOCK"]:
             durum = self.ayar["lock_durum"]
             govde = LOCK_GOVDE if durum == 200 else "<sahte>kilit yok</sahte>"
+            if durum == 200 and self.ayar["kilit_aninda"] and yol.startswith(KOL + "/"):
+                # baska bir oturum okuma ile kilit ARASINDA yazdi (TOCTOU)
+                kad = unquote(yol[len(KOL) + 1:]).lower()
+                self.spotlar[kad] = self.ayar["kilit_aninda"](self.spotlar[kad])
         elif q.get("_action") == ["UNLOCK"]:
             durum, govde = 200, ""
         elif yol == KOL and m == "POST":
@@ -264,6 +275,8 @@ class Sunucu:
                     g = self.ayar["readback_bozucu"](g)
                 durum, govde, bas = 200, g, {"Content-Type": "application/vnd.sap.adt.enh.enhs.v2+xml"}
             elif m == "PUT":
+                if isinstance(self.ayar["put_istisna"], BaseException):
+                    raise self.ayar["put_istisna"]
                 if self.ayar["put_istisna"]:
                     raise requests.ConnectionError("sahte baglanti koptu")
                 if "lockHandle" not in q:
@@ -376,7 +389,8 @@ def bolum_g(L, P):
     ekle("G3b 30 karakter siniri gecer (ad denetimi bos)", h == [], h)
     s = Sunucu({"es_standart_x": _belge("ES_STANDART_X")})
     c = _istemci(L, s)
-    w, exc, _ = _sessiz(c.write_enhancement_spot, "ES_STANDART_X", _model(L, _belge("ES_STANDART_X")), TR)
+    w, exc, _ = _sessiz(c.write_enhancement_spot, "ES_STANDART_X", _model(L, _belge("ES_STANDART_X")), TR,
+                        taban=_model(L, _belge("ES_STANDART_X")))
     ekle("G4 lib yazma katmani: standart spot -> hata ad_denetimi, SIFIR istek",
          exc is None and not w["ok"] and str(w["hata"]).startswith("ad_denetimi") and not s.istekler,
          (exc, w, len(s.istekler)))
@@ -386,13 +400,15 @@ def bolum_g(L, P):
          rc == 2 and not s.lock_var() and not s.putlar(), (rc, [i[:2] for i in s.istekler]))
     s = Sunucu({SPOT: _belge()}, master_system="SAP")
     c = _istemci(L, s)
-    w, exc, _ = _sessiz(c.write_enhancement_spot, SPOT, _model(L, _belge()), TR)
+    w, exc, _ = _sessiz(c.write_enhancement_spot, SPOT, _model(L, _belge()), TR,
+                        taban=_model(L, s.spotlar[SPOT.lower()]))
     ekle("G5b lib: masterSystem=SAP -> hata standart_obje, kilit/PUT YOK",
          exc is None and str((w or {}).get("hata")).startswith("standart_obje")
          and not s.lock_var() and not s.putlar(), (exc, w))
     s = Sunucu({SPOT: _belge(tanimlar=[_tanim(), _tanim(ad="BADI_STANDART", filtreler=())])})
     c = _istemci(L, s)
-    w, exc, _ = _sessiz(c.write_enhancement_spot, SPOT, _model(L, _belge()), TR)
+    w, exc, _ = _sessiz(c.write_enhancement_spot, SPOT, _model(L, _belge()), TR,
+                        taban=_model(L, s.spotlar[SPOT.lower()]))
     ekle("G6 sunucudaki belgede standart adli tanim -> hata mevcut_belge_ad_denetimi, PUT YOK",
          exc is None and str((w or {}).get("hata")).startswith("mevcut_belge_ad_denetimi")
          and not s.putlar(), (exc, w))
@@ -471,7 +487,8 @@ def bolum_l(L, P):
          and not s.say("POST", lambda y, q: y == "/sap/bc/adt/activation"), (rc, cikti[-200:]))
     s = Sunucu({SPOT: _belge()}, put_istisna=True)
     c = _istemci(L, s)
-    w, exc, _ = _sessiz(c.write_enhancement_spot, SPOT, _model(L, _belge()), TR)
+    w, exc, _ = _sessiz(c.write_enhancement_spot, SPOT, _model(L, _belge()), TR,
+                        taban=_model(L, s.spotlar[SPOT.lower()]))
     ekle("L2 PUT istisnasi -> UNLOCK gonderildi, istisna sizmaz, lock_released True",
          exc is None and w and not w["ok"] and str(w["hata"]).startswith("put_istisna")
          and w["lock_released"] is True and s.unlock_var(), (exc, w))
@@ -591,14 +608,16 @@ def bolum_o(L, P):
     # O2 — lib: model [B(yeni), A(canli)] -> PUT [A, B]
     s = Sunucu({SPOT: _belge()})
     m = _model(L, _belge(tanimlar=[_tanim(ad=BADI_B, filtreler=()), _tanim()]))
-    w, exc, _ = _sessiz(_istemci(L, s).write_enhancement_spot, SPOT, m, TR)
+    w, exc, _ = _sessiz(_istemci(L, s).write_enhancement_spot, SPOT, m, TR,
+                        taban=_model(L, s.spotlar[SPOT.lower()]))
     pm = _put_model(L, s)
     ekle("O2 lib model [B yeni, A canli] -> PUT sirasi [A, B]",
          exc is None and w and w["ok"] and _adlar(pm) == [BADI, BADI_B], (exc, w and w.get("hata"), _adlar(pm)))
     # O3 — lib: govdedeki tanimlarin HICBIRI canlida yok, canlida tanim var -> RED, kilit/PUT YOK
     s = Sunucu({SPOT: _belge()})
     m = _model(L, _belge(tanimlar=[_tanim(ad=BADI_B, filtreler=())]))
-    w, exc, _ = _sessiz(_istemci(L, s).write_enhancement_spot, SPOT, m, TR)
+    w, exc, _ = _sessiz(_istemci(L, s).write_enhancement_spot, SPOT, m, TR,
+                        taban=_model(L, s.spotlar[SPOT.lower()]))
     ekle("O3 hepsi yeni + canlida tanim var -> hata sira_tuzagi, kilit/PUT YOK",
          exc is None and w and str(w.get("hata")).startswith("sira_tuzagi")
          and not s.lock_var() and not s.putlar(), (exc, w))
@@ -657,6 +676,96 @@ def bolum_o(L, P):
     ekle("F2 bos filtre adi -> cikis 2, kilit/PUT YOK", rc == 2 and not s.lock_var() and not s.putlar(), rc)
 
 
+def bolum_t(L, P):
+    """Duzeltme turu 1: kilit alti yeniden okuma (TOCTOU) · istisna sozlesmesi · --cwd sirasi ·
+    --dry-run transport'suz · var olan spot'ta --description · yalniz-sabit-deger filtresi."""
+    yabanci = lambda g: g.replace("</enhs:badiDefinition>", "<enhs:bilinmeyenAlan/></enhs:badiDefinition>", 1)  # noqa: E731
+    s = Sunucu({SPOT: _belge()}, kilit_aninda=yabanci)
+    rc, cikti = _cli(P, L, _yaz(BADI, "--shorttext", "x"), s)
+    ekle("L5 okuma ile kilit arasinda modellenmeyen alan girer -> kilit alti GET yakalar, PUT YOK, UNLOCK, cikis 1",
+         rc == 1 and "kilit_alti:modellenmeyen_alan" in cikti and not s.putlar() and s.unlock_var(),
+         (rc, cikti[-250:]))
+    baska = lambda g: g.replace('enhs:shorttext="İkinci"', 'enhs:shorttext="Başkası yazdı"', 1)  # noqa: E731
+    s = Sunucu({SPOT: _belge(tanimlar=[_tanim(), _tanim(ad=BADI_B, kisa="İkinci", filtreler=())])},
+               kilit_aninda=baska)
+    rc, cikti = _cli(P, L, _yaz(BADI, "--shorttext", "x"), s)
+    ekle("L6 okuma ile kilit arasinda ikinci tanim degisir -> taban_degisti, PUT YOK, UNLOCK, cikis 1",
+         rc == 1 and "taban_degisti" in cikti and not s.putlar() and s.unlock_var(), (rc, cikti[-250:]))
+    s = Sunucu({SPOT: _belge()}, ek_kok="<enhs:bilinmeyenAlan/>")
+    w, exc, _ = _sessiz(_istemci(L, s).write_enhancement_spot, SPOT, _model(L, _belge()), TR,
+                        taban=_model(L, _belge()))
+    ekle("L7 lib dogrudan: canli belgede modellenmeyen alan -> hata modellenmeyen_alan, kilit/PUT YOK",
+         exc is None and w and str(w.get("hata")).startswith("modellenmeyen_alan")
+         and not s.lock_var() and not s.putlar(), (exc, w))
+    s = Sunucu({SPOT: _belge()}, put_istisna=RuntimeError("sahte"))
+    w, exc, _ = _sessiz(_istemci(L, s).write_enhancement_spot, SPOT, _model(L, _belge()), TR,
+                        taban=_model(L, _belge()))
+    ekle("L8 PUT'ta RequestException DISI istisna -> sizmaz, hata put_istisna:RuntimeError, UNLOCK",
+         exc is None and w and w.get("hata") == "put_istisna:RuntimeError" and w["lock_released"] is True
+         and s.unlock_var(), (exc, w))
+    s = Sunucu({SPOT: _belge()})
+    w, exc, _ = _sessiz(_istemci(L, s).write_enhancement_spot, SPOT, _model(L, _belge()), TR, taban=None)
+    ekle("L9 lib taban verilmedi -> hata taban_yok, SIFIR istek",
+         exc is None and w and str(w.get("hata")).startswith("taban_yok") and not s.istekler, (exc, w))
+    # --cwd: ad denetimi hedef projenin customer_namespaces'ini okur (sira)
+    b = tempfile.mkdtemp(prefix="enhs_badi_b_")
+    Path(b, ".conn_adt").write_bytes(b"ADT_SAP_URL=https://sahte-b.invalid\nADT_SAP_CLIENT=000\n")
+    Path(b, "project.yaml").write_text("sap_profile: s4_private\nrelease: '2025'\nsource_root: SOURCE_CODES\n"
+                                       "customer_namespaces: [\"/EFGH/\"]\n", encoding="utf-8")
+    try:
+        s = Sunucu({"/EFGH/ES_X": _belge("/EFGH/ES_X")})
+        rc, cikti = _cli(P, L, ["--cwd", b, "--spot", "/EFGH/ES_X", "--transport", TR, "--badi", "/EFGH/BADI_X",
+                                "--interface", "ZIF_SD001_BADI_A", "--shorttext", "x"], s)
+        ekle("CW1 --cwd projesinde bildirilmis /EFGH/ -> kabul, cikis 0", rc == 0, (rc, cikti[-250:]))
+        s = Sunucu({"/ABCD/ES_X": _belge("/ABCD/ES_X")})
+        rc, _ = _cli(P, L, ["--cwd", b, "--spot", "/ABCD/ES_X", "--transport", TR, "--badi", "/ABCD/BADI_X",
+                            "--interface", "ZIF_SD001_BADI_A", "--shorttext", "x"], s)
+        ekle("CW2 --cwd projesinde bildirilmemis /ABCD/ -> cikis 2, SIFIR istek", rc == 2 and not s.istekler,
+             (rc, len(s.istekler)))
+    finally:
+        L.set_explicit_working_dir(_KUM)
+        shutil.rmtree(b, ignore_errors=True)
+    s = Sunucu({})
+    c = _istemci(L, s)
+
+    def _red(*a, **k):
+        raise L.SAPValidationError("sahte yaratma reddi")
+    c.create_enhancement_spot = _red
+    rc, exc, cikti = _sessiz(P.calistir, _yaz(BADI, "--package", "$TMP", "--description", "Yeni",
+                                              "--interface", "ZIF_SD001_BADI_A", "--shorttext", "x"), client=c)
+    ekle("CW3 yaratma SAPValidationError -> cikis 2 (traceback YOK)", exc is None and rc == 2, (rc, exc))
+    # --dry-run transport'suz · --description var olan spot'ta
+    s = Sunucu({SPOT: _belge()})
+    rc, cikti = _cli(P, L, ["--spot", SPOT, "--badi", BADI, "--shorttext", "x", "--dry-run"], s)
+    ekle("D1 --dry-run --transport'suz -> cikis 0, yalniz GET (kilit/PUT/POST YOK)",
+         rc == 0 and "[DRY-RUN]" in cikti and s.istekler and all(m == "GET" for m, y, q, _ in s.istekler),
+         (rc, [i[:2] for i in s.istekler]))
+    s = Sunucu({SPOT: _belge()})
+    rc, cikti = _cli(P, L, _yaz(BADI, "--shorttext", "x", "--description", "Başka açıklama"), s)
+    ekle("D2 var olan spot'ta farkli --description -> cikis 2, kilit/PUT YOK (sessizce yok sayilmaz)",
+         rc == 2 and not s.lock_var() and not s.putlar(), (rc, cikti[-200:]))
+    s = Sunucu({SPOT: _belge()})
+    rc, _ = _cli(P, L, _yaz(BADI, "--shorttext", "x", "--description", "Test 413 BAdI noktası (%s)" % GUSIOC), s)
+    ekle("D3 var olan spot'ta AYNI --description -> engel degil, cikis 0", rc == 0, rc)
+    # yalniz-sabit-deger filtresi (BADI_FILTER-CONSTANT): GET'te yalniz ="true" olculdu
+    eski = 'enhs:filterName="SAYI" enhs:filterType="I" enhs:shorttext="Sayısal deneme"/>'
+    sabit = _belge().replace(eski, eski[:-2] + ' enhs:onlyConstantFilterValues="true"/>')
+    s = Sunucu({SPOT: sabit})
+    rc, cikti = _cli(P, L, _yaz(BADI, "--shorttext", "x"), s)
+    pm = _put_model(L, s)
+    t = _tanim_bul(pm, BADI) if pm else None
+    ekle("N1 onlyConstantFilterValues=\"true\" okunur, PUT'ta AYNI filtrede korunur, readback esit, cikis 0",
+         rc == 0 and t is not None
+         and [(f["name"], f.get("onlyConstant")) for f in t["filters"]] == [("ULKE", None), ("SAYI", "true")]
+         and 'enhs:shorttext="Sayısal deneme" enhs:onlyConstantFilterValues="true"' in s.putlar()[-1],
+         (rc, t, cikti[-200:]))
+    s = Sunucu({SPOT: _belge().replace(eski, eski[:-2] + ' enhs:onlyConstantFilterValues="false"/>')})
+    rc, cikti = _cli(P, L, _yaz(BADI, "--shorttext", "x"), s)
+    ekle("N2 olculmemis deger bicimi (=\"false\") -> modellenmeyen, kilit/PUT YOK, cikis 1",
+         rc == 1 and "onlyConstantFilterValues=false" in cikti and not s.lock_var() and not s.putlar(),
+         (rc, cikti[-200:]))
+
+
 def main() -> int:
     import importlib
     mods = {}
@@ -667,7 +776,7 @@ def main() -> int:
             return 3
         mods[ad] = m
     L, P = mods["sap_adt_lib"], mods["populate_badi_spot"]
-    for fn in (bolum_s, bolum_g, bolum_p, bolum_r, bolum_l, bolum_a, bolum_e, bolum_k, bolum_o):
+    for fn in (bolum_s, bolum_g, bolum_p, bolum_r, bolum_l, bolum_a, bolum_e, bolum_k, bolum_o, bolum_t):
         try:
             fn(L, P)
         except Exception as exc:                       # noqa: BLE001 — bolum cokmesi FAIL'dir
@@ -688,19 +797,19 @@ _LIB = "scripts/sap_adt_lib.py"
 _CLI = "scripts/populate_badi_spot.py"
 MUTASYONLAR = {
     "--mutasyon-ad-politikasi": (_LIB, "        if karar != 'musteri':\n", "        if False:\n",
-                                 {"G1", "G2", "G4", "G6", "G8"}),
+                                 {"CW2", "G1", "G2", "G4", "G6", "G8"}),
     "--mutasyon-ad-siniri": (_LIB, "        if len(a) > sinir:\n", "        if False:\n", {"G3"}),
     "--mutasyon-cli-ad-katmani": (_CLI, "    hatalar = L.enhs_ad_denetimi(spot, adlar, root=root)\n",
-                                  "    hatalar = []\n", {"G1", "G2", "G3"}),
+                                  "    hatalar = []\n", {"CW2", "G1", "G2", "G3"}),
     "--mutasyon-yazma-ad-katmani": (
         _LIB, "        hatalar = enhs_ad_denetimi(spot, [t.get('name') for t in model.get('tanimlar') or []],\n"
               "                                   root=root)\n",
         "        hatalar = []\n", {"G4"}),
     "--mutasyon-mevcut-ad-katmani": (
-        _LIB, "        hatalar = enhs_ad_denetimi(spot, [t.get('name') for t in mevcut['tanimlar']], root=root)\n",
+        _LIB, "        hatalar = enhs_ad_denetimi(spot, [t.get('name') for t in m['tanimlar']], root=root)\n",
         "        hatalar = []\n", {"G6"}),
     "--mutasyon-lib-master-system": (
-        _LIB, "        if (mevcut['spot'].get('masterSystem') or '').upper() == 'SAP':\n",
+        _LIB, "        if (m['spot'].get('masterSystem') or '').upper() == 'SAP':\n",
         "        if False:\n", {"G5b"}),
     "--mutasyon-cli-master-system": (
         _CLI, "    if (model['spot'].get('masterSystem') or '').upper() == 'SAP':\n", "    if False:\n", {"G5a"}),
@@ -709,16 +818,15 @@ MUTASYONLAR = {
         "        t = dict(ENHS_TANIM_VARSAYILAN, name=ad, shorttext=tanimlar[sira[0]].get('shorttext'),\n"
         "                 interface=tanimlar[sira[0]].get('interface'), defaultClass=None,\n"
         "                 sampleClasses=[], filters=[])\n"
-        "        tanimlar[sira[0]] = t\n", {"K1", "P1", "R1", "R2"}),
+        "        tanimlar[sira[0]] = t\n", {"K1", "N1", "P1", "R1", "R2"}),
     "--mutasyon-get-tabani": (_CLI, "            yeni, yapilan = L.enhs_tanim_uygula(model, d)\n",
                               "            yeni, yapilan = L.enhs_tanim_uygula(dict(model, tanimlar=[]), d)\n",
-                              {"A1", "E1", "E2", "K1", "L1", "L3", "L4", "O1", "P1", "P2", "R1", "R2",
-                               "U1", "U2", "U3"}),
+                              {"A1", "CW1", "D1", "D3", "E1", "E2", "K1", "L1", "L3", "L4", "L5", "L6", "N1", "O1", "P1", "P2", "R1", "R2", "U1", "U2", "U3"}),
     "--mutasyon-kaldirma": (_LIB, "        del t['filters'][konum[0]]\n", "        pass\n", {"R1"}),
     "--mutasyon-unlock-finally": (
         _LIB, "        finally:\n            sonuc['lock_released'] = bool(self.unlock_object(url, el))\n",
         "        except ZeroDivisionError:\n            raise\n"
-        "        sonuc['lock_released'] = bool(self.unlock_object(url, el))\n", {"C1", "L1", "L2", "L4"}),
+        "        sonuc['lock_released'] = bool(self.unlock_object(url, el))\n", {"C1", "L1", "L2", "L4", "L5", "L6", "L8"}),
     "--mutasyon-kilitsiz-put": (
         _LIB, "        if el in ('NO_LOCK_SUPPORT', 'IMPLICIT_LOCK', None, ''):\n            # Kilitsiz",
         "        if False:\n            # Kilitsiz", {"L3"}),
@@ -737,16 +845,37 @@ MUTASYONLAR = {
         "        akt = self.activate_object((spot or '').upper(), url)\n", {"A5"}),
     "--mutasyon-kacis": (_LIB, "    return '\"%s\"' % _esc('' if deger is None else str(deger), {'\"': '&quot;'})\n",
                          "    return '\"%s\"' % ('' if deger is None else str(deger))\n", {"E1"}),
-    "--mutasyon-utf8": (_LIB, "                    data=govde.encode('utf-8'))\n            except requests.RequestException",
-                        "                    data=govde.encode('latin-1', 'replace'))\n            except requests.RequestException",
-                        {"A1", "C1", "E1", "E2", "K1", "L4", "O1", "O2", "P1", "P2", "R1", "R2",
-                         "SP1", "U1", "U2", "U3"}),
+    "--mutasyon-utf8": (_LIB, "                    data=govde.encode('utf-8'))\n            except Exception as exc:  # noqa: BLE001 — PUT",
+                        "                    data=govde.encode('latin-1', 'replace'))\n            except Exception as exc:  # noqa: BLE001 — PUT",
+                        {"A1", "C1", "CW1", "D3", "E1", "E2", "K1", "L4", "N1", "O1", "O2", "P1", "P2", "R1", "R2", "SP1", "U1", "U2", "U3"}),
     "--mutasyon-modellenmeyen": (_CLI, "    if model['modellenmeyen']:\n", "    if False:\n", {"M1"}),
     "--mutasyon-bilinmeyen-eleman": (_LIB, "        else:\n            m.append('%s/%s' % (yol, y))\n",
-                                     "        else:\n            pass\n", {"M1"}),
+                                     "        else:\n            pass\n", {"L5", "L7", "M1"}),
     "--mutasyon-readback": (_CLI, "    fark = L.enhs_kiyasla(yeni, okunan)\n", "    fark = []\n", {"K1"}),
     "--mutasyon-filtre-tipi": (_LIB, "        if tip not in ENHS_FILTRE_TIPLERI:\n", "        if False:\n", {"F1"}),
-    "--mutasyon-transport": (_CLI, "    if yazma and not a.transport:\n", "    if False:\n", {"T1"}),
+    "--mutasyon-transport": (_CLI, "    if yazma and not a.dry_run and not a.transport:\n", "    if False:\n", {"T1"}),
+    "--mutasyon-kilit-alti-get": (_LIB, "            taze, hata = self._enhs_yazilabilir_oku(spot, root)\n",
+                                  "            taze, hata = mevcut, None\n", {"L5", "L6"}),
+    "--mutasyon-taban-kiyasi": (_LIB, "            fark = enhs_kiyasla(taban, taze)\n", "            fark = []\n", {"L6"}),
+    "--mutasyon-lib-modellenmeyen": (_LIB, "        if m['modellenmeyen']:\n", "        if False:\n", {"L5", "L7"}),
+    "--mutasyon-put-istisna-genis": (
+        _LIB, "            except Exception as exc:  # noqa: BLE001 — PUT istisnasi raporlanir, sizmaz\n",
+        "            except requests.RequestException as exc:\n", {"L8"}),
+    "--mutasyon-taban-zorunlu": (_LIB, "        if not isinstance(taban, dict) or 'tanimlar' not in taban:\n",
+                                 "        if False:\n", {"L9"}),
+    "--mutasyon-cwd-sirasi": (_CLI, "    if a.cwd:\n        # Ad denetimi hedef projenin",
+                              "    if False:\n        # Ad denetimi hedef projenin", {"CW1", "CW2"}),
+    "--mutasyon-yaratma-reddi": (_CLI, "        except L.SAPValidationError as exc:\n",
+                                 "        except ZeroDivisionError as exc:\n", {"CW3"}),
+    "--mutasyon-aciklama-sessiz": (
+        _CLI, "        if a.description is not None and a.description != model['spot'].get('description'):\n",
+        "        if False:\n", {"D2"}),
+    "--mutasyon-sabit-filtre-kur": (_LIB, "                        bas += ' enhs:onlyConstantFilterValues=\"true\"'\n",
+                                    "                        pass\n", {"N1"}),
+    "--mutasyon-sabit-filtre-oku": (_LIB, "        if y == 'onlyConstantFilterValues' and v == 'true':\n",
+                                    "        if False:\n", {"N1"}),
+    "--mutasyon-sabit-filtre-deger": (_LIB, "        if y == 'onlyConstantFilterValues' and v == 'true':\n",
+                                      "        if y == 'onlyConstantFilterValues':\n", {"N2"}),
     "--mutasyon-yeni-basa": (_LIB, "    return mevcutlar + yeniler, None\n", "    return yeniler + mevcutlar, None\n",
                              {"O1", "O2", "SP1"}),
     "--mutasyon-sira-reddi": (_LIB, "    if canli and tanimlar and not mevcutlar:\n", "    if False:\n", {"O3"}),
@@ -762,7 +891,7 @@ MUTASYONLAR = {
     "--mutasyon-diger-tanimlar": (
         _LIB, "    tanimlar = yeni['tanimlar']\n",
         "    tanimlar = yeni['tanimlar'] = [t for t in yeni['tanimlar'] if (t.get('name') or '').upper() == ad]\n",
-        {"O1", "P2", "SP1"}),
+        {"CW1", "O1", "P2", "SP1"}),
     "--mutasyon-usages-ek": (_LIB, "                    ek.append('contentCommon/usages')   # sunucu doldurur; GONDERILMEZ\n",
                              "                    m.append('contentCommon/usages')\n", {"S1", "U3"}),
     "--mutasyon-filtre-adi-bos": (_LIB, "        if not fa:\n            raise ValueError('filtre adi bos (SAP e037)')\n",

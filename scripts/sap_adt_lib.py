@@ -8483,8 +8483,9 @@ constants:
         """GET spot belgesi -> requests.Response.
 
         ⚠ `version='active'` AKTIFLIK KANITI DEGILDIR: hic aktive edilmemis spotta da 200 +
-        `adtcore:version="active"` + inaktif icerik doner (olculdu). Aktiflik =
-        `activate_enhancement_spot` (activationExecuted + worklist sondasi).
+        `adtcore:version="active"` + inaktif icerik doner (olculdu, 20/20 okumada "active").
+        Aktiflik = `activate_enhancement_spot` (aktivasyon `success` + worklist sondasi +
+        surumsuz GET).
         """
         params = {'version': version} if version else None
         return self.session.get(self.url + enhs_spot_url(spot), headers=self._get_headers(ENHS_CT),
@@ -8509,52 +8510,69 @@ constants:
         return {'ok': r.status_code == 201, 'status': r.status_code,
                 'location': r.headers.get('Location'), 'text': (r.text or '')[:500]}
 
-    def write_enhancement_spot(self, spot, model, transport, root=None):
-        """Tam belgeyi yaz: ad denetimi -> taze GET (2. katman) -> kilit -> PUT -> unlock(finally).
+    def _enhs_yazilabilir_oku(self, spot, root):
+        """Yazma oncesi okuma: GET -> (model, None) | (None, hata). Ayni denetim iki kez kosar:
+        kilitten ONCE (standart obje kilitlenmez) ve kilit ALTINDA (TOCTOU)."""
+        try:
+            r = self.get_enhancement_spot(spot)
+        except Exception as exc:  # noqa: BLE001 — okunamadi: yazma YOK
+            return None, 'get_istisna:%s' % type(exc).__name__
+        if r.status_code != 200:
+            return None, 'get_http_%s' % r.status_code
+        try:
+            m = enhs_belgesi_ayristir(r.content)
+        except (ValueError, ET.ParseError) as exc:
+            return None, 'get_ayristirilamadi:%s' % exc
+        if (m['spot'].get('masterSystem') or '').upper() == 'SAP':
+            return None, 'standart_obje: masterSystem=SAP (ADR 0005-A)'
+        if (m['spot'].get('name') or '').upper() != (spot or '').upper():
+            return None, 'get_ad_uyusmuyor:%s' % m['spot'].get('name')
+        hatalar = enhs_ad_denetimi(spot, [t.get('name') for t in m['tanimlar']], root=root)
+        if hatalar:
+            return None, 'mevcut_belge_ad_denetimi: ' + '; '.join(hatalar)
+        if m['modellenmeyen']:
+            # TAM-belge PUT modelin tasimadigi alani SUNUCUDA SILER — yazma YOK.
+            return None, 'modellenmeyen_alan: ' + ', '.join(m['modellenmeyen'])
+        return m, None
 
-        Doner {'ok','put_status','hata','lock_released','gonderilen'}; istisna ATMAZ (yazma
-        sonucu ve kilit durumu ayri raporlanir). `lock_released` False ise kilit acik kalmis
-        olabilir — `kilit_birakilamadi_uyarisi`.
+    def write_enhancement_spot(self, spot, model, transport, taban, root=None):
+        """Tam belgeyi yaz: ad denetimi -> on GET (kilitsiz) -> kilit -> KILIT ALTINDA GET ->
+        PUT -> unlock(finally).
+
+        `taban` = cagiranin `model`'i kurarken okudugu belgenin modeli (`enhs_belgesi_ayristir`).
+        Kilit altindaki GET'te ① modellenmeyen alan varsa ② modellenen alanlar `taban`dan farkliysa
+        (okuma ile kilit arasinda baskasi yazdi) YAZMA YOK (`kilit_alti:` / `taban_degisti:`).
+        Yeniden kurma YAPILMAZ: lib degisikligi degil sonuc modelini alir; ustune yazmak araya
+        giren degisikligi siler. Cagiran yeniden okuyup tekrar dener.
+        Doner {'ok','put_status','hata','lock_released','gonderilen'}. `Exception` sinifindan
+        istisna ATMAZ (hata alaninda raporlanir); KeyboardInterrupt/SystemExit gecer, kilit yine
+        `finally`de birakilir. `lock_released` False ise kilit acik kalmis olabilir —
+        `kilit_birakilamadi_uyarisi`.
         """
         sonuc = {'ok': False, 'put_status': None, 'hata': None, 'lock_released': None,
                  'gonderilen': None}
         if not transport:
             sonuc['hata'] = 'transport_yok'
             return sonuc
+        if not isinstance(taban, dict) or 'tanimlar' not in taban:
+            sonuc['hata'] = 'taban_yok: cagiranin okudugu belge modeli zorunlu'
+            return sonuc
         hatalar = enhs_ad_denetimi(spot, [t.get('name') for t in model.get('tanimlar') or []],
                                    root=root)
         if hatalar:
             sonuc['hata'] = 'ad_denetimi: ' + '; '.join(hatalar)
             return sonuc
-        # 2. katman: yazmadan HEMEN once sunucudaki belge — standart spot'a (masterSystem SAP)
-        # ya da standart adli tanim tasiyan spot'a yazilmaz.
-        r = self.get_enhancement_spot(spot)
-        if r.status_code != 200:
-            sonuc['hata'] = 'on_get_http_%s' % r.status_code
+        # 2. katman, kilitten ONCE: standart spot'a (masterSystem SAP) ya da standart adli tanim
+        # tasiyan spot'a kilit bile alinmaz.
+        mevcut, hata = self._enhs_yazilabilir_oku(spot, root)
+        if hata:
+            sonuc['hata'] = hata
             return sonuc
-        try:
-            mevcut = enhs_belgesi_ayristir(r.content)
-        except (ValueError, ET.ParseError) as exc:
-            sonuc['hata'] = 'on_get_ayristirilamadi:%s' % exc
-            return sonuc
-        if (mevcut['spot'].get('masterSystem') or '').upper() == 'SAP':
-            sonuc['hata'] = 'standart_obje: masterSystem=SAP (ADR 0005-A)'
-            return sonuc
-        if (mevcut['spot'].get('name') or '').upper() != (spot or '').upper():
-            sonuc['hata'] = 'on_get_ad_uyusmuyor:%s' % mevcut['spot'].get('name')
-            return sonuc
-        hatalar = enhs_ad_denetimi(spot, [t.get('name') for t in mevcut['tanimlar']], root=root)
-        if hatalar:
-            sonuc['hata'] = 'mevcut_belge_ad_denetimi: ' + '; '.join(hatalar)
-            return sonuc
-        sirali, sira_hatasi = enhs_govde_sirasi(model.get('tanimlar') or [],
-                                                [t.get('name') for t in mevcut['tanimlar']])
-        if sira_hatasi:
+        _, sira_hatasi = enhs_govde_sirasi(model.get('tanimlar') or [],
+                                           [t.get('name') for t in mevcut['tanimlar']])
+        if sira_hatasi:                       # kilitsiz erken red; kilit altinda yeniden hesaplanir
             sonuc['hata'] = sira_hatasi
             return sonuc
-        model = dict(model, tanimlar=sirali)
-        govde = enhs_belgesi_kur(model)
-        sonuc['gonderilen'] = govde
         url = enhs_spot_url(spot)
         try:
             el = self.lock_object(url, transport=transport)
@@ -8567,13 +8585,29 @@ constants:
             sonuc['lock_released'] = True
             return sonuc
         try:
+            # KILIT ALTINDA yeniden oku: okuma ile kilit arasinda belgeye giren alan korunur.
+            taze, hata = self._enhs_yazilabilir_oku(spot, root)
+            if hata:
+                sonuc['hata'] = 'kilit_alti:' + hata
+                return sonuc
+            fark = enhs_kiyasla(taban, taze)
+            if fark:
+                sonuc['hata'] = 'taban_degisti: ' + '; '.join(fark[:5])
+                return sonuc
+            sirali, sira_hatasi = enhs_govde_sirasi(model.get('tanimlar') or [],
+                                                    [t.get('name') for t in taze['tanimlar']])
+            if sira_hatasi:
+                sonuc['hata'] = sira_hatasi
+                return sonuc
+            govde = enhs_belgesi_kur(dict(model, tanimlar=sirali))
+            sonuc['gonderilen'] = govde
             try:
                 r = self._request_with_csrf_retry(
                     'put', self.url + url, headers=self._get_headers(ENHS_CT, ENHS_CT),
                     params={'corrNr': getattr(self, '_last_lock_effective_transport', None) or transport,
                             'lockHandle': el},
                     data=govde.encode('utf-8'))
-            except requests.RequestException as exc:
+            except Exception as exc:  # noqa: BLE001 — PUT istisnasi raporlanir, sizmaz
                 sonuc['hata'] = 'put_istisna:%s' % type(exc).__name__
                 return sonuc
             sonuc['put_status'] = r.status_code
@@ -8588,10 +8622,11 @@ constants:
     def activate_enhancement_spot(self, spot):
         """Spot'u aktive et; hukum = aktivasyon sonucu + worklist sondasi + SURUMSUZ GET.
 
-        Uc kosul birlikte: `activate_object` basarili · worklist'te yok (ad + ana tip ENHS) ·
-        surumsuz GET `adtcore:version="active"`. `?version=active` / `?version=inactive`
-        HUKUMDE KULLANILMAZ — ikisi de yanki yapar (iki surumde olculdu). Sonda ya da surumsuz
-        GET kurulamazsa sonuc AKTIF DEGIL, `dogrulanamadi=True`'dur.
+        Uc kosul birlikte: `activate_object` sonucu `success` True (`activationExecuted` DEGIL —
+        olculdu: success=true + activationExecuted=false iken spot aktifti) · worklist'te yok
+        (ad + ana tip ENHS) · surumsuz GET `adtcore:version="active"`. `?version=active`
+        HUKUMDE KULLANILMAZ — istenen surumu yankilar (20/20 okumada "active", 11'i inaktifken).
+        Sonda ya da surumsuz GET kurulamazsa sonuc AKTIF DEGIL, `dogrulanamadi=True`'dur.
         Doner {'aktif','dogrulanamadi','worklist_sonda','kalan_inaktif','surumsuz_surum',
                'aktivasyon','errors'}.
         """
@@ -8660,8 +8695,11 @@ def enhs_worklist_hedefi(spot):
 def enhs_surumsuz_surum(adt, spot):
     """SURUMSUZ GET'in `adtcore:version`'i ('active'/'inactive') | None (okunamadi).
 
-    Aktifligi ayiran TEK okuma budur (iki surumde olculdu): `?version=active` aktivasyondan
-    once, `?version=inactive` aktivasyondan sonra istenen surumu YANKILAR.
+    Hukmun okudugu yuzey budur. Olcum (bir gelistirme sistemi, 20 okuma): surumsuz GET 10 yazma
+    sonrasi okumanin 10'unda + hic aktive edilmemis spot okumasinda `inactive`, 9 aktivasyon
+    sonrasi okumanin 9'unda `active`. `?version=active` 20/20 `active` (YANKI — aktiflik kaniti
+    degil). `?version=inactive` 20/20 surumsuz GET ile ayni degeri verdi; arac yine surumsuz GET'i
+    kullanir (tek yuzey).
     """
     try:
         r = adt.get_enhancement_spot(spot)
@@ -8808,6 +8846,8 @@ def enhs_belgesi_kur(model):
                 for f in t['filters']:
                     bas = '<enhs:filter enhs:filterName=%s enhs:filterType=%s enhs:shorttext=%s' % (
                         _enhs_q(f['name']), _enhs_q(f['type']), _enhs_q(f.get('shorttext')))
+                    if f.get('onlyConstant') == 'true':   # okunan degeri korunur (PUT kabulu OLCULMEDI)
+                        bas += ' enhs:onlyConstantFilterValues="true"'
                     if f.get('check'):
                         p.append(bas + '><enhs:filterCheck xsi:type="enhcore:DictionaryCheck" '
                                  'xmlns:xsi="%s" xmlns:enhcore="%s"><enhcore:checkObject '
@@ -8841,9 +8881,17 @@ def _enhs_filtre_ayristir(f, yol, m):
     sonuc = {'name': f.get('{%s}filterName' % _ENHS_NS), 'type': f.get('{%s}filterType' % _ENHS_NS),
              'shorttext': f.get('{%s}shorttext' % _ENHS_NS), 'check': None}
     yol = '%s/filter[%s]' % (yol, sonuc['name'])
-    for k in f.attrib:
-        if _enhs_yerel(k) not in ('filterName', 'filterType', 'shorttext'):
-            m.append('%s@%s' % (yol, _enhs_yerel(k)))
+    for k, v in f.attrib.items():
+        y = _enhs_yerel(k)
+        if y in ('filterName', 'filterType', 'shorttext'):
+            continue
+        # "Yalniz sabit filtre degerleri" (BADI_FILTER-CONSTANT): GET'te yalniz `="true"` bicimi
+        # OLCULDU (standart spot okumasi, 3/3 filtre); bayraksiz filtrede oznitelik YOK. Baska
+        # deger bicimi OLCULMEDI ⇒ modellenmeyen (yazma yok).
+        if y == 'onlyConstantFilterValues' and v == 'true':
+            sonuc['onlyConstant'] = v
+            continue
+        m.append('%s@%s=%s' % (yol, y, v) if y == 'onlyConstantFilterValues' else '%s@%s' % (yol, y))
     for c in f:
         if c.tag != '{%s}filterCheck' % _ENHS_NS:
             m.append('%s/%s' % (yol, _enhs_yerel(c.tag)))

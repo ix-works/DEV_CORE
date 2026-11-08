@@ -63,7 +63,10 @@ Bayraklar: `--remove-badi` · `--remove-fallback-class` · `--remove-sample-clas
 kullanım = `BADI_MAIN-SINGLE_USE = X` **[758]**; "çoklu kullanım: evet → `false`" standart spot'ların
 canlı XML'iyle **[816]**). Çıkış: `0` tamam · `1` akış hatası (HTTP / kilit / aktivasyon / readback) ·
 `2` kullanım ya da koruma reddi (**SAP'ye istek gitmeden** ya da yazmadan önce). `--transport` her
-yazmada zorunlu — numarayı kullanıcıya sor, uydurma.
+yazmada zorunlu — numarayı kullanıcıya sor, uydurma; `--dry-run` yazmadığı için istemez (yalnız GET).
+Var olan spot'ta `--description` / `--package` okunan değerden farklıysa araç `2` döner (açıklama
+değişikliği ÖLÇÜLMEDİ; sessizce yok sayılmaz). `--cwd` ad denetiminden ÖNCE uygulanır: müşteri ad
+alanı o projenin `customer_namespaces`'inden okunur.
 
 ## 2. Ölçülen uçlar ve sıra
 
@@ -74,14 +77,14 @@ yazmada zorunlu — numarayı kullanıcıya sor, uydurma.
 | Kilit | çekirdek `lock_object`: `/locks` 404 → `/core/objectlock` 404 → nesne URL'i `?_action=LOCK&accessMode=MODIFY&corrNr=` **200** | **[758+816]**; yanıtta `CORRNR` boş (`$TMP`), **[758]** `MODIFICATION_SUPPORT` de boş |
 | Yazma | `PUT …/enhsxsb/<ad>?corrNr=&lockHandle=` tam belge | **[758+816]** 200. **[758]** kilitsiz PUT → 400 `ExceptionParameterNotFound` "lockHandle" (`SADT_RESOURCE 017`) |
 | Kilit bırak | `POST …?_action=UNLOCK&lockHandle=` | 200 — araç bunu `finally`'de yapar (PUT 4xx/istisnada da) |
-| Aktivasyon | çekirdek `activate_object(..., object_type='ENHS/XSB')` | **[758]** 7/7 `activationExecuted=true` (`adtcore:type="UNKNOWN"` ile de aktive oldu; mekanizma ÖLÇÜLMEDİ) · **[816]** her kademede `activationExecuted=true` |
+| Aktivasyon | çekirdek `activate_object(..., object_type='ENHS/XSB')` | **[758]** 9 aktivasyonun 9'unda `success=true`; `activationExecuted` 8/9 `true` — 1 `false`: zaten aktif spot'u yeniden aktive etme, spot aktifti (ölçüm özetleri). `adtcore:type="UNKNOWN"` ile de aktive oldu; mekanizma ÖLÇÜLMEDİ · **[816]** her kademede `activationExecuted=true`. Araç hükmü `success`'i okur, `activationExecuted`'ı DEĞİL |
 | Silme | kilit → `DELETE …/enhsxsb/<ad>` | **[816]** 200; aktif, inaktif ve sürümsüz GET üçü de 404, worklist 0. **Bu araçta silme YOK**; çekirdek `adt_delete` ENHS'i desteklemiyor (`object_types.get_object_url` → `ValueError: Unsupported object type`) — açık kalem §7 |
 
 İçerik tipi (Accept + Content-Type): `application/vnd.sap.adt.enh.enhs.v2+xml`. İlk yazma isteği
 `403 CSRF` + `GET /discovery 406` + yeniden deneme verir — çekirdek token yenileme deseni, hata değil.
 
-Sürüm başına ölçülen içerik: arabirim · örnek sınıf · DictionaryCheck'li `C` filtresi **[758+816]** ·
-yedek (fallback) sınıf · `I` tipi filtre · kilitsiz PUT 400 · tek POST **[758]** · kontrolsüz `C` filtresi ·
+Sürüm başına ölçülen içerik: arabirim · örnek sınıf · DictionaryCheck'li `C` filtresi · kontrolsüz `C`
+filtresi **[758+816]** · yedek (fallback) sınıf · `I` tipi filtre · kilitsiz PUT 400 · tek POST **[758]** ·
 silme **[816]**.
 
 **Aktivasyon SIRASI (kural):** ① BAdI arabirimi + fallback/örnek sınıflar ÖNCE aktif ② sonra
@@ -97,6 +100,10 @@ spot + BAdI tanımı ③ BAdI'ye atıf yapan sınıflar (implementasyon, `GET BA
    kurar, yalnız verilen tanımı/alanı değiştirir; diğer tanımlar okunan belgeden aynen gider;
    kaldırma yalnız `--remove-*`. GET belgesi aracın modellemediği alan taşıyorsa (bilinmeyen
    eleman/öznitelik, Dictionary dışı filtre kontrolü, dolu `documentationId`) araç **yazmaz**.
+   Lib bu denetimi **kilit ALTINDA yeniden** koşar: okuma ile kilit arasında belgeye modellenmeyen
+   alan girdiyse ya da modellenen alanlar çağıranın okuduğu tabandan farklıysa PUT gitmez
+   (`kilit_alti:` / `taban_degisti:`; kilit bırakılır, yeniden oku ve tekrar dene). Yeniden kurma
+   yapılmaz: lib değişikliği değil sonuç modelini alır, üstüne yazmak araya gireni siler.
 2. **GÖVDE SIRASI — çalışma alanı tuzağı (kaynakta doğrulandı, canlıda tetiklenmedi).**
    **[kaynak, 758; aynı bulgu 816 kaynak okumasında]** aynı yöntemde silme döngüsü
    (`LOOP AT l_badi_datas INTO l_badi_data`) bitince çalışma alanında SON eski tanım kalır; gövdenin
@@ -113,11 +120,14 @@ spot + BAdI tanımı ③ BAdI'ye atıf yapan sınıflar (implementasyon, `GET BA
    Aynı yöntemden **[kaynak]**: filtre tipi `badi_filter_types` tablosuna karşı denetlenir (e038) ·
    boş tanım/filtre adı e036/e037 · `amdp=true` ⇒ HDB. Araç yeni filtrede yalnız ölçülen `C`/`I`
    tipini ve boş olmayan adı kabul eder; `amdp` okunan değeriyle korunur, ayarlanmaz.
-3. **Aktiflik = sürümsüz GET + worklist + `activationExecuted`; `?version=` AKTİFLİK KANITI DEĞİL.**
+3. **Aktiflik = aktivasyon `success` + worklist + sürümsüz GET; `?version=active` AKTİFLİK KANITI DEĞİL.**
    **[758+816]** aktivasyondan önce `?version=active` 200 + `adtcore:version="active"` + **inaktif
-   içerik** döner; aktivasyondan sonra `?version=inactive` de `version="active"` der (asimetrik yankı).
-   **[758]** sürümsüz GET 13/13 yazım sonrası `inactive`, 11/11 aktivasyon sonrası `active` ⇒ ayıran
-   tek okuma **sürümsüz GET**. Araç hükmü: `activationExecuted` + worklist'te yok + sürümsüz GET `active`.
+   içerik** döner (yankı). **[758]** 20 okumalık ölçüm (her adımda üç GET biçimi; kaynak: ölçüm
+   özetlerinin `get_varsayilan` / `get_active` / `get_inactive` alanları): sürümsüz GET 10 yazma
+   sonrası okumanın 10'unda + hiç aktive edilmemiş spot okumasında `inactive`, 9 aktivasyon sonrası
+   okumanın 9'unda `active` · `?version=active` 20/20 `active` · `?version=inactive` 20/20 sürümsüz
+   GET ile aynı (aktivasyondan sonra `active` döner, yankı DEĞİL). Araç hükmü sürümsüz GET'i okur
+   (tek yüzey): `success` + worklist'te yok + sürümsüz GET `active`.
 4. **Worklist spot'u başka adla listeler** **[758+816]**: `adtcore:type="ENHS/XS"` +
    `…/enhancements/enhsxs/<ad>` (istek `ENHS/XSB` + `…/enhsxsb/<ad>`). URI ya da tam tiple eşleştiren
    sonda inaktif spot'u **GÖREMEZ** — hedef `{'name': <AD>, 'type': 'ENHS'}` (`enhs_worklist_hedefi`).
@@ -148,6 +158,11 @@ spot + BAdI tanımı ③ BAdI'ye atıf yapan sınıflar (implementasyon, `GET BA
 ```
 
 Kontrolsüz filtre: `<enhs:filter enhs:filterName=… enhs:filterType="C" enhs:shorttext=…/>` **[758+816]**.
+"Yalnız sabit filtre değerleri" (`BADI_FILTER-CONSTANT`): **[758, salt-okur GET]** standart bir
+spot'un üç filtresinde de `enhs:onlyConstantFilterValues="true"` (shorttext'ten sonra); bayraksız
+filtrede öznitelik YOK. Araç `="true"`yu okur, PUT'ta aynı filtrede korur, readback'te kıyaslar;
+başka değer biçimi (ör. `="false"`) ÖLÇÜLMEDİ ⇒ modellenmeyen, yazma yok. Özniteliği taşıyan PUT'un
+kabulü ÖLÇÜLMEDİ (yalnız GET ölçüldü; standart spot'a yazılmaz).
 Fixture `tests/fixtures/enhs_badi_spot` (S2): ölçülen readback'ten kurulan belge, ölçülen kabul
 edilmiş PUT ile **bayt-eşit**. Yeni tanımın varsayılanları ölçülen ilk PUT'unkilerdir
 (`singleUse=true`, `contextMode=N`, diğer bayraklar `false`).
@@ -167,6 +182,9 @@ adlı tanım taşıyan belgeye yazmaz. BAdI adı sınırı 30: AFF şemasından,
 - Fallback kaldırma (`true→false`), örnek sınıf kaldırma, son tanımı kaldırma (boş `badiDefinitions`
   PUT), filtre tipini değiştirme (araç reddeder), `contextMode` S/Y, ProgramCheck filtresi, çeviri,
   transport'lu pakette kabuk POST'u **ÖLÇÜLMEDİ**.
+- Türkçe karakterli filtre adı: araç reddetmez, SAP'nin kabulü **ÖLÇÜLMEDİ**.
+- DOMA (alan) kontrollü ya da ProgramCheck'li filtre: araç modellemez ⇒ o spot'a yazmaz; yazma
+  biçimi **ÖLÇÜLMEDİ**.
 - Kilit son hâli bağımsız araçla ÖLÇÜLEMEDİ (`adt_lock_check` ENHS desteklemiyor); dayanak
   LOCK 200 ↔ UNLOCK 200 istek kaydıdır, SM12 kontrolü kullanıcıdadır.
 
