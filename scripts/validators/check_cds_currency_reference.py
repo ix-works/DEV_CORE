@@ -190,14 +190,58 @@ def parse_source(text: str, src_type: str) -> dict:
     return fields
 
 
+_KAYNAK_ADI_RE = re.compile(
+    r'^\s*define\s+(?:table|structure|type)\s+([A-Za-z_/][A-Za-z0-9_/]*)', re.IGNORECASE)
+_YERLESIK_CUKY_RE = re.compile(
+    r'^\s*(?:key\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*:\s*abap\.cuky\b', re.IGNORECASE)
+
+
+def kaynak_adi(text: str) -> str | None:
+    """`define table|structure|type <ad>` başlığındaki nesne adı (küçük harf); yoksa None.
+
+    None (ör. `extend type … with …`) ⇒ çağıran ESKİ davranışa düşer: qualified başvurunun
+    tablo kısmı karşılaştırılmaz, alan bu kaynakta aranır.
+    """
+    for raw_line in text.splitlines():
+        m = _KAYNAK_ADI_RE.match(yorumu_kirp(raw_line))
+        if m:
+            return m.group(1).lower()
+    return None
+
+
 def check_table(text: str) -> list[dict]:
-    """Tablo source'unda CURR/QUAN reference check."""
+    """Tablo source'unda CURR/QUAN reference check.
+
+    CURR referansı (DEV_CORE Issue #399, 2026-11-08) üç ayrı soruya bölünür:
+      ① qualified başvurunun tablo kısmı BAŞKA bir tabloyu gösteriyor (`'t001.waers'`)
+         → aynı-tablo denetimi ATLANIR, yalnız INFO notu. SAP DDIC başka tablonun
+         CUKY alanına başvuruyu kabul eder (standart KONP: `PKWRT` → `T001-WAERS`).
+         Bu kapı o tabloyu okumaz; başvurunun doğruluğu SAP aktivasyonundadır.
+      ② alan bu tabloda HİÇ yok → BLOCKER (değişmedi).
+      ③ alan var ama DTEL'i paylaşılan CUKY sözlüğünde değil (Z'li CUKY DTEL'i) →
+         WARNING. Eskiden ②ile aynı BLOCKER'dı (yanlış pozitif). Kapı canlı DD04L okumaz;
+         yanlış tipli başvuruyu SAP aktivasyonu reddeder (bu turda canlı ÖLÇÜLMEDİ).
+    ⚠ ③ bir DARALTMADIR (BLOCKER → WARNING); ② ve annotation eksik / qualified değil /
+      CUKY marker eksik BLOCKER'ları aynen durur.
+    """
     fields = parse_source(text, 'table')
     violations = []
+    tablo_adi = kaynak_adi(text)
 
-    # CUKY/UNIT field'ları indexle (marker check için)
+    # Tüm alanlar (varlık sorusu) + CUKY sözlüğündeki alanlar (tip sorusu)
+    tum_alanlar = {f['name']: f for f in fields}
     cuky_fields = {f['name']: f for f in fields if f['dtel'] in CUKY_DTELS}
-    unit_fields = {f['name']: f for f in fields if f['dtel'] in UNIT_DTELS}
+    # Yerleşik tip `alan : abap.cuky[(n)];` — `parse_source` alan desenine UYMAZ (nokta/
+    # parantez), alan hiç kaydedilmezdi ⇒ ona başvuran tutar "tabloda yok" BLOCKER'ı
+    # alırdı (Issue #399 sınıfının kardeşi). Tipi sözdiziminden KANITLI CUKY'dir; yalnız
+    # referans sorusu için eklenir — marker denetimi (aşağıda) DEĞİŞMEZ.
+    for raw_line in text.splitlines():
+        m = _YERLESIK_CUKY_RE.match(yorumu_kirp(raw_line))
+        if m:
+            ad = m.group(1).lower()
+            kayit = {'name': ad, 'dtel': 'abap.cuky'}
+            tum_alanlar.setdefault(ad, kayit)
+            cuky_fields.setdefault(ad, kayit)
 
     # CURR field'ları kontrol
     for f in fields:
@@ -228,15 +272,41 @@ def check_table(text: str) -> list[dict]:
                         'fix': f"'{val}' → '<table_name>.{val}' (qualified TABLE.FIELD)"
                     })
                 else:
-                    # Referans field aynı tabloda mı?
-                    ref_field = val.split('.')[-1].lower()
-                    if ref_field not in cuky_fields:
+                    ref_tablo, _, ref_field = val.rpartition('.')
+                    ref_tablo = ref_tablo.strip().lower()
+                    ref_field = ref_field.strip().lower()
+                    if tablo_adi and ref_tablo != tablo_adi:
+                        # ① Başka tabloya başvuru: aynı-tablo denetimi uygulanmaz.
+                        violations.append({
+                            'severity': 'INFO',
+                            'line': f['line'],
+                            'check_id': 'C-TBL-CUR-02',
+                            'message': (f"CURR field '{f['name']}' başka tablonun alanına başvuruyor "
+                                        f"('{ref_tablo}.{ref_field}') — aynı-tablo denetimi atlandı; "
+                                        f"bu kapı '{ref_tablo}' tablosunu okumaz"),
+                            'fix': '—'
+                        })
+                    elif ref_field not in tum_alanlar:
+                        # ② Alan bu kaynakta hiç yok
                         violations.append({
                             'severity': 'BLOCKER',
                             'line': f['line'],
                             'check_id': 'C-TBL-CUR-04',
                             'message': f"CURR field '{f['name']}' referans verdiği CUKY '{ref_field}' tabloda yok",
                             'fix': f"CUKY field '{ref_field}' ekle veya farklı referans seç"
+                        })
+                    elif ref_field not in cuky_fields:
+                        # ③ Alan var, tipi sözlükten doğrulanamıyor
+                        violations.append({
+                            'severity': 'WARNING',
+                            'line': f['line'],
+                            'check_id': 'C-TBL-CUR-04',
+                            'message': (f"CURR field '{f['name']}' referans verdiği '{ref_field}' alanı "
+                                        f"tabloda var ama DTEL'i '{tum_alanlar[ref_field]['dtel']}' "
+                                        f"CUKY sözlüğünde yok: referans alanın tipi sözlükten "
+                                        f"doğrulanamadı; yanlış tipli başvuruyu SAP aktivasyonu reddeder"),
+                            'fix': (f"'{ref_field}' alanının DTEL'i CUKY tipli mi kontrol et; standart "
+                                    f"bir CUKY DTEL'iyse scripts/utils/ddic_semantics.py CUKY_DTELS'e ekle")
                         })
 
     # CUKY field'ları @Semantics.currencyCode : true marker check
@@ -631,6 +701,13 @@ def main() -> int:
         violations = check_table(text)
     else:
         violations = check_cds(text)
+
+    # INFO notları ihlal DEĞİLDİR (Issue #399: başka tabloya qualified başvuru): stdout'a
+    # basılır, şiddet/çıkış kodunu etkilemez ve "temiz" satırını bastırmaz.
+    bilgiler = [v for v in violations if v['severity'] == 'INFO']
+    violations = [v for v in violations if v['severity'] != 'INFO']
+    for v in bilgiler:
+        print(f"  [INFO] line {v['line']} ({v['check_id']}): {v['message']}")
 
     if not violations:
         # ⛔ PAYDASIZ "temiz" BASMA: kaç elemana bakıldığı yazılmazsa `0 eleman` ile

@@ -36,8 +36,17 @@ QUAN_DTELS = {
 }
 
 # Built-in CUKY/UNIT DTEL'leri
-CUKY_DTELS = {'waers', 'waerk', 'hwaer'}
-UNIT_DTELS = {'meins', 'vrkme', 'gewei', 'voleh', 'lager', 'unit'}
+# 2026-11-08 (DEV_CORE Issue #399): koşul kaydı DTEL'leri eklendi — `konwa`/`konws`
+# (CUKY) · `kmein`/`konms` (UNIT). Kaynak: Issue #399 ölçümü (S/4 DEV, 2026-11-08,
+# DD04L 9 adlık sorgu → 8 aktif DTEL; standart KONP `KBETR` → `RV13A-KONWA`).
+# Eksiklikleri `konwa` tipli para birimi alanına başvuran tutarı "referans tabloda
+# yok" BLOCKER'ına düşürüyordu (yanlış pozitif).
+# `lager`: aynı ölçümde aktif DTEL olarak DÖNMEDİ; bu turda bağımsız ölçülemediği ve
+# başka sürümde var olup olmadığı bilinmediği için DOKUNULMADI (yukarıdaki kural:
+# sözlük kısaltılamaz). Var olmayan bir DTEL'le hiçbir alan aktive olamaz, yani
+# üyeliği bugün hiçbir kararı değiştirmez.
+CUKY_DTELS = {'waers', 'waerk', 'hwaer', 'konwa', 'konws'}
+UNIT_DTELS = {'meins', 'vrkme', 'gewei', 'voleh', 'lager', 'unit', 'kmein', 'konms'}
 
 
 # ---------------------------------------------------------------------------
