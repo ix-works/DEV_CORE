@@ -439,6 +439,8 @@ ZSD001_T_CONTY,Konteyner Tipleri,A,ALLOWED,WAERS,N,WAERS,Para birimi,,
 > referans alanı `konwa`/`konws` ise `unit_kind` artık `currency` çıkarılır (önceden
 > `quantity` + UYARI → yanlış annotation). Denetçide referans alanının tipi sözlükte
 > yoksa (Z'li CUKY DTEL'i) bulgu **WARNING**'dir, alan tabloda hiç yoksa **BLOCKER**;
+> başvurulan her yerel alan (Z'li DTEL ya da yerleşik `abap.cuky`) `@Semantics.currencyCode : true`
+> marker'ı ister, yoksa **BLOCKER**; boş tablo kısmı (`'.waers'`) qualified sayılmaz (BLOCKER);
 > başka tabloya qualified başvuru (`'t001.waers'`) aynı-tablo denetiminden muaftır
 > (checklist `table-update.md` C-TBL-CUR-02).
 

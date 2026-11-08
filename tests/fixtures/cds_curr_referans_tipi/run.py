@@ -18,6 +18,13 @@ Tablo adı karşılaştırması büyük/küçük harf duyarsız. KARDEŞ (aynı 
 `curr : abap.cuky;` alanı tablo alan desenine uymadığı için hiç kaydedilmiyordu ⇒ ona başvuran
 tutar da "tabloda yok" alıyordu; artık referans sorusu için tanınır (marker denetimi değişmedi).
 
+BUG-GATE TURU (PR #400, 2026-11-08) — ilk düzeltmenin kendi gerilemeleri:
+  F1 başvurulan YEREL alanın marker'ı denetlenmiyordu (Z'li DTEL / `abap.cuky` marker'sız →
+     "temiz"; taban BLOCKER veriyordu) → R2b R7b R7c R7d S3 · F3 boş tablo kısmı (`'.waers'`)
+     "başka tablo" sayılıyordu → Q1 · F4 blok yorumdaki `define table` adı kimliği ele
+     geçiriyordu → B1 · F5 ID'ler checklist'e hizalandı (tablo C-TBL-CUR-02/-04, yapı
+     C-STR-CUR-04/-05) → K1 R2 R4b S2 S3 S4.
+
 KORUNAN BLOCKER'LAR (K vektörleri — düzeltme turu kendi regresyonunu üretmesin):
 alan yok · annotation eksik · qualified değil · CUKY marker eksik · QUAN annotation eksik.
 
@@ -82,10 +89,15 @@ ART = {
                 "  rate : kbetr;\n"
                 "  @Semantics.currencyCode : true\n"
                 "  curr : konwa;\n"),
-    # R2 — Z'li CUKY DTEL'i: sözlük tipi bilemez ⇒ WARNING
+    # R2 — Z'li CUKY DTEL'i (marker'lı): sözlük tipi bilemez ⇒ WARNING
     "R2": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
                 "  rate : kbetr;\n"
+                "  @Semantics.currencyCode : true\n"
                 "  curr : zsd001_de_cuky;\n"),
+    # R2b — bug-gate F1: aynı, marker'SIZ ⇒ marker eksik BLOCKER (+ tip WARNING)
+    "R2b": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
+                 "  rate : kbetr;\n"
+                 "  curr : zsd001_de_cuky;\n"),
     # R3 — başka tabloya qualified başvuru
     "R3": tablo("  @Semantics.amount.currencyCode : 't001.waers'\n"
                 "  rate : kbetr;\n"),
@@ -101,6 +113,14 @@ ART = {
     "R5": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
                 "  rate : kbetr;\n"
                 "  curr : konwa;\n"),
+    # R5b — sözlük üyeliğini TEK BAŞINA ölçen ikiz: `konwa` alanına HİÇBİR CURR başvurmaz,
+    # marker yok ⇒ BLOCKER'ı yalnız sözlük verir (R5'te bug-gate F1 sonrası yerel başvuru
+    # yolu da BLOCKER verdiği için R5 sözlük mutasyonunu artık ayırt etmez)
+    "R5b": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
+                 "  rate : kbetr;\n"
+                 "  @Semantics.currencyCode : true\n"
+                 "  curr : waers;\n"
+                 "  ikinci : konwa;\n"),
     # R6 — `konws` (ikinci yeni CUKY üyesi)
     "R6": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
                 "  rate : kbetr;\n"
@@ -112,6 +132,29 @@ ART = {
                 "  rate : netwr;\n"
                 "  @Semantics.currencyCode : true\n"
                 "  curr : abap.cuky;\n"),
+    # R7b — bug-gate F1: R7'nin marker'SIZ eşi ⇒ BLOCKER (ilk tur "temiz" diyordu)
+    "R7b": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
+                 "  rate : netwr;\n"
+                 "  curr : abap.cuky;\n"),
+    # R7c — uzunluklu yerleşik tip, marker'lı ⇒ temiz
+    "R7c": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
+                 "  rate : netwr;\n"
+                 "  @Semantics.currencyCode : true\n"
+                 "  curr : abap.cuky(5);\n"),
+    # R7d — uzunluklu yerleşik tip, marker'SIZ (aradaki boş satır bloğu bölmez) ⇒ BLOCKER
+    "R7d": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
+                 "  rate : netwr;\n"
+                 "\n"
+                 "  curr : abap.cuky( 5 );\n"),
+    # Q1 — bug-gate F3: boş tablo kısmı ⇒ qualified DEĞİL BLOCKER (ilk tur "başka tablo")
+    "Q1": tablo("  @Semantics.amount.currencyCode : '.waers'\n"
+                "  rate : netwr;\n"
+                "  @Semantics.currencyCode : true\n"
+                "  waers : waers;\n"),
+    # B1 — bug-gate F4: blok yorumdaki eski `define table` başlığı adı ELE GEÇİRMEZ
+    "B1": ("/* eski tanim:\ndefine table zsd001_t_eski {\n*/\n"
+           + tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.yok'\n"
+                   "  rate : netwr;\n")),
     # K1 — alan HİÇ yok ⇒ BLOCKER korunur
     "K1": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.yok'\n"
                 "  rate : kbetr;\n"
@@ -147,6 +190,15 @@ ART = {
     # S2 — yapı + alan yok ⇒ BLOCKER korunur
     "S2": tablo("  @Semantics.amount.currencyCode : 'zsd001_s_test.yok'\n"
                 "  rate : kbetr;\n", ad="zsd001_s_test", tur="type"),
+    # S3 — yapı + Z'li CUKY marker'SIZ ⇒ C-STR-CUR-05 BLOCKER
+    "S3": tablo("  @Semantics.amount.currencyCode : 'zsd001_s_test.curr'\n"
+                "  rate : kbetr;\n"
+                "  curr : zsd001_de_cuky;\n", ad="zsd001_s_test", tur="type"),
+    # S4 — yapı + Z'li CUKY marker'lı ⇒ C-STR-CUR-04 WARNING
+    "S4": tablo("  @Semantics.amount.currencyCode : 'zsd001_s_test.curr'\n"
+                "  rate : kbetr;\n"
+                "  @Semantics.currencyCode : true\n"
+                "  curr : zsd001_de_cuky;\n", ad="zsd001_s_test", tur="type"),
 }
 
 
@@ -190,7 +242,7 @@ def vektorler(kok: Path, tmp: Path) -> list[tuple[str, bool, str]]:
              rc == 0 and blok_yok(o) and uyari_yok(o) and "temiz" in o, f"rc={rc} :: {o[-220:]!r}")
     rc, o = dogrula("R2")
     ekle("R2 Z'li CUKY DTEL'i → WARNING (BLOCKER değil), rc 0",
-         rc == 0 and blok_yok(o) and _var(o, "[WARNING]", "C-TBL-CUR-04", "'curr'", "tabloda var ama"),
+         rc == 0 and blok_yok(o) and _var(o, "[WARNING]", "C-TBL-CUR-02", "'curr'", "tabloda var ama"),
          f"rc={rc} :: {o[-260:]!r}")
     rc, o = dogrula("R3")
     ekle("R3 başka tablo ('t001.waers') → aynı-tablo denetimi atlandı + INFO, temiz",
@@ -201,20 +253,47 @@ def vektorler(kok: Path, tmp: Path) -> list[tuple[str, bool, str]]:
          rc == 0 and blok_yok(o) and "[INFO]" not in o and "temiz" in o, f"rc={rc} :: {o[-260:]!r}")
     rc, o = dogrula("R4b")
     ekle("R4b harf-duyarsız aynı tablo + alan yok → BLOCKER korunur",
-         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-04", "'yok' tabloda yok"), f"rc={rc} :: {o[-260:]!r}")
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-02", "'yok' tabloda yok"), f"rc={rc} :: {o[-260:]!r}")
     rc, o = dogrula("R5")
     ekle("R5 yeni CUKY üyesi (konwa) marker denetimine girer → marker eksik BLOCKER",
          rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-04", "'curr'", "marker eksik"),
+         f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("R5b")
+    ekle("R5b başvurulmayan sözlük CUKY alanı (konwa) marker'sız → BLOCKER (yalnız sözlük)",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-04", "'ikinci'", "marker eksik"),
          f"rc={rc} :: {o[-260:]!r}")
     rc, o = dogrula("R6")
     ekle("R6 konws referansı temiz", rc == 0 and blok_yok(o) and uyari_yok(o), f"rc={rc} :: {o[-220:]!r}")
     rc, o = dogrula("R7")
     ekle("R7 kardeş: yerleşik `abap.cuky` alanına başvuru temiz (alan tanınır)",
          rc == 0 and blok_yok(o) and uyari_yok(o) and "temiz" in o, f"rc={rc} :: {o[-220:]!r}")
+    rc, o = dogrula("R2b")
+    ekle("R2b F1: Z'li CUKY marker'sız → marker eksik BLOCKER",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-04", "'curr'", "marker eksik"),
+         f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("R7b")
+    ekle("R7b F1: yerleşik `abap.cuky` marker'sız → marker eksik BLOCKER",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-04", "'curr'", "marker eksik"),
+         f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("R7c")
+    ekle("R7c F1: `abap.cuky(5)` marker'lı → temiz",
+         rc == 0 and blok_yok(o) and uyari_yok(o) and "temiz" in o, f"rc={rc} :: {o[-220:]!r}")
+    rc, o = dogrula("R7d")
+    ekle("R7d F1: `abap.cuky( 5 )` marker'sız (boş satır arada) → marker eksik BLOCKER",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-04", "'curr'", "marker eksik"),
+         f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("Q1")
+    ekle("Q1 F3: boş tablo kısmı ('.waers') → qualified değil BLOCKER (başka tablo DEĞİL)",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-03", "qualified") and "[INFO]" not in o,
+         f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("B1")
+    ekle("B1 F4: blok yorumdaki eski `define table` adı kimliği ele geçirmez → alan yok BLOCKER",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-02", "'yok' tabloda yok") and "[INFO]" not in o,
+         f"rc={rc} :: {o[-260:]!r}")
 
     # ── K: korunan BLOCKER'lar ──
     for kod, parcalar, ad in [
-        ("K1", ("[BLOCKER]", "C-TBL-CUR-04", "'yok' tabloda yok"), "K1 alan HİÇ yok → BLOCKER"),
+        ("K1", ("[BLOCKER]", "C-TBL-CUR-02", "'yok' tabloda yok"), "K1 alan HİÇ yok → BLOCKER"),
         ("K2", ("[BLOCKER]", "C-TBL-CUR-03", "'rate'", "eksik"), "K2 CURR annotation eksik → BLOCKER"),
         ("K3", ("[BLOCKER]", "C-TBL-CUR-03", "qualified"), "K3 qualified değil → BLOCKER"),
         ("K4", ("[BLOCKER]", "C-TBL-CUR-04", "'waers'", "marker eksik"), "K4 CUKY marker eksik → BLOCKER"),
@@ -233,7 +312,15 @@ def vektorler(kok: Path, tmp: Path) -> list[tuple[str, bool, str]]:
          f"rc={rc} :: {o[-220:]!r}")
     rc, o = dogrula("S2")
     ekle("S2 3.BAĞLAM yapı + alan yok → BLOCKER korunur",
-         rc == 1 and _var(o, "[BLOCKER]", "'yok' tabloda yok"), f"rc={rc} :: {o[-220:]!r}")
+         rc == 1 and _var(o, "[BLOCKER]", "C-STR-CUR-04", "'yok' tabloda yok"), f"rc={rc} :: {o[-220:]!r}")
+    rc, o = dogrula("S3")
+    ekle("S3 3.BAĞLAM yapı + Z CUKY marker'sız → C-STR-CUR-05 marker BLOCKER",
+         rc == 1 and _var(o, "[BLOCKER]", "C-STR-CUR-05", "'curr'", "marker eksik"),
+         f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("S4")
+    ekle("S4 3.BAĞLAM yapı + Z CUKY marker'lı → C-STR-CUR-04 WARNING, rc 0",
+         rc == 0 and blok_yok(o) and _var(o, "[WARNING]", "C-STR-CUR-04", "tabloda var ama"),
+         f"rc={rc} :: {o[-260:]!r}")
 
     # ── P: kardeş tüketici — üretici `classify_unit_kind` ──
     kod_py = ("import sys; sys.path.insert(0, sys.argv[1]); "
@@ -301,12 +388,12 @@ def vektorler(kok: Path, tmp: Path) -> list[tuple[str, bool, str]]:
 MUTASYONLAR: dict[str, tuple[Path, str, str, tuple[str, ...]]] = {
     "--mutasyon-tip-blocker": (
         VAL_REL,
-        "                        # ③ Alan var, tipi sözlükten doğrulanamıyor\n"
-        "                        violations.append({\n"
-        "                            'severity': 'WARNING',",
-        "                        # ③ Alan var, tipi sözlükten doğrulanamıyor\n"
-        "                        violations.append({\n"
-        "                            'severity': 'BLOCKER',",
+        "                            # ③ Alan var, tipi sözlükten doğrulanamıyor\n"
+        "                            violations.append({\n"
+        "                                'severity': 'WARNING',",
+        "                            # ③ Alan var, tipi sözlükten doğrulanamıyor\n"
+        "                            violations.append({\n"
+        "                                'severity': 'BLOCKER',",
         ("R2", "RR3")),
     "--mutasyon-alan-yok": (
         VAL_REL,
@@ -319,8 +406,8 @@ MUTASYONLAR: dict[str, tuple[Path, str, str, tuple[str, ...]]] = {
         ("R4b", "K1", "S2", "RR4")),
     "--mutasyon-baska-tablo": (
         VAL_REL,
-        "                    if tablo_adi and ref_tablo != tablo_adi:\n",
-        "                    if False:\n",
+        "                    elif tablo_adi and ref_tablo != tablo_adi:\n",
+        "                    elif False:\n",
         ("R3",)),
     "--mutasyon-harf": (
         VAL_REL,
@@ -329,8 +416,8 @@ MUTASYONLAR: dict[str, tuple[Path, str, str, tuple[str, ...]]] = {
         ("R4", "R4b")),
     "--mutasyon-ad-harf": (
         VAL_REL,
-        "            return m.group(1).lower()\n",
-        "            return m.group(1)\n",
+        "            return tur, m.group(2).lower()\n",
+        "            return tur, m.group(2)\n",
         ("R4", "R4b")),
     "--mutasyon-info": (
         VAL_REL,
@@ -348,12 +435,44 @@ MUTASYONLAR: dict[str, tuple[Path, str, str, tuple[str, ...]]] = {
         "            cuky_fields.setdefault(ad, kayit)\n",
         "            pass\n",
         ("R7",)),
+    "--mutasyon-marker-yerel": (
+        VAL_REL,
+        "            denetlenecek.append(tum_alanlar[ad])\n",
+        "            pass\n",
+        ("R2b", "R7b", "R7d", "S3")),
+    "--mutasyon-yerlesik-marker": (
+        VAL_REL,
+        "                     'annotations': _ustteki_annotasyonlar(satirlar, i)}\n",
+        "                     'annotations': []}\n",
+        ("R7", "R7c")),
+    "--mutasyon-bos-parca": (
+        VAL_REL,
+        "                    if not ref_tablo or not ref_field:\n",
+        "                    if False:\n",
+        ("Q1",)),
+    "--mutasyon-blok-yorum": (
+        VAL_REL,
+        "    for raw_line in blok_yorumu_maskele(text).splitlines():\n"
+        "        m = _KAYNAK_ADI_RE.match(yorumu_kirp(raw_line))\n",
+        "    for raw_line in text.splitlines():\n"
+        "        m = _KAYNAK_ADI_RE.match(yorumu_kirp(raw_line))\n",
+        ("B1",)),
+    "--mutasyon-id-yapi": (
+        VAL_REL,
+        "    id_referans = 'C-STR-CUR-04' if yapi_mi else 'C-TBL-CUR-02'\n",
+        "    id_referans = 'C-TBL-CUR-02'\n",
+        ("S2", "S4")),
+    "--mutasyon-id-marker": (
+        VAL_REL,
+        "    id_marker = 'C-STR-CUR-05' if yapi_mi else 'C-TBL-CUR-04'\n",
+        "    id_marker = 'C-TBL-CUR-04'\n",
+        ("S3",)),
     "--mutasyon-sozluk-cuky": (
         DS_REL,
         "CUKY_DTELS = {'waers', 'waerk', 'hwaer', 'konwa', 'konws'}\n",
         "CUKY_DTELS = {'waers', 'waerk', 'hwaer'}\n",
         ("R1 konwa referansı temiz (auto)", "R1 konwa referansı temiz (--type table)",
-         "R4", "R5", "R6", "S1", "P1", "RR1", "RR2")),
+         "R4", "R5b", "R6", "S1", "P1", "RR1", "RR2")),
     "--mutasyon-sozluk-unit": (
         DS_REL,
         "'unit', 'kmein', 'konms'}\n",
