@@ -15,7 +15,7 @@ NEDEN VAR (DEV_CORE #410, 2026-11-08 kardes taramasi)
   tipli eleman (`Id : abap.char(10);`) abstract'ta da custom'da da alan URETMEZ (ayri konu).
   K3 (#412 duzeltme 3) `gen_field_table._strip_comments` yalniz `/* */` + `//` atiyordu:
      `--` satir yorumundaki eski baslik ad oluyor, `-- yorum`lu alan satiri alan listesini
-     bosaltiyordu. Artik ortak `sap_adt_lib.cds_kod_metni(..., string_icerigini_koru=True)`.
+     bosaltiyordu. Artik ortak `utils.cds_metin.cds_kod_metni(..., string_icerigini_koru=True)`.
 
 VEKTORLER
   V1 root custom entity -> (ad, ddls)          V2 custom entity -> (ad, ddls)
