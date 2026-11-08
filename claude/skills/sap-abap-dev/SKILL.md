@@ -55,7 +55,7 @@ Detay: `governance/decisions/0005-sap-standart-obje-koruma-ve-sistem-state-yasak
 2. **MCP tool mu, script mi? (ADR 0007):**
    - Tek obje yaratım/aktivasyon/push/search/lock → **MCP `sap-adt` tool** (`adt_*`).
    - CSV'den batch (`populate_*.py`), validator, sprint gate, TD spec check → **script**.
-   - MCP server zaten server-side guardrail uygular (Z/Y prefix, TR text, transport zorunlu).
+   - MCP server zaten server-side guardrail uygular (müşteri ad alanı Z/Y ya da bildirilmiş `/<NS>/`, TR text, transport zorunlu).
 3. **Bağlantı:** `.conn_adt` (sistem <SYSTEM_ID>, client 100, user <SAP_USER>, **TR**).
    Aktif transport `<TRANSPORT>`. Değerleri ASLA uydurma — dosyadan oku.
 

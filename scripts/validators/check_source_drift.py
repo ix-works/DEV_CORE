@@ -43,6 +43,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from utils.project_config import SOURCE_ROOT_NAME  # noqa: E402  # K12
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 from source_drift import (  # noqa: E402
     SOURCE_EXTENSIONS,
     compare_sources,
@@ -104,7 +105,7 @@ def _fetch_active_source(client, name: str, ext: str):
         adt_path = _TYPE_TO_ADT_PATH.get(obj_type)
         if not adt_path:
             continue
-        url = f"{client.url}/sap/bc/adt/{adt_path}/{name.lower()}/source/main"
+        url = f"{client.url}/sap/bc/adt/{adt_path}/{_adt_seg(name)}/source/main"
         try:
             r = client.session.get(
                 url,

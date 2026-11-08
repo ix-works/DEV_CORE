@@ -250,6 +250,10 @@ def sandbox(tmp: Path, validator: str, taban: bool = False,
     vdir = kok / "scripts" / "validators"
     vdir.mkdir(parents=True, exist_ok=True)
     (kok / "scripts" / "sap_adt_lib.py").write_text(SAHTE_LIB, encoding="utf-8")
+    # Kum validator'in import KOKUNU tasir (Q393 P2a: validator `utils.ad_politikasi.url_segmenti`
+    # ile URL kurar; `utils/`suz kumda ModuleNotFoundError — davranis kopyanin KONUMUNA bagli olurdu).
+    shutil.copytree(CORE / "scripts" / "utils", kok / "scripts" / "utils", dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns("__pycache__"))
 
     hedef = vdir / f"{validator}.py"
     shutil.copy2(VAL / f"{validator}.py", hedef)

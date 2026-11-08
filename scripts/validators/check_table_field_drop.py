@@ -97,11 +97,12 @@ def main() -> int:
 
     # SAP'den canlı source çek
     sys.path.insert(0, str(Path(__file__).parent.parent))
+    from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
     try:
         from sap_adt_lib import SAPADTClient  # type: ignore
         client = SAPADTClient()
         r = client.session.get(
-            client.url + f'/sap/bc/adt/ddic/tables/{table.lower()}/source/main',
+            client.url + f'/sap/bc/adt/ddic/tables/{_adt_seg(table)}/source/main',
             params={'sap-client': '100', 'sap-language': 'TR'},
             headers={'Accept': 'text/plain'}, verify=False, timeout=15)
     except Exception as e:

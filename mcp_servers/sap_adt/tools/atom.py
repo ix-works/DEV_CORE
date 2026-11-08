@@ -106,7 +106,9 @@ def _fugr_include_guardrail(name: str, object_type: str, group: str | None) -> N
     """Q383: `group` yalnız FUGR/I'da anlamlıdır; FUGR/I'da ZORUNLUDUR.
 
     ADR 0005-A bu tipte GRUP üzerinden uygulanır (include adı `L` ile başlar, Z/Y değil):
-    grup Z/Y olmalı VE include adı `L<GRUP>` önekini taşımalı (SAP'nin grup-include adlandırması;
+    grup müşteri adı olmalı (Z/Y ya da projede bildirilmiş `/<NS>/` — `utils.ad_politikasi`) VE
+    include adı grubun önekini taşımalı (`ad_politikasi.fugr_include_oneki`: `ZFG` → `LZFG…` ·
+    `/NS/FG` → `/NS/LFG…`; SAP'nin grup-include adlandırması;
     grup adı include'dan TÜRETİLMEZ, yalnız verilen grupla TUTARLILIĞI ölçülür). Standart çıkış
     grubundaki müşteri include'u (CMOD `ZX...`) bu tipe girmez — o yol ölçülmedi.
     Eksik/yersiz grup → ValueError (çağıran `group_required`/`group_not_applicable` döner).
@@ -121,10 +123,13 @@ def _fugr_include_guardrail(name: str, object_type: str, group: str | None) -> N
         raise ValueError("object_type='fugr_include' için group (fonksiyon grubu) ZORUNLU — grup "
                          "include adından türetilmez.")
     require_customer_namespace(g, what="function group")
-    if not (name or "").strip().upper().startswith("L" + g):
+    # Önek kuralı TEK KAYNAK (Q393): `ZFG` → `LZFG` · namespace'li `/NS/FG` → `/NS/LFG`.
+    from mcp_servers.sap_adt.guardrails import _ad
+    onek = _ad.fugr_include_oneki(g)
+    if not (name or "").strip().upper().startswith(onek):
         raise GuardrailViolation(
             "ADR_0005_A",
-            f"FUGR include '{name}' verilen grubun include öneki 'L{g}' ile başlamıyor — "
+            f"FUGR include '{name}' verilen grubun include öneki '{onek}' ile başlamıyor — "
             f"grup/include eşleşmesi doğrulanamadı (yazma yapılmadı).",
             name=name,
         )
@@ -1147,10 +1152,10 @@ def adt_post_shell(
 
     Args:
         object_type: 'class', 'doma', 'dtel', 'tabl', 'ddls', 'msag', ...
-        name: Customer-namespace name (Z* or Y*).
+        name: Customer-namespace name (Z/Y or a project-declared `/<NS>/`).
         package: Target SAP package.
         transport: Modifiable transport request number.
-        description: Short description (TR for Z* objects per ADR 0005 §D).
+        description: Short description (TR for customer objects per ADR 0005 §D).
         extra: Object-specific parameters (e.g., {'datatype':'CHAR','length':10} for domain).
 
     ⛔ **`ok: false` "OBJE YARATILMADI" DEMEK DEGILDIR — RETRY ETMEDEN ONCE OKU.**
@@ -1261,7 +1266,7 @@ def adt_push_source(
     (and document why in the commit message).
 
     Args:
-        name: Object name (Z*/Y*).
+        name: Object name (Z*/Y* or a project-declared /<NS>/ customer namespace).
         object_type: 'class', 'ddls', 'prog', 'tabl', ...
         source: Source body text (full content; partial diffs not supported).
         transport: Modifiable transport (optional if object already has assignment).
@@ -1275,7 +1280,8 @@ def adt_push_source(
         group: Q383 — YALNIZ object_type='fugr_include' (eşanlamlı 'fugr-include'/'fugr/i';
             fonksiyon grubu include'u, ör. SE54 TMG olay include'u L<FG>F01) için ZORUNLU
             fonksiyon grubu adı. Grup include adından TÜRETİLMEZ. Diğer tiplerde verilirse ret.
-            Guardrail: GRUP Z/Y olmalı ve include adı `L<GRUP>` önekli olmalı.
+            Guardrail: GRUP Z/Y ya da bildirilmiş /<NS>/ olmalı; include grubun önekini
+            taşımalı (ZFG→LZFG…, /NS/FG→/NS/LFG…).
 
     Returns:
         {ok, name, type, result, client_log, reviewer?}
@@ -1467,14 +1473,15 @@ def adt_delete(
     object_type: str,
     transport: str | None = None,
 ) -> dict:
-    """Delete a Z/Y namespace SAP object.
+    """Delete a customer-namespace SAP object (Z/Y or a declared /<NS>/).
 
-    Hard guardrail (ADR 0005 §A): only Z*/Y* objects deletable. Standard SAP
+    Hard guardrail (ADR 0005 §A): only Z*/Y* or project-declared customer namespace
+    (`customer_namespaces`) objects deletable. Standard SAP
     objects → reject. Caller bears responsibility for downstream impact;
     where-used analysis is the caller's job (not done here).
 
     Args:
-        name: Object name (must be Z*/Y*).
+        name: Object name (must be Z*/Y* or a project-declared /<NS>/ customer namespace).
         object_type: 'class', 'doma', 'dtel', 'tabl', 'ddls', 'msag', 'prog', ...
         transport: Modifiable transport for the delete entry.
 
@@ -1647,14 +1654,15 @@ def adt_activate(name: str, object_type: str = "class", also: list | None = None
     (activationExecuted + type=E parse). bdef/srvd gibi tipler de bu yolda çalışır.
 
     Args:
-        name: Birincil obje (Z*/Y*). object_type: 'class', 'ddls', 'bdef', 'srvd', 'tabl', ...
+        name: Birincil obje (Z*/Y* ya da bildirilmiş /<NS>/). object_type: 'class', 'ddls', 'bdef', 'srvd', 'tabl', ...
         also: [{"name": "...", "object_type": "..."}, ...]; None/boş → tek-obje (klasik yol).
             FUGR/I `also` içinde DESTEKLENMEZ (`fugr_include_also_unsupported`; atomik yol
             bu tip için ölçülmedi) — include'u tekil çağır.
         group: Q383 — YALNIZ object_type='fugr_include' (fonksiyon grubu include'u, FUGR/I)
             için ZORUNLU fonksiyon grubu; yoksa `group_required` (sessiz yanlış URI DEĞİL).
-            Aktivasyondan ÖNCE grup KANITI: `programs/includes/<incl>` `include:contextRef`
-            tipi FUGR/I ve adı SAPL<GRUP> olmalı (⚠ önceki metin containerRef diyordu, YANLIŞTI: SAP URL grubunu yansıtır, ölçüm 2026-11-08).
+            Aktivasyondan ÖNCE grup KANITI: `programs/includes/<incl>`'te TEK FUGR/* `include:contextRef`
+            — FUGR/I ana program (SAPL<GRUP> · /NS/SAPL<GRUP>) ya da namespace'li grupta FUGR/F <GRUP>
+            (⚠ önceki metin containerRef diyordu, YANLIŞTI: SAP URL grubunu yansıtır, ölçüm 2026-11-08).
             Uyuşmazlık / ölçülemezlik → `fugr_group_unverified`, oturumdaki push kaydının grubu farklıysa
             `fugr_group_mismatch`; ikisinde de SAP'ye aktivasyon isteği YOK).
             Aktivasyon include'un kendi ucundan (FUGR iki fazlı yol) yapılır; worklist sondası
@@ -1968,7 +1976,7 @@ def adt_classrun(name: str) -> dict:
     bayatlığı ele. Dönüş tazelik ölçmez (`session_age` alanı YOK — açık infra kalemi).
 
     Args:
-        name: Sınıf (Z*/Y*, if_oo_adt_classrun~main implement etmeli).
+        name: Sınıf (Z*/Y* ya da projede bildirilmiş /<NS>/; if_oo_adt_classrun~main implement etmeli).
 
     Returns:
         {ok, class, status, output} — output = out->write konsol çıktısı.

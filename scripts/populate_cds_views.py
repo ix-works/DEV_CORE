@@ -44,6 +44,7 @@ if sys.platform == 'win32':
 
 sys.path.insert(0, str(Path(__file__).parent))
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 
 def extract_label(source: str) -> str:
@@ -296,7 +297,7 @@ def build_shell_xml(name: str, description: str, package: str, master_lang: str 
                 adtcore:name="{name.upper()}"
                 adtcore:description="{xml_escape(description)}"
                 adtcore:masterLanguage="{master_lang}">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package.upper()}"/>
 </ddl:ddlSource>'''
@@ -304,7 +305,7 @@ def build_shell_xml(name: str, description: str, package: str, master_lang: str 
 
 def cds_exists(client: SAPADTClient, name: str) -> bool:
     r = client.session.get(
-        client.url + f'/sap/bc/adt/ddic/ddl/sources/{name.lower()}',
+        client.url + f'/sap/bc/adt/ddic/ddl/sources/{_adt_seg(name)}',
         verify=False, timeout=10
     )
     return r.status_code == 200
@@ -407,7 +408,7 @@ def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
     if force_recreate and exists:
         try:
             dr = client.session.delete(
-                client.url + f'/sap/bc/adt/ddic/ddl/sources/{name.lower()}',
+                client.url + f'/sap/bc/adt/ddic/ddl/sources/{_adt_seg(name)}',
                 params={'corrNr': transport},
                 headers={'X-CSRF-Token': csrf}, verify=False, timeout=30
             )
@@ -442,7 +443,7 @@ def create_one(client: SAPADTClient, csrf: str, name: str, source: str,
         return SONUC_HATA
 
     # Step 3: LOCK
-    obj_url = f'/sap/bc/adt/ddic/ddl/sources/{name.lower()}'
+    obj_url = f'/sap/bc/adt/ddic/ddl/sources/{_adt_seg(name)}'
     lr = client.session.post(
         client.url + obj_url,
         params={'_action':'LOCK', 'accessMode':'MODIFY', 'corrNr':transport},

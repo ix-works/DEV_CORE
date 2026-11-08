@@ -22,6 +22,7 @@ script_dir = Path(__file__).parent
 sys.path.insert(0, str(script_dir))
 
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 from sap_client import SAPClient
 
 
@@ -56,7 +57,7 @@ def check_ddic_object(client: SAPClient, object_name: str, object_type: str) -> 
         }
 
     accept_type, endpoint = mapping
-    object_url = f"/sap/bc/adt/ddic/{endpoint}/{object_name.lower()}"
+    object_url = f"/sap/bc/adt/ddic/{endpoint}/{_adt_seg(object_name)}"
 
     print(f"Checking DDIC object: {object_name} (type: {object_type})")
 

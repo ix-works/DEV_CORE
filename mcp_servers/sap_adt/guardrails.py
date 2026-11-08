@@ -13,6 +13,8 @@ Implementation status:
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path
 from typing import Iterable
 
 
@@ -34,31 +36,28 @@ class GuardrailViolation(Exception):
         }
 
 
-# Customer namespace: Z or Y prefix
-# `\Z` (`$` DEĞİL): Python `$` sondaki TEK `\n`'in önünde de eşleşir ⇒ "ZFOO\n" kabul
-# ediliyordu (Q363②, 2026-10-12). Kabul listesi tam-dize olmalı.
-_CUSTOMER_PREFIX = re.compile(r"^[ZY][A-Z0-9_]*\Z", re.IGNORECASE)
-# Lock objeleri (ENQU) ZORUNLU E-prefix alır (E + customer namespace, örn. EZSD000_X) —
-# bu da MEŞRU customer-namespace'tir, standart obje DEĞİL (SAP konvansiyonu, ADR 0005-A istisnası).
-_LOCK_TYPES = {"enqu", "lock", "lockobject", "lockobjects"}
-_LOCK_PREFIX = re.compile(r"^E[ZY][A-Z0-9_]*\Z", re.IGNORECASE)
+# Müşteri ad alanı kararı TEK KAYNAKTADIR: `scripts/utils/ad_politikasi.py` (Q393, Issue #397).
+# Z/Y · kilit nesnesi (ENQU) için E+Z/Y · projede `customer_namespaces` ile bildirilmiş `/<NS>/`.
+# Desenler (`\Z` — Q363②) ve fail-closed yapılandırma kuralları orada; burada yeniden YAZILMAZ.
+# Proje kökü `_profile` ile AYNI yoldan çözülür (`utils.project_config.project_root`).
+_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from utils import ad_politikasi as _ad  # noqa: E402
+
+_LOCK_TYPES = _ad.KILIT_TIPLERI
 
 
 def _is_customer_namespace(name: str, object_type: str | None = None) -> bool:
-    """Z/Y customer namespace mi? Lock objeleri (ENQU) için E+Z/Y de meşrudur."""
-    if not name:
-        return False
-    if _CUSTOMER_PREFIX.match(name):
-        return True
-    if object_type and object_type.lower() in _LOCK_TYPES and _LOCK_PREFIX.match(name):
-        return True  # lock objesi: E + Z/Y (örn. EZSD000_LOCK)
-    return False
+    """Müşteri ad alanı mı? (Z/Y · ENQU için E+Z/Y · kayıtlı `/<NS>/`) — `ad_politikasi`."""
+    return _ad.musteri_adi_mi(name, object_type)
 
 
 def require_customer_namespace(name: str, *, what: str = "object", object_type: str | None = None) -> None:
     """ADR 0005 §A: standart obje yaratma/değiştirme yasak.
 
-    Customer namespace (Z/Y prefix; lock objeleri için E+Z/Y) zorunlu.
+    Müşteri ad alanı zorunlu: Z/Y önek (lock objeleri için E+Z/Y) ya da projede
+    `customer_namespaces` ile bildirilmiş namespace (`/<NS>/…`; ADR 0005 A-EK).
     """
     if not name:
         raise GuardrailViolation(
@@ -68,7 +67,9 @@ def require_customer_namespace(name: str, *, what: str = "object", object_type: 
     if not _is_customer_namespace(name, object_type):
         raise GuardrailViolation(
             "ADR_0005_A",
-            f"Standart obje yaratma yasak — {what} '{name}' Z/Y (lock için E+Z/Y) ile başlamalı (customer namespace)",
+            f"Standart obje yaratma yasak — {what} '{name}' Z/Y (lock için E+Z/Y) ya da projede "
+            f"bildirilmiş müşteri namespace'i (/<NS>/) ile başlamalı (customer namespace)"
+            f"{_ad.red_gerekcesi(name)}",
             name=name,
         )
 
@@ -107,7 +108,8 @@ def reject_standard_delete(name: str, object_type: str | None = None) -> None:
     if not _is_customer_namespace(name or "", object_type):
         raise GuardrailViolation(
             "ADR_0005_A",
-            f"Standart obje sil yasak — '{name}' Z/Y (lock için E+Z/Y) ile başlamıyor",
+            f"Standart obje sil yasak — '{name}' Z/Y (lock için E+Z/Y) ya da bildirilmiş "
+            f"müşteri namespace'i ile başlamıyor{_ad.red_gerekcesi(name or '')}",
             name=name,
         )
 

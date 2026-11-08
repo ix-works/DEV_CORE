@@ -26,7 +26,7 @@ Bu kuralları **doküman olarak söylemek yetmez** (LESSONS_LEARNED #4); **kural
 
 ## Karar — Kesin Yasaklar Listesi
 
-### KATEGORİ A — SAP Standart Objelere Müdahale (Z ile başlamayan TÜM objeler)
+### KATEGORİ A — SAP Standart Objelere Müdahale (müşteri ad alanında OLMAYAN TÜM objeler — tanım: A-EK)
 
 **Operasyon türünden bağımsız YASAK:**
 
@@ -45,6 +45,34 @@ Bu kuralları **doküman olarak söylemek yetmez** (LESSONS_LEARNED #4); **kural
 | A11 | Bu değişiklikleri yapan **script yazma veya çalıştırma** — script aracılığıyla bypass YASAK |
 | A12 | Append struct, custom field, DTEL adı **AI tarafından önerilmez ve uygulanmaz**. Kullanıcı SAP GUI'den belirler ve uygular, sonucu (field adı, DTEL adı, domain) AI'a bildirir. AI sadece bu sonucu Z'li objelerinde kullanır. |
 | A13 | "Geçici", "test için", "bir kerelik" istisna **YASAK** — standart objeye dokunma kararı her zaman kullanıcının |
+
+#### A-EK — "Müşteri ad alanı" tanımı (2026-11-08, DEV_CORE Issue #397 — kullanıcı onayı)
+
+Bu ADR'de **"Z'li obje"**, **"Z\* obje"** ve **"Z/Y ile başlayan"** ifadeleri aynı şeyi anlatır:
+**müşteri ad alanındaki obje**. Müşteri ad alanı şunlardır:
+
+1. **Z** ya da **Y** ile başlayan ad. Kilit nesnesinde (ENQU) SAP `E` öneki ister: **EZ… / EY…**.
+2. Projenin `project.yaml` dosyasında **`customer_namespaces: ["/<NS>/"]`** ile bildirilmiş
+   namespace ile başlayan ad (`/<NS>/<AD>`; namespace eğik çizgiler dahil en çok 10 karakter).
+   Fonksiyon grubunda include `/<NS>/L<GRUP>…`, ana program `/<NS>/SAPL<GRUP>` adını taşır.
+
+**Standart sayılanlar:** geri kalan her ad. SAP'nin kendi namespace'leri (`/SCWM/`, `/SAPAPO/`
+gibi) **standarttır** ve bu kategorinin bütün yasakları onlar için geçerlidir. Bildirilmemiş
+namespace de standart sayılır (fail-closed). Liste yoksa, boşsa ya da biçimi bozuksa yalnız
+Z/Y geçerlidir.
+
+**Kimin işi:**
+- Namespace'i **SAP'ye kaydetmek** (SE03 / TRNSPACE kaydı, geliştirici ya da onarım lisans
+  anahtarı girmek) **sistem state** değişikliğidir → **KATEGORİ C kapsamında**, AI yapmaz.
+  Lisans anahtarı hiçbir dosyaya yazılmaz.
+- `customer_namespaces` listesine bir namespace eklemek **kullanıcının beyanıdır**. AI listeye
+  kendiliğinden namespace eklemez; eklemeden önce kullanıcıdan onay alır. Çekirdek hangi
+  namespace'in SAP'ye ait olduğunu bilmez, bu yüzden yanlış bir bildirimi yakalayamaz.
+  SAP namespace'ini listeye yazmak bu kategorinin ihlalidir.
+
+**Uygulama (tek kaynak):** karar `scripts/utils/ad_politikasi.py` içindedir. MCP guardrail'i
+(`mcp_servers/sap_adt/guardrails.py`) ve yazma yolundaki script'ler bu modülü çağırır; ad
+kuralını kendi içlerinde yeniden yazmazlar.
 
 ### KATEGORİ B — Standart Tablo Verilerine Direkt Müdahale
 
@@ -73,7 +101,7 @@ Ayrıntılı karar ağacı (bağlam/commit kuralı, adım başına canlı teyitl
 
 ### KATEGORİ D — Z'li Obje Yaratırken/Değiştirirken Zorunlular
 
-Z* (custom) objelerle çalışırken **zorunlu davranışlar**:
+Z* (custom) objelerle — müşteri ad alanındaki her objeyle, namespace'li olanlar dahil (A-EK) — çalışırken **zorunlu davranışlar**:
 
 | # | Zorunlu |
 |---|---|

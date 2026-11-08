@@ -28,7 +28,7 @@ mcp = FastMCP(
     name="sap-adt",
     instructions=(
         "SAP ABAP Development Tools (ADT) — typed tool layer. "
-        "Hardcoded ADR 0005 guardrails: Z/Y prefix mandatory, TR text required, "
+        "Hardcoded ADR 0005 guardrails: customer namespace mandatory (Z/Y or a project-declared /<NS>/ in project.yaml customer_namespaces), TR text required, "
         "no standard object modification, no transport release."
     ),
 )
