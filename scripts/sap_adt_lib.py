@@ -4825,8 +4825,12 @@ class SAPADTClient:
 
         return result
 
-    def activate_object(self, object_name, object_url):
+    def activate_object(self, object_name, object_url, object_type=None):
         """Activate an ABAP object — two-phase flow + TEK KANONIK hukum (Q187/Q188/Q231).
+
+        `object_type` (istege bagli, #413): istek govdesindeki `adtcore:type`. Verilmezse
+        URL'den `_extract_object_type` cozer (eski davranis BIREBIR). Kayit defterinde
+        (`object_types`) olmayan bir tipi yazan arac kendi tipini buradan gecirir.
 
         Iki faz `_activate_object_iki_faz`'dadir (pre-audit + toplu). Donen sonucun
         `aktivasyon_hukmu`'u `None` ise (govde hukum tasimiyor — ör. yalniz generation),
@@ -4839,7 +4843,7 @@ class SAPADTClient:
             dict with 'success' (bool), 'errors' (list), 'warnings' (list), 'response' (str),
             'aktivasyon_hukmu' (True|False|None), 'aktivasyon_dogrulama' (varsa)
         """
-        sonuc = self._activate_object_iki_faz(object_name, object_url)
+        sonuc = self._activate_object_iki_faz(object_name, object_url, object_type=object_type)
         return self._aktivasyon_hukmunu_kesinlestir(sonuc, object_name, object_url)
 
     def _aktivasyon_hukmunu_kesinlestir(self, p, object_name, object_url):
@@ -4943,7 +4947,7 @@ class SAPADTClient:
             refs = [{'uri': object_url, 'type': object_type, 'name': object_name}]
         return refs, bilgi
 
-    def _activate_object_iki_faz(self, object_name, object_url):
+    def _activate_object_iki_faz(self, object_name, object_url, object_type=None):
         """Activate an ABAP object using two-phase pre-audit + batch activation.
 
         Phase 1 (pre-audit): POST with preauditRequested=true on the seed object.
@@ -4963,7 +4967,7 @@ class SAPADTClient:
         Returns:
             dict with 'success' (bool), 'errors' (list), 'warnings' (list), 'response' (str)
         """
-        object_type = self._extract_object_type(object_url)
+        object_type = object_type or self._extract_object_type(object_url)
         parent_uri = self._extract_parent_uri(object_url)
 
         ADT_CORE_NS = 'http://www.sap.com/adt/core'
@@ -8468,6 +8472,610 @@ constants:
             'name': name.upper(),
             'message': f'Behavior implementation {name} created'
         }
+
+    # ── Enhancement spot (ENHS/XSB) + BAdI tanimi — DEV_CORE #413 (olculdu 2026-11-08) ─────
+    # Recete + tuzaklar: playbook/adt-enhancement-spot-badi.md. Saf yardimcilar (ayristir /
+    # kur / uygula / kiyasla / ad denetimi) sinifin ALTINDA modul seviyesindedir.
+    # ⛔ PUT TAM BELGEDIR: gonderilmeyen filtre/tanim SUNUCUDA SILINIR (olculdu) ⇒ yazilan belge
+    #    daima taze GET'ten kurulur; cagiran yalniz degisen alani verir.
+
+    def get_enhancement_spot(self, spot, version=None):
+        """GET spot belgesi -> requests.Response.
+
+        ⚠ `version='active'` AKTIFLIK KANITI DEGILDIR: hic aktive edilmemis spotta da 200 +
+        `adtcore:version="active"` + inaktif icerik doner (olculdu). Aktiflik =
+        `activate_enhancement_spot` (activationExecuted + worklist sondasi).
+        """
+        params = {'version': version} if version else None
+        return self.session.get(self.url + enhs_spot_url(spot), headers=self._get_headers(ENHS_CT),
+                                params=params, verify=False, timeout=self.timeout_default)
+
+    def create_enhancement_spot(self, spot, description, package, transport, root=None):
+        """BOS kabuk spot yarat (POST koleksiyon `?corrNr=`) -> {'ok','status','location','text'}.
+
+        Icerik bu cagrida GONDERILMEZ: tanimlar ayrica `write_enhancement_spot` ile (kilit ->
+        PUT -> unlock) yazilir. Icerikli tek POST da kaydediyor (olculdu) ama birincil yol
+        bos kabuktur — kilit/transport zinciri tek yerde kalir.
+        """
+        hatalar = enhs_ad_denetimi(spot, (), root=root)
+        if hatalar:
+            raise SAPValidationError('ENHS yaratma reddedildi (ADR 0005-A): ' + '; '.join(hatalar))
+        if not transport:
+            raise SAPValidationError('ENHS yaratma: transport (corrNr) zorunlu')
+        govde = enhs_bos_kabuk_govdesi(spot, description, package, self.language)
+        r = self._request_with_csrf_retry(
+            'post', self.url + ENHS_KOLEKSIYON, headers=self._get_headers(ENHS_CT, ENHS_CT),
+            params={'corrNr': transport}, data=govde.encode('utf-8'))
+        return {'ok': r.status_code == 201, 'status': r.status_code,
+                'location': r.headers.get('Location'), 'text': (r.text or '')[:500]}
+
+    def write_enhancement_spot(self, spot, model, transport, root=None):
+        """Tam belgeyi yaz: ad denetimi -> taze GET (2. katman) -> kilit -> PUT -> unlock(finally).
+
+        Doner {'ok','put_status','hata','lock_released','gonderilen'}; istisna ATMAZ (yazma
+        sonucu ve kilit durumu ayri raporlanir). `lock_released` False ise kilit acik kalmis
+        olabilir — `kilit_birakilamadi_uyarisi`.
+        """
+        sonuc = {'ok': False, 'put_status': None, 'hata': None, 'lock_released': None,
+                 'gonderilen': None}
+        if not transport:
+            sonuc['hata'] = 'transport_yok'
+            return sonuc
+        hatalar = enhs_ad_denetimi(spot, [t.get('name') for t in model.get('tanimlar') or []],
+                                   root=root)
+        if hatalar:
+            sonuc['hata'] = 'ad_denetimi: ' + '; '.join(hatalar)
+            return sonuc
+        # 2. katman: yazmadan HEMEN once sunucudaki belge — standart spot'a (masterSystem SAP)
+        # ya da standart adli tanim tasiyan spot'a yazilmaz.
+        r = self.get_enhancement_spot(spot)
+        if r.status_code != 200:
+            sonuc['hata'] = 'on_get_http_%s' % r.status_code
+            return sonuc
+        try:
+            mevcut = enhs_belgesi_ayristir(r.content)
+        except (ValueError, ET.ParseError) as exc:
+            sonuc['hata'] = 'on_get_ayristirilamadi:%s' % exc
+            return sonuc
+        if (mevcut['spot'].get('masterSystem') or '').upper() == 'SAP':
+            sonuc['hata'] = 'standart_obje: masterSystem=SAP (ADR 0005-A)'
+            return sonuc
+        if (mevcut['spot'].get('name') or '').upper() != (spot or '').upper():
+            sonuc['hata'] = 'on_get_ad_uyusmuyor:%s' % mevcut['spot'].get('name')
+            return sonuc
+        hatalar = enhs_ad_denetimi(spot, [t.get('name') for t in mevcut['tanimlar']], root=root)
+        if hatalar:
+            sonuc['hata'] = 'mevcut_belge_ad_denetimi: ' + '; '.join(hatalar)
+            return sonuc
+        sirali, sira_hatasi = enhs_govde_sirasi(model.get('tanimlar') or [],
+                                                [t.get('name') for t in mevcut['tanimlar']])
+        if sira_hatasi:
+            sonuc['hata'] = sira_hatasi
+            return sonuc
+        model = dict(model, tanimlar=sirali)
+        govde = enhs_belgesi_kur(model)
+        sonuc['gonderilen'] = govde
+        url = enhs_spot_url(spot)
+        try:
+            el = self.lock_object(url, transport=transport)
+        except Exception as exc:  # noqa: BLE001 — kilit alinamadi: yazma YOK
+            sonuc['hata'] = 'kilit_istisna:%s: %s' % (type(exc).__name__, str(exc)[:200])
+            return sonuc
+        if el in ('NO_LOCK_SUPPORT', 'IMPLICIT_LOCK', None, ''):
+            # Kilitsiz PUT 400 `lockHandle` doner (olculdu) — denenmez.
+            sonuc['hata'] = 'kilit_alinamadi:%s' % el
+            sonuc['lock_released'] = True
+            return sonuc
+        try:
+            try:
+                r = self._request_with_csrf_retry(
+                    'put', self.url + url, headers=self._get_headers(ENHS_CT, ENHS_CT),
+                    params={'corrNr': getattr(self, '_last_lock_effective_transport', None) or transport,
+                            'lockHandle': el},
+                    data=govde.encode('utf-8'))
+            except requests.RequestException as exc:
+                sonuc['hata'] = 'put_istisna:%s' % type(exc).__name__
+                return sonuc
+            sonuc['put_status'] = r.status_code
+            if not 200 <= r.status_code < 300:
+                sonuc['hata'] = 'put_http_%s: %s' % (r.status_code, (r.text or '')[:300])
+                return sonuc
+            sonuc['ok'] = True
+            return sonuc
+        finally:
+            sonuc['lock_released'] = bool(self.unlock_object(url, el))
+
+    def activate_enhancement_spot(self, spot):
+        """Spot'u aktive et; hukum = aktivasyon sonucu + worklist sondasi + SURUMSUZ GET.
+
+        Uc kosul birlikte: `activate_object` basarili · worklist'te yok (ad + ana tip ENHS) ·
+        surumsuz GET `adtcore:version="active"`. `?version=active` / `?version=inactive`
+        HUKUMDE KULLANILMAZ — ikisi de yanki yapar (iki surumde olculdu). Sonda ya da surumsuz
+        GET kurulamazsa sonuc AKTIF DEGIL, `dogrulanamadi=True`'dur.
+        Doner {'aktif','dogrulanamadi','worklist_sonda','kalan_inaktif','surumsuz_surum',
+               'aktivasyon','errors'}.
+        """
+        url = enhs_spot_url(spot)
+        akt = self.activate_object((spot or '').upper(), url, object_type=ENHS_TIP)
+        akt = akt if isinstance(akt, dict) else {'success': False, 'errors': [{'message': repr(akt)}]}
+        hedef = enhs_worklist_hedefi(spot)
+        ok, sonda, kalan = aktivasyon_worklist_sondasi(self, hedef)
+        surum = enhs_surumsuz_surum(self, spot)
+        if surum is None and ok is not False:
+            ok = None                         # surumsuz GET okunamadi: aktif DENEMEZ
+        elif surum != 'active' and ok is True:
+            ok = False                        # bekleyen inaktif surum var
+        return {'aktif': akt.get('success') is True and ok is True,
+                'dogrulanamadi': ok is None, 'worklist_sonda': sonda, 'kalan_inaktif': kalan,
+                'surumsuz_surum': surum,
+                'aktivasyon': {k: akt.get(k) for k in ('success', 'aktivasyon_hukmu', 'hukum_sebep',
+                                                       'activation_executed')},
+                'errors': akt.get('errors') or []}
+
+
+# =============================================================================
+# Enhancement spot (ENHS/XSB) + BAdI tanimi — saf yardimcilar (DEV_CORE #413)
+# =============================================================================
+# CANLI OLCUM (2026-11-08, bir gelistirme sistemi SAP_BASIS 758; recete
+# playbook/adt-enhancement-spot-badi.md): koleksiyon `/enhancements/enhsxsb`, icerik tipi
+# `application/vnd.sap.adt.enh.enhs.v2+xml`, nesne kilidi nesne URL'inde `_action=LOCK`.
+ENHS_KOLEKSIYON = '/sap/bc/adt/enhancements/enhsxsb'
+ENHS_CT = 'application/vnd.sap.adt.enh.enhs.v2+xml'
+ENHS_TIP = 'ENHS/XSB'
+ENHS_SPOT_AD_SINIRI = 30      # OLCULDU: validation 400 InvalidObjName, T100 SWB_TOOL 017 V1=30
+ENHS_BADI_AD_SINIRI = 30      # AFF semasi — canli sinir OLCULMEDI
+ENHS_FILTRE_TIPLERI = ('C', 'I')   # yeni filtrede OLCULEN tipler; okunan belgedeki tip korunur
+_ENHS_NS = 'http://www.sap.com/adt/enhancements/enhs'
+_ENHCORE_NS = 'http://www.sap.com/abapsource/enhancementscore'
+_XSI_NS = 'http://www.w3.org/2001/XMLSchema-instance'
+_ATOM_NS = 'http://www.w3.org/2005/Atom'
+_ENHS_TANIM_OZN = ('name', 'shorttext', 'singleUse', 'useFallbackClass', 'filterLimitation',
+                   'contextMode', 'amdp', 'internalUse')
+# Sunucunun okumada ekledigi, yazmada GONDERILMEYEN oznitelikler (olculdu: PUT'ta yoktu,
+# readback'te `customLogicRegistered="false"` + `documentationId=""`). Dolu documentationId
+# modellenmez (yazinca ne olacagi OLCULMEDI) ⇒ fail-closed.
+_ENHS_TANIM_SUNUCU_OZN = ('customLogicRegistered',)
+# Yeni tanimin varsayilanlari = olculen ilk PUT'un degerleri (K1).
+ENHS_TANIM_VARSAYILAN = {'singleUse': 'true', 'useFallbackClass': 'false',
+                         'filterLimitation': 'false', 'contextMode': 'N', 'amdp': 'false',
+                         'internalUse': 'false'}
+
+
+def enhs_spot_url(spot):
+    """Spot nesne URL'i (yol parcasi `utils.ad_politikasi.url_segmenti` — kucuk harf, kodlu)."""
+    return '%s/%s' % (ENHS_KOLEKSIYON, _adt_seg(spot))
+
+
+def enhs_worklist_hedefi(spot):
+    """Aktivasyon worklist sondasi hedefi: AD + ANA TIP `ENHS`, URI'siz.
+
+    ⛔ Worklist spot'u `adtcore:type="ENHS/XS"` + `.../enhancements/enhsxs/<ad>` URI'siyle
+    listeler (olculdu); aktivasyon istegi ise `ENHS/XSB` + `.../enhsxsb/<ad>` kullanir. URI ya
+    da tam tip verilirse `aktivasyon_worklist_kalan` HIC eslesmez ⇒ inaktif spot "aktif"
+    gorunur (sahte-yesil). Ana parca `ENHS` ad ile birlikte eslesir.
+    """
+    return [{'name': (spot or '').upper(), 'type': 'ENHS'}]
+
+
+def enhs_surumsuz_surum(adt, spot):
+    """SURUMSUZ GET'in `adtcore:version`'i ('active'/'inactive') | None (okunamadi).
+
+    Aktifligi ayiran TEK okuma budur (iki surumde olculdu): `?version=active` aktivasyondan
+    once, `?version=inactive` aktivasyondan sonra istenen surumu YANKILAR.
+    """
+    try:
+        r = adt.get_enhancement_spot(spot)
+        if getattr(r, 'status_code', None) != 200:
+            return None
+        return enhs_belgesi_ayristir(r.content)['spot'].get('version') or None
+    except Exception:  # noqa: BLE001 — okunamadi = OLCULEMEDI
+        return None
+
+
+def enhs_govde_sirasi(tanimlar, canli_adlar):
+    """PUT govdesindeki tanim SIRASI -> (sirali_liste, hata|None).
+
+    ⛔ SAP kaynagi (`CL_ENH_ADT_BADI_DEF_CONT_SVC->SET_DATA_TO_TOOL`, okundu; canlida
+    TETIKLENMEDI): eski tanimlari silen dongu calisma alaninda SON eski tanimi birakir; gövdedeki
+    tanim icin `READ TABLE ... INTO` bulamazsa calisma alani degismez, `CLEAR` yalniz dongu
+    sonunda ⇒ govdenin ILK tanimi canlida yoksa yeni tanim son eski tanimin metin kimliklerini
+    (filtre metin kimligi dahil) devralir. Kural: once canlida OLAN tanimlar (canli sirasiyla),
+    yeniler SONA (`add_badi_def` append eder; sira yalniz gosterim). Canlida tanim varken
+    govdedeki tanimlarin HICBIRI canlida yoksa tuzak kacinilmaz ⇒ RED (iki adimda yap: once ekle,
+    sonra `--remove-badi`).
+    """
+    canli = [(a or '').upper() for a in canli_adlar or []]
+    ad = lambda t: (t.get('name') or '').upper()  # noqa: E731
+    mevcutlar = sorted([t for t in tanimlar if ad(t) in canli], key=lambda t: canli.index(ad(t)))
+    yeniler = [t for t in tanimlar if ad(t) not in canli]
+    if canli and tanimlar and not mevcutlar:
+        return None, ('sira_tuzagi: canlida tanim var (%s) ama govdedeki tanimlarin hicbiri canlida '
+                      'yok — SAP calisma alani tuzagi; iki adimda yap (once yenileri ekle, sonra '
+                      'eskileri --remove-badi ile kaldir)' % ', '.join(canli))
+    return mevcutlar + yeniler, None
+
+
+def enhs_coklu_kullanim(deger):
+    """'evet'/'hayir' (coklu kullanim) -> `enhs:singleUse` degeri. TERS esleme: coklu = 'false'.
+
+    `singleUse="true"` = TEK kullanim (`BADI_MAIN-SINGLE_USE = X`, olculdu); "coklu kullanim:
+    evet" -> `singleUse="false"` (standart spot'larin canli XML'iyle olculdu).
+    """
+    d = (deger or '').strip().lower()
+    if d == 'evet':
+        return 'false'
+    if d == 'hayir':
+        return 'true'
+    raise ValueError('coklu_kullanim evet|hayir olmali: %r' % deger)
+
+
+def enhs_spec_uygula(model, spec):
+    """Spec (`{'tanimlar': [..]}`) -> (yeni_model, yapilanlar). Her oge EKLE/GUNCELLE'dir;
+    spec'te olmayan tanim canlidaki haliyle KALIR; silme spec'te YOKTUR (yalniz acik bayrak).
+
+    Oge anahtarlari: badi (zorunlu), interface, shorttext, coklu_kullanim (evet|hayir),
+    fallback, ornek [..], filtreler [{'ad','tip','kisa','dtel'}]. Bilinmeyen anahtar ValueError.
+    """
+    izinli = {'badi', 'interface', 'shorttext', 'coklu_kullanim', 'fallback', 'ornek', 'filtreler'}
+    ogeler = (spec or {}).get('tanimlar')
+    if not isinstance(ogeler, list) or not ogeler:
+        raise ValueError("spec 'tanimlar' bos olmayan liste olmali")
+    yap = []
+    for o in ogeler:
+        fazla = set(o) - izinli
+        if fazla:
+            raise ValueError('spec ogesinde bilinmeyen anahtar(lar): %s' % ', '.join(sorted(fazla)))
+        filtreler = o.get('filtreler') or []
+        d = {'badi': o.get('badi'), 'interface': o.get('interface'), 'shorttext': o.get('shorttext'),
+             'singleUse': (enhs_coklu_kullanim(o['coklu_kullanim'])
+                           if o.get('coklu_kullanim') is not None else None),
+             'fallback': o.get('fallback'), 'ornek_ekle': o.get('ornek') or [],
+             'filtre_ekle': [{'name': f.get('ad'), 'type': f.get('tip'), 'shorttext': f.get('kisa')}
+                             for f in filtreler],
+             'filtre_kontrol': {(f.get('ad') or '').upper(): f['dtel'] for f in filtreler if f.get('dtel')}}
+        model, y = enhs_tanim_uygula(model, d)
+        yap.extend('%s: %s' % ((o.get('badi') or '').upper(), x) for x in y)
+    return model, yap
+
+
+def enhs_ad_denetimi(spot, badi_adlari=(), root=None):
+    """ADR 0005-A + ad uzunlugu: [] = yazilabilir, aksi hata metinleri listesi.
+
+    Musteri karari TEK kaynaktan: `utils.ad_politikasi.musteri_karari` (Z/Y ya da projede
+    `customer_namespaces` ile bildirilmis `/<NS>/`). Yeni kural ICAT EDILMEZ (ADR 0019).
+    """
+    from utils.ad_politikasi import musteri_karari, red_gerekcesi
+    hatalar = []
+    for tur, ad, sinir in ([('spot', spot, ENHS_SPOT_AD_SINIRI)]
+                           + [('BAdI', a, ENHS_BADI_AD_SINIRI) for a in badi_adlari or ()]):
+        a = (ad or '').strip().upper()
+        karar = musteri_karari(a, root=root)
+        if karar != 'musteri':
+            hatalar.append('%s adi %r musteri ad alaninda degil (%s)%s'
+                           % (tur, a, karar, red_gerekcesi(a, root=root)))
+        if len(a) > sinir:
+            hatalar.append('%s adi %r %d karakter > %d' % (tur, a, len(a), sinir))
+    return hatalar
+
+
+def _enhs_q(deger):
+    """XML oznitelik degeri: &, <, >, " kacisli, cift tirnakli."""
+    from xml.sax.saxutils import escape as _esc
+    return '"%s"' % _esc('' if deger is None else str(deger), {'"': '&quot;'})
+
+
+def enhs_bos_kabuk_govdesi(spot, description, package, language):
+    """Bos spot yaratma govdesi (olculen POST bicimi; `<enhs:badiDefinitions/>`)."""
+    return enhs_belgesi_kur({'spot': {'name': (spot or '').upper(), 'description': description,
+                                      'language': language, 'masterLanguage': language,
+                                      'package': package},
+                             'tanimlar': []})
+
+
+def _enhs_ref(ad, yol, tip, etiket):
+    return '<enhs:%s adtcore:uri=%s adtcore:type="%s" adtcore:name=%s/>' % (
+        etiket, _enhs_q('/sap/bc/adt/oo/%s/%s' % (yol, _adt_seg(ad))), tip, _enhs_q(ad.upper()))
+
+
+def enhs_belgesi_kur(model):
+    """Model -> PUT/POST tam belgesi (olculen bicim, UTF-8 metin). Sunucu ozniteligi YAZILMAZ."""
+    s = model['spot']
+    p = ['<?xml version="1.0" encoding="UTF-8"?>',
+         '<enhs:objectData xmlns:enhs="%s" xmlns:adtcore="%s" xmlns:enhcore="%s" adtcore:name=%s '
+         'adtcore:type="%s" adtcore:description=%s adtcore:language=%s adtcore:masterLanguage=%s>'
+         % (_ENHS_NS, _AKT_ADTCORE_NS, _ENHCORE_NS, _enhs_q((s.get('name') or '').upper()), ENHS_TIP,
+            _enhs_q(s.get('description')), _enhs_q(s.get('language') or s.get('masterLanguage')),
+            _enhs_q(s.get('masterLanguage') or s.get('language'))),
+         '<adtcore:packageRef adtcore:name=%s/>' % _enhs_q(s.get('package')),
+         '<enhs:contentCommon enhs:toolType="BADI_DEF"/>',
+         '<enhs:contentSpecific><enhs:badiTechnology>']
+    tanimlar = model.get('tanimlar') or []
+    if not tanimlar:
+        p.append('<enhs:badiDefinitions/>')
+    else:
+        p.append('<enhs:badiDefinitions>')
+        for t in tanimlar:
+            p.append('<enhs:badiDefinition %s>' % ' '.join(
+                'enhs:%s=%s' % (k, _enhs_q(t.get(k))) for k in _ENHS_TANIM_OZN))
+            p.append(_enhs_ref(t['interface'], 'interfaces', 'INTF/OI', 'interface'))
+            if t.get('defaultClass'):
+                p.append(_enhs_ref(t['defaultClass'], 'classes', 'CLAS/OC', 'defaultClass'))
+            if t.get('sampleClasses'):
+                p.append('<enhs:sampleClasses>%s</enhs:sampleClasses>' % ''.join(
+                    _enhs_ref(c, 'classes', 'CLAS/OC', 'sampleClass') for c in t['sampleClasses']))
+            if t.get('filters'):
+                p.append('<enhs:filters>')
+                for f in t['filters']:
+                    bas = '<enhs:filter enhs:filterName=%s enhs:filterType=%s enhs:shorttext=%s' % (
+                        _enhs_q(f['name']), _enhs_q(f['type']), _enhs_q(f.get('shorttext')))
+                    if f.get('check'):
+                        p.append(bas + '><enhs:filterCheck xsi:type="enhcore:DictionaryCheck" '
+                                 'xmlns:xsi="%s" xmlns:enhcore="%s"><enhcore:checkObject '
+                                 'adtcore:uri=%s adtcore:type="DTEL/DE" adtcore:name=%s/>'
+                                 '</enhs:filterCheck></enhs:filter>'
+                                 % (_XSI_NS, _ENHCORE_NS,
+                                    _enhs_q('/sap/bc/adt/ddic/dataelements/%s' % _adt_seg(f['check'])),
+                                    _enhs_q(f['check'].upper())))
+                    else:
+                        p.append(bas + '/>')
+                p.append('</enhs:filters>')
+            p.append('</enhs:badiDefinition>')
+        p.append('</enhs:badiDefinitions>')
+    p.append('</enhs:badiTechnology></enhs:contentSpecific></enhs:objectData>')
+    return ''.join(p)
+
+
+def _enhs_yerel(etiket):
+    return etiket.split('}')[-1]
+
+
+def _enhs_ref_adi(e, beklenen_tip, yol, m):
+    tip = e.get('{%s}type' % _AKT_ADTCORE_NS) or ''
+    ad = e.get('{%s}name' % _AKT_ADTCORE_NS) or ''
+    if tip.upper() != beklenen_tip:
+        m.append('%s@type=%s' % (yol, tip))
+    return ad.upper()
+
+
+def _enhs_filtre_ayristir(f, yol, m):
+    sonuc = {'name': f.get('{%s}filterName' % _ENHS_NS), 'type': f.get('{%s}filterType' % _ENHS_NS),
+             'shorttext': f.get('{%s}shorttext' % _ENHS_NS), 'check': None}
+    yol = '%s/filter[%s]' % (yol, sonuc['name'])
+    for k in f.attrib:
+        if _enhs_yerel(k) not in ('filterName', 'filterType', 'shorttext'):
+            m.append('%s@%s' % (yol, _enhs_yerel(k)))
+    for c in f:
+        if c.tag != '{%s}filterCheck' % _ENHS_NS:
+            m.append('%s/%s' % (yol, _enhs_yerel(c.tag)))
+            continue
+        if (c.get('{%s}type' % _XSI_NS) or '').split(':')[-1] != 'DictionaryCheck':
+            m.append('%s/filterCheck@xsi:type=%s' % (yol, c.get('{%s}type' % _XSI_NS)))
+            continue
+        nesneler = [o for o in c if o.tag == '{%s}checkObject' % _ENHCORE_NS]
+        if len(nesneler) != 1 or len(list(c)) != 1:
+            m.append('%s/filterCheck(cocuk=%d)' % (yol, len(list(c))))
+            continue
+        sonuc['check'] = _enhs_ref_adi(nesneler[0], 'DTEL/DE', yol + '/filterCheck', m)
+    return sonuc
+
+
+def _enhs_tanim_ayristir(bd, m, ek=None):
+    ek = [] if ek is None else ek
+    t = {k: bd.get('{%s}%s' % (_ENHS_NS, k)) for k in _ENHS_TANIM_OZN}
+    yol = 'badiDefinition[%s]' % t['name']
+    for k, v in bd.attrib.items():
+        y = _enhs_yerel(k)
+        if y in _ENHS_TANIM_OZN:
+            continue
+        if y in _ENHS_TANIM_SUNUCU_OZN or (y == 'documentationId' and not v):
+            ek.append('%s@%s' % (yol, y))
+            continue
+        m.append('%s@%s' % (yol, y))
+    t.update({'interface': None, 'defaultClass': None, 'sampleClasses': [], 'filters': []})
+    for c in bd:
+        y = _enhs_yerel(c.tag)
+        if c.tag == '{%s}link' % _ATOM_NS:
+            ek.append('%s/atom:link' % yol)
+            continue
+        if c.tag == '{%s}interface' % _ENHS_NS:
+            t['interface'] = _enhs_ref_adi(c, 'INTF/OI', yol + '/interface', m)
+        elif c.tag == '{%s}defaultClass' % _ENHS_NS:
+            t['defaultClass'] = _enhs_ref_adi(c, 'CLAS/OC', yol + '/defaultClass', m)
+        elif c.tag == '{%s}sampleClasses' % _ENHS_NS:
+            for s in c:
+                if s.tag == '{%s}sampleClass' % _ENHS_NS:
+                    t['sampleClasses'].append(_enhs_ref_adi(s, 'CLAS/OC', yol + '/sampleClass', m))
+                else:
+                    m.append('%s/sampleClasses/%s' % (yol, _enhs_yerel(s.tag)))
+        elif c.tag == '{%s}filters' % _ENHS_NS:
+            for f in c:
+                if f.tag == '{%s}filter' % _ENHS_NS:
+                    t['filters'].append(_enhs_filtre_ayristir(f, yol, m))
+                else:
+                    m.append('%s/filters/%s' % (yol, _enhs_yerel(f.tag)))
+        else:
+            m.append('%s/%s' % (yol, y))
+    if not t['interface']:
+        m.append('%s/interface(yok)' % yol)
+    return t
+
+
+def enhs_belgesi_ayristir(govde):
+    """GET govdesi -> {'spot': {..}, 'tanimlar': [..], 'modellenmeyen': [..], 'sunucu_ek': [..]}.
+
+    `sunucu_ek` = tolere edilen sunucu eklentileri (yazilmaz, readback kiyasina GIRMEZ).
+
+    ⛔ `modellenmeyen` BOS DEGILSE belge YAZILMAZ: PUT tam belgedir, modelin tasimadigi her
+    alan (bilinmeyen eleman/oznitelik, Dictionary disi filtre kontrolu, dolu documentationId)
+    yazinca SUNUCUDA SILINIR. Sunucunun salt-okunur eklentileri (atom:link, enhs:usages,
+    adtcore meta oznitelikleri, `customLogicRegistered`, bos `documentationId`) tolere edilir.
+    Govde `enhs:objectData` degilse ValueError.
+    """
+    root = ET.fromstring(govde if isinstance(govde, (bytes, bytearray)) else (govde or '').encode('utf-8'))
+    if root.tag != '{%s}objectData' % _ENHS_NS:
+        raise ValueError('enhs_belgesi_degil:%s' % _enhs_yerel(root.tag))
+    a = lambda k: root.get('{%s}%s' % (_AKT_ADTCORE_NS, k))  # noqa: E731
+    spot = {k: a(k) for k in ('name', 'type', 'description', 'language', 'masterLanguage',
+                              'masterSystem', 'version')}
+    spot['package'] = None
+    m, tanimlar, arac, ek = [], [], None, []
+    for k in root.attrib:
+        if not k.startswith('{%s}' % _AKT_ADTCORE_NS):
+            m.append('objectData@%s' % _enhs_yerel(k))
+    for c in root:
+        if c.tag == '{%s}link' % _ATOM_NS:
+            ek.append('objectData/atom:link')
+            continue
+        if c.tag == '{%s}packageRef' % _AKT_ADTCORE_NS:
+            spot['package'] = c.get('{%s}name' % _AKT_ADTCORE_NS)
+        elif c.tag == '{%s}contentCommon' % _ENHS_NS:
+            arac = c.get('{%s}toolType' % _ENHS_NS)
+            if (c.get('{%s}internal' % _ENHS_NS) or 'false') != 'false':
+                m.append('contentCommon@internal=%s' % c.get('{%s}internal' % _ENHS_NS))
+            for k in c.attrib:
+                if _enhs_yerel(k) in ('internal', 'internalFlagEditable'):
+                    ek.append('contentCommon@%s' % _enhs_yerel(k))
+            for u in c:
+                if u.tag != '{%s}usages' % _ENHS_NS:
+                    m.append('contentCommon/%s' % _enhs_yerel(u.tag))
+                else:
+                    ek.append('contentCommon/usages')   # sunucu doldurur; GONDERILMEZ
+        elif c.tag == '{%s}contentSpecific' % _ENHS_NS:
+            for bt in c:
+                if bt.tag != '{%s}badiTechnology' % _ENHS_NS:
+                    m.append('contentSpecific/%s' % _enhs_yerel(bt.tag))
+                    continue
+                for bl in bt:
+                    if bl.tag != '{%s}badiDefinitions' % _ENHS_NS:
+                        m.append('badiTechnology/%s' % _enhs_yerel(bl.tag))
+                        continue
+                    for bd in bl:
+                        if bd.tag == '{%s}badiDefinition' % _ENHS_NS:
+                            tanimlar.append(_enhs_tanim_ayristir(bd, m, ek))
+                        else:
+                            m.append('badiDefinitions/%s' % _enhs_yerel(bd.tag))
+        else:
+            m.append('objectData/%s' % _enhs_yerel(c.tag))
+    if arac != 'BADI_DEF':
+        m.append('contentCommon@toolType=%s' % arac)
+    return {'spot': spot, 'tanimlar': tanimlar, 'modellenmeyen': m, 'sunucu_ek': ek}
+
+
+def enhs_tanim_uygula(model, degisiklik):
+    """Modele TEK tanim degisikligi uygula -> (yeni_model, yapilanlar). Girdi modeli DEGISMEZ.
+
+    degisiklik: {'badi': AD (zorunlu), 'kaldir': bool, 'shorttext', 'interface', 'singleUse'
+    ('true'/'false'), 'fallback': SINIF, 'fallback_kaldir': bool, 'ornek_ekle': [..],
+    'ornek_kaldir': [..], 'filtre_ekle': [{'name','type','shorttext'}], 'filtre_kontrol':
+    {FILTRE: DTEL}, 'filtre_kaldir': [..]}. Verilmeyen her alan GET'teki degeriyle KALIR.
+    Gecersiz istek (olmayani kaldirmak, arabirimsiz yeni tanim, olculmemis filtre tipi) ValueError.
+    """
+    import copy
+    yeni = copy.deepcopy(model)
+    d = degisiklik or {}
+    ad = (d.get('badi') or '').strip().upper()
+    if not ad:
+        raise ValueError('badi adi zorunlu')
+    yap = []
+    tanimlar = yeni['tanimlar']
+    sira = [i for i, t in enumerate(tanimlar) if (t.get('name') or '').upper() == ad]
+    if d.get('kaldir'):
+        if not sira:
+            raise ValueError('kaldirilacak BAdI tanimi yok: %s' % ad)
+        del tanimlar[sira[0]]
+        return yeni, ['tanim kaldirildi: %s' % ad]
+    if sira:
+        t = tanimlar[sira[0]]
+    else:
+        if not d.get('interface') or not d.get('shorttext'):
+            raise ValueError('yeni BAdI tanimi %s icin --interface ve --shorttext zorunlu' % ad)
+        t = dict(ENHS_TANIM_VARSAYILAN, name=ad, shorttext=None, interface=None,
+                 defaultClass=None, sampleClasses=[], filters=[])
+        tanimlar.append(t)
+        yap.append('yeni tanim: %s' % ad)
+    if d.get('shorttext') is not None:
+        t['shorttext'] = d['shorttext']
+        yap.append('shorttext')
+    if d.get('interface'):
+        t['interface'] = d['interface'].upper()
+        yap.append('interface')
+    if d.get('singleUse') is not None:
+        t['singleUse'] = d['singleUse']
+        yap.append('singleUse')
+    if d.get('fallback') and d.get('fallback_kaldir'):
+        raise ValueError('fallback hem verildi hem kaldiriliyor')
+    if d.get('fallback'):
+        t['defaultClass'], t['useFallbackClass'] = d['fallback'].upper(), 'true'
+        yap.append('fallback')
+    if d.get('fallback_kaldir'):
+        if not t.get('defaultClass'):
+            raise ValueError('kaldirilacak fallback sinifi yok (%s)' % ad)
+        t['defaultClass'], t['useFallbackClass'] = None, 'false'
+        yap.append('fallback kaldirildi')
+    for c in d.get('ornek_kaldir') or []:
+        c = c.upper()
+        if c not in t['sampleClasses']:
+            raise ValueError('kaldirilacak ornek sinif yok: %s' % c)
+        t['sampleClasses'].remove(c)
+        yap.append('ornek kaldirildi: %s' % c)
+    for c in d.get('ornek_ekle') or []:
+        if c.upper() not in t['sampleClasses']:
+            t['sampleClasses'].append(c.upper())
+            yap.append('ornek: %s' % c.upper())
+    for fa in d.get('filtre_kaldir') or []:
+        fa = fa.upper()
+        konum = [i for i, f in enumerate(t['filters']) if (f.get('name') or '').upper() == fa]
+        if not konum:
+            raise ValueError('kaldirilacak filtre yok: %s' % fa)
+        del t['filters'][konum[0]]
+        yap.append('filtre kaldirildi: %s' % fa)
+    for f in d.get('filtre_ekle') or []:
+        fa, tip = (f.get('name') or '').strip().upper(), (f.get('type') or '').upper()
+        if not fa:
+            raise ValueError('filtre adi bos (SAP e037)')
+        mevcut =[x for x in t['filters'] if (x.get('name') or '').upper() == fa]
+        if mevcut:
+            if tip and tip != (mevcut[0].get('type') or '').upper():
+                raise ValueError('filtre %s tipi degistirilemez (%s -> %s; OLCULMEDI)'
+                                 % (fa, mevcut[0].get('type'), tip))
+            mevcut[0]['shorttext'] = f.get('shorttext')
+            yap.append('filtre guncellendi: %s' % fa)
+            continue
+        if tip not in ENHS_FILTRE_TIPLERI:
+            raise ValueError('filtre tipi %r OLCULMEDI (olculen: %s)' % (tip, ', '.join(ENHS_FILTRE_TIPLERI)))
+        t['filters'].append({'name': fa, 'type': tip, 'shorttext': f.get('shorttext'), 'check': None})
+        yap.append('filtre: %s' % fa)
+    for fa, dtel in (d.get('filtre_kontrol') or {}).items():
+        konum = [x for x in t['filters'] if (x.get('name') or '').upper() == fa.upper()]
+        if not konum:
+            raise ValueError('kontrolu verilen filtre yok: %s' % fa)
+        konum[0]['check'] = dtel.upper() if dtel else None
+        yap.append('filtre kontrolu: %s' % fa.upper())
+    return yeni, yap
+
+
+def enhs_kiyasla(beklenen, okunan):
+    """Gonderilen model <-> readback modeli: modellenen alanlarda farklar listesi ([] = esit)."""
+    fark = []
+    for k in ('name', 'description', 'package'):
+        b, o = beklenen['spot'].get(k), okunan['spot'].get(k)
+        if k == 'name':
+            b, o = (b or '').upper(), (o or '').upper()
+        if b != o:
+            fark.append('spot.%s: gonderilen=%r okunan=%r' % (k, b, o))
+    bt = {(t.get('name') or '').upper(): t for t in beklenen['tanimlar']}
+    ot = {(t.get('name') or '').upper(): t for t in okunan['tanimlar']}
+    for ad in sorted(set(bt) | set(ot)):
+        if ad not in ot:
+            fark.append('tanim %s okunanda YOK' % ad)
+            continue
+        if ad not in bt:
+            fark.append('tanim %s gonderilmedi ama okunanda VAR' % ad)
+            continue
+        for k in _ENHS_TANIM_OZN + ('interface', 'defaultClass', 'sampleClasses', 'filters'):
+            if bt[ad].get(k) != ot[ad].get(k):
+                fark.append('tanim[%s].%s: gonderilen=%r okunan=%r' % (ad, k, bt[ad].get(k), ot[ad].get(k)))
+    return fark
 
 
 # =============================================================================

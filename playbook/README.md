@@ -28,6 +28,7 @@ Bu klasör **L3 katman** dosyaları içerir: SAP ADT REST işlemleri için **den
 | **ABAP Class** (create, OSQLC, push+activate flow) | [`adt-classes.md`](adt-classes.md) | §19, §20, §26 |
 | **ABAP Report (PROG/P)** | [`adt-programs.md`](adt-programs.md) | §21 |
 | **Function Group + Function Module** (create/imza/RFC) + **Klasik Dynpro ekranı & GUI status ÜRETİMİ** | [`adt-fugr-functions.md`](adt-fugr-functions.md) | FG/FM tam pattern + §6 `ZSD000_FM_SCREEN_GEN` (RPY_DYNPRO_INSERT + RS_CUA, SOAP-RFC) — **yeni klasik ALV/Dynpro programında ÖNER** |
+| **BAdI Enhancement Spot (ENHS/XSB) + BAdI tanımı** | [`adt-enhancement-spot-badi.md`](adt-enhancement-spot-badi.md) | PUT TAM belge · `?version=active` aktiflik kanıtı değil · worklist `ENHS/XS` · MCP yok, CLI |
 | ABAP coding patterns (Range, FAE, İç tablo, Kur dönüşümü, harici HTTP UTF-8 gövde, Türkçe harf/mesaj değişkeni/regex sınırları) | [`coding-patterns.md`](coding-patterns.md) | §22-§27 |
 | OData services (Pricing simulation, Function Import, UpdateSO, BAPIRET2) | [`odata-services.md`](odata-services.md) | §27-§30 |
 | Bilinen hatalar ve çözümlü durumlar | [`known-errors.md`](known-errors.md) | §31 |
@@ -62,6 +63,7 @@ Her playbook section'ı `scripts/` altındaki **kanonik implementasyon**'a refer
 | Class | [`scripts/create_object.py`](../scripts/create_object.py), [`push_object.py`](../scripts/push_object.py) | `adt-classes.md` |
 | Function Group | [`scripts/create_function_group.py`](../scripts/create_function_group.py) | `adt-fugr-functions.md` (placeholder) |
 | Function Module | [`scripts/create_function_module.py`](../scripts/create_function_module.py) | `adt-fugr-functions.md` (placeholder) |
+| BAdI Enhancement Spot + BAdI tanımı | [`scripts/populate_badi_spot.py`](../scripts/populate_badi_spot.py) | `adt-enhancement-spot-badi.md` |
 | Populate batch | [`scripts/populate_*.py`](../scripts/) | İlgili obje dosyası |
 | Behavior Definition | [`scripts/create_behavior_definition.py`](../scripts/create_behavior_definition.py) | `adt-rap.md` §32.2 |
 | Behavior Impl. | [`scripts/create_behavior_implementation.py`](../scripts/create_behavior_implementation.py) | `adt-rap.md` §32.3 |
