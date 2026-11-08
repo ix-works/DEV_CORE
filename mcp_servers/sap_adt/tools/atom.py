@@ -1266,7 +1266,7 @@ def adt_push_source(
     (and document why in the commit message).
 
     Args:
-        name: Object name (Z*/Y*).
+        name: Object name (Z*/Y* or a project-declared /<NS>/ customer namespace).
         object_type: 'class', 'ddls', 'prog', 'tabl', ...
         source: Source body text (full content; partial diffs not supported).
         transport: Modifiable transport (optional if object already has assignment).
@@ -1481,7 +1481,7 @@ def adt_delete(
     where-used analysis is the caller's job (not done here).
 
     Args:
-        name: Object name (must be Z*/Y*).
+        name: Object name (must be Z*/Y* or a project-declared /<NS>/ customer namespace).
         object_type: 'class', 'doma', 'dtel', 'tabl', 'ddls', 'msag', 'prog', ...
         transport: Modifiable transport for the delete entry.
 
@@ -1976,7 +1976,7 @@ def adt_classrun(name: str) -> dict:
     bayatlığı ele. Dönüş tazelik ölçmez (`session_age` alanı YOK — açık infra kalemi).
 
     Args:
-        name: Sınıf (Z*/Y*, if_oo_adt_classrun~main implement etmeli).
+        name: Sınıf (Z*/Y* ya da projede bildirilmiş /<NS>/; if_oo_adt_classrun~main implement etmeli).
 
     Returns:
         {ok, class, status, output} — output = out->write konsol çıktısı.

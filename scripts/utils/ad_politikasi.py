@@ -29,8 +29,10 @@ YAPILANDIRMA (`namespace_yapilandirmasi`) — FAIL-CLOSED
   · HANGİ project.yaml (bug-gate F2, 2026-11-08): sürecin ÇÖZDÜĞÜ `.conn_adt`'nin dizinindeki.
     Yazma hangi sisteme gidiyorsa izin listesi o projeden gelir ⇒ `CLAUDE_PROJECT_DIR=<başka
     dizin>` öneki ya da `--cwd B` listeyi bağlantıdan ayıramaz. Açık `root` verilir ve bağlantı
-    dizininden farklıysa ⇒ namespace kabulü KAPALI. Bağlantı dosyası yoksa (çevrimdışı
-    validator) `root` / `project_root()` okunur — o süreçte SAP yazımı da yoktur.
+    dizininden farklıysa ⇒ namespace kabulü KAPALI. Bağlantı dosyası çözülemezse de KAPALI
+    (bug-gate-2 F3 ölçümü: `.conn_adt`'siz dizin + env `ADT_SAP_URL=…` + `CLAUDE_PROJECT_DIR=<listesi
+    /SCWM/ olan dizin>` ⇒ eski "project_root'a düş" kuralı `/SCWM/X_TABLE`'ı KABUL ediyordu; kimlik
+    env'den gelebildiği için "dosya yoksa yazım da yok" varsayımı YANLIŞTI). Z/Y kabulü etkilenmez.
   · ⛔ env `IX_CUSTOMER_NAMESPACES` BİLEREK OKUNMAZ (`project_config.cfg` env'i önceler):
     bir komutun önüne env koyarak izin listesini genişletmek guard'ı aşmanın en kısa yolu
     olurdu. (Önceki metin "kaynak yalnız proje kökü" diyordu ve `CLAUDE_PROJECT_DIR` önekini
@@ -113,17 +115,17 @@ def _baglanti_dizini() -> Path | None:
 
 def _kok_coz(root) -> tuple[Path | None, str | None]:
     """(kök, hata). Bağlantı dosyası varsa kök ONUN dizinidir; verilen `root` ondan ayrışırsa
-    hata (namespace kabulü KAPALI — fail-closed). Bağlantı yoksa `root` ya da `project_root()`."""
+    hata (namespace kabulü KAPALI — fail-closed). Bağlantı dosyası çözülemezse de KAPALI: kimlik
+    `.conn_adt` olmadan env'den (`ADT_SAP_*`) gelebilir ⇒ listenin hangi projeye ait olduğu
+    bilinemez (bug-gate-2 F3, 2026-11-08 ölçüldü)."""
     baglanti = _baglanti_dizini()
-    if baglanti is not None:
-        if root and Path(root).resolve() != baglanti:
-            return None, (f"{ANAHTAR}: proje kökü ({Path(root).resolve()}) bağlantı dosyasının "
-                          f"dizininden ({baglanti}) farklı — namespace kabulü KAPALI")
-        return baglanti, None
-    if root:
-        return Path(root), None
-    from utils.project_config import project_root  # lazy: komşu taban kopyaları import'u taşımaz
-    return project_root(), None
+    if baglanti is None:
+        return None, (f"{ANAHTAR}: bağlantı dosyası (.conn_adt) çözülemedi — liste hangi projeye "
+                      f"ait belirsiz (kimlik env'den gelebilir), namespace kabulü KAPALI")
+    if root and Path(root).resolve() != baglanti:
+        return None, (f"{ANAHTAR}: proje kökü ({Path(root).resolve()}) bağlantı dosyasının "
+                      f"dizininden ({baglanti}) farklı — namespace kabulü KAPALI")
+    return baglanti, None
 
 
 _YAML_ONBELLEK: dict = {}

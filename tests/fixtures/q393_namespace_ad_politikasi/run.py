@@ -35,6 +35,7 @@ KULLANIM
 """
 from __future__ import annotations
 
+import ast
 import io
 import os
 import re
@@ -107,16 +108,26 @@ def _sessiz(fn, *a, **k):
         sys.stdout, sys.stderr = eski
 
 
-def proje(yaml_metni: str | None) -> Path:
-    """Yeni proje kökü (her biri AYRI yol: `_yaml_lite` yola göre önbelleklidir)."""
+def proje(yaml_metni: str | None, baglanti: bool = True) -> Path:
+    """Yeni proje kökü (her biri AYRI yol: `_yaml_lite` yola göre önbelleklidir).
+    `baglanti=True`: dizine sahte `.conn_adt` yazılır (bug-gate-2 F3: bağlantı dosyası
+    çözülemeyen süreçte namespace kabulü KAPALI ⇒ kabul vektörleri gerçek bir bağlantı ister)."""
     _SAYAC[0] += 1
     d = _KUM / f"p{_SAYAC[0]}"
     d.mkdir(parents=True)
     if yaml_metni is not None:
         (d / "project.yaml").write_bytes(yaml_metni.encode("utf-8"))
+    if baglanti:
+        _sahte_baglanti(d)
     os.environ["CLAUDE_PROJECT_DIR"] = str(d)
     _baglanti(d)
     return d
+
+
+def nsy(A, r):
+    """`namespace_yapilandirmasi(r)` — bağlantıyı önce r'ye sabitler (açık kök = bağlantı dizini)."""
+    _baglanti(r)
+    return A.namespace_yapilandirmasi(r)
 
 
 def _baglanti(d, explicit=None):
@@ -171,15 +182,13 @@ def bolum_y(A):
     r1b = proje(YAML_YOK)
     r1c = proje("customer_namespaces: []\n")
     ekle("Y1 yapilandirma yok/bos -> () ve hata yok (bugunku davranis)",
-         A.namespace_yapilandirmasi(r1) == ((), []) and A.namespace_yapilandirmasi(r1b) == ((), [])
-         and A.namespace_yapilandirmasi(r1c) == ((), []),
-         [A.namespace_yapilandirmasi(x) for x in (r1, r1b, r1c)])
+         nsy(A, r1) == ((), []) and nsy(A, r1b) == ((), []) and nsy(A, r1c) == ((), []),
+         [nsy(A, x) for x in (r1, r1b, r1c)])
     r2 = proje("customer_namespaces: [\"/NSPC/\", '/AB_1/']\n")
     r2b = proje("customer_namespaces:\n  - \"/NSPC/\"   # aciklama\n  - /AB_1/\n")
     ekle("Y2 satir ici + blok liste okunur (#391 ayristiricisi)",
-         A.namespace_yapilandirmasi(r2) == (("/NSPC/", "/AB_1/"), [])
-         and A.namespace_yapilandirmasi(r2b) == (("/NSPC/", "/AB_1/"), []),
-         [A.namespace_yapilandirmasi(r2), A.namespace_yapilandirmasi(r2b)])
+         nsy(A, r2) == (("/NSPC/", "/AB_1/"), []) and nsy(A, r2b) == (("/NSPC/", "/AB_1/"), []),
+         [nsy(A, r2), nsy(A, r2b)])
     r3 = proje("customer_namespaces: [/nspc/]\n")
     ekle("Y3 kucuk harf buyuge normalize", A.namespace_yapilandirmasi(r3) == (("/NSPC/",), []),
          A.namespace_yapilandirmasi(r3))
@@ -351,7 +360,7 @@ def bolum_s(SD):
 def bolum_r(A, G, L, O):
     xml_canli = (BURASI / "canli" / "ns_progs_include_meta.xml").read_text(encoding="utf-8")
     # R1 (i): CLAUDE_PROJECT_DIR=X (.conn_adt YOK, liste /SCWM/ + /NSPC/) · bağlantı cwd P'den
-    x = proje("customer_namespaces: [\"/SCWM/\", \"/NSPC/\"]\n")
+    x = proje("customer_namespaces: [\"/SCWM/\", \"/NSPC/\"]\n", baglanti=False)
     pdir = _KUM / f"p{_SAYAC[0]}_baglanti"
     pdir.mkdir()
     (pdir / "project.yaml").write_bytes(YAML_YOK.encode("utf-8"))
@@ -436,45 +445,82 @@ def bolum_r(A, G, L, O):
          and k(karisik, "/NSPC/FG1")[0] is False and k(karisik, "/NSPC/FG2")[0] is False
          and k(z_karisik, "ZFG1")[0] is False,
          [k(iki_ff, "/NSPC/FG1"), k(karisik, "/NSPC/FG2"), k(z_karisik, "ZFG1")])
+    # R11 (bug-gate-2 F3): .conn_adt YOK + kimlik env'den (ADT_SAP_URL) + CLAUDE_PROJECT_DIR=<listeli dizin>
+    x11 = proje("customer_namespaces: [\"/SCWM/\", \"/NSPC/\"]\n", baglanti=False)
+    _baglanti(x11, explicit=x11)
+    L.conn_path = L.find_conn_file()                  # GERÇEK çözücü: açık dizin, dosya YOK
+    on_kosul11 = not Path(L.conn_path).exists() and os.environ.get("CLAUDE_PROJECT_DIR") == str(x11)
+    eski_url = os.environ.get("ADT_SAP_URL")
+    os.environ["ADT_SAP_URL"] = "https://sahte.invalid"
+    try:
+        ns11, h11 = A.namespace_yapilandirmasi()
+        sonuc11 = (A.musteri_adi_mi("/SCWM/X_TABLE"), A.musteri_adi_mi("/NSPC/X"),
+                   G._is_customer_namespace("/SCWM/X_TABLE", "tabl"), A.musteri_adi_mi("ZSD001_T01"),
+                   A.musteri_adi_mi("EZSD001_L", "enqu"), G._is_customer_namespace("ZSD001_T01", "tabl"))
+        gerekce11 = A.red_gerekcesi("/SCWM/X_TABLE")
+    finally:
+        if eski_url is None:
+            os.environ.pop("ADT_SAP_URL", None)
+        else:
+            os.environ["ADT_SAP_URL"] = eski_url
+    ekle("R11 ⭐ .conn_adt cozulemedi + env ADT_SAP_URL + CLAUDE_PROJECT_DIR=<listesi /SCWM/ /NSPC/> -> "
+         "namespace KAPALI (/SCWM/ /NSPC/ RED, gerekce 'cozulemedi') · Z/Y + EZ kilit AYNEN kabul",
+         on_kosul11 and ns11 == () and h11 and "çözülemedi" in h11[0]
+         and sonuc11 == (False, False, False, True, True, True) and "çözülemedi" in gerekce11,
+         [on_kosul11, ns11, h11, sonuc11, gerekce11])
+    _baglanti(x11)
 
 
 # ── U: ADT URL yol parçası (Parti 2a) ───────────────────────────────────────
-_URL_DOSYALARI = (
-    "scripts/sap_adt_lib.py", "scripts/sap_client.py", "scripts/create_rap_service.py",
-    "scripts/populate_cds_views.py", "scripts/populate_dataelements.py", "scripts/populate_message_class.py",
-    "scripts/populate_tables.py", "scripts/populate_lock_objects.py", "scripts/populate_domains.py",
-    "scripts/push_textpool.py", "scripts/pull_msag_textpool.py", "scripts/check_package.py",
-    "scripts/syntax_check.py", "scripts/list_revisions.py", "scripts/object_types.py",
-    "scripts/validators/check_sap_active_version.py", "scripts/validators/check_sap_struct_consistency.py",
-    "scripts/validators/check_source_drift.py", "scripts/validators/check_table_field_drop.py",
-    "scripts/validators/check_struct_field_dtel_active.py", "mcp_servers/sap_adt/tools/composite.py",
-    "mcp_servers/sap_adt/tools/atom.py",
-)
 _URL_ISARET = ("/sap/bc/adt", "_BASE}", "uri=", "_path}", "_url}")
-_ATAMA_ADLARI = {"prog_l", "fg", "fm", "cls"}
+_ICF_SEGMENT = "/sap/bc/ui5_ui5/"     # BSP ICF yolu: ayrı sınıf, changelog'da bilinen sınır (kapsam dışı)
 
 
-def _url_kalintilari():
-    """AST: URL f-string'inde `{X.lower()}` ve URL parçası atamasında `= X.lower()` kalıntısı."""
-    import ast
+def _url_dosyalari():
+    """KODDAN türetilir (bug-gate-2 F2): `scripts/` + `mcp_servers/` altında `/sap/bc/adt/`
+    geçen her .py (attic · tests · __pycache__ hariç). Elle liste yazılmaz — yeni bir URL
+    dosyası eklendiğinde tarama ona KENDİLİĞİNDEN uzanır. (Seçim tablosu `run_fixture_tests`
+    P2a satırları elle tutulur; kaçan dosya yalnız seçili koşumda atlanır, tam süit/CI yakalar.)"""
+    out = []
+    for kok in ("scripts", "mcp_servers"):
+        for p in sorted((REPO / kok).rglob("*.py")):
+            rel = p.relative_to(REPO).as_posix()
+            if any(f"/{x}/" in f"/{rel}" for x in ("attic", "tests", "__pycache__")):
+                continue
+            if "/sap/bc/adt/" in p.read_bytes().decode("utf-8", "replace"):
+                out.append(rel)
+    return out
+
+
+def _lower_cagrisi(c) -> bool:
+    return (isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr == "lower"
+            and not c.args)
+
+
+def _url_kalintilari(dosyalar):
+    """AST: URL f-string'inde `{X.lower()}` ya da AYNI kapsamda `ad = X.lower()` atanmış bir adın
+    `{ad}` kullanımı (ad listesi elle yazılmaz — kapsam başına türetilir). ICF yolu hariç."""
     kalan = []
-    for yol in _URL_DOSYALARI:
+    for yol in dosyalar:
         ham = (REPO / yol).read_bytes().decode("utf-8")
         satirlar = ham.splitlines(keepends=True)
-        for n in ast.walk(ast.parse(ham)):
-            if isinstance(n, ast.JoinedStr):
+        agac = ast.parse(ham)
+        kapsamlar = [agac] + [n for n in ast.walk(agac) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        for kap in kapsamlar:
+            icerik = [n for st in kap.body for n in ast.walk(st)]
+            lower_adlar = {t.id for n in icerik if isinstance(n, ast.Assign) and _lower_cagrisi(n.value)
+                           for t in n.targets if isinstance(t, ast.Name)}
+            for n in icerik:
+                if not isinstance(n, ast.JoinedStr):
+                    continue
                 seg = "".join(satirlar[n.lineno - 1:n.end_lineno])
-                if any(i in seg for i in _URL_ISARET):
-                    for v in n.values:
-                        c = v.value if isinstance(v, ast.FormattedValue) else None
-                        if (isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
-                                and c.func.attr == "lower" and not c.args):
-                            kalan.append(f"{yol}:{c.lineno}")
-            elif (isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
-                  and n.targets[0].id in _ATAMA_ADLARI and isinstance(n.value, ast.Call)
-                  and isinstance(n.value.func, ast.Attribute) and n.value.func.attr == "lower"):
-                kalan.append(f"{yol}:{n.lineno}(atama)")
-    return kalan
+                if not any(i in seg for i in _URL_ISARET) or _ICF_SEGMENT in seg:
+                    continue
+                for v in n.values:
+                    c = v.value if isinstance(v, ast.FormattedValue) else None
+                    if _lower_cagrisi(c) or (isinstance(c, ast.Name) and c.id in lower_adlar):
+                        kalan.append(f"{yol}:{c.lineno}")
+    return sorted(set(kalan))
 
 
 def _kurucular(m):
@@ -527,9 +573,12 @@ def bolum_u(A, O, TO, KUR, TKUR):
     ekle("U6 ⭐ KONTROL: 11 XML/URL kurucusu Z adinda tabanla BAYT BAYT AYNI", not fark, fark[:4])
     ekle("U7 ⭐ ayni 11 kurucu NS adinda %2F kodlu (ham '/nspc/' yol parcasi YOK, %25 YOK)",
          not ns_hata, ns_hata[:4])
-    kalan = _url_kalintilari()
-    ekle(f"U8 ⭐ {len(_URL_DOSYALARI)} dosyada URL f-string / URL atamasinda `.lower()` kalintisi YOK (AST)",
-         not kalan, kalan[:6])
+    dosyalar = _url_dosyalari()
+    kalan = _url_kalintilari(dosyalar)
+    ekle(f"U8 ⭐ koddan turetilen {len(dosyalar)} URL dosyasinda (/sap/bc/adt/ gecen .py) URL f-string'inde "
+         f"`.lower()` / lower'lanmis ad kalintisi YOK (AST, ICF haric)",
+         len(dosyalar) >= 30 and "scripts/push_bo_atomic.py" in dosyalar and not kalan,
+         [len(dosyalar), kalan[:6]])
 
 
 def bolum_d(PD, CD, TPD):
@@ -640,6 +689,11 @@ def main() -> int:
 # MUTASYONLAR: kip -> (dosya, çapa, yerine, düşmesi İLAN edilen vektör kümesi)
 _AP = "scripts/utils/ad_politikasi.py"
 Z = chr(92) + "Z"
+_KOK_ILK = "    baglanti = _baglanti_dizini()\n"
+_KOK_KAPALI_KALAN = "        return None, (f\"{ANAHTAR}: bağlantı dosyası"
+_KOK_KAPALI_CAPA = _KOK_ILK + "    if baglanti is None:\n" + _KOK_KAPALI_KALAN
+_KOK_GERI_DUS = ("    if baglanti is None:\n        from utils.project_config import project_root\n"
+                 "        return (Path(root) if root else project_root()), None\n    if False:\n")
 MUTASYONLAR = {
     "--mutasyon-ns-kapali": (_AP, "    if ns not in kayitli:\n        return False\n",
                              "    return False\n",
@@ -657,7 +711,7 @@ MUTASYONLAR = {
                               {"Y6"}),
     "--mutasyon-kayitsiz-kabul": (_AP, "    if ns not in kayitli:\n        return False\n", "",
                                   {"G2", "G6", "G7", "G8", "L1", "L2", "L3", "L4", "F2", "F5", "S2",
-                                   "R1", "R2", "R4", "R5", "D2"}),
+                                   "R1", "R2", "R4", "R5", "D2", "R11"}),
     "--mutasyon-ff-z-grupta": ("scripts/object_types.py",
                                "    if _ap.ad_namespace(g) and _ap.musteri_adi_mi(g, root=root):\n",
                                "    if True:\n", {"F4", "F5", "R2"}),
@@ -676,14 +730,19 @@ MUTASYONLAR = {
                                 "    if package_upper.startswith('/'):\n",
                                 "    if False:\n", {"L2"}),
     "--mutasyon-kilit-zy-yok": (_AP, "    if object_type and object_type.lower() in KILIT_TIPLERI and _KILIT_ZY.match(ad):\n",
-                                "    if False:\n", {"G8", "G9", "G10"}),
+                                "    if False:\n", {"G8", "G9", "G10", "R11"}),
     "--mutasyon-harf-duyarli": (_AP, '_ZY = re.compile(r"^[ZY][A-Z0-9_]*' + Z + '", re.IGNORECASE)',
                                 '_ZY = re.compile(r"^[ZY][A-Z0-9_]*' + Z + '")', {"G8", "G9"}),
     # ── P2a/bug-gate F2-F5 + öneri ──
-    "--mutasyon-kok-proje": (_AP, "    baglanti = _baglanti_dizini()\n", "    baglanti = None\n",
-                             {"R1", "R2", "R4"}),
-    "--mutasyon-kok-ayrisma": (_AP, "        if root and Path(root).resolve() != baglanti:\n",
-                               "        if False:\n", {"R4"}),
+    # eski (P1) davranis: bağlantı hiç okunmaz, kök = root / project_root()
+    "--mutasyon-kok-proje": (_AP, _KOK_KAPALI_CAPA,
+                             "    baglanti = None\n" + _KOK_GERI_DUS + _KOK_KAPALI_KALAN,
+                             {"R1", "R2", "R4", "R11"}),
+    "--mutasyon-kok-ayrisma": (_AP, "    if root and Path(root).resolve() != baglanti:\n",
+                               "    if False:\n", {"R4"}),
+    # bug-gate-2 F3: bağlantı dosyası çözülemezse root / project_root()'a DÜŞ (beadd6e davranışı)
+    "--mutasyon-baglantisiz-kok": (_AP, _KOK_KAPALI_CAPA, _KOK_ILK + _KOK_GERI_DUS + _KOK_KAPALI_KALAN,
+                                   {"R11"}),
     "--mutasyon-onbellek-kalici": (_AP, "    if kayit is not None and kayit[0] == anahtar:\n",
                                    "    if kayit is not None:\n", {"R3", "R5"}),
     "--mutasyon-mukerrer-anahtar": (_AP, "    if tekrar > 1:\n", "    if False:\n", {"R6"}),
@@ -711,6 +770,9 @@ MUTASYONLAR = {
                                {"U8"}),
     "--mutasyon-atama-kalinti": ("scripts/push_textpool.py", "    prog_l = _adt_seg(prog)\n",
                                  "    prog_l = prog.lower()\n", {"U8"}),
+    # bug-gate-2 F2: elle listede OLMAYAN dosya (push_bo_atomic) — koddan türetilen liste yakalar
+    "--mutasyon-bo-atomic-lower": ("scripts/push_bo_atomic.py", "    n = _adt_seg(name)\n",
+                                   "    n = name.lower()\n", {"U8"}),
     "--mutasyon-dtel-zy": ("scripts/populate_dataelements.py",
                            "            if not _ap.musteri_adi_mi(ad.upper(), root=_gewd()):\n",
                            "            if not ad.upper().startswith(('Z', 'Y')):\n", {"D1"}),

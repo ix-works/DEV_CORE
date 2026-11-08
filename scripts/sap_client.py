@@ -2122,7 +2122,7 @@ class SAPClient:
         SOAP-RFC gerektirmez. Sınıf if_oo_adt_classrun~main implement etmeli.
 
         Args:
-            class_name: Çalıştırılacak sınıf (Z*/Y*).
+            class_name: Çalıştırılacak sınıf (Z*/Y* ya da projede bildirilmiş /<NS>/).
 
         Returns:
             {ok, class, output, status} — output = console (out->write) çıktısı.

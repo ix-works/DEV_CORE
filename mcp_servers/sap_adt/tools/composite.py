@@ -5,7 +5,7 @@
 - adt_struct_create  : create_structure + activate + verify
 
 Pattern (atomic, fail-explicit):
-  1. Guardrails (Z/Y prefix, transport, TR text, labels)
+  1. Guardrails (customer namespace: Z/Y or project-declared /<NS>/, transport, TR text, labels)
   2. Pre-check via adt_get → fail if already exists (caller must decide: keep/recreate)
   3. SAPClient.create_<x>() — shell + source set (no activation)
   4. SAPClient.activate_object()
@@ -236,11 +236,11 @@ def adt_domain_create(
 ) -> dict:
     """Create + activate + verify a DDIC domain atomically.
 
-    Guardrails: Z/Y prefix, transport non-empty, description non-empty.
+    Guardrails: customer namespace (Z/Y or project-declared /<NS>/), transport non-empty, description non-empty.
     Reviewer (ADR 0006): if artifact_path given, run_review.py pre-flight; BLOCKER rejects.
 
     Args:
-        name: Domain name (Z*/Y*).
+        name: Domain name (Z*/Y* or a project-declared /<NS>/ customer namespace).
         datatype: 'CHAR', 'NUMC', 'INT4', 'CURR', 'QUAN', 'DATS', 'TIMS', 'DEC', ...
         length: Field length.
         description: TR description (ADR 0005 §D — non-empty).
@@ -356,7 +356,7 @@ def adt_dtel_create(
     Reviewer (ADR 0006): if artifact_path given, pre-flight runs; BLOCKER rejects.
 
     Args:
-        name: Data element name (Z*/Y*).
+        name: Data element name (Z*/Y* or a project-declared /<NS>/ customer namespace).
         domain_name: Underlying domain (Z* preferred; standard ABAP types like CHAR1 also OK).
         description: TR description.
         package: Target package.
@@ -470,7 +470,7 @@ def adt_struct_create(
     and calls this tool WITHOUT artifact_path.
 
     Args:
-        name: Structure name (Z*/Y*).
+        name: Structure name (Z*/Y* or a project-declared /<NS>/ customer namespace).
         fields: [{'name':'FIELD1','type':'char10'}, {'name':'CUST','type':'ZSD000_E_CUST'}, ...]
                 'type' is either ABAP primitive (char10, numc8, ...) or a data element name.
         description: TR description.
