@@ -527,8 +527,9 @@ MUTASYONLAR = {
                                    "        if not target and f.suffix.lower() != \".bdef\":\n",
                                    {"B1"}),
     "--mutasyon-naming-asbdef": (_V + "check_package_naming.py",
-                                 "\"cds\": [\"*.cds\", \"*.bdef\", \"*.asbdef\", \"*.dcl\"],",
-                                 "\"cds\": [\"*.cds\", \"*.bdef\", \"*.dcl\"],",
+                                 # #405: çapa `*.asddls`/`*.asdcls` eklenen satıra taşındı
+                                 "\"cds\": [\"*.cds\", \"*.bdef\", \"*.asbdef\", \"*.dcl\", \"*.asddls\", \"*.asdcls\"],",
+                                 "\"cds\": [\"*.cds\", \"*.bdef\", \"*.dcl\", \"*.asddls\", \"*.asdcls\"],",
                                  {"P1"}),
 }
 KIPLER = list(MUTASYONLAR)     # sözlük sırası = ilan sırası (elle ikinci liste tutulmaz)

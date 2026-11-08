@@ -109,6 +109,10 @@ def _live_matches_older_commit(path: Path, live_body: bytes, max_commits: int = 
 # 2026-10-18: liste TEK KAYNAĞA taşındı (`utils/sap_kaynak_uzantilari.py`); sıra (tiebreak
 # önceliği) ve içerik AYNEN korundu. `init_project` `.gitattributes` LF bloğunu aynı listeden üretir.
 from utils.sap_kaynak_uzantilari import SAP_KAYNAK_UZANTILARI as SOURCE_EXTENSIONS  # noqa: E402
+# Dosya adı gövdesi → SAP adı TEK yardımcıdan (#405): abapGit `#ns#x` · `%23ns%23x` · AFF `(ns)x`
+# → `/NS/X`. Eskiden "ilk noktaya kadar gövde = obje adı" HAM kıyaslanıyordu ⇒ namespace'li obje
+# (`/NS/X`) kendi dosyasını (`#ns#x.*`) bulamıyor, kapı adı `#NS#X` diye öneriyordu.
+from utils.ad_politikasi import dosya_adindan_ad  # noqa: E402
 
 # .md/.txt gibi dosyalar source değil — find sırasında elenir.
 _NON_SOURCE_SUFFIXES = (".md", ".txt", ".json", ".xml")
@@ -224,7 +228,7 @@ def find_repo_source_file(
     if not erp_root.exists():
         return None
 
-    name_lower = object_name.lower()
+    name_sap = dosya_adindan_ad(object_name)   # #405: `/NS/X` ya da `#NS#X` → `/NS/X`
     candidates: list[Path] = []
 
     for f in erp_root.rglob("*"):
@@ -240,9 +244,9 @@ def find_repo_source_file(
         # class alt-include'ları (/source/main değil) → sahte drift kaynağı
         if _is_class_subsource(fname):
             continue
-        # basename (ilk '.'a kadar) obje adıyla birebir eşleşmeli
+        # basename (ilk '.'a kadar, SAP adına çözülmüş) obje adıyla birebir eşleşmeli
         base = fname.split(".", 1)[0]
-        if base != name_lower:
+        if dosya_adindan_ad(base) != name_sap:
             continue
         # gerçekten source uzantısı mı?
         if not any(fname.endswith(ext) for ext in SOURCE_EXTENSIONS):
@@ -604,7 +608,8 @@ def pbe_siniflandir(path, kok_segmentleri=None) -> Optional[dict]:
 
     Kapsamdaysa: {'tur', 'ad', 'tip', 'aile'}
       tur  : 'kaynak' (ana source) | 'sinif_include'
-      ad   : SAP obje adı (dosya adının ilk noktasına kadar, BÜYÜK)
+      ad   : SAP obje adı (dosya adının ilk noktasına kadar, `dosya_adindan_ad` ile çözülmüş:
+             `#ns#x` → `/NS/X`; namespace'siz ad BÜYÜK harf — #405)
       tip  : `sap_sync_pull --type` değeri ('class', 'implementations', 'auto', ...)
       aile : 'auto' tiplerde ADT arama süzgeci ('abap' | 'ddl'), diğerlerinde None
     Muafiyet kuralları kapının ESKİ davranışıyla aynıdır: kaynak-kök segmenti yoksa ya da
@@ -626,7 +631,7 @@ def pbe_siniflandir(path, kok_segmentleri=None) -> Optional[dict]:
         return None
     if _EXCLUDED_DIR_SEGMENTS & parts:
         return None
-    ad = p.name.split(".", 1)[0].upper()
+    ad = dosya_adindan_ad(p.name.split(".", 1)[0])     # #405: `#ns#x` → `/NS/X`
     tur = class_include_kind_from_filename(n)
     if tur:
         return {"tur": "sinif_include", "ad": ad, "tip": tur, "aile": None}
@@ -681,10 +686,10 @@ def _pbe_adaylari(object_name: str, erp_root: Optional[Path] = None):
         erp_root = repo_root() / SOURCE_ROOT_NAME
     if not erp_root.exists():
         return []
-    ad = object_name.lower()
+    ad = dosya_adindan_ad(object_name)
     out = []
     for f in erp_root.rglob("*"):
-        if not f.is_file() or f.name.lower().split(".", 1)[0] != ad:
+        if not f.is_file() or dosya_adindan_ad(f.name.split(".", 1)[0]) != ad:   # #405
             continue
         if _is_excluded_path(f, erp_root):
             continue

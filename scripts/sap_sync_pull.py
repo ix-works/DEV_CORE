@@ -35,6 +35,7 @@ if sys.platform == "win32":
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ importları
 
 from utils.project_config import project_root  # noqa: E402
+from utils.ad_politikasi import dosya_adindan_ad  # noqa: E402 — dosya adı ↔ SAP adı TEK kaynak (#405)
 
 # ADR 0020: junction'da __file__ DEV_CORE'a çözülür → tazelik damgası PROJE köküne yazılmalı
 ROOT = project_root()
@@ -64,9 +65,13 @@ def _dosya_tutarsizligi(obj: str, t: str, repo_file) -> str:
 
     Bug gate M1 (2026-09-26): `--file` doğrulanmıyordu → `ZCL_BASKA --type class --file
     ZCL_SD001_X.clas.abap` BAŞKA objenin kaynağını yazıp damgalıyor, `[OK]` diyordu.
-    ① Ad: dosya adının ilk noktaya kadarki gövdesi (BÜYÜK) == obje adı. Farklı ad taşıyan
-       meşru bir aile ÖLÇÜLMEDİ (tüketici korpusta `#` namespace dosyası 0; FM/include/
-       alt-include dosyaları da obje adını taşır) → gevşetme YOK.
+    ① Ad: dosya adının ilk noktaya kadarki gövdesi, SAP adına ÇÖZÜLEREK (`ad_politikasi.
+       dosya_adindan_ad`: abapGit `#ns#x` · `%23ns%23x` · AFF `(ns)x` → `/NS/X`; namespace'siz ad
+       BÜYÜK harf) == obje adı (aynı yardımcıdan geçer: `/XNS/X` ya da `#XNS#X` verilebilir).
+       ⚠ GEVŞETME (#405, kullanıcı onaylı 2026-11-08): eskiden gövde HAM kıyaslanıyordu ⇒
+       `/XNS/X` + `#xns#x.tabl.ddl` "başka objenin dosyası" diye reddediliyor, kapı namespace'li
+       objede yalnız `--offline` ile açılıyordu (canlıyı ezme koruması fiilen yoktu). YALNIZ
+       `#ns#` ↔ `/NS/` eşdeğerliği gevşedi; farklı ad (M1) AYNEN red.
     ② Tip: dosya kapının sınıflandırmasıyla (`pbe_siniflandir`, TEK KAYNAK) uyuşmalı —
        alt-include dosyası yalnız alt-include tipiyle ve AYNI türle; tipi dosyadan kesin
        olan dosya yalnız o tiple; `auto` ailesindeki dosya `auto` ya da uzantısını kabul
@@ -90,8 +95,8 @@ def _dosya_tutarsizligi(obj: str, t: str, repo_file) -> str:
             exts = _TYPE_TO_EXTENSIONS.get(ham)
             return "uzanti:" + ",".join(exts) if exts else ham
 
-    govde = repo_file.name.split(".", 1)[0].upper()
-    if govde != obj.upper():
+    govde = dosya_adindan_ad(repo_file.name.split(".", 1)[0])
+    if govde != dosya_adindan_ad(obj):
         return (f"--file '{repo_file.name}' obje adı '{govde}' taşıyor, istenen '{obj}' — "
                 f"başka objenin dosyası YAZILMAZ/DAMGALANMAZ")
     s = pbe_siniflandir(repo_file)
@@ -163,6 +168,25 @@ def _damgala(session: str, repo_path) -> str:
     return tazelik_damgala(session, repo_path, ROOT)
 
 
+_ARG_AD = ""   # kullanıcının yazdığı ham ad (main doldurur) — tekrar komutunda aynen kullanılır
+
+
+def _komut_adi(ad: str) -> str:
+    """Önerilen komuttaki ad argümanı. Namespace'siz ad AYNEN (eski metin bayt-aynı).
+
+    Namespace'li adda (`/XNS/X`) iki kabuk tuzağı (#405): Git Bash `/` ile başlayan argümanı
+    Windows yoluna çevirir; `#` kelime başında bash/PowerShell YORUMUDUR. Kullanıcı adı dosya-adı
+    biçiminde verdiyse (`#xns#x`) o biçim TIRNAKLI tekrarlanır; aksi hâlde ADT yol parçası biçimi
+    (`url_segmenti`: `%2Fxns%2Fx` — `/` ile başlamaz, `#` taşımaz; `dosya_adindan_ad` geri çözer).
+    """
+    if not str(ad).startswith("/"):
+        return ad
+    if _ARG_AD and not _ARG_AD.startswith("/") and dosya_adindan_ad(_ARG_AD) == ad:
+        return f'"{_ARG_AD}"'
+    from utils.ad_politikasi import url_segmenti
+    return f'"{url_segmenti(ad)}"'
+
+
 def _sonuc(etiket: str, t: str, res: dict, session: str, komut_eki: str = "",
            komut_tipi: str = "") -> int:
     """Tek dosyanın çekme sonucunu bildir; yalnız GERÇEKTEN yazılan/eşit bulunan dosya damgalanır.
@@ -173,7 +197,7 @@ def _sonuc(etiket: str, t: str, res: dict, session: str, komut_eki: str = "",
     tekrar komutunu yine `auto` ile basar (bug gate L1: "source URL türetilemedi" döngüsü).
     """
     yol = res.get("repo_path")
-    tekrar = (f"python core/scripts/sap_sync_pull.py {etiket} --type {komut_tipi or t}"
+    tekrar = (f"python core/scripts/sap_sync_pull.py {_komut_adi(etiket)} --type {komut_tipi or t}"
               f"{komut_eki} --force")
     if res.get("blocked_dirty"):
         # FIX-B: yerelde commit'siz değişiklik var → pull EZMEDİ (WIP korundu). Taze
@@ -330,7 +354,11 @@ def main() -> int:
     ap.add_argument("--force", action="store_true",
                     help="Yereldeki commit'lenmemiş değişikliği EZ — bilerek canlı aktif sürüme dön (FIX-B escape).")
     args = ap.parse_args()
-    obj = args.name.upper()
+    # #405: ad dosya-adı biçiminde de verilebilir (`"#xns#x"` — kapının önerdiği biçim: `#` kabukta
+    # tırnaksız YORUM, `/XNS/` Git Bash'te yol dönüşümüne uğrar). Namespace'siz adda `.upper()` ile aynı.
+    global _ARG_AD
+    _ARG_AD = args.name
+    obj = dosya_adindan_ad(args.name)
     from source_drift import seans_kimligi
     session = seans_kimligi(args.session)
     t = args.type.lower().strip()
