@@ -160,10 +160,10 @@ secim, _ = sec("scripts/sap_adt_lib.py")
 # alanları + iki worklist tüketicisi) → 13'ten 14'e · 2026-09-25 Issue #302: `revizyon_okuma`
 # (`get_object_revisions` + gerçek çağıran list_revisions) → 14'ten 15'e · 2026-10-03:
 # `sql_satir_kirma` (freestyle 255-satır sınırı `sql_satirlarini_kir`) → 15'ten 16'ya ·
-# 2026-10-12 dış repo turu Part A: `kilit_birakma_durustlugu` + `istek_sahibi_metni` + `transport_yaklasim_sirasi` + `fugr_faz2_ioc_sondasi` → 16'dan 20'ye · aynı tur ikinci dalga: `ad_kabul_tam_dize` + `hata_sebebi_ve_maskeleme` + `checkrun_sozdizimi` + `oturum_izi_ve_ddl_accept` → 20'den 24'e · 2026-10-18 Issue #325: `classrun_tek_post` (`tek_post_onekini_bagla`) → 24'ten 25'e · 2026-10-18 Issue #339: `responsible_kacis` → 25'ten 26'ya · 2026-10-29 T-ADT-OTURUM-LOGOFF: `adt_oturum_kapatma` → 26'dan 27'ye · 2026-11-07 Q383: `fugr_include_yazim` → 27'den 28'e · 2026-11-08 Q393: `q393_namespace_ad_politikasi` → 28'den 29'a) HARİTA ile BU SATIR birlikte güncellenir. Sayıyı
+# 2026-10-12 dış repo turu Part A: `kilit_birakma_durustlugu` + `istek_sahibi_metni` + `transport_yaklasim_sirasi` + `fugr_faz2_ioc_sondasi` → 16'dan 20'ye · aynı tur ikinci dalga: `ad_kabul_tam_dize` + `hata_sebebi_ve_maskeleme` + `checkrun_sozdizimi` + `oturum_izi_ve_ddl_accept` → 20'den 24'e · 2026-10-18 Issue #325: `classrun_tek_post` (`tek_post_onekini_bagla`) → 24'ten 25'e · 2026-10-18 Issue #339: `responsible_kacis` → 25'ten 26'ya · 2026-10-29 T-ADT-OTURUM-LOGOFF: `adt_oturum_kapatma` → 26'dan 27'ye · 2026-11-07 Q383: `fugr_include_yazim` → 27'den 28'e · 2026-11-08 Q393: `q393_namespace_ad_politikasi` → 28'den 29'a · 2026-11-08 #411: `csrf_tanima_ortak` → 29'dan 30'a · 2026-11-08 #412 düzeltme 2: `cds_paket_kapsami` (`cds_kod_metni`) → 30'dan 31'e · 2026-11-08 #412 düzeltme 3: `cds_entity_baslik_kardesleri` (`cds_kod_metni` `string_icerigini_koru=True`, gen_field_table) → 31'den 32'ye) HARİTA ile BU SATIR birlikte güncellenir. Sayıyı
 # gevşetmek (`>=`) çapayı öldürür — sessiz daraltma tam olarak burada görünür.
-kontrol("P3 çok-tüketicili kaynak → 29 korpusun hepsi",
-        secim is not None and len(secim) == 29
+kontrol("P3 çok-tüketicili kaynak → 32 korpusun hepsi",
+        secim is not None and len(secim) == 32
         and {"O:lock_modification_support", "O:conn_cift_anahtar",
              "O:retry_500_govde", "O:transport_gorev_istek_cevrimi",
              "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi",
@@ -177,7 +177,9 @@ kontrol("P3 çok-tüketicili kaynak → 29 korpusun hepsi",
              "O:checkrun_sozdizimi", "O:oturum_izi_ve_ddl_accept",
              "O:classrun_tek_post", "O:responsible_kacis",
              "O:adt_oturum_kapatma", "O:fugr_include_yazim",
-             "O:q393_namespace_ad_politikasi"} <= secim,
+             "O:q393_namespace_ad_politikasi",
+             "O:csrf_tanima_ortak", "O:cds_paket_kapsami",
+             "O:cds_entity_baslik_kardesleri"} <= secim,
         f"alınan={sorted(secim) if secim else secim}")
 
 # P4: mutlak yol + ters-bölü (Windows'ta ajanın vereceği gerçek biçim) aynı sonucu verir.

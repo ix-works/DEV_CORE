@@ -30,6 +30,7 @@ _scripts_dir = Path(__file__).parent
 if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
 from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
+from utils.cds_metin import cds_kod_metni  # noqa: E402,F401 — #412 düzeltme 4: yeniden dışa açım (tek kaynak)
 
 # Import auth providers for BTP cloud support
 try:
@@ -871,6 +872,11 @@ def validate_package_name(package):
 # Module-level variable to store explicit working directory (set via --cwd)
 # This is checked BEFORE searching for .conn_adt
 _explicit_working_dir = None
+
+
+# `cds_kod_metni` (CDS yorum/string ayıklayıcı) `utils/cds_metin.py`'ye taşındı (#412 düzeltme 4):
+# bağımlılıksız tüketici (`gen_field_table`) bu modülü açmadan kullanabilsin diye. Yukarıda
+# yeniden dışa açılır; `sap_adt_lib.cds_kod_metni` aynen çalışır.
 
 
 def set_explicit_working_dir(path: str) -> None:
@@ -2236,8 +2242,11 @@ class SAPADTClient:
             if self.retry_on_timeout:
                 return True, f"Timeout (attempt {attempt + 1})"
 
-        # CSRF token validation failed - retry with fresh token
-        if 'CSRF token validation failed' in response.text:
+        # CSRF reddi - taze token ile tekrar. #411 (2026-11-08): eskiden YALNIZ İngilizce
+        # 'CSRF token validation failed' gövdesine bakıyordu; kardeş yol
+        # (`_request_with_csrf_retry`) dilden bağımsızdı. Tanıma artık TEK yüklemde
+        # (`_csrf_reddi_mi`): 403 + (gövdede 'CSRF' VEYA `x-csrf-token: Required` başlığı).
+        if self._csrf_reddi_mi(response):
             if self.retry_on_csrf_fail:
                 return True, f"CSRF token expired (attempt {attempt + 1})"
 
@@ -2461,6 +2470,32 @@ class SAPADTClient:
                 url=self.url
             )
 
+    @staticmethod
+    def _csrf_reddi_mi(response):
+        """Yanıt bir CSRF reddi mi? TEK yüklem (#411, 2026-11-08) — dört çağıran paylaşır:
+        `_should_retry` · `_request_with_csrf_retry` · `lock_object` · `create_object`.
+
+        Ölçüt (kaynağı `_request_with_csrf_retry`'nin 2026-07 yüklemi, değiştirilmeden taşındı):
+        HTTP 403 VE (gövdede 'CSRF' geçer VEYA `x-csrf-token` başlığı 'Required').
+        Canlı ölçüm (2026-11-08, salt-okur uç, geçersiz token): sap-language TR/EN/DE üçünde
+        de 403 + `x-csrf-token: Required`, gövde hep İngilizce. Almanca gövdeli sunucu
+        ÖLÇÜLMEDİ — başlık dalı gövde dilinden bağımsız tanır. 403 OLMAYAN yanıt CSRF reddi
+        SAYILMAZ (CSRF dışı 403 — ör. yetki hatası, başlıksız — retry ETMEZ).
+        Başlık adı büyük/küçük harften bağımsız aranır (`requests` zaten öyle; sahte
+        yanıtlardaki düz dict için de aynı sonuç).
+        """
+        if getattr(response, 'status_code', None) != 403:
+            return False
+        if 'CSRF' in (getattr(response, 'text', '') or ''):
+            return True
+        basliklar = getattr(response, 'headers', None) or {}
+        try:
+            ogeler = basliklar.items()
+        except AttributeError:
+            return False
+        return any(str(k).lower() == 'x-csrf-token' and str(v).lower() == 'required'
+                   for k, v in ogeler)
+
     def _request_with_csrf_retry(self, method, url, headers=None, timeout=None, **kwargs):
         """Execute HTTP request with CSRF token management and automatic retry.
 
@@ -2507,10 +2542,7 @@ class SAPADTClient:
         # Retry once on CSRF token expiry — self-healing: zehirli on-disk cache'i
         # temizle + SAP'den force-refresh (elle .csrf_token.json silmek gerekmesin).
         # 'CSRF token validation failed' (403) ya da X-CSRF-Token: Required başlığı.
-        csrf_rejected = response.status_code == 403 and (
-            'CSRF' in response.text
-            or response.headers.get('x-csrf-token', '').lower() == 'required'
-        )
+        csrf_rejected = self._csrf_reddi_mi(response)
         if csrf_rejected:
             if self.debug_enabled:
                 self._debug(f"[DEBUG] CSRF token rejected on {method.upper()} {url}, force-refresh + retry")
@@ -3736,7 +3768,7 @@ class SAPADTClient:
                     continue
 
                 # 403 - CSRF token might be expired, refresh and retry this strategy once
-                elif response.status_code == 403 and 'CSRF' in response.text:
+                elif self._csrf_reddi_mi(response):
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] lock_object attempt {attempt_num} - CSRF error, refreshing token and retrying")
                     try:
@@ -5514,7 +5546,7 @@ class SAPADTClient:
             # 403 CSRF: the cached token can be stale server-side. Force-refresh
             # and retry this attempt ONCE with a new token before falling through
             # to the media-type/namespace retry queue.
-            if response.status_code == 403 and 'CSRF' in response.text:
+            if self._csrf_reddi_mi(response):
                 self.fetch_csrf_token(force_refresh=True)
                 headers = self._get_headers(media_type, media_type)
                 response = self.session.post(
@@ -6994,16 +7026,19 @@ define table {name.lower()} {{
   <blue:source>{ddl_source}</blue:source>
 </blue:blueSource>'''
 
-        headers = self._get_headers(
-            'application/vnd.sap.adt.tables.v2+xml',
-            'application/vnd.sap.adt.tables.v2+xml'
-        )
-
         params = {}
         if transport:
             params['corrNr'] = transport
 
         def make_request():
+            # #411 (2026-11-08): header'lar closure İÇİNDE kurulur. Eskiden dışarıda bir
+            # kez kuruluyordu ⇒ `_retry_request` CSRF reddinde token'ı tazelese de tekrar
+            # isteği ESKİ token'la gidiyordu (kardeş DTEL/domain/yapı/CDS yolları zaten
+            # closure içinde kuruyordu; tablo tek istisnaydı).
+            headers = self._get_headers(
+                'application/vnd.sap.adt.tables.v2+xml',
+                'application/vnd.sap.adt.tables.v2+xml'
+            )
             return self.session.post(
                 f"{self.url}/sap/bc/adt/ddic/tables",
                 headers=headers,
@@ -7059,46 +7094,61 @@ define table {name.lower()} {{
         # ediyordu (`VIEW ENTITY` + `PROJECTION ON` alt-dizeleri) ⇒ KORUNUR; reddetmek
         # geçerli bir biçimde yeni bir yanlış-red üretirdi (fixture B9 çapası).
         # BİLİNÇLİ RED (doğru mesajla, "düzelt" demeden): table function (AMDP sınıfı ister,
-        # bu araçla yaratılması ölçülmedi — lider kararı 2026-09-13) · custom entity ve
-        # diğer tanım türleri (korpusta örnek yok).
+        # bu araçla yaratılması ölçülmedi — lider kararı 2026-09-13) · diğer tanım türleri.
+        # ── #410 (2026-11-08, ⚠GEVŞETME, kullanıcı onaylı): `define [root] custom entity`
+        # [`with parameters <liste>`] `{ ... }` KABUL. Eski ret dalının gerekçesi ("korpusta
+        # örnek yok") tüketici korpusu içindi; bir S/4HANA geliştirme sisteminde ölçüldü:
+        # DDDDLSRC SOURCE_TYPE='Q' 1.137 aktif custom entity (177 root, 72 with parameters).
+        # Nesne tipi view/abstract ile aynı (DDLS/DF, tür kaynaktan çıkar). Gövde kuralı
+        # abstract entity'ninkiyle aynıdır (select/projection ARANMAZ — veri sorgu
+        # sınıfından gelir); tek fark başlıktan sonra isteğe bağlı parametre listesi.
+        # ⛔ abstract entity dalı DEĞİŞMEDİ (onun `with parameters` biçimi hâlâ RED; ayrı
+        # karar). Canlı yaratma/aktivasyon reçetesi: playbook/adt-rap.md (ölçülünce).
 
-        def _kod_metni(metin):
-            # Yorumları (`//`, `/* */`) ve string içeriğini ('..', `''` kaçışı) atar;
-            # satır sonları korunur. Anahtar sözcük YALNIZ kodda sayılır.
-            cikti = []
-            i, n = 0, len(metin)
-            while i < n:
-                c = metin[i]
-                if c == "'":
-                    j = i + 1
-                    while j < n:
-                        if metin[j] == "'":
-                            if j + 1 < n and metin[j + 1] == "'":
-                                j += 2
-                                continue
-                            break
-                        j += 1
-                    cikti.append("''")
-                    i = j + 1
-                elif metin.startswith('//', i):
-                    j = metin.find('\n', i)
-                    i = n if j < 0 else j
-                elif metin.startswith('/*', i):
-                    j = metin.find('*/', i + 2)
-                    cikti.append(' ')
-                    i = n if j < 0 else j + 2
-                else:
-                    cikti.append(c)
-                    i += 1
-            return ''.join(cikti)
+        def _parametre_sonrasi_eleman_listesi(govde):
+            # Custom entity: başlık adından sonra ya hemen `{` ya da
+            # `with parameters <liste>` ve ardından `{` gelmeli. Parametre listesinde
+            # annotation değeri `{...}` / `[...]` olabilir (`@X: { a: 1 }`) — `:`'dan
+            # hemen sonra gelen `{` ve parantez/köşeli içindekiler eleman listesi
+            # SAYILMAZ. Liste `as`/`returns`/`implemented` taşırsa (view / table function
+            # karışımı) RED. Sınır: bu bir dilbilgisi ayrıştırıcısı DEĞİL, akıl sağlığı
+            # kapısıdır — kesin hüküm SAP aktivasyonundadır.
+            if re.match(r'\s*\{', govde):
+                return True
+            pm = re.match(r'\s*with\s+parameters\b', govde, re.IGNORECASE)
+            if not pm:
+                return False
+            derinlik, onceki = 0, ''
+            for i in range(pm.end(), len(govde)):
+                c = govde[i]
+                if c in '([':
+                    derinlik += 1
+                elif c in ')]':
+                    derinlik -= 1
+                elif c == '{':
+                    if derinlik == 0 and onceki != ':':
+                        liste = govde[pm.end():i]
+                        return (':' in liste and not re.search(
+                            r'\b(?:as|returns|implemented)\b', liste, re.IGNORECASE))
+                    derinlik += 1
+                elif c == '}':
+                    derinlik -= 1
+                if not c.isspace():
+                    onceki = c
+            return False
+
+        # Ayıklayıcı modül düzeyinde TEK kopya (`cds_kod_metni`; #410 K3 — populate_cds_views
+        # başlık tespiti de aynı fonksiyonu kullanır).
+        _kod_metni = cds_kod_metni
 
         kod = _kod_metni(cds_source)
         bicimler = ("define view <name> / define [root|transient] view entity <name> "
                     "(as select [distinct] from | as projection on) · "
-                    "define [root] abstract entity <name> { ... }")
+                    "define [root] abstract entity <name> { ... } · "
+                    "define [root] custom entity <name> [with parameters ...] { ... }")
         baslik = re.search(
             r'\bdefine\s+((?:root\s+|transient\s+)?view\s+entity|view|(?:root\s+)?abstract\s+entity'
-            r'|table\s+function|custom\s+entity)\s+([A-Za-z_/][\w/]*)',
+            r'|table\s+function|(?:root\s+)?custom\s+entity)\s+([A-Za-z_/][\w/]*)',
             kod, re.IGNORECASE)
         if not baslik:
             raise SAPValidationError(
@@ -7119,12 +7169,15 @@ define table {name.lower()} {{
                 "necessarily wrong - do NOT rewrite it; report it.",
                 field='cds_source'
             )
-        if tur == 'custom entity':
-            raise SAPValidationError(
-                "CDS custom entity is not supported by this tool (no measured example). "
-                "The source is not necessarily wrong - do NOT rewrite it; report it.",
-                field='cds_source'
-            )
+        if tur.endswith('custom entity'):
+            if not _parametre_sonrasi_eleman_listesi(govde):
+                raise SAPValidationError(
+                    f"CDS '{tur}' must be followed (after an optional 'with parameters ...' "
+                    "list) by its element list '{ ... }' (a custom entity has no "
+                    "select/projection; its data comes from the query class).",
+                    field='cds_source'
+                )
+            return
         if tur.endswith('abstract entity'):
             if not re.match(r'\s*\{', govde):
                 raise SAPValidationError(
