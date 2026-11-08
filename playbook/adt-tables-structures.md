@@ -433,6 +433,16 @@ ZSD001_T_CONTY,Konteyner Tipleri,A,ALLOWED,WAERS,N,WAERS,Para birimi,,
 > `@Semantics.quantity.unitOfMeasure` alıyordu. Bu, `check_cds_currency_reference.py`
 > denetçisinin **BLOCKER** (C-TBL-CUR-03) verdiği DDL demekti. Üretici ve denetçi artık
 > **aynı DTEL sözlüğünü** kullanır.
+>
+> ℹ **Issue #399 (2026-11-08):** sözlüğe koşul kaydı DTEL'leri eklendi (`konwa`/`konws`
+> CUKY · `kmein`/`konms` UNIT). Üreticide etkisi: tutar alanı Z'li bir DTEL taşıyıp
+> referans alanı `konwa`/`konws` ise `unit_kind` artık `currency` çıkarılır (önceden
+> `quantity` + UYARI → yanlış annotation). Denetçide referans alanının tipi sözlükte
+> yoksa (Z'li CUKY DTEL'i) bulgu **WARNING**'dir, alan tabloda hiç yoksa **BLOCKER**;
+> başvurulan her yerel alan (Z'li DTEL ya da yerleşik `abap.cuky`) `@Semantics.currencyCode : true`
+> marker'ı ister, yoksa **BLOCKER**; boş tablo kısmı (`'.waers'`) qualified sayılmaz (BLOCKER);
+> başka tabloya qualified başvuru (`'t001.waers'`) aynı-tablo denetiminden muaftır
+> (checklist `table-update.md` C-TBL-CUR-02).
 
 ### 28.1 İki Adımlı Yaratma Pattern
 
