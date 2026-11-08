@@ -518,6 +518,62 @@ _ELEMAN = re.compile(r"^\s*(?:key\s+)?(?P<ifade>.+?)\s+as\s+(?P<alias>\w+)\s*,?\
 # Kaynak (tablo/alias) ve alan adı `ad_politikasi` gramerinden (#402 K1): eski `(\w+)\.` namespace'li
 # kaynağı (`/nspc/t.netwr as X`) "sade alan değil" sayıp sözlük eşlemesini sessizce atlıyordu.
 _SADE_ALAN = re.compile(r"^(?:(" + AD_DESENI + r")\.)?(" + AD_DESENI + r")$")
+# TAKMA ADSIZ eleman (DEV_CORE #405, 2026-11-08): `kbetr,` · `konp.kbetr,` · `key knumh` — `_ELEMAN`
+# `as <takma ad>` zorunlu tuttuğu için bu elemanlar ne paydaya ne denetime giriyordu (ölçüldü: Z adlı
+# görünümde annotation'sız `kbetr,` → rc 0 "tipi ÇÖZÜLEBİLEN … YOK"; `kbetr as Amount,` → WARNING).
+# Yalnız SADE alan referansı kabul edilir (ifade/çağrı/cast takma adsız olamaz); eleman adı = alan adı.
+# Yapısal satırlar (`as select from …`, association, join) boşluk/anahtar sözcük taşıdığı için
+# bu desene UYMAZ — tek belirteçli (`kaynak.alan` ya da `alan`) birim şartı.
+_ELEMAN_TAKMASIZ = re.compile(
+    r"^\s*(?:key\s+)?(?P<ifade>(?:" + AD_DESENI + r"\.)?" + AD_DESENI + r")\s*,?\s*$", re.I)
+
+
+def _eleman_ayir(s: str, liste_icinde: bool = True):
+    """(eleman adı, ifade) ya da None. Önce `… as <takma ad>`, sonra takma adsız sade alan (#405).
+
+    Takma adsız biçim YALNIZ select listesinin İÇİNDE (`{ … }`) eleman sayılır: `}` sonrası
+    `group by a.bmeng,` satırları da tek belirteçlidir (ölçüldü 2026-11-08, tüketici korpusu:
+    ilk sürüm 2 `group by` öğesini eleman sanıp sahte WARNING üretti).
+    """
+    m = _ELEMAN.match(s)
+    if m:
+        return m.group('alias'), m.group('ifade')
+    m = _ELEMAN_TAKMASIZ.match(s) if liste_icinde else None
+    if m:
+        ifade = m.group('ifade')
+        return _SADE_ALAN.match(ifade).group(2), ifade
+    return None
+
+
+# KAPSAM BEYANI (CDS yolu, #405 lider kararı 2026-11-08) — her koşumda basılır. Projeksiyon mirası
+# MODELLENMEZ: tüketici korpusunda `as projection on` görünümündeki takma adsız `Netwr,` elemanı
+# tabandaki annotation'ı miras aldığı hâlde WARNING alır (takma adlı projeksiyon elemanında da aynı).
+CDS_KAPSAM_BEYANI = ("KAPSAM: eleman = `… as <ad>` ya da select listesi `{…}` içindeki takma adsız "
+                     "sade alan (`alan` / `kaynak.alan`; `}` sonrası group by sayılmaz) · "
+                     "ÖLÇÜLMEDİ: projeksiyon (`as projection on`) annotation mirası MODELLENMEZ — "
+                     "projeksiyonda eksik-annotation uyarısı yanlış pozitif olabilir")
+
+
+def _liste_durumu(s: str, liste_icinde: bool) -> tuple[bool, bool]:
+    """(bu birim listenin içinde mi, sonraki birim için durum). `}` ile başlayan birim listeyi
+    kapatır; `{` taşıyan birim (başlık / `union … select from … {`) SONRAKİ birimden itibaren açar.
+    Tırnak içi ayraç sayılmaz (`_denge` ile aynı gerekçe)."""
+    if s.startswith('}'):
+        liste_icinde = False
+    simdi = liste_icinde
+    acik = None
+    q = None
+    for c in s:
+        if q is not None:
+            if c == q:
+                q = None
+        elif c in "'\"":
+            q = c
+        elif c == '{':
+            acik = True
+        elif c == '}':
+            acik = False
+    return simdi, (liste_icinde if acik is None else acik)
 # Eleman OLMAYAN ama `as` içerebilen yapısal satırlar — bunlar bekleyen annotation
 # bloğunu SIFIRLAMAZ (ör. `as select from`, association tanımları)
 _YAPISAL = ("{", "}", "define", "as select", "association", "left outer",
@@ -659,6 +715,7 @@ def curr_quan_eleman_sayisi(text: str) -> int:
     (genişletilebilir, KISALTILAMAZ) ya da açık `cast( … as abap.curr/quan(…) )`.
     """
     n = 0
+    liste = False
     for _i, s in _mantiksal_satirlar(text):
         if s.startswith('@'):
             continue
@@ -667,8 +724,9 @@ def curr_quan_eleman_sayisi(text: str) -> int:
             s = s[m_union.end():].strip()
             if not s:
                 continue
-        m = _ELEMAN.match(s)
-        if m and _eleman_tipi(m.group('ifade')):
+        icinde, liste = _liste_durumu(s, liste)
+        e = _eleman_ayir(s, icinde)
+        if e and _eleman_tipi(e[1]):
             n += 1
     return n
 
@@ -701,6 +759,7 @@ def eksik_annotation_bul(text: str) -> list[dict]:
     dal = 0                          # 0 = 1. SELECT dalı (annotation'ın YAŞADIĞI yer)
     dal0_annotasyonlu: set[str] = set()   # 1. dalda annotation'ı OLAN alias'lar
     dal0_bulgulu: set[str] = set()        # 1. dalda ZATEN raporlanmış alias'lar
+    liste = False                         # select listesi `{ … }` içinde mi (#405 takma adsız)
     for i, s in _mantiksal_satirlar(text):
         if s.startswith('@'):
             bekleyen.append(s)
@@ -712,12 +771,13 @@ def eksik_annotation_bul(text: str) -> list[dict]:
             s = s[m_union.end():].strip()
             if not s:
                 continue
-        m = _ELEMAN.match(s)
-        if not m:
+        icinde, liste = _liste_durumu(s, liste)
+        e = _eleman_ayir(s, icinde)
+        if not e:
             if not s.startswith(_YAPISAL):
                 bekleyen = []
             continue
-        alias, ifade = m.group('alias'), m.group('ifade')
+        alias, ifade = e
         tip = _eleman_tipi(ifade)
         if tip:
             blok = ' '.join(bekleyen)
@@ -868,6 +928,7 @@ def main() -> int:
                       'tipi ÇÖZÜLEBİLEN CURR/QUAN elemanı YOK — bu "temiz" bir '
                       'KAPSAMA iddiası DEĞİLDİR')
             print(f'OK — {path.name} ({src_type}) CURR/QUAN reference check temiz · {kapsam}')
+            print(f'  {CDS_KAPSAM_BEYANI}')
         else:
             print(f'OK — {path.name} ({src_type}) CURR/QUAN reference check temiz')
         return 0
@@ -876,6 +937,8 @@ def main() -> int:
     for v in violations:
         print(f"  [{v['severity']}] line {v['line']} ({v['check_id']}): {v['message']}", file=sys.stderr)
         print(f"    Fix: {v['fix']}", file=sys.stderr)
+    if src_type == 'cds':
+        print(f'  {CDS_KAPSAM_BEYANI}', file=sys.stderr)
 
     # BLOCKER varsa exit 1
     if any(v['severity'] == 'BLOCKER' for v in violations):

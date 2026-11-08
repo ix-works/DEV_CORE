@@ -41,6 +41,11 @@ def main() -> int:
     if not name and args.path:
         fn = Path(args.path).name
         name = fn.split(".")[0]
+        # #405: abapGit `#ns#x` / `%23ns%23x` / AFF `(ns)x` gövdesi SAP adına çözülür (TEK yardımcı);
+        # eskiden `#ns#x` canlıda aranıyor, bulunamayıp SKIP (measured=false) dönüyordu. Z adı AYNEN.
+        from utils.ad_politikasi import dosya_adindan_ad  # noqa: PLC0415
+        if dosya_adindan_ad(name).startswith("/"):
+            name = dosya_adindan_ad(name)
         if otype is None:
             low = fn.lower()
             otype = "ddls" if any(e in low for e in (".cds", ".ddls", ".asddls")) else (

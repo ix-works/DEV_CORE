@@ -269,6 +269,28 @@ TASK_VALIDATORS = {
     ],
 }
 
+# KAPSAM BEYANI — HİÇBİR görev tipinin ÖLÇMEDİĞİ nesne türleri (DEV_CORE #405 ⑤, 2026-11-08).
+# Bu reviewer'da görevi OLMAYAN tür, "zincir boş" (kayıtlı boşluk: dtel_update · rap_service_binding)
+# değildir: görev tipi listesinde hiç yoktur ⇒ hiçbir koşum onu ölçmez. Her raporda basılır
+# (sıfır-bulgu anı dahil, CLAUDE.core §7). Bu turda yeni denetim BAĞLANMADI (kapsam kararı).
+# (sonek kümesi, insan-okur etiket)
+OLCULMEYEN_TURLER = [
+    ((".dcls.asdcls", ".asdcls", ".dcl"), "DCL (erişim kontrolü, `define role`)"),
+]
+
+
+def olculmeyen_tur_satirlari(artifact) -> list[str]:
+    """Rapor gövdesinin bakılmayanlar satırları; incelenen dosyanın KENDİSİ bu türdeyse ayrıca söyler."""
+    ad = Path(str(artifact)).name.lower()
+    out = []
+    for sonekler, etiket in OLCULMEYEN_TURLER:
+        bu = ad.endswith(sonekler)
+        out.append(f"{etiket.split(' ', 1)[0]}: ÖLÇÜLMEDİ — {etiket} için görev tipi YOK"
+                   + (" · ⚠ İNCELENEN DOSYA BU TÜRDE: bu koşumun hükmü onun içeriğini "
+                      "ölçmez" if bu else ""))
+    return out
+
+
 # Checklist dosyaları (manuel/LLM tarafından okunması gereken ek kontroller)
 TASK_CHECKLISTS = {
     'cds_creation': 'playbook/checklists/cds-creation.md',
@@ -577,6 +599,8 @@ def main() -> int:
             # ⛔ Verdict'e SAYILMAZ (görünürlük kalemi); tüketici kendi kararını verir.
             'sessiz_bulgu_count': len(sessiz_bulgular),
             'sessiz_bulgu_gates': [r['validator'] for r in sessiz_bulgular],
+            # #405 ⑤ — hiçbir görev tipinin ölçmediği türler (her koşumda)
+            'bakilmayan': olculmeyen_tur_satirlari(artifact_path),
             'checklist_reference': checklist,
             'results': results,
         }
@@ -674,6 +698,9 @@ def main() -> int:
                 print('     (indirilen gate yok — ölçüm üretemeyen BLOCKER bulunmadı)')
         if checklist:
             print(f'\nManuel checklist (ek kontrol için): {checklist}')
+        # #405 ⑤ KAPSAM BEYANI: bu reviewer'ın HİÇ ölçmediği türler (verdict'e girmez)
+        for satir in olculmeyen_tur_satirlari(artifact_path):
+            print(f'  BAKILMAYAN — {satir}')
         print(f'{"="*70}\n')
 
         if verdict == 'BLOCKER':
