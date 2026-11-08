@@ -44,6 +44,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from utils.project_config import SOURCE_ROOT_NAME  # noqa: E402  # K12
 from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
+from utils.ad_politikasi import dosya_adindan_ad  # noqa: E402 — #405: dosya adi -> SAP adi tek kaynak
 from source_drift import (  # noqa: E402
     SOURCE_EXTENSIONS,
     compare_sources,
@@ -92,8 +93,12 @@ _TYPE_TO_ADT_PATH = {
 
 
 def _object_name_from_file(f: Path) -> str:
-    """Dosya adından obje adı (ilk '.'a kadar, büyük harf)."""
-    return f.name.split(".", 1)[0].upper()
+    """Dosya adından obje adı (ilk '.'a kadar, SAP adına çözülmüş — `ad_politikasi.dosya_adindan_ad`).
+
+    #405: eskiden gövde HAM büyük harfe çevriliyordu ⇒ `#ns#x.tabl.ddl` → `#NS#X` → URL
+    `%23ns%23x` canlıda bulunamaz, dosya "canlıda yok" sayılıp drift denetimi SESSİZCE atlanırdı.
+    """
+    return dosya_adindan_ad(f.name.split(".", 1)[0])
 
 
 def _fetch_active_source(client, name: str, ext: str):
