@@ -884,6 +884,16 @@ OZEL_TESTLER = [
      "kaynak ici `// dtel-istisna` SAYILMAZ; bayat istisna bilgi; harf duyarsiz; namespace'li govde), "
      "DTEL'li/include alan sayilmaz, xml/append/cozulemeyen deyim measured=false, uyari+olculemeyen "
      "= KISMI; dtel_active kapsam beyani; 15 mutasyon"),
+    # 2026-11-08 DEV_CORE #413: BAdI enhancement spot (ENHS/XSB) + BAdI tanimi yazma araci.
+    ("enhs_badi_spot",
+     "populate_badi_spot + sap_adt_lib enhs_*: olculen readback -> model -> PUT bayt-esit; ADR 0005-A "
+     "(spot/BAdI adi, CLI + lib + sunucu belgesi katmani, masterSystem=SAP) + spot 30 karakter; TAM "
+     "belge (fallback/ornek/filtre/ikinci tanim korunur) + acik kaldirma; kilit finally (PUT 400/istisna); "
+     "aktivasyon hukmu worklist ENHS/XS (surum alani tuzagi, DOGRULANAMADI basari degil); kacis + UTF-8; "
+     "modellenmeyen alan -> yazma yok; readback kiyasi; coklu tanim + govde sirasi (canli once, hepsi "
+     "yeni -> sira_tuzagi) + spec; surumsuz GET aktiflik hukmu; coklu-kullanim ters esleme; usages "
+     "kiyas disi; kilit alti yeniden okuma (TOCTOU) + taban kiyasi; onlyConstantFilterValues; --cwd "
+     "sirasi; 43 mutasyon"),
 ]
 
 
@@ -1857,6 +1867,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # sayisi check_ui5_freestyle_traps icin pinli (10; Q386 ile 9->10) — baglanti istenirse ikisi birlikte guncellenir.
     ("playbook/templates/ui5-freestyle/**", ("O:ui5_freestyle_sablon",),
      "freestyle UI5 sablonu: ortak govde + surum parcalari + backend referansi"),
+    # 2026-11-08 DEV_CORE #413 — AYRI satirlar; sap_adt_lib birlesimi 32→33 (main #412 sonrasi) ⇒ `b0_secim` P3
+    # pinli sayisi BIRLIKTE guncellendi.
+    ("scripts/sap_adt_lib.py", ("O:enhs_badi_spot",),
+     "enhs_* yardimcilari + get/create/write/activate_enhancement_spot + activate_object object_type"),
+    ("scripts/populate_badi_spot.py", ("O:enhs_badi_spot",),
+     "CLI: GET -> degistir -> TAM PUT -> aktive -> readback"),
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla
