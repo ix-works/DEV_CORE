@@ -682,7 +682,16 @@ OZEL_TESTLER = [
      "KACIS (kimliksiz blok) · sessiz TEMIZ (kok-yok/kapsam-sifir -> OLCULEMEDI + exit 2). "
      "Taban filtresi CIFT YONLU olculur (S4a/S4b); satir bolme capasi GERCEK korpustan "
      "dogdu (splitlines Unicode sinirlarini boluyordu); ozet satiri olay token'ini "
-     "tekrarlamaz (grep uyari korlugu) — 27 vektor + 4 mutasyon"),
+     "tekrarlamaz (grep uyari korlugu); 2026-11-08 izin kanali: on plan Bash/PS yas >= "
+     "limit + 1 dk -> IZIN-BEKLIYOR, >= mudahale esigi -> MUDAHALE-ZAMANI, ask kurali "
+     "eslesmesi, cagri basina bir kez — 59 vektor + 20 mutasyon"),
+    # 2026-11-08: izin/onay olaylari gun-sonu gozlemi — GOZLEMCI, kapi DEGIL.
+    ("izin_bekleme_taramasi",
+     "izin_bekleme_taramasi: oturum kayitlarindan onay olaylari IKI KATMANLA (metin imzasi + "
+     "toolDenialKind/permissionDecision) siniflanir; katman basina ayri vektor; GEC-ONAY = on plan "
+     "Bash/PS bosluk > komut limiti + 1 dk; sahte olay (is_error yok / arac kostu / api-request-blob "
+     "kopyasi / OS Permission denied / komut zaman asimi) · sessiz kacis (SINIFLANMADI dusurulmez) · "
+     "sessiz temiz (kok-yok/kapsam-sifir -> OLCULEMEDI + exit 2) civilenir — 47 vektor + 20 mutasyon"),
     # 2026-09-25 (DEV_CORE Issue #302): get_object_revisions sinif/include/arayuzde surum
     # gecmisini okuyamiyor (obje GET 406, atom: onekli GORELI baglanti) ve her hatayi [] yapiyordu.
     ("revizyon_okuma",
@@ -1473,6 +1482,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "takılma sinyalinin TANIMI burada yaşar (eşleşmemiş tool_use + yaş + taban filtresi) "
      "ve üç sessiz kusur sınıfının (sahte-ASILI / sessiz KAÇIŞ / sessiz TEMİZ) çapası "
      "o korpustadır; çıkış kodu hüküm taşımadığı için regresyon YALNIZ olay satırından ölçülür"),
+    # 2026-11-08: gün-sonu izin/onay gözlemi — kapı DEĞİL, hook DEĞİL, salt-okur.
+    ("scripts/izin_bekleme_taramasi.py", ("O:izin_bekleme_taramasi",),
+     "izin olayı imzaları + yapısal alan eşlemesi + GEÇ-ONAY süre ölçütü burada yaşar; çıkış "
+     "kodu hüküm taşımadığı için regresyon YALNIZ olay listesinden ölçülür"),
     ("scripts/switch_tier.py", ("O:tier_fail_closed",), "tier çözümleme"),
     ("scripts/statusline.py",
      ("O:tier_fail_closed", "O:worktree_yasam_dongusu", "O:statusline_token_esikleri"),

@@ -142,3 +142,14 @@ Birbirinden BAĞIMSIZ okuma çağrılarını (Read / Grep / Glob / adt_get / adt
 adt_sql_query vb.) **tek turda PARALEL gönder** — teker teker sırayla değil. Seri çağrı
 YALNIZ bir çağrının girdisi öncekinin çıktısına bağlıysa meşrudur. Yazma (Edit/Write) ve
 sıra-bağımlı işlemler DAİMA seri kalır.
+
+## ⛔ ONAY PENCERESİ AÇAN KOMUT YAZMA (kullanıcı ekranda olmayabilir — 2026-11-08)
+
+Onay penceresi açan komut kullanıcı dönene kadar ASILI kalır, lider de seni göremez (ölçüm 2026-11-08: 22.372 ön plan komutunda 16 bekleme, en uzunu ~9 saat; 14'ü proje `permissions.ask` kuralına uyan komut — 13 `rm -rf`, 1 `pkill`). Claude Code'un **yerleşik silme denetimi** ise izin listesiyle aşılamaz ve pencere açmadan reddeder — adım kaybolur. Kontrollü deney: aynı `rm -r` scratchpad içindeki sabit yolda pencere açmadan koştu, çalışma dizini dışındaki yolda pencerede bekledi. Ateşler: her Bash/PowerShell komutunu yazarken.
+- Silme komutunda yol **değişkenle** (`rm -f $D/*.html`) ya da **`bash -c` içinde** verilmez. Geçici çıktı scratchpad'e / `.tmp/` altına yazılır ve **silinmez** — yeniden üretimde üzerine yaz ya da yeni dizin aç; temizlik lider/gün-sonu işidir. Silmek şartsa yol açık, mutlak, literal ve scratchpad/çalışma dizini İÇİNDE olur. Denetimi script ya da başka kabukla **dolanmak YASAK**.
+- `permissions.ask` listesindeki komutlar (`rm -r`/`rm -rf`, `kill`/`pkill`, `git reset --hard`, `git clean -f`, `git push --force`, `chmod -R` …) otomatik modda da pencere açabilir — kullanma; süreç durdurmak ya da dizin silmek gerekiyorsa lidere bildir.
+- Çalışma dizini dışına `cd` içeren bileşik komut yazma — mutlak yol ver.
+- Bağlantı/kimlik dosyası (`.conn_adt`, `.env`) içeriğini okuma/yazdırma — otomatik mod sınıflandırıcısı reddeder.
+- Komut onay/ret dönerse aynı biçimi tekrar deneme: biçimi değiştir ya da DERHAL lidere bildir.
+- Lider seni onay penceresinde beklerken durdurup mesajla devam ettirebilir: bekleyen komut ret olarak döner ve **KOŞMAMIŞTIR**. Onu tekrarlama; liderin verdiği biçimle devam et.
+- Gözlem aracı: `python core/scripts/izin_bekleme_taramasi.py` (salt-okur).

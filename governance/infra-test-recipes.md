@@ -3638,6 +3638,33 @@ python tests/run_battery.py pdf_yerlesim --kardes pdf_sayfa_no_yer_imi build_kd_
 - **Kardeş `pdf_sayfa_no_yer_imi`:** taban koşumu P1/P3 (bayraksız/bayraklı ↔ taban metin + blok y) yeşil kalmalıdır — o fixture'ın örnek belgesinde taşan/kırpık öğe yoktur ⇒ hiçbir öğe işaretlenmez, P1/P3 bu belge için tabanla eşliği ölçer. Önceki metin "yerleşim CSS'i çıktıyı değiştirmez" diyordu — 2458c17'de YANLIŞTI (global `img`/`pre` kuralı sığan tabloyu da değiştiriyordu; bug-gate F1). Sığan tablo/görsel eşliğinin asıl ölçümü pdf_yerlesim Y5k/Y9/Y10/Y11'dir. 31 mutasyon çapasının yeni kaynakta TEK geçtiği statik sayımla doğrulanır (kipleri ~95 dk; bu turda koşulmadı).
 - **KAPSAM DIŞI:** shadow root / iframe içi taşma, sola taşma, koşullu `@page` seçiminin modellenmesi (en büyük yan boşluk alınır), mutlak olmayan birimli `@page` yan boşluğu (sayılır, ölçülmez), mermaid render.
 
+## B99 — `agent_stall_watch` izin kanalı: `IZIN-BEKLIYOR` / `MUDAHALE-ZAMANI` (2026-11-08)
+
+```
+python tests/fixtures/agent_stall_watch/run.py               # 59/59 (39 eski + S24–S34)
+python tests/run_battery.py agent_stall_watch --kardes b0_secim --precommit
+python scripts/agent_stall_watch.py --tek-atim --baslangic <ISO> --ayar <proje>/.claude/settings.json   # gerçek korpus, salt-okur
+```
+
+- **Sinyal:** sonucu gelmemiş, `run_in_background` olmayan Bash/PowerShell `tool_use`; yaş ≥ max(`input.timeout`/60000 (yoksa 2) + 1 dk, `--izin-esik-dk` [3]) → `IZIN-BEKLIYOR` bir kez; yaş ≥ max(`--mudahale-dk` [10], izin eşiği) → `MUDAHALE-ZAMANI` bir kez. `ASILI?` (12 dk) aynı çağrı için ayrıca basılır.
+- **Yeni vektörler:** S24/S24b eşik iki yönü · S25/S25b arka plan (izin yok, ASILI var) · S26/S26b `timeout=600000` (4 dk yok, 12 dk var) · S27 döngü kipinde tekillik · S28/S28b/S28c müdahale eşiği + ASILI korunur · S29a/b/c ask eşleşmesi (önek · bileşik komutta alt komut · yok) · S30/S30b ayar yok / bozuk → `OLCULEMEDI` · S31 Read izin kanalına girmez · S32 lider kontrollü deneyinin kayıt BİÇİMİ (genericize) · S32b PowerShell kuralı · S33 kapsam/özet satırı olay token'ı taşımaz · S34 varsayılan tabanda kalıntı sessiz, taze çağrı var.
+- ⛔ **Çapa tekilliği:** izin döngüsü ASILI döngüsünün taban satırını birebir taşır ⇒ `--mutasyon-taban` çapası önceki satırla (`if anahtar in self.bildirilen:` + `continue`) tekilleştirilmiştir; bu satırı kaldırırsan kip 2 eşleşmeyle KURULAMADI verir (ilk koşumda ölçüldü).
+- **Mutasyon kipi → düşmesi İLAN edilen küme** (eski 11 kip aynen): `izin` S24 S26b S27 S28b S29a S29b S29c S30 S30b S32 S32b S34 · `izin-limit` S26 · `izin-arkaplan` S25 · `izin-arac` S31 · `izin-tekil` S27 · `mudahale` S28b · `ask` S29a S29b S32 S32b · `ask-olculemedi` S30 S30b · `izin-taban` S34.
+- ⛔ **Bilinen sınır:** eşik 3 dk'dan küçük olamaz (limit + 1 dk) ⇒ lider deneyindeki 75 sn'lik bekleme bu sinyalle görülmez; ask eşleşmesi kaba bölmedir (tırnak içi ayırıcılar da böler; `settings.local.json` ve kullanıcı seviyesi kurallar okunmaz); TaskStop sonrası transkriptteki ret kullanıcı reddiyle aynıdır.
+
+## B98 — `izin_bekleme_taramasi` izin/onay olayları gözlemi (2026-11-08)
+
+```
+python tests/fixtures/izin_bekleme_taramasi/run.py          # 47/47 (sentetik kayıtlar; ağ/SAP yok)
+python tests/run_battery.py izin_bekleme_taramasi --precommit
+python scripts/izin_bekleme_taramasi.py --gun 60            # gerçek korpus (salt-okur; makineye özgü sayılar)
+```
+
+- **Vektör grupları:** kategori başına METİN-yalnız ve ALAN-yalnız AYRI vektör (V01–V09b; katman başına ayrı vektör — biri sökülünce öbürü tutar, ama katman etiketi değişir ve V01/V06/V34 bunu ölçer) · ONAYLANDI V10 · SINIFLANMADI V11/V11b · sahte olay V12–V16 · GEÇ-ONAY V17–V17f (eşik, `timeout`, arka plan, araç türü, ret ezilmez) · çelişki V19 · eşleşmeyen kimlik V20 · ana oturum V21 · 3. bağlam kök B V22–V25 · pencere çift yön V26a/b · mtime V27a/b · kök yok V28 · olaysız KAPSAM V29 · grep körlüğü V30 · JSON = metin V31 · filtre V32a/b · kullanım V33 · satır biçimi V34.
+- **Mutasyon kipi → düşmesi İLAN edilen küme** (karar tablosu: tam düştü → 1, sapma → 2, çapa bayat/derlenmez → 3): `zaman-imza` V01 V02 V22 V34 · `zaman-alan` V01 V03 V34 · `kullanici-imza` V04 V19 V21 V23 V32a · `siniflandirici-imza` V06 · `gecici-imza` V07 · `kural-imza` V08 V24 · `hook-imza` V09 · `is-error` V12 · `kabul` V10 V13 · `blob` V14 · `siniflanmadi` V11 V11b · `pencere` V26a · `mtime` V27a · `kapsam` V27a V28 · `satir` (splitlines) V23 V25 · `tz` V22 V23 V24 V25 V32b (kök B koşumu çöker) · `gec-onay` V17 · `gec-limit` V17b · `gec-arkaplan` V17c · `gec-ret` V17e.
+- ⛔ **Bilinen sınır (kapsam satırında da):** kullanıcı reddi ↔ liderin TaskStop'u ayırt edilemez (kontrollü deney 2026-11-08); yalnız `the user said:` notu insanı gösterir. GEÇ-ONAY yalnız ön plan Bash/PowerShell'de ölçülür. Pencereyi hangi kuralın açtığı kayıtta çoğu zaman yazmaz.
+- **Gerçek korpus sondası (bu makine, 2026-11-08, `--gun 60`):** rc 0 · 562 dosya (ana 39 · alt 523) · 92 mtime ile atlandı · 4575 kopya kayıt · 0 bozuk satır · 0 çelişki · 493 olay (onaylandı 362 · hook_bloku 54 · gec_onay 20 · kural_reddi 20 · siniflandirici_reddi 17 · zaman_asimi 11 · kullanici_reddi 7 · gecici 1 · siniflanmadi 1). Sayılar makineye özgüdür; kanıt komuttur.
+
 ## B95 — fonksiyon grubu include'u (FUGR/I) yazma + aktivasyon + kilit hata özeti (Q383, 2026-11-07)
 
 ```
