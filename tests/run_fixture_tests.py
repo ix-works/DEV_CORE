@@ -863,10 +863,11 @@ OZEL_TESTLER = [
     # 2026-11-08 DEV_CORE #406: DDIC tablo/yapi YARATIMINDA DTEL'siz (yerlesik abap.*) alan listesi.
     ("ddic_builtin_fields",
      "check_ddic_builtin_fields: DTEL'siz alan LISTELENIR (rc 1, run_review table_creation/"
-     "struct_creation WARNING; bildirilen ornek VERDICT PASS -> WARNING), `// dtel-istisna: <gerekce>` "
-     "istisna (gerekcesiz isaret uyari kalir; yon: onceki alanin satir sonu isareti gecmez), DTEL'li/"
-     "include alan sayilmaz, xml/append/cozulemeyen deyim measured=false; dtel_active kapsam beyani; "
-     "11 mutasyon"),
+     "struct_creation WARNING; bildirilen ornek VERDICT PASS -> WARNING), istisna kardes "
+     "`<GOVDE>.README.md` `dtel-istisna: <ALAN> — <gerekce>` (gerekcesiz/baska ayirici uyari kalir; "
+     "kaynak ici `// dtel-istisna` SAYILMAZ; bayat istisna bilgi; harf duyarsiz; namespace'li govde), "
+     "DTEL'li/include alan sayilmaz, xml/append/cozulemeyen deyim measured=false, uyari+olculemeyen "
+     "= KISMI; dtel_active kapsam beyani; 15 mutasyon"),
 ]
 
 

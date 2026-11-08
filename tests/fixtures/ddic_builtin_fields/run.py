@@ -14,20 +14,25 @@ VEKTÖRLER (SAP'ye istek YOK: girdilerde Z DTEL yok, env `ADT_SAP_*` sahte adres
   D1  bildirilen örnek → rc 1 · id/cnt/note listelenir · `mandt : mandt` listelenmez
   D2  DTEL'li tablo (çok satırlı foreign key, value help, annotation) → rc 0 · OK measured=true temiz
       · KAPSAM + BAKILMAYAN satırları 0-bulgu anında da basılır
-  D3  hepsi gerekçeli istisna (aynı satır · üst satır · annotation'ın üstü) → rc 0 · hepsi-istisna-gerekceli
-  D4  gerekçesiz `// dtel-istisna:` → rc 1 · "GEREKÇESİZ"
+  D3  hepsi gerekçeli istisna — kardeş `<GÖVDE>.README.md` (`- ` / `* ` madde işareti, BÜYÜK harfli
+      alan adı) → rc 0 · hepsi-istisna-gerekceli · KAPSAM "README: okundu 1"
+  D4  README'de gerekçesiz satır + yanlış ayırıcı (` - `) → rc 1 · ikisi de "GEREKÇESİZ"
   D5  `include x;` + `grp : include y with suffix _a;` → alan sayılmaz, include 2
   D6  çözülemeyen deyim (DTEL'siz alan yok) → rc 0 · SKIPPED measured=false deyim-cozulemedi
   D7  klasik `.tabl.xml` → rc 0 · measured=false klasik-xml-olculmedi
   D8  append (`extend type`) → rc 0 · measured=false append-olculmedi
   D9  namespace'li yapı + alan (`/XNS/`) → alan `/xns/fld` listelenir, `/xns/sd001_e_x` DTEL'li sayılır
   D10 yorum / blok yorum / dize içindeki `abap.` ve `;` alan sayılmaz
-  D11 YÖN: önceki alanın satır sonu işareti sonraki alana GEÇMEZ (a istisna, b uyarı)
+  D11 KAYNAK İÇİ `// dtel-istisna:` istisna SAYILMAZ (SAP tablo readback'i yorumu siler, yapı push
+      400) → a ve b (aynı satırdaki iki alan — eski Ö1 belirsizliği yok) uyarı + "README'ye taşı"
+  D15 bayat istisna: README'deki DDL'de olmayan / DTEL'li alan → [BİLGİ] satırı, rc etkilenmez
+  D16 KISMİ: uyarı + çözülemeyen deyim aynı dosyada → reason `…-KISMI` + `[KISMİ]` satırı
+  D17 namespace'li dosya adı `#xns#…` → README gövdesi dosya adının kendisi (`#xns#….README.md`)
   D12 ardışık iki annotation'lı alan ayrıştırılır (çözülemeyen deyim 0)
   D13 `define table function` dosyası → measured=false tablo-yapi-tanimi-yok
   D14 ÜÇÜNCÜ BAĞLAM: dizin kipi (CDS view atlanır + tablo + yapı + xml) + CRLF/BOM dosyası
   R1  run_review table_creation bildirilen örnek → VERDICT WARNING (eski: PASS), exit 0
-  R2  run_review table_creation hepsi istisnalı → VERDICT PASS
+  R2  run_review table_creation hepsi istisnalı (kardeş README) → VERDICT PASS
   R3  run_review table_creation DTEL'li tablo → VERDICT PASS
   R4  run_review struct_creation DTEL'siz yapı → yeni kayıt FAIL/WARNING, exit 0 (BLOCKER yok)
   R5  run_review table_creation çözülemeyen deyim → yeni kayıt SKIP (ölçüm yok), verdict ≠ PASS
@@ -89,19 +94,44 @@ define table zsd001_t_demo2 {
 
 TABLO_ISTISNA = """define table zsd001_t_demo3 {
   key mandt : mandt not null;
-  key id : abap.numc(3) not null; // dtel-istisna: teknik sayaç anahtarı
-  // dtel-istisna: ham sayaç, iş anlamı yok
+  key id : abap.numc(3) not null;
   cnt : abap.int4;
-  // dtel-istisna: serbest not metni, DTEL karşılığı yok
   @EndUserText.label : 'Not'
   note : abap.char(100);
 }
 """
 
+README_ISTISNA = """# ZSD001_T_DEMO3
+
+Tasarım onayı: kullanıcı, 2026-11-08 (alan + key + DTEL tablosu).
+
+- dtel-istisna: id — teknik sayaç anahtarı
+* dtel-istisna: CNT — ham sayaç, iş anlamı yok
+dtel-istisna: note — serbest not metni, DTEL karşılığı yok
+"""
+
 TABLO_GEREKCESIZ = """define table zsd001_t_demo4 {
   key mandt : mandt not null;
-  cnt : abap.int4; // dtel-istisna:
+  cnt : abap.int4;
+  id : abap.numc(3);
 }
+"""
+
+README_GEREKCESIZ = """- dtel-istisna: cnt
+- dtel-istisna: id - tire ayırıcı kabul edilmez
+"""
+
+TABLO_BAYAT = """define table zsd001_t_demo9 {
+  key mandt : mandt not null;
+  matnr : matnr;
+}
+"""
+
+README_BAYAT = """- dtel-istisna: eski_alan — kaldırılmış alan
+- dtel-istisna: matnr — artık DTEL'li
+"""
+
+README_NS = """- dtel-istisna: /XNS/FLD — namespace'li bayrak
 """
 
 YAPI_INCLUDE = """define structure zsd001_s_demo {
@@ -143,10 +173,18 @@ TABLO_YORUM = """define table zsd001_t_demo6 {
 }
 """
 
-TABLO_YON = """define table zsd001_t_demo7 {
+TABLO_KAYNAK_ISARET = """define table zsd001_t_demo7 {
   key mandt : mandt not null;
-  a : abap.int4; // dtel-istisna: a için karar
-  b : abap.int4;
+  // dtel-istisna: kaynak içi işaret artık geçersiz
+  a : abap.int4; b : abap.int4; // dtel-istisna: iki alan aynı satırda
+}
+"""
+
+TABLO_KISMI = """define table zsd001_t_demo10 {
+  key mandt : mandt not null;
+  -- eski alan abap.char(1)
+  note : abap.char(100);
+  f2 : abap.int4;
 }
 """
 
@@ -228,8 +266,9 @@ def dogrudan(kok: Path, kum: Path) -> None:
     g = kum / "g"
     rc, out, err = kos(kok, kum, V, str(yaz(g / "zsd001_t_demo.tabl.ddl", TABLO_ORNEK)))
     ekle("D1", rc == 1 and uyarilar(out) == ["id", "cnt", "note"] and "mandt" not in uyarilar(out)
-         and beyan(out) == ("check_ddic_builtin_fields", "FINDING", "true", "3-dtelsiz-alan"),
-         f"rc={rc} uyari={uyarilar(out)} beyan={beyan(out)} err={err[-200:]}")
+         and beyan(out) == ("check_ddic_builtin_fields", "FINDING", "true", "3-dtelsiz-alan")
+         and "README: okundu 0 · yok 1" in kapsam(out) and "[KISMİ]" not in out,
+         f"rc={rc} uyari={uyarilar(out)} beyan={beyan(out)} kapsam={kapsam(out)!r} err={err[-200:]}")
 
     rc, out, _ = kos(kok, kum, V, str(yaz(g / "zsd001_t_demo2.tabl.ddl", TABLO_DTELLI)))
     k = kapsam(out)
@@ -238,15 +277,17 @@ def dogrudan(kok: Path, kum: Path) -> None:
          and "çözülemeyen deyim 0" in k and any(ln.startswith("BAKILMAYAN:") for ln in out.splitlines()),
          f"rc={rc} beyan={beyan(out)} kapsam={k!r}")
 
+    yaz(g / "ZSD001_T_DEMO3.README.md", README_ISTISNA)   # gövde harfi farklı: harf duyarsız bulunur
     rc, out, _ = kos(kok, kum, V, str(yaz(g / "zsd001_t_demo3.tabl.ddl", TABLO_ISTISNA)))
     ekle("D3", rc == 0 and not uyarilar(out) and istisnalar(out) == ["id", "cnt", "note"]
          and beyan(out) == ("check_ddic_builtin_fields", "OK", "true", "hepsi-istisna-gerekceli")
-         and "teknik sayaç anahtarı" in out,
-         f"rc={rc} uyari={uyarilar(out)} istisna={istisnalar(out)} beyan={beyan(out)}")
+         and "teknik sayaç anahtarı" in out and "README: okundu 1" in kapsam(out),
+         f"rc={rc} uyari={uyarilar(out)} istisna={istisnalar(out)} beyan={beyan(out)} kapsam={kapsam(out)!r}")
 
+    yaz(g / "zsd001_t_demo4.README.md", README_GEREKCESIZ)
     rc, out, _ = kos(kok, kum, V, str(yaz(g / "zsd001_t_demo4.tabl.ddl", TABLO_GEREKCESIZ)))
-    ekle("D4", rc == 1 and uyarilar(out) == ["cnt"] and "GEREKÇESİZ" in out and not istisnalar(out),
-         f"rc={rc} uyari={uyarilar(out)} istisna={istisnalar(out)}")
+    ekle("D4", rc == 1 and uyarilar(out) == ["cnt", "id"] and out.count("GEREKÇESİZ") == 2
+         and not istisnalar(out), f"rc={rc} uyari={uyarilar(out)} istisna={istisnalar(out)}")
 
     rc, out, _ = kos(kok, kum, V, str(yaz(g / "zsd001_s_demo.ddls.asddls", YAPI_INCLUDE)))
     k = kapsam(out)
@@ -276,9 +317,33 @@ def dogrudan(kok: Path, kum: Path) -> None:
     ekle("D10", rc == 0 and not uyarilar(out) and "alan 2 (DTEL'li 2" in k and "çözülemeyen deyim 0" in k,
          f"rc={rc} uyari={uyarilar(out)} kapsam={k!r}")
 
-    rc, out, _ = kos(kok, kum, V, str(yaz(g / "zsd001_t_demo7.tabl.ddl", TABLO_YON)))
-    ekle("D11", rc == 1 and uyarilar(out) == ["b"] and istisnalar(out) == ["a"],
-         f"rc={rc} uyari={uyarilar(out)} istisna={istisnalar(out)}")
+    rc, out, _ = kos(kok, kum, V, str(yaz(g / "zsd001_t_demo7.tabl.ddl", TABLO_KAYNAK_ISARET)))
+    tasi = [ln for ln in out.splitlines() if ln.startswith("[KAYNAK-İÇİ İŞARET]")]
+    ekle("D11", rc == 1 and uyarilar(out) == ["a", "b"] and not istisnalar(out) and len(tasi) == 2
+         and all("zsd001_t_demo7.README.md" in ln for ln in tasi)
+         and "kaynak-içi işaret (sayılmadı) 2" in kapsam(out),
+         f"rc={rc} uyari={uyarilar(out)} istisna={istisnalar(out)} tasi={len(tasi)} kapsam={kapsam(out)!r}")
+
+    yaz(g / "zsd001_t_demo9.README.md", README_BAYAT)
+    rc, out, _ = kos(kok, kum, V, str(yaz(g / "zsd001_t_demo9.tabl.ddl", TABLO_BAYAT)))
+    bilgi = [ln for ln in out.splitlines() if ln.startswith("[BİLGİ] bayat istisna:")]
+    ekle("D15", rc == 0 and len(bilgi) == 2 and any("eski_alan" in b and "DDL'de yok" in b for b in bilgi)
+         and any("matnr" in b and "DTEL'li" in b for b in bilgi)
+         and beyan(out) == ("check_ddic_builtin_fields", "OK", "true", "temiz"),
+         f"rc={rc} bilgi={bilgi} beyan={beyan(out)}")
+
+    rc, out, _ = kos(kok, kum, V, str(yaz(g / "zsd001_t_demo10.tabl.ddl", TABLO_KISMI)))
+    ekle("D16", rc == 1 and uyarilar(out) == ["f2"] and "[KISMİ]" in out
+         and "KISMİ: liste eksik olabilir" in out
+         and beyan(out) == ("check_ddic_builtin_fields", "FINDING", "true", "1-dtelsiz-alan-KISMI"),
+         f"rc={rc} uyari={uyarilar(out)} beyan={beyan(out)}")
+
+    g17 = kum / "g17"
+    yaz(g17 / "#xns#sd001_s_demo.README.md", README_NS)
+    rc, out, _ = kos(kok, kum, V, str(yaz(g17 / "#xns#sd001_s_demo.ddls.asddls", YAPI_NS)))
+    ekle("D17", rc == 0 and istisnalar(out) == ["/xns/fld"] and not uyarilar(out)
+         and "README: okundu 1" in kapsam(out),
+         f"rc={rc} uyari={uyarilar(out)} istisna={istisnalar(out)} kapsam={kapsam(out)!r}")
 
     rc, out, _ = kos(kok, kum, V, str(yaz(g / "zsd001_t_demo8.tabl.ddl", TABLO_IKI_ANNOT)))
     k = kapsam(out)
@@ -318,6 +383,7 @@ def reviewer(kok: Path, kum: Path) -> None:
          and r["severity"] == "WARNING" and js.get("blocker_count") == 0,
          f"rc={rc} verdict={js.get('verdict')} kayit={(r or {}).get('status')} {js.get('_ham', '')}")
 
+    yaz(g / "zsd001_t_demo3.README.md", README_ISTISNA)
     rc, js = rr("table_creation", yaz(g / "zsd001_t_demo3.tabl.ddl", TABLO_ISTISNA))
     r = kayit(js, V)
     ekle("R2", rc == 0 and js.get("verdict") == "PASS" and r is not None and r["status"] == "PASS",
@@ -393,7 +459,7 @@ MUTASYONLAR = {
     # istisna işaretini görmezden gel
     "--mutasyon-istisna-yok": (
         _DBF, "            if isaret:\n", "            if False:\n",
-        {"D3", "D11", "R2"}),
+        {"D3", "D17", "R2"}),
     # gerekçesiz işareti istisna say (`_isaret_bul` içindeki `if gerekce:` mutasyonu NO-OP'tu:
     # boş gerekçe "" yine falsy döner — ölçüldü 2026-11-08, ilk kurulumda KAÇTI)
     "--mutasyon-gerekcesiz-gecer": (
@@ -404,16 +470,16 @@ MUTASYONLAR = {
     "--mutasyon-dtelli-listele": (
         _DBF, "            y = _YERLESIK_RE.match(tip_ifade)\n",
         "            y = re.match(r'(.+?)(\\s*\\([^)]*\\))?\\Z', tip_ifade)\n",
-        {"D1", "D2", "D3", "D4", "D5", "D6", "D9", "D10", "D11", "D12", "D14", "R2", "R3", "R5"}),
+        {"D1", "D2", "D3", "D4", "D5", "D6", "D9", "D10", "D11", "D12", "D14", "D15", "D16", "D17", "R2", "R3", "R5"}),
     # kapsam beyanını bastır
     "--mutasyon-beyan-bastir": (
         _DBF, '    print("BAKILMAYAN: klasik', '    (lambda *a: None)("BAKILMAYAN: klasik',
         {"D2"}),
     # bulguda rc 0 dön (eski "rc 0" tasarımı) ⇒ run_review verdict PASS'a döner
     "--mutasyon-rc-sifir": (
-        _DBF, '        gate_status(_GATE, "FINDING", True, f"{len(uyari)}-dtelsiz-alan")\n        return 1\n',
-        '        gate_status(_GATE, "FINDING", True, f"{len(uyari)}-dtelsiz-alan")\n        return 0\n',
-        {"D1", "D4", "D9", "D11", "D14", "R1", "R4"}),
+        _DBF, '        gate_status(_GATE, "FINDING", True, f"{len(uyari)}-dtelsiz-alan" + ("-KISMI" if kismi else ""))\n        return 1\n',
+        '        gate_status(_GATE, "FINDING", True, f"{len(uyari)}-dtelsiz-alan" + ("-KISMI" if kismi else ""))\n        return 0\n',
+        {"D1", "D4", "D9", "D11", "D14", "D16", "R1", "R4"}),
     # ölçülemeyeni temiz say (fail-open)
     "--mutasyon-olculemedi-temiz": (
         _DBF, '        gate_status(_GATE, "SKIPPED", False, sonuc["olculmedi"][0][2])\n',
@@ -427,13 +493,34 @@ MUTASYONLAR = {
     "--mutasyon-yorum-maskesiz": (
         _DBF, '            out.append(" " * (j - i))\n            i = j\n',
         '            out.append(metin[i:j])\n            i = j\n',
-        # maskesiz yorum satırı "boş" görünmez ⇒ üst-satır işareti de kaybolur (D3/D11/R2) — koşumdan
-        {"D10", "D3", "D11", "R2"}),
-    # YÖN: yukarı yürüyüş alan satırında durmasın (önceki alanın satır sonu işareti geçer)
-    "--mutasyon-yon-genis": (
-        _DBF, "        if (not s and k in yorumlar) or s.startswith(\"@\"):\n",
-        "        if True:\n",
+        # README biçiminde D3/R2 artık yoruma bağlı değil; D11 kaynak-içi işaret satırı sayımı düşer — koşumdan
+        {"D10", "D11"}),
+    # K1: kaynak içi `// dtel-istisna:` yeniden istisna sayılsın (eski tasarım; yapı push 400 ·
+    # tablo readback'te siliniyor) — aynı satırdaki iki alanı da örter (Ö1)
+    "--mutasyon-kaynak-ici-gecer": (
+        _DBF, "            isaret = isaretler.get(alan.lower())\n",
+        "            isaret = 'kaynak' if any(_KAYNAK_ISARET_RE.match(y.strip()) for y in "
+        "yorumlar.get(ad_satiri, [])) else isaretler.get(alan.lower())\n",
         {"D11"}),
+    # README alan adı büyük/küçük harf duyarlı olsun
+    "--mutasyon-harf-duyarli": (
+        _DBF, "        alan, kalan = m.group(1).lower(), m.group(2)\n",
+        "        alan, kalan = m.group(1), m.group(2)\n",
+        {"D3", "D17", "R2"}),
+    # bayat istisna bilgisini bastır
+    "--mutasyon-bayat-sessiz": (
+        _DBF, '        sonuc["bilgi"].append(f"[BİLGİ] bayat istisna:',
+        '        (lambda *a: None)(f"[BİLGİ] bayat istisna:',
+        {"D15"}),
+    # K3: uyarı + ölçülemeyen birlikteyken kısmilik görünmesin
+    "--mutasyon-kismi-gizle": (
+        _DBF, '    kismi = bool(uyari) and bool(sonuc["olculmedi"])\n', "    kismi = False\n",
+        {"D16"}),
+    # ayırıcı gevşesin (` - ` / `:` da gerekçe saysın)
+    "--mutasyon-ayirici-gevsek": (
+        _DBF, "        gerekce = kalan[len(_AYIRICI):].strip() if kalan.startswith(_AYIRICI) else \"\"\n",
+        "        gerekce = kalan.lstrip('—-: ').strip()\n",
+        {"D4"}),
     # zincirden çıkar (taban davranışı: bildirilen örnek PASS)
     "--mutasyon-zincirden-cikar": (
         _V + "run_review.py",
