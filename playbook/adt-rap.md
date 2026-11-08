@@ -92,7 +92,7 @@ Script: `scripts/populate_cds_views.py` (batch) — **RAP-aware** (`validate_sql
 Custom entity (`define [root] custom entity <ad> [with parameters …] { … }`) de DDLS'tir; select/projection
 yoktur, veri `@ObjectModel.query.implementedBy: 'ABAP:<SINIF>'` sınıfından (`IF_RAP_QUERY_PROVIDER`) gelir.
 Kaynak kapısı (`_validate_cds_source`) ve `populate_cds_views` bu biçimi #410'dan beri kabul eder.
-**Ölçüm ortamı:** bir geliştirme sistemi (S/4HANA 2025), yerel paket; üç biçim (implementedBy'sız ·
+**Ölçüm ortamı:** bir geliştirme sistemi (SAP_BASIS 758), yerel paket; üç biçim (implementedBy'sız ·
 `root` + implementedBy · `with parameters` + implementedBy) ve iki yaratma sırası. Ayrıntılı kayıt:
 `governance/infra-test-recipes.md` B103.
 

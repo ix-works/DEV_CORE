@@ -394,6 +394,23 @@ def senaryolar_pcv(pcv, kum: Path, mut=None) -> list[tuple[str, bool, str]]:
     r.append(("P12e GERCEK custom entity, yorumdaki eski ad yakalanmaz -> hata YOK (RAP dali)",
               e == [], str(e)))
 
+    # P13 — #412 duzeltme 2: `--` satir yorumu (canli aktif CDS'te olculen bicim).
+    # Kesme isaretli `--` yorumu basliktan once: ayiklayici `--`'yi tanimazsa `'` string
+    # acar, baslik yutulur -> view entity klasik dala duser (sahte "sqlViewName EKSIK").
+    fv_tire = d / "ZMOD002_I_TIRE.cds"
+    fv_tire.write_text("-- Musteri'nin kasa hareketleri\n"
+                       "@EndUserText.label: 'Kasa'\n"
+                       "define view entity ZMOD002_I_TIRE as select from t000 {\n"
+                       "  key t000.mandt as Client\n}\n", encoding="utf-8")
+    e = dogrula([fv_tire], "ZMOD002_CLC")
+    r.append(("P13a `--` (kesme isaretli) yorumlu view entity -> hata YOK (RAP dali)",
+              e == [], str(e)))
+    fk_tire = yaz_klasik_izli("ZMOD002_DDL_KTIRE", "ZMOD002_V_KTIR", "zmod002_ddl_ktire",
+                              "-- define custom entity ZMOD002_I_Q\n")
+    e = dogrula([fk_tire], "ZMOD002_CLC")
+    r.append(("P13b KLASIK gecerli view, yorumda `-- define custom entity` -> hata YOK (klasik dal)",
+              e == [], str(e)))
+
     r += senaryolar_sprint(pcv, kum)
     return r
 
@@ -539,6 +556,23 @@ def senaryolar_sprint(pcv, kum: Path) -> list[tuple[str, bool, str]]:
     r.append(("RA4 KLASIK view yorumda `define custom entity` main(): TD-spec ATLANMAZ -> rc=1",
               rc == 1 and TD_IZ in out,
               "rc=%r td_iz=%s" % (rc, TD_IZ in out)))
+
+    # RA5 — #412 duzeltme 2 GERCEK GIRIS (main): `-- Musteri'nin …` yorumlu view entity
+    # TD-spec'ten ATLANIR + pre-flight OK. c17e80d'de `'` basligi yutuyordu -> klasik dal,
+    # TD-spec EKSIK + rc=1 (d3f5c66'da geciyordu = bizden dogan gerileme).
+    rc5 = kum / "ra_src_tire"
+    rc5.mkdir(parents=True, exist_ok=True)
+    (rc5 / "ZMOD001_I_TIRE.cds").write_text(
+        "-- Musteri'nin kasa raporu\n"
+        "@EndUserText.label: 'Kasa'\n"
+        "define view entity ZMOD001_I_TIRE as select from t000 {\n"
+        "  key t000.mandt as Client\n"
+        "}\n", encoding="utf-8")
+    rc, out, g = kos([], env=bos, src=rc5)
+    r.append(("RA5 `--` (kesme isaretli) yorumlu view entity main(): TD-spec ATLANIR -> rc=0",
+              rc == 0 and TD_IZ not in out and "[OK] Pre-flight" in out
+              and "DRY-RUN: ZMOD001_I_TIRE" in out,
+              "rc=%r td_iz=%s preflight=%s" % (rc, TD_IZ in out, "[OK] Pre-flight" in out)))
 
     return r
 
@@ -709,6 +743,15 @@ PCV_MUT = [
      lambda s: s.replace(
          "                if RAP_VIEW_ENTITY_RE.search(cds_kod_metni(f.read_text(encoding='utf-8'))):\n",
          "                if RAP_VIEW_ENTITY_RE.search(f.read_text(encoding='utf-8')):\n")),
+    # #412 duzeltme 2: ayiklayici `--` satir yorumunu tanimasin (c17e80d lib davranisi).
+    # Sadik benzetim: eski lib `-` karakterini duz kod sayiyordu; `--`'yi bosluga cevirmek
+    # ayni sonucu verir (string icerigi zaten atilir).
+    ("M18 #412 `--` satir yorumu tanınmasın (ayıklayıcı yalnız // ve /* */)",
+     lambda s: s.replace(
+         "from sap_adt_lib import cds_kod_metni  # noqa: E402",
+         "from sap_adt_lib import cds_kod_metni as _ckm_gercek  # noqa: E402\n"
+         "def cds_kod_metni(m): return _ckm_gercek(m.replace('--', '  '))  # noqa: E302,E704\n"
+         "#")),
     ("M14 Q298 SINIR: tespit asiri genis (her `define` RAP sayilsin, klasik dal olsun)",
      lambda s: s.replace(
          r'RAP_VIEW_ENTITY_RE  = re.compile(RAP_BASLIK_DESENI + r"\b", re.IGNORECASE)',

@@ -33,6 +33,11 @@ DEGISMEZLER -> CAPALAR
               komsu dallar TABANLA AYNI: abstract + with parameters hala RED (R5),
               yorumdaki `define custom entity` view entity'yi kurtarmaz (R6)
        F1     yorumunda custom entity gecen gecerli view entity -> GECER (FP capasi)
+     #412 duzeltme 2 — `--` satir yorumu (`cds_kod_metni`; canli aktif CDS'te olculdu):
+       D1-D2  kesme isaretli `--` yorumu basliktan once (view entity / custom entity) -> GECER
+              (taban acigi: `'` string acip basligi yutuyordu = yanlis-RED duzeltmesi)
+       D3     string ICINDE `--` yorum SAYILMAZ (ayni satirdaki baslik yutulmaz) -> GECER
+       D4     yorumdaki `-- define custom entity` select'siz view entity'yi KURTARMAZ -> RED
 
 KIPLER (BEYAN) — her kipin DUSMESI GEREKEN vektor kumesi `BEKLENEN_DUSEN`'de ILAN edilir.
   Dusen kume ilanla AYNI -> exit 1 (DUSTU) · FARKLI (eksik YA DA fazla) -> exit 2 SAPMA ·
@@ -43,6 +48,8 @@ KIPLER (BEYAN) — her kipin DUSMESI GEREKEN vektor kumesi `BEKLENEN_DUSEN`'de I
   --mutasyon-q410-taban taban SHA 3353fca (#410 oncesi: custom entity RED). git show.
   --mutasyon-serbest    kapi bos-olmayan her seyi kabul eder
   --mutasyon-yorum      yorum/string ayiklama sokulur
+  --mutasyon-tire       `cds_kod_metni`'nin `--` dali kapanir (yalniz `//` + `/* */` kalir)
+  --mutasyon-tire-naif  `--` dize-korsuz regex on-gecisiyle silinir (string ici `--` de yorum sayilir)
   --mutasyon-govde      view/abstract govde kosulu sokulur
   --mutasyon-tf         table function dali sokulur
   --mutasyon-ce-ret     #410 eski ret dali geri gelir (custom entity -> RED)
@@ -80,7 +87,8 @@ TABAN_SHA = "d6c9539"
 Q410_TABAN_SHA = "3353fca"
 GECERLI_KIP = ("--mutasyon", "--mutasyon-q410-taban", "--mutasyon-serbest", "--mutasyon-yorum",
                "--mutasyon-govde", "--mutasyon-tf", "--mutasyon-ce-ret", "--mutasyon-ce-rootsuz",
-               "--mutasyon-ce-param", "--mutasyon-ce-govdesiz", "--mutasyon-ce-liste")
+               "--mutasyon-ce-param", "--mutasyon-ce-govdesiz", "--mutasyon-ce-liste",
+               "--mutasyon-tire", "--mutasyon-tire-naif")
 KIPLER = [a for a in sys.argv[1:] if a.startswith("--")]
 if len(KIPLER) > 1 or (KIPLER and KIPLER[0] not in GECERLI_KIP):
     print(f"[KULLANIM] gecerli kipler: {', '.join(GECERLI_KIP)} (en fazla bir tane)")
@@ -114,6 +122,13 @@ MUTASYONLAR = {
     "--mutasyon-ce-liste": (
         ("                        return (':' in liste and not re.search(\n",
          "                        return (':' in liste or not re.search(\n"),),
+    # #412 duzeltme 2: `--` satir yorumu dali (modul duzeyi `cds_kod_metni`)
+    "--mutasyon-tire": (
+        ("        elif metin.startswith('//', i) or metin.startswith('--', i):\n",
+         "        elif metin.startswith('//', i):\n"),),
+    "--mutasyon-tire-naif": (
+        ("    cikti = []\n    i, n = 0, len(metin)\n",
+         "    metin = re.sub(r'--[^\\n]*', '', metin)\n    cikti = []\n    i, n = 0, len(metin)\n"),),
 }
 
 KUM = Path(tempfile.mkdtemp(prefix="cdskapi_"))
@@ -395,6 +410,28 @@ k, m = karar(F1_SRC)
 kontrol("F1 FP CAPASI: yorum/string'inde custom entity gecen gecerli view entity -> GECER",
         k == "GECER", f"{k} {m[:90]}")
 
+# ── 8. #412 duzeltme 2: `--` SATIR YORUMU (canli aktif CDS'te olculen bicim) ──────
+D = {
+    "D1 kesme isaretli `--` yorumu + view entity -> GECER": (
+        "-- Musteri'nin kasa hareketleri\n"
+        "@EndUserText.label: 'Kasa'\n"
+        "define view entity ZSD001_I_ORNEK_D1 as select from zsd001_t_ornek { key a }\n"),
+    "D2 kesme isaretli `--` yorumu + custom entity -> GECER": (
+        "-- 601'in sorgusu\n"
+        "@ObjectModel.query.implementedBy: 'ABAP:ZCL_SD001_ORNEK_Q'\n"
+        "define custom entity ZSD001_I_ORNEK_D2\n{\n  key Id : abap.char(10);\n}\n"),
+    "D3 string ICINDE `--` yorum sayilmaz (ayni satirda baslik) -> GECER": (
+        "@EndUserText.label: 'Ozet -- kasa' define view entity ZSD001_I_ORNEK_D3 "
+        "as select from zsd001_t_ornek { key a }\n"),
+}
+for ad, src in D.items():
+    k, m = karar(src)
+    kontrol(ad, k == "GECER", f"{k} {m[:90]}")
+k, m = karar("-- define custom entity ZSD001_I_ORNEK_Y\n"
+             "define view entity ZSD001_I_ORNEK_D4\n{ key a }\n")
+kontrol("D4 yorumdaki `-- define custom entity` select'siz view entity'yi KURTARMAZ -> RED",
+        k == "RED", f"{k} {m[:90]}")
+
 # ── 6. GERCEK GIRIS NOKTASI: create_cds_view (POST atilir mi) ─────────────────
 
 
@@ -460,21 +497,24 @@ kontrol("E6 create_cds_view govdesi `{` olmayan custom entity -> SAPValidationEr
 BEKLENEN_DUSEN = {
     # d6c9539: distinct + abstract RED, yorum sayilir, eski mesajlar (E2/E4/E6 mesaj/POST)
     "--mutasyon": {"A1", "A2", "A3", "A4", "A5", "A6", "S1", "S2", "S3", "S4", "T2",
-                   "C1", "C2", "C3", "C4", "C5", "E1", "E2", "E4", "E5", "E6"},
+                   "C1", "C2", "C3", "C4", "C5", "E1", "E2", "E4", "E5", "E6", "D2"},
     # 3353fca: YALNIZ custom entity kabulu duser; R1-R7/F1 tabanda da yesil = komsu dallar ayni
-    "--mutasyon-q410-taban": {"C1", "C2", "C3", "C4", "C5", "E5"},
+    # #412 duzeltme 2: D1/D2 tabanda da RED (`--` tanınmıyordu = taban acigi)
+    "--mutasyon-q410-taban": {"C1", "C2", "C3", "C4", "C5", "E5", "D1", "D2"},
     # N1/N2/N4 tip/bosluk kontrolu `_kod_metni`'nden ONCE yasar -> serbest mutasyonda ayakta
     "--mutasyon-serbest": {"N3", "N5", "N6", "N7", "N8", "N9", "N10", "N11",
                            "S1", "S2", "S3", "S4", "T1", "T2", "R1", "R2", "R3", "R4", "R5",
-                           "R6", "R7", "E3", "E4", "E6"},
+                           "R6", "R7", "E3", "E4", "E6", "D4"},
     "--mutasyon-yorum": {"A5", "B8", "S1", "S3", "S4"},
-    "--mutasyon-govde": {"N6", "N7", "N11", "S4", "R5", "R6", "E3"},
+    "--mutasyon-govde": {"N6", "N7", "N11", "S4", "R5", "R6", "E3", "D4"},
     "--mutasyon-tf": {"T2", "E4"},
-    "--mutasyon-ce-ret": {"C1", "C2", "C3", "C4", "C5", "E5"},
+    "--mutasyon-ce-ret": {"C1", "C2", "C3", "C4", "C5", "E5", "D2"},
     "--mutasyon-ce-rootsuz": {"C2", "C4", "E5"},
     "--mutasyon-ce-param": {"C3", "C4"},
     "--mutasyon-ce-govdesiz": {"R1", "R2", "R3", "R4", "R7", "E6"},
     "--mutasyon-ce-liste": {"R3", "R7"},
+    "--mutasyon-tire": {"D1", "D2"},
+    "--mutasyon-tire-naif": {"D3"},
 }
 basarisiz = [s for s in SONUC if not s[1]]
 for ad, ok, detay in SONUC:

@@ -1404,6 +1404,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # 2026-10-03: AYRI satır; birleşim büyüdü → `b0_secim` P3 pinli sayısı 15→16 BİRLİKTE güncellendi.
     ("scripts/sap_adt_lib.py", ("O:sql_satir_kirma",),
      "`sql_satirlarini_kir` (freestyle 255-satır sınırı) + `run_query` 400 gövdesi kırpılmadan"),
+    # 2026-11-08 (#412 düzeltme 2): AYRI satır; populate_cds_views başlık tespiti artık
+    # `cds_kod_metni`'ye bağlı → `b0_secim` P3 pinli sayısı 30→31 BİRLİKTE güncellendi.
+    ("scripts/sap_adt_lib.py", ("O:cds_paket_kapsami",),
+     "`cds_kod_metni` (yorum/string ayıklayıcı) — populate_cds_views RAP başlık tespiti + TD-spec atlaması"),
     # 2026-10-18 (Issue #325): AYRI satırlar; sap_adt_lib birleşimi büyüdü → `b0_secim` P3
     # pinli sayısı 24→25 BİRLİKTE güncellendi.
     ("scripts/sap_adt_lib.py", ("O:classrun_tek_post",),

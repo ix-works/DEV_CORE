@@ -897,7 +897,13 @@ def cds_kod_metni(metin):
                 j += 1
             cikti.append("''")
             i = j + 1
-        elif metin.startswith('//', i):
+        elif metin.startswith('//', i) or metin.startswith('--', i):
+            # `--` de CDS satır yorumudur (#412 düzeltme 2, bug-gate: canlı aktif bir CDS'te
+            # `-- 601'in teslimat şartı …` satırı ölçüldü). Tanınmazsa yorumdaki `'` string
+            # açar ve başlığı yutar. Kardeşlerle aynı normalizasyon:
+            # `check_sap_active_version._yorumlari_siyir` ·
+            # `check_cds_currency_reference.yorumu_kirp`/`blok_yorumu_maskele`. String
+            # içindeki `--` yukarıdaki string dalında tüketilir, yorum SAYILMAZ.
             j = metin.find('\n', i)
             i = n if j < 0 else j
         elif metin.startswith('/*', i):
