@@ -504,8 +504,8 @@ MUTASYONLAR: dict[str, tuple[Path, str, str, tuple[str, ...]]] = {
         ("R4", "R4b")),
     "--mutasyon-ad-harf": (
         VAL_REL,
-        "            return tur, m.group(2).lower()\n",
-        "            return tur, m.group(2)\n",
+        "            return tur, (m.group(2).lower() if ad_gecerli_mi(m.group(2)) else None)\n",
+        "            return tur, (m.group(2) if ad_gecerli_mi(m.group(2)) else None)\n",
         ("R4", "R4b")),
     "--mutasyon-info": (
         VAL_REL,

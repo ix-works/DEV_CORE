@@ -844,7 +844,7 @@ OZEL_TESTLER = [
      "namespace'li / gramer disi ad (`/AB/`) validator'da ya DENETLENIR ya OLCULEMEDI (ad-cozulemedi / "
      "namespace-kayitsiz), sessiz 'kapsam disi' YOK: managed_etag EK-1/EK-2 + reuse_gate + readonly + "
      "active_version + struct_consistency + struct_field_dtel_active + table_field_drop + "
-     "standard_table_fields + cds_currency + checklist BE-01; taban e52ad6f 11/44 (kontrol grubu); 19 mutasyon"),
+     "standard_table_fields + cds_currency + checklist BE-01; taban e52ad6f tam agac 13/45; ASCII kilidi U1; 20 mutasyon"),
     ("validator_ad_grameri",
      "TEK AD GRAMERI geri donus korumasi (AST): scripts/validators/*.py'de nesne-adi baglaminda kendi "
      "ad deseni (kelime sinifi / [a-z][a-z0-9_]* / Z...) = FAIL; istisna `# ad-grameri: <gerekce>` isaretiyle "

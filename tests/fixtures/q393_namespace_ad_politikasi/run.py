@@ -708,13 +708,13 @@ MUTASYONLAR = {
     "--mutasyon-ns-kapali": (_AP, "    if ns not in kayitli:\n        return False\n",
                              "    return False\n",
                              {"G1", "G4", "G7", "L1", "L2", "L3", "F2", "F3", "F8", "S1",
-                              "R3", "R5", "R9", "D1"}),
+                              "R3", "R5", "R9", "D1", "R7c"}),   # R7c: kontrol `/NSP/` kabulü (#402 B-2)
     "--mutasyon-ns-dolar": (_AP, 'r"[A-Z0-9_]+' + Z + '", ad, re.IGNORECASE | re.ASCII)',
                             'r"[A-Z0-9_]+$", ad, re.IGNORECASE | re.ASCII)', {"G4"}),
     "--mutasyon-ns-bos-govde": (_AP, 'r"[A-Z0-9_]+' + Z + '", ad, re.IGNORECASE | re.ASCII)',
                                 'r"[A-Z0-9_]*' + Z + '", ad, re.IGNORECASE | re.ASCII)', {"G3", "L1"}),
     "--mutasyon-yapi-kismi": (_AP, "    if hatalar:\n        return (), hatalar + [",
-                              "    if False:\n        return (), hatalar + [", {"Y5", "G6", "R7", "R8"}),
+                              "    if False:\n        return (), hatalar + [", {"Y5", "G6", "R7", "R8", "R7c"}),  # R7c: `/AB/` reddi bu daldan (#402 B-2)
     "--mutasyon-env-okunur": (_AP, "        ham = veri.get(ANAHTAR)\n",
                               "        _e = __import__('os').environ.get('IX_' + ANAHTAR.upper())\n"
                               "        ham = _e.split(',') if _e else veri.get(ANAHTAR)\n",

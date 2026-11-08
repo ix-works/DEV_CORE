@@ -34,8 +34,11 @@ DEĞİŞMEZLER (her biri bir vektörle çivili; mutasyon kipleri aşağıda)
     C3 BDEF'siz projeksiyon → BLOCKER · R1 Z duplicate → WARNING · R3 CDS olmayan → K2 susar ·
     B0/A0 düz `.bdef` hâlâ yakalanır · N1 gramer dışı ad active_version'da zaten ÖLÇÜLEMEDİ ·
     N5b KAYITLI namespace tablosu müşteri sayılır (std_table_fields aşırı sıkı DEĞİL).
-    TABAN ÖLÇÜMÜ (e52ad6f, 2026-11-08): 11/44 — yeşil kalanlar TAM bu kontrol grubu (11 vektör);
-    düşen 33 vektörün her biri bu turun (Faz A + B-2) kapattığı bir boşluktur.
+    TABAN ÖLÇÜMÜ (e52ad6f TAM ağaç — `git archive e52ad6f` tamamı; checklist_check playbook/checklists
+    okur, yalnız `scripts` ile kurulan taban EKSİKTİR; 2026-11-08): 13/45 — yeşil kalanlar bu kontrol
+    grubu (11) + N7c + N7e. N7c tabanda da yeşil çünkü eski `startswith(("z","y"))` kayıtsız `/nspc/t01`'i zaten standart sayıyordu — gevşetmenin (`_std` kayıtlı NS) koruma vektörüdür; N7e tabanda yeşil çünkü taban `#ns#` dosya adını hiç çözmüyordu (sessiz geçiş) — `be01-dosya` mutantını yakalayan vektördür. Düşen 32 vektörün her biri bu turun (Faz A + B-2)
+    kapattığı bir boşluktur (U1 tabanda bölüm çökmesiyle düşer: `ad_gecerli_mi` yoktu).
+  U1  ASCII kilidi: `ı`/`ſ`/KELVIN `K` içeren ad geçersiz (`(?a:` yoksa IGNORECASE katlaması kabul eder)
 
 KULLANIM
   python tests/fixtures/validator_ad_deseni/run.py                       # tüm vektörler
@@ -411,8 +414,25 @@ def bolum_n() -> None:
             shutil.rmtree(kum, ignore_errors=True)
 
 
+# ── Bölüm U: gramerin ASCII kilidi (ad_politikasi, süreç içi; scripts/ bu ağacınki) ──────────
+def bolum_u() -> None:
+    """U1: `re.IGNORECASE` altında Unicode harf katlaması (`ı`→I, `ſ`→S, KELVIN `K`→k) `[A-Za-z]`'yi
+    genişletir; `(?a:…)` olmadan bu adlar GEÇERLİ sayılır (ölçüldü). SAP adı ASCII'dir ⇒ geçersiz."""
+    sys.path.insert(0, str(REPO / "scripts"))
+    try:
+        import importlib
+        ap = importlib.import_module("utils.ad_politikasi")
+        unicode_adlar = ["ZSD001_" + chr(0x131), "ZSD001_" + chr(0x17F), "ZSD001_" + chr(0x212A),
+                         "/NSP" + chr(0x131) + "/X"]
+        kabul = [a for a in unicode_adlar if ap.ad_gecerli_mi(a) or ap.ad_coz(a)[0]]
+        ekle("U1", not kabul and ap.ad_gecerli_mi("ZSD001_X") and ap.ad_gecerli_mi("/NSP/X"),
+             f"ASCII dışı ad KABUL edildi: {[ascii(a) for a in kabul]}")
+    finally:
+        sys.path.remove(str(REPO / "scripts"))
+
+
 def main() -> int:
-    for fn in (bolum_e, bolum_r, bolum_c, bolum_abp, bolum_n):
+    for fn in (bolum_e, bolum_r, bolum_c, bolum_abp, bolum_n, bolum_u):
         try:
             fn()
         except Exception as exc:                       # noqa: BLE001 — bölüm çökmesi FAIL'dir
@@ -482,6 +502,10 @@ MUTASYONLAR = {
                             "        return not (musteri_adi_mi(tab) or ",
                             "        return not (t.startswith((\"z\", \"y\")) or ",
                             {"N7d"}),
+    "--mutasyon-ascii": ("scripts/utils/ad_politikasi.py",
+                         'AD_DESENI = r"(?a:(?:/"',
+                         'AD_DESENI = r"(?:(?:/"',
+                         {"U1"}),
     "--mutasyon-be01-dosya": (_V + "checklist_check.py",
                               "    nesne = dosya_adindan_ad(m.group(1)) if m else \"\"\n",
                               "    nesne = m.group(1) if m else \"\"\n",
