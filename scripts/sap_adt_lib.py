@@ -30,6 +30,7 @@ _scripts_dir = Path(__file__).parent
 if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
 from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
+from utils.cds_metin import cds_kod_metni  # noqa: E402,F401 — #412 düzeltme 4: yeniden dışa açım (tek kaynak)
 
 # Import auth providers for BTP cloud support
 try:
@@ -873,51 +874,9 @@ def validate_package_name(package):
 _explicit_working_dir = None
 
 
-def cds_kod_metni(metin, string_icerigini_koru=False):
-    """CDS kaynağından yorumları atar: `//` ve `--` satır yorumları (satır sonu korunur) +
-    `/* */` blok yorumu (tek boşluk olur). String ('..', `''` kaçışı) yorumdan ÖNCE tüketilir
-    ⇒ string içindeki `//` / `--` / `/*` yorum SAYILMAZ.
-
-    `string_icerigini_koru=False` (varsayılan): string yerine `''` bırakılır — anahtar sözcük /
-    başlık araması YALNIZ kodda yapılsın diye. `True`: string olduğu gibi kalır (yalnız yorum
-    atılır) — `@EndUserText.label: '…'` metnine ihtiyaç duyan tüketici için.
-    Tüketiciler: `SAPADTClient._validate_cds_source` (Q277) · `populate_cds_views` RAP başlık
-    tespiti (#410 K3, 2026-11-08: ham metinde arama yorumdaki `define view entity` /
-    `define custom entity` ile klasik view'i RAP dalına düşürüyordu) · `gen_field_table`
-    (`string_icerigini_koru=True`; #412 düzeltme 3). Kopyalama — buradan import et.
-    """
-    cikti = []
-    i, n = 0, len(metin)
-    while i < n:
-        c = metin[i]
-        if c == "'":
-            j = i + 1
-            while j < n:
-                if metin[j] == "'":
-                    if j + 1 < n and metin[j + 1] == "'":
-                        j += 2
-                        continue
-                    break
-                j += 1
-            cikti.append(metin[i:j + 1] if string_icerigini_koru else "''")
-            i = j + 1
-        elif metin.startswith('//', i) or metin.startswith('--', i):
-            # `--` de CDS satır yorumudur (#412 düzeltme 2, bug-gate: canlı aktif bir CDS'te
-            # `-- 601'in teslimat şartı …` satırı ölçüldü). Tanınmazsa yorumdaki `'` string
-            # açar ve başlığı yutar. Kardeşlerle aynı normalizasyon:
-            # `check_sap_active_version._yorumlari_siyir` ·
-            # `check_cds_currency_reference.yorumu_kirp`/`blok_yorumu_maskele`. String
-            # içindeki `--` yukarıdaki string dalında tüketilir, yorum SAYILMAZ.
-            j = metin.find('\n', i)
-            i = n if j < 0 else j
-        elif metin.startswith('/*', i):
-            j = metin.find('*/', i + 2)
-            cikti.append(' ')
-            i = n if j < 0 else j + 2
-        else:
-            cikti.append(c)
-            i += 1
-    return ''.join(cikti)
+# `cds_kod_metni` (CDS yorum/string ayıklayıcı) `utils/cds_metin.py`'ye taşındı (#412 düzeltme 4):
+# bağımlılıksız tüketici (`gen_field_table`) bu modülü açmadan kullanabilsin diye. Yukarıda
+# yeniden dışa açılır; `sap_adt_lib.cds_kod_metni` aynen çalışır.
 
 
 def set_explicit_working_dir(path: str) -> None:

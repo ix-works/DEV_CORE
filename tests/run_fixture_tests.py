@@ -1284,7 +1284,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/validators/check_sap_active_version.py", ("O:cds_entity_baslik_kardesleri",),
      "#410: ad cikarimi `define root abstract|custom entity`yi tanir"),
     ("scripts/gen_field_table.py", ("O:cds_entity_baslik_kardesleri",),
-     "#410: _body custom entity basligini tanir (ad + govde baslangici)"),
+     "#410: _body custom entity basligini tanir (ad + govde baslangici) · #412: `--` yorumu, "
+     "string koruma, bagimliliksiz acilis (G9/G10)"),
     ("scripts/validators/run_review.py",
      ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam", "O:sap_gate_skip_sozlesmesi",
       "O:reviewer_uzun_yol_ipucu", "O:checklist_check", "O:ddic_builtin_fields"),
@@ -1413,6 +1414,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # `b0_secim` P3 pinli sayısı 31→32 BİRLİKTE güncellendi.
     ("scripts/sap_adt_lib.py", ("O:cds_entity_baslik_kardesleri",),
      "`cds_kod_metni` `string_icerigini_koru=True` dalı + `--` yorumu — gen_field_table.parse_cds"),
+    # 2026-11-08 (#412 düzeltme 4): `cds_kod_metni` gövdesi bağımlılıksız `utils/cds_metin.py`'ye
+    # taşındı; `sap_adt_lib` yeniden dışa açar (yukarıdaki üç satır bu yüzden KALIR).
+    # `cds_kaynak_kapisi` (`--mutasyon-tire*`) ve `cds_entity_baslik_kardesleri` (`ortak-tiresiz`)
+    # yamayı BU dosyaya uygular; `cds_paket_kapsami` davranışı populate üzerinden koşar.
+    ("scripts/utils/cds_metin.py",
+     ("O:cds_kaynak_kapisi", "O:cds_paket_kapsami", "O:cds_entity_baslik_kardesleri"),
+     "`cds_kod_metni` (CDS yorum/string ayıklayıcı, yalnız stdlib) — Q277 kapısı · populate · gen_field_table"),
     # 2026-10-18 (Issue #325): AYRI satırlar; sap_adt_lib birleşimi büyüdü → `b0_secim` P3
     # pinli sayısı 24→25 BİRLİKTE güncellendi.
     ("scripts/sap_adt_lib.py", ("O:classrun_tek_post",),

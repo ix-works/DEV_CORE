@@ -37,7 +37,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sap_adt_lib import cds_kod_metni  # noqa: E402 — CDS yorum grameri TEK kaynak (#412 düzeltme 3)
+from utils.cds_metin import cds_kod_metni  # noqa: E402 — CDS yorum grameri TEK kaynak; bağımlılıksız modül (#412 düzeltme 4: sap_adt_lib requests/dotenv + .conn_adt yüklüyordu)
 
 
 def _strip_comments(text):

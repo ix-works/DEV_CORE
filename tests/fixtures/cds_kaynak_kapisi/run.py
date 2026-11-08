@@ -50,6 +50,9 @@ KIPLER (BEYAN) — her kipin DUSMESI GEREKEN vektor kumesi `BEKLENEN_DUSEN`'de I
   --mutasyon-yorum      yorum/string ayiklama sokulur
   --mutasyon-tire       `cds_kod_metni`'nin `--` dali kapanir (yalniz `//` + `/* */` kalir)
   --mutasyon-tire-naif  `--` dize-korsuz regex on-gecisiyle silinir (string ici `--` de yorum sayilir)
+                        (iki kip de #412 duzeltme 4'ten beri `scripts/utils/cds_metin.py`'yi yamalar;
+                        yamali modul `sys.modules['utils.cds_metin']`e ONCEDEN konur ve olcum
+                        modulunun onu aldigi KIMLIKLE dogrulanir, almadiysa exit 3)
   --mutasyon-govde      view/abstract govde kosulu sokulur
   --mutasyon-tf         table function dali sokulur
   --mutasyon-ce-ret     #410 eski ret dali geri gelir (custom entity -> RED)
@@ -122,14 +125,18 @@ MUTASYONLAR = {
     "--mutasyon-ce-liste": (
         ("                        return (':' in liste and not re.search(\n",
          "                        return (':' in liste or not re.search(\n"),),
-    # #412 duzeltme 2: `--` satir yorumu dali (modul duzeyi `cds_kod_metni`)
+    # #412 duzeltme 2: `--` satir yorumu dali (`cds_kod_metni`; duzeltme 4'ten beri
+    # `utils/cds_metin.py`'de -> hedef dosya CDS_METIN_KIPLERI ile secilir)
     "--mutasyon-tire": (
         ("        elif metin.startswith('//', i) or metin.startswith('--', i):\n",
          "        elif metin.startswith('//', i):\n"),),
     "--mutasyon-tire-naif": (
         ("    cikti = []\n    i, n = 0, len(metin)\n",
-         "    metin = re.sub(r'--[^\\n]*', '', metin)\n    cikti = []\n    i, n = 0, len(metin)\n"),),
+         "    import re\n    metin = re.sub(r'--[^\\n]*', '', metin)\n"
+         "    cikti = []\n    i, n = 0, len(metin)\n"),),
 }
+CDS_METIN = KOK / "scripts" / "utils" / "cds_metin.py"
+CDS_METIN_KIPLERI = ("--mutasyon-tire", "--mutasyon-tire-naif")
 
 KUM = Path(tempfile.mkdtemp(prefix="cdskapi_"))
 _eski_cwd = os.getcwd()
@@ -151,25 +158,7 @@ def _bitir(kod: int) -> None:
     sys.exit(kod)
 
 
-def _kaynak_uret() -> str:
-    canli = (KOK / "scripts" / "sap_adt_lib.py").read_text(encoding="utf-8")
-    if KIP == "":
-        return canli
-    if KIP in ("--mutasyon", "--mutasyon-q410-taban"):
-        sha, iz = ((TABAN_SHA, "'SELECT FROM' not in cds_upper") if KIP == "--mutasyon"
-                   else (Q410_TABAN_SHA, "CDS custom entity is not supported by this tool"))
-        r = subprocess.run(["git", "-C", str(KOK), "show", f"{sha}:scripts/sap_adt_lib.py"],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace")
-        if r.returncode != 0:
-            print(f"[DOGRULANAMADI] git show {sha} -> {r.stderr.strip()[:160]} "
-                  "(tipik: SIG KLON)", file=_GERCEK_ERR)
-            _bitir(2)
-        if iz not in r.stdout:
-            print(f"[DOGRULANAMADI] taban {sha} kusurlu surum DEGIL (literal yok) -> "
-                  "hicbir sayi raporlanmadi", file=_GERCEK_ERR)
-            _bitir(2)
-        return r.stdout
-    metin = canli
+def _yamala(metin: str) -> str:
     for capa, yerine in MUTASYONLAR[KIP]:
         n = metin.count(capa)
         if n != 1:
@@ -180,8 +169,56 @@ def _kaynak_uret() -> str:
     return metin
 
 
+def _git_show(sha: str, goreli: str) -> str:
+    r = subprocess.run(["git", "-C", str(KOK), "show", f"{sha}:{goreli}"],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        print(f"[DOGRULANAMADI] git show {sha}:{goreli} -> {r.stderr.strip()[:160]} "
+              "(tipik: SIG KLON)", file=_GERCEK_ERR)
+        _bitir(2)
+    return r.stdout
+
+
+def _cds_metin_on_yukle(src: str):
+    """`utils.cds_metin`'i (yamali ya da taban SHA'daki) olcum modulunden ONCE sys.modules'e
+    koyar: `from utils.cds_metin import cds_kod_metni` onu alir (agac karismaz)."""
+    yol = KUM / "cds_metin_olcum.py"
+    yol.write_text(src, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("utils.cds_metin", yol)
+    m = importlib.util.module_from_spec(spec)                # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)                           # type: ignore[union-attr]
+    except Exception as exc:                                 # noqa: BLE001
+        print(f"[KURULAMADI] cds_metin yuklenemedi: {type(exc).__name__}: {exc}", file=_GERCEK_ERR)
+        _bitir(3)
+    sys.modules["utils.cds_metin"] = m
+    return m
+
+
+def _kaynak_uret() -> tuple[str, str]:
+    canli = (KOK / "scripts" / "sap_adt_lib.py").read_text(encoding="utf-8")
+    if KIP == "" or KIP in CDS_METIN_KIPLERI:
+        return canli, ""
+    if KIP in ("--mutasyon", "--mutasyon-q410-taban"):
+        sha, iz = ((TABAN_SHA, "'SELECT FROM' not in cds_upper") if KIP == "--mutasyon"
+                   else (Q410_TABAN_SHA, "CDS custom entity is not supported by this tool"))
+        taban = _git_show(sha, "scripts/sap_adt_lib.py")
+        if iz not in taban:
+            print(f"[DOGRULANAMADI] taban {sha} kusurlu surum DEGIL (literal yok) -> "
+                  "hicbir sayi raporlanmadi", file=_GERCEK_ERR)
+            _bitir(2)
+        return taban, sha
+    return _yamala(canli), ""
+
+
 def _yukle():
-    src = _kaynak_uret()
+    src, sha = _kaynak_uret()
+    on = None
+    if KIP in CDS_METIN_KIPLERI:
+        on = _cds_metin_on_yukle(_yamala(CDS_METIN.read_text(encoding="utf-8")))
+    elif sha and "from utils.cds_metin import" in src:
+        # TABAN_SHA ileri cekilirse (#412 duzeltme 4 sonrasi) ayiklayici da AYNI SHA'dan gelir.
+        on = _cds_metin_on_yukle(_git_show(sha, "scripts/utils/cds_metin.py"))
     yol = KUM / "sap_adt_lib_olcum.py"
     yol.write_text(src, encoding="utf-8")
     if yol.read_text(encoding="utf-8") != src:          # yazim DOGRULANIR
@@ -195,6 +232,11 @@ def _yukle():
         m = importlib.util.module_from_spec(spec)            # type: ignore[arg-type]
         sys.modules["sap_adt_lib_olcum"] = m
         spec.loader.exec_module(m)                           # type: ignore[union-attr]
+        if on is not None and getattr(m, "cds_kod_metni", None) is not on.cds_kod_metni:
+            sys.stdout, sys.stderr = yedek
+            print("[KURULAMADI] olcum modulu on-yuklenen cds_metin'i ALMADI (sys.modules)",
+                  file=_GERCEK_ERR)
+            _bitir(3)
         return m
     except Exception as exc:                                 # noqa: BLE001
         sys.stdout, sys.stderr = yedek
