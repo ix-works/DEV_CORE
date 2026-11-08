@@ -26,7 +26,7 @@ applies_to: [s4_private]
 Her composite (`adt_*_create`) şu adımları sırayla yapar, sonuçları `steps` field'ında raporlar:
 
 ```
-1. Guardrails check (Z/Y prefix, transport, TR text, labels)
+1. Guardrails check (müşteri ad alanı: Z/Y ya da bildirilmiş `/<NS>/`; transport, TR text, labels)
 2. pre_check    → adt_get ile zaten var mı? Varsa already_exists
 3. create       → SAPClient.create_<x>() (shell + source set)
 4. activate     → SAPClient.activate_object()
@@ -51,7 +51,7 @@ Tool çağrısı SAP'a gitmeden önce reject edilebilir:
 
 | Code | Sebep | Düzeltme |
 |---|---|---|
-| `ADR_0005_A` | İsim Z/Y ile başlamıyor | Customer namespace kullan |
+| `ADR_0005_A` | İsim müşteri ad alanında değil (Z/Y ya da projede bildirilmiş `/<NS>/` değil) | Z/Y adı kullan ya da namespace'i `project.yaml` `customer_namespaces`'e bildir |
 | `ADR_0005_C` | Transport boş | `adt_transport_list` ile aktif transport seç, kullanıcıya doğrulat |
 | `ADR_0005_D` | Description veya 4 label'dan biri boş | TR text doldur (<LEGACY_SOURCE> SEVKEMRI'den çıkar — tahmin YASAK) |
 
@@ -160,7 +160,7 @@ adt_struct_create(name, fields, artifact_path='ERP/SD/.../X.asddls', ...)
               WARNING → devam, response'da reviewer field'ı taşınır
               PASS    → devam
    ↓
-  [1. adım] MCP guardrail (Z/Y prefix, transport, TR text)
+  [1. adım] MCP guardrail (müşteri ad alanı Z/Y ya da `/<NS>/`, transport, TR text)
    ↓
   [2-4. adım] create + activate + verify
 ```
@@ -189,7 +189,7 @@ adt_struct_create(name, fields, artifact_path='ERP/SD/.../X.asddls', ...)
 | Katman | Ne kontrol | Bypass |
 |---|---|---|
 | Reviewer (ADR 0006) | Lokal draft kalitesi — namespace pattern, validator chain | `skip_reviewer=True` (acil) |
-| MCP guardrails (ADR 0005) | REST parametreleri — Z/Y prefix, TR text, transport | Yok — server-side hardcoded |
+| MCP guardrails (ADR 0005) | REST parametreleri — müşteri ad alanı (Z/Y ya da `/<NS>/`), TR text, transport | Yok — server-side hardcoded |
 | SAP'in kendi validasyonu | Aktivasyon, syntax, FK | n/a |
 
 Katmanlar overlapping değil tamamlayıcı — biri kaçırırsa diğeri yakalar.

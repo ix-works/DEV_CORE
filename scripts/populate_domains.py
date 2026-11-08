@@ -50,6 +50,7 @@ if sys.platform == 'win32':
 sys.path.insert(0, str(Path(__file__).parent))
 
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 from utils.ddic_aktivasyon import aktivasyon_notu   # "yaratildi != aktif" kapanis notu (tek kaynak)
 from utils.xml_kacis import attr_escape, sorumlu_coz, SORUMLU_YOK_MESAJI  # oznitelik kacisi + responsible (Issue #339, tek kaynak)
 
@@ -231,7 +232,7 @@ def build_xml(name: str, description: str, package: str, responsible: str,
              adtcore:language="TR"
              xmlns:doma="http://www.sap.com/dictionary/domain"
              xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package}"/>
   <doma:content>
@@ -270,7 +271,7 @@ def domain_varlik_sondasi(client: SAPADTClient, name: str) -> tuple:
     """
     try:
         r = client.session.get(
-            client.url + f'/sap/bc/adt/ddic/domains/{name.lower()}',
+            client.url + f'/sap/bc/adt/ddic/domains/{_adt_seg(name)}',
             verify=False, timeout=10
         )
     except Exception as exc:            # noqa: BLE001 — teshis bozulmasin

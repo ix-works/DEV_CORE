@@ -28,6 +28,7 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
 from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 urllib3.disable_warnings()
 
@@ -120,7 +121,7 @@ def srvd_shell_xml(name, desc, pkg):
         '                 adtcore:type="SRVD/SRV"\n'
         '                 srvd:srvdSourceType="S"\n'
         '                 adtcore:masterLanguage="TR">\n'
-        f'  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{pkg.lower()}"\n'
+        f'  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(pkg)}"\n'
         '                      adtcore:type="DEVC/K"\n'
         f'                      adtcore:name="{pkg.upper()}"/>\n'
         '</srvd:srvdSource>'
@@ -158,13 +159,13 @@ def srvb_xml(name, srvd, pkg):
         '                     adtcore:type="SRVB/SVB"\n'
         f'                     adtcore:description="{xml_escape(SRVB_LABEL or (SRVD_LABEL + " bağlama"))}"\n'
         '                     adtcore:masterLanguage="TR" adtcore:language="TR">\n'
-        f'  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{pkg.lower()}"\n'
+        f'  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(pkg)}"\n'
         f'                      adtcore:type="DEVC/K" adtcore:name="{pkg.upper()}"/>\n'
         f'  <srvb:services srvb:name="{name.upper()}">\n'
         '    <srvb:content srvb:version="0001" srvb:minorVersion="0"\n'
         '                  srvb:patchVersion="0" srvb:buildVersion=""\n'
         '                  srvb:releaseState="NOT_RELEASED">\n'
-        f'      <srvb:serviceDefinition adtcore:uri="/sap/bc/adt/ddic/srvd/sources/{srvd.lower()}"\n'
+        f'      <srvb:serviceDefinition adtcore:uri="/sap/bc/adt/ddic/srvd/sources/{_adt_seg(srvd)}"\n'
         f'          adtcore:type="SRVD/SRV" adtcore:name="{srvd.upper()}"/>\n'
         '    </srvb:content>\n'
         '  </srvb:services>\n'
@@ -179,7 +180,7 @@ def publish_xml(binding):
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">\n'
-        f'  <adtcore:objectReference adtcore:uri="{SRVB_BASE}/{binding.lower()}"\n'
+        f'  <adtcore:objectReference adtcore:uri="{SRVB_BASE}/{_adt_seg(binding)}"\n'
         f'      adtcore:name="{binding.upper()}"/>\n'
         '</adtcore:objectReferences>'
     )
@@ -342,7 +343,7 @@ def activate_and_verify(client, tok, refs):
 
 def step_srvd(client, tok, transport):
     name = SRVD_NAME
-    obj = f"{SRVD_BASE}/{name.lower()}"
+    obj = f"{SRVD_BASE}/{_adt_seg(name)}"
     print(f"\n=== SRVD: {name} ===")
     r = client.session.post(
         client.url + SRVD_BASE, params={"corrNr": transport},
@@ -405,7 +406,7 @@ def bdef_shell_xml(name, desc, pkg):
         f'                 adtcore:description="{xml_escape(desc)}"\n'
         '                 adtcore:type="BDEF/BDO"\n'
         '                 adtcore:masterLanguage="TR">\n'
-        f'  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{pkg.lower()}"\n'
+        f'  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(pkg)}"\n'
         '                      adtcore:type="DEVC/K"\n'
         f'                      adtcore:name="{pkg.upper()}"/>\n'
         '</blue:blueSource>'
@@ -414,7 +415,7 @@ def bdef_shell_xml(name, desc, pkg):
 
 def step_bdef(client, tok, transport, bdef_source_path, bdef_name=BDEF_NAME):
     name = bdef_name
-    obj = f"{BDEF_BASE}/{name.lower()}"
+    obj = f"{BDEF_BASE}/{_adt_seg(name)}"
     print(f"\n=== BDEF: {name} ===")
     src = open(bdef_source_path, encoding="utf-8").read()
     r = client.session.post(
@@ -490,7 +491,7 @@ def bclass_shell_xml(name, desc, pkg):
         '                 adtcore:language="TR"\n'
         '                 class:final="true"\n'
         '                 class:visibility="public">\n'
-        f'  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{pkg.lower()}"\n'
+        f'  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(pkg)}"\n'
         '                      adtcore:type="DEVC/K"\n'
         f'                      adtcore:name="{pkg.upper()}"/>\n'
         '</class:abapClass>'
@@ -501,7 +502,7 @@ def step_bclass(client, tok, transport):
     """Behavior class'ı RAW REST + masterLanguage=TR ile yarat (ADR 0005 D).
     MCP adt_post_shell class'ı EN yaratıyor — bu yüzden raw REST."""
     name = BCLASS_NAME
-    obj = f"{BCLASS_BASE}/{name.lower()}"
+    obj = f"{BCLASS_BASE}/{_adt_seg(name)}"
     print(f"\n=== BCLASS (TR): {name} ===")
     r = client.session.post(
         client.url + BCLASS_BASE, params={"corrNr": transport},
@@ -559,7 +560,7 @@ def step_cdsactivate(client, tok):
     print(f"\n=== CDS BİRLİKTE AKTİVE: {', '.join(names)} ===")
     refs = "".join(
         f'  <adtcore:objectReference '
-        f'adtcore:uri="/sap/bc/adt/ddic/ddl/sources/{n.lower()}" '
+        f'adtcore:uri="/sap/bc/adt/ddic/ddl/sources/{_adt_seg(n)}" '
         f'adtcore:name="{n}"/>\n' for n in names
     )
     body = (
@@ -583,7 +584,7 @@ def step_cdsactivate(client, tok):
 def step_ccimp(client, tok, transport, ccimp_path):
     """Behavior class CCIMP (Local Types / includes/implementations) push —
     RAP determination/validation handler (lhc_*)."""
-    cls = BCLASS_NAME.lower()
+    cls = _adt_seg(BCLASS_NAME)
     obj = f"/sap/bc/adt/oo/classes/{cls}"
     inc = obj + "/includes/implementations"
     src = open(ccimp_path, encoding="utf-8").read()
@@ -625,9 +626,9 @@ def step_pbactivate(client, tok):
     print("\n=== ACTIVATE interface+projection BDEF + class ===")
     proj = BDEF_NAME.upper().replace('_I_', '_C_')
     refs = (
-        f'  <adtcore:objectReference adtcore:uri="{BDEF_BASE}/{BDEF_NAME.lower()}" adtcore:name="{BDEF_NAME.upper()}"/>\n'
-        f'  <adtcore:objectReference adtcore:uri="{BDEF_BASE}/{proj.lower()}" adtcore:name="{proj}"/>\n'
-        f'  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/{BCLASS_NAME.lower()}" adtcore:name="{BCLASS_NAME.upper()}"/>\n'
+        f'  <adtcore:objectReference adtcore:uri="{BDEF_BASE}/{_adt_seg(BDEF_NAME)}" adtcore:name="{BDEF_NAME.upper()}"/>\n'
+        f'  <adtcore:objectReference adtcore:uri="{BDEF_BASE}/{_adt_seg(proj)}" adtcore:name="{proj}"/>\n'
+        f'  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/{_adt_seg(BCLASS_NAME)}" adtcore:name="{BCLASS_NAME.upper()}"/>\n'
     )
     body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">\n'
@@ -650,9 +651,9 @@ def step_bactivate(client, tok):
     body = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">\n'
-        f'  <adtcore:objectReference adtcore:uri="{BDEF_BASE}/{BDEF_NAME.lower()}"\n'
+        f'  <adtcore:objectReference adtcore:uri="{BDEF_BASE}/{_adt_seg(BDEF_NAME)}"\n'
         f'      adtcore:name="{BDEF_NAME.upper()}"/>\n'
-        f'  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/{BCLASS_NAME.lower()}"\n'
+        f'  <adtcore:objectReference adtcore:uri="/sap/bc/adt/oo/classes/{_adt_seg(BCLASS_NAME)}"\n'
         f'      adtcore:name="{BCLASS_NAME.upper()}"/>\n'
         '</adtcore:objectReferences>'
     )
@@ -692,7 +693,7 @@ def step_srvbactivate(client, tok):
     # kanıtlı) SRVB obj URI'sine uygulanır.
     name = SRVB_NAME
     print(f"\n=== SRVB ACTIVATE: {name} ===")
-    return activate(client, tok, name, f"{SRVB_BASE}/{name.lower()}")
+    return activate(client, tok, name, f"{SRVB_BASE}/{_adt_seg(name)}")
 
 
 # ── PUBLISH HÜKMÜ GÖVDEDEN KURULUR, HTTP KODUNDAN DEĞİL — TEK KAYNAK ────────────────────

@@ -92,6 +92,7 @@ _PLUGIN_PATH = r'C:\Users\<USER>\.config\opencode\ntt-marketplace\plugins\abaper
 sys.path.insert(0, _PLUGIN_PATH)
 
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 
 # T100-TEXT alan uzunlugu = CHAR 73 (DD03L'den olculdu 2026-08-20).
@@ -240,7 +241,7 @@ def build_xml(name: str, description: str, package: str, responsible: str,
                  adtcore:language="{language}"
                  xmlns:mc="http://www.sap.com/adt/MessageClass"
                  xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package}"/>
 {msgs_xml}
@@ -269,7 +270,7 @@ def populate(client: SAPADTClient, name: str, description: str, package: str,
     gövde canlıdan kurulup `silme_govdesi_dogrula` ile doğrulanmış olmalı).
     """
     name = name.upper()
-    object_url = f'/sap/bc/adt/messageclass/{name.lower()}'
+    object_url = f'/sap/bc/adt/messageclass/{_adt_seg(name)}'
 
     # Build payload
     if xml_payload is None:
@@ -388,7 +389,7 @@ def populate(client: SAPADTClient, name: str, description: str, package: str,
 
 def verify(client: SAPADTClient, name: str) -> list:
     """GET class and return list of (msgno, msgtext) tuples."""
-    object_url = f'/sap/bc/adt/messageclass/{name.lower()}'
+    object_url = f'/sap/bc/adt/messageclass/{_adt_seg(name)}'
     r = client.session.get(
         client.url + object_url,
         headers={'Accept': 'application/vnd.sap.adt.mc.messageclass+xml'},
@@ -603,7 +604,7 @@ def sinif_oku(client: SAPADTClient, name: str, language: str = None):
     """Canlı sınıf GET → (http_durum, gövde_metni). Yazma YOK."""
     params = {'sap-language': language} if language else {}
     r = client.session.get(
-        client.url + f'/sap/bc/adt/messageclass/{name.lower()}',
+        client.url + f'/sap/bc/adt/messageclass/{_adt_seg(name)}',
         headers={'Accept': 'application/vnd.sap.adt.mc.messageclass+xml'},
         params=params, verify=False, timeout=60)
     return r.status_code, r.text

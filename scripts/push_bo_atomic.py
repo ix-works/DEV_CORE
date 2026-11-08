@@ -65,6 +65,7 @@ if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
 # core/scripts import yolu — ATAMA DEĞİL, proje kökü türetmez (CORE-01 muaf).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sap_adt_lib import SAPADTClient  # noqa: E402  # type: ignore
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 ACTIVATION = "/sap/bc/adt/activation"
 
@@ -101,7 +102,7 @@ def retry(fn, what: str, n: int = 6):
 
 
 def uri_for(kind: str, name: str) -> str:
-    n = name.lower()
+    n = _adt_seg(name)
     if kind == "ddls":
         return f"/sap/bc/adt/ddic/ddl/sources/{n}"
     if kind == "bdef":

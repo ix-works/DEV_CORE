@@ -73,6 +73,7 @@ def main() -> int:
 
     # SAP'ye bağlan
     sys.path.insert(0, str(Path(__file__).parent.parent))
+    from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
     try:
         from sap_adt_lib import SAPADTClient
         client = SAPADTClient()
@@ -92,7 +93,7 @@ def main() -> int:
     for dtel in sorted(z_dtels):
         try:
             r = client.session.get(
-                client.url + f'/sap/bc/adt/ddic/dataelements/{dtel.lower()}',
+                client.url + f'/sap/bc/adt/ddic/dataelements/{_adt_seg(dtel)}',
                 params={'sap-client': '100'}, verify=False, timeout=10
             )
             if r.status_code == 404:

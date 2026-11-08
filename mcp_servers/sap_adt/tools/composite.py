@@ -5,7 +5,7 @@
 - adt_struct_create  : create_structure + activate + verify
 
 Pattern (atomic, fail-explicit):
-  1. Guardrails (Z/Y prefix, transport, TR text, labels)
+  1. Guardrails (customer namespace: Z/Y or project-declared /<NS>/, transport, TR text, labels)
   2. Pre-check via adt_get → fail if already exists (caller must decide: keep/recreate)
   3. SAPClient.create_<x>() — shell + source set (no activation)
   4. SAPClient.activate_object()
@@ -45,6 +45,7 @@ from mcp_servers.sap_adt.guardrails import (
 )
 from mcp_servers.sap_adt.guardrails import adlandirma_uyarisi  # Q369⑤ yalnız uyarı
 from mcp_servers.sap_adt._conn import get_active_tier
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 
 def _maybe_reviewer(tool_name: str, name: str, object_type: str,
@@ -180,7 +181,7 @@ def _verify_ddic_content(client, name: str, obj_type: str) -> dict:
     adt = getattr(client, "adt_client", client)
     try:
         if obj_type == "tabl":
-            url = f"/sap/bc/adt/ddic/structures/{name.lower()}/source/main"
+            url = f"/sap/bc/adt/ddic/structures/{_adt_seg(name)}/source/main"
             r = adt.session.get(adt.url + url, headers=adt._get_headers("text/plain"),
                                 params={"version": "active"}, timeout=30)
             if r.status_code != 200:
@@ -194,7 +195,7 @@ def _verify_ddic_content(client, name: str, obj_type: str) -> dict:
                 return {"ok": False, "reason": "no_fields", "source_head": src[:160]}
             return {"ok": True, "field_count": fcount}
         if obj_type == "ttyp":
-            url = f"/sap/bc/adt/ddic/tabletypes/{name.lower()}"
+            url = f"/sap/bc/adt/ddic/tabletypes/{_adt_seg(name)}"
             r = adt.session.get(
                 adt.url + url,
                 headers={"Authorization": adt._get_auth_header(),
@@ -235,11 +236,11 @@ def adt_domain_create(
 ) -> dict:
     """Create + activate + verify a DDIC domain atomically.
 
-    Guardrails: Z/Y prefix, transport non-empty, description non-empty.
+    Guardrails: customer namespace (Z/Y or project-declared /<NS>/), transport non-empty, description non-empty.
     Reviewer (ADR 0006): if artifact_path given, run_review.py pre-flight; BLOCKER rejects.
 
     Args:
-        name: Domain name (Z*/Y*).
+        name: Domain name (Z*/Y* or a project-declared /<NS>/ customer namespace).
         datatype: 'CHAR', 'NUMC', 'INT4', 'CURR', 'QUAN', 'DATS', 'TIMS', 'DEC', ...
         length: Field length.
         description: TR description (ADR 0005 §D — non-empty).
@@ -355,7 +356,7 @@ def adt_dtel_create(
     Reviewer (ADR 0006): if artifact_path given, pre-flight runs; BLOCKER rejects.
 
     Args:
-        name: Data element name (Z*/Y*).
+        name: Data element name (Z*/Y* or a project-declared /<NS>/ customer namespace).
         domain_name: Underlying domain (Z* preferred; standard ABAP types like CHAR1 also OK).
         description: TR description.
         package: Target package.
@@ -469,7 +470,7 @@ def adt_struct_create(
     and calls this tool WITHOUT artifact_path.
 
     Args:
-        name: Structure name (Z*/Y*).
+        name: Structure name (Z*/Y* or a project-declared /<NS>/ customer namespace).
         fields: [{'name':'FIELD1','type':'char10'}, {'name':'CUST','type':'ZSD000_E_CUST'}, ...]
                 'type' is either ABAP primitive (char10, numc8, ...) or a data element name.
         description: TR description.

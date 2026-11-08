@@ -67,6 +67,7 @@ if sys.platform == 'win32':
 
 sys.path.insert(0, str(Path(__file__).parent))
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 from utils.ddic_aktivasyon import aktivasyon_notu   # "yaratildi != aktif" kapanis notu (tek kaynak)
 from utils.ddic_semantics import (
     classify_unit_kind, normalize_unit_kind, UnitKindError,
@@ -203,7 +204,7 @@ def build_xml(table_name: str, description: str, package: str,
                  adtcore:type="TABL/DT"
                  adtcore:description="{xml_escape(description)}"
                  adtcore:masterLanguage="{master_lang}">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package.upper()}"/>
 </blue:blueSource>'''
@@ -226,7 +227,7 @@ def table_varlik_sondasi(client: SAPADTClient, name: str) -> tuple:
     """
     try:
         r = client.session.get(
-            client.url + f'/sap/bc/adt/ddic/tables/{name.lower()}',
+            client.url + f'/sap/bc/adt/ddic/tables/{_adt_seg(name)}',
             verify=False, timeout=10
         )
     except Exception as exc:            # noqa: BLE001 — teshis bozulmasin
@@ -274,7 +275,7 @@ def readback_dogrula(client: SAPADTClient, table_name: str, beklenen_alan: int):
       durum: 'AYNI' | 'FARKLI' | 'OLCULEMEDI'
     ⚠ 'OLCULEMEDI' cagirana **temiz** diye donmez — "olculemedi != temiz".
     """
-    url = client.url + f'/sap/bc/adt/ddic/tables/{table_name.lower()}/source/main'
+    url = client.url + f'/sap/bc/adt/ddic/tables/{_adt_seg(table_name)}/source/main'
     try:
         r = client.session.get(url, headers={'Accept': 'text/plain'},
                                verify=False, timeout=30)
@@ -349,7 +350,7 @@ def create_one(client: SAPADTClient, csrf: str, table_name: str,
 
     if force_recreate and exists:
         del_resp = client.session.delete(
-            client.url + f'/sap/bc/adt/ddic/tables/{table_name.lower()}',
+            client.url + f'/sap/bc/adt/ddic/tables/{_adt_seg(table_name)}',
             params={'corrNr': transport},
             headers={'X-CSRF-Token': csrf, 'Accept': 'application/xml'},
             verify=False, timeout=30
@@ -380,7 +381,7 @@ def create_one(client: SAPADTClient, csrf: str, table_name: str,
 
     # Step 2: Manual LOCK + PUT /source/main + UNLOCK
     # Library'nin set_object_source() If-Match gönderiyor (412 mismatch). Manual gidiyoruz.
-    object_url = f'/sap/bc/adt/ddic/tables/{table_name.lower()}'
+    object_url = f'/sap/bc/adt/ddic/tables/{_adt_seg(table_name)}'
 
     # LOCK
     lr = client.session.post(

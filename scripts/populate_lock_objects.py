@@ -37,6 +37,7 @@ if sys.platform == 'win32':
 
 sys.path.insert(0, str(Path(__file__).parent))
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 
 def build_xml(name: str, description: str, package: str, primary_table: str,
@@ -67,7 +68,7 @@ def build_xml(name: str, description: str, package: str, primary_table: str,
                  adtcore:name="{name}"
                  adtcore:description="{xml_escape(description)}"
                  adtcore:masterLanguage="TR">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package}"/>
   <enqu:content>
@@ -87,7 +88,7 @@ def build_xml(name: str, description: str, package: str, primary_table: str,
 def lock_object_exists(client: SAPADTClient, name: str) -> bool:
     """⚠ URL pattern: /lockobjects/sources/{name} (sources alt yolu — playbook §29.1)"""
     r = client.session.get(
-        client.url + f'/sap/bc/adt/ddic/lockobjects/sources/{name.lower()}',
+        client.url + f'/sap/bc/adt/ddic/lockobjects/sources/{_adt_seg(name)}',
         verify=False, timeout=10
     )
     return r.status_code == 200
@@ -95,7 +96,7 @@ def lock_object_exists(client: SAPADTClient, name: str) -> bool:
 
 def activate_lock_object(client: SAPADTClient, csrf: str, name: str) -> bool:
     """Lock object activation (playbook §29.6) — activate_object.py ENQU/DL desteklemez."""
-    obj_url = f'/sap/bc/adt/ddic/lockobjects/sources/{name.lower()}'
+    obj_url = f'/sap/bc/adt/ddic/lockobjects/sources/{_adt_seg(name)}'
     body = f'''<?xml version="1.0" encoding="UTF-8"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:objectReference adtcore:uri="{obj_url}"
@@ -146,7 +147,7 @@ def create_one(client: SAPADTClient, csrf: str, name: str, description: str,
     if force_recreate and exists:
         try:
             client.session.delete(
-                client.url + f'/sap/bc/adt/ddic/lockobjects/sources/{name.lower()}',
+                client.url + f'/sap/bc/adt/ddic/lockobjects/sources/{_adt_seg(name)}',
                 params={'corrNr': transport},
                 headers={'X-CSRF-Token': csrf}, verify=False, timeout=30
             )
