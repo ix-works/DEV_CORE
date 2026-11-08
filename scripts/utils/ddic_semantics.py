@@ -23,10 +23,17 @@ görmezden gelmesine yol açar (sessiz gevşetme).
 # ---------------------------------------------------------------------------
 
 # Built-in CURR DTEL'leri (genişletilebilir)
+# ⚠ GEVŞETME (DEV_CORE #402 EK-3, 2026-11-08, sahip onaylı): `curr` ÇIKARILDI — yukarıdaki
+# "kısaltılamaz" kuralının bilinçli istisnası. Ölçüm: DD04L (S/4 private DEV, salt-okuma)
+# `ROLLNAME='CURR'` → 0 satır ⇒ DTEL yolunda hiçbir alanla eşleşemezdi; tek etkisi CDS kolon-adı
+# sezgisindeydi (`_eleman_tipi`): `curr as Curr` (para BİRİMİ, CUKY) elemanı tutar sayılıp
+# "ölçülen CURR" paydasını şişiriyordu. Aynı ölçümde PRICE = CURR(15) (kalır), RATE = DEC(9)
+# (eklenmez). BİLİNEN SINIR: `amount` DD04L'de NUMC(9) (tutar DEĞİL) ve QUAN_DTELS'teki `quan`
+# DD04L'de 0 satır — ikisi de sözlükte DURUYOR (gözlenmiş hata yok; çıkarmak ad sezgisini gevşetir).
 CURR_DTELS = {
     'netwr', 'mwsbp', 'kbetr', 'dmbtr', 'wrbtr', 'kzwi1', 'kzwi2',
     'kzwi3', 'kzwi4', 'kzwi5', 'kzwi6', 'sklfr', 'klfre', 'lfrec',
-    'price', 'curr', 'amount',
+    'price', 'amount',
 }
 
 # Built-in QUAN DTEL'leri

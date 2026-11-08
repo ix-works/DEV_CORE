@@ -199,7 +199,58 @@ ART = {
                 "  rate : kbetr;\n"
                 "  @Semantics.currencyCode : true\n"
                 "  curr : zsd001_de_cuky;\n", ad="zsd001_s_test", tur="type"),
+    # ── DEV_CORE #402 (PR #400 bug-gate LOW bulguları Y1-Y3 + EK-3) ──
+    # Y1a — marker blok YORUMUN içinde (kapanış annotation satırında), sözlük CUKY alanı
+    # ⇒ marker YOK sayılmalı ⇒ C-TBL-CUR-04 BLOCKER (taban: "temiz")
+    "Y1a": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
+                 "  rate : kbetr;\n"
+                 "  /* eski:\n  @Semantics.currencyCode : true */\n"
+                 "  curr : waers;\n"),
+    # Y1b — aynı, Z'li CUKY DTEL'i ⇒ marker BLOCKER + tip WARNING (taban: yalnız WARNING)
+    "Y1b": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
+                 "  rate : kbetr;\n"
+                 "  /* eski:\n  @Semantics.currencyCode : true */\n"
+                 "  curr : zsd001_de_cuky;\n"),
+    # Y1k — KONTROL (FP çapası): blok yorum ARADA, gerçek marker alanın hemen üstünde ⇒ temiz
+    "Y1k": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
+                 "  rate : kbetr;\n"
+                 "  /* not */\n"
+                 "  @Semantics.currencyCode : true\n"
+                 "  curr : waers;\n"),
+    # Y2 — çift nokta: tablo kısmı 'zsd001_t_test.' ⇒ qualified değil (taban: INFO "başka tablo")
+    "Y2": tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test..curr'\n"
+                "  rate : kbetr;\n"),
+    # Y3 — `--` satırındaki `/*` blok maskeyi AÇMAMALI (taban: dosya sonuna kadar maskeli ⇒
+    # yerleşik `abap.cuky` alanı görünmez ⇒ sahte "tabloda yok" BLOCKER)
+    "Y3": ("-- not: /* eski bicim\n"
+           + tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
+                   "  rate : netwr;\n"
+                   "  @Semantics.currencyCode : true\n"
+                   "  curr : abap.cuky;\n")),
+    # Y3k — KONTROL: aynı satır `//` ile ⇒ temiz (tabanda da temiz)
+    "Y3k": ("// not: /* eski bicim\n"
+            + tablo("  @Semantics.amount.currencyCode : 'zsd001_t_test.curr'\n"
+                    "  rate : netwr;\n"
+                    "  @Semantics.currencyCode : true\n"
+                    "  curr : abap.cuky;\n")),
+    # Y3c — ÇAPA (Y3'ün tek başına koruyamadığı yön): `--` satırındaki `/*` maskeyi açarsa
+    # dosyanın GERİ KALANI görünmez ⇒ gerçek ihlal (annotation'sız CURR) "temiz" olur.
+    # Ölçüldü: `--mutasyon-y3-maske` altında Y3 YEŞİL kaldı (Y1 ile parse_source da maskeli
+    # okuduğundan hiç alan kalmıyor ⇒ boş-temiz); Y3 tabanın kırmızısını, Y3c bugünün
+    # korumasını taşır.
+    "Y3c": ("-- not: /* eski bicim\n"
+            + tablo("  rate : netwr;\n")),
+    # Y3b — KARDEŞ: satır SONU `--` yorumu alan desenini (`;$`) bozmamalı ⇒ annotation eksik
+    # BLOCKER (taban: alan kaydedilmiyor ⇒ "temiz"; aynı satır `//` ile BLOCKER veriyordu)
+    "Y3b": tablo("  rate : netwr; -- tutar\n"),
 }
+
+# EK-3 (K5) — CDS kolon-adı sezgisi: `curr` (para BİRİMİ) elemanı CURR tutar SAYILMAZ.
+# Taban: "CURR tipli 'Curr' elemanında annotation YOK" WARNING'i (sahte payda). DD04L'de
+# `CURR` adlı DTEL 0 satır (sahip ölçümü 2026-11-08).
+CDS_Y5 = ("@AccessControl.authorizationCheck: #NOT_REQUIRED\n"
+          "define view entity ZSD001_I_X as select from zsd001_t_test as t\n{\n"
+          "  key t.mandt as Mandt,\n      t.curr  as Curr\n}\n")
 
 
 def _kos(cmd: list[str], cwd: Path, env_ek: dict | None = None) -> tuple[int, str]:
@@ -289,6 +340,43 @@ def vektorler(kok: Path, tmp: Path) -> list[tuple[str, bool, str]]:
     rc, o = dogrula("B1")
     ekle("B1 F4: blok yorumdaki eski `define table` adı kimliği ele geçirmez → alan yok BLOCKER",
          rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-02", "'yok' tabloda yok") and "[INFO]" not in o,
+         f"rc={rc} :: {o[-260:]!r}")
+
+    # ── Y: DEV_CORE #402 — PR #400 bug-gate LOW bulguları (taban f15becb'de KIRMIZI) ──
+    rc, o = dogrula("Y1a")
+    ekle("Y1a yorumdaki marker SAYILMAZ (waers) → C-TBL-CUR-04 marker BLOCKER",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-04", "'curr'", "marker eksik"),
+         f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("Y1b")
+    ekle("Y1b yorumdaki marker SAYILMAZ (Z CUKY) → marker BLOCKER",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-04", "'curr'", "marker eksik"),
+         f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("Y1k")
+    ekle("Y1k KONTROL blok yorum arada + gerçek marker → temiz",
+         rc == 0 and blok_yok(o) and uyari_yok(o) and "temiz" in o, f"rc={rc} :: {o[-220:]!r}")
+    rc, o = dogrula("Y2")
+    ekle("Y2 çift nokta ('tablo..curr') → qualified değil BLOCKER, INFO YOK",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-03", "qualified") and "[INFO]" not in o,
+         f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("Y3")
+    ekle("Y3 `--` satırındaki `/*` maskeyi açmaz → abap.cuky görünür, temiz",
+         rc == 0 and blok_yok(o) and "temiz" in o, f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("Y3k")
+    ekle("Y3k KONTROL aynı satır `//` ile → temiz",
+         rc == 0 and blok_yok(o) and "temiz" in o, f"rc={rc} :: {o[-220:]!r}")
+    rc, o = dogrula("Y3c")
+    ekle("Y3c `--` satırındaki `/*` sonrası ihlali GİZLEMEZ → annotation eksik BLOCKER",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-03", "'rate'", "eksik"),
+         f"rc={rc} :: {o[-260:]!r}")
+    rc, o = dogrula("Y3b")
+    ekle("Y3b satır sonu `--` yorumu alanı düşürmez → annotation eksik BLOCKER",
+         rc == 1 and _var(o, "[BLOCKER]", "C-TBL-CUR-03", "'rate'", "eksik"),
+         f"rc={rc} :: {o[-260:]!r}")
+    p5 = tmp / "Y5.ddls"
+    p5.write_text(CDS_Y5, encoding="utf-8")
+    rc, o = _kos([sys.executable, str(val), str(p5)], tmp)
+    ekle("Y5 EK-3: CDS `t.curr as Curr` (CUKY) CURR tutar SAYILMAZ → uyarı yok, payda 0",
+         rc == 0 and uyari_yok(o) and blok_yok(o) and "ÇÖZÜLEBİLEN CURR/QUAN elemanı YOK" in o,
          f"rc={rc} :: {o[-260:]!r}")
 
     # ── K: korunan BLOCKER'lar ──
@@ -394,7 +482,7 @@ MUTASYONLAR: dict[str, tuple[Path, str, str, tuple[str, ...]]] = {
         "                            # ③ Alan var, tipi sözlükten doğrulanamıyor\n"
         "                            violations.append({\n"
         "                                'severity': 'BLOCKER',",
-        ("R2", "RR3")),
+        ("R2", "S4", "RR3")),
     "--mutasyon-alan-yok": (
         VAL_REL,
         "                        # ② Alan bu kaynakta hiç yok\n"
@@ -403,7 +491,7 @@ MUTASYONLAR: dict[str, tuple[Path, str, str, tuple[str, ...]]] = {
         "                        # ② Alan bu kaynakta hiç yok\n"
         "                        violations.append({\n"
         "                            'severity': 'WARNING',",
-        ("R4b", "K1", "S2", "RR4")),
+        ("R4b", "B1", "K1", "S2", "RR4")),
     "--mutasyon-baska-tablo": (
         VAL_REL,
         "                    elif tablo_adi and ref_tablo != tablo_adi:\n",
@@ -434,22 +522,22 @@ MUTASYONLAR: dict[str, tuple[Path, str, str, tuple[str, ...]]] = {
         "            tum_alanlar.setdefault(ad, kayit)\n"
         "            cuky_fields.setdefault(ad, kayit)\n",
         "            pass\n",
-        ("R7",)),
+        ("R7", "R7b", "R7c", "R7d", "Y3", "Y3k")),
     "--mutasyon-marker-yerel": (
         VAL_REL,
         "            denetlenecek.append(tum_alanlar[ad])\n",
         "            pass\n",
-        ("R2b", "R7b", "R7d", "S3")),
+        ("R2b", "R7b", "R7d", "Y1b", "S3")),
     "--mutasyon-yerlesik-marker": (
         VAL_REL,
         "                     'annotations': _ustteki_annotasyonlar(satirlar, i)}\n",
         "                     'annotations': []}\n",
-        ("R7", "R7c")),
+        ("R7", "R7c", "Y3", "Y3k")),
     "--mutasyon-bos-parca": (
         VAL_REL,
-        "                    if not ref_tablo or not ref_field:\n",
+        "                    if not _TANIMLAYICI_RE.fullmatch(ref_tablo) or not _TANIMLAYICI_RE.fullmatch(ref_field):\n",
         "                    if False:\n",
-        ("Q1",)),
+        ("Q1", "Y2")),
     "--mutasyon-blok-yorum": (
         VAL_REL,
         "    for raw_line in blok_yorumu_maskele(text).splitlines():\n"
@@ -478,6 +566,29 @@ MUTASYONLAR: dict[str, tuple[Path, str, str, tuple[str, ...]]] = {
         "'unit', 'kmein', 'konms'}\n",
         "'unit'}\n",
         ("P2", "P4")),
+    # ── DEV_CORE #402 ──
+    "--mutasyon-y1-maske": (
+        VAL_REL,
+        "    lines = (blok_yorumu_maskele(text) if src_type == 'table' else text).splitlines()\n",
+        "    lines = text.splitlines()\n",
+        ("Y1a", "Y1b")),
+    "--mutasyon-y3-maske": (
+        VAL_REL,
+        "        elif (c == '/' and i + 1 < n and text[i + 1] == '/') or (\n"
+        "                c == '-' and i + 1 < n and text[i + 1] == '-'):\n",
+        "        elif (c == '/' and i + 1 < n and text[i + 1] == '/') or (\n"
+        "                False):\n",
+        ("Y3c",)),
+    "--mutasyon-y3-kirp": (
+        VAL_REL,
+        "        elif c == '-' and i + 1 < n and line[i + 1] == '-':\n",
+        "        elif False:\n",
+        ("Y3b",)),
+    "--mutasyon-sozluk-curr": (
+        DS_REL,
+        "    'price', 'amount',\n",
+        "    'price', 'curr', 'amount',\n",
+        ("Y5",)),
 }
 
 
@@ -515,11 +626,19 @@ def mutasyon_kos(kip: str) -> int:
     dusen = [ad for ad, ok, _ in sonuc if not ok]
     gecen = len(sonuc) - len(dusen)
     eksik = [b for b in beklenen if not _dusmus_mu(b, dusen)]
+    # DEV_CORE #402 Y4: FAZLA düşen de SAPMA'dır — yalnız eksik bakılınca ilan kümeleri
+    # koşumdan sapmıştı (ölçüldü: alan-yok B1'i, tip-blocker S4'ü, yerlesik 5 vektörü
+    # ilan etmeden düşürüyordu) ve B96 reçetesi bu sapmayı taşıyordu.
+    ilan_kodlari = {_kod(b) for b in beklenen}
+    fazla = sorted({_kod(a) for a in dusen} - ilan_kodlari)
     print(f"cds_curr_referans_tipi {kip}: {gecen}/{len(sonuc)}")
     print(f"  düşen: {[_kod(a) for a in dusen]}")
     print(f"  ilan edilen: {list(beklenen)}")
     if eksik:
         print(f"[SAPMA] ilan edilip düşmeyen: {eksik}")
+    if fazla:
+        print(f"[SAPMA] ilan edilmeden düşen: {fazla}")
+    if eksik or fazla:
         return 2
     return 1
 

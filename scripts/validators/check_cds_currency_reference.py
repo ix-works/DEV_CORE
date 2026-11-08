@@ -69,6 +69,12 @@ def yorumu_kirp(line: str) -> str:
             q = c
         elif c == '/' and i + 1 < n and line[i + 1] == '/':
             return line[:i]
+        elif c == '-' and i + 1 < n and line[i + 1] == '-':
+            # DEV_CORE #402 (Y3 kardeşi, ölçüldü f15becb): `rate : netwr; -- tutar` satırı
+            # alan desenine (`;$`) uymuyordu ⇒ CURR alanı HİÇ kaydedilmiyor, "annotation
+            # eksik" BLOCKER'ı sessizce kayboluyordu (aynı satır `//` ile BLOCKER veriyordu).
+            # `parse_source` ve `_ustteki_annotasyonlar` `--`'yı zaten yorum sayıyordu.
+            return line[:i]
         i += 1
     return line
 
@@ -144,7 +150,11 @@ def parse_source(text: str, src_type: str) -> dict:
 
     src_type: 'cds' veya 'table'
     """
-    lines = text.splitlines()
+    # DEV_CORE #402 Y1: tablo yolu MASKELİ metinden okunur (yerleşik `abap.cuky` taraması ve
+    # `kaynak_kimligi` ile aynı). Maskesiz okunduğunda `/* … @Semantics.currencyCode : true */`
+    # blok yorumundaki satır annotation sayılıyor, marker'sız alan "marker var" geçiyordu
+    # (sözlükteki `waers` alanında tabandan beri; ölçüldü f15becb). Maske satır sayısını korur.
+    lines = (blok_yorumu_maskele(text) if src_type == 'table' else text).splitlines()
     fields = []  # [(line_no, name, dtel, annotations_before)]
     pending_annotations = []
 
@@ -192,6 +202,9 @@ def parse_source(text: str, src_type: str) -> dict:
 
 _KAYNAK_ADI_RE = re.compile(
     r'^\s*define\s+(table|structure|type)\s+([A-Za-z_/][A-Za-z0-9_/]*)', re.IGNORECASE)
+# Qualified başvurunun parçaları için tanımlayıcı (`_KAYNAK_ADI_RE` ad kümesiyle aynı; boş dize
+# eşleşmez ⇒ eski `not ref_tablo` denetimini de kapsar). Harf duyarsız: harf normalizasyonu ayrı değişmezdir.
+_TANIMLAYICI_RE = re.compile(r'[a-z_/][a-z0-9_/]*', re.IGNORECASE)
 _YERLESIK_CUKY_RE = re.compile(
     r'^\s*(?:key\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*:\s*abap\.cuky\b', re.IGNORECASE)
 
@@ -220,8 +233,12 @@ def blok_yorumu_maskele(text: str) -> str:
         elif c in "'\"":
             q = c
             out.append(c)
-        elif c == '/' and i + 1 < n and text[i + 1] == '/':
-            # satır yorumu: satır sonuna kadar olduğu gibi bırak (yorumu_kirp keser)
+        elif (c == '/' and i + 1 < n and text[i + 1] == '/') or (
+                c == '-' and i + 1 < n and text[i + 1] == '-'):
+            # satır yorumu (`//` ya da `--`): satır sonuna kadar olduğu gibi bırak (yorumu_kirp
+            # keser). DEV_CORE #402 Y3: `--` tanınmıyordu ⇒ `-- not: /* eski` satırındaki `/*`
+            # blok maskeyi AÇIYOR, dosyanın geri kalanı maskeleniyordu (yerleşik `abap.cuky`
+            # alanı görünmez ⇒ sahte "tabloda yok" BLOCKER; aynı satır `//` ile temizdi).
             j = text.find('\n', i)
             j = n if j < 0 else j
             out.append(text[i:j])
@@ -364,7 +381,11 @@ def check_table(text: str) -> list[dict]:
                     ref_tablo, _, ref_field = val.rpartition('.')
                     ref_tablo = ref_tablo.strip().lower()
                     ref_field = ref_field.strip().lower()
-                    if not ref_tablo or not ref_field:
+                    # DEV_CORE #402 Y2: `'tablo..waers'` → rpartition tablo kısmını `'tablo.'`
+                    # verir ve "başka tablo" INFO'suyla denetimden kaçardı (ölçüldü f15becb,
+                    # rc 0). Her iki parça TANIMLAYICI olmalı (`_KAYNAK_ADI_RE` ad sözlüğü);
+                    # değilse boş parçayla AYNI hüküm: qualified değil (C-TBL-CUR-03).
+                    if not _TANIMLAYICI_RE.fullmatch(ref_tablo) or not _TANIMLAYICI_RE.fullmatch(ref_field):
                         # Boş tablo ya da alan kısmı (`'.yok'`, `'tab.'`): qualified DEĞİL
                         # (bug-gate F3 — eskiden boş ad "başka tablo" sayılıp atlanıyordu).
                         violations.append({
