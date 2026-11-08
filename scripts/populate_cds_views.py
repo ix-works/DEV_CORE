@@ -44,6 +44,7 @@ if sys.platform == 'win32':
 
 sys.path.insert(0, str(Path(__file__).parent))
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from sap_adt_lib import cds_kod_metni  # noqa: E402 — #410 K3: yorum/string ayıklayıcı TEK kaynak (Q277 kapısıyla aynı)
 from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 
@@ -128,6 +129,13 @@ def _derive_prefixes(package=None):
 # sqlViewName YASAĞI + yasak literal taraması custom entity'de de işler.
 RAP_BASLIK_DESENI   = r"\bdefine\s+(?:root\s+)?(?:view|abstract|custom)\s+entity"
 RAP_VIEW_ENTITY_RE  = re.compile(RAP_BASLIK_DESENI + r"\b", re.IGNORECASE)
+# ⭐ #410 K3 (2026-11-08, bug-gate PR #412): başlık tespiti + ad yakalama HAM metinde
+# değil, yorum/string ayıklanmış metinde (`cds_kod_metni`) yapılır. Ham aramada
+# yorumunda `define custom entity` / `define view entity` geçen KLASİK view RAP dalına
+# düşüyordu: sqlViewName'siz olan sahte GEÇER, sqlViewName'li olan sahte "YASAK" alıyor,
+# TD-spec kapısı da atlanıyordu. `view entity` / `abstract entity` yorumları için açık
+# tabanda (3353fca) da vardı. sqlViewName annotation'ı ve yasak literal taraması HAM
+# metinde kalır (değerleri string içindedir).
 # Modül-bağımsız RAP view entity adı (01-naming: Z<MOD><nnn>_<I|C|R|E>_*;
 # MOD = SD/MM/FI/CO/PP/QM/PM/EWM... 2-4 harf). Paket-doğru olma kontrolü
 # check_package_naming.py'de (.rules.md regex'i); burası RAP-naming sanity
@@ -209,15 +217,18 @@ def validate_sql_view_names(cds_files, package=None):
         cds_name = f.stem.upper()
         legacy_sv = LEGACY_SQLVIEW_EXCEPTIONS.get(cds_name)
 
+        # Başlık araması YALNIZ kodda (#410 K3) — yorum/string içindeki `define …` sayılmaz.
+        kod = cds_kod_metni(source)
+
         # ─── RAP VIEW ENTITY DALI (sqlViewName YOK; ayrı isim kuralı) ────────
-        if RAP_VIEW_ENTITY_RE.search(source):
+        if RAP_VIEW_ENTITY_RE.search(kod):
             if re.search(r"@AbapCatalog\.sqlViewName", source):
                 errors.append(
                     f"{f.name}: RAP view entity'de @AbapCatalog.sqlViewName "
                     f"YASAK (view entity sqlView taşımaz). Kaldır. "
                     f"(checklist C-RAP-VE-02)"
                 )
-            vem = re.search(RAP_BASLIK_DESENI + r"\s+(\S+)", source, re.IGNORECASE)
+            vem = re.search(RAP_BASLIK_DESENI + r"\s+(\S+)", kod, re.IGNORECASE)
             if not vem:
                 errors.append(
                     f"{f.name}: 'define [root] view entity <name>' / "
@@ -264,7 +275,7 @@ def validate_sql_view_names(cds_files, package=None):
                 )
 
         # ─── 2. define view <name> WHITELIST ──────────────────────────────────
-        vm = re.search(r"\bdefine\s+view\s+(\S+)", source, re.IGNORECASE)
+        vm = re.search(r"\bdefine\s+view\s+(\S+)", kod, re.IGNORECASE)
         if not vm:
             errors.append(f"{f.name}: 'define view <name>' bulunamadı")
         else:
@@ -616,7 +627,7 @@ def main():
             # td_spec_check içermez. standards/05-coding-rap.md §9; 2026-05-15
             # reconcile (PILOT_VOYAGE_RAP.md §88, repo gate — ADR 0005 dışı).
             try:
-                if RAP_VIEW_ENTITY_RE.search(f.read_text(encoding='utf-8')):
+                if RAP_VIEW_ENTITY_RE.search(cds_kod_metni(f.read_text(encoding='utf-8'))):
                     continue
             except Exception:
                 pass

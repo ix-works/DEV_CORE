@@ -873,6 +873,43 @@ def validate_package_name(package):
 _explicit_working_dir = None
 
 
+def cds_kod_metni(metin):
+    """CDS kaynağından yorumları (`//`, `/* */`) ve string içeriğini ('..', `''` kaçışı) atar.
+
+    Satır sonları korunur; string yerine `''` bırakılır. Anahtar sözcük / başlık araması
+    YALNIZ kodda yapılsın diye vardır. Tüketiciler: `SAPADTClient._validate_cds_source`
+    (Q277) · `populate_cds_views` RAP başlık tespiti (#410 K3, 2026-11-08: ham metinde
+    arama yorumdaki `define view entity` / `define custom entity` ile klasik view'i RAP
+    dalına düşürüyordu). Kopyalama — buradan import et.
+    """
+    cikti = []
+    i, n = 0, len(metin)
+    while i < n:
+        c = metin[i]
+        if c == "'":
+            j = i + 1
+            while j < n:
+                if metin[j] == "'":
+                    if j + 1 < n and metin[j + 1] == "'":
+                        j += 2
+                        continue
+                    break
+                j += 1
+            cikti.append("''")
+            i = j + 1
+        elif metin.startswith('//', i):
+            j = metin.find('\n', i)
+            i = n if j < 0 else j
+        elif metin.startswith('/*', i):
+            j = metin.find('*/', i + 2)
+            cikti.append(' ')
+            i = n if j < 0 else j + 2
+        else:
+            cikti.append(c)
+            i += 1
+    return ''.join(cikti)
+
+
 def set_explicit_working_dir(path: str) -> None:
     """
     Set an explicit working directory for finding .conn_adt.
@@ -7131,35 +7168,9 @@ define table {name.lower()} {{
                     onceki = c
             return False
 
-        def _kod_metni(metin):
-            # Yorumları (`//`, `/* */`) ve string içeriğini ('..', `''` kaçışı) atar;
-            # satır sonları korunur. Anahtar sözcük YALNIZ kodda sayılır.
-            cikti = []
-            i, n = 0, len(metin)
-            while i < n:
-                c = metin[i]
-                if c == "'":
-                    j = i + 1
-                    while j < n:
-                        if metin[j] == "'":
-                            if j + 1 < n and metin[j + 1] == "'":
-                                j += 2
-                                continue
-                            break
-                        j += 1
-                    cikti.append("''")
-                    i = j + 1
-                elif metin.startswith('//', i):
-                    j = metin.find('\n', i)
-                    i = n if j < 0 else j
-                elif metin.startswith('/*', i):
-                    j = metin.find('*/', i + 2)
-                    cikti.append(' ')
-                    i = n if j < 0 else j + 2
-                else:
-                    cikti.append(c)
-                    i += 1
-            return ''.join(cikti)
+        # Ayıklayıcı modül düzeyinde TEK kopya (`cds_kod_metni`; #410 K3 — populate_cds_views
+        # başlık tespiti de aynı fonksiyonu kullanır).
+        _kod_metni = cds_kod_metni
 
         kod = _kod_metni(cds_source)
         bicimler = ("define view <name> / define [root|transient] view entity <name> "
