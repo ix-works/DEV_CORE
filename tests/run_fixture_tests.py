@@ -830,6 +830,12 @@ OZEL_TESTLER = [
      "BOM+CRLF; tirnaksiz `#` ve kelime ici kesme isareti eski gibi) + check_object_in_correct_pkg "
      "namespace'li pakette ayni namespace oneki + .rules.md Naming regex'i ile kabul (yanlis "
      "namespace / tabloya uymayan ad / .rules.md yok / Z paketi red; kucuk harfli paket klasoru; durum makinesi kurallari Y15-Y22); 13 mutasyon"),
+    # 2026-11-08 Q393 (Issue #397 Parti 1): musteri ad alani karari TEK KAYNAK (utils/ad_politikasi).
+    ("q393_namespace_ad_politikasi",
+     "customer_namespaces (project.yaml, fail-closed; env OKUNMAZ) -> guardrail/sap_adt_lib/"
+     "object_types/atom/sap_set_object_description ayni karar; kayitsiz /NS/ red; yapilandirmasiz "
+     "Z/Y karari tabanla AYNI (b0bcfac kontrol); NS FUGR grup kaniti FUGR/F (canli bicim), Z'de "
+     "eski kural; 13 mutasyon"),
 ]
 
 
@@ -1577,6 +1583,20 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "Q383③ adt_push_source/adt_activate group + _activation_uri + _content_readback FUGR/I"),
     ("mcp_servers/sap_adt/tools/query.py", ("O:fugr_include_yazim",),
      "Q383 adt_lock_check fugr_include + group (contextRef grup kaniti, salt-okur sonda)"),
+    # ── 2026-11-08 Q393 (Issue #397 P1): musteri ad alani karari tek kaynak + 5 tuketici ──
+    ("scripts/utils/ad_politikasi.py", ("O:q393_namespace_ad_politikasi", "O:ad_kabul_tam_dize",
+                                        "O:fugr_include_yazim"),
+     "musteri_adi_mi / namespace_yapilandirmasi / fugr_include_oneki / fugr_ana_program"),
+    ("mcp_servers/sap_adt/guardrails.py", ("O:q393_namespace_ad_politikasi",),
+     "_is_customer_namespace ad_politikasi'na delege + red_gerekcesi"),
+    ("scripts/sap_adt_lib.py", ("O:q393_namespace_ad_politikasi",),
+     "validate_object_name / validate_package_name / _validate_object_name namespace dali"),
+    ("scripts/object_types.py", ("O:q393_namespace_ad_politikasi",),
+     "fugr_include_ad_alani_hatasi + fugr_include_grup_kaniti namespace'li grup (FUGR/F)"),
+    ("mcp_servers/sap_adt/tools/atom.py", ("O:q393_namespace_ad_politikasi",),
+     "_fugr_include_guardrail onek kurali ad_politikasi.fugr_include_oneki"),
+    ("scripts/sap_set_object_description.py", ("O:q393_namespace_ad_politikasi",),
+     "Z/Y kapisi ad_politikasi.musteri_adi_mi"),
     ("scripts/sap_client.py", ("O:kilit_birakma_durustlugu", "O:istek_sahibi_metni"),
      "_kilit_birak 9 cagri (lock_released=False, retry yok) + Bug 11 WARN istek sahibi"),
     ("scripts/populate_cds_views.py", ("O:kilit_birakma_durustlugu",),

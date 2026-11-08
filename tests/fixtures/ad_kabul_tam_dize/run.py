@@ -12,7 +12,7 @@ NEDEN VAR (2026-10-12)
   GEVŞETME). Bu fixture o yönü de ölçer (R bölümü) — biri "tutarlılık" için çevirirse düşer.
 
 KAPSAM (kabul yönü, 7 desen / 3 dosya)
-  guardrails `_CUSTOMER_PREFIX` · `_LOCK_PREFIX` · sap_adt_lib `validate_object_name` ·
+  guardrails `_CUSTOMER_PREFIX` · `_LOCK_PREFIX` (Q393'ten beri `utils/ad_politikasi` `_ZY`/`_KILIT_ZY`) · sap_adt_lib `validate_object_name` ·
   `validate_package_name` · `SAPADTClient._validate_object_name` · query `_TABLO_ADI` · `_KOLON_ADI`
 
 KULLANIM
@@ -195,12 +195,14 @@ def main() -> int:
 
 Z = chr(92) + "Z"
 MUTASYONLAR = [
-    ("M1 _CUSTOMER_PREFIX `$`a doner", "mcp_servers/sap_adt/guardrails.py",
-     '_CUSTOMER_PREFIX = re.compile(r"^[ZY][A-Z0-9_]*' + Z + '"',
-     '_CUSTOMER_PREFIX = re.compile(r"^[ZY][A-Z0-9_]*$"'),
-    ("M2 _LOCK_PREFIX `$`a doner", "mcp_servers/sap_adt/guardrails.py",
-     '_LOCK_PREFIX = re.compile(r"^E[ZY][A-Z0-9_]*' + Z + '"',
-     '_LOCK_PREFIX = re.compile(r"^E[ZY][A-Z0-9_]*$"'),
+    # Q393 (2026-11-08): guardrails Z/Y desenleri tek kaynağa (`utils/ad_politikasi.py`) taşındı;
+    # guardrails `_is_customer_namespace` oraya delege eder ⇒ M1/M2 çapası yeni evde.
+    ("M1 _CUSTOMER_PREFIX (ad_politikasi _ZY) `$`a doner", "scripts/utils/ad_politikasi.py",
+     '_ZY = re.compile(r"^[ZY][A-Z0-9_]*' + Z + '"',
+     '_ZY = re.compile(r"^[ZY][A-Z0-9_]*$"'),
+    ("M2 _LOCK_PREFIX (ad_politikasi _KILIT_ZY) `$`a doner", "scripts/utils/ad_politikasi.py",
+     '_KILIT_ZY = re.compile(r"^E[ZY][A-Z0-9_]*' + Z + '"',
+     '_KILIT_ZY = re.compile(r"^E[ZY][A-Z0-9_]*$"'),
     ("M3 validate_object_name `$`a doner", "scripts/sap_adt_lib.py",
      "re.match(r'^[A-Z][A-Z0-9_]*" + Z + "', name_upper)",
      "re.match(r'^[A-Z][A-Z0-9_]*$', name_upper)"),

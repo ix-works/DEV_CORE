@@ -775,6 +775,27 @@ def validate_object_name(name, object_type='class'):
     if len(name) > 30:
         raise SAPValidationError(f"Object name '{name}' exceeds 30 characters")
 
+    # Müşteri ad alanı kararı TEK KAYNAK: `utils.ad_politikasi` (Q393, Issue #397) — Z/Y ya da
+    # projede `customer_namespaces` ile bildirilmiş `/<NS>/`. Namespace'li adda sınıf kuralı
+    # namespace'ten SONRAKİ parçaya uygulanır (`/NS/CL_X` ↔ `ZCL_X`); Z/Y yolu aşağıda AYNEN.
+    from utils import ad_politikasi as _ap  # lazy: object_types deseni
+    ns = _ap.ad_namespace(name_upper)
+    if ns is not None or name_upper.startswith('/'):
+        if not _ap.musteri_adi_mi(name_upper, root=_explicit_working_dir):
+            raise SAPValidationError(
+                f"Object name '{name}' must start with Z or Y or a declared customer namespace "
+                f"/<NS>/ (customer namespace){_ap.red_gerekcesi(name_upper, root=_explicit_working_dir)}"
+            )
+        govde = name_upper[len(ns):]
+        if object_type and object_type.lower() == 'class':
+            if govde.startswith('CL_') or '_CL_' in govde:
+                return True
+            if govde.startswith('CL') or '_CL' in govde:
+                raise SAPValidationError(
+                    f"Class name '{name}' must use {ns}CL_ or {ns}*_CL_ prefix"
+                )
+        return True
+
     # Check for valid characters (alphanumeric and underscore)
 
     # `\Z` (`$` DEĞİL): `$` sondaki tek `\n`'i kabul eder (Q363②, 2026-10-12).
@@ -821,6 +842,16 @@ def validate_package_name(package):
         raise SAPValidationError(
             f"Package name '{package}' must be uppercase"
         )
+
+    # Namespace'li paket (`/NS/SD001`, Q393): yalnız projede bildirilmiş müşteri namespace'i.
+    from utils import ad_politikasi as _ap  # lazy: object_types deseni
+    if package_upper.startswith('/'):
+        if not _ap.musteri_adi_mi(package_upper, root=_explicit_working_dir):
+            raise SAPValidationError(
+                f"Package name '{package}' contains invalid characters"
+                f"{_ap.red_gerekcesi(package_upper, root=_explicit_working_dir)}"
+            )
+        return True
 
     # Check for valid characters
 
@@ -6305,6 +6336,19 @@ class SAPADTClient:
         if len(name) > 30:
             raise SAPValidationError(
                 f"{object_type} name too long (max 30 characters): {len(name)}",
+                field='name',
+                value=name
+            )
+
+        # Namespace'li ad (Q393): yalnız projede bildirilmiş müşteri namespace'i (büyük harf).
+        if name.startswith('/'):
+            from utils import ad_politikasi as _ap  # lazy: object_types deseni
+            if name == name.upper() and _ap.musteri_adi_mi(name, root=_explicit_working_dir):
+                return
+            raise SAPValidationError(
+                f"{object_type} name must start with letter and contain only A-Z, 0-9, underscore "
+                f"(or a declared customer namespace /<NS>/): {name}"
+                f"{_ap.red_gerekcesi(name.upper(), root=_explicit_working_dir)}",
                 field='name',
                 value=name
             )

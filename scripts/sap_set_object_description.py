@@ -195,8 +195,11 @@ def main() -> int:
     args = ap.parse_args()
 
     name = args.name.upper()
-    if not re.match(r"^[ZY]", name):
-        print(f"[RED] {name}: yalnız Z/Y objesi (ADR 0005-A).")
+    # Müşteri ad alanı kararı TEK KAYNAK (Q393): Z/Y ya da bildirilmiş `/<NS>/` (ADR 0005 A-EK).
+    from utils import ad_politikasi as _ap
+    if not _ap.musteri_adi_mi(name, args.type):
+        print(f"[RED] {name}: yalnız müşteri ad alanındaki obje — Z/Y ya da projede "
+              f"customer_namespaces ile bildirilmiş namespace (ADR 0005-A){_ap.red_gerekcesi(name)}.")
         return 2
     url = _main_url(name, args.type)
     if not url:

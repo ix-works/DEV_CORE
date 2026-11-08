@@ -121,10 +121,13 @@ def _fugr_include_guardrail(name: str, object_type: str, group: str | None) -> N
         raise ValueError("object_type='fugr_include' için group (fonksiyon grubu) ZORUNLU — grup "
                          "include adından türetilmez.")
     require_customer_namespace(g, what="function group")
-    if not (name or "").strip().upper().startswith("L" + g):
+    # Önek kuralı TEK KAYNAK (Q393): `ZFG` → `LZFG` · namespace'li `/NS/FG` → `/NS/LFG`.
+    from mcp_servers.sap_adt.guardrails import _ad
+    onek = _ad.fugr_include_oneki(g)
+    if not (name or "").strip().upper().startswith(onek):
         raise GuardrailViolation(
             "ADR_0005_A",
-            f"FUGR include '{name}' verilen grubun include öneki 'L{g}' ile başlamıyor — "
+            f"FUGR include '{name}' verilen grubun include öneki '{onek}' ile başlamıyor — "
             f"grup/include eşleşmesi doğrulanamadı (yazma yapılmadı).",
             name=name,
         )

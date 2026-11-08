@@ -568,10 +568,20 @@ def fugr_include_grup_kaniti(progs_metadata_xml, group):
     if len(fugr_baglamlari) > 1:
         return False, (f"birden cok FUGR/I contextRef {sorted(fugr_baglamlari)} "
                        f"(tekil baglam degil — fail-closed)")
-    beklenen = 'SAPL' + g
+    from utils import ad_politikasi as _ap  # lazy: object_types deseni
+    beklenen = _ap.fugr_ana_program(g)
     for ref in reflar:
         if ref['type'] == 'FUGR/I' and ref['name'] == beklenen:
             return True, f"contextRef FUGR/I {beklenen}"
+    # NAMESPACE'LI GRUP (Q393, canli olcum 2026-11-08 DEV salt-GET): `/NS/FG` include'larinda
+    # contextRef type `FUGR/F`, name = GRUBUN KENDISI (3 namespace grubunun 3'unde, TOP/U01/UXX;
+    # namespace'siz 2 grubun 2'sinde FUGR/I SAPL<GRUP>). Bu URL grup TASIMAZ (yansima yok).
+    # Yalniz namespace'li VE musteri namespace'i olarak bildirilmis grupta kabul; Z grupta
+    # FUGR/F kanit DEGILDIR (eski kural birebir).
+    if _ap.ad_namespace(g) and _ap.musteri_adi_mi(g):
+        for ref in reflar:
+            if ref['type'] == 'FUGR/F' and ref['name'] == g:
+                return True, f"contextRef FUGR/F {g} (namespace'li grup)"
     gorulen = ', '.join(f"{r['type'] or '?'} {r['name'] or '?'}" for r in reflar)
     return False, f"contextRef {gorulen} != FUGR/I {beklenen}"
 
@@ -589,23 +599,28 @@ def fugr_include_konteyneri(metadata_xml):
 
 
 def fugr_include_ad_alani_hatasi(group, include_name):
-    """ADR 0005-A, FUGR/I: grup Z/Y olmali VE include `L<GRUP>` onekli olmali -> hata metni | None.
+    """ADR 0005-A, FUGR/I: grup musteri adi olmali VE include grubun onekini tasimali -> hata | None.
+
+    Musteri adi + onek kurali tek kaynak `utils.ad_politikasi` (Q393): `ZFG` -> `LZFG...`,
+    bildirilmis namespace'li `/NS/FG` -> `/NS/LFG...`.
 
     MCP `_fugr_include_guardrail` ile AYNI kural (CLI `push_fugr_include` yolu bunu kullanir).
     Grup include adindan TURETILMEZ; yalniz verilen grupla tutarlilik olculur. Grup/include
     eslesmesinin KANITI bu degil, `fugr_include_grup_kaniti`'dir (`programs/includes` contextRef
     FUGR/I SAPL<GRUP>); bu yalniz ad alani on-elemesi. ⚠ onceki metin containerRef diyordu, YANLISTI: SAP URL grubunu yansitir, olcum 2026-11-08.
     """
-    import re as _re
     g = (group or '').strip().upper()
     i = (include_name or '').strip().upper()
     if not g:
         return "fonksiyon grubu adi bos olamaz"
-    if not _re.match(r"^[ZY][A-Z0-9_]*\Z", g):
-        return (f"Standart obje degistirme yasak (ADR 0005-A) — fonksiyon grubu '{g}' Z/Y ile "
-                f"baslamali (customer namespace)")
-    if not i.startswith("L" + g):
-        return (f"FUGR include '{i}' verilen grubun include oneki 'L{g}' ile baslamiyor — "
+    from utils import ad_politikasi as _ap  # lazy: object_types deseni (tek kaynak, Q393)
+    if not _ap.musteri_adi_mi(g):
+        return (f"Standart obje degistirme yasak (ADR 0005-A) — fonksiyon grubu '{g}' Z/Y ya da "
+                f"bildirilmis musteri namespace'i ile baslamali (customer namespace)"
+                f"{_ap.red_gerekcesi(g)}")
+    onek = _ap.fugr_include_oneki(g)
+    if not i.startswith(onek):
+        return (f"FUGR include '{i}' verilen grubun include oneki '{onek}' ile baslamiyor — "
                 f"grup/include eslesmesi dogrulanamadi (ADR 0005-A)")
     return None
 
