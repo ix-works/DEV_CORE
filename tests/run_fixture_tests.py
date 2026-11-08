@@ -432,6 +432,10 @@ OZEL_TESTLER = [
     # 2026-08-19 ADT teshis gorunurlugu (iki kalem, tek tema: SAP'nin SEBEBI cagirana ulasmali)
     ("retry_500_govde",
      "retry adapter'i SAP'nin 500 GOVDESINI yutuyordu (429/502/503/504 tekrar KORUNDU)"),
+    # 2026-11-08 (#411): CSRF reddi TEK yuklemde (dil/başlık) + create_table retry'da TAZE token
+    ("csrf_tanima_ortak",
+     "_csrf_reddi_mi: 403 + ('CSRF' gövde | x-csrf-token: Required) dort cagiranda; "
+     "CSRF disi 403 retry ETMEZ; create_table tekrar istegi taze token tasir; 5 kip ilanli"),
     ("sorgu_basarisizligi_gorunur",
      "adt_sql_query/adt_table_read: alt katman None -> ok:false (ok:true + 0 satir = sahte yesil)"),
     # 2026-10-03: ADT freestyle SATIR BASINA 255 karakter keser (olculdu, T000) -> otomatik kirma
@@ -598,8 +602,13 @@ OZEL_TESTLER = [
     # 2026-09-13 (Q277): create_cds_view kapisi duz alt-dize ariyordu.
     ("cds_kaynak_kapisi",
      "create_cds_view kapisi: `select distinct from` + abstract entity KABUL (korpus 63->2 red), "
-     "yorum/string/yazim hatasi anahtar sozcuk SAYILMAZ, table function/custom entity dogru "
-     "mesajla RED ('duzelt' demez); eski uc red + giris noktasi POST 0/1"),
+     "yorum/string/yazim hatasi anahtar sozcuk SAYILMAZ, table function dogru mesajla RED "
+     "('duzelt' demez); #410 [root] custom entity [with parameters] KABUL + govde kurali; "
+     "eski uc red + giris noktasi POST 0/1; her kip ilan edilen kumeyle duser"),
+    # 2026-11-08 (#410): ayni CDS entity baslik deseninin iki kardes yuzeyi.
+    ("cds_entity_baslik_kardesleri",
+     "check_sap_active_version ad cikarimi `define root abstract|custom entity` + "
+     "gen_field_table custom entity basligi; taban 3353fca + iki mutasyon ilan edilen kumeyle"),
     # 2026-09-09 (Q268 + Q222(2)): "push/yukleme akisi sahte basari raporluyor" sinifi.
     ("push_atlandi_ve_kaynak_izi",
      "ATLANAN != BASARILI: populate_cds_views uc baglami (yazildi/atlandi/gercek hata) + "
@@ -1282,6 +1291,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "#406: DTEL'siz alan listesi + istisna isareti + KAPSAM beyani"),
     ("scripts/validators/check_sap_active_version.py", ("O:sap_gate_skip_sozlesmesi",),
      "B3-01: BEŞ ayrı ölçmeyen exit-0 yolu"),
+    ("scripts/validators/check_sap_active_version.py", ("O:cds_entity_baslik_kardesleri",),
+     "#410: ad cikarimi `define root abstract|custom entity`yi tanir"),
+    ("scripts/gen_field_table.py", ("O:cds_entity_baslik_kardesleri",),
+     "#410: _body custom entity basligini tanir (ad + govde baslangici) · #412: `--` yorumu, "
+     "string koruma, bagimliliksiz acilis (G9/G10)"),
     ("scripts/validators/run_review.py",
      ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam", "O:sap_gate_skip_sozlesmesi",
       "O:reviewer_uzun_yol_ipucu", "O:checklist_check", "O:ddic_builtin_fields"),
@@ -1388,7 +1402,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde",
       "O:transport_gorev_istek_cevrimi", "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi",
       "O:aktivasyon_govde_hukmu", "O:aciklama_412_retry", "O:mcp_sahte_sonuc_uclusu",
-      "O:sorgu_araclari_durustlugu", "O:revizyon_okuma"),
+      "O:sorgu_araclari_durustlugu", "O:revizyon_okuma", "O:csrf_tanima_ortak"),
      "on korpus bu modülü import/mutasyon eder (2026-09-03: `set_function_module_source` "
      "LOCK-CORRNR otoritesi + `_verify_and_return_lock` docstring'i · 2026-09-04: "
      "`get_object_source` URL kuruluşu + 404 mesajının obje adı · 2026-09-13 Q277: "
@@ -1401,6 +1415,22 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # 2026-10-03: AYRI satır; birleşim büyüdü → `b0_secim` P3 pinli sayısı 15→16 BİRLİKTE güncellendi.
     ("scripts/sap_adt_lib.py", ("O:sql_satir_kirma",),
      "`sql_satirlarini_kir` (freestyle 255-satır sınırı) + `run_query` 400 gövdesi kırpılmadan"),
+    # 2026-11-08 (#412 düzeltme 2): AYRI satır; populate_cds_views başlık tespiti artık
+    # `cds_kod_metni`'ye bağlı → `b0_secim` P3 pinli sayısı 30→31 BİRLİKTE güncellendi.
+    ("scripts/sap_adt_lib.py", ("O:cds_paket_kapsami",),
+     "`cds_kod_metni` (yorum/string ayıklayıcı) — populate_cds_views RAP başlık tespiti + TD-spec atlaması"),
+    # 2026-11-08 (#412 düzeltme 3): AYRI satır; gen_field_table yorum ayıklaması artık
+    # `cds_kod_metni(..., string_icerigini_koru=True)` — bu dalı YALNIZ bu korpus koşar.
+    # `b0_secim` P3 pinli sayısı 31→32 BİRLİKTE güncellendi.
+    ("scripts/sap_adt_lib.py", ("O:cds_entity_baslik_kardesleri",),
+     "`cds_kod_metni` `string_icerigini_koru=True` dalı + `--` yorumu — gen_field_table.parse_cds"),
+    # 2026-11-08 (#412 düzeltme 4): `cds_kod_metni` gövdesi bağımlılıksız `utils/cds_metin.py`'ye
+    # taşındı; `sap_adt_lib` yeniden dışa açar (yukarıdaki üç satır bu yüzden KALIR).
+    # `cds_kaynak_kapisi` (`--mutasyon-tire*`) ve `cds_entity_baslik_kardesleri` (`ortak-tiresiz`)
+    # yamayı BU dosyaya uygular; `cds_paket_kapsami` davranışı populate üzerinden koşar.
+    ("scripts/utils/cds_metin.py",
+     ("O:cds_kaynak_kapisi", "O:cds_paket_kapsami", "O:cds_entity_baslik_kardesleri"),
+     "`cds_kod_metni` (CDS yorum/string ayıklayıcı, yalnız stdlib) — Q277 kapısı · populate · gen_field_table"),
     # 2026-10-18 (Issue #325): AYRI satırlar; sap_adt_lib birleşimi büyüdü → `b0_secim` P3
     # pinli sayısı 24→25 BİRLİKTE güncellendi.
     ("scripts/sap_adt_lib.py", ("O:classrun_tek_post",),

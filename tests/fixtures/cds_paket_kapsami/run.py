@@ -184,6 +184,26 @@ def yaz_abstract(dizin: Path, ad: str, entity: str, root: bool,
     return p
 
 
+def yaz_custom(dizin: Path, ad: str, entity: str, root: bool, param: bool = False,
+               sqlview: str | None = None) -> Path:
+    """#410: custom entity (veri sorgu sinifindan) — SELECT TASIMAZ, sqlViewName YOK."""
+    dizin.mkdir(parents=True, exist_ok=True)
+    p = dizin / f"{ad}.cds"
+    bas = f"@AbapCatalog.sqlViewName: '{sqlview}'\n" if sqlview else ""
+    p.write_text(
+        bas
+        + "@EndUserText.label: 'Test sorgu'\n"
+        + "@ObjectModel.query.implementedBy: 'ABAP:ZCL_MOD002_TEST_Q'\n"
+        + ("define root custom entity " if root else "define custom entity ")
+        + f"{entity}\n"
+        + ("  with parameters p_tarih : abap.dats\n" if param else "")
+        + "{\n"
+        + "  key Id : abap.char(10);\n"
+        + "}\n",
+        encoding="utf-8")
+    return p
+
+
 # ---------------------------------------------------------------------------
 # SENARYOLAR — populate_cds_views
 # ---------------------------------------------------------------------------
@@ -310,6 +330,87 @@ def senaryolar_pcv(pcv, kum: Path, mut=None) -> list[tuple[str, bool, str]]:
     r.append(("P10e POZITIF KONTROL: sqlViewName'siz KLASIK view -> hala EKSIK hatasi",
               len(e) == 1 and "sqlViewName annotation EKSİK" in e[0], str(e)))
 
+    # P11 — #410: `define [root] custom entity` RAP dalina girer (abstract gibi). Eski
+    # desen `(view|abstract)` custom'u tanimiyordu -> klasik dalda 2 SAHTE hata.
+    # Muafiyet yine YALNIZ TD namespace kurali + sqlViewName zorunlulugu (P11d/P11e).
+    for etiket, ad_, root, param in (
+            ("P11a custom entity", "ZMOD002_I_CE_A", False, False),
+            ("P11b root custom entity", "ZMOD002_I_CE_B", True, False),
+            ("P11c custom entity + with parameters", "ZMOD002_I_CE_C", False, True)):
+        fc = yaz_custom(d, ad_, ad_, root=root, param=param)
+        e = dogrula([fc], "ZMOD002_CLC")
+        r.append(("%s (dogru ad) -> hata YOK (kusur)" % etiket, e == [], str(e)))
+    fc_kotu = yaz_custom(d, "ZMOD002_BADCE", "ZMOD002_X_CE", root=True)
+    e = dogrula([fc_kotu], "ZMOD002_CLC")
+    r.append(("P11d root custom ad kalibi disi (X_) -> YALNIZ RAP ad hatasi",
+              len(e) == 1 and "RAP view entity adı='ZMOD002_X_CE'" in e[0], str(e)))
+    fc_sv = yaz_custom(d, "ZMOD002_I_CE_SV", "ZMOD002_I_CE_SV", root=False,
+                       sqlview="ZMOD002_V_CE")
+    e = dogrula([fc_sv], "ZMOD002_CLC")
+    r.append(("P11e custom entity + @AbapCatalog.sqlViewName -> RAP YASAGI",
+              len(e) == 1 and "@AbapCatalog.sqlViewName YASAK" in e[0], str(e)))
+
+    # P12 — #410 K3 (bug-gate PR #412): baslik tespiti + ad yakalama YORUM/STRING
+    # ayiklanmis metinde. Ham aramada yorumunda RAP basligi gecen KLASIK view RAP dalina
+    # dusuyordu. P12c/P12d tabanda (3353fca) da acikti (view entity yorumu/stringi).
+    def yaz_klasik_izli(ad, sqlview, viewadi, iz):
+        d.mkdir(parents=True, exist_ok=True)
+        p = d / f"{ad}.cds"
+        p.write_text(
+            iz
+            + (f"@AbapCatalog.sqlViewName: '{sqlview}'\n" if sqlview else "")
+            + f"define view {viewadi} as select from t000 {{\n"
+            + "  key t000.mandt as Client\n"
+            + "}\n", encoding="utf-8")
+        return p
+
+    fk_a = yaz_klasik_izli("ZMOD002_DDL_KLS", None, "zmod002_ddl_kls",
+                           "// eski tasarim: define custom entity ZMOD002_I_ESKI\n")
+    e = dogrula([fk_a], "ZMOD002_CLC")
+    r.append(("P12a KLASIK view, yorumda `define custom entity`, sqlViewName YOK -> EKSIK hatasi",
+              len(e) == 1 and "sqlViewName annotation EKSİK" in e[0], str(e)))
+    fk_b = yaz_klasik_izli("ZMOD002_DDL_KLS2", "ZMOD002_V_KLS2", "zmod002_ddl_kls2",
+                           "/* yerine gelecek: define root custom entity ZMOD002_I_YENI */\n")
+    e = dogrula([fk_b], "ZMOD002_CLC")
+    r.append(("P12b KLASIK gecerli view, blok yorumda `define root custom entity` -> hata YOK",
+              e == [], str(e)))
+    fk_c = yaz_klasik_izli("ZMOD002_DDL_KLS3", "ZMOD002_V_KLS3", "zmod002_ddl_kls3",
+                           "// bkz. define view entity ZMOD002_I_KARDES\n")
+    e = dogrula([fk_c], "ZMOD002_CLC")
+    r.append(("P12c KLASIK gecerli view, yorumda `define view entity` -> hata YOK (taban acigi)",
+              e == [], str(e)))
+    fk_d = yaz_klasik_izli("ZMOD002_DDL_KLS4", "ZMOD002_V_KLS4", "zmod002_ddl_kls4",
+                           "@EndUserText.label: 'define root view entity ornegi'\n")
+    e = dogrula([fk_d], "ZMOD002_CLC")
+    r.append(("P12d KLASIK gecerli view, label STRING'inde `define root view entity` -> hata YOK "
+              "(taban acigi)", e == [], str(e)))
+    d.mkdir(parents=True, exist_ok=True)
+    fc_iz = d / "ZMOD002_I_CE_IZ.cds"
+    fc_iz.write_text("// onceki ad: define custom entity ZMOD002_X_YANLIS\n"
+                     "@EndUserText.label: 'Test sorgu'\n"
+                     "define custom entity ZMOD002_I_CE_IZ\n"
+                     "{\n  key Id : abap.char(10);\n}\n", encoding="utf-8")
+    e = dogrula([fc_iz], "ZMOD002_CLC")
+    r.append(("P12e GERCEK custom entity, yorumdaki eski ad yakalanmaz -> hata YOK (RAP dali)",
+              e == [], str(e)))
+
+    # P13 — #412 duzeltme 2: `--` satir yorumu (canli aktif CDS'te olculen bicim).
+    # Kesme isaretli `--` yorumu basliktan once: ayiklayici `--`'yi tanimazsa `'` string
+    # acar, baslik yutulur -> view entity klasik dala duser (sahte "sqlViewName EKSIK").
+    fv_tire = d / "ZMOD002_I_TIRE.cds"
+    fv_tire.write_text("-- Musteri'nin kasa hareketleri\n"
+                       "@EndUserText.label: 'Kasa'\n"
+                       "define view entity ZMOD002_I_TIRE as select from t000 {\n"
+                       "  key t000.mandt as Client\n}\n", encoding="utf-8")
+    e = dogrula([fv_tire], "ZMOD002_CLC")
+    r.append(("P13a `--` (kesme isaretli) yorumlu view entity -> hata YOK (RAP dali)",
+              e == [], str(e)))
+    fk_tire = yaz_klasik_izli("ZMOD002_DDL_KTIRE", "ZMOD002_V_KTIR", "zmod002_ddl_ktire",
+                              "-- define custom entity ZMOD002_I_Q\n")
+    e = dogrula([fk_tire], "ZMOD002_CLC")
+    r.append(("P13b KLASIK gecerli view, yorumda `-- define custom entity` -> hata YOK (klasik dal)",
+              e == [], str(e)))
+
     r += senaryolar_sprint(pcv, kum)
     return r
 
@@ -429,6 +530,49 @@ def senaryolar_sprint(pcv, kum: Path) -> list[tuple[str, bool, str]]:
                   "rc=%r td_iz=%s preflight=%s dry=%s" % (
                       rc, TD_IZ in out, "[OK] Pre-flight" in out,
                       "DRY-RUN: ZMOD001_I_PRM" in out)))
+
+    # RA3 — #410 GERCEK GIRIS (main): root custom entity + with parameters TD-spec'ten
+    # ATLANIR. Eski desen (3353fca) -> "TD spec EKSİK" + rc=1.
+    rc3 = kum / "ra_src_custom"
+    yaz_custom(rc3, "ZMOD001_I_CEQ", "ZMOD001_I_CEQ", root=True, param=True)
+    rc, out, g = kos([], env=bos, src=rc3)
+    r.append(("RA3 root custom entity main(): TD-spec ATLANIR + pre-flight OK -> dry-run rc=0",
+              rc == 0 and TD_IZ not in out and "[OK] Pre-flight" in out
+              and "DRY-RUN: ZMOD001_I_CEQ" in out,
+              "rc=%r td_iz=%s preflight=%s" % (rc, TD_IZ in out, "[OK] Pre-flight" in out)))
+
+    # RA4 — #410 K3 GERCEK GIRIS (main): yorumunda `define custom entity` gecen KLASIK
+    # view TD-spec kapisindan ATLANMAZ (spec yok -> "TD spec EKSİK" + rc=1). Ham aramada
+    # RAP sayilip kapi atlaniyordu.
+    rc4 = kum / "ra_src_klasik_izli"
+    rc4.mkdir(parents=True, exist_ok=True)
+    (rc4 / "ZMOD001_DDL_KIZ.cds").write_text(
+        "// eski tasarim: define custom entity ZMOD001_I_ESKI\n"
+        "@AbapCatalog.sqlViewName: 'ZMOD001_V_KIZ'\n"
+        "define view zmod001_ddl_kiz as select from t000 {\n"
+        "  key t000.mandt as Client\n"
+        "}\n", encoding="utf-8")
+    rc, out, g = kos([], env=bos, src=rc4)
+    r.append(("RA4 KLASIK view yorumda `define custom entity` main(): TD-spec ATLANMAZ -> rc=1",
+              rc == 1 and TD_IZ in out,
+              "rc=%r td_iz=%s" % (rc, TD_IZ in out)))
+
+    # RA5 — #412 duzeltme 2 GERCEK GIRIS (main): `-- Musteri'nin …` yorumlu view entity
+    # TD-spec'ten ATLANIR + pre-flight OK. c17e80d'de `'` basligi yutuyordu -> klasik dal,
+    # TD-spec EKSIK + rc=1 (d3f5c66'da geciyordu = bizden dogan gerileme).
+    rc5 = kum / "ra_src_tire"
+    rc5.mkdir(parents=True, exist_ok=True)
+    (rc5 / "ZMOD001_I_TIRE.cds").write_text(
+        "-- Musteri'nin kasa raporu\n"
+        "@EndUserText.label: 'Kasa'\n"
+        "define view entity ZMOD001_I_TIRE as select from t000 {\n"
+        "  key t000.mandt as Client\n"
+        "}\n", encoding="utf-8")
+    rc, out, g = kos([], env=bos, src=rc5)
+    r.append(("RA5 `--` (kesme isaretli) yorumlu view entity main(): TD-spec ATLANIR -> rc=0",
+              rc == 0 and TD_IZ not in out and "[OK] Pre-flight" in out
+              and "DRY-RUN: ZMOD001_I_TIRE" in out,
+              "rc=%r td_iz=%s preflight=%s" % (rc, TD_IZ in out, "[OK] Pre-flight" in out)))
 
     return r
 
@@ -575,19 +719,39 @@ PCV_MUT = [
     # --- Q298 degismezleri: dort bagimsiz eksen ---------------------------
     ("M11 Q298 eski baslik desenini geri getir (root yalniz view'a bagli)",
      lambda s: s.replace(
-         r'RAP_BASLIK_DESENI   = r"\bdefine\s+(?:root\s+)?(?:view|abstract)\s+entity"',
-         r'RAP_BASLIK_DESENI   = r"\bdefine\s+(?:(?:root\s+)?view|abstract)\s+entity"')),
+         r'RAP_BASLIK_DESENI   = r"\bdefine\s+(?:root\s+)?(?:view|abstract|custom)\s+entity"',
+         r'RAP_BASLIK_DESENI   = r"\bdefine\s+(?:(?:root\s+)?view|abstract|custom)\s+entity"')),
+    ("M15 #410 eski baslik desenini geri getir (custom entity TANINMASIN)",
+     lambda s: s.replace(
+         r'RAP_BASLIK_DESENI   = r"\bdefine\s+(?:root\s+)?(?:view|abstract|custom)\s+entity"',
+         r'RAP_BASLIK_DESENI   = r"\bdefine\s+(?:root\s+)?(?:view|abstract)\s+entity"')),
     ("M12 Q298 ad yakalama tespitten AYRISSIN (yalniz :209 eski desen)",
      lambda s: s.replace(
-         r'            vem = re.search(RAP_BASLIK_DESENI + r"\s+(\S+)", source, re.IGNORECASE)',
+         r'            vem = re.search(RAP_BASLIK_DESENI + r"\s+(\S+)", kod, re.IGNORECASE)',
          r'            vem = re.search(r"\bdefine\s+(?:(?:root\s+)?view|abstract)\s+entity\s+(\S+)", '
-         r'source, re.IGNORECASE)')),
+         r'kod, re.IGNORECASE)')),
     ("M13 Q298 TD-spec kapisinda RAP atlamasini sok (kablolama)",
      lambda s: s.replace(
-         "                if RAP_VIEW_ENTITY_RE.search(f.read_text(encoding='utf-8')):\n"
+         "                if RAP_VIEW_ENTITY_RE.search(cds_kod_metni(f.read_text(encoding='utf-8'))):\n"
          "                    continue",
          "                if False:\n"
          "                    continue")),
+    # --- #410 K3: iki AYRI giris noktasi, her biri kendi mutasyonu ------------
+    ("M16 #410 K3 validate: baslik HAM metinde aransin (yorum/string ayiklanmasin)",
+     lambda s: s.replace("        kod = cds_kod_metni(source)\n", "        kod = source\n")),
+    ("M17 #410 K3 TD-spec atlamasi HAM metinde (yalniz main() girisi)",
+     lambda s: s.replace(
+         "                if RAP_VIEW_ENTITY_RE.search(cds_kod_metni(f.read_text(encoding='utf-8'))):\n",
+         "                if RAP_VIEW_ENTITY_RE.search(f.read_text(encoding='utf-8')):\n")),
+    # #412 duzeltme 2: ayiklayici `--` satir yorumunu tanimasin (c17e80d lib davranisi).
+    # Sadik benzetim: eski lib `-` karakterini duz kod sayiyordu; `--`'yi bosluga cevirmek
+    # ayni sonucu verir (string icerigi zaten atilir).
+    ("M18 #412 `--` satir yorumu tanınmasın (ayıklayıcı yalnız // ve /* */)",
+     lambda s: s.replace(
+         "from sap_adt_lib import cds_kod_metni  # noqa: E402",
+         "from sap_adt_lib import cds_kod_metni as _ckm_gercek  # noqa: E402\n"
+         "def cds_kod_metni(m): return _ckm_gercek(m.replace('--', '  '))  # noqa: E302,E704\n"
+         "#")),
     ("M14 Q298 SINIR: tespit asiri genis (her `define` RAP sayilsin, klasik dal olsun)",
      lambda s: s.replace(
          r'RAP_VIEW_ENTITY_RE  = re.compile(RAP_BASLIK_DESENI + r"\b", re.IGNORECASE)',
