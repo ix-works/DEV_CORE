@@ -37,7 +37,7 @@ if sys.platform == 'win32':
 # yaşarsa üretici, bu denetçinin BLOCKER diyeceği annotation'ı üretir (B-13 kökü).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from utils.ddic_semantics import (  # noqa: E402
-    CURR_DTELS, QUAN_DTELS, CUKY_DTELS, UNIT_DTELS,
+    CURR_DTELS, QUAN_DTELS, CUKY_DTELS,
 )
 
 
@@ -190,14 +190,147 @@ def parse_source(text: str, src_type: str) -> dict:
     return fields
 
 
+_KAYNAK_ADI_RE = re.compile(
+    r'^\s*define\s+(table|structure|type)\s+([A-Za-z_/][A-Za-z0-9_/]*)', re.IGNORECASE)
+_YERLESIK_CUKY_RE = re.compile(
+    r'^\s*(?:key\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*:\s*abap\.cuky\b', re.IGNORECASE)
+
+
+def blok_yorumu_maskele(text: str) -> str:
+    """`/* … */` blok yorumlarını BOŞLUKLA maskeler; satır sonları korunur (satır no aynı kalır).
+
+    Tırnak içi `/*` korunur. Kapanmayan blok dosya sonuna kadar yorumdur.
+    NEDEN (bug-gate F4, 2026-11-08): `kaynak_adi` yorumdaki `define table eski_ad {` satırını
+    başlık sanıyordu ⇒ gerçek ada yapılan başvuru "başka tablo" sayılıp denetimden kaçıyordu.
+    """
+    out, i, n, q, blok = [], 0, len(text), None, False
+    while i < n:
+        c = text[i]
+        if blok:
+            if c == '*' and i + 1 < n and text[i + 1] == '/':
+                out.append('  ')
+                i += 2
+                blok = False
+                continue
+            out.append('\n' if c == '\n' else ' ')
+        elif q is not None:
+            out.append(c)
+            if c == q or c == '\n':
+                q = None
+        elif c in "'\"":
+            q = c
+            out.append(c)
+        elif c == '/' and i + 1 < n and text[i + 1] == '/':
+            # satır yorumu: satır sonuna kadar olduğu gibi bırak (yorumu_kirp keser)
+            j = text.find('\n', i)
+            j = n if j < 0 else j
+            out.append(text[i:j])
+            i = j
+            continue
+        elif c == '/' and i + 1 < n and text[i + 1] == '*':
+            out.append('  ')
+            i += 2
+            blok = True
+            continue
+        else:
+            out.append(c)
+        i += 1
+    return ''.join(out)
+
+
+def kaynak_kimligi(text: str) -> tuple[str | None, str | None]:
+    """(`'table'|'structure'`, nesne adı küçük harf) — `define table|structure|type <ad>`.
+
+    Blok ve satır yorumları atlanır. Bulunamazsa (None, None) (ör. `extend type … with …`)
+    ⇒ çağıran ESKİ davranışa düşer: tablo kısmı karşılaştırılmaz, alan bu kaynakta aranır.
+    `type`/`structure` ikisi de DDIC yapısıdır (struct checklist ID'leri).
+    """
+    for raw_line in blok_yorumu_maskele(text).splitlines():
+        m = _KAYNAK_ADI_RE.match(yorumu_kirp(raw_line))
+        if m:
+            tur = 'table' if m.group(1).lower() == 'table' else 'structure'
+            return tur, m.group(2).lower()
+    return None, None
+
+
+def kaynak_adi(text: str) -> str | None:
+    """Geriye uyum sarmalayıcısı: yalnız nesne adı (bkz. `kaynak_kimligi`)."""
+    return kaynak_kimligi(text)[1]
+
+
+def _ustteki_annotasyonlar(satirlar: list[str], idx: int) -> list[tuple[str, str]]:
+    """`satirlar[idx]` alanının HEMEN üstündeki `@anahtar : değer` blokunu döndürür.
+
+    `parse_source` ile aynı sözleşme: boş satır ve yorum satırı bloğu bölmez; başka her
+    satır bloğu bitirir. Yerleşik tipli alanlar (`abap.cuky`) `parse_source`'a girmediği
+    için marker'ları buradan okunur.
+    """
+    desen = re.compile(r'^\s*@(\S+)\s*:\s*(.+?)\s*$')
+    toplanan = []
+    j = idx - 1
+    while j >= 0:
+        s = satirlar[j].strip()
+        if not s or s.startswith('--'):
+            j -= 1
+            continue
+        m = desen.match(satirlar[j])
+        if not m:
+            break
+        toplanan.append((m.group(1), m.group(2)))
+        j -= 1
+    toplanan.reverse()
+    return toplanan
+
+
 def check_table(text: str) -> list[dict]:
-    """Tablo source'unda CURR/QUAN reference check."""
+    """Tablo source'unda CURR/QUAN reference check.
+
+    CURR referansı (DEV_CORE Issue #399, 2026-11-08) üç ayrı soruya bölünür:
+      ① qualified başvurunun tablo kısmı BAŞKA bir tabloyu gösteriyor (`'t001.waers'`)
+         → aynı-tablo denetimi ATLANIR, yalnız INFO notu. SAP DDIC başka tablonun
+         CUKY alanına başvuruyu kabul eder (standart KONP: `PKWRT` → `T001-WAERS`).
+         Bu kapı o tabloyu okumaz; başvurunun doğruluğu SAP aktivasyonundadır.
+      ② alan bu tabloda HİÇ yok → BLOCKER (şiddet değişmedi; ID checklist'e hizalandı:
+         C-TBL-CUR-02 / yapıda C-STR-CUR-04 — eskiden C-TBL-CUR-04 basılıyordu).
+      ⓪ tablo ya da alan kısmı BOŞ (`'.waers'`) → qualified değil BLOCKER (C-TBL-CUR-03).
+      Kaynağın kendi adı blok/satır yorumu atlanarak okunur (`kaynak_kimligi`).
+      ③ alan var ama DTEL'i paylaşılan CUKY sözlüğünde değil (Z'li CUKY DTEL'i) →
+         WARNING. Eskiden ②ile aynı BLOCKER'dı (yanlış pozitif). Kapı canlı DD04L okumaz;
+         yanlış tipli başvuruyu SAP aktivasyonu reddeder (bu turda canlı ÖLÇÜLMEDİ).
+    ⚠ ③ bir DARALTMADIR (BLOCKER → WARNING); ② ve annotation eksik / qualified değil /
+      CUKY marker eksik BLOCKER'ları aynen durur.
+    ⭐ MARKER (bug-gate F1, 2026-11-08): `@Semantics.currencyCode : true` denetimi
+      sözlükteki CUKY alanlarına EK OLARAK, bir CURR alanının başvurduğu HER yerel alana
+      (Z'li DTEL'li ya da yerleşik `abap.cuky`) uygulanır. Bu tabana göre sıkılaştırma
+      DEĞİLDİR: taban bu girdilerde zaten "tabloda yok" BLOCKER'ı veriyordu; ilk düzeltme
+      turu marker'sız başvuruyu "temiz"e çeviriyordu (gerileme).
+    ID'ler kaynak türüne göre (checklist): tablo C-TBL-CUR-02 (referans) / C-TBL-CUR-04
+      (marker) · yapı C-STR-CUR-04 / C-STR-CUR-05.
+    """
     fields = parse_source(text, 'table')
     violations = []
+    kaynak_turu, tablo_adi = kaynak_kimligi(text)
+    yapi_mi = kaynak_turu == 'structure'
+    id_referans = 'C-STR-CUR-04' if yapi_mi else 'C-TBL-CUR-02'
+    id_marker = 'C-STR-CUR-05' if yapi_mi else 'C-TBL-CUR-04'
 
-    # CUKY/UNIT field'ları indexle (marker check için)
+    # Tüm alanlar (varlık sorusu) + CUKY sözlüğündeki alanlar (tip sorusu)
+    tum_alanlar = {f['name']: f for f in fields}
     cuky_fields = {f['name']: f for f in fields if f['dtel'] in CUKY_DTELS}
-    unit_fields = {f['name']: f for f in fields if f['dtel'] in UNIT_DTELS}
+    # Yerleşik tip `alan : abap.cuky[(n)];` — `parse_source` alan desenine UYMAZ (nokta/
+    # parantez), alan hiç kaydedilmezdi ⇒ ona başvuran tutar "tabloda yok" BLOCKER'ı
+    # alırdı (Issue #399 sınıfının kardeşi). Tipi sözdiziminden KANITLI CUKY'dir.
+    # Marker'ı `_ustteki_annotasyonlar` ile metinden okunur (aşağıdaki marker denetimi).
+    satirlar = [yorumu_kirp(s) for s in blok_yorumu_maskele(text).splitlines()]
+    for i, s in enumerate(satirlar):
+        m = _YERLESIK_CUKY_RE.match(s)
+        if m:
+            ad = m.group(1).lower()
+            kayit = {'name': ad, 'dtel': 'abap.cuky', 'line': i + 1,
+                     'annotations': _ustteki_annotasyonlar(satirlar, i)}
+            tum_alanlar.setdefault(ad, kayit)
+            cuky_fields.setdefault(ad, kayit)
+    basvurulan_yerel: list[str] = []   # marker denetimine girecek yerel referans alanları
 
     # CURR field'ları kontrol
     for f in fields:
@@ -228,32 +361,78 @@ def check_table(text: str) -> list[dict]:
                         'fix': f"'{val}' → '<table_name>.{val}' (qualified TABLE.FIELD)"
                     })
                 else:
-                    # Referans field aynı tabloda mı?
-                    ref_field = val.split('.')[-1].lower()
-                    if ref_field not in cuky_fields:
+                    ref_tablo, _, ref_field = val.rpartition('.')
+                    ref_tablo = ref_tablo.strip().lower()
+                    ref_field = ref_field.strip().lower()
+                    if not ref_tablo or not ref_field:
+                        # Boş tablo ya da alan kısmı (`'.yok'`, `'tab.'`): qualified DEĞİL
+                        # (bug-gate F3 — eskiden boş ad "başka tablo" sayılıp atlanıyordu).
                         violations.append({
                             'severity': 'BLOCKER',
                             'line': f['line'],
-                            'check_id': 'C-TBL-CUR-04',
+                            'check_id': 'C-TBL-CUR-03',
+                            'message': f"CURR field '{f['name']}' annotation qualified format değil: {val}",
+                            'fix': "'<table_name>.<currency_field>' (iki parça da dolu)"
+                        })
+                    elif tablo_adi and ref_tablo != tablo_adi:
+                        # ① Başka tabloya başvuru: aynı-tablo denetimi uygulanmaz.
+                        violations.append({
+                            'severity': 'INFO',
+                            'line': f['line'],
+                            'check_id': id_referans,
+                            'message': (f"CURR field '{f['name']}' başka tablonun alanına başvuruyor "
+                                        f"('{ref_tablo}.{ref_field}') — aynı-tablo denetimi atlandı; "
+                                        f"bu kapı '{ref_tablo}' tablosunu okumaz"),
+                            'fix': '—'
+                        })
+                    elif ref_field not in tum_alanlar:
+                        # ② Alan bu kaynakta hiç yok
+                        violations.append({
+                            'severity': 'BLOCKER',
+                            'line': f['line'],
+                            'check_id': id_referans,
                             'message': f"CURR field '{f['name']}' referans verdiği CUKY '{ref_field}' tabloda yok",
                             'fix': f"CUKY field '{ref_field}' ekle veya farklı referans seç"
                         })
+                    else:
+                        # Yerel başvuru: alan hangi tipte olursa olsun marker denetimine girer
+                        if ref_field not in basvurulan_yerel:
+                            basvurulan_yerel.append(ref_field)
+                        if ref_field not in cuky_fields:
+                            # ③ Alan var, tipi sözlükten doğrulanamıyor
+                            violations.append({
+                                'severity': 'WARNING',
+                                'line': f['line'],
+                                'check_id': id_referans,
+                                'message': (f"CURR field '{f['name']}' referans verdiği '{ref_field}' alanı "
+                                            f"tabloda var ama DTEL'i '{tum_alanlar[ref_field]['dtel']}' "
+                                            f"CUKY sözlüğünde yok: referans alanın tipi sözlükten "
+                                            f"doğrulanamadı; yanlış tipli başvuruyu SAP aktivasyonu reddeder"),
+                                'fix': (f"'{ref_field}' alanının DTEL'i CUKY tipli mi kontrol et; standart "
+                                        f"bir CUKY DTEL'iyse scripts/utils/ddic_semantics.py CUKY_DTELS'e ekle")
+                            })
 
-    # CUKY field'ları @Semantics.currencyCode : true marker check
-    for f in fields:
-        if f['dtel'] in CUKY_DTELS:
-            has_marker = any(
-                'currencycode' in key.lower() and 'true' in val.lower()
-                for key, val in f['annotations']
-            )
-            if not has_marker:
-                violations.append({
-                    'severity': 'BLOCKER',
-                    'line': f['line'],
-                    'check_id': 'C-TBL-CUR-04',
-                    'message': f"CUKY field '{f['name']}' üzerinde @Semantics.currencyCode : true marker eksik",
-                    'fix': f"Hemen üstüne ekle: @Semantics.currencyCode : true"
-                })
+    # CUKY field'ları @Semantics.currencyCode : true marker check — sözlükteki CUKY
+    # alanları + CURR'un başvurduğu her yerel alan (Z'li DTEL / yerleşik abap.cuky)
+    denetlenecek = [f for f in fields if f['dtel'] in CUKY_DTELS]
+    gorulen = {f['name'] for f in denetlenecek}
+    for ad in basvurulan_yerel:
+        if ad not in gorulen:
+            denetlenecek.append(tum_alanlar[ad])
+            gorulen.add(ad)
+    for f in denetlenecek:
+        has_marker = any(
+            'currencycode' in key.lower() and 'true' in val.lower()
+            for key, val in f['annotations']
+        )
+        if not has_marker:
+            violations.append({
+                'severity': 'BLOCKER',
+                'line': f['line'],
+                'check_id': id_marker,
+                'message': f"CUKY field '{f['name']}' üzerinde @Semantics.currencyCode : true marker eksik",
+                'fix': f"Hemen üstüne ekle: @Semantics.currencyCode : true"
+            })
 
     # QUAN field'ları kontrol (aynı pattern)
     for f in fields:
@@ -631,6 +810,13 @@ def main() -> int:
         violations = check_table(text)
     else:
         violations = check_cds(text)
+
+    # INFO notları ihlal DEĞİLDİR (Issue #399: başka tabloya qualified başvuru): stdout'a
+    # basılır, şiddet/çıkış kodunu etkilemez ve "temiz" satırını bastırmaz.
+    bilgiler = [v for v in violations if v['severity'] == 'INFO']
+    violations = [v for v in violations if v['severity'] != 'INFO']
+    for v in bilgiler:
+        print(f"  [INFO] line {v['line']} ({v['check_id']}): {v['message']}")
 
     if not violations:
         # ⛔ PAYDASIZ "temiz" BASMA: kaç elemana bakıldığı yazılmazsa `0 eleman` ile
