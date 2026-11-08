@@ -3759,3 +3759,22 @@ python tests/run_battery.py validator_ad_deseni --kardes validator_ad_grameri q3
 - **KAPSAM DIŞI:** TRNSPACE çapraz kontrolü · paket–namespace uyumu · `sap-client=100` sabit kodlaması (table_field_drop · struct_consistency · struct_field_dtel_active · standard_table_fields — ayrı sınıf, raporlandı) · dosya adı YAZMA yönü `/`→`#` (Parti 2b).
 - ⛔ **Mutant ağacı `playbook/checklists`'i de taşır:** checklist_check madde haritasını `CORE/playbook/checklists/checklist-map.yaml`'dan okur; yalnız `scripts` kopyalanınca BE-01 satırı basılmaz ve N7 ailesi (6 vektör) HER kipte FAZLA düşer (ölçüldü: ilk batarya 19/19 SAPMA, kopya eklenince 19/19 DÜŞTÜ).
 - ⛔ **Kardeş pinleri:** `b0_secim` P1b (`check_bdef_backtick` → 5 birim: +`validator_ad_deseni` +`validator_ad_grameri`) · P2 10 → 11 (`scripts/validators/*.py` satırı her validator'a `validator_ad_grameri` ekler). `b0_secim` worktree cwd'sinden koşulur (ana proje cwd'sinden 12/21 sahte FAIL).
+
+## B102 — DDIC tablo/yapı YARATIMI: DTEL'siz (yerleşik `abap.*` tipli) alan listesi (DEV_CORE Issue #406, 2026-11-08)
+
+```
+python tests/fixtures/ddic_builtin_fields/run.py      # 21/21 (offline; alt süreç, kum; SAP'ye istek yok)
+python tests/run_battery.py ddic_builtin_fields --kardes checklist_check reviewer_skip_sozlesmesi reviewer_tip_kapsam reviewer_uzun_yol_ipucu sap_gate_skip_sozlesmesi validator_ad_grameri validator_ad_deseni q393_namespace_ad_politikasi id_tekilligi core_index_kapsam b0_secim --kardes-tam --precommit
+python scripts/validators/checklist_check.py --reach            # BE-13 -> claude/agents/adt-gateway.md PASS
+python scripts/validators/checklist_check.py --harita-denetim   # map <-> checklist tutarlı
+python scripts/validators/check_rule_gate_coverage.py           # C-STR-FIELD-01 / C-TBL-CRE-01 -> advisory, OK
+```
+
+- **Değişmez:** `run_review --task table_creation|struct_creation` DTEL'siz alanı GÖRÜR: istisnasız (ya da gerekçesiz işaretli) DTEL'siz alan ⇒ `check_ddic_builtin_fields` rc 1 ⇒ zincir şiddeti WARNING ⇒ verdict WARNING, run_review exit 0 (bloklamaz). Tümü `// dtel-istisna: <gerekçe>` ile işaretliyse ya da DTEL'siz alan yoksa rc 0 / PASS. Ölçülemeyen yüzey (çözülemeyen deyim · `.tabl.xml` · `extend type` · tanım yok) rc 0 + `measured=false` ⇒ run_review SKIP → WARNING (temiz SAYILMAZ). `run_all_validators`'ta YOK (R6 çiviler).
+- **Taban (kontrol grubu):** `git archive 3353fca | tar -x -C <scratch>` + fixture'ı `<scratch>/tests/fixtures/ddic_builtin_fields/` altına kopyala → **0/21**; R1 `verdict=PASS` (Issue'nun kendisi), T1 beyan yok.
+- **Vektör grupları:** D1-D14 doğrudan validator (D2 0-bulgu anında KAPSAM+BAKILMAYAN · D6/D7/D8/D13 measured=false dört kök · D9 `/XNS/` ad grameri · D10 yorum/blok/dize maskesi · D11 işaretin YÖNÜ · D12 ardışık annotation · D14 üçüncü bağlam: dizin kipi + CRLF/BOM) · R1-R6 gerçek `run_review` (`--json`; R6 zincir haritası modül içe aktarılarak) · T1 `check_struct_field_dtel_active` kapsam beyanı (hüküm aynen).
+- **Mutasyon kipi → düşmesi İLAN edilen küme** (koşumdan): `istisna-yok` D3 D11 R2 · `gerekcesiz-gecer` D4 · `dtelli-listele` D1 D2 D3 D4 D5 D6 D9 D10 D11 D12 D14 R2 R3 R5 · `beyan-bastir` D2 · `rc-sifir` D1 D4 D9 D11 D14 R1 R4 · `olculemedi-temiz` D6 D7 D8 D13 R5 · `annot-capa` D12 · `yorum-maskesiz` D3 D10 D11 R2 · `yon-genis` D11 · `zincirden-cikar` R1 R2 R3 R5 R6 · `dtel-beyan-yok` T1.
+- ⛔ **`gerekcesiz-gecer` çapası çağıran daldadır** (`if isaret:`): `_isaret_bul` içindeki `if gerekce:` mutasyonu NO-OP'tur (boş gerekçe `""` yine falsy) — ilk kurulumda KAÇTI.
+- ⛔ **Mutant kumu `scripts/` ağacının TAMAMINI taşır** (run_review zinciri `scripts/utils`, `_gate_status` ve kardeş validator'ları ister); fixture env'i `ADT_SAP_*` sahte adrese zorlar, girdilerde Z DTEL yok ⇒ dtel_active SAP'ye gitmez.
+- **BAKILMAYAN (validator her koşumda basar):** klasik `*.tabl.xml` (DD03P) · append (`extend type`) · canlı DD03L · include edilen yapının alanları · DTEL varlığı/aktifliği · `/* */` blok yorumundaki işaret.
+- **DOĞRULANAMADI:** bildirenin canlı vakası · `s4_private` dışı profiller · klasik xml yolu.

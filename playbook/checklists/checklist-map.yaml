@@ -107,7 +107,8 @@ maddeler:
     uygulanir: ["*.tabl.ddl", "*.tabl.xml", "*.abap"]
     kontrol: null
     seviye: uyari
-    yazan_kanali: null
+    yazan_kanali: claude/agents/adt-gateway.md
+    not: "onay kaydı yargıdır (C); DTEL'siz alan LİSTESİ run_review table_creation/struct_creation zincirinde check_ddic_builtin_fields (WARNING, engellemez; C-TBL-CRE-01 / C-STR-FIELD-01) — DEV_CORE #406"
   - id: BE-14
     sinif: C
     uygulanir: ["*.abap"]

@@ -39,6 +39,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _gate_status import gate_status, sap_baglanti_yok  # noqa: E402
 
 _GATE = Path(__file__).stem
+_DTELSIZ_BEYANI = ("KAPSAM: DTEL'siz (yerleşik abap.* tipli) alan: BAKILMADI — "
+                   "bkz. check_ddic_builtin_fields.py (run_review table_creation/struct_creation)")
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -61,6 +63,10 @@ def main() -> int:
         return 1
 
     text = path.read_text(encoding='utf-8', errors='replace')
+    # KAPSAM BEYANI (DEV_CORE #406): bu gate yalnız Z/namespace'li DTEL'lerin SAP'deki durumuna
+    # bakar. Yerleşik `abap.*` tipli alan onun kapsamında DEĞİLDİR — `kapsam-disi-z-dtel-yok`
+    # "alanların hepsi DTEL'li" demek değildir. Hüküm/şiddet/rc bu satırdan etkilenmez.
+    print(_DTELSIZ_BEYANI)
 
     # Müşteri DTEL referansları — adlandırma kuralı `<ad-alanı>SD<NNN>_E_*` (zsd<NNN>_e_*,
     # zsd_<NNN>_e_*, /<NS>/sd<NNN>_e_*, /<NS>/zsd…). DEV_CORE #402 K1: eski `\bzsd…\b` yalnız Z

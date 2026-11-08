@@ -860,6 +860,13 @@ OZEL_TESTLER = [
      "TEK AD GRAMERI geri donus korumasi (AST): scripts/validators/*.py'de nesne-adi baglaminda kendi "
      "ad deseni (kelime sinifi / [a-z][a-z0-9_]* / Z...) = FAIL; istisna `# ad-grameri: <gerekce>` isaretiyle "
      "koddan turetilir; dedektor kontrolu (kotu/iyi ornek); taban e52ad6f 29 ihlal; 3 mutasyon"),
+    # 2026-11-08 DEV_CORE #406: DDIC tablo/yapi YARATIMINDA DTEL'siz (yerlesik abap.*) alan listesi.
+    ("ddic_builtin_fields",
+     "check_ddic_builtin_fields: DTEL'siz alan LISTELENIR (rc 1, run_review table_creation/"
+     "struct_creation WARNING; bildirilen ornek VERDICT PASS -> WARNING), `// dtel-istisna: <gerekce>` "
+     "istisna (gerekcesiz isaret uyari kalir; yon: onceki alanin satir sonu isareti gecmez), DTEL'li/"
+     "include alan sayilmaz, xml/append/cozulemeyen deyim measured=false; dtel_active kapsam beyani; "
+     "11 mutasyon"),
 ]
 
 
@@ -1251,11 +1258,15 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "IX-GATE-STATUS ÜRETİCİ ucunun tek kaynağı (B3-01)"),
     ("scripts/validators/check_struct_field_dtel_active.py", ("O:sap_gate_skip_sozlesmesi",),
      "B3-01 ailesinin başı: bağlantı yok + kısmi körlük dalları"),
+    ("scripts/validators/check_struct_field_dtel_active.py", ("O:ddic_builtin_fields",),
+     "#406: \"DTEL'siz alan: BAKILMADI\" kapsam beyanı (T1)"),
+    ("scripts/validators/check_ddic_builtin_fields.py", ("O:ddic_builtin_fields",),
+     "#406: DTEL'siz alan listesi + istisna isareti + KAPSAM beyani"),
     ("scripts/validators/check_sap_active_version.py", ("O:sap_gate_skip_sozlesmesi",),
      "B3-01: BEŞ ayrı ölçmeyen exit-0 yolu"),
     ("scripts/validators/run_review.py",
      ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam", "O:sap_gate_skip_sozlesmesi",
-      "O:reviewer_uzun_yol_ipucu", "O:checklist_check"),
+      "O:reviewer_uzun_yol_ipucu", "O:checklist_check", "O:ddic_builtin_fields"),
      "SKIP sözleşmesi + push-tipi/reviewer haritası; ayrıca `gate_durum_beyani` "
      "TÜKETİCİ ucu üretici tarafından sap_gate_skip_sozlesmesi V7 ile çağrılır"),
 
