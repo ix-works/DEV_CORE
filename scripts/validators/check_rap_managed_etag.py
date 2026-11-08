@@ -6,10 +6,15 @@ Kaynak (gap-analysis #16, SAP topluluğu RAP-demo anekdotu):
   Claude managed RAP demo'da LAST_CHANGED_AT / etag alanını eklemeyi unutunca
   uygulama çalışmadı (managed senaryoda kilitleme/concurrency için hayati).
 
-Kural (managed + yazma operasyonu varsa):
+Kural (managed + BDEF'in herhangi bir bloğunda yazma operasyonu varsa):
   - Root behavior `lock master` tanımlamalı (kilit).            → eksikse BLOCKER
-  - `etag master <field>` veya `etag dependent` olmalı (optimistic concurrency).
-                                                                 → eksikse BLOCKER
+  - `lock master` taşıyan HER blok (KÖK) `etag master <field>` tanımlamalı (optimistic
+    concurrency); kökte `etag dependent` GEÇERSİZ. Kökün kendi gövdesinde create/update/delete
+    olmasa da (yalnız `action …; association …;`) denetlenir — salt-okunurluk BDEF DÜZEYİNDE
+    karar verilir, blok düzeyinde değil (#405 bug-gate F1).         → eksikse BLOCKER
+  - Çocuk blok (`lock master` taşımayan): `etag master` ya da `etag dependent` KABUL; etag'siz
+    çocuk DENETLENMEZ (ÖLÇÜLMEDİ — KAPSAM satırında sayılır). Yazma operasyonu taşımayan çocuk
+    salt-okunur sayılır.
   - İPUCU: etag master alanı CDS root view'da
     `@Semantics.systemDateTime.lastChangedAt: true` olmalı (BDEF dışı; WARNING hatırlatma).
 
@@ -23,7 +28,11 @@ VARLIK (BLOK) DÜZEYİ (DEV_CORE #405, 2026-11-08):
     · diğer bloklar = ÇOCUK → `etag master` ya da `etag dependent` KABUL; etag'siz çocuk
       DENETLENMEZ (lider kararı 2026-11-08 — tüketici korpusunda DEV'de aktif 6 BDEF'in çocuğu
       etag'siz, SAP zorlamıyor) ⇒ KAPSAM satırı "ÖLÇÜLMEDİ: çocuk blok etag'i" der.
-    · yazma operasyonu (create/update/delete) taşımayan blok etag İSTEMEZ (salt-okunur varlık).
+    · yazma operasyonu (create/update/delete) taşımayan ÇOCUK blok etag İSTEMEZ (salt-okunur
+      varlık). KÖK bu istisnaya GİRMEZ: BDEF'te herhangi bir blok yazıyorsa her `lock master`
+      bloğu denetlenir (bug-gate F1, 2026-11-08: CRUD'suz kök — yalnız `action doIt;
+      association _Item;` — + CRUD'lu çocuk + hiç etag yok → taban BLOCKER, ilk #405 sürümü
+      rc 0 "temiz" veriyordu = ilan edilmemiş gevşetme; ölçüldü, lider bağımsız yeniden üretti).
   Taban (2026-11-08, 42 BDEF): rc dağılımı değişmez (yalnız mesaj metni blok no + satır taşır).
   Blok adı YAKALANMAZ (#402: bu dosya ad deseni yazmaz) — bulgu blok sırası + satır no ile basılır.
   "En az bir `lock master`" kuralı dosya düzeyinde AYNEN durur. LastChanged semantics WARNING'i
@@ -97,20 +106,19 @@ def behavior_bloklari(text: str) -> list[tuple[int, str]]:
 def blok_etag_ihlalleri(text: str) -> tuple[list[str], dict]:
     """Varlık düzeyi etag denetimi (#405) → (ihlaller, kapsam sayaçları).
 
-    KÖK (`lock master`) + yazma operasyonu → `etag master <alan>` ister; `etag dependent` kökte
-    geçersiz. ÇOCUK blok: etag varsa `master|dependent` KABUL; etag'siz çocuk DENETLENMEZ
+    KÖK (`lock master`; BDEF'te herhangi bir blok yazıyorsa — kökün kendi gövdesi CRUD'suz olsa
+    da) → `etag master <alan>` ister; `etag dependent` kökte geçersiz. ÇOCUK blok: etag varsa `master|dependent` KABUL; etag'siz çocuk DENETLENMEZ
     (lider kararı 2026-11-08: tüketici korpusunda DEV'de AKTİF 6 BDEF'in çocuk bloğu etag'siz —
     SAP zorlamıyor; bu kapı onu BLOCKER yapmaz) ⇒ sayılıp ÖLÇÜLMEDİ diye beyan edilir.
     """
     ihlal = []
     say = {"blok": 0, "kok": 0, "cocuk": 0, "etagsiz_cocuk": 0, "salt_okunur": 0}
+    # Salt-okunurluk BDEF DÜZEYİNDE (bug-gate F1): herhangi bir blok yazıyorsa kök daima denetlenir.
+    bdef_yazmali = bool(WRITE_OP_RE.search(text))
     for sira, (satir, blok) in enumerate(behavior_bloklari(text), 1):
         say["blok"] += 1
-        if not WRITE_OP_RE.search(blok):
-            say["salt_okunur"] += 1
-            continue                                  # salt-okunur varlık: etag gerekmez
         etag = ETAG_RE.search(blok)
-        if LOCK_MASTER_RE.search(blok):
+        if LOCK_MASTER_RE.search(blok) and bdef_yazmali:
             say["kok"] += 1
             if not etag or etag.group(1).lower() != 'master':
                 ihlal.append(
@@ -118,10 +126,13 @@ def blok_etag_ihlalleri(text: str) -> tuple[list[str], dict]:
                     + (" ('etag dependent' kökte geçersiz)" if etag else "")
                     + " — optimistic concurrency için zorunlu. Anekdot: LAST_CHANGED_AT/etag "
                     "unutulunca managed RAP çalışmaz. Köke 'etag master <LastChangedField>' ekle.")
-        else:
-            say["cocuk"] += 1
-            if not etag:
-                say["etagsiz_cocuk"] += 1
+            continue
+        if not WRITE_OP_RE.search(blok):
+            say["salt_okunur"] += 1
+            continue                                  # salt-okunur çocuk varlık: etag gerekmez
+        say["cocuk"] += 1
+        if not etag:
+            say["etagsiz_cocuk"] += 1
     return ihlal, say
 
 

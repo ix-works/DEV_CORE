@@ -865,8 +865,8 @@ OZEL_TESTLER = [
      "namespace'li dosya adi (#ns#x / %23ns%23x / (ns)x) SAP adina cozulur: sap_sync_pull --file kabulu "
      "(M1 farkli ad reddi KORUNUR) + kapi/tekrar komutu kabukta guvenli (Z bayt-ayni) + pbe/drift/bulucular + "
      "master_language; package_naming cds/ .asddls/.asdcls + KAPSAM + OLCULEMEDI; objpkg .asdcls/.asbdef; "
-     "managed_etag blok duzeyi (kok etag master, cocuk OLCULMEDI); cds_currency takma adsiz eleman + group by; "
-     "run_review DCL OLCULMEDI; taban 3353fca 26/71; 29 mutasyon"),
+     "managed_etag blok duzeyi (kok etag master, salt-okunurluk BDEF duzeyinde, cocuk OLCULMEDI); cds_currency takma adsiz eleman + group by; "
+     "run_review DCL OLCULMEDI; taban 3353fca 28/75; 32 mutasyon"),
 ]
 
 

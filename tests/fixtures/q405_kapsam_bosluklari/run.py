@@ -269,6 +269,18 @@ def bolum_naming() -> None:
          f"rc={rc} {out[:300]!r} {err[:200]!r}")
     ekle("N12", "ÖLÇÜLEMEDİ 1" in _kapsam(out), f"OK satırında KAPSAM yok: {out[:300]!r}")
 
+    # D (bug-gate F2): Z paketinde biçimi BOZUK namespace (2 harf · boş) ⇒ FAIL kalır (taban
+    # davranışı); ÖLÇÜLEMEDİ yalnız GEÇERLİ namespace + tablo onu anmıyor (N5) dalıdır.
+    kum = yeni_kum("nmD")
+    cds = kum / "SOURCE_CODES" / "SD" / "ZSD001_CLC" / "cds"
+    yaz(cds.parent / ".rules.md", RULES_Z)
+    yaz(cds / "ZSD001_I_OK.cds", DDL)
+    yaz(cds / "#ab#i_x.cds", DDL)
+    yaz(cds / "##zsd001_i_q.cds", DDL)
+    rc, out, err = kos(kum, nm)
+    ekle("N13", rc == 1 and "#ab#i_x.cds: hiçbir regex" in err, f"2 harfli ns rc={rc} {out[:200]!r} {err[:300]!r}")
+    ekle("N14", rc == 1 and "##zsd001_i_q.cds: hiçbir regex" in err, f"boş ns rc={rc} {out[:200]!r} {err[:300]!r}")
+
     # C: namespace paketi, tablo XNS'i anıyor (ham + çözülmüş biçim)
     kum = yeni_kum("nmC")
     cds = kum / "SOURCE_CODES" / "SD" / "#XNS#SD001" / "cds"
@@ -338,6 +350,15 @@ def bolum_etag() -> None:
     ekle("E6", rc == 0 and "kök 1 · çocuk 1 · salt-okunur 1" in t, f"salt-okunur blok rc={rc} {t[:300]!r}")
     rc, t = kos_b("e7", bdef(kok_yok, cocuk_yok))
     ekle("E7", rc == 1, f"KONTROL hiç etag yok rc={rc}")
+    # bug-gate F1: CRUD'suz kök (yalnız action + association) + CRUD'lu çocuk + hiç etag yok.
+    # Taban BLOCKER veriyordu; ilk #405 sürümü kökü "salt-okunur" sayıp rc 0 dönüyordu.
+    kok_crudsuz = ("define behavior for ZI_ROOT alias Root\npersistent table zroot\nlock master\n"
+                   "authorization master ( instance )\n{\n  action doIt;\n  association _Item;\n}\n")
+    cocuk_crud = ("define behavior for ZI_ITEM alias Item\npersistent table zitem\n"
+                  "lock dependent by _Root\nauthorization dependent by _Root\n{\n  update;\n  delete;\n"
+                  "  field ( readonly ) RootId;\n  association _Root;\n}\n")
+    rc, t = kos_b("e8", bdef(kok_crudsuz, cocuk_crud))
+    ekle("E8", rc == 1 and "blok #1 (satır 3, KÖK" in t, f"CRUD'suz kök rc={rc} {t[:300]!r}")
     # ③ ham docstring: `-W error` altında derlenir
     r = subprocess.run([sys.executable, "-W", "error", "-c",
                         "import sys; compile(open(sys.argv[1], encoding='utf-8').read(), sys.argv[1], 'exec')",
@@ -372,6 +393,8 @@ def bolum_curr() -> None:
     rc, out, err = kos_c("c5", _ddl("  key knumh,\n      @Semantics.amount.currencyCode: 'konwa'\n"
                                     "      kbetr,\n      konwa\n"))
     ekle("C5", rc == 0 and "1 CURR/QUAN elemanı denetlendi" in out, f"annotasyonlu {out[:250]!r}")
+    rc, out, err = kos_c("c10", _ddl("  key kbetr,\n      konwa\n"))
+    ekle("C10", "'kbetr' elemanında" in err, f"`key` önekli takma adsız {out[:200]!r} {err[:200]!r}")
     rc, out, err = kos_c("c5a", _ddl("  key knumh as Knumh,\n      kbetr as Amount,\n      konwa as Konwa\n"))
     ekle("C5a", "'Amount' elemanında" in err, f"KONTROL takma adlı eksik annotation {err[:200]!r}")
     gb = ("define view entity ZI_GB\n  as select from konp\n{\n  key konp.knumh as Knumh,\n"
@@ -505,9 +528,14 @@ MUTASYONLAR = {
                                    "            adaylar = [name, sap_ad, name.upper()]\n",
                                    {"N9"}),
     "--mutasyon-naming-olculemedi-yok": (_V + "check_package_naming.py",
-                                         "                if not ns or not _tablo_ns_aniyor(applicable_regexes, ns):\n",
+                                         "                if ns and not _tablo_ns_aniyor(applicable_regexes, ns):\n",
                                          "                if False:\n",
                                          {"N5", "N12"}),
+    # bug-gate F2: biçimi bozuk namespace'i de ÖLÇÜLEMEDİ'ye sokan ilk #405 sürümü
+    "--mutasyon-naming-bozuk-ns-olculemedi": (_V + "check_package_naming.py",
+                                              "                if ns and not _tablo_ns_aniyor(applicable_regexes, ns):\n",
+                                              "                if not ns or not _tablo_ns_aniyor(applicable_regexes, ns):\n",
+                                              {"N13", "N14"}),
     "--mutasyon-naming-ns-anma-yok": (_V + "check_package_naming.py",
                                       "        if f\"/{ic}/\" in duz or f\"#{ic}#\" in duz:\n",
                                       "        if False:\n",
@@ -522,10 +550,15 @@ MUTASYONLAR = {
                                  {"O1", "O2"}),
     # ② + ③
     "--mutasyon-etag-dosya": (_V + "check_rap_managed_etag.py",
-                              "        if LOCK_MASTER_RE.search(blok):\n",
+                              "        if LOCK_MASTER_RE.search(blok) and bdef_yazmali:\n",
                               "        if False:\n",
                               # E7: hiçbir blok kök sayılmaz ⇒ etag'siz kök de geçer (dosya düzeyi kontrol yok)
-                              {"E1", "E3", "E4", "E5", "E6", "E7"}),
+                              {"E1", "E3", "E4", "E5", "E6", "E7", "E8"}),
+    # bug-gate F1: kökün salt-okunurluğunu BLOK düzeyinde soran ilk #405 sürümü
+    "--mutasyon-etag-kok-salt-okunur": (_V + "check_rap_managed_etag.py",
+                                        "        if LOCK_MASTER_RE.search(blok) and bdef_yazmali:\n",
+                                        "        if LOCK_MASTER_RE.search(blok) and WRITE_OP_RE.search(blok):\n",
+                                        {"E8"}),
     "--mutasyon-etag-kok-dependent": (_V + "check_rap_managed_etag.py",
                                       "            if not etag or etag.group(1).lower() != 'master':\n",
                                       "            if not etag:\n",
@@ -548,12 +581,16 @@ MUTASYONLAR = {
                                      "    m = None\n",
                                      # C9: takma adsız eleman sayılmayınca ihlal yok ⇒ beyan stderr'e değil
                                      # stdout'a basılır; C8 (OK yolu) beyanı yine görür
-                                     {"C1", "C2", "C3", "C4", "C5", "C9"}),
+                                     {"C1", "C2", "C3", "C4", "C5", "C9", "C10"}),
     "--mutasyon-curr-liste-yok": (_V + "check_cds_currency_reference.py",
                                   "    m = _ELEMAN_TAKMASIZ.match(s) if liste_icinde else None\n",
                                   "    m = _ELEMAN_TAKMASIZ.match(s)\n",
                                   {"C6"}),
-    "--mutasyon-curr-beyan-yok": (_V + "check_cds_currency_reference.py",
+    "--mutasyon-curr-key-onek": (_V + "check_cds_currency_reference.py",
+                                 "    r\"^\\s*(?:key\\s+)?(?P<ifade>(?:\" + AD_DESENI",
+                                 "    r\"^\\s*(?P<ifade>(?:\" + AD_DESENI",
+                                 {"C10"}),
+    "--mutasyon-curr-beyan-yok":(_V + "check_cds_currency_reference.py",
                                   "            print(f'  {CDS_KAPSAM_BEYANI}')\n",
                                   "",
                                   {"C8"}),

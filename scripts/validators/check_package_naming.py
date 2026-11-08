@@ -171,7 +171,8 @@ def parse_rules_md(rules_path: Path) -> list[tuple[str, str]]:
 
 def yeni_kapsam() -> dict:
     """KAPSAM BEYANI sayaçları (#405 ①): taranan · uzantısı listede olmayan · regex'siz klasör ·
-    ÖLÇÜLEMEDİ (namespace'li ad, paketin tablosu o namespace'i hiç anmıyor)."""
+    ÖLÇÜLEMEDİ (GEÇERLİ namespace'li ad, paketin tablosu o namespace'i hiç anmıyor; biçimi bozuk
+    namespace — `#ab#x`, `##x` — FAIL kalır, bug-gate F2)."""
     return {"taranan": 0, "atlanan": 0, "atlanan_uzanti": {}, "regexsiz_klasor": 0,
             "olculemedi": []}
 
@@ -299,13 +300,14 @@ def validate_package(pkg_dir: Path, verbose: bool = False, kapsam: dict | None =
                 continue
             if sap_ad.startswith("/"):
                 ns = ad_namespace(sap_ad)
-                if not ns or not _tablo_ns_aniyor(applicable_regexes, ns):
+                if ns and not _tablo_ns_aniyor(applicable_regexes, ns):
                     # #402 ilkesi: `/` taşıyan ad ya denetlenir ya ÖLÇÜLEMEDİ döner. Tablo bu
-                    # namespace'i hiç anmıyor ⇒ hiçbir regex bu adı DEĞERLENDİREMEZ (FAIL değil).
-                    neden = ("namespace biçimi tanınmadı (ad grameri)" if not ns else
-                             f"paketin Naming tablosu {ns} namespace'ini hiç anmıyor")
+                    # GEÇERLİ namespace'i hiç anmıyor ⇒ hiçbir regex bu adı DEĞERLENDİREMEZ (FAIL
+                    # değil). Biçimi BOZUK namespace (`#ab#x` 2 harf · `##x`) bu dala GİRMEZ —
+                    # taban davranışı FAIL korunur (bug-gate F2, lider kararı 2026-11-08).
                     kapsam["olculemedi"].append(
-                        f"{pkg_dir.name}/{folder_name}/{f.name} → {sap_ad}: {neden}")
+                        f"{pkg_dir.name}/{folder_name}/{f.name} → {sap_ad}: "
+                        f"paketin Naming tablosu {ns} namespace'ini hiç anmıyor")
                     continue
             violations.append(
                 f"{pkg_dir.name}/{folder_name}/{f.name}: "
