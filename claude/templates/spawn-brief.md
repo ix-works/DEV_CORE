@@ -68,6 +68,7 @@ taze-oku kuralı GEÇERLİ KALIR — hazır-bağlam yalnız değişmeyen referan
 - Kanıtsız iddia RAPORA YAZILMAZ; sayı verirken içerik-çapası kullan (satır-no tek başına değil).
 - Bağımsız OKUMA çağrılarını tek turda PARALEL gönder; yazma/sıra-bağımlı seri (P6).
 - Ara ürünleri DİSKE YAZ (login-expiry/kopma = yazılmamış iş kaybı; vaka #50).
+- ⛔ Onay penceresi açan komut yazma: silmede yolu değişkenle ya da `bash -c` içinde verme · geçici çıktıyı silme, üzerine yaz · dizin dışına `cd` yok, mutlak yol · kimlik dosyası okuma yok (kullanıcı ekranda olmayabilir; yerleşik silme denetimi izin listesiyle aşılamaz — ajan tanımlarındaki ONAY PENCERESİ bölümü) · lider seni pencerede beklerken durdurursa bekleyen komut KOŞMAMIŞTIR, tekrarlama; mesajdaki biçimle devam et.
 
 ## 8. RAPORLAMA SÖZLEŞMESİ (ZORUNLU — "uzun iş" istisnası YOK)
 **Her ajan hem ÇALIŞIRKEN ara rapor verir, hem BİTİNCE nihai rapor verir.** Aşağıdaki üç madde

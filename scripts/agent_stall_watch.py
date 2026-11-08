@@ -44,8 +44,10 @@ BILINEN SINIR (kaydin kendi kapsam-disi maddesi): turunu bitirmis ama ENGELLENMI
    tool_use yoktur. Onu brifingdeki "ENGELLENIRSEN DERHAL bildir" maddesi kapsar.
    Ayrica taban ONCESI asilmis bir ajan da yakalanmaz (bilincli tasarim).
 
-CIKTI — yalniz OLAY basar (STATUS seli yok, popup yok). Bes olay turu:
+CIKTI — yalniz OLAY basar (STATUS seli yok, popup yok). Yedi olay turu:
    ASILI? <ajan> <arac> N dk -> SendMessage probe, cevap yoksa TaskStop
+   IZIN-BEKLIYOR <ajan> N dk | <komut ozu> | ask=<kural|yok|OLCULEMEDI(..)> -> bildir [2026-11-08]
+   MUDAHALE-ZAMANI <ajan> N dk | <komut ozu> | ask=.. -> TaskStop + SendMessage [2026-11-08]
    COZULDU <ajan> <arac> (N dk sonra sonuc geldi)
    DONGU? <ajan> N ardisik max_tokens turu (arada tool_use yok)      [2026-10-03]
    IPTAL? <ajan> ~600 sn sonra 'interrupted' kaydi -> ajan oldu       [2026-10-03]
@@ -54,6 +56,30 @@ CIKTI — yalniz OLAY basar (STATUS seli yok, popup yok). Bes olay turu:
    goremez); gerekce + kaynak: `_imza_izle` ustundeki blok.
    Aksiyon olayin ICINDE yazilidir (aksiyon sahibi = lider; removed-controls satir
    25'in ucuncu yeniden-acma sarti).
+
+IZIN-BEKLIYOR (2026-11-08, kullanici onayi): ON PLAN Bash/PowerShell komutu kendi zaman
+   limitinden (input.timeout, yoksa 2 dk) uzun KOSAMAZ — arac onu keser. Sonucu limit + 1 dk
+   icinde gelmemis bir on plan komutu demek ki BASLAMAMISTIR = onay penceresinde bekliyor.
+   Esik = max(limit + 1 dk, --izin-esik-dk [3]). Arka plan komutu (run_in_background) ve
+   diger araclar bu sinyale GIRMEZ; onlar icin ASILI? (12 dk) aynen gecerlidir ve ayni
+   cagri icin ASILI? yine basilir. Olcum (lider + bug-gate #403, 2026-11-08): 22.372 on plan alt
+   ajan komutunda limit + 1 dk'yi asan 16 bosluk; 15'i onay beklemesi (14 karar user_temporary/
+   user_permanent, 1 kayitta karar alani yok), 1'i SIRA beklemesi (ayni mesajda onceki komut
+   214 sn kostu, karar config/classifier). 15'in 14'unde bir `permissions.ask` kuralina uyan
+   alt komut var (13 `rm -rf`, 1 `pkill`).
+   KUYRUK (bug-gate #403 F1): ayni assistant mesajindaki (message.id) ONCEKI kardes cagri hala
+   sonucsuzsa cagri sirada bekliyordur -> izin kanalina ALINMAZ; kardeslerin sonucu geldiyse
+   yas en gec kardes sonucundan baslar. ASILI? bunu kullanmaz (tool_use damgasindan olcer).
+   Gecmis kayit yeniden oynatmasi (16 aday, gercek CLI, sonuctan 1 sn onceki dosya on eki):
+   eski kod 16 IZIN, yeni kod 15 IZIN — dusen tek vaka sira beklemesi; kalan 15'in 14'unde
+   karar kullanicidan, 1'inde alan yok (yanlis alarm olarak kanitlanan 0).
+   MUDAHALE-ZAMANI: yas >= max(--mudahale-dk [10], izin esigi) -> lider TaskStop + SendMessage
+   (governance/agent-teams-operating-model.md §4D). Ikisi de cagri basina BIR KEZ basilir.
+   `ask=` alani: komut, `--ayar` (varsayilan <CLAUDE_PROJECT_DIR|cwd>/.claude/settings.json)
+   `permissions.ask` kurallarindan birine uyuyorsa o kural. Kaba alt komut bolmesi
+   (&& || ; | satir sonu); tirnak icindeki ayiricilar da boler. Okunamazsa OLCULEMEDI.
+   ⚠ SINIR: liderin TaskStop'u bekleyen cagriya kullanici REDDIYLE birebir ayni sonuc yazar
+   (kontrollu deney 2026-11-08) — sonradan transkriptte ikisi ayirt edilemez.
 
 "0 bulgu" != "temiz" (core §7 KAPSAM BEYANI): kok yoksa / 0 transkript
    gorulebiliyorsa / bir dosya okunamiyorsa arac SESSIZ KALMAZ, OLCULEMEDI basar
@@ -67,6 +93,7 @@ KULLANIM (lider, Monitor ile):
     python core/scripts/agent_stall_watch.py --esik-dk 12 --aralik-sn 60 --sure-dk 60
     python core/scripts/agent_stall_watch.py --proje C--IX-<PROJECT_NAME>
     python core/scripts/agent_stall_watch.py --tek-atim        # tek yoklama, cik
+    python core/scripts/agent_stall_watch.py --izin-esik-dk 3 --mudahale-dk 10 --ayar <settings.json>
     python core/scripts/agent_stall_watch.py --olcum-korpus    # korpus dagilimi (salt-okur)
 
 TEST KANCALARI (yalniz fixture icin; uretimde kullanilmaz):
@@ -81,6 +108,7 @@ import argparse
 import datetime as _dt
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -150,6 +178,8 @@ def transkript_tara(dosya: Path) -> tuple[list[dict], list[str], list[dict]]:
     satirlar = ham.split("\n")
     kullanim: dict[str, dict] = {}
     sonuclar: set[str] = set()
+    sonuc_zamani: dict[str, _dt.datetime] = {}
+    mesaj_sirasi: dict[str, list[str]] = {}
     bozuk_indeks: list[int] = []
     kimliksiz_kullanim = 0
     kimliksiz_sonuc = 0
@@ -176,8 +206,12 @@ def transkript_tara(dosya: Path) -> tuple[list[dict], list[str], list[dict]]:
             if t == "tool_use":
                 kimlik = b.get("id")
                 if isinstance(kimlik, str):
+                    mid = m.get("id") if isinstance(m.get("id"), str) else None
                     kullanim[kimlik] = {"arac": b.get("name") or "?",
-                                        "ts": _zaman(d.get("timestamp"))}
+                                        "ts": _zaman(d.get("timestamp")),
+                                        "girdi": b.get("input"), "mesaj": mid}
+                    if mid is not None and kimlik not in mesaj_sirasi.setdefault(mid, []):
+                        mesaj_sirasi[mid].append(kimlik)
                 else:
                     # Kimliksiz cagri IZLENEMEZ -> gercek bir takilma SESSIZCE kacar.
                     kimliksiz_kullanim += 1
@@ -185,6 +219,9 @@ def transkript_tara(dosya: Path) -> tuple[list[dict], list[str], list[dict]]:
                 sonuc_kimlik = b.get("tool_use_id")
                 if isinstance(sonuc_kimlik, str):
                     sonuclar.add(sonuc_kimlik)
+                    sz = _zaman(d.get("timestamp"))
+                    if sz is not None:
+                        sonuc_zamani[sonuc_kimlik] = sz
                 else:
                     # Kimliksiz sonuc ESLESTIRILEMEZ -> bitmis cagri "asili" gorunur (FP).
                     kimliksiz_sonuc += 1
@@ -200,12 +237,36 @@ def transkript_tara(dosya: Path) -> tuple[list[dict], list[str], list[dict]]:
         sebepler.append(f"kimliksiz-tool_use {dosya.name}: {kimliksiz_kullanim} cagri izlenemedi")
     if kimliksiz_sonuc:
         sebepler.append(f"kimliksiz-tool_result {dosya.name}: {kimliksiz_sonuc} sonuc eslestirilemedi")
-    bekleyen = [{"dosya": dosya, "id": k, "arac": v["arac"], "ts": v["ts"]}
+    bekleyen = [dict({"dosya": dosya, "id": k, "arac": v["arac"], "ts": v["ts"],
+                      "girdi": v.get("girdi")},
+                     **kuyruk_durumu(k, v.get("mesaj"), mesaj_sirasi, kullanim, sonuclar,
+                                     sonuc_zamani))
                 for k, v in kullanim.items() if k not in sonuclar]
     if any(b["ts"] is None for b in bekleyen):
         sebepler.append(f"zaman-damgasi-yok {dosya.name}")
         bekleyen = [b for b in bekleyen if b["ts"] is not None]
     return bekleyen, sebepler, [dict(o, dosya=dosya) for o in imza["olay"]]
+
+
+def kuyruk_durumu(kimlik: str, mesaj: str | None, mesaj_sirasi: dict[str, list[str]],
+                  kullanim: dict[str, dict], sonuclar: set[str],
+                  sonuc_zamani: dict[str, _dt.datetime]) -> dict:
+    """Ayni assistant mesajindaki (message.id) ONCEKI kardes cagrilara gore kuyruk durumu.
+
+    Bug-gate PR #403 F1 (korpusta olculdu): ayni mesajda iki on plan Bash; ilki 214 sn kostu,
+    ikincisi SIRADA bekledi ve 218 sn sonra sonuc aldi (karar config/classifier — pencere YOK).
+    Yas tool_use damgasindan olculurse ikinci cagri "onay bekliyor" sanilir. Kural:
+      · onceki kardeslerden biri hala sonucsuzsa -> kuyrukta=True (izin kanalina ALINMAZ)
+      · hepsinin sonucu geldiyse izin yasi en gec kardes sonucundan baslar (izin_ts)
+    ASILI? bu alanlari KULLANMAZ (12 dk kurali tool_use damgasindan olcmeye devam eder)."""
+    if mesaj is None:
+        return {"kuyrukta": False, "izin_ts": None}
+    sira = mesaj_sirasi.get(mesaj, [])
+    onceki = sira[:sira.index(kimlik)] if kimlik in sira else []
+    if any(k not in sonuclar for k in onceki):
+        return {"kuyrukta": True, "izin_ts": None}
+    zamanlar = [sonuc_zamani[k] for k in onceki if k in sonuc_zamani]
+    return {"kuyrukta": False, "izin_ts": max(zamanlar) if zamanlar else None}
 
 
 # ── IKI TAKILMA IMZASI (2026-10-03) — ikisi de ILERLEME olcer, sessizlik DEGIL ──
@@ -222,6 +283,77 @@ def transkript_tara(dosya: Path) -> tuple[list[dict], list[str], list[dict]]:
 DONGU_ESIK = 2
 IPTAL_ARALIK_SN = (595.0, 620.0)
 KESME_ONEKI = "[Request interrupted by user"
+
+
+# ── IZIN-BEKLIYOR / MUDAHALE-ZAMANI (2026-11-08) — gerekce modul docstring'inde ──
+IZIN_ARACLARI = ("Bash", "PowerShell")
+VARSAYILAN_LIMIT_DK = 2.0
+IZIN_PAY_DK = 1.0
+IZIN_ESIK_DK = 3.0
+MUDAHALE_DK = 10.0
+KOMUT_OZU_KR = 100
+
+
+def komut_limiti_dk(girdi) -> float:
+    t = girdi.get("timeout") if isinstance(girdi, dict) else None
+    if isinstance(t, (int, float)) and not isinstance(t, bool) and t > 0:
+        return float(t) / 60000.0
+    return VARSAYILAN_LIMIT_DK
+
+
+def izin_esigi_dk(arac: str, girdi, izin_esik_dk: float) -> float | None:
+    """None = bu cagri izin sinyaline girmez (arac turu ya da arka plan)."""
+    if arac not in IZIN_ARACLARI:
+        return None
+    if isinstance(girdi, dict) and girdi.get("run_in_background"):
+        return None
+    return max(komut_limiti_dk(girdi) + IZIN_PAY_DK, izin_esik_dk)
+
+
+def komut_ozu(girdi) -> str:
+    k = girdi.get("command") if isinstance(girdi, dict) else None
+    k = " ".join(str(k).split()) if k else ""
+    return k if len(k) <= KOMUT_OZU_KR else k[:KOMUT_OZU_KR] + "…"
+
+
+def ask_kurallari_oku(yol: Path) -> tuple[list[str] | None, str]:
+    """(kurallar, sebep) — kurallar None ise OLCULEMEDI; sebep satira yazilir."""
+    try:
+        d = json.loads(yol.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None, f"dosya-yok {yol}"
+    except Exception as e:
+        return None, f"okunamadi {yol.name}: {type(e).__name__}"
+    izin = d.get("permissions") if isinstance(d, dict) else None
+    ask = izin.get("ask", []) if isinstance(izin, dict) else []
+    if not isinstance(ask, list):
+        return None, f"permissions.ask liste degil ({yol.name})"
+    return [str(x) for x in ask], f"{yol} ({len(ask)} kural)"
+
+
+def ask_eslesmesi(arac: str, girdi, kurallar: list[str]) -> list[str]:
+    """`Arac(onek:*)` / `Arac(tam)` / `Arac` kurallari; komut kaba alt komutlara bolunur."""
+    komut = girdi.get("command") if isinstance(girdi, dict) else None
+    if not isinstance(komut, str):
+        return []
+    parcalar = [x.strip() for x in re.split(r"&&|\|\||;|\||\n", komut) if x.strip()]
+    uyan: list[str] = []
+    for kural in kurallar:
+        m = re.fullmatch(r"\s*([A-Za-z_]+)\s*(?:\((.*)\))?\s*", kural)
+        if not m or m.group(1) != arac:
+            continue
+        spec = m.group(2)
+        if spec is None or spec.strip() in ("", "*"):
+            uyan.append(kural)
+            continue
+        spec = spec.strip()
+        if spec.endswith(":*"):
+            onek = spec[:-2].strip()
+            if any(p == onek or p.startswith(onek + " ") for p in parcalar):
+                uyan.append(kural)
+        elif any(p == spec for p in parcalar):
+            uyan.append(kural)
+    return uyan
 
 
 def _imza_izle(d: dict, m: dict, icerik, imza: dict) -> None:
@@ -280,14 +412,21 @@ class Bekci:
     """Olay uretici. Durum SADECE bellekte (dosya yok, kilit yok, yetim yok)."""
 
     def __init__(self, esik_dk: float = ESIK_DK,
-                 taban: _dt.datetime | None = None) -> None:
+                 taban: _dt.datetime | None = None,
+                 izin_esik_dk: float = IZIN_ESIK_DK, mudahale_dk: float = MUDAHALE_DK,
+                 ask: tuple[list[str] | None, str] = (None, "verilmedi")) -> None:
         self.esik_dk = esik_dk
         self.taban = taban
+        self.izin_esik_dk = izin_esik_dk
+        self.mudahale_dk = mudahale_dk
+        self.ask_kurallari, self.ask_sebep = ask
+        self.bildirilen_izin: set[tuple[str, str]] = set()
+        self.bildirilen_mudahale: set[tuple[str, str]] = set()
         self.bildirilen: dict[tuple[str, str], dict] = {}
         self.bildirilen_sebep: set[str] = set()
         self.bildirilen_imza: set[tuple[str, str]] = set()
         self.sayac = {"asili": 0, "cozuldu": 0, "olculemedi": 0, "yoklama": 0,
-                      "dongu": 0, "iptal": 0}
+                      "dongu": 0, "iptal": 0, "izin": 0, "mudahale": 0}
         self.olculdu = False
 
     def imza_olaylari(self, imzalar: list[dict]) -> list[str]:
@@ -333,6 +472,32 @@ class Bekci:
                 self.sayac["cozuldu"] += 1
                 olaylar.append(f"COZULDU {kayit['ajan']} {kayit['arac']} "
                                f"({kayit['dk']:.0f} dk sonra sonuc geldi)")
+        # IZIN-BEKLIYOR / MUDAHALE-ZAMANI: on plan Bash/PowerShell, yas >= limit + 1 dk.
+        # ASILI?'dan BAGIMSIZ kanal: ayni cagri icin ASILI? asagida yine basilir.
+        for anahtar, b in sorted(acik.items(), key=lambda kv: kv[1]["ts"]):
+            if self.taban is not None and b["ts"] < self.taban:
+                continue
+            esik = izin_esigi_dk(b["arac"], b.get("girdi"), self.izin_esik_dk)
+            if esik is None:
+                continue
+            if b.get("kuyrukta"):
+                continue
+            bas = max(b["ts"], b.get("izin_ts") or b["ts"])
+            dk = (simdi - bas).total_seconds() / 60.0
+            if dk < esik:
+                continue
+            ad = ajan_adi(b["dosya"])
+            ozet = f"{komut_ozu(b.get('girdi'))} | ask={self._ask_metni(b)}"
+            if anahtar not in self.bildirilen_izin:
+                self.bildirilen_izin.add(anahtar)
+                self.sayac["izin"] += 1
+                olaylar.append(f"IZIN-BEKLIYOR {ad} {dk:.0f} dk | {ozet} "
+                               f"-> kullaniciya bildir (operating-model §4D)")
+            if dk >= max(self.mudahale_dk, esik) and anahtar not in self.bildirilen_mudahale:
+                self.bildirilen_mudahale.add(anahtar)
+                self.sayac["mudahale"] += 1
+                olaylar.append(f"MUDAHALE-ZAMANI {ad} {dk:.0f} dk | {ozet} "
+                               f"-> TaskStop + SendMessage (operating-model §4D)")
         # ASILI?: taban sonrasi dogmus + esigi asmis + henuz bildirilmemis.
         # Sira EN ESKIDEN yeniye: ilerlemesi en cok durmus cagri once gorunur.
         for anahtar, b in sorted(acik.items(), key=lambda kv: kv[1]["ts"]):
@@ -349,6 +514,13 @@ class Bekci:
             olaylar.append(f"ASILI? {ad} {b['arac']} {dk:.0f} dk "
                            f"-> SendMessage probe, cevap yoksa TaskStop")
         return olaylar
+
+
+    def _ask_metni(self, b: dict) -> str:
+        if self.ask_kurallari is None:
+            return f"OLCULEMEDI({self.ask_sebep})"
+        uyan = ask_eslesmesi(b["arac"], b.get("girdi"), self.ask_kurallari)
+        return ",".join(uyan) if uyan else "yok"
 
 
 def korpus_olcumu(kok: Path) -> int:
@@ -416,6 +588,12 @@ def ayristir(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--proje", default=None, help="proje slug filtresi")
     p.add_argument("--seans", default=None, help="oturum kimligi filtresi")
     p.add_argument("--tek-atim", action="store_true")
+    p.add_argument("--izin-esik-dk", type=float, default=IZIN_ESIK_DK,
+                   help="on plan Bash/PowerShell izin sinyalinin alt siniri (dk)")
+    p.add_argument("--mudahale-dk", type=float, default=MUDAHALE_DK,
+                   help="MUDAHALE olayinin esigi (dk)")
+    p.add_argument("--ayar", default=None,
+                   help="permissions.ask kaynagi (varsayilan <CLAUDE_PROJECT_DIR|cwd>/.claude/settings.json)")
     p.add_argument("--olcum-korpus", action="store_true")
     p.add_argument("--simdi", default=None,
                    help="TEST: yas hesabinda kullanilacak simdi (ISO)")
@@ -446,6 +624,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         taban = _simdi() - _dt.timedelta(minutes=a.gecmis_dk)
 
+    ayar = Path(a.ayar) if a.ayar else (
+        Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd()) / ".claude" / "settings.json")
+    ask = ask_kurallari_oku(ayar)
     # KAPSAM BEYANI (core §7): her kosumda basilir — en kritik an sifir-bulgu anidir.
     print(f"[bekci] KAPSAM kok={kok} · filtre=proje:{a.proje or '*'}/seans:{a.seans or '*'} · "
           f"esik={a.esik_dk:g} dk · aralik={a.aralik_sn:g} sn · sure={a.sure_dk:g} dk · "
@@ -454,13 +635,29 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[bekci] IMZALAR: dongu = >={DONGU_ESIK} ardisik max_tokens turu, arada "
           f"tool_use yok (#97647) · iptal = '{KESME_ONEKI}...' kaydi onceki kayittan "
           f"{IPTAL_ARALIK_SN[0]:g}-{IPTAL_ARALIK_SN[1]:g} sn sonra (#84346)", flush=True)
+    # Olay token'lari ("IZIN-BEKLIYOR"/"MUDAHALE-ZAMANI") bu satirda GECMEZ (grep korlugu).
+    print(f"[bekci] IZIN SINYALI: on plan Bash/PowerShell sonucu max(komut limiti + "
+          f"{IZIN_PAY_DK:g} dk, {a.izin_esik_dk:g} dk) icinde gelmediyse komut baslamamistir "
+          f"(on plan komut limitinden uzun kosamaz) · mudahale >= {a.mudahale_dk:g} dk · "
+          f"ask kaynagi: {ask[1] if ask[0] is not None else 'olculemedi ' + ask[1]}", flush=True)
     print("[bekci] BAKMADIGI: taban ONCESI dogmus arac cagrilari/imzalar (eski transkript "
           "kalintilari) · turunu bitirmis ama ENGELLENMIS ajan (bekleyen tool_use yok) · "
           "ana oturum (yalniz subagents/) · ajanin ICERIGI (yalniz ilerleme olculur) · "
           "TEK max_tokens turu · pencere DISI kesmeler (lider TaskStop/ESC) · harness'in "
-          "kaydetmedigi oldurmeler", flush=True)
+          "kaydetmedigi oldurmeler · on plan Bash/PowerShell DISI araclarin onay beklemesi "
+          "(onlar yalniz 12 dk kuralinda) · arka plan komutlari · ask eslesmesinde tirnak "
+          "ici ayiricilar (kaba bolme) · settings.local.json ve kullanici seviyesi ask "
+          "kurallari · TaskStop sonrasi reddin kaynagi (kullanici reddiyle ayni kayit) · "
+          "sira: yalniz ayni message.id'deki onceki kardes sayilir (kardes sonucu kayitta "
+          "yoksa gorulmez) · paralel (salt-okur) kardes: onceki kardes kosarken sonrakinin "
+          "sirada oldugu varsayilir; paralel kosan kardes onay bekliyorsa onceki bitene kadar "
+          "gorulmez · 180 sn otomatik arka plana alma (surume bagli): uzun timeout'lu "
+          "komutun onay beklemesi limit + 1 dk dolana kadar gorulmez · BASH_DEFAULT_TIMEOUT_MS / "
+          "BASH_MAX_TIMEOUT_MS ortam degiskenleri okunmaz (varsayilan limit sabit 2 dk)",
+          flush=True)
 
-    bekci = Bekci(esik_dk=a.esik_dk, taban=taban)
+    bekci = Bekci(esik_dk=a.esik_dk, taban=taban, izin_esik_dk=a.izin_esik_dk,
+                  mudahale_dk=a.mudahale_dk, ask=ask)
     bitis = time.monotonic() + a.sure_dk * 60.0
     while True:
         bekleyen, sebepler, imzalar = yokla(kok, a.proje, a.seans)
@@ -479,7 +676,8 @@ def main(argv: list[str] | None = None) -> int:
     # sonuc uretti (2026-09-17).
     print(f"[bekci] BITTI - {s['yoklama']} yoklama · asili={s['asili']} · "
           f"cozuldu={s['cozuldu']} · olculemedi={s['olculemedi']} · "
-          f"dongu={s['dongu']} · iptal={s['iptal']}", flush=True)
+          f"dongu={s['dongu']} · iptal={s['iptal']} · izin={s['izin']} · "
+          f"mudahale={s['mudahale']}", flush=True)
     return 0 if bekci.olculdu else 2
 
 

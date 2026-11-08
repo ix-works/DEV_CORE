@@ -185,6 +185,9 @@
   değildir; onaydan önce Issue'ya yalnız `durum:*` etiketi konur). Listede **durum etiketine bak**
   (`--json number,title,labels`): `durum:onay-bekliyor`/`durum:onaylandi` olan yeniden
   değerlendirilmez; etiketsiz olan yeni bildirimdir (§6c durum tablosu).
+  + **Onay bekleme gözlemi (2026-11-08):** `python core/scripts/izin_bekleme_taramasi.py --gun 1` —
+  bugün hangi ajan onay penceresinde bekledi / reddedildi. Gözlemdir, GATE DEĞİL; zaman aşımı görülürse
+  komut biçimi aşağıdaki ONAY PENCERESİ maddesine göre düzeltilir, izin listesi genişletilmez.
 - **⛔ KAPANIŞ DİSİPLİNİ — bir madde konuşmada değil, ARTEFAKTTA kapanır (2026-08-12):**
   1. **Kapanış anı = artefakt anı.** Madde konuşmada kapandığında **aynı turda** dosyada da
      kapanır; gün-sonuna bırakılmaz. *(Yeni kural değil — "İCRA ya da açık ertele"nin
@@ -263,6 +266,24 @@
   ölçüldü (865 transkript): bitmiş ajanların bir kısmı da `tool_result`/sessizlikle biter.
   Saat-bazlı DEĞİL (ajanın öz-zamanlayıcısı yok; kilometre-taşı başına ≈ birkaç dk). Geniş
   fan-out'ta KAPAT (mesaj seli). 📖 `governance/agent-teams-operating-model.md` §4B + §5-6.
+- **⛔ ONAY PENCERESİ AÇAN KOMUT YAZMA (lider + alt-ajan, 2026-11-08):** kullanıcı ekranda olmayabilir;
+  onay penceresi açan komut kullanıcı dönene kadar asılı kalır (ölçüm: 22.372 ön plan alt-ajan komutunda
+  15 onay beklemesi, en uzunu ~9 saat; 14'ü `permissions.ask` kuralına uyan komut — 13 `rm -rf`, 1 `pkill`); yerleşik silme denetimi ise izin listesiyle aşılamaz ve pencere açmadan
+  reddeder, adım kaybolur. Silmede yolu değişkenle ya da `bash -c` içinde verme · geçici çıktıyı silme, üzerine
+  yaz · dizin dışına `cd` yok, mutlak yol · kimlik dosyası okuma yok · denetimi dolanmak YASAK. Kanonik metin
+  her ajan tanımında (`claude/agents/*.md`) ve spawn-brief §7'de. Gözlem: `python core/scripts/izin_bekleme_taramasi.py --gun 1`.
+- **⛔ ONAY BEKLEYEN AJANA MÜDAHALE (lider, 2026-11-08):** alt ajan spawn edilince takılma bekçisi
+  (`agent_stall_watch.py`, `Monitor`) başlatılır. `IZIN-BEKLIYOR` olayı = ön plandaki Bash/PS çağrısı max(kendi
+  zaman aşımı + 1 dk, 3 dk) boyunca sonuçsuz kaldı ⇒ komut başlamamış, onay penceresinde (aynı mesajda
+  seri koşan önceki komut koşarken bekleyen çağrı sırada sayılır, olay üretmez; yaş önceki komutun
+  sonucundan başlar). Sıra: ① kullanıcıya
+  `PushNotification` (ajan + komut özü) ② `MUDAHALE-ZAMANI` (max(10 dk, izin eşiği), `--mudahale-dk`) gelince hâlâ
+  sonuç yoksa `TaskStop <ajan>` → bekleyen çağrı ret olarak düşer, komut KOŞMAZ → `SendMessage` ile ajanı
+  devam ettir: *"o komut iptal, tekrarlama; şu biçimi kullan"* (üzerine yaz · sabit tam yol · tek dizin) ③ adım
+  gerçekten kullanıcı onayı istiyorsa açık kalem yaz, diğer işe geç. ⛔ Lider kullanıcı yerine ONAYLAMAZ, izin
+  listesini genişletmez, denetimi dolanan biçim önermez. Ölçüm (kontrollü deney 2026-11-08): çalışma dizini
+  dışındaki `rm -r` 75 sn pencerede bekledi → `TaskStop` → ret sonucu, hedef yerinde (koşmadı) → devam ettirilen
+  ajan bağlamını korudu. ⚠ `TaskStop`'un yazdığı ret metni kullanıcı reddiyle AYNIDIR. 📖 operating-model §4D.
 - ⭐ **SPAWN İZNİ — VARSAYILAN AÇIK (bu core'u kullanan TÜM projeler; sahip kararı 2026-08-20).**
   Harness bazı modellerde sistem promptuna *"Do not call the AgentTool unless the user requested it"*
   enjekte eder (**ikilide sabit kodlu**, ayarla kapatılamaz — ölçüldü 2026-08-20, Claude Code 2.1.237).

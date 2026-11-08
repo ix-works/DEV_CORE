@@ -61,6 +61,34 @@ SENARYOLAR (S1-S16)
       COKMEZ (taban kiyasi + imza araligi TypeError'i), BITTI basar, ASILI? + IPTAL? yine
       uretilir (bug-gate #313: tek transkript tum bekciyi olduruyordu)
 
+  -- IZIN-BEKLIYOR / MUDAHALE-ZAMANI (2026-11-08) — on plan Bash/PowerShell --
+  S24 ⭐ 4 dk'lik on plan Bash (limit 2 dk + 1) -> IZIN-BEKLIYOR (ad + dk + komut ozu)
+  S24b 2 dk'lik on plan Bash -> SESSIZ (esigin altinda; komut hala kosuyor olabilir)
+  S25 run_in_background=true 20 dk -> IZIN-BEKLIYOR YOK · S25b ayni cagri icin ASILI? VAR
+  S26 timeout=600000 komut 4 dk'da -> SESSIZ (limit 10 + 1 dk) · S26b 12 dk'da -> VAR
+  S27 ⭐ dongu kipinde (cok yoklama) IZIN-BEKLIYOR ve MUDAHALE-ZAMANI cagri basina BIR KEZ
+  S28 13 dk -> MUDAHALE-ZAMANI (aksiyon TaskStop + SendMessage) · S28b 5 dk -> IZIN var,
+      MUDAHALE yok · S28c ayni 13 dk'lik cagri icin ASILI? yine basilir (eski kanal degismez)
+  S29a ask eslesmesi `rm -rf` · S29b bilesik komutun alt komutu `pkill` · S29c eslesme yok -> ask=yok
+  S30 ayar dosyasi yok -> ask=OLCULEMEDI(dosya-yok ..) · S30b bozuk JSON -> ask=OLCULEMEDI(okunamadi ..)
+  S31 Read araci 20 dk -> IZIN-BEKLIYOR YOK (yalniz Bash/PowerShell), ASILI? VAR
+  S32 ⭐ GERCEK BICIM (lider kontrollu deneyi 2026-11-08, genericize): ek alanli assistant
+      kaydi (wireToolInputs, requestId, ...) + once tamamlanmis cagri -> IZIN + ask=Bash(rm -r:*)
+  S32b PowerShell + PowerShell(...) ask kurali
+  S33 KAPSAM/IZIN SINYALI/BITTI satirlari IZIN-BEKLIYOR / MUDAHALE-ZAMANI token'ini TASIMAZ
+  S34 varsayilan tabanda (5 dk) 3 gun onceki kalinti SESSIZ, 4 dk'lik cagri VAR (cift yon)
+  -- KUYRUK (bug-gate PR #403 F1, 2026-11-08) — ayni message.id'de sirali on plan cagrilar --
+  S35 ⭐ GERCEK VAKA BICIMI: 1. Bash timeout=600000 hala kosuyor, 2. Bash (grep) SIRADA 4 dk
+      -> 2. cagri IZIN-BEKLIYOR ALMAZ (onceki kardes sonucsuz = kuyruk, pencere degil)
+  S35b 1. kardes 7,5 dk kostu, 30 sn once bitti; 2. cagri 8 dk'dir sonucsuz -> SESSIZ
+      (yas onceki kardesin SONUCUNDAN baslar: 0,5 dk)
+  S35c 1. kardes 4 dk once bitti, 2. cagri hala sonucsuz -> IZIN-BEKLIYOR VAR (4 dk; kuyruk
+      kurali gercek bekleyisi gizlemez — kontrol grubu; tek uzun cagri kontrolu = S24)
+  S35d farkli message.id'deki onceki sonucsuz cagri kuyruk SAYILMAZ -> IZIN VAR
+  S36 ⭐ KORUMA YONU (bug-gate-2 #403 F1a): ayni mesajda 1. Bash 5 dk sonucsuz (onay bekliyor),
+      2. Bash sirada -> 1. cagri IZIN-BEKLIYOR ALIR (kuyruk yalniz ONCEKI kardeslerden kurulur)
+  S36b ayni dosyada 2. cagri SESSIZ + dosyada en az bir olay var (bos-temiz korumasi)
+
 KOSUM:
     python tests/fixtures/agent_stall_watch/run.py
     ... --mutasyon             (esik kontrolu sokulur          -> 26/27: S2)
@@ -74,6 +102,9 @@ KOSUM:
     ... --mutasyon-iptal-pencere (~600 sn penceresi kalkar     -> S21)
     ... --mutasyon-imza-taban  (imzalarin taban filtresi sokulur -> S22)
     ... --mutasyon-tz          (tz'siz damga UTC'ye cevrilmez    -> S23/S23b)
+    ... --mutasyon-izin / -izin-limit / -izin-arkaplan / -izin-arac / -izin-tekil /
+        -mudahale / -ask / -ask-olculemedi / -izin-taban / -izin-kuyruk /
+        -izin-kuyruk-yas / -izin-kuyruk-mesaj / -izin-kuyruk-yon   (kume: BEKLENEN_DUSUS)
 ⛔ CORE-07: mutasyon kipinde dusen vektor kumesi BEKLENEN_DUSUS ile ESITLIKLE kiyaslanir
    (eksik de fazla da sapma) -> sapma exit 2 (DOGRULANAMADI).
   (Sayilar OLCULDU, tahmin degil — `python tests/run_battery.py agent_stall_watch`.)
@@ -109,7 +140,12 @@ ARAC = REPO / "scripts" / "agent_stall_watch.py"
 GECERLI_KIP = {"--mutasyon", "--mutasyon-eslestirme", "--mutasyon-taban",
                "--mutasyon-kapsam", "--mutasyon-dongu", "--mutasyon-dongu-seri",
                "--mutasyon-dongu-parca", "--mutasyon-iptal", "--mutasyon-iptal-pencere",
-               "--mutasyon-imza-taban", "--mutasyon-tz"}
+               "--mutasyon-imza-taban", "--mutasyon-tz", "--mutasyon-izin",
+               "--mutasyon-izin-limit", "--mutasyon-izin-arkaplan", "--mutasyon-izin-arac",
+               "--mutasyon-izin-kuyruk", "--mutasyon-izin-kuyruk-yas",
+               "--mutasyon-izin-kuyruk-mesaj", "--mutasyon-izin-kuyruk-yon",
+               "--mutasyon-izin-tekil", "--mutasyon-mudahale", "--mutasyon-ask",
+               "--mutasyon-ask-olculemedi", "--mutasyon-izin-taban"}
 
 # Fix'in SOKUMU (mutasyon capalari): (kip) -> (eski metin, yeni metin)
 CAPA = {
@@ -119,8 +155,12 @@ CAPA = {
     "--mutasyon-eslestirme": (
         "                    sonuclar.add(sonuc_kimlik)\n",
         "                    pass  # MUTASYON: tool_result eslestirmesi no-op\n"),
+    # 2026-11-08: ayni taban satiri izin dongusunde de var (--mutasyon-izin-taban) ->
+    # capa ASILI dongusunun onceki satiriyla tekillestirildi (ilk kosum: 2 eslesme, KURULAMADI).
     "--mutasyon-taban": (
+        "            if anahtar in self.bildirilen:\n                continue\n"
         '            if self.taban is not None and b["ts"] < self.taban:\n',
+        "            if anahtar in self.bildirilen:\n                continue\n"
         "            if False:  # MUTASYON: taban filtresi sokuldu\n"),
     "--mutasyon-kapsam": (
         '                olaylar.append(f"OLCULEMEDI {s}")\n',
@@ -146,6 +186,49 @@ CAPA = {
     "--mutasyon-tz": (
         "    return z if z.tzinfo is not None else z.replace(tzinfo=_dt.timezone.utc)\n",
         "    return z  # MUTASYON: tz'siz damga oldugu gibi\n"),
+    "--mutasyon-izin": (
+        '                olaylar.append(f"IZIN-BEKLIYOR {ad} {dk:.0f} dk | {ozet} "\n'
+        '                               f"-> kullaniciya bildir (operating-model §4D)")\n',
+        "                pass  # MUTASYON: izin olayi basilmiyor\n"),
+    "--mutasyon-izin-limit": (
+        "        return float(t) / 60000.0\n",
+        "        return VARSAYILAN_LIMIT_DK  # MUTASYON: input.timeout yok sayildi\n"),
+    "--mutasyon-izin-arkaplan": (
+        '    if isinstance(girdi, dict) and girdi.get("run_in_background"):\n        return None\n',
+        "    if False:  # MUTASYON: arka plan ayrimi sokuldu\n        return None\n"),
+    "--mutasyon-izin-arac": (
+        "    if arac not in IZIN_ARACLARI:\n        return None\n",
+        "    if False:  # MUTASYON: arac filtresi sokuldu\n        return None\n"),
+    "--mutasyon-izin-tekil": (
+        "                self.bildirilen_izin.add(anahtar)\n",
+        "                pass  # MUTASYON: tekillik sokuldu\n"),
+    "--mutasyon-mudahale": (
+        "            if dk >= max(self.mudahale_dk, esik) and anahtar not in self.bildirilen_mudahale:\n",
+        "            if anahtar not in self.bildirilen_mudahale:  # MUTASYON: esik sokuldu\n"),
+    "--mutasyon-ask": (
+        "    return uyan\n\n\ndef _imza_izle",
+        "    return []  # MUTASYON: eslesme yok\n\n\ndef _imza_izle"),
+    "--mutasyon-ask-olculemedi": (
+        '            return f"OLCULEMEDI({self.ask_sebep})"\n',
+        '            return "yok"  # MUTASYON: okunamayan ayar sessizce yok\n'),
+    "--mutasyon-izin-taban": (
+        '            if self.taban is not None and b["ts"] < self.taban:\n'
+        "                continue\n            esik = izin_esigi_dk(",
+        "            if False:  # MUTASYON: izin taban filtresi sokuldu\n"
+        "                continue\n            esik = izin_esigi_dk("),
+    "--mutasyon-izin-kuyruk": (
+        '            if b.get("kuyrukta"):\n                continue\n',
+        "            pass  # MUTASYON: sirada bekleyen kardes izin kanalina girer\n"),
+    "--mutasyon-izin-kuyruk-yas": (
+        '            bas = max(b["ts"], b.get("izin_ts") or b["ts"])\n',
+        '            bas = b["ts"]  # MUTASYON: yas tool_use damgasindan\n'),
+    "--mutasyon-izin-kuyruk-mesaj": (
+        '                    mid = m.get("id") if isinstance(m.get("id"), str) else None\n',
+        '                    mid = "TEK"  # MUTASYON: message.id yok sayilir (dosya tek mesaj)\n'),
+    # bug-gate-2 #403 F1a: kuyruk SONRAKI kardesleri de sayar (bug-gate mutantinin birebiri).
+    "--mutasyon-izin-kuyruk-yon": (
+        "    onceki = sira[:sira.index(kimlik)] if kimlik in sira else []\n",
+        "    onceki = [k for k in sira if k != kimlik]  # MUTASYON: sonraki kardesler de sayilir\n"),
 }
 # OLCULDU (2026-09-17, tahmin DEGIL — `python tests/run_battery.py agent_stall_watch`):
 # taban 27/27 · --mutasyon 26/27 · --mutasyon-eslestirme 24/27 ·
@@ -159,7 +242,7 @@ CAPA = {
 #   DONGU?/IPTAL? bekler) — esitlik kiyasi bu fazlayi ilk kosumda yakaladi.
 BEKLENEN_DUSUS = {
     "--mutasyon": ("S2",),
-    "--mutasyon-eslestirme": ("S3", "S5", "S11", "S18c"),
+    "--mutasyon-eslestirme": ("S3", "S5", "S11", "S18c", "S35c"),  # S35c: kardes sonucu eslesmezse kuyrukta
     "--mutasyon-taban": ("S4a",),
     "--mutasyon-kapsam": ("S6", "S6b", "S7", "S9", "S13", "S14"),
     "--mutasyon-dongu": ("S18", "S22b", "S23b"),
@@ -169,6 +252,25 @@ BEKLENEN_DUSUS = {
     "--mutasyon-iptal-pencere": ("S21", "S20b"),
     "--mutasyon-imza-taban": ("S22",),
     "--mutasyon-tz": ("S23", "S23b"),
+    # 2026-11-08 izin kanali — kume olcumden ONCE ilan edildi (gerekce: hangi vektor o
+    # degismezi ayni kosumda okuyor).
+    "--mutasyon-izin": ("S24", "S26b", "S27", "S28b", "S29a", "S29b", "S29c", "S30",
+                        "S30b", "S32", "S32b", "S34", "S35c", "S35d", "S36", "S36b"),
+    "--mutasyon-izin-limit": ("S26",),
+    "--mutasyon-izin-arkaplan": ("S25",),
+    "--mutasyon-izin-arac": ("S31",),
+    "--mutasyon-izin-tekil": ("S27",),
+    "--mutasyon-mudahale": ("S28b",),
+    "--mutasyon-ask": ("S29a", "S29b", "S32", "S32b"),
+    "--mutasyon-ask-olculemedi": ("S30", "S30b"),
+    "--mutasyon-izin-taban": ("S34",),
+    # 2026-11-08 kuyruk (bug-gate #403 F1) — kume olcumden ONCE ilan edildi.
+    "--mutasyon-izin-kuyruk": ("S35", "S36b"),
+    "--mutasyon-izin-kuyruk-yas": ("S35b",),
+    "--mutasyon-izin-kuyruk-mesaj": ("S35d",),
+    # bug-gate-2 #403 F1a (koruma yonu) — kume olcumden ONCE ilan edildi.
+    # S36b da duser: bos-temiz korumasi (`bool(iz36)`) — 1. cagri susunca dosyada hic olay kalmaz.
+    "--mutasyon-izin-kuyruk-yon": ("S36", "S36b"),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -280,6 +382,221 @@ def olculemedi_satirlari(cikti: str) -> list[str]:
 
 def cozuldu_satirlari(cikti: str) -> list[str]:
     return [s for s in cikti.splitlines() if "] COZULDU" in s]
+
+
+def izin_satirlari(cikti: str) -> list[str]:
+    return [s for s in cikti.splitlines() if "] IZIN-BEKLIYOR " in s]
+
+
+def mudahale_satirlari(cikti: str) -> list[str]:
+    return [s for s in cikti.splitlines() if "] MUDAHALE-ZAMANI " in s]
+
+
+def _kullanim_g(kimlik: str, arac: str, girdi: dict, ts: str, ek: dict | None = None) -> str:
+    """Girdili tool_use kaydi; `ek` gercek bicimdeki ust-duzey alanlari tasir."""
+    o: dict = {"type": "assistant", "timestamp": ts,
+               "message": {"role": "assistant",
+                           "content": [{"type": "tool_use", "id": kimlik, "name": arac,
+                                        "input": girdi}]}}
+    if ek:
+        o.update(ek)
+    return json.dumps(o, ensure_ascii=False)
+
+
+def _kullanim_m(kimlik: str, arac: str, girdi: dict, ts: str, mid: str) -> str:
+    """Gercek bicim: cok-cagrili mesajin her tool_use blogu AYRI kayitta, ayni message.id ile."""
+    return json.dumps({"type": "assistant", "timestamp": ts,
+                       "message": {"role": "assistant", "id": mid,
+                                   "content": [{"type": "tool_use", "id": kimlik, "name": arac,
+                                                "input": girdi}]}}, ensure_ascii=False)
+
+
+def kuyruk_senaryolari(arac: Path, simdi: _dt.datetime, taban_uzak: str, ayar: Path) -> None:
+    """S35-S35d: ayni message.id'de sirali on plan cagrilar (bug-gate #403 F1)."""
+    kok = _tmp() / "projects"
+    # S35: korpustaki vakanin BICIMI (genericize): 1. Bash timeout=600000, 2 sn sonra 2. Bash grep.
+    transkript(kok, "PROJE", "s9", "k01", [
+        _kullanim_m("k01a", "Bash", {"command": "make kuyruk-uzun", "timeout": 600000},
+                    iso_sn(240, simdi), "msg_k01"),
+        _kullanim_m("k01b", "Bash", {"command": "grep -n S35 /tmp/x/a.py"}, iso_sn(238, simdi),
+                    "msg_k01")], meta={"agentType": "kuyruk", "description": "sirada"})
+    transkript(kok, "PROJE", "s9", "k02", [
+        _kullanim_m("k02a", "Bash", {"command": "make S35b-uzun", "timeout": 600000},
+                    iso_sn(480, simdi), "msg_k02"),
+        _kullanim_m("k02b", "Bash", {"command": "grep -n S35b /tmp/x/a.py"}, iso_sn(479, simdi),
+                    "msg_k02"),
+        _sonuc("k02a", iso_sn(30, simdi), "bitti")],
+        meta={"agentType": "kuyruk-bitti", "description": "kardes yeni bitti"})
+    transkript(kok, "PROJE", "s9", "k03", [
+        _kullanim_m("k03a", "Bash", {"command": "ls S35c-ilk"}, iso_sn(300, simdi), "msg_k03"),
+        _kullanim_m("k03b", "Bash", {"command": "rm -rf /tmp/x/S35c"}, iso_sn(299, simdi),
+                    "msg_k03"),
+        _sonuc("k03a", iso_sn(240, simdi), "ok")],
+        meta={"agentType": "kuyruk-sonra", "description": "kardes bitti, bekliyor"})
+    transkript(kok, "PROJE", "s9", "k04", [
+        _kullanim_m("k04a", "Bash", {"command": "make S35d-uzun", "timeout": 600000},
+                    iso_sn(300, simdi), "msg_k04a"),
+        _kullanim_m("k04b", "Bash", {"command": "rm -rf /tmp/x/S35d"}, iso_sn(240, simdi),
+                    "msg_k04b")],
+        meta={"agentType": "kuyruk-yok", "description": "ayri mesaj"})
+    rc, out = kos(arac, ["--kok", str(kok), "--baslangic", taban_uzak, "--ayar", str(ayar)], simdi)
+    iz = izin_satirlari(out)
+    kayit("S35 sirada bekleyen kardes (onceki sonucsuz) IZIN-BEKLIYOR almaz",
+          rc == 0 and not any("grep -n S35 " in x for x in iz), f"rc={rc} izin={iz}")
+    kayit("S35b yas onceki kardesin SONUCUNDAN baslar (0,5 dk) -> SESSIZ",
+          rc == 0 and not any("S35b" in x for x in iz), f"izin={iz}")
+    kayit("S35c kardes 4 dk once bitti, cagri sonucsuz -> IZIN-BEKLIYOR",
+          any("| rm -rf /tmp/x/S35c " in x for x in iz), f"izin={iz}")
+    kayit("S35d farkli message.id kuyruk sayilmaz -> IZIN-BEKLIYOR",
+          any("rm -rf /tmp/x/S35d" in x for x in iz), f"izin={iz}")
+    # S36 (bug-gate-2 #403 F1a): KORUMA YONU — kuyruk yalniz ONCEKI kardeslerden kurulur.
+    # 1. cagri 5 dk sonucsuz (onay bekliyor), 2. cagri ONUN ARKASINDA sirada. Sonraki kardesi de
+    # sayan bir kural 1. cagriyi "sirada" sanip gercek onay beklemesini SUSTURUR (S35 bunu
+    # gormez: oradaki 1. kardes timeout=600000 ile esigin altinda kalir).
+    kok36 = _tmp() / "projects"
+    transkript(kok36, "PROJE", "s9", "k05", [
+        _kullanim_m("k05a", "Bash", {"command": "rm -rf /tmp/x/S36-ilk"}, iso_sn(300, simdi),
+                    "msg_k05"),
+        _kullanim_m("k05b", "Bash", {"command": "ls /tmp/x/S36-sirada"}, iso_sn(299, simdi),
+                    "msg_k05")],
+        meta={"agentType": "kuyruk-ilk", "description": "ilk cagri bekliyor"})
+    rc36, out36 = kos(arac, ["--kok", str(kok36), "--baslangic", taban_uzak, "--ayar", str(ayar)],
+                      simdi)
+    iz36 = izin_satirlari(out36)
+    kayit("S36 ayni mesajda 1. cagri 5 dk sonucsuz -> 1. cagri IZIN-BEKLIYOR alir",
+          rc36 == 0 and any(" 5 dk | rm -rf /tmp/x/S36-ilk |" in x for x in iz36),
+          f"rc={rc36} izin={iz36}")
+    kayit("S36b ayni mesajda 1. cagrinin arkasindaki 2. cagri SESSIZ (sirada)",
+          rc36 == 0 and bool(iz36) and not any("S36-sirada" in x for x in iz36),
+          f"rc={rc36} izin={iz36}")
+
+
+def izin_senaryolari(arac: Path, simdi: _dt.datetime, taban_uzak: str) -> None:
+    kok = _tmp() / "projects"
+    ayar = _tmp() / "settings.json"
+    ayar.write_text(json.dumps({"permissions": {"ask": [
+        "Bash(rm -rf:*)", "Bash(rm -r:*)", "Bash(pkill:*)", "PowerShell(Remove-Item:*)"]}}),
+        encoding="utf-8", newline="\n")
+    m = {"agentType": "backend-expert", "description": "izin rm"}
+    transkript(kok, "PROJE", "s1", "i01", [_kullanim_g("u01", "Bash",
+               {"command": "rm -rf /tmp/x/y", "description": "temizle"}, iso(4, simdi))], meta=m)
+    transkript(kok, "PROJE", "s1", "i02", [_kullanim_g("u02", "Bash", {"command": "ls"},
+               iso(2, simdi))], meta={"agentType": "bug-expert", "description": "genc"})
+    transkript(kok, "PROJE", "s1", "i03", [_kullanim_g("u03", "Bash",
+               {"command": "srv", "run_in_background": True}, iso(20, simdi))],
+               meta={"agentType": "adt-gateway", "description": "arka plan"})
+    transkript(kok, "PROJE", "s1", "i04", [_kullanim_g("u04", "Bash",
+               {"command": "make", "timeout": 600000}, iso(4, simdi))],
+               meta={"agentType": "frontend-expert", "description": "uzun limit"})
+    transkript(kok, "PROJE", "s1", "i05", [_kullanim_g("u05", "Bash",
+               {"command": "make all", "timeout": 600000}, iso(12, simdi))],
+               meta={"agentType": "sap-research", "description": "uzun limit asildi"})
+    transkript(kok, "PROJE", "s1", "i06", [_kullanim_g("u06", "Bash",
+               {"command": "cd /tmp/x && pkill -f srv"}, iso(13, simdi))],
+               meta={"agentType": "infra-expert", "description": "mudahale"})
+    transkript(kok, "PROJE", "s1", "i07", [_kullanim_g("u07", "Bash", {"command": "ls /tmp/x"},
+               iso(5, simdi))], meta={"agentType": "doc-expert", "description": "mudahale yok"})
+    transkript(kok, "PROJE", "s1", "i08", [_kullanim_g("u08", "Read", {"file_path": "/tmp/x"},
+               iso(20, simdi))], meta={"agentType": "sap-feature", "description": "read"})
+    # S32: lider kontrollu deneyinin kayit BICIMI (2026-11-08) — yol/kimlik genericize.
+    gercek_ek = {"isSidechain": True, "agentId": "a0000000000000000", "cwd": "/tmp/x",
+                 "userType": "external", "version": "0.0.0", "toolInputStreamMs": 221,
+                 "serverClassifierRequest": "00000000-0000-0000-0000-000000000000",
+                 "apiBlockIndex": 1, "requestId": "req_0000",
+                 "wireToolInputs": {"u09": {"command": "rm -r /tmp/x/alt",
+                                            "description": "Remove test directory tree"}}}
+    transkript(kok, "PROJE", "s1", "i09", [
+        _kullanim_g("u09a", "Bash", {"command": "echo KELIME > /tmp/x/a.txt"}, iso(6, simdi),
+                    gercek_ek),
+        _sonuc("u09a", iso(5.9, simdi), "(Bash completed with no output)"),
+        _kullanim_g("u09", "Bash", {"command": "rm -r /tmp/x/alt",
+                                    "description": "Remove test directory tree"},
+                    iso(4, simdi), gercek_ek)],
+        meta={"agentType": "general-purpose", "description": "izin deneyi"})
+    transkript(kok, "PROJE", "s1", "i10", [_kullanim_g("u10", "PowerShell",
+               {"command": "Remove-Item -Recurse C:/tmp/x"}, iso(4, simdi))],
+               meta={"agentType": "ps-expert", "description": "powershell"})
+    transkript(kok, "PROJE", "s1", "i11", [_kullanim_g("u11", "Bash", {"command": "rm -rf /tmp/z"},
+               iso(3 * 24 * 60, simdi))], meta={"agentType": "kalinti", "description": "eski"})
+
+    rc, out = kos(arac, ["--kok", str(kok), "--baslangic", taban_uzak, "--ayar", str(ayar)], simdi)
+    iz, mu, asl = izin_satirlari(out), mudahale_satirlari(out), asili_satirlari(out)
+
+    def bir(lst: list[str], ad: str) -> list[str]:
+        return [x for x in lst if f" {ad}/" in x]
+
+    kayit("S24 4 dk'lik on plan Bash -> IZIN-BEKLIYOR (ad + dk + komut ozu)",
+          any(" 4 dk | rm -rf /tmp/x/y |" in x for x in bir(iz, "backend-expert")), f"izin={iz}")
+    kayit("S24b 2 dk'lik on plan Bash SESSIZ", not bir(iz, "bug-expert"), f"izin={iz}")
+    kayit("S25 arka plan komutu IZIN-BEKLIYOR uretmez", not bir(iz, "adt-gateway"), f"izin={iz}")
+    kayit("S25b ayni arka plan cagrisi icin ASILI? yine basilir", bool(bir(asl, "adt-gateway")),
+          f"asili={asl}")
+    kayit("S26 timeout=600000 komut 4 dk'da SESSIZ", not bir(iz, "frontend-expert"), f"izin={iz}")
+    kayit("S26b timeout=600000 komut 12 dk'da IZIN-BEKLIYOR", bool(bir(iz, "sap-research")),
+          f"izin={iz}")
+    kayit("S28 13 dk -> MUDAHALE-ZAMANI + aksiyon",
+          any("TaskStop + SendMessage" in x for x in bir(mu, "infra-expert")), f"mudahale={mu}")
+    kayit("S28b 5 dk -> IZIN var, MUDAHALE yok",
+          bool(bir(iz, "doc-expert")) and not bir(mu, "doc-expert"), f"izin={iz} mudahale={mu}")
+    kayit("S28c ayni 13 dk'lik cagri icin ASILI? yine basilir", bool(bir(asl, "infra-expert")),
+          f"asili={asl}")
+    kayit("S29a ask eslesmesi rm -rf",
+          any("ask=Bash(rm -rf:*)" in x for x in bir(iz, "backend-expert")), f"izin={iz}")
+    kayit("S29b bilesik komutta alt komut pkill eslesir",
+          any("ask=Bash(pkill:*)" in x for x in bir(iz, "infra-expert")), f"izin={iz}")
+    kayit("S29c eslesme yok -> ask=yok", any("| ask=yok -> kullaniciya bildir" in x for x in bir(iz, "doc-expert")),
+          f"izin={iz}")
+    kayit("S31 Read 20 dk -> IZIN yok, ASILI var",
+          not bir(iz, "sap-feature") and bool(bir(asl, "sap-feature")), f"izin={iz}")
+    kayit("S32 gercek bicim: ek alanli kayit -> IZIN + ask=Bash(rm -r:*)",
+          any("rm -r /tmp/x/alt" in x and "ask=Bash(rm -r:*)" in x
+              for x in bir(iz, "general-purpose")), f"izin={iz}")
+    kuyruk_senaryolari(arac, simdi, taban_uzak, ayar)
+    kayit("S32b PowerShell + PowerShell(...) ask kurali",
+          any("ask=PowerShell(Remove-Item:*)" in x for x in bir(iz, "ps-expert")), f"izin={iz}")
+    ozet = [x for x in out.splitlines() if x.startswith("[bekci] ")]
+    kayit("S33 kapsam/ozet satirlari olay token'ini tasimaz + sayac basilir",
+          not any("IZIN-BEKLIYOR" in x or "MUDAHALE-ZAMANI" in x for x in ozet)
+          and any("[bekci] IZIN SINYALI" in x for x in ozet)
+          and any("izin=" in x and "mudahale=" in x for x in ozet if "BITTI" in x), str(ozet)[:300])
+    rc34, out34 = kos(arac, ["--kok", str(kok), "--ayar", str(ayar)], simdi)   # varsayilan taban
+    iz34 = izin_satirlari(out34)
+    kayit("S34 varsayilan tabanda kalinti SESSIZ, 4 dk'lik cagri VAR",
+          not bir(iz34, "kalinti") and bool(bir(iz34, "backend-expert")), f"izin={iz34}")
+    _, out30 = kos(arac, ["--kok", str(kok), "--baslangic", taban_uzak,
+                          "--ayar", str(_tmp() / "yok.json")], simdi)
+    kayit("S30 ayar dosyasi yok -> ask=OLCULEMEDI(dosya-yok",
+          any("ask=OLCULEMEDI(dosya-yok" in x for x in izin_satirlari(out30)),
+          str(izin_satirlari(out30))[:200])
+    bozuk = _tmp() / "bozuk.json"
+    bozuk.write_text("{bozuk", encoding="utf-8")
+    _, out30b = kos(arac, ["--kok", str(kok), "--baslangic", taban_uzak, "--ayar", str(bozuk)], simdi)
+    kayit("S30b bozuk ayar -> ask=OLCULEMEDI(okunamadi",
+          any("ask=OLCULEMEDI(okunamadi" in x for x in izin_satirlari(out30b)),
+          str(izin_satirlari(out30b))[:200])
+
+    # S27: dongu kipi — cok yoklamada olay cagri basina BIR KEZ.
+    env = dict(os.environ)
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
+    pr = subprocess.Popen(
+        [sys.executable, str(arac), "--kok", str(kok), "--baslangic", taban_uzak,
+         "--simdi", simdi.isoformat(), "--aralik-sn", "0.3", "--sure-dk", "0.04",
+         "--ayar", str(ayar)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        encoding="utf-8", errors="replace", env=env)
+    try:
+        out27 = pr.communicate(timeout=60)[0] or ""
+    except subprocess.TimeoutExpired:
+        pr.kill()
+        out27 = pr.communicate()[0] or ""
+    yoklama = out27.split("BITTI - ", 1)[-1].split(" yoklama", 1)[0].strip()
+    kayit("S27 dongu kipinde IZIN ve MUDAHALE cagri basina BIR KEZ",
+          yoklama.isdigit() and int(yoklama) >= 2
+          and len(bir(izin_satirlari(out27), "backend-expert")) == 1
+          and len(bir(mudahale_satirlari(out27), "infra-expert")) == 1,
+          f"yoklama={yoklama} izin={bir(izin_satirlari(out27), 'backend-expert')} "
+          f"mudahale={bir(mudahale_satirlari(out27), 'infra-expert')}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -562,6 +879,8 @@ def senaryolar(arac: Path) -> None:
     kayit("S14 kimliksiz tool_use -> OLCULEMEDI (sessiz KACIS gorunur olur)",
           any("kimliksiz-tool_use" in s for s in olculemedi_satirlari(out14)),
           f"satirlar={olculemedi_satirlari(out14)}")
+
+    izin_senaryolari(arac, simdi, taban_uzak)
 
     # ── S16: CANLI KORPUS SONDASI (ortam-bagimli, salt-okur) ───────────────
     ev = os.environ.get("CLAUDE_CONFIG_DIR")

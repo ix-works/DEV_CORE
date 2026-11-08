@@ -47,6 +47,7 @@ Sabit 4 eksen (her brife: kanıt-kuralları bloğu + `path=core/` talimatı + "s
 | Validator zinciri | `time run_all --quick` + validator-başına ayrı-süreç dökümü + `run_review --task class_push` |
 | Negatif-test örneklemi | ≥4 gate'e bozuk/temiz fixture (scratchpad'de; repo kirletme) — "koştu ≠ baktı" kontrolü |
 | **Ajan duvar-saati** | `python core/scripts/agent_time_report.py` (+ gerekirse gün-filtreli) — süre-ayrışması/batch/tekrar-okuma/model-dağılımı |
+| **İzin / onay olayları** | `python core/scripts/izin_bekleme_taramasi.py --gun 30` (salt-okur; gün sonu için `--gun 1`) — onay penceresine takılan / geç onaylanan / reddedilen / sınıflandırıcıya düşen çağrılar, ajan başına; `bekleme_sn` gerçek bekleme süresidir. ⚠ Kullanıcı reddi ile liderin TaskStop'u kayıtta AYIRT EDİLEMEZ (aracın KAPSAM satırı) |
 | Yüklenme gerçeği | `.tmp/instructions-loaded.log` analizi + inspector koşumu + **deneme-spawn echo testi** (kural alt-ajanda VAR mı) |
 | Guard FP'si | tur sırasında yaşanan her yanlış-blok KAYDEDİLİR (kendisi bulgudur) |
 

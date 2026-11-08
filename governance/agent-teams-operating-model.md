@@ -204,6 +204,32 @@ lider `scratchpad`'inde `agent_time_analysis.py` (transkript doluysa per-tool d�
 
 **(4) HERHANGİ bir alt-ajanın "YAPILAMAZ"/olumsuz raporunu KANITSIZ KABUL ETME — SORGULA (lider; BAĞLAYICI).** **Her** alt-ajan (`adt-gateway`/`bug-expert`/`backend-expert`/`frontend-expert`/`sap-research`/`general` — gateway yalnız en sık örnek) "yapılamaz / desteklenmiyor / blocker / yok / bulunamadı" derse, bunu doğru kabul edip **ona göre işlem yapma veya durma**. Önce sorgula: bu **gerçekten imkânsız mı**, yoksa **"bu ajanın elindeki araçlarla/kapsamla yapamadı/bulamadı"** mı? Ajanın tool-görünümü repo'nun gerçek kabiliyetinden DARDIR. Protokol: (a) iddiayı **repo'da ara** — aynı işi yapan mevcut `scripts/*.py` / playbook reçetesi / alternatif yol var mı (`grep`/Glob); (b) varsa ajanı o yolla **yeniden yönlendir/taze-spawn et**; (c) yoksa iddiayı **kendin canlı doğrula**, sonra kullanıcıya ilet. **Ders (2026-06-22):** gateway "SRVB description typed-tool ile değişmez" dedi → lider kabul etti; oysa `scripts/sap_set_object_description.py` tam bu senaryo için (voyage "Sefer..." düzeltme) yazılmıştı. Bu, ajan-tarafı [[feedback_dogrula-once-flag-spekulatif-blocker-yasak]]'ın **lider-tarafı tamamlayıcısı**; kök ilke = TAHMİN YASAK = kanıtlı hareket et. Bkz. [[feedback_ajan-olumsuz-donusu-kanitla-sorgula]].
 
+### 4D. Onay bekleyen ajana müdahale (2026-11-08, kullanıcı talebi)
+Kullanıcı ekranda değilken alt ajan bir onay penceresinde saatlerce bekleyebilir (ölçüm: 22.372 ön plan
+alt-ajan komutunda 16 aday boşluk: 15'i onay beklemesi — 14'ünü kullanıcı onayladı, 1'inin kaydında karar
+alanı yok —, 1'i aynı mesajdaki önceki komutun arkasında sıra beklemesi, karar sınıflandırıcıdan; en uzunu
+~9 saat). Lider bunu
+transkriptten görür ve belirli bir süre sonra müdahale eder.
+- **SİNYAL (tahmin değil):** ön plandaki Bash/PowerShell komutu kendi zaman aşımından uzun koşamaz. Sonucu
+  max(*zaman aşımı + 1 dk*, `--izin-esik-dk` [3]) içinde gelmemişse komut başlamamıştır ⇒ onay
+  penceresindedir. `agent_stall_watch.py` bunu `IZIN-BEKLIYOR` olarak basar. Aynı mesajdaki önceki komut hâlâ
+  koşuyorsa çağrı sırada bekliyordur ve sayılmaz (seri koşan kardeşler için doğru; paralel koşan salt-okur
+  kardeşte onay beklemesi önceki bitene kadar görülmez); önceki komut bittiyse yaş onun sonucundan başlar. Diğer araçlar için genel `ASILI`
+  sinyali (12 dk) geçerlidir.
+- **MÜDAHALE SIRASI:** ① `IZIN-BEKLIYOR` → kullanıcıya `PushNotification` (ajan + komut özü); dönerse kendisi
+  onaylar. ② `MUDAHALE-ZAMANI` (max(`--mudahale-dk` [10 dk], izin eşiği)) → hâlâ sonuç yoksa `TaskStop <ajan>` →
+  `SendMessage` ile devam ettir: komut iptal, tekrarlanmayacak, güvenli biçim şu. ③ Adım gerçekten kullanıcı
+  onayı istiyorsa açık kalem yazılır, diğer iş sürer.
+- **ÖLÇÜLDÜ (kontrollü deney 2026-11-08):** `TaskStop` bekleyen çağrıya ret sonucu yazar ve komut koşmaz
+  (hedef dizin yerinde kaldı); `SendMessage` ile devam ettirilen ajan bağlamını korudu (adım 1'de yazdığı
+  kelimeyi dosyayı okumadan söyledi) ve verilen biçimle devam etti. Kontrol grubu: aynı `rm -r` scratchpad
+  içindeki sabit yolda pencere açmadan koştu.
+- ⚠ **SINIR:** `TaskStop`'un yazdığı ret metni kullanıcı reddiyle aynıdır — `izin_bekleme_taramasi.py`
+  ikisini metinden ayırt edemez. Ret mesajı ajana *"kullanıcıyı bekle"* der; liderin `SendMessage`'ı bu
+  yüzden komutun iptal edildiğini ve nasıl devam edileceğini AÇIKÇA söyler.
+- ⛔ Lider kullanıcı yerine onaylamaz, izin listesini genişletmez, denetimi dolanan biçim önermez. Onay
+  penceresini otomatik yanıtlayan hook bu turda KURULMADI (ADR 0019: önce bu doküman + bekçi denenir).
+
 ### UI BUILD DONE-CRITERIA + LİDER DOĞRULAMA (ADR 0017 — Booking post-mortem)
 
 > Booking UI'da çok fazla amatör patinaj oldu çünkü (a) çalışan kardeş deseni yerine sıfırdan yazıldı, (b) ajan "done/verified" dedi ama runtime hata ancak kullanıcı test edince çıktı, (c) lider doğrulamadan kabul etti. Bunlar **bağlayıcı**:
@@ -230,7 +256,9 @@ Gateway arka planda opaktır; takılırsa görünmez. Beş katman:
    - **Sinyal = İLERLEME, canlılık değil:** alt-ajan transkriptinde (`<config>/projects/<slug>/<seans>/subagents/agent-*.jsonl` — **çalışırken canlı yazılır**) *sonucu gelmemiş `tool_use` + yaşı*. ⚠ Madde 3'teki `tasks/<id>.output` **AYRI bir yüzeydir** ve güvenilir kalıcılaşmaz (§4C ölçümü) — bu araç onu kullanmaz.
    - ⛔ **Çıplak sessizlik süresi sinyal DEĞİLDİR** (ölçüldü, 865 transkript: %95,7 `text` ile biter, %2,2 eşleşmemiş `tool_use`, %2,3 `tool_result`) — sessizlik "bitti" ile "asıldı"yı ayırt edemez.
    - **Eşik 12 dk** (Bash p99 ≈ 2 dk · SAP araçları max 2,1 dk · Bash timeout tavanı 10 dk). **Taban filtresi:** yalnız bekçinin penceresinde doğmuş çağrılar — korpustaki ~19 kalıcı kalıntı (öldürülmüş ajan) aksi hâlde her yoklamada yeniden ateşler = uyarı körlüğü.
-   - **Çıktı yalnız OLAY:** `ASILI? <ajan> <araç> N dk → SendMessage probe, cevap yoksa TaskStop` · `ÇÖZÜLDÜ …` · `DONGU? …` · `IPTAL? …` · `ÖLÇÜLEMEDİ <sebep>`. Aksiyon satırın içinde yazılıdır; **aksiyon sahibi lider**dir. Kök yok / 0 transkript ⇒ sessiz "temiz" YOK: `ÖLÇÜLEMEDİ` + exit 2 (core §7 KAPSAM BEYANI).
+   - **Çıktı yalnız OLAY:** `ASILI? <ajan> <araç> N dk → SendMessage probe, cevap yoksa TaskStop` · `ÇÖZÜLDÜ …` · `DONGU? …` · `IPTAL? …` · `ÖLÇÜLEMEDİ <sebep>` · ve izin kanalı (2026-11-08, §4D):
+     · `IZIN-BEKLIYOR <ajan> N dk | <komut özü> | ask=<kural|yok|OLCULEMEDI(..)> -> kullaniciya bildir` — ön plan Bash/PowerShell, sonucu max(komut limiti + 1 dk, `--izin-esik-dk` [3]) içinde gelmemiş (komut kendi limitinden uzun koşamaz ⇒ başlamamıştır). **Sıra istisnası:** aynı assistant mesajındaki (`message.id`) önceki kardeş komut hâlâ sonuçsuzsa çağrı sırada bekliyordur, olay üretmez; önceki kardeşler bittiyse yaş en geç kardeş sonucundan başlar (bekçi kardeşlerin seri koştuğunu varsayar; paralel koşan salt-okur kardeşte onay beklemesi önceki bitene kadar görülmez). `ask=` projenin `permissions.ask` kuralı (`--ayar`, varsayılan `<proje>/.claude/settings.json`).
+     · `MUDAHALE-ZAMANI <ajan> N dk | … -> TaskStop + SendMessage` — yaş (aynı sıra kuralıyla) ≥ max(`--mudahale-dk` [10], izin eşiği); uzun `timeout`'lu komutta izin eşiği 10 dk'yı aşar ve müdahale onunla birlikte gelir. İkisi de çağrı başına bir kez; arka plan komutu ve diğer araçlar bu kanala girmez (onlarda `ASILI?` 12 dk geçerli). Aksiyon satırın içinde yazılıdır; **aksiyon sahibi lider**dir. Kök yok / 0 transkript ⇒ sessiz "temiz" YOK: `ÖLÇÜLEMEDİ` + exit 2 (core §7 KAPSAM BEYANI).
    - **İki takılma İMZASI (2026-10-03) — bekleyen `tool_use` OLMAYAN takılmalar** (`ASILI?` bunları yapısal olarak göremez):
      · `DONGU? <ajan> N ardışık max_tokens turu` — ≥2 ardışık assistant turu `stop_reason: max_tokens`, aralarında hiç `tool_use` yok (Claude Code issue **#97647**: ajan 4 tur × 64k düşünme tokeni yaktı, 38 dk dosya/metin yok; akış canlı olduğu için harness watchdog'u da susmuştu). Aksiyon: `SendMessage` probe, cevap yoksa `TaskStop`.
      · `IPTAL? <ajan> N sn sonra 'interrupted' kaydı` — `[Request interrupted by user…]` kaydı önceki kayıttan **595–620 sn** sonra (issue **#84346**: harness'in ~600 sn watchdog'u kesmeyi kullanıcı kesmesi gibi yazar). Ajan **ölmüştür**, rapor gelmez → `SendMessage` ile sürdür ya da yeniden spawn.
@@ -314,6 +342,7 @@ pilot geri alınır.
 5. Gateway'i izle (§5): küçük batch, obje-başı rapor, sessizse output-dosyası oku.
 6. İş bitince üyeleri kapat (boşta token yakma).
 7. bug-expert verdict'ini kabul etmeden önce §2A BUG GATE'teki kapsama denetimini uygula: raporu dosyaya kaydet → `checklist_check.py --repo <proje kökü> --diff <aralık> --verify-report <rapor.md>` → exit 0 / 1 / 2 dalları orada.
+8. Alt ajan spawn ettiysen takılma bekçisini başlat (`agent_stall_watch.py`, `Monitor`, süre dolunca yeniden kur); `IZIN-BEKLIYOR` / `MUDAHALE-ZAMANI` olaylarında §4D sırası.
 
 ## 11. Kaynaklar
 - Anthropic — Building Effective Agents; How we built our multi-agent research system; Multi-Agent Coordination Patterns
