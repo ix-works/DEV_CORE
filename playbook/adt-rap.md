@@ -87,6 +87,54 @@ Script: `scripts/populate_cds_views.py` (batch) — **RAP-aware** (`validate_sql
 - Child'da `association to parent ZSD001_I_ORDER as _Voyage on ...`
 - Projection: `define view entity ZSD001_C_ORDER as projection on ZSD001_I_ORDER`
 
+### 32.1d CDS Custom Entity + sorgu sınıfı — ✅ ÖLÇÜLDÜ 2026-11-08 (DEV_CORE #410)
+
+Custom entity (`define [root] custom entity <ad> [with parameters …] { … }`) de DDLS'tir; select/projection
+yoktur, veri `@ObjectModel.query.implementedBy: 'ABAP:<SINIF>'` sınıfından (`IF_RAP_QUERY_PROVIDER`) gelir.
+Kaynak kapısı (`_validate_cds_source`) ve `populate_cds_views` bu biçimi #410'dan beri kabul eder.
+**Ölçüm ortamı:** bir geliştirme sistemi (S/4HANA 2025), yerel paket; üç biçim (implementedBy'sız ·
+`root` + implementedBy · `with parameters` + implementedBy) ve iki yaratma sırası. Ayrıntılı kayıt:
+`governance/infra-test-recipes.md` B103.
+
+```powershell
+# 1) entity: shell + PUT (aktive ETMEZ)
+python scripts/populate_cds_views.py --package <PAKET> --transport <TRANSPORT> `
+  --source-dir <cds-dizini> --only ZSD001_I_<AD>
+# 2) entity aktivasyonu (ayrı adım)
+python scripts/activate_object.py --name ZSD001_I_<AD> --type ddls
+# 3) sorgu sınıfı: kabuk + kaynak (push_object sözdizimi kontrolü + aktivasyon yapar)
+python scripts/create_object.py --name ZCL_SD001_<AD>_Q --type class --package <PAKET> `
+  --description '<açıklama>' --transport <TRANSPORT>
+python scripts/push_object.py --name ZCL_SD001_<AD>_Q --type class --transport <TRANSPORT> `
+  --source-file <sinif>.clas.abap
+# 4) sınıf entity'den SONRA geldiyse entity'yi yeniden aktive et (implementedBy uyarısı kalkar)
+python scripts/activate_object.py --name ZSD001_I_<AD> --type ddls
+```
+
+**Ölçülenler:**
+- **Sıra önerisi = entity-önce** (yukarıdaki 1→4). Sınıf ilk push'ta aktive oldu; atomik toplu
+  aktivasyon (`also`) gerekmedi.
+- **implementedBy sınıfı yokken entity AKTİVE OLUR**, SAP yalnız **uyarı** verir:
+  `Class '<SINIF>' for 'ObjectModel.query.implementedBy' not found`. Sınıf yaratılıp entity yeniden
+  aktive edilince uyarı kalkar. implementedBy'sız entity uyarısız aktive olur.
+- **Sınıf-önce yapılırsa:** `push_object` sözdizimi kontrolünde `Type "<ENTITY>" is unknown` ile
+  FAIL verir ve `was NOT pushed to SAP` yazar, **ama kaynak SAP'ye İNAKTİF sürüm olarak yüklenmiştir**
+  (readback: inaktif kaynak = yerel dosya, aktif = `create_object` kabuğu). Push'u TEKRARLAMA. Entity'yi
+  yaratıp aktive et, sonra yalnız sınıfı aktive et (`activate_object.py --type class`); yine `also` gerekmedi.
+  ⚠ `push_object`'in "NOT pushed" mesajı bu durumda yanıltıcıdır (araç düzeltmesi bu kaydın kapsamı dışında).
+- `ddl:source_type` üç biçimde de `custom entity` döner (`root` ve `with parameters` ayrı değer üretmez).
+- ⛔ **Aktiflik kanıtı yalnız `adtcore:version="active"`** (metadata GET). Aktivasyondan ÖNCE de
+  `source/main?version=active` GET 200 + inaktif kaynağın içeriğini döndürdü ⇒ "active GET 200" aktiflik
+  kanıtı DEĞİLDİR. Bağımsız ikinci teyit: `list_inactive_objects.py` listesinde olmamak.
+- Sınıf readback'inde ham md5 yereldekinden farklı çıktı; fark yalnız satır sonudur (CRLF→LF + sondaki
+  satır sonu atılınca eşit).
+- ⚠ Yerel pakette `push_object`'in `[OK] R3TR entry registered` satırına rağmen E071 kaydı OLUŞMADI
+  (ölçüldü: 0 satır). Transport'lu pakette bu satırın etkisi bu turda ölçülmedi.
+
+**ÖLÇÜLMEDİ:** sorgu sınıfının çalışma zamanı (servis bağlama, sayfalama, OData okuma) · transport'lu
+pakette yaratma · `abstract entity` + `with parameters` (kaynak kapısı hâlâ reddeder, ayrı karar) ·
+`transient view entity`.
+
 ### 32.2 Behavior Definition — ✅ WRAPPER FIXED 2026-06-14
 
 Script: `scripts/create_behavior_definition.py` → `sap_client.create_behavior_definition(name, root_entity, implementation_type=Managed, transport, source, activate)`.

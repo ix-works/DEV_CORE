@@ -48,7 +48,10 @@ def _body(text):
     Body '{' aramaya define ifadesinden SONRA başlanır — yoksa define'dan önceki header
     annotation'larındaki '{' (ör. @ObjectModel.usageType: {...}) yanlışlıkla body sanılır.
     """
-    m = re.search(r"define\s+(?:root\s+)?(?:view\s+entity|abstract\s+entity)\s+(\w+)", text)
+    # #410 (2026-11-08): custom entity de tanınır (eskiden ad '?' + gövde aramasi 0'dan
+    # başlıyordu ⇒ başlık annotation'ındaki `{` gövde sanılabilirdi).
+    m = re.search(r"define\s+(?:root\s+)?(?:view\s+entity|abstract\s+entity|custom\s+entity)\s+(\w+)",
+                  text)
     name = m.group(1) if m else "?"
     search_from = m.end() if m else 0
     pm = re.search(r"as\s+projection\s+on\s+(\w+)", text[search_from:])

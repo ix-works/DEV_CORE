@@ -122,7 +122,11 @@ def _derive_prefixes(package=None):
 # Başlık deseni TEK yerde: tespit (RAP_VIEW_ENTITY_RE) ile ad yakalama aynı kaynaktan
 # türer, biri diğerinden sapamaz. Kardeş: sap_adt_lib._validate_cds_source (Q277).
 # `transient view entity` bu desende YOK (Q277 kapısı tanır) — bilinçli, ayrı kalem.
-RAP_BASLIK_DESENI   = r"\bdefine\s+(?:root\s+)?(?:view|abstract)\s+entity"
+# ⭐ #410 (2026-11-08, ⚠GEVŞETME, kullanıcı onaylı): `define [root] custom entity` de RAP
+# teknik CDS'tir (veri sorgu sınıfından gelir; sqlViewName taşımaz, legacy→TD dönüşümü
+# değil) ⇒ TD-spec + klasik sqlViewName dalı UYGULANMAZ; RAP dalının ad kalıbı +
+# sqlViewName YASAĞI + yasak literal taraması custom entity'de de işler.
+RAP_BASLIK_DESENI   = r"\bdefine\s+(?:root\s+)?(?:view|abstract|custom)\s+entity"
 RAP_VIEW_ENTITY_RE  = re.compile(RAP_BASLIK_DESENI + r"\b", re.IGNORECASE)
 # Modül-bağımsız RAP view entity adı (01-naming: Z<MOD><nnn>_<I|C|R|E>_*;
 # MOD = SD/MM/FI/CO/PP/QM/PM/EWM... 2-4 harf). Paket-doğru olma kontrolü
@@ -217,7 +221,8 @@ def validate_sql_view_names(cds_files, package=None):
             if not vem:
                 errors.append(
                     f"{f.name}: 'define [root] view entity <name>' / "
-                    f"'define [root] abstract entity <name>' bulunamadı"
+                    f"'define [root] abstract entity <name>' / "
+                    f"'define [root] custom entity <name>' bulunamadı"
                 )
             elif not RAP_VE_NAME_PATTERN.match(vem.group(1).upper()):
                 errors.append(

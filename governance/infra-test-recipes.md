@@ -3759,3 +3759,36 @@ python tests/run_battery.py validator_ad_deseni --kardes validator_ad_grameri q3
 - **KAPSAM DIŞI:** TRNSPACE çapraz kontrolü · paket–namespace uyumu · `sap-client=100` sabit kodlaması (table_field_drop · struct_consistency · struct_field_dtel_active · standard_table_fields — ayrı sınıf, raporlandı) · dosya adı YAZMA yönü `/`→`#` (Parti 2b).
 - ⛔ **Mutant ağacı `playbook/checklists`'i de taşır:** checklist_check madde haritasını `CORE/playbook/checklists/checklist-map.yaml`'dan okur; yalnız `scripts` kopyalanınca BE-01 satırı basılmaz ve N7 ailesi (6 vektör) HER kipte FAZLA düşer (ölçüldü: ilk batarya 19/19 SAPMA, kopya eklenince 19/19 DÜŞTÜ).
 - ⛔ **Kardeş pinleri:** `b0_secim` P1b (`check_bdef_backtick` → 5 birim: +`validator_ad_deseni` +`validator_ad_grameri`) · P2 10 → 11 (`scripts/validators/*.py` satırı her validator'a `validator_ad_grameri` ekler). `b0_secim` worktree cwd'sinden koşulur (ana proje cwd'sinden 12/21 sahte FAIL).
+
+## B103 — CDS custom entity kaynak kapısı + başlık deseni kardeşleri (DEV_CORE Issue #410, 2026-11-08)
+
+```
+python tests/fixtures/cds_kaynak_kapisi/run.py              # 51/51 (offline; SAP'ye istek yok)
+python tests/fixtures/cds_paket_kapsami/run.py              # 33 senaryo + 15 mutasyon (kendi içinde)
+python tests/fixtures/cds_entity_baslik_kardesleri/run.py   # 9/9
+python tests/run_battery.py cds_kaynak_kapisi --kardes cds_paket_kapsami cds_entity_baslik_kardesleri push_atlandi_ve_kaynak_izi sap_gate_skip_sozlesmesi worktype_alt_tur b0_secim --kardes-tam --precommit
+```
+
+- **Değişmez:** `define [root] custom entity <ad> [with parameters …]` ardından `{ … }` eleman listesi gelirse GEÇER. Gövdesiz ya da select/projection/returns ile karışık custom entity RED. `abstract entity` + `with parameters` RED kalır (bu kayıt o dalı açmadı).
+- **Vektörler (`cds_kaynak_kapisi`):** C1-C5 kabul (implementedBy annotation'lı · root · `with parameters` (annotation'da `{ }` `[ ]`) · root + parametre + CRLF/BOM/TAB · ad `{` ile bitişik + büyük harf) · R1-R7 red (select karışık · liste yok · parametre + select · parametre + liste yok · abstract + parametre · yorumdaki başlık kurtarmaz · `returns` karışık) · F1 FP çapası · E5 `create_cds_view` root custom → POST 1, gövdede `root custom entity` · E6 gövdesiz → POST 0. Eski T3 (custom entity RED) kabul vektörüne çevrildi.
+- **Mutasyon kipi → düşmesi İLAN edilen küme** (koşumdan, 2026-11-08): `--mutasyon` A1-A6 S1-S4 T2 C1-C5 E1 E2 E4 E5 E6 · `-q410-taban` (3353fca) C1-C5 E5 · `-serbest` N3 N5-N11 S1-S4 T1 T2 R1-R7 E3 E4 E6 · `-yorum` A5 B8 S1 S3 S4 · `-govde` N6 N7 N11 S4 R5 R6 E3 · `-tf` T2 E4 · `-ce-ret` C1-C5 E5 · `-ce-rootsuz` C2 C4 E5 · `-ce-param` C3 C4 · `-ce-govdesiz` R1-R4 R7 E6 · `-ce-liste` R3 R7. ⚠ Pinli SHA kipleri `git show` kullanır; sığ klonda exit 2 (DOĞRULANAMADI).
+- **`cds_paket_kapsami`:** P11a-e (custom · root custom · custom + parametre · ad kalıbı dışı → yalnız RAP ad hatası · `sqlViewName` → RAP yasağı) + RA3 (`main()` root custom + parametre: TD-spec atlanır, dry-run rc 0) + M15 (eski başlık deseni geri gelir). **Taban karşıtlığı:** 3353fca `populate_cds_views.py` scratch'e alınıp `PCV_PATH` ona çevrilince 21/27; düşenler tam P11a-e + RA3.
+- **`cds_entity_baslik_kardesleri`:** V1-V6 `check_sap_active_version.infer_from_artifact` (root custom/abstract ad verir · düz abstract ve root view FP çapası · yorumdaki başlık ad vermez) · G1-G3 `gen_field_table._body`. Kipler: `asv-rootsuz` {V1,V3} · `gft-customsuz` {G1,G2} · `taban` 3353fca {V1,V3,G1,G2}.
+- **CANLI (adt-gateway, 2026-11-08; bir geliştirme sistemi, S/4HANA 2025, yerel paket):** üç biçim (implementedBy'sız · root + implementedBy · `with parameters` + implementedBy) `populate_cds_views` → `activate_object --type ddls` ile AKTİF oldu. Kanıt: metadata `adtcore:version=active` + `list_inactive_objects` listesinde yok. `ddl:source_type` üçünde de `custom entity`. Var olmayan implementedBy sınıfı yalnız UYARI üretir. Sınıf-önce sırada `push_object` sözdizimi FAIL verir ama kaynak inaktif yüklenmiş olur. İki sırada da atomik `also` gerekmedi. Tarif: `playbook/adt-rap.md` §32.1d.
+- ⛔ **Aktiflik ölçütü:** aktivasyondan önce de `source/main?version=active` GET 200 + inaktif kaynağın içeriğini döndü ⇒ yalnız `adtcore:version` kanıttır.
+- **ÖLÇÜLMEDİ:** sorgu sınıfının çalışma zamanı (servis bağlama, sayfalama) · transport'lu pakette yaratma · populate'in POST/PUT HTTP kodları (araç yalnız `[OK]` basar).
+- **KAPSAM DIŞI:** `adt_post_shell(ddls)` · namespace'li paket globu · `transient view entity` · `push_object` mesaj doğruluğu.
+
+## B104 — CSRF reddi tek yüklem + retry'da taze token (DEV_CORE Issue #411, 2026-11-08)
+
+```
+python tests/fixtures/csrf_tanima_ortak/run.py               # 13/13 (offline; oturum + token sahte)
+python scripts/tests/test_csrf_header_injection.py          # 5/5 (başlık enjeksiyonu; çakışma kontrolü)
+python tests/run_battery.py csrf_tanima_ortak --kardes cds_kaynak_kapisi retry_500_govde lock_modification_support kilit_birakma_durustlugu aciklama_412_retry transport_yaklasim_sirasi class_include_push --kardes-tam --precommit
+```
+
+- **Değişmez:** CSRF reddi TEK yüklemde tanınır (`_csrf_reddi_mi`): 403 + (gövdede `CSRF` VEYA `x-csrf-token: Required`). `_retry_request` yolundaki her tekrar isteği başlığını closure İÇİNDE kurar, yani tazelenen token'ı taşır.
+- **Vektörler:** S1-S4 `_should_retry` tanır (İngilizce gövde · Almanca gövde · başlık + Almanca gövde · yalnız başlık) · N1-N3 tanımaz (yetki 403 · 200 + CSRF gövde · 500 + İngilizce CSRF metni) · Q1-Q3 `_request_with_csrf_retry` (Almanca gövde 2 istek, 2. istek taze token · yalnız başlık 2 · yetki 403 tek istek) · T1-T2 gerçek `create_table` girişi (CSRF 403 → 2 POST, 2. POST taze token · yetki 403 → 1 POST) · W1 kablolama (tam 4 çağrı, eski İngilizce yüklem kodda yok).
+- **Mutasyon kipi → ilan edilen küme** (koşumdan, 2026-11-08): `should-eski` {S2,S3,S4,N3,T1,W1} · `baslik-yok` {S3,S4,Q2} · `403siz` {N2,N3} · `tablo-bayat` {T1} · `taban` 3353fca {N3,S2,S3,S4,T1,W1}.
+- ⚠ **N3 = davranış değişikliği kaydı:** 403 dışı yanıttaki CSRF metni artık retry tetiklemez (lider kararı 2026-11-08). Vektör silinmez.
+- **Canlı dayanak:** CSRF reddi TR/EN/DE login dilinde 403 + `x-csrf-token: Required` döndü, gövde hep İngilizce. **ÖLÇÜLMEDİ:** Almanca gövde döndüren sunucu (S2/Q1 sentetiktir).

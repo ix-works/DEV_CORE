@@ -432,6 +432,10 @@ OZEL_TESTLER = [
     # 2026-08-19 ADT teshis gorunurlugu (iki kalem, tek tema: SAP'nin SEBEBI cagirana ulasmali)
     ("retry_500_govde",
      "retry adapter'i SAP'nin 500 GOVDESINI yutuyordu (429/502/503/504 tekrar KORUNDU)"),
+    # 2026-11-08 (#411): CSRF reddi TEK yuklemde (dil/başlık) + create_table retry'da TAZE token
+    ("csrf_tanima_ortak",
+     "_csrf_reddi_mi: 403 + ('CSRF' gövde | x-csrf-token: Required) dort cagiranda; "
+     "CSRF disi 403 retry ETMEZ; create_table tekrar istegi taze token tasir; 5 kip ilanli"),
     ("sorgu_basarisizligi_gorunur",
      "adt_sql_query/adt_table_read: alt katman None -> ok:false (ok:true + 0 satir = sahte yesil)"),
     # 2026-10-03: ADT freestyle SATIR BASINA 255 karakter keser (olculdu, T000) -> otomatik kirma
@@ -598,8 +602,13 @@ OZEL_TESTLER = [
     # 2026-09-13 (Q277): create_cds_view kapisi duz alt-dize ariyordu.
     ("cds_kaynak_kapisi",
      "create_cds_view kapisi: `select distinct from` + abstract entity KABUL (korpus 63->2 red), "
-     "yorum/string/yazim hatasi anahtar sozcuk SAYILMAZ, table function/custom entity dogru "
-     "mesajla RED ('duzelt' demez); eski uc red + giris noktasi POST 0/1"),
+     "yorum/string/yazim hatasi anahtar sozcuk SAYILMAZ, table function dogru mesajla RED "
+     "('duzelt' demez); #410 [root] custom entity [with parameters] KABUL + govde kurali; "
+     "eski uc red + giris noktasi POST 0/1; her kip ilan edilen kumeyle duser"),
+    # 2026-11-08 (#410): ayni CDS entity baslik deseninin iki kardes yuzeyi.
+    ("cds_entity_baslik_kardesleri",
+     "check_sap_active_version ad cikarimi `define root abstract|custom entity` + "
+     "gen_field_table custom entity basligi; taban 3353fca + iki mutasyon ilan edilen kumeyle"),
     # 2026-09-09 (Q268 + Q222(2)): "push/yukleme akisi sahte basari raporluyor" sinifi.
     ("push_atlandi_ve_kaynak_izi",
      "ATLANAN != BASARILI: populate_cds_views uc baglami (yazildi/atlandi/gercek hata) + "
@@ -1253,6 +1262,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "B3-01 ailesinin başı: bağlantı yok + kısmi körlük dalları"),
     ("scripts/validators/check_sap_active_version.py", ("O:sap_gate_skip_sozlesmesi",),
      "B3-01: BEŞ ayrı ölçmeyen exit-0 yolu"),
+    ("scripts/validators/check_sap_active_version.py", ("O:cds_entity_baslik_kardesleri",),
+     "#410: ad cikarimi `define root abstract|custom entity`yi tanir"),
+    ("scripts/gen_field_table.py", ("O:cds_entity_baslik_kardesleri",),
+     "#410: _body custom entity basligini tanir (ad + govde baslangici)"),
     ("scripts/validators/run_review.py",
      ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam", "O:sap_gate_skip_sozlesmesi",
       "O:reviewer_uzun_yol_ipucu", "O:checklist_check"),
@@ -1359,7 +1372,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       "O:sessiz_olumsuzlama_2026_08_10", "O:retry_500_govde",
       "O:transport_gorev_istek_cevrimi", "O:adt_uc_url_cozumu", "O:cds_kaynak_kapisi",
       "O:aktivasyon_govde_hukmu", "O:aciklama_412_retry", "O:mcp_sahte_sonuc_uclusu",
-      "O:sorgu_araclari_durustlugu", "O:revizyon_okuma"),
+      "O:sorgu_araclari_durustlugu", "O:revizyon_okuma", "O:csrf_tanima_ortak"),
      "on korpus bu modülü import/mutasyon eder (2026-09-03: `set_function_module_source` "
      "LOCK-CORRNR otoritesi + `_verify_and_return_lock` docstring'i · 2026-09-04: "
      "`get_object_source` URL kuruluşu + 404 mesajının obje adı · 2026-09-13 Q277: "

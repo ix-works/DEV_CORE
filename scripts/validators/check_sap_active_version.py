@@ -142,7 +142,9 @@ def infer_from_artifact(path: Path) -> tuple[str | None, str | None]:
     # CDS abstract/custom entity: define abstract entity NAME / define custom entity NAME
     # (view yoktur → üstteki regex eşleşmez; eklenmezse abstract entity push'unda obje adı
     #  None döner → false BLOCKER. Vaka: ZSD001_I_SIM_R, 2026-06-29.)
-    m = re.search(r'define\s+(?:abstract|custom)\s+entity\s+(' + AD_ADAYI + r')', text, re.IGNORECASE)
+    # #410 (2026-11-08): `root` öneki de tanınır (`define root abstract|custom entity`);
+    # eskiden ad çözülemiyordu ⇒ "ad çözülemedi" SKIP (ölçüm yok). Ad yakalaması aynı.
+    m = re.search(r'define\s+(?:root\s+)?(?:abstract|custom)\s+entity\s+(' + AD_ADAYI + r')', text, re.IGNORECASE)
     if m:
         return m.group(1).upper(), 'ddls'
     return None, None
