@@ -3678,7 +3678,7 @@ python scripts/validators/check_rule_gate_coverage.py             # rc 0, DELİK
 ## B97 — müşteri namespace'i (`/<NS>/`) tek ad politikası (Q393 / DEV_CORE Issue #397 Parti 1, 2026-11-08)
 
 ```
-python tests/fixtures/q393_namespace_ad_politikasi/run.py      # 35/35 (offline; SAP'ye istek yok)
+python tests/fixtures/q393_namespace_ad_politikasi/run.py      # 59/59 (offline; SAP'ye istek yok)
 python tests/run_battery.py q393_namespace_ad_politikasi --kardes b0_secim ad_kabul_tam_dize fugr_include_yazim --kardes-tam --precommit
 ```
 
@@ -3715,6 +3715,7 @@ python tests/run_battery.py fugr_include_yazim
 python tests/fixtures/validator_ad_deseni/run.py      # 45/45 (offline; alt süreç, kum; SAP'ye istek yok)
 python tests/fixtures/validator_ad_grameri/run.py     # 6/6  (statik AST; KAPSAM satırı her koşumda)
 python tests/run_battery.py validator_ad_deseni --kardes validator_ad_grameri q393_namespace_ad_politikasi sap_gate_skip_sozlesmesi cds_curr_referans_tipi --kardes-tam --precommit
+# checklist_check.py degisirse ayrica: python tests/run_battery.py checklist_check --precommit  (39 kip; bu PR _std GEVSETME tasir)
 ```
 
 - **Değişmez:** `/` ile başlayan nesne adı hiçbir validator'da sessizce "kapsam dışı / OK" sayılmaz — ya katı gramerle (`AD_DESENI` = `(?:/[A-Z0-9_]{3,8}/)?[A-Z0-9_]+`, ASCII) ayrıştırılıp DENETLENİR, ya `IX-GATE-STATUS … measured=false reason=ad-cozulemedi|namespace-kayitsiz` (cds_currency: exit 2) verir. Yakalama iki katmanlı: `AD_ADAYI` gevşek (her `/…` belirteci) → `ad_coz` katı. Müşteri kararı `musteri_karari` (`customer_namespaces`, project.yaml; bağlantı dosyasının dizininden — B97).
