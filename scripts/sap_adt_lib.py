@@ -873,14 +873,18 @@ def validate_package_name(package):
 _explicit_working_dir = None
 
 
-def cds_kod_metni(metin):
-    """CDS kaynağından yorumları (`//`, `/* */`) ve string içeriğini ('..', `''` kaçışı) atar.
+def cds_kod_metni(metin, string_icerigini_koru=False):
+    """CDS kaynağından yorumları atar: `//` ve `--` satır yorumları (satır sonu korunur) +
+    `/* */` blok yorumu (tek boşluk olur). String ('..', `''` kaçışı) yorumdan ÖNCE tüketilir
+    ⇒ string içindeki `//` / `--` / `/*` yorum SAYILMAZ.
 
-    Satır sonları korunur; string yerine `''` bırakılır. Anahtar sözcük / başlık araması
-    YALNIZ kodda yapılsın diye vardır. Tüketiciler: `SAPADTClient._validate_cds_source`
-    (Q277) · `populate_cds_views` RAP başlık tespiti (#410 K3, 2026-11-08: ham metinde
-    arama yorumdaki `define view entity` / `define custom entity` ile klasik view'i RAP
-    dalına düşürüyordu). Kopyalama — buradan import et.
+    `string_icerigini_koru=False` (varsayılan): string yerine `''` bırakılır — anahtar sözcük /
+    başlık araması YALNIZ kodda yapılsın diye. `True`: string olduğu gibi kalır (yalnız yorum
+    atılır) — `@EndUserText.label: '…'` metnine ihtiyaç duyan tüketici için.
+    Tüketiciler: `SAPADTClient._validate_cds_source` (Q277) · `populate_cds_views` RAP başlık
+    tespiti (#410 K3, 2026-11-08: ham metinde arama yorumdaki `define view entity` /
+    `define custom entity` ile klasik view'i RAP dalına düşürüyordu) · `gen_field_table`
+    (`string_icerigini_koru=True`; #412 düzeltme 3). Kopyalama — buradan import et.
     """
     cikti = []
     i, n = 0, len(metin)
@@ -895,7 +899,7 @@ def cds_kod_metni(metin):
                         continue
                     break
                 j += 1
-            cikti.append("''")
+            cikti.append(metin[i:j + 1] if string_icerigini_koru else "''")
             i = j + 1
         elif metin.startswith('//', i) or metin.startswith('--', i):
             # `--` de CDS satır yorumudur (#412 düzeltme 2, bug-gate: canlı aktif bir CDS'te

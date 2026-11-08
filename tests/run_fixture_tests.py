@@ -1408,6 +1408,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # `cds_kod_metni`'ye bağlı → `b0_secim` P3 pinli sayısı 30→31 BİRLİKTE güncellendi.
     ("scripts/sap_adt_lib.py", ("O:cds_paket_kapsami",),
      "`cds_kod_metni` (yorum/string ayıklayıcı) — populate_cds_views RAP başlık tespiti + TD-spec atlaması"),
+    # 2026-11-08 (#412 düzeltme 3): AYRI satır; gen_field_table yorum ayıklaması artık
+    # `cds_kod_metni(..., string_icerigini_koru=True)` — bu dalı YALNIZ bu korpus koşar.
+    # `b0_secim` P3 pinli sayısı 31→32 BİRLİKTE güncellendi.
+    ("scripts/sap_adt_lib.py", ("O:cds_entity_baslik_kardesleri",),
+     "`cds_kod_metni` `string_icerigini_koru=True` dalı + `--` yorumu — gen_field_table.parse_cds"),
     # 2026-10-18 (Issue #325): AYRI satırlar; sap_adt_lib birleşimi büyüdü → `b0_secim` P3
     # pinli sayısı 24→25 BİRLİKTE güncellendi.
     ("scripts/sap_adt_lib.py", ("O:classrun_tek_post",),

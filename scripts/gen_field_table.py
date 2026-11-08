@@ -36,10 +36,18 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
         pass
 
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sap_adt_lib import cds_kod_metni  # noqa: E402 — CDS yorum grameri TEK kaynak (#412 düzeltme 3)
+
+
 def _strip_comments(text):
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
-    text = re.sub(r"//[^\n]*", "", text)
-    return text
+    # #412 düzeltme 3 (2026-11-08): eski regex yalnız `/* */` + `//` atıyordu ⇒ `--` satır
+    # yorumundaki `define view entity <ESKI>` başlık sanılıyor, `-- yorum`lu alan satırı
+    # alan listesini boşaltıyordu; ayrıca string'e kördü (label içindeki `//` metni kesiyordu).
+    # Ortak ayıklayıcı string'e duyarlıdır; etiket (`@EndUserText.label: '…'`) metni gerektiği
+    # için string içeriği KORUNUR. Üçüncü bir kopya yazılmaz: dilbilgisi ayrışması (#412
+    # düzeltme 2 + 3) iki kopyanın birbirinden kaymasıyla doğdu.
+    return cds_kod_metni(text, string_icerigini_koru=True)
 
 
 def _body(text):
