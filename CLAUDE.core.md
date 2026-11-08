@@ -25,7 +25,7 @@
 > pre_tool_guard SAP-yazma) damganın kanonikle eşliğini zorlar · `sync_yasaklar.py`
 > kanonik değişince yeniden damgalar. **Özet (tam metin kök CLAUDE.md'de):**
 >
-> - **A — Standart SAP objeleri** (Z/Y ile başlamayan): yarat/değiştir/sil YASAK; append/DTEL adını AI önermez.
+> - **A — Standart SAP objeleri** (Z/Y ya da bildirilmiş `/<NS>/` ile başlamayan; ADR 0005 A-EK): yarat/değiştir/sil YASAK; append/DTEL adını AI önermez.
 > - **B — Standart tablo verileri**: direkt `INSERT/UPDATE/DELETE/MODIFY` YASAK (released API→BAPI→RFC→BDC→manuel; ağaç: `standards/10`).
 > - **C — Sistem state**: transport/package yaratma/release, enqueue lock silme YASAK.
 > - **D — Z'li obje**: login = projenin `master_language`'i; 4 field label TAM; activate öncesi REST GET doğrula.

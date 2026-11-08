@@ -196,6 +196,7 @@ def main() -> int:
         return 0
 
     sys.path.insert(0, str(Path(__file__).parent.parent))
+    from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
     try:
         from sap_adt_lib import SAPADTClient
         client = SAPADTClient()
@@ -206,7 +207,7 @@ def main() -> int:
 
     try:
         r = client.session.get(
-            client.url + f'/sap/bc/adt/{path_segment}/{name.lower()}',
+            client.url + f'/sap/bc/adt/{path_segment}/{_adt_seg(name)}',
             params={'sap-client': '100'}, verify=False, timeout=15
         )
     except Exception as e:
@@ -244,7 +245,7 @@ def main() -> int:
     if obj_type.lower() in SOURCE_BEARING:
         try:
             sr = client.session.get(
-                client.url + f'/sap/bc/adt/{path_segment}/{name.lower()}/source/main',
+                client.url + f'/sap/bc/adt/{path_segment}/{_adt_seg(name)}/source/main',
                 params={'sap-client': '100', 'version': 'active'},
                 headers={'Accept': 'text/plain'}, verify=False, timeout=15)
             body = sr.text if sr.status_code == 200 else ''

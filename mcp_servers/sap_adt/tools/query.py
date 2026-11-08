@@ -326,7 +326,7 @@ def adt_atc_check(name: str, object_type: str = "class",
     Reviewer'ı (ADR 0006) tamamlar; SAP'ye YAZMAZ. Bulgular severity'li döner.
 
     Args:
-        name: Obje adı (Z*/Y*).
+        name: Obje adı (Z*/Y* ya da projede bildirilmiş /<NS>/).
         object_type: ADT tipi ('class', 'ddls', 'prog', ...).
         variant: ATC check variant. None ise .conn_adt ADT_ATC_VARIANT'tan okunur
                  (sisteme özgü, ör. ZZNDBS_ATC); o da yoksa 'DEFAULT'.
@@ -480,7 +480,7 @@ def adt_syntax_check(name: str, object_type: str = "class") -> dict:
     tek-yazıcı (gateway) disiplinine tabidir. Tarihçe: playbook/adt-mcp.md.
 
     Args:
-        name: Obje adı (Z*/Y*; standart obje REDDEDİLİR — ADR 0005-A).
+        name: Obje adı (Z*/Y* ya da projede bildirilmiş /<NS>/; standart obje REDDEDİLİR — ADR 0005-A).
         object_type: ADT tipi ('class', 'ddls', 'prog', ...).
 
     Returns:
@@ -2129,7 +2129,7 @@ def adt_unit_run(name: str, object_type: str = "class",
          ihtimalini söyler (sessiz sıfır YOK).
 
     Args:
-        name: Obje (Z*/Y*; standart obje REDDEDİLİR — ADR 0005-A).
+        name: Obje (Z*/Y* ya da projede bildirilmiş /<NS>/; standart obje REDDEDİLİR — ADR 0005-A).
         object_type: 'class'|'program'|'functiongroup'.
         allow_risky_tests: `dangerous`/`critical` bandını da koş (varsayılan False).
 

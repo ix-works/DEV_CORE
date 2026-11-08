@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sap_client import SAPClient  # noqa: E402
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 # Windows konsolu/pipe'i cp1252'dir: non-ASCII basmak UnicodeEncodeError ile COKER
 # (exit 1 -> gercek FAIL'den ayirt edilemez). C-ENC-01 / check_console_utf8.py
@@ -121,7 +122,7 @@ def main() -> int:
     c = SAPClient()
     adt = c.adt_client
     base = adt.url.rstrip("/")
-    prog_l = prog.lower()
+    prog_l = _adt_seg(prog)
     root = f"{base}/sap/bc/adt/textelements/programs/{prog_l}"
     # Lock/unlock hedefi = TEXTELEMENTS (REPT) kaynağı, PROGRAM değil. textelements PUT,
     # REPT resource'un lock handle'ını ister; program (PROG) lock'u "invalid lock handle"

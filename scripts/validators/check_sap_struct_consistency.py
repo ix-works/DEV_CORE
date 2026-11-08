@@ -108,6 +108,7 @@ def main() -> int:
 
     # SAP'ye bağlan
     sys.path.insert(0, str(Path(__file__).parent.parent))
+    from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
     try:
         from sap_adt_lib import SAPADTClient
         client = SAPADTClient()
@@ -119,7 +120,7 @@ def main() -> int:
     # SAP'den source çek (structures endpoint)
     try:
         r = client.session.get(
-            client.url + f'/sap/bc/adt/ddic/structures/{struct_name.lower()}/source/main',
+            client.url + f'/sap/bc/adt/ddic/structures/{_adt_seg(struct_name)}/source/main',
             params={'sap-client': '100'}, verify=False, timeout=20
         )
     except Exception as e:
@@ -162,7 +163,7 @@ def main() -> int:
     # 3. Version check — metadata
     try:
         rm = client.session.get(
-            client.url + f'/sap/bc/adt/ddic/structures/{struct_name.lower()}',
+            client.url + f'/sap/bc/adt/ddic/structures/{_adt_seg(struct_name)}',
             params={'sap-client': '100'}, verify=False, timeout=10
         )
         if rm.status_code == 200:

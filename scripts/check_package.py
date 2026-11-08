@@ -27,6 +27,7 @@ script_dir = Path(__file__).parent
 sys.path.insert(0, str(script_dir))
 
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 import requests
 
 
@@ -52,7 +53,7 @@ def check_package_exists(package_name: str) -> dict:
 
     # Try multiple approaches to check if package exists
     # Method 1: Direct package endpoint with different media types
-    url = f"{adt.url}/sap/bc/adt/packages/{package_name.lower()}"
+    url = f"{adt.url}/sap/bc/adt/packages/{_adt_seg(package_name)}"
 
     # Try different Accept headers (application/* works best)
     accept_types = [
