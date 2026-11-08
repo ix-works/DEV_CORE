@@ -3,7 +3,7 @@ applies_to: [s4_private]
 ---
 # Reviewer Checklist — Table ALTER / Update (Z Table Field Ekleme/Değiştirme)
 
-> Reviewer agent için mekanik checklist. Mevcut Z tabloya yeni field eklemek, field tipini değiştirmek, vb. işlemlerde `run_review.py --task table_update` çağrılır.
+> Reviewer agent için mekanik checklist. Mevcut Z tabloya yeni field eklemek, field tipini değiştirmek, vb. işlemlerde `run_review.py --task table_update` çağrılır. Yeni tablo **YARATIMI** (`run_review.py --task table_creation`) da bu dosyayı gösterir: önce aşağıdaki **Tablo YARATIMI** bölümü, sonra ALTER'a özgü olmayan genel satırlar (ad, CURR/QUAN, LOCK/PUT, append yasağı).
 
 **Hedef obje tipi:** `TABL` (Transparent Table)
 **İlgili playbook:** [`../adt-tables-structures.md`](../adt-tables-structures.md) §15 + §28
@@ -35,6 +35,17 @@ applies_to: [s4_private]
 | **C-TBL-DLI-01** | DeliveryClass değişiyor mu? | regex:delivery-class | WARNING | Genelde stabil olmalı |
 | **C-TBL-MAINT-01** | DataMaintenance değişiyor mu? | regex:data-maintenance | INFO | Tercih |
 | **C-TBL-ORDER-01** | Yeni iş alanı **audit bloğunun ÜSTÜNE** mi eklendi? Audit bloğu (`created_by`/`create_date`/`create_time`/`updated_by`/`update_date`/`update_time`/`last_changed_at`) **EN SONDA** kalmalı — audit'in altına alan EKLEME (append-at-end yapma). | manual:audit-last-check | WARNING | Convention 2026-06-14 (kullanıcı) |
+
+---
+
+## Tablo YARATIMI (`run_review.py --task table_creation`)
+
+| ID | Kontrol | Validator | Severity | Kural Referansı |
+|---|---|---|---|---|
+| **C-TBL-CRE-01** | DTEL'siz (yerleşik `abap.*` tipli) alan var mı? Her biri `alan · tip · tablo` olarak **listelenir**; mümkünse mevcut (standart ya da Z) DTEL'e çevrilir. Bilinçli karar kaynakta DEĞİL, DDL dosyasıyla aynı dizindeki kardeş `<GÖVDE>.README.md`'de yazılır (gövde = dosya adının ilk `.`'ya kadarki kısmı, namespace'li adda `#ns#ad` dahil): satır `dtel-istisna: <ALAN> — <gerekçe>` (başta `-`/`*` serbest; ayırıcı YALNIZ ` — `; alan adı harf duyarsız) → "istisna (gerekçeli)" sayılır, uyarı vermez; gerekçesiz ya da başka ayırıcılı satır uyarı kalır, DDL'de olmayan alan "bayat istisna" bilgisi verir. Kaynak içi `// dtel-istisna:` istisna SAYILMAZ (yorumlu yapı gövdesi push'ta 400 · tablo yorumları SAP readback'te siliniyor — `playbook/adt-tables-structures.md` §12.1 ③). Client alanı `mandt : mandt` (DTEL), `abap.clnt` değil | `check_ddic_builtin_fields.py` (`run_review` table_creation zincirinde WARNING; listeler, engellemez) | WARNING | `claude/rules/sap-source-protokolu.md` "Yeni DDIC tablo" · DEV_CORE #406 |
+| **C-TBL-CRE-02** | Tasarım onay kaydı var mı? Yaratmadan önce kullanıcının **alan + key + DTEL** tasarımına verdiği açık onayın kaydı (karar cümlesi/yeri) brifte durur; C-TBL-CRE-01'in listelediği her DTEL'siz alan o onayda **adıyla** geçer. Kayıt yoksa ya da listelenen alan kayıtta yoksa **yaratma**, lidere sor | manual:be13-onay-kaydi (yaratımı yapan rol: `claude/agents/adt-gateway.md` "BE-13 — tablo/yapı YARATIMI onay kaydı") | BLOCKER | `bug-checklist-backend.md` BE-13 · `claude/memory-seed/feedback_tablo-yaratma-onay-gate.md` |
+
+> Kapsam sınırı (C-TBL-CRE-01): klasik `*.tabl.xml` yolu, append yapıları (`extend type`), canlı DD03L ve include edilen yapının alanları **ÖLÇÜLMEZ** — validator bunları her koşumda KAPSAM/BAKILMAYAN satırında yazar; çözülemeyen deyim `measured=false` (run_review SKIP → WARNING) verir, "temiz" sayılmaz.
 
 ---
 
