@@ -52,8 +52,10 @@ CHECK_FOLDERS = {"cds", "classes", "programs", "structures", "tables", "function
 # edilmemişti; yanlış-paket-prefiksli bir BDEF/SRVD bu gate'ten sessizce geçerdi.
 # Genişletme sonrası ihlal sayısı 0 → taban temiz, HARD kalabilir (PATTERN#14).
 # Yeni bir SAP obje-uzantısı repoya girdiğinde BURAYA da eklenir (aksi hâlde sessiz boşluk).
+# #405 kardeşi: abapGit DCL (`X.dcls.asdcls`) ve BDEF (`X.bdef.asbdef`) son uzantıları YOKTU ⇒ bu
+# dosyalar hiç görülmüyordu. Taban (2026-11-08, 4 tüketici `<source_root>`): bu uzantıda dosya 0.
 OBJE_UZANTILARI = {".abap", ".cds", ".ddls", ".asddls", ".xml",
-                   ".bdef", ".srvd", ".ddl", ".dcl", ".tabl"}
+                   ".bdef", ".srvd", ".ddl", ".dcl", ".tabl", ".asdcls", ".asbdef"}
 
 # Tooling scratch dizini artık .tmp/sap_scratch (ERP DIŞI, gitignored) — ZAI default'u
 # KALDIRILDI (2026-06-18). <source_root>/ZAI ARTIK YASAK: belirirse bu check onu flag'ler

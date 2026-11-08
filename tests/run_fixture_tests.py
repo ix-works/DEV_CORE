@@ -860,6 +860,13 @@ OZEL_TESTLER = [
      "TEK AD GRAMERI geri donus korumasi (AST): scripts/validators/*.py'de nesne-adi baglaminda kendi "
      "ad deseni (kelime sinifi / [a-z][a-z0-9_]* / Z...) = FAIL; istisna `# ad-grameri: <gerekce>` isaretiyle "
      "koddan turetilir; dedektor kontrolu (kotu/iyi ornek); taban e52ad6f 29 ihlal; 3 mutasyon"),
+    # 2026-11-08 DEV_CORE #405: kapsam bosluklari (kullanici onayli) — namespace'li dosya adi + 4 validator.
+    ("q405_kapsam_bosluklari",
+     "namespace'li dosya adi (#ns#x / %23ns%23x / (ns)x) SAP adina cozulur: sap_sync_pull --file kabulu "
+     "(M1 farkli ad reddi KORUNUR) + kapi/tekrar komutu kabukta guvenli (Z bayt-ayni) + pbe/drift/bulucular + "
+     "master_language; package_naming cds/ .asddls/.asdcls + KAPSAM + OLCULEMEDI; objpkg .asdcls/.asbdef; "
+     "managed_etag blok duzeyi (kok etag master, salt-okunurluk BDEF duzeyinde, cocuk OLCULMEDI); cds_currency takma adsiz eleman + group by; "
+     "run_review DCL OLCULMEDI; taban 3353fca 28/75; 32 mutasyon"),
     # 2026-11-08 DEV_CORE #406: DDIC tablo/yapi YARATIMINDA DTEL'siz (yerlesik abap.*) alan listesi.
     ("ddic_builtin_fields",
      "check_ddic_builtin_fields: DTEL'siz alan LISTELENIR (rc 1, run_review table_creation/"
@@ -1677,6 +1684,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "#402: _NS_RE NS_GOVDE (3-8) — namespace'li paket kabulu"),
     ("scripts/validators/*.py", ("O:validator_ad_grameri",),
      "#402: her validator AST taramasinda (yeni validator dahil)"),
+    # ── 2026-11-08 DEV_CORE #405: kapsam bosluklari ──
+    *[(y, ("O:q405_kapsam_bosluklari",), "#405: dosya adi -> SAP adi (dosya_adindan_ad) / kapsam beyani")
+      for y in ("scripts/sap_sync_pull.py", "scripts/hooks/pull_before_edit.py", "scripts/source_drift.py",
+                "scripts/validators/check_source_drift.py", "scripts/validators/check_sap_master_language.py",
+                "scripts/validators/check_package_naming.py", "scripts/validators/check_object_in_correct_pkg.py",
+                "scripts/validators/check_rap_managed_etag.py",
+                "scripts/validators/check_cds_currency_reference.py", "scripts/validators/run_review.py",
+                "scripts/utils/ad_politikasi.py")],
     ("scripts/sap_client.py", ("O:fugr_include_yazim",),
      "P2a: include 'L' kontrolu namespace siyrilarak (C14/C15) + grup kaniti root"),
     ("scripts/sap_client.py", ("O:kilit_birakma_durustlugu", "O:istek_sahibi_metni"),

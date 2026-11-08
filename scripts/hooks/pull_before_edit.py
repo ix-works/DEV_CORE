@@ -235,8 +235,18 @@ def _komut(s: dict, p: Path, session_id: str) -> tuple:
                        f"kapının seans kimliğiyle değiştirildi — sözleşme: eklenti --session "
                        f"basmaz, kapı ekler.)\n")
     ad = s.get("ad") or "<AD>"
+    not_ = ""
+    if ad.startswith("/"):
+        # #405: namespace'li ad (`/XNS/X`) iki kabuk tuzağına düşer — Git Bash `/` ile başlayan
+        # argümanı Windows yoluna çevirir, `#` kelime başında bash/PowerShell YORUMUDUR. Komut adı
+        # dosyanın HAM gövdesiyle (`#xns#x`) TIRNAKLI verilir; sap_sync_pull onu
+        # `ad_politikasi.dosya_adindan_ad` ile `/XNS/X`'e çözer (yeni dönüşüm yok). Z adı: bayt-aynı.
+        ham = p.name.split(".", 1)[0]
+        not_ = (f"(namespace'li nesne {ad}: ad dosya-adı biçiminde TIRNAKLI verildi — Git Bash "
+                f"`/` ile başlayan argümanı yola çevirir, `#` tırnaksız YORUMDUR.)\n")
+        ad = f'"{ham}"'
     return (f"python core/scripts/sap_sync_pull.py {ad} --type {s['tip']} "
-            f"--file \"{p}\" --session {session_id}"), ""
+            f"--file \"{p}\" --session {session_id}"), not_
 
 
 def main() -> int:
@@ -313,7 +323,7 @@ def main() -> int:
                  "canlıdan ezme riskini bilerek kabul edersin).\n")
         baslik = "bu seansta SAP'den çekilMEDİ. Düzenlemeden ÖNCE güncel halini al:"
         ne_olur = (f"(canlıyı çeker → {p.name} dosyasına yazar → DOSYAYI seans-taze damgalar; "
-                   f"sonra edit'i TEKRAR dene.)\n")
+                   f"sonra edit'i TEKRAR dene.)\n") + cmd_notu
     if s.get("tip") == "auto":
         ek = ("(tip dosya adından KESİN çıkmıyor — `--type auto` canlı ADT aramasıyla çözer; "
               "0 ya da >1 aday çıkarsa DURUR, tahmin etmez.)\n")
