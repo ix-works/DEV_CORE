@@ -20,7 +20,7 @@ applies_to: [s4_private]
 | **Action/handler dump** | EML `MODIFY ENTITIES` failed/reported handle edilmemiş; `%cid` boş; mapping eksik | FAILED/REPORTED oku; `%cid`/`%key` set; `mapping for ...` |
 | **Save'de veri yazılmıyor** | managed save için `MODIFY` yerine elle yazma; ya da unmanaged'da `save` metodu boş | managed: framework yazar; unmanaged: `saver~save_modified` |
 | **`CREATE BY \_assoc` child'ı boş key/alanla oluşuyor** (ör. "Muhatap rolünü girin"; parvw boş) — yeni belgede çalışır, **mevcut** belgeye eklemede boş | Semantik key salt-okunur; create'te key'in **`<Key>ForEdit`** muadili (`@ObjectModel.editableFieldFor`) set edilmeli | Projeksiyon CDS source oku (`adt_get <Entity>TP cds`); `editableFieldFor` ara. Reçete: `adt-rap.md` §35 |
-| **Etag/lock hatası** (managed) | `lock master` + `etag master <field>` eksik | `check_rap_managed_etag.py`; BDEF `lock master` + `etag master` |
+| **Etag/lock hatası** (managed) | `lock master` + `etag master <field>` eksik | `check_rap_managed_etag.py` (uygulama türü `managed` · `managed with additional save` · `managed with unmanaged save` — üçü de kapsamda; namespace'li `/<NS>/` BDEF de ölçülür, #402); BDEF `lock master` + `etag master` |
 | **$metadata 404 / boş** | SRVB publish edilmedi/aktive değil; SRVD↔SRVB bağı | publish + activate; `adt_get` SRVB version=active |
 | **Draft tutarsızlığı** | `with draft` + draft tablo (`_D`) eksik/uyumsuz; `draft determine action Prepare` | draft tablo + draft action |
 | **Performans (liste yavaş)** | eager join; CompareFilter kapalı; gereksiz expose | association (join-on-demand); `@AbapCatalog.compiler.compareFilter: true` |
