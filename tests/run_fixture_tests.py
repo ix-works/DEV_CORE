@@ -850,6 +850,16 @@ OZEL_TESTLER = [
      "object_types/atom/sap_set_object_description ayni karar; kayitsiz /NS/ red; yapilandirmasiz "
      "Z/Y karari tabanla AYNI (b0bcfac kontrol); NS FUGR grup kaniti FUGR/F (canli bicim), Z'de "
      "eski kural; 13 mutasyon"),
+    # 2026-11-08 DEV_CORE #402: "ad deseni tutmadi => kapsam disi / OK" SINIFI (Faz A + B-2 tek ad grameri).
+    ("validator_ad_deseni",
+     "namespace'li / gramer disi ad (`/AB/`) validator'da ya DENETLENIR ya OLCULEMEDI (ad-cozulemedi / "
+     "namespace-kayitsiz), sessiz 'kapsam disi' YOK: managed_etag EK-1/EK-2 + reuse_gate + readonly + "
+     "active_version + struct_consistency + struct_field_dtel_active + table_field_drop + "
+     "standard_table_fields + cds_currency + checklist BE-01; taban e52ad6f tam agac 13/45; ASCII kilidi U1; 20 mutasyon"),
+    ("validator_ad_grameri",
+     "TEK AD GRAMERI geri donus korumasi (AST): scripts/validators/*.py'de nesne-adi baglaminda kendi "
+     "ad deseni (kelime sinifi / [a-z][a-z0-9_]* / Z...) = FAIL; istisna `# ad-grameri: <gerekce>` isaretiyle "
+     "koddan turetilir; dedektor kontrolu (kotu/iyi ornek); taban e52ad6f 29 ihlal; 3 mutasyon"),
 ]
 
 
@@ -1636,6 +1646,25 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
                 "scripts/workflows/write_workflow.py", "scripts/hooks/pre_tool_guard.py",
                 "scripts/validators/check_standard_table_fields.py", "mcp_servers/sap_adt/_profile.py",
                 "mcp_servers/sap_adt/tools/query.py")],
+    # ── 2026-11-08 DEV_CORE #402: tek ad grameri (ad_politikasi) + validator baglantilari ──
+    ("scripts/utils/ad_politikasi.py", ("O:validator_ad_deseni", "O:validator_ad_grameri"),
+     "AD_ADAYI / AD_DESENI / NS_GOVDE / ad_coz / musteri_karari / dosya_adindan_ad"),
+    *[(y, ("O:validator_ad_deseni", "O:validator_ad_grameri"), "#402: nesne adi ad_politikasi gramerinden")
+      for y in ("scripts/validators/check_reuse_gate.py", "scripts/validators/check_rap_readonly_consumption.py",
+                "scripts/validators/check_rap_managed_etag.py", "scripts/validators/check_sap_active_version.py",
+                "scripts/validators/check_sap_struct_consistency.py",
+                "scripts/validators/check_struct_field_dtel_active.py",
+                "scripts/validators/check_table_field_drop.py", "scripts/validators/check_standard_table_fields.py",
+                "scripts/validators/check_cds_currency_reference.py", "scripts/validators/checklist_check.py",
+                "scripts/validators/check_audit_fields_autofill.py", "scripts/validators/check_bdef_backtick.py",
+                "scripts/validators/check_package_naming.py")],
+    *[(y, ("O:validator_ad_grameri",), "#402: nesne adi ad_politikasi gramerinden (AST korumasi)")
+      for y in ("scripts/validators/check_abaplint.py", "scripts/validators/check_released_objects.py",
+                "scripts/validators/check_object_in_correct_pkg.py")],
+    ("scripts/validators/check_object_in_correct_pkg.py", ("O:issue391_ns_yaml_yorum",),
+     "#402: _NS_RE NS_GOVDE (3-8) — namespace'li paket kabulu"),
+    ("scripts/validators/*.py", ("O:validator_ad_grameri",),
+     "#402: her validator AST taramasinda (yeni validator dahil)"),
     ("scripts/sap_client.py", ("O:fugr_include_yazim",),
      "P2a: include 'L' kontrolu namespace siyrilarak (C14/C15) + grup kaniti root"),
     ("scripts/sap_client.py", ("O:kilit_birakma_durustlugu", "O:istek_sahibi_metni"),

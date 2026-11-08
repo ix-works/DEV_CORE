@@ -15,6 +15,15 @@ Kural (managed + yazma operasyonu varsa):
 
 Kapsam dışı (OK): unmanaged (released BAPI/EML), `query`/read-only behavior, .bdef olmayan.
 
+TANIMA (DEV_CORE #402, 2026-11-08) — ADA DEĞİL ANAHTAR SÖZCÜĞE bakılır:
+  · BDEF mi? = `define behavior for` var mı. Eski desen adı `(\w+)` ile de yakalıyordu;
+    `\w` `/` eşlemediği için namespace'li (`/NSPC/...`) BDEF "behavior definition değil"
+    sayılıp rc=0 dönüyordu. Kontrol adı hiç kullanmadığı için ad yakalaması kaldırıldı.
+  · managed mi? = BDEF'in ilk deyimi (uygulama türü) satır başında `managed` ile mi
+    başlıyor (`unmanaged` hariç). Eski `managed\s+implementation` deseni
+    `managed with additional save ...` / `managed with unmanaged save ...` biçimlerini
+    görmüyordu: Z adlı BDEF bile "kapsam dışı" çıkıyordu (#402 EK-1).
+
 Kullanım:
     python scripts/validators/check_rap_managed_etag.py <bdef_path>
 
@@ -30,9 +39,14 @@ if sys.platform == 'win32':
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-MANAGED_RE = re.compile(r'\bmanaged\b\s+implementation', re.IGNORECASE)
-UNMANAGED_RE = re.compile(r'\bunmanaged\b\s+implementation', re.IGNORECASE)
-DEFINE_BEHAVIOR_RE = re.compile(r'\bdefine\s+behavior\s+for\s+(\w+)', re.IGNORECASE)
+# Uygulama türü BDEF'in ilk deyimidir ve satır başında durur: `managed …;` · `managed with
+# additional save …;` · `managed with unmanaged save …;` · `unmanaged …;`. Satır-başı çapası
+# `field ( numbering : managed )` gibi gövde içi kullanımları dışarıda bırakır; `\b` ise
+# `unmanaged` içindeki `managed`ı eşlemez (n-m arasında sözcük sınırı yok).
+MANAGED_RE = re.compile(r'^\s*managed\b', re.IGNORECASE | re.MULTILINE)
+UNMANAGED_RE = re.compile(r'^\s*unmanaged\b', re.IGNORECASE | re.MULTILINE)
+# BDEF mi? = anahtar sözcük. Ad YAKALANMAZ: bu kontrol adı hiç kullanmaz (bkz. docstring).
+DEFINE_BEHAVIOR_RE = re.compile(r'\bdefine\s+behavior\s+for\b', re.IGNORECASE)
 WRITE_OP_RE = re.compile(r'\b(create|update|delete)\b', re.IGNORECASE)
 LOCK_MASTER_RE = re.compile(r'\block\s+master\b', re.IGNORECASE)
 LOCK_DEPENDENT_RE = re.compile(r'\block\s+dependent\b', re.IGNORECASE)

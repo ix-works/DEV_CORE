@@ -85,7 +85,9 @@ def main():
     if target:
         files = [Path(target)]
     else:
-        files = list((root / SOURCE_ROOT_NAME).rglob("*.bdef"))
+        # #402 EK-2 kardeşi: abapGit yerleşimi `X.bdef.asbdef` (ev deseni: checklist_check).
+        files = [*(root / SOURCE_ROOT_NAME).rglob("*.bdef"),
+                 *(root / SOURCE_ROOT_NAME).rglob("*.asbdef")]
 
     total = 0
     for f in KAPSAM.say(files):

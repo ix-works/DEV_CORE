@@ -1,6 +1,8 @@
 """
 check_struct_field_dtel_active.py — Struct/Table source'ta kullanılan ZSD<NNN>_E_*
-DTEL'lerin SAP'de aktif olup olmadığını kontrol eder.
+(ve kayıtlı namespace'li `/<NS>/SD<NNN>_E_*`, #402) DTEL'lerin SAP'de aktif olup olmadığını
+kontrol eder. Bildirilmemiş namespace'li ya da şekli bozuk ad ⇒ ÖLÇÜLEMEDİ (`measured=false`
+reason=namespace-kayitsiz|ad-cozulemedi), "Z DTEL yok" DEĞİL.
 
 Sprint 6 (Z Structures) için kritik: struct'ta kullanılan DTEL'ler aktif değilse
 aktivasyon fail eder + cascade fail (dependent struct'lar/CDS'ler).
@@ -60,9 +62,32 @@ def main() -> int:
 
     text = path.read_text(encoding='utf-8', errors='replace')
 
-    # Z DTEL referansları (zsd<NNN>_e_*, zsd_<NNN>_e_*, vb.)
-    z_dtels = set(re.findall(r'\b(zsd[0-9_]*_e_[a-z0-9_]+)\b', text, re.IGNORECASE))
-    z_dtels = {d.upper() for d in z_dtels}
+    # Müşteri DTEL referansları — adlandırma kuralı `<ad-alanı>SD<NNN>_E_*` (zsd<NNN>_e_*,
+    # zsd_<NNN>_e_*, /<NS>/sd<NNN>_e_*, /<NS>/zsd…). DEV_CORE #402 K1: eski `\bzsd…\b` yalnız Z
+    # gövdesini görüyordu; namespace'li DTEL hiç denetlenmiyordu. Ad-alanı kararı
+    # `musteri_karari`'dadır: bildirilmemiş namespace ⇒ 'namespace-kayitsiz' (ÖLÇÜLEMEDİ).
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from utils.ad_politikasi import AD_ADAYI, NS_GOVDE, ad_coz, musteri_karari  # noqa: E402
+    z_dtels = set()
+    olculemeyen = []      # (ad, gerekçe) — "denetlendi, temiz" denemez
+    for aday in re.findall(r'(?<![A-Za-z0-9_/])((?:z|/' + NS_GOVDE + r'/z?)sd[0-9_]*_e_[a-z0-9_]+)'
+                           r'(?![A-Za-z0-9_/])', text, re.IGNORECASE | re.ASCII):
+        karar = musteri_karari(aday, 'dtel')
+        if karar == 'musteri':
+            z_dtels.add(aday.upper())
+        else:
+            olculemeyen.append((aday.upper(), karar))
+    # Alan TİPİ konumunda şekli bozuk namespace denemesi (`fld : /ab/x;`) ⇒ ne olduğu bilinemez
+    for aday in re.findall(r'^\s*(?:key\s+)?' + AD_ADAYI + r'\s*:\s*(' + AD_ADAYI + r')', text,
+                           re.IGNORECASE | re.MULTILINE):
+        if aday.startswith('/') and not ad_coz(aday)[0]:
+            olculemeyen.append((aday, 'ad-cozulemedi'))
+
+    if not z_dtels and olculemeyen:
+        print(f'[ÖLÇÜLEMEDİ] {path.name}: ' + ', '.join(f'{a} ({k})' for a, k in olculemeyen)
+              + ' — DTEL denetimi bu adlar için KOŞMADI; "temiz" denemez.', file=sys.stderr)
+        gate_status(_GATE, 'SKIPPED', False, olculemeyen[0][1])
+        return 0
 
     if not z_dtels:
         print(f'OK — {path.name} Z DTEL referansı yok')
@@ -112,6 +137,12 @@ def main() -> int:
             okunamayan.append(dtel)
 
     if not missing and not inactive:
+        if olculemeyen:
+            print(f'[ÖLÇÜLEMEDİ] {len(olculemeyen)} ad denetlenemedi ('
+                  + ', '.join(f'{a} ({k})' for a, k in olculemeyen)
+                  + ') — kalan Z DTEL\'ler aktif, ama TEMİZ denemez.', file=sys.stderr)
+            gate_status(_GATE, 'SKIPPED', False, olculemeyen[0][1])
+            return 0
         if okunamayan:
             # "Bulunamadı ≠ yok": okunamayan DTEL inactive OLABİLİR. Yeşil demek yasak.
             print(f'[ÖLÇÜLEMEDİ] {len(okunamayan)}/{len(z_dtels)} Z DTEL okunamadı '

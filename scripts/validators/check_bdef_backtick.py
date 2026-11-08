@@ -58,6 +58,9 @@ from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12
 from utils.kapsam import Kapsam  # noqa: E402
 
 KAPSAM = Kapsam('.bdef')   # K1: taranan dosya sayaci
+# BDEF dosya uzantilari: ADT duz `.bdef` + abapGit `.bdef.asbdef` (`.asbdef` son eki). #402
+# EK-2: yalniz `.bdef` aranirken abapGit dosyalari HIC taranmiyordu (0 bulgu = "bakilmadi").
+_BDEF_UZANTILARI = (".bdef", ".asbdef")
 
 if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -93,14 +96,15 @@ def main():
         import os as _os
         for _r, _ds, _fs in _os.walk(root / SOURCE_ROOT_NAME):
             _ds[:] = [d for d in _ds if d not in ("node_modules", ".git", "dist", "coverage")]
-            files += [Path(_r) / f for f in _fs if f.lower().endswith(".bdef")]
+            # #402 EK-2 kardeşi: abapGit yerleşimi `X.bdef.asbdef` (ev deseni: checklist_check).
+            files += [Path(_r) / f for f in _fs if f.lower().endswith(_BDEF_UZANTILARI)]
 
     toplam = 0
     dosya_sayisi = 0
     for f in KAPSAM.say(files):
         # run_review artifact'i gecici dosya olabilir (.bdef uzantisi olmayabilir);
         # acik --file/path verildiyse uzanti filtreleme YAPMA, aksi halde sessizce atlar.
-        if not target and f.suffix.lower() != ".bdef":
+        if not target and not f.name.lower().endswith(_BDEF_UZANTILARI):
             continue
         try:
             txt = f.read_text(encoding="utf-8", errors="replace")

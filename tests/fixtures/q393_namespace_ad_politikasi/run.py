@@ -197,11 +197,11 @@ def bolum_y(A):
     ekle("Y4 skaler deger -> hata + namespace KAPALI", ns4 == () and h4 and "LİSTE" in h4[0], h4)
     hatali = []
     for oge in ("NSPC", "/NSPC", "/TOOLONGNS/", "#NSPC#", "/NS-X/", "//"):
-        r = proje(f"customer_namespaces: [\"/OK/\", \"{oge}\"]\n")
+        r = proje(f"customer_namespaces: [\"/OKNS/\", \"{oge}\"]\n")
         ns, h = A.namespace_yapilandirmasi(r)
         if ns != () or not any(oge in x for x in h) or not any("KAPALI" in x for x in h):
             hatali.append((oge, ns, h))
-    ekle("Y5 gecersiz oge -> hata adla raporlanir ve GECERLI '/OK/' dahil TUM liste kapali",
+    ekle("Y5 gecersiz oge -> hata adla raporlanir ve GECERLI '/OKNS/' dahil TUM liste kapali",
          not hatali, hatali)
     r6 = proje(YAML_YOK)
     os.environ["IX_CUSTOMER_NAMESPACES"] = "/NSPC/"
@@ -415,13 +415,23 @@ def bolum_r(A, G, L, O):
     ns6, h6 = A.namespace_yapilandirmasi(r6)
     ekle("R6 mukerrer customer_namespaces anahtari -> hata + KAPALI", ns6 == () and h6 and "2 kez" in h6[0],
          [ns6, h6])
-    r7 = proje("customer_namespaces: [\"/OK/\", \"/_/\"]\n")
+    r7 = proje("customer_namespaces: [\"/OKNS/\", \"/___/\"]\n")
     ns7, h7 = A.namespace_yapilandirmasi(r7)
-    r7b = proje("customer_namespaces: [\"/A_/\"]\n")
-    ekle("R7 '/_/' (harfsiz/rakamsiz) oge RED + liste kapali · '/A_/' gecerli",
-         ns7 == () and any("/_/" in x for x in h7) and A.namespace_yapilandirmasi(r7b) == (("/A_/",), []),
+    r7b = proje("customer_namespaces: [\"/A__/\"]\n")
+    ekle("R7 '/___/' (harfsiz/rakamsiz) oge RED + liste kapali · '/A__/' gecerli",
+         ns7 == () and any("/___/" in x for x in h7) and A.namespace_yapilandirmasi(r7b) == (("/A__/",), []),
          [ns7, h7])
-    r8 = proje("customer_namespaces: [\"/OK/\", \"/\u017fPC/\"]\n")
+    # R7c — DEV_CORE #402 tek gramer {3,8}: 2 karakterli oge RED + TUM liste kapali (gorunur hata);
+    # KONTROL: 3 karakterli '/NSP/' kabul (SAP: namespace '/' dahil 5-10 · abaplint {3,8} · TRNSPACE)
+    r7c = proje("customer_namespaces: [\"/NSP/\", \"/AB/\"]\n")
+    ns7c, h7c = A.namespace_yapilandirmasi(r7c)
+    r7d = proje("customer_namespaces: [\"/NSP/\"]\n")
+    ekle("R7c 2 karakterli '/AB/' oge RED + liste kapali · KONTROL '/NSP/' gecerli + /NSP/X musteri",
+         ns7c == () and any("/AB/" in x for x in h7c) and any("KAPALI" in x for x in h7c)
+         and A.namespace_yapilandirmasi(r7d) == (("/NSP/",), []) and A.musteri_adi_mi("/NSP/X")
+         and not A.musteri_adi_mi("/AB/X", namespaces=["/AB/"]),
+         [ns7c, h7c])
+    r8 = proje("customer_namespaces: [\"/OKNS/\", \"/\u017fPC/\"]\n")
     ns8, h8 = A.namespace_yapilandirmasi(r8)
     ekle("R8 ASCII olmayan oge ('/\u017fPC/' -> upper '/SPC/') RED + liste kapali", ns8 == () and h8, [ns8, h8])
     proje(YAML_NS)
@@ -698,13 +708,13 @@ MUTASYONLAR = {
     "--mutasyon-ns-kapali": (_AP, "    if ns not in kayitli:\n        return False\n",
                              "    return False\n",
                              {"G1", "G4", "G7", "L1", "L2", "L3", "F2", "F3", "F8", "S1",
-                              "R3", "R5", "R9", "D1"}),
+                              "R3", "R5", "R9", "D1", "R7c"}),   # R7c: kontrol `/NSP/` kabulü (#402 B-2)
     "--mutasyon-ns-dolar": (_AP, 'r"[A-Z0-9_]+' + Z + '", ad, re.IGNORECASE | re.ASCII)',
                             'r"[A-Z0-9_]+$", ad, re.IGNORECASE | re.ASCII)', {"G4"}),
     "--mutasyon-ns-bos-govde": (_AP, 'r"[A-Z0-9_]+' + Z + '", ad, re.IGNORECASE | re.ASCII)',
                                 'r"[A-Z0-9_]*' + Z + '", ad, re.IGNORECASE | re.ASCII)', {"G3", "L1"}),
     "--mutasyon-yapi-kismi": (_AP, "    if hatalar:\n        return (), hatalar + [",
-                              "    if False:\n        return (), hatalar + [", {"Y5", "G6", "R7", "R8"}),
+                              "    if False:\n        return (), hatalar + [", {"Y5", "G6", "R7", "R8", "R7c"}),  # R7c: `/AB/` reddi bu daldan (#402 B-2)
     "--mutasyon-env-okunur": (_AP, "        ham = veri.get(ANAHTAR)\n",
                               "        _e = __import__('os').environ.get('IX_' + ANAHTAR.upper())\n"
                               "        ham = _e.split(',') if _e else veri.get(ANAHTAR)\n",
@@ -747,6 +757,9 @@ MUTASYONLAR = {
                                    "    if kayit is not None:\n", {"R3", "R5"}),
     "--mutasyon-mukerrer-anahtar": (_AP, "    if tekrar > 1:\n", "    if False:\n", {"R6"}),
     "--mutasyon-ns-harfsiz": (_AP, "(?=[A-Z0-9_]*[A-Z0-9])", "", {"R7"}),
+    # DEV_CORE #402: tek gramer {3,8} — eski {1,8}'e dönüş 2 karakterli ögeyi yeniden kabul eder
+    "--mutasyon-ns-uzunluk": (_AP, 'NS_GOVDE = r"[A-Za-z0-9_]{3,8}"', 'NS_GOVDE = r"[A-Za-z0-9_]{1,8}"',
+                              {"R7c"}),
     "--mutasyon-ns-ascii-oge": (_AP, "        if not str(oge).isascii() or not _NS_BICIM.match(s):\n",
                                 "        if not _NS_BICIM.match(s):\n", {"R8"}),
     "--mutasyon-ns-unicode": (_AP, ", ad, re.IGNORECASE | re.ASCII)", ", ad, re.IGNORECASE)", {"R9"}),
