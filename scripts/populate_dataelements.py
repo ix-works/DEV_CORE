@@ -97,7 +97,7 @@ def load_dataelements_from_csv(csv_path: Path) -> list:
 
     ⚠ URETICI <-> DENETCI TEK KAYNAK: `scripts/validators/check_dtel_creation_labels.py`
     (`# ENFORCES: C-DTEL-CREATE-01`) DTEL CSV'sinde su kurallari zorluyor:
-      R1 `name` dolu + Z/Y ile baslar        R2 4 label'in hicbiri bos degil
+      R1 `name` dolu + Z/Y ya da bildirilmis /<NS>/ ile baslar        R2 4 label'in hicbiri bos degil
       R3 `description` bos degil             R4 label uzunluklari <= 10/20/40/55
       R5 `type_kind=domain` ise `type_name` dolu
     Denetci gate'in gerekce notu ureticiyi ACIKCA sucluyordu: *"populate_dataelements.py

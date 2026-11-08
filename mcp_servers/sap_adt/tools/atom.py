@@ -1152,10 +1152,10 @@ def adt_post_shell(
 
     Args:
         object_type: 'class', 'doma', 'dtel', 'tabl', 'ddls', 'msag', ...
-        name: Customer-namespace name (Z* or Y*).
+        name: Customer-namespace name (Z/Y or a project-declared `/<NS>/`).
         package: Target SAP package.
         transport: Modifiable transport request number.
-        description: Short description (TR for Z* objects per ADR 0005 §D).
+        description: Short description (TR for customer objects per ADR 0005 §D).
         extra: Object-specific parameters (e.g., {'datatype':'CHAR','length':10} for domain).
 
     ⛔ **`ok: false` "OBJE YARATILMADI" DEMEK DEGILDIR — RETRY ETMEDEN ONCE OKU.**

@@ -20,7 +20,7 @@ NEDEN VAR (kayıt #30②, 2026-08-29 — ölçümle gerekçelendirildi):
    Bir alan boşsa "şunu yaz" demez; "boş, kullanıcıdan al" der.
 
 DENETLENEN KURALLAR (her biri kaynağından okundu, özetten değil):
-  R1 `name` dolu ve Z/Y ile başlıyor            → KESİN YASAKLAR madde A/D
+  R1 `name` dolu; Z/Y ya da bildirilmiş /<NS>/ ile başlıyor            → KESİN YASAKLAR madde A/D
   R2 4 label'ın (short/medium/long/heading) hiçbiri boş değil
                                                  → madde D: "Tüm 4 field label ... TAM yazılır"
   R3 `description` boş değil                     → madde D: "Title/description boş bırakılmaz"

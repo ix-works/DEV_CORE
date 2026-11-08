@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""sap_set_object_description.py — Mevcut bir Z/Y objesinin adtcore:description'ını değiştir.
+"""sap_set_object_description.py — Mevcut bir müşteri objesinin (Z/Y ya da projede bildirilmiş `/<NS>/`) adtcore:description'ını değiştir.
 
 Açıklama (short text) yalnız create-time'da set ediliyor; sonradan değiştirmenin tek yolu
 objenin ANA envelope'unu GET → tek attribute (adtcore:description) değiştir → lock → PUT →
@@ -183,7 +183,7 @@ def _activate_and_verify(adt, name: str, url: str, full: str, desc: str) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Mevcut Z/Y objesinin açıklamasını (adtcore:description) değiştir")
+    ap = argparse.ArgumentParser(description="Mevcut müşteri objesinin (Z/Y ya da projede bildirilmiş /<NS>/) açıklamasını (adtcore:description) değiştir")
     ap.add_argument("name")
     ap.add_argument("--type", required=True, help="class/bdef/srvb/srvd/ddls/...")
     ap.add_argument("--desc", required=True, help="Yeni TR açıklama")
