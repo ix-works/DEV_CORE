@@ -876,6 +876,14 @@ OZEL_TESTLER = [
      "master_language; package_naming cds/ .asddls/.asdcls + KAPSAM + OLCULEMEDI; objpkg .asdcls/.asbdef; "
      "managed_etag blok duzeyi (kok etag master, salt-okunurluk BDEF duzeyinde, cocuk OLCULMEDI); cds_currency takma adsiz eleman + group by; "
      "run_review DCL OLCULMEDI; taban 3353fca 28/75; 32 mutasyon"),
+    # 2026-11-08 DEV_CORE #406: DDIC tablo/yapi YARATIMINDA DTEL'siz (yerlesik abap.*) alan listesi.
+    ("ddic_builtin_fields",
+     "check_ddic_builtin_fields: DTEL'siz alan LISTELENIR (rc 1, run_review table_creation/"
+     "struct_creation WARNING; bildirilen ornek VERDICT PASS -> WARNING), istisna kardes "
+     "`<GOVDE>.README.md` `dtel-istisna: <ALAN> — <gerekce>` (gerekcesiz/baska ayirici uyari kalir; "
+     "kaynak ici `// dtel-istisna` SAYILMAZ; bayat istisna bilgi; harf duyarsiz; namespace'li govde), "
+     "DTEL'li/include alan sayilmaz, xml/append/cozulemeyen deyim measured=false, uyari+olculemeyen "
+     "= KISMI; dtel_active kapsam beyani; 15 mutasyon"),
 ]
 
 
@@ -1267,6 +1275,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "IX-GATE-STATUS ÜRETİCİ ucunun tek kaynağı (B3-01)"),
     ("scripts/validators/check_struct_field_dtel_active.py", ("O:sap_gate_skip_sozlesmesi",),
      "B3-01 ailesinin başı: bağlantı yok + kısmi körlük dalları"),
+    ("scripts/validators/check_struct_field_dtel_active.py", ("O:ddic_builtin_fields",),
+     "#406: \"DTEL'siz alan: BAKILMADI\" kapsam beyanı (T1)"),
+    ("scripts/validators/check_ddic_builtin_fields.py", ("O:ddic_builtin_fields",),
+     "#406: DTEL'siz alan listesi + istisna isareti + KAPSAM beyani"),
     ("scripts/validators/check_sap_active_version.py", ("O:sap_gate_skip_sozlesmesi",),
      "B3-01: BEŞ ayrı ölçmeyen exit-0 yolu"),
     ("scripts/validators/check_sap_active_version.py", ("O:cds_entity_baslik_kardesleri",),
@@ -1275,7 +1287,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "#410: _body custom entity basligini tanir (ad + govde baslangici)"),
     ("scripts/validators/run_review.py",
      ("O:reviewer_skip_sozlesmesi", "O:reviewer_tip_kapsam", "O:sap_gate_skip_sozlesmesi",
-      "O:reviewer_uzun_yol_ipucu", "O:checklist_check"),
+      "O:reviewer_uzun_yol_ipucu", "O:checklist_check", "O:ddic_builtin_fields"),
      "SKIP sözleşmesi + push-tipi/reviewer haritası; ayrıca `gate_durum_beyani` "
      "TÜKETİCİ ucu üretici tarafından sap_gate_skip_sozlesmesi V7 ile çağrılır"),
 

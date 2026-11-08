@@ -144,6 +144,8 @@ TASK_VALIDATORS = {
     'table_creation': [
         ('check_struct_field_dtel_active.py', 'BLOCKER',
          'Kullanılan Z DTEL\'ler SAP\'de aktif mi (var olmayan/inaktif DTEL → aktivasyon fail)'),
+        ('check_ddic_builtin_fields.py', 'WARNING',
+         'DTEL\'siz (yerleşik abap.* tipli) alan listesi — her biri kullanıcı onay kaydında adıyla geçmeli (BE-13 · C-TBL-CRE-01; #406)'),
         ('check_cds_currency_reference.py', 'BLOCKER',
          'CURR/QUAN field annotation qualified format (--type table)'),
         ('check_deprecated_annotations.py', 'WARNING',
@@ -164,6 +166,8 @@ TASK_VALIDATORS = {
     'struct_creation': [
         ('check_struct_field_dtel_active.py', 'BLOCKER',
          'Kullanılan Z DTEL\'ler aktif mi'),
+        ('check_ddic_builtin_fields.py', 'WARNING',
+         'DTEL\'siz (yerleşik abap.* tipli) alan listesi — her biri kullanıcı onay kaydında adıyla geçmeli (BE-13 · C-STR-FIELD-01; #406)'),
         ('check_cds_currency_reference.py', 'BLOCKER',
          'CURR/QUAN annotation kontrolü'),
         ('check_td_cancelled_fields.py', 'WARNING',

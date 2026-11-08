@@ -38,9 +38,9 @@ python core/scripts/validators/run_review.py --task <task_type> --artifact <path
 |---|---|---|
 | `cds_creation` | Yeni CDS yaratırken | window function, deprecated, currency reference |
 | `cds_update` | Mevcut CDS update | aynı + namespace conversion |
-| `table_creation` | Yeni Z tablo | currency reference, deprecated |
+| `table_creation` | Yeni Z tablo | DTEL active, DTEL'siz alan listesi (WARNING — istisna kardeş `<GÖVDE>.README.md`), currency reference, deprecated |
 | `table_update` | Tablo ALTER (T_BOOKHD vakası gibi) | currency reference (qualified format!), deprecated |
-| `struct_creation` | Z struct yaratırken (Sprint 6) | DTEL active, currency reference, deprecated |
+| `struct_creation` | Z struct yaratırken (Sprint 6) | DTEL active, DTEL'siz alan listesi (WARNING), currency reference, TD-iptal alan (proje-lokal), deprecated, standart tablo alanları |
 | `domain_creation_csv` | populate_domains öncesi | output length formula |
 
 **Verdict:**
