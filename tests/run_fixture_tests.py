@@ -238,6 +238,9 @@ OZEL_TESTLER = [
      "CURR/QUAN kaynak-tipi: 'define root view entity' alt-diziye takilmiyordu -> rc=0 SESSIZ (V2)"),
     ("populate_tables_unit_kind",
      "B-13: CSV 'type' kolonu ABAP tipi saniliyordu -> CURR dali ULASILAMAZ olu koddu"),
+    ("cds_curr_referans_tipi",
+     "Issue #399: C-TBL-CUR referans alani - sozluk disi CUKY DTEL (konwa/Z) ve baska tabloya "
+     "qualified basvuru 'tabloda yok' BLOCKER aliyordu; alan-yok BLOCKER korunur"),
     ("cds_paket_kapsami",
      "CDS kapilari TEK PAKETE kilitliydi: namespace prefix'i paketten turetilir + "
      "spec yol-kesfi iki seviye/ref_docs (whitelist dalina giren klasik CDS'lerin bir kismi "
@@ -1109,8 +1112,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # ── validator ailesi: kendi koşucusunu taşıyan korpuslar ────────────────
     ("scripts/validators/check_cds_currency_reference.py",
      ("O:cds_curr_satir_yorumu", "O:cds_curr_kaynak_tipi", "O:populate_tables_unit_kind",
-      "O:cds_curr_eksik_annotation"),
-     "V1 korpusu bu validator'ı import eder; V2 korpusu CLI'yi subprocess ile koşup "
+      "O:cds_curr_eksik_annotation", "O:cds_curr_referans_tipi"),
+     "V1 korpusu bu validator'ı import eder; Issue #399 korpusu referans alanının üç "
+     "durumunu (alan yok / tip sözlük dışı / başka tablo) + gerçek run_review girişini ölçer; V2 korpusu CLI'yi subprocess ile koşup "
      "KAYNAK-TİPİ tespitini + çıkış-kodu sözleşmesini (0/1/2) ölçer; B-13 korpusu ise "
      "ÜRETİCİ↔DENETÇİ mutabakatını ölçer (ikisi aynı DTEL sözlüğünü kullanır); "
      "DERİNLİK korpusu EKSİK annotation'ı + yeşilin PAYDASINI + WARNING şiddetini ölçer "
@@ -1203,8 +1207,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "I-1 seçici onay (`--only`) + I-2 worktree/CRLF; İKİ GEVŞETME pozitif kontrollü "
      "(S2/S4 gerçek ihlalin hâlâ yakalandığını kanıtlar)"),
     ("scripts/utils/ddic_semantics.py",
-     ("O:populate_tables_unit_kind", "O:cds_curr_satir_yorumu"),
-     "DTEL sözlüğü TEK KAYNAK: hem üretici hem denetçi bu modülü import eder"),
+     ("O:populate_tables_unit_kind", "O:cds_curr_satir_yorumu", "O:cds_curr_referans_tipi"),
+     "DTEL sözlüğü TEK KAYNAK: hem üretici hem denetçi bu modülü import eder "
+     "(Issue #399: yeni CUKY/UNIT üyeleri iki tüketicide de ölçülür)"),
     ("scripts/validators/check_project_root_resolution.py",
      ("O:proje_koku_varyantlari", "O:conn_adt_proje_koku"),
      "V5 yazım-varyantları + CORE-01 dedektörünün ikinci yüzü"),
