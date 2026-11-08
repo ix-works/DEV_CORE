@@ -206,11 +206,14 @@ lider `scratchpad`'inde `agent_time_analysis.py` (transkript doluysa per-tool d�
 
 ### 4D. Onay bekleyen ajana müdahale (2026-11-08, kullanıcı talebi)
 Kullanıcı ekranda değilken alt ajan bir onay penceresinde saatlerce bekleyebilir (ölçüm: 22.372 ön plan
-alt-ajan komutunda 16 bekleme, en uzunu ~9 saat; hepsi kullanıcı dönünce onaylandı). Lider bunu
+alt-ajan komutunda 16 aday boşluk: 15'i onay beklemesi — 14'ünü kullanıcı onayladı, 1'inin kaydında karar
+alanı yok —, 1'i aynı mesajdaki önceki komutun arkasında sıra beklemesi, karar sınıflandırıcıdan; en uzunu
+~9 saat). Lider bunu
 transkriptten görür ve belirli bir süre sonra müdahale eder.
 - **SİNYAL (tahmin değil):** ön plandaki Bash/PowerShell komutu kendi zaman aşımından uzun koşamaz. Sonucu
-  *zaman aşımı + 1 dk* içinde gelmemişse komut başlamamıştır ⇒ onay penceresindedir. `agent_stall_watch.py`
-  bunu `IZIN-BEKLIYOR` olarak basar (eşik `--izin-esik-dk`, varsayılan 3). Diğer araçlar için genel `ASILI`
+  max(*zaman aşımı + 1 dk*, `--izin-esik-dk` [3]) içinde gelmemişse komut başlamamıştır ⇒ onay
+  penceresindedir. `agent_stall_watch.py` bunu `IZIN-BEKLIYOR` olarak basar. Aynı mesajdaki önceki komut hâlâ
+  koşuyorsa çağrı sırada bekliyordur ve sayılmaz; önceki komut bittiyse yaş onun sonucundan başlar. Diğer araçlar için genel `ASILI`
   sinyali (12 dk) geçerlidir.
 - **MÜDAHALE SIRASI:** ① `IZIN-BEKLIYOR` → kullanıcıya `PushNotification` (ajan + komut özü); dönerse kendisi
   onaylar. ② `MUDAHALE-ZAMANI` (varsayılan 10 dk, `--mudahale-dk`) → hâlâ sonuç yoksa `TaskStop <ajan>` →

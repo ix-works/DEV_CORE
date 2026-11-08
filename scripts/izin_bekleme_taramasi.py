@@ -53,9 +53,15 @@ TASKSTOP == KULLANICI-REDDI (kontrollu deney, 2026-11-08): onay bekleyen bir alt
 
 GEC-ONAY (lider olcumu + bu arac, 2026-11-08): on plan Bash/PowerShell komutu kendi zaman
    limitinden uzun kosamaz; tool_use -> tool_result araligi limit + 1 dk'yi asip komut sonunda
-   KOSMUSSA, komut baslamadan once onay beklemistir. Olculen 16 alt ajan vakasinin 14'unde komut
-   bir `permissions.ask` kuralina uyan alt komut tasiyordu (13 `rm -rf`, 1 `pkill`); kayittaki
-   `permissionDecision` pencereyi neyin actigini 16 vakanin yalniz 2'sinde (`reasonCode`) soyler
+   KOSMUSSA, komut baslamadan once bekledi. Karar kullanicidan geldiyse (user_temporary /
+   user_permanent) ya da kayitta karar alani yoksa GEC-ONAY; karar config/siniflandirici/hook
+   ise GEC-OTOKABUL (kullanici penceresi yok). SIRA (bug-gate PR #403 F1): bekleme, ayni
+   assistant mesajindaki (message.id) ONCEKI kardes cagrinin sonucundan baslatilir; sira
+   beklemesi `kuyruk_sn`'de ayri durur. Olcum (lider + bug-gate, 2026-11-08): 16 aday alt ajan
+   boslugunun 15'i onay beklemesi (14 karar kullanicidan, 1 alan yok), 1'i sira beklemesi
+   (karar config/classifier — duzeltmeyle esigin altina iner). 15'in 14'unde komut bir
+   `permissions.ask` kuralina uyan alt komut tasiyordu (13 `rm -rf`, 1 `pkill`); kayittaki
+   `permissionDecision` pencereyi neyin actigini yalniz 2 vakada (`reasonCode`) soyler
    ⇒ arac "hangi kural" sorusunu CEVAPLAMAZ, yalniz bekleyen cagriyi ve suresini gosterir.
 
 "0 olay" != "temiz" (core §7 KAPSAM BEYANI): her kosumda — olay sifirken de — taranan dosya
@@ -94,12 +100,16 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-KATEGORILER = ("ZAMAN-ASIMI", "GEC-ONAY", "KULLANICI-REDDI", "SINIFLANDIRICI-REDDI", "GECICI",
-               "KURAL-REDDI", "HOOK-BLOKU", "ONAYLANDI", "SINIFLANMADI")
+KATEGORILER = ("ZAMAN-ASIMI", "GEC-ONAY", "GEC-OTOKABUL", "KULLANICI-REDDI",
+               "SINIFLANDIRICI-REDDI", "GECICI", "KURAL-REDDI", "HOOK-BLOKU", "ONAYLANDI",
+               "SINIFLANMADI")
 KATEGORI_ACIKLAMA = {
     "ZAMAN-ASIMI": "onay gerekti, kimse onaylamadi (pencere zaman asimi ya da hic gosterilmedi)",
-    "GEC-ONAY": "on plan komutu kendi zaman limitinden + 1 dk uzun bekledi, sonra KOSTU "
-                "(baslamadan once onay bekledi)",
+    "GEC-ONAY": "on plan komutu kendi zaman limitinden + 1 dk uzun bekledi, sonra KOSTU; karar "
+                "kullanicidan (user_temporary/user_permanent) ya da kayitta karar alani yok",
+    "GEC-OTOKABUL": "on plan komutu limitinden + 1 dk uzun bekledi ama karar kullanicidan DEGIL "
+                    "(config/siniflandirici/hook) — kullanici penceresi yok; bekleme baska "
+                    "kaynakli (siniflandirici gecikmesi ya da kayitta gorulmeyen sira)",
     "KULLANICI-REDDI": "kullanici pencerede reddetti",
     "SINIFLANDIRICI-REDDI": "otomatik kip siniflandiricisi reddetti",
     "GECICI": "siniflandirici o an karar veremedi (tekrar denenebilir)",
@@ -140,6 +150,10 @@ KOMUT_KR = 120
 GEC_ONAY_ARACLAR = ("Bash", "PowerShell")
 VARSAYILAN_LIMIT_MS = 120000
 GEC_ONAY_PAY_SN = 60.0
+# Karar bu kaynaklardan geldiyse pencere KULLANICIYA gosterilmistir (olculdu: user_temporary
+# hizli araclarda ~9 sn, config ~0,3 sn). Baska kaynakli kabul GEC-ONAY degil GEC-OTOKABUL'dur
+# (bug-gate PR #403 F1: 218 sn'lik vaka source=config/classifier — kullanici penceresi YOK).
+KULLANICI_KAYNAKLARI = ("user_temporary", "user_permanent")
 
 
 def kayit_koku() -> Path:
@@ -276,6 +290,31 @@ def gec_onay_mi(arac: str, girdi: object, bekleme: float | None) -> bool:
     return bekleme > komut_limiti_sn(girdi) + GEC_ONAY_PAY_SN
 
 
+def gec_kategorisi(kayit: dict) -> str:
+    """GEC-ONAY mi GEC-OTOKABUL mu: karar alani VARSA ve kaynak kullanici degilse otokabul."""
+    pd = kayit.get("permissionDecision")
+    if isinstance(pd, dict) and pd.get("decision") == "accept" \
+            and pd.get("source") not in KULLANICI_KAYNAKLARI:
+        return "GEC-OTOKABUL"
+    return "GEC-ONAY"
+
+
+def kuyruk_baslangici(kimlik: str, mesaj: str | None, mesaj_sirasi: dict[str, list[str]],
+                      sonuc_zamani: dict[str, _dt.datetime],
+                      ts: _dt.datetime | None) -> _dt.datetime | None:
+    """Ayni assistant mesajindaki ONCEKI kardes cagrilarin en gec sonuc damgasi (<= ts).
+
+    Bug-gate PR #403 F1 (korpusta olculdu): ayni mesajda iki on plan Bash; ilki 214 sn kostu,
+    ikincisi SIRADA bekleyip 218 sn sonra sonuc aldi. Bekleme tool_use damgasindan olculurse
+    sira beklemesi "onay bekledi" sanilir. Bekleme bu damgadan baslatilir."""
+    if mesaj is None or ts is None:
+        return None
+    sira = mesaj_sirasi.get(mesaj, [])
+    onceki = sira[:sira.index(kimlik)] if kimlik in sira else []
+    zamanlar = [sonuc_zamani[k] for k in onceki if k in sonuc_zamani and sonuc_zamani[k] <= ts]
+    return max(zamanlar) if zamanlar else None
+
+
 def _karar_ozu(kayit: dict) -> str:
     pd = kayit.get("permissionDecision")
     if not isinstance(pd, dict) or not pd:
@@ -330,7 +369,9 @@ class Tarama:
             return
         self.sayac[tur] += 1
         ajan = "ana" if tur == "ana" else ajan_adi(dosya)
-        kullanimlar: dict[str, tuple[str, object, _dt.datetime | None]] = {}
+        kullanimlar: dict[str, tuple[str, object, _dt.datetime | None, str | None]] = {}
+        mesaj_sirasi: dict[str, list[str]] = {}
+        sonuc_zamani: dict[str, _dt.datetime] = {}
         # ⛔ str.splitlines() DEGIL: JSONL'i U+2028 / \x1c gibi Unicode satir sinirlarinda
         # da boler ve gecerli kaydi "bozuk satir" yapar (agent_stall_watch'ta olculdu).
         satirlar = ham.split("\n")
@@ -361,17 +402,28 @@ class Tarama:
                 if blok.get("type") == "tool_use":
                     kimlik = blok.get("id")
                     if isinstance(kimlik, str):
-                        kullanimlar[kimlik] = (str(blok.get("name") or "?"), blok.get("input"), ts)
+                        mid = mesaj.get("id") if isinstance(mesaj.get("id"), str) else None
+                        kullanimlar[kimlik] = (str(blok.get("name") or "?"), blok.get("input"), ts,
+                                               mid)
+                        if mid is not None and kimlik not in mesaj_sirasi.setdefault(mid, []):
+                            mesaj_sirasi[mid].append(kimlik)
                     continue
                 if blok.get("type") != "tool_result":
                     continue
-                arac, girdi, ts_kul = kullanimlar.get(str(blok.get("tool_use_id")), ("?", None, None))
-                bekleme = round((ts - ts_kul).total_seconds(), 1) if (ts and ts_kul) else None
+                kimlik = str(blok.get("tool_use_id"))
+                arac, girdi, ts_kul, mid = kullanimlar.get(kimlik, ("?", None, None, None))
+                kuyruk = kuyruk_baslangici(kimlik, mid, mesaj_sirasi, sonuc_zamani, ts)
+                bas_kul = max(ts_kul, kuyruk) if (ts_kul and kuyruk) else ts_kul
+                if ts is not None:
+                    sonuc_zamani[kimlik] = ts
+                bekleme = round((ts - bas_kul).total_seconds(), 1) if (ts and bas_kul) else None
+                kuyruk_sn = round((bas_kul - ts_kul).total_seconds(), 1) \
+                    if (ts_kul and bas_kul and bas_kul > ts_kul) else 0.0
                 sonuc = siniflandir(kayit, blok)
                 # GEC-ONAY: komut sonunda KOSTU (ret kategorisi yok) ama limitinden uzun bekledi.
                 ezilebilir = sonuc is None or sonuc[0] in ("ONAYLANDI", "SINIFLANMADI")
                 if ezilebilir and gec_onay_mi(arac, girdi, bekleme):
-                    sonuc = ("GEC-ONAY", "sure", False)
+                    sonuc = (gec_kategorisi(kayit), "sure", False)
                 if sonuc is None:
                     continue
                 kategori, katman, celiski = sonuc
@@ -384,13 +436,13 @@ class Tarama:
                 if celiski:
                     self.sayac["celiski"] += 1
                 detay = (f"limit={komut_limiti_sn(girdi) / 60:g} dk · {_karar_ozu(kayit)}"
-                         if kategori == "GEC-ONAY" else _detay(kategori, kayit, blok))
+                         if kategori in ("GEC-ONAY", "GEC-OTOKABUL") else _detay(kategori, kayit, blok))
                 self.olaylar.append({
                     "zaman": ts.astimezone(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "proje": proje, "seans": seans, "ajan_turu": tur, "ajan": ajan,
                     "arac": arac, "komut": komut_ozu(arac, girdi), "kategori": kategori,
                     "detay": detay, "katman": katman,
-                    "celiski": celiski, "bekleme_sn": bekleme,
+                    "celiski": celiski, "bekleme_sn": bekleme, "kuyruk_sn": kuyruk_sn,
                     "dosya": dosya.relative_to(kok).as_posix(),
                 })
 
@@ -470,7 +522,14 @@ def main(argv: list[str] | None = None) -> int:
         "siniflanmadi'ya duser ya da hic gorulmez",
         "onaylandi anlami permissionDecision.source=user_temporary alanindan cikarilir "
         "(sure olcumuyle desteklendi, sozlesme degil)",
-        "bekleme_sn = tool_use -> tool_result damga farki; aracin kosum suresini de icerir",
+        "bekleme_sn = tool_use (ya da ayni mesajdaki onceki kardesin sonucu) -> tool_result "
+        "damga farki; aracin kosum suresini de icerir; sira beklemesi kuyruk_sn'de ayri durur",
+        "sira yalniz ayni message.id'deki ONCEKI kardesin kayitli sonucuyla olculur; kardesin "
+        "sonucu kayitta yoksa (oturum kesildi) sira beklemesi gorulmez",
+        "gec_otokabul: karar kullanicidan gelmedi (config/siniflandirici/hook); beklemenin "
+        "kaynagi (siniflandirici gecikmesi mi, gorulmeyen sira mi) ayirt edilmez",
+        "komut limiti input.timeout ya da sabit 2 dk; BASH_DEFAULT_TIMEOUT_MS / BASH_MAX_TIMEOUT_MS "
+        "ortam degiskenleri ve 180 sn otomatik arka plana alma (surume bagli) hesaba katilmaz",
         "gec_onay yalniz on plan Bash/PowerShell icin olculur (komut limiti + 1 dk); "
         "diger araclarin (Edit/Write/MCP) gec onayi sure esigi olmadigi icin GORULMEZ, "
         "limitine yakin bekleyip kosan komut da esigin altinda kalir",

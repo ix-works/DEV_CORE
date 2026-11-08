@@ -77,6 +77,14 @@ SENARYOLAR (S1-S16)
   S32b PowerShell + PowerShell(...) ask kurali
   S33 KAPSAM/IZIN SINYALI/BITTI satirlari IZIN-BEKLIYOR / MUDAHALE-ZAMANI token'ini TASIMAZ
   S34 varsayilan tabanda (5 dk) 3 gun onceki kalinti SESSIZ, 4 dk'lik cagri VAR (cift yon)
+  -- KUYRUK (bug-gate PR #403 F1, 2026-11-08) — ayni message.id'de sirali on plan cagrilar --
+  S35 ⭐ GERCEK VAKA BICIMI: 1. Bash timeout=600000 hala kosuyor, 2. Bash (grep) SIRADA 4 dk
+      -> 2. cagri IZIN-BEKLIYOR ALMAZ (onceki kardes sonucsuz = kuyruk, pencere degil)
+  S35b 1. kardes 7,5 dk kostu, 30 sn once bitti; 2. cagri 8 dk'dir sonucsuz -> SESSIZ
+      (yas onceki kardesin SONUCUNDAN baslar: 0,5 dk)
+  S35c 1. kardes 4 dk once bitti, 2. cagri hala sonucsuz -> IZIN-BEKLIYOR VAR (4 dk; kuyruk
+      kurali gercek bekleyisi gizlemez — kontrol grubu; tek uzun cagri kontrolu = S24)
+  S35d farkli message.id'deki onceki sonucsuz cagri kuyruk SAYILMAZ -> IZIN VAR
 
 KOSUM:
     python tests/fixtures/agent_stall_watch/run.py
@@ -92,7 +100,8 @@ KOSUM:
     ... --mutasyon-imza-taban  (imzalarin taban filtresi sokulur -> S22)
     ... --mutasyon-tz          (tz'siz damga UTC'ye cevrilmez    -> S23/S23b)
     ... --mutasyon-izin / -izin-limit / -izin-arkaplan / -izin-arac / -izin-tekil /
-        -mudahale / -ask / -ask-olculemedi / -izin-taban   (kume: BEKLENEN_DUSUS)
+        -mudahale / -ask / -ask-olculemedi / -izin-taban / -izin-kuyruk /
+        -izin-kuyruk-yas / -izin-kuyruk-mesaj   (kume: BEKLENEN_DUSUS)
 ⛔ CORE-07: mutasyon kipinde dusen vektor kumesi BEKLENEN_DUSUS ile ESITLIKLE kiyaslanir
    (eksik de fazla da sapma) -> sapma exit 2 (DOGRULANAMADI).
   (Sayilar OLCULDU, tahmin degil — `python tests/run_battery.py agent_stall_watch`.)
@@ -130,6 +139,8 @@ GECERLI_KIP = {"--mutasyon", "--mutasyon-eslestirme", "--mutasyon-taban",
                "--mutasyon-dongu-parca", "--mutasyon-iptal", "--mutasyon-iptal-pencere",
                "--mutasyon-imza-taban", "--mutasyon-tz", "--mutasyon-izin",
                "--mutasyon-izin-limit", "--mutasyon-izin-arkaplan", "--mutasyon-izin-arac",
+               "--mutasyon-izin-kuyruk", "--mutasyon-izin-kuyruk-yas",
+               "--mutasyon-izin-kuyruk-mesaj",
                "--mutasyon-izin-tekil", "--mutasyon-mudahale", "--mutasyon-ask",
                "--mutasyon-ask-olculemedi", "--mutasyon-izin-taban"}
 
@@ -202,6 +213,15 @@ CAPA = {
         "                continue\n            esik = izin_esigi_dk(",
         "            if False:  # MUTASYON: izin taban filtresi sokuldu\n"
         "                continue\n            esik = izin_esigi_dk("),
+    "--mutasyon-izin-kuyruk": (
+        '            if b.get("kuyrukta"):\n                continue\n',
+        "            pass  # MUTASYON: sirada bekleyen kardes izin kanalina girer\n"),
+    "--mutasyon-izin-kuyruk-yas": (
+        '            bas = max(b["ts"], b.get("izin_ts") or b["ts"])\n',
+        '            bas = b["ts"]  # MUTASYON: yas tool_use damgasindan\n'),
+    "--mutasyon-izin-kuyruk-mesaj": (
+        '                    mid = m.get("id") if isinstance(m.get("id"), str) else None\n',
+        '                    mid = "TEK"  # MUTASYON: message.id yok sayilir (dosya tek mesaj)\n'),
 }
 # OLCULDU (2026-09-17, tahmin DEGIL — `python tests/run_battery.py agent_stall_watch`):
 # taban 27/27 · --mutasyon 26/27 · --mutasyon-eslestirme 24/27 ·
@@ -215,7 +235,7 @@ CAPA = {
 #   DONGU?/IPTAL? bekler) — esitlik kiyasi bu fazlayi ilk kosumda yakaladi.
 BEKLENEN_DUSUS = {
     "--mutasyon": ("S2",),
-    "--mutasyon-eslestirme": ("S3", "S5", "S11", "S18c"),
+    "--mutasyon-eslestirme": ("S3", "S5", "S11", "S18c", "S35c"),  # S35c: kardes sonucu eslesmezse kuyrukta
     "--mutasyon-taban": ("S4a",),
     "--mutasyon-kapsam": ("S6", "S6b", "S7", "S9", "S13", "S14"),
     "--mutasyon-dongu": ("S18", "S22b", "S23b"),
@@ -228,7 +248,7 @@ BEKLENEN_DUSUS = {
     # 2026-11-08 izin kanali — kume olcumden ONCE ilan edildi (gerekce: hangi vektor o
     # degismezi ayni kosumda okuyor).
     "--mutasyon-izin": ("S24", "S26b", "S27", "S28b", "S29a", "S29b", "S29c", "S30",
-                        "S30b", "S32", "S32b", "S34"),
+                        "S30b", "S32", "S32b", "S34", "S35c", "S35d"),
     "--mutasyon-izin-limit": ("S26",),
     "--mutasyon-izin-arkaplan": ("S25",),
     "--mutasyon-izin-arac": ("S31",),
@@ -237,6 +257,10 @@ BEKLENEN_DUSUS = {
     "--mutasyon-ask": ("S29a", "S29b", "S32", "S32b"),
     "--mutasyon-ask-olculemedi": ("S30", "S30b"),
     "--mutasyon-izin-taban": ("S34",),
+    # 2026-11-08 kuyruk (bug-gate #403 F1) — kume olcumden ONCE ilan edildi.
+    "--mutasyon-izin-kuyruk": ("S35",),
+    "--mutasyon-izin-kuyruk-yas": ("S35b",),
+    "--mutasyon-izin-kuyruk-mesaj": ("S35d",),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -369,6 +393,54 @@ def _kullanim_g(kimlik: str, arac: str, girdi: dict, ts: str, ek: dict | None = 
     return json.dumps(o, ensure_ascii=False)
 
 
+def _kullanim_m(kimlik: str, arac: str, girdi: dict, ts: str, mid: str) -> str:
+    """Gercek bicim: cok-cagrili mesajin her tool_use blogu AYRI kayitta, ayni message.id ile."""
+    return json.dumps({"type": "assistant", "timestamp": ts,
+                       "message": {"role": "assistant", "id": mid,
+                                   "content": [{"type": "tool_use", "id": kimlik, "name": arac,
+                                                "input": girdi}]}}, ensure_ascii=False)
+
+
+def kuyruk_senaryolari(arac: Path, simdi: _dt.datetime, taban_uzak: str, ayar: Path) -> None:
+    """S35-S35d: ayni message.id'de sirali on plan cagrilar (bug-gate #403 F1)."""
+    kok = _tmp() / "projects"
+    # S35: korpustaki vakanin BICIMI (genericize): 1. Bash timeout=600000, 2 sn sonra 2. Bash grep.
+    transkript(kok, "PROJE", "s9", "k01", [
+        _kullanim_m("k01a", "Bash", {"command": "make kuyruk-uzun", "timeout": 600000},
+                    iso_sn(240, simdi), "msg_k01"),
+        _kullanim_m("k01b", "Bash", {"command": "grep -n S35 /tmp/x/a.py"}, iso_sn(238, simdi),
+                    "msg_k01")], meta={"agentType": "kuyruk", "description": "sirada"})
+    transkript(kok, "PROJE", "s9", "k02", [
+        _kullanim_m("k02a", "Bash", {"command": "make S35b-uzun", "timeout": 600000},
+                    iso_sn(480, simdi), "msg_k02"),
+        _kullanim_m("k02b", "Bash", {"command": "grep -n S35b /tmp/x/a.py"}, iso_sn(479, simdi),
+                    "msg_k02"),
+        _sonuc("k02a", iso_sn(30, simdi), "bitti")],
+        meta={"agentType": "kuyruk-bitti", "description": "kardes yeni bitti"})
+    transkript(kok, "PROJE", "s9", "k03", [
+        _kullanim_m("k03a", "Bash", {"command": "ls S35c-ilk"}, iso_sn(300, simdi), "msg_k03"),
+        _kullanim_m("k03b", "Bash", {"command": "rm -rf /tmp/x/S35c"}, iso_sn(299, simdi),
+                    "msg_k03"),
+        _sonuc("k03a", iso_sn(240, simdi), "ok")],
+        meta={"agentType": "kuyruk-sonra", "description": "kardes bitti, bekliyor"})
+    transkript(kok, "PROJE", "s9", "k04", [
+        _kullanim_m("k04a", "Bash", {"command": "make S35d-uzun", "timeout": 600000},
+                    iso_sn(300, simdi), "msg_k04a"),
+        _kullanim_m("k04b", "Bash", {"command": "rm -rf /tmp/x/S35d"}, iso_sn(240, simdi),
+                    "msg_k04b")],
+        meta={"agentType": "kuyruk-yok", "description": "ayri mesaj"})
+    rc, out = kos(arac, ["--kok", str(kok), "--baslangic", taban_uzak, "--ayar", str(ayar)], simdi)
+    iz = izin_satirlari(out)
+    kayit("S35 sirada bekleyen kardes (onceki sonucsuz) IZIN-BEKLIYOR almaz",
+          rc == 0 and not any("grep -n S35 " in x for x in iz), f"rc={rc} izin={iz}")
+    kayit("S35b yas onceki kardesin SONUCUNDAN baslar (0,5 dk) -> SESSIZ",
+          rc == 0 and not any("S35b" in x for x in iz), f"izin={iz}")
+    kayit("S35c kardes 4 dk once bitti, cagri sonucsuz -> IZIN-BEKLIYOR",
+          any("| rm -rf /tmp/x/S35c " in x for x in iz), f"izin={iz}")
+    kayit("S35d farkli message.id kuyruk sayilmaz -> IZIN-BEKLIYOR",
+          any("rm -rf /tmp/x/S35d" in x for x in iz), f"izin={iz}")
+
+
 def izin_senaryolari(arac: Path, simdi: _dt.datetime, taban_uzak: str) -> None:
     kok = _tmp() / "projects"
     ayar = _tmp() / "settings.json"
@@ -449,6 +521,7 @@ def izin_senaryolari(arac: Path, simdi: _dt.datetime, taban_uzak: str) -> None:
     kayit("S32 gercek bicim: ek alanli kayit -> IZIN + ask=Bash(rm -r:*)",
           any("rm -r /tmp/x/alt" in x and "ask=Bash(rm -r:*)" in x
               for x in bir(iz, "general-purpose")), f"izin={iz}")
+    kuyruk_senaryolari(arac, simdi, taban_uzak, ayar)
     kayit("S32b PowerShell + PowerShell(...) ask kurali",
           any("ask=PowerShell(Remove-Item:*)" in x for x in bir(iz, "ps-expert")), f"izin={iz}")
     ozet = [x for x in out.splitlines() if x.startswith("[bekci] ")]

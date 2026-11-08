@@ -54,6 +54,14 @@ VEKTORLER (kok A = ana senaryo, kok B = UCUNCU BAGLAM: baska sekil)
   V32 --proje / --seans filtreleri
   V33 kullanim hatasi (--gun 0) → exit 1
   V34 metin OLAY satiri ajan + arac + bekleme_sn + katman tasir
+  -- KUYRUK + KARAR KAYNAGI (bug-gate PR #403 F1, 2026-11-08; kok E) --
+  V35 ⭐ GERCEK VAKA BICIMI: ayni message.id'de 1. Bash (timeout=600000) 214 sn kostu, 2. Bash
+      (grep) 218 sn sonra sonuc aldi, karar config/classifier -> GEC olayi YOK (sira beklemesi)
+  V35b ayni mesajda kardes 30 sn kostu, 2. cagri ondan 300 sn sonra sonuc aldi (user_temporary)
+      -> GEC-ONAY, bekleme_sn=300 (kardesin sonucundan), kuyruk_sn=30
+  V35c FARKLI message.id: ayni zamanlama sira SAYILMAZ -> GEC-ONAY bekleme_sn=218, kuyruk_sn=0
+  V36 tek cagri 400 sn, karar accept/config/classifier -> GEC-OTOKABUL (GEC-ONAY DEGIL)
+  V36b tek cagri 400 sn, permissionDecision YOK -> GEC-ONAY kalir (alansiz vaka ayirt edilemez)
 
 KOSUM:
     python tests/fixtures/izin_bekleme_taramasi/run.py
@@ -85,8 +93,9 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 ARAC = REPO / "scripts" / "izin_bekleme_taramasi.py"
 SIMDI = _dt.datetime(2026, 11, 8, 12, 0, 0, tzinfo=_dt.timezone.utc)
-KATEGORILER = ("ZAMAN-ASIMI", "GEC-ONAY", "KULLANICI-REDDI", "SINIFLANDIRICI-REDDI", "GECICI",
-               "KURAL-REDDI", "HOOK-BLOKU", "ONAYLANDI", "SINIFLANMADI")
+KATEGORILER = ("ZAMAN-ASIMI", "GEC-ONAY", "GEC-OTOKABUL", "KULLANICI-REDDI",
+               "SINIFLANDIRICI-REDDI", "GECICI", "KURAL-REDDI", "HOOK-BLOKU", "ONAYLANDI",
+               "SINIFLANMADI")
 
 GECERLI_KIP = {"--mutasyon-zaman-imza", "--mutasyon-zaman-alan", "--mutasyon-kullanici-imza",
                "--mutasyon-siniflandirici-imza", "--mutasyon-gecici-imza",
@@ -94,7 +103,8 @@ GECERLI_KIP = {"--mutasyon-zaman-imza", "--mutasyon-zaman-alan", "--mutasyon-kul
                "--mutasyon-kabul", "--mutasyon-blob", "--mutasyon-siniflanmadi",
                "--mutasyon-pencere", "--mutasyon-mtime", "--mutasyon-kapsam",
                "--mutasyon-satir", "--mutasyon-tz", "--mutasyon-gec-onay",
-               "--mutasyon-gec-limit", "--mutasyon-gec-arkaplan", "--mutasyon-gec-ret"}
+               "--mutasyon-gec-limit", "--mutasyon-gec-arkaplan", "--mutasyon-gec-ret",
+               "--mutasyon-kuyruk", "--mutasyon-kuyruk-mesaj", "--mutasyon-otokabul"}
 
 ASLA = 're.compile(r"(?!x)x")'
 CAPA = {
@@ -159,6 +169,15 @@ CAPA = {
     "--mutasyon-gec-ret": (
         '                ezilebilir = sonuc is None or sonuc[0] in ("ONAYLANDI", "SINIFLANMADI")\n',
         "                ezilebilir = True  # MUTASYON\n"),
+    "--mutasyon-kuyruk": (
+        "                bas_kul = max(ts_kul, kuyruk) if (ts_kul and kuyruk) else ts_kul\n",
+        "                bas_kul = ts_kul  # MUTASYON\n"),
+    "--mutasyon-kuyruk-mesaj": (
+        '                        mid = mesaj.get("id") if isinstance(mesaj.get("id"), str) else None\n',
+        '                        mid = "TEK" if mesaj.get("id") else None  # MUTASYON\n'),
+    "--mutasyon-otokabul": (
+        "            and pd.get(\"source\") not in KULLANICI_KAYNAKLARI:\n",
+        "            and False:  # MUTASYON\n"),
 }
 # Dusmesi ILAN edilen kume (olcumden ONCE gerekceyle yazildi; gerekce satir sonunda).
 # ILK KOSUM (2026-11-08) ilan edilenden FAZLA dusurdu ve fazlalarin hepsi ayni mekanizmanin
@@ -182,10 +201,15 @@ BEKLENEN_DUSUS = {
     "--mutasyon-kapsam": ("V27a", "V28"),
     "--mutasyon-satir": ("V23", "V25"),
     "--mutasyon-tz": ("V22", "V23", "V24", "V25", "V32b"),  # kok B kosumu coker
-    "--mutasyon-gec-onay": ("V17",),
+    # V35b/V35c/V36/V36b: kok E'nin GEC olaylari ayni gec_onay_mi esigini okur (ayni mekanizma).
+    "--mutasyon-gec-onay": ("V17", "V35b", "V35c", "V36", "V36b"),
     "--mutasyon-gec-limit": ("V17b",),
     "--mutasyon-gec-arkaplan": ("V17c",),
     "--mutasyon-gec-ret": ("V17e",),
+    # 2026-11-08 kuyruk + karar kaynagi (bug-gate #403 F1) — kume olcumden ONCE ilan edildi.
+    "--mutasyon-kuyruk": ("V35", "V35b"),       # sira beklemesi cagriya yazilir
+    "--mutasyon-kuyruk-mesaj": ("V35c",),       # farkli mesajlar tek sira sayilir
+    "--mutasyon-otokabul": ("V36",),            # config kabulu GEC-ONAY'a duser
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -344,6 +368,38 @@ def kok_b(kok: Path) -> None:
     yaz(f, kayitlar, crlf=True, ek='{"type": "user", "yarim')
 
 
+def kulm(kimlik: str, arac: str, girdi: dict, ts: str, mid: str) -> dict:
+    """Gercek bicim: cok-cagrili mesajin her tool_use blogu AYRI kayitta, ayni message.id ile."""
+    k = kul(kimlik, arac, girdi, ts)
+    k["message"]["id"] = mid
+    return k
+
+
+def kok_e(kok: Path) -> None:
+    """KUYRUK + KARAR KAYNAGI: her senaryo ayri dosyada (mesaj-anahtari mutasyonu dosya icinde kalir)."""
+    d = kok / "PROJE" / "s5" / "subagents"
+    sinif = {"decision": "accept", "source": "config", "reasonType": "classifier"}
+    kul_on = {"decision": "accept", "source": "user_temporary"}
+    yaz(d / "agent-e1.jsonl", [
+        kulm("e35a", "Bash", {"command": "make kardes-a-uzun", "timeout": 600000}, iso(3600 + 220), "msg_e1"),
+        kulm("e35b", "Bash", {"command": "grep -n V35-grep a.py"}, iso(3600 + 218), "msg_e1"),
+        son("e35a", iso(3600 + 6), "ok", hata=False, karar={"decision": "accept", "source": "config"}),
+        son("e35b", iso(3600), "ok", hata=False, karar=sinif)])
+    yaz(d / "agent-e2.jsonl", [
+        kulm("e36a", "Bash", {"command": "ls kardes-b-ilk"}, iso(3600 + 331), "msg_e2"),
+        kulm("e36b", "Bash", {"command": "rm -rf /tmp/x/V35b"}, iso(3600 + 330), "msg_e2"),
+        son("e36a", iso(3600 + 300), "ok", hata=False, karar={"decision": "accept", "source": "config"}),
+        son("e36b", iso(3600), "", hata=False, karar=kul_on)])
+    yaz(d / "agent-e3.jsonl", [
+        kulm("e37a", "Bash", {"command": "make kardes-c-uzun", "timeout": 600000}, iso(3600 + 220), "msg_e3a"),
+        kulm("e37b", "Bash", {"command": "rm -rf /tmp/x/V35c"}, iso(3600 + 218), "msg_e3b"),
+        son("e37a", iso(3600 + 6), "ok", hata=False, karar={"decision": "accept", "source": "config"}),
+        son("e37b", iso(3600), "", hata=False, karar=kul_on)])
+    yaz(d / "agent-e4.jsonl",
+        cift("e38", "Bash", {"command": "make V36-oto"}, 400, "ok", hata=False, karar=sinif)
+        + cift("e39", "Bash", {"command": "make V36b-alansiz"}, 400, "ok", hata=False))
+
+
 def kos(arac: Path, ek: list[str]) -> tuple[int, str]:
     env = {k: v for k, v in os.environ.items() if k != "CLAUDE_CONFIG_DIR"}
     env["PYTHONIOENCODING"] = "utf-8"
@@ -490,6 +546,26 @@ def senaryolar(arac: Path) -> None:
           and v01_satir.startswith("[izin] OLAY ZAMAN-ASIMI "), v01_satir)
     kayit("V29a KAPSAM + BAKILMAYANLAR olay varken basilir",
           "[izin] KAPSAM kok=" in metin and "[izin] KAPSAM BAKILMAYANLAR:" in metin, metin[-300:])
+
+    # ── kok E: kuyruk + karar kaynagi (bug-gate #403 F1) ─────────────────────
+    ke = _tmp() / "projects"
+    kok_e(ke)
+    rce, de, hame = jkos(arac, ["--kok", str(ke)])
+    kayit("V35 ayni mesajda sira beklemesi GEC olayi uretmez (gercek vaka bicimi)",
+          de is not None and rce == 0 and not bul(de, "V35-grep"), f"rc={rce} {bul(de, 'V35-grep')} {hame[-200:] if de is None else ''}")
+    o = tek(de, "V35b")
+    kayit("V35b bekleme kardesin sonucundan: GEC-ONAY bekleme 300, kuyruk 30",
+          o.get("kategori") == "GEC-ONAY" and o.get("bekleme_sn") == 300 and o.get("kuyruk_sn") == 30,
+          str(o))
+    o = tek(de, "V35c")
+    kayit("V35c farkli message.id sira sayilmaz: GEC-ONAY bekleme 218, kuyruk 0",
+          o.get("kategori") == "GEC-ONAY" and o.get("bekleme_sn") == 218 and o.get("kuyruk_sn") == 0,
+          str(o))
+    o = tek(de, "V36-oto")
+    kayit("V36 config/classifier kabulu GEC-OTOKABUL (GEC-ONAY degil)",
+          o.get("kategori") == "GEC-OTOKABUL" and "config" in o.get("detay", ""), str(o))
+    o = tek(de, "V36b")
+    kayit("V36b karar alani yok -> GEC-ONAY kalir", o.get("kategori") == "GEC-ONAY", str(o))
 
     # ── kok B: ucuncu baglam ────────────────────────────────────────────────
     kb = _tmp() / "projects"
