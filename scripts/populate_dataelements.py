@@ -65,6 +65,7 @@ if sys.platform == 'win32':
 
 sys.path.insert(0, str(Path(__file__).parent))
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 from utils.ddic_aktivasyon import aktivasyon_notu   # "yaratildi != aktif" kapanis notu (tek kaynak)
 from utils.xml_kacis import attr_escape, sorumlu_coz, SORUMLU_YOK_MESAJI  # oznitelik kacisi + responsible (Issue #339, tek kaynak)
 
@@ -144,9 +145,14 @@ def load_dataelements_from_csv(csv_path: Path) -> list:
                 continue                        # <- FAIL-CLOSED: satir ISLENMEZ
 
             hatali = False
-            if not ad.upper().startswith(('Z', 'Y')):
+            # Q393: musteri ad alani karari TEK KAYNAK (Z/Y ya da bildirilmis /<NS>/, ADR 0005 A-EK)
+            from utils import ad_politikasi as _ap
+            from sap_adt_lib import get_explicit_working_dir as _gewd
+            if not _ap.musteri_adi_mi(ad.upper(), root=_gewd()):
                 eksikler.append((satir_no, ad, 'name',
-                                 'Z/Y ile BASLAMIYOR (KESIN YASAKLAR madde A)'))
+                                 'musteri ad alaninda DEGIL — Z/Y ya da customer_namespaces '
+                                 'ile bildirilmis namespace (KESIN YASAKLAR madde A)'
+                                 + _ap.red_gerekcesi(ad.upper(), root=_gewd())))
                 hatali = True
             if ham['type_kind'].lower() != 'domain':
                 # ⛔ `BUILTIN` BILEREK REDDEDILIR — playbook/adt-domain-dtel.md §26.6:
@@ -241,7 +247,7 @@ def build_xml(name: str, description: str, package: str, responsible: str,
             adtcore:language="TR"
             xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel"
             xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package}"/>
   <dtel:dataElement xmlns:dtel="http://www.sap.com/adt/dictionary/dataelements">
@@ -285,7 +291,7 @@ def dtel_varlik_sondasi(client: SAPADTClient, name: str) -> tuple:
     """
     try:
         r = client.session.get(
-            client.url + f'/sap/bc/adt/ddic/dataelements/{name.lower()}',
+            client.url + f'/sap/bc/adt/ddic/dataelements/{_adt_seg(name)}',
             verify=False, timeout=10
         )
     except Exception as exc:            # noqa: BLE001 — teshis bozulmasin
@@ -334,7 +340,7 @@ def create_one(client: SAPADTClient, csrf: str, row: dict,
     # DELETE first if force_recreate and exists
     if force_recreate and exists:
         del_resp = client.session.delete(
-            client.url + f'/sap/bc/adt/ddic/dataelements/{name.lower()}',
+            client.url + f'/sap/bc/adt/ddic/dataelements/{_adt_seg(name)}',
             params={'corrNr': transport},
             headers={'X-CSRF-Token': csrf, 'Accept': 'application/xml'},
             verify=False, timeout=20

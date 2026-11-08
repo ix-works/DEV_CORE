@@ -69,6 +69,7 @@ from typing import Optional
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 for _akis in (sys.stdout, sys.stderr):
     try:
@@ -624,7 +625,7 @@ def _yanit_metni(r) -> str:
 
 def _tp_oku(client, program: str, alt: str, aktif: bool) -> list:
     from push_textpool import SUB_CTYPE  # noqa: E402 — tek kaynak: yazma aracının tip tablosu
-    url = (f"{client.url.rstrip('/')}/sap/bc/adt/textelements/programs/{program.lower()}"
+    url = (f"{client.url.rstrip('/')}/sap/bc/adt/textelements/programs/{_adt_seg(program)}"
            f"/source/{alt}" + ("?version=active" if aktif else ""))
     try:
         r = client._request_with_csrf_retry(
@@ -640,7 +641,7 @@ def _tp_oku(client, program: str, alt: str, aktif: bool) -> list:
 
 
 def _program_paketi(client, program: str) -> str:
-    url = f"{client.url.rstrip('/')}/sap/bc/adt/programs/programs/{program.lower()}"
+    url = f"{client.url.rstrip('/')}/sap/bc/adt/programs/programs/{_adt_seg(program)}"
     try:
         r = client._request_with_csrf_retry(
             "get", url, headers=client._get_headers(accept_type=_PROG_ACCEPT), timeout=30)

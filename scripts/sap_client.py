@@ -27,6 +27,7 @@ _setup_utf8_output()
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+from utils.ad_politikasi import url_segmenti as _adt_seg, ad_namespace as _ad_namespace  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 from sap_adt_lib import (
     SAPADTClient,
     SAPTransportError,
@@ -826,11 +827,13 @@ class SAPClient:
     def fugr_include_grubunu_dogrula(self, include_name: str, group: str) -> Dict[str, Any]:
         """FUGR/I include'u gercekten `group`'a mi ait? (salt-okur metadata GET; Q383).
 
-        Kanit = `programs/includes/<incl>` 200 + `include:contextRef` type FUGR/I, name
-        SAPL<GRUP> (`object_types.fugr_include_grup_kaniti`). Bu URL grup TASIMAZ.
+        Kanit = `programs/includes/<incl>` 200 + TEK `FUGR/*` `include:contextRef`: type FUGR/I
+        name = grubun ana programi (`SAPL<GRUP>` · namespace'li `/NS/SAPL<GRUP>`) ya da — yalniz
+        bildirilmis musteri namespace'indeki grupta — type FUGR/F name = grup
+        (`object_types.fugr_include_grup_kaniti`; ad kurali `utils.ad_politikasi`). Bu URL grup TASIMAZ.
         ⛔ `functions/groups/<g>/includes/<incl>` `containerRef`'i KANIT DEGILDIR: SAP URL grubunu
         geri yansitir, 200 doner — 2026-11-08 olculdu (dort grubun dordu, var olmayan grup dahil).
-        Ad oneki (`L<GRUP>`) de kanit degildir: `LZSD001_FGF01` hem `ZSD001_FG` hem `ZSD001` hem
+        Ad oneki (`L<GRUP>` · `/NS/L<GRUP>`, `ad_politikasi.fugr_include_oneki`) de kanit degildir: `LZSD001_FGF01` hem `ZSD001_FG` hem `ZSD001` hem
         `ZSD001_F` icin onek kuralini gecer. Uyusmazlik / olculemezlik -> ok False (fail-closed);
         cagiran YAZMAZ, KILITLEMEZ ve AKTIVE ETMEZ (yanlis grubun iki fazli aktivasyonu baska
         grubun inaktif objelerini toplar — bug-gate F1).
@@ -848,7 +851,7 @@ class SAPClient:
             return sonuc
         # KANIT KAYNAGI — programs/includes contextRef (FUGR/I containerRef DEGIL, 2026-11-08)
         kod, govde, hata = self._metadata_getir(sonuc['kanit_url'])
-        ok, sebep = fugr_include_grup_kaniti(govde, g) if kod == 200 else (False, '')
+        ok, sebep = fugr_include_grup_kaniti(govde, g, root=get_explicit_working_dir()) if kod == 200 else (False, '')
         if kod != 200:
             sonuc['sebep'] = f"programs/includes metadata GET -> {kod if kod is not None else hata}"
         else:
@@ -862,7 +865,7 @@ class SAPClient:
 
         Akis (2026-10-30 canli elle recetesinin kodlanmis hali):
           0. grup KANITI (`fugr_include_grubunu_dogrula`): `programs/includes/<incl>` 200 +
-             `include:contextRef` FUGR/I SAPL<GRUP>; degilse YAZMADAN dur (fail-closed — grup
+             tek `FUGR/*` contextRef (FUGR/I ana program · namespace'li grupta FUGR/F grup); degilse YAZMADAN dur (fail-closed — grup
              tahmin edilmez). ⚠ onceki metin containerRef diyordu, YANLISTI: SAP URL grubunu yansitir, olcum 2026-11-08.
           1. ETag (kilitten ONCE) → 2. `lock_object(FUGR/I URL, transport)` → 3. `set_object_source`
           4. `unlock` → 5. `activate_object(<INCL>, FUGR/I URL)` (FUGR iki fazli yol, Q231-a)
@@ -886,9 +889,10 @@ class SAPClient:
         except ValueError as e:
             result['error'], result['error_type'] = str(e), 'ValueError'
             return result
-        # ADR 0005-A (MCP guardrail'iyle ayni kural): grup Z/Y + include `L<GRUP>` onekli.
+        # ADR 0005-A (MCP guardrail'iyle ayni kural, tek kaynak `utils.ad_politikasi`): grup Z/Y ya da
+        # bildirilmis `/<NS>/` + include grubun onekli (`L<GRUP>` · `/NS/L<GRUP>`).
         # Yalniz bu yol — diger tiplerin CLI davranisi DEGISMEDI.
-        ad_hatasi = fugr_include_ad_alani_hatasi(group, include_name)
+        ad_hatasi = fugr_include_ad_alani_hatasi(group, include_name, root=get_explicit_working_dir())
         if ad_hatasi:
             result['error'], result['error_type'] = ad_hatasi + ". YAZILMADI.", 'GuardrailViolation'
             print(f"\n[ERROR] {result['error']}")
@@ -1090,14 +1094,17 @@ class SAPClient:
             # Kapsam OLCULEN sinifa daraltildi: SAP'nin grup-uretimli `L...` include'u. Standart
             # bir cikis grubundaki musteri include'u (CMOD `ZX...`) da contextRef FUGR tasir;
             # onun `programs/includes` kilidi OLCULMEDI ⇒ eski akis korunur (regresyon yok).
-            if _grup and not object_name.upper().startswith('L'):
+            # Q393 P2a: namespace'li grubun include'u `/NS/L<GRUP>...` — 'L' namespace'ten SONRA.
+            _ns = _ad_namespace(object_name)
+            _govde_ad = object_name.upper()[len(_ns):] if _ns else object_name.upper()
+            if _grup and not _govde_ad.startswith('L'):
                 print(f"      [INFO] Include FUGR baglamli ({_grup}) ama 'L' onekli degil "
                       f"(ör. CMOD ZX include'u) — PROG/I yolu korunuyor; kilit OLCULMEDI")
                 _grup = None
             if _grup:
                 result['error'] = (
                     f"{object_name.upper()} bir FONKSIYON GRUBU include'udur (SAP contextRef: "
-                    f"FUGR/I, grup {_grup}) — `include` (PROG/I) yolundan YAZILAMAZ (kilit 403 "
+                    f"FUGR, grup {_grup}) — `include` (PROG/I) yolundan YAZILAMAZ (kilit 403 "
                     f"TK/103). Kullan: push_object.py --name {object_name.upper()} --type fugr-include --group {_grup} "
                     f"--source-file <dosya> (MCP: object_type='fugr_include', group='{_grup}'). "
                     f"Grubu teyit et; arac kendiliginden yonlendirmez.")
@@ -1622,7 +1629,7 @@ class SAPClient:
         print(f"{'=' * 70}\n")
 
         # Get package path
-        package_path = f"/sap/bc/adt/packages/{package.lower()}"
+        package_path = f"/sap/bc/adt/packages/{_adt_seg(package)}"
 
         try:
             result = self.adt_client.create_object(
@@ -1637,7 +1644,7 @@ class SAPClient:
             if result.get('success'):
                 # low-level adt_client.create_object 'object_url' key'i döndürür ('url' değil) —
                 # key uyumsuzluğu success'te None döndürüp adt_post_shell'de ok:false yapıyordu.
-                object_url = result.get('object_url') or result.get('url') or f"{package_path}/{name.lower()}"
+                object_url = result.get('object_url') or result.get('url') or f"{package_path}/{_adt_seg(name)}"
                 print(f"\n[OK] Object created successfully")
                 print(f"     URL: {object_url}")
                 return object_url
@@ -1943,7 +1950,7 @@ class SAPClient:
                             objects.append({
                                 'name': name,
                                 'type': obj_type,
-                                'uri': f'/sap/bc/adt/{obj_type.lower().replace("/", "/")}s/{name.lower()}',
+                                'uri': f'/sap/bc/adt/{obj_type.lower().replace("/", "/")}s/{_adt_seg(name)}',
                                 'description': description,
                                 'listing_source': 'nodestructure',
                                 'package_verified': True,
@@ -2129,7 +2136,7 @@ class SAPClient:
         tekrar ETTİRMEZ → `islenmis_olabilir: True` + uyarı: tekrar koşturmadan önce yan
         etkiyi (gönderilen mail, yazılan kayıt) kontrol et.
         """
-        url = f"{self.adt_client.url}/sap/bc/adt/oo/classrun/{class_name.lower()}"
+        url = f"{self.adt_client.url}/sap/bc/adt/oo/classrun/{_adt_seg(class_name)}"
         # Standart ADT header'ları ŞART (Authorization + sap-client + stateful
         # session + X-CSRF-Token). Bare {'Accept':...} dict'i _get_headers()'ı
         # atlatır → soğuk session'da SAP sınıf bağlamını bulamayıp sahte
@@ -2287,7 +2294,7 @@ class SAPClient:
         """
         try:
             src_url = (f"{self.adt_client.url}/sap/bc/adt/oo/classes/"
-                       f"{class_name.lower()}/source/main")
+                       f"{_adt_seg(class_name)}/source/main")
             hdrs = self.adt_client._get_headers(accept_type='text/plain')
             r = self.adt_client._request_with_csrf_retry(
                 'get', src_url, headers=dict(hdrs),
@@ -2323,8 +2330,8 @@ class SAPClient:
             object_url = get_fugr_include_url(group, object_name)   # grup yoksa ValueError
             type_desc = 'Function Group Include (FUGR/I)'
             object_name = object_name.upper()
-            # Q383 bug-gate F1: grup KANITI aktivasyondan ONCE (programs/includes contextRef
-            # FUGR/I SAPL<GRUP>; ⚠ onceki metin containerRef diyordu, YANLISTI: SAP URL grubunu yansitir, olcum 2026-11-08);
+            # Q383 bug-gate F1: grup KANITI aktivasyondan ONCE (programs/includes tek FUGR/* contextRef:
+            # FUGR/I ana program · namespace'li grupta FUGR/F grup — Q393; ⚠ onceki metin containerRef diyordu, YANLISTI: SAP URL grubunu yansitir, olcum 2026-11-08);
             # yanlis grubun iki fazli aktivasyonu baska grubun inaktiflerini toplar -> fail-closed.
             dogrulama = self.fugr_include_grubunu_dogrula(object_name, group)
             if not dogrulama['ok']:
@@ -2803,7 +2810,7 @@ class SAPClient:
                 print(f"\n[OK] Structure created successfully")
                 print(f"     URL: {result.get('object_url')}")
                 print(f"\n     NOTE: Structure must be activated before use!")
-                print(f"     Run: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/ddic/structures/{name.lower()}')")
+                print(f"     Run: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/ddic/structures/{_adt_seg(name)}')")
                 return True
             else:
                 print(f"\n[ERROR] {result.get('message')}")
@@ -2904,7 +2911,7 @@ class SAPClient:
                 print(f"\n[OK] Table created successfully")
                 print(f"     URL: {result.get('object_url')}")
                 print(f"\n     NOTE: Table must be activated before use!")
-                print(f"     Run: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/ddic/tables/{name.lower()}')")
+                print(f"     Run: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/ddic/tables/{_adt_seg(name)}')")
                 return True
             else:
                 print(f"\n[ERROR] {result.get('message')}")
@@ -2985,7 +2992,7 @@ class SAPClient:
                 print(f"\n[OK] CDS view created successfully")
                 print(f"     URL: {result.get('object_url')}")
                 print(f"\n     NOTE: CDS view must be activated before use!")
-                print(f"     Run: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/ddic/ddl/sources/{name.lower()}')")
+                print(f"     Run: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/ddic/ddl/sources/{_adt_seg(name)}')")
                 return True
             else:
                 print(f"\n[ERROR] {result.get('message')}")
@@ -3070,7 +3077,7 @@ class SAPClient:
 
             if response.status_code in [200, 201]:
                 print(f"\n[OK] Table type created successfully")
-                print(f"     Activate with: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/ddic/tabletypes/{name.lower()}')")
+                print(f"     Activate with: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/ddic/tabletypes/{_adt_seg(name)}')")
                 return True
             if response.status_code == 404:
                 print("\n[WARNING] Table type endpoint not available on this SAP system")
@@ -3386,7 +3393,7 @@ constants:
                 print(f"\n[OK] Type group created successfully")
                 print(f"     URL: {result.get('object_url')}")
                 print(f"\n     NOTE: Type group must be activated before use!")
-                print(f"     Run: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/ddic/typegroups/{name.lower()}')")
+                print(f"     Run: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/ddic/typegroups/{_adt_seg(name)}')")
                 return True
             else:
                 print(f"\n[ERROR] {result.get('message')}")
@@ -3462,7 +3469,7 @@ constants:
                 print(f"\n[OK] Function group created successfully")
                 print(f"     URL: {result.get('object_url')}")
                 print(f"\n     NOTE: Function group must be activated before use!")
-                print(f"     Run: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/functions/groups/{name.lower()}')")
+                print(f"     Run: adt_client.activate_object('{name.upper()}', '/sap/bc/adt/functions/groups/{_adt_seg(name)}')")
                 return True
             else:
                 print(f"\n[ERROR] {result.get('message')}")

@@ -116,8 +116,11 @@ def _dosyayi_denetle(yol: Path, bulgular: list) -> bool:
             bulgular.append((str(yol), yer, "R1: `name` BOŞ"))
             continue
         yer = f"{ad} (satır {i})"
-        if not ad.upper().startswith(("Z", "Y")):
-            bulgular.append((str(yol), yer, f"R1: ad Z/Y ile başlamıyor ('{ad}')"))
+        from utils import ad_politikasi as _ap   # Q393: müşteri ad alanı TEK KAYNAK (ADR 0005 A-EK)
+        if not _ap.musteri_adi_mi(ad.upper()):
+            bulgular.append((str(yol), yer, f"R1: ad müşteri ad alanında değil — Z/Y ya da "
+                             f"customer_namespaces ile bildirilmiş namespace ('{ad}')"
+                             f"{_ap.red_gerekcesi(ad.upper())}"))
 
         for alan in ("short", "medium", "long", "heading"):
             deger = (r.get(alan) or "").strip()

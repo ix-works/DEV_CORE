@@ -24,6 +24,7 @@ sys.path.insert(0, str(script_dir))
 
 from sap_adt_lib import set_explicit_working_dir
 from sap_client import SAPClient
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 
 def main():
@@ -77,7 +78,7 @@ def main():
                 return 1
 
             base_url = type_map[obj_type]
-            object_url = f"{base_url}/{args.name.lower()}"
+            object_url = f"{base_url}/{_adt_seg(args.name)}"
         else:
             print("[ERROR] Either --name or --url is required")
             parser.print_help()

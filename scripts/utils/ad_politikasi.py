@@ -22,12 +22,21 @@ KARAR (`musteri_adi_mi`)
 
 YAPILANDIRMA (`namespace_yapilandirmasi`) — FAIL-CLOSED
   · anahtar yok / boş liste / project.yaml okunamıyor ⇒ () ⇒ bugünkü Z/Y davranışı BİREBİR.
-  · değer liste değil ya da bir öğe `^/[A-Z0-9_]{1,8}/\\Z` değil (eğik çizgiler dahil ≤10)
+  · değer liste değil · bir öğe ASCII `^/[A-Z0-9_]{1,8}/\\Z` değil (eğik çizgiler dahil ≤10;
+    `/_/` gibi harfsiz/rakamsız öğe de RED) · anahtar project.yaml'da BİRDEN ÇOK kez yazılı
     ⇒ HATA listesi döner ve TÜM liste devre dışı kalır (kısmen geçerli liste yarı açık
     kapı demektir). Hata sessiz düşmez: `red_gerekcesi` metnine girer.
+  · HANGİ project.yaml (bug-gate F2, 2026-11-08): sürecin ÇÖZDÜĞÜ `.conn_adt`'nin dizinindeki.
+    Yazma hangi sisteme gidiyorsa izin listesi o projeden gelir ⇒ `CLAUDE_PROJECT_DIR=<başka
+    dizin>` öneki ya da `--cwd B` listeyi bağlantıdan ayıramaz. Açık `root` verilir ve bağlantı
+    dizininden farklıysa ⇒ namespace kabulü KAPALI. Bağlantı dosyası yoksa (çevrimdışı
+    validator) `root` / `project_root()` okunur — o süreçte SAP yazımı da yoktur.
   · ⛔ env `IX_CUSTOMER_NAMESPACES` BİLEREK OKUNMAZ (`project_config.cfg` env'i önceler):
     bir komutun önüne env koyarak izin listesini genişletmek guard'ı aşmanın en kısa yolu
-    olurdu. Kaynak yalnız proje kökündeki `project.yaml`'dır.
+    olurdu. (Önceki metin "kaynak yalnız proje kökü" diyordu ve `CLAUDE_PROJECT_DIR` önekini
+    atlıyordu — YANLIŞTI; düzeltme yukarıdaki madde.)
+  · Önbellek: dosyanın (mtime, boyut)'u değişince yeniden okunur — uzun ömürlü MCP sürecinde
+    silinen namespace /mcp yeniden başlatması BEKLEMEDEN kapanır (`_yaml_lite`'a dokunulmaz).
   · ⚠ SINIR: çekirdek hangi namespace'in SAP'ye ait olduğunu bilmez ⇒ `["/SCWM/"]` gibi
     yanlış bir bildirim burada YAKALANAMAZ. Bildirim kullanıcı beyanıdır; yanlış bildirim
     ADR 0005-A ihlalidir (A-EK). Sistemde doğrulama (TRNSPACE) Parti 3'ün işidir.
@@ -37,42 +46,128 @@ FONKSİYON GRUBU (FUGR) ADLARI — canlı ölçüm 2026-11-08 (DEV, salt-GET)
   · namespace'li grup `/NS/FG`: include `/NS/LFG…`, ana program `/NS/SAPLFG`
     (ör. `/NS/LFGTOP`, `…U01`, `…UXX`).
 
+ADT YOL PARÇASI (`url_segmenti`, Parti 2a — canlı ölçüm 2026-11-08, DEV salt-GET)
+  `/sap/bc/adt/ddic/structures/%2f<ns>%2f<ad>` (ve `%2F…`) → 200 · aynı uç kodlamasız (`…/structures//<ns>/<ad>`)
+  → 404 "No suitable resource found". SAP kendi yanıtında da `packageRef adtcore:uri` değerini
+  `%2f` kodlu verir. Z/Y adında çıktı eski `ad.lower()` ile BAYT BAYT aynıdır (özel karakter yok).
+  İdempotent: önce `unquote` edilir ⇒ zaten kodlanmış ad (`%2fns%2fx`) `%252f`'ye ÇİFT KODLANMAZ
+  (SAP adında `%` geçmez). Küçük harf: ADT yolları küçük harfle kurulur (eski davranış).
+
 PARTİ 2 İÇİN YER AYRILDI (Issue #397 parti planı — gövde BU modülde yazılacak, burada YOK):
-  · `dosya_adi(ad)`      — yerel dosya adı `/` ↔ `#` (abapGit gösterimi `#ns#`) dönüşümü
-  · `url_segmenti(ad)`   — ADT yol parçası (`/` → `%2F`) — bugün dağınık `quote(safe='')`
-  · `uzunluk_siniri(tip)`— tip bazlı ad uzunluğu (namespace dahil)
+  · `dosya_adi(ad)`      — yerel dosya adı `/` ↔ `#` (abapGit gösterimi `#ns#`) dönüşümü (2b)
+  · `uzunluk_siniri(tip)`— tip bazlı ad uzunluğu (namespace dahil) (2c)
   Bunları yazacak olan, AYNI `ad_namespace` / `namespace_yapilandirmasi` fonksiyonlarını
   kullanır; namespace biçimini ikinci kez tanımlamaz.
 """
 from __future__ import annotations
 
+import os
 import re
+import sys
 from pathlib import Path
+from urllib.parse import quote as _quote, unquote as _unquote
+
+
+def url_segmenti(ad) -> str:
+    """ADT URL'inin tek yol parçası: `ZSD001_T01` → `zsd001_t01` · `/NS/X` → `%2Fns%2Fx`.
+
+    `quote(safe='')` büyük harfli kaçış üretir (`%2F`) — `object_types.get_object_url` ile aynı.
+    """
+    return _quote(_unquote(str(ad)).lower(), safe="")
+
+
+def url_parcasindan_ad(parca) -> str:
+    """`url_segmenti`'nin tersi: `%2Fns%2Fx` / `%2fns%2fx` → `/NS/X` (büyük harf)."""
+    return _unquote(str(parca)).upper()
 
 ANAHTAR = "customer_namespaces"
 
 _ZY = re.compile(r"^[ZY][A-Z0-9_]*\Z", re.IGNORECASE)
 _KILIT_ZY = re.compile(r"^E[ZY][A-Z0-9_]*\Z", re.IGNORECASE)
-_NS_BICIM = re.compile(r"^/[A-Z0-9_]{1,8}/\Z")
+_NS_BICIM = re.compile(r"^/(?=[A-Z0-9_]*[A-Z0-9])[A-Z0-9_]{1,8}/\Z")  # `/_/` RED: en az bir harf/rakam
 _AD_NS = re.compile(r"^(/[A-Za-z0-9_]{1,8}/)")
 KILIT_TIPLERI = frozenset({"enqu", "lock", "lockobject", "lockobjects"})
 
 
-def _kok(root) -> Path:
+def _baglanti_dizini() -> Path | None:
+    """Sürecin ÇÖZDÜĞÜ `.conn_adt`'nin dizini (dosya yoksa / çözülemezse None).
+
+    Yazma hangi sisteme gidecekse izin listesi de O projeden okunur (bug-gate F2, 2026-11-08):
+    `CLAUDE_PROJECT_DIR=<başka dizin>` öneki ya da `--cwd B` listeyi bağlantıdan AYIRAMAZ.
+    """
+    lib = sys.modules.get("sap_adt_lib")
+    if lib is None:
+        try:
+            import sap_adt_lib as lib  # type: ignore  # noqa: F811 — lazy, scripts/ sys.path'te
+        except Exception:  # noqa: BLE001 — bağlantı modülü yok ⇒ bu süreçte SAP yazımı da yok
+            return None
+    try:
+        p = lib.get_conn_path()
+    except Exception:  # noqa: BLE001
+        return None
+    if not p:
+        return None
+    p = Path(p)
+    return p.parent.resolve() if p.exists() else None
+
+
+def _kok_coz(root) -> tuple[Path | None, str | None]:
+    """(kök, hata). Bağlantı dosyası varsa kök ONUN dizinidir; verilen `root` ondan ayrışırsa
+    hata (namespace kabulü KAPALI — fail-closed). Bağlantı yoksa `root` ya da `project_root()`."""
+    baglanti = _baglanti_dizini()
+    if baglanti is not None:
+        if root and Path(root).resolve() != baglanti:
+            return None, (f"{ANAHTAR}: proje kökü ({Path(root).resolve()}) bağlantı dosyasının "
+                          f"dizininden ({baglanti}) farklı — namespace kabulü KAPALI")
+        return baglanti, None
     if root:
-        return Path(root)
+        return Path(root), None
     from utils.project_config import project_root  # lazy: komşu taban kopyaları import'u taşımaz
-    return project_root()
+    return project_root(), None
+
+
+_YAML_ONBELLEK: dict = {}
+
+
+def _yaml_oku(yol: Path) -> tuple[dict, int]:
+    """(ayrıştırılmış project.yaml, `customer_namespaces` anahtarının satır sayısı).
+
+    `project_config._yaml_lite` süreç ömrünce önbelleklidir (lru_cache) ⇒ namespace silinse de
+    uzun ömürlü süreçte (MCP) kabul sürerdi (bug-gate F5). Burada önbellek anahtarı dosyanın
+    (mtime_ns, boyut)'udur; `_yaml_lite`'ın önbelleğine ve `sap_profile` davranışına DOKUNULMAZ.
+    """
+    from utils.project_config import _yaml_lite  # mevcut ayrıştırıcı (#391 tırnak düzeltmesi)
+    try:
+        st = os.stat(yol)
+        anahtar = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        anahtar = None
+    kayit = _YAML_ONBELLEK.get(str(yol))
+    if kayit is not None and kayit[0] == anahtar:
+        return kayit[1], kayit[2]
+    cozumle = getattr(_yaml_lite, "__wrapped__", _yaml_lite)
+    veri = cozumle(str(yol))
+    tekrar = 0
+    if anahtar is not None:
+        metin = Path(yol).read_text(encoding="utf-8-sig", errors="replace")
+        tekrar = len(re.findall(r"^" + ANAHTAR + r"[ \t]*:", metin, re.M))
+    _YAML_ONBELLEK[str(yol)] = (anahtar, veri, tekrar)
+    return veri, tekrar
 
 
 def namespace_yapilandirmasi(root=None) -> tuple[tuple[str, ...], list[str]]:
     """`project.yaml` → (geçerli namespace'ler, hatalar). Hata varsa namespace'ler BOŞTUR."""
     try:
-        from utils.project_config import _yaml_lite  # mevcut ayrıştırıcı (#391 tırnak düzeltmesi)
-        yol = _kok(root) / "project.yaml"
-        ham = _yaml_lite(str(yol)).get(ANAHTAR)
+        kok, kok_hatasi = _kok_coz(root)
+        if kok_hatasi:
+            return (), [kok_hatasi]
+        veri, tekrar = _yaml_oku(kok / "project.yaml")
+        ham = veri.get(ANAHTAR)
     except Exception as exc:  # noqa: BLE001 — okunamayan yapılandırma = namespace YOK
         return (), [f"{ANAHTAR} okunamadı ({type(exc).__name__}) — yalnız Z/Y geçerli"]
+    if tekrar > 1:
+        return (), [f"{ANAHTAR} project.yaml'da {tekrar} kez tanımlı — hangisinin geçerli olduğu "
+                    f"belirsiz, namespace kabulü KAPALI"]
     if ham is None:
         return (), []
     if not isinstance(ham, list):
@@ -82,7 +177,7 @@ def namespace_yapilandirmasi(root=None) -> tuple[tuple[str, ...], list[str]]:
     hatalar: list[str] = []
     for oge in ham:
         s = str(oge).upper()
-        if not _NS_BICIM.match(s):
+        if not str(oge).isascii() or not _NS_BICIM.match(s):
             hatalar.append(f"{ANAHTAR} öğesi geçersiz: {oge!r} (beklenen biçim /<NS>/, "
                            f"A-Z 0-9 _, en çok 8 karakter)")
         elif s not in gecerli:
@@ -118,7 +213,9 @@ def musteri_adi_mi(ad: str, object_type: str | None = None, *, namespaces=None, 
         str(n).upper() for n in namespaces)
     if ns not in kayitli:
         return False
-    return re.match(r"^" + re.escape(ns) + r"[A-Z0-9_]+\Z", ad, re.IGNORECASE) is not None
+    # re.ASCII: namespace yolunda `[A-Z]` Unicode harf kabul ETMEZ ('ı'/'ſ'/'K' → I/S/K eşlemesi
+    # IGNORECASE'te sızardı). Z/Y yolu (`_ZY`) tabanla aynı bırakıldı — bkz. changelog notu.
+    return re.match(r"^" + re.escape(ns) + r"[A-Z0-9_]+\Z", ad, re.IGNORECASE | re.ASCII) is not None
 
 
 def red_gerekcesi(ad: str, *, root=None) -> str:

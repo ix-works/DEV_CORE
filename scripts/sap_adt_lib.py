@@ -29,6 +29,7 @@ for _akis in (sys.stdout, sys.stderr):
 _scripts_dir = Path(__file__).parent
 if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
+from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
 
 # Import auth providers for BTP cloud support
 try:
@@ -5526,7 +5527,7 @@ class SAPADTClient:
 
             if response.status_code in [200, 201]:
                 # Success
-                object_url = response.headers.get('Location', f'/sap/bc/adt/{object_path}/{name.lower()}')
+                object_url = response.headers.get('Location', f'/sap/bc/adt/{object_path}/{_adt_seg(name)}')
                 return {
                     'success': True,
                     'object_url': object_url,
@@ -6157,7 +6158,7 @@ class SAPADTClient:
             headers = self._get_headers()
             headers['Accept'] = 'application/vnd.sap.adt.domains.v2+xml, application/*'
             r = self.session.get(
-                f"{self.url}/sap/bc/adt/ddic/domains/{domain_name.lower()}",
+                f"{self.url}/sap/bc/adt/ddic/domains/{_adt_seg(domain_name)}",
                 headers=headers,
                 params={'sap-client': self.client, 'sap-language': self.language},
                 timeout=self.timeout_default,
@@ -6234,7 +6235,7 @@ class SAPADTClient:
             adtcore:language="{self.language}"
             xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel"
             xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
   <dtel:dataElement xmlns:dtel="http://www.sap.com/adt/dictionary/dataelements">
@@ -6288,14 +6289,14 @@ class SAPADTClient:
         response = self._retry_request(do_request, f'Create data element {name}')
 
         if response.status_code in [200, 201]:
-            object_url = response.headers.get('Location', f'/sap/bc/adt/ddic/dataelements/{name.lower()}')
+            object_url = response.headers.get('Location', f'/sap/bc/adt/ddic/dataelements/{_adt_seg(name)}')
             return {
                 'success': True,
                 'object_url': object_url,
                 'message': f'Data element {name} created successfully'
             }
         if response.status_code == 405 and 'AlreadyExists' in response.text:
-            object_url = f'/sap/bc/adt/ddic/dataelements/{name.lower()}'
+            object_url = f'/sap/bc/adt/ddic/dataelements/{_adt_seg(name)}'
             return {
                 'success': True,
                 'object_url': object_url,
@@ -6506,7 +6507,7 @@ class SAPADTClient:
              adtcore:masterLanguage="{self.language}"
              xmlns:doma="http://www.sap.com/dictionary/domain"
              xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
   <doma:content>
@@ -6554,14 +6555,14 @@ class SAPADTClient:
         response = self._retry_request(do_request, f'Create domain {name}')
 
         if response.status_code in [200, 201]:
-            object_url = response.headers.get('Location', f'/sap/bc/adt/ddic/domains/{name.lower()}')
+            object_url = response.headers.get('Location', f'/sap/bc/adt/ddic/domains/{_adt_seg(name)}')
             return {
                 'success': True,
                 'object_url': object_url,
                 'message': f'Domain {name} created successfully'
             }
         if response.status_code == 405 and 'AlreadyExists' in response.text:
-            object_url = f'/sap/bc/adt/ddic/domains/{name.lower()}'
+            object_url = f'/sap/bc/adt/ddic/domains/{_adt_seg(name)}'
             return {
                 'success': True,
                 'object_url': object_url,
@@ -6730,7 +6731,7 @@ class SAPADTClient:
                   adtcore:name="{name.upper()}"
                   adtcore:description="{description}"
                   adtcore:masterLanguage="{self.language}">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
   <blue:source>{ddl_source}</blue:source>
@@ -6758,7 +6759,7 @@ class SAPADTClient:
 
         response = self._retry_request(do_request, f'Create structure {name}')
 
-        object_url = f'/sap/bc/adt/ddic/structures/{name.lower()}'
+        object_url = f'/sap/bc/adt/ddic/structures/{_adt_seg(name)}'
         if response.status_code in [200, 201]:
             object_url = response.headers.get('Location', object_url)
         elif response.status_code == 405 and 'AlreadyExists' in response.text:
@@ -6772,7 +6773,7 @@ class SAPADTClient:
             )
 
         # DETERMİNİSTİK source yazımı — create-POST shell bırakmış olsa da düzeltir.
-        src_url = f'/sap/bc/adt/ddic/structures/{name.lower()}'
+        src_url = f'/sap/bc/adt/ddic/structures/{_adt_seg(name)}'
         lock_handle = self.lock_object(src_url, transport=transport)
         try:
             put_params = {'lockHandle': lock_handle}
@@ -6987,7 +6988,7 @@ define table {name.lower()} {{
                   adtcore:type="TABL/DT"
                   adtcore:description="{description}"
                   adtcore:masterLanguage="{self.language}">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
   <blue:source>{ddl_source}</blue:source>
@@ -7014,7 +7015,7 @@ define table {name.lower()} {{
         response = self._retry_request(make_request, operation=f'create table {name}')
 
         if response.status_code in [200, 201]:
-            object_url = response.headers.get('Location', f'/sap/bc/adt/ddic/tables/{name.lower()}')
+            object_url = response.headers.get('Location', f'/sap/bc/adt/ddic/tables/{_adt_seg(name)}')
             return {
                 'success': True,
                 'object_url': object_url,
@@ -7201,7 +7202,7 @@ define table {name.lower()} {{
                  adtcore:name="{name.upper()}"
                  adtcore:description="{description}"
                  adtcore:masterLanguage="{self.language}">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
   <ddl:sourceMainArtifact>
@@ -7234,14 +7235,14 @@ define table {name.lower()} {{
         response = self._retry_request(make_request, operation=f'create CDS view {name}')
 
         if response.status_code in [200, 201]:
-            object_url = response.headers.get('Location', f'/sap/bc/adt/ddic/ddl/sources/{name.lower()}')
+            object_url = response.headers.get('Location', f'/sap/bc/adt/ddic/ddl/sources/{_adt_seg(name)}')
             return {
                 'success': True,
                 'object_url': object_url,
                 'message': f'CDS view {name} created successfully'
             }
         if response.status_code == 405 and 'AlreadyExists' in response.text:
-            object_url = f'/sap/bc/adt/ddic/ddl/sources/{name.lower()}'
+            object_url = f'/sap/bc/adt/ddic/ddl/sources/{_adt_seg(name)}'
             return {
                 'success': True,
                 'object_url': object_url,
@@ -7280,7 +7281,7 @@ define table {name.lower()} {{
         headers = self._get_headers(accept_type)
 
         response = self.session.get(
-            f"{self.url}/sap/bc/adt/ddic/{endpoint}/{name.lower()}",
+            f"{self.url}/sap/bc/adt/ddic/{endpoint}/{_adt_seg(name)}",
             headers=headers,
             timeout=self.timeout_short
         )
@@ -7341,7 +7342,7 @@ constants:
                        adtcore:name="{name.upper()}"
                        adtcore:description="{description}"
                        adtcore:masterLanguage="{self.language}">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
 </atypgr:abapTypeGroup>'''
@@ -7368,7 +7369,7 @@ constants:
 
         if response.status_code not in [200, 201]:
             if response.status_code == 403 and 'already exists' in response.text.lower():
-                object_url = f'/sap/bc/adt/ddic/typegroups/{name.lower()}'
+                object_url = f'/sap/bc/adt/ddic/typegroups/{_adt_seg(name)}'
                 return {
                     'success': True,
                     'object_url': object_url,
@@ -7383,7 +7384,7 @@ constants:
 
         # Now upload the source code
         # The URL is constructed from the type group name (lowercase)
-        object_url = f'/sap/bc/adt/ddic/typegroups/{name.lower()}'
+        object_url = f'/sap/bc/adt/ddic/typegroups/{_adt_seg(name)}'
         source_url = f"{self.url}{object_url}/source/main"
 
         source_headers = self._get_headers(
@@ -7438,7 +7439,7 @@ constants:
                          adtcore:name="{name.upper()}"
                          adtcore:description="{description}"
                          adtcore:masterLanguage="{self.language}">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
 </group:abapFunctionGroup>'''
@@ -7464,14 +7465,14 @@ constants:
         )
 
         if response.status_code in [200, 201]:
-            object_url = f'/sap/bc/adt/functions/groups/{name.lower()}'
+            object_url = f'/sap/bc/adt/functions/groups/{_adt_seg(name)}'
             return {
                 'success': True,
                 'object_url': object_url,
                 'message': f'Function group {name} created successfully'
             }
         if response.status_code == 405 and 'AlreadyExists' in response.text:
-            object_url = f'/sap/bc/adt/functions/groups/{name.lower()}'
+            object_url = f'/sap/bc/adt/functions/groups/{_adt_seg(name)}'
             return {
                 'success': True,
                 'object_url': object_url,
@@ -7537,14 +7538,14 @@ constants:
         # CSRF-retry wrapper: stale CSRF token -> 403 was the FM-create root cause.
         response = self._request_with_csrf_retry(
             'post',
-            f"{self.url}/sap/bc/adt/functions/groups/{function_group.lower()}/fmodules",
+            f"{self.url}/sap/bc/adt/functions/groups/{_adt_seg(function_group)}/fmodules",
             headers=headers,
             data=fm_xml.encode('utf-8'),
             params=params,
             timeout=self.timeout_default
         )
 
-        object_url = f'/sap/bc/adt/functions/groups/{function_group.lower()}/fmodules/{name.lower()}'
+        object_url = f'/sap/bc/adt/functions/groups/{_adt_seg(function_group)}/fmodules/{_adt_seg(name)}'
 
         if response.status_code in [200, 201]:
             return {
@@ -7569,7 +7570,7 @@ constants:
             f"Failed to create function module {name}",
             status_code=response.status_code,
             response_text=response.text[:500],
-            endpoint=f'/sap/bc/adt/functions/groups/{function_group.lower()}/fmodules'
+            endpoint=f'/sap/bc/adt/functions/groups/{_adt_seg(function_group)}/fmodules'
         )
 
     def set_function_module_source(self, name, function_group, source_code,
@@ -7604,8 +7605,8 @@ constants:
         Returns:
             dict with success status, object_url and (if activated) activation result
         """
-        fg = function_group.lower()
-        fm = name.lower()
+        fg = _adt_seg(function_group)
+        fm = _adt_seg(name)
         fm_url = f'/sap/bc/adt/functions/groups/{fg}/fmodules/{fm}'
         base = f"{self.url}{fm_url}"
 
@@ -8142,7 +8143,7 @@ constants:
                   adtcore:name="{name.upper()}"
                   adtcore:description="{description}"
                   adtcore:masterLanguage="{self.language}">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
 </ddlx:ddlxSource>'''
@@ -8171,7 +8172,7 @@ constants:
                 response_text=response.text[:500]
             )
 
-        object_url = f'/sap/bc/adt/ddic/ddlx/sources/{name.lower()}'
+        object_url = f'/sap/bc/adt/ddic/ddlx/sources/{_adt_seg(name)}'
 
         # Upload the source (pass transport so SAP registers write under correct CTS entry)
         try:
@@ -8213,7 +8214,7 @@ constants:
                adtcore:name="{name.upper()}"
                adtcore:description="{description}"
                adtcore:masterLanguage="{self.language}">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
 </acm:dclSource>'''
@@ -8242,7 +8243,7 @@ constants:
                 response_text=response.text[:500]
             )
 
-        object_url = f'/sap/bc/adt/acm/dcl/sources/{name.lower()}'
+        object_url = f'/sap/bc/adt/acm/dcl/sources/{_adt_seg(name)}'
 
         # Upload the source (pass transport so SAP registers write under correct CTS entry)
         try:
@@ -8289,7 +8290,7 @@ constants:
         from xml.sax.saxutils import escape as _xe
         bdef_base = '/sap/bc/adt/bo/behaviordefinitions'
         bdef_ct = 'application/vnd.sap.adt.blues.v1+xml'
-        object_url = f'{bdef_base}/{name.lower()}'
+        object_url = f'{bdef_base}/{_adt_seg(name)}'
 
         shell_xml = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -8299,7 +8300,7 @@ constants:
             f'                 adtcore:description="{_xe(description or name)}"\n'
             '                 adtcore:type="BDEF/BDO"\n'
             f'                 adtcore:masterLanguage="{self.language}">\n'
-            f'  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"\n'
+            f'  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"\n'
             '                      adtcore:type="DEVC/K"\n'
             f'                      adtcore:name="{package_name.upper()}"/>\n'
             '</blue:blueSource>'
@@ -8412,10 +8413,10 @@ constants:
                                adtcore:name="{name.upper()}"
                                adtcore:description="{description or name}"
                                adtcore:masterLanguage="{self.language}">
-  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package_name.lower()}"
+  <adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package_name)}"
                       adtcore:type="DEVC/K"
                       adtcore:name="{package_name.upper()}"/>
-  <bimpl:behaviorDefinitionRef adtcore:uri="/sap/bc/adt/behaviordefinitions/{behavior_definition.lower()}"
+  <bimpl:behaviorDefinitionRef adtcore:uri="/sap/bc/adt/behaviordefinitions/{_adt_seg(behavior_definition)}"
                                 adtcore:name="{behavior_definition.upper()}"/>
 </bimpl:behaviorImplementation>'''
 
@@ -8443,7 +8444,7 @@ constants:
                 response_text=response.text[:500]
             )
 
-        object_url = f'/sap/bc/adt/behaviorimplementations/{name.lower()}'
+        object_url = f'/sap/bc/adt/behaviorimplementations/{_adt_seg(name)}'
 
         # Upload source if provided
         if source:
@@ -8496,7 +8497,7 @@ def _resolve_source_url(object_name, object_type):
         pass
     seg = _DRIFT_FALLBACK_PATHS.get((object_type or '').lower())
     if seg:
-        return f'/sap/bc/adt/{seg}/{object_name.lower()}/source/main'
+        return f'/sap/bc/adt/{seg}/{_adt_seg(object_name)}/source/main'
     return None
 
 

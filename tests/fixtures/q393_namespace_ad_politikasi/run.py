@@ -115,7 +115,21 @@ def proje(yaml_metni: str | None) -> Path:
     if yaml_metni is not None:
         (d / "project.yaml").write_bytes(yaml_metni.encode("utf-8"))
     os.environ["CLAUDE_PROJECT_DIR"] = str(d)
+    _baglanti(d)
     return d
+
+
+def _baglanti(d, explicit=None):
+    """sap_adt_lib'in ÇÖZDÜĞÜ bağlantıyı sabitle (P2a/F2: namespace kökü = bağlantı dizini).
+    Ortamın kendi `.conn_adt`'si (worktree provizyonu) ölçüme SIZMASIN diye her projede yeniden."""
+    lib = sys.modules.get("sap_adt_lib")
+    if lib is not None:
+        lib._explicit_working_dir = Path(explicit).resolve() if explicit else None
+        lib.conn_path = Path(d) / ".conn_adt"
+
+
+def _sahte_baglanti(d):
+    (Path(d) / ".conn_adt").write_bytes(b"ADT_SAP_URL=https://sahte.invalid\nADT_SAP_CLIENT=000\n")
 
 
 YAML_NS = "sap_profile: s4_private\ncustomer_namespaces: [\"/NSPC/\"]\n"
@@ -333,6 +347,222 @@ def bolum_s(SD):
     ekle("S3 Z adi gecer, standart ad rc 2", kos("ZCL_X") == "GECTI" and kos("CL_X") == 2, "")
 
 
+# ── R: namespace kökü = BAĞLANTI dizini (bug-gate F2) + yapılandırma sertleştirmeleri ──
+def bolum_r(A, G, L, O):
+    xml_canli = (BURASI / "canli" / "ns_progs_include_meta.xml").read_text(encoding="utf-8")
+    # R1 (i): CLAUDE_PROJECT_DIR=X (.conn_adt YOK, liste /SCWM/ + /NSPC/) · bağlantı cwd P'den
+    x = proje("customer_namespaces: [\"/SCWM/\", \"/NSPC/\"]\n")
+    pdir = _KUM / f"p{_SAYAC[0]}_baglanti"
+    pdir.mkdir()
+    (pdir / "project.yaml").write_bytes(YAML_YOK.encode("utf-8"))
+    _sahte_baglanti(pdir)
+    eski_cwd = os.getcwd()
+    try:
+        os.chdir(pdir)
+        cozulen = L.find_conn_file()                  # GERÇEK çözücü: X'te yok → cwd P
+    finally:
+        os.chdir(eski_cwd)
+    L.conn_path = cozulen
+    on_kosul = Path(cozulen).resolve() == (pdir / ".conn_adt").resolve()
+    ekle("R1 ⭐ CLAUDE_PROJECT_DIR=<.conn_adt'siz, listeli dizin> + baglanti baska projede -> "
+         "liste BAGLANTININ projesinden: /SCWM/ ve /NSPC/ RED",
+         on_kosul and not G._is_customer_namespace("/SCWM/CL_X", "class")
+         and not G._is_customer_namespace("/NSPC/X", "tabl")
+         and _red(G.require_customer_namespace, "/SCWM/CL_X", object_type="clas"),
+         [str(cozulen), G._is_customer_namespace("/SCWM/CL_X", "class")])
+    # R2 (ii): CLAUDE_PROJECT_DIR=A (liste /NSPC/) · --cwd B (bağlantı B, liste YOK)
+    a = proje(YAML_NS)
+    b = _KUM / f"p{_SAYAC[0]}_cwd"
+    b.mkdir()
+    (b / "project.yaml").write_bytes(YAML_YOK.encode("utf-8"))
+    _sahte_baglanti(b)
+    _baglanti(b, explicit=b)
+    ekle("R2 ⭐ --cwd B (baglanti B, liste yok) + CLAUDE_PROJECT_DIR=A (liste /NSPC/) -> "
+         "guardrail / validate_object_name / grup kaniti B'yi okur: RED",
+         not G._is_customer_namespace("/NSPC/X", "tabl")
+         and _red(L.validate_object_name, "/NSPC/CL_SD001_X", "class")
+         and O.fugr_include_grup_kaniti(xml_canli, "/NSPC/FG1")[0] is False,
+         [G._is_customer_namespace("/NSPC/X", "tabl"), O.fugr_include_grup_kaniti(xml_canli, "/NSPC/FG1")])
+    (b / "project.yaml").write_bytes(YAML_NS.encode("utf-8"))
+    os.utime(b / "project.yaml", ns=(1, 2_000_000_000_000_000_000))
+    ekle("R3 KONTROL: B'nin listesi /NSPC/ olunca ayni uc kabul (okunan gercekten B)",
+         G._is_customer_namespace("/NSPC/X", "tabl")
+         and _kabul(L.validate_object_name, "/NSPC/CL_SD001_X", "class")
+         and O.fugr_include_grup_kaniti(xml_canli, "/NSPC/FG1")[0] is True, "")
+    # R4: açık root bağlantı dizininden farklı -> kabul KAPALI + gerekçe
+    ns4, h4 = A.namespace_yapilandirmasi(a)
+    ekle("R4 ⭐ acik root (A) baglanti dizininden (B) farkli -> namespace KAPALI + hata metni",
+         ns4 == () and h4 and "farkl" in h4[0] and not A.musteri_adi_mi("/NSPC/X", root=a)
+         and "farkl" in A.red_gerekcesi("/NSPC/X", root=a), [ns4, h4])
+    _baglanti(a)
+    # R5 (F5): aynı süreçte dosya değişince yeniden okunur
+    r5 = proje(YAML_NS)
+    once = A.musteri_adi_mi("/NSPC/X")
+    (r5 / "project.yaml").write_bytes(YAML_YOK.encode("utf-8"))
+    os.utime(r5 / "project.yaml", ns=(1, 2_000_000_000_000_000_000))
+    ekle("R5 ⭐ namespace silinince ayni surecte RED (mtime anahtarli onbellek; /mcp beklemez)",
+         once is True and A.musteri_adi_mi("/NSPC/X") is False, [once])
+    r6 = proje("customer_namespaces: [\"/NSPC/\"]\nsap_profile: s4_private\ncustomer_namespaces: [\"/SCWM/\"]\n")
+    ns6, h6 = A.namespace_yapilandirmasi(r6)
+    ekle("R6 mukerrer customer_namespaces anahtari -> hata + KAPALI", ns6 == () and h6 and "2 kez" in h6[0],
+         [ns6, h6])
+    r7 = proje("customer_namespaces: [\"/OK/\", \"/_/\"]\n")
+    ns7, h7 = A.namespace_yapilandirmasi(r7)
+    r7b = proje("customer_namespaces: [\"/A_/\"]\n")
+    ekle("R7 '/_/' (harfsiz/rakamsiz) oge RED + liste kapali · '/A_/' gecerli",
+         ns7 == () and any("/_/" in x for x in h7) and A.namespace_yapilandirmasi(r7b) == (("/A_/",), []),
+         [ns7, h7])
+    r8 = proje("customer_namespaces: [\"/OK/\", \"/\u017fPC/\"]\n")
+    ns8, h8 = A.namespace_yapilandirmasi(r8)
+    ekle("R8 ASCII olmayan oge ('/\u017fPC/' -> upper '/SPC/') RED + liste kapali", ns8 == () and h8, [ns8, h8])
+    proje(YAML_NS)
+    ekle("R9 namespace govdesinde Unicode harf RED ('\u0131' '\u017f' '\u212a' '\u0130'), ASCII kabul",
+         not any(A.musteri_adi_mi("/NSPC/X" + ch) for ch in ("\u0131", "\u017f", "\u212a", "\u0130"))
+         and A.musteri_adi_mi("/NSPC/XK") and not G._is_customer_namespace("/NSPC/X\u0131", "tabl"), "")
+    # R10 (F3): tam olarak TEK FUGR/* baglam
+    iki_ff = _meta("FUGR/F", "/NSPC/FG1", "/sap/bc/adt/functions/groups/%2fnspc%2ffg1/source/main",
+                   ikinci='<include:contextRef adtcore:uri="/sap/bc/adt/functions/groups/%2fnspc%2ffg2/'
+                          'source/main" adtcore:type="FUGR/F" adtcore:name="/NSPC/FG2"/>')
+    karisik = _meta("FUGR/I", "/NSPC/SAPLFG1", "/sap/bc/adt/functions/groups/%2fnspc%2ffg1/source/main",
+                    ikinci='<include:contextRef adtcore:uri="/sap/bc/adt/functions/groups/%2fnspc%2ffg2/'
+                           'source/main" adtcore:type="FUGR/F" adtcore:name="/NSPC/FG2"/>')
+    z_karisik = _meta("FUGR/I", "SAPLZFG1", "/sap/bc/adt/functions/groups/zfg1/source/main",
+                      ikinci='<include:contextRef adtcore:uri="/sap/bc/adt/functions/groups/zfg1/'
+                             'source/main" adtcore:type="FUGR/F" adtcore:name="ZFG1"/>')
+    k = O.fugr_include_grup_kaniti
+    ekle("R10 ⭐ birden cok FUGR/* contextRef (iki FUGR/F · FUGR/I+FUGR/F, Z dahil) -> RED (iki grup "
+         "birden kanitlanmaz)",
+         k(iki_ff, "/NSPC/FG1")[0] is False and k(iki_ff, "/NSPC/FG2")[0] is False
+         and k(karisik, "/NSPC/FG1")[0] is False and k(karisik, "/NSPC/FG2")[0] is False
+         and k(z_karisik, "ZFG1")[0] is False,
+         [k(iki_ff, "/NSPC/FG1"), k(karisik, "/NSPC/FG2"), k(z_karisik, "ZFG1")])
+
+
+# ── U: ADT URL yol parçası (Parti 2a) ───────────────────────────────────────
+_URL_DOSYALARI = (
+    "scripts/sap_adt_lib.py", "scripts/sap_client.py", "scripts/create_rap_service.py",
+    "scripts/populate_cds_views.py", "scripts/populate_dataelements.py", "scripts/populate_message_class.py",
+    "scripts/populate_tables.py", "scripts/populate_lock_objects.py", "scripts/populate_domains.py",
+    "scripts/push_textpool.py", "scripts/pull_msag_textpool.py", "scripts/check_package.py",
+    "scripts/syntax_check.py", "scripts/list_revisions.py", "scripts/object_types.py",
+    "scripts/validators/check_sap_active_version.py", "scripts/validators/check_sap_struct_consistency.py",
+    "scripts/validators/check_source_drift.py", "scripts/validators/check_table_field_drop.py",
+    "scripts/validators/check_struct_field_dtel_active.py", "mcp_servers/sap_adt/tools/composite.py",
+    "mcp_servers/sap_adt/tools/atom.py",
+)
+_URL_ISARET = ("/sap/bc/adt", "_BASE}", "uri=", "_path}", "_url}")
+_ATAMA_ADLARI = {"prog_l", "fg", "fm", "cls"}
+
+
+def _url_kalintilari():
+    """AST: URL f-string'inde `{X.lower()}` ve URL parçası atamasında `= X.lower()` kalıntısı."""
+    import ast
+    kalan = []
+    for yol in _URL_DOSYALARI:
+        ham = (REPO / yol).read_bytes().decode("utf-8")
+        satirlar = ham.splitlines(keepends=True)
+        for n in ast.walk(ast.parse(ham)):
+            if isinstance(n, ast.JoinedStr):
+                seg = "".join(satirlar[n.lineno - 1:n.end_lineno])
+                if any(i in seg for i in _URL_ISARET):
+                    for v in n.values:
+                        c = v.value if isinstance(v, ast.FormattedValue) else None
+                        if (isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+                                and c.func.attr == "lower" and not c.args):
+                            kalan.append(f"{yol}:{c.lineno}")
+            elif (isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
+                  and n.targets[0].id in _ATAMA_ADLARI and isinstance(n.value, ast.Call)
+                  and isinstance(n.value.func, ast.Attribute) and n.value.func.attr == "lower"):
+                kalan.append(f"{yol}:{n.lineno}(atama)")
+    return kalan
+
+
+def _kurucular(m):
+    """(etiket, çağrı) — modül `m`'nin saf XML/URL kurucuları; `ad`/`pkg` parametreli."""
+    yield "dtel", lambda ad, pkg: m["populate_dataelements"].build_xml(
+        ad, "aciklama", pkg, "SAP_USER_A", "domain", "ZD", "CHAR", 10, 0, "k", "o", "u", "b")
+    yield "doma", lambda ad, pkg: m["populate_domains"].build_xml(ad, "aciklama", pkg, "SAP_USER_A", "CHAR", 10, 0, [])
+    yield "enqu", lambda ad, pkg: m["populate_lock_objects"].build_xml(ad, "aciklama", pkg, "ZT", "E", False, ["F1"])
+    yield "msag", lambda ad, pkg: m["populate_message_class"].build_xml(ad, "aciklama", pkg, "SAP_USER_A", [])
+    yield "tabl", lambda ad, pkg: m["populate_tables"].build_xml(ad, "aciklama", pkg, "TR", "")
+    yield "ddls", lambda ad, pkg: m["populate_cds_views"].build_shell_xml(ad, "aciklama", pkg)
+    yield "srvd", lambda ad, pkg: m["create_rap_service"].srvd_shell_xml(ad, "aciklama", pkg)
+    yield "srvb", lambda ad, pkg: m["create_rap_service"].srvb_xml(ad, ad + "_D", pkg)
+    yield "publ", lambda ad, pkg: m["create_rap_service"].publish_xml(ad)
+    yield "bdef", lambda ad, pkg: m["create_rap_service"].bdef_shell_xml(ad, "aciklama", pkg)
+    yield "bcls", lambda ad, pkg: m["create_rap_service"].bclass_shell_xml(ad, "aciklama", pkg)
+
+
+def bolum_u(A, O, TO, KUR, TKUR):
+    seg = A.url_segmenti
+    z = [a for a in AD_KORPUS + ["ZSD001_T01", "ZCL_SD001_ORDER", "Y1_X", "lzfg1top", "SAPLZFG1"]
+         if a and re.fullmatch(r"[A-Za-z0-9_]+", a)]
+    ekle(f"U1 ⭐ KONTROL: {len(z)} Z/Y/ad-karakterli adda url_segmenti == eski .lower() (bayt bayt)",
+         all(seg(a) == a.lower() for a in z), [(a, seg(a)) for a in z if seg(a) != a.lower()][:4])
+    ekle("U2 NS ad kodlanir: /NSPC/X -> %2Fnspc%2Fx · /nspc/cl_x -> %2Fnspc%2Fcl_x",
+         seg("/NSPC/X") == "%2Fnspc%2Fx" and seg("/nspc/cl_x") == "%2Fnspc%2Fcl_x", seg("/NSPC/X"))
+    cift = [seg("%2fnspc%2fx"), seg("%2Fnspc%2Fx"), seg(seg("/NSPC/X")), seg(seg(seg("/NSPC/X")))]
+    ekle("U3 ⭐ zaten kodlanmis ad CIFT kodlanmaz (%252f YOK, idempotent)",
+         all(c == "%2Fnspc%2Fx" for c in cift) and not any("%25" in c for c in cift), cift)
+    ekle("U4 url_parcasindan_ad ters donusum: %2fnspc%2ffg1 / %2Fnspc%2Ffg1 -> /NSPC/FG1 · zfg1 -> ZFG1",
+         A.url_parcasindan_ad("%2fnspc%2ffg1") == "/NSPC/FG1" == A.url_parcasindan_ad(seg("/NSPC/FG1"))
+         and A.url_parcasindan_ad("zfg1") == "ZFG1", "")
+    ns_meta = _meta("FUGR/F", "/NSPC/FG1", "/sap/bc/adt/functions/groups/%2fnspc%2ffg1/source/main")
+    z_meta = _meta("FUGR/I", "SAPLZFG1", "/sap/bc/adt/functions/groups/zfg1/source/main")
+    ekle("U5 ⭐ include_fugr_baglami NS grubu COZULMUS doner (/NSPC/FG1) · Z grup tabanla AYNI",
+         O.include_fugr_baglami(ns_meta) == "/NSPC/FG1"
+         and O.include_fugr_baglami(z_meta) == TO.include_fugr_baglami(z_meta) == "ZFG1",
+         [O.include_fugr_baglami(ns_meta), O.include_fugr_baglami(z_meta)])
+    fark, ns_hata = [], []
+    for (et, fn), (_, tfn) in zip(_kurucular(KUR), _kurucular(TKUR)):
+        yeni, e1 = _sessiz(fn, "ZSD001_X", "ZSD001_PKG")
+        eski, e2 = _sessiz(tfn, "ZSD001_X", "ZSD001_PKG")
+        if e1 or e2 or yeni != eski:
+            fark.append((et, repr(e1)[:60], repr(e2)[:60]))
+        nsx, e3 = _sessiz(fn, "/NSPC/X", "/NSPC/SD001")
+        urls = [t for t in re.split("[\"' <>]", nsx or "") if "/sap/bc/adt/" in t]
+        if (e3 or not urls or not any("%2fnspc%2f" in u.lower() for u in urls)
+                or any("/nspc/" in u.lower() for u in urls) or any("%25" in u for u in urls)):
+            ns_hata.append((et, repr(e3)[:60], urls[:2]))
+    ekle("U6 ⭐ KONTROL: 11 XML/URL kurucusu Z adinda tabanla BAYT BAYT AYNI", not fark, fark[:4])
+    ekle("U7 ⭐ ayni 11 kurucu NS adinda %2F kodlu (ham '/nspc/' yol parcasi YOK, %25 YOK)",
+         not ns_hata, ns_hata[:4])
+    kalan = _url_kalintilari()
+    ekle(f"U8 ⭐ {len(_URL_DOSYALARI)} dosyada URL f-string / URL atamasinda `.lower()` kalintisi YOK (AST)",
+         not kalan, kalan[:6])
+
+
+def bolum_d(PD, CD, TPD):
+    sutun = "name,type_kind,type_name,datatype,length,decimals,description,short,medium,long,heading\n"
+    def csv(ad):
+        y = _KUM / f"dtel_{_SAYAC[0]}.csv"
+        y.write_bytes((sutun + f"{ad},domain,ZD,CHAR,10,0,aciklama,k,o,u,b\n").encode("utf-8"))
+        return y
+    proje(YAML_NS)
+    yol = csv("/NSPC/SD001_D01")
+    rows, exc = _sessiz(PD.load_dataelements_from_csv, yol)
+    b1 = []
+    CD._dosyayi_denetle(yol, b1)
+    ekle("D1 ⭐ DTEL CSV: kayitli NS adi populate + validator'dan GECER",
+         exc is None and rows and rows[0]["name"] == "/NSPC/SD001_D01"
+         and not [x for x in b1 if "R1" in x[2]], [repr(exc)[:120], b1[:2]])
+    proje(YAML_YOK)
+    yol = csv("/NSPC/SD001_D01")
+    _, exc2 = _sessiz(PD.load_dataelements_from_csv, yol)
+    b2 = []
+    CD._dosyayi_denetle(yol, b2)
+    ekle("D2 kayitsiz NS adi populate RED (gerekce metinde) + validator R1",
+         exc2 is not None and "bildirilmemi" in str(exc2) and [x for x in b2 if "R1" in x[2]],
+         [repr(exc2)[:160], b2[:2]])
+    yol = csv("MARA_X")
+    _, exc3 = _sessiz(PD.load_dataelements_from_csv, yol)
+    _, exc4 = _sessiz(TPD.load_dataelements_from_csv, yol)
+    yol5 = csv("ZSD001_D01")
+    r5, exc5 = _sessiz(PD.load_dataelements_from_csv, yol5)
+    ekle("D3 KONTROL: standart ad iki surumde de RED · Z adi gecer",
+         exc3 is not None and exc4 is not None and exc5 is None and r5, [repr(exc5)[:100]])
+
+
 # ── K: taban (ayırt edicilik) ───────────────────────────────────────────────
 def _taban_modul(yol, ad):
     g = subprocess.run(["git", "-C", str(_GIT_KOK), "show", f"{TABAN_SHA}:{yol}"], capture_output=True)
@@ -346,6 +576,17 @@ def _taban_modul(yol, ad):
     return mod
 
 
+def _taban_disi_modul(yol, ad):
+    """Paket olmayan dizindeki betiği (validators/) dosyadan yükle — GÜNCEL sürüm."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(ad, str(REPO / yol))
+    mod = importlib.util.module_from_spec(spec)
+    _, exc = _sessiz(spec.loader.exec_module, mod)
+    if exc is not None:
+        raise SystemExit(f"[fixture-hatasi] {yol} yuklenemedi: {exc!r}")
+    return mod
+
+
 def bolum_k(TG, TO, TL):
     xml_canli = (BURASI / "canli" / "ns_progs_include_meta.xml").read_text(encoding="utf-8")
     proje(YAML_NS)
@@ -355,6 +596,9 @@ def bolum_k(TG, TO, TL):
         xml_canli, "/NSPC/FG1")[0] is False, "")
     ekle("K3 ⭐ taban validate_object_name/package NS'i reddediyordu",
          _red(TL.validate_object_name, "/NSPC/CL_SD001_X", "class") and _red(TL.validate_package_name, "/NSPC/SD001"), "")
+    ns_meta = _meta("FUGR/F", "/NSPC/FG1", "/sap/bc/adt/functions/groups/%2fnspc%2ffg1/source/main")
+    ekle("K4 ⭐ taban include_fugr_baglami NS grubunu KODLU donduruyordu (%2FNSPC%2FFG1)",
+         TO.include_fugr_baglami(ns_meta) == "%2FNSPC%2FFG1", TO.include_fugr_baglami(ns_meta))
 
 
 def main() -> int:
@@ -364,15 +608,22 @@ def main() -> int:
     O = _imp("object_types")
     ATOM = _imp("mcp_servers.sap_adt.tools.atom")
     SD = _imp("sap_set_object_description")
+    _KURUCU_MOD = ("populate_dataelements", "populate_domains", "populate_lock_objects",
+                   "populate_message_class", "populate_tables", "populate_cds_views", "create_rap_service")
+    KUR = {ad: _imp(ad) for ad in _KURUCU_MOD}
+    CD = _taban_disi_modul("scripts/validators/check_dtel_creation_labels.py", "check_dtel_creation_labels")
     try:
         TG = _taban_modul("mcp_servers/sap_adt/guardrails.py", "guardrails_taban")
         TO = _taban_modul("scripts/object_types.py", "object_types_taban")
         TL = _taban_modul("scripts/sap_adt_lib.py", "sap_adt_lib_taban")
+        TKUR = {ad: _taban_modul(f"scripts/{ad}.py", ad + "_taban") for ad in _KURUCU_MOD}
     except Exception as exc:                           # noqa: BLE001
         print(f"[fixture-hatasi] taban kurulamadi: {exc}")
         return 3
     for fn, a in ((bolum_y, (A,)), (bolum_g, (G, TG)), (bolum_l, (L, TL)), (bolum_f, (A, O, ATOM)),
-                  (bolum_s, (SD,)), (bolum_k, (TG, TO, TL))):
+                  (bolum_s, (SD,)), (bolum_r, (A, G, L, O)), (bolum_u, (A, O, TO, KUR, TKUR)),
+                  (bolum_d, (KUR["populate_dataelements"], CD, TKUR["populate_dataelements"])),
+                  (bolum_k, (TG, TO, TL))):
         try:
             fn(*a)
         except Exception as exc:                       # çökme != FAIL: ölçülür
@@ -392,25 +643,27 @@ Z = chr(92) + "Z"
 MUTASYONLAR = {
     "--mutasyon-ns-kapali": (_AP, "    if ns not in kayitli:\n        return False\n",
                              "    return False\n",
-                             {"G1", "G4", "G7", "L1", "L2", "L3", "F2", "F3", "F8", "S1"}),
-    "--mutasyon-ns-dolar": (_AP, 'r"[A-Z0-9_]+' + Z + '", ad, re.IGNORECASE)',
-                            'r"[A-Z0-9_]+$", ad, re.IGNORECASE)', {"G4"}),
-    "--mutasyon-ns-bos-govde": (_AP, 'r"[A-Z0-9_]+' + Z + '", ad, re.IGNORECASE)',
-                                'r"[A-Z0-9_]*' + Z + '", ad, re.IGNORECASE)', {"G3", "L1"}),
+                             {"G1", "G4", "G7", "L1", "L2", "L3", "F2", "F3", "F8", "S1",
+                              "R3", "R5", "R9", "D1"}),
+    "--mutasyon-ns-dolar": (_AP, 'r"[A-Z0-9_]+' + Z + '", ad, re.IGNORECASE | re.ASCII)',
+                            'r"[A-Z0-9_]+$", ad, re.IGNORECASE | re.ASCII)', {"G4"}),
+    "--mutasyon-ns-bos-govde": (_AP, 'r"[A-Z0-9_]+' + Z + '", ad, re.IGNORECASE | re.ASCII)',
+                                'r"[A-Z0-9_]*' + Z + '", ad, re.IGNORECASE | re.ASCII)', {"G3", "L1"}),
     "--mutasyon-yapi-kismi": (_AP, "    if hatalar:\n        return (), hatalar + [",
-                              "    if False:\n        return (), hatalar + [", {"Y5", "G6"}),
-    "--mutasyon-env-okunur": (_AP, "        ham = _yaml_lite(str(yol)).get(ANAHTAR)\n",
+                              "    if False:\n        return (), hatalar + [", {"Y5", "G6", "R7", "R8"}),
+    "--mutasyon-env-okunur": (_AP, "        ham = veri.get(ANAHTAR)\n",
                               "        _e = __import__('os').environ.get('IX_' + ANAHTAR.upper())\n"
-                              "        ham = _e.split(',') if _e else _yaml_lite(str(yol)).get(ANAHTAR)\n",
+                              "        ham = _e.split(',') if _e else veri.get(ANAHTAR)\n",
                               {"Y6"}),
     "--mutasyon-kayitsiz-kabul": (_AP, "    if ns not in kayitli:\n        return False\n", "",
-                                  {"G2", "G6", "G7", "G8", "L1", "L2", "L3", "L4", "F2", "F5", "S2"}),
+                                  {"G2", "G6", "G7", "G8", "L1", "L2", "L3", "L4", "F2", "F5", "S2",
+                                   "R1", "R2", "R4", "R5", "D2"}),
     "--mutasyon-ff-z-grupta": ("scripts/object_types.py",
-                               "    if _ap.ad_namespace(g) and _ap.musteri_adi_mi(g):\n",
-                               "    if True:\n", {"F4", "F5"}),
+                               "    if _ap.ad_namespace(g) and _ap.musteri_adi_mi(g, root=root):\n",
+                               "    if True:\n", {"F4", "F5", "R2"}),
     "--mutasyon-ff-kayit-sarti": ("scripts/object_types.py",
-                                  "    if _ap.ad_namespace(g) and _ap.musteri_adi_mi(g):\n",
-                                  "    if _ap.ad_namespace(g):\n", {"F5"}),
+                                  "    if _ap.ad_namespace(g) and _ap.musteri_adi_mi(g, root=root):\n",
+                                  "    if _ap.ad_namespace(g):\n", {"F5", "R2"}),
     "--mutasyon-onek-eski": (_AP, '    return ns + "L" + g[len(ns):] if ns else "L" + g\n',
                              '    return "L" + g\n', {"F1", "F2", "F8"}),
     "--mutasyon-guardrail-eski": ("mcp_servers/sap_adt/guardrails.py",
@@ -418,7 +671,7 @@ MUTASYONLAR = {
                                   "    return bool(re.match(r'^[ZY][A-Z0-9_]*" + Z + "', name or '', re.I)) or bool("
                                   "object_type and object_type.lower() in _LOCK_TYPES and "
                                   "re.match(r'^E[ZY][A-Z0-9_]*" + Z + "', name or '', re.I))\n",
-                                  {"G1", "G4", "G7", "F8"}),
+                                  {"G1", "G4", "G7", "F8", "R3"}),
     "--mutasyon-paket-ns-yok": ("scripts/sap_adt_lib.py",
                                 "    if package_upper.startswith('/'):\n",
                                 "    if False:\n", {"L2"}),
@@ -426,6 +679,41 @@ MUTASYONLAR = {
                                 "    if False:\n", {"G8", "G9", "G10"}),
     "--mutasyon-harf-duyarli": (_AP, '_ZY = re.compile(r"^[ZY][A-Z0-9_]*' + Z + '", re.IGNORECASE)',
                                 '_ZY = re.compile(r"^[ZY][A-Z0-9_]*' + Z + '")', {"G8", "G9"}),
+    # ── P2a/bug-gate F2-F5 + öneri ──
+    "--mutasyon-kok-proje": (_AP, "    baglanti = _baglanti_dizini()\n", "    baglanti = None\n",
+                             {"R1", "R2", "R4"}),
+    "--mutasyon-kok-ayrisma": (_AP, "        if root and Path(root).resolve() != baglanti:\n",
+                               "        if False:\n", {"R4"}),
+    "--mutasyon-onbellek-kalici": (_AP, "    if kayit is not None and kayit[0] == anahtar:\n",
+                                   "    if kayit is not None:\n", {"R3", "R5"}),
+    "--mutasyon-mukerrer-anahtar": (_AP, "    if tekrar > 1:\n", "    if False:\n", {"R6"}),
+    "--mutasyon-ns-harfsiz": (_AP, "(?=[A-Z0-9_]*[A-Z0-9])", "", {"R7"}),
+    "--mutasyon-ns-ascii-oge": (_AP, "        if not str(oge).isascii() or not _NS_BICIM.match(s):\n",
+                                "        if not _NS_BICIM.match(s):\n", {"R8"}),
+    "--mutasyon-ns-unicode": (_AP, ", ad, re.IGNORECASE | re.ASCII)", ", ad, re.IGNORECASE)", {"R9"}),
+    "--mutasyon-coklu-yalniz-fi": ("scripts/object_types.py",
+                                   "for r in reflar if r['type'].startswith('FUGR')})",
+                                   "for r in reflar if r['type'] == 'FUGR/I'})", {"R10"}),
+    "--mutasyon-url-lower": (_AP, '    return _quote(_unquote(str(ad)).lower(), safe="")\n',
+                             '    return str(ad).lower()\n', {"U2", "U3", "U7"}),
+    "--mutasyon-url-cift": (_AP, '    return _quote(_unquote(str(ad)).lower(), safe="")\n',
+                            '    return _quote(str(ad).lower(), safe="")\n', {"U3"}),
+    "--mutasyon-baglam-kodlu": ("scripts/object_types.py",
+                                "            return url_parcasindan_ad(parcalar[i + 1])",
+                                "            return parcalar[i + 1].upper()", {"U5"}),
+    "--mutasyon-kurucu-geri": ("scripts/populate_dataelements.py",
+                               '<adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{_adt_seg(package)}"',
+                               '<adtcore:packageRef adtcore:uri="/sap/bc/adt/packages/{package.lower()}"',
+                               {"U7", "U8"}),
+    "--mutasyon-url-kalinti": ("scripts/populate_tables.py",
+                               "    url = client.url + f'/sap/bc/adt/ddic/tables/{_adt_seg(table_name)}/source/main'\n",
+                               "    url = client.url + f'/sap/bc/adt/ddic/tables/{table_name.lower()}/source/main'\n",
+                               {"U8"}),
+    "--mutasyon-atama-kalinti": ("scripts/push_textpool.py", "    prog_l = _adt_seg(prog)\n",
+                                 "    prog_l = prog.lower()\n", {"U8"}),
+    "--mutasyon-dtel-zy": ("scripts/populate_dataelements.py",
+                           "            if not _ap.musteri_adi_mi(ad.upper(), root=_gewd()):\n",
+                           "            if not ad.upper().startswith(('Z', 'Y')):\n", {"D1"}),
 }
 KIPLER = sorted(MUTASYONLAR)
 

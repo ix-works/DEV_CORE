@@ -431,6 +431,26 @@ def bolum_c(SC):
     ekle("C7 KONTROL L-oneksiz include (CMOD tipi, contextRef FUGR) -> ESKI yol korunur",
          bool(_tipler(adt, "lock")) and _tipler(adt, "lock")[0][1] == ex_url
          and r.get("error_type") != "FugrIncludeTypeError", f"olaylar={adt.olaylar}")
+    # C14/C15 — Q393 P2a: namespace'li grubun include'u `/NS/L<GRUP>…` ('L' namespace'ten SONRA);
+    # canli bicim (2026-11-08 DEV salt-GET): contextRef FUGR/F name=grup, uri grubu %2f KODLU tasir.
+    ns_ad, ns_url = "/NSPC/LFG1TOP", "/sap/bc/adt/programs/includes/%2Fnspc%2Flfg1top"
+    ns_meta = _oku("progs_include_meta.xml").replace(INCL, ns_ad).replace(
+        'adtcore:type="FUGR/I" adtcore:name="SAPLZSD001_FG"', 'adtcore:type="FUGR/F" adtcore:name="/NSPC/FG1"'
+    ).replace("functions/groups/zsd001_fg/source/main", "functions/groups/%2fnspc%2ffg1/source/main")
+    adt = _SahteAdt({ns_url: (200, ns_meta)}, kilit_hata=RuntimeError("SAHTE_DUR"))
+    r, _ = _sessiz(_sapclient(SC, adt).push_object, ns_ad, "include", None, _kaynak_dosyasi())
+    r = r or {}
+    ekle("C14 ⭐ NS grup include'u (/NSPC/L…) --type include -> kilitten ONCE red; grup COZULMUS "
+         "(/NSPC/FG1, %2F degil) komut onerisinde",
+         r.get("error_type") == "FugrIncludeTypeError" and not _tipler(adt, "lock")
+         and "--group /NSPC/FG1 " in (r.get("error") or ""), f"r={r.get('error_type')} {r.get('error')!r:.160} olaylar={adt.olaylar}")
+    ns_ex, ns_ex_url = "/NSPC/ZXINC", "/sap/bc/adt/programs/includes/%2Fnspc%2Fzxinc"
+    adt = _SahteAdt({ns_ex_url: (200, ns_meta.replace(ns_ad, ns_ex))}, kilit_hata=RuntimeError("SAHTE_DUR"))
+    r, _ = _sessiz(_sapclient(SC, adt).push_object, ns_ex, "include", None, _kaynak_dosyasi())
+    r = r or {}
+    ekle("C15 KONTROL NS L-oneksiz include (/NSPC/ZX…, contextRef FUGR) -> ESKI yol korunur",
+         bool(_tipler(adt, "lock")) and _tipler(adt, "lock")[0][1] == ns_ex_url
+         and r.get("error_type") != "FugrIncludeTypeError", f"olaylar={adt.olaylar}")
     adt = _SahteAdt({PROG_URL: ConnectionError("ag yok")}, kilit_hata=RuntimeError("SAHTE_DUR"))
     r, _ = _sessiz(_sapclient(SC, adt).push_object, INCL, "include", None, _kaynak_dosyasi())
     ekle("C8 metadata GET istisnasi -> on-kontrol OLCULEMEDI, eski akis (kilit denenir)",
@@ -739,7 +759,7 @@ MUTASYONLAR = {
     # 2026-11-08 canli: eski kanit (FUGR/I containerRef) URL grubunu yansitir -> KENDINI DOGRULAR
     "--mutasyon-kanit-kaynagi": ("scripts/sap_client.py",
                                  "        kod, govde, hata = self._metadata_getir(sonuc['kanit_url'])\n"
-                                 "        ok, sebep = fugr_include_grup_kaniti(govde, g) if kod == 200 else (False, '')\n",
+                                 "        ok, sebep = fugr_include_grup_kaniti(govde, g, root=get_explicit_working_dir()) if kod == 200 else (False, '')\n",
                                  "        kod, govde, hata = self._metadata_getir(sonuc['object_url'])\n"
                                  "        ok, sebep = ((__import__('object_types').fugr_include_konteyneri(govde) == g), 'containerRef') if kod == 200 else (False, '')\n",
                                  {"C2", "C3", "C12", "C13", "E9", "E11", "L1", "L3"}),
@@ -799,11 +819,21 @@ MUTASYONLAR = {
     "--mutasyon-include-red": ("scripts/sap_client.py",
                                "            _grup = include_fugr_baglami(_govde) if _kod == 200 else None\n",
                                "            _grup = None\n",
-                               {"C5"}),
+                               {"C5", "C14"}),
     "--mutasyon-l-onek": ("scripts/sap_client.py",
-                          "            if _grup and not object_name.upper().startswith('L'):\n",
+                          "            if _grup and not _govde_ad.startswith('L'):\n",
                           "            if False:\n",
-                          {"C7"}),
+                          {"C7", "C15"}),
+    # Q393 P2a: 'L' kontrolu namespace SIYRILMADAN yapilirsa /NSPC/L… CMOD sanilir (eski yol)
+    "--mutasyon-l-onek-ns": ("scripts/sap_client.py",
+                             "            _govde_ad = object_name.upper()[len(_ns):] if _ns else object_name.upper()\n",
+                             "            _govde_ad = object_name.upper()\n",
+                             {"C14"}),
+    # Q393 P2a: contextRef uri'sindeki grup KODLU kalirsa komut onerisi %2FNSPC%2FFG1 olur
+    "--mutasyon-baglam-kodlu": ("scripts/object_types.py",
+                                "            return url_parcasindan_ad(parcalar[i + 1])",
+                                "            return parcalar[i + 1].upper()",
+                                {"C14"}),
     "--mutasyon-t100": ("scripts/sap_adt_lib.py",
                         "        if sebep:\n            etiket = ",
                         "        if False:\n            etiket = ",
@@ -849,7 +879,8 @@ KIPLER = ["--mutasyon-yol", "--mutasyon-grup-dogrulama", "--mutasyon-include-red
           "--mutasyon-mcp-grup-kaniti", "--mutasyon-mcp-push-kaydi", "--mutasyon-mcp-also-red",
           "--mutasyon-varsayilan-kapali", "--mutasyon-kanit-kaynagi", "--mutasyon-kanit-ad",
           "--mutasyon-kanit-tip", "--mutasyon-kilit-grup-kaniti", "--mutasyon-kilit-url",
-          "--mutasyon-kilit-grup-zorunlu", "--mutasyon-kanit-sayac", "--mutasyon-kanit-coklu"]
+          "--mutasyon-kilit-grup-zorunlu", "--mutasyon-kanit-sayac", "--mutasyon-kanit-coklu",
+          "--mutasyon-l-onek-ns", "--mutasyon-baglam-kodlu"]
 
 
 def _mutasyon(kip) -> int:
