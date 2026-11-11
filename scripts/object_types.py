@@ -790,7 +790,8 @@ def islem_reddi(object_type, islem=None):
     Yalniz `generic_islemler` TASIYAN tiplerde (bugun: `enhancementspot`) karar verir; diger
     her tipte None (islem yok sayilir — eski davranis). Cozulemeyen tip adinda da None doner:
     ret karari o durumda `normalize_object_type`'ta kalir (cagiran oraya zaten carpar).
-    ValueError FIRLATMAZ — cagiran istek gondermeden ONCE sorabilsin diye var (Q402).
+    Tip cozumunde ValueError FIRLATMAZ; yalniz bilinmeyen `islem` adinda firlatir (U8) —
+    cagiran istek gondermeden ONCE sorabilsin diye var (Q402).
     """
     if islem is not None and islem not in GENERIC_ISLEM_ADLARI:
         raise ValueError(f"Bilinmeyen islem adi: {islem!r} (gecerli: {', '.join(GENERIC_ISLEM_ADLARI)})")

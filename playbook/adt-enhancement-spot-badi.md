@@ -12,8 +12,9 @@ status: active
 
 > **Kanonik araç:** 📦 [`scripts/populate_badi_spot.py`](../scripts/populate_badi_spot.py) (lib:
 > `sap_adt_lib` `get/create/write/activate_enhancement_spot` + `enhs_*` yardımcıları).
-> **MCP yüzeyi YOK — bu CLI kullanılır** (açık kalem: §7). Genel MCP araçlarından yalnız
-> `adt_delete` ve `adt_lock_check` spot'u tanır (`object_types` `enhancementspot`/`enhs`, Q402 §2a);
+> **MCP yüzeyi YOK — bu CLI kullanılır** (açık kalem: §7). Genel MCP araçlarından `adt_delete` ve
+> `adt_lock_check` spot'u tanır, `adt_get` yalnız `include_source=False` ile metadata/varlık okur
+> (`object_types` `enhancementspot`/`enhs`, Q402 §2a);
 > `adt_atc_check` ENHS'i istek göndermeden **kapsam dışı** diye reddeder.
 > **Ölçüm — iki sürümde ölçüldü:** bir geliştirme sistemi (SAP_BASIS 758) + bir tüketici sistemi
 > (SAP_BASIS 816), ikisi de `$TMP`'de sentetik spot'la (DEV_CORE #413). Hangi davranışın hangi
@@ -104,10 +105,11 @@ worklist sondası tip `ENHS/XSB` ile sorar (worklist `ENHS/XS` listeler, §3.4) 
 
 | Araç | ENHS'te davranış | Dayanak |
 |---|---|---|
-| `adt_delete` | kilit (nesne URL'i `_action=LOCK`; `/locks` ve `/core/objectlock` 404) → `DELETE` (`lockHandle` + `corrNr`) → `UNLOCK`; sonra `delete_verified` (GET `*/*` 404) | yol **[816]** #413 + **[758]** 2026-11-09 ölçüm betikleri; çekirdek `delete_object` ile ENHS'te canlı koşu **ÖLÇÜLMEDİ** (Q402 ölçüm betiği hazır, kuru kipi yeşil; canlı koşu ayrı) |
+| `adt_delete` | kilit (nesne URL'i `_action=LOCK`; `/locks` ve `/core/objectlock` 404) → `DELETE` (`lockHandle` + `corrNr`) → `UNLOCK`; sonra `delete_verified` (GET `*/*` 404) | yol **[816]** #413 + **[758]** 2026-11-09 ölçüm betikleri; çekirdek `adt_delete` ile ENHS'te canlı koşu **[758]** 2026-11-11 (Q402 ölçüm betiği, `$TMP` sentetik Z spot): `LOCK` 200 → `DELETE` 200 → `UNLOCK` 200, `delete_verified: true`; silme sonrası GET 404 ×3, TADIR 0, E071 0 |
 | `adt_lock_check` | spot'u tanır, varlığı okur; kilit durumu `locked: null` + `kilit_belirsiz` | **[758]** salt-okur: `GET /sap/bc/adt/locks?objectRef=` **sınıfta da** 404 ⇒ ENHS'e özgü değil, kilit ucu bu sistemde yok |
 | `adt_atc_check` | istek GÖNDERİLMEZ: `error: atc_kapsam_disi`, `finding_count: null` | **[758]** salt-okur ATC: var olan Z spot · standart spot · var olmayan spot · var olmayan sınıf dördü de `FINDING_STATS 0,0,0` + boş obje listesi; bulgulu Z sınıf `0,0,1` + 1 obje ⇒ ENHS'te "0 bulgu" yokluktan ayırt edilemez |
-| `adt_activate` · `adt_syntax_check` · `adt_where_used` · `adt_get` · `adt_push_source` | `ValueError` (kanonik araç: `populate_badi_spot.py`) | işlem izin kümesi dışında (fail-closed) |
+| `adt_get` | `include_source=False` → `ok: true`, `exists` + metadata (izinli metadata yolu, `Accept: */*`); var olmayan spot `exists: false`. Varsayılan `include_source=True` → `ok: false` (kaynak işlem izin kümesi dışında; hata kodu `unexpected`) | sahte HTTP sunucusuyla ölçüldü (Q402 bağımsız kontrol, 2026-11-11); canlı koşu ÖLÇÜLMEDİ |
+| `adt_activate` · `adt_syntax_check` · `adt_where_used` · `adt_push_source` | `ValueError` (kanonik araç: `populate_badi_spot.py`) | işlem izin kümesi dışında (fail-closed) |
 
 Metadata okuması (`get_object_structure`) ENHS'te yalnız `Accept: */*` ile 200 döner — classes v2/v4,
 `core.v1`, `application/xml` 406 **[758]**; var olmayan spot `*/*` ile 404.
