@@ -1036,8 +1036,9 @@ class SAPClient:
         }
 
         type_desc = get_type_description(object_type)
-        object_url = get_object_url(object_name, object_type)
+        # Q402: kaynak URL'i ONCE — kaynak ucu olmayan tip (ENHS) acik "kaynak ucu YOK" reddini alir.
         source_url = get_source_url(object_name, object_type)
+        object_url = get_object_url(object_name, object_type)
 
         print(f"\n{'=' * 70}")
         print(f"  Pushing {type_desc}: {object_name}")
@@ -1671,7 +1672,7 @@ class SAPClient:
             True if successful, False otherwise
         """
         type_desc = get_type_description(object_type)
-        object_url = get_object_url(object_name, object_type)
+        object_url = get_object_url(object_name, object_type, islem='silme')  # Q402: ENHS izinli
 
         if self.debug_enabled:
             self._debug(f"[DEBUG] delete_object - name: {object_name}, type: {object_type}, url: {object_url}")
@@ -2437,7 +2438,7 @@ class SAPClient:
         Returns:
             XML metadata string
         """
-        object_url = get_object_url(object_name, object_type)
+        object_url = get_object_url(object_name, object_type, islem='metadata')  # Q402: ENHS izinli
 
         try:
             metadata = self.adt_client.get_object_structure(object_url)
@@ -3782,7 +3783,8 @@ constants:
         print(f"Variant: {variant}")
 
         try:
-            object_url = get_object_url(object_name, object_type)
+            # Q402: ENHS'te islem='atc' REDDEDILIR (ATC sonucu yokluktan ayirt edilemez — olculdu)
+            object_url = get_object_url(object_name, object_type, islem='atc')
             result = self.adt_client.run_atc_check(object_url, variant=variant)
             return result
         except Exception as e:

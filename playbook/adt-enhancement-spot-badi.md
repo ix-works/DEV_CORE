@@ -4,7 +4,7 @@ layer: L3
 scope: project-wide
 type: playbook
 applies-to: backend
-last-updated: 2026-11-08
+last-updated: 2026-11-11
 status: active
 ---
 
@@ -12,7 +12,9 @@ status: active
 
 > **Kanonik araç:** 📦 [`scripts/populate_badi_spot.py`](../scripts/populate_badi_spot.py) (lib:
 > `sap_adt_lib` `get/create/write/activate_enhancement_spot` + `enhs_*` yardımcıları).
-> **MCP yüzeyi YOK — bu CLI kullanılır** (açık kalem: §7).
+> **MCP yüzeyi YOK — bu CLI kullanılır** (açık kalem: §7). Genel MCP araçlarından yalnız
+> `adt_delete` ve `adt_lock_check` spot'u tanır (`object_types` `enhancementspot`/`enhs`, Q402 §2a);
+> `adt_atc_check` ENHS'i istek göndermeden **kapsam dışı** diye reddeder.
 > **Ölçüm — iki sürümde ölçüldü:** bir geliştirme sistemi (SAP_BASIS 758) + bir tüketici sistemi
 > (SAP_BASIS 816), ikisi de `$TMP`'de sentetik spot'la (DEV_CORE #413). Hangi davranışın hangi
 > sürümde ölçüldüğü satırında etiketlidir: **[758]** · **[816]** · **[758+816]**; ikisinde de
@@ -78,7 +80,7 @@ alanı o projenin `customer_namespaces`'inden okunur.
 | Yazma | `PUT …/enhsxsb/<ad>?corrNr=&lockHandle=` tam belge | **[758+816]** 200. **[758]** kilitsiz PUT → 400 `ExceptionParameterNotFound` "lockHandle" (`SADT_RESOURCE 017`) |
 | Kilit bırak | `POST …?_action=UNLOCK&lockHandle=` | 200 — araç bunu `finally`'de yapar (PUT 4xx/istisnada da) |
 | Aktivasyon | çekirdek `activate_object(..., object_type='ENHS/XSB')` | **[758]** 9 aktivasyonun 9'unda `success=true`; `activationExecuted` 8/9 `true` — 1 `false`: zaten aktif spot'u yeniden aktive etme, spot aktifti (ölçüm özetleri). `adtcore:type="UNKNOWN"` ile de aktive oldu; mekanizma ÖLÇÜLMEDİ · **[816]** her kademede `activationExecuted=true`. Araç hükmü `success`'i okur, `activationExecuted`'ı DEĞİL |
-| Silme | kilit → `DELETE …/enhsxsb/<ad>` | **[816]** 200; aktif, inaktif ve sürümsüz GET üçü de 404, worklist 0. **Bu araçta silme YOK**; çekirdek `adt_delete` ENHS'i desteklemiyor (`object_types.get_object_url` → `ValueError: Unsupported object type`) — açık kalem §7 |
+| Silme | kilit → `DELETE …/enhsxsb/<ad>` | **[816]** 200; aktif, inaktif ve sürümsüz GET üçü de 404, worklist 0. **Bu araçta silme YOK** — genel `adt_delete(name, object_type="enhs", transport)` kullanılır (Q402, §2a) |
 
 İçerik tipi (Accept + Content-Type): `application/vnd.sap.adt.enh.enhs.v2+xml`. İlk yazma isteği
 `403 CSRF` + `GET /discovery 406` + yeniden deneme verir — çekirdek token yenileme deseni, hata değil.
@@ -90,6 +92,25 @@ silme **[816]**.
 **Aktivasyon SIRASI (kural):** ① BAdI arabirimi + fallback/örnek sınıflar ÖNCE aktif ② sonra
 spot + BAdI tanımı ③ BAdI'ye atıf yapan sınıflar (implementasyon, `GET BADI` çağıranı) EN SON.
 Ölçümde ① aktifken ② temiz aktive oldu **[758+816]**; ters sıra ÖLÇÜLMEDİ.
+
+### 2a. Genel ADT araçlarında ENHS (Q402 / DEV_CORE #415)
+
+`object_types.OBJECT_TYPES['enhancementspot']` (eş anlamlı `enhs` · `enhsxsb` · `enhs/xsb`), URL
+`enhs_spot_url` ile aynı. Girdi **işlem-izinlidir**: `get_object_url(ad, tip, islem=…)` ENHS için
+yalnız `silme` · `kilit` · `metadata` işlemine URL üretir; `islem` vermeyen ya da başka işlem veren her
+çağıran `ValueError` alır. Gerekçe: düz bir girdi `adt_activate` tek-obje yolunu da açardı ve o yolun
+worklist sondası tip `ENHS/XSB` ile sorar (worklist `ENHS/XS` listeler, §3.4) ⇒ inaktif spot
+"doğrulandı" görünürdü (sahte-yeşil).
+
+| Araç | ENHS'te davranış | Dayanak |
+|---|---|---|
+| `adt_delete` | kilit (nesne URL'i `_action=LOCK`; `/locks` ve `/core/objectlock` 404) → `DELETE` (`lockHandle` + `corrNr`) → `UNLOCK`; sonra `delete_verified` (GET `*/*` 404) | yol **[816]** #413 + **[758]** 2026-11-09 ölçüm betikleri; çekirdek `delete_object` ile ENHS'te canlı koşu **ÖLÇÜLMEDİ** (Q402 ölçüm betiği hazır, kuru kipi yeşil; canlı koşu ayrı) |
+| `adt_lock_check` | spot'u tanır, varlığı okur; kilit durumu `locked: null` + `kilit_belirsiz` | **[758]** salt-okur: `GET /sap/bc/adt/locks?objectRef=` **sınıfta da** 404 ⇒ ENHS'e özgü değil, kilit ucu bu sistemde yok |
+| `adt_atc_check` | istek GÖNDERİLMEZ: `error: atc_kapsam_disi`, `finding_count: null` | **[758]** salt-okur ATC: var olan Z spot · standart spot · var olmayan spot · var olmayan sınıf dördü de `FINDING_STATS 0,0,0` + boş obje listesi; bulgulu Z sınıf `0,0,1` + 1 obje ⇒ ENHS'te "0 bulgu" yokluktan ayırt edilemez |
+| `adt_activate` · `adt_syntax_check` · `adt_where_used` · `adt_get` · `adt_push_source` | `ValueError` (kanonik araç: `populate_badi_spot.py`) | işlem izin kümesi dışında (fail-closed) |
+
+Metadata okuması (`get_object_structure`) ENHS'te yalnız `Accept: */*` ile 200 döner — classes v2/v4,
+`core.v1`, `application/xml` 406 **[758]**; var olmayan spot `*/*` ile 404.
 
 ## 3. ⛔ Tuzaklar
 
@@ -185,13 +206,15 @@ adlı tanım taşıyan belgeye yazmaz. BAdI adı sınırı 30: AFF şemasından,
 - Türkçe karakterli filtre adı: araç reddetmez, SAP'nin kabulü **ÖLÇÜLMEDİ**.
 - DOMA (alan) kontrollü ya da ProgramCheck'li filtre: araç modellemez ⇒ o spot'a yazmaz; yazma
   biçimi **ÖLÇÜLMEDİ**.
-- Kilit son hâli bağımsız araçla ÖLÇÜLEMEDİ (`adt_lock_check` ENHS desteklemiyor); dayanak
-  LOCK 200 ↔ UNLOCK 200 istek kaydıdır, SM12 kontrolü kullanıcıdadır.
+- Kilit son hâli bağımsız araçla ÖLÇÜLEMEDİ: `adt_lock_check` spot'u tanır (Q402) ama kilit ucu
+  `GET /sap/bc/adt/locks` bu sistemde her tipte 404 ⇒ `locked: null`. Dayanak LOCK 200 ↔ UNLOCK 200
+  istek kaydıdır, SM12 kontrolü kullanıcıdadır.
 
 ## 7. Kapsam dışı / açık kalemler
 
-- **Silme:** ölçülmüş yol (bir tüketici sisteminde, SAP_BASIS 816) kilit → `DELETE` → 200; çekirdek
-  `adt_delete` ENHS'i desteklemiyor — açık kalem (`object_types`'a `enhsxsb` girdisi bu PR'da eklenmedi).
-- **MCP aracı** (`adt_*`) yok — o zamana kadar bu CLI.
-- BAdI implementasyonu (ENHO), `CL_ENH_*` API'leri, `adt_enhancement_read` enhoxhb yanlış-negatifi,
-  `adt_lock_check`'in ENHS'i desteklememesi bu aracın kapsamı dışında.
+- **Silme:** KAPANDI (Q402) — genel `adt_delete` (§2a).
+- **ATC:** kapsam dışı (§2a ölçümü). BAdI arabirimi ve sınıfları için ATC o objelerde koşulur.
+- **MCP aracı** (`adt_*`) yok — o zamana kadar bu CLI. `adt_activate` ENHS'te bilerek kapalı
+  (worklist tip uyuşmazlığı); aktivasyon `populate_badi_spot.py` / `activate_enhancement_spot`.
+- BAdI implementasyonu (ENHO), `CL_ENH_*` API'leri, `adt_enhancement_read` enhoxhb yanlış-negatifi
+  bu aracın kapsamı dışında.
