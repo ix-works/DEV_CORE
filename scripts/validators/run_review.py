@@ -425,8 +425,10 @@ def main() -> int:
                              've dosyası olmayan gate\'ler ETKİLENMEZ. Env: IX_CEVRIMDISI=1')
     parser.add_argument('--ack-drop', default='',
                         help='Onaylı tablo DROP alanları (virgülle) — check_table_field_drop\'a '
-                             'iletilir. SADECE adı verilen alanlar ACK-WARNING; isimsiz drop/tip '
-                             'değişikliği yine BLOCKER. Kullanıcı+lider bilinçli onayı (ADR 0005-B).')
+                             'iletilir. SADECE adı verilen alanlar ACK-WARNING; isimsiz drop yine '
+                             'BLOCKER. Tip hükmüne etkisi YOK (#408): daralma/tür/çözülemeyen tip '
+                             'her zaman BLOCKER (genişleme WARNING, aynı fiziksel tip INFO). '
+                             'Kullanıcı+lider bilinçli onayı (ADR 0005-B).')
     args = parser.parse_args()
 
     # ⛔ OTOMATİK ÇIKARIM YOK (bilinçli): `.conn_adt` yokluğuna BAKMIYORUZ. Kullanıcının

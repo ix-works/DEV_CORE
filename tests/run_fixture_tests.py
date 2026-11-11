@@ -884,6 +884,13 @@ OZEL_TESTLER = [
      "kaynak ici `// dtel-istisna` SAYILMAZ; bayat istisna bilgi; harf duyarsiz; namespace'li govde), "
      "DTEL'li/include alan sayilmaz, xml/append/cozulemeyen deyim measured=false, uyari+olculemeyen "
      "= KISMI; dtel_active kapsam beyani; 15 mutasyon"),
+    # 2026-11-11 DEV_CORE #408 (Q399): table_field_drop alan tipi TAM metin + fiziksel tip kiyasi.
+    ("table_field_drop_tip",
+     "check_table_field_drop: yerlesik tip daralmasi/tur degisikligi BLOCKER (eski: `abap` diye kesilip "
+     "gorunmuyordu), DTEL ADT meta verisinden fiziksel tipe cozulur; ayni fiziksel tip INFO (GEVSETME), "
+     "genisleme WARNING rc 0, cozulemeyen DTEL BLOCKER + measured=false YALNIZ tek neden oyken; "
+     "--ack-drop tipi kapsamaz; namespace + CRLF/BOM ucuncu baglam; run_review + checklist BE-16 "
+     "tuketici sonuclari; taban d85de77 5/28; 12 mutasyon"),
     # 2026-11-08 DEV_CORE #413: BAdI enhancement spot (ENHS/XSB) + BAdI tanimi yazma araci.
     ("enhs_badi_spot",
      "populate_badi_spot + sap_adt_lib enhs_*: olculen readback -> model -> PUT bayt-esit; ADR 0005-A "
@@ -1304,6 +1311,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "#406: \"DTEL'siz alan: BAKILMADI\" kapsam beyanı (T1)"),
     ("scripts/validators/check_ddic_builtin_fields.py", ("O:ddic_builtin_fields",),
      "#406: DTEL'siz alan listesi + istisna isareti + KAPSAM beyani"),
+    # 2026-11-11 #408 (Q399): AYRI satirlar (paralel turlarla ortak satir duzenlenmesin).
+    ("scripts/validators/check_table_field_drop.py", ("O:table_field_drop_tip",),
+     "#408: tip TAM metin + fiziksel tip kiyasi (daralma/tur BLOCKER · ayni INFO · genisleme WARNING)"),
+    ("scripts/validators/run_review.py", ("O:table_field_drop_tip",),
+     "#408: table_update zinciri drop-guard kaydi (R1 sessiz bulgu · R2/R3 FAIL)"),
+    ("scripts/validators/checklist_check.py", ("O:table_field_drop_tip",),
+     "#408: BE-16 tuketicisi (K1 PASS · K2 OLCULEMEDI · K3 FAIL)"),
     ("scripts/validators/check_sap_active_version.py", ("O:sap_gate_skip_sozlesmesi",),
      "B3-01: BEŞ ayrı ölçmeyen exit-0 yolu"),
     ("scripts/validators/check_sap_active_version.py", ("O:cds_entity_baslik_kardesleri",),
