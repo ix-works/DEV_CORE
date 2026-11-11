@@ -40,7 +40,7 @@ def atc_bulgulari(object_name, object_type='class', variant='DEFAULT',
     """
     from object_types import get_object_url
     client = client or SAPClient()
-    url = get_object_url(object_name, object_type)
+    url = get_object_url(object_name, object_type, islem='atc')  # Q402: ENHS -> ValueError (kapsam disi)
     return client.adt_client.run_atc_check(url, variant=variant, max_verdicts=max_verdicts)
 
 
