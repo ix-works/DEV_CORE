@@ -36,9 +36,12 @@ VEKTÖRLER (SAP yerine 127.0.0.1 sahte ADT ucu; alınan istekler listelenir — 
   T17b `dataTypeLength` BOŞ öğe → aynı · T18 DEC DTEL'de `dataTypeDecimals` YOK → `dtel-ondalik-yok`
   DÜZELTME TURU 2: T19 CHAR `000000` → ÇÖZÜLEMEDİ (sıfır-uzunluk dalı) · T20 GEOM_EWKB `000000` A→B → INFO
       (ADT'de uzunluk 0 = sınırsız; eski: sahte ÖLÇÜLEMEDİ) · T21 `abap.utclong` → UTCLONG DTEL → INFO ·
-      T22 `abap.d16n` → DECFLOAT16 DTEL → INFO (ölçülen ADT adı eşlemesi) · T23 `abap.d34n` → DECFLOAT34 DTEL
-      → TÜR DEĞİŞTİ (ADT adı ölçülmedi ⇒ eşlenmez, fail-closed) · T24 uzunluk `²` (isdigit True, int() patlar)
-      → ÇÖZÜLEMEDİ, Traceback YOK
+      T22 `abap.decfloat16` → DECFLOAT16 DTEL → INFO · T23 `abap.decfloat34` → DECFLOAT34 DTEL → INFO ·
+      T24 uzunluk `²` (isdigit True, int() patlar) → ÇÖZÜLEMEDİ, Traceback YOK
+  DÜZELTME TURU 3 (yerleşik yazım SAP'nin tablo DDL'indeki gibi; `abap.d16n`/`d34n` DDL'de yok):
+      T25 `abap.df16_raw` → DF16_RAW DTEL → INFO · T26 `abap.decfloat16` → DECFLOAT34 DTEL → TÜR DEĞİŞTİ ·
+      T27 `abap.decfloat16` → DF16_RAW DTEL → TÜR DEĞİŞTİ · T28 `abap.df34_raw` → DF34_RAW DTEL (uzunluğu
+      ölçülmedi, sabit sayılmaz) → ÖLÇÜLEMEDİ rc 1 + measured=false (fail-closed)
   T16 istekler yalnız sahte uca, yalnız tablo kaynağı + veri öğesi yolu; kumda `.conn_adt` oluşmadı
   TÜKETİCİLER (lider talebi: genişleme rc 0'ın ve measured=false'un sonucu SAYIYLA)
   R1  run_review table_update, genişleme → drop-guard kaydı PASS + `sessiz_bulgu_gates`'te
@@ -131,6 +134,8 @@ DTEL = {
     "zsd001_e_utcl": (200, dtel_xml("UTCLONG", 27)),
     "zsd001_e_d16": (200, dtel_xml("DECFLOAT16", 16)),
     "zsd001_e_d34": (200, dtel_xml("DECFLOAT34", 34)),
+    "zsd001_e_d16r": (200, dtel_xml("DF16_RAW", 16)),
+    "zsd001_e_d34r": (200, dtel_xml("DF34_RAW", 34)),
     "zsd001_e_sup": (200, dtel_xml("CHAR", "²")),
 }
 
@@ -325,13 +330,27 @@ def dogrudan(kok: Path, kum: Path, srv: Sunucu) -> list:
     rc, out, err, _ = k("t21", "  ts : abap.utclong;\n", "  ts : zsd001_e_utcl;\n")
     ekle("T21", rc == 0 and "[INFO]" in out and "(UTCLONG → UTCLONG)" in out,
          f"rc={rc} out={out[-300:]!r} err={err[-300:]!r}")
-    rc, out, err, _ = k("t22", "  df : abap.d16n;\n", "  df : zsd001_e_d16;\n")
+    rc, out, err, _ = k("t22", "  df : abap.decfloat16;\n", "  df : zsd001_e_d16;\n")
     ekle("T22", rc == 0 and "[INFO]" in out and "(DECFLOAT16 → DECFLOAT16)" in out,
          f"rc={rc} out={out[-300:]!r} err={err[-300:]!r}")
-    rc, out, err, _ = k("t23", "  df : abap.d34n;\n", "  df : zsd001_e_d34;\n")
-    ekle("T23", rc == 1 and "TÜR DEĞİŞTİ abap.d34n → zsd001_e_d34" in err, f"rc={rc} err={err[-300:]!r}")
+    rc, out, err, _ = k("t23", "  df : abap.decfloat34;\n", "  df : zsd001_e_d34;\n")
+    ekle("T23", rc == 0 and "[INFO]" in out and "(DECFLOAT34 → DECFLOAT34)" in out,
+         f"rc={rc} out={out[-300:]!r} err={err[-300:]!r}")
     rc, out, err, _ = k("t24", "  ref : zsd001_e_sup;\n", "  ref : abap.char(10);\n")
     ekle("T24", rc == 1 and "dtel-uzunluk-yok" in err and "Traceback" not in err, f"rc={rc} err={err[-300:]!r}")
+    # Düzeltme turu 3
+    rc, out, err, _ = k("t25", "  df : abap.df16_raw;\n", "  df : zsd001_e_d16r;\n")
+    ekle("T25", rc == 0 and "[INFO]" in out and "(DF16_RAW → DF16_RAW)" in out,
+         f"rc={rc} out={out[-300:]!r} err={err[-300:]!r}")
+    rc, out, err, _ = k("t26", "  df : abap.decfloat16;\n", "  df : zsd001_e_d34;\n")
+    ekle("T26", rc == 1 and "TÜR DEĞİŞTİ abap.decfloat16 → zsd001_e_d34 (DECFLOAT16 → DECFLOAT34)" in err,
+         f"rc={rc} err={err[-300:]!r}")
+    rc, out, err, _ = k("t27", "  df : abap.decfloat16;\n", "  df : zsd001_e_d16r;\n")
+    ekle("T27", rc == 1 and "TÜR DEĞİŞTİ abap.decfloat16 → zsd001_e_d16r (DECFLOAT16 → DF16_RAW)" in err,
+         f"rc={rc} err={err[-300:]!r}")
+    rc, out, err, _ = k("t28", "  df : abap.df34_raw;\n", "  df : zsd001_e_d34r;\n")
+    ekle("T28", rc == 1 and "değişken uzunluklu tipte uzunluk yazılmamış" in err
+         and "measured=false" in out, f"rc={rc} out={out[-200:]!r} err={err[-300:]!r}")
     return tum_istek
 
 
@@ -458,13 +477,13 @@ MUTASYONLAR = {
         "    + r')',\n",
         # K1 (genişleme → PASS) düşmez: kesik tipte değişiklik görünmez, sonuç yine PASS. T8/K3 düşer:
         # daralma görünmez ⇒ tek neden çözülemeyen DTEL kalır ⇒ measured=false basılır.
-        # T21-T23: `abap.utclong`/`abap.d16n`/`abap.d34n` kesilince `abap` kalır ⇒ hüküm değişir.
+        # T21-T23/T25-T28: `abap.utclong`/`abap.decfloat16`/`abap.decfloat34`/`abap.df16_raw`/`abap.df34_raw` kesilince `abap` kalır.
         {"T1", "T2", "T3", "T3b", "T5", "T5b", "T6", "T8", "T10", "T10b", "T15", "T21", "T22", "T23",
-         "R1", "R3", "K3"}),
+         "T25", "T26", "T27", "T28", "R1", "R3", "K3"}),
     # aynı fiziksel tip yine BLOCKER (gevşetme geri alınır)
     "--mutasyon-ayni-blocker": (
         _D, _BLK, _BLK.replace("'olculemedi')", "'olculemedi', 'ayni')"),
-        {"T4", "T5", "T5b", "T13a", "T20", "T21", "T22"}),
+        {"T4", "T5", "T5b", "T13a", "T20", "T21", "T22", "T23", "T25"}),
     # genişleme BLOCKER
     "--mutasyon-genisleme-blocker": (
         _D, _BLK, _BLK.replace("'olculemedi')", "'olculemedi', 'genisleme')"),
@@ -477,7 +496,7 @@ MUTASYONLAR = {
     # çözülemeyen tip bloklamaz
     "--mutasyon-olculemedi-gecer": (
         _D, _BLK, _BLK.replace(", 'olculemedi')", ")"),
-        {"T7", "T7b", "T8", "T9", "T13b", "T17", "T17b", "T18", "T19", "T24", "R2", "K2"}),   # T8/T17*/T18: ÖLÇÜLEMEDİ satırı da kaybolur
+        {"T7", "T7b", "T8", "T9", "T13b", "T17", "T17b", "T18", "T19", "T24", "T28", "R2", "K2"}),   # T8/T17*/T18: ÖLÇÜLEMEDİ satırı da kaybolur
     # measured=false ölçülmüş BLOCKER yanında da basılır (lider pini)
     "--mutasyon-measured-genis": (
         _D, "    if not unack_dropped and all(h[3] == 'olculemedi' for h in tip_blocker):\n",
@@ -487,12 +506,12 @@ MUTASYONLAR = {
     "--mutasyon-measured-yok": (
         _D, "        gate_status(_GATE, 'FAIL', False, 'fiziksel-tip-cozulemedi')\n",
         "        pass\n",
-        {"T7", "T7b", "T13b", "T17", "K2"}),   # T17 measured=false beyanını da ister
+        {"T7", "T7b", "T13b", "T17", "T28", "K2"}),   # T17/T28 measured=false beyanını da ister
     # sabit uzunluklu tip kümesi körleşir
     "--mutasyon-sabit-kor": (
         _D, "    if dt in SABIT_UZUNLUK:\n        return 'ayni'\n",
         "    if False:\n        return 'ayni'\n",
-        {"T5b", "T21", "T22"}),   # T21/T22: UTCLONG/DECFLOAT16 sabit uzunluklu (yerleşikte uzunluk yok)
+        {"T5b", "T21", "T22", "T23", "T25"}),   # T21-T23/T25: yerleşikte uzunluk yok, sabit uzunluklu
     # STRING uzunluk 0 = sınırsız kuralı körleşir
     "--mutasyon-sinirsiz-kor": (_D, "    if dt in SINIRSIZ_SIFIR:\n", "    if False:\n", {"T15"}),
     # tam sayı hanesi yerine yalnız toplam uzunluk
@@ -520,9 +539,16 @@ MUTASYONLAR = {
     "--mutasyon-geom-kor": (
         _D, "SINIRSIZ_SIFIR = frozenset({'STRING', 'RAWSTRING', 'GEOM_EWKB'})",
         "SINIRSIZ_SIFIR = frozenset({'STRING', 'RAWSTRING'})", {"T20"}),
-    # yerleşik ad → ADT adı eşlemesi kalkar
-    "--mutasyon-ad-esleme-yok": (
-        _D, "    return (YERLESIK_ADT_ADI.get(ad, ad),", "    return (ad,", {"T22"}),
+    # DECFLOAT34 / DF16_RAW sabit uzunluklu sayılmaz (düzeltme turu 3)
+    "--mutasyon-d34-sabit-yok": (
+        _D, "'DECFLOAT16', 'DECFLOAT34',", "'DECFLOAT16',", {"T23", "T26"}),   # T26: gösterim DECFLOAT34(34)
+    "--mutasyon-df16raw-sabit-yok": (
+        _D, "                           'DF16_RAW', 'ACCP', 'PREC'})",
+        "                           'ACCP', 'PREC'})", {"T25", "T27"}),   # T27: gösterim DF16_RAW(16)
+    # tür kıyası körleşir (DECFLOAT16 ≠ DECFLOAT34 ≠ DF16_RAW çivisi)
+    "--mutasyon-tur-kor": (
+        _D, "    if eski[0] != yeni[0]:\n        return 'tur'\n", "    if False:\n        return 'tur'\n",
+        {"T1", "T12", "T26", "T27"}),
     # UTCLONG sabit uzunluklu sayılmaz
     "--mutasyon-utclong-sabit-yok": (
         _D, "'UTCL', 'UTCLONG', 'DECFLOAT16',", "'UTCL', 'DECFLOAT16',", {"T21"}),

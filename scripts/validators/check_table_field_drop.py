@@ -123,21 +123,23 @@ def parse_fields(text: str) -> dict:
 # CLNT 3 · LANG 1 · INT1 3 · INT2 5 · INT4 10 · DATS 8 · TIMS 6 · FLTP 16/16 · CUKY 5 · UNIT 3 ·
 # CHAR · NUMC · RAW · DEC/CURR/QUAN (uzunluk+ondalık) · `STRING`/`RAWSTRING` uzunluk 0 (ADT bu iki
 # tip için `STRG`/`RSTR` DEĞİL, tam adı döner).
-# Düzeltme turu 2 (bağımsız kontrolün canlı ölçümü, 2026-11-12, standart DTEL'ler): `abap.utcl`/
-# `abap.utclong` → ADT `UTCLONG` (uzunluk 27) · `abap.d16n` → ADT `DECFLOAT16` · `abap.df16_dec`
-# → ADT `DF16_DEC` (15/0) · `abap.sstring` → `SSTRING` (40) · `abap.geom_ewkb` → `GEOM_EWKB` (uzunluk
-# 0; DD04L'de leng=0 yalnız STRG/RSTR/GGM1). ÖLÇÜLMEDİ (ADT adı): INT8 · DATN · TIMN · ACCP · PREC ·
-# DF34_DEC · `abap.d34n` (DECFLOAT34 olduğu VARSAYILMAZ ⇒ eşlenmez, fail-closed: farklı ad = "tür
-# değişti" BLOCKER). Sabit-uzunluk kümesindeki ölçülmemiş adlar DDIC tanımından alındı; ad farklı
-# çıkarsa sonuç yine "tür değişti" (BLOCKER) olur, gevşemez.
+# Düzeltme turu 2-3 (canlı salt-okur, 2026-11-12). Tablo DDL'inde SAP'nin kendi yazımı (standart
+# tablolar): `abap.utclong` · `abap.decfloat16` · `abap.decfloat34` · `abap.df16_raw` · `abap.df34_raw`
+# · `abap.df16_dec(15,0)` · `abap.df34_dec(31,0)`; DD03L'deki kısa adlar (`d16n`/`d34n`/`utcl`) DDL'de
+# YOK ⇒ ad eşlemesi gerekmez, yerleşik ad büyük harfle ADT adıdır. Standart DTEL `dataType`: UTCLONG 27
+# · DECFLOAT16 16 · DECFLOAT34 34 · DF16_RAW 16 · DF16_SCL 16 · DF16_DEC 15/0 · SSTRING 40 · GEOM_EWKB
+# 0 (DD04L'de leng=0 yalnız STRG/RSTR/GGM1). DECFLOAT16 ≠ DECFLOAT34 ≠ DF16_RAW ≠ DF16_SCL ⇒ ayrı
+# türler ("tür değişti" BLOCKER). ÖLÇÜLMEDİ (ADT adı/uzunluğu): INT8 · DATN · TIMN · ACCP · PREC ·
+# DF34_RAW · DF34_SCL · DF34_DEC — sabit-uzunluk kümesine alınmadı ya da (INT8/DATN/TIMN/ACCP/PREC)
+# DDIC tanımından alındı; ad farklı çıkarsa sonuç "tür değişti", uzunluksuz değişken tipte ÖLÇÜLEMEDİ
+# (BLOCKER) olur, gevşemez.
 SABIT_UZUNLUK = frozenset({'CLNT', 'LANG', 'INT1', 'INT2', 'INT4', 'INT8', 'DATS', 'TIMS', 'FLTP',
-                           'CUKY', 'DATN', 'TIMN', 'UTCL', 'UTCLONG', 'DECFLOAT16', 'ACCP', 'PREC'})
+                           'CUKY', 'DATN', 'TIMN', 'UTCL', 'UTCLONG', 'DECFLOAT16', 'DECFLOAT34',
+                           'DF16_RAW', 'ACCP', 'PREC'})
 SINIRSIZ_SIFIR = frozenset({'STRING', 'RAWSTRING', 'GEOM_EWKB'})   # uzunluk 0 = sınırsız
 # Ondalık taşıyan tipler: DTEL XML'inde ondalık öğesi yok/boşsa ÖLÇÜLEMEDİ (0 varsayılmaz).
 # DEC/CURR/QUAN/DF16_DEC adı ölçüldü; DF34_DEC adı ÖLÇÜLMEDİ (DDIC tanımından).
 ONDALIKLI = frozenset({'DEC', 'CURR', 'QUAN', 'DF16_DEC', 'DF34_DEC'})
-# Yerleşik `abap.<ad>` → ADT `dataType` adı; yalnız ÖLÇÜLEN farklı adlar (ölçülmeyen eşlenmez).
-YERLESIK_ADT_ADI = {'UTCL': 'UTCLONG', 'D16N': 'DECFLOAT16'}
 _RAKAM_RE = re.compile(r'[0-9]+')
 _YERLESIK_RE = re.compile(r'\Aabap\.([a-z0-9_]+)(?:\((\d+)(?:,(\d+))?\))?\Z')
 
@@ -147,8 +149,7 @@ def yerlesik_fiziksel(tip: str):
     m = _YERLESIK_RE.match(tip)
     if not m:
         return None
-    ad = m.group(1).upper()
-    return (YERLESIK_ADT_ADI.get(ad, ad), int(m.group(2)) if m.group(2) else None,
+    return (m.group(1).upper(), int(m.group(2)) if m.group(2) else None,
             int(m.group(3)) if m.group(3) else 0)
 
 
