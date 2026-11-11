@@ -335,13 +335,24 @@ def adt_atc_check(name: str, object_type: str = "class",
     Returns:
         {ok, name, type, variant, finding_count, findings: [...], client_log}
     """
+    # Q402 (2026-11-11, olculdu): ENHS'te ATC sonucu ('FINDING_STATS 0,0,0' + bos obje listesi)
+    # VAR OLMAYAN objeninkiyle AYNI ⇒ "0 bulgu" temizlik kaniti olamaz. Istek GONDERILMEZ,
+    # "Unsupported" yerine acik kapsam-disi hukmu doner (olculemedi ≠ temiz).
+    try:
+        from object_types import islem_reddi  # type: ignore
+        _ret = islem_reddi(object_type, "atc")
+    except Exception:  # noqa: BLE001 — karar get_object_url'de yeniden verilir (fail-closed)
+        _ret = None
+    if _ret:
+        return {"ok": False, "error": "atc_kapsam_disi", "name": name, "type": object_type,
+                "finding_count": None, "message": _ret}
     client = _get_client()
     try:
         if variant is None:
             from mcp_servers.sap_adt._conn import get_atc_variant
             variant = get_atc_variant()
         from object_types import get_object_url  # type: ignore
-        url = get_object_url(name.upper(), object_type)
+        url = get_object_url(name.upper(), object_type, islem="atc")
         with _capture() as buf:
             res = client.adt_client.run_atc_check(url, variant=variant, max_verdicts=max_verdicts)
         findings = res.get("findings", []) if isinstance(res, dict) else (res or [])
@@ -2364,7 +2375,7 @@ def adt_lock_check(name: str, object_type: str = "class", group: str | None = No
         from object_types import get_object_url  # type: ignore
         if adt is not None and hasattr(adt, "is_object_locked"):
             with _capture() as buf2:
-                bilgi = adt.is_object_locked(get_object_url(name, object_type))
+                bilgi = adt.is_object_locked(get_object_url(name, object_type, islem="kilit"))
             log = (log + "\n" + buf2.getvalue().strip()).strip()
     except Exception as exc:                                   # sonda kurulumu bile başarısızsa
         log = (log + f"\n[ERROR] kilit sondası: {exc}").strip()

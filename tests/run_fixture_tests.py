@@ -894,6 +894,14 @@ OZEL_TESTLER = [
      "yeni -> sira_tuzagi) + spec; surumsuz GET aktiflik hukmu; coklu-kullanim ters esleme; usages "
      "kiyas disi; kilit alti yeniden okuma (TOCTOU) + taban kiyasi; onlyConstantFilterValues; --cwd "
      "sirasi; 43 mutasyon"),
+    # 2026-11-11 DEV_CORE #415 (Q402): ENHS genel tip tablosunda — ISLEM-IZINLI girdi.
+    ("enhs_tip_yuzeyi",
+     "object_types ENHS (enhancementspot/enhs): URL == enhs_spot_url; generic_islemler silme/kilit/"
+     "metadata, islem vermeyen her cagiran ValueError (fail-closed); get_source_url/push acik red; "
+     "ATC kapsam disi (adt_atc_check atc_kapsam_disi SIFIR istek — 0 bulgu yokluktan ayirt edilemez, "
+     "olculdu); adt_delete kilit nesne URL'inde -> DELETE + delete_verified; adt_lock_check "
+     "kilit_belirsiz (GET /locks 404, durust); adt_activate/syntax/where-used ENHS'te kapali "
+     "(sahte-yesil yolu); diger tipler islem'den etkilenmez; 10 mutasyon"),
 ]
 
 
@@ -1873,6 +1881,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "enhs_* yardimcilari + get/create/write/activate_enhancement_spot + activate_object object_type"),
     ("scripts/populate_badi_spot.py", ("O:enhs_badi_spot",),
      "CLI: GET -> degistir -> TAM PUT -> aktive -> readback"),
+    # 2026-11-11 DEV_CORE #415 (Q402) — AYRI satirlar (b0_secim'de bu dosyalara pinli sayi YOK).
+    ("scripts/object_types.py", ("O:enhs_tip_yuzeyi",),
+     "ENHS girdisi + generic_islemler + islem_reddi + get_source_url islem='kaynak'"),
+    ("scripts/sap_client.py", ("O:enhs_tip_yuzeyi",),
+     "delete_object/get_object_metadata/run_atc_check islem + push_object kaynak URL'i once"),
+    ("mcp_servers/sap_adt/tools/query.py", ("O:enhs_tip_yuzeyi",),
+     "adt_atc_check atc_kapsam_disi on-reddi + adt_lock_check islem='kilit'"),
+    ("scripts/run_atc_check.py", ("O:enhs_tip_yuzeyi",), "atc_bulgulari islem='atc'"),
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla

@@ -845,9 +845,12 @@ MUTASYONLAR = {
     "--mutasyon-dogrulanamadi-basari": (
         _LIB, "        return {'aktif': akt.get('success') is True and ok is True,\n",
         "        return {'aktif': akt.get('success') is True and ok is not False,\n", {"A3", "A7"}),
+    # Q402 (#415): `object_types` ENHS URL'inden artik ENHS/XSB turetiyor ⇒ parametreyi SILMEK A5'i
+    # dusurmez (iki katman ayni tipi verir; URL katmani `enhs_tip_yuzeyi` U6'da). Bu kip acik
+    # parametrenin ONCELIGINI olcer: worklist tipiyle (ENHS/XS) degistirilirse istek yanlis tipi tasir.
     "--mutasyon-aktivasyon-tipi": (
         _LIB, "        akt = self.activate_object((spot or '').upper(), url, object_type=ENHS_TIP)\n",
-        "        akt = self.activate_object((spot or '').upper(), url)\n", {"A5"}),
+        "        akt = self.activate_object((spot or '').upper(), url, object_type='ENHS/XS')\n", {"A5"}),
     "--mutasyon-kacis": (_LIB, "    return '\"%s\"' % _esc('' if deger is None else str(deger), {'\"': '&quot;'})\n",
                          "    return '\"%s\"' % ('' if deger is None else str(deger))\n", {"E1"}),
     "--mutasyon-utf8": (_LIB, "                    data=govde.encode('utf-8'))\n            except Exception as exc:  # noqa: BLE001 — PUT",
