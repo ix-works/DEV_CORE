@@ -47,6 +47,12 @@ def main() -> int:
     pkgs = sys.argv[1:] or _default_packages()
     from sap_client import SAPClient  # type: ignore
     c = SAPClient()
+    # Müşteri ad alanı = Z/Y öneki (AYNEN) ∨ projede bildirilmiş `/<NS>/` öneki (#416, tek kaynak
+    # `ad_politikasi`). ÖNEK düzeyi — tam ad grameri (`musteri_adi_mi`) DEĞİL: ADT paket içeriği
+    # boşluklu ad taşır (IWSV/IWVB/SICF: `<SERVIS>   0001`; ölçüm 2026-11-08 envanteri 332'de 6) ve
+    # tam gramer onları envanterden SESSİZCE düşürürdü. Liste yoksa yalnız Z/Y (fail-closed).
+    from utils import ad_politikasi as _ap
+    ns_liste = _ap.musteri_namespaceleri()
     inv: dict[str, dict] = {}
     for pkg in pkgs:
         print(f"[envanter] {pkg} ...")
@@ -59,7 +65,8 @@ def main() -> int:
         n = 0
         for o in objs or []:
             name = (o.get("name") or "").strip()
-            if not name or not name.upper().startswith(("Z", "Y")):
+            if not name or not (name.upper().startswith(("Z", "Y"))
+                                or _ap.ad_namespace(name.upper()) in ns_liste):
                 continue
             key = name.upper()
             # DEVC (paketin kendisi) gibi tekrarları atla
@@ -71,7 +78,7 @@ def main() -> int:
                 "package": pkg,
             })
             n += 1
-        print(f"  {n} Z obje")
+        print(f"  {n} müşteri obje (Z/Y{' + ' + ' '.join(ns_liste) if ns_liste else ''})")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps({

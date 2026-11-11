@@ -70,6 +70,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
+from utils import ad_politikasi as _ap  # noqa: E402 — #416: müşteri ad alanı kararı tek kaynak
 
 for _akis in (sys.stdout, sys.stderr):
     try:
@@ -752,8 +753,9 @@ def main(argv=None, client=None) -> int:
         print(f"[FAIL] {'--name' if a.tur == 'msag' else '--program'} gerekli (yer tutucu "
               f"değil, gerçek ad) — hiçbir şey okunmadı/yazılmadı.")
         return 1
-    if not a.nesne[:1].upper() in ("Z", "Y"):
-        print(f"[FAIL] yalnız Z/Y nesne: {a.nesne}")
+    # ADR 0005-A kararı TEK kaynakta (#416): Z/Y ya da bildirilmiş `/<NS>/` (fail-closed).
+    if not _ap.musteri_adi_mi(a.nesne, "msag" if a.tur == "msag" else "prog"):
+        print(f"[FAIL] {_ap.musteri_adi_red_metni(a.nesne)}")
         return 1
     if not dosya.is_file():
         print(f"[FAIL] dosya yok: {dosya} (yeni dosyaysa çekecek bir şey yok — kapı da muaf tutar)")

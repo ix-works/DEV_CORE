@@ -55,10 +55,21 @@ ADT YOL PARÇASI (`url_segmenti`, Parti 2a — canlı ölçüm 2026-11-08, DEV s
   İdempotent: önce `unquote` edilir ⇒ zaten kodlanmış ad (`%2fns%2fx`) `%252f`'ye ÇİFT KODLANMAZ
   (SAP adında `%` geçmez). Küçük harf: ADT yolları küçük harfle kurulur (eski davranış).
 
+YEREL DOSYA ADI (`dosya_adi` — DEV_CORE #416 / Q403, yazma yönü; okuma yönü `dosya_adindan_ad`)
+  `/NS/X` → `#ns#x` (abapGit gösterimi, küçük harf) · `ZX` → `zx`. Dosya adında `/` OLAMAZ:
+  `Path(out) / "/ns/x.abap"` sürücü köküne kaçar (Windows `C:/ns/x.abap`) ⇒ ad dosya adına
+  yalnız bu yardımcıdan geçerek yazılır. `dosya_adindan_ad(dosya_adi(x)) == x.upper()` YALNIZ
+  dilbilgisine uyan ad için (`ad_gecerli_mi`); `C:X`, `(AB)X`, `#AB#X` gibi girdilerde tutmaz
+  ⇒ çağıran önce `musteri_adi_mi` ile denetler (bug-gate Ö1, #416).
+
+KOMUT SATIRI RED METNİ (`musteri_adi_red_metni` — #416): CLI araçları (push_textpool ·
+  pull_msag_textpool · scaffold_classic_program) red metnini TEK yerden alır. Git Bash `/` ile
+  başlayan argümanı tırnaklı olsa da yol sanıp çevirir (ölçüldü 2026-11-11: `/NS/PROG` →
+  `C:/Program Files/Git/NS/PROG`) ⇒ sürücü harfiyle başlayan adda `MSYS_NO_PATHCONV=1` ipucu.
+
 PARTİ 2 İÇİN YER AYRILDI (Issue #397 parti planı — gövde BU modülde yazılacak, burada YOK):
-  · `dosya_adi(ad)`      — yerel dosya adı `/` ↔ `#` (abapGit gösterimi `#ns#`) dönüşümü (2b)
   · `uzunluk_siniri(tip)`— tip bazlı ad uzunluğu (namespace dahil) (2c)
-  Bunları yazacak olan, AYNI `ad_namespace` / `namespace_yapilandirmasi` fonksiyonlarını
+  Bunu yazacak olan, AYNI `ad_namespace` / `namespace_yapilandirmasi` fonksiyonlarını
   kullanır; namespace biçimini ikinci kez tanımlamaz.
 """
 from __future__ import annotations
@@ -242,6 +253,20 @@ def red_gerekcesi(ad: str, *, root=None) -> str:
     return f" · {ns} kayıtlı, ama namespace'ten sonraki ad geçersiz (A-Z 0-9 _, boş olamaz)"
 
 
+_SURUCU_YOLU = re.compile(r"^[A-Za-z]:[/\\]")
+
+
+def musteri_adi_red_metni(ad, *, root=None) -> str:
+    """CLI araçlarının ortak red metni (#416): karar `musteri_adi_mi`'de, metin burada TEK yerde."""
+    a = "" if ad is None else str(ad)
+    ipucu = ""
+    if _SURUCU_YOLU.match(a):
+        ipucu = (" · ad bir Windows yoluna dönüşmüş görünüyor: Git Bash `/` ile başlayan argümanı "
+                 "yol sanıp çevirir — komutun önüne MSYS_NO_PATHCONV=1 koy")
+    return (f"yalnız müşteri ad alanı (Z/Y ya da bildirilmiş /<NS>/). Verilen: {a}"
+            f"{red_gerekcesi(a, root=root)}{ipucu}")
+
+
 # ── KAYNAK METİNDE AD YAKALAMA — TEK AD GRAMERİ (DEV_CORE #402) ──────────────────────────────
 # NEDEN: validator'lar nesne adını kaynak metinden kendi desenleriyle (`(\w+)`, `[a-z][a-z0-9_]*`,
 # `Z[A-Z]{2,4}\d{3}_C_\w+` …) yakalıyordu. `\w` `/` eşlemediği için namespace'li ad
@@ -300,14 +325,27 @@ def musteri_karari(ad, object_type: str | None = None, *, namespaces=None, root=
 
 
 def dosya_adindan_ad(parca) -> str:
-    """Yerel dosya adının nesne-adı parçası → SAP adı (OKUMA yönü; #397 Parti 2b'nin yazma yarısı
-    `dosya_adi` burada YOK). abapGit `#ns#x` · URL-kodlu `%23ns%23x` · AFF `(ns)x` → `/NS/X`;
+    """Yerel dosya adının nesne-adı parçası → SAP adı (OKUMA yönü; yazma yönü `dosya_adi`,
+    hemen altında — #416). abapGit `#ns#x` · URL-kodlu `%23ns%23x` · AFF `(ns)x` → `/NS/X`;
     namespace'siz ad büyük harfe çevrilir. Biçim doğrulaması YAPMAZ (`ad_coz`'a ver)."""
     s = _unquote(str(parca or ""))
     m = re.match(r"^#([^#]*)#(.*)\Z", s, re.S) or re.match(r"^\(([^()]*)\)(.*)\Z", s, re.S)
     if m:
         s = "/" + m.group(1) + "/" + m.group(2)
     return s.upper()
+
+
+def dosya_adi(ad) -> str:
+    """SAP adı → yerel dosya adının nesne-adı parçası (YAZMA yönü; tersi `dosya_adindan_ad`).
+    `/NS/X` → `#ns#x` (abapGit) · `ZX` → `zx`. Müşteri kararı VERMEZ (önce `musteri_adi_mi`);
+    dönüşümden sonra `/` ya da `\\` kalırsa ValueError (dosya adı yol ayıracı taşıyamaz)."""
+    a = str(ad or "").strip().upper()
+    ns = ad_namespace(a)
+    if ns:
+        a = "#" + ns[1:-1] + "#" + a[len(ns):]
+    if "/" in a or "\\" in a:
+        raise ValueError(f"dosya adına çevrilemez (yol ayıracı kalıyor): {ad!r}")
+    return a.lower()
 
 
 def fugr_include_oneki(grup: str) -> str:
