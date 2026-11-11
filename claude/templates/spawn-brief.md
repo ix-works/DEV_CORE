@@ -15,6 +15,18 @@
 - KAPSAM DIŞI: <"şunu da düzelteyim" YOK; ilgisiz bulguyu RAPORLA, dokunma>
 - KARDEŞ TARAMASI (lider, spawn ÖNCESİ — düzeltme işlerinde): <desen → N dosya: [liste]> — aynı sınıftaki vakalar KAPSAM İÇİ'ne yazılır, sonradan kuyruğa ayrı kayıt olarak AÇILMAZ (kuyruk yakınsamaz). Ajanın yeni bulduğu aynı-desen kardeş kendi dosya kümesindeyse ara raporda bildirilip kapsama alınır (infra-expert F2).
 - Model: <X — rol×kapsam matrisi satırı (operating-model §6); beyan≠fiilî, transcript kanıt>
+- **DOĞRULAMA KADANSI ajan tanımından gelir — brif onu EZMEZ (Issue #417, 2026-11-11):** ajan
+  tanımının doğrulama/test kadansı brifte yeniden yazılmaz (ör. `frontend-expert` DOĞRULAMA SEVİYESİ:
+  varsayılan HAFİF, tam tarayıcı turu yalnız açık talepte · `infra-expert` TEST KADANSI: tam süit
+  yerelde koşulmaz, CI koşar). Brif, tanımın **izin verdiği aralıkta** daha ağır bir kadans istiyorsa
+  (ör. FE'de tam tarayıcı turu), **gerekçesini** bu satıra yazar: hangi risk o maliyeti haklı kılıyor.
+  Tanımdaki bir ⛔ yasak (ör. `infra-expert` yerel tam süit) gerekçeyle de **aşılmaz**. *Neden:* bir
+  projede brif "değişiklikten önce ve sonra tam test" dedi. ~470 senaryoluk UI süitinin seri tam koşusu
+  ~40 dk sürüyordu. İki ajan 96 dk ve 100+ dk sürdü; ikincisinde iş ortasında iki kez kapsam da
+  eklenmişti. Sonraki iki partide üç şey birlikte değişti: baz test sonucu son commit'ten alındı, tam
+  süit bir kez koştu, gruplar paralel koştu. Partiler 1243 sn ve 1390 sn sürdü. Kazancın ne kadarının
+  bu kurala ait olduğu ÖLÇÜLMEDİ (baz devralma bu şablonda benimsenmedi). Ölçüm tek projeden, tek iş
+  türünden. *Ateşler:* brife test/doğrulama talimatı yazarken.
 
 ## 3. ÇIKTI FORMATI (output format)
 - Final mesaj = rapor (kanal §8: `SendMessage({to:"main"})`, yoksa son mesajın gövdesi); şekli: <madde listesi / tablo / diff / dosya-yolu>
@@ -114,6 +126,16 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
   ③ rapor dosyaya yazılıp orada bırakılamaz (§3)."*
   ⓘ Lider → ajan yönü (`SendMessage(to:<agentId>)`) durmuş ajanı yeniden uyandırır.
 - "YAPILAMAZ" demeden önce: repo'da alternatif yol ara + denediklerini kanıtla (kanıtsız olumsuz rapor sorgulanır).
+
+> **Lider notu (brife GİRMEZ) — KOD DONDU vermiş ajana kapsam EKLENMEZ (Issue #417, 2026-11-11):**
+> KOD DONDU mesajından sonra yeni kalem yeni partiye (yeni ajan ya da yeni tur) gider. İstisna yalnız
+> iki durum: kapıyı ya da CI'ı bloklayan düzeltme, ve aynı satırdaki küçük düzeltme. *Neden:* donmuş
+> koda eklenen her kalem yeni bir test döngüsü açar ve md5 çapasını bayatlatır. Bir projede lider iş
+> ortasında iki kez kapsam ekledi ve her biri yeni bir test döngüsü açtı. *Kapsam koşulu:* o vakada
+> eklemelerin KOD DONDU'dan önce mi sonra mı olduğu ÖLÇÜLMEDİ; kural bilerek daha dar anı (KOD DONDU
+> sonrası) kapsar. KOD DONDU kilometre taşı vermeyen rollerde uygulanmaz. *Ateşler:* KOD DONDU
+> mesajı geldikten sonra ajana yeni iş yazarken. *Nerede:* `playbook/howto-infra-fix-proseduru.md`
+> B0 tablosunun LİDER / KOD DONDU satırı da buraya atıf verir.
 
 ## 9. ENGELLENİRSEN — ZORUNLU MADDE (⛔ yazma işi veren her brifte)
 > **Şu satır brife AYNEN girer (ajanın charter'ı bunu tekrarlamaz — brif söylemek zorundadır):**
