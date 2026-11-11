@@ -107,16 +107,6 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
   repo genelinde tara, kalan isabet sayısını **0 olarak raporla**. (Ölçülmüş vaka: controller
   yeniden adlandırıldı, fragment eski adda kaldı ⇒ özellik 2/2 app'te ölü + runtime hatası;
   saf-mantık testleri fragment'ı görmediği için 42/42 yeşildi.)
-
-> **Lider notu (brife GİRMEZ) — KOD DONDU vermiş ajana kapsam EKLENMEZ (Issue #417, 2026-11-11):**
-> KOD DONDU mesajından sonra yeni kalem yeni partiye (yeni ajan ya da yeni tur) gider. İstisna yalnız
-> iki durum: kapıyı ya da CI'ı bloklayan düzeltme, ve aynı satırdaki küçük düzeltme. *Neden:* donmuş
-> koda eklenen her kalem yeni bir test döngüsü açar ve md5 çapasını bayatlatır. Bir projede lider iş
-> ortasında iki kez kapsam ekledi ve her biri yeni bir test döngüsü açtı. *Kapsam koşulu:* o vakada
-> eklemelerin KOD DONDU'dan önce mi sonra mı olduğu ÖLÇÜLMEDİ; kural bilerek daha dar anı (KOD DONDU
-> sonrası) kapsar. KOD DONDU kilometre taşı vermeyen rollerde uygulanmaz. *Ateşler:* KOD DONDU
-> mesajı geldikten sonra ajana yeni iş yazarken. *Nerede:* `playbook/howto-infra-fix-proseduru.md`
-> B0 tablosunun LİDER / KOD DONDU satırı da buraya atıf verir.
 - **DERHAL (kilometre taşını BEKLEME):** BLOCKER · çelişki · kapsam-dışı bulgu · yazacak yer yok.
 - **NİHAİ RAPOR — bitince, bu iskeletle:** ① kalem bazında sonuç tablosu
   (`KAPANDI · KISMİ · KAPSAM-DIŞI · ÇELİŞKİ · DOĞRULANAMADI · YAPILMADI(gerekçe)` + kanıt +
@@ -136,6 +126,16 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
   ③ rapor dosyaya yazılıp orada bırakılamaz (§3)."*
   ⓘ Lider → ajan yönü (`SendMessage(to:<agentId>)`) durmuş ajanı yeniden uyandırır.
 - "YAPILAMAZ" demeden önce: repo'da alternatif yol ara + denediklerini kanıtla (kanıtsız olumsuz rapor sorgulanır).
+
+> **Lider notu (brife GİRMEZ) — KOD DONDU vermiş ajana kapsam EKLENMEZ (Issue #417, 2026-11-11):**
+> KOD DONDU mesajından sonra yeni kalem yeni partiye (yeni ajan ya da yeni tur) gider. İstisna yalnız
+> iki durum: kapıyı ya da CI'ı bloklayan düzeltme, ve aynı satırdaki küçük düzeltme. *Neden:* donmuş
+> koda eklenen her kalem yeni bir test döngüsü açar ve md5 çapasını bayatlatır. Bir projede lider iş
+> ortasında iki kez kapsam ekledi ve her biri yeni bir test döngüsü açtı. *Kapsam koşulu:* o vakada
+> eklemelerin KOD DONDU'dan önce mi sonra mı olduğu ÖLÇÜLMEDİ; kural bilerek daha dar anı (KOD DONDU
+> sonrası) kapsar. KOD DONDU kilometre taşı vermeyen rollerde uygulanmaz. *Ateşler:* KOD DONDU
+> mesajı geldikten sonra ajana yeni iş yazarken. *Nerede:* `playbook/howto-infra-fix-proseduru.md`
+> B0 tablosunun LİDER / KOD DONDU satırı da buraya atıf verir.
 
 ## 9. ENGELLENİRSEN — ZORUNLU MADDE (⛔ yazma işi veren her brifte)
 > **Şu satır brife AYNEN girer (ajanın charter'ı bunu tekrarlamaz — brif söylemek zorundadır):**
