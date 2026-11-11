@@ -1274,7 +1274,9 @@ def adt_push_source(
         ack_drop: Comma-separated table field names whose DROP is explicitly
             approved (user+lead, ADR 0005-B). Forwarded to the embedded reviewer's
             --ack-drop → ONLY these named drops become ACK-WARNING; any un-named
-            drop or any TYPE/RENAME change still BLOCKER. This is the targeted,
+            drop is still BLOCKER. It has NO effect on the type verdict (DEV_CORE
+            #408): narrowing / kind change / unresolvable physical type is always
+            BLOCKER (widening = WARNING, same physical type = INFO). This is the targeted,
             auditable alternative to skip_reviewer for intentional table DROPs —
             the rest of the drop-guard (and all other checks) stay active.
         group: Q383 — YALNIZ object_type='fugr_include' (eşanlamlı 'fugr-include'/'fugr/i';

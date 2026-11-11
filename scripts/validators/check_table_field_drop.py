@@ -122,15 +122,23 @@ def parse_fields(text: str) -> dict:
 # `dataType` değeriyle BİREBİR aynıdır (büyük harf). ÖLÇÜLDÜ 2026-11-11 (salt-okur GET, s4_private):
 # CLNT 3 · LANG 1 · INT1 3 · INT2 5 · INT4 10 · DATS 8 · TIMS 6 · FLTP 16/16 · CUKY 5 · UNIT 3 ·
 # CHAR · NUMC · RAW · DEC/CURR/QUAN (uzunluk+ondalık) · `STRING`/`RAWSTRING` uzunluk 0 (ADT bu iki
-# tip için `STRG`/`RSTR` DEĞİL, tam adı döner). ÖLÇÜLMEDİ: INT8 · DATN · TIMN · UTCL · ACCP · PREC ·
-# SSTRING · decfloat aileleri (standart DTEL'i bulunamadı) — sabit-uzunluk kümesine yalnız DDIC
-# tanımından alındı; ad farklı çıkarsa sonuç "tür değişti" (BLOCKER) olur, gevşemez.
+# tip için `STRG`/`RSTR` DEĞİL, tam adı döner).
+# Düzeltme turu 2 (bağımsız kontrolün canlı ölçümü, 2026-11-12, standart DTEL'ler): `abap.utcl`/
+# `abap.utclong` → ADT `UTCLONG` (uzunluk 27) · `abap.d16n` → ADT `DECFLOAT16` · `abap.df16_dec`
+# → ADT `DF16_DEC` (15/0) · `abap.sstring` → `SSTRING` (40) · `abap.geom_ewkb` → `GEOM_EWKB` (uzunluk
+# 0; DD04L'de leng=0 yalnız STRG/RSTR/GGM1). ÖLÇÜLMEDİ (ADT adı): INT8 · DATN · TIMN · ACCP · PREC ·
+# DF34_DEC · `abap.d34n` (DECFLOAT34 olduğu VARSAYILMAZ ⇒ eşlenmez, fail-closed: farklı ad = "tür
+# değişti" BLOCKER). Sabit-uzunluk kümesindeki ölçülmemiş adlar DDIC tanımından alındı; ad farklı
+# çıkarsa sonuç yine "tür değişti" (BLOCKER) olur, gevşemez.
 SABIT_UZUNLUK = frozenset({'CLNT', 'LANG', 'INT1', 'INT2', 'INT4', 'INT8', 'DATS', 'TIMS', 'FLTP',
-                           'CUKY', 'DATN', 'TIMN', 'UTCL', 'ACCP', 'PREC'})
-SINIRSIZ_SIFIR = frozenset({'STRING', 'RAWSTRING'})   # uzunluk 0 = sınırsız
+                           'CUKY', 'DATN', 'TIMN', 'UTCL', 'UTCLONG', 'DECFLOAT16', 'ACCP', 'PREC'})
+SINIRSIZ_SIFIR = frozenset({'STRING', 'RAWSTRING', 'GEOM_EWKB'})   # uzunluk 0 = sınırsız
 # Ondalık taşıyan tipler: DTEL XML'inde ondalık öğesi yok/boşsa ÖLÇÜLEMEDİ (0 varsayılmaz).
-# DEC/CURR/QUAN ölçüldü; DF16_DEC/DF34_DEC adı ÖLÇÜLMEDİ (DDIC tanımından).
+# DEC/CURR/QUAN/DF16_DEC adı ölçüldü; DF34_DEC adı ÖLÇÜLMEDİ (DDIC tanımından).
 ONDALIKLI = frozenset({'DEC', 'CURR', 'QUAN', 'DF16_DEC', 'DF34_DEC'})
+# Yerleşik `abap.<ad>` → ADT `dataType` adı; yalnız ÖLÇÜLEN farklı adlar (ölçülmeyen eşlenmez).
+YERLESIK_ADT_ADI = {'UTCL': 'UTCLONG', 'D16N': 'DECFLOAT16'}
+_RAKAM_RE = re.compile(r'[0-9]+')
 _YERLESIK_RE = re.compile(r'\Aabap\.([a-z0-9_]+)(?:\((\d+)(?:,(\d+))?\))?\Z')
 
 
@@ -139,8 +147,14 @@ def yerlesik_fiziksel(tip: str):
     m = _YERLESIK_RE.match(tip)
     if not m:
         return None
-    return (m.group(1).upper(), int(m.group(2)) if m.group(2) else None,
+    ad = m.group(1).upper()
+    return (YERLESIK_ADT_ADI.get(ad, ad), int(m.group(2)) if m.group(2) else None,
             int(m.group(3)) if m.group(3) else 0)
+
+
+def _sayi(ham: str | None) -> int | None:
+    """Yalnız ASCII rakam dizisi → int; yok/boş/başka her şey → None (`'²'.isdigit()` True ama int() patlar)."""
+    return int(ham) if ham is not None and _RAKAM_RE.fullmatch(ham) else None
 
 
 def _xml_alani(govde: str, ad: str) -> str | None:
@@ -161,19 +175,15 @@ def dtel_fiziksel(govde: str):
     # #408 düzeltme turu F4 (⚠SIKILAŞTIRMA): eksik/boş öğe 0 SAYILMAZ. Eski `int(… or '0')` gerçek
     # CHAR(40)'ı CHAR(0) okuyup `abap.char(10)`'a geçişi "genişleme" (rc 0) yapıyordu; ondalığı
     # eksik DEC(15,5) ise (15,0) okunuyordu. Uzunluk sabit uzunluklu tiplerde kıyasa girmez.
+    uz, on = _sayi(uz_ham), _sayi(on_ham)
     if dt not in SABIT_UZUNLUK:
-        if not (uz_ham or '').isdigit():
+        if uz is None:
             return None, 'dtel-uzunluk-yok'
-        if dt not in SINIRSIZ_SIFIR and int(uz_ham) == 0:
+        if dt not in SINIRSIZ_SIFIR and uz == 0:
             return None, 'dtel-uzunluk-yok'
-    if dt in ONDALIKLI and not (on_ham or '').isdigit():
+    if dt in ONDALIKLI and on is None:
         return None, 'dtel-ondalik-yok'
-    try:
-        uz = int(uz_ham) if (uz_ham or '').isdigit() else 0
-        on = int(on_ham) if (on_ham or '').isdigit() else 0
-    except ValueError:
-        return None, 'dtel-uzunluk-okunamadi'
-    return (dt, uz, on), None
+    return (dt, uz or 0, on or 0), None
 
 
 def tip_karsilastir(eski, yeni) -> str:
@@ -393,8 +403,9 @@ def main() -> int:
             print(f'  TYPE   : \'{f}\' {ad} {old} → {new} ({ayrinti}) '
                   f'(veri-dönüşüm/kayıp riski — ack KAPSAMI DIŞI)', file=sys.stderr)
     if ack_dropped:
-        print(f'  NOT    : {", ".join(ack_dropped)} onaylıydı ama başka onaysız drop/tip '
-              f'değişikliği var → yine BLOCKER (hedefli ack, blanket değil)', file=sys.stderr)
+        print(f'  NOT    : {", ".join(ack_dropped)} onaylıydı ama başka onaysız drop ya da '
+              f'bloklayan tip hükmü (daralma/tür/çözülemeyen) var → yine BLOCKER (hedefli ack, '
+              f'blanket değil; ack tip hükmünü değiştirmez)', file=sys.stderr)
     print('\nÇözüm: Bilinçli silme ise ilgili alanı --ack-drop <alan> ile onayla (kullanıcı+lider '
           'onayı sonrası). Kazara ise canlı source\'u GET ile alıp sadece additive değişiklik yap.',
           file=sys.stderr)

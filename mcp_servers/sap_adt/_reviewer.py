@@ -186,7 +186,10 @@ def run_reviewer(task: Optional[str], artifact_path: Optional[str],
         ack_drop: comma-separated field names whose table DROP is explicitly
                   approved (user+lead, ADR 0005-B). Forwarded to run_review's
                   --ack-drop → ONLY these named drops become ACK-WARNING; any
-                  un-named drop or any TYPE/RENAME change still BLOCKER. Empty
+                  un-named drop is still BLOCKER. NO effect on the type verdict
+                  (DEV_CORE #408): narrowing / kind change / unresolvable physical
+                  type is always BLOCKER (widening = WARNING, same physical type =
+                  INFO). Empty
                   → no acknowledgement (default; full drop-guard).
 
     Returns:
@@ -221,8 +224,9 @@ def run_reviewer(task: Optional[str], artifact_path: Optional[str],
     ]
     if ack_drop:
         # Hedefli onaylı-DROP ack — yalnız drop-guard'a iletilir (run_review içinde
-        # check_table_field_drop'a geçer). Blanket bypass DEĞİL: isimsiz drop/tip
-        # değişikliği yine BLOCKER. ADR 0005-B kullanıcı+lider bilinçli onayı.
+        # check_table_field_drop'a geçer). Blanket bypass DEĞİL: isimsiz drop yine
+        # BLOCKER; tip hükmüne etkisi YOK (#408: daralma/tür/çözülemeyen tip her zaman
+        # BLOCKER, genişleme WARNING, aynı fiziksel tip INFO). ADR 0005-B kullanıcı+lider onayı.
         cmd += ["--ack-drop", ack_drop]
     try:
         proc = subprocess.run(
