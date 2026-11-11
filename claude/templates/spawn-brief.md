@@ -15,6 +15,15 @@
 - KAPSAM DIŞI: <"şunu da düzelteyim" YOK; ilgisiz bulguyu RAPORLA, dokunma>
 - KARDEŞ TARAMASI (lider, spawn ÖNCESİ — düzeltme işlerinde): <desen → N dosya: [liste]> — aynı sınıftaki vakalar KAPSAM İÇİ'ne yazılır, sonradan kuyruğa ayrı kayıt olarak AÇILMAZ (kuyruk yakınsamaz). Ajanın yeni bulduğu aynı-desen kardeş kendi dosya kümesindeyse ara raporda bildirilip kapsama alınır (infra-expert F2).
 - Model: <X — rol×kapsam matrisi satırı (operating-model §6); beyan≠fiilî, transcript kanıt>
+- **DOĞRULAMA KADANSI ajan tanımından gelir — brif onu EZMEZ (DEV_CORE #417, 2026-11-11):** ajan
+  tanımının doğrulama/test kadansı (ör. `frontend-expert` "DOĞRULAMA SEVİYESİ" varsayılan HAFİF ·
+  `infra-expert` "tam süit yerelde değil, CI'da") brifte yeniden yazılmaz. Brif daha ağır bir kadans
+  istiyorsa (ör. "önce ve sonra tam test"), **gerekçesini** bu satıra yazar: hangi risk o maliyeti
+  haklı kılıyor. *Neden:* bir projede brif "değişiklikten önce ve sonra tam test" deyince ~470
+  senaryoluk UI süitinin seri tam koşusu (~40 dk) iki kez koştu ve ajanlar 96 dk ile 100+ dk sürdü.
+  Kadans ajan tanımına geri bırakılınca (tam süit KOD DONDU'da bir kez, gruplar paralel) aynı
+  büyüklükteki partiler 1243 sn ve 1390 sn sürdü. Ölçüm tek projeden, tek iş türünden. *Ateşler:* brife
+  test/doğrulama talimatı yazarken.
 
 ## 3. ÇIKTI FORMATI (output format)
 - Final mesaj = rapor (kanal §8: `SendMessage({to:"main"})`, yoksa son mesajın gövdesi); şekli: <madde listesi / tablo / diff / dosya-yolu>
@@ -82,6 +91,12 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
   md5 listesi **+ `infra-changelog` satırı yazılmış ve stage'li** (B11 kapısı aynı commit'te ister; placeholder YOK). Lider o anda commit+push+draft PR açar; CI, ajan rapor yazarken koşar (ölçüm:
   son süit → rapor sonu med ~11 dk, CI 2 dk ⇒ 6/6 koşuda sonuç rapordan önce gelirdi).
   Bundan sonra koda dokunulursa "KOD DONDU-2" (md5 çapası yenilenir).
+  ⛔ **KOD DONDU vermiş ajana kapsam EKLENMEZ (lider; DEV_CORE #417, 2026-11-11):** yeni kalem
+  yeni partiye (yeni ajan ya da yeni tur) gider. İstisna yalnız iki durum: kapıyı ya da CI'ı bloklayan
+  düzeltme, ve aynı satırdaki küçük düzeltme. *Neden:* donmuş koda eklenen her kalem yeni bir test
+  döngüsü açar ve md5 çapasını bayatlatır. Ölçülmüş vakada lider iş ortasında iki kez kapsam ekledi,
+  her biri ayrı tam test döngüsüne mal oldu ve ajan 100+ dk sürdü. *Ateşler:* KOD DONDU mesajı
+  geldikten sonra ajana yeni iş yazarken.
 - **TALİMAT-DEĞİŞİKLİĞİ TEYİDİ — olay-tetikli, ZORUNLU (2026-09-10; sınıfın 3. vakası):** İş
   sırasında lider'den **bir kararı değiştiren / iptal eden** mesaj gelirse, yeni işe başlamadan
   ÖNCE tek `SendMessage`: ① değişikliği **KENDİ CÜMLENLE** özetle ("X ölçütü düştü, yerine Y") —
