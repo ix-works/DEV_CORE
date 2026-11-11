@@ -843,7 +843,7 @@ MUTASYONLAR = {
                                   "    if True:\n",
                                   {"B1", "B3"}),
     "--mutasyon-csrf": ("scripts/sap_adt_lib.py",
-                        "                elif response.status_code == 403 and 'CSRF' in response.text:\n"
+                        "                elif self._csrf_reddi_mi(response):\n"
                         "                    if self.debug_enabled:\n"
                         "                        self._debug(f\"[DEBUG] lock_object attempt {attempt_num} - CSRF error",
                         "                elif False:\n"

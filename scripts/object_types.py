@@ -169,8 +169,60 @@ OBJECT_TYPES = {
         'description': 'ABAP Package',
         'supports_create': True,
         'file_extension': ''
-    }
+    },
+    # BAdI enhancement spot (ENHS/XSB) — Q402 / DEV_CORE #415. URL `sap_adt_lib.enhs_spot_url`
+    # ile AYNI bicim (`/enhancements/enhsxsb/<kucuk harf, %2f kodlu>`). ⛔ ISLEM-IZINLI GIRDI:
+    # `generic_islemler` listesi DISINDAKI her cagiran (`islem` vermeyen ya da baska islem veren)
+    # `get_object_url`'den ValueError alir — yeni tip bir yolu ISTEMEDEN "destekleniyor"a
+    # cevirmesin. Olculen gerekce (2026-11-11, salt-okur, SAP_BASIS 758):
+    #   · aktivasyon: `adt_activate` tek-obje yolu worklist'i tip `ENHS/XSB` ile sorar, worklist spot'u
+    #     `ENHS/XS` olarak listeler (#413) ⇒ inaktif spot "dogrulandi" gorunurdu (sahte-yesil).
+    #     Kanonik yol: `populate_badi_spot.py` / `SAPADTClient.activate_enhancement_spot`.
+    #   · kaynak: spot'un `/source/main` ucu YOK (belge XML'dir) — yazma `populate_badi_spot.py`.
+    #   · atc: var olan bir Z spot'u, standart bir spot, VAR OLMAYAN spot ve VAR OLMAYAN sinif
+    #     dordu de AYNI sonucu verdi (`FINDING_STATS 0,0,0`, bos `objects`); kontrol grubu
+    #     bulgulu bir Z sinif `0,0,1` + 1 obje ⇒ ENHS'te "0 bulgu" yokluktan AYIRT EDILEMEZ.
+    #   · metadata: GET 200 yalniz `Accept: */*` ile (classes v2/v4, core.v1, application/xml 406);
+    #     var olmayan spot `*/*` ile 404 ⇒ varlik/yokluk okunur.
+    #   · kilit: `GET /sap/bc/adt/locks?objectRef=` bu sistemde SINIFTA DA 404 ⇒ `adt_lock_check`
+    #     spot'u tanir ama `kilit_belirsiz` doner (durust; ENHS'e ozgu degil).
+    #   · silme: kilit (nesne URL'i `_action=LOCK`) -> DELETE 200 — #413'te 816'da olculdu; core
+    #     `delete_object` yolunun ENHS'teki canli kosusu Q402 olcum betigiyle (lider/adt-gateway).
+    'enhancementspot': {
+        'adt_type': 'ENHS/XSB',
+        'url_path': 'enhancements/enhsxsb',
+        'xml_namespace': 'enhs',
+        'description': 'BAdI Enhancement Spot',
+        'supports_create': False,  # yarat/yaz/aktive: scripts/populate_badi_spot.py
+        'file_extension': '',
+        'generic_islemler': ('silme', 'kilit', 'metadata'),
+        'generic_url_ret': (
+            "BAdI enhancement spot (ENHS/XSB) genel ADT yolunda YALNIZ silme / kilit sorgusu / "
+            "metadata okumasi icin adreslenir. Yaratma, tanim yazma, aktivasyon ve okuma: "
+            "scripts/populate_badi_spot.py (lib: SAPADTClient.get/create/write/"
+            "activate_enhancement_spot). Bkz. playbook/adt-enhancement-spot-badi.md."
+        ),
+        'islem_ret': {
+            'kaynak': (
+                "BAdI enhancement spot'un kaynak (/source/main) ucu YOKTUR — belge XML'dir "
+                "(application/vnd.sap.adt.enh.enhs.v2+xml). Okuma/yazma: "
+                "scripts/populate_badi_spot.py --show / --spec. "
+                "Bkz. playbook/adt-enhancement-spot-badi.md."
+            ),
+            'atc': (
+                "ENHS icin ATC KAPSAM DISI: SAP bir spot icin 'FINDING_STATS 0,0,0' + bos obje "
+                "listesi dondurur ve bu sonuc VAR OLMAYAN bir objeninkiyle AYNIDIR (olculdu "
+                "2026-11-11) — '0 bulgu' TEMIZ anlamina gelmez, ATC istegi gonderilmedi. Spot "
+                "dogrulamasi: populate_badi_spot.py readback + aktivasyon hukmu; BAdI arabirimi ve "
+                "siniflari icin ATC'yi o objelerde (class/interface) kos."
+            ),
+        },
+    },
 }
+
+#: `get_object_url(..., islem=...)` icin bilinen islem adlari (yalniz belgeleme + yazim hatasi
+#: denetimi). Bir tip `generic_islemler` TASIMIYORSA islem YOK SAYILIR (eski davranis birebir).
+GENERIC_ISLEM_ADLARI = ('silme', 'kilit', 'metadata', 'atc', 'kaynak')
 
 # Aliases for convenience
 OBJECT_TYPE_ALIASES = {
@@ -198,7 +250,11 @@ OBJECT_TYPE_ALIASES = {
     'srvd': 'servicedefinition',
     'srv': 'servicedefinition',
     # Package alias
-    'devc': 'package'
+    'devc': 'package',
+    # BAdI enhancement spot (Q402) — #415'te kullanici `enhs` yazdi
+    'enhs': 'enhancementspot',
+    'enhsxsb': 'enhancementspot',
+    'enhs/xsb': 'enhancementspot',
 }
 
 
@@ -728,17 +784,50 @@ def ddic_read_mode(object_type):
     return (None, None)
 
 
-def get_object_url(object_name, object_type='class'):
+def islem_reddi(object_type, islem=None):
+    """Tip bu `islem` icin genel ADT yolunda REDDEDILIYOR mu? -> ret mesaji | None.
+
+    Yalniz `generic_islemler` TASIYAN tiplerde (bugun: `enhancementspot`) karar verir; diger
+    her tipte None (islem yok sayilir — eski davranis). Cozulemeyen tip adinda da None doner:
+    ret karari o durumda `normalize_object_type`'ta kalir (cagiran oraya zaten carpar).
+    Tip cozumunde ValueError FIRLATMAZ; yalniz bilinmeyen `islem` adinda firlatir (U8) —
+    cagiran istek gondermeden ONCE sorabilsin diye var (Q402).
+    """
+    if islem is not None and islem not in GENERIC_ISLEM_ADLARI:
+        raise ValueError(f"Bilinmeyen islem adi: {islem!r} (gecerli: {', '.join(GENERIC_ISLEM_ADLARI)})")
+    try:
+        obj_type = normalize_object_type(object_type)
+    except ValueError:
+        return None
+    info = OBJECT_TYPES[obj_type]
+    izinli = info.get('generic_islemler')
+    if izinli is None or islem in izinli:
+        return None
+    ozel = (info.get('islem_ret') or {}).get(islem)
+    return (f"'{object_type}' ({info['adt_type']}) icin "
+            f"{('islem=' + repr(islem)) if islem else 'islem belirtilmeyen cagri'} genel "
+            f"ADT yolunda REDDEDILDI (izinli: {', '.join(izinli)}). "
+            + (ozel or info.get('generic_url_ret') or ''))
+
+
+def get_object_url(object_name, object_type='class', islem=None):
     """Generate SAP ADT object URL for any object type
 
     Her tipin tek-parametreli generic bir ucu YOKTUR. `url_path` bos olan tip
     FAIL-CLOSED reddedilir (ValueError + kanonik yolu SOYLEYEN mesaj): yanlis bir adres
     uretmek 404 dogurur ve 404 "obje YOK" diye okunur -- sessiz yanlis teshis. Bugun bu
     durumda olan tek tip `function` (FM); gerekce tablodaki yorumda.
+
+    `islem` (Q402): `generic_islemler` tasiyan tipte (ENHS) URL YALNIZ listedeki islem icin
+    uretilir; `islem` vermeyen ya da baska islem veren cagiran ValueError alir (fail-closed
+    varsayilan — gelecekteki cagiranlar da kapali kalir). Diger tiplerde yok sayilir.
     """
     from urllib.parse import quote
     obj_type = normalize_object_type(object_type)
     type_info = OBJECT_TYPES[obj_type]
+    ret = islem_reddi(object_type, islem)
+    if ret:
+        raise ValueError(ret)
     if not type_info.get('url_path'):
         raise ValueError(
             f"'{object_type}' icin generic ADT URL'i URETILEMEZ "
@@ -768,8 +857,12 @@ def is_function_module_type(object_type):
 
 
 def get_source_url(object_name, object_type='class'):
-    """Generate source URL with /source/main suffix"""
-    base_url = get_object_url(object_name, object_type)
+    """Generate source URL with /source/main suffix
+
+    Q402: kaynak ucu olmayan tip (ENHS) `islem='kaynak'` ile REDDEDILIR — mesaj kanonik araci
+    soyler (`push_object` / `download_object` / pretty-print bu kapiya carpar).
+    """
+    base_url = get_object_url(object_name, object_type, islem='kaynak')
     return f'{base_url}/source/main'
 
 
@@ -791,14 +884,15 @@ def supports_creation(object_type):
     return OBJECT_TYPES[obj_type]['supports_create']
 
 
-def supports_generic_url(object_type):
+def supports_generic_url(object_type, islem=None):
     """Tip tek-parametreli `get_object_url()` ile adreslenebilir mi?
 
-    TEK GERCEKTEN turer (`url_path`); ikinci bir bayrak TUTULMAZ -- iki alan ayrisirsa
-    biri bayatlar. Cagiran `get_object_url`u cagirmadan ONCE sorabilsin diye var.
+    TEK GERCEKTEN turer (`url_path` + Q402 `islem_reddi`); ikinci bir bayrak TUTULMAZ -- iki
+    alan ayrisirsa biri bayatlar. Cagiran `get_object_url`u cagirmadan ONCE sorabilsin diye var.
+    ENHS: `islem` verilmezse False (get_object_url da reddeder), izinli islemle True.
     """
     obj_type = normalize_object_type(object_type)
-    return bool(OBJECT_TYPES[obj_type].get('url_path'))
+    return bool(OBJECT_TYPES[obj_type].get('url_path')) and not islem_reddi(obj_type, islem)
 
 
 def list_supported_types():
@@ -852,6 +946,7 @@ _TYPE_TO_SUBDIR = {
     'accesscontrol': 'cds', 'dcls': 'cds', 'dcl': 'cds',
     'servicedefinition': 'cds', 'srvd': 'cds', 'srv': 'cds',
     'package': 'packages', 'devc': 'packages',
+    'enhancementspot': 'enhs', 'enhs': 'enhs', 'enhsxsb': 'enhs', 'enhs/xsb': 'enhs',
 }
 
 

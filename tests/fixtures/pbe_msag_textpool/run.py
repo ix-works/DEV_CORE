@@ -838,8 +838,11 @@ MUTASYONLAR = [
      "c = {no: (v[0], _selfexp(v[1])) for no, v in canli.items()}"),
     ("MU23 [MX9] yanıttaki sınıf adı denetimi sökülür", PULL_PATH,
      'if canli["name"].upper() != name:', "if False:"),
+    # #416 (Q403): ad kararı `_sap_adi` yardımcısına taşındı (Z/Y dalı `_SAP_AD_RE` AYNEN) — çapa
+    # yeni yazıma hizalandı, mutant AYNI anlamda: adlı textpool'da ad denetimi tümden sökülür.
     ("MU24 [MX12] adlı textpool Z/Y denetimi sökülür", HOOK_PATH,
-     "        if not _SAP_AD_RE.match(prog):\n            return None", "        pass"),
+     '        prog = _sap_adi(tp_adli.group("prog"), "prog")\n        if prog is None:\n            return None',
+     '        prog = tp_adli.group("prog").upper()'),
     ("MU25 [L3] paket_dizini İLK kök eşleşmesini alır", PULL_PATH,
      "    for i in range(len(parts) - 1, -1, -1):", "    for i in range(len(parts)):"),
     ("MU26 [L4] --cwd seçeneği geri gelir", PULL_PATH,
