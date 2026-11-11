@@ -15,15 +15,18 @@
 - KAPSAM DIŞI: <"şunu da düzelteyim" YOK; ilgisiz bulguyu RAPORLA, dokunma>
 - KARDEŞ TARAMASI (lider, spawn ÖNCESİ — düzeltme işlerinde): <desen → N dosya: [liste]> — aynı sınıftaki vakalar KAPSAM İÇİ'ne yazılır, sonradan kuyruğa ayrı kayıt olarak AÇILMAZ (kuyruk yakınsamaz). Ajanın yeni bulduğu aynı-desen kardeş kendi dosya kümesindeyse ara raporda bildirilip kapsama alınır (infra-expert F2).
 - Model: <X — rol×kapsam matrisi satırı (operating-model §6); beyan≠fiilî, transcript kanıt>
-- **DOĞRULAMA KADANSI ajan tanımından gelir — brif onu EZMEZ (DEV_CORE #417, 2026-11-11):** ajan
-  tanımının doğrulama/test kadansı (ör. `frontend-expert` "DOĞRULAMA SEVİYESİ" varsayılan HAFİF ·
-  `infra-expert` "tam süit yerelde değil, CI'da") brifte yeniden yazılmaz. Brif daha ağır bir kadans
-  istiyorsa (ör. "önce ve sonra tam test"), **gerekçesini** bu satıra yazar: hangi risk o maliyeti
-  haklı kılıyor. *Neden:* bir projede brif "değişiklikten önce ve sonra tam test" deyince ~470
-  senaryoluk UI süitinin seri tam koşusu (~40 dk) iki kez koştu ve ajanlar 96 dk ile 100+ dk sürdü.
-  Kadans ajan tanımına geri bırakılınca (tam süit KOD DONDU'da bir kez, gruplar paralel) aynı
-  büyüklükteki partiler 1243 sn ve 1390 sn sürdü. Ölçüm tek projeden, tek iş türünden. *Ateşler:* brife
-  test/doğrulama talimatı yazarken.
+- **DOĞRULAMA KADANSI ajan tanımından gelir — brif onu EZMEZ (Issue #417, 2026-11-11):** ajan
+  tanımının doğrulama/test kadansı brifte yeniden yazılmaz (ör. `frontend-expert` DOĞRULAMA SEVİYESİ:
+  varsayılan HAFİF, tam tarayıcı turu yalnız açık talepte · `infra-expert` TEST KADANSI: tam süit
+  yerelde koşulmaz, CI koşar). Brif, tanımın **izin verdiği aralıkta** daha ağır bir kadans istiyorsa
+  (ör. FE'de tam tarayıcı turu), **gerekçesini** bu satıra yazar: hangi risk o maliyeti haklı kılıyor.
+  Tanımdaki bir ⛔ yasak (ör. `infra-expert` yerel tam süit) gerekçeyle de **aşılmaz**. *Neden:* bir
+  projede brif "değişiklikten önce ve sonra tam test" dedi. ~470 senaryoluk UI süitinin seri tam koşusu
+  ~40 dk sürüyordu. İki ajan 96 dk ve 100+ dk sürdü; ikincisinde iş ortasında iki kez kapsam da
+  eklenmişti. Sonraki iki partide üç şey birlikte değişti: baz test sonucu son commit'ten alındı, tam
+  süit bir kez koştu, gruplar paralel koştu. Partiler 1243 sn ve 1390 sn sürdü. Kazancın ne kadarının
+  bu kurala ait olduğu ÖLÇÜLMEDİ (baz devralma bu şablonda benimsenmedi). Ölçüm tek projeden, tek iş
+  türünden. *Ateşler:* brife test/doğrulama talimatı yazarken.
 
 ## 3. ÇIKTI FORMATI (output format)
 - Final mesaj = rapor (kanal §8: `SendMessage({to:"main"})`, yoksa son mesajın gövdesi); şekli: <madde listesi / tablo / diff / dosya-yolu>
@@ -91,12 +94,6 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
   md5 listesi **+ `infra-changelog` satırı yazılmış ve stage'li** (B11 kapısı aynı commit'te ister; placeholder YOK). Lider o anda commit+push+draft PR açar; CI, ajan rapor yazarken koşar (ölçüm:
   son süit → rapor sonu med ~11 dk, CI 2 dk ⇒ 6/6 koşuda sonuç rapordan önce gelirdi).
   Bundan sonra koda dokunulursa "KOD DONDU-2" (md5 çapası yenilenir).
-  ⛔ **KOD DONDU vermiş ajana kapsam EKLENMEZ (lider; DEV_CORE #417, 2026-11-11):** yeni kalem
-  yeni partiye (yeni ajan ya da yeni tur) gider. İstisna yalnız iki durum: kapıyı ya da CI'ı bloklayan
-  düzeltme, ve aynı satırdaki küçük düzeltme. *Neden:* donmuş koda eklenen her kalem yeni bir test
-  döngüsü açar ve md5 çapasını bayatlatır. Ölçülmüş vakada lider iş ortasında iki kez kapsam ekledi,
-  her biri ayrı tam test döngüsüne mal oldu ve ajan 100+ dk sürdü. *Ateşler:* KOD DONDU mesajı
-  geldikten sonra ajana yeni iş yazarken.
 - **TALİMAT-DEĞİŞİKLİĞİ TEYİDİ — olay-tetikli, ZORUNLU (2026-09-10; sınıfın 3. vakası):** İş
   sırasında lider'den **bir kararı değiştiren / iptal eden** mesaj gelirse, yeni işe başlamadan
   ÖNCE tek `SendMessage`: ① değişikliği **KENDİ CÜMLENLE** özetle ("X ölçütü düştü, yerine Y") —
@@ -110,6 +107,16 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
   repo genelinde tara, kalan isabet sayısını **0 olarak raporla**. (Ölçülmüş vaka: controller
   yeniden adlandırıldı, fragment eski adda kaldı ⇒ özellik 2/2 app'te ölü + runtime hatası;
   saf-mantık testleri fragment'ı görmediği için 42/42 yeşildi.)
+
+> **Lider notu (brife GİRMEZ) — KOD DONDU vermiş ajana kapsam EKLENMEZ (Issue #417, 2026-11-11):**
+> KOD DONDU mesajından sonra yeni kalem yeni partiye (yeni ajan ya da yeni tur) gider. İstisna yalnız
+> iki durum: kapıyı ya da CI'ı bloklayan düzeltme, ve aynı satırdaki küçük düzeltme. *Neden:* donmuş
+> koda eklenen her kalem yeni bir test döngüsü açar ve md5 çapasını bayatlatır. Bir projede lider iş
+> ortasında iki kez kapsam ekledi ve her biri yeni bir test döngüsü açtı. *Kapsam koşulu:* o vakada
+> eklemelerin KOD DONDU'dan önce mi sonra mı olduğu ÖLÇÜLMEDİ; kural bilerek daha dar anı (KOD DONDU
+> sonrası) kapsar. KOD DONDU kilometre taşı vermeyen rollerde uygulanmaz. *Ateşler:* KOD DONDU
+> mesajı geldikten sonra ajana yeni iş yazarken. *Nerede:* `playbook/howto-infra-fix-proseduru.md`
+> B0 tablosunun LİDER / KOD DONDU satırı da buraya atıf verir.
 - **DERHAL (kilometre taşını BEKLEME):** BLOCKER · çelişki · kapsam-dışı bulgu · yazacak yer yok.
 - **NİHAİ RAPOR — bitince, bu iskeletle:** ① kalem bazında sonuç tablosu
   (`KAPANDI · KISMİ · KAPSAM-DIŞI · ÇELİŞKİ · DOĞRULANAMADI · YAPILMADI(gerekçe)` + kanıt +
