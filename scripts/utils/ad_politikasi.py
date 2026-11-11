@@ -58,7 +58,9 @@ ADT YOL PARÇASI (`url_segmenti`, Parti 2a — canlı ölçüm 2026-11-08, DEV s
 YEREL DOSYA ADI (`dosya_adi` — DEV_CORE #416 / Q403, yazma yönü; okuma yönü `dosya_adindan_ad`)
   `/NS/X` → `#ns#x` (abapGit gösterimi, küçük harf) · `ZX` → `zx`. Dosya adında `/` OLAMAZ:
   `Path(out) / "/ns/x.abap"` sürücü köküne kaçar (Windows `C:/ns/x.abap`) ⇒ ad dosya adına
-  yalnız bu yardımcıdan geçerek yazılır. `dosya_adindan_ad(dosya_adi(x)) == x.upper()`.
+  yalnız bu yardımcıdan geçerek yazılır. `dosya_adindan_ad(dosya_adi(x)) == x.upper()` YALNIZ
+  dilbilgisine uyan ad için (`ad_gecerli_mi`); `C:X`, `(AB)X`, `#AB#X` gibi girdilerde tutmaz
+  ⇒ çağıran önce `musteri_adi_mi` ile denetler (bug-gate Ö1, #416).
 
 KOMUT SATIRI RED METNİ (`musteri_adi_red_metni` — #416): CLI araçları (push_textpool ·
   pull_msag_textpool · scaffold_classic_program) red metnini TEK yerden alır. Git Bash `/` ile
@@ -323,8 +325,8 @@ def musteri_karari(ad, object_type: str | None = None, *, namespaces=None, root=
 
 
 def dosya_adindan_ad(parca) -> str:
-    """Yerel dosya adının nesne-adı parçası → SAP adı (OKUMA yönü; #397 Parti 2b'nin yazma yarısı
-    `dosya_adi` burada YOK). abapGit `#ns#x` · URL-kodlu `%23ns%23x` · AFF `(ns)x` → `/NS/X`;
+    """Yerel dosya adının nesne-adı parçası → SAP adı (OKUMA yönü; yazma yönü `dosya_adi`,
+    hemen altında — #416). abapGit `#ns#x` · URL-kodlu `%23ns%23x` · AFF `(ns)x` → `/NS/X`;
     namespace'siz ad büyük harfe çevrilir. Biçim doğrulaması YAPMAZ (`ad_coz`'a ver)."""
     s = _unquote(str(parca or ""))
     m = re.match(r"^#([^#]*)#(.*)\Z", s, re.S) or re.match(r"^\(([^()]*)\)(.*)\Z", s, re.S)
