@@ -894,6 +894,13 @@ OZEL_TESTLER = [
      "yeni -> sira_tuzagi) + spec; surumsuz GET aktiflik hukmu; coklu-kullanim ters esleme; usages "
      "kiyas disi; kilit alti yeniden okuma (TOCTOU) + taban kiyasi; onlyConstantFilterValues; --cwd "
      "sirasi; 43 mutasyon"),
+    # 2026-11-11 Q403 / DEV_CORE #416: sabit Z/Y onek kontrolu yapan araclar ad_politikasi'na baglandi.
+    ("q403_ns_ad_kardesleri",
+     "push_textpool / pull_msag_textpool / scaffold_classic_program musteri_adi_mi + ortak red metni "
+     "(Git Bash MSYS ipucu); scaffold dosya adi dosya_adi (#ns#x, disari kacis yok); build_cbo_inventory "
+     "onek duzeyi (Z/Y aynen + bildirilmis NS; bosluklu IWSV/SICF adi korunur); PBE kancasi #ns#x dosya "
+     "adini tanir (kayitsiz NS tanimaz); yapilandirmasiz Z/Y tabanla ayni, fark yalniz gramer disi Z/Y "
+     "adlarda kabul->red (taban d85de77); 11 mutasyon"),
 ]
 
 
@@ -1873,6 +1880,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "enhs_* yardimcilari + get/create/write/activate_enhancement_spot + activate_object object_type"),
     ("scripts/populate_badi_spot.py", ("O:enhs_badi_spot",),
      "CLI: GET -> degistir -> TAM PUT -> aktive -> readback"),
+    # 2026-11-11 Q403 / DEV_CORE #416 — AYRI satirlar (paralel PR'larla cakismasin); sap_adt_lib'e satir
+    # EKLENMEDI (b0_secim P3 birlesimi degismez).
+    *[(y, ("O:q403_ns_ad_kardesleri",), "#416: musteri ad alani karari ad_politikasi (CLI/kanca/envanter)")
+      for y in ("scripts/utils/ad_politikasi.py", "scripts/push_textpool.py", "scripts/pull_msag_textpool.py",
+                "scripts/scaffold_classic_program.py", "scripts/build_cbo_inventory.py",
+                "scripts/hooks/_pbe_msag_textpool.py")],
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla

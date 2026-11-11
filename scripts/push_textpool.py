@@ -19,7 +19,9 @@ Akış: csrf → GET(etag) → lock(prog, corrNr=transport) → PUT(her alt-kayn
       → UNLOCK → activate(PROG/P + PROG/PX; unlock'tan SONRA — PROG/PX self-conflict 403 önlenir)
       → readback GET (?version=active doğrulama). Ayrıca PUT öncesi offline @MaxLength ön-kontrolü.
 
-ADR 0005: yalnız Z/Y program. Transport ZORUNLU (corrNr). TR master-lang .conn_adt'den gelir.
+ADR 0005: yalnız müşteri ad alanı (Z/Y ya da projede bildirilmiş /<NS>/ — `ad_politikasi`).
+Git Bash'te `/<NS>/…` argümanı yol sanılıp çevrilir → komutun önüne `MSYS_NO_PATHCONV=1`.
+Transport ZORUNLU (corrNr). TR master-lang .conn_adt'den gelir.
 """
 import argparse
 import re
@@ -29,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sap_client import SAPClient  # noqa: E402
 from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
+from utils import ad_politikasi as _ap  # noqa: E402 — #416: müşteri ad alanı kararı tek kaynak
 
 # Windows konsolu/pipe'i cp1252'dir: non-ASCII basmak UnicodeEncodeError ile COKER
 # (exit 1 -> gercek FAIL'den ayirt edilemez). C-ENC-01 / check_console_utf8.py
@@ -82,7 +85,7 @@ def _check_symbol_maxlengths(payload: str) -> list:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Klasik program text-pool PUT + aktivasyon")
-    ap.add_argument("--program", required=True, help="Z/Y program adı (örn ZSD001_P_SOZLESME_KOPYALA)")
+    ap.add_argument("--program", required=True, help="Z/Y ya da bildirilmiş /<NS>/ program adı (örn ZSD001_P_SOZLESME_KOPYALA)")
     ap.add_argument("--transport", required=True, help="Modifiable transport (corrNr), örn <TRANSPORT>")
     ap.add_argument("--symbols-file", help="symbols (TEXT-xxx / blok başlık) payload dosyası")
     ap.add_argument("--selections-file", help="selection texts payload dosyası")
@@ -91,8 +94,10 @@ def main() -> int:
     args = ap.parse_args()
 
     prog = args.program
-    if not prog[:1].upper() in ("Z", "Y"):
-        print(f"[BLOCK] ADR 0005: yalnız Z/Y program. Verilen: {prog}")
+    # ADR 0005-A: karar TEK kaynakta (`ad_politikasi.musteri_adi_mi`, #416) — Z/Y ya da projede
+    # `customer_namespaces` ile bildirilmiş `/<NS>/`; liste yoksa yalnız Z/Y (fail-closed).
+    if not _ap.musteri_adi_mi(prog, "prog"):
+        print(f"[BLOCK] ADR 0005: {_ap.musteri_adi_red_metni(prog)}")
         return 2
 
     subs = []

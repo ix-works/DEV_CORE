@@ -25,7 +25,9 @@ yüklemede SESSİZCE ezilir.
 
 KAPSAM (yalnız `<source_root>/…` altında; muaf klasörler çekirdekle AYNI):
   · mesaj sınıfı : `messages.csv` · `messages-<ek>.csv`
-      nesne = `<ek>` BÜYÜK harf (Z/Y ile başlıyorsa; örn `messages-zsd000.csv` → ZSD000).
+      nesne = `<ek>` BÜYÜK harf (Z/Y ile başlıyorsa; örn `messages-zsd000.csv` → ZSD000;
+      #416: bildirilmiş namespace'te abapGit adı `messages-#ns#msg.csv` → `/NS/MSG`, textpool
+      `#ns#prog.symbols.txt` → `/NS/PROG`; bildirilmemiş namespace tanınmaz).
       `messages-all.csv` / `messages.csv` → ad dosyadan ÇIKMAZ ⇒ yer tutucu `<MSAG_ADI>`
       (tahmin YOK; `.rules.md` adlandırma tablosu bir kuraldır, kanıt değildir).
   · textpool     : `…/textpool/<PROG>.{selections,symbols,headings}.txt` → nesne = PROG
@@ -67,6 +69,32 @@ _TP_ADLI_RE = re.compile(r"^(?P<prog>[^.]+)\.(?P<alt>selections|symbols|headings
                          re.IGNORECASE)
 _TP_CIPLAK_RE = re.compile(r"^(?P<alt>selections|symbols|headings)\.txt$", re.IGNORECASE)
 _SAP_AD_RE = re.compile(r"^[ZY][A-Z0-9_/]*$")
+# Namespace'li ad (#416): dosya adında `/` olamaz → abapGit `#ns#x` (ya da `%23ns%23x`, `(ns)x`).
+# Çözüm `ad_politikasi.dosya_adindan_ad`, karar `musteri_adi_mi` (pull aracıyla AYNI karar: kapı
+# aracın reddedeceği bir pull'u İSTEMEZ). Bildirilmemiş namespace → tanınmaz (standart adla aynı).
+_MSYS_NOTU = ("Git Bash: `/` ile başlayan ad yol sanılıp çevrilir — komutun önüne "
+              "MSYS_NO_PATHCONV=1 koy. ")
+
+
+def _ns_ad(parca: str, tip: str) -> Optional[str]:
+    """Dosya adı parçası → bildirilmiş namespace'li SAP adı; değilse / çözülemezse None.
+    Kapı asla çökmemeli: modül yüklenemezse None (bugünkü davranış: namespace'li ad tanınmaz)."""
+    try:
+        from utils import ad_politikasi as _ap  # type: ignore
+        ad = _ap.dosya_adindan_ad(parca)
+        if ad.startswith("/") and _ap.musteri_adi_mi(ad, tip):
+            return ad
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _sap_adi(parca: str, tip: str) -> Optional[str]:
+    """Z/Y dalı `_SAP_AD_RE` ile AYNEN (R3 pini); ek dal yalnız namespace'li ad."""
+    ad = parca.upper()
+    if _SAP_AD_RE.match(ad):
+        return ad
+    return _ns_ad(parca, tip)
 
 MSAG_YER_TUTUCU = "<MSAG_ADI>"
 PROG_YER_TUTUCU = "<PROGRAM_ADI>"
@@ -107,8 +135,7 @@ def _tek_program(programs_dizini: Path) -> Optional[str]:
         return None
     if len(adaylar) != 1:
         return None
-    ad = adaylar[0][: -len(".prog.abap")].upper()
-    return ad if _SAP_AD_RE.match(ad) else None
+    return _sap_adi(adaylar[0][: -len(".prog.abap")], "prog")
 
 
 def sinifla(path, root=None) -> Optional[dict]:
@@ -128,19 +155,19 @@ def sinifla(path, root=None) -> Optional[dict]:
         return None
 
     if m:
-        ek = (m.group("ek") or "").upper()
-        nesne = ek if (ek and ek != "ALL" and _SAP_AD_RE.match(ek)) else MSAG_YER_TUTUCU
+        ek = m.group("ek") or ""
+        nesne = (_sap_adi(ek, "msag") if (ek and ek.upper() != "ALL") else None) or MSAG_YER_TUTUCU
         neden = "" if nesne != MSAG_YER_TUTUCU else (
             "Mesaj sınıfı adı dosya adından çıkmıyor — <MSAG_ADI> yerine sınıf adını yaz. ")
         return {"nesne": nesne, "tip": "msag",
                 "komut": f'{_PULL} msag --name {nesne} --file "{p}"',
-                "not": neden + _KACIS}
+                "not": neden + (_MSYS_NOTU if nesne.startswith("/") else "") + _KACIS}
 
     if p.parent.name.lower() != "textpool":
         return None
     if tp_adli:
-        prog = tp_adli.group("prog").upper()
-        if not _SAP_AD_RE.match(prog):
+        prog = _sap_adi(tp_adli.group("prog"), "prog")
+        if prog is None:
             return None
     else:
         prog = _tek_program(p.parent.parent) or PROG_YER_TUTUCU
@@ -149,4 +176,4 @@ def sinifla(path, root=None) -> Optional[dict]:
         "<PROGRAM_ADI> yerine programı yaz; pull o DOSYAYI damgalar. ")
     return {"nesne": prog, "tip": "textpool",
             "komut": f'{_PULL} textpool --program {prog} --file "{p}"',
-            "not": neden + _KACIS}
+            "not": neden + (_MSYS_NOTU if prog.startswith("/") else "") + _KACIS}

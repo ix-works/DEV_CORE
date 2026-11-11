@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from utils import ad_politikasi as _ap  # noqa: E402 — #416: müşteri ad alanı kararı tek kaynak
 
 MAIN = """\
 *&---------------------------------------------------------------------*
@@ -105,19 +107,24 @@ def main() -> int:
     ap.add_argument("--out", default=".", help="Çıktı klasörü")
     args = ap.parse_args()
 
-    if not args.program.upper().startswith(("Z", "Y")):
-        print("[HATA] Program adı Z/Y ile başlamalı (ADR 0005-A)", file=sys.stderr)
+    # ADR 0005-A: karar TEK kaynakta (`ad_politikasi.musteri_adi_mi`, #416).
+    if not _ap.musteri_adi_mi(args.program, "prog"):
+        print(f"[HATA] Program adı (ADR 0005-A): {_ap.musteri_adi_red_metni(args.program)}",
+              file=sys.stderr)
         return 2
 
     prog = args.program.upper()
     ctx = {"prog": prog, "prog_lc": prog.lower(), "desc": args.desc}
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    # Dosya adı `ad_politikasi.dosya_adi` ile: `/NS/X` → `#ns#x` (ad dosya adına `/` ile
+    # yazılırsa `out / "/ns/x.abap"` sürücü köküne kaçar). Z/Y adında `prog.lower()` ile AYNI.
+    dosya = _ap.dosya_adi(prog)
     files = {
-        f"{prog.lower()}.abap": MAIN,
-        f"{prog.lower()}_top.abap": TOP,
-        f"{prog.lower()}_cls.abap": CLS,
-        f"{prog.lower()}_f01.abap": F01,
+        f"{dosya}.abap": MAIN,
+        f"{dosya}_top.abap": TOP,
+        f"{dosya}_cls.abap": CLS,
+        f"{dosya}_f01.abap": F01,
     }
     for fn, tmpl in files.items():
         (out / fn).write_text(tmpl.format(**ctx), encoding="utf-8")
