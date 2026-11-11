@@ -25,10 +25,15 @@ CANLI source'u GET ile çek, onun haritasıyla karşılaştır.
 parçasında kesiyordu ⇒ HER yerleşik tip `abap` diye kaydediliyordu ⇒ `abap.int4`→`abap.int2`,
 `abap.char(100)`→`abap.char(10)` daralması GÖRÜNMÜYORDU (sessiz veri kaybı). Ters yönde ad metni
 kıyası, fiziksel tipi aynı kalan DTEL→DTEL / yerleşik→DTEL geçişini BLOCKER yapıyordu.
-⚠GEVŞETME (bilinçli, removed-controls kaydı): ① aynı fiziksel tip artık BLOCKER değil INFO
-② yalnız çözülemeyen DTEL BLOCKER'ı varsa `measured=false` basılır ⇒ checklist_check BE-16 o
-dar vakada FAIL yerine ÖLÇÜLEMEDİ der (run_review rc≠0'da beyanı okumaz ⇒ BLOCKER kalır).
-Ölçülmüş drop/daralma/tür değişikliği yanındaysa `measured=false` BASILMAZ.
+⚠GEVŞETME (bilinçli, removed-controls kaydı — üç hücre): ① aynı fiziksel tip artık BLOCKER
+değil INFO ② yalnız çözülemeyen DTEL BLOCKER'ı varsa `measured=false` basılır ⇒ checklist_check
+BE-16 o dar vakada FAIL yerine ÖLÇÜLEMEDİ der (run_review rc≠0'da beyanı okumaz ⇒ BLOCKER kalır).
+Ölçülmüş drop/daralma/tür değişikliği yanındaysa `measured=false` BASILMAZ. ③ DTEL'li genişleme
+(DTEL→DTEL, yerleşik→DTEL, DTEL→yerleşik): eski rc 1 BLOCKER → rc 0 WARNING (`status=FINDING
+measured=true`); run_review drop-guard kaydı PASS + `sessiz_bulgu_gates` · BE-16 PASS (k_be16
+FINDING'i okumaz).
+⚠SIKILAŞTIRMA (düzeltme turu F4): DTEL XML'inde uzunluk (sabit uzunluklu tipler hariç) ya da
+ondalık (DEC/CURR/QUAN) öğesi yok/boşsa fiziksel tip ÇÖZÜLEMEDİ sayılır (eskiden 0 okunuyordu).
 
 KAPSAM BEYANI (her koşumda basılır): bakılan = canlı DDL kaynağı + değişen alanların DTEL meta
 verisi (SAP'deki GÜNCEL tanım; DTEL'in kendisi değiştiyse tarihçesi bilinmez). Bakılmayan:
@@ -40,8 +45,10 @@ Kullanım:
     python scripts/validators/check_table_field_drop.py <path> --ack-drop order_amount,order_currency
 
 --ack-drop NOTU (ADR 0005-B): Sadece açıkça onaylanmış, ADI YAZILAN alanların DROP'u
-BLOCKER yerine ACK-WARNING olur. İsmi verilmeyen herhangi bir DROP veya herhangi bir
-TYPE/RENAME değişikliği YİNE BLOCKER kalır (kör/blanket bypass DEĞİL — hedefli ack).
+BLOCKER yerine ACK-WARNING olur. İsmi verilmeyen herhangi bir DROP YİNE BLOCKER kalır.
+`--ack-drop` tip hükmünü HİÇ değiştirmez: daralma / tür değişikliği / çözülemeyen tip her
+zaman BLOCKER; genişleme (WARNING) ve aynı fiziksel tip (INFO) ack'ten bağımsız olarak zaten
+bloklamaz (kör/blanket bypass DEĞİL — hedefli ack).
 
 Exit kodu: 0 temiz/skip/ack/genişleme/aynı-tip · 1 BLOCKER (onaysız DROP · daralma · tür
 değişikliği · çözülemeyen fiziksel tip)
@@ -121,6 +128,9 @@ def parse_fields(text: str) -> dict:
 SABIT_UZUNLUK = frozenset({'CLNT', 'LANG', 'INT1', 'INT2', 'INT4', 'INT8', 'DATS', 'TIMS', 'FLTP',
                            'CUKY', 'DATN', 'TIMN', 'UTCL', 'ACCP', 'PREC'})
 SINIRSIZ_SIFIR = frozenset({'STRING', 'RAWSTRING'})   # uzunluk 0 = sınırsız
+# Ondalık taşıyan tipler: DTEL XML'inde ondalık öğesi yok/boşsa ÖLÇÜLEMEDİ (0 varsayılmaz).
+# DEC/CURR/QUAN ölçüldü; DF16_DEC/DF34_DEC adı ÖLÇÜLMEDİ (DDIC tanımından).
+ONDALIKLI = frozenset({'DEC', 'CURR', 'QUAN', 'DF16_DEC', 'DF34_DEC'})
 _YERLESIK_RE = re.compile(r'\Aabap\.([a-z0-9_]+)(?:\((\d+)(?:,(\d+))?\))?\Z')
 
 
@@ -145,12 +155,25 @@ def dtel_fiziksel(govde: str):
     dt = _xml_alani(govde, 'dataType')
     if not dt:
         return None, 'dtel-veri-tipi-yok'
+    dt = dt.upper()
+    uz_ham = _xml_alani(govde, 'dataTypeLength')
+    on_ham = _xml_alani(govde, 'dataTypeDecimals')
+    # #408 düzeltme turu F4 (⚠SIKILAŞTIRMA): eksik/boş öğe 0 SAYILMAZ. Eski `int(… or '0')` gerçek
+    # CHAR(40)'ı CHAR(0) okuyup `abap.char(10)`'a geçişi "genişleme" (rc 0) yapıyordu; ondalığı
+    # eksik DEC(15,5) ise (15,0) okunuyordu. Uzunluk sabit uzunluklu tiplerde kıyasa girmez.
+    if dt not in SABIT_UZUNLUK:
+        if not (uz_ham or '').isdigit():
+            return None, 'dtel-uzunluk-yok'
+        if dt not in SINIRSIZ_SIFIR and int(uz_ham) == 0:
+            return None, 'dtel-uzunluk-yok'
+    if dt in ONDALIKLI and not (on_ham or '').isdigit():
+        return None, 'dtel-ondalik-yok'
     try:
-        uz = int(_xml_alani(govde, 'dataTypeLength') or '0')
-        on = int(_xml_alani(govde, 'dataTypeDecimals') or '0')
+        uz = int(uz_ham) if (uz_ham or '').isdigit() else 0
+        on = int(on_ham) if (on_ham or '').isdigit() else 0
     except ValueError:
         return None, 'dtel-uzunluk-okunamadi'
-    return (dt.upper(), uz, on), None
+    return (dt, uz, on), None
 
 
 def tip_karsilastir(eski, yeni) -> str:
@@ -221,7 +244,8 @@ def main() -> int:
     parser.add_argument('--ack-drop', default='',
                         help='Onaylı DROP alanları (virgülle). Kullanıcı+lider bilinçli '
                              'silme onayı verdiğinde; SADECE bu alanlar ACK-WARNING olur, '
-                             'isimsiz drop/type değişikliği yine BLOCKER.')
+                             'isimsiz drop yine BLOCKER. Tip hükmüne etkisi YOK: daralma/tür '
+                             'değişikliği/çözülemeyen tip her zaman BLOCKER.')
     args, _ = parser.parse_known_args()
     path = Path(args.path)
     ack = {f.strip().lower() for f in args.ack_drop.split(',') if f.strip()}

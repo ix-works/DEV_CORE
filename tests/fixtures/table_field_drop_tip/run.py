@@ -31,6 +31,9 @@ VEKTÖRLER (SAP yerine 127.0.0.1 sahte ADT ucu; alınan istekler listelenir — 
       öneki `de:` → [INFO] (T13a); aynı tabloda `dataType` BOŞ DTEL → ÖLÇÜLEMEDİ, rc 1 (T13b)
   T14 KAPSAM beyanı her kıyas koşumunda basılır (sıfır-bulgu anı dahil)
   T15 `abap.string(256)` → `abap.string(0)` (0 = sınırsız) → genişleme, rc 0
+  T17 DTEL XML'inde `dataTypeLength` YOK → ÇÖZÜLEMEDİ (rc 1, measured=false) — eski kod 0 okuyup
+      `abap.char(10)`'a geçişi "genişleme" rc 0 yapıyordu (düzeltme turu F4, ⚠SIKILAŞTIRMA)
+  T17b `dataTypeLength` BOŞ öğe → aynı · T18 DEC DTEL'de `dataTypeDecimals` YOK → `dtel-ondalik-yok`
   T16 istekler yalnız sahte uca, yalnız tablo kaynağı + veri öğesi yolu; kumda `.conn_adt` oluşmadı
   TÜKETİCİLER (lider talebi: genişleme rc 0'ın ve measured=false'un sonucu SAYIYLA)
   R1  run_review table_update, genişleme → drop-guard kaydı PASS + `sessiz_bulgu_gates`'te
@@ -80,16 +83,24 @@ _SIL = ("ADT_BTP_SERVICE_KEY_PATH", "ADT_BTP_AUTH_TYPE", "ADT_IAS_TOKEN_URL", "A
         "IX_CEVRIMDISI")
 
 
-def dtel_xml(dt: str, uz: int, on: int = 0, onek: str = "dtel") -> str:
+def _oge(onek: str, ad: str, deger) -> str:
+    """deger None → öğe YOK · "" → boş öğe (`<x/>`) · int → 6 haneli."""
+    if deger is None:
+        return ""
+    if deger == "":
+        return f"<{onek}:{ad}/>"
+    return f"<{onek}:{ad}>{deger:06d}</{onek}:{ad}>"
+
+
+def dtel_xml(dt: str, uz, on=0, onek: str = "dtel") -> str:
     tip = f"<{onek}:dataType/>" if dt == "" else f"<{onek}:dataType>{dt}</{onek}:dataType>"
     return ('<?xml version="1.0" encoding="utf-8"?><blue:wbobj adtcore:version="active" '
             'adtcore:name="X" adtcore:type="DTEL/DE" xmlns:blue="http://www.sap.com/wbobj/dictionary/dtel" '
             'xmlns:adtcore="http://www.sap.com/adt/core">'
             f'<{onek}:dataElement xmlns:{onek}="http://www.sap.com/adt/dictionary/dataelements">'
             f'<{onek}:typeKind>domain</{onek}:typeKind><{onek}:typeName>X</{onek}:typeName>{tip}'
-            f'<{onek}:dataTypeLength>{uz:06d}</{onek}:dataTypeLength>'
-            f'<{onek}:dataTypeDecimals>{on:06d}</{onek}:dataTypeDecimals>'
-            f'</{onek}:dataElement></blue:wbobj>')
+            + _oge(onek, "dataTypeLength", uz) + _oge(onek, "dataTypeDecimals", on)
+            + f'</{onek}:dataElement></blue:wbobj>')
 
 
 DTEL = {
@@ -102,6 +113,10 @@ DTEL = {
     "/xns/e_a": (200, dtel_xml("CHAR", 12, onek="de")),
     "/xns/e_b": (200, dtel_xml("CHAR", 12, onek="de")),
     "/xns/e_bos": (200, dtel_xml("", 0, onek="de")),
+    # F4 (düzeltme turu): öğe eksik/boş — eski kod 0 okuyordu (gerçek tip CHAR 40 / DEC 15,5 varsayımı)
+    "zsd001_e_uzyok": (200, dtel_xml("CHAR", None)),
+    "zsd001_e_uzbos": (200, dtel_xml("CHAR", "")),
+    "zsd001_e_onyok": (200, dtel_xml("DEC", 15, None)),
 }
 
 
@@ -278,6 +293,14 @@ def dogrudan(kok: Path, kum: Path, srv: Sunucu) -> list:
     rc, out, err, _ = k("t15", "  txt : abap.string(256);\n", "  txt : abap.string(0);\n")
     ekle("T15", rc == 0 and "[WARNING]" in err and "(STRING(256) → STRING)" in err,
          f"rc={rc} err={err[-300:]!r}")
+    # F4 (⚠SIKILAŞTIRMA): uzunluk/ondalık öğesi yok ya da boş ⇒ ÇÖZÜLEMEDİ (eski: 0 ⇒ "genişleme" rc 0)
+    rc, out, err, _ = k("t17", "  ref : zsd001_e_uzyok;\n", "  ref : abap.char(10);\n")
+    ekle("T17", rc == 1 and "dtel-uzunluk-yok" in err and beyan(out) == (_GATE, "FAIL", "false", "fiziksel-tip-cozulemedi"),
+         f"rc={rc} beyan={beyan(out)} err={err[-300:]!r}")
+    rc, out, err, _ = k("t17b", "  ref : zsd001_e_uzbos;\n", "  ref : abap.char(10);\n")
+    ekle("T17b", rc == 1 and "dtel-uzunluk-yok" in err, f"rc={rc} err={err[-300:]!r}")
+    rc, out, err, _ = k("t18", "  qty : zsd001_e_onyok;\n", "  qty : abap.dec(16,0);\n")
+    ekle("T18", rc == 1 and "dtel-ondalik-yok" in err, f"rc={rc} err={err[-300:]!r}")
     return tum_istek
 
 
@@ -421,7 +444,7 @@ MUTASYONLAR = {
     # çözülemeyen tip bloklamaz
     "--mutasyon-olculemedi-gecer": (
         _D, _BLK, _BLK.replace(", 'olculemedi')", ")"),
-        {"T7", "T7b", "T8", "T9", "T13b", "R2", "K2"}),   # T8: ÖLÇÜLEMEDİ satırı da kaybolur
+        {"T7", "T7b", "T8", "T9", "T13b", "T17", "T17b", "T18", "R2", "K2"}),   # T8/T17*/T18: ÖLÇÜLEMEDİ satırı da kaybolur
     # measured=false ölçülmüş BLOCKER yanında da basılır (lider pini)
     "--mutasyon-measured-genis": (
         _D, "    if not unack_dropped and all(h[3] == 'olculemedi' for h in tip_blocker):\n",
@@ -431,7 +454,7 @@ MUTASYONLAR = {
     "--mutasyon-measured-yok": (
         _D, "        gate_status(_GATE, 'FAIL', False, 'fiziksel-tip-cozulemedi')\n",
         "        pass\n",
-        {"T7", "T7b", "T13b", "K2"}),
+        {"T7", "T7b", "T13b", "T17", "K2"}),   # T17 measured=false beyanını da ister
     # sabit uzunluklu tip kümesi körleşir
     "--mutasyon-sabit-kor": (
         _D, "    if dt in SABIT_UZUNLUK:\n        return 'ayni'\n",
@@ -449,6 +472,19 @@ MUTASYONLAR = {
         {"T10b"}),
     # kapsam beyanı kalkar
     "--mutasyon-kapsam-yok": (_D, "    print(_KAPSAM_BEYANI)\n", "", {"T14"}),
+    # F4: eksik/boş uzunluk yine 0 okunur (eski fail-open; blok TÜMDEN kalkar — yalnız ilk
+    # koşulu kapatmak `int(None)` çökmesi üretirdi, çökme ≠ ölçülen kaçak)
+    "--mutasyon-uzunluk-yok-gecer": (
+        _D, ("    if dt not in SABIT_UZUNLUK:\n        if not (uz_ham or '').isdigit():\n"
+             "            return None, 'dtel-uzunluk-yok'\n        if dt not in SINIRSIZ_SIFIR and int(uz_ham) == 0:\n"
+             "            return None, 'dtel-uzunluk-yok'\n"),
+        "    pass\n",
+        {"T17", "T17b"}),
+    # F4: eksik ondalık yine 0 okunur
+    "--mutasyon-ondalik-yok-gecer": (
+        _D, "    if dt in ONDALIKLI and not (on_ham or '').isdigit():\n",
+        "    if False:\n",
+        {"T18"}),
 }
 KIPLER = sorted(MUTASYONLAR)
 
