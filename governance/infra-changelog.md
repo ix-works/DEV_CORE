@@ -14,6 +14,12 @@ Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileş
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).
 
+## tests/fixtures/fugr_include_yazim/run.py (`--mutasyon-csrf` çapası) — Q405 (2026-11-11; infra-expert, kullanıcı onayı 2026-11-11) — ⚠GEVŞETME YOK
+
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-11-11 | **Yalnız test çapası; davranış kodu yok.** `MUTASYONLAR["--mutasyon-csrf"]` çapasının ilk satırı `elif response.status_code == 403 and 'CSRF' in response.text:` → `elif self._csrf_reddi_mi(response):` (sonraki iki satır ve mutant `elif False:` aynen; ilan kümesi `{"B1c"}` aynen). Çapa üç satırlı kaldı: `_csrf_reddi_mi(response)` `sap_adt_lib.py`'de 4 yerde geçer, `lock_object` dalı (debug satırıyla birlikte) tek eşleşmedir. | PR #412'nin yan etkisi, Q405: PR #412 `lock_object` CSRF dalını ortak `_csrf_reddi_mi` yüklemine taşıdı, çapa eski satırı aramaya devam etti ⇒ kip `[KURULAMADI] --mutasyon-csrf -> capa 0 kez` (rc=3) — B1c değişmezi (CSRF yenilemesi gerçekten koşar) mutasyonla korunmuyordu. Kardeş taraması (`'CSRF' in response.text`, tests/ scripts/ mcp_servers/): yalnız bu çapa. | Önce: `run.py --mutasyon-csrf` → KURULAMADI capa 0 kez, rc=3. Sonra: yeni çapa sayımı 1 · `--mutasyon-csrf: 49/50 OK · dusen=['B1c'] · ilan=['B1c']` MUTASYON DUSTU rc=1 · taban 50/50 OK · `KIPLER` listesindeki 29 kipin 29'u "DUSTU (ilan edilen kume TAM)" · `run_battery.py fugr_include_yazim --kardes kilit_birakma_durustlugu reviewer_tip_kapsam mcp_profil_aktivasyon_offline b0_secim mcp_arac_sinifi --kardes-tam --precommit` → TOPLAM 44/44 PASS. | `tests/fixtures/fugr_include_yazim/run.py --mutasyon-csrf` | (bu PR) |
+
 ## DEV_CORE Issue #417 — claude/templates/spawn-brief.md §2 (doğrulama kadansı ajan tanımından gelir) · §8 lider notu (KOD DONDU sonrası kapsam eklenmez) · playbook/howto-infra-fix-proseduru.md B0 LİDER satırı (atıf) (2026-11-11; lider, kullanıcı onayı 2026-11-11: "(b)+(c) belge olarak")
 
 | tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
