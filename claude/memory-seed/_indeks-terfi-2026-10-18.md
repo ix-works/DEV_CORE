@@ -9,7 +9,8 @@ metadata:
 # 2026-10-18 tohum terfisi — tohum indeksi
 
 > Bu dersler mevcut konu hub'larına DEĞİL bu dosyaya yazıldı: tohumlama merge-safe'tir, kurulu bir
-> makinede var olan hub'ı EZMEZ ⇒ oraya eklenen satır o makineye hiç ulaşmaz. Yeni bir hub dosyası
+> makinede yerelde DÜZENLENMİŞ (ya da manifest'siz, ayırt edilemez) hub'ı EZMEZ ⇒ oraya eklenen satır o
+> makineye ulaşmaz (dokunulmamış hub S1 ile güncellenir — düzeltme 2026-11-12). Yeni bir hub dosyası
 > ise her makineye kopyalanır ve `MEMORY.md`'deki tek satırı `seed_memory` indekse ekler.
 > Vaka anlatımları genericize edildi ("bir projede, <tarih>"); paket/obje/belge adları temsilîdir.
 

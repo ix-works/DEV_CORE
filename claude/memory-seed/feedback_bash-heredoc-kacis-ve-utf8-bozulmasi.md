@@ -22,18 +22,28 @@ Bash tool'una verilen komut **metni**, Python'a ulaşmadan önce bozulabilir. İ
 
 **3. vaka (2026-09-13) — kaçış hatası BAŞKA bir dosyanın gerçek yola yazmasına yol açtı:** gerçek dosyaya yazan betikten
 "kopya yolunu kullanan deneme betiği" türetiyordum. Heredoc içindeki `.replace('\\', '/')` Python'a `'\'` olarak ulaştı →
-`SyntaxError` → deneme betiği **yeniden üretilmedi**. Bir önceki (başarısız `sed`) adımdan kalan `td_deneme.py` ise
-**gerçek yolu** taşıyordu ve zincirde koştu: TD `governance/infra-findings.md`'ye sahte SHA'larla yazdı (+37/-4). Kopyada
+`SyntaxError` → deneme betiği **yeniden üretilmedi**. Bir önceki (başarısız `sed`) adımdan kalan deneme betiği ise
+**gerçek yolu** taşıyordu ve zincirde koştu: projenin `governance/infra-findings.md`'sine sahte SHA'larla yazdı (+37/-4). Kopyada
 0 değişiklik görünce yakalandı, `git checkout --` ile geri alındı (dosyada başka commit'siz değişiklik yoktu — önceden ölçülmüştü).
 - Türetilmiş/deneme betiğini üretmeden ÖNCE **sil** (`rm -f`); çalıştırmadan önce içinde gerçek yolun **olmadığını assert et**.
 - Gerçek dosyaya yazan betik yolu mümkünse **argümanla** alsın (hardcode yol = deneme türetmeyi kırılgan yapar).
 - Deneme koşumunda **gerçek dosyanın md5'ini önce/sonra** ölç — "kopyada değişiklik yok" belirtisi tek başına geç kalır.
 - Üretici betiği heredoc ile değil **Write ile dosyaya** yaz (bu dersin 1. maddesi — tekrar edildi).
 
-Son-doğrulama: 2026-09-13 · Applies-to: Windows Git Bash tool katmanı, python heredoc/`-c`
+**4. vaka (2026-09-25) — regex kelime sınırı dosyaya KONTROL BAYTI olarak girdi:** heredoc'la çalışan düzenleme betiğinde
+`r'\\b'` → hedef `.py` dosyasına `0x08` (backspace) yazıldı. Regex hiç eşleşmedi → fonksiyon canlıda "0 kayıt" döndü; ekranda
+görünmez, Edit aracı da o satırı eşleştiremedi. Onarım: Write ile yazılmış bayt düzeltici (`bytes([8])` → `bytes([92, 98])`).
+- Kod dosyası düzenlendikten sonra **`tr -cd '\010' < f | wc -c`** (0 olmalı) — bug-gate'e de bayt sayımını ekle.
 
----
-**Son-dogrulama:** 2026-09-13 (ders yazim tarihi — o gunden beri YENIDEN OLCULMEDI) · **Applies-to:** bu cekirdegi kullanan tum projeler
+**5. vaka (2026-10-14, AYNI OTURUMDA İKİ KEZ) — kabuk TEST VEKTÖRÜ üretimi sessizce geçersiz ölçüm verdi:** guard canlı
+sondasında heredoc'taki Python'da `'it'\\''s'` / f-string içinde `\\''` yazdım → komut `'it'''s` oldu (kaçış yok). Sonuç
+ilk seferde "apostrof düzeltmesi canlıda çalışmıyor" (sahte AÇIK), ikincisinde "4. turdan sonra regresyon" (sahte REGRESYON)
+gibi okundu; ikisinde de ajana yanlış soru gidebilirdi. Yakalayan: komutu **yazdırıp gözle bakmak** + kontrol grubu.
+- Kabuk vektörü üretirken ters-bölü DAİMA `chr(92)` ile; tek tırnak kaçışını `Q = "'" + chr(92) + "''"` gibi kur.
+- Ölçüm tablosuna **üretilen komutun kendisini** de bas — sonuçtan önce vektörü doğrula.
+- Eski guard sürümünü `.tmp/` altına kopyalayıp koşmak `rc 1` (import kırığı) verir — rc 1 ölçüm değildir, satırı at.
+
+Son-doğrulama: 2026-10-14 · Applies-to: Windows Git Bash tool katmanı, python heredoc/`-c`, kabuk test vektörü üretimi · bu çekirdeği kullanan tüm projeler
 
 ⚠ **ARAC IDDIASI** — bu ders *"bugun su arac/kapi boyle davraniyor"* der, yapisal bir olgu
 degil. Arac surumu degismis olabilir: davranisa **dayanmadan once bir kez olc**. (Vaka: bir

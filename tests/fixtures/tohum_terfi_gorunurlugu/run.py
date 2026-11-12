@@ -36,6 +36,13 @@ MUTASYON (korpusun bos-yesil olmadigini kanitlar):
   --mutasyon-gurultu-sayilir CRLF normalizasyonu kalkar                     -> D DUSMELI
   --mutasyon-beyansiz        blocklist kapsam satiri silinir                -> B DUSMELI
   --mutasyon-kanalsiz        yetkisiz klon terfi kanali satiri silinir (#286) -> B DUSMELI
+  --mutasyon-taze-hepsi      (a-taze) mtime suzgeci kalkar (Q407 F)          -> F1 + F2 DUSMELI
+  --mutasyon-karar-yok       gun-sonu karar bolumu basilmaz (Q407 F)         -> F2 DUSMELI
+  --mutasyon-birlestirildi-karar karar kaydi beyani eski metne doner (N1)    -> F5 DUSMELI
+
+Q407 F (2026-11-12): (a) kovasi birikir (canli 258) ve butunuyle okunamaz; gun-sonu kararinin
+konusu yalniz son TAZE_GUN gunde duzenlenenlerdir ('(a-taze)', mtime). Arac karar VERMEZ,
+'GUN-SONU KARARI BEKLEYENLER' bolumu yalniz hangi kovada hangi kararin beklendigini soyler.
 """
 from __future__ import annotations
 
@@ -80,6 +87,18 @@ MUTLAR = {
     "--mutasyon-kanalsiz": (
         '"`core/playbook/howto-cekirdek-bulgu-bildirimi.md` kanalıyla (Issue) iletilir.")',
         '"(kanal notu)")'),
+    # Q407 F: mtime suzgeci kalkar -> eski duzenleme de 'taze' gorunur
+    "--mutasyon-taze-hepsi": (
+        "a_taze = [ad for ad in a_gercek if (target / ad).stat().st_mtime >= sinir]",
+        "a_taze = list(a_gercek)"),
+    # Q407 F: gun-sonu karar bolumu basilmaz (gozlem aksiyona baglanmaz)
+    "--mutasyon-karar-yok": (
+        'print("\\n--- GÜN-SONU KARARI BEKLEYENLER (CLAUDE.core §1.1 — karar dersi yazanındır) ---")',
+        'print("\\n--- (bolum) ---")'),
+    # N1 (PR #426): karar kaydi beyani eski (core §1.1'in TERSI) metne doner
+    "--mutasyon-birlestirildi-karar": (
+        '"günün SESSION_NOTES gün-sonu satırından okunur: satırı olan kalem için yeniden karar "',
+        '"--birlestirildi ile kapatılmış ders de görünür; o kalem için yeniden karar "'),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -157,13 +176,15 @@ def main() -> int:
                                                          encoding="utf-8", newline="\n")
         (seed / "feedback_satir-sonu.md").write_text(_ders("satir-sonu", "GOVDE"),
                                                      encoding="utf-8", newline="\n")
+        (seed / "feedback_yerel-duzenli-eski.md").write_text(_ders("yerel-duzenli-eski", "TOHUM"),
+                                                             encoding="utf-8", newline="\n")
         (seed / "MEMORY.md").write_text("## Feedback\n\n- [a](feedback_ayni.md) — oz\n",
                                         encoding="utf-8", newline="\n")
 
         # ── hedef memory: tohumda OLMAYAN dersler (kova + kimlik eksenleri) ─────
         hedef = tmp / "mem"
         hedef.mkdir()
-        for ad in ("ayni", "yerel-duzenli", "tohum-ilerledi", "satir-sonu"):
+        for ad in ("ayni", "yerel-duzenli", "tohum-ilerledi", "satir-sonu", "yerel-duzenli-eski"):
             shutil.copy2(seed / f"feedback_{ad}.md", hedef / f"feedback_{ad}.md")
         # manifest = "tohumlandigi andaki" sha (yerel duzenleme ONCESI)
         import json
@@ -174,6 +195,13 @@ def main() -> int:
         # (a) yerelde DUZENLENMIS: yerel != tohum ve yerel != manifest sha
         (hedef / "feedback_yerel-duzenli.md").write_text(_ders("yerel-duzenli", "YEREL EKLEME"),
                                                          encoding="utf-8", newline="\n")
+        # (a) ama ESKI duzenleme (Q407 F): mtime 30 gun once -> '(a-taze)'de GORUNMEZ
+        eski_p = hedef / "feedback_yerel-duzenli-eski.md"
+        eski_p.write_text(_ders("yerel-duzenli-eski", "ESKI YEREL EKLEME"), encoding="utf-8",
+                          newline="\n")
+        import time as _t
+        _eski_zaman = _t.time() - 30 * 86400
+        os.utime(eski_p, (_eski_zaman, _eski_zaman))
         # (b) tohum ILERLEMIS: yerel == manifest sha, tohum farkli
         (seed / "feedback_tohum-ilerledi.md").write_text(_ders("tohum-ilerledi", "TOHUM V2"),
                                                          encoding="utf-8", newline="\n")
@@ -231,7 +259,7 @@ def main() -> int:
             m = re.search(rf"^\s*{re.escape(ad)}\s*:\s*(\d+)", metin, re.MULTILINE)
             return int(m.group(1)) if m else None
 
-        ekle("K1 SAYIM satiri: yerelde-var-tohumda-yok dogru (11 yerel - 4 tohumlu = 7)",
+        ekle("K1 SAYIM satiri: yerelde-var-tohumda-yok dogru (12 yerel - 5 tohumlu = 7)",
              "yerelde VAR, tohumda YOK : 7" in out,
              f"cikti={[l for l in out.split(chr(10)) if 'tohumda YOK' in l]}")
         ekle("K2 kova 'evet' = 3 (2 kimlik ekseni + 1 duz)", kova_sayisi(out, "evet") == 3,
@@ -266,8 +294,8 @@ def main() -> int:
              "project_kapsam-disi" not in out, "project_* dosyasi ciktida gorunmemeli")
 
         # ══ D: SAPMA + GURULTU ═════════════════════════════════════════════════
-        ekle("D1 (a) yerelde duzenlenmis: 1 gercek + 1 gurultu AYRI",
-             "(a) yerelde DÜZENLENMİŞ (geri akış adayı) : 1   [+1 yalnız satır-sonu" in out,
+        ekle("D1 (a) yerelde duzenlenmis: 2 gercek (taze + eski, Q407 F) + 1 gurultu AYRI",
+             "(a) yerelde DÜZENLENMİŞ (geri akış adayı) : 2   [+1 yalnız satır-sonu" in out,
              f"cikti={[l for l in out.split(chr(10)) if '(a)' in l]}")
         ekle("D2 (b) tohum ilerlemis: 1 gercek (bugun gorunmeyen yon)",
              "(b) tohum İLERLEMİŞ, yerel kopya ESKİ     : 1" in out,
@@ -277,6 +305,31 @@ def main() -> int:
         ekle("D4 GURULTU dosyasi gercek kovada LISTELENMEZ",
              "· feedback_satir-sonu.md" not in out,
              "CRLF-only fark is degildir; listelenirse hayali is uretilir")
+
+        # ══ F: Q407 — gozlem -> KARAR (a-taze + gun-sonu bolumu) ═════════════════
+        ekle("F1 (a-taze) yalniz son 7 gunde duzenleneni gosterir (taze VAR, 30 gunluk YOK)",
+             "(a-taze) bunlardan son 7 günde düzenlenen : 1" in out
+             and "⏱ feedback_yerel-duzenli.md" in out
+             and "⏱ feedback_yerel-duzenli-eski.md" not in out
+             and "· feedback_yerel-duzenli-eski.md" in out,
+             f"cikti={[l for l in out.split(chr(10)) if 'taze' in l or '⏱' in l or 'duzenli-eski' in l]}")
+        ekle("F2 GUN-SONU KARARI bolumu kova sayilariyla basilir (evet 3 · <YOK> 1 · a-taze 1)",
+             "GÜN-SONU KARARI BEKLEYENLER" in out and "'evet' kovası 3 →" in out
+             and "'<YOK>' kovası 1 →" in out and "(a-taze) 1 → GERİ AKIŞ" in out,
+             f"cikti={[l for l in out.split(chr(10)) if 'kovası' in l or 'GERİ AKIŞ' in l]}")
+        ekle("F3 (a-taze) olcutu KAPSAM BEYANI'nda (mtime sinirli oldugu yazili)",
+             "'(a-taze)' dosya mtime'ına bakar" in out, "beyan satiri yok")
+        # N1 (PR #426 bug-gate): karar kaydinin yeri CLAUDE.core §1.1 ile AYNI olmali —
+        # SESSION_NOTES gun-sonu satiri; --birlestirildi karar kaydi DEGIL (tohum ilerlemediyse
+        # iz birakmaz, olculdu 2026-11-12). Eski metin tersini soyluyordu.
+        _ayirmaz = [l for l in out.split("\n") if "karara bağlanmış dersi AYIRMAZ" in l]
+        _ay = _ayirmaz[0] if len(_ayirmaz) == 1 else ""
+        ekle("F5 (a-taze) karar kaydi beyani core §1.1'e hizali (SESSION_NOTES; --birlestirildi "
+             "karar kaydi DEGIL)",
+             "SESSION_NOTES" in _ay and "karar kaydı DEĞİLDİR" in _ay
+             and "--birlestirildi ile kapatılmış" not in out
+             and "satırı olmayan karara bağlanmamıştır" in _ay,
+             f"satir_sayisi={len(_ayirmaz)} satir={_ay!r}")
 
         # ══ B: KAPSAM BEYANI ═══════════════════════════════════════════════════
         for anahtar, etiket in (
@@ -311,6 +364,9 @@ def main() -> int:
         rc3, out3, _ = kos(hedef2, tmp)
         ekle("C3 manifest YOKSA sapma 'ÖLÇÜLEMEDİ' (0 sapma diye okunamaz)",
              rc3 == 0 and "ÖLÇÜLEMEDİ" in out3 and "seed-manifest" in out3,
+             f"rc={rc3} cikti={out3[-300:]!r}")
+        ekle("F4 manifest YOKSA (a-taze) 'ÖLÇÜLEMEDİ' (0 diye okunamaz, Traceback yok)",
+             rc3 == 0 and "(a-taze) ÖLÇÜLEMEDİ" in out3 and "Traceback" not in out3,
              f"rc={rc3} cikti={out3[-300:]!r}")
     finally:
         _sil(tmp)

@@ -173,6 +173,21 @@
   salt-okunurdur, kopyalamaz; kararı §5'e göre dersi yazan verir. `<YOK>` kovası boşalmıyorsa
   terfi kontrolü *"core dokümanına yazdım"* ayağında kalmış demektir — "başka makineye ulaştı"
   ayağı ölçülmemiştir.
+  ⭐ **Gözlem → KARAR (Q407 F, 2026-11-12):** çıktının `GÜN-SONU KARARI BEKLEYENLER` bölümü boş
+  değilse **aynı gün** kalem başına karar verilir: `evet` → tohuma terfi (genericize; sahip makinede
+  PR, yazma yetkisiz klonda Issue) · `<YOK>` → `seed:` kararı · `(a-taze)` (tohumda olup son 7 günde
+  yerelde düzenlenen ders) → kural değiştiyse ya da ters döndüyse tohum güncellenir, yalnız yerel
+  vaka ayrıntısıysa bırakılır. Ateşler: gün-sonunda bu bölümde **karara bağlanmamış** kalem görünce.
+  **Karar NEREYE yazılır:** o günün gün-sonu `SESSION_NOTES.md` bloğuna kalem başına tek satır
+  (`<ders> → terfi | tohum güncellendi | bırak`). Araç kararı ayırmaz: `(a-taze)` kalemi 7 günlük
+  pencere boyunca listede kalır; ertesi gün o satırı bulunan kalem **yeniden karar istemez**, satırı
+  olmayan kalem karara bağlanmamıştır. ⚠ `--birlestirildi <dosya>` yalnız tohum ilerlediğinde
+  manifest'e iz yazar; tohum ilerlemediyse ("bırak") hiçbir şey yazmaz (ölçüldü 2026-11-12: manifest
+  md5 ve `--terfi-adaylari` çıktısı öncesi/sonrası aynı) — karar kaydının yerini tutmaz. ⚠ Yerel `seed:` alanının dolu olması
+  bu kararın işareti DEĞİLDİR: o alan *terfi* kararıdır, *geri akış* kararı değil (ölçüldü
+  2026-11-12: geri akışı henüz yapılmamış 3 derste `seed: evet` var, tohum bayat).
+  *(Vaka 2026-11-12: karar bağlanmadığı için "yerelde düzenlenmiş" kovası 258'e birikti; tohumda
+  kuralı TERS dönmüş dersler diğer makinelere eski hâliyle gitti.)*
   + **Gelen çekirdek bildirimi gözlemi (yalnız çekirdek SAHİBİ makinede, 2026-09-18):**
   `gh issue list --repo ix-works/DEV_CORE --state open` — tüketici klonlar bulguyu **yalnız Issue**
   ile gönderir, fork-PR yolu yoktur ([`playbook/howto-cekirdek-bulgu-bildirimi.md`](playbook/howto-cekirdek-bulgu-bildirimi.md) §3).

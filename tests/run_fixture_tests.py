@@ -646,6 +646,14 @@ OZEL_TESTLER = [
      "bilgi satiri · terfi (b) kovasi kosumdan sonra dogru · #322 `--birlestirildi` elle "
      "birlestirme sonrasi uyariyi kapatir (tohum ilerleyince geri gelir; gecersiz ad/--force/"
      "--terfi-adaylari exit 2); 48 vektor + 18 mutasyon (pinli kume, CORE-07); HEAD-oncesi kod 34/48"),
+    # 2026-11-12 (Q407 M4): "tohumda duruyor" != "kurulu makineye ulasti". GERCEK eski tohum
+    # (pinli git tabani) ile kurulu sahte makineye yeni tohum uygulanir; ulasan/ulasmayan olculur.
+    ("tohum_yayilim_m4",
+     "tohum yayilimi (sahte MEVCUT makine, pinli eski tohum -> calisma agaci tohumu): evrilmis "
+     "dokunulmamis ders yeni govdeyi alir · duzenlenmis ders ezilmez + uyarida adi · yeni ders + "
+     "tarihli hub eklenir ve MEMORY.md'den ERISILIR (gercek _butunluk) · dokunulmamis hub'a sonda "
+     "ULASIR, duzenlenmis hub'a sonda ULASMAZ (negatif kontrol) · manifest'siz makine (3. baglam); "
+     "12 vektor + 2 kip (pinli kume, CORE-07); git tabani yoksa DOGRULANAMADI exit 3"),
     # 2026-09-18 (Q326/D7): desen 3. kez genisledi; 2 harfle sinirli desen 3-4 harfli
     # modul kodunu KACIRIYORDU (kontrol grubu: 2 harfli yakalaniyordu).
     ("z_obje_desen_kapsami",
@@ -1676,6 +1684,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "ters yon: `--terfi-adaylari` salt-okunurlugu + kova semantigi + sapma/gurultu ayrimi"),
     ("scripts/seed_memory.py", ("O:tohum_govde_guncelleme",),
      "S1: var olan dosyada karar (_mevcut_dosya_karari) + manifest eski sha korunur"),
+    ("scripts/seed_memory.py", ("O:tohum_yayilim_m4",),
+     "Q407 M4: gercek tohumun kurulu makineye yayilimi (_index_onar + S1 birlikte)"),
+    ("scripts/validators/check_memory_index.py", ("O:tohum_yayilim_m4",),
+     "Q407 M4 erisilebilirligi gercek C-MEM-01 `_butunluk` ile olcer"),
     ("scripts/genericize_common.py", ("O:tohum_terfi_gorunurlugu", "O:z_obje_desen_kapsami"),
      "D7 desen kapsami + ORNEK_Z olcutu; ayrica terfi listeleyicisinin kimlik on-taramasi "
      "AYNI modulu cagirir (listeleyici kapidan dar olamaz)"),
