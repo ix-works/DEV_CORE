@@ -104,6 +104,6 @@ kritik olanı bildirilir ([[feedback_infra-turunda-yeni-acilan-maddeye-baslama-m
 [[feedback_dogrula-once-flag-spekulatif-blocker-yasak]] · [[feedback_flag-degil-icra-bekleyen-is-kapat]] ·
 [[feedback_soru-once-tartis-act-etme]]
 
-Son-doğrulama: 2026-08-21 ((e) dalı eklendi — onaylı kuralı yeniden yorumlama = UYGULAMA, SOR;
-(d) daraltması 2026-08-14'ten beri aynen geçerli)
+Son-doğrulama: 2026-11-12 ("kusur ≠ öneri" karşılıklı satırı eklendi; (e) dalı 2026-08-21, (d)
+daraltması 2026-08-14'ten beri aynen geçerli)
 Applies-to: her proje / her tur; özellikle çok maddeli (S2) turlar ve alt-ajanlı çalışma
