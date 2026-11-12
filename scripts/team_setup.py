@@ -15,6 +15,7 @@ Yaptıkları:
      + `.gitignore` YÖNETİLEN BLOK: şablonda olup projede olmayan satırları dosyanın BAŞINDAKİ
        işaretli bloğa yazar; proje satırları bayt-eş ve bloktan sonra (Q365④; `--no-gitignore`)
   --tazele-shim / --tazele-precommit : sapmış kopyayı AÇIK onayla tazele (fark + yedek + sha)
+  --tazele-settings : settings.json'a YALNIZ EKSİK şablon kancalarını ekle (ezmez; Q406)
   5. Claude Code plugin'leri (setup_plugins.py; non-fatal) + seed_memory (--no-seed ile atla)
   6. Smoke: statusline + MCP import
   --repair-junctions      : yalnız junction kur/onar + rapor (session_start'ın önerdiği komut)
@@ -41,6 +42,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import hashlib
+import json
 import os
 import shutil
 import stat
@@ -323,6 +325,97 @@ def kopya_tazele(proje: Path, rel_yerel: str) -> bool:
         return False
     say(OK, f"{ad} TAZELENDİ — doğrulandı: sonuç sha256 == şablon sha256 "
             f"({sonraki_sha[:12]})")
+    return True
+
+
+def settings_tazele(proje: Path) -> bool:
+    """`--tazele-settings` — `.claude/settings.json`a YALNIZ EKSİK şablon kancalarını ekler (Q406).
+
+    NEDEN: `settings.json` `TAZELENEBILIR`de BİLİNÇLİ OLARAK yok (F12b, 2026-10-03): tam-dosya
+    tazeleme proje eklerini (ek `allow`, proje-özel kanca) silerdi. Ama bu, eski kurulumda
+    EKSİK kalan bir şablon kancası (ör. 2026-08-01 öncesi kurulumda `recall_inject`) için de
+    onarım yolu bırakmıyordu — `dosya_tamamla` var olan dosyayı ezmez, howto "elle birleştir"
+    diyordu ve `ix_doctor` eksikliği ad vermeden WARN'lıyordu.
+    ⛔ EZMEZ: hiçbir öğe silinmez/değiştirilmez; yalnız (olay, eşleyici, kanca) bağlantısı
+    şablonda olup projede olmayan kanca eklenir (`utils.kanca_kablolari.eksikleri_ekle`).
+    "Eşleyici farklı" bağlantı EKLENMEZ (karar kullanıcının). Ters yön (2026-08-22: projede
+    kablolu kanca şablonda yoktu) bu yüzden zararsızdır — proje eki KORUNUR ve raporda görünür.
+    Sıra: FARK RAPORU (önce) → yedek `settings.json.yedek-<sha8>` → yaz → doğrula (eksik 0 +
+    eski bağlantıların TAMAMI yerinde + kanca dışı alanlar bayt-eş JSON) → doğrulanamazsa
+    yedekten GERİ YÜKLE. Bayrak = açık onay (`--tazele-shim` ile aynı sözleşme).
+    """
+    try:
+        sys.path.insert(0, str(CORE_ROOT / "scripts"))
+        from utils import kanca_kablolari as KK  # type: ignore
+    except Exception as e:  # noqa: BLE001
+        say(FAIL, f"settings.json: kanca okuyucusu ÖLÇÜLEMEDİ — utils.kanca_kablolari yüklenemedi "
+                  f"({type(e).__name__}: {e}); dosyaya DOKUNULMADI")
+        return False
+    hedef = proje / ".claude" / "settings.json"
+    kaynak = CORE_ROOT / "claude" / "settings.template.json"
+    if not hedef.is_file():
+        say(WARN, f"{hedef} YOK — tazelenecek bir kopya yok; normal üretim yolu "
+                  f"(python core/scripts/team_setup.py) şablondan üretir")
+        return False
+    try:
+        ham = hedef.read_bytes()
+        eski = json.loads(ham.decode("utf-8"))
+        sablon = json.loads(kaynak.read_text(encoding="utf-8"))
+        k = KK.kiyas(eski, sablon)
+        yeni, eklenen = KK.eksikleri_ekle(eski, sablon)
+    except Exception as e:  # noqa: BLE001
+        say(FAIL, f"settings.json/şablon okunamadı ya da işlenemedi ({type(e).__name__}: {e}) — "
+                  f"dosyaya DOKUNULMADI")
+        return False
+
+    print("\n  --- settings.json KANCA FARK RAPORU (tazelemeden ÖNCE) ---")
+    print(f"  şablon: core/claude/settings.template.json · {k['sablon_sayisi']} bağlantı "
+          f"({len(k['sablon_kanca'])} kanca)")
+    for b in k["eksik"]:
+        print(f"  + EKLENECEK      {KK.bicim(b)}")
+    for b, p_eslik in k["eslesik_farki"]:
+        print(f"  ~ DOKUNULMAYACAK {KK.bicim(b)} — projede eşleyici `{p_eslik or '-'}` (karar kullanıcının)")
+    for b in k["ek"]:
+        print(f"  = KORUNACAK      {KK.bicim(b)} (proje eki)")
+    if KK.hepsi_kapali(eski):
+        say(WARN, "settings.json `disableAllHooks: true` — eklenen kancalar da KOŞMAZ; anahtara "
+                  "DOKUNULMADI (kullanıcı kararı)")
+    if not eklenen:
+        say(OK, "settings.json: eksik şablon kancası YOK — dosyaya DOKUNULMADI")
+        return True
+
+    onceki_sha = hashlib.sha256(ham).hexdigest()
+    yedek = hedef.with_name(f"{hedef.name}.yedek-{onceki_sha[:8]}")
+    shutil.copyfile(hedef, yedek)
+    say(OK, f"yedek alındı: {yedek.name} (ekleme GERİ ALINABİLİR)")
+    metin = json.dumps(yeni, indent=2, ensure_ascii=False) + "\n"
+    if b"\r\n" in ham:
+        metin = metin.replace("\n", "\r\n")
+    hedef.write_bytes(metin.encode("utf-8"))
+
+    try:
+        okunan = json.loads(hedef.read_bytes().decode("utf-8"))
+        kalan = KK.kiyas(okunan, sablon)["eksik"]
+        from collections import Counter
+        kayip = Counter(KK.baglantilar(eski)) - Counter(KK.baglantilar(okunan))
+        dis_esit = ({a: v for a, v in okunan.items() if a != "hooks"}
+                    == {a: v for a, v in eski.items() if a != "hooks"})
+        hata = (f"eksik kaldı: {[KK.bicim(b) for b in kalan]}" if kalan else
+                f"eski bağlantı KAYBOLDU: {[KK.bicim(b) for b in kayip]}" if kayip else
+                "kanca dışı alanlar değişti" if not dis_esit else "")
+    except Exception as e:  # noqa: BLE001
+        hata = f"yazılan dosya okunamadı ({type(e).__name__}: {e})"
+    if hata:
+        shutil.copyfile(yedek, hedef)
+        say(FAIL, f"settings.json tazelemesi DOĞRULANAMADI ({hata}) — yedekten GERİ YÜKLENDİ")
+        return False
+    say(OK, f"settings.json: {len(eklenen)} şablon kancası EKLENDİ — "
+            + ", ".join(KK.bicim(b) for b in eklenen)
+            + f" · proje eki {len(k['ek'])} korundu · doğrulandı (eksik 0, eski bağlantılar yerinde)")
+    say(INFO, "davranış yüzeyi değişti: projede onaylı değişiklik olarak commit'le + "
+              "python core/scripts/behavior_manifest.py generate; oturum içinde ConfigChange "
+              "guard'ı uyarabilir (beklenen) — kancalar oturumu KAPAT-AÇ sonrası yüklenir; "
+              "doğrula: python core/scripts/ix_doctor.py --layer 4")
     return True
 
 
@@ -650,6 +743,12 @@ def sablon_sapmasi(proje: Path) -> int:
         if rel_y in TAZELENEBILIR:
             komut = (f"önce farkı gör + yedekli tazele: python core/scripts/team_setup.py "
                      f"{TAZELENEBILIR[rel_y]} (proje İLERİDE olabilir — fark raporunu oku)")
+        elif rel_y == ".claude/settings.json":
+            # Q406: eksik şablon KANCASI için onaylı ekleme yolu var (tam-dosya tazeleme DEĞİL).
+            komut = (f"eksik şablon kancası için: python core/scripts/team_setup.py "
+                     f"--tazele-settings (yalnız EKSİK kancaları ekler, proje eklerine dokunmaz) · "
+                     f"diğer farklar: git diff --no-index core/{rel_t} {rel_y} "
+                     f"(otomatik tazeleme YOK — proje ekleri meşru)")
         else:
             komut = (f"{sapma_onarim} · fark: git diff --no-index core/{rel_t} {rel_y} "
                      f"(otomatik tazeleme YOK — proje ekleri meşru)")
@@ -1420,7 +1519,11 @@ def main() -> int:
     ap.add_argument("--tazele-precommit", action="store_true",
                     help="scripts/git-hooks/pre-commit'i sablondan TAZELE (ACIK onay) — "
                          "--tazele-shim ile AYNI guvenlik: once FARK + yon sayimi, yedek, "
-                         "sha dogrulamasi. settings.json icin tazeleme YOK (proje ekleri mesru).")
+                         "sha dogrulamasi. settings.json icin tam-dosya tazeleme YOK (proje ekleri mesru).")
+    ap.add_argument("--tazele-settings", action="store_true",
+                    help=".claude/settings.json'a YALNIZ EKSIK sablon kancalarini ekle (ACIK onay; "
+                         "Q406). EZMEZ: proje ekleri/izinler/env dokunulmaz. Once FARK raporu, "
+                         "yedek, sonra dogrulama; dogrulanamazsa yedekten geri yukler.")
     # PATH artik OPSIYONEL (2026-08-29): verilmezse icinde bulunulan worktree provizyonlanir.
     # `const` bilerek bos dizge DEGIL bir SENTINEL: `if a.provision_worktree:` truthiness
     # testi bos dizgeyi "verilmedi" sanardi (sessiz NO-OP). Kontrol `is not None` ile yapilir.
@@ -1448,15 +1551,17 @@ def main() -> int:
     proje = Path(a.project).resolve()
     print(f"team_setup — core = {CORE_ROOT}\n            proje = {proje}\n")
 
-    if a.tazele_shim or a.tazele_precommit:
+    if a.tazele_shim or a.tazele_precommit or a.tazele_settings:
         # AYRI ve ERKEN dal: tazeleme tek işi yapar, kurulumun geri kalanını koşturmaz
-        # (yan etki yüzeyi mümkün olduğunca dar). İki bayrak birlikte verilirse ikisi de
+        # (yan etki yüzeyi mümkün olduğunca dar). Bayraklar birlikte verilirse hepsi
         # denenir; biri başarısızsa exit 1.
         ok = True
         if a.tazele_shim:
             ok = shim_tazele(proje) and ok
         if a.tazele_precommit:
             ok = kopya_tazele(proje, "scripts/git-hooks/pre-commit") and ok
+        if a.tazele_settings:
+            ok = settings_tazele(proje) and ok
         return 0 if ok else 1
     if a.wt_yolu:
         print(wt_yolu(proje, a.wt_yolu)); return 0

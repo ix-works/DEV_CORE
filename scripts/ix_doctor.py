@@ -21,7 +21,9 @@ Katmanlar (GECIS-EXEC-CHECKLIST BLOK F / F2.1–F2.7):
   4. CLAUDE        : settings/shim template-drift (D7) · SHIM_SURUM · behavior-
                      manifest ↔ ağaç (F2) · hook smoke (örnek-stdin) · tanım dosyası
                      frontmatter'ı geçerli YAML mı (4g; `utils/frontmatter_lint`, WARN-only,
-                     otomatik düzeltme YOK — bulgu ÇEKİRDEK/PROJE kaynağıyla ayrılır)
+                     otomatik düzeltme YOK — bulgu ÇEKİRDEK/PROJE kaynağıyla ayrılır) ·
+                     kanca kablolaması AD düzeyinde (4h) · şablon+proje kancalarının HER
+                     BİRİ gerçek shim'den smoke (4i) · recall_inject içerik sondası (4j) — Q406
                      (freeze-guard canlı testi 2026-07-10'da R10 ile birlikte KALDIRILDI — bkz. 4e)
   5. MCP/SAP       : .conn_adt var+placeholder'sız · MCP server dosyaları
                      junction'dan erişilebilir · MCP server IMPORT edilebilir (Q335;
@@ -757,13 +759,18 @@ def _shim_yolu() -> Path:
     return PROJ / "scripts" / "hook_shim.py"
 
 
-def _hook_kos(hook: str, stdin_json: dict, timeout: int = 60) -> tuple[int, str, float]:
-    """Hook'u proje shim'i üzerinden (D15 zinciri) örnek-stdin ile koş."""
+def _hook_kos(hook: str, stdin_json: dict, timeout: int = 60,
+              yorumlayici: str | None = None) -> tuple[int, str, float]:
+    """Hook'u proje shim'i üzerinden (D15 zinciri) örnek-stdin ile koş.
+
+    `yorumlayici` verilirse (4i, Q406) settings'teki komutun PATH çözümüyle koşulur —
+    Claude Code'un gerçek giriş noktası; verilmezse `sys.executable` (4d/6b bugünkü gibi)."""
     shim = _shim_yolu()
+    py = yorumlayici or sys.executable
     if shim.exists():
-        args = [sys.executable, str(shim), hook]
+        args = [py, str(shim), hook]
     else:  # shim yoksa doğrudan core hook (drift kontrolü zaten ayrıca FAIL verir)
-        args = [sys.executable, str(CORE_ROOT / "scripts" / "hooks" / f"{hook}.py")]
+        args = [py, str(CORE_ROOT / "scripts" / "hooks" / f"{hook}.py")]
     t0 = time.perf_counter()
     rc, out = _run(args, cwd=PROJ, stdin_text=json.dumps(stdin_json), timeout=timeout, env=_hook_env())
     return rc, out, time.perf_counter() - t0
@@ -864,6 +871,14 @@ def katman4() -> list[Sonuc]:
     #      bloklanan komut PowerShell'den GEÇİYORDU (canlı A/B ile kanıtlandı). Guard'ı
     #      doğrudan çağıran testler yeşildi. "Kod-seviyesi koruma" ≠ "korunuyor".
     r.extend(_kablolama_kontrol())
+
+    # 4h/4i/4j — KANCA KABLOLAMASI + TÜM KANCALARA SMOKE + RECALL SAĞLIĞI (Q406, 2026-11-12):
+    #      4a dosyayı tek imzayla kıyaslar (kanca adı vermez), 4d yalnız 2 kancayı koşar,
+    #      4f yalnız pre_tool_guard'ın matcher'ına bakar ⇒ şablondaki 16 kancanın 14'ü
+    #      ad düzeyinde hiç denetlenmiyordu ve fail-open recall_inject'in arızası sessizdi.
+    r.extend(_kanca_kablolama())
+    r.extend(_kanca_smoke())
+    r.extend(_recall_saglik())
 
     # 4g — TANIM DOSYASI FRONTMATTER'I (2026-10-18, çekirdek PR #347 vakası): tırnaksız
     #      `description:` içindeki `: ` Claude Code'da LF'te tolere edildi, CRLF checkout'ta
@@ -1074,6 +1089,325 @@ def _kablolama_kontrol() -> list:
                         f"PreToolUse matcher'ında ({len(matcherlar)} blok) "
                         f"[küme pre_tool_guard.py'den TÜRETİLDİ, elle liste YOK]{onek_notu}"))
     return r
+
+
+# ---------------------------------------------------------------- 4h / 4i / 4j (Q406)
+# NEDEN VAR (Q406, 2026-11-12, kullanıcı onayı): şablon 16 kanca bağlar; ix_doctor bunların
+# yalnız 2'sini koşuyor (4d), yalnız 1'inin matcher'ına bakıyordu (4f); 4a tüm dosyayı tek
+# imzayla kıyasladığı için bir kancanın DÜŞMESİ ile zararsız bir proje eki AYNI ad vermeyen
+# WARN'ı basıyordu (ölçüldü: geçici kopyadan `recall_inject` silindi → yalnız "template'ten
+# SAPMIŞ"; aynı WARN'ı başka bir tüketici yalnız kanca-dışı farkla da veriyordu).
+# ⛔ GATE DEĞİL (ADR 0019): ix_doctor salt-okur teşhistir; onarım AYRI ve açık onaylı yoldur
+# (`team_setup --tazele-settings`, howto-cekirdek-guncelleme §6a ①).
+# ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: modül/dosya okunamazsa satır PASS DEMEZ.
+_TAZELE_SETTINGS = "python core/scripts/team_setup.py --tazele-settings"
+_KANCA_KAPSAM = ("kapsam: (olay, eşleyici, kanca adı) üçlüsü şablona karşı; komut yorumlayıcısı "
+                 "1g'de, kancanın ÇALIŞMASI 4i'de ölçülür; permissions/env/statusLine bu satırda "
+                 "BAKILMADI")
+_SMOKE_4D = ("session_start", "pre_tool_guard")     # 4d'de zaten koşulur (bugünkü ölçüt)
+_SMOKE_KAPSAM = ("kapsam: zararsız örnek girdi — blok/yazma dalı TETİKLENMEZ, kancanın kararı "
+                 "ölçülmez; çıktı İÇERİĞİ yalnız yan etkisiz sondası olan kancalarda ölçülür; "
+                 "yan etki: .tmp/instructions-loaded.log ve .tmp/config-changes.log'a birer "
+                 "`ix_doctor_smoke` satırı")
+
+
+def _kanca_modulu():
+    from utils import kanca_kablolari as KK  # type: ignore  # CORE_ROOT/scripts sys.path'te
+    return KK
+
+
+def _json_oku(p: Path) -> dict:
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def _kanca_kablolama(ayar: Path | None = None, sablon: Path | None = None) -> list[Sonuc]:
+    """4h — şablondaki HER kanca bağlantısı projede var mı (ad düzeyi)."""
+    ayar = ayar or PROJ / ".claude" / "settings.json"
+    sablon = sablon or CORE_ROOT / "claude" / "settings.template.json"
+    try:
+        KK = _kanca_modulu()
+    except Exception as e:  # noqa: BLE001
+        return [(FAIL, f"kanca kablolaması ÖLÇÜLEMEDİ — utils.kanca_kablolari yüklenemedi "
+                       f"({type(e).__name__}: {e}); TEMİZ demek DEĞİL")]
+    if not ayar.is_file():
+        return [(FAIL, f"kanca kablolaması: .claude/settings.json YOK — HİÇBİR kanca kablolu "
+                       f"değil (pre_tool_guard dahil). Onarım (§6a ①): python core/scripts/"
+                       f"team_setup.py (şablondan üretir)")]
+    try:
+        p, s = _json_oku(ayar), _json_oku(sablon)
+    except Exception as e:  # noqa: BLE001
+        return [(FAIL, f"kanca kablolaması ÖLÇÜLEMEDİ — settings/şablon okunamadı "
+                       f"({type(e).__name__}: {e}); TEMİZ demek DEĞİL")]
+    r: list[Sonuc] = []
+    if KK.hepsi_kapali(p):
+        r.append((FAIL, "kanca kablolaması: settings.json `disableAllHooks: true` — kablolama ne "
+                        "olursa olsun HİÇBİR kanca koşmaz (pre_tool_guard dahil = sessiz fail-open); "
+                        "bilinçli değilse anahtarı kaldır (§6a ②: kullanıcıya sor)"))
+    k = KK.kiyas(p, s)
+    n, adet = k["sablon_sayisi"], len(k["sablon_kanca"])
+    ek = (f" · proje eki {len(k['ek'])} (BİLGİ, WARN değil — onarım SİLMEZ): "
+          + ", ".join(KK.bicim(b) for b in k["ek"][:6]) + (" …" if len(k["ek"]) > 6 else "")
+          if k["ek"] else "")
+    if k["eksik"]:
+        r.append((FAIL, f"kanca kablolaması: şablonun {n} bağlantısından {len(k['eksik'])}'i "
+                        f"projede YOK → " + ", ".join(KK.bicim(b) for b in k["eksik"])
+                        + f" — bu kancalar HİÇ koşmaz. Onarım (§6a ①): {_TAZELE_SETTINGS} "
+                          f"(yalnız EKSİKLERİ ekler, proje eklerine dokunmaz; önce fark + yedek), "
+                          f"sonra `python core/scripts/ix_doctor.py --layer 4`{ek} [{_KANCA_KAPSAM}]"))
+    for b, p_eslik in k["eslesik_farki"]:
+        r.append((WARN, f"kanca eşleyicisi şablondan FARKLI: {b[2]} ({b[0]}) şablon `{b[1] or '-'}` "
+                        f"↔ proje `{p_eslik or '-'}` — genişletme/daraltma olabilir, otomatik "
+                        f"onarılmaz; şablonla karşılaştır (§6a ②) [{_KANCA_KAPSAM}]"))
+    if not k["eksik"] and not KK.hepsi_kapali(p):
+        r.append((PASS, f"kanca kablolaması: şablonun {n} bağlantısının ({adet} kanca) tamamı "
+                        f"projede{ek} [{_KANCA_KAPSAM}]"))
+    return r
+
+
+def _smoke_ornekleri(token: str) -> dict[str, tuple[dict, tuple | None]]:
+    """Kanca → (zararsız örnek stdin, içerik beklentisi). Beklenti: None (yalnız temiz çıkış) ·
+    ("stdout", parça) · ("log", proje-göreli dosya, parça). ⛔ Şablona kanca eklenince buraya da
+    örnek eklenir — eklenmezse 4i "örnek tanımsız" FAIL'i basar (korpus T1 çiviler)."""
+    yaz = str(PROJ / ".tmp" / "ix_doctor_smoke.txt")
+    w = {"tool_name": "Write", "tool_input": {"file_path": yaz, "content": ""}}
+    kisa = {"prompt": "ix_doctor smoke"}
+    return {
+        "tooling_radar_check": ({}, None),
+        "instructions_loaded_log": ({"hook_event_name": "InstructionsLoaded",
+                                     "file_path": f"<ix_doctor_smoke {token}>",
+                                     "memory_type": "Project", "load_reason": "ix_doctor_smoke"},
+                                    ("log", ".tmp/instructions-loaded.log", token)),
+        "skill_injector": (kisa, None),
+        "intake_triage": (kisa, None),
+        "recall_inject": (kisa, None),                 # içerik sondası 4j'de
+        "infra_write_guard": (w, None),
+        "pull_before_edit": (w, None),
+        "sap_worktype_hint": ({"tool_name": "Read", "tool_input": {}}, None),
+        "itg_backstop": ({"tool_name": "mcp__sap-adt__ping", "tool_input": {}}, None),
+        "watchdog_launch": ({"tool_name": "Read", "tool_input": {}}, None),
+        "post_validate": ({"tool_name": "Write", "tool_input": {"file_path": yaz},
+                           "tool_response": {}}, None),
+        "post_tool_failure": ({"tool_name": "Read", "tool_input": {}, "tool_response": "ok"}, None),
+        "config_change_guard": ({"hook_event_name": "ConfigChange",
+                                 "source": f"ix_doctor_smoke {token}"},
+                                ("log", ".tmp/config-changes.log", token)),
+        "pre_compact": ({"hook_event_name": "PreCompact", "trigger": "manual"},
+                        ("stdout", '"systemMessage"')),
+    }
+
+
+def _smoke_yorumlayici(veri: dict, KK) -> tuple[str | None, Sonuc | None, str]:
+    """Kanca komutlarının yorumlayıcısı (Claude Code'un çözeceği gibi, PATH'le).
+
+    -> (yol | None, satır | None, not). None yol = `sys.executable` yedeği (kanca KODU yine
+    ölçülür; yorumlayıcı arızası AYRI satırdır — §6a ② ile ③ karışmasın)."""
+    adlar: dict[str, int] = {}
+    for bloklar in (veri.get("hooks") or {}).values():
+        for blok in bloklar if isinstance(bloklar, list) else []:
+            for kanca in (blok.get("hooks") or []) if isinstance(blok, dict) else []:
+                if not isinstance(kanca, dict) or not KK.shim_kancasi_mi(KK.kanca_adi(kanca)):
+                    continue
+                kom = str(kanca.get("command") or "").strip()
+                if "args" not in kanca:
+                    m = re.match(r'\s*"([^"]+)"|\s*(\S+)', kom)
+                    kom = (m.group(1) or m.group(2)) if m else kom
+                adlar[kom] = adlar.get(kom, 0) + 1
+    if not adlar:
+        return None, None, "yorumlayıcı: settings'te shim komutu yok → sys.executable"
+    ad, adet = max(adlar.items(), key=lambda x: x[1])
+    if _YORUMLAYICI_DEGISKEN.search(ad):
+        return None, (SKIP, f"kanca smoke yorumlayıcısı `{ad}` ÖLÇÜLEMEDİ — genişletilmemiş "
+                            f"değişken; smoke sys.executable ile koşuldu (temiz demek DEĞİL)"), \
+            "yorumlayıcı ÖLÇÜLEMEDİ → sys.executable"
+    yol = ad if ("/" in ad or "\\" in ad) else shutil.which(ad)
+    if not yol:
+        return None, (FAIL, f"kanca smoke: yorumlayıcı `{ad}` PATH'te YOK — settings'teki {adet} "
+                            f"kanca komutu HİÇ başlamaz (pre_tool_guard bloklamaz = sessiz "
+                            f"fail-open). §6a ②: Python kur / PATH'i düzelt (1g satırı). Kanca "
+                            f"KODU aşağıda sys.executable ile ayrıca ölçüldü"), \
+            "yorumlayıcı YOK → sys.executable yedeği"
+    if not _YORUMLAYICI_PY_AILE.fullmatch(re.split(r"[\\/]", ad)[-1]):
+        return None, (SKIP, f"kanca smoke yorumlayıcısı `{ad}` python ailesi DEĞİL — başlama "
+                            f"ölçülmedi; smoke sys.executable ile koşuldu (temiz demek DEĞİL)"), \
+            "yorumlayıcı python dışı → sys.executable"
+    rc, out = _run([yol, "-c", f"print('{_YORUMLAYICI_ISARET}')"], timeout=30)
+    if rc != 0 or _YORUMLAYICI_ISARET not in out:
+        son = next((s.strip() for s in reversed(out.splitlines()) if s.strip()), "çıktı yok")
+        return None, (FAIL, f"kanca smoke: yorumlayıcı `{ad}` → {yol} BAŞLAMIYOR (rc={rc}: "
+                            f"{son[:90]!r}) — {adet} kanca komutu HİÇ çalışmaz (sessiz fail-open). "
+                            f"§6a ②: gerçek Python'u PATH'te öne al (1g satırı). Kanca KODU aşağıda "
+                            f"sys.executable ile ayrıca ölçüldü"), "yorumlayıcı BAŞLAMIYOR → sys.executable yedeği"
+    return yol, None, f"yorumlayıcı `{ad}` → {yol}"
+
+
+def _smoke_sorunu(rc: int, out: str, beklenti: tuple | None) -> tuple[str, str] | None:
+    """-> None (temiz) ya da (§6a sınıfı, açıklama)."""
+    son = next((s.strip() for s in reversed(out.splitlines()) if s.strip()), "çıktı yok")[:110]
+    if "CORE JUNCTION KOPUK" in out:
+        return "①", ("shim çekirdek kancasını BULAMADI (core junction kopuk/eksik) — onarım: "
+                      "python core/scripts/team_setup.py --repair-junctions")
+    if "Traceback (most recent call last)" in out:
+        return "③", f"kanca ÇÖKTÜ (Traceback, exit {rc}): {son!r}"
+    if "GIRDI-PARSE-EDILEMEDI" in out:
+        return "③", "örnek girdi OKUNAMADI (kanca stdin'i ayrıştıramadı)"
+    if rc != 0:
+        return "③", f"zararsız girdide exit {rc} (0 beklenir): {son!r}"
+    if beklenti and beklenti[0] == "stdout" and beklenti[1] not in out:
+        return "③", f"fail-open kanca SESSİZ kaldı — beklenen {beklenti[1]} çıktısı yok"
+    if beklenti and beklenti[0] == "log":
+        try:
+            metin = (PROJ / beklenti[1]).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            metin = ""
+        if beklenti[2] not in metin:
+            return "③", (f"fail-open kanca SESSİZ kaldı — {beklenti[1]}'e smoke satırı YAZILMADI "
+                          f"(yazma hatası kancada sessizce yutuluyor)")
+    return None
+
+
+def _kanca_smoke(ayar: Path | None = None) -> list[Sonuc]:
+    """4i — kablolu + şablondaki HER kanca gerçek giriş noktasından (`scripts/hook_shim.py
+    <kanca>`, settings'teki yorumlayıcıyla) zararsız örnek girdiyle koşulur."""
+    ayar = ayar or PROJ / ".claude" / "settings.json"
+    try:
+        KK = _kanca_modulu()
+        s = _json_oku(CORE_ROOT / "claude" / "settings.template.json")
+    except Exception as e:  # noqa: BLE001
+        return [(FAIL, f"kanca smoke ÖLÇÜLEMEDİ — modül/şablon okunamadı ({type(e).__name__}: "
+                       f"{e}); TEMİZ demek DEĞİL")]
+    try:
+        p = _json_oku(ayar) if ayar.is_file() else None
+    except Exception:  # noqa: BLE001
+        p = None                                     # 4h ÖLÇÜLEMEDİ der; smoke şablonla sürer
+    sablon_adlar = [a for a in KK.kiyas({}, s)["sablon_kanca"] if KK.shim_kancasi_mi(a)]
+    adlar = list(sablon_adlar)
+    for _o, _m, a in KK.baglantilar(p or {}):
+        if KK.shim_kancasi_mi(a) and a not in adlar:
+            adlar.append(a)
+    yol, ysatir, ynot = _smoke_yorumlayici(p if p is not None else s, KK)
+    r: list[Sonuc] = [ysatir] if ysatir else []
+    token = f"{os.getpid()}-{int(time.time() * 1000)}"
+    ornek = _smoke_ornekleri(token)
+    gecen: list[str] = []
+    icerik: list[str] = []
+    n_fail = 0
+    for ad in adlar:
+        if ad in _SMOKE_4D:
+            continue
+        if ad not in ornek:
+            if ad in sablon_adlar:
+                n_fail += 1
+                r.append((FAIL, f"kanca smoke `{ad}`: şablon kancası için örnek girdi TANIMSIZ "
+                                f"(ix_doctor `_smoke_ornekleri` şablonun gerisinde) — ölçülemedi; "
+                                f"§6a ③ çekirdek hatası"))
+            elif not (PROJ / "core" / "scripts" / "hooks" / f"{ad}.py").is_file():
+                n_fail += 1
+                r.append((FAIL, f"kanca `{ad}` projede KABLOLU ama çekirdekte YOK "
+                                f"(core/scripts/hooks/{ad}.py) — her olayda shim hata basar; "
+                                f"çekirdekten kaldırılmış bir kanca olabilir: kablosu kaldırılsın mı "
+                                f"kullanıcıya sor (§6a ②)"))
+            else:
+                r.append((SKIP, f"kanca smoke `{ad}` ÖLÇÜLMEDİ — proje eki, örnek girdi tanımsız "
+                                f"(temiz demek DEĞİL)"))
+            continue
+        stdin, beklenti = ornek[ad]
+        rc, out, _sure = _hook_kos(ad, stdin, timeout=60, yorumlayici=yol)
+        sorun = _smoke_sorunu(rc, out, beklenti)
+        if sorun:
+            n_fail += 1
+            sinif, aciklama = sorun
+            ek = (" — çekirdek dosyasına DOKUNMA; core/playbook/howto-cekirdek-bulgu-bildirimi.md"
+                  if sinif == "③" else "")
+            r.append((FAIL, f"kanca smoke `{ad}` FAIL — {aciklama} · §6a {sinif}{ek}"))
+        else:
+            gecen.append(ad)
+            if beklenti:
+                icerik.append(ad)
+    toplam = len([a for a in adlar if a not in _SMOKE_4D])
+    ozet = (f"kanca smoke: {len(gecen)}/{toplam} kanca gerçek giriş noktasından "
+            f"(scripts/hook_shim.py <kanca>; {ynot}) temiz çıktı · içerik ölçülen: "
+            f"{', '.join(icerik) or 'yok'} · session_start + pre_tool_guard 4d'de [{_SMOKE_KAPSAM}]")
+    r.append((FAIL, f"{ozet} — {n_fail} sorun yukarıda") if n_fail else (PASS, ozet))
+    return r
+
+
+_RECALL_KAPSAM = ("kapsam: kanca kablosu + .tmp/recall-index.json (var · JSON · kayıt · tazelik "
+                  "= build_recall_index.kaynak_mtime) + .tmp/recall-index.status + gerçek giriş "
+                  "noktasından örnek prompt'un ÇIKTI İÇERİĞİ; isabet oranı ÖLÇÜLMEDİ")
+
+
+def _recall_indeks_durumu(idx: Path) -> tuple[str, list]:
+    """-> (YOK | BOZUK | BOŞ | BAYAT | TAZE | TAZELİK-ÖLÇÜLEMEDİ, kayıtlar)."""
+    if not idx.is_file():
+        return "YOK", []
+    try:
+        kayit = json.loads(idx.read_text(encoding="utf-8")).get("kayit") or []
+    except Exception:  # noqa: BLE001
+        return "BOZUK", []
+    if not kayit:
+        return "BOŞ", []
+    try:
+        import build_recall_index as B  # type: ignore  # CORE_ROOT/scripts sys.path'te
+        return ("TAZE" if idx.stat().st_mtime >= B.kaynak_mtime(PROJ) else "BAYAT"), kayit
+    except Exception:  # noqa: BLE001
+        return "TAZELİK-ÖLÇÜLEMEDİ", kayit
+
+
+def _recall_saglik() -> list[Sonuc]:
+    """4j — fail-open `recall_inject` sağlığı: kablo · indeks · status · ÖRNEK PROMPT İÇERİĞİ.
+
+    ⛔ exit 0 kanıt DEĞİLDİR: kanca indeks yok/bozukken de 0 döner. Ölçüt, gerçek giriş
+    noktasından koşulan örnek prompt'un `[JIT-RECALL]` + indeksteki bir kaydın başlığını
+    DÖNDÜRMESİDİR. Örnek prompt `session_id`/`transcript_path` TAŞIMAZ ⇒ oturum-içi tekrar
+    bastırma kaydı (`.tmp/recall-shown/`) yazılmaz."""
+    idx = PROJ / ".tmp" / "recall-index.json"
+    st = PROJ / ".tmp" / "recall-index.status"
+    try:
+        KK = _kanca_modulu()
+        ayar = PROJ / ".claude" / "settings.json"
+        kablolu = ("recall_inject" in {a for _o, _m, a in KK.baglantilar(_json_oku(ayar))}
+                   if ayar.is_file() else False)
+    except Exception:  # noqa: BLE001
+        kablolu = None
+    once, _ = _recall_indeks_durumu(idx)
+    # İndeks yok/bayatsa kancanın KENDİ tazeleme yolu (Q287) gerçek giriş noktasından
+    # tetiklenir: ≥40 karakterlik nötr prompt. Bozuk-ama-taze indeksi kanca yeniden ÜRETMEZ.
+    if once in ("YOK", "BAYAT", "BOŞ", "TAZELİK-ÖLÇÜLEMEDİ"):
+        _hook_kos("recall_inject", {"prompt": "ix_doctor recall saglik sondasi: indeks tazeleme "
+                                              "tetigi (notr metin)"}, timeout=120)
+    sonra, kayitlar = _recall_indeks_durumu(idx)
+    try:
+        durum = json.loads(st.read_text(encoding="utf-8")) if st.is_file() else {}
+    except Exception:  # noqa: BLE001
+        durum = {"sonuc": "OKUNAMADI"}
+    st_ozet = (f"status sonuc={durum.get('sonuc', '<YOK>')} zaman={durum.get('zaman', '?')}"
+               + (f" hata={str(durum.get('hata'))[:80]!r}" if durum.get("hata") else ""))
+    onarim = "Onarım (§6a ①): python core/scripts/build_recall_index.py, sonra --layer 4"
+    if not kayitlar:
+        return [(FAIL, f"recall_inject sağlığı: indeks {sonra} (önce {once}) — kanca öneri "
+                       f"ÜRETEMEZ ve fail-open olduğu için SESSİZDİR; {st_ozet}. {onarim} "
+                       f"[{_RECALL_KAPSAM}]")]
+    secim = next((k for k in kayitlar if str(k.get("id", "")).startswith("how:")), kayitlar[0])
+    baslik = str(secim.get("baslik") or "")
+    prompt = f"{baslik} {secim.get('oz') or ''}".strip()
+    while len(prompt) < 60:
+        prompt = f"{prompt} {baslik}".strip() or "ix_doctor recall sondasi"
+    rc, out, _ = _hook_kos("recall_inject", {"prompt": prompt}, timeout=120)
+    dondu = "[JIT-RECALL]" in out and baslik[:30] in out
+    kablo = {True: "kablolu", False: "kablolu DEĞİL (4h)", None: "kablo ÖLÇÜLEMEDİ"}[kablolu]
+    govde = (f"recall_inject sağlığı: {kablo} · indeks önce {once} → sonra {sonra} "
+             f"({len(kayitlar)} kayıt) · {st_ozet} · örnek prompt ({secim.get('id')}) ")
+    if not dondu:
+        son = next((s.strip() for s in reversed(out.splitlines()) if s.strip()), "çıktı yok")
+        return [(FAIL, govde + f"öneri DÖNDÜRMEDİ (exit {rc}: {son[:90]!r}) — fail-open kanca "
+                               f"SESSİZ; {onarim}; sürerse §6a ③ [{_RECALL_KAPSAM}]")]
+    if kablolu is not True:
+        return [(FAIL, govde + f"öneri DÖNDÜRDÜ ama kanca oturumda KOŞMAZ — onarım (§6a ①): "
+                               f"{_TAZELE_SETTINGS} [{_RECALL_KAPSAM}]")]
+    if sonra != "TAZE":
+        return [(WARN, govde + f"öneri DÖNDÜRDÜ; indeks tazeliği {sonra} — {onarim} "
+                               f"[{_RECALL_KAPSAM}]")]
+    return [(PASS, govde + f"öneri DÖNDÜRDÜ (`[JIT-RECALL]` + `{baslik[:40]}`) [{_RECALL_KAPSAM}]")]
 
 
 # ---------------------------------------------------------------- katman 5
