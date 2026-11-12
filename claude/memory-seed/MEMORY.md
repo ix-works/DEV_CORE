@@ -121,7 +121,7 @@
 ### İnfra · gate · dosya yetkisi
 - **2 ders:** [tam indeks](_indeks-infra-gate.md)
 - ⛔ [Muafiyetin gerekcesi ALT-KUMEYE aitse muafiyet kor nokta olur](feedback_muafiyetin-gerekcesi-alt-kumeye-aitse-muafiyet-kor-nokta-olur.md) — Bir kapının bilinçli muafiyeti gerekçesinden GENİŞ yazılmışsa (dosya-bazlı muafiyet, gerekçe yalnız dosyanın bir bölümü için geçerli) kör noktaya döner; dokunulmazlığı yüzünden o kapının EN UZUN YAŞAYAN kör noktası olur. Düzeltmenin AÇIKLAMA metni bile o boşluktan sızabilir. Daraltma: muafiyeti satır/token bazlı yap.
-- ⛔ [Merge-safe dagitimda SATIR yalniz ONARILAN dosyaya ulasir](feedback_merge-safe-dagitimda-satir-yalniz-onarilan-dosyaya-ulasir.md) — Mevcut dosyayi EZMEYEN bir dagitici eklenen DOSYAYI herkese ulastirir ama eklenen SATIRI ulastirmaz; satir yalniz dagiticinin OZEL OLARAK ONARDIGI dosyada tasinir. Dogrulamayi bos dizine degil, once eski surumle kurulmus sahte bir "mevcut makine"ye yap + negatif kontrol koy.
+- ⛔ [Merge-safe dagitimda SATIR yalniz ONARILAN dosyaya ulasir](feedback_merge-safe-dagitimda-satir-yalniz-onarilan-dosyaya-ulasir.md) — Yeni DOSYA herkese ulasir; mevcut dosyaya eklenen SATIR yalniz yerelde DOKUNULMAMIS kopyaya (S1) ya da ozel ONARILAN dosyaya ulasir, duzenlenmis/ayirt-edilemez kopyaya ulasmaz. Dogrulamayi bos dizine degil, once eski surumle kurulmus sahte bir "mevcut makine"ye yap + negatif kontrol koy.
 - ⛔ [Tek seferlik script paylasilan modulun desenini yeniden turetmez](feedback_tek-seferlik-script-paylasilan-modulun-desenini-yeniden-turetmez.md) — O modülün yorumları senin düşeceğin tuzağın kaydıdır. Asıl kural: redundans, katmanlar BAĞIMSIZ değilse redundans değildir — ve bir katmanı düzeltmek öbürünün körlüğünü meşrulaştırmaz, GÖRÜNMEZ kılar.
 
 ### Araç · kabuk · kodlama tuzakları
@@ -154,11 +154,11 @@
 ### 2026-10-18 tohum terfisi (konu başlıklı)
 - **42 ders:** [tam indeks](_indeks-terfi-2026-10-18.md) — SAP 16 · UI 12 · Doküman 4 · Araç 4 · Ajan 3 · Karar 3
 
-### 2026-10-29 tohum terfisi (tek ders — doğrudan satır: hub'a yazılan satır kurulu makineye ulaşmaz)
+### 2026-10-29 tohum terfisi (tek ders — doğrudan satır: yerelde düzenlenmiş hub'a satır ulaşmaz)
 - ⭐ [Yeni geliştirmede TS build'dan önce yazılır](feedback_yeni-gelistirmede-ts-builddan-once-yazilir.md) — sıra FS onayı → TS → build; "donmuş kod" dersi TS'i ERTELEMEZ; TS'i kodlayan ajan yazmaz (taze bağlam)
 
 ### 2026-11-12 tohum terfisi (konu başlıklı)
-- **11 ders:** [tam indeks](_indeks-terfi-2026-11-12.md) — Türkçe iletişim · test için açık onay · az yorum (tüm kullanıcılar) + araç/ajan/SAP 8
+- **11 ders:** [tam indeks](_indeks-terfi-2026-11-12.md) — Karar 4 · Ajan 2 · Araç 2 · SAP 2 · UI 1 (tüm kullanıcılar: Türkçe · test onayı · az yorum)
 
 ### Araç kök-fix tarihçesi (regresyon sözlüğü)
 - **10 kayıt:** [tam indeks](_indeks-arac-kok-fixleri.md) — *"bu bug daha önce oldu mu"* sorusunun yeri; güncel kural DEĞİL

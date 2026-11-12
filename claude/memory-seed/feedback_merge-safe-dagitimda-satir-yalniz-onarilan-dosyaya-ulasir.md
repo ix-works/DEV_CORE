@@ -1,15 +1,16 @@
 ---
 name: feedback_merge-safe-dagitimda-satir-yalniz-onarilan-dosyaya-ulasir
-description: "Merge-safe bir dağıtıcı (mevcut dosyayı EZMEYEN tohum/şablon kopyalayıcı) yeni bir SATIRI yalnız özel olarak ONARDIĞI dosyaya ulaştırır — başka bir dosyaya yazılan satır sadece YENİ kurulumlara gider, kurulu makineler onu hiç görmez"
+description: "Merge-safe bir dağıtıcı (mevcut dosyayı EZMEYEN tohum/şablon kopyalayıcı) yeni bir SATIRI yerelde DÜZENLENMİŞ (ya da manifest'siz, ayırt edilemez) kopyaya ulaştıramaz — oraya ulaşan yüzey yalnız yeni dosya ve özel ONARILAN dosyadır; dokunulmamış kopya S1 ile güncellenir"
 metadata:
   node_type: memory
   type: feedback
 ---
 
-Bir dağıtıcı **merge-safe** ise (hedefte var olan dosyayı ezmez, yalnız eksikleri ekler),
-eklediğin **dosya** herkese gider ama eklediğin **satır** gitmez — satır, hedefte zaten var
-olan bir dosyanın içindedir ve o dosya ezilmez. Kurulu makinelere ulaşan tek satır-yüzeyi,
-dağıtıcının **özel olarak onardığı** dosyadır.
+Bir dağıtıcı **merge-safe** ise (hedefte yerelde değiştirilmiş dosyayı ezmez, yalnız eksikleri
+ekler), eklediğin **dosya** herkese gider ama eklediğin **satır** yerelde **düzenlenmiş** (ya da
+manifest kaydı olmadığı için ayırt edilemeyen) kopyaya gitmez — o dosya ezilmez. Bu kopyalara ulaşan
+tek satır-yüzeyi, dağıtıcının **özel olarak onardığı** dosyadır. *(Dokunulmamış kopya gövde
+güncellemesi alır — aşağıdaki DARALTMA; `seed_memory` için S1, 2026-10-03.)*
 
 **Ölçülen vaka (2026-09-18, memory tohumu):** `seed_memory.py` merge-safe'tir ve yalnız
 `MEMORY.md` için bir `_index_onar` adımı koşar (eksik tohum satırlarını enjekte eder).

@@ -121,9 +121,12 @@ Yukarıdaki tetiklere gömülü tuzaklar + [[bug-checklist-backend]] (BE-19/26/2
 
 > **Terfi notu (2026-11-12, kuyruk Q407 D):** aşağıdaki SD-D1…D11, bir tüketici projenin hafızasında
 > "proje hatırası" olarak duran ama **standart SAP davranışı** olan bilgilerdir; proje izi (sistem,
-> ambar/tesis kodu, belge no, müşteri) ayıklanarak buraya taşındı. Hepsi **tek bir S/4 private
-> DEV sisteminde ölçüldü** — başka sistemde **hipotezdir**, kullanmadan önce canlıda doğrula
-> (üstteki "Ne DEĞİL" notu). Sessiz hata üretenler ⚠ ile işaretli.
+> ambar/tesis kodu, belge no, müşteri) ayıklanarak buraya taşındı. **Ölçülen kalemler tek bir
+> S/4 private DEV sisteminde ölçüldü**; satır içinde **DOĞRULANMADI / DENENMEDİ / ölçülmedi /
+> "kod okumasından çıkarım"** etiketi taşıyan kısımlar **ölçülmedi** (ör. SD-D4 GUI menü yolu, SD-D5
+> hibrit köprü, SD-D7 çağrısız SA, SD-D10 standart onay sınırı, SD-D11 tarih ofseti). Hepsi başka
+> sistemde **hipotezdir** — kullanmadan önce canlıda doğrula (üstteki "Ne DEĞİL" notu). Sessiz hata
+> üretenler ⚠ ile işaretli.
 
 ### SD-D1 ⚠ Embedded EWM: ERP ambar no ≠ EWM ambar no (stok sorgusu sessizce 0 satır) — T-SD-1
 - Embedded EWM'de (ERP ile aynı istemci; `/SCWM/T300` dolu, `I_EWM_PLANTSTORLOCMAPTOWHSE.ERPLOGICALSYSTEM`
