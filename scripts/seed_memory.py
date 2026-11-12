@@ -87,6 +87,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
 
 try:
@@ -295,6 +296,8 @@ def _index_onar(target: Path, seed_index: Path, seed_adlari: set,
 # `id_pattern()` zinciri `git rev-parse` çağırır (~100 ms, tembel_desen korpusunda
 # ölçüldü). Normal tohumlama yolunun bu bedeli ödemesi için hiçbir sebep yok.
 SEED_ETIKET_RE = re.compile(r"^\s*seed:\s*(\S+)\s*$", re.MULTILINE)
+# Q407 F: '(a-taze)' penceresi (gun). Gun-sonu her gun kosar; 7 gun kacirilan gunleri tolere eder.
+TAZE_GUN = 7
 
 
 def _frontmatter(metin: str) -> str:
@@ -413,6 +416,15 @@ def terfi_adaylari(target: Path) -> int:
               f"   [+{len(a_gurultu)} yalnız satır-sonu farkı = gürültü]")
         for ad in a_gercek:
             print(f"    · {ad}")
+        # Q407 F: (a) kovası birikir (ölçüldü 2026-11-12: 258) ve bütünüyle okunamaz ⇒ gün-sonu
+        # kararının konusu yalnız SON günlerde düzenlenenlerdir. Ölçüt dosya mtime'ı; git
+        # checkout/kopya mtime'ı tazeler ⇒ yanılma yönü "fazla taze" (kaçırma değil).
+        sinir = time.time() - TAZE_GUN * 86400
+        a_taze = [ad for ad in a_gercek if (target / ad).stat().st_mtime >= sinir]
+        print(f"  (a-taze) bunlardan son {TAZE_GUN} günde düzenlenen : {len(a_taze)}"
+              "   ← gün-sonu GERİ AKIŞ kararı bunlar için verilir")
+        for ad in a_taze:
+            print(f"    ⏱ {ad}")
         print(f"  (b) tohum İLERLEMİŞ, yerel kopya ESKİ     : {len(b_gercek)}"
               f"   [+{len(b_gurultu)} yalnız satır-sonu farkı = gürültü]")
         print("      ⚠ Normal tohumlama (b) dosyasını GÜNCELLER (yerel == manifest sha = "
@@ -420,8 +432,23 @@ def terfi_adaylari(target: Path) -> int:
         for ad in b_gercek:
             print(f"    · {ad}")
 
+    # --- Q407 F: gözlem → KARAR. Araç karar VERMEZ; yalnız hangi kovada hangi kararın
+    # beklendiğini söyler (CLAUDE.core §1.1 gün-sonu "Tohum terfi" maddesi). ---
+    print("\n--- GÜN-SONU KARARI BEKLEYENLER (CLAUDE.core §1.1 — karar dersi yazanındır) ---")
+    print(f"  · 'evet' kovası {len(kova.get('evet', []))} → tohuma TERFİ (sahip makinede PR; "
+          "yazma yetkisiz klonda Issue)")
+    print(f"  · '<YOK>' kovası {len(kova.get('<YOK>', []))} → dersi yazan `metadata.seed:` kararını verir")
+    if manifest:
+        print(f"  · (a-taze) {len(a_taze)} → GERİ AKIŞ kararı: kural değişti/ters döndüyse tohumu "
+              "güncelle (genericize); yalnız yerel vaka ayrıntısıysa bırak")
+    else:
+        print("  · (a-taze) ÖLÇÜLEMEDİ — manifest yok")
+
     # --- KAPSAM BEYANI (core §7: 'bakmadığım yüzey' de yazılır) ---
     print("\n--- KAPSAM BEYANI (neye BAKMADIM) ---")
+    print(f"  · '(a-taze)' dosya mtime'ına bakar (son {TAZE_GUN} gün): git checkout / kopya mtime'ı "
+          "tazeler ⇒ fazla taze gösterebilir; bu pencereden ÖNCE düzenlenip karara bağlanmamış "
+          "ders (a) listesinde kalır ama '(a-taze)'de görünmez.")
     print("  · Bu rapor metodoloji/proje ayrımına KARAR VERMEZ — kovalar yalnız yazım anında")
     print("    konmuş `metadata.seed:` etiketini OKUR. '<YOK>' = etiket yok, 'terfi etmeli' DEĞİL.")
     print("  · YALNIZ `feedback_*.md` taranır. `project_*` / `reference_*` / `user_*` dosyaları")

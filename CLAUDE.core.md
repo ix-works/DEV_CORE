@@ -173,6 +173,13 @@
   salt-okunurdur, kopyalamaz; kararı §5'e göre dersi yazan verir. `<YOK>` kovası boşalmıyorsa
   terfi kontrolü *"core dokümanına yazdım"* ayağında kalmış demektir — "başka makineye ulaştı"
   ayağı ölçülmemiştir.
+  ⭐ **Gözlem → KARAR (Q407 F, 2026-11-12):** çıktının `GÜN-SONU KARARI BEKLEYENLER` bölümü boş
+  değilse **aynı gün** kalem başına karar verilir: `evet` → tohuma terfi (genericize; sahip makinede
+  PR, yazma yetkisiz klonda Issue) · `<YOK>` → `seed:` kararı · `(a-taze)` (tohumda olup son 7 günde
+  yerelde düzenlenen ders) → kural değiştiyse ya da ters döndüyse tohum güncellenir, yalnız yerel
+  vaka ayrıntısıysa bırakılır. Ateşler: gün-sonunda bu bölümde sıfırdan büyük sayı görünce.
+  *(Vaka 2026-11-12: karar bağlanmadığı için "yerelde düzenlenmiş" kovası 258'e birikti; tohumda
+  kuralı TERS dönmüş dersler diğer makinelere eski hâliyle gitti.)*
   + **Gelen çekirdek bildirimi gözlemi (yalnız çekirdek SAHİBİ makinede, 2026-09-18):**
   `gh issue list --repo ix-works/DEV_CORE --state open` — tüketici klonlar bulguyu **yalnız Issue**
   ile gönderir, fork-PR yolu yoktur ([`playbook/howto-cekirdek-bulgu-bildirimi.md`](playbook/howto-cekirdek-bulgu-bildirimi.md) §3).

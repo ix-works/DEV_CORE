@@ -26,6 +26,9 @@ hub'a konan sonda satırı tohumda kaldı (`1`) ama hedefe **ulaşmadı** (`0`).
 Merge-safe olmak bir güvenlik özelliğidir (yereli ezmez) ama aynı zamanda sessiz bir yayılım
 sınırıdır: hata vermez, yalnız eksik yayar. Bu yüzden `--force` bilinçli bir karardır.
 
+**⚠ DARALTMA (2026-11-12, kod ölçümü):** 2026-09-18 ölçümü S1 ÖNCESİNE aittir. DEV_CORE #318 (`cf30813`, 2026-10-03) ile `seed_memory.py` `_mevcut_dosya_karari` hedefteki dosyanın sha'sı **eski tohum sha'sına eşitse** (yerelde dokunulmamış) gövdeyi `guncelle` eder — hub'lar (`_indeks-*.md`) dahil (fixture `tohum_govde_guncelleme` G4). Bugünkü sınır: hub'a eklenen satır yalnız **yerelde düzenlenmiş** (ya da manifest kaydı olmayan, `ayirt-edilemez`) hub'a ulaşmaz. Pratik kural değişmedi: her iki durumda da ulaşan yüzey **yeni dosya + MEMORY.md satırı**dır (tarihli hub deseni). Daraltmayı yakalayan: bir infra turu (fixture `tohum_yayilim_m4` S1/S2 iki kolu da ölçer).
+Son-doğrulama: 2026-11-12 · Applies-to: merge-safe tohum/şablon dağıtıcıları (seed_memory ve benzerleri)
+
 **How to apply:**
 - Merge-safe bir dağıtıcıya **satır** eklerken önce sor: *bu dosya hedefte ezilir mi?* Ezilmiyorsa
   satır yalnız **yeni** kurulumlara gider.

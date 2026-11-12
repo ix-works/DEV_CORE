@@ -935,4 +935,23 @@ MODIFY ENTITIES OF i_salesordertp
 
 ---
 
+## §36 — Birden çok managed root AYNI persistent tabloyu paylaşabilir (spike PASS, 2026-06-14)
+
+**Soru:** aynı iş verisini taşıyan iki ayrı uygulama (ör. aynı belge tablosu üzerinde iki farklı
+belge tipi için iki ayrı Fiori uygulaması) RAP düzeyinde **iki ayrı managed root** ile kurulabilir mi,
+yoksa *"persistent table already used by behavior"* türünde bir çakışma mı çıkar?
+
+**Ölçüm (S/4 private DEV, tek spike):** iki ayrı managed root (`ZSD001_I_ROOT_A`, `ZSD001_I_ROOT_B`
+biçiminde), ikisi de `persistent table <ortak_tablo>` + `lock master` + `authorization master ( global )`
+ile **yan yana aktive oldu**; çakışma mesajı yok, iki BDEF'in aktif kaynak GET'i 200.
+
+**Sonuç:** "ortak veri + ayrı frontend" deseninde her tip kendi managed root + kendi behavior pool
+sınıfıyla kurulabilir; aynı tabloyu paylaşmak aktivasyonu bozmaz.
+**Sınır (ÖLÇÜLMEDİ):** iki root'un aynı satırı eşzamanlı değiştirmesinde kilit davranışı (iki ayrı
+`lock master` aynı anahtarı kilitler mi) ve draft tablolarının paylaşımı bu spike'ta denenmedi —
+eşzamanlı yazım senaryosu varsa ayrıca ölç.
+*Kaynak: tüketici proje hafızasından terfi (kuyruk Q407 D, 2026-11-12); RAP obje zinciri (BDEF yaratma dahil) §32.*
+
+---
+
 *Bu dosya her başarılı/başarısız RAP ADT işleminden sonra güncellenir (T1/T2). Pilot bitince retrospektif → ADR 0008 girdisi.*

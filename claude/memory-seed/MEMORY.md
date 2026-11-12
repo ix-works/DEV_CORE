@@ -157,6 +157,9 @@
 ### 2026-10-29 tohum terfisi (tek ders — doğrudan satır: hub'a yazılan satır kurulu makineye ulaşmaz)
 - ⭐ [Yeni geliştirmede TS build'dan önce yazılır](feedback_yeni-gelistirmede-ts-builddan-once-yazilir.md) — sıra FS onayı → TS → build; "donmuş kod" dersi TS'i ERTELEMEZ; TS'i kodlayan ajan yazmaz (taze bağlam)
 
+### 2026-11-12 tohum terfisi (konu başlıklı)
+- **11 ders:** [tam indeks](_indeks-terfi-2026-11-12.md) — Türkçe iletişim · test için açık onay · az yorum (tüm kullanıcılar) + araç/ajan/SAP 8
+
 ### Araç kök-fix tarihçesi (regresyon sözlüğü)
 - **10 kayıt:** [tam indeks](_indeks-arac-kok-fixleri.md) — *"bu bug daha önce oldu mu"* sorusunun yeri; güncel kural DEĞİL
 
