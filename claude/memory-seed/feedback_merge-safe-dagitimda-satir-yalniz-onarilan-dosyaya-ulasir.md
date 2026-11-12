@@ -33,7 +33,7 @@ Son-doğrulama: 2026-11-12 · Applies-to: merge-safe tohum/şablon dağıtıcıl
 **How to apply:**
 - Merge-safe bir dağıtıcıya **satır** eklerken önce sor: *bu dosya hedefte ezilir mi?* O makinede
   ezilmiyorsa (yerelde düzenlenmiş ya da tohumla ayırt edilemiyor) satır **oraya gitmez**; dokunulmamış
-  mevcut kopyalar ise yeni sürümü alır (aşağıdaki DARALTMA).
+  mevcut kopyalar ise yeni sürümü alır (yukarıdaki DARALTMA).
 - Dağıtıcının **özel-onarım** yaptığı dosyayı koddan bul (`_index_onar` benzeri) — satır oraya
   yazılır. Kaynak yerleşimi (yerelde hangi hub'daydı) **kopyalanmaz**, dağıtım yüzeyi belirler.
 - Doğrulamayı **sahte bir "mevcut makine"** üzerinde yap: önce ESKİ sürümle kur, sonra YENİ

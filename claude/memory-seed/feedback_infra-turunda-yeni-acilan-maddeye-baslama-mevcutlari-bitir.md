@@ -48,8 +48,9 @@ yan bulgusu ertelenmiş-iş listesine yeni bölüm olarak yazıldı; kullanıcı
 bıraktın, yapman gerekmiyor mu?"* Ayıklama: 2'si core'da zaten kayıtlıydı (mükerrer), 2'si
 gereksizdi, 1'i (ajan MEMORY.md %95,9 bütçe = sessiz kesilme) gerçekten yapılması gerekendi.
 ⇒ Gün-sonunda "bugün doğan ertelenmiş iş" = **kullanıcının açıkça "ertele/kalem aç" dediği** kalem
-**+ kapsam-dışı karar ağacının "ilgisiz" dalından gelen KANITLI kusur** (o dal açık kalem ister —
-[[feedback_kapsam-disi-bulgu-protokolu]]). Öneri/gözlem niteliğindeki tur yan bulgusu ise deferred'e
+**+ kapsam-dışı karar ağacının "ilgisiz" dalından gelen, açık kalem gerektiren KANITLI kusur**
+([[feedback_kapsam-disi-bulgu-protokolu]] (d): program/kod kusuru düzeltilir; açık kalem yalnız
+program-dışı iş — ör. paylaşılan araç/altyapı, başka ekibin sistemi). Öneri/gözlem niteliğindeki tur yan bulgusu ise deferred'e
 girmez: ya **yap** (mutlaka gerekiyorsa, onayla) ya **düşür**; üçüncü yol "deferred'e yazıp bırakmak"
 değildir. Kalem yazmadan önce: core'da zaten kayıtlı mı?
 
