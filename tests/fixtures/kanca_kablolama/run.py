@@ -41,6 +41,13 @@ K1 MATRİSİ (Q408 KAPANIŞ KOŞULU; boş dizin DEĞİL — eski durumlu sahte "
   U11 F7 kontrol (fazla daraltma): kabuk zincirinde İKİNCİ shim çağrısı (`… a && … recall_inject`)
       gerçekten koşar → biçim farkı, EKLENMEZ (çift koşum yok)
   J1  F7 4j: recall_inject yalnız tanınmayan biçimde → FAIL, onarım `--tazele-settings` DEĞİL (§6a ②)
+  ÜÇÜNCÜ DOĞRULAMA KAPISI (F10, 2026-11-13) — ağ/zincir bağlantısı BLOK EŞLEYİCİSİYLE kıyaslanır:
+  U12 Vaka A `Edit|…` bloğunda `pull_before_edit && infra_write_guard` (ve `?…` ikizi), Bash bloğu
+      yok → Bash EKSİK + eklenir, Edit biçim farkı · U12b 4h FAIL [Bash] + TEK WARN [Edit|Write|MultiEdit]
+  U13 Vaka B `pre_tool_guard && pre_tool_guard`, NotebookEdit yok → EKSİK + eklenir (= zincirsiz ikiz)
+  U14 aynı-ad zinciri KISMEN kesişen blokta → sonuç zincirsiz ikizle aynı (yeni eşleyici getirmez)
+  U15 kontrol: kapsayan blokta zincir → biçim farkı ×2, kesişen blokta KISMİ; eksik 0, EKLENMEZ
+      · U15b 4h iki AYRI WARN (şablon eşleyicileriyle) + özet DOĞRULANAMADI
   Y1  F8 4i PASS özeti PATH sınırını taşır (`--layer 4` 1g satırını basmaz)
   U8  Ö2 birleşik eşleyici (Bash|…|Edit|…|NotebookEdit) ⊇ şablon → KAPSANAN, eksik 0, eklenen 0
   U9  Ö2 kontrol: kısmi kapsama → kapsanan + eşleyici farkı + YALNIZ kapsanmayan EKSİK eklenir
@@ -83,6 +90,11 @@ MUTASYON (çapa tam 1 kez bulunmazsa exit 2; ilan edilen vektörler düşmezse S
   --mutasyon-bicim-pass      F7 biçim farkında özet PASS "tamamı"  → U7b
   --mutasyon-recall-bicim-kor F7 4j tanınmayan biçimi görmez       → J1
   --mutasyon-path-siniri-yok F8 4i PASS özetinde PATH sınırı yok   → Y1
+  --mutasyon-ag-eslik-kor    F10 ağ blok eşleyicisine bakmaz (8ab2594) → U12 · U12b · U13 · U14
+  --mutasyon-kesisim-kor     F10 (a) kesişim süzgeci yok           → U12 · U12b
+  --mutasyon-ayni-blok-kor   F10 (b) aynı-ad bloğu süzgeci yok     → U14
+  --mutasyon-kismi-eksik     F10 KISMİ kesişim EKSİK sayılır       → U15
+  --mutasyon-warn-eslik-yok  F10 4h WARN şablon eşleyicisini basmaz → U12b · U15b
 TABAN (eski kod, KIRMIZI beklenir): --kaynak <ix_doctor.py> · --kaynak-inspector <inspector.py> ·
   --kaynak-kk <utils/kanca_kablolari.py>
 
@@ -148,6 +160,11 @@ ILAN = {
     "--mutasyon-bicim-pass": {"U7b"},
     "--mutasyon-recall-bicim-kor": {"J1"},
     "--mutasyon-path-siniri-yok": {"Y1"},
+    "--mutasyon-ag-eslik-kor": {"U12", "U12b", "U13", "U14"},
+    "--mutasyon-kesisim-kor": {"U12", "U12b"},
+    "--mutasyon-ayni-blok-kor": {"U14"},
+    "--mutasyon-kismi-eksik": {"U15"},
+    "--mutasyon-warn-eslik-yok": {"U12b", "U15b"},
 }
 GECERLI_KIP = ("--mutasyon-ad-yok", "--mutasyon-ek-warn", "--mutasyon-ezerek-tazele",
                "--mutasyon-dogrulama-yok", "--mutasyon-sys-executable", "--mutasyon-exit0-yeter",
@@ -157,7 +174,9 @@ GECERLI_KIP = ("--mutasyon-ad-yok", "--mutasyon-ek-warn", "--mutasyon-ezerek-taz
                "--mutasyon-smoke-sayilir", "--mutasyon-local-kor", "--mutasyon-shimdisi-sessiz",
                "--mutasyon-genel-sapma", "--mutasyon-ag-taninana", "--mutasyon-zincir-kor",
                "--mutasyon-bicim-pass",
-               "--mutasyon-recall-bicim-kor", "--mutasyon-path-siniri-yok")
+               "--mutasyon-recall-bicim-kor", "--mutasyon-path-siniri-yok",
+               "--mutasyon-ag-eslik-kor", "--mutasyon-kesisim-kor", "--mutasyon-ayni-blok-kor",
+               "--mutasyon-kismi-eksik", "--mutasyon-warn-eslik-yok")
 KIP: str | None = None
 TABAN: Path | None = None
 TABAN_INSP: Path | None = None
@@ -231,6 +250,8 @@ def _kaynak_doctor() -> str:
         m = _degistir(m, '                kablolu = "bicim"\n', "                pass\n", KIP)
     if KIP == "--mutasyon-path-siniri-yok":
         m = _degistir(m, 'else f" [{_PATH_SINIRI}]"\n', 'else ""\n', KIP)
+    if KIP == "--mutasyon-warn-eslik-yok":
+        m = _degistir(m, 'f"kanca {KK.bicim(b)} TANINMAYAN', 'f"kanca {b[2]} ({b[0]}) TANINMAYAN', KIP)
     return m
 
 
@@ -252,7 +273,20 @@ def _kaynak_kk() -> str:
         m = _degistir(m, "        kalan = _tokenler(komut[m.end():].lstrip(_TIRNAK))\n",
                       "        kalan = komut[m.end():].split()\n", KIP)
     if KIP == "--mutasyon-ham-ag-yok":
-        m = _degistir(m, "        ham = _ham_iceren(proje, b[0], b[2])\n", "        ham = None\n", KIP)
+        m = _degistir(m, "        ham = [(e, k) for e, k in _ham_iceren(proje, b[0], b[2])\n",
+                      "        ham = [] and [(e, k) for e, k in _ham_iceren(proje, b[0], b[2])\n", KIP)
+    if KIP == "--mutasyon-ag-eslik-kor":
+        m = _degistir(m, "               if e not in p_esl and _kesisir(e, b[1])]\n", "               ]\n", KIP)
+    if KIP == "--mutasyon-kesisim-kor":
+        m = _degistir(m, "               if e not in p_esl and _kesisir(e, b[1])]\n",
+                      "               if e not in p_esl]\n", KIP)
+    if KIP == "--mutasyon-ayni-blok-kor":
+        m = _degistir(m, "               if e not in p_esl and _kesisir(e, b[1])]\n",
+                      "               if _kesisir(e, b[1])]\n", KIP)
+    if KIP == "--mutasyon-kismi-eksik":
+        m = _degistir(m, "        if ham:\n            e, komut = ham[0]\n",
+                      "        if ham and _kapsar(p_esl + [x for x, _k in ham], b[1]):\n"
+                      "            e, komut = ham[0]\n", KIP)
     if KIP == "--mutasyon-kapsama-yok":
         m = _degistir(m, "    hedef = _eslik_kumesi(eslik)\n    birlesim: set = set()\n",
                       "    return False\n", KIP)
@@ -446,6 +480,90 @@ def _bash_iki_ad(t: dict) -> dict:
     return d
 
 
+def _zincir(*adlar: str) -> dict:
+    """Kabuk zinciri: `python …/hook_shim.py a && python …/hook_shim.py b` (her çağrı koşar)."""
+    return {"type": "command", "command": " && ".join(
+        f'python "${{CLAUDE_PROJECT_DIR}}/scripts/hook_shim.py" {a}' for a in adlar)}
+
+
+def _pre(d: dict, cikar: tuple[str, ...], ekle: list[tuple[str, dict]]) -> dict:
+    """PreToolUse: `cikar` adlı kancaları tüm bloklardan çıkar (boşalan blok düşer), sonra
+    (eşleyici, kanca) bloklarını SONA ekle."""
+    d = copy.deepcopy(d)
+    yeni = []
+    for b in d["hooks"]["PreToolUse"]:
+        b["hooks"] = [h for h in b["hooks"] if not any(a in json.dumps(h) for a in cikar)]
+        if b["hooks"]:
+            yeni.append(b)
+    yeni += [{"matcher": e, "hooks": [k]} for e, k in ekle]
+    d["hooks"]["PreToolUse"] = yeni
+    return d
+
+
+def _vaka_a(t: dict) -> dict:
+    """F10 Vaka A: `Edit|Write|MultiEdit` bloğunda `pull_before_edit && infra_write_guard`,
+    `Bash` bloğu YOK ⇒ infra_write_guard Bash'te HİÇ koşmaz (eşleyiciler kesişmez)."""
+    return _pre(t, ("infra_write_guard", "pull_before_edit"),
+                [("Edit|Write|MultiEdit", _zincir("pull_before_edit", "infra_write_guard"))])
+
+
+def _vaka_a2(t: dict) -> dict:
+    """F10 Vaka A'nın `?…` ikizi: infra_write_guard yalnız `Edit|…` bloğunda AYRIŞTIRILAMAYAN
+    biçimde (`command` shim'de biter, ad `args`ta), `Bash` bağlantısı YOK."""
+    d = _pre(t, ("infra_write_guard",), [])
+    for b in d["hooks"]["PreToolUse"]:
+        if b.get("matcher") == "Edit|Write|MultiEdit":
+            b["hooks"].append({"type": "command",
+                               "command": "python ${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py",
+                               "args": ["infra_write_guard"]})
+    return d
+
+
+def _vaka_b(t: dict, tekli: bool = False) -> dict:
+    """F10 Vaka B: `Bash|PowerShell|mcp…` bloğunda `pre_tool_guard && pre_tool_guard`,
+    `NotebookEdit` bloğu YOK. `tekli` = aynı kurgu zincirsiz (ikiz)."""
+    d = copy.deepcopy(t)
+    for b in d["hooks"]["PreToolUse"]:
+        if b.get("matcher", "").startswith("Bash|PowerShell"):
+            b["hooks"] = [_shim("pre_tool_guard") if tekli
+                          else _zincir("pre_tool_guard", "pre_tool_guard")]
+    d["hooks"]["PreToolUse"] = [b for b in d["hooks"]["PreToolUse"] if b.get("matcher") != "NotebookEdit"]
+    return d
+
+
+def _vaka_c(t: dict, tekli: bool = False) -> dict:
+    """F10 aynı-ad zinciri KISMEN kesişen blokta: pre_tool_guard yalnız `Bash|Edit` bloğunda
+    (+ şablonun NotebookEdit'i). `Bash|Edit` şablonun `Bash|…|mcp` bağlantısına eşleyici farkı
+    olarak harcanır; `Edit|Write|MultiEdit` için aynı blok yeni bilgi taşımaz."""
+    return _pre(t, ("pre_tool_guard",),
+                [("Bash|Edit", _shim("pre_tool_guard") if tekli
+                  else _zincir("pre_tool_guard", "pre_tool_guard")),
+                 ("NotebookEdit", _shim("pre_tool_guard"))])
+
+
+def _vaka_d(t: dict) -> dict:
+    """F10 kontrol (⊇): `Edit|Write|MultiEdit|Bash` bloğunda `pull_before_edit && infra_write_guard`
+    — iki şablon bağlantısını da KAPSAR ⇒ biçim farkı ×2, EKLENMEZ (çift koşum yok)."""
+    return _pre(t, ("infra_write_guard", "pull_before_edit"),
+                [("Edit|Write|MultiEdit|Bash", _zincir("pull_before_edit", "infra_write_guard"))])
+
+
+def _vaka_e(t: dict) -> dict:
+    """F10 kontrol (KISMİ): infra_write_guard `Edit|Write|MultiEdit`ten çıkar, `Edit` bloğunda
+    `proje_ozel_kanca && infra_write_guard` — kesişir ama kapsamaz ⇒ KISMİ biçim farkı, EKLENMEZ."""
+    d = copy.deepcopy(t)
+    for b in d["hooks"]["PreToolUse"]:
+        if b.get("matcher") == "Edit|Write|MultiEdit":
+            b["hooks"] = [h for h in b["hooks"] if "infra_write_guard" not in json.dumps(h)]
+    d["hooks"]["PreToolUse"].append({"matcher": "Edit",
+                                     "hooks": [_zincir("proje_ozel_kanca", "infra_write_guard")]})
+    return d
+
+
+def _ozet(k: dict) -> tuple:
+    return (k["eksik"], [b for b, _ in k["bicim_farki"]], k["eslesik_farki"], k["kapsanan"])
+
+
 def _recall_adedi(d: dict) -> int:
     return sum(1 for bl in d["hooks"].values() if isinstance(bl, list) for b in bl
                for h in b.get("hooks", []) if "recall_inject" in json.dumps(h))
@@ -614,6 +732,44 @@ def main() -> int:
                 and [b[1] for b, _ in k9["eslesik_farki"]] == ["Edit|Write|MultiEdit"]
                 and e9 == [("PreToolUse", "NotebookEdit", "pre_tool_guard")]
                 and k9["bicim_farki"] == [], f"{k9} {e9}")
+        # F10 (2026-11-13): ağ/zincir bağlantısı BLOK EŞLEYİCİSİYLE kıyaslanır.
+        u12 = []
+        for kur in (_vaka_a, _vaka_a2):
+            ka = kk.kiyas(kur(T), T)
+            _ya, ea = kk.eksikleri_ekle(kur(T), T)
+            u12.append(ka["eksik"] == [("PreToolUse", "Bash", "infra_write_guard")]
+                       and [b for b, _ in ka["bicim_farki"]] == [("PreToolUse", "Edit|Write|MultiEdit",
+                                                                  "infra_write_guard")]
+                       and ea == [("PreToolUse", "Bash", "infra_write_guard")])
+            u12.append(f"{kur.__name__}: {_ozet(ka)} {ea}")
+        kontrol("U12 F10 Vaka A (zincir) + `?…` ikizi: `Edit|…` bloğundaki çağrı `Bash` bağlantısını "
+                "KARŞILAMAZ → Bash EKSİK + eklenir · Edit biçim farkı",
+                u12[0] is True and u12[2] is True, f"{u12[1]} | {u12[3]}")
+        kb, kb1 = kk.kiyas(_vaka_b(T), T), kk.kiyas(_vaka_b(T, tekli=True), T)
+        _yb, eb = kk.eksikleri_ekle(_vaka_b(T), T)
+        kontrol("U13 F10 Vaka B: `pre_tool_guard && pre_tool_guard` NotebookEdit'i KARŞILAMAZ → EKSİK + "
+                "eklenir · sonuç zincirsiz ikizle AYNI",
+                kb["eksik"] == [("PreToolUse", "NotebookEdit", "pre_tool_guard")]
+                and kb["bicim_farki"] == [] and eb == kb["eksik"] and _ozet(kb) == _ozet(kb1),
+                f"{_ozet(kb)} | ikiz {_ozet(kb1)} | {eb}")
+        kc, kc1 = kk.kiyas(_vaka_c(T), T), kk.kiyas(_vaka_c(T, tekli=True), T)
+        kontrol("U14 F10 aynı-ad zinciri KISMEN kesişen blokta yeni eşleyici getirmez → sonuç "
+                "zincirsiz ikizle AYNI (Edit|Write|MultiEdit EKSİK, biçim farkı YOK)",
+                kc["eksik"] == [("PreToolUse", "Edit|Write|MultiEdit", "pre_tool_guard")]
+                and kc["bicim_farki"] == [] and _ozet(kc) == _ozet(kc1),
+                f"{_ozet(kc)} | ikiz {_ozet(kc1)}")
+        kd, ke = kk.kiyas(_vaka_d(T), T), kk.kiyas(_vaka_e(T), T)
+        _yd, ed = kk.eksikleri_ekle(_vaka_d(T), T)
+        _ye, ee = kk.eksikleri_ekle(_vaka_e(T), T)
+        kontrol("U15 F10 kontrol (fazla daraltma): zincir KAPSAYAN blokta → biçim farkı ×2 (KISMİ "
+                "yok) · KESİŞEN blokta → KISMİ biçim farkı · ikisinde de eksik 0, EKLENMEZ",
+                kd["eksik"] == [] and ed == [] and sorted(b[1] for b, _ in kd["bicim_farki"]) == [
+                    "Bash", "Edit|Write|MultiEdit"]
+                and not any("KISMİ" in c for _b, c in kd["bicim_farki"])
+                and [b[2] for b in kd["kapsanan"]] == ["pull_before_edit"]
+                and ke["eksik"] == [] and ee == []
+                and [(b[1], c.startswith("(KISMİ: blok `Edit`")) for b, c in ke["bicim_farki"]]
+                == [("Edit|Write|MultiEdit", True)], f"{_ozet(kd)} {ed} | {ke['bicim_farki']} {ee}")
 
         # ── T1 / W1 ──────────────────────────────────────────────────────────
         if "_smoke_ornekleri" in g:
@@ -713,6 +869,21 @@ def main() -> int:
                 len(f) == 1 and "infra_write_guard (PreToolUse [Bash])" in f[0]
                 and "--tazele-settings" in f[0] and not bul(r, "TANINMAYAN")
                 and not bul(r, "tamamı projede"), f"{r}")
+        r = _cagir(g, "_kanca_kablolama", kum("u12", _vaka_a(T)))
+        f = bul(r, "kanca kablolaması", "FAIL")
+        w = bul(r, "TANINMAYAN", "WARN")
+        kontrol("U12b F10 4h Vaka A: FAIL infra_write_guard [Bash] ADIYLA · TEK WARN, şablon "
+                "eşleyicisi [Edit|Write|MultiEdit] satırda",
+                len(f) == 1 and "infra_write_guard (PreToolUse [Bash])" in f[0]
+                and len(w) == 1 and "infra_write_guard (PreToolUse [Edit|Write|MultiEdit])" in w[0],
+                f"{r}")
+        r = _cagir(g, "_kanca_kablolama", kum("u15", _vaka_d(T)))
+        w = bul(r, "TANINMAYAN", "WARN")
+        kontrol("U15b F10 4h kapsayan zincir: iki WARN AYRI (şablon eşleyicileri [Edit|Write|MultiEdit] "
+                "· [Bash]) · FAIL YOK · özet 'tamamı DOĞRULANAMADI'",
+                "FAIL" not in tag(r) and len(w) == 2 and len(set(w)) == 2
+                and any("[Edit|Write|MultiEdit])" in m for m in w) and any("[Bash])" in m for m in w)
+                and len(bul(r, "tamamı DOĞRULANAMADI", "WARN")) == 1, f"{r}")
         dd = copy.deepcopy(T)
         dd["disableAllHooks"] = True
         r = _cagir(g, "_kanca_kablolama", kum("d1", dd))

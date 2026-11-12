@@ -1197,8 +1197,9 @@ def _kanca_kablolama(ayar: Path | None = None, sablon: Path | None = None) -> li
         ek += (f" · birleşik eşleyiciyle KAPSANAN {len(k['kapsanan'])}: "
                + ", ".join(KK.bicim(b) for b in k["kapsanan"][:6]))
     for b, komut in k["bicim_farki"]:
-        r.append((WARN, f"kanca {b[2]} ({b[0]}) TANINMAYAN biçimde kablolu: `{komut[:120]}` — ad "
-                        f"ayrıştırılamayan komutta ya da kabuk zincirindeki 2.+ shim çağrısında "
+        r.append((WARN, f"kanca {KK.bicim(b)} TANINMAYAN biçimde kablolu: `{komut[:140]}` — ad "
+                        f"şablon eşleyicisiyle KESİŞEN bir blokta, ayrıştırılamayan komutta ya da "
+                        f"kabuk zincirindeki 2.+ shim çağrısında "
                         f"(hook_shim.py kanca adını İLK argüman sayar); koşup koşmadığı ÖLÇÜLMEDİ; "
                         f"EKSİK sayılmadı, onarım EKLEMEZ (çift koşum olabilirdi); şablon biçimiyle "
                         f"karşılaştır (§6a ②) [{_KANCA_KAPSAM}]"))

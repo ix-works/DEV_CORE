@@ -74,9 +74,15 @@ def shim_kancasi_mi(ad: str) -> bool:
     return not ad.startswith(SHIM_DISI_ONEK)
 
 
-def _ham_iceren(proje: dict, olay: str, ad: str) -> str | None:
+def _ham_iceren(proje: dict, olay: str, ad: str) -> list[tuple[str, str]]:
     """Emniyet ağı (Ö1, 2026-11-12): `olay` altında shim'e giden, adı AYRIŞTIRILAMAYAN (`?…`)
-    ve ham token'larından biri `ad` olan bir kanca komutu var mı → komut metni.
+    ve ham token'larından biri `ad` olan kanca komutları → [(BLOK EŞLEYİCİSİ, komut metni)].
+
+    ⛔ Eşleyici bağlantının parçasıdır (F10, 2026-11-13): ağ bulduğu komutu, içinde durduğu
+    bloğun eşleyicisiyle birlikte döndürür; hangi şablon bağlantısını karşıladığına `kiyas`
+    eşleyiciye göre karar verir. Eskiden yalnız komut dönüyordu ⇒ `Edit|Write|MultiEdit`
+    bloğundaki zincir çağrısı, `Bash` bloğunda gerçekten EKSİK olan aynı kancayı "biçim farkı"
+    sayıp maskeliyordu (ölçüldü: 8e94e17 ve 8ab2594'te `eksik []`, onarım eklemiyordu).
 
     NEDEN: ad okunamayan bir biçim "eksik" sayılırsa `eksikleri_ekle` aynı kancayı İKİNCİ KEZ
     ekleyebilir (ölçüldü: tırnaklı kabuk biçiminde 2 canlı recall_inject — o biçim artık
@@ -89,9 +95,13 @@ def _ham_iceren(proje: dict, olay: str, ad: str) -> str | None:
     Adı ayrıştırılmış kancada yalnız ZİNCİRDEKİ İKİNCİ+ shim çağrısı sayılır
     (`… hook_shim.py a && … hook_shim.py b` → b gerçekten koşar; `kanca_adi` yalnız a'yı okur
     ⇒ b'yi EKSİK saymak onu çift koşturur)."""
+    out: list[tuple[str, str]] = []
     bloklar = (yorumsuz(proje).get("hooks") or {}).get(olay) if isinstance(proje, dict) else None
     for blok in bloklar if isinstance(bloklar, list) else []:
-        for kanca in (blok.get("hooks") or []) if isinstance(blok, dict) else []:
+        if not isinstance(blok, dict):
+            continue
+        eslik = str(blok.get("matcher") or "")
+        for kanca in blok.get("hooks") or []:
             if not isinstance(kanca, dict):
                 continue
             ham = " ".join([str(kanca.get("command") or ""),
@@ -103,10 +113,10 @@ def _ham_iceren(proje: dict, olay: str, ad: str) -> str | None:
                 # shim yalnız argv[1]'i koşturur: aynı çağrının sonraki token'ları koşmaz.
                 if ad in [tk[i + 1] for i in range(len(tk) - 1)
                           if tk[i].lower().endswith("hook_shim.py")][1:]:
-                    return ham.strip()
+                    out.append((eslik, ham.strip()))
             elif ad in tk:
-                return ham.strip()
-    return None
+                out.append((eslik, ham.strip()))
+    return out
 
 
 def _eslik_kumesi(eslik: str) -> frozenset | None:
@@ -130,6 +140,12 @@ def _kapsar(proje_eslikleri: list[str], eslik: str) -> bool:
             return True
         birlesim |= k
     return hedef is not None and hedef <= birlesim
+
+
+def _kesisir(a: str, b: str) -> bool:
+    """İki eşleyici en az bir aracı ortak tutuyor mu (boş/`*` = her araç; öğeler LİTERAL)."""
+    ka, kb = _eslik_kumesi(a), _eslik_kumesi(b)
+    return ka is None or kb is None or bool(ka & kb)
 
 
 def baglantilar(veri: dict) -> list[tuple[str, str, str]]:
@@ -173,17 +189,31 @@ def kiyas(proje: dict, sablon: dict) -> dict:
     -> {"eksik": [(olay, eşleyici, ad)]   şablonda var, projede (olay, ad) HİÇ yok
         "eslesik_farki": [((olay, ş_eşleyici, ad), p_eşleyici)]  aynı olay+ad, başka eşleyici
         "kapsanan": [(olay, ş_eşleyici, ad)]  projede aynı kanca, eşleyici BİRLEŞİMİ ⊇ şablonunki
-        "bicim_farki": [((olay, ş_eşleyici, ad), komut)]  adı ayrıştırılamayan (`?…`) shim
-                                                           komutunun ham token'larında VAR
+        "bicim_farki": [((olay, ş_eşleyici, ad), komut)]  ad, şablon eşleyicisiyle KESİŞEN bir
+                         blokta ya adı ayrıştırılamayan (`?…`) shim komutunun ham token'larında
+                         ya da kabuk zincirindeki 2.+ shim çağrısında geçiyor. Kesişim kapsama
+                         (⊇) değilse komutun başında `(KISMİ: …)` notu durur. Kancanın o
+                         eşleyicide KOŞUP KOŞMADIĞI ÖLÇÜLMEDİ (zincir çağrısı koşar; `?…`
+                         biçimi bilinmez; KISMİ'de şablonun kesişmeyen kısmı kablosuzdur)
         "ek": [(olay, eşleyici, ad)]      yalnız projede (BİLGİ)
         "sablon_sayisi": int, "sablon_kanca": [ad]}
     Çokluküme farkıdır. Birebir eşi olmayan şablon bağlantısı sırayla: ① projede aynı (olay,
     ad) eşleyicilerinin birleşimi şablon eşleyicisini kapsıyorsa KAPSANAN (Ö2 — birleşik
     `Bash|…|Edit|…` bloğu; yeniden eklemek kancayı İKİ KEZ koşturur) ② aynı (olay, ad) başka
     eşleyiciyle varsa "eşleyici farklı" (genişletilmiş/daraltılmış olabilir — otomatik karar
-    VERİLMEZ) ③ adı AYRIŞTIRILAMAYAN bir shim komutunun ham token'larında ad geçiyorsa BİÇİM
-    FARKI (Ö1 emniyet ağı — çift ekleme yok; adı ayrıştırılan kanca o adı koşturur, ağa girmez)
-    ④ hiçbiri değilse EKSİK. Yalnız ④ `eksikleri_ekle`'nin girdisidir.
+    VERİLMEZ) ③ BİÇİM FARKI (Ö1 emniyet ağı + F7 zincir istisnası — çift ekleme yok): ad,
+    adı ayrıştırılamayan (`?…`) bir shim komutunda ya da kabuk zincirindeki 2.+ shim
+    çağrısında geçiyorsa. Adı ayrıştırılmış çağrının argv[2+] token'ları ağa GİRMEZ (shim
+    yalnız argv[1]'i koşturur). ④ hiçbiri değilse EKSİK. Yalnız ④ `eksikleri_ekle`'nin
+    girdisidir.
+    ⛔ ③'ün EŞLEYİCİ KURALI (F10, 2026-11-13): ağın bulduğu komut, içinde durduğu BLOĞUN
+    eşleyicisiyle bir bağlantıdır ve yalnız şu iki koşulda sayılır:
+      (a) blok eşleyicisi şablon eşleyicisiyle KESİŞİYOR (`_kesisir`; ⊇ ise tam, değilse
+          KISMİ). Kesişmeyen blok (`Edit|…` bloğundaki zincir ↔ şablonun `Bash` bağlantısı)
+          o bağlantıyı KARŞILAMAZ ⇒ EKSİK, onarım ekler.
+      (b) aynı blok eşleyicisi bu adın AYRIŞTIRILMIŞ bağlantıları arasında YOK. O eşleyici
+          ①/②'de zaten tartıldı. `pre_tool_guard && pre_tool_guard` gibi aynı-ad zinciri yeni
+          bir eşleyici getirmez, eksiği maskeleyemez (8e94e17 davranışı).
     """
     s, p = Counter(baglantilar(sablon)), Counter(baglantilar(proje))
     p_liste = baglantilar(proje)
@@ -203,9 +233,13 @@ def kiyas(proje: dict, sablon: dict) -> dict:
             ek_ham.remove(es)
             farkli.append((b, es[1]))
             continue
-        ham = _ham_iceren(proje, b[0], b[2])
-        if ham is not None:
-            bicim_farki.append((b, ham))
+        ham = [(e, k) for e, k in _ham_iceren(proje, b[0], b[2])
+               if e not in p_esl and _kesisir(e, b[1])]
+        if ham:
+            e, komut = ham[0]
+            if not _kapsar(p_esl + [x for x, _k in ham], b[1]):
+                komut = f"(KISMİ: blok `{e or '*'}` ⊉ şablon) {komut}"
+            bicim_farki.append((b, komut))
             continue
         eksik.append(b)
     # Kapsamaya katkı veren proje bağlantısı "proje eki" DEĞİLDİR (şablon kancasının ta kendisi).
@@ -230,8 +264,16 @@ def eksikleri_ekle(proje: dict, sablon: dict) -> tuple[dict, list[tuple[str, str
     Girdi DEĞİŞTİRİLMEZ (derin kopya). Eklenen kanca aynı olay + aynı eşleyicili ilk proje
     bloğuna eklenir; yoksa şablon bloğunun kopyası (yorum alanıyla, yalnız eksik kancalarla)
     olayın SONUNA eklenir. "Eşleyici farklı", "kapsanan" ve "biçim farkı" bağlantılar
-    EKLENMEZ (kıyas onları EKSİK saymaz — ilki kullanıcı kararı, son ikisi kanca ZATEN
-    kablolu: eklemek çift koşum olurdu). `hooks` bir sözlük değilse ValueError (sessiz ezme yok).
+    EKLENMEZ, çünkü kıyas onları EKSİK saymaz:
+      · eşleyici farklı → kullanıcı kararı;
+      · kapsanan → kanca ZATEN kablolu, eklemek çift koşum olur;
+      · biçim farkı → kanca o eşleyiciyle KESİŞEN bir blokta tanınmayan biçimde ya da kabuk
+        zincirinin 2.+ çağrısında duruyor. Koşup koşmadığı ÖLÇÜLMEDİ (zincir çağrısı koşar,
+        `?…` biçimi bilinmez). Eklemek çift koşum OLABİLİRDİ; karar kullanıcının (4h WARN).
+        KISMİ kesişimde şablonun kesişmeyen kısmı kablosuz kalır. Bu kısım da EKLENMEZ,
+        çünkü eklenecek blok kesişen araçlarda kancayı ikinci kez koştururdu.
+    Eşleyicisi şablonunkiyle KESİŞMEYEN bloktaki zincir/`?…` çağrısı o bağlantıyı karşılamaz
+    ⇒ EKSİK sayılır ve eklenir (F10). `hooks` bir sözlük değilse ValueError (sessiz ezme yok).
     """
     yeni = copy.deepcopy(proje)
     hooks = yeni.setdefault("hooks", {})
