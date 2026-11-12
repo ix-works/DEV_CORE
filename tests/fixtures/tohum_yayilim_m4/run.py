@@ -76,6 +76,17 @@ B_GUNCEL = [  # tohumda evrilen, hedefte dokunulmamis -> yeni govde gelmeli
     "feedback_kararlari-once-topla-sonra-dispatch.md",
     "feedback_lider-ajan-paralel-yazim-cakismasi.md",
     "feedback_merge-safe-dagitimda-satir-yalniz-onarilan-dosyaya-ulasir.md",
+    # PR-2 (2026-11-12): kural degistiren geri akis
+    "feedback_rap-by-assoc-read-all-fields.md",
+    "feedback_atc-priority-1-zorunlu.md",
+    "feedback_deploy-lokal-test-onayi-sart.md",
+    "feedback_push-failure-stale-lock-persistent-session.md",
+    "feedback_dokuman-turu-donmus-kod-ister-paralel-kosturma.md",
+    "feedback_playwright-ui5-firepress-model-api.md",
+    "feedback_kapi-zinciri-derlemeyi-gormez.md",
+    "feedback_capadaki-acik-madde-devralmadan-once-olculur.md",
+    "feedback_clean-core-released-cds-proaktif.md",      # kullanici onayli GEVSETME (yalniz yeni kod)
+    "feedback_fs-ts-html-uretilmez-teslim-bicimi.md",    # kullanici kurali: PDF test OK sonrasi
 ]
 ZLI = "feedback_zli-obje-text-tahmin-yasak.md"          # tohumda evrildi + hedefte DUZENLENDI
 YENI_HUB = "_indeks-terfi-2026-11-12.md"

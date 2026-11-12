@@ -7,6 +7,11 @@ metadata:
   originSessionId: 7be4eb27-4593-4b9b-a0fd-793cd5aa7970
 ---
 
+> ⚠ **KAPSAM (2026-10-28 daraltması):** Bu ders **build SONRASI** belge turları içindir (KD,
+> ekran görüntüsü, PDF, TS hizalaması). Yeni geliştirmenin **tasarım TS'ini** build sonrasına
+> ERTELEMEZ — yeni build'de TS build'den önce yazılır:
+> [[feedback_yeni-gelistirmede-ts-builddan-once-yazilir]] (vaka: bir projede maliyet penceresi geliştirmesi).
+
 **KURAL:** Doküman üretimi (FS/TS/KD, ekran görüntüleri, PDF) kodun **donmuş** olmasını
 gerektirir. Kod düzeltme turu hâlâ uçuşta iken doküman ajanı başlatma. Sıra **seri**dir:
 **KOD DONDU (md5 çapası) → doküman turu**. Paralel koşturmak duvar saati kazandırmaz,

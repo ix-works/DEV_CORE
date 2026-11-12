@@ -66,3 +66,22 @@ tahmin/araç-turu yerine doğrudan sormak** hem ucuz hem kesindir ([[feedback_ka
 Son-doğrulama: 2026-09-04 (yukarıdaki tekrar) · 2026-09-01 · prior-art: arandı — [[feedback_takim-sureklilik-gun-sonu-resume]]
 (üretici tarafı) ve [[feedback_kanit-tazeligi-indeks-ve-zaman-sirasi]] (kanıt tazeliği) VAR;
 tüketici-tarafı kapısı YOKTU. Applies-to: tüm projeler.
+
+**Ters yön vakası (2026-09-25 — ertelenmiş-iş listesinin genel arşivi):** "açık" iddiası gibi
+**"kapalı" iddiası da ölçülür.** Başlıkta ✅ olan bölümün gövdesi açık kalem taşıyabilir; kapanış
+bloğu da **başka bir bölüme** düşmüş olabilir (iki kaydın kapanışı komşu bölümün altındaydı).
+⇒ Başlık/`Durum:` damgası tarayarak sınıflama YETMEZ — **gövdeyi oku**, şüpheli başlıkları elle
+aç (6 şüpheliden 5'i KISMİ/AÇIK çıktı). Arşive taşımada korunumu **satır sayacıyla** ölç (özgün ↔
+canlı+arşiv, kayıp 0). Son-doğrulama: 2026-09-25.
+
+**⟳ TEKRAR 2026-09-30 — YENİ KIVRIM: ertelenmiş kalemi KULLANICI KARARINA sunmadan önce de ölçülür.**
+Bir pakette ertelenmiş bir kalemi (bir UI işleminde HTTP 414) doğrudan "build'e alalım mı?" diye
+sordum. Kullanıcı: *"biz bu sorunu çözmemiş miydik, yapılan çalışmaları hatırla önce, problemin
+gerçekliğinden emin ol, ondan sonra"*. Tarama + ölçüm sonucu: çözüm (`useBatch:true` ikinci model)
+yalnız kardeş bir pakette uygulanmıştı, bu uygulamaya hiç taşınmamıştı. Duvar sunucu genelinde
+(8.448 B), gerçekçi eşik 18–20 kalem, DEV'deki en büyük çağrı 12 kalem. Soru ancak bundan sonra
+anlamlı hâle geldi.
+⇒ **Kalemi karara sunmadan önce iki soru cevaplanır:** ① *başka yerde çözüldü mü?* (kardeş
+paket/RESUME/SESSION_NOTES, obje ya da reçete adıyla grep) ② *bugün gerçek mi, hangi eşikte?*
+(ucuz salt-okur ölçüm). Cevaplar sorunun içine yazılır. Kalem kaydı "ÖLÇÜLMEDİ" diyorsa soru
+sorulmaz, önce ölçülür. Son-doğrulama: 2026-09-30; tohum geri akışı 2026-11-12.
