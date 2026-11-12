@@ -50,8 +50,8 @@
 - [Dosya Bölgeleri / Yazım Yetkisi](feedback_dosya-bolgeleri-yazim-yetkisi.md) — A metodoloji/araç=lider · B paket kaynağı/docs=feature+lider · C SAP=gateway; commit=lider
 - [Takım Süreklilik / Gün-sonu / Resume](feedback_takim-sureklilik-gun-sonu-resume.md) — süreklilik=lider; ajan durumsuz; gün-sonu=checkpoint+SESSION_NOTES+WIP commit+**push origin main ZORUNLU**; resume=re-spawn+brief
 - [Kararları Önce Topla, Sonra Dispatch](feedback_kararlari-once-topla-sonra-dispatch.md) — build-unit'in TÜM user-kararlarını önce topla, sonra konsolide yönerge; mid-build ping-pong yok
-- [ATC Priority 1 Zorunlu](feedback_atc-priority-1-zorunlu.md) — yalnız Prio 1 zorunlu; Prio 2/3 açık onayla pass (sessiz pass yok); variant ZZNDBS_ATC
-- [Clean Core Released-CDS Proaktif](feedback_clean-core-released-cds-proaktif.md) — GATE check_released_objects; released CDS tercih (MARA değil I_Product); released_successors.json
+- [ATC Priority 1 Zorunlu](feedback_atc-priority-1-zorunlu.md) — yalnız Prio 1 zorunlu; Prio 2/3 açık onayla pass (sessiz pass yok); mevcut kodda clean-core P1 muaf; variant ZZNDBS_ATC
+- [Clean Core Released-CDS Proaktif](feedback_clean-core-released-cds-proaktif.md) — GATE check_released_objects; YENİ kodda released CDS (MARA değil I_Product); mevcut kod muaf (proje politikası aksini demiyorsa)
 - [Spec-Mutabakat Gate (her dev başı)](feedback_spec-mutabakat-gate.md) — yeni program: ekran+fonksiyonel spec iste → <LEGACY_SOURCE>+app+DDL/S ile sentezle → MUTABAKAT → build
 - [Hook Komut ${CLAUDE_PROJECT_DIR} Exec-Form](feedback_hook-komut-project-dir-execform.md) — hook+statusLine ASLA göreceli yol; cwd kayınca kırılır; exec-form + ${CLAUDE_PROJECT_DIR}
 - [API Call İç Gateway Proxy (ZBC001)](feedback_api-call-ic-gateway-proxy.md) — RFC-dest call'da ZBC001_CL_GET_TOKEN + /iwfnd iç loopback; host/client runtime; örn ZSD001 simulate_pricing
@@ -80,8 +80,8 @@
 - [Ajan brifing'inde SendMessage to main zorunlu](feedback_agent-briefing-sendmessage-main.md) — "lider'e DÖN" YETMEZ; ÇIKTI bölümüne SendMessage({to:"main"}) ekle yoksa rapor gelmez
 - [Gate'lenmemiş kural ≈ kuralsız](feedback_kural-gate-lenmeli-yoksa-anlamsiz.md) — GATE check_rule_gate_coverage; her kural atlanamaz kurgulanmalı (validator/hook/checklist)
 - [TR app i18n: her iki dosya](feedback_i18n-tr-her-iki-dosya.md) — language=tr app'te i18n_tr override eder; etiket değişikliği HER İKİ dosyada + hard refresh
-- [RAP BY-assoc read ALL FIELDS WITH](feedback_rap-by-assoc-read-all-fields.md) — GATE check_rap_byassoc_keys_only; READ BY _assoc YALNIZ KEY döner, non-key için ALL FIELDS WITH
-- [Playwright UI5: firePress + model API](feedback_playwright-ui5-firepress-model-api.md) — .click() bazen press tetiklemez → firePress()/controller-invoke + getModel().getData() ile doğrula
+- [RAP BY-assoc read ALL FIELDS WITH](feedback_rap-by-assoc-read-all-fields.md) — GATE check_rap_byassoc_keys_only; READ BY _assoc YALNIZ KEY döner; non-key için FIELDS ( … ) WITH (ALL FIELDS -305 riski)
+- [Playwright UI5: firePress + model API](feedback_playwright-ui5-firepress-model-api.md) — .click() bazen press tetiklemez → firePress() + getModel().getData(); MessageBox'ta TERSİ (DOM click)
 - [Inactive-worklist audit (HTTP-200≠aktif)](feedback_inactive-worklist-audit-http200-degil.md) — commit+gün-sonu worklist_audit.py; root-CDS-alan FOR-BEHAVIOR BDEF'i sessizce inactive; canlı re-verify
 - [Çözülmüş tooling-bug'ları (10)](feedback_resolved-tooling-bugs.md) — regresyon ref: adt_dtel_create·adt_get-ddic·source-drift·bdef-blues·csrf·push-stale-lock·cds-escape·mcp-stdio·table-read
 - [Behavior pool main boş → CCIMP tuzağı](feedback_behavior-pool-main-empty-ccimp-trap.md) — managed pool source/main DAİMA boş; handler CCIMP'te; incelemeden ÖNCE CCIMP çek, BDEF↔lhc_* eşle

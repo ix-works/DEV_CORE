@@ -1,11 +1,16 @@
 ---
 name: feedback_dokuman-turu-donmus-kod-ister-paralel-kosturma
-description: "Doküman turu (FS/TS/KD + ekran görüntüsü) DONMUŞ koda bağlıdır. Kod düzeltme turuyla PARALEL koşturulursa aynı bedel üç kez ödenir: md5 çapası bayatlar, satır referansları kayar, ekran görüntüleri yeniden çekilir. Duvar saatinden kazanmaz, kaybettirir."
+description: "Build SONRASI doküman turu (KD/ekran görüntüsü/PDF/TS hizalaması) DONMUŞ koda bağlıdır; yeni geliştirmenin tasarım TS'i build'den ÖNCE yazılır, ertelenmez. Kod düzeltme turuyla PARALEL koşturulursa aynı bedel üç kez ödenir: md5 çapası bayatlar, satır referansları kayar, ekran görüntüleri yeniden çekilir. Duvar saatinden kazanmaz, kaybettirir."
 metadata: 
   node_type: memory
   type: feedback
   originSessionId: 7be4eb27-4593-4b9b-a0fd-793cd5aa7970
 ---
+
+> ⚠ **KAPSAM (2026-10-28 daraltması):** Bu ders **build SONRASI** belge turları içindir (KD,
+> ekran görüntüsü, PDF, TS hizalaması). Yeni geliştirmenin **tasarım TS'ini** build sonrasına
+> ERTELEMEZ — yeni build'de TS build'den önce yazılır:
+> [[feedback_yeni-gelistirmede-ts-builddan-once-yazilir]] (vaka: bir projede maliyet penceresi geliştirmesi).
 
 **KURAL:** Doküman üretimi (FS/TS/KD, ekran görüntüleri, PDF) kodun **donmuş** olmasını
 gerektirir. Kod düzeltme turu hâlâ uçuşta iken doküman ajanı başlatma. Sıra **seri**dir:
@@ -49,3 +54,5 @@ dosya-sahipliği yüzüdür.
 - Ekran görüntüsü üreten harness'i, ürettiği görüntülerin **tamamını** kapsayacak biçimde
   tut: bu turda script 17 görüntünün 13'ünü üretiyordu, kapsam dışı kalan 3'ünden 2'si
   aylardır çöp veri taşıyordu ve yeniden yayımlanan kılavuzda canlıya gidiyordu.
+
+Son-doğrulama: 2026-11-12 (kapsam bandı 2026-10-28; ana vaka 2026-09-09) · Applies-to: kod düzeltme turu ile aynı pencerede açılan build SONRASI doküman turları (KD/FS/TS hizalaması/ekran görüntüsü/PDF)
