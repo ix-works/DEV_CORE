@@ -38,6 +38,7 @@ MUTASYON (korpusun bos-yesil olmadigini kanitlar):
   --mutasyon-kanalsiz        yetkisiz klon terfi kanali satiri silinir (#286) -> B DUSMELI
   --mutasyon-taze-hepsi      (a-taze) mtime suzgeci kalkar (Q407 F)          -> F1 + F2 DUSMELI
   --mutasyon-karar-yok       gun-sonu karar bolumu basilmaz (Q407 F)         -> F2 DUSMELI
+  --mutasyon-birlestirildi-karar karar kaydi beyani eski metne doner (N1)    -> F5 DUSMELI
 
 Q407 F (2026-11-12): (a) kovasi birikir (canli 258) ve butunuyle okunamaz; gun-sonu kararinin
 konusu yalniz son TAZE_GUN gunde duzenlenenlerdir ('(a-taze)', mtime). Arac karar VERMEZ,
@@ -94,6 +95,10 @@ MUTLAR = {
     "--mutasyon-karar-yok": (
         'print("\\n--- GÜN-SONU KARARI BEKLEYENLER (CLAUDE.core §1.1 — karar dersi yazanındır) ---")',
         'print("\\n--- (bolum) ---")'),
+    # N1 (PR #426): karar kaydi beyani eski (core §1.1'in TERSI) metne doner
+    "--mutasyon-birlestirildi-karar": (
+        '"günün SESSION_NOTES gün-sonu satırından okunur: satırı olan kalem için yeniden karar "',
+        '"--birlestirildi ile kapatılmış ders de görünür; o kalem için yeniden karar "'),
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -314,6 +319,17 @@ def main() -> int:
              f"cikti={[l for l in out.split(chr(10)) if 'kovası' in l or 'GERİ AKIŞ' in l]}")
         ekle("F3 (a-taze) olcutu KAPSAM BEYANI'nda (mtime sinirli oldugu yazili)",
              "'(a-taze)' dosya mtime'ına bakar" in out, "beyan satiri yok")
+        # N1 (PR #426 bug-gate): karar kaydinin yeri CLAUDE.core §1.1 ile AYNI olmali —
+        # SESSION_NOTES gun-sonu satiri; --birlestirildi karar kaydi DEGIL (tohum ilerlemediyse
+        # iz birakmaz, olculdu 2026-11-12). Eski metin tersini soyluyordu.
+        _ayirmaz = [l for l in out.split("\n") if "karara bağlanmış dersi AYIRMAZ" in l]
+        _ay = _ayirmaz[0] if len(_ayirmaz) == 1 else ""
+        ekle("F5 (a-taze) karar kaydi beyani core §1.1'e hizali (SESSION_NOTES; --birlestirildi "
+             "karar kaydi DEGIL)",
+             "SESSION_NOTES" in _ay and "karar kaydı DEĞİLDİR" in _ay
+             and "--birlestirildi ile kapatılmış" not in out
+             and "satırı olmayan karara bağlanmamıştır" in _ay,
+             f"satir_sayisi={len(_ayirmaz)} satir={_ay!r}")
 
         # ══ B: KAPSAM BEYANI ═══════════════════════════════════════════════════
         for anahtar, etiket in (
