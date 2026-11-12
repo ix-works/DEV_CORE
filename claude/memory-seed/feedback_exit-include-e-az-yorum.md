@@ -18,4 +18,3 @@ Kullanıcı 2026-10-30'da şöyle dedi: *"çok geniş fazla açıklama yazma , b
 - Kullanıcıya verilen yanıtlar da kısa olmalı.
 
 Son-doğrulama: 2026-10-30 · Applies-to: bu çekirdeği kullanan tüm projeler — exit include'ları / ABAP yorumları (kullanıcı kararı 2026-11-12: tüm core kullanıcılarına)
-İlgili: [[feedback_ayrilmis-z-exit-include-a-ai-yazabilir]]

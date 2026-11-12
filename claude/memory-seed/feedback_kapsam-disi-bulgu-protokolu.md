@@ -96,6 +96,9 @@ yakalanmıştı. (d) dalı bu ikisini birlikte çözüyor — bulgu kaybolmuyor,
 ağacını **açıkça yaz** (alt-ajanlar bu memory'yi görmez). Ajanlardan bulguları **ayrı başlıkta**
 ve 6 alanlı formatta iste; "yapılacak" listesine yalnız kullanıcının maddeleri girer. Tur sonunda
 açık kalemler `governance/deferred-triggers.md`'ye **tetik koşuluyla** taşınır — kaybolmaz, gizlenmez.
+⚖ **Kapsam (2026-11-12, kullanıcı kararı "kusur ≠ öneri"):** bu ağaç **kanıtlı KUSUR** içindir; kusur kanıtı
+taşımayan yeni fikir / iyileştirme önerisi / gözlem bu ağaca girmez — önerilmez, deferred'e yazılmaz, yalnız
+kritik olanı bildirilir ([[feedback_infra-turunda-yeni-acilan-maddeye-baslama-mevcutlari-bitir]]).
 
 İlgili: [[feedback_kararlari-once-topla-sonra-dispatch]] · [[feedback_cok-katmanli-degisiklik-yonetimi]] ·
 [[feedback_dogrula-once-flag-spekulatif-blocker-yasak]] · [[feedback_flag-degil-icra-bekleyen-is-kapat]] ·

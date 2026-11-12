@@ -177,7 +177,12 @@
   değilse **aynı gün** kalem başına karar verilir: `evet` → tohuma terfi (genericize; sahip makinede
   PR, yazma yetkisiz klonda Issue) · `<YOK>` → `seed:` kararı · `(a-taze)` (tohumda olup son 7 günde
   yerelde düzenlenen ders) → kural değiştiyse ya da ters döndüyse tohum güncellenir, yalnız yerel
-  vaka ayrıntısıysa bırakılır. Ateşler: gün-sonunda bu bölümde sıfırdan büyük sayı görünce.
+  vaka ayrıntısıysa bırakılır. Ateşler: gün-sonunda bu bölümde **karara bağlanmamış** kalem görünce.
+  **Karara bağlanmış `(a-taze)` kalemi:** geri akışı tohuma işlenmiş (fark yalnız genericize) ya da
+  "bırak" kararıyla `--birlestirildi <dosya>` koşulmuş ders — araç bunu ayırmaz, kalem 7 günlük
+  pencere boyunca listede kalır; **yeniden karar verilmez**. ⚠ Yerel `seed:` alanının dolu olması
+  bu kararın işareti DEĞİLDİR: o alan *terfi* kararıdır, *geri akış* kararı değil (ölçüldü
+  2026-11-12: geri akışı henüz yapılmamış 3 derste `seed: evet` var, tohum bayat).
   *(Vaka 2026-11-12: karar bağlanmadığı için "yerelde düzenlenmiş" kovası 258'e birikti; tohumda
   kuralı TERS dönmüş dersler diğer makinelere eski hâliyle gitti.)*
   + **Gelen çekirdek bildirimi gözlemi (yalnız çekirdek SAHİBİ makinede, 2026-09-18):**

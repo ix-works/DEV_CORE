@@ -1,6 +1,6 @@
 ---
 name: feedback_infra-turunda-yeni-acilan-maddeye-baslama-mevcutlari-bitir
-description: Tur içinde çıkan yeni bulgu ÖNERİLMEZ, deferred'e de yazılmaz — yalnız çok önemli ve mutlaka yapılması gereken (kritik/geri alınamaz/doğruluk bozan) bildirilir; önce mevcut maddeler biter
+description: Tur içinde çıkan yeni FİKİR/öneri/gözlem ÖNERİLMEZ, deferred'e de yazılmaz — yalnız çok önemli ve mutlaka yapılması gereken bildirilir; KANITLI KUSUR ise kapsam-dışı bulgu karar ağacına girer, kaybolmaz; önce mevcut maddeler biter
 metadata: 
   node_type: memory
   type: feedback
@@ -16,8 +16,13 @@ metadata:
 **Sıkılaştırma (kullanıcı, 2026-10-03):** *"yeni bir bulgu çıkarsa, çok önemli ve mutlaka yapılması
 gerekmiyorsa önerme, bitmiyor işler bu şekilde sürekli yeni madde ekleyerek"*
 
-- Tur sırasında çıkan yeni bulgu (bug-gate ÖNERİ'leri, ajan "açık nokta"ları, kenar gözlemler)
-  **kullanıcıya önerilmez ve ertelenmiş-iş listesine (deferred) kalem olarak da yazılmaz** — sessizce düşer.
+- ⚖ **Önce ayır — KUSUR ≠ ÖNERİ** (kullanıcı kararı 2026-11-12):
+  - **KANITLI KUSUR** (bir şeyin bozuk olduğuna dair ölçüm/örnek) bu kuralın konusu DEĞİLDİR → çekirdek
+    §1.1 KAPSAM-DIŞI BULGU karar ağacına girer ([[feedback_kapsam-disi-bulgu-protokolu]]: bizden mi
+    doğdu / işi etkiliyor mu / kritik mi / ilgisiz mi) — **kaybolmaz, gizlenmez**.
+  - **YENİ FİKİR / iyileştirme önerisi / gözlem** (bug-gate ÖNERİ'leri, ajan "açık nokta"ları, kenar
+    gözlemler — bozukluk kanıtı taşımayan) **kullanıcıya önerilmez ve ertelenmiş-iş listesine (deferred)
+    kalem olarak da yazılmaz**.
 - İSTİSNA yalnız: **çok önemli VE mutlaka yapılması gereken** — kritik/geri alınamaz, sessiz yanlış
   veri, güvenlik/PII, ya da uçuştaki işin doğruluğunu bozan. Bunu tek cümleyle bildir **ve YAP**
   (kullanıcı 2026-11-02: *"ders kalsın aynı şekilde, ama önemlileri yapacak şekilde"* — önemli olanın
@@ -43,7 +48,7 @@ yan bulgusu ertelenmiş-iş listesine yeni bölüm olarak yazıldı; kullanıcı
 bıraktın, yapman gerekmiyor mu?"* Ayıklama: 2'si core'da zaten kayıtlıydı (mükerrer), 2'si
 gereksizdi, 1'i (ajan MEMORY.md %95,9 bütçe = sessiz kesilme) gerçekten yapılması gerekendi.
 ⇒ Gün-sonunda "bugün doğan ertelenmiş iş" = yalnız **kullanıcının açıkça "ertele/kalem aç"
-dediği** kalem. Tur yan bulgusu: ya **yap** (mutlaka gerekiyorsa, onayla) ya **düşür**; üçüncü
+dediği** kalem. Tur yan bulgusu (öneri/gözlem; kanıtlı kusur karar ağacına gider): ya **yap** (mutlaka gerekiyorsa, onayla) ya **düşür**; üçüncü
 yol "deferred'e yazıp bırakmak" değildir. Kalem yazmadan önce: core'da zaten kayıtlı mı?
 
 Son-doğrulama: 2026-11-02 · Applies-to: tüm çok-PR'lı turlar (infra, radar, doküman) + gün-sonu ertelenmiş-iş süpürmesi

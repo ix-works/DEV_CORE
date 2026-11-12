@@ -449,6 +449,9 @@ def terfi_adaylari(target: Path) -> int:
     print(f"  · '(a-taze)' dosya mtime'ına bakar (son {TAZE_GUN} gün): git checkout / kopya mtime'ı "
           "tazeler ⇒ fazla taze gösterebilir; bu pencereden ÖNCE düzenlenip karara bağlanmamış "
           "ders (a) listesinde kalır ama '(a-taze)'de görünmez.")
+    print("  · '(a-taze)' karara bağlanmış dersi AYIRMAZ: geri akışı işlenmiş (fark yalnız "
+          "genericize) ya da --birlestirildi ile kapatılmış ders de pencere boyunca görünür; "
+          "o kalem için yeniden karar verilmez. Yerel `seed:` alanı bu kararın işareti DEĞİLDİR.")
     print("  · Bu rapor metodoloji/proje ayrımına KARAR VERMEZ — kovalar yalnız yazım anında")
     print("    konmuş `metadata.seed:` etiketini OKUR. '<YOK>' = etiket yok, 'terfi etmeli' DEĞİL.")
     print("  · YALNIZ `feedback_*.md` taranır. `project_*` / `reference_*` / `user_*` dosyaları")
