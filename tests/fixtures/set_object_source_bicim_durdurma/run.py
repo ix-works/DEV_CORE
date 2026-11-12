@@ -501,6 +501,22 @@ def bolum_p(L, SC, PO):
     t1 = res.get("error_t100") or {}
     ekle("P7c KONTROL: başka kullanıcı (oturum kullanıcısı değil) maskelenmez — istisna yolu kuralıyla aynı",
          t1.get("T100KEY-V4") == "SAP_USER_B", f"t100={t1}")
+    # PR #427 Y1: `put_denemeleri` öz metni 409 gövdesinin T100 metnini taşır (V4 = kullanıcı adı).
+    # Yol: GERÇEK PUT 409 (SAPADTError.denemeler) → `_hata_ayrintisi_ekle` → sonuç sözlüğü.
+    res, exc, log, pt = kos(sabit((409, ust)), sonuc=True)
+    res = res if isinstance(res, dict) else {}
+    pd = res.get("put_denemeleri") or []
+    pds = str(pd)
+    ekle("P7d ⭐ put_denemeleri: öz metninde oturum kullanıcısı maskeli (<KULLANICI>), ham ad YOK, "
+         "kod int AYNEN (409)",
+         len(pd) == 4 and KULLANICI not in pds and "<KULLANICI>" in pds
+         and all(d[1] == 409 and isinstance(d[1], int) for d in pd),
+         f"exc={exc!r} n={len(pd)} pd={pds[:200]!r}")
+    res, exc, log, pt = kos(sabit((409, yab)), sonuc=True)
+    res = res if isinstance(res, dict) else {}
+    pds = str(res.get("put_denemeleri") or [])
+    ekle("P7e KONTROL: put_denemeleri'nde başka kullanıcı maskelenmez (P7c ile aynı kural)",
+         "SAP_USER_B" in pds and "<KULLANICI>" not in pds, f"pd={pds[:200]!r}")
 
 
 def main() -> int:
@@ -551,6 +567,10 @@ MUTASYONLAR = [
      "result['error_response_text'] = str(govde)", {"P7a"}),
     ("M9b F7: error_t100 maskesiz", "scripts/sap_client.py",
      "{k: kimlik_maskele(str(v), parola=parola, kullanici=kullanici)", "{k: str(v)", {"P7b"}),
+    ("M9c Y1: put_denemeleri maskesiz", "scripts/sap_client.py",
+     "[[kimlik_maskele(x, parola=parola, kullanici=kullanici)\n"
+     "                                         if isinstance(x, str) else x for x in d] for d in den]",
+     "[list(d) for d in den]", {"P7d"}),
     ("M10 F1: PUT 409 kendi-kilit/CRITICAL dalina girmez", "scripts/push_object.py",
      "_put_409 = bool(_denemeler) and str(_denemeler[-1][1]) == '409'", "_put_409 = False",
      {"P6", "P6b"}),
@@ -622,7 +642,7 @@ def _mutasyon() -> int:
 def _taban() -> int:
     """BİLGİ (gate değil): pinli taban `8565c9d`'nin üç dosyasıyla koş — hangi vektör düşüyor,
     eski kodda P1'de 'ANOTHER developer' basılıyor muydu. Beklenen: L1/L5/L6/L10/P1/P2/P4 düşer;
-    PR #427 vektörlerinden L11/L12/P5/P6/P6b/P7a/P7b de (taban bu alanları hiç üretmez)."""
+    PR #427 vektörlerinden L11/L12/P5/P6/P6b/P7a/P7b/P7d/P7e de (taban bu alanları hiç üretmez)."""
     kok, env = _kum_kur()
     try:
         for rel in ("scripts/sap_adt_lib.py", "scripts/sap_client.py", "scripts/push_object.py"):

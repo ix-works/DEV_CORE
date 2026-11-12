@@ -254,10 +254,12 @@ def _hata_ayrintisi_ekle(result: Dict[str, Any], exc: BaseException, adt: Any = 
     `put_denemeleri` = `set_object_source`'un [(biçim, kod, öz)] listesi (yoksa anahtar EKLENMEZ);
     `error_response_text` = istisnanın taşıdığı SAP gövdesi · `error_t100` = istisnanın TAM
     gövdeden ayrıştırdığı `T100KEY-*` girdileri (409'da V3 = çakışan istek, V4 = kilit sahibi).
-    PR #427 F7: bu sonuç MCP yanıtına (`atom` `"result": result`) AYNEN girer ⇒ iki alan istisna
+    PR #427 F7: bu sonuç MCP yanıtına (`atom` `"result": result`) AYNEN girer ⇒ üç alan da istisna
     yolunun kuralıyla (`kimlik_maskele`: parola + oturum kullanıcısı) MASKELENİR; oturum
-    kullanıcısı `<KULLANICI>` olur. Sonuç alanları (`success`/`error`/`error_type`) DEĞİŞMEZ;
-    istisna atmaz. `adt` = kimlik değerlerinin okunduğu istemci (yoksa maske yalnız desenle).
+    kullanıcısı `<KULLANICI>` olur. `put_denemeleri`nde yalnız METİN öğeleri (biçim, öz) maskelenir,
+    kod (int) AYNEN kalır — öz, 409 gövdesinin T100 metnini taşır ve V4'te kullanıcı adı geçer
+    (PR #427 Y1). Sonuç alanları (`success`/`error`/`error_type`) DEĞİŞMEZ; istisna atmaz.
+    `adt` = kimlik değerlerinin okunduğu istemci (yoksa maske yalnız desenle).
     """
     try:
         from sap_adt_lib import kimlik_maskele
@@ -265,7 +267,8 @@ def _hata_ayrintisi_ekle(result: Dict[str, Any], exc: BaseException, adt: Any = 
         kullanici = getattr(adt, 'user', None) if adt is not None else None
         den = getattr(exc, 'denemeler', None)
         if den:
-            result['put_denemeleri'] = [list(d) for d in den]
+            result['put_denemeleri'] = [[kimlik_maskele(x, parola=parola, kullanici=kullanici)
+                                         if isinstance(x, str) else x for x in d] for d in den]
         govde = getattr(exc, 'response_text', None)
         if govde:
             result['error_response_text'] = kimlik_maskele(str(govde), parola=parola,

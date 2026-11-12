@@ -343,7 +343,7 @@ print('Create status:', create_resp.status_code)  # 200 veya 201 = basarili
 > once Adim 2 (kilidi BIRAK; SILME ajanin isi degildir — ADR 0005-C).
 
 **Adim 2 — Create-sonrasi kilidi birak (ajan SILMEZ):**
-- Kilit bu kullanıcının **kendi** create oturumundan kalır → kendi oturumunda **unlock ile bırak** (aynı-kullanıcı kalıntı kilidi için kütüphanedeki lock→unlock döngüsü `clear_enqueue_lock(<obje_url>, transport=...)`; `False` = bırakılamadı — create-sonrası kilitte bu döngü ÖLÇÜLMEDİ) ya da oturum kapanınca düşmesini bekle.
+- Kilit bu kullanıcının **kendi** create oturumundan kalır → kendi oturumunda **unlock ile bırak** (yalnız create-sonrası, AYNI oturumda tutulan kilit için kütüphanedeki lock→unlock döngüsü `clear_enqueue_lock(<obje_url>, transport=...)`; `False` = bırakılamadı → DUR. Önceki oturumdan kalmış bayat kilidi programatik temizlemek ADR 0005-C sınırındadır — `lessons-learned.md` PATTERN #13; create-sonrası kilitte bu döngü ÖLÇÜLMEDİ) ya da oturum kapanınca düşmesini bekle.
 - Kilit **başkasınınsa** ya da bırakılamıyorsa: **DUR → kullanıcıya bildir.** SM12'de kilidi SİLME kararı ve eylemi kullanıcınındır; ajan silmeyi önermez, yapmaz (ADR 0005-C · komşu: `adt-classes.md` §24.7 `409` satırı).
 
 **Adim 3 — Source Push + Aktivasyon:**

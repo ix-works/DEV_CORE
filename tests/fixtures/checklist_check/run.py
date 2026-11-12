@@ -52,7 +52,8 @@ Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile e
   --mutasyon-be55-yerel   BE-55 FAIL yerel sınıf/INTF kaynağında da (PR #427 F2: ölçülmedi → WARN olmalı)
   --mutasyon-be55-bolum   BE-55 FAIL IMPORTING dışı bölümde de (PR #427 F2)
   --mutasyon-be55-bicim   BE-55 FAIL TABLE/STRUCTURE/MAPPED/EARLY/LATE biçiminde de (PR #427 F2)
-  --mutasyon-be55-ana     BE-55 ana kaynak kararı `--ana-sinif`i görmez (run_review class_push WARN'a iner)
+  --mutasyon-be55-ana     BE-55 ana kaynak kararı elle verilen `--ana-sinif`i görmez (FAIL WARN'a iner;
+                          run_review yalnız BE-10b koşar, BE-55 class_push'ta koşmaz)
   --mutasyon-hukum-tum-hucre  verify-report hükmü kanıt dahil tüm hücrelerden okunur
   --mutasyon-celiski-pass ÇELİŞKİ yalnız rapor PASS'te (UYGULANMAZ/ÖLÇÜLEMEDİ/WARN kaçar)
   --mutasyon-bagsiz       çıplak FAIL kabul edilir
@@ -1229,9 +1230,10 @@ def r_vektorleri(G, tmp: Path) -> None:
         detay.append(f"{ad}: rc={rc} {tablo(out).get('BE-10b', '-')[:30]}")
     kontrol("R7 `--ana-sinif`: include dosyaları (`.clas.macros` · `.ccimp` · `.clas.locals_imp`) BE-10b'ye girmez",
             ok, " · ".join(detay))
-    # R8 (PR #427 F2): run_review class_push yerel kopyası `ZCL_X.abap` adlı olabilir → `--ana-sinif`
+    # R8 (PR #427 F2): adı `.clas.abap` olmayan yerel kopya (`ZCL_X.abap`) elle verilen `--ana-sinif`
     # ile ANA kaynak sayılır ⇒ ölçülen biçim FAIL kalır (daraltma bu yolda WARN'a İNMEZ);
-    # aynı dosya `--ana-sinif`'siz WARN (ad ana kaynak demiyor, ölçülmedi).
+    # aynı dosya `--ana-sinif`'siz WARN (ad ana kaynak demiyor, ölçülmedi). run_review class_push
+    # checklist_check'i yalnız `--ids BE-10b` ile çağırır ⇒ BE-55 o yolda KOŞMAZ (PR #427 N1).
     imza = "    METHODS m IMPORTING is_failed TYPE RESPONSE FOR FAILED zi_sd001_demo.\n"
     dosyalari_yaz(ana, {"ZCL_BE55.abap": imza})
     rc1, out1 = kos(G, ["--repo", str(ana), "--files", "ZCL_BE55.abap", "--ids", "BE-55", "--ana-sinif"])

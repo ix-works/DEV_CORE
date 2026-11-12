@@ -76,7 +76,7 @@ print('Create:', resp.status_code)
 
 ### 24.3 Adım 2 — Create-sonrası kilidi bırak (ajan SİLMEZ)
 
-- Kilit bu kullanıcının **kendi** create oturumundan kalır → kendi oturumunda **unlock ile bırak** (aynı-kullanıcı kalıntı kilidi için kütüphanedeki lock→unlock döngüsü `clear_enqueue_lock(<obje_url>, transport=...)`; `False` = bırakılamadı — create-sonrası kilitte bu döngü ÖLÇÜLMEDİ) ya da oturum kapanınca düşmesini bekle.
+- Kilit bu kullanıcının **kendi** create oturumundan kalır → kendi oturumunda **unlock ile bırak** (yalnız create-sonrası, AYNI oturumda tutulan kilit için kütüphanedeki lock→unlock döngüsü `clear_enqueue_lock(<obje_url>, transport=...)`; `False` = bırakılamadı → DUR. Önceki oturumdan kalmış bayat kilidi programatik temizlemek ADR 0005-C sınırındadır — `lessons-learned.md` PATTERN #13; create-sonrası kilitte bu döngü ÖLÇÜLMEDİ) ya da oturum kapanınca düşmesini bekle.
 - Kilit **başkasınınsa** ya da bırakılamıyorsa: **DUR → kullanıcıya bildir.** SM12'de kilidi SİLME kararı ve eylemi kullanıcınındır; ajan silmeyi önermez, yapmaz (ADR 0005-C · komşu: `adt-classes.md` §24.7 `409` satırı).
 
 ---
@@ -132,7 +132,7 @@ python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --name
 | `TYPE zz1_discount_code` | Aynı sebep | `TYPE char3` kullan |
 | `RETURNING VALUE(...) TYPE netwr` | `netwr` CURR tipi — method imzasında CURR/P DECIMALS scan tarafından reddediliyor | `TYPE wrbtr` kullan |
 | `CONV netwr(...)` / `COND netwr(...)` | Aynı CURR tipi sorunu | `CONV wrbtr(...)` / `COND wrbtr(...)` kullan |
-| Metot imzasında türetilmiş RAP tipi (`IMPORTING is_failed TYPE RESPONSE FOR FAILED <bdef>`) | Aynı save-scan reddi (400 `ExceptionResourceScanDuringSaveFailure` gövdesinde `OO_SOURCE_BASED 011`, satır no yok) — DEV_CORE #424; ölçülen: global sınıf · `IMPORTING` · `RESPONSE FOR FAILED/REPORTED` (BASIS 816). `MAPPED` · `TABLE`/`STRUCTURE FOR` · `EXPORTING`/`CHANGING`/`RETURNING` · yerel sınıf · INTF ÖLÇÜLMEDİ; tetik (türetilmiş tip mi `EARLY` eksikliği mi) ayrışmadı | Sınıfta isimli tip: `TYPES ty_failed TYPE RESPONSE FOR FAILED EARLY <bdef>.` → param `TYPE ty_failed` (her durumda geçerli çare). Kontrol: `checklist_check` BE-55 — ölçülen biçim FAIL, ölçülmemiş biçimler (yerel sınıf dahil) WARN "ÖLÇÜLMEDİ" |
+| Metot imzasında türetilmiş RAP tipi (`IMPORTING is_failed TYPE RESPONSE FOR FAILED <bdef>`) | Aynı save-scan reddi (400 `ExceptionResourceScanDuringSaveFailure` gövdesinde `OO_SOURCE_BASED 011`, satır no yok) — DEV_CORE #424; ölçülen: global sınıf · `IMPORTING` · `RESPONSE FOR FAILED/REPORTED` (BASIS 816). `MAPPED` · `TABLE`/`STRUCTURE FOR` · `EXPORTING`/`CHANGING`/`RETURNING` · yerel sınıf · INTF ÖLÇÜLMEDİ; tetik (türetilmiş tip mi `EARLY` eksikliği mi) ayrışmadı | Sınıfta isimli tip: `TYPES ty_failed TYPE RESPONSE FOR FAILED EARLY <bdef>.` → param `TYPE ty_failed` (ölçülen biçimde geçerli çare; öbür biçimlerde de önerilir, orada ayrıca ölçülmedi). Kontrol: `checklist_check` BE-55 — ölçülen biçim FAIL, ölçülmemiş biçimler (yerel sınıf dahil) WARN "ÖLÇÜLMEDİ" |
 
 **Genel Kural:**
 - Method imzasında (IMPORTING/EXPORTING/RETURNING) `CURR` tipli data element kullanma — `wrbtr`, `dmbtr` gibi `CURR` olmayan parasal tip kullan

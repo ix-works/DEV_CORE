@@ -1281,7 +1281,8 @@ def k_be55(d, c):
             # `IMPORTING` + `RESPONSE FOR FAILED|REPORTED <bdef>` (EARLY/LATE'siz; BASIS 816). Öbür
             # biçimler (TABLE/STRUCTURE FOR · MAPPED · EARLY/LATE · EXPORTING/CHANGING/RETURNING ·
             # yerel sınıf `.ccimp`/`.locals_imp` · INTF) ÖLÇÜLMEDİ ⇒ WARN; kesin kural sayılmaz.
-            # Ana kaynak = ad `.clas.abap` ya da `--ana-sinif` (run_review class_push: `ZCL_X.abap`).
+            # Ana kaynak = ad `.clas.abap` ya da ELLE verilen `--ana-sinif`. run_review class_push
+            # checklist_check'i yalnız `--ids BE-10b` ile çağırır ⇒ BE-55 class_push'ta KOŞMAZ.
             global_ana = bool(re.search(r"\.clas\.abap$", d.eslesme_adi or d.rel, re.I))
             for m in re.finditer(r"\bTYPE\s+(RESPONSE|TABLE|STRUCTURE)\s+FOR\b", kl, re.I):
                 bolumler = re.findall(r"\b(IMPORTING|EXPORTING|CHANGING|RETURNING|RAISING|EXCEPTIONS)\b",
