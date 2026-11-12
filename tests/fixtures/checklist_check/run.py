@@ -48,6 +48,7 @@ Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile e
   --mutasyon-tab          boşluklu yolda `+++` satırının TAB eki sökülmez
   --mutasyon-fe13-satir1  FE-13 satırı yine 1'e sabit
   --mutasyon-be01-satir1  BE-01 ad bulgusu yine 1. satıra bağlı
+  --mutasyon-be55-rap     BE-55 türetilmiş RAP tipi (`TYPE RESPONSE/TABLE/STRUCTURE FOR`) deseni yok (#424)
   --mutasyon-hukum-tum-hucre  verify-report hükmü kanıt dahil tüm hücrelerden okunur
   --mutasyon-celiski-pass ÇELİŞKİ yalnız rapor PASS'te (UYGULANMAZ/ÖLÇÜLEMEDİ/WARN kaçar)
   --mutasyon-bagsiz       çıplak FAIL kabul edilir
@@ -112,7 +113,7 @@ _GECERLI_KIP = frozenset({"--mutasyon-literal", "--mutasyon-degisen", "--mutasyo
                           "--mutasyon-birlestirme-yok", "--mutasyon-be50-clear", "--mutasyon-be50-kosullu",
                           "--mutasyon-kardes-disk", "--mutasyon-be50-select", "--mutasyon-be50-select-tumu",
                           "--mutasyon-be50-at", "--mutasyon-be50-ic-data", "--mutasyon-be16-measured",
-                          "--mutasyon-be16-rc", "--mutasyon-ids-bos"})
+                          "--mutasyon-be16-rc", "--mutasyon-ids-bos", "--mutasyon-be55-rap"})
 
 _MUT = {
     "--mutasyon-literal": (
@@ -227,6 +228,10 @@ _MUT = {
     "--mutasyon-be50-ic-data": (
         '            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad, baslangic):',
         '            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad, 0):'),
+    # DEV_CORE #424: türetilmiş RAP tipi deseni söküldü (eski k_be55 davranışı)
+    "--mutasyon-be55-rap": (
+        '            for m in re.finditer(r"\\bTYPE\\s+(RESPONSE|TABLE|STRUCTURE)\\s+FOR\\b", kl, re.I):',
+        '            for m in re.finditer(r"(?!x)x", kl, re.I):'),
     "--mutasyon-be16-measured": (
         '    if "measured=false" in (r.stdout or ""):',
         '    if False:'),
@@ -310,6 +315,7 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-be16-measured": {"B4"},
     "--mutasyon-be16-rc": {"B6"},
     "--mutasyon-ids-bos": {"X8b"},
+    "--mutasyon-be55-rap": {"BE-55/P-response", "BE-55/P-tablefor"},
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -466,6 +472,17 @@ VEKTORLER = [
     ("BE-51/N", "BE-51", {CLS: "  METHOD m.\n    DATA lv_x TYPE i.\n    lv_x = 1.\n  ENDMETHOD.\n"}, CLS, {"PASS"}),
     ("BE-55/P", "BE-55", {CLS: "    METHODS m IMPORTING it_x TYPE STANDARD TABLE OF i.\n"}, CLS, {"FAIL"}),
     ("BE-55/N", "BE-55", {CLS: "    METHODS m IMPORTING it_x TYPE tt_x.\n"}, CLS, {"PASS"}),
+    # DEV_CORE #424: türetilmiş RAP tipi imzada (ölçülen biçim: CLASS-METHODS + IMPORTING +
+    # RESPONSE FOR FAILED/REPORTED) — eski k_be55 PASS veriyordu. TABLE FOR biçimi ölçülmedi,
+    # aynı desen ailesi olarak kapsanır. NEGATİF: TYPES ile isimli tip + DATA satırı serbest.
+    ("BE-55/P-response", "BE-55", {CLS: "    CLASS-METHODS m IMPORTING is_failed TYPE RESPONSE FOR FAILED zi_sd001_demo\n"
+                                        "                              is_reported TYPE RESPONSE FOR REPORTED zi_sd001_demo.\n"},
+     CLS, {"FAIL"}),
+    ("BE-55/P-tablefor", "BE-55", {CLS: "    METHODS m IMPORTING it_k TYPE TABLE FOR CREATE zi_sd001_demo.\n"}, CLS, {"FAIL"}),
+    ("BE-55/N-isimli", "BE-55", {CLS: "    TYPES ty_failed TYPE RESPONSE FOR FAILED EARLY zi_sd001_demo.\n"
+                                      "    METHODS m IMPORTING is_failed TYPE ty_failed.\n"}, CLS, {"PASS"}),
+    ("BE-55/N-data", "BE-55", {CLS: "  METHOD m.\n    DATA ls_failed TYPE RESPONSE FOR FAILED EARLY zi_sd001_demo.\n"
+                                    "    DATA lt_k TYPE TABLE FOR CREATE zi_sd001_demo.\n  ENDMETHOD.\n"}, CLS, {"PASS"}),
     ("BE-57/P", "BE-57", {CLS: "    TYPES tt_x TYPE STANDARD TABLE OF i.\n    METHODS m RETURNING VALUE(rt) TYPE tt_x.\n"}, CLS, {"FAIL"}),
     ("BE-57/N", "BE-57", {CLS: "    TYPES tt_x TYPE STANDARD TABLE OF i WITH DEFAULT KEY.\n    METHODS m RETURNING VALUE(rt) TYPE tt_x.\n"}, CLS, {"PASS"}),
     ("BE-58/P", "BE-58", {PRG: "PARAMETERS p_uzunisim TYPE i.\n"}, PRG, {"FAIL"}),

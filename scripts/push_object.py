@@ -156,6 +156,42 @@ def kaynak_izi_satirlari(result, istenen_source_file=None):
     return satirlar
 
 
+# ── DEV_CORE Issue #423 (2026-11-12) — 409 UYARISI GERÇEK YANITI ÖRTMESİN ─────
+# Ölçülen vaka: biçim-1 PUT'u 400 `OO_SOURCE_BASED 011` (içerik reddi) aldı, sonraki biçimler
+# kendi kilidimize çarpıp 409 `CTS_WBO_API 019` aldı; çıktı yalnız 409'u ve "başka geliştiricinin
+# transport'u" uyarısını gösterdi, teşhis kilit yönünde yürüdü. İki kural:
+#   ① denemelerden biri 409-DIŞI bir hata aldıysa önce O yanıt gösterilir;
+#   ② 409 gövdesindeki T100KEY-V3 (transport) + V4 (kullanıcı) bu push'un transport'u ve
+#      oturum kullanıcısıysa "başka geliştirici" iddiası BASILMAZ (kullanıcı adı basılmaz).
+#   Biri okunamazsa eski (muhafazakâr) uyarı aynen basılır.
+def onceki_farkli_hatalar(denemeler):
+    """[(biçim, kod, öz)] içinde 409 ve 2xx DIŞI kodlu denemeler (sıra korunur)."""
+    out = []
+    for d in denemeler or []:
+        try:
+            kod = int(d[1])
+        except Exception:
+            continue
+        if kod != 409 and not (200 <= kod < 300):
+            out.append(d)
+    return out
+
+
+def _t100_degeri(metin, anahtar):
+    m = re.search(r"<entry\s+key=[\"']%s[\"']\s*>\s*([^<]*?)\s*</entry>" % re.escape(anahtar),
+                  metin or '')
+    return m.group(1) if m else None
+
+
+def kendi_kilidimiz_mi(metin, transport, kullanici):
+    """409 gövdesinde V3 == bu transport VE V4 == oturum kullanıcısı mı? Biri yoksa False."""
+    v3, v4 = _t100_degeri(metin, 'T100KEY-V3'), _t100_degeri(metin, 'T100KEY-V4')
+    if not (v3 and v4 and transport and kullanici):
+        return False
+    return v3.strip().upper() == str(transport).strip().upper() and \
+        v4.strip().upper() == str(kullanici).strip().upper()
+
+
 class _YonlendirenParser(argparse.ArgumentParser):
     """`--type` reddini AYNEN korur (exit 2), yalnız mesaja yönlendirme ekler."""
 
@@ -308,8 +344,25 @@ def main():
         print("[ACTION REQUIRED] Each retry may create new SAP transport tasks (ghost transports).")
         if error_type in ('SAPTransportError', 'SAPAuthenticationError'):
             print("[HINT] Run list_transports.py --modifiable-only and ask the user to pick a valid transport.")
+        # Issue #423 ①: 409-dışı hata alan deneme varsa ÖNCE o gösterilir (409 türev olabilir).
+        _denemeler = result.get('put_denemeleri') if isinstance(result, dict) else None
+        _farkli = onceki_farkli_hatalar(_denemeler)
+        if _farkli and str(_denemeler[-1][1]) == '409':
+            print("[HINT] Son yanit 409 olsa da su deneme(ler) 409-DISI hata aldi -- ONCE O YANITA BAK:")
+            for d in _farkli:
+                print(f"         {d[0]} -> {d[1]} -> {d[2]}")
+            print("[HINT] Sonraki 409, ilk denemenin biraktigi duruma (kendi kilidimiz) carpmis olabilir.")
         if error_type == 'SAPLockError':
-            if '409' in error or 'transport' in error.lower() or 'CORRNR' in error:
+            _govde = (error or '') + '\n' + str(result.get('error_response_text') or '')
+            _kullanici = getattr(getattr(client, 'adt_client', None), 'user', None)
+            if '409' in error and kendi_kilidimiz_mi(_govde, args.transport, _kullanici):
+                # Issue #423 ②: çakışan transport + kullanıcı bu push'un kendisi.
+                print("[HINT] 409 govdesindeki transport (V3) bu push'un transport'u, kullanici (V4) "
+                      "bu oturumun kullanicisi -- cakisma KENDI kilidimizle; baska gelistirici YOK.")
+                print("[HINT] Once ayni push'un onceki/paralel denemesine bak (yukaridaki denemeler, "
+                      "acik kalmis oturum). SM12'de kilidi KONTROL ET; silme karari kullanicidadir "
+                      "(ADR 0005-C).")
+            elif '409' in error or 'transport' in error.lower() or 'CORRNR' in error:
                 print("[HINT] Transport conflict: object is locked under a different transport.")
                 print("")
                 print("=" * 60)

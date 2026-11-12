@@ -362,7 +362,7 @@ ENDMETHOD.
 
 ### ETag — Optimistic Concurrency Control
 
-> **Kural:** Her transactional entity'de mutlaka bir ETag alanı (`ChangedAt` timestamp) tanımla. Frontend OData model otomatik olarak `If-Match` header gönderir.
+> **Kural:** Her transactional entity'de mutlaka bir ETag alanı (`ChangedAt` timestamp) tanımla. Frontend OData V2 model `If-Match` başlığını `update`/`remove`'da entity'nin ETag'inden otomatik ekler; **`callFunction` (function import / RAP instance action) için EKLEMEZ** — yalnız çağıran `mParameters.eTag` verirse gider (UI5 1.120 kaynağı, 2026-11-12). ETag'li BO'da action çağrısı `If-Match`'siz 428 alabilir ⇒ UI sözleşmesine "action çağrısı eTag taşır" yazılır (bkz. `playbook/checklists/bug-checklist-frontend.md` FE-55; RAP'te ETag'in OData'ya çıkması projeksiyonda `use etag` ister).
 
 ```abap
 " In MPC_EXT — mark the ETag property

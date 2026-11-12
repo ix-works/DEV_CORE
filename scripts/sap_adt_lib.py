@@ -503,6 +503,45 @@ def sap_hata_sebebi(govde):
     return {'metin': metin, 't100': t100, 'tip': tip}
 
 
+# ── DEV_CORE Issue #423 (2026-11-12): PUT TRANSPORT-BİÇİM DÖNGÜSÜ YALNIZ BİÇİM REDDİNDE SÜRER ──
+# `set_object_source` dört transport biçimini sırayla dener. Eskiden 2xx ve 423-NO_LOCK dışındaki
+# HER yanıt bir sonraki biçime düşüyor, yalnız SONUNCUNUN yanıtı raporlanıyordu. Ölçülen vaka
+# (tüketici, on-prem, global sınıf): biçim 1-2 → 400 `OO_SOURCE_BASED 011` (kayıt-anı tarama
+# reddi = KAYNAK İÇERİĞİ), biçim 3-4 → kendi kilidimize çarpan 409 `CTS_WBO_API 019`; araç yalnız
+# 409'u bastı, teşhis üç tur kilit yönünde yürüdü. İçerik reddini biçim değiştirmek çözmez.
+# Sonraki biçime GEÇİLEN sinyaller (gerekçesi yazılı olanlar, başka hiçbiri):
+#   · "Parameter … could not be found" — sistem `corrNr`'ı tanımıyor (orijinal yedek sebebi)
+#   · 409 — known-errors §12.7c eki 2026-10-12: yalnız header → 409, aynı handle'la `corrNr` →
+#     200 ölçüldü ⇒ 409 biçime bağlı olabilir (fixture `transport_yaklasim_sirasi` T3 sözleşmesi)
+#   · 412 — inaktif-ETag dalı yeni ETag'i "sonraki denemeler için" günceller; dal DEĞİŞMEDİ
+# Geri kalan her yanıt (400 · 403 · 404 · 423 · 5xx …) döngüyü DURDURUR ve O yanıt raporlanır.
+PUT_DENEME_OZU_SINIRI = 160
+
+
+def transport_bicim_reddi_mi(status_code, govde):
+    """PUT yanıtı transport BİÇİMİNİN reddi mi (sonraki biçim denenmeli mi)? Ağ yok, istisna atmaz."""
+    t = govde or ''
+    if 'Parameter' in t and 'could not be found' in t:
+        return True
+    return status_code in (409, 412)
+
+
+def put_deneme_ozu(govde):
+    """PUT denemesi yanıtından tek satırlık öz: `T100: metin` | gövdenin ilk N karakteri | (gövde yok)."""
+    sebep = sap_hata_sebebi(govde)
+    if sebep:
+        return f"{sebep['t100']}: {sebep['metin']}" if sebep.get('t100') else sebep['metin']
+    duz = ' '.join(str(govde or '').split())
+    if not duz:
+        return '(gövde yok)'
+    return duz if len(duz) <= PUT_DENEME_OZU_SINIRI else duz[:PUT_DENEME_OZU_SINIRI - 1] + '…'
+
+
+def put_denemeleri_metni(denemeler):
+    """[(biçim, kod, öz)] → `  1. biçim -> kod -> öz` satırları (hata metni + push_object ipucu)."""
+    return '\n'.join(f"  {i}. {d} -> {k} -> {o}" for i, (d, k, o) in enumerate(denemeler or [], 1))
+
+
 # ── Q383② (2026-11-07): KİLİT HATA ÖZETİ SAP SEBEBİNİ TAŞIR ────────────────────────────
 # `lock_object` tüm stratejileri düşünce özet eskiden `strateji -> 403` idi; gövdedeki T100
 # mesajı ATILIYOR, çare olarak koşulsuz "yetki (S_DEVELOP)" öneriliyordu. Ölçülen vaka: FUGR
@@ -3063,7 +3102,9 @@ class SAPADTClient:
             (False, False, 'no transport (object may not need it)'),
         ]
 
-        # Try each transport approach
+        # Try each transport approach — Issue #423: yalnız `transport_bicim_reddi_mi` doğruysa
+        # sonraki biçime geçilir; her deneme (biçim, kod, öz) olarak kaydedilir ve hata metnine girer.
+        denemeler = []
         for attempt_num, (use_header, use_param, desc) in enumerate(transport_approaches, 1):
             if self.debug_enabled:
                 self._debug(f"[DEBUG] set_object_source - approach {attempt_num}: {desc}")
@@ -3126,6 +3167,8 @@ class SAPADTClient:
                     self._debug(f"[DEBUG] set_object_source - SUCCESS with approach {attempt_num}")
                 return True
 
+            denemeler.append((desc, response.status_code, put_deneme_ozu(response.text)))
+
             # Handle 412 Precondition Failed (ETag mismatch) - retry with inactive ETag
             if response.status_code == 412:
                 if self.debug_enabled:
@@ -3154,43 +3197,63 @@ class SAPADTClient:
                                 if self.debug_enabled:
                                     self._debug("[DEBUG] set_object_source - SUCCESS with inactive ETag retry")
                                 return True
+                            denemeler.append((f"{desc} [412 sonrasi inaktif ETag tekrari]",
+                                              retry_resp.status_code, put_deneme_ozu(retry_resp.text)))
                 except Exception as e_retry:
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] set_object_source - 412 retry failed: {str(e_retry)[:100]}")
 
-            # If this approach failed with specific parameter error, try next approach
-            if 'Parameter' in response.text and 'could not be found' in response.text:
+            # Issue #423: sonraki biçime YALNIZ transport-biçimi reddinde geçilir (yukarıdaki
+            # `transport_bicim_reddi_mi` gerekçesi). Son biçimde de reddedilirse aşağıda raporlanır —
+            # eskiden son biçimdeki "Parameter … could not be found" döngüyü bitirip `True`
+            # döndürüyordu (yazılmamış kaynak için sahte başarı).
+            _son = attempt_num == len(transport_approaches)
+            if transport_bicim_reddi_mi(response.status_code, response.text) and not _son:
                 if self.debug_enabled:
-                    self._debug(f"[DEBUG] set_object_source - parameter error with approach {attempt_num}, trying next")
+                    self._debug(f"[DEBUG] set_object_source - transport-format rejection "
+                                f"({response.status_code}) with approach {attempt_num}, trying next")
                 continue  # Try next approach
 
-            # For other errors, check if we should try next approach or fail
-            if attempt_num == len(transport_approaches):
-                # Last attempt failed
-                if self.debug_enabled:
-                    self._debug(f"[DEBUG] set_object_source - All {len(transport_approaches)} transport approaches failed")
-                # ADT hata yanıtı ÇOK-MESAJLI XML olabilir (headline + satır-numaralı asıl
-                # hata). Eskiden response.text[:300] ile kesiliyordu → gerçek (line-no) hata
-                # gizleniyordu (ZSD001 C4 patinajı: "unknown comments" headline'dı, asıl hata
-                # truncate'liydi). Artık TAM yanıt yakalanır. (Fix 2026-06-15, kullanıcı içgörüsü.)
-                _full = response.text or ''
-                print(f"[set_object_source] FULL ERROR RESPONSE ({response.status_code}), "
-                      f"{len(_full)} chars:\n{_full}")
+            # DUR: bu yanıt (içerik/sunucu reddi ya da son biçim) çağırana raporlanır.
+            if self.debug_enabled:
+                self._debug(f"[DEBUG] set_object_source - stopping at approach {attempt_num} "
+                            f"({response.status_code})")
+            # ADT hata yanıtı ÇOK-MESAJLI XML olabilir (headline + satır-numaralı asıl
+            # hata). Eskiden response.text[:300] ile kesiliyordu → gerçek (line-no) hata
+            # gizleniyordu (ZSD001 C4 patinajı: "unknown comments" headline'dı, asıl hata
+            # truncate'liydi). Artık TAM yanıt yakalanır. (Fix 2026-06-15, kullanıcı içgörüsü.)
+            _full = response.text or ''
+            _liste = put_denemeleri_metni(denemeler)
+            print(f"[set_object_source] DENEMELER ({len(denemeler)}):\n{_liste}")
+            print(f"[set_object_source] FULL ERROR RESPONSE ({response.status_code}), "
+                  f"{len(_full)} chars:\n{_full}")
 
-                # ── 423 = §12.7'nin SEMPTOMU: teşhis TAM BURADA basılır ────────────────
-                _tani = ''
-                if response.status_code == 423:
-                    _tani = self.put_423_diagnosis(object_url, transport)
-                    print(_tani)
+            # ── 423 = §12.7'nin SEMPTOMU: teşhis TAM BURADA basılır ────────────────
+            _tani = ''
+            if response.status_code == 423:
+                _tani = self.put_423_diagnosis(object_url, transport)
+                print(_tani)
 
-                raise SAPADTError(
-                    f"Failed to set source after {len(transport_approaches)} attempts. "
-                    f"Response ({response.status_code}), FULL:\n{_full}{_tani}",
-                    status_code=response.status_code,
-                    response_text=_full
-                )
+            if _son:
+                _bas = f"Failed to set source after {attempt_num} attempts."
+            else:
+                _bas = (f"Failed to set source: transport-bicim denemesi {attempt_num}/"
+                        f"{len(transport_approaches)}'de DURDU — HTTP {response.status_code} "
+                        f"transport-bicimi reddi degil (icerik/sunucu yaniti); sonraki "
+                        f"bicimler DENENMEDI.")
+            _hata = SAPADTError(
+                f"{_bas}\nDENEMELER ({len(denemeler)}):\n{_liste}\n"
+                f"Response ({response.status_code}), FULL:\n{_full}{_tani}",
+                status_code=response.status_code,
+                response_text=_full
+            )
+            _hata.denemeler = list(denemeler)
+            raise _hata
 
-        return True
+        # Döngü ya başarıyla döner ya da son biçimde raporlayıp fırlatır; buraya düşmek bir
+        # kod kusurudur ⇒ sahte başarı (`True`) yerine fail-closed.
+        raise SAPADTError("set_object_source: transport-bicim dongusu sonuc uretmedi "
+                          f"(denemeler={len(denemeler)})")
 
     def set_include_source(self, include_url, source_code, lock_handle, transport=None, etag=None):
         """PUT source code directly to a method-level include URL.

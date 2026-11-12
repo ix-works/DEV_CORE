@@ -248,6 +248,24 @@ def classrun_istek_gitmedi(exc: BaseException) -> bool:
     return False
 
 
+def _hata_ayrintisi_ekle(result: Dict[str, Any], exc: BaseException) -> None:
+    """Issue #423: push hata dalında `push_object.py`'nin ipucu kararı için iki ham ayrıntı.
+
+    `put_denemeleri` = `set_object_source`'un [(biçim, kod, öz)] listesi (yoksa anahtar EKLENMEZ);
+    `error_response_text` = istisnanın taşıdığı ham SAP gövdesi (409'da T100KEY-V3/V4 burada).
+    Sonuç alanları (`success`/`error`/`error_type`) DEĞİŞMEZ; istisna atmaz.
+    """
+    try:
+        den = getattr(exc, 'denemeler', None)
+        if den:
+            result['put_denemeleri'] = [list(d) for d in den]
+        govde = getattr(exc, 'response_text', None)
+        if govde:
+            result['error_response_text'] = str(govde)
+    except Exception:  # noqa: BLE001 — ayrıntı eklemek hata akışını bozamaz
+        pass
+
+
 class SAPClient:
     """High-level SAP ABAP Development Client"""
 
@@ -992,6 +1010,7 @@ class SAPClient:
         except Exception as e:
             result['error'] = str(e)
             result['error_type'] = type(e).__name__
+            _hata_ayrintisi_ekle(result, e)   # Issue #423
             print(f"\n[ERROR] {result['error'][:600]}")
             return result
         finally:
@@ -1542,6 +1561,7 @@ class SAPClient:
             error_str = str(e)
             result['error'] = error_str
             result['error_type'] = type(e).__name__
+            _hata_ayrintisi_ekle(result, e)   # Issue #423
             print(f"\n[ERROR] {error_str}")
 
             if isinstance(e, SAPLockError) and getattr(e, 'status_code', None) == 409:

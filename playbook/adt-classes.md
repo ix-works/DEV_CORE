@@ -131,6 +131,7 @@ python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --name
 | `TYPE zz1_discount_code` | Aynı sebep | `TYPE char3` kullan |
 | `RETURNING VALUE(...) TYPE netwr` | `netwr` CURR tipi — method imzasında CURR/P DECIMALS scan tarafından reddediliyor | `TYPE wrbtr` kullan |
 | `CONV netwr(...)` / `COND netwr(...)` | Aynı CURR tipi sorunu | `CONV wrbtr(...)` / `COND wrbtr(...)` kullan |
+| Metot imzasında türetilmiş RAP tipi (`IMPORTING is_failed TYPE RESPONSE FOR FAILED <bdef>`) | Aynı save-scan reddi (`OO_SOURCE_BASED 011`, satır no yok) — DEV_CORE #424; ölçülen: global sınıf · `IMPORTING` · `RESPONSE FOR FAILED/REPORTED` (BASIS 816). `MAPPED` · `TABLE`/`STRUCTURE FOR` · `EXPORTING`/`CHANGING`/`RETURNING` · yerel sınıf · INTF ÖLÇÜLMEDİ; tetik (türetilmiş tip mi `EARLY` eksikliği mi) ayrışmadı | Sınıfta isimli tip: `TYPES ty_failed TYPE RESPONSE FOR FAILED EARLY <bdef>.` → param `TYPE ty_failed` (her durumda geçerli çare). Kontrol: `checklist_check` BE-55 |
 
 **Genel Kural:**
 - Method imzasında (IMPORTING/EXPORTING/RETURNING) `CURR` tipli data element kullanma — `wrbtr`, `dmbtr` gibi `CURR` olmayan parasal tip kullan
@@ -182,7 +183,7 @@ try_push(minimal, 'minimal baseline')
 | Hata | Sebep | Çözüm |
 |------|-------|-------|
 | `ExceptionResourceScanDuringSaveFailure` | Kodda tarama reddeden tip var | Bisect yap — bkz 24.6 |
-| `409 Conflict` (lock) | Başka lock var | SM12'den temizle, retry yapma |
+| `409 Conflict` (lock, ör. `CTS_WBO_API 019`) | Başka bir kilit — ya da AYNI push'un önceki denemesinin bıraktığı durum (DEV_CORE #423: biçim-1 400 içerik reddinden sonra yedek biçimler kendi kilidimize çarpıp 409 aldı) | ÖNCE ilk denemenin yanıtına bak (`set_object_source` hata metnindeki DENEMELER listesi; `push_object.py` 409-dışı denemeyi "ONCE O YANITA BAK" diye basar) · gövdedeki `T100KEY-V3`/`V4` bu push'un transport'u + kullanıcısı mı · SM12'de kilidi KONTROL ET — kilidi SİLMEK kullanıcı kararıdır (ADR 0005-C), ajan önermez · retry yapma |
 | `412 PreconditionFailed` | Yanlış ETag | `source/main` endpoint'inden ETag al |
 | `400 lockHandle not found` | Lock handle eksik | `push_object.py` kullan (SAPClient) — manuel PUT yapma |
 | Tüm method bisect'te FAIL | Sorun IMPL'de değil DEFINITION'da | DEFINITION bölümünü bisect et |

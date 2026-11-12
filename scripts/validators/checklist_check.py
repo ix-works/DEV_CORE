@@ -1275,6 +1275,14 @@ def k_be55(d, c):
             for m in re.finditer(r"\bTYPE\s+(?:STANDARD\s+|SORTED\s+|HASHED\s+|INDEX\s+|ANY\s+)?TABLE\s+OF\b", kl, re.I):
                 out.append(F(_ilk_satir(bas, kl, m.start()),
                              "metot arayüzünde anonim `TYPE … TABLE OF` → isimli tablo tipi (TYPES tt_x …)"))
+            # DEV_CORE #424: türetilmiş RAP tipi aynı OO_SOURCE_BASED 011 reddini üretti (ölçülen:
+            # global sınıf, IMPORTING, RESPONSE FOR FAILED/REPORTED). TYPES/DATA satırları bu
+            # ifade filtresine girmez ⇒ `DATA ls_failed TYPE RESPONSE FOR FAILED EARLY …` serbest.
+            for m in re.finditer(r"\bTYPE\s+(RESPONSE|TABLE|STRUCTURE)\s+FOR\b", kl, re.I):
+                out.append(F(_ilk_satir(bas, kl, m.start()),
+                             f"metot arayüzünde türetilmiş RAP tipi `TYPE {m.group(1).upper()} FOR …` → "
+                             f"sınıfta TYPES ile isimli tip (ör. `TYPES ty_x TYPE RESPONSE FOR FAILED "
+                             f"EARLY <bdef>.`), parametre `TYPE ty_x`"))
     return out
 
 
