@@ -1,6 +1,6 @@
 ---
 name: feedback_clean-core-released-cds-proaktif
-description: "CDS/RAP yazmadan ÖNCE released CDS tercih et (MARA değil I_Product); released-WARNING'i sessiz geçme"
+description: "YENİ CDS/RAP kodu yazmadan ÖNCE released CDS tercih et (MARA değil I_Product), released-WARNING'i sessiz geçme; mevcut programlardaki ham tablo kullanımı muaftır (proje politikası aksini demiyorsa) — iş kalemi açılmaz, migrasyon önerilmez"
 metadata: 
   node_type: memory
   type: feedback
@@ -21,6 +21,11 @@ kapsamın tohuma (tüm core kullanıcılarına) girmesini onayladı.
 durumdur**; ne ATC prio-1 ne reviewer WARNING üzerinden **iş kalemi açılır**. Bu bulgular
 envanterdir, borç değil. Released-CDS disiplini **yazılmakta olan** koda uygulanır.
 ⛔ Migrasyon **önerme**; kullanıcı özellikle istemedikçe gündeme getirme.
+📐 **Kapsam (çekirdekle hizalı):** bu muafiyet **varsayılandır**; çekirdek CDS-DCL-02 / BE-68 gereği
+migrasyon bir **proje politikası** kararıdır ⇒ projenin clean-core politikası (ör. `project.yaml`
+`cleancore_policy: strict` ya da yazılı proje kararı) mevcut kodun da taşınmasını istiyorsa o geçerlidir.
+Politika bunu söylemiyorsa bu kayıt uygulanır. ATC P1 kuralıyla ilişki: kardeş derste istisna satırı
+([[feedback_atc-priority-1-zorunlu]] "İstisna — clean-core muafiyeti").
 
 **Vaka (2026-08-14):** bir sipariş yönetimi sınıfında ATC 13 prio-1 (hepsi KNVV/KNA1/KNVP,
 Note 0003067314) görüldü ve lider bunu ertelenmiş-iş listesine **"yapılacak"** diye yazdı —
@@ -46,3 +51,5 @@ migrasyona karşı **ek** bir sebeptir, tek başına sebep değil.
 **How to apply:** CDS/RAP işine başlarken `released_successors.json`'a bak (skill TETİKLEMELİ YÜKLEME CDS/RAP satırı + checklist C-CDS-FROM-04 / C-RAP-REL-01 hatırlatır). Tüm-tip released-API (class/FM) için SAP yerel ATC "Usage of APIs" otoriter. Dil-versiyonu/no-classic Clean Core aileleri bize uygulanmaz (dual-track on-prem). Bkz. [[feedback_atc-priority-1-zorunlu]] (aynı sessiz-pass disiplini).
 
 **KULLANICI "MARM/std tablo kullan" DESE BİLE released successor varsa ONU kullan (2026-06-12, ZSD001 PAK):** Kullanıcı tüm alternatif CDS'leri bilemeyebilir; "MARM kullan" demesi **veriyi** kasteder, released eşdeğerini YASAKLAMAZ. Reviewer/`released_successors.json` bir successor öneriyorsa (MARM→I_ProductUnitsOfMeasure gibi) released'ı kullan. Kullanıcının sözü: "ben marm derim ama sistem zaten biliyor ve I_PRODUCTUNITSOFMEASURE kullan diyor; bu kullanmana engel olmamalı." Sadece released gerçekten işi yapamıyorsa (eksik alan vb.) std tabloya düş + gerekçeyi bildir. **Operasyonel tuzak:** released UoM çevrim alanları (I_ProductUnitsOfMeasure.QuantityNumerator=umrez / QuantityDenominator=umren) `@Semantics.quantity` (birim-referanslı) → aritmetik/CASE'te doğrudan kullanınca "Elements with required UNIT-reference are not supported" aktivasyon hatası; önce `cast( ... as abap.dec(n,m) )` ile birim semantiğini sıyır.
+
+Son-doğrulama: 2026-11-12 (kapsam: muafiyet varsayılan, proje politikası üstün) · Applies-to: s4_private/s4_public/btp_abap — CDS/RAP/ABAP okuma kodu yazan tüm projeler

@@ -84,7 +84,7 @@ dersinin bir ust katmandaki hali.
 Bellek dersi alt ajanlara ulaşmadığı için backend-expert yeni metotta CONV'suz yazdı; run_review + bug-gate PASS, toplu aktivasyon 5× "incompatible" ile iptal (aktif sürüm korunmuştu). **Terfi edildi:** core `playbook/checklists/bug-checklist-backend.md` **BE-80** — artık bug-expert/backend-expert checklist'inde. Ön-tarama deseni: `grep -niE "VALUE [^ (]*\( \( '"` + satır tipinin NUMC olup olmadığı (DD04L) (eski desen tip adlı `VALUE zcl_…=>tt( ( '…' ) )` satırını kaçırıyordu; yeni desen iki eski hatalı sürümde 5/5, düzeltilmişte 0). Son-doğrulama: 2026-10-04 · Applies-to: ABAP sınıf/test include, NUMC DTEL.
 
 ---
-**Son-dogrulama:** 2026-09-05 (ders yazim tarihi — o gunden beri YENIDEN OLCULMEDI) · **Applies-to:** bu cekirdegi kullanan tum projeler
+**Son-dogrulama:** 2026-10-04 (Vaka 3 — NUMC bicimi, BE-80'e terfi; ana ders 2026-09-05'ten beri YENIDEN OLCULMEDI) · **Applies-to:** bu cekirdegi kullanan tum projeler
 
 ⚠ **ARAC IDDIASI** — bu ders *"bugun su arac/kapi boyle davraniyor"* der, yapisal bir olgu
 degil. Arac surumu degismis olabilir: davranisa **dayanmadan once bir kez olc**. (Vaka: bir

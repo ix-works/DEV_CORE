@@ -18,6 +18,10 @@ Prio-2/3 = düşük öncelik, şu aşamada bloke etmesin.
 - `adt_atc_check` (mcp_servers/sap_adt/tools/query.py) yanıtında `priority_1_count`,
   `other_priority_count`, `must_fix` (prio1>0), `policy` alanları var.
 - `must_fix=True` (Priority 1 bulgu var) → **DUR, düzelt** (forward progress yok).
+  ⚖ **İstisna — clean-core muafiyeti:** mevcut (bu turun yazmadığı) kodda ham standart tablo
+  okumasından doğan released-API P1 ailesi (ör. KNA1/KNVV/KNVP, "Usage of APIs") bu turun düzeltme
+  kalemi değildir ve migrasyon önerilmez — projenin clean-core politikası aksini söylemiyorsa
+  ([[feedback_clean-core-released-cds-proaktif]]). Bu turun yazdığı kodda aynı bulgu → DUR, düzelt.
 - Sadece Priority 2/3 varsa → kullanıcıya bulguları **göster + açık onay iste** ("pass geçeyim mi?");
   onay gelirse pass. Sessizce/otomatik pass GEÇME — onay şart (ADR 0011 onay-kelimesi mantığı gibi).
 - ATC variant sisteme özgü ZZNDBS_ATC (`.conn_adt` ADT_ATC_VARIANT). Bkz. [[feedback_mcp-post-shell-en-master-lang]] kardeşi reviewer kültürü (ADR 0006).
@@ -80,6 +84,11 @@ YANLIŞTI ve gateway ölçerek çürüttü.** Push yetmez: **aktivasyona kadar A
 ⇒ `adt_syntax_check`'i "aktivasyon öncesi ayrı adım" sanmak da aynı hatanın kardeşi: o araç
 **temizse AKTİVE EDER** (core PATTERN #20), ayrı bir adım olarak var olamaz. Derlenirlik kanıtı
 **aktivasyonun kendisidir**.
+⚠ **Şerh (Q360, 2026-10-12 — bu paragraf ondan önce yazıldı):** `adt_syntax_check`'in varsayılan
+kanalı artık **salt-okur** checkrun'dır (`version=inactive`); "temizse aktive eder" davranışı yalnız
+geri dönüş kipinde (`_SOZDIZIMI_KAYNAGI="aktivasyon"`) geçerlidir — kanonik:
+`core/playbook/adt-mcp.md` "GÜNCELLEME 2026-10-12 (Q360)". ATC için yukarıdaki sıra
+(push → AKTİVE → ATC) değişmedi: ATC hâlâ aktif sürümü ölçer.
 
 ### ⭐ TEK ATIŞLIK ATC KAPI DEĞİLDİR — BASELINE ↔ SONRASI karşılaştır
 Aktivasyondan sonraki tek bir ATC koşusu *"bu turun ürettiği"* ile *"zaten oradaki"* bulguyu

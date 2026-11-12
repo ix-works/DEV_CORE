@@ -1,6 +1,6 @@
 ---
 name: feedback_playwright-ui5-firepress-model-api
-description: UI5 doğrulamada playwright .click() bazen tetiklemez → firePress/controller-invoke + model API ile sayısal doğrula
+description: "UI5 doğrulamada playwright .click() bazen tetiklemez → firePress/controller-invoke + model API ile sayısal doğrula; MessageBox butonunda TERSİ — firePress onClose'u tetiklemez, DOM click gerekir"
 metadata: 
   node_type: memory
   type: feedback
