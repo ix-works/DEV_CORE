@@ -375,6 +375,12 @@ def settings_tazele(proje: Path) -> bool:
         print(f"  + EKLENECEK      {KK.bicim(b)}")
     for b, p_eslik in k["eslesik_farki"]:
         print(f"  ~ DOKUNULMAYACAK {KK.bicim(b)} — projede eşleyici `{p_eslik or '-'}` (karar kullanıcının)")
+    for b in k["kapsanan"]:
+        print(f"  = KAPSANIYOR     {KK.bicim(b)} — projede birleşik eşleyiciyle ZATEN kablolu "
+              f"(yeniden eklenmez: çift koşum olurdu)")
+    for b, komut in k["bicim_farki"]:
+        print(f"  ~ DOKUNULMAYACAK {KK.bicim(b)} — projede TANINMAYAN biçimde var: `{komut[:100]}` "
+              f"(yeniden eklenmez: çift koşum olurdu; karar kullanıcının)")
     for b in k["ek"]:
         print(f"  = KORUNACAK      {KK.bicim(b)} (proje eki)")
     if KK.hepsi_kapali(eski):
@@ -744,11 +750,9 @@ def sablon_sapmasi(proje: Path) -> int:
             komut = (f"önce farkı gör + yedekli tazele: python core/scripts/team_setup.py "
                      f"{TAZELENEBILIR[rel_y]} (proje İLERİDE olabilir — fark raporunu oku)")
         elif rel_y == ".claude/settings.json":
-            # Q406: eksik şablon KANCASI için onaylı ekleme yolu var (tam-dosya tazeleme DEĞİL).
-            komut = (f"eksik şablon kancası için: python core/scripts/team_setup.py "
-                     f"--tazele-settings (yalnız EKSİK kancaları ekler, proje eklerine dokunmaz) · "
-                     f"diğer farklar: git diff --no-index core/{rel_t} {rel_y} "
-                     f"(otomatik tazeleme YOK — proje ekleri meşru)")
+            # Q406 F3: onarım metni TEK KAYNAKTA (`D7_CIFTLERI` settings çifti — eksik kanca →
+            # --tazele-settings, diğer farklar → git diff + elle birleştir); burada kopyalanmaz.
+            komut = sapma_onarim
         else:
             komut = (f"{sapma_onarim} · fark: git diff --no-index core/{rel_t} {rel_y} "
                      f"(otomatik tazeleme YOK — proje ekleri meşru)")

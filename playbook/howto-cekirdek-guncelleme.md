@@ -94,9 +94,11 @@ kurulumu + npm CLI'ler → **memory tohumu** (`seed_memory.py`, merge-safe) → 
   (ikisi de önce farkı ve yönü basar, yedek alır; **TERS YÖN** satırı varsa proje İLERİDEDİR —
   satırları okumadan onaylama). settings için **tam-dosya** tazeleme YOK (proje eklerini
   silerdi — F12b); **eksik şablon kancası** için `python core/scripts/team_setup.py
-  --tazele-settings` (Q406, 2026-11-12): önce `+ EKLENECEK / ~ DOKUNULMAYACAK / = KORUNACAK`
-  fark raporu basar, yedek (`settings.json.yedek-<sha8>`) alır, YALNIZ eksik (olay, eşleyici,
-  kanca) bağlantısını ekler — izin/env/statusLine/proje kancası silinmez ya da değişmez;
+  --tazele-settings` (Q406, 2026-11-12): yazmadan önce, AYNI çağrıda `+ EKLENECEK / = KAPSANIYOR /
+  ~ DOKUNULMAYACAK / = KORUNACAK` fark raporu basar (kuru koşum yok — onayı 4h satırındaki kanca
+  adlarıyla al, §6a ①), yedek (`settings.json.yedek-<sha8>`) alır, YALNIZ eksik (olay, eşleyici,
+  kanca) bağlantısını ekler — birleşik eşleyiciyle zaten kapsanan ya da tanınmayan biçimde var olan
+  kancayı yeniden EKLEMEZ (çift koşum olurdu) — izin/env/statusLine/proje kancası silinmez ya da değişmez;
   doğrulayamazsa yedekten geri yükler. "Eşleyici farklı" satırı EKLENMEZ (kararı kullanıcı
   verir). Kanca dışı farklar için `git diff --no-index core/claude/settings.template.json
   .claude/settings.json` ile elle birleştir. Ekleme davranış yüzeyidir ⇒ proje PR'ıyla commit +
@@ -359,13 +361,14 @@ CORE-INDEX FAIL verirse: `python core/scripts/build_core_index.py`.
 
 ### 6a. `ix_doctor` bir şey bulursa — her satırı ÜÇ sınıftan birine koy
 
-`ix_doctor` **salt-okurdur**: hiçbir şeyi düzeltmez, Issue açmaz; her kontrol için PASS/WARN/FAIL
+`ix_doctor` **projeyi ve ayarları değiştirmez**: hiçbir şeyi düzeltmez, Issue açmaz; yalnız `.tmp`
+altına yazar (4i smoke log satırları; 4j recall indeksini tazeleyebilir); her kontrol için PASS/WARN/FAIL
 ve çoğunda bir `onarım:` / `düzelt:` ipucu basar. Ne yapılacağına **bu adımı yürüten** karar
 verir. FAIL'ler **ve** WARN'lar tek tek, sırayla şu üç sınıftan birine konur:
 
 | Sınıf | Ölçüt | Ne yapılır |
 |---|---|---|
-| **① ONAR** (Claude yapar) | Satır bir onarım komutu veriyor **ve** komut yalnız bu projenin kurulumunu ya da çekirdek klonunun yerel ayarını değiştiriyor: `team_setup` (`--repair-junctions` dahil; `--tazele-settings` = 4h "şablon kancası EKSİK" satırının onarımı — fark raporunu kullanıcıya göster, satırları okumadan onaylatma) · `seed_memory` · `build_core_index` · `build_recall_index` (4j indeks YOK/BAYAT) · `git -C core config …` | Komutu koş → `ix_doctor`'u (gerekirse `--layer N`) yeniden koş → satırın PASS olduğunu göster. Hâlâ FAIL ise ③'e geç. |
+| **① ONAR** (Claude yapar) | Satır bir onarım komutu veriyor **ve** komut yalnız bu projenin kurulumunu ya da çekirdek klonunun yerel ayarını değiştiriyor: `team_setup` (`--repair-junctions` dahil; `--tazele-settings` = 4h "şablon kancası EKSİK" satırının onarımı. Araçta kuru koşum YOK, fark raporu yazımla AYNI çağrıda basılır ⇒ sıra: **önce** 4h FAIL satırındaki eksik kanca adlarını kullanıcıya göster → kullanıcı onaylar → komutu koş → basılan fark raporunu (`+ EKLENECEK` / `= KAPSANIYOR` / `~ DOKUNULMAYACAK` / `= KORUNACAK`) kullanıcıya göster. 4h satırı yalnız "eşleyici FARKLI" ya da "TANINMAYAN biçim" WARN'ıysa bu komut onu düzeltmez → ②. Yerel ayar dosyası (`settings.local.json`, kullanıcı ayarı, managed policy) kancaları 4h'nin dışındadır.) · `seed_memory` · `build_core_index` · `build_recall_index` (4j indeks YOK/BAYAT) · `git -C core config …` | Komutu koş → `ix_doctor`'u (gerekirse `--layer N`) yeniden koş → satırın PASS olduğunu göster. Hâlâ FAIL ise ③'e geç. |
 | **② KULLANICI** (Claude yapamaz ya da yapmamalı) | Kimlik/şifre (`.conn_adt`) · yetki ya da hesap (`gh auth`, repo/ruleset/CI sahipliği, hafıza yedeği için repo açmak) · yazılım kurulumu (CLI, Claude Code sürümü, plugin) · makine geneli ya da yönetici ayarı (managed-policy, PowerShell politikası, git **global** ayarları) · yarım iş olabilecek durum (çalışma ağacı kirli, `main ≠ origin/main`) | Ne gerektiğini tek satırla söyle, satırdaki ipucunu ver, kullanıcının yapmasını bekle; sonra yeniden ölç. Şifre ya da anahtarı Claude yazmaz. |
 | **③ ÇEKİRDEK HATASI** (sahibine bildirilir) | Kurulum doğru olduğu hâlde çekirdeğin kendi dosyası ya da aracı yanlış davranıyor: ① uygulandığı hâlde süren FAIL · hook smoke / guard kablolaması FAIL'i (4i satırı her FAIL'de sınıfını kendisi yazar: `CORE JUNCTION KOPUK` → ①, yorumlayıcı başlamıyor / kanca çekirdekte yok → ②, kanca ÇÖKTÜ · girdiyi parse edemedi · rc≠0 · SESSİZ kaldı → ③) · yolu çekirdeğe çözülen bir dosyada frontmatter uyarısı · `katman çalıştırılamadı` (aracın kendisi çöktü) | Çekirdek dosyasına yerelde **DOKUNMA** (junction'dır, her projeyi etkiler, sonraki güncellemede çakışır). [`howto-cekirdek-bulgu-bildirimi.md`](howto-cekirdek-bulgu-bildirimi.md) §1–§2 biçiminde Issue **taslağı** hazırla, kullanıcıya göster; Issue public yayındır ⇒ **açık onayla** açılır. Çekirdek sahibinin makinesindeysen Issue yerine çekirdekte normal infra düzeltme süreci işler. |
 

@@ -3896,8 +3896,8 @@ python tests/run_battery.py q403_ns_ad_kardesleri --kardes pbe_msag_textpool q39
 ## B110 — `ix_doctor` 4h/4i/4j (kanca kablolaması ad düzeyi · tüm kancalara smoke · recall sağlığı) + `team_setup --tazele-settings` + `parity_probe` kanca satırı (Q406 / Q408 İP-2, 2026-11-12)
 
 ```
-python tests/fixtures/kanca_kablolama/run.py      # 27/27 (SAP/ağ yok; kancalar GERÇEK alt süreçte, ~1-2 dk)
-python tests/run_battery.py kanca_kablolama --kardes d7_drift_imzasi frontmatter_lint ix_doctor_kablolama ix_doctor_surum_yorumlayici ix_doctor_repo_mode ix_doctor_ps_politika team_setup_sablon_sapmasi team_setup_hook_kablolama shim_tazeleme parity_probe_diff core_fiziksel_kopya team_setup_gitignore_blok --kardes-tam --precommit
+python tests/fixtures/kanca_kablolama/run.py      # 43/43 (SAP/ağ yok; kancalar GERÇEK alt süreçte, ~20-40 sn)
+python tests/run_battery.py kanca_kablolama --kardes d7_drift_imzasi frontmatter_lint ix_doctor_kablolama ix_doctor_surum_yorumlayici ix_doctor_repo_mode ix_doctor_ps_politika team_setup_sablon_sapmasi team_setup_hook_kablolama shim_tazeleme parity_probe_diff core_fiziksel_kopya team_setup_gitignore_blok mcp_import_denetimi overlay_materyalize_atomik worktree_yasam_dongusu overlay_oto_tazeleme overlay_kiyas_tabani --kardes-tam --precommit
 ```
 
 - **Kum = sahte "mevcut proje", boş dizin DEĞİL:** eski durumlu `settings.json` + gerçek `core` bağı (Windows junction / POSIX symlink, `_bag`) + gerçek `scripts/hook_shim.py` (şablondan); kancalar `hook_shim.py <kanca>` alt sürecinde koşar. Kum silinirken ÖNCE bağ kaldırılır (`_sil`) — `rmtree` bağın HEDEFİNE (worktree) inmez.
@@ -3907,4 +3907,11 @@ python tests/run_battery.py kanca_kablolama --kardes d7_drift_imzasi frontmatter
 - ⛔ **Smoke örneği ŞABLONLA birlikte büyür:** şablona yeni kanca eklenirse `ix_doctor._smoke_ornekleri`'ne zararsız örnek girdi eklenmezse T1 kırmızı yanar ve canlı `ix_doctor` 4i FAIL ③ basar (tasarım: ölçülmeyen kanca PASS sayılmaz).
 - ⛔ **`_comment*` elemesi `drift_imzasi.yorumsuz`'dan:** `kanca_kablolari` kendi `startswith("_comment")`ını yazarsa `d7_drift_imzasi` V16 kırmızı (tek tanım) — V17 tüketici kümesi `kanca_kablolari`'nı beyan eder.
 - **Yan etki (kasıtlı, kapsam beyanında yazılı):** 4i her koşumda `.tmp/instructions-loaded.log` ve `.tmp/config-changes.log`'a birer `ix_doctor_smoke` satırı yazar; 4j indeks YOK/BAYAT ise kancanın kendi tazelemesini tetikler (`.tmp/recall-index.json` + `.status`).
-- **ÖLÇÜLMEDİ (yerelde):** POSIX/CI (symlink bağ · `#!/bin/sh` stub · PYTHONPATH zehri) — CI'da görülür · eski bir `hook_shim.py` sürümüyle M1 · `session_start` YÜKLEME satırının `ix_doctor_smoke` log satırından etkilenmediği.
+- **ÖLÇÜLMEDİ (yerelde):** POSIX/CI (symlink bağ · `#!/bin/sh` stub · PYTHONPATH zehri) — CI'da görülür · eski bir `hook_shim.py` sürümüyle M1.
+- **DÜZELTME TURU (bug-gate PR #429 WARNING, 2026-11-12) — 43 vektör, 19 mutasyon kipi:**
+  `run.py` ⇒ **43/43** · `--kaynak .tmp/ix_doctor_head.py` (`git show HEAD:` ilk tur) ⇒ **36/43** (M6 U7b D2 L1 S2 R1 M5a kırmızı) · `--kaynak-inspector .tmp/inspector_taban.py` (`git show HEAD:scripts/inspector.py`) ⇒ **42/43** (I1 kırmızı).
+  Yeni kip → düşmesi İLAN edilen: `tirnak-kor` U5 · `ham-ag-yok` U7 · `kapsama-yok` U8 M6 · `tek-kayit` R1 · `kapali-kor` D1 · `dizge-kor` D2 · `smoke-sayilir` I1 · `local-kor` L1 · `shimdisi-sessiz` S2 · `genel-sapma` F3 (settings çiftini `_GENEL_SAPMA`'ya döndürür; `utils.drift_imzasi` bellekte mutasyonlu yüklenir).
+  - **F1 smoke ↔ A katmanı — okuyucu ENVANTERİ** (`rg "instructions-loaded|config-changes" --type py`): `instructions-loaded.log` → yazan `hooks/instructions_loaded_log.py`; okuyan `inspector._log_satirlari` (A1–A4 tek giriş — `ix_doctor_smoke` burada elenir, I1/I2) + `session_start._oturum_olcumu` (yalnız `sid=` kolonlu satır; smoke girdisinde `session_id` yok ⇒ sayılmaz, I3 gerçek modülle ölçüldü). `config-changes.log` → yazan `hooks/config_change_guard.py`; çekirdekte OKUYAN YOK (0 eşleşme). Tüketici projelerin kendi betikleri ÖLÇÜLMEDİ.
+  - **Ö1 ad ayrıştırma:** shim `sys.argv[1]`i kanca adı sayar ⇒ `hook_shim.py --x ad`'ın adı `--x`tir (4i "çekirdekte YOK" der). Emniyet ağı: adı TANINMAYAN kanca komutunun ham token'larında şablon kancasının adı geçiyorsa EKSİK sayılmaz → `bicim_farki` (4h WARN, `--tazele-settings` EKLEMEZ).
+  - **Ö2 kapsama:** eşleyici `|` ile bölünür, öğeler LİTERAL kıyaslanır (regex çözülmez); `""`/`*` = hepsi. Kısmi kapsamada kapsanmayan şablon bağlantısı yine EKSİK'tir ve eklenir (U9 — süzgecin fazla maskelemediğinin kontrolü).
+  - **Ö4:** `disableAllHooks` bool değilse WARN + "ÖLÇÜLMEDİ" — Claude Code'un dizge değeri nasıl yorumladığı ölçülmedi.

@@ -84,12 +84,20 @@ _PRECOMMIT_YOK = ("sablondan KOPYALA (core/claude/git-hooks/pre-commit.template 
                   "(core.hooksPath kablolar); init_project --force KULLANMA (tum dosyalari ezer)")
 _PRECOMMIT_SAPMA = ("sablonda yer tutucu YOK, proje-ozel uyarlama beklenmez: sablondan yenile ve "
                     "projenin kendi deposunda PR ile commit'le (manifest yuzeyinde DEGIL)")
+# settings.json (Q406 F3, 2026-11-12): genel metin "template'ten yenile" diyordu — settings için
+# TAM dosya yenileme proje eklerini (izin, env, proje kancası) SİLER (F12b, 2026-10-03). Aynı
+# ekranda 4h `--tazele-settings` dediği için iki satır birbirine zıt onarım öneriyordu.
+_SETTINGS_SAPMA = ("eksik şablon kancası → python core/scripts/team_setup.py --tazele-settings "
+                   "(yalnız EKSİKLERİ ekler, önce fark + yedek; kanca adları ix_doctor 4h "
+                   "satırında); diğer farklar → git diff --no-index core/claude/settings.template.json "
+                   ".claude/settings.json ile incele ve ELLE birleştir (tam dosya kopyalama proje "
+                   "eklerini siler); bilinçli fark ise behavior_manifest.py generate")
 
 # (proje-göreli kopya, core-göreli şablon, görünen ad, YOK onarımı, SAPMA onarımı)
 D7_CIFTLERI = (
     (".claude/settings.json", "claude/settings.template.json", "settings.json",
      _GENEL_YOK,
-     _GENEL_SAPMA),
+     _SETTINGS_SAPMA),
     ("scripts/hook_shim.py", "claude/hook_shim.template.py", "hook_shim.py",
      _GENEL_YOK,
      _GENEL_SAPMA),

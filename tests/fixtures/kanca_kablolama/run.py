@@ -31,6 +31,22 @@ K1 MATRİSİ (Q408 KAPANIŞ KOŞULU; boş dizin DEĞİL — eski durumlu sahte "
       ölçüldü · M5b projede kablolu ama çekirdekte olmayan kanca → FAIL §6a ② · M5c kanca çöküyor
       (PYTHONPATH'e zehirli `datetime`) → FAIL "ÇÖKTÜ" §6a ③ · M5d fail-open SESSİZ (log yolu
       dizin) → FAIL "SESSİZ kaldı" §6a ③
+  DÜZELTME TURU (bug-gate PR #429, 2026-11-12):
+  U5  Ö1 kanca_adi: tırnaklı kabuk adı · `hook_shim.py --x ad` = `--x` (shim argv[1]) · yönlendirme
+  U6  Ö1 tırnaklı biçimde kablolu recall_inject EKSİK DEĞİL · tazeleme İKİNCİ kopya EKLEMEZ
+  U7  Ö1 emniyet ağı: ayrıştırılamayan biçim (`--flag recall_inject`) → biçim farkı, EKLENMEZ, 4h WARN
+  U8  Ö2 birleşik eşleyici (Bash|…|Edit|…|NotebookEdit) ⊇ şablon → KAPSANAN, eksik 0, eklenen 0
+  U9  Ö2 kontrol: kısmi kapsama → kapsanan + eşleyici farkı + YALNIZ kapsanmayan EKSİK eklenir
+  M6  Ö2 4h birleşik eşleyicide FAIL YOK + tazeleme bayt-eş "KAPSANIYOR"
+  R1  Ö3 ilk kayıt dönmüyor, ikincisi dönüyor → 4j PASS (eski kod: tek kayıt → FAIL)
+  D1  Ö4 `disableAllHooks: true` → 4h FAIL · D2 `"true"` dizgesi → 4h WARN "bool DEĞİL … ÖLÇÜLMEDİ"
+  L1  F2a settings.local.json disableAllHooks + kanca → WARN (FAIL DEĞİL)
+  S2  F2c shim dışı proje kancası → 4i SKIP satırı + özette "ÖLÇÜLMEDİ … shim dışı 1"
+  F3  settings D7 onarım metni: ix_doctor 4a + team_setup sablon_sapmasi `--tazele-settings`
+      der, "template'ten yenile" DEMEZ
+  I1  F1 smoke log satırı inspector A1'i SUSTURMAZ (gerçek smoke + gerçek logger + inspector)
+      I2 kontrol: gerçek oturum satırı A1'i susturur (süzgeç fazla maskelemez)
+      I3 session_start `_oturum_olcumu` smoke satırını oturum SAYMAZ
   U1-U4 utils.kanca_kablolari birim · T1 şablonun her kancasının smoke örneği VAR ·
   W1 katman4 üç kolu ÇAĞIRIR (AST) · C3 ÜÇÜNCÜ BAĞLAM: kabuk biçimli settings (ad + yorumlayıcı
   komut dizgesinden) · P1 parity_probe `kanca_sablondan_eksik` (GERÇEK alt süreç, --no-doctor)
@@ -45,7 +61,17 @@ MUTASYON (çapa tam 1 kez bulunmazsa exit 2; ilan edilen vektörler düşmezse S
   --mutasyon-traceback-kor   4i Traceback ayrımı kapalı            → M5c
   --mutasyon-recall-exit0    4j exit 0'ı öneri sayar               → M3d
   --mutasyon-kablosuz        katman4 4h'yi çağırmaz                → W1
-TABAN (eski kod, KIRMIZI beklenir): --kaynak <ix_doctor.py>
+  --mutasyon-tirnak-kor      kanca_adi tırnak/shlex ayrıştırmaz    → U5
+  --mutasyon-ham-ag-yok      Ö1 emniyet ağı kapalı                 → U7
+  --mutasyon-kapsama-yok     Ö2 ⊇ kapsama kapalı                   → U8 · M6
+  --mutasyon-tek-kayit       Ö3 4j yalnız 1 kayıt dener            → R1
+  --mutasyon-kapali-kor      hepsi_kapali hep False                → D1
+  --mutasyon-dizge-kor       bool dışı disableAllHooks görülmez    → D2
+  --mutasyon-smoke-sayilir   inspector smoke satırını sayar        → I1
+  --mutasyon-local-kor       4h settings.local.json'a bakmaz       → L1
+  --mutasyon-shimdisi-sessiz 4i shim dışı SKIP satırı yok          → S2
+  --mutasyon-genel-sapma     settings çifti eski genel metne döner → F3
+TABAN (eski kod, KIRMIZI beklenir): --kaynak <ix_doctor.py> · --kaynak-inspector <inspector.py>
 
 Çıkış: 0 hepsi beklendiği gibi · 1 sapma (mutasyonda: ilan edilenler DÜŞTÜ) · 2 KURULAMADI/SAPMA
 """
@@ -78,6 +104,9 @@ REPO = HERE.parents[2]
 DOCTOR = REPO / "scripts" / "ix_doctor.py"
 TEAM = REPO / "scripts" / "team_setup.py"
 KKYOL = REPO / "scripts" / "utils" / "kanca_kablolari.py"
+DRIFT = REPO / "scripts" / "utils" / "drift_imzasi.py"
+INSP = REPO / "scripts" / "inspector.py"
+SSTART = REPO / "scripts" / "hooks" / "session_start.py"
 SABLON = REPO / "claude" / "settings.template.json"
 WINDOWS = os.name == "nt"
 
@@ -91,17 +120,34 @@ ILAN = {
     "--mutasyon-traceback-kor": {"M5c"},
     "--mutasyon-recall-exit0": {"M3d"},
     "--mutasyon-kablosuz": {"W1"},
+    "--mutasyon-tirnak-kor": {"U5"},
+    "--mutasyon-ham-ag-yok": {"U7"},
+    "--mutasyon-kapsama-yok": {"U8", "M6"},
+    "--mutasyon-tek-kayit": {"R1"},
+    "--mutasyon-kapali-kor": {"D1"},
+    "--mutasyon-dizge-kor": {"D2"},
+    "--mutasyon-smoke-sayilir": {"I1"},
+    "--mutasyon-local-kor": {"L1"},
+    "--mutasyon-shimdisi-sessiz": {"S2"},
+    "--mutasyon-genel-sapma": {"F3"},
 }
 GECERLI_KIP = ("--mutasyon-ad-yok", "--mutasyon-ek-warn", "--mutasyon-ezerek-tazele",
                "--mutasyon-dogrulama-yok", "--mutasyon-sys-executable", "--mutasyon-exit0-yeter",
-               "--mutasyon-traceback-kor", "--mutasyon-recall-exit0", "--mutasyon-kablosuz")
+               "--mutasyon-traceback-kor", "--mutasyon-recall-exit0", "--mutasyon-kablosuz",
+               "--mutasyon-tirnak-kor", "--mutasyon-ham-ag-yok", "--mutasyon-kapsama-yok",
+               "--mutasyon-tek-kayit", "--mutasyon-kapali-kor", "--mutasyon-dizge-kor",
+               "--mutasyon-smoke-sayilir", "--mutasyon-local-kor", "--mutasyon-shimdisi-sessiz",
+               "--mutasyon-genel-sapma")
 KIP: str | None = None
 TABAN: Path | None = None
+TABAN_INSP: Path | None = None
 _a = sys.argv[1:]
 while _a:
     x = _a.pop(0)
     if x == "--kaynak" and _a:
         TABAN = Path(_a.pop(0)).resolve()
+    elif x == "--kaynak-inspector" and _a:
+        TABAN_INSP = Path(_a.pop(0)).resolve()
     elif x in GECERLI_KIP and KIP is None:
         KIP = x
     else:
@@ -148,6 +194,13 @@ def _kaynak_doctor() -> str:
                       "    dondu = rc == 0\n", KIP)
     if KIP == "--mutasyon-kablosuz":
         m = _degistir(m, "    r.extend(_kanca_kablolama())\n", "", KIP)
+    if KIP == "--mutasyon-tek-kayit":
+        m = _degistir(m, "_RECALL_DENEME = 3\n", "_RECALL_DENEME = 1\n", KIP)
+    if KIP == "--mutasyon-local-kor":
+        m = _degistir(m, '    r.extend(_yerel_ayar_kancalari(ayar.with_name("settings.local.json"), KK))\n',
+                      "", KIP)
+    if KIP == "--mutasyon-shimdisi-sessiz":
+        m = _degistir(m, "    if shim_disi:\n        # F2c", "    if False:\n        # F2c", KIP)
     return m
 
 
@@ -157,6 +210,35 @@ def _kaynak_kk() -> str:
         m = _degistir(m, '    yeni = copy.deepcopy(proje)\n    hooks = yeni.setdefault("hooks", {})\n',
                       '    yeni = copy.deepcopy(proje)\n    yeni["hooks"] = copy.deepcopy(sablon.get("hooks") or {})\n'
                       '    hooks = yeni.setdefault("hooks", {})\n', KIP)
+    if KIP == "--mutasyon-tirnak-kor":
+        m = _degistir(m, "        kalan = _tokenler(komut[m.end():].lstrip(_TIRNAK))\n",
+                      "        kalan = komut[m.end():].split()\n", KIP)
+    if KIP == "--mutasyon-ham-ag-yok":
+        m = _degistir(m, "        ham = _ham_iceren(proje, b[0], b[2])\n", "        ham = None\n", KIP)
+    if KIP == "--mutasyon-kapsama-yok":
+        m = _degistir(m, "    hedef = _eslik_kumesi(eslik)\n    birlesim: set = set()\n",
+                      "    return False\n", KIP)
+    if KIP == "--mutasyon-kapali-kor":
+        m = _degistir(m, '    return isinstance(veri, dict) and veri.get("disableAllHooks") is True\n',
+                      "    return False\n", KIP)
+    if KIP == "--mutasyon-dizge-kor":
+        m = _degistir(m, "    return None if isinstance(d, bool) else d\n", "    return None\n", KIP)
+    return m
+
+
+def _kaynak_drift() -> str:
+    m = DRIFT.read_text(encoding="utf-8")
+    if KIP == "--mutasyon-genel-sapma":
+        m = _degistir(m, "     _SETTINGS_SAPMA),\n", "     _GENEL_SAPMA),\n", KIP)
+    return m
+
+
+def _kaynak_insp() -> str:
+    if TABAN_INSP is not None:
+        return TABAN_INSP.read_text(encoding="utf-8")
+    m = INSP.read_text(encoding="utf-8")
+    if KIP == "--mutasyon-smoke-sayilir":
+        m = _degistir(m, "        if len(p) >= 2 and p[1] == SMOKE_NEDENI:\n            continue\n", "", KIP)
     return m
 
 
@@ -297,6 +379,42 @@ def _kabuk(t: dict) -> dict:
     return d
 
 
+def _recall_bicim(t: dict, kanca: dict) -> dict:
+    """recall_inject girdisini verilen biçimle DEĞİŞTİR (Ö1 — tanınmayan/tırnaklı biçim)."""
+    d = copy.deepcopy(t)
+    for b in d["hooks"]["UserPromptSubmit"]:
+        b["hooks"] = [copy.deepcopy(kanca) if "recall_inject" in json.dumps(h) else h for h in b["hooks"]]
+    return d
+
+
+TIRNAKLI = {"type": "command",
+            "command": 'python "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py" "recall_inject"'}
+BAYRAKLI = {"type": "command", "command": "python",
+            "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "--flag", "recall_inject"]}
+
+
+def _recall_adedi(d: dict) -> int:
+    return sum(1 for bl in d["hooks"].values() if isinstance(bl, list) for b in bl
+               for h in b.get("hooks", []) if "recall_inject" in json.dumps(h))
+
+
+def _birlesik(t: dict, eslik: str) -> dict:
+    """pre_tool_guard'ı şablonun üç bloğundan çıkarıp TEK birleşik eşleyicili bloğa koy (Ö2)."""
+    d = copy.deepcopy(t)
+    yeni = []
+    for b in d["hooks"]["PreToolUse"]:
+        b["hooks"] = [h for h in b["hooks"] if "pre_tool_guard" not in json.dumps(h)]
+        if b["hooks"]:
+            yeni.append(b)
+    yeni.insert(0, {"matcher": eslik, "hooks": [_shim("pre_tool_guard")]})
+    d["hooks"]["PreToolUse"] = yeni
+    return d
+
+
+TAM_BIRLESIK = "Bash|PowerShell|mcp__sap-adt__.*|Edit|Write|MultiEdit|NotebookEdit"
+KISMI_BIRLESIK = "Bash|PowerShell|mcp__sap-adt__.*|Edit|Write"
+
+
 def _stub(ad: str, cikti: str, rc: int) -> Path:
     d = KOK / "bin"
     d.mkdir(exist_ok=True)
@@ -314,6 +432,9 @@ def _stub(ad: str, cikti: str, rc: int) -> Path:
 def yukle():
     sys.path.insert(0, str(REPO / "scripts"))
     import utils  # type: ignore
+    dr = _modul("utils.drift_imzasi", DRIFT, _kaynak_drift())
+    sys.modules["utils.drift_imzasi"] = dr
+    utils.drift_imzasi = dr  # type: ignore[attr-defined]
     kk = _modul("utils.kanca_kablolari", KKYOL, _kaynak_kk())
     sys.modules["utils.kanca_kablolari"] = kk
     utils.kanca_kablolari = kk  # type: ignore[attr-defined]
@@ -323,7 +444,8 @@ def yukle():
     exec(compile(_kaynak_doctor(), str(DOCTOR), "exec"), g)
     ts: dict = {"__name__": "team_setup_q406", "__file__": str(TEAM), "__builtins__": __builtins__}
     exec(compile(_kaynak_team(), str(TEAM), "exec"), ts)
-    return kk, g, ts
+    ins = _modul("inspector_q406", INSP, _kaynak_insp())
+    return kk, g, ts, ins
 
 
 def _cagir(g: dict, ad: str, proj: Path) -> list:
@@ -359,7 +481,7 @@ def bul(r: list, parca: str, t: str | None = None) -> list[str]:
 
 
 def main() -> int:
-    kk, g, ts = yukle()
+    kk, g, ts, ins = yukle()
     try:
         # ── U: birim ─────────────────────────────────────────────────────────
         kontrol("U1 kanca_adi: exec · kabuk · shim-dışı",
@@ -383,6 +505,38 @@ def main() -> int:
                 and kk.kiyas(yeni, T)["eksik"] == [], f"eklenen={eklenen}")
         _y, ek4 = kk.eksikleri_ekle(_m2_eslik(T), T)
         kontrol("U4 eşleyici farklı bağlantı EKLENMEZ (karar kullanıcının)", ek4 == [], f"{ek4}")
+        u5 = (kk.kanca_adi(TIRNAKLI), kk.kanca_adi(BAYRAKLI),
+              kk.kanca_adi({"command": 'python "${X}/scripts/hook_shim.py" recall_inject 2>nul'}),
+              kk.kanca_adi({"command": "python ${X}/scripts/hook_shim.py --flag recall_inject"}))
+        kontrol("U5 Ö1 kanca_adi: tırnaklı ad · `--flag ad`=`--flag` (shim argv[1]) · yönlendirme",
+                u5 == ("recall_inject", "--flag", "recall_inject", "--flag"), f"{u5}")
+        d6 = _recall_bicim(T, TIRNAKLI)
+        k6 = kk.kiyas(d6, T)
+        y6, e6 = kk.eksikleri_ekle(d6, T)
+        kontrol("U6 Ö1 tırnaklı biçimde kablolu recall_inject EKSİK DEĞİL · İKİNCİ kopya EKLENMEZ",
+                k6["eksik"] == [] and e6 == [] and _recall_adedi(y6) == 1, f"{k6['eksik']} {e6}")
+        d7 = _recall_bicim(T, BAYRAKLI)
+        k7 = kk.kiyas(d7, T)
+        y7, e7 = kk.eksikleri_ekle(d7, T)
+        kontrol("U7 Ö1 emniyet ağı: `--flag recall_inject` → biçim farkı, EKSİK değil, EKLENMEZ",
+                k7["eksik"] == [] and [b[2] for b, _ in k7["bicim_farki"]] == ["recall_inject"]
+                and e7 == [] and _recall_adedi(y7) == 1, f"{k7['eksik']} {k7['bicim_farki']} {e7}")
+        d8 = _birlesik(T, TAM_BIRLESIK)
+        k8 = kk.kiyas(d8, T)
+        _y8, e8 = kk.eksikleri_ekle(d8, T)
+        kontrol("U8 Ö2 birleşik eşleyici ⊇ şablon → KAPSANAN 3, eksik 0, ek 0, eklenen 0",
+                k8["eksik"] == [] and e8 == [] and k8["ek"] == [] and k8["eslesik_farki"] == []
+                and sorted(b[1] for b in k8["kapsanan"]) == sorted(
+                    ["Bash|PowerShell|mcp__sap-adt__.*", "Edit|Write|MultiEdit", "NotebookEdit"]),
+                f"{k8}")
+        d9 = _birlesik(T, KISMI_BIRLESIK)
+        k9 = kk.kiyas(d9, T)
+        _y9, e9 = kk.eksikleri_ekle(d9, T)
+        kontrol("U9 Ö2 kontrol: kısmi kapsama → kapsanan + eşleyici farkı + YALNIZ NotebookEdit eklenir",
+                [b[1] for b in k9["kapsanan"]] == ["Bash|PowerShell|mcp__sap-adt__.*"]
+                and [b[1] for b, _ in k9["eslesik_farki"]] == ["Edit|Write|MultiEdit"]
+                and e9 == [("PreToolUse", "NotebookEdit", "pre_tool_guard")]
+                and k9["bicim_farki"] == [], f"{k9} {e9}")
 
         # ── T1 / W1 ──────────────────────────────────────────────────────────
         if "_smoke_ornekleri" in g:
@@ -461,6 +615,38 @@ def main() -> int:
                 "FAIL" not in tag(r) and bul(r, "eşleyicisi şablondan FARKLI", "WARN")
                 and ok is True and "DOKUNULMAYACAK" in out
                 and (p2d / ".claude" / "settings.json").read_bytes() == once, f"{r} {out[-300:]}")
+        p6 = kum("m6", _birlesik(T, TAM_BIRLESIK))
+        r = _cagir(g, "_kanca_kablolama", p6)
+        once = (p6 / ".claude" / "settings.json").read_bytes()
+        ok, out = _tazele(ts, p6)
+        kontrol("M6 Ö2 birleşik eşleyici: 4h FAIL/WARN YOK + 'KAPSANAN 3' · tazeleme bayt-eş 'KAPSANIYOR'",
+                tag(r) == ["PASS"] and "KAPSANAN 3" in r[0][1] and ok is True
+                and "KAPSANIYOR" in out and (p6 / ".claude" / "settings.json").read_bytes() == once,
+                f"{r} {out[-400:]}")
+        r = _cagir(g, "_kanca_kablolama", kum("u7k", _recall_bicim(T, BAYRAKLI)))
+        kontrol("U7b Ö1 4h: tanınmayan biçim → WARN 'TANINMAYAN', FAIL YOK",
+                "FAIL" not in tag(r) and len(bul(r, "TANINMAYAN", "WARN")) == 1, f"{r}")
+        dd = copy.deepcopy(T)
+        dd["disableAllHooks"] = True
+        r = _cagir(g, "_kanca_kablolama", kum("d1", dd))
+        kontrol("D1 Ö4 `disableAllHooks: true` (bool) → 4h FAIL 'disableAllHooks'",
+                len(bul(r, "disableAllHooks: true", "FAIL")) == 1, f"{r}")
+        dd["disableAllHooks"] = "true"
+        r = _cagir(g, "_kanca_kablolama", kum("d2", dd))
+        kontrol("D2 Ö4 `disableAllHooks: \"true\"` (dizge) → 4h WARN 'bool DEĞİL' + ÖLÇÜLMEDİ (sessiz PASS değil)",
+                len([m for m in bul(r, "bool DEĞİL", "WARN") if "ÖLÇÜLMEDİ" in m]) == 1, f"{r}")
+        pl = kum("l1", T)
+        (pl / ".claude" / "settings.local.json").write_text(json.dumps(
+            {"disableAllHooks": True, "hooks": {"Stop": [{"hooks": [_shim("yerel_kanca")]}]}}),
+            encoding="utf-8")
+        r = _cagir(g, "_kanca_kablolama", pl)
+        kontrol("L1 F2a settings.local.json disableAllHooks + kanca → iki WARN, FAIL YOK",
+                "FAIL" not in tag(r) and len(bul(r, "settings.local.json `disableAllHooks", "WARN")) == 1
+                and len(bul(r, "4h kıyasına ve 4i smoke'a GİRMEDİ", "WARN")) == 1, f"{r}")
+        r = _cagir(g, "_kanca_smoke", kum("s2", _ekli(T)))
+        kontrol("S2 F2c shim dışı proje kancası → 4i SKIP 'shim dışı 1' + özet 'ÖLÇÜLMEDİ'",
+                len(bul(r, "shim dışı 1 proje kancası", "SKIP")) == 1 and r[-1][0] == "PASS"
+                and "ÖLÇÜLMEDİ 1 (shim dışı 1" in r[-1][1], f"{r[-3:]}")
         pv = kum("v1", _m2(T))
         once = (pv / ".claude" / "settings.json").read_bytes()
         asil = kk.eksikleri_ekle
@@ -496,6 +682,16 @@ def main() -> int:
         r = _cagir(g, "_recall_saglik", p3)
         kontrol("M3c bayat → kanca tazeler → PASS 'önce BAYAT → sonra TAZE'",
                 tag(r) == ["PASS"] and "önce BAYAT → sonra TAZE" in r[0][1], f"{r}")
+        gercek = json.loads(idx.read_text(encoding="utf-8"))
+        sahte = {"id": "how:000-ix-sahte", "kaynak": "k", "baslik": "Zzqx Yyqw sonda basligi uzun",
+                 "oz": "anlamsiz", "anahtar": ["qqqqq"]}
+        gercek["kayit"] = [sahte] + list(gercek.get("kayit") or [])
+        idx.write_text(json.dumps(gercek, ensure_ascii=False), encoding="utf-8")
+        os.utime(idx, (gelecek, gelecek))
+        r = _cagir(g, "_recall_saglik", p3)
+        kontrol("R1 Ö3 ilk kayıt dönmüyor, sonraki dönüyor → 4j PASS (denenen ≥2)",
+                tag(r) == ["PASS"] and "how:000-ix-sahte" in r[0][1] and "denenen 1:" not in r[0][1],
+                f"{r}")
         idx.write_text(json.dumps({"v": 1, "kayit": [{"id": "how:x", "kaynak": "k",
                                                       "baslik": "Zzqx Yyqw sonda basligi uzun",
                                                       "oz": "anlamsiz", "anahtar": ["qqqqq"]}]}),
@@ -510,7 +706,8 @@ def main() -> int:
         r = _cagir(g, "_kanca_smoke", kum("m5a", _yorumlayici_degis(T, str(stub))))
         f = bul(r, "BAŞLAMIYOR", "FAIL")
         kontrol("M5a yorumlayıcı başlamıyor → FAIL §6a ② + kod sys.executable yedeğiyle ölçüldü",
-                len(f) == 1 and "§6a ②" in f[0] and bul(r, "sys.executable yedeği"), f"{r[:2]} {r[-1:]}")
+                len(f) == 1 and "§6a ②" in f[0] and bul(r, "sys.executable yedeği")
+                and "Claude Code'un hook ortamının PATH'i ÖLÇÜLMEDİ" in f[0], f"{r[:2]} {r[-1:]}")
         d5b = copy.deepcopy(T)
         d5b["hooks"]["Stop"] = [{"hooks": [_shim("eski_kaldirilmis_kanca")]}]
         r = _cagir(g, "_kanca_smoke", kum("m5b", d5b))
@@ -549,6 +746,48 @@ def main() -> int:
                 tag(r_k) == ["PASS"] and "19 bağlantısının" in r_k[0][1]
                 and r_s and r_s[-1][0] == "PASS" and "yorumlayıcı `python`" in r_s[-1][1],
                 f"{r_k} | {r_s[-1:]}")
+
+        # ── F3 settings D7 onarım metni ──────────────────────────────────────
+        pf = kum("f3", _m1(T))
+        r = _cagir(g, "_d7_drift", pf)
+        d7s = bul(r, "settings.json")
+        tampon = io.StringIO()
+        g_ts_proj = ts.get("sablon_sapmasi")
+        with contextlib.redirect_stdout(tampon):
+            try:
+                g_ts_proj(pf) if g_ts_proj else print("sablon_sapmasi YOK")
+            except Exception as e:  # noqa: BLE001
+                print(f"HATA {type(e).__name__}: {e}")
+        ts_out = [s_ for s_ in tampon.getvalue().splitlines() if "settings.json" in s_ and "SAPMI" in s_]
+        kontrol("F3 settings D7 onarımı (ix_doctor 4a + team_setup): --tazele-settings + git diff, "
+                "'template'ten yenile' YOK",
+                len(d7s) == 1 and "--tazele-settings" in d7s[0] and "git diff --no-index" in d7s[0]
+                and "template'ten yenile" not in d7s[0]
+                and len(ts_out) == 1 and "--tazele-settings" in ts_out[0]
+                and "template'ten yenile" not in ts_out[0], f"{d7s} | {ts_out}")
+
+        # ── I1-I3 smoke log satırı A katmanını susturmaz (F1) ───────────────
+        pi = kum("i1", T)
+        _cagir(g, "_kanca_smoke", pi)
+        logp = pi / ".tmp" / "instructions-loaded.log"
+        ham = logp.read_text(encoding="utf-8") if logp.is_file() else ""
+        a1 = list(ins.a1_logger_canli(pi, ins._log_satirlari(pi)))
+        kontrol("I1 F1 log YALNIZ smoke satırı (gerçek logger yazdı) → inspector A1 HÂLÂ ateşler",
+                "ix_doctor_smoke" in ham and len(a1) == 1, f"ham={ham[-200:]!r} a1={a1}")
+        with logp.open("a", encoding="utf-8") as fh:
+            fh.write("2026-11-12T10:00:00+03:00\tsession_start\tProject\t/x/CLAUDE.md\tsid=ix-gercek-oturum\n")
+        a1b = list(ins.a1_logger_canli(pi, ins._log_satirlari(pi)))
+        kontrol("I2 kontrol: gerçek oturum satırı eklenince A1 SUSAR (süzgeç fazla maskelemez)",
+                a1b == [], f"{a1b}")
+        logp.write_text(ham, encoding="utf-8")
+        try:
+            ss = _modul("session_start_q406", SSTART, SSTART.read_text(encoding="utf-8"))
+            ss.PROJ = pi
+            olc = ss._oturum_olcumu("ix-bu-oturum", False)
+        except Exception as e:  # noqa: BLE001
+            olc = f"YUKLENEMEDI {type(e).__name__}: {e}"
+        kontrol("I3 session_start YÜKLEME ölçümü smoke satırını oturum SAYMAZ (ÖLÇÜLEMEDİ, sid yok)",
+                "ÖLÇÜLEMEDİ" in olc and "sid'li log satırı yok" in olc, olc)
 
         # ── P1 parity_probe (GERÇEK alt süreç) ──────────────────────────────
         pp = kum("p1", _m1(T))

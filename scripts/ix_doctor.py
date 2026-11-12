@@ -1097,18 +1097,28 @@ def _kablolama_kontrol() -> list:
 # imzayla kıyasladığı için bir kancanın DÜŞMESİ ile zararsız bir proje eki AYNI ad vermeyen
 # WARN'ı basıyordu (ölçüldü: geçici kopyadan `recall_inject` silindi → yalnız "template'ten
 # SAPMIŞ"; aynı WARN'ı başka bir tüketici yalnız kanca-dışı farkla da veriyordu).
-# ⛔ GATE DEĞİL (ADR 0019): ix_doctor salt-okur teşhistir; onarım AYRI ve açık onaylı yoldur
-# (`team_setup --tazele-settings`, howto-cekirdek-guncelleme §6a ①).
+# ⛔ GATE DEĞİL (ADR 0019): ix_doctor teşhistir — projeyi ve ayarları DEĞİŞTİRMEZ; yalnız
+# `.tmp` altına yazar (4i smoke log satırları, 4j recall indeksini tazeleyebilir). Onarım AYRI
+# ve açık onaylı yoldur (`team_setup --tazele-settings`, howto-cekirdek-guncelleme §6a ①).
 # ⛔ ÖLÇÜLEMEDİ ≠ TEMİZ: modül/dosya okunamazsa satır PASS DEMEZ.
 _TAZELE_SETTINGS = "python core/scripts/team_setup.py --tazele-settings"
-_KANCA_KAPSAM = ("kapsam: (olay, eşleyici, kanca adı) üçlüsü şablona karşı; komut yorumlayıcısı "
-                 "1g'de, kancanın ÇALIŞMASI 4i'de ölçülür; permissions/env/statusLine bu satırda "
-                 "BAKILMADI")
+_KANCA_KAPSAM = ("kapsam: YALNIZ .claude/settings.json'daki (olay, eşleyici, kanca adı) üçlüsü "
+                 "şablona karşı (birleşik eşleyici ⊇ kapsama sayılır); settings.local.json yalnız "
+                 "disableAllHooks + kanca VARLIĞI için okunur, birleştirilmez; kullanıcı ayarı "
+                 "(~/.claude/settings.json), managed policy ve plugin kancaları OKUNMADI — bunlar "
+                 "kancaları sessizce kapatabilir/ekleyebilir (ADR 0023 İkincil gerekçeler 1); "
+                 "komut yorumlayıcısı 1g'de, kancanın ÇALIŞMASI 4i'de ölçülür; permissions/env/"
+                 "statusLine bu satırda BAKILMADI")
 _SMOKE_4D = ("session_start", "pre_tool_guard")     # 4d'de zaten koşulur (bugünkü ölçüt)
 _SMOKE_KAPSAM = ("kapsam: zararsız örnek girdi — blok/yazma dalı TETİKLENMEZ, kancanın kararı "
                  "ölçülmez; çıktı İÇERİĞİ yalnız yan etkisiz sondası olan kancalarda ölçülür; "
+                 "shim dışı proje kancaları (`?<komut>`) KOŞULMAZ; "
                  "yan etki: .tmp/instructions-loaded.log ve .tmp/config-changes.log'a birer "
-                 "`ix_doctor_smoke` satırı")
+                 "`ix_doctor_smoke` satırı (inspector A1 bu satırları SAYMAZ; session_start "
+                 "YÜKLEME satırı yalnız sid'li satırı sayar)")
+# 1g ile AYNI ölçüm sınırı — 4i yorumlayıcı FAIL'leri de taşır (F2b, 2026-11-12).
+_PATH_SINIRI = ("yorumlayıcı ix_doctor sürecinin PATH'iyle çözüldü — Claude Code'un hook "
+                "ortamının PATH'i ÖLÇÜLMEDİ")
 
 
 def _kanca_modulu():
@@ -1118,6 +1128,34 @@ def _kanca_modulu():
 
 def _json_oku(p: Path) -> dict:
     return json.loads(p.read_text(encoding="utf-8"))
+
+
+def _yerel_ayar_kancalari(yerel: Path, KK) -> list[Sonuc]:
+    """settings.local.json (gitignore'lu, makine-yerel) — SALT-OKUR, WARN-only (F2a).
+
+    Kıyasa girmez ve FAIL üretmez: Claude Code'un local katmanı settings.json ile nasıl
+    birleştirdiği burada ÖLÇÜLMEDİ. Yalnız kancaları sessizce kapatabilecek/ekleyebilecek
+    iki işaret görünür kılınır (ADR 0023 İkincil gerekçeler 1: local katmandaki kapatma
+    repoda, CI'da, guard'da iz bırakmaz)."""
+    if not yerel.is_file():
+        return []
+    try:
+        v = _json_oku(yerel)
+    except Exception as e:  # noqa: BLE001
+        return [(WARN, f"settings.local.json OKUNAMADI ({type(e).__name__}) — local katmandaki "
+                       f"kanca/disableAllHooks ÖLÇÜLEMEDİ (temiz demek DEĞİL)")]
+    r: list[Sonuc] = []
+    if KK.hepsi_kapali(v) or KK.kapali_belirsiz(v) is not None:
+        r.append((WARN, f"settings.local.json `disableAllHooks: {v.get('disableAllHooks')!r}` — "
+                        f"bu makinede kancalar KAPALI olabilir (pre_tool_guard dahil); repoda/CI'da "
+                        f"iz bırakmaz. Birleştirme davranışı ÖLÇÜLMEDİ; bilinçli değilse anahtarı "
+                        f"kaldır (§6a ②: kullanıcıya sor)"))
+    yb = KK.baglantilar(v) if isinstance(v, dict) else []
+    if yb:
+        r.append((WARN, f"settings.local.json {len(yb)} kanca bağlantısı taşıyor ("
+                        + ", ".join(KK.bicim(b) for b in yb[:4]) + (" …" if len(yb) > 4 else "")
+                        + ") — 4h kıyasına ve 4i smoke'a GİRMEDİ (makine-yerel, ölçülmedi)"))
+    return r
 
 
 def _kanca_kablolama(ayar: Path | None = None, sablon: Path | None = None) -> list[Sonuc]:
@@ -1143,11 +1181,26 @@ def _kanca_kablolama(ayar: Path | None = None, sablon: Path | None = None) -> li
         r.append((FAIL, "kanca kablolaması: settings.json `disableAllHooks: true` — kablolama ne "
                         "olursa olsun HİÇBİR kanca koşmaz (pre_tool_guard dahil = sessiz fail-open); "
                         "bilinçli değilse anahtarı kaldır (§6a ②: kullanıcıya sor)"))
+    belirsiz = KK.kapali_belirsiz(p)
+    if belirsiz is not None:
+        r.append((WARN, f"kanca kablolaması: settings.json `disableAllHooks` bool DEĞİL "
+                        f"({belirsiz!r}) — Claude Code'un bu değeri nasıl yorumladığı ÖLÇÜLMEDİ "
+                        f"(kancaları kapatabilir ya da ayar dosyasını reddedebilir); bool yaz ya da "
+                        f"anahtarı kaldır (§6a ②: kullanıcıya sor)"))
+    r.extend(_yerel_ayar_kancalari(ayar.with_name("settings.local.json"), KK))
     k = KK.kiyas(p, s)
     n, adet = k["sablon_sayisi"], len(k["sablon_kanca"])
     ek = (f" · proje eki {len(k['ek'])} (BİLGİ, WARN değil — onarım SİLMEZ): "
           + ", ".join(KK.bicim(b) for b in k["ek"][:6]) + (" …" if len(k["ek"]) > 6 else "")
           if k["ek"] else "")
+    if k["kapsanan"]:
+        ek += (f" · birleşik eşleyiciyle KAPSANAN {len(k['kapsanan'])}: "
+               + ", ".join(KK.bicim(b) for b in k["kapsanan"][:6]))
+    for b, komut in k["bicim_farki"]:
+        r.append((WARN, f"kanca {b[2]} ({b[0]}) TANINMAYAN biçimde kablolu: `{komut[:120]}` — ad "
+                        f"ayrıştırılamadı (hook_shim.py kanca adını İLK argüman sayar); EKSİK "
+                        f"sayılmadı, onarım EKLEMEZ (çift koşum olurdu); şablon biçimiyle "
+                        f"karşılaştır (§6a ②) [{_KANCA_KAPSAM}]"))
     if k["eksik"]:
         r.append((FAIL, f"kanca kablolaması: şablonun {n} bağlantısından {len(k['eksik'])}'i "
                         f"projede YOK → " + ", ".join(KK.bicim(b) for b in k["eksik"])
@@ -1224,7 +1277,7 @@ def _smoke_yorumlayici(veri: dict, KK) -> tuple[str | None, Sonuc | None, str]:
         return None, (FAIL, f"kanca smoke: yorumlayıcı `{ad}` PATH'te YOK — settings'teki {adet} "
                             f"kanca komutu HİÇ başlamaz (pre_tool_guard bloklamaz = sessiz "
                             f"fail-open). §6a ②: Python kur / PATH'i düzelt (1g satırı). Kanca "
-                            f"KODU aşağıda sys.executable ile ayrıca ölçüldü"), \
+                            f"KODU aşağıda sys.executable ile ayrıca ölçüldü [{_PATH_SINIRI}]"), \
             "yorumlayıcı YOK → sys.executable yedeği"
     if not _YORUMLAYICI_PY_AILE.fullmatch(re.split(r"[\\/]", ad)[-1]):
         return None, (SKIP, f"kanca smoke yorumlayıcısı `{ad}` python ailesi DEĞİL — başlama "
@@ -1236,7 +1289,8 @@ def _smoke_yorumlayici(veri: dict, KK) -> tuple[str | None, Sonuc | None, str]:
         return None, (FAIL, f"kanca smoke: yorumlayıcı `{ad}` → {yol} BAŞLAMIYOR (rc={rc}: "
                             f"{son[:90]!r}) — {adet} kanca komutu HİÇ çalışmaz (sessiz fail-open). "
                             f"§6a ②: gerçek Python'u PATH'te öne al (1g satırı). Kanca KODU aşağıda "
-                            f"sys.executable ile ayrıca ölçüldü"), "yorumlayıcı BAŞLAMIYOR → sys.executable yedeği"
+                            f"sys.executable ile ayrıca ölçüldü [{_PATH_SINIRI}]"), \
+            "yorumlayıcı BAŞLAMIYOR → sys.executable yedeği"
     return yol, None, f"yorumlayıcı `{ad}` → {yol}"
 
 
@@ -1281,16 +1335,27 @@ def _kanca_smoke(ayar: Path | None = None) -> list[Sonuc]:
         p = None                                     # 4h ÖLÇÜLEMEDİ der; smoke şablonla sürer
     sablon_adlar = [a for a in KK.kiyas({}, s)["sablon_kanca"] if KK.shim_kancasi_mi(a)]
     adlar = list(sablon_adlar)
+    shim_disi: list[str] = []
     for _o, _m, a in KK.baglantilar(p or {}):
-        if KK.shim_kancasi_mi(a) and a not in adlar:
-            adlar.append(a)
+        if KK.shim_kancasi_mi(a):
+            if a not in adlar:
+                adlar.append(a)
+        elif a not in shim_disi:
+            shim_disi.append(a)
     yol, ysatir, ynot = _smoke_yorumlayici(p if p is not None else s, KK)
     r: list[Sonuc] = [ysatir] if ysatir else []
+    if shim_disi:
+        # F2c: shim'e gitmeyen proje kancası koşulmaz (örnek girdisi/beklentisi bilinmez) —
+        # ölçülmediği SESSİZCE düşmesin, satırda ve özette sayılsın.
+        r.append((SKIP, f"kanca smoke ÖLÇÜLMEDİ — shim dışı {len(shim_disi)} proje kancası: "
+                        + ", ".join(f"`{a[1:][:70]}`" for a in shim_disi[:4])
+                        + (" …" if len(shim_disi) > 4 else "")
+                        + " (scripts/hook_shim.py'den geçmez; temiz demek DEĞİL)"))
     token = f"{os.getpid()}-{int(time.time() * 1000)}"
     ornek = _smoke_ornekleri(token)
     gecen: list[str] = []
     icerik: list[str] = []
-    n_fail = 0
+    n_fail = orneksiz = 0
     for ad in adlar:
         if ad in _SMOKE_4D:
             continue
@@ -1307,6 +1372,7 @@ def _kanca_smoke(ayar: Path | None = None) -> list[Sonuc]:
                                 f"çekirdekten kaldırılmış bir kanca olabilir: kablosu kaldırılsın mı "
                                 f"kullanıcıya sor (§6a ②)"))
             else:
+                orneksiz += 1
                 r.append((SKIP, f"kanca smoke `{ad}` ÖLÇÜLMEDİ — proje eki, örnek girdi tanımsız "
                                 f"(temiz demek DEĞİL)"))
             continue
@@ -1323,17 +1389,22 @@ def _kanca_smoke(ayar: Path | None = None) -> list[Sonuc]:
             gecen.append(ad)
             if beklenti:
                 icerik.append(ad)
-    toplam = len([a for a in adlar if a not in _SMOKE_4D])
+    toplam = len([a for a in adlar if a not in _SMOKE_4D]) + len(shim_disi)
+    olcmedi = (f" · ÖLÇÜLMEDİ {orneksiz + len(shim_disi)} (shim dışı {len(shim_disi)}, "
+               f"örneksiz proje eki {orneksiz})" if orneksiz or shim_disi else "")
     ozet = (f"kanca smoke: {len(gecen)}/{toplam} kanca gerçek giriş noktasından "
-            f"(scripts/hook_shim.py <kanca>; {ynot}) temiz çıktı · içerik ölçülen: "
+            f"(scripts/hook_shim.py <kanca>; {ynot}) temiz çıktı{olcmedi} · içerik ölçülen: "
             f"{', '.join(icerik) or 'yok'} · session_start + pre_tool_guard 4d'de [{_SMOKE_KAPSAM}]")
     r.append((FAIL, f"{ozet} — {n_fail} sorun yukarıda") if n_fail else (PASS, ozet))
     return r
 
 
+_RECALL_DENEME = 3
 _RECALL_KAPSAM = ("kapsam: kanca kablosu + .tmp/recall-index.json (var · JSON · kayıt · tazelik "
                   "= build_recall_index.kaynak_mtime) + .tmp/recall-index.status + gerçek giriş "
-                  "noktasından örnek prompt'un ÇIKTI İÇERİĞİ; isabet oranı ÖLÇÜLMEDİ")
+                  "noktasından en çok 3 örnek prompt'un ÇIKTI İÇERİĞİ (biri dönerse yeter); "
+                  "isabet oranı ÖLÇÜLMEDİ; yan etki: projeyi ve ayarları DEĞİŞTİRMEZ, yalnız .tmp "
+                  "altına yazar — indeks YOK/BAYAT ise kancanın kendi tazelemesini tetikler")
 
 
 def _recall_indeks_durumu(idx: Path) -> tuple[str, list]:
@@ -1387,19 +1458,29 @@ def _recall_saglik() -> list[Sonuc]:
         return [(FAIL, f"recall_inject sağlığı: indeks {sonra} (önce {once}) — kanca öneri "
                        f"ÜRETEMEZ ve fail-open olduğu için SESSİZDİR; {st_ozet}. {onarim} "
                        f"[{_RECALL_KAPSAM}]")]
-    secim = next((k for k in kayitlar if str(k.get("id", "")).startswith("how:")), kayitlar[0])
-    baslik = str(secim.get("baslik") or "")
-    prompt = f"{baslik} {secim.get('oz') or ''}".strip()
-    while len(prompt) < 60:
-        prompt = f"{prompt} {baslik}".strip() or "ix_doctor recall sondasi"
-    rc, out, _ = _hook_kos("recall_inject", {"prompt": prompt}, timeout=120)
-    dondu = "[JIT-RECALL]" in out and baslik[:30] in out
+    # Ö3 (2026-11-12): TEK sabit kayıt yanlış FAIL üretir — ölçüldü, gerçek indekslerde
+    # kayıtların bir kısmı kendi başlığıyla sorulunca dönmüyor (62'de 1-3). Sırayla en çok
+    # _RECALL_DENEME kayıt (önce `how:`) denenir; BİRİ dönerse kanca canlıdır, hiçbiri dönmezse FAIL.
+    adaylar = ([k for k in kayitlar if str(k.get("id", "")).startswith("how:")]
+               + [k for k in kayitlar if not str(k.get("id", "")).startswith("how:")])[:_RECALL_DENEME]
+    denenen: list[str] = []
+    for secim in adaylar:
+        baslik = str(secim.get("baslik") or "")
+        prompt = f"{baslik} {secim.get('oz') or ''}".strip()
+        while len(prompt) < 60:
+            prompt = f"{prompt} {baslik}".strip() or "ix_doctor recall sondasi"
+        rc, out, _ = _hook_kos("recall_inject", {"prompt": prompt}, timeout=120)
+        denenen.append(str(secim.get("id")))
+        dondu = "[JIT-RECALL]" in out and baslik[:30] in out
+        if dondu:
+            break
     kablo = {True: "kablolu", False: "kablolu DEĞİL (4h)", None: "kablo ÖLÇÜLEMEDİ"}[kablolu]
     govde = (f"recall_inject sağlığı: {kablo} · indeks önce {once} → sonra {sonra} "
-             f"({len(kayitlar)} kayıt) · {st_ozet} · örnek prompt ({secim.get('id')}) ")
+             f"({len(kayitlar)} kayıt) · {st_ozet} · örnek prompt (denenen {len(denenen)}: "
+             f"{', '.join(denenen)}) ")
     if not dondu:
         son = next((s.strip() for s in reversed(out.splitlines()) if s.strip()), "çıktı yok")
-        return [(FAIL, govde + f"öneri DÖNDÜRMEDİ (exit {rc}: {son[:90]!r}) — fail-open kanca "
+        return [(FAIL, govde + f"HİÇBİRİ öneri DÖNDÜRMEDİ (son exit {rc}: {son[:90]!r}) — fail-open kanca "
                                f"SESSİZ; {onarim}; sürerse §6a ③ [{_RECALL_KAPSAM}]")]
     if kablolu is not True:
         return [(FAIL, govde + f"öneri DÖNDÜRDÜ ama kanca oturumda KOŞMAZ — onarım (§6a ①): "
