@@ -92,9 +92,28 @@ G409 = exc_xml("CTS_WBO_API", "019", "Object is locked in request", v1="LIMU CLS
 GPARAM = "Parameter corrNr could not be found"
 
 
+def g409_uzun(v3, v4):
+    """PR #427 F1: GERÇEKÇİ uzunlukta `CTS_WBO_API 019` 409 gövdesi — ADT `exc:exception` biçimi
+    (`hata_sebebi_ve_maskeleme` EXC_GOVDE deseni: communicationframework ad alanı + namespace +
+    type + message + localizedMessage + properties). Bug-gate ölçümü: ~719 kr, V3 ~618., V4 ~660.
+    ⇒ V3/V4 500. karakterin ÖTESİNDE. Kısa G409 (V3/V4 ~400.) gerçekte oluşmayan rejimdi."""
+    return ('<?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/'
+            'types/communicationframework"><namespace id="com.sap.adt"/>'
+            '<type id="ExceptionResourceLockConflict"/>'
+            f'<message lang="EN">Object LIMU CLSD ZSD001_CL_ORNEK is locked in request {v3} of user {v4}'
+            '</message>'
+            f'<localizedMessage lang="TR">Nesne LIMU CLSD ZSD001_CL_ORNEK {v4} kullanicisinin {v3} '
+            'talebinde kilitli; nesne yalniz bu talep icinde degistirilebilir</localizedMessage><properties>'
+            '<entry key="T100KEY-ID">CTS_WBO_API</entry><entry key="T100KEY-NO">019</entry>'
+            '<entry key="T100KEY-V1">LIMU CLSD ZSD001_CL_ORNEK</entry><entry key="T100KEY-V2"></entry>'
+            f'<entry key="T100KEY-V3">{v3}</entry><entry key="T100KEY-V4">{v4}</entry>'
+            '</properties></exc:exception>')
+
+
 # ── sahte SAP (127.0.0.1) ─────────────────────────────────────────────────────
 class _Kolu(BaseHTTPRequestHandler):
     karar = None        # fn(sira, headers, params) -> (kod, govde)
+    post_karar = None   # fn(yol) -> (kod, govde) | None  (None = 200 <ok/>; PR #427 F1 kilit 409)
     putlar: list = []
     get_etag = "ETAG-INAKTIF"
 
@@ -132,6 +151,10 @@ class _Kolu(BaseHTTPRequestHandler):
 
     def do_POST(self):
         self._govdeyi_tuket()
+        k = _Kolu.post_karar(urlparse(self.path).path) if _Kolu.post_karar else None
+        if k:
+            self._yaz(*k)
+            return
         self._yaz(200, "<ok/>")
 
     def log_message(self, *a):
@@ -143,9 +166,15 @@ threading.Thread(target=_SUNUCU.serve_forever, daemon=True).start()
 TABAN_URL = f"http://127.0.0.1:{_SUNUCU.server_address[1]}"
 
 
-def senaryo(karar):
+def senaryo(karar, post=None):
     _Kolu.karar = karar
+    _Kolu.post_karar = post
     _Kolu.putlar = []
+
+
+def kilit_post_409(govde):
+    """Gerçek `lock_object` 1. stratejisi (`/sap/bc/adt/locks`) 409 + verilen gövde alır."""
+    return lambda yol: (409, govde) if yol.endswith("/sap/bc/adt/locks") else None
 
 
 def _yakala(fn, *a, **k):
@@ -283,14 +312,43 @@ def bolum_l(L):
          r is None and getattr(exc, "status_code", None) == 400 and len(pt) == 4
          and "after 4 attempts" in str(exc), f"r={r} exc={exc!r} put={len(pt)}")
 
+    # L11 — PR #427 F3: 412 → inaktif ETag tekrarı 400 (içerik reddi) → DURUR, tekrarın yanıtı raporlanır.
+    # c2a1039'da karar ilk 412'ye bakıyordu ⇒ biçim-2'ye düşüp 3. PUT atılıyordu.
+    _Kolu.get_etag = "ETAG-INAKTIF"
+    r, exc, log, pt = kos(sabit((412, "etag"), (400, G400)))
+    m = str(exc or "")
+    ekle("L11 ⭐ 412 -> tekrar 400 -> 2 PUT'ta DURUR, istisna 400 + OO_SOURCE_BASED (tekrarın yanıtı)",
+         len(pt) == 2 and getattr(exc, "status_code", None) == 400 and "OO_SOURCE_BASED/011" in m
+         and "DENEMELER (2)" in m and "412 sonrasi inaktif ETag tekrari] -> 400" in m
+         and "Response (400)" in m, f"put={len(pt)} kod={getattr(exc, 'status_code', None)} m={m[:240]!r}")
+
+    # L12 — PR #427 F1: GERÇEK lock_object 409 dalı, gerçekçi uzun gövde (V3/V4 > 500. karakter)
+    govde = g409_uzun(K, KULLANICI)
+    on_kosul = len(govde) > 500 and govde.index("T100KEY-V3") > 500 and govde.index("T100KEY-V4") > 500
+    senaryo(sabit((200, "")), post=kilit_post_409(govde))
+    c = istemci_kur(L)
+    r, exc, log = _yakala(c.lock_object, URL, transport=K)
+    t1 = getattr(exc, "t100_degiskenleri", None) or {}
+    ekle("L12 ⭐ gerçek lock_object 409 (gövde %d kr, V3@%d V4@%d): response_text 500'e kesik AMA "
+         "t100_degiskenleri V3/V4'ü TAM gövdeden taşır" % (len(govde), govde.index("T100KEY-V3"),
+                                                          govde.index("T100KEY-V4")),
+         on_kosul and type(exc).__name__ == "SAPLockError" and getattr(exc, "status_code", None) == 409
+         and len(getattr(exc, "response_text", "") or "") == 500
+         and "T100KEY-V3" not in (exc.response_text or "")
+         and t1.get("T100KEY-V3") == K and t1.get("T100KEY-V4") == KULLANICI
+         and t1.get("T100KEY-ID") == "CTS_WBO_API",
+         f"on_kosul={on_kosul} exc={type(exc).__name__} t100={t1}")
+
 
 # ── P: push_object.main() gerçek giriş noktası ────────────────────────────────
 def bolum_p(L, SC, PO):
     kaynak = Path(_TMP) / f"{AD}.clas.abap"
     kaynak.write_bytes(b"CLASS zsd001_cl_ornek DEFINITION.\nENDCLASS.\n")
 
-    def kos(karar, kilit_hatasi=None):
-        senaryo(karar)
+    def kos(karar, kilit_hatasi=None, post=None, sonuc=False):
+        """`post` verilirse GERÇEK `lock_object` koşar (sahte sunucu POST yanıtıyla, PR #427 F1).
+        `sonuc=True` → `push_object.main()` yerine `SAPClient.push_object` sonuç SÖZLÜĞÜ döner (F7)."""
+        senaryo(karar, post=post)
 
         class _A(L.SAPADTClient):
             def __init__(self):
@@ -309,6 +367,8 @@ def bolum_p(L, SC, PO):
                 return "ETAG-1"
 
             def lock_object(self, url, transport=None, **kw):
+                if post is not None:
+                    return L.SAPADTClient.lock_object(self, url, transport=transport, **kw)
                 if kilit_hatasi is not None:
                     self._last_lock_effective_transport = None
                     raise kilit_hatasi
@@ -332,6 +392,10 @@ def bolum_p(L, SC, PO):
         ist.local_base = Path(_TMP)
         ist._find_existing_transport = lambda n, t, tr: tr
         ist.syntax_check = lambda *a, **k: {"valid": True}
+        if sonuc:
+            res, exc, log = _yakala(ist.push_object, object_name=AD, object_type="class",
+                                    transport=K, source_file=str(kaynak))
+            return res, exc, log, list(_Kolu.putlar)
         eski_sc, eski_argv = PO.SAPClient, sys.argv
         PO.SAPClient = lambda *a, **k: ist
         sys.argv = ["push_object.py", "--name", AD, "--type", "class", "--transport", K,
@@ -391,6 +455,53 @@ def bolum_p(L, SC, PO):
          rc == 1 and "ONCE O YANITA BAK" not in log and len(pt) == 4, f"rc={rc} put={len(pt)}")
     _Kolu.get_etag = "ETAG-INAKTIF"
 
+    # ── PR #427 F1: GERÇEK uzunlukta gövde (V3/V4 > 500. kr) + GERÇEK kilit/PUT yolu ──
+    ust = g409_uzun(K, KULLANICI)
+    yab = g409_uzun("SAHK900099", "SAP_USER_B")
+
+    def hint(log_):
+        return [s for s in log_.splitlines() if "HINT" in s or "CRITICAL" in s][:3]
+
+    rc, exc, log, pt = kos(sabit((200, "")), post=kilit_post_409(ust))
+    ekle("P5 ⭐ GERÇEK lock_object 409, uzun gövde, V3/V4 kendimiz -> 'KENDI kilidimizle', "
+         "'ANOTHER developer' YOK, kullanıcı adı basılmaz, PUT yok",
+         rc == 1 and "KENDI kilidimizle" in log and BASKA not in log and KULLANICI not in log
+         and len(pt) == 0, f"rc={rc} put={len(pt)} {hint(log)}")
+    rc, exc, log, pt = kos(sabit((200, "")), post=kilit_post_409(yab))
+    ekle("P5b KONTROL: GERÇEK lock_object 409, uzun gövde, başka istek+kullanıcı -> 'ANOTHER developer' VAR",
+         rc == 1 and BASKA in log and "KENDI kilidimizle" not in log, f"rc={rc} {hint(log)}")
+    # PUT 409 (SAPADTError) da aynı 409 kararından geçer — eskiden bu dala hiç girmiyordu.
+    rc, exc, log, pt = kos(sabit((409, ust)))
+    # (PUT hata metni `error` TAM gövdeyi taşır — maskesiz `error` önceden var, F7 kapsamı dışı.)
+    ekle("P6 ⭐ PUT 409 her biçimde (SAPADTError), uzun gövde kendimiz -> 'KENDI kilidimizle', "
+         "'ANOTHER developer' YOK",
+         rc == 1 and len(pt) == 4 and "KENDI kilidimizle" in log and BASKA not in log
+         and "[ERROR TYPE] SAPADTError" in log, f"rc={rc} put={len(pt)} {hint(log)}")
+    rc, exc, log, pt = kos(sabit((409, yab)))
+    ekle("P6b ⭐ PUT 409 her biçimde, başka istek+kullanıcı -> 'ANOTHER developer' + 'NEVER pick' VAR "
+         "(eskiden PUT 409'da HİÇ basılmıyordu)",
+         rc == 1 and BASKA in log and "NEVER pick a transport" in log and "KENDI kilidimizle" not in log,
+         f"rc={rc} {hint(log)}")
+    rc, exc, log, pt = kos(sabit((400, G400)))
+    ekle("P6c KONTROL: PUT 400 (409-dışı) -> 409 dalı YOK ('ANOTHER developer' ve 'KENDI' basılmaz)",
+         rc == 1 and BASKA not in log and "KENDI kilidimizle" not in log, f"rc={rc} {hint(log)}")
+
+    # ── PR #427 F7: sonuç sözlüğü (MCP `"result": result`e AYNEN girer) kimlik maskeli ──
+    res, exc, log, pt = kos(sabit((200, "")), post=kilit_post_409(ust), sonuc=True)
+    res = res if isinstance(res, dict) else {}
+    ert = str(res.get("error_response_text") or "")
+    t1 = res.get("error_t100") or {}
+    ekle("P7a ⭐ error_response_text: oturum kullanıcısı maskeli (<KULLANICI>), ham ad YOK",
+         bool(ert) and KULLANICI not in ert and "<KULLANICI>" in ert,
+         f"exc={exc!r} ert={ert[:160]!r}")
+    ekle("P7b ⭐ error_t100: V4 (kilit sahibi = oturum kullanıcısı) maskeli, V3 transport AYNEN",
+         t1.get("T100KEY-V4") == "<KULLANICI>" and t1.get("T100KEY-V3") == K, f"t100={t1}")
+    res, exc, log, pt = kos(sabit((200, "")), post=kilit_post_409(yab), sonuc=True)
+    res = res if isinstance(res, dict) else {}
+    t1 = res.get("error_t100") or {}
+    ekle("P7c KONTROL: başka kullanıcı (oturum kullanıcısı değil) maskelenmez — istisna yolu kuralıyla aynı",
+         t1.get("T100KEY-V4") == "SAP_USER_B", f"t100={t1}")
+
 
 def main() -> int:
     L = _sessiz_import("sap_adt_lib")
@@ -418,7 +529,8 @@ MUTASYONLAR = [
     ("M3 son bicimde Parameter -> dongu biter (sahte True yolu)", "scripts/sap_adt_lib.py",
      "and not _son:\n", ":\n", {"L10"}),
     ("M4 push_object kendi-kilit suzgeci kapali", "scripts/push_object.py",
-     "if '409' in error and kendi_kilidimiz_mi(", "if False and kendi_kilidimiz_mi(", {"P2"}),
+     "if ('409' in error or _put_409) and kendi_kilidimiz_mi(", "if False and kendi_kilidimiz_mi(",
+     {"P2", "P5", "P6"}),
     ("M5 push_object ONCE-O-YANITA-BAK kapali", "scripts/push_object.py",
      "if _farkli and str(_denemeler[-1][1]) == '409':", "if False:", {"P4"}),
     ("M5b ipucu son yanit 409 olmasa da basilir", "scripts/push_object.py",
@@ -426,6 +538,22 @@ MUTASYONLAR = [
      "if _farkli and any(str(d[1]) == '409' for d in _denemeler):", {"P3"}),
     ("M6 sap_client hata ayrintisi aktarilmaz", "scripts/sap_client.py",
      "        den = getattr(exc, 'denemeler', None)\n", "        return\n", {"P2", "P4"}),
+    # ── PR #427 (bug-gate düzeltme turu) ──
+    ("M7 F3: 412 tekrarinin yaniti karara girmez (c2a1039)", "scripts/sap_adt_lib.py",
+     "                            response = retry_resp\n", "", {"L11"}),
+    ("M8 F1: V3/V4 kesik (500) govdeden okunur", "scripts/sap_adt_lib.py",
+     "response_text=response_text[:500],\n"
+     "                                       t100_degiskenleri=t100_degiskenleri_oku(response_text))",
+     "response_text=response_text[:500])", {"L12", "P5"}),
+    ("M9a F7: error_response_text maskesiz", "scripts/sap_client.py",
+     "result['error_response_text'] = kimlik_maskele(str(govde), parola=parola,\n"
+     "                                                           kullanici=kullanici)",
+     "result['error_response_text'] = str(govde)", {"P7a"}),
+    ("M9b F7: error_t100 maskesiz", "scripts/sap_client.py",
+     "{k: kimlik_maskele(str(v), parola=parola, kullanici=kullanici)", "{k: str(v)", {"P7b"}),
+    ("M10 F1: PUT 409 kendi-kilit/CRITICAL dalina girmez", "scripts/push_object.py",
+     "_put_409 = bool(_denemeler) and str(_denemeler[-1][1]) == '409'", "_put_409 = False",
+     {"P6", "P6b"}),
 ]
 
 
@@ -493,7 +621,8 @@ def _mutasyon() -> int:
 
 def _taban() -> int:
     """BİLGİ (gate değil): pinli taban `8565c9d`'nin üç dosyasıyla koş — hangi vektör düşüyor,
-    eski kodda P1'de 'ANOTHER developer' basılıyor muydu. Beklenen: L1/L5/L6/L10/P1/P2/P4 düşer."""
+    eski kodda P1'de 'ANOTHER developer' basılıyor muydu. Beklenen: L1/L5/L6/L10/P1/P2/P4 düşer;
+    PR #427 vektörlerinden L11/L12/P5/P6/P6b/P7a/P7b de (taban bu alanları hiç üretmez)."""
     kok, env = _kum_kur()
     try:
         for rel in ("scripts/sap_adt_lib.py", "scripts/sap_client.py", "scripts/push_object.py"):

@@ -248,20 +248,32 @@ def classrun_istek_gitmedi(exc: BaseException) -> bool:
     return False
 
 
-def _hata_ayrintisi_ekle(result: Dict[str, Any], exc: BaseException) -> None:
-    """Issue #423: push hata dalında `push_object.py`'nin ipucu kararı için iki ham ayrıntı.
+def _hata_ayrintisi_ekle(result: Dict[str, Any], exc: BaseException, adt: Any = None) -> None:
+    """Issue #423: push hata dalında `push_object.py`'nin ipucu kararı için ayrıntılar.
 
     `put_denemeleri` = `set_object_source`'un [(biçim, kod, öz)] listesi (yoksa anahtar EKLENMEZ);
-    `error_response_text` = istisnanın taşıdığı ham SAP gövdesi (409'da T100KEY-V3/V4 burada).
-    Sonuç alanları (`success`/`error`/`error_type`) DEĞİŞMEZ; istisna atmaz.
+    `error_response_text` = istisnanın taşıdığı SAP gövdesi · `error_t100` = istisnanın TAM
+    gövdeden ayrıştırdığı `T100KEY-*` girdileri (409'da V3 = çakışan istek, V4 = kilit sahibi).
+    PR #427 F7: bu sonuç MCP yanıtına (`atom` `"result": result`) AYNEN girer ⇒ iki alan istisna
+    yolunun kuralıyla (`kimlik_maskele`: parola + oturum kullanıcısı) MASKELENİR; oturum
+    kullanıcısı `<KULLANICI>` olur. Sonuç alanları (`success`/`error`/`error_type`) DEĞİŞMEZ;
+    istisna atmaz. `adt` = kimlik değerlerinin okunduğu istemci (yoksa maske yalnız desenle).
     """
     try:
+        from sap_adt_lib import kimlik_maskele
+        parola = getattr(adt, 'password', None) if adt is not None else None
+        kullanici = getattr(adt, 'user', None) if adt is not None else None
         den = getattr(exc, 'denemeler', None)
         if den:
             result['put_denemeleri'] = [list(d) for d in den]
         govde = getattr(exc, 'response_text', None)
         if govde:
-            result['error_response_text'] = str(govde)
+            result['error_response_text'] = kimlik_maskele(str(govde), parola=parola,
+                                                           kullanici=kullanici)
+        t100 = getattr(exc, 't100_degiskenleri', None)
+        if t100:
+            result['error_t100'] = {k: kimlik_maskele(str(v), parola=parola, kullanici=kullanici)
+                                    for k, v in t100.items()}
     except Exception:  # noqa: BLE001 — ayrıntı eklemek hata akışını bozamaz
         pass
 
@@ -1010,7 +1022,7 @@ class SAPClient:
         except Exception as e:
             result['error'] = str(e)
             result['error_type'] = type(e).__name__
-            _hata_ayrintisi_ekle(result, e)   # Issue #423
+            _hata_ayrintisi_ekle(result, e, self.adt_client)   # Issue #423 · PR #427 F7
             print(f"\n[ERROR] {result['error'][:600]}")
             return result
         finally:
@@ -1561,7 +1573,7 @@ class SAPClient:
             error_str = str(e)
             result['error'] = error_str
             result['error_type'] = type(e).__name__
-            _hata_ayrintisi_ekle(result, e)   # Issue #423
+            _hata_ayrintisi_ekle(result, e, self.adt_client)   # Issue #423 · PR #427 F7
             print(f"\n[ERROR] {error_str}")
 
             if isinstance(e, SAPLockError) and getattr(e, 'status_code', None) == 409:

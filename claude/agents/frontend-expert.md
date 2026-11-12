@@ -69,6 +69,11 @@ satırındadır (tek ev). Tetiklenen satırı AÇ ve oku.
 - Decimal alanın boş/dolu olmasına göre karar veren formatter'ı ya da mock'u yazarken kararı BE'nin
   durum alanına dayandır — çünkü V2'de boş decimal `null` değil `"0.000"` gelir ve `null` taklit eden
   mock duman testini sahte-yeşil yapar (FE-52).
+- BE canlıyken mock kurarken ya da mock'a karşı yeşil geçen bir UI'ı teslim ederken mock'un davranışını
+  (sayfa boyu ve `__next`, etag/`If-Match`, hata kodları, süzgeç sınırları, alan değer kümeleri) canlı
+  servisten ölçerek kur; mock-yeşilini canlı kanıtı sayma — çünkü sunucu sayfalaması, ETag zorunluluğu
+  ve aksiyon hata kodu mock'ta yoksa UI mock'ta geçip canlıda kırılır (FE-54, FE-55, FE-56). BE henüz yoksa madde
+  uygulanmaz.
 
 ## 🧪 TESLİM ÖNCESİ ÖZ-DENETİM — ortak kontrol programı (ZORUNLU)
 Trap validator'dan SONRA, `BUG_GATE_READY` göndermeden ÖNCE. Değişiklik commit'liyse `--diff <aralık>`

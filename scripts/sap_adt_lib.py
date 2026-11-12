@@ -64,17 +64,40 @@ if os.getenv('ADT_SAP_SSL_VERIFY', 'false').lower() not in ('true', '1', 'yes'):
 class SAPADTError(Exception):
     """Base exception for all SAP ADT errors"""
 
-    def __init__(self, message, status_code=None, response_text=None, endpoint=None, **kwargs):
+    def __init__(self, message, status_code=None, response_text=None, endpoint=None,
+                 t100_degiskenleri=None, **kwargs):
         self.message = message
         self.status_code = status_code
         self.response_text = response_text
         self.endpoint = endpoint
+        # PR #427 F1: T100KEY-* değerleri. Çağıran KESİLMİŞ gövde veriyorsa TAM gövdeden
+        # ayrıştırıp burada verir (409 CTS_WBO_API 019'da V3/V4 ~600. karakterden sonradır);
+        # verilmezse elindeki gövdeden ayrıştırılır. Ağ yok, istisna atmaz.
+        self.t100_degiskenleri = (t100_degiskenleri if t100_degiskenleri is not None
+                                  else t100_degiskenleri_oku(response_text))
         super().__init__(self.message)
 
     def __str__(self):
         if self.status_code:
             return f"[{self.status_code}] {self.message}"
         return self.message
+
+
+_T100_GIRDI_RE = re.compile(r"<entry\s+key=[\"'](T100KEY-[A-Z0-9]+)[\"']\s*>\s*([^<]*?)\s*</entry>")
+
+
+def t100_degiskenleri_oku(govde):
+    """SAP hata gövdesindeki `T100KEY-*` girdileri → {'T100KEY-V3': ..., ...}. Yoksa {}.
+
+    PR #427 F1: istisna gövdesi `[:500]` kesilince 409 `CTS_WBO_API 019`'un V3/V4'ü kayboluyordu
+    (gerçekçi gövde ~719 kr, V3 ~618.). Değerler istisna ANINDA tam gövdeden okunur. Ağ yok,
+    istisna atmaz; gövde XML değilse de düz desenle çalışır (bozuk gövde = boş sözlük)."""
+    if not govde:
+        return {}
+    try:
+        return {k: v for k, v in _T100_GIRDI_RE.findall(str(govde))}
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 class SAPConnectionError(SAPADTError):
@@ -3199,6 +3222,11 @@ class SAPADTClient:
                                 return True
                             denemeler.append((f"{desc} [412 sonrasi inaktif ETag tekrari]",
                                               retry_resp.status_code, put_deneme_ozu(retry_resp.text)))
+                            # PR #427 F3: durma kararı ve rapor TEKRARIN yanıtına bakar. Eskiden
+                            # ilk 412'ye bakılıyordu ⇒ "412 → tekrar 400" (içerik reddi) yine
+                            # sonraki biçime düşüyordu. Tekrar da biçim reddiyse (412/409/
+                            # Parameter) aşağıdaki karar sonraki biçime geçmeyi sürdürür (L4b).
+                            response = retry_resp
                 except Exception as e_retry:
                     if self.debug_enabled:
                         self._debug(f"[DEBUG] set_object_source - 412 retry failed: {str(e_retry)[:100]}")
@@ -4031,7 +4059,10 @@ class SAPADTClient:
                         f"  2. Go to SE01/SE09 -> find transport {conflict_transport or conflict_transport} -> move object to {transport or 'your target transport'}\n"
                         f"  3. Retry the push"
                     )
-                    raise SAPLockError(msg, status_code=409, response_text=response_text[:500])
+                    # PR #427 F1: gövde [:500] kesilir AMA T100KEY-V3/V4 (çakışan istek + kullanıcı)
+                    # gerçek gövdede ~600. karakterden sonradır ⇒ TAM gövdeden ayrıştırılıp taşınır.
+                    raise SAPLockError(msg, status_code=409, response_text=response_text[:500],
+                                       t100_degiskenleri=t100_degiskenleri_oku(response_text))
 
                 # Other errors - try next strategy
                 else:

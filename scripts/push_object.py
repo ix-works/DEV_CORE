@@ -177,19 +177,23 @@ def onceki_farkli_hatalar(denemeler):
     return out
 
 
-def _t100_degeri(metin, anahtar):
-    m = re.search(r"<entry\s+key=[\"']%s[\"']\s*>\s*([^<]*?)\s*</entry>" % re.escape(anahtar),
-                  metin or '')
-    return m.group(1) if m else None
+_KULLANICI_MASKESI = '<KULLANICI>'   # sap_adt_lib.kimlik_maskele'nin oturum kullanıcısı yerine yazdığı
 
 
-def kendi_kilidimiz_mi(metin, transport, kullanici):
-    """409 gövdesinde V3 == bu transport VE V4 == oturum kullanıcısı mı? Biri yoksa False."""
-    v3, v4 = _t100_degeri(metin, 'T100KEY-V3'), _t100_degeri(metin, 'T100KEY-V4')
+def kendi_kilidimiz_mi(t100, transport, kullanici):
+    """409'un T100KEY-V3'ü == bu transport VE V4 == oturum kullanıcısı mı? Biri yoksa False.
+
+    `t100` = sonuçtaki `error_t100` (istisna ANINDA TAM gövdeden ayrıştırılmış; PR #427 F1 —
+    eskiden `[:500]` kesilmiş gövdeden okunuyordu, gerçek 409'da V3/V4 kesimin ötesindeydi).
+    Değerler maskelidir (F7): oturum kullanıcısı `<KULLANICI>` olur ⇒ V4 bu maskeyse ya da
+    (maskelenmemişse) kullanıcı adıyla aynıysa eşleşir. Kullanıcı bilinmiyorsa False (muhafazakâr)."""
+    t100 = t100 if isinstance(t100, dict) else {}
+    v3, v4 = t100.get('T100KEY-V3'), t100.get('T100KEY-V4')
     if not (v3 and v4 and transport and kullanici):
         return False
-    return v3.strip().upper() == str(transport).strip().upper() and \
-        v4.strip().upper() == str(kullanici).strip().upper()
+    v4 = str(v4).strip()
+    return str(v3).strip().upper() == str(transport).strip().upper() and \
+        (v4 == _KULLANICI_MASKESI or v4.upper() == str(kullanici).strip().upper())
 
 
 class _YonlendirenParser(argparse.ArgumentParser):
@@ -352,17 +356,21 @@ def main():
             for d in _farkli:
                 print(f"         {d[0]} -> {d[1]} -> {d[2]}")
             print("[HINT] Sonraki 409, ilk denemenin biraktigi duruma (kendi kilidimiz) carpmis olabilir.")
-        if error_type == 'SAPLockError':
-            _govde = (error or '') + '\n' + str(result.get('error_response_text') or '')
+        # PR #427 F1: PUT 409'u (set_object_source → SAPADTError, son deneme 409) da AYNI 409
+        # kararından geçer — eskiden yalnız kilit-adımı 409'u (SAPLockError) bu dala giriyordu,
+        # PUT 409'da ne "kendi kilidimiz" ne de "baska gelistiricinin transport'unu kullanma" uyarısı basılıyordu.
+        _put_409 = bool(_denemeler) and str(_denemeler[-1][1]) == '409'
+        if error_type == 'SAPLockError' or _put_409:
+            _t100 = result.get('error_t100') if isinstance(result, dict) else None
             _kullanici = getattr(getattr(client, 'adt_client', None), 'user', None)
-            if '409' in error and kendi_kilidimiz_mi(_govde, args.transport, _kullanici):
+            if ('409' in error or _put_409) and kendi_kilidimiz_mi(_t100, args.transport, _kullanici):
                 # Issue #423 ②: çakışan transport + kullanıcı bu push'un kendisi.
                 print("[HINT] 409 govdesindeki transport (V3) bu push'un transport'u, kullanici (V4) "
                       "bu oturumun kullanicisi -- cakisma KENDI kilidimizle; baska gelistirici YOK.")
                 print("[HINT] Once ayni push'un onceki/paralel denemesine bak (yukaridaki denemeler, "
                       "acik kalmis oturum). SM12'de kilidi KONTROL ET; silme karari kullanicidadir "
                       "(ADR 0005-C).")
-            elif '409' in error or 'transport' in error.lower() or 'CORRNR' in error:
+            elif '409' in error or _put_409 or 'transport' in error.lower() or 'CORRNR' in error:
                 print("[HINT] Transport conflict: object is locked under a different transport.")
                 print("")
                 print("=" * 60)
