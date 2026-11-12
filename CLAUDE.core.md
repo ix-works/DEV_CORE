@@ -178,9 +178,12 @@
   PR, yazma yetkisiz klonda Issue) · `<YOK>` → `seed:` kararı · `(a-taze)` (tohumda olup son 7 günde
   yerelde düzenlenen ders) → kural değiştiyse ya da ters döndüyse tohum güncellenir, yalnız yerel
   vaka ayrıntısıysa bırakılır. Ateşler: gün-sonunda bu bölümde **karara bağlanmamış** kalem görünce.
-  **Karara bağlanmış `(a-taze)` kalemi:** geri akışı tohuma işlenmiş (fark yalnız genericize) ya da
-  "bırak" kararıyla `--birlestirildi <dosya>` koşulmuş ders — araç bunu ayırmaz, kalem 7 günlük
-  pencere boyunca listede kalır; **yeniden karar verilmez**. ⚠ Yerel `seed:` alanının dolu olması
+  **Karar NEREYE yazılır:** o günün gün-sonu `SESSION_NOTES.md` bloğuna kalem başına tek satır
+  (`<ders> → terfi | tohum güncellendi | bırak`). Araç kararı ayırmaz: `(a-taze)` kalemi 7 günlük
+  pencere boyunca listede kalır; ertesi gün o satırı bulunan kalem **yeniden karar istemez**, satırı
+  olmayan kalem karara bağlanmamıştır. ⚠ `--birlestirildi <dosya>` yalnız tohum ilerlediğinde
+  manifest'e iz yazar; tohum ilerlemediyse ("bırak") hiçbir şey yazmaz (ölçüldü 2026-11-12: manifest
+  md5 ve `--terfi-adaylari` çıktısı öncesi/sonrası aynı) — karar kaydının yerini tutmaz. ⚠ Yerel `seed:` alanının dolu olması
   bu kararın işareti DEĞİLDİR: o alan *terfi* kararıdır, *geri akış* kararı değil (ölçüldü
   2026-11-12: geri akışı henüz yapılmamış 3 derste `seed: evet` var, tohum bayat).
   *(Vaka 2026-11-12: karar bağlanmadığı için "yerelde düzenlenmiş" kovası 258'e birikti; tohumda

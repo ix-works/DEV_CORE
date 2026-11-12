@@ -47,8 +47,10 @@ kümesi, uçuştaki işin içinde) yeni madde değil mevcut işin kapsamıdır.
 yan bulgusu ertelenmiş-iş listesine yeni bölüm olarak yazıldı; kullanıcı: *"bunları neden ekleyip
 bıraktın, yapman gerekmiyor mu?"* Ayıklama: 2'si core'da zaten kayıtlıydı (mükerrer), 2'si
 gereksizdi, 1'i (ajan MEMORY.md %95,9 bütçe = sessiz kesilme) gerçekten yapılması gerekendi.
-⇒ Gün-sonunda "bugün doğan ertelenmiş iş" = yalnız **kullanıcının açıkça "ertele/kalem aç"
-dediği** kalem. Tur yan bulgusu (öneri/gözlem; kanıtlı kusur karar ağacına gider): ya **yap** (mutlaka gerekiyorsa, onayla) ya **düşür**; üçüncü
-yol "deferred'e yazıp bırakmak" değildir. Kalem yazmadan önce: core'da zaten kayıtlı mı?
+⇒ Gün-sonunda "bugün doğan ertelenmiş iş" = **kullanıcının açıkça "ertele/kalem aç" dediği** kalem
+**+ kapsam-dışı karar ağacının "ilgisiz" dalından gelen KANITLI kusur** (o dal açık kalem ister —
+[[feedback_kapsam-disi-bulgu-protokolu]]). Öneri/gözlem niteliğindeki tur yan bulgusu ise deferred'e
+girmez: ya **yap** (mutlaka gerekiyorsa, onayla) ya **düşür**; üçüncü yol "deferred'e yazıp bırakmak"
+değildir. Kalem yazmadan önce: core'da zaten kayıtlı mı?
 
-Son-doğrulama: 2026-11-02 · Applies-to: tüm çok-PR'lı turlar (infra, radar, doküman) + gün-sonu ertelenmiş-iş süpürmesi
+Son-doğrulama: 2026-11-12 · Applies-to: tüm çok-PR'lı turlar (infra, radar, doküman) + gün-sonu ertelenmiş-iş süpürmesi
