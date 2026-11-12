@@ -50,7 +50,7 @@
 - [Dosya Bölgeleri / Yazım Yetkisi](feedback_dosya-bolgeleri-yazim-yetkisi.md) — A metodoloji/araç=lider · B paket kaynağı/docs=feature+lider · C SAP=gateway; commit=lider
 - [Takım Süreklilik / Gün-sonu / Resume](feedback_takim-sureklilik-gun-sonu-resume.md) — süreklilik=lider; ajan durumsuz; gün-sonu=checkpoint+SESSION_NOTES+WIP commit+**push origin main ZORUNLU**; resume=re-spawn+brief
 - [Kararları Önce Topla, Sonra Dispatch](feedback_kararlari-once-topla-sonra-dispatch.md) — build-unit'in TÜM user-kararlarını önce topla, sonra konsolide yönerge; mid-build ping-pong yok
-- [ATC Priority 1 Zorunlu](feedback_atc-priority-1-zorunlu.md) — yalnız Prio 1 zorunlu; Prio 2/3 açık onayla pass (sessiz pass yok); variant ZZNDBS_ATC
+- [ATC Priority 1 Zorunlu](feedback_atc-priority-1-zorunlu.md) — yalnız Prio 1 zorunlu; Prio 2/3 açık onayla pass (sessiz pass yok); mevcut kodda clean-core P1 muaf; variant ZZNDBS_ATC
 - [Clean Core Released-CDS Proaktif](feedback_clean-core-released-cds-proaktif.md) — GATE check_released_objects; YENİ kodda released CDS (MARA değil I_Product); mevcut kod muaf (proje politikası aksini demiyorsa)
 - [Spec-Mutabakat Gate (her dev başı)](feedback_spec-mutabakat-gate.md) — yeni program: ekran+fonksiyonel spec iste → <LEGACY_SOURCE>+app+DDL/S ile sentezle → MUTABAKAT → build
 - [Hook Komut ${CLAUDE_PROJECT_DIR} Exec-Form](feedback_hook-komut-project-dir-execform.md) — hook+statusLine ASLA göreceli yol; cwd kayınca kırılır; exec-form + ${CLAUDE_PROJECT_DIR}

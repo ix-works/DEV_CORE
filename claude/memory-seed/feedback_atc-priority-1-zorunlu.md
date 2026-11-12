@@ -1,6 +1,6 @@
 ---
 name: feedback_atc-priority-1-zorunlu
-description: ATC bulgularında yalnızca Priority 1 zorunlu düzeltilir; Priority 2/3 kullanıcı onayıyla pass
+description: "ATC bulgularında yalnızca Priority 1 zorunlu düzeltilir; Priority 2/3 kullanıcı onayıyla pass; mevcut koddaki clean-core (ham tablo / released-API) P1 ailesi muaf (proje politikası aksini demiyorsa)"
 metadata: 
   node_type: memory
   type: feedback
