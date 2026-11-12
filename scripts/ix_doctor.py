@@ -1198,8 +1198,9 @@ def _kanca_kablolama(ayar: Path | None = None, sablon: Path | None = None) -> li
                + ", ".join(KK.bicim(b) for b in k["kapsanan"][:6]))
     for b, komut in k["bicim_farki"]:
         r.append((WARN, f"kanca {b[2]} ({b[0]}) TANINMAYAN biçimde kablolu: `{komut[:120]}` — ad "
-                        f"ayrıştırılamadı (hook_shim.py kanca adını İLK argüman sayar); EKSİK "
-                        f"sayılmadı, onarım EKLEMEZ (çift koşum olurdu); şablon biçimiyle "
+                        f"ayrıştırılamayan komutta ya da kabuk zincirindeki 2.+ shim çağrısında "
+                        f"(hook_shim.py kanca adını İLK argüman sayar); koşup koşmadığı ÖLÇÜLMEDİ; "
+                        f"EKSİK sayılmadı, onarım EKLEMEZ (çift koşum olabilirdi); şablon biçimiyle "
                         f"karşılaştır (§6a ②) [{_KANCA_KAPSAM}]"))
     if k["eksik"]:
         r.append((FAIL, f"kanca kablolaması: şablonun {n} bağlantısından {len(k['eksik'])}'i "
@@ -1211,7 +1212,14 @@ def _kanca_kablolama(ayar: Path | None = None, sablon: Path | None = None) -> li
         r.append((WARN, f"kanca eşleyicisi şablondan FARKLI: {b[2]} ({b[0]}) şablon `{b[1] or '-'}` "
                         f"↔ proje `{p_eslik or '-'}` — genişletme/daraltma olabilir, otomatik "
                         f"onarılmaz; şablonla karşılaştır (§6a ②) [{_KANCA_KAPSAM}]"))
-    if not k["eksik"] and not KK.hepsi_kapali(p):
+    if not k["eksik"] and not KK.hepsi_kapali(p) and k["bicim_farki"]:
+        # F7 (2026-11-12): tanınmayan biçimdeki bağlantının koşup koşmadığı ÖLÇÜLMEDİ ⇒ özet
+        # "tamamı projede" diyemez ve PASS olamaz (ÖLÇÜLEMEDİ ≠ TEMİZ).
+        bf = len(k["bicim_farki"])
+        r.append((WARN, f"kanca kablolaması: şablonun {n} bağlantısından {n - bf}'i projede ad "
+                        f"düzeyinde VAR, {bf}'i yalnız tanınmayan biçimde (yukarıda) — tamamı "
+                        f"DOĞRULANAMADI{ek} [{_KANCA_KAPSAM}]"))
+    elif not k["eksik"] and not KK.hepsi_kapali(p):
         r.append((PASS, f"kanca kablolaması: şablonun {n} bağlantısının ({adet} kanca) tamamı "
                         f"projede{ek} [{_KANCA_KAPSAM}]"))
     return r
@@ -1291,7 +1299,9 @@ def _smoke_yorumlayici(veri: dict, KK) -> tuple[str | None, Sonuc | None, str]:
                             f"§6a ②: gerçek Python'u PATH'te öne al (1g satırı). Kanca KODU aşağıda "
                             f"sys.executable ile ayrıca ölçüldü [{_PATH_SINIRI}]"), \
             "yorumlayıcı BAŞLAMIYOR → sys.executable yedeği"
-    return yol, None, f"yorumlayıcı `{ad}` → {yol}"
+    # F8 (2026-11-12): PASS özetinde de aynı sınır — `--layer 4` 1g satırını basmaz.
+    sinir = "" if ("/" in ad or "\\" in ad) else f" [{_PATH_SINIRI}]"
+    return yol, None, f"yorumlayıcı `{ad}` → {yol}{sinir}"
 
 
 def _smoke_sorunu(rc: int, out: str, beklenti: tuple | None) -> tuple[str, str] | None:
@@ -1436,8 +1446,14 @@ def _recall_saglik() -> list[Sonuc]:
     try:
         KK = _kanca_modulu()
         ayar = PROJ / ".claude" / "settings.json"
-        kablolu = ("recall_inject" in {a for _o, _m, a in KK.baglantilar(_json_oku(ayar))}
-                   if ayar.is_file() else False)
+        kablolu: bool | str | None = False
+        if ayar.is_file():
+            pv = _json_oku(ayar)
+            kablolu = "recall_inject" in {a for _o, _m, a in KK.baglantilar(pv)}
+            if not kablolu and any(b[2] == "recall_inject" for b, _k in KK.kiyas(
+                    pv, _json_oku(CORE_ROOT / "claude" / "settings.template.json"))["bicim_farki"]):
+                # F7: tanınmayan biçim — `--tazele-settings` buna DOKUNMAZ (çift ekleme yok).
+                kablolu = "bicim"
     except Exception:  # noqa: BLE001
         kablolu = None
     once, _ = _recall_indeks_durumu(idx)
@@ -1474,7 +1490,8 @@ def _recall_saglik() -> list[Sonuc]:
         dondu = "[JIT-RECALL]" in out and baslik[:30] in out
         if dondu:
             break
-    kablo = {True: "kablolu", False: "kablolu DEĞİL (4h)", None: "kablo ÖLÇÜLEMEDİ"}[kablolu]
+    kablo = {True: "kablolu", False: "kablolu DEĞİL (4h)", None: "kablo ÖLÇÜLEMEDİ",
+             "bicim": "yalnız TANINMAYAN biçimde kablolu (4h WARN)"}[kablolu]
     govde = (f"recall_inject sağlığı: {kablo} · indeks önce {once} → sonra {sonra} "
              f"({len(kayitlar)} kayıt) · {st_ozet} · örnek prompt (denenen {len(denenen)}: "
              f"{', '.join(denenen)}) ")
@@ -1482,6 +1499,11 @@ def _recall_saglik() -> list[Sonuc]:
         son = next((s.strip() for s in reversed(out.splitlines()) if s.strip()), "çıktı yok")
         return [(FAIL, govde + f"HİÇBİRİ öneri DÖNDÜRMEDİ (son exit {rc}: {son[:90]!r}) — fail-open kanca "
                                f"SESSİZ; {onarim}; sürerse §6a ③ [{_RECALL_KAPSAM}]")]
+    if kablolu == "bicim":
+        return [(FAIL, govde + f"öneri DÖNDÜRDÜ ama kancanın oturumda koşup koşmadığı ÖLÇÜLMEDİ "
+                               f"— {_TAZELE_SETTINGS} bu biçime DOKUNMAZ (çift ekleme olurdu); "
+                               f"kablo satırını şablon biçimine elle çevir (§6a ②: kullanıcıya "
+                               f"sor) [{_RECALL_KAPSAM}]")]
     if kablolu is not True:
         return [(FAIL, govde + f"öneri DÖNDÜRDÜ ama kanca oturumda KOŞMAZ — onarım (§6a ①): "
                                f"{_TAZELE_SETTINGS} [{_RECALL_KAPSAM}]")]

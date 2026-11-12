@@ -34,7 +34,14 @@ K1 MATRİSİ (Q408 KAPANIŞ KOŞULU; boş dizin DEĞİL — eski durumlu sahte "
   DÜZELTME TURU (bug-gate PR #429, 2026-11-12):
   U5  Ö1 kanca_adi: tırnaklı kabuk adı · `hook_shim.py --x ad` = `--x` (shim argv[1]) · yönlendirme
   U6  Ö1 tırnaklı biçimde kablolu recall_inject EKSİK DEĞİL · tazeleme İKİNCİ kopya EKLEMEZ
-  U7  Ö1 emniyet ağı: ayrıştırılamayan biçim (`--flag recall_inject`) → biçim farkı, EKLENMEZ, 4h WARN
+  U7  Ö1 emniyet ağı: adı ayrıştırılamayan (`?…`) biçim → biçim farkı, EKLENMEZ · U7b 4h WARN +
+      özet "tamamı projede" DEMEZ (F7)
+  U10 F7 adı ayrıştırılmış ama BAŞKA adı koşturan kanca (`--flag recall_inject` · `pull_before_edit
+      infra_write_guard`) → EKSİK + eklenir (shim yalnız argv[1]'i koşturur) · U10b 4h FAIL ADIYLA
+  U11 F7 kontrol (fazla daraltma): kabuk zincirinde İKİNCİ shim çağrısı (`… a && … recall_inject`)
+      gerçekten koşar → biçim farkı, EKLENMEZ (çift koşum yok)
+  J1  F7 4j: recall_inject yalnız tanınmayan biçimde → FAIL, onarım `--tazele-settings` DEĞİL (§6a ②)
+  Y1  F8 4i PASS özeti PATH sınırını taşır (`--layer 4` 1g satırını basmaz)
   U8  Ö2 birleşik eşleyici (Bash|…|Edit|…|NotebookEdit) ⊇ şablon → KAPSANAN, eksik 0, eklenen 0
   U9  Ö2 kontrol: kısmi kapsama → kapsanan + eşleyici farkı + YALNIZ kapsanmayan EKSİK eklenir
   M6  Ö2 4h birleşik eşleyicide FAIL YOK + tazeleme bayt-eş "KAPSANIYOR"
@@ -71,7 +78,13 @@ MUTASYON (çapa tam 1 kez bulunmazsa exit 2; ilan edilen vektörler düşmezse S
   --mutasyon-local-kor       4h settings.local.json'a bakmaz       → L1
   --mutasyon-shimdisi-sessiz 4i shim dışı SKIP satırı yok          → S2
   --mutasyon-genel-sapma     settings çifti eski genel metne döner → F3
-TABAN (eski kod, KIRMIZI beklenir): --kaynak <ix_doctor.py> · --kaynak-inspector <inspector.py>
+  --mutasyon-ag-taninana     F7 ağ adı tanınan kancaya da bakar    → U10 · U10b
+  --mutasyon-zincir-kor      F7 zincirdeki 2. shim çağrısı görülmez → U11
+  --mutasyon-bicim-pass      F7 biçim farkında özet PASS "tamamı"  → U7b
+  --mutasyon-recall-bicim-kor F7 4j tanınmayan biçimi görmez       → J1
+  --mutasyon-path-siniri-yok F8 4i PASS özetinde PATH sınırı yok   → Y1
+TABAN (eski kod, KIRMIZI beklenir): --kaynak <ix_doctor.py> · --kaynak-inspector <inspector.py> ·
+  --kaynak-kk <utils/kanca_kablolari.py>
 
 Çıkış: 0 hepsi beklendiği gibi · 1 sapma (mutasyonda: ilan edilenler DÜŞTÜ) · 2 KURULAMADI/SAPMA
 """
@@ -130,6 +143,11 @@ ILAN = {
     "--mutasyon-local-kor": {"L1"},
     "--mutasyon-shimdisi-sessiz": {"S2"},
     "--mutasyon-genel-sapma": {"F3"},
+    "--mutasyon-ag-taninana": {"U10", "U10b"},
+    "--mutasyon-zincir-kor": {"U11"},
+    "--mutasyon-bicim-pass": {"U7b"},
+    "--mutasyon-recall-bicim-kor": {"J1"},
+    "--mutasyon-path-siniri-yok": {"Y1"},
 }
 GECERLI_KIP = ("--mutasyon-ad-yok", "--mutasyon-ek-warn", "--mutasyon-ezerek-tazele",
                "--mutasyon-dogrulama-yok", "--mutasyon-sys-executable", "--mutasyon-exit0-yeter",
@@ -137,10 +155,13 @@ GECERLI_KIP = ("--mutasyon-ad-yok", "--mutasyon-ek-warn", "--mutasyon-ezerek-taz
                "--mutasyon-tirnak-kor", "--mutasyon-ham-ag-yok", "--mutasyon-kapsama-yok",
                "--mutasyon-tek-kayit", "--mutasyon-kapali-kor", "--mutasyon-dizge-kor",
                "--mutasyon-smoke-sayilir", "--mutasyon-local-kor", "--mutasyon-shimdisi-sessiz",
-               "--mutasyon-genel-sapma")
+               "--mutasyon-genel-sapma", "--mutasyon-ag-taninana", "--mutasyon-zincir-kor",
+               "--mutasyon-bicim-pass",
+               "--mutasyon-recall-bicim-kor", "--mutasyon-path-siniri-yok")
 KIP: str | None = None
 TABAN: Path | None = None
 TABAN_INSP: Path | None = None
+TABAN_KK: Path | None = None
 _a = sys.argv[1:]
 while _a:
     x = _a.pop(0)
@@ -148,6 +169,8 @@ while _a:
         TABAN = Path(_a.pop(0)).resolve()
     elif x == "--kaynak-inspector" and _a:
         TABAN_INSP = Path(_a.pop(0)).resolve()
+    elif x == "--kaynak-kk" and _a:
+        TABAN_KK = Path(_a.pop(0)).resolve()
     elif x in GECERLI_KIP and KIP is None:
         KIP = x
     else:
@@ -201,11 +224,26 @@ def _kaynak_doctor() -> str:
                       "", KIP)
     if KIP == "--mutasyon-shimdisi-sessiz":
         m = _degistir(m, "    if shim_disi:\n        # F2c", "    if False:\n        # F2c", KIP)
+    if KIP == "--mutasyon-bicim-pass":
+        m = _degistir(m, '    if not k["eksik"] and not KK.hepsi_kapali(p) and k["bicim_farki"]:\n',
+                      "    if False:\n", KIP)
+    if KIP == "--mutasyon-recall-bicim-kor":
+        m = _degistir(m, '                kablolu = "bicim"\n', "                pass\n", KIP)
+    if KIP == "--mutasyon-path-siniri-yok":
+        m = _degistir(m, 'else f" [{_PATH_SINIRI}]"\n', 'else ""\n', KIP)
     return m
 
 
 def _kaynak_kk() -> str:
+    if TABAN_KK is not None:
+        return TABAN_KK.read_text(encoding="utf-8")
     m = KKYOL.read_text(encoding="utf-8")
+    if KIP == "--mutasyon-ag-taninana":
+        m = _degistir(m, "            if shim_kancasi_mi(kanca_adi(kanca)):\n                # shim yalnız",
+                      "            if False:\n                # shim yalnız", KIP)
+    if KIP == "--mutasyon-zincir-kor":
+        m = _degistir(m, 'if tk[i].lower().endswith("hook_shim.py")][1:]:\n',
+                      'if tk[i].lower().endswith("hook_shim.py")][0:0]:\n', KIP)
     if KIP == "--mutasyon-ezerek-tazele":
         m = _degistir(m, '    yeni = copy.deepcopy(proje)\n    hooks = yeni.setdefault("hooks", {})\n',
                       '    yeni = copy.deepcopy(proje)\n    yeni["hooks"] = copy.deepcopy(sablon.get("hooks") or {})\n'
@@ -391,6 +429,21 @@ TIRNAKLI = {"type": "command",
             "command": 'python "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py" "recall_inject"'}
 BAYRAKLI = {"type": "command", "command": "python",
             "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py", "--flag", "recall_inject"]}
+# Adı AYRIŞTIRILAMAYAN biçim (komut dizgesi shim'de biter, ad `args`ta) → `?…` (Ö1 ağının hedefi).
+AYRISMAZ = {"type": "command", "command": "python ${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py",
+            "args": ["recall_inject"]}
+
+
+def _bash_iki_ad(t: dict) -> dict:
+    """F7 sonda biçimi: şablonun `Bash` bloğunda `hook_shim.py pull_before_edit infra_write_guard`
+    — shim yalnız argv[1]'i (pull_before_edit) koşturur, infra_write_guard Bash'te HİÇ koşmaz."""
+    d = copy.deepcopy(t)
+    for b in d["hooks"]["PreToolUse"]:
+        if b.get("matcher") == "Bash":
+            b["hooks"] = [{"type": "command", "command": "python",
+                           "args": ["${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py",
+                                    "pull_before_edit", "infra_write_guard"]}]
+    return d
 
 
 def _recall_adedi(d: dict) -> int:
@@ -515,12 +568,36 @@ def main() -> int:
         y6, e6 = kk.eksikleri_ekle(d6, T)
         kontrol("U6 Ö1 tırnaklı biçimde kablolu recall_inject EKSİK DEĞİL · İKİNCİ kopya EKLENMEZ",
                 k6["eksik"] == [] and e6 == [] and _recall_adedi(y6) == 1, f"{k6['eksik']} {e6}")
-        d7 = _recall_bicim(T, BAYRAKLI)
+        d7 = _recall_bicim(T, AYRISMAZ)
         k7 = kk.kiyas(d7, T)
         y7, e7 = kk.eksikleri_ekle(d7, T)
-        kontrol("U7 Ö1 emniyet ağı: `--flag recall_inject` → biçim farkı, EKSİK değil, EKLENMEZ",
-                k7["eksik"] == [] and [b[2] for b, _ in k7["bicim_farki"]] == ["recall_inject"]
+        kontrol("U7 Ö1 emniyet ağı: adı ayrıştırılamayan (`?…`) biçim → biçim farkı, EKSİK değil, EKLENMEZ",
+                kk.kanca_adi(AYRISMAZ).startswith("?")
+                and k7["eksik"] == [] and [b[2] for b, _ in k7["bicim_farki"]] == ["recall_inject"]
                 and e7 == [] and _recall_adedi(y7) == 1, f"{k7['eksik']} {k7['bicim_farki']} {e7}")
+        d10 = _recall_bicim(T, BAYRAKLI)
+        k10 = kk.kiyas(d10, T)
+        y10, e10 = kk.eksikleri_ekle(d10, T)
+        d10b = _bash_iki_ad(T)
+        k10b = kk.kiyas(d10b, T)
+        _y10b, e10b = kk.eksikleri_ekle(d10b, T)
+        kontrol("U10 F7 adı ayrıştırılmış, başka adı koşturan kanca → EKSİK + eklenir "
+                "(`--flag recall_inject` · `pull_before_edit infra_write_guard`)",
+                [b[2] for b in k10["eksik"]] == ["recall_inject"] and k10["bicim_farki"] == []
+                and [b[2] for b in e10] == ["recall_inject"] and _recall_adedi(y10) == 2
+                and k10b["eksik"] == [("PreToolUse", "Bash", "infra_write_guard")]
+                and k10b["bicim_farki"] == [] and e10b == [("PreToolUse", "Bash", "infra_write_guard")],
+                f"{k10['eksik']} {k10['bicim_farki']} {e10} | {k10b['eksik']} {k10b['bicim_farki']} {e10b}")
+        zincir = {"type": "command",
+                  "command": 'python "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py" proje_ozel_kanca && '
+                             'python "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py" recall_inject'}
+        d11 = _recall_bicim(T, zincir)
+        k11 = kk.kiyas(d11, T)
+        y11, e11 = kk.eksikleri_ekle(d11, T)
+        kontrol("U11 F7 kontrol: zincirde İKİNCİ shim çağrısı (recall_inject) → biçim farkı, EKLENMEZ",
+                kk.kanca_adi(zincir) == "proje_ozel_kanca" and k11["eksik"] == []
+                and [b[2] for b, _ in k11["bicim_farki"]] == ["recall_inject"]
+                and e11 == [] and _recall_adedi(y11) == 1, f"{k11['eksik']} {k11['bicim_farki']} {e11}")
         d8 = _birlesik(T, TAM_BIRLESIK)
         k8 = kk.kiyas(d8, T)
         _y8, e8 = kk.eksikleri_ekle(d8, T)
@@ -623,9 +700,19 @@ def main() -> int:
                 tag(r) == ["PASS"] and "KAPSANAN 3" in r[0][1] and ok is True
                 and "KAPSANIYOR" in out and (p6 / ".claude" / "settings.json").read_bytes() == once,
                 f"{r} {out[-400:]}")
-        r = _cagir(g, "_kanca_kablolama", kum("u7k", _recall_bicim(T, BAYRAKLI)))
-        kontrol("U7b Ö1 4h: tanınmayan biçim → WARN 'TANINMAYAN', FAIL YOK",
-                "FAIL" not in tag(r) and len(bul(r, "TANINMAYAN", "WARN")) == 1, f"{r}")
+        r = _cagir(g, "_kanca_kablolama", kum("u7k", _recall_bicim(T, AYRISMAZ)))
+        kontrol("U7b Ö1 4h: tanınmayan biçim → WARN 'TANINMAYAN', FAIL YOK · F7 özet PASS DEĞİL, "
+                "'tamamı projede' DEMEZ, 'DOĞRULANAMADI'",
+                "FAIL" not in tag(r) and "PASS" not in tag(r) and len(bul(r, "TANINMAYAN", "WARN")) == 1
+                and not bul(r, "tamamı projede") and len(bul(r, "tamamı DOĞRULANAMADI", "WARN")) == 1,
+                f"{r}")
+        r = _cagir(g, "_kanca_kablolama", kum("u10", _bash_iki_ad(T)))
+        f = bul(r, "kanca kablolaması", "FAIL")
+        kontrol("U10b F7 4h: `pull_before_edit infra_write_guard` → FAIL infra_write_guard ADIYLA + "
+                "--tazele-settings · TANINMAYAN/‘tamamı projede’ YOK",
+                len(f) == 1 and "infra_write_guard (PreToolUse [Bash])" in f[0]
+                and "--tazele-settings" in f[0] and not bul(r, "TANINMAYAN")
+                and not bul(r, "tamamı projede"), f"{r}")
         dd = copy.deepcopy(T)
         dd["disableAllHooks"] = True
         r = _cagir(g, "_kanca_kablolama", kum("d1", dd))
@@ -700,6 +787,11 @@ def main() -> int:
         r = _cagir(g, "_recall_saglik", p3)
         kontrol("M3d kayıt var, öneri dönmüyor (exit 0) → FAIL 'öneri DÖNDÜRMEDİ'",
                 tag(r) == ["FAIL"] and "öneri DÖNDÜRMEDİ" in r[0][1], f"{r}")
+        r = _cagir(g, "_recall_saglik", kum("j1", _recall_bicim(T, AYRISMAZ)))
+        kontrol("J1 F7 4j: yalnız tanınmayan biçimde kablolu → FAIL 'TANINMAYAN' · `--tazele-settings` "
+                "onarım olarak GÖSTERİLMEZ ('DOKUNMAZ' + §6a ②)",
+                tag(r) == ["FAIL"] and "TANINMAYAN" in r[0][1] and "DOKUNMAZ" in r[0][1]
+                and "§6a ②" in r[0][1] and "onarım (§6a ①)" not in r[0][1], f"{r}")
 
         # ── M5 ───────────────────────────────────────────────────────────────
         stub = _stub("python_stub", "Python was not found", 49)
@@ -746,6 +838,9 @@ def main() -> int:
                 tag(r_k) == ["PASS"] and "19 bağlantısının" in r_k[0][1]
                 and r_s and r_s[-1][0] == "PASS" and "yorumlayıcı `python`" in r_s[-1][1],
                 f"{r_k} | {r_s[-1:]}")
+        kontrol("Y1 F8 4i PASS özeti PATH sınırını taşır (`--layer 4` 1g satırını basmaz)",
+                bool(r_s) and r_s[-1][0] == "PASS"
+                and "Claude Code'un hook ortamının PATH'i ÖLÇÜLMEDİ" in r_s[-1][1], f"{r_s[-1:]}")
 
         # ── F3 settings D7 onarım metni ──────────────────────────────────────
         pf = kum("f3", _m1(T))
@@ -811,7 +906,8 @@ def main() -> int:
 
     dusen = {k for k, v in SONUC.items() if not v}
     ok = len(SONUC) - len(dusen)
-    etiket = f" [TABAN {TABAN}]" if TABAN else (f" [{KIP}]" if KIP else "")
+    tabanlar = [str(x) for x in (TABAN, TABAN_INSP, TABAN_KK) if x]
+    etiket = f" [TABAN {' + '.join(tabanlar)}]" if tabanlar else (f" [{KIP}]" if KIP else "")
     print(f"\nkanca_kablolama{etiket}: {ok}/{len(SONUC)} PASS")
     if KIP:
         ilan = ILAN[KIP]

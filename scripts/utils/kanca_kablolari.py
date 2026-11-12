@@ -37,7 +37,8 @@ from utils.drift_imzasi import yorumsuz
 # Kabuk biçimi: `python "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py" recall_inject`
 # (ad tırnaklı da olabilir: `… hook_shim.py" "recall_inject"`). Ad = shim'den SONRAKİ İLK
 # argüman — `hook_shim.py` da `sys.argv[1]`i kanca adı sayar (bayrak ayrıştırmaz); bu yüzden
-# `hook_shim.py --x ad` biçiminin adı `--x`tir (shim onu arar, bulamaz → 4i "çekirdekte YOK").
+# `hook_shim.py --x ad` biçiminin adı `--x`tir (shim onu arar, bulamaz → 4i "çekirdekte YOK")
+# ve `ad` 4h'de EKSİK sayılır, onarım onu ekler — o kanca gerçekten koşmuyor (F7).
 _SHIM = re.compile(r"hook_shim\.py", re.I)
 _TIRNAK = "\"'"
 SHIM_DISI_ONEK = "?"
@@ -74,20 +75,36 @@ def shim_kancasi_mi(ad: str) -> bool:
 
 
 def _ham_iceren(proje: dict, olay: str, ad: str) -> str | None:
-    """Emniyet ağı (Ö1, 2026-11-12): `olay` altında shim'e giden ve ham token'larından biri
-    `ad` olan bir kanca komutu var mı (ayrıştırıcının TANIMADIĞI biçim) → komut metni.
+    """Emniyet ağı (Ö1, 2026-11-12): `olay` altında shim'e giden, adı AYRIŞTIRILAMAYAN (`?…`)
+    ve ham token'larından biri `ad` olan bir kanca komutu var mı → komut metni.
 
-    NEDEN: ad okunamayan bir biçim (`?…` ya da yanlış ad) "eksik" sayılırsa `eksikleri_ekle`
-    aynı kancayı İKİNCİ KEZ ekler (ölçüldü: tırnaklı kabuk biçiminde 2 canlı recall_inject).
-    Bu ağ, ayrıştırıcı hangi biçimi kaçırırsa kaçırsın çift eklemeyi imkânsız kılar."""
+    NEDEN: ad okunamayan bir biçim "eksik" sayılırsa `eksikleri_ekle` aynı kancayı İKİNCİ KEZ
+    ekleyebilir (ölçüldü: tırnaklı kabuk biçiminde 2 canlı recall_inject — o biçim artık
+    `kanca_adi`'nde ayrıştırılıyor; ağ, ayrıştırıcının kaçırdığı biçimler için durur).
+    ⛔ Adı AYRIŞTIRILMIŞ shim kancasına BAKMAZ (F7, 2026-11-12): shim yalnız `sys.argv[1]`'i
+    koşturur ⇒ `hook_shim.py pull_before_edit infra_write_guard` infra_write_guard'ı HİÇ
+    koşturmaz, `hook_shim.py --flag recall_inject` recall_inject'i HİÇ koşturmaz. Ağ bunlara da
+    bakınca gerçek EKSİK "biçim farkı" sayılıyor, onarım onu eklemiyor ve 4h "tamamı projede"
+    diyordu (ölçüldü: abd227b'de FAIL + onarım vardı, 8e94e17'de WARN + PASS).
+    Adı ayrıştırılmış kancada yalnız ZİNCİRDEKİ İKİNCİ+ shim çağrısı sayılır
+    (`… hook_shim.py a && … hook_shim.py b` → b gerçekten koşar; `kanca_adi` yalnız a'yı okur
+    ⇒ b'yi EKSİK saymak onu çift koşturur)."""
     bloklar = (yorumsuz(proje).get("hooks") or {}).get(olay) if isinstance(proje, dict) else None
     for blok in bloklar if isinstance(bloklar, list) else []:
         for kanca in (blok.get("hooks") or []) if isinstance(blok, dict) else []:
-            if not isinstance(kanca, dict) or kanca_adi(kanca) == ad:
-                continue        # adı TANINAN kanca eşleyici mantığına aittir (kapsama/fark)
+            if not isinstance(kanca, dict):
+                continue
             ham = " ".join([str(kanca.get("command") or ""),
                             *[str(a) for a in (kanca.get("args") or [])]])
-            if _SHIM.search(ham) and ad in _tokenler(ham.replace("\\", "/")):
+            if not _SHIM.search(ham):
+                continue
+            tk = _tokenler(ham.replace("\\", "/"))
+            if shim_kancasi_mi(kanca_adi(kanca)):
+                # shim yalnız argv[1]'i koşturur: aynı çağrının sonraki token'ları koşmaz.
+                if ad in [tk[i + 1] for i in range(len(tk) - 1)
+                          if tk[i].lower().endswith("hook_shim.py")][1:]:
+                    return ham.strip()
+            elif ad in tk:
                 return ham.strip()
     return None
 
@@ -156,14 +173,16 @@ def kiyas(proje: dict, sablon: dict) -> dict:
     -> {"eksik": [(olay, eşleyici, ad)]   şablonda var, projede (olay, ad) HİÇ yok
         "eslesik_farki": [((olay, ş_eşleyici, ad), p_eşleyici)]  aynı olay+ad, başka eşleyici
         "kapsanan": [(olay, ş_eşleyici, ad)]  projede aynı kanca, eşleyici BİRLEŞİMİ ⊇ şablonunki
-        "bicim_farki": [((olay, ş_eşleyici, ad), komut)]  ad ayrıştırılamadı ama ham komutta VAR
+        "bicim_farki": [((olay, ş_eşleyici, ad), komut)]  adı ayrıştırılamayan (`?…`) shim
+                                                           komutunun ham token'larında VAR
         "ek": [(olay, eşleyici, ad)]      yalnız projede (BİLGİ)
         "sablon_sayisi": int, "sablon_kanca": [ad]}
     Çokluküme farkıdır. Birebir eşi olmayan şablon bağlantısı sırayla: ① projede aynı (olay,
     ad) eşleyicilerinin birleşimi şablon eşleyicisini kapsıyorsa KAPSANAN (Ö2 — birleşik
     `Bash|…|Edit|…` bloğu; yeniden eklemek kancayı İKİ KEZ koşturur) ② aynı (olay, ad) başka
     eşleyiciyle varsa "eşleyici farklı" (genişletilmiş/daraltılmış olabilir — otomatik karar
-    VERİLMEZ) ③ ham komutta ad geçiyorsa BİÇİM FARKI (Ö1 emniyet ağı — çift ekleme yok)
+    VERİLMEZ) ③ adı AYRIŞTIRILAMAYAN bir shim komutunun ham token'larında ad geçiyorsa BİÇİM
+    FARKI (Ö1 emniyet ağı — çift ekleme yok; adı ayrıştırılan kanca o adı koşturur, ağa girmez)
     ④ hiçbiri değilse EKSİK. Yalnız ④ `eksikleri_ekle`'nin girdisidir.
     """
     s, p = Counter(baglantilar(sablon)), Counter(baglantilar(proje))

@@ -361,7 +361,7 @@ CORE-INDEX FAIL verirse: `python core/scripts/build_core_index.py`.
 
 ### 6a. `ix_doctor` bir şey bulursa — her satırı ÜÇ sınıftan birine koy
 
-`ix_doctor` **projeyi ve ayarları değiştirmez**: hiçbir şeyi düzeltmez, Issue açmaz; yalnız `.tmp`
+`ix_doctor` **projeyi ve ayarları değiştirmez** (önceki metin "salt-okur" diyordu; 4i/4j `.tmp`'ye yazdığı için düzeltildi, PR #429): hiçbir şeyi düzeltmez, Issue açmaz; yalnız `.tmp`
 altına yazar (4i smoke log satırları; 4j recall indeksini tazeleyebilir); her kontrol için PASS/WARN/FAIL
 ve çoğunda bir `onarım:` / `düzelt:` ipucu basar. Ne yapılacağına **bu adımı yürüten** karar
 verir. FAIL'ler **ve** WARN'lar tek tek, sırayla şu üç sınıftan birine konur:
