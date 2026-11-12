@@ -69,14 +69,15 @@ print('Create:', resp.status_code)
 # 200 veya 201 = basarili, 409 = zaten var (her ikisi de OK)
 ```
 
-> **Önemli:** Create sonrası SAP otomatik lock koyar ama lock handle döndürmez.
-> **SM12'den** <SAP_USER> / ZCL_ORNEK_CLASS lock'unu sil, sonra push'a geç.
+> **Önemli:** Create sonrası SAP otomatik lock koyar ama lock handle döndürmez. Push'a geçmeden önce
+> kilit BIRAKILIR (§24.3) — SİLMEK ajanın işi değildir (ADR 0005-C).
 
 ---
 
-### 24.3 Adım 2 — SM12'den Lock Sil
+### 24.3 Adım 2 — Create-sonrası kilidi bırak (ajan SİLMEZ)
 
-Transaction SM12 → User: <SAP_USER> → Object: ZCL_ORNEK_CLASS → Sil
+- Kilit bu kullanıcının **kendi** create oturumundan kalır → kendi oturumunda **unlock ile bırak** (yalnız create-sonrası, AYNI oturumda tutulan kilit için kütüphanedeki lock→unlock döngüsü `clear_enqueue_lock(<obje_url>, transport=...)`; `False` = bırakılamadı → DUR. Önceki oturumdan kalmış bayat kilidi programatik temizlemek ADR 0005-C sınırındadır — `lessons-learned.md` PATTERN #13; create-sonrası kilitte bu döngü ÖLÇÜLMEDİ) ya da oturum kapanınca düşmesini bekle.
+- Kilit **başkasınınsa** ya da bırakılamıyorsa: **DUR → kullanıcıya bildir.** SM12'de kilidi SİLME kararı ve eylemi kullanıcınındır; ajan silmeyi önermez, yapmaz (ADR 0005-C · komşu: `adt-classes.md` §24.7 `409` satırı).
 
 ---
 
@@ -131,6 +132,7 @@ python "<PROJECT_ROOT>\scripts\activate_object.py" --cwd "<PROJECT_ROOT>" --name
 | `TYPE zz1_discount_code` | Aynı sebep | `TYPE char3` kullan |
 | `RETURNING VALUE(...) TYPE netwr` | `netwr` CURR tipi — method imzasında CURR/P DECIMALS scan tarafından reddediliyor | `TYPE wrbtr` kullan |
 | `CONV netwr(...)` / `COND netwr(...)` | Aynı CURR tipi sorunu | `CONV wrbtr(...)` / `COND wrbtr(...)` kullan |
+| Metot imzasında türetilmiş RAP tipi (`IMPORTING is_failed TYPE RESPONSE FOR FAILED <bdef>`) | Aynı save-scan reddi (400 `ExceptionResourceScanDuringSaveFailure` gövdesinde `OO_SOURCE_BASED 011`, satır no yok) — DEV_CORE #424; ölçülen: global sınıf · `IMPORTING` · `RESPONSE FOR FAILED/REPORTED` (BASIS 816). `MAPPED` · `TABLE`/`STRUCTURE FOR` · `EXPORTING`/`CHANGING`/`RETURNING` · yerel sınıf · INTF ÖLÇÜLMEDİ; tetik (türetilmiş tip mi `EARLY` eksikliği mi) ayrışmadı | Sınıfta isimli tip: `TYPES ty_failed TYPE RESPONSE FOR FAILED EARLY <bdef>.` → param `TYPE ty_failed` (ölçülen biçimde geçerli çare; öbür biçimlerde de önerilir, orada ayrıca ölçülmedi). Kontrol: `checklist_check` BE-55 — ölçülen biçim FAIL, ölçülmemiş biçimler (yerel sınıf dahil) WARN "ÖLÇÜLMEDİ" |
 
 **Genel Kural:**
 - Method imzasında (IMPORTING/EXPORTING/RETURNING) `CURR` tipli data element kullanma — `wrbtr`, `dmbtr` gibi `CURR` olmayan parasal tip kullan
@@ -182,7 +184,7 @@ try_push(minimal, 'minimal baseline')
 | Hata | Sebep | Çözüm |
 |------|-------|-------|
 | `ExceptionResourceScanDuringSaveFailure` | Kodda tarama reddeden tip var | Bisect yap — bkz 24.6 |
-| `409 Conflict` (lock) | Başka lock var | SM12'den temizle, retry yapma |
+| `409 Conflict` (lock, ör. `CTS_WBO_API 019`) | Başka bir kilit — ya da AYNI push'un önceki denemesinin bıraktığı durum (DEV_CORE #423: biçim-1 400 içerik reddinden sonra yedek biçimler kendi kilidimize çarpıp 409 aldı) | ÖNCE ilk denemenin yanıtına bak (`set_object_source` hata metnindeki DENEMELER listesi; `push_object.py` 409-dışı denemeyi "ONCE O YANITA BAK" diye basar) · gövdedeki `T100KEY-V3`/`V4` bu push'un transport'u + kullanıcısı mı (`push_object.py` bunu kilit-adımı VE PUT 409'unda istisna anında TAM gövdeden okunan değerle karşılaştırır, ikisi de eşleşirse "KENDI kilidimizle" basar; biri farklı/okunamazsa "ANOTHER developer" uyarısı aynen) · SM12'de kilidi KONTROL ET — kilidi SİLMEK kullanıcı kararıdır (ADR 0005-C), ajan önermez · retry yapma |
 | `412 PreconditionFailed` | Yanlış ETag | `source/main` endpoint'inden ETag al |
 | `400 lockHandle not found` | Lock handle eksik | `push_object.py` kullan (SAPClient) — manuel PUT yapma |
 | Tüm method bisect'te FAIL | Sorun IMPL'de değil DEFINITION'da | DEFINITION bölümünü bisect et |

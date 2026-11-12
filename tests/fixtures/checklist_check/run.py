@@ -48,6 +48,12 @@ Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile e
   --mutasyon-tab          boşluklu yolda `+++` satırının TAB eki sökülmez
   --mutasyon-fe13-satir1  FE-13 satırı yine 1'e sabit
   --mutasyon-be01-satir1  BE-01 ad bulgusu yine 1. satıra bağlı
+  --mutasyon-be55-rap     BE-55 türetilmiş RAP tipi (`TYPE RESPONSE/TABLE/STRUCTURE FOR`) deseni yok (#424)
+  --mutasyon-be55-yerel   BE-55 FAIL yerel sınıf/INTF kaynağında da (PR #427 F2: ölçülmedi → WARN olmalı)
+  --mutasyon-be55-bolum   BE-55 FAIL IMPORTING dışı bölümde de (PR #427 F2)
+  --mutasyon-be55-bicim   BE-55 FAIL TABLE/STRUCTURE/MAPPED/EARLY/LATE biçiminde de (PR #427 F2)
+  --mutasyon-be55-ana     BE-55 ana kaynak kararı elle verilen `--ana-sinif`i görmez (FAIL WARN'a iner;
+                          run_review yalnız BE-10b koşar, BE-55 class_push'ta koşmaz)
   --mutasyon-hukum-tum-hucre  verify-report hükmü kanıt dahil tüm hücrelerden okunur
   --mutasyon-celiski-pass ÇELİŞKİ yalnız rapor PASS'te (UYGULANMAZ/ÖLÇÜLEMEDİ/WARN kaçar)
   --mutasyon-bagsiz       çıplak FAIL kabul edilir
@@ -112,7 +118,9 @@ _GECERLI_KIP = frozenset({"--mutasyon-literal", "--mutasyon-degisen", "--mutasyo
                           "--mutasyon-birlestirme-yok", "--mutasyon-be50-clear", "--mutasyon-be50-kosullu",
                           "--mutasyon-kardes-disk", "--mutasyon-be50-select", "--mutasyon-be50-select-tumu",
                           "--mutasyon-be50-at", "--mutasyon-be50-ic-data", "--mutasyon-be16-measured",
-                          "--mutasyon-be16-rc", "--mutasyon-ids-bos"})
+                          "--mutasyon-be16-rc", "--mutasyon-ids-bos", "--mutasyon-be55-rap",
+                          "--mutasyon-be55-yerel", "--mutasyon-be55-bolum", "--mutasyon-be55-bicim",
+                          "--mutasyon-be55-ana"})
 
 _MUT = {
     "--mutasyon-literal": (
@@ -227,6 +235,23 @@ _MUT = {
     "--mutasyon-be50-ic-data": (
         '            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad, baslangic):',
         '            if not _be50_okumadan_once_sifirlanir(ifs[idx + 1:], ad, 0):'),
+    # DEV_CORE #424: türetilmiş RAP tipi deseni söküldü (eski k_be55 davranışı)
+    "--mutasyon-be55-rap": (
+        '            for m in re.finditer(r"\\bTYPE\\s+(RESPONSE|TABLE|STRUCTURE)\\s+FOR\\b", kl, re.I):',
+        '            for m in re.finditer(r"(?!x)x", kl, re.I):'),
+    # PR #427 F2: FAIL ölçülen biçime daraltıldı — her daraltma koşulu ayrı sökülür (koşul başına vektör)
+    "--mutasyon-be55-yerel": (
+        '            global_ana = bool(re.search(r"\\.clas\\.abap$", d.eslesme_adi or d.rel, re.I))',
+        '            global_ana = True'),
+    "--mutasyon-be55-ana": (
+        're.search(r"\\.clas\\.abap$", d.eslesme_adi or d.rel, re.I)',
+        're.search(r"\\.clas\\.abap$", d.rel, re.I)'),
+    "--mutasyon-be55-bolum": (
+        '                olculen = global_ana and bolum == "IMPORTING" and bicim',
+        '                olculen = global_ana and bicim'),
+    "--mutasyon-be55-bicim": (
+        '                bicim = bool(_BE55_OLCULEN_RX.match(kl, m.start()))',
+        '                bicim = True'),
     "--mutasyon-be16-measured": (
         '    if "measured=false" in (r.stdout or ""):',
         '    if False:'),
@@ -310,6 +335,12 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-be16-measured": {"B4"},
     "--mutasyon-be16-rc": {"B6"},
     "--mutasyon-ids-bos": {"X8b"},
+    "--mutasyon-be55-rap": {"BE-55/P-response", "BE-55/W-tablefor", "BE-55/W-early", "BE-55/W-mapped",
+                            "BE-55/W-changing", "BE-55/W-yerel", "BE-55/W-intf", "R8"},
+    "--mutasyon-be55-yerel": {"BE-55/W-yerel", "BE-55/W-intf", "R8"},
+    "--mutasyon-be55-bolum": {"BE-55/W-changing"},
+    "--mutasyon-be55-ana": {"R8"},
+    "--mutasyon-be55-bicim": {"BE-55/W-tablefor", "BE-55/W-early", "BE-55/W-mapped"},
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -356,6 +387,34 @@ def tablo(cikti: str) -> dict[str, str]:
 # (ad, madde_id, {rel: içerik}, hedef_rel, beklenen_sonuç_kümesi[, eski_metin])
 CLS = "p/classes/zcl_t.clas.abap"
 PRG = "p/programs/zab_p_t.prog.abap"
+LOCIMP = "p/classes/zcl_t.clas.locals_imp.abap"   # PR #427 F2: yerel sınıf kaynağı
+INTF = "p/interfaces/zif_t.intf.abap"             # PR #427 F2: arayüz kaynağı
+BE55_NEG = (
+    "CLASS lhc_x DEFINITION INHERITING FROM cl_abap_behavior_handler.\n"
+    "  PRIVATE SECTION.\n"
+    "    METHODS get_instance_features FOR INSTANCE FEATURES\n"
+    "      IMPORTING keys REQUEST requested_features FOR zi_x RESULT result.\n"
+    "    METHODS create FOR MODIFY IMPORTING entities FOR CREATE zi_x.\n"
+    "    METHODS read FOR READ IMPORTING keys FOR READ zi_x RESULT result.\n"
+    "    METHODS setstatus FOR MODIFY IMPORTING keys FOR ACTION zi_x~setstatus RESULT result.\n"
+    "    METHODS validate FOR VALIDATE ON SAVE IMPORTING keys FOR zi_x~validate.\n"
+    "    METHODS lock FOR LOCK IMPORTING keys FOR LOCK zi_x.\n"
+    "    METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION\n"
+    "      IMPORTING REQUEST requested_authorizations FOR zi_x RESULT result.\n"
+    "    METHODS on_evt FOR EVENT changed OF lcl_y IMPORTING sender.\n"
+    "    METHODS t1 FOR TESTING RAISING cx_static_check.\n"
+    "    METHODS g1 IMPORTING it TYPE table.\n"
+    "    METHODS g2 IMPORTING it TYPE INDEX TABLE.\n"
+    "    CLASS-DATA gs_failed TYPE RESPONSE FOR FAILED EARLY zi_x.\n"
+    "    TYPES ty_k TYPE TABLE FOR CREATE zi_x.\n"
+    "    TYPES ty_s TYPE STRUCTURE FOR CREATE zi_x.\n"
+    "    DATA ms_rep TYPE RESPONSE FOR REPORTED EARLY zi_x.\n"
+    "    \" METHODS cm IMPORTING x TYPE TABLE FOR CREATE zi_x.\n"
+    "ENDCLASS.\n"
+    "CLASS lsc_x DEFINITION INHERITING FROM cl_abap_behavior_saver.\n"
+    "  PROTECTED SECTION.\n"
+    "    METHODS save_modified REDEFINITION.\n"
+    "ENDCLASS.\n")
 CDS = "p/cds/zi_t.cds"
 BDF = "p/behaviors/zi_t.bdef"
 VIEW = "a/webapp/view/Main.view.xml"
@@ -466,6 +525,29 @@ VEKTORLER = [
     ("BE-51/N", "BE-51", {CLS: "  METHOD m.\n    DATA lv_x TYPE i.\n    lv_x = 1.\n  ENDMETHOD.\n"}, CLS, {"PASS"}),
     ("BE-55/P", "BE-55", {CLS: "    METHODS m IMPORTING it_x TYPE STANDARD TABLE OF i.\n"}, CLS, {"FAIL"}),
     ("BE-55/N", "BE-55", {CLS: "    METHODS m IMPORTING it_x TYPE tt_x.\n"}, CLS, {"PASS"}),
+    # DEV_CORE #424: türetilmiş RAP tipi imzada (ölçülen biçim: global sınıf + IMPORTING +
+    # RESPONSE FOR FAILED/REPORTED, EARLY/LATE'siz) — eski k_be55 PASS veriyordu. PR #427 F2:
+    # ölçülmeyen biçimler (TABLE/STRUCTURE FOR · MAPPED · EARLY/LATE · IMPORTING dışı · yerel
+    # sınıf · INTF) WARN "ölçülmedi" — A-FAIL değil. NEGATİF: TYPES ile isimli tip + DATA satırı serbest.
+    ("BE-55/P-response", "BE-55", {CLS: "    CLASS-METHODS m IMPORTING is_failed TYPE RESPONSE FOR FAILED zi_sd001_demo\n"
+                                        "                              is_reported TYPE RESPONSE FOR REPORTED zi_sd001_demo.\n"},
+     CLS, {"FAIL"}),
+    ("BE-55/W-tablefor", "BE-55", {CLS: "    METHODS m IMPORTING it_k TYPE TABLE FOR CREATE zi_sd001_demo.\n"}, CLS, {"WARN"}),
+    ("BE-55/W-early", "BE-55", {CLS: "    METHODS m IMPORTING is_f TYPE RESPONSE FOR FAILED EARLY zi_sd001_demo.\n"}, CLS, {"WARN"}),
+    ("BE-55/W-mapped", "BE-55", {CLS: "    METHODS m IMPORTING is_m TYPE RESPONSE FOR MAPPED zi_sd001_demo.\n"}, CLS, {"WARN"}),
+    ("BE-55/W-changing", "BE-55", {CLS: "    METHODS: m1 IMPORTING x TYPE i,\n"
+                                        "      m2 CHANGING reported TYPE RESPONSE FOR REPORTED zi_sd001_demo.\n"},
+     CLS, {"WARN"}),
+    ("BE-55/W-yerel", "BE-55", {LOCIMP: "    METHODS m IMPORTING is_failed TYPE RESPONSE FOR FAILED zi_sd001_demo.\n"},
+     LOCIMP, {"WARN"}),
+    ("BE-55/W-intf", "BE-55", {INTF: "    METHODS m IMPORTING is_failed TYPE RESPONSE FOR FAILED zi_sd001_demo.\n"},
+     INTF, {"WARN"}),
+    # bug-gate PR #427 doğru-negatif seti (RAP işleyici imzaları · DATA/TYPES/CLASS-DATA · yorum · REDEFINITION)
+    ("BE-55/N-rap-imza", "BE-55", {CLS: BE55_NEG}, CLS, {"PASS"}),
+    ("BE-55/N-isimli", "BE-55", {CLS: "    TYPES ty_failed TYPE RESPONSE FOR FAILED EARLY zi_sd001_demo.\n"
+                                      "    METHODS m IMPORTING is_failed TYPE ty_failed.\n"}, CLS, {"PASS"}),
+    ("BE-55/N-data", "BE-55", {CLS: "  METHOD m.\n    DATA ls_failed TYPE RESPONSE FOR FAILED EARLY zi_sd001_demo.\n"
+                                    "    DATA lt_k TYPE TABLE FOR CREATE zi_sd001_demo.\n  ENDMETHOD.\n"}, CLS, {"PASS"}),
     ("BE-57/P", "BE-57", {CLS: "    TYPES tt_x TYPE STANDARD TABLE OF i.\n    METHODS m RETURNING VALUE(rt) TYPE tt_x.\n"}, CLS, {"FAIL"}),
     ("BE-57/N", "BE-57", {CLS: "    TYPES tt_x TYPE STANDARD TABLE OF i WITH DEFAULT KEY.\n    METHODS m RETURNING VALUE(rt) TYPE tt_x.\n"}, CLS, {"PASS"}),
     ("BE-58/P", "BE-58", {PRG: "PARAMETERS p_uzunisim TYPE i.\n"}, PRG, {"FAIL"}),
@@ -1148,6 +1230,17 @@ def r_vektorleri(G, tmp: Path) -> None:
         detay.append(f"{ad}: rc={rc} {tablo(out).get('BE-10b', '-')[:30]}")
     kontrol("R7 `--ana-sinif`: include dosyaları (`.clas.macros` · `.ccimp` · `.clas.locals_imp`) BE-10b'ye girmez",
             ok, " · ".join(detay))
+    # R8 (PR #427 F2): adı `.clas.abap` olmayan yerel kopya (`ZCL_X.abap`) elle verilen `--ana-sinif`
+    # ile ANA kaynak sayılır ⇒ ölçülen biçim FAIL kalır (daraltma bu yolda WARN'a İNMEZ);
+    # aynı dosya `--ana-sinif`'siz WARN (ad ana kaynak demiyor, ölçülmedi). run_review class_push
+    # checklist_check'i yalnız `--ids BE-10b` ile çağırır ⇒ BE-55 o yolda KOŞMAZ (PR #427 N1).
+    imza = "    METHODS m IMPORTING is_failed TYPE RESPONSE FOR FAILED zi_sd001_demo.\n"
+    dosyalari_yaz(ana, {"ZCL_BE55.abap": imza})
+    rc1, out1 = kos(G, ["--repo", str(ana), "--files", "ZCL_BE55.abap", "--ids", "BE-55", "--ana-sinif"])
+    rc2, out2 = kos(G, ["--repo", str(ana), "--files", "ZCL_BE55.abap", "--ids", "BE-55"])
+    s1, s2 = tablo(out1).get("BE-55", "YOK"), tablo(out2).get("BE-55", "YOK")
+    kontrol("R8 BE-55 `--ana-sinif` (ad `.clas.abap` değil) ölçülen biçim → FAIL; bayraksız → WARN",
+            s1.startswith("FAIL") and s2.startswith("WARN"), f"ana={s1[:40]} · bayraksiz={s2[:40]}")
     kirli = tmp / "rr" / "ZCL_RR.abap"
     temiz = tmp / "rr" / "zcl_rr2.clas.abap"
     dosyalari_yaz(tmp / "rr", {"ZCL_RR.abap": SINIF_ARA.replace("{ARA}", "* bant\n").replace("zcl_t", "zcl_rr"),

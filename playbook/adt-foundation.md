@@ -339,11 +339,12 @@ print('Create status:', create_resp.status_code)  # 200 veya 201 = basarili
 ```
 
 > **UYARI:** Program create edilince SAP otomatik enqueue lock koyar ve lock handle'i disariya vermez.
-> SM12'den <SAP_USER> / ZPROG_ADIN lock'unu silmeden push yapilamaz.
-> create_resp sonrasi HEMEN asagidaki push adimina gecme — once SM12'den lock'u sil.
+> Bu kilit birakilmadan push yapilamaz. create_resp sonrasi HEMEN asagidaki push adimina gecme —
+> once Adim 2 (kilidi BIRAK; SILME ajanin isi degildir — ADR 0005-C).
 
-**Adim 2 — SM12'den Lock Sil:**
-- Transaction SM12 -> User: <SAP_USER> -> Object: ZPROG_ADIN -> Sil
+**Adim 2 — Create-sonrasi kilidi birak (ajan SILMEZ):**
+- Kilit bu kullanıcının **kendi** create oturumundan kalır → kendi oturumunda **unlock ile bırak** (yalnız create-sonrası, AYNI oturumda tutulan kilit için kütüphanedeki lock→unlock döngüsü `clear_enqueue_lock(<obje_url>, transport=...)`; `False` = bırakılamadı → DUR. Önceki oturumdan kalmış bayat kilidi programatik temizlemek ADR 0005-C sınırındadır — `lessons-learned.md` PATTERN #13; create-sonrası kilitte bu döngü ÖLÇÜLMEDİ) ya da oturum kapanınca düşmesini bekle.
+- Kilit **başkasınınsa** ya da bırakılamıyorsa: **DUR → kullanıcıya bildir.** SM12'de kilidi SİLME kararı ve eylemi kullanıcınındır; ajan silmeyi önermez, yapmaz (ADR 0005-C · komşu: `adt-classes.md` §24.7 `409` satırı).
 
 **Adim 3 — Source Push + Aktivasyon:**
 ```python
@@ -404,7 +405,7 @@ else:
 
 **Bilinen Hatalar:**
 - `412 PreconditionFailed`: Yanlis ETag — program obje ETag'i degil, `source/main` ETag'ini kullan
-- `423 InvalidLockHandle`: SM12'den lock silinmemis — once SM12 yap
+- `423 InvalidLockHandle`: create-sonrasi kilit birakilmamis — Adim 2'ye don (kendi oturumunda birak; birakilamiyorsa DUR → kullaniciya bildir, SM12 silme karari kullanicinindir)
 - `400 Parameter corrNr not found`: `corrNr`'i header degil query param olarak gonder
 - `TEXT-xxx cannot be modified`: Kod icinde `TEXT-xxx = '...'` yazma — selection screen title/comment icin `tit1`, `com01` gibi serbest degisken kullan (`INITIALIZATION` blogunda atanabilir)
 
@@ -595,7 +596,7 @@ Her retry SAP'de yeni bir boş K-type transport yaratır.
 
 **409 sonrası yapılacaklar:**
 1. Kullanıcıya bildir
-2. Kullanıcı SM12'den stale lock'u temizlesin
+2. Kullanıcıdan SM12'de kilit durumunu KONTROL etmesini iste — kilidi silme kararı ve eylemi kullanıcınındır; ajan silmeyi önermez (ADR 0005-C). Kilit ajanın kendi oturumunun kalıntısıysa önce kendi oturumunda bırakılır (bkz. Program create Adım 2)
 3. Kullanıcı SE10'dan objeyi doğru transport'a assign etsin
 4. Sonra tek bir retry yap
 

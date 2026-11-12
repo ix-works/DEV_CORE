@@ -1275,7 +1275,40 @@ def k_be55(d, c):
             for m in re.finditer(r"\bTYPE\s+(?:STANDARD\s+|SORTED\s+|HASHED\s+|INDEX\s+|ANY\s+)?TABLE\s+OF\b", kl, re.I):
                 out.append(F(_ilk_satir(bas, kl, m.start()),
                              "metot arayüzünde anonim `TYPE … TABLE OF` → isimli tablo tipi (TYPES tt_x …)"))
+            # DEV_CORE #424: türetilmiş RAP tipi aynı OO_SOURCE_BASED 011 reddini üretti. TYPES/DATA
+            # satırları bu ifade filtresine girmez ⇒ `DATA ls_failed TYPE RESPONSE FOR FAILED EARLY …` serbest.
+            # PR #427 F2: FAIL yalnız ÖLÇÜLEN biçimde — global sınıf ana kaynağı (`.clas.abap`) +
+            # `IMPORTING` + `RESPONSE FOR FAILED|REPORTED <bdef>` (EARLY/LATE'siz; BASIS 816). Öbür
+            # biçimler (TABLE/STRUCTURE FOR · MAPPED · EARLY/LATE · EXPORTING/CHANGING/RETURNING ·
+            # yerel sınıf `.ccimp`/`.locals_imp` · INTF) ÖLÇÜLMEDİ ⇒ WARN; kesin kural sayılmaz.
+            # Ana kaynak = ad `.clas.abap` ya da ELLE verilen `--ana-sinif`. run_review class_push
+            # checklist_check'i yalnız `--ids BE-10b` ile çağırır ⇒ BE-55 class_push'ta KOŞMAZ.
+            global_ana = bool(re.search(r"\.clas\.abap$", d.eslesme_adi or d.rel, re.I))
+            for m in re.finditer(r"\bTYPE\s+(RESPONSE|TABLE|STRUCTURE)\s+FOR\b", kl, re.I):
+                bolumler = re.findall(r"\b(IMPORTING|EXPORTING|CHANGING|RETURNING|RAISING|EXCEPTIONS)\b",
+                                      kl[:m.start()], re.I)
+                bolum = bolumler[-1].upper() if bolumler else ""
+                bicim = bool(_BE55_OLCULEN_RX.match(kl, m.start()))
+                olculen = global_ana and bolum == "IMPORTING" and bicim
+                cesit = m.group(1).upper()
+                if olculen:
+                    out.append(F(_ilk_satir(bas, kl, m.start()),
+                                 f"metot arayüzünde türetilmiş RAP tipi `TYPE {cesit} FOR …` → "
+                                 f"sınıfta TYPES ile isimli tip (ör. `TYPES ty_x TYPE RESPONSE FOR FAILED "
+                                 f"EARLY <bdef>.`), parametre `TYPE ty_x`"))
+                    continue
+                farklar = [x for x, kosul in (("yerel sınıf/INTF kaynağı", not global_ana),
+                                              (f"{bolum or 'bölümsüz'} bölümü", bolum != "IMPORTING"),
+                                              ("MAPPED/TABLE/STRUCTURE ya da EARLY/LATE", not bicim)) if kosul]
+                out.append(W(_ilk_satir(bas, kl, m.start()),
+                             f"metot arayüzünde türetilmiş RAP tipi `TYPE {cesit} FOR …` — bu biçim "
+                             f"({', '.join(farklar)}) ÖLÇÜLMEDİ (ölçülen: global sınıf + IMPORTING + "
+                             f"`RESPONSE FOR FAILED/REPORTED`); isimli tip (`TYPES ty_x TYPE …`) her "
+                             f"durumda geçerli çare"))
     return out
+
+
+_BE55_OLCULEN_RX = re.compile(r"TYPE\s+RESPONSE\s+FOR\s+(?:FAILED|REPORTED)\s+(?!(?:EARLY|LATE)\b)[\w/]", re.I)
 
 
 @kontrol("be57_returning_key")

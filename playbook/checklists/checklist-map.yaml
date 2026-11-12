@@ -592,6 +592,13 @@ maddeler:
     seviye: uyari
     yazan_kanali: claude/agents/backend-expert.md
     not: "SAP pretty printer ucu (durumsuz, yazmaz); kullanıcının ADT ayarı ↔ ATC varyantı farkı olabilir"
+  - id: BE-89
+    sinif: C
+    uygulanir: ["*.abap"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: "custom entity query provider + get_as_ranges; bizde ölçülmedi (DEV_CORE #425)"
   - id: FE-01
     sinif: A
     uygulanir: ["**/webapp/**/*.js"]
@@ -921,6 +928,34 @@ maddeler:
     seviye: uyari
     yazan_kanali: null
     not: "backend ölçümü gerekir (sap-ui-version.json + tema md5); yazım kanalı UI-BOOT-01 (ui-freestyle-creation) — frontend-expert tanımına ekleme meta-infra, lider kararı"
+  - id: FE-54
+    sinif: B
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: claude/agents/frontend-expert.md
+    not: "canlı yanıt ölçümü (__count > satır + d.__next); yazım kanalı frontend-expert FE-52 altı mock-canlı ilkesi (PR #427) (DEV_CORE #425)"
+  - id: FE-55
+    sinif: B
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: claude/agents/frontend-expert.md
+    not: "kapsam koşulu $metadata ConcurrencyMode=Fixed (projeksiyonda use etag); ağ izinde action POST If-Match (DEV_CORE #425); yazım kanalı frontend-expert FE-52 altı mock-canlı ilkesi (PR #427)"
+  - id: FE-56
+    sinif: B
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: claude/agents/frontend-expert.md
+    not: "canlı hata gövdesinde mesaj kimliği; bizde ölçülmedi (DEV_CORE #425); yazım kanalı frontend-expert FE-52 altı mock-canlı ilkesi (PR #427)"
+  - id: FE-57
+    sinif: C
+    uygulanir: ["**/webapp/**/*.js", "**/webapp/**/*.view.xml", "**/webapp/**/*.fragment.xml"]
+    kontrol: null
+    seviye: uyari
+    yazan_kanali: null
+    not: "tek ev BE-89; FE tarafı işaretçi (DEV_CORE #425)"
   - id: DOC-KD-01
     sinif: C
     uygulanir: ["**/KD-*.md", "**/KD-*.html", "**/KD-*.htm"]

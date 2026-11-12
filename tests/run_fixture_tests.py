@@ -750,6 +750,11 @@ OZEL_TESTLER = [
     ("transport_yaklasim_sirasi",
      "set_object_source PUT transport sirasi PARAM-ONCE (corrNr -> ikisi -> header -> transportsuz); "
      "olculen sistemde bosa 409 yok, header yedegi duruyor (taban 6b6c11d kontrol)"),
+    # 2026-11-12 DEV_CORE #423: icerik reddi (400) transport-bicim yedeklerine dusup 409 ile ortulmesin
+    ("set_object_source_bicim_durdurma",
+     "#423: set_object_source sonraki bicime YALNIZ bicim reddinde (Parameter-not-found/409/412) "
+     "gecer; 400/404/423/500 TEK PUT + o yanit; DENEMELER listesi; push_object.main gercek giris "
+     "(ONCE O YANITA BAK + kendi-kilit 409'da 'baska gelistirici' yok); 7 mutasyon (taban 8565c9d bilgi)"),
     ("fugr_faz2_ioc_sondasi",
      "FUGR toplu aktivasyonunda 2. faz ioc = hukum DEGIL -> bagimsiz worklist sondasi "
      "(temiz/kalan/kurulamaz); FUGR disi birebir eski (taban 6b6c11d sahte-negatif kontrol)"),
@@ -1700,6 +1705,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
                                 "O:transport_yaklasim_sirasi", "O:fugr_faz2_ioc_sondasi"),
      "Q359 unlock_object False sozlesmesi + kilit_birakilamadi_uyarisi · Q362 _istek_sahibi_metni · "
      "transport_approaches param-once sirasi · FUGR 2. faz ioc -> worklist sondasi"),
+    # ── 2026-11-12 DEV_CORE #423: PUT bicim dongusu durdurma (lib + sap_client + push_object);
+    # sap_adt_lib.py birlesimi buyudu → `b0_secim` P3 pinli sayisi 33→34 BIRLIKTE guncellendi.
+    ("scripts/sap_adt_lib.py", ("O:set_object_source_bicim_durdurma",),
+     "#423 transport_bicim_reddi_mi / put_deneme_ozu / set_object_source durma + DENEMELER"),
+    ("scripts/sap_client.py", ("O:set_object_source_bicim_durdurma",),
+     "#423 _hata_ayrintisi_ekle (put_denemeleri + error_response_text)"),
+    ("scripts/push_object.py", ("O:set_object_source_bicim_durdurma",),
+     "#423 ONCE O YANITA BAK + kendi_kilidimiz_mi (409 'baska gelistirici' suzgeci)"),
     # ── 2026-11-07 Q383: FUGR/I include yazim zinciri (5 kaynak + reviewer haritasi) ──
     ("scripts/sap_adt_lib.py", ("O:fugr_include_yazim",),
      "Q383② lock_object ozeti T100 tasir (kilit_deneme_ozeti / kilit_403_onerisi) + CSRF dali"),
