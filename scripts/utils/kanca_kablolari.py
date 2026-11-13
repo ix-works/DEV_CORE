@@ -120,8 +120,13 @@ def _ham_iceren(proje: dict, olay: str, ad: str) -> list[tuple[str, str]]:
 
 
 def _eslik_kumesi(eslik: str) -> frozenset | None:
-    """`A|B|C` → {A, B, C}; boş ya da `*` → None (= HER araç)."""
-    e = (eslik or "").strip()
+    """`A|B|C` → {A, B, C}; boş ya da `*` → None (= HER araç).
+
+    ⛔ Dizge bütün olarak KIRPILMAZ (P9, 2026-11-13): Claude Code eşleyiciyi kırpmadan okur
+    (2.1.323: settings şeması `matcher:o().optional()`, `r8` `!n||n==="*"` tam eşitlik) ⇒ `" "`
+    "her araç" DEĞİLDİR; `s8` olaylarında (PreToolUse dahil) boş listedir, kanca HİÇ koşmaz. Eskiden `" "` → None
+    ⇒ ① KAPSANAN, 4h PASS (sessiz)."""
+    e = eslik or ""
     if e in ("", "*"):
         return None
     return frozenset(x.strip() for x in e.split("|") if x.strip())
@@ -142,13 +147,28 @@ def _kapsar(proje_eslikleri: list[str], eslik: str) -> bool:
     return hedef is not None and hedef <= birlesim
 
 
-# Claude Code eşleyici okuması (2.1.323 ikilisinden ölçüldü 2026-11-13, `Owt`/`r8`): `""`/`*` = her
-# araç · YALNIZ `[A-Za-z0-9_|]` → TAM AD listesi (`|` ile) · araç olaylarında `,` boşluk `-` de
-# listedir (`|`/`,` ile bölünür, öğe kırpılır) · başka her karakter → JS RegExp, ÇAPASIZ `test`
-# (alt dizgi araması), araç adı VE eski adlarıyla denenir. Liste öğesi eski adla yazılmışsa kanonik
-# ada çevrilir (`Task` bloğu `Agent` aracında koşar).
+# Claude Code eşleyici okuması (2.1.323 ikilisinden ölçüldü 2026-11-13, `Owt`/`r8`/`s8`): `""`/`*`
+# = her araç (tam eşitlik, kırpma YOK) · `Owt(eşleyici, s8.has(olay))`: olay `s8` kümesindeyse
+# `[A-Za-z0-9_|, -]` taşıyan eşleyici TAM AD listesidir (`|`/`,` ile bölünür, öğe kırpılır, boş öğe
+# atılır), değilse yalnız `[A-Za-z0-9_|]` (`|` ile). Liste DEĞİLSE → JS RegExp, ÇAPASIZ `test` (alt
+# dizgi araması), araç adı VE eski adlarıyla denenir. Bir eşleyici olaya göre TEK okuma alır — liste
+# ya da regex; ikisi birden değil. Liste öğesi eski adla yazılmışsa kanonik ada çevrilir (`Task`
+# bloğu `Agent` aracında koşar).
 _LISTE_DAR = re.compile(r"[A-Za-z0-9_|]+")
 _LISTE_GENIS = re.compile(r"[A-Za-z0-9_|, -]+")
+# İkilideki `var s8=new Set([...])` OLDUĞU GİBİ (21 olay; 2.1.323). Yalnız araç olayları değildir —
+# SessionStart · Notification · ConfigChange · InstructionsLoaded · PreCompact da içindedir.
+# Başka sürümde küme değişebilir (ÖLÇÜLMEDİ).
+_GENIS_LISTE_OLAYLARI = frozenset({
+    "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest", "PermissionDenied",
+    "UserPromptExpansion", "SessionStart", "SessionEnd", "Setup", "PreCompact", "PostCompact",
+    "PreModelSwitch", "PostModelSwitch", "Notification", "SubagentStart", "SubagentStop",
+    "Elicitation", "ElicitationResult", "ConfigChange", "InstructionsLoaded", "DirectoryAdded"})
+# Çapalı, alternatifleri yalnız literal ad olan desen: `^ad$` · `^(a|b)$` · `^(?:a|b)$`. Claude
+# Code'da regex'tir ama yalnız adı TAM bu dizgelerden biri olan araçta tutar ⇒ ad listesine
+# indirgenir (F2, 2026-11-13). `^a|b$` (öncelik: `(^a)|(b$)`) bu biçime UYMAZ, regex kalır.
+_AD = r"[A-Za-z0-9_-]+"
+_CAPALI_LITERAL = re.compile(rf"\^(?:({_AD})|\((?:\?:)?({_AD}(?:\|{_AD})*)\))\$")
 _ESKI_AD = {"Task": "Agent", "KillShell": "TaskStop", "KillBash": "TaskStop",
             "ListPeers": "ListAgents", "Brief": "SendUserMessage",
             "ListMcpResources": "ListMcpResourcesTool", "ReadMcpResource": "ReadMcpResourceTool",
@@ -165,22 +185,28 @@ def _ad_ailesi(ad: str) -> set[str]:
     return {ad, k, *[e for e, y in _ESKI_AD.items() if y == k]}
 
 
-def _eslik_yorumlari(eslik: str) -> list[tuple[str, object]] | None:
-    """None = her araç. Aksi hâlde eşleyicinin OLASI okumaları: ("liste", frozenset kanonik ad) /
-    ("regex", desen). `,` / boşluk / `-` taşıyan düz eşleyici iki okumayı da alır: araç olaylarında
-    liste, diğer olaylarda (ve eski sürümlerde ÖLÇÜLMEDİ) regex — `_kesisir` ikisinden biri kesişirse
-    kesişir der (şüphe yönü)."""
-    e = (eslik or "").strip()
+def _eslik_yorumlari(eslik: str, olay: str) -> list[tuple[str, object]] | None:
+    """None = her araç. Aksi hâlde eşleyicinin Claude Code'daki TEK okuması, tek öğeli liste
+    olarak: [("liste", frozenset kanonik ad)] ya da [("regex", desen)].
+
+    Okuma OLAYA bağlıdır (F1, 2026-11-13): `,` / boşluk / `-` taşıyan düz eşleyici `s8`
+    olaylarında (`_GENIS_LISTE_OLAYLARI`) YALNIZ liste, diğer olaylarda YALNIZ regex. Eskiden iki
+    okumayı birden alıyordu; regex okuması regex şablonla hep "kesişir" verdiği için ayrık çiftler
+    (`Edit, Write` ↔ `Bash|PowerShell|mcp__sap-adt__.*` · `mcp__other-srv__x` ↔ SWH) biçim farkına
+    düşüyor, onarım eksik kancayı eklemiyordu (4d6cca6 EKSİK + onarım veriyordu).
+    Çapalı literal desen (`^(a|b)$`, `_CAPALI_LITERAL`) ad listesine indirgenir (F2).
+    Dizge KIRPILMAZ (P9): `" "` `s8` olayında boş listedir (hiçbir araç), başka olayda regex."""
+    e = eslik or ""
     if e in ("", "*"):
         return None
-    if _LISTE_DAR.fullmatch(e):
-        return [("liste", frozenset(_kanonik(x) for x in e.split("|") if x))]
-    yorum: list[tuple[str, object]] = []
-    if _LISTE_GENIS.fullmatch(e):
-        yorum.append(("liste", frozenset(_kanonik(x.strip()) for x in re.split(r"[|,]", e)
-                                         if x.strip())))
-    yorum.append(("regex", e))
-    return yorum
+    genis = olay in _GENIS_LISTE_OLAYLARI
+    if (_LISTE_GENIS if genis else _LISTE_DAR).fullmatch(e):
+        ayrac = r"[|,]" if genis else r"\|"
+        return [("liste", frozenset(_kanonik(x.strip()) for x in re.split(ayrac, e) if x.strip()))]
+    capali = _CAPALI_LITERAL.fullmatch(e)
+    if capali:
+        return [("liste", frozenset(_kanonik(x) for x in (capali.group(1) or capali.group(2)).split("|")))]
+    return [("regex", e)]
 
 
 def _yorum_kesisir(x: tuple[str, object], y: tuple[str, object]) -> bool:
@@ -196,37 +222,46 @@ def _yorum_kesisir(x: tuple[str, object], y: tuple[str, object]) -> bool:
     return any(r.search(n) for ad in adlar for n in _ad_ailesi(ad))  # type: ignore[union-attr]
 
 
-def _kesisir(a: str, b: str) -> bool:
-    """İki eşleyici en az bir aracı ortak tutuyor mu — Claude Code'un okumasıyla (yukarıdaki not).
+def _kesisir(a: str, b: str, olay: str) -> bool:
+    """`olay` altındaki iki eşleyici en az bir aracı ortak tutuyor mu — Claude Code'un okumasıyla
+    (yukarıdaki not; okuma olaya bağlıdır, `_eslik_yorumlari`).
 
     ŞÜPHE YÖNÜ = KESİŞİR (F14, 2026-11-13). `kiyas` ③(a)'da "kesişmiyor" sonucu bağlantıyı EKSİK
     yapar ve `eksikleri_ekle` ikinci bir kopya ekler; kanca zaten koşuyorsa bu görünmez çift
-    koşumdur. Bu yüzden "kesişmiyor" yalnız KANITLANABİLDİĞİNDE döner:
+    koşumdur. Bu yüzden "kesişmiyor" yalnız modellenen adlar için kanıtlanınca döner:
       · liste × liste → kanonik ad kümelerinin kesişimi (harf duyarlı, Claude Code gibi);
-      · regex × liste → desen her adda (ve eski adlarında) `re.search` ile denenir — kesin;
-      · regex × regex → KESİŞİR (çapasız iki alt dizgi deseninin ayrıklığı kanıtlanamaz);
+      · regex × liste → desen her adda ve `_ESKI_AD` eski adlarında `re.search` ile denenir;
+      · regex × regex → KESİŞİR (çapasız iki alt dizgi deseninin ayrıklığı kanıtlanamaz) —
+        çapalı literal desen (`^(a|b)$`) önce ad listesine indirgenir, bu dala girmez;
       · Python'un derleyemediği desen → KESİŞİR.
     Öğeler `|`'den LİTERAL bölünmez: `mcp__x__adt_(a|b)` tek bir regex'tir (parantez içi `|`).
+    ⚠ regex × liste "kesin" DEĞİLDİR (Ö2): Claude Code bir aracı eşleyiciye ayrıca aile adlarıyla
+    (`_8n` · `jlo` · `Z7t`), `L9` takma adlarıyla, `q0e`/`Rqr` alternatif adlarıyla ve `Eval→REPL`
+    eşlemesiyle de dener; burada YALNIZ kanonik ad + `_ESKI_AD` eski adları denenir ⇒ "kesişmez"
+    cevabı, modellenmeyen bir ad üzerinden Claude Code'da kesişebilir (o zaman onarım ikinci kopya
+    ekler). Ters yönde: Claude Code eski adı koşullu dener (`P_n` + desende kelime sınırıyla geçmesi),
+    burada koşulsuz ⇒ "kesişir" fazla olabilir (şüphe yönü). Şablonun araç adlarında bu adların
+    hangisinin dolu olduğu ÖLÇÜLMEDİ.
     ÖLÇÜLMEDİ: JS ↔ Python regex sözdizimi farkı (JS'nin reddettiği desen Claude Code'da hiçbir
     araca eşleşmez; burada şüphe yönüne düşer)."""
-    ya, yb = _eslik_yorumlari(a), _eslik_yorumlari(b)
+    ya, yb = _eslik_yorumlari(a, olay), _eslik_yorumlari(b, olay)
     if ya is None or yb is None:
         return True
     return any(_yorum_kesisir(x, y) for x in ya for y in yb)
 
 
-def _kapsama_notu(blok: str, eslikler: list[str], sablon: str) -> str:
+def _kapsama_notu(blok: str, eslikler: list[str], sablon: str, olay: str) -> str:
     """Biçim farkı komutunun önüne konan kapsama notu ("" = kapsıyor).
 
-    `(KISMİ: …)` yalnız KANITLANDIĞINDA yazılır: tüm eşleyiciler tam ad listesi (ya da `*`) ve
-    kanonik ad birleşimi şablonunkini kapsamıyor. Regex ya da çok okumalı (`,` boşluk `-`) eşleyici
-    varsa kapsama ölçülemez ⇒ `(KAPSAMA ÖLÇÜLEMEDİ: …)` (F14: `.*` bloğu her aracı kapsar, "⊉"
-    demek yanlış olurdu). Not yalnız WARN metnidir; ekleme kararını değiştirmez."""
+    `(KISMİ: …)` yalnız KANITLANDIĞINDA yazılır: tüm eşleyiciler (olaydaki okumayla) tam ad listesi
+    (ya da `*`) ve kanonik ad birleşimi şablonunkini kapsamıyor. Regex eşleyici varsa kapsama
+    ölçülemez ⇒ `(KAPSAMA ÖLÇÜLEMEDİ: …)` (F14: `.*` bloğu her aracı kapsar, "⊉" demek yanlış
+    olurdu). Not yalnız WARN metnidir; ekleme kararını değiştirmez."""
     if _kapsar(eslikler, sablon):
         return ""
-    yorumlar = [_eslik_yorumlari(x) for x in [*eslikler, sablon]]
+    yorumlar = [_eslik_yorumlari(x, olay) for x in [*eslikler, sablon]]
     if any(y is not None and (len(y) != 1 or y[0][0] != "liste") for y in yorumlar):
-        return f"(KAPSAMA ÖLÇÜLEMEDİ: blok `{blok or '*'}` ↔ şablon, regex/çok okumalı eşleyici) "
+        return f"(KAPSAMA ÖLÇÜLEMEDİ: blok `{blok or '*'}` ↔ şablon, regex eşleyici) "
     if any(y is None for y in yorumlar[:-1]):
         return ""
     hedef = yorumlar[-1]
@@ -282,7 +317,7 @@ def kiyas(proje: dict, sablon: dict) -> dict:
         "bicim_farki": [((olay, ş_eşleyici, ad), komut)]  ad, şablon eşleyicisiyle KESİŞEN bir
                          blokta ya adı ayrıştırılamayan (`?…`) shim komutunun ham token'larında
                          ya da kabuk zincirindeki 2.+ shim çağrısında geçiyor. Kesişim kapsama
-                         (⊇) değilse komutun başında `(KISMİ: …)` notu durur (regex/çok okumalı
+                         (⊇) değilse komutun başında `(KISMİ: …)` notu durur (regex
                          eşleyicide `(KAPSAMA ÖLÇÜLEMEDİ: …)`). Kancanın o
                          eşleyicide KOŞUP KOŞMADIĞI ÖLÇÜLMEDİ (zincir çağrısı koşar; `?…`
                          biçimi bilinmez; KISMİ'de şablonun kesişmeyen kısmı kablosuzdur)
@@ -304,7 +339,7 @@ def kiyas(proje: dict, sablon: dict) -> dict:
           o bağlantıyı KARŞILAMAZ ⇒ EKSİK, onarım ekler. ŞÜPHE YÖNÜ (F14): kesişmezlik
           kanıtlanamıyorsa (regex × regex, derlenemeyen desen) KESİŞİR sayılır ⇒ biçim farkı
           (4h WARN), onarım EKLEMEZ. Kapsama notu `_kapsama_notu`: `(KISMİ: …)` yalnız tam ad
-          listelerinde kanıtlanınca; regex/çok okumalı eşleyicide `(KAPSAMA ÖLÇÜLEMEDİ: …)`.
+          listelerinde kanıtlanınca; regex eşleyicide `(KAPSAMA ÖLÇÜLEMEDİ: …)`.
       (b) aynı blok eşleyicisi bu adın AYRIŞTIRILMIŞ bağlantıları arasında YOK. O eşleyici
           ①/②'de zaten tartıldı. `pre_tool_guard && pre_tool_guard` gibi aynı-ad zinciri yeni
           bir eşleyici getirmez, eksiği maskeleyemez (8e94e17 davranışı).
@@ -328,10 +363,10 @@ def kiyas(proje: dict, sablon: dict) -> dict:
             farkli.append((b, es[1]))
             continue
         ham = [(e, k) for e, k in _ham_iceren(proje, b[0], b[2])
-               if e not in p_esl and _kesisir(e, b[1])]
+               if e not in p_esl and _kesisir(e, b[1], b[0])]
         if ham:
             e, komut = ham[0]
-            komut = _kapsama_notu(e, p_esl + [x for x, _k in ham], b[1]) + komut
+            komut = _kapsama_notu(e, p_esl + [x for x, _k in ham], b[1], b[0]) + komut
             bicim_farki.append((b, komut))
             continue
         eksik.append(b)
