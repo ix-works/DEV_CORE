@@ -1,6 +1,6 @@
 ---
 name: feedback_playwright-ui5-firepress-model-api
-description: UI5 doğrulamada playwright .click() bazen tetiklemez → firePress/controller-invoke + model API ile sayısal doğrula
+description: "UI5 doğrulamada playwright .click() bazen tetiklemez → firePress/controller-invoke + model API ile sayısal doğrula; MessageBox butonunda TERSİ — firePress onClose'u tetiklemez, DOM click gerekir"
 metadata: 
   node_type: memory
   type: feedback
@@ -15,4 +15,17 @@ UI5 freestyle app'i playwright ile doğrularken: `playwright-cli click` (CSS id 
 1. Buton wiring şüphesinde `sap.ui.core.Element.registry.get('<id>').firePress()` (gerçek press = kullanıcı tıklaması eşdeğeri) veya `getController().<handler>()` direkt-invoke.
 2. State'i model API'den oku: `getModel('<name>').getData()` (DOM satır sayısı değil — sap.ui.table virtual-row DOM'u yanıltır).
 3. Buton sağlığını kontrol et: `getEnabled()/getVisible()/mEventRegistry.press/getDomRef().offsetParent`.
-4. Genişlik/hiza: `getBoundingClientRect()` ile px ölç (vision yok). [[feedback_dogrula-once-flag-spekulatif-blocker-yasak]] · [[feedback_done-tam-kapsam-dogrula]] · [[feedback_fe-merge-key-padding-ve-playwright-runtime-tespit]]
+4. Genişlik/hiza: `getBoundingClientRect()` ile px ölç (vision yok).
+
+⛔ **TERS YÖNLÜ İSTİSNA — `MessageBox` (ölçüldü 2026-09-09):**
+`MessageBox.confirm/error`'ın butonunda **`firePress()` `onClose`'u TETİKLEMEZ** — dialog açık
+kalır, akış ilerlemez. Burada çalışan tek yol **gerçek DOM tıklamasıdır** (`page.click('#'+id)`).
+⚠ **Mekanizma [DOĞRULANMADI]** — ölçülen şey SEMPTOM (firePress → dialog açık kaldı, DOM click →
+akış ilerledi). *"`onClose` press handler'ına değil `Dialog`'un kapanma zincirine bağlı"* açıklaması
+**çıkarımdır, ölçüm değildir**; UI5 kaynağına bakılarak doğrulanmadı.
+⇒ Kural tek yönlü değil: **normal butonlarda `firePress()` `.click()`'ten sağlam, MessageBox
+butonlarında TERSİ.** Hangi kontrolle uğraştığını bak; ikisini de dene, hangisinin ilerlettiğini
+**ölç** — "tetiklemedi" bulgusunu ürün kusuru sanma (bu tuzağın iki yönü de ölçüldü).
+
+İlgili: [[feedback_dogrula-once-flag-spekulatif-blocker-yasak]] · [[feedback_done-tam-kapsam-dogrula]] · [[feedback_fe-merge-key-padding-ve-playwright-runtime-tespit]] · [[feedback_ajan-bulgusu-dogru-mekanizmasi-yanlis]]
+Son-doğrulama: 2026-11-12 (tohum geri akışı; ölçüm 2026-09-09) · Applies-to: Playwright ile UI5 doğrulaması

@@ -32,8 +32,9 @@ Aktif transport: **`<TRANSPORT>`** (kullanıcı verir, AI yaratmaz — ADR 0005 
   FIDKxxxxxx" mesajındaki numara başka geliştiriciye ait olabilir; kullanmak değişikliğini
   onun request'ine enjekte eder. DUR ve kullanıcıya sor.
 - **409 / lock conflict → retry YOK.** Her retry yeni boş K-type transport (ghost task)
-  yaratır. Sıra: kullanıcıya bildir → SM12 stale lock temizle → SE10 doğru transport'a
-  assign → tek retry.
+  yaratır. Sıra: DUR → kullanıcıya bildir (kilidin sahibi + transport) → kilit bizim oturumumuzdaysa
+  unlock ile bırak; başkasınınsa ya da bırakılamıyorsa kararı ve eylemi kullanıcıya bırak (enqueue
+  kilidi silmek AI'a YASAK — ADR 0005 §C) → kullanıcı doğru transport'u teyit edince tek retry.
 - `push` başarılı olunca SAP otomatik S-type child task yaratır (K-type altında) —
   bu normaldir, beraber release olur.
 

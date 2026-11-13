@@ -12,3 +12,12 @@ metadata:
 **Why (KESİN, 2026-06-15 kanıtlı):** ZSD001 C4 push 5 tur boyunca aynı lock handle `F66BB933...` aldı, obje adt_lock_check'te NOT-locked görünmesine rağmen. Fix (push failure'da unlock) + `/mcp restart` (yeni session = stale lock düşer) sonrası **TAZE handle `AA736AA3...` geldi** → stale-lock bug'ı kesin doğrulandı + çözüldü. (NOT: o vakada 400 hatasının ASIL sebebi stale-lock DEĞİLDİ — ayrı eşzamanlı source-scan sorunuydu; ama stale-lock gerçek bir bug'dı ve her tekrar-push'ı kirletiyordu, teşhisi zorlaştırıyordu.)
 
 **How to apply:** Fix uygulandı: `push_object` except bloğu push failure'da `unlock_object` çağırır (stale-lock guard). Tekrar-push patinajında **aynı lock handle dönüyorsa** (taze beklerken) → persistent session'da stale lock var; `/mcp restart` ile session sıfırla (lock düşer) + push_object'in failure-unlock'unun çalıştığını teyit et. Tooling fix = LİDER ([[feedback_arac-kod-fix-lider-isi]]); gateway raporlar, lider düzeltir. /mcp restart şart (in-memory session + kod). İlgili: [[feedback_csrf-cache-poison-self-heal-fixed]] (benzer cache-poison ama CSRF, bu LOCK).
+
+---
+
+⚠ **`adt_lock_check` bir kurulumda `locked: null` / `http_404` döndü (2026-09-08, ölçüldü).**
+Kilit ucu yoksa bu araçtan *"kilitli DEĞİL"* sonucu **ÇIKARILAMAZ** — ölçüm **yapılamamıştır**.
+(Yukarıdaki vakadaki "adt_lock_check'te NOT-locked" okuması da bu yüzden kanıt sayılmaz.)
+Push 409/enqueue vermediyse ilerlenebilir, ama nota *"kilit durumu ÖLÇÜLEMEDİ"* yazılır,
+*"kilitli değildi"* YAZILMAZ ([[feedback_arac-basarisizligini-zararsiz-sayma]]).
+Son-doğrulama: 2026-11-12 (tohum geri akışı) · Applies-to: ADT MCP push/lock akışı

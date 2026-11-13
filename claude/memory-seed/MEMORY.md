@@ -50,8 +50,8 @@
 - [Dosya Bölgeleri / Yazım Yetkisi](feedback_dosya-bolgeleri-yazim-yetkisi.md) — A metodoloji/araç=lider · B paket kaynağı/docs=feature+lider · C SAP=gateway; commit=lider
 - [Takım Süreklilik / Gün-sonu / Resume](feedback_takim-sureklilik-gun-sonu-resume.md) — süreklilik=lider; ajan durumsuz; gün-sonu=checkpoint+SESSION_NOTES+WIP commit+**push origin main ZORUNLU**; resume=re-spawn+brief
 - [Kararları Önce Topla, Sonra Dispatch](feedback_kararlari-once-topla-sonra-dispatch.md) — build-unit'in TÜM user-kararlarını önce topla, sonra konsolide yönerge; mid-build ping-pong yok
-- [ATC Priority 1 Zorunlu](feedback_atc-priority-1-zorunlu.md) — yalnız Prio 1 zorunlu; Prio 2/3 açık onayla pass (sessiz pass yok); variant ZZNDBS_ATC
-- [Clean Core Released-CDS Proaktif](feedback_clean-core-released-cds-proaktif.md) — GATE check_released_objects; released CDS tercih (MARA değil I_Product); released_successors.json
+- [ATC Priority 1 Zorunlu](feedback_atc-priority-1-zorunlu.md) — yalnız Prio 1 zorunlu; Prio 2/3 açık onayla pass (sessiz pass yok); mevcut kodda clean-core P1 muaf; variant ZZNDBS_ATC
+- [Clean Core Released-CDS Proaktif](feedback_clean-core-released-cds-proaktif.md) — GATE check_released_objects; YENİ kodda released CDS (MARA değil I_Product); mevcut kod muaf (proje politikası aksini demiyorsa)
 - [Spec-Mutabakat Gate (her dev başı)](feedback_spec-mutabakat-gate.md) — yeni program: ekran+fonksiyonel spec iste → <LEGACY_SOURCE>+app+DDL/S ile sentezle → MUTABAKAT → build
 - [Hook Komut ${CLAUDE_PROJECT_DIR} Exec-Form](feedback_hook-komut-project-dir-execform.md) — hook+statusLine ASLA göreceli yol; cwd kayınca kırılır; exec-form + ${CLAUDE_PROJECT_DIR}
 - [API Call İç Gateway Proxy (ZBC001)](feedback_api-call-ic-gateway-proxy.md) — RFC-dest call'da ZBC001_CL_GET_TOKEN + /iwfnd iç loopback; host/client runtime; örn ZSD001 simulate_pricing
@@ -80,8 +80,8 @@
 - [Ajan brifing'inde SendMessage to main zorunlu](feedback_agent-briefing-sendmessage-main.md) — "lider'e DÖN" YETMEZ; ÇIKTI bölümüne SendMessage({to:"main"}) ekle yoksa rapor gelmez
 - [Gate'lenmemiş kural ≈ kuralsız](feedback_kural-gate-lenmeli-yoksa-anlamsiz.md) — GATE check_rule_gate_coverage; her kural atlanamaz kurgulanmalı (validator/hook/checklist)
 - [TR app i18n: her iki dosya](feedback_i18n-tr-her-iki-dosya.md) — language=tr app'te i18n_tr override eder; etiket değişikliği HER İKİ dosyada + hard refresh
-- [RAP BY-assoc read ALL FIELDS WITH](feedback_rap-by-assoc-read-all-fields.md) — GATE check_rap_byassoc_keys_only; READ BY _assoc YALNIZ KEY döner, non-key için ALL FIELDS WITH
-- [Playwright UI5: firePress + model API](feedback_playwright-ui5-firepress-model-api.md) — .click() bazen press tetiklemez → firePress()/controller-invoke + getModel().getData() ile doğrula
+- [RAP BY-assoc read ALL FIELDS WITH](feedback_rap-by-assoc-read-all-fields.md) — GATE check_rap_byassoc_keys_only; READ BY _assoc YALNIZ KEY döner; non-key için FIELDS ( … ) WITH (ALL FIELDS -305 riski)
+- [Playwright UI5: firePress + model API](feedback_playwright-ui5-firepress-model-api.md) — .click() bazen press tetiklemez → firePress() + getModel().getData(); MessageBox'ta TERSİ (DOM click)
 - [Inactive-worklist audit (HTTP-200≠aktif)](feedback_inactive-worklist-audit-http200-degil.md) — commit+gün-sonu worklist_audit.py; root-CDS-alan FOR-BEHAVIOR BDEF'i sessizce inactive; canlı re-verify
 - [Çözülmüş tooling-bug'ları (10)](feedback_resolved-tooling-bugs.md) — regresyon ref: adt_dtel_create·adt_get-ddic·source-drift·bdef-blues·csrf·push-stale-lock·cds-escape·mcp-stdio·table-read
 - [Behavior pool main boş → CCIMP tuzağı](feedback_behavior-pool-main-empty-ccimp-trap.md) — managed pool source/main DAİMA boş; handler CCIMP'te; incelemeden ÖNCE CCIMP çek, BDEF↔lhc_* eşle
@@ -121,7 +121,7 @@
 ### İnfra · gate · dosya yetkisi
 - **2 ders:** [tam indeks](_indeks-infra-gate.md)
 - ⛔ [Muafiyetin gerekcesi ALT-KUMEYE aitse muafiyet kor nokta olur](feedback_muafiyetin-gerekcesi-alt-kumeye-aitse-muafiyet-kor-nokta-olur.md) — Bir kapının bilinçli muafiyeti gerekçesinden GENİŞ yazılmışsa (dosya-bazlı muafiyet, gerekçe yalnız dosyanın bir bölümü için geçerli) kör noktaya döner; dokunulmazlığı yüzünden o kapının EN UZUN YAŞAYAN kör noktası olur. Düzeltmenin AÇIKLAMA metni bile o boşluktan sızabilir. Daraltma: muafiyeti satır/token bazlı yap.
-- ⛔ [Merge-safe dagitimda SATIR yalniz ONARILAN dosyaya ulasir](feedback_merge-safe-dagitimda-satir-yalniz-onarilan-dosyaya-ulasir.md) — Mevcut dosyayi EZMEYEN bir dagitici eklenen DOSYAYI herkese ulastirir ama eklenen SATIRI ulastirmaz; satir yalniz dagiticinin OZEL OLARAK ONARDIGI dosyada tasinir. Dogrulamayi bos dizine degil, once eski surumle kurulmus sahte bir "mevcut makine"ye yap + negatif kontrol koy.
+- ⛔ [Merge-safe dagitimda SATIR yalniz ONARILAN dosyaya ulasir](feedback_merge-safe-dagitimda-satir-yalniz-onarilan-dosyaya-ulasir.md) — Yeni DOSYA herkese ulasir; mevcut dosyaya eklenen SATIR yalniz yerelde DOKUNULMAMIS kopyaya (S1) ya da ozel ONARILAN dosyaya ulasir, duzenlenmis/ayirt-edilemez kopyaya ulasmaz. Dogrulamayi bos dizine degil, once eski surumle kurulmus sahte bir "mevcut makine"ye yap + negatif kontrol koy.
 - ⛔ [Tek seferlik script paylasilan modulun desenini yeniden turetmez](feedback_tek-seferlik-script-paylasilan-modulun-desenini-yeniden-turetmez.md) — O modülün yorumları senin düşeceğin tuzağın kaydıdır. Asıl kural: redundans, katmanlar BAĞIMSIZ değilse redundans değildir — ve bir katmanı düzeltmek öbürünün körlüğünü meşrulaştırmaz, GÖRÜNMEZ kılar.
 
 ### Araç · kabuk · kodlama tuzakları
@@ -154,8 +154,11 @@
 ### 2026-10-18 tohum terfisi (konu başlıklı)
 - **42 ders:** [tam indeks](_indeks-terfi-2026-10-18.md) — SAP 16 · UI 12 · Doküman 4 · Araç 4 · Ajan 3 · Karar 3
 
-### 2026-10-29 tohum terfisi (tek ders — doğrudan satır: hub'a yazılan satır kurulu makineye ulaşmaz)
+### 2026-10-29 tohum terfisi (tek ders — doğrudan satır: yerelde düzenlenmiş hub'a satır ulaşmaz)
 - ⭐ [Yeni geliştirmede TS build'dan önce yazılır](feedback_yeni-gelistirmede-ts-builddan-once-yazilir.md) — sıra FS onayı → TS → build; "donmuş kod" dersi TS'i ERTELEMEZ; TS'i kodlayan ajan yazmaz (taze bağlam)
+
+### 2026-11-12 tohum terfisi (konu başlıklı)
+- **11 ders:** [tam indeks](_indeks-terfi-2026-11-12.md) — Karar 4 · Ajan 2 · Araç 2 · SAP 2 · UI 1 (tüm kullanıcılar: Türkçe · test onayı · az yorum)
 
 ### Araç kök-fix tarihçesi (regresyon sözlüğü)
 - **10 kayıt:** [tam indeks](_indeks-arac-kok-fixleri.md) — *"bu bug daha önce oldu mu"* sorusunun yeri; güncel kural DEĞİL

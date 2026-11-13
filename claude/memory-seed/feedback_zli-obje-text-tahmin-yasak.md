@@ -1,36 +1,66 @@
 ---
 name: feedback-zli-obje-text-tahmin-yasak
-description: "Z'li obje text'lerini (description, label) AI TAHMİN ETMEZ — kanonik kaynaktan çıkar (<LEGACY_SOURCE> SEVKEMRI veya proje spec dosyaları)"
+description: "Z'li obje text'leri (description, label): AI ÖNERİR ve onaya sunar (kullanıcı 2026-09-02) — ama önce kanonik kaynağı arar ve türetimini kalem kalem gösterir; yasak olan SESSİZCE UYDURMAK, öneri üretmek değil"
 metadata: 
   node_type: memory
   type: feedback
   originSessionId: 7091c15c-424a-42a9-bcf8-7c3f51f36d33
 ---
 
-Z'li (custom) SAP objelerinin metinlerini (description, field label, başlık) **AI HİÇBİR ŞEKİLDE TAHMİN ETMEZ**.
+## ⭐ GÜNCEL USUL (kullanıcı, 2026-09-02) — **AI ÖNERİR, KULLANICI ONAYLAR**
 
-**Kanonik kaynaklar:**
-1. **`<LEGACY_SOURCE> — Tablo alan listelerinde her DTEL/domain için "Anlamı" sütununda Türkçe metin var (kanonik).
-2. **`<LEGACY_SOURCE> — Struct'lar — tabloda olmayan domain'ler için.
-3. **`<LEGACY_SOURCE> — DTEL XML kaynakları (eski sistem) — 4 label (short/medium/long/heading) tam metni var.
-4. Proje spec dosyaları: `ERP/<MODULE>/<PKG>/SPEC.md`, `MODULE_FS.md`, `DESIGN_DIFFERENCES.md`
+> **Tohum notu (2026-11-12):** bu dersin önceki tohum hâli *"AI HİÇBİR ŞEKİLDE TAHMİN ETMEZ —
+> bulunamazsa kullanıcıdan iste"* diyordu. Kural 2026-09-02'de kullanıcı tarafından **esnetildi**;
+> eski hâli bu sürümle geçersizdir.
 
-**Önemli:** "DTEL metni = domain description" (kullanıcı bilgisi, 2026-05-14). Domain description ile DTEL field label'ları aynı semantic kaynaktan beslenir.
+Kullanıcının kendi sözleri: *"aslında AI metin önerir ve onay ister, ben istersem değiştiririm."*
+Aynı gün bir emsal kararla uygulandı (iki Z objesinin — bir fonksiyon grubu ve bir IDoc giriş
+FM'i — kısa metinleri öneri + onayla yazıldı).
 
-**Yapılması GEREKMEYEN:**
-- Domain/DTEL adından (örn. `<DOMAIN_A>`) anlam tahmin etmek ("Lojistik Partneri" gibi)
-- DEPENDENCY_GRAPH'taki kategori başlığını description olarak almak ("Partner" gibi tek kelime — yetersiz)
-- İngilizce alan adından Türkçe tahmin türetmek (DEParture PORT → "Kalkış Limanı" tahmini doğru olabilir ama kanonik kaynaktan teyit şart)
+⇒ **Esnetilen:** *"AI öneri üretmez"*. ⇒ **Esnetilmeyen — kuralın asıl derdi:** *"AI sessizce
+uydurur"*. Öneri sunmak serbesttir; **türetimi göstermeden** metin yazmak değildir.
 
-**Yapılması GEREKEN sıralı arama:**
-1. Önce `ERP/<MODULE>/<PKG>/` altında spec/structure dosyaları — yeni sistem kanonik kaynağı
-2. Sonra `<LEGACY_SOURCE> — domain'in geçtiği tablo dosyalarında "Anlamı" sütunu
-3. Sonra `structures\` — struct dosyaları
-4. Son çare `sources\ddic\dtel\` — DTEL XML
-5. Hiçbiri yoksa **kullanıcıya sor** — AI tahmin etmez
+**Öneri sunarken zorunlu adımlar:**
+1. **Önce kanonik kaynağı ara** (aşağıdaki sıra). Bulunduysa öneri değil **alıntı** yap.
+2. **Türetimi kalem kalem göster** — hangi belge, hangi satır, hangi ev emsali (kardeş objenin
+   üslubu). Kaynaksız öneri, kılık değiştirmiş tahmindir.
+3. ⭐ **Alan uzunluğunu ÖNERİDEN ÖNCE ölç** (canlı `DD03L`). Sığmayan metin **sessizce kırpılır**;
+   emsal turda `TLIBT-AREAT` CHAR 40 / `TFTIT-STEXT` CHAR 74 ölçülmeseydi kusur readback'e kadar
+   görünmezdi. Yazımdan sonra readback'te **kod-noktası** kıyası yap (mojibake: `ş` U+015F · `ı` U+0131).
+4. Onayı **kalıcı bir provenance belgesine** yaz (`docs/METIN-ONAY-EK-<tarih>.md` kalıbı).
+   📌 Metni kanonik yapan şey **öneri değil, onaydır**.
 
-**Why:** 2026-05-14 Sprint 1A başlatılırken AI 27 domain için description tahmini yaptı (<DOMAIN_A> = "Lojistik Partneri", <DOMAIN_B> = "Teslimat Rezervasyonu", vb.). Kullanıcı uyardı: "txt tahmin etmemen gerek özellikle Z lilerde". <LEGACY_SOURCE> tablo dosyalarında kanonik karşılıklar bulundu, ~5 tahminden 3'ü yanlış çıktı (<DOMAIN_A> = "Hat / shipping line", <DOMAIN_B> = "Gecikme sebebi"). Bu, ⛔ KATEGORİ D (Z'li obje TR text zorunluluğu) prensibinin doğrudan ihlali — yanlış text → ekran/rapor'da yanlış metinler.
+⚠ **İstisna — şu hâlâ kullanıcınındır:** yeni bir **iş kavramının** görünen adı/durum metni
+(ör. bir durumun *"belirlenemedi"* karşılığı) ölçümle türetilemez; orada öneri sunulur ama
+**kullanıcı belirler**. `ADR 0005-D`'nin 4 field label (short/medium/long/heading) TAM yazılma
+zorunluluğu **aynen** durur.
 
-**How to apply:** Z'li domain/DTEL/CDS/class/program yaratırken description/title/label gerekirse: önce kanonik kaynakları sırayla ara, bulunamazsa kullanıcıdan iste. ASLA tahmin yazma. Eğer obje hiç eski sistemde yoksa (yeni icat), kullanıcıdan TR description'ı al.
+---
 
-İlgili: [[feedback_legacy-draft-txt-files]], ADR 0005 KATEGORİ D
+## Kanonik kaynak sırası (öneri üretmeden ÖNCE)
+
+1. Proje spec dosyaları: `<source_root>/<MODULE>/<PKG>/` altında `SPEC.md`, `*_FS.md`, ad/metin onay
+   listeleri, `DESIGN_DIFFERENCES.md` — **yeni sistemin kanonik kaynağı**
+2. **Ev emsali:** kardeş objenin canlı kısa metni (üslup birliği için — emsal turda kardeş FUGR'ın
+   kısa metninin üslubu alındı)
+3. Projede bir legacy/eski sistem kaynağı **tanımlı ve erişilebilirse** oradaki DDIC metinleri
+   (tablo alan listelerindeki "Anlamı" sütunu, DTEL 4 label) — kök iptal edildiyse bu adım atlanır
+4. Hiçbiri yoksa → **öneri üret, türetimi göster, onaya sun**
+
+**Önemli:** *"DTEL metni = domain description"* (kullanıcı bilgisi, 2026-05-14). Domain description
+ile DTEL field label'ları aynı semantik kaynaktan beslenir.
+
+**Yine de YASAK olanlar:**
+- Domain/DTEL **adından** anlam uydurup kaynak göstermemek (`<DOMAIN_A>` → *"Lojistik Partneri"*)
+- DEPENDENCY_GRAPH kategori başlığını description sanmak (tek kelime — yetersiz)
+- İngilizce alan adından TR türetip **teyit etmemek**
+
+**Why — ölçülmüş vaka, 2026-05-14:** AI 27 domain için description **tahmin etti**, kaynak
+göstermedi. Kullanıcı: *"txt tahmin etmemen gerek özellikle Z lilerde."* Kanonik karşılıklar
+bulununca ~5 tahminden **3'ü yanlış** çıktı (`<DOMAIN_A>` = *"Hat / shipping line"*, `<DOMAIN_B>` =
+*"Gecikme sebebi"*). Yanlış text → ekranda/raporda yanlış metin, **sessiz** hata.
+⇒ Vakayı kötü yapan **öneri sunmak değildi**; kaynaksız ve onaysız **yazmaktı**. 2026-09-02
+güncellemesi bu ayrımı netleştirir.
+
+İlgili: [[feedback_legacy-draft-txt-files]] · [[feedback_onay-isteme-formati]] ·
+[[feedback_capayi-ada-cevirmek-de-bir-olcumdur]] · ADR 0005 KATEGORİ D

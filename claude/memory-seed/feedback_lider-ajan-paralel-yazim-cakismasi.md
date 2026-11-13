@@ -28,4 +28,11 @@ ajanın o ana kadarki işini **oku ve karşılaştır** — seninki otomatik ola
 Çakışma sinyalleri: Edit aracının *"dosya diskte değişmiş"* uyarısı · aynı adın iki kez
 tanımlanması · beklenmedik mtime. **Son-doğrulama:** 2026-08-13 ·
 **Applies-to:** lider + worktree'de çalışan her ajan.
+**Vaka 2 (2026-10-09, ajan↔ajan, ortak çalışma ağacı):** kapsamı iki FE ajanı arasında yeniden böldüm;
+eski sahibine *"bu uygulamaları bırak"* dedim, o da kendi değişikliklerini `git checkout -- <dosya>` ile geri aldı —
+ama yeni sahip aynı dosyalara **çoktan** yazmaya başlamıştı ⇒ 4 uygulamadaki kopyaları sessizce silindi (ikinci
+ajan durum teyidinde fark etti, yeniden kopyaladı). **Ek kural:** kapsam devrinde eski sahibe *"yalnız KENDİ
+satırlarını geri al, dosya-düzeyi `git checkout`/`restore` YOK"* de ve geri almayı **devirden ÖNCE** bitirt; yeni
+sahip ancak onay geldikten sonra başlar. Devir sonrası iki ajandan da dosya md5 listesi al. Son-doğrulama: 2026-10-09.
+
 İlgili: [[feedback_kararlari-once-topla-sonra-dispatch]] · [[feedback_arac-kod-fix-lider-isi]]

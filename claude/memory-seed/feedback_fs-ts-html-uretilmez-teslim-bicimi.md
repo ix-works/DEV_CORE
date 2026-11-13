@@ -29,4 +29,18 @@ bedel çıkarıyordu. KD'nin HTML'i ise **yük taşıyor** — uygulama içi kı
   <PAKET-C>-v2 · <PAKET-D> · <PAKET-E> · <PAKET-F> · <PAKET-G>; kalanlar taslak/parça/ref_docs). Bu kararla
   yaratılmadı, önceden vardı.
 
+**⏱ PDF ZAMANLAMASI — kullanıcı kuralı (2026-10-15; 2026-11-12'de tüm core kullanıcıları için onaylandı):**
+*"dokuman pdf lerini geliştirme tamamlandıktan sonra testler ok olduğunda oluşturursun, onlarla zaman ve
+kaynak harcama öncesinde"*
+- Tasarım/build süresince FS/TS (ve KD) **yalnız `.md`** güncellenir; **`.pdf` ÜRETİLMEZ** — ara sürümler
+  için de. PDF tek seferde: **geliştirme bitti + kullanıcı testi OK** olduktan sonra.
+- Bayat kalan mevcut `.pdf` o ana kadar yeniden üretilmez; "pdf bayat" diye bulgu/kalem açılmaz.
+- Why: bir pakette FS 32 / TS 52 sayfalık PDF'ler her doküman turunda yeniden üretildi; içerik build
+  boyunca değişeceği için emek boşa gidiyordu.
+- **İstisna (2026-10-31, bir paket):** geliştirme kapanınca kullanıcı *"bunlar için beklemeye gerek yok.
+  şimdi yap bunları"* dedi → PDF test dönüşü beklenmeden üretildi. Bu yalnız o paket için verildi; genel
+  kural değişmedi. Geliştirme kapanırken PDF'in şimdi mi yoksa testten sonra mı isteneceğini kullanıcıya
+  sormak makul.
+- Son-doğrulama: 2026-11-12 (tohum geri akışı) · Applies-to: tüm core kullanıcıları, FS/TS/KD doküman turları
+
 İlgili: [[feedback_turetilmis-artefakt-sondasi-tablo-hucresini-krar]] · [[feedback_teslim-paketi-artefakttan-ayri-yasar]] · [[feedback_dokuman-turu-donmus-kod-ister-paralel-kosturma]]

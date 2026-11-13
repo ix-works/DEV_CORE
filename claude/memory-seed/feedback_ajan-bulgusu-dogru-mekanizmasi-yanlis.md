@@ -18,6 +18,21 @@ say ve kendin ölç**. İkisi bağımsızdır: *"X bozuk"* doğru olabilirken *"
 ⇒ çıktıya bakan *"blocker yok ⇒ temiz"* der. Kusur exit kodunda değil, **kanıtın yokluğunun kanıt
 sanılmasında**.
 
+**Vaka 2 (2026-09-18) — mekanizma yalnız yanlış değil, TERSİNE çıktı.** Bir infra ajanı
+`pre_tool_guard`'ın sızıntı kapısında kör nokta bildirdi: *"`"Z" + "AB" + "001"` gibi `+` ile
+bölünmüş literali birleştirip yakalıyor, `"Z""EWM""000"` gibi bitişik literali kaçırıyor."*
+**Ölçüm (7 payload, gerçek giriş noktası, pozitif kontrollü) tam tersini gösterdi:** bitişik
+biçim **BLOKLANIYOR** (rc=2) — çünkü guard'ın sözcük ayırıcısı Bash'i doğru modelliyor ve Bash
+da bitişik tırnakları birleştirir; `+` ve boşluklu biçimler ise **kimliği hiç üretmiyor**
+(`eval echo` → `Z + AB + 001`) ⇒ onları bloklamaMAK **doğru davranış**. Yani Bash yüzeyinde
+kör nokta **YOK**. Gerçek açık **başka kabuktaydı**: PowerShell'de `+` bir çalışma-zamanı
+birleştirme operatörüdür ve `$p = …; -m "fix: $p"` enterpolasyonu da guard'ın gördüğü metinde
+kimliği **hiç göstermez** ⇒ iki PowerShell biçimi de rc=0 ile geçti (pozitif kontrol rc=2).
+⭐ Ajanın cümlesindeki **iki öge de yanlıştı** (hangi biçimin yakalandığı + hangi kabuğun
+kör olduğu), ama **bir açık gerçekten vardı**. Kayıt düzeltilmiş mekanizmayla açıldı.
+⛔ Bu vakanın öğrettiği ek şey: mekanizmayı ölçerken **kabuğun kendi semantiğini de ölç** —
+"guard bunu görmüyor" ile "bu gerçekten kimlik üretiyor" ayrı sorulardır.
+
 **Why:** Kayıt, bulgudan uzun yaşar. Yanlış mekanizma kayda geçerse (a) düzeltmeyi yapan **yanlış
 yerde** arar, (b) *"exit kodunu kontrol edelim"* gibi **işe yaramaz bir gate** doğabilir, (c) gerçek
 sınıf (*"sessiz kanıt yokluğu"*) hiç adlandırılmadığı için **başka yüzeylerde tekrar eder**.
