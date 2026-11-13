@@ -142,10 +142,100 @@ def _kapsar(proje_eslikleri: list[str], eslik: str) -> bool:
     return hedef is not None and hedef <= birlesim
 
 
+# Claude Code eşleyici okuması (2.1.323 ikilisinden ölçüldü 2026-11-13, `Owt`/`r8`): `""`/`*` = her
+# araç · YALNIZ `[A-Za-z0-9_|]` → TAM AD listesi (`|` ile) · araç olaylarında `,` boşluk `-` de
+# listedir (`|`/`,` ile bölünür, öğe kırpılır) · başka her karakter → JS RegExp, ÇAPASIZ `test`
+# (alt dizgi araması), araç adı VE eski adlarıyla denenir. Liste öğesi eski adla yazılmışsa kanonik
+# ada çevrilir (`Task` bloğu `Agent` aracında koşar).
+_LISTE_DAR = re.compile(r"[A-Za-z0-9_|]+")
+_LISTE_GENIS = re.compile(r"[A-Za-z0-9_|, -]+")
+_ESKI_AD = {"Task": "Agent", "KillShell": "TaskStop", "KillBash": "TaskStop",
+            "ListPeers": "ListAgents", "Brief": "SendUserMessage",
+            "ListMcpResources": "ListMcpResourcesTool", "ReadMcpResource": "ReadMcpResourceTool",
+            "ReadMcpResourceDir": "ReadMcpResourceDirTool"}
+
+
+def _kanonik(ad: str) -> str:
+    return _ESKI_AD.get(ad, ad)
+
+
+def _ad_ailesi(ad: str) -> set[str]:
+    """Kanonik ad + ona giden eski adlar (regex Claude Code'da hepsiyle denenir)."""
+    k = _kanonik(ad)
+    return {ad, k, *[e for e, y in _ESKI_AD.items() if y == k]}
+
+
+def _eslik_yorumlari(eslik: str) -> list[tuple[str, object]] | None:
+    """None = her araç. Aksi hâlde eşleyicinin OLASI okumaları: ("liste", frozenset kanonik ad) /
+    ("regex", desen). `,` / boşluk / `-` taşıyan düz eşleyici iki okumayı da alır: araç olaylarında
+    liste, diğer olaylarda (ve eski sürümlerde ÖLÇÜLMEDİ) regex — `_kesisir` ikisinden biri kesişirse
+    kesişir der (şüphe yönü)."""
+    e = (eslik or "").strip()
+    if e in ("", "*"):
+        return None
+    if _LISTE_DAR.fullmatch(e):
+        return [("liste", frozenset(_kanonik(x) for x in e.split("|") if x))]
+    yorum: list[tuple[str, object]] = []
+    if _LISTE_GENIS.fullmatch(e):
+        yorum.append(("liste", frozenset(_kanonik(x.strip()) for x in re.split(r"[|,]", e)
+                                         if x.strip())))
+    yorum.append(("regex", e))
+    return yorum
+
+
+def _yorum_kesisir(x: tuple[str, object], y: tuple[str, object]) -> bool:
+    if x[0] == y[0] == "liste":
+        return bool(x[1] & y[1])  # type: ignore[operator]
+    if x[0] == y[0] == "regex":
+        return True    # iki çapasız desen: ayrıklık KANITLANAMAZ → şüphe yönü
+    desen, adlar = (x[1], y[1]) if x[0] == "regex" else (y[1], x[1])
+    try:
+        r = re.compile(str(desen))
+    except re.error:
+        return True    # Python derleyemedi; JS okuması bilinmiyor → şüphe yönü
+    return any(r.search(n) for ad in adlar for n in _ad_ailesi(ad))  # type: ignore[union-attr]
+
+
 def _kesisir(a: str, b: str) -> bool:
-    """İki eşleyici en az bir aracı ortak tutuyor mu (boş/`*` = her araç; öğeler LİTERAL)."""
-    ka, kb = _eslik_kumesi(a), _eslik_kumesi(b)
-    return ka is None or kb is None or bool(ka & kb)
+    """İki eşleyici en az bir aracı ortak tutuyor mu — Claude Code'un okumasıyla (yukarıdaki not).
+
+    ŞÜPHE YÖNÜ = KESİŞİR (F14, 2026-11-13). `kiyas` ③(a)'da "kesişmiyor" sonucu bağlantıyı EKSİK
+    yapar ve `eksikleri_ekle` ikinci bir kopya ekler; kanca zaten koşuyorsa bu görünmez çift
+    koşumdur. Bu yüzden "kesişmiyor" yalnız KANITLANABİLDİĞİNDE döner:
+      · liste × liste → kanonik ad kümelerinin kesişimi (harf duyarlı, Claude Code gibi);
+      · regex × liste → desen her adda (ve eski adlarında) `re.search` ile denenir — kesin;
+      · regex × regex → KESİŞİR (çapasız iki alt dizgi deseninin ayrıklığı kanıtlanamaz);
+      · Python'un derleyemediği desen → KESİŞİR.
+    Öğeler `|`'den LİTERAL bölünmez: `mcp__x__adt_(a|b)` tek bir regex'tir (parantez içi `|`).
+    ÖLÇÜLMEDİ: JS ↔ Python regex sözdizimi farkı (JS'nin reddettiği desen Claude Code'da hiçbir
+    araca eşleşmez; burada şüphe yönüne düşer)."""
+    ya, yb = _eslik_yorumlari(a), _eslik_yorumlari(b)
+    if ya is None or yb is None:
+        return True
+    return any(_yorum_kesisir(x, y) for x in ya for y in yb)
+
+
+def _kapsama_notu(blok: str, eslikler: list[str], sablon: str) -> str:
+    """Biçim farkı komutunun önüne konan kapsama notu ("" = kapsıyor).
+
+    `(KISMİ: …)` yalnız KANITLANDIĞINDA yazılır: tüm eşleyiciler tam ad listesi (ya da `*`) ve
+    kanonik ad birleşimi şablonunkini kapsamıyor. Regex ya da çok okumalı (`,` boşluk `-`) eşleyici
+    varsa kapsama ölçülemez ⇒ `(KAPSAMA ÖLÇÜLEMEDİ: …)` (F14: `.*` bloğu her aracı kapsar, "⊉"
+    demek yanlış olurdu). Not yalnız WARN metnidir; ekleme kararını değiştirmez."""
+    if _kapsar(eslikler, sablon):
+        return ""
+    yorumlar = [_eslik_yorumlari(x) for x in [*eslikler, sablon]]
+    if any(y is not None and (len(y) != 1 or y[0][0] != "liste") for y in yorumlar):
+        return f"(KAPSAMA ÖLÇÜLEMEDİ: blok `{blok or '*'}` ↔ şablon, regex/çok okumalı eşleyici) "
+    if any(y is None for y in yorumlar[:-1]):
+        return ""
+    hedef = yorumlar[-1]
+    birlesim: set = set()
+    for y in yorumlar[:-1]:
+        birlesim |= y[0][1]  # type: ignore[index,operator]
+    if hedef is not None and hedef[0][1] <= birlesim:  # type: ignore[operator]
+        return ""
+    return f"(KISMİ: blok `{blok or '*'}` ⊉ şablon) "
 
 
 def baglantilar(veri: dict) -> list[tuple[str, str, str]]:
@@ -192,7 +282,8 @@ def kiyas(proje: dict, sablon: dict) -> dict:
         "bicim_farki": [((olay, ş_eşleyici, ad), komut)]  ad, şablon eşleyicisiyle KESİŞEN bir
                          blokta ya adı ayrıştırılamayan (`?…`) shim komutunun ham token'larında
                          ya da kabuk zincirindeki 2.+ shim çağrısında geçiyor. Kesişim kapsama
-                         (⊇) değilse komutun başında `(KISMİ: …)` notu durur. Kancanın o
+                         (⊇) değilse komutun başında `(KISMİ: …)` notu durur (regex/çok okumalı
+                         eşleyicide `(KAPSAMA ÖLÇÜLEMEDİ: …)`). Kancanın o
                          eşleyicide KOŞUP KOŞMADIĞI ÖLÇÜLMEDİ (zincir çağrısı koşar; `?…`
                          biçimi bilinmez; KISMİ'de şablonun kesişmeyen kısmı kablosuzdur)
         "ek": [(olay, eşleyici, ad)]      yalnız projede (BİLGİ)
@@ -210,7 +301,10 @@ def kiyas(proje: dict, sablon: dict) -> dict:
     eşleyicisiyle bir bağlantıdır ve yalnız şu iki koşulda sayılır:
       (a) blok eşleyicisi şablon eşleyicisiyle KESİŞİYOR (`_kesisir`; ⊇ ise tam, değilse
           KISMİ). Kesişmeyen blok (`Edit|…` bloğundaki zincir ↔ şablonun `Bash` bağlantısı)
-          o bağlantıyı KARŞILAMAZ ⇒ EKSİK, onarım ekler.
+          o bağlantıyı KARŞILAMAZ ⇒ EKSİK, onarım ekler. ŞÜPHE YÖNÜ (F14): kesişmezlik
+          kanıtlanamıyorsa (regex × regex, derlenemeyen desen) KESİŞİR sayılır ⇒ biçim farkı
+          (4h WARN), onarım EKLEMEZ. Kapsama notu `_kapsama_notu`: `(KISMİ: …)` yalnız tam ad
+          listelerinde kanıtlanınca; regex/çok okumalı eşleyicide `(KAPSAMA ÖLÇÜLEMEDİ: …)`.
       (b) aynı blok eşleyicisi bu adın AYRIŞTIRILMIŞ bağlantıları arasında YOK. O eşleyici
           ①/②'de zaten tartıldı. `pre_tool_guard && pre_tool_guard` gibi aynı-ad zinciri yeni
           bir eşleyici getirmez, eksiği maskeleyemez (8e94e17 davranışı).
@@ -237,8 +331,7 @@ def kiyas(proje: dict, sablon: dict) -> dict:
                if e not in p_esl and _kesisir(e, b[1])]
         if ham:
             e, komut = ham[0]
-            if not _kapsar(p_esl + [x for x, _k in ham], b[1]):
-                komut = f"(KISMİ: blok `{e or '*'}` ⊉ şablon) {komut}"
+            komut = _kapsama_notu(e, p_esl + [x for x, _k in ham], b[1]) + komut
             bicim_farki.append((b, komut))
             continue
         eksik.append(b)

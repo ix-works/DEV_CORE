@@ -48,6 +48,13 @@ K1 MATRİSİ (Q408 KAPANIŞ KOŞULU; boş dizin DEĞİL — eski durumlu sahte "
   U14 aynı-ad zinciri KISMEN kesişen blokta → sonuç zincirsiz ikizle aynı (yeni eşleyici getirmez)
   U15 kontrol: kapsayan blokta zincir → biçim farkı ×2, kesişen blokta KISMİ; eksik 0, EKLENMEZ
       · U15b 4h iki AYRI WARN (şablon eşleyicileriyle) + özet DOĞRULANAMADI
+  DÖRDÜNCÜ DOĞRULAMA KAPISI (F14, 2026-11-13) — `_kesisir` eşleyiciyi Claude Code'un okumasıyla:
+  U16 regex ekseni R1 `mcp__sap-adt__.*`↔SWH · R2 `mcp__.*`↔`mcp__sap-adt__.*` · R3 `.*`↔Agent ·
+      R3b `*` kontrol → biçim farkı, EKLENMEZ, "KISMİ ⊉" iddiası YOK · U16b 4h R1 WARN (FAIL yok)
+      "KAPSAMA ÖLÇÜLEMEDİ" + tazeleme bayt-eş
+  U17 sözdizimi: eski ad `Task` · virgüllü liste · parantez içi `|` · derlenemeyen desen → biçim farkı
+  U18 kontrol (fazla genişletme): `mcp__.*` blok ↔ `Bash` · harf `agent` → EKSİK + eklenir
+  U18b kontrol: düz `activate` bloğu ↔ SWH → EKSİK + eklenir (literal bölme eşit sayıyordu)
   Y1  F8 4i PASS özeti PATH sınırını taşır (`--layer 4` 1g satırını basmaz)
   U8  Ö2 birleşik eşleyici (Bash|…|Edit|…|NotebookEdit) ⊇ şablon → KAPSANAN, eksik 0, eklenen 0
   U9  Ö2 kontrol: kısmi kapsama → kapsanan + eşleyici farkı + YALNIZ kapsanmayan EKSİK eklenir
@@ -93,8 +100,14 @@ MUTASYON (çapa tam 1 kez bulunmazsa exit 2; ilan edilen vektörler düşmezse S
   --mutasyon-ag-eslik-kor    F10 ağ blok eşleyicisine bakmaz (8ab2594) → U12 · U12b · U13 · U14
   --mutasyon-kesisim-kor     F10 (a) kesişim süzgeci yok           → U12 · U12b
   --mutasyon-ayni-blok-kor   F10 (b) aynı-ad bloğu süzgeci yok     → U14
-  --mutasyon-kismi-eksik     F10 KISMİ kesişim EKSİK sayılır       → U15
+  --mutasyon-kismi-eksik     F10 KISMİ kesişim EKSİK sayılır       → U15 · U16 · U16b · U17 (F14: regex blok literal ⊉)
   --mutasyon-warn-eslik-yok  F10 4h WARN şablon eşleyicisini basmaz → U12b · U15b
+  --mutasyon-regex-literal   F14 `_kesisir` öğeleri LİTERAL kıyaslar (4d6cca6) → U16 · U16b · U17 · U18b
+  --mutasyon-meta-kesisir    F14 meta karakter varsa hep kesişir (kaba) → U17 · U18 · U18b
+  --mutasyon-regex-regex-ayrik F14 regex × regex "kesişmez" der    → U16 · U16b · U17
+  --mutasyon-eski-ad-yok     F14 liste öğesi kanonik ada çevrilmez → U17
+  --mutasyon-virgul-yok      F14 `,`/boşluk/`-` liste okuması yok  → U17
+  --mutasyon-kismi-iddia     F14 kapsanmayan her blokta "KISMİ ⊉" yazılır (4d6cca6 notu) → U16 · U16b · U17
 TABAN (eski kod, KIRMIZI beklenir): --kaynak <ix_doctor.py> · --kaynak-inspector <inspector.py> ·
   --kaynak-kk <utils/kanca_kablolari.py>
 
@@ -163,8 +176,14 @@ ILAN = {
     "--mutasyon-ag-eslik-kor": {"U12", "U12b", "U13", "U14"},
     "--mutasyon-kesisim-kor": {"U12", "U12b"},
     "--mutasyon-ayni-blok-kor": {"U14"},
-    "--mutasyon-kismi-eksik": {"U15"},
+    "--mutasyon-kismi-eksik": {"U15", "U16", "U16b", "U17"},
     "--mutasyon-warn-eslik-yok": {"U12b", "U15b"},
+    "--mutasyon-regex-literal": {"U16", "U16b", "U17", "U18b"},
+    "--mutasyon-meta-kesisir": {"U17", "U18", "U18b"},
+    "--mutasyon-regex-regex-ayrik": {"U16", "U16b", "U17"},
+    "--mutasyon-eski-ad-yok": {"U17"},
+    "--mutasyon-virgul-yok": {"U17"},
+    "--mutasyon-kismi-iddia": {"U16", "U16b", "U17"},
 }
 GECERLI_KIP = ("--mutasyon-ad-yok", "--mutasyon-ek-warn", "--mutasyon-ezerek-tazele",
                "--mutasyon-dogrulama-yok", "--mutasyon-sys-executable", "--mutasyon-exit0-yeter",
@@ -176,7 +195,9 @@ GECERLI_KIP = ("--mutasyon-ad-yok", "--mutasyon-ek-warn", "--mutasyon-ezerek-taz
                "--mutasyon-bicim-pass",
                "--mutasyon-recall-bicim-kor", "--mutasyon-path-siniri-yok",
                "--mutasyon-ag-eslik-kor", "--mutasyon-kesisim-kor", "--mutasyon-ayni-blok-kor",
-               "--mutasyon-kismi-eksik", "--mutasyon-warn-eslik-yok")
+               "--mutasyon-kismi-eksik", "--mutasyon-warn-eslik-yok",
+               "--mutasyon-regex-literal", "--mutasyon-meta-kesisir", "--mutasyon-regex-regex-ayrik",
+               "--mutasyon-eski-ad-yok", "--mutasyon-virgul-yok", "--mutasyon-kismi-iddia")
 KIP: str | None = None
 TABAN: Path | None = None
 TABAN_INSP: Path | None = None
@@ -287,6 +308,25 @@ def _kaynak_kk() -> str:
         m = _degistir(m, "        if ham:\n            e, komut = ham[0]\n",
                       "        if ham and _kapsar(p_esl + [x for x, _k in ham], b[1]):\n"
                       "            e, komut = ham[0]\n", KIP)
+    if KIP == "--mutasyon-regex-literal":
+        m = _degistir(m, "    ya, yb = _eslik_yorumlari(a), _eslik_yorumlari(b)\n",
+                      "    ka, kb = _eslik_kumesi(a), _eslik_kumesi(b)\n"
+                      "    return ka is None or kb is None or bool(ka & kb)\n", KIP)
+    if KIP == "--mutasyon-meta-kesisir":
+        m = _degistir(m, "    ya, yb = _eslik_yorumlari(a), _eslik_yorumlari(b)\n",
+                      "    if any(c in a + b for c in \".*([+?\"):\n        return True\n"
+                      "    ka, kb = _eslik_kumesi(a), _eslik_kumesi(b)\n"
+                      "    return ka is None or kb is None or bool(ka & kb)\n", KIP)
+    if KIP == "--mutasyon-regex-regex-ayrik":
+        m = _degistir(m, "        return True    # iki çapasız desen: ayrıklık KANITLANAMAZ",
+                      "        return False    # iki çapasız desen: ayrıklık KANITLANAMAZ", KIP)
+    if KIP == "--mutasyon-eski-ad-yok":
+        m = _degistir(m, "    return _ESKI_AD.get(ad, ad)\n", "    return ad\n", KIP)
+    if KIP == "--mutasyon-virgul-yok":
+        m = _degistir(m, "    if _LISTE_GENIS.fullmatch(e):\n", "    if False:\n", KIP)
+    if KIP == "--mutasyon-kismi-iddia":
+        m = _degistir(m, "    yorumlar = [_eslik_yorumlari(x) for x in [*eslikler, sablon]]\n",
+                      "    return f\"(KISMİ: blok `{blok or '*'}` ⊉ şablon) \"\n", KIP)
     if KIP == "--mutasyon-kapsama-yok":
         m = _degistir(m, "    hedef = _eslik_kumesi(eslik)\n    birlesim: set = set()\n",
                       "    return False\n", KIP)
@@ -560,6 +600,74 @@ def _vaka_e(t: dict) -> dict:
     return d
 
 
+SWH = "mcp__sap-adt__adt_(push_source|activate|dtel_create|domain_create|struct_create|publish_service)"
+
+
+def _blokta_zincir(t: dict, ad: str, eslik: str, ilk: str = "proje_ozel_kanca",
+                   tekli: tuple[tuple[str, str], ...] = ()) -> dict:
+    """F14: `ad` ve `ilk` tüm bloklardan çıkar; `eslik` bloğunda `ilk && ad` zinciri (+ `tekli`
+    (eşleyici, ad) blokları ayrıştırılmış tek kanca olarak)."""
+    return _pre(t, (ad, ilk) + tuple(a for _e, a in tekli),
+                [(e, _shim(a)) for e, a in tekli] + [(eslik, _zincir(ilk, ad))])
+
+
+# (etiket, zincirdeki kanca, blok eşleyicisi, şablon eşleyicisi, ilk kanca, tekli bloklar)
+# F14 regex ekseni (`probe_v9` R1–R3b): zincirdeki kanca, şablon eşleyicisiyle GERÇEKTE kesişen
+# regex blokta koşuyor ⇒ biçim farkı, EKLENMEZ (4d6cca6: EKSİK + onarım = görünmez çift koşum).
+F14_REGEX = (
+    ("R1 `mcp__sap-adt__.*`↔SWH", "sap_worktype_hint", "mcp__sap-adt__.*", SWH, "itg_backstop", ()),
+    ("R2 `mcp__.*`↔`mcp__sap-adt__.*`", "itg_backstop", "mcp__.*", "mcp__sap-adt__.*", "proje_ozel_kanca", ()),
+    ("R3 `.*`↔Agent", "watchdog_launch", ".*", "Agent", "proje_ozel_kanca", ()),
+    ("R3b `*`↔Agent (kontrol)", "watchdog_launch", "*", "Agent", "proje_ozel_kanca", ()),
+)
+# F14 sözdizimi ekseni: Claude Code'un liste okuması (eski ad · virgül) + parantez içi `|` +
+# derlenemeyen desen (şüphe yönü) ⇒ biçim farkı, EKLENMEZ.
+F14_SOZDIZIMI = (
+    ("eski-ad `Task`↔Agent", "watchdog_launch", "Task", "Agent", "proje_ozel_kanca", ()),
+    ("virgül `Agent, Read`↔Agent", "watchdog_launch", "Agent, Read", "Agent", "proje_ozel_kanca", ()),
+    ("parantez-ici `…adt_activate`↔SWH", "sap_worktype_hint", "mcp__sap-adt__adt_activate", SWH,
+     "proje_ozel_kanca", ()),
+    ("derlenemeyen `mcp__sap-adt__adt_(`↔SWH", "sap_worktype_hint", "mcp__sap-adt__adt_(", SWH,
+     "proje_ozel_kanca", ()),
+)
+# F14 kontrol (fazla genişletme): kesişmezlik KANITLANABİLİYOR ⇒ EKSİK + onarım KORUNUR.
+F14_AYRIK = (
+    ("regex-blok `mcp__.*`↔Bash", "infra_write_guard", "mcp__.*", "Bash", "proje_ozel_kanca",
+     (("Edit|Write|MultiEdit", "infra_write_guard"),)),
+    ("harf `agent`↔Agent", "watchdog_launch", "agent", "Agent", "proje_ozel_kanca", ()),
+)
+F14_PARANTEZ = (
+    ("duz `activate`↔SWH (parantez içi öğe tek başına araç adı DEĞİL)", "sap_worktype_hint", "activate",
+     SWH, "proje_ozel_kanca", ()),
+)
+
+
+def _f14_kur(v: tuple) -> dict:
+    _et, ad, blok, _s, ilk, tekli = v
+    return _blokta_zincir(T, ad, blok, ilk, tekli)
+
+
+def _f14(kk, vakalar, beklenen: str) -> tuple[bool, list[str]]:
+    """beklenen 'bicim' → eksik 0 + yalnız (PreToolUse, şablon eşleyicisi, ad) biçim farkı + ekleme 0;
+    'eksik' → (PreToolUse, şablon eşleyicisi, ad) EKSİK + yalnız o eklenir, biçim farkı 0."""
+    ok, iz = True, []
+    for v in vakalar:
+        hedef = ("PreToolUse", v[3], v[1])
+        k = kk.kiyas(_f14_kur(v), T)
+        _y, e = kk.eksikleri_ekle(_f14_kur(v), T)
+        bf = [b for b, _c in k["bicim_farki"]]
+        if beklenen == "bicim":
+            # kapsayan/ölçülemeyen blokta "⊉" iddiası (KISMİ) YANLIŞ olurdu
+            tamam = (k["eksik"] == [] and bf == [hedef] and e == []
+                     and not any(c.startswith("(KISMİ") for _b, c in k["bicim_farki"]))
+        else:
+            tamam = k["eksik"] == [hedef] and bf == [] and e == [hedef]
+        ok = ok and tamam
+        iz.append(f"{v[0]}: {'ok' if tamam else 'SAPMA'} eksik={k['eksik']} bicim={bf} ekle={e} "
+                  f"not={[c[:40] for _b, c in k['bicim_farki']]}")
+    return ok, iz
+
+
 def _ozet(k: dict) -> tuple:
     return (k["eksik"], [b for b, _ in k["bicim_farki"]], k["eslesik_farki"], k["kapsanan"])
 
@@ -770,6 +878,19 @@ def main() -> int:
                 and ke["eksik"] == [] and ee == []
                 and [(b[1], c.startswith("(KISMİ: blok `Edit`")) for b, c in ke["bicim_farki"]]
                 == [("Edit|Write|MultiEdit", True)], f"{_ozet(kd)} {ed} | {ke['bicim_farki']} {ee}")
+        # F14 (2026-11-13): `_kesisir` eşleyiciyi Claude Code'un okumasıyla tartar; şüphede KESİŞİR.
+        v16, i16 = _f14(kk, F14_REGEX, "bicim")
+        kontrol("U16 F14 regex ekseni (R1 R2 R3 + R3b kontrol): zincir GERÇEKTE kesişen regex blokta → "
+                "biçim farkı, EKSİK değil, EKLENMEZ", v16, " | ".join(i16))
+        v17, i17 = _f14(kk, F14_SOZDIZIMI, "bicim")
+        kontrol("U17 F14 sözdizimi ekseni: eski ad `Task` · virgüllü liste · parantez içi `|` · "
+                "derlenemeyen desen → biçim farkı, EKLENMEZ", v17, " | ".join(i17))
+        v18, i18 = _f14(kk, F14_AYRIK, "eksik")
+        kontrol("U18 F14 kontrol (fazla genişletme): regex blok literal şablonla kesişmiyor · harf farkı "
+                "→ EKSİK + eklenir", v18, " | ".join(i18))
+        v18b, i18b = _f14(kk, F14_PARANTEZ, "eksik")
+        kontrol("U18b F14 kontrol: düz `activate` bloğu SWH regex'iyle kesişmez → EKSİK + eklenir "
+                "(literal bölme `activate` öğesini eşit sayıyordu)", v18b, " | ".join(i18b))
 
         # ── T1 / W1 ──────────────────────────────────────────────────────────
         if "_smoke_ornekleri" in g:
@@ -884,6 +1005,18 @@ def main() -> int:
                 "FAIL" not in tag(r) and len(w) == 2 and len(set(w)) == 2
                 and any("[Edit|Write|MultiEdit])" in m for m in w) and any("[Bash])" in m for m in w)
                 and len(bul(r, "tamamı DOĞRULANAMADI", "WARN")) == 1, f"{r}")
+        p16 = kum("u16", _f14_kur(F14_REGEX[0]))
+        r = _cagir(g, "_kanca_kablolama", p16)
+        w = bul(r, "TANINMAYAN", "WARN")
+        once = (p16 / ".claude" / "settings.json").read_bytes()
+        ok, out = _tazele(ts, p16)
+        kontrol("U16b F14 4h R1: FAIL YOK · TEK WARN sap_worktype_hint [SWH] 'KAPSAMA ÖLÇÜLEMEDİ' "
+                "(KISMİ iddiası YOK) · özet DOĞRULANAMADI · "
+                "tazeleme EKLEMEZ (bayt-eş)",
+                "FAIL" not in tag(r) and len(w) == 1 and f"sap_worktype_hint (PreToolUse [{SWH}])" in w[0]
+                and "KAPSAMA ÖLÇÜLEMEDİ" in w[0] and "KISMİ" not in w[0]
+                and len(bul(r, "tamamı DOĞRULANAMADI", "WARN")) == 1 and ok is True
+                and (p16 / ".claude" / "settings.json").read_bytes() == once, f"{r} {out[-400:]}")
         dd = copy.deepcopy(T)
         dd["disableAllHooks"] = True
         r = _cagir(g, "_kanca_kablolama", kum("d1", dd))
