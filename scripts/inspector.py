@@ -274,10 +274,21 @@ def b5_core_baglantisi(proj: Path, core: Path) -> list[Bulgu]:
 
 # ── A KATMANI — canlılık (ÖNCEKİ oturumun izi) ──────────────────────────────────
 
+# `ix_doctor` 4i smoke'u (Q406) logger'ı GERÇEK giriş noktasından koşar ve bu nedenle log'a
+# `load_reason=ix_doctor_smoke` satırı yazar. O satır bir talimat YÜKLEMESİ değildir: sayılırsa
+# A1'in "log YOK/BOŞ" sinyalini (hook hiç ateşlenmemiş) kalıcı susturur — ölçüldü 2026-11-12,
+# smoke sonrası A1=[] (bug-gate, PR #429). Bu yüzden A katmanının TÜM okuyucuları için burada,
+# TEK noktada elenir. Değer ix_doctor `_smoke_ornekleri`'ndeki `load_reason` ile AYNI olmalı
+# (korpus: tests/fixtures/kanca_kablolama I1 — gerçek smoke + gerçek logger + bu okuyucu).
+SMOKE_NEDENI = "ix_doctor_smoke"
+
+
 def _log_satirlari(proj: Path) -> list[dict]:
     out = []
     for satir in _oku(proj / ".tmp" / "instructions-loaded.log").splitlines():
         p = satir.rstrip("\r").split("\t")
+        if len(p) >= 2 and p[1] == SMOKE_NEDENI:
+            continue
         if len(p) >= 4:
             # Q286 C1: logger satır SONUNA `sid=<session_id>` ekler; eski satırlarda yoktur.
             sid = next((x[4:] for x in p[4:] if x.startswith("sid=")), None)
@@ -295,7 +306,8 @@ def a1_logger_canli(proj: Path, satirlar: list[dict]) -> list[Bulgu]:
         return [Bulgu("A1", "InstructionsLoaded log'u YOK — hook hiç ateşlenmemiş olabilir",
                       ".tmp/instructions-loaded.log")]
     if not satirlar:
-        return [Bulgu("A1", "InstructionsLoaded log'u BOŞ — talimat yüklemesi izlenmiyor",
+        return [Bulgu("A1", "InstructionsLoaded log'u BOŞ — talimat yüklemesi izlenmiyor "
+                      f"(`{SMOKE_NEDENI}` satırları SAYILMAZ)",
                       "hook kablolu mu? (settings.json → InstructionsLoaded)")]
     return []
 

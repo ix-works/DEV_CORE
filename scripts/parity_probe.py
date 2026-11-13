@@ -38,6 +38,7 @@ ONE_CIKAN = (
     "harness.claude_version", "core.head", "core.origin_main_gerisinde",
     "claude_katmani.core_kopyasi_sha16", "memory.ders_dosyasi_sayisi",
     "mcp_ve_profil.aktif_paket_drift", "kosumlar.ix_doctor.ozet.fail", "kosumlar.ix_doctor.ozet.warn",
+    "claude_katmani.kanca_sablondan_eksik",   # Q406/K4
 )
 DIFF_YOK_SAY = {"_zaman"}
 
@@ -289,6 +290,17 @@ def main() -> int:
             pass
     kanca = hook_envanteri(sd)
     kanca_tpl = hook_envanteri(td)
+    # Q406: ad DÜZEYİ eksik (olay, eşleyici, kanca) — ix_doctor 4h + team_setup --tazele-settings
+    # ile AYNI okuyucu (utils.kanca_kablolari tek kaynak). OLCULEMEDI != TEMIZ.
+    if not (sj.exists() and tpl.exists()) or "_parse_hatasi" in sd or not td:
+        kanca_eksik = ["OLCULEMEDI: settings.json ya da sablon okunamadi"]
+    else:
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from utils import kanca_kablolari as _KK  # type: ignore
+            kanca_eksik = [_KK.bicim(b) for b in _KK.kiyas(sd, td)["eksik"]]
+        except Exception as e:  # noqa: BLE001
+            kanca_eksik = ["OLCULEMEDI: utils.kanca_kablolari (%s)" % type(e).__name__]
     sl = C / "settings.local.json"
     sl_allow = -1
     if sl.exists():
@@ -312,6 +324,7 @@ def main() -> int:
         # OLCULEMEDI != TEMIZ: kaynak dosya yoksa "fark yok" DENMEZ
         "kanca_template_farki": (sorted(set(kanca) ^ set(kanca_tpl)) if (sj.exists() and tpl.exists())
                                  else ["OLCULEMEDI: %s yok" % ("settings.json" if not sj.exists() else "core/claude/settings.template.json")]),
+        "kanca_sablondan_eksik": kanca_eksik,
         "statusLine_var": bool(sd.get("statusLine")),
         "settings_local_var": sl.exists(),
         "settings_local_allow_sayisi": sl_allow,
@@ -506,6 +519,13 @@ def main() -> int:
                 j = json.loads(d["out"][d["out"].find("{"):])
                 ozet = {"fail": j.get("fail"), "warn": j.get("warn"),
                         "katmanlar": j.get("katmanlar")}
+                # Q406/K4: kanca kablolama · smoke · recall sağlığı satırları ayrıca öne çıkar
+                # (her güncellemede proje başına görünür; --diff tam metni kıyaslar).
+                ozet["kanca_satirlari"] = [
+                    "%s %s" % (c.get("tag"), str(c.get("mesaj"))[:220])
+                    for k in (j.get("katmanlar") or []) if k.get("no") == 4
+                    for c in (k.get("kontroller") or [])
+                    if str(c.get("mesaj", "")).startswith(("kanca ", "recall_inject sağlığı"))]
             except Exception as e:
                 ozet = {"_parse_hatasi": str(e), "ham_son": d["out"][-2000:]}
         R["kosumlar"]["ix_doctor"] = {"rc": d["rc"], "err": d["err"], "ozet": ozet}
@@ -538,6 +558,7 @@ def main() -> int:
     p("rules dosyalari  : %s" % ck["rules_dosyalari"])
     p("kanca            : %s adet (template %s; fark=%s)" % (
         ck["kanca_sayisi"], ck["template_kanca_sayisi"], ck["kanca_template_farki"] or "YOK"))
+    p("kanca eksik (ad) : %s" % (ck["kanca_sablondan_eksik"] or "YOK"))
     p("agents/skills/cmd: %s / %s skill / %s komut" % (
         len(ck["agent_tanimlari"]), ck["skill_sayisi"], ck["command_sayisi"]))
     p("settings.local   : %s, allow=%s" % ("var" if ck["settings_local_var"] else "YOK",

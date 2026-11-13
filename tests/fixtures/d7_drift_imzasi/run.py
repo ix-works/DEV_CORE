@@ -653,10 +653,12 @@ def main() -> int:
     # Q303 (2026-09-13): `team_setup.py` UCUNCU tuketici — yalniz `D7_CIFTLERI`in pre-commit
     # YOK onarim metnini okur (imza hesaplamaz). Kume TAM esitlik olarak kalir: beyansiz yeni
     # bir tuketici hala V17'yi dusurur.
-    kayit("V17 ⭐ tuketiciler (iki D7 kapisi + team_setup onarim metni) ortak modulu import "
-          "eder + ix_doctor'da ham-sha kiyasi YOK",
+    # Q406 (2026-11-12): `utils/kanca_kablolari.py` DORDUNCU tuketici — `_comment*` elemesini
+    # kendisi yazmak yerine `yorumsuz`u ithal eder (V16 tek-tanim kurali bunu zorladi).
+    kayit("V17 ⭐ tuketiciler (iki D7 kapisi + team_setup onarim metni + kanca okuyucusu) ortak "
+          "modulu import eder + ix_doctor'da ham-sha kiyasi YOK",
           set(tuketici) == {"scripts/ix_doctor.py", "scripts/hooks/session_start.py",
-                            "scripts/team_setup.py"}
+                            "scripts/team_setup.py", "scripts/utils/kanca_kablolari.py"}
           and not ham_kiyas,
           f"tuketici={sorted(tuketici)} ham_sha_kaldi={ham_kiyas}")
     # Q245② — CIFT LISTESI de tek kaynakta: tuketicilerde literal `ciftler = [` YOK, sablon

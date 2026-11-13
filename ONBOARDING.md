@@ -226,7 +226,7 @@ Claude-katmanı (settings/shim drift + behavior-manifest + hook smoke; freeze-gu
 R10 ile birlikte 2026-07-10'da KALDIRILDI — [`governance/removed-controls.md`](governance/removed-controls.md)), MCP/SAP,
 validator+performans, iş-akışı smoke — her kontrol kanıt-satırı basar; exit 0 = FAIL yok.
 Tamamlayıcı: `python core/scripts/validators/run_all_validators.py` (proje kökünden).
-`ix_doctor` **salt-okurdur**: düzeltmez, Issue açmaz — çoğu satırda bir `onarım:` ipucu basar.
+`ix_doctor` **projeyi ve ayarları değiştirmez**: düzeltmez, Issue açmaz; yalnız `.tmp` altına yazar (4i smoke log satırları; 4j recall indeksini tazeleyebilir) — çoğu satırda bir `onarım:` ipucu basar.
 Bulunan her satırla ne yapılacağı (Claude onarır · kullanıcı yapar · çekirdek sahibine bildirilir):
 [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md) §6a.
 

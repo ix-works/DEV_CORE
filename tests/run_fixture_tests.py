@@ -190,6 +190,11 @@ OZEL_TESTLER = [
      "Q365①: K1 1f Claude Code surumu ↔ OLCULMUS taban (bilinen/bozuk dizgi → sahte FAIL yok, "
      "taninmayan = OLCULEMEDI) + 1g hook yorumlayicisi settings'teki komutun PATH COZUMUYLE "
      "(sys.executable DEGIL) `-c` probu — Store yonlendiricisi/PATH'te yok/eski surum → WARN"),
+    ("kanca_kablolama",
+     "Q406/Q408 IP-2 K1 matrisi (M1 eski settings · M2 proje eki/ters yon · M3 recall YOK/bozuk/bayat/sessiz · "
+     "M5 yorumlayici/cekirdekte-yok/cokme/sessiz fail-open): ix_doctor 4h ad duzeyi FAIL+onarim · 4i tum "
+     "kancalara GERCEK shim smoke · 4j recall icerik sondasi + team_setup --tazele-settings EZMEZ (fark/yedek/"
+     "dogrulama/geri yukleme) + parity_probe kanca_sablondan_eksik"),
     ("team_setup_gitignore_blok",
      "Q365④: .gitignore YONETILEN BLOK dosyanin BASINDA, proje satirlari bayt-es ve SONRA "
      "(son eslesen kazanir ⇒ projenin gizledigi yol ACILMAZ; gercek check-ignore, global config "
@@ -1866,6 +1871,28 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "atc_bulgulari() yeniden kullanim girisi (R1: max_verdicts lib'e AYNEN)"),
     ("scripts/xlsx_yardimci.py", ("O:xlsx_yardimci",),
      "metin-guvenli xlsx + goreli iliski hedefi (cl_fdt_xl CORE005 on kosulu)"),
+    # ── Q406 (2026-11-12): kanca kablolamasi ad duzeyi + smoke + recall sagligi + onarim ──
+    ("scripts/utils/kanca_kablolari.py", ("O:kanca_kablolama",),
+     "(olay, esleyici, kanca) okuyucusu TEK KAYNAK: ix_doctor 4h/4i + team_setup --tazele-settings + parity_probe"),
+    ("scripts/utils/kanca_kablolari.py", ("O:d7_drift_imzasi",),
+     "V16/V17: `_comment*` elemesi drift_imzasi.yorumsuz'dan ithal (kopya tanim yok)"),
+    ("scripts/utils/drift_imzasi.py", ("O:kanca_kablolama",),
+     "kanca_kablolari `yorumsuz`u ithal eder — yorum anahtari olay/kanca sayilmamali"),
+    ("scripts/ix_doctor.py", ("O:kanca_kablolama",),
+     "4h ad duzeyi kablolama · 4i tum kancalara gercek shim smoke · 4j recall icerik sondasi"),
+    ("scripts/team_setup.py", ("O:kanca_kablolama",),
+     "--tazele-settings: yalniz EKSIK sablon kancasi eklenir, proje eki/izin/env KORUNUR, dogrulanamazsa geri yukler"),
+    ("scripts/parity_probe.py", ("O:kanca_kablolama",), "claude_katmani.kanca_sablondan_eksik (P1)"),
+    ("scripts/inspector.py", ("O:kanca_kablolama",),
+     "I1/I2: 4i smoke'un `ix_doctor_smoke` log satiri A1'i susturmaz (gercek smoke + logger)"),
+    ("scripts/hooks/session_start.py", ("O:kanca_kablolama",),
+     "I3: _oturum_olcumu smoke satirini oturum saymaz (sid yok)"),
+    ("scripts/utils/drift_imzasi.py", ("O:kanca_kablolama",),
+     "F3: settings D7 onarim metni --tazele-settings (ix_doctor 4a + team_setup)"),
+    ("claude/settings.template.json", ("O:kanca_kablolama",),
+     "T1: sablona eklenen her kancanin ix_doctor smoke ornegi olmali"),
+    ("claude/hook_shim.template.py", ("O:kanca_kablolama",), "4i smoke gercek giris noktasi"),
+    ("scripts/hooks/*.py", ("O:kanca_kablolama",), "4i: her kanca zararsiz ornek girdiyle temiz cikmali"),
     ("scripts/parity_probe.py", ("O:parity_probe_diff",),
      "--diff: _zaman yok sayilir, OLCULEMEDI ayri, skaler liste kume farki"),
     # ── B85 (2026-10-18): build_kd_pdf arguman sozlesmesi ───────────────────
