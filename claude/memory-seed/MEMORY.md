@@ -157,6 +157,9 @@
 ### 2026-10-29 tohum terfisi (tek ders — doğrudan satır: yerelde düzenlenmiş hub'a satır ulaşmaz)
 - ⭐ [Yeni geliştirmede TS build'dan önce yazılır](feedback_yeni-gelistirmede-ts-builddan-once-yazilir.md) — sıra FS onayı → TS → build; "donmuş kod" dersi TS'i ERTELEMEZ; TS'i kodlayan ajan yazmaz (taze bağlam)
 
+### 2026-11-13 tohum terfisi (tek ders — doğrudan satır)
+- ⛔⛔ [Engellenen silmeyi kullanıcıya komut olarak verme](feedback_engellenen-silmeyi-kullaniciya-komut-olarak-verme.md) — harness'ın engellediği silme kullanıcıya hazır komut olarak verilmez; `$`'lı yol çift tırnakta boşa açılır (vaka: tüm proje kökü silindi)
+
 ### 2026-11-12 tohum terfisi (konu başlıklı)
 - **11 ders:** [tam indeks](_indeks-terfi-2026-11-12.md) — Karar 4 · Ajan 2 · Araç 2 · SAP 2 · UI 1 (tüm kullanıcılar: Türkçe · test onayı · az yorum)
 
