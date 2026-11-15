@@ -147,28 +147,34 @@ uygulandı. Kanonik metin: `standards/13-kural-yazim-standardi.md` — **yazmada
   DoD maddeleri (kaldırma varsa removed-controls önerisi).
 
 ## 🛡 TESLİM ÖNCESİ ÖZ-KAPI — kapının bulacağını önce sen bul (ZORUNLU; 2026-11-15)
-NE ZAMAN: her turda (düzeltme turları dahil) **"KOD DONDU" göndermeden ÖNCE**. NEREDE: KOD DONDU
-mesajında dört ayrı başlık; yapılamayan adım `ÖLÇÜLEMEDİ — <neden>` yazılır, sessizce atlanmaz.
-NEDEN (ölçüldü 2026-11-15): dört çekirdek PR'da 11 kapı turu. Bulguların çoğu üreticinin kendi testlerinin bakmadığı yerdeydi: regex'le okunan YAML gerçek ayrıştırıcıdan sapıyordu (4 tur, her kapı aynı açığın yeni bir biçimini buldu) · kodu değişen davranış araç çıktısında ve tohum dersinde eski hâliyle kaldı · kardeş mutasyon kipleri koşulmadı · test gerçek sürücü köküne yazdı. Üretici kendi yazdığını onaylayan testi koşar, kapı saldırgan testi koşar — o testi önce sen koş.
+NE ZAMAN: "KOD DONDU" gönderilen her turda (düzeltme turları dahil), **göndermeden ÖNCE**. Kodu değişmeyen
+turda (yalnız doküman) uygulanmaz. ÇIKTI: KOD DONDU mesajında dört ayrı başlık; yapılamayan adım
+`ÖLÇÜLEMEDİ — <neden>` yazılır (lider aynı mesajda görür), sessizce atlanmaz.
+NEDEN (ölçüldü 2026-11-15, çekirdek PR #444 #445 #447 #448: toplam 11 kapı turu): bulguların çoğu üreticinin kendi testlerinin bakmadığı yerdeydi — regex'le okunan YAML gerçek ayrıştırıcıdan sapıyordu (#445, 4 tur; her kapı aynı açığın yeni bir biçimini buldu) · kodu değişen davranış araç çıktısında ve tohum dersinde eski hâliyle kaldı (#444) · kardeş mutasyon kipleri koşulmadı ve fixture'ın mutasyon kipi gerçek sürücü köküne yazdı (#447). Üretici kendi yazdığını onaylayan testi koşar, kapı saldırgan testi koşar — o testi önce sen koş.
 1. **KAHİN KARŞILAŞTIRMASI** — bir biçimi (YAML · JSON · ABAP · URI · ad deseni · tablo/rapor metni)
    okuyor, ayrıştırıyor ya da üretiyorsan, sonucu o biçimin **gerçek** ayrıştırıcısıyla/sistemiyle aynı
-   girdi kümesinde kıyasla (ör. elle yazılmış YAML okuyucu ↔ PyYAML/js-yaml · ad süzgeci ↔ ortak politika
-   fonksiyonu). Kümeye kenar vakaları koy: tırnak · yorum · çok satır · yinelenen anahtar · boş · Unicode ·
-   ayraç varyantları. Rapor: `KAHİN: <kahin> · <N> vaka · fark <k>`. Kahin yoksa nedenini yaz.
+   girdi kümesinde kıyasla (ör. elle yazılmış YAML okuyucu ↔ PyYAML ya da node + js-yaml · ad süzgeci ↔ ortak
+   politika fonksiyonu). Kümeye kenar vakaları koy: tırnak · yorum · çok satır · yinelenen anahtar · boş ·
+   Unicode · ayraç varyantları. Rapor: `KAHİN: <kahin> · <N> vaka · fark <k>`. Kahin kurulu değilse paket
+   kurma; aynı biçimin başka bir gerçek okuyucusunu dene, o da yoksa `ÖLÇÜLEMEDİ — <kahin> yok` yaz.
    ⛔ Yaklaşımın kahinden **bir sınıf olarak** ayrışıyorsa yamaya geçme — lidere **YÖNTEM sorusu** gönder
    (vaka yamak bir sonraki kapıda komşu biçimi doğurur).
 2. **SINIF TARAMASI** — düzelttiğin her bulgu için F2 SINIF-ENVANTERİ'ni yeniden koş: aynı hatanın komşu
    biçimleri (diğer ayraçlar · diğer kipler · diğer giriş noktaları) ve kardeş kopyaları. Bulgu sana tek
    vaka olarak gelse de sınıf olarak kapat; raporda `SINIF: <desen> → N geçiş: [kapandı/bırakıldı(neden)]`.
-3. **METİN TARAMASI** — davranış değiştiyse onu **anlatan** her metni bul ve güncelle: docstring/yorum ·
-   aracın kendi çıktısı (`print` · hata mesajı · KAPSAM beyanı) · playbook/standards · `claude/memory-seed/`
-   tohum dersleri · changelog/recipes. Eski davranışı tarif eden sözcükleri `rg` ile ara (Türkçe harf
-   varyantlarıyla). Rapor: `METİN: <desen> → N geçiş: [güncellendi/bilerek bırakıldı(neden)]`.
-4. **KARDEŞ BATARYASI + KUM HAVUZU** — `python tests/run_battery.py <fixture> --kardes <ad…> --kardes-tam
-   --precommit` (`--kardes-tam` olmadan kardeşin yalnız tabanı koşar, mutasyon kipleri koşmaz). Testler ve
-   mutasyon kipleri YALNIZ `tempfile.mkdtemp()` altına yazar; test edilen kod gerçek yol üretebiliyorsa
-   fixture bir yazma kalkanı kurar (TEMP dışı yazma = FAIL; mutant alt süreçte de). Koşudan önce ve sonra
-   hedef dışı aday kökleri listele (`ls -d <yollar>`), çıktıyı rapora koy.
+3. **METİN TARAMASI** — davranış değiştiyse onu **anlatan** her metni bul (`rg`, Türkçe harf varyantlarıyla).
+   · KOD DONDU'dan ÖNCE güncellenir: kod içi metin (docstring · yorum · aracın kendi çıktısı: `print`, hata
+   mesajı, KAPSAM beyanı) + changelog satırı.
+   · KOD DONDU mesajında listelenir, aşağıdaki KOD DONDU sırasına uygun olarak sonraki doküman adımında
+   güncellenir: playbook/standards · `claude/memory-seed/` tohum dersleri · recipes. Biçim:
+   `METİN: <yer> → güncellenecek | bilerek bırakıldı(neden)`.
+4. **KARDEŞ BATARYASI + KUM HAVUZU** — `python <worktree>/tests/run_battery.py <fixture> --kardes <ad…>
+   --kardes-tam --precommit` (`--kardes-tam` olmadan kardeşin yalnız tabanı koşar, mutasyon kipleri koşmaz).
+   Testler ve mutasyon kipleri YALNIZ `tempfile.mkdtemp()` altına yazar. Test edilen kod gerçek yol
+   üretebiliyorsa fixture süreç geneli bir **yazma kalkanı** kurar: TEMP dışına her yazma/silme engellenir ve
+   FAIL sayılır, mutant alt süreçte de (örnek: `tests/fixtures/namespace_tesisat/run.py` `_kalkan_kur`,
+   reçete B111). **Aday kökler** = test edilen kodun ürettiği yolların sürücü kökü + kullanıcı ev dizini +
+   repo kökü; koşudan önce ve sonra bunları `ls -d <yollar>` ile listele, iki çıktıyı rapora koy.
 
 ## VERİMLİLİK SÖZLEŞMESİ (hız — kaliteden ödünsüz; lider agent_time_report ile ölçer)
 - Bağımsız okuma/`git log`/Grep çağrılarını **TEK turda paralel** gönder (batch); seri tek-çağrı israftır.

@@ -128,20 +128,21 @@ python core/scripts/validators/checklist_check.py --repo <proje kökü> --diff <
   bulgu olarak raporla (program düzeltilir, betik çoğalmaz).
 
 ## 🛡 TESLİM ÖNCESİ ÖZ-KAPI — kapının bulacağını önce sen bul (ZORUNLU; 2026-11-15)
-NE ZAMAN: her turda (düzeltme turları dahil) `BUG_GATE_READY` göndermeden ÖNCE, yukarıdaki programdan
-SONRA. NEREDE: teslim mesajında dört ayrı başlık; yapılamayan adım `ÖLÇÜLEMEDİ — <neden>`.
-NEDEN (ölçüldü 2026-11-15): dört çekirdek PR'da 11 kapı turu. Bulguların çoğu üreticinin kendi testlerinin bakmadığı yerdeydi: regex'le okunan YAML gerçek ayrıştırıcıdan sapıyordu (4 tur, her kapı aynı açığın yeni bir biçimini buldu) · kodu değişen davranış araç çıktısında ve tohum dersinde eski hâliyle kaldı · kardeş mutasyon kipleri koşulmadı · test gerçek sürücü köküne yazdı. Üretici kendi yazdığını onaylayan testi koşar, kapı saldırgan testi koşar — o testi önce sen koş.
-1. **KAHİN KARŞILAŞTIRMASI** — sonucu bağımsız bir kaynakla aynı anahtar kümesinde kıyasla: CDS/sınıf
-   çıktısı ↔ doğrudan tablo okuması (`adt_sql_query`) · standart işlem/released API'nin verdiği değer ·
-   kenar vakalar (boş · çok kalem · para birimi/birim · tarih sınırı). Rapor: `KAHİN: <ne> · <N> anahtar · fark <k>`.
+NE ZAMAN: `BUG_GATE_READY` gönderilen her turda (düzeltme turları dahil), göndermeden ÖNCE ve yukarıdaki
+programdan SONRA. Trivial değişiklikte (`BUG_GATE_READY` gerekmeyen iş) uygulanmaz. ÇIKTI: teslim mesajında dört ayrı başlık; yapılamayan adım
+`ÖLÇÜLEMEDİ — <neden>`.
+NEDEN (ölçüldü 2026-11-15, çekirdek PR #444 #445 #447 #448: toplam 11 kapı turu): bulguların çoğu üreticinin kendi testlerinin bakmadığı yerdeydi — regex'le okunan YAML gerçek ayrıştırıcıdan sapıyordu (#445, 4 tur; her kapı aynı açığın yeni bir biçimini buldu) · kodu değişen davranış araç çıktısında ve tohum dersinde eski hâliyle kaldı (#444) · kardeş mutasyon kipleri koşulmadı ve fixture'ın mutasyon kipi gerçek sürücü köküne yazdı (#447). Üretici kendi yazdığını onaylayan testi koşar, kapı saldırgan testi koşar — o testi önce sen koş. ⚠ Bu ölçüm çekirdek infra PR'larından; BE için ÖLÇÜLMEDİ — aynı hata sınıfları (kahinsiz biçim okuma · metin–davranış ayrışması · kardeş kopyası) BE işinde de oluşabildiği için uygulanır.
+1. **KAHİN KARŞILAŞTIRMASI** — sonucu bağımsız bir kaynakla aynı anahtar kümesinde kıyasla: CDS/sınıf çıktısı ↔ doğrudan
+   tablo okuması (`adt_sql_query`) · standart işlem/released API'nin verdiği değer · kenar vakalar (boş · çok
+   kalem · para birimi/birim · tarih sınırı). Rapor: `KAHİN: <ne> · <N> anahtar · fark <k>`.
    ⛔ Yaklaşımın bir sınıf olarak ayrışıyorsa yamaya geçme — lidere YÖNTEM sorusu gönder.
-2. **SINIF TARAMASI** — aynı hatanın diğer metot/include/kardeş sınıftaki kopyası (`adt_grep_source` ·
-   `adt_where_used`) ve komşu biçimleri. Bulgu tek vaka gelse de sınıf olarak kapat.
-3. **METİN TARAMASI** — davranış değiştiyse onu anlatan her metni listele: mesaj sınıfı metinleri ·
-   TS/FS bölümü ve test vakası · sınıf/metot yorumları · KD. Senin dosya bölgendekini güncelle; geri
-   kalanı `METİN: <yer> → güncellenmeli` diye listele.
-4. **KARDEŞ + KUM HAVUZU** — değişikliğin where-used tüketicileri için etki listesi ve en az bir
-   tüketicide okuma ölçümü. Yerel ölçüm çıktıları yalnız `.tmp/` ya da TEMP altına yazar.
+2. **SINIF TARAMASI** — aynı hatanın diğer metot/include/kardeş sınıftaki kopyası (`adt_grep_source` · `adt_where_used`)
+   ve komşu biçimleri. Bulgu tek vaka gelse de sınıf olarak kapat.
+3. **METİN TARAMASI** — davranış değiştiyse onu anlatan her metni bul. Bu turda güncellenir: senin yerel kaynağındaki
+   mesaj metinleri ve sınıf/metot yorumları. Listelenir (`METİN: <yer> → güncellenmeli`; doküman turu lider
+   kararıdır): TS/FS/KD bölümü ve test vakası.
+4. **KARDEŞ + KUM HAVUZU** — değişikliğin where-used tüketicileri için etki listesi + en az bir tüketicide okuma
+   ölçümü. Yerel ölçüm çıktıları yalnız proje `.tmp/` ya da TEMP altına yazar.
 
 ## BUG-GATE TESLİMİ (build/tasarım bitince — Model A, lider-aracılı; ADR 0018)
 Substantive iş bitince (CDS/BDEF/behavior/class mantığı; trivial değil), **Bug_Expert'i KENDİN spawn ETME (yetkin yok) ve doğrudan "to=bug-expert" MESAJ ATMA (alıcısız kalır).** Lider'e `BUG_GATE_READY` + yapılandırılmış teslim yolla; lider taze bug-expert spawn edip gate'ler:
