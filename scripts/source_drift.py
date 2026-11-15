@@ -876,6 +876,129 @@ def _stamp(session_id: str, obj: str) -> None:
         print(kilit_uyarisi)
 
 
+def _store_yolu(kok: Path) -> Path:
+    return Path(kok) / ".claude" / ".session_fresh.json"
+
+
+def _yol_kimligi(p: Path) -> str:
+    """Store kıyası için yol kimliği (Windows harf duyarsız, `..`/bağ çözülmüş)."""
+    try:
+        p = Path(p).resolve()
+    except Exception:  # noqa: BLE001
+        p = Path(os.path.abspath(str(p)))
+    return os.path.normcase(str(p))
+
+
+def git_agac_kokleri(path) -> tuple:
+    """Dosyanın git bilgisinden (ana çalışma ağacı kökü, dosyanın kendi ağacının kökü).
+
+    Kaynak: `git -C <dosyanın dizini> rev-parse --show-toplevel --git-common-dir`.
+    `--git-common-dir` bir worktree'de de ANA deponun `.git`ini verir (genericize_common
+    `_git_dir` emsali) → parent'ı = ana çalışma ağacı. Göreli sonuç SORGUNUN dizinine göre
+    çözülür (süreç cwd'sine göre değil). Ortak dizin `.git` adlı değilse (bare / ayrık git
+    dizini) ana ağaç türetilemez → None. Git yok / depo değil / hata → (None, None): çağıran
+    bugünkü davranışa düşer. `GIT_DIR`/`GIT_WORK_TREE` ortamdan ÇIKARILIR (bir git kancasının
+    içinden koşulursa sorgu dosyanın deposunu değil kancanın deposunu cevaplardı).
+    """
+    import subprocess
+    d = Path(os.path.abspath(str(path))).parent
+    while not d.is_dir():                 # henüz yazılmamış alt dizin → var olan ilk ata
+        if d.parent == d:
+            return None, None
+        d = d.parent
+    onbellek = _GIT_KOK_ONBELLEGI.get(str(d))
+    if onbellek is not None:              # UI çekicisi webapp'in her dosyasını damgalar
+        return onbellek
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")}
+    try:
+        r = subprocess.run(["git", "-C", str(d), "rev-parse", "--show-toplevel",
+                            "--git-common-dir"], capture_output=True, text=True,
+                           timeout=8, env=env)
+    except Exception:  # noqa: BLE001 — git yok/zaman aşımı → türetilemedi
+        return None, None
+    satirlar = [s.strip() for s in (r.stdout or "").splitlines() if s.strip()]
+    if r.returncode != 0 or len(satirlar) < 2:
+        return None, None
+    agac = Path(satirlar[0])
+    ortak = Path(satirlar[1])
+    if not ortak.is_absolute():
+        ortak = d / ortak
+    try:
+        ortak = ortak.resolve()
+    except Exception:  # noqa: BLE001
+        pass
+    ana = ortak.parent if ortak.name.lower() == ".git" else None
+    _GIT_KOK_ONBELLEGI[str(d)] = (ana, agac)   # yalnız BULUNAN sonuç önbelleğe girer
+    return ana, agac
+
+
+_GIT_KOK_ONBELLEGI: dict = {}
+
+
+def _kok_seansi(kok: Path) -> str:
+    """Kökün SessionStart marker'ındaki seans ("" = marker yok/okunamadı)."""
+    try:
+        v = json.loads((Path(kok) / ".claude" / ".current_session").read_text(encoding="utf-8"))
+        return str(v.get("session_id") or "") if isinstance(v, dict) else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def tazelik_ek_hedefleri(path, root=None) -> list:
+    """Birincil store (`FRESH_STORE`) DIŞINDA damganın yazılacağı yerler → [(kök, store), ...].
+
+    #435 (2026-11-15): kapı store'u + anahtarı KENDİ kökünden (`CLAUDE_PROJECT_DIR` → cwd)
+    çözer; çekici başka bir cwd'den (ör. worktree) env boşken koşunca damga başka store'a ve
+    başka anahtarla gidiyordu → kapı bloklamaya devam ediyordu. Kapının hangi kökte koştuğu
+    çekiciden BİLİNEMEZ; ama dosyanın git bilgisi iki aday verir: ana çalışma ağacı (oturum
+    ana projeden açıldıysa kapının kökü) + dosyanın kendi ağacı (oturum worktree'de açıldıysa).
+    Her ikisine de, o kökün kapısının hesaplayacağı anahtarla (`tazelik_anahtari(p, kök)`)
+    yazılır. Birincil store ile aynı dosyaya düşen aday ELENİR (tekilleştirme).
+    """
+    ana, agac = git_agac_kokleri(path)
+    goruldu = {_yol_kimligi(FRESH_STORE)}
+    out = []
+    for kok in (ana, agac):
+        if kok is None:
+            continue
+        store = _store_yolu(kok)
+        kimlik = _yol_kimligi(store)
+        if kimlik in goruldu:
+            continue
+        goruldu.add(kimlik)
+        out.append((Path(kok), store))
+    return out
+
+
+def _ek_hedefe_damgala(session_id: str, path, kok: Path, store: Path) -> str:
+    """Ek store'a damga → "" (yazıldı) ya da görünür not (yazılmadı).
+
+    KORUMA: `_stamp` başka seansın store'unu SIFIRLAR. Ek hedef yalnız o kökün SessionStart
+    marker'ı YOKSA ya da BİZİM seansımızı gösteriyorsa yazılır — aksi hâlde o kökte açık başka
+    bir oturumun damgaları silinirdi (ve o oturumun kapısı bu seansın damgasını zaten okumaz).
+    Birincil hedefin davranışı DEĞİŞMEZ.
+    `_stamp`/`_store_yaz` gövdeleri `FRESH_STORE` global'ini okur (damga_yarisi çapaları bu
+    metne bağlı) → hedef, global try/finally ile GEÇİCİ değiştirilerek aynı yazıcıdan geçer
+    (kilit + atomik yazım aynen). Çekiciler tek iş parçacıklı CLI'lardır.
+    """
+    global FRESH_STORE
+    sahip = _kok_seansi(kok)
+    if sahip and sahip != session_id:
+        return (f"[DAMGA] ek store YAZILMADI: {store} — o kökün etkin seansı başka ({sahip}); "
+                f"damgaları silinmesin diye dokunulmadı.")
+    anahtar = tazelik_anahtari(path, kok)
+    if not anahtar:
+        return f"[DAMGA] ek store YAZILMADI: {store} — anahtar üretilemedi."
+    onceki = FRESH_STORE
+    FRESH_STORE = store
+    try:
+        _stamp(session_id, anahtar)
+    finally:
+        FRESH_STORE = onceki
+    return ""
+
+
 def tazelik_damgala(session_id: str, path, root=None) -> str:
     """DOSYAYI seans-taze damgala (PUBLIC). Döner: yazılan anahtar; "" = damgalanMADI.
 
@@ -883,6 +1006,9 @@ def tazelik_damgala(session_id: str, path, root=None) -> str:
     YAZILMAZ ve görünür uyarı basılır — yön güvenli (kapı 'taze değil' der, tekrar çekilir);
     sahte-taze damga üreten dal YOK. Yalnız canlıdan GERÇEKTEN yazılan ya da canlıyla
     eşit bulunan dosya için çağrılır (çağıranın sözleşmesi).
+    #435: birincil store'a ek olarak dosyanın git'ten türetilen ana çalışma ağacının ve
+    kendi ağacının store'una da yazılır (`tazelik_ek_hedefleri`); dönüş değeri birincil
+    anahtardır (sözleşme aynı). Ek hedef hatası birincil damgayı GERİ ALMAZ, görünür not basar.
     """
     # C-ENC-01: bu yol Türkçe uyarı basabilir (kilit/anahtar) ve çağıran başka bir çekici
     # konsolu UTF-8'e sabitlememiş olabilir -> cp1252'de ÇÖKME = damga sonrası sahte hata.
@@ -902,4 +1028,26 @@ def tazelik_damgala(session_id: str, path, root=None) -> str:
     if not anahtar:
         return ""
     _stamp(session_id, anahtar)
+    try:
+        hedefler = tazelik_ek_hedefleri(path, root)
+    except Exception as exc:  # noqa: BLE001 — ek hedef türetilemedi: birincil damga kalır
+        print(f"[DAMGA] ek store türetilemedi ({type(exc).__name__}: {exc}) — yalnız "
+              f"{FRESH_STORE} yazıldı.")
+        hedefler = []
+    for kok, store in hedefler:
+        try:
+            not_ = _ek_hedefe_damgala(session_id, path, kok, store)
+        except Exception as exc:  # noqa: BLE001
+            not_ = f"[DAMGA] ek store YAZILAMADI: {store} ({type(exc).__name__}: {exc})"
+        EK_DAMGA_SONUCLARI[str(store)] = not_
+        satir = not_ or f"[DAMGA] ek store: {store} (git ağacı {kok})"
+        if satir not in _BASILAN_EK_NOTLARI:   # UI çekicisi yüzlerce dosya damgalar: store başına 1 satır
+            _BASILAN_EK_NOTLARI.add(satir)
+            print(satir)
     return anahtar
+
+
+#: Bu süreçte ek store'lara yazımın sonucu: {store: "" (yazıldı) | görünür not (yazılmadı)}.
+#: Çekicinin özet satırı (`fetch_ui_source.damga_yeri`) buradan okur — hedef değil SONUÇ basılır.
+EK_DAMGA_SONUCLARI: dict = {}
+_BASILAN_EK_NOTLARI: set = set()

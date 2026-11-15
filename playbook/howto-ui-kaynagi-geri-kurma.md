@@ -113,11 +113,15 @@ Beklenen: `YALNIZ-CANLI=0 · değişecek=0 · yalnız-dist=0` ve `GERCEK-FARK=0`
 ölçülüp **damgalanmadıysa** bloklanır (`scripts/hooks/_pbe_ui.py`; kapı `pull_before_edit`). Proje kökü
 **dışındaki** webapp (kanonik `.wt` worktree'si) ve proje ağacındaki bir junction/symlink'in **arkasındaki**
 webapp de kapsamdadır (kapsam kararı bağı izlemeyen, `..`'sı sadeleşmiş yolda) — ABAP kapısıyla simetrik; damga mutlak
-yol anahtarıyla yazılır. ⚠ Store ve anahtar kökü `CLAUDE_PROJECT_DIR`'den, boşsa **çalışma dizininden**
-çözülür (ABAP kapısıyla ortak sınır; ertelendi T-PBE-KOK-CWD) ⇒ damga kapının baktığı store'a YALNIZ komut
-**proje kökünden (ya da `CLAUDE_PROJECT_DIR=<proje>` ile)** koşulduğunda gider. Araç yazdığı store'u ve kökü
-basar (`store=… · anahtar kökü=…`; env boş VE çalışma dizini proje kökü değilse — `project.yaml` yok —
-`⚠ CLAUDE_PROJECT_DIR BOŞ` uyarısı) — "damgalandı" dediği hâlde
+yol anahtarıyla yazılır. Birincil store ve anahtar kökü `CLAUDE_PROJECT_DIR`'den, boşsa **çalışma dizininden**
+çözülür (ABAP kapısıyla ortak). #435 (2026-11-15) sonrası damga **ayrıca** dosyanın git bilgisinden türetilen
+**ana çalışma ağacının** ve **dosyanın kendi ağacının** store'una, o kökün kapısının anahtarıyla yazılır
+(`source_drift.tazelik_damgala` — üç çekici ortak) ⇒ worktree'den `CLAUDE_PROJECT_DIR` boşken koşulan komutun
+damgası da ana projeden açılmış oturumun kapısına ulaşır. Ek store, o kökün `.claude/.current_session`
+marker'ı **başka** bir seansı gösteriyorsa yazılmaz (o seansın damgaları silinmesin; çıktıda `YAZILMADI`).
+Araç yazdığı store'ları ve kökü basar (`store=… · anahtar kökü=… · ek store=… (yazıldı)`); env boş VE ana
+ağaç git'ten **türetilemediyse** VE (çalışma dizininde `project.yaml` yok YA DA çalışma dizini bir worktree)
+`⚠ CLAUDE_PROJECT_DIR BOŞ` uyarısı basılır — "damgalandı" dediği hâlde
 kapı yine bloklıyorsa önce o satıra bak. Blok mesajı şu komutu verir — sonuna kapı **o seansın**
 `--session <id>`'sini ekler; komutu kopyalayıp proje kökünden **olduğu gibi** koş:
 ```bash
