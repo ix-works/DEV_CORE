@@ -99,6 +99,10 @@ Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile e
   --mutasyon-yabanci-baslik  ID'siz başlık satırı (kendi `|---|`) tanınmaz → önceki tablonun kipi sürer
   --mutasyon-kati-gevsek  başlıksız/ID'siz tabloda da gevşek kimlik okuma (`BE-47 canlı PUT` eşlenir)
   --mutasyon-be01-tire    `DELETE x FROM ls-to` bileşeni `TO` sayılır (DB DELETE iç tablo diye susar)
+  --mutasyon-kati-birlesik  ID'siz/başlıksız tabloda birden çok kimlik 'birleşik satır' sayılmaz (satır yok'a düşer)
+  --mutasyon-kisa-izleyen   kısaltma soneki ardından metin gelse de kabul (`BE-12, 3 dosya` → BE-3)
+  --mutasyon-aralik-tavan   aralık tavanı yok (`BE-01..5000` 5000 kimliğe açılır)
+  --mutasyon-kisa-parantez  sonekten sonra `(` gelirse kısaltma sayılmaz (`DOC-FS-01…03 (02a dahil)` ilk kimliğe eşlenir)
 CORE-07: her kipin DÜŞMESİ BEKLENEN vektör kümesi `_BEKLENEN_DUSEN`'de PİNLİDİR ve EŞİTLİKLE
 kıyaslanır. Çıkış: 0 taban yeşil · 1 mutasyon BEKLENEN kümeyle düştü · 2 SAPMA · 3
 DOGRULANAMADI (çapa tam 1 kez eşleşmedi ya da mutant derlenmedi — "düştü" SAYILMAZ).
@@ -160,7 +164,11 @@ _GECERLI_KIP = frozenset({"--mutasyon-literal", "--mutasyon-degisen", "--mutasyo
                           "--mutasyon-blok-devir",
                           "--mutasyon-yabanci-baslik",
                           "--mutasyon-kati-gevsek",
-                          "--mutasyon-be01-tire"})
+                          "--mutasyon-be01-tire",
+                          "--mutasyon-kati-birlesik",
+                          "--mutasyon-kisa-izleyen",
+                          "--mutasyon-aralik-tavan",
+                          "--mutasyon-kisa-parantez"})
 
 _MUT = {
     "--mutasyon-literal": (
@@ -352,6 +360,19 @@ _MUT = {
     "--mutasyon-be01-tire": (
         "|[^.]*?(?<!-)" + "\\bTO",
         "|[^.]*?" + "\\bTO"),
+    # PR #444 re-gate (2026-11-15)
+    "--mutasyon-kati-birlesik": (
+        "(None, _id_hucresi(h[0])[1])",
+        "(None, [])"),
+    "--mutasyon-kisa-izleyen": (
+        r"(?=\s*(?:$|\.\.|[,/…–(]))",
+        r"(?![\w])"),
+    "--mutasyon-kisa-parantez": (
+        r"(?=\s*(?:$|\.\.|[,/…–(]))",
+        r"(?=\s*(?:$|\.\.|[,/…–]))"),
+    "--mutasyon-aralik-tavan": (
+        "_ARALIK_TAVAN = 200 ",
+        "_ARALIK_TAVAN = 10**6 "),
     "--mutasyon-ids-bos": (
         '    if ids is not None and not ids:',
         '    if False:'),
@@ -437,8 +458,9 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-be55-bicim": {"BE-55/W-tablefor", "BE-55/W-early", "BE-55/W-mapped"},
     # #433/#432/#439/#438 turu (2026-11-15) — ÖLÇÜMLE pinlenecek (ilk değer = ilan edilen beklenti)
     "--mutasyon-id-sutun": {"V18"},
-    "--mutasyon-id-bas": {"V17", "V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V21g", "V21h", "V21i", "V22"},   # PR #444: tam eşleşme açıklamalı/kısaltılmış hücreyi tanımaz
-    "--mutasyon-birlesik-esle": {"V19", "V20", "V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V22"},   # PR #444: kısaltma açılsa da ilk kimliğe eşlenir
+    "--mutasyon-id-bas": {"V17", "V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V21g", "V21h", "V21i", "V22",
+                          "V27", "V29a", "V29b", "V29c", "V29d", "V30a", "V30b"},   # PR #444: tam eşleşme açıklamalı/kısaltılmış hücreyi tanımaz
+    "--mutasyon-birlesik-esle": {"V19", "V20", "V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V22", "V29d", "V30a", "V30b"},   # PR #444: kısaltma açılsa da ilk kimliğe eşlenir
     "--mutasyon-ts05-allow": {"DOC-TS-05/N-uzun", "DOC-TS-05/N-degisken", "DOC-TS-05/P-mesajmetni"},
     "--mutasyon-ts05-blok": {"DOC-TS-05/N-bloksuz"},
     "--mutasyon-ts05-baslik": {"DOC-TS-05/N-bitisik"},
@@ -448,11 +470,15 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-be01-ic-delete": {"BE-01/N-dellit", "BE-01/N-delto"},
     "--mutasyon-be01-ic-genis": {"BE-01/P-delwa", "BE-01/P-deltab", "BE-01/P-delparam", "BE-01/P-deltire"},
     "--mutasyon-be01-screen": {"BE-01/N-screen"},
-    "--mutasyon-kisaltma": {"V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V22"},
+    "--mutasyon-kisaltma": {"V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V22", "V27", "V29d", "V30a", "V30b"},
     "--mutasyon-blok-devir": {"V25"},
     "--mutasyon-yabanci-baslik": {"V24"},
-    "--mutasyon-kati-gevsek": {"V23", "V24", "V25"},   # yan tablo satırı gevşek okunur → hükümsüz
+    "--mutasyon-kati-gevsek": {"V23", "V24", "V25", "V28"},   # yan tablo satırı gevşek okunur → hükümsüz
     "--mutasyon-be01-tire": {"BE-01/P-deltire"},
+    "--mutasyon-kati-birlesik": {"V27", "V27b"},
+    "--mutasyon-kisa-izleyen": {"V29a", "V29b", "V29c"},
+    "--mutasyon-aralik-tavan": {"V30a"},
+    "--mutasyon-kisa-parantez": {"V29d"},   # korpus: `DOC-FS-01…08 (06a/06b dahil)` grubu İLK kimliğe eşlenirdi
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -1322,6 +1348,33 @@ def v_vektorleri(G, tmp: Path) -> None:
     dene("V26", "| BE-47 | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n" + tam35, 0, ["- satır yok: 0"],
          "KONTROL (taban uyumu): ID'siz başlıklı tabloda (| Madde | Sınıf | Hüküm | Kanıt |) yalnız-kimlik satırı okunur",
          baslik="| Madde | Sınıf | Hüküm | Kanıt |\n|---|---|---|---|\n")
+    # PR #444 re-gate (BE-77): katı kipte (ID'siz başlık / başlıksız) de birden çok kimlik = "birleşik satır";
+    # açıklamalı TEK kimlik katı kipte okunmaz → "satır yok" (ölçülen davranış, metinde böyle yazılı)
+    madde_bas = "| Madde | Sınıf | Hüküm | Kanıt |\n|---|---|---|---|\n"
+    dene("V27", "| BE-35/47 | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n", 1,
+         ["- satır yok: 0", "- birleşik satır: 2 → BE-35, BE-47"],
+         "ID'siz başlıklı tabloda kısaltılmış birleşik → 'birleşik satır' (satır yok DEĞİL)", baslik=madde_bas)
+    dene("V27b", "| BE-47 / BE-35 | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n", 1,
+         ["- satır yok: 0", "- birleşik satır: 2 → BE-35, BE-47"],
+         "BAŞLIKSIZ tabloda birleşik → 'birleşik satır'", baslik="Hüküm tablosu (başlıksız):\n\n")
+    dene("V28", "| BE-47 (şablon) | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n" + tam35, 1,
+         ["- satır yok: 1 → BE-47", "- birleşik satır: 0"],
+         "KONTROL: ID'siz başlıklı tabloda açıklamalı TEK kimlik okunmaz → 'satır yok' (birleşik DEĞİL)", baslik=madde_bas)
+    # PR #444 re-gate F2-LOW: sonek yalnız hücre sonu ya da yeni ayraç izliyorsa kısaltmadır
+    for ad, hucre in (("V29a", "BE-12, 3 dosya"), ("V29b", "BE-10 – 2026-11-15 vakası"), ("V29c", "FE-12 / 2. tur")):
+        mid, kim = G._id_hucresi(hucre)
+        kontrol(f"{ad} NEGATİF: `{hucre}` kısaltma SAYILMAZ → tek kimlik",
+                mid == hucre.split()[0].rstrip(",") and kim == [mid], f"mid={mid} kimlikler={kim[:4]} ({len(kim)})")
+    mid, kim = G._id_hucresi("DOC-FS-01…03 (02a dahil)")
+    kontrol("V29d KONTROL: sonekten sonra açıklama parantezi → grup yine birleşik (korpusta ölçülen biçim)",
+            mid is None and kim == ["DOC-FS-01", "DOC-FS-02", "DOC-FS-03"], f"mid={mid} kimlikler={kim}")
+    # aralık tavanı: aşırı geniş aralık AÇILMAZ — iki uç kimlik, birleşik (rc 1 korunur, süre sınırlı)
+    mid, kim = G._id_hucresi("BE-01..5000")
+    kontrol("V30a aralık tavanı: `BE-01..5000` açılmaz → mid None, yalnız iki uç",
+            mid is None and kim == ["BE-01", "BE-5000"], f"mid={mid} kimlik sayısı={len(kim)}")
+    mid, kim = G._id_hucresi("BE-1..201")
+    kontrol("V30b KONTROL sınır: `BE-1..201` (fark 200 = tavan) açılır → 201 kimlik",
+            mid is None and len(kim) == 201, f"mid={mid} kimlik sayısı={len(kim)}")
     rc, out = kos(G, taban + ["--verify-report", str(kok / "yok-rapor.md")])
     kontrol("V9 okunamayan rapor → exit 2 [PROGRAM KOŞMADI] (eksiklik DEĞİL)",
             rc == 2 and "[PROGRAM KOŞMADI]" in out, f"rc={rc} {out[-160:]!r}")

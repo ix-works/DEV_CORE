@@ -2568,7 +2568,9 @@ _ID_SUTUNU = re.compile(r"\W*ID\W*", re.I)
 _ID_TAM = re.compile(r"\**`?((?:BE|FE|DOC)-[0-9A-Za-z-]+)`?\**")      # başlıksız tablo: hücre YALNIZ kimlik
 # Kısaltılmış birleşik yazım (PR #444 F1): tam kimliği izleyen ayraç + çıplak sonek —
 # `BE-10a/b` · `BE-01,03,10a` · `FE-02, 03, 04` · `BE-22..25` · `DOC-KD-01…16` · `BE-52/53/54`.
-_ID_KISA = re.compile(r"\s*(\.\.|[,/…–])\s*(\d+[A-Za-z]?|[A-Za-z])(?![\w])")
+# Sonek yalnız hücre sonu, YENİ ayraç ya da `(` izliyorsa kabul (`DOC-FS-01…08 (06a dahil)` grup) (`BE-12, 3 dosya` · `BE-10 – 2026-11-15` kısaltma DEĞİL).
+_ID_KISA = re.compile(r"\s*(\.\.|[,/…–])\s*(\d+[A-Za-z]?|[A-Za-z])(?=\s*(?:$|\.\.|[,/…–(]))")
+_ARALIK_TAVAN = 200      # bundan geniş aralık AÇILMAZ: yalnız iki uç kimlik → birleşik satır (rc 1 korunur)
 _ID_PARCA = re.compile(r"(.*-)(\d+)([A-Za-z]?)$")
 
 
@@ -2587,6 +2589,8 @@ def _kisaltma_ac(bas: str, hucre: str, konum: int) -> list[str]:
         onek, no, harf = p.groups()
         if sonek.isalpha():                                  # `BE-10a/b` → BE-10b
             yeni = [f"{onek}{no}{sonek}"]
+        elif ayrac in ("..", "…", "–") and sonek.isdigit() and not harf and int(sonek) - int(no) > _ARALIK_TAVAN:
+            yeni = [f"{onek}{sonek}"]                        # aşırı geniş aralık: uç kimlik, açılmaz
         elif ayrac in ("..", "…", "–") and sonek.isdigit() and not harf and int(sonek) > int(no):
             yeni = [f"{onek}{i:0{len(no)}d}" for i in range(int(no) + 1, int(sonek) + 1)]   # aralık
         else:                                                # `BE-01,03` → BE-03
@@ -2653,7 +2657,9 @@ def rapor_dogrula(rapor: Path, satirlar: list[Satir]) -> int:
             continue
         if kip == "kati":
             mt = _ID_TAM.fullmatch(h[0])
-            mid, kimlikler = (mt.group(1), [mt.group(1)]) if mt else (None, [])
+            # yalnız-kimlik hücresi okunur; açıklamalı TEK kimlik (`BE-04 (decimal)`) okunmaz → "satır yok";
+            # birden çok kimlik (`BE-10a/b`) her tablo türünde "birleşik satır" (BE-77)
+            mid, kimlikler = (mt.group(1), [mt.group(1)]) if mt else (None, _id_hucresi(h[0])[1])
         else:
             mid, kimlikler = _id_hucresi(h[id_idx])
         if mid:
@@ -2695,9 +2701,10 @@ def rapor_dogrula(rapor: Path, satirlar: list[Satir]) -> int:
     print(f"- Rapor: {rapor.name} · beklenen madde {len(satirlar)} · {HUKUM_SATIRI}")
     for ad, liste in kategoriler:
         print(f"- {ad}: {len(liste)}" + (f" → {', '.join(liste)}" if liste else ""))
-    print("  (kimlik ID sütunundan okunur — başlıkta `ID` adlı sütun, yoksa ilk sütun; hücrenin başındaki tek kimlik, "
-          "ardındaki açıklama/bağlantı yok sayılır · birleşik satır = bir hücrede birden çok kimlik (`BE-10a / BE-10b`): "
-          "eşlenmez, madde başına ayrı satır yazın · hüküm YALNIZ hüküm sütunundan okunur · bağsız FAIL = `FAIL→F<n>` "
+    print("  (kimlik: başlığında `ID` adlı sütun olan tabloda o sütunun başındaki tek kimlik — ardındaki "
+          "açıklama/bağlantı yok sayılır; ID sütunsuz ya da başlıksız tabloda ilk hücre YALNIZ kimlikse okunur, "
+          "`BE-04 (decimal)` orada satır yok sayılır · birleşik satır = bir hücrede birden çok kimlik (`BE-10a / BE-10b` · "
+          "`BE-10a/b` · `BE-22..25`), her tablo türünde: eşlenmez, madde başına ayrı satır yazın · hüküm YALNIZ hüküm sütunundan okunur · bağsız FAIL = `FAIL→F<n>` "
           "yerine çıplak FAIL · ELLE = yargı doldurulmamış · ÇELİŞKİ = program A-FAIL, rapor "
           "PASS/WARN/UYGULANMAZ/ÖLÇÜLEMEDİ — itiraz yolu ÇÜRÜTÜLDÜ+kanıt)")
     if curutulen:
