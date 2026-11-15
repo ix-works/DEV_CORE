@@ -275,6 +275,9 @@ OZEL_TESTLER = [
      "Q352-C: PBE eklentisi msag CSV + textpool: salt-okur pull birlestirme (sira/tirnak/BOM/satir sonu KORUNUR, "
      "yalniz-yerel dokunulmaz) + damga YALNIZ tam karsilastirmada (paket/ortak-anahtar/calisma!=active -> OLCULEMEDI) "
      "+ gercek kapi uctan uca"),
+    ("pbe_worktree_damga",
+     "#435: worktree cwd'sinden env bos kosan cekicinin damgasi kapiya ULASIR (git'ten ana agac + "
+     "dosyanin agaci store'u; baska seansin store'u korunur) — 3 cekici + GERCEK kapi alt sureci"),
     ("cds_curr_eksik_annotation",
      "DERINLIK: EKSIK @Semantics hic aranmiyordu (rc=0 bilgi tasimiyordu) + yesilin PAYDASI + WARNING siddeti"
      " + Q234/Q237: cok-satirli ifade ve `union` 2.+ dali YANLIS POZITIF uretiyordu"),
@@ -934,6 +937,12 @@ OZEL_TESTLER = [
      "onek duzeyi (Z/Y aynen + bildirilmis NS; bosluklu IWSV/SICF adi korunur); PBE kancasi #ns#x dosya "
      "adini tanir (kayitsiz NS tanimaz); yapilandirmasiz Z/Y tabanla ayni, fark yalniz gramer disi Z/Y "
      "adlarda kabul->red (taban d85de77); 11 mutasyon"),
+    # 2026-11-15 namespace tesisati: /<NS>/ ve Y adlarinin eski tesisat noktalari (G1-G6 + #9-#14).
+    ("namespace_tesisat",
+     "yerel dosya yolu yazma yonu yerel_ad (#ns#x, surucu kokune kacis/silme yok; Z/Y dosya adi tabanla ayni) · "
+     "bootstrap #ns# klasoru · gen_field_table/program_to_spec AD_ADAYI · OData /sap/opu/odata/<ns>/ koku · "
+     "URL->ad %2f cozumu · paket/RAP ad kalibi Z/Y/bildirilmis NS (Z ayni) · ref_structure yalniz bicim · "
+     "table_contents/paket aramasi/kilit uyarisi · sizinti kapisi Y + /<NS>/ govde (FP 0); surec geneli yazma kalkani (Z0); taban 4323bba; 30 mutasyon"),
 ]
 
 
@@ -1552,6 +1561,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "E1: eklenti kaydı + komut/not sözleşmesi → gerçek alt süreç"),
     ("scripts/source_drift.py", ("O:pbe_msag_textpool",),
      "E1 tazelik_damgala/seans_kimligi gerçek store + H11 `_EXCLUDED_DIR_SEGMENTS` tek kaynak"),
+    # #435 (2026-11-15): ek damga hedefleri (git ana ağaç + dosyanın ağacı). AYRI satırlar.
+    ("scripts/source_drift.py", ("O:pbe_worktree_damga",),
+     "`git_agac_kokleri` + `tazelik_ek_hedefleri` + seans korumalı ek damga"),
+    ("scripts/fetch_ui_source.py", ("O:pbe_worktree_damga",), "`damga_yeri` ek store + ⚠ koşulu"),
+    ("scripts/sap_sync_pull.py", ("O:pbe_worktree_damga",), "--offline --file wt cwd'sinden"),
+    ("scripts/pull_msag_textpool.py", ("O:pbe_worktree_damga",), "--offline --file wt cwd'sinden"),
+    ("scripts/hooks/pull_before_edit.py", ("O:pbe_worktree_damga",),
+     "kapı anahtarı (kök dışı = mutlak) — ek damganın okuyucusu (değişmedi)"),
     ("scripts/push_object.py",
      ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
       "O:push_onkontrol_olculemedi"),
@@ -1968,6 +1985,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
       for y in ("scripts/utils/ad_politikasi.py", "scripts/push_textpool.py", "scripts/pull_msag_textpool.py",
                 "scripts/scaffold_classic_program.py", "scripts/build_cbo_inventory.py",
                 "scripts/hooks/_pbe_msag_textpool.py")],
+    # 2026-11-15 namespace tesisati — AYRI satirlar; sap_adt_lib'e satir EKLENMEDI (b0_secim P3 birlesimi
+    # degismez; sap_adt_lib degisikligi tam suitte ve ad_politikasi satiriyla secilir).
+    *[(y, ("O:namespace_tesisat",), "namespace tesisati: /<NS>/ + Y adlari eski betiklerde (G1-G6, #9-#14)")
+      for y in ("scripts/utils/ad_politikasi.py", "scripts/sap_client.py", "scripts/download_object.py",
+                "scripts/download_ddic_objects.py", "scripts/bootstrap_package.py", "scripts/populate_cds_views.py",
+                "scripts/gen_field_table.py", "scripts/program_to_spec.py", "scripts/check_ui_odata_refs.py",
+                "scripts/create_rap_service.py", "scripts/sap_set_object_description.py",
+                "scripts/create_lock_object.py", "scripts/init_project.py", "scripts/genericize_common.py")],
 ]
 
 # Fixture DİZİNİNE dokunulduğunda o fixture koşar. Bölüm-1/OZEL adları dizin adıyla

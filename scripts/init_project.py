@@ -224,6 +224,8 @@ master_language: __DOLDUR__    # örn. TR / EN (ADR 0005-D bu dille uygulanır)
 #      (hiçbir guard okumuyor). Dondurulmuş arşiv kökü varsa PROJE CLAUDE.md'sinde
 #      DİSİPLİN kuralı olarak yaz; gerçek koruma isteniyorsa OS/ACL izni ver.
 # sql_view_prefix: Z<MOD><NNN>_V_   # populate_cds_views namespace-gate'i (B-5)
+# customer_namespaces: ["/<NS>/"]   # SE03'te müşteriye KAYITLI namespace'ler (ADR 0005-A-EK) — Z/Y'ye ek
+#                                   # müşteri ad alanı; SAP'nin kendi namespace'i YAZILMAZ (yazmak 0005-A ihlali)
 # package_prefixes: []         # paket-sınır validator'ları
 """
 

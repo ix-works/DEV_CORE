@@ -91,8 +91,10 @@ KIP = KIPLER[0] if KIPLER else ""
 MUTASYONLAR = {
     "--mutasyon-asv-rootsuz": (ASV, (r"define\s+(?:root\s+)?(?:abstract|custom)\s+entity\s+",
                                      r"define\s+(?:abstract|custom)\s+entity\s+")),
-    "--mutasyon-gft-customsuz": (GFT, (r"abstract\s+entity|custom\s+entity)\s+(\w+)",
-                                       r"abstract\s+entity)\s+(\w+)")),
+    # 2026-11-15 (namespace tesisatı G2): ad yakalaması `(\w+)` → `(" + AD_ADAYI + r")` ⇒ çapa
+    # grubun AÇILIŞINA hizalandı (mutasyonun anlamı aynı: custom entity alternatifi kalkar)
+    "--mutasyon-gft-customsuz": (GFT, (r'abstract\s+entity|custom\s+entity)\s+("',
+                                       r'abstract\s+entity)\s+("')),
     "--mutasyon-ortak-tiresiz": (CDSM, ("        elif metin.startswith('//', i) or "
                                        "metin.startswith('--', i):\n",
                                        "        elif metin.startswith('//', i):\n")),
