@@ -107,9 +107,13 @@ def bsp_name(app_dir: Path) -> str:
     ve dört tüketici (deploy_ui · fetch_ui_source · verify_ui_static_assets · _pbe_ui) BSP'yi
     çözemiyordu. Karar artık `utils.ad_politikasi.musteri_adi_mi`'den gelir (ADR 0005-A tek
     kaynak; kayıtsız namespace RED). Ad BÜYÜK harfe çevrilir (BSP adı SAP'de büyük harftir).
-    `app:` bloğundaki `name:` ÖNCELİKLİDİR: kabul artık büyük/küçük harf duyarsız olduğundan
-    `metadata.name: zfoo` gibi tek parçalı bir uygulama kimliği app.name'in önüne geçmesin.
-    `app:` bloğu yoksa eski kural: dosyadaki ilk müşteri adı. Z adlı, `metadata.name`'i
+    `app:` bloğu GÖRÜLDÜYSE sonuç YALNIZ o bloktaki `name:`den gelir; oradaki ad reddedilirse
+    (kayıtsız namespace · standart ad) sonuç "" olur — bloğun DIŞINDAKİ bir `name:` satırına
+    (çoğu zaman tek parçalı `metadata.name: zfoo`) DÜŞÜLMEZ. Gerekçe (PR #445 kapısı,
+    2026-11-15): `fiori deploy` hedefi app.name'den alır; düşüş, reddedilen app.name'e
+    deploy'u "geçerli BSP" adıyla açar ve canlı doğrulama başka bir BSP'yi çeker. Eski
+    regex'teki kardeş (`metadata.name: ZFOO` + standart app.name → 'ZFOO') da bununla kapanır.
+    `app:` bloğu HİÇ yoksa eski kural: dosyadaki ilk müşteri adı. Z adlı, `metadata.name`'i
     noktalı (`com.x.y`) dosyada sonuç eskisiyle aynıdır.
     """
     y = app_dir / "ui5-deploy.yaml"
@@ -117,6 +121,7 @@ def bsp_name(app_dir: Path) -> str:
         return ""
     app_icinde: list = []
     herhangi: list = []
+    app_goruldu = False
     app_girinti = None
     for line in y.read_text(encoding="utf-8", errors="ignore").splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
@@ -127,6 +132,7 @@ def bsp_name(app_dir: Path) -> str:
         m = _APP_BLOK.match(line)
         if m:
             app_girinti = len(m.group(1))
+            app_goruldu = True
             continue
         m = _NAME_SATIRI.match(line)
         if not m:
@@ -134,7 +140,9 @@ def bsp_name(app_dir: Path) -> str:
         ad = _yaml_skaler(m.group(1)).upper()
         if musteri_adi_mi(ad):
             (app_icinde if app_girinti is not None else herhangi).append(ad)
-    return (app_icinde or herhangi or [""])[0]
+    if app_goruldu:
+        return (app_icinde or [""])[0]
+    return (herhangi or [""])[0]
 
 
 def bsp_icf_yolu(bsp: str) -> str:

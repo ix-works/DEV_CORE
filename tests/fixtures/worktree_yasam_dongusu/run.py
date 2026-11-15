@@ -28,6 +28,8 @@ Q334 (2026-11-02): ③ `--wt-ac`'in KENDI provizyon urunlerini (bag · rules ove
 Q349 (2026-11-02): `--wt-ac` tabani `refs/remotes/origin/main` — `origin/main` ADLI tag (V14; M29).
 Issue #437 (2026-11-15): `--wt-taban REF` (tam ref/tam SHA, dogrulamali) + yerelde VAR olan dal
   `-b`'siz acilir, HEAD dogrulanir; ayni adli tag golgesi + CLI kablolamasi (V15a-i; M30-M35).
+  PR #445 kapisi F2: mevcut dal origin/main'i icermiyorsa [UYARI] (bloklamaz), guncelse yok,
+  olculemezse [UYARI] OLCULEMEDI (V15a/j/k/l; M36-M38).
 
 UC BAGLAM (F3):
   (1) bilinen-BOZUK  : fix sokulmus kod (mutasyon dali)
@@ -651,8 +653,9 @@ def v15_wt_taban_mevcut_dal(ts, kok: Path) -> None:
         ok, out = ac("infra/integ")
         acilan.append("infra/integ")
         sb, h = bas("infra/integ")
-        sonuc("V15a mevcut yerel dal `-b`'siz acilir: HEAD refs/heads/<dal> ucunda (origin/main DEGIL)",
-              ok and sb == "refs/heads/infra/integ" and h == integ,
+        sonuc("V15a mevcut yerel dal `-b`'siz acilir: HEAD refs/heads/<dal> ucunda (origin/main DEGIL)"
+              " + origin/main'i iceren GUNCEL dalda bayatlik UYARISI YOK",
+              ok and sb == "refs/heads/infra/integ" and h == integ and "[UYARI]" not in out,
               f"ok={ok} head={sb or 'AYRIK'} {h[:8]} {son(out)}")
 
         ok, out = ac("infra/golge")
@@ -711,6 +714,40 @@ def v15_wt_taban_mevcut_dal(ts, kok: Path) -> None:
             sonuc("V15i `--wt-taban` tek basina → rc 2 (kurulum kosmaz)", rc2 == 2, f"rc={rc2}")
         finally:
             sys.argv = eski_argv
+
+        # PR #445 kapisi F2: mevcut dal origin/main'i ICERMIYORSA (squash-merge edilmis eski dal
+        # sinifi) acilir AMA acik [UYARI] basilir; guncel dalda uyari YOK. origin/main burada
+        # ILERLETILIR — bu yuzden V15'in sonundadir (onceki vektorler eski `uzak`a bakar).
+        git(proje, "branch", "infra/eski", uzak)
+        (proje / "c.txt").write_text("c\n", encoding="utf-8")
+        git(proje, "add", "-A")
+        git(proje, "commit", "-q", "-m", "main ilerledi")
+        git(proje, "push", "-q", "origin", "main")
+        git(proje, "fetch", "-q", "origin")
+        yeni_uzak = git(proje, "rev-parse", "refs/remotes/origin/main").stdout.strip()
+        if not yeni_uzak or yeni_uzak == uzak:
+            raise Kurulamadi(f"V15j kum: origin/main ilerlemedi ({yeni_uzak[:8]})")
+        ok, out = ac("infra/eski")
+        acilan.append("infra/eski")
+        sb, h = bas("infra/eski")
+        sonuc("V15j BAYAT mevcut dal (origin/main ilerledi) acilir AMA [UYARI] ICERMIYOR basilir (bloklamaz)",
+              ok and sb == "refs/heads/infra/eski" and h == uzak and "[UYARI]" in out
+              and "ICERMIYOR" in out, f"ok={ok} head={sb or 'AYRIK'} {h[:8]} {son(out)}")
+        git(proje, "branch", "infra/taze", yeni_uzak)
+        ok, out = ac("infra/taze")
+        acilan.append("infra/taze")
+        sonuc("V15k GUNCEL mevcut dal (yeni origin/main ucunda) → [UYARI] YOK",
+              ok and "[UYARI]" not in out, f"ok={ok} {son(out)}")
+        eski_taban = ts._GUNCEL_TABAN
+        try:
+            ts._GUNCEL_TABAN = "refs/remotes/origin/yok-boyle"
+            git(proje, "branch", "infra/olcme", yeni_uzak)
+            ok, out = ac("infra/olcme")
+            acilan.append("infra/olcme")
+        finally:
+            ts._GUNCEL_TABAN = eski_taban
+        sonuc("V15l tazelik OLCULEMEZSE (taban ref yok) sessiz gecmez: [UYARI] OLCULEMEDI, acilis bloklanmaz",
+              ok and "[UYARI]" in out and "OLCULEMEDI" in out, f"ok={ok} {son(out)}")
     finally:
         ts.provision_worktree = eski_pv
         for dal in acilan:
@@ -1073,6 +1110,16 @@ MUTASYONLAR = [
       "        if False:"), "wtac2"),
     ("M35 #437 dal VARKEN verilen taban sessizce yok sayilir", "team_setup",
      ("    if dal_var and taban_verildi:", "    if False:"), "wtac2"),
+    # --- PR #445 kapisi F2: mevcut dalda bayat uc UYARISI ---
+    ("M36 F2 bayat dal uyarisi hic cagrilmaz", "team_setup",
+     ("    if dal_var:\n        _bayat_dal_uyarisi(proje, dal_ref)\n",
+      "    if False:\n        _bayat_dal_uyarisi(proje, dal_ref)\n"), "wtac2"),
+    ("M37 F2 ata sorusu TERS yonde (dal origin/main'in atasi mi)", "team_setup",
+     ('r = _git(proje, "merge-base", "--is-ancestor", _GUNCEL_TABAN, dal_ref)',
+      'r = _git(proje, "merge-base", "--is-ancestor", dal_ref, _GUNCEL_TABAN)'), "wtac2"),
+    ("M38 F2 olculemeyen tazelik SESSIZ gecer", "team_setup",
+     ('    say(WARN, f"[UYARI] dal tazeligi OLCULEMEDI',
+      '    return\n    say(WARN, f"[UYARI] dal tazeligi OLCULEMEDI'), "wtac2"),
 ]
 
 

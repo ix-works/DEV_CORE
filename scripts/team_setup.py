@@ -30,6 +30,8 @@ WORKTREE YAŞAM DÖNGÜSÜ (2026-08-29 — kayıt #80):
      hata sınıfı (bayat kopya taranması) mekanik olarak imkânsızlaşır.
   --wt-ac DAL             : kanonik yolda worktree aç + provizyonla (çağıran PATH üretmez).
                             Dal yerelde VARSA mevcut dal açılır; yoksa tabandan yeni dal.
+                            Mevcut dal origin/main'i içermiyorsa [UYARI] (bayat olabilir;
+                            bloklamaz — yeni iş için yeni dal adı).
   --wt-taban REF          : --wt-ac yeni dal tabanı (TAM ref/tam SHA; varsayılan
                             refs/remotes/origin/main). --wt-denetim main'e karşı ölçer ⇒
                             main dışı tabandan açılan worktree denetimde ALARM verebilir.
@@ -1437,6 +1439,8 @@ def wt_ac(proje: Path, dal: str, taban: str = "refs/remotes/origin/main",
         `-b` kosulsuzdu → `fatal: a branch named '<dal>' already exists` (entegrasyon dalinin
         KENDISI icin worktree acilamiyordu). Dal varken `--wt-taban` da verilmisse ⇒ FAIL
         (mevcut dal tabandan yeniden dallanmaz; sessizce yok saymak yaniltirdi).
+        Mevcut dal acildiktan sonra `_bayat_dal_uyarisi` (PR #445 kapisi F2): ucu origin/main'i
+        icermiyorsa [UYARI] — bloklamaz.
         Mevcut dal KISA adla verilir: `refs/heads/<dal>` verilseydi git HEAD'i AYIRIRDI
         (olculdu git 2.54: detached). Ayni adli tag varken de kisa ad DALI secer (olculdu:
         HEAD = refs/heads/<dal> ucu); yine de sonrasinda HEAD dogrulanir (fail-closed).
@@ -1473,7 +1477,35 @@ def wt_ac(proje: Path, dal: str, taban: str = "refs/remotes/origin/main",
         return False
     say(OK, f"worktree acildi: {yol} (dal={dal}, "
             + ("MEVCUT dal" if dal_var else f"taban={taban}") + ")")
+    if dal_var:
+        _bayat_dal_uyarisi(proje, dal_ref)
     return provision_worktree(yol, proje)
+
+
+_GUNCEL_TABAN = "refs/remotes/origin/main"
+
+
+def _bayat_dal_uyarisi(proje: Path, dal_ref: str) -> None:
+    """Mevcut dal acildiginda ucu `origin/main`i ICERMIYORSA acik UYARI (BLOKLAMAZ).
+
+    PR #445 kapisi F2 (2026-11-15, lider karari): `--wt-kapat` yerel dali SILMEZ ⇒ squash-merge
+    edilmis eski bir dal adi yeniden `--wt-ac` ile verilince worktree BAYAT uca oturur (CLAUDE.core
+    §1.1 GIT "acik baslangic noktasi" sinifi). Mevcut dali acmak Issue #437'nin istedigi
+    davranistir, o yuzden engellenmez; yalniz gorunur kilinir.
+    ⚠ Buradaki `merge-base --is-ancestor` SORUSU, `--wt-denetim`'in yasakladigi soru DEGILDIR:
+    denetim "dal main'e girdi mi" diye sorar (squash-merge'de yaniltir). Burada sorulan
+    "dalin ucu guncel main'i iceriyor mu"dur — squash-merge edilmis eski dal tam da bu soruda
+    HAYIR verir (istenen sonuc). main'den yeni acilmis dal EVET verir.
+    """
+    r = _git(proje, "merge-base", "--is-ancestor", _GUNCEL_TABAN, dal_ref)
+    if r.returncode == 0:
+        return
+    if r.returncode == 1:
+        say(WARN, f"[UYARI] dal '{dal_ref}' {_GUNCEL_TABAN}'i ICERMIYOR (gerisinde ya da ayrik) — "
+                  f"BAYAT olabilir (squash-merge edilmis eski dal?). Yeni is icin YENI dal adi kullan.")
+        return
+    say(WARN, f"[UYARI] dal tazeligi OLCULEMEDI ({_GUNCEL_TABAN} ↔ {dal_ref}: "
+              f"{(r.stderr or r.stdout).strip()[:160]}) — dal bayat olabilir, elle kontrol et.")
 
 
 def npm_clis() -> None:
@@ -1581,7 +1613,8 @@ def main() -> int:
                     help="D16 provizyonu. PATH verilmezse cwd (bir worktree ICINDE olmali).")
     ap.add_argument("--wt-ac", metavar="DAL",
                     help="Kanonik yolda (<proje.parent>/.wt/<proje>/<dal>) worktree AC + provizyonla. "
-                         "Dal yerelde varsa MEVCUT dal acilir; yoksa --wt-taban'dan yeni dal.")
+                         "Dal yerelde varsa MEVCUT dal acilir (origin/main'i icermiyorsa [UYARI] — bayat "
+                         "olabilir, bloklamaz); yoksa --wt-taban'dan yeni dal.")
     ap.add_argument("--wt-taban", metavar="REF",
                     help="--wt-ac YENI dal tabani — TAM ref (refs/...) ya da tam SHA "
                          "(varsayilan refs/remotes/origin/main). Uyari: --wt-denetim main'e "

@@ -15,6 +15,9 @@ verify_ui_static_assets statik varlık). FIX: ad kararı `utils.ad_politikasi.mu
 ölçüldü; bu korpus yalnız URL'in NASIL KURULDUĞUNU ölçer (ağ sahte), SAP'nin o yolu servis
 ettiğini ÖLÇMEZ. Gerçek deploy YOK.
 
+PR #445 kapısı (F1): `app:` bloğu GÖRÜLDÜYSE sonuç yalnız o bloktan — reddedilen app.name
+blok dışı `metadata.name`e düşmez (A13-A16; mutasyon `--mutasyon-app-reddi-dusuyor`).
+
 ÜÇ BAĞLAM (F3)
   (1) bilinen-BOZUK : `--mutasyon-*` (fix bellekte geri alınır)
   (2) bilinen-TEMİZ : bugünkü kod — Z yolu regresyon vektörleri (A1/B1/C1/C3) dahil
@@ -50,8 +53,12 @@ MUTASYONLAR = {
                                  '        if re.match(r"Z[A-Z0-9_]+\\Z", ad):  # MUTASYON\n'),
     "--mutasyon-kayitsiz-ns-kabul": (DUI, "        if musteri_adi_mi(ad):\n",
                                      "        if musteri_adi_mi(ad) or ad_namespace(ad):  # MUTASYON\n"),
-    "--mutasyon-app-oncelik-yok": (DUI, '    return (app_icinde or herhangi or [""])[0]',
-                                   '    return ((herhangi + app_icinde) or [""])[0]  # MUTASYON'),
+    "--mutasyon-app-oncelik-yok": (DUI, '        return (app_icinde or [""])[0]\n',
+                                   '        return ((herhangi + app_icinde) or [""])[0]  # MUTASYON\n'),
+    # PR #445 kapısı F1: app: bloğu VARKEN reddedilen app.name blok dışı `name:`e düşüyordu
+    "--mutasyon-app-reddi-dusuyor": (DUI, '    if app_goruldu:\n        return (app_icinde or [""])[0]\n',
+                                     '    if app_goruldu and app_icinde:  # MUTASYON\n'
+                                     '        return app_icinde[0]\n'),
     "--mutasyon-yorum-ayiklanmaz": (DUI, '    v = re.split(r"\\s#", ham, maxsplit=1)[0].strip()',
                                     "    v = ham.strip()  # MUTASYON"),
     "--mutasyon-buyuk-harf-yok": (DUI, "        ad = _yaml_skaler(m.group(1)).upper()",
@@ -145,6 +152,13 @@ VAKALAR = [
      {"metadata": "zfoo"}, "ZSD001_APP"),
     ("A11 app: bloğu YOK -> ilk müşteri adı (eski kural)", "ZSD001_APP", {"app_blok": False},
      "ZSD001_APP"),
+    # PR #445 kapısı F1: app: bloğu VARKEN reddedilen app.name blok DIŞINA düşmez
+    ("A13 kayıtsız /ABC/APP + metadata `zfoo` -> '' (ZFOO'ya DÜŞMEZ)", "/ABC/APP",
+     {"metadata": "zfoo"}, ""),
+    ("A14 standart SAPUI5_STD + metadata `zfoo` -> ''", "SAPUI5_STD", {"metadata": "zfoo"}, ""),
+    ("A15 Y-olmayan SAPAPP + metadata `yapp` -> ''", "SAPAPP", {"metadata": "yapp"}, ""),
+    ("A16 ESKİ kardeş: standart SAPUI5_STD + metadata `ZFOO` (eski regex 'ZFOO' verirdi) -> ''",
+     "SAPUI5_STD", {"metadata": "ZFOO"}, ""),
 ]
 for ad, deger, kw, beklenen in VAKALAR:
     sonuc = D.bsp_name(yaml_app(deger, **kw))

@@ -241,7 +241,8 @@ OZEL_TESTLER = [
     ("bsp_adi_namespace",
      "Issue #440: bsp_name musteri_adi_mi (Z/Y/kayitli NS; kayitsiz NS RED) + bsp_icf_yolu "
      "(Z aynen /sap/bc/ui5_ui5/sap/, /NS/APP -> /sap/bc/ui5_ui5/<ns>/<app>/, bicimsiz ad fail-closed) "
-     "+ iki URL kurucusu + 4 tuketici kablolamasi (verify/fetch/_pbe_ui); 9 mutasyon"),
+     "+ iki URL kurucusu + 4 tuketici kablolamasi (verify/fetch/_pbe_ui) + app: blogu varken "
+     "reddedilen app.name blok disina DUSMEZ (PR #445 kapisi); 10 mutasyon"),
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
     # 2026-08-01 kuyruk-turu (validator ailesi, V1-V6):
     ("cds_curr_satir_yorumu", "CURR/QUAN: satir-sonu // yorumu alani/degeri gizliyordu (V1)"),
