@@ -680,9 +680,8 @@ PCV_MUT = [
     ("M1 prefix turetmesini sok (her sey yine config'ten gelsin)",
      lambda s: s.replace(
          "    if package:\n"
-         "        m = _PKG_PREFIX_RE.match(str(package).strip().upper())\n"
-         "        if m:\n"
-         "            kok = m.group(1)\n"
+         "        kok = _paket_koku(package)\n"
+         "        if kok:\n"
          "            return f\"{kok}_V_\", f\"{kok.lower()}_ddl_\"\n"
          "    return _SQLP, _VNP",
          "    return _SQLP, _VNP")),

@@ -49,10 +49,12 @@ NE YAPAR (yalnız GET — SAP'ye hiçbir şey yazmaz):
                              kapı (`hooks/_pbe_ui`) düzenlemeye izin verir. Damga YALNIZ: taze indirme
                              (`--zip` → YOK) · rc 0 · kaynak haritası sapması yok · webapp kapının kapsamında
                              (proje kökü DIŞINDAKİ `.wt` worktree'si dahil — anahtar mutlak; ABAP kapısıyla
-                             simetrik) ve BSP'si app'in `ui5-deploy.yaml`'ıyla tutarlı. ⚠ Store + anahtar
-                             kökü `CLAUDE_PROJECT_DIR`'den, boşsa CWD'den çözülür (ABAP ile ortak;
-                             ertelendi T-PBE-KOK-CWD) ⇒ kapı damgayı YALNIZ araç proje kökünden (ya da
-                             `CLAUDE_PROJECT_DIR` ile) koşulduğunda görür; araç yazdığı store'u + kökü basar. Bu kipte YALNIZ `deploy-to-abap` görevinin `configuration.exclude`
+                             simetrik) ve BSP'si app'in `ui5-deploy.yaml`'ıyla tutarlı. Birincil store + anahtar
+                             kökü `CLAUDE_PROJECT_DIR`'den, boşsa CWD'den çözülür (ABAP ile ortak); #435'ten
+                             beri damga ayrıca dosyanın git'ten türetilen ana çalışma ağacının + kendi
+                             ağacının store'una da yazılır (`source_drift.tazelik_damgala`; o kökün marker'ı
+                             başka seansı gösteriyorsa YAZILMAZ) ⇒ worktree cwd'sinden env boşken koşulsa
+                             da ana projeden açılmış oturumun kapısı görür; araç yazdığı store'ları + kökü basar. Bu kipte YALNIZ `deploy-to-abap` görevinin `configuration.exclude`
                              önekleri (HARF DUYARLI — deploy aracı `RegExp(regex,"g")`) altındaki
                              YALNIZ-YEREL dosyalar `DEPLOY-DISI` etiketlenir (canlıya hiç gitmez;
                              rc'ye sayılmaz). rc 1/2'de ASLA damga yok. `--session` opsiyonel geçersiz kılma
@@ -377,19 +379,32 @@ def damga_engeli(satirlar: list, zip_taze: bool, sapma: list, rc: int) -> str | 
     return None
 
 
-def damga_yeri() -> str:
+def damga_yeri(webapp: Path | None = None) -> str:
     """Damganın HANGİ store'a, hangi köke göre yazıldığı (bug gate 2. tur: cwd'ye düşen kök
-    yanıltıcı \"damgalandı\" üretiyordu — kapı başka store'a bakar). Kök çözümü değişmez."""
+    yanıltıcı \"damgalandı\" üretiyordu — kapı başka store'a bakar).
+
+    #435 (2026-11-15): `tazelik_damgala` birincil store'a ek olarak dosyanın git'ten türetilen
+    ana çalışma ağacının + kendi ağacının store'una da yazar; satır o EK yazımların SONUCUNU
+    da basar. ⚠ koşulu eskiden "env boş VE kökte `project.yaml` yok"tu — `project.yaml` izlenen
+    dosya olduğu için worktree'de de VAR ⇒ uyarı tam worktree senaryosunda SUSUYORDU. Artık:
+    env boş VE ana ağaç git'ten TÜRETİLEMEDİ VE (kökte `project.yaml` yok YA DA kök bir
+    worktree — `.git` dosya)."""
     try:
         import source_drift as sd
         store = str(sd.FRESH_STORE)
+        ana = sd.git_agac_kokleri(Path(webapp) / "_")[0] if webapp is not None else None
+        ek = dict(getattr(sd, "EK_DAMGA_SONUCLARI", {}) or {})
     except Exception as e:   # noqa: BLE001
         return f"store=ÖLÇÜLEMEDİ ({type(e).__name__}) · anahtar kökü={REPO}"
     s = f"store={store} · anahtar kökü={REPO}"
-    # Uyarı YALNIZ kök şüpheliyse (3. tur): env boş ajan Bash'inde olağandır; proje kökünden koşulduğunda
-    # (kökte `project.yaml` var) tek satır bilgi yeter. Env boş VE kökte proje işareti yoksa ⚠.
-    if not os.environ.get("CLAUDE_PROJECT_DIR") and not (Path(REPO) / "project.yaml").is_file():
-        s += (f" · ⚠ CLAUDE_PROJECT_DIR BOŞ ve çalışma dizini ({Path.cwd()}) proje kökü DEĞİL (project.yaml yok) "
+    for ek_store, not_ in ek.items():
+        s += f" · ek store={ek_store} " + ("(yazıldı)" if not not_ else "YAZILMADI")
+    kok_wt = (Path(REPO) / ".git").is_file()
+    if (not os.environ.get("CLAUDE_PROJECT_DIR") and ana is None
+            and (kok_wt or not (Path(REPO) / "project.yaml").is_file())):
+        neden = ("bir git worktree'si ve ana çalışma ağacı git'ten türetilemedi" if kok_wt
+                 else "proje kökü DEĞİL (project.yaml yok)")
+        s += (f" · ⚠ CLAUDE_PROJECT_DIR BOŞ ve çalışma dizini ({Path.cwd()}) {neden} "
               "— kapı başka kökte koşuyorsa bu damgayı GÖRMEZ (proje kökünden koş ya da CLAUDE_PROJECT_DIR=<proje> ver)")
     return s
 
@@ -774,9 +789,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[OLCULEMEDI] PBE damgası: {hata}", file=sys.stderr)
             print("\n" + beyan("— (--offline: indirme YOK)"))
             return 2
-        durum["damga"] = f"OFFLINE — {len(yazilan)} dosya, canlıyla KARŞILAŞTIRILMADAN · {damga_yeri()}"
+        durum["damga"] = f"OFFLINE — {len(yazilan)} dosya, canlıyla KARŞILAŞTIRILMADAN · {damga_yeri(yerel_kok)}"
         print(f"[OFFLINE] {yerel_kok}: fetch YAPILMADI, {len(yazilan)} dosya seans-taze damgalandı "
-              f"({damga_yeri()}). "
+              f"({damga_yeri(yerel_kok)}). "
               "DİKKAT: canlıdaki belgelenmemiş değişikliği (başka makinenin deploy'u) ezme riskini kabul ettin "
               "(sap_sync_pull --offline ile aynı anlam).")
         print("\n" + beyan("— (--offline: indirme YOK)"))
@@ -943,9 +958,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"\n[OLCULEMEDI] PBE damgası: {hata}", file=sys.stderr)
                 rc = 2
             else:
-                durum["damga"] = f"YAZILDI — {len(yazilan)} dosya (canlıyla eşit ölçülenler) · {damga_yeri()}"
+                durum["damga"] = f"YAZILDI — {len(yazilan)} dosya (canlıyla eşit ölçülenler) · {damga_yeri(yerel_kok)}"
                 print(f"\n=== PBE DAMGASI: {len(yazilan)} dosya seans-taze damgalandı ({yerel_kok}) ===\n"
-                      f"  {damga_yeri()}")
+                      f"  {damga_yeri(yerel_kok)}")
 
     print("\n" + beyan(zip_kaynagi))
     return rc

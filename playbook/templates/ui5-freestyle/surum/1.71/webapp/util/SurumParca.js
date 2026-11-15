@@ -19,6 +19,9 @@ sap.ui.define([
   //                 "Ascending"; SortOrder enum'unda "None" YOK ⇒ "None" karşılaştırması her kolonu sıralı sayar)
   //  · dogrulayiciMetni : MultiInput validator'ına gelen metin HAMDIR (1.71.85 _validateCurrentText →
   //                 _tokenizer._addValidateToken({text: text}), kaçış yok) ⇒ olduğu gibi döner.
+  //  · filtreMenusuneEkle : 1.120 kardeşiyle AYNI gövde — kolon menüsünün ÖZEL _addFilterMenuItem metodu (public API YOK).
+  //                 1.71.85 sap/ui/table/ColumnMenu: _addFilterMenuItem :238 · _invalidate :141 (yalnız bayrak) · open() bayraklıysa
+  //                 destroyItems + _addMenuItems (:176-190) · Column._openMenu fireColumnMenuOpen({menu}) → oMenu.open (:731-740).
   // ============================================================================================
 
   var PASTE_SPLIT = /\r\n|\r|\n|\t/g;
@@ -64,6 +67,22 @@ sap.ui.define([
     // Validator'ın aldığı metni HAM biçime getirir (ortak gövde token'ı setter'la kurar, kaçış istemez).
     dogrulayiciMetni: function (sText) {
       return sText;
+    },
+
+    // Kolon menüsüne, yerleşik filtre kutusunun HEMEN ALTINA öğe ekler: menünün özel _addFilterMenuItem metodu BU menü örneğinde
+    // sarılır; fnOge(oMenu) menü her yeniden kurulduğunda kutudan sonra çağrılır (öğeyi kurmak çağıranın işi). Sarma bir kez yapılır,
+    // ardından _invalidate ile ilk açılışta yeniden kurulum zorlanır. Dönen: false = metot yok (öğe KURULAMAZ; çağıran loglar).
+    filtreMenusuneEkle: function (oMenu, fnOge) {
+      if (oMenu.__kfpSarildi) { return true; }
+      var fnOrj = oMenu._addFilterMenuItem;
+      if (typeof fnOrj !== "function") { return false; }
+      oMenu._addFilterMenuItem = function () {
+        fnOrj.apply(this, arguments);
+        fnOge(this);
+      };
+      oMenu.__kfpSarildi = true;
+      if (typeof oMenu._invalidate === "function") { oMenu._invalidate(); }
+      return true;
     },
 
     yapistirmaBagla: function (oMI, fnSatir, fnBitti) {

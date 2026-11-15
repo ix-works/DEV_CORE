@@ -28,6 +28,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from utils.ad_politikasi import url_segmenti as _adt_seg, ad_namespace as _ad_namespace  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
+from utils.ad_politikasi import yerel_ad as _yerel_ad  # noqa: E402 — G1 (2026-11-15): yerel dosya adi YAZMA yonu tek kaynak (/NS/X -> #ns#x)
 from sap_adt_lib import (
     SAPADTClient,
     SAPTransportError,
@@ -388,7 +389,8 @@ class SAPClient:
             target_dir = package_base / subdir
             target_dir.mkdir(parents=True, exist_ok=True)
 
-            file_path = target_dir / f"{object_name}.abap"
+            # G1 (2026-11-15): `/NS/X` Path birlesiminde surucu kokune kacardi (`C:/NS/X.abap`).
+            file_path = target_dir / f"{_yerel_ad(object_name)}.abap"
             with open(file_path, 'w', encoding='utf-8', newline='\n') as f:
                 f.write(cleaned_source)
             if self.debug_enabled:
@@ -1084,7 +1086,7 @@ class SAPClient:
         else:
             subdir = get_local_subdir(object_type)
             package_base = self.local_base.parent
-            local_file = package_base / subdir / f"{object_name}.abap"
+            local_file = package_base / subdir / f"{_yerel_ad(object_name)}.abap"   # G1: download_object ile ayni ad
 
         if not local_file.exists():
             print(f"\n[ERROR] Local file not found: {local_file}")
@@ -1751,7 +1753,9 @@ class SAPClient:
             from object_types import get_local_subdir
             subdir = get_local_subdir(object_type)
             package_base = self.local_base.parent
-            local_file = package_base / subdir / f"{object_name}.abap"
+            # G1 (2026-11-15): eski `f"{object_name}.abap"` namespace'li adda SURUCU KOKUNDEKI
+            # ayni adli dosyayi `unlink` ederdi (`C:/NS/X.abap`). Ad download_object ile ayni yerden.
+            local_file = package_base / subdir / f"{_yerel_ad(object_name)}.abap"
 
             if self.debug_enabled:
                 self._debug(f"[DEBUG] delete_object - checking for local file: {local_file}")
@@ -2026,6 +2030,10 @@ class SAPClient:
                 f'{package_name[0]}_*',  # Single letter prefix: Z_*
                 f'{package_name[:2]}*',  # Two letter prefix: ZA* (if applicable)
             ]
+            # #11 (2026-11-15): namespace'li pakette ilk harf jokerleri `/_*` · `/N*` olur ve BASKA
+            # namespace'leri toplar ⇒ yalniz `<ns><ad>*` (namespace sinirinda kalan tek desen).
+            if _ad_namespace(str(package_name).upper()):
+                search_patterns = [f'{package_name}*']
 
             # Remove duplicates while preserving order
             seen = set()

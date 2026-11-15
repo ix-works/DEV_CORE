@@ -610,7 +610,8 @@ $metadata 200 / 46 KB, 2026-05-19.
 **Modül-agnostik düzeltme (2026-05-19, izolasyon denetimi):** 3 RAP-script
 ZSD-prefix varsayımından arındı → başka modül (ZMM/ZFI/ZEWM…) için de
 doğru: (a) `create_rap_service.py` `--package` override; (b) `populate_
-cds_views.py` `RAP_VE_NAME_PATTERN` `^Z[A-Z]{2,4}\d{3}_(I|C|R|E)_` (klasik
+cds_views.py` RAP entity ad kuralı `^Z[A-Z]{2,4}\d{3}_(I|C|R|E)_` — 2026-11-15'ten beri
+önek Z · Y · bildirilmiş `/<NS>/` + aynı gövde, `rap_ve_adi_gecerli` (klasik
 ZSD001 sqlView whitelist bilinçli olarak ZSD001-katı kaldı — Sprint-3
 legacy guard, yeni iş RAP); (c) `check_rap_readonly_consumption.py`
 regex `Z[A-Z]{2,4}\d{3}` (eskiden ZMM/ZFI'yi sessiz atlardı = false-

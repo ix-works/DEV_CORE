@@ -1,6 +1,6 @@
 ---
 name: feedback_standing-ajani-bos-bekletme-tek-tam-brif
-description: "Bir ajan koşusunun takvim süresinin %40-60'ı liderden mesaj BEKLEMEKTİR (ölçüldü 2026-08-29, 30 gün): gateway 36 dk, frontend 31, backend 21 dk/koşu. Ajan yavaş değil, lider parça parça besliyor. Kural: scoped spawn + kapat; standing zorunluysa (gateway) işi TEK TAM paketle ver"
+description: "Final rapordan sonra SendMessage ile yeni tur verme — taze spawn (core P7). Bir ajan koşusunun takvim süresinin %40-60'ı liderden mesaj BEKLEMEKTİR (ölçüldü 2026-08-29, 30 gün): gateway 36 dk, frontend 31, backend 21 dk/koşu. Ajan yavaş değil, lider parça parça besliyor. Kural: scoped spawn + kapat; standing zorunluysa (gateway) işi TEK TAM paketle ver"
 metadata: 
   node_type: memory
   type: feedback
@@ -35,3 +35,6 @@ takvim değil, canlı context de tutar (cache süresi dolunca yeniden ısınma m
 - Bir ajana SendMessage ile ikinci parça gönderiyorsan dur: bu, ölçülen bekleme desenidir.
 - Aynı tur: [[feedback_ajan-model-secimi-olculdu-ayri-politika-yazilmadi]] (model değil),
   [[feedback_subagent-karar-kurali]] (kaç ajan), [[feedback_lider-bloke-olmama-background-dispatch]].
+
+**Tekrar (2026-11-08, bir UI build'i):** lider frontend ajanına her FİNAL raporundan sonra SendMessage ile yeni bir düzeltme turu gönderdi. Ajan ~3,8 saat ve ~480 araç çağrısı boyunca aynı bağlamla koştu ve son turunda bir yarış açığını kaçırdı (token yanlış anda alınmıştı). Kullanıcı sordu: *"aynı context ile mi çalışıyor … yavaşlatmaz mı"*. Kanonik kural zaten yazılıydı: `governance/agent-teams-operating-model.md` §2 **P7 boşta-bekletme kuralı**. Buna göre final rapordan sonraki iş YENİ ve taze bir spawn'dır; bağlam brif ve rapor dosyalarıyla taşınır (§3B). **Tetik anı:** bir ajana `SendMessage` ile *yeni iş* yazmadan önce bak; ajan final rapor verdiyse DUR ve taze spawn et. Tek istisna aynı turdaki kısa bir soru ya da netleştirmedir.
+Son-doğrulama: 2026-11-08

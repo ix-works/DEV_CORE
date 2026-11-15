@@ -200,6 +200,26 @@ ORNEK_Z = frozenset({
 # eklemek kapıyı sessizce gevşetir (yayın cache'lenir, geri alınamaz).
 Z_OBJ_PAT = re.compile(r"(?<![A-Za-z0-9])(Z[A-Z]{2,4}\d{3})(?!\d)", re.IGNORECASE)
 
+# D8 (2026-11-15, namespace tesisatı #9) — ⚠SIKILAŞTIRMA: aynı SINIF (müşteri obje adı) Z'ye
+# kilitliydi. Müşteri ad alanı Z ile sınırlı DEĞİLDİR (ADR 0005-A + A-EK): Y önekli ve müşteriye
+# kayıtlı `/<NS>/` namespace'li adlar da müşteri nesnesidir ⇒ `Y<MOD><NNN>` ve `/<NS>/<MOD><NNN>`
+# arka kapıdan görünmeden geçiyordu (ölçüldü: Z karşılığı yakalanırken Y ve namespace'li biçim
+# YAKALANMIYORDU). `Z_OBJ_PAT` AYNEN durur (Z davranışı bayt bayt aynı); iki kardeş desen eklenir.
+#  · Namespace'in kendisi yakalamaya GİRMEZ, çekirdek hangi namespace'in müşteriye ait olduğunu
+#    bilmez (`/SCWM/` SAP'nindir) ⇒ yalnız Z kalıbının GÖVDESİ (`<MOD><NNN>`) aranır; gövde Z/Y
+#    ile başlıyorsa o hâl zaten `Z_OBJ_PAT`'a/Y desenine düşer (ADT URL'i `/programs/zsd000` ikinci
+#    kez sayılmaz).
+#  · Allowlist AYNI küme (`ORNEK_Z`): ad Z biçimine indirgenip bakılır (`Y…` → `Z…`, `/<NS>/G` →
+#    `ZG`) — örnek gövde (`SD001`) her önekte örnektir; yeni allowlist kümesi AÇILMAZ.
+#  · FP ölçümü (2026-11-15, `git ls-files` tüm çekirdek, bu desenlerle): Y → 2 ad / 16 isabet
+#    (örnek gövde + `ORNEK_DIGER`'deki tek metin parçası) · namespace → 5 ad / 61 isabet; Z biçimine
+#    indirgeme + gövde-Z/Y dışlamasıyla kalan FP 0.
+Y_OBJ_PAT = re.compile(r"(?<![A-Za-z0-9])(Y[A-Z]{2,4}\d{3})(?!\d)", re.IGNORECASE)
+NS_OBJ_PAT = re.compile(r"(?<![A-Za-z0-9_])(/[A-Za-z0-9_]{3,8}/)((?![ZYzy])[A-Za-z]{2,4}\d{3})(?!\d)")
+# Z biçimine indirgenemeyen, ölçülmüş tek metin parçası (obje adı DEĞİL): Türkçe "yok" + HTTP 404
+# (sahte-uç fixture'ında durum kodu yer tutucusu). Buraya ad eklemek = GEREKÇELİ PR (ORNEK_Z kuralı).
+ORNEK_DIGER = frozenset({"YOK404"})
+
 # D4: SAP kullanıcı adı (gerçek kişi).
 # ⚠ Yalnız 'X' ya da yalnız 'N' harflerinden oluşan diziler dokümantasyon PLACEHOLDER'ıdır
 # (gerçek kullanıcı değil) → muaf. 2026-07-10: kendi README şablonumuz bu yanlış-pozitife
@@ -277,9 +297,15 @@ KIMLIK_BAGLAMI_PAT = re.compile(
 
 
 def z_obje_sizintilari(metin: str) -> list[str]:
-    """Örnek-allowlist'te olmayan Z-obje adları."""
-    return [m.group(1) for m in Z_OBJ_PAT.finditer(metin)
-            if m.group(1).upper() not in ORNEK_Z]
+    """Örnek-allowlist'te olmayan müşteri obje adları: Z (değişmedi) + Y + `/<NS>/` (D8)."""
+    bulunan = [m.group(1) for m in Z_OBJ_PAT.finditer(metin)
+               if m.group(1).upper() not in ORNEK_Z]
+    bulunan += [m.group(1) for m in Y_OBJ_PAT.finditer(metin)
+                if m.group(1).upper() not in ORNEK_DIGER
+                and "Z" + m.group(1).upper()[1:] not in ORNEK_Z]
+    bulunan += [m.group(1) + m.group(2) for m in NS_OBJ_PAT.finditer(metin)
+                if "Z" + m.group(2).upper() not in ORNEK_Z]
+    return bulunan
 
 
 def sap_user_sizintilari(metin: str) -> list[str]:

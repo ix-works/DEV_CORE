@@ -95,7 +95,8 @@ def main():
                 folder_name = DDIC_TYPES.get(args.type, args.type)
                 target_dir = Path(client.local_base).parent / folder_name
                 target_dir.mkdir(parents=True, exist_ok=True)
-                file_path = target_dir / f"{args.name.upper()}.xml"
+                from utils.ad_politikasi import yerel_ad  # G1 (2026-11-15): /NS/X -> #ns#x, surucu kokune kacmaz
+                file_path = target_dir / f"{yerel_ad(args.name.upper())}.xml"
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(xml_content)
                 print(f"[OK] Saved to: {file_path}")
