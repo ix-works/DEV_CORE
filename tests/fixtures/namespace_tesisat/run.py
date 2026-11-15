@@ -43,8 +43,13 @@ KULLANIM
   python tests/fixtures/namespace_tesisat/run.py --mutasyon-<kip>
   Mutasyon exit: 1 = ilan edilen küme TAM düştü · 2 = sapma · 3 = çapa ≠ 1 / derlenmedi / sayı yok.
 
-GÜVENLİK: SAP'ye istek YOK (sahte istemciler). Yol ölçümü sandbox altında; taban (kusurlu) kod kök dışı
-  yola yalnız SAHTE `open`/`Path` üzerinden "yazar" — gerçek sürücü köküne dosya açılmaz/silinmez.
+GÜVENLİK: SAP'ye istek YOK (sahte istemciler). Yol ölçümü sandbox altında. İKİ katman:
+  (1) taban (kusurlu) kod kök dışı yola SAHTE `open`/`IzPath` üzerinden "yazar" (kaçış kaydedilir);
+  (2) SÜREÇ GENELİ YAZMA KALKANI (`_kalkan_kur`, import anında; mutasyon alt sürecinde de) — geçici
+  dizin kökü dışına her yazma/silme PermissionError + `KACAK` kaydı. (2) olmadan MUTANT kopyalar kusuru
+  gerçekten işletti: ilk koşumda sürücü köküne `NSPC/…` ve `AB/X_CLC/` açıldı (2026-11-15, elle silindi).
+  Z0 kalkanı her koşumda sınar; koşum sonu `[KALKAN] … denemesi: N` satırı, mutasyon satırı `kalkan=N`.
+  Her koşum kendi `mkdtemp` kumundan başlar; kök durumuna bağlı hüküm yok (B2 red NEDENİNİ ölçer).
   Namespace yapılandırması `ad_politikasi.musteri_namespaceleri` yamalanarak verilir (yapılandırma
   okuma yolu `q393_namespace_ad_politikasi`'nın konusudur).
 """
@@ -76,6 +81,74 @@ if not (REPO / "scripts").is_dir():
 TABAN_SHA = "4323bba"
 _GIT_KOK = Path(os.environ.get("NST_GIT_KOK") or REPO)
 _KUM = Path(tempfile.mkdtemp(prefix="nst_")).resolve()
+
+# ── YAZMA KALKANI (2026-11-15) ─────────────────────────────────────────────────────────────
+# Bu fixture'ın konusu "yol sürücü köküne kaçar" kusurudur; MUTANT kopyalar o kusuru GERÇEKTEN
+# işletir (ölçüldü: ilk koşumda `C:/NSPC/CL_X.abap`, `C:/NSPC/SD001_CLC/`, `C:/AB/X_CLC/`
+# açıldı — taban korumaları `IzPath` + sahte `open` yalnız TABAN modüle takılıydı). Kalkan süreç
+# genelidir: geçici dizin kökü DIŞINA her yazma/silme PermissionError + `KACAK` kaydı. Okuma serbest.
+# Mutasyon alt süreci aynı run.py'yi koştuğu için kalkan orada da kuruludur.
+_IZINLI_KOK = Path(tempfile.gettempdir()).resolve()
+KACAK: list = []
+
+
+def _izinli(p) -> bool:
+    try:
+        Path(os.fspath(p)).resolve().relative_to(_IZINLI_KOK)
+        return True
+    except Exception:
+        return False
+
+
+def _kalkan(islem, p):
+    if isinstance(p, int) or _izinli(p):
+        return
+    KACAK.append((islem, str(p)))
+    raise PermissionError(f"[fixture-kalkani] gecici kok disina {islem}: {p}")
+
+
+def _kalkan_kur():
+    import builtins
+    import io as _io
+    import pathlib as _pl
+    _ac = builtins.open
+
+    def _open(file, mode="r", *a, **k):
+        if any(c in mode for c in "wax+"):
+            _kalkan("open:" + mode, file)
+        return _ac(file, mode, *a, **k)
+    builtins.open = _open
+    _io.open = _open
+    for ad in ("mkdir", "touch", "unlink", "rmdir", "write_text", "write_bytes", "rename", "replace"):
+        asil = getattr(_pl.Path, ad)
+
+        def sar(self, *a, _asil=asil, _ad=ad, **k):
+            _kalkan(_ad, self)
+            return _asil(self, *a, **k)
+        setattr(_pl.Path, ad, sar)
+    asil_open = _pl.Path.open
+
+    def p_open(self, mode="r", *a, **k):
+        if any(c in mode for c in "wax+"):
+            _kalkan("Path.open:" + mode, self)
+        return asil_open(self, mode, *a, **k)
+    _pl.Path.open = p_open
+    for ad in ("makedirs", "mkdir", "remove", "unlink", "rmdir", "rename", "replace"):
+        asil = getattr(os, ad)
+
+        def sar_os(yol, *a, _asil=asil, _ad=ad, **k):
+            _kalkan("os." + _ad, yol)
+            return _asil(yol, *a, **k)
+        setattr(os, ad, sar_os)
+    asil_rmtree = shutil.rmtree
+
+    def rmtree(yol, *a, **k):
+        _kalkan("rmtree", yol)
+        return asil_rmtree(yol, *a, **k)
+    shutil.rmtree = rmtree
+
+
+_kalkan_kur()
 _PROJE = _KUM / "proje"
 _PROJE.mkdir()
 (_PROJE / "project.yaml").write_text("sap_profile: s4_private\n", encoding="utf-8")
@@ -192,10 +265,12 @@ def sap_client_ornegi(SCm, alt="scr"):
 def bolum_g1(SCm, TSC, A):
     KAYIT.clear()
     c = sap_client_ornegi(SCm, "d1")
+    k0 = len(KACAK)
     with sessiz():
-        c.download_object("/NSPC/CL_X", "class")
+        with contextlib.suppress(PermissionError):    # kalkan: kök dışı yazma = vektör FAIL, bölüm çökmez
+            c.download_object("/NSPC/CL_X", "class")
     hedef = _KUM / "d1" / "classes" / "#nspc#cl_x.abap"
-    disari = [k for k in KAYIT if not _ic(k[1])]
+    disari = [k for k in KAYIT if not _ic(k[1])] + KACAK[k0:]
     ekle("D1", hedef.is_file() and not disari, f"dosya={hedef.is_file()} disari={disari}")
 
     yazilan = []
@@ -224,19 +299,26 @@ def bolum_g1(SCm, TSC, A):
     finally:
         del TSC.open
 
+    k0 = len(KACAK)
+    r = {}
     with sessiz():
-        r = sap_client_ornegi(SCm, "d2").push_object("/NSPC/CL_X", "class")
+        with contextlib.suppress(PermissionError):
+            r = sap_client_ornegi(SCm, "d2").push_object("/NSPC/CL_X", "class")
     sp = str(r.get("source_path", ""))
-    ekle("D2", sp.replace("\\", "/").endswith("d2/classes/#nspc#cl_x.abap") and _ic(sp), sp)
+    ekle("D2", sp.replace("\\", "/").endswith("d2/classes/#nspc#cl_x.abap") and _ic(sp)
+         and len(KACAK) == k0, f"{sp} kacak={KACAK[k0:]}")
 
     KAYIT.clear()
     d3 = _KUM / "d3" / "classes"
     d3.mkdir(parents=True)
     (d3 / "#nspc#cl_x.abap").write_text("x", encoding="utf-8")
     c3 = sap_client_ornegi(SCm, "d3")
+    k0 = len(KACAK)
+    ok = False
     with sessiz():
-        ok = c3.delete_object("/NSPC/CL_X", "class", transport="<TR>", confirm=False)
-    disari = [k for k in KAYIT if not _ic(k[1])]
+        with contextlib.suppress(PermissionError):
+            ok = c3.delete_object("/NSPC/CL_X", "class", transport="<TR>", confirm=False)
+    disari = [k for k in KAYIT if not _ic(k[1])] + KACAK[k0:]
     ekle("D3", ok and not (d3 / "#nspc#cl_x.abap").exists() and not disari, f"ok={ok} disari={disari}")
 
     hepsi = True
@@ -256,9 +338,15 @@ def bootstrap(BP, ad):
     eski = sys.argv
     sys.argv = ["bootstrap_package.py", ad, "--title", "T", "--module", "SD",
                 "--source-root", str(kok / "SRC"), "--templates-root", str(tm)]
+    k0 = len(KACAK)
     try:
         with sessiz() as (o, e):
-            rc = BP.main()
+            try:
+                rc = BP.main()
+            except PermissionError:
+                rc = "KALKAN"
+        if len(KACAK) > k0:      # kök dışına yazma denendi ⇒ hiçbir rc beklentisi tutmaz
+            rc = "KALKAN"
     finally:
         sys.argv = eski
     return rc, kok / "SRC" / "SD", e.getvalue()
@@ -275,7 +363,8 @@ def bolum_b(BP, A):
     rc, sd, err = bootstrap(BP, "zsd001_clc")
     ekle("B1z-kucuk", "UYARI" in err, err[:120])
     rc, sd, err = bootstrap(BP, "/AB/X_CLC")
-    ekle("B2", rc == 1 and "HATA" in err and not sd.exists(), f"rc={rc} err={err[:160]}")
+    # red NEDENİ de ölçülür: "klasör adına çevrilemedi" — kök durumuna bağlı "zaten var" reddi sayılmaz
+    ekle("B2", rc == 1 and "klasör adına çevrilemedi" in err and not sd.exists(), f"rc={rc} err={err[:160]}")
     rc, sd, err = bootstrap(BP, "YSD001_CLC")
     ekle("B3", rc == 0 and "UYARI" not in err, err[:120])
 
@@ -311,8 +400,13 @@ def bolum_g2(GF, TGF, PS, TPS):
     nsl = next((l for l in doc.splitlines() if l.startswith("- **Namespace")), "")
     ekle("P1", "/nspc/tab_cust" in nsl and "ytab_cust" not in std and "vbak" in std
          and "# TASLAK FS/TS — /nspc/sd001_r_x" in doc, doc[:300])
-    zsrc = "REPORT zprog.\nSELECT * FROM vbak INTO @z.\nSELECT * FROM zt_kendi INTO @w.\nTABLES: mara.\n"
-    ekle("P1z", PS.render(PS.extract(zsrc), ["x"]) == TPS.render(TPS.extract(zsrc), ["x"]))
+    # KONTROL: Z/standart çıktı tabanla aynı (yalnız kova başlığı "Z tablolar" → "Z/Y tablolar") +
+    # Türkçe sözcük KESİLMEZ (`satır` → `sat` değil; ASCII aday + harf sınırı — bağımsız kapı bulgusu)
+    zsrc = ("REPORT zprog.\nSELECT * FROM vbak INTO @z.\nSELECT * FROM zt_kendi INTO @w.\nTABLES: mara.\n"
+            "\" iki satır from satır gelir\n")
+    yeni = PS.render(PS.extract(zsrc), ["x"]).replace("- **Z/Y tablolar:**", "- **Z tablolar:**")
+    ekle("P1z", yeni == TPS.render(TPS.extract(zsrc), ["x"])
+         and PS.extract(zsrc)["select_from"] == TPS.extract(zsrc)["select_from"], PS.extract(zsrc)["select_from"])
     tdoc = TPS.render(TPS.extract(src), ["x.abap"])
     tstd = next((l for l in tdoc.splitlines() if l.startswith("- **Standart")), "")
     ekle("K3", "/nspc/tab_cust" not in tdoc and "ytab_cust" in tstd, tdoc[:200])
@@ -392,6 +486,10 @@ def bolum_g3(A, CU, TCU, CR):
     gzt, _ = servis_bul(TCU, a_z)
     ekle("O3z", gz[:1] == gzt[:1] == ["ZSD001_SRV"] and CU.model_haritasi(str(a_z)) == TCU.model_haritasi(str(a_z)),
          (gz, gzt))
+    # SAP'nin kendi namespace'li servisi (bildirilmemiş) ana servis SEÇİLMEZ → eski davranış (exit 2)
+    a_s = uygulama("/sap/opu/odata/iwfnd/CATALOGSERVICE/", "o3s")
+    gs, outs = servis_bul(CU, a_s)
+    ekle("O3s", gs == [] and "servis adi cozulemedi" in outs, f"{gs} {outs[-160:]}")
 
     class Istemci:
         url = "https://h"
@@ -456,8 +554,12 @@ def bolum_g5(PC, TPC):
     ekle("C4", [PC._derive_prefixes(p) for p in paketler] == [TPC._derive_prefixes(p) for p in paketler],
          [PC._derive_prefixes(p) for p in paketler])
     ze = [_cds(d, "zmod001_i_x.cds", "ZMOD001_I_X"), _cds(d, "zmod001_x_bad.cds", "ZMOD001_X_BAD")]
-    ekle("C4b", PC.validate_sql_view_names(ze, package="ZMOD001_CLC")
-         == TPC.validate_sql_view_names(ze, package="ZMOD001_CLC"))
+    # Z HÜKMÜ tabanla aynı (hangi dosya, hangi kural); biçim metni önek-genel hâle getirildi (F4)
+    def _hukum(es):
+        return [m.split(" YASAK")[0] for m in es]
+    yz, tz = (PC.validate_sql_view_names(ze, package="ZMOD001_CLC"),
+              TPC.validate_sql_view_names(ze, package="ZMOD001_CLC"))
+    ekle("C4b", len(yz) == 1 and _hukum(yz) == _hukum(tz), (yz, tz))
     k6 = TPC.validate_sql_view_names([d / "#nspc#sd001_i_x.cds"], package="/NSPC/SD001_CLC")
     ekle("K6", len(k6) == 1 and "B-5" in k6[0], k6)
 
@@ -648,8 +750,17 @@ def main() -> int:
             import traceback
             ekle(f"[BOLUM-COKTU]-{fn.__name__}", False,
                  f"{type(exc).__name__}: {exc} {traceback.format_exc()[-300:]}")
+    sonda = Path(_KUM.anchor) / "nst_kalkan_sondasi_yok" / "x.txt"
+    try:
+        sonda.write_text("x", encoding="utf-8")
+        z0 = False
+    except PermissionError:
+        z0 = not sonda.exists()
+    ekle("Z0", z0 and ("write_text", str(sonda)) in KACAK, f"kacak={KACAK[-3:]}")
     for ad, ok, d in S:
         print(f"  [{'PASS' if ok else 'FAIL'}] {ad}" + ("" if ok else f"\n         -> {d}"))
+    print(f"[KALKAN] gecici kok disina yazma/silme denemesi: {len(KACAK) - 1} (Z0 sondasi haric)"
+          + "".join(f"\n         {i}: {y}" for i, y in KACAK if "nst_kalkan_sondasi_yok" not in y)[:900])
     n = sum(1 for _, ok, _ in S if ok)
     print(f"\n{n}/{len(S)} OK")
     os.chdir(BURASI)
@@ -676,8 +787,8 @@ MUTASYONLAR = {
                             "f\"{obj['name'].upper()}.xml\"", {"D4"}),
     "--mutasyon-bootstrap-yol": ("scripts/bootstrap_package.py", "    pkg_dir = module_dir / pkg_klasor",
                                  "    pkg_dir = module_dir / pkg_full", {"B1"}),
-    "--mutasyon-yerel-ad-ayirac": (_AP, '    if "/" in a or "' + BS + BS + '" in a:\n        return dosya_adi(a)\n',
-                                   "    if False:\n        return dosya_adi(a)\n", {"A1", "A2", "D1", "D2", "D3", "B1", "B2"}),
+    "--mutasyon-yerel-ad-ayirac": (_AP, '    if any(ayirac in a for ayirac in ("/", "' + BS + BS + '")):\n        return dosya_adi(a)\n',
+                                   "    if False:\n        return dosya_adi(a)\n", {"A1", "A2", "D1", "D2", "D3", "B1", "B2", "F3"}),   # F3: arayüz dosya yolu da yerel_ad ile
     "--mutasyon-gft-ad": ("scripts/gen_field_table.py", "                  + AD_ADAYI + r\")\", text)\n",
                           "                  + r\"" + BS + "w+\" + r\")\", text)\n", {"F1"}),
     # projeksiyon adı ayrı regex'tir (define satırı mutasyonu onu etkilemez) ⇒ kendi vektörü
@@ -692,6 +803,8 @@ MUTASYONLAR = {
                               '    z_tables = [t for t in tables if t.upper()[:1] in ("Z", "Y")]\n'
                               '    std_tables += [t for t in tables if t.upper()[:1] == "Y"]\n', {"P1"}),
     "--mutasyon-pts-ns-kova": ("scripts/program_to_spec.py", "    if ns_tables:\n", "    if False:\n", {"P1"}),
+    "--mutasyon-pts-harf-siniri": ("scripts/program_to_spec.py", '_ADAY = r"(?:" + AD_ADAYI + r"(?!' + BS + 'w)|' + BS + 'w+)"',
+                                  '_ADAY = AD_ADAYI', {"P1z"}),
     "--mutasyon-odata-sap-sabit": (_AP, '        return f"{ODATA_KOK}/{ns[1:-1].lower()}/{s[len(ns):]}"\n',
                                    '        return f"{ODATA_KOK}/sap/{s}"\n', {"O1", "O2", "O4"}),
     "--mutasyon-odata-uri-ns": (_AP, "    return ns + ad if _NS_BICIM.match(ns) else None\n", "    return None\n",
@@ -700,6 +813,9 @@ MUTASYONLAR = {
     "--mutasyon-harita-ns": ("scripts/check_ui_odata_refs.py",
                              '                if ns_servis and ns_servis.startswith("/"):\n',
                              "                if False:\n", {"O3"}),
+    "--mutasyon-anaservis-musteri": ("scripts/check_ui_odata_refs.py",
+                                     '                if aday and aday.startswith("/") and musteri_govdesi(aday) is not None:\n',
+                                     "                if aday:\n", {"O3s"}),
     "--mutasyon-anaservis-ns": ("scripts/check_ui_odata_refs.py",
                                 "        if not service:   # G3:", "        if False:   # G3:", {"O3"}),
     "--mutasyon-urlad-quote": (_AP, "    return url_parcasindan_ad(ad) if ad else \"\"\n",
@@ -708,11 +824,12 @@ MUTASYONLAR = {
                                "    og = musteri_govdesi(str(package).strip().upper())\n"
                                "    og = og if og and og[0] == 'Z' else None\n", {"C1", "C2", "C5"}),
     "--mutasyon-rap-ad-z": (_PCV, "            elif not rap_ve_adi_gecerli(vem.group(1)):\n",
-                            "            elif not RAP_VE_NAME_PATTERN.match(vem.group(1).upper()):\n", {"C1", "C2", "C5"}),
+                            "            elif not re.match(r'^Z[A-Z]{2,4}" + BS + "d{3}_(?:I|C|R|E)_[A-Z0-9_]+$', "
+                            "vem.group(1).upper()):\n", {"C1", "C2", "C5"}),
     "--mutasyon-stem-upper": (_PCV, "        name = dosya_adindan_ad(f.stem)   # G1",
                               "        name = f.stem.upper()   # G1", {"C5"}),
     "--mutasyon-govde-kayit": (_AP, "    return (ns, a[len(ns):]) if ns in kayitli else None\n",
-                               "    return (ns, a[len(ns):])\n", {"A3", "C3"}),
+                               "    return (ns, a[len(ns):])\n", {"A3", "C3", "O3s"}),   # O3s: SAP ns'i müşteri sanılır
     "--mutasyon-ref-musteri": (_LIB, "            if referans and name == name.upper() and _ap.ad_gecerli_mi(name):\n",
                                "            if False:\n", {"R1"}),
     "--mutasyon-ref-gramer": (_LIB, "            if referans and name == name.upper() and _ap.ad_gecerli_mi(name):\n",
@@ -761,7 +878,9 @@ def _mutasyon(kip) -> int:
             print(f"[ALT-SUREC SAYI VERMEDI] {kip} rc={r.returncode} son={son[0][:160]}")
             return 3
         dusen = {x.split()[1] for x in r.stdout.splitlines() if x.strip().startswith("[FAIL]")}
-        print(f"{kip}: {m.group(0)} · dusen={sorted(dusen)} · ilan={sorted(beklenen)}")
+        kk = re.search(r"^\[KALKAN\] .*?: (\d+)", r.stdout, re.M)
+        print(f"{kip}: {m.group(0)} · dusen={sorted(dusen)} · ilan={sorted(beklenen)}"
+              f" · kalkan={kk.group(1) if kk else '?'}")
         if dusen == beklenen:
             print("MUTASYON DUSTU (ilan edilen kume TAM)")
             return 1

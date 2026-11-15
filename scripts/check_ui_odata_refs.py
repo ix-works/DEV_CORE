@@ -79,7 +79,7 @@ except Exception: pass
 # DEGIL, `scripts/` import koku araniyor). Ortak kapsam sozlesmesi orada yasar.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils.kapsam import kapsam_eki  # noqa: E402
-from utils.ad_politikasi import odata_servis_yolu, odata_uri_servisi  # noqa: E402 — G3 (2026-11-15): /<NS>/ servis koku
+from utils.ad_politikasi import musteri_govdesi, odata_servis_yolu, odata_uri_servisi  # noqa: E402 — G3 (2026-11-15): /<NS>/ servis koku
 
 JS_KEYS = {"method", "headers", "success", "error", "urlParameters", "filters", "sorters"}
 
@@ -495,9 +495,12 @@ def main():
         m = re.search(r'"uri":\s*"/sap/opu/odata/sap/([^/"]+)/?"', mani, re.I)
         service = m.group(1) if m else None
         if not service:   # G3: sap/ yolu yoksa namespace'li servis koku (`/sap/opu/odata/<ns>/<AD>/`)
+            # YALNIZ müşteri namespace'i (projede bildirilmiş): manifestteki ilk namespace'li URI SAP'nin
+            # kendi servisi (`/IWFND/…`) olabilir — o ana servis SEÇİLMEZ, eski davranış (exit 2) kalır.
             for mu in re.finditer(r'"uri":\s*"(/sap/opu/odata/[^"]+)"', mani, re.I):
-                service = odata_uri_servisi(mu.group(1))
-                if service:
+                aday = odata_uri_servisi(mu.group(1))
+                if aday and aday.startswith("/") and musteri_govdesi(aday) is not None:
+                    service = aday
                     break
     if not service:
         print("[FAIL] servis adi cozulemedi (--service ver)"); sys.exit(2)

@@ -939,7 +939,7 @@ OZEL_TESTLER = [
      "yerel dosya yolu yazma yonu yerel_ad (#ns#x, surucu kokune kacis/silme yok; Z/Y dosya adi tabanla ayni) · "
      "bootstrap #ns# klasoru · gen_field_table/program_to_spec AD_ADAYI · OData /sap/opu/odata/<ns>/ koku · "
      "URL->ad %2f cozumu · paket/RAP ad kalibi Z/Y/bildirilmis NS (Z ayni) · ref_structure yalniz bicim · "
-     "table_contents/paket aramasi/kilit uyarisi · sizinti kapisi Y + /<NS>/ govde (FP 0); taban 4323bba; 25 mutasyon"),
+     "table_contents/paket aramasi/kilit uyarisi · sizinti kapisi Y + /<NS>/ govde (FP 0); surec geneli yazma kalkani (Z0); taban 4323bba; 30 mutasyon"),
 ]
 
 

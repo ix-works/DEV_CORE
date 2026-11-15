@@ -371,7 +371,8 @@ def yerel_ad(ad) -> str:
     'C:\\NS\\CL_X.abap'`, silme dalı sürücü kökündeki aynı adlı dosyayı `unlink` ederdi.
     `/` ile başlayıp namespace biçimine uymayan ad ya da gövdede yol ayıracı ⇒ ValueError."""
     a = str(ad or "").strip()
-    if "/" in a or "\\" in a:
+    # yazım `dosya_adi`'ndaki denetimden bilerek farklı (kardeş fixture q403 o satırı tek çapa olarak keser)
+    if any(ayirac in a for ayirac in ("/", "\\")):
         return dosya_adi(a)
     return a
 

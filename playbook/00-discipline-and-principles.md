@@ -57,7 +57,8 @@ Bu klasör **ADT REST endpoint'lerinin nasıl çağrılacağını gösteren çal
 Her pakette **tek geçerli format** vardır. Whitelist'te olmayan her şey YASAK. Negatif ifade ("X olmasın") yetmez — pozitif ifade ("**Y OLMALI**") kullan.
 
 ⚠ **Format paket-türevlidir, modüle SABİTLENMİŞ DEĞİL.** `populate_cds_views.py::_derive_prefixes()`
-hedef paket adından (`--package`) türetir: `Z<MOD 2-4 harf><3 hane>` kökü → `<kök>_V_` + `<kök küçük>_ddl_`.
+hedef paket adından (`--package`) türetir: `<önek><MOD 2-4 harf><3 hane>` kökü (önek Z · Y · projede bildirilmiş
+`/<NS>/`) → `<kök>_V_` + `<kök küçük>_ddl_`.
 Örn. `ZSD001_CLC` → `ZSD001_V_`/`zsd001_ddl_`; `ZMOD001_CLC` → `ZMOD001_V_`/`zmod001_ddl_`.
 Paket adı kalıba uymazsa `project.yaml`'daki `sql_view_prefix`/`cds_view_name_prefix` **fallback**'ine
 düşülür; ikisi de yoksa gate **B-5 NET hatasıyla durur** (prefix VARSAYMAZ). ⇒ Yeni paket için

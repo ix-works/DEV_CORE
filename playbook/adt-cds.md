@@ -359,8 +359,8 @@ Eski <LEGACY_SOURCE> CDS'ini içeri taşırken yapılacak değişiklikler:
 
 **⚠️ SQL View Adı KURALI (Sprint 3'te ihlal edildi):**
 - Format **`<SQLV_PREFIX><≤5 char>`** — ⚠ prefix **SABİT DEĞİL, hedef paketten TÜRER**
-  (`populate_cds_views.py::_derive_prefixes()`): `Z<MOD 2-4 harf><3 hane>_<x>` kalıbındaki paket adı
-  → `<PKG3><NNN>_V_` + `<pkg><nnn>_ddl_`. Örn. `--package ZSD001_CLC` → `ZSD001_V_` / `zsd001_ddl_`;
+  (`populate_cds_views.py::_derive_prefixes()`): `<önek><MOD 2-4 harf><3 hane>_<x>` kalıbındaki paket adı
+  (önek Z · Y · projede bildirilmiş `/<NS>/`) → `<kök>_V_` + `<kök küçük>_ddl_`. Örn. `--package ZSD001_CLC` → `ZSD001_V_` / `zsd001_ddl_`;
   `--package ZMOD001_CLC` → `ZMOD001_V_` / `zmod001_ddl_`. Toplam ≤14 char sınırı her paket için geçerli.
 - `project.yaml`'daki `sql_view_prefix`/`cds_view_name_prefix` **yalnız fallback/istisnadır** —
   paket adı kalıba uymuyorsa devreye girer. İkisi de yoksa gate **B-5 NET hatasıyla durur** (varsaymaz).
@@ -420,15 +420,23 @@ core'da hard-code değil, **proje `project.yaml` → `cds_banned_literals`**'ten
 tarama atlanır; prefix whitelist'i yine zorunlu kalır).
 
 ```python
-# Paket adı → namespace kökü. ZMOD001_CLC → ZMOD001 (suffix serbest)
-_PKG_PREFIX_RE = re.compile(r"^(Z[A-Z]{2,4}\d{3})(?:_|$)")
+# Paket adı → kök. Önek kararı ortak politikada (`utils.ad_politikasi.musteri_govdesi`):
+# Z · Y (yapılandırma okunmaz) · projede bildirilmiş `/<NS>/`; gövde kalıbı aynı.
+_PKG_GOVDE_RE = re.compile(r"^([A-Z]{2,4}\d{3})(?:_|$)")
+
+def _paket_koku(package):
+    """ZMOD001_CLC → ZMOD001 · YMOD001_CLC → YMOD001 · /NSPC/SD001_CLC → /NSPC/SD001; aksi None."""
+    og = musteri_govdesi(str(package).strip().upper())   # (önek, gövde) | None
+    if og is None:
+        return None
+    m = _PKG_GOVDE_RE.match(og[1])
+    return og[0] + m.group(1) if m else None
 
 def _derive_prefixes(package=None):
     """(sql_view_prefix, cds_view_name_prefix) — paketten türet, olmazsa project.yaml."""
     if package:
-        m = _PKG_PREFIX_RE.match(str(package).strip().upper())
-        if m:
-            kok = m.group(1)
+        kok = _paket_koku(package)
+        if kok:
             return f"{kok}_V_", f"{kok.lower()}_ddl_"   # ZMOD001_V_ / zmod001_ddl_
     return _SQLP, _VNP        # project.yaml fallback (ikisi de None olabilir)
 
@@ -462,16 +470,20 @@ def validate_sql_view_names(cds_files, package=None):
 
 **Çağrı biçimi:** `validate_sql_view_names(cds_files, package=args.package)` — `package` verilmezse
 eski (config-tabanlı) davranış geriye-uyumlu olarak korunur. ⇒ **Yeni bir paket için `project.yaml`'a
-prefix eklemek GEREKMEZ**; paket adı `Z<MOD 2-4 harf><3 hane>` kalıbındaysa gate kendi türetir.
+prefix eklemek GEREKMEZ**; paket adı `<önek><MOD 2-4 harf><3 hane>` kalıbındaysa (önek Z · Y · bildirilmiş
+`/<NS>/`) gate kendi türetir. ⚠ Namespace'li paketin klasik `sqlViewName` öneki uzundur: `/NSPC/SD001_V_`
+tek başına 14 karakter = `SQL_VIEW_MAX_LEN` ⇒ o pakette klasik view sığmaz (3 harfli namespace + 2 harfli
+modülde `/NS/SD001_V_` 12 karakter ⇒ 2 karakter kalır); SAP'nin namespace'li SQL view sınırı ÖLÇÜLMEDİ.
 
 **RAP view entity istisnası:** `define [root] view entity` / `define abstract entity` içeren dosyalarda
 sqlViewName whitelist'i **uygulanmaz** (view entity sqlView taşımaz; `@AbapCatalog.sqlViewName` varsa
-YASAK). Onun yerine ad kuralı: `^Z[A-Z]{2,4}\d{3}_(I|C|R|E)_[A-Z0-9_]+$` (`standards/05-coding-rap.md` §4).
+YASAK). Onun yerine ad kuralı: önek (Z · Y · bildirilmiş `/<NS>/`) + gövde `^[A-Z]{2,4}\d{3}_(I|C|R|E)_[A-Z0-9_]+$`
+(`rap_ve_adi_gecerli`; `standards/05-coding-rap.md` §4).
 
 #### Manual Kontrol Komutları (her CDS batch'inden önce çalıştır)
 
 > ⚠ Aşağıdaki komutlar **hedef paket `ZSD001_CLC`** örneğidir. Başka pakette önce prefix'i türet
-> (`Z<MOD><nnn>` kökü + `_V_` / `_ddl_`) ve komutlardaki `ZSD001_V_`/`zsd001_ddl_` yerine onu koy.
+> (`<önek><MOD><nnn>` kökü + `_V_` / `_ddl_`) ve komutlardaki `ZSD001_V_`/`zsd001_ddl_` yerine onu koy.
 > `cds_banned_literals` (3. komut) proje `project.yaml`'ından gelir; projede tanımlı değilse o
 > tarama **yoktur** (gate atlar).
 

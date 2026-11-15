@@ -79,7 +79,8 @@ def extract_label(source: str) -> str:
 # `.cds` dosyaları yapısal olarak FAIL veriyordu (ölçüldü: 11 paket / ~121 dosya).
 # Artık prefix `--package` argümanından DETERMİNİSTİK türetilir:
 #     ZMOD001_CLC  →  sqlView: "ZMOD001_V_"   ·   view adı: "zmod001_ddl_"
-# Kök kalıp `RAP_VE_NAME_PATTERN` ile AYNIDIR (Z<MOD 2-4 harf><3 hane>).
+# Kök kalıp RAP entity adıyla AYNI gövde kuralıdır: `<önek><MOD 2-4 harf><3 hane>`, önek Z · Y ·
+# projede bildirilmiş `/<NS>/` (`_paket_koku` → `utils.ad_politikasi.musteri_govdesi`).
 # project.yaml config'i KALKMADI: paket adı kalıba uymuyorsa (ya da paket
 # bilinmiyorsa) fallback olarak kullanılır. İkisi de yoksa gate VARSAYMAZ —
 # validate anında NET hatayla durur (fail-safe).
@@ -150,13 +151,14 @@ RAP_VIEW_ENTITY_RE  = re.compile(RAP_BASLIK_DESENI + r"\b", re.IGNORECASE)
 # TD-spec kapısı da atlanıyordu. `view entity` / `abstract entity` yorumları için açık
 # tabanda (3353fca) da vardı. sqlViewName annotation'ı ve yasak literal taraması HAM
 # metinde kalır (değerleri string içindedir).
-# Modül-bağımsız RAP view entity adı (01-naming: Z<MOD><nnn>_<I|C|R|E>_*;
+# Modül-bağımsız RAP view entity adı (01-naming: <önek><MOD><nnn>_<I|C|R|E>_*, önek Z · Y ·
+# bildirilmiş /<NS>/;
 # MOD = SD/MM/FI/CO/PP/QM/PM/EWM... 2-4 harf). Paket-doğru olma kontrolü
 # check_package_naming.py'de (.rules.md regex'i); burası RAP-naming sanity
 # (ZSD'ye hardcoded DEĞİL — başka modülde de çalışır).
-RAP_VE_NAME_PATTERN = re.compile(r"^Z[A-Z]{2,4}\d{3}_(?:I|C|R|E)_[A-Z0-9_]+$")
 # G5 (2026-11-15): ad kuralı önekten sonraki GÖVDEYE uygulanır; önek Z · Y · bildirilmiş
-# `/<NS>/` (`musteri_govdesi`). Z adında sonuç `RAP_VE_NAME_PATTERN` ile aynıdır.
+# `/<NS>/` (`musteri_govdesi`). Z adında hüküm eski Z-yalnız kalıpla
+# (`^Z[A-Z]{2,4}\d{3}_(I|C|R|E)_[A-Z0-9_]+$`, kaldırıldı) aynıdır.
 RAP_VE_GOVDE_PATTERN = re.compile(r"^[A-Z]{2,4}\d{3}_(?:I|C|R|E)_[A-Z0-9_]+$")
 
 
@@ -222,7 +224,8 @@ def validate_sql_view_names(cds_files, package=None):
     # B-5 fail-safe: ne paket adı çözülebildi ne config var → VARSAYMA, NET hata.
     if not _sqlp or not _vnp:
         return [f"NAMESPACE-GATE ÇÖZÜLEMEDİ (B-5): paket adı={package!r} kalıba "
-                f"UYMUYOR (beklenen: 'Z<MOD 2-4 harf><3 hane>_<x>', ör. ZMOD001_CLC) "
+                f"UYMUYOR (beklenen: '<önek><MOD 2-4 harf><3 hane>_<x>' — önek Z · Y · projede "
+                f"bildirilmiş /<NS>/; ör. ZMOD001_CLC) "
                 f"VE project.yaml'da `sql_view_prefix` / `cds_view_name_prefix` YOK. "
                 f"İkisinden BİRİ gerekli — gate prefix VARSAYMAZ, bu doldurulmadan "
                 f"CDS populate REDDEDİLİR."]
@@ -260,10 +263,8 @@ def validate_sql_view_names(cds_files, package=None):
             elif not rap_ve_adi_gecerli(vem.group(1)):
                 errors.append(
                     f"{f.name}: RAP view entity adı='{vem.group(1)}' YASAK. "
-                    f"FORMAT: 'Z<MOD><nnn>_<I|C|R|E>_<x>' "
-                    + ("(Y ya da bildirilmiş /<NS>/ önekiyle aynı gövde) "
-                       if vem.group(1)[:1] in ("/", "Y", "y") else "")
-                    + f"(regex: ^Z[A-Z]{{2,4}}\\d{{3}}_(I|C|R|E)_[A-Z0-9_]+$). "
+                    f"FORMAT: '<önek><MOD><nnn>_<I|C|R|E>_<x>' — önek Z · Y · projede "
+                    f"bildirilmiş /<NS>/ (gövde regex: ^[A-Z]{{2,4}}\\d{{3}}_(I|C|R|E)_[A-Z0-9_]+$). "
                     f"(standards/05-coding-rap.md §4)"
                 )
             # Section 3 (yasak namespace ref) RAP view entity'de de geçerli
