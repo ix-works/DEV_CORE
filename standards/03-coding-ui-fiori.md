@@ -852,10 +852,16 @@ kurulum reçetesi: **detay §16** (tekrarı önlemek için bu doküman içinde t
 Rapor/liste **seçim (filtre) ekranı** ABAP SELECT-OPTIONS pariteli olmalı — **kullanıcı istemese de varsayılan** (gate: `check_filter_search_pattern.py`):
 
 - **Çoklu-değer + aralık:** her filtre alanı `sap.m.MultiInput` + `sap.ui.comp.valuehelpdialog.ValueHelpDialog` (değer tablosu + "Koşul Tanımla"/ranges sekmesi). Tek-değer `<Input>` KULLANMA. Tarih = `DateRangeSelection`, durum/bayrak = `SegmentedButton` istisna.
-- **Harf-duyarsız "içeren" varsayılan:** F4 değer-tablosu araması, grid sütun-başlığı filtresi ve düz-değer token'ları **harf-duyarsız `substringof` (Contains)** ile çalışır — kullanıcı küçük/BÜYÜK fark etmeksizin `gül`→`GÜLAK` bulur.
+- **Harf-duyarsız "içeren" varsayılan:** F4 değer-tablosu araması, grid sütun-başlığı filtre kutusu ve düz-değer token'ları **harf-duyarsız `substringof` (Contains)** ile çalışır — kullanıcı küçük/BÜYÜK fark etmeksizin `gül`→`GÜLAK` bulur.
 - **⛔ `caseSensitive:false` YASAK** (FE-32, gate'li): UI5 V2'de `$filter`'a `toupper()`/`tolower()` enjekte eder; SAP Gateway (/IWBEP) bunları DESTEKLEMEZ → **HTTP 400** "Function toupper/tolower is not supported" (SAP Note 1797736) → arama hiç sonuç döndürmez. `new Filter(path, FilterOperator.Contains, q)` — **caseSensitive parametresi VERME**; düz `substringof` zaten harf-duyarsız (DB collation, canlı kanıt 2026-06-24).
-- **Wildcard (SAP alışkanlığı):** `*x*` / `x` → Contains · `x*` → StartsWith · `*x` → EndsWith (startswith/endswith /IWBEP'te DESTEKLENİR — toupper'ın aksine). Ortak `_parseSearchTerm` helper; literal asterisk aranmaz.
+- **Wildcard (SAP alışkanlığı) — yalnız seçim ekranı ve değer yardımı araması:** `*x*` / `x` → Contains · `x*` → StartsWith · `*x` → EndsWith (startswith/endswith /IWBEP'te DESTEKLENİR — toupper'ın aksine). Ortak `_parseSearchTerm` helper (filtre controller'ı); literal asterisk aranmaz. **Grid kolon filtresine uygulanmaz** — orada koşul pencereden seçilir (aşağıdaki madde).
 - **Kod / serbest-metin alanlarında** düz-token default `Contains` (kısmi-kod araması korunur; `defaultOp` config).
+- **Grid kolon filtresi = başlık kutusunda düz arama + `Filtre…` penceresinde TANIMLI koşul (2026-11-15):**
+  - **NE:** kolon başlığı menüsündeki filtre kutusu yalnız **düz değer** arar — metin kolonunda İçerir (Türkçe büyük/küçük harf varyantlarıyla), sayı/tarih/saat kolonunda Eşittir. Koşul (İle başlar · Arasında · Büyüktür …) kutuya **yazılmaz**: menüdeki `Filtre…` öğesi bir pencere açar; koşul kolon tipine göre **tanımlı listeden seçilir** (metin 13 · sayı/tarih 7 · saat 1 koşul), değer(ler) tipe uygun alana girilir (tarih = `DatePicker`), `Filtreyi Kaldır` düğmesi vardır. Kutuya koşul işareti yazılırsa (`=` `!` `<` `>` ile başlayan, `*` ya da `..` içeren metin) filtre **uygulanmaz**, uyarı verilir, önceki filtre korunur — sessizce düz arama sayılmaz, sessizce yok sayılmaz. Geçersiz değer (sayı `1.25`, tarih `31.11.2026`) de aynı biçimde reddedilir; pencerede geçersiz alan kırmızı işaretlenir, pencere kapanmaz.
+  - **NEDEN:** koşulu kutuya elle yazmak (joker / işaret sözdizimi) kullanıcının bilmesi gereken gizli bir dildi; kullanıcı kararı (2026-11-15) koşulun **tanımlı olup seçilen** hâlde sunulmasıdır, el yazımı değil. Kutu düz aramada kalır, çünkü en sık kullanım odur ve tek adımdır.
+  - **NE ZAMAN:** grid (`sap.ui.table.Table`) liste ekranı kurulurken ya da kolon filtresi davranışına dokunulurken.
+  - **NEREDE:** kanonik uygulama çekirdek şablonundadır — ayrıştırma `util/ColumnFilterParser.js` (`kutuDugumu` · `kosulDugumu` · `kosulListesi`), pencere `util/KolonFiltrePenceresi.js`, bağlantı `TablePersonalizer._onMenuAc` / `_onColumnFilter`. Menüye öğe eklemek UI5'in alt çizgili `ColumnMenu._addFilterMenuItem` metodunu sarmayı gerektirir; bu çağrı **yalnız `SurumParca.filtreMenusuneEkle` içinde** yaşar (şablon README §4 — sürüme bağlı API ortak koda girmez). Metot bulunamazsa öğe eklenmez, `Log.error` yazılır, kutu düz arama çalışmaya devam eder.
+  - **Ölçüm sınırı:** davranış 1.71 ve 1.120 hattında tarayıcıda (gerçek `sap.ui.table.Table`, JSON model) ölçüldü. **ÖLÇÜLMEDİ:** gerçek backend'e giden OData `$filter` metni · 1.72–1.119 arası sürümler · `AnalyticalTable`.
 - **⛔ Yazılı metin → token ZORUNLU (`addValidator`, 2026-10-16):** kullanıcı değeri F4 açmadan **yazabilmeli** (`1500` + Enter). `MultiInput`'a validator konmazsa yazılan metin token OLMAZ, alanda metin olarak kalır — liste/ara işleyicisi yalnız `getTokens()` okuyorsa bu metin **SESSİZCE yok sayılır** ⇒ rapor süzgeçsiz, geniş sonuç döner (canlı ölçüm: müşteri alanına yazılan değer `$filter`'a hiç girmedi; zorunlu alanda ise kullanıcı "değer girdim" derken "zorunlu alan" uyarısı alır). Her `MultiInput` için:
   1. `oMI.addValidator(fn)` — Enter / Tab / odak kaybında metin → token. Token, VH'nin ürettiği token'la **aynı anlamı** taşır (düz değer · joker · `defaultOp`); yeni token türü icat edilmez. Çok satırlı yapıştırma (UI5 yerleşik, satır başına token) bozulmaz.
   2. **Kod alanında büyük harf** (domain `LOWERCASE` boş — VKORG/KUNNR/MATNR…): yazılan değer **ve** VH "Koşulları tanımla" range değerleri (`value1`/`value2`) seçim kurucuda `toUpperCase()`. Yoksa küçük harf BE'ye olduğu gibi gider ⇒ HATASIZ boş sonuç. Serbest metin alanında çevrilmez; ayrım `$metadata`/DDIC'ten ölçülür.
@@ -864,7 +870,7 @@ Rapor/liste **seçim (filtre) ekranı** ABAP SELECT-OPTIONS pariteli olmalı —
   5. **Listele/Ara kapısı:** herhangi bir `MultiInput`'ta `getValue()` boş değilse (token'a dönüşmemiş metin) çağrı YAPILMAZ, alan adını söyleyen hata verilir. Sessiz yok sayma yasaktır.
   6. **VH "Tamam":** alanda kalmış yazılı metin kaybolmaz — geçerliyse token'a dönüşür, tekrarsa eklenmez (tekrar karşılaştırması büyük harfe çevrilmiş değerle; yazılı değeri silmez).
   - **Ölçüm:** kaynak okuması yetmez — yaz + Enter → token sayısı, ardından Listele'nin ağ izindeki `$filter`'ında değer VAR MI (kod ≠ kablolama).
-- **Kanonik kaynak (kopyala): çekirdek şablonu [`playbook/templates/ui5-freestyle/`](../playbook/templates/ui5-freestyle/README.md)** — desen bileşenleri: filtre view'ı (MultiInput+VHD), VH yardımcıları (`_openVH`/`_applyVHSearch`/`_syncTokens`/`_parseSearchTerm`), util kolon filtresi (`_onColumnFilter`). ⚠ **Eskiden kanonik sayılan proje-içi kopyada validator YOKTU (2026-10-16 ölçüldü)** — ondan türeyen kopyalar aynı kusuru taşıdı; çekirdek şablonu bu boşluğu kapatmak üzere *Yazılı metin → token* maddesiyle üretildi (Issue #381). Kural kopya kaynağından bağımsızdır: kopyanda `addValidator` + Listele kapısı yoksa eksik say. Teknik + tuzaklar: [`playbook/ui-freestyle-odata-v2.md` §C](../playbook/ui-freestyle-odata-v2.md).
+- **Kanonik kaynak (kopyala): çekirdek şablonu [`playbook/templates/ui5-freestyle/`](../playbook/templates/ui5-freestyle/README.md)** — desen bileşenleri: filtre view'ı (MultiInput+VHD), VH yardımcıları (`_openVH`/`_applyVHSearch`/`_syncTokens`/`_parseSearchTerm`), util kolon filtresi (`TablePersonalizer._onColumnFilter` kutu + `_onMenuAc` → `KolonFiltrePenceresi`, ayrıştırma `ColumnFilterParser`). ⚠ **Eskiden kanonik sayılan proje-içi kopyada validator YOKTU (2026-10-16 ölçüldü)** — ondan türeyen kopyalar aynı kusuru taşıdı; çekirdek şablonu bu boşluğu kapatmak üzere *Yazılı metin → token* maddesiyle üretildi (Issue #381). Kural kopya kaynağından bağımsızdır: kopyanda `addValidator` + Listele kapısı yoksa eksik say. Teknik + tuzaklar: [`playbook/ui-freestyle-odata-v2.md` §C](../playbook/ui-freestyle-odata-v2.md).
 
 ### 10.1 `sap.ui.layout.Splitter` Namespace Kullanımı
 
@@ -1126,7 +1132,8 @@ Her liste ekranı (grid; m.Table yalnız mobil-istisna) şunları **zorunlu** sa
    tıkla → hızlı **Sırala** (↑/↓) + alana **operatörlü Filtre**
    (tip-duyarlı: metin Contains/EQ/StartsWith/EndsWith/NE; sayı·tarih
    EQ/NE/GT/GE/LT/LE/BT; bool EQ). **`sap.m.P13nDialog`/P13nFilterPanel
-   KULLANMA** (model-sync kırılgan — ADR 0008 reddi).
+   KULLANMA** (model-sync kırılgan — ADR 0008 reddi). Grid'de bunun karşılığı: native menü
+   kutusu düz arama + menüdeki `Filtre…` penceresinde tip-duyarlı tanımlı koşul listesi (§10.0.1).
 2. **Aktif filtre çubuğu** (tablo `infoToolbar`): `Alan op değer ✕`
    (✕=kaldır) + "Tümünü temizle"; filtreli kolon başlığı belirgin
    (`.zsd001FilterActive` benzeri stil).
@@ -1141,7 +1148,7 @@ Her liste ekranı (grid; m.Table yalnız mobil-istisna) şunları **zorunlu** sa
 reusable util `app/webapp/util/TablePersonalizer.js` (kurucu deseni `new TablePersonalizer({table, persoKey,
 columns:[{key,path,colId,text,type}], bundle, baseFilters})`; DB-backed varyant servisi
 `ZSD000_UI_VARIANT_O2` örneği) + liste controller'ında `onColumns`/`onExportExcel` bağlantısı +
-i18n key seti (`op.*`, `flt.*`, `exp.*`, `btn.cols`, `btn.excel`). Satır modu sürüme bağlıdır
+i18n key seti (`flt.*`, `kfp.*` — kolon filtresi penceresi, koşul adları `kfp.op.*` dahil —, `exp.*`, `btn.cols`, `btn.excel`). Satır modu sürüme bağlıdır
 (`rowMode` 1.120 hattı · `visibleRowCountMode` 1.71 hattı — §2.6; `rowmodes.Auto` `@since` 1.119 ama 1.119 yalnız bulut sürümüdür). Proje-içi eski util kopyaları (m.Table
 sürümü dahil) kopya kaynağı DEĞİLDİR.
 

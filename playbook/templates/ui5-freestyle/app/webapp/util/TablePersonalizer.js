@@ -19,16 +19,21 @@ sap.ui.define([
   "sap/ui/model/odata/v2/ODataModel",
   "sap/ui/core/Component",
   "sap/base/Log",
-  "com/example/alan/uygulama/util/Tarih",
-  "com/example/alan/uygulama/util/Sayi"
+  "sap/ui/unified/MenuItem",
+  "com/example/alan/uygulama/util/ColumnFilterParser",
+  "com/example/alan/uygulama/util/KolonFiltrePenceresi",
+  "com/example/alan/uygulama/util/SurumParca"
 ], function (BaseObject, Filter, FilterOperator, Label, Input,
              Select, CoreItem, CheckBox, Button, Dialog, HBox, VBox,
-             SearchField, ScrollContainer, ToggleButton, MessageBox, MessageToast, ODataModel, Component, Log, Tarih, Sayi) {
+             SearchField, ScrollContainer, ToggleButton, MessageBox, MessageToast, ODataModel, Component, Log,
+             MenuItem, ColumnFilterParser, KolonFiltrePenceresi, SurumParca) {
   "use strict";
 
   // ============================================================================================
   // TablePersonalizer — sap.ui.table.Table (grid / ALV-tarzı) kişiselleştirme (std/03 §10.0 + §16, ADR 0008)
   //  - Sort/Filter: GRID'in NATIVE kolon menüsünden (sortProperty/filterProperty) → custom kolon menüsü YOK.
+  //    Kolon menüsüne yalnız "Filtre…" öğesi eklenir (kolon filtresi seçim penceresi, util/KolonFiltrePenceresi): bkz. _onMenuAc.
+  //    Menüdeki kutu DÜZ ARAMADIR (metin İçerir · sayı/tarih/saat Eşittir); koşul yalnız pencereden seçilir (std/03 §10.0.1, FE-32 (e)).
   //  - "Kolonlar" göster/gizle penceresi (arama + tümünü seç/kaldır + kaydırma) + varyant çubuğu.
   //  - DB varyant: Config = TAM layout { cols: [ {key, visible, width, index} ] }.
   //  - Excel export için kolon listesi (getColumnsForExport).
@@ -36,7 +41,7 @@ sap.ui.define([
   // Kullanım:
   //   new TablePersonalizer({
   //     table: oGrid, persoKey: "<RAPOR_ANAHTARI>", bundle: oResourceBundle,
-  //     columns: [{ key, path, colId, text, type: "string"|"numeric"|"date" }],
+  //     columns: [{ key, path, colId, text, type: "string"|"numeric"|"date"|"time" }],
   //     baseFilters: function () { return [ ...seçim ekranı süzgeçleri... ]; },
   //     defaultHidden: ["<key>"],                       // isteğe bağlı: başlangıçta gizli kolonlar
   //     variantService: { serviceUrl, entitySet, nameMaxLen }   // isteğe bağlı (yoksa yalnız localStorage)
@@ -53,6 +58,15 @@ sap.ui.define([
   // ============================================================================================
 
   var LOG_BILESEN = "ui5-freestyle-sablon.TablePersonalizer";
+
+  // Kolon filtresi KUTUSU doğrulama hatası (ColumnFilterParser.kutuDugumu neden) → [önceki filtre yokken, önceki filtre korunurken] i18n anahtarı.
+  // Kept varyantı {1} (önceki filtre) taşır; "zaman" saat kolonunda geçersiz saat; "kosulYazimi" kutuya koşul yazımıdır (koşullar yalnız Filtre… penceresinden).
+  var HATA_MESAJ = {
+    "sayi":   ["flt.numberInvalid", "flt.numberInvalidKept"],
+    "tarih":  ["flt.dateInvalid", "flt.dateInvalidKept"],
+    "zaman":  ["flt.timeInvalid", "flt.timeInvalidKept"],
+    "kosulYazimi": ["flt.boxCondition", "flt.boxConditionKept"]
+  };
 
   return BaseObject.extend("com.example.alan.uygulama.util.TablePersonalizer", {
 
@@ -91,6 +105,9 @@ sap.ui.define([
       this._colFilters = {};
       // Uygulanmakta olan kolon filtresinin kullanıcı metni: { <filterProperty>: "<metin>" } (geçersiz girişte geri çekilir)
       this._colFilterText = {};
+      // Kolon filtresi koşulu: { <filterProperty>: { kosul:{op,v,v2}, tur } } — Filtre… penceresinin DOLU açılması için (kutu düz araması da
+      // buraya yazılır: metin → İçerir, sayı/tarih/saat → Eşittir). Varyanta YAZILMAZ.
+      this._colKosul = {};
 
       // DB varyant durumu: { <name>: { uuid, name, isDefault, cols:[...] } } — null = servis yok / okunamadı
       this._variants = null;
@@ -99,7 +116,13 @@ sap.ui.define([
 
       this._applyVisibility();
 
-      // Grid NATIVE kolon filtresi → string kolonda düz Contains (substringof; backend harf-duyarsız).
+      // Kolon menüsüne "Filtre…" öğesi (kolon filtresi seçim penceresi): menü her açılmadan ÖNCE columnMenuOpen ateşlenir (_onMenuAc).
+      this._cols.forEach(function (m) {
+        var oCol = this._colById[m.key];
+        if (oCol) { oCol.attachColumnMenuOpen(this._onMenuAc, this); }
+      }, this);
+
+      // Grid NATIVE kolon filtresi kutusu → util/ColumnFilterParser.kutuDugumu (düz arama; substringof ailesi backend'de harf-duyarsız).
       // caseSensitive parametresi VERİLMEZ (FE-32: gateway toupper/tolower'ı reddeder, HTTP 400).
       this._t.attachFilter(this._onColumnFilter, this);
 
@@ -107,7 +130,106 @@ sap.ui.define([
       this._initVariantsFromService();
     },
 
-    // ── grid native kolon-filtresi → harf-duyarsız (string) ──
+    // ── kolon menüsüne "Filtre…" öğesi ──
+    // Menü UI5'in yerleşik sap.ui.table.ColumnMenu'sudur (AnalyticalTable'da AnalyticalColumnMenu — ortak _addFilterMenuItem). Öğe,
+    // kutunun (yerleşik "Filtre" metin alanı) HEMEN ALTINA eklenir: menünün ÖZEL `_addFilterMenuItem` metodu bu menü örneğinde sarılır
+    // — alt çizgili API olduğu için sarma sürüm parçasındadır (SurumParca.filtreMenusuneEkle, README §4). Sarma `columnMenuOpen`
+    // olayında (menü açılmadan önce; ilk açılışta öğeler henüz kurulmamıştır) bir kez yapılır; menü yeniden kurulduğunda sarılmış metot
+    // yeniden çağrılır ⇒ öğe kalıcıdır.
+    // ⚠ Özel metot bir yama sürümünde değişirse "Filtre…" görünmez ve kolon filtresinde KOŞULA ERİŞİLEMEZ (kutu yalnız düz aramadır)
+    // — bu yüzden sürüm ilk açılışta loglanır ve öğenin menüde olup olmadığı açılıştan sonra denetlenir (yoksa Log.error).
+    _onMenuAc: function (oEvent) {
+      var that = this, oCol = oEvent.getSource(), oMenu = oEvent.getParameter("menu");
+      var sSurum = (window.sap && window.sap.ui) ? window.sap.ui.version : "?";
+      if (!this._surumLoglandi) {
+        this._surumLoglandi = true;
+        Log.info("UI5 sürümü: " + sSurum + " — kolon menüsü 'Filtre…' öğesi kuruluyor.", "persoKey=" + this._key, LOG_BILESEN);
+      }
+      if (!oMenu) { return; }
+      var bKuruldu = SurumParca.filtreMenusuneEkle(oMenu, function (oM) {
+        if (oCol.getFilterProperty() && oCol.getShowFilterMenuEntry()) {      // = kutunun görünme koşulu (Column.isFilterableByMenu)
+          oM.addItem(new MenuItem(oM.getId() + "-kfp", {
+            text: that._txt("kfp.menuItem"),
+            icon: "sap-icon://filter",
+            select: function () { that._penceredeAc(oCol); }
+          }));
+        }
+      });
+      if (!bKuruldu) {
+        Log.error("Kolon menüsünde özel filtre-öğesi metodu yok (SurumParca.filtreMenusuneEkle) — 'Filtre…' öğesi KURULAMADI; "
+          + "kolon filtresinde koşul seçilemez. UI5 " + sSurum,
+          "persoKey=" + this._key, LOG_BILESEN);
+        return;
+      }
+      // Menü açılışı bu olayın hemen ardından kurulur: sonra öğenin gerçekten orada olduğunu doğrula.
+      var sId = oMenu.getId() + "-kfp";
+      setTimeout(function () {
+        if (!oCol.getFilterProperty() || !oCol.getShowFilterMenuEntry()) { return; }
+        var bVar = oMenu.getItems().some(function (oI) { return oI.getId() === sId; });
+        if (!bVar) {
+          Log.error("Kolon menüsünde 'Filtre…' öğesi YOK (kolon: " + oCol.getId() + "); koşul seçilemez. UI5 " + sSurum,
+            "persoKey=" + that._key, LOG_BILESEN);
+        }
+      }, 0);
+    },
+
+    _metaByPath: function (sProp) {
+      return this._cols.filter(function (m) { return m.path === sProp; })[0] || {};
+    },
+
+    // "Filtre…" → pencere. Pencere yalnız {op,tur,deger,deger2} düğümü üretir; süzgeç toFilter → _applyAllFilters akışından geçer.
+    _penceredeAc: function (oCol) {
+      var that = this, sProp = oCol.getFilterProperty();
+      var oMeta = this._metaByPath(sProp), sTur = oMeta.type || "string";
+      var oK = this._colKosul[sProp];
+      KolonFiltrePenceresi.ac({
+        sahip: this._t,
+        bundle: this._t18,
+        baslik: oMeta.text || sProp,
+        tur: sTur,
+        mevcut: oK ? oK.kosul : null,
+        uygula: function (oKosul, oDugum) {
+          that._kosulUygula(oCol, sProp, sTur, oDugum, oKosul, that._kosulGosterim(oKosul, sTur));
+        },
+        kaldir: function () { that._filtreKaldir(oCol, sProp); }
+      });
+    },
+
+    // Kutuda görünen okunur metin: "Eşit değil: 1010" · "Arasında: 01.11.2026 ile 30.11.2026" (tarih GG.AA.YYYY).
+    _kosulGosterim: function (oKosul, sTur) {
+      function deger(v) { return sTur === "date" ? String(v).split("-").reverse().join(".") : v; }
+      var sOp = this._txt("kfp.op." + oKosul.op);
+      return (oKosul.op === "BT")
+        ? this._t18.getText("kfp.showBT", [sOp, deger(oKosul.v), deger(oKosul.v2)])
+        : this._t18.getText("kfp.show", [sOp, deger(oKosul.v)]);
+    },
+
+    // Bir koşulu kolon filtresi olarak uygula (pencere ve kutu ortak yolu). sGosterim = kutuda görünecek metin.
+    _kosulUygula: function (oColumn, sProp, sTur, oDugum, oKosul, sGosterim) {
+      this._colFilters[sProp] = ColumnFilterParser.toFilter(sProp, oDugum);
+      this._colFilterText[sProp] = sGosterim;
+      this._colKosul[sProp] = { kosul: oKosul, tur: sTur };
+      oColumn.setFiltered(true);
+      oColumn.setFilterValue(sGosterim);
+      this._applyAllFilters();
+    },
+
+    _filtreKaldir: function (oColumn, sProp) {
+      delete this._colFilters[sProp];
+      delete this._colFilterText[sProp];
+      delete this._colKosul[sProp];
+      oColumn.setFiltered(false);
+      oColumn.setFilterValue("");
+      this._applyAllFilters();
+    },
+
+    // ── grid native kolon-filtresi KUTUSU (ayrıştırma util/ColumnFilterParser.kutuDugumu) ──
+    // Kutu DÜZ ARAMADIR: metinde içerir · sayı/tarih/saatte eşittir. Koşul yazımı (`=` `!` `<` `>` `*` ile başlayan, `..` ya da
+    // `*` içeren) uyarı verir, filtre uygulanmaz, önceki filtre korunur. Koşullar yalnız Filtre… penceresinden verilir.
+    // Tarih metni oturum dilinin biçimiyle SIKI ayrıştırılır (util/Tarih, FE-45 — olmayan gün sonraki aya kaymaz), sayı oturum dilinin
+    // sayı biçimiyle (util/Sayi — OData'ya kanonik dizgi); ham metin filtre değeri OLMAZ (ColumnFilterParser.degerCoz).
+    // Kutudaki metin pencereden verilmiş koşulun gösterim metniyle aynıysa (kullanıcı değiştirmeden Enter'a bastı) HİÇBİR ŞEY yapılmaz;
+    // farklı bir değer yazılırsa düz arama koşulun YERİNE geçer.
     _onColumnFilter: function (oEvent) {
       oEvent.preventDefault();
       var oColumn = oEvent.getParameter("column");
@@ -116,40 +238,18 @@ sap.ui.define([
       if (!sProp) { return; }
 
       var v = (sValue === null || sValue === undefined ? "" : String(sValue)).trim();
-      var oMeta = this._cols.filter(function (m) { return m.path === sProp; })[0] || {};
-      var sType = oMeta.type || "string";
-      var oFilter = null, aGecersiz = null;   // [mesaj (önceki filtre yok), mesaj (önceki filtre korundu)]
-      if (v) {
-        if (sType === "string") {
-          var p = this._parseSearchTerm(v);
-          if (p) { oFilter = new Filter(sProp, p.operator, p.value); }
-        } else if (sType === "date") {
-          // Tarih: metin oturum dilinin biçimiyle SIKI ayrıştırılır → takvim gününün UTC gece yarısı (util/Tarih,
-          // FE-45). Ham metin filtre YAPILMAZ (ODataUtils new Date(<metin>) → ay/gün kayar, sessiz).
-          var dGun = Tarih.metindenGun(v);
-          if (dGun) {
-            oFilter = new Filter(sProp, FilterOperator.EQ, dGun);
-          } else {
-            aGecersiz = [this._txt("flt.dateInvalid"), this._txt("flt.dateInvalidKept")];
-          }
-        } else {
-          // Sayı: metin oturum dilinin sayı biçimiyle ayrıştırılır → kanonik dizgi (util/Sayi). Ham metin filtre
-          // YAPILMAZ (ODataUtils Edm.Decimal v + "m" → TR "1.250" 1,25 aranır, sessiz).
-          var sSayi = Sayi.metindenSayi(v);
-          if (sSayi !== null) {
-            oFilter = new Filter(sProp, FilterOperator.EQ, sSayi);
-          } else {
-            aGecersiz = [this._txt("flt.numberInvalid"), this._txt("flt.numberInvalidKept")];
-          }
-        }
-      }
+      if (v !== "" && v === this._colFilterText[sProp]) { return; }
+      var sType = this._metaByPath(sProp).type || "string";
+      var oSonuc = ColumnFilterParser.kutuDugumu(v, sType);
       // Ayrıştırılamayan metin: kolonun ÖNCEKİ geçerli filtresi KORUNUR (binding'e dokunulmaz) ve mesaj bunu söyler.
-      // Tarih ve sayı dalı aynı davranır. Menüdeki filtre metni de uygulanmakta olan filtreye geri çekilir.
-      if (aGecersiz) {
+      // Menüdeki filtre metni de uygulanmakta olan filtreye geri çekilir.
+      if (!oSonuc.ok) {
+        var aAnahtar = HATA_MESAJ[oSonuc.neden] || HATA_MESAJ["kosulYazimi"];
+        var aGecersiz = [this._txt(aAnahtar[0]), this._txt(aAnahtar[1])];   // [önceki filtre yok, önceki filtre korundu]
         var sOnceki = this._colFilterText[sProp];
         if (this._colFilters[sProp] && sOnceki) {
           // fonksiyonlu replace: metindeki "$&" / "$1" özel değiştirme deseni sayılmasın. {1} ÖNCE: geçersiz
-          // metin "{1}" içeriyorsa ikinci replace onu değiştirmesin (önceki metin geçerli tarih/sayıdır, süslü parantez taşımaz).
+          // metin "{1}" içeriyorsa ikinci replace onu değiştirmesin (önceki metin geçerli olduğundan süslü parantez taşımaz).
           MessageToast.show(aGecersiz[1].replace("{1}", function () { return sOnceki; })
             .replace("{0}", function () { return v; }));
           oColumn.setFilterValue(sOnceki);
@@ -159,34 +259,11 @@ sap.ui.define([
         }
         return;
       }
-      if (oFilter) {
-        this._colFilters[sProp] = oFilter;
-        this._colFilterText[sProp] = v;
-        oColumn.setFiltered(true);
-        oColumn.setFilterValue(v);
+      if (oSonuc.dugum) {
+        this._kosulUygula(oColumn, sProp, sType, oSonuc.dugum, oSonuc.kosul, v);
       } else {
-        delete this._colFilters[sProp];
-        delete this._colFilterText[sProp];
-        oColumn.setFiltered(false);
-        oColumn.setFilterValue("");
+        this._filtreKaldir(oColumn, sProp);
       }
-      this._applyAllFilters();
-    },
-
-    // Joker → operatör (SELECT-OPTIONS alışkanlığı): '*x*' veya 'x' → Contains · 'x*' → StartsWith · '*x' → EndsWith.
-    _parseSearchTerm: function (sRaw) {
-      var q = (sRaw || "").trim();
-      if (!q) { return null; }
-      var bLead  = q.charAt(0) === "*";
-      var bTrail = q.charAt(q.length - 1) === "*";
-      var sVal = q.replace(/\*/g, "");
-      if (!sVal) { return null; }
-      var op;
-      if (bLead && bTrail) { op = FilterOperator.Contains; }
-      else if (bTrail)     { op = FilterOperator.StartsWith; }
-      else if (bLead)      { op = FilterOperator.EndsWith; }
-      else                 { op = FilterOperator.Contains; }
-      return { operator: op, value: sVal };
     },
 
     // Base filtreler + tüm aktif kolon filtreleri → AND.
@@ -242,6 +319,7 @@ sap.ui.define([
       var that = this;
       Object.keys(this._colFilters).forEach(function (k) { delete that._colFilters[k]; });
       this._colFilterText = {};
+      this._colKosul = {};
       (this._t.getColumns() || []).forEach(function (oCol) {
         if (oCol.getFiltered && oCol.getFiltered()) { oCol.setFiltered(false); }
         if (oCol.getFilterValue && oCol.getFilterValue()) { oCol.setFilterValue(""); }
@@ -794,7 +872,13 @@ sap.ui.define([
     },
 
     destroy: function () {
-      if (this._t) { this._t.detachFilter(this._onColumnFilter, this); }
+      if (this._t) {
+        this._t.detachFilter(this._onColumnFilter, this);
+        this._cols.forEach(function (m) {
+          var oCol = this._colById[m.key];
+          if (oCol) { oCol.detachColumnMenuOpen(this._onMenuAc, this); }
+        }, this);
+      }
       if (this._oVarModel) { this._oVarModel.destroy(); this._oVarModel = null; }
       if (this._colDlg) { this._colDlg.destroy(); this._colDlg = null; }
       BaseObject.prototype.destroy.apply(this, arguments);

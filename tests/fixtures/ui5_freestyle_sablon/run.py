@@ -11,19 +11,23 @@ SENTETİK bir projeye kopyalar (`<kum>/SOURCE_CODES/SD/ZSD001_CLC/ui/sablon_<v>/
                    koşar → exit 0 VE "N ... tarandı" satırındaki N, kopyadan sayılan dosya sayısına
                    EŞİT (0 dosya = "temiz" değil, ölçülmedi — K1 kapsam sözleşmesi)
   V2  ⭐ YÜZEY     ortak gövdede (kopyada sürüm parçasının GETİRMEDİĞİ her dosya — parça kümesi
-                   surum/<v>/webapp listesinden türetilir) sürüme bağlı desen YOK (YASAK listesi, 11):
+                   surum/<v>/webapp listesinden türetilir) sürüme bağlı desen YOK (YASAK listesi, 12):
                    IllustratedMessage · rowmodes · sap/m/VariantManagement · sap.m.VariantManagement ·
                    IAsyncContentCreation · addValidateToken · _validateOnPaste ·
                    data-sap-ui- (bootstrap öznitelik biçimi sürüme bağlı → index.html parçada) ·
                    "bundleUrl" (sap.app.i18n nesne biçimi 1.71'de yok) · rowsUpdated (Table olayı @since 1.86) ·
-                   getSortOrder() ==/!= "None" (1.71 sortOrder varsayılanı Ascending, enum'da None yok)
+                   getSortOrder() ==/!= "None" (1.71 sortOrder varsayılanı Ascending, enum'da None yok) ·
+                   _addFilterMenuItem (kolon menüsünün ÖZEL metodu — iki sürümde var ama alt çizgili ⇒ yalnız
+                   SurumParca.filtreMenusuneEkle'de; emsal _validateOnPaste)
   V3  ⭐ İMZA      iki SurumParca aynı üye kümesini verir; ortak gövdenin çağırdığı her üye iki parçada var
   V4  TAMLIK       manifest routing hedefi → view dosyası · view controllerName → controller dosyası ·
                    uygulama-içi sap.ui.define bağımlılığı → dosya (sürüm parçası bindirildikten SONRA) ·
                    view olay işleyicisi ".onX" → controller'da (ya da BaseController'da) tanımlı
   V2/V3 yorumları AYIKLANMIŞ metni ölçer: şablon yorumları sürüm API'lerini bilerek adıyla anar
                    (kural KODU ölçer). Ayıklama kaba bir regex'tir (JS "//" yalnız satır başı/boşluk sonrası).
-  V5  TAMLIK       kullanılan her i18n anahtarı iki dilde de var; iki dosyanın anahtar kümesi aynı
+  V5  TAMLIK       kullanılan her i18n anahtarı iki dilde de var (noktayla biten dinamik önek — `_txt("kfp.op." + op)` —
+                   için o önekle başlayan anahtar); iki dosyanın anahtar kümesi aynı
+  V4c göreli (`./X`) define bağımlılığı da dosyaya çözülür (ad alanından bağımsız util modülleri)
   V6  ⭐ BOOTSTRAP index.html sürüm parçasından gelir (app/ kaynağında YOK) ve öznitelik biçimi sürüme uyar:
                    1.71 → tek kelime küçük harf (oninit · resourceroots · compatversion; tireli çok-kelime YOK —
                    1.71.85 tire→camel dönüşümü yapmaz) · 1.120 → kebab (on-init · resource-roots · compat-version)
@@ -36,9 +40,16 @@ SENTETİK bir projeye kopyalar (`<kum>/SOURCE_CODES/SD/ZSD001_CLC/ui/sablon_<v>/
                    V9a ortak gövdedeki her `DateFormat.getDateInstance(…)` çağrısı `strictParsing: true` taşır
                        (gevşek ayrıştırma 31.11 → 1 Aralık kaydırır; iki sürümde tarayıcıda ölçüldü, README §4)
                    V9b ortak gövdede `NumberFormat.getFloatInstance(…)` çağrısı var ve `parseAsString: true` taşır
-                   V9c TablePersonalizer `_onColumnFilter` gövdesi `Tarih.metindenGun(` + `Sayi.metindenSayi(`
-                       çağırır ve ham `v`'yi değer yapan `new Filter(…, FilterOperator.X, v)` YOK
+                   V9c util/ColumnFilterParser `degerCoz` gövdesi `Tarih.metindenGun(` + `Sayi.metindenSayi(` çağırır ve
+                       ham metni (`v: sMetin`) YALNIZ metin dalında değer yapar (tam 1 kez) · TablePersonalizer
+                       `_onColumnFilter` gövdesinde ham `v`'yi değer yapan `new Filter(…, FilterOperator.X, v)` YOK
                    SINIR: ayrıştırıcının DOĞRU sonuç verdiğini ölçmez (o, README §0 tarayıcı sondasıdır)
+  V10 ⭐ KOLON KUTUSU = DÜZ ARAMA + Filtre… penceresi (sözdizimsel):
+                   V10a TablePersonalizer `_onColumnFilter` `ColumnFilterParser.kutuDugumu(` çağırır, `_parseSearchTerm` YOK
+                   V10b ColumnFilterParser `kutuDugumu` gövdesi koşul yazımını değer ayrıştırmadan ÖNCE reddeder
+                        (`if (KOSUL_YAZIMI.test(s)) { return hata("kosulYazimi"); }` + KOSUL_YAZIMI deseni birebir)
+                   V10c TablePersonalizer `attachColumnMenuOpen(` + `SurumParca.filtreMenusuneEkle(` + `KolonFiltrePenceresi.ac(`
+                   SINIR: davranışı (öğenin menüde görünmesi, pencerenin $filter'ı) ÖLÇMEZ — o, README §0 tarayıcı sondasıdır
   N1-N3 ⭐ POZ.KONTROL validator'lar KOPYAYI gerçekten tarıyor: kopyaya bilinen kusur sokulunca
                    ilgili validator exit≠0 (N1 caseSensitive:false · N2 liste view sap.m.Table ·
                    N3 V2 nav "/_X")
@@ -57,7 +68,9 @@ SENTETİK bir projeye kopyalar (`<kum>/SOURCE_CODES/SD/ZSD001_CLC/ui/sablon_<v>/
   --mutasyon-sortorder-none  kopya List.controller siraliMi çağrısı → getSortOrder() === "None" → V2
   --mutasyon-spreadsheet-binding  kopya List.controller Spreadsheet dataSource nesnesi → oRowBinding → V8
   --mutasyon-tarih-gevsek    kopya util/Tarih getDateInstance({ strictParsing: true }) → getDateInstance() → V9a
-  --mutasyon-sayi-ham        kopya TablePersonalizer sayı dalı filtre değeri sSayi → ham v → V9c
+  --mutasyon-sayi-ham        kopya ColumnFilterParser sayı dalı düğüm değeri sSayi → ham sMetin → V9c
+  --mutasyon-kutu-joker      kopya ColumnFilterParser kutuDugumu koşul-yazımı reddi silinir → V10b
+  --mutasyon-menu-ortakta    kopya TablePersonalizer _addFilterMenuItem'a doğrudan dokunur → V2
 
 TAMAMEN CEVRIMDISI. SAP'ye / CDN'e istek YOK. Sürüm API kanıtı (CDN ölçümü) şablon README §4'tedir;
 bu koşucu onu yeniden ölçmez, yalnız ortak gövdenin o yüzeye SIZMADIĞINI zorlar.
@@ -86,7 +99,8 @@ GECERLI_KIP = {"--mutasyon-yasak-api", "--mutasyon-parca-eksik", "--mutasyon-hed
                "--mutasyon-i18n", "--mutasyon-imza", "--mutasyon-kapsam-sifir",
                "--mutasyon-index-ortakta", "--mutasyon-index-bicim", "--mutasyon-i18n-nesne",
                "--mutasyon-rowsupdated", "--mutasyon-sortorder-none", "--mutasyon-spreadsheet-binding",
-               "--mutasyon-tarih-gevsek", "--mutasyon-sayi-ham"}
+               "--mutasyon-tarih-gevsek", "--mutasyon-sayi-ham", "--mutasyon-kutu-joker",
+               "--mutasyon-menu-ortakta"}
 for _a in sys.argv[1:]:
     if _a not in GECERLI_KIP:
         print(f"[DURDU] bilinmeyen kip: {_a!r} — gecerli: {sorted(GECERLI_KIP)}")
@@ -104,10 +118,12 @@ NS_NOKTA = "com.example.alan.uygulama."
 YASAK = tuple((d, re.compile(re.escape(d))) for d in (
     "IllustratedMessage", "rowmodes", "sap/m/VariantManagement", "sap.m.VariantManagement",
     "IAsyncContentCreation", "addValidateToken", "_validateOnPaste",
-    "data-sap-ui-", '"bundleUrl"', "rowsUpdated")) + (
+    "data-sap-ui-", '"bundleUrl"', "rowsUpdated", "_addFilterMenuItem")) + (
     ('getSortOrder() == "None"', re.compile(r"""getSortOrder\(\)\s*[!=]==?\s*["']None["']""")),)
 PARCA_UYELERI = ("surum", "satirModu", "bosDurum", "yapistirmaBagla", "bilesenArayuzleri", "siraliMi",
-                 "dogrulayiciMetni")
+                 "dogrulayiciMetni", "filtreMenusuneEkle")
+# V10b: ColumnFilterParser'daki kutu koşul-yazımı deseni (birebir satır; değişirse V10b düşer — kasıtlı)
+KOSUL_YAZIMI_SATIRI = r"var KOSUL_YAZIMI = /^[=!<>*]|\.\.|\*/;"
 # V6: index.html bootstrap öznitelikleri (sürüm → zorunlu ad kümesi)
 BOOT_ZORUNLU = {"1.71": {"oninit", "resourceroots", "compatversion"},
                 "1.120": {"on-init", "resource-roots", "compat-version"}}
@@ -329,13 +345,37 @@ def agac_denetle(app: Path, surum: str, parca: set[str]) -> None:
             f"parseAsString'siz: {float_ok.count(False)}")
     tp = yorumsuz(w / "util" / "TablePersonalizer.js")
     i0 = tp.find("_onColumnFilter:")
-    i1 = tp.find("_parseSearchTerm:", i0)
+    i1 = tp.find("_applyAllFilters:", i0)
     govde_cf = tp[i0:i1] if i0 >= 0 and i1 > i0 else ""
     ham = re.findall(r"new Filter\(\s*\w+\s*,\s*FilterOperator\.\w+\s*,\s*v\s*\)", govde_cf)
-    eksik_cf = [c for c in ("Tarih.metindenGun(", "Sayi.metindenSayi(") if c not in govde_cf]
+    cfp_yol = w / "util" / "ColumnFilterParser.js"
+    cfp = yorumsuz(cfp_yol) if cfp_yol.is_file() else ""
+    j0 = cfp.find("function degerCoz(")
+    j1 = cfp.find("function kirp(", j0)
+    govde_dc = cfp[j0:j1] if j0 >= 0 and j1 > j0 else ""
+    eksik_dc = [c for c in ("Tarih.metindenGun(", "Sayi.metindenSayi(") if c not in govde_dc]
+    n_ham_dc = len(re.findall(r"\bv\s*:\s*sMetin\b", govde_dc))
     kontrol(f"V9c {etiket} kolon filtresi tarih/sayı ayrıştırır, ham metin filtre değeri yok",
-            bool(govde_cf) and not ham and not eksik_cf,
-            f"gövde: {'var' if govde_cf else 'YOK'} · ham: {ham[:2]} · eksik çağrı: {eksik_cf}")
+            bool(govde_cf) and bool(govde_dc) and not ham and not eksik_dc and n_ham_dc == 1,
+            f"_onColumnFilter: {'var' if govde_cf else 'YOK'} · degerCoz: {'var' if govde_dc else 'YOK'} · "
+            f"ham Filter: {ham[:2]} · eksik çağrı: {eksik_dc} · 'v: sMetin' sayısı {n_ham_dc} (beklenen 1 — metin dalı)")
+
+    # V10 kolon kutusu = düz arama; koşullar Filtre… penceresinden
+    kontrol(f"V10a {etiket} kutu ColumnFilterParser.kutuDugumu ile ayrıştırılır, _parseSearchTerm yok",
+            "ColumnFilterParser.kutuDugumu(" in govde_cf and "_parseSearchTerm" not in tp,
+            f"_onColumnFilter: {'var' if govde_cf else 'YOK'} · _parseSearchTerm: {'_parseSearchTerm' in tp}")
+    k0 = cfp.find("function kutuDugumu(")
+    k1 = cfp.find("function imza(", k0)
+    govde_kd = cfp[k0:k1] if k0 >= 0 and k1 > k0 else ""
+    i_red = govde_kd.find('if (KOSUL_YAZIMI.test(s)) { return hata("kosulYazimi"); }')
+    i_coz = govde_kd.find("degerCoz(")
+    desen_ok = KOSUL_YAZIMI_SATIRI in cfp
+    kontrol(f"V10b {etiket} kutuDugumu koşul yazımını değer ayrıştırmadan ÖNCE reddeder",
+            bool(govde_kd) and 0 <= i_red < i_coz and desen_ok,
+            f"kutuDugumu: {'var' if govde_kd else 'YOK'} · red@{i_red} · degerCoz@{i_coz} · KOSUL_YAZIMI deseni: {desen_ok}")
+    eksik_m = [c for c in ("attachColumnMenuOpen(", "SurumParca.filtreMenusuneEkle(", "KolonFiltrePenceresi.ac(")
+               if c not in tp]
+    kontrol(f"V10c {etiket} kolon menüsünde Filtre… öğesi + pencere kablolu", not eksik_m, f"eksik: {eksik_m}")
 
     # V3 imza: ortak gövdenin çağırdığı her SurumParca üyesi bu parçada var
     parca = w / "util" / "SurumParca.js"
@@ -385,16 +425,25 @@ def agac_denetle(app: Path, surum: str, parca: set[str]) -> None:
                 n_dep += 1
                 if not (w / (d[len(NS_YOL):] + ".js")).is_file():
                     yok_dep.append(f"{p.name}→{d[len(NS_YOL):]}")
+            elif d.startswith("./"):        # göreli bağımlılık (ad alanından bağımsız util modülleri)
+                n_dep += 1
+                if not (p.parent / (d[2:] + ".js")).is_file():
+                    yok_dep.append(f"{p.name}→{d}")
     kontrol(f"V4c {etiket} {n_dep} uygulama-içi bağımlılık çözülür", n_dep > 0 and not yok_dep,
             f"çözülmeyen: {sorted(set(yok_dep))}")
 
     # V5 i18n
     en = i18n_anahtarlari(w / "i18n" / "i18n.properties")
     tr = i18n_anahtarlari(w / "i18n" / "i18n_tr.properties")
-    kul = kullanilan_anahtarlar(w)
-    kontrol(f"V5a {etiket} {len(kul)} kullanılan anahtar iki dilde de var",
-            bool(kul) and kul <= en and kul <= tr,
-            f"EN eksik: {sorted(kul - en)[:5]} · TR eksik: {sorted(kul - tr)[:5]}")
+    kul_ham = kullanilan_anahtarlar(w)
+    # Noktayla biten "anahtar" dinamik önektir (`_txt("kfp.op." + op)`): iki dilde de o önekle başlayan anahtar olmalı.
+    onekler = {k for k in kul_ham if k.endswith(".")}
+    kul = kul_ham - onekler
+    onek_eksik = sorted(o for o in onekler
+                        if not any(k.startswith(o) for k in en) or not any(k.startswith(o) for k in tr))
+    kontrol(f"V5a {etiket} {len(kul)} kullanılan anahtar + {len(onekler)} dinamik önek iki dilde de var",
+            bool(kul) and kul <= en and kul <= tr and not onek_eksik,
+            f"EN eksik: {sorted(kul - en)[:5]} · TR eksik: {sorted(kul - tr)[:5]} · önek eksik: {onek_eksik}")
     kontrol(f"V5b {etiket} EN/TR anahtar kümesi aynı", en == tr, f"fark: {sorted(en ^ tr)[:5]}")
 
 
@@ -451,11 +500,25 @@ with tempfile.TemporaryDirectory(prefix="ui5sablon_") as _t:
                 dur("tarih-gevsek: çapa 'getDateInstance({ strictParsing: true })' util/Tarih içinde tek değil")
             yaz(p, s.replace("getDateInstance({ strictParsing: true })", "getDateInstance()"))
         if "--mutasyon-sayi-ham" in KIP:
+            p = w / "util" / "ColumnFilterParser.js"
+            s = oku(p)
+            if s.count("{ ok: true, v: sSayi, g: sMetin }") != 1:
+                dur("sayi-ham: çapa '{ ok: true, v: sSayi, g: sMetin }' ColumnFilterParser içinde tek değil")
+            yaz(p, s.replace("{ ok: true, v: sSayi, g: sMetin }", "{ ok: true, v: sMetin, g: sMetin }"))
+        if "--mutasyon-kutu-joker" in KIP:
+            p = w / "util" / "ColumnFilterParser.js"
+            s = oku(p)
+            capa = 'if (KOSUL_YAZIMI.test(s)) { return hata("kosulYazimi"); }'
+            if s.count(capa) != 1:
+                dur("kutu-joker: çapa 'if (KOSUL_YAZIMI.test(s)) …' ColumnFilterParser içinde tek değil")
+            yaz(p, s.replace(capa, ""))
+        if "--mutasyon-menu-ortakta" in KIP:
             p = w / "util" / "TablePersonalizer.js"
             s = oku(p)
-            if s.count("new Filter(sProp, FilterOperator.EQ, sSayi)") != 1:
-                dur("sayi-ham: çapa 'new Filter(sProp, FilterOperator.EQ, sSayi)' TablePersonalizer içinde tek değil")
-            yaz(p, s.replace("new Filter(sProp, FilterOperator.EQ, sSayi)", "new Filter(sProp, FilterOperator.EQ, v)"))
+            capa = "var bKuruldu = SurumParca.filtreMenusuneEkle(oMenu,"
+            if s.count(capa) != 1:
+                dur("menu-ortakta: çapa 'var bKuruldu = SurumParca.filtreMenusuneEkle(oMenu,' TablePersonalizer içinde tek değil")
+            yaz(p, s.replace(capa, "var bKuruldu = !!oMenu._addFilterMenuItem && SurumParca.filtreMenusuneEkle(oMenu,"))
         if "--mutasyon-yasak-api" in KIP:
             p = w / "controller" / "List.controller.js"
             s = oku(p)
