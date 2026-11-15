@@ -36,4 +36,4 @@ bulgular kaçırıldığı için değil, **üretildiği için** damla damla geli
   ([[feedback_kendi-isini-yeniden-siniflandirip-kural-disina-cikma]]).
 
 İlgili: [[feedback_done-tam-kapsam-dogrula]] · [[feedback_yesil-sinyalin-kapsamini-sor]] ·
-[[feedback_ters-yon-kontrolu]] · [[feedback_sonucu-olc-uygulamayi-degil]]
+[[feedback_ters-yon-kontrolu]] · [[feedback_sonucu-olc-uygulamayi-degil]] · re-gate kapsamı ve MEDIUM/LOW koşulu: [[feedback_re-gate-dar-kapsam-yalniz-high-durdurur]]

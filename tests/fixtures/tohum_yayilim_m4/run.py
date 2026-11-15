@@ -10,7 +10,8 @@ ONARILAN dosyaya ulasir). Bu korpus GERCEK tohumla, GERCEK `seed_memory.py` ile 
 "mevcut tuketici makine" kurar ve yeni tohumun oraya ne kadarinin ulastigini OLCER.
 
 SAHNE (gercek eski durum — bos dizin DEGIL):
-  1) Eski tohum = `git archive <TABAN_SHA> claude/memory-seed` (Q407 oncesi core main).
+  1) Eski tohum = `git archive <TABAN_SHA> claude/memory-seed` (olculen terfi turundan ONCEKI core
+     main; bugun DEV_CORE#441 turu, ilk pin Q407).
      Sandbox core'da eski tohumla `seed_memory` kosulur -> makine manifest'iyle kurulur.
   2) Kullanici dokunuslari: bir tohum dersi yerelde duzenlenir (ZLI) · bir konu hub'i yerelde
      duzenlenir (HUB_DUZ) · kullanici kendi dersini + MEMORY.md satirini ekler.
@@ -24,7 +25,8 @@ CIVILENEN SOZLESME
   M3  yeni dersler (A+C) + yeni tarihli hub makineye eklenir ("Eklendi" tam sayi)
   M4  yeni dersler hedef MEMORY.md'den ERISILIR (tarihli hub satiri `_index_onar` ile eklendi;
       olcum gercek `check_memory_index._butunluk` ile)
-  M5  kullanicinin kendi satiri/dersi korunur · M6 MEMORY.md 200 satir / 25.600 bayt icinde
+  M5  kullanicinin kendi satiri/dersi korunur
+  M6  TAZE kurulumun MEMORY.md'si C-MEM-01 FAIL esiginin altinda (validator sabitleri, CRLF)
   S1  dokunulmamis hub'a konan sonda satiri ULASIR (S1 govde guncellemesi, #318)
   S2  NEGATIF KONTROL: duzenlenmis hub'a konan sonda satiri ULASMAZ (hub ezilmez, uyarida adi
       var, sonda dersi diskte ama erisilemez) — bu yuzden yeni dersler mevcut hub'a DEGIL
@@ -64,44 +66,42 @@ for _s in (sys.stdout, sys.stderr):
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent.parent
 SCRIPTS = REPO / "scripts"
-TABAN_SHA = "8565c9d"          # Q407 oncesi core main (tohum 299 feedback)
+# Sahne her tarihli terfi turunda O TURA yeniden pinlenir (infra-changelog 2026-11-12 Test-senaryosu (1)).
+# Gecmis pinler: 8565c9d / Q407 2026-11-12 (11 yeni ders + 18 geri akis) -> git log bu dosya.
+TABAN_SHA = "4323bba"          # DEV_CORE#441 oncesi core main (tohum 311 feedback)
 
-# Q407 PR-1'in ici (sahnenin olctugu somut dosyalar)
+# DEV_CORE#441 turunun ici (sahnenin olctugu somut dosyalar)
 B_GUNCEL = [  # tohumda evrilen, hedefte dokunulmamis -> yeni govde gelmeli
-    "feedback_agent-briefing-sendmessage-main.md",
-    "feedback_ajan-bulgusu-dogru-mekanizmasi-yanlis.md",
-    "feedback_arac-kod-fix-lider-isi.md",
-    "feedback_bash-heredoc-kacis-ve-utf8-bozulmasi.md",
-    "feedback_infra-turunda-yeni-acilan-maddeye-baslama-mevcutlari-bitir.md",
-    "feedback_kararlari-once-topla-sonra-dispatch.md",
-    "feedback_lider-ajan-paralel-yazim-cakismasi.md",
-    "feedback_merge-safe-dagitimda-satir-yalniz-onarilan-dosyaya-ulasir.md",
-    # PR-2 (2026-11-12): kural degistiren geri akis
-    "feedback_rap-by-assoc-read-all-fields.md",
-    "feedback_atc-priority-1-zorunlu.md",
-    "feedback_deploy-lokal-test-onayi-sart.md",
-    "feedback_push-failure-stale-lock-persistent-session.md",
-    "feedback_dokuman-turu-donmus-kod-ister-paralel-kosturma.md",
-    "feedback_playwright-ui5-firepress-model-api.md",
-    "feedback_kapi-zinciri-derlemeyi-gormez.md",
-    "feedback_capadaki-acik-madde-devralmadan-once-olculur.md",
-    "feedback_clean-core-released-cds-proaktif.md",      # kullanici onayli GEVSETME (yalniz yeni kod)
-    "feedback_fs-ts-html-uretilmez-teslim-bicimi.md",    # kullanici kurali: PDF test OK sonrasi
+    "feedback_abap-unit-aktivasyon-sonrasi-sahte-sifir-test.md",     # G1
+    "feedback_aktardigin-olcum-emre-donusunce-kanitini-tasi.md",     # G2
+    "feedback_sorulari-tek-tek-sor-oneriyle.md",                     # G4 (a)
+    "feedback_standing-ajani-bos-bekletme-tek-tam-brif.md",          # G5
+    "feedback_grid-liste-standardi.md",                              # sarkan project_* linki kaldirildi
+    "feedback_takim-sureklilik-gun-sonu-resume.md",                  # gun sonu = PR ile main (ders 9 hizasi)
 ]
-ZLI = "feedback_zli-obje-text-tahmin-yasak.md"          # tohumda evrildi + hedefte DUZENLENDI
-YENI_HUB = "_indeks-terfi-2026-11-12.md"
+ZLI = "feedback_tablo-yaratma-onay-gate.md"             # G6: tohumda evrildi + hedefte DUZENLENDI
+YENI_HUB = "_indeks-terfi-2026-11-15.md"
 YENI_DERSLER = [
-    "feedback_infra-brifinde-kardes-kipleri-kod-dondu-oncesi.md",
-    "feedback_isaret-sozdizimi-onermeden-once-prior-art-ara.md",
-    "feedback_python-ile-dosya-duzenlerken-bayt-kipi-kullan-eol-korunur.md",
-    "feedback_seed-alanina-satir-ici-yorum-yazma.md",
-    "feedback_deploy-ui-yarida-kesilince-bsp-yine-yaratilmis-olabilir.md",
-    "feedback_fugr-include-push-fugr-i-yolu-tmg-olay.md",
-    "feedback_is-parametresini-koda-gomme-onerme.md",
-    "feedback_kapi-raporu-kaydi-verify-report-tuzaklari.md",
-    "feedback_test-yazmadan-once-acik-onay.md",
-    "feedback_exit-include-e-az-yorum.md",
-    "feedback_kullaniciya-her-mesaj-turkce.md",
+    "feedback_bekci-yeniden-kurulunca-tabani-kayar-sabit-baslangic-ver.md",
+    "feedback_belge-incelemesinde-fable-kayit-duzeni-opus-tasarim.md",
+    "feedback_canli-test-oracle-sistem-kaydi-uygulama-durumu-degil.md",
+    "feedback_cdn-surum-varligi-surum-dosyasiyla-kanitlanmaz.md",
+    "feedback_ekran-teyidi-gorev-mesajinda-da-ilk-cikti.md",
+    "feedback_gorunen-hata-son-denemenin-yanitidir-ilk-tekrarda-ham-iz-ve-kontrol.md",
+    "feedback_gun-sonu-dal-pr-ile-maine-girer.md",
+    "feedback_kayit-tarihi-saatten-alinir.md",
+    "feedback_onay-diyalogu-afterclose-once-sozu-sonuclandir-sonra-destroy.md",
+    "feedback_rap-isleyicide-submit-yasak-destination-none-izinli.md",
+    "feedback_re-gate-dar-kapsam-yalniz-high-durdurur.md",
+    "feedback_read-entities-bo-disi-tamponu-gormez.md",
+    "feedback_sessiz-yanlis-fiyat-gorunur-eksikten-agir.md",
+    "feedback_ui-testi-dom-varligi-gorunurluk-ve-olay-parametresi.md",
+    "feedback_ui-testinin-son-kontrolu-sunucu-durumunu-olcmeli.md",
+    "feedback_ui5-mockserver-batch-etag-iki-nokta-keser.md",
+    "feedback_ui5-yapici-ayarinda-suslu-parantez-baglamadir.md",
+    "feedback_wt-denetim-entegrasyon-dali-uzerinden-birlesen-dal-hukmu.md",
+    "feedback_yazmadan-hemen-once-taze-etag-okumak-iyimser-kilidi-sifirlar.md",
+    "feedback_yeni-surum-api-yoklugu-denetim-yoklugu-degildir.md",
 ]
 HUB_TEMIZ = "_indeks-ajan-takim.md"          # hedefte dokunulmaz
 HUB_DUZ = "_indeks-karar-iletisim.md"        # hedefte kullanici duzenler
@@ -120,7 +120,8 @@ _BEKLENEN_DUSEN: dict[str, set[str]] = {
     # yeni tohum yok: evrilmis govde gelmez, yeni ders/hub yok, sondalar yok, ZLI uyarisi yok
     # (tohum ilerlemedi -> duzenlenmis ders SESSIZ), duzenlenmis hub uyarisi yok; X2: manifest'siz
     # makinede dosya tohumla AYNI kalir -> 'ayırt edilemez' uyarisi da cikmaz (olculdu 2026-11-12)
-    "--mutasyon-eski-tohum": {"M1", "M2b", "M3", "M4", "S1", "S2", "X1", "X2"},
+    # + M6 (DEV_CORE#441): eski tohumun MEMORY.md'si C-MEM-01 FAIL esiginin USTUNDEYDI
+    "--mutasyon-eski-tohum": {"M1", "M2b", "M3", "M4", "M6", "S1", "S2", "X1", "X2"},
     # duzenlenmis ders + duzenlenmis hub EZILIR, uyari cikmaz; sonda duzenlenmis hub'a da ulasir
     "--mutasyon-duzenleneni-ez": {"M2a", "M2b", "S2"},
 }
@@ -179,12 +180,18 @@ def _sonda_ekle(tohum: dict[str, bytes]) -> None:
                         f"  type: feedback\n---\n\nsonda govdesi\n").encode("utf-8")
 
 
-def _erisilemez(hedef: Path) -> set[str]:
-    """Gercek C-MEM-01 `_butunluk` ile hedefte indeksten erisilemeyen dosya adlari."""
+def _cmi():
+    """Gercek C-MEM-01 modulu (check_memory_index) — esikler ve olcum ondan okunur."""
     spec = importlib.util.spec_from_file_location(
         "_cmi_m4", SCRIPTS / "validators" / "check_memory_index.py")
     mod = importlib.util.module_from_spec(spec)                      # type: ignore[arg-type]
     spec.loader.exec_module(mod)                                     # type: ignore[union-attr]
+    return mod
+
+
+def _erisilemez(hedef: Path) -> set[str]:
+    """Gercek C-MEM-01 `_butunluk` ile hedefte indeksten erisilemeyen dosya adlari."""
+    mod = _cmi()
     hatalar: list[str] = []
     mod._butunluk(hedef, "m4", hatalar)
     out = set()
@@ -302,12 +309,29 @@ def main(kip: str | None) -> int:
              KENDI_SATIR in mem and (h / KENDI).read_bytes() == kendi_once
              and not (erisilemez - erisilemez_once - {SONDA_DUZ}),
              f"yeni-erisilemez={sorted(erisilemez - erisilemez_once)}")
-        mb = (h / "MEMORY.md").read_bytes()
-        mb_satir = mb.count(b"\n")
-        # C-MEM-01 tavani DISK baytidir; Windows checkout'u CRLF'dir -> en kotu durum CRLF esdegeri
-        mb_crlf = len(_lf(mb)) + mb_satir
-        ekle("M6 hedef MEMORY.md 200 satir / 25.600 bayt icinde (CRLF esdegeri)",
-             mb_satir <= 200 and mb_crlf <= 25 * 1024, f"satir={mb_satir} bayt-crlf={mb_crlf}")
+        # M6 TAZE kurulumu olcer: MEMORY.md yalniz hedefte YOKSA kopyalanir, mevcut makinenin
+        # indeksi tohumdan guncellenmez (yalniz eksik link satiri eklenir) => tohumdaki
+        # kisaltma yalniz yeni kuruluma ulasir; mevcut makinenin indeksi kullanicinindir.
+        taze = tmp / "taze"
+        rct, _ = kos(taze)
+        (taze / "MEMORY.md").write_bytes((taze / "MEMORY.md").read_bytes().rstrip(b"\n")
+                                         + b"\n" + KENDI_SATIR.encode("utf-8") + b"\n")
+        mb = (taze / "MEMORY.md").read_bytes()
+        # C-MEM-01 butcesi DISK baytidir; Windows checkout'u CRLF'dir -> en kotu durum CRLF esdegeri.
+        # Esik validator'in KENDI FAIL esigidir (FAIL_ORAN x tavan), tavanin kendisi DEGIL:
+        # DEV_CORE#441 olcumu — tohum MEMORY.md 25.321 B (CRLF) tavanin altindaydi ama %95 FAIL
+        # esiginin (24.320) ustundeydi => her TAZE kurulumda check_memory_index ilk kosuda FAIL.
+        # Eski M6 (<= 25*1024) bunu goremiyordu.
+        cmi = _cmi()
+        govde = cmi._yukleme_govdesi(_lf(mb).replace(b"\n", b"\r\n").decode("utf-8"))
+        mb_crlf = len(govde.encode("utf-8"))
+        mb_satir = len(govde.splitlines())
+        bayt_sinir = int(cmi.FAIL_ORAN * cmi.BAYT_TAVAN)
+        satir_sinir = int(cmi.FAIL_ORAN * cmi.SATIR_TAVAN)
+        ekle("M6 TAZE kurulumun MEMORY.md'si (+1 kullanici satiri) C-MEM-01 FAIL esiginin altinda "
+             "(CRLF esdegeri, validator sabitleri)",
+             rct == 0 and mb_satir < satir_sinir and mb_crlf < bayt_sinir,
+             f"rc={rct} satir={mb_satir}/{satir_sinir} bayt-crlf={mb_crlf}/{bayt_sinir}")
         hub_temiz = (h / HUB_TEMIZ).read_bytes().decode("utf-8")
         ekle("S1 dokunulmamis hub'a konan sonda satiri ULASTI + sonda dersi erisilir",
              f"[[{SONDA_TEMIZ[:-3]}]]" in hub_temiz and SONDA_TEMIZ not in erisilemez

@@ -39,5 +39,13 @@ Beşini de **ölçen kişi** (üretici/kapı) düzeltti. Bir kez de ajan talimat
 - Ajan aktarımını çürütürse **teşekkür et ve ölçümü kabul et**; kapıların değeri liderin haklı
   çıkmasında değil, her katmanın ölçme hakkını kullanmasında.
 
+**Tekrar (2026-11-08, gateway brifi):** brife "T03 silinince T02'nin where-used sonucu **0** olmalı" yazıldı ama bu ölçülmemişti.
+T02 kendine para birimi referansı verdiği için where-used sonucunda kendini gösterir. Gateway DUR koyup sordu;
+bu doğru bir davranıştı. Aynı brifte "E071 satırı kalabilir" yazıldı ve playbook'taki kapanış adımı
+(`playbook/adt-tables-structures.md`) okunmadı. **Ders:** brifteki her *beklenen sonuç* de bir olgu iddiasıdır.
+Ölçülmemişse "beklenen (ölçülmedi)" diye yaz ve DUR koşulunu buna göre esnek kur.
+
+Son-doğrulama: 2026-11-08
+
 İlgili: [[feedback_tarama-ciktisi-hipotezdir-is-listesi-degil]], [[feedback_kapsam-niteleyicisini-dusurme]],
 [[feedback_ajan-bulgusu-dogru-mekanizmasi-yanlis]], [[feedback_iddia-yazma-aninda-kanit-kurallari]]
