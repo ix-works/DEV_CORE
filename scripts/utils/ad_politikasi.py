@@ -93,6 +93,19 @@ def url_parcasindan_ad(parca) -> str:
     """`url_segmenti`'nin tersi: `%2Fns%2Fx` / `%2fns%2fx` → `/NS/X` (büyük harf)."""
     return _unquote(str(parca)).upper()
 
+
+def url_adi(object_url) -> str:
+    """ADT nesne URL'inin AD parçası (sorgu/parça + `/source/main` · `/source` kuyruğu atılır),
+    `url_parcasindan_ad` ile çözülmüş: `…/classes/%2fns%2fcl_x/source/main` → `/NS/CL_X`.
+    Çözülemezse '' (çağıran yer tutucu basar). Namespace tesisatı G4 (2026-11-15): eski
+    `split('/')[-1].upper()` `%2FNS%2FCL_X` üretiyordu ⇒ E071 teşhis sorgusu 0 satır."""
+    yol = str(object_url or "").split("?")[0].split("#")[0].rstrip("/")
+    for kuyruk in ("/source/main", "/source"):
+        if yol.lower().endswith(kuyruk):
+            yol = yol[: -len(kuyruk)].rstrip("/")
+    ad = yol.rsplit("/", 1)[-1].strip()
+    return url_parcasindan_ad(ad) if ad else ""
+
 ANAHTAR = "customer_namespaces"
 
 _ZY = re.compile(r"^[ZY][A-Z0-9_]*\Z", re.IGNORECASE)
@@ -346,6 +359,76 @@ def dosya_adi(ad) -> str:
     if "/" in a or "\\" in a:
         raise ValueError(f"dosya adına çevrilemez (yol ayıracı kalıyor): {ad!r}")
     return a.lower()
+
+
+def yerel_ad(ad) -> str:
+    """Eski "dosya adı = SAP adı" yazan araçların YAZMA yönü (namespace tesisatı, 2026-11-15).
+
+    Namespace'siz ad AYNEN döner (harf DEĞİŞMEZ — `download_object`/`push_object`/`delete_object`
+    ve DDIC indiricisi Z/Y adında bugün `ZCL_X.abap` gibi BÜYÜK harfli dosya kullanır; okuyan
+    taraf da o adı arar) · `/NS/X` → `dosya_adi` (`#ns#x`, abapGit). Neden: `Path(kok) / "/NS/X.abap"`
+    sürücü köküne kaçar (Windows `C:/NS/X.abap`) — ölçüldü 2026-11-15: indirme `FileNotFoundError
+    'C:\\NS\\CL_X.abap'`, silme dalı sürücü kökündeki aynı adlı dosyayı `unlink` ederdi.
+    `/` ile başlayıp namespace biçimine uymayan ad ya da gövdede yol ayıracı ⇒ ValueError."""
+    a = str(ad or "").strip()
+    if "/" in a or "\\" in a:
+        return dosya_adi(a)
+    return a
+
+
+def musteri_govdesi(ad, *, namespaces=None, root=None) -> tuple[str, str] | None:
+    """(önek, gövde): `ZSD001_CLC` → ('Z', 'SD001_CLC') · `YSD001` → ('Y', 'SD001') ·
+    `/NSPC/SD001_CLC` → ('/NSPC/', 'SD001_CLC') YALNIZ namespace projede bildirilmişse; aksi None.
+
+    Adlandırma standardı (ADR 0002) Z önekli `Z<MOD><NNN>` kökünü tarif eder; Y ve bildirilmiş
+    namespace'te aynı GÖVDE kuralı uygulanır (lider yorumu 2026-11-15, sahip onayına açık:
+    namespace'li paket `/NS/` + Z'li gövdenin aynısı, ör. `/NSPC/SD001_CLC`). Z/Y adında
+    yapılandırma OKUNMAZ (eski Z davranışı yan etkisiz korunur). Harf büyütülür."""
+    a = str(ad or "").strip().upper()
+    if a[:1] in ("Z", "Y"):
+        return a[:1], a[1:]
+    ns = ad_namespace(a)
+    if ns is None:
+        return None
+    kayitli = musteri_namespaceleri(root) if namespaces is None else tuple(
+        str(n).upper() for n in namespaces)
+    return (ns, a[len(ns):]) if ns in kayitli else None
+
+
+# ── OData V2 servis kökü (namespace tesisatı G3, 2026-11-15) ────────────────────────────────
+# SAP Gateway ICF ağacında `…/sap/opu/odata/` altında `sap` düğümünün KARDEŞİ olarak namespace
+# düğümleri durur (ölçüldü 2026-11-15, DEV salt-okur: `icfservice` …/odata → 16 çocuk; `SAP` yanında
+# SAP'nin kendi namespace düğümleri) ve `/IWFND/I_MED_SRH` namespace'li servis kaydını
+# `NAMESPACE=/<NS>/` + `OBJECT_NAME=/<NS>/<AD>` biçiminde tutar ⇒ `/<NS>/<AD>` servisinin kökü
+# `/sap/opu/odata/<ns>/<AD>`'dir, `sap/` altında DEĞİL. ⚠ ÖLÇÜLEMEDİ: namespace'li GERÇEK bir
+# müşteri servisine HTTP isteği (ölçüm sisteminde müşteri namespace'li servis yok) — yol kayıttan
+# ve ICF ağacından türetildi. Namespace düğümü küçük harf yazılır (ICF düğüm adları harf duyarsız;
+# `sap` düğümüyle aynı yazım). Z/Y servis adında çıktı eski `/sap/opu/odata/sap/{servis}` ile
+# BAYT BAYT aynıdır (servis adının harfi değiştirilmez).
+ODATA_KOK = "/sap/opu/odata"
+_ODATA_URI = re.compile(r"^/sap/opu/odata/([^/\"?]+)/([^/\"?]+)/?\Z", re.IGNORECASE)
+
+
+def odata_servis_yolu(servis) -> str:
+    """`ZSD001_SRV` → `/sap/opu/odata/sap/ZSD001_SRV` · `/NS/X_SRV` → `/sap/opu/odata/ns/X_SRV`."""
+    s = str(servis or "").strip()
+    ns = ad_namespace(s)
+    if ns:
+        return f"{ODATA_KOK}/{ns[1:-1].lower()}/{s[len(ns):]}"
+    return f"{ODATA_KOK}/sap/{s}"
+
+
+def odata_uri_servisi(uri) -> str | None:
+    """`odata_servis_yolu`'nun tersi (manifest `dataSources.*.uri`): `…/sap/<AD>/` → `<AD>` ·
+    `…/<ns>/<AD>/` → `/NS/<AD>`; segment `sap` ya da namespace biçimi değilse None."""
+    m = _ODATA_URI.match(str(uri or ""))
+    if not m:
+        return None
+    seg, ad = m.group(1), m.group(2)
+    if seg.lower() == "sap":
+        return ad
+    ns = "/" + seg.upper() + "/"
+    return ns + ad if _NS_BICIM.match(ns) else None
 
 
 def fugr_include_oneki(grup: str) -> str:

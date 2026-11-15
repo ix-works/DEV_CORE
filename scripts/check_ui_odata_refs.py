@@ -79,6 +79,7 @@ except Exception: pass
 # DEGIL, `scripts/` import koku araniyor). Ortak kapsam sozlesmesi orada yasar.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils.kapsam import kapsam_eki  # noqa: E402
+from utils.ad_politikasi import odata_servis_yolu, odata_uri_servisi  # noqa: E402 — G3 (2026-11-15): /<NS>/ servis koku
 
 JS_KEYS = {"method", "headers", "success", "error", "urlParameters", "filters", "sorters"}
 
@@ -114,6 +115,10 @@ RE_ISIMLI_SUSLU = re.compile(r'\{\s*([A-Za-z0-9_]+)>/([A-Za-z0-9_]+)\s*\}')
 RE_FILTER_DEGISKEN = re.compile(r'new Filter\(\s*(?!["\'{])[A-Za-z_$][\w$.]*\s*,')
 RE_LITERAL = re.compile(r'(["\'])/([A-Z][A-Za-z0-9_]*)\1')
 RE_SERVIS_URI = re.compile(r'^/sap/opu/odata/sap/([^/"?]+)/?$', re.I)
+# G3 (2026-11-15): `/<NS>/<AD>` servisinin koku `/sap/opu/odata/<ns>/<AD>` (sap/ DEGIL) — cozum
+# `utils.ad_politikasi.odata_uri_servisi` / `odata_servis_yolu` (gerekce + OLCULEMEDI siniri orada).
+# `RE_SERVIS_URI` (sap/ yolu) hem model haritasinda hem ana servis seciminde ONCELIKLIDIR: eski
+# davranis bayt bayt korunur, namespace yolu yalniz sap/ eslesmesi YOKSA devreye girer.
 
 ENTITY_DESENLERI = ".read('/X') · path: '/X' · entitySet='X' · var X = '/X' (tek/cift tirnak)"
 
@@ -138,7 +143,7 @@ def load_conn(cwd):
 
 def fetch_metadata(cfg, service):
     s = requests.Session(); s.auth = (cfg["ADT_SAP_USER"], cfg["ADT_SAP_PASSWORD"]); s.verify = False
-    url = f"{cfg['ADT_SAP_URL']}/sap/opu/odata/sap/{service}/$metadata"
+    url = f"{cfg['ADT_SAP_URL']}{odata_servis_yolu(service)}/$metadata"   # G3: /NS/X -> /sap/opu/odata/ns/X
     r = s.get(url, params={"sap-client": cfg.get("ADT_SAP_CLIENT", "100")}, timeout=ZAMAN_ASIMI)
     r.raise_for_status()
     return r.text
@@ -190,6 +195,10 @@ def model_haritasi(app):
             u = RE_SERVIS_URI.match(d.get("uri") or "")
             if u:
                 servis_ds[ad] = u.group(1)
+            else:   # G3: sap/ yolu degilse `<ns>/<AD>` -> `/NS/<AD>` (namespace'li servis koku)
+                ns_servis = odata_uri_servisi(d.get("uri") or "")
+                if ns_servis and ns_servis.startswith("/"):
+                    servis_ds[ad] = ns_servis
     harita = {}
     for ad, mdl in ((m.get("sap.ui5") or {}).get("models") or {}).items():
         if isinstance(mdl, dict) and mdl.get("dataSource") in servis_ds:
@@ -485,6 +494,11 @@ def main():
         mani = open(os.path.join(a.app, "webapp", "manifest.json"), encoding="utf-8").read()
         m = re.search(r'"uri":\s*"/sap/opu/odata/sap/([^/"]+)/?"', mani, re.I)
         service = m.group(1) if m else None
+        if not service:   # G3: sap/ yolu yoksa namespace'li servis koku (`/sap/opu/odata/<ns>/<AD>/`)
+            for mu in re.finditer(r'"uri":\s*"(/sap/opu/odata/[^"]+)"', mani, re.I):
+                service = odata_uri_servisi(mu.group(1))
+                if service:
+                    break
     if not service:
         print("[FAIL] servis adi cozulemedi (--service ver)"); sys.exit(2)
 

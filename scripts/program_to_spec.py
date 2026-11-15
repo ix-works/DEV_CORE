@@ -26,9 +26,14 @@ from pathlib import Path
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from utils.ad_politikasi import AD_ADAYI, ad_coz, ad_namespace  # noqa: E402 — G2 (2026-11-15): tek ad grameri
+
+# G2 (2026-11-15): tablo adı `(\w+)` ile yakalanıyordu — `\w` `/` eşlemez ⇒ `FROM /ns/tab`
+# hiçbir listeye girmeden KAYBOLUYORDU (ölçüldü). Tablo yakalaması `AD_ADAYI` + `ad_coz`.
 _PATTERNS = {
-    "tables": re.compile(r'\bTABLES?\s*:?\s+(\w+)', re.IGNORECASE),
-    "select_from": re.compile(r'\b(?:FROM|JOIN)\s+(\w+)', re.IGNORECASE),
+    "tables": re.compile(r'\bTABLES?\s*:?\s+(' + AD_ADAYI + ')', re.IGNORECASE),
+    "select_from": re.compile(r'\b(?:FROM|JOIN)\s+(' + AD_ADAYI + ')', re.IGNORECASE),
     "params": re.compile(r'\bPARAMETERS?\s*:?\s+(\w+)', re.IGNORECASE),
     "selopts": re.compile(r'\bSELECT-OPTIONS\s*:?\s+(\w+)', re.IGNORECASE),
     "call_func": re.compile(r"\bCALL\s+FUNCTION\s+'([^']+)'", re.IGNORECASE),
@@ -36,11 +41,13 @@ _PATTERNS = {
     "forms": re.compile(r'\bFORM\s+(\w+)', re.IGNORECASE),
     "methods": re.compile(r'\bMETHODS?\s*:?\s+(\w+)', re.IGNORECASE),
     "screens": re.compile(r'\b(?:CALL|SET)\s+SCREEN\s+(\d+)', re.IGNORECASE),
-    "classes": re.compile(r'\bCLASS\s+(\w+)\s+DEFINITION', re.IGNORECASE),
-    "cds_entity": re.compile(r'\bdefine\s+(?:root\s+)?view\s+entity\s+(\w+)', re.IGNORECASE),
-    "report": re.compile(r'\bREPORT\s+(\w+)', re.IGNORECASE),
-    "func_pool": re.compile(r'\bFUNCTION-POOL\s+(\w+)', re.IGNORECASE),
+    "classes": re.compile(r'\bCLASS\s+(' + AD_ADAYI + r')\s+DEFINITION', re.IGNORECASE),
+    "cds_entity": re.compile(r'\bdefine\s+(?:root\s+)?view\s+entity\s+(' + AD_ADAYI + ')', re.IGNORECASE),
+    "report": re.compile(r'\bREPORT\s+(' + AD_ADAYI + ')', re.IGNORECASE),
+    "func_pool": re.compile(r'\bFUNCTION-POOL\s+(' + AD_ADAYI + ')', re.IGNORECASE),
 }
+# Nesne adı taşıyan anahtarlar — katı gramer (`ad_coz`) süzgecinden geçer.
+_AD_ANAHTARLARI = ("tables", "select_from", "classes", "cds_entity", "report", "func_pool")
 # Standart SAP tabloları (ihtimal) — büyük harf, 3+ ve Z ile başlamayan
 _STD_TABLE_HINT = re.compile(r'^[A-Y]\w{2,}$')
 
@@ -58,7 +65,11 @@ def extract(text: str) -> dict:
     text = "\n".join(l for l in text.splitlines() if not l.strip().startswith("*"))
     facts = {}
     for key, rx in _PATTERNS.items():
-        facts[key] = _uniq(rx.findall(text))
+        bulunan = rx.findall(text)
+        if key in _AD_ANAHTARLARI:
+            # gramer dışı aday (`/AB/X`, `/`) düşer — ad_coz katı katman
+            bulunan = [a for a in (ad_coz(b)[0] for b in bulunan) if a]
+        facts[key] = _uniq(bulunan)
     return facts
 
 
@@ -66,8 +77,13 @@ def render(facts: dict, sources: list[str]) -> str:
     prog = (facts["report"] or facts["func_pool"] or facts["classes"]
             or facts["cds_entity"] or ["<obje>"])[0]
     tables = _uniq(facts["tables"] + facts["select_from"])
-    std_tables = [t for t in tables if _STD_TABLE_HINT.match(t.upper()) and not t.upper().startswith("Z")]
-    z_tables = [t for t in tables if t.upper().startswith("Z")]
+    # G2 (2026-11-15): Y de müşteri ad alanıdır (ADR 0005-A); eski kod `ytab` tablosunu
+    # "Standart (teyit et)" listesine koyuyordu. Namespace'li tablo AYRI kova: buradan müşterinin
+    # bildirdiği namespace mi SAP'nin mi BİLİNEMEZ (taslak araç proje yapılandırması okumaz).
+    ns_tables = [t for t in tables if ad_namespace(t.upper())]
+    std_tables = [t for t in tables if not ad_namespace(t.upper())
+                  and _STD_TABLE_HINT.match(t.upper()) and t.upper()[:1] not in ("Z", "Y")]
+    z_tables = [t for t in tables if t.upper()[:1] in ("Z", "Y")]
     L = []
     w = L.append
     w(f"# TASLAK FS/TS — {prog}")
@@ -107,6 +123,9 @@ def render(facts: dict, sources: list[str]) -> str:
         w(f"- **Standart (teyit et — sistemde var mı, ADR 0005-A okuma):** {', '.join(std_tables)}")
     if z_tables:
         w(f"- **Z tablolar:** {', '.join(z_tables)}")
+    if ns_tables:
+        w(f"- **Namespace'li tablolar (müşteri namespace'i mi SAP'nin mi — teyit et, ADR 0005-A):** "
+          f"{', '.join(ns_tables)}")
     if not tables:
         w("- <tespit edilemedi>")
     w("")

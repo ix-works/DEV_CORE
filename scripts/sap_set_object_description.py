@@ -118,7 +118,8 @@ def _lock_put_unlock(adt, url, full, ctype, data, etag, transport):
             # DEĞİŞMEZ, yeniden deneme YOK; yalnız tek kaynak uyarı (SM12 KONTROL, silme değil).
             if adt.unlock_object(url, lock_handle) is False:
                 from sap_adt_lib import kilit_birakilamadi_uyarisi
-                print(kilit_birakilamadi_uyarisi(url.rstrip("/").rsplit("/", 1)[-1].upper()))
+                from utils.ad_politikasi import url_adi  # G4 (2026-11-15): %2f çözülür
+                print(kilit_birakilamadi_uyarisi(url_adi(url) or "<OBJE>"))
         except Exception as exc:
             print(f"[WARN] unlock: {exc}")
 

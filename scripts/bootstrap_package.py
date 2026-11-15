@@ -35,6 +35,7 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
 from utils.project_config import project_root,  SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+from utils.ad_politikasi import yerel_ad, musteri_govdesi, ad_namespace  # G1/G5 (2026-11-15): tek ad politikasi
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -99,19 +100,35 @@ def main() -> int:
     args = parser.parse_args()
 
     pkg_full = args.package
-    if not re.match(r"^ZSD\d{3}_CLC$", pkg_full):
+    # G5 (2026-11-15): standart biçim Z/Y önekiyle ya da projede bildirilmiş `/<NS>/` ile
+    # (`customer_namespaces`) AYNI gövde: `ZSD001_CLC` · `YSD001_CLC` · `/NSPC/SD001_CLC`
+    # (lider yorumu, sahip onayına açık — ADR 0002 yalnız Z biçimini yazar). Z davranışı aynı.
+    _og = musteri_govdesi(pkg_full)
+    if not (_og and re.match(r"^SD\d{3}_CLC$", _og[1]) and pkg_full == pkg_full.upper()):
         print(
-            f"UYARI: Paket adı '{pkg_full}' standart format değil (ZSD<NNN>_CLC). "
-            f"ADR 0002'ye bak.",
+            f"UYARI: Paket adı '{pkg_full}' standart format değil (ZSD<NNN>_CLC; Y ya da "
+            f"bildirilmiş /<NS>/ önekiyle aynı gövde). ADR 0002'ye bak.",
             file=sys.stderr,
         )
+    # G1 (2026-11-15): `/` taşıyan ad Path parçası OLAMAZ — `erp_root/"SD"/"/NS/SD001_CLC"` sürücü
+    # köküne (`C:/NS/SD001_CLC`) klasör açıyordu (ölçüldü). Klasör adı abapGit biçimi `#ns#…`
+    # (küçük harf; check_package_naming / check_object_in_correct_pkg bu biçimi okur, Issue #391 N3).
+    try:
+        pkg_klasor = yerel_ad(pkg_full)
+    except ValueError as exc:
+        print(f"HATA: paket adı klasör adına çevrilemedi: {exc}. Hiçbir şey YARATILMADI.",
+              file=sys.stderr)
+        return 1
 
     pkg_short = pkg_full.replace("_CLC", "")
     pkg_noz = pkg_noz_turet(pkg_short)
     if pkg_noz == pkg_short:
+        _ns = ad_namespace(pkg_short.upper())
+        _oneri = (f" (namespace'li pakette sınıf biçimi `{_ns}CL_{pkg_short[len(_ns):]}_*`)"
+                  if _ns else "")
         print(f"[BİLGİ] PKG_NOZ = PKG ('{pkg_short}' büyük Z ile başlamıyor): .rules.md'deki "
               f"`ZCL_{{PKG_NOZ}}_*` sınıf satırı `ZCL_{pkg_short}_*` üretir — ad alanına uymuyorsa "
-              f"satırı elle düzelt.", file=sys.stderr)
+              f"satırı elle düzelt{_oneri}.", file=sys.stderr)
     # Güvenli-varsayılan: kimlik gömme. Gerçek ad ancak AÇIKÇA istenirse yazılır.
     if args.owner:
         owner = args.owner
@@ -136,7 +153,7 @@ def main() -> int:
     templates_dir = Path(args.templates_root)
     erp_root = (lambda _p: _p if _p.is_absolute() else (project_root() / _p))(Path(args.source_root))
     module_dir = erp_root / args.module
-    pkg_dir = module_dir / pkg_full
+    pkg_dir = module_dir / pkg_klasor   # G1: namespace'li ad `#ns#…` (yerel_ad)
 
     # Modül klasörü: VARSA (listede olsun olmasın) aynen kullanılır. YOKSA ve `--module`
     # GECERLI_MODULLER'deyse burada YARATILIR ve bu söylenir; liste dışı bir ad için klasör
