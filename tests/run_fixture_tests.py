@@ -275,6 +275,9 @@ OZEL_TESTLER = [
      "Q352-C: PBE eklentisi msag CSV + textpool: salt-okur pull birlestirme (sira/tirnak/BOM/satir sonu KORUNUR, "
      "yalniz-yerel dokunulmaz) + damga YALNIZ tam karsilastirmada (paket/ortak-anahtar/calisma!=active -> OLCULEMEDI) "
      "+ gercek kapi uctan uca"),
+    ("pbe_worktree_damga",
+     "#435: worktree cwd'sinden env bos kosan cekicinin damgasi kapiya ULASIR (git'ten ana agac + "
+     "dosyanin agaci store'u; baska seansin store'u korunur) — 3 cekici + GERCEK kapi alt sureci"),
     ("cds_curr_eksik_annotation",
      "DERINLIK: EKSIK @Semantics hic aranmiyordu (rc=0 bilgi tasimiyordu) + yesilin PAYDASI + WARNING siddeti"
      " + Q234/Q237: cok-satirli ifade ve `union` 2.+ dali YANLIS POZITIF uretiyordu"),
@@ -1558,6 +1561,14 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "E1: eklenti kaydı + komut/not sözleşmesi → gerçek alt süreç"),
     ("scripts/source_drift.py", ("O:pbe_msag_textpool",),
      "E1 tazelik_damgala/seans_kimligi gerçek store + H11 `_EXCLUDED_DIR_SEGMENTS` tek kaynak"),
+    # #435 (2026-11-15): ek damga hedefleri (git ana ağaç + dosyanın ağacı). AYRI satırlar.
+    ("scripts/source_drift.py", ("O:pbe_worktree_damga",),
+     "`git_agac_kokleri` + `tazelik_ek_hedefleri` + seans korumalı ek damga"),
+    ("scripts/fetch_ui_source.py", ("O:pbe_worktree_damga",), "`damga_yeri` ek store + ⚠ koşulu"),
+    ("scripts/sap_sync_pull.py", ("O:pbe_worktree_damga",), "--offline --file wt cwd'sinden"),
+    ("scripts/pull_msag_textpool.py", ("O:pbe_worktree_damga",), "--offline --file wt cwd'sinden"),
+    ("scripts/hooks/pull_before_edit.py", ("O:pbe_worktree_damga",),
+     "kapı anahtarı (kök dışı = mutlak) — ek damganın okuyucusu (değişmedi)"),
     ("scripts/push_object.py",
      ("O:class_include_push", "O:adt_uc_url_cozumu", "O:push_atlandi_ve_kaynak_izi",
       "O:push_onkontrol_olculemedi"),
