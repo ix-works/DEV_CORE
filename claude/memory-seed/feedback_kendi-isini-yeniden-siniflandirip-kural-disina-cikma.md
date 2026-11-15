@@ -52,3 +52,19 @@ sınıflandırmadan önce **o** okunur. [[feedback_infra-icin-ayri-acik-onay-sar
 
 İlgili: [[feedback_lider-build-yapmaz-experte-dagit]], [[feedback_subagent-karar-kurali]],
 [[feedback_karar-verimliligi-asiri-kapi-yok]], [[feedback_sonucu-olc-uygulamayi-degil]]
+
+**⟳ Vaka 2 (2026-09-30) — ADR kaynaklı onay kalemi.** Bir düzeltme turunda "açık onay kalemlerini
+kapat" derken bir arama listesinin **ADR 0009 ortak/local yerleşim** sorusunu "teknik obje adı →
+lider kararı" diye yeniden sınıflandırdım ve kullanıcıya **"açık kullanıcı kararı kalmadı"** dedim.
+ADR 0009 yerleşimi kullanıcıya sormayı açıkça şart koşuyor. Taze doküman kapısı yakaladı; kullanıcıya
+soruldu. ⇒ Bir kalemi "kullanıcı kararı değil" diye kapatmadan önce o kalemi soran **kuralın kendi
+metni** okunur. Kalem bir ADR'den geliyorsa sınıfı ADR belirler, benim kapatma isteğim belirlemez.
+
+**⟳ Vaka 3 (2026-11-14) — test dönüşü "küçük" değişiklik.** Bir ALV raporuna iki kolon (JOIN + ikinci
+SELECT + ABAP seçim kuralı, ~40 satır) talebinde `backend-expert`'e vermeden kodu lider yazdı;
+gerekçeyi kendime bile söylemeden "küçük, §1.1 'önemsiz → kendin'" saydım. Kullanıcı sordu: *"kodlamayı
+neden sen yapıyorsun"*. Hatırlama değil — **sınıflandırma kararını sessiz verdim**. Ölçüt: iş kuralı +
+SQL + ABAP mantığı taşıyan HER kod değişikliği build'dir → `backend-expert`; "önemsiz" yalnız
+yorum/metin/tek sabit gibi mantıksız düzeltmedir. Sınırda kalırsan etiketi KULLANICIYA söyle, kendine değil.
+
+Son-doğrulama: 2026-11-14 · Applies-to: lider, SAP build işleri (BE/FE) ve ADR kaynaklı onay kalemleri

@@ -40,7 +40,7 @@
 - [Freestyle UI PRE-FLIGHT Zorunlu](feedback_freestyle-ui-preflight.md) — GATE ui-freestyle-creation + check_ui5_freestyle_traps; ui-freestyle-odata-v2 + ui-backend-rap §0 baştan
 - [Liste Ekranı ALV Standardı](feedback_liste-ekrani-alv-standardi.md) — GATE check_list_view_grid; sort/filtre+çubuk+göster-gizle/varyant+Excel zorunlu (istemese bile)
 - [Grid Liste Standardı (sap.ui.table)](feedback_grid-liste-standardi.md) — GATE check_list_view_grid; ALV-tarzı=grid+native sort/filter+DB varyant; m.Table mobil istisna
-- [Rapor Filtre = Select-Options + Contains](feedback_rapor-filtre-select-options-contains-standardi.md) — GATE check_filter_search_pattern (FE-32); MultiInput+VHD çoklu+aralık; caseSensitive:false YASAK (/IWBEP toupper 400, Note 1797736); wildcard _parseSearchTerm; kanonik ZSD001
+- [Rapor Filtre = Select-Options + Contains](feedback_rapor-filtre-select-options-contains-standardi.md) — GATE check_filter_search_pattern (FE-32); MultiInput+VHD çoklu+aralık; caseSensitive:false YASAK (/IWBEP toupper 400, Note 1797736); wildcard _parseSearchTerm yalnız seçim ekranı/VH (grid kutusu düz arama + Filtre…); kanonik ZSD001
 - [Audit Alan Auto-Fill](feedback_audit-alan-autofill-standardi.md) — GATE check_audit_fields_autofill; idempotent setAdmin; create→tümü, update→updated_*
 - [Ortak Value-Help — KULLANICIYA SOR](feedback_ortak-value-help-sor.md) — VH için ortak ZSD000_I_* mı local mi SOR; generic master VH tekrar yaratma, expose+assoc (ADR 0009)
 - [Done = Tam Kapsam Doğrula](feedback_done-tam-kapsam-dogrula.md) — "tamam" demeden TAM kapsama karşı doğrula; ertelenen alt-maddeyi flag+register; canlı teyit
@@ -163,6 +163,7 @@
 ### 2026-11-12 + 11-15 tohum terfileri (konu başlıklı)
 - **11 ders:** [tam indeks](_indeks-terfi-2026-11-12.md) — Karar 4 · Ajan 2 · Araç 2 · SAP 2 · UI 1 (tüm kullanıcılar: Türkçe · test onayı · az yorum)
 - **20 ders (11-15):** [tam indeks](_indeks-terfi-2026-11-15.md) — UI 7 · Kanıt 4 · Ajan 3 · Süreç 3 · SAP 3
+- **3 ders (11-15b):** [tam indeks](_indeks-terfi-2026-11-15b.md) — Ajan 2 · UI 1
 
 ### Araç kök-fix tarihçesi (regresyon sözlüğü)
 - **10 kayıt:** [tam indeks](_indeks-arac-kok-fixleri.md) — *"bu bug daha önce oldu mu"* sorusunun yeri; güncel kural DEĞİL
