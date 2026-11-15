@@ -16,6 +16,10 @@ Ne ölçülür (vektör aileleri):
      → diff kipinde 7'si FAIL, önceden var olan WARN, exit 1; `--files` kipinde önceden var FAIL.
   V  `--verify-report`: tam rapor · satır yok · ELLE · ÇELİŞKİ · ÇÜRÜTÜLDÜ (kanıtlı kabul,
      kanıtsız red) · hükümsüz kelime · yalnız `FAIL→F1` (kanıtsız) · okunamayan rapor (exit 2).
+     V17-V20 (#433): açıklamalı/bağlantılı kimlik · önde `#` sütunu · birleşik satır adlandırılır,
+     eşlenmez (V20 sahte PASS koruması).
+  Y  (#439) A sınıfı ELLE satırı map `not:` alanını basar (Y1 BE-12 · Y3 DOC-TS-05) · BE-12 ELLE metni
+     taranmayan kalıpları adlandırır (Y2) · FAIL satırına `not:` eklenmez (Y4).
   X  exit kodları: kullanım 2 · bozuk/eksik map 2 · beklenmeyen istisna 2 · --help hüküm satırı.
   H  `--harita-denetim`: gerçek map OK · bilinmeyen alan · kontrolsüz A · blok yalnız BE-10b.
   R  `--reach` (geçici map) PASS/FAIL · mini YAML == PyYAML (yoksa ATLA) ·
@@ -76,6 +80,20 @@ Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile e
   --mutasyon-be16-measured  BE-16 alt sürecin `measured=false` beyanı yok sayılır (temiz sanılır)
   --mutasyon-be16-rc      BE-16 alt sürecin rc ≠ 0'ı yok sayılır
   --mutasyon-ids-bos      boş `--ids` listesi (`","`) kullanım hatası değil (filtre kalkar)
+  #433/#432/#439/#438 turu (2026-11-15; her biri bir düzeltmeyi GERİ alır):
+  --mutasyon-id-sutun     verify-report kimliği yine ilk sütundan (başlıktaki `ID` sütunu yok sayılır)
+  --mutasyon-id-bas       verify-report ID hücresi yine tam eşleşme (açıklamalı/bağlantılı kimlik tanınmaz)
+  --mutasyon-birlesik-esle  birleşik satır (`BE-47 / BE-35`) ilk kimliğe eşlenir (sahte PASS)
+  --mutasyon-ts05-allow   DOC-TS-05 sütunu yine "metin|text" geçen ilk sütun (uzun metin / `&1 … (metin)`
+                          seçilir, `Mesaj metni` kaçar)
+  --mutasyon-ts05-blok    DOC-TS-05 tablo bloğu boş satırda bitmez (ayraçsız ikinci blok sütunu devralır)
+  --mutasyon-ts05-baslik  DOC-TS-05 `|---|` öncesi satır başlık sayılmaz (bitişik ikinci tablo devralır)
+  --mutasyon-a-elle-not   A sınıfı ELLE satırına map `not:` basılmaz
+  --mutasyon-not-fail     `not:` A sınıfı FAIL/WARN satırına da basılır (yalnız ELLE olmalı)
+  --mutasyon-be12-metin   BE-12 ELLE metni taranmayan kalıpları adlandırmaz (eski metin)
+  --mutasyon-be01-ic-delete  `DELETE itab FROM <literal>` / `… TO …` iç tablo imzası tanınmaz
+  --mutasyon-be01-ic-genis   iç tablo imzası her `DELETE x FROM` (DB biçimi de susar — koruma vektörleri)
+  --mutasyon-be01-screen  `MODIFY SCREEN FROM wa` dışlaması yok
 CORE-07: her kipin DÜŞMESİ BEKLENEN vektör kümesi `_BEKLENEN_DUSEN`'de PİNLİDİR ve EŞİTLİKLE
 kıyaslanır. Çıkış: 0 taban yeşil · 1 mutasyon BEKLENEN kümeyle düştü · 2 SAPMA · 3
 DOGRULANAMADI (çapa tam 1 kez eşleşmedi ya da mutant derlenmedi — "düştü" SAYILMAZ).
@@ -120,7 +138,19 @@ _GECERLI_KIP = frozenset({"--mutasyon-literal", "--mutasyon-degisen", "--mutasyo
                           "--mutasyon-be50-at", "--mutasyon-be50-ic-data", "--mutasyon-be16-measured",
                           "--mutasyon-be16-rc", "--mutasyon-ids-bos", "--mutasyon-be55-rap",
                           "--mutasyon-be55-yerel", "--mutasyon-be55-bolum", "--mutasyon-be55-bicim",
-                          "--mutasyon-be55-ana"})
+                          "--mutasyon-be55-ana",
+                          "--mutasyon-id-sutun",
+                          "--mutasyon-id-bas",
+                          "--mutasyon-birlesik-esle",
+                          "--mutasyon-ts05-allow",
+                          "--mutasyon-ts05-blok",
+                          "--mutasyon-ts05-baslik",
+                          "--mutasyon-a-elle-not",
+                          "--mutasyon-not-fail",
+                          "--mutasyon-be12-metin",
+                          "--mutasyon-be01-ic-delete",
+                          "--mutasyon-be01-ic-genis",
+                          "--mutasyon-be01-screen"})
 
 _MUT = {
     "--mutasyon-literal": (
@@ -258,6 +288,44 @@ _MUT = {
     "--mutasyon-be16-rc": (
         '    if r.returncode == 0:\n        return []',
         '    if True:\n        return []'),
+    # #433/#432/#439/#438 turu (2026-11-15)
+    "--mutasyon-id-sutun": (
+        '            id_idx = next(i for i, x in enumerate(h) if _ID_SUTUNU.fullmatch(x))',
+        '            id_idx = 0'),
+    "--mutasyon-id-bas": (
+        '    m = _ID_BAS.match(hucre)',
+        '    m = re.fullmatch(r"\**`?((?:BE|FE|DOC)-[0-9A-Za-z-]+)`?\**", hucre)'),
+    "--mutasyon-birlesik-esle": (
+        '    if len(kimlikler) > 1:\n        return None, kimlikler\n',
+        ''),
+    "--mutasyon-ts05-allow": (
+        'if _TS05_KISA_METIN.match(h)), -1)',
+        'if re.search(r"metin|text", h, re.I)), -1)'),
+    "--mutasyon-ts05-blok": (
+        '            sutun = None        # tablo bloğu bitti',
+        '            pass                # tablo bloğu bitti'),
+    "--mutasyon-ts05-baslik": (
+        '        if sutun is None or (sonraki.startswith("|") and _ts05_ayrac(sonraki)):',
+        '        if sutun is None:'),
+    "--mutasyon-a-elle-not": (
+        '            kanit += _not(madde)',
+        '            pass'),
+    "--mutasyon-not-fail": (
+        '        elif sonuc == "ELLE" and sinif == "A":',
+        '        elif sinif == "A":'),
+    "--mutasyon-be12-metin": (
+        '"statik LOOP AT…ENDLOOP içinde SELECT yok · TARANMADI: DO/WHILE, FOR..IN, çağrılan metot, "\n'
+        '                           "SELECT…ENDSELECT içi; öbür ATC P1 bulguları `adt_atc_check` ister"',
+        '"statik LOOP-içi-SELECT yok; öbür ATC P1 bulguları `adt_atc_check` ister"'),
+    "--mutasyon-be01-ic-delete": (
+        '                        or _BE01_DELETE_IC.search(kl))',
+        '                        or False)'),
+    "--mutasyon-be01-ic-genis": (
+        r'r"\s+FROM\s+(?:\d+(?![\w-])|[^.]*?\bTO\b)"',
+        r'r"\s+FROM\b"'),
+    "--mutasyon-be01-screen": (
+        '"value", "screen"))',
+        '"value"))'),
     "--mutasyon-ids-bos": (
         '    if ids is not None and not ids:',
         '    if False:'),
@@ -341,6 +409,19 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-be55-bolum": {"BE-55/W-changing"},
     "--mutasyon-be55-ana": {"R8"},
     "--mutasyon-be55-bicim": {"BE-55/W-tablefor", "BE-55/W-early", "BE-55/W-mapped"},
+    # #433/#432/#439/#438 turu (2026-11-15) — ÖLÇÜMLE pinlenecek (ilk değer = ilan edilen beklenti)
+    "--mutasyon-id-sutun": {"V18"},
+    "--mutasyon-id-bas": {"V17"},
+    "--mutasyon-birlesik-esle": {"V19", "V20"},
+    "--mutasyon-ts05-allow": {"DOC-TS-05/N-uzun", "DOC-TS-05/N-degisken", "DOC-TS-05/P-mesajmetni"},
+    "--mutasyon-ts05-blok": {"DOC-TS-05/N-bloksuz"},
+    "--mutasyon-ts05-baslik": {"DOC-TS-05/N-bitisik"},
+    "--mutasyon-a-elle-not": {"Y1", "Y3"},
+    "--mutasyon-not-fail": {"Y4"},
+    "--mutasyon-be12-metin": {"Y2"},
+    "--mutasyon-be01-ic-delete": {"BE-01/N-dellit", "BE-01/N-delto"},
+    "--mutasyon-be01-ic-genis": {"BE-01/P-delwa", "BE-01/P-deltab", "BE-01/P-delparam"},
+    "--mutasyon-be01-screen": {"BE-01/N-screen"},
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -426,6 +507,29 @@ SINIF_ARA = ("CLASS zcl_t DEFINITION PUBLIC.\n  PUBLIC SECTION.\n    METHODS m1.
              "CLASS zcl_t IMPLEMENTATION.\n  METHOD m1.\n  ENDMETHOD.\n{ARA}  METHOD m2.\n    \" gövde yorumu serbest\n"
              "  ENDMETHOD.\nENDCLASS.\n")
 TS_MESAJ = "## Mesajlar\n\n| No | Metin |\n|---|---|\n| 001 | {M} |\n"
+# #432 (DOC-TS-05 tablo bloğu): 7 sütunlu şemaya yakın kısa metin tablosu + üç komşu tablo biçimi
+UZUN81 = "Bu kısa metin gerçekten çok uzun ve T100 alanına sığmaz, yetmiş üç karakteri aşar"   # 81 kr
+UZUN_ACIK = ("Bu mesaj, istenen kaydın veri tabanında bulunamadığını bildirir. Kullanıcı girdiği anahtarı "
+             "kontrol etmeli, gerekirse yetkili kullanıcıya başvurmalıdır; SE91 uzun metni")      # > 73
+TS5_KISA = ("## 10.1 Mesaj Sınıfı Tanımları\n\n| Mesaj Sınıfı | No | Tip | Kısa metin | Üretim noktası |\n"
+            "|---|---|---|---|---|\n| ZSD001_MSG | 001 | E | {M} | `ZCL_A->run( )` |\n")
+TS5_UZUN = ("\n## 10.2 Mesaj uzun metinleri (SE91)\n\n| Mesaj Sınıfı | No | Tip | Uzun metin (SE91) | Üretim noktası |\n"
+            "|---|---|---|---|---|\n| ZSD001_MSG | 001 | E | " + UZUN_ACIK + " | `ZCL_A->run( )` |\n")
+# &1 açıklama tablosu: kısa metin sütunu YOK; 4. hücre (öncekinin kısa metin indeksi 3) uzun
+TS5_DEGISKEN = ("| Mesaj | Üretici | &1 TR (alan adı) | &1 EN |\n|---|---|---|---|\n"
+                "| 001 | ZCL_A | alan adları listesi | " + UZUN_ACIK + " |\n")
+# ayraç satırı OLMAYAN iki blok (yalnız boş satır ayırır) — ikincinin başlığı kısa metin sunmaz
+TS5_BLOKSUZ = ("## Mesajlar\n\n| No | Metin |\n| 001 | Kayıt &1 bulunamadı |\n\n"
+               "| No | Değişken açıklaması |\n| 001 | " + UZUN_ACIK + " |\n")
+# başlıkta "metin" geçen ama kısa metin OLMAYAN sütunlar (`&1 açıklaması (metin)`; eski arama bunu seçerdi)
+TS5_ACIKLAMA = ("## Mesaj değişkenleri\n\n| No | Tip | &1 açıklaması (metin) | &2 açıklaması (metin) |\n|---|---|---|---|\n"
+                "| 001 | E | " + UZUN_ACIK + " | kısa |\n")
+TS5_KANONIK = ("## 10.1 Mesaj envanteri\n\n| Mesaj Sınıfı | No | Tip | Metin (birebir, ≤73 karakter) | `&1..&4` anlamı "
+               "| Üretim noktası (sınıf/metot) | Kullanıcı aksiyonu |\n|---|---|---|---|---|---|---|\n"
+               "| ZSD001_MSG | 001 | E | " + UZUN81 + " | &1 = malzeme | `ZCL_A->run( )` | girdiyi düzelt |\n")
+# önce kısa metin sütunsuz tablo, SONRA gerçek kısa metin tablosu: ikinci tablo -1'i devralmamalı (eski FN)
+TS5_IKINCI = ("## Mesajlar\n\n| Mesaj | &1 anlamı |\n|---|---|\n| 001 | malzeme |\n\n"
+              "| No | Metin |\n|---|---|\n| 001 | Kayıt & bulunamadı |\n")
 BDEF_SIL = ("managed implementation in class zbp_t unique;\ndefine behavior for ZI_T alias Kalem\n{\n"
             "  delete;\n  validation valSil on save { delete; }\n}\n")
 IMP_SIL = ("CLASS lhc DEFINITION INHERITING FROM cl_abap_behavior_handler.\n  PRIVATE SECTION.\n"
@@ -438,6 +542,16 @@ VEKTORLER = [
     ("BE-01/P", "BE-01", {CLS: "    UPDATE mara SET matkl = 'X' WHERE matnr = lv_m.\n"}, CLS, {"FAIL"}),
     ("BE-01/N", "BE-01", {CLS: "    UPDATE ztab SET f = 1 WHERE k = 2.\n"}, CLS, {"PASS"}),
     ("BE-01/N-lit", "BE-01", {CLS: "    lv_sql = 'UPDATE mara SET matkl = 1'.\n"}, CLS, {"PASS"}),
+    # #438 DARALT: yalnız kesin iç tablo imzaları susar (sayısal literal · `TO`) + `MODIFY SCREEN`
+    ("BE-01/N-dellit", "BE-01", {CLS: "    DELETE items FROM 2.\n"}, CLS, {"PASS"}),
+    ("BE-01/N-delto", "BE-01", {CLS: "    DELETE result FROM cut_from TO cut_to.\n"}, CLS, {"PASS"}),
+    ("BE-01/N-screen", "BE-01", {CLS: "    MODIFY SCREEN FROM ls_screen.\n"}, CLS, {"PASS"}),
+    # koruma yönü: DB biçimleri WARN'da KALIR (daraltma bunları susturmamalı)
+    ("BE-01/P-delwa", "BE-01", {CLS: "    DELETE mara FROM ls_mara.\n"}, CLS, {"WARN"}),
+    ("BE-01/P-deltab", "BE-01", {CLS: "    DELETE mara FROM TABLE lt_mara.\n"}, CLS, {"WARN"}),
+    ("BE-01/P-modwa", "BE-01", {CLS: "    MODIFY mara FROM ls_mara.\n"}, CLS, {"WARN"}),
+    # bilinen sınır (bilerek): parametre/inline ad tanıma YOK → `DELETE <param> FROM <ad>` WARN kalır
+    ("BE-01/P-delparam", "BE-01", {CLS: "    DELETE items FROM cut_from.\n"}, CLS, {"WARN"}),
     ("BE-03/P", "BE-03", {CLS: "    SELECT SINGLE * FROM afko INTO @DATA(ls) WHERE aufnr = @lv.\n"}, CLS, {"WARN"}),
     ("BE-03/N", "BE-03", {CLS: "    SELECT SINGLE * FROM zafko INTO @DATA(ls) WHERE aufnr = @lv.\n"}, CLS, {"PASS"}),
     ("BE-04/P", "BE-04", {CLS: "    lv_payload = 'x'.\n    WRITE lv_tutar TO lv_metin.\n"}, CLS, {"FAIL"}),
@@ -452,6 +566,9 @@ VEKTORLER = [
     ("BE-11/N", "BE-11", {BDF: "managed;\ndefine behavior for ZI_T\n{\n  field ( readonly ) created_by;\n  determination setAdmin on save { create; }\n}\n"}, BDF, {"PASS"}),
     ("BE-12/P", "BE-12", {CLS: "    LOOP AT lt_a INTO DATA(ls_a).\n      SELECT SINGLE f FROM ztab INTO @DATA(lv) WHERE k = @ls_a-k.\n    ENDLOOP.\n"}, CLS, {"FAIL"}),
     ("BE-12/N", "BE-12", {CLS: "    SELECT f FROM ztab INTO TABLE @DATA(lt).\n    LOOP AT lt INTO DATA(ls).\n    ENDLOOP.\n"}, CLS, {"ELLE"}),
+    # #439: DO/WHILE tarayıcısı BİLEREK yok (meşru sınırlı yoklama döngüsü FP yığar) → ELLE, FAIL değil
+    ("BE-12/N-do", "BE-12", {CLS: "    DO 5 TIMES.\n      SELECT SINGLE f FROM ztab INTO @DATA(lv) WHERE k = @lv_k.\n"
+                                  "      IF sy-subrc = 0.\n        EXIT.\n      ENDIF.\n    ENDDO.\n"}, CLS, {"ELLE"}),
     ("BE-26/P", "BE-26", {"p/classes/zbp_t.clas.locals_imp.abap": "    COMMIT WORK.\n"}, "p/classes/zbp_t.clas.locals_imp.abap", {"FAIL"}),
     ("BE-26/N", "BE-26", {"p/classes/zbp_t.clas.locals_imp.abap": "    lv = 1.\n"}, "p/classes/zbp_t.clas.locals_imp.abap", {"PASS"}),
     ("BE-28/P", "BE-28", {CLS: "  METHOD m BY DATABASE PROCEDURE FOR HDB LANGUAGE SQLSCRIPT.\n    -- açıklama\n    et = select * from ztab;\n  ENDMETHOD.\n"}, CLS, {"FAIL"}),
@@ -654,6 +771,23 @@ VEKTORLER = [
      "# FS\n\nFR-01 ve FR-02 kuralı.\n"),
     ("DOC-TS-05/P", "DOC-TS-05", {"d/docs/TS-T.md": TS_MESAJ.replace("{M}", "Kayıt & bulunamadı")}, "d/docs/TS-T.md", {"FAIL"}),
     ("DOC-TS-05/N", "DOC-TS-05", {"d/docs/TS-T.md": TS_MESAJ.replace("{M}", "Kayıt &1 bulunamadı")}, "d/docs/TS-T.md", {"ELLE"}),
+    # #432: sütun seçimi TABLONUN KENDİ başlık satırına bağlı (bölüm başlığına değil) + kısa metin allow-list
+    ("DOC-TS-05/P-kisa", "DOC-TS-05", {"d/docs/TS-T.md": TS5_KISA.replace("{M}", UZUN81)}, "d/docs/TS-T.md", {"FAIL"}),
+    ("DOC-TS-05/N-uzun", "DOC-TS-05", {"d/docs/TS-T.md": TS5_KISA.replace("{M}", "Kayıt &1 bulunamadı") + TS5_UZUN},
+     "d/docs/TS-T.md", {"ELLE"}),
+    ("DOC-TS-05/N-ardisik", "DOC-TS-05", {"d/docs/TS-T.md": TS5_KISA.replace("{M}", "Kayıt &1 bulunamadı") + "\n" + TS5_DEGISKEN},
+     "d/docs/TS-T.md", {"ELLE"}),
+    ("DOC-TS-05/N-bitisik", "DOC-TS-05", {"d/docs/TS-T.md": TS5_KISA.replace("{M}", "Kayıt &1 bulunamadı") + TS5_DEGISKEN},
+     "d/docs/TS-T.md", {"ELLE"}),
+    ("DOC-TS-05/N-bloksuz", "DOC-TS-05", {"d/docs/TS-T.md": TS5_BLOKSUZ}, "d/docs/TS-T.md", {"ELLE"}),
+    ("DOC-TS-05/N-degisken", "DOC-TS-05", {"d/docs/TS-T.md": TS5_ACIKLAMA}, "d/docs/TS-T.md", {"UYGULANMAZ"}),
+    ("DOC-TS-05/P-ikinci", "DOC-TS-05", {"d/docs/TS-T.md": TS5_IKINCI}, "d/docs/TS-T.md", {"FAIL"}),
+    # allow-list standards/04 §10.1 kanonik başlığını (`Metin (birebir, ≤73 karakter)`) kaçırmamalı (FN koruması)
+    ("DOC-TS-05/P-kanonik", "DOC-TS-05", {"d/docs/TS-T.md": TS5_KANONIK}, "d/docs/TS-T.md", {"FAIL"}),
+    # eski `metin|text` araması `Mesaj metni` başlığını kaçırıyordu ("metni" ⊅ "metin") — allow-list yakalar (eski FN)
+    ("DOC-TS-05/P-mesajmetni", "DOC-TS-05",
+     {"d/docs/TS-T.md": "## Mesajlar\n\n| No | Mesaj metni |\n|---|---|\n| 001 | Kayıt & bulunamadı |\n"},
+     "d/docs/TS-T.md", {"FAIL"}),
 ]
 
 
@@ -695,6 +829,28 @@ def a_vektorleri(G, harita: dict, tmp: Path) -> None:
         if not {"P", "N"} <= yonler:
             eksik.append(f"{mid}({''.join(sorted(yonler)) or '-'})")
     kontrol("K0 kontrolü olan her A maddesinin pozitif+negatif vektörü var", not eksik, f"eksik: {eksik}")
+
+
+# ═══════════════════════════════════════════ Y: A-ELLE kapsam beyanı (#439) ══
+def y_vektorleri(G, harita: dict, tmp: Path) -> None:
+    """ELLE satırının kanıtı statik ayağın kapsamını söyler: map `not:` (genel) + BE-12'nin TARANMADI listesi."""
+    temiz12 = {CLS: "    SELECT f FROM ztab INTO TABLE @DATA(lt).\n    LOOP AT lt INTO DATA(ls).\n    ENDLOOP.\n"}
+    s, detay = degerlendir(G, harita, tmp / "y1", temiz12, CLS, "BE-12")
+    not12 = harita["BE-12"].get("not") or "<map not: yok>"
+    kontrol("Y1 A-ELLE satırı map `not:` alanını basar (BE-12)",
+            s is not None and s.sonuc == "ELLE" and not12 in s.kanit, f"{detay} · beklenen not: {not12[:60]}")
+    kontrol("Y2 BE-12 ELLE metni taranmayan kalıpları ADLANDIRIR",
+            s is not None and "TARANMADI: DO/WHILE, FOR..IN, çağrılan metot, SELECT…ENDSELECT içi" in s.kanit, detay)
+    ts = {"d/docs/TS-T.md": TS_MESAJ.replace("{M}", "Kayıt &1 bulunamadı")}
+    s, detay = degerlendir(G, harita, tmp / "y3", ts, "d/docs/TS-T.md", "DOC-TS-05")
+    notts = harita["DOC-TS-05"].get("not") or "<map not: yok>"
+    kontrol("Y3 A-ELLE satırı map `not:` alanını basar (DOC-TS-05 — ikinci madde: genel, BE-12'ye özel değil)",
+            s is not None and s.sonuc == "ELLE" and notts in s.kanit, detay)
+    kirli12 = {CLS: "    LOOP AT lt_a INTO DATA(ls_a).\n      SELECT SINGLE f FROM ztab INTO @DATA(lv) WHERE k = @ls_a-k.\n"
+                    "    ENDLOOP.\n"}
+    s, detay = degerlendir(G, harita, tmp / "y4", kirli12, CLS, "BE-12")
+    kontrol("Y4 NEGATİF: A-FAIL satırına `not:` eklenmez (yalnız ELLE; bulgu kanıtı kısa kalır)",
+            s is not None and s.sonuc == "FAIL" and not12 not in s.kanit, detay)
 
 
 # ═══════════════════════════════════════════════════════════════ T: BE-10b ══
@@ -1087,6 +1243,21 @@ def v_vektorleri(G, tmp: Path) -> None:
     # F15b: çıplak FAIL geçersiz — sözleşme FAIL→F<n>
     dene("V16", "| BE-47 | A | FAIL | satır 1 şablonda kaçışsız |\n" + tam35, 1, ["- bağsız FAIL: 1 → BE-47", "RAPOR EKSİK: bağsız FAIL"],
          "çıplak FAIL (bulguya bağsız) → 'bağsız FAIL' eksikliği")
+    # #433: kimlik ID sütunundan, hücrenin başındaki TEK kimlik; birleşik satır eşlenmez ama adlandırılır
+    dene("V17", "| BE-47 (şablon) | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n"
+                "| [BE-35](bug-checklist-backend.md#BE-35) | A | PASS | char40 güvenli aralıkta |\n", 0,
+         ["- satır yok: 0", "- birleşik satır: 0", "- ÇELİŞKİ: 0"],
+         "açıklamalı (`BE-47 (şablon)`) ve bağlantılı (`[BE-35](…#BE-35)`) kimlik tanınır → exit 0")
+    dene("V18", "| 1 | BE-47 | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n| 2 | BE-35 | A | PASS | char40 güvenli aralıkta |\n", 0,
+         ["- satır yok: 0", "- hükümsüz: 0", "- ÇELİŞKİ: 0"],
+         "önde `#` sütunu (| # | ID | … |) → kimlik başlıktaki ID sütunundan okunur",
+         baslik="| # | ID | Sınıf | Sonuç | Kanıt |\n|---|---|---|---|---|\n")
+    dene("V19", "| BE-47 / BE-35 | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n", 1,
+         ["- satır yok: 0", "- birleşik satır: 2 → BE-35, BE-47", "RAPOR EKSİK: birleşik satır"],
+         "birleşik satır → 'satır yok' DEĞİL 'birleşik satır' (adı konur, exit 1)")
+    dene("V20", "| BE-47 / BE-35 | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n" + tam35, 1,
+         ["- birleşik satır: 1 → BE-47", "RAPOR EKSİK: birleşik satır"],
+         "NEGATİF (sahte PASS koruması): birleşik satır hiçbir maddeye eşlenmez — ayrı satırı olan BE-35 geçer, BE-47 eksik")
     rc, out = kos(G, taban + ["--verify-report", str(kok / "yok-rapor.md")])
     kontrol("V9 okunamayan rapor → exit 2 [PROGRAM KOŞMADI] (eksiklik DEĞİL)",
             rc == 2 and "[PROGRAM KOŞMADI]" in out, f"rc={rc} {out[-160:]!r}")
@@ -1280,6 +1451,7 @@ def main(kip: str | None) -> int:
     tmp = Path(tempfile.mkdtemp(prefix="cc_fx_"))
     try:
         a_vektorleri(G, harita, tmp)
+        y_vektorleri(G, harita, tmp)
         t_vektorleri(G)
         cb_vektorleri(G, harita, tmp)
         s_vektorleri(G, tmp)

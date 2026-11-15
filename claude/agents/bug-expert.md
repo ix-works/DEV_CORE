@@ -113,7 +113,7 @@ Checklist'te iki cins must-do var; tipini **checklist'in TİP'i belirler**, sen 
 ## ÇIKTI ŞABLONU (kanıt-zorunlu)
 Her bulgu: `[TİP·SEVERITY·KANIT] dosya:satır — sorun — failure-mode/eksik-gereksinim — neden mevcut guard/standart yetmiyor — önerilen aksiyon`. TİP = HATA | EKSİK | ÖNERİ · KANIT = canlı | kaynak | doküman.
 **KAPSAMA TABLOSU (zorunlu bölüm):** önce `checklist_check.py` çıktısı aynen; ardından `ELLE` satırlarının ve programın `FAIL` satırlarının senin hükmün (bu tablo program tablosundan SONRA gelir, aynı ID'nin son satırı geçerlidir):
-`ID · sınıf · hüküm · kanıt (dosya:satır, sorgu, test)`. **Hüküm kelimeleri** programın kabul ettikleridir ve
+`ID · sınıf · hüküm · kanıt (dosya:satır, sorgu, test)`. **Madde başına tek satır; ID hücresinde yalnız tek kimlik** (açıklama varsa kanıt sütununa yazılır) — `BE-10a / BE-10b` gibi birleşik satırı `--verify-report` eşlemez ve "birleşik satır" diye reddeder. **Hüküm kelimeleri** programın kabul ettikleridir ve
 `checklist_check.py --help` çıktısında listelenir (otorite programdır; bugünkü liste): `PASS` · `FAIL→F<n>`
 (bulgu tablosundaki numara) · `WARN` · `UYGULANMAZ` + gerekçe · `ÖLÇÜLEMEDİ` + neden · `ÇÜRÜTÜLDÜ` + kanıt. Başka
 kelime (ör. "BULGU", "ilgisiz") hükümsüz sayılır ve `--verify-report` raporu reddeder. `WARN` ve `ÇÜRÜTÜLDÜ`

@@ -1142,7 +1142,7 @@ maddeler:
     kontrol: doc_ts05_mesaj
     seviye: uyari
     yazan_kanali: null
-    not: "mesaj tablosunda çıplak `&` + >73 karakter; envanter tamlığı ELLE"
+    not: "mesaj tablosunda çıplak `&` + >73 karakter — yalnız kısa metin sütunu (tablonun kendi başlığında `Metin`/`Kısa metin`/`Mesaj metni`/`Text` ile başlayan); uzun metin (SE91) ve `&n` açıklama tabloları ölçülmez; envanter tamlığı ELLE"
   - id: DOC-TS-06
     sinif: C
     uygulanir: ["**/TS-*.md"]

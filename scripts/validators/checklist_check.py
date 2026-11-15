@@ -37,7 +37,7 @@ dosyalar da girer, bütün satırları "değişmiş" sayılır. İki uçlu aral�
 çapraz-dosya kardeşleri (BDEF, i18n, uygulama JS'i …) SAĞ ucun ağacından okunur, çalışma ağacından DEĞİL.
 
 Exit: 0 = engelleyici FAIL yok · 1 = `seviye: blok` maddede FAIL ya da `--verify-report` eksikliği
-(satır yok / hükümsüz / bağsız FAIL / kanıtsız / ELLE / ÇELİŞKİ — kategori adı stdout'ta) · 2 = kullanım
+(satır yok / birleşik satır / hükümsüz / bağsız FAIL / kanıtsız / ELLE / ÇELİŞKİ — kategori adı stdout'ta) · 2 = kullanım
 hatası (`KULLANIM HATASI: …` stderr: `--files`'ta olmayan dosya, bilinmeyen ya da `--kind` dışı `--ids`
 kimliği, boş `--ids` listesi (`","`) …) ya da program KOŞMADI (`[PROGRAM KOŞMADI] <tip>: <mesaj>`: okunamayan map/rapor, beklenmeyen
 istisna, `seviye: blok` maddenin kontrolünün ÇÖKMESİ). Blok OLMAYAN maddede kontrol çökerse o madde
@@ -507,6 +507,11 @@ _DB_YAZ_BELIRSIZ = [
     (re.compile(r"\bINSERT\s+(" + AD_ADAYI + r")\s+FROM\s+(TABLE\s+)?[@\w<]", re.I), "INSERT … FROM"),
     (re.compile(r"\bDELETE\s+(" + AD_ADAYI + r")\s+FROM\s+(TABLE\s+)?[@\w<]", re.I), "DELETE … FROM"),
 ]
+# Yalnız iç tablo biçiminde geçen DELETE imzaları (#438): `DELETE itab FROM <sayısal literal>` ve
+# `DELETE itab FROM <idx> TO <idx>`. DB `DELETE dbtab FROM wa|TABLE itab` ne literal ne `TO` alır →
+# WARN'da kalır. Ad/bildirim sezgisi (inline `DATA(x)`, metot parametresi) BİLEREK eklenmedi: parametre
+# adı DB tablo adıyla çakışırsa gerçek DB yazımını susturur.
+_BE01_DELETE_IC = re.compile(r"\bDELETE\s+" + AD_ADAYI + r"\s+FROM\s+(?:\d+(?![\w-])|[^.]*?\bTO\b)", re.I)
 # FUGR'nin türetilmiş programları: include `L<grup>…`, ana program `SAPL<grup>`, modül havuzu
 # `SAPM<ad>`; namespace'li biçim `/<NS>/L…`, `/<NS>/SAPL…` zaten namespace ile BAŞLAR.
 _TURETILMIS_ONEK = re.compile(r"^(?:SAPL|SAPM|L)(?=[ZY])", re.I)
@@ -560,13 +565,15 @@ def k_be01(d: Dosya, c: Baglam):
         # müşteri tablosunu (`/nspc/t01`) STANDART sayıyordu (FP). ⚠ GEVŞETME (A-EK): kayıtlı
         # namespace'e yazım artık bulgu DEĞİL; bildirilmemiş namespace (`/scwm/…`) standart kalır.
         t = tab.lower()
+        # `screen` (#438): `MODIFY SCREEN FROM wa` dinamik ekran deyimidir, DB tablosu değil
         return not (musteri_adi_mi(tab) or t.startswith(("<", "@")) or _YEREL_AD.match(t) or t in yerel
-                    or t in ("table", "lines", "adjacent", "from", "into", "value"))
+                    or t in ("table", "lines", "adjacent", "from", "into", "value", "screen"))
 
     for bas, _son, _l, kl in a.ifadeler():
         if re.search(r"\bENTIT(?:Y|IES)\b", kl, re.I):
             continue                     # EML (`MODIFY ENTITIES … DELETE FROM VALUE #(…)`) DB SQL değil
-        ic_tablo = bool(re.search(r"\b(INDEX|TRANSPORTING|ASSIGNING|REFERENCE\s+INTO)\b", kl, re.I))
+        ic_tablo = bool(re.search(r"\b(INDEX|TRANSPORTING|ASSIGNING|REFERENCE\s+INTO)\b", kl, re.I)
+                        or _BE01_DELETE_IC.search(kl))
         for rx, et in _DB_YAZ_KESIN:
             for mm in rx.finditer(kl):
                 if _std(mm.group(1)):
@@ -806,7 +813,8 @@ def k_be12(d, c):
             if "#EC CI_SEL_NESTED" in " ".join(a.ham[bas - 1:son]).upper():
                 continue
             out.append(F(bas, "LOOP AT … ENDLOOP içinde SELECT (ATC P1 Nested Reading) → döngü öncesi toplu oku"))
-    return out or [E(None, "statik LOOP-içi-SELECT yok; öbür ATC P1 bulguları `adt_atc_check` ister")]
+    return out or [E(None, "statik LOOP AT…ENDLOOP içinde SELECT yok · TARANMADI: DO/WHILE, FOR..IN, çağrılan metot, "
+                           "SELECT…ENDSELECT içi; öbür ATC P1 bulguları `adt_atc_check` ister")]
 
 
 @kontrol("ip_be19_bp_ad")
@@ -2128,24 +2136,42 @@ def k_doc_fs07(d, c):
     return out + [E(None, "cümle düzeyi denklik (bulanık eşleşme) yargı")]
 
 
+# T100 KISA metin sütunu (#432): başlık hücresi bu sözcüklerle BAŞLAR — `Metin ≤73`, `Kısa metin`,
+# `Mesaj metni`, `Text`, `Message text`, `Short text`. "metin" geçen her sütun DEĞİL: `Uzun metin (SE91)`
+# (standards/04: uzun metin isteğe bağlı, 73 sınırı yok) ve `&1 … metni` değişken açıklaması seçilmez.
+_TS05_KISA_METIN = re.compile(r"[\s*`_]*(?:k[ıi]sa\s+metin|mesaj\s+metni|metin|short\s+text|message\s+text|text)\b",
+                              re.I)
+
+
+def _ts05_ayrac(s: str) -> bool:
+    return "-" in s and set(s.replace("|", "").strip()) <= set("-: ")
+
+
 @kontrol("doc_ts05_mesaj")
 def k_doc_ts05(d, c):
     out = []
     baslik_mesaj = False
-    sutun = None
+    sutun = None                # None = bu tablo bloğunun başlığı henüz okunmadı · -1 = blokta kısa metin sütunu yok
     t100_satir = 0
-    for no, s in enumerate(d.satirlar, 1):
+    satirlar = d.satirlar
+    for no, s in enumerate(satirlar, 1):
         if s.startswith("#"):
             baslik_mesaj = bool(re.search(r"mesaj", s, re.I))
             sutun = None
             continue
-        if not baslik_mesaj or not s.strip().startswith("|"):
+        if not s.strip().startswith("|"):
+            sutun = None        # tablo bloğu bitti: sonraki tablo öncekinin sütununu DEVRALMAZ (#432)
+            continue
+        if not baslik_mesaj or _ts05_ayrac(s):
             continue
         hucre = [h.strip() for h in s.strip().strip("|").split("|")]
-        if sutun is None:
-            sutun = next((i for i, h in enumerate(hucre) if re.search(r"metin|text", h, re.I)), -1)
+        sonraki = satirlar[no].strip() if no < len(satirlar) else ""
+        if sutun is None or (sonraki.startswith("|") and _ts05_ayrac(sonraki)):
+            # tablonun KENDİ başlık satırı (bloğun ilk satırı ya da ardından `|---|` gelen satır — boş satırsız
+            # bitişik ikinci tablo da kendi başlığıyla okunur)
+            sutun = next((i for i, h in enumerate(hucre) if _TS05_KISA_METIN.match(h)), -1)
             continue
-        if sutun < 0 or set(s.replace("|", "").strip()) <= set("-: ") or sutun >= len(hucre):
+        if sutun < 0 or sutun >= len(hucre):
             continue
         if not any(re.fullmatch(r"[*`\s]*\d{3}[*`\s]*(?:\(.*\))?", h) for h in hucre[:3]):
             continue                    # T100 satırı değil (ör. i18n anahtarı) → 73 / `&` kuralı uygulanmaz
@@ -2359,6 +2385,10 @@ def degerlendir(madde: dict, dosyalar: list[Dosya], c: Baglam) -> Satir:
         kanit = " · ".join(kanitlar[:5]) + (f" · (+{len(kanitlar) - 5} bulgu)" if len(kanitlar) > 5 else "")
         if sinif == "C":
             kanit = ("ipucu (hüküm değil): " + kanit) if kanitlar else "yargı (ipucu taraması aday bulmadı)"
+        elif sonuc == "ELLE" and sinif == "A":
+            # #439: A maddesinin ELLE satırı statik ayağın NEYİ taradığını da söyler (map `not:`) — ELLE'yi
+            # okuyan "taranmayan" kısmı çıktıda görür (KAPSAM BEYANI); kontrolsüz maddelerdeki `_not` ile aynı alan
+            kanit += _not(madde)
     blok = sonuc == "FAIL" and madde.get("seviye") == "blok"
     return Satir(madde, sonuc, kanit, blok, cokme)
 
@@ -2532,6 +2562,25 @@ def _kanit_mi(hucre: str) -> bool:
     return len(re.findall(r"\w", kalan)) >= 2 and kalan not in ("A", "B", "C")
 
 
+_ID_JETON = re.compile(r"(?<![\w-])((?:BE|FE|DOC)-[0-9A-Za-z-]*[0-9A-Za-z])(?![\w])")
+_ID_BAS = re.compile(r"[\s*`_\[]*((?:BE|FE|DOC)-[0-9A-Za-z-]*[0-9A-Za-z])(?![\w])")
+_ID_SUTUNU = re.compile(r"\W*ID\W*", re.I)
+
+
+def _id_hucresi(hucre: str) -> tuple[str | None, list[str]]:
+    """ID hücresinden (tek kimlik | None, hücredeki farklı kimlikler).
+
+    Hücrenin BAŞINDAKİ kimlik alınır; ardındaki açıklama (`BE-04 (decimal)`) ve bağlantı
+    (`[BE-28](x.md)`) yok sayılır (#433). Hücrede BİRDEN ÇOK farklı kimlik varsa (`BE-10a / BE-10b`)
+    satır hiçbir maddeye eşlenmez: tek hüküm iki maddeye yayılırsa sahte PASS olur — çağıran bunu
+    "birleşik satır" diye adlandırır."""
+    kimlikler = list(dict.fromkeys(_ID_JETON.findall(hucre)))
+    if len(kimlikler) > 1:
+        return None, kimlikler
+    m = _ID_BAS.match(hucre)
+    return (m.group(1) if m else None), kimlikler
+
+
 def rapor_dogrula(rapor: Path, satirlar: list[Satir]) -> int:
     try:
         metin = rapor.read_text(encoding="utf-8", errors="replace")
@@ -2539,26 +2588,34 @@ def rapor_dogrula(rapor: Path, satirlar: list[Satir]) -> int:
         # okunamayan rapor bir EKSİKLİK değil, programın koşamamasıdır → exit 2
         raise ProgramKosmadi(f"--verify-report raporu okunamadı: {e}") from e
     hucreler: dict[str, list[tuple[str, list[str]]]] = {}   # id → [(hüküm hücresi, öbür hücreler)]
+    birlesik_ids: set[str] = set()                # yalnız birleşik satırda geçen kimlikler (#433)
     huk_idx = 2                                   # başlıksız tablo: | ID | Sınıf | Hüküm | Kanıt |
+    id_idx = 0
     for s in metin.splitlines():
         if not s.strip().startswith("|"):
             continue
         h = [x.strip() for x in re.split(r"(?<!\\)\|", s.strip().strip("|"))]   # `\|` hücre içi kaçış
-        if h and re.fullmatch(r"\W*ID\W*", h[0], re.I):
-            # başlık satırı: hüküm sütununu ADINDAN bul (kanıt sütunundaki kelime hüküm sayılmasın)
+        if any(_ID_SUTUNU.fullmatch(x) for x in h):
+            # başlık satırı: ID ve hüküm sütununu ADINDAN bul — önde `#` sütunu olabilir (#433);
+            # kanıt sütunundaki kelime hüküm sayılmasın
+            id_idx = next(i for i, x in enumerate(h) if _ID_SUTUNU.fullmatch(x))
             huk_idx = next((i for i, x in enumerate(h) if _HUKUM_SUTUNU.match(x)), 2)
             continue
-        m = re.fullmatch(r"\**`?((?:BE|FE|DOC)-[0-9A-Za-z-]+)`?\**", h[0]) if h else None
-        if m:
+        if id_idx >= len(h):
+            continue
+        mid, kimlikler = _id_hucresi(h[id_idx])
+        if mid:
             hukum = h[huk_idx] if huk_idx < len(h) else ""
-            hucreler.setdefault(m.group(1), []).append(
-                (hukum, [x for i, x in enumerate(h) if i not in (0, huk_idx)]))
-    eksik, hukumsuz, kanitsiz, elle, celiski, curutulen, bagsiz = [], [], [], [], [], [], []
+            hucreler.setdefault(mid, []).append(
+                (hukum, [x for i, x in enumerate(h) if i not in (id_idx, huk_idx)]))
+        elif len(kimlikler) > 1:
+            birlesik_ids.update(kimlikler)
+    eksik, hukumsuz, kanitsiz, elle, celiski, curutulen, bagsiz, birlesik = [], [], [], [], [], [], [], []
     for s in satirlar:
         mid = s.madde["id"]
         rows = hucreler.get(mid)
         if not rows:
-            eksik.append(mid)
+            (birlesik if mid in birlesik_ids else eksik).append(mid)
             continue
         hukum, diger = rows[-1]
         hk = _hukum_tokenlari(hukum)
@@ -2580,14 +2637,17 @@ def rapor_dogrula(rapor: Path, satirlar: list[Satir]) -> int:
             continue
         if s.sonuc == "FAIL" and s.madde.get("sinif") == "A" and "FAIL" not in hk:
             celiski.append(f"{mid} (rapor: {'/'.join(dict.fromkeys(hk))})")
-    kategoriler = (("satır yok", eksik), ("hükümsüz", hukumsuz), ("bağsız FAIL", bagsiz), ("kanıtsız", kanitsiz),
-                   ("ELLE", elle), ("ÇELİŞKİ", celiski))
+    kategoriler = (("satır yok", eksik), ("birleşik satır", birlesik), ("hükümsüz", hukumsuz),
+                   ("bağsız FAIL", bagsiz), ("kanıtsız", kanitsiz), ("ELLE", elle), ("ÇELİŞKİ", celiski))
     print("\n### --verify-report")
     print(f"- Rapor: {rapor.name} · beklenen madde {len(satirlar)} · {HUKUM_SATIRI}")
     for ad, liste in kategoriler:
         print(f"- {ad}: {len(liste)}" + (f" → {', '.join(liste)}" if liste else ""))
-    print("  (hüküm YALNIZ hüküm sütunundan okunur · bağsız FAIL = `FAIL→F<n>` yerine çıplak FAIL · ELLE = yargı "
-          "doldurulmamış · ÇELİŞKİ = program A-FAIL, rapor PASS/WARN/UYGULANMAZ/ÖLÇÜLEMEDİ — itiraz yolu ÇÜRÜTÜLDÜ+kanıt)")
+    print("  (kimlik ID sütunundan okunur — başlıkta `ID` adlı sütun, yoksa ilk sütun; hücrenin başındaki tek kimlik, "
+          "ardındaki açıklama/bağlantı yok sayılır · birleşik satır = bir hücrede birden çok kimlik (`BE-10a / BE-10b`): "
+          "eşlenmez, madde başına ayrı satır yazın · hüküm YALNIZ hüküm sütunundan okunur · bağsız FAIL = `FAIL→F<n>` "
+          "yerine çıplak FAIL · ELLE = yargı doldurulmamış · ÇELİŞKİ = program A-FAIL, rapor "
+          "PASS/WARN/UYGULANMAZ/ÖLÇÜLEMEDİ — itiraz yolu ÇÜRÜTÜLDÜ+kanıt)")
     if curutulen:
         print(f"\n#### ÇÜRÜTÜLDÜ — korpus kalibrasyon adayı ({len(curutulen)}; eksiklik DEĞİL)")
         for x in curutulen:
@@ -2733,7 +2793,7 @@ def _main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description="Ortak checklist kontrol programı (BE/FE/DOC)",
         epilog=HUKUM_SATIRI + ". Exit: 0 = engelleyici FAIL yok · 1 = blok FAIL ya da --verify-report "
-               "eksikliği (satır yok/hükümsüz/bağsız FAIL/kanıtsız/ELLE/ÇELİŞKİ) · 2 = kullanım hatası (olmayan "
+               "eksikliği (satır yok/birleşik satır/hükümsüz/bağsız FAIL/kanıtsız/ELLE/ÇELİŞKİ) · 2 = kullanım hatası (olmayan "
                "dosya, bilinmeyen --ids) ya da program koşmadı (blok madde kontrolü çöktü dahil).")
     ap.add_argument("--repo", help="incelenen reponun mutlak yolu (proje kökü)")
     g = ap.add_mutually_exclusive_group()
