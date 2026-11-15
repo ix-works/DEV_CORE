@@ -131,10 +131,22 @@
      provizyonu — doğru hedefli bağ · manifest-eş overlay · ana projeyle bayt-eş kopya — hariç, değişmiş kopya hariç DEĞİL)
      ⓓ yetimlerde `git hash-object` → `git cat-file -e` + `gitdir`siz bayat metadata.
      ⛔ **`--is-ancestor` KULLANILMAZ** — squash-merge'de yanıltır (ölçüldü: 5 dalın 5'i
-     "merge edilmemiş" göründü). ⛔ **`git cherry` hüküm DEĞİLDİR** — çok commit'li dal
+     "merge edilmemiş" göründü; tek istisna aşağıda: entegrasyon dalına gerçek merge bağı). ⛔ **`git cherry` hüküm DEĞİLDİR** — çok commit'li dal
      squash-merge edilince her commit `+` çıkar (Issue #280; o 5 dal tek commit'liydi).
      Bilinen sınır: squash **sonrası** main aynı dosyaya dokunduysa içerik farklı görünür ⇒
      ALARM **beklenebilir (paylaşılan dosyada sık)**; farkı elle incele — sessiz onay değildir.
+     **Entegrasyon dalı ara katmanı** (vaka 2026-11-15: 10 dalın 10'u ⓑ'de FAIL verdi, hepsinin işi main'deydi):
+     dal önce bir entegrasyon dalına **gerçek merge** ile girip entegrasyon dalı main'e squash edildiyse ⓑ (araç
+     çıktısında ②) FAIL beklenir. Hüküm entegrasyon dalının merge edilen PR'ından kurulur (`gh pr view <N> --repo
+     <ORG>/<REPO> --json headRefOid,mergeCommit` — uzak dal silinmiş ya da main sonradan ilerlemiş olsa da çalışır):
+     ⑴ `git merge-base --is-ancestor refs/heads/<dal> <headRefOid>` (gerçek merge bağında `--is-ancestor`
+     GEÇERLİDİR; yukarıdaki yasak yalnız dal→main squash bağı içindir) ⑵ squash commit'inin değiştirdiği dosyalarda
+     (F = `git diff --name-only <mergeCommit>^ <mergeCommit>`) entegrasyon dalının son hâli main'e aynen girmiş:
+     `git diff --name-only <headRefOid> <mergeCommit> -- <F>` boş ⑶ `--wt-denetim`
+     çıktısında bu worktree için ⓒ (araç çıktısında ③) FAIL yok ve HASAT ADAYI yok — ya da ③b adayları ana projede
+     aynı göreli yola kopyalandı ve md5 eşitliği ölçüldü (araç onları yine listeler) — ve kalan bulgu bu dalın ⓑ'si.
+     Üçü de geçerse `--wt-kapat --zorla` meşrudur; ⑶ ölçülmeden verilen `--zorla` commit'lenmemiş işi ve hasat
+     adayını da siler.
      Prior-art: `merge-tree` 3-yollu karşılaştırma denendi (2026-09-25, 8 kollu matris) —
      main'in aynı dosyaya dokunduğu kolda o da yanlış alarm verdi, iyileştirme yok.
      ⛔ ⓓ olmadan *"yetimde özgün iş var mı"* **cevaplanamaz**: düz dosya karşılaştırması
@@ -148,7 +160,16 @@
   `session_start` *"origin'in gerisinde"* derse → `/core-guncelle` (kanonik:
   [`playbook/howto-cekirdek-guncelleme.md`](playbook/howto-cekirdek-guncelleme.md)). Yalnız `git pull`
   YETMEZ — `team_setup`, aynı makinedeki diğer projeler, doğrulama ve oturumu yeniden açma o prosedürdedir.
-- Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU** +
+- Gün-sonu: checkpoint + `SESSION_NOTES.md` + WIP commit + **`push origin main` ZORUNLU** — main'e doğrudan
+  commit YOK olduğundan bunun anlamı: **iş dalı PR ile main'e GİRER** (CI yeşil → merge → birleşen dal uzakta ve
+  yerelde silinir; uzak dalı silmeden ÖNCE dal ucu = merge edilen PR'ın `headRefOid`'i ölçülür, yoksa merge sonrası
+  push'lanan commit kaybolur → yerel `main` origin'e eşitlenir; ölçüm `main`'e geçip eşitledikten SONRA:
+  `git log origin/main..main` boş + `git ls-remote --heads origin` yalnız `main` ya da bilinçli açık dallar). Dalı
+  yalnız push'lamak bu maddeyi KARŞILAMAZ (vaka 2026-11-08: 21 commit'lik dal push'landı, PR hiç açılmadı, ertesi
+  sabah `/core-guncelle` "dal main değil" diye durdu). **Kapıdan geçmemiş iş main'e GİRMEZ:** BUG GATE BLOCKER'ı açık
+  ya da kapısı koşmamış iş dal hâlinde push'lanır, durumu RESUME'ye yazılır ve kullanıcıya söylenir; kullanıcı
+  açıkça "dal açık kalsın" derse de karar RESUME'ye yazılır; RESUME'de açık diye yazılmış dalın (kapı bekleyen dal dahil) `--wt-denetim` ⓑ
+  FAIL'i beklenir — ⓒ FAIL'i ya da hasat adayı beklenmez, onlar yine giderilir — ve gün o dal için kapanır (gün kapansın diye kapıdan geçmemiş iş main'e alınmaz) +
   **auto-memory git'i commit+push** (memory dizini kendi PRIVATE remote'lu git'indedir —
   2026-08-12: makine-lokal tek kopya riski ölçülerek kapatıldı; push'suz memory = yedeksiz)
   + ⭐ **`--wt-denetim` (yukarıdaki madde 3)** — açık worktree'lerde main'e gitmemiş iş ya da

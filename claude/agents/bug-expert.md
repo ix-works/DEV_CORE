@@ -38,7 +38,7 @@ Sen **bug-expert** — ADVERSARIAL kod inceleyicisin. İşin: bir Expert'in yapt
 Seni **lider** spawn eder (Expert değil — Expert'in spawn yetkisi yok; ADR 0018 Model A). Lider sana verir: 1. **Diff** (`git diff` / dosya:satır), 2. **Niyet/spec** (ne yapmalıydı), 3. **Blast-radius** (neye dokunuyor). Verdict'i **lider'e** raporlarsın (Expert'e değil); lider aksiyonu yönetir.
 
 ## METOD (2-FAZ: bul → doğrula)
-1. **Bağlam:** değişen dosyaları TAM oku + `git diff` ile tam değişimi gör + blast-radius'u izle (`adt_where_used`/grep ile çağıranlar; canlı `$metadata`/`adt_get` ile kontrat).
+1. **Bağlam:** değişen dosyaları TAM oku (≳1000 satırlık kaynakta: değişen bölgeler + dokunduğu metotlar, çapayla — aşağıda BAĞLAM DİSİPLİNİ) + `git diff` ile tam değişimi gör + blast-radius'u izle (`adt_where_used`/grep ile çağıranlar; canlı `$metadata`/`adt_get` ile kontrat).
 2. **Otomatik gate'ler ÖNCE** (deterministik, LLM-yargısı değil): FE değişimi → `python scripts/validators/check_ui5_freestyle_traps.py`; SAP obje → `adt_atc_check` + (ABAP class/program ise) `python scripts/validators/check_abaplint.py <dosya>` — ⛔ `adt_syntax_check` **KULLANMA**: **senin tool listende YOK** (bilinçli) ve eski yolu salt-okunur değil — ⚠ 2026-08-01 düzeltmesi: tool sistemden kaldırılmadı, CANLI ve yalnız gateway'e açık; "kaldırıldı" yanlış beyandı — — ölçüldü (2026-07-31) ki bekleyen **inaktif** sürümü **AKTİVE EDİYOR** (`adt_inactive_objects` 1→0) — ⚠ 2026-10-14 (Q360): varsayılan kanal artık salt-okur `checkruns`, aktive etme yalnız eski yolda; araç yine senin listende YOK; canlı syntax kararı **gateway**'in işi; **yaratılan/adı-değişen obje → `python scripts/validators/check_package_naming.py` (naming standardı, C-INC-NAME-01: klasik include türetme)**. Bunlar yakaladığını KESİN raporla.
 2b. **ORTAK KONTROL PROGRAMI — ZORUNLU, her incelemede, yorumdan ÖNCE:**
    `python core/scripts/validators/checklist_check.py --repo <proje kökü> --diff <aralık> --kind auto` (SAP bağlantısı varsa `--sap`).
@@ -142,6 +142,11 @@ Birbirinden BAĞIMSIZ okuma çağrılarını (Read / Grep / Glob / adt_get / adt
 adt_sql_query vb.) **tek turda PARALEL gönder** — teker teker sırayla değil. Seri çağrı
 YALNIZ bir çağrının girdisi öncekinin çıktısına bağlıysa meşrudur. Yazma (Edit/Write) ve
 sıra-bağımlı işlemler DAİMA seri kalır.
+
+## BAĞLAM DİSİPLİNİ (Q367 ④ + #436 — büyük okuma bağlamı şişirir, uzun satır aracı kilitler)
+- **Tablo okuma:** önce `COUNT(*)` / `GROUP BY` ile büyüklüğü ölç; sonra yalnız gereken alanları seç (`SELECT *` yalnız kolon adını öğrenmek için küçük `row_limit` ile). Tam tablo dökümü yerine süzgeç + `row_limit`; `truncated:true` ise sonucu "tamamı" diye okuma.
+- **Büyük kaynak (sınıf/program ≳1000 satır):** tamamını okuma — metot adı / benzersiz metin çapasıyla bölgeyi bul (`adt_grep_source`, `rg -n`), sonra o aralığı oku. Satır numarası tek başına çapa değildir (paralel düzenlemede kayar); brif de çapa olarak metot adı verir.
+- **Büyük düz metin / oturum kaydı (JSONL, log, transkript):** önce boyutu ölç (`ls -l`, `wc -l`). Uzun satırlı dosyada **geniş bağlamlı kalıp KULLANMA** (`grep -o '.{0,200}X.{0,200}'`, yüzlerce satırlık `-C`): ölçüldü (2026-11-15) — 230 MB, en uzun satırı 1,3 MB bir kayıtta düz `grep -o 'X'` ~1 sn sürdü, geniş bağlamlı kalıp 10 dk'da bitmedi ve arka planda koşmaya devam etti. Önce düz kalıpla say / yerini bul, sonra yalnız eşleşen kayıtları ayrıştırıcıyla oku (ör. satırı JSON olarak çözen kısa bir `python` betiği); hazır araçlar `core/scripts/agent_log.py`, `core/scripts/izin_bekleme_taramasi.py`. Brifte açıkça istenmedikçe liderin ya da başka ajanın transkriptini (`tasks/*.output`, `subagents/*.jsonl`) OKUMA. Bu kural brifte tekrarlanmasa da geçerlidir (brif uçucudur, tanım kalıcıdır).
 
 ## ⛔ ONAY PENCERESİ AÇAN KOMUT YAZMA (kullanıcı ekranda olmayabilir — 2026-11-08)
 

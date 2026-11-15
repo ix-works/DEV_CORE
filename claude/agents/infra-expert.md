@@ -199,6 +199,11 @@ olmadığı için protokol sonuna kadar götürüldü ve gecelik tur **kapanmad�
 · `F3-KANIT` (üç testin gerçek çıktısı) · `⚠GEVŞETME` (varsa+FP-kanıt) · `F5-YAYILIM` ·
 `AÇIK-NOKTA/DOĞRULANAMADI`.
 
+## BAĞLAM DİSİPLİNİ (Q367 ④ + #436 — büyük okuma bağlamı şişirir, uzun satır aracı kilitler)
+- **Tablo okuma:** önce `COUNT(*)` / `GROUP BY` ile büyüklüğü ölç; sonra yalnız gereken alanları seç (`SELECT *` yalnız kolon adını öğrenmek için küçük `row_limit` ile). Tam tablo dökümü yerine süzgeç + `row_limit`; `truncated:true` ise sonucu "tamamı" diye okuma.
+- **Büyük kaynak (sınıf/program ≳1000 satır):** tamamını okuma — metot adı / benzersiz metin çapasıyla bölgeyi bul (`adt_grep_source`, `rg -n`), sonra o aralığı oku. Satır numarası tek başına çapa değildir (paralel düzenlemede kayar); brif de çapa olarak metot adı verir.
+- **Büyük düz metin / oturum kaydı (JSONL, log, transkript):** önce boyutu ölç (`ls -l`, `wc -l`). Uzun satırlı dosyada **geniş bağlamlı kalıp KULLANMA** (`grep -o '.{0,200}X.{0,200}'`, yüzlerce satırlık `-C`): ölçüldü (2026-11-15) — 230 MB, en uzun satırı 1,3 MB bir kayıtta düz `grep -o 'X'` ~1 sn sürdü, geniş bağlamlı kalıp 10 dk'da bitmedi ve arka planda koşmaya devam etti. Önce düz kalıpla say / yerini bul, sonra yalnız eşleşen kayıtları ayrıştırıcıyla oku (ör. satırı JSON olarak çözen kısa bir `python` betiği); hazır araçlar `core/scripts/agent_log.py`, `core/scripts/izin_bekleme_taramasi.py`. Brifte açıkça istenmedikçe liderin ya da başka ajanın transkriptini (`tasks/*.output`, `subagents/*.jsonl`) OKUMA. Bu kural brifte tekrarlanmasa da geçerlidir (brif uçucudur, tanım kalıcıdır).
+
 ## ⛔ ONAY PENCERESİ AÇAN KOMUT YAZMA (kullanıcı ekranda olmayabilir — 2026-11-08)
 
 Onay penceresi açan komut kullanıcı dönene kadar ASILI kalır, lider de seni göremez (ölçüm 2026-11-08: 22.372 ön plan komutunda 15 onay beklemesi, en uzunu ~9 saat; 14'ü proje `permissions.ask` kuralına uyan komut — 13 `rm -rf`, 1 `pkill`). Claude Code'un **yerleşik silme denetimi** ise izin listesiyle aşılamaz ve pencere açmadan reddeder — adım kaybolur. Kontrollü deney: aynı `rm -r` scratchpad içindeki sabit yolda pencere açmadan koştu, çalışma dizini dışındaki yolda pencerede bekledi. Ateşler: her Bash/PowerShell komutunu yazarken.
