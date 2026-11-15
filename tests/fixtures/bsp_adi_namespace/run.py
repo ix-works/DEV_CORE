@@ -59,6 +59,15 @@ MUTASYONLAR = {
     "--mutasyon-app-reddi-dusuyor": (DUI, '    if app_goruldu:\n        return (app_icinde or [""])[0]\n',
                                      '    if app_goruldu and app_icinde:  # MUTASYON\n'
                                      '        return app_icinde[0]\n'),
+    # PR #445 re-gate F-YENİ-1: `app` anahtarı her biçimde (tırnaklı / akış) "görüldü"
+    "--mutasyon-app-anahtar-eski": (DUI, '_APP_ANAHTAR = re.compile(r"""^(\\s*)(?:app|"app"|\'app\')\\s*:(?:\\s+(.*))?$""")',
+                                    '_APP_ANAHTAR = re.compile(r"^(\\s*)app:()\\s*(?:#.*)?$")  # MUTASYON eski'),
+    "--mutasyon-akis-ayristirilmaz": (DUI, "    m = _AKIS_TEK_SATIR.match(deger.strip())\n",
+                                      "    return None  # MUTASYON\n    m = _AKIS_TEK_SATIR.match(deger.strip())\n"),
+    "--mutasyon-akis-politikasiz": (DUI, "if ad is not None and musteri_adi_mi(ad.upper()):",
+                                    "if ad is not None:  # MUTASYON"),
+    "--mutasyon-name-tirnak-eski": (DUI, '_NAME_SATIRI = re.compile(r"""^\\s*(?:name|"name"|\'name\')\\s*:\\s*(.*)$""")',
+                                    '_NAME_SATIRI = re.compile(r"^\\s*name:\\s*(.*)$")  # MUTASYON'),
     "--mutasyon-yorum-ayiklanmaz": (DUI, '    v = re.split(r"\\s#", ham, maxsplit=1)[0].strip()',
                                     "    v = ham.strip()  # MUTASYON"),
     "--mutasyon-buyuk-harf-yok": (DUI, "        ad = _yaml_skaler(m.group(1)).upper()",
@@ -162,6 +171,38 @@ VAKALAR = [
 ]
 for ad, deger, kw, beklenen in VAKALAR:
     sonuc = D.bsp_name(yaml_app(deger, **kw))
+    kontrol(ad, sonuc == beklenen, f"bekl={beklenen!r} gelen={sonuc!r}")
+
+
+def yaml_ham(app_satirlari: str, metadata: str = "zfoo") -> Path:
+    """`app` anahtarını VERİLEN biçimde yazar (akış / tırnaklı); metadata.name tek parçalı."""
+    d = Path(tempfile.mkdtemp(prefix="app_", dir=KUM))
+    govde = (f"specVersion: \"4.0\"\nmetadata:\n  name: {metadata}\ntype: application\n"
+             "builder:\n  customTasks:\n    - name: deploy-to-abap\n      configuration:\n"
+             "        target:\n          url: https://sahte.invalid\n" + app_satirlari)
+    (d / "ui5-deploy.yaml").write_text(govde, encoding="utf-8")
+    return d
+
+
+# PR #445 re-gate F-YENİ-1: `app` anahtarı HER biçimde görüldü sayılır (kapı probu P8-P11)
+for ad, app_satirlari, beklenen in [
+        ("A17 AKIŞ `app: {name: /ABC/APP}` (kayıtsız) + metadata zfoo -> ''",
+         "        app: {name: /ABC/APP, package: ZPAKET}\n", ""),
+        ("A18 AKIŞ standart `SAPSTD` + metadata zfoo -> ''",
+         "        app: {name: SAPSTD}\n", ""),
+        ("A19 AKIŞ geçerli `ZAPP` -> ZAPP (pozitif kontrol)",
+         "        app: {name: ZAPP, package: ZPAKET}  # yorum\n", "ZAPP"),
+        ("A20 TIRNAKLI `\"app\":` blok + /ABC/APP + metadata zfoo -> ''",
+         "        \"app\":\n          name: /ABC/APP\n", ""),
+        ("A21 TIRNAKLI `'app':` blok + ZAPP -> ZAPP",
+         "        'app':\n          name: ZAPP\n", "ZAPP"),
+        ("A22 TIRNAKLI anahtar + AKIŞ `\"app\": {\"name\": \"/NSP/APP\"}` -> /NSP/APP",
+         "        \"app\": {\"name\": \"/NSP/APP\"}\n", "/NSP/APP"),
+        ("A23 ÇOK SATIRLI akış (ayrıştırılamaz) + metadata zfoo -> '' (fail-closed)",
+         "        app: {\n          name: ZAPP }\n", ""),
+        ("A24 app bloğunda TIRNAKLI `\"name\":` ZSD001_APP -> ZSD001_APP (kapı P11)",
+         "        app:\n          \"name\": ZSD001_APP\n", "ZSD001_APP")]:
+    sonuc = D.bsp_name(yaml_ham(app_satirlari))
     kontrol(ad, sonuc == beklenen, f"bekl={beklenen!r} gelen={sonuc!r}")
 kontrol("A12 ui5-deploy.yaml yok -> ''", D.bsp_name(Path(tempfile.mkdtemp(dir=KUM))) == "")
 

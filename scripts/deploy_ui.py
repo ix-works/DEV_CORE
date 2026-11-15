@@ -87,8 +87,35 @@ def read_conn():
 
 BSP_ADI_BEKLENEN = ("müşteri ad alanında BSP adı (app.name: Z/Y ya da project.yaml "
                     "customer_namespaces'te kayıtlı /<NS>/ ile başlayan)")
-_APP_BLOK = re.compile(r"^(\s*)app:\s*(?:#.*)?$")
-_NAME_SATIRI = re.compile(r"^\s*name:\s*(.*)$")
+# `app` ANAHTARI her biçimde (PR #445 re-gate F-YENİ-1): tırnaksız / `"app"` / `'app'`;
+# değer kısmı (grup 2) boşsa (yalnız yorum olabilir) BLOK, `{`la başlıyorsa AKIŞ, başka bir
+# şeyse (anchor/alias/skaler) ayrıştırılamaz ⇒ yine "görüldü" sayılır ve sonuç "".
+_APP_ANAHTAR = re.compile(r"""^(\s*)(?:app|"app"|'app')\s*:(?:\s+(.*))?$""")
+_AKIS_TEK_SATIR = re.compile(r"^\{([^{}\[\]]*)\}\s*(?:#.*)?$")
+_AKIS_NAME = re.compile(r"""^\s*(?:name|"name"|'name')\s*:\s*(.*)$""")
+_NAME_SATIRI = re.compile(r"""^\s*(?:name|"name"|'name')\s*:\s*(.*)$""")
+
+
+def _akis_app_adi(deger: str):
+    """`{name: X, package: Y}` → `X`; tek satırda güvenle ayrıştırılamıyorsa None.
+
+    Güvenli kabul: tek satır, iç içe `{}`/`[]` yok, öğelerde tırnak içinde virgül yok
+    (virgülle bölünce her öğe `anahtar: değer`), `name` anahtarı TAM BİR KEZ. Aksi hâl
+    (çok satırlı akış, iç içe yapı, çift `name`) None ⇒ çağıran sonucu "" yapar (fail-closed).
+    """
+    m = _AKIS_TEK_SATIR.match(deger.strip())
+    if not m:
+        return None
+    adlar = []
+    for oge in m.group(1).split(","):
+        if not oge.strip():
+            continue
+        if oge.count('"') % 2 or oge.count("'") % 2:
+            return None                       # tırnak içinde virgül → bölme güvensiz
+        n = _AKIS_NAME.match(oge)
+        if n:
+            adlar.append(_yaml_skaler(n.group(1)))
+    return adlar[0] if len(adlar) == 1 else None
 
 
 def _yaml_skaler(ham: str) -> str:
@@ -113,8 +140,14 @@ def bsp_name(app_dir: Path) -> str:
     2026-11-15): `fiori deploy` hedefi app.name'den alır; düşüş, reddedilen app.name'e
     deploy'u "geçerli BSP" adıyla açar ve canlı doğrulama başka bir BSP'yi çeker. Eski
     regex'teki kardeş (`metadata.name: ZFOO` + standart app.name → 'ZFOO') da bununla kapanır.
-    `app:` bloğu HİÇ yoksa eski kural: dosyadaki ilk müşteri adı. Z adlı, `metadata.name`'i
+    `app` anahtarı HER BİÇİMDE "görüldü" sayılır (PR #445 re-gate F-YENİ-1): tırnaklı
+    (`"app":`/`'app':`) ya da akış (`app: {name: X}`); akışta ad yalnız tek satırda güvenle
+    ayrıştırılabiliyorsa politikadan geçer, aksi hâlde "" (fail-closed). `name` anahtarı da
+    tırnaklı yazılabilir.
+    `app` anahtarı HİÇ yoksa eski kural: dosyadaki ilk müşteri adı. Z adlı, `metadata.name`'i
     noktalı (`com.x.y`) dosyada sonuç eskisiyle aynıdır.
+    ⚠ SINIR: yorum satırına alınmış `# app:` bloğu YAML'da yoktur ⇒ blok yok sayılır ve eski
+    kurala düşülür (kapı probu P6; `fiori deploy` da o bloğu görmez — kapsam dışı).
     """
     y = app_dir / "ui5-deploy.yaml"
     if not y.exists():
@@ -129,10 +162,17 @@ def bsp_name(app_dir: Path) -> str:
         girinti = len(line) - len(line.lstrip())
         if app_girinti is not None and girinti <= app_girinti:
             app_girinti = None
-        m = _APP_BLOK.match(line)
+        m = _APP_ANAHTAR.match(line)
         if m:
-            app_girinti = len(m.group(1))
             app_goruldu = True
+            deger = (m.group(2) or "").strip()
+            if not deger or deger.startswith("#"):
+                app_girinti = len(m.group(1))         # blok biçimi: altındaki name: satırları
+            else:
+                app_girinti = None                    # akış / skaler: blok açılmaz
+                ad = _akis_app_adi(deger) if deger.startswith("{") else None
+                if ad is not None and musteri_adi_mi(ad.upper()):
+                    app_icinde.append(ad.upper())
             continue
         m = _NAME_SATIRI.match(line)
         if not m:

@@ -1501,8 +1501,19 @@ def _bayat_dal_uyarisi(proje: Path, dal_ref: str) -> None:
     if r.returncode == 0:
         return
     if r.returncode == 1:
-        say(WARN, f"[UYARI] dal '{dal_ref}' {_GUNCEL_TABAN}'i ICERMIYOR (gerisinde ya da ayrik) — "
-                  f"BAYAT olabilir (squash-merge edilmis eski dal?). Yeni is icin YENI dal adi kullan.")
+        # Ikinci soru (re-gate onerisi ①): GERISINDE (dal ucu origin/main'in atasi — dalin isi
+        # zaten main'de, yalniz ilerletilmemis) ile AYRIK (ortak atadan sonra iki yanda da commit —
+        # squash-merge edilmis eski dalin imzasi) ayrilir; "YENI dal adi" onerisi YALNIZ ayrikta.
+        r2 = _git(proje, "merge-base", "--is-ancestor", dal_ref, _GUNCEL_TABAN)
+        if r2.returncode == 0:
+            say(WARN, f"[UYARI] dal '{dal_ref}' {_GUNCEL_TABAN}'i ICERMIYOR: GERISINDE (ucu "
+                      f"{_GUNCEL_TABAN}'in atasi) — ise baslamadan once dali {_GUNCEL_TABAN}'e ilerlet.")
+        elif r2.returncode == 1:
+            say(WARN, f"[UYARI] dal '{dal_ref}' {_GUNCEL_TABAN}'i ICERMIYOR: AYRIK (iki yanda da "
+                      f"farkli commit) — squash-merge edilmis eski dal olabilir; yeni is icin YENI dal adi kullan.")
+        else:
+            say(WARN, f"[UYARI] dal '{dal_ref}' {_GUNCEL_TABAN}'i ICERMIYOR; gerisinde/ayrik ayrimi "
+                      f"OLCULEMEDI ({(r2.stderr or r2.stdout).strip()[:120]}) — bayat olabilir, elle kontrol et.")
         return
     say(WARN, f"[UYARI] dal tazeligi OLCULEMEDI ({_GUNCEL_TABAN} ↔ {dal_ref}: "
               f"{(r.stderr or r.stdout).strip()[:160]}) — dal bayat olabilir, elle kontrol et.")

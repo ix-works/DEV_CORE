@@ -29,7 +29,8 @@ Q349 (2026-11-02): `--wt-ac` tabani `refs/remotes/origin/main` — `origin/main`
 Issue #437 (2026-11-15): `--wt-taban REF` (tam ref/tam SHA, dogrulamali) + yerelde VAR olan dal
   `-b`'siz acilir, HEAD dogrulanir; ayni adli tag golgesi + CLI kablolamasi (V15a-i; M30-M35).
   PR #445 kapisi F2: mevcut dal origin/main'i icermiyorsa [UYARI] (bloklamaz), guncelse yok,
-  olculemezse [UYARI] OLCULEMEDI (V15a/j/k/l; M36-M38).
+  olculemezse [UYARI] OLCULEMEDI (V15a/j/k/l; M36-M38). Re-gate ①: GERISINDE (V15j) ile AYRIK
+  (V15m, "YENI dal adi" onerisi yalniz burada) ayrilir (M39-M40).
 
 UC BAGLAM (F3):
   (1) bilinen-BOZUK  : fix sokulmus kod (mutasyon dali)
@@ -730,9 +731,23 @@ def v15_wt_taban_mevcut_dal(ts, kok: Path) -> None:
         ok, out = ac("infra/eski")
         acilan.append("infra/eski")
         sb, h = bas("infra/eski")
-        sonuc("V15j BAYAT mevcut dal (origin/main ilerledi) acilir AMA [UYARI] ICERMIYOR basilir (bloklamaz)",
+        sonuc("V15j GERISINDE mevcut dal (ucu origin/main'in atasi) acilir AMA [UYARI] GERISINDE "
+              "basilir; 'YENI dal adi' onerisi YOK (bloklamaz)",
               ok and sb == "refs/heads/infra/eski" and h == uzak and "[UYARI]" in out
-              and "ICERMIYOR" in out, f"ok={ok} head={sb or 'AYRIK'} {h[:8]} {son(out)}")
+              and "GERISINDE" in out and "YENI dal adi" not in out,
+              f"ok={ok} head={sb or 'AYRIK'} {h[:8]} {son(out)}")
+        # AYRIK: eski uctan dallanip KENDI commit'i olan dal (squash-merge edilmis eski dalin imzasi);
+        # checkout'suz `commit-tree` ile kurulur (calisma agaci main'de kalir)
+        agac = git(proje, "rev-parse", f"{uzak}^{{tree}}").stdout.strip()
+        ayrik = git(proje, "commit-tree", agac, "-p", uzak, "-m", "squash oncesi is").stdout.strip()
+        if not ayrik:
+            raise Kurulamadi("V15m kum: ayrik commit kurulamadi")
+        git(proje, "branch", "infra/ayrik", ayrik)
+        ok, out = ac("infra/ayrik")
+        acilan.append("infra/ayrik")
+        sonuc("V15m AYRIK mevcut dal → [UYARI] AYRIK + 'squash-merge' + 'YENI dal adi' onerisi (bloklamaz)",
+              ok and "[UYARI]" in out and "AYRIK" in out and "YENI dal adi" in out
+              and "GERISINDE" not in out, f"ok={ok} {son(out)}")
         git(proje, "branch", "infra/taze", yeni_uzak)
         ok, out = ac("infra/taze")
         acilan.append("infra/taze")
@@ -1117,6 +1132,10 @@ MUTASYONLAR = [
     ("M37 F2 ata sorusu TERS yonde (dal origin/main'in atasi mi)", "team_setup",
      ('r = _git(proje, "merge-base", "--is-ancestor", _GUNCEL_TABAN, dal_ref)',
       'r = _git(proje, "merge-base", "--is-ancestor", dal_ref, _GUNCEL_TABAN)'), "wtac2"),
+    ("M39 re-gate ① gerisinde/ayrik ayrimi kalkar (her ICERMIYOR 'ayrik' sayilir)", "team_setup",
+     ("        if r2.returncode == 0:\n", "        if False:\n"), "wtac2"),
+    ("M40 re-gate ① ayrik dali 'gerisinde' sayilir (YENI dal onerisi kaybolur)", "team_setup",
+     ("        elif r2.returncode == 1:\n", "        elif False:\n"), "wtac2"),
     ("M38 F2 olculemeyen tazelik SESSIZ gecer", "team_setup",
      ('    say(WARN, f"[UYARI] dal tazeligi OLCULEMEDI',
       '    return\n    say(WARN, f"[UYARI] dal tazeligi OLCULEMEDI'), "wtac2"),
