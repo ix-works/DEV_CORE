@@ -18,6 +18,16 @@ ettiğini ÖLÇMEZ. Gerçek deploy YOK.
 PR #445 kapısı (F1): `app:` bloğu GÖRÜLDÜYSE sonuç yalnız o bloktan — reddedilen app.name
 blok dışı `metadata.name`e düşmez (A13-A16; mutasyon `--mutasyon-app-reddi-dusuyor`).
 
+PR #445 3. kapı (lider kararı): satır regex'i KALDIRILDI — ad GERÇEK YAML ayrıştırıcıyla,
+`fiori deploy`un okuduğu yoldan (İLK `deploy-to-abap` görevinin `configuration.app.name`).
+Birincil: node + `yaml` paketi (fiori'nin kütüphane ailesi) · yedek: PyYAML (yinelenen anahtar ve
+`<<` RED) · ikisi yoksa / belge hatalıysa "". `metadata.name`'e düşüş YOK (A11).
+G01–G74 = kapının 74 probe girdisi (`g_vakalari.py`, AYNEN); beklenen değer, fiori'nin kendi
+okuma kodunun (`parseDocument().toJSON()` + `find`) bu girdilerdeki sonucunun politikadan geçmiş
+hâlidir (belge hatası ⇒ "") — ölçülüp SABİTLENDİ (BEKLENEN_DOLU). Her eksen (node · PyYAML) AYRI
+koşulur. Node ekseni `yaml` paketi gerektirir: `BSP_FIXTURE_YAML_PAKETI=<.../node_modules/yaml>`
+ya da `npm root -g` altında; bulunamazsa eksen ÖLÇÜLEMEDİ yazılır (CI'da beklenen hâl).
+
 ÜÇ BAĞLAM (F3)
   (1) bilinen-BOZUK : `--mutasyon-*` (fix bellekte geri alınır)
   (2) bilinen-TEMİZ : bugünkü kod — Z yolu regresyon vektörleri (A1/B1/C1/C3) dahil
@@ -49,29 +59,32 @@ VUS = SCRIPTS / "verify_ui_static_assets.py"
 
 # kip -> (dosya, eski, yeni) — bellekte uygulanır; gerçek kaynak DEĞİŞMEZ
 MUTASYONLAR = {
-    "--mutasyon-eski-z-deseni": (DUI, "        if musteri_adi_mi(ad):\n",
-                                 '        if re.match(r"Z[A-Z0-9_]+\\Z", ad):  # MUTASYON\n'),
-    "--mutasyon-kayitsiz-ns-kabul": (DUI, "        if musteri_adi_mi(ad):\n",
-                                     "        if musteri_adi_mi(ad) or ad_namespace(ad):  # MUTASYON\n"),
-    "--mutasyon-app-oncelik-yok": (DUI, '        return (app_icinde or [""])[0]\n',
-                                   '        return ((herhangi + app_icinde) or [""])[0]  # MUTASYON\n'),
-    # PR #445 kapısı F1: app: bloğu VARKEN reddedilen app.name blok dışı `name:`e düşüyordu
-    "--mutasyon-app-reddi-dusuyor": (DUI, '    if app_goruldu:\n        return (app_icinde or [""])[0]\n',
-                                     '    if app_goruldu and app_icinde:  # MUTASYON\n'
-                                     '        return app_icinde[0]\n'),
-    # PR #445 re-gate F-YENİ-1: `app` anahtarı her biçimde (tırnaklı / akış) "görüldü"
-    "--mutasyon-app-anahtar-eski": (DUI, '_APP_ANAHTAR = re.compile(r"""^(\\s*)(?:app|"app"|\'app\')\\s*:(?:\\s+(.*))?$""")',
-                                    '_APP_ANAHTAR = re.compile(r"^(\\s*)app:()\\s*(?:#.*)?$")  # MUTASYON eski'),
-    "--mutasyon-akis-ayristirilmaz": (DUI, "    m = _AKIS_TEK_SATIR.match(deger.strip())\n",
-                                      "    return None  # MUTASYON\n    m = _AKIS_TEK_SATIR.match(deger.strip())\n"),
-    "--mutasyon-akis-politikasiz": (DUI, "if ad is not None and musteri_adi_mi(ad.upper()):",
-                                    "if ad is not None:  # MUTASYON"),
-    "--mutasyon-name-tirnak-eski": (DUI, '_NAME_SATIRI = re.compile(r"""^\\s*(?:name|"name"|\'name\')\\s*:\\s*(.*)$""")',
-                                    '_NAME_SATIRI = re.compile(r"^\\s*name:\\s*(.*)$")  # MUTASYON'),
-    "--mutasyon-yorum-ayiklanmaz": (DUI, '    v = re.split(r"\\s#", ham, maxsplit=1)[0].strip()',
-                                    "    v = ham.strip()  # MUTASYON"),
-    "--mutasyon-buyuk-harf-yok": (DUI, "        ad = _yaml_skaler(m.group(1)).upper()",
-                                  "        ad = _yaml_skaler(m.group(1))  # MUTASYON"),
+    "--mutasyon-eski-z-deseni": (DUI, "        if not musteri_adi_mi(bsp):\n",
+                                 '        if not re.match(r"Z[A-Z0-9_]+\\Z", bsp):  # MUTASYON\n'),
+    "--mutasyon-kayitsiz-ns-kabul": (DUI, "        if not musteri_adi_mi(bsp):\n",
+                                     "        if not (musteri_adi_mi(bsp) or ad_namespace(bsp)):  # MUTASYON\n"),
+    "--mutasyon-buyuk-harf-yok": (DUI, "        bsp = deger.upper()\n", "        bsp = deger  # MUTASYON\n"),
+    # PR #445 3. kapı: ayrıştırıcı yerine satır regex'i (son `name:` satırı)
+    "--mutasyon-ayristirici-yerine-regex": (
+        DUI, 'AYRISTIRICILAR = (("node-yaml", _node_ile), ("PyYAML", _pyyaml_ile))',
+        'AYRISTIRICILAR = (("regex", lambda y: ("OK", (re.findall(r"(?m)^\\s*name:\\s*(\\S+)", '
+        'y.read_text(encoding="utf-8")) or [None])[-1])),)  # MUTASYON'),
+    "--mutasyon-yinelenen-anahtar-kabul-node": (DUI, "  if (d.errors && d.errors.length) {",
+                                                "  if (false) {  // MUTASYON"),
+    "--mutasyon-yinelenen-anahtar-kabul-pyyaml": (DUI, "            if anahtar in gorulen:\n",
+                                                  "            if False:  # MUTASYON\n"),
+    "--mutasyon-gorev-suzgeci-yok-node": (DUI, "e => e && e.name === 'deploy-to-abap'",
+                                          "e => e && e.configuration && e.configuration.app"),
+    "--mutasyon-gorev-suzgeci-yok-pyyaml": (DUI, 'e.get("name") == _DEPLOY_GOREVI), None)',
+                                            '"configuration" in e), None)  # MUTASYON'),
+    "--mutasyon-metadata-dususu": (
+        DUI, '        if deger is None:\n            return "", f"{_DEPLOY_GOREVI}',
+        '        if deger is None:\n'
+        '            _m = re.search(r"(?m)^  name:\\s*(\\S+)", y.read_text(encoding="utf-8"))\n'
+        '            deger = _m.group(1) if _m else None  # MUTASYON metadata.name dususu\n'
+        '        if deger is None:\n            return "", f"{_DEPLOY_GOREVI}'),
+    "--mutasyon-ayristiramadi-sessiz": (DUI, '        print(f"[UYARI] BSP adı ayrıştırılamadı:',
+                                        '        (lambda *a, **k: None)(f"[UYARI] BSP adı ayrıştırılamadı:'),  # MUTASYON
     "--mutasyon-icf-ns-dali-yok": (DUI, "    if ns:\n        return f\"/sap/bc/ui5_ui5/{ns",
                                    "    if False:\n        return f\"/sap/bc/ui5_ui5/{ns"),
     "--mutasyon-icf-bicimsiz-sap-dugumune": (DUI, '    if "/" in bsp:\n',
@@ -93,6 +106,26 @@ KUM = Path(tempfile.mkdtemp(prefix="bsp_ns_"))
 (KUM / ".conn_adt").write_bytes(b"ADT_SAP_URL=https://sahte.invalid\nADT_SAP_CLIENT=000\n")
 (KUM / "project.yaml").write_text("sap_profile: s4_private\nsource_root: SOURCE_CODES\n"
                                   "customer_namespaces: [\"/NSP/\"]\n", encoding="utf-8")
+
+
+def _yaml_paketi_bul():
+    """Node ekseni için `yaml` paketi: env → `npm root -g`. Yoksa None (eksen ÖLÇÜLEMEDİ)."""
+    import subprocess as _sp
+    aday = os.environ.get("BSP_FIXTURE_YAML_PAKETI")
+    if aday and (Path(aday) / "package.json").exists():
+        return Path(aday)
+    try:
+        kok = _sp.run(["npm", "root", "-g"], capture_output=True, text=True, timeout=60,
+                      shell=(os.name == "nt")).stdout.strip()
+    except (OSError, _sp.SubprocessError):
+        return None
+    aday = Path(kok) / "yaml" if kok else None
+    return aday if aday and (aday / "package.json").exists() else None
+
+
+YAML_PAKETI = _yaml_paketi_bul()
+if YAML_PAKETI:   # KUM altındaki her app dizini `yaml`ı buradan çözer (Node üst dizinlere bakar)
+    shutil.copytree(YAML_PAKETI, KUM / "node_modules" / "yaml")
 os.environ["CLAUDE_PROJECT_DIR"] = str(KUM)   # deploy_ui REPO'yu import anında okur
 os.chdir(KUM)
 sys.path.insert(0, str(SCRIPTS))
@@ -159,8 +192,8 @@ VAKALAR = [
     ("A9 tırnaklı \"/NSP/APP\"", "\"/NSP/APP\"", {}, "/NSP/APP"),
     ("A10 metadata.name tek parçalı `zfoo` + app.name -> app.name ÖNCELİKLİ", "ZSD001_APP",
      {"metadata": "zfoo"}, "ZSD001_APP"),
-    ("A11 app: bloğu YOK -> ilk müşteri adı (eski kural)", "ZSD001_APP", {"app_blok": False},
-     "ZSD001_APP"),
+    ("A11 deploy-to-abap'ta app YOK (üst düzey `name:` var) -> '' — DÜŞÜŞ YOK (3. kapı)",
+     "ZSD001_APP", {"app_blok": False}, ""),
     # PR #445 kapısı F1: app: bloğu VARKEN reddedilen app.name blok DIŞINA düşmez
     ("A13 kayıtsız /ABC/APP + metadata `zfoo` -> '' (ZFOO'ya DÜŞMEZ)", "/ABC/APP",
      {"metadata": "zfoo"}, ""),
@@ -198,13 +231,86 @@ for ad, app_satirlari, beklenen in [
          "        'app':\n          name: ZAPP\n", "ZAPP"),
         ("A22 TIRNAKLI anahtar + AKIŞ `\"app\": {\"name\": \"/NSP/APP\"}` -> /NSP/APP",
          "        \"app\": {\"name\": \"/NSP/APP\"}\n", "/NSP/APP"),
-        ("A23 ÇOK SATIRLI akış (ayrıştırılamaz) + metadata zfoo -> '' (fail-closed)",
-         "        app: {\n          name: ZAPP }\n", ""),
+        ("A23 ÇOK SATIRLI akış (geçerli YAML) -> ZAPP (gerçek ayrıştırıcı; fiori de ZAPP okur)",
+         "        app: {\n          name: ZAPP }\n", "ZAPP"),
         ("A24 app bloğunda TIRNAKLI `\"name\":` ZSD001_APP -> ZSD001_APP (kapı P11)",
          "        app:\n          \"name\": ZSD001_APP\n", "ZSD001_APP")]:
     sonuc = D.bsp_name(yaml_ham(app_satirlari))
     kontrol(ad, sonuc == beklenen, f"bekl={beklenen!r} gelen={sonuc!r}")
 kontrol("A12 ui5-deploy.yaml yok -> ''", D.bsp_name(Path(tempfile.mkdtemp(dir=KUM))) == "")
+
+# ══ G — kapının 74 probe girdisi, HER ayrıştırıcı ekseni AYRI (PR #445 3. kapı) ══════════
+# Beklenen: fiori'nin okuma kodunun (yaml 2.8.3: parseDocument().toJSON() + find deploy-to-abap)
+# bu girdilerdeki app.name'i, politikadan geçmiş hâli; belge hatası (DUPLICATE_KEY vb.) ⇒ "".
+# Ölçüm 2026-11-15 (node yaml 2.8.3 + PyYAML 6.0.3): 74/74 iki eksende de aynı → SABİTLENDİ.
+BEKLENEN_DOLU = {g: "ZAPP" for g in (
+    "G01 G02 G03 G06 G07 G08 G09 G11 G12 G14 G15 G26 G30 G31 G35 G40 G41 G48 G53 G54 G55 G57 "
+    "G59 G67 G68 G69 G71").split()}
+BEKLENEN_DOLU.update({"G38": "/NSP/APP", "G39": "/NSP/APP"})
+G_HEAD = ('specVersion: "4.0"\nmetadata:\n  name: {meta}\ntype: application\nbuilder:\n  customTasks:\n'
+          '    - name: deploy-to-abap\n      configuration:\n        target:\n          url: https://sahte.invalid\n')
+G_DIZINLERI: list[tuple[str, Path]] = []
+
+
+def _g_case(ad, body=None, meta="zfoo", full=None, raw=None):
+    d = Path(tempfile.mkdtemp(prefix="g_", dir=KUM))
+    if raw is not None:
+        (d / "ui5-deploy.yaml").write_bytes(raw)
+    else:
+        metin = full if full is not None else G_HEAD.format(meta=meta) + body
+        (d / "ui5-deploy.yaml").write_bytes(metin.encode("utf-8"))
+    G_DIZINLERI.append((ad, d))
+
+
+exec(compile((Path(__file__).parent / "g_vakalari.py").read_text(encoding="utf-8"), "g_vakalari.py", "exec"),
+     {"case": _g_case, "A": "        ", "HEAD": G_HEAD})
+kontrol("G00 kapı korpusu TAM: 74 vaka yüklendi", len(G_DIZINLERI) == 74, f"n={len(G_DIZINLERI)}")
+import contextlib  # noqa: E402
+import io  # noqa: E402
+_ASIL = D.AYRISTIRICILAR
+EKSENLER = []
+for eksen_adi, fn in _ASIL:
+    D.AYRISTIRICILAR = ((eksen_adi, fn),)
+    sonda = fn(G_DIZINLERI[0][1] / "ui5-deploy.yaml")
+    if sonda is None:
+        print(f"  [ÖLÇÜLEMEDİ] G ekseni {eksen_adi}: ayrıştırıcı bu ortamda YOK "
+              + ("(node `yaml` paketi bulunamadı — BSP_FIXTURE_YAML_PAKETI)" if eksen_adi == "node-yaml"
+                 else "(PyYAML kurulu değil)"))
+        continue
+    EKSENLER.append(eksen_adi)
+    yanlis = []
+    for ad, d in G_DIZINLERI:
+        with contextlib.redirect_stderr(io.StringIO()):   # [UYARI] satırları P1'de ayrıca ölçülür
+            gelen = D.bsp_name(d)
+        bek = BEKLENEN_DOLU.get(ad.split()[0], "")
+        if gelen != bek:
+            yanlis.append(f"{ad.split()[0]}:bekl={bek!r},gelen={gelen!r}")
+    kontrol(f"G[{eksen_adi}] 74 kapı vakası fiori-politika beklentisiyle BİREBİR", not yanlis,
+            " ".join(yanlis[:12]))
+D.AYRISTIRICILAR = _ASIL
+kontrol("G-EKSEN en az bir ayrıştırıcı ekseni ÖLÇÜLDÜ (ikisi de yoksa fixture kör)", bool(EKSENLER),
+        f"eksenler={EKSENLER}")
+if KIP and KIP.endswith("-node") and "node-yaml" not in EKSENLER:
+    print(f"[KURULAMADI] {KIP}: node ekseni bu ortamda yok — mutasyon ölçülemez (KAÇTI DEĞİLDİR)")
+    raise SystemExit(3)
+if KIP and KIP.endswith("-pyyaml") and "PyYAML" not in EKSENLER:
+    print(f"[KURULAMADI] {KIP}: PyYAML ekseni bu ortamda yok — mutasyon ölçülemez (KAÇTI DEĞİLDİR)")
+    raise SystemExit(3)
+
+# P — ayrıştırıcı HİÇ yoksa: "" + stderr [UYARI] (fail-closed, sessiz değil)
+D.AYRISTIRICILAR = ()
+_hata = io.StringIO()
+with contextlib.redirect_stderr(_hata):
+    _p1 = D.bsp_name(yaml_app("ZSD001_APP"))
+D.AYRISTIRICILAR = _ASIL
+kontrol("P1 ayrıştırıcı YOK -> '' + stderr `[UYARI] BSP adı ayrıştırılamadı` (sessiz değil)",
+        _p1 == "" and "[UYARI] BSP adı ayrıştırılamadı" in _hata.getvalue(),
+        f"gelen={_p1!r} stderr={_hata.getvalue()[:120]!r}")
+_hata = io.StringIO()
+with contextlib.redirect_stderr(_hata):
+    _p2 = D.bsp_name(yaml_app("SAPUI5_STD"))
+kontrol("P2 politika reddi (ayrıştırma BAŞARILI) -> '' ve [UYARI] YOK (teşhis karışmaz)",
+        _p2 == "" and "[UYARI]" not in _hata.getvalue(), f"stderr={_hata.getvalue()[:120]!r}")
 
 # ══ B — bsp_icf_yolu ═════════════════════════════════════════════════════════════════
 for ad, bsp, beklenen in [

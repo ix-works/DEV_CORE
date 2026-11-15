@@ -262,7 +262,11 @@ def app_kur(ui: Path, ad: str, bsp: str, *, dist_preload: bytes | None = None,
             webapp: dict | None = None, dist: dict | None = None) -> None:
     d = ui / ad
     (d / "webapp").mkdir(parents=True, exist_ok=True)
-    (d / "ui5-deploy.yaml").write_bytes(f"specVersion: '3.0'\napp:\n  name: {bsp}\n".encode())
+    # PR #445 3. kapı: BSP adı artık `fiori deploy`un okuduğu yoldan (deploy-to-abap görevinin
+    # configuration.app.name) alınır — üst düzey `app:` gerçek dosya şekli DEĞİLDİ.
+    (d / "ui5-deploy.yaml").write_bytes(
+        (f"specVersion: '3.0'\nbuilder:\n  customTasks:\n    - name: deploy-to-abap\n"
+         f"      configuration:\n        app:\n          name: {bsp}\n").encode())
     if dist_preload is not None:
         (d / "dist").mkdir(parents=True, exist_ok=True)
         (d / "dist" / "Component-preload.js").write_bytes(dist_preload)

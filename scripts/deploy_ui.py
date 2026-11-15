@@ -87,102 +87,147 @@ def read_conn():
 
 BSP_ADI_BEKLENEN = ("müşteri ad alanında BSP adı (app.name: Z/Y ya da project.yaml "
                     "customer_namespaces'te kayıtlı /<NS>/ ile başlayan)")
-# `app` ANAHTARI her biçimde (PR #445 re-gate F-YENİ-1): tırnaksız / `"app"` / `'app'`;
-# değer kısmı (grup 2) boşsa (yalnız yorum olabilir) BLOK, `{`la başlıyorsa AKIŞ, başka bir
-# şeyse (anchor/alias/skaler) ayrıştırılamaz ⇒ yine "görüldü" sayılır ve sonuç "".
-_APP_ANAHTAR = re.compile(r"""^(\s*)(?:app|"app"|'app')\s*:(?:\s+(.*))?$""")
-_AKIS_TEK_SATIR = re.compile(r"^\{([^{}\[\]]*)\}\s*(?:#.*)?$")
-_AKIS_NAME = re.compile(r"""^\s*(?:name|"name"|'name')\s*:\s*(.*)$""")
-_NAME_SATIRI = re.compile(r"""^\s*(?:name|"name"|'name')\s*:\s*(.*)$""")
+# PR #445 3. kapı (2026-11-15, lider kararı): satır regex'i yerine GERÇEK YAML ayrıştırıcı.
+# Üç regex turu yakınsamadı (akış map içinde `app`, `? app` açık anahtar, alt ağaçtaki blok
+# skaler/iç map, `name:ZAPP` boşluksuz, yinelenen anahtar…) — her turda kapı yeni bir biçim buldu.
+# HEDEF = `fiori deploy`un OKUDUĞU yer. Ölçüldü (@sap/ux-ui5-tooling 1.25.0, dist/cli/index.cjs
+# `readConfig`): `parseDocument(readFileSync(<config>, "utf8")).toJSON()` (eemeli `yaml`, pakete
+# GÖMÜLÜ) → `builder.customTasks.find(e => e.name === "deploy-to-abap").configuration` → app.name.
+# ⚠ `yaml` (2.8.3 ölçüldü) yinelenen anahtarda `errors=[DUPLICATE_KEY]` kaydeder ama `toJSON()`
+# SONUNCUYU döndürür ve fiori `errors`a bakmaz ⇒ burada `errors` doluysa "" (fail-closed).
+_DEPLOY_GOREVI = "deploy-to-abap"
+_NODE_BETIGI = r"""
+const fs = require('fs');
+const [, yol, dizin] = process.argv;
+let Y;
+try { Y = require(require.resolve('yaml', { paths: [dizin] })); }
+catch (e) { console.log(JSON.stringify({ durum: 'KUTUPHANE_YOK' })); process.exit(0); }
+let s;
+try {
+  const d = Y.parseDocument(fs.readFileSync(yol, 'utf8'));
+  if (d.errors && d.errors.length) {
+    s = { durum: 'HATA', neden: d.errors.map(e => e.code || e.name).join(',') };
+  } else {
+    const j = d.toJSON();
+    const g = j && j.builder && Array.isArray(j.builder.customTasks)
+      ? j.builder.customTasks.find(e => e && e.name === 'deploy-to-abap') : undefined;
+    const a = g && g.configuration && g.configuration.app;
+    s = { durum: 'OK', ad: (a && typeof a.name === 'string') ? a.name : null };
+  }
+} catch (e) { s = { durum: 'HATA', neden: String((e && e.message) || e).slice(0, 200) }; }
+console.log(JSON.stringify(s));
+"""
 
 
-def _akis_app_adi(deger: str):
-    """`{name: X, package: Y}` → `X`; tek satırda güvenle ayrıştırılamıyorsa None.
+def _node_ile(yol: Path):
+    """fiori'nin kütüphane AİLESİ (`yaml`) ile oku — app'in node_modules'undan çözülür.
 
-    Güvenli kabul: tek satır, iç içe `{}`/`[]` yok, öğelerde tırnak içinde virgül yok
-    (virgülle bölünce her öğe `anahtar: değer`), `name` anahtarı TAM BİR KEZ. Aksi hâl
-    (çok satırlı akış, iç içe yapı, çift `name`) None ⇒ çağıran sonucu "" yapar (fail-closed).
+    Döner: ("OK", ad|None) · ("HATA", neden) · None (node ya da `yaml` paketi YOK → sıradaki yol).
     """
-    m = _AKIS_TEK_SATIR.match(deger.strip())
-    if not m:
+    import json as _json
+    try:
+        r = subprocess.run(["node", "-e", _NODE_BETIGI, str(yol), str(yol.parent)],
+                           capture_output=True, text=True, encoding="utf-8", timeout=60)
+    except (OSError, subprocess.SubprocessError):
         return None
-    adlar = []
-    for oge in m.group(1).split(","):
-        if not oge.strip():
+    try:
+        v = _json.loads((r.stdout or "").strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return ("HATA", f"node çıktısı okunamadı (rc={r.returncode})")
+    if v.get("durum") == "KUTUPHANE_YOK":
+        return None
+    if v.get("durum") == "OK":
+        return ("OK", v.get("ad"))
+    return ("HATA", f"yaml: {v.get('neden')}")
+
+
+def _pyyaml_ile(yol: Path):
+    """Yedek yol: PyYAML, yinelenen anahtar ve `<<` birleştirme anahtarı REDDEDİLİR (fiori'nin
+    YAML 1.2 kütüphanesi `<<`'i birleştirme saymaz — kabul etmek farklı bir ad üretebilirdi).
+    Döner: ("OK", ad|None) · ("HATA", neden) · None (PyYAML yok)."""
+    try:
+        import yaml as _yaml
+    except Exception:                                  # noqa: BLE001 — bozuk kurulum = yok
+        return None
+
+    class _TekilYukleyici(_yaml.SafeLoader):
+        pass
+
+    def _harita(loader, node, deep=False):
+        gorulen = []
+        for k, _v in node.value:
+            if k.tag == "tag:yaml.org,2002:merge":
+                raise _yaml.constructor.ConstructorError(None, None, "'<<' birlestirme anahtari",
+                                                         k.start_mark)
+            anahtar = loader.construct_object(k, deep=True)
+            if anahtar in gorulen:
+                raise _yaml.constructor.ConstructorError(None, None, f"yinelenen anahtar {anahtar!r}",
+                                                         k.start_mark)
+            gorulen.append(anahtar)
+        return loader.construct_mapping(node, deep=deep)
+
+    _TekilYukleyici.add_constructor(_yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _harita)
+    try:
+        with open(yol, encoding="utf-8") as fh:
+            j = _yaml.load(fh, Loader=_TekilYukleyici)  # noqa: S506 — SafeLoader alt sınıfı
+    except Exception as exc:                           # noqa: BLE001
+        return ("HATA", type(exc).__name__)
+    gorevler = (j.get("builder") or {}).get("customTasks") if isinstance(j, dict) else None
+    if not isinstance(gorevler, list):
+        return ("OK", None)
+    g = next((e for e in gorevler if isinstance(e, dict) and e.get("name") == _DEPLOY_GOREVI), None)
+    a = g.get("configuration", {}).get("app") if isinstance(g, dict) and isinstance(
+        g.get("configuration"), dict) else None
+    ad = a.get("name") if isinstance(a, dict) else None
+    return ("OK", ad if isinstance(ad, str) else None)
+
+
+AYRISTIRICILAR = (("node-yaml", _node_ile), ("PyYAML", _pyyaml_ile))
+
+
+def bsp_adi_cozumle(app_dir: Path) -> tuple:
+    """(bsp, açıklama). bsp = politikadan geçen app.name (BÜYÜK harf) ya da "".
+
+    Açıklama "" ise ad bulundu; aksi hâlde NEDEN boş (teşhis — karar DEĞİL)."""
+    y = app_dir / "ui5-deploy.yaml"
+    if not y.exists():
+        return "", "ui5-deploy.yaml yok"
+    for ad_, fn in AYRISTIRICILAR:
+        sonuc = fn(y)
+        if sonuc is None:
             continue
-        if oge.count('"') % 2 or oge.count("'") % 2:
-            return None                       # tırnak içinde virgül → bölme güvensiz
-        n = _AKIS_NAME.match(oge)
-        if n:
-            adlar.append(_yaml_skaler(n.group(1)))
-    return adlar[0] if len(adlar) == 1 else None
-
-
-def _yaml_skaler(ham: str) -> str:
-    """`X  # yorum` · `"X"` · `'X'` → `X` (YAML'da yorum `#`'den ÖNCE boşluk ister)."""
-    v = re.split(r"\s#", ham, maxsplit=1)[0].strip()
-    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
-        v = v[1:-1].strip()
-    return v
+        durum, deger = sonuc
+        if durum != "OK":
+            return "", f"AYRISTIRILAMADI ({ad_}: {deger})"
+        if deger is None:
+            return "", f"{_DEPLOY_GOREVI} görevinde configuration.app.name YOK ({ad_})"
+        bsp = deger.upper()
+        if not musteri_adi_mi(bsp):
+            return "", f"app.name {deger!r} müşteri ad alanında DEĞİL ({ad_})"
+        return bsp, ""
+    return "", "AYRISTIRILAMADI (ayrıştırıcı YOK: node+`yaml` paketi de PyYAML de bulunamadı)"
 
 
 def bsp_name(app_dir: Path) -> str:
-    """ui5-deploy.yaml'dan hedef BSP adını (müşteri ad alanındaki app.name) çıkar; yoksa "".
+    """ui5-deploy.yaml'dan hedef BSP adını (`fiori deploy`un okuduğu app.name) çıkar; yoksa "".
 
-    Issue #440 (2026-11-15): eskiden yalnız `Z[A-Z0-9_]+` (büyük harf, satır sonunda yorum
-    yok) kabul ediliyordu ⇒ `/NS/APP`, `Y…`, küçük harfli ad ve `ZAD # yorum` sessizce "" idi
-    ve dört tüketici (deploy_ui · fetch_ui_source · verify_ui_static_assets · _pbe_ui) BSP'yi
-    çözemiyordu. Karar artık `utils.ad_politikasi.musteri_adi_mi`'den gelir (ADR 0005-A tek
-    kaynak; kayıtsız namespace RED). Ad BÜYÜK harfe çevrilir (BSP adı SAP'de büyük harftir).
-    `app:` bloğu GÖRÜLDÜYSE sonuç YALNIZ o bloktaki `name:`den gelir; oradaki ad reddedilirse
-    (kayıtsız namespace · standart ad) sonuç "" olur — bloğun DIŞINDAKİ bir `name:` satırına
-    (çoğu zaman tek parçalı `metadata.name: zfoo`) DÜŞÜLMEZ. Gerekçe (PR #445 kapısı,
-    2026-11-15): `fiori deploy` hedefi app.name'den alır; düşüş, reddedilen app.name'e
-    deploy'u "geçerli BSP" adıyla açar ve canlı doğrulama başka bir BSP'yi çeker. Eski
-    regex'teki kardeş (`metadata.name: ZFOO` + standart app.name → 'ZFOO') da bununla kapanır.
-    `app` anahtarı HER BİÇİMDE "görüldü" sayılır (PR #445 re-gate F-YENİ-1): tırnaklı
-    (`"app":`/`'app':`) ya da akış (`app: {name: X}`); akışta ad yalnız tek satırda güvenle
-    ayrıştırılabiliyorsa politikadan geçer, aksi hâlde "" (fail-closed). `name` anahtarı da
-    tırnaklı yazılabilir.
-    `app` anahtarı HİÇ yoksa eski kural: dosyadaki ilk müşteri adı. Z adlı, `metadata.name`'i
-    noktalı (`com.x.y`) dosyada sonuç eskisiyle aynıdır.
-    ⚠ SINIR: yorum satırına alınmış `# app:` bloğu YAML'da yoktur ⇒ blok yok sayılır ve eski
-    kurala düşülür (kapı probu P6; `fiori deploy` da o bloğu görmez — kapsam dışı).
+    Issue #440 (2026-11-15): eskiden yalnız `Z[A-Z0-9_]+` satır regex'i vardı ⇒ `/NS/APP`, `Y…`,
+    küçük harfli ad, `ZAD # yorum` sessizce "" idi. Karar `utils.ad_politikasi.musteri_adi_mi`'den
+    (ADR 0005-A tek kaynak; kayıtsız namespace RED); ad BÜYÜK harfe çevrilir.
+    PR #445 3. kapı: ad GERÇEK YAML ayrıştırıcıyla, fiori'nin okuduğu yoldan alınır —
+    `builder.customTasks` içinde İLK `name: deploy-to-abap` görevinin `configuration.app.name`'i.
+    Önce node + app'in `node_modules`'undaki `yaml` (fiori'nin kütüphane ailesi), yoksa PyYAML;
+    ikisi de yoksa ya da belge hatalıysa (yinelenen anahtar dahil) "" + stderr `[UYARI]`.
+    `metadata.name`'e ya da başka bir `name:`e DÜŞÜŞ YOK: hedef ad yoksa "".
+    ⚠ KAPSAM: birincil yol fiori'nin GÖMÜLÜ `yaml` kopyasını değil app'in kendi `yaml` paketini
+    kullanır (aynı aile, sürüm eşliği ÖLÇÜLMEDİ). PyYAML yedeği YAML 1.1'dir; JS yolundan farklı
+    karar verdiği girdilerde (fixture'da ölçülen) sonuç ya aynı ad ya "" olur, BAŞKA bir ad olmaz.
     """
-    y = app_dir / "ui5-deploy.yaml"
-    if not y.exists():
-        return ""
-    app_icinde: list = []
-    herhangi: list = []
-    app_goruldu = False
-    app_girinti = None
-    for line in y.read_text(encoding="utf-8", errors="ignore").splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        girinti = len(line) - len(line.lstrip())
-        if app_girinti is not None and girinti <= app_girinti:
-            app_girinti = None
-        m = _APP_ANAHTAR.match(line)
-        if m:
-            app_goruldu = True
-            deger = (m.group(2) or "").strip()
-            if not deger or deger.startswith("#"):
-                app_girinti = len(m.group(1))         # blok biçimi: altındaki name: satırları
-            else:
-                app_girinti = None                    # akış / skaler: blok açılmaz
-                ad = _akis_app_adi(deger) if deger.startswith("{") else None
-                if ad is not None and musteri_adi_mi(ad.upper()):
-                    app_icinde.append(ad.upper())
-            continue
-        m = _NAME_SATIRI.match(line)
-        if not m:
-            continue
-        ad = _yaml_skaler(m.group(1)).upper()
-        if musteri_adi_mi(ad):
-            (app_icinde if app_girinti is not None else herhangi).append(ad)
-    if app_goruldu:
-        return (app_icinde or [""])[0]
-    return (herhangi or [""])[0]
+    bsp, neden = bsp_adi_cozumle(app_dir)
+    if not bsp and neden.startswith("AYRISTIRILAMADI"):
+        print(f"[UYARI] BSP adı ayrıştırılamadı: {app_dir / 'ui5-deploy.yaml'} — {neden}",
+              file=sys.stderr)
+    return bsp
 
 
 def bsp_icf_yolu(bsp: str) -> str:

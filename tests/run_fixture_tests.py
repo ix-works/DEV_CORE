@@ -236,14 +236,16 @@ OZEL_TESTLER = [
      "Issue #304: BSP kaynagini geri kurma (-dbg kurali, metin LF/ikili ham, kaynak haritasi "
      "sondasi) + karsilastirma (YALNIZ olculmus build donusumleri) + --eslik (preload + tam liste; "
      "sahte ui5 CLI alt sureci)"),
-    # 2026-11-15 Issue #440: BSP adi ad_politikasi'ndan (Z/Y + kayitli /NS/, kucuk harf, yorum,
-    # app: blogu oncelikli) + canli ICF yolu tek yardimcidan (bsp_icf_yolu); 4 tuketici ayni cozum.
+    # 2026-11-15 Issue #440: BSP adi ad_politikasi'ndan (Z/Y + kayitli /NS/, kucuk harf) + canli ICF
+    # yolu tek yardimcidan (bsp_icf_yolu); 4 tuketici ayni cozum. PR #445 3. kapi: ad GERCEK YAML
+    # ayristiriciyla (node `yaml` / PyYAML yedegi) fiori'nin okudugu deploy-to-abap gorevinden.
     ("bsp_adi_namespace",
      "Issue #440: bsp_name musteri_adi_mi (Z/Y/kayitli NS; kayitsiz NS RED) + bsp_icf_yolu "
      "(Z aynen /sap/bc/ui5_ui5/sap/, /NS/APP -> /sap/bc/ui5_ui5/<ns>/<app>/, bicimsiz ad fail-closed) "
-     "+ iki URL kurucusu + 4 tuketici kablolamasi (verify/fetch/_pbe_ui) + app: blogu varken "
-     "reddedilen app.name blok disina DUSMEZ (PR #445 kapisi) + app anahtari her bicimde "
-     "(tirnakli/akis; re-gate F-YENI-1); 14 mutasyon"),
+     "+ iki URL kurucusu + 4 tuketici kablolamasi (verify/fetch/_pbe_ui) + ad YALNIZ "
+     "deploy-to-abap gorevinin configuration.app.name'i (gercek ayristirici, metadata dususu YOK, "
+     "yinelenen anahtar RED) + 74 kapi vakasi (G00-G74) node-yaml ve PyYAML ekseninde ayri "
+     "(eksen yoksa OLCULEMEDI) + ayristiricisiz ortamda '' + [UYARI] (PR #445 3. kapi); 14 mutasyon"),
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
     # 2026-08-01 kuyruk-turu (validator ailesi, V1-V6):
     ("cds_curr_satir_yorumu", "CURR/QUAN: satir-sonu // yorumu alani/degeri gizliyordu (V1)"),
@@ -993,6 +995,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "parçalama ağırlıkları: yalnız DENGEYİ etkiler, kapsamı değil (tamlık evrenden ölçülür)"),
     (".github/workflows/core-ci.yml", ("O:parca_tamlik",),
      "matris parçaları + `gates` toplayıcısının `--parca-birlestir` çağrısı"),
+    (".github/workflows/core-ci.yml", ("O:bsp_adi_namespace", "O:ui_dogrulama_satir_sonu_kacis"),
+     "fixture işlerinin `pip install` satırı: PyYAML (BSP adı ayrıştırıcı yedeği; PR #445 3. kapı)"),
     ("scripts/hooks/post_tool_failure.py",
      ("O:post_tool_failure_bash", "O:atc_p1_sonuc", "O:negatif_test_harness"),
      "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları) + "
@@ -1552,7 +1556,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/hooks/pull_before_edit.py", ("O:pbe_ui",), "eklenti kaydı → gerçek alt süreç (C)"),
     ("scripts/source_drift.py", ("O:pbe_ui",), "tazelik_damgala/seans_kimligi gerçek store (C)"),
     ("scripts/deploy_ui.py", ("O:pbe_ui", "O:bsp_adi_namespace"),
-     "bsp_name — pbe_ui BSP çözümü + (Issue #440) ad_politikasi kararı + bsp_icf_yolu"),
+     "bsp_name — pbe_ui BSP çözümü + (Issue #440) ad_politikasi kararı + bsp_icf_yolu "
+     "+ (PR #445 3. kapı) node `yaml`/PyYAML ayrıştırıcısı"),
     ("scripts/pull_msag_textpool.py", ("O:pbe_msag_textpool",), "msag/textpool salt-okur çekici + damga sözleşmesi"),
     ("scripts/hooks/_pbe_msag_textpool.py", ("O:pbe_msag_textpool",), "PBE eklentisi sinifla (msag/textpool)"),
     ("scripts/populate_message_class.py", ("O:pbe_msag_textpool",), "pull `sinif_oku`/`sinif_xml_ayristir` tüketir"),

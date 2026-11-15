@@ -155,9 +155,13 @@ blok mesajındaki `--session`'lı komut tercih edilir.
 - **Ölçülmedi:** canlı TypeScript BSP (harita sondası yalnız sentetik `.ts` ile) · Fiori Elements ·
   `s4_public`/`btp_abap` · deploy'un canlıdan dosya SİLME davranışı · ADT filestore yolu
   (`/sap/bc/adt/filestore/ui5-bsp/…`; bir makinede zaman aşımı).
-- **BSP adı (Issue #440):** `ui5-deploy.yaml` `app.name` Z/Y ya da `project.yaml`
+- **BSP adı (Issue #440):** `ui5-deploy.yaml`'da `fiori deploy`un okuduğu yerden alınır — İLK
+  `name: deploy-to-abap` görevinin `configuration.app.name`'i; Z/Y ya da `project.yaml`
   `customer_namespaces`'te kayıtlı `/<NS>/` ile başlamalı (karar `utils/ad_politikasi.musteri_adi_mi`;
-  kayıtsız namespace çözülmez). Canlı ICF yolu tek yardımcıdan (`deploy_ui.bsp_icf_yolu`): Z/Y →
+  kayıtsız namespace çözülmez). Okuma gerçek YAML ayrıştırıcıyla: `node` + app'in `node_modules`'undaki
+  `yaml` paketi, yedek PyYAML. İkisi de yoksa, belge hatalıysa (yinelenen anahtar dahil) ya da
+  hedef ad yoksa ad ÇÖZÜLMEZ (`metadata.name`'e düşülmez) ⇒ `--bsp <BSP_ADI>` ver; ayrıştırıcı
+  yokluğu stderr'de `[UYARI] BSP adı ayrıştırılamadı` olarak görünür (PR #445 3. kapı). Canlı ICF yolu tek yardımcıdan (`deploy_ui.bsp_icf_yolu`): Z/Y →
   `/sap/bc/ui5_ui5/sap/<bsp>/` · `/NS/APP` → `/sap/bc/ui5_ui5/<ns>/<app>/`. Namespace yolu yalnız
   Issue sahibinin ortamında (tek sistem) ölçüldü; çekirdekte namespace'li BSP ile canlı **ÖLÇÜLMEDİ**.
 - Canlı = indirilen zip anı; ICF servis katmanı ölçülmez.
