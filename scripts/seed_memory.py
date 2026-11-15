@@ -128,6 +128,10 @@ def default_target() -> Path:
 
 MANIFEST_ADI = ".seed-manifest.json"
 LINK_RE = re.compile(r"\]\(([^)]+\.md)\)")
+# Issue #430: Feedback başlığı SATIR düzeyinde tanınır — `## Feedback`, `## Feedback — konu`,
+# sonda boşluk, dosya sonunda yeni satırsız başlık. `\b`: `## Feedbacks` gibi başka başlık değil.
+FEEDBACK_BASLIK_RE = re.compile(r"^## Feedback\b[^\n]*$", re.MULTILINE)
+INDEKS_UYARI_ONEKI = "[UYARI]"
 
 
 def _sha(p: Path) -> str:
@@ -266,16 +270,34 @@ def _index_onar(target: Path, seed_index: Path, seed_adlari: set,
         except OSError:
             continue
     eklenecek = []
+    adlar = []
     for s in seed_metin.split("\n"):
         m = LINK_RE.search(s)
         if m and m.group(1) in seed_adlari and m.group(1) not in var_olan:
             eklenecek.append(s)
-            islem.append(f"indekse eklendi: {m.group(1)}")
+            adlar.append(m.group(1))
     if eklenecek:
-        if "## Feedback" in metin:
-            metin = metin.replace("## Feedback\n", "## Feedback\n\n" + "\n".join(eklenecek) + "\n", 1)
+        # Issue #430: başlık SATIR olarak bulunur. Eskiden "var mı" testi alt-dize
+        # (`"## Feedback" in metin`), "yerine koy" testi tam satırdı (`"## Feedback\n"`) ⇒
+        # `## Feedback — konu`, sonda boşluk ve dosya sonunda yeni satırsız başlıkta replace
+        # NO-OP oluyor ama "indekse eklendi" yine basılıyordu (sahte başarı). CRLF tek başına
+        # sebep değildir (read_text evrensel satır sonuyla okur). İlk Feedback başlığının
+        # hemen altına eklenir; başlık yoksa dosya sonunda açılır.
+        blok = "\n".join(eklenecek)
+        m = FEEDBACK_BASLIK_RE.search(metin)
+        if m:
+            son = m.end()
+            yeni = (metin[:son] + "\n\n" + blok + ("\n" if son == len(metin) else "")
+                    + metin[son:])
         else:
-            metin = metin.rstrip() + "\n\n## Feedback\n\n" + "\n".join(eklenecek) + "\n"
+            yeni = metin.rstrip() + "\n\n## Feedback\n\n" + blok + "\n"
+        # Başarı satırı DEĞİŞİKLİKTEN SONRA, ad başına ölçülerek yazılır (eylemden önce
+        # başarı yazılmaz). Eklenemeyen ad uyarı olarak döner; özet onu başarı saymaz.
+        sonra = _recall.metin_linkleri(yeni)
+        for ad in adlar:
+            islem.append(f"indekse eklendi: {ad}" if ad in sonra
+                         else f"{INDEKS_UYARI_ONEKI} indekse EKLENEMEDİ: {ad} — MEMORY.md elle onarılmalı")
+        metin = yeni
 
     if islem and not dry:
         dst.write_text(metin, encoding="utf-8")
@@ -675,15 +697,30 @@ def main() -> int:
             print(f"    · {ad}")
         print("    (yaratmadığımız dosyayı silmeyiz; gerekiyorsa elle sil)")
 
+    # Issue #430: özet YALNIZ gerçekten yapılanı söyler. Eskiden `index_islem` boş değilse
+    # (ekleme NO-OP olsa bile) "[OK] … tohumlandı/onarıldı" basılıyordu.
+    index_uyari = [i for i in index_islem if i.startswith(INDEKS_UYARI_ONEKI)]
+    index_eklenen = sum(1 for i in index_islem if i.startswith("indekse eklendi: "))
+    index_dusen = sum(1 for i in index_islem if i.startswith("indeksten düştü: "))
     if args.dry_run:
         print("\n  (DRY-RUN — hiçbir dosya yazılmadı)")
-    elif elle:
-        print(f"\n[UYARI] {len(elle)} tohum dosyası elle birleştirme bekliyor (liste yukarıda) "
-              "— 'her şey güncel' DEĞİL. Birleştirince: --birlestirildi <dosya>")
-    elif added or forced or guncellenen or silinen or index_islem or isaretli:
-        print("\n[OK] Feedback memory tohumlandı/onarıldı. Yeni Claude oturumunda kurallar yüklenir.")
+    elif elle or index_uyari:
+        if elle:
+            print(f"\n[UYARI] {len(elle)} tohum dosyası elle birleştirme bekliyor (liste yukarıda) "
+                  "— 'her şey güncel' DEĞİL. Birleştirince: --birlestirildi <dosya>")
+        if index_uyari:
+            print(f"\n[UYARI] {len(index_uyari)} tohum satırı MEMORY.md'ye EKLENEMEDİ (liste "
+                  "yukarıda) — 'her şey güncel' DEĞİL; indeksi elle onar.")
     else:
-        print("\n[OK] Her şey güncel.")
+        yapilan = [f"{etiket} {n}" for etiket, n in (
+            ("eklendi", len(added)), ("ezildi", len(forced)), ("güncellendi", len(guncellenen)),
+            ("budandı", len(silinen)), ("indekse eklendi", index_eklenen),
+            ("indeksten düştü", index_dusen), ("işaretlendi", len(isaretli))) if n]
+        if yapilan:
+            print("\n[OK] Feedback memory tohumlandı/onarıldı: " + " · ".join(yapilan)
+                  + ". Yeni Claude oturumunda kurallar yüklenir.")
+        else:
+            print("\n[OK] Her şey güncel.")
     return 0
 
 

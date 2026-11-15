@@ -236,6 +236,12 @@ OZEL_TESTLER = [
      "Issue #304: BSP kaynagini geri kurma (-dbg kurali, metin LF/ikili ham, kaynak haritasi "
      "sondasi) + karsilastirma (YALNIZ olculmus build donusumleri) + --eslik (preload + tam liste; "
      "sahte ui5 CLI alt sureci)"),
+    # 2026-11-15 Issue #440: BSP adi ad_politikasi'ndan (Z/Y + kayitli /NS/, kucuk harf, yorum,
+    # app: blogu oncelikli) + canli ICF yolu tek yardimcidan (bsp_icf_yolu); 4 tuketici ayni cozum.
+    ("bsp_adi_namespace",
+     "Issue #440: bsp_name musteri_adi_mi (Z/Y/kayitli NS; kayitsiz NS RED) + bsp_icf_yolu "
+     "(Z aynen /sap/bc/ui5_ui5/sap/, /NS/APP -> /sap/bc/ui5_ui5/<ns>/<app>/, bicimsiz ad fail-closed) "
+     "+ iki URL kurucusu + 4 tuketici kablolamasi (verify/fetch/_pbe_ui); 9 mutasyon"),
     ("conn_yazici_encoding", ".conn_adt YAZICI tarafi acik encoding tasir (S6)"),
     # 2026-08-01 kuyruk-turu (validator ailesi, V1-V6):
     ("cds_curr_satir_yorumu", "CURR/QUAN: satir-sonu // yorumu alani/degeri gizliyordu (V1)"),
@@ -1539,11 +1545,12 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "alt-include abapGit son-ekleri + `AUTO_AILE_ADT_TIPLERI` (auto aile süzgeci)"),
     ("scripts/validators/check_source_drift.py", ("O:pbe_kapsam",),
      "uzantı→canlı tip tamlığı (`SOURCE_EXTENSIONS` ⊆ `_EXT_TO_TYPES`) + tablo DDL ucu (L3)"),
-    ("scripts/hooks/_pbe_ui.py", ("O:pbe_ui",), "PBE UI eklentisi: sinifla + deploy exclude"),
+    ("scripts/hooks/_pbe_ui.py", ("O:pbe_ui", "O:bsp_adi_namespace"), "PBE UI eklentisi: sinifla + deploy exclude"),
     ("scripts/fetch_ui_source.py", ("O:pbe_ui",), "--damgala/--offline: damga_engeli, DEPLOY-DISI"),
     ("scripts/hooks/pull_before_edit.py", ("O:pbe_ui",), "eklenti kaydı → gerçek alt süreç (C)"),
     ("scripts/source_drift.py", ("O:pbe_ui",), "tazelik_damgala/seans_kimligi gerçek store (C)"),
-    ("scripts/deploy_ui.py", ("O:pbe_ui",), "bsp_name — pbe_ui BSP çözümü"),
+    ("scripts/deploy_ui.py", ("O:pbe_ui", "O:bsp_adi_namespace"),
+     "bsp_name — pbe_ui BSP çözümü + (Issue #440) ad_politikasi kararı + bsp_icf_yolu"),
     ("scripts/pull_msag_textpool.py", ("O:pbe_msag_textpool",), "msag/textpool salt-okur çekici + damga sözleşmesi"),
     ("scripts/hooks/_pbe_msag_textpool.py", ("O:pbe_msag_textpool",), "PBE eklentisi sinifla (msag/textpool)"),
     ("scripts/populate_message_class.py", ("O:pbe_msag_textpool",), "pull `sinif_oku`/`sinif_xml_ayristir` tüketir"),
@@ -1579,11 +1586,11 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # 2026-09-13 (Q285): bu dosya HARİTA'da HİÇ YOKTU ve korpusu da yoktu (canlı BSP gerektirdiği
     # için 2026-08-10'da "fixture YOK" diye bırakılmıştı); ağ/kimlik sahtelenerek artık ölçülüyor.
     ("scripts/verify_ui_static_assets.py",
-     ("O:ui_dogrulama_satir_sonu_kacis", "O:fetch_ui_source"),
+     ("O:ui_dogrulama_satir_sonu_kacis", "O:fetch_ui_source", "O:bsp_adi_namespace"),
      "taban=dist + .properties çözülmüş kaynak kıyası + help enjekte-meta kontrol grubu"),
     # 2026-09-26 (Issue #304): deploy_ui + verify_ui_static_assets yardımcılarını import eder ⇒
     # o iki dosyadaki değişiklik bu korpusu da koşturur (satırları yukarıda; tüketici burada).
-    ("scripts/fetch_ui_source.py", ("O:fetch_ui_source",),
+    ("scripts/fetch_ui_source.py", ("O:fetch_ui_source", "O:bsp_adi_namespace"),
      "BSP kaynağını geri kurma + karşılaştırma + eşlik kapısı (sahte ui5 CLI)"),
     ("scripts/worklist_audit.py", ("R:AV-13", "O:sorgu_araclari_durustlugu"),
      "üç-değerli sınıflama + (Q310) worklist ayrıştırması kanonik `aktivasyon_worklist_ayristir`"),
@@ -1733,7 +1740,7 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "Q383 adt_lock_check fugr_include + group (contextRef grup kaniti, salt-okur sonda)"),
     # ── 2026-11-08 Q393 (Issue #397 P1): musteri ad alani karari tek kaynak + 5 tuketici ──
     ("scripts/utils/ad_politikasi.py", ("O:q393_namespace_ad_politikasi", "O:ad_kabul_tam_dize",
-                                        "O:fugr_include_yazim"),
+                                        "O:fugr_include_yazim", "O:bsp_adi_namespace"),
      "musteri_adi_mi / namespace_yapilandirmasi / fugr_include_oneki / fugr_ana_program"),
     ("mcp_servers/sap_adt/guardrails.py", ("O:q393_namespace_ad_politikasi",),
      "_is_customer_namespace ad_politikasi'na delege + red_gerekcesi"),

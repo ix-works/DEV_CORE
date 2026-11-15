@@ -42,6 +42,8 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
 from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+# Issue #440: "müşteri adı mı" kararının TEK kaynağı (Z/Y + project.yaml customer_namespaces).
+from utils.ad_politikasi import ad_namespace, musteri_adi_mi
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -83,16 +85,77 @@ def read_conn():
     )
 
 
+BSP_ADI_BEKLENEN = ("müşteri ad alanında BSP adı (app.name: Z/Y ya da project.yaml "
+                    "customer_namespaces'te kayıtlı /<NS>/ ile başlayan)")
+_APP_BLOK = re.compile(r"^(\s*)app:\s*(?:#.*)?$")
+_NAME_SATIRI = re.compile(r"^\s*name:\s*(.*)$")
+
+
+def _yaml_skaler(ham: str) -> str:
+    """`X  # yorum` · `"X"` · `'X'` → `X` (YAML'da yorum `#`'den ÖNCE boşluk ister)."""
+    v = re.split(r"\s#", ham, maxsplit=1)[0].strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        v = v[1:-1].strip()
+    return v
+
+
 def bsp_name(app_dir: Path) -> str:
-    """ui5-deploy.yaml'dan hedef BSP adını (Z ile başlayan app.name) çıkar."""
+    """ui5-deploy.yaml'dan hedef BSP adını (müşteri ad alanındaki app.name) çıkar; yoksa "".
+
+    Issue #440 (2026-11-15): eskiden yalnız `Z[A-Z0-9_]+` (büyük harf, satır sonunda yorum
+    yok) kabul ediliyordu ⇒ `/NS/APP`, `Y…`, küçük harfli ad ve `ZAD # yorum` sessizce "" idi
+    ve dört tüketici (deploy_ui · fetch_ui_source · verify_ui_static_assets · _pbe_ui) BSP'yi
+    çözemiyordu. Karar artık `utils.ad_politikasi.musteri_adi_mi`'den gelir (ADR 0005-A tek
+    kaynak; kayıtsız namespace RED). Ad BÜYÜK harfe çevrilir (BSP adı SAP'de büyük harftir).
+    `app:` bloğundaki `name:` ÖNCELİKLİDİR: kabul artık büyük/küçük harf duyarsız olduğundan
+    `metadata.name: zfoo` gibi tek parçalı bir uygulama kimliği app.name'in önüne geçmesin.
+    `app:` bloğu yoksa eski kural: dosyadaki ilk müşteri adı. Z adlı, `metadata.name`'i
+    noktalı (`com.x.y`) dosyada sonuç eskisiyle aynıdır.
+    """
     y = app_dir / "ui5-deploy.yaml"
     if not y.exists():
         return ""
+    app_icinde: list = []
+    herhangi: list = []
+    app_girinti = None
     for line in y.read_text(encoding="utf-8", errors="ignore").splitlines():
-        m = re.match(r"\s*name:\s*(Z[A-Z0-9_]+)\s*$", line)
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        girinti = len(line) - len(line.lstrip())
+        if app_girinti is not None and girinti <= app_girinti:
+            app_girinti = None
+        m = _APP_BLOK.match(line)
         if m:
-            return m.group(1)
-    return ""
+            app_girinti = len(m.group(1))
+            continue
+        m = _NAME_SATIRI.match(line)
+        if not m:
+            continue
+        ad = _yaml_skaler(m.group(1)).upper()
+        if musteri_adi_mi(ad):
+            (app_icinde if app_girinti is not None else herhangi).append(ad)
+    return (app_icinde or herhangi or [""])[0]
+
+
+def bsp_icf_yolu(bsp: str) -> str:
+    """Canlı BSP'nin ICF yolu (`/` ile biter) — iki URL kurucusunun (canlı preload ·
+    statik varlık doğrulaması) TEK kaynağı (Issue #440).
+
+    · Z/Y: `/sap/bc/ui5_ui5/sap/<bsp>/` — bugüne kadarki tek yol, aynen korunur.
+    · `/NS/APP`: `/sap/bc/ui5_ui5/<ns>/<app>/` — `sap` düğümünün KARDEŞİ olan namespace
+      düğümü. ⚠ Bu yol Issue #440 sahibinin ortamında (tek sistem, ilk deploy) ölçüldü;
+      çekirdek sahibinin sisteminde namespace'li BSP olmadığı için burada ÖLÇÜLEMEDİ —
+      yalnız ICF ağacının yapısı (UI5_UI5 altında SAP ile kardeş namespace düğümleri) görüldü.
+    """
+    ns = ad_namespace(bsp)
+    if ns:
+        return f"/sap/bc/ui5_ui5/{ns.strip('/').lower()}/{bsp[len(ns):].lower()}/"
+    if "/" in bsp:
+        # `/X/APP` (namespace 3-8 karakter değil) ya da başka eğik çizgili ad: `sap` düğümüne
+        # düşürmek `/sap/bc/ui5_ui5/sap//x/app/` gibi SAHTE bir yol kurar ⇒ 404 "BSP yok"
+        # diye okunur (sessiz yanlış teşhis). Fail-closed.
+        raise ValueError(f"BSP adı ICF yoluna çevrilemez (namespace biçimi /<3-8>/ değil): {bsp!r}")
+    return f"/sap/bc/ui5_ui5/sap/{bsp.lower()}/"
 
 
 def satir_sonu_normalize(b: bytes) -> bytes:
@@ -200,7 +263,7 @@ def run(cmd: str, cwd: Path, env: dict) -> tuple:
 def fetch_live_preload(base_url: str, user: str, pw: str, client: str, bsp: str) -> bytes:
     """Canlı BSP Component-preload.js'i cache-bust + no-cache + identity-encoding ile çek."""
     ts = str(int(time.time()))
-    url = f"{base_url}/sap/bc/ui5_ui5/sap/{bsp.lower()}/{PRELOAD}?sap-client={client}&cb={ts}"
+    url = f"{base_url}{bsp_icf_yolu(bsp)}{PRELOAD}?sap-client={client}&cb={ts}"
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -225,7 +288,7 @@ def deploy_one(app: str, ui_root: Path, conn, env: dict, dry: bool, verify_only:
         return (app, False, f"app dizini yok: {app_dir}")
     bsp = bsp_name(app_dir)
     if not bsp:
-        return (app, False, "ui5-deploy.yaml'da BSP adı (Z...) bulunamadı")
+        return (app, False, f"ui5-deploy.yaml'da {BSP_ADI_BEKLENEN} bulunamadı")
 
     # 1) BUILD (zorunlu — mevcut webapp kaynağından taze dist)
     print(f"  [{app}] build (ui5 build --clean-dest --dest dist)…")

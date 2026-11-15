@@ -153,8 +153,13 @@ blok mesajındaki `--session`'lı komut tercih edilir.
 
 - Ölçülen: `s4_private`, freestyle UI5 1.120, OData V2, JavaScript kaynak, @ui5/cli 4.x.
 - **Ölçülmedi:** canlı TypeScript BSP (harita sondası yalnız sentetik `.ts` ile) · Fiori Elements ·
-  namespace'li BSP adı (`/X/…`) · `s4_public`/`btp_abap` · deploy'un canlıdan dosya SİLME
-  davranışı · ADT filestore yolu (`/sap/bc/adt/filestore/ui5-bsp/…`; bir makinede zaman aşımı).
+  `s4_public`/`btp_abap` · deploy'un canlıdan dosya SİLME davranışı · ADT filestore yolu
+  (`/sap/bc/adt/filestore/ui5-bsp/…`; bir makinede zaman aşımı).
+- **BSP adı (Issue #440):** `ui5-deploy.yaml` `app.name` Z/Y ya da `project.yaml`
+  `customer_namespaces`'te kayıtlı `/<NS>/` ile başlamalı (karar `utils/ad_politikasi.musteri_adi_mi`;
+  kayıtsız namespace çözülmez). Canlı ICF yolu tek yardımcıdan (`deploy_ui.bsp_icf_yolu`): Z/Y →
+  `/sap/bc/ui5_ui5/sap/<bsp>/` · `/NS/APP` → `/sap/bc/ui5_ui5/<ns>/<app>/`. Namespace yolu yalnız
+  Issue sahibinin ortamında (tek sistem) ölçüldü; çekirdekte namespace'li BSP ile canlı **ÖLÇÜLMEDİ**.
 - Canlı = indirilen zip anı; ICF servis katmanı ölçülmez.
 - PBE kapısı: deploy `exclude` girdisi yalnız webapp köküne göre, harf duyarlı **önek** yorumlanır.
   Deploy aracı girdiyi çapasız regex olarak `/resources/<proje-adı>/<rel>` üzerinde arar ⇒ iç içe yolları

@@ -24,7 +24,8 @@
 Ne yapar (her app için, `<subdir>` varsayılan: help):
   1) `ui5-deploy.yaml` → hedef BSP adı
   2) `webapp/<subdir>/**` ∪ `dist/<subdir>/**` altındaki HER dosya
-  3) canlı GET `/sap/bc/ui5_ui5/sap/<bsp>/<subdir>/<rel>?cb=<ts>` (no-cache, identity)
+  3) canlı GET `<ICF yolu>/<subdir>/<rel>?cb=<ts>` (no-cache, identity) — ICF yolu `deploy_ui.bsp_icf_yolu`
+     (Z/Y: `/sap/bc/ui5_ui5/sap/<bsp>/` · `/NS/APP`: `/sap/bc/ui5_ui5/<ns>/<app>/`, Issue #440)
   4) EKSEN ① canlı ↔ dist (deploy edilen şey): HTML'de enjekte meta ayıklanır, satır sonu
      normalize edilir → fark = `FARKLI`. Dosya dist'te yoksa taban webapp'e düşer (not basılır).
   5) EKSEN ② canlı ↔ webapp (KAYNAK): `.properties` → `\\uXXXX` çözülmüş (anahtar, değer)
@@ -54,7 +55,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Bağlantı okuma + BSP adı çözümleme + proje kökü DEPLOY_UI'DAN GELİR (kopya üretme:
 # aynı .conn_adt sözleşmesi ve aynı ui5-deploy.yaml ayrıştırması tek yerde kalsın).
-from deploy_ui import DEFAULT_UI_ROOT, REPO, bsp_name, read_conn  # noqa: E402
+from deploy_ui import BSP_ADI_BEKLENEN, DEFAULT_UI_ROOT, REPO, bsp_icf_yolu, bsp_name, read_conn  # noqa: E402
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -125,7 +126,7 @@ def _prop_fark(a: bytes, b: bytes) -> str:
 
 def fetch(base_url: str, user: str, pw: str, client: str, bsp: str, rel_url: str) -> bytes:
     """Canlı BSP dosyasını cache-bust + no-cache + identity-encoding ile çek."""
-    url = (f"{base_url}/sap/bc/ui5_ui5/sap/{bsp.lower()}/{rel_url}"
+    url = (f"{base_url}{bsp_icf_yolu(bsp)}{rel_url}"   # Issue #440: ICF yolu tek kaynaktan
            f"?sap-client={client}&cb={int(time.time() * 1000)}")
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -152,7 +153,7 @@ def check_app(app: str, ui_root: Path, subdir: str, conn) -> tuple:
     app_dir = ui_root / app
     bsp = bsp_name(app_dir)
     if not bsp:
-        return (app, False, "ui5-deploy.yaml yok/BSP adı okunamadı (deployable değil)")
+        return (app, False, f"ui5-deploy.yaml yok ya da {BSP_ADI_BEKLENEN} okunamadı (deployable değil)")
     src = app_dir / "webapp" / subdir
     dist = app_dir / "dist" / subdir
     if not src.is_dir() and not dist.is_dir():

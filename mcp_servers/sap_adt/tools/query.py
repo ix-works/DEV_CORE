@@ -222,6 +222,40 @@ def adt_transport_list(user: str | None = None) -> dict:
 # adt_where_used  (gap-analysis #10)
 # =============================================================================
 
+# Issue #434 (2026-11-15): merkezi `object_types.OBJECT_TYPES`'ta BDEF girdisi YOK ⇒
+# `get_object_url(..., 'bdef')` "Unsupported object type" verir ve where-used hiç koşmaz.
+# Ölçüldü (salt-okur, bir müşteri sisteminde): BDEF ucu `/sap/bc/adt/bo/behaviordefinitions/<ad>`
+# usageReferences'ı DESTEKLER (projeksiyon BDEF + davranış havuzu sınıfı döner) ve varlık sondası
+# (`get_object_structure`) var=200 / yok=404 ayırır. Eşleme BİLEREK yalnız bu araçta ve yalnız
+# `bdef` için: `OBJECT_TYPES`'a girdi eklemek push/aktivasyon/PBE/iskelet yollarının da tip
+# kümesini değiştirir (geniş etki, ayrı iş). `adt_impact_analysis` bu eşlemeyi KULLANMAZ.
+# ⚠ Ölçülen yanıt BDEF'in KENDİSİNİ de bir referans olarak içerir (2/2 BDEF); süzülmez —
+# `count` bu satırı da sayar.
+_WHERE_USED_DAR_UC = {"bdef": "bo/behaviordefinitions"}
+
+
+def _where_used_dar_url(name: str, object_type: str) -> str | None:
+    """`bdef` için where-used ucu; diğer her tip için None (merkezi tabloya düşer)."""
+    yol = _WHERE_USED_DAR_UC.get((object_type or "").strip().lower())
+    if yol is None:
+        return None
+    from utils.ad_politikasi import url_segmenti  # type: ignore  # /NS/ → %2Fns%2F…
+    return f"/sap/bc/adt/{yol}/{url_segmenti(name)}"
+
+
+def _dar_url_var_mi(client, url: str) -> bool:
+    """`SAPClient.object_exists` ile AYNI sözleşme (yalnız 404 = yok; 401/403/500 yükselir)."""
+    from sap_adt_lib import SAPADTError, SAPObjectNotFoundError  # type: ignore
+    try:
+        client.adt_client.get_object_structure(url)
+        return True
+    except SAPObjectNotFoundError:
+        return False
+    except SAPADTError as e:
+        if getattr(e, "status_code", None) == 404:
+            return False
+        raise
+
 @profil_tool()
 def adt_where_used(name: str, object_type: str = "class") -> dict:
     """Where-used: bir Z objeyi referanslayan objeleri listele (read-only).
@@ -231,7 +265,8 @@ def adt_where_used(name: str, object_type: str = "class") -> dict:
 
     Args:
         name: Obje adı (Z*/Y* veya standart — okuma serbest).
-        object_type: ADT tipi ('class', 'ddls', 'dtel', 'doma', 'tabl', 'intf', 'prog', ...).
+        object_type: ADT tipi ('class', 'ddls', 'dtel', 'doma', 'tabl', 'intf', 'prog',
+            'bdef', ...). 'bdef' yalnız bu araçta (#434): /bo/behaviordefinitions ucu.
 
     Returns:
         {ok, name, type, count, references: [{name, type, uri, description}], client_log}
@@ -255,7 +290,10 @@ def adt_where_used(name: str, object_type: str = "class") -> dict:
 
         with _capture() as buf:
             fm = None
-            if is_function_module_type(object_type):
+            dar_url = _where_used_dar_url(name, object_type)
+            if dar_url is not None:
+                varlik = _dar_url_var_mi(client, dar_url)
+            elif is_function_module_type(object_type):
                 fm = client.resolve_function_module(name)
                 varlik = fm.get("status") == "found"
             else:
@@ -275,7 +313,8 @@ def adt_where_used(name: str, object_type: str = "class") -> dict:
                 if fm is not None:
                     yok["probe"] = fm.get("probe")
                 return yok
-            url = fm["uri"] if fm is not None else get_object_url(name.upper(), object_type)
+            url = (dar_url if dar_url is not None
+                   else fm["uri"] if fm is not None else get_object_url(name.upper(), object_type))
             refs = client.adt_client.where_used(url)
         from sap_client import where_used_paket_ayir  # type: ignore
         objeler, paketler = where_used_paket_ayir(refs)

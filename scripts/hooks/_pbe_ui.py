@@ -249,7 +249,7 @@ def sinifla(path, root) -> Optional[dict]:
         bsp = ""
     if not bsp:
         neden = (f"{DEPLOY_YAML} yok" if not (app / DEPLOY_YAML).is_file()
-                 else f"{DEPLOY_YAML}'da BSP adı (Z…) çözülemedi")
+                 else f"{DEPLOY_YAML}'da müşteri ad alanında BSP adı (Z/Y ya da kayıtlı /<NS>/) çözülemedi")
         return {"nesne": BSP_YER_TUTUCU, "tip": "bsp",
                 "komut": komut_uret(app, root, BSP_YER_TUTUCU), "not": not_uret(neden)}
     return {"nesne": bsp, "tip": "bsp", "komut": komut_uret(app, root, bsp), "not": not_uret()}
