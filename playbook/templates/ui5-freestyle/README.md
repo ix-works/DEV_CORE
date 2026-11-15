@@ -104,7 +104,7 @@ Issue aç — `playbook/howto-cekirdek-bulgu-bildirimi.md`):
 | `<BACKEND_UI5_SURUMU>` | `manifest.json` `minUI5Version` | 1. adımda ölçülen `version` |
 | `<SERVIS_ADI>` | `manifest.json` `dataSources` | OData V2 servis adı |
 | `<DEV_HOST>` · `<PORT>` · `<CLIENT>` | `ui5.yaml`, `ui5-deploy.yaml` | `.conn_adt` ile birebir aynı host (std/03 §2.4) |
-| `<BSP_ADI>` · `<SAP_PAKET>` · `<TRANSPORT_NO>` · `<UYGULAMA_ACIKLAMASI>` | `ui5-deploy.yaml`, `package.json` | deploy hedefi (deploy yalnız `deploy_ui.py` ile) |
+| `<BSP_ADI>` · `<SAP_PAKET>` · `<TRANSPORT_NO>` · `<UYGULAMA_ACIKLAMASI>` | `ui5-deploy.yaml`, `package.json` | deploy hedefi (deploy yalnız `deploy_ui.py` ile). `<BSP_ADI>` doldurulmadan kalırsa ad çözülmez: `deploy_ui.py --all` / `verify_ui_static_assets.py --all` app'i atlamaz, `[FAIL]` sayar (çıkış 1) |
 | `ZSD001_*` adları | `util/Config.js`, `view/*.xml`, `controller/List.controller.js` | demo entity/VH adları — servisin gerçek adlarıyla değişir |
 | `ZSD000_UI_VARIANT_O2` · `ZSD000_C_UI_VARIANT` | `util/Config.js` `VARIANT` | varyant servisi (`backend-referans/`) |
 

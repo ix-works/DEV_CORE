@@ -1004,8 +1004,9 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "parçalama ağırlıkları: yalnız DENGEYİ etkiler, kapsamı değil (tamlık evrenden ölçülür)"),
     (".github/workflows/core-ci.yml", ("O:parca_tamlik",),
      "matris parçaları + `gates` toplayıcısının `--parca-birlestir` çağrısı"),
-    (".github/workflows/core-ci.yml", ("O:bsp_adi_namespace", "O:ui_dogrulama_satir_sonu_kacis"),
-     "fixture işlerinin `pip install` satırı: PyYAML (BSP adı ayrıştırıcı yedeği; PR #445 3. kapı)"),
+    (".github/workflows/core-ci.yml", ("O:bsp_adi_namespace", "O:ui_dogrulama_satir_sonu_kacis", "O:pbe_ui"),
+     "fixture işlerinin `pip install` satırı: PyYAML (BSP adı ayrıştırıcı yedeği; PR #445 3. kapı). "
+     "pbe_ui da bağlı: sentetik ui5-deploy.yaml'ın BSP adı (`deploy_yaml`) bu ayrıştırıcıdan çözülür (4. kapı Ö4)"),
     ("scripts/hooks/post_tool_failure.py",
      ("O:post_tool_failure_bash", "O:atc_p1_sonuc", "O:negatif_test_harness"),
      "patinaj-kesici hook: ATEŞLEME + SESSİZLİK değişmezleri (Bash + MCP dalları) + "

@@ -28,6 +28,9 @@ hâlidir (belge hatası ⇒ "") — ölçülüp SABİTLENDİ (BEKLENEN_DOLU). He
 koşulur. Node ekseni `yaml` paketi gerektirir: `BSP_FIXTURE_YAML_PAKETI=<.../node_modules/yaml>`
 ya da `npm root -g` altında; bulunamazsa eksen ÖLÇÜLEMEDİ yazılır (CI'da beklenen hâl).
 
+PR #445 4. kapı F1: `--all` listesi (L1–L4 + kâhin K1–K4) iki aracın GERÇEK main()'iyle — yalnız
+ui5-deploy.yaml'sız dizin atlanır; yaml VAR ama ad çözülemeyen app FAIL + RC 1 (`--mutasyon-all-*`).
+
 ÜÇ BAĞLAM (F3)
   (1) bilinen-BOZUK : `--mutasyon-*` (fix bellekte geri alınır)
   (2) bilinen-TEMİZ : bugünkü kod — Z yolu regresyon vektörleri (A1/B1/C1/C3) dahil
@@ -93,6 +96,24 @@ MUTASYONLAR = {
                                      'url = f"{base_url}/sap/bc/ui5_ui5/sap/{bsp.lower()}/{PRELOAD}'),
     "--mutasyon-statik-sabit-yol": (VUS, 'url = (f"{base_url}{bsp_icf_yolu(bsp)}{rel_url}"',
                                     'url = (f"{base_url}/sap/bc/ui5_ui5/sap/{bsp.lower()}/{rel_url}"'),
+    # PR #445 4. kapı F1: `--all` listesi (L bölümü) — her yeni dal için bir kip
+    "--mutasyon-all-eski-suzgec-dui": (
+        DUI, "        apps, atlanan, cozulemeyen_sonuc = all_kipi(ui_root)\n",
+        "        apps = sorted(d.name for d in ui_root.iterdir() if d.is_dir() and d.name != \"node_modules\" "
+        "and bsp_name(d))  # MUTASYON\n"),
+    "--mutasyon-all-eski-suzgec-vus": (
+        VUS, "        apps, atlanan, cozulemeyen_sonuc = all_kipi(ui_root)\n",
+        "        apps = sorted(d.name for d in ui_root.iterdir() if d.is_dir() and d.name != \"node_modules\" "
+        "and bsp_name(d))  # MUTASYON\n"),
+    "--mutasyon-all-yamlsiz-da-fail": (DUI, "        elif neden == NEDEN_YAML_YOK:\n",
+                                       "        elif False:  # MUTASYON\n"),
+    "--mutasyon-all-cozulemeyen-atlanir": (DUI, "            cozulemeyen.append((d.name, neden))\n",
+                                           "            atlanan.append(d.name)  # MUTASYON\n"),
+    "--mutasyon-all-ozet-kosmadi-yok": (DUI, "                         if cozulemeyen_n else []))\n",
+                                        "                         if False else []))  # MUTASYON\n"),
+    "--mutasyon-all-atlanan-notu-yok": (
+        DUI, "    return f\" · {len(atlanan)} dizin ui5-deploy.yaml'sız ATLANDI\" if tum_kip else \"\"\n",
+        "    return \"\"  # MUTASYON\n"),
 }
 
 ARG = [a for a in sys.argv[1:] if a.startswith("--mutasyon")]
@@ -384,6 +405,117 @@ for ad, app_adi, beklenen in [("T4 _pbe_ui.sinifla /NSP/APP -> nesne /NSP/APP", 
                                        encoding="utf-8")
     s = P.sinifla(str(a / "webapp" / "Component.js"), str(KUM))
     kontrol(ad, bool(s) and s.get("nesne") == beklenen, f"sonuc={s and s.get('nesne')!r}")
+
+# ══ L — `--all` listesi, İKİ aracın GERÇEK main()'i (PR #445 4. kapı F1) ══════════════════
+# Kusur: liste `... and bsp_name(d)` süzgeciyle kuruluyordu; `''` artık "belge hatası / ayrıştırıcı
+# yok / politika reddi" de demek olunca app sessizce düşüyor, `[OK] 0 app doğrulandı` + RC 0
+# basılıyordu (kontrol grubu 5fd32f0: aynı girdide RC 1). Kural (lider kararı): YALNIZ
+# ui5-deploy.yaml'sız dizin atlanır; diğer her neden app başına FAIL satırı + RC 1.
+# Kâhin (K*): verify_ui_static_assets `--apps <yaml'lı dizinlerin hepsi>` — liste yardımcısından
+# GEÇMEYEN yol (check_app → bsp_name) — `--all` ile aynı RC ve aynı FAIL kümesini vermeli.
+# deploy_one SAHTE (build/deploy/ağ YOK; koşan app'ler kaydedilir); check_app GERÇEK (help yok → atlandı).
+import re  # noqa: E402
+
+YAML_GECERLI = (yaml_app("ZSD001_APP") / "ui5-deploy.yaml").read_text(encoding="utf-8")
+YAML_STANDART = (yaml_app("SAPUI5_STD") / "ui5-deploy.yaml").read_text(encoding="utf-8")
+YAML_ADSIZ = (yaml_app("ZSD001_APP", app_blok=False) / "ui5-deploy.yaml").read_text(encoding="utf-8")
+YAML_YINELENEN = G_HEAD.format(meta="zfoo") + "        app:\n          name: SAPSTD\n        app:\n          name: ZAPP\n"
+KOSAN: list[str] = []
+
+
+def _ui_kok(ad: str, uygulamalar: dict) -> Path:
+    kok = KUM / f"ui_{ad}"
+    for app, govde in uygulamalar.items():
+        (kok / app).mkdir(parents=True)
+        if govde is not None:
+            (kok / app / "ui5-deploy.yaml").write_text(govde, encoding="utf-8")
+    return kok
+
+
+def _sahte_deploy_one(app, ui_root, conn, env, dry, verify_only):
+    KOSAN.append(app)
+    return (app, True, "sahte deploy_one (fixture): build/deploy/canlı YOK")
+
+
+def _main(modul, argv: list) -> tuple:
+    KOSAN.clear()
+    out, err, eski = io.StringIO(), io.StringIO(), sys.argv
+    sys.argv = argv
+    try:
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                rc = modul.main()
+            except SystemExit as exc:
+                rc = exc.code
+    finally:
+        sys.argv = eski
+    return rc, out.getvalue(), err.getvalue(), list(KOSAN)
+
+
+def _fail_kumesi(cikti: str) -> set:
+    return set(re.findall(r"(?m)^\s+\[FAIL\] (\S+)  —", cikti))
+
+
+_ASIL_DEPLOY_ONE = D.deploy_one
+D.deploy_one = _sahte_deploy_one
+ATL1 = "1 dizin ui5-deploy.yaml'sız ATLANDI"
+
+# L1 — geçerli app + ui5-deploy.yaml'sız dizin: atlanan FAIL DEĞİLDİR (FP çapası)
+kok1 = _ui_kok("L1", {"zapp": YAML_GECERLI, "notlar": None})
+rc, o, e, k = _main(D, ["deploy_ui.py", "--all", "--verify-only", "--ui-root", str(kok1)])
+kontrol("L1-D geçerli + yaml'sız dizin → RC 0, yalnız zapp koştu, özet satırında atlanan sayısı",
+        rc == 0 and k == ["zapp"] and ATL1 in o and "[FAIL]" not in o + e, f"rc={rc} kosan={k} out={o[-200:]!r}")
+rc, o, e, _k = _main(V, ["v.py", "--all", "--ui-root", str(kok1)])
+kontrol("L1-V geçerli + yaml'sız dizin → RC 0, [OK] 1 app + atlanan sayısı",
+        rc == 0 and "[OK] 1 app" in o and ATL1 in o, f"rc={rc} out={o[-200:]!r}")
+rc_k, o_k, _e, _k = _main(V, ["v.py", "--apps", "zapp", "--ui-root", str(kok1)])
+kontrol("K1 kâhin: V --apps zapp ile aynı RC (0)", rc_k == rc == 0, f"--apps rc={rc_k} --all rc={rc}")
+
+# L2 — AYRIŞTIRICISIZ ortam + geçerli app (kapının ölçtüğü sessiz regresyon)
+kok2 = _ui_kok("L2", {"zapp": YAML_GECERLI})
+D.AYRISTIRICILAR = ()
+for kip_adi, ek in (("verify-only", ["--verify-only"]), ("dry-run", ["--dry-run"]), ("deploy", [])):
+    rc, o, e, k = _main(D, ["deploy_ui.py", "--all", "--ui-root", str(kok2), *ek])
+    kontrol(f"L2-D[{kip_adi}] ayrıştırıcısız → RC 1, [FAIL] zapp (AYRISTIRILAMADI), hiçbir app KOŞMADI, "
+            "özet 'HİÇ KOŞMADI'",
+            rc == 1 and k == [] and _fail_kumesi(o) == {"zapp"} and "AYRISTIRILAMADI" in o
+            and "1/1 app BSP adı ÇÖZÜLEMEDİĞİ için HİÇ KOŞMADI" in e and "doğrulandı" not in o,
+            f"rc={rc} kosan={k} fail={_fail_kumesi(o)} err={e[-200:]!r}")
+rc, o, e, _k = _main(V, ["v.py", "--all", "--ui-root", str(kok2)])
+kontrol("L2-V ayrıştırıcısız → RC 1, [FAIL] zapp, özet 'HİÇ KOŞMADI'",
+        rc == 1 and _fail_kumesi(o) == {"zapp"} and "1/1 app BSP adı ÇÖZÜLEMEDİĞİ için HİÇ KOŞMADI" in e,
+        f"rc={rc} fail={_fail_kumesi(o)} err={e[-200:]!r}")
+rc_k, o_k, _e, _k = _main(V, ["v.py", "--apps", "zapp", "--ui-root", str(kok2)])
+kontrol("K2 kâhin: V --apps zapp ile aynı RC + aynı FAIL kümesi",
+        rc_k == rc and _fail_kumesi(o_k) == _fail_kumesi(o), f"--apps rc={rc_k} {_fail_kumesi(o_k)} --all rc={rc}")
+D.AYRISTIRICILAR = _ASIL
+
+# L3 — YİNELENEN anahtar + geçerli app: geçerli olan koşar, belge hatası FAIL
+kok3 = _ui_kok("L3", {"dup": YAML_YINELENEN, "zapp": YAML_GECERLI})
+rc, o, e, k = _main(D, ["deploy_ui.py", "--all", "--verify-only", "--ui-root", str(kok3)])
+kontrol("L3-D yinelenen anahtar → RC 1, [FAIL] dup, zapp KOŞTU, özet koşan/koşmayan ayrı (1/2 HİÇ KOŞMADI)",
+        rc == 1 and k == ["zapp"] and _fail_kumesi(o) == {"dup"} and "1/2 app BSP adı ÇÖZÜLEMEDİĞİ" in e
+        and "STALE" not in e, f"rc={rc} kosan={k} fail={_fail_kumesi(o)} err={e[-200:]!r}")
+rc, o, e, _k = _main(V, ["v.py", "--all", "--ui-root", str(kok3)])
+kontrol("L3-V yinelenen anahtar → RC 1, [FAIL] dup", rc == 1 and _fail_kumesi(o) == {"dup"},
+        f"rc={rc} fail={_fail_kumesi(o)}")
+rc_k, o_k, _e, _k = _main(V, ["v.py", "--apps", "dup,zapp", "--ui-root", str(kok3)])
+kontrol("K3 kâhin: V --apps dup,zapp ile aynı RC + aynı FAIL kümesi",
+        rc_k == rc and _fail_kumesi(o_k) == _fail_kumesi(o), f"--apps rc={rc_k} {_fail_kumesi(o_k)} --all rc={rc}")
+
+# L4 — politika reddi (standart ad) + hedef ad YOK + geçerli
+kok4 = _ui_kok("L4", {"sapstd": YAML_STANDART, "adsiz": YAML_ADSIZ, "zapp": YAML_GECERLI, "notlar": None})
+rc, o, e, k = _main(D, ["deploy_ui.py", "--all", "--verify-only", "--ui-root", str(kok4)])
+kontrol("L4-D politika reddi + ad yok → RC 1, iki FAIL satırı, yalnız zapp koştu, atlanan 1",
+        rc == 1 and k == ["zapp"] and _fail_kumesi(o) == {"sapstd", "adsiz"} and ATL1 in e,
+        f"rc={rc} kosan={k} fail={_fail_kumesi(o)} err={e[-200:]!r}")
+rc, o, e, _k = _main(V, ["v.py", "--all", "--ui-root", str(kok4)])
+kontrol("L4-V politika reddi + ad yok → RC 1, iki FAIL satırı",
+        rc == 1 and _fail_kumesi(o) == {"sapstd", "adsiz"}, f"rc={rc} fail={_fail_kumesi(o)}")
+rc_k, o_k, _e, _k = _main(V, ["v.py", "--apps", "sapstd,adsiz,zapp", "--ui-root", str(kok4)])
+kontrol("K4 kâhin: V --apps <yaml'lı 3 dizin> ile aynı RC + aynı FAIL kümesi",
+        rc_k == rc and _fail_kumesi(o_k) == _fail_kumesi(o), f"--apps rc={rc_k} {_fail_kumesi(o_k)} --all rc={rc}")
+D.deploy_one = _ASIL_DEPLOY_ONE
 
 # 3. BAĞLAM — namespace YAPILANDIRMASIZ proje: /NSP/ reddedilir, Z/Y aynen
 (KUM / "project.yaml").write_text("sap_profile: s4_private\n", encoding="utf-8")

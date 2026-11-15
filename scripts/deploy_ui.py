@@ -185,13 +185,16 @@ def _pyyaml_ile(yol: Path):
 AYRISTIRICILAR = (("node-yaml", _node_ile), ("PyYAML", _pyyaml_ile))
 
 
+NEDEN_YAML_YOK = "ui5-deploy.yaml yok"   # `--all`un ATLAYABİLDİĞİ TEK neden (all_app_listesi)
+
+
 def bsp_adi_cozumle(app_dir: Path) -> tuple:
     """(bsp, açıklama). bsp = politikadan geçen app.name (BÜYÜK harf) ya da "".
 
     Açıklama "" ise ad bulundu; aksi hâlde NEDEN boş (teşhis — karar DEĞİL)."""
     y = app_dir / "ui5-deploy.yaml"
     if not y.exists():
-        return "", "ui5-deploy.yaml yok"
+        return "", NEDEN_YAML_YOK
     for ad_, fn in AYRISTIRICILAR:
         sonuc = fn(y)
         if sonuc is None:
@@ -228,6 +231,61 @@ def bsp_name(app_dir: Path) -> str:
         print(f"[UYARI] BSP adı ayrıştırılamadı: {app_dir / 'ui5-deploy.yaml'} — {neden}",
               file=sys.stderr)
     return bsp
+
+
+def all_app_listesi(ui_root: Path) -> tuple:
+    """`--all` listesi — deploy_ui ve verify_ui_static_assets'in ORTAK tek kaynağı.
+
+    Dönüş (apps, atlanan, cozulemeyen):
+      apps         BSP adı çözülen app dizin adları (sıralı) → normal akışa girer
+      atlanan      `ui5-deploy.yaml`'ı OLMAYAN dizinler → deployable değil, ATLANIR (eskiden de böyleydi)
+      cozulemeyen  [(app, neden)] — `ui5-deploy.yaml` VAR ama ad çözülemedi (belge hatası · yinelenen
+                   anahtar · ayrıştırıcı yok · hedef ad yok · politika reddi) → çağıran app başına
+                   FAIL satırı basar ve çıkış kodu 1 olur.
+    Neden (PR #445 4. kapı F1): liste eskiden `... and bsp_name(d)` süzgeciyle kuruluyordu; bu PR'la
+    `''` "belge hatası / ayrıştırıcı yok" da demek olunca `--all` o app'i sessizce düşürüp
+    `[OK] 0 app doğrulandı` + RC 0 basıyordu (ölçüldü; kontrol grubu 5fd32f0 aynı girdide RC 1).
+    KOŞMAYAN doğrulama BEYAN EDİLMEZ (deploy_ui özet ilkesi)."""
+    apps, atlanan, cozulemeyen = [], [], []
+    for d in sorted(ui_root.iterdir(), key=lambda p: p.name):
+        if not d.is_dir() or d.name == "node_modules":
+            continue
+        bsp, neden = bsp_adi_cozumle(d)
+        if bsp:
+            apps.append(d.name)
+        elif neden == NEDEN_YAML_YOK:
+            atlanan.append(d.name)
+        else:
+            cozulemeyen.append((d.name, neden))
+    return apps, atlanan, cozulemeyen
+
+
+def all_kipi(ui_root: Path) -> tuple:
+    """`--all` girişi (iki araç ortak): listeyi kurar, `[i]` satırını basar.
+
+    Dönüş (apps, atlanan, cozulemeyen_sonuc) — cozulemeyen_sonuc = (app, False, not) sonuç satırları;
+    çağıran bunları sonuç listesinin BAŞINA koyar (FAIL sayılır, çıkış kodu 1)."""
+    apps, atlanan, cozulemeyen = all_app_listesi(ui_root)
+    print(f"[i] --all → {len(apps)} deployable app: {', '.join(apps)}"
+          + (f" · {len(cozulemeyen)} app'te ui5-deploy.yaml VAR ama BSP adı ÇÖZÜLEMEDİ (FAIL): "
+             f"{', '.join(a for a, _n in cozulemeyen)}" if cozulemeyen else "")
+          + f" · {len(atlanan)} dizin ui5-deploy.yaml'sız (atlandı)")
+    return apps, atlanan, [(app, False, f"BSP adı ÇÖZÜLEMEDİ — {neden} · beklenen: {BSP_ADI_BEKLENEN} "
+                                        "(doğrulama/deploy KOŞMADI)") for app, neden in cozulemeyen]
+
+
+def fail_ozeti(fail: int, toplam: int, cozulemeyen_n: int, kosan_metni: str) -> str:
+    """FAIL özet gövdesi (iki araç ortak): KOŞUP başarısız olanlar ile BSP adı çözülemediği için HİÇ
+    KOŞMAYANLAR ayrı sayılır — koşmayan app 'STALE/güncel değil' diye beyan edilmez."""
+    kosan = fail - cozulemeyen_n
+    return " · ".join(([f"{kosan}/{toplam} {kosan_metni}"] if kosan else [])
+                      + ([f"{cozulemeyen_n}/{toplam} app BSP adı ÇÖZÜLEMEDİĞİ için HİÇ KOŞMADI"]
+                         if cozulemeyen_n else []))
+
+
+def atlanan_notu(atlanan: list, tum_kip: bool) -> str:
+    """Özet satırı eki: `--all`da ui5-deploy.yaml'sız atlanan dizin sayısı (yalnız --all; aksi hâlde "")."""
+    return f" · {len(atlanan)} dizin ui5-deploy.yaml'sız ATLANDI" if tum_kip else ""
 
 
 def bsp_icf_yolu(bsp: str) -> str:
@@ -491,14 +549,13 @@ def main() -> int:
         print(f"[FAIL] ui-root yok: {ui_root}", file=sys.stderr)
         return 1
 
+    cozulemeyen_sonuc, atlanan = [], []   # yalnız --all doldurur (PR #445 4. kapı F1)
     if args.app:
         apps = [args.app]
     elif args.apps:
         apps = [a.strip() for a in args.apps.split(",") if a.strip()]
     elif args.all:
-        apps = sorted(d.name for d in ui_root.iterdir()
-                      if d.is_dir() and d.name != "node_modules" and bsp_name(d))
-        print(f"[i] --all → {len(apps)} deployable app: {', '.join(apps)}")
+        apps, atlanan, cozulemeyen_sonuc = all_kipi(ui_root)
     else:
         apps, git_hatalari = changed_apps(ui_root)
         if git_hatalari:
@@ -524,7 +581,7 @@ def main() -> int:
 
     mode = "[VERIFY-ONLY]" if args.verify_only else ("[DRY-RUN]" if args.dry_run else "[DEPLOY]")
     print(f"=== UI {mode}: {', '.join(apps)} (ui-root={ui_root}) ===")
-    results = []
+    results = list(cozulemeyen_sonuc)
     for app in apps:
         print(f"\n--- {app} ---")
         results.append(deploy_one(app, ui_root, conn, env, args.dry_run, args.verify_only))
@@ -542,6 +599,7 @@ def main() -> int:
     satir_sonu_notu = (f"    [OK~] = {len(satir_sonu)} app bayt-eş DEĞİL, fark YALNIZ preload string'lerindeki "
                        f"kaçışlı \\r\\n (CRLF çalışma ağacından build); içerik modül modül eşit, STALE "
                        f"SAYILMADI: {', '.join(satir_sonu)}")
+    atl = atlanan_notu(atlanan, args.all)
     if fail:
         if args.verify_only:
             act = "STALE tespit edildi (canlı ≠ kaynak)"
@@ -549,8 +607,8 @@ def main() -> int:
             act = "BUILD başarısız (deploy zaten yapılmadı)"
         else:
             act = "deploy DOĞRULANAMADI (bayat gitmiş olabilir)"
-        print(f"\n[FAIL] {fail}/{len(results)} app {act} — yukarıyı incele, kullanıcıya raporla "
-              "(asla 'başarılı' deme).", file=sys.stderr)
+        print(f"\n[FAIL] {fail_ozeti(fail, len(results), len(cozulemeyen_sonuc), 'app ' + act)}{atl} — "
+              "yukarıyı incele, kullanıcıya raporla (asla 'başarılı' deme).", file=sys.stderr)
         if satir_sonu:
             print(satir_sonu_notu, file=sys.stderr)
         return 1
@@ -567,17 +625,17 @@ def main() -> int:
     if args.verify_only and satir_sonu:
         print(f"\n[OK] {len(results)} app doğrulandı (canlı == mevcut kaynak — hepsi güncel; "
               f"{len(results) - len(satir_sonu)}'i hash-eşit, {len(satir_sonu)}'i YALNIZ SATIR SONU "
-              "farkıyla içerik-eşit).")
+              f"farkıyla içerik-eşit).{atl}")
         print(satir_sonu_notu)
     elif args.verify_only:
-        print(f"\n[OK] {len(results)} app doğrulandı (canlı == mevcut kaynak — hepsi güncel).")
+        print(f"\n[OK] {len(results)} app doğrulandı (canlı == mevcut kaynak — hepsi güncel).{atl}")
     elif args.dry_run:
         print(f"\n[i] DRY-RUN bitti: {len(results)} app BUILD edildi. "
-              "DEPLOY YAPILMADI, CANLI İÇERİK OKUNMADI.")
+              f"DEPLOY YAPILMADI, CANLI İÇERİK OKUNMADI.{atl}")
         print("    Bu çıktı 'canlı == build' KANITI DEĞİLDİR ve app'in güncel olduğunu GÖSTERMEZ.")
         print("    Bayatlık (stale) taraması için: --verify-only · gerçek deploy için bayraksız koş.")
     else:
-        print(f"\n[OK] {len(results)} app doğrulandı (canlı Component-preload == build çıktısı).")
+        print(f"\n[OK] {len(results)} app doğrulandı (canlı Component-preload == build çıktısı).{atl}")
     return 0
 
 
