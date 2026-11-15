@@ -10,6 +10,12 @@
 > **Test-reçeteleri AYRI dosyada:** `governance/infra-test-recipes.md` (bileşen-başına koş-adımları) — F0'da İKİSİ birlikte okunur.
 
 Format: `| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |`
+
+## claude/agents/{infra-expert,frontend-expert,backend-expert}.md — "TESLİM ÖNCESİ ÖZ-KAPI" bölümü (2026-11-15; lider, kullanıcı açık onayı 2026-11-15) — ⚠GEVŞETME YOK (yeni talimat; gate/kod değişmedi)
+
+| tarih | değişiklik | NEDEN (senaryo/vaka) | NASIL test edildi | fixture/koşucu-ref | PR |
+|---|---|---|---|---|---|
+| 2026-11-15 | Üç üretici ajan tanımına teslimden önce dört adım: kahin karşılaştırması (gerçek ayrıştırıcı/sistemle aynı girdi kümesi; sınıf olarak ayrışırsa yama değil YÖNTEM sorusu) · sınıf taraması · davranışı anlatan metin taraması · kardeş bataryası `--kardes-tam` + TEMP kum havuzu/yazma kalkanı. infra-expert'te KOD DONDU öncesi, FE/BE'de checklist programından sonra `BUG_GATE_READY` öncesi. | Dört çekirdek PR'da 11 kapı turu: regex YAML okuyucu gerçek ayrıştırıcıdan sapıyordu (4 tur) · değişen davranış araç çıktısında ve tohum dersinde eski kaldı · kardeş mutasyon kipleri koşulmadı · fixture mutasyon kipleri sürücü köküne yazdı. Var olan dersler (kardeş taraması, `--kardes-tam`) hafızadaydı ama alt ajan hafızayı görmez; kural tanıma yazılınca ulaşır. | Ön arama: `kardes-tam` · kahin · kum havuzu · "tüm geçiş" ajan tanımlarında 0 geçiş (yalnız `run_battery.py` + recipes'ta). Frontmatter `yaml.safe_load` üç dosyada geçerli, anahtarlar değişmedi; CRLF korunarak eklendi. | — (talimat; ölçüm sonraki turların kapı sayısıyla) | (bu PR) |
 Her bileşen bölümü ayrıca **`Test-senaryosu:`** bloğu taşır — o bileşene dokunan HERKESİN
 (infra-expert F0/F3 + lider bağımsız-koşum) çalıştıracağı adım reçetesi; mevcut test-varlığı
 yoksa `[ÖNERİ]` etiketiyle aday yazılır (varmış gibi gösterilmez).

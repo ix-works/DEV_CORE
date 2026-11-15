@@ -96,6 +96,24 @@ python core/scripts/validators/checklist_check.py --repo <proje kökü> --diff <
   düzelt (son hüküm bug-expert'te).
 - Programın kapsadığı madde için tek seferlik betik yazma — program yanlışsa bulgu olarak raporla.
 
+## 🛡 TESLİM ÖNCESİ ÖZ-KAPI — kapının bulacağını önce sen bul (ZORUNLU; 2026-11-15)
+NE ZAMAN: her turda (düzeltme turları dahil) `BUG_GATE_READY` / "KOD DONDU" göndermeden ÖNCE, yukarıdaki
+programdan SONRA. NEREDE: teslim mesajında dört ayrı başlık; yapılamayan adım `ÖLÇÜLEMEDİ — <neden>`.
+NEDEN (ölçüldü 2026-11-15): dört çekirdek PR'da 11 kapı turu. Bulguların çoğu üreticinin kendi testlerinin bakmadığı yerdeydi: regex'le okunan YAML gerçek ayrıştırıcıdan sapıyordu (4 tur, her kapı aynı açığın yeni bir biçimini buldu) · kodu değişen davranış araç çıktısında ve tohum dersinde eski hâliyle kaldı · kardeş mutasyon kipleri koşulmadı · test gerçek sürücü köküne yazdı. Üretici kendi yazdığını onaylayan testi koşar, kapı saldırgan testi koşar — o testi önce sen koş.
+1. **KAHİN KARŞILAŞTIRMASI** — davranış iddianı gerçek çalışma zamanında ölç: canlı OData servisi
+   (istek metni + yanıt) ve gerçek UI5 kontrolü (mock değil). Bir biçimi (filtre metni · sayı/tarih ·
+   URL · Excel çıktısı) ayrıştırıyor ya da üretiyorsan sonucu sunucunun kabul ettiği/döndürdüğüyle kıyasla.
+   Kontrol grubu = değişiklik öncesi kod (ör. `git show <taban>:<yol>`). Rapor: `KAHİN: <ne> · <N> vaka · fark <k>`.
+   ⛔ Yaklaşımın bir sınıf olarak ayrışıyorsa yamaya geçme — lidere YÖNTEM sorusu gönder.
+2. **SINIF TARAMASI** — aynı hatanın komşu biçimleri: diğer kolon türleri (metin/sayı/tarih/saat) ·
+   diğer giriş yolları (kutu · menü · varyant · Excel · yeniden listeleme) · kardeş uygulamalardaki kopya
+   util (`rg` ile dosya ve fonksiyon adı). Bulgu tek vaka gelse de sınıf olarak kapat.
+3. **METİN TARAMASI** — davranış değiştiyse onu anlatan her metni listele: i18n anahtarları · kullanıcı
+   kılavuzu (help HTML) · TS/FS'teki ilgili bölüm ve test vakası · kod yorumları. Senin dosya bölgendekini
+   güncelle; doküman lider/doküman turunun işiyse `METİN: <yer> → güncellenmeli` diye listele.
+4. **KARDEŞ + KUM HAVUZU** — değişen util'i kullanan diğer ekran/uygulamalarda temel akışı koş. Ölçüm
+   betikleri ve çıktıları yalnız `.tmp/` ya da TEMP altına yazar; canlı sistemde kalıcı veri bırakmaz.
+
 ## BUG-GATE TESLİMİ (build bitince — Model A, lider-aracılı; ADR 0018)
 Substantive bir build bitince (yeni ekran/handler/save-mantığı; trivial i18n DEĞİL), **Bug_Expert'i KENDİN spawn ETME (yetkin yok) ve doğrudan "to=bug-expert" MESAJ ATMA (alıcısız kalır).** Bunun yerine **lider'e** `BUG_GATE_READY` + yapılandırılmış teslim yolla; lider taze bir bug-expert spawn edip gate'ler:
 1. **Diff:** `git diff` / `dosya:satır` — ne değişti
