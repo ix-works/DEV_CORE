@@ -15,6 +15,7 @@ Sıra: PR aç → CI (`statusCheckRollup`) yeşil → squash-merge → birleşen
 
 **How to apply:**
 - Gün sonunda `git log origin/main..HEAD` boş değilse PR açılır ve merge edilir. `--admin` yalnız "onaylayan yok" şartını aşmak içindir, CI'yi atlamak için değil.
+- ⛔ **Kapıdan geçmemiş iş main'e GİRMEZ.** BUG GATE BLOCKER'ı açık ya da kapısı hiç koşmamış iş dal hâlinde push'lanır, durumu RESUME'ye yazılır ve kullanıcıya söylenir. Gün o dal için böyle kapanır; gün kapansın diye iş main'e alınmaz (merge geri alınamaz).
 - İş bitince `git ls-remote --heads origin` yalnız `main`'i göstermelidir. İstisna: bilerek açık bırakılmış ve kullanıcıya söylenmiş bir dal.
 - Uzak dalı silmeden önce dalın ucunun merge edilen PR'ın `headRefOid`'ine eşit olduğunu ölç. Böylece merge'den sonra eklenmiş bir commit kaybolmaz.
 - Kullanıcı açıkça "dal açık kalsın" derse kural uygulanmaz; karar RESUME'ye yazılır.

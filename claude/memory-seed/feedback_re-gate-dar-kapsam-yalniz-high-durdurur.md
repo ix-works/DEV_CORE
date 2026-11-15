@@ -15,6 +15,8 @@ Hüküm kuralı:
 
 Builder tarafında tam regresyon da tur sonunda **bir kez** koşulur.
 
+**Eski iki dersle ilişkisi:** [[feedback_duzeltme-turu-kendi-ciktisina-kapi-ister]] ve [[feedback_duzeltme-turu-kendi-regresyonunu-uretir]] geçerlidir: her düzeltme turu kendi çıktısına bir kapı koşar ve o kapı bu dersteki dar re-gate'tir. Bu ders yalnız re-gate'in **kapsamını** ve **hangi bulgunun yeni tur açtığını** belirler. MEDIUM/LOW düzeltmesi kapısız geçer, ancak düzeltme yalnız bulgunun gösterdiği yeri değiştiriyorsa. Düzeltme yeni bir mantık dalı, yeni bir dosya ya da bulgunun dışında bir davranış değişikliği getiriyorsa o yeni yüzey bir sonraki dar re-gate'e girer.
+
 **Why:** Kullanıcı (2026-11-08, bir SD paketi): "yine bug çalıştı kaç defa çalışacak … ne zaman bitecek". Her düzeltme küçük yeni kusurlar getirdi ve build→gate→fix→re-gate döngüsü saatlerce uzadı (UI ajanı ~3 saat). Gate'ler gerçek HIGH'lar yakaladı: derlenmeyen bir iş planlama çağrısı, para birimi ondalığı yüzünden 100 kat yanlış fiyat ve bir kip bloğu kusuru. Maliyetli olan gate'in kendisi değil, kapsamı ve MEDIUM/LOW bulgularda yeniden tur açmasıydı. Kullanıcı önerilen dar kapsam kuralına "evet, öyle yapman gerek zaten" dedi.
 **How to apply:** Re-gate brifine iki satır yaz: kapsam ("yalnız bu turun diff'i + çağıranları") ve hüküm kuralı ("yalnız HIGH BLOCKER; MEDIUM/LOW düzeltme listesine, WARNING"). Yeni bir build'in ilk gate'i tam kapsamlı kalır. Bağlantılı: [[feedback_lider-build-yapmaz-experte-dagit]]. BUG GATE kuralı (core §1.1) geçerliliğini korur; yalnız re-gate'in kapsamı daralır.
 
