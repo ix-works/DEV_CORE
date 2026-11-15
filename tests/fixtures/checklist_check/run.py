@@ -94,6 +94,11 @@ Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile e
   --mutasyon-be01-ic-delete  `DELETE itab FROM <literal>` / `… TO …` iç tablo imzası tanınmaz
   --mutasyon-be01-ic-genis   iç tablo imzası her `DELETE x FROM` (DB biçimi de susar — koruma vektörleri)
   --mutasyon-be01-screen  `MODIFY SCREEN FROM wa` dışlaması yok
+  --mutasyon-kisaltma     kısaltılmış birleşik yazım (`BE-10a/b`, `BE-22..25`) açılmaz → ilk kimliğe eşlenir
+  --mutasyon-blok-devir   verify-report tablo bloğu bitince kip/indeks sıfırlanmaz (sonraki tablo devralır)
+  --mutasyon-yabanci-baslik  ID'siz başlık satırı (kendi `|---|`) tanınmaz → önceki tablonun kipi sürer
+  --mutasyon-kati-gevsek  başlıksız/ID'siz tabloda da gevşek kimlik okuma (`BE-47 canlı PUT` eşlenir)
+  --mutasyon-be01-tire    `DELETE x FROM ls-to` bileşeni `TO` sayılır (DB DELETE iç tablo diye susar)
 CORE-07: her kipin DÜŞMESİ BEKLENEN vektör kümesi `_BEKLENEN_DUSEN`'de PİNLİDİR ve EŞİTLİKLE
 kıyaslanır. Çıkış: 0 taban yeşil · 1 mutasyon BEKLENEN kümeyle düştü · 2 SAPMA · 3
 DOGRULANAMADI (çapa tam 1 kez eşleşmedi ya da mutant derlenmedi — "düştü" SAYILMAZ).
@@ -150,7 +155,12 @@ _GECERLI_KIP = frozenset({"--mutasyon-literal", "--mutasyon-degisen", "--mutasyo
                           "--mutasyon-be12-metin",
                           "--mutasyon-be01-ic-delete",
                           "--mutasyon-be01-ic-genis",
-                          "--mutasyon-be01-screen"})
+                          "--mutasyon-be01-screen",
+                          "--mutasyon-kisaltma",
+                          "--mutasyon-blok-devir",
+                          "--mutasyon-yabanci-baslik",
+                          "--mutasyon-kati-gevsek",
+                          "--mutasyon-be01-tire"})
 
 _MUT = {
     "--mutasyon-literal": (
@@ -321,11 +331,27 @@ _MUT = {
         '                        or _BE01_DELETE_IC.search(kl))',
         '                        or False)'),
     "--mutasyon-be01-ic-genis": (
-        r'r"\s+FROM\s+(?:\d+(?![\w-])|[^.]*?\bTO\b)"',
+        r'r"\s+FROM\s+(?:\d+(?![\w-])|[^.]*?(?<!-)\bTO\b)"',
         r'r"\s+FROM\b"'),
     "--mutasyon-be01-screen": (
         '"value", "screen"))',
         '"value"))'),
+    # PR #444 bug-gate düzeltmesi (2026-11-15)
+    "--mutasyon-kisaltma": (
+        "_kisaltma_ac(m.group(1), hucre, m.end())",
+        "[]"),
+    "--mutasyon-blok-devir": (
+        '            kip, huk_idx, id_idx = "kati", 2, 0          # tablo bloğu bitti',
+        '            pass                                     # tablo bloğu bitti'),
+    "--mutasyon-yabanci-baslik": (
+        '        if sonraki.strip().startswith("|") and _rapor_ayrac(sonraki):',
+        '        if False:'),
+    "--mutasyon-kati-gevsek": (
+        '        if kip == "kati":',
+        '        if False:'),
+    "--mutasyon-be01-tire": (
+        "|[^.]*?(?<!-)" + "\\bTO",
+        "|[^.]*?" + "\\bTO"),
     "--mutasyon-ids-bos": (
         '    if ids is not None and not ids:',
         '    if False:'),
@@ -411,8 +437,8 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-be55-bicim": {"BE-55/W-tablefor", "BE-55/W-early", "BE-55/W-mapped"},
     # #433/#432/#439/#438 turu (2026-11-15) — ÖLÇÜMLE pinlenecek (ilk değer = ilan edilen beklenti)
     "--mutasyon-id-sutun": {"V18"},
-    "--mutasyon-id-bas": {"V17"},
-    "--mutasyon-birlesik-esle": {"V19", "V20"},
+    "--mutasyon-id-bas": {"V17", "V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V21g", "V21h", "V21i", "V22"},   # PR #444: tam eşleşme açıklamalı/kısaltılmış hücreyi tanımaz
+    "--mutasyon-birlesik-esle": {"V19", "V20", "V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V22"},   # PR #444: kısaltma açılsa da ilk kimliğe eşlenir
     "--mutasyon-ts05-allow": {"DOC-TS-05/N-uzun", "DOC-TS-05/N-degisken", "DOC-TS-05/P-mesajmetni"},
     "--mutasyon-ts05-blok": {"DOC-TS-05/N-bloksuz"},
     "--mutasyon-ts05-baslik": {"DOC-TS-05/N-bitisik"},
@@ -420,8 +446,13 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-not-fail": {"Y4"},
     "--mutasyon-be12-metin": {"Y2"},
     "--mutasyon-be01-ic-delete": {"BE-01/N-dellit", "BE-01/N-delto"},
-    "--mutasyon-be01-ic-genis": {"BE-01/P-delwa", "BE-01/P-deltab", "BE-01/P-delparam"},
+    "--mutasyon-be01-ic-genis": {"BE-01/P-delwa", "BE-01/P-deltab", "BE-01/P-delparam", "BE-01/P-deltire"},
     "--mutasyon-be01-screen": {"BE-01/N-screen"},
+    "--mutasyon-kisaltma": {"V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V22"},
+    "--mutasyon-blok-devir": {"V25"},
+    "--mutasyon-yabanci-baslik": {"V24"},
+    "--mutasyon-kati-gevsek": {"V23", "V24", "V25"},   # yan tablo satırı gevşek okunur → hükümsüz
+    "--mutasyon-be01-tire": {"BE-01/P-deltire"},
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -552,6 +583,7 @@ VEKTORLER = [
     ("BE-01/P-modwa", "BE-01", {CLS: "    MODIFY mara FROM ls_mara.\n"}, CLS, {"WARN"}),
     # bilinen sınır (bilerek): parametre/inline ad tanıma YOK → `DELETE <param> FROM <ad>` WARN kalır
     ("BE-01/P-delparam", "BE-01", {CLS: "    DELETE items FROM cut_from.\n"}, CLS, {"WARN"}),
+    ("BE-01/P-deltire", "BE-01", {CLS: "    DELETE mara FROM ls_sel-to.\n"}, CLS, {"WARN"}),
     ("BE-03/P", "BE-03", {CLS: "    SELECT SINGLE * FROM afko INTO @DATA(ls) WHERE aufnr = @lv.\n"}, CLS, {"WARN"}),
     ("BE-03/N", "BE-03", {CLS: "    SELECT SINGLE * FROM zafko INTO @DATA(ls) WHERE aufnr = @lv.\n"}, CLS, {"PASS"}),
     ("BE-04/P", "BE-04", {CLS: "    lv_payload = 'x'.\n    WRITE lv_tutar TO lv_metin.\n"}, CLS, {"FAIL"}),
@@ -1258,6 +1290,38 @@ def v_vektorleri(G, tmp: Path) -> None:
     dene("V20", "| BE-47 / BE-35 | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n" + tam35, 1,
          ["- birleşik satır: 1 → BE-47", "RAPOR EKSİK: birleşik satır"],
          "NEGATİF (sahte PASS koruması): birleşik satır hiçbir maddeye eşlenmez — ayrı satırı olan BE-35 geçer, BE-47 eksik")
+    # PR #444 F1: kısaltılmış birleşik yazım (tam kimlik + ayraç + çıplak sonek) da birleşiktir — İLK kimliğe eşlenmez
+    for ad, hucre, beklenen in (("V21a", "BE-10a/b", ["BE-10a", "BE-10b"]),
+                                ("V21b", "BE-01,03,10a", ["BE-01", "BE-03", "BE-10a"]),
+                                ("V21c", "BE-22..25", ["BE-22", "BE-23", "BE-24", "BE-25"]),
+                                ("V21d", "DOC-KD-01…03", ["DOC-KD-01", "DOC-KD-02", "DOC-KD-03"]),
+                                ("V21e", "FE-02, 03, 04", ["FE-02", "FE-03", "FE-04"]),
+                                ("V21f", "BE-52/53/54", ["BE-52", "BE-53", "BE-54"])):
+        mid, kim = G._id_hucresi(hucre)
+        kontrol(f"{ad} kısaltılmış birleşik `{hucre}` → eşlenmez, açılır {beklenen}",
+                mid is None and kim == beklenen, f"mid={mid} kimlikler={kim}")
+    for ad, hucre in (("V21g", "BE-04 (decimal)"), ("V21h", "BE-12 / ATC"), ("V21i", "BE-10b – canlı PUT")):
+        mid, kim = G._id_hucresi(hucre)
+        kontrol(f"{ad} NEGATİF: açıklamalı `{hucre}` kısaltma SAYILMAZ → tek kimlik",
+                mid == hucre.split()[0] and kim == [mid], f"mid={mid} kimlikler={kim}")
+    r = kok / "V22.md"
+    r.write_bytes((bas + "| BE-35/47 | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n").encode("utf-8"))
+    rc, out = kos(G, taban + ["--verify-report", str(r)])
+    kontrol("V22 uçtan uca kısaltılmış birleşik `BE-35/47` → 'birleşik satır: 2', 'satır yok: 0'",
+            rc == 1 and "- birleşik satır: 2 → BE-35, BE-47" in out and "- satır yok: 0" in out,
+            f"rc={rc} · {out[out.find('### --verify'):][:260]!r}")
+    # PR #444 F2: ID'siz başlıklı / başlıksız tablo kapsama tablosunun sütun indeksini ve gevşek okumasını DEVRALMAZ
+    sistem = ("| Madde | Neden | Kim |\n|---|---|---|\n| BE-47 canlı PUT | yerelde ölçülemez | gateway |\n")
+    dene("V23", tam47 + tam35 + "\n## Sistemde kalan doğrulamalar\n" + sistem, 0,
+         ["- satır yok: 0", "- hükümsüz: 0"],
+         "NEGATİF (tabana göre gerileme): kapsama + şablonun 'Sistemde kalan doğrulamalar' tablosu → exit 0")
+    dene("V24", tam47 + tam35 + sistem, 0, ["- hükümsüz: 0"],
+         "boş satırsız BİTİŞİK ID'siz başlıklı tablo (kendi `|---|` ayracıyla) → kapsama satırını ezmez")
+    dene("V25", tam47 + tam35 + "\n| BE-47 canlı PUT | yerelde ölçülemez | gateway |\n", 0, ["- hükümsüz: 0"],
+         "boş satırla ayrılmış BAŞLIKSIZ blok → katı okuma (yalnız-kimlik hücresi), gevşek okuma devralınmaz")
+    dene("V26", "| BE-47 | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n" + tam35, 0, ["- satır yok: 0"],
+         "KONTROL (taban uyumu): ID'siz başlıklı tabloda (| Madde | Sınıf | Hüküm | Kanıt |) yalnız-kimlik satırı okunur",
+         baslik="| Madde | Sınıf | Hüküm | Kanıt |\n|---|---|---|---|\n")
     rc, out = kos(G, taban + ["--verify-report", str(kok / "yok-rapor.md")])
     kontrol("V9 okunamayan rapor → exit 2 [PROGRAM KOŞMADI] (eksiklik DEĞİL)",
             rc == 2 and "[PROGRAM KOŞMADI]" in out, f"rc={rc} {out[-160:]!r}")

@@ -27,7 +27,7 @@ metadata:
 ## Ajan · takım
 
 - [Infra brifinde kardes kipleri kod dondu oncesi](feedback_infra-brifinde-kardes-kipleri-kod-dondu-oncesi.md) — Paylaşılan modül/validator değiştiren infra brifinde KOD DONDU öncesi kardeş fixture'ların TÜM kiplerini (`run_battery --kardes-tam`) koşturmayı açıkça iste
-- [Kapi raporu kaydi verify report tuzaklari](feedback_kapi-raporu-kaydi-verify-report-tuzaklari.md) — Bug-gate raporunu kaydedip `checklist_check --verify-report` koşarken: tam metin alt-ajan jsonl'ında · `--repo .` şart · gruplu hüküm satırı 'satır yok' · repo dışı `--files` glob'a girmez
+- [Kapi raporu kaydi verify report tuzaklari](feedback_kapi-raporu-kaydi-verify-report-tuzaklari.md) — Bug-gate raporunu kaydedip `checklist_check --verify-report` koşarken: tam metin alt-ajan jsonl'ında · `--repo .` şart · gruplu hüküm satırı 'birleşik satır' (eşlenmez) · repo dışı `--files` glob'a girmez
 
 ## Araç tuzakları
 

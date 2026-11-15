@@ -511,7 +511,7 @@ _DB_YAZ_BELIRSIZ = [
 # `DELETE itab FROM <idx> TO <idx>`. DB `DELETE dbtab FROM wa|TABLE itab` ne literal ne `TO` alır →
 # WARN'da kalır. Ad/bildirim sezgisi (inline `DATA(x)`, metot parametresi) BİLEREK eklenmedi: parametre
 # adı DB tablo adıyla çakışırsa gerçek DB yazımını susturur.
-_BE01_DELETE_IC = re.compile(r"\bDELETE\s+" + AD_ADAYI + r"\s+FROM\s+(?:\d+(?![\w-])|[^.]*?\bTO\b)", re.I)
+_BE01_DELETE_IC = re.compile(r"\bDELETE\s+" + AD_ADAYI + r"\s+FROM\s+(?:\d+(?![\w-])|[^.]*?(?<!-)\bTO\b)", re.I)
 # FUGR'nin türetilmiş programları: include `L<grup>…`, ana program `SAPL<grup>`, modül havuzu
 # `SAPM<ad>`; namespace'li biçim `/<NS>/L…`, `/<NS>/SAPL…` zaten namespace ile BAŞLAR.
 _TURETILMIS_ONEK = re.compile(r"^(?:SAPL|SAPM|L)(?=[ZY])", re.I)
@@ -2565,20 +2565,54 @@ def _kanit_mi(hucre: str) -> bool:
 _ID_JETON = re.compile(r"(?<![\w-])((?:BE|FE|DOC)-[0-9A-Za-z-]*[0-9A-Za-z])(?![\w])")
 _ID_BAS = re.compile(r"[\s*`_\[]*((?:BE|FE|DOC)-[0-9A-Za-z-]*[0-9A-Za-z])(?![\w])")
 _ID_SUTUNU = re.compile(r"\W*ID\W*", re.I)
+_ID_TAM = re.compile(r"\**`?((?:BE|FE|DOC)-[0-9A-Za-z-]+)`?\**")      # başlıksız tablo: hücre YALNIZ kimlik
+# Kısaltılmış birleşik yazım (PR #444 F1): tam kimliği izleyen ayraç + çıplak sonek —
+# `BE-10a/b` · `BE-01,03,10a` · `FE-02, 03, 04` · `BE-22..25` · `DOC-KD-01…16` · `BE-52/53/54`.
+_ID_KISA = re.compile(r"\s*(\.\.|[,/…–])\s*(\d+[A-Za-z]?|[A-Za-z])(?![\w])")
+_ID_PARCA = re.compile(r"(.*-)(\d+)([A-Za-z]?)$")
+
+
+def _kisaltma_ac(bas: str, hucre: str, konum: int) -> list[str]:
+    """`bas` kimliğinden sonra gelen kısaltılmış sonekleri tam kimliğe açar (yoksa [])."""
+    out, onceki = [], bas
+    while True:
+        m = _ID_KISA.match(hucre, konum)
+        if not m:
+            return out
+        konum = m.end()
+        ayrac, sonek = m.group(1), m.group(2)
+        p = _ID_PARCA.match(onceki)
+        if not p:
+            return out
+        onek, no, harf = p.groups()
+        if sonek.isalpha():                                  # `BE-10a/b` → BE-10b
+            yeni = [f"{onek}{no}{sonek}"]
+        elif ayrac in ("..", "…", "–") and sonek.isdigit() and not harf and int(sonek) > int(no):
+            yeni = [f"{onek}{i:0{len(no)}d}" for i in range(int(no) + 1, int(sonek) + 1)]   # aralık
+        else:                                                # `BE-01,03` → BE-03
+            yeni = [f"{onek}{sonek}"]
+        out += yeni
+        onceki = yeni[-1]
 
 
 def _id_hucresi(hucre: str) -> tuple[str | None, list[str]]:
     """ID hücresinden (tek kimlik | None, hücredeki farklı kimlikler).
 
     Hücrenin BAŞINDAKİ kimlik alınır; ardındaki açıklama (`BE-04 (decimal)`) ve bağlantı
-    (`[BE-28](x.md)`) yok sayılır (#433). Hücrede BİRDEN ÇOK farklı kimlik varsa (`BE-10a / BE-10b`)
-    satır hiçbir maddeye eşlenmez: tek hüküm iki maddeye yayılırsa sahte PASS olur — çağıran bunu
-    "birleşik satır" diye adlandırır."""
+    (`[BE-28](x.md)`) yok sayılır (#433). Hücrede BİRDEN ÇOK farklı kimlik varsa (`BE-10a / BE-10b`,
+    kısaltılmış `BE-10a/b` · `BE-01,03` · `BE-22..25` dahil) satır hiçbir maddeye eşlenmez: tek hüküm
+    iki maddeye yayılırsa sahte PASS olur — çağıran bunu "birleşik satır" diye adlandırır."""
     kimlikler = list(dict.fromkeys(_ID_JETON.findall(hucre)))
+    m = _ID_BAS.match(hucre)
+    if m:
+        kimlikler = list(dict.fromkeys([m.group(1)] + _kisaltma_ac(m.group(1), hucre, m.end()) + kimlikler))
     if len(kimlikler) > 1:
         return None, kimlikler
-    m = _ID_BAS.match(hucre)
     return (m.group(1) if m else None), kimlikler
+
+
+def _rapor_ayrac(s: str) -> bool:
+    return "-" in s and set(s.strip().replace("|", "").strip()) <= set("-: ")
 
 
 def rapor_dogrula(rapor: Path, satirlar: list[Satir]) -> int:
@@ -2589,21 +2623,39 @@ def rapor_dogrula(rapor: Path, satirlar: list[Satir]) -> int:
         raise ProgramKosmadi(f"--verify-report raporu okunamadı: {e}") from e
     hucreler: dict[str, list[tuple[str, list[str]]]] = {}   # id → [(hüküm hücresi, öbür hücreler)]
     birlesik_ids: set[str] = set()                # yalnız birleşik satırda geçen kimlikler (#433)
-    huk_idx = 2                                   # başlıksız tablo: | ID | Sınıf | Hüküm | Kanıt |
-    id_idx = 0
-    for s in metin.splitlines():
+    # Tablo BLOĞU başına kip (PR #444 F2): "id" = başlığında `ID` sütunu olan kapsama tablosu (gevşek
+    # kimlik okuma: açıklama/bağlantı/birleşik) · "kati" = başlıksız ya da ID'siz başlıklı tablo — taban
+    # davranışı: ilk hücre YALNIZ kimlikse okunur (ör. şablonun "Sistemde kalan doğrulamalar" tablosundaki
+    # `BE-10b canlı PUT` OKUNMAZ). Kip ve sütun indeksleri blok bitince sıfırlanır — sonraki tablo devralmaz.
+    satirlar_metin = metin.splitlines()
+    kip, huk_idx, id_idx = "kati", 2, 0
+    for no, s in enumerate(satirlar_metin):
         if not s.strip().startswith("|"):
+            kip, huk_idx, id_idx = "kati", 2, 0          # tablo bloğu bitti: sonraki tablo DEVRALMAZ
+            continue
+        if _rapor_ayrac(s):
             continue
         h = [x.strip() for x in re.split(r"(?<!\\)\|", s.strip().strip("|"))]   # `\|` hücre içi kaçış
         if any(_ID_SUTUNU.fullmatch(x) for x in h):
             # başlık satırı: ID ve hüküm sütununu ADINDAN bul — önde `#` sütunu olabilir (#433);
             # kanıt sütunundaki kelime hüküm sayılmasın
+            kip = "id"
             id_idx = next(i for i, x in enumerate(h) if _ID_SUTUNU.fullmatch(x))
+            huk_idx = next((i for i, x in enumerate(h) if _HUKUM_SUTUNU.match(x)), 2)
+            continue
+        sonraki = satirlar_metin[no + 1] if no + 1 < len(satirlar_metin) else ""
+        if sonraki.strip().startswith("|") and _rapor_ayrac(sonraki):
+            # ID sütunu OLMAYAN başlık: katı okuma; hüküm sütunu varsa ADINDAN, yoksa 3. sütun
+            kip, id_idx = "kati", 0
             huk_idx = next((i for i, x in enumerate(h) if _HUKUM_SUTUNU.match(x)), 2)
             continue
         if id_idx >= len(h):
             continue
-        mid, kimlikler = _id_hucresi(h[id_idx])
+        if kip == "kati":
+            mt = _ID_TAM.fullmatch(h[0])
+            mid, kimlikler = (mt.group(1), [mt.group(1)]) if mt else (None, [])
+        else:
+            mid, kimlikler = _id_hucresi(h[id_idx])
         if mid:
             hukum = h[huk_idx] if huk_idx < len(h) else ""
             hucreler.setdefault(mid, []).append(
