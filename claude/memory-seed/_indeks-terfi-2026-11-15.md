@@ -44,7 +44,7 @@ metadata:
 
 - [Ekran teyidi gorev mesajinda da ilk cikti](feedback_ekran-teyidi-gorev-mesajinda-da-ilk-cikti.md) — İlk mesaj iş istese de Ekran Teyidi ilk metin çıktısıdır; compact sonrası istenmez
 - [Gun sonu dal pr ile maine girer](feedback_gun-sonu-dal-pr-ile-maine-girer.md) — Gün sonu = iş dalı PR ile main'e girer; dalı push'lamak yetmez (çekirdek §1.1)
-- [Wt denetim entegrasyon dali hukmu](feedback_wt-denetim-entegrasyon-dali-uzerinden-birlesen-dal-hukmu.md) — `--wt-denetim` ② FAIL'inde entegrasyon dalı yolu: iki ölçüm; `--is-ancestor` yalnız dal→entegrasyon gerçek merge'ünde
+- [Wt denetim entegrasyon dali hukmu](feedback_wt-denetim-entegrasyon-dali-uzerinden-birlesen-dal-hukmu.md) — `--wt-denetim` ② FAIL'inde entegrasyon dalı yolu: PR'dan üç ölçüm, ③ temiz değilse `--zorla` yok; `--is-ancestor` yalnız dal→entegrasyon gerçek merge'ünde
 
 ## SAP · ABAP / RAP
 
