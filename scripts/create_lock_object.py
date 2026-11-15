@@ -63,8 +63,15 @@ def main():
         return 1
 
     # Validate lock object name starts with E
-    if not args.name.upper().startswith('E'):
-        print("[WARNING] Lock object names typically start with 'E'")
+    # #12 (2026-11-15): namespace'li adda kural namespace'ten SONRAKI parçaya uygulanır
+    # (`/NS/EX`); `ad_politikasi` başlığı: namespace'li kilit nesnelerinin bir kısmı `/NS/E…`
+    # değildir (ölçüm 144/1555) ⇒ yalnız uyarı, kapı DEĞİL.
+    from utils.ad_politikasi import ad_namespace
+    _ad = args.name.upper()
+    _ns = ad_namespace(_ad)
+    if not _ad[len(_ns or ''):].startswith('E'):
+        print("[WARNING] Lock object names typically start with 'E'"
+              + (f" (namespace'ten sonra: {_ns}E…)" if _ns else ""))
 
     # Parse lock fields JSON
     try:

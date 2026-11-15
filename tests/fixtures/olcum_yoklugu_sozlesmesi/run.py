@@ -181,6 +181,18 @@ A_KOK = KOK / "a" / "scripts"
 shutil.copyfile(KAPSAM_MOD, A_KOK / "utils" / "kapsam.py")
 A_ARAC = A_KOK / "check_ui_odata_refs.py"
 A_ARAC.write_text(kaynak(UI_ARAC), encoding="utf-8", newline="")
+# 2026-11-15 (namespace tesisatı): izole kopya aracın `utils.*` bağımlılık KAPANIŞINI taşır — elle
+# yazılan tek dosya (`kapsam.py`) araç yeni bir `utils` modülü içe aktarınca (G3: `ad_politikasi`)
+# her vektörü Traceback'e çevirdi (CI A1-A6 FAIL). Kapanış kaynaktaki `from utils.<m> import`
+# satırlarından (girintili/tembel olanlar dahil) türetilir; yeni bağımlılık fixture düzenlemesi istemez.
+_UTILS_KAYNAK = REPO / "scripts" / "utils"
+_bekleyen, _kopyalanan = [A_ARAC.read_text(encoding="utf-8")], {"kapsam"}
+while _bekleyen:
+    for _m in re.findall(r"^\s*from\s+utils\.(\w+)\s+import", _bekleyen.pop(), re.M):
+        if _m not in _kopyalanan and (_UTILS_KAYNAK / f"{_m}.py").is_file():
+            _kopyalanan.add(_m)
+            shutil.copyfile(_UTILS_KAYNAK / f"{_m}.py", A_KOK / "utils" / f"{_m}.py")
+            _bekleyen.append((_UTILS_KAYNAK / f"{_m}.py").read_text(encoding="utf-8"))
 
 
 def ui_kos(app: Path | str) -> tuple[int, str]:

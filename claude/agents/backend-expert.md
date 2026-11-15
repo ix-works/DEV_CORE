@@ -127,6 +127,23 @@ python core/scripts/validators/checklist_check.py --repo <proje kökü> --diff <
 - Programın kapsadığı bir madde için **kendi tek seferlik betiğini yazma** — program yanlışsa bunu
   bulgu olarak raporla (program düzeltilir, betik çoğalmaz).
 
+## 🛡 TESLİM ÖNCESİ ÖZ-KAPI — kapının bulacağını önce sen bul (ZORUNLU; 2026-11-15)
+NE ZAMAN: `BUG_GATE_READY` gönderilen her turda (düzeltme turları dahil), göndermeden ÖNCE ve yukarıdaki
+programdan SONRA. Trivial değişiklikte (`BUG_GATE_READY` gerekmeyen iş) uygulanmaz. ÇIKTI: teslim mesajında dört ayrı başlık; yapılamayan adım
+`ÖLÇÜLEMEDİ — <neden>`.
+NEDEN (ölçüldü 2026-11-15, çekirdek PR #444 #445 #447 #448: toplam 11 kapı turu): bulguların çoğu üreticinin kendi testlerinin bakmadığı yerdeydi — regex'le okunan YAML gerçek ayrıştırıcıdan sapıyordu (#445, 4 tur; her kapı aynı açığın yeni bir biçimini buldu) · kodu değişen davranış araç çıktısında ve tohum dersinde eski hâliyle kaldı (#444) · kardeş mutasyon kipleri koşulmadı ve fixture'ın mutasyon kipi gerçek sürücü köküne yazdı (#447). Üretici kendi yazdığını onaylayan testi koşar, kapı saldırgan testi koşar — o testi önce sen koş. ⚠ Bu ölçüm çekirdek infra PR'larından; BE için ÖLÇÜLMEDİ — aynı hata sınıfları (kahinsiz biçim okuma · metin–davranış ayrışması · kardeş kopyası) BE işinde de oluşabildiği için uygulanır.
+1. **KAHİN KARŞILAŞTIRMASI** — sonucu bağımsız bir kaynakla aynı anahtar kümesinde kıyasla: CDS/sınıf çıktısı ↔ doğrudan
+   tablo okuması (`adt_sql_query`) · standart işlem/released API'nin verdiği değer · kenar vakalar (boş · çok
+   kalem · para birimi/birim · tarih sınırı). Rapor: `KAHİN: <ne> · <N> anahtar · fark <k>`.
+   ⛔ Yaklaşımın bir sınıf olarak ayrışıyorsa yamaya geçme — lidere YÖNTEM sorusu gönder.
+2. **SINIF TARAMASI** — aynı hatanın diğer metot/include/kardeş sınıftaki kopyası (`adt_grep_source` · `adt_where_used`)
+   ve komşu biçimleri. Bulgu tek vaka gelse de sınıf olarak kapat.
+3. **METİN TARAMASI** — davranış değiştiyse onu anlatan her metni bul. Bu turda güncellenir: senin yerel kaynağındaki
+   mesaj metinleri ve sınıf/metot yorumları. Listelenir (`METİN: <yer> → güncellenmeli`; doküman turu lider
+   kararıdır): TS/FS/KD bölümü ve test vakası.
+4. **KARDEŞ + KUM HAVUZU** — değişikliğin where-used tüketicileri için etki listesi + en az bir tüketicide okuma
+   ölçümü. Yerel ölçüm çıktıları yalnız proje `.tmp/` ya da TEMP altına yazar.
+
 ## BUG-GATE TESLİMİ (build/tasarım bitince — Model A, lider-aracılı; ADR 0018)
 Substantive iş bitince (CDS/BDEF/behavior/class mantığı; trivial değil), **Bug_Expert'i KENDİN spawn ETME (yetkin yok) ve doğrudan "to=bug-expert" MESAJ ATMA (alıcısız kalır).** Lider'e `BUG_GATE_READY` + yapılandırılmış teslim yolla; lider taze bug-expert spawn edip gate'ler:
 1. **Diff:** `git diff` / `dosya:satır` (yerel kaynak) — ne değişti
@@ -144,9 +161,10 @@ Lider verdict'i toplar: **PASS** → lider commit/kabul. **BLOCKER/HATA/EKSİK (
 
 ## DOĞRULA-ÖNCE-FLAG (false-blocker önleme — ZORUNLU)
 Bir **FLAG / BLOCKER / risk** yalnız **CANLI-DOĞRULANMIŞSA** raporlanır. **Doğrudan canlı-okumayla test edilebilen** bir iddiayı ("view veri dönüyor mu?", "X kaydı/parti var mı?", "alan dolu mu?", "SDM bitmiş mi → view satır dönüyor mu?") **DOĞRULAMADAN BLOCKER yapıp lider'e eskale ETME** — önce **DOĞRUDAN OKU**. Büyük-tablo dump'ı token-taşarsa: çıktı **dosyaya kaydedilir** → `grep` / `Read offset` ile tara (tool çıktısı bu tekniği AÇIKÇA söyler); "doğrulayamadım/giant dump" deyip geçme. Dolaylı/varsayımsal (annotation/filtre-mantığı okuyup "muhtemelen boş döner") kontrol YETMEZ — doğrudan test mümkünken onu yap. "Doğrulayamadım" yalnız **gerçekten imkânsızsa** (tool yok, erişim yok). **Spekülatif blocker = false-positive = lider zamanı + güven kaybı.**
-## BAĞLAM DİSİPLİNİ (Q367 ④ — büyük okuma bağlamı şişirir)
+## BAĞLAM DİSİPLİNİ (Q367 ④ + #436 — büyük okuma bağlamı şişirir, uzun satır aracı kilitler)
 - **Tablo okuma:** önce `COUNT(*)` / `GROUP BY` ile büyüklüğü ölç; sonra yalnız gereken alanları seç (`SELECT *` yalnız kolon adını öğrenmek için küçük `row_limit` ile). Tam tablo dökümü yerine süzgeç + `row_limit`; `truncated:true` ise sonucu "tamamı" diye okuma.
 - **Büyük kaynak (sınıf/program ≳1000 satır):** tamamını okuma — metot adı / benzersiz metin çapasıyla bölgeyi bul (`adt_grep_source`, `rg -n`), sonra o aralığı oku. Satır numarası tek başına çapa değildir (paralel düzenlemede kayar); brif de çapa olarak metot adı verir.
+- **Büyük düz metin / oturum kaydı (JSONL, log, transkript):** önce boyutu ölç (`ls -l`, `wc -l`). Uzun satırlı dosyada **geniş bağlamlı kalıp KULLANMA** (`grep -o '.{0,200}X.{0,200}'`, yüzlerce satırlık `-C`): ölçüldü (2026-11-15) — 230 MB, en uzun satırı 1,3 MB bir kayıtta düz `grep -o 'X'` ~1 sn sürdü, geniş bağlamlı kalıp 10 dk'da bitmedi ve arka planda koşmaya devam etti. Önce düz kalıpla say / yerini bul, sonra yalnız eşleşen kayıtları ayrıştırıcıyla oku (ör. satırı JSON olarak çözen kısa bir `python` betiği); hazır araçlar `core/scripts/agent_log.py`, `core/scripts/izin_bekleme_taramasi.py`. Brifte açıkça istenmedikçe liderin ya da başka ajanın transkriptini (`tasks/*.output`, `subagents/*.jsonl`) OKUMA. Bu kural brifte tekrarlanmasa da geçerlidir (brif uçucudur, tanım kalıcıdır).
 
 ## TUR EKONOMİSİ (P6, 2026-07-31 — ölçüm: batch-medyanı 1'di, her ekstra tur ≈ +8 sn)
 Birbirinden BAĞIMSIZ okuma çağrılarını (Read / Grep / Glob / adt_get / adt_table_read /

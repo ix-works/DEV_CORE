@@ -21,4 +21,4 @@ kapının kapsamında değildi. Bulgunun kapatılması, kapsamın da genişlemes
 **How to apply:** `kapı → düzeltme → KAPI`. İkinci kapı **DAR** (yalnız değişen satırlar) ve
 **BAŞKA GÖZ** (birinci kapının raporunu görmemiş) olmalı — birinci kapı kendi teşhisinin gözüyle
 okur. Yorum-only turlar bu kuralın dışında: orada lider okuması yeter (orantı).
-İlgili: [[feedback_duzeltme-turu-kendi-ciktisina-kapi-ister]]
+İlgili: [[feedback_duzeltme-turu-kendi-ciktisina-kapi-ister]] · kapsam/hüküm kuralı: [[feedback_re-gate-dar-kapsam-yalniz-high-durdurur]]

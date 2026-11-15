@@ -96,6 +96,29 @@ python core/scripts/validators/checklist_check.py --repo <proje kökü> --diff <
   düzelt (son hüküm bug-expert'te).
 - Programın kapsadığı madde için tek seferlik betik yazma — program yanlışsa bulgu olarak raporla.
 
+## 🛡 TESLİM ÖNCESİ ÖZ-KAPI — kapının bulacağını önce sen bul (ZORUNLU; 2026-11-15)
+NE ZAMAN: `BUG_GATE_READY` gönderilen her turda (düzeltme turları dahil), göndermeden ÖNCE ve yukarıdaki
+programdan SONRA. Trivial değişiklikte (yalnız etiket/i18n metni — `BUG_GATE_READY` gerekmeyen iş) uygulanmaz. ÇIKTI: teslim mesajında dört ayrı başlık; yapılamayan adım
+`ÖLÇÜLEMEDİ — <neden>`.
+NEDEN (ölçüldü 2026-11-15, çekirdek PR #444 #445 #447 #448: toplam 11 kapı turu): bulguların çoğu üreticinin kendi testlerinin bakmadığı yerdeydi — regex'le okunan YAML gerçek ayrıştırıcıdan sapıyordu (#445, 4 tur; her kapı aynı açığın yeni bir biçimini buldu) · kodu değişen davranış araç çıktısında ve tohum dersinde eski hâliyle kaldı (#444) · kardeş mutasyon kipleri koşulmadı ve fixture'ın mutasyon kipi gerçek sürücü köküne yazdı (#447). Üretici kendi yazdığını onaylayan testi koşar, kapı saldırgan testi koşar — o testi önce sen koş. ⚠ Bu ölçüm çekirdek infra PR'larından; FE için ÖLÇÜLMEDİ — aynı hata sınıfları (kahinsiz biçim okuma · metin–davranış ayrışması · kardeş kopyası) FE işinde de oluşabildiği için uygulanır.
+DERİNLİK: aşağıdaki GENEL §DOĞRULAMA SEVİYESİ (kullanıcı kuralı) geçerlidir — öz-kapı tam tarayıcı
+journey'i İSTEMEZ. Additive değişiklikte kahin = HAFİF (tek hedefli eval + canlı istek/yanıt kıyası); tam
+journey yalnız oradaki (a)/(b) durumunda.
+1. **KAHİN KARŞILAŞTIRMASI** — davranış iddianı gerçek sistemle kıyasla: canlı OData isteği ve yanıtı (mock değil). Bir biçimi (filtre
+   metni · sayı/tarih · URL · Excel çıktısı) ayrıştırıyor ya da üretiyorsan çıkan değeri sunucunun kabul
+   ettiği/döndürdüğüyle kıyasla. Kontrol grubu = değişiklik öncesi kod (`git show <taban>:<yol>`).
+   Rapor: `KAHİN: <ne> · <N> vaka · fark <k>`.
+   ⛔ Yaklaşımın bir sınıf olarak ayrışıyorsa yamaya geçme — lidere YÖNTEM sorusu gönder.
+2. **SINIF TARAMASI** — aynı hatanın komşu biçimleri: diğer kolon türleri (metin/sayı/tarih/saat) · diğer giriş
+   yolları (kutu · menü · varyant · Excel · yeniden listeleme) · kardeş uygulamalardaki kopya util (`rg` ile
+   dosya ve fonksiyon adı). Bulgu tek vaka gelse de sınıf olarak kapat.
+3. **METİN TARAMASI** — davranış değiştiyse onu anlatan her metni bul. Bu turda güncellenir: i18n · kod yorumları.
+   Listelenir (`METİN: <yer> → güncellenmeli`; doküman turu donmuş koddan sonra, lider kararıyla): kullanıcı
+   kılavuzu (help HTML = KD) · TS/FS bölümü ve test vakası · ekran görüntüleri.
+4. **KARDEŞ + KUM HAVUZU** — değişen util'i kullanan diğer ekran/uygulamalar için etki listesi + en az birinde HAFİF
+   ölçüm (tek hedefli eval ya da canlı istek). Ölçüm betikleri ve çıktıları yalnız proje `.tmp/` ya da TEMP
+   altına yazar; canlı sistemde kalıcı veri bırakmaz.
+
 ## BUG-GATE TESLİMİ (build bitince — Model A, lider-aracılı; ADR 0018)
 Substantive bir build bitince (yeni ekran/handler/save-mantığı; trivial i18n DEĞİL), **Bug_Expert'i KENDİN spawn ETME (yetkin yok) ve doğrudan "to=bug-expert" MESAJ ATMA (alıcısız kalır).** Bunun yerine **lider'e** `BUG_GATE_READY` + yapılandırılmış teslim yolla; lider taze bir bug-expert spawn edip gate'ler:
 1. **Diff:** `git diff` / `dosya:satır` — ne değişti
@@ -116,6 +139,11 @@ Birbirinden BAĞIMSIZ okuma çağrılarını (Read / Grep / Glob / adt_get / adt
 adt_sql_query vb.) **tek turda PARALEL gönder** — teker teker sırayla değil. Seri çağrı
 YALNIZ bir çağrının girdisi öncekinin çıktısına bağlıysa meşrudur. Yazma (Edit/Write) ve
 sıra-bağımlı işlemler DAİMA seri kalır.
+
+## BAĞLAM DİSİPLİNİ (Q367 ④ + #436 — büyük okuma bağlamı şişirir, uzun satır aracı kilitler)
+- **Tablo okuma:** önce `COUNT(*)` / `GROUP BY` ile büyüklüğü ölç; sonra yalnız gereken alanları seç (`SELECT *` yalnız kolon adını öğrenmek için küçük `row_limit` ile). Tam tablo dökümü yerine süzgeç + `row_limit`; `truncated:true` ise sonucu "tamamı" diye okuma.
+- **Büyük kaynak (sınıf/program ≳1000 satır):** tamamını okuma — metot adı / benzersiz metin çapasıyla bölgeyi bul (`adt_grep_source`, `rg -n`), sonra o aralığı oku. Satır numarası tek başına çapa değildir (paralel düzenlemede kayar); brif de çapa olarak metot adı verir.
+- **Büyük düz metin / oturum kaydı (JSONL, log, transkript):** önce boyutu ölç (`ls -l`, `wc -l`). Uzun satırlı dosyada **geniş bağlamlı kalıp KULLANMA** (`grep -o '.{0,200}X.{0,200}'`, yüzlerce satırlık `-C`): ölçüldü (2026-11-15) — 230 MB, en uzun satırı 1,3 MB bir kayıtta düz `grep -o 'X'` ~1 sn sürdü, geniş bağlamlı kalıp 10 dk'da bitmedi ve arka planda koşmaya devam etti. Önce düz kalıpla say / yerini bul, sonra yalnız eşleşen kayıtları ayrıştırıcıyla oku (ör. satırı JSON olarak çözen kısa bir `python` betiği); hazır araçlar `core/scripts/agent_log.py`, `core/scripts/izin_bekleme_taramasi.py`. Brifte açıkça istenmedikçe liderin ya da başka ajanın transkriptini (`tasks/*.output`, `subagents/*.jsonl`) OKUMA. Bu kural brifte tekrarlanmasa da geçerlidir (brif uçucudur, tanım kalıcıdır).
 
 ## ⛔ ONAY PENCERESİ AÇAN KOMUT YAZMA (kullanıcı ekranda olmayabilir — 2026-11-08)
 

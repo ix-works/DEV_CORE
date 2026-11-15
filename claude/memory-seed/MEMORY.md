@@ -40,7 +40,7 @@
 - [Freestyle UI PRE-FLIGHT Zorunlu](feedback_freestyle-ui-preflight.md) — GATE ui-freestyle-creation + check_ui5_freestyle_traps; ui-freestyle-odata-v2 + ui-backend-rap §0 baştan
 - [Liste Ekranı ALV Standardı](feedback_liste-ekrani-alv-standardi.md) — GATE check_list_view_grid; sort/filtre+çubuk+göster-gizle/varyant+Excel zorunlu (istemese bile)
 - [Grid Liste Standardı (sap.ui.table)](feedback_grid-liste-standardi.md) — GATE check_list_view_grid; ALV-tarzı=grid+native sort/filter+DB varyant; m.Table mobil istisna
-- [Rapor Filtre = Select-Options + Contains](feedback_rapor-filtre-select-options-contains-standardi.md) — GATE check_filter_search_pattern (FE-32); MultiInput+VHD çoklu+aralık; caseSensitive:false YASAK (/IWBEP toupper 400, Note 1797736); wildcard _parseSearchTerm; kanonik ZSD001
+- [Rapor Filtre = Select-Options + Contains](feedback_rapor-filtre-select-options-contains-standardi.md) — GATE check_filter_search_pattern (FE-32); MultiInput+VHD çoklu+aralık; caseSensitive:false YASAK (/IWBEP toupper 400, Note 1797736); wildcard _parseSearchTerm yalnız seçim ekranı/VH (grid kutusu düz arama + Filtre…); kanonik ZSD001
 - [Audit Alan Auto-Fill](feedback_audit-alan-autofill-standardi.md) — GATE check_audit_fields_autofill; idempotent setAdmin; create→tümü, update→updated_*
 - [Ortak Value-Help — KULLANICIYA SOR](feedback_ortak-value-help-sor.md) — VH için ortak ZSD000_I_* mı local mi SOR; generic master VH tekrar yaratma, expose+assoc (ADR 0009)
 - [Done = Tam Kapsam Doğrula](feedback_done-tam-kapsam-dogrula.md) — "tamam" demeden TAM kapsama karşı doğrula; ertelenen alt-maddeyi flag+register; canlı teyit
@@ -48,7 +48,7 @@
 - [Review Bulguları → Bug-Checklist Routing](feedback_review-bulgulari-bug-checkliste-routing.md) — review/bug bulgusu → bug-checklist'e FE/BE-NN satır; playbook notu tek başına YETMEZ
 - [Araç/Kod Fix Lider'in İşi](feedback_arac-kod-fix-lider-isi.md) — paylaşılan tooling kök-fix'i = LİDER; gateway dar lane (SAP yazımı+retry+rapor)
 - [Dosya Bölgeleri / Yazım Yetkisi](feedback_dosya-bolgeleri-yazim-yetkisi.md) — A metodoloji/araç=lider · B paket kaynağı/docs=feature+lider · C SAP=gateway; commit=lider
-- [Takım Süreklilik / Gün-sonu / Resume](feedback_takim-sureklilik-gun-sonu-resume.md) — süreklilik=lider; ajan durumsuz; gün-sonu=checkpoint+SESSION_NOTES+WIP commit+**push origin main ZORUNLU**; resume=re-spawn+brief
+- [Takım Süreklilik / Gün-sonu / Resume](feedback_takim-sureklilik-gun-sonu-resume.md) — süreklilik=lider; ajan durumsuz; gün-sonu=checkpoint+SESSION_NOTES+WIP commit+**iş dalı PR ile main'e girer** (dal push'u yetmez); resume=re-spawn+brief
 - [Kararları Önce Topla, Sonra Dispatch](feedback_kararlari-once-topla-sonra-dispatch.md) — build-unit'in TÜM user-kararlarını önce topla, sonra konsolide yönerge; mid-build ping-pong yok
 - [ATC Priority 1 Zorunlu](feedback_atc-priority-1-zorunlu.md) — yalnız Prio 1 zorunlu; Prio 2/3 açık onayla pass (sessiz pass yok); mevcut kodda clean-core P1 muaf; variant ZZNDBS_ATC
 - [Clean Core Released-CDS Proaktif](feedback_clean-core-released-cds-proaktif.md) — GATE check_released_objects; YENİ kodda released CDS (MARA değil I_Product); mevcut kod muaf (proje politikası aksini demiyorsa)
@@ -102,7 +102,7 @@
 
 ### Kanıt · ölçüm · doğrulama disiplini
 - **49 ders:** [tam indeks](_indeks-kanit-olcum.md)
-- ⭐ [Aktardigin olcum emre donusunce kanitini tasi](feedback_aktardigin-olcum-emre-donusunce-kanitini-tasi.md) — Ajana verdiğin talimat bir OLGU iddiası taşıyorsa ölçümünü de taşı ya da 'ölçülmedi' diye işaretle — ölçmediğin bir şeyi emir kılığında göndermek ajanı bug yazmaya sürükler
+- ⭐ [Aktardigin olcum emre donusunce kanitini tasi](feedback_aktardigin-olcum-emre-donusunce-kanitini-tasi.md) — Talimattaki olgu iddiasının ölçümünü taşı ya da 'ölçülmedi' yaz — brifteki beklenen sonuç da olgu iddiasıdır
 - ⭐ [Ayni sinif ayni duzeltme degildir](feedback_ayni-sinif-ayni-duzeltme-degildir.md) — Kusur SINIFI nereye bakılacağını söyler, ne yapılacağını SÖYLEMEZ — kardeş vakanın düzeltmesini taşımadan önce mekanizmayı yeniden ölç
 - ⭐ [Bulgu listesi ornektir sinif duzeltmesi tarama ister](feedback_bulgu-listesi-ornektir-sinif-duzeltmesi-tarama-ister.md) — Kapının verdiği bulgu listesi bir ÖRNEKLEMDİR, sayım değil — bir SINIF düzeltilirken liste değil TARAMA kapatır; kapı bile ilk turda 4'ün 3'ünü görmüştü
 
@@ -114,21 +114,21 @@
 
 ### Karar · iletişim · iş yönetimi
 - **9 ders:** [tam indeks](_indeks-karar-iletisim.md)
-- ⭐ [Alinti onay turu acmaz toren enflasyonu](feedback_alinti-onay-turu-acmaz-toren-enflasyonu.md) — ALINTI onay turu AÇMAZ — provenance damgası (`[TS]`/`[ONERI]`) onay kuyruğu değildir; <PAKET-A>'de bu ayrımın kaybı 15 onay belgesi + çok turlu 'metin onay töreni' üretti (kardeş <PAKET-B>: 1750 anahtar, 0 belge)
+- ⭐ [Alinti onay turu acmaz toren enflasyonu](feedback_alinti-onay-turu-acmaz-toren-enflasyonu.md) — ALINTI onay turu AÇMAZ — provenance damgası (`[TS]`/`[ONERI]`) onay kuyruğu değildir (tören enflasyonu)
 - ⭐ [Github actions asili queued kosu pr kapat ac](feedback_github-actions-asili-queued-kosu-pr-kapat-ac.md) — GitHub Actions koşusu saatlerce `queued` + 0 job asılı kalırsa cancel/rerun çelişkili döner; PR'ı kapat+yeniden aç (tek komutta) yeni koşu doğurur
-- ⭐ [Grup bazli genisletmede her grup kendi dali ve metodu](feedback_grup-bazli-genisletmede-her-grup-kendi-dali-ve-metodu.md) — Müşteri grubu bazlı mantığı yeni gruplara açarken her grup KENDİ WHEN dalı + KENDİ MODIFY_<GRUP> metodu alır; OR ile birleştirme / başka grubun metodunu çağırma YOK — gövde bugün kopya olsa bile
+- ⭐ [Grup bazli genisletmede her grup kendi dali ve metodu](feedback_grup-bazli-genisletmede-her-grup-kendi-dali-ve-metodu.md) — Yeni müşteri grubu = KENDİ WHEN dalı + KENDİ MODIFY_<GRUP> metodu; OR ile birleştirme YOK
 
 ### İnfra · gate · dosya yetkisi
 - **2 ders:** [tam indeks](_indeks-infra-gate.md)
-- ⛔ [Muafiyetin gerekcesi ALT-KUMEYE aitse muafiyet kor nokta olur](feedback_muafiyetin-gerekcesi-alt-kumeye-aitse-muafiyet-kor-nokta-olur.md) — Bir kapının bilinçli muafiyeti gerekçesinden GENİŞ yazılmışsa (dosya-bazlı muafiyet, gerekçe yalnız dosyanın bir bölümü için geçerli) kör noktaya döner; dokunulmazlığı yüzünden o kapının EN UZUN YAŞAYAN kör noktası olur. Düzeltmenin AÇIKLAMA metni bile o boşluktan sızabilir. Daraltma: muafiyeti satır/token bazlı yap.
-- ⛔ [Merge-safe dagitimda SATIR yalniz ONARILAN dosyaya ulasir](feedback_merge-safe-dagitimda-satir-yalniz-onarilan-dosyaya-ulasir.md) — Yeni DOSYA herkese ulasir; mevcut dosyaya eklenen SATIR yalniz yerelde DOKUNULMAMIS kopyaya (S1) ya da ozel ONARILAN dosyaya ulasir, duzenlenmis/ayirt-edilemez kopyaya ulasmaz. Dogrulamayi bos dizine degil, once eski surumle kurulmus sahte bir "mevcut makine"ye yap + negatif kontrol koy.
-- ⛔ [Tek seferlik script paylasilan modulun desenini yeniden turetmez](feedback_tek-seferlik-script-paylasilan-modulun-desenini-yeniden-turetmez.md) — O modülün yorumları senin düşeceğin tuzağın kaydıdır. Asıl kural: redundans, katmanlar BAĞIMSIZ değilse redundans değildir — ve bir katmanı düzeltmek öbürünün körlüğünü meşrulaştırmaz, GÖRÜNMEZ kılar.
+- ⛔ [Muafiyetin gerekcesi ALT-KUMEYE aitse muafiyet kor nokta olur](feedback_muafiyetin-gerekcesi-alt-kumeye-aitse-muafiyet-kor-nokta-olur.md) — Gerekçesinden GENİŞ yazılmış muafiyet kapının en uzun yaşayan kör noktası olur — muafiyeti satır/token bazlı daralt
+- ⛔ [Merge-safe dagitimda SATIR yalniz ONARILAN dosyaya ulasir](feedback_merge-safe-dagitimda-satir-yalniz-onarilan-dosyaya-ulasir.md) — Yeni DOSYA herkese ulaşır; mevcut dosyaya eklenen SATIR yalnız dokunulmamış kopyaya — doğrulamayı sahte "mevcut makine"de yap
+- ⛔ [Tek seferlik script paylasilan modulun desenini yeniden turetmez](feedback_tek-seferlik-script-paylasilan-modulun-desenini-yeniden-turetmez.md) — O modülün yorumları senin düşeceğin tuzağın kaydıdır; katmanlar BAĞIMSIZ değilse redundans değildir
 
 ### Araç · kabuk · kodlama tuzakları
 - **8 ders:** [tam indeks](_indeks-arac-tuzaklari.md)
-- ⛔ [Monitor CI izleyicisi SESSIZ kalabilir](feedback_monitor-sessiz-oldu-bash-background-ile-dogrula.md) — İzleyicinin sessizliği "iş henüz bitmedi" ile AYIRT EDİLEMEZ: iki izleyici de sıfır olayla doldu, oysa her iki CI de bitmişti. Kontrol grubu: Bash + run_in_background aynı işi iki kez yaptı. Sonucu daima bir kez doğrudan sor.
-- ⭐ [Mojibake taramasi ciplak karakter aramaz](feedback_mojibake-taramasi-ciplak-karakter-aramaz.md) — Brifinge yazılan mojibake taraması çıplak `Â`/`Ã` aramaz — Türkçede meşru (hâlâ, kâr); mojibake İKİLİ dizidir. Liderin brifing kapısı da bir kapıdır, ajan ona itaat edip doğru metni bozar
-- ⭐ [Python yazdigi liste crlf tasir xargs sessizce bosa koser](feedback_python-yazdigi-liste-crlf-tasir-xargs-sessizce-bosa-koser.md) — Windows'ta Python'un yazdığı satır listesi CRLF taşır; git/xargs'a beslenince her ad sonunda \r kalır, eşleşme tutmaz ve işlem SESSİZCE hiçbir şey yapmaz. `| wc -l` çıktıyı sayarken HATA satırlarını sayar ⇒ başarı gibi görünür.
+- ⛔ [Monitor CI izleyicisi SESSIZ kalabilir](feedback_monitor-sessiz-oldu-bash-background-ile-dogrula.md) — İzleyicinin sessizliği "iş bitmedi" ile ayırt edilemez — sonucu bir kez doğrudan sor
+- ⭐ [Mojibake taramasi ciplak karakter aramaz](feedback_mojibake-taramasi-ciplak-karakter-aramaz.md) — Mojibake taraması çıplak `Â`/`Ã` aramaz (hâlâ, kâr meşru); mojibake İKİLİ dizidir
+- ⭐ [Python yazdigi liste crlf tasir xargs sessizce bosa koser](feedback_python-yazdigi-liste-crlf-tasir-xargs-sessizce-bosa-koser.md) — Python'un yazdığı liste CRLF taşır; xargs/git'te ad sonunda \r kalır, işlem SESSİZCE boşa koşar
 - ⭐ [Tr karakter varyantli arama](feedback_tr-karakter-varyantli-arama.md) — Müşteri/metin aramasında Türkçe İ/Ş/Ç varyantı — ASCII LIKE 'yok' der (TRİGO vakası)
 
 ### SAP · ABAP · RAP
@@ -140,7 +140,7 @@
 
 ### UI · freestyle UI5
 - **6 ders:** [tam indeks](_indeks-ui.md)
-- ⭐ [Playwright pdf page margin ve thead tekrar tuzagi](feedback_playwright-pdf-page-margin-ve-thead-tekrar-tuzagi.md) — HTML→PDF (Playwright/Chromium) dört tuzak — dokümanın kendi @page{margin:0}'ı JS page.pdf({margin})'i SESSİZCE ezer; <thead> tekrarı bu zincirde çalışmaz, headerTemplate çalışır; marginTop SABİT OLMAZ — header içerikle büyüdüğü için ölçülerek türetilir (Chromium sabit ~2,4mm daha yüksek çizer); headerTemplate ZEMİN BOYAMAZ — orada mürekkep yalniz border+metinden gelir
+- ⭐ [Playwright pdf page margin ve thead tekrar tuzagi](feedback_playwright-pdf-page-margin-ve-thead-tekrar-tuzagi.md) — HTML→PDF (Playwright/Chromium) dört tuzak: belgenin @page{margin:0}'ı page.pdf margin'ini ezer · thead tekrarı çalışmaz (headerTemplate) · marginTop ölçülür · headerTemplate zemin boyamaz
 - ⭐ [Tarayici araci secimi playwright vs chrome eklentisi](feedback_tarayici-araci-secimi-playwright-vs-chrome-eklentisi.md) — İki tarayıcı aracı VAR — Playwright (deterministik KAPI) ve Claude in Chrome eklentisi (canlı GÖZ); hangisi ne zaman + eklentinin kurulum durumu
 
 ### Doküman · spec
@@ -160,8 +160,10 @@
 ### 2026-11-13 tohum terfisi (tek ders — doğrudan satır)
 - ⛔⛔ [Engellenen silmeyi kullanıcıya komut olarak verme](feedback_engellenen-silmeyi-kullaniciya-komut-olarak-verme.md) — harness'ın engellediği silme kullanıcıya hazır komut olarak verilmez; `$`'lı yol çift tırnakta boşa açılır (vaka: tüm proje kökü silindi)
 
-### 2026-11-12 tohum terfisi (konu başlıklı)
+### 2026-11-12 + 11-15 tohum terfileri (konu başlıklı)
 - **11 ders:** [tam indeks](_indeks-terfi-2026-11-12.md) — Karar 4 · Ajan 2 · Araç 2 · SAP 2 · UI 1 (tüm kullanıcılar: Türkçe · test onayı · az yorum)
+- **20 ders (11-15):** [tam indeks](_indeks-terfi-2026-11-15.md) — UI 7 · Kanıt 4 · Ajan 3 · Süreç 3 · SAP 3
+- **3 ders (11-15b):** [tam indeks](_indeks-terfi-2026-11-15b.md) — Ajan 2 · UI 1
 
 ### Araç kök-fix tarihçesi (regresyon sözlüğü)
 - **10 kayıt:** [tam indeks](_indeks-arac-kok-fixleri.md) — *"bu bug daha önce oldu mu"* sorusunun yeri; güncel kural DEĞİL
