@@ -100,9 +100,14 @@ Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile e
   --mutasyon-kati-gevsek  başlıksız/ID'siz tabloda da gevşek kimlik okuma (`BE-47 canlı PUT` eşlenir)
   --mutasyon-be01-tire    `DELETE x FROM ls-to` bileşeni `TO` sayılır (DB DELETE iç tablo diye susar)
   --mutasyon-kati-birlesik  ID'siz/başlıksız tabloda birden çok kimlik 'birleşik satır' sayılmaz (satır yok'a düşer)
-  --mutasyon-kisa-izleyen   kısaltma soneki ardından metin gelse de kabul (`BE-12, 3 dosya` → BE-3)
+  --mutasyon-kisa-izleyen   2c: sonek ardından metin/`(` gelse de hane farkına bakılmadan GRUP (`BE-12, 3 dosya` → BE-3)
   --mutasyon-aralik-tavan   aralık tavanı yok (`BE-01..5000` 5000 kimliğe açılır)
-  --mutasyon-kisa-parantez  sonekten sonra `(` gelirse kısaltma sayılmaz (`DOC-FS-01…03 (02a dahil)` ilk kimliğe eşlenir)
+  --mutasyon-aralik-grup    1: aralık (`..` `…`) liste gibi değerlendirilir (`BE-9..12 ortak kanıt` → tek kimlik)
+  --mutasyon-kisa-kapanis   2a: kapanış süsü/noktalama/hücre sonu grup kanıtı sayılmaz (`` `BE-12,3` `` → tek kimlik)
+  --mutasyon-kisa-harf      2b: harfli sonek grup kanıtı sayılmaz (`BE-10a/b ortak kanıt` → tek kimlik)
+  --mutasyon-kisa-hane      2c: eşit hane grup sayılmaz (`BE-01,03 ortak kanıt` → tek kimlik)
+  --mutasyon-kisa-nokta     `.` ardından sözcük gelse de kapanış (`FE-12 / 2. tur` → FE-2 grubu)
+  --mutasyon-kisa-sinir     sonek sınırı `(?![\w])` — `_` sözcük sayılır (`_BE-10a/b_` → tek kimlik)
 CORE-07: her kipin DÜŞMESİ BEKLENEN vektör kümesi `_BEKLENEN_DUSEN`'de PİNLİDİR ve EŞİTLİKLE
 kıyaslanır. Çıkış: 0 taban yeşil · 1 mutasyon BEKLENEN kümeyle düştü · 2 SAPMA · 3
 DOGRULANAMADI (çapa tam 1 kez eşleşmedi ya da mutant derlenmedi — "düştü" SAYILMAZ).
@@ -168,7 +173,12 @@ _GECERLI_KIP = frozenset({"--mutasyon-literal", "--mutasyon-degisen", "--mutasyo
                           "--mutasyon-kati-birlesik",
                           "--mutasyon-kisa-izleyen",
                           "--mutasyon-aralik-tavan",
-                          "--mutasyon-kisa-parantez"})
+                          "--mutasyon-aralik-grup",
+                          "--mutasyon-kisa-kapanis",
+                          "--mutasyon-kisa-harf",
+                          "--mutasyon-kisa-hane",
+                          "--mutasyon-kisa-nokta",
+                          "--mutasyon-kisa-sinir"})
 
 _MUT = {
     "--mutasyon-literal": (
@@ -364,12 +374,28 @@ _MUT = {
     "--mutasyon-kati-birlesik": (
         "(None, _id_hucresi(h[0])[1])",
         "(None, [])"),
+    # PR #444 F3/F4 (lider kuralı) — kural dalı başına bir kip
     "--mutasyon-kisa-izleyen": (
-        r"(?=\s*(?:$|\.\.|[,/…–(]))",
-        r"(?![\w])"),
-    "--mutasyon-kisa-parantez": (
-        r"(?=\s*(?:$|\.\.|[,/…–(]))",
-        r"(?=\s*(?:$|\.\.|[,/…–]))"),
+        "    return len(sonek) == len(onceki_no)",
+        "    return True"),
+    "--mutasyon-kisa-hane": (
+        "    return len(sonek) == len(onceki_no)",
+        "    return False"),
+    "--mutasyon-aralik-grup": (
+        'if ayrac in ("..", "…"):',
+        "if False:"),
+    "--mutasyon-kisa-kapanis": (
+        "if _KISA_KAPANIS.match(hucre, son):",
+        "if False:"),
+    "--mutasyon-kisa-harf": (
+        "if not sonek.isdigit():",
+        "if False:"),
+    "--mutasyon-kisa-nokta": (
+        r"|\.(?!\s*[^\W_]))",
+        r"|\.)"),
+    "--mutasyon-kisa-sinir": (
+        r"[A-Za-z])(?![^\W_])",
+        r"[A-Za-z])(?![\w])"),
     "--mutasyon-aralik-tavan": (
         "_ARALIK_TAVAN = 200 ",
         "_ARALIK_TAVAN = 10**6 "),
@@ -459,8 +485,10 @@ _BEKLENEN_DUSEN = {
     # #433/#432/#439/#438 turu (2026-11-15) — ÖLÇÜMLE pinlenecek (ilk değer = ilan edilen beklenti)
     "--mutasyon-id-sutun": {"V18"},
     "--mutasyon-id-bas": {"V17", "V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V21g", "V21h", "V21i", "V22",
-                          "V27", "V29a", "V29b", "V29c", "V29d", "V30a", "V30b"},   # PR #444: tam eşleşme açıklamalı/kısaltılmış hücreyi tanımaz
-    "--mutasyon-birlesik-esle": {"V19", "V20", "V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V22", "V29d", "V30a", "V30b"},   # PR #444: kısaltma açılsa da ilk kimliğe eşlenir
+                          "V27", "V29a", "V29b", "V29c", "V29d", "V30a", "V30b",
+        "V31a/id", "V31a/madde", "V31a/basliksiz", "V31b/id", "V31b/madde", "V31b/basliksiz", "V31c/id", "V31c/madde", "V31c/basliksiz", "V31d/id", "V31d/madde", "V31d/basliksiz", "V31e/id", "V31e/madde", "V31e/basliksiz", "V31f/id", "V31f/madde", "V31f/basliksiz", "V31g/id", "V31g/madde", "V31g/basliksiz", "V31h/id", "V31h/madde", "V31h/basliksiz", "V31i/id", "V31i/madde", "V31i/basliksiz", "V31j/id", "V31j/madde", "V31j/basliksiz", "V32a", "V32b", "V32c", "V32d", "V32e", "V32f", "V32g", "V33a/id", "V33b/id", "V33c/id", "V33d/id", "V33e/id", "V33f/id"},   # PR #444: tam eşleşme açıklamalı/kısaltılmış hücreyi tanımaz
+    "--mutasyon-birlesik-esle": {"V19", "V20", "V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V22", "V29d", "V30a", "V30b",
+        "V31a/id", "V31b/id", "V31c/id", "V31d/id", "V31e/id", "V31f/id", "V31g/id", "V31h/id", "V31i/id", "V31j/id", "V32a", "V32b", "V32c", "V32d", "V32e", "V32f", "V32g"},   # PR #444: kısaltma açılsa da ilk kimliğe eşlenir
     "--mutasyon-ts05-allow": {"DOC-TS-05/N-uzun", "DOC-TS-05/N-degisken", "DOC-TS-05/P-mesajmetni"},
     "--mutasyon-ts05-blok": {"DOC-TS-05/N-bloksuz"},
     "--mutasyon-ts05-baslik": {"DOC-TS-05/N-bitisik"},
@@ -470,15 +498,23 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-be01-ic-delete": {"BE-01/N-dellit", "BE-01/N-delto"},
     "--mutasyon-be01-ic-genis": {"BE-01/P-delwa", "BE-01/P-deltab", "BE-01/P-delparam", "BE-01/P-deltire"},
     "--mutasyon-be01-screen": {"BE-01/N-screen"},
-    "--mutasyon-kisaltma": {"V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V22", "V27", "V29d", "V30a", "V30b"},
+    "--mutasyon-kisaltma": {"V21a", "V21b", "V21c", "V21d", "V21e", "V21f", "V22", "V27", "V29d", "V30a", "V30b",
+        "V31a/id", "V31a/madde", "V31a/basliksiz", "V31b/id", "V31b/madde", "V31b/basliksiz", "V31c/id", "V31c/madde", "V31c/basliksiz", "V31d/id", "V31d/madde", "V31d/basliksiz", "V31e/id", "V31e/madde", "V31e/basliksiz", "V31f/id", "V31f/madde", "V31f/basliksiz", "V31g/id", "V31g/madde", "V31g/basliksiz", "V31h/id", "V31h/madde", "V31h/basliksiz", "V31i/id", "V31i/madde", "V31i/basliksiz", "V31j/id", "V31j/madde", "V31j/basliksiz", "V32a", "V32b", "V32c", "V32d", "V32e", "V32f", "V32g"},
     "--mutasyon-blok-devir": {"V25"},
     "--mutasyon-yabanci-baslik": {"V24"},
-    "--mutasyon-kati-gevsek": {"V23", "V24", "V25", "V28"},   # yan tablo satırı gevşek okunur → hükümsüz
+    "--mutasyon-kati-gevsek": {"V23", "V24", "V25", "V28",
+        "V33a/madde", "V33a/basliksiz", "V33b/madde", "V33b/basliksiz", "V33c/madde", "V33c/basliksiz", "V33d/madde", "V33d/basliksiz", "V33e/madde", "V33e/basliksiz", "V33f/madde", "V33f/basliksiz"},   # yan tablo satırı gevşek okunur → hükümsüz
     "--mutasyon-be01-tire": {"BE-01/P-deltire"},
-    "--mutasyon-kati-birlesik": {"V27", "V27b"},
-    "--mutasyon-kisa-izleyen": {"V29a", "V29b", "V29c"},
+    "--mutasyon-kati-birlesik": {"V27", "V27b",
+        "V31a/madde", "V31a/basliksiz", "V31b/madde", "V31b/basliksiz", "V31c/madde", "V31c/basliksiz", "V31d/madde", "V31d/basliksiz", "V31e/madde", "V31e/basliksiz", "V31f/madde", "V31f/basliksiz", "V31g/madde", "V31g/basliksiz", "V31h/madde", "V31h/basliksiz", "V31i/madde", "V31i/basliksiz", "V31j/madde", "V31j/basliksiz"},
+    "--mutasyon-kisa-izleyen": {"V29a", "V29b", "V29c", "V33a/id", "V33a/madde", "V33a/basliksiz", "V33b/id", "V33b/madde", "V33b/basliksiz", "V33c/id", "V33c/madde", "V33c/basliksiz", "V33d/id", "V33d/madde", "V33d/basliksiz", "V33e/id", "V33e/madde", "V33e/basliksiz", "V33f/id", "V33f/madde", "V33f/basliksiz"},   # F4 sahte RED
     "--mutasyon-aralik-tavan": {"V30a"},
-    "--mutasyon-kisa-parantez": {"V29d"},   # korpus: `DOC-FS-01…08 (06a/06b dahil)` grubu İLK kimliğe eşlenirdi
+    "--mutasyon-aralik-grup": {"V32a"},
+    "--mutasyon-kisa-kapanis": {"V32b", "V32c", "V32d", "V32e"},
+    "--mutasyon-kisa-harf": {"V31d/id", "V31d/madde", "V31d/basliksiz"},
+    "--mutasyon-kisa-hane": {"V31i/id", "V31i/madde", "V31i/basliksiz", "V31j/id", "V31j/madde", "V31j/basliksiz", "V32g"},
+    "--mutasyon-kisa-nokta": {"V29c", "V33f/id", "V33f/madde", "V33f/basliksiz"},
+    "--mutasyon-kisa-sinir": {"V32e", "V32f"},
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -1360,7 +1396,7 @@ def v_vektorleri(G, tmp: Path) -> None:
     dene("V28", "| BE-47 (şablon) | A | FAIL→F1 | satır 1 şablonda kaçışsız |\n" + tam35, 1,
          ["- satır yok: 1 → BE-47", "- birleşik satır: 0"],
          "KONTROL: ID'siz başlıklı tabloda açıklamalı TEK kimlik okunmaz → 'satır yok' (birleşik DEĞİL)", baslik=madde_bas)
-    # PR #444 re-gate F2-LOW: sonek yalnız hücre sonu ya da yeni ayraç izliyorsa kısaltmadır
+    # PR #444 re-gate F2-LOW: ardından metin gelen farklı haneli sonek açıklamadır, kısaltma değil (kural: V31–V33 üstü)
     for ad, hucre in (("V29a", "BE-12, 3 dosya"), ("V29b", "BE-10 – 2026-11-15 vakası"), ("V29c", "FE-12 / 2. tur")):
         mid, kim = G._id_hucresi(hucre)
         kontrol(f"{ad} NEGATİF: `{hucre}` kısaltma SAYILMAZ → tek kimlik",
@@ -1375,6 +1411,65 @@ def v_vektorleri(G, tmp: Path) -> None:
     mid, kim = G._id_hucresi("BE-1..201")
     kontrol("V30b KONTROL sınır: `BE-1..201` (fark 200 = tavan) açılır → 201 kimlik",
             mid is None and len(kim) == 201, f"mid={mid} kimlik sayısı={len(kim)}")
+    # PR #444 F3/F4 (lider kuralı, belirsizlikte GRUP): 1 aralık daima grup · 2a sonek ardından hücre sonu / ayraç /
+    # kapanış süsü-noktalama (önünde boşluk olabilir; `.` yalnız ardından sözcük gelmiyorsa) → grup · 2b harfli sonek
+    # → grup · 2c ardından metin ya da `(` → hane eşitse grup, değilse tek kimlik + açıklama.
+    # Biçim × tablo türü UÇTAN UCA: satır 1 biçim hücresi, satır 2 (grupta) ikinci kimliğin kendi satırı. Grupta İLK
+    # kimlik yalnız birleşik satırda geçer → `birleşik satır: 1 → <ilk>` (F3 sahte PASS'ında ilk kimlik eşlenir, rc 0).
+    uk = tmp / "verify-bicim"
+    dosyalari_yaz(uk, {CLS: "CLASS zcl_t IMPLEMENTATION.\nENDCLASS.\n", JS: "sap.ui.define([], function () {});\n",
+                       "d/docs/FS-T.md": "# FS\n\nmetin\n"})
+    turu = {"BE": ("backend", CLS), "FE": ("frontend", JS), "DOC": ("doc", "d/docs/FS-T.md")}
+    tablolar = (("id", "| ID | Sınıf | Hüküm | Kanıt |\n|---|---|---|---|\n"),
+                ("madde", "| Madde | Sınıf | Hüküm | Kanıt |\n|---|---|---|---|\n"),
+                ("basliksiz", "Hüküm tablosu:\n\n"))
+    sag = " | C | UYGULANMAZ | bu madde bu dosyaya uygulanmaz çünkü sınıf boş |\n"
+
+    def bicim(ad, hucre, ids, grup):
+        kind, dosya = turu[ids[0].split("-")[0]]
+        for tad, bas_ in tablolar:
+            r = uk / f"{ad}-{tad}.md"
+            r.write_bytes((bas_ + f"| {hucre}{sag}" + (f"| {ids[1]}{sag}" if grup else "")).encode("utf-8"))
+            rc, out = kos(G, ["--repo", str(uk), "--files", dosya, "--kind", kind, "--ids", ",".join(ids),
+                              "--verify-report", str(r)])
+            if grup:
+                brc, isaret, ne = 1, ["- satır yok: 0", f"- birleşik satır: 1 → {ids[0]}"], "birleşik satır"
+            elif tad == "id":
+                brc, isaret, ne = 0, ["- satır yok: 0", "- birleşik satır: 0"], "eşlendi (tek kimlik + açıklama)"
+            else:
+                brc, isaret, ne = 1, [f"- satır yok: 1 → {ids[0]}", "- birleşik satır: 0"], "satır yok (katı tablo)"
+            kontrol(f"{ad}/{tad} `{hucre}` → {ne}", rc == brc and all(x in out for x in isaret),
+                    f"rc={rc} beklenen={brc} · {out[out.find('### --verify'):][:220]!r}")
+
+    for ad, hucre, ids in (("V31a", "`BE-10a/b`", ["BE-10a", "BE-10b"]),           # F3 (kapı ölçümü)
+                           ("V31b", "**BE-10a/b**", ["BE-10a", "BE-10b"]),
+                           ("V31c", "BE-10a/b:", ["BE-10a", "BE-10b"]),
+                           ("V31d", "BE-10a/b ortak kanıt", ["BE-10a", "BE-10b"]),   # 2b
+                           ("V31e", "BE-10a/b.", ["BE-10a", "BE-10b"]),
+                           ("V31f", "BE-10a/b · canlı", ["BE-10a", "BE-10b"]),
+                           ("V31g", "BE-22..25:", ["BE-22", "BE-25"]),
+                           ("V31h", "BE-22..25 *(ATC)*", ["BE-22", "BE-25"]),
+                           ("V31i", "BE-01,03 ortak kanıt", ["BE-01", "BE-03"]),     # 2c eşit hane
+                           ("V31j", "DOC-CR-04/05 ZSD001 zinciri", ["DOC-CR-04", "DOC-CR-05"])):   # korpus biçimi (2c eşit hane)
+        bicim(ad, hucre, ids, True)
+    for ad, hucre, ids in (("V33a", "BE-12 / 2 (ikinci tur)", ["BE-12"]),            # F4 (2c farklı hane)
+                           ("V33b", "BE-12 – 3 (ATC)", ["BE-12"]),
+                           ("V33c", "BE-12, 3 (dosya)", ["BE-12"]),
+                           ("V33d", "FE-12 / 2 (tur)", ["FE-12"]),
+                           ("V33e", "BE-12, 3 dosya", ["BE-12"]),                    # F2
+                           ("V33f", "FE-12 / 2. tur", ["FE-12"])):                   # F2 + `.` sıra sayısı
+        bicim(ad, hucre, ids, False)
+    # Kural dalı başına birim vektör (her dalın mutasyon kipi bunları düşürür)
+    for ad, hucre, beklenen in (
+            ("V32a", "BE-9..12 ortak kanıt", ["BE-9", "BE-10", "BE-11", "BE-12"]),   # 1: aralık, hane farkına bakılmaz
+            ("V32b", "`BE-12,3`", ["BE-12", "BE-3"]),                                 # 2a: kapanış süsü
+            ("V32c", "BE-12, 3 · canlı", ["BE-12", "BE-3"]),                          # 2a: önünde boşluklu kapanış
+            ("V32d", "BE-01,3.", ["BE-01", "BE-3"]),                                  # 2a: sonda `.`
+            ("V32e", "_BE-12,3_", ["BE-12", "BE-3"]),                                 # 2a: `_` kapanış (sınır dahil)
+            ("V32f", "_BE-10a/b_", ["BE-10a", "BE-10b"]),                             # sınır: `_` sözcük sayılmaz
+            ("V32g", "BE-01,03. ortak", ["BE-01", "BE-03"])):                         # `.`+sözcük → 2c eşit hane
+        mid, kim = G._id_hucresi(hucre)
+        kontrol(f"{ad} `{hucre}` → grup {beklenen}", mid is None and kim == beklenen, f"mid={mid} kimlikler={kim}")
     rc, out = kos(G, taban + ["--verify-report", str(kok / "yok-rapor.md")])
     kontrol("V9 okunamayan rapor → exit 2 [PROGRAM KOŞMADI] (eksiklik DEĞİL)",
             rc == 2 and "[PROGRAM KOŞMADI]" in out, f"rc={rc} {out[-160:]!r}")

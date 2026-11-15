@@ -2568,9 +2568,24 @@ _ID_SUTUNU = re.compile(r"\W*ID\W*", re.I)
 _ID_TAM = re.compile(r"\**`?((?:BE|FE|DOC)-[0-9A-Za-z-]+)`?\**")      # başlıksız tablo: hücre YALNIZ kimlik
 # Kısaltılmış birleşik yazım (PR #444 F1): tam kimliği izleyen ayraç + çıplak sonek —
 # `BE-10a/b` · `BE-01,03,10a` · `FE-02, 03, 04` · `BE-22..25` · `DOC-KD-01…16` · `BE-52/53/54`.
-# Sonek yalnız hücre sonu, YENİ ayraç ya da `(` izliyorsa kabul (`DOC-FS-01…08 (06a dahil)` grup) (`BE-12, 3 dosya` · `BE-10 – 2026-11-15` kısaltma DEĞİL).
-_ID_KISA = re.compile(r"\s*(\.\.|[,/…–])\s*(\d+[A-Za-z]?|[A-Za-z])(?=\s*(?:$|\.\.|[,/…–(]))")
+# Sonek bir sözcüğün parçası olamaz (`BE-12 / ATC` → `A` sonek değil; `_` kapanış süsüdür, sözcük sayılmaz).
+# Grup mu kararı `_kisa_grup_mu`'da — belirsizlikte GRUP (sahte red yüksek sesle çıkar, sahte PASS sessizdir).
+_ID_KISA = re.compile(r"\s*(\.\.|[,/…–])\s*(\d+[A-Za-z]?|[A-Za-z])(?![^\W_])")
+# 2a: sonek ardından (boşluk olabilir) hücre sonu · yeni ayraç · kapanış süsü/noktalama. `.` yalnız ardından
+# sözcük gelmiyorsa kapanıştır — `FE-12 / 2. tur` Türkçe sıra sayısıdır, metin sayılır (2c'ye düşer).
+_KISA_KAPANIS = re.compile(r"\s*(?:$|\.\.|[,/…–`*_\]:·—)]|\.(?!\s*[^\W_]))")
 _ARALIK_TAVAN = 200      # bundan geniş aralık AÇILMAZ: yalnız iki uç kimlik → birleşik satır (rc 1 korunur)
+
+
+def _kisa_grup_mu(ayrac: str, sonek: str, onceki_no: str, hucre: str, son: int) -> bool:
+    """Kısaltılmış sonek grubu mu, yoksa tek kimliği izleyen açıklama mı (PR #444 F3/F4 lider kuralı)."""
+    if ayrac in ("..", "…"):                       # 1: aralık daima grup (hane genişliğine bakılmaz)
+        return True
+    if _KISA_KAPANIS.match(hucre, son):            # 2a: hücre sonu / yeni ayraç / kapanış süsü-noktalama
+        return True
+    if not sonek.isdigit():                        # 2b: harfli sonek (`10a/b` · `06a/06b`)
+        return True
+    return len(sonek) == len(onceki_no)            # 2c: ardından metin ya da `(` → hane eşitse grup
 _ID_PARCA = re.compile(r"(.*-)(\d+)([A-Za-z]?)$")
 
 
@@ -2581,12 +2596,14 @@ def _kisaltma_ac(bas: str, hucre: str, konum: int) -> list[str]:
         m = _ID_KISA.match(hucre, konum)
         if not m:
             return out
-        konum = m.end()
         ayrac, sonek = m.group(1), m.group(2)
         p = _ID_PARCA.match(onceki)
         if not p:
             return out
         onek, no, harf = p.groups()
+        if not _kisa_grup_mu(ayrac, sonek, no, hucre, m.end()):
+            return out                                       # `BE-12, 3 dosya` → tek kimlik + açıklama
+        konum = m.end()
         if sonek.isalpha():                                  # `BE-10a/b` → BE-10b
             yeni = [f"{onek}{no}{sonek}"]
         elif ayrac in ("..", "…", "–") and sonek.isdigit() and not harf and int(sonek) - int(no) > _ARALIK_TAVAN:
@@ -2704,7 +2721,11 @@ def rapor_dogrula(rapor: Path, satirlar: list[Satir]) -> int:
     print("  (kimlik: başlığında `ID` adlı sütun olan tabloda o sütunun başındaki tek kimlik — ardındaki "
           "açıklama/bağlantı yok sayılır; ID sütunsuz ya da başlıksız tabloda ilk hücre YALNIZ kimlikse okunur, "
           "`BE-04 (decimal)` orada satır yok sayılır · birleşik satır = bir hücrede birden çok kimlik (`BE-10a / BE-10b` · "
-          "`BE-10a/b` · `BE-22..25`), her tablo türünde: eşlenmez, madde başına ayrı satır yazın · hüküm YALNIZ hüküm sütunundan okunur · bağsız FAIL = `FAIL→F<n>` "
+          "`BE-10a/b` · `BE-22..25`), her tablo türünde: eşlenmez, madde başına ayrı satır yazın · kısaltma: aralık (`..` `…`) "
+          "daima grup; `,` `/` `–` soneki harfliyse ya da ardından hücre sonu, yeni ayraç veya kapanış süsü/noktalama "
+          "(`` ` `` `*` `_` `]` `:` `.` `·` `—` `)`; `.` ardından sözcük gelmiyorsa) geliyorsa grup; ardından metin ya da `(` "
+          "geliyorsa hane eşitse grup (`BE-01,03 ortak kanıt`), değilse tek kimlik + açıklama (`BE-12, 3 dosya` · "
+          "`FE-12 / 2. tur`) · hüküm YALNIZ hüküm sütunundan okunur · bağsız FAIL = `FAIL→F<n>` "
           "yerine çıplak FAIL · ELLE = yargı doldurulmamış · ÇELİŞKİ = program A-FAIL, rapor "
           "PASS/WARN/UYGULANMAZ/ÖLÇÜLEMEDİ — itiraz yolu ÇÜRÜTÜLDÜ+kanıt)")
     if curutulen:
