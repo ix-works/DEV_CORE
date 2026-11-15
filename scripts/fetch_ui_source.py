@@ -116,7 +116,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Tek kaynak: bağlantı sözleşmesi, BSP adı, satır sonu ve preload kıyası deploy_ui'da yaşar.
-from deploy_ui import (PRELOAD, REPO, SATIR_SONU, bsp_name, preload_karsilastir,  # noqa: E402
+from deploy_ui import (BSP_ADI_BEKLENEN, PRELOAD, REPO, SATIR_SONU, bsp_name, preload_karsilastir,  # noqa: E402
                        read_conn, run, satir_sonu_normalize, sha)
 from verify_ui_static_assets import TEXT_SUFFIXES, _U_KACIS  # noqa: E402
 
@@ -808,7 +808,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             bsp = a.bsp or bsp_name(Path(a.app_dir))
             if not bsp:
-                print(f"[KULLANIM] {a.app_dir}/ui5-deploy.yaml'da BSP adı (Z…) bulunamadı", file=sys.stderr)
+                print(f"[KULLANIM] {a.app_dir}/ui5-deploy.yaml'da {BSP_ADI_BEKLENEN} bulunamadı", file=sys.stderr)
                 return 2
             if not _BSP_ADI.match(bsp):
                 print(f"[KULLANIM] geçersiz BSP adı: {bsp!r}", file=sys.stderr)

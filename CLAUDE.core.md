@@ -104,7 +104,9 @@
 - **⛔ WORKTREE YAŞAM DÖNGÜSÜ — kanonik yol + kim açar + gün-sonu denetimi (2026-08-29, kayıt #80):**
   1. **KANONİK YOL (yol icat etme):** `<proje.parent>/.wt/<proje-adı>/<dal-etiketi>`.
      Açma **tek komutla**: `python core/scripts/team_setup.py --wt-ac <dal>` — yolu **kendisi
-     üretir** (`--wt-yolu <dal>` yalnız basar). *(Vaka 2026-08-28: yol her oturumda yeniden
+     üretir** (`--wt-yolu <dal>` yalnız basar). Dal yerelde varsa mevcut dalı açar; yeni dalı main
+     dışından açmak için `--wt-taban refs/...` (tam ref ya da tam SHA) — böyle bir worktree
+     `--wt-denetim`de ALARM verebilir (denetim main'e karşıdır). *(Vaka 2026-08-28: yol her oturumda yeniden
      icat edildiği için tek makinede **4 artık worktree / 4 farklı adlandırma**, en eskisi
      3 haftalık; ikisi git'e kayıtsız yetimdi.)*
      ⭐ **Kök neden repo DIŞINDA:** repo kökünden `rglob`/`os.walk` yapan araçlar (statusline,

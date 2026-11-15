@@ -28,7 +28,13 @@ WORKTREE YAŞAM DÖNGÜSÜ (2026-08-29 — kayıt #80):
   ⭐ Kök her reponun DIŞINDADIR: repo kökünden `rglob`/`os.walk` yapan araçlar (statusline,
      validator'lar, behavior_manifest) worktree kopyalarına YAPISAL olarak ulaşamaz — aynı
      hata sınıfı (bayat kopya taranması) mekanik olarak imkânsızlaşır.
-  --wt-ac DAL             : kanonik yolda worktree aç + provizyonla (çağıran PATH üretmez)
+  --wt-ac DAL             : kanonik yolda worktree aç + provizyonla (çağıran PATH üretmez).
+                            Dal yerelde VARSA mevcut dal açılır; yoksa tabandan yeni dal.
+                            Mevcut dal origin/main'i içermiyorsa [UYARI] (bayat olabilir;
+                            bloklamaz — yeni iş için yeni dal adı).
+  --wt-taban REF          : --wt-ac yeni dal tabanı (TAM ref/tam SHA; varsayılan
+                            refs/remotes/origin/main). --wt-denetim main'e karşı ölçer ⇒
+                            main dışı tabandan açılan worktree denetimde ALARM verebilir.
   --wt-yolu DAL           : kanonik yolu yalnız BAS (script'ler için)
   --wt-denetim            : GÜN-SONU süpürgesi — kayıtsız yetim · İÇERİK karşılaştırmasıyla
                             main'e gitmemiş iş (`git cherry` yalnız ek sinyal; Issue #280)
@@ -44,6 +50,7 @@ import difflib
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -1177,6 +1184,8 @@ def wt_denetim(proje: Path) -> int:
 
     Cikis: 0 = temiz · 1 = OPERATOR MUDAHALESI gerek (yetim / main'e gitmemis is / kirli agac).
     ⛔ Hicbir sey SILMEZ — silme ayri ve acik bir komuttur (`--wt-kapat`).
+    ② hukmu BILINCLI olarak `refs/heads/main`e karsidir: `--wt-taban` ile main DISI bir
+    tabandan (entegrasyon dalindan) acilan worktree burada ALARM verebilir (Issue #437).
     """
     say(INFO, f"worktree denetimi — proje={proje}  kanonik kok={wt_kok(proje)}")
     bulgu = 0
@@ -1411,23 +1420,103 @@ def wt_kapat(proje: Path, hedef: str, zorla: bool = False) -> bool:
     return True
 
 
-def wt_ac(proje: Path, dal: str, taban: str = "refs/remotes/origin/main") -> bool:
+_TAM_SHA = re.compile(r"[0-9a-f]{40}([0-9a-f]{24})?\Z")
+
+
+def wt_ac(proje: Path, dal: str, taban: str = "refs/remotes/origin/main",
+          taban_verildi: bool = False) -> bool:
     """Kanonik yolda worktree AC + provizyonla. Cagiran PATH vermez — yol turetilir.
 
     Q349: taban TAM ref adiyla. `origin/main` ADLI bir tag varsa kisa ad belirsizlesir
     (olculdu 2026-11-02, git 2.54: `worktree add ... origin/main` → `fatal: ambiguous
     object name`, exit 255; tam ref ile upstream izleme `refs/heads/main` aynen kurulur).
+
+    Issue #437 (2026-11-15):
+      · `--wt-taban REF` → `taban` (varsayilan AYNI). Yalniz TAM ref (`refs/...`) ya da tam
+        SHA kabul edilir (Q349 gerekcesi: kisa ad tag'le golgelenir) ve `REF^{commit}`
+        cozulmezse hicbir sey yaratilmaz.
+      · Dal YERELDE zaten varsa `-b`'siz acilir (mevcut dal worktree'ye alinir). Eskiden
+        `-b` kosulsuzdu → `fatal: a branch named '<dal>' already exists` (entegrasyon dalinin
+        KENDISI icin worktree acilamiyordu). Dal varken `--wt-taban` da verilmisse ⇒ FAIL
+        (mevcut dal tabandan yeniden dallanmaz; sessizce yok saymak yaniltirdi).
+        Mevcut dal acildiktan sonra `_bayat_dal_uyarisi` (PR #445 kapisi F2): ucu origin/main'i
+        icermiyorsa [UYARI] — bloklamaz.
+        Mevcut dal KISA adla verilir: `refs/heads/<dal>` verilseydi git HEAD'i AYIRIRDI
+        (olculdu git 2.54: detached). Ayni adli tag varken de kisa ad DALI secer (olculdu:
+        HEAD = refs/heads/<dal> ucu); yine de sonrasinda HEAD dogrulanir (fail-closed).
+      ⚠ `--wt-denetim` ② hukmu bilincli olarak `refs/heads/main`e karsidir: main DISI bir
+        tabandan (entegrasyon dalindan) acilan worktree denetimde ALARM verebilir.
     """
     yol = wt_yolu(proje, dal)
     if yol.exists():
         say(FAIL, f"zaten var: {yol}"); return False
-    yol.parent.mkdir(parents=True, exist_ok=True)
     _git(proje, "fetch", "-q", "origin")
-    r = _git(proje, "worktree", "add", "-b", dal, str(yol), taban)
+    dal_ref = f"refs/heads/{dal}"
+    dal_var = _git(proje, "rev-parse", "--verify", "-q", f"{dal_ref}^{{commit}}").returncode == 0
+    if dal_var and taban_verildi:
+        say(FAIL, f"dal '{dal}' yerelde ZATEN VAR — --wt-taban yalniz YENI dal icindir "
+                  f"(mevcut dali acmak icin --wt-taban'siz kos)"); return False
+    if not dal_var:
+        if not (taban.startswith("refs/") or _TAM_SHA.match(taban)):
+            say(FAIL, f"--wt-taban TAM ref olmali (refs/heads/<dal> · refs/remotes/origin/<dal>) "
+                      f"ya da tam SHA: {taban!r} (kisa ad ayni adli tag'le golgelenir — Q349)")
+            return False
+        if _git(proje, "rev-parse", "--verify", "-q", f"{taban}^{{commit}}").returncode != 0:
+            say(FAIL, f"taban cozulemedi: {taban} (rev-parse --verify {taban}^{{commit}})"); return False
+    yol.parent.mkdir(parents=True, exist_ok=True)
+    if dal_var:
+        r = _git(proje, "worktree", "add", str(yol), dal)
+    else:
+        r = _git(proje, "worktree", "add", "-b", dal, str(yol), taban)
     if r.returncode != 0:
         say(FAIL, f"git worktree add: {(r.stderr or r.stdout).strip()[:200]}"); return False
-    say(OK, f"worktree acildi: {yol} (dal={dal}, taban={taban})")
+    bas = _git(yol, "symbolic-ref", "-q", "HEAD").stdout.strip()
+    if bas != dal_ref or (_git(yol, "rev-parse", "HEAD").stdout.strip()
+                          != _git(proje, "rev-parse", dal_ref).stdout.strip()):
+        say(FAIL, f"worktree acildi ama HEAD '{dal_ref}' DEGIL (HEAD={bas or 'AYRIK'}) — elle incele: {yol}")
+        return False
+    say(OK, f"worktree acildi: {yol} (dal={dal}, "
+            + ("MEVCUT dal" if dal_var else f"taban={taban}") + ")")
+    if dal_var:
+        _bayat_dal_uyarisi(proje, dal_ref)
     return provision_worktree(yol, proje)
+
+
+_GUNCEL_TABAN = "refs/remotes/origin/main"
+
+
+def _bayat_dal_uyarisi(proje: Path, dal_ref: str) -> None:
+    """Mevcut dal acildiginda ucu `origin/main`i ICERMIYORSA acik UYARI (BLOKLAMAZ).
+
+    PR #445 kapisi F2 (2026-11-15, lider karari): `--wt-kapat` yerel dali SILMEZ ⇒ squash-merge
+    edilmis eski bir dal adi yeniden `--wt-ac` ile verilince worktree BAYAT uca oturur (CLAUDE.core
+    §1.1 GIT "acik baslangic noktasi" sinifi). Mevcut dali acmak Issue #437'nin istedigi
+    davranistir, o yuzden engellenmez; yalniz gorunur kilinir.
+    ⚠ Buradaki `merge-base --is-ancestor` SORUSU, `--wt-denetim`'in yasakladigi soru DEGILDIR:
+    denetim "dal main'e girdi mi" diye sorar (squash-merge'de yaniltir). Burada sorulan
+    "dalin ucu guncel main'i iceriyor mu"dur — squash-merge edilmis eski dal tam da bu soruda
+    HAYIR verir (istenen sonuc). main'den yeni acilmis dal EVET verir.
+    """
+    r = _git(proje, "merge-base", "--is-ancestor", _GUNCEL_TABAN, dal_ref)
+    if r.returncode == 0:
+        return
+    if r.returncode == 1:
+        # Ikinci soru (re-gate onerisi ①): GERISINDE (dal ucu origin/main'in atasi — dalin isi
+        # zaten main'de, yalniz ilerletilmemis) ile AYRIK (ortak atadan sonra iki yanda da commit —
+        # squash-merge edilmis eski dalin imzasi) ayrilir; "YENI dal adi" onerisi YALNIZ ayrikta.
+        r2 = _git(proje, "merge-base", "--is-ancestor", dal_ref, _GUNCEL_TABAN)
+        if r2.returncode == 0:
+            say(WARN, f"[UYARI] dal '{dal_ref}' {_GUNCEL_TABAN}'i ICERMIYOR: GERISINDE (ucu "
+                      f"{_GUNCEL_TABAN}'in atasi) — ise baslamadan once dali {_GUNCEL_TABAN}'e ilerlet.")
+        elif r2.returncode == 1:
+            say(WARN, f"[UYARI] dal '{dal_ref}' {_GUNCEL_TABAN}'i ICERMIYOR: AYRIK (iki yanda da "
+                      f"farkli commit) — squash-merge edilmis eski dal olabilir; yeni is icin YENI dal adi kullan.")
+        else:
+            say(WARN, f"[UYARI] dal '{dal_ref}' {_GUNCEL_TABAN}'i ICERMIYOR; gerisinde/ayrik ayrimi "
+                      f"OLCULEMEDI ({(r2.stderr or r2.stdout).strip()[:120]}) — bayat olabilir, elle kontrol et.")
+        return
+    say(WARN, f"[UYARI] dal tazeligi OLCULEMEDI ({_GUNCEL_TABAN} ↔ {dal_ref}: "
+              f"{(r.stderr or r.stdout).strip()[:160]}) — dal bayat olabilir, elle kontrol et.")
 
 
 def npm_clis() -> None:
@@ -1534,7 +1623,13 @@ def main() -> int:
     ap.add_argument("--provision-worktree", metavar="PATH", nargs="?", const="<CWD>",
                     help="D16 provizyonu. PATH verilmezse cwd (bir worktree ICINDE olmali).")
     ap.add_argument("--wt-ac", metavar="DAL",
-                    help="Kanonik yolda (<proje.parent>/.wt/<proje>/<dal>) worktree AC + provizyonla.")
+                    help="Kanonik yolda (<proje.parent>/.wt/<proje>/<dal>) worktree AC + provizyonla. "
+                         "Dal yerelde varsa MEVCUT dal acilir (origin/main'i icermiyorsa [UYARI] — bayat "
+                         "olabilir, bloklamaz); yoksa --wt-taban'dan yeni dal.")
+    ap.add_argument("--wt-taban", metavar="REF",
+                    help="--wt-ac YENI dal tabani — TAM ref (refs/...) ya da tam SHA "
+                         "(varsayilan refs/remotes/origin/main). Uyari: --wt-denetim main'e "
+                         "karsi olcer; main disi tabandan acilan worktree denetimde ALARM verebilir.")
     ap.add_argument("--wt-yolu", metavar="DAL",
                     help="Kanonik worktree yolunu BAS (script'ler icin; hicbir sey yaratmaz).")
     ap.add_argument("--wt-denetim", action="store_true",
@@ -1573,7 +1668,11 @@ def main() -> int:
         return wt_denetim(proje)
     if a.wt_kapat:
         return 0 if wt_kapat(proje, a.wt_kapat, zorla=a.zorla) else 1
+    if a.wt_taban and not a.wt_ac:
+        say(FAIL, "--wt-taban yalniz --wt-ac ile kullanilir"); return 2
     if a.wt_ac:
+        if a.wt_taban:
+            return 0 if wt_ac(proje, a.wt_ac, a.wt_taban, taban_verildi=True) else 1
         return 0 if wt_ac(proje, a.wt_ac) else 1
     if a.provision_worktree is not None:
         if a.provision_worktree == "<CWD>":

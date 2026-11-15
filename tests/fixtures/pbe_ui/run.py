@@ -144,8 +144,12 @@ MUTASYONLAR = {
     "--mutasyon-kapsam-cozulmus": (PBE, "    ps = _sade(p)\n", "    ps = _cozulmus(p)\n"),
     # B — damga çıktısı store/kök basmaz (cwd'ye düşen kökte yanıltıcı "damgalandı")
     "--mutasyon-damga-yeri-yok": (FUS, '    s = f"store={store} · anahtar kökü={REPO}"\n', '    return ""\n'),
-    # B — env boşken proje kökünden koşulsa da ⚠ basılır (ajan Bash'inde her koşumda gürültü)
-    "--mutasyon-uyari-hep": (FUS, ' and not (Path(REPO) / "project.yaml").is_file():\n', ":\n"),
+    # B — env boşken proje kökünden koşulsa da ⚠ basılır (ajan Bash'inde her koşumda gürültü).
+    # Çapa #448'den sonra `(kok_wt or not project.yaml)` koşulunun tamamıdır (eski çapa 0 kez geçiyordu →
+    # KURULAMADI). Kök koşulu bütünüyle `True` olur = "uyarı her zaman". kok_wt dalının KENDİ kipi
+    # pbe_worktree_damga `--mutasyon-uyari-eski`dedir; burada ayrı kip açılmadı.
+    "--mutasyon-uyari-hep": (FUS, '            and (kok_wt or not (Path(REPO) / "project.yaml").is_file())):\n',
+                             "            and True):  # MUTASYON\n"),
     # B — kök DIŞI webapp reddi geri gelir (bug gate HIGH: kapı bloklar, damga yolu yok = kalıcı kilit)
     "--mutasyon-kok-disi-red": (FUS, "            pbe = ui_eklenti_modulu()\n",
                                 "            yerel_kok.resolve().relative_to(REPO.resolve())\n"

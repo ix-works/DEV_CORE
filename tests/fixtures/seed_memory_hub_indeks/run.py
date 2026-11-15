@@ -20,6 +20,13 @@ description'dan kayit olur) seed icin "var" DEGILDIR — N2 bunu civiller. Hub-D
 dosyasindaki `[[wiki]]` de "indeks" sayilmaz (C-MEM-01 onu erisilebilir sayar; seed yine
 satir ekler = zararsiz fazlalik) — N3 bu siniri belgeler.
 
+Issue #430 (2026-11-15): Feedback basligi SATIR olarak bulunur (`## Feedback — konu`, sonda
+bosluk, CRLF, EOF'ta yeni satirsiz; `## Feedbacks` baska basliktir) -> SAHNE 3 (8 varyant x 5
+vektor; eski kodda `— konu`/bosluk/EOF/`Feedbacks` varyantlarinda ekleme NO-OP iken
+"indekse eklendi" basiliyordu). "indekse eklendi" ve ozet `[OK]` satiri yalniz gercekten
+yapilani soyler -> SAHNE 4 (ekleme ENJEKSIYONLA etkisiz kilinir; durust rapor yalniz gercek
+basarisizlikta olculebilir). Eski surum `--seed-kaynak` ile koşulunca sahne 4 kurulamaz (exit 2).
+
 Sandbox: gercek `scripts/seed_memory.py` + `build_recall_index.py` + `utils/` bir gecici
 core kopyasina alinir; seed dizini sentetiktir. Mutasyonlar YALNIZ sandbox kopyasina yazilir
 (gercek kaynak kirlenmez).
@@ -87,7 +94,68 @@ MUTLAR = {
         "    var_olan = _recall.metin_linkleri(metin)",
         "    var_olan = _recall.metin_linkleri(metin) | {p.name for p in target.glob('*.md')}"
         "  # MUTASYON"),
+    # --- Issue #430 (2026-11-15): baslik SATIR olarak bulunur + basari eylemden SONRA ---
+    # ekleme eski tam-satir replace'e doner (baslik varyantlarinda NO-OP) -> H* kirmizi
+    "--mutasyon-eski-ekleme": ("S",
+        '            yeni = (metin[:son] + "\\n\\n" + blok + ("\\n" if son == len(metin) else "")\n'
+        "                    + metin[son:])",
+        '            yeni = metin.replace("## Feedback\\n", "## Feedback\\n\\n" + blok + "\\n", 1)'
+        "  # MUTASYON"),
+    # baslik tam satira daraltilir (`## Feedback — konu` taninmaz -> ikinci baslik acilir)
+    "--mutasyon-tam-satir-baslik": ("S",
+        'FEEDBACK_BASLIK_RE = re.compile(r"^## Feedback\\b[^\\n]*$", re.MULTILINE)',
+        'FEEDBACK_BASLIK_RE = re.compile(r"^## Feedback$", re.MULTILINE)  # MUTASYON'),
+    # "indekse eklendi" degisiklik olculmeden yazilir (Issue #430'un sahte basarisi)
+    "--mutasyon-basari-once": ("S",
+        '            islem.append(f"indekse eklendi: {ad}" if ad in sonra',
+        '            islem.append(f"indekse eklendi: {ad}" if True  # MUTASYON\n'),
+    # ozet eklenemeyen satiri gormez -> "[OK] tohumlandi/onarildi" basilir
+    "--mutasyon-ozet-uyari-yok": ("S",
+        "    elif elle or index_uyari:",
+        "    elif elle:  # MUTASYON"),
+    # ozet ne yapildigini saymaz (eski genel cumle)
+    "--mutasyon-ozet-sayim-yok": ("S",
+        '"\\n[OK] Feedback memory tohumlandı/onarıldı: " + " · ".join(yapilan)',
+        '"\\n[OK] Feedback memory tohumlandı/onarıldı: " + ""  # MUTASYON\n'
+        '                  '),
 }
+
+# #430 ENJEKSIYON (sahne 4): ekleme blogu BOSALTILIR -> satir gercekten eklenemez. Durust
+# raporlama ancak gercek bir basarisizlikta gorulur; temiz kodda ekleme hic basarisiz olmaz.
+ENJEKSIYON = ('        blok = "\\n".join(eklenecek)\n',
+              '        blok = ""  # ENJEKSIYON: ekleme etkisiz\n')
+
+# #430 baslik varyantlari: (ad, MEMORY.md baytlari). Hepsinde 7 seed eklenmeli ve satirlar
+# ILK Feedback basliginin altina (bir sonraki `## ` basligindan once) dusmeli.
+_GOVDE = "- [Kok](feedback_kok.md) — var\n"
+BASLIK_VARYANTLARI = [
+    ("H-tam (kontrol)", f"# M\n\n## Feedback\n\n{_GOVDE}\n## Diger\n\n- x\n".encode()),
+    ("H-ek-metin", f"# M\n\n## Feedback — konu indeksleri\n\n{_GOVDE}\n## Diger\n\n- x\n".encode()),
+    ("H-sonda-bosluk", f"# M\n\n## Feedback \n\n{_GOVDE}\n## Diger\n\n- x\n".encode()),
+    ("H-crlf-ek-metin", f"# M\n\n## Feedback — x\n\n{_GOVDE}\n## Diger\n\n- x\n"
+     .replace("\n", "\r\n").encode()),
+    ("H-crlf-tam", f"# M\n\n## Feedback\n\n{_GOVDE}".replace("\n", "\r\n").encode()),
+    ("H-eof-yeni-satirsiz", f"# M\n\n{_GOVDE}\n## Feedback".encode()),
+    ("H-iki-baslik (ilk ek metinli)", f"# M\n\n## Feedback — a\n\n{_GOVDE}\n## Feedback\n\n- y\n"
+     .encode()),
+    ("H-feedbacks-baska-baslik", f"# M\n\n## Feedbacks\n\n{_GOVDE}".encode()),
+]
+
+
+class _SahneAtla(Exception):
+    pass
+
+
+def _ilk_feedback_bolumu(metin: str) -> tuple[int, int]:
+    """(baslik satiri, bolum sonu) — test kendi tanimini kullanir (kod regex'ine BAKMAZ)."""
+    satirlar = metin.splitlines()
+    bas = next((i for i, s in enumerate(satirlar)
+                if s == "## Feedback" or s.startswith("## Feedback ")), -1)
+    if bas < 0:
+        return -1, -1
+    son = next((i for i in range(bas + 1, len(satirlar)) if satirlar[i].startswith("## ")),
+               len(satirlar))
+    return bas, son
 
 SEED_ADLARI = ["feedback_kok.md", "feedback_hub-md.md", "feedback_hub-wiki.md",
                "feedback_hub-duzyazi.md", "feedback_mm-wiki.md", "feedback_yok.md",
@@ -141,6 +209,7 @@ def main() -> int:
         seed_kaynak = Path(arg[arg.index("--seed-kaynak") + 1])
 
     tmp = Path(tempfile.mkdtemp(prefix="seed_hub_"))
+    kurulamadi: list[str] = []
     sonuc: list[tuple[str, bool, str]] = []
 
     def ekle(ad, kosul, aciklama=""):
@@ -248,6 +317,70 @@ def main() -> int:
         ekle("B1 hub'siz hedef: MEMORY.md disindaki 7 seed eklenir, `## Feedback` acilir",
              rc4 == 0 and eklenen2 == set(SEED_ADLARI) - {"feedback_kok.md"}
              and "\n## Feedback\n" in mm2, f"rc={rc4} eklenen={sorted(eklenen2)} err={err4[:200]!r}")
+
+        # ================= SAHNE 3 (#430): Feedback BASLIK VARYANTLARI =================
+        beklenen7 = set(SEED_ADLARI) - {"feedback_kok.md"}
+        for i, (ad, bayt) in enumerate(BASLIK_VARYANTLARI):
+            h = tmp / f"mem_h{i}"
+            h.mkdir()
+            (h / "MEMORY.md").write_bytes(bayt)
+            rc_h, out_h, err_h = kos(h)
+            ham = (h / "MEMORY.md").read_bytes()
+            mm_h = ham.decode("utf-8").replace("\r\n", "\n")
+            satirlar = mm_h.splitlines()
+            bas, son = _ilk_feedback_bolumu(mm_h)
+            dosyada = {a for a in beklenen7 if f"]({a})" in mm_h}
+            yerinde = {a for a in beklenen7
+                       if any(f"]({a})" in s for s in satirlar[bas + 1:son])} if bas >= 0 else set()
+            soylenen = set(EKLENDI_RE.findall(out_h))
+            son_s = [s for s in out_h.strip().splitlines() if s.strip()][-1:] or [""]
+            ekle(f"{ad}: 7 seed satiri MEMORY.md'de GERCEKTEN var",
+                 rc_h == 0 and dosyada == beklenen7,
+                 f"rc={rc_h} eksik={sorted(beklenen7 - dosyada)} err={err_h[:160]!r}")
+            ekle(f"{ad}: satirlar ILK Feedback basligi altinda (sonraki `## `ten once)",
+                 yerinde == beklenen7, f"bas={bas} son={son} disarda={sorted(beklenen7 - yerinde)}")
+            ekle(f"{ad}: 'indekse eklendi' = dosyada gercekten eklenen + uyari yok",
+                 soylenen == dosyada and "EKLENEMEDİ" not in out_h,
+                 f"soylenen-dosyada={sorted(soylenen - dosyada)}")
+            ekle(f"{ad}: ozet yapilani sayar ('[OK] … indekse eklendi 7')",
+                 son_s[0].startswith("[OK] Feedback memory tohumlandı/onarıldı:")
+                 and "indekse eklendi 7" in son_s[0], f"son={son_s[0][:160]!r}")
+            n_crlf, n_lf = ham.count(b"\r\n"), ham.count(b"\n")
+            ekle(f"{ad}: satir sonu karismadi (ya hep CRLF ya hep LF)",
+                 n_crlf in (0, n_lf), f"crlf={n_crlf} lf={n_lf}")
+
+        # ================= SAHNE 4 (#430): ekleme ENJEKTE basarisiz -> DURUST rapor ======
+        try:
+            core_e = tmp / "core_enj"
+            shutil.copytree(core, core_e, ignore=shutil.ignore_patterns("__pycache__"))
+            sm_e = core_e / "scripts" / "seed_memory.py"
+            k_e = sm_e.read_text(encoding="utf-8")
+            if ENJEKSIYON[0] not in k_e:
+                # ESKI surum (--seed-kaynak) bu capayi tasimaz: sahne 1-3 yine raporlanir, cikis 2.
+                kurulamadi.append("sahne 4: enjeksiyon capasi bulunamadi (eski surum?)")
+                raise _SahneAtla
+            sm_e.write_text(k_e.replace(ENJEKSIYON[0], ENJEKSIYON[1], 1), encoding="utf-8")
+            h = tmp / "mem_enj"
+            h.mkdir()
+            (h / "MEMORY.md").write_bytes(BASLIK_VARYANTLARI[1][1])
+            env = dict(os.environ, PYTHONIOENCODING="utf-8", CLAUDE_PROJECT_DIR=str(tmp / "proje"))
+            p = subprocess.run([sys.executable, str(sm_e), "--target", str(h)], env=env, cwd=str(tmp),
+                               capture_output=True, timeout=120)
+            out_e = p.stdout.decode("utf-8", "replace")
+            mm_e = (h / "MEMORY.md").read_text(encoding="utf-8")
+            son_e = [s for s in out_e.strip().splitlines() if s.strip()][-1:] or [""]
+            dosyada_e = {a for a in beklenen7 if f"]({a})" in mm_e}
+            ekle("ENJ0 kurulum: enjeksiyon gercekten etkili (dosyada 0 seed satiri)",
+                 p.returncode == 0 and not dosyada_e, f"rc={p.returncode} dosyada={sorted(dosyada_e)}")
+            ekle("ENJ1 eklenemeyen ad icin 'indekse eklendi' DENMEZ (eylemden once basari yok)",
+                 not EKLENDI_RE.findall(out_e), f"soylenen={EKLENDI_RE.findall(out_e)}")
+            ekle("ENJ2 ad basina '[UYARI] indekse EKLENEMEDİ' basilir (7 satir)",
+                 out_e.count("indekse EKLENEMEDİ") == 7, f"sayi={out_e.count('indekse EKLENEMEDİ')}")
+            ekle("ENJ3 son satir [UYARI], '[OK] … tohumlandı/onarıldı' YOK",
+                 son_e[0].startswith("[UYARI]") and "tohumlandı/onarıldı" not in out_e,
+                 f"son={son_e[0][:160]!r}")
+        except _SahneAtla:
+            pass
     finally:
         _sil(tmp)                                    # Q319: kopyalanan scripts/utils salt-okur
 
@@ -258,6 +391,10 @@ def main() -> int:
     if secili:
         print(f"  (MUTASYON {secili[0]} — dusmesi BEKLENEN vektorler var; "
               f"tam skor 'mutasyon KACTI' demektir)")
+    for k in kurulamadi:
+        print(f"  [DOGRULANAMADI] {k}")
+    if kurulamadi:
+        return 2
     return 0 if gecen == len(sonuc) and sonuc else 1
 
 

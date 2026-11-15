@@ -24,7 +24,8 @@
 Ne yapar (her app için, `<subdir>` varsayılan: help):
   1) `ui5-deploy.yaml` → hedef BSP adı
   2) `webapp/<subdir>/**` ∪ `dist/<subdir>/**` altındaki HER dosya
-  3) canlı GET `/sap/bc/ui5_ui5/sap/<bsp>/<subdir>/<rel>?cb=<ts>` (no-cache, identity)
+  3) canlı GET `<ICF yolu>/<subdir>/<rel>?cb=<ts>` (no-cache, identity) — ICF yolu `deploy_ui.bsp_icf_yolu`
+     (Z/Y: `/sap/bc/ui5_ui5/sap/<bsp>/` · `/NS/APP`: `/sap/bc/ui5_ui5/<ns>/<app>/`, Issue #440)
   4) EKSEN ① canlı ↔ dist (deploy edilen şey): HTML'de enjekte meta ayıklanır, satır sonu
      normalize edilir → fark = `FARKLI`. Dosya dist'te yoksa taban webapp'e düşer (not basılır).
   5) EKSEN ② canlı ↔ webapp (KAYNAK): `.properties` → `\\uXXXX` çözülmüş (anahtar, değer)
@@ -54,7 +55,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Bağlantı okuma + BSP adı çözümleme + proje kökü DEPLOY_UI'DAN GELİR (kopya üretme:
 # aynı .conn_adt sözleşmesi ve aynı ui5-deploy.yaml ayrıştırması tek yerde kalsın).
-from deploy_ui import DEFAULT_UI_ROOT, REPO, bsp_name, read_conn  # noqa: E402
+from deploy_ui import (BSP_ADI_BEKLENEN, DEFAULT_UI_ROOT, REPO, all_kipi, atlanan_notu,  # noqa: E402
+                       bsp_icf_yolu, bsp_name, fail_ozeti, read_conn)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -125,7 +127,7 @@ def _prop_fark(a: bytes, b: bytes) -> str:
 
 def fetch(base_url: str, user: str, pw: str, client: str, bsp: str, rel_url: str) -> bytes:
     """Canlı BSP dosyasını cache-bust + no-cache + identity-encoding ile çek."""
-    url = (f"{base_url}/sap/bc/ui5_ui5/sap/{bsp.lower()}/{rel_url}"
+    url = (f"{base_url}{bsp_icf_yolu(bsp)}{rel_url}"   # Issue #440: ICF yolu tek kaynaktan
            f"?sap-client={client}&cb={int(time.time() * 1000)}")
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -152,7 +154,7 @@ def check_app(app: str, ui_root: Path, subdir: str, conn) -> tuple:
     app_dir = ui_root / app
     bsp = bsp_name(app_dir)
     if not bsp:
-        return (app, False, "ui5-deploy.yaml yok/BSP adı okunamadı (deployable değil)")
+        return (app, False, f"ui5-deploy.yaml yok ya da {BSP_ADI_BEKLENEN} okunamadı (deployable değil)")
     src = app_dir / "webapp" / subdir
     dist = app_dir / "dist" / subdir
     if not src.is_dir() and not dist.is_dir():
@@ -255,19 +257,20 @@ def main() -> int:
         print(f"[FAIL] ui-root yok: {ui_root}", file=sys.stderr)
         return 1
 
+    cozulemeyen_sonuc, atlanan = [], []   # yalnız --all doldurur (PR #445 4. kapı F1)
     if args.app:
         apps = [args.app]
     elif args.apps:
         apps = [a.strip() for a in args.apps.split(",") if a.strip()]
     else:
-        apps = sorted(d.name for d in ui_root.iterdir()
-                      if d.is_dir() and d.name != "node_modules" and bsp_name(d))
-        print(f"[i] --all → {len(apps)} deployable app")
+        # Liste deploy_ui ile AYNI yardımcıdan: yalnız ui5-deploy.yaml'sız dizin atlanır; yaml VAR ama
+        # BSP adı çözülemeyen app sessizce düşmez, FAIL satırı olur (eskiden `and bsp_name(d)` süzgeci).
+        apps, atlanan, cozulemeyen_sonuc = all_kipi(ui_root)
 
     conn = read_conn()
     print(f"=== STATİK VARLIK DOĞRULAMA [{args.subdir}: canlı↔dist · canlı↔webapp kaynak] : "
           f"{', '.join(apps)} ===")
-    results = []
+    results = list(cozulemeyen_sonuc)
     for app in apps:
         print(f"\n--- {app} ---")
         results.append(check_app(app, ui_root, args.subdir, conn))
@@ -279,8 +282,10 @@ def main() -> int:
         print(f"  {'[OK]  ' if ok else '[FAIL]'} {app}  — {note}")
         if not ok:
             fail += 1
+    atl = atlanan_notu(atlanan, args.all)
     if fail:
-        print(f"\n[FAIL] {fail}/{len(results)} app'te statik varlık canlıda GÜNCEL DEĞİL.\n"
+        ozet = fail_ozeti(fail, len(results), len(cozulemeyen_sonuc), "app'te statik varlık canlıda GÜNCEL DEĞİL")
+        print(f"\n[FAIL] {ozet}{atl}.\n"
               "       FARKLI (canlı ≠ dist) → `deploy_ui.py --app <ad>` (build + deploy) → bu script'i tekrar koş.\n"
               "       KAYNAK FARKI (canlı == dist ≠ webapp) → dist bayat: build + deploy.\n"
               "       ⚠ 'FARKLI' çıkanlar dokunulmamış app'leri de kapsıyorsa önce ÖLÇÜMDEN şüphelen "
@@ -288,7 +293,7 @@ def main() -> int:
               file=sys.stderr)
         return 1
     print(f"\n[OK] {len(results)} app — {args.subdir} altındaki tüm dosyalar canlıda AYNI "
-          "(canlı == dist, kaynak webapp ile eşdeğer).")
+          f"(canlı == dist, kaynak webapp ile eşdeğer).{atl}")
     return 0
 
 

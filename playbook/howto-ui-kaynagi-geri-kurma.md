@@ -157,8 +157,22 @@ blok mesajındaki `--session`'lı komut tercih edilir.
 
 - Ölçülen: `s4_private`, freestyle UI5 1.120, OData V2, JavaScript kaynak, @ui5/cli 4.x.
 - **Ölçülmedi:** canlı TypeScript BSP (harita sondası yalnız sentetik `.ts` ile) · Fiori Elements ·
-  namespace'li BSP adı (`/X/…`) · `s4_public`/`btp_abap` · deploy'un canlıdan dosya SİLME
-  davranışı · ADT filestore yolu (`/sap/bc/adt/filestore/ui5-bsp/…`; bir makinede zaman aşımı).
+  `s4_public`/`btp_abap` · deploy'un canlıdan dosya SİLME davranışı · ADT filestore yolu
+  (`/sap/bc/adt/filestore/ui5-bsp/…`; bir makinede zaman aşımı).
+- **BSP adı (Issue #440):** `ui5-deploy.yaml`'da `fiori deploy`un okuduğu yerden alınır — İLK
+  `name: deploy-to-abap` görevinin `configuration.app.name`'i; Z/Y ya da `project.yaml`
+  `customer_namespaces`'te kayıtlı `/<NS>/` ile başlamalı (karar `utils/ad_politikasi.musteri_adi_mi`;
+  kayıtsız namespace çözülmez). Okuma gerçek YAML ayrıştırıcıyla: `node` + app'in `node_modules`'undaki
+  `yaml` paketi, yedek PyYAML. İkisi de yoksa, belge hatalıysa (yinelenen anahtar dahil) ya da
+  hedef ad yoksa ad ÇÖZÜLMEZ (`metadata.name`'e düşülmez) ⇒ `--bsp <BSP_ADI>` ver; ayrıştırıcı
+  yokluğu stderr'de `[UYARI] BSP adı ayrıştırılamadı` olarak görünür (PR #445 3. kapı).
+  `deploy_ui.py --all` ve `verify_ui_static_assets.py --all` listeyi aynı yardımcıdan kurar
+  (`deploy_ui.all_app_listesi`): yalnız `ui5-deploy.yaml`'ı olmayan dizin atlanır ve özet satırında
+  sayılır; dosya VAR ama ad çözülemiyorsa (yukarıdaki nedenlerin hepsi + politika reddi) app sessizce
+  düşmez, nedeniyle `[FAIL]` satırı alır, özet onu "HİÇ KOŞMADI" diye ayrı sayar ve çıkış 1 olur
+  (PR #445 4. kapı). Canlı ICF yolu tek yardımcıdan (`deploy_ui.bsp_icf_yolu`): Z/Y →
+  `/sap/bc/ui5_ui5/sap/<bsp>/` · `/NS/APP` → `/sap/bc/ui5_ui5/<ns>/<app>/`. Namespace yolu yalnız
+  Issue sahibinin ortamında (tek sistem) ölçüldü; çekirdekte namespace'li BSP ile canlı **ÖLÇÜLMEDİ**.
 - Canlı = indirilen zip anı; ICF servis katmanı ölçülmez.
 - PBE kapısı: deploy `exclude` girdisi yalnız webapp köküne göre, harf duyarlı **önek** yorumlanır.
   Deploy aracı girdiyi çapasız regex olarak `/resources/<proje-adı>/<rel>` üzerinde arar ⇒ iç içe yolları

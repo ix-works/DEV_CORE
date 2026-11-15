@@ -155,8 +155,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      # pyyaml (PR #445 3. kapi): `deploy_ui.bsp_name` BSP adini GERCEK YAML ayristiriciyla okur
+      # (node+`yaml` paketi yoksa PyYAML); ikisi de yoksa fail-closed "" -> UI fixture'lari
+      # (bsp_adi_namespace, ui_dogrulama_satir_sonu_kacis, pbe_ui, fetch_ui_source) kor kalirdi.
       - name: Bagimliliklar
-        run: pip install --quiet requests urllib3 python-dotenv
+        run: pip install --quiet requests urllib3 python-dotenv pyyaml
 
       - name: Validator fixture testleri (parca ${{ matrix.parca }})
         run: >-
@@ -207,7 +210,7 @@ jobs:
           python-version: "3.11"
 
       - name: Bagimliliklar
-        run: pip install --quiet requests urllib3 python-dotenv
+        run: pip install --quiet requests urllib3 python-dotenv pyyaml   # PR #445 3. kapi (yukari)
 
       - name: Validator fixture testleri (TAM suit, Windows — olcum)
         run: python tests/run_fixture_tests.py

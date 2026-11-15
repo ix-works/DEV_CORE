@@ -37,6 +37,9 @@ NEDEN VAR (Q261 = Q217/Q221 turunun artığı + Q106'nın where_used ayağı):
          usageReferences 500 → ok:false (count YOK) · arama hatası → ok:false, NOT_FOUND DEĞİL.
   W6     KONTROL: sınıf var/yok davranışı değişmedi.
   I1-I2  `adt_impact_analysis(func)` aynı çözümlemeyi kullanır.
+  WB1-WB6 (Issue #434) `adt_where_used(bdef)` dar eşleme: var → count · yok → NOT_FOUND
+         (usageReferences sorulmaz) · sonda 500 → ok:false · /NS/ ad %2F kodlu · merkezi
+         `get_object_url(bdef)` hâlâ ValueError · impact_analysis eşlemeyi kullanmaz (sınır).
   C1-C3  CLI katmanı (`SAPClient.where_used`, `scripts/where_used.py`'nin çağırdığı yol).
 
 SİLİNMEZ ÇAPALAR (her mutasyonda GEÇER): R9a · R10 · W6a. ⚠ W6b çapa DEĞİLDİR:
@@ -67,6 +70,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import urllib.parse
 import os
 import sys
 from pathlib import Path
@@ -121,11 +125,12 @@ MUTASYONLAR = {
          "        return _read_function_module(name, object_type, include_source)\n",
          "    if False:\n"
          "        return _read_function_module(name, object_type, include_source)\n"),
+        # #434: dal `elif` oldu (önünde bdef dar eşleme dalı) — çapa aynı FM dalını hedefler
         (_QUERY,
-         "            if is_function_module_type(object_type):\n"
+         "            elif is_function_module_type(object_type):\n"
          "                fm = client.resolve_function_module(name)\n"
          "                varlik = fm.get(\"status\") == \"found\"\n",
-         "            if False:\n"
+         "            elif False:\n"
          "                fm = client.resolve_function_module(name)\n"
          "                varlik = fm.get(\"status\") == \"found\"\n"),
     ],
@@ -162,11 +167,30 @@ MUTASYONLAR = {
     "--mutasyon-func-filtresi": [
         (_CLIENT, "    FM_SEARCH_TYPE = 'FUGR/FF'\n", "    FM_SEARCH_TYPE = 'FUNC'\n"),
     ],
+    # --- Issue #434: adt_where_used(bdef) dar esleme ---
+    "--mutasyon-bdef-esleme-yok": [
+        (_QUERY, '_WHERE_USED_DAR_UC = {"bdef": "bo/behaviordefinitions"}',
+         "_WHERE_USED_DAR_UC = {}  # MUTASYON"),
+    ],
+    "--mutasyon-bdef-varlik-sokuk": [
+        (_QUERY, "                varlik = _dar_url_var_mi(client, dar_url)\n",
+         "                varlik = True  # MUTASYON\n"),
+    ],
+    "--mutasyon-bdef-404-disi-yutulur": [
+        (_QUERY, "            return False\n        raise\n",
+         "            return False\n        return False  # MUTASYON\n"),
+    ],
+    "--mutasyon-bdef-url-kodlamasiz": [
+        (_QUERY, 'return f"/sap/bc/adt/{yol}/{url_segmenti(name)}"',
+         'return f"/sap/bc/adt/{yol}/{name.lower()}"'),
+    ],
 }
 GECERLI_KIP = {"--mutasyon-kanal-sokuk", "--mutasyon-where-used-ayrim-sokuk",
                "--mutasyon-okuma-ayrim-sokuk", "--mutasyon-ipucu-geri",
                "--mutasyon-resolver-tahmin", "--mutasyon-bakamadim-yok",
-               "--mutasyon-func-filtresi"}
+               "--mutasyon-func-filtresi", "--mutasyon-bdef-esleme-yok",
+               "--mutasyon-bdef-varlik-sokuk", "--mutasyon-bdef-404-disi-yutulur",
+               "--mutasyon-bdef-url-kodlamasiz"}
 
 _kipler = [a for a in sys.argv[1:] if a.startswith("--mutasyon")]
 for _k in _kipler:
@@ -228,6 +252,9 @@ FM_YOK = "ZSD001_FM_YOK"
 FM_KOMSU = "ZSD001_FM_ORNEK_EK"       # yalnız ön-ek komşusu
 CLS_VAR = "ZCL_SD001_ORNEK"
 CLS_YOK = "ZCL_SD001_YOK"
+BDEF_VAR = "ZSD001_I_ORNEK"           # #434: davranis tanimi (cagiranli)
+BDEF_YOK = "ZSD001_I_YOK"
+BDEF_NS = "/NSP/I_ORNEK"              # namespace'li ad: uc %2F kodlu olmali
 V3 = "application/vnd.sap.adt.functions.fmodules.v3+xml"
 
 
@@ -237,6 +264,10 @@ def fm_uri(fg: str, fm: str) -> str:
 
 def cls_uri(c: str) -> str:
     return f"/sap/bc/adt/oo/classes/{c.lower()}"
+
+
+def bdef_uri(b: str) -> str:
+    return "/sap/bc/adt/bo/behaviordefinitions/" + b.lower().replace("/", "%2F")
 
 
 class _Yanit:
@@ -253,7 +284,14 @@ class SahteSAP:
         self.refs = {fm_uri(FG, FM_VAR): [("ZCL_SD001_TUKETICI", "CLAS/OC"),
                                           ("ZSD001", "DEVC/K")],
                      fm_uri(FG, FM_BOS): [],
-                     cls_uri(CLS_VAR): [("ZCL_SD001_BASKA", "CLAS/OC")]}
+                     cls_uri(CLS_VAR): [("ZCL_SD001_BASKA", "CLAS/OC")],
+                     # #434 canli olcumun SEKLI (salt-okur, bir musteri sisteminde): projeksiyon
+                     # BDEF + davranis havuzu sinifi doner
+                     bdef_uri(BDEF_VAR): [("ZSD001_C_ORNEK", "BDEF/BDO"),
+                                          ("ZBP_SD001_I_ORNEK", "CLAS/OC")],
+                     bdef_uri(BDEF_NS): [("ZBP_NSP_I_ORNEK", "CLAS/OC")]}
+        self.bdefler = {BDEF_VAR, BDEF_NS}
+        self.bdef_500 = False
         self.arama_hata = False
         self.komsu_modu = False                         # aramada ön-ek komşularını da döndür
         self.cift_uc: set = set()
@@ -287,6 +325,13 @@ class SahteSAP:
                 return _Yanit(406, "<message>Accepted content types: %s</message>" % V3)
             return _Yanit(200, f'<fmodule:abapFunctionModule adtcore:name="{fm_ad}" '
                                f'adtcore:type="FUGR/FF"/>')
+        if "/bo/behaviordefinitions/" in yol:
+            if self.bdef_500:
+                return _Yanit(500, "server down")
+            parca = yol.split("/bo/behaviordefinitions/", 1)[1]
+            ad = urllib.parse.unquote(parca).upper()
+            # kodsuz `/` ayri yol parcasi olur -> SAP 404 (ad_politikasi.url_segmenti olcumu)
+            return _Yanit(200, "<bdef/>") if (ad in self.bdefler and "/" not in parca) else _Yanit(404, "")
         if "/oo/classes/" in yol:
             ad = yol.rsplit("/", 1)[1].upper()
             return _Yanit(200, "<class/>") if ad in self.siniflar else _Yanit(404, "")
@@ -505,6 +550,41 @@ kontrol("W6b KONTROL sınıf yok → OBJECT_NOT_FOUND (usageReferences'ın 200+[
         r.get("ok") is False and r.get("error_code") == "OBJECT_NOT_FOUND" and "count" not in r,
         kisa(r))
 
+# ── WB: WHERE-USED bdef (Issue #434 — yalniz bu aracta dar esleme) ─────────────────
+c, sap = kur()
+r = cagir(query.adt_where_used, BDEF_VAR, "bdef")
+kontrol("WB1 bdef var → ok:true count:2 (projeksiyon BDEF + havuz sinifi) + resolved_uri BDEF ucu",
+        r.get("ok") is True and r.get("count") == 2 and r.get("resolved_uri") == bdef_uri(BDEF_VAR)
+        and {x.get("name") for x in r.get("references") or []} == {"ZSD001_C_ORNEK", "ZBP_SD001_I_ORNEK"},
+        kisa(r))
+c, sap = kur()
+r = cagir(query.adt_where_used, BDEF_YOK, "bdef")
+_post = [i for i in sap.istekler if i[0] == "POST"]
+kontrol("WB2 AYRIM bdef yok → OBJECT_NOT_FOUND, count YOK, usageReferences HIC sorulmaz",
+        r.get("ok") is False and r.get("error_code") == "OBJECT_NOT_FOUND" and "count" not in r
+        and not _post, kisa(r) + f" post={len(_post)}")
+c, sap = kur(bdef_500=True)
+r = cagir(query.adt_where_used, BDEF_VAR, "bdef")
+kontrol("WB3 varlik sondasi 500 → ok:false, OBJECT_NOT_FOUND DEGIL (bakamadim != yok)",
+        r.get("ok") is False and r.get("error_code") != "OBJECT_NOT_FOUND" and "count" not in r,
+        kisa(r))
+c, sap = kur()
+r = cagir(query.adt_where_used, BDEF_NS, "BDEF")
+kontrol("WB4 namespace'li ad + buyuk harf tip → uc %2F kodlu, ok:true count:1",
+        r.get("ok") is True and r.get("count") == 1 and r.get("resolved_uri") == bdef_uri(BDEF_NS),
+        kisa(r))
+try:
+    object_types.get_object_url(BDEF_VAR, "bdef")
+    _bt = "URL_URETTI"
+except Exception as exc:                                      # noqa: BLE001
+    _bt = type(exc).__name__
+kontrol("WB5 DAR KAPSAM: merkezi get_object_url(bdef) hala ValueError (OBJECT_TYPES dokunulmadi)",
+        _bt == "ValueError", _bt)
+c, sap = kur()
+r = cagir(query.adt_impact_analysis, BDEF_VAR, "bdef", max_depth=1)
+kontrol("WB6 SINIR: adt_impact_analysis(bdef) bu eslemeyi KULLANMAZ → ok:true DEGIL (belgeli)",
+        r.get("ok") is not True, kisa(r))
+
 # ── I: IMPACT ANALYSIS ────────────────────────────────────────────────────────────
 c, sap = kur()
 r = cagir(query.adt_impact_analysis, FM_VAR, "func", max_depth=1)
@@ -544,5 +624,6 @@ for ad, ok, detay in SONUC:
 gecen = sum(1 for _a, ok, _d in SONUC if ok)
 print(f"SONUC: {gecen}/{len(SONUC)} PASS")
 print("KAPSAM: bakilmayan = gercek SAP · where_used.py alt-surec metni · adt_atc_check/"
-      "adt_lock_check func · usageReferences DEVC satirlari")
+      "adt_lock_check func · usageReferences DEVC satirlari · bdef: yalniz adt_where_used "
+      "(impact_analysis/CLI where_used.py bdef'i tanimaz)")
 sys.exit(0 if gecen == len(SONUC) else 1)

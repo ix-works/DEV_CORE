@@ -42,6 +42,8 @@ import sys as _pc_sys
 from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
 from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
+# Issue #440: "müşteri adı mı" kararının TEK kaynağı (Z/Y + project.yaml customer_namespaces).
+from utils.ad_politikasi import ad_namespace, musteri_adi_mi
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -83,16 +85,228 @@ def read_conn():
     )
 
 
-def bsp_name(app_dir: Path) -> str:
-    """ui5-deploy.yaml'dan hedef BSP adını (Z ile başlayan app.name) çıkar."""
+BSP_ADI_BEKLENEN = ("müşteri ad alanında BSP adı (app.name: Z/Y ya da project.yaml "
+                    "customer_namespaces'te kayıtlı /<NS>/ ile başlayan)")
+# PR #445 3. kapı (2026-11-15, lider kararı): satır regex'i yerine GERÇEK YAML ayrıştırıcı.
+# Üç regex turu yakınsamadı (akış map içinde `app`, `? app` açık anahtar, alt ağaçtaki blok
+# skaler/iç map, `name:ZAPP` boşluksuz, yinelenen anahtar…) — her turda kapı yeni bir biçim buldu.
+# HEDEF = `fiori deploy`un OKUDUĞU yer. Ölçüldü (@sap/ux-ui5-tooling 1.25.0, dist/cli/index.cjs
+# `readConfig`): `parseDocument(readFileSync(<config>, "utf8")).toJSON()` (eemeli `yaml`, pakete
+# GÖMÜLÜ) → `builder.customTasks.find(e => e.name === "deploy-to-abap").configuration` → app.name.
+# ⚠ `yaml` (2.8.3 ölçüldü) yinelenen anahtarda `errors=[DUPLICATE_KEY]` kaydeder ama `toJSON()`
+# SONUNCUYU döndürür ve fiori `errors`a bakmaz ⇒ burada `errors` doluysa "" (fail-closed).
+_DEPLOY_GOREVI = "deploy-to-abap"
+_NODE_BETIGI = r"""
+const fs = require('fs');
+const [, yol, dizin] = process.argv;
+let Y;
+try { Y = require(require.resolve('yaml', { paths: [dizin] })); }
+catch (e) { console.log(JSON.stringify({ durum: 'KUTUPHANE_YOK' })); process.exit(0); }
+let s;
+try {
+  const d = Y.parseDocument(fs.readFileSync(yol, 'utf8'));
+  if (d.errors && d.errors.length) {
+    s = { durum: 'HATA', neden: d.errors.map(e => e.code || e.name).join(',') };
+  } else {
+    const j = d.toJSON();
+    const g = j && j.builder && Array.isArray(j.builder.customTasks)
+      ? j.builder.customTasks.find(e => e && e.name === 'deploy-to-abap') : undefined;
+    const a = g && g.configuration && g.configuration.app;
+    s = { durum: 'OK', ad: (a && typeof a.name === 'string') ? a.name : null };
+  }
+} catch (e) { s = { durum: 'HATA', neden: String((e && e.message) || e).slice(0, 200) }; }
+console.log(JSON.stringify(s));
+"""
+
+
+def _node_ile(yol: Path):
+    """fiori'nin kütüphane AİLESİ (`yaml`) ile oku — app'in node_modules'undan çözülür.
+
+    Döner: ("OK", ad|None) · ("HATA", neden) · None (node ya da `yaml` paketi YOK → sıradaki yol).
+    """
+    import json as _json
+    try:
+        r = subprocess.run(["node", "-e", _NODE_BETIGI, str(yol), str(yol.parent)],
+                           capture_output=True, text=True, encoding="utf-8", timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    try:
+        v = _json.loads((r.stdout or "").strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return ("HATA", f"node çıktısı okunamadı (rc={r.returncode})")
+    if v.get("durum") == "KUTUPHANE_YOK":
+        return None
+    if v.get("durum") == "OK":
+        return ("OK", v.get("ad"))
+    return ("HATA", f"yaml: {v.get('neden')}")
+
+
+def _pyyaml_ile(yol: Path):
+    """Yedek yol: PyYAML, yinelenen anahtar ve `<<` birleştirme anahtarı REDDEDİLİR (fiori'nin
+    YAML 1.2 kütüphanesi `<<`'i birleştirme saymaz — kabul etmek farklı bir ad üretebilirdi).
+    Döner: ("OK", ad|None) · ("HATA", neden) · None (PyYAML yok)."""
+    try:
+        import yaml as _yaml
+    except Exception:                                  # noqa: BLE001 — bozuk kurulum = yok
+        return None
+
+    class _TekilYukleyici(_yaml.SafeLoader):
+        pass
+
+    def _harita(loader, node, deep=False):
+        gorulen = []
+        for k, _v in node.value:
+            if k.tag == "tag:yaml.org,2002:merge":
+                raise _yaml.constructor.ConstructorError(None, None, "'<<' birlestirme anahtari",
+                                                         k.start_mark)
+            anahtar = loader.construct_object(k, deep=True)
+            if anahtar in gorulen:
+                raise _yaml.constructor.ConstructorError(None, None, f"yinelenen anahtar {anahtar!r}",
+                                                         k.start_mark)
+            gorulen.append(anahtar)
+        return loader.construct_mapping(node, deep=deep)
+
+    _TekilYukleyici.add_constructor(_yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _harita)
+    try:
+        with open(yol, encoding="utf-8") as fh:
+            j = _yaml.load(fh, Loader=_TekilYukleyici)  # noqa: S506 — SafeLoader alt sınıfı
+    except Exception as exc:                           # noqa: BLE001
+        return ("HATA", type(exc).__name__)
+    gorevler = (j.get("builder") or {}).get("customTasks") if isinstance(j, dict) else None
+    if not isinstance(gorevler, list):
+        return ("OK", None)
+    g = next((e for e in gorevler if isinstance(e, dict) and e.get("name") == _DEPLOY_GOREVI), None)
+    a = g.get("configuration", {}).get("app") if isinstance(g, dict) and isinstance(
+        g.get("configuration"), dict) else None
+    ad = a.get("name") if isinstance(a, dict) else None
+    return ("OK", ad if isinstance(ad, str) else None)
+
+
+AYRISTIRICILAR = (("node-yaml", _node_ile), ("PyYAML", _pyyaml_ile))
+
+
+NEDEN_YAML_YOK = "ui5-deploy.yaml yok"   # `--all`un ATLAYABİLDİĞİ TEK neden (all_app_listesi)
+
+
+def bsp_adi_cozumle(app_dir: Path) -> tuple:
+    """(bsp, açıklama). bsp = politikadan geçen app.name (BÜYÜK harf) ya da "".
+
+    Açıklama "" ise ad bulundu; aksi hâlde NEDEN boş (teşhis — karar DEĞİL)."""
     y = app_dir / "ui5-deploy.yaml"
     if not y.exists():
-        return ""
-    for line in y.read_text(encoding="utf-8", errors="ignore").splitlines():
-        m = re.match(r"\s*name:\s*(Z[A-Z0-9_]+)\s*$", line)
-        if m:
-            return m.group(1)
-    return ""
+        return "", NEDEN_YAML_YOK
+    for ad_, fn in AYRISTIRICILAR:
+        sonuc = fn(y)
+        if sonuc is None:
+            continue
+        durum, deger = sonuc
+        if durum != "OK":
+            return "", f"AYRISTIRILAMADI ({ad_}: {deger})"
+        if deger is None:
+            return "", f"{_DEPLOY_GOREVI} görevinde configuration.app.name YOK ({ad_})"
+        bsp = deger.upper()
+        if not musteri_adi_mi(bsp):
+            return "", f"app.name {deger!r} müşteri ad alanında DEĞİL ({ad_})"
+        return bsp, ""
+    return "", "AYRISTIRILAMADI (ayrıştırıcı YOK: node+`yaml` paketi de PyYAML de bulunamadı)"
+
+
+def bsp_name(app_dir: Path) -> str:
+    """ui5-deploy.yaml'dan hedef BSP adını (`fiori deploy`un okuduğu app.name) çıkar; yoksa "".
+
+    Issue #440 (2026-11-15): eskiden yalnız `Z[A-Z0-9_]+` satır regex'i vardı ⇒ `/NS/APP`, `Y…`,
+    küçük harfli ad, `ZAD # yorum` sessizce "" idi. Karar `utils.ad_politikasi.musteri_adi_mi`'den
+    (ADR 0005-A tek kaynak; kayıtsız namespace RED); ad BÜYÜK harfe çevrilir.
+    PR #445 3. kapı: ad GERÇEK YAML ayrıştırıcıyla, fiori'nin okuduğu yoldan alınır —
+    `builder.customTasks` içinde İLK `name: deploy-to-abap` görevinin `configuration.app.name`'i.
+    Önce node + app'in `node_modules`'undaki `yaml` (fiori'nin kütüphane ailesi), yoksa PyYAML;
+    ikisi de yoksa ya da belge hatalıysa (yinelenen anahtar dahil) "" + stderr `[UYARI]`.
+    `metadata.name`'e ya da başka bir `name:`e DÜŞÜŞ YOK: hedef ad yoksa "".
+    ⚠ KAPSAM: birincil yol fiori'nin GÖMÜLÜ `yaml` kopyasını değil app'in kendi `yaml` paketini
+    kullanır (aynı aile, sürüm eşliği ÖLÇÜLMEDİ). PyYAML yedeği YAML 1.1'dir; JS yolundan farklı
+    karar verdiği girdilerde (fixture'da ölçülen) sonuç ya aynı ad ya "" olur, BAŞKA bir ad olmaz.
+    """
+    bsp, neden = bsp_adi_cozumle(app_dir)
+    if not bsp and neden.startswith("AYRISTIRILAMADI"):
+        print(f"[UYARI] BSP adı ayrıştırılamadı: {app_dir / 'ui5-deploy.yaml'} — {neden}",
+              file=sys.stderr)
+    return bsp
+
+
+def all_app_listesi(ui_root: Path) -> tuple:
+    """`--all` listesi — deploy_ui ve verify_ui_static_assets'in ORTAK tek kaynağı.
+
+    Dönüş (apps, atlanan, cozulemeyen):
+      apps         BSP adı çözülen app dizin adları (sıralı) → normal akışa girer
+      atlanan      `ui5-deploy.yaml`'ı OLMAYAN dizinler → deployable değil, ATLANIR (eskiden de böyleydi)
+      cozulemeyen  [(app, neden)] — `ui5-deploy.yaml` VAR ama ad çözülemedi (belge hatası · yinelenen
+                   anahtar · ayrıştırıcı yok · hedef ad yok · politika reddi) → çağıran app başına
+                   FAIL satırı basar ve çıkış kodu 1 olur.
+    Neden (PR #445 4. kapı F1): liste eskiden `... and bsp_name(d)` süzgeciyle kuruluyordu; bu PR'la
+    `''` "belge hatası / ayrıştırıcı yok" da demek olunca `--all` o app'i sessizce düşürüp
+    `[OK] 0 app doğrulandı` + RC 0 basıyordu (ölçüldü; kontrol grubu 5fd32f0 aynı girdide RC 1).
+    KOŞMAYAN doğrulama BEYAN EDİLMEZ (deploy_ui özet ilkesi)."""
+    apps, atlanan, cozulemeyen = [], [], []
+    for d in sorted(ui_root.iterdir(), key=lambda p: p.name):
+        if not d.is_dir() or d.name == "node_modules":
+            continue
+        bsp, neden = bsp_adi_cozumle(d)
+        if bsp:
+            apps.append(d.name)
+        elif neden == NEDEN_YAML_YOK:
+            atlanan.append(d.name)
+        else:
+            cozulemeyen.append((d.name, neden))
+    return apps, atlanan, cozulemeyen
+
+
+def all_kipi(ui_root: Path) -> tuple:
+    """`--all` girişi (iki araç ortak): listeyi kurar, `[i]` satırını basar.
+
+    Dönüş (apps, atlanan, cozulemeyen_sonuc) — cozulemeyen_sonuc = (app, False, not) sonuç satırları;
+    çağıran bunları sonuç listesinin BAŞINA koyar (FAIL sayılır, çıkış kodu 1)."""
+    apps, atlanan, cozulemeyen = all_app_listesi(ui_root)
+    print(f"[i] --all → {len(apps)} deployable app: {', '.join(apps)}"
+          + (f" · {len(cozulemeyen)} app'te ui5-deploy.yaml VAR ama BSP adı ÇÖZÜLEMEDİ (FAIL): "
+             f"{', '.join(a for a, _n in cozulemeyen)}" if cozulemeyen else "")
+          + f" · {len(atlanan)} dizin ui5-deploy.yaml'sız (atlandı)")
+    return apps, atlanan, [(app, False, f"BSP adı ÇÖZÜLEMEDİ — {neden} · beklenen: {BSP_ADI_BEKLENEN} "
+                                        "(doğrulama/deploy KOŞMADI)") for app, neden in cozulemeyen]
+
+
+def fail_ozeti(fail: int, toplam: int, cozulemeyen_n: int, kosan_metni: str) -> str:
+    """FAIL özet gövdesi (iki araç ortak): KOŞUP başarısız olanlar ile BSP adı çözülemediği için HİÇ
+    KOŞMAYANLAR ayrı sayılır — koşmayan app 'STALE/güncel değil' diye beyan edilmez."""
+    kosan = fail - cozulemeyen_n
+    return " · ".join(([f"{kosan}/{toplam} {kosan_metni}"] if kosan else [])
+                      + ([f"{cozulemeyen_n}/{toplam} app BSP adı ÇÖZÜLEMEDİĞİ için HİÇ KOŞMADI"]
+                         if cozulemeyen_n else []))
+
+
+def atlanan_notu(atlanan: list, tum_kip: bool) -> str:
+    """Özet satırı eki: `--all`da ui5-deploy.yaml'sız atlanan dizin sayısı (yalnız --all; aksi hâlde "")."""
+    return f" · {len(atlanan)} dizin ui5-deploy.yaml'sız ATLANDI" if tum_kip else ""
+
+
+def bsp_icf_yolu(bsp: str) -> str:
+    """Canlı BSP'nin ICF yolu (`/` ile biter) — iki URL kurucusunun (canlı preload ·
+    statik varlık doğrulaması) TEK kaynağı (Issue #440).
+
+    · Z/Y: `/sap/bc/ui5_ui5/sap/<bsp>/` — bugüne kadarki tek yol, aynen korunur.
+    · `/NS/APP`: `/sap/bc/ui5_ui5/<ns>/<app>/` — `sap` düğümünün KARDEŞİ olan namespace
+      düğümü. ⚠ Bu yol Issue #440 sahibinin ortamında (tek sistem, ilk deploy) ölçüldü;
+      çekirdek sahibinin sisteminde namespace'li BSP olmadığı için burada ÖLÇÜLEMEDİ —
+      yalnız ICF ağacının yapısı (UI5_UI5 altında SAP ile kardeş namespace düğümleri) görüldü.
+    """
+    ns = ad_namespace(bsp)
+    if ns:
+        return f"/sap/bc/ui5_ui5/{ns.strip('/').lower()}/{bsp[len(ns):].lower()}/"
+    if "/" in bsp:
+        # `/X/APP` (namespace 3-8 karakter değil) ya da başka eğik çizgili ad: `sap` düğümüne
+        # düşürmek `/sap/bc/ui5_ui5/sap//x/app/` gibi SAHTE bir yol kurar ⇒ 404 "BSP yok"
+        # diye okunur (sessiz yanlış teşhis). Fail-closed.
+        raise ValueError(f"BSP adı ICF yoluna çevrilemez (namespace biçimi /<3-8>/ değil): {bsp!r}")
+    return f"/sap/bc/ui5_ui5/sap/{bsp.lower()}/"
 
 
 def satir_sonu_normalize(b: bytes) -> bytes:
@@ -200,7 +414,7 @@ def run(cmd: str, cwd: Path, env: dict) -> tuple:
 def fetch_live_preload(base_url: str, user: str, pw: str, client: str, bsp: str) -> bytes:
     """Canlı BSP Component-preload.js'i cache-bust + no-cache + identity-encoding ile çek."""
     ts = str(int(time.time()))
-    url = f"{base_url}/sap/bc/ui5_ui5/sap/{bsp.lower()}/{PRELOAD}?sap-client={client}&cb={ts}"
+    url = f"{base_url}{bsp_icf_yolu(bsp)}{PRELOAD}?sap-client={client}&cb={ts}"
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -225,7 +439,7 @@ def deploy_one(app: str, ui_root: Path, conn, env: dict, dry: bool, verify_only:
         return (app, False, f"app dizini yok: {app_dir}")
     bsp = bsp_name(app_dir)
     if not bsp:
-        return (app, False, "ui5-deploy.yaml'da BSP adı (Z...) bulunamadı")
+        return (app, False, f"ui5-deploy.yaml'da {BSP_ADI_BEKLENEN} bulunamadı")
 
     # 1) BUILD (zorunlu — mevcut webapp kaynağından taze dist)
     print(f"  [{app}] build (ui5 build --clean-dest --dest dist)…")
@@ -335,14 +549,13 @@ def main() -> int:
         print(f"[FAIL] ui-root yok: {ui_root}", file=sys.stderr)
         return 1
 
+    cozulemeyen_sonuc, atlanan = [], []   # yalnız --all doldurur (PR #445 4. kapı F1)
     if args.app:
         apps = [args.app]
     elif args.apps:
         apps = [a.strip() for a in args.apps.split(",") if a.strip()]
     elif args.all:
-        apps = sorted(d.name for d in ui_root.iterdir()
-                      if d.is_dir() and d.name != "node_modules" and bsp_name(d))
-        print(f"[i] --all → {len(apps)} deployable app: {', '.join(apps)}")
+        apps, atlanan, cozulemeyen_sonuc = all_kipi(ui_root)
     else:
         apps, git_hatalari = changed_apps(ui_root)
         if git_hatalari:
@@ -368,7 +581,7 @@ def main() -> int:
 
     mode = "[VERIFY-ONLY]" if args.verify_only else ("[DRY-RUN]" if args.dry_run else "[DEPLOY]")
     print(f"=== UI {mode}: {', '.join(apps)} (ui-root={ui_root}) ===")
-    results = []
+    results = list(cozulemeyen_sonuc)
     for app in apps:
         print(f"\n--- {app} ---")
         results.append(deploy_one(app, ui_root, conn, env, args.dry_run, args.verify_only))
@@ -386,6 +599,7 @@ def main() -> int:
     satir_sonu_notu = (f"    [OK~] = {len(satir_sonu)} app bayt-eş DEĞİL, fark YALNIZ preload string'lerindeki "
                        f"kaçışlı \\r\\n (CRLF çalışma ağacından build); içerik modül modül eşit, STALE "
                        f"SAYILMADI: {', '.join(satir_sonu)}")
+    atl = atlanan_notu(atlanan, args.all)
     if fail:
         if args.verify_only:
             act = "STALE tespit edildi (canlı ≠ kaynak)"
@@ -393,8 +607,8 @@ def main() -> int:
             act = "BUILD başarısız (deploy zaten yapılmadı)"
         else:
             act = "deploy DOĞRULANAMADI (bayat gitmiş olabilir)"
-        print(f"\n[FAIL] {fail}/{len(results)} app {act} — yukarıyı incele, kullanıcıya raporla "
-              "(asla 'başarılı' deme).", file=sys.stderr)
+        print(f"\n[FAIL] {fail_ozeti(fail, len(results), len(cozulemeyen_sonuc), 'app ' + act)}{atl} — "
+              "yukarıyı incele, kullanıcıya raporla (asla 'başarılı' deme).", file=sys.stderr)
         if satir_sonu:
             print(satir_sonu_notu, file=sys.stderr)
         return 1
@@ -411,17 +625,17 @@ def main() -> int:
     if args.verify_only and satir_sonu:
         print(f"\n[OK] {len(results)} app doğrulandı (canlı == mevcut kaynak — hepsi güncel; "
               f"{len(results) - len(satir_sonu)}'i hash-eşit, {len(satir_sonu)}'i YALNIZ SATIR SONU "
-              "farkıyla içerik-eşit).")
+              f"farkıyla içerik-eşit).{atl}")
         print(satir_sonu_notu)
     elif args.verify_only:
-        print(f"\n[OK] {len(results)} app doğrulandı (canlı == mevcut kaynak — hepsi güncel).")
+        print(f"\n[OK] {len(results)} app doğrulandı (canlı == mevcut kaynak — hepsi güncel).{atl}")
     elif args.dry_run:
         print(f"\n[i] DRY-RUN bitti: {len(results)} app BUILD edildi. "
-              "DEPLOY YAPILMADI, CANLI İÇERİK OKUNMADI.")
+              f"DEPLOY YAPILMADI, CANLI İÇERİK OKUNMADI.{atl}")
         print("    Bu çıktı 'canlı == build' KANITI DEĞİLDİR ve app'in güncel olduğunu GÖSTERMEZ.")
         print("    Bayatlık (stale) taraması için: --verify-only · gerçek deploy için bayraksız koş.")
     else:
-        print(f"\n[OK] {len(results)} app doğrulandı (canlı Component-preload == build çıktısı).")
+        print(f"\n[OK] {len(results)} app doğrulandı (canlı Component-preload == build çıktısı).{atl}")
     return 0
 
 
