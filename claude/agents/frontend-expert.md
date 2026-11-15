@@ -112,9 +112,9 @@ journey yalnız oradaki (a)/(b) durumunda.
 2. **SINIF TARAMASI** — aynı hatanın komşu biçimleri: diğer kolon türleri (metin/sayı/tarih/saat) · diğer giriş
    yolları (kutu · menü · varyant · Excel · yeniden listeleme) · kardeş uygulamalardaki kopya util (`rg` ile
    dosya ve fonksiyon adı). Bulgu tek vaka gelse de sınıf olarak kapat.
-3. **METİN TARAMASI** — davranış değiştiyse onu anlatan her metni bul. Bu turda güncellenir: i18n · kod yorumları ·
-   kullanıcı kılavuzu (help HTML) metni. Listelenir (`METİN: <yer> → güncellenmeli`; doküman turu lider
-   kararıdır): TS/FS/KD bölümü ve test vakası · ekran görüntüleri.
+3. **METİN TARAMASI** — davranış değiştiyse onu anlatan her metni bul. Bu turda güncellenir: i18n · kod yorumları.
+   Listelenir (`METİN: <yer> → güncellenmeli`; doküman turu donmuş koddan sonra, lider kararıyla): kullanıcı
+   kılavuzu (help HTML = KD) · TS/FS bölümü ve test vakası · ekran görüntüleri.
 4. **KARDEŞ + KUM HAVUZU** — değişen util'i kullanan diğer ekran/uygulamalar için etki listesi + en az birinde HAFİF
    ölçüm (tek hedefli eval ya da canlı istek). Ölçüm betikleri ve çıktıları yalnız proje `.tmp/` ya da TEMP
    altına yazar; canlı sistemde kalıcı veri bırakmaz.

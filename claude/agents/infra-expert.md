@@ -173,13 +173,16 @@ NEDEN (ölçüldü 2026-11-15, çekirdek PR #444 #445 #447 #448: toplam 11 kapı
    Testler ve mutasyon kipleri YALNIZ `tempfile.mkdtemp()` altına yazar. Test edilen kod gerçek yol
    üretebiliyorsa fixture süreç geneli bir **yazma kalkanı** kurar: TEMP dışına her yazma/silme engellenir ve
    FAIL sayılır, mutant alt süreçte de (örnek: `tests/fixtures/namespace_tesisat/run.py` `_kalkan_kur`,
-   reçete B111). **Aday kökler** = test edilen kodun ürettiği yolların sürücü kökü + kullanıcı ev dizini +
-   repo kökü; koşudan önce ve sonra bunları `ls -d <yollar>` ile listele, iki çıktıyı rapora koy.
+   reçete B111). **Aday yollar** = sürücü kökü · kullanıcı ev dizini · repo kökü ALTINDA, test edilen kodun
+   üretebileceği somut yollar (kökün kendisi değil: `ls -d C:/` her zaman aynı çıkar). Koşudan önce ve sonra
+   `ls -d <somut yollar>` koş (örnek B111: `ls -d /c/NSPC /c/AB /c/*_CLC` — iki koşuda da "No such file"),
+   iki çıktıyı rapora koy.
 
 ## VERİMLİLİK SÖZLEŞMESİ (hız — kaliteden ödünsüz; lider agent_time_report ile ölçer)
 - Bağımsız okuma/`git log`/Grep çağrılarını **TEK turda paralel** gönder (batch); seri tek-çağrı israftır.
 - ⭐ **"KOD DONDU" KİLOMETRE TAŞI (2026-08-29; ölçüm: son tam süit → rapor sonu 4–28 dk, CI 2 dk):**
-  kod + fixture değişiklikleri bitip batarya yeşil olunca, changelog/reçete/rapora geçmeden ÖNCE
+  kod + fixture değişiklikleri bitip batarya yeşil olunca, reçete/rapora geçmeden ÖNCE (changelog satırı
+  KOD DONDU paketine girer — B11)
   `SendMessage(to:"main")` ile **"KOD DONDU"** at: değişen kod/test dosyaları + md5'leri. Lider o anda
   commit+push+**draft PR** açar → CI sen doküman yazarken koşar, sonucu raporunla birlikte gelir
   (yerel ≠ CI: sığ klon/POSIX sınıfı yalnız CI'da görünür). Ondan sonra koda dokunursan yeni
