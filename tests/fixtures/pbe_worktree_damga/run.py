@@ -29,12 +29,22 @@ VAKALAR
   U1           git_agac_kokleri: worktree dosyasında (ana, wt)
   U2/U2b       UI uyarısı: worktree'de ana kök türetilemezse ⚠ (project.yaml VARKEN de); türetilirse yok
   U3           UI uyarısı: git dışı + project.yaml yok → ⚠ (eski davranış korunur)
+  PR #448 bağımsız kapısı (WARNING) düzeltme turu:
+  F1 / F1b     marker yok/bozuk/boş-sid + store BAŞKA seansın → dokunulmaz / store yoksa yazılır
+  U1b          ana ağacın alt dizininden (git `--git-common-dir`i burada GÖRELİ verir) → (ana, ana)
+  F2 / F2b     `--separate-git-dir <X>/.git` → ana = çalışma ağacı · bare depo worktree'si → ana None
+  F2c          ayrık git dizinli deponun BAĞLI worktree'si → git dizininin ebeveynine store YAZILMAZ
+  F3 / F3b     projeyi kapsayan depo / proje içinde iç içe depo → o köke store YAZILMAZ ("ATLANDI")
 
 MUTASYONLAR (her biri exit 1 = DÜŞTÜ olmalı; 3 = KURULAMADI)
   --mutasyon-yardimci-yok   ek hedef türetilmez (yardımcı geri alındı) → V1a/b/c KIRMIZI
   --mutasyon-ek-anahtar     ek store'a birincil kökün anahtarı yazılır → V1a KIRMIZI
   --mutasyon-koruma-yok     başka seansın store'u sıfırlanır → G1 KIRMIZI
   --mutasyon-uyari-eski     UI uyarısı yine `project.yaml` koşuluna bağlı → U2 KIRMIZI
+  --mutasyon-koruma-store-yok   marker okunamazken store sahibine bakılmaz → F1 KIRMIZI
+  --mutasyon-ana-gitdir         ana kök yine `--git-common-dir` ebeveyninden → F2 KIRMIZI
+  --mutasyon-ana-ayrik-yok      ana ağaçtayken de `worktree list` ilk kaydı kullanılır → F2 KIRMIZI
+  --mutasyon-proje-kontrol-yok  proje olmayan git köküne de yazılır → F3 F3b KIRMIZI
 
 Koşum: python tests/fixtures/pbe_worktree_damga/run.py [--mutasyon-…]   (exit 0 = PASS)
 """
@@ -69,6 +79,24 @@ MUTASYONLAR = {
         "source_drift.py",
         "    if sahip and sahip != session_id:\n",
         "    if False:\n")],
+    "--mutasyon-koruma-store-yok": [(
+        "source_drift.py",
+        "        if store_sahibi and store_sahibi != session_id:\n",
+        "        if False:\n")],
+    "--mutasyon-ana-gitdir": [(
+        "source_drift.py",
+        "    ana = agac if gd == ortak else _ana_calisma_agaci(d, env)\n",
+        "    _o = Path(satirlar[2])\n"
+        "    _o = _o if _o.is_absolute() else (d / _o).resolve()\n"
+        "    ana = _o.parent if _o.name.lower() == \".git\" else None\n")],
+    "--mutasyon-ana-ayrik-yok": [(
+        "source_drift.py",
+        "    ana = agac if gd == ortak else _ana_calisma_agaci(d, env)\n",
+        "    ana = _ana_calisma_agaci(d, env)\n")],
+    "--mutasyon-proje-kontrol-yok": [(
+        "source_drift.py",
+        "        if not _proje_koku_mu(Path(kok)):\n",
+        "        if False:\n")],
     "--mutasyon-uyari-eski": [(
         "fetch_ui_source.py",
         "            and (kok_wt or not (Path(REPO) / \"project.yaml\").is_file())):\n",
@@ -185,6 +213,18 @@ def ui_cek(scripts, cwd, env_proje, app, sid=SID):
                "--karsilastir", str(app / "webapp"), "--damgala", "--offline", "--session", sid)
 
 
+def git_kokleri_al(cwd: Path, scripts: Path, dosya: Path) -> tuple:
+    """`source_drift.git_agac_kokleri(dosya)` — ayrı süreçte (önbellek/ortam sızmasın)."""
+    kod = ("import sys, json; sys.path.insert(0, sys.argv[1]); import source_drift as s; "
+           "print(json.dumps([str(x) if x else None for x in s.git_agac_kokleri(sys.argv[2])]))")
+    rc, out = kos(cwd, None, "-c", kod, str(scripts), str(dosya))
+    try:
+        a, t = json.loads(out.strip().splitlines()[-1])
+        return (Path(a) if a else None), (Path(t) if t else None)
+    except Exception:
+        return "HATA", out[-300:]
+
+
 def store(kok: Path) -> Path:
     return kok / ".claude" / ".session_fresh.json"
 
@@ -284,6 +324,39 @@ def senaryolar(scripts: Path, kum: Path) -> None:
             f"\n{out[-400:]}")
     marker(ana, SID)
 
+    # F1 (PR #448 kapısı) — marker YOK / bozuk / boş sid + store BAŞKA seansın: dokunulmaz
+    mk = ana / ".claude" / ".current_session"
+    sonuc = []
+    for ad, ham in (("yok", None), ("bozuk", "{bozuk"), ("bos-sid", json.dumps({"session_id": ""}))):
+        temizle(ana, wt)
+        if mk.exists():
+            mk.unlink()
+        if ham is not None:
+            mk.write_text(ham, encoding="utf-8")
+        store(ana).write_text(json.dumps({"session_id": "T-BASKA",
+                                          "objects": {"X": "2026-01-01T00:00:00Z"}}), encoding="utf-8")
+        once = store(ana).read_bytes()
+        rc_c, out = abap_cek(scripts, wt, None, wt_abap)
+        sonuc.append((ad, rc_c == 0 and store(ana).read_bytes() == once and "YAZILMADI" in out,
+                      out[-300:]))
+    kontrol("F1 marker yok/bozuk/bos-sid + ana store BASKA seansin -> ana store BAYT-AYNI + 'YAZILMADI'",
+            all(ok for _, ok, _ in sonuc), "\n".join(f"{a}: {o}" for a, ok, o in sonuc if not ok))
+    # F1b kontrol: marker yok + store YOK -> yazılır, kapı(ANA) geçer
+    temizle(ana, wt)
+    if mk.exists():
+        mk.unlink()
+    rc_c, out = abap_cek(scripts, wt, None, wt_abap)
+    rc, _ = kapi(scripts, ana, wt_abap)
+    kontrol("F1b KONTROL: marker yok + store yok -> ek store yazilir, kapi(ANA) 0",
+            rc_c == 0 and rc == 0 and store(ana).is_file(), f"cekici rc={rc_c} kapi rc={rc}\n{out[-300:]}")
+    marker(ana, SID)
+
+    # U1b (PR #448 Ö1-b) — ana ağacın ALT dizininden: git `--git-common-dir`i göreli verir (Windows'ta da)
+    a, t = git_kokleri_al(kum, scripts, ana / "SOURCE_CODES" / "SD" / "x.abap")
+    kontrol("U1b ana agacin alt dizini -> (ana, ana)",
+            isinstance(a, Path) and isinstance(t, Path) and a.resolve() == ana.resolve()
+            and t.resolve() == ana.resolve(), f"{a} {t}")
+
     # U1 — yardımcının kendisi
     kod = ("import sys, json; sys.path.insert(0, sys.argv[1]); import source_drift as s; "
            "print(json.dumps([str(x) if x else None for x in s.git_agac_kokleri(sys.argv[2])]))")
@@ -338,6 +411,81 @@ def ucuncu_baglam(scripts: Path, kum: Path) -> None:
             rc_c == 0 and "CLAUDE_PROJECT_DIR BOŞ" in out and "proje kökü DEĞİL" in out, out[-500:])
 
 
+def git_bicimleri(scripts: Path, kum: Path) -> None:
+    """F2/F3 (PR #448 kapısı) — ayrık git dizini · bare ana · kapsayan depo · iç içe depo."""
+    # F2 — `git init --separate-git-dir`: ana kök git dizininin EBEVEYNİ değil, çalışma ağacıdır
+    sep = kum / "sepw"
+    gd = kum / "gitdizinleri" / "sepw" / ".git"      # kapının ölçtüğü biçim: `<X>/.git`
+    gd.parent.mkdir(parents=True, exist_ok=True)
+    sep.mkdir(parents=True, exist_ok=True)
+    git(sep, "init", "-q", "--separate-git-dir", str(gd))
+    f = sep / ABAP
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_bytes(b"x\n")
+    (sep / "project.yaml").write_bytes(b"source_root: SOURCE_CODES\n")
+    for c in (["config", "user.email", "fx"], ["config", "user.name", "fx"], ["add", "-A"],
+              ["commit", "-q", "-m", "t"]):
+        git(sep, *c)
+    a, t = git_kokleri_al(kum, scripts, f)
+    kontrol("F2 ayrik git dizini (ana agactan) -> ana = calisma agaci (git dizininin ebeveyni DEGIL)",
+            isinstance(a, Path) and a.resolve() == sep.resolve() and isinstance(t, Path)
+            and t.resolve() == sep.resolve(), f"{a} {t}")
+    # F2c — ayrık git dizinli deponun BAĞLI worktree'si: git ana ağacı yanlış bilir (gd.parent);
+    # o kök proje değil ⇒ oraya store YAZILMAZ
+    swt = kum / ".wt" / "sepw" / "dal"
+    swt.parent.mkdir(parents=True, exist_ok=True)
+    git(sep, "worktree", "add", "-q", "-b", "dal", str(swt))
+    rc_c, out = abap_cek(scripts, swt, None, swt / ABAP)
+    kontrol("F2c ayrik git dizinli deponun bagli worktree'si -> git dizini ebeveynine store YAZILMAZ",
+            rc_c == 0 and not store(gd.parent).exists(), f"cekici rc={rc_c}\n{out[-300:]}")
+    # F2b — bare depodan açılmış worktree: ana çalışma ağacı YOK
+    kaynak = kum / "bkaynak"
+    kaynak.mkdir()
+    (kaynak / "a.txt").write_bytes(b"x\n")
+    for c in (["init", "-q"], ["config", "user.email", "fx"], ["config", "user.name", "fx"],
+              ["add", "-A"], ["commit", "-q", "-m", "t"]):
+        git(kaynak, *c)
+    bare = kum / "b.git"
+    subprocess.run(["git", "clone", "-q", "--bare", str(kaynak), str(bare)], check=True,
+                   capture_output=True)
+    bwt = kum / "bwt"
+    git(bare, "worktree", "add", "-q", str(bwt))
+    bf = bwt / ABAP
+    bf.parent.mkdir(parents=True, exist_ok=True)
+    bf.write_bytes(b"x\n")
+    a, t = git_kokleri_al(kum, scripts, bf)
+    kontrol("F2b bare depo worktree'si -> ana None, agac = worktree",
+            a is None and isinstance(t, Path) and t.resolve() == bwt.resolve(), f"{a} {t}")
+
+    # F3 — projeyi KAPSAYAN depo (proje kökünde git yok, üstte var): kapsayana yazılmaz
+    dis = kum / "dis"
+    dis.mkdir()
+    (dis / "a.txt").write_bytes(b"x\n")
+    for c in (["init", "-q"], ["config", "user.email", "fx"], ["config", "user.name", "fx"],
+              ["add", "-A"], ["commit", "-q", "-m", "t"]):
+        git(dis, *c)
+    proj = dis / "proj"
+    pf = proj / ABAP
+    pf.parent.mkdir(parents=True, exist_ok=True)
+    pf.write_bytes(b"x\n")
+    (proj / "project.yaml").write_bytes(b"source_root: SOURCE_CODES\n")
+    rc_c, out = abap_cek(scripts, proj, None, pf)
+    rc, _ = kapi(scripts, proj, pf)
+    kontrol("F3 kapsayan depo (proje degil) -> dis/.claude store YAZILMAZ + 'ATLANDI'; birincil kapi 0",
+            rc_c == 0 and rc == 0 and not store(dis).exists() and "ATLANDI" in out,
+            f"cekici rc={rc_c} kapi rc={rc} dis_store={store(dis).exists()}\n{out[-300:]}")
+    # F3b — proje İÇİNDE iç içe depo: iç deponun köküne yazılmaz
+    ic = proj / "SOURCE_CODES" / "ic"
+    ic.mkdir(parents=True)
+    git(ic, "init", "-q")
+    icf = ic / "ZCL_SD001_A.clas.abap"
+    icf.write_bytes(b"x\n")
+    rc_c, out = abap_cek(scripts, proj, None, icf)
+    kontrol("F3b ic ice depo -> ic/.claude store YAZILMAZ + 'ATLANDI'",
+            rc_c == 0 and not store(ic).exists() and "ATLANDI" in out,
+            f"cekici rc={rc_c} ic_store={store(ic).exists()}\n{out[-300:]}")
+
+
 def main(argv: list[str]) -> int:
     kipler = [a for a in argv if a.startswith("--")]
     if any(k not in MUTASYONLAR for k in kipler) or len(kipler) > 1:
@@ -350,7 +498,7 @@ def main(argv: list[str]) -> int:
     kum = Path(tempfile.mkdtemp(prefix="pbe_wt_damga_"))
     try:
         scripts = kopya_kur(kum, kip)
-        for bolum in (senaryolar, ucuncu_baglam):
+        for bolum in (senaryolar, ucuncu_baglam, git_bicimleri):
             try:
                 bolum(scripts, kum)
             except BaseException as exc:  # noqa: BLE001 — çökme != FAIL: bölüm adıyla görünür

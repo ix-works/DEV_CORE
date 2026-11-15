@@ -892,13 +892,23 @@ def _yol_kimligi(p: Path) -> str:
 def git_agac_kokleri(path) -> tuple:
     """Dosyanın git bilgisinden (ana çalışma ağacı kökü, dosyanın kendi ağacının kökü).
 
-    Kaynak: `git -C <dosyanın dizini> rev-parse --show-toplevel --git-common-dir`.
-    `--git-common-dir` bir worktree'de de ANA deponun `.git`ini verir (genericize_common
-    `_git_dir` emsali) → parent'ı = ana çalışma ağacı. Göreli sonuç SORGUNUN dizinine göre
-    çözülür (süreç cwd'sine göre değil). Ortak dizin `.git` adlı değilse (bare / ayrık git
-    dizini) ana ağaç türetilemez → None. Git yok / depo değil / hata → (None, None): çağıran
-    bugünkü davranışa düşer. `GIT_DIR`/`GIT_WORK_TREE` ortamdan ÇIKARILIR (bir git kancasının
-    içinden koşulursa sorgu dosyanın deposunu değil kancanın deposunu cevaplardı).
+    Kaynak: tek `git -C <dosyanın dizini> rev-parse --show-toplevel --git-dir --git-common-dir`.
+    Dosyanın kendi ağacı = `--show-toplevel`. Ana çalışma ağacı: `--git-dir` = `--git-common-dir`
+    ise kendi ağacı; değilse (bağlı worktree) `git worktree list --porcelain` İLK kaydı (git ana
+    ağacı daima ilk listeler; mutlak yol). İlk kayıt `bare` ise ya da kökünde `.git` girdisi
+    yoksa ana ağaç türetilemedi → None.
+    ⚠ PR #448 bağımsız kapısı (F2, ölçüldü): eski türetme `--git-common-dir`in parent'ıydı —
+    `git init --separate-git-dir <X>/.git` deposunda ana kök `<X>` (git dizininin ebeveyni)
+    diye YANLIŞ çıkıyordu; ayrıca ana ağacın alt dizininden sorulunca çıktı Windows'ta da
+    GÖRELİ geliyordu (`../../.git`; göreli çıktı sorgu dizinine göre çözülür). Şimdi: dosya
+    ANA ağaçtaysa (`--git-dir` = `--git-common-dir`) ana = kendi ağacı; bağlı worktree'deyse
+    `worktree list` ilk kaydı. Bilinen sınır (ölçüldü, git 2.54): ayrık git dizinli deponun BAĞLI
+    worktree'sinden git'in kendisi ana ağacı git dizininin ebeveyni sanır (`worktree list` ilk
+    kaydı o) — bu kök proje olmadığından (`project.yaml`/oturum izi yok) `tazelik_ek_hedefleri`
+    oraya YAZMAZ (F3 koşulu); o depoda ana ağaç türetilemez. Git yok / depo değil /
+    hata → (None, None): çağıran bugünkü davranışa düşer. `GIT_DIR`/`GIT_WORK_TREE` ortamdan
+    ÇIKARILIR (bir git kancasının içinden koşulursa sorgu dosyanın deposunu değil kancanın
+    deposunu cevaplardı).
     """
     import subprocess
     d = Path(os.path.abspath(str(path))).parent
@@ -912,25 +922,41 @@ def git_agac_kokleri(path) -> tuple:
     env = {k: v for k, v in os.environ.items()
            if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE")}
     try:
-        r = subprocess.run(["git", "-C", str(d), "rev-parse", "--show-toplevel",
-                            "--git-common-dir"], capture_output=True, text=True,
-                           timeout=8, env=env)
+        r = subprocess.run(["git", "-C", str(d), "rev-parse", "--show-toplevel", "--git-dir",
+                            "--git-common-dir"], capture_output=True, text=True, timeout=8, env=env)
     except Exception:  # noqa: BLE001 — git yok/zaman aşımı → türetilemedi
         return None, None
     satirlar = [s.strip() for s in (r.stdout or "").splitlines() if s.strip()]
-    if r.returncode != 0 or len(satirlar) < 2:
+    if r.returncode != 0 or len(satirlar) < 3:
         return None, None
     agac = Path(satirlar[0])
-    ortak = Path(satirlar[1])
-    if not ortak.is_absolute():
-        ortak = d / ortak
-    try:
-        ortak = ortak.resolve()
-    except Exception:  # noqa: BLE001
-        pass
-    ana = ortak.parent if ortak.name.lower() == ".git" else None
+    gd, ortak = (_yol_kimligi(p if p.is_absolute() else d / p)
+                 for p in (Path(satirlar[1]), Path(satirlar[2])))
+    # Ana çalışma ağacının İÇİNDEYSEK (git dizini = ortak dizin) ana = kendi ağacımız — ayrık
+    # git dizininde de doğru. Bağlı bir worktree'deysek ana, git'in worktree listesinden.
+    ana = agac if gd == ortak else _ana_calisma_agaci(d, env)
     _GIT_KOK_ONBELLEGI[str(d)] = (ana, agac)   # yalnız BULUNAN sonuç önbelleğe girer
     return ana, agac
+
+
+def _ana_calisma_agaci(d: Path, env: dict) -> Optional[Path]:
+    """`git worktree list --porcelain` ilk kaydı = ana çalışma ağacı; `bare` ya da hata → None."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", str(d), "worktree", "list", "--porcelain"],
+                           capture_output=True, text=True, timeout=8, env=env)
+    except Exception:  # noqa: BLE001
+        return None
+    if r.returncode != 0:
+        return None
+    ilk = (r.stdout or "").replace("\r\n", "\n").split("\n\n", 1)[0].splitlines()
+    if not ilk or not ilk[0].startswith("worktree ") or "bare" in (s.strip() for s in ilk[1:]):
+        return None
+    aday = Path(ilk[0][len("worktree "):].strip())
+    # Ölçüldü (git 2.54, Windows): `--separate-git-dir` deposunda ilk kayıt çalışma ağacı DEĞİL,
+    # git dizininin KENDİSİ (`<X>/sepw.git`). Gerçek çalışma ağacı kökünde daima `.git` girdisi
+    # (dizin ya da dosya) vardır → yoksa aday güvenilmez, ana ağaç türetilemedi say.
+    return aday if (aday / ".git").exists() else None
 
 
 _GIT_KOK_ONBELLEGI: dict = {}
@@ -955,6 +981,11 @@ def tazelik_ek_hedefleri(path, root=None) -> list:
     ana projeden açıldıysa kapının kökü) + dosyanın kendi ağacı (oturum worktree'de açıldıysa).
     Her ikisine de, o kökün kapısının hesaplayacağı anahtarla (`tazelik_anahtari(p, kök)`)
     yazılır. Birincil store ile aynı dosyaya düşen aday ELENİR (tekilleştirme).
+    PROJE KÖKÜ KOŞULU (PR #448 kapısı F3): git kökü bir proje olmayabilir (proje içinde iç içe
+    depo · projeyi kapsayan üst depo) — oraya `.claude/.session_fresh.json` yazılmaz. Kök,
+    `project.yaml` ya da bir oturumun izi (`.claude/.current_session` / `.claude/.session_fresh.json`)
+    taşıyorsa projedir. Yalnız `.claude/` dizini YETMEZ: kullanıcı ev dizini bir git deposuysa
+    `~/.claude/` her makinede vardır. Atlanan kök `EK_DAMGA_SONUCLARI`'na notla girer.
     """
     ana, agac = git_agac_kokleri(path)
     goruldu = {_yol_kimligi(FRESH_STORE)}
@@ -967,8 +998,30 @@ def tazelik_ek_hedefleri(path, root=None) -> list:
         if kimlik in goruldu:
             continue
         goruldu.add(kimlik)
+        if not _proje_koku_mu(Path(kok)):
+            not_ = f"[DAMGA] ek store ATLANDI: {kok} proje kökü değil (project.yaml ve oturum izi yok)"
+            EK_DAMGA_SONUCLARI[str(store)] = not_
+            if not_ not in _BASILAN_EK_NOTLARI:
+                _BASILAN_EK_NOTLARI.add(not_)
+                print(not_)
+            continue
         out.append((Path(kok), store))
     return out
+
+
+def _proje_koku_mu(kok: Path) -> bool:
+    return ((kok / "project.yaml").is_file()
+            or (kok / ".claude" / ".current_session").is_file()
+            or (kok / ".claude" / ".session_fresh.json").is_file())
+
+
+def _store_seansi(store: Path) -> str:
+    """Store'un sahibi seans ("" = store yok/okunamadı/kimliksiz)."""
+    try:
+        v = json.loads(Path(store).read_text(encoding="utf-8"))
+        return str(v.get("session_id") or "") if isinstance(v, dict) else ""
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def _ek_hedefe_damgala(session_id: str, path, kok: Path, store: Path) -> str:
@@ -977,6 +1030,12 @@ def _ek_hedefe_damgala(session_id: str, path, kok: Path, store: Path) -> str:
     KORUMA: `_stamp` başka seansın store'unu SIFIRLAR. Ek hedef yalnız o kökün SessionStart
     marker'ı YOKSA ya da BİZİM seansımızı gösteriyorsa yazılır — aksi hâlde o kökte açık başka
     bir oturumun damgaları silinirdi (ve o oturumun kapısı bu seansın damgasını zaten okumaz).
+    Marker YOK / bozuk / `session_id` boşsa (PR #448 kapısı F1, ölçüldü): sahibi store'un
+    kendisi söyler — mevcut store'un `session_id`'si boş değil ve bu seanstan FARKLIYSA yazılmaz
+    (`_stamp` o seansın damgalarını silerdi); store yok/boş/bizimse yazılır.
+    Bilinen sınır (ÖLÇÜLMEDİ): sahip denetimi `_stamp`ın kilidinin DIŞINDADIR — denetimle yazım
+    arasında başka bir seans store'u devralırsa sıfırlanabilir (kilit yeniden girilir değil;
+    `_stamp` gövdesi `damga_yarisi` çapalarına bağlı olduğundan denetim içeri alınmadı).
     Birincil hedefin davranışı DEĞİŞMEZ.
     `_stamp`/`_store_yaz` gövdeleri `FRESH_STORE` global'ini okur (damga_yarisi çapaları bu
     metne bağlı) → hedef, global try/finally ile GEÇİCİ değiştirilerek aynı yazıcıdan geçer
@@ -987,6 +1046,11 @@ def _ek_hedefe_damgala(session_id: str, path, kok: Path, store: Path) -> str:
     if sahip and sahip != session_id:
         return (f"[DAMGA] ek store YAZILMADI: {store} — o kökün etkin seansı başka ({sahip}); "
                 f"damgaları silinmesin diye dokunulmadı.")
+    if not sahip:
+        store_sahibi = _store_seansi(store)
+        if store_sahibi and store_sahibi != session_id:
+            return (f"[DAMGA] ek store YAZILMADI: {store} — o kökün marker'ı okunamadı ve store "
+                    f"başka seansa ait ({store_sahibi}); damgaları silinmesin diye dokunulmadı.")
     anahtar = tazelik_anahtari(path, kok)
     if not anahtar:
         return f"[DAMGA] ek store YAZILMADI: {store} — anahtar üretilemedi."
