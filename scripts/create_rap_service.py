@@ -29,6 +29,7 @@ from pathlib import Path as _pc_Path
 _pc_sys.path.insert(0, str(_pc_Path(__file__).resolve().parents[0]))
 from utils.project_config import SOURCE_ROOT_NAME  # K12: kaynak-klasor adi config'ten
 from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
+from utils.ad_politikasi import odata_servis_yolu  # noqa: E402 — G3 (2026-11-15): /NS/X servisi /sap/opu/odata/ns/X altinda
 
 urllib3.disable_warnings()
 
@@ -59,7 +60,7 @@ SRVD_BASE = "/sap/bc/adt/ddic/srvd/sources"
 SRVB_BASE = "/sap/bc/adt/businessservices/bindings"
 PUBLISH_V2 = "/sap/bc/adt/businessservices/odatav2/publishjobs"
 ACTIVATION = "/sap/bc/adt/activation"
-ODATA_V2_BASE = "/sap/opu/odata/sap"
+ODATA_V2_BASE = "/sap/opu/odata/sap"   # yalniz Z/Y servis; servis yolu `odata_servis_yolu(SRVB_NAME)` (G3)
 
 
 def verify_active(names_types):
@@ -816,7 +817,7 @@ def step_publish(client, tok):
 def step_e2e(client):
     """Canli servise composition deep-create: header + 1 varis limani.
     Numbering (NR ZSD001_VN) + KR-VOY validasyon + composition CRUD kaniti."""
-    base = f"{ODATA_V2_BASE}/{SRVB_NAME}"
+    base = odata_servis_yolu(SRVB_NAME)   # G3: Z/Y -> ODATA_V2_BASE/<SRVB> (ayni)
     # CSRF — OData servisinin kendi token'i
     rg = client.session.get(client.url + base + "/", params={"sap-client": "100"},
                             headers={"X-CSRF-Token": "Fetch"}, verify=False, timeout=30)
@@ -843,7 +844,7 @@ def step_e2e(client):
 
 
 def step_verify(client):
-    url = client.url + f"{ODATA_V2_BASE}/{SRVB_NAME}/$metadata"
+    url = client.url + f"{odata_servis_yolu(SRVB_NAME)}/$metadata"   # G3
     r = client.session.get(url, params={"sap-client": "100"}, verify=False, timeout=30)
     print(f"\n=== VERIFY $metadata ===\n{url}\nstatus={r.status_code} len={len(r.text)}")
     print("   " + r.text[:300].replace("\n", " "))

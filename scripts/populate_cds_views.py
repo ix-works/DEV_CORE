@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from sap_adt_lib import set_explicit_working_dir, SAPADTClient
 from sap_adt_lib import cds_kod_metni  # noqa: E402 — #410 K3: yorum/string ayıklayıcı TEK kaynak (Q277 kapısıyla aynı)
 from utils.ad_politikasi import url_segmenti as _adt_seg  # noqa: E402 — Q393 P2a: ADT yol parcasi tek kaynak
+from utils.ad_politikasi import dosya_adindan_ad, musteri_govdesi  # noqa: E402 — G1/G5 (2026-11-15): dosya adi -> SAP adi + musteri koku tek kaynak
 
 
 def extract_label(source: str) -> str:
@@ -53,9 +54,9 @@ def extract_label(source: str) -> str:
     return m.group(1) if m else 'CDS View'
 
 
-def extract_view_name(source: str) -> str:
-    m = re.search(r"define\s+view\s+(\w+)", source, re.IGNORECASE)
-    return m.group(1).upper() if m else ''
+# `extract_view_name` (G2, 2026-11-15) KALDIRILDI: `define view (\w+)` namespace'li adı
+# yakalayamıyordu ve çağıranı yoktu (rg: scripts/ mcp_servers/ tests/ → 0). Ad yakalama
+# `validate_sql_view_names` içinde `(\S+)` ile yapılır.
 
 
 # ─── PRE-FLIGHT VALIDATION (POZİTİF WHITELIST — legacy-prefix hatası tekrar olmasın) ─
@@ -78,7 +79,8 @@ def extract_view_name(source: str) -> str:
 # `.cds` dosyaları yapısal olarak FAIL veriyordu (ölçüldü: 11 paket / ~121 dosya).
 # Artık prefix `--package` argümanından DETERMİNİSTİK türetilir:
 #     ZMOD001_CLC  →  sqlView: "ZMOD001_V_"   ·   view adı: "zmod001_ddl_"
-# Kök kalıp `RAP_VE_NAME_PATTERN` ile AYNIDIR (Z<MOD 2-4 harf><3 hane>).
+# Kök kalıp RAP entity adıyla AYNI gövde kuralıdır: `<önek><MOD 2-4 harf><3 hane>`, önek Z · Y ·
+# projede bildirilmiş `/<NS>/` (`_paket_koku` → `utils.ad_politikasi.musteri_govdesi`).
 # project.yaml config'i KALKMADI: paket adı kalıba uymuyorsa (ya da paket
 # bilinmiyorsa) fallback olarak kullanılır. İkisi de yoksa gate VARSAYMAZ —
 # validate anında NET hatayla durur (fail-safe).
@@ -94,20 +96,33 @@ SQL_VIEW_MAX_LEN  = 14                                          # SAP DB SQL vie
 # Paket adının namespace kökü: ZMOD001_CLC → ZMOD001 (sondaki `_<suffix>` serbest,
 # suffix'siz düz paket adı da kabul). `\d{3}` sonrası başka rakam/harf gelirse
 # EŞLEŞMEZ → yanlış türetme yerine config fallback'ine düşülür (fail-safe).
-_PKG_PREFIX_RE = re.compile(r"^(Z[A-Z]{2,4}\d{3})(?:_|$)")
+# G5 (2026-11-15): önek Z'ye kilitli değil — `utils.ad_politikasi.musteri_govdesi` Z · Y ·
+# projede bildirilmiş `/<NS>/` önekini ayırır, GÖVDE kuralı aynıdır: `YMOD001_CLC` → YMOD001 ·
+# `/NSPC/SD001_CLC` → /NSPC/SD001 (lider yorumu, sahip onayına açık). Bildirilmemiş namespace
+# ⇒ None ⇒ config fallback / B-5. Z adında yapılandırma OKUNMAZ (davranış eskisiyle aynı).
+_PKG_GOVDE_RE = re.compile(r"^([A-Z]{2,4}\d{3})(?:_|$)")
+
+
+def _paket_koku(package):
+    """`ZMOD001_CLC` → `ZMOD001` · `YMOD001` · `/NSPC/SD001`; kalıp dışı / müşterisiz → None."""
+    og = musteri_govdesi(str(package).strip().upper())
+    if og is None:
+        return None
+    m = _PKG_GOVDE_RE.match(og[1])
+    return og[0] + m.group(1) if m else None
 
 
 def _derive_prefixes(package=None):
     """(sql_view_prefix, cds_view_name_prefix) — paket adından türet, olmazsa config.
 
     ZMOD001_CLC → ("ZMOD001_V_", "zmod001_ddl_")
+    /NSPC/SD001_CLC (bildirilmiş) → ("/NSPC/SD001_V_", "/nspc/sd001_ddl_")
     Paket None / kalıp dışı (ör. "LEGACY_STUFF") → (config, config) — ikisi de
     None olabilir; o zaman çağıran fail-safe hata döndürür.
     """
     if package:
-        m = _PKG_PREFIX_RE.match(str(package).strip().upper())
-        if m:
-            kok = m.group(1)
+        kok = _paket_koku(package)
+        if kok:
             return f"{kok}_V_", f"{kok.lower()}_ddl_"
     return _SQLP, _VNP
 
@@ -136,11 +151,20 @@ RAP_VIEW_ENTITY_RE  = re.compile(RAP_BASLIK_DESENI + r"\b", re.IGNORECASE)
 # TD-spec kapısı da atlanıyordu. `view entity` / `abstract entity` yorumları için açık
 # tabanda (3353fca) da vardı. sqlViewName annotation'ı ve yasak literal taraması HAM
 # metinde kalır (değerleri string içindedir).
-# Modül-bağımsız RAP view entity adı (01-naming: Z<MOD><nnn>_<I|C|R|E>_*;
+# Modül-bağımsız RAP view entity adı (01-naming: <önek><MOD><nnn>_<I|C|R|E>_*, önek Z · Y ·
+# bildirilmiş /<NS>/;
 # MOD = SD/MM/FI/CO/PP/QM/PM/EWM... 2-4 harf). Paket-doğru olma kontrolü
 # check_package_naming.py'de (.rules.md regex'i); burası RAP-naming sanity
 # (ZSD'ye hardcoded DEĞİL — başka modülde de çalışır).
-RAP_VE_NAME_PATTERN = re.compile(r"^Z[A-Z]{2,4}\d{3}_(?:I|C|R|E)_[A-Z0-9_]+$")
+# G5 (2026-11-15): ad kuralı önekten sonraki GÖVDEYE uygulanır; önek Z · Y · bildirilmiş
+# `/<NS>/` (`musteri_govdesi`). Z adında hüküm eski Z-yalnız kalıpla
+# (`^Z[A-Z]{2,4}\d{3}_(I|C|R|E)_[A-Z0-9_]+$`, kaldırıldı) aynıdır.
+RAP_VE_GOVDE_PATTERN = re.compile(r"^[A-Z]{2,4}\d{3}_(?:I|C|R|E)_[A-Z0-9_]+$")
+
+
+def rap_ve_adi_gecerli(ad) -> bool:
+    og = musteri_govdesi(str(ad or "").upper())
+    return og is not None and RAP_VE_GOVDE_PATTERN.match(og[1]) is not None
 
 # Source body içinde yasak literal'ler — PROJE-CONFIG'ten (legacy namespace projeye
 # özgü veridir; core hard-code etmez). project.yaml:
@@ -200,7 +224,8 @@ def validate_sql_view_names(cds_files, package=None):
     # B-5 fail-safe: ne paket adı çözülebildi ne config var → VARSAYMA, NET hata.
     if not _sqlp or not _vnp:
         return [f"NAMESPACE-GATE ÇÖZÜLEMEDİ (B-5): paket adı={package!r} kalıba "
-                f"UYMUYOR (beklenen: 'Z<MOD 2-4 harf><3 hane>_<x>', ör. ZMOD001_CLC) "
+                f"UYMUYOR (beklenen: '<önek><MOD 2-4 harf><3 hane>_<x>' — önek Z · Y · projede "
+                f"bildirilmiş /<NS>/; ör. ZMOD001_CLC) "
                 f"VE project.yaml'da `sql_view_prefix` / `cds_view_name_prefix` YOK. "
                 f"İkisinden BİRİ gerekli — gate prefix VARSAYMAZ, bu doldurulmadan "
                 f"CDS populate REDDEDİLİR."]
@@ -214,7 +239,7 @@ def validate_sql_view_names(cds_files, package=None):
             continue
 
         # CDS adından exception kontrolü (config: cds_legacy_sqlview_exceptions)
-        cds_name = f.stem.upper()
+        cds_name = dosya_adindan_ad(f.stem)   # G1: `#ns#x.cds` → `/NS/X`
         legacy_sv = LEGACY_SQLVIEW_EXCEPTIONS.get(cds_name)
 
         # Başlık araması YALNIZ kodda (#410 K3) — yorum/string içindeki `define …` sayılmaz.
@@ -235,11 +260,11 @@ def validate_sql_view_names(cds_files, package=None):
                     f"'define [root] abstract entity <name>' / "
                     f"'define [root] custom entity <name>' bulunamadı"
                 )
-            elif not RAP_VE_NAME_PATTERN.match(vem.group(1).upper()):
+            elif not rap_ve_adi_gecerli(vem.group(1)):
                 errors.append(
                     f"{f.name}: RAP view entity adı='{vem.group(1)}' YASAK. "
-                    f"FORMAT: 'Z<MOD><nnn>_<I|C|R|E>_<x>' "
-                    f"(regex: ^Z[A-Z]{{2,4}}\\d{{3}}_(I|C|R|E)_[A-Z0-9_]+$). "
+                    f"FORMAT: '<önek><MOD><nnn>_<I|C|R|E>_<x>' — önek Z · Y · projede "
+                    f"bildirilmiş /<NS>/ (gövde regex: ^[A-Z]{{2,4}}\\d{{3}}_(I|C|R|E)_[A-Z0-9_]+$). "
                     f"(standards/05-coding-rap.md §4)"
                 )
             # Section 3 (yasak namespace ref) RAP view entity'de de geçerli
@@ -553,7 +578,7 @@ def main():
 
     only_set = None
     if args.only:
-        only_set = {x.strip().upper() for x in args.only.split(',')}
+        only_set = {dosya_adindan_ad(x.strip()) for x in args.only.split(',')}   # G1: `/NS/X` ya da `#ns#x`
 
     cds_files = sorted(src_dir.glob('*.cds'))
     if not cds_files:
@@ -568,7 +593,7 @@ def main():
     if only_set is None:
         files_to_check = cds_files
     else:
-        files_to_check = [f for f in cds_files if f.stem.upper() in only_set]
+        files_to_check = [f for f in cds_files if dosya_adindan_ad(f.stem) in only_set]
 
     # ─── PRE-FLIGHT 1/3: Sprint Gate Check (LESSONS_LEARNED.md PATTERN #1) ──
     # Bu populate işlemi hangi sprint'e ait? Önceki sprint'ler kapalı mı?
@@ -621,7 +646,7 @@ def main():
         from td_spec_check import require_td_spec, find_deleted_items, scan_source_for_deleted
         spec_errors = []
         for f in files_to_check:
-            cds_name = f.stem.upper()
+            cds_name = dosya_adindan_ad(f.stem)   # G1
             # RAP view entity → TD spec ZORUNLU DEĞİL (legacy→TD dönüşümü
             # değil; fresh Z-tablo view'ı). Reviewer rap_cds_creation zinciri de
             # td_spec_check içermez. standards/05-coding-rap.md §9; 2026-05-15
@@ -696,9 +721,9 @@ def main():
     atlananlar = []
     islenmeyenler = []
     hedefler = [f for f in cds_files
-                if not only_set or f.stem.upper() in only_set]
+                if not only_set or dosya_adindan_ad(f.stem) in only_set]
     for sira, f in enumerate(hedefler):
-        name = f.stem.upper()
+        name = dosya_adindan_ad(f.stem)   # G1: `#ns#x.cds` → `/NS/X` (eski `#NS#X` _validate_object_name RED)
         source = f.read_text(encoding='utf-8')
         try:
             durum = create_one(client=client, csrf=csrf, name=name, source=source,
@@ -707,7 +732,7 @@ def main():
         except SilmeSonucuBilinmiyor:
             # Q318: DELETE sonucu bilinmiyor → sonraki objelere YAZMA YOK.
             sayac[SONUC_HATA] += 1
-            islenmeyenler = [g.stem.upper() for g in hedefler[sira + 1:]]
+            islenmeyenler = [dosya_adindan_ad(g.stem) for g in hedefler[sira + 1:]]
             print(f'  [DUR]  {name} DELETE sonucu bilinmiyor — koşum DURDURULDU; '
                   f'İŞLENMEDİ ({len(islenmeyenler)}): '
                   f'{", ".join(islenmeyenler) or "-"}')

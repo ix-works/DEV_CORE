@@ -3449,15 +3449,14 @@ class SAPADTClient:
         """ADT obje URL'inden obje adını türet (E071 teşhis sorgusu için).
 
         '/sap/bc/adt/oo/classes/zcl_foo' -> 'ZCL_FOO'
+        '/sap/bc/adt/oo/classes/%2fns%2fcl_x/source/main' -> '/NS/CL_X'  (namespace tesisatı G4,
+        2026-11-15: eski `.upper()` `%2FNS%2FCL_X` basıyordu ⇒ E071 teşhis sorgusu 0 satır)
         Çözülemezse '<OBJE>' yer tutucusu döner — yer tutucu dürüsttür, tahmin edilen ad değil.
+        Ayrıştırma TEK yerde: `utils.ad_politikasi.url_adi`.
         """
         try:
-            yol = str(object_url or '').split('?')[0].split('#')[0].rstrip('/')
-            for kuyruk in ('/source/main', '/source'):
-                if yol.lower().endswith(kuyruk):
-                    yol = yol[: -len(kuyruk)].rstrip('/')
-            ad = yol.rsplit('/', 1)[-1].strip()
-            return ad.upper() if ad else '<OBJE>'
+            from utils.ad_politikasi import url_adi
+            return url_adi(object_url) or '<OBJE>'
         except Exception:
             return '<OBJE>'
 
@@ -4026,7 +4025,7 @@ class SAPADTClient:
                             f"  1. Wait for them to finish editing\n"
                             f"  2. Ask {lock_owner} to close their SAP session\n"
                             f"  3. SM12'de 'EADT_LOCK' kilidini KONTROL ET (silme/birakma karari kullanicidadir, ADR 0005-C)\n\n"
-                            f"Object: {object_url.split('/')[-1]}",
+                            f"Object: {self._object_name_from_url(object_url)}",
                             lock_owner=lock_owner,
                             status_code=403,
                             response_text=response_text[:500]
@@ -6112,7 +6111,7 @@ class SAPADTClient:
             params['sqlQuery'] = sql_query
 
         response = self.session.get(
-            f"{self.url}/sap/bc/adt/datapreview/freestyle/{table_name.upper()}",
+            f"{self.url}/sap/bc/adt/datapreview/freestyle/{_adt_seg(table_name).upper()}",   # #10: /NS/T -> %2FNS%2FT
             headers=headers,
             params=params,
             timeout=self.timeout_default
@@ -6440,12 +6439,17 @@ class SAPADTClient:
         )
 
     # Validation Helpers
-    def _validate_object_name(self, name, object_type='Object'):
+    def _validate_object_name(self, name, object_type='Object', referans=False):
         """Validate object name follows SAP naming conventions
 
         Args:
             name: Object name to validate
             object_type: Type description for error message
+            referans: True = ad YARATILAN nesnenin değil, BAŞVURULAN nesnenin adıdır (ör. tabloya
+                `include` edilen yapı). G6 (2026-11-15): başvuru OKUMA niteliğindedir — müşteri
+                ad alanı kararı (ADR 0005-A) YALNIZ yaratılan nesneye uygulanır; başvuruda yalnız
+                BİÇİM denetlenir. Eski kod `/SCWM/S_X` gibi SAP namespace'li standart yapıyı
+                reddediyor, namespace'siz standart yapıyı (`BAPIRET2`) kabul ediyordu (tutarsız).
 
         Raises:
             SAPValidationError: If name is invalid
@@ -6474,6 +6478,8 @@ class SAPADTClient:
         # Namespace'li ad (Q393): yalnız projede bildirilmiş müşteri namespace'i (büyük harf).
         if name.startswith('/'):
             from utils import ad_politikasi as _ap  # lazy: object_types deseni
+            if referans and name == name.upper() and _ap.ad_gecerli_mi(name):
+                return   # G6: başvuru — yalnız biçim (namespace dahil tam gramer), müşteri kararı YOK
             if name == name.upper() and _ap.musteri_adi_mi(name, root=_explicit_working_dir):
                 return
             raise SAPValidationError(
@@ -7067,7 +7073,7 @@ class SAPADTClient:
 
         if ref_structure:
             # Validate structure name format
-            self._validate_object_name(ref_structure, 'Referenced Structure')
+            self._validate_object_name(ref_structure, 'Referenced Structure', referans=True)   # G6
             # Reference mode: use include structure syntax
             fields_source = f'  include {ref_structure.upper()};'
         else:

@@ -37,6 +37,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from utils.ad_politikasi import AD_ADAYI, ad_coz, yerel_ad  # noqa: E402 — G2 (2026-11-15): tek ad grameri
 from utils.cds_metin import cds_kod_metni  # noqa: E402 — CDS yorum grameri TEK kaynak; bağımlılıksız modül (#412 düzeltme 4: sap_adt_lib requests/dotenv + .conn_adt yüklüyordu)
 
 
@@ -58,12 +59,16 @@ def _body(text):
     """
     # #410 (2026-11-08): custom entity de tanınır (eskiden ad '?' + gövde aramasi 0'dan
     # başlıyordu ⇒ başlık annotation'ındaki `{` gövde sanılabilirdi).
-    m = re.search(r"define\s+(?:root\s+)?(?:view\s+entity|abstract\s+entity|custom\s+entity)\s+(\w+)",
-                  text)
-    name = m.group(1) if m else "?"
+    # G2 (2026-11-15): ad `(\w+)` ile yakalanıyordu — `\w` `/` eşlemez ⇒ `/NS/X` adlı entity
+    # '?' + projeksiyon yok + gövde olarak BAŞLIK annotation bloğu (SESSİZ yanlış alan tablosu,
+    # ölçüldü). Yakalama `ad_politikasi.AD_ADAYI` (gevşek) + `ad_coz` (katı); çözülemeyen ad '?'
+    # olarak görünür kalır ama gövde araması yine define ifadesinden SONRA başlar.
+    m = re.search(r"define\s+(?:root\s+)?(?:view\s+entity|abstract\s+entity|custom\s+entity)\s+("
+                  + AD_ADAYI + r")", text)
+    name = (ad_coz(m.group(1))[0] or "?") if m else "?"
     search_from = m.end() if m else 0
-    pm = re.search(r"as\s+projection\s+on\s+(\w+)", text[search_from:])
-    proj = pm.group(1) if pm else None
+    pm = re.search(r"as\s+projection\s+on\s+(" + AD_ADAYI + r")", text[search_from:])
+    proj = (ad_coz(pm.group(1))[0] or None) if pm else None
     if pm:
         search_from += pm.end()
     bi = text.find("{", search_from)
@@ -173,14 +178,15 @@ def build_table(path, ref_csv=None):
     # etiket fallback: interface CDS (as projection on X) → X.cds aynı klasörde
     iface_labels = {}
     if proj:
-        ipath = os.path.join(folder, proj + ".cds")
+        # G1 (2026-11-15): `os.path.join(folder, "/NS/X.cds")` klasörü ATAR (mutlak ikinci parça).
+        ipath = os.path.join(folder, yerel_ad(proj) + ".cds")
         if os.path.exists(ipath):
             _, _, ifields = parse_cds(ipath)
             iface_labels = {f["name"]: f["label"] for f in ifields if f["label"]}
     # readonly: sibling .bdef + (projection ise) interface .bdef
     ro = parse_bdef_readonly(os.path.splitext(path)[0] + ".bdef")
     if proj:
-        ro |= parse_bdef_readonly(os.path.join(folder, proj + ".bdef"))
+        ro |= parse_bdef_readonly(os.path.join(folder, yerel_ad(proj) + ".bdef"))
     csv_labels = load_csv_labels(ref_csv)
 
     rows = []

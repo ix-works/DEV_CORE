@@ -57,7 +57,8 @@ Bu klasör **ADT REST endpoint'lerinin nasıl çağrılacağını gösteren çal
 Her pakette **tek geçerli format** vardır. Whitelist'te olmayan her şey YASAK. Negatif ifade ("X olmasın") yetmez — pozitif ifade ("**Y OLMALI**") kullan.
 
 ⚠ **Format paket-türevlidir, modüle SABİTLENMİŞ DEĞİL.** `populate_cds_views.py::_derive_prefixes()`
-hedef paket adından (`--package`) türetir: `Z<MOD 2-4 harf><3 hane>` kökü → `<kök>_V_` + `<kök küçük>_ddl_`.
+hedef paket adından (`--package`) türetir: `<önek><MOD 2-4 harf><3 hane>` kökü (önek Z · Y · projede bildirilmiş
+`/<NS>/`) → `<kök>_V_` + `<kök küçük>_ddl_`.
 Örn. `ZSD001_CLC` → `ZSD001_V_`/`zsd001_ddl_`; `ZMOD001_CLC` → `ZMOD001_V_`/`zmod001_ddl_`.
 Paket adı kalıba uymazsa `project.yaml`'daki `sql_view_prefix`/`cds_view_name_prefix` **fallback**'ine
 düşülür; ikisi de yoksa gate **B-5 NET hatasıyla durur** (prefix VARSAYMAZ). ⇒ Yeni paket için
@@ -72,7 +73,7 @@ düşülür; ikisi de yoksa gate **B-5 NET hatasıyla durur** (prefix VARSAYMAZ)
 | 3. Source body referansları | Sadece hedef namespace (Z-CDS/tablo/DTEL) | proje `project.yaml:cds_banned_literals` desenleri (tanımsızsa bu katman ATLANIR) |
 
 ⛔ **RAP `view entity` istisnası:** `define [root] view entity` / `abstract entity` sqlView TAŞIMAZ →
-katman 1-2 uygulanmaz; onun yerine `^Z[A-Z]{2,4}\d{3}_(I|C|R|E)_[A-Z0-9_]+$` ad kuralı geçerlidir.
+katman 1-2 uygulanmaz; onun yerine RAP ad kuralı `<önek><MOD 2-4 harf><3 hane>_(I|C|R|E)_<ad>` geçerlidir (önek Z · Y · `project.yaml` `customer_namespaces` ile bildirilmiş `/<NS>/`; denetim `populate_cds_views.rap_ve_adi_gecerli`).
 
 **Geçmiş hatalar (referans):**
 
