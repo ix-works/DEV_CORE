@@ -291,7 +291,8 @@ def script_severity() -> dict[str, str]:
 #
 # ⚠ `startswith("mcp__sap-adt__")` gibi ÖNEK dalları ENUMERE EDİLEMEZ ⇒ kapsam dışıdır ve
 # çıktıda SAYIYLA bildirilir (sessiz atlama değil).
-_TOOL_OLAYLARI = ("PreToolUse", "PostToolUse")  # tool-dağıtımı yapan olaylar
+# PostToolUseFailure (2026-11-19 Q411): başarısız çağrının olayı; aynı tool matcher sözdizimi.
+_TOOL_OLAYLARI = ("PreToolUse", "PostToolUse", "PostToolUseFailure")  # tool-dağıtımı yapan olaylar
 _TOOL_ANAHTARI = "tool_name"
 
 
@@ -450,7 +451,7 @@ def hook_tool_adlari() -> tuple[dict[str, set[str]], dict[str, list[str]],
 
 
 def hook_matcherlari() -> tuple[dict[str, list[str]], str]:
-    """hook → PreToolUse/PostToolUse matcher listesi (matcher YOKSA '.*' — Claude Code
+    """hook → PreToolUse/PostToolUse/PostToolUseFailure matcher listesi (matcher YOKSA '.*' — Claude Code
     semantiği; `ix_doctor._kablolama_kontrol` de aynı varsayımı kullanır)."""
     out: dict[str, list[str]] = {}
     try:

@@ -565,6 +565,25 @@ python tests/run_battery.py pbe_kapsam --kardes cikti_iddiasi_durustlugu damga_y
     Üçü de gösterilemeden açılmaz (`removed-controls.md` 2026-08-29).
 - pre_compact çıktısı `systemMessage` (additionalContext ŞEMA-GEÇERSİZ — canlı-kanıtlı).
 - post_tool_failure: fail-payload'da merdiven(+5b infra-satırı) · başarıda sessiz.
+- **post_tool_failure PostToolUseFailure olayı (2026-11-19, Q411):** exit≠0 kabuk komutu ve hata dönen
+  MCP aracı YALNIZ bu olaya gider. Payload'da `tool_response` YOKTUR; metin üst düzey `error`dadır
+  (kabukta ilk satır `Exit code N`, çıktı karışık, ortadan kesilebilir) + `is_interrupt`. ⛔ Fixture
+  payload'ını resmî şemadan kur (`hook_event_name` · `error` · `is_interrupt` · MCP'de `mcp_server`);
+  `tool_response`'lu bir "hata" payload'ı bu olayı ÖLÇMEZ (2026-08-14 korpusu boşluğu tam bu yüzden
+  görmedi). Çıktının `hookEventName`'i koşan olayın adıdır (O1). Kabukta iki kapı aynen geçerli:
+  `grep … push_object.py` exit 1 ile kapı-1'i geçer, sessizliği kapı-2 taşır (FN3). Kablolama da korpusta
+  ölçülür (K1: şablon eşleyicisi Bash · PowerShell · sap-adt'yi tutar, Write/Read'i tutmaz). Korpus:
+  `post_tool_failure_bash` → **27/27**. Altı kipin her biri İLAN ettiği vektörleri düşürür; sapma exit 2,
+  kurulamadı exit 3: `kapi1` N2/N4 · `imza` N5/FN2 · `olaybash` F1/F2/F3/F5/C2 · `olaymcp` FM1/FM2/C3 ·
+  `olayadi` O1 · `kablo` K1. Bağ eklenince kardeş envanterler de değişir: C-TPL-01 `GECERLI_OLAYLAR` ·
+  `check_rule_gate_coverage._TOOL_OLAYLARI` · `kanca_kablolama` bağlantı sayısı (U2/M1d/C3).
+  ⚠ `atc_p1_sonuc --mutasyon-stdin`, ortamda `PYTHONUTF8=1` varken KAÇAR (UTF-8 kipi stdin'i zaten
+  UTF-8 okur, mojibake doğmaz). Bu tur kendi değişikliğinin etkisi olmadığını `env -u PYTHONUTF8` ile ayırdı.
+  **Canlı tetik testi (lider; kod ≠ kablolama):** proje `.claude/settings.json`'a bağ geldikten
+  (`team_setup --tazele-settings`) sonra YENİ oturumda, komut metninde SAP aracı adı geçen ve exit 1 dönen
+  zararsız bir komut koş: `python -c "import sys; print('HTTP 423 InvalidLockHandle - is not locked'); sys.exit(1)" # push_object.py`.
+  Araç sonucunun yanında merdiven görünmeli. Kontrol grubu: aynı komut `sys.exit(0)` ile (PostToolUse
+  yolu, merdiven yine görünür) ve SAP adı geçmeyen bir exit 1 komutu (sessiz kalmalı).
 - **post_tool_failure ATC P1 SONUÇ ekseni (2026-08-21):** tetik **yapısal alan** — `priority_1_count > 0` ya da `must_fix: true`. ⛔ `findings[]` içindeki `priority` değerlerini ya da mesaj METNİNİ tarama (aynı doktrin: "client_log PROSE'u taranmaz"); ⛔ `other_priority_count` tek başına ASLA konuşturmaz (Prio 2/3 ev politikası gereği kapsam dışı); ⛔ hook politikayı ÜRETMEZ — aracın `policy` alanını TAŞIR, yoksa UYDURMAZ. **Çapa AŞAMASI ÖNEMLİ:** hook `json.dumps` varsayılanıyla basar (`ensure_ascii=True`) ⇒ HAM stdout'ta Türkçe substring aramak **sahte-KIRMIZI** verir; çapa daima çözülmüş `additionalContext` üzerinde kurulur. Hook stdin'i **ham byte** okur (`hook_shim`'in UTF-8 çevirimi `sys.stderr.encoding` KOŞULUNA bağlı ⇒ garanti değil) — bu değişmezin kendi mutasyonu vardır. Korpus: `atc_p1_sonuc` → **22/22**; dört mutasyon: `sayi` 18/22 · `bayrak` 20/22 · `esik` 19/22 · `stdin` 21/22. Eksenin GİRDİSİ `mcp_servers/sap_adt/tools/query.py::adt_atc_check` yanıt şeklidir: alan adı ya da `policy` metni değişirse eksen **sessizce boşalır** (HARİTA'da o dosya da korpusa bağlıdır).
 - instructions_log: 10-eşzamanlı → 10-tam-satır; `SEMA-DEĞİŞTİ` görürsen CC-şeması değişti (sessiz `? ?`e dönme).
 

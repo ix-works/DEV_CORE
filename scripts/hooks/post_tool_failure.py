@@ -1,6 +1,23 @@
 #!/usr/bin/env python3
 # ENFORCES: ADR-0006  (ADR 0019 coverage binding)
-"""PostToolUse (matcher: mcp__sap-adt__* **+ Bash**) — başarısız SAP işleminde PATİNAJ KESİCİ.
+"""PostToolUse + PostToolUseFailure (matcher: mcp__sap-adt__* + Bash [+ PowerShell]) — başarısız
+SAP işleminde PATİNAJ KESİCİ.
+
+⚠ 2026-11-19 — OLAY GENİŞLETİLDİ (ölçülmüş boşluk, kontrol gruplu): hook yalnız `PostToolUse`
+olayına bağlıydı. Claude Code o olayı yalnız BAŞARILI çağrıda koşturur; çıkış kodu ≠0 olan
+Bash/PowerShell komutu ve hata dönen MCP aracı `PostToolUseFailure` olayına gider. O olayın
+payload'ında `tool_response` YOKTUR; hata metni üst düzey `error` alanındadır (kabukta ilk satır
+`Exit code N`, ardından stdout+stderr karışık; uzun metin ortadan kesilir) ve `is_interrupt`
+taşır (resmî şema: code.claude.com/docs/en/hooks §PostToolUseFailure). `push_object.py` hata
+yolunda `return 1` döner ⇒ 2026-08-14'ün Bash dalı tam o yolda HİÇ koşmuyordu. Ölçüm (lider):
+aynı çıktı `exit 0` ile merdiveni bastı, `exit 1` ile sessiz kaldı. Düzeltme: şablon hook'u
+`PostToolUseFailure`'a da bağlar; hook `error` alanını kabuk dalında kapı-2'nin girdisine katar,
+MCP dalında olayın kendisini başarısızlık sinyali sayar (`is_interrupt` hariç); çıktının
+`hookEventName`'i koşan olayın adıdır. İKİ KAPI kabuk dalında AYNEN geçerlidir: exit ≠0 tek
+başına konuşturmaz (`grep … push_object.py` eşleşmesizlikte exit 1 döner — kapı-1'i geçer).
+PowerShell: failure bağlantısının eşleyicisinde VAR (bu makinelerde birincil kabuk); PostToolUse
+eşleyicisi bilerek DEĞİŞMEDİ (kurulu projelerde eşleyici farkı otomatik onarılmaz → her projede
+elle karar WARN'ı; başarılı PowerShell çıktısında imza arama boşluğu kayıtlıdır).
 
 ⚠ 2026-08-14 — YÜZEY GENİŞLETİLDİ (ölçülmüş boşluk): hook yalnız `mcp__sap-adt__.*`
 matcher'ına bağlıydı. Bir SAP-yazma turunda **12 push denemesinin tamamı `Bash` üzerinden**
@@ -92,15 +109,42 @@ _BASH_FAIL_IMZALARI = (
 )
 
 BASH_EKI = (
-    "\n\n📌 Bu hata **Bash** üzerinden koşan bir SAP aracından geldi (MCP değil). Aynı komutu\n"
+    "\n\n📌 Bu hata **{arac}** üzerinden koşan bir SAP aracından geldi (MCP değil). Aynı komutu\n"
     "  AYNI parametrelerle tekrar koşmadan önce known-errors.md'de semptomu ARA — bu hook tam\n"
     "  bu tekrarı kesmek için var. Araç retry döngüsü asıl hatayı MASKELEYEBİLİR: ilk yanıtın\n"
     "  ham gövdesine bak (sonraki denemelerin kodu türev olabilir)."
 )
 
+# Kabuk yüzeyleri (2026-11-19): ikisinin de payload'ı `tool_input.command` taşır ve failure
+# olayında `error` ilk satırı `Exit code N`dir (resmî şema). PowerShell'in PostToolUse
+# `tool_response` şekli ÖLÇÜLMEDİ — dal dict/dizge ikisini de okur.
+_KABUK_ARACLARI = ("Bash", "PowerShell")
+_OLAYLAR = ("PostToolUse", "PostToolUseFailure")
 
-def _bash_dali(data: dict) -> int:
-    """Bash yüzeyi: iki kapı da geçilmezse TAM SESSİZ (exit 0, sıfır çıktı)."""
+
+def _olay_adi(data: dict) -> str:
+    """Koşan olay. Alan yoksa (eski/elle payload) şekilden: `error` var + `tool_response` yok ⇒
+    failure. Çıktıdaki `hookEventName` bu değerdir (olay adı uyuşmayan hookSpecificOutput'u
+    Claude Code'un nasıl ele aldığı ÖLÇÜLMEDİ — uyuşmazlık riski alınmaz)."""
+    ad = str(data.get("hook_event_name") or "")
+    if ad in _OLAYLAR:
+        return ad
+    if "error" in data and "tool_response" not in data and "tool_result" not in data:
+        return "PostToolUseFailure"
+    return "PostToolUse"
+
+
+def _yaz(olay: str, metin: str) -> None:
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": olay,
+            "additionalContext": metin,
+        }
+    }))
+
+
+def _bash_dali(data: dict, olay: str) -> int:
+    """Kabuk yüzeyi (Bash/PowerShell): iki kapı da geçilmezse TAM SESSİZ (exit 0, sıfır çıktı)."""
     ti = data.get("tool_input") or {}
     komut = str(ti.get("command", "")).lower() if isinstance(ti, dict) else ""
     if not any(s in komut for s in _BASH_SAP_KOMUT_IMZALARI):
@@ -108,19 +152,17 @@ def _bash_dali(data: dict) -> int:
 
     resp = data.get("tool_response", data.get("tool_result", ""))
     if isinstance(resp, dict):
-        cikti = " ".join(str(resp.get(k, "")) for k in
-                         ("stdout", "stderr", "output", "error", "content"))
+        parcalar = [str(resp.get(k, "")) for k in
+                    ("stdout", "stderr", "output", "error", "content")]
     else:
-        cikti = str(resp)
+        parcalar = [str(resp)]
+    # PostToolUseFailure: çıktı `tool_response`ta DEĞİL, üst düzey `error`da (2026-11-19).
+    parcalar.append(str(data.get("error") or ""))
+    cikti = " ".join(parcalar)
     if not any(s in cikti.lower() for s in _BASH_FAIL_IMZALARI):
         return 0  # başarılı ya da tanınmayan çıktı → SESSİZ (fail-safe: konuşmamak)
 
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PostToolUse",
-            "additionalContext": REMINDER + BASH_EKI,
-        }
-    }))
+    _yaz(olay, REMINDER + BASH_EKI.format(arac=str(data.get("tool_name") or "Bash")))
     return 0
 
 
@@ -243,21 +285,37 @@ def main() -> int:
         _parse_fail_notu()
         return 0
 
-    # Bash yüzeyi ayrı dal: yanıt şekli MCP'den farklı (stdout/stderr, yapısal `ok` YOK)
-    if str(data.get("tool_name", "")) == "Bash":
-        return _bash_dali(data)
+    olay = _olay_adi(data)
 
-    resp = data.get("tool_response", data.get("tool_result", {}))
-    if isinstance(resp, str):
+    # Kabuk yüzeyi ayrı dal: yanıt şekli MCP'den farklı (stdout/stderr, yapısal `ok` YOK)
+    if str(data.get("tool_name", "")) in _KABUK_ARACLARI:
+        return _bash_dali(data, olay)
+
+    failed = False
+    if olay == "PostToolUseFailure":  # MCP-HATA-DALI
+        # Olayın KENDİSİ başarısızlık sinyalidir (araç hata fırlattı / hata sonucu döndü);
+        # `tool_response` yok. Kesinti (`is_interrupt`) aracın bildirdiği hata DEĞİLDİR → sessiz.
+        if data.get("is_interrupt") is True:
+            return 0
+        hata = str(data.get("error") or "")
         try:
-            resp = json.loads(resp)
+            resp = json.loads(hata)
         except Exception:
-            return 0  # düz metin yanıt — yapısal hata sinyali yok
-    if not isinstance(resp, dict):
-        return 0
+            resp = None
+        if not isinstance(resp, dict):
+            resp = {"error": hata}  # düz metin: CDS imza araması `error` alanını okur
+        failed = True
+    else:
+        resp = data.get("tool_response", data.get("tool_result", {}))
+        if isinstance(resp, str):
+            try:
+                resp = json.loads(resp)
+            except Exception:
+                return 0  # düz metin yanıt — yapısal hata sinyali yok
+        if not isinstance(resp, dict):
+            return 0
 
     # Yalnızca YAPISAL alanlar (client_log prose'u DEĞİL — "Unlocked" false-positive fix).
-    failed = False
     if resp.get("ok") is False:
         failed = True
     err = str(resp.get("error", "")).lower()
@@ -277,12 +335,7 @@ def main() -> int:
 
     if not failed:
         if atc_notu:
-            print(json.dumps({
-                "hookSpecificOutput": {
-                    "hookEventName": "PostToolUse",
-                    "additionalContext": atc_notu,
-                }
-            }))
+            _yaz(olay, atc_notu)
         return 0
 
     context = REMINDER
@@ -291,12 +344,7 @@ def main() -> int:
     if atc_notu:
         context += "\n\n" + atc_notu
 
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PostToolUse",
-            "additionalContext": context,
-        }
-    }))
+    _yaz(olay, context)
     return 0
 
 

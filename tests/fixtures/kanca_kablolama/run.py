@@ -15,7 +15,7 @@ K1 MATRİSİ (Q408 KAPANIŞ KOŞULU; boş dizin DEĞİL — eski durumlu sahte "
       M1a önce: 4h FAIL + iki kanca ADIYLA + `--tazele-settings` + §6a ①
       M1b önce: 4j FAIL "kablolu DEĞİL" ama kanca kodu öneri DÖNDÜRDÜ (iki eksen ayrı)
       M1c onarım: settings_tazele → FARK RAPORU yazımdan ÖNCE · yedek · EKLENDİ
-      M1d sonra: 4h PASS 19/19 · 4i PASS · 4j PASS
+      M1d sonra: 4h PASS 20/20 · 4i PASS · 4j PASS
       M1e ikinci koşum: DOKUNULMADI + bayt-eş (idempotent)
       M1f GERÇEK CLI: `team_setup.py --project <kum> --tazele-settings` alt süreç rc 0 + eksik 0
   M2  proje-özel kanca + allow + env eki, pre_compact eksik (2026-08-22 ters yön vakası)
@@ -856,7 +856,7 @@ def main() -> int:
         kontrol("U2 kiyas: eşleyici farkı EKSİK sayılmaz · M1 eksikleri ADIYLA",
                 k2["eksik"] == [] and [b[2] for b, _ in k2["eslesik_farki"]] == ["pull_before_edit"]
                 and sorted(b[2] for b in k1["eksik"]) == ["intake_triage", "recall_inject"]
-                and k1["sablon_sayisi"] == 19 and len(k1["sablon_kanca"]) == 16, f"{k1} {k2}")
+                and k1["sablon_sayisi"] == 20 and len(k1["sablon_kanca"]) == 16, f"{k1} {k2}")
         giris = _m2(T)
         giris_kopya = copy.deepcopy(giris)
         yeni, eklenen = kk.eksikleri_ekle(giris, T)
@@ -1044,8 +1044,8 @@ def main() -> int:
         r_k = _cagir(g, "_kanca_kablolama", p1)
         r_s = _cagir(g, "_kanca_smoke", p1)
         r_r = _cagir(g, "_recall_saglik", p1)
-        kontrol("M1d sonra: 4h PASS 19 bağlantı · 4i son satır PASS · 4j PASS",
-                tag(r_k) == ["PASS"] and "19 bağlantısının" in r_k[0][1]
+        kontrol("M1d sonra: 4h PASS 20 bağlantı · 4i son satır PASS · 4j PASS",
+                tag(r_k) == ["PASS"] and "20 bağlantısının" in r_k[0][1]
                 and r_s and r_s[-1][0] == "PASS" and "FAIL" not in tag(r_s)
                 and tag(r_r) == ["PASS"], f"{r_k} | {r_s[-2:]} | {r_r}")
         once = (p1 / ".claude" / "settings.json").read_bytes()
@@ -1267,8 +1267,8 @@ def main() -> int:
         pc = kum("c3", _kabuk(T))
         r_k = _cagir(g, "_kanca_kablolama", pc)
         r_s = _cagir(g, "_kanca_smoke", pc)
-        kontrol("C3 kabuk biçimi: 4h PASS 19 · 4i PASS (yorumlayıcı komut dizgesinden çözüldü)",
-                tag(r_k) == ["PASS"] and "19 bağlantısının" in r_k[0][1]
+        kontrol("C3 kabuk biçimi: 4h PASS 20 · 4i PASS (yorumlayıcı komut dizgesinden çözüldü)",
+                tag(r_k) == ["PASS"] and "20 bağlantısının" in r_k[0][1]
                 and r_s and r_s[-1][0] == "PASS" and "yorumlayıcı `python`" in r_s[-1][1],
                 f"{r_k} | {r_s[-1:]}")
         kontrol("Y1 F8 4i PASS özeti PATH sınırını taşır (`--layer 4` 1g satırını basmaz)",

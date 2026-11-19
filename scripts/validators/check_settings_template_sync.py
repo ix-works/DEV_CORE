@@ -49,6 +49,7 @@ OPT_OUT: set[str] = set()  # (şu an yok; eklenirse gerekçesi yorum olarak yaz�
 # muhtemelen yanlış yere konmuş yorum.
 GECERLI_OLAYLAR = {
     "SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PostToolUse",
+    "PostToolUseFailure",  # 2026-11-19 Q411: exit!=0 / MCP hata sonucu bu olaya gider
     "PreCompact", "PostCompact", "ConfigChange", "InstructionsLoaded", "Stop",
     "SubagentStart", "SubagentStop", "Notification",
 }
