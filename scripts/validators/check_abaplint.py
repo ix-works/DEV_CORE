@@ -36,7 +36,7 @@ if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
 
 CONFIG = Path(__file__).resolve().parents[1] / 'abaplint' / 'abaplint.json'
 
-# Sürüm PİNLİ (2026-07-26; BUMP 2026-08-28: 2.120.5 → 2.120.38; BUMP 2026-10-03: → 2.120.64; BUMP 2026-10-27: → 2.120.89). Pin'siz `@abaplint/cli`
+# Sürüm PİNLİ (2026-07-26; BUMP 2026-08-28: 2.120.5 → 2.120.38; BUMP 2026-10-03: → 2.120.64; BUMP 2026-10-27: → 2.120.89; BUMP 2026-11-19: → 2.120.111). Pin'siz `@abaplint/cli`
 # her koşumda upstream latest'i çeker → lint davranışı bizden habersiz değişir (upstream'de
 # 2 haftada 43 commit) + tedarik-zinciri yüzeyi. Bump = BİLİNÇLİ karar: burayı güncelle,
 # bir class/program üzerinde koş, farkı gör.
@@ -65,7 +65,13 @@ CONFIG = Path(__file__).resolve().parents[1] / 'abaplint' / 'abaplint.json'
 # ⚠ 2.120.84 BDEF parser'ı (`bdef_parser_error`) getirdi ama bu gate yalnız `.clas.abap`/`.prog.abap`
 # alır ⇒ `.bdef` hâlâ KAPSAM DIŞI; bump bunu DEĞİŞTİRMEZ (ayrı karar).
 # Fetch edilemezse (offline/cache yok) aşağıdaki except → SKIP (reviewer kırılmaz, mevcut davranış).
-ABAPLINT_PIN = '@abaplint/cli@2.120.89'
+# 2026-11-19 bump'ı (2.120.89 → 2.120.111) AYNI YÖNTEMLE — 222 canlı artefakt (`.clas.abap` +
+# `.prog.abap`; `.tmp/` hariç), iki sürüm sırayla, dosya başına 3 paralel:
+#   2.120.89  → 197 OK · 25 FINDING · 0 FAIL  · toplam 23 bulgu satırı
+#   2.120.111 → 196 OK · 25 FINDING · 1 FAIL* · toplam 23 bulgu satırı
+# Bulgu satırı kümesi (dosya, satır) BİREBİR AYNI. *FAIL = `measured=false reason=no-summary-line`
+# (paralel koşumda geçici); aynı dosya tek başına 2.120.89 ×1 + 2.120.111 ×2 → OK/OK/OK ⇒ sürüme bağlı değil.
+ABAPLINT_PIN = '@abaplint/cli@2.120.111'
 ISSUE_RE = re.compile(r'^(.*\.abap)\[(\d+),\s*(\d+)\]\s*-\s*(.+?)\s*\(([a-z_]+)\)\s*\[[EWI]\]\s*$')
 
 # ⛔ FAIL-OPEN KİLİDİ (2026-08-14) — "bulgu satırı görmedim" ≠ "temiz".
