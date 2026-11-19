@@ -36,7 +36,7 @@ satır yoktur — `.gitignore`, pre-commit ve CI (`guard.yml`) bunu üç katmand
 | **L2/L3** standart & playbook | `core/standards/`, `core/playbook/` | On-demand |
 | **L4** paket kuralı | `<source_root>/<MOD>/<PKG>/.rules.md` | On-demand |
 
-> **Markdown link hiçbir şey yüklemez.** Claude Code `CLAUDE.md` okur, `AGENTS.md` okumaz.
+> **Markdown link hiçbir şey yüklemez.** Claude Code `CLAUDE.md` okur; CLAUDE.md varsa `AGENTS.md`'yi okumaz (CC 2.1.277+: CLAUDE.md yoksa AGENTS.md okunur, `/config` → "Project instructions"; ölçüldü 2026-11-19 — bizim projelerde CLAUDE.md hep var).
 > `.claude/rules/` frontmatter'ında **`paths:`** kullanılır (`globs:` sessizce yok sayılır ve
 > kural her oturum koşulsuz yüklenir). Ayrıntı: `core/docs/claude-rules-nasil-yazilir.md`.
 

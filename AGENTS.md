@@ -1,5 +1,5 @@
 > ⛔ **SUPERSEDED (2026-08-01, D1 — denetim):** Bu dosya EMEKLİDİR ve hiçbir oturumda
-> otomatik yüklenmez (harness AGENTS.md okumaz — resmî). Tekil-değerli içerik taşındı:
+> otomatik yüklenmez (harness CLAUDE.md varken AGENTS.md okumaz — resmî; CC 2.1.277+ yalnız CLAUDE.md yoksa okur, ölçüldü 2026-11-19). Tekil-değerli içerik taşındı:
 > davranış → `CLAUDE.core.md` §1.1 · SAP-protokol/teyit/yerleşim → `claude/rules/sap-source-protokolu.md`
 > · UI DONE-CRITERIA (ADR 0017) → `claude/rules/ui5-freestyle.md` · ADT-altyapı kapsamı → `MAINTENANCE.md`
 > · 'YAPILAMAZ-sorgula' → `governance/agent-teams-operating-model.md` · TITLE-suffix → `standards/01` ·

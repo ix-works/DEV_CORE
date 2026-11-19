@@ -14,7 +14,7 @@ birikmiş dersleri sende YOK — bu yüzden burada tekrarlanır:
 - **Kanıtsız iddia yazma.** Yüzde/oran uydurma; her iddiaya kaynak ver (dosya:satır veya URL).
 - **Bulunamadı ≠ yok** · **kod ≠ kablolama** · **çökme ≠ FAIL** · **HTTP 200 ≠ başarı**.
 - Erişemediğini/test edemediğini **"DOĞRULANAMADI"** diye işaretle — boşluğu doldurma.
-- ÇIKTI: bitince `SendMessage({to:"main"})` ile raporla, yoksa lider raporu görmez.
+- ÇIKTI: ara raporlar (AR-n · KOD DONDU · DERHAL) `SendMessage({to:"main"})` ile. NİHAİ rapor: harness sana teslim aracı verdiyse (`SubagentHandback`) YALNIZ onunla — son adımdır, aynı raporu ayrıca `SendMessage` ile GÖNDERME; araç yoksa `SendMessage({to:"main"})`. Aksi hâlde lider raporu görmez.
 
 ## 🔎 METODOLOJİ ARAMASI — `core/` GÖRÜNMEZ (kritik)
 `core/` bir **junction**'dır. `Grep` ve `Glob` junction'ı **TAKİP ETMEZ** (gitignore'dan
@@ -37,7 +37,7 @@ push/activate/create/delete/post_shell araçların **YOK**. Tüm SAP yazımı **
 Bir SAP source objesini DEĞİŞTİRMEK üzere çalışmaya başlarken, **analiz/edit'ten ÖNCE** canlıyı çek: `python scripts/sap_sync_pull.py <NAME> --type <ddls|bdef|srvd|class|...>` (seans-bazlı, obje başına 1×; `--session` marker'dan otomatik). Analizin+değişikliğin TAZE koda dayansın (eski pre-push drift-block kaldırıldı; working-tree≠live doğal). PreToolUse(Edit) hook'u unutursan backstop. Muaf: git-dirty WIP · yeni obje · ref_docs/.tmp · SAP-dışı/UI dosyası. SAP erişilemezse `--offline`.
 
 ## KURALLAR
-- ADR 0005 yasakları; L1-L4 katman mimarisi (CLAUDE.md/AGENTS.md); SAP işinde `sap-abap-dev` skill + `playbook/`; freestyle UI'da PRE-FLIGHT + grid std (ADR 0008) + RUN.md.
+- ADR 0005 yasakları; L1-L4 katman mimarisi (CLAUDE.md + `.claude/rules/`; AGENTS.md SUPERSEDED, yüklenmez); SAP işinde `sap-abap-dev` skill + `playbook/`; freestyle UI'da PRE-FLIGHT + grid std (ADR 0008) + RUN.md.
 - **Tahmin etme** — playbook/standard/mevcut artefakt oku; canlı teyit et. DTEL/append adı ÖNERME (kullanıcı/lider verir, ADR 0005-A).
 - Lider'e SADECE SendMessage; görevleri TaskUpdate ile işaretle. Takıldığın/karar gereken yeri **açık nokta** işaretle, tahminle ilerleme.
 - **DOSYA BÖLGESİ (yazım):** yalnız KENDİ paketinin Zone B'sini yaz — `<source_root>/<senin-pkg>/` SAP kaynak + `docs/` (FS/TS) + `SESSION_NOTES.md` + `.rules.md`. **Zone A (metodoloji/araç: `CLAUDE.md`, `AGENTS.md`, `standards/`, `playbook/`, `governance/`, `.claude/`, `scripts/`, `mcp_servers/`) = SALT-OKUNUR** — değişiklik gerekiyorsa lider'e ÖNER, kendin yazma. Yapısal naming/prefix kararı da lider'in. **Commit = lider** (sen commit etmezsin). Bkz. operating-model §3A.

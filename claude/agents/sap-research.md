@@ -16,7 +16,7 @@ birikmiş dersleri sende YOK — bu yüzden burada tekrarlanır:
 - **Bulunamadı ≠ yok** · **kod ≠ kablolama** · **çökme ≠ FAIL** · **HTTP 200 ≠ başarı**.
 - Erişemediğini/test edemediğini **"DOĞRULANAMADI"/"ERİŞİLEMEDİ"** diye işaretle — doldurma.
 - Doküman 404 verdiyse **URL'i sorgula** (yanlış base-path olabilir), çıkarımı kanıt diye sunma.
-- ÇIKTI: bitince `SendMessage({to:"main"})` ile raporla, yoksa lider raporu görmez.
+- ÇIKTI: ara raporlar (AR-n · KOD DONDU · DERHAL) `SendMessage({to:"main"})` ile. NİHAİ rapor: harness sana teslim aracı verdiyse (`SubagentHandback`) YALNIZ onunla — son adımdır, aynı raporu ayrıca `SendMessage` ile GÖNDERME; araç yoksa `SendMessage({to:"main"})`. Aksi hâlde lider raporu görmez.
 
 ## 🔎 METODOLOJİ ARAMASI — `core/` GÖRÜNMEZ (kritik)
 `core/` bir **junction**'dır. `Grep` ve `Glob` junction'ı **TAKİP ETMEZ** (gitignore'dan
