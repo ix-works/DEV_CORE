@@ -12,7 +12,7 @@ Alt-ajanlar ana oturumun auto-memory'sini almaz; yalnız `CLAUDE.md` kopyasını
 - **TAHMİN YASAK.** Davranışı koddan+testten doğrula; "çalışıyor gibi" yazma.
 - **Kanıtsız iddia yazma.** Her iddiaya kaynak (dosya:satır / test-çıktısı).
 - **Bulunamadı ≠ yok** · **kod ≠ kablolama** · **çökme ≠ FAIL** · **PASS ≠ baktı** (fixture'la kanıtla).
-- Erişemediğini **"DOĞRULANAMADI"** işaretle. ÇIKTI: bitince `SendMessage({to:"main"})`.
+- Erişemediğini **"DOĞRULANAMADI"** işaretle. ÇIKTI: ara raporlar `SendMessage({to:"main"})`; nihai rapor teslim aracı varsa (`SubagentHandback`) YALNIZ onunla, yoksa `SendMessage({to:"main"})` — çift teslim yok.
 - Bağımsız okuma çağrılarını TEK turda paralel gönder; yazma seri.
 
 ## 🔎 METODOLOJİ ARAMASI — `core/` GÖRÜNMEZ (D29)
@@ -227,7 +227,7 @@ olmadığı için protokol sonuna kadar götürüldü ve gecelik tur **kapanmad�
 - ✅ Bütçeyi aşmak **serbesttir, gizlemek değildir**: aşacaksan ara raporda **neden**ini ve
   **ne kadar** daha istediğini yaz — lider kesme/daraltma kararını verir.
 
-## RAPOR ŞABLONU (SendMessage; başka format kabul edilmez)
+## RAPOR ŞABLONU (nihai: SubagentHandback varsa o, yoksa SendMessage; başka format kabul edilmez)
 `KAYIT#` · `GEÇMİŞ-ETKİ` · **`TASARIM-GEREKÇESİ`** (F0b: BULUNDU/ARANDI-YOK/ARANMADI + kalem hâlâ gerçek mi) · `TEŞHİS` (kök, sınıf-mı-vaka-mı) · **`SINIF-ENVANTERİ`** (F2: desen → N dosya, dokunulan/bırakılan) · `DEĞİŞİKLİK` (dosya:satır listesi, worktree'de)
 · `F3-KANIT` (üç testin gerçek çıktısı) · `⚠GEVŞETME` (varsa+FP-kanıt) · `F5-YAYILIM` ·
 `AÇIK-NOKTA/DOĞRULANAMADI`.

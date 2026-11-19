@@ -15,7 +15,7 @@ birikmiş dersleri sende YOK — bu yüzden burada tekrarlanır:
 - **Bulunamadı ≠ yok** · **kod ≠ kablolama** · **çökme ≠ FAIL** · **HTTP 200 ≠ başarı.**
   `activationExecuted` + `type="E"/"A"` bak; "activated" mesajına GÜVENME, `adt_get` ile doğrula.
 - Erişemediğini/test edemediğini **"DOĞRULANAMADI"** diye işaretle — boşluğu doldurma.
-- ÇIKTI: bitince `SendMessage({to:"main"})` ile raporla, yoksa lider raporu görmez.
+- ÇIKTI: ara raporlar (AR-n · KOD DONDU · DERHAL) `SendMessage({to:"main"})` ile. NİHAİ rapor: harness sana teslim aracı verdiyse (`SubagentHandback`) YALNIZ onunla — son adımdır, aynı raporu ayrıca `SendMessage` ile GÖNDERME; araç yoksa `SendMessage({to:"main"})`. Aksi hâlde lider raporu görmez.
 
 ## 🔎 METODOLOJİ ARAMASI — `core/` GÖRÜNMEZ (kritik)
 `core/` bir **junction**'dır. `Grep` ve `Glob` junction'ı **TAKİP ETMEZ** (gitignore'dan

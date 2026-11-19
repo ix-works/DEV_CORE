@@ -79,7 +79,8 @@
 
 > **⚠ 2026-07-10 memory/recall denetiminin İKİ DEĞİŞMEZİ** (vaka anlatısı + nasıl-yazılır:
 > [`docs/claude-rules-nasil-yazilir.md`](docs/claude-rules-nasil-yazilir.md)):
-> ① Claude Code `CLAUDE.md` okur, **`AGENTS.md` okumaz**; düz markdown link **hiçbir şey
+> ① Claude Code `CLAUDE.md` okur, projede CLAUDE.md varken **`AGENTS.md`'yi okumaz** (2.1.277+: CLAUDE.md
+> yoksa AGENTS.md okunur — ölçüldü 2026-11-19); düz markdown link **hiçbir şey
 > yüklemez** → **"yüklendi" varsayma** *(356 satır / 25 zorunlu kural sessizce ölüydü ve ekran
 > teyidi her oturum "yüklendi" diyordu)*.
 > ② Frontmatter'da **yalnız `paths:`** okunur; yanlış anahtar kuralı öldürmez, *sessizce her
@@ -294,7 +295,7 @@
   **ŞABLONDAN kur:** [`claude/templates/spawn-brief.md`](claude/templates/spawn-brief.md) — §7 kanıt
   kuralları (değişmez blok) · §8 rapor + hüküm sözlüğü · §9 engellenirsen. Elle düzyazı BİRİKMEZ:
   iki ajanda tekrarlayan hata brife değil **ajan tanımına** yazılır, döngü-içi yöntem **paylaşılan araca**.
-  Brifingin ÇIKTI bölümüne `SendMessage({to:"main"})` ekle, yoksa rapor gelmez.
+  Brifingin ÇIKTI bölümüne `SendMessage({to:"main"})` ekle (ara raporlar; nihai rapor harness teslim aracı `SubagentHandback` varsa onunla gelir — spawn-brief §8), yoksa rapor gelmez.
   **Checkpoint-heartbeat (uzun/token-ağır ajan):** brifinge ekle → ajan her doğal kilometre-taşında
   (ön-okuma bitti · canlı-teyit bitti · her ana metot/INCLUDE) 2-3 satır `SendMessage({to:"main"})`
   ("yaptım / sırada / açık-nokta"). = **görünürlük** (ne yapıyor), canlılık garantisi DEĞİL: asılı ajan

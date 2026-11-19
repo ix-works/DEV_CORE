@@ -204,7 +204,10 @@ MCP_JSON = """\
 # kurdu, `mcp` yerinde kaldı (sap-adt `mcp<2` ister). Ölçüm: governance/infra-changelog.md
 # "scripts/init_project.py — sap-gui sürüm pin'i" bölümü; bileşen kaydı:
 # governance/tooling-plugins.md "sap-gui MCP" satırı. Sürümü değiştiren dry-run'ı yeniden ölçer.
-SAPGUI_PIP_PIN = "mcp-sap-gui==0.5.2 fastmcp==3.4.7 fastmcp-slim==3.4.7"
+# 2026-11-19 güvenlik bump'ı: 0.5.4 + fastmcp/fastmcp-slim 3.4.10 (fastmcp 3.4.7 GHSA-gpgx-58w2-xwwf);
+# pinli dry-run bu üçünü kurdu, `pip check` temiz. `mcp` BİLEREK pinde yok (sap-adt `mcp<2` ister;
+# paylaşılan ortamda ayrı yükseltilir — 2026-11-19: 1.27.2, GHSA-hvrp-rf83-w775).
+SAPGUI_PIP_PIN = "mcp-sap-gui==0.5.4 fastmcp==3.4.10 fastmcp-slim==3.4.10"
 
 PROJECT_YAML = """\
 # project.yaml — proje kimliği (PROJECT_BOOTSTRAP STEP 0 kararları;

@@ -11,7 +11,7 @@ model kararına bağlı değildir.
 
 ## Neden var (2026-07-10 memory/recall denetimi)
 
-`AGENTS.md` hiçbir oturumda yüklenmiyordu — Claude Code `CLAUDE.md` okur, `AGENTS.md` okumaz.
+`AGENTS.md` hiçbir oturumda yüklenmiyordu — Claude Code `CLAUDE.md` okur, `AGENTS.md` okumaz *(o günkü sürüm; 2.1.277+ CLAUDE.md yoksa AGENTS.md okunur — ölçüldü 2026-11-19)*.
 356 satırlık davranış katmanı, düz bir markdown link'in arkasında sessizce ölüydü. Çözüm:
 her-oturum gerekli olan → `CLAUDE.core.md §1.1`; **iş-anına özgü olan → `claude/rules/`.**
 

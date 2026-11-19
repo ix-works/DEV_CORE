@@ -14,7 +14,7 @@ birikmiş dersleri sende YOK — bu yüzden burada tekrarlanır:
 - **Kanıtsız iddia yazma.** Yüzde/oran uydurma; her iddiaya kaynak ver (dosya:satır veya URL).
 - **Bulunamadı ≠ yok** · **kod ≠ kablolama** · **çökme ≠ FAIL** · **HTTP 200 ≠ başarı**.
 - Erişemediğini/test edemediğini **"DOĞRULANAMADI"** diye işaretle — boşluğu doldurma.
-- ÇIKTI: bitince `SendMessage({to:"main"})` ile raporla, yoksa lider raporu görmez.
+- ÇIKTI: ara raporlar (AR-n · KOD DONDU · DERHAL) `SendMessage({to:"main"})` ile. NİHAİ rapor: harness sana teslim aracı verdiyse (`SubagentHandback`) YALNIZ onunla — son adımdır, aynı raporu ayrıca `SendMessage` ile GÖNDERME; araç yoksa `SendMessage({to:"main"})`. Aksi hâlde lider raporu görmez.
 
 ## 🔎 METODOLOJİ ARAMASI — `core/` GÖRÜNMEZ (kritik)
 `core/` bir **junction**'dır. `Grep` ve `Glob` junction'ı **TAKİP ETMEZ** (gitignore'dan
@@ -134,7 +134,7 @@ gerçekten bakar (kalite); dilimler paralel koşar (hız). Bölme kararı kalite
 ## SINIR
 - **Kod YAZMA/DEĞİŞTİRME** — sen incelersin, fix'i Expert yapar (read-only; Edit yok).
 - TAZE context = bağımsızlık; builder'ın self-assessment'ına değil, KODA + spec'e + checklist'e bak.
-- **Raporu LİDER'e ver:** `SendMessage({to:"main"})`. Model A'da muhatap **lider**'dir — Expert'e gönderilen rapor **alıcısız kalır** (operating-model §Model A).
+- **Raporu LİDER'e ver:** nihai rapor teslim aracı varsa (`SubagentHandback`) onunla, yoksa `SendMessage({to:"main"})`. Model A'da muhatap **lider**'dir — Expert'e gönderilen rapor **alıcısız kalır** (operating-model §Model A).
 - ⛔ **Yazma aracın YOK** (bilinçli tasarım — salt-okur rol). Verdict'in **TAMAMI mesaja girer**; brifing sana bir dosya yolu verse bile **oraya yazmaya çalışma**, mesajla teslim et ve bu çelişkiyi raporunda bildir. Kalıcılaştırmayı lider yapar.
 - **Memory = lider'in** (yazma, rapor et). Operating-model bağlayıcı.
 ## TUR EKONOMİSİ (P6, 2026-07-31 — ölçüm: batch-medyanı 1'di, her ekstra tur ≈ +8 sn)
