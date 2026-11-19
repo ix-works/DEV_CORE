@@ -229,6 +229,40 @@ transkriptten görür ve belirli bir süre sonra müdahale eder.
   yüzden komutun iptal edildiğini ve nasıl devam edileceğini AÇIKÇA söyler.
 - ⛔ Lider kullanıcı yerine onaylamaz, izin listesini genişletmez, denetimi dolanan biçim önermez. Onay
   penceresini otomatik yanıtlayan hook bu turda KURULMADI (ADR 0019: önce bu doküman + bekçi denenir).
+- **ADAY — pencere açmak yerine REDDET (2026-11-19; ⛔ canlı DENENMEDİ, hiçbir yerde ETKİN DEĞİL).**
+  Askıyı kaynağında kesebilecek iki ayar var. Bu madde yalnız onları ve ölçüm planını kaydeder;
+  etkinleştirme ayrı ve açık bir karardır (ajan tanımı ve kullanıcı ayarı davranış yüzeyidir).
+  · `permissions.denyInsteadOfPrompting` (Claude Code 2.1.319 CHANGELOG: *"a tool call that would wait
+  on a permission prompt is denied and the turn continues, in terminal sessions, subagents and
+  teammates"*). Belgeye göre yalnız user ya da managed settings'te ve `--settings` ile verilir; proje
+  `settings.json`'ında geçerli DEĞİLDİR. Etkisi oturumun tamamınadır: lider oturumunun kendi onay
+  pencereleri de kalkar. Kullanıcı ekrandayken bu istenmeyebilir; karar kullanıcınındır.
+  · Ajan frontmatter'ında `permissionMode: dontAsk`: o ajanın, normalde onay penceresi açacak her
+  araç çağrısı sorulmadan reddedilir; allow kuralları ve PreToolUse'un onayladığı çağrılar koşar.
+  ⚠ Sub-agents belgesine göre ana oturum `bypassPermissions`, `acceptEdits` ya da `auto` kipindeyse
+  bu alan **yok sayılır**. Lider auto kipte koşuyorsa frontmatter tek başına bir şey değiştirmez;
+  pilot önce bunu ölçer.
+  **Rol uygunluğu (ikisi için de aynı mantık — allow dışı her şey reddedilir):**
+  · UYGUN: salt-okur roller (`bug-expert`, `sap-research`). İzinli okuma araçlarıyla çalışırlar;
+  ret onları asılı bırakmaz, rapor yine gelir.
+  · UYGUN DEĞİL: Edit/Write'lı roller (`backend-expert`, `frontend-expert`, `sap-feature`,
+  `infra-expert`) ve `adt-gateway`. SAP-yazma ve davranış-yüzeyi araçları D32 gereği allow listesine
+  giremez; bu rollerde onlar da sorulmadan reddedilir ve iş yarım kalır.
+  **Ölçüm planı (pilotu lider koşar; kabul ölçütü baştan yazılı):**
+  ① Kontrol grubu: salt-okur bir deneme ajanı, `dontAsk`'sız, pencere açtığı bilinen biçimde bir komut
+  (çalışma dizini dışında sabit yolda `rm -r`; §4D ÖLÇÜLDÜ satırı). Beklenen: pencere + `IZIN-BEKLIYOR`.
+  ② Aynı ajan `permissionMode: dontAsk` ile, lider önce auto DIŞI bir kipte, sonra auto kipte. Ölçülen:
+  ret süresi, ajanın ret metnini nasıl okuduğu (kullanıcı reddiyle aynı metin mi, "kullanıcıyı bekle"
+  deyip duruyor mu), raporun gelip gelmediği.
+  ③ Allow listesindeki salt-okur çağrı etkilenmiyor mu.
+  ④ `izin_bekleme_taramasi.py` bu retleri nasıl sınıflıyor.
+  ⑤ `denyInsteadOfPrompting` için ①-④ aynı sırayla, tek oturumda `--settings` ile; lider oturumunun
+  kendi pencerelerine etkisi dahil. ⚠ K4 radar notu: auto kipte 20 ardışık ret turu bitirir — ⑤'te sayılır.
+  Kabul: ②'de bekleme sıfır, ajan iş akışını kaybetmeden rapor veriyor; ③'te fark yok. Tutmazsa aday
+  `governance/removed-controls.md`'ye ölçümüyle yazılır.
+  *NEDEN aday:* §4D'nin bugünkü çaresi (komut biçimi + bekçi + `TaskStop`) askıyı **sonradan** keser;
+  bu iki ayar pencereyi hiç açmaz. *NE ZAMAN:* §4D askısı yeniden ölçüldüğünde ya da salt-okur role
+  frontmatter değişikliği önerildiğinde. *Kaynak:* radar 2026-11-19 (K4 · K6 bulgu 3).
 
 ### UI BUILD DONE-CRITERIA + LİDER DOĞRULAMA (ADR 0017 — Booking post-mortem)
 
