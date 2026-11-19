@@ -427,8 +427,11 @@ OZEL_TESTLER = [
     # 2026-08-14: patinaj-kesici hook'un BASH yuzeyi. Hook mcp__sap-adt__.* matcher'ina
     # bagliydi; 12 push denemesi Bash'ten kostu ve hook HIC atesle(n)medi. Iki degismez:
     # ATESLEME (SAP komutu + hata imzasi) ve SESSIZLIK (diger her sey).
+    # 2026-11-19: ayni hook PostToolUseFailure olayina da bagli (exit!=0 Bash/PowerShell + hata
+    # donen MCP araci o olaya gider; payload'da tool_response YOK, metin `error`da).
     ("post_tool_failure_bash",
-     "Bash yuzeyi: iki kapi (komut imzasi + hata imzasi); FP capalari + MCP dali regresyonu"),
+     "Bash yuzeyi: iki kapi (komut imzasi + hata imzasi); FP capalari + MCP dali regresyonu; "
+     "PostToolUseFailure olayi (error alani, hookEventName, sablon kablosu K1)"),
     # 2026-08-17: FS dokuman-standardi UCLUSU (validator + post_validate doc-fs dali +
     # denklik araci). Iki yon ayni korpusta: YAKALAMA (analiz-gunlugu izi) ve SESSIZLIK
     # (belgenin kendi kimlik satiri / mesru hata kodu / katman-2 dosyasi). FP capalari
@@ -1923,6 +1926,8 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
      "F3: settings D7 onarim metni --tazele-settings (ix_doctor 4a + team_setup)"),
     ("claude/settings.template.json", ("O:kanca_kablolama",),
      "T1: sablona eklenen her kancanin ix_doctor smoke ornegi olmali"),
+    ("claude/settings.template.json", ("O:post_tool_failure_bash",),
+     "K1/K2: post_tool_failure PostToolUseFailure + PostToolUse kablosu (kod != kablolama)"),
     ("claude/hook_shim.template.py", ("O:kanca_kablolama",), "4i smoke gercek giris noktasi"),
     ("scripts/hooks/*.py", ("O:kanca_kablolama",), "4i: her kanca zararsiz ornek girdiyle temiz cikmali"),
     ("scripts/parity_probe.py", ("O:parity_probe_diff",),

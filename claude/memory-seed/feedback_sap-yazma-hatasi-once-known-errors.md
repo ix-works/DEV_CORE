@@ -33,6 +33,12 @@ yolları da kapatır. Arama maliyeti ~1 dk, atlamanın maliyeti ~2 saat oldu.
 - Mekanik destek (2026-08-14 eklendi): `post_tool_failure` hook'u artık **Bash** yüzeyinde de
   ateşliyor ve doğrudan known-errors.md'ye yönlendiriyor. ⚠ Yeni bir SAP-yazma aracı eklenirse
   `_BASH_SAP_KOMUT_IMZALARI`'na yazılmalı, yoksa hook o araç için yine sessiz kalır.
+  ⚠ **Düzeltme (2026-11-19):** 2026-08-14 eki yalnız `PostToolUse` olayına bağlıydı; o olay yalnız
+  BAŞARILI (exit 0) çağrıda koşar. `push_object.py` hata yolunda exit 1 döner ⇒ gerçek push
+  hatasında hook o tarihten beri HİÇ ateşlemiyordu (kontrol gruplu ölçüm: aynı çıktı exit 0 ile
+  merdiveni bastı, exit 1 ile sessiz kaldı). Artık `PostToolUseFailure`'a da bağlı. Kurulu bir
+  projede bağ yoksa (`.claude/settings.json`'da `PostToolUseFailure` anahtarı) `team_setup
+  --tazele-settings` ekler. Hook'un "sessiz" kalması, hatanın olmadığını göstermez.
 
 İlgili: [[feedback_arastir-once-patinaj-uretim-gorev]] (dış araştırma ekseni) ·
 [[feedback_ajan-olumsuz-donusu-kanitla-sorgula]] · [[feedback_kural-gate-lenmeli-yoksa-anlamsiz]]

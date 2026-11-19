@@ -530,8 +530,8 @@ veya **`additionalContext` JSON** (bağlam enjekte eder).
 | PreToolUse `mcp__sap-adt__adt_(push_source\|activate\|…)` | `sap_worktype_hint` | **Gerçek obje-tipinden** deterministik checklist hatırlatması | Hayır |
 | PreToolUse `mcp__sap-adt__*` | `itg_backstop` | SAP işi fiilen başladıysa ve ITG-marker yoksa protokolü enjekte | Hayır |
 | PreToolUse `Agent` | `watchdog_launch` | Spawn-anı brifing nudge'ları (şablon izi · prior-art/KB-01 · `agent_type` tuzağı) | Hayır |
-| PostToolUse `Edit\|Write\|MultiEdit` | `post_validate` | Kural-taşıyan dosya editlendiyse `run_all_validators --quick` | **Evet** (FAIL'de geri besler) |
-| PostToolUse `mcp__sap-adt__*` | `post_tool_failure` | Yapısal fail'de patinaj-kesici eskalasyon merdiveni | Hayır |
+| PostToolUse `Edit\|Write\|MultiEdit\|Bash` | `post_validate` | Kural-taşıyan dosya editlendiyse `run_all_validators --quick` | **Evet** (FAIL'de geri besler) |
+| PostToolUse `mcp__sap-adt__*\|Bash` · PostToolUseFailure `mcp__sap-adt__*\|Bash\|PowerShell` | `post_tool_failure` | Yapısal fail'de ya da SAP-yazma komutunun hata imzasında patinaj-kesici eskalasyon merdiveni (exit≠0 komut ve hata dönen MCP aracı yalnız PostToolUseFailure'a gider — 2026-11-19) | Hayır |
 | ConfigChange | `config_change_guard` | Seans-içi davranış-yüzeyi değişimi manifest-onaysızsa blokla | **Evet** |
 | PreCompact | `pre_compact` | SESSION_NOTES/memory flush hatırlatması | Hayır |
 

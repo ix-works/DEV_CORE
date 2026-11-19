@@ -29,7 +29,7 @@
   türünden. *Ateşler:* brife test/doğrulama talimatı yazarken.
 
 ## 3. ÇIKTI FORMATI (output format)
-- Final mesaj = rapor (kanal §8: `SendMessage({to:"main"})`, yoksa son mesajın gövdesi); şekli: <madde listesi / tablo / diff / dosya-yolu>
+- Final mesaj = rapor (kanal §8: harness nihai teslim aracı verdiyse `SubagentHandback`, vermediyse `SendMessage({to:"main"})`, o da yoksa son mesajın gövdesi); şekli: <madde listesi / tablo / diff / dosya-yolu>
 - Büyük çıktıyı scratch/dosyaya YAZ, mesajda yolunu ver (mesaj-şişirme yok).
 - ⛔ **SALT-OKUR rollere dosya yolu ÇIKTI olarak VERİLMEZ.** `tools:` satırında `Write`/`Edit` **olmayan** roller (ör. `bug-expert`) raporu dosyaya yazamaz; çıktıları **mesaja** girer (`SendMessage({to:"main"})`), kalıcılaştırmayı **lider** yapar.
   ⚠ Aksi hâlde ajan raporu **üretir ama teslim edemez**: `Write` çağrısı `No such tool available` ile düşer ve bulgu **hiçbir kanaldan çıkmaz**. Bu bir nüks sınıfıdır — `infra-findings` `Q29` (2026-08-27) ve aynı sınıf 2026-08-07 · 2026-08-19. Ölçüm: 195 `bug-expert` ajanı / 17 yazma denemesi / **17 hata / 0 başarı**.
@@ -123,8 +123,21 @@ brife AYNEN girer; ajan bunları yerine getirmeden iş "bitmiş" sayılmaz.
   *"`SendMessage`'ı çağır. Araç yoksa: ① ara raporları (AR/HB) beklemeden işe devam et, nihai
   raporun BAŞINA `### AR-n` başlıklarıyla o anki hâlleriyle taşı ② bir DERHAL maddesi doğarsa o
   noktada DUR, işi diske yaz, durumu nihai mesajla raporla — lider seni mesajla devam ettirir
-  ③ rapor dosyaya yazılıp orada bırakılamaz (§3)."*
+  ③ rapor dosyaya yazılıp orada bırakılamaz (§3). Harness sana nihai teslim aracı verdiyse
+  (`SubagentHandback`) nihai rapor YALNIZ onunla gider; aynı raporu ayrıca `SendMessage` ile GÖNDERME."*
   ⓘ Lider → ajan yönü (`SendMessage(to:<agentId>)`) durmuş ajanı yeniden uyandırır.
+- **NİHAİ rapor kanalı ≠ ara rapor kanalı (2026-11-19).**
+  · *NE:* Harness ajana nihai teslim aracı verdiyse (`SubagentHandback`; ajanın sistem talimatı bunu
+  açıkça söyler) nihai rapor YALNIZ o araçla gider ve çağrı ajanın koşusunu bitirir, yani son adımdır.
+  Ara raporlar (AR-n, KOD DONDU, TALİMAT-DEĞİŞİKLİĞİ TEYİDİ, DERHAL, §9) `SendMessage({to:"main"})`
+  ile gider; `SubagentHandback` mesajlaşma kanalı değildir, tek seferliktir. Araç verilmediyse nihai
+  rapor da `SendMessage` ile gider (yedek: son mesajın gövdesi).
+  · ⛔ *Çift teslim yapma:* aynı nihai rapor iki kanaldan giderse lider iki kez alır.
+  · *NEDEN:* bir projede 2026-11-19'da auto kipteki lider oturumunda 12/12 alt ajanın nihai raporu
+  harness'ın `[Subagent hand-back]` çerçevesiyle geldi. Bu şablon o güne kadar nihai rapor için
+  yalnız `SendMessage` diyordu. Yalnız `SendMessage`'la biten ajanın raporu teslim edilir mi,
+  ÖLÇÜLMEDİ; auto dışı kiplerde aracın verilip verilmediği de ÖLÇÜLMEDİ.
+  · *NE ZAMAN:* brife rapor kanalı yazarken; ajan nihai raporunu gönderirken.
 - "YAPILAMAZ" demeden önce: repo'da alternatif yol ara + denediklerini kanıtla (kanıtsız olumsuz rapor sorgulanır).
 
 > **Lider notu (brife GİRMEZ) — KOD DONDU vermiş ajana kapsam EKLENMEZ (Issue #417, 2026-11-11):**

@@ -227,6 +227,22 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "_comment": "post_tool_failure (2026-11-19): PostToolUse yalniz BASARILI cagrida kosar; exit!=0 Bash/PowerShell ve hata donen MCP araci bu olaya gider (payload: tool_response YOK, `error` + `is_interrupt`). push_object.py hata yolunda exit 1 => patinaj merdiveni gercek push hatalarinda bu bag olmadan HIC atesleMEZ. Iki kapi (SAP-yazma komutu + SAP hata imzasi) aynen gecerli; siradan basarisiz komutta sessiz.",
+        "matcher": "mcp__sap-adt__.*|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/hook_shim.py",
+              "post_tool_failure"
+            ]
+          }
+        ]
+      }
+    ],
     "ConfigChange": [
       {
         "hooks": [
