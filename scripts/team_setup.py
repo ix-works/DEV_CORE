@@ -1534,7 +1534,10 @@ def npm_clis() -> None:
         # bizim render reçetemiz (doc_tools: -i -o -t -b -s + -p executablePath) yalnız 11
         # hattında ölçüldü — 11.16.0 ↔ 11.17.0 aynı .mmd için bayt-eşit PNG. Bump = bilinçli
         # karar. Aynı sürüm dizesi: doc_tools.py `render_mermaid` hata metni + ix_doctor.py 1d.
-        ("mmdc", "@mermaid-js/mermaid-cli@11.17.0", "Mermaid → SVG/PNG (FS/TS/KD)"),
+        # BUMP 2026-11-19 → 11.17.1 (11.17.0'da düşük şiddetli advisory; radar 2026-11-19). Ölçüm: flowchart
+        # PNG+SVG ve sequence SVG iki sürümde bayt-eşit; sequence PNG aynı sürümde de koşudan koşuya
+        # değişiyor (11.17.1 bir koşuda 11.17.0 ile aynı md5'i verdi) ⇒ fark render gürültüsü, sürüm değil.
+        ("mmdc", "@mermaid-js/mermaid-cli@11.17.1", "Mermaid → SVG/PNG (FS/TS/KD)"),
         ("marp", "@marp-team/marp-cli@latest", "Markdown → slayt (PDF/PPTX)"),
     ]
     for binary, pkg, desc in clis:

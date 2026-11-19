@@ -336,11 +336,11 @@ makineyle karşılaştır:
 | Araç | Çekirdeğin beklediği (kaynak) | Kontrol | Eskiyse |
 |---|---|---|---|
 | `playwright-cli` | **0.1.22** — `claude/skills/playwright-cli` bu sürümden alındı | `playwright-cli --version` | `npm i -g @playwright/cli@0.1.22` |
-| `mcp-sap-gui` | **0.5.2 + `fastmcp` 3.4.7** — `scripts/init_project.py` `SAPGUI_PIP_PIN` | `python -m pip show mcp-sap-gui fastmcp` | ① `python -m pip install --dry-run mcp-sap-gui==0.5.2 fastmcp==3.4.7 fastmcp-slim==3.4.7` → `Would install` listesinde `mcp` paketi **varsa DUR** (sap-adt `mcp<2` ister) ② yoksa aynı komut `--dry-run`'sız ③ Claude Code'da `/mcp` ile yeniden bağlan |
-| `mmdc` | **11.17.0** — `scripts/team_setup.py` `npm_clis` | `mmdc --version` | `npm i -g @mermaid-js/mermaid-cli@11.17.0` |
+| `mcp-sap-gui` | **0.5.4 + `fastmcp` 3.4.10** (2026-11-19 güvenlik bump'ı: fastmcp 3.4.7 GHSA-gpgx-58w2-xwwf) — `scripts/init_project.py` `SAPGUI_PIP_PIN` | `python -m pip show mcp-sap-gui fastmcp mcp` | ① `python -m pip install --dry-run mcp-sap-gui==0.5.4 fastmcp==3.4.10 fastmcp-slim==3.4.10` → `Would install` listesinde `mcp` paketi **varsa DUR** (sap-adt `mcp<2` ister) ② yoksa aynı komut `--dry-run`'sız ③ `mcp` < 1.27.2 ise `python -m pip install mcp==1.27.2` (GHSA-hvrp-rf83-w775; `mcp<2` sınırı içinde, pinde BİLEREK yok) ④ `python -m pip check` temiz ⑤ Claude Code'da `/mcp` ile yeniden bağlan |
+| `mmdc` | **11.17.1** (2026-11-19; 11.17.0'da düşük şiddetli advisory) — `scripts/team_setup.py` `npm_clis` | `mmdc --version` | `npm i -g @mermaid-js/mermaid-cli@11.17.1` |
 | `@abaplint/cli` | `scripts/validators/check_abaplint.py` `ABAPLINT_PIN` | — | eylem yok: `npx` pinli sürümü kendisi çeker |
 
-⚠ **sap-gui 0.5.2:** `sap_screenshot(save_path=…)` yol kısıtı olmadan yeni `.png` yazar ve
+⚠ **sap-gui 0.5.2+ (0.5.4'te de geçerli):** `sap_screenshot(save_path=…)` yol kısıtı olmadan yeni `.png` yazar ve
 `--read-only` bunu engellemez ⇒ `save_path` yalnız proje `.tmp/` ya da scratch altına verilir
 (ayrıntı: [`../governance/tooling-plugins.md`](../governance/tooling-plugins.md) "sap-gui MCP").
 📌 **Bu tablo, bir aracın beklenen sürümünü değiştiren PR'ın AYNI PR'ında güncellenir** — yoksa
