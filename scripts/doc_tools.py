@@ -86,7 +86,7 @@ def render_mermaid(mmd_path, out_path, scale=2, background="white", theme="defau
     if not mmdc:
         # Sürüm pinli (team_setup.py npm_clis ile AYNI dize): pinsiz kurulum 12.x getirir,
         # reçete yalnız 11 hattında ölçüldü.
-        raise RuntimeError("mmdc bulunamadı. Kurulum: npm i -g @mermaid-js/mermaid-cli@11.17.0")
+        raise RuntimeError("mmdc bulunamadı. Kurulum: npm i -g @mermaid-js/mermaid-cli@11.17.1")
     browser = find_browser()
     cfg_path = None
     cmd = [mmdc, "-i", mmd_path, "-o", out_path, "-t", theme, "-b", background, "-s", str(scale)]

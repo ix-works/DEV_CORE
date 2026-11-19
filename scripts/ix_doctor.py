@@ -246,7 +246,7 @@ def katman1() -> list[Sonuc]:
                  else (FAIL, f"CLI YOK: {ad} — kurulum: {kur}"))
     for ad, kur in (("playwright-cli", "npm install -g @playwright/cli"),
                     ("ast-grep", "npm install -g @ast-grep/cli"),
-                    ("mmdc", "npm install -g @mermaid-js/mermaid-cli@11.17.0"),  # pin: team_setup npm_clis
+                    ("mmdc", "npm install -g @mermaid-js/mermaid-cli@11.17.1"),  # pin: team_setup npm_clis
                     ("marp", "npm install -g @marp-team/marp-cli")):
         yol = shutil.which(ad)
         if yol:
