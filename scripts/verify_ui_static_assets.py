@@ -77,7 +77,14 @@ INJECTED_META = re.compile(
     r'<meta name="sap-ui-fesr"[^>]*>'
     r'<meta name="sap\.whitelistService"[^>]*>'
 )
-TEXT_SUFFIXES = {".html", ".htm", ".css", ".js", ".json", ".txt", ".xml", ".properties"}
+TEXT_SUFFIXES = {".html", ".htm", ".css", ".js", ".json", ".txt", ".xml", ".properties", ".library"}
+
+
+def sonek_al(rel) -> str:
+    """Uzantı (küçük harf). Noktayla başlayan uzantısız ad (`.library`) için adın kendisi — `Path(".library").suffix`
+    BOŞ döner ⇒ dosya ikili sayılır, SAP'nin CRLF ile sunduğu `.library` sahte GERCEK-FARK olurdu (ölçüldü 2026-11-27)."""
+    p = Path(rel)
+    return (p.suffix or (p.name if p.name.startswith(".") else "")).lower()
 # Build'in içeriği KODLAMA düzeyinde dönüştürdüğü uzantılar: kaynak (webapp) kıyası bayt
 # üzerinden değil ÇÖZÜLMÜŞ içerik üzerinden yapılır. Yalnız ÖLÇÜLEN uzantı listelenir.
 BUILD_DONUSUMLU = {".properties"}
@@ -187,7 +194,7 @@ def check_app(app: str, ui_root: Path, subdir: str, conn) -> tuple:
     taban_webapp, yalniz_dist, donusum = [], [], []
     for rel in adlar:
         w, d = webapp_d.get(rel), dist_d.get(rel)
-        sonek = Path(rel).suffix.lower()
+        sonek = sonek_al(rel)
         try:
             live = fetch(base_url, user, pw, client, bsp, f"{subdir}/{rel}")
         except urllib.error.HTTPError as e:
