@@ -580,6 +580,10 @@ _c8 = (P.kaynak_kokunden_uygulama(LIB / "src" / NSY, KUM), P.kaynak_kokunden_uyg
        P.kaynak_kokunden_uygulama(APP / "webapp", KUM))
 kontrol("C8 kaynak_kokunden_uygulama: ns kökü → lib · src → None · webapp → app",
         _c8 == (LIB, None, APP), repr(_c8))
+_c8b = (P.kaynak_kokunden_uygulama(Path(os.path.relpath(LIB / "src" / NSY, KUM)), KUM),
+        P.kaynak_kokunden_uygulama(Path(os.path.relpath(APP / "webapp", KUM)), KUM))
+kontrol("C8b GÖRELİ yol (kapının bastığı komut biçimi): ns kökü → lib · webapp → app",
+        _c8b == (LIB, APP), repr(_c8b))
 yaz(LIB / "src", {"disari.js": b"x\n", "com/example/komsu.js": b"y\n"})
 _c9 = (P.sinifla(LIB / "src" / "disari.js", KUM), P.sinifla(LIB / "src" / "com" / "example" / "komsu.js", KUM))
 kontrol("C9 ns kökü DIŞINDAKİ src dosyası (Flat build dağıtmaz — ölçüldü) → None", _c9 == (None, None), repr(_c9))
