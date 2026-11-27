@@ -1,0 +1,35 @@
+# Deploy YALNIZ kanonik yoldan: python core/scripts/deploy_ui.py (std/03 §2.4.1) — yalın `fiori deploy` YASAK.
+# Hedef URL .conn_adt'deki ADT_SAP_URL ile BİREBİR olmalı (std/03 §2.4).
+#
+# LIBRARY FARKLARI (ölçüldü 2026-11-27, @ui5/cli 4.0.61 · @sap/ux-ui5-tooling 1.30.0):
+#  · type: library — `afterTask: generateCachebusterInfo` library'de YOKTUR: `ui5 build --config ui5-deploy.yaml`
+#    "Could not find task generateCachebusterInfo" ile durur. Library görev listesinde son paketleme
+#    görevi `generateLibraryPreload`'dur (ölçülen sıra: … generateLibraryManifest, enhanceManifest,
+#    generateLibraryPreload, buildThemes).
+#  · `deploy_ui.py` `npm run build` + `fiori deploy --config ui5-deploy.yaml` koşar. `fiori deploy` CLI'ı
+#    `dist/`'i OLDUĞU GİBİ arşivler (kök kırpmaz) ⇒ `package.json` build'i `--output-style Flat` İLE kurulur
+#    (varsayılan Namespace düzeni BSP'ye `resources/<ns-yolu>/…` yükler). Flat değilse deploy_ui deploy'u
+#    KOŞTURMAZ (dist/resources/ engeli).
+specVersion: "4.0"
+metadata:
+  name: com.example.alan.ortak
+type: library
+builder:
+  resources:
+    excludes:
+      - /test/**
+  customTasks:
+    - name: deploy-to-abap
+      afterTask: generateLibraryPreload
+      configuration:
+        ignoreCertErrors: true
+        target:
+          url: https://<DEV_HOST>:<PORT>
+          client: "<CLIENT>"
+        app:
+          name: <BSP_ADI>
+          description: <UYGULAMA_ACIKLAMASI>
+          package: <SAP_PAKET>
+          transport: <TRANSPORT_NO>
+        exclude:
+          - /test/

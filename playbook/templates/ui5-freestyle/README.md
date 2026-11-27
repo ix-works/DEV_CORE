@@ -18,7 +18,8 @@ ui5-freestyle/
 ├── surum/                   SÜRÜM PARÇASI — iki dosya: webapp/index.html + webapp/util/SurumParca.js
 │   ├── 1.120/webapp/        backend UI5 >= 1.120 (bootstrap öznitelikleri kebab: on-init, resource-roots …)
 │   └── 1.71/webapp/         backend UI5 < 1.120, ölçülen 1.71.x (bootstrap öznitelikleri tek kelime: oninit …)
-└── backend-referans/        varyant servisi (RAP) kaynak kopyası + sözleşme
+├── backend-referans/        varyant servisi (RAP) kaynak kopyası + sözleşme
+└── library/                UI5 REUSE LIBRARY build/deploy yapılandırması (package.json · ui5.yaml · ui5-deploy.yaml) — §7
 ```
 
 ## 0. Bilinen sınırlar — ilk kullanımda ZORUNLU doğrulama
@@ -204,3 +205,26 @@ kopya yanlış yerdedir, sonuç okunamaz. Dördüncüsü canlı servisin `$metad
 adlarını doğrular (SAP bağlantısı ister). Checklist: `playbook/checklists/ui-freestyle-creation.md`.
 Şablonun kendi testi: `tests/fixtures/ui5_freestyle_sablon/run.py` (iki sürüm parçasıyla sentetik projeye
 kopyalar, üç validator'ı koşar, sürüm yüzeyi kuralını zorlar).
+
+## 7. UI5 reuse library (ortak ekran kodu) — build + deploy notu
+
+`library/` yalnız **yapılandırmadır** (kaynak kodu yoktur; library kodu projenin kendi `src/<ns-yolu>/`'sında
+yaşar: `.library` · `library.js` · `util/` · `fragment/` · `i18n/`). Library kendi ui-root'unda tek başına durur
+(`<paket>/<ui-root>/<lib-dizini>/`), `webapp/` taşımaz. Yer tutucular §2 ile aynı; `com.example.alan.ortak`
+library namespace'idir.
+
+Ölçülmüş üç fark (2026-11-27, @ui5/cli 4.0.61 · @sap/ux-ui5-tooling 1.30.0):
+
+1. **Build `--output-style Flat` İLE** (`package.json` `build`). `deploy_ui.py` `fiori deploy`u koşar ve o
+   CLI `dist/`'i olduğu gibi yükler; varsayılan Namespace düzeni (`dist/resources/<ns-yolu>/`) BSP'ye
+   `resources/…` altında gider. `deploy_ui.py` Flat olmayan library dist'inde deploy'u **koşturmaz**.
+   `--include-task generateResourcesJson` library'nin `resources.json`'unu üretir (düz build üretmez).
+2. **`afterTask: generateLibraryPreload`** (`ui5-deploy.yaml`). Uygulamadaki `generateCachebusterInfo`
+   görevi library'de yoktur; `ui5 build --config ui5-deploy.yaml` onunla durur.
+3. **Paket `library-preload.js`**: `deploy_ui.py` canlı doğrulamayı bu dosyayla yapar;
+   `verify_ui_static_assets.py` kaynak kökü olarak `src/<ns-yolu>`'yu, PULL-BEFORE-EDIT kapısı
+   `<lib>/src/<ns-yolu>/**`'yi kullanır (komut: `fetch_ui_source.py … --karsilastir "<lib>/src/<ns-yolu>" --damgala`).
+
+Deploy yine **yalnız** `python core/scripts/deploy_ui.py --app <lib-dizini> --ui-root <ui-root>` ile
+(std/03 §2.4.1). ÖLÇÜLMEDİ: gerçek BSP'ye library deploy'u ve tüketen uygulamanın library'yi yüklemesi —
+ilk kullanımda canlı turla doğrulanır. Test: `tests/fixtures/ui5_library_kipi/run.py`.

@@ -1,0 +1,14 @@
+{
+  "name": "com.example.alan.ortak",
+  "version": "0.0.1",
+  "description": "<UYGULAMA_ACIKLAMASI>",
+  "private": true,
+  "scripts": {
+    "build": "ui5 build --config=ui5.yaml --clean-dest --dest dist --output-style Flat --include-task generateResourcesJson",
+    "deploy-test": "npm run build && fiori deploy --config ui5-deploy.yaml --testMode true"
+  },
+  "devDependencies": {
+    "@ui5/cli": "^4.0.33",
+    "@sap/ux-ui5-tooling": "1"
+  }
+}

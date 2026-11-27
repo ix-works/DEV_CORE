@@ -1,0 +1,7 @@
+# UI5 reuse library (ortak ekran kodu) — build yapılandırması. Kaynak `src/<ns-yolu>/` altında durur
+# (`.library` + `library.js` + util/ · fragment/ · i18n/); `webapp/` YOKTUR.
+# Library kendi ui-root'unda tek başına durur: `<paket>/<ui-root>/<lib-dizini>/{package.json, ui5.yaml, ui5-deploy.yaml, src/}`.
+specVersion: "4.0"
+metadata:
+  name: com.example.alan.ortak
+type: library

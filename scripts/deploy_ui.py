@@ -23,9 +23,15 @@ Her app için sırayla (atlanamaz):
 Kullanım:
     python scripts/deploy_ui.py --apps sip_se,dsk_se,fih_se
     python scripts/deploy_ui.py --app dsk_se
-    python scripts/deploy_ui.py --all-changed          # git'e göre webapp'i değişen app'ler
+    python scripts/deploy_ui.py --all-changed          # git'e göre webapp'i (library: src'si) değişen app'ler
     python scripts/deploy_ui.py --apps sip_se --dry-run # build+doğrula plan, deploy YOK
     # --ui-root ile farklı paket: --ui-root <source_root>/SD/ZSD001_CLC/ui (varsayılan)
+
+UI5 REUSE LIBRARY (`ui5.yaml` type: library, 2026-11-27): aynı akış, iki fark — doğrulanan dosya
+`library-preload.js` ve build çıktısı `--output-style Flat` olmalı (dist kökü = BSP kökü; Namespace
+düzeni deploy ÖNCESİ FAIL). Kaynak `<lib>/src/<ns-yolu>/`; `--all-changed` src değişikliğini YALNIZ
+library dizininde sayar. Tip okunamazsa (PyYAML yok / belge hatası) uygulama yolu koşar → deploy
+öncesi FAIL. Ayrıntı: `LIB_PRELOAD` bloğu + playbook/templates/ui5-freestyle/library/.
 """
 import argparse
 import base64
@@ -59,6 +65,119 @@ REPO = _project_root()
 # "SOURCE_CODES/SD/<PKG>/ui"); yoksa --ui-root ZORUNLU (core paket VARSAYMAZ).
 DEFAULT_UI_ROOT = _cfg("default_ui_root")  # None olabilir
 PRELOAD = "Component-preload.js"
+
+# ── UI5 reuse library (`type: library`) kipi (2026-11-27) ─────────────────────────────────────
+# Uygulama (`type: application`) yolu DEĞİŞMEDİ; library yalnız `ui5.yaml` tipi `library` olan dizinde
+# açılır. Ölçülen üç gerçek (@ui5/cli 4.0.61 · @sap/ux-ui5-tooling 1.30.0, fixture `ui5_library_kipi`):
+#   ① library build çıktısı varsayılan (Namespace) düzende `dist/resources/<ns-yolu>/`'dadır;
+#      `--output-style Flat` ile `dist/` köküne iner: `.library`, `library.js`, `library-preload.js`,
+#      `manifest.json`, `i18n/`, alt klasörler — canlı SAP library BSP'sinin kök düzeniyle aynı.
+#   ② deploy_ui'nin koştuğu `fiori deploy` CLI'ı build YAPMAZ ve `/resources/<ns>/` kırpması YAPMAZ:
+#      `createDistWorkspace()` `<cwd>/dist`'i `/resources/fiori/cli/`e bağlar, arşiv o öneki kırpar ⇒
+#      `dist/` OLDUĞU GİBİ yüklenir. Namespace düzenli dist BSP'ye `resources/<ns>/…` yükler (yanlış
+#      kök, "Deployment Successful" yine basılır) ⇒ library kipinde deploy ÖNCESİ Flat düzen zorunlu.
+#   ③ `afterTask: generateCachebusterInfo` library görev listesinde yok: `ui5 build --config
+#      ui5-deploy.yaml` "Could not find task generateCachebusterInfo" ile düşer (CLI yolu bu alanı
+#      okumaz; şablon `generateLibraryPreload` kullanır — playbook/templates/ui5-freestyle/library/).
+LIB_PRELOAD = "library-preload.js"
+TIP_UYGULAMA, TIP_KUTUPHANE = "application", "library"
+UI5_YAML = "ui5.yaml"
+KUTUPHANE_KAYNAK = "src"
+KUTUPHANE_TANIM = ".library"
+
+
+def proje_tipi(app_dir: Path) -> tuple:
+    """`ui5.yaml` → (tip, açıklama). Tip @ui5/project'in seçtiği belgedendir (Module.js 4.0.17:
+    `jsyaml.loadAll` → `kind` yoksa "project" · birden çok project belgesi HATA): TEK `kind: project`
+    belgesinin `type`'ı. Okunamazsa (dosya yok / PyYAML yok / belge hatası / 0 ya da >1 project
+    belgesi / tip metin değil / tip @ui5/project şemasında yok / YİNELENEN anahtar — js-yaml gibi) tip None
+    + neden. KAHİN: @ui5/project 4.0.17 `graphFromPackageDependencies().getRoot().getType()` ile
+    kıyaslandı (2026-11-27, 22 vaka, fark 1): tek ayrışma @ui5/project'in TİP DIŞI şema doğrulamasıdır
+    (ör. `metadata.name` deseni) — orada build zaten düşer; tip burada şemaya bakılmadan okunur.
+
+    ⛔ Karar kuralı (çağıranlar): YALNIZ tip == "library" library kipini açar; None dahil her şey
+    bugünkü UYGULAMA yoludur (davranış değişmez). Library'nin tipi okunamazsa uygulama yolu
+    `Component-preload.js` ister ve deploy ÖNCESİ FAIL verir (fail-closed)."""
+    y = Path(app_dir) / UI5_YAML
+    if not y.is_file():
+        return None, f"{UI5_YAML} yok"
+    try:
+        import yaml as _yaml
+    except Exception:                                   # noqa: BLE001
+        return None, "PyYAML yok"
+    try:
+        belgeler = list(_yaml.load_all(y.read_text(encoding="utf-8-sig"), Loader=_yinelenen_anahtar_yukleyici(_yaml)))
+    except Exception as exc:                            # noqa: BLE001
+        return None, f"{UI5_YAML} ayrıştırılamadı ({type(exc).__name__})"
+    if not all(isinstance(b, dict) for b in belgeler):
+        # @ui5/project her belgeyi şemayla doğrular: boş (`---\n---`) ya da liste belge "Configuration must be
+        # of type 'object'" HATASI (KAHİN ölçümü 2026-11-27) ⇒ tip okunamaz.
+        return None, f"{UI5_YAML}'da eşleme (object) olmayan belge var"
+    projeler = [b for b in belgeler if (b.get("kind") or "project") == "project"]
+    if len(projeler) != 1:
+        return None, f"{UI5_YAML}'da {len(projeler)} 'kind: project' belgesi (tam 1 beklenir)"
+    tip = projeler[0].get("type")
+    if not isinstance(tip, str):
+        return None, f"{UI5_YAML} project belgesinde `type` yok"
+    if tip not in UI5_PROJE_TIPLERI:
+        return None, f"{UI5_YAML} `type: {tip}` @ui5/project şemasında yok ({', '.join(UI5_PROJE_TIPLERI)})"
+    return tip, ""
+
+
+# @ui5/project 4.0.17 `lib/validation/schema/specVersion/kind/project.json` `type.enum` (ölçüldü 2026-11-27).
+# Şema dışı tip (`Library` gibi) @ui5/project'te "Invalid ui5.yaml configuration" HATASIDIR ⇒ None (KAHİN eşliği).
+UI5_PROJE_TIPLERI = ("application", "library", "theme-library", "module")
+
+
+def _yinelenen_anahtar_yukleyici(_yaml):
+    """PyYAML SafeLoader + YİNELENEN ANAHTAR = HATA. @ui5/project js-yaml ile okur ve yinelenen anahtarda
+    "Failed to parse configuration" verir; PyYAML ise sessizce SONUNCUYU alır (ölçüldü 2026-11-27, KAHİN:
+    `type: library` + `type: application` → PyYAML application, @ui5/project HATA). Eşlik için reddedilir."""
+    class _Yukleyici(_yaml.SafeLoader):
+        pass
+
+    def _esleme(loader, node, deep=False):
+        anahtarlar = set()
+        for k_node, _v in node.value:
+            k = loader.construct_object(k_node, deep=deep)
+            try:
+                if k in anahtarlar:
+                    raise _yaml.constructor.ConstructorError(None, None, f"yinelenen anahtar: {k!r}",
+                                                              k_node.start_mark)
+                anahtarlar.add(k)
+            except TypeError:   # hash edilemeyen anahtar — SafeLoader'ın kendi hatasına bırak
+                pass
+        return loader.construct_mapping(node, deep=deep)
+    _Yukleyici.add_constructor(_yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _esleme)
+    return _Yukleyici
+
+
+def kutuphane_mi(app_dir: Path) -> bool:
+    return proje_tipi(app_dir)[0] == TIP_KUTUPHANE
+
+
+def kutuphane_kaynak_koku(app_dir: Path) -> tuple:
+    """Library kaynak kökü = `src/` altındaki TEK `.library` dosyasının dizini (`src/<ns-yolu>/`) →
+    (Path|None, neden). Build'in `dist/` köküne (Flat) koyduğu ağaç budur."""
+    src = Path(app_dir) / KUTUPHANE_KAYNAK
+    if not src.is_dir():
+        return None, f"{KUTUPHANE_KAYNAK}/ yok"
+    adaylar = sorted(p.parent for p in src.rglob(KUTUPHANE_TANIM) if p.is_file())
+    if len(adaylar) != 1:
+        return None, f"{KUTUPHANE_KAYNAK}/ altında {len(adaylar)} {KUTUPHANE_TANIM} (tam 1 beklenir)"
+    return adaylar[0], ""
+
+
+def kutuphane_dist_engeli(dist: Path) -> str:
+    """Library dist'i deploy edilebilir mi (Flat düzen)? "" = evet; aksi hâlde NEDEN (deploy KOŞMAZ)."""
+    if (dist / "resources").is_dir():
+        return ("dist/resources/ VAR — build Namespace düzeninde; `fiori deploy` dist'i OLDUĞU GİBİ yükler "
+                "⇒ BSP'ye `resources/<ns>/…` gider (yanlış kök). package.json build script'ine "
+                "`--output-style Flat` ekle (şablon: playbook/templates/ui5-freestyle/library/)")
+    eksik = [a for a in (LIB_PRELOAD, KUTUPHANE_TANIM) if not (dist / a).is_file()]
+    if eksik:
+        return f"build sonrası dist/ kökünde {', '.join(eksik)} yok — library build çıktısı beklenmedik"
+    return ""
 
 
 def _conn_field(text: str, key: str) -> str:
@@ -411,10 +530,12 @@ def run(cmd: str, cwd: Path, env: dict) -> tuple:
     return p.returncode, out
 
 
-def fetch_live_preload(base_url: str, user: str, pw: str, client: str, bsp: str) -> bytes:
-    """Canlı BSP Component-preload.js'i cache-bust + no-cache + identity-encoding ile çek."""
+def fetch_live_preload(base_url: str, user: str, pw: str, client: str, bsp: str,
+                       dosya: str = PRELOAD) -> bytes:
+    """Canlı BSP preload'unu (uygulama: Component-preload.js · library: library-preload.js) cache-bust
+    + no-cache + identity-encoding ile çek."""
     ts = str(int(time.time()))
-    url = f"{base_url}{bsp_icf_yolu(bsp)}{PRELOAD}?sap-client={client}&cb={ts}"
+    url = f"{base_url}{bsp_icf_yolu(bsp)}{dosya}?sap-client={client}&cb={ts}"
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -441,17 +562,31 @@ def deploy_one(app: str, ui_root: Path, conn, env: dict, dry: bool, verify_only:
     if not bsp:
         return (app, False, f"ui5-deploy.yaml'da {BSP_ADI_BEKLENEN} bulunamadı")
 
-    # 1) BUILD (zorunlu — mevcut webapp kaynağından taze dist)
+    kutuphane = kutuphane_mi(app_dir)   # yalnız `ui5.yaml` type: library — aksi hâlde bugünkü yol
+    preload_adi = LIB_PRELOAD if kutuphane else PRELOAD
+    if kutuphane:
+        print(f"  [{app}] UI5 library (ui5.yaml type: library) — doğrulama {LIB_PRELOAD}, dist Flat düzen")
+
+    # 1) BUILD (zorunlu — mevcut webapp/src kaynağından taze dist)
     print(f"  [{app}] build (ui5 build --clean-dest --dest dist)…")
     rc, out = run("npm run build", app_dir, env)
     if rc != 0:
         return (app, False, f"BUILD FAIL rc={rc}: {out.strip()[-300:]}")
-    dist_preload = app_dir / "dist" / PRELOAD
+    if kutuphane:
+        engel = kutuphane_dist_engeli(app_dir / "dist")
+        if engel:
+            return (app, False, f"{engel} (deploy KOŞMADI)")
+    dist_preload = app_dir / "dist" / preload_adi
     if not dist_preload.exists():
-        return (app, False, f"build sonrası dist/{PRELOAD} yok — build çıktısı beklenmedik")
+        ipucu = ""
+        if not kutuphane and (app_dir / KUTUPHANE_KAYNAK).is_dir() and any(
+                (app_dir / KUTUPHANE_KAYNAK).rglob(KUTUPHANE_TANIM)):
+            ipucu = (f" · src/ altında {KUTUPHANE_TANIM} var: library ise {UI5_YAML} tipi okunamadı "
+                     f"({proje_tipi(app_dir)[1]})")
+        return (app, False, f"build sonrası dist/{preload_adi} yok — build çıktısı beklenmedik{ipucu}")
     local_bytes = dist_preload.read_bytes()
     local_hash = sha(local_bytes)
-    print(f"  [{app}] dist/{PRELOAD} sha(norm)={local_hash[:12]}…")
+    print(f"  [{app}] dist/{preload_adi} sha(norm)={local_hash[:12]}…")
 
     if dry:
         return (app, True, f"dry-run (build OK, BSP={bsp}, deploy+doğrulama YOK)")
@@ -464,9 +599,11 @@ def deploy_one(app: str, ui_root: Path, conn, env: dict, dry: bool, verify_only:
             return (app, False, f"DEPLOY FAIL rc={rc}: {out.strip()[-400:]}")
 
     # CANLI DOĞRULAMA — "Successful" mesajına GÜVENME, içeriği kanıtla (satır-sonu normalize'lı)
-    print(f"  [{app}] canlı {PRELOAD} {'karşılaştır (verify)' if verify_only else 'doğrula'} (cache-bust)…")
+    print(f"  [{app}] canlı {preload_adi} {'karşılaştır (verify)' if verify_only else 'doğrula'} (cache-bust)…")
     try:
-        live = fetch_live_preload(base_url, user, pw, client, bsp)
+        # Uygulama çağrısı BİREBİR eski biçim (imza değişmez); library yalnız dosya adını verir.
+        live = (fetch_live_preload(base_url, user, pw, client, bsp, dosya=LIB_PRELOAD) if kutuphane
+                else fetch_live_preload(base_url, user, pw, client, bsp))
     except Exception as e:
         return (app, False, f"canlı çekme HATASI ({type(e).__name__}): {e} — doğrulanamadı")
     live_hash = sha(live)
@@ -497,7 +634,7 @@ def deploy_one(app: str, ui_root: Path, conn, env: dict, dry: bool, verify_only:
 
 
 def changed_apps(ui_root: Path) -> tuple[list, list]:
-    """git'e göre webapp/ altı değişen app'ler → (app_listesi, hatalar).
+    """git'e göre webapp/ altı (library: src/ altı) değişen app'ler → (app_listesi, hatalar).
 
     ⛔ 2026-08-01 (KAYIT S5): eskiden git ÇIKIŞ KODLARI hiç kontrol edilmiyordu ve yalnız
     `list` dönüyordu. `HEAD~1` çözülemeyen bir ağaçta (tek-commit'lik repo, `--depth 1`
@@ -524,8 +661,15 @@ def changed_apps(ui_root: Path) -> tuple[list, list]:
     rel = ui_root.relative_to(REPO).as_posix()
     for block in bloklar:
         for line in block.splitlines():
-            m = re.search(re.escape(rel) + r"/([^/]+)/webapp/", line.replace("\\", "/"))
+            satir = line.replace("\\", "/")
+            m = re.search(re.escape(rel) + r"/([^/]+)/webapp/", satir)
             if m:
+                names.add(m.group(1))
+                continue
+            # Library (2026-11-27): kaynak `<lib>/src/`. YALNIZ ui5.yaml tipi library olan dizin sayılır —
+            # `src/`'si olan bir uygulama (ya da yardımcı dizin) listeye girmez.
+            m = re.search(re.escape(rel) + r"/([^/]+)/" + KUTUPHANE_KAYNAK + r"/", satir)
+            if m and kutuphane_mi(ui_root / m.group(1)):
                 names.add(m.group(1))
     return sorted(names), hatalar
 
@@ -535,7 +679,8 @@ def main() -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--app", help="Tek app (ör. dsk_se)")
     g.add_argument("--apps", help="Virgülle app listesi (ör. sip_se,dsk_se,fih_se)")
-    g.add_argument("--all-changed", action="store_true", help="git'e göre webapp değişen app'ler")
+    g.add_argument("--all-changed", action="store_true",
+                   help="git'e göre webapp (library: src) değişen app'ler")
     g.add_argument("--all", action="store_true", help="ui-root'taki TÜM deployable app (ui5-deploy.yaml olan)")
     ap.add_argument("--ui-root", default=DEFAULT_UI_ROOT,
                 help=f"UI workspace kökü (varsayılan: project.yaml default_ui_root={DEFAULT_UI_ROOT})")
@@ -569,7 +714,7 @@ def main() -> int:
                   "        Açık liste ver: --app <ad> | --apps a,b | --all", file=sys.stderr)
             return 1
         if not apps:
-            print("[i] git'e göre webapp değişen app yok — deploy edilecek bir şey yok.")
+            print("[i] git'e göre webapp/src değişen app yok — deploy edilecek bir şey yok.")
             return 0
         print(f"[i] --all-changed → {', '.join(apps)}")
 
@@ -579,6 +724,7 @@ def main() -> int:
     env["FIORI_TOOLS_PASSWORD"] = conn[2]
     env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
 
+    kutuphaneler = [a for a in apps if (ui_root / a).is_dir() and kutuphane_mi(ui_root / a)]
     mode = "[VERIFY-ONLY]" if args.verify_only else ("[DRY-RUN]" if args.dry_run else "[DEPLOY]")
     print(f"=== UI {mode}: {', '.join(apps)} (ui-root={ui_root}) ===")
     results = list(cozulemeyen_sonuc)
@@ -635,7 +781,9 @@ def main() -> int:
         print("    Bu çıktı 'canlı == build' KANITI DEĞİLDİR ve app'in güncel olduğunu GÖSTERMEZ.")
         print("    Bayatlık (stale) taraması için: --verify-only · gerçek deploy için bayraksız koş.")
     else:
-        print(f"\n[OK] {len(results)} app doğrulandı (canlı Component-preload == build çıktısı).{atl}")
+        lib_notu = (f" · {len(kutuphaneler)} library: canlı library-preload == build çıktısı "
+                    f"({', '.join(kutuphaneler)})" if kutuphaneler else "")
+        print(f"\n[OK] {len(results)} app doğrulandı (canlı Component-preload == build çıktısı{lib_notu}).{atl}")
     return 0
 
 
