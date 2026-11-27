@@ -127,7 +127,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from deploy_ui import (BSP_ADI_BEKLENEN, KUTUPHANE_TANIM, LIB_PRELOAD, PRELOAD, REPO, SATIR_SONU,  # noqa: E402
                        bsp_name, preload_karsilastir,
                        read_conn, run, satir_sonu_normalize, sha)
-from verify_ui_static_assets import TEXT_SUFFIXES, _U_KACIS  # noqa: E402
+from verify_ui_static_assets import TEXT_SUFFIXES, _U_KACIS, sonek_al  # noqa: E402
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -156,7 +156,7 @@ class Olculemedi(Exception):
 
 # ───────────────────────────── saf mantık (fixture'lı) ─────────────────────────────
 def metin_mi(rel: str) -> bool:
-    return Path(rel).suffix.lower() in TEXT_SUFFIXES
+    return sonek_al(rel) in TEXT_SUFFIXES
 
 
 def dbg_kaynak_adi(rel: str) -> str | None:

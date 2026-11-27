@@ -280,10 +280,13 @@ def kaynak_koku(path, root=None) -> Optional[Path]:
 def kaynak_kokunden_uygulama(kok, root=None) -> Optional[Path]:
     """`kok` bir app'in KAPIDAKİ kaynak kökü mü (uygulama `<app>/webapp` · library `<app>/src/<ns-yolu>`)?
     Evetse app dizini, değilse None (`fetch_ui_source --damgala` ön koşulu)."""
-    c = _coz(Path(kok) / "_", root)
+    kok = Path(kok)
+    if not kok.is_absolute() and root is not None:   # `_coz` ile AYNI kök (kapının bastığı komut göreli yol verir)
+        kok = Path(root) / kok
+    c = _coz(kok / "_", root)
     if c is None:
         return None
-    if os.path.normcase(str(_sade(Path(c[1])))) != os.path.normcase(str(_sade(Path(kok)))):
+    if os.path.normcase(str(_sade(Path(c[1])))) != os.path.normcase(str(_sade(kok))):
         return None
     return c[0]
 

@@ -580,6 +580,10 @@ _c8 = (P.kaynak_kokunden_uygulama(LIB / "src" / NSY, KUM), P.kaynak_kokunden_uyg
        P.kaynak_kokunden_uygulama(APP / "webapp", KUM))
 kontrol("C8 kaynak_kokunden_uygulama: ns kökü → lib · src → None · webapp → app",
         _c8 == (LIB, None, APP), repr(_c8))
+_c8b = (P.kaynak_kokunden_uygulama(Path(os.path.relpath(LIB / "src" / NSY, KUM)), KUM),
+        P.kaynak_kokunden_uygulama(Path(os.path.relpath(APP / "webapp", KUM)), KUM))
+kontrol("C8b GÖRELİ yol (kapının bastığı komut biçimi): ns kökü → lib · webapp → app",
+        _c8b == (LIB, APP), repr(_c8b))
 yaz(LIB / "src", {"disari.js": b"x\n", "com/example/komsu.js": b"y\n"})
 _c9 = (P.sinifla(LIB / "src" / "disari.js", KUM), P.sinifla(LIB / "src" / "com" / "example" / "komsu.js", KUM))
 kontrol("C9 ns kökü DIŞINDAKİ src dosyası (Flat build dağıtmaz — ölçüldü) → None", _c9 == (None, None), repr(_c9))
@@ -593,7 +597,11 @@ else:
     ATLANAN.append(("C10 ns harf duyarlılığı", "POSIX: farklı harfli yol ayrı dizindir"))
 
 # ════════════════════════════════ D — fetch_ui_source ════════════════════════════════
-CANLI_LIB = {k: (crlf(v) if F.metin_mi(k) else v) for k, v in flat_dist().items()}
+# SAP `.library`yi de CRLF sunar (ölçüldü 2026-11-27: canlı 669B / 17 CR ↔ yerel 652B) — metin_mi'den BAĞIMSIZ modellenir
+CANLI_LIB = {k: (crlf(v) if (F.metin_mi(k) or k.endswith(".library")) else v) for k, v in flat_dist().items()}
+kontrol("D0 `.library` (uzantısız nokta-adı) METİN sayılır — fetch + verify ortak `sonek_al`",
+        F.metin_mi(".library") and F.metin_mi("x/.library") and V.sonek_al(".library") == ".library" and V.sonek_al("a.JS") == ".js",
+        repr((F.metin_mi(".library"), V.sonek_al(".library"))))
 kaynak, atilan = F.geri_kur(CANLI_LIB)
 kontrol("D1 geri kurma: library-preload.js(.map) atılır, library-dbg.js → library.js",
         "library-preload.js" not in kaynak and "library-preload.js.map" not in kaynak
