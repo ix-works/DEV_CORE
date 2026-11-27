@@ -179,6 +179,17 @@ blok mesajındaki `--session`'lı komut tercih edilir.
   (`view/test/…`) da dışlar; kapının yorumu bunun **alt kümesidir** (daha dar muafiyet = daha çok kapı,
   güvenli yön; karar çözülmüş yolda verildiği için sahte-muaf yok).
 
+- **UI5 reuse library (`ui5.yaml` `type: library`, 2026-11-27):** kaynak kökü `<lib>/src/<ns-yolu>`
+  (`src/` altındaki TEK `.library`'nin dizini; Flat build'in `dist/` köküne koyduğu ağaç). Canlı zip'in
+  kökünde `.library` varsa library sayılır: `library-preload.js(.map)` geri kurmada atılır, paket haritası
+  sondadan muaftır, `manifest.json` / `resources.json` yerelde `.library` VARSA build ürünü (BUILD-DONUSUMU)
+  sayılır. Damga komutu: `fetch_ui_source.py --app-dir <lib> --karsilastir "<lib>/src/<ns-yolu>" --damgala`
+  (`<lib>/src` tek başına kabul edilmez, `[KULLANIM]` rc 2). PBE kapısı `<lib>/src/<ns-yolu>/**`'yi kapsar (ns dışındaki
+  `src/**` kapı dışı: Flat build onu dağıtmaz); deploy `exclude` önekleri ns köküne göre. **`--eslik` library'de YOK** (ÖLÇÜLEMEDİ, rc 2) — `--karsilastir` /
+  `--dist-karsilastir` kullan. ÖLÇÜLMEDİ: canlı library BSP'si (yalnız sentetik + gerçek yerel build) ·
+  `library.js`/`.library`'de build'in `${version}` gibi yer tutucu değişimi (GERCEK-FARK görünür) · tema
+  içeren library. Deploy düzeni (Flat şartı): `templates/ui5-freestyle/README.md` §7.
+
 ## İlgili
 - `scripts/fetch_ui_source.py` (docstring: kipler, çıkış kodları) · `scripts/deploy_ui.py` · `scripts/verify_ui_static_assets.py`
 - [`../standards/03-coding-ui-fiori.md`](../standards/03-coding-ui-fiori.md) §2.4 (excludes notu) · §2.4.1 · §2.4.2

@@ -33,6 +33,12 @@ Ne yapar (her app için, `<subdir>` varsayılan: help):
      ama webapp'te build edilmemiş değişiklik). ⛔ ② KALDIRILAMAZ: help dosyası webapp'te
      düzenlenip build edilmemişse canlı == (bayat) dist'tir; ② olmadan bu kaçar.
 
+UI5 REUSE LIBRARY (`ui5.yaml` type: library, 2026-11-27): kaynak kökü `webapp` yerine
+`src/<ns-yolu>/` (src altındaki tek `.library`'nin dizini — `deploy_ui.kutuphane_kaynak_koku`); dist
+Flat düzende olmalıdır (dist kökü = BSP kökü — `deploy_ui` LIB_PRELOAD bloğu). Namespace düzenli dist
+(`dist/resources/`) ya da çözülemeyen kaynak kökü → o library FAIL, ölçüm KOŞMAZ. Etiketlerde
+`webapp` yerine kaynak kökünün göreli yolu basılır; uygulamada çıktı değişmez.
+
 Kullanım:
     python core/scripts/verify_ui_static_assets.py --all
     python core/scripts/verify_ui_static_assets.py --app <app_adi>
@@ -56,7 +62,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Bağlantı okuma + BSP adı çözümleme + proje kökü DEPLOY_UI'DAN GELİR (kopya üretme:
 # aynı .conn_adt sözleşmesi ve aynı ui5-deploy.yaml ayrıştırması tek yerde kalsın).
 from deploy_ui import (BSP_ADI_BEKLENEN, DEFAULT_UI_ROOT, REPO, all_kipi, atlanan_notu,  # noqa: E402
-                       bsp_icf_yolu, bsp_name, fail_ozeti, read_conn)
+                       bsp_icf_yolu, bsp_name, fail_ozeti, kutuphane_kaynak_koku, kutuphane_mi,
+                       read_conn)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -155,10 +162,23 @@ def check_app(app: str, ui_root: Path, subdir: str, conn) -> tuple:
     bsp = bsp_name(app_dir)
     if not bsp:
         return (app, False, f"ui5-deploy.yaml yok ya da {BSP_ADI_BEKLENEN} okunamadı (deployable değil)")
-    src = app_dir / "webapp" / subdir
+    ke = "webapp"   # kaynak kökünün etiketi (uygulama: webapp · library: src/<ns-yolu>)
+    if kutuphane_mi(app_dir):
+        # Library (2026-11-27): kaynak `src/<ns-yolu>/` (tek `.library`'nin dizini), deploy edilen dist
+        # Flat düzendedir (dist kökü = BSP kökü) ⇒ canlı `<subdir>/<rel>` ↔ `dist/<subdir>/<rel>` aynen.
+        kaynak_kok, neden = kutuphane_kaynak_koku(app_dir)
+        if kaynak_kok is None:
+            return (app, False, f"UI5 library ama kaynak kökü çözülemedi — {neden} (ölçüm KOŞMADI)")
+        if (app_dir / "dist" / "resources").is_dir():
+            return (app, False, f"UI5 library dist'i Namespace düzeninde (dist/resources/) — "
+                                f"deploy_ui bunu deploy etmez; `--output-style Flat` ile build et (ölçüm KOŞMADI)")
+        ke = kaynak_kok.relative_to(app_dir).as_posix()
+        src = kaynak_kok / subdir
+    else:
+        src = app_dir / "webapp" / subdir
     dist = app_dir / "dist" / subdir
     if not src.is_dir() and not dist.is_dir():
-        return (app, True, f"webapp/{subdir} ve dist/{subdir} yok — kıyaslanacak statik varlık yok (atlandı)")
+        return (app, True, f"{ke}/{subdir} ve dist/{subdir} yok — kıyaslanacak statik varlık yok (atlandı)")
 
     base_url, user, pw, client = conn
     webapp_d, dist_d = _dosyalar(src), _dosyalar(dist)
@@ -188,7 +208,7 @@ def check_app(app: str, ui_root: Path, subdir: str, conn) -> tuple:
         else:
             taban_webapp.append(rel)
             if not icerik_esit(live, wb, sonek, cozumle=True):
-                diff.append(f"{rel} (canlı={len(live)}B webapp={len(wb)}B — dist'te yok, taban webapp)")
+                diff.append(f"{rel} (canlı={len(live)}B {ke}={len(wb)}B — dist'te yok, taban {ke})")
                 continue
         # EKSEN ② canlı ↔ kaynak (webapp)
         if wb is None:
@@ -205,22 +225,22 @@ def check_app(app: str, ui_root: Path, subdir: str, conn) -> tuple:
     for rel in diff:
         print(f"      ⛔ FARKLI : {rel}")
     for rel in kaynak_farki:
-        print(f"      ⛔ KAYNAK FARKI : {rel}  (canlı == dist ama webapp'te build edilmemiş değişiklik "
+        print(f"      ⛔ KAYNAK FARKI : {rel}  (canlı == dist ama {ke}'te build edilmemiş değişiklik "
               "→ build + deploy)")
     for rel in missing:
         print(f"      ⛔ CANLIDA YOK/OKUNAMADI : {rel}")
     for rel in dist_stale:
-        print(f"      ⚠ webapp ≠ dist : {rel}  (deploy dist'i gönderir → önce build)")
+        print(f"      ⚠ {ke} ≠ dist : {rel}  (deploy dist'i gönderir → önce build)")
     if taban_webapp:
-        print(f"      ℹ dist/{subdir}'de yok → taban webapp ({len(taban_webapp)}): {_kisalt(taban_webapp)}")
+        print(f"      ℹ dist/{subdir}'de yok → taban {ke} ({len(taban_webapp)}): {_kisalt(taban_webapp)}")
     if yalniz_dist:
         print(f"      ℹ yalnız dist'te (kaynak kıyası yok) ({len(yalniz_dist)}): {_kisalt(yalniz_dist)}")
     if donusum:
-        print(f"      ℹ build dönüşümü BEKLENEN ({len(donusum)}): webapp baytı ≠ dist, "
+        print(f"      ℹ build dönüşümü BEKLENEN ({len(donusum)}): {ke} baytı ≠ dist, "
               f"\\uXXXX çözülünce anahtar/değer EŞİT — {_kisalt(donusum)}")
 
     ok = not diff and not missing and not kaynak_farki
-    taban = "dist" if dist.is_dir() else "webapp (dist yok)"
+    taban = "dist" if dist.is_dir() else f"{ke} (dist yok)"
     note = f"{len(same)}/{len(adlar)} dosya canlıda AYNI (BSP={bsp}, taban={taban})"
     if diff:
         note += f" · FARKLI={len(diff)}"
@@ -229,7 +249,7 @@ def check_app(app: str, ui_root: Path, subdir: str, conn) -> tuple:
     if missing:
         note += f" · YOK={len(missing)}"
     if dist_stale:
-        note += f" · webapp≠dist={len(dist_stale)}"
+        note += f" · {ke}≠dist={len(dist_stale)}"
     if donusum:
         note += f" · build-dönüşümü={len(donusum)}"
     return (app, ok, note)
@@ -287,7 +307,7 @@ def main() -> int:
         ozet = fail_ozeti(fail, len(results), len(cozulemeyen_sonuc), "app'te statik varlık canlıda GÜNCEL DEĞİL")
         print(f"\n[FAIL] {ozet}{atl}.\n"
               "       FARKLI (canlı ≠ dist) → `deploy_ui.py --app <ad>` (build + deploy) → bu script'i tekrar koş.\n"
-              "       KAYNAK FARKI (canlı == dist ≠ webapp) → dist bayat: build + deploy.\n"
+              "       KAYNAK FARKI (canlı == dist ≠ webapp · library: src/<ns-yolu>) → dist bayat: build + deploy.\n"
               "       ⚠ 'FARKLI' çıkanlar dokunulmamış app'leri de kapsıyorsa önce ÖLÇÜMDEN şüphelen "
               "(enjekte meta bloğu ya da build dönüşümü değişmiş olabilir — dosya başlığındaki notlara bak).",
               file=sys.stderr)

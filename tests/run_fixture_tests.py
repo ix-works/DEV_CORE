@@ -881,6 +881,9 @@ OZEL_TESTLER = [
      "kopyadaki dosya sayisi; ortak govdede surume bagli API yok; parca imzasi; manifest/view/"
      "controller/define/i18n tamligi; Excel dataSource {dataUrl} nesnesi; kolon filtresi tarih strictParsing + "
      "sayi getFloatInstance, ham metin filtre degeri yok; kopyaya sokulan kusuru 3 validator yakalar; 14 mutasyon"),
+    # 2026-11-27: UI5 reuse library (ui5.yaml type: library) kipi — deploy_ui/verify/PBE/fetch.
+    ("ui5_library_kipi",
+     "library: Flat dist → library-preload.js canli dogrulamasi · Namespace dist (dist/resources/) deploy KOSMAZ · tipi okunamayan library fail-closed · changed_apps src yalniz library · verify kaynak koku src/<ns> · PBE library src kapida (exclude ns kokune gore, src'li uygulama disarida) · fetch geri kurma library-preload atar + manifest/resources.json BUILD + --damgala ns koku; uygulama kontrol gruplari; gercek ui5 build UI5_CLI varsa (yoksa ATLA); sablon library/; KAHIN @ui5/project getType; 21 mutasyon"),
     # 2026-11-07 Issue #391: namespace'li paket — yaml-lite tirnakli `#` + paket siniri .rules.md kabulu.
     ("issue391_ns_yaml_yorum",
      "project_config `#` yalniz tirnak DISINDA yorum (satir ici/blok repro, satir sonu yorumu, "
@@ -1985,6 +1988,15 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # sayisi check_ui5_freestyle_traps icin pinli (10; Q386 ile 9->10) — baglanti istenirse ikisi birlikte guncellenir.
     ("playbook/templates/ui5-freestyle/**", ("O:ui5_freestyle_sablon",),
      "freestyle UI5 sablonu: ortak govde + surum parcalari + backend referansi"),
+    # 2026-11-27 UI5 library kipi: dort aracin library dali + library sablonu (T1/T2 + gercek build E1).
+    ("playbook/templates/ui5-freestyle/library/**", ("O:ui5_library_kipi",),
+     "library sablonu: build Flat + generateResourcesJson, deploy afterTask library gorevi"),
+    ("scripts/deploy_ui.py", ("O:ui5_library_kipi",),
+     "proje_tipi/kutuphane_mi/kutuphane_kaynak_koku/kutuphane_dist_engeli + library-preload canli dogrulama"),
+    ("scripts/verify_ui_static_assets.py", ("O:ui5_library_kipi",), "library kaynak koku src/<ns-yolu>"),
+    ("scripts/hooks/_pbe_ui.py", ("O:ui5_library_kipi",), "library src/** kapsami + kaynak_kokunden_uygulama"),
+    ("scripts/fetch_ui_source.py", ("O:ui5_library_kipi",),
+     "library geri kurma + build urunleri + --damgala kaynak koku + --eslik OLCULEMEDI"),
     # 2026-11-08 DEV_CORE #413 — AYRI satirlar; sap_adt_lib birlesimi 32→33 (main #412 sonrasi) ⇒ `b0_secim` P3
     # pinli sayisi BIRLIKTE guncellendi.
     ("scripts/sap_adt_lib.py", ("O:enhs_badi_spot",),

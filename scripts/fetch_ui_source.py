@@ -87,6 +87,14 @@ Kullanım:
     python core/scripts/fetch_ui_source.py --bsp ZSD001_APP --out <scratch>/webapp --zip-kaydet <scratch>/canli.zip
     python core/scripts/fetch_ui_source.py --zip <scratch>/canli.zip --karsilastir <ui>/<app>/webapp
 
+UI5 REUSE LIBRARY (2026-11-27): BSP kökünde `.library` varsa library sayılır. Geri kurmada kökteki
+`library-preload.js(.map)` da atılır (sondada paket haritası atlanır); `--karsilastir` yerel kökü
+`<lib>/src/<ns-yolu>`'dur ve kökteki `manifest.json` / `resources.json` yerelde YOKSA (yerelde
+`.library` varken) BUILD-DONUSUMU sayılır — library build'i bunları üretir (ölçüldü @ui5/cli 4.0.61;
+`LIB_BUILD_URUNLERI`).
+`--damgala` kaynak kökünü kapıdan alır (`_pbe_ui.kaynak_kokunden_uygulama`). `--eslik` library'de
+ÖLÇÜLEMEDİ (rc 2) döner. Kökte `.library` olmayan zip'te davranış AYNEN.
+
 Çıkış kodu: 0 = istenen her adım temiz (eşlik TAM/SATIR-SONU; karşılaştırmada yalnız AYNI ve
 BUILD-DONUSUMU) · 1 = fark var / eşlik YOK · 2 = ÖLÇÜLEMEDİ ya da kullanım hatası (ağ, ui5 CLI
 yok, zip'te preload yok, `--out` dolu…). ⛔ 2 asla "temiz" okunmaz.
@@ -116,7 +124,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Tek kaynak: bağlantı sözleşmesi, BSP adı, satır sonu ve preload kıyası deploy_ui'da yaşar.
-from deploy_ui import (BSP_ADI_BEKLENEN, PRELOAD, REPO, SATIR_SONU, bsp_name, preload_karsilastir,  # noqa: E402
+from deploy_ui import (BSP_ADI_BEKLENEN, KUTUPHANE_TANIM, LIB_PRELOAD, PRELOAD, REPO, SATIR_SONU,  # noqa: E402
+                       bsp_name, preload_karsilastir,
                        read_conn, run, satir_sonu_normalize, sha)
 from verify_ui_static_assets import TEXT_SUFFIXES, _U_KACIS  # noqa: E402
 
@@ -165,6 +174,18 @@ def dbg_adi(rel: str) -> str:
     return _DBG_ILERI.sub(r"-dbg\1", rel.rpartition("/")[2])
 
 
+def kutuphane_zipi_mi(dosyalar) -> bool:
+    """BSP bir UI5 library mi? Kökte `.library` (SAP library BSP'si ve Flat library build'i — ölçüldü).
+    Uygulama zip'inde kökte `.library` olmaz ⇒ uygulama davranışı değişmez."""
+    return KUTUPHANE_TANIM in dosyalar
+
+
+def preload_adlari(dosyalar) -> tuple:
+    """Atılacak/sondada atlanacak paket adları: uygulama `Component-preload.js` · library ayrıca KÖKTEKİ
+    `library-preload.js` (yalnız kökte: library preload'u BSP kökündedir)."""
+    return (PRELOAD, LIB_PRELOAD) if kutuphane_zipi_mi(dosyalar) else (PRELOAD,)
+
+
 def harita_sondasi(dosyalar: dict[str, bytes]) -> list[str]:
     """Kaynak haritası sondası → sapma listesi (boş = beklenen biçim).
 
@@ -175,8 +196,11 @@ def harita_sondasi(dosyalar: dict[str, bytes]) -> list[str]:
     (ölçüldü 3 BSP · 21/21 harita). Girdi build'den ÖNCE dönüştürülmüşse builder `-dbg`'e de harita
     üretir (minifier.js `dbgSourceMapResource`) ve `sources` özgün dosyayı gösterir."""
     sapma = []
+    lib = kutuphane_zipi_mi(dosyalar)
     for rel in sorted(dosyalar):
         if not rel.endswith(".map") or rel.rpartition("/")[2] == PRELOAD + ".map":
+            continue
+        if lib and rel == LIB_PRELOAD + ".map":   # paket haritası çok kaynaklıdır (Component-preload gibi)
             continue
         hedef = rel[:-4]
         if dbg_kaynak_adi(hedef):
@@ -198,12 +222,13 @@ def geri_kur(dosyalar: dict[str, bytes]) -> tuple[dict[str, bytes], list[tuple[s
 
     Metin dosyaları LF'e indirilir; ikili dosyalar HAM kalır."""
     dbg_hedef = {rel: h for rel in dosyalar if (h := dbg_kaynak_adi(rel))}
+    lib = kutuphane_zipi_mi(dosyalar)
     kucultulmus = set(dbg_hedef.values())
     kaynak: dict[str, bytes] = {}
     atilan: list[tuple[str, str]] = []
     for rel in sorted(dosyalar):
         ad = rel.rpartition("/")[2]
-        if ad in (PRELOAD, PRELOAD + ".map"):
+        if ad in (PRELOAD, PRELOAD + ".map") or (lib and rel in (LIB_PRELOAD, LIB_PRELOAD + ".map")):
             atilan.append((rel, "preload"))
             continue
         if rel.endswith(".map"):
@@ -315,11 +340,30 @@ def dosya_kiyasla(rel: str, canli: bytes, yerel: bytes) -> tuple[str, str, str, 
     return GERCEK, "", _metin(canli), _metin(yerel)
 
 
-def karsilastir(kaynak: dict[str, bytes], yerel: dict[str, bytes]) -> list[tuple[str, str, str, list[str]]]:
-    """→ [(rel, sınıf, detay, unified-diff satırları)] — rel sıralı."""
+# Library build'inin kaynakta KARŞILIĞI OLMAYAN kök çıktıları (ölçüldü @ui5/cli 4.0.61, fixture
+# ui5_library_kipi E): `manifest.json` (generateLibraryManifest — `.library`'den) · `resources.json`
+# (generateResourcesJson — dosya listesi; şablon build'i bunu ister). Liste dışlama değil ÖLÇÜLEN listedir.
+LIB_BUILD_URUNLERI = {
+    "manifest.json": "library manifest.json'u build ÜRETİR (generateLibraryManifest, .library'den) — "
+                     "kaynakta yok, içerik .library kıyasıyla kapsanır",
+    "resources.json": "library resources.json'u build ÜRETİR (generateResourcesJson, dosya listesi) — "
+                      "kaynakta yok, dosya kümesi diğer satırlarla kapsanır",
+}
+
+
+def karsilastir(kaynak: dict[str, bytes], yerel: dict[str, bytes],
+                kutuphane: bool = False) -> list[tuple[str, str, str, list[str]]]:
+    """→ [(rel, sınıf, detay, unified-diff satırları)] — rel sıralı.
+
+    `kutuphane=True` (canlı zip kökünde `.library`): `LIB_BUILD_URUNLERI`'ndeki kök dosya YEREL'de YOKSA
+    ve yerelde `.library` VARSA BUILD-DONUSUMU sayılır (library build'i bunları üretir; kaynakta durmaz).
+    Yerelde varsa normal kıyaslanır. Uygulamada (`kutuphane=False`) AYNEN."""
     satirlar = []
     for rel in sorted(kaynak.keys() | yerel.keys()):
         if rel not in yerel:
+            if kutuphane and rel in LIB_BUILD_URUNLERI and KUTUPHANE_TANIM in yerel:
+                satirlar.append((rel, BUILD, LIB_BUILD_URUNLERI[rel], []))
+                continue
             satirlar.append((rel, YALNIZ_CANLI, "", []))
             continue
         if rel not in kaynak:
@@ -598,6 +642,9 @@ def _uygulama_kimligi(kaynak: dict[str, bytes]) -> str:
 
 def eslik_olc(kaynak: dict[str, bytes], canli: dict[str, bytes], ui5_cli: str | None) -> tuple:
     """Geri kurulan kaynağı DEĞİŞTİRMEDEN derle → (sınıf, modüller, tam-liste özeti)."""
+    if kutuphane_zipi_mi(canli):
+        raise Olculemedi("UI5 library BSP'si (kökte .library) — --eslik yalnız UYGULAMA için kurulu "
+                         "(library build eşliği bu araçta YOK); --karsilastir / --dist-karsilastir kullan")
     if PRELOAD not in canli:
         raise Olculemedi(f"zip'te {PRELOAD} yok — eşlik ölçülemez (preload'suz build?)")
     cli = ui5_cli or shutil.which("ui5")
@@ -665,7 +712,9 @@ def kapsam_beyani(zip_kaynagi: str, eslik_durumu: str, karsilastirma: str, deplo
         "             ondan eşit çıktı üretebilir; tek ayırt edici kaynak haritası sondasıdır (canlı TS BSP'de",
         "             DOĞRULANMADI) · -dbg'de küçültmede kaybolan yorum/biçim farkı · Fiori Elements ·",
         "             namespace'li BSP adı (/X/…) · deploy'un canlıdan dosya SİLME davranışı ·",
-        "             manifest'te ölçülen iki yol DIŞINDAKİ build eklemeleri (GERCEK-FARK görünür).",
+        "             manifest'te ölçülen iki yol DIŞINDAKİ build eklemeleri (GERCEK-FARK görünür) ·",
+        "             UI5 library (kökte .library): --eslik YOK · library.js/.library'de build'in `${version}`",
+        "             gibi yer tutucu değişimi ölçülmedi (GERCEK-FARK görünür).",
     ])
 
 
@@ -729,16 +778,17 @@ def main(argv: list[str] | None = None) -> int:
         # store PROJE kökününki. Aksi hâlde kapı bloklar ama damga yolu olmaz = kalıcı kilit (bug gate).
         try:
             pbe = ui_eklenti_modulu()
-            cozum = pbe.uygulama_coz(yerel_kok / "_", REPO) if yerel_kok.name.lower() == pbe.WEBAPP else None
+            # uygulama `<app>/webapp` · library `<lib>/src/<ns-yolu>` (kapının KAYNAK KÖKÜ; 2026-11-27)
+            app = pbe.kaynak_kokunden_uygulama(yerel_kok, REPO)
         except Exception as e:   # noqa: BLE001 — eklenti yüklenemezse damga YOK (sahte-taze yok)
             print(f"[OLCULEMEDI] PULL-BEFORE-EDIT UI eklentisi yüklenemedi ({type(e).__name__}: {e}) — "
                   "damga YAZILMADI", file=sys.stderr)
             return 2
-        if cozum is None:
-            print(f"[KULLANIM] --damgala yalnız PULL-BEFORE-EDIT kapısının kapsadığı bir `<kök-segment>/…/<app>/webapp` "
+        if app is None:
+            print(f"[KULLANIM] --damgala yalnız PULL-BEFORE-EDIT kapısının kapsadığı bir kaynak kökü için — "
+                  f"`<kök-segment>/…/<app>/webapp` ya da library `<kök-segment>/…/<lib>/src/<ns-yolu>` "
                   f"dizini için (ref_docs/docs/.tmp/node_modules … altı değil): {yerel_kok}", file=sys.stderr)
             return 2
-        app = cozum[0]
         app_bsp = bsp_name(app)
         if a.app_dir and Path(a.app_dir).resolve() != app.resolve():
             print(f"[KULLANIM] --app-dir ({a.app_dir}) ile --karsilastir ({yerel_kok}) FARKLI uygulama — "
@@ -898,7 +948,7 @@ def main(argv: list[str] | None = None) -> int:
             yerel_dosyalar = dizin_oku(yerel_kok)
         except OSError as e:   # re-gate P-1
             return olculemedi(zip_kaynagi, f"--karsilastir dizini okunamadı ({type(e).__name__}: {e})")
-        satirlar = karsilastir(kaynak, yerel_dosyalar)
+        satirlar = karsilastir(kaynak, yerel_dosyalar, kutuphane=kutuphane_zipi_mi(canli))
         if a.damgala:
             satirlar = deploy_disi_etiketle(satirlar, damga_onekler)
         print(f"\n=== KARŞILAŞTIR: canlı (geri kurulan) ↔ yerel {yerel_kok} ===")

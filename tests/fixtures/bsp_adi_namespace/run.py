@@ -92,8 +92,9 @@ MUTASYONLAR = {
                                    "    if False:\n        return f\"/sap/bc/ui5_ui5/{ns"),
     "--mutasyon-icf-bicimsiz-sap-dugumune": (DUI, '    if "/" in bsp:\n',
                                              "    if False:  # MUTASYON\n"),
-    "--mutasyon-preload-sabit-yol":(DUI, 'url = f"{base_url}{bsp_icf_yolu(bsp)}{PRELOAD}',
-                                     'url = f"{base_url}/sap/bc/ui5_ui5/sap/{bsp.lower()}/{PRELOAD}'),
+    # 2026-11-27: preload dosya adı parametreli (`dosya`: uygulama Component-preload · library library-preload)
+    "--mutasyon-preload-sabit-yol":(DUI, 'url = f"{base_url}{bsp_icf_yolu(bsp)}{dosya}',
+                                     'url = f"{base_url}/sap/bc/ui5_ui5/sap/{bsp.lower()}/{dosya}'),
     "--mutasyon-statik-sabit-yol": (VUS, 'url = (f"{base_url}{bsp_icf_yolu(bsp)}{rel_url}"',
                                     'url = (f"{base_url}/sap/bc/ui5_ui5/sap/{bsp.lower()}/{rel_url}"'),
     # PR #445 4. kapı F1: `--all` listesi (L bölümü) — her yeni dal için bir kip

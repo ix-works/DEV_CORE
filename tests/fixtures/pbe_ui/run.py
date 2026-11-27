@@ -104,8 +104,8 @@ MUTASYONLAR = {
     # A — kök DIŞI webapp (worktree) kapsam dışı sayılır (M14)
     "--mutasyon-kok-disi-none": (PBE, "        ust = [s.lower() for s in app.parts]\n", "        return None\n"),
     # A — komuta açıklama eklenir (kapının eklediği `--session` açıklamanın arkasına düşer)
-    "--mutasyon-komut-aciklamali": (PBE, "--karsilastir \"{a}/{WEBAPP}\" --damgala'\n",
-                                    "--karsilastir \"{a}/{WEBAPP}\" --damgala' + \"   (açıklama)\"\n"),
+    "--mutasyon-komut-aciklamali": (PBE, "--karsilastir \"{k}\" --damgala'\n",
+                                    "--karsilastir \"{k}\" --damgala' + \"   (açıklama)\"\n"),
     # A — kök segment şartı kalkar (proje kaynak kökü dışındaki webapp da kapıya girer)
     "--mutasyon-kok-seg-yok": (PBE, "    if not (kok_seg & set(ust)) or (haric & set(ust)):\n",
                                "    if haric & set(ust):\n"),
@@ -131,16 +131,16 @@ MUTASYONLAR = {
     # B — BSP uyuşmazlığı denetimi kalkar
     "--mutasyon-bsp-uyumsuz": (FUS, "        if a.bsp and app_bsp and a.bsp.upper() != app_bsp.upper():\n", "        if False:\n"),
     # A — yol çözülmeden karar (bug gate 2. tur: harf + `..` yazımıyla sahte-muaf)
-    "--mutasyon-rel-cozulmemis": (PBE, "        rel = _cozulmus(ps).relative_to(_cozulmus(webapp)).as_posix()\n",
-                                  "        rel = p.relative_to(webapp).as_posix()\n"),
+    "--mutasyon-rel-cozulmemis": (PBE, "        rel = _cozulmus(ps).relative_to(_cozulmus(kaynak)).as_posix()\n",
+                                  "        rel = p.relative_to(kaynak).as_posix()\n"),
     # A — yalnız `..` normalize edilir, disk harf biçimi alınmaz (harf yazımıyla sahte-muaf)
-    "--mutasyon-rel-normpath": (PBE, "        rel = _cozulmus(ps).relative_to(_cozulmus(webapp)).as_posix()\n",
-                                "        rel = ps.relative_to(webapp).as_posix()\n"),
+    "--mutasyon-rel-normpath": (PBE, "        rel = _cozulmus(ps).relative_to(_cozulmus(kaynak)).as_posix()\n",
+                                "        rel = ps.relative_to(kaynak).as_posix()\n"),
     # A — KAPSAM kararı çözülmüş (bağı izleyen) yolda (3. tur MEDIUM: junction arkası sessizce dışarıda)
     # (`_cozulmus` ValueError/NUL kipi YOK: `rel` hesabının kendi `except ValueError`ı aynı hatayı
     #  yakalar ⇒ EŞDEĞER mutant, ölçüldü 2026-09-26 — A20 çökmezliği iki katmanla birlikte ölçer.)
     # A — webapp içinden DIŞARI giden bağ dalı (`rel` fallback'i) None döner (fail-open, görünmez)
-    "--mutasyon-fallback-none": (PBE, "        rel = ps.relative_to(webapp).as_posix()\n", "        return None\n"),
+    "--mutasyon-fallback-none": (PBE, "        rel = ps.relative_to(kaynak).as_posix()\n", "        return None\n"),
     "--mutasyon-kapsam-cozulmus": (PBE, "    ps = _sade(p)\n", "    ps = _cozulmus(p)\n"),
     # B — damga çıktısı store/kök basmaz (cwd'ye düşen kökte yanıltıcı "damgalandı")
     "--mutasyon-damga-yeri-yok": (FUS, '    s = f"store={store} · anahtar kökü={REPO}"\n', '    return ""\n'),

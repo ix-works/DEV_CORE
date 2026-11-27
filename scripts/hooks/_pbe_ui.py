@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""_pbe_ui.py — PULL-BEFORE-EDIT (ADR 0016) eklentisi: freestyle UI5 `webapp/` dosyaları (Q352-B).
+"""_pbe_ui.py — PULL-BEFORE-EDIT (ADR 0016) eklentisi: freestyle UI5 `webapp/` + UI5 library `src/` dosyaları (Q352-B).
 
 ⛔ NEDEN VAR (canlı vaka, 2026-09-26): başka bir makinede bir rapor uygulamasına kolon eklenip
    canlıya deploy edilmişti; repo habersizdi. Eski yerel kodla yapılacak bir sonraki deploy o
@@ -16,6 +16,14 @@ SÖZLEŞME (kapı `pull_before_edit._EK_DENETCILER` bu modülü yükler):
 KAPSAM (karar Q352-B AR-1, lider onaylı):
   · `<kök-segment>/…/<app>/webapp/**` — `<app>` = `webapp`'in ebeveyni. `<kök-segment>` =
     çekirdek kapının kök segmentleri (proje `source_root` + geçiş-eski `erp`).
+  · UI5 REUSE LIBRARY (2026-11-27): `webapp` atası YOKSA `<kök-segment>/…/<lib>/src/**` — `<lib>` =
+    ebeveyni library olan EN YAKIN `src` atasının ebeveyni. Library = `ui5.yaml` tipi `library`
+    (`deploy_ui.proje_tipi`, @ui5/project'in seçtiği belge) YA DA `ui5.yaml` var ama tipi okunamadı ve
+    `src/` altında `.library` var (fail-closed: fazla kapı güvenli yön). Kaynak kökü = `src/<ns-yolu>`
+    (tek `.library`'nin dizini; belirsizse `src`): deploy Flat dist'i yükler ⇒ deploy-exclude muafiyeti bu
+    köke göre. Komut `--karsilastir "<lib>/src/<ns-yolu>"`. `src/`'si olan UYGULAMA (tipi application)
+    kapsama GİRMEZ; `<lib>/test/**` kapsam dışıdır (deploy edilmez). ns kökü çözülebiliyorsa onun DIŞINDAKİ
+    `src/**` dosyası da kapı dışıdır: Flat build onu dist'e koymaz (ölçüldü, "not within project namespace").
   · App'in KENDİSİ `_EXCLUDED_DIR_SEGMENTS` (ref_docs/docs/.tmp/legacy/archive/drafts) ya da
     `node_modules` altındaysa canlı uygulama değildir → None.
   · Proje kökü DIŞINDAKİ webapp (ör. kanonik `.wt` worktree'si) ve proje ağacındaki bir
@@ -58,6 +66,7 @@ from pathlib import Path
 from typing import Optional
 
 WEBAPP = "webapp"
+LIB_KAYNAK = "src"          # UI5 library kaynak dizini (deploy_ui.KUTUPHANE_KAYNAK ile aynı)
 DEPLOY_YAML = "ui5-deploy.yaml"
 ARAC = "core/scripts/fetch_ui_source.py"
 BSP_YER_TUTUCU = "<BSP_ADI>"
@@ -174,14 +183,11 @@ def uygulama_coz(path, root=None) -> Optional[tuple[Path, str]]:
         göre ifade edilemezse (webapp içinden dışarı giden bağ) sadeleşmiş yola düşülür — dosya kapıda
         kalır (fixture A21/C8). webapp içinden `test/`'e giden bağ ÖLÇÜLMEDİ (deploy aracı bağı izliyor mu).
     """
-    p = Path(path)
-    if not p.is_absolute() and root is not None:
-        p = Path(root) / p
-    ps = _sade(p)
-    webapp = next((a for a in ps.parents if a.name.lower() == WEBAPP), None)
-    if webapp is None:
-        return None
-    app = webapp.parent
+    c = _coz(path, root)
+    return None if c is None else (c[0], c[2])
+
+
+def _kapsamda_mi(app: Path, root) -> bool:
     kok_seg, haric = _kapi_kumeleri()
     try:
         ust = ([s.lower() for s in app.relative_to(_sade(Path(root))).parts]
@@ -194,12 +200,92 @@ def uygulama_coz(path, root=None) -> Optional[tuple[Path, str]]:
         # webapp'i de damgalar (anahtar mutlak) — aksi hâlde kapı bloklar, damga yolu olmaz.
         ust = [s.lower() for s in app.parts]
     if not (kok_seg & set(ust)) or (haric & set(ust)):
-        return None
+        return False
+    return True
+
+
+def _deploy_ui():
+    from deploy_ui import kutuphane_kaynak_koku, kutuphane_mi   # tek kaynak (proje tipi + ns kökü)
+    return kutuphane_mi, kutuphane_kaynak_koku
+
+
+def kutuphane_kaynagi_mi(app: Path) -> bool:
+    """`<app>/src/**` library kaynağı mı? `ui5.yaml` tipi library (deploy_ui.proje_tipi) — YA DA tip
+    okunamadı (dosya yok sayılmaz: `ui5.yaml` VAR olmalı) ve `src/` altında `.library` var. İkinci dal
+    fail-closed'dur: tipi okunamayan bir library'nin kaynağı kapıdan sessizce çıkmasın (fazla kapı =
+    güvenli yön). `deploy_ui` yüklenemezse yalnız ikinci dal çalışır."""
+    if not (app / LIB_KAYNAK).is_dir() or not (app / "ui5.yaml").is_file():
+        return False
     try:
-        rel = _cozulmus(ps).relative_to(_cozulmus(webapp)).as_posix()
+        import deploy_ui as _d   # tek kaynak: proje_tipi (ui5.yaml → @ui5/project'in seçtiği belge)
+        tip = _d.proje_tipi(app)[0]
+        if tip is not None:
+            return tip == "library"
+    except Exception:   # noqa: BLE001 — tip okunamadı → yapısal işarete düş
+        pass
+    return any((app / LIB_KAYNAK).rglob(".library"))
+
+
+def _coz(path, root=None):
+    """→ (app, kaynak kökü, kaynak köküne göre posix rel) ya da None.
+
+    Kaynak kökü: uygulama `<app>/webapp` · library `<app>/src/<ns-yolu>` (src altındaki tek `.library`'nin
+    dizini; kök belirsizse — 0 ya da >1 `.library` — `<app>/src`, fail-closed). ns kökü çözülebiliyor ve dosya
+    onun DIŞINDAYSA None (Flat build ns dışını dist'e koymaz ⇒ deploy edilmez). Library deploy'u Flat dist'i (dist kökü =
+    `src/<ns-yolu>`) yükler ⇒ deploy-exclude önekleri bu köke göre kıyaslanır. Önce `webapp` atası aranır
+    (bugünkü uygulama yolu AYNEN); yoksa ebeveyni library olan EN YAKIN `src` atası (2026-11-27)."""
+    p = Path(path)
+    if not p.is_absolute() and root is not None:
+        p = Path(root) / p
+    ps = _sade(p)
+    webapp = next((a for a in ps.parents if a.name.lower() == WEBAPP), None)
+    if webapp is not None:
+        app, kaynak = webapp.parent, webapp
+        if not _kapsamda_mi(app, root):
+            return None
+    else:
+        app = kaynak = None
+        for a in ps.parents:
+            if a.name.lower() != LIB_KAYNAK or not _kapsamda_mi(a.parent, root):
+                continue
+            if kutuphane_kaynagi_mi(a.parent):
+                app, kaynak = a.parent, a
+                try:
+                    ns, _ = _deploy_ui()[1](a.parent)
+                except Exception:   # noqa: BLE001
+                    ns = None
+                if ns is not None:
+                    if _sade(ns) not in ps.parents:   # Path eşitliği OS kuralıyla (Windows harf duyarsız)
+                        # ns kökü DIŞI (`src/x.js`, `src/com/example/y.js`): Flat build onu dist'e KOYMAZ
+                        # (ölçüldü @ui5/cli 4.0.61: "Omitting … File is not within project namespace") ⇒
+                        # deploy edilmez, canlı karşılığı yok — deploy-exclude gibi kapı dışı.
+                        return None
+                    kaynak = _sade(ns)
+                break
+        if app is None:
+            return None
+    try:
+        rel = _cozulmus(ps).relative_to(_cozulmus(kaynak)).as_posix()
     except ValueError:
-        rel = ps.relative_to(webapp).as_posix()
-    return app, rel
+        rel = ps.relative_to(kaynak).as_posix()
+    return app, kaynak, rel
+
+
+def kaynak_koku(path, root=None) -> Optional[Path]:
+    """Dosyanın kapıdaki kaynak kökü (uygulama: webapp · library: src/<ns-yolu>) ya da None."""
+    c = _coz(path, root)
+    return None if c is None else c[1]
+
+
+def kaynak_kokunden_uygulama(kok, root=None) -> Optional[Path]:
+    """`kok` bir app'in KAPIDAKİ kaynak kökü mü (uygulama `<app>/webapp` · library `<app>/src/<ns-yolu>`)?
+    Evetse app dizini, değilse None (`fetch_ui_source --damgala` ön koşulu)."""
+    c = _coz(Path(kok) / "_", root)
+    if c is None:
+        return None
+    if os.path.normcase(str(_sade(Path(c[1])))) != os.path.normcase(str(_sade(Path(kok)))):
+        return None
+    return c[0]
 
 
 def _goreli(p: Path, root) -> str:
@@ -209,16 +295,18 @@ def _goreli(p: Path, root) -> str:
         return p.as_posix()
 
 
-def komut_uret(app: Path, root, bsp: str) -> str:
+def komut_uret(app: Path, root, bsp: str, kaynak: Optional[Path] = None) -> str:
     """Blok mesajındaki komut — YALNIZ çalıştırılabilir komut (proje kökünden ya da
     `CLAUDE_PROJECT_DIR` ile koşulur — aksi hâlde damga başka store'a gider).
 
     `--session` BURADA BASILMAZ: kapı kendi seans kimliğini ekler (çift olmasın); elle koşulursa
     araç SessionStart marker'ına düşer. Açıklama `not_uret()`te — komutun arkasına eklenmez ki
-    kapının eklediği `--session` açıklamanın arkasına düşmesin."""
+    kapının eklediği `--session` açıklamanın arkasına düşmesin.
+    `kaynak` (library: `src/<ns-yolu>`) verilmezse `<app>/webapp` — uygulama komutu AYNEN."""
     a = _goreli(app, root)
-    kaynak = f'--app-dir "{a}"' if bsp != BSP_YER_TUTUCU else f"--bsp {BSP_YER_TUTUCU}"
-    return f'python {ARAC} {kaynak} --karsilastir "{a}/{WEBAPP}" --damgala'
+    k = f"{a}/{WEBAPP}" if kaynak is None else _goreli(Path(kaynak), root)
+    hedef = f'--app-dir "{a}"' if bsp != BSP_YER_TUTUCU else f"--bsp {BSP_YER_TUTUCU}"
+    return f'python {ARAC} {hedef} --karsilastir "{k}" --damgala'
 
 
 def not_uret(neden: str = "") -> str:
@@ -226,7 +314,7 @@ def not_uret(neden: str = "") -> str:
     return ((f"[{neden} — BSP adını ver; app henüz hiç deploy edilmediyse `--offline` ekle] " if neden else "")
             + "Komutu PROJE KÖKÜNDEN (ya da CLAUDE_PROJECT_DIR=<proje> ile) koş — başka dizinden koşulursa "
             "damga başka store'a yazılır, kapı görmez (araç yazdığı store'u basar). "
-            "Komut canlı ↔ yerel karşılaştırır, TEMİZSE webapp'i damgalar — dosyaya YAZMAZ. Fark çıkarsa: "
+            "Komut canlı ↔ yerel karşılaştırır, TEMİZSE kaynak kökünü (webapp · library: src/<ns-yolu>) damgalar — dosyaya YAZMAZ. Fark çıkarsa: "
             "playbook/howto-ui-kaynagi-geri-kurma.md §2.1. SAP erişilemiyorsa ya da yerel canlıdan İLERİDEYSE "
             "(commit'li, henüz deploy edilmemiş iş): aynı komuta `--offline` ekle — canlıdan ezme riskini "
             "bilerek kabul edersin.")
@@ -234,10 +322,11 @@ def not_uret(neden: str = "") -> str:
 
 def sinifla(path, root) -> Optional[dict]:
     """PULL-BEFORE-EDIT eklenti sözleşmesi (modül başlığı)."""
-    c = uygulama_coz(path, root)
+    c = _coz(path, root)
     if c is None:
         return None
-    app, rel = c
+    app, kaynak_kok, rel = c
+    kaynak = None if kaynak_kok.name.lower() == WEBAPP and kaynak_kok.parent == app else kaynak_kok
     onekler, _ = deploy_haric_desenleri(app)
     if deploy_haric_mi(rel, onekler):
         return None
@@ -251,5 +340,5 @@ def sinifla(path, root) -> Optional[dict]:
         neden = (f"{DEPLOY_YAML} yok" if not (app / DEPLOY_YAML).is_file()
                  else f"{DEPLOY_YAML}'da müşteri ad alanında BSP adı (Z/Y ya da kayıtlı /<NS>/) çözülemedi")
         return {"nesne": BSP_YER_TUTUCU, "tip": "bsp",
-                "komut": komut_uret(app, root, BSP_YER_TUTUCU), "not": not_uret(neden)}
-    return {"nesne": bsp, "tip": "bsp", "komut": komut_uret(app, root, bsp), "not": not_uret()}
+                "komut": komut_uret(app, root, BSP_YER_TUTUCU, kaynak), "not": not_uret(neden)}
+    return {"nesne": bsp, "tip": "bsp", "komut": komut_uret(app, root, bsp, kaynak), "not": not_uret()}
