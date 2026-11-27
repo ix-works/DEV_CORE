@@ -175,7 +175,10 @@ def _kalkan_kur():
         asil = getattr(os, ad)
 
         def sar_os(yol, *a, _asil=asil, _ad=ad, **k):
-            _kalkan("os." + _ad, yol)
+            # POSIX shutil.rmtree (_rmtree_safe_fd) çocukları dir_fd'ye GÖRELİ adla siler (os.unlink("x.js", dir_fd=fd));
+            # kök zaten rmtree sarmalayıcısında denetlendi ⇒ dir_fd'li çağrı cwd'ye göre çözülmez (CI #459: sahte KACAK)
+            if k.get("dir_fd") is None:
+                _kalkan("os." + _ad, yol)
             return _asil(yol, *a, **k)
         setattr(os, ad, sar_os)
     asil_rmtree = shutil.rmtree
