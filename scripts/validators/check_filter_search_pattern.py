@@ -17,7 +17,9 @@ WARNING (bloklamaz): rapor `Filter.view.xml`'inde tek-değer `<Input ... valueHe
   → select-options için `<MultiInput>` olmalı (çoklu-değer + aralık standardı, FE-32).
   (Tüm raporlar replike edilince temizlenir → sonra HARD'a terfi adayı.)
 
-Kapsam: <source_root>/**/ui/**/webapp/** (dist/ build-kopyası hariç).
+Kapsam: <source_root>/** altında bir `ui/` segmenti taşıyan ağaç (yalnız `webapp/` DEĞİL — kod `ui` segmentine
+bakar) + `ui/` dışında da olsa UI5 reuse library kaynağı (`src/` altındaki `.library` kökü — tanım
+`utils/ui5_kutuphane.py`, 2026-11-28). dist/ build-kopyası hariç. Çıktı kütüphane dosya sayısını yazar.
 Kullanım: python check_filter_search_pattern.py [--file <path>] [--strict]
 Çıkış: 0 temiz (veya yalnız WARNING) · 1 BLOCKER (caseSensitive:false bulundu).
 """
@@ -36,6 +38,8 @@ from utils.project_config import SOURCE_ROOT_NAME, project_root  # K12: kaynak-k
 from utils.kapsam import Kapsam  # noqa: E402
 # B2-02 (2026-08-28): cok-satirli `/* */` blok yorumu ORTAK katmanda cozulur.
 from utils.kaynak_tarama import js_kod  # noqa: E402
+# 2026-11-28: UI5 reuse library kaynağı TEK tanımdan (checklist_check · check_ui5_freestyle_traps aynısı).
+from utils.ui5_kutuphane import DiskKutuphanesi  # noqa: E402
 
 KAPSAM = Kapsam('UI .js/.view.xml')   # K1: taranan dosya sayaci
 
@@ -108,6 +112,7 @@ def main() -> int:
     # ADR 0020: junction'da __file__ DEV_CORE'a çözülür → kanonik project_root()
     root = project_root()
     target = args.file or args.path
+    kutuphane_dosyasi = []
 
     if target:
         p = Path(target)
@@ -118,11 +123,15 @@ def main() -> int:
         # PERF: rglob node_modules'ı (1184 dizin) dolaşıyordu → os.walk ile yürüyüş anında buda.
         _prune = {"node_modules", "dist", ".tmp", "tmp", ".git", "worktrees"}
         ui_files = []
+        kutuphane = DiskKutuphanesi(root / SOURCE_ROOT_NAME)
         for dirpath, dirnames, filenames in os.walk(root / SOURCE_ROOT_NAME):
             dirnames[:] = [d for d in dirnames if d.lower() not in _prune]
-            if "ui" not in Path(dirpath).parts:  # yalnız ui/ ağacı
+            lib = bool(filenames) and kutuphane.kok(Path(dirpath) / filenames[0]) is not None
+            if "ui" not in Path(dirpath).parts and not lib:  # yalnız ui/ ağacı + UI5 kütüphane kaynağı
                 continue
             ui_files += [Path(dirpath) / fn for fn in filenames]
+            if lib:
+                kutuphane_dosyasi += [Path(dirpath) / fn for fn in filenames]
         js_files = [f for f in ui_files if f.suffix == ".js"]
         view_files = [f for f in ui_files if f.name.lower() == "filter.view.xml"]
 
@@ -137,6 +146,10 @@ def main() -> int:
         if scan_filter_view(f):
             rel = f.relative_to(root) if str(f).startswith(str(root)) else f
             warnings.append(rel)
+
+    if not target:
+        lib_js = sum(1 for f in kutuphane_dosyasi if f.suffix == ".js")
+        print(f"Kapsam: {KAPSAM.n} dosya · UI5 kütüphane kaynağı (`src/` altında `.library` kökü): {lib_js} JS")
 
     for rel, ln, code in blockers:
         print(f"[İHLAL] {rel}:{ln}  BLOCKER (FE-32): caseSensitive:false KULLANMA → "

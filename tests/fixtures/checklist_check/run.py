@@ -22,6 +22,10 @@ Ne ölçülür (vektör aileleri):
      taranmayan kalıpları adlandırır (Y2) · FAIL satırına `not:` eklenmez (Y4).
   X  exit kodları: kullanım 2 · bozuk/eksik map 2 · beklenmeyen istisna 2 · --help hüküm satırı.
   H  `--harita-denetim`: gerçek map OK · bilinmeyen alan · kontrolsüz A · blok yalnız BE-10b.
+  L  (2026-11-28) UI5 reuse library kaynağı: `src/<ns>/.library` kökündeki JS/fragment FE maddelerine
+     girer (L1 FE-43 · L4/L5 FE-11 messagebundle · L6 FE-50 kütüphane kökü) · `.library`'siz `src/` JS'i
+     (L2) ve `src/` dışı `.library` (L3) kütüphane SAYILMAZ · L7/L7b iki uçlu aralıkta `.library` sağ
+     ağaçtan · L8 KAPSAM: özgül maddeye girmeyen JS listelenir (genel `**/*` sayılmaz).
   R  `--reach` (geçici map) PASS/FAIL · mini YAML == PyYAML (yoksa ATLA) ·
      run_review class_push zinciri: kirli sınıf BLOCKER, temiz PASS (gerçek CLI) ·
      `--ana-sinif` çapalı include dışlaması (R6 ana sınıf girer, R7 include girmez).
@@ -108,6 +112,12 @@ Mutasyon kipleri (program kaynak METNİ değiştirilir, gerçek `__file__` ile e
   --mutasyon-kisa-hane      2c: eşit hane grup sayılmaz (`BE-01,03 ortak kanıt` → tek kimlik)
   --mutasyon-kisa-nokta     `.` ardından sözcük gelse de kapanış (`FE-12 / 2. tur` → FE-2 grubu)
   --mutasyon-kisa-sinir     sonek sınırı `(?![\w])` — `_` sözcük sayılır (`_BE-10a/b_` → tek kimlik)
+  UI5 reuse library turu (2026-11-28; her biri bir düzeltmeyi GERİ alır):
+  --mutasyon-kutuphane-yok  `src/<ns>/.library` kökü tanınmaz (kütüphane dosyası FE globlarına girmez)
+  --mutasyon-kutuphane-ref  iki uçlu aralıkta `.library` varlığı sağ ağaç yerine diskten okunur
+  --mutasyon-genel-glob     kapsam satırı genel `**/*` maddelerini de özgül sayar (yine yapısal 0)
+  --mutasyon-app-koku       FE-11/50/51 kardeş kökü kütüphanede yine dosyanın dizini
+  --mutasyon-messagebundle  FE-11 kütüphanede `messagebundle*.properties` yerine `i18n/` arar
 CORE-07: her kipin DÜŞMESİ BEKLENEN vektör kümesi `_BEKLENEN_DUSEN`'de PİNLİDİR ve EŞİTLİKLE
 kıyaslanır. Çıkış: 0 taban yeşil · 1 mutasyon BEKLENEN kümeyle düştü · 2 SAPMA · 3
 DOGRULANAMADI (çapa tam 1 kez eşleşmedi ya da mutant derlenmedi — "düştü" SAYILMAZ).
@@ -178,7 +188,12 @@ _GECERLI_KIP = frozenset({"--mutasyon-literal", "--mutasyon-degisen", "--mutasyo
                           "--mutasyon-kisa-harf",
                           "--mutasyon-kisa-hane",
                           "--mutasyon-kisa-nokta",
-                          "--mutasyon-kisa-sinir"})
+                          "--mutasyon-kisa-sinir",
+                          "--mutasyon-kutuphane-yok",
+                          "--mutasyon-kutuphane-ref",
+                          "--mutasyon-genel-glob",
+                          "--mutasyon-app-koku",
+                          "--mutasyon-messagebundle"})
 
 _MUT = {
     "--mutasyon-literal": (
@@ -402,6 +417,22 @@ _MUT = {
     "--mutasyon-ids-bos": (
         '    if ids is not None and not ids:',
         '    if False:'),
+    # UI5 reuse library kaynağı (2026-11-28) — her biri tek düzeltmeyi GERİ alır
+    "--mutasyon-kutuphane-yok": (
+        '        if d.rel in kut:\n',
+        '        if False:\n'),
+    "--mutasyon-kutuphane-ref": (
+        '    if ref:\n        try:\n            for i in range(0, len(tum), 200):',
+        '    if False:\n        try:\n            for i in range(0, len(tum), 200):'),
+    "--mutasyon-genel-glob": (
+        '    return all(g in ("*", "**/*")',
+        '    return False and all(g in ("*", "**/*")'),
+    "--mutasyon-app-koku": (
+        '    kok = d.ui5_kok or _app_koku(d.rel)',
+        '    kok = _app_koku(d.rel)'),
+    "--mutasyon-messagebundle": (
+        '    if d.ui5_kok:\n        adlar = ("messagebundle.properties"',
+        '    if False:\n        adlar = ("messagebundle.properties"'),
 }
 
 # Ölçülerek pinlendi (2026-10-18). Her küme NEDEN o vektörleri içerir:
@@ -515,6 +546,18 @@ _BEKLENEN_DUSEN = {
     "--mutasyon-kisa-hane": {"V31i/id", "V31i/madde", "V31i/basliksiz", "V31j/id", "V31j/madde", "V31j/basliksiz", "V32g"},
     "--mutasyon-kisa-nokta": {"V29c", "V33f/id", "V33f/madde", "V33f/basliksiz"},
     "--mutasyon-kisa-sinir": {"V32e", "V32f"},
+    # UI5 reuse library (2026-11-28) — ilan edilen beklenti, ölçümle doğrulandı
+    #  kutuphane-yok: tanıma kalkar → kütüphane JS/fragment'ı hiçbir FE globuna girmez (L1 L4-L7b)
+    #  (`src/` şartı paylaşılan `utils/ui5_kutuphane.py`'dadır → kipi `ui5_kutuphane` fixture'ında: --mutasyon-src)
+    #  kutuphane-ref: iki uçlu aralıkta disk okunur → ağaçta olan sayılmaz, diskte olan sayılır (L7 L7b)
+    #  genel-glob   : `**/*` maddeleri özgül sayılır → kapsam satırı yine 0 (L8)
+    #  app-koku     : kardeş kökü yine dosyanın dizini → messagebundle/addValidator görünmez (L4 L5 L6)
+    #  messagebundle: kütüphanede yine `i18n/` aranır → UYGULANMAZ (L4 L5)
+    "--mutasyon-kutuphane-yok": {"L1", "L4", "L5", "L6", "L7", "L7b"},
+    "--mutasyon-kutuphane-ref": {"L7", "L7b"},
+    "--mutasyon-genel-glob": {"L8"},
+    "--mutasyon-app-koku": {"L4", "L5", "L6"},
+    "--mutasyon-messagebundle": {"L4", "L5"},
 }
 
 SONUC: list[tuple[str, bool, str]] = []
@@ -1642,6 +1685,82 @@ def r_vektorleri(G, tmp: Path) -> None:
                 f"{'BLOCKER' if beklenen_blok else 'PASS'}", ok, f"rc={r.returncode} satır={satir!r}")
 
 
+# ═══════════════════════════════════ L: UI5 reuse library kaynağı (2026-11-28) ══
+# Dizin ağacı SABİT kurulur — kütüphane kararı test edilen fonksiyonla üretilmez (fixture canlıyı
+# modellerse kusur maskelenir). Hepsi gerçek giriş noktasından (`main`) koşar.
+LIB = "lib/src/com/acme/ortak"
+LIB_TANIM = ('<?xml version="1.0" encoding="UTF-8" ?>\n<library xmlns="http://www.sap.com/sap.ui.library.xsd">\n'
+             "  <name>com.acme.ortak</name>\n  <version>1.0.0</version>\n</library>\n")
+ODATA_KIRLI = 'sap.ui.define([], function () {\n  var m = new ODataModel("/sap/opu/odata/x/", {});\n  return m;\n});\n'
+ODATA_TEMIZ = 'sap.ui.define([], function () {\n  return 1;\n});\n'
+MB = "var.anahtar=Var\n"
+
+
+def _satir(out: str, onek: str) -> str:
+    return next((s for s in out.splitlines() if s.startswith(onek)), "YOK")
+
+
+def l_vektorleri(G, tmp: Path) -> None:
+    kok = tmp / "kutuphane"
+    dosyalari_yaz(kok, {
+        f"{LIB}/.library": LIB_TANIM,
+        f"{LIB}/util/Veri.js": ODATA_KIRLI,
+        f"{LIB}/util/Metin.js": 'sap.ui.define([], function () {\n  return b.getText("yok.anahtar");\n});\n',
+        f"{LIB}/util/MetinVar.js": 'sap.ui.define([], function () {\n  return b.getText("var.anahtar");\n});\n',
+        f"{LIB}/util/Dogrula.js": 'sap.ui.define([], function () {\n  o.addValidator(function () {});\n});\n',
+        f"{LIB}/fragment/Secim.fragment.xml": '<core:FragmentDefinition xmlns="sap.m" xmlns:core="sap.ui.core">\n'
+                                              '  <MultiInput id="mi"/>\n</core:FragmentDefinition>\n',
+        f"{LIB}/messagebundle.properties": MB,
+        f"{LIB}/messagebundle_tr.properties": MB,
+        "tool/src/com/acme/util/Veri.js": ODATA_KIRLI,          # .library YOK — sıradan JS projesi
+        "lib2/com/acme/.library": LIB_TANIM,                    # .library `src/` altında DEĞİL
+        "lib2/com/acme/util/Veri.js": ODATA_KIRLI,
+    })
+    rc, out = kos(G, ["--repo", str(kok), "--files", f"{LIB}/util/Veri.js", "--kind", "frontend", "--ids", "FE-43"])
+    t = tablo(out)
+    kontrol("L1 kütüphane JS'i (`src/<ns>/.library` kökü) FE-43'e girer → FAIL + beyan '1 dosya webapp/ eşdeğeri'",
+            t.get("FE-43", "").startswith("FAIL") and "UI5 kütüphane kaynağı" in out and ": 1 dosya" in out,
+            f"{t.get('FE-43', 'YOK')[:90]} · {_satir(out, '- UI5 kütüphane')[:90]}")
+    rc, out = kos(G, ["--repo", str(kok), "--files", "tool/src/com/acme/util/Veri.js", "--kind", "frontend"])
+    t = tablo(out)
+    kontrol("L2 NEGATİF: `.library`'siz `src/` JS'i kütüphane SAYILMAZ (FE-43 uygulanmaz, kütüphane beyanı yok)",
+            rc == 0 and "### KAPSAM BEYANI" in out and "FE-43" not in t and "UI5 kütüphane kaynağı" not in out,
+            f"rc={rc} {t.get('FE-43', 'yok')}")
+    kontrol("L8 KAPSAM: hiçbir özgül maddeye girmeyen JS listelenir (genel `**/*` maddeleri sayılmaz)",
+            "girmeyen dosya (1): tool/src/com/acme/util/Veri.js" in out, _satir(out, "- Türü")[:160])
+    rc, out = kos(G, ["--repo", str(kok), "--files", "lib2/com/acme/util/Veri.js", "--kind", "frontend", "--ids", "FE-43"])
+    kontrol("L3 NEGATİF: `src/` DIŞINDAKİ `.library` kütüphane kökü sayılmaz (deploy_ui tanımı)",
+            rc == 0 and "### KAPSAM BEYANI" in out and "FE-43" not in tablo(out)
+            and "UI5 kütüphane kaynağı" not in out, f"rc={rc} {_satir(out, '- UI5 kütüphane')[:120]}")
+    rc, out = kos(G, ["--repo", str(kok), "--files", f"{LIB}/util/Metin.js", "--kind", "frontend", "--ids", "FE-11"])
+    t = tablo(out).get("FE-11", "YOK")
+    kontrol("L4 kütüphanede FE-11 messagebundle'a bakar: tanımsız anahtar → FAIL (messagebundle adıyla)",
+            t.startswith("FAIL") and "messagebundle.properties" in t, t[:120])
+    rc, out = kos(G, ["--repo", str(kok), "--files", f"{LIB}/util/MetinVar.js", "--kind", "frontend", "--ids", "FE-11"])
+    t = tablo(out).get("FE-11", "YOK")
+    kontrol("L5 NEGATİF: messagebundle'da tanımlı anahtar → PASS (UYGULANMAZ değil — paket okundu)",
+            t.startswith("PASS"), t[:120])
+    rc, out = kos(G, ["--repo", str(kok), "--files", f"{LIB}/fragment/Secim.fragment.xml", "--kind", "frontend",
+                      "--ids", "FE-50"])
+    t = tablo(out).get("FE-50", "YOK")
+    kontrol("L6 FE-50 kütüphane fragment'ı: addValidator başka dizindeki kütüphane JS'inde → ELLE (sahte FAIL yok)",
+            t.startswith("ELLE"), t[:120])
+    # L7/L7b: iki uçlu aralık — `.library` varlığı SAĞ ucun AĞACINDAN okunur, diskten değil
+    kok = _depo(tmp, "kutuphane_diff")
+    if kok:
+        _commit(kok, {f"{LIB}/.library": LIB_TANIM, f"{LIB}/util/Veri.js": ODATA_TEMIZ,
+                      "lib3/src/com/acme/b/util/Veri.js": ODATA_TEMIZ}, "taban")
+        _commit(kok, {f"{LIB}/util/Veri.js": ODATA_KIRLI, "lib3/src/com/acme/b/util/Veri.js": ODATA_KIRLI}, "kirli")
+        (kok / LIB / ".library").unlink()                                       # diskte YOK, ağaçta VAR
+        dosyalari_yaz(kok, {"lib3/src/com/acme/b/.library": LIB_TANIM})         # diskte VAR, ağaçta YOK
+        rc, out = kos(G, ["--repo", str(kok), "--diff", "HEAD~1..HEAD", "--kind", "frontend", "--ids", "FE-43"])
+        t = tablo(out).get("FE-43", "YOK")
+        kontrol("L7 `--diff A..B`: `.library` yalnız B ağacında → kütüphane JS'i FE-43 FAIL",
+                t.startswith("FAIL") and f"{LIB}/util/Veri.js" in t, t[:140])
+        kontrol("L7b NEGATİF: `.library` yalnız diskte (B ağacında yok) → o JS kütüphane sayılmaz",
+                "lib3/" not in t and ": 1 dosya" in _satir(out, "- UI5 kütüphane"), _satir(out, "- UI5 kütüphane")[:140])
+
+
 def main(kip: str | None) -> int:
     kaynak = PROG.read_bytes().decode("utf-8")
     if kip:
@@ -1672,6 +1791,7 @@ def main(kip: str | None) -> int:
         x_vektorleri(G, tmp)
         h_vektorleri(G, tmp)
         r_vektorleri(G, tmp)
+        l_vektorleri(G, tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

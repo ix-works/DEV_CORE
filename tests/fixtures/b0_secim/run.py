@@ -136,15 +136,15 @@ kontrol("P1b bölüm-1 validator → kendi bad/good çifti + K1 payda korpusu + 
 #   güncellenir. 2026-10-18: ortak checklist programı `_T1_PATTERNS`/`_T4_*` kullanıyor →
 #   `O:checklist_check` (8 → 9). 2026-11-02 (Q386): XML yorum maskesi korpusu
 #   `O:ui5_xml_yorumu` (9 → 10). 2026-11-08 (#402): her validator `O:validator_ad_grameri`
-#   AST korumasına girer (10 → 11).
+#   AST korumasına girer (10 → 11). 2026-11-28: UI5 kütüphane tanımı korpusu `O:ui5_kutuphane` (11 → 12).
 secim, _ = sec("scripts/build_core_index.py",
                "scripts/validators/check_ui5_freestyle_traps.py")
-kontrol("P2 çok dosya → BİRLEŞİM (11 birim)",
+kontrol("P2 çok dosya → BİRLEŞİM (12 birim)",
         secim == {"O:core_index_kapsam", "O:core_index_siralama",
                   "O:sap_gate_skip_sozlesmesi", "O:team_setup_sablon_sapmasi",
                   "O:ui5_t1_tirnak_sinifi", "O:ui5_blok_yorumu", "O:ui5_xml_yorumu",
                   "V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi",
-                  "O:checklist_check", "O:validator_ad_grameri"},
+                  "O:checklist_check", "O:validator_ad_grameri", "O:ui5_kutuphane"},
         f"alınan={secim}")
 
 # P3: bir dosya birden çok fixture'ı besliyorsa hepsi seçilir (tek-fixture varsayımı

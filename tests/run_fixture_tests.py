@@ -884,6 +884,11 @@ OZEL_TESTLER = [
     # 2026-11-27: UI5 reuse library (ui5.yaml type: library) kipi — deploy_ui/verify/PBE/fetch.
     ("ui5_library_kipi",
      "library: Flat dist → library-preload.js canli dogrulamasi · Namespace dist (dist/resources/) deploy KOSMAZ · tipi okunamayan library fail-closed · changed_apps src yalniz library · verify kaynak koku src/<ns> · PBE library src kapida (exclude ns kokune gore, src'li uygulama disarida) · fetch geri kurma library-preload atar + manifest/resources.json BUILD + --damgala ns koku; uygulama kontrol gruplari; gercek ui5 build UI5_CLI varsa (yoksa ATLA); sablon library/; KAHIN @ui5/project getType; 21 mutasyon"),
+    # 2026-11-28: UI5 reuse library kaynağını tanıyan TEK tanım + onu kullanan iki validator.
+    ("ui5_kutuphane",
+     "utils/ui5_kutuphane: aday kokler yalniz src alti · .library tam ad · src disi .library kok degil · en yakin kok; "
+     "check_ui5_freestyle_traps kutuphane fragment T4 ERROR (src/<ns>/.library) + .library'siz src taranmaz; "
+     "check_filter_search_pattern ui/ disindaki kutuphane JS caseSensitive BLOCKER + .library'siz taranmaz; 3 mutasyon"),
     # 2026-11-07 Issue #391: namespace'li paket — yaml-lite tirnakli `#` + paket siniri .rules.md kabulu.
     ("issue391_ns_yaml_yorum",
      "project_config `#` yalniz tirnak DISINDA yorum (satir ici/blok repro, satir sonu yorumu, "
@@ -1161,13 +1166,13 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     ("scripts/validators/check_list_view_grid.py", ("V:check_list_view_grid", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_ui5_freestyle_traps.py",
      ("V:check_ui5_freestyle_traps", "O:validator_kapsam_paydasi", "O:ui5_t1_tirnak_sinifi",
-      "O:ui5_blok_yorumu", "O:ui5_xml_yorumu"),
+      "O:ui5_blok_yorumu", "O:ui5_xml_yorumu", "O:ui5_kutuphane"),
      "G1 çifti + T1 tırnak-sınıfı korpusu + blok-yorumu FP korpusu (üçü de AYNI T1 "
      "desenlerini ölçer: desen/tarama-katmanı ayrımı ancak birlikte kanıtlanır) + XML "
      "yorum maskesi korpusu (T2/T3/T4, Q386)"),
     ("scripts/validators/check_filter_search_pattern.py",
      ("V:check_filter_search_pattern", "O:validator_kapsam_paydasi",
-      "O:filtre_yorum_ve_tirnak"),
+      "O:filtre_yorum_ve_tirnak", "O:ui5_kutuphane"),
      "G1 çifti + anahtar-yazımı/blok-yorumu korpusu (BLOCKER dalı burada ölçülür)"),
     ("scripts/validators/check_decimal_write_to.py", ("V:check_decimal_write_to", "O:validator_kapsam_paydasi"), "G1 çifti"),
     ("scripts/validators/check_method_param_type_c.py",
@@ -1991,6 +1996,10 @@ HARITA: list[tuple[str, tuple[str, ...], str]] = [
     # 2026-11-27 UI5 library kipi: dort aracin library dali + library sablonu (T1/T2 + gercek build E1).
     ("playbook/templates/ui5-freestyle/library/**", ("O:ui5_library_kipi",),
      "library sablonu: build Flat + generateResourcesJson, deploy afterTask library gorevi"),
+    # 2026-11-28: kutuphane tanimi (checklist_check FE + traps + filter ortak) — tuketiciler birlikte kosar.
+    ("scripts/utils/ui5_kutuphane.py", ("O:ui5_kutuphane", "O:checklist_check", "V:check_ui5_freestyle_traps",
+                                        "V:check_filter_search_pattern"),
+     "UI5 reuse library kaynak tanimi: src/ alti .library koku"),
     ("scripts/deploy_ui.py", ("O:ui5_library_kipi",),
      "proje_tipi/kutuphane_mi/kutuphane_kaynak_koku/kutuphane_dist_engeli + library-preload canli dogrulama"),
     ("scripts/verify_ui_static_assets.py", ("O:ui5_library_kipi",), "library kaynak koku src/<ns-yolu>"),

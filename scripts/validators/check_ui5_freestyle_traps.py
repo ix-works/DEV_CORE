@@ -22,8 +22,10 @@ Tuzaklar:
              Çoklu-kontrol: HBox yerine sibling f:fields veya ayrı f:FormElement. XML-valid → node-check
              YAKALAMAZ; bu statik gate + runtime açılış (FE-17) birlikte. (shipment 2026-07-02.)
 
-Kapsam: <source_root>/**/ui/**/webapp altındaki *.xml (view/fragment) + *.js (controller). node_modules,
-dist, test elenir. JS'te yorumlar (satır + ÇOK-SATIRLI `/* */`) taramadan düşer — 2026-08-28
+Kapsam: <source_root>/** altında bir `webapp` ağacındaki *.xml (view/fragment) + *.js (controller) +
+UI5 reuse library kaynağı (`src/` altındaki `.library` kökü — tanım `utils/ui5_kutuphane.py`; 2026-11-28
+öncesi kütüphane `src/` ağacı `webapp` segmenti taşımadığı için HİÇ taranmıyordu). node_modules,
+dist, test elenir. Çıktı kütüphane dosya sayısını her koşumda yazar. JS'te yorumlar (satır + ÇOK-SATIRLI `/* */`) taramadan düşer — 2026-08-28
 (B2-06) öncesi yalnız `//` ve hizalı `*` satırları atlanıyordu, yıldızsız blok yorumunun
 içindeki ölü kod T1 ERROR (build DURDURAN yanlış-pozitif) üretiyordu.
 XML'de `<!-- -->` yorumları T2/T3/T4 taramasından ÖNCE maskelenir (`_xml_yorum_maskele`,
@@ -55,6 +57,8 @@ from utils.project_config import project_root, source_dir  # K12: kaynak-klasor 
 from utils.kapsam import Kapsam  # noqa: E402
 # B2-06 (2026-08-28): JS blok yorumu ORTAK katmanda, DOSYA GENELİNDE durumlu.
 from utils.kaynak_tarama import js_kod  # noqa: E402
+# 2026-11-28: UI5 reuse library kaynağı TEK tanımdan (checklist_check · check_filter_search_pattern aynısı).
+from utils.ui5_kutuphane import DiskKutuphanesi  # noqa: E402
 
 KAPSAM = Kapsam('webapp .js/.xml')   # K1: taranan dosya sayaci
 
@@ -67,6 +71,7 @@ REPO = project_root()
 ERP = source_dir()
 
 _SKIP_SEGMENTS = {"node_modules", "dist", "tmp", ".tmp", "worktrees"}
+KUTUPHANE_DOSYASI = []   # taranan UI5 kütüphane kaynak dosyaları (kapsam beyanı)
 
 # --- T1: V2 nav `_X` (entity adı DEĞİL; nav property). Entity-set'ler /Z ile başlar,
 #     nav property'ler `_Cap` bare token veya `/_Cap` path segmenti. `/Z...` ve `to_...`
@@ -113,18 +118,22 @@ def _iter_ui_files():
     if not ERP.exists():
         return
     import os
+    kutuphane = DiskKutuphanesi(ERP)
     # PERF: ERP.rglob("*") TÜM node_modules'ı (1184 dizin) dolaşıyordu → os.walk ile
     # ağır dizinleri YÜRÜYÜŞ ANINDA buda (dirnames in-place). Sonuç birebir aynı
     # (node_modules zaten _SKIP_SEGMENTS ile dışlanıyordu), yalnız ~35sn → ~ms.
     for dirpath, dirnames, filenames in os.walk(ERP):
         dirnames[:] = [d for d in dirnames if d.lower() not in _SKIP_SEGMENTS]
         parts = {p.lower() for p in Path(dirpath).parts}
-        # yalnız bir webapp ağacının içindekiler
-        if "webapp" not in parts:
+        # yalnız bir webapp ağacının ya da UI5 kütüphane kaynağının içindekiler
+        lib = bool(filenames) and kutuphane.kok(Path(dirpath) / filenames[0]) is not None
+        if "webapp" not in parts and not lib:
             continue
         for fn in filenames:
             suf = Path(fn).suffix.lower()
             if suf == ".js" or suf == ".xml":
+                if lib and "webapp" not in parts:
+                    KUTUPHANE_DOSYASI.append(Path(dirpath) / fn)
                 yield Path(dirpath) / fn
 
 
@@ -183,9 +192,12 @@ def main() -> int:
     findings = _scan()
     errors = [x for x in findings if x[0] == "ERROR"]
     warns = [x for x in findings if x[0] == "WARN"]
+    kutuphane_satiri = (f"Kapsam: {KAPSAM.n} dosya · UI5 kütüphane kaynağı (`src/` altında `.library` "
+                        f"kökü): {len(KUTUPHANE_DOSYASI)} dosya")
 
     if not findings:
         print("Freestyle UI5 tuzak kontrolü: temiz (T1/T2/T3/T4 yok)." + KAPSAM.ek())
+        print(kutuphane_satiri)
         return 0
 
     for sev, trap, f, ln, text in findings:
@@ -195,6 +207,7 @@ def main() -> int:
 
     print()
     print(f"Özet: {len(errors)} ERROR (T1 V2-nav / T4 form-content), {len(warns)} WARN (T2/T3).")
+    print(kutuphane_satiri)
     if errors:
         print("ERROR = T1 V2-nav `_X` sessiz kırılma (`to_X` kullan) VEYA T4 `<f:fields>` içi container (Form render-crash → sibling f:fields/ayrı FormElement). Build DURUR.")
     if warns and not errors:

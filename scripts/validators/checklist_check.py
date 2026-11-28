@@ -80,6 +80,8 @@ CHECKLISTLER = {
 }
 sys.path.insert(0, str(SCRIPTS))
 from utils.kaynak_tarama import js_kod  # noqa: E402
+from utils.ui5_kutuphane import (  # noqa: E402  UI5 reuse library tanımı (tek ev)
+    KUTUPHANE_KAYNAK, KUTUPHANE_TANIM, aday_kokler, diskte_tanim_var, kok_sec)
 # Nesne adı yakalama + müşteri kararı TEK kaynaktan (DEV_CORE #402 K1, ADR 0005-A A-EK)
 from utils.ad_politikasi import (  # noqa: E402
     AD_ADAYI, ad_coz, dosya_adindan_ad, musteri_adi_mi)
@@ -193,7 +195,8 @@ class Dosya:
     eski_kaynak: object = None       # diff kipinde aralığın sol tarafı: str | callable (tembel) | None
     degisen: set[int] | None = None  # None = tüm satırlar "değişmiş" sayılır (--files)
     yol: Path | None = None
-    eslesme_adi: str | None = None   # glob eşlemesinde rel yerine kullanılacak ad (--ana-sinif)
+    eslesme_adi: str | None = None   # glob eşlemesinde rel yerine kullanılacak ad (--ana-sinif · UI5 kütüphanesi)
+    ui5_kok: str | None = None       # UI5 reuse library kaynak kökü (`.library`'nin dizini) — `kutuphane_kokleri`
 
     _satirlar: list[str] | None = None
 
@@ -287,6 +290,51 @@ def paket_koku(rel: str) -> str:
                          "structures", "docs", "behaviors"):
             return "/".join(parcalar[:i])
     return "/".join(parcalar[:-1])
+
+
+# ═══════════════════════════════════════════════════ UI5 reuse library kaynağı ══
+# (2026-11-28) FE maddelerinin globları `**/webapp/**` biçimindedir; UI5 reuse library kaynağı `webapp/`
+# altında DEĞİL `src/<ns-yolu>/` altındadır ⇒ kütüphane dosyaları hiçbir FE maddesine girmiyordu (ölçüldü:
+# 15 kütüphane JS'i + 2 fragment içeren farkta FE-11/43/47/49 yalnız uygulama dosyalarına koştu).
+# Tanıma KODDADIR, globda değil: düz `src/**` her JS projesine uyar. Tanımın TEK evi
+# `utils/ui5_kutuphane.py` (deploy_ui ile aynı kural: `src/` ağacındaki `.library`'nin dizini). Kütüphane
+# dosyası glob eşlemesinde `src/` yerine `webapp/` taşıyan eşdeğer adla eşlenir (`--ana-sinif`'in
+# `eslesme_adi` emsali) — YALNIZ `.js`/`.xml` (manifest/index/properties eşlemesi değişmez).
+_KUTUPHANE_UZANTI = (".js", ".xml")
+
+
+def kutuphane_kokleri(repo: Path, girdi: list, ref: str | None) -> tuple[dict[str, str], str | None]:
+    """(`rel` → kütüphane kökü, hata). Kök = `src/` altındaki en yakın ata dizin ki içinde `.library` var.
+    Varlık üç yerden: girdi kümesi · `ref` doluysa O commit'in ağacı (`ls-tree`) · değilse disk (ad TAM eşleşir:
+    `os.listdir` — Windows'ta `Path.is_file` `.Library`'yi de bulurdu, Linux bulmaz). Hata = ÖLÇÜLEMEDİ."""
+    adaylar = {d.rel: aday_kokler(d.rel) for d in girdi if d.rel.lower().endswith(_KUTUPHANE_UZANTI)}
+    tum = sorted({a for v in adaylar.values() for a in v})
+    if not tum:
+        return {}, None
+    girdi_adlari = {d.rel for d in girdi}
+    var = {a for a in tum if f"{a}/{KUTUPHANE_TANIM}" in girdi_adlari}
+    hata = None
+    if ref:
+        try:
+            for i in range(0, len(tum), 200):       # komut satırı uzunluğu (Windows 32K)
+                cikti = _git(repo, "ls-tree", "--name-only", "-z", ref, "--",
+                             *[f"{a}/{KUTUPHANE_TANIM}" for a in tum[i:i + 200]])
+                var |= {x.rsplit("/", 1)[0] for x in cikti.split("\0") if x.endswith("/" + KUTUPHANE_TANIM)}
+        except RuntimeError as e:
+            hata = str(e)[:160]
+    else:
+        var |= {a for a in tum if diskte_tanim_var(repo / a)}
+    kokler = {rel: kok_sec(rel, var.__contains__) for rel in adaylar}
+    return {rel: k for rel, k in kokler.items() if k}, hata
+
+
+def _webapp_esdegeri(rel: str, kok: str) -> str:
+    """Kütüphane dosyasının glob eşleme adı: kökteki (kök dahil) SON `src` segmenti `webapp` olur."""
+    p = rel.split("/")
+    yer = [j for j, x in enumerate(kok.split("/")) if x == KUTUPHANE_KAYNAK]
+    if not yer:                 # `aday_kokler` bunu üretmez; savunma (eşleme adı değişmez)
+        return rel
+    return "/".join(p[:yer[-1]] + ["webapp"] + p[yer[-1] + 1:])
 
 
 # ═════════════════════════════════════════════════════════ ABAP normalizasyonu ══
@@ -1750,7 +1798,8 @@ def _app_koku(rel: str) -> str:
 
 
 def _app_dosyalari(d: Dosya, c: Baglam, desen: str) -> list[Dosya]:
-    kok = _app_koku(d.rel)
+    """Dosyanın uygulama (`webapp/`) ya da UI5 kütüphanesi (`.library` kökü) ağacındaki `desen` dosyaları."""
+    kok = d.ui5_kok or _app_koku(d.rel)
     anahtar = ("app", kok, desen)
     if anahtar in c.onbellek:
         return c.onbellek[anahtar]
@@ -1775,13 +1824,23 @@ def _props_anahtarlar(metin: str) -> set[str]:
 
 @kontrol("fe11_i18n")
 def k_fe11(d, c):
-    i18n = [x for x in _app_dosyalari(d, c, "**/i18n/*.properties")]
-    taban = next((x for x in i18n if x.rel.lower().endswith("/i18n.properties")), None)
-    tr = next((x for x in i18n if x.rel.lower().endswith("/i18n_tr.properties")), None)
+    """Kullanılan i18n anahtarı taban + `_tr` dosyasında tanımlı mı. Uygulama: `i18n/i18n*.properties`.
+    UI5 kütüphanesi (`d.ui5_kok`): kökteki `messagebundle*.properties` (kütüphanenin varsayılan paketi)."""
+    if d.ui5_kok:
+        adlar = ("messagebundle.properties", "messagebundle_tr.properties")
+        paket = {x.rel: x for x in _app_dosyalari(d, c, "**/messagebundle*.properties")}
+        taban, tr = (paket.get(f"{d.ui5_kok}/{a}") for a in adlar)
+        yok = "kütüphane kökünde messagebundle dosyası yok"
+    else:
+        adlar = ("i18n.properties", "i18n_tr.properties")
+        i18n = [x for x in _app_dosyalari(d, c, "**/i18n/*.properties")]
+        taban = next((x for x in i18n if x.rel.lower().endswith("/i18n.properties")), None)
+        tr = next((x for x in i18n if x.rel.lower().endswith("/i18n_tr.properties")), None)
+        yok = "uygulamada i18n dosyası yok"
     if taban is None and tr is None:
-        return U("uygulamada i18n dosyası yok")
-    kumeler = {"i18n.properties": _props_anahtarlar(taban.metin) if taban else None,
-               "i18n_tr.properties": _props_anahtarlar(tr.metin) if tr else None}
+        return U(yok)
+    kumeler = {adlar[0]: _props_anahtarlar(taban.metin) if taban else None,
+               adlar[1]: _props_anahtarlar(tr.metin) if tr else None}
     out = []
     satirlar = _js_satirlari(d) if d.rel.lower().endswith(".js") else list(enumerate(_xml_kod(d).splitlines(), 1))
     rx_xml = re.compile(r"\{i18n>([\w.\-]+)\}")
@@ -2404,6 +2463,24 @@ def _md(s: str) -> str:
 _ANA_SINIF_INCLUDE = re.compile(r"\.(?:ccimp|ccau|ccdef|ccmac|locals_imp|locals_def|testclasses|macros)(?:\.abap)?$", re.I)
 
 
+def _genel_madde(m: dict) -> bool:
+    """Globu yalnız `**/*`/`*` olan madde (her dosyaya uyar — C sınıfı yargı maddeleri)."""
+    return all(g in ("*", "**/*") for g in (m.get("uygulanir") or ["*"]))
+
+
+def _ozgul_maddesiz(dosyalar: list, maddeler: list) -> tuple[list[str], list[str]]:
+    """(dosyalar, sonekler): özgül maddelerin globlarındaki tür sonekleri (`*.js` → `.js`, `*.view.xml` →
+    `.view.xml`; map'ten TÜRETİLİR) taşıyan ama hiçbir özgül maddeye girmeyen dosyalar. Ad-desenli glob
+    (`*.abap`) her zaman eşleştiği için yalnız YOL-kısıtlı globların dışında kalan dosya listelenir."""
+    ozgul = [m for m in maddeler if not _genel_madde(m)]
+    sonek = sorted({g.rsplit("/", 1)[-1][1:].lower() for m in ozgul for g in (m.get("uygulanir") or [])
+                    if re.fullmatch(r"\*\.[^*?/]+", g.rsplit("/", 1)[-1])})
+    out = [d.rel for d in dosyalar
+           if d.rel.lower().endswith(tuple(sonek))
+           and not any(glob_eslesir(d.eslesme_adi or d.rel, m.get("uygulanir") or []) for m in ozgul)]
+    return out, sonek
+
+
 def calistir(args) -> int:
     t0 = time.perf_counter()
     repo = Path(args.repo).resolve()
@@ -2442,6 +2519,12 @@ def calistir(args) -> int:
                 d.eslesme_adi = d.rel + ".clas.abap"
                 ana_notlar.append(d.rel)
     c = Baglam(repo, dosyalar, sap=args.sap, sap_kok=Path(args.sap_kok) if args.sap_kok else None, ref=sag_ref)
+    kut, kut_hata = kutuphane_kokleri(repo, dosyalar, sag_ref)
+    for d in dosyalar:
+        if d.rel in kut:
+            d.ui5_kok = kut[d.rel]
+            if d.eslesme_adi is None:
+                d.eslesme_adi = _webapp_esdegeri(d.rel, d.ui5_kok)
 
     satirlar: list[Satir] = []
     uygulanmaz_madde = 0
@@ -2459,6 +2542,8 @@ def calistir(args) -> int:
     eslesmeyen = [d.rel for d in dosyalar
                   if not any(glob_eslesir(d.eslesme_adi or d.rel, m.get("uygulanir") or [])
                              for m in harita if m["id"].startswith(onekler))]
+    ozgulsuz, ozgul_sonek = _ozgul_maddesiz(dosyalar, [m for m in harita if m["id"].startswith(onekler)
+                                                        and (not ids or m["id"] in ids)])
 
     print(f"## checklist_check — kapsama tablosu\n")
     print(f"Girdi: {'--diff ' + args.diff if args.diff else '--files'} · kind={args.kind} · "
@@ -2492,6 +2577,20 @@ def calistir(args) -> int:
         print(f"- Okunamayan dosya ({len(hatalar)}): {'; '.join(hatalar[:5])} — ÖLÇÜLMEDİ.")
     print(f"- Hiçbir maddenin globuna girmeyen dosya ({len(eslesmeyen)}): "
           + (", ".join(eslesmeyen[:10]) + (" …" if len(eslesmeyen) > 10 else "") if eslesmeyen else "yok"))
+    # Genel (`**/*`) globlu C maddeleri her dosyayı "kapsar" ⇒ yukarıdaki satır onlar varken yapısal olarak 0
+    # basar (ölçüldü 2026-11-28: kind=frontend farkında kütüphane dosyaları yalnız FE-39/40/41'e girdi, satır "0").
+    print(f"- Türü bu kind'in özgül maddelerince hedeflenen ({', '.join(f'`*{s}`' for s in ozgul_sonek) or '—'}) "
+          f"ama HİÇBİR özgül maddeye (glob `**/*` dışı) girmeyen dosya ({len(ozgulsuz)}): "
+          + (", ".join(ozgulsuz[:10]) + (" …" if len(ozgulsuz) > 10 else "") +
+             " — yalnız genel maddelere düştü, A/B kontrolleri bu dosyalara KOŞMADI" if ozgulsuz else "yok"))
+    kut_adet = sum(1 for d in dosyalar if d.ui5_kok)
+    if kut_adet or kut_hata:
+        kokler = sorted({d.ui5_kok for d in dosyalar if d.ui5_kok})
+        print(f"- UI5 kütüphane kaynağı (`{KUTUPHANE_KAYNAK}/` altında `{KUTUPHANE_TANIM}` kökü): {kut_adet} dosya "
+              f"`webapp/` eşdeğeri sayıldı (kök: {', '.join(kokler) or '—'}); FE-11 kütüphanede kök "
+              "`messagebundle*.properties`'e bakar, yalnız `getText(…)`/`{i18n>…}` — başka model adlı metin "
+              "binding'i (`{<model>>…}`) ÖLÇÜLMEZ"
+              + (f" · kütüphane tanıma ÖLÇÜLEMEDİ: {kut_hata}" if kut_hata else ""))
     print(f"- ELLE = program hüküm VERMEDİ (C yargı / kontrolsüz madde) → inceleyen doldurur. "
           f"A sınıfı ama kontrolü yazılmamış: {', '.join(kontrolsuz_a) or 'yok'}")
     if not args.sap:

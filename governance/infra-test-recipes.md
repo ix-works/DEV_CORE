@@ -4015,3 +4015,19 @@ python tests/run_battery.py pbe_worktree_damga --kardes damga_yarisi pbe_kapsam 
 - **Tip okuması (A6 + E3 KAHİN):** beklenen tablo @ui5/project 4.0.17 `graphFromPackageDependencies().getRoot().getType()` ölçümüdür; yeni vaka eklerken önce kahine sor (E3 CLI varsa aynı tabloyu yeniden ölçer). Sondaki `---` boş belge açar → @ui5/project HATA ⇒ None.
 - **Kum:** `mkdtemp` + süreç geneli yazma kalkanı (Z0/Z1); `ls -d` sondaları: sürücü kökünde `ui5_lib_kalkan_sondasi.txt`, worktree kökünde `SOURCE_CODES`/`dist`/`project.yaml`, tüketici `ui/dist` — koşu öncesi/sonrası "No such file". Gerçek `ui5 build` alt süreci kalkan DIŞINDADIR, yalnız kum dizinine yazar (`--dest` mutlak kum yolu).
 - **ÖLÇÜLMEDİ:** gerçek BSP deploy'u (testMode dahil — lider/spike işi) · `fiori deploy`un Flat library dist'ini BSP'ye yükledikten sonraki SAP tarafı düzeni · `${version}` gibi build yer tutucu değişimi (`library.js`'te literal sürümle ölçüldü) · tema içeren library (`buildThemes`, `themes/`) · birden çok `.library` taşıyan proje (FAIL verilir, düzeni ölçülmedi) · POSIX/CI'da gerçek build.
+
+## B114 — UI5 reuse library kaynağı FE denetimlerine girer: `utils/ui5_kutuphane` tek tanım · checklist_check FE eşlemesi + KAPSAM satırı · check_ui5_freestyle_traps · check_filter_search_pattern · ui5-freestyle `paths:` (2026-11-28)
+
+```
+python tests/fixtures/ui5_kutuphane/run.py                      # 12/12 (U aday kökler · D disk tanıma · T traps · F filter · E0)
+python tests/run_battery.py ui5_kutuphane                        # taban + 3 kip: src → U1 U2 U3 D3 · traps → T1 · filter → F1
+python tests/fixtures/checklist_check/run.py                     # L1–L8 + L7b dahil
+python tests/run_battery.py checklist_check                      # + kutuphane-yok · kutuphane-ref · genel-glob · app-koku · messagebundle
+python tests/fixtures/b0_secim/run.py                            # P2 pin 12 birim (O:ui5_kutuphane)
+```
+
+- **Tanım tek evde:** `src/` ALTINDAKİ `.library`'nin dizini (deploy_ui ile aynı kural). Üç tüketici (checklist_check · traps · filter) aynı fonksiyonu çağırır; varlığın nereden okunduğu çağıranındır (checklist_check `--diff A..B` kipinde B'nin ağacı, L7/L7b).
+- **Validator mutasyonları alt süreçte:** önyükleyici mutant kaynağı gerçek `__file__` ile koşar; mutant diske yazılmaz. E0 önyükleyici ↔ doğrudan `python <validator>` eşliğini ölçer.
+- **D2 kipi yok (bilerek):** `.library` tam ad eşleşmesi (`os.listdir`) ile `Path.exists` farkı yalnız harf duyarsız dosya sisteminde gözlenir; Linux CI'da mutant tabanla aynı davranır.
+- **Gerçek giriş noktası önce/sonra (tüketici farkı, salt-okur):** `python scripts/validators/checklist_check.py --repo <tüketici> --diff <A>..<B> --kind frontend` — kütüphane dosyalarının FE maddelerinin dosya sayısına girdiği ve KAPSAM BEYANI'ndaki iki yeni satır görülür; taban için `git show <taban>:scripts/validators/checklist_check.py` gerçek `__file__` ile exec edilir.
+- **`paths:` eşleşmesi ÖLÇÜLMEDİ** (Claude Code yükleyicisi): yalnız YAML ayrıştırma ve yerel ağaçlarda FP sayımı. Ölçmek için: eşleşen bir kütüphane dosyasını okuyan taze `claude -p` oturumunda `InstructionsLoaded` / `path_glob_match` kaydı.
